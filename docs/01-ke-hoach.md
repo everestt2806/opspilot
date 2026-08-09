@@ -29,7 +29,7 @@ Ba điều quan trọng nhất, nhắc lại ở đây vì hay bị vi phạm nh
 │  ├─ Renderer: React + TS + Ant Design v5                  │      │  ├─ app container   :30xxx → cổng app   │
 │  ├─ Main: Node.js                                         │ SSH  │  ├─ postgres (chỉ khi app cần)          │
 │  │   ├─ ssh/manager.ts     (ssh2, pool 1 conn/VPS)        │─────▶│  ├─ collector       (python:3.12-alpine)│
-│  │   ├─ detectors/         (mảng object cùng interface)   │      │  │     ghi /opt/deploytool/<app>/metrics/│
+│  │   ├─ detectors/         (mảng object cùng interface)   │      │  │     ghi /opt/opspilot/<app>/metrics/│
 │  │   ├─ deploy/pipeline.ts (state machine 7 bước)         │      │  │        metrics.jsonl + latest.json   │
 │  │   ├─ migrate/pipeline.ts                               │      │  └─ loadgen (chỉ khi chạy thí nghiệm)   │
 │  │   ├─ monitor/poller.ts  (30s: đọc dòng mới, rule, ML)  │      └─────────────────────────────────────────┘
@@ -180,7 +180,7 @@ State machine tuyến tính 7 bước, mỗi bước phát event theo
 | # | Bước | Việc | Fail thì |
 |---|---|---|---|
 | 1 | `PRECHECK` | `free -m`, `df -h /`, `ss -tlnp` → RAM trống >512MB, disk trống >2GB, `host_port` chưa dùng (FR-B4) | Dừng, chưa đụng gì vào VPS |
-| 2 | `UPLOAD` | `uploadDir` → `/opt/deploytool/<app>/src/` | Dừng, xoá thư mục vừa tạo |
+| 2 | `UPLOAD` | `uploadDir` → `/opt/opspilot/<app>/src/` | Dừng, xoá thư mục vừa tạo |
 | 3 | `RENDER` | Sinh `Dockerfile` + `docker-compose.yml` + `.env` (chmod 600) từ template | Dừng |
 | 4 | `BUILD` | `docker build -t <app>:v<N> .` — stream log ra UI | Dừng, `docker image rm` image dở |
 | 5 | `DEPLOY` | `docker compose up -d` (app + collector + postgres nếu cần) | Rollback về v(N-1) nếu có |
@@ -205,7 +205,7 @@ mỗi `COLLECT_INTERVAL_S` (mặc định **10**):
 3. DB probe (nếu có postgres): `SELECT 1` → `db_response_ms`.
 4. Host: `/proc/loadavg`, `/proc/meminfo` → `host_cpu_pct`, `host_mem_pct`.
 
-Ghi ra 2 file trong `/opt/deploytool/<app>/metrics/` (bind mount):
+Ghi ra 2 file trong `/opt/opspilot/<app>/metrics/` (bind mount):
 - **append** 1 dòng JSON vào `metrics.jsonl` (nguồn dữ liệu chính thức, có `seq` tăng dần)
 - ghi đè `latest.json` (chỉ để xem nhanh/debug)
 

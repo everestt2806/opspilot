@@ -8,7 +8,7 @@ này. Hai bên **không được** thoả thuận miệng thứ gì ngoài đây
 ## 1. Bố trí thư mục trên VPS
 
 ```
-/opt/deploytool/
+/opt/opspilot/
 └── <app_name>/                       app_name khớp cột app.name, slug [a-z0-9-]
     ├── src/                          source đã upload (M4 bước UPLOAD)
     ├── Dockerfile                    sinh từ templates/ (bước RENDER)
@@ -74,7 +74,7 @@ Poller **không dùng** file này; nó chỉ phục vụ debug tay: `ssh vps cat
 
 ```
 offset = app.metrics_offset          -- byte, 1-based, mặc định 1
-tail -c +<offset> /opt/deploytool/<app>/metrics/metrics.jsonl
+tail -c +<offset> /opt/opspilot/<app>/metrics/metrics.jsonl
 ```
 
 1. Cắt phần trả về theo `\n`. **Dòng cuối không kết thúc bằng `\n` là dòng viết dở → bỏ,
@@ -105,7 +105,7 @@ tự nạp bù toàn bộ khoảng thiếu. Đây là lý do chọn append-only 
 | `PROBE_TIMEOUT_S` | `5` | Timeout probe HTTP |
 | `ERROR_WINDOW_S` | `60` | Cửa sổ tính `http_error_rate` |
 | `DB_DSN` | rỗng | DSN postgres; rỗng → `db_response_ms` luôn `null` |
-| `METRICS_DIR` | `/var/metrics` | Thư mục ghi (bind mount ra `/opt/deploytool/<app>/metrics`) |
+| `METRICS_DIR` | `/var/metrics` | Thư mục ghi (bind mount ra `/opt/opspilot/<app>/metrics`) |
 | `MAX_FILE_MB` | `50` | Ngưỡng xoay vòng file |
 
 Container chạy với `--restart unless-stopped`, mount `/var/run/docker.sock:ro`, giới hạn

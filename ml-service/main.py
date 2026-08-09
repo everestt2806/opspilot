@@ -7,7 +7,7 @@ SERVICE_VERSION = "0.1.0"
 STARTED_AT = monotonic()
 
 app = FastAPI(
-    title="DeployTool ML Service",
+    title="OpsPilot ML Service",
     version=SERVICE_VERSION,
     docs_url=None,
     redoc_url=None,

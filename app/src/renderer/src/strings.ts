@@ -1,6 +1,6 @@
 export const strings = {
   app: {
-    name: 'DeployTool',
+    name: 'OpsPilot',
     noSelection: 'Chưa chọn VPS / ứng dụng'
   },
   navigation: {

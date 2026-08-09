@@ -43,7 +43,7 @@ function sanitizeContext(context: LogContext): LogContext {
 
 function logPath(date = new Date()): string {
   const datePart = date.toISOString().slice(0, 10)
-  return join(homedir(), '.deploytool', 'logs', `app-${datePart}.log`)
+  return join(homedir(), '.opspilot', 'logs', `app-${datePart}.log`)
 }
 
 function write(level: LogLevel, module: string, message: string, context: LogContext = {}): void {
@@ -57,7 +57,7 @@ function write(level: LogLevel, module: string, message: string, context: LogCon
   }
 
   const target = logPath()
-  mkdirSync(join(homedir(), '.deploytool', 'logs'), { recursive: true })
+  mkdirSync(join(homedir(), '.opspilot', 'logs'), { recursive: true })
   appendFileSync(target, `${line}\n`, { encoding: 'utf8' })
 }
 

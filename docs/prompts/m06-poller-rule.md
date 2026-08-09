@@ -17,7 +17,7 @@ bằng ML service, tạo alert khi cần, và đẩy lên dashboard.
 ## Vòng lặp cho mỗi app đang có deployment `running`
 
 ```
-1. tail -c +<app.metrics_offset> /opt/deploytool/<app>/metrics/metrics.jsonl
+1. tail -c +<app.metrics_offset> /opt/opspilot/<app>/metrics/metrics.jsonl
 2. Cắt theo '\n'. DÒNG CUỐI KHÔNG KẾT THÚC BẰNG '\n' -> BỎ, không cộng offset.
 3. Với mỗi dòng hoàn chỉnh (theo đúng thứ tự seq tăng dần):
      a. validate bằng zod -> insert metric_sample (UNIQUE(deployment_id,seq) chống trùng)

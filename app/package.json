@@ -1,9 +1,9 @@
 {
-  "name": "@deploytool/app",
-  "productName": "DeployTool",
+  "name": "@opspilot/app",
+  "productName": "OpsPilot",
   "version": "0.1.0",
-  "description": "Ung dung desktop DeployTool",
-  "author": "DeployTool Team",
+  "description": "Ung dung desktop OpsPilot",
+  "author": "OpsPilot Team",
   "packageManager": "pnpm@11.1.0",
   "main": "./out/main/index.js",
   "scripts": {

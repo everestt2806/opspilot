@@ -1,4 +1,4 @@
-# DeployTool — Desktop app deploy/migrate web app lên VPS + ML phát hiện degraded state
+# OpsPilot — Desktop app deploy/migrate web app lên VPS + ML phát hiện degraded state
 
 Đồ án tốt nghiệp · 2 người · hạn nộp **20/11/2026**
 

@@ -72,8 +72,8 @@ Quy tắc:
 
 | Nơi | Ghi gì | Ghi đâu |
 |---|---|---|
-| Main process | mọi lệnh SSH (đã che secret), mọi chuyển bước pipeline | `~/.deploytool/logs/app-YYYY-MM-DD.log` + console dev |
-| Log deploy | nguyên văn stdout/stderr | `~/.deploytool/logs/deploy-<id>.log` |
+| Main process | mọi lệnh SSH (đã che secret), mọi chuyển bước pipeline | `~/.opspilot/logs/app-YYYY-MM-DD.log` + console dev |
+| Log deploy | nguyên văn stdout/stderr | `~/.opspilot/logs/deploy-<id>.log` |
 | Hành động người dùng | 1 dòng | bảng `action_log` (FR-E3) |
 | ML service | request + thời gian inference | stdout (Electron bắt và hiện khi bấm dot ML) |
 

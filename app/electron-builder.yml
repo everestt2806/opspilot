@@ -1,5 +1,5 @@
-appId: vn.deploytool.desktop
-productName: DeployTool
+appId: vn.opspilot.desktop
+productName: OpsPilot
 directories:
   buildResources: resources
   output: dist
@@ -26,9 +26,9 @@ win:
     - target: nsis
       arch:
         - x64
-  executableName: DeployTool
+  executableName: OpsPilot
 nsis:
-  artifactName: DeployTool-${version}-setup.${ext}
-  shortcutName: DeployTool
-  uninstallDisplayName: DeployTool
+  artifactName: OpsPilot-${version}-setup.${ext}
+  shortcutName: OpsPilot
+  uninstallDisplayName: OpsPilot
   createDesktopShortcut: always

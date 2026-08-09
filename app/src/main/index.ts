@@ -55,8 +55,8 @@ function createWindow(): void {
 void app
   .whenReady()
   .then(async () => {
-    electronApp.setAppUserModelId('vn.deploytool.desktop')
-    app.setName('DeployTool')
+    electronApp.setAppUserModelId('vn.opspilot.desktop')
+    app.setName('OpsPilot')
 
     app.on('browser-window-created', (_event, window) => {
       optimizer.watchWindowShortcuts(window)

@@ -41,7 +41,7 @@ Ngưỡng: RAM >512MB · disk >2GB · port chưa dùng · Docker tồn tại.
 Trả `PrecheckResult` với **con số thực tế vs yêu cầu** cho từng dòng (UI hiện bảng 3 dòng).
 App mới → cấp `host_port` là port trống nhỏ nhất trong **30000–30999**; app cũ → dùng lại port đã lưu.
 
-**2. `UPLOAD`** — `ssh.uploadDir(local, /opt/deploytool/<app>/src)`.
+**2. `UPLOAD`** — `ssh.uploadDir(local, /opt/opspilot/<app>/src)`.
 
 **3. `RENDER`** — đọc template trong `templates/`, thay biến, `writeFile` lên VPS:
 `Dockerfile` · `docker-compose.yml` · `.env` (**chmod 600**).
@@ -50,7 +50,7 @@ Compose gồm: service `app` (map `<host_port>:<container_port>`, `mem_limit: 51
 Biến thay thế: `{{APP_NAME}} {{IMAGE_TAG}} {{HOST_PORT}} {{CONTAINER_PORT}} {{HEALTHCHECK_PATH}}
 {{BUILD_COMMAND}} {{START_COMMAND}} {{COLLECT_INTERVAL_S}}`.
 
-**4. `BUILD`** — `cd /opt/deploytool/<app> && docker build -t <app>:v<N> .`
+**4. `BUILD`** — `cd /opt/opspilot/<app> && docker build -t <app>:v<N> .`
 Stream stdout/stderr **nguyên văn, giữ ANSI**, không trim, không gộp dòng.
 
 **5. `DEPLOY`** — `docker compose up -d`. Chờ container app ở trạng thái `running`.
@@ -93,4 +93,4 @@ Chạy trọn pipeline từ CLI với đường dẫn source và `vps_id` truy�
       app cũ chạy lại được
 - [ ] Ngắt mạng giữa `UPLOAD` → `step-failed` đúng bước, VPS không còn rác
 - [ ] `docker image ls` chỉ còn tối đa 3 image của app đó
-- [ ] `grep -r "PASSWORD" ~/.deploytool/logs/` → không có giá trị thật
+- [ ] `grep -r "PASSWORD" ~/.opspilot/logs/` → không có giá trị thật

@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: DeployTool ML Service
+  title: OpsPilot ML Service
   version: "1.0.0"
   description: |
     Service phát hiện bất thường chạy CỤC BỘ trên máy người dùng, do Electron spawn.

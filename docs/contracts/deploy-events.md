@@ -28,7 +28,7 @@ UI dựa vào `finished` để tắt spinner — thiếu nó là màn hình treo
 | Bước | Lệnh chính trên VPS | Điều kiện qua | Nhánh lỗi |
 |---|---|---|---|
 | `PRECHECK` | `free -m`, `df -h /`, `ss -tlnp`, `docker --version` | RAM trống >512MB · disk trống >2GB · `host_port` chưa dùng · Docker tồn tại | Dừng. **Chưa ghi gì lên VPS** |
-| `UPLOAD` | `tar czf - --exclude=... . \| ssh 'tar xzf - -C /opt/deploytool/<app>/src'` | tar trả 0 | Xoá `/opt/deploytool/<app>` nếu vừa tạo mới |
+| `UPLOAD` | `tar czf - --exclude=... . \| ssh 'tar xzf - -C /opt/opspilot/<app>/src'` | tar trả 0 | Xoá `/opt/opspilot/<app>` nếu vừa tạo mới |
 | `RENDER` | ghi `Dockerfile`, `docker-compose.yml`, `.env` (chmod 600) | 3 file tồn tại | Dừng, xoá file vừa ghi |
 | `BUILD` | `docker build -t <app>:v<N> .` | exit 0 | `docker image rm <app>:v<N>` (bỏ qua lỗi) |
 | `DEPLOY` | `docker compose up -d` | exit 0, container app `running` | Nếu có v(N-1): `docker compose` với tag cũ. Nếu không: `compose down` (giữ volume) |
@@ -52,7 +52,7 @@ UI dựa vào `finished` để tắt spinner — thiếu nó là màn hình treo
 - `log` event stream **nguyên văn** stdout/stderr, giữ ANSI escape (xterm.js sẽ render màu).
 - Không gộp dòng, không trim — gộp làm hỏng progress bar của `docker build`.
 - Main giữ **200 dòng cuối mỗi bước** trong bộ nhớ để đưa vào `step-failed.last_log_lines`.
-- Toàn bộ log của một deployment ghi ra `~/.deploytool/logs/deploy-<id>.log` để tra lại sau.
+- Toàn bộ log của một deployment ghi ra `~/.opspilot/logs/deploy-<id>.log` để tra lại sau.
 
 ---
 

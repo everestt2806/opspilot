@@ -18,7 +18,7 @@ afterEach(() => {
 
 describe('initializeDatabase', () => {
   it('tao schema v1, bat WAL va foreign key', () => {
-    testDirectory = mkdtempSync(join(tmpdir(), 'deploytool-db-'))
+    testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-'))
     const database = initializeDatabase(testDirectory)
 
     const tables = database

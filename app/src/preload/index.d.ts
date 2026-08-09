@@ -1,7 +1,7 @@
-import type { DeployToolApi } from './index'
+import type { OpsPilotApi } from './index'
 
 declare global {
   interface Window {
-    api: DeployToolApi
+    api: OpsPilotApi
   }
 }

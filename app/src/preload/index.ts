@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 import type { IpcEventMap, IpcInvokeMap } from '@shared/ipc'
 
-export interface DeployToolApi {
+export interface OpsPilotApi {
   invoke<K extends keyof IpcInvokeMap>(
     channel: K,
     ...args: Parameters<IpcInvokeMap[K]>
@@ -13,7 +13,7 @@ export interface DeployToolApi {
   ): () => void
 }
 
-const api: DeployToolApi = {
+const api: OpsPilotApi = {
   invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
   on: (channel, callback) => {
     const listener = (

@@ -27,7 +27,7 @@ service được spawn và `/health` trả 200. Không có nghiệp vụ nào.
    | `docs/contracts/detector-contract.ts` | `app/src/main/detectors/types.ts` |
 
 4. **Lớp DB** `app/src/main/db/index.ts`
-   - Mở SQLite tại `app.getPath('userData')/deploytool.db`
+   - Mở SQLite tại `app.getPath('userData')/opspilot.db`
    - `PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`
    - Chạy migration theo thứ tự tên file, ghi `schema_version`, bỏ qua file đã chạy
    - Export `db` (instance `better-sqlite3`) — dùng đồng bộ, **không** bọc async

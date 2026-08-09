@@ -82,7 +82,7 @@ Hội đồng nhìn đâu cũng thấy cùng một hệ màu → cảm giác nh�
   | Số app | Hành động.
 - "Thêm VPS" → Modal: Tên, Host, Port (mặc định 22), Username, tab [SSH key | Password],
   textarea dán private key. Nút "Kiểm tra kết nối" **ngay trong modal**, kết quả hiện từng
-  bước: `✓ SSH OK → ✓ Docker 27.1 → ✓ Ghi được /opt/deploytool`.
+  bước: `✓ SSH OK → ✓ Docker 27.1 → ✓ Ghi được /opt/opspilot`.
   Thiếu Docker → cảnh báo vàng + nút "Cài Docker ngay" (confirm lại, FR-A2).
 - Xoá VPS → confirm 2 lớp, cảnh báo rõ "app đang chạy trên VPS **không** bị xoá".
 - Empty state: "Chưa có VPS nào. Thêm VPS đầu tiên để bắt đầu deploy." + nút chính.

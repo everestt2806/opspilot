@@ -125,7 +125,7 @@ docs/                   toàn bộ tài liệu (file này trỏ tới)
 | Ngưỡng rule mặc định | cpu>90%, mem>90%, latency>2000ms, error_rate>0.5, 3 mẫu liên tiếp | M6 |
 | Precheck VPS | RAM trống >512MB, disk trống >2GB, port đích chưa dùng | M4 |
 | Dải port cấp cho app | **30000–30999** | ADR-006 |
-| Thư mục làm việc trên VPS | `/opt/deploytool/<app_name>/` | metric-format.md |
+| Thư mục làm việc trên VPS | `/opt/opspilot/<app_name>/` | metric-format.md |
 | Cổng ML service | **8765** (localhost, có fallback +1 nếu bận) | M7 |
 | Số image cũ giữ lại để rollback | **3** | M4 |
 | 1 run thí nghiệm | baseline train 30' + holdout 15' + fault 20' + hồi phục 10' | docs/07 |

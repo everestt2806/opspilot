@@ -1,5 +1,5 @@
 {
-  "name": "deploytool",
+  "name": "opspilot",
   "version": "0.1.0",
   "private": true,
   "description": "Desktop tool deploy va migrate web app len VPS, kem phat hien degraded state",
@@ -9,14 +9,14 @@
     "pnpm": ">=9"
   },
   "scripts": {
-    "dev": "pnpm --filter @deploytool/app dev",
-    "build": "pnpm --filter @deploytool/app build",
-    "build:win": "pnpm --filter @deploytool/app build:win",
+    "dev": "pnpm --filter @opspilot/app dev",
+    "build": "pnpm --filter @opspilot/app build",
+    "build:win": "pnpm --filter @opspilot/app build:win",
     "test": "pnpm test:app && pnpm test:ml",
-    "test:app": "pnpm --filter @deploytool/app test",
+    "test:app": "pnpm --filter @opspilot/app test",
     "test:ml": "cd ml-service && .venv\\Scripts\\python.exe -m pytest tests",
-    "lint": "pnpm --filter @deploytool/app lint && cd ml-service && .venv\\Scripts\\python.exe -m ruff check .",
-    "typecheck": "pnpm --filter @deploytool/app typecheck",
-    "format": "pnpm --filter @deploytool/app format && ml-service\\.venv\\Scripts\\python.exe -m ruff format ml-service"
+    "lint": "pnpm --filter @opspilot/app lint && cd ml-service && .venv\\Scripts\\python.exe -m ruff check .",
+    "typecheck": "pnpm --filter @opspilot/app typecheck",
+    "format": "pnpm --filter @opspilot/app format && ml-service\\.venv\\Scripts\\python.exe -m ruff format ml-service"
   }
 }

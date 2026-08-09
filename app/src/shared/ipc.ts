@@ -217,7 +217,7 @@ export interface VpsConnectionCheck {
   docker_installed: boolean;
   docker_version: string | null;
   workdir_writable: boolean;
-  /** Từng bước để UI hiện tuần tự: "✓ SSH OK → ✓ Docker 27.1 → ✓ Ghi được /opt/deploytool" */
+  /** Từng bước để UI hiện tuần tự: "✓ SSH OK → ✓ Docker 27.1 → ✓ Ghi được /opt/opspilot" */
   steps: Array<{ label: string; ok: boolean; detail?: string }>;
 }
 

@@ -1,1 +1,1 @@
-"""Các mô hình phát hiện degraded state của DeployTool."""
+"""Các mô hình phát hiện degraded state của OpsPilot."""

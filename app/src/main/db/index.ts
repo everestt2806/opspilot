@@ -22,7 +22,7 @@ const migrations: Migration[] = [
 export let db: Database.Database
 
 export function initializeDatabase(userDataPath: string): Database.Database {
-  const databasePath = join(userDataPath, 'deploytool.db')
+  const databasePath = join(userDataPath, 'opspilot.db')
   mkdirSync(dirname(databasePath), { recursive: true })
 
   db = new Database(databasePath)
