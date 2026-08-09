@@ -70,13 +70,19 @@ docs/           Toàn bộ tài liệu, hợp đồng kỹ thuật, prompt cho A
 
 ## Lệnh thường dùng (sẽ có từ tuần 1)
 
+Trên máy có nhiều bản Node, chạy một lần ở đầu terminal PowerShell:
+
+```powershell
+. .\tools\enter-node22.ps1
+```
+
 ```bash
-pnpm dev            # chạy Electron ở chế độ dev (tự spawn ml-service)
-pnpm test           # vitest — detectors, crypto
-pnpm build          # đóng gói bằng electron-builder
-pytest ml-service   # test features.py, models
-python experiments/run_experiment.py --scenario memory_leak --repeat 10
-python experiments/analyze.py --out report/
+pnpm dev          # chạy Electron ở chế độ dev (tự spawn ml-service)
+pnpm typecheck    # kiểm tra TypeScript
+pnpm lint         # ESLint + Ruff
+pnpm test         # Vitest + Pytest
+pnpm build        # build mã nguồn Electron
+pnpm build:win    # tạo bộ cài Windows bằng electron-builder
 ```
 
 ---

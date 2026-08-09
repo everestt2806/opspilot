@@ -8,7 +8,7 @@ Bảng này vào **phụ lục báo cáo** làm bằng chứng nhóm có quy tr�
 
 | Ngày | Người chạy | Kết quả | Bước fail | Ghi chú / đã sửa ở đâu |
 |---|---|---|---|---|
-| | | | | |
+| 2026-08-09 | A + Codex | ✅ PASS | — | M00: typecheck, lint, 2 test TS, 1 test Python; dev + bản đóng gói `/health` OK; DB v1 đủ 11 bảng; đóng app dev không còn Python mồ côi |
 
 <!--
 Ví dụ cách ghi:

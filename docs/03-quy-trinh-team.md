@@ -25,6 +25,17 @@ phải soi lỗi. Checklist review: [`prompts/99-review.md`](prompts/99-review.m
 **Quy tắc vàng:** không hiểu code trong PR (kể cả code AI viết) → **không approve**. Hỏi cho
 đến khi hiểu. Đây không phải khách sáo — đây là chuẩn bị cho câu hỏi phản biện.
 
+### Tài khoản và credential Git
+
+- Dùng **một repo private chung**, mời cả hai tài khoản làm collaborator. Không tách code A/B
+  thành hai repo vì contract, migration và smoke test cần được kiểm tra trên cùng một `main`.
+- Mỗi người clone repo bằng tài khoản của mình và cấu hình `user.name`/`user.email` trên máy
+  của mình. Không chia sẻ token, mật khẩu hay private SSH key Git.
+- Nếu A làm thay phần của B khi B bận, A vẫn commit bằng danh tính của A với prefix đúng module
+  như `[ml]` hoặc `[monitor]`. Không đổi author thành B và không dùng credential của B.
+- Nếu thật sự cần hai tài khoản Git trên cùng một máy, dùng hai SSH key + hai host alias và hai
+  clone riêng; mỗi clone cấu hình identity cục bộ. Đây chỉ là phương án vận hành, không tạo repo thứ hai.
+
 ---
 
 ## 2. Nhịp làm việc

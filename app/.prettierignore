@@ -1,0 +1,3 @@
+src/shared/ipc.ts
+src/main/detectors/types.ts
+src/main/db/migrations/*.sql

@@ -58,7 +58,7 @@ service được spawn và `/health` trả 200. Không có nghiệp vụ nào.
 
 ## Định nghĩa xong
 - [ ] `pnpm dev` mở app, không lỗi console
-- [ ] File SQLite được tạo, `schema_version` = 1, `sqlite3 .tables` thấy đủ 9 bảng
+- [ ] File SQLite được tạo, `schema_version` = 1, `sqlite3 .tables` thấy đủ 11 bảng theo contract hiện tại
 - [ ] Dot ML service ở topbar **xanh**; kill tiến trình python bằng tay → dot chuyển **đỏ**
 - [ ] Thoát app → **không còn** tiến trình python mồ côi (kiểm tra Task Manager)
 - [ ] `pnpm build` ra file cài đặt, cài lên máy chạy được (chưa cần có tính năng)

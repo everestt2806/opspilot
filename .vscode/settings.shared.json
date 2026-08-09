@@ -1,0 +1,6 @@
+{
+  "editor.formatOnSave": true,
+  "files.eol": "\n",
+  "typescript.tsdk": "app/node_modules/typescript/lib",
+  "python.defaultInterpreterPath": "${workspaceFolder}/ml-service/.venv/Scripts/python.exe"
+}

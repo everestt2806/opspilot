@@ -1,0 +1,69 @@
+@import './base.css';
+
+.app-shell {
+  min-height: 100%;
+  background: var(--bg-base);
+}
+
+.brand {
+  display: flex;
+  height: 48px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.brand-mark {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--bg-base);
+  background: var(--info);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.brand-name {
+  color: var(--text-primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.topbar {
+  display: flex;
+  height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  line-height: 48px;
+}
+
+.status-button {
+  height: 32px;
+  padding-inline: 8px;
+}
+
+.content {
+  padding: 24px;
+  background: var(--bg-base);
+}
+
+.page-panel {
+  min-height: calc(100vh - 96px);
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+}
+
+.page-panel .ant-empty {
+  margin-top: 120px;
+}
