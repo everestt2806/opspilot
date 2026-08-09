@@ -1,0 +1,28 @@
+# Chuẩn hoá line ending. BẮT BUỘC: cả nhóm dev trên Windows nhưng mọi script
+# đều chạy trong container Linux / trên VPS Ubuntu. File có CRLF sẽ khiến
+# shebang `#!/bin/sh\r` không tồn tại -> "no such file or directory" rất khó debug.
+* text=auto eol=lf
+
+# Nhị phân — không đụng vào
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary
+*.dump binary
+*.db binary
+
+# File bắt buộc LF kể cả khi ai đó chỉnh core.autocrlf
+*.sh        text eol=lf
+*.py        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+Dockerfile  text eol=lf
+*.Dockerfile text eol=lf
+.env.example text eol=lf
+
+# Gộp diff dễ đọc cho tài liệu
+*.md diff=markdown

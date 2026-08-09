@@ -1,0 +1,282 @@
+openapi: 3.0.3
+info:
+  title: DeployTool ML Service
+  version: "1.0.0"
+  description: |
+    Service phát hiện bất thường chạy CỤC BỘ trên máy người dùng, do Electron spawn.
+    Chỉ lắng nghe 127.0.0.1 — không bao giờ bind 0.0.0.0.
+
+    HỢP ĐỒNG: đúng 6 endpoint dưới đây. Không thêm, không đổi tên trường.
+    Mọi tên trường dùng snake_case (khớp với schema.sql), KHÔNG camelCase.
+
+    Vòng đời điển hình:
+      1. Electron spawn service  -> GET /health cho tới khi 200
+      2. Poller gửi từng mẫu     -> POST /ingest (trả ready:false cho tới khi đủ mẫu train)
+      3. Đủ >=150 mẫu bình thường-> POST /train
+      4. Từ đó /ingest trả score đầy đủ cho 4 phương pháp
+      5. Phân tích offline sau thí nghiệm -> POST /replay (không side-effect)
+
+servers:
+  - url: http://127.0.0.1:8765
+
+paths:
+  /health:
+    get:
+      summary: Kiểm tra service sống (dùng cho dot trạng thái ở topbar)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, version, uptime_s]
+                properties:
+                  status:   { type: string, enum: [ok] }
+                  version:  { type: string, example: "1.0.0" }
+                  uptime_s: { type: number }
+
+  /status:
+    get:
+      summary: Trạng thái model của một deployment
+      parameters:
+        - name: deployment_id
+          in: query
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deployment_id, trained, sample_count, min_samples_required]
+                properties:
+                  deployment_id:        { type: integer }
+                  trained:              { type: boolean }
+                  sample_count:         { type: integer, description: Số mẫu đã nhận qua /ingest }
+                  min_samples_required: { type: integer, example: 150 }
+                  trained_at:           { type: string, nullable: true, description: ISO-8601 UTC }
+                  train_sample_count:   { type: integer, nullable: true }
+                  feature_version:      { type: string, example: "v1-5metrics-4feats-w20" }
+
+  /ingest:
+    post:
+      summary: Nạp một mẫu metric và nhận score của 4 phương pháp ML
+      description: |
+        Poller gọi endpoint này MỘT LẦN CHO MỖI MẪU, theo đúng thứ tự seq tăng dần.
+        Gửi sai thứ tự làm hỏng cửa sổ trượt và EWMA.
+        Rule-based KHÔNG chạy ở đây — nó chạy trong Electron (M6).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deployment_id, sample]
+              properties:
+                deployment_id: { type: integer }
+                sample:        { $ref: "#/components/schemas/MetricSample" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ready, sample_count, scores, above_threshold]
+                properties:
+                  ready:
+                    type: boolean
+                    description: false khi chưa train xong -> mọi score là null
+                  sample_count: { type: integer }
+                  scores:
+                    type: object
+                    description: 0..1 đã chuẩn hoá. null khi ready=false.
+                    required: [zscore_ewma, iforest, ocsvm, ensemble]
+                    properties:
+                      zscore_ewma: { type: number, nullable: true }
+                      iforest:     { type: number, nullable: true }
+                      ocsvm:       { type: number, nullable: true }
+                      ensemble:    { type: number, nullable: true, description: trung vị 3 score trên }
+                  above_threshold:
+                    type: object
+                    description: |
+                      Mỗi method: score > threshold. ensemble = true khi >=2/3 method
+                      (zscore_ewma, iforest, ocsvm) cùng true — KHÔNG dựa trên score ensemble.
+                    required: [zscore_ewma, iforest, ocsvm, ensemble]
+                    properties:
+                      zscore_ewma: { type: boolean }
+                      iforest:     { type: boolean }
+                      ocsvm:       { type: boolean }
+                      ensemble:    { type: boolean }
+                  detail:
+                    type: object
+                    description: Giải thích ngắn cho UI/detail_json, key là tên method
+                    additionalProperties:
+                      type: object
+                      properties:
+                        top_metric:      { type: string, example: mem_mb }
+                        top_feature:     { type: string, enum: [value, mean, std, slope] }
+                        contribution:    { type: number }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /train:
+    post:
+      summary: Huấn luyện lại từ tập mẫu "bình thường"
+      description: |
+        Gọi sau khi thu đủ baseline (khuyến nghị 180 mẫu = 30 phút @10s).
+        Ghi đè state cũ của deployment_id. Fit StandardScaler trước OCSVM.
+        random_state cố định = 42 để kết quả tái lập được.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deployment_id, samples]
+              properties:
+                deployment_id: { type: integer }
+                samples:
+                  type: array
+                  minItems: 150
+                  items: { $ref: "#/components/schemas/MetricSample" }
+      responses:
+        "200":
+          description: Đã train
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deployment_id, trained, train_sample_count, feature_vector_count]
+                properties:
+                  deployment_id:        { type: integer }
+                  trained:              { type: boolean }
+                  train_sample_count:   { type: integer }
+                  feature_vector_count: { type: integer, description: = train_sample_count - window + 1 }
+                  trained_at:           { type: string }
+                  warnings:
+                    type: array
+                    items: { type: string }
+                    example: ["db_response_ms toàn null - metric này bị bỏ khỏi vector"]
+        "400":
+          description: Không đủ mẫu (< 150) hoặc dữ liệu không hợp lệ
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+  /reset:
+    post:
+      summary: Xoá toàn bộ state của một deployment (dùng đầu mỗi run thí nghiệm)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deployment_id]
+              properties:
+                deployment_id: { type: integer }
+      responses:
+        "200":
+          description: Đã xoá
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deployment_id: { type: integer }
+                  deleted:       { type: boolean }
+
+  /replay:
+    post:
+      summary: Chạy inference thuần trên một mảng mẫu, KHÔNG side-effect
+      description: |
+        Công cụ cho 2 phân tích offline ở docs/07 (không tốn thêm giờ máy):
+          * Ablation study: gửi use_slope=false để chứng minh slope là chìa khoá
+          * Threshold sweep: lấy score thô rồi quét ngưỡng ngoài service
+        Train trên `train_count` mẫu đầu, chấm điểm toàn bộ mảng.
+        KHÔNG đọc/ghi state trên đĩa, KHÔNG ảnh hưởng model đang chạy.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [samples, train_count]
+              properties:
+                samples:
+                  type: array
+                  minItems: 170
+                  items: { $ref: "#/components/schemas/MetricSample" }
+                train_count:
+                  type: integer
+                  description: Số mẫu đầu dùng để train (thường = số mẫu baseline)
+                feature_config:
+                  type: object
+                  properties:
+                    use_slope:  { type: boolean, default: true }
+                    use_mean:   { type: boolean, default: true }
+                    use_std:    { type: boolean, default: true }
+                    window:     { type: integer, default: 20 }
+                    metrics:
+                      type: array
+                      items: { type: string }
+                      default: [cpu_pct, mem_mb, latency_ms, http_error_rate, db_response_ms]
+                methods:
+                  type: array
+                  items: { type: string, enum: [zscore_ewma, iforest, ocsvm, ensemble] }
+                  default: [zscore_ewma, iforest, ocsvm, ensemble]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [feature_dim, results]
+                properties:
+                  feature_dim: { type: integer, example: 20 }
+                  results:
+                    type: array
+                    description: Cùng thứ tự và độ dài với `samples`; score null cho các mẫu chưa đủ cửa sổ
+                    items:
+                      type: object
+                      properties:
+                        index:  { type: integer }
+                        ts:     { type: string }
+                        scores:
+                          type: object
+                          additionalProperties: { type: number, nullable: true }
+        "422": { $ref: "#/components/responses/ValidationError" }
+
+components:
+  responses:
+    ValidationError:
+      description: Dữ liệu vào không hợp lệ
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              detail: { type: string }
+
+  schemas:
+    MetricSample:
+      type: object
+      description: |
+        Khớp 1-1 với các cột của bảng metric_sample (schema.sql).
+        Trường null nghĩa là không đo được (probe lỗi / app không có DB), KHÔNG phải 0.
+      required: [ts, container_up]
+      properties:
+        ts:              { type: string,  description: ISO-8601 UTC theo ĐỒNG HỒ VPS }
+        seq:             { type: integer, nullable: true }
+        cpu_pct:         { type: number,  nullable: true }
+        mem_mb:          { type: number,  nullable: true }
+        mem_pct:         { type: number,  nullable: true }
+        mem_limit_mb:    { type: number,  nullable: true }
+        latency_ms:      { type: number,  nullable: true }
+        http_error_rate: { type: number,  nullable: true, minimum: 0, maximum: 1 }
+        db_response_ms:  { type: number,  nullable: true }
+        container_up:    { type: integer, enum: [0, 1] }
+        host_cpu_pct:    { type: number,  nullable: true }
+        host_mem_pct:    { type: number,  nullable: true }
