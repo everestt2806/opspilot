@@ -22,6 +22,7 @@ extraResources:
       - '**/*'
 npmRebuild: false
 win:
+  icon: resources/icon.png
   target:
     - target: nsis
       arch:

@@ -15,18 +15,12 @@
   overflow: hidden;
 }
 
-.brand-mark {
-  display: inline-flex;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  align-items: center;
-  justify-content: center;
+.brand-logo {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
   border-radius: 8px;
-  color: var(--bg-base);
-  background: var(--info);
-  font-size: 12px;
-  font-weight: 700;
+  object-fit: contain;
 }
 
 .brand-name {

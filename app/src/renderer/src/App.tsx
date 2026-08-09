@@ -17,6 +17,7 @@ import { HistoryPage } from './pages/HistoryPage'
 import { MigratePage } from './pages/MigratePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { VpsPage } from './pages/VpsPage'
+import opsPilotLogo from './assets/opspilot-logo.png'
 import { strings } from './strings'
 
 type PageKey = 'vps' | 'apps' | 'deploy' | 'dashboard' | 'migrate' | 'history' | 'settings'
@@ -82,7 +83,7 @@ function App(): React.JSX.Element {
           theme="dark"
         >
           <div className="brand" aria-label={strings.app.name}>
-            <span className="brand-mark">DT</span>
+            <img className="brand-logo" src={opsPilotLogo} alt="" aria-hidden="true" />
             {!collapsed && <span className="brand-name">{strings.app.name}</span>}
           </div>
           <Menu

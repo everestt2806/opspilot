@@ -1,6 +1,6 @@
 # OpsPilot — Desktop app deploy/migrate web app lên VPS + ML phát hiện degraded state
 
-Đồ án tốt nghiệp · 2 người · hạn nộp **20/11/2026**
+Dự án CNTT · 2 người · hạn nộp **20/11/2026**
 
 Ứng dụng desktop kết nối VPS qua SSH để deploy/migrate web app đa framework, đồng thời
 thu thập metric vận hành và chạy song song 4 phương pháp phát hiện bất thường
