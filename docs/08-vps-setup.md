@@ -16,7 +16,7 @@ chạy tiếp thí nghiệm. **Vừa làm vừa cập nhật file này** — m�
 | Provider | **Cùng provider, cùng gói, cùng region cho cả 2 máy** — bắt buộc, xem [`07`](07-giao-thuc-thi-nghiem.md#9-3) |
 | Gợi ý | Hetzner CX22 (~€4/th) · Vultr · DigitalOcean (~6–12 USD/th) |
 | Chi phí | ~40–70 USD cho 4 tháng cả 2 máy |
-| Đặt tên | `deploytool-vps-1`, `deploytool-vps-2` |
+| Đặt tên | `opspilot-vps-1`, `opspilot-vps-2` |
 
 Ghi lại ngay sau khi mua:
 
@@ -35,13 +35,13 @@ Ghi lại ngay sau khi mua:
 Trên **máy dev** (không dùng lại key cá nhân):
 
 ```bash
-ssh-keygen -t ed25519 -C "deploytool-doan" -f ~/.ssh/deploytool_ed25519
+ssh-keygen -t ed25519 -C "opspilot-doan" -f ~/.ssh/opspilot_ed25519
 ```
 
 - Cả 2 thành viên đều tạo key riêng, **cả 2 key đều nạp lên cả 2 VPS**.
 - Không commit private key (đã chặn trong `.gitignore`). Không dán vào chat/Drive.
 - Nạp key lúc tạo VPS (dán public key vào giao diện provider) hoặc:
-  `ssh-copy-id -i ~/.ssh/deploytool_ed25519.pub root@<ip>`
+  `ssh-copy-id -i ~/.ssh/opspilot_ed25519.pub root@<ip>`
 
 ---
 
@@ -97,9 +97,9 @@ su - deploy -c 'docker ps'
 ## 4. Thư mục làm việc
 
 ```bash
-mkdir -p /opt/deploytool
-chown deploy:deploy /opt/deploytool
-chmod 755 /opt/deploytool
+mkdir -p /opt/opspilot
+chown deploy:deploy /opt/opspilot
+chmod 755 /opt/opspilot
 ```
 
 Cấu trúc bên trong do tool tự tạo — xem [`contracts/metric-format.md`](contracts/metric-format.md).
@@ -111,7 +111,7 @@ Cấu trúc bên trong do tool tự tạo — xem [`contracts/metric-format.md`]
 ```bash
 ssh deploy@<ip> 'echo OK'                                  # 1. SSH bằng key, user deploy
 ssh deploy@<ip> 'docker run --rm hello-world | tail -1'    # 2. Docker chạy không cần sudo
-ssh deploy@<ip> 'touch /opt/deploytool/.probe && rm /opt/deploytool/.probe && echo WRITABLE'
+ssh deploy@<ip> 'touch /opt/opspilot/.probe && rm /opt/opspilot/.probe && echo WRITABLE'
 ssh deploy@<ip> 'timedatectl status | grep synchronized'   # 4. Đồng hồ đồng bộ
 ssh deploy@<ip> 'free -m | head -2; df -h / | tail -1'     # 5. Tài nguyên đúng như đã mua
 ssh deploy@<ip> "date +%s%3N"                              # 6. So với đồng hồ máy dev, lệch < 2000ms

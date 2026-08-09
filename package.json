@@ -1,0 +1,22 @@
+{
+  "name": "opspilot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop tool deploy va migrate web app len VPS, kem phat hien degraded state",
+  "packageManager": "pnpm@11.1.0",
+  "engines": {
+    "node": ">=22 <23",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @opspilot/app dev",
+    "build": "pnpm --filter @opspilot/app build",
+    "build:win": "pnpm --filter @opspilot/app build:win",
+    "test": "pnpm test:app && pnpm test:ml",
+    "test:app": "pnpm --filter @opspilot/app test",
+    "test:ml": "cd ml-service && .venv\\Scripts\\python.exe -m pytest tests",
+    "lint": "pnpm --filter @opspilot/app lint && cd ml-service && .venv\\Scripts\\python.exe -m ruff check .",
+    "typecheck": "pnpm --filter @opspilot/app typecheck",
+    "format": "pnpm --filter @opspilot/app format && ml-service\\.venv\\Scripts\\python.exe -m ruff format ml-service"
+  }
+}

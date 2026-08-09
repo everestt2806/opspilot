@@ -72,4 +72,4 @@ test qua interface với scheme AES (đủ để chứng minh logic đúng, ghi 
 - [ ] Toàn bộ unit test xanh
 - [ ] Thêm VPS qua UI → cột `encrypted_secret` trong DB **không đọc được bằng mắt**
 - [ ] Mở lại app → kết nối SSH vẫn thành công (giải mã đúng)
-- [ ] `grep -ri "BEGIN OPENSSH" ~/.deploytool/logs/` → **không có kết quả**
+- [ ] `grep -ri "BEGIN OPENSSH" ~/.opspilot/logs/` → **không có kết quả**

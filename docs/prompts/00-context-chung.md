@@ -17,7 +17,7 @@ Máy người dùng (Windows)                                VPS (Ubuntu 24.04)
 │  ├─ Renderer: React + TS + Ant Design v5                 ├─ container app        :30xxx
 │  └─ Main (Node.js):                          ── SSH ──▶  ├─ postgres (nếu app cần)
 │     ssh2 · detectors · deploy pipeline                   └─ collector (python alpine)
-│     migrate pipeline · poller · better-sqlite3              ghi /opt/deploytool/<app>/
+│     migrate pipeline · poller · better-sqlite3              ghi /opt/opspilot/<app>/
 │                                                             metrics/metrics.jsonl
 └─ spawn ▶ ML service Python (FastAPI + scikit-learn)
            http://127.0.0.1:8765
@@ -66,7 +66,7 @@ Không agent trên VPS. Không mở thêm port. Chỉ Docker và các container 
 | Auto-rollback | trusted method triggered 3 lần liên tiếp, cooldown 10 phút |
 | Precheck VPS | RAM trống >512MB, disk trống >2GB, port chưa dùng |
 | Dải port cấp cho app | 30000–30999 |
-| Thư mục trên VPS | `/opt/deploytool/<app_name>/` |
+| Thư mục trên VPS | `/opt/opspilot/<app_name>/` |
 | Cổng ML service | 8765 (chỉ 127.0.0.1) |
 | `random_state` | **42** ở mọi nơi có ngẫu nhiên |
 

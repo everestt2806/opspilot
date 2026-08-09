@@ -1,0 +1,35 @@
+appId: vn.opspilot.desktop
+productName: OpsPilot
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**
+  - package.json
+asarUnpack:
+  - '**/node_modules/better-sqlite3/**'
+extraResources:
+  - from: ../ml-service
+    to: ml-service
+    filter:
+      - '**/*'
+      - '!**/__pycache__/**'
+      - '!**/.pytest_cache/**'
+      - '!state/**'
+  - from: ../templates
+    to: templates
+    filter:
+      - '**/*'
+npmRebuild: false
+win:
+  icon: resources/icon.png
+  target:
+    - target: nsis
+      arch:
+        - x64
+  executableName: OpsPilot
+nsis:
+  artifactName: OpsPilot-${version}-setup.${ext}
+  shortcutName: OpsPilot
+  uninstallDisplayName: OpsPilot
+  createDesktopShortcut: always

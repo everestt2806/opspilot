@@ -44,7 +44,7 @@ Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng đượ
 
 | ID | Yêu cầu | Bảo đảm bằng | Kiểm chứng | TT |
 |---|---|---|---|---|
-| NFR-1 | Không tiến trình thường trực trên VPS ngoài container | Kiến trúc SSH-only (ADR-001) | `systemctl list-units \| grep deploytool` → rỗng | ⬜ |
+| NFR-1 | Không tiến trình thường trực trên VPS ngoài container | Kiến trúc SSH-only (ADR-001) | `systemctl list-units \| grep opspilot` → rỗng | ⬜ |
 | NFR-2 | Credential mã hoá, không rời máy | M2 `safeStorage` (ADR-002) | unit test + **chốt với GVHD tuần 0** | ⬜ |
 | NFR-3 | Đóng gói electron-builder chạy được | `electron-builder.yml` | cài trên **máy sạch** (không có Node) | ⬜ |
 | NFR-4 | Deploy Tier 1 < 3 phút | M4 tối ưu bước UPLOAD/BUILD | `deployment.total_duration_ms`, ≥5 lần mỗi framework | ⬜ |

@@ -74,7 +74,7 @@ phần trăm 1 chữ số thập phân · score 2 chữ số thập phân.
 
 | Ngữ cảnh | Cách ghép | Ví dụ |
 |---|---|---|
-| Trên VPS (Linux) | `path.posix.join` | `/opt/deploytool/express-api/metrics/metrics.jsonl` |
+| Trên VPS (Linux) | `path.posix.join` | `/opt/opspilot/express-api/metrics/metrics.jsonl` |
 | Trên máy user (Windows) | `path.join` | `D:\Developing\DuAnCNTT\demo-apps\express-api` |
 | Trong container | tuyệt đối, cố định | `/var/metrics/metrics.jsonl` |
 

@@ -33,7 +33,7 @@ In ra hoặc copy vào issue GitHub. Tick thật, đừng tick cho có.
 
 ### Máy dev (cả 2 người)
 - [ ] Node 22 · pnpm · Python 3.12 · Docker Desktop · VS Code — theo [`09`](09-moi-truong-dev.md) mục 1
-- [ ] Tạo SSH key riêng cho đồ án: `~/.ssh/deploytool_ed25519`
+- [ ] Tạo SSH key riêng cho đồ án: `~/.ssh/opspilot_ed25519`
 - [ ] Thêm ngoại lệ Windows Defender cho thư mục repo
 
 ### VPS

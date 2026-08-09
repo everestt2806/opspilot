@@ -18,7 +18,7 @@ Chỉ hỗ trợ app **do chính tool này deploy** — cấu trúc thư mục v
 
 | # | Bước | Việc |
 |---|---|---|
-| 1 | `PREPARE` | Precheck VPS đích (dùng lại `PRECHECK` của M4), cấp `host_port` trên đích, tạo `/opt/deploytool/<app>` |
+| 1 | `PREPARE` | Precheck VPS đích (dùng lại `PRECHECK` của M4), cấp `host_port` trên đích, tạo `/opt/opspilot/<app>` |
 | 2 | `FREEZE` | `docker compose stop app` trên **nguồn** (postgres vẫn chạy để dump). **Bắt đầu đếm downtime** |
 | 3 | `BACKUP` | `docker exec <pg> pg_dump -Fc -U <user> <db> > backup.dump` (nếu `needs_db`) · `tar czf data.tar.gz data/` · copy `.env` · `sha256sum` từng file |
 | 4 | `TRANSFER` | `ssh nguồn 'cat f' \| ssh đích 'cat > f'` — stream qua máy người dùng, **không yêu cầu 2 VPS thấy nhau**. Phát `progress` theo byte |

@@ -1,0 +1,9 @@
+packages:
+  - app
+allowBuilds:
+  better-sqlite3: true
+  cpu-features: false
+  electron: true
+  electron-winstaller: false
+  esbuild: true
+  ssh2: false

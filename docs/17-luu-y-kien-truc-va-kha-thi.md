@@ -68,7 +68,7 @@ cấu hình của version mới.
 **Đề xuất cấu trúc:**
 
 ```text
-/opt/deploytool/<app>/
+/opt/opspilot/<app>/
 └── releases/
     ├── v1/
     │   ├── docker-compose.yml
