@@ -36,6 +36,17 @@ phải soi lỗi. Checklist review: [`prompts/99-review.md`](prompts/99-review.m
 - Nếu thật sự cần hai tài khoản Git trên cùng một máy, dùng hai SSH key + hai host alias và hai
   clone riêng; mỗi clone cấu hình identity cục bộ. Đây chỉ là phương án vận hành, không tạo repo thứ hai.
 
+### Quản lý task
+
+- **Trello là nguồn sự thật cho task/trạng thái; GitHub là nguồn sự thật cho code/test/merge.**
+  Không tạo lại cùng một task ở GitHub Issues.
+- Luồng card: `TUẦN NÀY → ĐANG LÀM → CHỜ REVIEW → HOÀN THÀNH`; vướng trên 30 phút thì
+  chuyển `BLOCKED` và ghi rõ điều kiện gỡ chặn.
+- Mỗi người tối đa một card `ĐANG LÀM`. Push commit chưa phải hoàn thành; phải có PR mới sang
+  `CHỜ REVIEW`, và chỉ sang `HOÀN THÀNH` sau khi PR merge vào `main` cùng test pass.
+- Card phải ghi owner, deadline, branch, vùng file được sửa/không sửa và Definition of Done.
+  Cách dựng board và script tự động: [`18-trello-workflow.md`](18-trello-workflow.md).
+
 ---
 
 ## 2. Nhịp làm việc
