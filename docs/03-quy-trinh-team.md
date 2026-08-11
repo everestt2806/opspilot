@@ -45,7 +45,9 @@ phải soi lỗi. Checklist review: [`prompts/99-review.md`](prompts/99-review.m
 - Mỗi người tối đa một card `ĐANG LÀM`. Push commit chưa phải hoàn thành; phải có PR mới sang
   `CHỜ REVIEW`, và chỉ sang `HOÀN THÀNH` sau khi PR merge vào `main` cùng test pass.
 - Card phải ghi owner, deadline, branch, vùng file được sửa/không sửa và Definition of Done.
-  Cách dựng board và script tự động: [`18-trello-workflow.md`](18-trello-workflow.md).
+  Playbook thao tác hằng ngày, mẫu comment và script dựng board: [`18-trello-workflow.md`](18-trello-workflow.md).
+- Khi giao một card cho AI, dùng [`prompts/01-task-from-trello.md`](prompts/01-task-from-trello.md).
+  Con người vẫn chịu trách nhiệm xác nhận test, cập nhật trạng thái Trello và quyết định merge.
 
 ---
 

@@ -50,6 +50,7 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | File | Nội dung |
 |---|---|
 | [`prompts/00-context-chung.md`](prompts/00-context-chung.md) | Khối ngữ cảnh dán vào đầu mọi phiên chat với model bất kỳ |
+| [`prompts/01-task-from-trello.md`](prompts/01-task-from-trello.md) | Mẫu giao một Trello card cho AI, gồm scope, DoD, quyền sửa/commit/push và mẫu bàn giao |
 | [`prompts/m01`…`m12`](prompts/) | Một brief hoàn chỉnh cho mỗi module: input, output, ràng buộc, định nghĩa xong, cách test |
 | [`prompts/99-review.md`](prompts/99-review.md) | Prompt để AI tự review code trước khi mở PR |
 
