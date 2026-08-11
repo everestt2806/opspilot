@@ -33,8 +33,11 @@ Không ghi API key/token vào repo, Trello card, chat hoặc ảnh chụp màn h
 ```powershell
 .\tools\setup-trello.ps1 `
   -BoardUrl 'https://trello.com/b/XXXXXXXX/opspilot-delivery' `
-  -PartnerUsername 'trello_username_cua_B'
+  -PartnerEmail 'email_cua_B@example.com'
 ```
+
+Nếu B đã mở board và có username Trello, có thể dùng `-PartnerUsername` thay cho
+`-PartnerEmail`. Không ghi email thật vào script hay commit.
 
 Script sẽ:
 

@@ -2,6 +2,7 @@
 param(
   [string]$BoardUrl,
   [string]$PartnerUsername,
+  [string]$PartnerEmail,
   [switch]$PlanOnly
 )
 
@@ -297,6 +298,23 @@ try {
     }
   }
 
+  if ($null -eq $partner -and -not [string]::IsNullOrWhiteSpace($PartnerEmail)) {
+    $encodedPartnerEmail = [Uri]::EscapeDataString($PartnerEmail)
+    try {
+      $null = Invoke-TrelloApi -Method PUT -Path "boards/$($board.id)/members?email=$encodedPartnerEmail&type=normal" -Body @{ fullName = $PartnerEmail }
+      Write-Host 'Da gui/dong bo loi moi nguoi B vao board.'
+      $members = @(Invoke-TrelloApi -Method GET -Path "boards/$($board.id)/members?fields=id,username,fullName")
+      $otherMembers = @($members | Where-Object { $_.id -ne $currentMember.id })
+      if ($otherMembers.Count -eq 1) {
+        $partner = $otherMembers[0]
+      }
+    } catch {
+      Write-Warning "Chua moi/assign duoc B qua email: $($_.Exception.Message)"
+    } finally {
+      $encodedPartnerEmail = $null
+    }
+  }
+
   if ($null -eq $partner) {
     Write-Warning 'Khong xac dinh duoc nguoi B. Card B se duoc tao nhung chua assign. Moi B vao board va assign thu cong.'
   } else {
@@ -389,5 +407,6 @@ try {
   $apiKey = $null
   $encodedKey = $null
   $authorizeUrl = $null
+  $PartnerEmail = $null
   $script:TrelloHeaders = $null
 }
