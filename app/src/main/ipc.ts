@@ -4,6 +4,7 @@ import type { IpcInvokeMap, IpcResult } from '@shared/ipc'
 
 import { AppError, toIpcError } from './errors'
 import type { MlServiceManager } from './mlClient'
+import type { VpsService } from './vps/service'
 
 type Channel = keyof IpcInvokeMap
 type ChannelArgs<K extends Channel> = Parameters<IpcInvokeMap[K]>
@@ -24,7 +25,12 @@ export function handle<K extends Channel>(
   })
 }
 
-export function registerIpcHandlers(mlService: MlServiceManager): void {
+export function registerIpcHandlers(mlService: MlServiceManager, vpsService: VpsService): void {
+  handle('vps:list', () => vpsService.list())
+  handle('vps:create', (input) => vpsService.create(input))
+  handle('vps:update', (id, patch) => vpsService.update(id, patch))
+  handle('vps:delete', (id) => vpsService.delete(id))
+
   handle('system:ml-status', async () => mlService.status())
   handle('system:ml-restart', async () => {
     await mlService.restart()

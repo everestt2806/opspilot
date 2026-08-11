@@ -61,3 +61,29 @@
 .page-panel .ant-empty {
   margin-top: 120px;
 }
+
+.page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.page-heading .ant-typography {
+  margin-top: 0;
+}
+
+.page-alert {
+  margin-bottom: 16px;
+}
+
+.mono-input,
+.mono-input input,
+.mono-input textarea {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+.page-panel .ant-table .ant-empty {
+  margin-block: 64px;
+}

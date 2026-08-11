@@ -4,10 +4,13 @@ import { app, BrowserWindow, shell } from 'electron'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 
 import icon from '../../resources/icon.png?asset'
+import { createCredentialCipher } from './crypto/masterKey'
 import { closeDatabase, initializeDatabase } from './db'
+import { VpsRepository } from './db/vpsRepository'
 import { registerIpcHandlers } from './ipc'
 import { logger } from './logger'
 import { MlServiceManager } from './mlClient'
+import { VpsService } from './vps/service'
 
 let mainWindow: BrowserWindow | null = null
 let mlService: MlServiceManager | null = null
@@ -62,9 +65,12 @@ void app
       optimizer.watchWindowShortcuts(window)
     })
 
-    initializeDatabase(app.getPath('userData'))
+    const userDataPath = app.getPath('userData')
+    const database = initializeDatabase(userDataPath)
+    const credentialCipher = createCredentialCipher(userDataPath)
+    const vpsService = new VpsService(new VpsRepository(database), credentialCipher)
     mlService = new MlServiceManager(emitMlStatus)
-    registerIpcHandlers(mlService)
+    registerIpcHandlers(mlService, vpsService)
     createWindow()
 
     try {
