@@ -165,25 +165,25 @@ $cards = @(
     Done = @('Moi nguoi toi da 1 card DANG LAM', 'Co PR moi sang CHO REVIEW', 'Merge main + test pass moi HOAN THANH', 'Vuong qua 30 phut thi sang BLOCKED')
   },
   [pscustomobject]@{
-    Title = "$emojiFlag W1 - Foundation - 10/08-16/08"; ListKey = 'ThisWeek'; Owner = 'Both'; Due = '2026-08-16T23:00:00+07:00'; DueLabel = '16/08/2026'
+    Title = "$emojiFlag W1 - Foundation - 10/08-21/08"; PreviousTitles = @("$emojiFlag W1 - Foundation - 10/08-16/08"); ListKey = 'ThisWeek'; Owner = 'Both'; Due = '2026-08-21T23:00:00+07:00'; DueLabel = '21/08/2026'
     Branch = 'Khong ap dung'; Labels = @('Shared', 'P0'); Goal = 'Dat gate W1: SSH, credential, collector va demo app co the test doc lap.'
     Scope = @('Tat ca task W1'); Avoid = @('Khong keo feature W2 vao W1')
     Done = @('App va ML service chay bang mot lenh', 'pnpm try:ssh chay docker --version tren VPS', 'VPS List hien online/RAM/disk', '3 demo app chay Docker local', 'Review cheo va smoke test main')
   },
   [pscustomobject]@{
-    Title = "$emojiFlag W2 - Vertical Slice - 17/08-23/08"; ListKey = 'Backlog'; Owner = 'Both'; Due = '2026-08-23T23:00:00+07:00'; DueLabel = '23/08/2026'
+    Title = "$emojiFlag W2 - Vertical Slice - 22/08-28/08"; PreviousTitles = @("$emojiFlag W2 - Vertical Slice - 17/08-23/08"); ListKey = 'Backlog'; Owner = 'Both'; Due = '2026-08-28T23:00:00+07:00'; DueLabel = '28/08/2026'
     Branch = 'Khong ap dung'; Labels = @('Shared', 'P1'); Goal = 'Express detect -> build VPS -> app chay -> metric dung contract; ML API test doc lap.'
     Scope = @('M3', 'M4 PRECHECK-BUILD', 'M5', 'M7'); Avoid = @('Khong polish UI ngoai Deploy Log khung')
     Done = @('3 detector Tier 1 qua test', 'Express build tren VPS', 'metrics.jsonl dung contract', '4 ML method chay du lieu gia')
   },
   [pscustomobject]@{
-    Title = "$emojiFlag W3 - Deploy + Data - 24/08-30/08"; ListKey = 'Backlog'; Owner = 'Both'; Due = '2026-08-30T23:00:00+07:00'; DueLabel = '30/08/2026'
+    Title = "$emojiFlag W3 - Deploy + Data - 29/08-04/09"; PreviousTitles = @("$emojiFlag W3 - Deploy + Data - 24/08-30/08"); ListKey = 'Backlog'; Owner = 'Both'; Due = '2026-09-04T23:00:00+07:00'; DueLabel = '04/09/2026'
     Branch = 'Khong ap dung'; Labels = @('Shared', 'P1'); Goal = 'Deploy 3 app tu UI va thay metric/score that tren dashboard.'
     Scope = @('M4', 'M6', 'Dashboard v1'); Avoid = @('Khong lam migrate')
     Done = @('Deploy Next/Express/Vite tu UI', 'Metric that vao SQLite', 'Moi sample co 5 score_sample', 'Doi threshold lam alert thay doi')
   },
   [pscustomobject]@{
-    Title = "$emojiFlag W4 - MVP 66.7% - 31/08-06/09"; ListKey = 'Backlog'; Owner = 'Both'; Due = '2026-09-06T23:00:00+07:00'; DueLabel = '06/09/2026'
+    Title = "$emojiFlag W4 - MVP 66.7% - 05/09-11/09"; PreviousTitles = @("$emojiFlag W4 - MVP 66.7% - 31/08-06/09"); ListKey = 'Backlog'; Owner = 'Both'; Due = '2026-09-11T23:00:00+07:00'; DueLabel = '11/09/2026'
     Branch = 'Khong ap dung'; Labels = @('Shared', 'P0'); Goal = 'Dat MVP 16/24 FR voi rollback, alert va reconnect.'
     Scope = @('Gate W4'); Avoid = @('Khong them feature ngoai gate')
     Done = @('Smoke UC-01/02/03/04/06/08', 'Rollback dung v(N-1)', 'Fault tao alert va gan nhan', 'Mat SSH roi nap bu khong trung')
@@ -195,13 +195,13 @@ $cards = @(
     Done = @('Chot lifecycle deployment', 'Chot release artifact', 'Chot http_error_rate', 'Chot migrate VERIFY fail', 'Chot attempt_index', 'Chot SSH fingerprint', 'Cap nhat contract + DECISIONS.md')
   },
   [pscustomobject]@{
-    Title = '[Shared][Infra] Dung va kiem tra 2 VPS'; ListKey = 'ThisWeek'; Owner = 'A'; Due = '2026-08-12T23:00:00+07:00'; DueLabel = '12/08/2026'
+    Title = '[Shared][Infra] Dung va kiem tra 2 VPS'; ListKey = 'ThisWeek'; Owner = 'A'; Due = '2026-08-15T23:00:00+07:00'; DueLabel = '15/08/2026'
     Branch = 'Khong can code'; Labels = @('A', 'Shared', 'P0'); Goal = 'Hai VPS Ubuntu 24.04 SSH duoc, cung provider/goi/region, snapshot sach.'
     Scope = @('docs/08-vps-setup.md', 'Tai khoan provider'); Avoid = @('Khong ghi IP/password/private key vao Git/Trello')
     Done = @('Tao user deploy', 'SSH key hoat dong', 'Docker hoat dong', '/opt/opspilot ghi duoc', 'Snapshot sach ca 2 VPS')
   },
   [pscustomobject]@{
-    Title = '[Shared] Review cheo va smoke gate W1'; ListKey = 'ThisWeek'; Owner = 'Both'; Due = '2026-08-15T23:00:00+07:00'; DueLabel = '15/08/2026'
+    Title = '[Shared] Review cheo va smoke gate W1'; ListKey = 'ThisWeek'; Owner = 'Both'; Due = '2026-08-21T23:00:00+07:00'; DueLabel = '21/08/2026'
     Branch = 'Khong ap dung'; Labels = @('Shared', 'P0'); Goal = 'Merge phan A/B, review cheo va xac nhan gate W1 tren main.'
     Scope = @('PR W1', 'docs/smoke-log.md', 'docs/04-timeline.md'); Avoid = @('Khong merge code khong giai thich duoc')
     Done = @('A review PR cua B', 'B review PR cua A', 'Typecheck/lint/test pass', 'Smoke SSH + collector pass', 'Cap nhat cot Thuc te')
@@ -213,157 +213,157 @@ $cards = @(
     Done = @('CRUD dung schema', 'Unit test DB/repository', 'IPC tra ApiResult', 'Khong log credential', 'pnpm typecheck + test pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[A][UI] Khung VPS List noi du lieu that'; ListKey = 'ThisWeek'; Owner = 'A'; Due = '2026-08-15T23:00:00+07:00'; DueLabel = '15/08/2026'
+    Title = '[A][UI] Khung VPS List noi du lieu that'; ListKey = 'ThisWeek'; Owner = 'A'; Due = '2026-08-11T23:00:00+07:00'; DueLabel = '11/08/2026'
     Branch = 'feat/m10-vps-list'; Labels = @('A', 'P1'); Goal = 'VPS List doc SQLite/IPC, co loading, empty va error state.'
     Scope = @('app/src/renderer/src/pages/VpsPage.tsx', 'app/src/renderer/src/components/**'); Avoid = @('collector/**', 'ml-service/**')
     Done = @('List du lieu that', 'Loading/empty/error state', 'Khong truy cap Node tu renderer', 'Typecheck pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[A][M2] Credential encrypt/decrypt + tamper test'; ListKey = 'ThisWeek'; Owner = 'A'; Due = '2026-08-12T23:00:00+07:00'; DueLabel = '12/08/2026'
+    Title = '[A][M2] Credential encrypt/decrypt + tamper test'; ListKey = 'ThisWeek'; Owner = 'A'; Due = '2026-08-15T23:00:00+07:00'; DueLabel = '15/08/2026'
     Branch = 'feat/m02-credential'; Labels = @('A', 'P0'); Goal = 'Boc Electron safeStorage theo contract va test ciphertext bi sua.'
     Scope = @('app/src/main/crypto/**', 'app/src/main/ipc.ts', 'app/src/main/db/** neu can'); Avoid = @('Khong tu viet AES neu chua co decision', 'Khong log plaintext/private key')
     Done = @('Encrypt/decrypt dung interface', 'Tamper test throw', 'Secret khong vao log', 'Unit test pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[A][M1] SSH connect/exec + timeout/reconnect'; ListKey = 'ThisWeek'; Owner = 'A'; Due = '2026-08-13T23:00:00+07:00'; DueLabel = '13/08/2026'
+    Title = '[A][M1] SSH connect/exec + timeout/reconnect'; ListKey = 'ThisWeek'; Owner = 'A'; Due = '2026-08-17T23:00:00+07:00'; DueLabel = '17/08/2026'
     Branch = 'feat/m01-ssh-connect-exec'; Labels = @('A', 'P0'); Goal = 'Pool 1 connection/VPS, exec streaming, phan loai loi va reconnect backoff.'
     Scope = @('app/src/main/ssh/**', 'app/scripts/try-ssh.ts'); Avoid = @('collector/**', 'ml-service/**', 'UI ngoai IPC toi thieu')
     Done = @('connect/exec dung interface', 'AUTH_FAILED/TIMEOUT/HOST_UNREACHABLE', 'Timeout huy command', 'Reconnect 1s/2s/4s toi da 3', 'try:ssh chay docker --version')
   },
   [pscustomobject]@{
-    Title = '[A][M1] uploadDir/readFileTail + resource check'; ListKey = 'ThisWeek'; Owner = 'A'; Due = '2026-08-14T23:00:00+07:00'; DueLabel = '14/08/2026'
+    Title = '[A][M1] uploadDir/readFileTail + resource check'; ListKey = 'ThisWeek'; Owner = 'A'; Due = '2026-08-19T23:00:00+07:00'; DueLabel = '19/08/2026'
     Branch = 'feat/m01-ssh-files-resource'; Labels = @('A', 'P0'); Goal = 'Upload tar stream, tail theo byte va kiem tra Docker/RAM/disk tren VPS.'
     Scope = @('app/src/main/ssh/**', 'app/scripts/try-ssh.ts'); Avoid = @('Khong sua metric format cua B', 'Khong noi UI truoc khi CLI pass')
     Done = @('uploadDir exclude dung', 'readFile/readFileTail dung nextByte', 'shellQuote input', 'Docker/resource check', 'A doc duoc metrics.jsonl cua B')
   },
   [pscustomobject]@{
-    Title = '[B][M5] Collector scaffold + metric contract test'; ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-11T23:00:00+07:00'; DueLabel = '11/08/2026'
+    Title = '[B][M5] Collector scaffold + metric contract test'; ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-15T23:00:00+07:00'; DueLabel = '15/08/2026'
     Branch = 'feat/m05-collector-scaffold'; Labels = @('B', 'P0'); Goal = 'Tao khung collector va test mot MetricSample dung metric-format.md.'
     Scope = @('collector/**', 'docs/contracts/metric-format.md chi doc'); Avoid = @('app/src/main/**', 'docs/contracts/**')
     Done = @('collect.py co config interval', 'MetricSample dung field/type', 'Timestamp/seq hop le', 'pytest pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[B][M12] Ba demo app chay Docker local'; ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-11T23:00:00+07:00'; DueLabel = '11/08/2026'
+    Title = '[B][M12] Ba demo app chay Docker local'; ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-16T23:00:00+07:00'; DueLabel = '16/08/2026'
     Branch = 'feat/m12-demo-apps'; Labels = @('B', 'P1'); Goal = 'Next blog, Express API va Vite SPA co Dockerfile va health endpoint local.'
     Scope = @('demo-apps/**'); Avoid = @('app/src/main/**', 'collector/** ngoai config demo')
     Done = @('3 app build image', '3 container start', 'Health endpoint 200', 'README lenh tai hien', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[B][Fixture] Generator metric gia dung contract'; PreviousTitles = @('[B][M7] Generator metric gia dung contract'); ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-11T23:00:00+07:00'; DueLabel = '11/08/2026'
+    Title = '[B][Fixture] Generator metric gia dung contract'; PreviousTitles = @('[B][M7] Generator metric gia dung contract'); ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-17T23:00:00+07:00'; DueLabel = '17/08/2026'
     Branch = 'feat/m07-fake-metrics'; Labels = @('B', 'P1'); Goal = 'Sinh metrics.jsonl baseline/anomaly de ML va poller test doc lap.'
     Scope = @('experiments/fixtures/**', 'experiments/tests/**'); Avoid = @('app/src/main/**', 'ml-service/**', 'docs/contracts/**')
     Done = @('Seq tang dan', 'Timestamp hop le', 'Null metric dung contract', 'Co baseline va anomaly', 'Test format pass')
   },
   [pscustomobject]@{
-    Title = '[B][M5] Docker stats + HTTP probe local'; ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-12T23:00:00+07:00'; DueLabel = '12/08/2026'
+    Title = '[B][M5] Docker stats + HTTP probe local'; ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-18T23:00:00+07:00'; DueLabel = '18/08/2026'
     Branch = 'feat/m05-collector-probes'; Labels = @('B', 'P0'); Goal = 'Collector doc docker stats va probe app local voi timeout 5s.'
     Scope = @('collector/**'); Avoid = @('app/src/main/**', 'ml-service/models/**')
     Done = @('Parse CPU/memory', 'Probe latency/status', 'Timeout -> container_up=0', 'Test bang demo Express', 'pytest pass')
   },
   [pscustomobject]@{
-    Title = '[B][M5] Ghi metrics.jsonl + latest.json'; ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-13T23:00:00+07:00'; DueLabel = '13/08/2026'
+    Title = '[B][M5] Ghi metrics.jsonl + latest.json'; ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-19T23:00:00+07:00'; DueLabel = '19/08/2026'
     Branch = 'feat/m05-collector-output'; Labels = @('B', 'P0'); Goal = 'Append JSONL va atomic replace latest.json dung contract.'
     Scope = @('collector/**'); Avoid = @('app/src/main/monitor/**', 'docs/contracts/**')
     Done = @('Append 1 dong moi sample', 'latest.json atomic', 'Seq khong reset', 'Khong mat dong khi restart', 'pytest pass')
   },
   [pscustomobject]@{
-    Title = '[B][M5] Chay collector Docker tren VPS'; ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-14T23:00:00+07:00'; DueLabel = '14/08/2026'
+    Title = '[B][M5] Chay collector Docker tren VPS'; ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-20T23:00:00+07:00'; DueLabel = '20/08/2026'
     Branch = 'feat/m05-collector-docker'; Labels = @('B', 'P0'); Goal = 'Dong goi collector va thu metric that tren VPS.'
     Scope = @('collector/**', 'templates/** neu can mount'); Avoid = @('app/src/main/ssh/**', 'Khong mo port metric')
     Done = @('python:3.12-alpine', 'Docker socket read-only', 'metrics.jsonl co metric that', 'latest.json hop le', 'A doc duoc file qua SSH')
   },
   [pscustomobject]@{
-    Title = '[A][M7] ML skeleton test + lenh tai hien'; PreviousTitles = @('[B][M7] ML skeleton test + lenh tai hien'); ListKey = 'ThisWeek'; Owner = 'A'; Due = '2026-08-15T23:00:00+07:00'; DueLabel = '15/08/2026'
+    Title = '[A][M7] ML skeleton test + lenh tai hien'; PreviousTitles = @('[B][M7] ML skeleton test + lenh tai hien'); ListKey = 'ThisWeek'; Owner = 'A'; Due = '2026-08-21T23:00:00+07:00'; DueLabel = '21/08/2026'
     Branch = 'feat/m07-ml-skeleton-tests'; Labels = @('A', 'P1'); Goal = 'Mo rong test health/config/features skeleton va ghi lenh tai hien.'
     Scope = @('ml-service/**'); Avoid = @('app/src/renderer/**', 'Khong doi OpenAPI')
     Done = @('pytest pass', 'health version dung', 'Config deterministic random_state=42', 'README lenh tai hien', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[B][UI] VPS connection + resource states bang typed mock'; ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-15T23:00:00+07:00'; DueLabel = '15/08/2026'
+    Title = '[B][UI] VPS connection + resource states bang typed mock'; ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-21T23:00:00+07:00'; DueLabel = '21/08/2026'
     Branch = 'feat/m10-vps-connection-ui'; Labels = @('B', 'P0'); Goal = 'Dung UI test SSH/Docker va CPU/RAM/disk bang fixture cung type, sau do noi handler that.'
     Scope = @('app/src/renderer/**'); Avoid = @('app/src/main/**', 'app/src/shared/**', 'docs/contracts/**')
     Done = @('Loading/empty/success/error', 'Fixture satisfies typed IPC', 'Khong import Node/Electron', 'Noi window.api.invoke sau PR A', 'Typecheck + component test pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[A][M3] Detector 3 Tier 1 + unit test'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-08-18T23:00:00+07:00'; DueLabel = '18/08/2026'
+    Title = '[A][M3] Detector 3 Tier 1 + unit test'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-08-23T23:00:00+07:00'; DueLabel = '23/08/2026'
     Branch = 'feat/m03-tier1-detectors'; Labels = @('A', 'P0'); Goal = 'Detect Next.js, Express va static SPA dung contract, kem bang chung tung dau hieu.'
     Scope = @('app/src/main/detectors/**'); Avoid = @('app/src/renderer/**', 'docs/contracts/**')
     Done = @('3 detector dung interface', 'Moi detector >=4 case', 'Ket qua co evidence', 'pnpm test + typecheck pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[B][UI] Deploy Wizard shell bang typed mock'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-08-19T23:00:00+07:00'; DueLabel = '19/08/2026'
+    Title = '[B][UI] Deploy Wizard shell bang typed mock'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-08-24T23:00:00+07:00'; DueLabel = '24/08/2026'
     Branch = 'feat/m10-deploy-wizard-ui'; Labels = @('B', 'P1'); Goal = 'Dung wizard chon source, detection, env va precheck bang typed fixture.'
     Scope = @('app/src/renderer/**'); Avoid = @('app/src/main/**', 'app/src/shared/**')
     Done = @('Du 4 buoc va validation', 'Loading/success/error', 'Fixture satisfies contract', 'Khong import Node/Electron', 'Typecheck + component test pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[A][M4] PRECHECK-UPLOAD-RENDER-BUILD Express'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-08-21T23:00:00+07:00'; DueLabel = '21/08/2026'
+    Title = '[A][M4] PRECHECK-UPLOAD-RENDER-BUILD Express'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-08-26T23:00:00+07:00'; DueLabel = '26/08/2026'
     Branch = 'feat/m04-deploy-build'; Labels = @('A', 'P0'); Goal = 'Chay lat cat Express tu precheck den build image tren VPS bang CLI.'
     Scope = @('app/src/main/deploy/**', 'templates/**', 'app/scripts/**'); Avoid = @('app/src/renderer/**', 'collector/**')
     Done = @('State machine PRECHECK-BUILD', 'Event dung contract', 'Fail ghi dung step', 'CLI build Express tren VPS', 'Test + typecheck pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[B][UI] Deploy Log stepper + xterm bang event gia'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-08-21T23:00:00+07:00'; DueLabel = '21/08/2026'
+    Title = '[B][UI] Deploy Log stepper + xterm bang event gia'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-08-26T23:00:00+07:00'; DueLabel = '26/08/2026'
     Branch = 'feat/m10-deploy-log-ui'; Labels = @('B', 'P1'); Goal = 'Hien stepper va log ANSI tu chuoi deploy event gia dung contract.'
     Scope = @('app/src/renderer/**'); Avoid = @('app/src/main/**', 'docs/contracts/**')
     Done = @('Stepper 7 buoc', 'Log stream/scroll/search', 'Running/success/fail state', 'Fixture dung event contract', 'Typecheck + test pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[A][M7] Train-ingest-replay + 4 methods'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-08-23T23:00:00+07:00'; DueLabel = '23/08/2026'
+    Title = '[A][M7] Train-ingest-replay + 4 methods'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-08-28T23:00:00+07:00'; DueLabel = '28/08/2026'
     Branch = 'feat/m07-ml-methods'; Labels = @('A', 'P0'); Goal = 'Feature pipeline va API train/ingest/replay chay rule, zscore-EWMA, IForest, OCSVM va ensemble.'
     Scope = @('ml-service/**'); Avoid = @('app/src/renderer/**', 'experiments/**')
     Done = @('API dung OpenAPI', 'random_state=42', 'Replay khong side effect', 'Test du lieu gia pass', '4 method + ensemble co score', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[A][M4] DEPLOY-HEALTHCHECK-RECORD + release'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-08-26T23:00:00+07:00'; DueLabel = '26/08/2026'
+    Title = '[A][M4] DEPLOY-HEALTHCHECK-RECORD + release'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-09-01T23:00:00+07:00'; DueLabel = '01/09/2026'
     Branch = 'feat/m04-deploy-record'; Labels = @('A', 'P0'); Goal = 'Hoan tat deploy, healthcheck, record va release artifact theo lifecycle da chot.'
     Scope = @('app/src/main/deploy/**', 'templates/**'); Avoid = @('app/src/renderer/**')
     Done = @('Deploy Express thanh cong', 'Healthcheck timeout dung', 'Deployment/release record dung schema', 'Fail giu log/audit', 'Test + smoke pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[B][UI] Noi Deploy Wizard vao IPC that'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-08-27T23:00:00+07:00'; DueLabel = '27/08/2026'
+    Title = '[B][UI] Noi Deploy Wizard vao IPC that'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-09-01T23:00:00+07:00'; DueLabel = '01/09/2026'
     Branch = 'feat/m10-deploy-integration'; Labels = @('B', 'P0'); Goal = 'Thay fixture bang typed IPC/event that va giu du cac state UI.'
     Scope = @('app/src/renderer/**'); Avoid = @('app/src/main/**', 'docs/contracts/**')
     Done = @('Khong con mock o production path', 'Deploy Express tu UI', 'Log event real-time', 'Error theo failed step', 'Typecheck + smoke pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[A][M6] Poller + rule + metric-score IPC'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-08-29T23:00:00+07:00'; DueLabel = '29/08/2026'
+    Title = '[A][M6] Poller + rule + metric-score IPC'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-09-04T23:00:00+07:00'; DueLabel = '04/09/2026'
     Branch = 'feat/m06-monitor-poller'; Labels = @('A', 'P0'); Goal = 'Tail metric, dedupe, ghi SQLite, goi ML va phat metric/score/alert typed event.'
     Scope = @('app/src/main/monitor/**', 'app/src/main/ipc.ts', 'app/src/main/db/**'); Avoid = @('app/src/renderer/**', 'collector/**')
     Done = @('Offset/seq khong trung', 'Metric vao SQLite', '5 score moi sample', 'Rule threshold tao alert', 'Test + typecheck pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[B][UI] Dashboard charts + score panel'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-08-30T23:00:00+07:00'; DueLabel = '30/08/2026'
+    Title = '[B][UI] Dashboard charts + score panel'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-09-04T23:00:00+07:00'; DueLabel = '04/09/2026'
     Branch = 'feat/m10-dashboard'; Labels = @('B', 'P0'); Goal = 'Dashboard hien metric, score 5 phuong phap va alert tu typed fixture/IPC.'
     Scope = @('app/src/renderer/**'); Avoid = @('app/src/main/**', 'ml-service/**')
     Done = @('Chart metric that', 'Panel 5 method', 'Loading/empty/error', 'Responsive o 1280x800', 'Typecheck + test pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[B][UI] Versions + History + rollback controls'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-09-02T23:00:00+07:00'; DueLabel = '02/09/2026'
+    Title = '[B][UI] Versions + History + rollback controls'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-09-07T23:00:00+07:00'; DueLabel = '07/09/2026'
     Branch = 'feat/m10-versions-history'; Labels = @('B', 'P1'); Goal = 'Hien deployment/release history va thao tac rollback co confirm/error state.'
     Scope = @('app/src/renderer/**'); Avoid = @('app/src/main/**')
     Done = @('Timeline/version list', 'Rollback confirm', 'Loading/empty/error', 'Dung typed IPC', 'Typecheck + test pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[A][M4] Redeploy + rollback + retry'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-09-03T23:00:00+07:00'; DueLabel = '03/09/2026'
+    Title = '[A][M4] Redeploy + rollback + retry'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-09-08T23:00:00+07:00'; DueLabel = '08/09/2026'
     Branch = 'feat/m04-redeploy-rollback'; Labels = @('A', 'P0'); Goal = 'Redeploy tao version moi, rollback dung v(N-1), retry giu audit va release artifact.'
     Scope = @('app/src/main/deploy/**', 'app/src/main/db/**'); Avoid = @('app/src/renderer/**')
     Done = @('Redeploy/rollback CLI pass', 'Version/attempt dung', 'Retry khong mat audit', 'Test nhanh failure branch', 'Smoke VPS pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[B][UI] Alert feedback + action states'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-09-04T23:00:00+07:00'; DueLabel = '04/09/2026'
+    Title = '[B][UI] Alert feedback + action states'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-09-09T23:00:00+07:00'; DueLabel = '09/09/2026'
     Branch = 'feat/m10-alert-feedback'; Labels = @('B', 'P1'); Goal = 'Hien alert, 5 score va nut danh dau dung/sai voi optimistic/error state an toan.'
     Scope = @('app/src/renderer/**'); Avoid = @('app/src/main/**', 'ml-service/**')
     Done = @('Alert detail ro method/score', 'Dung/sai co confirm state', 'Loi khong mat lua chon', 'Dung typed IPC', 'Typecheck + test pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[A][Integration] Alert lifecycle + reconnect dedupe'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-09-05T23:00:00+07:00'; DueLabel = '05/09/2026'
+    Title = '[A][Integration] Alert lifecycle + reconnect dedupe'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-09-10T23:00:00+07:00'; DueLabel = '10/09/2026'
     Branch = 'feat/m06-alert-reconnect'; Labels = @('A', 'P0'); Goal = 'Hoan tat feedback/action log va nap bu metric khong trung sau khi mat SSH.'
     Scope = @('app/src/main/monitor/**', 'app/src/main/ipc.ts', 'app/src/main/db/**'); Avoid = @('app/src/renderer/**')
     Done = @('Alert lifecycle dung schema', 'Feedback/action log luu du', 'Reconnect nap bu khong trung', 'Test disconnect/retry pass', 'Smoke VPS pass', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[B][QA] MVP smoke evidence + demo script'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-09-06T23:00:00+07:00'; DueLabel = '06/09/2026'
+    Title = '[B][QA] MVP smoke evidence + demo script'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-09-11T23:00:00+07:00'; DueLabel = '11/09/2026'
     Branch = 'docs/mvp-smoke-evidence'; Labels = @('B', 'Shared', 'P0'); Goal = 'Chay smoke UC-01/02/03/04/06/08 tren main va luu bang chung demo da che secret.'
     Scope = @('docs/smoke-log.md', 'docs/04-timeline.md', 'anh/video Drive duoc link'); Avoid = @('Khong sua core de lam test pass', 'Khong commit secret/IP kem credential')
     Done = @('16/24 FR co bang chung', 'Lenh tai hien ro', 'Anh/video da che secret', 'Bug co card rieng', 'A review ket qua', 'Mo PR va dan link')
@@ -398,8 +398,26 @@ if ($PlanOnly) {
     }
   }
 
+  $completedBeforePause = @(
+    '[Shared] Chot 7 quyet dinh kien truc',
+    '[A][DB] Repository CRUD VPS + typed IPC',
+    '[A][UI] Khung VPS List noi du lieu that'
+  )
+  $resumeAt = [DateTimeOffset]::Parse('2026-08-15T00:00:00+07:00')
+  $invalidEarlyCards = @(
+    $cards | Where-Object {
+      $null -ne $_.Due -and
+      [DateTimeOffset]::Parse($_.Due) -lt $resumeAt -and
+      $_.Title -notin $completedBeforePause
+    }
+  )
+  if ($invalidEarlyCards.Count -gt 0) {
+    throw "Card chua hoan thanh co deadline truoc 15/08: $(@($invalidEarlyCards.Title) -join ', ')"
+  }
+
   Write-Host "Lists: $($listSpecs.Count); labels: $($labelSpecs.Count); cards: $($cards.Count)"
   Write-Host 'Response normalization: pass'
+  Write-Host 'Pause deadline guard: pass'
   Write-Host "Sync existing: $($SyncExisting.IsPresent)"
   $cards | Select-Object Title, ListKey, Owner, DueLabel | Format-Table -AutoSize
   exit 0

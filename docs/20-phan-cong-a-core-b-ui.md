@@ -1,7 +1,10 @@
 # PHÂN CÔNG MỚI — A CORE/ALGORITHMS, B UI/DELIVERY
 
-**Hiệu lực từ 12/08/2026.** Các task/PR đã hoàn thành trước mốc này giữ nguyên owner thực tế;
+**Hiệu lực từ 15/08/2026.** Các task/PR đã hoàn thành trước mốc này giữ nguyên owner thực tế;
 không đổi lịch sử để làm đẹp bảng tiến độ.
+
+Sau phần đã merge ngày 11/08, cả A và B bận nên nhóm nghỉ đến hết 14/08. Mọi card chưa hoàn
+thành được dời sang từ 15/08; khoảng nghỉ này không tính là trễ.
 
 Mục tiêu của cách chia mới là để B có thể làm giao diện độc lập trong khi A xử lý những phần có
 rủi ro kỹ thuật cao. Đây là phân công theo **ranh giới file và artifact**, không phải chia thành hai
@@ -39,10 +42,10 @@ B: fixture/mock cùng type -> UI states -> thay mock bằng window.api.invoke
 
 | Tuần | Người A — việc khó/core | Người B — UI/delivery | Điểm nối bắt buộc |
 |---|---|---|---|
-| W1 · 10/08–16/08 | DB/credential; SSH connect/exec/files/resource; ML skeleton | Collector cơ bản; 3 demo app; fake metric; UI kết nối/tài nguyên bằng typed mock | VPS List hiện loading/error/online/RAM/disk; A đọc được `metrics.jsonl` của B |
-| W2 · 17/08–23/08 | Detector 3 Tier 1; deploy `PRECHECK→BUILD`; train/ingest/replay và 4 method | Hoàn tất collector; Deploy Wizard và Deploy Log bằng mock event | Express build trên VPS; UI render đúng deploy event contract |
-| W3 · 24/08–30/08 | Deploy `DEPLOY→RECORD`; poller/rule; nối score/alert vào SQLite/IPC | Nối Deploy Wizard vào IPC thật; Dashboard chart + score panel | Deploy 3 app từ UI; metric/score thật thấy trên Dashboard |
-| W4 · 31/08–06/09 | Redeploy/rollback/retry; alert lifecycle; reconnect/offset/dedupe | Versions/History; alert feedback UI; fault script và smoke evidence | Smoke 16/24 FR trên `main`, mỗi bằng chứng có link/log |
+| W1 · 10/08–21/08 | DB đã merge; từ 15/08: credential, SSH connect/exec/files/resource, ML skeleton | Từ 15/08: collector, 3 demo app, fake metric, UI kết nối/tài nguyên | VPS List hiện loading/error/online/RAM/disk; A đọc được `metrics.jsonl` của B |
+| W2 · 22/08–28/08 | Detector 3 Tier 1; deploy `PRECHECK→BUILD`; train/ingest/replay và 4 method | Hoàn tất collector; Deploy Wizard và Deploy Log bằng mock event | Express build trên VPS; UI render đúng deploy event contract |
+| W3 · 29/08–04/09 | Deploy `DEPLOY→RECORD`; poller/rule; nối score/alert vào SQLite/IPC | Nối Deploy Wizard vào IPC thật; Dashboard chart + score panel | Deploy 3 app từ UI; metric/score thật thấy trên Dashboard |
+| W4 · 05/09–11/09 | Redeploy/rollback/retry; alert lifecycle; reconnect/offset/dedupe | Versions/History; alert feedback UI; fault script và smoke evidence | Smoke 16/24 FR trên `main`, mỗi bằng chứng có link/log |
 
 ### Thứ tự ưu tiên của A
 
@@ -53,7 +56,7 @@ B: fixture/mock cùng type -> UI states -> thay mock bằng window.api.invoke
 
 ### Thứ tự ưu tiên của B
 
-1. Hoàn thành collector/demo app đang làm; không bỏ ngang branch có PR.
+1. Collector scaffold → ba demo app → fake metric; mỗi lần chỉ kéo một card.
 2. VPS connection/resource states bằng mock typed.
 3. Deploy Wizard và Deploy Log bằng mock typed.
 4. Nối UI vào IPC thật, sau đó Dashboard và Versions/Alert UI.

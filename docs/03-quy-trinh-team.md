@@ -67,7 +67,7 @@ Smoke test fail → **tuần sau ưu tiên sửa trước khi làm việc mới*
 
 ## 3. Phân công & ranh giới
 
-Từ 12/08/2026, nhóm dùng phân công **A = Core/Algorithms, B = UI/Delivery**. Bản đầy đủ,
+Từ 15/08/2026, nhóm dùng phân công **A = Core/Algorithms, B = UI/Delivery**. Bản đầy đủ,
 timeline bàn giao và cách đồng bộ Trello nằm tại
 [`20-phan-cong-a-core-b-ui.md`](20-phan-cong-a-core-b-ui.md).
 
