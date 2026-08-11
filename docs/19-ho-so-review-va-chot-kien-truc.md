@@ -425,6 +425,10 @@ lặp của scenario được giữ và auto-rollback mức demo an toàn.
 5. Migrate có DB có quá rộng; nên mặc định cắt sớm hay giữ tới G2?
 6. 180 baseline sample cho vector 20 chiều có đủ để pilot ba model không?
 7. Cách tính CI theo run và ground truth có bias đáng kể nào?
+8. Với D1, version bị khuyết do attempt fail sớm có gây khó audit/debug hoặc hiển thị lịch sử
+   không; có cần tách `attempt_id` khỏi release version liên tục?
+9. Với D5, giữ toàn bộ attempt kể cả `aborted` có làm phình dữ liệu hoặc vô tình gây nhiễu
+   phân tích không; cơ chế lọc chỉ lấy `completed` đã đủ an toàn chưa?
 
 ---
 
