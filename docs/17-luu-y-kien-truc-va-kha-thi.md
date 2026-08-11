@@ -7,6 +7,9 @@
 > `docs/contracts/` → `01-ke-hoach.md` → các tài liệu còn lại.
 > Đề xuất nào được nhóm chấp nhận phải sửa contract liên quan và ghi vào `DECISIONS.md`
 > trong cùng commit.
+>
+> Bản tóm tắt một file để gửi engineer/giảng viên review:
+> [`19-ho-so-review-va-chot-kien-truc.md`](19-ho-so-review-va-chot-kien-truc.md).
 
 ---
 

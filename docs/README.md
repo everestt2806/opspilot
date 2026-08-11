@@ -22,6 +22,7 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | [`05-truy-vet-yeu-cau.md`](05-truy-vet-yeu-cau.md) | Ma trận FR/NFR → module → contract → test → màn hình → tuần | Khi cần biết "còn thiếu gì" |
 | [`06-glossary-quy-uoc.md`](06-glossary-quy-uoc.md) | Thuật ngữ, đơn vị, timezone, quy ước đặt tên | Trước khi đặt tên bất cứ thứ gì |
 | [`18-trello-workflow.md`](18-trello-workflow.md) | Board, trạng thái, card template và script dựng task W1 | Khi tạo/cập nhật Trello |
+| [`19-ho-so-review-va-chot-kien-truc.md`](19-ho-so-review-va-chot-kien-truc.md) | Hồ sơ một file: đề tài, phạm vi, kiến trúc, thí nghiệm, 7 quyết định và phiếu review | Gửi engineer/GVHD trước khi khóa contract |
 
 ## Kỹ thuật
 
