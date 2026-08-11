@@ -93,5 +93,6 @@ pnpm build:win    # tạo bộ cài Windows bằng electron-builder
 - Kế hoạch & spec module → [`docs/01-ke-hoach.md`](docs/01-ke-hoach.md)
 - Lịch 16 tuần theo ngày thật → [`docs/04-timeline.md`](docs/04-timeline.md)
 - Luồng làm việc Trello → branch → PR → Done → [`docs/18-trello-workflow.md`](docs/18-trello-workflow.md)
+- Hồ sơ một file gửi engineer/giảng viên review kiến trúc → [`docs/19-ho-so-review-va-chot-kien-truc.md`](docs/19-ho-so-review-va-chot-kien-truc.md)
 - Giao thức thí nghiệm (phần ăn điểm) → [`docs/07-giao-thuc-thi-nghiem.md`](docs/07-giao-thuc-thi-nghiem.md)
 - Nhật ký quyết định → [`DECISIONS.md`](DECISIONS.md)
