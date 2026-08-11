@@ -201,7 +201,7 @@ REST localhost.** (c) Python nhúng qua PyInstaller/`pythonia`.
 **Vì sao.** (a) tự cài đặt Isolation Forest và OCSVM là rủi ro lớn về tính đúng đắn — và hội
 đồng sẽ hỏi "sao không dùng thư viện chuẩn". (b) dùng đúng scikit-learn (dễ giải trình, kết
 quả so sánh được với tài liệu), lại **test được bằng `curl` mà không cần Electron**, cho phép
-Người B làm việc hoàn toàn độc lập từ tuần 1 bằng dữ liệu giả.
+A kiểm thử ML độc lập với UI/collector bằng dữ liệu giả do B bàn giao.
 
 **Đánh đổi.** Máy chạy app phải có Python 3.12 → giảm tính "cài là chạy" của NFR-3.
 Đã chốt với GVHD ở tuần 0; PyInstaller chỉ thử ở tuần 12 nếu dư thời gian. Cũng phải xử lý

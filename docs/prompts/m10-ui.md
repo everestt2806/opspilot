@@ -1,4 +1,4 @@
-# M10 — Giao diện · Người A · rải Tuần 1–10
+# M10 — Giao diện · Người B · rải Tuần 1–10
 
 `app/src/renderer/` — UC-01..UC-09
 

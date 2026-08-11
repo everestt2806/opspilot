@@ -67,14 +67,19 @@ Smoke test fail → **tuần sau ưu tiên sửa trước khi làm việc mới*
 
 ## 3. Phân công & ranh giới
 
-| | Người A — App/Infra | Người B — ML/Monitoring |
-|---|---|---|
-| Sở hữu | `app/src/main/{ssh,crypto,db,detectors,deploy,migrate}`, `app/src/renderer`, `templates/` | `ml-service/`, `collector/`, `experiments/`, `app/src/main/monitor/` |
-| Báo cáo | Chương 1, 3, 4 (phần app) | Chương 2, 4 (phần ML), 5 |
-| Không đụng vào của nhau | trừ khi sửa bug chặn, và phải báo trong PR | |
+Từ 12/08/2026, nhóm dùng phân công **A = Core/Algorithms, B = UI/Delivery**. Bản đầy đủ,
+timeline bàn giao và cách đồng bộ Trello nằm tại
+[`20-phan-cong-a-core-b-ui.md`](20-phan-cong-a-core-b-ui.md).
 
-**Ranh giới chung là `docs/contracts/`.** Ai muốn đổi contract phải báo người kia **trước
-khi** code, vì phía bên kia đang code theo phiên bản cũ.
+| | Người A — Core/Algorithms | Người B — UI/Delivery |
+|---|---|---|
+| Sở hữu | `app/src/main/**`, `ml-service/**`, `templates/**` | `app/src/renderer/**`, `collector/**`, `demo-apps/**`, `experiments/**` |
+| Báo cáo | Kiến trúc, core app/infra, monitoring và thuật toán ML | UI/UX, collector, kịch bản demo, thực thi thí nghiệm và hình/bảng kết quả |
+| Không đụng vào của nhau | trừ bug chặn đã báo trên card/PR | trừ bug chặn đã báo trên card/PR |
+
+**Ranh giới chung là `app/src/shared/**`, `docs/contracts/**`, migration và giao thức thí
+nghiệm.** Ai muốn đổi contract phải báo người kia **trước khi** code, vì phía bên kia đang
+code theo phiên bản cũ. B dựng UI bằng fixture/mock đúng type; A cung cấp handler thật sau.
 
 ---
 

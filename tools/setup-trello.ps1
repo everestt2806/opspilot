@@ -3,7 +3,8 @@ param(
   [string]$BoardUrl,
   [string]$PartnerUsername,
   [string]$PartnerEmail,
-  [switch]$PlanOnly
+  [switch]$PlanOnly,
+  [switch]$SyncExisting
 )
 
 Set-StrictMode -Version Latest
@@ -147,8 +148,8 @@ $listSpecs = @(
 )
 
 $labelSpecs = @(
-  [pscustomobject]@{ Key = 'A'; Name = 'A - App/Infra'; Color = 'blue' },
-  [pscustomobject]@{ Key = 'B'; Name = 'B - ML/Monitoring'; Color = 'purple' },
+  [pscustomobject]@{ Key = 'A'; Name = 'A - Core/Algorithms'; PreviousNames = @('A - App/Infra'); Color = 'blue' },
+  [pscustomobject]@{ Key = 'B'; Name = 'B - UI/Delivery'; PreviousNames = @('B - ML/Monitoring'); Color = 'purple' },
   [pscustomobject]@{ Key = 'Shared'; Name = 'Shared'; Color = 'orange' },
   [pscustomobject]@{ Key = 'Contract'; Name = 'Contract - ca hai duyet'; Color = 'red' },
   [pscustomobject]@{ Key = 'P0'; Name = 'P0 - chan tien do'; Color = 'red' },
@@ -248,9 +249,9 @@ $cards = @(
     Done = @('3 app build image', '3 container start', 'Health endpoint 200', 'README lenh tai hien', 'Mo PR va dan link')
   },
   [pscustomobject]@{
-    Title = '[B][M7] Generator metric gia dung contract'; ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-11T23:00:00+07:00'; DueLabel = '11/08/2026'
+    Title = '[B][Fixture] Generator metric gia dung contract'; PreviousTitles = @('[B][M7] Generator metric gia dung contract'); ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-11T23:00:00+07:00'; DueLabel = '11/08/2026'
     Branch = 'feat/m07-fake-metrics'; Labels = @('B', 'P1'); Goal = 'Sinh metrics.jsonl baseline/anomaly de ML va poller test doc lap.'
-    Scope = @('ml-service/scripts/**', 'ml-service/tests/**'); Avoid = @('app/src/main/**', 'docs/contracts/**')
+    Scope = @('experiments/fixtures/**', 'experiments/tests/**'); Avoid = @('app/src/main/**', 'ml-service/**', 'docs/contracts/**')
     Done = @('Seq tang dan', 'Timestamp hop le', 'Null metric dung contract', 'Co baseline va anomaly', 'Test format pass')
   },
   [pscustomobject]@{
@@ -272,10 +273,100 @@ $cards = @(
     Done = @('python:3.12-alpine', 'Docker socket read-only', 'metrics.jsonl co metric that', 'latest.json hop le', 'A doc duoc file qua SSH')
   },
   [pscustomobject]@{
-    Title = '[B][M7] ML skeleton test + lenh tai hien'; ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-15T23:00:00+07:00'; DueLabel = '15/08/2026'
-    Branch = 'feat/m07-ml-skeleton-tests'; Labels = @('B', 'P1'); Goal = 'Mo rong test health/config/features skeleton va ghi lenh tai hien.'
-    Scope = @('ml-service/**'); Avoid = @('app/src/main/**', 'Khong doi OpenAPI')
+    Title = '[A][M7] ML skeleton test + lenh tai hien'; PreviousTitles = @('[B][M7] ML skeleton test + lenh tai hien'); ListKey = 'ThisWeek'; Owner = 'A'; Due = '2026-08-15T23:00:00+07:00'; DueLabel = '15/08/2026'
+    Branch = 'feat/m07-ml-skeleton-tests'; Labels = @('A', 'P1'); Goal = 'Mo rong test health/config/features skeleton va ghi lenh tai hien.'
+    Scope = @('ml-service/**'); Avoid = @('app/src/renderer/**', 'Khong doi OpenAPI')
     Done = @('pytest pass', 'health version dung', 'Config deterministic random_state=42', 'README lenh tai hien', 'Mo PR va dan link')
+  },
+  [pscustomobject]@{
+    Title = '[B][UI] VPS connection + resource states bang typed mock'; ListKey = 'ThisWeek'; Owner = 'B'; Due = '2026-08-15T23:00:00+07:00'; DueLabel = '15/08/2026'
+    Branch = 'feat/m10-vps-connection-ui'; Labels = @('B', 'P0'); Goal = 'Dung UI test SSH/Docker va CPU/RAM/disk bang fixture cung type, sau do noi handler that.'
+    Scope = @('app/src/renderer/**'); Avoid = @('app/src/main/**', 'app/src/shared/**', 'docs/contracts/**')
+    Done = @('Loading/empty/success/error', 'Fixture satisfies typed IPC', 'Khong import Node/Electron', 'Noi window.api.invoke sau PR A', 'Typecheck + component test pass', 'Mo PR va dan link')
+  },
+  [pscustomobject]@{
+    Title = '[A][M3] Detector 3 Tier 1 + unit test'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-08-18T23:00:00+07:00'; DueLabel = '18/08/2026'
+    Branch = 'feat/m03-tier1-detectors'; Labels = @('A', 'P0'); Goal = 'Detect Next.js, Express va static SPA dung contract, kem bang chung tung dau hieu.'
+    Scope = @('app/src/main/detectors/**'); Avoid = @('app/src/renderer/**', 'docs/contracts/**')
+    Done = @('3 detector dung interface', 'Moi detector >=4 case', 'Ket qua co evidence', 'pnpm test + typecheck pass', 'Mo PR va dan link')
+  },
+  [pscustomobject]@{
+    Title = '[B][UI] Deploy Wizard shell bang typed mock'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-08-19T23:00:00+07:00'; DueLabel = '19/08/2026'
+    Branch = 'feat/m10-deploy-wizard-ui'; Labels = @('B', 'P1'); Goal = 'Dung wizard chon source, detection, env va precheck bang typed fixture.'
+    Scope = @('app/src/renderer/**'); Avoid = @('app/src/main/**', 'app/src/shared/**')
+    Done = @('Du 4 buoc va validation', 'Loading/success/error', 'Fixture satisfies contract', 'Khong import Node/Electron', 'Typecheck + component test pass', 'Mo PR va dan link')
+  },
+  [pscustomobject]@{
+    Title = '[A][M4] PRECHECK-UPLOAD-RENDER-BUILD Express'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-08-21T23:00:00+07:00'; DueLabel = '21/08/2026'
+    Branch = 'feat/m04-deploy-build'; Labels = @('A', 'P0'); Goal = 'Chay lat cat Express tu precheck den build image tren VPS bang CLI.'
+    Scope = @('app/src/main/deploy/**', 'templates/**', 'app/scripts/**'); Avoid = @('app/src/renderer/**', 'collector/**')
+    Done = @('State machine PRECHECK-BUILD', 'Event dung contract', 'Fail ghi dung step', 'CLI build Express tren VPS', 'Test + typecheck pass', 'Mo PR va dan link')
+  },
+  [pscustomobject]@{
+    Title = '[B][UI] Deploy Log stepper + xterm bang event gia'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-08-21T23:00:00+07:00'; DueLabel = '21/08/2026'
+    Branch = 'feat/m10-deploy-log-ui'; Labels = @('B', 'P1'); Goal = 'Hien stepper va log ANSI tu chuoi deploy event gia dung contract.'
+    Scope = @('app/src/renderer/**'); Avoid = @('app/src/main/**', 'docs/contracts/**')
+    Done = @('Stepper 7 buoc', 'Log stream/scroll/search', 'Running/success/fail state', 'Fixture dung event contract', 'Typecheck + test pass', 'Mo PR va dan link')
+  },
+  [pscustomobject]@{
+    Title = '[A][M7] Train-ingest-replay + 4 methods'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-08-23T23:00:00+07:00'; DueLabel = '23/08/2026'
+    Branch = 'feat/m07-ml-methods'; Labels = @('A', 'P0'); Goal = 'Feature pipeline va API train/ingest/replay chay rule, zscore-EWMA, IForest, OCSVM va ensemble.'
+    Scope = @('ml-service/**'); Avoid = @('app/src/renderer/**', 'experiments/**')
+    Done = @('API dung OpenAPI', 'random_state=42', 'Replay khong side effect', 'Test du lieu gia pass', '4 method + ensemble co score', 'Mo PR va dan link')
+  },
+  [pscustomobject]@{
+    Title = '[A][M4] DEPLOY-HEALTHCHECK-RECORD + release'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-08-26T23:00:00+07:00'; DueLabel = '26/08/2026'
+    Branch = 'feat/m04-deploy-record'; Labels = @('A', 'P0'); Goal = 'Hoan tat deploy, healthcheck, record va release artifact theo lifecycle da chot.'
+    Scope = @('app/src/main/deploy/**', 'templates/**'); Avoid = @('app/src/renderer/**')
+    Done = @('Deploy Express thanh cong', 'Healthcheck timeout dung', 'Deployment/release record dung schema', 'Fail giu log/audit', 'Test + smoke pass', 'Mo PR va dan link')
+  },
+  [pscustomobject]@{
+    Title = '[B][UI] Noi Deploy Wizard vao IPC that'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-08-27T23:00:00+07:00'; DueLabel = '27/08/2026'
+    Branch = 'feat/m10-deploy-integration'; Labels = @('B', 'P0'); Goal = 'Thay fixture bang typed IPC/event that va giu du cac state UI.'
+    Scope = @('app/src/renderer/**'); Avoid = @('app/src/main/**', 'docs/contracts/**')
+    Done = @('Khong con mock o production path', 'Deploy Express tu UI', 'Log event real-time', 'Error theo failed step', 'Typecheck + smoke pass', 'Mo PR va dan link')
+  },
+  [pscustomobject]@{
+    Title = '[A][M6] Poller + rule + metric-score IPC'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-08-29T23:00:00+07:00'; DueLabel = '29/08/2026'
+    Branch = 'feat/m06-monitor-poller'; Labels = @('A', 'P0'); Goal = 'Tail metric, dedupe, ghi SQLite, goi ML va phat metric/score/alert typed event.'
+    Scope = @('app/src/main/monitor/**', 'app/src/main/ipc.ts', 'app/src/main/db/**'); Avoid = @('app/src/renderer/**', 'collector/**')
+    Done = @('Offset/seq khong trung', 'Metric vao SQLite', '5 score moi sample', 'Rule threshold tao alert', 'Test + typecheck pass', 'Mo PR va dan link')
+  },
+  [pscustomobject]@{
+    Title = '[B][UI] Dashboard charts + score panel'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-08-30T23:00:00+07:00'; DueLabel = '30/08/2026'
+    Branch = 'feat/m10-dashboard'; Labels = @('B', 'P0'); Goal = 'Dashboard hien metric, score 5 phuong phap va alert tu typed fixture/IPC.'
+    Scope = @('app/src/renderer/**'); Avoid = @('app/src/main/**', 'ml-service/**')
+    Done = @('Chart metric that', 'Panel 5 method', 'Loading/empty/error', 'Responsive o 1280x800', 'Typecheck + test pass', 'Mo PR va dan link')
+  },
+  [pscustomobject]@{
+    Title = '[B][UI] Versions + History + rollback controls'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-09-02T23:00:00+07:00'; DueLabel = '02/09/2026'
+    Branch = 'feat/m10-versions-history'; Labels = @('B', 'P1'); Goal = 'Hien deployment/release history va thao tac rollback co confirm/error state.'
+    Scope = @('app/src/renderer/**'); Avoid = @('app/src/main/**')
+    Done = @('Timeline/version list', 'Rollback confirm', 'Loading/empty/error', 'Dung typed IPC', 'Typecheck + test pass', 'Mo PR va dan link')
+  },
+  [pscustomobject]@{
+    Title = '[A][M4] Redeploy + rollback + retry'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-09-03T23:00:00+07:00'; DueLabel = '03/09/2026'
+    Branch = 'feat/m04-redeploy-rollback'; Labels = @('A', 'P0'); Goal = 'Redeploy tao version moi, rollback dung v(N-1), retry giu audit va release artifact.'
+    Scope = @('app/src/main/deploy/**', 'app/src/main/db/**'); Avoid = @('app/src/renderer/**')
+    Done = @('Redeploy/rollback CLI pass', 'Version/attempt dung', 'Retry khong mat audit', 'Test nhanh failure branch', 'Smoke VPS pass', 'Mo PR va dan link')
+  },
+  [pscustomobject]@{
+    Title = '[B][UI] Alert feedback + action states'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-09-04T23:00:00+07:00'; DueLabel = '04/09/2026'
+    Branch = 'feat/m10-alert-feedback'; Labels = @('B', 'P1'); Goal = 'Hien alert, 5 score va nut danh dau dung/sai voi optimistic/error state an toan.'
+    Scope = @('app/src/renderer/**'); Avoid = @('app/src/main/**', 'ml-service/**')
+    Done = @('Alert detail ro method/score', 'Dung/sai co confirm state', 'Loi khong mat lua chon', 'Dung typed IPC', 'Typecheck + test pass', 'Mo PR va dan link')
+  },
+  [pscustomobject]@{
+    Title = '[A][Integration] Alert lifecycle + reconnect dedupe'; ListKey = 'Backlog'; Owner = 'A'; Due = '2026-09-05T23:00:00+07:00'; DueLabel = '05/09/2026'
+    Branch = 'feat/m06-alert-reconnect'; Labels = @('A', 'P0'); Goal = 'Hoan tat feedback/action log va nap bu metric khong trung sau khi mat SSH.'
+    Scope = @('app/src/main/monitor/**', 'app/src/main/ipc.ts', 'app/src/main/db/**'); Avoid = @('app/src/renderer/**')
+    Done = @('Alert lifecycle dung schema', 'Feedback/action log luu du', 'Reconnect nap bu khong trung', 'Test disconnect/retry pass', 'Smoke VPS pass', 'Mo PR va dan link')
+  },
+  [pscustomobject]@{
+    Title = '[B][QA] MVP smoke evidence + demo script'; ListKey = 'Backlog'; Owner = 'B'; Due = '2026-09-06T23:00:00+07:00'; DueLabel = '06/09/2026'
+    Branch = 'docs/mvp-smoke-evidence'; Labels = @('B', 'Shared', 'P0'); Goal = 'Chay smoke UC-01/02/03/04/06/08 tren main va luu bang chung demo da che secret.'
+    Scope = @('docs/smoke-log.md', 'docs/04-timeline.md', 'anh/video Drive duoc link'); Avoid = @('Khong sua core de lam test pass', 'Khong commit secret/IP kem credential')
+    Done = @('16/24 FR co bang chung', 'Lenh tai hien ro', 'Anh/video da che secret', 'Bug co card rieng', 'A review ket qua', 'Mo PR va dan link')
   }
 )
 
@@ -289,8 +380,27 @@ if ($PlanOnly) {
     throw 'Kiem tra chuan hoa Trello response that bai.'
   }
 
+  $duplicateTitles = @($cards | Group-Object Title | Where-Object { $_.Count -gt 1 })
+  if ($duplicateTitles.Count -gt 0) {
+    throw "Card title bi trung: $(@($duplicateTitles.Name) -join ', ')"
+  }
+
+  $knownListKeys = @($listSpecs.Key)
+  $knownLabelKeys = @($labelSpecs.Key)
+  foreach ($card in $cards) {
+    if ($card.ListKey -notin $knownListKeys) {
+      throw "ListKey khong ton tai tren card $($card.Title): $($card.ListKey)"
+    }
+    foreach ($labelKey in $card.Labels) {
+      if ($labelKey -notin $knownLabelKeys) {
+        throw "Label key khong ton tai tren card $($card.Title): $labelKey"
+      }
+    }
+  }
+
   Write-Host "Lists: $($listSpecs.Count); labels: $($labelSpecs.Count); cards: $($cards.Count)"
   Write-Host 'Response normalization: pass'
+  Write-Host "Sync existing: $($SyncExisting.IsPresent)"
   $cards | Select-Object Title, ListKey, Owner, DueLabel | Format-Table -AutoSize
   exit 0
 }
@@ -393,24 +503,35 @@ try {
   $labelIds = @{}
   foreach ($spec in $labelSpecs) {
     $existing = $existingLabels | Where-Object { $_.name -eq $spec.Name } | Select-Object -First 1
+    if ($null -eq $existing -and $SyncExisting -and $null -ne $spec.PSObject.Properties['PreviousNames']) {
+      $previousNames = @($spec.PreviousNames)
+      $existing = $existingLabels | Where-Object { $_.name -in $previousNames } | Select-Object -First 1
+      if ($null -ne $existing) {
+        $existing = Invoke-TrelloApi -Method PUT -Path "labels/$($existing.id)" -Body @{ name = $spec.Name; color = $spec.Color }
+        Write-Host "Renamed label: $($spec.Name)" -ForegroundColor Green
+      }
+    }
     if ($null -eq $existing) {
       $existing = Invoke-TrelloApi -Method POST -Path "boards/$($board.id)/labels" -Body @{ name = $spec.Name; color = $spec.Color }
       Write-Host "Created label: $($spec.Name)"
+    } elseif ($SyncExisting -and ($existing.name -ne $spec.Name -or $existing.color -ne $spec.Color)) {
+      $existing = Invoke-TrelloApi -Method PUT -Path "labels/$($existing.id)" -Body @{ name = $spec.Name; color = $spec.Color }
+      Write-Host "Updated label: $($spec.Name)" -ForegroundColor Green
     }
     $labelIds[$spec.Key] = $existing.id
   }
 
-  $cardsResponse = Invoke-TrelloApi -Method GET -Path "boards/$($board.id)/cards/open?fields=id,name,idList"
+  $cardsResponse = Invoke-TrelloApi -Method GET -Path "boards/$($board.id)/cards/open?fields=id,name,idList,idMembers,idLabels,due,desc"
   $existingCards = @(ConvertTo-TrelloObjectArray -Value $cardsResponse -RequiredProperties @('id', 'name'))
   $createdCount = 0
   $skippedCount = 0
+  $updatedCount = 0
 
   foreach ($card in $cards) {
     $existingCard = $existingCards | Where-Object { $_.name -eq $card.Title } | Select-Object -First 1
-    if ($null -ne $existingCard) {
-      Write-Host "Skipped existing card: $($card.Title)"
-      $skippedCount++
-      continue
+    if ($null -eq $existingCard -and $SyncExisting -and $null -ne $card.PSObject.Properties['PreviousTitles']) {
+      $previousTitles = @($card.PreviousTitles)
+      $existingCard = $existingCards | Where-Object { $_.name -in $previousTitles } | Select-Object -First 1
     }
 
     $memberIds = @()
@@ -422,6 +543,35 @@ try {
     }
 
     $cardLabelIds = @($card.Labels | ForEach-Object { $labelIds[$_] })
+    if ($null -ne $existingCard) {
+      if (-not $SyncExisting) {
+        Write-Host "Skipped existing card: $($card.Title)"
+        $skippedCount++
+        continue
+      }
+
+      $managedLabelIds = @($labelIds.Values)
+      $preservedLabelIds = @($existingCard.idLabels | Where-Object { $_ -notin $managedLabelIds })
+      $updatedLabelIds = @($preservedLabelIds + $cardLabelIds | Select-Object -Unique)
+      $updateBody = @{
+        name = $card.Title
+        desc = New-CardDescription $card
+        idLabels = $updatedLabelIds -join ','
+      }
+      if ($memberIds.Count -gt 0) {
+        $updateBody.idMembers = $memberIds -join ','
+      }
+      if ($null -ne $card.Due) {
+        $updateBody.due = $card.Due
+        $updateBody.dueReminder = 1440
+      }
+
+      $null = Invoke-TrelloApi -Method PUT -Path "cards/$($existingCard.id)" -Body $updateBody
+      Write-Host "Updated existing card: $($card.Title)" -ForegroundColor Green
+      $updatedCount++
+      continue
+    }
+
     $body = @{
       idList = $listIds[$card.ListKey]
       name = $card.Title
@@ -449,7 +599,7 @@ try {
 
   Write-Host ''
   Write-Host "Trello setup xong: $($board.url)" -ForegroundColor Green
-  Write-Host "Created $createdCount card(s); skipped $skippedCount existing card(s)."
+  Write-Host "Created $createdCount card(s); updated $updatedCount card(s); skipped $skippedCount existing card(s)."
   Write-Host 'Token 1 ngay chi ton tai trong bo nho cua terminal nay.'
 } finally {
   $apiToken = $null

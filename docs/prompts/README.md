@@ -35,11 +35,11 @@ docs/prompts/m04-deploy-pipeline.md"*.
 | [`m03-detectors.md`](m03-detectors.md) | Detector engine | A | W2 |
 | [`m04-deploy-pipeline.md`](m04-deploy-pipeline.md) | Deploy pipeline | A | W2–W4 |
 | [`m05-collector.md`](m05-collector.md) | Metric collector | B | W1–W2 |
-| [`m06-poller-rule.md`](m06-poller-rule.md) | Poller + rule engine | B | W3–W4 |
-| [`m07-ml-service.md`](m07-ml-service.md) | ML service | B | W1–W3 |
+| [`m06-poller-rule.md`](m06-poller-rule.md) | Poller + rule engine | A | W3–W4 |
+| [`m07-ml-service.md`](m07-ml-service.md) | ML service | A | W1–W3 |
 | [`m08-auto-rollback.md`](m08-auto-rollback.md) | Auto-rollback | A | W5 |
 | [`m09-migrate.md`](m09-migrate.md) | Migrate pipeline | A | W6–W7 |
-| [`m10-ui.md`](m10-ui.md) | Giao diện | A | W1–W10 |
+| [`m10-ui.md`](m10-ui.md) | Giao diện | B | W1–W10 |
 | [`m11-experiments.md`](m11-experiments.md) | Thí nghiệm + phân tích | B | W6–W10 |
 | [`m12-demo-apps.md`](m12-demo-apps.md) | 3 app demo + fault endpoint | B | W1, W6 |
 | [`99-review.md`](99-review.md) | Prompt tự review trước khi mở PR | cả hai | mọi tuần |

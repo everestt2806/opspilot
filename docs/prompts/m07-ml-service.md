@@ -1,4 +1,4 @@
-# M07 — ML service · Người B · Tuần 1–3
+# M07 — ML service · Người A · Tuần 1–3
 
 `ml-service/` — FR-D4. **Đây là phần ăn điểm nhất của đồ án.**
 
@@ -91,8 +91,8 @@ Theo đúng `ml-api.openapi.yaml`. Điểm cần chú ý:
 
 ## `scripts/gen_fake_series.py`
 Sinh chuỗi metric giả (numpy): pha bình thường + inject anomaly theo kiểu (tăng dần / đột ngột /
-nhiễu), xuất ra `metrics.jsonl` đúng format. Cho phép Người B test toàn bộ pipeline ML **không
-cần VPS, không cần Người A**, từ tuần 1.
+nhiễu), xuất ra `metrics.jsonl` đúng format. Fixture do B bàn giao cho phép A test toàn bộ
+pipeline ML **không cần VPS, không cần collector thật**, từ tuần 1.
 
 ## Unit test (`pytest`)
 - [ ] Chuỗi tăng tuyến tính đã biết → `slope` đúng giá trị lý thuyết (sai số 1e-6)

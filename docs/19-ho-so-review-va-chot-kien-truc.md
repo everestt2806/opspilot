@@ -6,7 +6,7 @@
 | Phiên bản | `RC-1` — Review Candidate 1 |
 | Ngày lập | 11/08/2026 |
 | Trạng thái | **Chờ review ngoài nhóm trước khi khóa contract** |
-| Nhóm | 2 người: A — App/Infra; B — ML/Monitoring |
+| Nhóm | 2 người: A — Core/Algorithms; B — UI/Delivery (hiệu lực từ 12/08/2026) |
 | Thời gian | 10/08/2026–20/11/2026 |
 | Repo | <https://github.com/everestt2806/opspilot> |
 

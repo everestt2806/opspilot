@@ -9,7 +9,7 @@ Mức: 🔴 cao · 🟡 trung bình · 🟢 thấp
 
 | # | Rủi ro | Khả năng | Tác động | Ứng phó đã cài sẵn | Dấu hiệu sớm | Tình trạng |
 |---|---|---|---|---|---|---|
-| R1 | **Đường ống metric không xong trước tuần 4** → phần ML không có dữ liệu thật, cả đồ án đổ | 🟡 | 🔴 | Cổng G2 ở W4 buộc Người A dừng UI/migrate dồn vào pipeline; Người B có dữ liệu giả từ W1 để làm việc độc lập | Hết W3 mà `metric_sample` vẫn rỗng | Mở |
+| R1 | **Đường ống metric không xong trước tuần 4** → phần ML không có dữ liệu thật, cả đồ án đổ | 🟡 | 🔴 | Cổng G2 ở W4 buộc A dừng tính năng core mới để dồn vào pipeline; B dừng UI mới và hỗ trợ fixture/smoke/tái hiện lỗi | Hết W3 mà `metric_sample` vẫn rỗng | Mở |
 | R2 | Một thành viên bận/ốm 1–2 tuần | 🟡 | 🟡 | Review chéo hằng tuần → người kia gánh được; W12 là đệm; thứ tự ưu tiên khi 1 người đã chốt ở [`03`](03-quy-trinh-team.md#6-khi-một-người-bậnốm) | | Mở |
 | R3 | SSH chập chờn làm hỏng run thí nghiệm giữa chừng | 🔴 | 🟡 | `run_experiment.py` đánh dấu `aborted` + tự chạy lại (tối đa 2 lần); mỗi run độc lập; ngân sách W9 có buffer retry | Nhiều `abort_reason='ssh'` trong pilot W8 | Mở |
 | R4 | **Lệch đồng hồ VPS làm sai detection delay** — hỏng con số headline | 🟡 | 🔴 | Bật `systemd-timesyncd`; đo `clock_offset_ms` mỗi run; huỷ run khi lệch >2s | Offset đo được tăng dần giữa các run | Mở |

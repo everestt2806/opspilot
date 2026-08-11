@@ -212,7 +212,7 @@ Ghi ra 2 file trong `/opt/opspilot/<app>/metrics/` (bind mount):
 Format chính xác: [`contracts/metric-format.md`](contracts/metric-format.md).
 Tự xoay vòng file khi `metrics.jsonl` > 50MB (đổi tên `.1`, tạo file mới, `seq` **không** reset).
 
-### M6 — Poller + Rule engine · `app/src/main/monitor/` · Người B · W3–W4
+### M6 — Poller + Rule engine · `app/src/main/monitor/` · Người A · W3–W4
 
 Mỗi `poll_interval_s` (mặc định **30**) cho từng deployment đang `running`:
 
@@ -232,7 +232,7 @@ Mỗi `poll_interval_s` (mặc định **30**) cho từng deployment đang `runn
 VPS mất kết nối → poller không tạo mẫu giả, ghi `action_log` và thử lại; khi kết nối lại,
 `tail -c +offset` tự nạp bù toàn bộ khoảng thiếu.
 
-### M7 — ML service · `ml-service/` · Người B · W1–W3
+### M7 — ML service · `ml-service/` · Người A · W1–W3
 
 API: [`contracts/ml-api.openapi.yaml`](contracts/ml-api.openapi.yaml) — 6 endpoint, không thêm bớt.
 
@@ -302,7 +302,7 @@ Lỗi ở bất kỳ bước nào → dọn sạch bên đích, `docker compose 
 > liệu đích được giữ lại để điều tra. Đề xuất chi tiết được đặt cạnh contract; phải chốt một
 > hành vi duy nhất trước khi code M9.
 
-### M10 — UI · `app/src/renderer/` · Người A · rải W1–W10
+### M10 — UI · `app/src/renderer/` · Người B · rải W1–W10
 
 7 màn hình, spec chi tiết: [`02-ui-ux-spec.md`](02-ui-ux-spec.md).
 Ưu tiên đầu tư: **Dashboard và Deploy Log chiếm 90% công sức UI** (2 màn xuất hiện lúc

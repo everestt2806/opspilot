@@ -29,6 +29,7 @@
 | 2026-07-28 | [plan] | Ngày bắt đầu dự kiến là **08/08/2026**; quyết định này được thay bởi rebaseline ngày 09/08 bên dưới | Tách rõ kế hoạch ban đầu với lịch nhóm thực sự cam kết | `README.md`, `docs/04-timeline.md` |
 | 2026-07-28 | [ops] | GVHD là người giám sát mức độ làm việc nghiêm túc, **không là cổng phê duyệt kỹ thuật**; nhóm tự quyết định và ghi lý do để giải trình | Không phụ thuộc vào khả năng GVHD hướng dẫn chi tiết; vẫn giữ trao đổi định kỳ làm bằng chứng tiến độ | `docs/15-checklists.md`, cách ra quyết định kỹ thuật |
 | 2026-08-09 | [plan] | **Rebaseline ngày bắt đầu thành 10/08/2026**; W1–W4 ưu tiên 16/24 FR để đạt 66,7% chức năng | Repo mới có tài liệu, chưa có code; cần gom setup vào W1 và đi theo lát cắt dọc Express trước để có hệ thống chạy thật sớm | `README.md`, `docs/04-timeline.md`, các nhãn tuần trong tài liệu |
+| 2026-08-11 | [plan] | Từ 12/08, đổi vai thành **A — Core/Algorithms; B — UI/Delivery**; B dựng UI bằng typed fixture trước khi nối handler thật | A nhận các phần rủi ro kỹ thuật cao; ranh giới main/renderer giúp hai người làm song song và giảm conflict | `docs/20-phan-cong-a-core-b-ui.md`, timeline, owner M6/M7/M10, Trello W1–W4 |
 
 ---
 
