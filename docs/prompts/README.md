@@ -8,10 +8,12 @@ khớp với phần còn lại của hệ thống, ở phiên thứ nhất hay p
 ## Công thức mỗi phiên làm việc
 
 ```
-[1] docs/prompts/00-context-chung.md      ← luôn dán, không bỏ
-[2] docs/prompts/mXX-<module>.md          ← đúng MỘT module đang làm
-[3] các file trong docs/contracts/ mà brief đó liệt kê ở mục "Đọc trước"
-[4] (nếu sửa code có sẵn) file code hiện tại
+[0] một Trello card đang ở ĐANG LÀM       ← outcome, scope, branch và DoD
+[1] docs/prompts/01-task-from-trello.md   ← mẫu giao card và chọn quyền cho AI
+[2] docs/prompts/00-context-chung.md      ← ngữ cảnh dự án, luôn đọc
+[3] docs/prompts/mXX-<module>.md          ← đúng MỘT module đang làm
+[4] các file trong docs/contracts/ mà brief đó liệt kê ở mục "Đọc trước"
+[5] (nếu sửa code có sẵn) file code hiện tại trên đúng branch
 ```
 
 **Không dán cả repo.** Ngữ cảnh loãng làm AI bịa tên hàm và "cải tiến" interface — đúng thứ
@@ -26,6 +28,7 @@ docs/prompts/m04-deploy-pipeline.md"*.
 
 | File | Module | Người | Tuần |
 |---|---|---|---|
+| [`01-task-from-trello.md`](01-task-from-trello.md) | Mẫu giao một card cho AI, chọn lập kế hoạch/thực hiện/review | cả hai | mọi task |
 | [`m00-scaffold.md`](m00-scaffold.md) | Khởi tạo repo, cấu hình build | A | W1 |
 | [`m01-ssh-manager.md`](m01-ssh-manager.md) | SSH manager | A | W1 |
 | [`m02-credential.md`](m02-credential.md) | Mã hoá credential | A | W1 |

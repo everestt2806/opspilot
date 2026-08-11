@@ -21,6 +21,7 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | [`04-timeline.md`](04-timeline.md) | Lịch 16 tuần theo ngày thật, DoD từng tuần, quy tắc cắt phạm vi | Mỗi đầu tuần |
 | [`05-truy-vet-yeu-cau.md`](05-truy-vet-yeu-cau.md) | Ma trận FR/NFR → module → contract → test → màn hình → tuần | Khi cần biết "còn thiếu gì" |
 | [`06-glossary-quy-uoc.md`](06-glossary-quy-uoc.md) | Thuật ngữ, đơn vị, timezone, quy ước đặt tên | Trước khi đặt tên bất cứ thứ gì |
+| [`18-trello-workflow.md`](18-trello-workflow.md) | Board, trạng thái, card template và script dựng task W1 | Khi tạo/cập nhật Trello |
 
 ## Kỹ thuật
 
@@ -49,6 +50,7 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | File | Nội dung |
 |---|---|
 | [`prompts/00-context-chung.md`](prompts/00-context-chung.md) | Khối ngữ cảnh dán vào đầu mọi phiên chat với model bất kỳ |
+| [`prompts/01-task-from-trello.md`](prompts/01-task-from-trello.md) | Mẫu giao một Trello card cho AI, gồm scope, DoD, quyền sửa/commit/push và mẫu bàn giao |
 | [`prompts/m01`…`m12`](prompts/) | Một brief hoàn chỉnh cho mỗi module: input, output, ràng buộc, định nghĩa xong, cách test |
 | [`prompts/99-review.md`](prompts/99-review.md) | Prompt để AI tự review code trước khi mở PR |
 
