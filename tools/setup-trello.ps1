@@ -67,6 +67,39 @@ function Invoke-TrelloApi {
   }
 }
 
+function ConvertTo-TrelloObjectArray {
+  param(
+    [AllowNull()]
+    [object]$Value,
+    [string[]]$RequiredProperties = @('id')
+  )
+
+  if ($null -eq $Value) {
+    return
+  }
+
+  foreach ($candidate in $Value) {
+    # Windows PowerShell 5.1 can keep a JSON array returned by
+    # Invoke-RestMethod as one nested pipeline object. Flatten it explicitly.
+    if ($candidate -is [System.Array]) {
+      ConvertTo-TrelloObjectArray -Value $candidate -RequiredProperties $RequiredProperties
+      continue
+    }
+
+    $hasRequiredProperties = $true
+    foreach ($propertyName in $RequiredProperties) {
+      if ($null -eq $candidate.PSObject.Properties[$propertyName]) {
+        $hasRequiredProperties = $false
+        break
+      }
+    }
+
+    if ($hasRequiredProperties) {
+      Write-Output $candidate
+    }
+  }
+}
+
 function New-CardDescription([pscustomobject]$Card) {
   $lines = @(
     "Owner: $($Card.Owner)",
@@ -247,7 +280,17 @@ $cards = @(
 )
 
 if ($PlanOnly) {
+  $normalizationFixture = ,@(
+    [pscustomobject]@{ id = 'one'; name = 'One' },
+    [pscustomobject]@{ id = 'two'; name = 'Two' }
+  )
+  $normalizedFixture = @(ConvertTo-TrelloObjectArray -Value $normalizationFixture -RequiredProperties @('id', 'name'))
+  if ($normalizedFixture.Count -ne 2) {
+    throw 'Kiem tra chuan hoa Trello response that bai.'
+  }
+
   Write-Host "Lists: $($listSpecs.Count); labels: $($labelSpecs.Count); cards: $($cards.Count)"
+  Write-Host 'Response normalization: pass'
   $cards | Select-Object Title, ListKey, Owner, DueLabel | Format-Table -AutoSize
   exit 0
 }
@@ -287,7 +330,8 @@ try {
   Write-Host "Board: $($board.name)" -ForegroundColor Green
   Write-Host "Owner API: $($currentMember.fullName) (@$($currentMember.username))"
 
-  $members = @(Invoke-TrelloApi -Method GET -Path "boards/$($board.id)/members?fields=id,username,fullName")
+  $membersResponse = Invoke-TrelloApi -Method GET -Path "boards/$($board.id)/members?fields=id,username,fullName"
+  $members = @(ConvertTo-TrelloObjectArray -Value $membersResponse -RequiredProperties @('id', 'username', 'fullName'))
   $partner = $null
   if (-not [string]::IsNullOrWhiteSpace($PartnerUsername)) {
     $partner = $members | Where-Object { $_.username -eq $PartnerUsername } | Select-Object -First 1
@@ -303,7 +347,8 @@ try {
     try {
       $null = Invoke-TrelloApi -Method PUT -Path "boards/$($board.id)/members?email=$encodedPartnerEmail&type=normal" -Body @{ fullName = $PartnerEmail }
       Write-Host 'Da gui/dong bo loi moi nguoi B vao board.'
-      $members = @(Invoke-TrelloApi -Method GET -Path "boards/$($board.id)/members?fields=id,username,fullName")
+      $membersResponse = Invoke-TrelloApi -Method GET -Path "boards/$($board.id)/members?fields=id,username,fullName"
+      $members = @(ConvertTo-TrelloObjectArray -Value $membersResponse -RequiredProperties @('id', 'username', 'fullName'))
       $otherMembers = @($members | Where-Object { $_.id -ne $currentMember.id })
       if ($otherMembers.Count -eq 1) {
         $partner = $otherMembers[0]
@@ -321,7 +366,8 @@ try {
     Write-Host "Nguoi B: $($partner.fullName) (@$($partner.username))"
   }
 
-  $existingLists = @(Invoke-TrelloApi -Method GET -Path "boards/$($board.id)/lists?filter=open&fields=id,name,pos")
+  $listsResponse = Invoke-TrelloApi -Method GET -Path "boards/$($board.id)/lists?filter=open&fields=id,name,pos"
+  $existingLists = @(ConvertTo-TrelloObjectArray -Value $listsResponse -RequiredProperties @('id', 'name'))
   $listIds = @{}
   for ($index = 0; $index -lt $listSpecs.Count; $index++) {
     $spec = $listSpecs[$index]
@@ -338,10 +384,12 @@ try {
   $desiredListNames = @($listSpecs | ForEach-Object { $_.Name })
   $extraLists = @($existingLists | Where-Object { $_.name -notin $desiredListNames })
   if ($extraLists.Count -gt 0) {
-    Write-Warning "Cac list co san duoc giu nguyen: $($extraLists.name -join ', '). Co the archive thu cong neu khong dung."
+    $extraListNames = @($extraLists | ForEach-Object { $_.name })
+    Write-Warning "Cac list co san duoc giu nguyen: $($extraListNames -join ', '). Co the archive thu cong neu khong dung."
   }
 
-  $existingLabels = @(Invoke-TrelloApi -Method GET -Path "boards/$($board.id)/labels?fields=id,name,color&limit=1000")
+  $labelsResponse = Invoke-TrelloApi -Method GET -Path "boards/$($board.id)/labels?fields=id,name,color&limit=1000"
+  $existingLabels = @(ConvertTo-TrelloObjectArray -Value $labelsResponse -RequiredProperties @('id', 'name'))
   $labelIds = @{}
   foreach ($spec in $labelSpecs) {
     $existing = $existingLabels | Where-Object { $_.name -eq $spec.Name } | Select-Object -First 1
@@ -352,7 +400,8 @@ try {
     $labelIds[$spec.Key] = $existing.id
   }
 
-  $existingCards = @(Invoke-TrelloApi -Method GET -Path "boards/$($board.id)/cards/open?fields=id,name,idList")
+  $cardsResponse = Invoke-TrelloApi -Method GET -Path "boards/$($board.id)/cards/open?fields=id,name,idList"
+  $existingCards = @(ConvertTo-TrelloObjectArray -Value $cardsResponse -RequiredProperties @('id', 'name'))
   $createdCount = 0
   $skippedCount = 0
 
