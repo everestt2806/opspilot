@@ -6,7 +6,7 @@
 | Phiên bản | `RC-1` — Review Candidate 1 |
 | Ngày lập | 11/08/2026 |
 | Trạng thái | **Chờ review ngoài nhóm trước khi khóa contract** |
-| Nhóm | 2 người: A — App/Infra; B — ML/Monitoring |
+| Nhóm | 2 người: A — Core/Algorithms; B — UI/Delivery (hiệu lực từ 15/08/2026) |
 | Thời gian | 10/08/2026–20/11/2026 |
 | Repo | <https://github.com/everestt2806/opspilot> |
 
@@ -83,7 +83,7 @@ so sánh trung thực**, không nằm ở số lượng màn hình hay độ ph�
 | Thí nghiệm | 5 scenario × 10 lần; P/R/F1, CI 95%, detection delay, số run bị huỷ |
 | Sản phẩm | Electron chạy trên Windows; demo thật có fallback local/video |
 
-Đề tài có **24 functional requirement**. Mục tiêu đến 06/09/2026 là kiểm chứng **16/24
+Đề tài có **24 functional requirement**. Mục tiêu đến 11/09/2026 là kiểm chứng **16/24
 (66,7%)** trên luồng thật; đây là MVP lõi, không phải 66,7% tổng giờ công.
 
 ---
@@ -374,15 +374,16 @@ Electron; passphrase+scrypt mặc định có UX kém và nguy cơ passphrase y�
 
 | Cổng | Hạn | Điều kiện đạt |
 |---|---|---|
-| G0 — Nền chạy được | 16/08 | App, DB, SSH, ML skeleton trên hai máy; hai VPS dùng được |
-| G1 — Lát cắt Express | 23/08 | Detect → deploy Express → collector ghi đúng contract |
-| G2 — MVP 66,7% | 06/09 | 16/24 FR có smoke evidence; rollback/dashboard/alert hoạt động |
-| G3 — Freeze thí nghiệm | 04/10 | Pilot 10 run; runner tự động; threshold/feature khóa |
-| G4 — Dữ liệu chính thức | 11/10 | 50 run hoặc phạm vi cắt có lý do; CSV backup |
+| G0 — Nền chạy được | 21/08 | App, DB, SSH, ML skeleton trên hai máy; hai VPS dùng được |
+| G1 — Lát cắt Express | 28/08 | Detect → deploy Express → collector ghi đúng contract |
+| G2 — MVP 66,7% | 11/09 | 16/24 FR có smoke evidence; rollback/dashboard/alert hoạt động |
+| G3 — Freeze thí nghiệm | 09/10 | Pilot 10 run; runner tự động; threshold/feature khóa |
+| G4 — Dữ liệu chính thức | 16/10 | 50 run hoặc phạm vi cắt có lý do; CSV backup |
 | Nộp | 20/11 | App, báo cáo, slide, video và demo fallback sẵn sàng |
 
-Giả định G2: mỗi người 28–32 giờ tập trung/tuần, review PR trong 24 giờ. Dưới 20 giờ/tuần thì
-giảm mục tiêu xuống 50–55% thay vì bỏ test.
+Giả định G2 sau khi quay lại: A có 34–38 giờ, B có 24–30 giờ tập trung/tuần và review PR
+trong 24 giờ. A dưới 28 giờ hoặc B dưới 20 giờ/tuần thì giảm mục tiêu xuống 50–55% thay vì
+bỏ test.
 
 Thứ tự cắt: Tier 2 → `slow_db/latency_creep` → migrate PostgreSQL → đóng gói Python hoàn toàn
 → UI nâng cao. Không cắt deploy end-to-end, metric pipeline đúng, ba model + rule + ensemble,

@@ -1,4 +1,4 @@
-# M06 — Poller + Rule engine · Người B · Tuần 3–4
+# M06 — Poller + Rule engine · Người A · Tuần 3–4
 
 `app/src/main/monitor/poller.ts` + `rules.ts` — FR-D2, FR-D3
 
@@ -76,7 +76,7 @@ poller không được tự train đè lên.) Cờ tắt auto-train: `monitor_se
 ## Test không cần VPS
 `ml-service/scripts/gen_fake_series.py` (M07) sinh `metrics.jsonl` giả có anomaly →
 đặt vào một thư mục local → chạy poller ở chế độ đọc file local thay vì SSH (một cờ trong
-constructor). Nhờ đó Người B làm việc **hoàn toàn độc lập** với Người A từ tuần 3.
+constructor). Nhờ đó A kiểm thử poller **độc lập với collector/VPS của B** từ tuần 3.
 
 ## Định nghĩa xong
 - [ ] Metric thật từ VPS chảy vào `metric_sample`, `seq` liên tục không thủng

@@ -48,8 +48,13 @@ Script sẽ:
 2. Mở trang Trello xin token `read,write` hết hạn sau **1 ngày**.
 3. Hỏi token bằng input ẩn.
 4. Từ chối chạy nếu board đang Public.
-5. Tạo 6 list, 7 label, milestone W1–W4 và task W1.
+5. Tạo 6 list, 7 label, milestone và task chi tiết W1–W4.
 6. Assign card A/B nếu cả hai đã tham gia board.
+
+Board đã được tạo theo phân công cũ thì thêm `-SyncExisting`. Script sẽ đổi tên label A/B,
+reconcile owner/mô tả/label quản lý của card có trong cấu hình và tạo card còn thiếu. Script giữ
+nguyên list hiện tại, custom label, comment, attachment và trạng thái checklist của card đã có;
+không archive/xóa card.
 
 Script không lưu key/token xuống file. API key chỉ xuất hiện trong URL cấp quyền chính thức
 của Trello; các request REST sau đó dùng `Authorization` header nên token không nằm trong URL
@@ -115,8 +120,8 @@ vào title, description, checklist, comment hay ảnh đính kèm.
 
 | Label | Dùng khi |
 |---|---|
-| `A - App/Infra` | Thuộc phần App/Infra do A sở hữu |
-| `B - ML/Monitoring` | Thuộc phần ML/Monitoring do B sở hữu |
+| `A - Core/Algorithms` | Backend Electron, infra, pipeline, monitoring và ML do A sở hữu |
+| `B - UI/Delivery` | Renderer, collector, demo, thí nghiệm và bằng chứng do B sở hữu |
 | `Shared` | Cần phối hợp, handoff hoặc cùng chịu trách nhiệm |
 | `Contract - ca hai duyet` | Thay đổi `docs/contracts/` hoặc interface giữa phần A/B; bắt buộc cả hai duyệt |
 | `P0 - chan tien do` | Không xong thì milestone hoặc người kia bị chặn |
@@ -236,11 +241,14 @@ test đã chạy, phần chưa xong và rủi ro; con người xác nhận rồi
 
 ## 9. Ranh giới A/B và trường hợp làm thay
 
-- A sở hữu `app/src/main/{ssh,crypto,db,detectors,deploy,migrate}`, `app/src/renderer` và
-  `templates/`.
-- B sở hữu `ml-service/`, `collector/`, `experiments/` và `app/src/main/monitor/`.
-- `docs/contracts/` là vùng chung. Mọi thay đổi contract phải có card label
+- A sở hữu `app/src/main/**`, `ml-service/**` và `templates/**`.
+- B sở hữu `app/src/renderer/**`, `collector/**`, `demo-apps/**` và `experiments/**`.
+- `app/src/shared/**`, `docs/contracts/**`, migration và giao thức thí nghiệm là vùng chung.
+  Mọi thay đổi contract phải có card label
   `Contract - ca hai duyet` và cả hai review PR.
-- Nếu A làm thay task của B: giữ label `B - ML/Monitoring`, đổi member/owner thực tế sang A và comment
-  `A thực hiện thay B từ <ngày>`. A commit bằng danh tính Git của A, tuyệt đối không dùng credential của B.
+- B dựng UI bằng fixture/mock đúng typed IPC, không thêm handler tạm trong main. A cung cấp handler;
+  PR tích hợp chỉ thay mock bằng `window.api.invoke` sau khi dependency merge.
+- Nếu A làm thay task của B: giữ label vùng `B - UI/Delivery`, đổi member/owner thực tế sang A và
+  comment `A thực hiện thay B từ <ngày>`. A commit bằng danh tính Git của A, tuyệt đối không dùng
+  credential của B. Chiều ngược lại áp dụng tương tự với label `A - Core/Algorithms`.
 - Handoff giữa hai phía phải ghi rõ file/artifact đầu ra và cách kiểm tra; không chỉ comment “xong rồi”.

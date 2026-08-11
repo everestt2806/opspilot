@@ -4,7 +4,7 @@ In ra hoặc copy vào issue GitHub. Tick thật, đừng tick cho có.
 
 ---
 
-## Checklist trước khi code — phần còn thiếu hấp thụ vào W1 (10/08–16/08)
+## Checklist trước khi code — phần còn thiếu hấp thụ vào W1 (10/08–21/08, nghỉ 11–14/08 sau phần đã merge)
 
 ### Chốt với giảng viên (BLOCKING — làm ngày đầu tiên)
 
@@ -70,7 +70,7 @@ Ghi kết quả 1 dòng vào `docs/smoke-log.md`: ngày · ai chạy · pass/fai
 
 ---
 
-## Trước tuần thí nghiệm chính thức (cuối W8, hạn 04/10)
+## Trước tuần thí nghiệm chính thức (cuối W8, hạn 09/10)
 
 - [ ] **Soak test 24 giờ đã chạy và đạt** ([`11`](11-chien-luoc-test.md#3-test-độ-bền-soak-test--tuần-9-bắt-buộc))
 - [ ] Pilot 10 run (5 kịch bản × 2) đã chạy xong

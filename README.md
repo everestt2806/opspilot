@@ -21,7 +21,7 @@ giảm vận hành và tự động rollback trước khi ứng dụng chết h�
 
 > **Rebaseline 09/08/2026:** nhóm bắt đầu triển khai vào **10/08/2026**. Bốn tuần đầu ưu tiên
 > lát cắt chạy thật từ SSH → deploy → metric → ML/dashboard, mục tiêu nghiệm thu **16/24 yêu
-> cầu chức năng (66,7%)** vào 06/09. Lịch mới: [`docs/04-timeline.md`](docs/04-timeline.md).
+> cầu chức năng (66,7%)** vào 11/09. Lịch mới: [`docs/04-timeline.md`](docs/04-timeline.md).
 
 ---
 

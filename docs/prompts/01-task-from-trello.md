@@ -25,7 +25,7 @@ Thay toàn bộ phần trong dấu `<...>` trước khi gửi:
 ```text
 Tôi đang làm OpsPilot trong repo hiện tại.
 
-Vai trò của tôi: <A - App/Infra | B - ML/Monitoring>
+Vai trò của tôi: <A - Core/Algorithms | B - UI/Delivery>
 Chế độ: <chỉ lập kế hoạch | hiện thực + test + commit + push branch, không merge>
 
 Trello card:

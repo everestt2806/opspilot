@@ -21,8 +21,9 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | [`04-timeline.md`](04-timeline.md) | Lịch 16 tuần theo ngày thật, DoD từng tuần, quy tắc cắt phạm vi | Mỗi đầu tuần |
 | [`05-truy-vet-yeu-cau.md`](05-truy-vet-yeu-cau.md) | Ma trận FR/NFR → module → contract → test → màn hình → tuần | Khi cần biết "còn thiếu gì" |
 | [`06-glossary-quy-uoc.md`](06-glossary-quy-uoc.md) | Thuật ngữ, đơn vị, timezone, quy ước đặt tên | Trước khi đặt tên bất cứ thứ gì |
-| [`18-trello-workflow.md`](18-trello-workflow.md) | Board, trạng thái, card template và script dựng task W1 | Khi tạo/cập nhật Trello |
+| [`18-trello-workflow.md`](18-trello-workflow.md) | Board, trạng thái, card template và script đồng bộ task W1–W4 | Khi tạo/cập nhật Trello |
 | [`19-ho-so-review-va-chot-kien-truc.md`](19-ho-so-review-va-chot-kien-truc.md) | Hồ sơ một file: đề tài, phạm vi, kiến trúc, thí nghiệm, 7 quyết định và phiếu review | Gửi engineer/GVHD trước khi khóa contract |
+| [`20-phan-cong-a-core-b-ui.md`](20-phan-cong-a-core-b-ui.md) | Phân công từ 15/08: A core/algorithms, B UI/delivery; điểm giao typed IPC | Mỗi đầu tuần và khi giao task |
 
 ## Kỹ thuật
 
