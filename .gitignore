@@ -15,6 +15,7 @@ out/
 release/
 build/
 *.tsbuildinfo
+.out-scripts/
 
 # ── DỮ LIỆU NHẠY CẢM — TUYỆT ĐỐI KHÔNG COMMIT ────────────────
 # SQLite của app chứa credential SSH đã mã hoá của bảng `vps`.
@@ -44,6 +45,10 @@ tmp/
 experiments/results/**/*.db
 experiments/results/**/*.dump
 experiments/results/**/raw/
+
+# ── GitNexus index cục bộ cho AI agent ─────────────────────────
+# Mỗi máy tự chạy `gitnexus analyze`; cấu hình chung ở .gitnexusrc
+.gitnexus/
 
 # ── OS / IDE ─────────────────────────────────────────────────
 .DS_Store
