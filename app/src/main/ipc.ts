@@ -4,6 +4,8 @@ import type { IpcInvokeMap, IpcResult } from '@shared/ipc'
 
 import { AppError, toIpcError } from './errors'
 import type { MlServiceManager } from './mlClient'
+import type { SshManager } from './ssh/manager'
+import { readVpsResources, testConnectionWithCredentials } from './vps/connectionService'
 import type { VpsService } from './vps/service'
 
 type Channel = keyof IpcInvokeMap
@@ -25,11 +27,25 @@ export function handle<K extends Channel>(
   })
 }
 
-export function registerIpcHandlers(mlService: MlServiceManager, vpsService: VpsService): void {
+export function registerIpcHandlers(
+  mlService: MlServiceManager,
+  vpsService: VpsService,
+  ssh: SshManager
+): void {
   handle('vps:list', () => vpsService.list())
   handle('vps:create', (input) => vpsService.create(input))
   handle('vps:update', (id, patch) => vpsService.update(id, patch))
   handle('vps:delete', (id) => vpsService.delete(id))
+  handle('vps:test-connection', (input) =>
+    testConnectionWithCredentials({
+      host: input.host,
+      port: input.port,
+      username: input.username,
+      authType: input.auth_type,
+      secret: input.secret
+    })
+  )
+  handle('vps:get-resources', (vpsId) => readVpsResources(ssh, vpsId))
 
   handle('system:ml-status', async () => mlService.status())
   handle('system:ml-restart', async () => {

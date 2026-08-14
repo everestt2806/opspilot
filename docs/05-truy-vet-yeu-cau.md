@@ -15,9 +15,9 @@ Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng đượ
 
 | ID | Yêu cầu | Module | Kiểm chứng | Màn hình | Tuần | TT |
 |---|---|---|---|---|---|---|
-| FR-A1 | CRUD VPS, credential mã hoá | M2 + `db` | unit test crypto + smoke test | 3.1 | W1 | ⬜ |
-| FR-A2 | Test SSH, kiểm tra & tự cài Docker | M1 + `vps:install-docker` | smoke test trên VPS sạch | 3.1 | W1 | ⬜ |
-| FR-A3 | Danh sách VPS + trạng thái + tài nguyên | M1 + `vps:get-resources` | smoke test | 3.1 | W1 | ⬜ |
+| FR-A1 | CRUD VPS, credential mã hoá | M2 + `db` | unit test crypto + `loadSecret` roundtrip DB (pass) · chờ smoke VPS | 3.1 | W1 | 🔨 |
+| FR-A2 | Test SSH, kiểm tra & tự cài Docker | M1 + `vps:install-docker` | `try-ssh` 6 bước chống sandbox + `vps:test-connection` (pass) · chưa `install-docker` + smoke VPS | 3.1 | W1 | 🔨 |
+| FR-A3 | Danh sách VPS + trạng thái + tài nguyên | M1 + `vps:get-resources` | `vps:get-resources` handler + parse test (pass) · chờ smoke VPS thật | 3.1 | W1 | 🔨 |
 | FR-B1 | Detector plugin nhận diện framework | M3 | unit test ≥4 case/detector | 3.2 b2 | W2 | ⬜ |
 | FR-B2 | Hỗ trợ 3 stack Tier 1 (+Flask Tier 2) | M3 | deploy thật cả 3 demo app | 3.2 | W3 | ⬜ |
 | FR-B3 | Wizard hỏi env thiếu + cảnh báo thủ công | M3 `requiredEnv` + UI | smoke test | 3.2 b3 | W3 | ⬜ |
