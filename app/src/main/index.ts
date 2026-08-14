@@ -5,15 +5,18 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 
 import icon from '../../resources/icon.png?asset'
 import { createCredentialCipher } from './crypto/masterKey'
+import { loadSecret } from './crypto/credentials'
 import { closeDatabase, initializeDatabase } from './db'
 import { VpsRepository } from './db/vpsRepository'
 import { registerIpcHandlers } from './ipc'
 import { logger } from './logger'
 import { MlServiceManager } from './mlClient'
+import { SshManager } from './ssh/manager'
 import { VpsService } from './vps/service'
 
 let mainWindow: BrowserWindow | null = null
 let mlService: MlServiceManager | null = null
+let sshManager: SshManager | null = null
 
 function emitMlStatus(status: { running: boolean; reason?: string }): void {
   mainWindow?.webContents.send('system:ml-status', status)
@@ -68,9 +71,23 @@ void app
     const userDataPath = app.getPath('userData')
     const database = initializeDatabase(userDataPath)
     const credentialCipher = createCredentialCipher(userDataPath)
-    const vpsService = new VpsService(new VpsRepository(database), credentialCipher)
+    const vpsRepository = new VpsRepository(database)
+    const vpsService = new VpsService(vpsRepository, credentialCipher)
+    sshManager = new SshManager((vpsId) => {
+      const vps = vpsRepository.getById(vpsId)
+      return {
+        host: vps.host,
+        port: vps.port,
+        username: vps.username,
+        authType: vps.auth_type,
+        secret: loadSecret(database, credentialCipher, vpsId)
+      }
+    })
+    sshManager.on('status', (update) => {
+      mainWindow?.webContents.send('system:ssh-status', update)
+    })
     mlService = new MlServiceManager(emitMlStatus)
-    registerIpcHandlers(mlService, vpsService)
+    registerIpcHandlers(mlService, vpsService, sshManager)
     createWindow()
 
     try {
@@ -100,6 +117,7 @@ void app
 
 app.on('before-quit', () => {
   mlService?.stopSync()
+  sshManager?.disconnectAll()
 })
 
 app.on('will-quit', () => {

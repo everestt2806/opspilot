@@ -20,7 +20,7 @@
     "test": "vitest run",
     "build:unpack": "pnpm build && electron-builder --dir",
     "build:win": "pnpm build && electron-builder --win nsis",
-    "try:ssh": "node -e \"console.log('M1 chua duoc trien khai')\"",
+    "try:ssh": "tsc -p tsconfig.scripts.json && node .out-scripts/scripts/try-ssh.js",
     "try:detect": "node -e \"console.log('M3 chua duoc trien khai')\"",
     "try:deploy": "node -e \"console.log('M4 chua duoc trien khai')\""
   },
