@@ -36,4 +36,27 @@ describe('AesGcmCredentialCipher', () => {
 
     expect(() => cipher.decrypt(tampered)).toThrow()
   })
+
+  it('throw khi authTag bi sua', () => {
+    const cipher = new AesGcmCredentialCipher(randomBytes(32))
+    const encrypted = cipher.encrypt('secret')
+    const tampered = { ...encrypted, auth_tag: Buffer.from(encrypted.auth_tag) }
+    tampered.auth_tag[0] ^= 1
+
+    expect(() => cipher.decrypt(tampered)).toThrow()
+  })
+
+  it('ma hoa va giai ma private key ed25519 nhieu dong', () => {
+    const cipher = new AesGcmCredentialCipher(randomBytes(32))
+    const privateKey = [
+      '-----BEGIN OPENSSH PRIVATE KEY-----',
+      'b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZWQy',
+      'NTUxOQAAACB2FcQhYbQewyV3lYPd6o2Xf9QwvQcN4wRCuO2v3m3mHwAAAKjRwCk9Mx1N',
+      'v0EZ1WfGs8QpE2g0T0B5WHXm1mZvLq4vHWwiuAqSGykAAAAFWJuYW1lQGJueW5hbWUBNg',
+      '-----END OPENSSH PRIVATE KEY-----'
+    ].join('\n')
+
+    const encrypted = cipher.encrypt(privateKey)
+    expect(cipher.decrypt(encrypted)).toBe(privateKey)
+  })
 })
