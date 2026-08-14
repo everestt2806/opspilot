@@ -1,0 +1,6 @@
+{
+  "skipAgentsMd": true,
+  "skipSkills": true,
+  "defaultBranch": "main",
+  "embeddings": false
+}
