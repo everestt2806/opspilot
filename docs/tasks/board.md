@@ -16,7 +16,7 @@
 | TK-A2 | UI khung màn VPS List (state rỗng) | A | 11/08 | HOÀN THÀNH | feat/ui-vps-list-khung | #4 | B nối 4 state đầy đủ ở TK-B7 |
 | TK-A3 | M2 credential: AES-256-GCM + safeStorage | A | 11/08 | HOÀN THÀNH | feat/m02-credential | #8 | 30/30 test |
 | TK-B1 | M5 collector scaffold (script + Dockerfile khung) | B | 15/08 | HOÀN THÀNH | feat/m05-collector-scaffold | #6 | pytest 3/3; probe/output tách TK-B4/B5 |
-| TK-S2 | Dựng + nghiệm thu 2 VPS cùng provider/gói/region | A | 12/08 | ĐANG LÀM | chore/vps-nghiem-thu-19-08 | — | Đã dựng + 6/6 nghiệm thu xong 19/08 (Ubuntu 24.04.4 · Docker 29.7.2 · clock <300ms); còn snapshot `clean-docker-19-08` (tay người dùng) + nạp key B + chép DC/hạn thanh toán từ dashboard. Hồ sơ: `tk-s2-vps.md` |
+| TK-S2 | Dựng + nghiệm thu 2 VPS cùng provider/gói/region | A | 12/08 | ĐANG LÀM | chore/vps-nghiem-thu-19-08 | #12 | Đã dựng + 6/6 nghiệm thu xong 19/08 (Ubuntu 24.04.4 · Docker 29.7.2 · clock <300ms); còn snapshot `clean-docker-19-08` (tay người dùng) + nạp key B + chép DC/hạn thanh toán từ dashboard. Hồ sơ: `tk-s2-vps.md` |
 | TK-A4 | M1 SSH: connect/exec + timeout + auth fail + TOFU | A | 17/08 | HOÀN THÀNH | feat/m01-ssh-connect-exec | #9 | `try-ssh` **6/6 trên 2 VPS thật** 19/08; PR #9 đã merge. Hồ sơ: `tk-a4-m1-ssh.md` |
 | TK-A5 | M1 upload/readFileTail + resource check | A | 19/08 | BLOCKED | feat/m01-ssh-connect-exec | #9 | upload/readFileTail đã xanh trên VPS thật; còn đọc `metrics.jsonl` của B (TK-B5). Hồ sơ: `tk-a5-m1-files.md` |
 | TK-A6 | M7 ML skeleton: features + 6 endpoint + unit test | A | 21/08 | TUẦN NÀY | feat/m07-ml-skeleton-tests | — | Kéo sau TK-S2; B chưa giao fixture → A tự viết `gen_fake_series.py` nếu cần (báo B trước). Hồ sơ: `tk-a6-m7.md` |
