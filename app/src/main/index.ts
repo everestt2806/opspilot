@@ -7,8 +7,10 @@ import icon from '../../resources/icon.png?asset'
 import { createCredentialCipher } from './crypto/masterKey'
 import { loadSecret } from './crypto/credentials'
 import { closeDatabase, initializeDatabase } from './db'
+import { ActionLogRepository } from './db/actionLogRepository'
 import { VpsRepository } from './db/vpsRepository'
 import { DeployService } from './deploy/service'
+import { HistoryService } from './history/service'
 import { registerIpcHandlers } from './ipc'
 import { logger } from './logger'
 import { MlServiceManager } from './mlClient'
@@ -97,7 +99,9 @@ void app
       }
     })
 
-    registerIpcHandlers(mlService, vpsService, sshManager, deployService)
+    const historyService = new HistoryService(new ActionLogRepository(database))
+
+    registerIpcHandlers(mlService, vpsService, sshManager, deployService, historyService)
 
     createWindow()
 

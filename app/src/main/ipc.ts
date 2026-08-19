@@ -4,6 +4,7 @@ import type { IpcInvokeMap, IpcResult } from '@shared/ipc'
 
 import type { DeployService } from './deploy/service'
 import { AppError, toIpcError } from './errors'
+import type { HistoryService } from './history/service'
 import type { MlServiceManager } from './mlClient'
 import type { SshManager } from './ssh/manager'
 import { readVpsResources, testConnectionWithCredentials } from './vps/connectionService'
@@ -33,7 +34,8 @@ export function registerIpcHandlers(
   mlService: MlServiceManager,
   vpsService: VpsService,
   ssh: SshManager,
-  deployService: DeployService
+  deployService: DeployService,
+  historyService: HistoryService
 ): void {
   handle('vps:list', () => vpsService.list())
   handle('vps:create', (input) => vpsService.create(input))
@@ -67,6 +69,8 @@ export function registerIpcHandlers(
   handle('app:rollback', (appId, targetDeploymentId) =>
     deployService.rollback(appId, targetDeploymentId)
   )
+
+  handle('history:list', (filter) => historyService.list(filter))
 
   handle('system:ml-status', async () => mlService.status())
   handle('system:ml-restart', async () => {

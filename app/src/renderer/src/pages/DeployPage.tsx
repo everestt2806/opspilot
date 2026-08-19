@@ -142,7 +142,11 @@ function applyEvent(prev: RunView, event: DeployEvent): RunView {
   return { ...prev, steps, lines }
 }
 
-export function DeployPage(): React.JSX.Element {
+interface DeployPageProps {
+  onOpenDashboard?: () => void
+}
+
+export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Element {
   const [vpsList, setVpsList] = useState<Vps[]>([])
   const [apps, setApps] = useState<App[]>([])
   const [vpsId, setVpsId] = useState<number | undefined>(undefined)
@@ -384,6 +388,7 @@ export function DeployPage(): React.JSX.Element {
         appName={appName}
         vpsName={vpsList.find((vps) => vps.id === vpsId)?.name ?? ''}
         onOpenApp={openApp}
+        onOpenDashboard={onOpenDashboard}
         onBack={resetWizard}
       />
     )
@@ -855,6 +860,7 @@ interface DeployLogViewProps {
   onScroll: () => void
   onScrollDown: () => void
   onOpenApp: () => void
+  onOpenDashboard?: () => void
   onBack: () => void
 }
 
@@ -868,6 +874,7 @@ function DeployLogView({
   onScroll,
   onScrollDown,
   onOpenApp,
+  onOpenDashboard,
   onBack
 }: DeployLogViewProps): React.JSX.Element {
   const [cancelOpen, setCancelOpen] = useState(false)
@@ -932,11 +939,16 @@ function DeployLogView({
           message={strings.deploy.log.success(formatDuration(finished.totalDurationMs))}
           description={appUrl ? <Typography.Text code>{appUrl}</Typography.Text> : undefined}
           action={
-            appUrl ? (
-              <Button type="primary" onClick={onOpenApp}>
-                {strings.deploy.log.openApp}
-              </Button>
-            ) : undefined
+            <Space>
+              {appUrl && (
+                <Button type="primary" onClick={onOpenApp}>
+                  {strings.deploy.log.openApp}
+                </Button>
+              )}
+              {onOpenDashboard && (
+                <Button onClick={onOpenDashboard}>{strings.deploy.log.viewDashboard}</Button>
+              )}
+            </Space>
           }
         />
       )}

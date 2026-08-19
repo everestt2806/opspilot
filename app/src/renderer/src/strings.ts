@@ -197,6 +197,12 @@ export const strings = {
       failedStep: (step: string) => `Lỗi ở bước ${step}`,
       rolledBack: 'Healthcheck thất bại — đã tự rollback về bản đang chạy trước đó.',
       openApp: 'Mở app',
+      viewDashboard: 'Xem dashboard',
+      toolbar: {
+        copy: 'Sao chép',
+        wrap: 'Xuống dòng',
+        search: 'Tìm'
+      },
       cancel: 'Huỷ deploy',
       cancelConfirm: 'Dừng lại',
       cancelAsk:
@@ -205,5 +211,41 @@ export const strings = {
       empty: 'Chưa có log. Đang chuẩn bị…',
       backToWizard: 'Quay lại wizard'
     }
+  },
+  dashboard: {
+    title: 'Tổng quan',
+    refresh: 'Làm mới',
+    stats: {
+      vpsOnline: 'VPS online',
+      appsRunning: 'App đang chạy',
+      deploy24h: 'Deploy 24 giờ',
+      lastDeploy: 'Deploy gần nhất'
+    },
+    recent: {
+      title: 'Hoạt động gần đây',
+      columnTime: 'Thời gian',
+      columnAction: 'Hành động',
+      columnVps: 'VPS',
+      columnStatus: 'Trạng thái',
+      columnMessage: 'Nội dung',
+      empty: 'Chưa có hoạt động nào. Deploy app đầu tiên để thấy lịch sử ở đây.',
+      deployNow: 'Deploy ngay',
+      unknownVps: 'VPS đã xoá',
+      unknownAction: 'Khác'
+    },
+    actions: {
+      deploy: 'Deploy',
+      rollback_auto: 'Rollback tự động',
+      rollback_manual: 'Rollback thủ công'
+    },
+    statuses: {
+      success: 'Thành công',
+      failed: 'Thất bại',
+      cancelled: 'Đã huỷ'
+    },
+    emptyVps: 'Chưa có VPS nào. Thêm VPS đầu tiên để bắt đầu deploy.',
+    addVps: 'Thêm VPS',
+    loadFailed: 'Không tải được dữ liệu dashboard.',
+    retry: 'Thử lại'
   }
 } as const

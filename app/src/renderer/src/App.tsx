@@ -32,14 +32,21 @@ const menuItems = [
   { key: 'settings', icon: <SettingOutlined />, label: strings.navigation.settings }
 ]
 
-const pages: Record<PageKey, React.JSX.Element> = {
-  vps: <VpsPage />,
-  apps: <AppsPage />,
-  deploy: <DeployPage />,
-  dashboard: <DashboardPage />,
-  migrate: <MigratePage />,
-  history: <HistoryPage />,
-  settings: <SettingsPage />
+function renderPage(activePage: PageKey, open: (page: PageKey) => void): React.JSX.Element {
+  const staticPages: Record<Exclude<PageKey, 'deploy' | 'dashboard'>, React.JSX.Element> = {
+    vps: <VpsPage />,
+    apps: <AppsPage />,
+    migrate: <MigratePage />,
+    history: <HistoryPage />,
+    settings: <SettingsPage />
+  }
+  if (activePage === 'deploy') {
+    return <DeployPage onOpenDashboard={() => open('dashboard')} />
+  }
+  if (activePage === 'dashboard') {
+    return <DashboardPage onOpenVps={() => open('vps')} onOpenDeploy={() => open('deploy')} />
+  }
+  return staticPages[activePage]
 }
 
 function App(): React.JSX.Element {
@@ -109,7 +116,9 @@ function App(): React.JSX.Element {
               </Button>
             </Space>
           </Layout.Header>
-          <Layout.Content className="content">{pages[activePage]}</Layout.Content>
+          <Layout.Content className="content">
+            {renderPage(activePage, setActivePage)}
+          </Layout.Content>
         </Layout>
       </Layout>
     </ConfigProvider>
