@@ -2,7 +2,7 @@
 
 | Chủ | Hạn | Branch | Brief | Ưu tiên |
 |---|---|---|---|---|
-| Both | 21/08/2026 | — | `docs/19` mục 10 (bảng cổng) | P0 |
+| Both | 22/08/2026 | — | `docs/19` mục 10 (bảng cổng) | P0 |
 
 ## Mục tiêu
 
@@ -33,6 +33,11 @@ Chốt cổng **G0 — Nền chạy được**: "App, DB, SSH, ML skeleton trên
 - UPDATE 19/08 — phụ thuộc còn treo: TK-S2 (VPS), TK-B2 (demo apps, TRỄ), TK-A6 (ML skeleton),
   TK-B3 (fixture). Dự kiến chạy review chéo 20/08, smoke + chốt gate 21/08; nếu trượt thì lùi
   sang 22/08 và W2 ưu tiên gỡ trước việc mới (quy tắc trong `docs/03`).
+- UPDATE 19/08 — B bận, A làm hết tuần (demo 24/08): **chạy gate chiều 22/08**. Review chéo:
+  B nếu rảnh, không thì **A tự review theo `prompts/99` và ghi rõ trong hồ sơ này**. Hai item
+  thay đổi phạm vi theo quyết định dồn demo: item ML (TK-A6/B3) **hoãn W2** — ghi rõ lý do
+  trong kết quả gate; item demo-apps chỉ tính lát cắt `express-api`. Smoke W1 vẫn: VPS thật +
+  try-ssh + lint/typecheck trên main + express chạy local.
 
 ## Lệnh tái hiện
 

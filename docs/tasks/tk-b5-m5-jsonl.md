@@ -2,7 +2,7 @@
 
 | Chủ | Hạn | Branch | Brief | Ưu tiên |
 |---|---|---|---|---|
-| B | 19/08/2026 | feat/m05-collector-output | `docs/prompts/m05-collector.md`, `contracts/metric-format.md` | P1 |
+| B | 27/08/2026 | feat/m05-collector-output | `docs/prompts/m05-collector.md`, `contracts/metric-format.md` | P1 |
 
 ## Mục tiêu
 
@@ -29,6 +29,8 @@ kèm `latest.json` cho trạng thái tức thời. A (TK-A5) đọc `metrics.jso
 ## Nhật ký
 
 - START 19/08 — dự kiến trong ngày.
+- UPDATE 19/08 — **Lùi W2** cùng chuỗi collector (quyết định dồn lực demo 24/08). Hạn dời
+  27/08. Hệ quả: TK-A5 (A) vẫn BLOCKED chờ file này — khép ngay sau khi B5 có JSONL thật.
 
 ## Lệnh tái hiện
 

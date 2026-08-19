@@ -2,7 +2,7 @@
 
 | Chủ | Hạn | Branch | Brief | Ưu tiên |
 |---|---|---|---|---|
-| B | 20/08/2026 | feat/m05-collector-docker | `docs/prompts/m05-collector.md`, `docs/08-vps-setup.md` | P1 |
+| B | 28/08/2026 | feat/m05-collector-docker | `docs/prompts/m05-collector.md`, `docs/08-vps-setup.md` | P1 |
 
 ## Mục tiêu
 
@@ -28,6 +28,8 @@ dùng được" của gate G0.
 ## Nhật ký
 
 - START 20/08 — VPS đã mua từ 19/08 (TK-S2), điều kiện cần đã có.
+- UPDATE 19/08 — **Lùi W2** cùng chuỗi collector (quyết định dồn lực demo 24/08). Hạn dời
+  28/08; VPS vẫn sẵn sàng (2 máy nghiệm thu 6/6) nên không mất điều kiện gì.
 
 ## Lệnh tái hiện
 

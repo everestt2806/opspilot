@@ -2,7 +2,7 @@
 
 | Chủ | Hạn | Branch | Brief | Ưu tiên |
 |---|---|---|---|---|
-| B | 17/08/2026 | feat/m07-fake-metrics | `docs/contracts/metric-format.md`, `prompts/m07` (mục gen_fake_series) | P1 |
+| B | 28/08/2026 | feat/m07-fake-metrics | `docs/contracts/metric-format.md`, `prompts/m07` (mục gen_fake_series) | P1 |
 
 ## Mục tiêu
 
@@ -32,6 +32,8 @@ thường + inject anomaly (tăng dần / đột ngột / nhiễu).
 - START 17/08 — dự kiến giao fixture cho A.
 - UPDATE 19/08 — chưa thấy PR; A sẽ tự viết `gen_fake_series.py` nếu đến 20/08 vẫn trống
   (đã ghi ở TK-A6). Nếu B làm, báo A để A không viết trùng.
+- UPDATE 19/08 — **Lùi W2 cùng TK-A6** (quyết định dồn lực demo 24/08; ML ngoài demo). Hạn
+  dời 28/08; phương án dự phòng "A tự viết gen_fake_series" vẫn giữ nguyên.
 
 ## Lệnh tái hiện
 
