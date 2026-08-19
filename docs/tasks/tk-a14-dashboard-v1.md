@@ -35,16 +35,16 @@ collector/M7 lùi W2 theo `docs/20`, board ghi rõ "không chart metric".
 
 ## Definition of Done
 
-- [ ] DashboardPage: thẻ tổng quan sống từ DB thật (VM01/VM02 + deploy v1 đã có), bảng
+- [x] DashboardPage: thẻ tổng quan sống từ DB thật (VM01/VM02 + deploy v1 đã có), bảng
       hoạt động gần đây hiện đúng hành động deploy/rollback, empty state đúng quy tắc
-- [ ] `history:list` hạ cánh đúng contract (filter actions/vps_id/thời gian/limit/offset, lỗi 3 phần)
-- [ ] Deploy Log: xterm giữ ANSI color, toolbar [Sao chép][Tìm] hoạt động (nút "Xuống dòng"
+- [x] `history:list` hạ cánh đúng contract (filter actions/vps_id/thời gian/limit/offset, lỗi 3 phần)
+- [x] Deploy Log: xterm giữ ANSI color, toolbar [Sao chép][Tìm] hoạt động (nút "Xuống dòng"
       của spec bỏ — xterm v6 đã xoá option wrap, xem nhật ký 20/08), auto-scroll ngắt khi cuộn
       lên + nút xuống cuối, banner thành công có "Xem dashboard" điều hướng được
-- [ ] HistoryPage: bảng + filter + drawer key–value (không dump JSON thô)
-- [ ] Unit test: history service, reducer run deploy (ANSI giữ nguyên), DashboardPage happy
+- [x] HistoryPage: bảng + filter + drawer key–value (không dump JSON thô)
+- [x] Unit test: history service, reducer run deploy (ANSI giữ nguyên), DashboardPage happy
       path + empty state, DeployPage test cập nhật theo cấu trúc xterm (mock xterm)
-- [ ] lint/typecheck sạch, toàn bộ test pass
+- [x] lint/typecheck sạch, toàn bộ test pass
 - [ ] Board + tk cập nhật cùng commit/PR của task
 
 ## Nhật ký
@@ -72,6 +72,13 @@ collector/M7 lùi W2 theo `docs/20`, board ghi rõ "không chart metric".
   không có API thay thế — đã bỏ nút, ghi vào DoD. Test DeployPage mock xterm bằng class
   giả (ghi nhận qua `term.write`), 121/121 test, lint/typecheck sạch. Còn: HistoryPage
   (chunk 3). Lệnh tái hiện: `pnpm dev` → Deploy → log có màu ANSI, thử tìm + sao chép.
+- UPDATE 20/08 — Chunk 3 xong: `HistoryPage` theo spec 3.7 — bảng 5 cột (thời gian tương
+  đối + tooltip tuyệt đối, Tag hành động, Badge trạng thái, message ellipsis), filter
+  multi-select hành động + VPS + RangePicker ngày, click hàng mở Drawer với Descriptions
+  và `detail_json` dạng key–value (không dump JSON thô, parse an toàn). Test 3 case
+  (happy + drawer, lỗi hiện Alert + nút Thử lại, filter gọi lại `history:list` với
+  `actions`). 124/124 test toàn repo, lint/typecheck/prettier sạch. Xong toàn bộ DoD.
+  Lệnh tái hiện: `pnpm dev` → menu Lịch sử → lọc + bấm hàng xem drawer.
 
 ## Lệnh tái hiện
 

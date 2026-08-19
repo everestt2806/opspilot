@@ -247,5 +247,35 @@ export const strings = {
     addVps: 'Thêm VPS',
     loadFailed: 'Không tải được dữ liệu dashboard.',
     retry: 'Thử lại'
+  },
+  history: {
+    title: 'Lịch sử',
+    description: 'Tra cứu deploy, rollback và cảnh báo đã thực hiện.',
+    filters: {
+      action: 'Hành động',
+      actionAll: 'Tất cả',
+      vps: 'VPS',
+      vpsAll: 'Tất cả VPS',
+      timeRange: 'Thời gian'
+    },
+    columns: {
+      time: 'Thời gian',
+      action: 'Hành động',
+      vps: 'VPS',
+      status: 'Trạng thái',
+      message: 'Nội dung'
+    },
+    detail: {
+      title: 'Chi tiết hoạt động',
+      time: 'Thời gian',
+      vps: 'VPS',
+      status: 'Trạng thái',
+      message: 'Nội dung',
+      fields: 'Thông tin thêm',
+      emptyFields: 'Không có thông tin thêm.'
+    },
+    empty: 'Chưa có hoạt động nào trong bộ lọc này.',
+    loadFailed: 'Không tải được lịch sử.',
+    retry: 'Thử lại'
   }
 } as const
