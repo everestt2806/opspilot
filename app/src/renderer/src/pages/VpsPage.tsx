@@ -5,46 +5,34 @@ import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant
 import type { Vps, VpsInput } from '@shared/ipc'
 
 import { VpsFormModal, type VpsFormValues } from '../components/VpsFormModal'
+import { VpsResourcesCell } from '../components/VpsResourcesCell'
 import { strings } from '../strings'
+import { useVpsStore } from '../store/vpsStore'
+import { rowDisplayStatus, type RowDisplayStatus } from '../vpsResources'
+
+const STATUS_TAG: Record<RowDisplayStatus, { color: string; label: string }> = {
+  checking: { color: 'processing', label: strings.vps.status.checking },
+  online: { color: 'success', label: strings.vps.status.online },
+  offline: { color: 'error', label: strings.vps.status.offline },
+  unknown: { color: 'default', label: strings.vps.status.unknown }
+}
 
 export function VpsPage(): React.JSX.Element {
-  const [items, setItems] = useState<Vps[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const items = useVpsStore((state) => state.items)
+  const loading = useVpsStore((state) => state.loading)
+  const loadError = useVpsStore((state) => state.loadError)
+  const resources = useVpsStore((state) => state.resources)
+  const load = useVpsStore((state) => state.load)
+  const refreshResources = useVpsStore((state) => state.refreshResources)
+
   const [formOpen, setFormOpen] = useState(false)
   const [editingVps, setEditingVps] = useState<Vps | null>(null)
   const [saving, setSaving] = useState(false)
-
-  const loadItems = useCallback(async (): Promise<void> => {
-    setLoading(true)
-    setError(null)
-    const result = await window.api.invoke('vps:list')
-    if (result.ok) {
-      setItems(result.data)
-    } else {
-      setError(result.error.message)
-    }
-    setLoading(false)
-  }, [])
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
-    let active = true
-
-    void window.api.invoke('vps:list').then((result) => {
-      if (!active) return
-
-      if (result.ok) {
-        setItems(result.data)
-      } else {
-        setError(result.error.message)
-      }
-      setLoading(false)
-    })
-
-    return () => {
-      active = false
-    }
-  }, [])
+    void load()
+  }, [load])
 
   const deleteVps = useCallback(
     (vps: Vps): void => {
@@ -57,14 +45,13 @@ export function VpsPage(): React.JSX.Element {
         async onOk() {
           const result = await window.api.invoke('vps:delete', vps.id)
           if (!result.ok) {
-            setError(result.error.message)
             return Promise.reject(new Error(result.error.message))
           }
-          await loadItems()
+          await load()
         }
       })
     },
-    [loadItems]
+    [load]
   )
 
   const columns = useMemo(
@@ -84,12 +71,21 @@ export function VpsPage(): React.JSX.Element {
       },
       {
         title: strings.vps.columns.status,
-        dataIndex: 'last_status',
-        key: 'last_status',
-        render: (status: Vps['last_status']) => (
-          <Tag color={status === 'online' ? 'success' : status === 'offline' ? 'error' : 'default'}>
-            {strings.vps.status[status]}
-          </Tag>
+        key: 'status',
+        render: (_: unknown, vps: Vps) => {
+          const status = rowDisplayStatus(vps, resources[vps.id])
+          return <Tag color={STATUS_TAG[status].color}>{STATUS_TAG[status].label}</Tag>
+        }
+      },
+      {
+        title: strings.vps.columns.resources,
+        key: 'resources',
+        render: (_: unknown, vps: Vps) => (
+          <VpsResourcesCell
+            vpsName={vps.name}
+            state={resources[vps.id]}
+            onRetry={() => void refreshResources([vps.id])}
+          />
         )
       },
       {
@@ -124,12 +120,12 @@ export function VpsPage(): React.JSX.Element {
         )
       }
     ],
-    [deleteVps]
+    [deleteVps, refreshResources, resources]
   )
 
   const submitForm = async (values: VpsFormValues): Promise<void> => {
     setSaving(true)
-    setError(null)
+    setSaveError(null)
 
     const result = editingVps
       ? await window.api.invoke('vps:update', editingVps.id, toUpdatePatch(values))
@@ -137,13 +133,13 @@ export function VpsPage(): React.JSX.Element {
 
     setSaving(false)
     if (!result.ok) {
-      setError(result.error.message)
+      setSaveError(result.error.message)
       return
     }
 
     setFormOpen(false)
     setEditingVps(null)
-    await loadItems()
+    await load()
   }
 
   return (
@@ -154,8 +150,12 @@ export function VpsPage(): React.JSX.Element {
           <Typography.Text type="secondary">{strings.vps.description}</Typography.Text>
         </div>
         <Space>
-          <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void loadItems()}>
-            {strings.common.refresh}
+          <Button
+            icon={<ReloadOutlined />}
+            disabled={items.length === 0}
+            onClick={() => void refreshResources()}
+          >
+            {strings.vps.checkResources}
           </Button>
           <Button
             type="primary"
@@ -170,14 +170,18 @@ export function VpsPage(): React.JSX.Element {
         </Space>
       </div>
 
-      {error && (
+      {(loadError || saveError) && (
         <Alert
           className="page-alert"
           type="error"
           showIcon
-          message={strings.vps.loadError}
-          description={error}
-          action={<Button onClick={() => void loadItems()}>{strings.common.retry}</Button>}
+          message={loadError ? strings.vps.loadError : strings.common.saveError}
+          description={loadError ?? saveError}
+          action={
+            loadError ? (
+              <Button onClick={() => void load()}>{strings.common.retry}</Button>
+            ) : undefined
+          }
         />
       )}
 

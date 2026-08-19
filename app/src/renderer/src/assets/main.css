@@ -87,3 +87,60 @@
 .page-panel .ant-table .ant-empty {
   margin-block: 64px;
 }
+
+.mono-text {
+  font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+.resource-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+}
+
+.resource-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.resource-bar-label {
+  flex: 0 0 36px;
+  font-size: 11px;
+}
+
+.resource-bar .ant-progress {
+  flex: 1;
+}
+
+.check-steps {
+  margin-top: 8px;
+}
+
+.check-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.check-step .mono-text {
+  font-size: 12px;
+}
+
+.step-icon-ok {
+  color: var(--success);
+}
+
+.step-icon-fail {
+  color: var(--danger);
+}
+
+.diagnosis-body {
+  align-items: flex-start;
+}
+
+.diagnosis-fixes {
+  margin-block: 0 2px;
+  padding-left: 20px;
+}
