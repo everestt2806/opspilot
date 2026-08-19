@@ -13,9 +13,9 @@ chạy tiếp thí nghiệm. **Vừa làm vừa cập nhật file này** — m�
 | Số lượng | **2** (nguồn + đích cho migrate; chạy song song thí nghiệm) |
 | Cấu hình | 2 vCPU · 4 GB RAM · 40 GB SSD (build Next.js cần ≥2GB) |
 | OS | **Ubuntu 24.04 LTS** |
-| Provider | **Cùng provider, cùng gói, cùng region cho cả 2 máy** — bắt buộc, xem [`07`](07-giao-thuc-thi-nghiem.md#9-3) |
-| Gợi ý | Hetzner CX22 (~€4/th) · Vultr · DigitalOcean (~6–12 USD/th) |
-| Chi phí | ~40–70 USD cho 4 tháng cả 2 máy |
+| Provider | **WiService (VN) — preset Cheap 2**, 2 máy cùng preset và **cùng datacenter**. Cùng provider/gói/region là bắt buộc, xem [`07`](07-giao-thuc-thi-nghiem.md#9-3) |
+| Dự phòng nếu WiService hỏng hẳn | Hetzner CX22 (~€4.4/th) · Vultr · DigitalOcean |
+| Chi phí | **81.000 ₫/tháng/máy chưa VAT** (CPU 2 core 30.000₫ + RAM 4GB 20.000₫ + SSD 40GB 28.000₫ + 1 IPv4 3.000₫); tính theo giờ ~111 ₫/h; VAT 10% cộng thêm |
 | Đặt tên | `opspilot-vps-1`, `opspilot-vps-2` |
 
 Ghi lại ngay sau khi mua:
@@ -125,6 +125,10 @@ Lệnh 6 chính là phép đo `clock_offset_ms` mà `run_experiment.py` tự đ�
 
 Chụp snapshot **cả 2 VPS** ngay sau bước 5, đặt tên `clean-docker-<ngày>`.
 Ghi ID snapshot vào bảng ở mục 0.
+
+> WiService: snapshot là tuỳ chọn ngoài preset (0–7 cái, ~**4.000₫/cái/tháng**). Mở đúng
+> **1 snapshot/máy** `clean-docker-<ngày>` — không cần 7 mức; chi phí ~8.000₫/tháng cho cả 2
+> máy, không đáng để bỏ.
 
 Snapshot này dùng để: reset nhanh giữa các lần tập demo · khôi phục khi thí nghiệm làm hỏng
 máy · dựng lại nếu provider có sự cố.
