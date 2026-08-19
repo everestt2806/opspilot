@@ -38,25 +38,41 @@ thêm vào `VpsConnectionCheck` (thêm, không đổi field cũ; khi OK thì `di
 
 ## Definition of Done
 
-- [ ] Probe TCP phụ trước SSH phân loại đúng 5 lớp (unit test, kể cả case "timeout mọi cổng")
-- [ ] Handler `vps:test-connection` kèm `diagnosis`; lỗi có title/cause/fixes tiếng Việt rõ
-- [ ] Không log secret; khi kết nối OK thì `diagnosis: null` (không đổi hành vi hiện tại)
-- [ ] Case mẫu firewall WiService tái hiện được bằng mock (TCP connect timeout, không RST)
-- [ ] `pnpm try:ssh` bước 0 chạy; các bước 1–6 vẫn xanh
-- [ ] `docs/contracts/ipc-contract.ts` + `app/src/shared/ipc.ts` giống hệt nhau; 1 dòng DECISIONS
+- [x] Probe TCP phụ trước SSH phân loại đúng 5 lớp (15 test mới `diagnose.test.ts`, kể cả case "timeout mọi cổng")
+- [x] Handler `vps:test-connection` kèm `diagnosis`; lỗi có title/cause/fixes tiếng Việt rõ
+- [x] Không log secret; khi kết nối OK thì không có `diagnosis` (trường tùy chọn — không đổi hành vi cũ)
+- [x] Case mẫu firewall WiService tái hiện được BẰNG MOCK (unit test) VÀ THẬT trên VM01 (cổng 30005 bị chặn bởi firewall WiService → app kết luận `PORT_TIMEOUT` trong ~8 giây)
+- [x] `pnpm try:ssh` bước 0 chạy; các bước 1–6 vẫn xanh (7/7 trên VM01 221.121.1.79)
+- [x] `docs/contracts/ipc-contract.ts` + `app/src/shared/ipc.ts` giống hệt nhau; 1 dòng DECISIONS
 
 ## Nhật ký
 
 - START 19/08 — task hệ quả quyết định demo 24/08 (người dùng chốt: A làm hết tuần này;
   bài toán "detect lỗi kết nối VPS" đứng đầu demo — case mẫu firewall WiService).
+- UPDATE 19/08 — hoàn thành toàn bộ DoD; PR #14. `diagnose.ts` mới: probe TCP trước SSH
+  (chính 3s + phụ 80/443 khi chính timeout để phân biệt "firewall chặn hết" với "chỉ chặn SSH"),
+  phân lớp → `VpsDiagnosis` 5 mã + gợi ý sửa tiếng Việt. `testConnectionWithCredentials` trả
+  kèm `diagnosis` khi lỗi; lỗi lạ vẫn throw như cũ. `try:ssh` thêm bước 0; khi không tới được
+  máy thì SKIP 6 bước sau (trước đây mỗi bước retry SSH ~1 phút — thử case này chết vì hết 5 phút).
+  Bằng chứng VPS thật: healthy 7/7; chặn firewall (port 30005) → kết luận "Mọi cổng đều im lặng —
+  nghi firewall chặn toàn bộ inbound" + gợi ý mở rule SSH trong ~8 giây. Test 45/45 · lint ·
+  typecheck xanh (kèm `.out-scripts` vào eslint ignores/.gitignore).
+  PR #14 merge main. → HOÀN THÀNH.
 
 ## Lệnh tái hiện
 
 ```bash
-# (điền khi có code) — bước 0 chẩn đoán:
-OPSPILOT_SSH_HOST=... pnpm try:ssh
+# VPS sẵn sàng — bước 0 PASS, 1–6 xanh:
+OPSPILOT_SSH_HOST=221.121.1.79 OPSPILOT_SSH_PORT=22 OPSPILOT_SSH_USER=deploy \
+OPSPILOT_SSH_AUTH_TYPE=key OPSPILOT_SSH_SECRET="$(cat "$HOME/.ssh/opspilot_ed25519")" pnpm try:ssh
+
+# Case firewall (cổng không mở rule): app tự kết luận nguyên nhân ~8s
+OPSPILOT_SSH_HOST=221.121.1.79 OPSPILOT_SSH_PORT=30005 OPSPILOT_SSH_USER=deploy \
+OPSPILOT_SSH_AUTH_TYPE=key OPSPILOT_SSH_SECRET="$(cat "$HOME/.ssh/opspilot_ed25519")" pnpm try:ssh
+
+cd app && pnpm test   # 45/45 (15 test chẩn đoán)
 ```
 
 ## PR
 
-— (chưa có)
+- #14 — feat/m01-connect-diagnostics

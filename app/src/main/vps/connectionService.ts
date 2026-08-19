@@ -1,16 +1,46 @@
-import type { VpsConnectionCheck, VpsResources } from '@shared/ipc'
+import type { VpsConnectionCheck, VpsDiagnosis, VpsResources } from '@shared/ipc'
 
+import { AppError } from '../errors'
+import { diagnoseFromSshError, preDiagnose } from '../ssh/diagnose'
 import { SshManager, type SshConnectionInfo } from '../ssh/manager'
 
 const WORKDIR = '/opt/opspilot'
 
+function failedCheck(detail: string, diagnosis: VpsDiagnosis): VpsConnectionCheck {
+  return {
+    ssh_ok: false,
+    docker_installed: false,
+    docker_version: null,
+    workdir_writable: false,
+    steps: [{ label: 'Kết nối SSH', ok: false, detail }],
+    diagnosis
+  }
+}
+
 /** FR-A2: test kết nối bằng credential người dùng vừa nhập (trước khi lưu VPS).
- *  Dùng manager dùng một lần, không đụng pool/DB — UI gọi khi bấm "Kiểm tra". */
+ *  Dùng manager dùng một lần, không đụng pool/DB — UI gọi khi bấm "Kiểm tra".
+ *  Chẩn đoán tầng TCP trước (TK-A10) để trả ngay nguyên nhân + cách sửa mà không tốn
+ *  thời gian retry của SSH — case mẫu: firewall nhà cung cấp chặn toàn bộ inbound. */
 export async function testConnectionWithCredentials(
   config: SshConnectionInfo
 ): Promise<VpsConnectionCheck> {
+  const pre = await preDiagnose(config)
+  if (pre) {
+    return failedCheck(pre.title, pre)
+  }
+
   const ssh = new SshManager(() => config)
-  await ssh.connect(1)
+  try {
+    await ssh.connect(1)
+  } catch (error) {
+    const code = error instanceof AppError ? error.code : 'UNKNOWN'
+    const diagnosis = diagnoseFromSshError(code)
+    if (!diagnosis) {
+      throw error
+    }
+    return failedCheck(diagnosis.title, diagnosis)
+  }
+
   const check = await probeVps(ssh, 1)
   await ssh.disconnect(1)
   return check

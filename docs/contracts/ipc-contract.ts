@@ -219,6 +219,21 @@ export interface VpsConnectionCheck {
   workdir_writable: boolean;
   /** Từng bước để UI hiện tuần tự: "✓ SSH OK → ✓ Docker 27.1 → ✓ Ghi được /opt/opspilot" */
   steps: Array<{ label: string; ok: boolean; detail?: string }>;
+  /** Khi `ssh_ok: false`: nguyên nhân + cách sửa tiếng Việt (TK-A10). Không có khi OK. */
+  diagnosis?: VpsDiagnosis;
+}
+
+/** Chẩn đoán nguyên nhân khi kết nối VPS thất bại (TK-A10). Mỗi lớp lỗi kèm hướng dẫn sửa
+ *  bằng tiếng Việt để người mới tự xử lý được — case mẫu: firewall nhà cung cấp chặn toàn bộ
+ *  inbound (máy vẫn "Running" nhưng mọi cổng timeout, không từ chối). */
+export interface VpsDiagnosis {
+  code: 'HOST_NOT_FOUND' | 'PORT_TIMEOUT' | 'PORT_CLOSED' | 'SSH_AUTH_FAILED' | 'SSH_HANDSHAKE_TIMEOUT';
+  /** Chuyện gì xảy ra — một câu ngắn */
+  title: string;
+  /** Vì sao app kết luận vậy — 1-2 câu */
+  cause: string;
+  /** Các bước nên thử, theo thứ tự */
+  fixes: string[];
 }
 
 export interface DeployInput {

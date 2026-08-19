@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { AppError } from '../src/main/errors'
+import { preDiagnose } from '../src/main/ssh/diagnose'
 import { SshManager, type SshConnectionInfo } from '../src/main/ssh/manager'
 
 function env(name: string, fallback: string): string {
@@ -35,6 +36,29 @@ function record(step: string, status: 'PASS' | 'FAIL' | 'SKIP' | 'WARN', detail 
 async function main(): Promise<void> {
   const ssh = new SshManager(() => buildConfig())
   const root = `${env('OPSPILOT_SSH_TEST_DIR', '/opt/opspilot').replace(/\/$/, '')}/try-ssh`
+
+  // 0. chẩn đoán lỗi kết nối (TK-A10) — in nguyên nhân + cách sửa khi không vào được máy.
+  const diagnosis = await preDiagnose(buildConfig())
+  if (diagnosis) {
+    record(
+      '0 chan doan',
+      'WARN',
+      `${diagnosis.code} — ${diagnosis.title} // ${diagnosis.cause} // GOI Y: ${diagnosis.fixes.join(' | ')}`
+    )
+    // Không tới được máy thì các bước dưới chỉ lặp lại cùng một lỗi với retry dài — bỏ qua.
+    for (const step of [
+      '1 exec docker --version',
+      '2 exec timeout',
+      '3 uploadDir + exclude node_modules',
+      '4 writeFile/readFile/fileSize',
+      '5 readFileTail tăng byte',
+      '6 sai credential'
+    ]) {
+      record(step, 'SKIP', 'khong toi duoc may chu — xem chan doan buoc 0')
+    }
+    return
+  }
+  record('0 chan doan', 'PASS', 'TCP OK, chuyen sang SSH')
 
   // 1. exec lệnh cơ bản
   try {
@@ -157,8 +181,14 @@ main()
   })
   .finally(() => {
     const failed = Object.values(RESULT).filter((status) => status === 'FAIL')
+    const warned = Object.values(RESULT).filter((status) => status === 'WARN')
+    const skipped = Object.values(RESULT).filter((status) => status === 'SKIP')
     const total = Object.keys(RESULT).length
-    console.log(`\nKết quả: ${total - failed.length}/${total} bước không lỗi`)
+    console.log(
+      `\nKết quả: ${total - failed.length}/${total} bước không lỗi` +
+        (warned.length > 0 ? ` · ${warned.length} cảnh báo` : '') +
+        (skipped.length > 0 ? ` · ${skipped.length} bỏ qua` : '')
+    )
     if (failed.length > 0) {
       process.exitCode = 1
     }
