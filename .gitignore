@@ -58,3 +58,4 @@ desktop.ini
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.shared.json
+.out-scripts

@@ -11,6 +11,7 @@ export default defineConfig(
       '**/node_modules',
       '**/dist',
       '**/out',
+      '**/.out-scripts',
       'src/shared/ipc.ts',
       'src/main/detectors/types.ts'
     ]
