@@ -94,6 +94,10 @@ Không agent trên VPS. Không mở thêm port. Chỉ Docker và các container 
 - Mỗi module kèm một script CLI chạy thử độc lập, không cần giao diện.
 - Comment tiếng Việt ở chỗ có đánh đổi thiết kế.
 - Không viết code cho tính năng nằm ngoài brief.
+- Task và trạng thái nằm trong repo: `docs/tasks/board.md` + hồ sơ `docs/tasks/tk-*.md`.
+  **Trước khi bàn giao kết quả cho tôi, bạn PHẢI cập nhật cả hai** (thêm dòng nhật ký
+  `UPDATE`/`BLOCKED`, sửa trạng thái board, ghi lệnh tái hiện và link PR) — người sau chỉ đọc
+  hai file này để tiếp việc, không hỏi lại người trước. Xem `docs/tasks/README.md` mục 3.
 
 ---
 

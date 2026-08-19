@@ -41,6 +41,10 @@ Kiểm tra theo đúng thứ tự sau, mỗi mục trả lời NGẮN GỌN, ch�
 6. CÂU HỎI HỘI ĐỒNG CÓ THỂ HỎI
    Nêu 3 câu hỏi khó nhất mà giảng viên có thể hỏi về đoạn code này, và gợi ý hướng trả lời.
 
+7. TRẠNG THÁI TASK
+   - Commit này có cập nhật docs/tasks/board.md và hồ sơ tk-*.md đúng trạng thái mới không?
+     (bắt buộc, xem docs/tasks/README.md mục 3)
+
 KHÔNG cần khen. KHÔNG đề xuất refactor lớn. KHÔNG đề xuất thêm thư viện.
 Nếu không có vấn đề ở mục nào, ghi "OK" cho mục đó.
 ```
@@ -55,6 +59,7 @@ Nếu không có vấn đề ở mục nào, ghi "OK" cho mục đó.
 - [ ] `git diff --staged | grep -iE 'password|secret|BEGIN.*KEY'` → không có giá trị thật
 - [ ] Đã cập nhật `docs/05-truy-vet-yeu-cau.md` nếu hoàn thành một FR
 - [ ] Đã ghi `DECISIONS.md` nếu lệch kế hoạch
+- [ ] Đã cập nhật `docs/tasks/board.md` + hồ sơ `docs/tasks/tk-*.md` cùng commit (bắt buộc)
 - [ ] **Tự giải thích được từng hàm public trong diff**
 
 ## Checklist cho người review (24 giờ)

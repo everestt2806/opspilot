@@ -3,7 +3,7 @@
 **Hiệu lực từ 15/08/2026.** Các task/PR đã hoàn thành trước mốc này giữ nguyên owner thực tế;
 không đổi lịch sử để làm đẹp bảng tiến độ.
 
-Sau phần đã merge ngày 11/08, cả A và B bận nên nhóm nghỉ đến hết 14/08. Mọi card chưa hoàn
+Sau phần đã merge ngày 11/08, cả A và B bận nên nhóm nghỉ đến hết 14/08. Mọi task chưa hoàn
 thành được dời sang từ 15/08; khoảng nghỉ này không tính là trễ.
 
 Mục tiêu của cách chia mới là để B có thể làm giao diện độc lập trong khi A xử lý những phần có
@@ -20,7 +20,7 @@ sản phẩm riêng.
 | Không tự sửa | Renderer của B, collector/demo/experiment runner của B | Electron main, DB, SSH, pipeline và model của A |
 
 Vùng dùng chung: `app/src/shared/**`, `docs/contracts/**`, migration và giao thức thí nghiệm.
-Thay đổi ở đây phải có label `Contract - ca hai duyet` và cả hai review.
+Thay đổi ở đây phải được ghi rõ trong nhật ký tk-file và cả hai review.
 
 ## 2. Cách hai người làm độc lập
 
@@ -35,8 +35,8 @@ B: fixture/mock cùng type -> UI states -> thay mock bằng window.api.invoke
 - A chốt type và ví dụ payload trước; B không cần chờ handler thật để dựng màn hình.
 - B đặt fixture trong renderer/test, không tạo IPC tạm và không import Node/Electron trực tiếp.
 - Khi handler của A merge, B chỉ nối typed IPC và chạy các state: loading, empty, success, error.
-- Mỗi card tích hợp phải ghi rõ channel/event nào là điểm giao và PR dependency nào cần merge trước.
-- B gặp thiếu field thì comment vào card Contract; không sửa contract âm thầm để vừa giao diện.
+- Mỗi task tích hợp phải ghi rõ channel/event nào là điểm giao và PR dependency nào cần merge trước.
+- B gặp thiếu field thì ghi vào nhật ký tk-file và báo A; không sửa contract âm thầm để vừa giao diện.
 
 ## 3. Rebaseline W1–W4
 
@@ -56,49 +56,35 @@ B: fixture/mock cùng type -> UI states -> thay mock bằng window.api.invoke
 
 ### Thứ tự ưu tiên của B
 
-1. Collector scaffold → ba demo app → fake metric; mỗi lần chỉ kéo một card.
+1. Collector scaffold → ba demo app → fake metric; mỗi lần chỉ kéo một task.
 2. VPS connection/resource states bằng mock typed.
 3. Deploy Wizard và Deploy Log bằng mock typed.
 4. Nối UI vào IPC thật, sau đó Dashboard và Versions/Alert UI.
 
 ## 4. Definition of Done riêng theo vai trò
 
-Card của A chỉ sang `CHỜ REVIEW` khi có unit/integration test cho core API, không log secret,
+Task của A chỉ sang `CHỜ REVIEW` khi có unit/integration test cho core API, không log secret,
 có lệnh tái hiện và nếu dùng VPS thì có smoke log đã che thông tin nhạy cảm.
 
-Card của B chỉ sang `CHỜ REVIEW` khi có đủ loading/empty/success/error, không truy cập Node
+Task của B chỉ sang `CHỜ REVIEW` khi có đủ loading/empty/success/error, không truy cập Node
 từ renderer, dùng type trong `app/src/shared`, có ảnh/video ngắn hoặc component test và không
 hard-code payload khác contract.
 
-Card tích hợp chỉ `HOÀN THÀNH` khi cả mock test của B và handler test của A đều pass trên `main`.
+Task tích hợp chỉ `HOÀN THÀNH` khi cả mock test của B và handler test của A đều pass trên `main`.
 
 ## 5. Quy tắc tái cân bằng
 
-- Mỗi người vẫn chỉ có một card `ĐANG LÀM`.
-- A không nhận UI polish khi còn card core P0; B không nhận model/pipeline chỉ vì đang chờ IPC.
+- Mỗi người vẫn chỉ có một task `ĐANG LÀM`.
+- A không nhận UI polish khi còn task core P0; B không nhận model/pipeline chỉ vì đang chờ IPC.
 - Nếu A trễ quá 1 ngày ở P0, B ưu tiên viết fixture, test, tài liệu tái hiện hoặc smoke script để
   giúp A; không sửa thẳng file core.
 - Nếu cuối W2 A chưa build được Express trên VPS, hạ mục tiêu W4 xuống 50–55% thay vì bỏ test.
 - Review chéo vẫn bắt buộc: B phải giải thích được luồng core ở mức sử dụng; A phải giải thích
   được state và error UX của màn demo.
 
-## 6. Áp dụng trên Trello
+## 6. Theo dõi task trong repo
 
-Chạy xem trước:
-
-```powershell
-.\tools\setup-trello.ps1 -PlanOnly -SyncExisting
-```
-
-Đồng bộ board hiện có:
-
-```powershell
-.\tools\setup-trello.ps1 `
-  -BoardUrl 'https://trello.com/b/RrSCc5uu/opspilot-delivery-board' `
-  -PartnerUsername 'voththienkim' `
-  -SyncExisting
-```
-
-Chế độ này đổi tên label A/B, cập nhật card được chuyển owner và tạo các card W1–W4 còn thiếu.
-Nó không archive/xóa card, không đổi list/custom label của card đã tồn tại và không xóa
-comment/attachment.
+Từ 19/08/2026 task và trạng thái nằm trong repo: **quy trình** ở
+[`tasks/README.md`](tasks/README.md), **trạng thái** ở [`tasks/board.md`](tasks/board.md),
+**hồ sơ từng task** ở `tasks/tk-*.md`. Phân công W1–W4 trong mục 3 của file này đã được chuyển
+thành các task trên board.

@@ -8,12 +8,13 @@ khớp với phần còn lại của hệ thống, ở phiên thứ nhất hay p
 ## Công thức mỗi phiên làm việc
 
 ```
-[0] một Trello card đang ở ĐANG LÀM       ← outcome, scope, branch và DoD
-[1] docs/prompts/01-task-from-trello.md   ← mẫu giao card và chọn quyền cho AI
-[2] docs/prompts/00-context-chung.md      ← ngữ cảnh dự án, luôn đọc
-[3] docs/prompts/mXX-<module>.md          ← đúng MỘT module đang làm
-[4] các file trong docs/contracts/ mà brief đó liệt kê ở mục "Đọc trước"
-[5] (nếu sửa code có sẵn) file code hiện tại trên đúng branch
+[0] một task trong docs/tasks/board.md ở ĐANG LÀM  ← outcome, scope, branch và DoD
+[1] docs/tasks/tk-<id>.md                            ← hồ sơ task (nhật ký, blocker, PR)
+[2] docs/prompts/01-task-from-board.md               ← mẫu giao task và chọn quyền cho AI
+[3] docs/prompts/00-context-chung.md                 ← ngữ cảnh dự án, luôn đọc
+[4] docs/prompts/mXX-<module>.md                     ← đúng MỘT module đang làm
+[5] các file trong docs/contracts/ mà brief đó liệt kê ở mục "Đọc trước"
+[6] (nếu sửa code có sẵn) file code hiện tại trên đúng branch
 ```
 
 **Không dán cả repo.** Ngữ cảnh loãng làm AI bịa tên hàm và "cải tiến" interface — đúng thứ
@@ -28,7 +29,7 @@ docs/prompts/m04-deploy-pipeline.md"*.
 
 | File | Module | Người | Tuần |
 |---|---|---|---|
-| [`01-task-from-trello.md`](01-task-from-trello.md) | Mẫu giao một card cho AI, chọn lập kế hoạch/thực hiện/review | cả hai | mọi task |
+| [`01-task-from-board.md`](01-task-from-board.md) | Mẫu giao một task (hồ sơ trong `docs/tasks/`) cho AI, chọn lập kế hoạch/thực hiện/review | cả hai | mọi task |
 | [`m00-scaffold.md`](m00-scaffold.md) | Khởi tạo repo, cấu hình build | A | W1 |
 | [`m01-ssh-manager.md`](m01-ssh-manager.md) | SSH manager | A | W1 |
 | [`m02-credential.md`](m02-credential.md) | Mã hoá credential | A | W1 |
@@ -56,6 +57,9 @@ docs/prompts/m04-deploy-pipeline.md"*.
 4. Mỗi module: **code + test bằng CLI trước → chạy thật với VPS → mới nối vào UI**.
 5. AI đề xuất cách làm khác và nhóm **chấp nhận** → ghi 1 dòng `DECISIONS.md` kèm lý do.
    Đó là bằng chứng nhóm có phán xét, không chỉ dán code.
+6. **Người làm việc với AI nào cũng phải bắt AI đó cập nhật `docs/tasks/board.md` + hồ sơ
+   `docs/tasks/tk-*.md`** (nhật ký, lệnh tái hiện, link PR) trước khi bàn giao kết quả — xem
+   `docs/tasks/README.md` mục 3. AI không cập nhật = người dùng không nhận kết quả đó.
 
 ---
 

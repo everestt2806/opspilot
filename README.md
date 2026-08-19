@@ -17,7 +17,7 @@ giảm vận hành và tự động rollback trước khi ứng dụng chết h�
 |---|---|
 | Tài liệu & hợp đồng kỹ thuật | ✅ Xong (tuần 0) |
 | Duyệt đề tài với giảng viên | ⏳ Đang chờ |
-| Code | ⛔ Chưa bắt đầu — khởi động từ tuần 1 (**10/08/2026**) |
+| Code | 🏗️ Đang triển khai tuần 1 — xem [`docs/tasks/`](docs/tasks/) |
 
 > **Rebaseline 09/08/2026:** nhóm bắt đầu triển khai vào **10/08/2026**. Bốn tuần đầu ưu tiên
 > lát cắt chạy thật từ SSH → deploy → metric → ML/dashboard, mục tiêu nghiệm thu **16/24 yêu
@@ -33,7 +33,7 @@ giảm vận hành và tự động rollback trước khi ứng dụng chết h�
 2. [`docs/README.md`](docs/README.md) — bản đồ toàn bộ tài liệu.
 3. [`docs/01-ke-hoach.md`](docs/01-ke-hoach.md) — kiến trúc + spec 10 module.
 4. [`docs/contracts/`](docs/contracts/) — hợp đồng kỹ thuật, không được sửa tuỳ tiện.
-5. [`docs/18-trello-workflow.md`](docs/18-trello-workflow.md) — chọn một card, tạo branch, bàn giao PR và cập nhật tiến độ.
+5. [`docs/tasks/`](docs/tasks/) — chọn một task trên board, đọc hồ sơ `tk-*`, tạo branch, bàn giao PR và cập nhật trạng thái.
 
 **Sắp code một module cụ thể:** mở `docs/prompts/mXX-*.md` tương ứng, dán vào AI cùng với
 `CLAUDE.md`. Đó là toàn bộ ngữ cảnh cần thiết.
@@ -92,7 +92,7 @@ pnpm build:win    # tạo bộ cài Windows bằng electron-builder
 
 - Kế hoạch & spec module → [`docs/01-ke-hoach.md`](docs/01-ke-hoach.md)
 - Lịch 16 tuần theo ngày thật → [`docs/04-timeline.md`](docs/04-timeline.md)
-- Luồng làm việc Trello → branch → PR → Done → [`docs/18-trello-workflow.md`](docs/18-trello-workflow.md)
+- Bảng task & trạng thái trong repo → branch → PR → Done → [`docs/tasks/`](docs/tasks/)
 - Hồ sơ một file gửi engineer/giảng viên review kiến trúc → [`docs/19-ho-so-review-va-chot-kien-truc.md`](docs/19-ho-so-review-va-chot-kien-truc.md)
 - Giao thức thí nghiệm (phần ăn điểm) → [`docs/07-giao-thuc-thi-nghiem.md`](docs/07-giao-thuc-thi-nghiem.md)
 - Nhật ký quyết định → [`DECISIONS.md`](DECISIONS.md)
