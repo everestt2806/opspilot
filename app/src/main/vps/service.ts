@@ -74,6 +74,25 @@ export class VpsService {
     validateId(id)
     this.repository.delete(id)
   }
+
+  /** Sau khi cài Docker thành công — lưu phiên bản + đánh dấu online (FR-A2). */
+  recordDockerInstalled(id: number, dockerVersion: string): Vps {
+    validateId(id)
+    return this.repository.update(id, {
+      docker_version: dockerVersion,
+      last_status: 'online',
+      last_seen_at: nowIso()
+    })
+  }
+
+  recordOnline(id: number, dockerVersion?: string): Vps {
+    validateId(id)
+    return this.repository.update(id, {
+      docker_version: dockerVersion,
+      last_status: 'online',
+      last_seen_at: nowIso()
+    })
+  }
 }
 
 function parseInput<T>(schema: z.ZodType<T>, value: unknown): T {
@@ -91,4 +110,8 @@ function validateId(id: number): void {
   if (!Number.isInteger(id) || id <= 0) {
     throw new AppError('VALIDATION', 'VPS không hợp lệ. Hãy tải lại danh sách rồi thử lại.')
   }
+}
+
+function nowIso(): string {
+  return new Date().toISOString()
 }

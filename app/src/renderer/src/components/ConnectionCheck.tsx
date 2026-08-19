@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Alert, Button, Space, Spin, Typography } from 'antd'
+import { Alert, Button, Modal, Space, Spin, Typography } from 'antd'
 import { ApiOutlined, CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons'
 
 import type { VpsConnectionCheck, VpsInput } from '@shared/ipc'
@@ -28,12 +28,19 @@ type CheckPhase =
 interface ConnectionCheckProps {
   getValues: () => VpsInput
   runCheck: (values: VpsInput) => Promise<VpsConnectionCheck>
+  /** ID VPS đã lưu trong DB — cần cho "Cài Docker ngay" (install-docker dùng credential đã
+   *  mã hoá). Không có (modal đang thêm VPS mới) thì chỉ hướng dẫn lưu VPS trước. */
+  vpsId?: number
 }
 
 /** Khối "Kiểm tra kết nối" trong modal VPS — 4 state: idle / checking / done / failed.
  *  Logic gọi IPC nằm ở parent (`runCheck`), component này thuần hiển thị để test được
  *  từng state bằng fixture. */
-export function ConnectionCheck({ getValues, runCheck }: ConnectionCheckProps): React.JSX.Element {
+export function ConnectionCheck({
+  getValues,
+  runCheck,
+  vpsId
+}: ConnectionCheckProps): React.JSX.Element {
   const [state, setState] = useState<CheckPhase>({ phase: 'idle' })
 
   async function check(): Promise<void> {
@@ -66,7 +73,7 @@ export function ConnectionCheck({ getValues, runCheck }: ConnectionCheckProps): 
   if (state.phase === 'done') {
     return (
       <Space direction="vertical" size="small" className="diagnosis-body">
-        <CheckResult result={state.result} onRetry={retry} />
+        <CheckResult result={state.result} onRetry={retry} vpsId={vpsId} />
       </Space>
     )
   }
@@ -105,10 +112,12 @@ export function ConnectionCheck({ getValues, runCheck }: ConnectionCheckProps): 
 
 function CheckResult({
   result,
-  onRetry
+  onRetry,
+  vpsId
 }: {
   result: VpsConnectionCheck
   onRetry: () => void
+  vpsId?: number
 }): React.JSX.Element {
   if (result.ssh_ok) {
     return (
@@ -120,14 +129,7 @@ function CheckResult({
           <Space direction="vertical" size="small" className="diagnosis-body">
             <Typography.Text type="secondary">{strings.vps.check.successHint}</Typography.Text>
             <CheckSteps steps={result.steps} />
-            {!result.docker_installed && (
-              <Alert
-                type="warning"
-                showIcon
-                message={strings.vps.check.dockerMissing}
-                description={strings.vps.check.dockerMissingHint}
-              />
-            )}
+            {!result.docker_installed && <DockerMissing vpsId={vpsId} />}
             {result.docker_installed && !result.workdir_writable && (
               <Alert type="warning" showIcon message={strings.vps.check.workdirFail} />
             )}
@@ -160,6 +162,86 @@ function CheckResult({
         />
       )}
     </Space>
+  )
+}
+
+function DockerMissing({ vpsId }: { vpsId?: number }): React.JSX.Element {
+  const [modal, contextHolder] = Modal.useModal()
+  const [installing, setInstalling] = useState(false)
+  const [installedVersion, setInstalledVersion] = useState<string | null>(null)
+  const [installError, setInstallError] = useState<string | null>(null)
+
+  function installDocker(): void {
+    if (!vpsId) return
+    modal.confirm({
+      title: strings.vps.install.confirmTitle,
+      content: strings.vps.install.confirmBody,
+      okText: strings.vps.install.confirm,
+      cancelText: strings.common.cancel,
+      async onOk() {
+        setInstalling(true)
+        const result = await window.api.invoke('vps:install-docker', vpsId)
+        setInstalling(false)
+        if (!result.ok) {
+          setInstallError(
+            `${result.error.message}${result.error.technical ? ` — ${result.error.technical}` : ''}`
+          )
+          return
+        }
+        setInstalledVersion(result.data.docker_version)
+      }
+    })
+  }
+
+  return (
+    <>
+      {contextHolder}
+      <Alert
+        type="warning"
+        showIcon
+        message={strings.vps.check.dockerMissing}
+        description={
+          <Space direction="vertical" size="small">
+            <Typography.Text type="secondary">
+              {strings.vps.check.dockerMissingHint}
+            </Typography.Text>
+            {!vpsId && (
+              <Typography.Text type="secondary">
+                {strings.vps.install.needSaveFirst}
+              </Typography.Text>
+            )}
+            {installing && (
+              <Space size="small">
+                <Spin size="small" />
+                <Typography.Text type="secondary">{strings.vps.install.installing}</Typography.Text>
+              </Space>
+            )}
+            {installedVersion && (
+              <Alert type="success" showIcon message={strings.vps.install.done(installedVersion)} />
+            )}
+            {installError && (
+              <Alert
+                type="error"
+                showIcon
+                message={strings.vps.install.failed}
+                description={
+                  <Typography.Text type="secondary" className="mono-text">
+                    {installError}
+                  </Typography.Text>
+                }
+              />
+            )}
+          </Space>
+        }
+        action={
+          vpsId ? (
+            <Button size="small" type="primary" loading={installing} onClick={installDocker}>
+              {strings.vps.install.button}
+            </Button>
+          ) : undefined
+        }
+      />
+    </>
   )
 }
 

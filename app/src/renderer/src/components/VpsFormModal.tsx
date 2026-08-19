@@ -159,6 +159,7 @@ export function VpsFormModal({
         key={formVersion}
         getValues={() => form.getFieldsValue() as VpsInput}
         runCheck={runCheck}
+        vpsId={initialVps?.id}
       />
     </Modal>
   )

@@ -24,6 +24,9 @@ export interface UpdateVpsRecord {
   auth_type?: 'key' | 'password'
   provider?: string
   region?: string
+  docker_version?: string
+  last_status?: 'online' | 'offline' | 'unknown'
+  last_seen_at?: string
   credential?: EncryptedCredential
 }
 
@@ -100,6 +103,9 @@ export class VpsRepository {
     if (patch.auth_type !== undefined) add('auth_type', patch.auth_type)
     if (patch.provider !== undefined) add('provider', normalizeOptionalText(patch.provider))
     if (patch.region !== undefined) add('region', normalizeOptionalText(patch.region))
+    if (patch.docker_version !== undefined) add('docker_version', patch.docker_version)
+    if (patch.last_status !== undefined) add('last_status', patch.last_status)
+    if (patch.last_seen_at !== undefined) add('last_seen_at', patch.last_seen_at)
     if (patch.credential !== undefined) {
       add('crypto_scheme', patch.credential.crypto_scheme)
       add('encrypted_secret', patch.credential.encrypted_secret)

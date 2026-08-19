@@ -8,6 +8,7 @@ import { createCredentialCipher } from './crypto/masterKey'
 import { loadSecret } from './crypto/credentials'
 import { closeDatabase, initializeDatabase } from './db'
 import { VpsRepository } from './db/vpsRepository'
+import { DeployService } from './deploy/service'
 import { registerIpcHandlers } from './ipc'
 import { logger } from './logger'
 import { MlServiceManager } from './mlClient'
@@ -87,7 +88,17 @@ void app
       mainWindow?.webContents.send('system:ssh-status', update)
     })
     mlService = new MlServiceManager(emitMlStatus)
-    registerIpcHandlers(mlService, vpsService, sshManager)
+
+    const deployService = new DeployService({
+      ssh: sshManager,
+      db: database,
+      emit: (event) => {
+        mainWindow?.webContents.send('deploy:event', event)
+      }
+    })
+
+    registerIpcHandlers(mlService, vpsService, sshManager, deployService)
+
     createWindow()
 
     try {

@@ -2,10 +2,12 @@ import { dialog, ipcMain, shell } from 'electron'
 
 import type { IpcInvokeMap, IpcResult } from '@shared/ipc'
 
+import type { DeployService } from './deploy/service'
 import { AppError, toIpcError } from './errors'
 import type { MlServiceManager } from './mlClient'
 import type { SshManager } from './ssh/manager'
 import { readVpsResources, testConnectionWithCredentials } from './vps/connectionService'
+import { installDockerOnVps } from './vps/dockerInstall'
 import type { VpsService } from './vps/service'
 
 type Channel = keyof IpcInvokeMap
@@ -30,7 +32,8 @@ export function handle<K extends Channel>(
 export function registerIpcHandlers(
   mlService: MlServiceManager,
   vpsService: VpsService,
-  ssh: SshManager
+  ssh: SshManager,
+  deployService: DeployService
 ): void {
   handle('vps:list', () => vpsService.list())
   handle('vps:create', (input) => vpsService.create(input))
@@ -46,6 +49,24 @@ export function registerIpcHandlers(
     })
   )
   handle('vps:get-resources', (vpsId) => readVpsResources(ssh, vpsId))
+  handle('vps:install-docker', async (vpsId) => {
+    const dockerVersion = await installDockerOnVps(ssh, vpsId)
+    vpsService.recordDockerInstalled(vpsId, dockerVersion)
+    return { docker_version: dockerVersion }
+  })
+
+  handle('deploy:detect', (sourcePath) => deployService.detect(sourcePath))
+  handle('deploy:precheck', (input) => deployService.precheck(input))
+  handle('deploy:start', (input) => deployService.start(input))
+  handle('deploy:cancel', (deploymentId) => {
+    deployService.cancel(deploymentId)
+  })
+  handle('app:list', (vpsId) => deployService.listApps(vpsId))
+  handle('app:get', (appId) => deployService.getApp(appId))
+  handle('app:versions', (appId) => deployService.versions(appId))
+  handle('app:rollback', (appId, targetDeploymentId) =>
+    deployService.rollback(appId, targetDeploymentId)
+  )
 
   handle('system:ml-status', async () => mlService.status())
   handle('system:ml-restart', async () => {

@@ -3,7 +3,7 @@
     "target": "ES2022",
     "module": "commonjs",
     "moduleResolution": "node",
-    "lib": ["ES2022"],
+    "lib": ["ES2023"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -16,5 +16,5 @@
       "@shared/*": ["src/shared/*"]
     }
   },
-  "files": ["scripts/try-ssh.ts"]
+  "files": ["scripts/try-ssh.ts", "scripts/try-deploy.ts", "scripts/seed-vps.ts", "src/main/raw.d.ts"]
 }

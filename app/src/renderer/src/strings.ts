@@ -118,6 +118,92 @@ export const strings = {
       cpu: 'Tải CPU (1 phút)',
       cores: (count: number) => `${count} nhân`,
       usedOf: (used: string, total: string) => `Đã dùng ${used} / ${total}`
+    },
+    install: {
+      button: 'Cài Docker ngay',
+      confirmTitle: 'Cài Docker trên VPS?',
+      confirmBody:
+        'OpsPilot chạy script cài chính thức của Docker trên máy chủ. Mất vài phút, không huỷ được giữa chừng.',
+      confirm: 'Cài Docker',
+      installing: 'Đang cài Docker trên máy chủ…',
+      done: (version: string) => `Đã cài xong Docker ${version}. Bấm “Kiểm tra lại” để cập nhật.`,
+      failed: 'Cài Docker thất bại. Bấm thử lại hoặc xem chi tiết kỹ thuật.',
+      needSaveFirst: 'Lưu VPS lại trước rồi mở lại hộp thoại này để cài Docker.'
+    }
+  },
+  deploy: {
+    title: 'Deploy ứng dụng',
+    description: 'Chọn thư mục source — app nhận diện framework rồi deploy lên VPS qua SSH.',
+    noVps: 'Chưa có VPS nào. Thêm VPS ở màn VPS trước khi deploy.',
+    steps: {
+      source: 'Nguồn',
+      detect: 'Nhận diện',
+      config: 'Cấu hình',
+      review: 'Kiểm tra & Deploy'
+    },
+    vpsLabel: 'VPS đích',
+    sourceLabel: 'Thư mục source',
+    pickFolder: 'Chọn thư mục',
+    pickAgain: 'Chọn lại',
+    next: 'Tiếp tục',
+    back: 'Quay lại',
+    detecting: 'Đang nhận diện framework…',
+    detectError: 'Không đọc được thư mục source. Kiểm tra đường dẫn rồi thử lại.',
+    detectView: 'Xem',
+    detectLabels: {
+      framework: 'Framework',
+      version: 'Phiên bản',
+      build: 'Build command',
+      port: 'Cổng container',
+      healthcheck: 'Healthcheck path',
+      template: 'Dockerfile template',
+      db: 'Cơ sở dữ liệu',
+      dbYes: 'Postgres chạy kèm app — tool tự tạo',
+      dbNo: 'Không cần',
+      tree: 'Cây file (rút gọn)'
+    },
+    unmatchedTitle: 'Không nhận diện được framework',
+    unmatchedHint:
+      'App đã kiểm tra từng dấu hiệu dưới đây. Chọn lại thư mục source hoặc kiểm tra project.',
+    signals: { title: 'Dấu hiệu đã kiểm tra', passed: 'Khớp', failed: 'Không khớp' },
+    config: {
+      appLabel: 'Ứng dụng trên VPS',
+      newApp: 'Tạo ứng dụng mới',
+      appNameLabel: 'Tên ứng dụng',
+      appNameRule: 'Chữ thường a-z, số và dấu gạch ngang — bắt đầu bằng chữ.',
+      envTitle: 'Biến môi trường',
+      envRequired: 'Bắt buộc',
+      envAddPlaceholder: 'Chọn biến tuỳ chọn',
+      envAdd: 'Thêm',
+      envRemove: (key: string) => `Bỏ ${key}`,
+      envHint:
+        'Giá trị secret được mã hoá ở máy, chỉ ghi dạng .env trên VPS và không hiện trong log.',
+      dbUrlHint: 'DATABASE_URL: bỏ trống để tool tự tạo Postgres kèm mật khẩu ngẫu nhiên.',
+      manualTitle: 'Cần làm tay sau deploy'
+    },
+    review: {
+      title: 'Kiểm tra VPS trước deploy',
+      checking: 'Đang precheck…',
+      retry: 'Kiểm tra lại',
+      urlLabel: 'URL sẽ dùng',
+      deploy: 'Deploy',
+      deployDisabled: 'Precheck chưa xanh — sửa trên VPS rồi bấm Kiểm tra lại.',
+      error: 'Không chạy được precheck.'
+    },
+    log: {
+      title: 'Deploy log',
+      running: 'Đang deploy',
+      success: (duration: string) => `Deploy thành công sau ${duration}`,
+      failedStep: (step: string) => `Lỗi ở bước ${step}`,
+      rolledBack: 'Healthcheck thất bại — đã tự rollback về bản đang chạy trước đó.',
+      openApp: 'Mở app',
+      cancel: 'Huỷ deploy',
+      cancelConfirm: 'Dừng lại',
+      cancelAsk:
+        'Dừng deploy giữa chừng? Tuỳ bước đang chạy, app cũ sẽ được giữ nguyên hoặc dọn dẹp.',
+      scrollDown: 'Xuống cuối',
+      empty: 'Chưa có log. Đang chuẩn bị…',
+      backToWizard: 'Quay lại wizard'
     }
   }
 } as const

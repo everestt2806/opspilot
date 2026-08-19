@@ -25,6 +25,8 @@ export interface ExecOptions {
   onStderr?: (chunk: string) => void
   timeoutMs?: number
   signal?: AbortSignal
+  /** false -> không ghi lệnh vào log (lệnh chứa dữ liệu nhạy cảm, vd ghi .env). */
+  logCommand?: boolean
 }
 
 export interface ExecResult {
@@ -161,14 +163,16 @@ export class SshManager extends EventEmitter {
     vpsId: number,
     remotePath: string,
     content: string,
-    mode?: number
+    options: { mode?: number; silent?: boolean } = {}
   ): Promise<void> {
     const entry = await this.ensureConnected(vpsId)
     const base64 = Buffer.from(content, 'utf8').toString('base64')
     const pathQuoted = shellQuote(remotePath)
-    await this.runCommand(entry, `printf %s '${base64}' | base64 -d > ${pathQuoted}`)
-    if (mode !== undefined) {
-      await this.runCommand(entry, `chmod ${mode.toString(8)} ${pathQuoted}`)
+    await this.runCommand(entry, `printf %s '${base64}' | base64 -d > ${pathQuoted}`, {
+      logCommand: options.silent === true ? false : true
+    })
+    if (options.mode !== undefined) {
+      await this.runCommand(entry, `chmod ${options.mode.toString(8)} ${pathQuoted}`)
     }
   }
 
@@ -309,11 +313,15 @@ export class SshManager extends EventEmitter {
     command: string,
     options: ExecOptions = {}
   ): Promise<ExecResult> {
-    const channel = await this.openExecChannel(entry, command)
+    const channel = await this.openExecChannel(entry, command, options)
     return this.awaitChannelResult(channel, options)
   }
 
-  private openExecChannel(entry: PoolEntry, command: string): Promise<ClientChannel> {
+  private openExecChannel(
+    entry: PoolEntry,
+    command: string,
+    options: ExecOptions = {}
+  ): Promise<ClientChannel> {
     return new Promise<ClientChannel>((resolve, reject) => {
       const client = entry.client
       if (!client) {
@@ -321,7 +329,9 @@ export class SshManager extends EventEmitter {
         return
       }
 
-      logger.info('ssh', command, { vps_id: entry.vpsId })
+      if (options.logCommand !== false) {
+        logger.info('ssh', command, { vps_id: entry.vpsId })
+      }
 
       client.exec(command, (error, channel) => {
         if (error) {
