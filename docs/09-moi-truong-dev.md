@@ -62,7 +62,7 @@ mới là một câu hỏi tiềm năng của hội đồng ("cái này để l�
 | `zod` | validate dữ liệu qua ranh giới IPC |
 | `dayjs` | format thời gian |
 | `tar` | tạo tar stream khi UPLOAD (không phụ thuộc `tar.exe` của Windows) |
-| dev: `vitest` · `eslint` · `prettier` · `@electron/rebuild` | |
+| dev: `vitest` · `eslint` · `prettier` · `@electron/rebuild` · `@testing-library/react` · `@testing-library/dom` · `jsdom` | 3 gói test sau chỉ cho component test renderer (quyết định 19/08), không vào bundle |
 
 ### `ml-service/` — Python
 

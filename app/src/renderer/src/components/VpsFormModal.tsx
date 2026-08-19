@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
-import { Form, Input, InputNumber, Modal, Radio } from 'antd'
+import { useCallback, useEffect, useState } from 'react'
+import { Divider, Form, Input, InputNumber, Modal, Radio } from 'antd'
 
-import type { Vps, VpsInput } from '@shared/ipc'
+import type { Vps, VpsConnectionCheck, VpsInput } from '@shared/ipc'
 
+import { ConnectionCheck, CheckFailedError } from './ConnectionCheck'
 import { strings } from '../strings'
 
 export type VpsFormValues = VpsInput
@@ -24,6 +25,8 @@ export function VpsFormModal({
 }: VpsFormModalProps): React.JSX.Element {
   const [form] = Form.useForm<VpsFormValues>()
   const authType = Form.useWatch('auth_type', form) ?? 'key'
+  // Đổi giá trị form => kết quả "Kiểm tra kết nối" cũ không còn đúng nữa => reset khối check.
+  const [formVersion, setFormVersion] = useState(0)
 
   useEffect(() => {
     if (!open) return
@@ -43,7 +46,27 @@ export function VpsFormModal({
       form.resetFields()
       form.setFieldsValue({ port: 22, auth_type: 'key' })
     }
+    // Không cần bump formVersion ở đây: destroyOnHidden đã hủy ConnectionCheck khi đóng modal.
   }, [form, initialVps, open])
+
+  const runCheck = useCallback(
+    async (values: VpsInput): Promise<VpsConnectionCheck> => {
+      try {
+        await form.validateFields()
+      } catch {
+        throw new CheckFailedError(strings.vps.validation.incomplete)
+      }
+      if (initialVps && !String(values.secret ?? '').trim()) {
+        throw new CheckFailedError(strings.vps.check.needCredential)
+      }
+      const result = await window.api.invoke('vps:test-connection', values)
+      if (!result.ok) {
+        throw new CheckFailedError(result.error.message, result.error.technical)
+      }
+      return result.data
+    },
+    [form, initialVps]
+  )
 
   return (
     <Modal
@@ -56,7 +79,13 @@ export function VpsFormModal({
       onCancel={onCancel}
       onOk={() => void form.submit()}
     >
-      <Form form={form} layout="vertical" requiredMark="optional" onFinish={onSubmit}>
+      <Form
+        form={form}
+        layout="vertical"
+        requiredMark="optional"
+        onValuesChange={() => setFormVersion((version) => version + 1)}
+        onFinish={onSubmit}
+      >
         <Form.Item
           name="name"
           label={strings.vps.fields.name}
@@ -124,6 +153,13 @@ export function VpsFormModal({
           <Input maxLength={100} />
         </Form.Item>
       </Form>
+
+      <Divider />
+      <ConnectionCheck
+        key={formVersion}
+        getValues={() => form.getFieldsValue() as VpsInput}
+        runCheck={runCheck}
+      />
     </Modal>
   )
 }
