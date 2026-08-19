@@ -21,12 +21,12 @@ bằng 6 lệnh. Đây là điều kiện gỡ choke cho TK-A4/A5, TK-B6 và gat
 
 ## Definition of Done
 
-- [ ] 2 máy **WiService preset Cheap 2** (2 vCPU · 4GB · 40GB · 1 IPv4), Ubuntu 24.04 LTS, cùng DC
-- [ ] Cả 2 máy chạy xong `docs/08` mục 1–4 (key riêng, user `deploy`, docker, `/opt/opspilot`)
-- [ ] 6/6 lệnh nghiệm thu `docs/08` mục 5 **xanh trên cả 2 máy**
+- [x] 2 máy **WiService preset Cheap 2** (2 vCPU · 4GB · 40GB · 1 IPv4), Ubuntu 24.04 LTS, cùng DC
+- [x] Cả 2 máy chạy xong `docs/08` mục 1–4 (key riêng, user `deploy`, docker, `/opt/opspilot`)
+- [x] 6/6 lệnh nghiệm thu `docs/08` mục 5 **xanh trên cả 2 máy**
 - [ ] Snapshot `clean-docker-<ngày>` chụp xong cho cả 2 máy, ID ghi vào bảng mục 0
-- [ ] Cả A và B đều `ssh deploy@<ip> 'echo OK'` bằng key riêng của mình
-- [ ] A chạy `pnpm try:ssh` thành công với VPS thật (giải choke TK-A4)
+- [ ] Cả A và B đều `ssh deploy@<ip> 'echo OK'` bằng key riêng của mình (A xong; B chưa nạp key)
+- [x] A chạy `pnpm try:ssh` thành công với VPS thật (giải choke TK-A4)
 
 ## Nhật ký
 
@@ -35,6 +35,18 @@ bằng 6 lệnh. Đây là điều kiện gỡ choke cho TK-A4/A5, TK-B6 và gat
 - UPDATE 19/08 — đã chốt provider WiService (`DECISIONS.md` 19/08) và **đã mua xong 2 máy**.
   Việc còn lại: chọn đúng Ubuntu 24.04 + cùng DC khi tạo máy (kiểm tra), chạy runbook mục 1–6,
   6 lệnh nghiệm thu, snapshot `clean-docker-19-08`.
+- UPDATE 19/08 — **dựng xong cả 2 máy, nghiệm thu 6/6 xanh trên cả 2**:
+  Ubuntu 24.04.4 LTS · 2 vCPU · 3909MB RAM · 39G disk · Docker 29.7.2 (giống hệt nhau);
+  user `deploy` + NOPASSWD sudoers; key A nạp xong rồi tắt `PasswordAuthentication no`
+  (đã kiểm tra key vẫn vào sau khi tắt); UTC + systemd-timesyncd synchronized;
+  `/opt/opspilot` chown deploy. `pnpm try:ssh` **6/6 trên cả 2 máy** (chi tiết xem TK-A4).
+  Đồng hồ lệch **290ms / 236ms**.
+  **Bẫy phát hiện:** firewall WiService mặc định chặn toàn bộ inbound → phải mở rule TCP 22
+  trên dashboard (đã ghi runbook `docs/08` mục 0 + hồ sơ này).
+  Còn lại để HOÀN THÀNH: (1) chụp snapshot `clean-docker-19-08` trên dashboard mỗi máy —
+  việc tay của người dùng (hướng dẫn đã gửi); (2) nạp key của B — vì đã tắt password auth
+  nên **B gửi pubkey cho A nạp bằng key A**, không bật lại password; (3) chép tên DC/hạn
+  thanh toán từ dashboard vào bảng `docs/08` mục 0.
 
 ## Lệnh tái hiện
 
