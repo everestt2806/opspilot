@@ -57,6 +57,7 @@ hay kiến trúc phức tạp. App chỉ cần chạy đúng và ổn định đ
 | Format file metric trên VPS | `docs/contracts/metric-format.md` |
 | Event của deploy/migrate pipeline | `docs/contracts/deploy-events.md` |
 | Spec module đang code | `docs/01-ke-hoach.md` PHẦN 4 + `docs/prompts/mXX-*.md` |
+| Task, trạng thái, hồ sơ bàn giao | `docs/tasks/board.md` + `docs/tasks/tk-*.md` |
 | Spec màn hình UI | `docs/02-ui-ux-spec.md` |
 | Giao thức thí nghiệm | `docs/07-giao-thuc-thi-nghiem.md` |
 | Quy ước đặt tên, đơn vị, timezone | `docs/06-glossary-quy-uoc.md` |
@@ -106,6 +107,14 @@ docs/                   toàn bộ tài liệu (file này trỏ tới)
 4. Nếu đổi schema: thêm file migration mới, **không sửa migration cũ** đã chạy trên máy người kia.
 
 **Sau khi xong một module:** cập nhật ô trạng thái trong `docs/05-truy-vet-yeu-cau.md`.
+
+**Quản lý task — bắt buộc với mọi phiên, kể cả khi chỉ chạy script ngắn:**
+- Task/trạng thái nằm trong repo: `docs/tasks/board.md` + hồ sơ `docs/tasks/tk-*.md`.
+- Đầu phiên: đọc board → ghi dòng `START <ngày>` vào nhật ký tk-file của task đang làm.
+- Trước khi tuyên bố "xong": cập nhật board (trạng thái, link PR) + tk-file (nhật ký
+  `UPDATE`/`REVIEW`/`DONE`/`BLOCKED`, lệnh tái hiện, kết quả test) **trong cùng
+  commit/PR của task**. Chưa cập nhật = chưa tính là xong, PR bị reject như thiếu test.
+- Chỉ `HOÀN THÀNH` sau khi PR merge `main` + test pass. Chi tiết: `docs/tasks/README.md` mục 3.
 
 ---
 

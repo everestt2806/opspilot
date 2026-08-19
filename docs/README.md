@@ -21,7 +21,7 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | [`04-timeline.md`](04-timeline.md) | Lịch 16 tuần theo ngày thật, DoD từng tuần, quy tắc cắt phạm vi | Mỗi đầu tuần |
 | [`05-truy-vet-yeu-cau.md`](05-truy-vet-yeu-cau.md) | Ma trận FR/NFR → module → contract → test → màn hình → tuần | Khi cần biết "còn thiếu gì" |
 | [`06-glossary-quy-uoc.md`](06-glossary-quy-uoc.md) | Thuật ngữ, đơn vị, timezone, quy ước đặt tên | Trước khi đặt tên bất cứ thứ gì |
-| [`18-trello-workflow.md`](18-trello-workflow.md) | Board, trạng thái, card template và script đồng bộ task W1–W4 | Khi tạo/cập nhật Trello |
+| [`tasks/`](tasks/README.md) | Quy trình, bảng task và hồ sơ bàn giao trong repo — **nguồn sự thật cho task/trạng thái** từ 19/08 | Khi nhận/cập nhật bất kỳ task nào |
 | [`19-ho-so-review-va-chot-kien-truc.md`](19-ho-so-review-va-chot-kien-truc.md) | Hồ sơ một file: đề tài, phạm vi, kiến trúc, thí nghiệm, 7 quyết định và phiếu review | Gửi engineer/GVHD trước khi khóa contract |
 | [`20-phan-cong-a-core-b-ui.md`](20-phan-cong-a-core-b-ui.md) | Phân công từ 15/08: A core/algorithms, B UI/delivery; điểm giao typed IPC | Mỗi đầu tuần và khi giao task |
 
@@ -53,7 +53,7 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | File | Nội dung |
 |---|---|
 | [`prompts/00-context-chung.md`](prompts/00-context-chung.md) | Khối ngữ cảnh dán vào đầu mọi phiên chat với model bất kỳ |
-| [`prompts/01-task-from-trello.md`](prompts/01-task-from-trello.md) | Mẫu giao một Trello card cho AI, gồm scope, DoD, quyền sửa/commit/push và mẫu bàn giao |
+| [`prompts/01-task-from-board.md`](prompts/01-task-from-board.md) | Mẫu giao một task trong `docs/tasks/` cho AI: scope, DoD, quyền sửa/commit/push và quy tắc bắt buộc cập nhật bảng task |
 | [`prompts/m01`…`m12`](prompts/) | Một brief hoàn chỉnh cho mỗi module: input, output, ràng buộc, định nghĩa xong, cách test |
 | [`prompts/99-review.md`](prompts/99-review.md) | Prompt để AI tự review code trước khi mở PR |
 

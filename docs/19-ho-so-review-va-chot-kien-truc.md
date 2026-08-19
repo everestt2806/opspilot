@@ -64,7 +64,8 @@ so sánh trung thực**, không nằm ở số lượng màn hình hay độ ph�
 
 - M00 scaffold Electron/React/TypeScript, ML service skeleton và cấu trúc repo đã merge vào `main`.
 - Bộ contract, kế hoạch, timeline, test strategy và protocol thí nghiệm đã có bản nháp chi tiết.
-- Trello/GitHub workflow cho hai người đã được dựng; task W1 đã phân owner và deadline.
+- Workflow task/PR cho hai người đã được dựng (từ 19/08 task/trạng thái nằm trong
+  `docs/tasks/`); task W1 đã phân owner và deadline.
 - Các feature module M1–M12 chưa được xem là hoàn thành nếu chưa có PR, test và smoke evidence.
 - D1–D7 trong tài liệu này đang chờ review; code phụ thuộc chúng không nên đi sâu trước khi khóa.
 
@@ -155,7 +156,7 @@ VPS — UBUNTU 24.04
 - Mọi thao tác VPS đi qua SSH; không mở cổng quản trị mới.
 - Collector chỉ ghi file metric; Electron poll qua SSH mỗi 30 giây.
 - Dữ liệu qua IPC/REST/JSON phải validate ở boundary.
-- Secret không vào log, Trello, Git hoặc CSV thí nghiệm.
+- Secret không vào log, Git hoặc CSV thí nghiệm.
 
 Hệ thống có hai **thành phần ứng dụng chính**: Electron app và Python ML service. Không mô tả
 là “đúng hai OS process” vì Electron có main và renderer process.

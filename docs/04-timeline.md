@@ -9,7 +9,7 @@ và bằng chứng). Chi tiết ranh giới và cơ chế mock typed:
 [`20-phan-cong-a-core-b-ui.md`](20-phan-cong-a-core-b-ui.md).
 
 Sau các kết quả đã merge ngày 11/08, cả hai **tạm dừng đến hết 14/08** vì bận. Không giao
-deadline và không tính trễ trong khoảng này; toàn bộ card chưa hoàn thành bắt đầu lại từ 15/08.
+deadline và không tính trễ trong khoảng này; toàn bộ task chưa hoàn thành bắt đầu lại từ 15/08.
 
 ## Mục tiêu 4 tuần đầu: 66,7% chức năng
 
@@ -45,8 +45,8 @@ bằng cách bỏ test.
 | Ngày | Người A | Người B | Điểm nối cuối ngày |
 |---|---|---|---|
 | **10/08** | Scaffold Electron + React; copy shared contract; khởi tạo DB/migration | Tạo venv; FastAPI `/health`; khung collector và test Python | Hai app chạy bằng một lệnh; tạo initial commit duy nhất trên `main`, sau đó mọi việc qua PR |
-| **11/08** | Repository CRUD VPS + IPC + khung VPS List đã merge | Không nhận card mới vì bận | PR #4 merge; sau kết quả này cả hai bắt đầu khoảng nghỉ |
-| **11/08 sau phần đã merge → 14/08** | **Tạm dừng — không nhận card mới** | **Tạm dừng — không nhận card mới** | Không tính trễ; card mở giữ ở `TUẦN NÀY`, không để giả ở `ĐANG LÀM` |
+| **11/08** | Repository CRUD VPS + IPC + khung VPS List đã merge | Không nhận task mới vì bận | PR #4 merge; sau kết quả này cả hai bắt đầu khoảng nghỉ |
+| **11/08 sau phần đã merge → 14/08** | **Tạm dừng — không nhận task mới** | **Tạm dừng — không nhận task mới** | Không tính trễ; task mở giữ ở `TUẦN NÀY`, không để giả ở `ĐANG LÀM` |
 | **15/08** | Nghiệm thu M2 + dựng/kiểm tra 2 VPS | Collector scaffold + contract test | Cả hai máy dev/VPS sẵn sàng; test module độc lập pass |
 | **16/08** | Chuẩn bị fixture/CLI cho SSH | Ba demo app chạy Docker local | 3 health endpoint trả 200; A có target để smoke SSH |
 | **17/08** | M1 `connect/exec`, timeout/reconnect | Generator metric giả đúng contract | `try:ssh` chạy lệnh đơn; JSONL giả hợp lệ |

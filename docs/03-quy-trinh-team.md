@@ -38,16 +38,18 @@ phải soi lỗi. Checklist review: [`prompts/99-review.md`](prompts/99-review.m
 
 ### Quản lý task
 
-- **Trello là nguồn sự thật cho task/trạng thái; GitHub là nguồn sự thật cho code/test/merge.**
-  Không tạo lại cùng một task ở GitHub Issues.
-- Luồng card: `TUẦN NÀY → ĐANG LÀM → CHỜ REVIEW → HOÀN THÀNH`; vướng trên 30 phút thì
-  chuyển `BLOCKED` và ghi rõ điều kiện gỡ chặn.
-- Mỗi người tối đa một card `ĐANG LÀM`. Push commit chưa phải hoàn thành; phải có PR mới sang
+- **Repo là nguồn sự thật cho task/trạng thái**: [`tasks/README.md`](tasks/README.md) (quy
+  trình) + [`tasks/board.md`](tasks/board.md) (bảng tổng) + `tasks/tk-*.md` (hồ sơ từng task).
+  GitHub vẫn là nguồn sự thật cho code/test/merge. Không dùng GitHub Issues.
+- Luồng task: `TUẦN NÀY → ĐANG LÀM → CHỜ REVIEW → HOÀN THÀNH`; vướng trên 30 phút thì
+  `BLOCKED` và ghi rõ điều kiện gỡ chặn.
+- Mỗi người tối đa một task `ĐANG LÀM`. Push commit chưa phải hoàn thành; phải có PR mới sang
   `CHỜ REVIEW`, và chỉ sang `HOÀN THÀNH` sau khi PR merge vào `main` cùng test pass.
-- Card phải ghi owner, deadline, branch, vùng file được sửa/không sửa và Definition of Done.
-  Playbook thao tác hằng ngày, mẫu comment và script dựng board: [`18-trello-workflow.md`](18-trello-workflow.md).
-- Khi giao một card cho AI, dùng [`prompts/01-task-from-trello.md`](prompts/01-task-from-trello.md).
-  Con người vẫn chịu trách nhiệm xác nhận test, cập nhật trạng thái Trello và quyết định merge.
+- Hồ sơ tk phải ghi owner, deadline, branch, vùng file được sửa/không sửa và Definition of Done.
+  Playbook hằng ngày và mẫu nhật ký cho AI: [`tasks/README.md`](tasks/README.md).
+- Khi giao một task cho AI, dùng [`prompts/01-task-from-board.md`](prompts/01-task-from-board.md).
+  **AI phải tự cập nhật board + tk-file trước khi bàn giao**; con người vẫn chịu trách nhiệm
+  xác nhận test và quyết định merge.
 
 ---
 
@@ -67,15 +69,15 @@ Smoke test fail → **tuần sau ưu tiên sửa trước khi làm việc mới*
 
 ## 3. Phân công & ranh giới
 
-Từ 15/08/2026, nhóm dùng phân công **A = Core/Algorithms, B = UI/Delivery**. Bản đầy đủ,
-timeline bàn giao và cách đồng bộ Trello nằm tại
-[`20-phan-cong-a-core-b-ui.md`](20-phan-cong-a-core-b-ui.md).
+Từ 15/08/2026, nhóm dùng phân công **A = Core/Algorithms, B = UI/Delivery**. Bản đầy đủ và
+timeline bàn giao nằm tại [`20-phan-cong-a-core-b-ui.md`](20-phan-cong-a-core-b-ui.md); quy
+trình theo dõi task nằm tại [`tasks/README.md`](tasks/README.md).
 
 | | Người A — Core/Algorithms | Người B — UI/Delivery |
 |---|---|---|
 | Sở hữu | `app/src/main/**`, `ml-service/**`, `templates/**` | `app/src/renderer/**`, `collector/**`, `demo-apps/**`, `experiments/**` |
 | Báo cáo | Kiến trúc, core app/infra, monitoring và thuật toán ML | UI/UX, collector, kịch bản demo, thực thi thí nghiệm và hình/bảng kết quả |
-| Không đụng vào của nhau | trừ bug chặn đã báo trên card/PR | trừ bug chặn đã báo trên card/PR |
+| Không đụng vào của nhau | trừ bug chặn đã ghi trong tk-file/PR | trừ bug chặn đã ghi trong tk-file/PR |
 
 **Ranh giới chung là `app/src/shared/**`, `docs/contracts/**`, migration và giao thức thí
 nghiệm.** Ai muốn đổi contract phải báo người kia **trước khi** code, vì phía bên kia đang
