@@ -2,7 +2,7 @@
 
 | Chủ | Hạn | Branch | Brief | Ưu tiên |
 |---|---|---|---|---|
-| B | 11/08/2026 | feat/m12-demo-apps | `docs/prompts/m12-demo-apps.md` | P0 |
+| A (nhận 19/08, trước là B) | 20/08/2026 | feat/m12-express-demo-app | `docs/prompts/m12-demo-apps.md` | P0 |
 
 ## Mục tiêu
 
@@ -10,9 +10,13 @@
 sinh fault (memory leak, cpu spike, error burst…) để deploy, chạy thí nghiệm và demo. Đây là
 điều kiện để có lát cắt Express W2 và gate smoke W1.
 
+**Lát cắt demo 24/08 (chỉ tiêu của A tuần này):** làm tối thiểu `express-api` — chạy local,
+endpoint fault, Dockerfile — làm đích deploy cho TK-A13. `next-blog` + `vite-spa` lùi W2,
+không chặn demo.
+
 ## Được sửa
 
-- `demo-apps/**` (thư mục của B).
+- `demo-apps/**` (thư mục của B; A làm trong tuần demo — docs/20 cập nhật 19/08).
 
 ## Không được sửa
 
@@ -31,6 +35,9 @@ sinh fault (memory leak, cpu spike, error burst…) để deploy, chạy thí ng
 - START 11/08 — dự kiến xong trong ngày.
 - UPDATE 19/08 — **TRỄ**: `demo-apps/` còn rỗng, chưa có PR. Đang chặn TK-B4 (probe cần đích)
   và gate G0 (TK-S3). B cần ưu tiên số 1: làm tối thiểu `express-api` trước, 2 app còn lại theo sau.
+- UPDATE 19/08 — B bận → **A nhận từ 19/08** (quyết định: A làm hết tuần này). Ưu tiên làm lát
+  cắt demo: `express-api` + fault endpoint + Dockerfile để TK-A13 có đích deploy 24/08;
+  2 app còn lại vẫn thuộc task này, làm nốt W2.
 
 ## Lệnh tái hiện
 

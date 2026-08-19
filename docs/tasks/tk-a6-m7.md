@@ -2,7 +2,7 @@
 
 | Chủ | Hạn | Branch | Brief | Ưu tiên |
 |---|---|---|---|---|
-| A | 21/08/2026 | feat/m07-ml-skeleton-tests | `docs/prompts/m07-ml-service.md` | P0 |
+| A | 28/08/2026 | feat/m07-ml-skeleton-tests | `docs/prompts/m07-ml-service.md` | P0 |
 
 ## Mục tiêu (FR-D4 — phần ăn điểm nhất)
 
@@ -35,6 +35,9 @@ persist state, `gen_fake_series.py`, 9 unit test trong brief. Mọi ngẫu nhiê
   `/health` + config rỗng. Kế hoạch: features.py → models → store → endpoint → test → fake series.
 - UPDATE 19/08 — chưa bắt đầu code (ưu tiên trong ngày: TK-S2 VPS nghiệm thu trước; B chưa giao
   fixture TK-B3 → sẽ tự viết `gen_fake_series.py` trong scope ml-service nếu B chưa kịp).
+- UPDATE 19/08 — **Lùi W2 cùng TK-B3**: quyết định dồn lực demo 24/08 (chẩn đoán lỗi kết nối +
+  deploy Express thật + ops dashboard); ML không nằm trong demo. Nội dung task giữ nguyên,
+  hạn dời 28/08. Các mục phụ thuộc TK-S2/B3 giải quyết khi quay lại.
 
 ## Lệnh tái hiện
 

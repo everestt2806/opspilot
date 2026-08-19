@@ -2,7 +2,7 @@
 
 | Chủ | Hạn | Branch | Brief | Ưu tiên |
 |---|---|---|---|---|
-| B | 18/08/2026 | feat/m05-collector-probes | `docs/prompts/m05-collector.md` | P1 |
+| B | 26/08/2026 | feat/m05-collector-probes | `docs/prompts/m05-collector.md` | P1 |
 
 ## Mục tiêu
 
@@ -30,6 +30,8 @@ HTTP probe đo `latency_ms` + `http_error_rate` vào đích app demo. Chạy loc
 - START 18/08 — dự kiến làm sau khi có scaffold (TK-B1 merged).
 - BLOCKED 19/08 — cần app demo (TK-B2) làm đích probe; tạm bỏ qua bằng cách probe localhost
   port tĩnh nếu muốn xả blocker — chọn cách nào thì ghi UPDATE vào đây.
+- UPDATE 19/08 — **Lùi W2** (quyết định dồn lực demo 24/08; collector ngoài demo). Hạn dời
+  26/08. Đích probe sẽ là `express-api` (TK-B2 đã có lát cắt của A) — hết blocker khi quay lại.
 
 ## Lệnh tái hiện
 

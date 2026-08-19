@@ -10,6 +10,21 @@ Mục tiêu của cách chia mới là để B có thể làm giao diện độc
 rủi ro kỹ thuật cao. Đây là phân công theo **ranh giới file và artifact**, không phải chia thành hai
 sản phẩm riêng.
 
+### Cập nhật 19/08/2026 — tuần chạy demo (19/08–23/08), A làm hết
+
+B bận tuần này → **từ 19/08 đến 23/08 A đảm nhận toàn bộ task: backend lẫn UI** (quyết định
+với người dùng; board là nguồn sự thật). Mục tiêu chi phối tuần: **demo với thầy 24/08** gồm:
+
+1. **Chẩn đoán lỗi kết nối VPS cho người mới** — case mẫu: firewall WiService mặc định chặn
+   inbound (máy báo Running nhưng TCP timeout toàn bộ cổng). App tự phân loại nguyên nhân và
+   in hướng dẫn sửa tiếng Việt (TK-A10 + phần hiển thị TK-B7).
+2. **Auto-deploy 1 app Express thật lên VM01 từ UI** (TK-B2 lát cắt express-api + TK-A13).
+3. **Ops dashboard** quản lý VPS, deploy, lịch sử, log live (TK-A14).
+
+Collector (TK-B4/B5/B6) + 2 demo app còn lại + M7 (TK-A6) lùi W2 — chart metric lên dashboard
+cùng đợt poller W2–W3. Trong tuần này A được sửa `app/src/renderer/**` (ranh giới mục 1 tạm
+nới); từ W2 quay lại đúng phân công trừ khi có quyết định mới.
+
 ## 1. Ranh giới sở hữu
 
 | | Người A — Core/Algorithms | Người B — UI/Delivery |
