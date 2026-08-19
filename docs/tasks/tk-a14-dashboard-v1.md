@@ -89,4 +89,4 @@ pnpm dev      # menu Dashboard -> thẻ tổng quan + bảng hoạt động; Dep
 
 ## PR
 
-- (chưa mở)
+- #18 — Dashboard v1: tổng quan + lịch sử + log deploy live (mô tả tiếng Anh)
