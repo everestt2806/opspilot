@@ -26,18 +26,11 @@ import {
   StopOutlined
 } from '@ant-design/icons'
 
-import type {
-  App,
-  DeployEvent,
-  DeployInput,
-  DeployStep,
-  DetectionResultDto,
-  IpcError,
-  PrecheckResult,
-  Vps
-} from '@shared/ipc'
+import type { App, DeployInput, DetectionResultDto, PrecheckResult, Vps } from '@shared/ipc'
 
 import { strings } from '../strings'
+import { applyEvent, initialSteps, SEVEN_STEPS, type RunView } from './deployRun'
+import { DeployTerminal } from './DeployTerminal'
 
 const WIZARD_STEPS = [
   { title: strings.deploy.steps.source },
@@ -45,20 +38,6 @@ const WIZARD_STEPS = [
   { title: strings.deploy.steps.config },
   { title: strings.deploy.steps.review }
 ]
-
-const SEVEN_STEPS: DeployStep[] = [
-  'PRECHECK',
-  'UPLOAD',
-  'RENDER',
-  'BUILD',
-  'DEPLOY',
-  'HEALTHCHECK',
-  'RECORD'
-]
-
-/** Dải màu ANSI trong log lệnh — lọc cho hiển thị đơn sắc (xterm thay ở TK-A14). */
-// eslint-disable-next-line no-control-regex
-const ANSI_RE = /\u001b\[[0-9;?]*[A-Za-z]/g
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
@@ -82,65 +61,6 @@ function isSecretKey(key: string): boolean {
 }
 
 const APP_NAME_RE = /^[a-z0-9][a-z0-9-]*$/
-
-interface StepUi {
-  status: 'pending' | 'running' | 'done' | 'failed'
-  durationMs: number
-}
-
-type FinalStatus = 'running' | 'failed' | 'rolled_back'
-
-interface RunView {
-  deploymentId: number
-  steps: Record<DeployStep, StepUi>
-  lines: Array<{ text: string; stream: 'stdout' | 'stderr' }>
-  error?: IpcError
-  finished?: { status: FinalStatus; totalDurationMs: number; appUrl?: string }
-}
-
-function initialSteps(): Record<DeployStep, StepUi> {
-  return Object.fromEntries(
-    SEVEN_STEPS.map((step) => [step, { status: 'pending', durationMs: 0 }])
-  ) as Record<DeployStep, StepUi>
-}
-
-function applyEvent(prev: RunView, event: DeployEvent): RunView {
-  const steps = { ...prev.steps }
-  let lines = prev.lines
-  switch (event.type) {
-    case 'step-start':
-      steps[event.step] = { status: 'running', durationMs: 0 }
-      break
-    case 'log': {
-      const text = event.chunk.replace(ANSI_RE, '').replace(/\r/g, '')
-      const parts = text.split('\n').filter((part) => part.length > 0)
-      if (parts.length > 0) {
-        lines = [...prev.lines, ...parts.map((part) => ({ text: part, stream: event.stream }))]
-      }
-      break
-    }
-    case 'step-done':
-      steps[event.step] = { status: 'done', durationMs: event.duration_ms }
-      break
-    case 'step-failed':
-      return {
-        ...prev,
-        steps: { ...steps, [event.step]: { status: 'failed', durationMs: 0 } },
-        error: event.error
-      }
-    case 'finished':
-      return {
-        ...prev,
-        steps,
-        finished: {
-          status: event.status,
-          totalDurationMs: event.total_duration_ms,
-          appUrl: event.app_url
-        }
-      }
-  }
-  return { ...prev, steps, lines }
-}
 
 interface DeployPageProps {
   onOpenDashboard?: () => void
@@ -169,10 +89,8 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
   const [run, setRun] = useState<RunView | null>(null)
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null)
   const [elapsedTick, setElapsedTick] = useState(0)
-  const [scrolledUp, setScrolledUp] = useState(false)
 
   const runRef = useRef<RunView | null>(null)
-  const logRef = useRef<HTMLDivElement>(null)
 
   const selectVps = useCallback(async (id: number): Promise<void> => {
     setVpsId(id)
@@ -215,13 +133,6 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
     const timer = window.setInterval(() => setElapsedTick(Date.now() - runStartedAt), 500)
     return () => window.clearInterval(timer)
   }, [run, runStartedAt])
-
-  useEffect(() => {
-    const el = logRef.current
-    if (el && !scrolledUp) {
-      el.scrollTop = el.scrollHeight
-    }
-  }, [run?.lines, scrolledUp])
 
   async function runDetect(path: string): Promise<boolean> {
     setDetecting(true)
@@ -342,11 +253,10 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
     setRun({
       deploymentId: result.data.deployment_id,
       steps: initialSteps(),
-      lines: []
+      buffer: ''
     })
     setRunStartedAt(Date.now())
     setElapsedTick(0)
-    setScrolledUp(false)
   }
 
   function resetWizard(): void {
@@ -356,7 +266,6 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
     setPrecheckError(null)
     setStartError(null)
     setStep(0)
-    setScrolledUp(false)
   }
 
   function openApp(): void {
@@ -365,26 +274,11 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
     }
   }
 
-  function handleLogScroll(): void {
-    const el = logRef.current
-    if (el) setScrolledUp(el.scrollTop + el.clientHeight < el.scrollHeight - 40)
-  }
-
-  function handleScrollDown(): void {
-    const el = logRef.current
-    if (el) el.scrollTop = el.scrollHeight
-    setScrolledUp(false)
-  }
-
   if (run) {
     return (
       <DeployLogView
         run={run}
         elapsed={elapsedTick}
-        scrolledUp={scrolledUp}
-        logRef={logRef}
-        onScroll={handleLogScroll}
-        onScrollDown={handleScrollDown}
         appName={appName}
         vpsName={vpsList.find((vps) => vps.id === vpsId)?.name ?? ''}
         onOpenApp={openApp}
@@ -853,12 +747,8 @@ function EnvRow({
 interface DeployLogViewProps {
   run: RunView
   elapsed: number
-  scrolledUp: boolean
-  logRef: React.RefObject<HTMLDivElement | null>
   appName: string
   vpsName: string
-  onScroll: () => void
-  onScrollDown: () => void
   onOpenApp: () => void
   onOpenDashboard?: () => void
   onBack: () => void
@@ -867,12 +757,8 @@ interface DeployLogViewProps {
 function DeployLogView({
   run,
   elapsed,
-  scrolledUp,
-  logRef,
   appName,
   vpsName,
-  onScroll,
-  onScrollDown,
   onOpenApp,
   onOpenDashboard,
   onBack
@@ -977,26 +863,7 @@ function DeployLogView({
         />
       )}
 
-      <div className="deploy-log-terminal mono-text" ref={logRef} onScroll={onScroll}>
-        {run.lines.length === 0 ? (
-          <Typography.Text type="secondary">{strings.deploy.log.empty}</Typography.Text>
-        ) : (
-          run.lines.map((line, index) => (
-            <div
-              key={index}
-              className={line.stream === 'stderr' ? 'deploy-log-line log-err' : 'deploy-log-line'}
-            >
-              {line.text}
-            </div>
-          ))
-        )}
-      </div>
-
-      {scrolledUp && !finished && (
-        <Button size="small" className="deploy-log-scrolldown" onClick={onScrollDown}>
-          {strings.deploy.log.scrollDown}
-        </Button>
-      )}
+      <DeployTerminal buffer={run.buffer} />
 
       <div className="deploy-log-footer">
         <Space size="small">

@@ -38,7 +38,8 @@ collector/M7 lùi W2 theo `docs/20`, board ghi rõ "không chart metric".
 - [ ] DashboardPage: thẻ tổng quan sống từ DB thật (VM01/VM02 + deploy v1 đã có), bảng
       hoạt động gần đây hiện đúng hành động deploy/rollback, empty state đúng quy tắc
 - [ ] `history:list` hạ cánh đúng contract (filter actions/vps_id/thời gian/limit/offset, lỗi 3 phần)
-- [ ] Deploy Log: xterm giữ ANSI color, 3 nút toolbar hoạt động, auto-scroll ngắt khi cuộn
+- [ ] Deploy Log: xterm giữ ANSI color, toolbar [Sao chép][Tìm] hoạt động (nút "Xuống dòng"
+      của spec bỏ — xterm v6 đã xoá option wrap, xem nhật ký 20/08), auto-scroll ngắt khi cuộn
       lên + nút xuống cuối, banner thành công có "Xem dashboard" điều hướng được
 - [ ] HistoryPage: bảng + filter + drawer key–value (không dump JSON thô)
 - [ ] Unit test: history service, reducer run deploy (ANSI giữ nguyên), DashboardPage happy
@@ -61,6 +62,16 @@ collector/M7 lùi W2 theo `docs/20`, board ghi rõ "không chart metric".
   `localDateTime` theo quy tắc UX #5). Test: history service 3, format 2, DashboardPage 3 —
   toàn bộ suite 116/116, lint/typecheck sạch. Còn: xterm (chunk 2) + HistoryPage (chunk 3).
   Lệnh tái hiện: `cd app && pnpm exec vitest run src/main/history/service.test.ts src/renderer/src/utils/format.test.ts src/renderer/src/pages/DashboardPage.test.tsx`
+- UPDATE 20/08 — Chunk 2 xong: log deploy nâng cấp xterm. Tách reducer ra module thuần
+  `deployRun.ts` (`applyEvent` giờ GIỮ NGUYÊN ANSI + `\r`, buffer nối chunk thô — xterm tự
+  render màu và thanh tiến trình) + test `deployRun.test.ts` (5 case, gồm ANSI không bị
+  lọc). Component `DeployTerminal.tsx`: Terminal v6 + FitAddon + SearchAddon, toolbar
+  [Sao chép][Tìm] kèm ô tìm (Enter tìm xuống), auto-scroll theo viewport — cuộn lên thì
+  hiện nút "↓ Xuống cuối" (scrollToBottom). **Lệch spec có ghi nhận**: nút "Xuống dòng"
+  không làm được vì xterm v6 (đã chốt trong docs/09) xoá hẳn option lineWrapping từ v4,
+  không có API thay thế — đã bỏ nút, ghi vào DoD. Test DeployPage mock xterm bằng class
+  giả (ghi nhận qua `term.write`), 121/121 test, lint/typecheck sạch. Còn: HistoryPage
+  (chunk 3). Lệnh tái hiện: `pnpm dev` → Deploy → log có màu ANSI, thử tìm + sao chép.
 
 ## Lệnh tái hiện
 

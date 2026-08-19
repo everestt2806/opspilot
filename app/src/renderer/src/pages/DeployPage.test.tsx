@@ -6,6 +6,50 @@ import type { DeployEvent, DetectionResultDto, Vps } from '@shared/ipc'
 
 import { DeployPage } from './DeployPage'
 
+const { termInstances } = vi.hoisted(() => {
+  const termInstances: Array<{
+    write: ReturnType<typeof vi.fn>
+    open: ReturnType<typeof vi.fn>
+    dispose: ReturnType<typeof vi.fn>
+  }> = []
+  return { termInstances }
+})
+
+vi.mock('@xterm/xterm', () => ({
+  Terminal: class {
+    write = vi.fn()
+    loadAddon = vi.fn()
+    open = vi.fn((container: HTMLElement) => {
+      const viewport = document.createElement('div')
+      viewport.className = 'xterm-viewport'
+      container.appendChild(viewport)
+    })
+    dispose = vi.fn()
+    scrollToBottom = vi.fn()
+    getSelection = (): string => ''
+    constructor() {
+      termInstances.push(this)
+    }
+  }
+}))
+
+vi.mock('@xterm/addon-fit', () => ({
+  FitAddon: class {
+    fit = vi.fn()
+  }
+}))
+vi.mock('@xterm/addon-search', () => ({
+  SearchAddon: class {
+    findNext = vi.fn()
+  }
+}))
+
+function writtenLog(): string {
+  return termInstances
+    .flatMap((term) => term.write.mock.calls.map((call) => String(call[0])))
+    .join('')
+}
+
 const VPS_A: Vps = {
   id: 1,
   name: 'VM01',
@@ -90,6 +134,7 @@ function mockApi(handlers: Record<string, InvokeHandler>): {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  termInstances.length = 0
 })
 
 afterEach(() => {
@@ -172,7 +217,7 @@ describe('DeployPage — wizard va log', () => {
       app_url: 'http://203.0.113.55:30000'
     })
 
-    expect(screen.getByText('Kiem tra RAM...')).toBeTruthy()
+    await waitFor(() => expect(writtenLog()).toContain('Kiem tra RAM...'))
     expect((await screen.findAllByText('Deploy thành công sau 15s')).length).toBeGreaterThan(0)
 
     fireEvent.click(screen.getAllByText('Mở app')[0])
@@ -212,7 +257,7 @@ describe('DeployPage — wizard va log', () => {
 
     expect((await screen.findAllByText('Lỗi ở bước BUILD')).length).toBeGreaterThan(0)
     expect(screen.getByText('Build that bai. Kiem tra build command.')).toBeTruthy()
-    expect(screen.getByText('ERROR: npm install that bai')).toBeTruthy()
+    await waitFor(() => expect(writtenLog()).toContain('ERROR: npm install that bai'))
     expect(screen.queryByText('Mở app')).toBeNull()
 
     fireEvent.click(screen.getByText('Quay lại wizard'))

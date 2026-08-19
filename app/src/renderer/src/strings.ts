@@ -200,8 +200,8 @@ export const strings = {
       viewDashboard: 'Xem dashboard',
       toolbar: {
         copy: 'Sao chép',
-        wrap: 'Xuống dòng',
-        search: 'Tìm'
+        search: 'Tìm',
+        searchPlaceholder: 'Tìm trong log…'
       },
       cancel: 'Huỷ deploy',
       cancelConfirm: 'Dừng lại',
