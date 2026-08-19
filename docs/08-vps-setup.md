@@ -22,11 +22,18 @@ Ghi lại ngay sau khi mua:
 
 | | VPS 1 | VPS 2 |
 |---|---|---|
-| IP | | |
-| Provider / region | | |
-| Ngày tạo | | |
-| Snapshot sạch (tên/ID) | | |
+| IP | `221.121.1.79` (VM01) | `221.121.1.80` (VM02) |
+| Provider / region | **WiService — preset Cheap 2** · DC: chưa chép tên vào đây | **WiService** · cùng DC với VPS 1 |
+| Ngày tạo | 19/08/2026 | 19/08/2026 |
+| Snapshot sạch (tên/ID) | chờ chụp `clean-docker-19-08` | chờ chụp `clean-docker-19-08` |
 | Hết hạn thanh toán | | |
+| Docker | 29.7.2 | 29.7.2 |
+
+> **Bẫy WiService — quên là mất cả tiếng:** firewall của máy mới mặc định **chặn toàn bộ
+> inbound**. Máy báo Running, SSH timeout hết, không port nào mở (kể cả ping). Ngay sau khi
+> tạo máy phải mở quy tắc firewall cho **TCP 22** trong dashboard; khi chạy app mở thêm dải
+> **30000–30999**. Đã vấp bẫy này 19/08: dựng xong mà 2 IP "chết", hoá ra chỉ thiếu quy tắc
+> firewall.
 
 ---
 

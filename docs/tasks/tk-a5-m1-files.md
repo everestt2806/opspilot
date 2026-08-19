@@ -20,11 +20,11 @@ của UI (B đang nối ở TK-B7).
 
 ## Definition of Done
 
-- [ ] Unit test upload loại đúng `node_modules`; readFileTail đúng offset/bytes
-- [ ] Đường dẫn phía VPS luôn `path.posix.join` (bẫy Windows)
-- [ ] Chạy thật trên VPS: upload 1 thư mục, đọc lại đuôi file
+- [x] Unit test upload loại đúng `node_modules`; readFileTail đúng offset/bytes
+- [x] Đường dẫn phía VPS luôn `path.posix.join` (bẫy Windows)
+- [x] Chạy thật trên VPS: upload 1 thư mục, đọc lại đuôi file (try-ssh bước 3–5, cả 2 máy)
 - [ ] Resource check: đọc được `metrics.jsonl` của B (TK-B5) nếu đã có
-- [ ] Đủ input cho `vps:get-resources` (B dùng ở TK-B7)
+- [ ] Đủ input cho `vps:get-resources` (B dùng ở TK-B7) — code đã merge, chờ B xác nhận khi nối UI
 
 ## Nhật ký
 
@@ -32,6 +32,10 @@ của UI (B đang nối ở TK-B7).
 - UPDATE 19/08 — code + unit test xong, sáp nhập vào PR #9; mục thật-vẫn chờ VPS + file của B.
 - BLOCKED 19/08 — chờ (1) TK-S2 VPS nghiệm thu xong, (2) TK-B5 có `metrics.jsonl` thật.
   Điều kiện gỡ: cả hai điều kiện trên; chạy try-ssh bước 3–4 + resource check rồi ghi DONE.
+- UPDATE 19/08 — **gỡ một nửa BLOCKED:** VPS nghiệm thu xong và try-ssh bước 3–5
+  (uploadDir loại node_modules, write/read UTF-8, readFileTail tăng byte) đã xanh trên
+  **cả 2 VPS thật** — chi tiết ở TK-A4. Còn BLOCKED chờ TK-B5 có `metrics.jsonl` thật
+  để nghiệm thu resource check; `vps:get-resources` đã merge (PR #9), B nối UI ở TK-B7.
 
 ## Lệnh tái hiện
 

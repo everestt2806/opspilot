@@ -126,8 +126,18 @@ async function main(): Promise<void> {
 
   await ssh.disconnectAll()
 
-  // 6. sai credential phải ra SSH_AUTH_FAILED (không retry vô hạn)
-  const bad = new SshManager(() => ({ ...buildConfig(), secret: 'sai-mat-khau-xyz' }))
+  // 6. sai credential phải ra SSH_AUTH_FAILED (không retry vô hạn).
+  // Dùng key dummy đúng định dạng PEM — chuỗi tuỳ ý sẽ bị báo lỗi parse chứ không đi
+  // vào đường auth của server, làm bước này trượt oan.
+  const WRONG_KEY = `-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW
+QyNTUxOQAAACAv9lJZTwmPL7T9t5S17p3rupjfPSmbh18yvPbkkapU5QAAAJjRhC4v0YQu
+LwAAAAtzc2gtZWQyNTUxOQAAACAv9lJZTwmPL7T9t5S17p3rupjfPSmbh18yvPbkkapU5Q
+AAAEAWtuSKO4NoeQYF9Wf+GQLIZbaQcJ+zn6KaY6OCRrKqgi/2UllPCY8vtP23lLXuneu6
+mN89KZuHXzK89uSRqlTlAAAAD2R1bW15LXdyb25nLWtleQECAwQFBg==
+-----END OPENSSH PRIVATE KEY-----`
+  const wrongSecret = buildConfig().authType === 'key' ? WRONG_KEY : 'sai-mat-khau-xyz'
+  const bad = new SshManager(() => ({ ...buildConfig(), secret: wrongSecret }))
   try {
     await bad.connect(2)
     record('6 sai credential', 'FAIL', 'vẫn kết nối được')
