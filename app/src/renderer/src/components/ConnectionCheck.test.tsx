@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { VpsConnectionCheck, VpsDiagnosis, VpsInput } from '@shared/ipc'
 
@@ -63,6 +63,10 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   })
   return { promise, resolve }
 }
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 describe('ConnectionCheck', () => {
   it('state idle: nut kiem tra + goi y, chua goi runCheck', () => {
@@ -151,5 +155,44 @@ describe('ConnectionCheck', () => {
       secondGate.resolve(OK_RESULT)
     })
     expect(screen.getByText('Kết nối thành công')).toBeTruthy()
+  })
+
+  it('thieu Docker + da luu VPS: nut Cai Docker ngay -> confirm -> install-docker -> hien version', async () => {
+    const installDocker = vi
+      .fn()
+      .mockResolvedValue({ ok: true, data: { docker_version: '27.2.1' } })
+    vi.stubGlobal('api', { invoke: installDocker })
+    const gate = deferred<VpsConnectionCheck>()
+    render(<ConnectionCheck getValues={() => VALUES} runCheck={() => gate.promise} vpsId={1} />)
+
+    fireEvent.click(screen.getByText('Kiểm tra kết nối'))
+    await act(async () => {
+      gate.resolve(NO_DOCKER_RESULT)
+    })
+
+    expect(screen.getByText('Máy chủ chưa cài Docker')).toBeTruthy()
+    fireEvent.click(screen.getByText('Cài Docker ngay'))
+    expect((await screen.findAllByText('Cài Docker trên VPS?')).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByText('Cài Docker'))
+
+    await waitFor(() => expect(installDocker).toHaveBeenCalledWith('vps:install-docker', 1))
+    expect(
+      await screen.findByText('Đã cài xong Docker 27.2.1. Bấm “Kiểm tra lại” để cập nhật.')
+    ).toBeTruthy()
+  })
+
+  it('thieu Docker + chua luu VPS: khong co nut cai, chi huong dan luu truoc', async () => {
+    const gate = deferred<VpsConnectionCheck>()
+    render(<ConnectionCheck getValues={() => VALUES} runCheck={() => gate.promise} />)
+
+    fireEvent.click(screen.getByText('Kiểm tra kết nối'))
+    await act(async () => {
+      gate.resolve(NO_DOCKER_RESULT)
+    })
+
+    expect(
+      screen.getByText('Lưu VPS lại trước rồi mở lại hộp thoại này để cài Docker.')
+    ).toBeTruthy()
+    expect(screen.queryByText('Cài Docker ngay')).toBeNull()
   })
 })
