@@ -24,7 +24,7 @@
 | TK-A4 | M1 SSH: connect/exec + timeout + auth fail + TOFU | A | 17/08 | HOÀN THÀNH | feat/m01-ssh-connect-exec | #9 | `try-ssh` **6/6 trên 2 VPS thật** 19/08 |
 | TK-A5 | M1 upload/readFileTail + resource check | A | 19/08 | BLOCKED | feat/m01-ssh-connect-exec | #9 | upload/readFileTail xanh trên VPS thật; còn chờ `metrics.jsonl` của collector (TK-B5 — lùi W2). Hồ sơ: `tk-a5-m1-files.md` |
 | TK-A10 | M1 chẩn đoán lỗi kết nối VPS: probe TCP + 5 lớp lỗi + gợi ý sửa tiếng Việt | A | 21/08 | HOÀN THÀNH | feat/m01-connect-diagnostics | #14 | Bài toán mở đầu demo 24/08 (case mẫu: firewall WiService chặn SSH). Đã merge: probe TCP + `VpsDiagnosis` trong contract; case chặn port kết luận nguyên nhân ~8s. Hồ sơ: `tk-a10-m1-diagnostics.md` |
-| TK-B2 | M12: lát cắt demo — express-api + fault endpoint + Dockerfile | **A** | 20/08 | TUẦN NÀY | feat/m12-express-demo-app | — | B lùi, **A nhận 19/08**. Làm tối thiểu `express-api` (chạy local, fault endpoint, Dockerfile) làm đích deploy TK-A13; `next-blog` + `vite-spa` lùi W2. Hồ sơ: `tk-b2-m12-demo.md` |
+| TK-B2 | M12: lát cắt demo — express-api + fault endpoint + Dockerfile | **A** | 20/08 | TUẦN NÀY | feat/m12-express-demo-app | #15 | Lát cắt `express-api` xong 19/08 (chạy local + Docker, CRUD + seed 1000): merge #15. Phần còn lại (`next-blog`, `vite-spa`, fault endpoint) chuyển W2, không chặn demo. Hồ sơ: `tk-b2-m12-demo.md` |
 | TK-B7 | UI VPS connection + resource: 4 state + hiển thị chẩn đoán | **A** | 22/08 | TUẦN NÀY | feat/ui-connection-states | — | B lùi, **A nhận 19/08**; scope thêm phần hiển thị `diagnosis` của TK-A10. Hồ sơ: `tk-b7-ui-states.md` |
 | TK-A13 | M4 lát cắt demo: deploy Express thật lên VM01 (PRECHECK→RECORD) | A | 23/08 | TUẦN NÀY | feat/m04-deploy-express | — | Kéo TK-A8 (W2) lên sớm cho demo 24/08: 1 app chạy port 30xxx trên VM01, thao tác từ UI, ghi nhận deploy trong DB. |
 | TK-A14 | Dashboard v1: tổng quan VPS + lịch sử + log deploy live | A | 23/08 | TUẦN NÀY | feat/ui-dashboard-v1 | — | Ops dashboard cho demo (không chart metric — collector lùi W2). |
@@ -45,6 +45,7 @@ Tạo tk-file khi kéo task (mẫu `tk-template.md`). Đầy đủ ở `docs/20`
 | TK-B5 | M5: ghi metrics.jsonl + latest.json chu kỳ 10s | B | BACKLOG | Lùi W2 cùng chuỗi collector; khép TK-A5 khi có file thật |
 | TK-B6 | M5: chạy collector bằng Docker trên VPS | B | BACKLOG | Lùi W2 cùng chuỗi collector |
 | TK-B8 | Hoàn tất collector + nối Monitor UI | B | BACKLOG | Phần Deploy Wizard/Log UI đã A làm ở TK-A14 → B8 còn lại = collector + Dashboard chart/score khi quay lại |
+| TK-B2 | M12 (phần còn lại): next-blog + vite-spa + fault endpoint | B | BACKLOG | Chuyển từ W1 (lát cắt express-api đã xong #15); giữ tk-file `tk-b2-m12-demo.md` |
 
 ## Tuần 3+ 
 
