@@ -75,17 +75,34 @@ Hội đồng nhìn đâu cũng thấy cùng một hệ màu → cảm giác nh�
 
 ## 3. SPEC TỪNG MÀN HÌNH
 
-### 3.1 Danh sách VPS (UC-01)
+### 3.1 VPS Control Panel (UC-01, điểm vào UC-02/03/09)
 
-- Bảng AntD: Tên | Host (mono) | Trạng thái (Tag: ● Online / ● Offline / ⟳ Đang kiểm tra) |
-  CPU/RAM/Disk khả dụng (3 progress bar mini, làm mới khi mở màn và khi bấm "Kiểm tra lại")
-  | Số app | Hành động.
+Màn VPS là **panel vận hành trong phạm vi OpsPilot**, không còn chỉ là một bảng CRUD. Bố cục
+master–detail: phía trên là tổng quan đội VPS; vùng chính giữ danh sách/chọn máy ở một phía và
+chi tiết máy đang chọn ở phía còn lại. Chi tiết có ba tab:
+
+1. **Tổng quan** — thông tin host/user/provider/region/Docker/last seen; CPU core + load 1 phút,
+   RAM và disk khả dụng; hành động kiểm tra lại, chẩn đoán kết nối, sửa, cài Docker, xoá.
+2. **Ứng dụng & deploy** — app trên đúng VPS, URL/cổng/framework/version hiện tại; mở app;
+   deploy app mới hoặc redeploy với VPS/app được điền sẵn trong Deploy Wizard.
+3. **Hoạt động** — 20 action log mới nhất lọc theo VPS; click hàng mở chi tiết key–value.
+
+Hàng tổng quan đội VPS phải có tổng số máy, online, offline và tổng số app. Danh sách cho phép
+tìm theo tên/host và lọc trạng thái; mỗi máy hiện tên, host (mono), trạng thái (Online / Offline /
+Đang kiểm tra / Chưa rõ), Docker, RAM/disk khả dụng và số app. Đổi máy phải xoá dữ liệu chi tiết
+cũ trong lúc tải để không hiển thị nhầm dữ liệu của VPS trước.
+
 - "Thêm VPS" → Modal: Tên, Host, Port (mặc định 22), Username, tab [SSH key | Password],
   textarea dán private key. Nút "Kiểm tra kết nối" **ngay trong modal**, kết quả hiện từng
   bước: `✓ SSH OK → ✓ Docker 27.1 → ✓ Ghi được /opt/opspilot`.
   Thiếu Docker → cảnh báo vàng + nút "Cài Docker ngay" (confirm lại, FR-A2).
 - Xoá VPS → confirm 2 lớp, cảnh báo rõ "app đang chạy trên VPS **không** bị xoá".
-- Empty state: "Chưa có VPS nào. Thêm VPS đầu tiên để bắt đầu deploy." + nút chính.
+- Empty state cấp đội máy: "Chưa có VPS nào. Thêm VPS đầu tiên để bắt đầu deploy." + nút chính.
+  Empty state trong tab ứng dụng/hoạt động phải hướng dẫn đúng hành động kế tiếp.
+- Task triển khai hiện hành: `docs/tasks/tk-b9-vps-control-panel.md`. Chỉ dùng typed IPC đã có;
+  tính năng cần backend mới phải tách task cho A, không dựng nút giả.
+- Không mở rộng thành cPanel/Plesk: không terminal/file manager/firewall/DNS/SSL/package manager,
+  không shell tuỳ ý và không thêm start/stop/reboot khi chưa có handler thật.
 
 ### 3.2 Deploy Wizard (UC-02) — AntD Steps 4 bước
 
@@ -198,7 +215,7 @@ Click hàng → Drawer chi tiết, hiển thị `detail_json` dạng **key–val
 |---|---|---|---|
 | 1 | Dashboard + Deploy Log | **90% công sức UI** | 2 màn demo — làm kỹ signature (vạch sự kiện trên chart, stepper + xterm) |
 | 2 | Deploy Wizard | Chuẩn AntD | Form + Steps mặc định, không custom |
-| 3 | VPS List, Phiên bản, Migrate | Chuẩn AntD | Table/Timeline/Steps mặc định |
+| 3 | VPS Control Panel, Phiên bản, Migrate | Chuẩn AntD | Master–detail/Tabs/Timeline/Steps mặc định |
 | 4 | Lịch sử, Cài đặt | Tối thiểu | Bảng thô có filter là đủ |
 
 **Không làm:** chuyển theme sáng/tối (chỉ dark), i18n runtime, kéo-thả sắp xếp dashboard,

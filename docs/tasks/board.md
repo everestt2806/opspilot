@@ -7,6 +7,13 @@
 > Mỗi người tối đa **một** task `ĐANG LÀM`; phần còn lại đứng `TUẦN NÀY` theo thứ tự kéo.
 > Cập nhật dòng task đi **cùng commit/PR của task** — không commit riêng.
 
+## Điểm vào hiện tại cho người B và AI của B
+
+> **Quyết định của A ngày 20/08/2026:** khi B quay lại, task đầu tiên cần nhận là **TK-B9 —
+> VPS Control Panel v1**. Đọc `tk-b9-vps-control-panel.md`, đồng bộ `main`, chuyển đúng một dòng
+> TK-B9 sang `ĐANG LÀM` và ghi `START 20/08` (hoặc ngày thực tế bắt đầu) trước khi sửa code.
+> TK-B7 chỉ là task lịch sử về 4 trạng thái kết nối/tài nguyên, **không phải** scope của panel mới.
+
 ## Tuần 1 — đang chạy (10/08–23/08)
 
 > Từ 19/08/2026 B bận → **A nhận toàn bộ task tuần, backend lẫn UI**, dồn lực **demo
@@ -27,7 +34,7 @@
 | TK-B2 | M12: lát cắt demo — express-api + fault endpoint + Dockerfile | **A** | 20/08 | TUẦN NÀY | feat/m12-express-demo-app | #15 | Lát cắt `express-api` xong 19/08 (chạy local + Docker, CRUD + seed 1000): merge #15. Phần còn lại (`next-blog`, `vite-spa`, fault endpoint) chuyển W2, không chặn demo. Hồ sơ: `tk-b2-m12-demo.md` |
 | TK-B7 | UI VPS connection + resource: 4 state + hiển thị chẩn đoán | **A** | 22/08 | CHỜ REVIEW | feat/ui-connection-states | #16 | B lùi, **A nhận 19/08**; 4 state bảng + tài nguyên + "Kiểm tra kết nối" trong modal + `DiagnosisPanel` (TK-A10) đã merge. Còn 1 DoD: chờ xác nhận bằng mắt với VPS thật khi người dùng thêm VM01 (demo). Hồ sơ: `tk-b7-ui-states.md` |
 | TK-A13 | M4 lát cắt demo: deploy Express thật lên VM01 (PRECHECK→RECORD) | A | 23/08 | CHỜ REVIEW | feat/m04-deploy-express | #17 | Pipeline + try-deploy + UI DeployPage (wizard + log live + nút Cài Docker) xong: 108 test/lint/typecheck xanh. Còn 2 DoD chờ **mở port 30000–30999 phía user** (firewall WiService): curl từ ngoài + click-through UI thật trên VM01. Hồ sơ: `tk-a13-m4-deploy-slice.md` |
-| TK-A14 | Dashboard v1: tổng quan VPS + lịch sử + log deploy live | A | 23/08 | CHỜ REVIEW | feat/ui-dashboard-v1 | #18 | Ops dashboard cho demo (không chart metric — collector lùi W2). Xong cả 3 chunk: `history:list` IPC + DashboardPage + Deploy Log xterm + HistoryPage (filter + drawer key–value), 124 test. |
+| TK-A14 | Dashboard v1: tổng quan VPS + lịch sử + log deploy live | A | 23/08 | HOÀN THÀNH | feat/ui-dashboard-v1 | #18 | Merge 20/08: `history:list` IPC + DashboardPage + Deploy Log xterm + HistoryPage; 124/124 test, lint/typecheck/prettier sạch. |
 | TK-S3 | Gate G0: review chéo + smoke tuần 1 | Both | 22/08 | TUẦN NÀY | — | — | Chạy chiều 22/08. B bận → review chéo: B nếu rảnh, không thì A tự review theo `prompts/99` và ghi rõ trong hồ sơ. Item ML hoãn W2 (A6/B3 lùi); item demo-apps tính theo lát cắt express-api. Hồ sơ: `tk-s3-w1-gate.md` |
 
 ## Tuần 2 — plan chốt (22/08–28/08)
@@ -36,10 +43,11 @@ Tạo tk-file khi kéo task (mẫu `tk-template.md`). Đầy đủ ở `docs/20`
 
 | ID | Task | Chủ | Trạng thái | Ghi chú |
 |---|---|---|---|---|
-| TK-A6 | M7 ML skeleton: features + 6 endpoint + unit test | A | CHỜ REVIEW | Kéo sớm 20/08 (A14 khép sớm hơn hạn, W2 dày A6→A7→A9, không phụ thuộc B/port). A tự viết `gen_fake_series.py` trong scope (TK-B3 chưa bàn giao). Xong 20/08: features 20 chiều + 3 model + 6 endpoint + 19/19 test + curl đủ 6 endpoint. PR #19. |
+| TK-A6 | M7 ML skeleton: features + 6 endpoint + unit test | A | HOÀN THÀNH | Merge #19 ngày 20/08: features 20 chiều + 3 model + ensemble + 6 endpoint + `gen_fake_series`; 19/19 test, curl đủ 6 endpoint. Việc tiếp theo của A: TK-A7. |
 | TK-A7 | M3 Detector engine: rule + 3 detector Tier 1 | A | BACKLOG | Brief `prompts/m03` |
 | TK-A9 | M7 train/ingest/replay + 4 method | A | BACKLOG | Sau TK-A6 |
 | TK-A15 | M4 hoàn thiện: compose + healthcheck + giữ 3 image + lock port | A | BACKLOG | Phần còn lại sau lát cắt demo TK-A13 |
+| TK-B9 | VPS Control Panel v1: tổng quan đội VPS + chi tiết máy + ứng dụng/deploy + hoạt động | B | TUẦN NÀY | **Task đầu tiên khi B quay lại; A giao 20/08.** Branch `feat/ui-vps-control-panel`, hạn 28/08. Dùng IPC hiện có; không làm terminal/file manager/firewall và không sửa backend. Hồ sơ: `tk-b9-vps-control-panel.md` |
 | TK-B3 | Fixture metric giả đúng contract cho A | B | BACKLOG | Lùi W2 cùng đợt ML (TK-A6); A tự viết `gen_fake_series` nếu cần (phương án dự phòng đã thống nhất) |
 | TK-B4 | M5: docker stats + HTTP probe (chạy local) | B | BACKLOG | Lùi W2 (collector ngoài demo 24/08); đích probe = express-api (TK-B2) |
 | TK-B5 | M5: ghi metrics.jsonl + latest.json chu kỳ 10s | B | BACKLOG | Lùi W2 cùng chuỗi collector; khép TK-A5 khi có file thật |

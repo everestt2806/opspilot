@@ -60,6 +60,9 @@ persist state, `gen_fake_series.py`, 9 unit test trong brief. Mọi ngẫu nhiê
   đã ghi 2 dòng DECISIONS.md 20/08 + cập nhật chữ m07. zscore_ewma chạy đúng (FP 0/40, median
   0.44). Test khoá theo ngưỡng hiện tại (chỉ chặn "không tệ hơn baseline"); **đánh giá FP
   trên dữ liệu collector thật là việc W9 của B** — nếu cần đổi cách chuẩn hoá thì mở ADR.
+- DONE 20/08 — PR [#19](https://github.com/everestt2806/opspilot/pull/19) merged vào `main` ·
+  19/19 pytest, ruff, curl đủ 6 endpoint và các smoke replay/restart/determinism đều xanh ·
+  việc tiếp theo của A: TK-A7 Detector engine Tier 1.
 
 ## Lệnh tái hiện
 
@@ -72,4 +75,4 @@ cd ml-service
 
 ## PR
 
-- [#19](https://github.com/everestt2806/opspilot/pull/19) — feat(m07) ML skeleton (mở 20/08, chờ review)
+- [#19](https://github.com/everestt2806/opspilot/pull/19) — merged 20/08/2026.
