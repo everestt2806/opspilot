@@ -45,7 +45,7 @@ collector/M7 lùi W2 theo `docs/20`, board ghi rõ "không chart metric".
 - [x] Unit test: history service, reducer run deploy (ANSI giữ nguyên), DashboardPage happy
       path + empty state, DeployPage test cập nhật theo cấu trúc xterm (mock xterm)
 - [x] lint/typecheck sạch, toàn bộ test pass
-- [ ] Board + tk cập nhật cùng commit/PR của task
+- [x] Board + tk cập nhật sau khi PR merge; trạng thái và bằng chứng khớp `main`
 
 ## Nhật ký
 
@@ -79,6 +79,9 @@ collector/M7 lùi W2 theo `docs/20`, board ghi rõ "không chart metric".
   (happy + drawer, lỗi hiện Alert + nút Thử lại, filter gọi lại `history:list` với
   `actions`). 124/124 test toàn repo, lint/typecheck/prettier sạch. Xong toàn bộ DoD.
   Lệnh tái hiện: `pnpm dev` → menu Lịch sử → lọc + bấm hàng xem drawer.
+- DONE 20/08 — PR [#18](https://github.com/everestt2806/opspilot/pull/18) merged vào `main` ·
+  124/124 test, lint/typecheck/prettier sạch · TK-B9 sẽ tái sử dụng `history:list` và
+  formatter/component lịch sử cho tab Hoạt động của VPS Control Panel.
 
 ## Lệnh tái hiện
 
@@ -89,4 +92,4 @@ pnpm dev      # menu Dashboard -> thẻ tổng quan + bảng hoạt động; Dep
 
 ## PR
 
-- #18 — Dashboard v1: tổng quan + lịch sử + log deploy live (mô tả tiếng Anh)
+- [#18](https://github.com/everestt2806/opspilot/pull/18) — merged 20/08/2026.
