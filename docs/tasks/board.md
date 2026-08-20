@@ -36,7 +36,7 @@ Tạo tk-file khi kéo task (mẫu `tk-template.md`). Đầy đủ ở `docs/20`
 
 | ID | Task | Chủ | Trạng thái | Ghi chú |
 |---|---|---|---|---|
-| TK-A6 | M7 ML skeleton: features + 6 endpoint + unit test | A | BACKLOG | Lùi từ W1 để dồn lực demo 24/08; A tự viết `gen_fake_series.py` trong scope nếu TK-B3 chưa xong |
+| TK-A6 | M7 ML skeleton: features + 6 endpoint + unit test | A | CHỜ REVIEW | Kéo sớm 20/08 (A14 khép sớm hơn hạn, W2 dày A6→A7→A9, không phụ thuộc B/port). A tự viết `gen_fake_series.py` trong scope (TK-B3 chưa bàn giao). Xong 20/08: features 20 chiều + 3 model + 6 endpoint + 19/19 test + curl đủ 6 endpoint. PR #19. |
 | TK-A7 | M3 Detector engine: rule + 3 detector Tier 1 | A | BACKLOG | Brief `prompts/m03` |
 | TK-A9 | M7 train/ingest/replay + 4 method | A | BACKLOG | Sau TK-A6 |
 | TK-A15 | M4 hoàn thiện: compose + healthcheck + giữ 3 image + lock port | A | BACKLOG | Phần còn lại sau lát cắt demo TK-A13 |

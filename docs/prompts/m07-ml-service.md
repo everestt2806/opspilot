@@ -56,7 +56,14 @@ phép `/replay` chạy ablation mà không phải viết code riêng.
 |---|---|---|
 | `zscore_ewma` | EWMA `α=0.3` cho mean và var từng **chiều**; z = \|x−μ\|/σ | `sigmoid(max_z/3 − 1)`, kẹp [0,1] |
 | `iforest` | `IsolationForest(n_estimators=100, contamination='auto', random_state=42)` | min-max của `−decision_function` **theo phân vị của tập train** (dùng p1 và p99 để không bị outlier kéo) |
-| `ocsvm` | `StandardScaler` **bắt buộc** → `OneClassSVM(kernel='rbf', nu=0.05, gamma='scale')` | như trên, trên `−decision_function` |
+| `ocsvm` | `StandardScaler` **bắt buộc** → `OneClassSVM(kernel='rbf', nu=0.05, gamma=0.001)` | như trên, trên `−decision_function` |
+
+> Đổi `gamma='scale'` → `0.001` ngày 20/08 (DECISIONS.md): 'scale' (=1/20) làm kernel quá khít
+> với 201 vector trong không gian 20 chiều — mọi mẫu unseen đều kịch trần 1.0 (đo 80 seeds).
+> Lưu ý đã biết khi đọc kết quả: với cách chuẩn hoá min-max p1/p99 tập train, **iforest và ocsvm
+> chấm mẫu unseen bình thường cao hơn mẫu train** (depth bias / curse of dimensionality) — đo trên
+> dữ liệu giả 08/2026: iforest ~41% mẫu ≥0.7, ocsvm ~40%. Số liệu đầy đủ ở nhật ký tk-a6, phần
+> đánh giá FP trên dữ liệu thật thuộc W9.
 | `ensemble` | không train gì thêm | `score` = **trung vị** 3 score; `above_threshold` = **≥2/3** method con vượt ngưỡng (ADR-008) |
 
 ⚠ `ensemble.above_threshold` tính từ **cờ của 3 model con**, KHÔNG phải từ `score` ensemble.
