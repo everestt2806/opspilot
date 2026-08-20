@@ -7,6 +7,13 @@
 > Mỗi người tối đa **một** task `ĐANG LÀM`; phần còn lại đứng `TUẦN NÀY` theo thứ tự kéo.
 > Cập nhật dòng task đi **cùng commit/PR của task** — không commit riêng.
 
+## Điểm vào hiện tại cho người B và AI của B
+
+> **Quyết định của A ngày 20/08/2026:** khi B quay lại, task đầu tiên cần nhận là **TK-B9 —
+> VPS Control Panel v1**. Đọc `tk-b9-vps-control-panel.md`, đồng bộ `main`, chuyển đúng một dòng
+> TK-B9 sang `ĐANG LÀM` và ghi `START 20/08` (hoặc ngày thực tế bắt đầu) trước khi sửa code.
+> TK-B7 chỉ là task lịch sử về 4 trạng thái kết nối/tài nguyên, **không phải** scope của panel mới.
+
 ## Tuần 1 — đang chạy (10/08–23/08)
 
 > Từ 19/08/2026 B bận → **A nhận toàn bộ task tuần, backend lẫn UI**, dồn lực **demo
@@ -40,6 +47,7 @@ Tạo tk-file khi kéo task (mẫu `tk-template.md`). Đầy đủ ở `docs/20`
 | TK-A7 | M3 Detector engine: rule + 3 detector Tier 1 | A | BACKLOG | Brief `prompts/m03` |
 | TK-A9 | M7 train/ingest/replay + 4 method | A | BACKLOG | Sau TK-A6 |
 | TK-A15 | M4 hoàn thiện: compose + healthcheck + giữ 3 image + lock port | A | BACKLOG | Phần còn lại sau lát cắt demo TK-A13 |
+| TK-B9 | VPS Control Panel v1: tổng quan đội VPS + chi tiết máy + ứng dụng/deploy + hoạt động | B | TUẦN NÀY | **Task đầu tiên khi B quay lại; A giao 20/08.** Branch `feat/ui-vps-control-panel`, hạn 28/08. Dùng IPC hiện có; không làm terminal/file manager/firewall và không sửa backend. Hồ sơ: `tk-b9-vps-control-panel.md` |
 | TK-B3 | Fixture metric giả đúng contract cho A | B | BACKLOG | Lùi W2 cùng đợt ML (TK-A6); A tự viết `gen_fake_series` nếu cần (phương án dự phòng đã thống nhất) |
 | TK-B4 | M5: docker stats + HTTP probe (chạy local) | B | BACKLOG | Lùi W2 (collector ngoài demo 24/08); đích probe = express-api (TK-B2) |
 | TK-B5 | M5: ghi metrics.jsonl + latest.json chu kỳ 10s | B | BACKLOG | Lùi W2 cùng chuỗi collector; khép TK-A5 khi có file thật |

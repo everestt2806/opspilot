@@ -14,7 +14,9 @@ kèm module ML phát hiện suy giảm vận hành (degraded state) và tự đ�
 Điểm số của đồ án nằm ở **phần thí nghiệm ML và đánh giá thống kê**, không nằm ở app đẹp
 hay kiến trúc phức tạp. App chỉ cần chạy đúng và ổn định để sinh dữ liệu cho thí nghiệm.
 
-- Nhóm 2 người. Người A = App/Infra. Người B = ML/Monitoring.
+- Nhóm 2 người. Từ 15/08/2026: **Người A = Core/Algorithms, Người B = UI/Delivery**.
+  Phân công hiện hành và ngoại lệ theo tuần nằm ở `docs/20-phan-cong-a-core-b-ui.md`; task cụ thể
+  luôn lấy từ `docs/tasks/board.md`, không suy ra từ mô tả vai trò tổng quát.
 - Deadline nộp: **20/11/2026**. Lịch chi tiết: `docs/04-timeline.md`.
 
 ---

@@ -25,6 +25,17 @@ Collector (TK-B4/B5/B6) + 2 demo app còn lại + M7 (TK-A6) lùi W2 — chart m
 cùng đợt poller W2–W3. Trong tuần này A được sửa `app/src/renderer/**` (ranh giới mục 1 tạm
 nới); từ W2 quay lại đúng phân công trừ khi có quyết định mới.
 
+### Cập nhật 20/08/2026 — B nhận VPS Control Panel khi quay lại
+
+A giao **TK-B9 — VPS Control Panel v1** làm task đầu tiên của B khi quay lại. TK-B7 vẫn giữ
+nguyên lịch sử (A đã làm thay phần 4 trạng thái trong tuần demo); TK-B9 là scope mới: biến màn
+VPS thành trung tâm vận hành có tổng quan đội máy, chi tiết VPS, ứng dụng/deploy và hoạt động.
+
+Panel chỉ tổng hợp các khả năng OpsPilot đã có qua typed IPC. B sở hữu renderer và test, không
+sửa Electron main/SSH/DB/pipeline, không tự đổi contract, và không mở rộng thành terminal/file
+manager/firewall/DNS/SSL. Nếu UI cần handler chưa có, B ghi blocker để A tạo task backend riêng.
+Nguồn sự thật để bắt đầu là `tasks/board.md` + `tasks/tk-b9-vps-control-panel.md`.
+
 ## 1. Ranh giới sở hữu
 
 | | Người A — Core/Algorithms | Người B — UI/Delivery |
@@ -58,8 +69,8 @@ B: fixture/mock cùng type -> UI states -> thay mock bằng window.api.invoke
 | Tuần | Người A — việc khó/core | Người B — UI/delivery | Điểm nối bắt buộc |
 |---|---|---|---|
 | W1 · 10/08–21/08 | DB đã merge; từ 15/08: credential, SSH connect/exec/files/resource, ML skeleton | Từ 15/08: collector, 3 demo app, fake metric, UI kết nối/tài nguyên | VPS List hiện loading/error/online/RAM/disk; A đọc được `metrics.jsonl` của B |
-| W2 · 22/08–28/08 | Detector 3 Tier 1; deploy `PRECHECK→BUILD`; train/ingest/replay và 4 method | Hoàn tất collector; Deploy Wizard và Deploy Log bằng mock event | Express build trên VPS; UI render đúng deploy event contract |
-| W3 · 29/08–04/09 | Deploy `DEPLOY→RECORD`; poller/rule; nối score/alert vào SQLite/IPC | Nối Deploy Wizard vào IPC thật; Dashboard chart + score panel | Deploy 3 app từ UI; metric/score thật thấy trên Dashboard |
+| W2 · 22/08–28/08 | Detector 3 Tier 1; deploy `PRECHECK→BUILD`; train/ingest/replay và 4 method | TK-B9 VPS Control Panel v1, sau đó hoàn tất collector | Panel quản lý được VPS/app/deploy/history bằng IPC thật; Express build trên VPS; `metrics.jsonl` đúng contract |
+| W3 · 29/08–04/09 | Deploy `DEPLOY→RECORD`; poller/rule; nối score/alert vào SQLite/IPC | Hoàn thiện collector; Dashboard chart + score panel | Deploy 3 app từ UI; metric/score thật thấy trên Dashboard |
 | W4 · 05/09–11/09 | Redeploy/rollback/retry; alert lifecycle; reconnect/offset/dedupe | Versions/History; alert feedback UI; fault script và smoke evidence | Smoke 16/24 FR trên `main`, mỗi bằng chứng có link/log |
 
 ### Thứ tự ưu tiên của A
@@ -71,10 +82,10 @@ B: fixture/mock cùng type -> UI states -> thay mock bằng window.api.invoke
 
 ### Thứ tự ưu tiên của B
 
-1. Collector scaffold → ba demo app → fake metric; mỗi lần chỉ kéo một task.
-2. VPS connection/resource states bằng mock typed.
-3. Deploy Wizard và Deploy Log bằng mock typed.
-4. Nối UI vào IPC thật, sau đó Dashboard và Versions/Alert UI.
+1. **TK-B9 VPS Control Panel v1** — task đầu tiên khi quay lại, scope/DoD chốt trong tk-file.
+2. Hoàn tất collector TK-B4→B5→B6 để khép `metrics.jsonl` và Gate G1.
+3. Phần còn lại của demo app TK-B2; mỗi lần chỉ kéo một task.
+4. TK-B8 nối chart/score vào Dashboard, sau đó Versions/Alert UI.
 
 ## 4. Definition of Done riêng theo vai trò
 
