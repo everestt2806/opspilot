@@ -72,4 +72,4 @@ cd ml-service
 
 ## PR
 
-— (chưa có)
+- [#19](https://github.com/everestt2806/opspilot/pull/19) — feat(m07) ML skeleton (mở 20/08, chờ review)
