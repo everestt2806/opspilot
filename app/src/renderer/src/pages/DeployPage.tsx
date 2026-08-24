@@ -29,6 +29,7 @@ import {
 import type { App, DeployInput, DetectionResultDto, PrecheckResult, Vps } from '@shared/ipc'
 
 import { strings } from '../strings'
+import { useUiState } from '../store/uiState'
 import { applyEvent, initialSteps, SEVEN_STEPS, type RunView } from './deployRun'
 import { DeployTerminal } from './DeployTerminal'
 
@@ -67,6 +68,8 @@ interface DeployPageProps {
 }
 
 export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Element {
+  const deployPreselect = useUiState((state) => state.deployPreselect)
+  const clearDeployPreselect = useUiState((state) => state.clearDeployPreselect)
   const [vpsList, setVpsList] = useState<Vps[]>([])
   const [apps, setApps] = useState<App[]>([])
   const [vpsId, setVpsId] = useState<number | undefined>(undefined)
@@ -92,9 +95,9 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
 
   const runRef = useRef<RunView | null>(null)
 
-  const selectVps = useCallback(async (id: number): Promise<void> => {
+  const selectVps = useCallback(async (id: number, preselectedAppId?: number): Promise<void> => {
     setVpsId(id)
-    setAppSelect(-1)
+    setAppSelect(preselectedAppId ?? -1)
     setApps([])
     setPrecheck(null)
     setPrecheckError(null)
@@ -102,6 +105,12 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
     const result = await window.api.invoke('app:list', id)
     if (result.ok) {
       setApps(result.data)
+      if (
+        preselectedAppId !== undefined &&
+        result.data.some((app) => app.id === preselectedAppId)
+      ) {
+        setAppSelect(preselectedAppId)
+      }
     }
   }, [])
 
@@ -114,11 +123,15 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
       const result = await window.api.invoke('vps:list')
       if (!result.ok) return
       setVpsList(result.data)
-      if (result.data.length > 0) {
+      const pre = deployPreselect
+      if (pre?.vpsId && result.data.some((vps) => vps.id === pre.vpsId)) {
+        await selectVps(pre.vpsId, pre.appId)
+        clearDeployPreselect()
+      } else if (result.data.length > 0) {
         void selectVps(result.data[0].id)
       }
     })()
-  }, [selectVps])
+  }, [selectVps, deployPreselect, clearDeployPreselect])
 
   useEffect(() => {
     return window.api.on('deploy:event', (event) => {
@@ -233,7 +246,7 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
     }
     const missing = requiredMissing()
     if (missing.length > 0) {
-      setConfigError(`Còn thiếu biến bắt buộc: ${missing.join(', ')}.`)
+      setConfigError(`Missing required variables: ${missing.join(', ')}.`)
       return
     }
     setConfigError(null)
@@ -307,7 +320,10 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
     <section className="page-panel">
       <div className="page-heading">
         <div>
-          <Typography.Title level={2}>{strings.deploy.title}</Typography.Title>
+          <Typography.Title level={2} style={{ color: 'var(--text-primary)', margin: 0 }}>
+            <RocketOutlined style={{ marginRight: 10, color: 'var(--info)' }} />
+            {strings.deploy.title}
+          </Typography.Title>
           <Typography.Text type="secondary">{strings.deploy.description}</Typography.Text>
         </div>
       </div>
@@ -453,7 +469,7 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
                       { value: -1, label: strings.deploy.config.newApp },
                       ...apps.map((app) => ({
                         value: app.id,
-                        label: `${app.name} — cổng ${app.host_port}`
+                        label: `${app.name} — port ${app.host_port}`
                       }))
                     ]}
                   />
@@ -579,11 +595,11 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
                       rowKey="label"
                       dataSource={precheck.checks}
                       columns={[
-                        { title: 'Kiểm tra', dataIndex: 'label' },
-                        { title: 'Yêu cầu', dataIndex: 'required' },
-                        { title: 'Thực tế', dataIndex: 'actual' },
+                        { title: 'Check', dataIndex: 'label' },
+                        { title: 'Required', dataIndex: 'required' },
+                        { title: 'Actual', dataIndex: 'actual' },
                         {
-                          title: 'Kết quả',
+                          title: 'Result',
                           key: 'ok',
                           render: (_, check) =>
                             check.ok ? (
@@ -599,7 +615,7 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
                         <Typography.Text code>{precheck.app_url}</Typography.Text>
                         <Typography.Text type="secondary">
                           {' '}
-                          (cổng {precheck.assigned_host_port})
+                          (port {precheck.assigned_host_port})
                         </Typography.Text>
                       </Descriptions.Item>
                     </Descriptions>
@@ -802,7 +818,10 @@ function DeployLogView({
     <section className="page-panel">
       <div className="page-heading">
         <div>
-          <Typography.Title level={2}>{strings.deploy.log.title}</Typography.Title>
+          <Typography.Title level={2} style={{ color: 'var(--text-primary)', margin: 0 }}>
+            <RocketOutlined style={{ marginRight: 10, color: 'var(--info)' }} />
+            {strings.deploy.log.title}
+          </Typography.Title>
           <Typography.Text type="secondary">
             {appName}
             {vpsName ? ` — ${vpsName}` : ''}

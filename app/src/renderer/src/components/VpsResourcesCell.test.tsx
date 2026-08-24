@@ -18,12 +18,12 @@ const RES: VpsResources = {
 describe('VpsResourcesCell — 4 state', () => {
   it('empty: chua kiem tra', () => {
     render(<VpsResourcesCell vpsName="VM01" state={undefined} onRetry={() => {}} />)
-    expect(screen.getByText('Chưa kiểm tra')).toBeTruthy()
+    expect(screen.getByText('Not checked')).toBeTruthy()
   })
 
   it('loading: spinner dang kiem tra', () => {
     render(<VpsResourcesCell vpsName="VM01" state={{ status: 'loading' }} onRetry={() => {}} />)
-    expect(screen.getByLabelText('Đang kiểm tra')).toBeTruthy()
+    expect(screen.getByLabelText('Checking')).toBeTruthy()
   })
 
   it('success: 3 thanh RAM/Disk/CPU voi so lieu thuc', () => {
@@ -37,11 +37,11 @@ describe('VpsResourcesCell — 4 state', () => {
 
     expect(screen.getByText('RAM')).toBeTruthy()
     expect(screen.getByText('Disk')).toBeTruthy()
-    expect(screen.getByText('Tải CPU (1 phút)')).toBeTruthy()
+    expect(screen.getByText('CPU load (1 min)')).toBeTruthy()
     // so lieu chi tiet trong aria-label cua tung thanh
-    expect(screen.getByLabelText('Đã dùng 3.0 GB / 4.0 GB')).toBeTruthy()
-    expect(screen.getByLabelText('Đã dùng 12 GB / 40 GB')).toBeTruthy()
-    expect(screen.getByLabelText('0.50 · 2 nhân')).toBeTruthy()
+    expect(screen.getByLabelText('3.0 GB / 4.0 GB used')).toBeTruthy()
+    expect(screen.getByLabelText('12 GB / 40 GB used')).toBeTruthy()
+    expect(screen.getByLabelText('0.50 · 2 cores')).toBeTruthy()
 
     const bars = screen.getAllByRole('progressbar')
     expect(bars.map((bar) => bar.getAttribute('aria-valuenow'))).toEqual(['75', '30', '25'])
@@ -57,8 +57,8 @@ describe('VpsResourcesCell — 4 state', () => {
       />
     )
 
-    expect(screen.getByLabelText('Không đọc được tài nguyên')).toBeTruthy()
-    const retry = screen.getByRole('button', { name: 'Đọc lại tài nguyên của VM01' })
+    expect(screen.getByLabelText('Could not read resources')).toBeTruthy()
+    const retry = screen.getByRole('button', { name: 'Re-read resources of VM01' })
     fireEvent.click(retry)
     expect(onRetry).toHaveBeenCalledTimes(1)
   })

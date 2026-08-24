@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ReloadOutlined, RocketOutlined, CloudServerOutlined } from '@ant-design/icons'
+import {
+  DashboardOutlined,
+  CloudServerOutlined,
+  ReloadOutlined,
+  RocketOutlined
+} from '@ant-design/icons'
 import {
   Alert,
   Badge,
@@ -97,7 +102,7 @@ export function DashboardPage({ onOpenVps, onOpenDeploy }: DashboardPageProps): 
 
   if (error) {
     return (
-      <div className="page">
+      <section className="page-panel">
         <Alert
           type="error"
           message={error.message}
@@ -109,19 +114,19 @@ export function DashboardPage({ onOpenVps, onOpenDeploy }: DashboardPageProps): 
           }
           showIcon
         />
-      </div>
+      </section>
     )
   }
 
   if (!loading && vpsList.length === 0) {
     return (
-      <div className="page">
+      <section className="page-panel">
         <Empty description={strings.dashboard.emptyVps} image={Empty.PRESENTED_IMAGE_SIMPLE}>
           <Button type="primary" icon={<CloudServerOutlined />} onClick={onOpenVps}>
             {strings.dashboard.addVps}
           </Button>
         </Empty>
-      </div>
+      </section>
     )
   }
 
@@ -187,17 +192,20 @@ export function DashboardPage({ onOpenVps, onOpenDeploy }: DashboardPageProps): 
   ]
 
   return (
-    <div className="page">
-      <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <Space style={{ justifyContent: 'space-between', width: '100%' }}>
+    <section className="page-panel">
+      <div className="page-heading">
+        <div>
           <Typography.Title level={4} style={{ margin: 0 }}>
+            <DashboardOutlined style={{ marginRight: 8, color: 'var(--info)' }} />
             {strings.dashboard.title}
           </Typography.Title>
-          <Button icon={<ReloadOutlined />} loading={loading} onClick={reload}>
-            {strings.dashboard.refresh}
-          </Button>
-        </Space>
+        </div>
+        <Button icon={<ReloadOutlined />} loading={loading} onClick={reload}>
+          {strings.dashboard.refresh}
+        </Button>
+      </div>
 
+      <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <Row gutter={16}>
           <Col span={6}>
             <Card>
@@ -258,6 +266,6 @@ export function DashboardPage({ onOpenVps, onOpenDeploy }: DashboardPageProps): 
           />
         </Card>
       </Space>
-    </div>
+    </section>
   )
 }

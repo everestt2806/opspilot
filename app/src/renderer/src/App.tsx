@@ -5,10 +5,23 @@ import {
   DashboardOutlined,
   DeploymentUnitOutlined,
   HistoryOutlined,
+  MoonOutlined,
   RocketOutlined,
-  SettingOutlined
+  SettingOutlined,
+  SunOutlined
 } from '@ant-design/icons'
-import { Badge, Button, ConfigProvider, Layout, Menu, Space, Typography, theme } from 'antd'
+import {
+  App as AntApp,
+  Badge,
+  Button,
+  ConfigProvider,
+  Layout,
+  Menu,
+  Segmented,
+  Space,
+  Tooltip,
+  Typography
+} from 'antd'
 
 import { AppsPage } from './pages/AppsPage'
 import { DashboardPage } from './pages/DashboardPage'
@@ -19,6 +32,8 @@ import { SettingsPage } from './pages/SettingsPage'
 import { VpsPage } from './pages/VpsPage'
 import opsPilotLogo from './assets/opspilot-logo.png'
 import { strings } from './strings'
+import { useUiState } from './store/uiState'
+import { themeTokens, type ThemeMode } from './utils/themeTokens'
 
 type PageKey = 'vps' | 'apps' | 'deploy' | 'dashboard' | 'migrate' | 'history' | 'settings'
 
@@ -32,9 +47,8 @@ const menuItems = [
   { key: 'settings', icon: <SettingOutlined />, label: strings.navigation.settings }
 ]
 
-function renderPage(activePage: PageKey, open: (page: PageKey) => void): React.JSX.Element {
-  const staticPages: Record<Exclude<PageKey, 'deploy' | 'dashboard'>, React.JSX.Element> = {
-    vps: <VpsPage />,
+function renderPage(activePage: PageKey, open: (page: string) => void): React.JSX.Element {
+  const staticPages: Record<Exclude<PageKey, 'deploy' | 'dashboard' | 'vps'>, React.JSX.Element> = {
     apps: <AppsPage />,
     migrate: <MigratePage />,
     history: <HistoryPage />,
@@ -46,13 +60,29 @@ function renderPage(activePage: PageKey, open: (page: PageKey) => void): React.J
   if (activePage === 'dashboard') {
     return <DashboardPage onOpenVps={() => open('vps')} onOpenDeploy={() => open('deploy')} />
   }
+  if (activePage === 'vps') {
+    return <VpsPage />
+  }
   return staticPages[activePage]
 }
 
 function App(): React.JSX.Element {
-  const [activePage, setActivePage] = useState<PageKey>('vps')
+  const themeMode = useUiState((state) => state.theme)
+  const setTheme = useUiState((state) => state.setTheme)
+  const activePage = useUiState((state) => state.activePage)
+  const setActivePage = useUiState((state) => state.setActivePage)
+  const selectedVpsIds = useUiState((state) => state.selectedVpsIds)
   const [collapsed, setCollapsed] = useState(false)
   const [mlRunning, setMlRunning] = useState(false)
+
+  // activePage lưu dạng string (session) — rào lại về PageKey hợp lệ trước khi render.
+  const page: PageKey = menuItems.some((item) => item.key === activePage)
+    ? (activePage as PageKey)
+    : 'vps'
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeMode
+  }, [themeMode])
 
   useEffect(() => {
     void window.api.invoke('system:ml-status').then((result) => {
@@ -65,62 +95,70 @@ function App(): React.JSX.Element {
   }, [])
 
   return (
-    <ConfigProvider
-      theme={{
-        algorithm: theme.darkAlgorithm,
-        token: {
-          colorPrimary: '#60A5FA',
-          colorSuccess: '#34D399',
-          colorWarning: '#FBBF24',
-          colorError: '#F87171',
-          colorBgBase: '#0F1115',
-          colorBgContainer: '#171A21',
-          colorBorder: '#2A2F3A',
-          borderRadius: 8
-        }
-      }}
-    >
-      <Layout className="app-shell">
-        <Layout.Sider
-          width={220}
-          collapsedWidth={56}
-          collapsible
-          collapsed={collapsed}
-          onCollapse={setCollapsed}
-          theme="dark"
-        >
-          <div className="brand" aria-label={strings.app.name}>
-            <img className="brand-logo" src={opsPilotLogo} alt="" aria-hidden="true" />
-            {!collapsed && <span className="brand-name">{strings.app.name}</span>}
-          </div>
-          <Menu
-            mode="inline"
-            theme="dark"
-            selectedKeys={[activePage]}
-            items={menuItems}
-            onClick={({ key }) => setActivePage(key as PageKey)}
-          />
-        </Layout.Sider>
-        <Layout>
-          <Layout.Header className="topbar">
-            <Typography.Text>{strings.app.noSelection}</Typography.Text>
-            <Space size={20}>
-              <Badge status="default" text={`${strings.status.ssh}: ${strings.status.unknown}`} />
-              <Button type="text" className="status-button">
-                <Badge
-                  status={mlRunning ? 'success' : 'error'}
-                  text={`${strings.status.mlService}: ${
-                    mlRunning ? strings.status.running : strings.status.stopped
-                  }`}
-                />
-              </Button>
-            </Space>
-          </Layout.Header>
-          <Layout.Content className="content">
-            {renderPage(activePage, setActivePage)}
-          </Layout.Content>
+    <ConfigProvider theme={themeTokens[themeMode]}>
+      <AntApp>
+        <Layout className="app-shell">
+          <Layout.Sider
+            width={220}
+            collapsedWidth={56}
+            collapsible
+            collapsed={collapsed}
+            onCollapse={setCollapsed}
+            theme={themeMode === 'dark' ? 'dark' : 'light'}
+          >
+            <div className="brand" aria-label={strings.app.name}>
+              <img className="brand-logo" src={opsPilotLogo} alt="" aria-hidden="true" />
+              {!collapsed && <span className="brand-name">{strings.app.name}</span>}
+            </div>
+            <Menu
+              mode="inline"
+              theme={themeMode === 'dark' ? 'dark' : 'light'}
+              selectedKeys={[page]}
+              items={menuItems}
+              onClick={({ key }) => setActivePage(key as PageKey)}
+            />
+          </Layout.Sider>
+          <Layout>
+            <Layout.Header className="topbar">
+              <Typography.Text>
+                {selectedVpsIds.length > 0
+                  ? strings.app.vpsSelected(selectedVpsIds.length)
+                  : strings.app.noSelection}
+              </Typography.Text>
+              <Space size={20}>
+                <Badge status="default" text={`${strings.status.ssh}: ${strings.status.unknown}`} />
+                <Button type="text" className="status-button">
+                  <Badge
+                    status={mlRunning ? 'success' : 'error'}
+                    text={`${strings.status.mlService}: ${
+                      mlRunning ? strings.status.running : strings.status.stopped
+                    }`}
+                  />
+                </Button>
+                <Tooltip title={strings.appearance.label}>
+                  <Segmented<ThemeMode>
+                    value={themeMode}
+                    onChange={(value) => setTheme(value)}
+                    options={[
+                      {
+                        value: 'light',
+                        icon: <SunOutlined aria-hidden="true" />,
+                        label: strings.appearance.light
+                      },
+                      {
+                        value: 'dark',
+                        icon: <MoonOutlined aria-hidden="true" />,
+                        label: strings.appearance.dark
+                      }
+                    ]}
+                  />
+                </Tooltip>
+              </Space>
+            </Layout.Header>
+            <Layout.Content className="content">{renderPage(page, setActivePage)}</Layout.Content>
+          </Layout>
         </Layout>
-      </Layout>
+      </AntApp>
     </ConfigProvider>
   )
 }

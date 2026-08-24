@@ -12,7 +12,7 @@ export function PagePlaceholder({ title, description }: PagePlaceholderProps): R
         <Typography.Title level={2}>{title}</Typography.Title>
         <Typography.Text type="secondary">{description}</Typography.Text>
       </Space>
-      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Khung màn hình đã sẵn sàng" />
+      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Screen scaffold ready" />
     </section>
   )
 }

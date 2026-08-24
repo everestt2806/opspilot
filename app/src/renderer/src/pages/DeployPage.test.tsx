@@ -154,16 +154,16 @@ const handersHappy: Record<string, InvokeHandler> = {
 
 /** Đi wizard tới bước 3: chọn folder -> detect -> điền env -> precheck. */
 async function reachStep3(invoke: ReturnType<typeof vi.fn>): Promise<void> {
-  fireEvent.click(await screen.findByText('Chọn thư mục'))
+  fireEvent.click(await screen.findByText('Choose folder'))
   await waitFor(() => expect(screen.getByDisplayValue(SOURCE_PATH)).toBeTruthy())
   await waitFor(() => expect(invoke).toHaveBeenCalledWith('deploy:detect', SOURCE_PATH))
-  fireEvent.click(screen.getByText('Tiếp tục'))
+  fireEvent.click(screen.getByText('Next'))
   await screen.findByText('Express.js')
-  fireEvent.click(screen.getByText('Tiếp tục'))
+  fireEvent.click(screen.getByText('Next'))
   await screen.findByLabelText('PORT')
   fireEvent.change(screen.getByLabelText('PORT'), { target: { value: '3000' } })
   fireEvent.change(screen.getByLabelText('SECRET_KEY'), { target: { value: 'sekret' } })
-  fireEvent.click(screen.getByText('Tiếp tục'))
+  fireEvent.click(screen.getByText('Next'))
   await screen.findByText('RAM trống')
 }
 
@@ -218,9 +218,9 @@ describe('DeployPage — wizard va log', () => {
     })
 
     await waitFor(() => expect(writtenLog()).toContain('Kiem tra RAM...'))
-    expect((await screen.findAllByText('Deploy thành công sau 15s')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('Deploy succeeded in 15s')).length).toBeGreaterThan(0)
 
-    fireEvent.click(screen.getAllByText('Mở app')[0])
+    fireEvent.click(screen.getAllByText('Open app')[0])
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith('system:open-external', 'http://203.0.113.55:30000')
     )
@@ -255,13 +255,13 @@ describe('DeployPage — wizard va log', () => {
     })
     emit({ type: 'finished', deployment_id: 7, status: 'failed', total_duration_ms: 30000 })
 
-    expect((await screen.findAllByText('Lỗi ở bước BUILD')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('Failed at step BUILD')).length).toBeGreaterThan(0)
     expect(screen.getByText('Build that bai. Kiem tra build command.')).toBeTruthy()
     await waitFor(() => expect(writtenLog()).toContain('ERROR: npm install that bai'))
-    expect(screen.queryByText('Mở app')).toBeNull()
+    expect(screen.queryByText('Open app')).toBeNull()
 
-    fireEvent.click(screen.getByText('Quay lại wizard'))
-    expect(await screen.findByText('Chọn lại')).toBeTruthy()
+    fireEvent.click(screen.getByText('Back to wizard'))
+    expect(await screen.findByText('Choose again')).toBeTruthy()
     expect(screen.getByDisplayValue(SOURCE_PATH)).toBeTruthy()
   })
 
@@ -273,9 +273,9 @@ describe('DeployPage — wizard va log', () => {
     fireEvent.click(screen.getByText('Deploy'))
     await screen.findByText('Deploy log')
 
-    fireEvent.click(screen.getByText('Huỷ deploy'))
-    expect((await screen.findAllByText(/Dừng deploy giữa chừng/)).length).toBeGreaterThan(0)
-    fireEvent.click(screen.getByText('Dừng lại'))
+    fireEvent.click(screen.getByText('Cancel deploy'))
+    expect((await screen.findAllByText(/Stop the deploy midway/)).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByText('Stop'))
 
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('deploy:cancel', 7))
   })
@@ -284,16 +284,14 @@ describe('DeployPage — wizard va log', () => {
     mockApi({ ...handersHappy, 'deploy:detect': async () => ({ ok: true, data: UNMATCHED }) })
 
     render(<DeployPage />)
-    fireEvent.click(await screen.findByText('Chọn thư mục'))
+    fireEvent.click(await screen.findByText('Choose folder'))
     await waitFor(() => expect(screen.getByDisplayValue(SOURCE_PATH)).toBeTruthy())
-    fireEvent.click(screen.getByText('Tiếp tục'))
+    fireEvent.click(screen.getByText('Next'))
 
-    expect(await screen.findByText('Không nhận diện được framework')).toBeTruthy()
+    expect(await screen.findByText('Framework not recognized')).toBeTruthy()
     expect(screen.getByText('package.json co dependency express')).toBeTruthy()
     expect(() => screen.getByText('Express.js')).toThrow()
-    expect((screen.getByRole('button', { name: 'Tiếp tục' }) as HTMLButtonElement).disabled).toBe(
-      true
-    )
+    expect((screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('precheck khong dat: hang do + nut Deploy disabled + giai thich', async () => {
@@ -318,7 +316,9 @@ describe('DeployPage — wizard va log', () => {
     await reachStep3(invoke)
 
     expect(screen.getByText('100 MB')).toBeTruthy()
-    expect(screen.getByText('Precheck chưa xanh — sửa trên VPS rồi bấm Kiểm tra lại.')).toBeTruthy()
+    expect(
+      screen.getByText('Precheck is not green — fix it on the VPS, then click Check again.')
+    ).toBeTruthy()
     expect((screen.getByText('Deploy').closest('button') as HTMLButtonElement).disabled).toBe(true)
   })
 })

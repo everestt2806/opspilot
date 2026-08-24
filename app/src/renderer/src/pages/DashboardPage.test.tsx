@@ -43,7 +43,7 @@ function logEntry(partial: Partial<ActionLogEntry> & { id: number }): ActionLogE
     ts: '2026-08-20T09:55:00Z',
     action: 'deploy',
     status: 'success',
-    message: 'Deploy xong bản v7.',
+    message: 'Deployed v7 successfully.',
     vps_id: 1,
     app_id: 1,
     deployment_id: 7,
@@ -59,7 +59,7 @@ const RECENT: ActionLogEntry[] = [
     ts: '2026-08-20T09:53:00Z',
     action: 'rollback_auto',
     status: 'failed',
-    message: 'Rollback thất bại.'
+    message: 'Rollback failed.'
   }),
   logEntry({ id: 3, ts: '2026-08-19T23:10:00Z', action: 'rollback_manual', status: 'cancelled' })
 ]
@@ -110,20 +110,20 @@ describe('DashboardPage', () => {
     const invoke = mockApi(happyHandlers)
     render(<DashboardPage onOpenVps={() => {}} onOpenDeploy={() => {}} />)
 
-    await screen.findByText('Tổng quan')
+    await screen.findByText('Overview')
 
     expect(within(statCard('VPS online')).getByText('1')).toBeTruthy()
-    expect(within(statCard('App đang chạy')).getByText('1')).toBeTruthy()
-    expect(within(statCard('Deploy 24 giờ')).getByText('2')).toBeTruthy()
-    expect(within(statCard('Deploy gần nhất')).getByText(/trước|vừa xong/)).toBeTruthy()
+    expect(within(statCard('Apps running')).getByText('1')).toBeTruthy()
+    expect(within(statCard('Deploys in 24h')).getByText('2')).toBeTruthy()
+    expect(within(statCard('Last deploy')).getByText(/ago|just now/)).toBeTruthy()
 
-    expect(screen.getAllByText('Deploy xong bản v7.').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Rollback thất bại.').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Deployed v7 successfully.').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Rollback failed.').length).toBeGreaterThan(0)
     expect(screen.getByText('Deploy')).toBeTruthy()
-    expect(screen.getByText('Rollback tự động')).toBeTruthy()
-    expect(screen.getByText('Thành công')).toBeTruthy()
-    expect(screen.getByText('Thất bại')).toBeTruthy()
-    expect(screen.getByText('Đã huỷ')).toBeTruthy()
+    expect(screen.getByText('Auto rollback')).toBeTruthy()
+    expect(screen.getByText('Succeeded')).toBeTruthy()
+    expect(screen.getByText('Failed')).toBeTruthy()
+    expect(screen.getByText('Cancelled')).toBeTruthy()
 
     expect(invoke).toHaveBeenCalledWith('history:list', { limit: 10, offset: 0 })
     expect(invoke).toHaveBeenCalledWith(
@@ -141,9 +141,9 @@ describe('DashboardPage', () => {
     render(<DashboardPage onOpenVps={onOpenVps} />)
 
     expect(
-      await screen.findByText('Chưa có VPS nào. Thêm VPS đầu tiên để bắt đầu deploy.')
+      await screen.findByText('No VPS yet. Add your first VPS to start deploying.')
     ).toBeTruthy()
-    fireEvent.click(screen.getByText('Thêm VPS'))
+    fireEvent.click(screen.getByText('Add VPS'))
     expect(onOpenVps).toHaveBeenCalled()
   })
 
@@ -165,7 +165,7 @@ describe('DashboardPage', () => {
     render(<DashboardPage />)
 
     expect(await screen.findByText('Khong doc duoc DB.')).toBeTruthy()
-    fireEvent.click(screen.getByText('Thử lại'))
-    expect(await screen.findByText('Tổng quan')).toBeTruthy()
+    fireEvent.click(screen.getByText('Retry'))
+    expect(await screen.findByText('Overview')).toBeTruthy()
   })
 })

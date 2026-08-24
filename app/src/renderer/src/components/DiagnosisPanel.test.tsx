@@ -29,11 +29,11 @@ describe('DiagnosisPanel', () => {
     expect(screen.getByText('PORT_TIMEOUT')).toBeTruthy()
   })
 
-  it('hien nut Kiem tra lai khi co onRetry, goi dung callback', () => {
+  it('hien nut Check again khi co onRetry, goi dung callback', () => {
     const onRetry = vi.fn()
     render(<DiagnosisPanel diagnosis={WISERVICE_FIREWALL} onRetry={onRetry} />)
 
-    const button = screen.getByText('Kiểm tra lại')
+    const button = screen.getByText('Check again')
     expect(button).toBeTruthy()
     button.click()
     expect(onRetry).toHaveBeenCalledTimes(1)

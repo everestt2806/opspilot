@@ -55,7 +55,7 @@
   padding: 24px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg-panel);
+  background: var(--bg-panel-translucent);
 }
 
 .page-panel .ant-empty {
@@ -78,18 +78,8 @@
   margin-bottom: 16px;
 }
 
-.mono-input,
-.mono-input input,
-.mono-input textarea {
-  font-family: 'JetBrains Mono', Consolas, monospace;
-}
-
 .page-panel .ant-table .ant-empty {
   margin-block: 64px;
-}
-
-.mono-text {
-  font-family: 'JetBrains Mono', Consolas, monospace;
 }
 
 .resource-bars {
@@ -236,4 +226,590 @@
   justify-content: space-between;
   margin-top: 12px;
   gap: 16px;
+}
+
+/* VPS Control Panel (TK-B9) — master–detail theo DESIGN.md (MiniDash) */
+
+.panel-fleet {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.panel-fleet .ant-card {
+  flex: 1;
+}
+
+/* Cuộn toàn trang (content + bảng) theo token DESIGN.md: bình thường/hover/đang kéo khác màu. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scroll-thumb-hover);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--scroll-thumb-active);
+}
+
+/* Header trang chi tiết VPS — back + tên máy sát trái, không bọc khung */
+.panel-detail-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+
+.panel-selector .ant-segmented {
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  padding: 2px;
+}
+
+.panel-selector .ant-segmented .ant-segmented-item {
+  color: var(--text-secondary);
+}
+
+.panel-selector .ant-segmented .ant-segmented-item:hover {
+  color: var(--text-primary);
+}
+
+.panel-selector .ant-segmented .ant-segmented-thumb {
+  background: var(--bg-elevated);
+  border: 1px solid var(--info);
+  box-shadow: none;
+}
+
+.panel-selector .ant-segmented .ant-segmented-item-selected {
+  background: transparent;
+  color: var(--info);
+  font-weight: 600;
+}
+
+
+.page-panel .ant-input-affix-wrapper:not(.ant-input-affix-wrapper-focused) {
+  border-color: var(--border-input);
+}
+
+.page-panel .ant-input-affix-wrapper:hover:not(.ant-input-affix-wrapper-focused) {
+  border-color: var(--border-input-hover);
+}
+
+.page-panel .ant-select:not(.ant-select-focused):not(.ant-select-disabled) .ant-select-selector {
+  border-color: var(--border-input);
+}
+
+.page-panel
+  .ant-select:not(.ant-select-focused):not(.ant-select-disabled):hover
+  .ant-select-selector {
+  border-color: var(--border-input-hover);
+}
+
+.page-panel .ant-picker:not(.ant-picker-focused) {
+  border-color: var(--border-input);
+}
+
+.page-panel .ant-picker:hover:not(.ant-picker-focused) {
+  border-color: var(--border-input-hover);
+}
+
+.panel-detail {
+  flex: 1;
+  min-width: 0;
+}
+
+
+.panel-detail-layout {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr) 248px;
+  gap: 12px;
+  align-items: start;
+}
+
+.panel-selector-full {
+  width: 100%;
+}
+
+.server-list-card .ant-card-head {
+  min-height: 44px;
+  padding-inline: 16px;
+}
+
+.server-list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.server-list-search {
+  max-width: 280px;
+  flex: 0 1 280px;
+}
+
+.server-list-table .ant-table-thead > tr > th {
+  padding: 8px 12px !important;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.server-list-table .ant-table-tbody > tr > td {
+  padding: 10px 12px !important;
+  vertical-align: middle;
+}
+
+.server-list-table .ant-table-tbody > tr:hover > td {
+  background: var(--bg-elevated);
+}
+
+.server-list-table .resource-bars {
+  min-width: 120px;
+}
+
+.server-list-table .ant-pagination {
+  margin-top: 12px !important;
+}
+
+
+.panel-server-header {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.panel-server-header-item {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+}
+
+.panel-server-header-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.panel-server-header-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.panel-server-header-value .mono-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+.panel-resource-alert {
+  margin-bottom: 0;
+}
+
+.panel-detail-column {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.panel-nav-sidebar {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-base);
+}
+
+.panel-nav-menu {
+  border: none !important;
+  background: transparent !important;
+}
+
+.panel-nav-menu .ant-menu-item {
+  height: 40px;
+  line-height: 40px;
+  margin: 2px 0;
+  border-radius: 8px;
+  color: var(--text-secondary);
+}
+
+.panel-nav-menu .ant-menu-item:hover {
+  color: var(--text-primary);
+  background: var(--bg-elevated) !important;
+}
+
+.panel-nav-menu .ant-menu-item-selected {
+  color: var(--info) !important;
+  background: var(--bg-elevated) !important;
+  font-weight: 600;
+  border-left: 2px solid var(--info);
+}
+
+.panel-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 4px 8px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+}
+
+.panel-action-bar-wrap {
+  display: inline-flex;
+}
+
+.panel-action-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.panel-action-bar-btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.panel-action-bar-btn-danger:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.panel-action-bar-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.db-tab-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.db-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.db-editor-header .ant-typography {
+  flex: 1;
+}
+
+.db-query-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-base);
+}
+
+.db-query-log {
+  margin: 8px 0 0;
+  max-height: 140px;
+  overflow: auto;
+  font-size: 12px;
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+}
+
+.db-row-dragging {
+  opacity: 0.55;
+}
+
+.panel-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.panel-nav-item:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.panel-nav-item-active {
+  background: var(--bg-elevated);
+  border-left: 2px solid var(--info);
+  color: var(--info);
+  font-weight: 600;
+}
+
+.panel-detail-main {
+  min-width: 0;
+}
+
+.panel-info-sidebar {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+}
+
+.panel-info-sidebar-title {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.panel-gauge-row {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.panel-gauge {
+  text-align: center;
+}
+
+.panel-gauge-label {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.panel-spec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.panel-spec-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.panel-spec-label {
+  color: var(--text-secondary);
+  flex: 0 0 auto;
+}
+
+.panel-spec-value {
+  color: var(--text-primary);
+  text-align: right;
+  word-break: break-word;
+}
+
+.panel-selector .ant-table-row-selected > td {
+  background: var(--bg-elevated) !important;
+}
+
+.panel-selector .ant-table-row-selected > td:first-child {
+  box-shadow: inset 2px 0 0 var(--info);
+}
+
+.panel-widget-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+
+
+.db-admin-grid {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.db-admin-grid .ant-card-head {
+  min-height: 44px;
+}
+
+.db-admin-grid .ant-card-head-title {
+  font-size: 13px;
+}
+
+.db-schema-canvas {
+  position: relative;
+  height: 480px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-base);
+}
+
+.db-schema-inner {
+  position: relative;
+  width: 1000px;
+  height: 640px;
+}
+
+.db-schema-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.db-schema-card {
+  position: absolute;
+  width: 260px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.db-schema-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  height: 36px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+  border-radius: 8px 8px 0 0;
+  background: var(--bg-elevated);
+  cursor: grab;
+  user-select: none;
+}
+
+.db-schema-card-head:active {
+  cursor: grabbing;
+}
+
+.db-schema-table-name {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.db-schema-col {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 6px;
+  min-width: 0;
+}
+
+.db-schema-col + .db-schema-col {
+  border-top: 1px dashed var(--border);
+}
+
+.db-schema-col .ant-input,
+.db-schema-col .ant-select .ant-select-selector {
+  font-size: 11px !important;
+}
+
+.db-schema-col .ant-input {
+  flex: 1;
+  min-width: 0;
+  padding-inline: 6px;
+}
+
+.db-schema-col-linkable {
+  cursor: crosshair;
+  border-radius: 4px;
+  outline: 2px dashed var(--info);
+  outline-offset: -2px;
+}
+
+.db-schema-col-source {
+  background: var(--bg-elevated);
+}
+
+.db-fk-badge {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10px;
+  color: var(--info);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.db-import-preview-table .ant-table-tbody > tr > td {
+  padding: 4px 8px !important;
+}
+
+.db-editor-header {
+  flex-wrap: wrap;
+}
+
+/* Environment scan — danh sách môi trường quét trên VPS (tab Tổng quan) */
+.scan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scan-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.scan-item-label {
+  min-width: 170px;
+  color: var(--text-primary);
+}
+
+.scan-item-missing {
+  font-size: 12px;
+}
+
+.scan-item-warn {
+  color: var(--warning);
+  cursor: help;
+}
+
+
+.panel-detail-layout-full {
+  grid-template-columns: 168px minmax(0, 1fr);
+}
+
+
+.panel-server-header {
+  margin-bottom: 12px;
 }

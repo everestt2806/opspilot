@@ -16,7 +16,8 @@ body {
   color: var(--text-primary);
   background: var(--bg-base);
   font-family:
-    Inter,
+    'DM Sans',
+    'Inter',
     -apple-system,
     BlinkMacSystemFont,
     'Segoe UI',
@@ -27,7 +28,11 @@ body {
 
 code,
 pre,
-.metric-value {
-  font-family: 'JetBrains Mono', Consolas, monospace;
+.metric-value,
+.mono-input,
+.mono-input input,
+.mono-input textarea,
+.mono-text {
+  font-family: 'IBM Plex Mono', 'JetBrains Mono', Consolas, monospace;
   font-variant-numeric: tabular-nums;
 }

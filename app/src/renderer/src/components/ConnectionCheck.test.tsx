@@ -73,8 +73,8 @@ describe('ConnectionCheck', () => {
     const runCheck = vi.fn()
     render(<ConnectionCheck getValues={() => VALUES} runCheck={runCheck} />)
 
-    expect(screen.getByText('Kiểm tra kết nối')).toBeTruthy()
-    expect(screen.getByText(/Nhập thông tin rồi bấm kiểm tra/)).toBeTruthy()
+    expect(screen.getByText('Check connection')).toBeTruthy()
+    expect(screen.getByText(/Fill in the details and click check/)).toBeTruthy()
     expect(runCheck).not.toHaveBeenCalled()
   })
 
@@ -82,8 +82,8 @@ describe('ConnectionCheck', () => {
     const gate = deferred<VpsConnectionCheck>()
     render(<ConnectionCheck getValues={() => VALUES} runCheck={() => gate.promise} />)
 
-    fireEvent.click(screen.getByText('Kiểm tra kết nối'))
-    expect(screen.getByText('Đang kiểm tra kết nối…')).toBeTruthy()
+    fireEvent.click(screen.getByText('Check connection'))
+    expect(screen.getByText('Checking connection…')).toBeTruthy()
 
     await act(async () => {
       gate.resolve(OK_RESULT)
@@ -95,15 +95,15 @@ describe('ConnectionCheck', () => {
     const runCheck = vi.fn(() => gate.promise)
     render(<ConnectionCheck getValues={() => VALUES} runCheck={runCheck} />)
 
-    fireEvent.click(screen.getByText('Kiểm tra kết nối'))
+    fireEvent.click(screen.getByText('Check connection'))
     await act(async () => {
       gate.resolve(NO_DOCKER_RESULT)
     })
 
-    expect(screen.getByText('Kết nối thành công')).toBeTruthy()
+    expect(screen.getByText('Connection successful')).toBeTruthy()
     expect(screen.getByText('Kết nối SSH')).toBeTruthy()
     expect(screen.getByText('— chưa cài')).toBeTruthy()
-    expect(screen.getByText('Máy chủ chưa cài Docker')).toBeTruthy()
+    expect(screen.getByText('Docker is not installed on the server')).toBeTruthy()
     expect(screen.getByText('Ghi được /opt/opspilot')).toBeTruthy()
   })
 
@@ -111,7 +111,7 @@ describe('ConnectionCheck', () => {
     const gate = deferred<VpsConnectionCheck>()
     render(<ConnectionCheck getValues={() => VALUES} runCheck={() => gate.promise} />)
 
-    fireEvent.click(screen.getByText('Kiểm tra kết nối'))
+    fireEvent.click(screen.getByText('Check connection'))
     await act(async () => {
       gate.resolve(FIREWALL_RESULT)
     })
@@ -125,11 +125,11 @@ describe('ConnectionCheck', () => {
   it('state failed: runCheck nem loi -> hien message + chi tiet ky thuat', async () => {
     const runCheck = vi
       .fn()
-      .mockRejectedValue(new CheckFailedError('Nhập đầy đủ thông tin.', 'raw: missing field'))
+      .mockRejectedValue(new CheckFailedError('Fill in all fields first.', 'raw: missing field'))
     render(<ConnectionCheck getValues={() => VALUES} runCheck={runCheck} />)
 
-    fireEvent.click(screen.getByText('Kiểm tra kết nối'))
-    expect(await screen.findByText('Nhập đầy đủ thông tin.')).toBeTruthy()
+    fireEvent.click(screen.getByText('Check connection'))
+    expect(await screen.findByText('Fill in all fields first.')).toBeTruthy()
     expect(screen.getByText(/raw: missing field/)).toBeTruthy()
   })
 
@@ -142,19 +142,19 @@ describe('ConnectionCheck', () => {
       .mockReturnValueOnce(secondGate.promise)
     render(<ConnectionCheck getValues={() => VALUES} runCheck={runCheck} />)
 
-    fireEvent.click(screen.getByText('Kiểm tra kết nối'))
+    fireEvent.click(screen.getByText('Check connection'))
     await act(async () => {
       firstGate.resolve(FIREWALL_RESULT)
     })
 
-    fireEvent.click(screen.getByText('Kiểm tra lại'))
+    fireEvent.click(screen.getByText('Check again'))
     expect(runCheck).toHaveBeenCalledTimes(2)
-    expect(screen.getByText('Đang kiểm tra kết nối…')).toBeTruthy()
+    expect(screen.getByText('Checking connection…')).toBeTruthy()
 
     await act(async () => {
       secondGate.resolve(OK_RESULT)
     })
-    expect(screen.getByText('Kết nối thành công')).toBeTruthy()
+    expect(screen.getByText('Connection successful')).toBeTruthy()
   })
 
   it('thieu Docker + da luu VPS: nut Cai Docker ngay -> confirm -> install-docker -> hien version', async () => {
@@ -165,19 +165,19 @@ describe('ConnectionCheck', () => {
     const gate = deferred<VpsConnectionCheck>()
     render(<ConnectionCheck getValues={() => VALUES} runCheck={() => gate.promise} vpsId={1} />)
 
-    fireEvent.click(screen.getByText('Kiểm tra kết nối'))
+    fireEvent.click(screen.getByText('Check connection'))
     await act(async () => {
       gate.resolve(NO_DOCKER_RESULT)
     })
 
-    expect(screen.getByText('Máy chủ chưa cài Docker')).toBeTruthy()
-    fireEvent.click(screen.getByText('Cài Docker ngay'))
-    expect((await screen.findAllByText('Cài Docker trên VPS?')).length).toBeGreaterThan(0)
-    fireEvent.click(screen.getByText('Cài Docker'))
+    expect(screen.getByText('Docker is not installed on the server')).toBeTruthy()
+    fireEvent.click(screen.getByText('Install Docker now'))
+    expect((await screen.findAllByText('Install Docker on this VPS?')).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByText('Install Docker'))
 
     await waitFor(() => expect(installDocker).toHaveBeenCalledWith('vps:install-docker', 1))
     expect(
-      await screen.findByText('Đã cài xong Docker 27.2.1. Bấm “Kiểm tra lại” để cập nhật.')
+      await screen.findByText('Docker 27.2.1 installed. Click "Refresh" to update.')
     ).toBeTruthy()
   })
 
@@ -185,14 +185,14 @@ describe('ConnectionCheck', () => {
     const gate = deferred<VpsConnectionCheck>()
     render(<ConnectionCheck getValues={() => VALUES} runCheck={() => gate.promise} />)
 
-    fireEvent.click(screen.getByText('Kiểm tra kết nối'))
+    fireEvent.click(screen.getByText('Check connection'))
     await act(async () => {
       gate.resolve(NO_DOCKER_RESULT)
     })
 
     expect(
-      screen.getByText('Lưu VPS lại trước rồi mở lại hộp thoại này để cài Docker.')
+      screen.getByText('Save the VPS first, then reopen this dialog to install Docker.')
     ).toBeTruthy()
-    expect(screen.queryByText('Cài Docker ngay')).toBeNull()
+    expect(screen.queryByText('Install Docker now')).toBeNull()
   })
 })
