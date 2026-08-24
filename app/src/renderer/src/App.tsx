@@ -5,23 +5,10 @@ import {
   DashboardOutlined,
   DeploymentUnitOutlined,
   HistoryOutlined,
-  MoonOutlined,
   RocketOutlined,
-  SettingOutlined,
-  SunOutlined
+  SettingOutlined
 } from '@ant-design/icons'
-import {
-  App as AntApp,
-  Badge,
-  Button,
-  ConfigProvider,
-  Layout,
-  Menu,
-  Segmented,
-  Space,
-  Tooltip,
-  Typography
-} from 'antd'
+import { App as AntApp, ConfigProvider, Layout, Menu } from 'antd'
 
 import { AppsPage } from './pages/AppsPage'
 import { AppTitleBar } from './components/AppTitleBar'
@@ -33,7 +20,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { VpsPage } from './pages/VpsPage'
 import { strings } from './strings'
 import { useUiState } from './store/uiState'
-import { themeTokens, type ThemeMode } from './utils/themeTokens'
+import { themeTokens } from './utils/themeTokens'
 
 type PageKey = 'vps' | 'apps' | 'deploy' | 'dashboard' | 'migrate' | 'history' | 'settings'
 
@@ -99,7 +86,13 @@ function App(): React.JSX.Element {
     <ConfigProvider theme={themeTokens[themeMode]}>
       <AntApp>
         <div className="app-window">
-          <AppTitleBar pageTitle={pageTitle} />
+          <AppTitleBar
+            pageTitle={pageTitle}
+            selectedVpsCount={selectedVpsIds.length}
+            mlRunning={mlRunning}
+            themeMode={themeMode}
+            onThemeChange={setTheme}
+          />
           <Layout className="app-shell">
             <Layout.Sider
               width={220}
@@ -123,46 +116,6 @@ function App(): React.JSX.Element {
               />
             </Layout.Sider>
             <Layout>
-              <Layout.Header className="topbar">
-                <Typography.Text className="topbar-summary">
-                  {selectedVpsIds.length > 0
-                    ? strings.app.vpsSelected(selectedVpsIds.length)
-                    : strings.app.noSelection}
-                </Typography.Text>
-                <Space size={20} className="topbar-status">
-                  <Badge
-                    className="topbar-ssh-status"
-                    status="default"
-                    text={`${strings.status.ssh}: ${strings.status.unknown}`}
-                  />
-                  <Button type="text" className="status-button">
-                    <Badge
-                      status={mlRunning ? 'success' : 'error'}
-                      text={`${strings.status.mlService}: ${
-                        mlRunning ? strings.status.running : strings.status.stopped
-                      }`}
-                    />
-                  </Button>
-                  <Tooltip title={strings.appearance.label}>
-                    <Segmented<ThemeMode>
-                      value={themeMode}
-                      onChange={(value) => setTheme(value)}
-                      options={[
-                        {
-                          value: 'light',
-                          icon: <SunOutlined aria-hidden="true" />,
-                          label: strings.appearance.light
-                        },
-                        {
-                          value: 'dark',
-                          icon: <MoonOutlined aria-hidden="true" />,
-                          label: strings.appearance.dark
-                        }
-                      ]}
-                    />
-                  </Tooltip>
-                </Space>
-              </Layout.Header>
               <Layout.Content className="content">{renderPage(page, setActivePage)}</Layout.Content>
             </Layout>
           </Layout>
