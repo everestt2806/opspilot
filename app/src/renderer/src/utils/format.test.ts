@@ -10,14 +10,14 @@ function ago(ms: number): string {
 
 describe('relativeTime', () => {
   it('mo ta dung muc do thoi gian', () => {
-    expect(relativeTime(ago(5_000), NOW)).toBe('vừa xong')
-    expect(relativeTime(ago(45_000), NOW)).toBe('45 giây trước')
-    expect(relativeTime(ago(5 * 60_000), NOW)).toBe('5 phút trước')
-    expect(relativeTime(ago(3 * 3_600_000), NOW)).toBe('3 giờ trước')
-    expect(relativeTime(ago(2 * 86_400_000), NOW)).toBe('2 ngày trước')
+    expect(relativeTime(ago(5_000), NOW)).toBe('just now')
+    expect(relativeTime(ago(45_000), NOW)).toBe('45 seconds ago')
+    expect(relativeTime(ago(5 * 60_000), NOW)).toBe('5 minutes ago')
+    expect(relativeTime(ago(3 * 3_600_000), NOW)).toBe('3 hours ago')
+    expect(relativeTime(ago(2 * 86_400_000), NOW)).toBe('2 days ago')
   })
 
   it('thoi gian tuong lai xem nhu vua xong', () => {
-    expect(relativeTime(ago(-30_000), NOW)).toBe('vừa xong')
+    expect(relativeTime(ago(-30_000), NOW)).toBe('just now')
   })
 })

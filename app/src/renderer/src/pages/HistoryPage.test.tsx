@@ -27,7 +27,7 @@ const ROWS: ActionLogEntry[] = [
     ts: '2026-08-19T10:00:00Z',
     action: 'deploy',
     status: 'success',
-    message: 'Deploy xong bản v7.',
+    message: 'Deployed v7 successfully.',
     vps_id: 1,
     app_id: 1,
     deployment_id: 7,
@@ -38,7 +38,7 @@ const ROWS: ActionLogEntry[] = [
     ts: '2026-08-19T09:50:00Z',
     action: 'rollback_auto',
     status: 'failed',
-    message: 'Rollback thất bại.',
+    message: 'Rollback failed.',
     vps_id: 1,
     app_id: 1,
     deployment_id: 6,
@@ -84,12 +84,12 @@ describe('HistoryPage', () => {
         offset: 0
       })
     )
-    expect((await screen.findAllByText('Deploy xong bản v7.')).length).toBeGreaterThan(0)
-    expect((await screen.findAllByText('Rollback thất bại.')).length).toBeGreaterThan(0)
-    expect(screen.getByText('Rollback tự động')).toBeTruthy()
+    expect((await screen.findAllByText('Deployed v7 successfully.')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('Rollback failed.')).length).toBeGreaterThan(0)
+    expect(screen.getByText('Auto rollback')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('row', { name: /Deploy xong bản v7\./ }))
-    expect(await screen.findByText('Chi tiết hoạt động')).toBeTruthy()
+    fireEvent.click(screen.getByRole('row', { name: /Deployed v7 successfully\./ }))
+    expect(await screen.findByText('Activity details')).toBeTruthy()
     expect(screen.getByText('step')).toBeTruthy()
     expect(screen.getByText('HEALTHCHECK')).toBeTruthy()
     expect(screen.getByText('duration_ms')).toBeTruthy()
@@ -106,9 +106,9 @@ describe('HistoryPage', () => {
     })
     render(<HistoryPage />)
 
-    expect(await screen.findByText('Không tải được lịch sử.')).toBeTruthy()
+    expect(await screen.findByText('Could not load the history.')).toBeTruthy()
     expect(screen.getByText('Khong doc duoc DB.')).toBeTruthy()
-    fireEvent.click(screen.getByText('Thử lại'))
+    fireEvent.click(screen.getByText('Retry'))
     await waitFor(() => expect(invoke).toHaveBeenCalledTimes(3))
   })
 

@@ -133,6 +133,14 @@ Nếu một nút cần channel chưa có handler thật, **không dựng nút gi
 
 - ASSIGNED 20/08 — A giao B biến UI VPS hiện tại thành VPS Control Panel v1; chốt ba vùng
   Tổng quan / Ứng dụng & deploy / Hoạt động, dùng typed IPC hiện có và không mở rộng backend.
+- START 21/08 — dựng panel theo ba lát: khung + Tổng quan → Ứng dụng & deploy → Hoạt động.
+- UPDATE 24/08 — Xong giao diện toàn bộ panel: tab Database (9 channel `db:*` đã thiết kế trong
+  `IpcInvokeMap`, chưa có handler — UI hiện lỗi trung thực), quét môi trường `vps:scan`
+  (handler + scanService nằm ở nhánh riêng `feat/vps-env-scan`), tinh chỉnh: action bar đầu tab
+  Tổng quan kèm nhãn hover native, header chi tiết bỏ khung, cột checkbox chọn VPS ghi id thật
+  + đếm "N VPS selected" trên topbar. Gate: 172/172 test, lint 0 lỗi, typecheck xanh. Tiếp
+  theo: commit UI trên `feat/ui-vps-control-panel`, commit backend scan trên `feat/vps-env-scan`,
+  đồng bộ contract, mở PR.
 
 ## Lệnh tái hiện
 

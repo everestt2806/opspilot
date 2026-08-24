@@ -1,70 +1,123 @@
 export const strings = {
   app: {
     name: 'OpsPilot',
-    noSelection: 'Chưa chọn VPS / ứng dụng'
+    noSelection: 'No VPS selected',
+    vpsSelected: (count: number) => `${count} VPS selected`
   },
   navigation: {
     vps: 'VPS',
-    apps: 'Ứng dụng',
+    apps: 'Apps',
     deploy: 'Deploy',
     dashboard: 'Dashboard',
     migrate: 'Migrate',
-    history: 'Lịch sử',
-    settings: 'Cài đặt'
+    history: 'History',
+    settings: 'Settings'
   },
   status: {
     ssh: 'SSH',
     mlService: 'ML service',
-    running: 'Đang chạy',
-    stopped: 'Đã dừng',
-    unknown: 'Chưa kết nối'
+    running: 'Running',
+    stopped: 'Stopped',
+    unknown: 'Not connected'
   },
   common: {
-    cancel: 'Huỷ',
-    notAvailable: 'Chưa có',
-    refresh: 'Làm mới',
-    retry: 'Thử lại',
-    save: 'Lưu',
-    saveError: 'Không lưu được VPS'
+    cancel: 'Cancel',
+    notAvailable: 'Not available',
+    refresh: 'Refresh',
+    retry: 'Retry',
+    save: 'Save',
+    close: 'Close',
+    back: 'Back',
+    confirm: 'Confirm',
+    saveError: 'Could not save the VPS'
+  },
+  pipeline: {
+    title: 'Deploy Pipeline (Dynamic)',
+    status: {
+      completed: 'Completed',
+      in_progress: 'Running',
+      error: 'Failed',
+      pending: 'Pending'
+    },
+    steps: {
+      PRECHECK: { title: 'Precheck', desc: 'Check VPS RAM / Disk / Port' },
+      UPLOAD: { title: 'Upload', desc: 'Push source code to the VPS' },
+      RENDER: { title: 'Render', desc: 'Generate Dockerfile & Compose' },
+      BUILD: { title: 'Build', desc: 'Run Docker build' },
+      DEPLOY: { title: 'Deploy', desc: 'Start container & swap port' },
+      HEALTHCHECK: { title: 'Healthcheck', desc: 'Verify HTTP GET live' },
+      RECORD: { title: 'Record', desc: 'Save version info to DB' }
+    },
+    banner: {
+      success: (time: string) => `Deploy succeeded in ${time}`,
+      openApp: 'Open app',
+      viewDashboard: 'View dashboard',
+      error: (step: string) => `Deploy failed at step [${step}] — check the error log below`,
+      rollback: 'Roll back to previous version'
+    }
+  },
+  projects: {
+    title: 'Projects & Deploy Launcher',
+    description: 'Pick a project to deploy a new version or watch the current pipeline.',
+    deployNew: 'Deploy new version',
+    newProject: '+ New project',
+    searchPlaceholder: 'Search projects...',
+    statusOnline: 'Online',
+    statusOffline: 'Offline',
+    statusDeploying: 'Deploying'
+  },
+  wizard: {
+    title: 'Deploy Wizard — 4 Steps',
+    step1: '1. Source',
+    step2: '2. Detect',
+    step3: '3. Configuration',
+    step4: '4. Precheck & Deploy',
+    detectSuccess: 'Framework detected successfully!',
+    precheckOk: 'All RAM / Disk / Port checks passed. Ready to deploy.',
+    startDeploy: 'Confirm Deploy'
   },
   vps: {
-    title: 'Danh sách VPS',
-    description: 'Quản lý thông tin kết nối và trạng thái các máy chủ.',
-    create: 'Thêm VPS',
-    createFirst: 'Thêm VPS đầu tiên',
-    empty: 'Chưa có VPS nào. Thêm VPS đầu tiên để bắt đầu deploy.',
-    loadError: 'Không tải được danh sách VPS',
-    checkResources: 'Kiểm tra lại',
+    title: 'Servers',
+    description: 'Fleet overview and server control panel for OpsPilot.',
+    create: 'Add VPS',
+    createFirst: 'Add your first VPS',
+    listCardTitle: 'Server list',
+    empty: 'No VPS yet. Add your first VPS to start deploying.',
+    loadError: 'Could not load the VPS list',
+    checkResources: 'Refresh',
+    backToList: 'Back to VPS list',
     columns: {
-      name: 'Tên',
-      host: 'Host',
-      status: 'Trạng thái',
+      name: 'Name',
+      ip: 'IP',
+      status: 'Status',
+      docker: 'Docker',
       resources: 'CPU / RAM / Disk',
-      provider: 'Provider / region',
-      actions: 'Hành động'
+      site: 'Site',
+      lastConnection: 'Last connection',
+      actions: 'Actions'
     },
     status: {
       online: 'Online',
       offline: 'Offline',
-      unknown: 'Chưa kiểm tra',
-      checking: 'Đang kiểm tra'
+      unknown: 'Not checked',
+      checking: 'Checking'
     },
     actions: {
-      edit: (name: string) => `Sửa VPS ${name}`,
-      delete: (name: string) => `Xoá VPS ${name}`
+      edit: (name: string) => `Edit VPS ${name}`,
+      delete: (name: string) => `Delete VPS ${name}`
     },
     delete: {
-      title: 'Xoá VPS?',
+      title: 'Delete VPS?',
       description: (name: string) =>
-        `VPS “${name}” sẽ bị xoá khỏi OpsPilot. Ứng dụng đang chạy trên máy chủ không bị xoá.`,
-      confirm: 'Xoá VPS'
+        `VPS "${name}" will be removed from OpsPilot. Apps running on the server are not deleted.`,
+      confirm: 'Delete VPS'
     },
     fields: {
-      name: 'Tên VPS',
-      host: 'Host hoặc IP',
-      port: 'Cổng SSH',
+      name: 'VPS name',
+      host: 'Host or IP',
+      port: 'SSH port',
       username: 'Username',
-      authType: 'Cách xác thực',
+      authType: 'Auth method',
       privateKey: 'Private key',
       password: 'Password',
       provider: 'Provider',
@@ -75,207 +128,390 @@ export const strings = {
       password: 'Password'
     },
     form: {
-      createTitle: 'Thêm VPS',
-      editTitle: 'Sửa VPS',
+      createTitle: 'Add VPS',
+      editTitle: 'Edit VPS',
       hostPlaceholder: '203.0.113.10',
-      keepCredentialHint: 'Để trống nếu muốn giữ credential hiện tại.'
+      keepCredentialHint: 'Leave blank to keep the current credential.'
     },
     validation: {
-      name: 'Nhập tên VPS.',
-      host: 'Nhập host hoặc địa chỉ IP.',
-      port: 'Nhập cổng SSH từ 1 đến 65535.',
-      username: 'Nhập username SSH.',
-      privateKey: 'Dán private key SSH.',
-      password: 'Nhập password SSH.',
-      incomplete: 'Nhập đầy đủ thông tin trước khi kiểm tra.'
+      name: 'Enter the VPS name.',
+      host: 'Enter the host or IP address.',
+      port: 'Enter an SSH port from 1 to 65535.',
+      username: 'Enter the SSH username.',
+      privateKey: 'Paste the SSH private key.',
+      password: 'Enter the SSH password.',
+      incomplete: 'Fill in all fields before checking.'
     },
     check: {
-      button: 'Kiểm tra kết nối',
-      retry: 'Kiểm tra lại',
+      button: 'Check connection',
+      retry: 'Check again',
       idleHint:
-        'Nhập thông tin rồi bấm kiểm tra — app sẽ thử kết nối SSH và chỉ ra nguyên nhân kèm cách sửa nếu lỗi.',
-      checking: 'Đang kiểm tra kết nối…',
-      needCredential: 'App không đọc lại credential đã lưu. Nhập credential rồi bấm kiểm tra lại.',
-      success: 'Kết nối thành công',
-      successHint: 'Các bước đã kiểm tra trên máy chủ:',
-      dockerMissing: 'Máy chủ chưa cài Docker',
+        'Fill in the details and click check — the app will try the SSH connection and explain the cause with a fix if it fails.',
+      checking: 'Checking connection…',
+      needCredential:
+        'The app cannot read the saved credential back. Enter the credential and click check again.',
+      success: 'Connection successful',
+      successHint: 'Steps verified on the server:',
+      dockerMissing: 'Docker is not installed on the server',
       dockerMissingHint:
-        'OpsPilot cần Docker để deploy ứng dụng. Cài Docker rồi bấm “Kiểm tra lại”.',
-      workdirFail: 'Chưa ghi được thư mục làm việc /opt/opspilot',
-      failUnknown: 'Không xác định được nguyên nhân cụ thể.',
-      technicalLabel: 'Chi tiết kỹ thuật'
+        'OpsPilot needs Docker to deploy apps. Install Docker, then click "Check again".',
+      workdirFail: 'Could not write the working directory /opt/opspilot',
+      failUnknown: 'Could not determine the specific cause.',
+      technicalLabel: 'Technical details'
     },
     diagnosis: {
-      causeLabel: 'Vì sao',
-      fixesLabel: 'Cách khắc phục'
+      causeLabel: 'Why',
+      fixesLabel: 'How to fix'
     },
     resources: {
-      empty: 'Chưa kiểm tra',
-      error: 'Không đọc được tài nguyên',
-      retry: (name: string) => `Đọc lại tài nguyên của ${name}`,
+      empty: 'Not checked',
+      error: 'Could not read resources',
+      retry: (name: string) => `Re-read resources of ${name}`,
       ram: 'RAM',
       disk: 'Disk',
-      cpu: 'Tải CPU (1 phút)',
-      cores: (count: number) => `${count} nhân`,
-      usedOf: (used: string, total: string) => `Đã dùng ${used} / ${total}`
+      cpu: 'CPU load (1 min)',
+      cores: (count: number) => `${count} cores`,
+      usedOf: (used: string, total: string) => `${used} / ${total} used`
     },
     install: {
-      button: 'Cài Docker ngay',
-      confirmTitle: 'Cài Docker trên VPS?',
+      button: 'Install Docker now',
+      confirmTitle: 'Install Docker on this VPS?',
       confirmBody:
-        'OpsPilot chạy script cài chính thức của Docker trên máy chủ. Mất vài phút, không huỷ được giữa chừng.',
-      confirm: 'Cài Docker',
-      installing: 'Đang cài Docker trên máy chủ…',
-      done: (version: string) => `Đã cài xong Docker ${version}. Bấm “Kiểm tra lại” để cập nhật.`,
-      failed: 'Cài Docker thất bại. Bấm thử lại hoặc xem chi tiết kỹ thuật.',
-      needSaveFirst: 'Lưu VPS lại trước rồi mở lại hộp thoại này để cài Docker.'
+        'OpsPilot will run the official Docker install script on the server. It takes a few minutes and cannot be cancelled halfway.',
+      confirm: 'Install Docker',
+      installing: 'Installing Docker on the server…',
+      done: (version: string) => `Docker ${version} installed. Click "Refresh" to update.`,
+      failed: 'Docker installation failed. Try again or check the technical details.',
+      needSaveFirst: 'Save the VPS first, then reopen this dialog to install Docker.'
     }
   },
   deploy: {
-    title: 'Deploy ứng dụng',
-    description: 'Chọn thư mục source — app nhận diện framework rồi deploy lên VPS qua SSH.',
-    noVps: 'Chưa có VPS nào. Thêm VPS ở màn VPS trước khi deploy.',
+    title: 'Deploy an application',
+    description:
+      'Pick a source folder — the app detects the framework and deploys it to a VPS over SSH.',
+    noVps: 'No VPS yet. Add a VPS on the VPS screen before deploying.',
     steps: {
-      source: 'Nguồn',
-      detect: 'Nhận diện',
-      config: 'Cấu hình',
-      review: 'Kiểm tra & Deploy'
+      source: 'Source',
+      detect: 'Detect',
+      config: 'Configuration',
+      review: 'Review & Deploy'
     },
-    vpsLabel: 'VPS đích',
-    sourceLabel: 'Thư mục source',
-    pickFolder: 'Chọn thư mục',
-    pickAgain: 'Chọn lại',
-    next: 'Tiếp tục',
-    back: 'Quay lại',
-    detecting: 'Đang nhận diện framework…',
-    detectError: 'Không đọc được thư mục source. Kiểm tra đường dẫn rồi thử lại.',
-    detectView: 'Xem',
+    vpsLabel: 'Target VPS',
+    sourceLabel: 'Source folder',
+    pickFolder: 'Choose folder',
+    pickAgain: 'Choose again',
+    next: 'Next',
+    back: 'Back',
+    detecting: 'Detecting framework…',
+    detectError: 'Could not read the source folder. Check the path and try again.',
+    detectView: 'View',
     detectLabels: {
       framework: 'Framework',
-      version: 'Phiên bản',
+      version: 'Version',
       build: 'Build command',
-      port: 'Cổng container',
+      port: 'Container port',
       healthcheck: 'Healthcheck path',
       template: 'Dockerfile template',
-      db: 'Cơ sở dữ liệu',
-      dbYes: 'Postgres chạy kèm app — tool tự tạo',
-      dbNo: 'Không cần',
-      tree: 'Cây file (rút gọn)'
+      db: 'Database',
+      dbYes: 'Postgres runs alongside the app — created by the tool',
+      dbNo: 'Not needed',
+      tree: 'File tree (trimmed)'
     },
-    unmatchedTitle: 'Không nhận diện được framework',
+    unmatchedTitle: 'Framework not recognized',
     unmatchedHint:
-      'App đã kiểm tra từng dấu hiệu dưới đây. Chọn lại thư mục source hoặc kiểm tra project.',
-    signals: { title: 'Dấu hiệu đã kiểm tra', passed: 'Khớp', failed: 'Không khớp' },
+      'The app checked every signal below. Pick a different source folder or check the project.',
+    signals: { title: 'Signals checked', passed: 'Matched', failed: 'Not matched' },
     config: {
-      appLabel: 'Ứng dụng trên VPS',
-      newApp: 'Tạo ứng dụng mới',
-      appNameLabel: 'Tên ứng dụng',
-      appNameRule: 'Chữ thường a-z, số và dấu gạch ngang — bắt đầu bằng chữ.',
-      envTitle: 'Biến môi trường',
-      envRequired: 'Bắt buộc',
-      envAddPlaceholder: 'Chọn biến tuỳ chọn',
-      envAdd: 'Thêm',
-      envRemove: (key: string) => `Bỏ ${key}`,
+      appLabel: 'Application on VPS',
+      newApp: 'Create a new application',
+      appNameLabel: 'Application name',
+      appNameRule: 'Lowercase a-z, digits and dashes — must start with a letter.',
+      envTitle: 'Environment variables',
+      envRequired: 'Required',
+      envAddPlaceholder: 'Pick an optional variable',
+      envAdd: 'Add',
+      envRemove: (key: string) => `Remove ${key}`,
       envHint:
-        'Giá trị secret được mã hoá ở máy, chỉ ghi dạng .env trên VPS và không hiện trong log.',
-      dbUrlHint: 'DATABASE_URL: bỏ trống để tool tự tạo Postgres kèm mật khẩu ngẫu nhiên.',
-      manualTitle: 'Cần làm tay sau deploy'
+        'Secrets are encrypted locally, written only to the .env file on the VPS, and never shown in logs.',
+      dbUrlHint:
+        'DATABASE_URL: leave empty to let the tool create Postgres with a random password.',
+      manualTitle: 'Manual steps after deploy'
     },
     review: {
-      title: 'Kiểm tra VPS trước deploy',
-      checking: 'Đang precheck…',
-      retry: 'Kiểm tra lại',
-      urlLabel: 'URL sẽ dùng',
+      title: 'Check VPS before deploy',
+      checking: 'Running precheck…',
+      retry: 'Check again',
+      urlLabel: 'URL to use',
       deploy: 'Deploy',
-      deployDisabled: 'Precheck chưa xanh — sửa trên VPS rồi bấm Kiểm tra lại.',
-      error: 'Không chạy được precheck.'
+      deployDisabled: 'Precheck is not green — fix it on the VPS, then click Check again.',
+      error: 'Could not run the precheck.'
     },
     log: {
       title: 'Deploy log',
-      running: 'Đang deploy',
-      success: (duration: string) => `Deploy thành công sau ${duration}`,
-      failedStep: (step: string) => `Lỗi ở bước ${step}`,
-      rolledBack: 'Healthcheck thất bại — đã tự rollback về bản đang chạy trước đó.',
-      openApp: 'Mở app',
-      viewDashboard: 'Xem dashboard',
+      running: 'Deploying',
+      success: (duration: string) => `Deploy succeeded in ${duration}`,
+      failedStep: (step: string) => `Failed at step ${step}`,
+      rolledBack: 'Healthcheck failed — automatically rolled back to the previous version.',
+      openApp: 'Open app',
+      viewDashboard: 'View dashboard',
       toolbar: {
-        copy: 'Sao chép',
-        search: 'Tìm',
-        searchPlaceholder: 'Tìm trong log…'
+        copy: 'Copy',
+        search: 'Find',
+        searchPlaceholder: 'Search in log…'
       },
-      cancel: 'Huỷ deploy',
-      cancelConfirm: 'Dừng lại',
+      cancel: 'Cancel deploy',
+      cancelConfirm: 'Stop',
       cancelAsk:
-        'Dừng deploy giữa chừng? Tuỳ bước đang chạy, app cũ sẽ được giữ nguyên hoặc dọn dẹp.',
-      scrollDown: 'Xuống cuối',
-      empty: 'Chưa có log. Đang chuẩn bị…',
-      backToWizard: 'Quay lại wizard'
+        'Stop the deploy midway? Depending on the current step, the previous app is kept as-is or cleaned up.',
+      scrollDown: 'Scroll to bottom',
+      empty: 'No logs yet. Preparing…',
+      backToWizard: 'Back to wizard'
     }
   },
   dashboard: {
-    title: 'Tổng quan',
-    refresh: 'Làm mới',
+    title: 'Overview',
+    refresh: 'Refresh',
     stats: {
       vpsOnline: 'VPS online',
-      appsRunning: 'App đang chạy',
-      deploy24h: 'Deploy 24 giờ',
-      lastDeploy: 'Deploy gần nhất'
+      appsRunning: 'Apps running',
+      deploy24h: 'Deploys in 24h',
+      lastDeploy: 'Last deploy'
     },
     recent: {
-      title: 'Hoạt động gần đây',
-      columnTime: 'Thời gian',
-      columnAction: 'Hành động',
+      title: 'Recent activity',
+      columnTime: 'Time',
+      columnAction: 'Action',
       columnVps: 'VPS',
-      columnStatus: 'Trạng thái',
-      columnMessage: 'Nội dung',
-      empty: 'Chưa có hoạt động nào. Deploy app đầu tiên để thấy lịch sử ở đây.',
-      deployNow: 'Deploy ngay',
-      unknownVps: 'VPS đã xoá',
-      unknownAction: 'Khác'
+      columnStatus: 'Status',
+      columnMessage: 'Message',
+      empty: 'No activity yet. Deploy your first app to see history here.',
+      deployNow: 'Deploy now',
+      unknownVps: 'Deleted VPS',
+      unknownAction: 'Other'
     },
     actions: {
       deploy: 'Deploy',
-      rollback_auto: 'Rollback tự động',
-      rollback_manual: 'Rollback thủ công'
+      rollback_auto: 'Auto rollback',
+      rollback_manual: 'Manual rollback'
     },
     statuses: {
-      success: 'Thành công',
-      failed: 'Thất bại',
-      cancelled: 'Đã huỷ'
+      success: 'Succeeded',
+      failed: 'Failed',
+      cancelled: 'Cancelled'
     },
-    emptyVps: 'Chưa có VPS nào. Thêm VPS đầu tiên để bắt đầu deploy.',
-    addVps: 'Thêm VPS',
-    loadFailed: 'Không tải được dữ liệu dashboard.',
-    retry: 'Thử lại'
+    emptyVps: 'No VPS yet. Add your first VPS to start deploying.',
+    addVps: 'Add VPS',
+    loadFailed: 'Could not load the dashboard data.',
+    retry: 'Retry'
   },
   history: {
-    title: 'Lịch sử',
-    description: 'Tra cứu deploy, rollback và cảnh báo đã thực hiện.',
+    title: 'History',
+    description: 'Browse deploys, rollbacks and alerts.',
     filters: {
-      action: 'Hành động',
-      actionAll: 'Tất cả',
+      action: 'Action',
+      actionAll: 'All',
       vps: 'VPS',
-      vpsAll: 'Tất cả VPS',
-      timeRange: 'Thời gian'
+      vpsAll: 'All VPS',
+      timeRange: 'Time range'
     },
     columns: {
-      time: 'Thời gian',
-      action: 'Hành động',
+      time: 'Time',
+      action: 'Action',
       vps: 'VPS',
-      status: 'Trạng thái',
-      message: 'Nội dung'
+      status: 'Status',
+      message: 'Message'
     },
     detail: {
-      title: 'Chi tiết hoạt động',
-      time: 'Thời gian',
+      title: 'Activity details',
+      time: 'Time',
       vps: 'VPS',
-      status: 'Trạng thái',
-      message: 'Nội dung',
-      fields: 'Thông tin thêm',
-      emptyFields: 'Không có thông tin thêm.'
+      status: 'Status',
+      message: 'Message',
+      fields: 'Extra details',
+      emptyFields: 'No extra details.'
     },
-    empty: 'Chưa có hoạt động nào trong bộ lọc này.',
-    loadFailed: 'Không tải được lịch sử.',
-    retry: 'Thử lại'
+    empty: 'No activity matches this filter.',
+    loadFailed: 'Could not load the history.',
+    retry: 'Retry'
+  },
+  vpsControl: {
+    tabs: {
+      overview: 'Overview',
+      apps: 'Apps & deploy',
+      database: 'Database',
+      activity: 'Activity'
+    },
+    fleet: {
+      totalVps: 'Total VPS',
+      online: 'Online',
+      offline: 'Offline',
+      totalApps: 'Total apps'
+    },
+    selector: {
+      searchPlaceholder: 'Search by name or host…',
+      filterAll: 'All statuses',
+      filterButton: 'Filter by status',
+      filterUnknown: 'Not checked',
+      copyIp: 'Copy IP',
+      pageTotal: (from: number, to: number, total: number) => `${from}-${to} of ${total}`,
+      noSelection: 'Select a VPS from the list on the left to view details.',
+      dockerMissing: 'No Docker',
+      appsCount: (count: number) => (count === 0 ? 'No apps' : `${count} apps`)
+    },
+    overview: {
+      machineTitle: 'Machine info',
+      resourcesTitle: 'Resources',
+      actionsTitle: 'Quick actions',
+      utilitiesTitle: 'Utilities',
+      dangerTitle: 'Danger zone',
+      host: 'Host',
+      sshPort: 'SSH port',
+      sshCommand: 'SSH command',
+      username: 'Username',
+      providerRegion: 'Provider / region',
+      docker: 'Docker',
+      dockerMissing: 'Docker not installed',
+      createdAt: 'Added at',
+      lastSeen: 'Last seen',
+      neverSeen: 'Never connected',
+      checkedAt: (time: string) => `Resources checked at ${time}`,
+      checkConnection: 'Check & diagnose connection',
+      copyCommand: 'Copy SSH command',
+      copied: 'Copied'
+    },
+    header: {
+      mainIp: 'Main IP',
+      sshPort: 'SSH port',
+      sshCommand: 'SSH command'
+    },
+    sidebar: {
+      title: 'Server info',
+      cpu: 'CPU load',
+      ram: 'RAM usage',
+      cores: 'CPU cores',
+      disk: 'Disk',
+      ramTotal: 'Total RAM',
+      loadAvg: 'Load avg (1m)',
+      docker: 'Docker',
+      lastSeen: 'Last seen',
+      checking: 'Checking resources…',
+      resourceError: 'Could not read server resources',
+      retryResources: 'Retry'
+    },
+    apps: {
+      title: 'Apps on this server',
+      deployNew: 'Deploy new app',
+      redeploy: 'Redeploy',
+      openApp: 'Open app',
+      empty: 'No apps on this server yet.',
+      emptyHint: 'Deploy your first app to start monitoring and managing it here.',
+      loadFailed: 'Could not load apps on this server.',
+      columns: {
+        name: 'Name',
+        framework: 'Framework',
+        port: 'Port',
+        url: 'URL',
+        version: 'Version',
+        status: 'Status',
+        actions: 'Actions'
+      },
+      status: {
+        running: 'Running',
+        failed: 'Failed',
+        building: 'Building',
+        deploying: 'Deploying',
+        stopped: 'Stopped',
+        rolled_back: 'Rolled back',
+        none: 'No deployment'
+      }
+    },
+    activity: {
+      title: 'Recent activity',
+      empty: 'No activity on this server yet.',
+      emptyHint: 'Deploy or manage apps to see actions logged here.',
+      loadFailed: 'Could not load activity for this server.'
+    },
+    database: {
+      usersTitle: 'Database users',
+      usersEmpty: 'No database users on this server yet.',
+      createUser: 'Create user',
+      createUserTitle: 'Create database user',
+      username: 'Username',
+      usernameRequired: 'Enter a username.',
+      usernameHint: 'Lowercase letters, digits and underscores.',
+      password: 'Password',
+      passwordRequired: 'Enter a password.',
+      passwordHint: 'Sent over SSH — stored on the server only, never logged.',
+      databasesTitle: 'Databases',
+      databasesEmpty: 'No databases on this server yet.',
+      createDatabase: 'Create database',
+      createDatabaseTitle: 'Create database',
+      databaseName: 'Database name',
+      databaseNameRequired: 'Enter a database name.',
+      databaseNameInvalid: 'Lowercase letters, digits and underscores only.',
+      createUserFailed: 'Could not create the user on the server.',
+      createDatabaseFailed: 'Could not create the database on the server.',
+      loadUsersFailed: 'Could not load database users.',
+      loadDatabasesFailed: 'Could not load databases.',
+      columns: {
+        id: 'ID',
+        username: 'Username',
+        name: 'Name',
+        size: 'Size',
+        tables: 'Tables'
+      },
+      backToDatabases: 'Back to databases',
+      designerTitle: 'Schema designer',
+      designerLocal:
+        'Backend for this VPS database is not ready yet — you are editing locally. Import a file or add tables by hand; "Save schema" will work once the backend lands.',
+      noTables: 'No tables yet. Click "Add table" or import a JSON/CSV file.',
+      addTable: 'Add table',
+      deleteTable: 'Delete table',
+      addColumn: 'Add column',
+      deleteColumn: 'Delete column',
+      columnName: 'Column name',
+      columnType: 'Type',
+      nullable: 'Nullable',
+      primaryKey: 'Primary key',
+      foreignKey: 'Foreign key',
+      connectHint: 'Linking: click a column, then click the target column on another table.',
+      connectCancel: 'Press Esc or click the same icon again to stop linking.',
+      sqlPreview: 'SQL preview',
+      saveSchema: 'Save schema',
+      schemaSaved: 'Schema sent to the server.',
+      schemaSaveFailed: 'Could not apply the schema on the server.',
+      importFile: 'Import file',
+      importHint: 'JSON or CSV — rows are previewed below and tables are added to the designer.',
+      importFailed: 'Could not read the file. Check the format and try again.',
+      exportJson: 'Export JSON',
+      exportCsv: 'Export CSV',
+      exportSql: 'Export SQL',
+      exportEmpty: 'Nothing to export yet — import a file or add a table first.',
+      dataTitle: 'Imported data',
+      dataCount: (count: number) => `${count} rows`,
+      refresh: 'Refresh'
+    },
+    resourceBanner: {
+      title: 'Could not refresh server resources',
+      markRead: 'Dismiss'
+    },
+    scan: {
+      title: 'Environment scan',
+      scanAgain: 'Scan again',
+      scanning: 'Scanning the server…',
+      failed: 'Could not scan the server.',
+      missing: 'Not installed',
+      itemSsh: 'SSH connection',
+      itemDocker: 'Docker',
+      itemCompose: 'Docker Compose',
+      itemNode: 'Node.js',
+      itemGit: 'Git',
+      itemWorkdir: 'Workspace /opt/opspilot'
+    }
+  },
+  appearance: {
+    label: 'Appearance',
+    light: 'Light',
+    dark: 'Dark'
   }
 } as const

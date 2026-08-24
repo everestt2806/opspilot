@@ -15,6 +15,7 @@ import {
   Typography
 } from 'antd'
 import type { Dayjs } from 'dayjs'
+import { HistoryOutlined } from '@ant-design/icons'
 
 import type { ActionLogEntry, IpcError, Vps } from '@shared/ipc'
 
@@ -133,7 +134,8 @@ export function HistoryPage(): React.JSX.Element {
       title: strings.history.columns.time,
       dataIndex: 'ts',
       key: 'ts',
-      width: 130,
+      width: 150,
+      align: 'center' as const,
       render: (ts: string) => (
         <Tooltip title={localDateTime(ts)}>
           <span className="mono-text">{relativeTime(ts)}</span>
@@ -145,6 +147,7 @@ export function HistoryPage(): React.JSX.Element {
       dataIndex: 'action',
       key: 'action',
       width: 170,
+      align: 'center' as const,
       render: (action: string) => (
         <Tag color={ACTION_COLORS[action]}>
           {strings.dashboard.actions[action as keyof typeof strings.dashboard.actions] ?? action}
@@ -155,7 +158,8 @@ export function HistoryPage(): React.JSX.Element {
       title: strings.history.columns.vps,
       dataIndex: 'vps_id',
       key: 'vps_id',
-      width: 130,
+      width: 150,
+      align: 'center' as const,
       render: (id: number | null) =>
         id === null ? '—' : (vpsNameById.get(id) ?? strings.dashboard.recent.unknownVps)
     },
@@ -163,7 +167,8 @@ export function HistoryPage(): React.JSX.Element {
       title: strings.history.columns.status,
       dataIndex: 'status',
       key: 'status',
-      width: 120,
+      width: 130,
+      align: 'center' as const,
       render: (status: ActionLogEntry['status']) =>
         status === null ? (
           '—'
@@ -178,6 +183,7 @@ export function HistoryPage(): React.JSX.Element {
       title: strings.history.columns.message,
       dataIndex: 'message',
       key: 'message',
+      align: 'center' as const,
       ellipsis: true,
       render: (message: string | null) =>
         message ? <Typography.Text ellipsis={{ tooltip: message }}>{message}</Typography.Text> : '—'
@@ -195,10 +201,13 @@ export function HistoryPage(): React.JSX.Element {
     : []
 
   return (
-    <div className="page">
+    <section className="page-panel">
       <div className="page-heading">
         <div>
-          <Typography.Title level={2}>{strings.history.title}</Typography.Title>
+          <Typography.Title level={2} style={{ color: 'var(--text-primary)', margin: 0 }}>
+            <HistoryOutlined style={{ marginRight: 10, color: 'var(--info)' }} />
+            {strings.history.title}
+          </Typography.Title>
           <Typography.Text type="secondary">{strings.history.description}</Typography.Text>
         </div>
       </div>
@@ -303,6 +312,6 @@ export function HistoryPage(): React.JSX.Element {
           <Descriptions column={1} size="small" bordered items={detailItems} />
         )}
       </Drawer>
-    </div>
+    </section>
   )
 }
