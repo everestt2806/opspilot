@@ -32,6 +32,8 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     frame: false,
+    titleBarStyle: 'hidden',
+    titleBarOverlay: false,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#0F1115',

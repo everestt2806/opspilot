@@ -31,7 +31,6 @@ import { HistoryPage } from './pages/HistoryPage'
 import { MigratePage } from './pages/MigratePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { VpsPage } from './pages/VpsPage'
-import opsPilotLogo from './assets/opspilot-logo.png'
 import { strings } from './strings'
 import { useUiState } from './store/uiState'
 import { themeTokens, type ThemeMode } from './utils/themeTokens'
@@ -114,11 +113,8 @@ function App(): React.JSX.Element {
               }}
               theme={themeMode === 'dark' ? 'dark' : 'light'}
             >
-              <div className="brand" aria-label={strings.app.name}>
-                <img className="brand-logo" src={opsPilotLogo} alt="" aria-hidden="true" />
-                {!collapsed && <span className="brand-name">{strings.app.name}</span>}
-              </div>
               <Menu
+                className="app-navigation"
                 mode="inline"
                 theme={themeMode === 'dark' ? 'dark' : 'light'}
                 selectedKeys={[page]}

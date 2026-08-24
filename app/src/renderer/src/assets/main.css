@@ -50,6 +50,8 @@
 
 .app-titlebar-controls {
   display: flex;
+  position: relative;
+  z-index: 2;
   height: 100%;
   justify-self: end;
   -webkit-app-region: no-drag;
@@ -67,6 +69,7 @@
   background: transparent;
   color: var(--text-primary);
   cursor: default;
+  -webkit-app-region: no-drag;
 }
 
 .app-titlebar-button:hover {
@@ -91,28 +94,8 @@
   min-height: 0;
 }
 
-.brand {
-  display: flex;
-  height: 48px;
-  align-items: center;
-  gap: 10px;
-  padding: 0 14px;
-  border-bottom: 1px solid var(--border);
-  overflow: hidden;
-}
-
-.brand-logo {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
-  border-radius: 8px;
-  object-fit: contain;
-}
-
-.brand-name {
-  color: var(--text-primary);
-  font-weight: 600;
-  white-space: nowrap;
+.app-navigation {
+  padding-top: 8px;
 }
 
 .topbar {
