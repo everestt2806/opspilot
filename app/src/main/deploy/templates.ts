@@ -98,3 +98,16 @@ export function buildEnvFile(
     dbPassword
   }
 }
+
+/** Đọc một giá trị từ nội dung .env mà không log hoặc diễn giải secret. */
+export function readEnvValue(content: string, key: string): string | undefined {
+  const prefix = `${key}=`
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (line.startsWith(prefix)) {
+      const value = line.slice(prefix.length).trim()
+      return value.length > 0 ? value : undefined
+    }
+  }
+  return undefined
+}

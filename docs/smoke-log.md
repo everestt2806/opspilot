@@ -9,6 +9,7 @@ Bảng này vào **phụ lục báo cáo** làm bằng chứng nhóm có quy tr�
 | Ngày | Người chạy | Kết quả | Bước fail | Ghi chú / đã sửa ở đâu |
 |---|---|---|---|---|
 | 2026-08-09 | A + Codex | ✅ PASS | — | M00: typecheck, lint, 2 test TS, 1 test Python; dev + bản đóng gói `/health` OK; DB v1 đủ 11 bảng; đóng app dev không còn Python mồ côi |
+| 2026-08-24 | A + Codex | ❌ FAIL | Bước 5 | Lát cắt demo cơ bản bước 1–4 đạt trên VM01: ML/SSH xanh, precheck đạt, deploy Express v2 qua đủ 7 bước trong 18.4s, URL công khai `/health` trả 200, PostgreSQL giữ nguyên 1.000 dòng. Full smoke dừng ở bước 5 vì Dashboard/collector chưa có số liệu; chưa tuyên bố MVP hoàn chỉnh. Sửa lỗi redeploy ở branch `fix/redeploy-postgres-password`. |
 
 <!--
 Ví dụ cách ghi:

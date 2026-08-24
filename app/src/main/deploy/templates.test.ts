@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { AppError } from '../errors'
 import {
   buildEnvFile,
+  readEnvValue,
   renderCompose,
   renderDockerfile,
   resolveTemplatesDir,
@@ -103,5 +104,12 @@ describe('buildEnvFile', () => {
 
   it('khong can bien nao: ghi chu thich thay vi file trong', () => {
     expect(buildEnvFile({}, false).content).toContain('#')
+  })
+
+  it('doc dung gia tri secret tu noi dung .env ma khong an phan sau dau bang', () => {
+    const content = '# managed\nPOSTGRES_PASSWORD=abc=123\nDATABASE_URL=postgresql://x\n'
+    expect(readEnvValue(content, 'POSTGRES_PASSWORD')).toBe('abc=123')
+    expect(readEnvValue(content, 'DATABASE_URL')).toBe('postgresql://x')
+    expect(readEnvValue(content, 'MISSING')).toBeUndefined()
   })
 })

@@ -29,15 +29,15 @@ treo từ TK-B7) và detector tối thiểu (express) để pipeline có `BuildP
 
 ## Definition of Done
 
-- [ ] `pnpm try:deploy` chạy trọn pipeline thật trên VM01: app express sống port 30xxx
-- [ ] `curl http://221.121.1.79:<port>/health` trả 200 từ ngoài (mở URL bằng trình duyệt)
+- [x] `pnpm try:deploy` chạy trọn pipeline thật trên VM01: app express sống port 30xxx
+- [x] `curl http://221.121.1.79:<port>/health` trả 200 từ ngoài (mở URL bằng trình duyệt)
 - [ ] Thao tác từ UI (DeployPage): chọn VPS → chọn folder → deploy → log live → mở URL
-- [ ] DB ghi đủ: `app` + `deployment` (version, duration) + `action_log`
-- [ ] Deploy lần 2 cùng app: version tăng, dùng lại host_port (evidence trong tk nhật ký)
-- [ ] Huỷ giữa chừng / lỗi bước → `step-failed` đúng bước + đúng một `finished` + dọn đúng nhánh lỗi
+- [x] DB ghi đủ: `app` + `deployment` (version, duration) + `action_log`
+- [x] Deploy lần 2 cùng app: version tăng, dùng lại host_port (evidence trong tk nhật ký)
+- [x] Huỷ giữa chừng / lỗi bước → `step-failed` đúng bước + đúng một `finished` + dọn đúng nhánh lỗi
 - [ ] `vps:install-docker` hạ cánh đúng (nút "Cài Docker ngay" có confirm, cập nhật `docker_version`)
 - [ ] Unit test các phần pure (detector, template, precheck parse) + lint/typecheck sạch
-- [ ] Không rò secret: `.env` không vào log; `grep -r "DATABASE_URL"` trong log rỗng
+- [x] Không rò secret: `.env` không vào log; `grep -r "DATABASE_URL"` trong log rỗng
 
 ## Nhật ký
 
@@ -65,6 +65,18 @@ treo từ TK-B7) và detector tối thiểu (express) để pipeline có `BuildP
   nút Deploy; ConnectionCheck 2 tests mới: cài Docker có vpsId, chưa lưu chỉ hint), lint
   0 error 0 warning, typecheck sạch. Điểm dở dang: log live xterm đầu tư cao để TK-A14
   (đúng phân công trên board), và click-through UI thật chờ mở port firewall phía user.
+- UPDATE 24/08 — WiService đã mở TCP 30000; kiểm thử qua chính IPC của bản Electron build trên
+  VM01. Lần v1 đi đủ PRECHECK→HEALTHCHECK nhưng fail đúng `HEALTHCHECK` do `.env` redeploy sinh
+  mật khẩu PostgreSQL mới trong khi bind volume giữ mật khẩu cũ. Branch
+  `fix/redeploy-postgres-password` sửa bằng cách đọc và tái sử dụng các biến DB được quản lý từ
+  `.env` hiện có; đồng thời wizard không còn coi cổng của chính app đang chạy là xung đột khi
+  redeploy. Lần v2 PASS đủ 7 bước, `status=running`, `current_deployment_id=2`, dùng lại port
+  30000, tổng 18.4s (BUILD 2.4s, HEALTHCHECK 3.2s). Kiểm tra ngoài mạng:
+  `http://221.121.1.79:30000/health` trả 200; hai container healthy/running; bảng `items` vẫn
+  đủ 1.000 dòng. App ghi đủ deployment v1 failed + v2 running và action log thành công; event
+  không chứa phép gán `POSTGRES_PASSWORD`, `DATABASE_URL` hay URL kèm credential. Cổng local:
+  35 test files / 175 tests PASS, build + typecheck PASS, lint 0 error (còn 16 warning format có
+  sẵn ở renderer, ngoài phạm vi branch). Chưa tick click-through UI thủ công và cài Docker thật.
 
 ## Lệnh tái hiện
 
