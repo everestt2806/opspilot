@@ -190,7 +190,7 @@ Chỉ vào các trường được nhận diện:
 - Healthcheck path: `/health`
 - Dockerfile template: `express.Dockerfile`
 - Database: PostgreSQL được tool dựng kèm
-- File tree có `package.json`, `server.js`, `.env.example`
+- File tree có `package.json`, `server.js`, `public/index.html`, `.env.example`
 
 Lời nói gợi ý:
 
@@ -261,34 +261,35 @@ Kết quả đạt:
 - Banner `Deploy succeeded`.
 - URL dùng port `30000`.
 
-**Không bấm `Open app`:** nút hiện mở URL `/`, trong khi API mẫu chưa khai báo route `/`, nên
-trình duyệt sẽ trả 404 dù deploy thành công. Dùng các endpoint ở mục tiếp theo.
+Bấm **Open app** để mở landing page vừa được deploy trên trình duyệt.
 
 ---
 
 ## 7. Màn 5 — Chứng minh ứng dụng và dữ liệu thật
 
-Mở trình duyệt thủ công:
+Landing page tại `http://221.121.1.79:30000/` phải hiện:
 
-```text
-http://221.121.1.79:30000/health
-```
+- `Live on VPS` và `Healthy`.
+- Storage engine là `PostgreSQL`.
+- Inventory records là `1.000`.
+- Runtime Node và container uptime đang tăng.
+- Các bước Source → Docker → Container → PostgreSQL → Healthcheck đều xanh.
 
-Kết quả dự kiến:
+Tại ô **New inventory item**:
 
-```json
-{"ok":true,"uptime_s":12}
-```
+1. Nhập `demo-with-lecturer`.
+2. Bấm **Create record**.
+3. Chỉ cho giảng viên thấy thông báo tạo bản ghi thành công, tổng tăng từ `1.000` lên `1.001`
+   và bản ghi mới xuất hiện đầu bảng.
 
-Mở tiếp:
+Lời nói gợi ý:
 
-```text
-http://221.121.1.79:30000/items?limit=5
-```
+> Trang này không phải mock tĩnh. Nút vừa bấm gọi `POST /items` vào Express trên VPS, ghi xuống
+> PostgreSQL rồi đọc lại bằng API. Như vậy luồng browser → container → database đã được kiểm
+> chứng sau deploy.
 
-Phải thấy năm bản ghi `khoan-thu-*`.
-
-Để chứng minh database có 1.000 dòng, chạy ở PowerShell:
+Nếu cần chứng minh thêm bằng API, bấm **Open healthcheck** và **Inspect JSON API** trên landing
+page. Hoặc chạy ở PowerShell:
 
 ```powershell
 curl.exe -s -D - "http://221.121.1.79:30000/items?limit=5" -o NUL |
@@ -299,13 +300,13 @@ Kết quả:
 
 ```text
 HTTP/1.1 200 OK
-X-Total-Count: 1000
+X-Total-Count: 1001
 ```
 
 Lời nói gợi ý:
 
-> Healthcheck trả 200 từ mạng ngoài. Dữ liệu nằm trong PostgreSQL chạy cùng ứng dụng và đã seed
-> 1.000 bản ghi.
+> Healthcheck trả 200 từ mạng ngoài. Dữ liệu nằm trong PostgreSQL chạy cùng ứng dụng; hệ thống
+> seed 1.000 bản ghi và bản ghi thứ 1.001 vừa được tạo trực tiếp trong buổi demo.
 
 ---
 
@@ -334,11 +335,30 @@ Nếu được hỏi về tiến độ toàn đề tài:
 > dashboard giám sát, phát hiện bất thường ML và migrate là các milestone tiếp theo; nhóm không
 > tuyên bố các phần đó đã hoàn tất trong buổi demo này.
 
+### 8.1 Nếu được hỏi: một VPS chạy nhiều app thế nào?
+
+OpsPilot đã tách từng app theo bốn lớp:
+
+- Tên app duy nhất trên VPS, ví dụ `express-api`, `admin-web`, `worker-api`.
+- Thư mục riêng: `/opt/opspilot/<app-name>`.
+- Container/Compose và PostgreSQL volume riêng theo tên app.
+- Host port riêng, tự lấy cổng nhỏ nhất còn trống trong dải `30000–30999`.
+
+Ví dụ trên VM01:
+
+| App           | Container port | Public port | URL                         |
+| ------------- | -------------: | ----------: | --------------------------- |
+| `express-api` |           3000 |       30000 | `http://221.121.1.79:30000` |
+| `admin-web`   |           3000 |       30001 | `http://221.121.1.79:30001` |
+| `worker-api`  |           8000 |       30002 | `http://221.121.1.79:30002` |
+
+Deploy lại đúng app sẽ tăng version nhưng giữ nguyên public port. Số app thực tế bị giới hạn bởi
+RAM/CPU/disk của VPS chứ không phải bởi mô hình dữ liệu; precheck phải đạt trước mỗi lượt deploy.
+
 ---
 
 ## 9. Những thao tác không làm trong buổi demo
 
-- Không bấm `Open app` với URL gốc.
 - Không mở Database Designer, Migrate hoặc monitoring/ML anomaly.
 - Không xóa/sửa VPS sau khi kết nối thành công.
 - Không bấm Install Docker vì Docker đã được cài.
@@ -355,7 +375,7 @@ Nếu được hỏi về tiến độ toàn đề tài:
 | Node.js đỏ | Tiếp tục demo; đây là trạng thái dự kiến |
 | Precheck báo port 30000 đã dùng | Dừng, không Deploy; cần dọn container cũ trước |
 | Build chậm | Chờ tối đa 3 phút; không bấm Deploy lần hai |
-| URL `/` trả 404 | Dùng `/health` và `/items?limit=5` |
+| URL `/` trả `Cannot GET /` | Source cũ đang chạy; kiểm tra có `public/index.html`, dọn app cũ rồi deploy lại |
 | `/health` chưa lên ngay | Chờ 5–10 giây rồi refresh; đối chiếu bước HEALTHCHECK trên log |
 
 ## 11. Sau lần tập

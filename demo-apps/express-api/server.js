@@ -2,6 +2,8 @@
 // Chỉ là công cụ thí nghiệm: endpoint fault bật trong các phiên đo, không phải lỗ hổng.
 const express = require('express')
 const { Pool } = require('pg')
+const path = require('path')
+const { version: APP_VERSION } = require('./package.json')
 
 const PORT = Number(process.env.PORT || 3000)
 const DATABASE_URL = process.env.DATABASE_URL || ''
@@ -9,6 +11,7 @@ const SEED_COUNT = 1000
 
 const app = express()
 app.use(express.json())
+app.use(express.static(path.join(__dirname, 'public')))
 
 // ── Lớp lưu trữ ──────────────────────────────────────────────────────────────
 // Có DATABASE_URL thì dùng PostgreSQL (migration + seed 1000 bản ghi); không có thì
@@ -105,6 +108,26 @@ const startedAt = Date.now()
 // ── Routes ───────────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
   res.json({ ok: true, uptime_s: Math.round((Date.now() - startedAt) / 1000) })
+})
+
+app.get('/favicon.ico', (_req, res) => res.status(204).end())
+
+app.get('/meta', async (_req, res, next) => {
+  try {
+    const { total } = await listItems(1, 0)
+    res.json({
+      service: 'OpsPilot Demo Inventory',
+      version: APP_VERSION,
+      status: 'online',
+      runtime: process.version,
+      storage: usingDb ? 'PostgreSQL' : 'In-memory fallback',
+      records: total,
+      started_at: new Date(startedAt).toISOString(),
+      uptime_s: Math.round((Date.now() - startedAt) / 1000)
+    })
+  } catch (error) {
+    next(error)
+  }
 })
 
 app.get('/items', async (req, res, next) => {

@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#080d18" />
+    <title>OpsPilot Demo Inventory</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #080d18;
+        --panel: rgba(15, 23, 42, 0.78);
+        --panel-solid: #0f172a;
+        --line: rgba(148, 163, 184, 0.17);
+        --text: #f8fafc;
+        --muted: #94a3b8;
+        --indigo: #818cf8;
+        --cyan: #22d3ee;
+        --green: #34d399;
+        --danger: #fb7185;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        min-width: 320px;
+        background: var(--bg);
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        overflow-x: hidden;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 12% 2%, rgba(99, 102, 241, 0.2), transparent 31rem),
+          radial-gradient(circle at 90% 22%, rgba(34, 211, 238, 0.12), transparent 28rem), var(--bg);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .shell {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+      }
+
+      .nav {
+        display: flex;
+        min-height: 72px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 750;
+        letter-spacing: -0.02em;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border: 1px solid rgba(129, 140, 248, 0.45);
+        border-radius: 11px;
+        background: linear-gradient(145deg, #6366f1, #0891b2);
+        box-shadow: 0 10px 30px rgba(99, 102, 241, 0.28);
+      }
+
+      .brand-mark svg {
+        width: 21px;
+        height: 21px;
+      }
+
+      .live-badge,
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #bbf7d0;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .live-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--green);
+        box-shadow: 0 0 0 5px rgba(52, 211, 153, 0.11);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+        gap: 48px;
+        align-items: center;
+        padding: 78px 0 54px;
+      }
+
+      .eyebrow {
+        color: var(--cyan);
+      }
+
+      h1 {
+        max-width: 720px;
+        margin: 17px 0 18px;
+        font-size: clamp(42px, 6.2vw, 78px);
+        line-height: 0.98;
+        letter-spacing: -0.065em;
+      }
+
+      .gradient-text {
+        color: transparent;
+        background: linear-gradient(90deg, #a5b4fc 4%, #67e8f9 62%, #6ee7b7);
+        background-clip: text;
+        -webkit-background-clip: text;
+      }
+
+      .hero-copy {
+        max-width: 650px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 17px;
+        line-height: 1.7;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 28px;
+      }
+
+      .button {
+        display: inline-flex;
+        min-height: 42px;
+        align-items: center;
+        justify-content: center;
+        padding: 0 17px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.66);
+        color: #dbeafe;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 160ms ease;
+      }
+
+      .button:hover {
+        border-color: rgba(129, 140, 248, 0.65);
+        transform: translateY(-1px);
+      }
+
+      .button-primary {
+        border-color: transparent;
+        background: linear-gradient(100deg, #6366f1, #0891b2);
+        color: white;
+      }
+
+      .deploy-card,
+      .panel,
+      .metric-card {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        box-shadow: 0 22px 60px rgba(2, 6, 23, 0.32);
+        backdrop-filter: blur(18px);
+      }
+
+      .deploy-card {
+        overflow: hidden;
+        border-radius: 18px;
+      }
+
+      .deploy-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 15px 18px;
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font:
+          12px ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          monospace;
+      }
+
+      .window-dots {
+        display: flex;
+        gap: 6px;
+      }
+
+      .window-dots i {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #334155;
+      }
+
+      .deploy-card-body {
+        padding: 22px;
+      }
+
+      .deploy-line {
+        display: grid;
+        grid-template-columns: 27px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 0;
+        color: #cbd5e1;
+        font-size: 13px;
+      }
+
+      .deploy-line + .deploy-line {
+        border-top: 1px dashed rgba(148, 163, 184, 0.12);
+      }
+
+      .deploy-check {
+        display: grid;
+        width: 22px;
+        height: 22px;
+        place-items: center;
+        border-radius: 50%;
+        background: rgba(52, 211, 153, 0.13);
+        color: var(--green);
+        font-size: 12px;
+      }
+
+      .deploy-time {
+        color: #64748b;
+        font:
+          11px ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          monospace;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-bottom: 36px;
+      }
+
+      .metric-card {
+        min-width: 0;
+        padding: 20px;
+        border-radius: 14px;
+      }
+
+      .metric-label {
+        display: block;
+        margin-bottom: 10px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      .metric-value {
+        display: block;
+        overflow: hidden;
+        color: var(--text);
+        font-size: clamp(19px, 2.4vw, 28px);
+        font-weight: 760;
+        letter-spacing: -0.035em;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .metric-note {
+        display: block;
+        margin-top: 7px;
+        color: #64748b;
+        font-size: 11px;
+      }
+
+      .status-good {
+        color: var(--green);
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+        gap: 18px;
+        padding-bottom: 64px;
+      }
+
+      .panel {
+        min-width: 0;
+        overflow: hidden;
+        border-radius: 15px;
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .panel-head h2 {
+        margin: 0;
+        font-size: 15px;
+        letter-spacing: -0.01em;
+      }
+
+      .panel-head span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 13px 20px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.09);
+        text-align: left;
+      }
+
+      th {
+        color: #64748b;
+        font-size: 10px;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+      }
+
+      td {
+        color: #cbd5e1;
+        font-size: 13px;
+      }
+
+      td:first-child,
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+
+      .empty-row {
+        height: 160px;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      .form-body {
+        padding: 20px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 9px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 650;
+      }
+
+      input {
+        width: 100%;
+        height: 43px;
+        padding: 0 13px;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 9px;
+        outline: none;
+        background: rgba(2, 6, 23, 0.48);
+        color: var(--text);
+      }
+
+      input:focus {
+        border-color: var(--indigo);
+        box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.12);
+      }
+
+      .form-body .button {
+        width: 100%;
+        margin-top: 12px;
+      }
+
+      .tech-list {
+        display: grid;
+        gap: 11px;
+        margin-top: 22px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+      }
+
+      .tech-row {
+        display: flex;
+        min-width: 0;
+        justify-content: space-between;
+        gap: 16px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .tech-row strong {
+        overflow: hidden;
+        color: #cbd5e1;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-weight: 500;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .toast {
+        min-height: 20px;
+        margin-top: 12px;
+        color: var(--green);
+        font-size: 12px;
+      }
+
+      .toast-error {
+        color: var(--danger);
+      }
+
+      footer {
+        padding: 0 0 34px;
+        color: #64748b;
+        font-size: 11px;
+        text-align: center;
+      }
+
+      @media (max-width: 900px) {
+        .hero,
+        .workspace {
+          grid-template-columns: 1fr;
+        }
+
+        .hero {
+          gap: 28px;
+          padding-top: 54px;
+        }
+
+        .metrics {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 560px) {
+        .shell {
+          width: min(100% - 24px, 1180px);
+        }
+
+        .nav {
+          min-height: 62px;
+        }
+
+        .nav .live-badge {
+          font-size: 10px;
+        }
+
+        .hero {
+          padding-top: 40px;
+        }
+
+        h1 {
+          font-size: 44px;
+        }
+
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+
+        .panel-head,
+        th,
+        td {
+          padding-inline: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="nav shell">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M5 15.5 12 4l7 11.5-7 4.5-7-4.5Z" stroke="white" stroke-width="1.7" />
+            <path d="M8.5 14.8h7M12 4v16" stroke="white" stroke-width="1.7" />
+          </svg>
+        </span>
+        <span>OpsPilot Demo Inventory</span>
+      </div>
+      <div class="live-badge"><span class="live-dot"></span> Live on VPS</div>
+    </nav>
+
+    <main class="shell">
+      <section class="hero">
+        <div>
+          <div class="eyebrow">Deployment verified</div>
+          <h1>Source to VPS.<br /><span class="gradient-text">One controlled flow.</span></h1>
+          <p class="hero-copy">
+            Ứng dụng Express đang chạy thật trong Docker, kết nối PostgreSQL và được healthcheck bởi
+            OpsPilot. Tạo một bản ghi bên dưới để kiểm chứng API và dữ liệu end-to-end.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="/health" target="_blank" rel="noreferrer">
+              Open healthcheck
+            </a>
+            <a class="button" href="/items?limit=5" target="_blank" rel="noreferrer">
+              Inspect JSON API
+            </a>
+          </div>
+        </div>
+
+        <div class="deploy-card" aria-label="OpsPilot deployment pipeline">
+          <div class="deploy-card-head">
+            <div class="window-dots"><i></i><i></i><i></i></div>
+            <span>opspilot / deploy</span>
+          </div>
+          <div class="deploy-card-body">
+            <div class="deploy-line">
+              <span class="deploy-check">✓</span><span>Source detected</span
+              ><span class="deploy-time">Express</span>
+            </div>
+            <div class="deploy-line">
+              <span class="deploy-check">✓</span><span>Docker image built</span
+              ><span class="deploy-time">Node 22</span>
+            </div>
+            <div class="deploy-line">
+              <span class="deploy-check">✓</span><span>Containers started</span
+              ><span class="deploy-time">healthy</span>
+            </div>
+            <div class="deploy-line">
+              <span class="deploy-check">✓</span><span>PostgreSQL connected</span
+              ><span class="deploy-time">ready</span>
+            </div>
+            <div class="deploy-line">
+              <span class="deploy-check">✓</span><span>Public healthcheck</span
+              ><span class="deploy-time">HTTP 200</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="metrics" aria-label="Live application metrics">
+        <article class="metric-card">
+          <span class="metric-label">Service status</span>
+          <strong id="health-value" class="metric-value status-good">Checking…</strong>
+          <span class="metric-note">GET /health</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Storage engine</span>
+          <strong id="storage-value" class="metric-value">—</strong>
+          <span class="metric-note">Detected at runtime</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Inventory records</span>
+          <strong id="records-value" class="metric-value">—</strong>
+          <span class="metric-note">Read from live API</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Container uptime</span>
+          <strong id="uptime-value" class="metric-value">—</strong>
+          <span class="metric-note">Since current deploy</span>
+        </article>
+      </section>
+
+      <section class="workspace">
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Latest database records</h2>
+            <span id="table-caption">Loading from /items…</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Created at</th>
+                </tr>
+              </thead>
+              <tbody id="items-body">
+                <tr>
+                  <td class="empty-row" colspan="3">Loading…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <aside class="panel">
+          <div class="panel-head">
+            <h2>Write through the API</h2>
+            <span>POST /items</span>
+          </div>
+          <div class="form-body">
+            <form id="create-form">
+              <label for="item-name">New inventory item</label>
+              <input
+                id="item-name"
+                name="name"
+                maxlength="80"
+                placeholder="demo-with-lecturer"
+                required
+              />
+              <button id="create-button" class="button button-primary" type="submit">
+                Create record
+              </button>
+            </form>
+            <div id="toast" class="toast" role="status" aria-live="polite"></div>
+            <div class="tech-list">
+              <div class="tech-row">
+                <span>App version</span><strong id="version-value">—</strong>
+              </div>
+              <div class="tech-row"><span>Runtime</span><strong id="runtime-value">—</strong></div>
+              <div class="tech-row"><span>Public host</span><strong id="host-value">—</strong></div>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <footer class="shell">Deployed and verified by OpsPilot · Express · Docker · PostgreSQL</footer>
+
+    <script>
+      const byId = (id) => document.getElementById(id)
+      const setText = (id, value) => {
+        byId(id).textContent = String(value)
+      }
+
+      function formatUptime(seconds) {
+        const value = Math.max(0, Number(seconds) || 0)
+        const hours = Math.floor(value / 3600)
+        const minutes = Math.floor((value % 3600) / 60)
+        const secs = value % 60
+        return hours > 0
+          ? `${hours}h ${minutes}m`
+          : minutes > 0
+            ? `${minutes}m ${secs}s`
+            : `${secs}s`
+      }
+
+      async function request(url, options) {
+        const response = await fetch(url, options)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response.json()
+      }
+
+      function renderItems(items) {
+        const body = byId('items-body')
+        body.replaceChildren()
+        if (items.length === 0) {
+          const row = document.createElement('tr')
+          const cell = document.createElement('td')
+          cell.colSpan = 3
+          cell.className = 'empty-row'
+          cell.textContent = 'No records yet.'
+          row.appendChild(cell)
+          body.appendChild(row)
+          return
+        }
+        for (const item of [...items].reverse()) {
+          const row = document.createElement('tr')
+          for (const value of [
+            item.id,
+            item.name,
+            new Date(item.created_at).toLocaleString('vi-VN')
+          ]) {
+            const cell = document.createElement('td')
+            cell.textContent = String(value)
+            row.appendChild(cell)
+          }
+          body.appendChild(row)
+        }
+      }
+
+      async function refreshDashboard() {
+        try {
+          const [meta, health] = await Promise.all([request('/meta'), request('/health')])
+          setText('health-value', health.ok ? 'Healthy' : 'Degraded')
+          setText('storage-value', meta.storage)
+          setText('records-value', Number(meta.records).toLocaleString('vi-VN'))
+          setText('uptime-value', formatUptime(health.uptime_s))
+          setText('version-value', `v${meta.version}`)
+          setText('runtime-value', meta.runtime)
+          setText('host-value', window.location.host)
+          setText('table-caption', `${Number(meta.records).toLocaleString('vi-VN')} total records`)
+          const offset = Math.max(0, Number(meta.records) - 6)
+          renderItems(await request(`/items?limit=6&offset=${offset}`))
+        } catch (error) {
+          setText('health-value', 'Unavailable')
+          byId('health-value').classList.remove('status-good')
+          setText('table-caption', error instanceof Error ? error.message : 'Request failed')
+        }
+      }
+
+      byId('create-form').addEventListener('submit', async (event) => {
+        event.preventDefault()
+        const input = byId('item-name')
+        const button = byId('create-button')
+        const toast = byId('toast')
+        const name = input.value.trim()
+        if (!name) return
+        button.disabled = true
+        button.textContent = 'Creating…'
+        toast.textContent = ''
+        toast.classList.remove('toast-error')
+        try {
+          const item = await request('/items', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+          })
+          input.value = ''
+          toast.textContent = `Created record #${item.id} in PostgreSQL.`
+          await refreshDashboard()
+        } catch (error) {
+          toast.classList.add('toast-error')
+          toast.textContent = error instanceof Error ? error.message : 'Could not create record.'
+        } finally {
+          button.disabled = false
+          button.textContent = 'Create record'
+        }
+      })
+
+      void refreshDashboard()
+      window.setInterval(() => {
+        void request('/health')
+          .then((health) => setText('uptime-value', formatUptime(health.uptime_s)))
+          .catch(() => undefined)
+      }, 5000)
+    </script>
+  </body>
+</html>

@@ -214,6 +214,10 @@ export interface IpcInvokeMap {
   'system:ml-restart':  () => IpcResult<void>;
   'system:open-external': (url: string) => IpcResult<void>;
   'system:pick-folder': () => IpcResult<{ path: string | null }>;
+  'window:minimize': () => IpcResult<void>;
+  'window:toggle-maximize': () => IpcResult<{ maximized: boolean }>;
+  'window:is-maximized': () => IpcResult<{ maximized: boolean }>;
+  'window:close': () => IpcResult<void>;
 }
 
 export interface VpsInput {
@@ -414,6 +418,8 @@ export interface IpcEventMap {
   'system:ml-status': { running: boolean; reason?: string };
   /** Kết nối SSH của một VPS đổi trạng thái — dot ở topbar */
   'system:ssh-status': { vps_id: number; status: 'online' | 'offline' };
+  /** Đồng bộ nút maximize/restore của custom title bar. */
+  'window:maximized-changed': { maximized: boolean };
   /** Auto-rollback vừa xảy ra — hiện notification nổi bật */
   'system:auto-rollback': {
     app_id: number; from_version: number; to_version: number;

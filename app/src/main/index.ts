@@ -29,8 +29,9 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
-    minWidth: 1280,
-    minHeight: 800,
+    minWidth: 900,
+    minHeight: 600,
+    frame: false,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#0F1115',
@@ -44,6 +45,12 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
+  mainWindow.on('maximize', () => {
+    mainWindow?.webContents.send('window:maximized-changed', { maximized: true })
+  })
+  mainWindow.on('unmaximize', () => {
+    mainWindow?.webContents.send('window:maximized-changed', { maximized: false })
+  })
   mainWindow.on('closed', () => {
     mainWindow = null
   })
@@ -101,7 +108,14 @@ void app
 
     const historyService = new HistoryService(new ActionLogRepository(database))
 
-    registerIpcHandlers(mlService, vpsService, sshManager, deployService, historyService)
+    registerIpcHandlers(
+      mlService,
+      vpsService,
+      sshManager,
+      deployService,
+      historyService,
+      () => mainWindow
+    )
 
     createWindow()
 

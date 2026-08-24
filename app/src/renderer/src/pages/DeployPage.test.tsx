@@ -6,13 +6,14 @@ import type { DeployEvent, DetectionResultDto, Vps } from '@shared/ipc'
 
 import { DeployPage } from './DeployPage'
 
-const { termInstances } = vi.hoisted(() => {
+const { termInstances, terminalOptions } = vi.hoisted(() => {
   const termInstances: Array<{
     write: ReturnType<typeof vi.fn>
     open: ReturnType<typeof vi.fn>
     dispose: ReturnType<typeof vi.fn>
   }> = []
-  return { termInstances }
+  const terminalOptions: Array<Record<string, unknown>> = []
+  return { termInstances, terminalOptions }
 })
 
 vi.mock('@xterm/xterm', () => ({
@@ -27,7 +28,8 @@ vi.mock('@xterm/xterm', () => ({
     dispose = vi.fn()
     scrollToBottom = vi.fn()
     getSelection = (): string => ''
-    constructor() {
+    constructor(options: Record<string, unknown>) {
+      terminalOptions.push(options)
       termInstances.push(this)
     }
   }
@@ -135,6 +137,7 @@ function mockApi(handlers: Record<string, InvokeHandler>): {
 beforeEach(() => {
   vi.clearAllMocks()
   termInstances.length = 0
+  terminalOptions.length = 0
 })
 
 afterEach(() => {
@@ -190,6 +193,8 @@ describe('DeployPage — wizard va log', () => {
     fireEvent.click(screen.getByText('Deploy'))
 
     expect(await screen.findByText('Deploy log')).toBeTruthy()
+    expect(screen.getByText('Live output')).toBeTruthy()
+    expect(terminalOptions[0]?.convertEol).toBe(true)
     expect(invoke).toHaveBeenCalledWith('deploy:start', {
       vps_id: 1,
       app_id: undefined,
