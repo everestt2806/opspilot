@@ -10,7 +10,10 @@ const migrationDir = join('.out-scripts', 'src', 'main', 'db', 'migrations')
 const compiledIndex = join('.out-scripts', 'src', 'main', 'db', 'index.js')
 
 mkdirSync(migrationDir, { recursive: true })
-copyFileSync(join('src', 'main', 'db', 'migrations', '001_init.sql'), join(migrationDir, '001_init.sql'))
+copyFileSync(
+  join('src', 'main', 'db', 'migrations', '001_init.sql'),
+  join(migrationDir, '001_init.sql')
+)
 
 let code = readFileSync(compiledIndex, 'utf8')
 const before = code

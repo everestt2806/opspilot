@@ -39,6 +39,9 @@ void app
     app.quit()
   })
   .catch((error: unknown) => {
-    console.error('SEED FAIL', error instanceof Error ? (error.stack ?? error.message) : String(error))
+    console.error(
+      'SEED FAIL',
+      error instanceof Error ? (error.stack ?? error.message) : String(error)
+    )
     app.exit(1)
   })
