@@ -88,4 +88,4 @@ pnpm dev                                    # DeployPage: chọn VPS -> chọn f
 
 ## PR
 
-- (chưa mở)
+- [#23 — fix(deploy): giữ credential PostgreSQL khi redeploy](https://github.com/everestt2806/opspilot/pull/23)
