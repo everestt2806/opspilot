@@ -9,6 +9,7 @@ import type { MlServiceManager } from './mlClient'
 import type { SshManager } from './ssh/manager'
 import { readVpsResources, testConnectionWithCredentials } from './vps/connectionService'
 import { installDockerOnVps } from './vps/dockerInstall'
+import { scanVpsEnvironment } from './vps/scanService'
 import type { VpsService } from './vps/service'
 
 type Channel = keyof IpcInvokeMap
@@ -55,6 +56,12 @@ export function registerIpcHandlers(
     const dockerVersion = await installDockerOnVps(ssh, vpsId)
     vpsService.recordDockerInstalled(vpsId, dockerVersion)
     return { docker_version: dockerVersion }
+  })
+  handle('vps:scan', async (vpsId) => {
+    const result = await scanVpsEnvironment(ssh, vpsId)
+    const docker = result.items.find((item) => item.key === 'docker')
+    vpsService.recordOnline(vpsId, docker?.ok ? (docker.version ?? undefined) : undefined)
+    return result
   })
 
   handle('deploy:detect', (sourcePath) => deployService.detect(sourcePath))

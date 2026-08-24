@@ -16,5 +16,10 @@
       "@shared/*": ["src/shared/*"]
     }
   },
-  "files": ["scripts/try-ssh.ts", "scripts/try-deploy.ts", "scripts/seed-vps.ts", "src/main/raw.d.ts"]
+  "files": [
+    "scripts/try-ssh.ts",
+    "scripts/try-deploy.ts",
+    "scripts/seed-vps.ts",
+    "src/main/raw.d.ts"
+  ]
 }

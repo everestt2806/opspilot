@@ -139,7 +139,7 @@ export interface IpcError {
     | 'DOCKER_MISSING' | 'DOCKER_BUILD_FAILED'
     | 'PRECHECK_FAILED' | 'HEALTHCHECK_FAILED'
     | 'DETECT_FAILED' | 'PORT_EXHAUSTED'
-    | 'ML_SERVICE_DOWN' | 'DB_ERROR' | 'VALIDATION' | 'UNKNOWN';
+    | 'ML_SERVICE_DOWN' | 'DB_ERROR' | 'DB_ADMIN_FAILED' | 'VALIDATION' | 'UNKNOWN';
   /** Câu tiếng Việt hiện thẳng cho người dùng: chuyện gì + ở bước nào + làm gì tiếp */
   message: string;
   /** Message thô của thư viện, để trong mục "Chi tiết kỹ thuật" thu gọn được */
@@ -158,6 +158,7 @@ export interface IpcInvokeMap {
   'vps:update':         (id: number, input: Partial<VpsInput>) => IpcResult<Vps>;
   'vps:delete':         (id: number) => IpcResult<void>;
   'vps:install-docker': (vpsId: number) => IpcResult<{ docker_version: string }>;
+  'vps:scan':           (vpsId: number) => IpcResult<VpsScanResult>;
 
   // ── Detect & Deploy (UC-02, UC-03) ─────────────────────────────────────────
   'deploy:detect':   (sourcePath: string) => IpcResult<DetectionResultDto>;
@@ -192,6 +193,21 @@ export interface IpcInvokeMap {
 
   // ── Lịch sử (UC-09) ────────────────────────────────────────────────────────
   'history:list':    (filter: HistoryFilter) => IpcResult<ActionLogEntry[]>;
+
+  // ── Database trên VPS (TK-B9 — quản trị Postgres qua ssh exec) ──────────────
+  // UI xong trước (B); backend (A) cài handler sau — chạy dạng:
+  //   docker compose exec -T db psql -U opspilot -At -c "<sql>"
+  'db:list-databases': (vpsId: number) => IpcResult<DbDatabase[]>;
+  'db:create-database': (vpsId: number, name: string) => IpcResult<DbDatabase>;
+  'db:list-users':    (vpsId: number) => IpcResult<DbUser[]>;
+  'db:create-user':   (vpsId: number, input: DbUserInput) => IpcResult<DbUser>;
+  'db:list-tables':   (vpsId: number, database: string) => IpcResult<DbSchemaTable[]>;
+  'db:save-schema':   (vpsId: number, database: string, ddl: string) => IpcResult<void>;
+  'db:import-data':   (vpsId: number, database: string, input: DbImportInput)
+                        => IpcResult<{ imported_tables: number; imported_rows: number }>;
+  'db:export-data':   (vpsId: number, database: string, format: 'json' | 'csv' | 'sql')
+                        => IpcResult<DbExportFile>;
+  'db:query':         (vpsId: number, database: string, sql: string) => IpcResult<DbQueryResult>;
 
   // ── Hệ thống ───────────────────────────────────────────────────────────────
   'system:ml-status':   () => IpcResult<{ running: boolean; version?: string; uptime_s?: number }>;
@@ -234,6 +250,25 @@ export interface VpsDiagnosis {
   cause: string;
   /** Các bước nên thử, theo thứ tự */
   fixes: string[];
+}
+
+/** Một hạng mục quét môi trường của VPS đã lưu (kênh 'vps:scan') — những thứ cần sẵn
+ *  trước khi chạy code trên VPS. Renderer tự map `key` sang nhãn hiển thị. */
+export interface VpsScanItem {
+  key: 'ssh' | 'docker' | 'compose' | 'node' | 'git' | 'workdir';
+  ok: boolean;
+  /** Phiên bản phát hiện được (đã gọt tiền tố, vd `27.1.1`) hoặc null khi không có */
+  version: string | null;
+  /** Chi tiết thô từ VPS để hiện tooltip — chỉ có khi thất bại */
+  detail?: string;
+}
+
+/** Kết quả quét môi trường một VPS đã lưu — không cần nhập lại credential. */
+export interface VpsScanResult {
+  /** ISO-8601 UTC lúc hoàn tất quét */
+  scanned_at: string;
+  ssh_ok: boolean;
+  items: VpsScanItem[];
 }
 
 export interface DeployInput {
@@ -291,6 +326,72 @@ export interface ActionLogEntry {
   app_id: number | null;
   deployment_id: number | null;
   detail_json: string | null;
+}
+
+/* ── Database trên VPS (TK-B9) ────────────────────────────────────────────── */
+
+/** Một database trên Postgres của VPS (thống kê lấy từ pg_database) */
+export interface DbDatabase {
+  /** OID của database — định danh ổn định trong Postgres */
+  oid: number;
+  name: string;
+  size_bytes: number;
+  table_count: number;
+}
+
+/** Một role (user) đăng nhập Postgres trên VPS */
+export interface DbUser {
+  oid: number;
+  username: string;
+}
+
+/** Dữ liệu tạo user mới — password truyền qua SSH, không log, không lưu đĩa */
+export interface DbUserInput {
+  username: string;
+  password: string;
+}
+
+export interface DbSchemaColumn {
+  name: string;
+  data_type: string;
+  nullable: boolean;
+  primary_key: boolean;
+  /** Chuỗi SQL bản rõ (vd: `''`, `now()`) hoặc null — main sinh DDL dán thẳng vào */
+  default_value: string | null;
+}
+
+export interface DbSchemaForeignKey {
+  column_name: string;
+  ref_table: string;
+  ref_column: string;
+}
+
+export interface DbSchemaTable {
+  name: string;
+  columns: DbSchemaColumn[];
+  foreign_keys: DbSchemaForeignKey[];
+}
+
+/** Dữ liệu import — UI đọc file JSON/CSV, backend chạy CREATE TABLE + COPY */
+export interface DbImportInput {
+  tables: Array<{
+    name: string;
+    columns: DbSchemaColumn[];
+    rows: Array<Record<string, string>>;
+  }>;
+}
+
+export interface DbExportFile {
+  filename: string;
+  content: string;
+  mime: string;
+}
+
+export interface DbQueryResult {
+  columns: string[];
+  rows: Array<Record<string, string>>;
+  row_count: number;
+  duration_ms: number;
 }
 
 /* =============================================================================
