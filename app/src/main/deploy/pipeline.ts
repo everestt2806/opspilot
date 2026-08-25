@@ -19,7 +19,13 @@ import { SshAbortedError, SshManager } from '../ssh/manager'
 import { shellQuote } from '../ssh/shellQuote'
 import { allocatePort } from './portPolicy'
 import { runPrecheck } from './precheck'
-import { buildEnvFile, renderCompose, renderDockerfile, type ComposeVars } from './templates'
+import {
+  buildEnvFile,
+  readEnvValue,
+  renderCompose,
+  renderDockerfile,
+  type ComposeVars
+} from './templates'
 
 const WORK_ROOT = '/opt/opspilot'
 const HEALTHCHECK_ATTEMPTS = 10
@@ -569,6 +575,7 @@ export class DeployPipeline {
   private async stepRender(ctx: RunContext): Promise<void> {
     await this.inStep(ctx, 'RENDER', async () => {
       const plan = this.requirePlan(ctx)
+      const input = this.requireInput(ctx)
       const appDir = posixJoin(WORK_ROOT, ctx.app.name)
       const vars: ComposeVars = {
         APP_NAME: ctx.app.name,
@@ -579,7 +586,33 @@ export class DeployPipeline {
         START_COMMAND: plan.startCommand,
         COLLECT_INTERVAL_S: RENDER_COLLECT_INTERVAL_S
       }
-      const env = buildEnvFile(this.requireInput(ctx).env, plan.needsDb)
+      let renderEnv = input.env
+      if (plan.needsDb && !ctx.newApp) {
+        const existingEnv = await this.ssh.readFile(ctx.app.vps_id, posixJoin(appDir, '.env'))
+        const existingPassword = readEnvValue(existingEnv, 'POSTGRES_PASSWORD')
+        const existingDatabaseUrl = readEnvValue(existingEnv, 'DATABASE_URL')
+
+        if (existingPassword) {
+          renderEnv = {
+            ...input.env,
+            POSTGRES_PASSWORD: existingPassword,
+            ...(existingDatabaseUrl ? { DATABASE_URL: existingDatabaseUrl } : {})
+          }
+          this.log(
+            ctx,
+            'RENDER',
+            'Giữ nguyên credential PostgreSQL hiện có để volume tiếp tục truy cập được.\n',
+            'stdout'
+          )
+        } else if (ctx.app.current_deployment_id !== null) {
+          throw new AppError(
+            'UNKNOWN',
+            'Không đọc được credential PostgreSQL hiện có. Đã dừng trước khi ghi .env để tránh làm mất kết nối database.',
+            { step: 'RENDER' }
+          )
+        }
+      }
+      const env = buildEnvFile(renderEnv, plan.needsDb)
       const files: Array<{ name: string; content: string; mode?: number }> = [
         {
           name: 'Dockerfile',

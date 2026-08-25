@@ -12,6 +12,14 @@ import { installDockerOnVps } from './vps/dockerInstall'
 import { scanVpsEnvironment } from './vps/scanService'
 import type { VpsService } from './vps/service'
 
+export interface WindowController {
+  minimize(): void
+  maximize(): void
+  unmaximize(): void
+  isMaximized(): boolean
+  close(): void
+}
+
 type Channel = keyof IpcInvokeMap
 type ChannelArgs<K extends Channel> = Parameters<IpcInvokeMap[K]>
 type ChannelResult<K extends Channel> = ReturnType<IpcInvokeMap[K]>
@@ -36,7 +44,8 @@ export function registerIpcHandlers(
   vpsService: VpsService,
   ssh: SshManager,
   deployService: DeployService,
-  historyService: HistoryService
+  historyService: HistoryService,
+  getWindow: () => WindowController | null
 ): void {
   handle('vps:list', () => vpsService.list())
   handle('vps:create', (input) => vpsService.create(input))
@@ -93,5 +102,22 @@ export function registerIpcHandlers(
       throw new AppError('VALIDATION', 'Chỉ được phép mở liên kết HTTP hoặc HTTPS.')
     }
     await shell.openExternal(url.toString())
+  })
+  handle('window:minimize', () => {
+    getWindow()?.minimize()
+  })
+  handle('window:toggle-maximize', () => {
+    const window = getWindow()
+    if (!window) return { maximized: false }
+    if (window.isMaximized()) {
+      window.unmaximize()
+    } else {
+      window.maximize()
+    }
+    return { maximized: window.isMaximized() }
+  })
+  handle('window:is-maximized', () => ({ maximized: getWindow()?.isMaximized() ?? false }))
+  handle('window:close', () => {
+    getWindow()?.close()
   })
 }

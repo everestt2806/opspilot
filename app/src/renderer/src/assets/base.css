@@ -6,10 +6,11 @@ html,
 body,
 #root {
   width: 100%;
-  min-width: 1280px;
   height: 100%;
-  min-height: 800px;
+  min-width: 0;
+  min-height: 0;
   margin: 0;
+  overflow: hidden;
 }
 
 body {

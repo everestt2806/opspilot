@@ -1,8 +1,8 @@
 {
   "name": "@opspilot/demo-express-api",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Demo app Express cho OpsPilot — đối tượng thí nghiệm (M12)",
+  "description": "Demo full-stack Express/PostgreSQL trực quan cho OpsPilot (M12)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

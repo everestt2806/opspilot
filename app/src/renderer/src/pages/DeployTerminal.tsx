@@ -7,12 +7,21 @@ import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 
 import { strings } from '../strings'
+import type { DeployStep } from '@shared/ipc'
 
 interface DeployTerminalProps {
   buffer: string
+  activeStep?: DeployStep
+  completedSteps: number
+  status: 'streaming' | 'success' | 'failed'
 }
 
-export function DeployTerminal({ buffer }: DeployTerminalProps): React.JSX.Element {
+export function DeployTerminal({
+  buffer,
+  activeStep,
+  completedSteps,
+  status
+}: DeployTerminalProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const searchRef = useRef<SearchAddon | null>(null)
@@ -28,8 +37,10 @@ export function DeployTerminal({ buffer }: DeployTerminalProps): React.JSX.Eleme
     const term = new Terminal({
       disableStdin: true,
       cursorBlink: false,
+      convertEol: true,
       fontSize: 12,
       fontFamily: "Consolas, 'Courier New', monospace",
+      lineHeight: 1.25,
       scrollback: 5000,
       theme: {
         background: '#0B0E14',
@@ -58,10 +69,14 @@ export function DeployTerminal({ buffer }: DeployTerminalProps): React.JSX.Eleme
     function handleResize(): void {
       fit.fit()
     }
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => fit.fit())
+    resizeObserver?.observe(container)
     window.addEventListener('resize', handleResize)
 
     return () => {
       window.removeEventListener('resize', handleResize)
+      resizeObserver?.disconnect()
       viewport?.removeEventListener('scroll', handleScroll)
       term.dispose()
       termRef.current = null
@@ -97,7 +112,17 @@ export function DeployTerminal({ buffer }: DeployTerminalProps): React.JSX.Eleme
   return (
     <div className="deploy-terminal-wrap">
       <div className="deploy-terminal-toolbar">
-        <Space size={4}>
+        <div className="deploy-terminal-heading">
+          <span
+            className={`deploy-terminal-live-dot deploy-terminal-live-dot-${status}`}
+            aria-hidden="true"
+          />
+          <span className="deploy-terminal-title">{strings.deploy.log.liveOutput}</span>
+          <span className="deploy-terminal-progress">
+            {activeStep ?? strings.deploy.log.finished} · {completedSteps}/7
+          </span>
+        </div>
+        <Space size={4} className="deploy-terminal-actions">
           <Button size="small" icon={<CopyOutlined />} onClick={handleCopy}>
             {strings.deploy.log.toolbar.copy}
           </Button>

@@ -76,12 +76,17 @@ export class DeployService {
   /** UC-02 bước 3: precheck VPS kèm cổng dự kiến (app mới: cổng dự kiến, chưa ghi DB). */
   async precheck(input: DeployInput): Promise<PrecheckResult> {
     const vps = this.vpsRepository.getById(input.vps_id)
-    const port =
-      input.app_id !== undefined
-        ? this.appRepository.getById(input.app_id).host_port
-        : allocatePort(this.appRepository.usedPorts(vps.id))
-    const detail = await runPrecheck(this.ssh, vps.id, { port })
-    return toPrecheckResult(detail, port, vps.host)
+    const existingApp =
+      input.app_id === undefined ? undefined : this.appRepository.getById(input.app_id)
+    const assignedPort =
+      existingApp?.host_port ?? allocatePort(this.appRepository.usedPorts(vps.id))
+
+    // Khi redeploy, chính phiên bản hiện tại đang giữ cổng này. Pipeline sẽ thay container
+    // bằng compose up nên chỉ kiểm tra cổng trống đối với app mới.
+    const detail = await runPrecheck(this.ssh, vps.id, {
+      port: existingApp === undefined ? assignedPort : null
+    })
+    return toPrecheckResult(detail, assignedPort, vps.host)
   }
 
   start(input: DeployInput): { deployment_id: number } {

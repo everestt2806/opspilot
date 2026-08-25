@@ -32,6 +32,7 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | [`contracts/`](contracts/) | **Hợp đồng kỹ thuật** — schema, API, IPC, interface, format file. Xem [`contracts/README.md`](contracts/README.md) |
 | [`08-vps-setup.md`](08-vps-setup.md) | Runbook dựng VPS từ đầu trong 30 phút |
 | [`21-ke-hoach-thue-vps.md`](21-ke-hoach-thue-vps.md) | Kế hoạch thuê VPS rẻ nhất & tối ưu: provider, gói, tính theo giờ, ngân sách |
+| [`22-kich-ban-demo-vps-deploy-co-ban.md`](22-kich-ban-demo-vps-deploy-co-ban.md) | Runbook demo 6–8 phút: thêm VPS, quét môi trường, deploy Express thật và xử lý sự cố |
 | [`09-moi-truong-dev.md`](09-moi-truong-dev.md) | Setup máy dev (Windows), dependency đã duyệt, bẫy đã biết |
 | [`10-quy-uoc-code.md`](10-quy-uoc-code.md) | Cấu trúc code, xử lý lỗi, logging, quy ước async/SSH |
 | [`11-chien-luoc-test.md`](11-chien-luoc-test.md) | Unit test (chỉ 3 chỗ), smoke test 10 phút, soak test 24h |

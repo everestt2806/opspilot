@@ -259,6 +259,8 @@ export const strings = {
         search: 'Find',
         searchPlaceholder: 'Search in log…'
       },
+      liveOutput: 'Live output',
+      finished: 'Finished',
       cancel: 'Cancel deploy',
       cancelConfirm: 'Stop',
       cancelAsk:

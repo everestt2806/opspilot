@@ -787,6 +787,13 @@ function DeployLogView({
     ? SEVEN_STEPS.find((step) => run.steps[step].status === 'failed')
     : undefined
   const appUrl = finished?.appUrl
+  const activeStep = SEVEN_STEPS.find((step) => run.steps[step].status === 'running')
+  const completedSteps = SEVEN_STEPS.filter((step) => run.steps[step].status === 'done').length
+  const terminalStatus = !finished
+    ? 'streaming'
+    : finished.status === 'running'
+      ? 'success'
+      : 'failed'
 
   async function doCancel(): Promise<void> {
     const result = await window.api.invoke('deploy:cancel', run.deploymentId)
@@ -882,7 +889,12 @@ function DeployLogView({
         />
       )}
 
-      <DeployTerminal buffer={run.buffer} />
+      <DeployTerminal
+        buffer={run.buffer}
+        activeStep={activeStep}
+        completedSteps={completedSteps}
+        status={terminalStatus}
+      />
 
       <div className="deploy-log-footer">
         <Space size="small">

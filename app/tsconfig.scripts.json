@@ -20,6 +20,7 @@
     "scripts/try-ssh.ts",
     "scripts/try-deploy.ts",
     "scripts/seed-vps.ts",
+    "scripts/reset-demo.ts",
     "src/main/raw.d.ts"
   ]
 }

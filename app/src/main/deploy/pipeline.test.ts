@@ -32,6 +32,7 @@ let vpsId = 0
 let database: ReturnType<typeof initializeDatabase>
 let sshExec: Mock
 let writeFileMock: Mock
+let readFileMock: Mock
 let events: DeployEvent[]
 let pipeline: DeployPipeline
 
@@ -103,9 +104,14 @@ function createHarness(options: StubSshOptions = {}): void {
   })
 
   writeFileMock = vi.fn(async () => undefined)
+  readFileMock = vi.fn(async (_vpsId: number, remotePath: string) => {
+    const previous = [...writeFileMock.mock.calls].reverse().find(([, path]) => path === remotePath)
+    return previous?.[2] ?? ''
+  })
   const stubSsh = {
     exec: sshExec,
     uploadDir: vi.fn(async () => ({ bytes: 1_024 })),
+    readFile: readFileMock,
     writeFile: writeFileMock,
     fileSize: vi.fn(async () => 10)
   } as unknown as SshManager
@@ -246,6 +252,18 @@ describe('DeployPipeline', () => {
       host_port: number
     }
     expect(app.host_port).toBe(30000)
+
+    const envWrites = writeFileCalls().filter((call) => call.remotePath.endsWith('.env'))
+    expect(envWrites).toHaveLength(2)
+    const firstPassword = envWrites[0].content.match(/^POSTGRES_PASSWORD=(.+)$/m)?.[1]
+    const secondPassword = envWrites[1].content.match(/^POSTGRES_PASSWORD=(.+)$/m)?.[1]
+    expect(firstPassword).toMatch(/^[0-9a-f]{24}$/)
+    expect(secondPassword).toBe(firstPassword)
+    expect(envWrites[1].content).toContain(
+      `DATABASE_URL=postgresql://opspilot:${firstPassword}@postgres:5432/opspilot`
+    )
+    expect(readFileMock).toHaveBeenCalledWith(vpsId, '/opt/opspilot/demo-api/.env')
+    expect(JSON.stringify(events)).not.toContain(firstPassword)
   })
 
   it('precheck truot -> dung o buoc PRECHECK, chua build gi', async () => {

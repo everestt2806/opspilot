@@ -5,35 +5,22 @@ import {
   DashboardOutlined,
   DeploymentUnitOutlined,
   HistoryOutlined,
-  MoonOutlined,
   RocketOutlined,
-  SettingOutlined,
-  SunOutlined
+  SettingOutlined
 } from '@ant-design/icons'
-import {
-  App as AntApp,
-  Badge,
-  Button,
-  ConfigProvider,
-  Layout,
-  Menu,
-  Segmented,
-  Space,
-  Tooltip,
-  Typography
-} from 'antd'
+import { App as AntApp, ConfigProvider, Layout, Menu } from 'antd'
 
 import { AppsPage } from './pages/AppsPage'
+import { AppTitleBar } from './components/AppTitleBar'
 import { DashboardPage } from './pages/DashboardPage'
 import { DeployPage } from './pages/DeployPage'
 import { HistoryPage } from './pages/HistoryPage'
 import { MigratePage } from './pages/MigratePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { VpsPage } from './pages/VpsPage'
-import opsPilotLogo from './assets/opspilot-logo.png'
 import { strings } from './strings'
 import { useUiState } from './store/uiState'
-import { themeTokens, type ThemeMode } from './utils/themeTokens'
+import { themeTokens } from './utils/themeTokens'
 
 type PageKey = 'vps' | 'apps' | 'deploy' | 'dashboard' | 'migrate' | 'history' | 'settings'
 
@@ -79,6 +66,7 @@ function App(): React.JSX.Element {
   const page: PageKey = menuItems.some((item) => item.key === activePage)
     ? (activePage as PageKey)
     : 'vps'
+  const pageTitle = menuItems.find((item) => item.key === page)?.label ?? strings.app.name
 
   useEffect(() => {
     document.documentElement.dataset.theme = themeMode
@@ -97,67 +85,41 @@ function App(): React.JSX.Element {
   return (
     <ConfigProvider theme={themeTokens[themeMode]}>
       <AntApp>
-        <Layout className="app-shell">
-          <Layout.Sider
-            width={220}
-            collapsedWidth={56}
-            collapsible
-            collapsed={collapsed}
-            onCollapse={setCollapsed}
-            theme={themeMode === 'dark' ? 'dark' : 'light'}
-          >
-            <div className="brand" aria-label={strings.app.name}>
-              <img className="brand-logo" src={opsPilotLogo} alt="" aria-hidden="true" />
-              {!collapsed && <span className="brand-name">{strings.app.name}</span>}
-            </div>
-            <Menu
-              mode="inline"
+        <div className="app-window">
+          <AppTitleBar
+            pageTitle={pageTitle}
+            selectedVpsCount={selectedVpsIds.length}
+            mlRunning={mlRunning}
+            themeMode={themeMode}
+            onThemeChange={setTheme}
+          />
+          <Layout className="app-shell">
+            <Layout.Sider
+              width={220}
+              collapsedWidth={56}
+              collapsible
+              collapsed={collapsed}
+              onCollapse={setCollapsed}
+              breakpoint="lg"
+              onBreakpoint={(broken) => {
+                if (broken) setCollapsed(true)
+              }}
               theme={themeMode === 'dark' ? 'dark' : 'light'}
-              selectedKeys={[page]}
-              items={menuItems}
-              onClick={({ key }) => setActivePage(key as PageKey)}
-            />
-          </Layout.Sider>
-          <Layout>
-            <Layout.Header className="topbar">
-              <Typography.Text>
-                {selectedVpsIds.length > 0
-                  ? strings.app.vpsSelected(selectedVpsIds.length)
-                  : strings.app.noSelection}
-              </Typography.Text>
-              <Space size={20}>
-                <Badge status="default" text={`${strings.status.ssh}: ${strings.status.unknown}`} />
-                <Button type="text" className="status-button">
-                  <Badge
-                    status={mlRunning ? 'success' : 'error'}
-                    text={`${strings.status.mlService}: ${
-                      mlRunning ? strings.status.running : strings.status.stopped
-                    }`}
-                  />
-                </Button>
-                <Tooltip title={strings.appearance.label}>
-                  <Segmented<ThemeMode>
-                    value={themeMode}
-                    onChange={(value) => setTheme(value)}
-                    options={[
-                      {
-                        value: 'light',
-                        icon: <SunOutlined aria-hidden="true" />,
-                        label: strings.appearance.light
-                      },
-                      {
-                        value: 'dark',
-                        icon: <MoonOutlined aria-hidden="true" />,
-                        label: strings.appearance.dark
-                      }
-                    ]}
-                  />
-                </Tooltip>
-              </Space>
-            </Layout.Header>
-            <Layout.Content className="content">{renderPage(page, setActivePage)}</Layout.Content>
+            >
+              <Menu
+                className="app-navigation"
+                mode="inline"
+                theme={themeMode === 'dark' ? 'dark' : 'light'}
+                selectedKeys={[page]}
+                items={menuItems}
+                onClick={({ key }) => setActivePage(key as PageKey)}
+              />
+            </Layout.Sider>
+            <Layout>
+              <Layout.Content className="content">{renderPage(page, setActivePage)}</Layout.Content>
+            </Layout>
           </Layout>
-        </Layout>
+        </div>
       </AntApp>
     </ConfigProvider>
   )
