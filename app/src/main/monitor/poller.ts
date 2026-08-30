@@ -7,17 +7,24 @@ import { MonitorRepository } from './repository'
 import { AlertTracker } from './alertTracker'
 import { evaluateRule } from './rules'
 import type { MetricLine } from './metricParser'
-import type { MlIngestResponse } from './mlApi'
+import type { MlIngestResponse, MlStatusResponse, MlTrainResponse } from './mlApi'
 
 export interface MetricScorer {
   ingest(deploymentId: number, sample: MetricLine): Promise<MlIngestResponse>
 }
 
+export interface MonitorRuntime extends MetricScorer {
+  status(deploymentId: number): Promise<MlStatusResponse>
+  train(deploymentId: number, samples: MetricLine[]): Promise<MlTrainResponse>
+}
+
 function ensembleAbove(result: MlIngestResponse | undefined, threshold: number): boolean {
   if (!result) return false
-  return (['zscore_ewma', 'iforest', 'ocsvm'] as const).filter(
-    (method) => result.scores[method] !== null && result.scores[method]! > threshold
-  ).length >= 2
+  return (
+    (['zscore_ewma', 'iforest', 'ocsvm'] as const).filter(
+      (method) => result.scores[method] !== null && result.scores[method]! > threshold
+    ).length >= 2
+  )
 }
 export interface MlStatusReporter {
   report(status: { running: boolean; reason?: string }): void
@@ -40,9 +47,9 @@ export class MonitorPoller {
     onSample?: (sampleId: number) => Promise<void> | void
   ): Promise<{ inserted: number; nextOffset: number; sampleIds: number[]; alertIds: number[] }> {
     const target = this.repository.getTarget(deploymentId)
-    if (!target || target.app_id !== appId) return { inserted: 0, nextOffset: 1, sampleIds: [], alertIds: [] }
+    if (!target || target.app_id !== appId)
+      return { inserted: 0, nextOffset: 1, sampleIds: [], alertIds: [] }
     let offset = target.metrics_offset
-    let mlFailureLogged = false
     let size: number
     try {
       size = await source.size()
@@ -67,7 +74,8 @@ export class MonitorPoller {
       throw new MetricSourceError('Không đọc được metrics.jsonl', { cause: error })
     }
     const committedBytes = completeByteLength(content)
-    if (committedBytes === 0) return { inserted: 0, nextOffset: offset, sampleIds: [], alertIds: [] }
+    if (committedBytes === 0)
+      return { inserted: 0, nextOffset: offset, sampleIds: [], alertIds: [] }
     const completeContent = content.slice(0, content.lastIndexOf('\n') + 1)
     const parsed = parseMetricContent(completeContent)
     for (const item of parsed)
@@ -91,20 +99,9 @@ export class MonitorPoller {
         try {
           mlResults.set(item.metric.seq, await this.scorer.ingest(deploymentId, item.metric))
         } catch {
-          if (!mlFailureLogged) {
-            this.repository.logAction(
-              'ml_service_restart',
-              'failed',
-              'ML service không khả dụng',
-              appId,
-              deploymentId
-            )
-            mlFailureLogged = true
-            this.mlStatus?.report({ running: false, reason: 'ML ingest không phản hồi' })
-          }
+          this.mlStatus?.report({ running: false, reason: 'ML ingest không phản hồi' })
           /* fallback NULL is persisted below */
         }
-        if (this.scorer && mlResults.has(item.metric.seq)) this.mlStatus?.report({ running: true })
       }
     }
     let inserted = 0

@@ -32,17 +32,80 @@ describe('MonitorService mutations', () => {
     const dir = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-auto-train-'))
     const db = initializeDatabase(dir)
     try {
-      db.exec("INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('v','127.0.0.1','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'app','express',30000,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'app:v1','running'); UPDATE app SET current_deployment_id=1 WHERE id=1;")
-      const raw = (seq: number): string => JSON.stringify({ seq, ts: `2026-08-30T00:00:${String(seq % 60).padStart(2, '0')}Z`, cpu_pct: 1, mem_mb: 2, mem_pct: 3, mem_limit_mb: 4, latency_ms: 5, http_error_rate: 0, db_response_ms: null, container_up: 1, host_cpu_pct: 1, host_mem_pct: 2, collector_version: '1.0.0' })
-      for (let i = 1; i <= 149; i += 1) { const value = raw(i); const parsed = JSON.parse(value); db.prepare('INSERT INTO metric_sample (deployment_id,seq,ts_vps,ts_local,raw_json) VALUES (?,?,?,?,?)').run(1, i, parsed.ts, parsed.ts, value) }
+      db.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('v','127.0.0.1','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'app','express',30000,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'app:v1','running'); UPDATE app SET current_deployment_id=1 WHERE id=1;"
+      )
+      const raw = (seq: number): string =>
+        JSON.stringify({
+          seq,
+          ts: `2026-08-30T00:00:${String(seq % 60).padStart(2, '0')}Z`,
+          cpu_pct: 1,
+          mem_mb: 2,
+          mem_pct: 3,
+          mem_limit_mb: 4,
+          latency_ms: 5,
+          http_error_rate: 0,
+          db_response_ms: null,
+          container_up: 1,
+          host_cpu_pct: 1,
+          host_mem_pct: 2,
+          collector_version: '1.0.0'
+        })
+      for (let i = 1; i <= 149; i += 1) {
+        const value = raw(i)
+        const parsed = JSON.parse(value)
+        db.prepare(
+          'INSERT INTO metric_sample (deployment_id,seq,ts_vps,ts_local,raw_json) VALUES (?,?,?,?,?)'
+        ).run(1, i, parsed.ts, parsed.ts, value)
+      }
       const content = `${raw(150)}\n`
-      const scorer = { status: async () => ({ deployment_id: 1, trained: false, sample_count: 0, min_samples_required: 150 }), train: async (_id: number, samples: unknown[]) => { expect(samples).toHaveLength(150); return { deployment_id: 1, trained: true, train_sample_count: 150, feature_vector_count: 150 } }, ingest: async () => ({ ready: false, sample_count: 0, scores: { zscore_ewma: null, iforest: null, ocsvm: null, ensemble: null }, above_threshold: { zscore_ewma: false, iforest: false, ocsvm: false, ensemble: false }, detail: {} }) }
-      const ssh = { fileSize: async () => Buffer.byteLength(content), readFileTail: async () => ({ content, nextOffset: 1 }) } as never
+      let statusCalls = 0
+      let trainCalls = 0
+      const scorer = {
+        status: async () => {
+          statusCalls += 1
+          return {
+            deployment_id: 1,
+            trained: trainCalls > 0,
+            sample_count: 0,
+            min_samples_required: 150
+          }
+        },
+        train: async (_id: number, samples: unknown[]) => {
+          trainCalls += 1
+          expect(samples).toHaveLength(150)
+          return {
+            deployment_id: 1,
+            trained: true,
+            train_sample_count: 150,
+            feature_vector_count: 150
+          }
+        },
+        ingest: async () => ({
+          ready: false,
+          sample_count: 0,
+          scores: { zscore_ewma: null, iforest: null, ocsvm: null, ensemble: null },
+          above_threshold: { zscore_ewma: false, iforest: false, ocsvm: false, ensemble: false },
+          detail: {}
+        })
+      }
+      const ssh = {
+        fileSize: async () => Buffer.byteLength(content),
+        readFileTail: async () => ({ content, nextOffset: 1 })
+      } as never
       const events: unknown[] = []
       await new MonitorService(db).pollAll(ssh, scorer, (event) => events.push(event))
       expect(db.prepare('SELECT COUNT(*) n FROM metric_sample').get()).toEqual({ n: 150 })
       expect((events[0] as { samples: unknown[]; scores: unknown[] }).samples).toHaveLength(1)
       expect((events[0] as { samples: unknown[]; scores: unknown[] }).scores).toHaveLength(1)
-    } finally { closeDatabase(); rmSync(dir, { recursive: true, force: true }) }
+      expect(trainCalls).toBe(1)
+      expect(statusCalls).toBe(1)
+      await new MonitorService(db).pollAll(ssh, scorer)
+      expect(trainCalls).toBe(1)
+      expect(statusCalls).toBe(2)
+    } finally {
+      closeDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
