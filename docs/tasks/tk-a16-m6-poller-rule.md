@@ -305,6 +305,7 @@ Nhật ký hiện tại:
 - CP3 30/08 18:12 — commit `feat(monitor): connect ml scores and typed monitor ipc` · file monitor/mlApi.ts, service.ts, repository.ts, poller.ts · test `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (7 tests) · tiếp theo scheduler, CLI và gate
 - CP4 30/08 18:18 — commit `test(monitor): add scheduler coverage and local smoke cli` · file monitor/scheduler.ts, service.ts, ipc.ts, index.ts, docs/05 · gate FAIL do DoD còn thiếu; test 186/186, lint 0 errors + 16 baseline warnings, typecheck PASS, prettier scoped PASS, build PASS · tiếp theo ghi BLOCKED và handoff
 - BLOCKED 30/08 18:19 — bước hoàn thiện DoD M6 · bằng chứng poller chưa tích hợp ML động/IPC tick/train-now/setting patch/label-alert và CLI fixture chưa có · đã thử unit test, typecheck, lint, build · cần A quyết định tiếp tục implementation trên cùng branch · điều kiện gỡ thêm đủ integration + regression test rồi mới READY_FOR_LOCAL_REVIEW
+- HANDOFF-LOCAL 30/08 18:20 — commits affc6d8..8139978 · gate FAIL (DoD chưa đủ, prettier full exit 1) · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH
 - ASSIGNED 30/08 — Sau demo VPS/Deploy, A ưu tiên lát cắt dữ liệu M6. Giao Worker GPT-5.6
   Luna Medium thực hiện CP1→CP4; Codex/root chịu trách nhiệm review lặp đến khi đạt DoD.
 
