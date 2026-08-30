@@ -1,21 +1,19 @@
 import { z } from 'zod'
 
-const nullableNumber = z.number().finite().nullable()
-
 export const metricLineSchema = z.object({
   seq: z.number().int().positive(),
-  ts: z.string().datetime({ offset: true }),
-  cpu_pct: nullableNumber,
-  mem_mb: nullableNumber,
-  mem_pct: nullableNumber,
-  mem_limit_mb: nullableNumber,
-  latency_ms: nullableNumber,
+  ts: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/),
+  cpu_pct: z.number().finite().min(0).nullable(),
+  mem_mb: z.number().finite().min(0).nullable(),
+  mem_pct: z.number().finite().min(0).max(100).nullable(),
+  mem_limit_mb: z.number().finite().min(0).nullable(),
+  latency_ms: z.number().finite().min(0).nullable(),
   http_error_rate: z.number().min(0).max(1).finite().nullable(),
-  db_response_ms: nullableNumber,
+  db_response_ms: z.number().finite().min(0).nullable(),
   container_up: z.union([z.literal(0), z.literal(1)]),
-  host_cpu_pct: nullableNumber,
-  host_mem_pct: nullableNumber,
-  collector_version: z.string().min(1)
+  host_cpu_pct: z.number().finite().min(0).max(100).nullable(),
+  host_mem_pct: z.number().finite().min(0).max(100).nullable(),
+  collector_version: z.string().regex(/^\d+\.\d+\.\d+$/)
 })
 
 export type MetricLine = z.infer<typeof metricLineSchema>

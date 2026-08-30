@@ -24,7 +24,7 @@ export class MonitorPoller {
     if (!target || target.app_id !== appId) return { inserted: 0, nextOffset: 1 }
     let offset = target.metrics_offset
     const size = await source.size()
-    if (size < offset) {
+    if (size < offset - 1) {
       offset = 1
       logger.info('monitor', 'File metric nhỏ hơn offset, reset về đầu file', { app_id: appId })
     }

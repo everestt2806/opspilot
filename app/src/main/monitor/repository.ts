@@ -37,7 +37,7 @@ export class MonitorRepository {
         ms.trusted_method, ms.rollback_consecutive, ms.cooldown_minutes
       FROM deployment d JOIN app a ON a.id=d.app_id
       LEFT JOIN monitor_setting ms ON ms.app_id=a.id
-      WHERE d.id=? AND d.status='running'`
+      WHERE d.id=? AND d.status='running' AND a.current_deployment_id=d.id`
       )
       .get(deploymentId) as Record<string, unknown> | undefined
     if (!row) return undefined
@@ -150,24 +150,35 @@ export class MonitorRepository {
   ): Array<{ ts_vps: string } & Record<MonitorMethod, number | null>> {
     const rows = this.database
       .prepare(
-        'SELECT ts_vps, method, score FROM score_sample WHERE deployment_id=? AND ts_vps>=? ORDER BY ts_vps ASC, id ASC'
+        'SELECT metric_sample_id, method, score FROM score_sample WHERE deployment_id=? AND ts_vps>=? ORDER BY id ASC'
       )
       .all(deploymentId, fromTs) as Array<{
-      ts_vps: string
+      metric_sample_id: number
       method: MonitorMethod
       score: number | null
     }>
-    const grouped = new Map<string, Partial<Record<MonitorMethod, number | null>>>()
+    const grouped = new Map<number, Partial<Record<MonitorMethod, number | null>>>()
+    const samples = this.database
+      .prepare(
+        'SELECT id, ts_vps FROM metric_sample WHERE deployment_id=? AND ts_vps>=? ORDER BY ts_vps ASC, seq ASC'
+      )
+      .all(deploymentId, fromTs) as Array<{ id: number; ts_vps: string }>
     for (const row of rows)
-      grouped.set(row.ts_vps, { ...(grouped.get(row.ts_vps) ?? {}), [row.method]: row.score })
-    return [...grouped].map(([ts_vps, scores]) => ({
-      ts_vps,
-      rule: scores.rule ?? null,
-      zscore_ewma: scores.zscore_ewma ?? null,
-      iforest: scores.iforest ?? null,
-      ocsvm: scores.ocsvm ?? null,
-      ensemble: scores.ensemble ?? null
-    }))
+      grouped.set(row.metric_sample_id, {
+        ...(grouped.get(row.metric_sample_id) ?? {}),
+        [row.method]: row.score
+      })
+    return samples.map((sample) => {
+      const scores = grouped.get(sample.id) ?? {}
+      return {
+        ts_vps: sample.ts_vps,
+        rule: scores.rule ?? null,
+        zscore_ewma: scores.zscore_ewma ?? null,
+        iforest: scores.iforest ?? null,
+        ocsvm: scores.ocsvm ?? null,
+        ensemble: scores.ensemble ?? null
+      }
+    })
   }
   listAlerts(deploymentId: number, limit: number): import('@shared/ipc').Alert[] {
     return this.database

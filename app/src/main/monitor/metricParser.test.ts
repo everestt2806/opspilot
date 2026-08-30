@@ -31,4 +31,13 @@ describe('metric parser', () => {
     expect(result.map((item) => item.metric?.seq ?? null)).toEqual([1, null, 2])
     expect(result[1]?.warning).toBeTruthy()
   })
+
+  it('reject miền giá trị, UTC và semver như corrupt line', () => {
+    const invalid = JSON.parse(line(1))
+    invalid.cpu_pct = -1
+    invalid.ts = '2026-08-30T00:00:00+07:00'
+    invalid.collector_version = 'latest'
+    expect(parseMetricContent(`${JSON.stringify(invalid)}\n${line(2)}\n`)[0]?.metric).toBeNull()
+    expect(parseMetricContent(`${JSON.stringify(invalid)}\n${line(2)}\n`)[1]?.metric?.seq).toBe(2)
+  })
 })

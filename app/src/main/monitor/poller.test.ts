@@ -38,7 +38,7 @@ function seed(): ReturnType<typeof initializeDatabase> {
   dir = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-monitor-'))
   const db = initializeDatabase(dir)
   db.exec(
-    "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('v','127.0.0.1','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'app','express',30000,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'app:v1','running');"
+    "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('v','127.0.0.1','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'app','express',30000,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'app:v1','running'); UPDATE app SET current_deployment_id=1 WHERE id=1;"
   )
   return db
 }
@@ -82,5 +82,15 @@ describe('MonitorPoller ingest', () => {
       (db.prepare('SELECT metrics_offset FROM app WHERE id=1').get() as { metrics_offset: number })
         .metrics_offset
     ).toBe(1)
+  })
+
+  it('EOF bình thường không reset offset và target cũ không được poll', async () => {
+    const db = seed()
+    const poller = new MonitorPoller(db)
+    await poller.poll(1, 1, source(`${metric(1)}\n`))
+    const before = (db.prepare('SELECT metrics_offset FROM app WHERE id=1').get() as { metrics_offset: number }).metrics_offset
+    expect(await poller.poll(1, 1, source(`${metric(1)}\n`))).toMatchObject({ inserted: 0, nextOffset: before })
+    db.prepare('UPDATE app SET current_deployment_id=NULL').run()
+    expect(await poller.poll(1, 1, source(`${metric(2)}\n`))).toEqual({ inserted: 0, nextOffset: 1 })
   })
 })

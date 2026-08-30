@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 
 import type { SshManager } from '../ssh/manager'
 
@@ -10,11 +10,11 @@ export interface MetricSource {
 export class LocalMetricSource implements MetricSource {
   constructor(private readonly filePath: string) {}
   async size(): Promise<number> {
-    return (await import('node:fs/promises')).stat(this.filePath).then((s) => s.size)
+    return (await stat(this.filePath)).size
   }
   async tail(fromByte: number): Promise<string> {
-    const content = await readFile(this.filePath, 'utf8')
-    return content.slice(Buffer.byteLength(content.slice(0, fromByte - 1), 'utf8'))
+    const content = await readFile(this.filePath)
+    return content.subarray(Math.max(0, fromByte - 1)).toString('utf8')
   }
 }
 

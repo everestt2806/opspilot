@@ -26,11 +26,15 @@ export class AlertTracker {
       ts_vps: string
     }>
     const high =
+      input.score !== null &&
       input.above &&
       rows.length >= input.consecutive &&
-      rows.slice(0, input.consecutive).every((r) => r.above_threshold === 1)
+      rows.slice(0, input.consecutive).every((r) => r.score !== null && r.above_threshold === 1)
     const low =
-      !input.above && rows.length >= 3 && rows.slice(0, 3).every((r) => r.above_threshold === 0)
+      input.score !== null &&
+      !input.above &&
+      rows.length >= 3 &&
+      rows.slice(0, 3).every((r) => r.score !== null && r.above_threshold === 0)
     const open = this.db
       .prepare(
         'SELECT * FROM alert WHERE deployment_id=? AND method=? AND ts_resolved IS NULL ORDER BY id DESC LIMIT 1'
@@ -53,7 +57,7 @@ export class AlertTracker {
           first.metric_sample_id,
           input.method,
           first.ts_vps,
-          input.score ?? 0,
+          Math.max(...rows.slice(0, input.consecutive).map((row) => row.score ?? 0)),
           input.detail ?? null
         )
     }
