@@ -361,3 +361,9 @@ Worker điền lệnh tối thiểu vào biên bản bàn giao để reviewer ch
 - REVIEW-FIX 30/08 — finding R3-06 · commit `docs(monitor): record review three handoff` · gate BLOCKED: full suite Node 22 không trả kết quả sau khởi động, monitor 16/16 và CLI 150/750/0 PASS.
 - HANDOFF-LOCAL 30/08 — commits `ba462a6..HEAD` · gate FAIL (full suite hang; DoD chưa đủ) · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH.
 - REVIEW 30/08 — `REQUEST_CHANGES` vòng 4 tại code `f268277` · review file `tk-a16-review-04.md` · R4-01 BLOCKING, R4-02…R4-06 MAJOR · reviewer Node 22: monitor 16/16 và CLI 150/750/0 PASS, scoped Prettier FAIL 4 file; full runner/renderer isolated chưa kết thúc nên chưa quy kết regression monitor · CHƯA PUSH.
+- UPDATE 31/08 — tiếp tục từ HEAD `fc36cfb`, giữ nguyên untracked/stash và không rewrite lịch sử; xử lý R4-01…R4-06 theo đúng thứ tự commit.
+- REVIEW-FIX 31/08 — R4-01/R4-04 · `49aaa48` · Node 22 monitor 16/16 PASS; runtime ML typed, dedupe lifecycle và setting schema theo field.
+- REVIEW-FIX 31/08 — R4-03 · `55dfd34` · Node 22 monitor 16/16 PASS; shutdown finally cuối và caller async.
+- REVIEW-FIX 31/08 — R4-02/R4-05 · `4ed705f` · Node 22 monitor 17/17 PASS; CLI generator thật 150/750/0, retry 0.
+- REVIEW-FIX 31/08 — R4-06 · commit docs handoff; scoped Prettier PASS, full test/build chưa kết thúc.
+- HANDOFF-LOCAL 31/08 — commits `fc36cfb..HEAD` · gate FAIL (full test/build hang; monitor/lint/typecheck/scoped Prettier PASS) · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH.

@@ -10,16 +10,16 @@
 | Reviewer | Codex/root |
 | Branch | `feat/m06-monitor-poller-rule` |
 | Baseline | `affc6d82 (>=7057d42)` |
-| Head local | `HEAD của commit handoff vòng 2` |
+| Head local | `4ed705f` (code trước handoff vòng 4) |
 | Remote/PR | `CHƯA PUSH — CHƯA MỞ PR` |
-| Thời gian bắt đầu/kết thúc | `30/08 18:25 — 30/08 18:56` |
+| Thời gian bắt đầu/kết thúc | `31/08 — chưa READY` |
 
 ## 1. Kết luận
 
 - Outcome: `BLOCKED`.
 - Tóm tắt phần đã hoàn thành: sửa byte offset/target/alert, ML client động và scoring tuần tự, runtime SSH scheduler, 7 monitor handler, tick/train/setting/label nền, CLI và regression.
 - Phần cố ý không làm theo scope: không sửa contract, migration, renderer, collector, deploy, detector; không stage dirty ngoài scope.
-- Điều kiện còn thiếu để đạt DoD: full test Node 22 hiện 190/192 với 2 renderer timeout; cần xác nhận lại môi trường baseline và reviewer kiểm tra sâu auto-train/status/runtime shutdown.
+- Điều kiện còn thiếu để đạt DoD: full `pnpm test` và `pnpm build` Node 22 treo sau khởi động/transform; không sửa renderer khi chưa có root cause. Các gate monitor, lint, typecheck và scoped Prettier đã đạt.
 
 ## 2. Commit cục bộ theo checkpoint
 
@@ -38,6 +38,10 @@
 | Round 2 fix 3 | `8300f55` | R2-07 exact batch/error classification | Node 22 monitor 14/14 | PASS |
 | Round 2 fix 4 | `d4f9d45` | R2-04 SQLite CLI | `pnpm try:monitor` | PASS: 3/15/0/679 |
 | Round 2 handoff | `HEAD` | docs and gate evidence | full gate | BLOCKED: 190/192 |
+| Round 4 fix 1 | `49aaa48` | ML lifecycle rate-limit + setting schema | Node 22 monitor 16/16 | PASS |
+| Round 4 fix 2 | `55dfd34` | shutdown cleanup + async callers | Node 22 monitor 16/16 | PASS |
+| Round 4 fix 3 | `4ed705f` | exact batch/alert restart/generated fixture tests | Node 22 monitor 17/17 + CLI | PASS |
+| Round 4 handoff | `HEAD` | docs and gate evidence | full gate | BLOCKED: full test/build hang |
 
 Khoảng diff reviewer cần đọc: `affc6d82..HEAD`.
 
@@ -149,8 +153,8 @@ Reviewer điền; Worker không tự sửa kết luận review.
 |---|---|---|---|---|
 | 1 | Codex/root | `REQUEST_CHANGES` | `R01–R05 BLOCKING; R06–R11 MAJOR; R12 MINOR` — xem `tk-a16-review-01.md` | `f251368`, `e1194cb`, `5aed052`, `4b762dc` |
 | 2 | Codex/root | `REQUEST_CHANGES` | `R2-01–R2-04 BLOCKING; R2-05–R2-07 MAJOR` — xem `tk-a16-review-02.md` | `63e1be3`, `75f760a`, `8300f55`, `d4f9d45` |
-| 3 | Codex/root | `REQUEST_CHANGES` | `R3-01/R3-02 BLOCKING; R3-03–R3-05 MAJOR; R3-06 MINOR` — xem `tk-a16-review-03.md` | `CHƯA SỬA` |
-| 4 | Codex/root | `REQUEST_CHANGES` | `R4-01 BLOCKING; R4-02–R4-06 MAJOR` — xem `tk-a16-review-04.md` | `CHƯA SỬA` |
+| 3 | Codex/root | `REQUEST_CHANGES` (superseded) | `R3-01/R3-02 BLOCKING; R3-03–R3-05 MAJOR; R3-06 MINOR` — xem `tk-a16-review-03.md` | `142b4a6`, `8f278e2`, `769796d`, `f268277` |
+| 4 | Codex/root | `REQUEST_CHANGES` | `R4-01 BLOCKING; R4-02–R4-06 MAJOR` — xem `tk-a16-review-04.md` | `49aaa48`, `55dfd34`, `4ed705f`, `CHƯA SỬA` |
 
 ## Review 03 cập nhật
 
@@ -161,3 +165,12 @@ Reviewer điền; Worker không tự sửa kết luận review.
 - Không chạm `.devflow/`, `docs/ban-giao-20-08.md`, `logo.png`, stash, contract, migration, renderer, collector hoặc deploy. Board giữ `ĐANG LÀM`.
 - Tái hiện: `. .\tools\enter-node22.ps1; cd app; pnpm test -- --run src/main/monitor; pnpm try:monitor; pnpm test; pnpm lint; pnpm typecheck; pnpm exec prettier --check src/main/index.ts src/main/ipc.ts src/main/mlClient.ts src/main/monitor scripts/try-monitor.ts; pnpm build`.
 - Reviewer cần kiểm tra full-suite hang sau auto-train test, exact tick IDs, alert restart và shutdown rejected-poll lifecycle.
+
+## Review 04 cập nhật
+
+- Outcome: `BLOCKED`; code HEAD `4ed705f`, handoff commit được tạo sau khi cập nhật tài liệu.
+- Regression Node 22: monitor `17/17 PASS`; CLI generator + SQLite/MonitorPoller thật `150 metrics / 750 scores / 0 alerts`, `retry_inserted=0`, `offset=43008`.
+- Gate Node 22: `node --version` exit 0 (`v22.23.2`); `pnpm lint` exit 0 (0 errors, 16 baseline warnings); `pnpm typecheck` exit 0; scoped Prettier exit 0; full `pnpm test` treo sau `RUN`, đã dừng exit 1; `pnpm build` transform 3045 modules nhưng không kết thúc, đã dừng exit 1.
+- DoD: R4-01/R4-02/R4-03/R4-04/R4-05 có code và regression; R4-06 ghi nhận. Full gate chưa xanh nên board giữ `ĐANG LÀM`, không tuyên bố READY.
+- File review-04 thay đổi: monitor poller/service/repository/alerts/tests, `app/src/main/index.ts`, `app/src/main/ssh/manager.ts`, `app/scripts/try-monitor.ts`, `app/scripts/reset-demo.ts`, `app/scripts/try-deploy.ts`; không chạm file user ngoài scope.
+- Lệnh tái hiện chính xác: `. .\tools\enter-node22.ps1; cd app; node --version; pnpm test -- --run src/main/monitor; pnpm try:monitor; pnpm test; pnpm lint; pnpm typecheck; pnpm exec prettier --check src/main/index.ts src/main/ipc.ts src/main/mlClient.ts src/main/monitor src/main/ssh/manager.ts scripts/try-monitor.ts; pnpm build`.
