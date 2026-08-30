@@ -1,7 +1,8 @@
 # TK-A16 — M6 Poller + Rule Engine: metric → SQLite → score/alert → IPC
 
 > Đây là task hiện tại của người A sau buổi demo VPS/Deploy cơ bản. Worker được chỉ định:
-> **GPT-5.6 Luna · Medium Effort**. Reviewer cuối: **Codex/root**. Worker không tự merge PR.
+> **GPT-5.6 Luna · Medium Effort**. Reviewer cuối: **Codex/root**. Worker chỉ commit cục bộ;
+> không được `git push`, mở PR hay merge nếu A chưa ra lệnh riêng.
 
 | Chủ | Hạn | Branch | Brief | Ưu tiên |
 |---|---|---|---|---|
@@ -199,7 +200,8 @@ Commit gợi ý: `feat(monitor): connect ml scores and typed monitor ipc`
 
 - SSH adapter, sequential scheduler, non-overlap, lifecycle start/stop.
 - `try-monitor` local dùng fixture sinh bởi `ml-service/scripts/gen_fake_series.py`.
-- Chạy toàn bộ gate, cập nhật board/tk-file/trace matrix, push và mở PR.
+- Chạy toàn bộ gate, cập nhật board/tk-file/trace matrix và commit cục bộ. Dừng lại để A review;
+  chỉ push/mở PR khi A ra lệnh riêng.
 
 Commit gợi ý: `test(monitor): add scheduler coverage and local smoke cli`
 
@@ -243,8 +245,8 @@ Nếu warning đã có từ baseline, ghi số lượng và chứng minh task kh
 - [ ] ML chết, SSH lỗi, file rotate và poll overlap không làm crash app hoặc bịa mẫu.
 - [ ] CLI local tái hiện được từ fixture mà không cần collector/VPS của B.
 - [ ] Test/lint/typecheck/prettier/build xanh.
-- [ ] `docs/05`, board và nhật ký file này cập nhật trong cùng PR.
-- [ ] Worker push branch, mở PR, ghi rõ giới hạn/chưa làm và **không tự merge**.
+- [ ] `docs/05`, board và nhật ký file này cập nhật trong cùng branch/commit bàn giao.
+- [ ] Worker bàn giao commit cục bộ và ghi rõ giới hạn/chưa làm; chưa push/mở PR/merge khi A chưa yêu cầu.
 - [ ] Reviewer Codex/root không còn finding mức blocking/major.
 
 Smoke metric thật trên VM01, stress/reboot và soak 24h thuộc TK-S4/W5, không chặn code gate này.
@@ -271,9 +273,11 @@ offset, partial line, corrupt line, duplicate seq, ML down, exactly-five-scores,
 transaction rollback và poll overlap.
 
 Cuối task chạy: pnpm test, pnpm lint, pnpm typecheck, prettier --check và pnpm build trong app.
-Cập nhật board + tk-file + docs/05 trong cùng branch; push branch và mở PR nhưng KHÔNG merge.
-Bàn giao bắt buộc gồm: PR/commit, file đã đổi, lệnh + kết quả test, checklist DoD, giới hạn còn lại
-và các điểm muốn reviewer chú ý. Không tuyên bố hoàn thành nếu còn test đỏ hoặc chưa cập nhật docs.
+Cập nhật board + tk-file + docs/05 trong cùng branch và tạo commit cục bộ. KHÔNG push, mở PR hoặc
+merge cho tới khi A ra lệnh riêng. Khi bàn giao, chờ reviewer kiểm tra local trước.
+Bàn giao bắt buộc gồm: commit cục bộ, file đã đổi, lệnh + kết quả test, checklist DoD, giới hạn còn
+lại và các điểm muốn reviewer chú ý. Chỉ cung cấp PR sau khi A cho phép push/mở PR. Không tuyên bố
+hoàn thành nếu còn test đỏ hoặc chưa cập nhật docs.
 ```
 
 ## 9. Quy trình review và sửa lỗi
@@ -286,7 +290,8 @@ Reviewer Codex/root sẽ:
    timer cleanup, IPC query và log không chứa secret.
 4. Trả finding có mức `BLOCKING`, `MAJOR`, `MINOR`, kèm file/dòng và cách tái hiện.
 5. Worker sửa trên cùng branch, thêm test hồi quy và dòng `REVIEW-FIX` vào nhật ký; reviewer chạy lại.
-6. Lặp đến khi không còn `BLOCKING/MAJOR`. Worker không tự merge; A quyết định merge sau APPROVED.
+6. Lặp đến khi không còn `BLOCKING/MAJOR`. Worker không push/mở PR/merge nếu chưa có lệnh riêng;
+   A quyết định thời điểm đẩy remote sau APPROVED.
 
 ## 10. Nhật ký
 

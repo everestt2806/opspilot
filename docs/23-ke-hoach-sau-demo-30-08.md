@@ -62,7 +62,8 @@ bổ sung chẩn đoán log khi container unhealthy. Không trộn A15 vào PR M
 2. Đọc `CLAUDE.md`, file này, `tasks/README.md`, `tasks/tk-b4-m5-probes.md`,
    `prompts/m05-collector.md` và `contracts/metric-format.md`.
 3. Chuyển TK-B4 `TUẦN NÀY → ĐANG LÀM`, thêm `START <ngày>` vào tk-file.
-4. Chỉ sửa `collector/**`, chạy pytest, cập nhật board/tk-file và mở PR; không tự merge.
+4. Chỉ sửa `collector/**`, chạy pytest, cập nhật board/tk-file và commit cục bộ. Không push, mở PR
+   hoặc merge cho tới khi A yêu cầu riêng.
 
 Prompt ngắn cho AI của B:
 
@@ -71,7 +72,8 @@ Tôi là người B — UI/Delivery. Hãy nhận TK-B4 trong
 docs/tasks/tk-b4-m5-probes.md. Đọc đủ các file trong mục "Cách B và AI bắt đầu", cập nhật
 TK-B4 sang ĐANG LÀM + ghi START trước khi code. Chỉ sửa collector/** và tài liệu task; không
 đổi contract, Electron main hoặc renderer. Hoàn thiện docker stats + HTTP probe đúng đơn vị/null
-semantics, thêm pytest, chạy gate, cập nhật board/tk-file, push và mở PR nhưng không tự merge.
+semantics, thêm pytest, chạy gate, cập nhật board/tk-file và commit cục bộ. KHÔNG push, mở PR hoặc
+merge nếu A chưa ra lệnh riêng; bàn giao commit local và kết quả test để A review trước.
 ```
 
 ### Chuỗi task của B sau B4
@@ -116,7 +118,7 @@ Ngày lệch một ngày được phép nếu có `BLOCKED/UPDATE` đúng format
 
 Mọi Worker/AI khi xong phải cung cấp đủ:
 
-1. Branch, commit và URL PR.
+1. Branch và commit cục bộ; URL PR chỉ có sau khi A đã cho phép push/mở PR.
 2. Danh sách file đổi và phần cố ý không làm.
 3. Lệnh test cùng kết quả thật.
 4. Checklist DoD đã tick và bằng chứng.
