@@ -360,3 +360,4 @@ Worker điền lệnh tối thiểu vào biên bản bàn giao để reviewer ch
 - PR: **chưa mở**.
 - REVIEW-FIX 30/08 — finding R3-06 · commit `docs(monitor): record review three handoff` · gate BLOCKED: full suite Node 22 không trả kết quả sau khởi động, monitor 16/16 và CLI 150/750/0 PASS.
 - HANDOFF-LOCAL 30/08 — commits `ba462a6..HEAD` · gate FAIL (full suite hang; DoD chưa đủ) · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH.
+- REVIEW 30/08 — `REQUEST_CHANGES` vòng 4 tại code `f268277` · review file `tk-a16-review-04.md` · R4-01 BLOCKING, R4-02…R4-06 MAJOR · reviewer Node 22: monitor 16/16 và CLI 150/750/0 PASS, scoped Prettier FAIL 4 file; full runner/renderer isolated chưa kết thúc nên chưa quy kết regression monitor · CHƯA PUSH.
