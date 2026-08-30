@@ -165,4 +165,85 @@ describe('MonitorService mutations', () => {
       rmSync(dir, { recursive: true, force: true })
     }
   })
+
+  it('recovers ML status when auto-train is disabled without training', async () => {
+    const dir = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-auto-train-disabled-'))
+    const db = initializeDatabase(dir)
+    try {
+      db.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('v','127.0.0.1','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'app','express',30000,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'app:v1','running'); UPDATE app SET current_deployment_id=1 WHERE id=1;"
+      )
+      const raw = (seq: number): string =>
+        JSON.stringify({
+          seq,
+          ts: `2026-08-30T00:00:0${seq}Z`,
+          cpu_pct: 1,
+          mem_mb: 2,
+          mem_pct: 3,
+          mem_limit_mb: 4,
+          latency_ms: 5,
+          http_error_rate: 0,
+          db_response_ms: null,
+          container_up: 1,
+          host_cpu_pct: 1,
+          host_mem_pct: 2,
+          collector_version: '1.0.0'
+        })
+      let content = `${raw(1)}\n`
+      let fail = true
+      let trainCalls = 0
+      const scorer = {
+        status: async () => ({
+          deployment_id: 1,
+          trained: false,
+          sample_count: 1,
+          min_samples_required: 150
+        }),
+        train: async () => {
+          trainCalls += 1
+          throw new Error('train must be disabled')
+        },
+        ingest: async () => {
+          if (fail) {
+            fail = false
+            throw new Error('ingest unavailable')
+          }
+          return {
+            ready: false,
+            sample_count: 0,
+            scores: { zscore_ewma: null, iforest: null, ocsvm: null, ensemble: null },
+            above_threshold: { zscore_ewma: false, iforest: false, ocsvm: false, ensemble: false },
+            detail: {}
+          }
+        }
+      }
+      const ssh = {
+        fileSize: async () => Buffer.byteLength(content),
+        readFileTail: async (_id: number, _path: string, offset: number) => ({
+          content: content.slice(offset - 1),
+          nextOffset: Buffer.byteLength(content) + 1
+        })
+      } as never
+      const statuses: Array<{ running: boolean; reason?: string }> = []
+      const service = new MonitorService(db, { autoTrain: false })
+      await service.pollAll(ssh, scorer, undefined, (status) => statuses.push(status))
+      content += `${raw(2)}\n`
+      await service.pollAll(ssh, scorer, undefined, (status) => statuses.push(status))
+      expect(statuses).toEqual([
+        { running: false, reason: 'ML ingest không phản hồi' },
+        { running: true }
+      ])
+      expect(trainCalls).toBe(0)
+      expect(
+        (
+          db
+            .prepare("SELECT COUNT(*) n FROM action_log WHERE action='ml_service_restart'")
+            .get() as { n: number }
+        ).n
+      ).toBe(1)
+    } finally {
+      closeDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 })

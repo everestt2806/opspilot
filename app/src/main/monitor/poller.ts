@@ -93,16 +93,19 @@ export class MonitorPoller {
       (item) => item.metric && !this.repository.hasSample(deploymentId, item.metric.seq)
     )
     const mlResults = new Map<number, MlIngestResponse>()
+    let ingestFailed = false
     if (this.scorer) {
       for (const item of newItems) {
         if (!item.metric) continue
         try {
           mlResults.set(item.metric.seq, await this.scorer.ingest(deploymentId, item.metric))
         } catch {
+          ingestFailed = true
           this.mlStatus?.report({ running: false, reason: 'ML ingest không phản hồi' })
           /* fallback NULL is persisted below */
         }
       }
+      if (newItems.length && !ingestFailed) this.mlStatus?.report({ running: true })
     }
     let inserted = 0
     const sampleIds: number[] = []
