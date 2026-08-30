@@ -120,6 +120,18 @@ describe('MonitorService mutations', () => {
             .get() as { n: number }
         ).n
       ).toBe(0)
+      const backfill = JSON.parse(raw(152))
+      backfill.ts = '2026-08-29T23:59:59Z'
+      content += `${raw(151)}\n${JSON.stringify(backfill)}\n`
+      await service.pollAll(
+        ssh,
+        scorer,
+        (event) => events.push(event),
+        (status) => mlEvents.push(status)
+      )
+      expect((events[1] as { samples: unknown[]; scores: unknown[] }).samples).toHaveLength(2)
+      expect((events[1] as { samples: unknown[]; scores: unknown[] }).scores).toHaveLength(2)
+      expect(trainCalls).toBe(1)
       statusDown = true
       await service.pollAll(
         ssh,
@@ -135,7 +147,7 @@ describe('MonitorService mutations', () => {
         (status) => mlEvents.push(status)
       )
       expect(trainCalls).toBe(1)
-      expect(statusCalls).toBe(3)
+      expect(statusCalls).toBe(4)
       expect(mlEvents).toEqual([
         { running: true },
         { running: false, reason: 'ML status/train không khả dụng' },

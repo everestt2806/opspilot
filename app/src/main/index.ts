@@ -19,6 +19,7 @@ import { VpsService } from './vps/service'
 import { MonitorService } from './monitor/service'
 import { MonitorScheduler } from './monitor/scheduler'
 import { MlApiClient } from './monitor/mlApi'
+import { shutdownRuntime } from './shutdown'
 
 let mainWindow: BrowserWindow | null = null
 let mlService: MlServiceManager | null = null
@@ -167,26 +168,16 @@ app.on('before-quit', (event) => {
   if (quitting) return
   event.preventDefault()
   quitting = true
-  void (async () => {
-    try {
-      await monitorScheduler?.stop()
-    } catch (error) {
-      logger.error('monitor', 'Dừng monitor thất bại', {
+  void shutdownRuntime({
+    stopScheduler: async () => monitorScheduler?.stop(),
+    stopMl: () => mlService?.stopSync(),
+    disconnectSsh: async () => sshManager?.disconnectAll(),
+    quit: () => app.quit(),
+    report: (error) =>
+      logger.error('system', 'Dọn dẹp khi thoát thất bại', {
         error: error instanceof Error ? error.message : String(error)
       })
-    } finally {
-      mlService?.stopSync()
-      try {
-        await sshManager?.disconnectAll()
-      } catch (error) {
-        logger.error('ssh', 'Ngắt SSH khi thoát thất bại', {
-          error: error instanceof Error ? error.message : String(error)
-        })
-      } finally {
-        app.quit()
-      }
-    }
-  })()
+  })
 })
 
 app.on('will-quit', () => {
