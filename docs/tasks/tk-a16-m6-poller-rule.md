@@ -333,6 +333,10 @@ Nhật ký hiện tại:
 - UPDATE 30/08 21:40 — Node 22.23.2 gate chạy đúng; monitor 14/14 và CLI thật PASS; full test hiện 190/192 do 2 renderer timeout, chưa READY_FOR_LOCAL_REVIEW.
 - HANDOFF-LOCAL 30/08 21:45 — commits 1b9b222..HEAD · gate FAIL (full test 190/192, 2 renderer timeout) · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH.
 - REVIEW 30/08 21:50 — `REQUEST_CHANGES` vòng 3 · review file `tk-a16-review-03.md` · R3-01/R3-02 BLOCKING, R3-03–R3-05 MAJOR, R3-06 MINOR · reviewer Node 22.23.2: monitor 14/14, CLI SQLite thật PASS, full 192/192, lint 0 error/16 baseline warning, typecheck/build/scoped Prettier PASS · timeout cũ không phải blocker · CHƯA PUSH.
+- UPDATE 30/08 — tiếp tục từ HEAD `ba462a6`, giữ nguyên lịch sử reviewer và file/stash ngoài scope; xử lý R3-01 đến R3-06 theo đúng thứ tự bốn commit.
+- REVIEW-FIX 30/08 — finding R3-01/R3-02 · commit `142b4a6` · regression Node 22 `pnpm test -- --run src/main/monitor` = PASS (15 tests); auto-train lấy baseline SQLite sau mẫu 150, tick query theo sample/alert IDs.
+- REVIEW-FIX 30/08 — finding R3-03/R3-04 · commit `8f278e2` · regression Node 22 `pnpm exec tsc --noEmit -p tsconfig.node.json && pnpm test -- --run src/main/monitor` = PASS (15 tests); scheduler/log/shutdown finally và validation setting/label/ensemble.
+- REVIEW-FIX 30/08 — finding R3-05 · commit `769796d` · regression Node 22 `pnpm test -- --run src/main/monitor && pnpm try:monitor` = PASS (16 tests; CLI 150/750/0, retry 0).
 
 ## 11. Biên bản bàn giao bắt buộc
 
@@ -354,3 +358,5 @@ Worker điền lệnh tối thiểu vào biên bản bàn giao để reviewer ch
 
 - Remote push: **chưa được A cho phép**.
 - PR: **chưa mở**.
+- REVIEW-FIX 30/08 — finding R3-06 · commit `docs(monitor): record review three handoff` · gate BLOCKED: full suite Node 22 không trả kết quả sau khởi động, monitor 16/16 và CLI 150/750/0 PASS.
+- HANDOFF-LOCAL 30/08 — commits `ba462a6..HEAD` · gate FAIL (full suite hang; DoD chưa đủ) · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH.

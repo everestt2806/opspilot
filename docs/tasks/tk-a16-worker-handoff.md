@@ -150,3 +150,13 @@ Reviewer điền; Worker không tự sửa kết luận review.
 | 1 | Codex/root | `REQUEST_CHANGES` | `R01–R05 BLOCKING; R06–R11 MAJOR; R12 MINOR` — xem `tk-a16-review-01.md` | `f251368`, `e1194cb`, `5aed052`, `4b762dc` |
 | 2 | Codex/root | `REQUEST_CHANGES` | `R2-01–R2-04 BLOCKING; R2-05–R2-07 MAJOR` — xem `tk-a16-review-02.md` | `63e1be3`, `75f760a`, `8300f55`, `d4f9d45` |
 | 3 | Codex/root | `REQUEST_CHANGES` | `R3-01/R3-02 BLOCKING; R3-03–R3-05 MAJOR; R3-06 MINOR` — xem `tk-a16-review-03.md` | `CHƯA SỬA` |
+
+## Review 03 cập nhật
+
+- Outcome hiện tại: `BLOCKED`; HEAD code trước handoff: `769796d`.
+- Commit review-03: `142b4a6` auto-train/tick, `8f278e2` shutdown/settings/alerts, `769796d` runtime regression/fixture CLI. Commit docs handoff được tạo tiếp theo.
+- Regression Node 22: `pnpm test -- --run src/main/monitor` PASS `7 files / 16 tests`; `pnpm try:monitor` PASS `metrics=150`, `score_rows=750`, `alerts=0`, `offset=34093`, `first_inserted=150`, `retry_inserted=0`.
+- Full `pnpm test` Node 22 khởi động nhưng không trả kết quả, đã dừng exit 1; lint/typecheck/scoped Prettier/build chưa chạy sau thay đổi cuối. DoD chưa đạt.
+- Không chạm `.devflow/`, `docs/ban-giao-20-08.md`, `logo.png`, stash, contract, migration, renderer, collector hoặc deploy. Board giữ `ĐANG LÀM`.
+- Tái hiện: `. .\tools\enter-node22.ps1; cd app; pnpm test -- --run src/main/monitor; pnpm try:monitor; pnpm test; pnpm lint; pnpm typecheck; pnpm exec prettier --check src/main/index.ts src/main/ipc.ts src/main/mlClient.ts src/main/monitor scripts/try-monitor.ts; pnpm build`.
+- Reviewer cần kiểm tra full-suite hang sau auto-train test, exact tick IDs, alert restart và shutdown rejected-poll lifecycle.
