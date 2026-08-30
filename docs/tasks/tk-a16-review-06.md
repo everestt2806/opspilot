@@ -114,7 +114,7 @@ riêng xanh, không sửa renderer trong TK-A16; ghi exception rõ trong handoff
 
 ```text
 Tiếp tục TK-A16 trên branch feat/m06-monitor-poller-rule từ HEAD hiện tại; lịch sử phải chứa Worker
-handoff b35c821 và reviewer commit REVIEWER_COMMIT, không checkout lùi. Đọc đầy đủ CLAUDE.md,
+handoff b35c821 và reviewer commit 6333008, không checkout lùi. Đọc đầy đủ CLAUDE.md,
 docs/tasks/tk-a16-m6-poller-rule.md, docs/tasks/tk-a16-review-06.md và handoff. Sửa toàn bộ
 R6-01…R6-04 theo đúng ba commit ở mục 4.
 
