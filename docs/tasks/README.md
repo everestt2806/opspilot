@@ -22,8 +22,9 @@ BACKLOG → TUẦN NÀY → ĐANG LÀM → CHỜ REVIEW → HOÀN THÀNH
 
 - WIP: **mỗi người tối đa 1 task `ĐANG LÀM`**; phần còn lại đứng `TUẦN NÀY` theo thứ tự kéo.
 - Vướng > 30 phút → `BLOCKED` kèm nguyên nhân + điều kiện gỡ chặn (ghi cả vào nhật ký tk).
-- Push commit chưa phải xong: mở PR mới sang `CHỜ REVIEW`; `HOÀN THÀNH` chỉ khi PR merge
-  `main` + test pass + DoD đủ bằng chứng.
+- Mặc định Worker chỉ commit cục bộ; **không được push/mở PR nếu A chưa yêu cầu riêng**. Khi đã có
+  handoff local đủ bằng chứng, task được sang `CHỜ REVIEW` với ghi chú `local <sha> · chưa push`.
+  `HOÀN THÀNH` chỉ khi PR được phép mở, merge `main`, test pass và DoD đủ bằng chứng.
 - Chủ nhật/tối thứ 6: task trễ về đầu hàng tuần sau hoặc về `BACKLOG` có ghi lý do.
 
 ## 3. Cập nhật trạng thái — BẮT BUỘC với mọi phiên AI (A và B)
@@ -33,8 +34,9 @@ BACKLOG → TUẦN NÀY → ĐANG LÀM → CHỜ REVIEW → HOÀN THÀNH
 1. **Đầu phiên:** đọc `board.md` → chuyển task của mình thành `ĐANG LÀM` (nếu đủ slot WIP) →
    thêm dòng `START <ngày> — <kế hoạch phiên>` vào nhật ký tk-file.
 2. **Cuối mỗi lần làm:** thêm dòng `UPDATE <ngày>`: đã xong gì, tiếp theo gì, test gì pass/chưa.
-3. **Mở PR:** ghi `REVIEW <ngày> — PR: <url> · kết quả test · điểm cần reviewer chú ý`; board
-   chuyển `CHỜ REVIEW` kèm link PR.
+3. **Bàn giao local:** ghi `HANDOFF-LOCAL <ngày> — <head sha> · kết quả test · file handoff`;
+   board chuyển `CHỜ REVIEW` với ghi chú `local <sha> · chưa push`. Chỉ sau khi A cho phép push mới
+   bổ sung `REVIEW <ngày> — PR: <url> · ...` và link PR.
 4. **PR merge:** tick DoD → ghi `DONE <ngày> — PR <url> · test <kết quả> · việc tiếp theo` →
    board chuyển `HOÀN THÀNH`.
 5. **Vướng > 30 phút:** ghi `BLOCKED <ngày> — <bước vướng> / <bằng chứng> / <đã thử> /
@@ -59,6 +61,10 @@ Cập nhật trạng thái đi **cùng commit/PR của task** (cùng nhánh), kh
 Dùng [`docs/prompts/01-task-from-board.md`](../prompts/01-task-from-board.md) kèm tk-file của
 task — không dán cả board. AI làm xong phải tự cập nhật tk-file + board (mục 3) trước khi trả
 kết quả.
+
+Quyền mặc định khi giao AI là **sửa + test + commit cục bộ**. `git push`, mở PR và merge không nằm
+trong quyền mặc định; chỉ được làm sau một lệnh riêng, rõ ràng của A. TK-A16 có prompt và mẫu bàn
+giao chuyên biệt tại [`../prompts/tk-a16-worker-luna.md`](../prompts/tk-a16-worker-luna.md).
 
 ## 6. Nhịp tuần
 

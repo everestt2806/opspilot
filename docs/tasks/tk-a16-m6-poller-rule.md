@@ -8,6 +8,13 @@
 |---|---|---|---|---|
 | A | 04/09/2026 | `feat/m06-monitor-poller-rule` | `docs/prompts/m06-poller-rule.md` | P0 |
 
+**Bộ giao việc chính thức:**
+
+- Prompt copy-paste: [`../prompts/tk-a16-worker-luna.md`](../prompts/tk-a16-worker-luna.md).
+- Biên bản Worker phải điền trước khi dừng: [`tk-a16-worker-handoff.md`](tk-a16-worker-handoff.md).
+- File này là nguồn sự thật về scope, checkpoint, test và DoD. Nếu prompt tóm tắt khác file này,
+  dừng và hỏi A; không tự chọn phiên bản thuận tiện hơn.
+
 ## 1. Kết quả cần tạo ra
 
 Hoàn thiện lát cắt backend giám sát chạy độc lập với UI và collector thật:
@@ -59,7 +66,9 @@ Nếu contract và brief mâu thuẫn, dừng và báo reviewer. Không tự s�
 - Logic deploy/rollback, detector hoặc VPS Control Panel.
 - Không thêm dependency. Dùng `zod`, `better-sqlite3`, `fetch` và thư viện đã có.
 - Không triển khai auto-rollback M8; task này chỉ tạo/đóng alert.
-- Không dùng GitNexus trong task này cho tới khi A cho phép lại.
+- Được dùng GitNexus ở chế độ đọc/phân tích để hiểu kiến trúc, truy vết và kiểm tra impact. Không
+  dùng lệnh clean index hoặc thay đổi source thông qua GitNexus; nếu index stale và cần re-analyze,
+  ghi vào nhật ký trước khi chạy.
 
 ## 4. Thiết kế tối thiểu bắt buộc
 
@@ -167,7 +176,10 @@ Sau mỗi mẻ có dữ liệu mới, phát đúng một `monitor:tick` với sa
 
 ## 5. Kế hoạch triển khai theo checkpoint
 
-Worker làm tuần tự và commit sau mỗi checkpoint. Không dồn toàn bộ vào một commit lớn.
+Worker làm tuần tự và commit cục bộ sau mỗi checkpoint. Không dồn toàn bộ vào một commit lớn.
+Sau mỗi checkpoint, bắt buộc thêm một dòng `CP<n>` theo mẫu ở mục 10 vào nhật ký rồi mới tạo
+commit. Dòng log ghi commit message dự kiến; SHA thực tế được chốt trong biên bản bàn giao. Không
+được tự push các commit này.
 
 ### CP1 — Ingest foundation
 
@@ -253,32 +265,8 @@ Smoke metric thật trên VM01, stress/reboot và soak 24h thuộc TK-S4/W5, kh�
 
 ## 8. Prompt giao nguyên văn cho Worker
 
-```text
-Bạn là Worker thực hiện TK-A16 bằng GPT-5.6 Luna, reasoning effort Medium.
-
-Repo: OpsPilot. Branch đã chuẩn bị: feat/m06-monitor-poller-rule.
-Hãy đọc đầy đủ CLAUDE.md, docs/tasks/README.md và
-docs/tasks/tk-a16-m6-poller-rule.md, sau đó đọc toàn bộ tài liệu bắt buộc trong mục 2 của
-tk-file. Tạm thời không dùng GitNexus.
-
-Trước khi code:
-1. Xác nhận branch dựa trên origin/main >= 2addfb8.
-2. Chuyển TK-A16 trên board từ TUẦN NÀY sang ĐANG LÀM và thêm START 30/08 vào nhật ký.
-3. Viết lại kế hoạch CP1→CP4 ngắn gọn; nếu phát hiện contract mâu thuẫn thì dừng và báo.
-
-Thực hiện đúng scope, không sửa docs/contracts, migration 001, renderer, collector hay deploy.
-Không thêm dependency và không overengineer. Làm tuần tự CP1→CP4, mỗi checkpoint có test và
-commit riêng. Dùng fixture/local source để không phụ thuộc B hoặc VPS. Không bỏ qua các case byte
-offset, partial line, corrupt line, duplicate seq, ML down, exactly-five-scores, alert lifecycle,
-transaction rollback và poll overlap.
-
-Cuối task chạy: pnpm test, pnpm lint, pnpm typecheck, prettier --check và pnpm build trong app.
-Cập nhật board + tk-file + docs/05 trong cùng branch và tạo commit cục bộ. KHÔNG push, mở PR hoặc
-merge cho tới khi A ra lệnh riêng. Khi bàn giao, chờ reviewer kiểm tra local trước.
-Bàn giao bắt buộc gồm: commit cục bộ, file đã đổi, lệnh + kết quả test, checklist DoD, giới hạn còn
-lại và các điểm muốn reviewer chú ý. Chỉ cung cấp PR sau khi A cho phép push/mở PR. Không tuyên bố
-hoàn thành nếu còn test đỏ hoặc chưa cập nhật docs.
-```
+Dùng nguyên văn file [`../prompts/tk-a16-worker-luna.md`](../prompts/tk-a16-worker-luna.md). Không
+rút gọn thêm khi giao, vì file đó khóa quyền Git, định dạng nhật ký, điều kiện dừng và mẫu bàn giao.
 
 ## 9. Quy trình review và sửa lỗi
 
@@ -293,11 +281,44 @@ Reviewer Codex/root sẽ:
 6. Lặp đến khi không còn `BLOCKING/MAJOR`. Worker không push/mở PR/merge nếu chưa có lệnh riêng;
    A quyết định thời điểm đẩy remote sau APPROVED.
 
-## 10. Nhật ký
+## 10. Nhật ký thực thi bắt buộc
+
+Worker nối thêm dòng mới, không sửa/xóa lịch sử cũ. Mỗi dòng phải có bằng chứng thật; không ghi
+`PASS` nếu chưa chạy lệnh trong phiên hiện tại.
+
+```text
+START dd/mm HH:mm — branch <name>@<short-sha> · kế hoạch CP1→CP4 · git status <clean/dirty + file>
+CP1 dd/mm HH:mm — commit `<message>` · file <danh sách ngắn> · test `<lệnh>` = PASS/FAIL (<số test>) · tiếp theo <việc>
+CP2 dd/mm HH:mm — commit `<message>` · file <danh sách ngắn> · test `<lệnh>` = PASS/FAIL (<số test>) · tiếp theo <việc>
+CP3 dd/mm HH:mm — commit `<message>` · file <danh sách ngắn> · test `<lệnh>` = PASS/FAIL (<số test>) · tiếp theo <việc>
+CP4 dd/mm HH:mm — commit `<message>` · file <danh sách ngắn> · gate <PASS/FAIL + tóm tắt> · tiếp theo handoff
+BLOCKED dd/mm HH:mm — bước <...> · bằng chứng <...> · đã thử <...> · cần A quyết định <...>
+HANDOFF-LOCAL dd/mm HH:mm — commits <base..head> · gate <PASS/FAIL> · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH
+REVIEW-FIX dd/mm HH:mm — finding <ID> · commit <sha> · regression test `<lệnh>` = PASS/FAIL
+```
+
+Nhật ký hiện tại:
 
 - ASSIGNED 30/08 — Sau demo VPS/Deploy, A ưu tiên lát cắt dữ liệu M6. Giao Worker GPT-5.6
   Luna Medium thực hiện CP1→CP4; Codex/root chịu trách nhiệm review lặp đến khi đạt DoD.
 
-## 11. Lệnh tái hiện và PR
+## 11. Biên bản bàn giao bắt buộc
 
-Worker điền khi bắt đầu/bàn giao. PR: chưa mở.
+Trước khi dừng, Worker phải điền đầy đủ
+[`tk-a16-worker-handoff.md`](tk-a16-worker-handoff.md), chuyển TK-A16 trên board sang `CHỜ REVIEW`
+với ghi chú `local <head-sha> · chưa push`, thêm dòng `HANDOFF-LOCAL` ở mục 10 và tạo commit bàn
+giao cục bộ. Thiếu một trong bốn phần này thì task vẫn là `ĐANG LÀM`:
+
+1. Outcome đạt/chưa đạt và phạm vi thực tế.
+2. Bảng commit CP1–CP4 cùng danh sách file thay đổi.
+3. Lệnh test/gate, exit code và kết quả thực tế.
+4. DoD, giới hạn, rủi ro, bước tái hiện và câu hỏi cho reviewer.
+
+Worker dừng sau commit bàn giao. Không push, mở PR hay merge; reviewer sẽ kiểm tra local trước.
+
+## 12. Lệnh tái hiện và trạng thái remote
+
+Worker điền lệnh tối thiểu vào biên bản bàn giao để reviewer chạy lại từ repository root.
+
+- Remote push: **chưa được A cho phép**.
+- PR: **chưa mở**.

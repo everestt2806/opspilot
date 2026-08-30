@@ -15,7 +15,9 @@ kiện hoàn thành, và **tự cập nhật trạng thái vào repo trước kh
 ## Chọn rõ chế độ làm việc
 
 - Muốn AI **chỉ định hình hướng làm**: ghi "chỉ phân tích/lập kế hoạch, chưa sửa file".
-- Muốn AI **thực hiện task**: ghi rõ "hãy sửa code, chạy test, commit và push branch; không merge PR".
+- Muốn AI **thực hiện task**: ghi rõ "hãy sửa code, chạy test và commit cục bộ; dừng để review".
+- `git push`, mở PR hoặc merge chỉ được phép khi người A ra một lệnh riêng, rõ ràng; không gộp quyền
+  này vào câu giao task chung.
 - Muốn AI **review**: cung cấp PR/diff và dùng thêm [`99-review.md`](99-review.md).
 
 AI không được tự hiểu câu "xem giúp" là quyền sửa, commit, push hay merge.
@@ -28,7 +30,7 @@ Thay toàn bộ phần trong dấu `<...>` trước khi gửi:
 Tôi đang làm OpsPilot trong repo hiện tại.
 
 Vai trò của tôi: <A - Core/Algorithms | B - UI/Delivery>
-Chế độ: <chỉ lập kế hoạch | hiện thực + test + commit + push branch, không merge>
+Chế độ: <chỉ lập kế hoạch | hiện thực + test + commit cục bộ, dừng để review>
 
 Task (hồ sơ trong repo):
 - ID: <TK-XX> — đọc docs/tasks/tk-<xx>-<slug>.md và đối chiếu docs/tasks/board.md
@@ -57,13 +59,13 @@ Khi thực hiện:
 - Không tự sửa docs/contracts/. Nếu contract có vấn đề, dừng và báo chính xác điểm mâu thuẫn.
 - Viết test và chạy các command kiểm tra phù hợp.
 - Không đọc/in secret, không dùng credential của người còn lại.
-- Không merge PR.
+- Không push, mở PR hoặc merge nếu người A chưa ra lệnh riêng.
 - BẮT BUỘC — cập nhật trạng thái vào repo trước khi bàn giao:
   1. docs/tasks/tk-<xx>.md: thêm dòng nhật ký `UPDATE <ngày>` (đã xong gì / tiếp theo gì /
      test pass chưa) hoặc `BLOCKED <ngày>` (bước vướng / bằng chứng / đã thử / cần ai /
      điều kiện gỡ chặn).
-  2. docs/tasks/board.md: dòng task → `CHỜ REVIEW` kèm link PR (nếu đã push) hoặc giữ
-     `ĐANG LÀM` / chuyển `BLOCKED` cho đúng thực tế.
+  2. docs/tasks/board.md: khi handoff local đủ bằng chứng, dòng task → `CHỜ REVIEW` với ghi chú
+     `local <head-sha> · chưa push`; nếu chưa đủ thì giữ `ĐANG LÀM` hoặc chuyển `BLOCKED`.
   3. Commit cả hai thay đổi trên CÙNG commit/PR của task — không tách commit riêng.
   Không tuyên bố "xong task" nếu chưa làm đủ ba việc trên.
 
@@ -71,7 +73,7 @@ Khi bàn giao, trả về:
 1. Outcome đã đạt/chưa đạt.
 2. File đã thay đổi và lý do.
 3. Test đã chạy cùng kết quả chính xác.
-4. Commit/branch/PR (nếu chế độ cho phép).
+4. Commit/branch; PR chỉ có nếu người A đã cho phép push/mở PR bằng lệnh riêng.
 5. Phần DoD chưa đạt, rủi ro hoặc blocker.
 6. Xác nhận đã cập nhật board + tk-file (dán lại dòng nhật ký vừa ghi).
 7. Lệnh tái hiện để người sau tự chạy lại.
