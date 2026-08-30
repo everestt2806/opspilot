@@ -176,8 +176,15 @@ app.on('before-quit', (event) => {
       })
     } finally {
       mlService?.stopSync()
-      await sshManager?.disconnectAll()
-      app.quit()
+      try {
+        await sshManager?.disconnectAll()
+      } catch (error) {
+        logger.error('ssh', 'Ngắt SSH khi thoát thất bại', {
+          error: error instanceof Error ? error.message : String(error)
+        })
+      } finally {
+        app.quit()
+      }
     }
   })()
 })

@@ -216,7 +216,7 @@ async function main(): Promise<void> {
     console.log(`Backup local: ${backupRoot}`)
     console.log(`Backup VM01: ${remoteBackup}`)
   } finally {
-    ssh.disconnectAll()
+    await ssh.disconnectAll()
     closeDatabase()
     if (localResetComplete) {
       for (const directory of ['Local Storage', 'Session Storage']) {
