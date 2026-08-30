@@ -7,10 +7,10 @@ import { MonitorPoller } from '../src/main/monitor/poller'
 
 const dir = mkdtempSync(join(tmpdir(), 'opspilot-monitor-cli-'))
 async function main(): Promise<void> {
-  const lines = Array.from({ length: 3 }, (_, index) =>
+  const lines = Array.from({ length: 150 }, (_, index) =>
     JSON.stringify({
       seq: index + 1,
-      ts: `2026-08-30T00:00:0${index}Z`,
+      ts: new Date(Date.UTC(2026, 7, 30, 0, 0, index * 10)).toISOString().replace('.000', ''),
       cpu_pct: 1,
       mem_mb: 2,
       mem_pct: 3,
@@ -43,10 +43,10 @@ async function main(): Promise<void> {
   ).metrics_offset
   db.close()
   if (
-    metrics !== 3 ||
-    scoreRows !== 15 ||
+    metrics !== 150 ||
+    scoreRows !== 750 ||
     alerts !== 0 ||
-    first.inserted !== 3 ||
+    first.inserted !== 150 ||
     second.inserted !== 0 ||
     offset !== Buffer.byteLength(content) + 1
   )
