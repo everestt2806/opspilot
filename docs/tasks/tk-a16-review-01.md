@@ -171,7 +171,8 @@ Worker đổi board `BLOCKED → ĐANG LÀM` khi bắt đầu sửa. Chỉ đổ
 ## 4. Prompt giao Worker vòng sửa 01
 
 ```text
-Tiếp tục TK-A16 trên branch feat/m06-monitor-poller-rule từ local HEAD bfba6c4.
+Tiếp tục TK-A16 trên branch feat/m06-monitor-poller-rule từ HEAD hiện tại. Trước khi sửa, xác nhận
+lịch sử có code head đã review bfba6c4 và reviewer commit baae52f; không checkout lùi về bfba6c4.
 
 Đọc đầy đủ CLAUDE.md, docs/tasks/tk-a16-m6-poller-rule.md,
 docs/tasks/tk-a16-review-01.md và docs/tasks/tk-a16-worker-handoff.md. Kết luận review là
