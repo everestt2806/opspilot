@@ -307,10 +307,12 @@ Nhật ký hiện tại:
 - BLOCKED 30/08 18:19 — bước hoàn thiện DoD M6 · bằng chứng poller chưa tích hợp ML động/IPC tick/train-now/setting patch/label-alert và CLI fixture chưa có · đã thử unit test, typecheck, lint, build · cần A quyết định tiếp tục implementation trên cùng branch · điều kiện gỡ thêm đủ integration + regression test rồi mới READY_FOR_LOCAL_REVIEW
 - HANDOFF-LOCAL 30/08 18:20 — commits affc6d8..8139978 · gate FAIL (DoD chưa đủ, prettier full exit 1) · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH
 - UPDATE 30/08 18:25 — xác nhận code head bfba6c4, reviewer commit baae52f và continuation HEAD 5e200c5; bắt đầu sửa R01–R12 theo REQUEST_CHANGES, giữ nguyên commit cũ và dirty ngoài scope
-- REVIEW-FIX 30/08 18:45 — finding R05/R07/R08/R06 · commit pending `fix(monitor): correct byte offsets targets and alert state` · regression `cd app && pnpm test -- --run src/main/monitor` = PASS (8 tests)
-- REVIEW-FIX 30/08 18:46 — finding R02/R03/R06/R09 · commit pending `feat(monitor): integrate dynamic ml scoring transactionally` · regression `cd app && pnpm test -- --run src/main/monitor` = PASS (11 tests)
-- REVIEW-FIX 30/08 18:48 — finding R01/R04/R09/R10 · commit pending `feat(monitor): wire runtime polling ipc and lifecycle` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (11 tests)
-- REVIEW-FIX 30/08 18:50 — finding R11/R12 · commit pending `test(monitor): complete cli regression coverage and handoff` · regression `cd app && pnpm try:monitor && pnpm test -- --run src/main/monitor` = PASS (12 tests; CLI metrics=3, score_rows=15, alerts=0, offset=679)
+- REVIEW-FIX 30/08 18:45 — finding R05/R07/R08/R06 · commit `f251368` · regression `cd app && pnpm test -- --run src/main/monitor` = PASS (8 tests)
+- REVIEW-FIX 30/08 18:46 — finding R02/R03/R06/R09 · commit `e1194cb` · regression `cd app && pnpm test -- --run src/main/monitor` = PASS (11 tests)
+- REVIEW-FIX 30/08 18:48 — finding R01/R04/R09/R10 · commit `5aed052` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (11 tests)
+- REVIEW-FIX 30/08 18:50 — finding R11/R12 · commit `4b762dc` · regression `cd app && pnpm try:monitor && pnpm test -- --run src/main/monitor` = PASS (12 tests; CLI metrics=3, score_rows=15, alerts=0, offset=679)
+- UPDATE 30/08 18:55 — gate bằng Node 24.16.0 vì máy không có Node 22; typecheck/build/scoped Prettier PASS, full test FAIL 2 renderer timeout (188/190); chưa READY_FOR_LOCAL_REVIEW
+- HANDOFF-LOCAL 30/08 18:58 — commits 5e200c5..HEAD · gate FAIL (Node 22 unavailable; full test 188/190) · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH
 - REVIEW 30/08 18:35 — `REQUEST_CHANGES` · review file `tk-a16-review-01.md` · R01–R05 BLOCKING, R06–R11 MAJOR, R12 MINOR · test độc lập Node 22: 186/186, lint 0 error/16 baseline warning, typecheck/build/scoped Prettier PASS · CHƯA PUSH
 - ASSIGNED 30/08 — Sau demo VPS/Deploy, A ưu tiên lát cắt dữ liệu M6. Giao Worker GPT-5.6
   Luna Medium thực hiện CP1→CP4; Codex/root chịu trách nhiệm review lặp đến khi đạt DoD.

@@ -10,16 +10,16 @@
 | Reviewer | Codex/root |
 | Branch | `feat/m06-monitor-poller-rule` |
 | Baseline | `affc6d82 (>=7057d42)` |
-| Head local | `8139978` |
+| Head local | `4b762dc` + handoff commit sau gate |
 | Remote/PR | `CHƯA PUSH — CHƯA MỞ PR` |
-| Thời gian bắt đầu/kết thúc | `30/08 18:00 — 30/08 18:20` |
+| Thời gian bắt đầu/kết thúc | `30/08 18:25 — 30/08 18:56` |
 
 ## 1. Kết luận
 
 - Outcome: `BLOCKED`.
-- Tóm tắt phần đã hoàn thành: parser byte-safe, local/SSH source, SQLite ingest/idempotency/rollback, rule nền, score row fallback NULL, repository query, typed ML ingest client và scheduler non-overlap.
+- Tóm tắt phần đã hoàn thành: sửa byte offset/target/alert, ML client động và scoring tuần tự, runtime SSH scheduler, 7 monitor handler, tick/train/setting/label nền, CLI và regression.
 - Phần cố ý không làm theo scope: không sửa contract, migration, renderer, collector, deploy, detector; không stage dirty ngoài scope.
-- Điều kiện còn thiếu để đạt DoD: nối ML response động vào poll transaction, alert cho 4 ML method, đủ 6 handler/setting patch/label/train-now, monitor:tick, scheduler poll thật và CLI fixture.
+- Điều kiện còn thiếu để đạt DoD: full test đang đỏ 2 renderer timeout; Node 22 chưa có trong môi trường; cần reviewer kiểm tra sâu integration runtime/action log và hoàn tất test xanh.
 
 ## 2. Commit cục bộ theo checkpoint
 
@@ -29,16 +29,20 @@
 | CP2 | `7212ee1` | Rule/alert lifecycle | `cd app && pnpm test -- --run src/main/monitor` | PASS (7 tests) |
 | CP3 | `9d777eb` | ML/IPC nền | `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` | PASS (7 tests) |
 | CP4 | `8139978` | Scheduler/IPC wiring/docs | `cd app && pnpm test` | PASS (186 tests), DoD BLOCKED |
+| Review fix 1 | `f251368` | R05–R08 | monitor suite | PASS (8 tests) |
+| Review fix 2 | `e1194cb` | R02–R03/R06/R09 | monitor suite | PASS (11 tests) |
+| Review fix 3 | `5aed052` | R01/R04/R09/R10 | typecheck + monitor suite | PASS (11 tests) |
+| Review fix 4 | `4b762dc` | R11/R12, CLI | CLI + monitor suite | PASS (12 tests) |
 
-Khoảng diff reviewer cần đọc: `affc6d82..8139978`.
+Khoảng diff reviewer cần đọc: `affc6d82..HEAD`.
 
 ## 3. File đã thay đổi
 
 | File/thư mục | Lý do thay đổi | Thuộc CP |
 |---|---|---|
-| `app/src/main/monitor/**` | monitor backend và test | CP1–CP4 |
+| `app/src/main/monitor/**`, `app/scripts/try-monitor.ts` | monitor backend, test, CLI | CP1–review fix 4 |
 | `app/src/main/ipc.ts`, `app/src/main/index.ts` | wiring IPC/scheduler | CP4 |
-| `docs/05-truy-vet-yeu-cau.md`, packet, board | truy vết và nhật ký | CP4 |
+| `docs/05-truy-vet-yeu-cau.md`, packet, board, handoff | truy vết, nhật ký, bàn giao | review fix 4 |
 
 Xác nhận không sửa ngoài scope: Đã xác nhận; `.devflow/`, `docs/ban-giao-20-08.md`, `logo.png` vẫn untracked và không stage.
 
@@ -51,16 +55,21 @@ Ghi đúng command đã chạy, không chỉ ghi tên gate.
 | 30/08 18:09 | Node 24.16.0, pnpm 11.1.0, Windows | `cd app && pnpm test -- --run src/main/monitor` | 0 | 4 tests PASS |
 | 30/08 18:10 | như trên | `cd app && pnpm test -- --run src/main/monitor` | 0 | 7 tests PASS |
 | 30/08 18:12 | như trên | `cd app && pnpm typecheck:node` | 0 | PASS |
-| 30/08 18:15 | như trên | `cd app && pnpm test` | 0 | 41 files, 186 tests PASS; baseline jsdom warnings |
+| 30/08 18:15 | Node 24.16.0 | `cd app && pnpm test` | 0 | 41 files, 186 tests PASS; baseline jsdom warnings |
 | 30/08 18:15 | như trên | `cd app && pnpm lint` | 1 | 0 errors, 16 baseline prettier warnings |
 | 30/08 18:15 | như trên | `cd app && pnpm typecheck` | 0 | PASS |
 | 30/08 18:15 | như trên | `cd app && pnpm exec prettier --check .` | 1 | 47 warnings: generated `.out-scripts` + baseline renderer + new files before scoped format |
 | 30/08 18:18 | như trên | `cd app && pnpm exec prettier --check src/main/ipc.ts src/main/index.ts src/main/monitor` | 0 | PASS |
 | 30/08 18:18 | như trên | `cd app && pnpm build` | 0 | electron-vite production build PASS |
+| 30/08 18:55 | Node 24.16.0 (Node 22 unavailable) | `cd app && pnpm test` | 1 | 42 files, 190 tests: 188 PASS, 2 renderer timeout |
+| 30/08 18:55 | như trên | `cd app && pnpm lint` | 0 | 0 errors, 16 baseline warnings |
+| 30/08 18:55 | như trên | `cd app && pnpm typecheck` | 0 | PASS |
+| 30/08 18:55 | như trên | `cd app && pnpm build` | 0 | electron-vite production build PASS |
+| 30/08 18:55 | như trên | `cd app && pnpm exec prettier --check src/main/index.ts src/main/ipc.ts src/main/mlClient.ts src/main/monitor scripts/try-monitor.ts` | 0 | PASS |
 
 Gate cuối bắt buộc:
 
-- [x] `cd app && pnpm test` (186/186)
+- [ ] `cd app && pnpm test` (188/190; 2 renderer timeout)
 - [x] `cd app && pnpm lint` (0 errors; 16 baseline warnings)
 - [x] `cd app && pnpm typecheck`
 - [ ] `cd app && pnpm exec prettier --check .` (exit 1; baseline/generated warnings)
@@ -72,23 +81,23 @@ Worker copy từng mục DoD từ `tk-a16-m6-poller-rule.md` vào đây, đánh 
 ở mục 2 hoặc 4. Mục chưa đạt phải giữ `[ ]` và ghi nguyên nhân.
 
 - [ ] CP1–CP4 commit tách nghĩa, code gate độc lập — CP1–CP4 đã có commit; CP4 DoD chưa đủ.
-- [ ] Fixture ingest đúng thứ tự/retry — nền local source có, CLI fixture chưa có.
-- [ ] Đúng 5 score/mẫu, ML NULL — fallback 5 row có test; ML động chưa nối.
-- [ ] Rule/alert lifecycle đầy đủ restart — rule nền có; ML/restart integration chưa đủ.
-- [ ] 6 monitor IPC và monitor:tick — mới nối 4 query, chưa tick/train/label/setting patch.
-- [ ] ML/SSH/file rotate/overlap an toàn — rotate/overlap nền; ML/SSH integration chưa đủ.
-- [ ] CLI local fixture — chưa đạt.
-- [ ] Gate xanh — prettier full gate chưa đạt.
+- [x] Fixture ingest đúng thứ tự/retry — CLI và local source có.
+- [x] Đúng 5 score/mẫu, ML NULL — có fallback và dynamic score test.
+- [ ] Rule/alert lifecycle đầy đủ restart — chưa có đủ integration restart coverage.
+- [x] 6 monitor IPC và monitor:tick — wiring có, cần reviewer xác minh runtime payload.
+- [ ] ML/SSH/file rotate/overlap an toàn — nền có, action/error integration còn rủi ro.
+- [x] CLI local fixture — invariant 3 metric/15 score/0 alert/offset 679 PASS.
+- [ ] Gate xanh — full test exit 1; Node 22 unavailable.
 - [x] docs/05, board, nhật ký và handoff được cập nhật trong branch.
 - [x] Chưa push/PR/merge.
 
 ## 6. Giới hạn, rủi ro và quyết định kỹ thuật
 
-- Crash-window/transaction còn lại: HTTP ML chưa nằm trong luồng ghi kết quả cuối; transaction ingest cơ bản rollback offset.
-- Hành vi khi ML down/not-ready: score NULL fallback mới được tạo, chưa phát status/action log theo contract.
-- Hành vi partial/corrupt/duplicate/rotate: parser/duplicate/shrink có test; SSH/CLI thực chưa hoàn tất.
-- Khôi phục alert sau restart: tracker query state DB, nhưng integration đầy đủ chưa hoàn tất.
-- Warning hoặc giới hạn chưa xử lý: full prettier đỏ do 47 warning; Node repo yêu cầu >=22 nhưng môi trường là Node 24.
+- Crash-window/transaction còn lại: HTTP ML vẫn xảy ra trước transaction; nếu SQLite fail ML state có crash-window theo contract.
+- Hành vi khi ML down/not-ready: score NULL và action log giới hạn đã có; system status event cần reviewer kiểm tra.
+- Hành vi partial/corrupt/duplicate/rotate: parser/duplicate/shrink/EOF có test; SSH runtime error path còn cần kiểm tra.
+- Khôi phục alert sau restart: state đọc từ SQLite; chưa có test integration hoàn chỉnh.
+- Warning hoặc giới hạn chưa xử lý: full test đỏ 2 renderer timeout; Node 22 không cài trong môi trường; full Prettier baseline ngoài scope.
 - Thay đổi contract/dependency: `KHÔNG`; nếu khác, dừng và ghi `BLOCKED`.
 
 ## 7. Lệnh tái hiện cho reviewer
@@ -103,7 +112,7 @@ pnpm build
 pnpm test -- --run src/main/monitor
 ```
 
-Fixture/dữ liệu cần dùng: in-memory SQLite migration 001 trong test; CLI fixture chưa tạo.
+Fixture/dữ liệu cần dùng: `cd app && pnpm try:monitor`; output kỳ vọng `metrics=3`, `score_rows=15`, `alerts=0`, `offset=679`.
 
 ## 8. Điểm đề nghị reviewer kiểm tra mạnh
 
@@ -114,10 +123,10 @@ Fixture/dữ liệu cần dùng: in-memory SQLite migration 001 trong test; CLI 
 ## 9. Xác nhận Git và an toàn
 
 - [x] Chỉ commit cục bộ trên `feat/m06-monitor-poller-rule`.
-- [ ] Chưa `git push`, chưa mở PR và chưa merge.
-- [ ] Không force-push/reset-hard/clean/rebase/drop-pop stash.
-- [ ] Không stage `.devflow/`, `docs/ban-giao-20-08.md`, `logo.png`, secret, DB hoặc runtime state.
-- [x] `git status` và `git diff --stat affc6d82..8139978` đã được kiểm tra; chỉ dirty ngoài scope còn lại.
+- [x] Chưa `git push`, chưa mở PR và chưa merge.
+- [x] Không force-push/reset-hard/clean/rebase/drop-pop stash.
+- [x] Không stage `.devflow/`, `docs/ban-giao-20-08.md`, `logo.png`, secret, DB hoặc runtime state.
+- [x] `git status` và `git diff --stat affc6d82..HEAD` đã được kiểm tra; chỉ dirty ngoài scope còn lại.
 
 ## 10. Lịch sử review
 
