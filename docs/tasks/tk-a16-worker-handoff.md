@@ -9,7 +9,7 @@
 | Branch | `feat/m06-monitor-poller-rule` |
 | Baseline | `92bb19f` (review-06 anchor `6333008`) |
 | Code head trước handoff | `734fccc` |
-| Handoff head | commit local tạo từ `734fccc` |
+| Handoff head | `d332931` |
 | Remote/PR | `CHƯA PUSH — CHƯA MỞ PR` |
 
 ## 1. Outcome
@@ -25,7 +25,7 @@ migration, collector, deploy hoặc dữ liệu người dùng.
 |---|---|
 | `5adaccb` | `fix(monitor): recover ml status with auto train disabled` |
 | `734fccc` | `test(monitor): close train and ipc contract regressions` |
-| handoff commit | `docs(monitor): reconcile round six handoff` |
+| `d332931` | `docs(monitor): reconcile round six handoff` |
 
 Các commit review trước đó vẫn giữ nguyên; không checkout lùi, rewrite hoặc
 rebase lịch sử.
@@ -60,6 +60,9 @@ Môi trường: Node `v22.23.2`, pnpm `11.1.0`, Windows.
 | `pnpm build` | 0 | PASS, 3045 modules transformed |
 | `pnpm test -- --reporter=verbose` | 1 | `189/200 PASS`, 11 renderer-only failures/timeouts; no monitor failure |
 | `pnpm test -- --run src/renderer/src/components/VpsOverviewTab.test.tsx` | 0 | 1 file, `3/3 PASS` |
+| Reviewer: focused/CLI/lint/typecheck/Prettier/build | 0 | PASS trên Node 22.23.2 |
+| Reviewer: `pnpm test -- --reporter=verbose` | 1 | `180/200`, 20 renderer-only timeout; no monitor failure |
+| Reviewer: `VpsOverviewTab.test.tsx` isolated | 0 | `3/3 PASS` |
 
 Full-suite renderer failures là baseline/environment timeout ngoài scope; file
 renderer bị ảnh hưởng chạy riêng `3/3 PASS`, không sửa renderer.
@@ -78,7 +81,7 @@ renderer bị ảnh hưởng chạy riêng `3/3 PASS`, không sửa renderer.
 - [x] `docs/05`, board, task log và handoff cập nhật trong branch.
 - [x] Chưa push, chưa mở PR, chưa merge.
 - [ ] Full suite tuyệt đối xanh: còn 11 renderer-only failures/timeouts baseline; không thuộc TK-A16.
-- [ ] Reviewer Codex/root xác nhận không còn finding blocking/major.
+- [x] Reviewer Codex/root xác nhận không còn finding blocking/major tại review-07.
 
 ## 6. Giới hạn và rủi ro
 
@@ -122,6 +125,7 @@ pnpm test -- --reporter=verbose
 | 4 | `REQUEST_CHANGES` | R4-01–R4-06 | superseded |
 | 5 | `REQUEST_CHANGES` | R5-01–R5-04 | superseded |
 | 6 | `REQUEST_CHANGES` | R6-01–R6-04 | đã xử lý trong vòng này, chờ review local |
+| 7 | `APPROVED LOCAL` | Không còn BLOCKING/MAJOR | code head `d332931`; chưa push/PR/merge |
 
 ## 10. Xác nhận an toàn Git
 
