@@ -35,9 +35,9 @@ bằng cách bỏ test.
 
 | Tuần | Người A — Core/Algorithms | Người B — UI/Delivery | Tích hợp và DoD cuối tuần | FR luỹ kế | Thực tế |
 |---|---|---|---|---:|---|
-| **W1 · 10/08–21/08** | Scaffold/DB đã merge; từ 15/08: credential, M1 SSH manager, ML skeleton | Từ 15/08: collector v0, metric giả, 3 demo app, UI kết nối/tài nguyên bằng typed mock | App khởi động; `pnpm try:ssh` chạy `docker --version`; VPS List thấy online/RAM/disk; A đọc `metrics.jsonl` của B; 3 demo app chạy Docker local | **3/24 · 12,5%** | |
-| **W2 · 22/08–28/08** | M3 detector 3 Tier 1; M4 `PRECHECK→BUILD`; M7 feature + train/ingest/replay và 4 method | TK-B9 VPS Control Panel v1, rồi hoàn tất collector trên VPS | **Cổng lát cắt dọc:** panel quản lý VPS/app/deploy/history bằng IPC thật; Express detect/build trên VPS; `metrics.jsonl` đúng contract; ML API test độc lập pass | **6/24 · 25,0%** | |
-| **W3 · 29/08–04/09** | M4 `DEPLOY→RECORD`; M6 poller/rule; nạp metric/score/alert vào SQLite và IPC | Hoàn thiện collector; Dashboard chart + panel 5 phương pháp | **Cổng deploy + dữ liệu:** 3 app Tier 1 deploy từ UI; metric thật hiện trên chart; mỗi mẫu có 5 `score_sample`; đổi rule làm alert thay đổi | **13/24 · 54,2%** | |
+| **W1 · 10/08–21/08** | Scaffold/DB đã merge; từ 15/08: credential, M1 SSH manager, ML skeleton | Từ 15/08: collector v0, metric giả, 3 demo app, UI kết nối/tài nguyên bằng typed mock | App khởi động; `pnpm try:ssh` chạy `docker --version`; VPS List thấy online/RAM/disk; A đọc `metrics.jsonl` của B; 3 demo app chạy Docker local | **3/24 · 12,5%** | DB/credential/SSH/2 VPS/Express slice/ML skeleton đã có; collector và 2 demo app lùi |
+| **W2 · 22/08–28/08** | M3 detector 3 Tier 1; M4 `PRECHECK→BUILD`; M7 feature + train/ingest/replay và 4 method | TK-B9 VPS Control Panel v1, rồi hoàn tất collector trên VPS | **Cổng lát cắt dọc:** panel quản lý VPS/app/deploy/history bằng IPC thật; Express detect/build trên VPS; `metrics.jsonl` đúng contract; ML API test độc lập pass | **6/24 · 25,0%** | PR #19/#21/#22/#23: ML + panel + scan + Express deploy/redeploy xanh; collector chưa làm, detector mới có Express |
+| **W3 · 29/08–04/09** | M4 `DEPLOY→RECORD`; M6 poller/rule; nạp metric/score/alert vào SQLite và IPC | Hoàn thiện collector; Dashboard chart + panel 5 phương pháp | **Cổng deploy + dữ liệu:** 3 app Tier 1 deploy từ UI; metric thật hiện trên chart; mỗi mẫu có 5 `score_sample`; đổi rule làm alert thay đổi | **13/24 · 54,2%** | Rebaseline 30/08: A kéo TK-A16; B kéo B4→B5→B6; gate dữ liệu thật TK-S4 ngày 04/09 |
 | **W4 · 05/09–11/09** | Redeploy/release/rollback/retry; alert lifecycle; reconnect/offset/dedupe | Versions/History; alert feedback UI; fault script và smoke evidence | **CỔNG MVP 66,7%:** smoke UC-01/02/03/04/06/08 trên `main`; rollback đúng v(N-1); fault tạo alert/gắn nhãn; nạp bù không trùng | **16/24 · 66,7%** | |
 
 ### Việc cụ thể ngay W1
@@ -93,7 +93,7 @@ Flask hoặc polish trước khi Cổng MVP xanh.
 | Cổng | Hạn | Điều kiện đạt | Nếu không đạt |
 |---|---|---|---|
 | **G0 — Nền chạy được** | 21/08 | App + DB + SSH + ML skeleton chạy trên máy của cả hai; 2 VPS dùng được | Hai người dừng tính năng mới, xử lý môi trường trong tối đa 2 ngày |
-| **G1 — Lát cắt Express** | 28/08 | Express deploy bằng tool và collector ghi metric trên VPS | B dừng UI mới, tập trung fixture/smoke/tái hiện lỗi cho A; chưa nhân sang Next/Vite |
+| **G1 — Lát cắt Express** | 28/08 | Express deploy bằng tool và collector ghi metric trên VPS | **Đạt phần deploy, trượt collector.** Từ 30/08 B dừng UI mới, làm B4→B6; chưa nhân Next/Vite |
 | **G2 — MVP 66,7%** | 11/09 | 16 FR nêu trên đều có bằng chứng smoke test | Hoãn M8/M9; W5 chỉ tích hợp. Nếu 13/24 trở xuống, cắt migrate có DB trước |
 | **G3 — Freeze thí nghiệm** | 09/10 | Pilot 10 run, runner chạy tự động, threshold/feature đã chốt | Cắt `slow_db` + `latency_creep`; vẫn giữ 10 lần lặp/kịch bản còn lại |
 | **G4 — Dữ liệu chính thức** | 16/10 | 50 run completed hoặc toàn bộ run của phạm vi đã cắt có lý do | Dùng W12 chạy bù; không làm Flask và không polish UI |

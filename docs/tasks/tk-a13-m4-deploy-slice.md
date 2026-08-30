@@ -31,12 +31,12 @@ treo từ TK-B7) và detector tối thiểu (express) để pipeline có `BuildP
 
 - [x] `pnpm try:deploy` chạy trọn pipeline thật trên VM01: app express sống port 30xxx
 - [x] `curl http://221.121.1.79:<port>/health` trả 200 từ ngoài (mở URL bằng trình duyệt)
-- [ ] Thao tác từ UI (DeployPage): chọn VPS → chọn folder → deploy → log live → mở URL
+- [x] Thao tác từ UI (DeployPage): chọn VPS → chọn folder → deploy → log live → mở URL
 - [x] DB ghi đủ: `app` + `deployment` (version, duration) + `action_log`
 - [x] Deploy lần 2 cùng app: version tăng, dùng lại host_port (evidence trong tk nhật ký)
 - [x] Huỷ giữa chừng / lỗi bước → `step-failed` đúng bước + đúng một `finished` + dọn đúng nhánh lỗi
-- [ ] `vps:install-docker` hạ cánh đúng (nút "Cài Docker ngay" có confirm, cập nhật `docker_version`)
-- [ ] Unit test các phần pure (detector, template, precheck parse) + lint/typecheck sạch
+- [x] `vps:install-docker` hạ cánh đúng (nút "Cài Docker ngay" có confirm, cập nhật `docker_version`)
+- [x] Unit test các phần pure (detector, template, precheck parse) + lint/typecheck sạch
 - [x] Không rò secret: `.env` không vào log; `grep -r "DATABASE_URL"` trong log rỗng
 
 ## Nhật ký
@@ -77,6 +77,9 @@ treo từ TK-B7) và detector tối thiểu (express) để pipeline có `BuildP
   không chứa phép gán `POSTGRES_PASSWORD`, `DATABASE_URL` hay URL kèm credential. Cổng local:
   35 test files / 175 tests PASS, build + typecheck PASS, lint 0 error (còn 16 warning format có
   sẵn ở renderer, ngoài phạm vi branch). Chưa tick click-through UI thủ công và cài Docker thật.
+- DONE 30/08 — PR #23 đã merge `main`; người dùng hoàn tất click-through VPS Management + Deploy
+  cơ bản trong buổi demo với giảng viên. Hardening còn lại (giữ ba image, retry/diagnostic sâu)
+  chuyển sang TK-A15, không giữ TK-A13 mở.
 
 ## Lệnh tái hiện
 

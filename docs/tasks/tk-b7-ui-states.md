@@ -28,8 +28,7 @@ thao tác "kiểm tra kết nối" và "xem tài nguyên" (CPU/RAM/disk). A đã
 - [x] Không import Node/Electron trong renderer; mọi thứ qua typed IPC
 - [x] Payload khớp type `app/src/shared`, không hard-code khác contract
 - [x] Component test làm bằng chứng (16 test renderer mới, fixture từng state)
-- [ ] Nối handler thật chạy được với VPS của A (chờ xác nhận bằng mắt ở demo — DB app
-      hiện chưa có VPS nào; thao tác "Thêm VPS → Kiểm tra kết nối" chính là phút mở đầu demo)
+- [x] Nối handler thật chạy được với VPS của A; đã xác nhận bằng mắt với VM01 trong demo.
 
 ## Nhật ký
 
@@ -61,6 +60,8 @@ thao tác "kiểm tra kết nối" và "xem tài nguyên" (CPU/RAM/disk). A đã
     với VPS thật vì DB app trống — đóng khi người dùng thêm VM01 trước demo.
   - **Chưa có nút "Cài Docker ngay"** (spec 3.1): `vps:install-docker` chưa có handler ở main
     (đã grep toàn bộ main) — nằm ngoài scope renderer, theo dõi ở TK-A13.
+- DONE 30/08 — Đã dùng handler thật với VM01 trong luồng demo; UI hiển thị trạng thái/tài nguyên
+  và diagnosis đúng. Nút cài Docker/scan môi trường đã hạ cánh qua TK-A13/PR #22.
 
 ## Lệnh tái hiện
 

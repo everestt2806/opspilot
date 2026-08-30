@@ -15,15 +15,15 @@ Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng đượ
 
 | ID | Yêu cầu | Module | Kiểm chứng | Màn hình | Tuần | TT |
 |---|---|---|---|---|---|---|
-| FR-A1 | CRUD VPS, credential mã hoá | M2 + `db` | unit test crypto + `loadSecret` roundtrip DB (pass) · chờ smoke VPS | 3.1 | W1 | 🔨 |
-| FR-A2 | Test SSH, kiểm tra & tự cài Docker | M1 + `vps:install-docker` | `try-ssh` 6 bước chống sandbox + `vps:test-connection` (pass) · chưa `install-docker` + smoke VPS | 3.1 | W1 | 🔨 |
-| FR-A3 | Danh sách VPS + trạng thái + tài nguyên | M1 + `vps:get-resources` | `vps:get-resources` handler + parse test (pass) · chờ smoke VPS thật | 3.1 | W1 | 🔨 |
+| FR-A1 | CRUD VPS, credential mã hoá | M2 + `db` | unit test crypto + `loadSecret` roundtrip DB + smoke VM01 30/08 | 3.1 | W1 | ✅ |
+| FR-A2 | Test SSH, kiểm tra & tự cài Docker | M1 + `vps:install-docker` | `try-ssh` 6 bước + connection/scan handler + smoke VM01 30/08 | 3.1 | W1 | ✅ |
+| FR-A3 | Danh sách VPS + trạng thái + tài nguyên | M1 + `vps:get-resources` | test parser/renderer + VPS Control Panel #21 + smoke VM01 30/08 | 3.1 | W1 | ✅ |
 | FR-B1 | Detector plugin nhận diện framework | M3 | unit test ≥4 case/detector | 3.2 b2 | W2 | ⬜ |
 | FR-B2 | Hỗ trợ 3 stack Tier 1 (+Flask Tier 2) | M3 | deploy thật cả 3 demo app | 3.2 | W3 | ⬜ |
 | FR-B3 | Wizard hỏi env thiếu + cảnh báo thủ công | M3 `requiredEnv` + UI | smoke test | 3.2 b3 | W3 | ⬜ |
-| FR-B4 | Precheck RAM/disk/port | M4 `PRECHECK` | smoke test + case cố tình thiếu RAM | 3.2 b4 | W2 | ⬜ |
-| FR-B5 | Build image + deploy qua SSH | M4 `BUILD`,`DEPLOY` | deploy end-to-end | 3.3 | W2–W3 | ⬜ |
-| FR-B6 | Log build/deploy real-time | M4 event + xterm | quan sát khi demo | 3.3 | W3 | ⬜ |
+| FR-B4 | Precheck RAM/disk/port | M4 `PRECHECK` | unit test + click-through VM01; case thiếu RAM còn bổ sung W4 | 3.2 b4 | W2 | 🔨 |
+| FR-B5 | Build image + deploy qua SSH | M4 `BUILD`,`DEPLOY` | Express/PostgreSQL end-to-end, health ngoài mạng 200, PR #23 | 3.3 | W2–W3 | ✅ |
+| FR-B6 | Log build/deploy real-time | M4 event + xterm | quan sát trực tiếp trong demo 30/08 | 3.3 | W3 | ✅ |
 | FR-B7 | Lịch sử deploy (version, framework, thời gian) | bảng `deployment` | màn Phiên bản có ≥3 version | 3.5 | W4 | ⬜ |
 | FR-B8 | Thêm framework mới không sửa lõi | `detector-contract.ts` | **đo giờ công thêm Flask ở W10** | — | W10 | ⬜ |
 | FR-C1 | Chọn VPS nguồn/đích, khởi tạo migrate | M9 `PREPARE` | smoke test | 3.6 | W6 | ⬜ |
@@ -57,8 +57,8 @@ Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng đượ
 
 | UC | Tên | Màn hình | Smoke test bước | TT |
 |---|---|---|---|---|
-| UC-01 | Kết nối VPS mới | 3.1 | 1 | ⬜ |
-| UC-02 | Deploy lần đầu | 3.2 + 3.3 | 2 | ⬜ |
+| UC-01 | Kết nối VPS mới | 3.1 | 1 | ✅ |
+| UC-02 | Deploy lần đầu | 3.2 + 3.3 | 2 | ✅ |
 | UC-03 | Redeploy + tự rollback khi healthcheck fail | 3.3 + 3.5 | — | ⬜ |
 | UC-04 | Rollback thủ công | 3.5 | 6 | ⬜ |
 | UC-05 | Migrate sang VPS khác | 3.6 | — | ⬜ |
