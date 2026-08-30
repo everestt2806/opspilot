@@ -124,6 +124,19 @@ export class MonitorRepository {
   updateOffset(appId: number, offset: number): void {
     this.database.prepare('UPDATE app SET metrics_offset=? WHERE id=?').run(offset, appId)
   }
+  logAction(
+    action: string,
+    status: string,
+    message: string,
+    appId?: number,
+    deploymentId?: number
+  ): void {
+    this.database
+      .prepare(
+        'INSERT INTO action_log (action,status,message,app_id,deployment_id) VALUES (?,?,?,?,?)'
+      )
+      .run(action, status, message, appId ?? null, deploymentId ?? null)
+  }
   getMetric(id: number): MetricSample {
     return this.database
       .prepare(
@@ -203,5 +216,12 @@ export class MonitorRepository {
         'SELECT id,deployment_id,method,ts_vps,ts_resolved,peak_score,detail_json,label,acted FROM alert WHERE deployment_id=? ORDER BY ts_vps DESC,id DESC LIMIT ?'
       )
       .all(deploymentId, limit) as import('@shared/ipc').Alert[]
+  }
+  listAlertsFrom(deploymentId: number, fromTs: string): import('@shared/ipc').Alert[] {
+    return this.database
+      .prepare(
+        'SELECT id,deployment_id,method,ts_vps,ts_resolved,peak_score,detail_json,label,acted FROM alert WHERE deployment_id=? AND ts_vps>=? ORDER BY ts_vps ASC,id ASC'
+      )
+      .all(deploymentId, fromTs) as import('@shared/ipc').Alert[]
   }
 }

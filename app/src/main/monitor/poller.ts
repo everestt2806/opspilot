@@ -30,10 +30,18 @@ export class MonitorPoller {
     const target = this.repository.getTarget(deploymentId)
     if (!target || target.app_id !== appId) return { inserted: 0, nextOffset: 1 }
     let offset = target.metrics_offset
+    let mlFailureLogged = false
     const size = await source.size()
     if (size < offset - 1) {
       offset = 1
       logger.info('monitor', 'File metric nhỏ hơn offset, reset về đầu file', { app_id: appId })
+      this.repository.logAction(
+        'ssh_error',
+        'failed',
+        'Metric file đã xoay vòng, reset offset',
+        appId,
+        deploymentId
+      )
     }
     const content = await source.tail(offset)
     const committedBytes = completeByteLength(content)
@@ -49,6 +57,16 @@ export class MonitorPoller {
         try {
           mlResults.set(item.metric.seq, await this.scorer.ingest(deploymentId, item.metric))
         } catch {
+          if (!mlFailureLogged) {
+            this.repository.logAction(
+              'ml_service_restart',
+              'failed',
+              'ML service không khả dụng',
+              appId,
+              deploymentId
+            )
+            mlFailureLogged = true
+          }
           /* fallback NULL is persisted below */
         }
       }

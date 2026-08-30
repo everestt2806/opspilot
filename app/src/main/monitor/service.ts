@@ -105,6 +105,14 @@ export class MonitorService {
           )
         )
       } catch {
+        this.repository.logAction(
+          'ssh_error',
+          'failed',
+          'Không đọc được metrics.jsonl',
+          target.app_id,
+          target.deployment_id
+        )
+        continue
         continue
       }
       const samples = this.repository
@@ -115,7 +123,7 @@ export class MonitorService {
           deployment_id: target.deployment_id,
           samples,
           scores: this.scores(target.deployment_id, samples[0]!.ts_vps),
-          new_alerts: this.alerts(target.deployment_id, 500)
+          new_alerts: this.repository.listAlertsFrom(target.deployment_id, samples[0]!.ts_vps)
         })
     }
   }
