@@ -31,9 +31,9 @@ export class MonitorPoller {
     deploymentId: number,
     source: MetricSource,
     onSample?: (sampleId: number) => Promise<void> | void
-  ): Promise<{ inserted: number; nextOffset: number; sampleIds: number[] }> {
+  ): Promise<{ inserted: number; nextOffset: number; sampleIds: number[]; alertIds: number[] }> {
     const target = this.repository.getTarget(deploymentId)
-    if (!target || target.app_id !== appId) return { inserted: 0, nextOffset: 1, sampleIds: [] }
+    if (!target || target.app_id !== appId) return { inserted: 0, nextOffset: 1, sampleIds: [], alertIds: [] }
     let offset = target.metrics_offset
     let mlFailureLogged = false
     let size: number
@@ -60,7 +60,7 @@ export class MonitorPoller {
       throw new MetricSourceError('Không đọc được metrics.jsonl', { cause: error })
     }
     const committedBytes = completeByteLength(content)
-    if (committedBytes === 0) return { inserted: 0, nextOffset: offset, sampleIds: [] }
+    if (committedBytes === 0) return { inserted: 0, nextOffset: offset, sampleIds: [], alertIds: [] }
     const completeContent = content.slice(0, content.lastIndexOf('\n') + 1)
     const parsed = parseMetricContent(completeContent)
     for (const item of parsed)
@@ -102,6 +102,7 @@ export class MonitorPoller {
     }
     let inserted = 0
     const sampleIds: number[] = []
+    const alertIds: number[] = []
     const commit = this.database.transaction(() => {
       for (const item of newItems) {
         if (!item.metric) continue
@@ -124,7 +125,7 @@ export class MonitorPoller {
             above: rule.violated,
             detail: JSON.stringify({ reasons: rule.reasons })
           })
-          this.tracker.update({
+          const ruleAlertId = this.tracker.update({
             deploymentId,
             metricSampleId: id,
             ts: sample.ts_vps,
@@ -135,6 +136,7 @@ export class MonitorPoller {
             consecutive: target.setting.rule_consecutive,
             detail: JSON.stringify({ reasons: rule.reasons })
           })
+          if (ruleAlertId) alertIds.push(ruleAlertId)
           for (const method of ['zscore_ewma', 'iforest', 'ocsvm', 'ensemble'] as const)
             this.repository.insertScore({
               metricSampleId: id,
@@ -153,7 +155,7 @@ export class MonitorPoller {
           for (const method of ['zscore_ewma', 'iforest', 'ocsvm', 'ensemble'] as const) {
             const result = mlResults.get(item.metric.seq)
             const score = result?.scores[method] ?? null
-            this.tracker.update({
+            const mlAlertId = this.tracker.update({
               deploymentId,
               metricSampleId: id,
               ts: sample.ts_vps,
@@ -166,6 +168,7 @@ export class MonitorPoller {
               threshold: target.setting.ml_score_threshold,
               consecutive: target.setting.ml_consecutive
             })
+            if (mlAlertId) alertIds.push(mlAlertId)
           }
           sampleIds.push(id)
         }
@@ -174,6 +177,6 @@ export class MonitorPoller {
     })
     commit()
     for (const sampleId of sampleIds) await onSample?.(sampleId)
-    return { inserted, nextOffset: offset + committedBytes, sampleIds }
+    return { inserted, nextOffset: offset + committedBytes, sampleIds, alertIds }
   }
 }

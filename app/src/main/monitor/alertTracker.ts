@@ -14,7 +14,7 @@ export class AlertTracker {
     threshold: number
     consecutive: number
     detail?: string
-  }): void {
+  }): number | null {
     const rows = this.db
       .prepare(
         'SELECT above_threshold, metric_sample_id, score, ts_vps FROM score_sample WHERE deployment_id=? AND method=? ORDER BY ts_vps DESC, id DESC LIMIT ?'
@@ -44,11 +44,11 @@ export class AlertTracker {
       if (input.score !== null && input.score > open.peak_score)
         this.db.prepare('UPDATE alert SET peak_score=? WHERE id=?').run(input.score, open.id)
       if (low) this.db.prepare('UPDATE alert SET ts_resolved=? WHERE id=?').run(input.ts, open.id)
-      return
+      return null
     }
     if (high) {
       const first = rows[input.consecutive - 1]
-      this.db
+      const result = this.db
         .prepare(
           'INSERT INTO alert (deployment_id,metric_sample_id,method,ts_vps,peak_score,detail_json) VALUES (?,?,?,?,?,?)'
         )
@@ -63,6 +63,8 @@ export class AlertTracker {
       this.db
         .prepare('INSERT INTO action_log (action,status,message,deployment_id) VALUES (?,?,?,?)')
         .run('alert_raised', 'success', `Mở alert ${input.method}`, input.deploymentId)
+      return Number(result.lastInsertRowid)
     }
+    return null
   }
 }

@@ -99,7 +99,8 @@ describe('MonitorPoller ingest', () => {
     expect(await poller.poll(1, 1, source(`${metric(2)}\n`))).toEqual({
       inserted: 0,
       nextOffset: 1,
-      sampleIds: []
+      sampleIds: [],
+      alertIds: []
     })
   })
 

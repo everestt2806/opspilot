@@ -12,8 +12,9 @@ import type { MlApiClient } from './mlApi'
 
 export class MonitorService {
   private readonly repository: MonitorRepository
-  private readonly autoTrained = new Set<number>()
-  constructor(private readonly db: Database.Database) {
+  private readonly autoTrainAttempts = new Map<number, number>()
+  private readonly lastMlStatus = new Map<number, string>()
+  constructor(private readonly db: Database.Database, private readonly options: { autoTrain?: boolean } = {}) {
     this.repository = new MonitorRepository(db)
   }
   samples(deploymentId: number, fromTs: string): MetricSample[] {
@@ -52,44 +53,47 @@ export class MonitorService {
         (key) => key === 'app_id' || !(allowed as readonly string[]).includes(key)
       )
     )
-      throw new AppError('VALIDATION', 'Setting không hợp lệ.')
+      throw new AppError('VALIDATION', 'Setting khÃ´ng há»£p lá»‡.')
+    if (!entries.length) return this.getSetting(appId)
     const update = this.db.transaction(() => {
       this.repository.getOrCreateSetting(appId)
       for (const [key, value] of entries) {
         if (typeof value !== 'number' && typeof value !== 'string')
-          throw new AppError('VALIDATION', 'Setting không hợp lệ.')
+          throw new AppError('VALIDATION', 'Setting khÃ´ng há»£p lá»‡.')
         if (typeof value === 'number' && (!Number.isFinite(value) || value < 0))
-          throw new AppError('VALIDATION', 'Setting ngoài miền cho phép.')
+          throw new AppError('VALIDATION', 'Setting ngoÃ i miá»n cho phÃ©p.')
         if (
           (key.endsWith('_consecutive') || key.endsWith('_interval_s')) &&
           (typeof value !== 'number' || !Number.isInteger(value) || value < 1)
         )
-          throw new AppError('VALIDATION', 'Setting phải là số nguyên dương.')
+          throw new AppError('VALIDATION', 'Setting pháº£i lÃ  sá»‘ nguyÃªn dÆ°Æ¡ng.')
         if ((key === 'rule_error_rate' || key === 'ml_score_threshold') && Number(value) > 1)
-          throw new AppError('VALIDATION', 'Ngưỡng phải từ 0 đến 1.')
+          throw new AppError('VALIDATION', 'NgÆ°á»¡ng pháº£i tá»« 0 Ä‘áº¿n 1.')
         if (
           key === 'trusted_method' &&
           !['rule', 'zscore_ewma', 'iforest', 'ocsvm', 'ensemble'].includes(String(value))
         )
-          throw new AppError('VALIDATION', 'Method không hợp lệ.')
+          throw new AppError('VALIDATION', 'Method khÃ´ng há»£p lá»‡.')
         this.db
           .prepare(`UPDATE monitor_setting SET ${key}=?, updated_at=? WHERE app_id=?`)
           .run(value, new Date().toISOString(), appId)
       }
       this.db
         .prepare('INSERT INTO action_log (action,status,message,app_id) VALUES (?,?,?,?)')
-        .run('config_change', 'success', 'Cập nhật cấu hình monitor', appId)
+        .run('config_change', 'success', 'Cáº­p nháº­t cáº¥u hÃ¬nh monitor', appId)
     })
     update()
     return this.getSetting(appId)
   }
   labelAlert(alertId: number, label: 'true_positive' | 'false_positive' | null): void {
-    this.db
-      .prepare('UPDATE alert SET label=?, labeled_at=? WHERE id=?')
-      .run(label, label ? new Date().toISOString() : null, alertId)
-    this.db
-      .prepare('INSERT INTO action_log (action,status,message) VALUES (?,?,?)')
-      .run('alert_labeled', 'success', `Cập nhật nhãn alert ${alertId}`)
+    if (label !== null && label !== 'true_positive' && label !== 'false_positive')
+      throw new AppError('VALIDATION', 'Invalid alert label')
+    this.db.transaction(() => {
+      if (!this.db.prepare('SELECT id FROM alert WHERE id=?').get(alertId))
+        throw new AppError('VALIDATION', 'Alert not found')
+      this.db.prepare('UPDATE alert SET label=?, labeled_at=? WHERE id=?').run(label, label ? new Date().toISOString() : null, alertId)
+      this.db.prepare('INSERT INTO action_log (action,status,message) VALUES (?,?,?)').run('alert_labeled', 'success', `Updated alert ${alertId}`)
+    })
   }
   async trainNow(
     deploymentId: number,
@@ -98,7 +102,7 @@ export class MonitorService {
     const rows = this.db
       .prepare('SELECT raw_json FROM metric_sample WHERE deployment_id=? ORDER BY seq')
       .all(deploymentId) as Array<{ raw_json: string }>
-    if (rows.length < 150) throw new Error('Chưa đủ 150 mẫu để train')
+    if (rows.length < 150) throw new Error('ChÆ°a Ä‘á»§ 150 máº«u Ä‘á»ƒ train')
     const samples = rows.map((row) => metricLineSchema.parse(JSON.parse(row.raw_json)))
     const result = await client.train(deploymentId, samples)
     return { train_sample_count: result.train_sample_count }
@@ -110,63 +114,44 @@ export class MonitorService {
     mlStatus?: (status: { running: boolean; reason?: string }) => void
   ): Promise<void> {
     for (const target of this.repository.listTargets()) {
-      if (scorer && 'status' in scorer) {
-        try {
-          const status = await (scorer as MlApiClient).status(target.deployment_id)
-          mlStatus?.({ running: true })
-          if (
-            status.sample_count >= 150 &&
-            !status.trained &&
-            !this.autoTrained.has(target.deployment_id)
-          ) {
-            const rows = this.db
-              .prepare('SELECT raw_json FROM metric_sample WHERE deployment_id=? ORDER BY seq')
-              .all(target.deployment_id) as Array<{ raw_json: string }>
-            if (rows.length >= 150) {
-              await (scorer as MlApiClient).train(
-                target.deployment_id,
-                rows.map((row) => metricLineSchema.parse(JSON.parse(row.raw_json)))
-              )
-              this.autoTrained.add(target.deployment_id)
-            }
-          }
-        } catch {
-          mlStatus?.({ running: false, reason: 'ML status/train không khả dụng' })
-        }
-      }
       const poller = new MonitorPoller(this.db, this.repository, undefined, scorer, {
-        report: (status) => mlStatus?.(status)
+        report: (status) => this.reportMl(target.deployment_id, mlStatus, status)
       })
-      let result: { sampleIds: number[] }
+      let result: { sampleIds: number[]; alertIds: number[] }
       try {
-        result = await poller.poll(
-          target.app_id,
-          target.deployment_id,
-          new SshMetricSource(
-            ssh,
-            target.vps_id,
-            posixJoin('/opt/opspilot', target.app_name, 'metrics', 'metrics.jsonl')
-          )
-        )
+        result = await poller.poll(target.app_id, target.deployment_id, new SshMetricSource(ssh, target.vps_id, posixJoin('/opt/opspilot', target.app_name, 'metrics', 'metrics.jsonl')))
       } catch (error) {
         if (!(error instanceof MetricSourceError)) throw error
-        this.repository.logAction(
-          'ssh_error',
-          'failed',
-          'Không đọc được metrics.jsonl',
-          target.app_id,
-          target.deployment_id
-        )
+        this.repository.logAction('ssh_error', 'failed', 'Khong doc duoc metrics.jsonl', target.app_id, target.deployment_id)
         continue
       }
-      const samples = result.sampleIds.map((id) => this.repository.getMetric(id))
-      if (samples.length)
-        emit?.({
-          deployment_id: target.deployment_id,
-          samples,
-          scores: this.scores(target.deployment_id, samples[0]!.ts_vps),
-          new_alerts: this.repository.listAlertsFrom(target.deployment_id, samples[0]!.ts_vps)
-        })
+      if (scorer && 'status' in scorer && this.options.autoTrain !== false)
+        await this.maybeAutoTrain(target.deployment_id, scorer as MlApiClient, mlStatus)
+      const samples = this.repository.listSamplesByIds(result.sampleIds)
+      if (samples.length) emit?.({ deployment_id: target.deployment_id, samples, scores: this.repository.listScoresBySampleIds(result.sampleIds), new_alerts: this.repository.listAlertsByIds(result.alertIds) })
     }
+  }
+
+  private async maybeAutoTrain(deploymentId: number, client: MlApiClient, report?: (status: { running: boolean; reason?: string }) => void): Promise<void> {
+    try {
+      const status = await client.status(deploymentId)
+      this.reportMl(deploymentId, report, { running: true })
+      const count = (this.db.prepare('SELECT COUNT(*) n FROM metric_sample WHERE deployment_id=?').get(deploymentId) as { n: number }).n
+      if (count < 150 || status.trained) return
+      const previous = this.autoTrainAttempts.get(deploymentId) ?? 0
+      if (previous && Date.now() - previous < 30_000) return
+      this.autoTrainAttempts.set(deploymentId, Date.now())
+      const rows = this.db.prepare('SELECT raw_json FROM metric_sample WHERE deployment_id=? ORDER BY seq').all(deploymentId) as Array<{ raw_json: string }>
+      await client.train(deploymentId, rows.map((row) => metricLineSchema.parse(JSON.parse(row.raw_json))))
+    } catch {
+      this.reportMl(deploymentId, report, { running: false, reason: 'ML status/train unavailable' })
+    }
+  }
+
+  private reportMl(deploymentId: number, report: ((status: { running: boolean; reason?: string }) => void) | undefined, status: { running: boolean; reason?: string }): void {
+    const key = `${status.running}:${status.reason ?? ''}`
+    if (this.lastMlStatus.get(deploymentId) === key) return
+    this.lastMlStatus.set(deploymentId, key)
+    report?.(status)
   }
 }
