@@ -301,6 +301,7 @@ Nhật ký hiện tại:
 
 - START 30/08 00:00 — branch feat/m06-monitor-poller-rule@affc6d8 · kế hoạch CP1→CP4 · git status dirty + .devflow/, docs/ban-giao-20-08.md, logo.png (giữ nguyên)
 - CP1 30/08 18:09 — commit `feat(monitor): ingest metric batches with byte-safe offsets` · file monitor/metricParser.ts, metricSource.ts, repository.ts, poller.ts · test `cd app && pnpm test -- --run src/main/monitor` = PASS (4 tests) · tiếp theo rule và alert lifecycle
+- CP2 30/08 18:10 — commit `feat(monitor): evaluate rules and persist alert lifecycle` · file monitor/rules.ts, alertTracker.ts, repository.ts, poller.ts · test `cd app && pnpm test -- --run src/main/monitor` = PASS (7 tests) · tiếp theo ML và IPC
 - ASSIGNED 30/08 — Sau demo VPS/Deploy, A ưu tiên lát cắt dữ liệu M6. Giao Worker GPT-5.6
   Luna Medium thực hiện CP1→CP4; Codex/root chịu trách nhiệm review lặp đến khi đạt DoD.
 

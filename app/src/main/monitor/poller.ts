@@ -4,11 +4,14 @@ import { logger } from '../logger'
 import { completeByteLength, parseMetricContent } from './metricParser'
 import type { MetricSource } from './metricSource'
 import { MonitorRepository } from './repository'
+import { AlertTracker } from './alertTracker'
+import { evaluateRule } from './rules'
 
 export class MonitorPoller {
   constructor(
     private readonly database: Database.Database,
-    private readonly repository: MonitorRepository = new MonitorRepository(database)
+    private readonly repository: MonitorRepository = new MonitorRepository(database),
+    private readonly tracker: AlertTracker = new AlertTracker(database)
   ) {}
 
   async poll(
@@ -43,7 +46,11 @@ export class MonitorPoller {
         })
         if (id !== 0) {
           inserted += 1
-          void onSample?.(id)
+          const sample = this.repository.getMetric(id)
+          const rule = evaluateRule(sample, target.setting)
+          this.repository.insertScore({ metricSampleId: id, deploymentId, ts: sample.ts_vps, method: 'rule', score: rule.violated ? 1 : 0, above: rule.violated, detail: JSON.stringify({ reasons: rule.reasons }) })
+          this.tracker.update({ deploymentId, metricSampleId: id, ts: sample.ts_vps, method: 'rule', score: rule.violated ? 1 : 0, above: rule.violated, threshold: 0, consecutive: target.setting.rule_consecutive, detail: JSON.stringify({ reasons: rule.reasons }) })
+          onSample?.(id)
         }
       }
       this.repository.updateOffset(appId, offset + committedBytes)

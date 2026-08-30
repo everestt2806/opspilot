@@ -56,4 +56,7 @@ export class MonitorRepository {
 
   updateOffset(appId: number, offset: number): void { this.database.prepare('UPDATE app SET metrics_offset=? WHERE id=?').run(offset, appId) }
   getMetric(id: number): MetricSample { return this.database.prepare('SELECT id,deployment_id,seq,ts_vps,cpu_pct,mem_mb,mem_pct,latency_ms,http_error_rate,db_response_ms,container_up FROM metric_sample WHERE id=?').get(id) as MetricSample }
+  insertScore(input: { metricSampleId: number; deploymentId: number; ts: string; method: MonitorMethod; score: number | null; above: boolean; detail?: string }): void {
+    this.database.prepare('INSERT OR IGNORE INTO score_sample (metric_sample_id,deployment_id,ts_vps,method,score,above_threshold,detail_json) VALUES (?,?,?,?,?,?,?)').run(input.metricSampleId, input.deploymentId, input.ts, input.method, input.score, input.above ? 1 : 0, input.detail ?? null)
+  }
 }
