@@ -88,9 +88,47 @@ describe('MonitorPoller ingest', () => {
     const db = seed()
     const poller = new MonitorPoller(db)
     await poller.poll(1, 1, source(`${metric(1)}\n`))
-    const before = (db.prepare('SELECT metrics_offset FROM app WHERE id=1').get() as { metrics_offset: number }).metrics_offset
-    expect(await poller.poll(1, 1, source(`${metric(1)}\n`))).toMatchObject({ inserted: 0, nextOffset: before })
+    const before = (
+      db.prepare('SELECT metrics_offset FROM app WHERE id=1').get() as { metrics_offset: number }
+    ).metrics_offset
+    expect(await poller.poll(1, 1, source(`${metric(1)}\n`))).toMatchObject({
+      inserted: 0,
+      nextOffset: before
+    })
     db.prepare('UPDATE app SET current_deployment_id=NULL').run()
-    expect(await poller.poll(1, 1, source(`${metric(2)}\n`))).toEqual({ inserted: 0, nextOffset: 1 })
+    expect(await poller.poll(1, 1, source(`${metric(2)}\n`))).toEqual({
+      inserted: 0,
+      nextOffset: 1
+    })
+  })
+
+  it('gọi ML tuần tự, ghi score động và fallback NULL khi service lỗi', async () => {
+    const db = seed()
+    const order: number[] = []
+    const poller = new MonitorPoller(db, undefined, undefined, {
+      ingest: async (_deploymentId, sample) => {
+        order.push(sample.seq)
+        if (sample.seq === 2) throw new Error('timeout')
+        return {
+          ready: true,
+          sample_count: 150,
+          scores: { zscore_ewma: 0.8, iforest: 0.1, ocsvm: 0.2, ensemble: 0.1 },
+          above_threshold: { zscore_ewma: true, iforest: false, ocsvm: false, ensemble: false },
+          detail: {}
+        }
+      }
+    })
+    await poller.poll(1, 1, source(`${metric(1)}\n${metric(2)}\n`))
+    expect(order).toEqual([1, 2])
+    expect(
+      db
+        .prepare("SELECT score FROM score_sample WHERE metric_sample_id=1 AND method='zscore_ewma'")
+        .get()
+    ).toEqual({ score: 0.8 })
+    expect(
+      db
+        .prepare("SELECT score FROM score_sample WHERE metric_sample_id=2 AND method='zscore_ewma'")
+        .get()
+    ).toEqual({ score: null })
   })
 })

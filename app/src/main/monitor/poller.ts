@@ -6,12 +6,19 @@ import type { MetricSource } from './metricSource'
 import { MonitorRepository } from './repository'
 import { AlertTracker } from './alertTracker'
 import { evaluateRule } from './rules'
+import type { MetricLine } from './metricParser'
+import type { MlIngestResponse } from './mlApi'
+
+export interface MetricScorer {
+  ingest(deploymentId: number, sample: MetricLine): Promise<MlIngestResponse>
+}
 
 export class MonitorPoller {
   constructor(
     private readonly database: Database.Database,
     private readonly repository: MonitorRepository = new MonitorRepository(database),
-    private readonly tracker: AlertTracker = new AlertTracker(database)
+    private readonly tracker: AlertTracker = new AlertTracker(database),
+    private readonly scorer?: MetricScorer
   ) {}
 
   async poll(
@@ -32,7 +39,20 @@ export class MonitorPoller {
     const committedBytes = completeByteLength(content)
     if (committedBytes === 0) return { inserted: 0, nextOffset: offset }
     const completeContent = content.slice(0, content.lastIndexOf('\n') + 1)
-    const parsed = parseMetricContent(completeContent)
+    const parsed = parseMetricContent(completeContent).filter(
+      (item) => item.metric && !this.repository.hasSample(deploymentId, item.metric.seq)
+    )
+    const mlResults = new Map<number, MlIngestResponse>()
+    if (this.scorer) {
+      for (const item of parsed) {
+        if (!item.metric) continue
+        try {
+          mlResults.set(item.metric.seq, await this.scorer.ingest(deploymentId, item.metric))
+        } catch {
+          /* fallback NULL is persisted below */
+        }
+      }
+    }
     let inserted = 0
     const commit = this.database.transaction(() => {
       for (const item of parsed) {
@@ -75,9 +95,24 @@ export class MonitorPoller {
               deploymentId,
               ts: sample.ts_vps,
               method,
-              score: null,
-              above: false
+              score: mlResults.get(item.metric.seq)?.scores[method] ?? null,
+              above: mlResults.get(item.metric.seq)?.above_threshold[method] ?? false,
+              detail: JSON.stringify(mlResults.get(item.metric.seq)?.detail?.[method] ?? null)
             })
+          for (const method of ['zscore_ewma', 'iforest', 'ocsvm', 'ensemble'] as const) {
+            const result = mlResults.get(item.metric.seq)
+            const score = result?.scores[method] ?? null
+            this.tracker.update({
+              deploymentId,
+              metricSampleId: id,
+              ts: sample.ts_vps,
+              method,
+              score,
+              above: result?.above_threshold[method] ?? false,
+              threshold: target.setting.ml_score_threshold,
+              consecutive: target.setting.ml_consecutive
+            })
+          }
           onSample?.(id)
         }
       }

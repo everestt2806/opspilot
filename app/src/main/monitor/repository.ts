@@ -103,6 +103,13 @@ export class MonitorRepository {
     if (result.changes === 0) return 0
     return Number(result.lastInsertRowid)
   }
+  hasSample(deploymentId: number, seq: number): boolean {
+    return Boolean(
+      this.database
+        .prepare('SELECT 1 FROM metric_sample WHERE deployment_id=? AND seq=?')
+        .get(deploymentId, seq)
+    )
+  }
 
   updateOffset(appId: number, offset: number): void {
     this.database.prepare('UPDATE app SET metrics_offset=? WHERE id=?').run(offset, appId)
