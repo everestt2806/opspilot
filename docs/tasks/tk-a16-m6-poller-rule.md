@@ -309,6 +309,7 @@ Nhật ký hiện tại:
 - UPDATE 30/08 18:25 — xác nhận code head bfba6c4, reviewer commit baae52f và continuation HEAD 5e200c5; bắt đầu sửa R01–R12 theo REQUEST_CHANGES, giữ nguyên commit cũ và dirty ngoài scope
 - REVIEW-FIX 30/08 18:45 — finding R05/R07/R08/R06 · commit pending `fix(monitor): correct byte offsets targets and alert state` · regression `cd app && pnpm test -- --run src/main/monitor` = PASS (8 tests)
 - REVIEW-FIX 30/08 18:46 — finding R02/R03/R06/R09 · commit pending `feat(monitor): integrate dynamic ml scoring transactionally` · regression `cd app && pnpm test -- --run src/main/monitor` = PASS (11 tests)
+- REVIEW-FIX 30/08 18:48 — finding R01/R04/R09/R10 · commit pending `feat(monitor): wire runtime polling ipc and lifecycle` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (11 tests)
 - REVIEW 30/08 18:35 — `REQUEST_CHANGES` · review file `tk-a16-review-01.md` · R01–R05 BLOCKING, R06–R11 MAJOR, R12 MINOR · test độc lập Node 22: 186/186, lint 0 error/16 baseline warning, typecheck/build/scoped Prettier PASS · CHƯA PUSH
 - ASSIGNED 30/08 — Sau demo VPS/Deploy, A ưu tiên lát cắt dữ liệu M6. Giao Worker GPT-5.6
   Luna Medium thực hiện CP1→CP4; Codex/root chịu trách nhiệm review lặp đến khi đạt DoD.

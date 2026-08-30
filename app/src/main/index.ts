@@ -18,6 +18,7 @@ import { SshManager } from './ssh/manager'
 import { VpsService } from './vps/service'
 import { MonitorService } from './monitor/service'
 import { MonitorScheduler } from './monitor/scheduler'
+import { MlApiClient } from './monitor/mlApi'
 
 let mainWindow: BrowserWindow | null = null
 let mlService: MlServiceManager | null = null
@@ -123,7 +124,14 @@ void app
       () => mainWindow,
       monitorService
     )
-    monitorScheduler = new MonitorScheduler(async () => undefined)
+    monitorScheduler = new MonitorScheduler(async () => {
+      const port = mlService?.getPort()
+      await monitorService.pollAll(
+        sshManager!,
+        port ? new MlApiClient(`http://127.0.0.1:${port}`) : undefined,
+        (event) => mainWindow?.webContents.send('monitor:tick', event)
+      )
+    })
     monitorScheduler.start()
 
     createWindow()

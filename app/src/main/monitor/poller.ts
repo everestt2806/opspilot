@@ -54,6 +54,7 @@ export class MonitorPoller {
       }
     }
     let inserted = 0
+    const sampleIds: number[] = []
     const commit = this.database.transaction(() => {
       for (const item of parsed) {
         if (item.warning)
@@ -113,12 +114,13 @@ export class MonitorPoller {
               consecutive: target.setting.ml_consecutive
             })
           }
-          onSample?.(id)
+          sampleIds.push(id)
         }
       }
       this.repository.updateOffset(appId, offset + committedBytes)
     })
     commit()
+    for (const sampleId of sampleIds) await onSample?.(sampleId)
     return { inserted, nextOffset: offset + committedBytes }
   }
 }

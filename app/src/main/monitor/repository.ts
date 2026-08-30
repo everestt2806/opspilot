@@ -68,6 +68,16 @@ export class MonitorRepository {
       setting
     }
   }
+  listTargets(): MonitorTarget[] {
+    const ids = this.database
+      .prepare(
+        "SELECT d.id FROM deployment d JOIN app a ON a.id=d.app_id WHERE d.status='running' AND a.current_deployment_id=d.id ORDER BY a.id"
+      )
+      .all() as Array<{ id: number }>
+    return ids
+      .map((row) => this.getTarget(row.id))
+      .filter((target): target is MonitorTarget => target !== undefined)
+  }
 
   getOrCreateSetting(appId: number): MonitorSetting {
     this.database.prepare('INSERT OR IGNORE INTO monitor_setting (app_id) VALUES (?)').run(appId)
