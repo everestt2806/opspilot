@@ -21,4 +21,27 @@ describe('MonitorScheduler', () => {
     scheduler.stop()
     expect(scheduler.active).toBe(false)
   })
+
+  it('stop chờ poll đang chạy', async () => {
+    let release!: () => void
+    const work = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const scheduler = new MonitorScheduler(
+      vi.fn(() => work),
+      1000
+    )
+    const tick = scheduler.tick()
+    const stopping = scheduler.stop()
+    let done = false
+    void stopping.then(() => {
+      done = true
+    })
+    await Promise.resolve()
+    expect(done).toBe(false)
+    release()
+    await tick
+    await stopping
+    expect(done).toBe(true)
+  })
 })

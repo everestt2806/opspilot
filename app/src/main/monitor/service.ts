@@ -4,7 +4,7 @@ import { MonitorRepository } from './repository'
 import { MonitorPoller, type MetricScorer } from './poller'
 import { SshMetricSource } from './metricSource'
 import type { SshManager } from '../ssh/manager'
-import { join as posixJoin } from 'node:path'
+import { join as posixJoin } from 'node:path/posix'
 import type { IpcEventMap } from '@shared/ipc'
 import { metricLineSchema } from './metricParser'
 import type { MlApiClient } from './mlApi'
@@ -112,7 +112,6 @@ export class MonitorService {
           target.app_id,
           target.deployment_id
         )
-        continue
         continue
       }
       const samples = this.repository

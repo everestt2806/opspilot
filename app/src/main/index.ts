@@ -24,6 +24,7 @@ let mainWindow: BrowserWindow | null = null
 let mlService: MlServiceManager | null = null
 let sshManager: SshManager | null = null
 let monitorScheduler: MonitorScheduler | null = null
+let quitting = false
 
 function emitMlStatus(status: { running: boolean; reason?: string }): void {
   mainWindow?.webContents.send('system:ml-status', status)
@@ -161,10 +162,16 @@ void app
     app.quit()
   })
 
-app.on('before-quit', () => {
-  monitorScheduler?.stop()
-  mlService?.stopSync()
-  sshManager?.disconnectAll()
+app.on('before-quit', (event) => {
+  if (quitting) return
+  event.preventDefault()
+  quitting = true
+  void (async () => {
+    await monitorScheduler?.stop()
+    mlService?.stopSync()
+    sshManager?.disconnectAll()
+    app.quit()
+  })()
 })
 
 app.on('will-quit', () => {

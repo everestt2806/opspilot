@@ -307,6 +307,8 @@ Nhật ký hiện tại:
 - BLOCKED 30/08 18:19 — bước hoàn thiện DoD M6 · bằng chứng poller chưa tích hợp ML động/IPC tick/train-now/setting patch/label-alert và CLI fixture chưa có · đã thử unit test, typecheck, lint, build · cần A quyết định tiếp tục implementation trên cùng branch · điều kiện gỡ thêm đủ integration + regression test rồi mới READY_FOR_LOCAL_REVIEW
 - HANDOFF-LOCAL 30/08 18:20 — commits affc6d8..8139978 · gate FAIL (DoD chưa đủ, prettier full exit 1) · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH
 - UPDATE 30/08 18:25 — xác nhận code head bfba6c4, reviewer commit baae52f và continuation HEAD 5e200c5; bắt đầu sửa R01–R12 theo REQUEST_CHANGES, giữ nguyên commit cũ và dirty ngoài scope
+- UPDATE 30/08 21:14 — tiếp tục vòng sửa 2 theo reviewer `fa8a40b`/`1b9b222`; giữ nguyên branch, stash và ba file dirty ngoài scope
+- REVIEW-FIX 30/08 21:14 — finding R2-01/R2-02 · commit `fix(monitor): use posix paths and await graceful shutdown` pending · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (14 tests)
 - REVIEW-FIX 30/08 18:45 — finding R05/R07/R08/R06 · commit `f251368` · regression `cd app && pnpm test -- --run src/main/monitor` = PASS (8 tests)
 - REVIEW-FIX 30/08 18:46 — finding R02/R03/R06/R09 · commit `e1194cb` · regression `cd app && pnpm test -- --run src/main/monitor` = PASS (11 tests)
 - REVIEW-FIX 30/08 18:48 — finding R01/R04/R09/R10 · commit `5aed052` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (11 tests)
