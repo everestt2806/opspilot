@@ -134,4 +134,5 @@ Reviewer điền; Worker không tự sửa kết luận review.
 
 | Lần | Reviewer | Kết luận | Finding | Commit sửa |
 |---|---|---|---|---|
-| 1 | Codex/root | `REQUEST_CHANGES` | `R01–R05 BLOCKING; R06–R11 MAJOR; R12 MINOR` — xem `tk-a16-review-01.md` | `CHƯA SỬA` |
+| 1 | Codex/root | `REQUEST_CHANGES` | `R01–R05 BLOCKING; R06–R11 MAJOR; R12 MINOR` — xem `tk-a16-review-01.md` | `f251368`, `e1194cb`, `5aed052`, `4b762dc` |
+| 2 | Codex/root | `REQUEST_CHANGES` | `R2-01–R2-04 BLOCKING; R2-05–R2-07 MAJOR` — xem `tk-a16-review-02.md` | `CHƯA SỬA` |
