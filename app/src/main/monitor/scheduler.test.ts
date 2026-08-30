@@ -44,4 +44,11 @@ describe('MonitorScheduler', () => {
     await stopping
     expect(done).toBe(true)
   })
+  it('stop rejects without leaving the scheduler active', async () => {
+    const scheduler = new MonitorScheduler(() => Promise.reject(new Error('poll failed')), 1000)
+    const tick = scheduler.tick()
+    await expect(scheduler.stop()).rejects.toThrow('poll failed')
+    await expect(tick).rejects.toThrow('poll failed')
+    expect(scheduler.active).toBe(false)
+  })
 })

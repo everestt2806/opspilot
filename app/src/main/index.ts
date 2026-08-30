@@ -168,10 +168,17 @@ app.on('before-quit', (event) => {
   event.preventDefault()
   quitting = true
   void (async () => {
-    await monitorScheduler?.stop()
-    mlService?.stopSync()
-    sshManager?.disconnectAll()
-    app.quit()
+    try {
+      await monitorScheduler?.stop()
+    } catch (error) {
+      logger.error('monitor', 'Dừng monitor thất bại', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+    } finally {
+      mlService?.stopSync()
+      await sshManager?.disconnectAll()
+      app.quit()
+    }
   })()
 })
 

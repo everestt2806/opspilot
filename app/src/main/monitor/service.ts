@@ -67,6 +67,12 @@ export class MonitorService {
           (typeof value !== 'number' || !Number.isInteger(value) || value < 1)
         )
           throw new AppError('VALIDATION', 'Setting pháº£i lÃ  sá»‘ nguyÃªn dÆ°Æ¡ng.')
+        if (key === 'auto_rollback' && (!Number.isInteger(value) || (value !== 0 && value !== 1)))
+          throw new AppError('VALIDATION', 'auto_rollback must be 0 or 1')
+        if (key === 'cooldown_minutes' && (!Number.isInteger(value) || Number(value) < 0))
+          throw new AppError('VALIDATION', 'cooldown_minutes must be a non-negative integer')
+        if (['rule_cpu_pct', 'rule_mem_pct'].includes(key) && Number(value) > 100)
+          throw new AppError('VALIDATION', 'rule percentage must be between 0 and 100')
         if ((key === 'rule_error_rate' || key === 'ml_score_threshold') && Number(value) > 1)
           throw new AppError('VALIDATION', 'NgÆ°á»¡ng pháº£i tá»« 0 Ä‘áº¿n 1.')
         if (

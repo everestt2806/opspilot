@@ -1,3 +1,5 @@
+import { logger } from '../logger'
+
 export class MonitorScheduler {
   private timer: ReturnType<typeof setInterval> | null = null
   private running = false
@@ -10,7 +12,11 @@ export class MonitorScheduler {
   start(): void {
     if (this.timer || this.stopping) return
     this.timer = setInterval(() => {
-      void this.tick().catch(() => undefined)
+      void this.tick().catch((error) => {
+        logger.error('monitor', 'Monitor scheduler tick thất bại', {
+          error: error instanceof Error ? error.message : String(error)
+        })
+      })
     }, this.intervalMs)
   }
   async stop(): Promise<void> {

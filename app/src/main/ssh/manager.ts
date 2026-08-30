@@ -196,10 +196,8 @@ export class SshManager extends EventEmitter {
     this.emitStatus(vpsId, 'offline')
   }
 
-  disconnectAll(): void {
-    for (const vpsId of [...this.entries.keys()]) {
-      void this.disconnect(vpsId)
-    }
+  async disconnectAll(): Promise<void> {
+    await Promise.all([...this.entries.keys()].map((vpsId) => this.disconnect(vpsId)))
   }
 
   override on(event: 'status', callback: (update: SshStatusEvent) => void): this {

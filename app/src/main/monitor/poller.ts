@@ -12,6 +12,13 @@ import type { MlIngestResponse } from './mlApi'
 export interface MetricScorer {
   ingest(deploymentId: number, sample: MetricLine): Promise<MlIngestResponse>
 }
+
+function ensembleAbove(result: MlIngestResponse | undefined, threshold: number): boolean {
+  if (!result) return false
+  return (['zscore_ewma', 'iforest', 'ocsvm'] as const).filter(
+    (method) => result.scores[method] !== null && result.scores[method]! > threshold
+  ).length >= 2
+}
 export interface MlStatusReporter {
   report(status: { running: boolean; reason?: string }): void
 }
@@ -146,7 +153,7 @@ export class MonitorPoller {
               score: mlResults.get(item.metric.seq)?.scores[method] ?? null,
               above:
                 method === 'ensemble'
-                  ? (mlResults.get(item.metric.seq)?.above_threshold[method] ?? false)
+                  ? ensembleAbove(mlResults.get(item.metric.seq), target.setting.ml_score_threshold)
                   : (mlResults.get(item.metric.seq)?.scores[method] ?? null) !== null &&
                     (mlResults.get(item.metric.seq)?.scores[method] ?? 0) >
                       target.setting.ml_score_threshold,
@@ -163,7 +170,7 @@ export class MonitorPoller {
               score,
               above:
                 method === 'ensemble'
-                  ? (result?.above_threshold[method] ?? false)
+                  ? ensembleAbove(result, target.setting.ml_score_threshold)
                   : score !== null && score > target.setting.ml_score_threshold,
               threshold: target.setting.ml_score_threshold,
               consecutive: target.setting.ml_consecutive
