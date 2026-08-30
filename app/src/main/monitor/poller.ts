@@ -36,7 +36,8 @@ export class MonitorPoller {
     let inserted = 0
     const commit = this.database.transaction(() => {
       for (const item of parsed) {
-        if (item.warning) logger.warn('monitor', item.warning, { app_id: appId, consumed_bytes: item.byteLength })
+        if (item.warning)
+          logger.warn('monitor', item.warning, { app_id: appId, consumed_bytes: item.byteLength })
         if (!item.metric) continue
         const id = this.repository.insertSample({
           deploymentId,
@@ -48,9 +49,35 @@ export class MonitorPoller {
           inserted += 1
           const sample = this.repository.getMetric(id)
           const rule = evaluateRule(sample, target.setting)
-          this.repository.insertScore({ metricSampleId: id, deploymentId, ts: sample.ts_vps, method: 'rule', score: rule.violated ? 1 : 0, above: rule.violated, detail: JSON.stringify({ reasons: rule.reasons }) })
-          this.tracker.update({ deploymentId, metricSampleId: id, ts: sample.ts_vps, method: 'rule', score: rule.violated ? 1 : 0, above: rule.violated, threshold: 0, consecutive: target.setting.rule_consecutive, detail: JSON.stringify({ reasons: rule.reasons }) })
-          for (const method of ['zscore_ewma', 'iforest', 'ocsvm', 'ensemble'] as const) this.repository.insertScore({ metricSampleId: id, deploymentId, ts: sample.ts_vps, method, score: null, above: false })
+          this.repository.insertScore({
+            metricSampleId: id,
+            deploymentId,
+            ts: sample.ts_vps,
+            method: 'rule',
+            score: rule.violated ? 1 : 0,
+            above: rule.violated,
+            detail: JSON.stringify({ reasons: rule.reasons })
+          })
+          this.tracker.update({
+            deploymentId,
+            metricSampleId: id,
+            ts: sample.ts_vps,
+            method: 'rule',
+            score: rule.violated ? 1 : 0,
+            above: rule.violated,
+            threshold: 0,
+            consecutive: target.setting.rule_consecutive,
+            detail: JSON.stringify({ reasons: rule.reasons })
+          })
+          for (const method of ['zscore_ewma', 'iforest', 'ocsvm', 'ensemble'] as const)
+            this.repository.insertScore({
+              metricSampleId: id,
+              deploymentId,
+              ts: sample.ts_vps,
+              method,
+              score: null,
+              above: false
+            })
           onSample?.(id)
         }
       }

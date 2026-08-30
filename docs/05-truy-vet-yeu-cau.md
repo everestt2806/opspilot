@@ -36,6 +36,8 @@ Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng đượ
 | FR-D3 | Rule-based, ngưỡng cấu hình được | M6 `rules.ts` + `monitor_setting` | đổi ngưỡng qua Drawer → alert đổi theo | 3.4 | W3 | ⬜ |
 | FR-D4 | 3 phương pháp ML song song + độ tin cậy | M7 | `score_sample` có đủ 5 dòng/mẫu | 3.4 | W1–W3 | ⬜ |
 | FR-D5 | Gắn nhãn đúng/sai từng cảnh báo | `monitor:label-alert` | bấm 1 phát, DB đổi | 3.4 t3 | W4 | ⬜ |
+
+Ghi chú TK-A16 local: đã có nền parser/repository/rule/scheduler và các query monitor; FR-D2/FR-D3/FR-D4 vẫn chưa đạt nghiệm thu vì chưa nối poll thật, ML scores động và toàn bộ IPC lifecycle.
 | FR-E1 | Rollback thủ công | M4 rollback | về đúng version cũ, app chạy | 3.5 | W4 | ⬜ |
 | FR-E2 | Tự động rollback theo method tin cậy | M8 | demo memory leak → tự rollback | 3.4 | W5 | ⬜ |
 | FR-E3 | Ghi log toàn bộ hành động | `action_log` | màn Lịch sử có đủ loại hành động | 3.7 | W7 | ⬜ |

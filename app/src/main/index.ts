@@ -16,10 +16,13 @@ import { logger } from './logger'
 import { MlServiceManager } from './mlClient'
 import { SshManager } from './ssh/manager'
 import { VpsService } from './vps/service'
+import { MonitorService } from './monitor/service'
+import { MonitorScheduler } from './monitor/scheduler'
 
 let mainWindow: BrowserWindow | null = null
 let mlService: MlServiceManager | null = null
 let sshManager: SshManager | null = null
+let monitorScheduler: MonitorScheduler | null = null
 
 function emitMlStatus(status: { running: boolean; reason?: string }): void {
   mainWindow?.webContents.send('system:ml-status', status)
@@ -109,6 +112,7 @@ void app
     })
 
     const historyService = new HistoryService(new ActionLogRepository(database))
+    const monitorService = new MonitorService(database)
 
     registerIpcHandlers(
       mlService,
@@ -116,8 +120,11 @@ void app
       sshManager,
       deployService,
       historyService,
-      () => mainWindow
+      () => mainWindow,
+      monitorService
     )
+    monitorScheduler = new MonitorScheduler(async () => undefined)
+    monitorScheduler.start()
 
     createWindow()
 
@@ -147,6 +154,7 @@ void app
   })
 
 app.on('before-quit', () => {
+  monitorScheduler?.stop()
   mlService?.stopSync()
   sshManager?.disconnectAll()
 })
