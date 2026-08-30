@@ -1,8 +1,8 @@
 # REVIEW 02 — TK-A16 M6 Poller + Rule Engine
 
-> Reviewer: Codex/root  
-> Code được review: `5e200c5..53482e7`  
-> Kết luận: **REQUEST_CHANGES — chưa đạt `READY_FOR_LOCAL_REVIEW`**  
+> Reviewer: Codex/root
+> Code được review: `5e200c5..53482e7`
+> Kết luận: **REQUEST_CHANGES — chưa đạt `READY_FOR_LOCAL_REVIEW`**
 > Quyền Git: chỉ commit cục bộ; **không push, không mở PR, không merge** khi A chưa yêu cầu.
 
 ## 1. Bằng chứng review độc lập
@@ -119,7 +119,8 @@
 
 ## 3. Thứ tự commit sửa vòng 2
 
-Không rewrite/rebase lịch sử. Tạo commit mới sau `53482e7` theo thứ tự:
+Không rewrite/rebase lịch sử. Tạo commit mới sau reviewer commit `fa8a40b` (code head được review là
+`53482e7`) theo thứ tự:
 
 1. `fix(monitor): use posix paths and await graceful shutdown` — R2-01, R2-02.
 2. `feat(monitor): complete ml lifecycle settings and alerts` — R2-03, R2-05, R2-06.
@@ -154,10 +155,11 @@ thể ghi riêng; scoped file TK-A16 phải xanh.
 ## 5. Prompt giao Worker vòng sửa 02
 
 ```text
-Tiếp tục TK-A16 trên branch feat/m06-monitor-poller-rule từ HEAD 53482e7. Đọc đầy đủ CLAUDE.md,
-docs/tasks/tk-a16-m6-poller-rule.md, docs/tasks/tk-a16-review-02.md và handoff hiện tại. Kết luận
-review vòng 2 là REQUEST_CHANGES: sửa toàn bộ R2-01 đến R2-07 theo đúng thứ tự 5 commit ở mục 3;
-không tự thu hẹp scope và không rewrite/rebase lịch sử.
+Tiếp tục TK-A16 trên branch feat/m06-monitor-poller-rule từ HEAD hiện tại. Xác nhận code head được
+review là 53482e7 và reviewer commit là fa8a40b; không checkout lùi. Đọc đầy đủ CLAUDE.md,
+docs/tasks/tk-a16-m6-poller-rule.md, docs/tasks/tk-a16-review-02.md và handoff hiện tại. Kết luận review
+vòng 2 là REQUEST_CHANGES: sửa toàn bộ R2-01 đến R2-07 theo đúng thứ tự 5 commit ở mục 3; không tự thu
+hẹp scope và không rewrite/rebase lịch sử.
 
 Node 22 có sẵn qua `. .\tools\enter-node22.ps1` (v22.23.2); phải dùng nó cho gate. Được dùng GitNexus
 read-only và re-analyze nếu stale. Không sửa contract/migration/renderer/collector/deploy, không thêm

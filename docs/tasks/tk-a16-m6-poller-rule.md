@@ -314,7 +314,7 @@ Nhật ký hiện tại:
 - UPDATE 30/08 18:55 — gate bằng Node 24.16.0 vì máy không có Node 22; typecheck/build/scoped Prettier PASS, full test FAIL 2 renderer timeout (188/190); chưa READY_FOR_LOCAL_REVIEW
 - HANDOFF-LOCAL 30/08 18:58 — commits 5e200c5..HEAD · gate FAIL (Node 22 unavailable; full test 188/190) · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH
 - REVIEW 30/08 18:35 — `REQUEST_CHANGES` · review file `tk-a16-review-01.md` · R01–R05 BLOCKING, R06–R11 MAJOR, R12 MINOR · test độc lập Node 22: 186/186, lint 0 error/16 baseline warning, typecheck/build/scoped Prettier PASS · CHƯA PUSH
-- REVIEW 30/08 19:15 — `REQUEST_CHANGES` vòng 2 · review file `tk-a16-review-02.md` · R2-01–R2-04 BLOCKING, R2-05–R2-07 MAJOR · test độc lập Node 22.23.2: monitor 12/12, full 190/190, lint 0 error/16 baseline warning, typecheck/build/scoped Prettier PASS · CLI hiện chưa chạy DB/poller thật · CHƯA PUSH
+- REVIEW 30/08 19:15 — commit `fa8a40b` · `REQUEST_CHANGES` vòng 2 · review file `tk-a16-review-02.md` · R2-01–R2-04 BLOCKING, R2-05–R2-07 MAJOR · test độc lập Node 22.23.2: monitor 12/12, full 190/190, lint 0 error/16 baseline warning, typecheck/build/scoped Prettier PASS · CLI hiện chưa chạy DB/poller thật · CHƯA PUSH
 - ASSIGNED 30/08 — Sau demo VPS/Deploy, A ưu tiên lát cắt dữ liệu M6. Giao Worker GPT-5.6
   Luna Medium thực hiện CP1→CP4; Codex/root chịu trách nhiệm review lặp đến khi đạt DoD.
 
