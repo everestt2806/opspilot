@@ -310,8 +310,11 @@ Nhật ký hiện tại:
 - UPDATE 30/08 21:14 — tiếp tục vòng sửa 2 theo reviewer `fa8a40b`/`1b9b222`; giữ nguyên branch, stash và ba file dirty ngoài scope
 - REVIEW-FIX 30/08 21:14 — finding R2-01/R2-02 · commit `fix(monitor): use posix paths and await graceful shutdown` pending · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (14 tests)
 - REVIEW-FIX 30/08 21:20 — finding R2-01/R2-02 · commit `63e1be3` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (14 tests)
+- REVIEW-FIX 30/08 21:22 — finding R2-03/R2-05/R2-06 · commit `75f760a` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (14 tests)
 - REVIEW-FIX 30/08 21:18 — finding R2-03/R2-05/R2-06 · commit pending `feat(monitor): complete ml lifecycle settings and alerts` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (14 tests)
 - REVIEW-FIX 30/08 21:22 — finding R2-07 · commit pending `fix(monitor): emit exact batches and classify runtime failures` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (14 tests)
+- REVIEW-FIX 30/08 21:25 — finding R2-07 · commit `8300f55` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (14 tests)
+- REVIEW-FIX 30/08 21:27 — finding R2-04 · commit pending `test(monitor): make local cli exercise sqlite poller flow` · regression `cd app && pnpm try:monitor` = PASS (SQLite metrics=3, score_rows=15, alerts=0, offset=679, retry_inserted=0)
 - REVIEW-FIX 30/08 18:45 — finding R05/R07/R08/R06 · commit `f251368` · regression `cd app && pnpm test -- --run src/main/monitor` = PASS (8 tests)
 - REVIEW-FIX 30/08 18:46 — finding R02/R03/R06/R09 · commit `e1194cb` · regression `cd app && pnpm test -- --run src/main/monitor` = PASS (11 tests)
 - REVIEW-FIX 30/08 18:48 — finding R01/R04/R09/R10 · commit `5aed052` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (11 tests)
