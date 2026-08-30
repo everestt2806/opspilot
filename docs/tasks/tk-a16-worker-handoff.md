@@ -125,4 +125,4 @@ Reviewer điền; Worker không tự sửa kết luận review.
 
 | Lần | Reviewer | Kết luận | Finding | Commit sửa |
 |---|---|---|---|---|
-| 1 | Codex/root | `CHƯA REVIEW` | `—` | `—` |
+| 1 | Codex/root | `REQUEST_CHANGES` | `R01–R05 BLOCKING; R06–R11 MAJOR; R12 MINOR` — xem `tk-a16-review-01.md` | `CHƯA SỬA` |

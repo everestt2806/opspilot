@@ -21,7 +21,7 @@
 
 | ID | Task | Chủ | Hạn | Trạng thái | Branch | PR/phụ thuộc | Ghi chú |
 |---|---|---|---|---|---|---|---|
-| TK-A16 | M6: poll JSONL → metric/5 score/alert → monitor IPC | A | 04/09 | BLOCKED | `feat/m06-monitor-poller-rule` | — | local 8139978 · chưa push · thiếu ML/IPC tick/train/CLI integration; cần tiếp tục trên cùng branch |
+| TK-A16 | M6: poll JSONL → metric/5 score/alert → monitor IPC | A | 04/09 | BLOCKED | `feat/m06-monitor-poller-rule` | — | review 01 tại `tk-a16-review-01.md`: R01–R05 blocking, R06–R11 major, R12 minor; local `bfba6c4`, chưa push |
 | TK-B4 | M5: docker stats + HTTP probe local | B | 01/09 | TUẦN NÀY | `feat/m05-collector-probes` | TK-B2 Express đã có | **Task B kéo ngay** |
 | TK-B5 | M5: metrics.jsonl + latest.json, seq/fsync/rotation | B | 02/09 | BACKLOG | `feat/m05-collector-output` | Sau TK-B4 | Khép blocker TK-A5 |
 | TK-B6 | M5: chạy collector Docker trên VM01 | B | 03/09 | BACKLOG | `feat/m05-collector-docker` | Sau TK-B5 | Không mở thêm port |
