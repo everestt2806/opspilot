@@ -119,8 +119,8 @@ pnpm test -- --reporter=verbose
 ## 7. Prompt giao Worker vòng sửa 05
 
 ```text
-Tiếp tục TK-A16 trên branch feat/m06-monitor-poller-rule từ HEAD hiện tại; lịch sử phải chứa commit
-7c0a7d7 và commit review `docs(review): request A16 round five corrections`, không checkout lùi.
+Tiếp tục TK-A16 trên branch feat/m06-monitor-poller-rule từ HEAD hiện tại; lịch sử phải chứa code
+handoff `7c0a7d7` và reviewer commit `a95ef2b`, không checkout lùi.
 Đọc đầy đủ CLAUDE.md, docs/tasks/tk-a16-m6-poller-rule.md,
 docs/tasks/tk-a16-review-05.md và handoff. Sửa toàn bộ R5-01…R5-04 theo đúng ba commit ở mục 5.
 
