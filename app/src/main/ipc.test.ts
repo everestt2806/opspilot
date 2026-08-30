@@ -110,10 +110,10 @@ describe('handle', () => {
       )
       const callbackFor = (
         channel: string
-      ): ((event: unknown, ...args: never[]) => Promise<unknown>) => {
+      ): ((event: unknown, ...args: unknown[]) => Promise<unknown>) => {
         const callback = handleMock.mock.calls.find(([registered]) => registered === channel)?.[1]
         expect(callback).toBeTypeOf('function')
-        return callback
+        return callback as (event: unknown, ...args: unknown[]) => Promise<unknown>
       }
       await expect(
         callbackFor('monitor:samples')({}, 1, '2026-08-30T00:00:00Z')

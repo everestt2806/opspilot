@@ -32,12 +32,12 @@ Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng đượ
 | FR-C4 | Verify checksum + đếm bản ghi | M9 `VERIFY` | bảng đối chiếu 2 cột (chụp vào báo cáo) | 3.6 | W7 | ⬜ |
 | FR-C5 | Huỷ/rollback migrate, giữ nguồn | M9 nhánh lỗi | **test chủ động: ngắt SSH giữa TRANSFER** | 3.6 | W7 | ⬜ |
 | FR-D1 | Container thu metric deploy kèm app | M5 + compose template | `metrics.jsonl` có dữ liệu | — | W2 | ⬜ |
-| FR-D2 | Poll metric qua SSH + dashboard real-time | M6 + UI | metric thật hiện trên chart | 3.4 | W3 | ⬜ |
-| FR-D3 | Rule-based, ngưỡng cấu hình được | M6 `rules.ts` + `monitor_setting` | đổi ngưỡng qua Drawer → alert đổi theo | 3.4 | W3 | ⬜ |
-| FR-D4 | 3 phương pháp ML song song + độ tin cậy | M7 | `score_sample` có đủ 5 dòng/mẫu | 3.4 | W1–W3 | ⬜ |
-| FR-D5 | Gắn nhãn đúng/sai từng cảnh báo | `monitor:label-alert` | bấm 1 phát, DB đổi | 3.4 t3 | W4 | ⬜ |
+| FR-D2 | Poll metric qua SSH + dashboard real-time | M6 + UI | metric/sample tick qua MonitorPoller + SQLite thật | 3.4 | W3 | 🔨 |
+| FR-D3 | Rule-based, ngưỡng cấu hình được | M6 `rules.ts` + `monitor_setting` | rule/setting/alert lifecycle có regression SQLite | 3.4 | W3 | 🔨 |
+| FR-D4 | 3 phương pháp ML song song + độ tin cậy | M7 | `score_sample` đủ 5 dòng/mẫu, ML NULL khi down | 3.4 | W1–W3 | 🔨 |
+| FR-D5 | Gắn nhãn đúng/sai từng cảnh báo | `monitor:label-alert` | IPC label ghi DB thật và regression | 3.4 t3 | W4 | 🔨 |
 
-Ghi chú TK-A16 local: đã có nền parser/repository/rule/scheduler và các query monitor; FR-D2/FR-D3/FR-D4 vẫn chưa đạt nghiệm thu vì chưa nối poll thật, ML scores động và toàn bộ IPC lifecycle.
+Ghi chú TK-A16 local: backend parser/repository/rule/poller/ML/IPC đã có regression SQLite thật và CLI fixture; smoke VPS thật, UI nghiệm thu và full-suite renderer vẫn ngoài scope TK-A16.
 | FR-E1 | Rollback thủ công | M4 rollback | về đúng version cũ, app chạy | 3.5 | W4 | ⬜ |
 | FR-E2 | Tự động rollback theo method tin cậy | M8 | demo memory leak → tự rollback | 3.4 | W5 | ⬜ |
 | FR-E3 | Ghi log toàn bộ hành động | `action_log` | màn Lịch sử có đủ loại hành động | 3.7 | W7 | ⬜ |

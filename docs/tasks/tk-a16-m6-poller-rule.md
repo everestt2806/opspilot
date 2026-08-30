@@ -382,3 +382,8 @@ Worker điền lệnh tối thiểu vào biên bản bàn giao để reviewer ch
 - REVIEW-FIX 31/08 — R5-04 · commit docs handoff · cập nhật trường tổng hợp, gate, review history và board.
 - HANDOFF-LOCAL 31/08 — commits `f924420..HEAD` · gate focused PASS; full reviewer `180/195` renderer baseline, isolated renderer `3/3 PASS` · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH.
 - REVIEW 31/08 — `REQUEST_CHANGES` vòng 6 tại Worker HEAD `b35c821` · review file `tk-a16-review-06.md` · R6-01 BLOCKING, R6-02…R6-04 MAJOR · reviewer Node 22: focused 18/18, CLI 150/750/0, lint/typecheck/scoped Prettier/build PASS; full 180/195 renderer baseline · CHƯA PUSH.
+- UPDATE 31/08 — tiếp tục từ HEAD `92bb19f`, xác nhận review commit `6333008`; board giữ `ĐANG LÀM`, giữ nguyên untracked/stash và sửa R6-01…R6-04 theo đúng ba commit local.
+- REVIEW-FIX 31/08 — finding R6-01 · commit `5adaccb` · regression `. .\tools\enter-node22.ps1; Set-Location app; pnpm test -- --run src/main/monitor` = PASS (18 tests); autoTrain:false down→up, một action-log failure, trainCalls=0.
+- REVIEW-FIX 31/08 — finding R6-02/R6-03 · commit `734fccc` · regression `. .\tools\enter-node22.ps1; Set-Location app; pnpm test -- --run src/main/monitor src/main/shutdown.test.ts src/main/ipc.test.ts` = PASS (25 tests); train boundary, exact tick, empty batch, two-app order, SQLite IPC và label.
+- REVIEW-FIX 31/08 — finding R6-04 · commit local handoff · handoff/task log/board reconcile, full evidence ghi trong `tk-a16-worker-handoff.md`.
+- HANDOFF-LOCAL 31/08 — commits `92bb19f..HEAD` · gate focused/CLI/lint/typecheck/scoped Prettier/build PASS; full `189/200`, 11 renderer-only failures/timeouts, isolated renderer `3/3 PASS` · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH
