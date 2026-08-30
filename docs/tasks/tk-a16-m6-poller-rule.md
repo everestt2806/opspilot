@@ -332,6 +332,7 @@ Nhật ký hiện tại:
 - REVIEW-FIX 30/08 21:27 — finding R2-04 · commit `d4f9d45` · regression `cd app && pnpm try:monitor` = PASS (SQLite metrics=3, score_rows=15, alerts=0, offset=679, retry_inserted=0).
 - UPDATE 30/08 21:40 — Node 22.23.2 gate chạy đúng; monitor 14/14 và CLI thật PASS; full test hiện 190/192 do 2 renderer timeout, chưa READY_FOR_LOCAL_REVIEW.
 - HANDOFF-LOCAL 30/08 21:45 — commits 1b9b222..HEAD · gate FAIL (full test 190/192, 2 renderer timeout) · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH.
+- REVIEW 30/08 21:50 — `REQUEST_CHANGES` vòng 3 · review file `tk-a16-review-03.md` · R3-01/R3-02 BLOCKING, R3-03–R3-05 MAJOR, R3-06 MINOR · reviewer Node 22.23.2: monitor 14/14, CLI SQLite thật PASS, full 192/192, lint 0 error/16 baseline warning, typecheck/build/scoped Prettier PASS · timeout cũ không phải blocker · CHƯA PUSH.
 
 ## 11. Biên bản bàn giao bắt buộc
 
