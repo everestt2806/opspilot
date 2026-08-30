@@ -76,7 +76,7 @@ export class MonitorService {
       throw new AppError('VALIDATION', 'Invalid alert label')
     if (!this.db.prepare('SELECT id FROM alert WHERE id=?').get(alertId))
       throw new AppError('VALIDATION', 'Alert not found')
-    this.db.transaction(() => {
+    const update = this.db.transaction(() => {
       const result = this.db
         .prepare('UPDATE alert SET label=?, labeled_at=? WHERE id=?')
         .run(label, label ? new Date().toISOString() : null, alertId)
@@ -85,6 +85,7 @@ export class MonitorService {
         .prepare('INSERT INTO action_log (action,status,message) VALUES (?,?,?)')
         .run('alert_labeled', 'success', `Updated alert ${alertId}`)
     })
+    update()
   }
   async trainNow(
     deploymentId: number,
@@ -93,7 +94,7 @@ export class MonitorService {
     const rows = this.db
       .prepare('SELECT raw_json FROM metric_sample WHERE deployment_id=? ORDER BY seq')
       .all(deploymentId) as Array<{ raw_json: string }>
-    if (rows.length < 150) throw new Error('Chưa đủ 150 mẫu để train')
+    if (rows.length < 150) throw new AppError('VALIDATION', 'Chưa đủ 150 mẫu để train')
     const samples = rows.map((row) => metricLineSchema.parse(JSON.parse(row.raw_json)))
     const result = await client.train(deploymentId, samples)
     return { train_sample_count: result.train_sample_count }

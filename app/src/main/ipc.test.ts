@@ -1,3 +1,5 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { handleMock } = vi.hoisted(() => ({ handleMock: vi.fn() }))
@@ -10,6 +12,8 @@ vi.mock('electron', () => ({
 
 import { AppError } from './errors'
 import { handle, registerIpcHandlers } from './ipc'
+import { closeDatabase, initializeDatabase } from './db'
+import { MonitorService } from './monitor/service'
 
 describe('handle', () => {
   beforeEach(() => {
@@ -84,5 +88,72 @@ describe('handle', () => {
     await callbackFor('window:close')({})
     expect(window.minimize).toHaveBeenCalledOnce()
     expect(window.close).toHaveBeenCalledOnce()
+  })
+
+  it('monitor handlers doc va sua SQLite that', async () => {
+    const dir = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-ipc-monitor-'))
+    const db = initializeDatabase(dir)
+    try {
+      db.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('v','127.0.0.1','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'app','express',30000,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'app:v1','running'); INSERT INTO metric_sample (deployment_id,seq,ts_vps,ts_local,raw_json,container_up) VALUES (1,1,'2026-08-30T00:00:01Z','2026-08-30T00:00:01Z','{}',1); INSERT INTO alert (deployment_id,metric_sample_id,method,ts_vps,peak_score) VALUES (1,1,'rule','2026-08-30T00:00:01Z',1);"
+      )
+      const monitor = new MonitorService(db)
+      const labelSpy = vi.spyOn(monitor, 'labelAlert')
+      registerIpcHandlers(
+        { getPort: () => 1234 } as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        {} as never,
+        () => null,
+        monitor
+      )
+      const callbackFor = (
+        channel: string
+      ): ((event: unknown, ...args: never[]) => Promise<unknown>) => {
+        const callback = handleMock.mock.calls.find(([registered]) => registered === channel)?.[1]
+        expect(callback).toBeTypeOf('function')
+        return callback
+      }
+      await expect(
+        callbackFor('monitor:samples')({}, 1, '2026-08-30T00:00:00Z')
+      ).resolves.toMatchObject({
+        ok: true,
+        data: [expect.objectContaining({ seq: 1 })]
+      })
+      await expect(
+        callbackFor('monitor:scores')({}, 1, '2026-08-30T00:00:00Z')
+      ).resolves.toMatchObject({
+        ok: true,
+        data: [expect.objectContaining({ rule: null })]
+      })
+      await expect(callbackFor('monitor:alerts')({}, 1, 10)).resolves.toMatchObject({
+        ok: true,
+        data: [expect.objectContaining({ id: 1 })]
+      })
+      await expect(callbackFor('monitor:get-setting')({}, 1)).resolves.toMatchObject({
+        ok: true,
+        data: expect.objectContaining({ app_id: 1 })
+      })
+      await expect(
+        callbackFor('monitor:set-setting')({}, 1, { rule_cpu_pct: 80 })
+      ).resolves.toMatchObject({
+        ok: true,
+        data: expect.objectContaining({ rule_cpu_pct: 80 })
+      })
+      await expect(callbackFor('monitor:label-alert')({}, 1, 'true_positive')).resolves.toEqual({
+        ok: true,
+        data: undefined
+      })
+      expect(labelSpy).toHaveBeenCalledWith(1, 'true_positive')
+      const trainResult = await callbackFor('monitor:train-now')({}, 1)
+      expect(trainResult).toMatchObject({ ok: false, error: { code: 'VALIDATION' } })
+      expect(
+        (db.prepare('SELECT label FROM alert WHERE id=1').get() as { label: string }).label
+      ).toBe('true_positive')
+    } finally {
+      closeDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
