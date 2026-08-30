@@ -138,7 +138,8 @@ host; không tự sửa renderer ngoài scope. Chỉ đổi board sang `CHỜ RE
 ## 6. Prompt giao Worker vòng sửa 04
 
 ```text
-Tiếp tục TK-A16 trên branch feat/m06-monitor-poller-rule từ HEAD f268277. Đọc đầy đủ CLAUDE.md,
+Tiếp tục TK-A16 trên branch feat/m06-monitor-poller-rule từ HEAD hiện tại; lịch sử phải chứa reviewer
+commit 0e75ed3, không checkout lùi về code head f268277. Đọc đầy đủ CLAUDE.md,
 docs/tasks/tk-a16-m6-poller-rule.md, docs/tasks/tk-a16-review-04.md và handoff. Review vòng 4 là
 REQUEST_CHANGES: sửa toàn bộ R4-01 đến R4-06 theo đúng bốn commit ở mục 4, không tự thu hẹp scope.
 
