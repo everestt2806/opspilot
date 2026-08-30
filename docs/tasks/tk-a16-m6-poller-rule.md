@@ -309,7 +309,9 @@ Nhật ký hiện tại:
 - UPDATE 30/08 18:25 — xác nhận code head bfba6c4, reviewer commit baae52f và continuation HEAD 5e200c5; bắt đầu sửa R01–R12 theo REQUEST_CHANGES, giữ nguyên commit cũ và dirty ngoài scope
 - UPDATE 30/08 21:14 — tiếp tục vòng sửa 2 theo reviewer `fa8a40b`/`1b9b222`; giữ nguyên branch, stash và ba file dirty ngoài scope
 - REVIEW-FIX 30/08 21:14 — finding R2-01/R2-02 · commit `fix(monitor): use posix paths and await graceful shutdown` pending · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (14 tests)
+- REVIEW-FIX 30/08 21:20 — finding R2-01/R2-02 · commit `63e1be3` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (14 tests)
 - REVIEW-FIX 30/08 21:18 — finding R2-03/R2-05/R2-06 · commit pending `feat(monitor): complete ml lifecycle settings and alerts` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (14 tests)
+- REVIEW-FIX 30/08 21:22 — finding R2-07 · commit pending `fix(monitor): emit exact batches and classify runtime failures` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (14 tests)
 - REVIEW-FIX 30/08 18:45 — finding R05/R07/R08/R06 · commit `f251368` · regression `cd app && pnpm test -- --run src/main/monitor` = PASS (8 tests)
 - REVIEW-FIX 30/08 18:46 — finding R02/R03/R06/R09 · commit `e1194cb` · regression `cd app && pnpm test -- --run src/main/monitor` = PASS (11 tests)
 - REVIEW-FIX 30/08 18:48 — finding R01/R04/R09/R10 · commit `5aed052` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (11 tests)

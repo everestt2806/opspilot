@@ -98,7 +98,8 @@ describe('MonitorPoller ingest', () => {
     db.prepare('UPDATE app SET current_deployment_id=NULL').run()
     expect(await poller.poll(1, 1, source(`${metric(2)}\n`))).toEqual({
       inserted: 0,
-      nextOffset: 1
+      nextOffset: 1,
+      sampleIds: []
     })
   })
 

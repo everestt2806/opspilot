@@ -1,7 +1,7 @@
 import type Database from 'better-sqlite3'
 import type { Alert, MetricSample, MonitorSetting, ScoreSet } from '@shared/ipc'
 import { MonitorRepository } from './repository'
-import { MonitorPoller, type MetricScorer } from './poller'
+import { MetricSourceError, MonitorPoller, type MetricScorer } from './poller'
 import { AppError } from '../errors'
 import { SshMetricSource } from './metricSource'
 import type { SshManager } from '../ssh/manager'
@@ -110,10 +110,6 @@ export class MonitorService {
     mlStatus?: (status: { running: boolean; reason?: string }) => void
   ): Promise<void> {
     for (const target of this.repository.listTargets()) {
-      const before = this.repository.listSamples(
-        target.deployment_id,
-        '0000-01-01T00:00:00Z'
-      ).length
       if (scorer && 'status' in scorer) {
         try {
           const status = await (scorer as MlApiClient).status(target.deployment_id)
@@ -141,8 +137,9 @@ export class MonitorService {
       const poller = new MonitorPoller(this.db, this.repository, undefined, scorer, {
         report: (status) => mlStatus?.(status)
       })
+      let result: { sampleIds: number[] }
       try {
-        await poller.poll(
+        result = await poller.poll(
           target.app_id,
           target.deployment_id,
           new SshMetricSource(
@@ -151,7 +148,8 @@ export class MonitorService {
             posixJoin('/opt/opspilot', target.app_name, 'metrics', 'metrics.jsonl')
           )
         )
-      } catch {
+      } catch (error) {
+        if (!(error instanceof MetricSourceError)) throw error
         this.repository.logAction(
           'ssh_error',
           'failed',
@@ -161,9 +159,7 @@ export class MonitorService {
         )
         continue
       }
-      const samples = this.repository
-        .listSamples(target.deployment_id, '0000-01-01T00:00:00Z')
-        .slice(before)
+      const samples = result.sampleIds.map((id) => this.repository.getMetric(id))
       if (samples.length)
         emit?.({
           deployment_id: target.deployment_id,

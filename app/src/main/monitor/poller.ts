@@ -15,6 +15,7 @@ export interface MetricScorer {
 export interface MlStatusReporter {
   report(status: { running: boolean; reason?: string }): void
 }
+export class MetricSourceError extends Error {}
 
 export class MonitorPoller {
   constructor(
@@ -30,12 +31,17 @@ export class MonitorPoller {
     deploymentId: number,
     source: MetricSource,
     onSample?: (sampleId: number) => Promise<void> | void
-  ): Promise<{ inserted: number; nextOffset: number }> {
+  ): Promise<{ inserted: number; nextOffset: number; sampleIds: number[] }> {
     const target = this.repository.getTarget(deploymentId)
-    if (!target || target.app_id !== appId) return { inserted: 0, nextOffset: 1 }
+    if (!target || target.app_id !== appId) return { inserted: 0, nextOffset: 1, sampleIds: [] }
     let offset = target.metrics_offset
     let mlFailureLogged = false
-    const size = await source.size()
+    let size: number
+    try {
+      size = await source.size()
+    } catch (error) {
+      throw new MetricSourceError('Không đọc được kích thước metrics.jsonl', { cause: error })
+    }
     if (size < offset - 1) {
       offset = 1
       logger.info('monitor', 'File metric nhỏ hơn offset, reset về đầu file', { app_id: appId })
@@ -47,16 +53,33 @@ export class MonitorPoller {
         deploymentId
       )
     }
-    const content = await source.tail(offset)
+    let content: string
+    try {
+      content = await source.tail(offset)
+    } catch (error) {
+      throw new MetricSourceError('Không đọc được metrics.jsonl', { cause: error })
+    }
     const committedBytes = completeByteLength(content)
-    if (committedBytes === 0) return { inserted: 0, nextOffset: offset }
+    if (committedBytes === 0) return { inserted: 0, nextOffset: offset, sampleIds: [] }
     const completeContent = content.slice(0, content.lastIndexOf('\n') + 1)
-    const parsed = parseMetricContent(completeContent).filter(
+    const parsed = parseMetricContent(completeContent)
+    for (const item of parsed)
+      if (item.warning) {
+        logger.warn('monitor', item.warning, { app_id: appId, consumed_bytes: item.byteLength })
+        this.repository.logAction(
+          'ssh_error',
+          'failed',
+          'Dòng metric hỏng đã được tiêu thụ',
+          appId,
+          deploymentId
+        )
+      }
+    const newItems = parsed.filter(
       (item) => item.metric && !this.repository.hasSample(deploymentId, item.metric.seq)
     )
     const mlResults = new Map<number, MlIngestResponse>()
     if (this.scorer) {
-      for (const item of parsed) {
+      for (const item of newItems) {
         if (!item.metric) continue
         try {
           mlResults.set(item.metric.seq, await this.scorer.ingest(deploymentId, item.metric))
@@ -80,9 +103,7 @@ export class MonitorPoller {
     let inserted = 0
     const sampleIds: number[] = []
     const commit = this.database.transaction(() => {
-      for (const item of parsed) {
-        if (item.warning)
-          logger.warn('monitor', item.warning, { app_id: appId, consumed_bytes: item.byteLength })
+      for (const item of newItems) {
         if (!item.metric) continue
         const id = this.repository.insertSample({
           deploymentId,
@@ -153,6 +174,6 @@ export class MonitorPoller {
     })
     commit()
     for (const sampleId of sampleIds) await onSample?.(sampleId)
-    return { inserted, nextOffset: offset + committedBytes }
+    return { inserted, nextOffset: offset + committedBytes, sampleIds }
   }
 }
