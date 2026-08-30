@@ -59,4 +59,12 @@ export class MonitorRepository {
   insertScore(input: { metricSampleId: number; deploymentId: number; ts: string; method: MonitorMethod; score: number | null; above: boolean; detail?: string }): void {
     this.database.prepare('INSERT OR IGNORE INTO score_sample (metric_sample_id,deployment_id,ts_vps,method,score,above_threshold,detail_json) VALUES (?,?,?,?,?,?,?)').run(input.metricSampleId, input.deploymentId, input.ts, input.method, input.score, input.above ? 1 : 0, input.detail ?? null)
   }
+  listSamples(deploymentId: number, fromTs: string): MetricSample[] { return this.database.prepare('SELECT id,deployment_id,seq,ts_vps,cpu_pct,mem_mb,mem_pct,latency_ms,http_error_rate,db_response_ms,container_up FROM metric_sample WHERE deployment_id=? AND ts_vps>=? ORDER BY ts_vps ASC, seq ASC').all(deploymentId, fromTs) as MetricSample[] }
+  listScores(deploymentId: number, fromTs: string): Array<{ ts_vps: string } & Record<MonitorMethod, number | null>> {
+    const rows = this.database.prepare('SELECT ts_vps, method, score FROM score_sample WHERE deployment_id=? AND ts_vps>=? ORDER BY ts_vps ASC, id ASC').all(deploymentId, fromTs) as Array<{ ts_vps: string; method: MonitorMethod; score: number | null }>
+    const grouped = new Map<string, Partial<Record<MonitorMethod, number | null>>>()
+    for (const row of rows) grouped.set(row.ts_vps, { ...(grouped.get(row.ts_vps) ?? {}), [row.method]: row.score })
+    return [...grouped].map(([ts_vps, scores]) => ({ ts_vps, rule: scores.rule ?? null, zscore_ewma: scores.zscore_ewma ?? null, iforest: scores.iforest ?? null, ocsvm: scores.ocsvm ?? null, ensemble: scores.ensemble ?? null }))
+  }
+  listAlerts(deploymentId: number, limit: number): import('@shared/ipc').Alert[] { return this.database.prepare('SELECT id,deployment_id,method,ts_vps,ts_resolved,peak_score,detail_json,label,acted FROM alert WHERE deployment_id=? ORDER BY ts_vps DESC,id DESC LIMIT ?').all(deploymentId, limit) as import('@shared/ipc').Alert[] }
 }

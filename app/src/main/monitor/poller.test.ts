@@ -25,6 +25,7 @@ describe('MonitorPoller ingest', () => {
     const db = seed(); const poller = new MonitorPoller(db)
     const content = `${metric(1)}\n${metric(2)}\n${metric(3)}`
     expect(await poller.poll(1, 1, source(content))).toMatchObject({ inserted: 2 })
+    expect((db.prepare('SELECT COUNT(*) n FROM score_sample WHERE metric_sample_id=1').get() as { n: number }).n).toBe(5)
     expect((db.prepare('SELECT metrics_offset FROM app WHERE id=1').get() as { metrics_offset: number }).metrics_offset).toBe(Buffer.byteLength(`${metric(1)}\n${metric(2)}\n`)+1)
     expect(await poller.poll(1, 1, source(`${metric(1)}\n${metric(2)}\n`))).toMatchObject({ inserted: 0 })
     expect(await poller.poll(1, 1, source(metric(3) + '\n'))).toMatchObject({ inserted: 1 })
