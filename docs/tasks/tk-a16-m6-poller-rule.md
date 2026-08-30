@@ -325,6 +325,13 @@ Nhật ký hiện tại:
 - REVIEW 30/08 19:15 — commit `fa8a40b` · `REQUEST_CHANGES` vòng 2 · review file `tk-a16-review-02.md` · R2-01–R2-04 BLOCKING, R2-05–R2-07 MAJOR · test độc lập Node 22.23.2: monitor 12/12, full 190/190, lint 0 error/16 baseline warning, typecheck/build/scoped Prettier PASS · CLI hiện chưa chạy DB/poller thật · CHƯA PUSH
 - ASSIGNED 30/08 — Sau demo VPS/Deploy, A ưu tiên lát cắt dữ liệu M6. Giao Worker GPT-5.6
   Luna Medium thực hiện CP1→CP4; Codex/root chịu trách nhiệm review lặp đến khi đạt DoD.
+- UPDATE 30/08 21:14 — tiếp tục vòng sửa 2 theo reviewer `fa8a40b`/`1b9b222`; giữ nguyên branch, stash và file dirty ngoài scope.
+- REVIEW-FIX 30/08 21:14 — finding R2-01/R2-02 · commit `63e1be3` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (14 tests).
+- REVIEW-FIX 30/08 21:22 — finding R2-03/R2-05/R2-06 · commit `75f760a` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (14 tests).
+- REVIEW-FIX 30/08 21:25 — finding R2-07 · commit `8300f55` · regression `cd app && pnpm typecheck:node && pnpm test -- --run src/main/monitor` = PASS (14 tests).
+- REVIEW-FIX 30/08 21:27 — finding R2-04 · commit `d4f9d45` · regression `cd app && pnpm try:monitor` = PASS (SQLite metrics=3, score_rows=15, alerts=0, offset=679, retry_inserted=0).
+- UPDATE 30/08 21:40 — Node 22.23.2 gate chạy đúng; monitor 14/14 và CLI thật PASS; full test hiện 190/192 do 2 renderer timeout, chưa READY_FOR_LOCAL_REVIEW.
+- HANDOFF-LOCAL 30/08 21:45 — commits 1b9b222..HEAD · gate FAIL (full test 190/192, 2 renderer timeout) · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH.
 
 ## 11. Biên bản bàn giao bắt buộc
 

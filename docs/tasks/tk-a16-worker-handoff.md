@@ -10,7 +10,7 @@
 | Reviewer | Codex/root |
 | Branch | `feat/m06-monitor-poller-rule` |
 | Baseline | `affc6d82 (>=7057d42)` |
-| Head local | `4b762dc` + handoff commit sau gate |
+| Head local | `HEAD của commit handoff vòng 2` |
 | Remote/PR | `CHƯA PUSH — CHƯA MỞ PR` |
 | Thời gian bắt đầu/kết thúc | `30/08 18:25 — 30/08 18:56` |
 
@@ -19,7 +19,7 @@
 - Outcome: `BLOCKED`.
 - Tóm tắt phần đã hoàn thành: sửa byte offset/target/alert, ML client động và scoring tuần tự, runtime SSH scheduler, 7 monitor handler, tick/train/setting/label nền, CLI và regression.
 - Phần cố ý không làm theo scope: không sửa contract, migration, renderer, collector, deploy, detector; không stage dirty ngoài scope.
-- Điều kiện còn thiếu để đạt DoD: full test đang đỏ 2 renderer timeout; Node 22 chưa có trong môi trường; cần reviewer kiểm tra sâu integration runtime/action log và hoàn tất test xanh.
+- Điều kiện còn thiếu để đạt DoD: full test Node 22 hiện 190/192 với 2 renderer timeout; cần xác nhận lại môi trường baseline và reviewer kiểm tra sâu auto-train/status/runtime shutdown.
 
 ## 2. Commit cục bộ theo checkpoint
 
@@ -33,6 +33,11 @@
 | Review fix 2 | `e1194cb` | R02–R03/R06/R09 | monitor suite | PASS (11 tests) |
 | Review fix 3 | `5aed052` | R01/R04/R09/R10 | typecheck + monitor suite | PASS (11 tests) |
 | Review fix 4 | `4b762dc` | R11/R12, CLI | CLI + monitor suite | PASS (12 tests) |
+| Round 2 fix 1 | `63e1be3` | R2-01/R2-02 POSIX + graceful shutdown | Node 22 monitor 14/14 | PASS |
+| Round 2 fix 2 | `75f760a` | R2-03/R2-05/R2-06 ML lifecycle/settings/alerts | Node 22 monitor 14/14 | PASS |
+| Round 2 fix 3 | `8300f55` | R2-07 exact batch/error classification | Node 22 monitor 14/14 | PASS |
+| Round 2 fix 4 | `d4f9d45` | R2-04 SQLite CLI | `pnpm try:monitor` | PASS: 3/15/0/679 |
+| Round 2 handoff | `HEAD` | docs and gate evidence | full gate | BLOCKED: 190/192 |
 
 Khoảng diff reviewer cần đọc: `affc6d82..HEAD`.
 
@@ -66,6 +71,14 @@ Ghi đúng command đã chạy, không chỉ ghi tên gate.
 | 30/08 18:55 | như trên | `cd app && pnpm typecheck` | 0 | PASS |
 | 30/08 18:55 | như trên | `cd app && pnpm build` | 0 | electron-vite production build PASS |
 | 30/08 18:55 | như trên | `cd app && pnpm exec prettier --check src/main/index.ts src/main/ipc.ts src/main/mlClient.ts src/main/monitor scripts/try-monitor.ts` | 0 | PASS |
+| 30/08 21:23 | Node 22.23.2 | `. .\tools\enter-node22.ps1; cd app; node --version` | 0 | v22.23.2 |
+| 30/08 21:24 | Node 22.23.2 | `pnpm test -- --run src/main/monitor` | 0 | 7 files, 14/14 PASS |
+| 30/08 21:24 | Node 22.23.2 | `pnpm try:monitor` | 0 | SQLite 3 metrics, 15 scores, 0 alerts, offset 679, retry 0 |
+| 30/08 21:25 | Node 22.23.2 | `pnpm test` | 1 | 43 files, 192 tests: 190 PASS, 2 renderer timeout |
+| 30/08 21:27 | Node 22.23.2 | `pnpm lint` | 0 | 0 errors, 16 baseline warnings |
+| 30/08 21:27 | Node 22.23.2 | `pnpm typecheck` | 0 | PASS |
+| 30/08 21:28 | Node 22.23.2 | `pnpm exec prettier --check src/main/index.ts src/main/ipc.ts src/main/mlClient.ts src/main/monitor scripts/try-monitor.ts` | 0 | PASS |
+| 30/08 21:29 | Node 22.23.2 | `pnpm build` | 0 | PASS |
 
 Gate cuối bắt buộc:
 
@@ -112,7 +125,7 @@ pnpm build
 pnpm test -- --run src/main/monitor
 ```
 
-Fixture/dữ liệu cần dùng: `cd app && pnpm try:monitor`; output kỳ vọng `metrics=3`, `score_rows=15`, `alerts=0`, `offset=679`.
+Fixture/dữ liệu cần dùng: `cd app && pnpm try:monitor`; output thực tế `metrics=3`, `score_rows=15`, `alerts=0`, `offset=679`, `first_inserted=3`, `retry_inserted=0`.
 
 ## 8. Điểm đề nghị reviewer kiểm tra mạnh
 
