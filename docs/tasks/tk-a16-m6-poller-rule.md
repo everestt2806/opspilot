@@ -381,3 +381,4 @@ Worker điền lệnh tối thiểu vào biên bản bàn giao để reviewer ch
 - REVIEW-FIX 31/08 — R5-02/R5-03 · `96b116f` · Node 22 focused monitor + shutdown PASS (18 tests); exact batch và shutdown reject orchestration có regression.
 - REVIEW-FIX 31/08 — R5-04 · commit docs handoff · cập nhật trường tổng hợp, gate, review history và board.
 - HANDOFF-LOCAL 31/08 — commits `f924420..HEAD` · gate focused PASS; full reviewer `180/195` renderer baseline, isolated renderer `3/3 PASS` · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH.
+- REVIEW 31/08 — `REQUEST_CHANGES` vòng 6 tại Worker HEAD `b35c821` · review file `tk-a16-review-06.md` · R6-01 BLOCKING, R6-02…R6-04 MAJOR · reviewer Node 22: focused 18/18, CLI 150/750/0, lint/typecheck/scoped Prettier/build PASS; full 180/195 renderer baseline · CHƯA PUSH.
