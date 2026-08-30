@@ -2,6 +2,7 @@ import type Database from 'better-sqlite3'
 import type { Alert, MetricSample, MonitorSetting, ScoreSet } from '@shared/ipc'
 import { MonitorRepository } from './repository'
 import { MonitorPoller, type MetricScorer } from './poller'
+import { AppError } from '../errors'
 import { SshMetricSource } from './metricSource'
 import type { SshManager } from '../ssh/manager'
 import { join as posixJoin } from 'node:path/posix'
@@ -11,6 +12,7 @@ import type { MlApiClient } from './mlApi'
 
 export class MonitorService {
   private readonly repository: MonitorRepository
+  private readonly autoTrained = new Set<number>()
   constructor(private readonly db: Database.Database) {
     this.repository = new MonitorRepository(db)
   }
@@ -50,17 +52,35 @@ export class MonitorService {
         (key) => key === 'app_id' || !(allowed as readonly string[]).includes(key)
       )
     )
-      throw new Error('Setting không hợp lệ')
-    for (const [key, value] of entries) {
-      if (typeof value !== 'number' && typeof value !== 'string')
-        throw new Error('Setting không hợp lệ')
-      if (typeof value === 'number' && (!Number.isFinite(value) || value < 0))
-        throw new Error('Setting ngoài miền cho phép')
-      this.db.prepare(`UPDATE monitor_setting SET ${key}=? WHERE app_id=?`).run(value, appId)
-    }
-    this.db
-      .prepare('INSERT INTO action_log (action,status,message,app_id) VALUES (?,?,?,?)')
-      .run('config_change', 'success', 'Cập nhật cấu hình monitor', appId)
+      throw new AppError('VALIDATION', 'Setting không hợp lệ.')
+    const update = this.db.transaction(() => {
+      this.repository.getOrCreateSetting(appId)
+      for (const [key, value] of entries) {
+        if (typeof value !== 'number' && typeof value !== 'string')
+          throw new AppError('VALIDATION', 'Setting không hợp lệ.')
+        if (typeof value === 'number' && (!Number.isFinite(value) || value < 0))
+          throw new AppError('VALIDATION', 'Setting ngoài miền cho phép.')
+        if (
+          (key.endsWith('_consecutive') || key.endsWith('_interval_s')) &&
+          (typeof value !== 'number' || !Number.isInteger(value) || value < 1)
+        )
+          throw new AppError('VALIDATION', 'Setting phải là số nguyên dương.')
+        if ((key === 'rule_error_rate' || key === 'ml_score_threshold') && Number(value) > 1)
+          throw new AppError('VALIDATION', 'Ngưỡng phải từ 0 đến 1.')
+        if (
+          key === 'trusted_method' &&
+          !['rule', 'zscore_ewma', 'iforest', 'ocsvm', 'ensemble'].includes(String(value))
+        )
+          throw new AppError('VALIDATION', 'Method không hợp lệ.')
+        this.db
+          .prepare(`UPDATE monitor_setting SET ${key}=?, updated_at=? WHERE app_id=?`)
+          .run(value, new Date().toISOString(), appId)
+      }
+      this.db
+        .prepare('INSERT INTO action_log (action,status,message,app_id) VALUES (?,?,?,?)')
+        .run('config_change', 'success', 'Cập nhật cấu hình monitor', appId)
+    })
+    update()
     return this.getSetting(appId)
   }
   labelAlert(alertId: number, label: 'true_positive' | 'false_positive' | null): void {
@@ -86,14 +106,41 @@ export class MonitorService {
   async pollAll(
     ssh: SshManager,
     scorer?: MetricScorer,
-    emit?: (event: IpcEventMap['monitor:tick']) => void
+    emit?: (event: IpcEventMap['monitor:tick']) => void,
+    mlStatus?: (status: { running: boolean; reason?: string }) => void
   ): Promise<void> {
     for (const target of this.repository.listTargets()) {
       const before = this.repository.listSamples(
         target.deployment_id,
         '0000-01-01T00:00:00Z'
       ).length
-      const poller = new MonitorPoller(this.db, this.repository, undefined, scorer)
+      if (scorer && 'status' in scorer) {
+        try {
+          const status = await (scorer as MlApiClient).status(target.deployment_id)
+          mlStatus?.({ running: true })
+          if (
+            status.sample_count >= 150 &&
+            !status.trained &&
+            !this.autoTrained.has(target.deployment_id)
+          ) {
+            const rows = this.db
+              .prepare('SELECT raw_json FROM metric_sample WHERE deployment_id=? ORDER BY seq')
+              .all(target.deployment_id) as Array<{ raw_json: string }>
+            if (rows.length >= 150) {
+              await (scorer as MlApiClient).train(
+                target.deployment_id,
+                rows.map((row) => metricLineSchema.parse(JSON.parse(row.raw_json)))
+              )
+              this.autoTrained.add(target.deployment_id)
+            }
+          }
+        } catch {
+          mlStatus?.({ running: false, reason: 'ML status/train không khả dụng' })
+        }
+      }
+      const poller = new MonitorPoller(this.db, this.repository, undefined, scorer, {
+        report: (status) => mlStatus?.(status)
+      })
       try {
         await poller.poll(
           target.app_id,

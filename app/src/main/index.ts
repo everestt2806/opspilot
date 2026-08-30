@@ -130,7 +130,8 @@ void app
       await monitorService.pollAll(
         sshManager!,
         port ? new MlApiClient(`http://127.0.0.1:${port}`) : undefined,
-        (event) => mainWindow?.webContents.send('monitor:tick', event)
+        (event) => mainWindow?.webContents.send('monitor:tick', event),
+        (status) => emitMlStatus(status)
       )
     })
     monitorScheduler.start()

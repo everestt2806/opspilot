@@ -6,7 +6,7 @@ describe('MonitorService mutations', () => {
   it('whitelist setting và label null/non-null', () => {
     const db = new Database(':memory:')
     db.exec(
-      "CREATE TABLE monitor_setting (app_id INTEGER PRIMARY KEY, collector_interval_s INTEGER DEFAULT 10, poll_interval_s INTEGER DEFAULT 30, rule_cpu_pct REAL DEFAULT 90, rule_mem_pct REAL DEFAULT 90, rule_latency_ms REAL DEFAULT 2000, rule_error_rate REAL DEFAULT .5, rule_consecutive INTEGER DEFAULT 3, ml_score_threshold REAL DEFAULT .7, ml_consecutive INTEGER DEFAULT 2, auto_rollback INTEGER DEFAULT 0, trusted_method TEXT DEFAULT 'ensemble', rollback_consecutive INTEGER DEFAULT 3, cooldown_minutes INTEGER DEFAULT 10); CREATE TABLE action_log (id INTEGER PRIMARY KEY, action TEXT, status TEXT, message TEXT, app_id INTEGER); CREATE TABLE alert (id INTEGER PRIMARY KEY, label TEXT, labeled_at TEXT)"
+      "CREATE TABLE monitor_setting (app_id INTEGER PRIMARY KEY, collector_interval_s INTEGER DEFAULT 10, poll_interval_s INTEGER DEFAULT 30, rule_cpu_pct REAL DEFAULT 90, rule_mem_pct REAL DEFAULT 90, rule_latency_ms REAL DEFAULT 2000, rule_error_rate REAL DEFAULT .5, rule_consecutive INTEGER DEFAULT 3, ml_score_threshold REAL DEFAULT .7, ml_consecutive INTEGER DEFAULT 2, auto_rollback INTEGER DEFAULT 0, trusted_method TEXT DEFAULT 'ensemble', rollback_consecutive INTEGER DEFAULT 3, cooldown_minutes INTEGER DEFAULT 10, updated_at TEXT); CREATE TABLE action_log (id INTEGER PRIMARY KEY, action TEXT, status TEXT, message TEXT, app_id INTEGER); CREATE TABLE alert (id INTEGER PRIMARY KEY, label TEXT, labeled_at TEXT)"
     )
     db.prepare('INSERT INTO monitor_setting (app_id) VALUES (1)').run()
     const service = new MonitorService(db)

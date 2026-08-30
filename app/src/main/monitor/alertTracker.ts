@@ -60,6 +60,9 @@ export class AlertTracker {
           Math.max(...rows.slice(0, input.consecutive).map((row) => row.score ?? 0)),
           input.detail ?? null
         )
+      this.db
+        .prepare('INSERT INTO action_log (action,status,message,deployment_id) VALUES (?,?,?,?)')
+        .run('alert_raised', 'success', `Mở alert ${input.method}`, input.deploymentId)
     }
   }
 }

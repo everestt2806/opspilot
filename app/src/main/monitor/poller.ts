@@ -12,13 +12,17 @@ import type { MlIngestResponse } from './mlApi'
 export interface MetricScorer {
   ingest(deploymentId: number, sample: MetricLine): Promise<MlIngestResponse>
 }
+export interface MlStatusReporter {
+  report(status: { running: boolean; reason?: string }): void
+}
 
 export class MonitorPoller {
   constructor(
     private readonly database: Database.Database,
     private readonly repository: MonitorRepository = new MonitorRepository(database),
     private readonly tracker: AlertTracker = new AlertTracker(database),
-    private readonly scorer?: MetricScorer
+    private readonly scorer?: MetricScorer,
+    private readonly mlStatus?: MlStatusReporter
   ) {}
 
   async poll(
@@ -66,9 +70,11 @@ export class MonitorPoller {
               deploymentId
             )
             mlFailureLogged = true
+            this.mlStatus?.report({ running: false, reason: 'ML ingest không phản hồi' })
           }
           /* fallback NULL is persisted below */
         }
+        if (this.scorer && mlResults.has(item.metric.seq)) this.mlStatus?.report({ running: true })
       }
     }
     let inserted = 0
@@ -115,7 +121,12 @@ export class MonitorPoller {
               ts: sample.ts_vps,
               method,
               score: mlResults.get(item.metric.seq)?.scores[method] ?? null,
-              above: mlResults.get(item.metric.seq)?.above_threshold[method] ?? false,
+              above:
+                method === 'ensemble'
+                  ? (mlResults.get(item.metric.seq)?.above_threshold[method] ?? false)
+                  : (mlResults.get(item.metric.seq)?.scores[method] ?? null) !== null &&
+                    (mlResults.get(item.metric.seq)?.scores[method] ?? 0) >
+                      target.setting.ml_score_threshold,
               detail: JSON.stringify(mlResults.get(item.metric.seq)?.detail?.[method] ?? null)
             })
           for (const method of ['zscore_ewma', 'iforest', 'ocsvm', 'ensemble'] as const) {
@@ -127,7 +138,10 @@ export class MonitorPoller {
               ts: sample.ts_vps,
               method,
               score,
-              above: result?.above_threshold[method] ?? false,
+              above:
+                method === 'ensemble'
+                  ? (result?.above_threshold[method] ?? false)
+                  : score !== null && score > target.setting.ml_score_threshold,
               threshold: target.setting.ml_score_threshold,
               consecutive: target.setting.ml_consecutive
             })

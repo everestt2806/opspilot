@@ -6,7 +6,7 @@ describe('AlertTracker', () => {
   it('mở một alert, cập nhật peak và resolve sau ba mẫu thấp', () => {
     const db = new Database(':memory:')
     db.exec(
-      'CREATE TABLE score_sample (id INTEGER PRIMARY KEY, deployment_id INTEGER, method TEXT, above_threshold INTEGER, metric_sample_id INTEGER, score REAL, ts_vps TEXT); CREATE TABLE alert (id INTEGER PRIMARY KEY, deployment_id INTEGER, metric_sample_id INTEGER, method TEXT, ts_vps TEXT, ts_resolved TEXT, peak_score REAL, detail_json TEXT)'
+      'CREATE TABLE score_sample (id INTEGER PRIMARY KEY, deployment_id INTEGER, method TEXT, above_threshold INTEGER, metric_sample_id INTEGER, score REAL, ts_vps TEXT); CREATE TABLE alert (id INTEGER PRIMARY KEY, deployment_id INTEGER, metric_sample_id INTEGER, method TEXT, ts_vps TEXT, ts_resolved TEXT, peak_score REAL, detail_json TEXT); CREATE TABLE action_log (id INTEGER PRIMARY KEY, action TEXT, status TEXT, message TEXT, deployment_id INTEGER)'
     )
     const tracker = new AlertTracker(db)
     for (let i = 1; i <= 3; i += 1) {
