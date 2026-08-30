@@ -229,7 +229,9 @@ export class MonitorRepository {
     if (!ids.length) return []
     const placeholders = ids.map(() => '?').join(',')
     const rows = this.database
-      .prepare(`SELECT id,deployment_id,seq,ts_vps,cpu_pct,mem_mb,mem_pct,latency_ms,http_error_rate,db_response_ms,container_up FROM metric_sample WHERE id IN (${placeholders})`)
+      .prepare(
+        `SELECT id,deployment_id,seq,ts_vps,cpu_pct,mem_mb,mem_pct,latency_ms,http_error_rate,db_response_ms,container_up FROM metric_sample WHERE id IN (${placeholders})`
+      )
       .all(...ids) as MetricSample[]
     const byId = new Map(rows.map((row) => [row.id, row]))
     return ids.map((id) => byId.get(id)).filter((row): row is MetricSample => row !== undefined)
@@ -238,19 +240,42 @@ export class MonitorRepository {
   listScoresBySampleIds(ids: number[]): Array<{ ts_vps: string } & ScoreSet> {
     if (!ids.length) return []
     const placeholders = ids.map(() => '?').join(',')
-    const rows = this.database.prepare(`SELECT metric_sample_id,method,score FROM score_sample WHERE metric_sample_id IN (${placeholders}) ORDER BY id ASC`).all(...ids) as Array<{ metric_sample_id: number; method: MonitorMethod; score: number | null }>
+    const rows = this.database
+      .prepare(
+        `SELECT metric_sample_id,method,score FROM score_sample WHERE metric_sample_id IN (${placeholders}) ORDER BY id ASC`
+      )
+      .all(...ids) as Array<{
+      metric_sample_id: number
+      method: MonitorMethod
+      score: number | null
+    }>
     const grouped = new Map<number, Partial<Record<MonitorMethod, number | null>>>()
-    for (const row of rows) grouped.set(row.metric_sample_id, { ...(grouped.get(row.metric_sample_id) ?? {}), [row.method]: row.score })
+    for (const row of rows)
+      grouped.set(row.metric_sample_id, {
+        ...(grouped.get(row.metric_sample_id) ?? {}),
+        [row.method]: row.score
+      })
     return ids.map((id) => {
       const sample = this.getMetric(id)
       const scores = grouped.get(id) ?? {}
-      return { ts_vps: sample.ts_vps, rule: scores.rule ?? null, zscore_ewma: scores.zscore_ewma ?? null, iforest: scores.iforest ?? null, ocsvm: scores.ocsvm ?? null, ensemble: scores.ensemble ?? null }
+      return {
+        ts_vps: sample.ts_vps,
+        rule: scores.rule ?? null,
+        zscore_ewma: scores.zscore_ewma ?? null,
+        iforest: scores.iforest ?? null,
+        ocsvm: scores.ocsvm ?? null,
+        ensemble: scores.ensemble ?? null
+      }
     })
   }
 
   listAlertsByIds(ids: number[]): import('@shared/ipc').Alert[] {
     if (!ids.length) return []
     const placeholders = ids.map(() => '?').join(',')
-    return this.database.prepare(`SELECT id,deployment_id,method,ts_vps,ts_resolved,peak_score,detail_json,label,acted FROM alert WHERE id IN (${placeholders}) ORDER BY id ASC`).all(...ids) as import('@shared/ipc').Alert[]
+    return this.database
+      .prepare(
+        `SELECT id,deployment_id,method,ts_vps,ts_resolved,peak_score,detail_json,label,acted FROM alert WHERE id IN (${placeholders}) ORDER BY id ASC`
+      )
+      .all(...ids) as import('@shared/ipc').Alert[]
   }
 }

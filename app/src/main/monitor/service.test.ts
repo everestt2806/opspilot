@@ -58,7 +58,7 @@ describe('MonitorService mutations', () => {
           'INSERT INTO metric_sample (deployment_id,seq,ts_vps,ts_local,raw_json) VALUES (?,?,?,?,?)'
         ).run(1, i, parsed.ts, parsed.ts, value)
       }
-      const content = `${raw(150)}\n`
+      let content = `${raw(150)}\n`
       let statusCalls = 0
       let trainCalls = 0
       const scorer = {
@@ -91,18 +91,28 @@ describe('MonitorService mutations', () => {
       }
       const ssh = {
         fileSize: async () => Buffer.byteLength(content),
-        readFileTail: async () => ({ content, nextOffset: 1 })
+        readFileTail: async (_id: number, _path: string, offset: number) => ({
+          content: content.slice(offset - 1),
+          nextOffset: Buffer.byteLength(content) + 1
+        })
       } as never
       const events: unknown[] = []
-      await new MonitorService(db).pollAll(ssh, scorer, (event) => events.push(event))
+      const service = new MonitorService(db)
+      await service.pollAll(ssh, scorer, (event) => events.push(event))
       expect(db.prepare('SELECT COUNT(*) n FROM metric_sample').get()).toEqual({ n: 150 })
       expect((events[0] as { samples: unknown[]; scores: unknown[] }).samples).toHaveLength(1)
       expect((events[0] as { samples: unknown[]; scores: unknown[] }).scores).toHaveLength(1)
       expect(trainCalls).toBe(1)
       expect(statusCalls).toBe(1)
-      await new MonitorService(db).pollAll(ssh, scorer)
+      const backfill = JSON.parse(raw(152))
+      backfill.ts = '2026-08-29T23:59:59Z'
+      content += `${raw(151)}\n${JSON.stringify(backfill)}\n`
+      await service.pollAll(ssh, scorer, (event) => events.push(event))
       expect(trainCalls).toBe(1)
       expect(statusCalls).toBe(2)
+      expect(events).toHaveLength(2)
+      expect((events[1] as { samples: unknown[]; scores: unknown[] }).samples).toHaveLength(2)
+      expect((events[1] as { samples: unknown[]; scores: unknown[] }).scores).toHaveLength(2)
     } finally {
       closeDatabase()
       rmSync(dir, { recursive: true, force: true })
