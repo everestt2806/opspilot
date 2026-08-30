@@ -61,9 +61,11 @@ describe('MonitorService mutations', () => {
       let content = `${raw(150)}\n`
       let statusCalls = 0
       let trainCalls = 0
+      let statusDown = false
       const scorer = {
         status: async () => {
           statusCalls += 1
+          if (statusDown) throw new Error('status unavailable')
           return {
             deployment_id: 1,
             trained: trainCalls > 0,
@@ -97,22 +99,55 @@ describe('MonitorService mutations', () => {
         })
       } as never
       const events: unknown[] = []
+      const mlEvents: Array<{ running: boolean; reason?: string }> = []
       const service = new MonitorService(db)
-      await service.pollAll(ssh, scorer, (event) => events.push(event))
+      await service.pollAll(
+        ssh,
+        scorer,
+        (event) => events.push(event),
+        (status) => mlEvents.push(status)
+      )
       expect(db.prepare('SELECT COUNT(*) n FROM metric_sample').get()).toEqual({ n: 150 })
       expect((events[0] as { samples: unknown[]; scores: unknown[] }).samples).toHaveLength(1)
       expect((events[0] as { samples: unknown[]; scores: unknown[] }).scores).toHaveLength(1)
       expect(trainCalls).toBe(1)
       expect(statusCalls).toBe(1)
-      const backfill = JSON.parse(raw(152))
-      backfill.ts = '2026-08-29T23:59:59Z'
-      content += `${raw(151)}\n${JSON.stringify(backfill)}\n`
-      await service.pollAll(ssh, scorer, (event) => events.push(event))
+      expect(mlEvents).toEqual([{ running: true }])
+      expect(
+        (
+          db
+            .prepare("SELECT COUNT(*) n FROM action_log WHERE action='ml_service_restart'")
+            .get() as { n: number }
+        ).n
+      ).toBe(0)
+      statusDown = true
+      await service.pollAll(
+        ssh,
+        scorer,
+        (event) => events.push(event),
+        (status) => mlEvents.push(status)
+      )
+      statusDown = false
+      await service.pollAll(
+        ssh,
+        scorer,
+        (event) => events.push(event),
+        (status) => mlEvents.push(status)
+      )
       expect(trainCalls).toBe(1)
-      expect(statusCalls).toBe(2)
-      expect(events).toHaveLength(2)
-      expect((events[1] as { samples: unknown[]; scores: unknown[] }).samples).toHaveLength(2)
-      expect((events[1] as { samples: unknown[]; scores: unknown[] }).scores).toHaveLength(2)
+      expect(statusCalls).toBe(3)
+      expect(mlEvents).toEqual([
+        { running: true },
+        { running: false, reason: 'ML status/train không khả dụng' },
+        { running: true }
+      ])
+      expect(
+        (
+          db
+            .prepare("SELECT COUNT(*) n FROM action_log WHERE action='ml_service_restart'")
+            .get() as { n: number }
+        ).n
+      ).toBe(1)
     } finally {
       closeDatabase()
       rmSync(dir, { recursive: true, force: true })

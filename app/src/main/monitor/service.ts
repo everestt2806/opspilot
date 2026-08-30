@@ -152,7 +152,7 @@ export class MonitorService {
   ): Promise<void> {
     try {
       const status = await client.status(deploymentId)
-      this.reportMl(deploymentId, report, { running: true })
+      report?.({ running: true })
       const count = (
         this.db
           .prepare('SELECT COUNT(*) n FROM metric_sample WHERE deployment_id=?')
@@ -170,7 +170,7 @@ export class MonitorService {
         rows.map((row) => metricLineSchema.parse(JSON.parse(row.raw_json)))
       )
     } catch {
-      this.reportMl(deploymentId, report, {
+      report?.({
         running: false,
         reason: 'ML status/train không khả dụng'
       })
