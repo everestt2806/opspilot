@@ -368,3 +368,16 @@ Worker điền lệnh tối thiểu vào biên bản bàn giao để reviewer ch
 - REVIEW-FIX 31/08 — R4-06 · commit docs handoff; scoped Prettier PASS, full test/build chưa kết thúc.
 - HANDOFF-LOCAL 31/08 — commits `fc36cfb..HEAD` · gate FAIL (full test/build hang; monitor/lint/typecheck/scoped Prettier PASS) · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH.
 - REVIEW 31/08 — `REQUEST_CHANGES` vòng 5 tại code `7c0a7d7` · review file `tk-a16-review-05.md` · R5-01 BLOCKING, R5-02…R5-04 MAJOR · reviewer Node 22: monitor 17/17, CLI 150/750/0, lint/typecheck/scoped Prettier/build PASS; full verbose 180/195 với 15 renderer failure dưới tải, file lỗi thật isolated 3/3 PASS · CHƯA PUSH.
+- UPDATE 31/08 — tiếp tục từ HEAD `f924420`, đọc review-05; giữ nguyên untracked/stash và xử lý R5-01…R5-04 theo đúng ba commit.
+- REVIEW-FIX 31/08 — R5-01 · `135b84b` · Node 22 focused monitor PASS (17 tests trước bổ sung shutdown); event ML up/down/up và action_log failure được assert trực tiếp.
+- REVIEW-FIX 31/08 — R5-02/R5-03 · `96b116f` · Node 22 focused monitor + shutdown PASS (18 tests); exact batch và shutdown reject orchestration có regression.
+- REVIEW-FIX 31/08 — R5-04 · commit docs handoff; cập nhật trường tổng hợp, review history, gate và giới hạn renderer baseline.
+- HANDOFF-LOCAL 31/08 — commits `f924420..HEAD` · gate focused PASS, full suite reviewer `180/195` renderer baseline · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH.- UPDATE 31/08 — tiếp tục từ HEAD `f924420`, đọc review-05, giữ nguyên untracked/stash.
+- REVIEW-FIX 31/08 — R5-01 · `135b84b` · Node 22 focused monitor PASS (17 tests trước test shutdown); ML up/down/up và action_log được assert thực tế.
+- REVIEW-FIX 31/08 — R5-02/R5-03 · `96b116f` · Node 22 focused monitor + shutdown PASS (18 tests); exact batch và shutdown reject orchestration có regression.
+- REVIEW-FIX 31/08 — R5-04 · `docs(monitor): record review five handoff` · cập nhật trường tổng hợp, gate, review history và board.
+- HANDOFF-LOCAL 31/08 — commits `f924420..HEAD` · gate focused PASS; full reviewer `180/195` renderer baseline, isolated renderer `3/3 PASS` · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH.- UPDATE 31/08 — tiếp tục từ HEAD `f924420`, đọc review-05, giữ nguyên untracked/stash.
+- REVIEW-FIX 31/08 — R5-01 · `135b84b` · Node 22 focused monitor PASS (17 tests trước test shutdown); ML up/down/up và action_log được assert thực tế.
+- REVIEW-FIX 31/08 — R5-02/R5-03 · `96b116f` · Node 22 focused monitor + shutdown PASS (18 tests); exact batch và shutdown reject orchestration có regression.
+- REVIEW-FIX 31/08 — R5-04 · commit docs handoff · cập nhật trường tổng hợp, gate, review history và board.
+- HANDOFF-LOCAL 31/08 — commits `f924420..HEAD` · gate focused PASS; full reviewer `180/195` renderer baseline, isolated renderer `3/3 PASS` · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH.

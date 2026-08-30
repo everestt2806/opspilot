@@ -21,7 +21,7 @@
 
 | ID | Task | Chủ | Hạn | Trạng thái | Branch | PR/phụ thuộc | Ghi chú |
 |---|---|---|---|---|---|---|---|
-| TK-A16 | M6: poll JSONL → metric/5 score/alert → monitor IPC | A | 04/09 | ĐANG LÀM | `feat/m06-monitor-poller-rule` | — | review 05 code/handoff `7c0a7d7`: R5-01 BLOCKING double-report ML; R5-02…R5-04 MAJOR; monitor/CLI/build PASS, full 180/195 chỉ lỗi renderer baseline · chưa push |
+| TK-A16 | M6: poll JSONL → metric/5 score/alert → monitor IPC | A | 04/09 | ĐANG LÀM | `feat/m06-monitor-poller-rule` | — | review 05 code `96b116f`: R5-01/R5-02/R5-03 có fix/regression; focused 18/18, CLI/lint/typecheck/Prettier/build PASS; full 180/195 renderer baseline · local handoff sau HEAD · chưa push |
 | TK-B4 | M5: docker stats + HTTP probe local | B | 01/09 | TUẦN NÀY | `feat/m05-collector-probes` | TK-B2 Express đã có | **Task B kéo ngay** |
 | TK-B5 | M5: metrics.jsonl + latest.json, seq/fsync/rotation | B | 02/09 | BACKLOG | `feat/m05-collector-output` | Sau TK-B4 | Khép blocker TK-A5 |
 | TK-B6 | M5: chạy collector Docker trên VM01 | B | 03/09 | BACKLOG | `feat/m05-collector-docker` | Sau TK-B5 | Không mở thêm port |

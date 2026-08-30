@@ -10,7 +10,7 @@
 | Reviewer | Codex/root |
 | Branch | `feat/m06-monitor-poller-rule` |
 | Baseline | `affc6d82 (>=7057d42)` |
-| Head local | `4ed705f` (code trước handoff vòng 4) |
+| Head local | `96b116f` (code trước handoff vòng 5) |
 | Remote/PR | `CHƯA PUSH — CHƯA MỞ PR` |
 | Thời gian bắt đầu/kết thúc | `31/08 — chưa READY` |
 
@@ -19,7 +19,7 @@
 - Outcome: `BLOCKED`.
 - Tóm tắt phần đã hoàn thành: sửa byte offset/target/alert, ML client động và scoring tuần tự, runtime SSH scheduler, 7 monitor handler, tick/train/setting/label nền, CLI và regression.
 - Phần cố ý không làm theo scope: không sửa contract, migration, renderer, collector, deploy, detector; không stage dirty ngoài scope.
-- Điều kiện còn thiếu để đạt DoD: full `pnpm test` và `pnpm build` Node 22 treo sau khởi động/transform; không sửa renderer khi chưa có root cause. Các gate monitor, lint, typecheck và scoped Prettier đã đạt.
+- Điều kiện còn thiếu để đạt DoD: full suite reviewer `180/195`, 15 lỗi renderer timeout; `VpsOverviewTab.test.tsx` chạy riêng `3/3 PASS`. Không sửa renderer. Các gate M6 focused, lint, typecheck, scoped Prettier và build đã PASS.
 
 ## 2. Commit cục bộ theo checkpoint
 
@@ -154,8 +154,8 @@ Reviewer điền; Worker không tự sửa kết luận review.
 | 1 | Codex/root | `REQUEST_CHANGES` | `R01–R05 BLOCKING; R06–R11 MAJOR; R12 MINOR` — xem `tk-a16-review-01.md` | `f251368`, `e1194cb`, `5aed052`, `4b762dc` |
 | 2 | Codex/root | `REQUEST_CHANGES` | `R2-01–R2-04 BLOCKING; R2-05–R2-07 MAJOR` — xem `tk-a16-review-02.md` | `63e1be3`, `75f760a`, `8300f55`, `d4f9d45` |
 | 3 | Codex/root | `REQUEST_CHANGES` (superseded) | `R3-01/R3-02 BLOCKING; R3-03–R3-05 MAJOR; R3-06 MINOR` — xem `tk-a16-review-03.md` | `142b4a6`, `8f278e2`, `769796d`, `f268277` |
-| 4 | Codex/root | `REQUEST_CHANGES` | `R4-01 BLOCKING; R4-02–R4-06 MAJOR` — xem `tk-a16-review-04.md` | `49aaa48`, `55dfd34`, `4ed705f`, `CHƯA SỬA` |
-| 5 | Codex/root | `REQUEST_CHANGES` | `R5-01 BLOCKING; R5-02–R5-04 MAJOR` — xem `tk-a16-review-05.md` | `CHƯA SỬA` |
+| 4 | Codex/root | `REQUEST_CHANGES` (superseded) | `R4-01 BLOCKING; R4-02–R4-06 MAJOR` — xem `tk-a16-review-04.md` | `49aaa48`, `55dfd34`, `4ed705f`, `7c0a7d7` |
+| 5 | Codex/root | `REQUEST_CHANGES` | `R5-01 BLOCKING; R5-02–R5-04 MAJOR` — xem `tk-a16-review-05.md` | `135b84b`, `96b116f`, `CHƯA SỬA` |
 
 ## Review 03 cập nhật
 
@@ -175,3 +175,11 @@ Reviewer điền; Worker không tự sửa kết luận review.
 - DoD: R4-01/R4-02/R4-03/R4-04/R4-05 có code và regression; R4-06 ghi nhận. Full gate chưa xanh nên board giữ `ĐANG LÀM`, không tuyên bố READY.
 - File review-04 thay đổi: monitor poller/service/repository/alerts/tests, `app/src/main/index.ts`, `app/src/main/ssh/manager.ts`, `app/scripts/try-monitor.ts`, `app/scripts/reset-demo.ts`, `app/scripts/try-deploy.ts`; không chạm file user ngoài scope.
 - Lệnh tái hiện chính xác: `. .\tools\enter-node22.ps1; cd app; node --version; pnpm test -- --run src/main/monitor; pnpm try:monitor; pnpm test; pnpm lint; pnpm typecheck; pnpm exec prettier --check src/main/index.ts src/main/ipc.ts src/main/mlClient.ts src/main/monitor src/main/ssh/manager.ts scripts/try-monitor.ts; pnpm build`.
+
+## Review 05 cập nhật
+
+- Outcome: `BLOCKED`; code HEAD `96b116f`, handoff commit được tạo tiếp theo.
+- Regression Node 22: focused monitor/lifecycle `18/18 PASS`; CLI generator + SQLite/MonitorPoller thật `150 metrics / 750 scores / 0 alerts`, retry `0`, offset `43008`.
+- Gate review-05: Node `v22.23.2`; full suite reviewer `180/195`, 15 lỗi renderer timeout; `VpsOverviewTab.test.tsx` chạy riêng `3/3 PASS`; không sửa renderer. Scoped Prettier đã chạy trước commit và PASS; các gate cuối vòng này sẽ ghi exact exit code trong mục này.
+- Không chạm `.devflow/`, `docs/ban-giao-20-08.md`, `logo.png`, stash, contract, migration, renderer, collector hoặc deploy. Board giữ `ĐANG LÀM`.
+- Reviewer cần kiểm tra một gateway ML, callback/action-log thực tế, exact batch timestamps, auto-train retry/disabled và shutdown reject orchestration.
