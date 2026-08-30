@@ -367,3 +367,4 @@ Worker điền lệnh tối thiểu vào biên bản bàn giao để reviewer ch
 - REVIEW-FIX 31/08 — R4-02/R4-05 · `4ed705f` · Node 22 monitor 17/17 PASS; CLI generator thật 150/750/0, retry 0.
 - REVIEW-FIX 31/08 — R4-06 · commit docs handoff; scoped Prettier PASS, full test/build chưa kết thúc.
 - HANDOFF-LOCAL 31/08 — commits `fc36cfb..HEAD` · gate FAIL (full test/build hang; monitor/lint/typecheck/scoped Prettier PASS) · handoff `tk-a16-worker-handoff.md` · CHƯA PUSH.
+- REVIEW 31/08 — `REQUEST_CHANGES` vòng 5 tại code `7c0a7d7` · review file `tk-a16-review-05.md` · R5-01 BLOCKING, R5-02…R5-04 MAJOR · reviewer Node 22: monitor 17/17, CLI 150/750/0, lint/typecheck/scoped Prettier/build PASS; full verbose 180/195 với 15 renderer failure dưới tải, file lỗi thật isolated 3/3 PASS · CHƯA PUSH.

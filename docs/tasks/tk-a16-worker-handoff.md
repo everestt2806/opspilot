@@ -155,6 +155,7 @@ Reviewer điền; Worker không tự sửa kết luận review.
 | 2 | Codex/root | `REQUEST_CHANGES` | `R2-01–R2-04 BLOCKING; R2-05–R2-07 MAJOR` — xem `tk-a16-review-02.md` | `63e1be3`, `75f760a`, `8300f55`, `d4f9d45` |
 | 3 | Codex/root | `REQUEST_CHANGES` (superseded) | `R3-01/R3-02 BLOCKING; R3-03–R3-05 MAJOR; R3-06 MINOR` — xem `tk-a16-review-03.md` | `142b4a6`, `8f278e2`, `769796d`, `f268277` |
 | 4 | Codex/root | `REQUEST_CHANGES` | `R4-01 BLOCKING; R4-02–R4-06 MAJOR` — xem `tk-a16-review-04.md` | `49aaa48`, `55dfd34`, `4ed705f`, `CHƯA SỬA` |
+| 5 | Codex/root | `REQUEST_CHANGES` | `R5-01 BLOCKING; R5-02–R5-04 MAJOR` — xem `tk-a16-review-05.md` | `CHƯA SỬA` |
 
 ## Review 03 cập nhật
 
