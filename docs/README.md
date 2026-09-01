@@ -24,6 +24,7 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | [`tasks/`](tasks/README.md) | Quy trình, bảng task và hồ sơ bàn giao trong repo — **nguồn sự thật cho task/trạng thái** từ 19/08 | Khi nhận/cập nhật bất kỳ task nào |
 | [`19-ho-so-review-va-chot-kien-truc.md`](19-ho-so-review-va-chot-kien-truc.md) | Hồ sơ một file: đề tài, phạm vi, kiến trúc, thí nghiệm, 7 quyết định và phiếu review | Gửi engineer/GVHD trước khi khóa contract |
 | [`20-phan-cong-a-core-b-ui.md`](20-phan-cong-a-core-b-ui.md) | Phân công từ 15/08: A core/algorithms, B UI/delivery; điểm giao typed IPC | Mỗi đầu tuần và khi giao task |
+| [`23-ke-hoach-sau-demo-30-08.md`](23-ke-hoach-sau-demo-30-08.md) | Điểm vào hiện hành sau demo: baseline, task A/B, prompt B và gate dữ liệu thật | **Đọc ngay sau CLAUDE.md từ 30/08** |
 
 ## Kỹ thuật
 

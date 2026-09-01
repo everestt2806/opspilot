@@ -11,6 +11,8 @@ import { readVpsResources, testConnectionWithCredentials } from './vps/connectio
 import { installDockerOnVps } from './vps/dockerInstall'
 import { scanVpsEnvironment } from './vps/scanService'
 import type { VpsService } from './vps/service'
+import type { MonitorService } from './monitor/service'
+import { MlApiClient } from './monitor/mlApi'
 
 export interface WindowController {
   minimize(): void
@@ -45,7 +47,8 @@ export function registerIpcHandlers(
   ssh: SshManager,
   deployService: DeployService,
   historyService: HistoryService,
-  getWindow: () => WindowController | null
+  getWindow: () => WindowController | null,
+  monitorService?: MonitorService
 ): void {
   handle('vps:list', () => vpsService.list())
   handle('vps:create', (input) => vpsService.create(input))
@@ -87,6 +90,22 @@ export function registerIpcHandlers(
   )
 
   handle('history:list', (filter) => historyService.list(filter))
+
+  if (monitorService) {
+    handle('monitor:samples', (deploymentId, fromTs) =>
+      monitorService.samples(deploymentId, fromTs)
+    )
+    handle('monitor:scores', (deploymentId, fromTs) => monitorService.scores(deploymentId, fromTs))
+    handle('monitor:alerts', (deploymentId, limit) => monitorService.alerts(deploymentId, limit))
+    handle('monitor:get-setting', (appId) => monitorService.getSetting(appId))
+    handle('monitor:set-setting', (appId, patch) => monitorService.setSetting(appId, patch))
+    handle('monitor:label-alert', (alertId, label) => monitorService.labelAlert(alertId, label))
+    handle('monitor:train-now', async (deploymentId) => {
+      const port = mlService.getPort()
+      if (!port) throw new AppError('ML_SERVICE_DOWN', 'ML service chưa sẵn sàng.')
+      return monitorService.trainNow(deploymentId, new MlApiClient(`http://127.0.0.1:${port}`))
+    })
+  }
 
   handle('system:ml-status', async () => mlService.status())
   handle('system:ml-restart', async () => {

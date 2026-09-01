@@ -2,7 +2,7 @@
 
 | Chủ | Hạn | Branch | Brief | Ưu tiên |
 |---|---|---|---|---|
-| B | 28/08/2026 | feat/m05-collector-docker | `docs/prompts/m05-collector.md`, `docs/08-vps-setup.md` | P1 |
+| B | 03/09/2026 | feat/m05-collector-docker | `docs/prompts/m05-collector.md`, `docs/08-vps-setup.md` | P0 |
 
 ## Mục tiêu
 
@@ -30,6 +30,8 @@ dùng được" của gate G0.
 - START 20/08 — VPS đã mua từ 19/08 (TK-S2), điều kiện cần đã có.
 - UPDATE 19/08 — **Lùi W2** cùng chuỗi collector (quyết định dồn lực demo 24/08). Hạn dời
   28/08; VPS vẫn sẵn sàng (2 máy nghiệm thu 6/6) nên không mất điều kiện gì.
+- ASSIGNED 30/08 — Rebaseline hạn 03/09; chỉ kéo sau TK-B5. Xong B6 báo A để chạy TK-S4
+  trong ngày 04/09, rồi B chuyển sang TK-B8 Dashboard.
 
 ## Lệnh tái hiện
 

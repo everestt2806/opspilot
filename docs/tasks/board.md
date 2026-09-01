@@ -1,61 +1,67 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
-> Luồng trạng thái và quy tắc cập nhật bắt buộc cho AI: [`README.md`](README.md) mục 2–3.
-> Hồ sơ chi tiết từng task: `tk-<id>-*.md`. Hệ thống task trong repo chính thức từ 19/08/2026.
+> Quy trình bắt buộc: [`README.md`](README.md). Kế hoạch sau demo và điểm vào cho AI mới:
+> [`../23-ke-hoach-sau-demo-30-08.md`](../23-ke-hoach-sau-demo-30-08.md).
 >
 > Trạng thái hợp lệ: `BACKLOG · TUẦN NÀY · ĐANG LÀM · CHỜ REVIEW · HOÀN THÀNH · BLOCKED`.
-> Mỗi người tối đa **một** task `ĐANG LÀM`; phần còn lại đứng `TUẦN NÀY` theo thứ tự kéo.
-> Cập nhật dòng task đi **cùng commit/PR của task** — không commit riêng.
+> Mỗi người tối đa **một** task `ĐANG LÀM`; Worker đổi trạng thái khi thật sự bắt đầu, không đổi
+> thay người kia. `HOÀN THÀNH` chỉ sau khi PR merge `main` và đủ bằng chứng.
 
-## Điểm vào hiện tại cho người B và AI của B
+## Điểm vào hiện tại — 30/08/2026
 
-> **Quyết định của A ngày 20/08/2026:** khi B quay lại, task đầu tiên cần nhận là **TK-B9 —
-> VPS Control Panel v1**. Đọc `tk-b9-vps-control-panel.md`, đồng bộ `main`, chuyển đúng một dòng
-> TK-B9 sang `ĐANG LÀM` và ghi `START 20/08` (hoặc ngày thực tế bắt đầu) trước khi sửa code.
-> TK-B7 chỉ là task lịch sử về 4 trạng thái kết nối/tài nguyên, **không phải** scope của panel mới.
+- **A:** TK-A16 — M6 Poller + Rule Engine. Hồ sơ/prompt Worker:
+  [`tk-a16-m6-poller-rule.md`](tk-a16-m6-poller-rule.md).
+- **B:** TK-B4 — collector docker stats + HTTP probe. Hồ sơ:
+  [`tk-b4-m5-probes.md`](tk-b4-m5-probes.md).
+- Baseline chung: `origin/main` commit `2addfb8`; PR #21, #22, #23 đã merge.
+- Demo VPS Management + Express/PostgreSQL Deploy cơ bản với giảng viên đã hoàn tất. P0 hiện tại
+  là `collector → metrics.jsonl → poller → SQLite/ML → Dashboard`, không phải polish thêm demo cũ.
 
-## Tuần 1 — đang chạy (10/08–23/08)
+## Đang ưu tiên — W3/W4
 
-> Từ 19/08/2026 B bận → **A nhận toàn bộ task tuần, backend lẫn UI**, dồn lực **demo
-> 24/08 với thầy** (chẩn đoán lỗi kết nối VPS → auto-deploy Express thật → ops dashboard).
-> Chi tiết ở `docs/20` mục "Cập nhật 19/08". Collector + 2 demo app còn lại + M7 lùi W2.
-
-| ID | Task | Chủ | Hạn | Trạng thái | Branch | PR | Ghi chú |
+| ID | Task | Chủ | Hạn | Trạng thái | Branch | PR/phụ thuộc | Ghi chú |
 |---|---|---|---|---|---|---|---|
-| TK-S1 | Hồ sơ kiến trúc RC-1 + 7 quyết định đề xuất D1–D7 | Both | 11/08 | HOÀN THÀNH | chore/ho-so-kien-truc | — | `docs/19`; D1–D7 còn chờ khóa contract sau review |
-| TK-A1 | DB: schema + CRUD + migration | A | 11/08 | HOÀN THÀNH | feat/db-crud | #4 | |
-| TK-A2 | UI khung màn VPS List (state rỗng) | A | 11/08 | HOÀN THÀNH | feat/ui-vps-list-khung | #4 | Nối 4 state đầy đủ + chẩn đoán: TK-B7 (A nhận 19/08) |
-| TK-A3 | M2 credential: AES-256-GCM + safeStorage | A | 11/08 | HOÀN THÀNH | feat/m02-credential | #8 | 30/30 test |
-| TK-B1 | M5 collector scaffold (script + Dockerfile khung) | B | 15/08 | HOÀN THÀNH | feat/m05-collector-scaffold | #6 | pytest 3/3; probe/output gốc ở TK-B4/B5 (lùi W2) |
-| TK-S2 | Dựng + nghiệm thu 2 VPS cùng provider/gói/region | A | 12/08 | BLOCKED | chore/vps-nghiem-thu-19-08 | #12 | Đã dựng + 6/6 nghiệm thu + merge 19/08; **chờ 3 việc tay người dùng**: snapshot `clean-docker-19-08`, nạp pubkey B, chép DC/hạn thanh toán vào `docs/08` mục 0 |
-| TK-A4 | M1 SSH: connect/exec + timeout + auth fail + TOFU | A | 17/08 | HOÀN THÀNH | feat/m01-ssh-connect-exec | #9 | `try-ssh` **6/6 trên 2 VPS thật** 19/08 |
-| TK-A5 | M1 upload/readFileTail + resource check | A | 19/08 | BLOCKED | feat/m01-ssh-connect-exec | #9 | upload/readFileTail xanh trên VPS thật; còn chờ `metrics.jsonl` của collector (TK-B5 — lùi W2). Hồ sơ: `tk-a5-m1-files.md` |
-| TK-A10 | M1 chẩn đoán lỗi kết nối VPS: probe TCP + 5 lớp lỗi + gợi ý sửa tiếng Việt | A | 21/08 | HOÀN THÀNH | feat/m01-connect-diagnostics | #14 | Bài toán mở đầu demo 24/08 (case mẫu: firewall WiService chặn SSH). Đã merge: probe TCP + `VpsDiagnosis` trong contract; case chặn port kết luận nguyên nhân ~8s. Hồ sơ: `tk-a10-m1-diagnostics.md` |
-| TK-B2 | M12: lát cắt demo — express-api + fault endpoint + Dockerfile | **A** | 20/08 | TUẦN NÀY | feat/m12-express-demo-app | #15 | Lát cắt `express-api` xong 19/08 (chạy local + Docker, CRUD + seed 1000): merge #15. Phần còn lại (`next-blog`, `vite-spa`, fault endpoint) chuyển W2, không chặn demo. Hồ sơ: `tk-b2-m12-demo.md` |
-| TK-B7 | UI VPS connection + resource: 4 state + hiển thị chẩn đoán | **A** | 22/08 | CHỜ REVIEW | feat/ui-connection-states | #16 | B lùi, **A nhận 19/08**; 4 state bảng + tài nguyên + "Kiểm tra kết nối" trong modal + `DiagnosisPanel` (TK-A10) đã merge. Còn 1 DoD: chờ xác nhận bằng mắt với VPS thật khi người dùng thêm VM01 (demo). Hồ sơ: `tk-b7-ui-states.md` |
-| TK-A13 | M4 lát cắt demo: deploy Express thật lên VM01 (PRECHECK→RECORD) | A | 23/08 | CHỜ REVIEW | feat/m04-deploy-express | #17 | Pipeline + try-deploy + UI DeployPage (wizard + log live + nút Cài Docker) xong: 108 test/lint/typecheck xanh. Còn 2 DoD chờ **mở port 30000–30999 phía user** (firewall WiService): curl từ ngoài + click-through UI thật trên VM01. Hồ sơ: `tk-a13-m4-deploy-slice.md` |
-| TK-A14 | Dashboard v1: tổng quan VPS + lịch sử + log deploy live | A | 23/08 | HOÀN THÀNH | feat/ui-dashboard-v1 | #18 | Merge 20/08: `history:list` IPC + DashboardPage + Deploy Log xterm + HistoryPage; 124/124 test, lint/typecheck/prettier sạch. |
-| TK-S3 | Gate G0: review chéo + smoke tuần 1 | Both | 22/08 | TUẦN NÀY | — | — | Chạy chiều 22/08. B bận → review chéo: B nếu rảnh, không thì A tự review theo `prompts/99` và ghi rõ trong hồ sơ. Item ML hoãn W2 (A6/B3 lùi); item demo-apps tính theo lát cắt express-api. Hồ sơ: `tk-s3-w1-gate.md` |
+| TK-A16 | M6: poll JSONL → metric/5 score/alert → monitor IPC | A | 04/09 | CHỜ REVIEW | `feat/m06-monitor-poller-rule` | — | local `d332931` · review-07 APPROVED LOCAL; focused 25/25, CLI/lint/typecheck/Prettier/build PASS; full renderer baseline exception · chưa push |
+| TK-B4 | M5: docker stats + HTTP probe local | B | 01/09 | TUẦN NÀY | `feat/m05-collector-probes` | TK-B2 Express đã có | **Task B kéo ngay** |
+| TK-B5 | M5: metrics.jsonl + latest.json, seq/fsync/rotation | B | 02/09 | BACKLOG | `feat/m05-collector-output` | Sau TK-B4 | Khép blocker TK-A5 |
+| TK-B6 | M5: chạy collector Docker trên VM01 | B | 03/09 | BACKLOG | `feat/m05-collector-docker` | Sau TK-B5 | Không mở thêm port |
+| TK-S4 | Gate dữ liệu thật: A16 + B6 trên VM01 | Both | 04/09 | BLOCKED | — | Chờ A16 và B6 | Metric thật vào SQLite, 5 score/mẫu, reconnect không trùng |
+| TK-B8 | Monitor Dashboard: chart + score + alert UI | B | 07/09 | BACKLOG | `feat/ui-monitor-dashboard` | Sau TK-S4 | Chỉ renderer + typed IPC thật |
+| TK-A15 | M4 hardening: 3 image + healthcheck/rollback/retry + lock port | A | 08/09 | BACKLOG | `feat/m04-deploy-hardening` | Sau TK-A16 | Không trộn vào PR M6 |
+| TK-A7 | M3: detector 3 Tier 1 | A | 10/09 | BACKLOG | `feat/m03-tier1-detectors` | Sau A15 | Breadth; thấp hơn đường dữ liệu |
+| TK-B2 | M12 còn lại: next-blog + vite-spa + fault endpoint | B | 10/09 | BACKLOG | `feat/m12-demo-apps-rest` | Sau B8 | Lát cắt Express đã hoàn thành #15 |
+| TK-S5 | Gate MVP 16/24 FR + smoke/rollback/alert | Both | 11/09 | BACKLOG | — | Sau A15/B8 | Bằng chứng vào `docs/smoke-log.md` |
 
-## Tuần 2 — plan chốt (22/08–28/08)
+## Đang bị chặn nhưng không chặn A16/B4
 
-Tạo tk-file khi kéo task (mẫu `tk-template.md`). Đầy đủ ở `docs/20` mục 3.
-
-| ID | Task | Chủ | Trạng thái | Ghi chú |
+| ID | Task | Chủ | Trạng thái | Điều kiện gỡ chặn |
 |---|---|---|---|---|
-| TK-A6 | M7 ML skeleton: features + 6 endpoint + unit test | A | HOÀN THÀNH | Merge #19 ngày 20/08: features 20 chiều + 3 model + ensemble + 6 endpoint + `gen_fake_series`; 19/19 test, curl đủ 6 endpoint. Việc tiếp theo của A: TK-A7. |
-| TK-A7 | M3 Detector engine: rule + 3 detector Tier 1 | A | BACKLOG | Brief `prompts/m03` |
-| TK-A9 | M7 train/ingest/replay + 4 method | A | BACKLOG | Sau TK-A6 |
-| TK-A15 | M4 hoàn thiện: compose + healthcheck + giữ 3 image + lock port | A | BACKLOG | Phần còn lại sau lát cắt demo TK-A13 |
-| TK-B9 | VPS Control Panel v1: tổng quan đội VPS + chi tiết máy + ứng dụng/deploy + hoạt động | B | ĐANG LÀM | **Task đầu tiên khi B quay lại; A giao 20/08.** Branch `feat/ui-vps-control-panel`, hạn 28/08. Dùng IPC hiện có; không làm terminal/file manager/firewall và không sửa backend. Hồ sơ: `tk-b9-vps-control-panel.md` |
-| TK-B3 | Fixture metric giả đúng contract cho A | B | BACKLOG | Lùi W2 cùng đợt ML (TK-A6); A tự viết `gen_fake_series` nếu cần (phương án dự phòng đã thống nhất) |
-| TK-B4 | M5: docker stats + HTTP probe (chạy local) | B | BACKLOG | Lùi W2 (collector ngoài demo 24/08); đích probe = express-api (TK-B2) |
-| TK-B5 | M5: ghi metrics.jsonl + latest.json chu kỳ 10s | B | BACKLOG | Lùi W2 cùng chuỗi collector; khép TK-A5 khi có file thật |
-| TK-B6 | M5: chạy collector bằng Docker trên VPS | B | BACKLOG | Lùi W2 cùng chuỗi collector |
-| TK-B8 | Hoàn tất collector + nối Monitor UI | B | BACKLOG | Phần Deploy Wizard/Log UI đã A làm ở TK-A14 → B8 còn lại = collector + Dashboard chart/score khi quay lại |
-| TK-B2 | M12 (phần còn lại): next-blog + vite-spa + fault endpoint | B | BACKLOG | Chuyển từ W1 (lát cắt express-api đã xong #15); giữ tk-file `tk-b2-m12-demo.md` |
+| TK-A5 | M1 readFileTail + resource check — nghiệm thu file thật | A | BLOCKED | TK-B5 sinh `metrics.jsonl`; đóng tại TK-S4 |
+| TK-S2 | Hoàn tất hồ sơ vận hành 2 VPS | A | BLOCKED | Snapshot sạch, pubkey B, DC/hạn thanh toán trong `docs/08` |
 
-## Tuần 3+ 
+## Đã hoàn thành/merge
 
-Lấy từ `docs/20` mục 3 (W3: DEPLOY→RECORD + poller/rule + Dashboard; W4: rollback + smoke 16/24).
-Thêm dòng vào bảng trên khi chốt plan đầu tuần.
+| ID | Kết quả | Chủ | PR/bằng chứng |
+|---|---|---|---|
+| TK-S1 | Hồ sơ kiến trúc RC-1 + D1–D7 | Both | `docs/19` |
+| TK-A1/A2 | DB CRUD + khung VPS List | A | #4 |
+| TK-A3 | Credential AES-256-GCM + safeStorage | A | #8, 30/30 test |
+| TK-A4 | SSH connect/exec/upload/read tail nền | A | #9, try-ssh 6/6 trên hai VPS |
+| TK-A6 | ML: feature 20D + 3 model + ensemble + 6 endpoint + fixture | A | #19, 19/19 pytest |
+| TK-A9 | Train/ingest/replay + 4 score ML | A | Đã được thực hiện gộp trong TK-A6/#19 |
+| TK-A10 | Chẩn đoán kết nối VPS 5 lớp | A | #14 |
+| TK-A13 | Express deploy/redeploy PRECHECK→RECORD + demo thật | A | #17 + #23; health ngoài mạng 200 |
+| TK-A14 | Dashboard tổng quan + History + log deploy | A | #18 |
+| TK-B1 | Collector scaffold | B | #6, pytest 3/3 |
+| TK-B3 | Fixture metric cho A | A làm fallback | `gen_fake_series.py` trong #19; B không cần làm lại |
+| TK-B7 | UI kết nối/tài nguyên/diagnosis đủ state | A làm thay | #16 + smoke demo thật 30/08 |
+| TK-B9 | VPS Control Panel v1 | B | #21; 172/172 test tại bàn giao |
+| TK-S3 | Gate nền điều chỉnh: SSH/VPS/Express/ML skeleton | Both | Demo cơ bản hoàn tất; phần collector chuyển sang TK-S4 |
+
+## Quy tắc cập nhật nhanh
+
+1. Bắt đầu: đổi đúng task của mình thành `ĐANG LÀM`, ghi `START dd/mm` trong tk-file.
+2. Cuối phiên: ghi `UPDATE` với code/test/việc tiếp theo.
+3. Mở PR: chuyển `CHỜ REVIEW`, thêm link PR và kết quả gate.
+4. Merge: tick DoD, ghi `DONE`, chuyển `HOÀN THÀNH`.
+5. Vướng trên 30 phút: chuyển `BLOCKED`, ghi bằng chứng + điều kiện gỡ.

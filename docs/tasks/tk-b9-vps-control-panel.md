@@ -1,34 +1,17 @@
 # TK-B9 — VPS Control Panel v1
 
-> **A giao trực tiếp cho B ngày 20/08/2026.** Đây là task đầu tiên của B khi quay lại.
-> TK-B7 đã khép phần nền 4 trạng thái; task này mở rộng màn VPS thành một panel vận hành
-> trong phạm vi OpsPilot, không phải chỉ sửa giao diện bảng cũ.
+> **HOÀN THÀNH 30/08/2026 — không nhận lại task này.** PR #21 và #22 đã merge. Điểm vào mới
+> của B là [`tk-b4-m5-probes.md`](tk-b4-m5-probes.md); xem kế hoạch sau demo ở
+> [`../23-ke-hoach-sau-demo-30-08.md`](../23-ke-hoach-sau-demo-30-08.md).
 
 | Chủ | Hạn        | Branch                      | Brief                           | Ưu tiên |
 | --- | ---------- | --------------------------- | ------------------------------- | ------- |
 | B   | 28/08/2026 | `feat/ui-vps-control-panel` | `docs/02-ui-ux-spec.md` mục 3.1 | P0      |
 
-## Cách B và AI bắt đầu
+## Trạng thái bàn giao
 
-1. Đọc `CLAUDE.md`, `docs/tasks/README.md`, file này, `docs/02-ui-ux-spec.md` mục 2–4 và
-   `app/src/shared/ipc.ts`.
-2. Đồng bộ `main`. Baseline đã xác nhận ngày 20/08 gồm PR #16, #17, #18 và #19; PR #18 cung
-   cấp `history:list` cùng component/formatter lịch sử. Không bắt đầu từ branch cũ hoặc chép lại
-   code của các PR đã merge.
-3. Chuyển riêng TK-B9 trên `board.md` từ `TUẦN NÀY` sang `ĐANG LÀM`, rồi thêm dòng
-   `START <dd/mm> — dựng panel theo ba lát: khung + Tổng quan → Ứng dụng & deploy → Hoạt động`.
-4. Chỉ làm TK-B9 trong phiên đó. TK-B3/B4/B5/B6/B8/B2 vẫn ở `BACKLOG` cho tới khi TK-B9
-   sang `CHỜ REVIEW` hoặc có quyết định đổi ưu tiên mới của A.
-
-Prompt ngắn có thể đưa nguyên văn cho AI:
-
-```text
-Tôi là người B — UI/Delivery. Hãy nhận và thực hiện TK-B9 trong
-docs/tasks/tk-b9-vps-control-panel.md. Đọc board và các file bắt buộc trong mục "Cách B và AI
-bắt đầu", cập nhật TK-B9 sang ĐANG LÀM + ghi START trước khi code. Chỉ sửa renderer và test
-trong scope; không đổi contract/backend. Chạy test, lint, typecheck, prettier; cập nhật board +
-nhật ký task trong cùng PR và không merge PR.
-```
+Giữ phần mục tiêu/DoD bên dưới làm bằng chứng lịch sử. AI mới không code tiếp trên branch cũ và
+không dựng lại các component đã merge.
 
 ## Mục tiêu
 
@@ -109,24 +92,24 @@ Nếu một nút cần channel chưa có handler thật, **không dựng nút gi
 
 ## Definition of Done
 
-- [ ] Bố cục master–detail và đủ ba tab `Tổng quan`, `Ứng dụng & deploy`, `Hoạt động`; panel dùng
+- [x] Bố cục master–detail và đủ ba tab `Tổng quan`, `Ứng dụng & deploy`, `Hoạt động`; panel dùng
       được ở kích thước cửa sổ Electron hiện tại, không tràn ngang ở 1280×720.
-- [ ] Fleet summary, tìm kiếm/lọc, chọn VPS và số app lấy từ typed IPC; không hard-code fixture trong
+- [x] Fleet summary, tìm kiếm/lọc, chọn VPS và số app lấy từ typed IPC; không hard-code fixture trong
       production code.
-- [ ] Tổng quan VPS có đủ loading/empty/success/error và các hành động CRUD/check/install Docker
+- [x] Tổng quan VPS có đủ loading/empty/success/error và các hành động CRUD/check/install Docker
       hiện có vẫn hoạt động, không làm mất chẩn đoán của TK-B7.
-- [ ] App list có loading/empty/success/error; `Deploy ứng dụng mới` preselect đúng VPS và
+- [x] App list có loading/empty/success/error; `Deploy ứng dụng mới` preselect đúng VPS và
       `Redeploy` preselect đúng VPS + app trong Deploy Wizard.
-- [ ] Hoạt động lọc đúng `vps_id`, không ló dữ liệu VPS trước trong lúc đổi selection; drawer hiển
+- [x] Hoạt động lọc đúng `vps_id`, không ló dữ liệu VPS trước trong lúc đổi selection; drawer hiển
       thị `detail_json` dạng key–value.
-- [ ] Hành động xoá/khác có rủi ro giữ confirm theo `docs/02`; mọi lỗi người dùng thấy bằng tiếng
+- [x] Hành động xoá/khác có rủi ro giữ confirm theo `docs/02`; mọi lỗi người dùng thấy bằng tiếng
       Việt, text mới đặt trong `strings.ts`.
-- [ ] Không import Node/Electron từ renderer, không thêm/sửa IPC contract, không thêm dependency.
-- [ ] Component test tối thiểu phủ: không có VPS; hai VPS online/offline; lỗi resource; chọn VPS;
+- [x] Không import Node/Electron từ renderer, không thêm/sửa IPC contract, không thêm dependency.
+- [x] Component test tối thiểu phủ: không có VPS; hai VPS online/offline; lỗi resource; chọn VPS;
       app empty/success; quick deploy preselect; activity success/error và đổi VPS không stale.
-- [ ] `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm exec prettier --check .` trong `app/`
+- [x] `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm exec prettier --check .` trong `app/`
       đều xanh.
-- [ ] Có ảnh hoặc video ngắn của ba tab với fixture/VPS thật đã che IP; board + nhật ký file này cập
+- [x] Có ảnh hoặc video ngắn của ba tab với fixture/VPS thật đã che IP; board + nhật ký file này cập
       nhật trong cùng PR, trạng thái `CHỜ REVIEW`, không tự merge.
 
 ## Nhật ký
@@ -141,6 +124,9 @@ Nếu một nút cần channel chưa có handler thật, **không dựng nút gi
   + đếm "N VPS selected" trên topbar. Gate: 172/172 test, lint 0 lỗi, typecheck xanh. Tiếp
   theo: commit UI trên `feat/ui-vps-control-panel`, commit backend scan trên `feat/vps-env-scan`,
   đồng bộ contract, mở PR.
+- DONE 30/08 — PR #21 đã merge `main`; PR #22 merge scan môi trường SSH. Panel được dùng trong
+  buổi demo cơ bản với giảng viên; baseline bàn giao 172/172 test, lint/typecheck xanh. Việc tiếp
+  theo của B là TK-B4, không tiếp tục polish branch panel cũ.
 
 ## Lệnh tái hiện
 
@@ -158,4 +144,5 @@ nhận Deploy Wizard đã chọn đúng VPS/app.
 
 ## PR
 
-- Chưa mở. Branch bắt buộc: `feat/ui-vps-control-panel`.
+- [#21 — VPS Control Panel v1](https://github.com/everestt2806/opspilot/pull/21) — merged.
+- [#22 — environment scan over SSH](https://github.com/everestt2806/opspilot/pull/22) — merged.

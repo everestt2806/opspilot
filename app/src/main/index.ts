@@ -16,10 +16,16 @@ import { logger } from './logger'
 import { MlServiceManager } from './mlClient'
 import { SshManager } from './ssh/manager'
 import { VpsService } from './vps/service'
+import { MonitorService } from './monitor/service'
+import { MonitorScheduler } from './monitor/scheduler'
+import { MlApiClient } from './monitor/mlApi'
+import { shutdownRuntime } from './shutdown'
 
 let mainWindow: BrowserWindow | null = null
 let mlService: MlServiceManager | null = null
 let sshManager: SshManager | null = null
+let monitorScheduler: MonitorScheduler | null = null
+let quitting = false
 
 function emitMlStatus(status: { running: boolean; reason?: string }): void {
   mainWindow?.webContents.send('system:ml-status', status)
@@ -109,6 +115,7 @@ void app
     })
 
     const historyService = new HistoryService(new ActionLogRepository(database))
+    const monitorService = new MonitorService(database)
 
     registerIpcHandlers(
       mlService,
@@ -116,8 +123,19 @@ void app
       sshManager,
       deployService,
       historyService,
-      () => mainWindow
+      () => mainWindow,
+      monitorService
     )
+    monitorScheduler = new MonitorScheduler(async () => {
+      const port = mlService?.getPort()
+      await monitorService.pollAll(
+        sshManager!,
+        port ? new MlApiClient(`http://127.0.0.1:${port}`) : undefined,
+        (event) => mainWindow?.webContents.send('monitor:tick', event),
+        (status) => emitMlStatus(status)
+      )
+    })
+    monitorScheduler.start()
 
     createWindow()
 
@@ -146,9 +164,20 @@ void app
     app.quit()
   })
 
-app.on('before-quit', () => {
-  mlService?.stopSync()
-  sshManager?.disconnectAll()
+app.on('before-quit', (event) => {
+  if (quitting) return
+  event.preventDefault()
+  quitting = true
+  void shutdownRuntime({
+    stopScheduler: async () => monitorScheduler?.stop(),
+    stopMl: () => mlService?.stopSync(),
+    disconnectSsh: async () => sshManager?.disconnectAll(),
+    quit: () => app.quit(),
+    report: (error) =>
+      logger.error('system', 'Dọn dẹp khi thoát thất bại', {
+        error: error instanceof Error ? error.message : String(error)
+      })
+  })
 })
 
 app.on('will-quit', () => {

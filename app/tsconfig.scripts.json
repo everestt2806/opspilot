@@ -21,6 +21,7 @@
     "scripts/try-deploy.ts",
     "scripts/seed-vps.ts",
     "scripts/reset-demo.ts",
+    "scripts/try-monitor.ts",
     "src/main/raw.d.ts"
   ]
 }

@@ -16,12 +16,15 @@ giảm vận hành và tự động rollback trước khi ứng dụng chết h�
 | Giai đoạn | Trạng thái |
 |---|---|
 | Tài liệu & hợp đồng kỹ thuật | ✅ Xong (tuần 0) |
-| Duyệt đề tài với giảng viên | ⏳ Đang chờ |
-| Code | 🏗️ Đang triển khai tuần 1 — xem [`docs/tasks/`](docs/tasks/) |
+| Demo lát cắt VPS Management + Express/PostgreSQL Deploy | ✅ Đã demo cơ bản 30/08 |
+| Code | 🏗️ W3: collector → poller/rule/ML → Dashboard — xem [`docs/tasks/`](docs/tasks/) |
 
 > **Rebaseline 09/08/2026:** nhóm bắt đầu triển khai vào **10/08/2026**. Bốn tuần đầu ưu tiên
 > lát cắt chạy thật từ SSH → deploy → metric → ML/dashboard, mục tiêu nghiệm thu **16/24 yêu
 > cầu chức năng (66,7%)** vào 11/09. Lịch mới: [`docs/04-timeline.md`](docs/04-timeline.md).
+>
+> **Điểm vào sau demo:** [`docs/23-ke-hoach-sau-demo-30-08.md`](docs/23-ke-hoach-sau-demo-30-08.md)
+> ghi task hiện tại của A/B, thứ tự kéo và điểm tích hợp. AI mới đọc file này trước board.
 
 ---
 

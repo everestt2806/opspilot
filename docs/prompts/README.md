@@ -30,6 +30,7 @@ docs/prompts/m04-deploy-pipeline.md"*.
 | File | Module | Người | Tuần |
 |---|---|---|---|
 | [`01-task-from-board.md`](01-task-from-board.md) | Mẫu giao một task (hồ sơ trong `docs/tasks/`) cho AI, chọn lập kế hoạch/thực hiện/review | cả hai | mọi task |
+| [`tk-a16-worker-luna.md`](tk-a16-worker-luna.md) | Prompt thực thi đầy đủ TK-A16: quyền Git, CP1–CP4, log và handoff local | A | W3 |
 | [`m00-scaffold.md`](m00-scaffold.md) | Khởi tạo repo, cấu hình build | A | W1 |
 | [`m01-ssh-manager.md`](m01-ssh-manager.md) | SSH manager | A | W1 |
 | [`m02-credential.md`](m02-credential.md) | Mã hoá credential | A | W1 |
@@ -58,8 +59,10 @@ docs/prompts/m04-deploy-pipeline.md"*.
 5. AI đề xuất cách làm khác và nhóm **chấp nhận** → ghi 1 dòng `DECISIONS.md` kèm lý do.
    Đó là bằng chứng nhóm có phán xét, không chỉ dán code.
 6. **Người làm việc với AI nào cũng phải bắt AI đó cập nhật `docs/tasks/board.md` + hồ sơ
-   `docs/tasks/tk-*.md`** (nhật ký, lệnh tái hiện, link PR) trước khi bàn giao kết quả — xem
+   `docs/tasks/tk-*.md`** (nhật ký, lệnh tái hiện, local HEAD; link PR chỉ khi đã được phép) trước khi bàn giao kết quả — xem
    `docs/tasks/README.md` mục 3. AI không cập nhật = người dùng không nhận kết quả đó.
+7. **Worker mặc định không có quyền push/mở PR/merge.** Chỉ commit cục bộ và bàn giao để review;
+   quyền đẩy remote phải do A cấp riêng sau đó.
 
 ---
 

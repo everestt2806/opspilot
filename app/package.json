@@ -23,6 +23,7 @@
     "try:ssh": "tsc -p tsconfig.scripts.json && node .out-scripts/scripts/try-ssh.js",
     "try:detect": "node -e \"console.log('M3 chua duoc trien khai')\"",
     "try:deploy": "tsc -p tsconfig.scripts.json && node scripts/prepare-cli.js && node scripts/run-as-node.js .out-scripts/scripts/try-deploy.js",
+    "try:monitor": "tsc -p tsconfig.scripts.json && node .out-scripts/scripts/try-monitor.js",
     "demo:reset": "tsc -p tsconfig.scripts.json && node scripts/prepare-cli.js && electron .out-scripts/scripts/reset-demo.js"
   },
   "dependencies": {

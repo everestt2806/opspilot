@@ -38,6 +38,10 @@ Chốt cổng **G0 — Nền chạy được**: "App, DB, SSH, ML skeleton trên
   thay đổi phạm vi theo quyết định dồn demo: item ML (TK-A6/B3) **hoãn W2** — ghi rõ lý do
   trong kết quả gate; item demo-apps chỉ tính lát cắt `express-api`. Smoke W1 vẫn: VPS thật +
   try-ssh + lint/typecheck trên main + express chạy local.
+- DONE 30/08 — Đóng gate nền theo phạm vi điều chỉnh: DB/credential/SSH trên hai VPS, Express
+  deploy/redeploy thật và ML skeleton đều có bằng chứng; demo cơ bản với giảng viên hoàn tất.
+  Collector trên VPS là tiêu chí chưa đạt của G1, được chuyển minh bạch sang TK-B4→B6 và gate
+  tích hợp TK-S4, không tuyên bố đã có metric thật.
 
 ## Lệnh tái hiện
 

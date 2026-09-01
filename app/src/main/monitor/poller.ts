@@ -1,0 +1,189 @@
+import type Database from 'better-sqlite3'
+
+import { logger } from '../logger'
+import { completeByteLength, parseMetricContent } from './metricParser'
+import type { MetricSource } from './metricSource'
+import { MonitorRepository } from './repository'
+import { AlertTracker } from './alertTracker'
+import { evaluateRule } from './rules'
+import type { MetricLine } from './metricParser'
+import type { MlIngestResponse, MlStatusResponse, MlTrainResponse } from './mlApi'
+
+export interface MetricScorer {
+  ingest(deploymentId: number, sample: MetricLine): Promise<MlIngestResponse>
+}
+
+export interface MonitorRuntime extends MetricScorer {
+  status(deploymentId: number): Promise<MlStatusResponse>
+  train(deploymentId: number, samples: MetricLine[]): Promise<MlTrainResponse>
+}
+
+function ensembleAbove(result: MlIngestResponse | undefined, threshold: number): boolean {
+  if (!result) return false
+  return (
+    (['zscore_ewma', 'iforest', 'ocsvm'] as const).filter(
+      (method) => result.scores[method] !== null && result.scores[method]! > threshold
+    ).length >= 2
+  )
+}
+export interface MlStatusReporter {
+  report(status: { running: boolean; reason?: string }): void
+}
+export class MetricSourceError extends Error {}
+
+export class MonitorPoller {
+  constructor(
+    private readonly database: Database.Database,
+    private readonly repository: MonitorRepository = new MonitorRepository(database),
+    private readonly tracker: AlertTracker = new AlertTracker(database),
+    private readonly scorer?: MetricScorer,
+    private readonly mlStatus?: MlStatusReporter
+  ) {}
+
+  async poll(
+    appId: number,
+    deploymentId: number,
+    source: MetricSource,
+    onSample?: (sampleId: number) => Promise<void> | void
+  ): Promise<{ inserted: number; nextOffset: number; sampleIds: number[]; alertIds: number[] }> {
+    const target = this.repository.getTarget(deploymentId)
+    if (!target || target.app_id !== appId)
+      return { inserted: 0, nextOffset: 1, sampleIds: [], alertIds: [] }
+    let offset = target.metrics_offset
+    let size: number
+    try {
+      size = await source.size()
+    } catch (error) {
+      throw new MetricSourceError('Không đọc được kích thước metrics.jsonl', { cause: error })
+    }
+    if (size < offset - 1) {
+      offset = 1
+      logger.info('monitor', 'File metric nhỏ hơn offset, reset về đầu file', { app_id: appId })
+      this.repository.logAction(
+        'ssh_error',
+        'failed',
+        'Metric file đã xoay vòng, reset offset',
+        appId,
+        deploymentId
+      )
+    }
+    let content: string
+    try {
+      content = await source.tail(offset)
+    } catch (error) {
+      throw new MetricSourceError('Không đọc được metrics.jsonl', { cause: error })
+    }
+    const committedBytes = completeByteLength(content)
+    if (committedBytes === 0)
+      return { inserted: 0, nextOffset: offset, sampleIds: [], alertIds: [] }
+    const completeContent = content.slice(0, content.lastIndexOf('\n') + 1)
+    const parsed = parseMetricContent(completeContent)
+    for (const item of parsed)
+      if (item.warning) {
+        logger.warn('monitor', item.warning, { app_id: appId, consumed_bytes: item.byteLength })
+        this.repository.logAction(
+          'ssh_error',
+          'failed',
+          'Dòng metric hỏng đã được tiêu thụ',
+          appId,
+          deploymentId
+        )
+      }
+    const newItems = parsed.filter(
+      (item) => item.metric && !this.repository.hasSample(deploymentId, item.metric.seq)
+    )
+    const mlResults = new Map<number, MlIngestResponse>()
+    let ingestFailed = false
+    if (this.scorer) {
+      for (const item of newItems) {
+        if (!item.metric) continue
+        try {
+          mlResults.set(item.metric.seq, await this.scorer.ingest(deploymentId, item.metric))
+        } catch {
+          ingestFailed = true
+          this.mlStatus?.report({ running: false, reason: 'ML ingest không phản hồi' })
+          /* fallback NULL is persisted below */
+        }
+      }
+      if (newItems.length && !ingestFailed) this.mlStatus?.report({ running: true })
+    }
+    let inserted = 0
+    const sampleIds: number[] = []
+    const alertIds: number[] = []
+    const commit = this.database.transaction(() => {
+      for (const item of newItems) {
+        if (!item.metric) continue
+        const id = this.repository.insertSample({
+          deploymentId,
+          line: item.metric,
+          rawJson: item.raw,
+          tsLocal: new Date().toISOString()
+        })
+        if (id !== 0) {
+          inserted += 1
+          const sample = this.repository.getMetric(id)
+          const rule = evaluateRule(sample, target.setting)
+          this.repository.insertScore({
+            metricSampleId: id,
+            deploymentId,
+            ts: sample.ts_vps,
+            method: 'rule',
+            score: rule.violated ? 1 : 0,
+            above: rule.violated,
+            detail: JSON.stringify({ reasons: rule.reasons })
+          })
+          const ruleAlertId = this.tracker.update({
+            deploymentId,
+            metricSampleId: id,
+            ts: sample.ts_vps,
+            method: 'rule',
+            score: rule.violated ? 1 : 0,
+            above: rule.violated,
+            threshold: 0,
+            consecutive: target.setting.rule_consecutive,
+            detail: JSON.stringify({ reasons: rule.reasons })
+          })
+          if (ruleAlertId) alertIds.push(ruleAlertId)
+          for (const method of ['zscore_ewma', 'iforest', 'ocsvm', 'ensemble'] as const)
+            this.repository.insertScore({
+              metricSampleId: id,
+              deploymentId,
+              ts: sample.ts_vps,
+              method,
+              score: mlResults.get(item.metric.seq)?.scores[method] ?? null,
+              above:
+                method === 'ensemble'
+                  ? ensembleAbove(mlResults.get(item.metric.seq), target.setting.ml_score_threshold)
+                  : (mlResults.get(item.metric.seq)?.scores[method] ?? null) !== null &&
+                    (mlResults.get(item.metric.seq)?.scores[method] ?? 0) >
+                      target.setting.ml_score_threshold,
+              detail: JSON.stringify(mlResults.get(item.metric.seq)?.detail?.[method] ?? null)
+            })
+          for (const method of ['zscore_ewma', 'iforest', 'ocsvm', 'ensemble'] as const) {
+            const result = mlResults.get(item.metric.seq)
+            const score = result?.scores[method] ?? null
+            const mlAlertId = this.tracker.update({
+              deploymentId,
+              metricSampleId: id,
+              ts: sample.ts_vps,
+              method,
+              score,
+              above:
+                method === 'ensemble'
+                  ? ensembleAbove(result, target.setting.ml_score_threshold)
+                  : score !== null && score > target.setting.ml_score_threshold,
+              threshold: target.setting.ml_score_threshold,
+              consecutive: target.setting.ml_consecutive
+            })
+            if (mlAlertId) alertIds.push(mlAlertId)
+          }
+          sampleIds.push(id)
+        }
+      }
+      this.repository.updateOffset(appId, offset + committedBytes)
+    })
+    commit()
+    for (const sampleId of sampleIds) await onSample?.(sampleId)
+    return { inserted, nextOffset: offset + committedBytes, sampleIds, alertIds }
+  }
+}

@@ -15,15 +15,15 @@ Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng đượ
 
 | ID | Yêu cầu | Module | Kiểm chứng | Màn hình | Tuần | TT |
 |---|---|---|---|---|---|---|
-| FR-A1 | CRUD VPS, credential mã hoá | M2 + `db` | unit test crypto + `loadSecret` roundtrip DB (pass) · chờ smoke VPS | 3.1 | W1 | 🔨 |
-| FR-A2 | Test SSH, kiểm tra & tự cài Docker | M1 + `vps:install-docker` | `try-ssh` 6 bước chống sandbox + `vps:test-connection` (pass) · chưa `install-docker` + smoke VPS | 3.1 | W1 | 🔨 |
-| FR-A3 | Danh sách VPS + trạng thái + tài nguyên | M1 + `vps:get-resources` | `vps:get-resources` handler + parse test (pass) · chờ smoke VPS thật | 3.1 | W1 | 🔨 |
+| FR-A1 | CRUD VPS, credential mã hoá | M2 + `db` | unit test crypto + `loadSecret` roundtrip DB + smoke VM01 30/08 | 3.1 | W1 | ✅ |
+| FR-A2 | Test SSH, kiểm tra & tự cài Docker | M1 + `vps:install-docker` | `try-ssh` 6 bước + connection/scan handler + smoke VM01 30/08 | 3.1 | W1 | ✅ |
+| FR-A3 | Danh sách VPS + trạng thái + tài nguyên | M1 + `vps:get-resources` | test parser/renderer + VPS Control Panel #21 + smoke VM01 30/08 | 3.1 | W1 | ✅ |
 | FR-B1 | Detector plugin nhận diện framework | M3 | unit test ≥4 case/detector | 3.2 b2 | W2 | ⬜ |
 | FR-B2 | Hỗ trợ 3 stack Tier 1 (+Flask Tier 2) | M3 | deploy thật cả 3 demo app | 3.2 | W3 | ⬜ |
 | FR-B3 | Wizard hỏi env thiếu + cảnh báo thủ công | M3 `requiredEnv` + UI | smoke test | 3.2 b3 | W3 | ⬜ |
-| FR-B4 | Precheck RAM/disk/port | M4 `PRECHECK` | smoke test + case cố tình thiếu RAM | 3.2 b4 | W2 | ⬜ |
-| FR-B5 | Build image + deploy qua SSH | M4 `BUILD`,`DEPLOY` | deploy end-to-end | 3.3 | W2–W3 | ⬜ |
-| FR-B6 | Log build/deploy real-time | M4 event + xterm | quan sát khi demo | 3.3 | W3 | ⬜ |
+| FR-B4 | Precheck RAM/disk/port | M4 `PRECHECK` | unit test + click-through VM01; case thiếu RAM còn bổ sung W4 | 3.2 b4 | W2 | 🔨 |
+| FR-B5 | Build image + deploy qua SSH | M4 `BUILD`,`DEPLOY` | Express/PostgreSQL end-to-end, health ngoài mạng 200, PR #23 | 3.3 | W2–W3 | ✅ |
+| FR-B6 | Log build/deploy real-time | M4 event + xterm | quan sát trực tiếp trong demo 30/08 | 3.3 | W3 | ✅ |
 | FR-B7 | Lịch sử deploy (version, framework, thời gian) | bảng `deployment` | màn Phiên bản có ≥3 version | 3.5 | W4 | ⬜ |
 | FR-B8 | Thêm framework mới không sửa lõi | `detector-contract.ts` | **đo giờ công thêm Flask ở W10** | — | W10 | ⬜ |
 | FR-C1 | Chọn VPS nguồn/đích, khởi tạo migrate | M9 `PREPARE` | smoke test | 3.6 | W6 | ⬜ |
@@ -32,10 +32,12 @@ Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng đượ
 | FR-C4 | Verify checksum + đếm bản ghi | M9 `VERIFY` | bảng đối chiếu 2 cột (chụp vào báo cáo) | 3.6 | W7 | ⬜ |
 | FR-C5 | Huỷ/rollback migrate, giữ nguồn | M9 nhánh lỗi | **test chủ động: ngắt SSH giữa TRANSFER** | 3.6 | W7 | ⬜ |
 | FR-D1 | Container thu metric deploy kèm app | M5 + compose template | `metrics.jsonl` có dữ liệu | — | W2 | ⬜ |
-| FR-D2 | Poll metric qua SSH + dashboard real-time | M6 + UI | metric thật hiện trên chart | 3.4 | W3 | ⬜ |
-| FR-D3 | Rule-based, ngưỡng cấu hình được | M6 `rules.ts` + `monitor_setting` | đổi ngưỡng qua Drawer → alert đổi theo | 3.4 | W3 | ⬜ |
-| FR-D4 | 3 phương pháp ML song song + độ tin cậy | M7 | `score_sample` có đủ 5 dòng/mẫu | 3.4 | W1–W3 | ⬜ |
-| FR-D5 | Gắn nhãn đúng/sai từng cảnh báo | `monitor:label-alert` | bấm 1 phát, DB đổi | 3.4 t3 | W4 | ⬜ |
+| FR-D2 | Poll metric qua SSH + dashboard real-time | M6 + UI | metric/sample tick qua MonitorPoller + SQLite thật | 3.4 | W3 | 🔨 |
+| FR-D3 | Rule-based, ngưỡng cấu hình được | M6 `rules.ts` + `monitor_setting` | rule/setting/alert lifecycle có regression SQLite | 3.4 | W3 | 🔨 |
+| FR-D4 | 3 phương pháp ML song song + độ tin cậy | M7 | `score_sample` đủ 5 dòng/mẫu, ML NULL khi down | 3.4 | W1–W3 | 🔨 |
+| FR-D5 | Gắn nhãn đúng/sai từng cảnh báo | `monitor:label-alert` | IPC label ghi DB thật và regression | 3.4 t3 | W4 | 🔨 |
+
+Ghi chú TK-A16 local: backend parser/repository/rule/poller/ML/IPC đã có regression SQLite thật và CLI fixture; smoke VPS thật, UI nghiệm thu và full-suite renderer vẫn ngoài scope TK-A16.
 | FR-E1 | Rollback thủ công | M4 rollback | về đúng version cũ, app chạy | 3.5 | W4 | ⬜ |
 | FR-E2 | Tự động rollback theo method tin cậy | M8 | demo memory leak → tự rollback | 3.4 | W5 | ⬜ |
 | FR-E3 | Ghi log toàn bộ hành động | `action_log` | màn Lịch sử có đủ loại hành động | 3.7 | W7 | ⬜ |
@@ -57,8 +59,8 @@ Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng đượ
 
 | UC | Tên | Màn hình | Smoke test bước | TT |
 |---|---|---|---|---|
-| UC-01 | Kết nối VPS mới | 3.1 | 1 | ⬜ |
-| UC-02 | Deploy lần đầu | 3.2 + 3.3 | 2 | ⬜ |
+| UC-01 | Kết nối VPS mới | 3.1 | 1 | ✅ |
+| UC-02 | Deploy lần đầu | 3.2 + 3.3 | 2 | ✅ |
 | UC-03 | Redeploy + tự rollback khi healthcheck fail | 3.3 + 3.5 | — | ⬜ |
 | UC-04 | Rollback thủ công | 3.5 | 6 | ⬜ |
 | UC-05 | Migrate sang VPS khác | 3.6 | — | ⬜ |

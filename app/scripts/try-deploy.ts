@@ -233,7 +233,7 @@ async function main(): Promise<void> {
     console.log('\nDeploy demo xong. App dang chay tai:', current.url)
   } finally {
     activeDeploymentId = null
-    ssh.disconnectAll()
+    await ssh.disconnectAll()
     closeDatabase()
     rmSync(dbDir, { recursive: true, force: true })
   }

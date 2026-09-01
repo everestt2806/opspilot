@@ -112,10 +112,12 @@ docs/                   toàn bộ tài liệu (file này trỏ tới)
 
 **Quản lý task — bắt buộc với mọi phiên, kể cả khi chỉ chạy script ngắn:**
 - Task/trạng thái nằm trong repo: `docs/tasks/board.md` + hồ sơ `docs/tasks/tk-*.md`.
+- Quyền mặc định của Worker là đọc/sửa/test và commit cục bộ. **Không được `git push`, mở PR hoặc
+  merge nếu người A chưa ra lệnh riêng, rõ ràng**, kể cả khi task đã qua toàn bộ test.
 - Đầu phiên: đọc board → ghi dòng `START <ngày>` vào nhật ký tk-file của task đang làm.
-- Trước khi tuyên bố "xong": cập nhật board (trạng thái, link PR) + tk-file (nhật ký
-  `UPDATE`/`REVIEW`/`DONE`/`BLOCKED`, lệnh tái hiện, kết quả test) **trong cùng
-  commit/PR của task**. Chưa cập nhật = chưa tính là xong, PR bị reject như thiếu test.
+- Trước khi bàn giao local: cập nhật board (trạng thái + local HEAD; link PR chỉ khi A đã cho phép)
+  + tk-file (nhật ký `UPDATE`/`HANDOFF-LOCAL`/`REVIEW`/`DONE`/`BLOCKED`, lệnh tái hiện, kết quả
+  test) **trong cùng branch/commit của task**. Chưa cập nhật = chưa đủ điều kiện review.
 - Chỉ `HOÀN THÀNH` sau khi PR merge `main` + test pass. Chi tiết: `docs/tasks/README.md` mục 3.
 
 ---

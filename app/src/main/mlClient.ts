@@ -121,6 +121,10 @@ export class MlServiceManager {
     }
   }
 
+  getPort(): number | null {
+    return this.port
+  }
+
   stopSync(): void {
     const pid = this.child?.pid
     if (!pid || this.child?.exitCode !== null) {
