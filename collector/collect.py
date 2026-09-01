@@ -194,13 +194,18 @@ def read_host_metrics() -> tuple[float | None, float | None]:
 
 
 def read_last_seq(metrics_path: Path) -> int:
+    """Đọc `seq` của dòng cuối cùng, chỉ đọc đuôi file (không nạp cả file khi restart)."""
     if not metrics_path.exists():
         return 0
     try:
-        lines = metrics_path.read_text(encoding="utf-8").splitlines()
+        with metrics_path.open("rb") as stream:
+            stream.seek(0, os.SEEK_END)
+            size = stream.tell()
+            stream.seek(max(0, size - 8192))
+            tail = stream.read().decode("utf-8", errors="replace")
     except OSError:
         return 0
-    for line in reversed(lines):
+    for line in reversed(tail.splitlines()):
         try:
             sequence = int(json.loads(line).get("seq", 0))
             if sequence >= 1:

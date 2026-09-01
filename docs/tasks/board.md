@@ -11,8 +11,8 @@
 
 - **A:** TK-A15 — M4 Deploy Hardening. Hồ sơ/prompt Worker:
   [`tk-a15-m4-deploy-hardening.md`](tk-a15-m4-deploy-hardening.md).
-- **B:** TK-B4 — collector docker stats + HTTP probe. Hồ sơ:
-  [`tk-b4-m5-probes.md`](tk-b4-m5-probes.md).
+- **B:** TK-B5 — ghi metrics.jsonl + latest.json, seq/fsync/rotation. Hồ sơ:
+  [`tk-b5-m5-jsonl.md`](tk-b5-m5-jsonl.md).
 - Baseline chung: `origin/main` commit `d40afc9`; PR #24 (TK-A16 Monitor backend) đã merge.
 - Demo VPS Management + Express/PostgreSQL Deploy cơ bản với giảng viên đã hoàn tất. P0 hiện tại
   là `collector → metrics.jsonl → poller → SQLite/ML → Dashboard`, không phải polish thêm demo cũ.
@@ -22,8 +22,8 @@
 | ID     | Task                                                                 | Chủ  | Hạn   | Trạng thái | Branch                      | PR/phụ thuộc             | Ghi chú                                                                       |
 | ------ | -------------------------------------------------------------------- | ---- | ----- | ---------- | --------------------------- | ------------------------ | ----------------------------------------------------------------------------- |
 | TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A    | 08/09 | CHỜ REVIEW | `feat/m04-deploy-hardening` | code `6fd3efd`           | VM02 smoke auto/manual PASS · full 220/220 · VM01 TCP/22 còn chặn · chưa push |
-| TK-B4  | M5: docker stats + HTTP probe local                                  | B    | 01/09 | ĐANG LÀM   | `feat/m05-collector-probes` | TK-B2 Express đã có      | START 01/09 · pytest 21/21                                                      |
-| TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B    | 02/09 | BACKLOG    | `feat/m05-collector-output` | Sau TK-B4                | Khép blocker TK-A5                                                            |
+| TK-B4  | M5: docker stats + HTTP probe local                                  | B    | 01/09 | CHỜ REVIEW | `feat/m05-collector-probes` | TK-B2 Express đã có      | code `fe1da33` đã push · 21/21 · mở PR cuối chuỗi B4–B5 (chỉ đạo B)             |
+| TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B    | 02/09 | ĐANG LÀM   | `feat/m05-collector-output` | Sau TK-B4                | START 01/09 · pytest 26/26 · khép blocker TK-A5                               |
 | TK-B6  | M5: chạy collector Docker trên VM01                                  | B    | 03/09 | BACKLOG    | `feat/m05-collector-docker` | Sau TK-B5                | Không mở thêm port                                                            |
 | TK-S4  | Gate dữ liệu thật: A16 + B6 trên VM01                                | Both | 04/09 | BLOCKED    | —                           | A16 đã merge; còn chờ B6 | Metric thật vào SQLite, 5 score/mẫu, reconnect không trùng                    |
 | TK-B8  | Monitor Dashboard: chart + score + alert UI                          | B    | 07/09 | BACKLOG    | `feat/ui-monitor-dashboard` | Sau TK-S4                | Chỉ renderer + typed IPC thật                                                 |

@@ -20,10 +20,10 @@ kèm `latest.json` cho trạng thái tức thời. A (TK-A5) đọc `metrics.jso
 
 ## Definition of Done
 
-- [ ] Mỗi dòng JSONL khớp contract, có `seq` tăng dần liên tục
-- [ ] Chu kỳ đúng 10 giây (ADR-007)
+- [x] Mỗi dòng JSONL khớp contract, có `seq` tăng dần liên tục
+- [x] Chu kỳ đúng 10 giây (ADR-007) — logic sẵn có + smoke B4 10 dòng/100s; xác nhận lại ở lần chạy 10 phút
 - [ ] Chạy 10 phút local không mất dòng, không trùng `seq`
-- [ ] `latest.json` phản ánh mẫu mới nhất
+- [x] `latest.json` phản ánh mẫu mới nhất
 - [ ] A chạy readFileTail đọc được file này (bước chung với TK-A5)
 
 ## Nhật ký
@@ -33,12 +33,22 @@ kèm `latest.json` cho trạng thái tức thời. A (TK-A5) đọc `metrics.jso
   27/08. Hệ quả: TK-A5 (A) vẫn BLOCKED chờ file này — khép ngay sau khi B5 có JSONL thật.
 - ASSIGNED 30/08 — Rebaseline hạn 02/09; chỉ kéo sau khi TK-B4 vào review. Output là điểm nối
   chính thức với TK-A16/TK-A5, không đổi `metric-format.md`.
+- START 01/09 — kéo trước khi B4 sang review theo chỉ đạo của B (B4 code+push `fe1da33` đã xong).
+  Nhánh `feat/m05-collector-output` đứng trên tip TK-B4. Phần ghi file đã có từ scaffold TK-B1
+  → B5 củng cố: `read_last_seq` chỉ đọc đuôi file + test đường ghi + bằng chứng chạy 10 phút.
+- UPDATE 01/09 — `read_last_seq` đổi sang đọc đuôi 8KB (không nạp cả file 50MB khi restart; vẫn
+  đúng khi dòng cuối viết dở hoặc dòng rác). Thêm 5 test: append tuần tự + `latest.json` =
+  dòng cuối, rotation sang `.1` không đứt thứ tự, dòng >4KB bị chặn không làm hỏng file,
+  seq hồi phục sau dòng viết dở, chỉ đọc cửa sổ đuôi. pytest 26/26 xanh.
 
 ## Lệnh tái hiện
 
 ```bash
-# (điền khi có code) — chạy 10 phút rồi kiểm tra:
-tail -3 metrics.jsonl && cat latest.json
+cd collector
+python -m pytest tests -q
+# chạy thật ~10 phút (DoD): app giả nginx + APP_URL, xong kiểm tra:
+#   số dòng ~60, seq 1..N liên tục, ts cách đúng 10s
+#   tail -3 metrics.jsonl; cat latest.json
 ```
 
 ## PR

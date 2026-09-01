@@ -6,6 +6,8 @@ from collections import deque
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from collect import (
@@ -262,3 +264,74 @@ def test_build_metric_error_window_expires(monkeypatch):
     second = build_metric(2, config, errors)
     assert first["http_error_rate"] == 1.0
     assert second["http_error_rate"] == 0.0
+
+
+def _base_metric(seq):
+    return {
+        "seq": seq,
+        "ts": "2026-08-12T00:00:00.000Z",
+        "cpu_pct": None,
+        "mem_mb": None,
+        "mem_pct": None,
+        "mem_limit_mb": None,
+        "latency_ms": 12.5,
+        "http_error_rate": 0.0,
+        "db_response_ms": None,
+        "host_cpu_pct": 4.0,
+        "host_mem_pct": 38.0,
+        "container_up": 1,
+        "collector_version": "1.0.0",
+    }
+
+
+def test_write_metric_appends_in_order_and_latest_mirrors_tail(tmp_path):
+    write_metric(tmp_path, _base_metric(1))
+    write_metric(tmp_path, _base_metric(2))
+    write_metric(tmp_path, _base_metric(3))
+
+    lines = (tmp_path / "metrics.jsonl").read_text(encoding="utf-8").splitlines()
+    assert [json.loads(line)["seq"] for line in lines] == [1, 2, 3]
+    assert json.loads(lines[0])["seq"] == 1  # dòng cũ không bị sửa (append-only)
+    latest = json.loads((tmp_path / "latest.json").read_text(encoding="utf-8"))
+    assert latest["seq"] == 3
+    assert latest == json.loads(lines[-1])
+
+
+def test_write_metric_rotates_file_without_resetting_order(tmp_path):
+    tiny_mb = 0.000001  # ngưỡng ~1 byte, dòng nào cũng vượt ngay
+    write_metric(tmp_path, _base_metric(1), max_file_mb=tiny_mb)
+    write_metric(tmp_path, _base_metric(2), max_file_mb=tiny_mb)
+    write_metric(tmp_path, _base_metric(3), max_file_mb=tiny_mb)
+
+    current = json.loads((tmp_path / "metrics.jsonl").read_text(encoding="utf-8"))
+    rotated = json.loads((tmp_path / "metrics.jsonl.1").read_text(encoding="utf-8"))
+    assert current["seq"] == 3
+    assert rotated["seq"] == 2
+    latest = json.loads((tmp_path / "latest.json").read_text(encoding="utf-8"))
+    assert latest["seq"] == 3
+
+
+def test_write_metric_rejects_over_4kb_without_corrupting_file(tmp_path):
+    write_metric(tmp_path, _base_metric(1))
+    with pytest.raises(ValueError):
+        write_metric(tmp_path, {**_base_metric(2), "collector_version": "x" * 5000})
+
+    lines = (tmp_path / "metrics.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    assert json.loads(lines[0])["seq"] == 1
+
+
+def test_read_last_seq_resumes_after_partial_write(tmp_path):
+    path = tmp_path / "metrics.jsonl"
+    path.write_text('{"seq":5}\n{"seq":6', encoding="utf-8")
+
+    assert read_last_seq(path) == 5
+
+
+def test_read_last_seq_reads_only_tail_window(tmp_path):
+    path = tmp_path / "metrics.jsonl"
+    path.write_text(
+        '{"seq":1}\n' + "filler\n" * 700 + '{"seq":2000}\nnot-json', encoding="utf-8"
+    )
+
+    assert read_last_seq(path) == 2000
