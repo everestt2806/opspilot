@@ -186,6 +186,7 @@ export class DeployPipeline {
   ): Promise<void> {
     try {
       await this.inStep(ctx, 'DEPLOY', async () => {
+        await this.ensureImageAvailable(ctx, targetImageTag)
         await this.restoreComposeTo(ctx.app, targetImageTag)
         this.log(ctx, 'DEPLOY', `Khôi phục compose với ảnh v${toVersion}...\n`, 'stdout')
         const result = await this.execStream(
@@ -223,7 +224,6 @@ export class DeployPipeline {
       })
 
       await this.recordManualRollbackSuccess(ctx, targetImageTag, targetDeploymentId)
-      await this.pruneImages(ctx, null, [targetImageTag])
     } catch (error) {
       await this.recordFailure(ctx, error)
       try {
@@ -273,6 +273,7 @@ export class DeployPipeline {
       deployment_id: ctx.deployment.id,
       message: `Rollback thủ công app ${ctx.app.name} về ${targetImageTag} — app đã chạy lại và healthcheck đạt.`
     })
+    await this.pruneImages(ctx, null, [targetImageTag])
     this.emit({
       type: 'finished',
       deployment_id: ctx.deployment.id,
@@ -871,7 +872,7 @@ export class DeployPipeline {
           )
         }
       })
-      await this.pruneImages(ctx, null)
+      await this.pruneImages(ctx, null, [previous.image_tag])
     } catch (error) {
       const ipcError = toStepIpcError(error)
       this.finalizeFailed(ctx)
@@ -1002,6 +1003,21 @@ export class DeployPipeline {
       }
     )
     return result.code === 0
+  }
+
+  private async ensureImageAvailable(ctx: RunContext, imageTag: string): Promise<void> {
+    const result = await this.ssh.exec(
+      ctx.app.vps_id,
+      `docker image inspect ${shellQuote(imageTag)} >/dev/null 2>&1`,
+      { timeoutMs: 15_000, signal: ctx.signal, retryOnReconnect: true }
+    )
+    if (result.code !== 0) {
+      throw new AppError(
+        'VALIDATION',
+        `Image ${imageTag} không còn trên VPS nên không thể rollback. Hãy chọn phiên bản còn image hoặc deploy lại source.`,
+        { step: 'DEPLOY' }
+      )
+    }
   }
 
   // ── Bước 7: RECORD — luôn "qua" (lỗi chỉ warn, không làm fail cả deploy) ─────

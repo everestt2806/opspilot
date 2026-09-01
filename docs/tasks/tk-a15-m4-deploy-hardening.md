@@ -188,6 +188,10 @@ pnpm test -- --reporter=verbose
   inspect/curl/image-list/log-tail được reconnect retry. Sleep gỡ abort listener, cancel giữa lúc chờ
   container không rò timer/lock. Node 22 deploy+SSH+logger focused `56/56 PASS`, scoped Prettier và
   `typecheck:node PASS`.
+- REVIEW-FIX 01/09 18:27 — manual rollback probe `docker image inspect` trước compose, target đã bị
+  retention xóa trả `VALIDATION` rõ và không chạy side effect; `finished` chỉ phát sau cleanup. Auto
+  rollback truyền target tag tường minh cho retention; test khóa app dọn pipeline nền trước teardown.
+  Node 22 focused `57/57 PASS`, `typecheck:node PASS`.
 
 Mẫu dòng tiếp theo:
 

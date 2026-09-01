@@ -34,6 +34,7 @@ interface StubSshOptions {
   }
   imagesOutput?: (call: number) => string
   imageRemove?: (call: number, command: string) => { code: number; stdout: string; stderr: string }
+  imageAvailable?: boolean
   containerLogs?: string
 }
 
@@ -126,6 +127,11 @@ function createHarness(options: StubSshOptions = {}): void {
     if (command.includes('docker images')) {
       imagesCall += 1
       return { code: 0, stdout: options.imagesOutput?.(imagesCall) ?? '', stderr: '' }
+    }
+    if (command.includes('docker image inspect')) {
+      return options.imageAvailable === false
+        ? { code: 1, stdout: '', stderr: 'No such image' }
+        : { code: 0, stdout: '', stderr: '' }
     }
     if (command.includes('docker image rm')) {
       imageRemoveCall += 1
@@ -521,6 +527,30 @@ describe('DeployPipeline', () => {
     expect(count.total).toBe(1)
   })
 
+  it('rollback thu cong target da bi xoa image -> VALIDATION va khong compose lai', async () => {
+    createHarness({ imageAvailable: false })
+    const first = pipeline.run(deployInput())
+    await waitForFinished(first.deploymentId)
+    const second = pipeline.run(deployInput())
+    await waitForFinished(second.deploymentId)
+    const composeCallsBefore = sshExec.mock.calls.filter(([, command]) =>
+      (command as string).includes('compose up -d')
+    ).length
+
+    const rollback = pipeline.rollback(currentAppId(), first.deploymentId)
+    expect((await waitForFinished(rollback.deploymentId)).status).toBe('failed')
+    expect(currentDeploymentId()).toBe(second.deploymentId)
+    const failed = events.find(
+      (event) => event.type === 'step-failed' && event.deployment_id === rollback.deploymentId
+    )
+    expect(failed?.type === 'step-failed' && failed.error.code).toBe('VALIDATION')
+    expect(failed?.type === 'step-failed' && failed.error.message).toContain('không còn trên VPS')
+    const composeCallsAfter = sshExec.mock.calls.filter(([, command]) =>
+      (command as string).includes('compose up -d')
+    ).length
+    expect(composeCallsAfter).toBe(composeCallsBefore)
+  })
+
   it('image retention bao ve v1 dang chay, giu toi da 3 tag va khong dung force', async () => {
     const listedImages = [
       'demo-api:v1',
@@ -685,10 +715,12 @@ describe('DeployPipeline', () => {
     expect((await waitForFinished(next.deploymentId)).status).toBe('failed')
   })
 
-  it('khoa hai pipeline cung app: lan thu hai bao VALIDATION ngay lap tuc', () => {
+  it('khoa hai pipeline cung app: lan thu hai bao VALIDATION ngay lap tuc', async () => {
     createHarness()
-    pipeline.run(deployInput())
+    const first = pipeline.run(deployInput())
     expect(() => pipeline.run(deployInput())).toThrow('VALIDATION')
+    pipeline.cancel(first.deploymentId)
+    expect((await waitForFinished(first.deploymentId)).status).toBe('failed')
   })
 
   it('huy giua chung -> kem ghi nhan cancelled trong action_log', async () => {

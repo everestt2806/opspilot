@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { EncryptedCredential } from '../crypto/credentialCipher'
 import { closeDatabase, initializeDatabase } from './index'
-import { AppRepository } from './appRepository'
+import { AppRepository, type CreateAppRecord } from './appRepository'
 import { VpsRepository } from './vpsRepository'
 
 let testDirectory: string | null = null
@@ -51,7 +51,7 @@ function createHarness(): { repository: AppRepository; vpsId: number } {
   return { repository: new AppRepository(database), vpsId: vps.id }
 }
 
-function appRecord(vpsId: number, name: string, hostPort: number) {
+function appRecord(vpsId: number, name: string, hostPort: number): CreateAppRecord {
   return {
     vps_id: vpsId,
     name,
