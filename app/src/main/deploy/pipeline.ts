@@ -146,6 +146,7 @@ export class DeployPipeline {
         'Chỉ có thể rollback về deployment đã chạy thành công. Hãy chọn một phiên bản running.'
       )
     }
+    const targetImageTag = this.deploymentRepository.runtimeImageTag(target.id)
 
     const controller = new AbortController()
     const deployment = this.deploymentRepository.createNextVersion(app.id, app.name, null, null)
@@ -166,7 +167,7 @@ export class DeployPipeline {
       cancelled: false,
       durations: {}
     }
-    void this.executeRollback(ctx, target.image_tag, target.version, target.id).catch(
+    void this.executeRollback(ctx, targetImageTag, target.version, target.id).catch(
       (error: unknown) => {
         logger.error('deploy', 'Rollback thủ công dừng bất thường ngoài vòng bắt lỗi', {
           deployment_id: deployment.id,
@@ -767,7 +768,7 @@ export class DeployPipeline {
     try {
       if (previous) {
         this.log(ctx, 'DEPLOY', `Khôi phục phiên bản cũ v${previous.version}...\n`, 'stdout')
-        await this.restoreComposeTo(ctx.app, previous.image_tag)
+        await this.restoreComposeTo(ctx.app, this.deploymentRepository.runtimeImageTag(previous.id))
         await this.execStream(
           ctx,
           'DEPLOY',
@@ -828,6 +829,7 @@ export class DeployPipeline {
       this.finalizeFailed(ctx)
       return 'failed'
     }
+    const previousImageTag = this.deploymentRepository.runtimeImageTag(previous.id)
 
     try {
       await this.inStep(ctx, 'DEPLOY', async () => {
@@ -837,7 +839,7 @@ export class DeployPipeline {
           `Tự rollback về v${previous.version} (healthcheck thất bại)...\n`,
           'stdout'
         )
-        await this.restoreComposeTo(ctx.app, previous.image_tag)
+        await this.restoreComposeTo(ctx.app, previousImageTag)
         const result = await this.execStream(
           ctx,
           'DEPLOY',
@@ -872,7 +874,7 @@ export class DeployPipeline {
           )
         }
       })
-      await this.pruneImages(ctx, null, [previous.image_tag])
+      await this.pruneImages(ctx, null, [previousImageTag])
     } catch (error) {
       const ipcError = toStepIpcError(error)
       this.finalizeFailed(ctx)
@@ -1140,7 +1142,7 @@ export class DeployPipeline {
       try {
         const currentDeploymentId = this.appRepository.getById(ctx.app.id).current_deployment_id
         if (currentDeploymentId !== null) {
-          protectedTags.push(this.deploymentRepository.getById(currentDeploymentId).image_tag)
+          protectedTags.push(this.deploymentRepository.runtimeImageTag(currentDeploymentId))
         }
       } catch (error) {
         logger.warn('deploy', 'Không xác định được image hiện đang chạy khi dọn image', {

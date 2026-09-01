@@ -192,6 +192,10 @@ pnpm test -- --reporter=verbose
   retention xóa trả `VALIDATION` rõ và không chạy side effect; `finished` chỉ phát sau cleanup. Auto
   rollback truyền target tag tường minh cho retention; test khóa app dọn pipeline nền trước teardown.
   Node 22 focused `57/57 PASS`, `typecheck:node PASS`.
+- REVIEW-FIX 01/09 18:30 — resolve recursive `is_rollback_of` thành image runtime thật. Vì manual
+  rollback attempt v3 có thể đang chạy image v1, auto rollback sau đó không còn chọn nhầm tag v3
+  không tồn tại; retention current cũng bảo vệ tag runtime. Regression chuỗi deploy v1→v2→manual
+  về v1→v4 fail→auto về v1; Node 22 focused `58/58 PASS`, `typecheck:node PASS`.
 
 Mẫu dòng tiếp theo:
 

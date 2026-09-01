@@ -513,6 +513,35 @@ describe('DeployPipeline', () => {
     ).toBe(true)
   })
 
+  it('auto rollback sau manual rollback dung image runtime cua target goc', async () => {
+    createHarness({ curlOk: (call) => call <= 3 || call === 14 })
+    const first = pipeline.run(deployInput())
+    await waitForFinished(first.deploymentId)
+    const second = pipeline.run(deployInput())
+    await waitForFinished(second.deploymentId)
+    const manual = pipeline.rollback(currentAppId(), first.deploymentId)
+    await waitForFinished(manual.deploymentId)
+
+    vi.useFakeTimers()
+    const next = pipeline.run(deployInput())
+    await advanceFailedHealthcheck()
+    vi.useRealTimers()
+
+    expect((await waitForFinished(next.deploymentId)).status).toBe('rolled_back')
+    expect(currentDeploymentId()).toBe(manual.deploymentId)
+    const v1ComposeWrites = writeFileCalls().filter(
+      (call) =>
+        call.remotePath.endsWith('docker-compose.yml') && call.content.includes('demo-api:v1')
+    )
+    expect(v1ComposeWrites).toHaveLength(3)
+    expect(
+      writeFileCalls().some(
+        (call) =>
+          call.remotePath.endsWith('docker-compose.yml') && call.content.includes('demo-api:v3')
+      )
+    ).toBe(false)
+  })
+
   it('rollback thu cong tu choi target failed truoc khi tao attempt', async () => {
     createHarness({
       precheckOutput: 'RAM_MB|100\nDISK_GB|20\nPORT|FREE\nDOCKER|Docker version 27.1.0'
