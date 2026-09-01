@@ -124,6 +124,12 @@ export class DeployPipeline {
     if (target.app_id !== appId) {
       throw new AppError('VALIDATION', 'Deployment không thuộc app này. Hãy tải lại rồi thử lại.')
     }
+    if (target.status !== 'running') {
+      throw new AppError(
+        'VALIDATION',
+        'Chỉ có thể rollback về deployment đã chạy thành công. Hãy chọn một phiên bản running.'
+      )
+    }
 
     const controller = new AbortController()
     const deployment = this.deploymentRepository.createNextVersion(app.id, app.name, null, null)
@@ -183,7 +189,7 @@ export class DeployPipeline {
         this.log(ctx, 'DEPLOY', `App đã chạy lại với ảnh v${toVersion}.\n`, 'stdout')
       })
 
-      const healthOk = await this.inStep(ctx, 'HEALTHCHECK', async () => {
+      await this.inStep(ctx, 'HEALTHCHECK', async () => {
         const ok = await this.healthcheckOnce(ctx.app, ctx.signal)
         this.log(
           ctx,
@@ -191,12 +197,34 @@ export class DeployPipeline {
           ok ? 'Phiên bản cũ trả lời HTTP OK.\n' : 'Phiên bản cũ không trả lời healthcheck.\n',
           ok ? 'stdout' : 'stderr'
         )
-        return ok
+        if (!ok) {
+          throw new AppError(
+            'UNKNOWN',
+            'Phiên bản rollback đã khởi động nhưng healthcheck không đạt. Hãy xem log container trên VPS.',
+            { step: 'HEALTHCHECK' }
+          )
+        }
       })
 
-      await this.recordRollbackResult(ctx, targetImageTag, targetDeploymentId, healthOk)
+      await this.recordManualRollbackSuccess(ctx, targetImageTag, targetDeploymentId)
     } catch (error) {
       await this.recordFailure(ctx, error)
+      try {
+        const ipcError = toStepIpcError(error)
+        this.actionLog.insert({
+          action: 'rollback_manual',
+          status: ctx.cancelled ? 'cancelled' : 'failed',
+          vps_id: ctx.app.vps_id,
+          app_id: ctx.app.id,
+          deployment_id: ctx.deployment.id,
+          message: `Rollback thủ công app ${ctx.app.name} thất bại: ${ipcError.message}`
+        })
+      } catch (recordError) {
+        logger.warn('deploy', 'Không ghi được action_log rollback thủ công thất bại', {
+          deployment_id: ctx.deployment.id,
+          error: recordError instanceof Error ? recordError.message : String(recordError)
+        })
+      }
       this.emit({
         type: 'finished',
         deployment_id: ctx.deployment.id,
@@ -208,57 +236,33 @@ export class DeployPipeline {
     }
   }
 
-  private async recordRollbackResult(
+  private async recordManualRollbackSuccess(
     ctx: RunContext,
     targetImageTag: string,
-    targetDeploymentId: number,
-    healthOk: boolean
+    targetDeploymentId: number
   ): Promise<void> {
-    if (healthOk) {
-      this.deploymentRepository.update(ctx.deployment.id, {
-        status: 'running',
-        is_rollback_of: targetDeploymentId,
-        finished_at: nowIso(),
-        total_duration_ms: Date.now() - ctx.startedAt
-      })
-      this.appRepository.setCurrentDeployment(ctx.app.id, ctx.deployment.id)
-      this.actionLog.insert({
-        action: 'rollback_manual',
-        status: 'success',
-        vps_id: ctx.app.vps_id,
-        app_id: ctx.app.id,
-        deployment_id: ctx.deployment.id,
-        message: `Rollback thủ công app ${ctx.app.name} về ${targetImageTag} — app đã chạy lại.`
-      })
-      this.emit({
-        type: 'finished',
-        deployment_id: ctx.deployment.id,
-        status: 'running',
-        total_duration_ms: Date.now() - ctx.startedAt,
-        app_url: ctx.app.url
-      })
-    } else {
-      this.deploymentRepository.update(ctx.deployment.id, {
-        status: 'failed',
-        failed_step: 'HEALTHCHECK',
-        finished_at: nowIso(),
-        total_duration_ms: Date.now() - ctx.startedAt
-      })
-      this.actionLog.insert({
-        action: 'rollback_manual',
-        status: 'failed',
-        vps_id: ctx.app.vps_id,
-        app_id: ctx.app.id,
-        deployment_id: ctx.deployment.id,
-        message: `Rollback thủ công app ${ctx.app.name} về ${targetImageTag} thất bại — healthcheck không đạt.`
-      })
-      this.emit({
-        type: 'finished',
-        deployment_id: ctx.deployment.id,
-        status: 'failed',
-        total_duration_ms: Date.now() - ctx.startedAt
-      })
-    }
+    this.deploymentRepository.update(ctx.deployment.id, {
+      status: 'running',
+      is_rollback_of: targetDeploymentId,
+      finished_at: nowIso(),
+      total_duration_ms: Date.now() - ctx.startedAt
+    })
+    this.appRepository.setCurrentDeployment(ctx.app.id, ctx.deployment.id)
+    this.actionLog.insert({
+      action: 'rollback_manual',
+      status: 'success',
+      vps_id: ctx.app.vps_id,
+      app_id: ctx.app.id,
+      deployment_id: ctx.deployment.id,
+      message: `Rollback thủ công app ${ctx.app.name} về ${targetImageTag} — app đã chạy lại và healthcheck đạt.`
+    })
+    this.emit({
+      type: 'finished',
+      deployment_id: ctx.deployment.id,
+      status: 'running',
+      total_duration_ms: Date.now() - ctx.startedAt,
+      app_url: ctx.app.url
+    })
   }
 
   cancel(deploymentId: number): boolean {
@@ -800,47 +804,70 @@ export class DeployPipeline {
       return 'failed'
     }
 
-    const rollbackStarted = Date.now()
-    this.emit({
-      type: 'step-start',
-      deployment_id: ctx.deployment.id,
-      step: 'DEPLOY',
-      ts: nowIso()
-    })
-    this.log(
-      ctx,
-      'DEPLOY',
-      `Tự rollback về v${previous.version} (healthcheck thất bại)...\n`,
-      'stdout'
-    )
     try {
-      await this.restoreComposeTo(ctx.app, previous.image_tag)
-      const result = await this.execStream(
-        ctx,
-        'DEPLOY',
-        `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker compose up -d`,
-        180_000
-      )
-      if (result.code !== 0) {
-        throw new Error(result.stderr.trim() || `compose up exit ${result.code}`)
-      }
-      await this.waitContainerRunning(ctx.app, ctx.signal, ctx.deployment.id)
-      this.log(ctx, 'DEPLOY', `Rollback về v${previous.version} xong.\n`, 'stdout')
+      await this.inStep(ctx, 'DEPLOY', async () => {
+        this.log(
+          ctx,
+          'DEPLOY',
+          `Tự rollback về v${previous.version} (healthcheck thất bại)...\n`,
+          'stdout'
+        )
+        await this.restoreComposeTo(ctx.app, previous.image_tag)
+        const result = await this.execStream(
+          ctx,
+          'DEPLOY',
+          `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker compose up -d`,
+          180_000
+        )
+        if (result.code !== 0) {
+          throw new AppError(
+            'UNKNOWN',
+            'Tự rollback không khởi động được phiên bản cũ. Hãy xem log container trên VPS.',
+            {
+              step: 'DEPLOY',
+              cause: new Error(result.stderr.trim() || `compose up exit ${result.code}`)
+            }
+          )
+        }
+        await this.waitContainerRunning(ctx.app, ctx.signal, ctx.deployment.id)
+        const healthOk = await this.healthcheckOnce(ctx.app, ctx.signal)
+        this.log(
+          ctx,
+          'DEPLOY',
+          healthOk
+            ? `Rollback về v${previous.version} xong; healthcheck đạt.\n`
+            : `Rollback về v${previous.version} đã chạy nhưng healthcheck không đạt.\n`,
+          healthOk ? 'stdout' : 'stderr'
+        )
+        if (!healthOk) {
+          throw new AppError(
+            'UNKNOWN',
+            'Tự rollback đã khởi động phiên bản cũ nhưng healthcheck không đạt. Hãy xem log container trên VPS.',
+            { step: 'DEPLOY' }
+          )
+        }
+      })
       await this.pruneImages(ctx, null)
     } catch (error) {
-      this.log(
-        ctx,
-        'DEPLOY',
-        `Rollback thất bại: ${error instanceof Error ? error.message : String(error)}\n`,
-        'stderr'
-      )
+      const ipcError = toStepIpcError(error)
+      this.finalizeFailed(ctx)
+      try {
+        this.actionLog.insert({
+          action: 'rollback_auto',
+          status: ctx.cancelled ? 'cancelled' : 'failed',
+          vps_id: ctx.app.vps_id,
+          app_id: ctx.app.id,
+          deployment_id: ctx.deployment.id,
+          message: `Tự rollback app ${ctx.app.name} về v${previous.version} thất bại: ${ipcError.message}`
+        })
+      } catch (recordError) {
+        logger.warn('deploy', 'Không ghi được action_log auto rollback thất bại', {
+          deployment_id: ctx.deployment.id,
+          error: recordError instanceof Error ? recordError.message : String(recordError)
+        })
+      }
+      return 'failed'
     }
-    this.emit({
-      type: 'step-done',
-      deployment_id: ctx.deployment.id,
-      step: 'DEPLOY',
-      duration_ms: Date.now() - rollbackStarted
-    })
 
     this.deploymentRepository.update(ctx.deployment.id, {
       status: 'rolled_back',

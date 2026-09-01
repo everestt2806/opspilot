@@ -173,6 +173,10 @@ pnpm test -- --reporter=verbose
   audit pipeline hiện hữu; kế hoạch CP1 rollback → CP2 image/port → CP3 diagnostic/retry → CP4
   handoff. Baseline Node 22 focused `28/28 PASS`, `typecheck:node PASS`. GitNexus re-index thành
   công nhưng MCP impact timeout handshake; fallback raw caller/source/test inspection.
+- CP1 01/09 18:03 — rollback auto chỉ ghi `rolled_back` sau compose/running/healthcheck target;
+  rollback fail phát `step-failed DEPLOY`, không đổi current và có action log failed. Manual rollback
+  từ chối target không `running`, healthcheck fail không đổi current, success/fail đều release lock.
+  Node 22 `pnpm test -- --run src/main/deploy/pipeline.test.ts` = `12/12 PASS`.
 
 Mẫu dòng tiếp theo:
 

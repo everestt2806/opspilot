@@ -23,7 +23,9 @@ const PRECHECK_OK = [
 
 interface StubSshOptions {
   precheckOutput?: string
-  curlOk?: () => boolean
+  curlOk?: (call: number) => boolean
+  composeUp?: (call: number) => { code: number; stdout: string; stderr: string }
+  inspectStatus?: (call: number) => string
 }
 
 let testDirectory: string | null = null
@@ -76,6 +78,9 @@ function createHarness(options: StubSshOptions = {}): void {
   })
   vpsId = vps.id
 
+  let composeUpCall = 0
+  let inspectCall = 0
+  let curlCall = 0
   sshExec = vi.fn(async (_vpsId: number, command: string) => {
     if (command.includes('free -m')) {
       return { code: 0, stdout: options.precheckOutput ?? PRECHECK_OK, stderr: '' }
@@ -84,19 +89,29 @@ function createHarness(options: StubSshOptions = {}): void {
       return { code: 0, stdout: 'build xong\n', stderr: '' }
     }
     if (command.includes('compose up -d')) {
+      composeUpCall += 1
+      if (options.composeUp) {
+        return options.composeUp(composeUpCall)
+      }
       return { code: 0, stdout: 'Container demo-api-app Started\n', stderr: '' }
     }
     if (command.includes('compose down')) {
       return { code: 0, stdout: '', stderr: '' }
     }
     if (command.includes('docker inspect')) {
-      return { code: 0, stdout: 'running\n', stderr: '' }
+      inspectCall += 1
+      return {
+        code: 0,
+        stdout: `${options.inspectStatus?.(inspectCall) ?? 'running'}\n`,
+        stderr: ''
+      }
     }
     if (command.includes('docker images')) {
       return { code: 0, stdout: '', stderr: '' }
     }
     if (command.includes('curl -fsS')) {
-      return options.curlOk?.() === false
+      curlCall += 1
+      return options.curlOk?.(curlCall) === false
         ? { code: 7, stdout: '', stderr: 'khong tra loi' }
         : { code: 0, stdout: '', stderr: '' }
     }
@@ -186,6 +201,20 @@ function currentDeploymentId(): number {
     .prepare('SELECT current_deployment_id FROM app WHERE name = ?')
     .get('demo-api') as { current_deployment_id: number }
   return row.current_deployment_id
+}
+
+function currentAppId(): number {
+  const row = database.prepare('SELECT id FROM app WHERE name = ?').get('demo-api') as {
+    id: number
+  }
+  return row.id
+}
+
+async function advanceFailedHealthcheck(): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    await vi.advanceTimersByTimeAsync(3_000)
+  }
+  await vi.advanceTimersByTimeAsync(100)
 }
 
 describe('DeployPipeline', () => {
@@ -283,21 +312,15 @@ describe('DeployPipeline', () => {
     expect(sshExec.mock.calls.some(([, command]) => command.includes('docker build'))).toBe(false)
   })
 
-  it('healthcheck truot khi co version dang chay -> tu rollback ve v1', async () => {
-    let healthOk = true
-    createHarness({ curlOk: () => healthOk })
+  it('healthcheck truot -> chi ghi auto rollback thanh cong sau khi v1 healthcheck dat', async () => {
+    createHarness({ curlOk: (call) => call === 1 || call === 12 })
     const first = pipeline.run(deployInput())
     expect((await waitForFinished()).status).toBe('running')
 
-    healthOk = false
     vi.useFakeTimers()
     const eventCountBefore = events.length
     const second = pipeline.run(deployInput())
-    // 10 lan thu healthcheck, moi lan cach nhau 3s
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      await vi.advanceTimersByTimeAsync(3_000)
-    }
-    await vi.advanceTimersByTimeAsync(100)
+    await advanceFailedHealthcheck()
     vi.useRealTimers()
 
     const finished = events
@@ -330,6 +353,144 @@ describe('DeployPipeline', () => {
     expect(actionLogRows(second.deploymentId).some((row) => row.action === 'rollback_auto')).toBe(
       true
     )
+    expect(
+      actionLogRows(second.deploymentId).some(
+        (row) => row.action === 'rollback_auto' && row.status === 'success'
+      )
+    ).toBe(true)
+  })
+
+  it('auto rollback compose fail -> step DEPLOY failed, DB failed va khong doi current', async () => {
+    createHarness({
+      curlOk: (call) => call === 1,
+      composeUp: (call) =>
+        call === 3
+          ? { code: 1, stdout: '', stderr: 'compose rollback failed' }
+          : { code: 0, stdout: 'started', stderr: '' }
+    })
+    const first = pipeline.run(deployInput())
+    await waitForFinished(first.deploymentId)
+
+    vi.useFakeTimers()
+    const eventCountBefore = events.length
+    const second = pipeline.run(deployInput())
+    await advanceFailedHealthcheck()
+    vi.useRealTimers()
+
+    const finished = await waitForFinished(second.deploymentId)
+    expect(finished.status).toBe('failed')
+    expect(deploymentRow(second.deploymentId)).toMatchObject({
+      status: 'failed',
+      failed_step: 'HEALTHCHECK'
+    })
+    expect(currentDeploymentId()).toBe(first.deploymentId)
+    const secondEvents = events.slice(eventCountBefore)
+    expect(
+      secondEvents.some((event) => event.type === 'step-failed' && event.step === 'DEPLOY')
+    ).toBe(true)
+    expect(
+      actionLogRows(second.deploymentId).some(
+        (row) => row.action === 'rollback_auto' && row.status === 'failed'
+      )
+    ).toBe(true)
+    expect(
+      actionLogRows(second.deploymentId).some(
+        (row) => row.action === 'rollback_auto' && row.status === 'success'
+      )
+    ).toBe(false)
+  })
+
+  it('auto rollback v1 khong running -> failed va khong doi current', async () => {
+    createHarness({
+      curlOk: (call) => call === 1,
+      inspectStatus: (call) => (call <= 2 ? 'running' : 'restarting')
+    })
+    const first = pipeline.run(deployInput())
+    await waitForFinished(first.deploymentId)
+
+    vi.useFakeTimers()
+    const second = pipeline.run(deployInput())
+    await advanceFailedHealthcheck()
+    await vi.advanceTimersByTimeAsync(181_000)
+    vi.useRealTimers()
+
+    const finished = await waitForFinished(second.deploymentId)
+    expect(finished.status).toBe('failed')
+    expect(currentDeploymentId()).toBe(first.deploymentId)
+    expect(events.some((event) => event.type === 'step-failed' && event.step === 'DEPLOY')).toBe(
+      true
+    )
+  })
+
+  it('auto rollback v1 healthcheck fail -> failed va khong ghi success', async () => {
+    createHarness({ curlOk: (call) => call === 1 })
+    const first = pipeline.run(deployInput())
+    await waitForFinished(first.deploymentId)
+
+    vi.useFakeTimers()
+    const second = pipeline.run(deployInput())
+    await advanceFailedHealthcheck()
+    vi.useRealTimers()
+
+    expect((await waitForFinished(second.deploymentId)).status).toBe('failed')
+    expect(currentDeploymentId()).toBe(first.deploymentId)
+    expect(
+      actionLogRows(second.deploymentId).some(
+        (row) => row.action === 'rollback_auto' && row.status === 'success'
+      )
+    ).toBe(false)
+  })
+
+  it('rollback thu cong success chi sau running va healthcheck, roi release lock', async () => {
+    createHarness()
+    const first = pipeline.run(deployInput())
+    await waitForFinished(first.deploymentId)
+    const second = pipeline.run(deployInput())
+    await waitForFinished(second.deploymentId)
+
+    const rollback = pipeline.rollback(currentAppId(), first.deploymentId)
+    expect((await waitForFinished(rollback.deploymentId)).status).toBe('running')
+    expect(currentDeploymentId()).toBe(rollback.deploymentId)
+    expect(
+      actionLogRows(rollback.deploymentId).some(
+        (row) => row.action === 'rollback_manual' && row.status === 'success'
+      )
+    ).toBe(true)
+
+    const next = pipeline.run(deployInput())
+    expect((await waitForFinished(next.deploymentId)).status).toBe('running')
+  })
+
+  it('rollback thu cong healthcheck fail -> khong doi current va ghi failed', async () => {
+    createHarness({ curlOk: (call) => call <= 2 })
+    const first = pipeline.run(deployInput())
+    await waitForFinished(first.deploymentId)
+    const second = pipeline.run(deployInput())
+    await waitForFinished(second.deploymentId)
+
+    const rollback = pipeline.rollback(currentAppId(), first.deploymentId)
+    expect((await waitForFinished(rollback.deploymentId)).status).toBe('failed')
+    expect(currentDeploymentId()).toBe(second.deploymentId)
+    expect(deploymentRow(rollback.deploymentId).failed_step).toBe('HEALTHCHECK')
+    expect(
+      actionLogRows(rollback.deploymentId).some(
+        (row) => row.action === 'rollback_manual' && row.status === 'failed'
+      )
+    ).toBe(true)
+  })
+
+  it('rollback thu cong tu choi target failed truoc khi tao attempt', async () => {
+    createHarness({
+      precheckOutput: 'RAM_MB|100\nDISK_GB|20\nPORT|FREE\nDOCKER|Docker version 27.1.0'
+    })
+    const failed = pipeline.run(deployInput())
+    await waitForFinished(failed.deploymentId)
+
+    expect(() => pipeline.rollback(currentAppId(), failed.deploymentId)).toThrow('VALIDATION')
+    const count = database.prepare('SELECT COUNT(*) AS total FROM deployment').get() as {
+      total: number
+    }
+    expect(count.total).toBe(1)
   })
 
   it('khoa hai pipeline cung app: lan thu hai bao VALIDATION ngay lap tuc', () => {
