@@ -19,6 +19,7 @@ const SECRET_KEYS = new Set([
 export function maskSecrets(value: string): string {
   return value
     .replace(/-----BEGIN [^-]+PRIVATE KEY-----[\s\S]*?-----END [^-]+PRIVATE KEY-----/gi, '***')
+    .replace(/([a-z][a-z0-9+.-]*:\/\/[^:\s/]+:)[^@\s/]+(@)/gi, '$1***$2')
     .replace(
       /(["']?(?:password|secret|private_key|privateKey|encrypted_secret|auth_tag|authorization|token)["']?\s*[:=]\s*)(["']?)([^\s,"'}]+|[^"']*)(\2)/gi,
       '$1***'

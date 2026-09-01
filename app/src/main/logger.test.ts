@@ -19,4 +19,11 @@ describe('maskSecrets', () => {
     expect(result).not.toContain('noi-dung-key')
     expect(result).toContain('password=***')
   })
+
+  it('che credential nam trong URL ket noi', () => {
+    const result = maskSecrets('DATABASE_URL=postgresql://opspilot:mat-khau@postgres:5432/app')
+
+    expect(result).toBe('DATABASE_URL=postgresql://opspilot:***@postgres:5432/app')
+    expect(result).not.toContain('mat-khau')
+  })
 })

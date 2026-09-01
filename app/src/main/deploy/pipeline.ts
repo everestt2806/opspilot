@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { join as posixJoin } from 'node:path/posix'
 
 import type { Database as SqliteDatabase } from 'better-sqlite3'
+import { z } from 'zod'
+
 import type { App, DeployEvent, DeployInput, DeployStep, Deployment, IpcError } from '@shared/ipc'
 
 import { ActionLogRepository } from '../db/actionLogRepository'
@@ -14,7 +16,7 @@ import { detectFramework } from '../detectors'
 import { buildSourceTree } from '../detectors/sourceTree'
 import type { BuildPlan } from '../detectors/types'
 import { AppError, toIpcError } from '../errors'
-import { logger } from '../logger'
+import { logger, maskSecrets } from '../logger'
 import { SshAbortedError, SshManager } from '../ssh/manager'
 import { shellQuote } from '../ssh/shellQuote'
 import { allocatePort } from './portPolicy'
@@ -32,6 +34,20 @@ const HEALTHCHECK_ATTEMPTS = 10
 const HEALTHCHECK_INTERVAL_MS = 3_000
 const RENDER_COLLECT_INTERVAL_S = '10'
 
+const containerStateSchema = z.object({
+  Status: z.string(),
+  ExitCode: z.number().int(),
+  Error: z.string(),
+  Health: z.object({ Status: z.string() }).optional()
+})
+
+interface ContainerState {
+  status: string
+  health: string
+  exitCode: number | null
+  error: string
+}
+
 type FinalStatus = 'running' | 'failed' | 'rolled_back'
 
 function nowIso(): string {
@@ -44,15 +60,15 @@ function sleep(milliseconds: number, signal: AbortSignal): Promise<void> {
       reject(new SshAbortedError())
       return
     }
-    const timer = setTimeout(resolve, milliseconds)
-    signal.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer)
-        reject(new SshAbortedError())
-      },
-      { once: true }
-    )
+    const abortListener = (): void => {
+      clearTimeout(timer)
+      reject(new SshAbortedError())
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', abortListener)
+      resolve()
+    }, milliseconds)
+    signal.addEventListener('abort', abortListener, { once: true })
   })
 }
 
@@ -185,7 +201,7 @@ export class DeployPipeline {
             { step: 'DEPLOY', cause: new Error(result.stderr.trim() || result.stdout.trim()) }
           )
         }
-        await this.waitContainerRunning(ctx.app, ctx.signal, ctx.deployment.id)
+        await this.waitContainerRunning(ctx)
         this.log(ctx, 'DEPLOY', `App đã chạy lại với ảnh v${toVersion}.\n`, 'stdout')
       })
 
@@ -505,6 +521,7 @@ export class DeployPipeline {
     return this.ssh.exec(ctx.app.vps_id, command, {
       timeoutMs,
       signal: ctx.signal,
+      retryOnReconnect: false,
       onStdout: (chunk) => this.log(ctx, step, chunk, 'stdout'),
       onStderr: (chunk) => this.log(ctx, step, chunk, 'stderr')
     })
@@ -568,7 +585,8 @@ export class DeployPipeline {
           await this.ignoreError(
             this.ssh.exec(
               ctx.app.vps_id,
-              `rm -rf ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))}`
+              `rm -rf ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))}`,
+              { retryOnReconnect: false }
             )
           )
         }
@@ -651,7 +669,9 @@ export class DeployPipeline {
       } catch (error) {
         for (const file of files) {
           await this.ignoreError(
-            this.ssh.exec(ctx.app.vps_id, `rm -f ${shellQuote(posixJoin(appDir, file.name))}`)
+            this.ssh.exec(ctx.app.vps_id, `rm -f ${shellQuote(posixJoin(appDir, file.name))}`, {
+              retryOnReconnect: false
+            })
           )
         }
         throw error
@@ -675,7 +695,9 @@ export class DeployPipeline {
         }
       } catch (error) {
         await this.ignoreError(
-          this.ssh.exec(ctx.app.vps_id, `docker image rm ${tag} >/dev/null 2>&1 || true`)
+          this.ssh.exec(ctx.app.vps_id, `docker image rm ${tag} >/dev/null 2>&1 || true`, {
+            retryOnReconnect: false
+          })
         )
         throw error
       }
@@ -694,7 +716,7 @@ export class DeployPipeline {
             cause: new Error(result.stderr.trim() || result.stdout.trim())
           })
         }
-        await this.waitContainerRunning(ctx.app, ctx.signal, ctx.deployment.id)
+        await this.waitContainerRunning(ctx)
       } catch (error) {
         await this.restorePreviousOrDown(ctx)
         throw error
@@ -714,7 +736,8 @@ export class DeployPipeline {
           `curl -fsS -m 5 -o /dev/null ${shellQuote(url)}`,
           {
             timeoutMs: 10_000,
-            signal: ctx.signal
+            signal: ctx.signal,
+            retryOnReconnect: true
           }
         )
         this.log(
@@ -830,7 +853,7 @@ export class DeployPipeline {
             }
           )
         }
-        await this.waitContainerRunning(ctx.app, ctx.signal, ctx.deployment.id)
+        await this.waitContainerRunning(ctx)
         const healthOk = await this.healthcheckOnce(ctx.app, ctx.signal)
         this.log(
           ctx,
@@ -889,28 +912,81 @@ export class DeployPipeline {
     return 'rolled_back'
   }
 
-  private async waitContainerRunning(
-    app: App,
-    signal: AbortSignal,
-    deploymentId: number
-  ): Promise<void> {
+  private async waitContainerRunning(ctx: RunContext): Promise<void> {
     const deadline = Date.now() + 180_000
-    const container = `${app.name}-app`
     while (Date.now() < deadline) {
-      const result = await this.ssh.exec(
-        app.vps_id,
-        `docker inspect -f '{{.State.Status}}' ${shellQuote(container)} 2>/dev/null || echo missing`,
-        { timeoutMs: 15_000, signal }
-      )
-      if (result.stdout.trim() === 'running') {
+      const state = await this.inspectContainerState(ctx.app, ctx.signal)
+      if (state.status === 'running' && state.health !== 'unhealthy') {
         return
       }
-      await sleep(2_000, signal)
+      if (state.status === 'exited' || state.status === 'dead' || state.health === 'unhealthy') {
+        throw await this.containerStateError(ctx, state, false)
+      }
+      await sleep(2_000, ctx.signal)
     }
-    throw new AppError(
-      'SSH_TIMEOUT',
-      `Container ${container} không vào trạng thái running đúng hạn. Hãy xem log container trên VPS.`,
-      { step: 'DEPLOY', cause: new Error(`deployment ${deploymentId}`) }
+    const state = await this.inspectContainerState(ctx.app, ctx.signal)
+    throw await this.containerStateError(ctx, state, true)
+  }
+
+  private async inspectContainerState(app: App, signal: AbortSignal): Promise<ContainerState> {
+    const container = `${app.name}-app`
+    const result = await this.ssh.exec(
+      app.vps_id,
+      `docker inspect -f '{{json .State}}' ${shellQuote(container)} 2>/dev/null || printf 'missing'`,
+      { timeoutMs: 15_000, signal, retryOnReconnect: true }
+    )
+    const raw = result.stdout.trim()
+    if (raw === 'missing' || result.code !== 0) {
+      return { status: 'missing', health: 'none', exitCode: null, error: '' }
+    }
+
+    try {
+      const parsed = containerStateSchema.parse(JSON.parse(raw))
+      return {
+        status: parsed.Status,
+        health: parsed.Health?.Status ?? 'none',
+        exitCode: parsed.ExitCode,
+        error: maskSecrets(parsed.Error)
+      }
+    } catch (error) {
+      return {
+        status: 'unknown',
+        health: 'unknown',
+        exitCode: null,
+        error: `Không đọc được docker inspect: ${error instanceof Error ? error.message : String(error)}`
+      }
+    }
+  }
+
+  private async containerStateError(
+    ctx: RunContext,
+    state: ContainerState,
+    timedOut: boolean
+  ): Promise<AppError> {
+    const container = `${ctx.app.name}-app`
+    let safeLogs = '(không đọc được log container)'
+    try {
+      const logs = await this.ssh.exec(
+        ctx.app.vps_id,
+        `docker logs --tail 80 ${shellQuote(container)} 2>&1`,
+        { timeoutMs: 15_000, signal: ctx.signal, retryOnReconnect: true }
+      )
+      safeLogs = maskSecrets(`${logs.stdout}${logs.stderr}`).trim().slice(-8_000) || '(log trống)'
+    } catch (error) {
+      safeLogs = `Không đọc được log: ${error instanceof Error ? error.message : String(error)}`
+    }
+
+    const summary = [
+      `status=${state.status}`,
+      `health=${state.health}`,
+      `exit_code=${state.exitCode ?? 'n/a'}`,
+      `error=${state.error || 'none'}`
+    ].join(', ')
+    this.log(ctx, 'DEPLOY', `Chẩn đoán ${container}: ${summary}\n${safeLogs}\n`, 'stderr')
+    return new AppError(
+      timedOut ? 'SSH_TIMEOUT' : 'UNKNOWN',
+      `Container ${container} không sẵn sàng (${summary}). Hãy kiểm tra log container và cấu hình start/healthcheck trên VPS.`,
+      { step: 'DEPLOY', cause: new Error(`${summary}\nlogs:\n${safeLogs}`) }
     )
   }
 
@@ -921,7 +997,8 @@ export class DeployPipeline {
       `curl -fsS -m 5 -o /dev/null ${shellQuote(url)}`,
       {
         timeoutMs: 10_000,
-        signal
+        signal,
+        retryOnReconnect: true
       }
     )
     return result.code === 0
@@ -1029,7 +1106,7 @@ export class DeployPipeline {
       const list = await this.ssh.exec(
         ctx.app.vps_id,
         `docker images --format '{{.Repository}}:{{.Tag}}'`,
-        { timeoutMs: 30_000 }
+        { timeoutMs: 30_000, retryOnReconnect: true }
       )
       const prefix = `${ctx.app.name}:v`
       const images = list.stdout
@@ -1079,7 +1156,7 @@ export class DeployPipeline {
           const removed = await this.ssh.exec(
             ctx.app.vps_id,
             `docker image rm ${shellQuote(tag)} >/dev/null 2>&1`,
-            { timeoutMs: 60_000 }
+            { timeoutMs: 60_000, retryOnReconnect: false }
           )
           if (removed.code === 0) {
             continue

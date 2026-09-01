@@ -182,6 +182,12 @@ pnpm test -- --reporter=verbose
   app cùng VPS được cấp `30000/30001` ở `start`; unique port/name map rõ thành
   `PORT_EXHAUSTED/VALIDATION`; lock được tái sử dụng sau success/rollback failure/cancel. Node 22
   focused pipeline/port/repository `19/19 PASS`, `typecheck:node PASS`.
+- CP3 01/09 18:16 — `docker inspect` chỉ đọc `.State` và validate bằng zod; diagnostic đủ
+  missing/exited/restarting/unhealthy, exit code/error và `docker logs --tail 80` đã mask secret lẫn
+  credential URL. `ExecOptions.retryOnReconnect=false` khóa retry cho build/compose/cleanup; chỉ
+  inspect/curl/image-list/log-tail được reconnect retry. Sleep gỡ abort listener, cancel giữa lúc chờ
+  container không rò timer/lock. Node 22 deploy+SSH+logger focused `56/56 PASS`, scoped Prettier và
+  `typecheck:node PASS`.
 
 Mẫu dòng tiếp theo:
 

@@ -26,8 +26,15 @@ interface StubSshOptions {
   curlOk?: (call: number) => boolean
   composeUp?: (call: number) => { code: number; stdout: string; stderr: string }
   inspectStatus?: (call: number) => string
+  inspectState?: (call: number) => {
+    Status: string
+    ExitCode: number
+    Error: string
+    Health?: { Status: string }
+  }
   imagesOutput?: (call: number) => string
   imageRemove?: (call: number, command: string) => { code: number; stdout: string; stderr: string }
+  containerLogs?: string
 }
 
 let testDirectory: string | null = null
@@ -104,9 +111,15 @@ function createHarness(options: StubSshOptions = {}): void {
     }
     if (command.includes('docker inspect')) {
       inspectCall += 1
+      const state = options.inspectState?.(inspectCall) ?? {
+        Status: options.inspectStatus?.(inspectCall) ?? 'running',
+        ExitCode: 0,
+        Error: '',
+        Health: { Status: 'healthy' }
+      }
       return {
         code: 0,
-        stdout: `${options.inspectStatus?.(inspectCall) ?? 'running'}\n`,
+        stdout: `${JSON.stringify(state)}\n`,
         stderr: ''
       }
     }
@@ -117,6 +130,9 @@ function createHarness(options: StubSshOptions = {}): void {
     if (command.includes('docker image rm')) {
       imageRemoveCall += 1
       return options.imageRemove?.(imageRemoveCall, command) ?? { code: 0, stdout: '', stderr: '' }
+    }
+    if (command.includes('docker logs --tail')) {
+      return { code: 0, stdout: options.containerLogs ?? '', stderr: '' }
     }
     if (command.includes('curl -fsS')) {
       curlCall += 1
@@ -559,6 +575,116 @@ describe('DeployPipeline', () => {
     ])
   })
 
+  it.each([
+    { status: 'exited', health: 'none', exitCode: 137 },
+    { status: 'running', health: 'unhealthy', exitCode: 1 }
+  ])(
+    'container $status/$health -> diagnostic co state, log mask secret va huong xu ly',
+    async ({ status, health, exitCode }) => {
+      createHarness({
+        inspectState: () => ({
+          Status: status,
+          ExitCode: exitCode,
+          Error: 'password=inspect-secret',
+          Health: { Status: health }
+        }),
+        containerLogs:
+          'password=log-secret token=abc123 DATABASE_URL=postgresql://user:url-secret@db:5432/app'
+      })
+
+      const deployment = pipeline.run(deployInput())
+      const finished = await waitForFinished(deployment.deploymentId)
+      expect(finished.status).toBe('failed')
+      const failed = events.find(
+        (event) => event.type === 'step-failed' && event.deployment_id === deployment.deploymentId
+      )
+      expect(failed?.type === 'step-failed' && failed.error.message).toContain(`status=${status}`)
+      expect(failed?.type === 'step-failed' && failed.error.message).toContain(`health=${health}`)
+      expect(failed?.type === 'step-failed' && failed.error.message).toContain(
+        `exit_code=${exitCode}`
+      )
+      expect(JSON.stringify(failed)).toContain('***')
+      expect(JSON.stringify(failed)).not.toContain('inspect-secret')
+      expect(JSON.stringify(failed)).not.toContain('log-secret')
+      expect(JSON.stringify(failed)).not.toContain('abc123')
+      expect(JSON.stringify(failed)).not.toContain('url-secret')
+      expect(
+        sshExec.mock.calls.some(
+          ([, command]) =>
+            (command as string).includes('docker inspect') &&
+            !(command as string).toLowerCase().includes('env')
+        )
+      ).toBe(true)
+    }
+  )
+
+  it.each(['missing', 'restarting'])(
+    'container %s qua deadline -> diagnostic timeout thay vi loi mo ho',
+    async (status) => {
+      createHarness({ inspectStatus: () => status, containerLogs: 'boot loop' })
+      vi.useFakeTimers()
+      const deployment = pipeline.run(deployInput())
+      await vi.advanceTimersByTimeAsync(181_000)
+      vi.useRealTimers()
+
+      const finished = await waitForFinished(deployment.deploymentId)
+      expect(finished.status).toBe('failed')
+      const failed = events.find(
+        (event) => event.type === 'step-failed' && event.deployment_id === deployment.deploymentId
+      )
+      expect(failed?.type === 'step-failed' && failed.error.code).toBe('SSH_TIMEOUT')
+      expect(failed?.type === 'step-failed' && failed.error.message).toContain(`status=${status}`)
+    }
+  )
+
+  it('side-effect command khong retry; probe images cho phep reconnect retry', async () => {
+    createHarness({
+      composeUp: () => ({ code: 1, stdout: '', stderr: 'compose failed' })
+    })
+    const deployment = pipeline.run(deployInput())
+    expect((await waitForFinished(deployment.deploymentId)).status).toBe('failed')
+
+    const buildCalls = sshExec.mock.calls.filter(([, command]) =>
+      (command as string).includes('docker build')
+    )
+    const composeUpCalls = sshExec.mock.calls.filter(([, command]) =>
+      (command as string).includes('compose up -d')
+    )
+    const composeDownCalls = sshExec.mock.calls.filter(([, command]) =>
+      (command as string).includes('compose down')
+    )
+    expect(buildCalls).toHaveLength(1)
+    expect(composeUpCalls).toHaveLength(1)
+    expect(composeDownCalls).toHaveLength(1)
+    for (const call of [...buildCalls, ...composeUpCalls, ...composeDownCalls]) {
+      expect(call[2]).toMatchObject({ retryOnReconnect: false })
+    }
+    const imageProbe = sshExec.mock.calls.find(([, command]) =>
+      (command as string).includes('docker images')
+    )
+    expect(imageProbe?.[2]).toMatchObject({ retryOnReconnect: true })
+  })
+
+  it('cancel khi dang cho container dung timer va release lock sach', async () => {
+    createHarness({ inspectStatus: () => 'restarting' })
+    vi.useFakeTimers()
+    const deployment = pipeline.run(deployInput())
+    await vi.advanceTimersByTimeAsync(2_100)
+    expect(pipeline.cancel(deployment.deploymentId)).toBe(true)
+    await vi.runAllTimersAsync()
+
+    const finished = events.find(
+      (event) => event.type === 'finished' && event.deployment_id === deployment.deploymentId
+    )
+    expect(finished?.type === 'finished' && finished.status).toBe('failed')
+    expect(vi.getTimerCount()).toBe(0)
+    vi.useRealTimers()
+
+    const next = pipeline.run(deployInput())
+    pipeline.cancel(next.deploymentId)
+    expect((await waitForFinished(next.deploymentId)).status).toBe('failed')
+  })
+
   it('khoa hai pipeline cung app: lan thu hai bao VALIDATION ngay lap tuc', () => {
     createHarness()
     pipeline.run(deployInput())
@@ -577,7 +703,7 @@ describe('DeployPipeline', () => {
     const cleanup = sshExec.mock.calls.find(([, command]) =>
       (command as string).includes('docker images')
     )
-    expect(cleanup?.[2]).toEqual({ timeoutMs: 30_000 })
+    expect(cleanup?.[2]).toEqual({ timeoutMs: 30_000, retryOnReconnect: true })
 
     const next = pipeline.run(deployInput())
     expect((await waitForFinished(next.deploymentId)).status).toBe('running')
