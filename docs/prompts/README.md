@@ -20,31 +20,32 @@ khớp với phần còn lại của hệ thống, ở phiên thứ nhất hay p
 **Không dán cả repo.** Ngữ cảnh loãng làm AI bịa tên hàm và "cải tiến" interface — đúng thứ
 phá hỏng hợp đồng giữa hai người.
 
-Với Claude Code: `CLAUDE.md` được nạp tự động, chỉ cần nói *"làm module M4 theo
-docs/prompts/m04-deploy-pipeline.md"*.
+Với Claude Code: `CLAUDE.md` được nạp tự động, chỉ cần nói _"làm module M4 theo
+docs/prompts/m04-deploy-pipeline.md"_.
 
 ---
 
 ## Danh sách brief
 
-| File | Module | Người | Tuần |
-|---|---|---|---|
-| [`01-task-from-board.md`](01-task-from-board.md) | Mẫu giao một task (hồ sơ trong `docs/tasks/`) cho AI, chọn lập kế hoạch/thực hiện/review | cả hai | mọi task |
-| [`tk-a16-worker-luna.md`](tk-a16-worker-luna.md) | Prompt thực thi đầy đủ TK-A16: quyền Git, CP1–CP4, log và handoff local | A | W3 |
-| [`m00-scaffold.md`](m00-scaffold.md) | Khởi tạo repo, cấu hình build | A | W1 |
-| [`m01-ssh-manager.md`](m01-ssh-manager.md) | SSH manager | A | W1 |
-| [`m02-credential.md`](m02-credential.md) | Mã hoá credential | A | W1 |
-| [`m03-detectors.md`](m03-detectors.md) | Detector engine | A | W2 |
-| [`m04-deploy-pipeline.md`](m04-deploy-pipeline.md) | Deploy pipeline | A | W2–W4 |
-| [`m05-collector.md`](m05-collector.md) | Metric collector | B | W1–W2 |
-| [`m06-poller-rule.md`](m06-poller-rule.md) | Poller + rule engine | A | W3–W4 |
-| [`m07-ml-service.md`](m07-ml-service.md) | ML service | A | W1–W3 |
-| [`m08-auto-rollback.md`](m08-auto-rollback.md) | Auto-rollback | A | W5 |
-| [`m09-migrate.md`](m09-migrate.md) | Migrate pipeline | A | W6–W7 |
-| [`m10-ui.md`](m10-ui.md) | Giao diện | B | W1–W10 |
-| [`m11-experiments.md`](m11-experiments.md) | Thí nghiệm + phân tích | B | W6–W10 |
-| [`m12-demo-apps.md`](m12-demo-apps.md) | 3 app demo + fault endpoint | B | W1, W6 |
-| [`99-review.md`](99-review.md) | Prompt tự review trước khi mở PR | cả hai | mọi tuần |
+| File                                               | Module                                                                                   | Người  | Tuần     |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------ | -------- |
+| [`01-task-from-board.md`](01-task-from-board.md)   | Mẫu giao một task (hồ sơ trong `docs/tasks/`) cho AI, chọn lập kế hoạch/thực hiện/review | cả hai | mọi task |
+| [`tk-a15-worker-luna.md`](tk-a15-worker-luna.md)   | Prompt thực thi TK-A15: M4 deploy hardening, quyền Git, CP1–CP4 và handoff local         | A      | W4       |
+| [`tk-a16-worker-luna.md`](tk-a16-worker-luna.md)   | Prompt thực thi đầy đủ TK-A16: quyền Git, CP1–CP4, log và handoff local                  | A      | W3       |
+| [`m00-scaffold.md`](m00-scaffold.md)               | Khởi tạo repo, cấu hình build                                                            | A      | W1       |
+| [`m01-ssh-manager.md`](m01-ssh-manager.md)         | SSH manager                                                                              | A      | W1       |
+| [`m02-credential.md`](m02-credential.md)           | Mã hoá credential                                                                        | A      | W1       |
+| [`m03-detectors.md`](m03-detectors.md)             | Detector engine                                                                          | A      | W2       |
+| [`m04-deploy-pipeline.md`](m04-deploy-pipeline.md) | Deploy pipeline                                                                          | A      | W2–W4    |
+| [`m05-collector.md`](m05-collector.md)             | Metric collector                                                                         | B      | W1–W2    |
+| [`m06-poller-rule.md`](m06-poller-rule.md)         | Poller + rule engine                                                                     | A      | W3–W4    |
+| [`m07-ml-service.md`](m07-ml-service.md)           | ML service                                                                               | A      | W1–W3    |
+| [`m08-auto-rollback.md`](m08-auto-rollback.md)     | Auto-rollback                                                                            | A      | W5       |
+| [`m09-migrate.md`](m09-migrate.md)                 | Migrate pipeline                                                                         | A      | W6–W7    |
+| [`m10-ui.md`](m10-ui.md)                           | Giao diện                                                                                | B      | W1–W10   |
+| [`m11-experiments.md`](m11-experiments.md)         | Thí nghiệm + phân tích                                                                   | B      | W6–W10   |
+| [`m12-demo-apps.md`](m12-demo-apps.md)             | 3 app demo + fault endpoint                                                              | B      | W1, W6   |
+| [`99-review.md`](99-review.md)                     | Prompt tự review trước khi mở PR                                                         | cả hai | mọi tuần |
 
 ---
 
@@ -70,6 +71,7 @@ docs/prompts/m04-deploy-pipeline.md"*.
 
 > Hãy hiện thực module `<MXX>` theo đúng brief dưới đây và các hợp đồng kỹ thuật đã cung cấp.
 > Yêu cầu:
+>
 > - Bám **chính xác** tên hàm, tham số, kiểu trả về, tên trường trong contract. Không đổi tên,
 >   không "cải tiến" interface.
 > - Không thêm thư viện ngoài danh sách đã duyệt.

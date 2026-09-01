@@ -5,7 +5,7 @@
 
 ## 1. Baseline đã có
 
-`origin/main` tại commit `2addfb8` đã gồm:
+`origin/main` tại commit `d40afc9` đã gồm:
 
 - PR #21: VPS Control Panel v1 của B.
 - PR #22: quét môi trường VPS qua SSH.
@@ -13,6 +13,7 @@
 - Lát cắt đã demo với giảng viên: thêm/kết nối VPS, xem trạng thái, quét môi trường, deploy
   `express-api` + PostgreSQL và mở app qua port công khai.
 - ML service độc lập đã có feature 20 chiều, 3 model + ensemble và 6 endpoint (PR #19).
+- PR #24: M6 poller/rule/5 score/alert/monitor IPC đã merge; focused 25/25 và CLI 150/750/0.
 
 Không tiếp tục polish VPS/Deploy nếu không phải bug chặn. Khoảng trống P0 hiện tại là đường dữ liệu:
 
@@ -22,20 +23,20 @@ app trên VPS → collector → metrics.jsonl → poller → SQLite/ML → Dashb
 
 ## 2. Hai luồng làm độc lập
 
-| | A — Core/Algorithms | B — UI/Delivery |
-|---|---|---|
-| Task kéo ngay | [`TK-A16`](tasks/tk-a16-m6-poller-rule.md) | [`TK-B4`](tasks/tk-b4-m5-probes.md) |
-| Sau đó | TK-A15 hardening deploy/rollback | TK-B5 → TK-B6 → TK-B8 |
-| Vùng file | `app/src/main/monitor/**`, DB repo, ML client, main IPC | `collector/**`; sau B6 mới sang `app/src/renderer/**` cho B8 |
-| Không đụng | renderer/collector/contract | Electron main/DB/SSH/contract |
-| Điểm nối | Đọc đúng `metric-format.md`, hiện thực `monitor:*` IPC | Ghi đúng `metric-format.md`, UI chỉ gọi typed IPC |
+|               | A — Core/Algorithms                                       | B — UI/Delivery                                              |
+| ------------- | --------------------------------------------------------- | ------------------------------------------------------------ |
+| Task kéo ngay | [`TK-A15`](tasks/tk-a15-m4-deploy-hardening.md)           | [`TK-B4`](tasks/tk-b4-m5-probes.md)                          |
+| Sau đó        | TK-A7 detector Tier 1; hỗ trợ TK-S4 khi B6 sẵn sàng       | TK-B5 → TK-B6 → TK-B8                                        |
+| Vùng file     | `app/src/main/deploy/**`, repo liên quan, test/CLI deploy | `collector/**`; sau B6 mới sang `app/src/renderer/**` cho B8 |
+| Không đụng    | renderer/collector/contract                               | Electron main/DB/SSH/contract                                |
+| Điểm nối      | A15 độc lập; A16 đã sẵn sàng đọc metric thật tại TK-S4    | Ghi đúng `metric-format.md`, UI chỉ gọi typed IPC            |
 
 Quy tắc WIP vẫn là một task `ĐANG LÀM` mỗi người. B không kéo B5 trước khi B4 sang `CHỜ REVIEW`;
-A không kéo A15 trước khi A16 sang `CHỜ REVIEW`.
+A đang làm A15 và chỉ tạm dừng để cùng B chạy TK-S4 khi B6 sẵn sàng.
 
 ## 3. Việc của A
 
-### Hiện tại — TK-A16, hạn 04/09
+### Đã merge — TK-A16, PR #24
 
 M6 Poller + Rule Engine hoàn chỉnh ở code/local gate:
 
@@ -46,13 +47,17 @@ M6 Poller + Rule Engine hoàn chỉnh ở code/local gate:
 - Scheduler tuần tự, không poll chồng, stop sạch khi thoát app.
 - Không chờ collector thật: dùng fixture và CLI local.
 
-Hồ sơ chi tiết và prompt Worker nằm trọn trong
-[`tasks/tk-a16-m6-poller-rule.md`](tasks/tk-a16-m6-poller-rule.md).
+Hồ sơ/review nằm tại [`tasks/tk-a16-m6-poller-rule.md`](tasks/tk-a16-m6-poller-rule.md) và
+`tasks/tk-a16-review-07.md`. Backend chờ collector thật của B tại TK-S4, không chặn A làm A15.
 
-### Tiếp theo — TK-A15
+### Hiện tại — TK-A15, hạn 08/09
 
-Chỉ kéo sau khi TK-A16 vào review: giữ ba image, healthcheck/rollback/retry ổn định, khóa port và
-bổ sung chẩn đoán log khi container unhealthy. Không trộn A15 vào PR M6.
+A đang hardening pipeline deploy đã demo với các mục tiêu: rollback chỉ success sau healthcheck thật,
+bảo vệ image đang chạy trong chính sách tối đa ba tag, khóa/cấp port nhiều app, retry chỉ probe
+đọc-an-toàn và chẩn đoán container unhealthy đã mask secret. Task packet:
+[`tasks/tk-a15-m4-deploy-hardening.md`](tasks/tk-a15-m4-deploy-hardening.md).
+
+A không chờ B. Sau A15, A kéo TK-A7 hoặc hỗ trợ TK-S4 nếu B6 đã sẵn sàng.
 
 ## 4. Việc của B
 
@@ -103,14 +108,14 @@ Mọi lỗi contract ở điểm nối được ghi vào TK-S4; không sửa nó
 
 ## 6. Mốc ngắn hạn
 
-| Mốc | A | B | Bằng chứng |
-|---|---|---|---|
-| 30/08 | Giao Worker + bắt đầu A16 | Đọc handoff, chuẩn bị B4 | Board/tk-file đúng trạng thái |
-| 01/09 | CP1–CP2 A16 | B4 vào review | Parser/rule test + probe pytest |
-| 02/09 | CP3 A16 | B5 vào review | 5 score/sample + JSONL/latest |
-| 03/09 | CP4 A16 vào review | B6 chạy VM01 | Gate code xanh + file metric thật |
-| 04/09 | Review/fix A16 + TK-S4 | Hỗ trợ TK-S4 | Metric thật vào SQLite/IPC |
-| 05–07/09 | A15 | B8 Dashboard | Chart/alert từ dữ liệu thật |
+| Mốc      | A                                       | B                                   | Bằng chứng                                  |
+| -------- | --------------------------------------- | ----------------------------------- | ------------------------------------------- |
+| 01/09    | Khởi động A15, audit + baseline         | Nhận B4                             | Task packet + baseline test                 |
+| 02/09    | A15 CP1 rollback truthful               | B4 vào review, kéo B5               | Regression rollback + probe pytest          |
+| 03/09    | A15 CP2 image/port                      | B5 vào review, kéo B6               | Retention/port test + JSONL/latest          |
+| 04/09    | A15 CP3 diagnostic/retry                | B6 chạy VM01; cùng A chạy TK-S4     | File metric thật vào SQLite/IPC             |
+| 05–07/09 | A15 CP4 + review/fix; hỗ trợ S4 khi cần | B8 Dashboard                        | Gate deploy xanh + chart/alert dữ liệu thật |
+| 08–10/09 | Kéo A7 sau A15                          | Hoàn tất B8, sau đó phần còn lại B2 | Detector test + UI states + demo apps       |
 
 Ngày lệch một ngày được phép nếu có `BLOCKED/UPDATE` đúng format; không được bỏ test để giữ lịch.
 
