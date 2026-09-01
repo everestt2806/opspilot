@@ -21,8 +21,8 @@ kèm `latest.json` cho trạng thái tức thời. A (TK-A5) đọc `metrics.jso
 ## Definition of Done
 
 - [x] Mỗi dòng JSONL khớp contract, có `seq` tăng dần liên tục
-- [x] Chu kỳ đúng 10 giây (ADR-007) — logic sẵn có + smoke B4 10 dòng/100s; xác nhận lại ở lần chạy 10 phút
-- [ ] Chạy 10 phút local không mất dòng, không trùng `seq`
+- [x] Chu kỳ đúng 10 giây (ADR-007) — xác nhận ở lần chạy 10 phút: 63 gap đều đúng 10,0s
+- [x] Chạy 10 phút local không mất dòng, không trùng `seq` (64 dòng/10,5 phút — chi tiết nhật ký 01/09)
 - [x] `latest.json` phản ánh mẫu mới nhất
 - [ ] A chạy readFileTail đọc được file này (bước chung với TK-A5)
 
@@ -40,6 +40,12 @@ kèm `latest.json` cho trạng thái tức thời. A (TK-A5) đọc `metrics.jso
   đúng khi dòng cuối viết dở hoặc dòng rác). Thêm 5 test: append tuần tự + `latest.json` =
   dòng cuối, rotation sang `.1` không đứt thứ tự, dòng >4KB bị chặn không làm hỏng file,
   seq hồi phục sau dòng viết dở, chỉ đọc cửa sổ đuôi. pytest 26/26 xanh.
+- SMOKE 01/09 — PASS. Chạy thật 10,5 phút local (container testapp nginx, `APP_URL` =
+  `http://localhost:8080/`): 64 dòng, ts `14:47:35Z` → `14:58:05Z`, `seq` 1..64 liên tục
+  không mất/không trùng, 63 gap đều đúng 10,0s, `latency_ms` có giá trị thật cả 64 mẫu,
+  `container_up` = 1 suốt, `http_error_rate` = 0, `latest.json` khớp dòng cuối, dòng to nhất
+  292 byte. Đủ bằng chứng DoD "không mất dòng, không trùng seq". Còn DoD cuối: A chạy
+  readFileTail nghiệm thu (bước chung TK-A5).
 
 ## Lệnh tái hiện
 
