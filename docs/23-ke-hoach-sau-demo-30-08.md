@@ -52,12 +52,14 @@ Hồ sơ/review nằm tại [`tasks/tk-a16-m6-poller-rule.md`](tasks/tk-a16-m6-p
 
 ### Hiện tại — TK-A15, hạn 08/09
 
-A đang hardening pipeline deploy đã demo với các mục tiêu: rollback chỉ success sau healthcheck thật,
-bảo vệ image đang chạy trong chính sách tối đa ba tag, khóa/cấp port nhiều app, retry chỉ probe
-đọc-an-toàn và chẩn đoán container unhealthy đã mask secret. Task packet:
+A15 đã đạt local gate và đang `CHỜ REVIEW`: rollback chỉ success sau healthcheck thật, image runtime
+được bảo vệ trong chính sách tối đa ba tag, nhiều app không trùng port, side-effect không retry và
+diagnostic container đã mask secret. Focused `58/58`, full suite `220/220`; còn smoke VM01 trước khi
+mở PR. Task packet:
 [`tasks/tk-a15-m4-deploy-hardening.md`](tasks/tk-a15-m4-deploy-hardening.md).
 
-A không chờ B. Sau A15, A kéo TK-A7 hoặc hỗ trợ TK-S4 nếu B6 đã sẵn sàng.
+A không chờ B: việc ngay của A là review diff + cho phép smoke VM01; sau khi A15 được duyệt thì kéo
+TK-A7 hoặc hỗ trợ TK-S4 nếu B6 đã sẵn sàng.
 
 ## 4. Việc của B
 

@@ -21,7 +21,7 @@
 
 | ID     | Task                                                                 | Chủ  | Hạn   | Trạng thái | Branch                      | PR/phụ thuộc             | Ghi chú                                                    |
 | ------ | -------------------------------------------------------------------- | ---- | ----- | ---------- | --------------------------- | ------------------------ | ---------------------------------------------------------- |
-| TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A    | 08/09 | ĐANG LÀM   | `feat/m04-deploy-hardening` | baseline `d40afc9`       | START 01/09 · focused baseline 28/28 PASS · không chờ B    |
+| TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A    | 08/09 | CHỜ REVIEW | `feat/m04-deploy-hardening` | code `9d35acf`           | focused 58/58 · full 220/220 · còn smoke VM01 · chưa push  |
 | TK-B4  | M5: docker stats + HTTP probe local                                  | B    | 01/09 | TUẦN NÀY   | `feat/m05-collector-probes` | TK-B2 Express đã có      | **Task B kéo ngay**                                        |
 | TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B    | 02/09 | BACKLOG    | `feat/m05-collector-output` | Sau TK-B4                | Khép blocker TK-A5                                         |
 | TK-B6  | M5: chạy collector Docker trên VM01                                  | B    | 03/09 | BACKLOG    | `feat/m05-collector-docker` | Sau TK-B5                | Không mở thêm port                                         |

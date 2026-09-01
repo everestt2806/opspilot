@@ -135,19 +135,19 @@ Không được sửa:
 
 ## 7. Test bắt buộc và Definition of Done
 
-- [ ] Rollback success chỉ được ghi sau healthcheck bản đích PASS.
-- [ ] Rollback failure không emit success/không đổi current deployment sai; đúng một `finished`.
-- [ ] Success/fail/cancel đều release lock và controller; cùng app bị chặn, app khác chạy được.
-- [ ] Nhiều app cùng VPS không trùng port; dải port và error mapping đúng.
-- [ ] Sau ≥5 version còn tối đa ba tag và tag current/rollback target luôn còn.
-- [ ] Không xóa image app khác, volume hoặc `/opt/opspilot/<app>/data`.
-- [ ] Container fail có status/health/exit/error hữu ích, đã mask secret.
-- [ ] Không retry lệnh side-effect; retry probe đọc-an-toàn có giới hạn và test trực tiếp.
-- [ ] Luồng Express deploy/redeploy hiện tại không regression.
-- [ ] Focused tests, CLI an toàn, lint, typecheck, scoped Prettier và build PASS.
-- [ ] Full suite được chạy và ghi kết quả thật; renderer baseline tách riêng nếu còn.
-- [ ] Docs/board/handoff cập nhật; không push/PR/merge khi A chưa cấp quyền riêng cho TK-A15.
-- [ ] Reviewer Codex/root không còn finding BLOCKING/MAJOR.
+- [x] Rollback success chỉ được ghi sau healthcheck bản đích PASS.
+- [x] Rollback failure không emit success/không đổi current deployment sai; đúng một `finished`.
+- [x] Success/fail/cancel đều release lock và controller; cùng app bị chặn, app khác chạy được.
+- [x] Nhiều app cùng VPS không trùng port; dải port và error mapping đúng.
+- [x] Sau ≥5 version còn tối đa ba tag và tag current/rollback target luôn còn.
+- [x] Không xóa image app khác, volume hoặc `/opt/opspilot/<app>/data`.
+- [x] Container fail có status/health/exit/error hữu ích, đã mask secret.
+- [x] Không retry lệnh side-effect; retry probe đọc-an-toàn có giới hạn và test trực tiếp.
+- [x] Luồng Express deploy/redeploy hiện tại không regression.
+- [x] Focused tests, CLI an toàn, lint, typecheck, scoped Prettier và build PASS.
+- [x] Full suite được chạy và ghi kết quả thật; renderer baseline tách riêng nếu còn.
+- [x] Docs/board/handoff cập nhật; không push/PR/merge khi A chưa cấp quyền riêng cho TK-A15.
+- [x] Reviewer Codex/root không còn finding BLOCKING/MAJOR.
 
 Smoke VM01 chỉ chạy sau unit gate và lệnh rõ của A. Smoke cần chụp: image list trước/sau, deploy
 vN success, healthcheck fail → rollback thật, URL cũ còn 200 và `data/`/PostgreSQL không mất.
@@ -158,12 +158,13 @@ vN success, healthcheck fail → rollback thật, URL cũ còn 200 và `data/`/P
 . .\tools\enter-node22.ps1
 Set-Location app
 node --version
-pnpm test -- --run src/main/deploy src/main/db/deploymentRepository.test.ts src/main/db/appRepository.test.ts
+pnpm test -- --run src/main/deploy src/main/db/appRepository.test.ts src/main/ssh/ssh.test.ts src/main/logger.test.ts
 pnpm lint
 pnpm typecheck
-pnpm exec prettier --check src/main/deploy src/main/db/appRepository.ts src/main/db/deploymentRepository.ts scripts/try-deploy.ts
+pnpm exec prettier --check src/main/deploy src/main/db/appRepository.ts src/main/db/appRepository.test.ts src/main/db/deploymentRepository.ts src/main/ssh/manager.ts src/main/ssh/errorMapping.ts src/main/ssh/ssh.test.ts src/main/logger.ts src/main/logger.test.ts scripts/try-deploy.ts
+pnpm exec tsc -p tsconfig.scripts.json
 pnpm build
-pnpm test -- --reporter=verbose
+pnpm test -- --reporter=dot
 ```
 
 ## 9. Nhật ký
@@ -196,6 +197,12 @@ pnpm test -- --reporter=verbose
   rollback attempt v3 có thể đang chạy image v1, auto rollback sau đó không còn chọn nhầm tag v3
   không tồn tại; retention current cũng bảo vệ tag runtime. Regression chuỗi deploy v1→v2→manual
   về v1→v4 fail→auto về v1; Node 22 focused `58/58 PASS`, `typecheck:node PASS`.
+- CP4 01/09 — code head `9d35acf`; Node 22 focused `58/58`, full suite `220/220`, lint exit 0 với
+  16 warning renderer baseline, typecheck/scoped Prettier/CLI compile/build PASS (3045 modules).
+  Không chạy `try:deploy`/smoke VM01 vì chưa có lệnh thay đổi VPS riêng. Board chuyển `CHỜ REVIEW`;
+  handoff và truy vết đã cập nhật. Outcome `READY_FOR_LOCAL_REVIEW`.
+- HANDOFF-LOCAL 01/09 — commits `3e3e7f3..9d35acf`; code gate xanh `58/58` focused + `220/220`
+  full; handoff `tk-a15-worker-handoff.md`; **CHƯA PUSH — CHƯA PR — CHƯA MERGE**.
 
 Mẫu dòng tiếp theo:
 
