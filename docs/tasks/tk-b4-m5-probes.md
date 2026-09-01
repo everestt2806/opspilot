@@ -31,10 +31,10 @@ HTTP probe đo `latency_ms` + `http_error_rate` vào đích app demo. Chạy loc
 
 ## Definition of Done
 
-- [ ] Parse `docker stats` đúng: `cpu_pct`, `mem_mb` (đơn vị theo contract)
-- [ ] Probe HTTP: `latency_ms` ms, `http_error_rate` 0–1 (cửa sổ 60s theo D3 khi vào thí nghiệm)
-- [ ] Thiếu metric → ghi `null`, không ghi `0`
-- [ ] pytest có test cho parser + probe (mock stats output)
+- [x] Parse `docker stats` đúng: `cpu_pct`, `mem_mb` (đơn vị theo contract)
+- [x] Probe HTTP: `latency_ms` ms, `http_error_rate` 0–1 (cửa sổ 60s theo D3 khi vào thí nghiệm)
+- [x] Thiếu metric → ghi `null`, không ghi `0`
+- [x] pytest có test cho parser + probe (mock stats output)
 
 ## Nhật ký
 
@@ -45,11 +45,27 @@ HTTP probe đo `latency_ms` + `http_error_rate` vào đích app demo. Chạy loc
   26/08. Đích probe sẽ là `express-api` (TK-B2 đã có lát cắt của A) — hết blocker khi quay lại.
 - ASSIGNED 30/08 — Sau demo, B4 là task duy nhất B cần kéo. Đích `express-api` và Docker đã có;
   hạn rebaseline 01/09. Bàn giao bằng PR, pytest và output mẫu đã che thông tin VPS.
+- START 01/09 — tạo nhánh `feat/m05-collector-probes` từ main `46e47b0`; audit parser đơn vị/null
+  so với `metric-format.md`; bổ sung pytest cho parser + probe HTTP (mock stats output).
+- UPDATE 01/09 — pytest 21/21 xanh. Thêm 18 test: đơn vị bộ nhớ (MiB/GiB/KiB/MB), docker stats
+  (mock subprocess: thành công/exit khác 0/không có docker), probe HTTP (mock requests: 200/5xx/
+  timeout/connection error, url rỗng), cửa sổ error rate 60s (probe fail và 5xx đều tính lỗi theo
+  chốt của B, mẫu hết hạn rớt khỏi cửa sổ, không có `APP_URL` thì rate null), null semantics và
+  `container_up = 0` khi probe fail/container chết. Tách helper `update_error_window` khỏi
+  `build_metric` để test cửa sổ. Chưa commit — chờ B tự chạy/check rồi commit cục bộ, không push
+  khi A chưa cho phép.
+- SMOKE 01/09 — PASS (Docker Desktop 29.0.1, app giả nginx `testapp`): 10 dòng/100s, `ts` cách đúng
+  10s, `seq` 1→10 liên tục, `cpu_pct`/`mem_mb`/`latency_ms` số thật (latency 3–26ms),
+  `http_error_rate` 0, `container_up` 1, `db_response_ms` null (không `DB_DSN`), `host_*` null
+  (Windows không có `/proc` — đúng dự kiến, lên VPS Linux mới có). Dòng mẫu (đã gọn):
+  `{"seq":1,"ts":"2026-09-01T13:48:41Z","cpu_pct":0.0,"mem_mb":16.2,"mem_pct":0.1,"mem_limit_mb":15851.52,"latency_ms":9.66,"http_error_rate":0.0,"db_response_ms":null,"host_cpu_pct":null,"host_mem_pct":null,"container_up":1,"collector_version":"1.0.0"}`.
+  Case app chết (stop container → `container_up:0`) sẽ kiểm chứng kỹ ở B6 trên VM01.
 
 ## Lệnh tái hiện
 
 ```bash
-# (điền khi có code)
+cd collector
+python -m pytest tests -q
 ```
 
 ## PR

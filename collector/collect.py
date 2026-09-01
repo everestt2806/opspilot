@@ -243,17 +243,25 @@ def write_metric(metrics_dir: Path, metric: dict[str, Any], max_file_mb: float =
     temporary.replace(latest_path)
 
 
+def update_error_window(
+    errors: deque[tuple[float, bool]], now: float, status_code: int | None, window_s: float
+) -> float | None:
+    """Đẩy kết quả probe vào cửa sổ trượt; probe fail hoặc 5xx tính là lỗi (chốt với B)."""
+    errors.append((now, status_code is None or status_code >= 500))
+    while errors and now - errors[0][0] > window_s:
+        errors.popleft()
+    return sum(item[1] for item in errors) / len(errors) if errors else None
+
+
 def build_metric(seq: int, config: Config, errors: deque[tuple[float, bool]]) -> dict[str, Any]:
     stats = read_docker_stats(config.app_container_name)
     latency_ms, status_code = probe_http(config.app_url, config.probe_timeout_s)
     now = time.monotonic()
-    if config.app_url:
-        errors.append((now, status_code is None or status_code >= 500))
-        while errors and now - errors[0][0] > config.error_window_s:
-            errors.popleft()
-        error_rate = sum(item[1] for item in errors) / len(errors) if errors else None
-    else:
-        error_rate = None
+    error_rate = (
+        update_error_window(errors, now, status_code, config.error_window_s)
+        if config.app_url
+        else None
+    )
     host_cpu, host_mem = read_host_metrics()
     return {
         "seq": seq,
