@@ -103,7 +103,28 @@ function mapAppDatabaseError(error: unknown): AppError {
   if (error instanceof AppError) {
     return error
   }
+  const code = getSqliteErrorCode(error)
+  const message = error instanceof Error ? error.message : String(error)
+  if (code.startsWith('SQLITE_CONSTRAINT') && message.includes('app.vps_id, app.host_port')) {
+    return new AppError(
+      'PORT_EXHAUSTED',
+      'Cổng deploy vừa được cấp cho app khác trên VPS. Hãy chạy precheck lại rồi thử lại.',
+      { cause: error }
+    )
+  }
+  if (code.startsWith('SQLITE_CONSTRAINT') && message.includes('app.vps_id, app.name')) {
+    return new AppError('VALIDATION', 'Tên app đã tồn tại trên VPS. Hãy tải lại danh sách app.', {
+      cause: error
+    })
+  }
   return new AppError('DB_ERROR', 'Không thể lưu app. Hãy kiểm tra database rồi thử lại.', {
     cause: error
   })
+}
+
+function getSqliteErrorCode(error: unknown): string {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    return String(error.code)
+  }
+  return ''
 }

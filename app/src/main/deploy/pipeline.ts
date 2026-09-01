@@ -207,6 +207,7 @@ export class DeployPipeline {
       })
 
       await this.recordManualRollbackSuccess(ctx, targetImageTag, targetDeploymentId)
+      await this.pruneImages(ctx, null, [targetImageTag])
     } catch (error) {
       await this.recordFailure(ctx, error)
       try {
@@ -1018,36 +1019,83 @@ export class DeployPipeline {
     })
   }
 
-  /** Giữ tối đa 3 image của một app (ADR-004). Lỗi chỉ warn, không làm fail deploy. */
-  private async pruneImages(ctx: RunContext, logStep: DeployStep | null): Promise<void> {
+  /** Giữ tối đa 3 image của một app (ADR-004), luôn bảo vệ image đang chạy/rollback target. */
+  private async pruneImages(
+    ctx: RunContext,
+    logStep: DeployStep | null,
+    protectedImageTags: string[] = []
+  ): Promise<void> {
     try {
       const list = await this.ssh.exec(
         ctx.app.vps_id,
         `docker images --format '{{.Repository}}:{{.Tag}}'`,
-        { timeoutMs: 30_000, signal: ctx.signal }
+        { timeoutMs: 30_000 }
       )
       const prefix = `${ctx.app.name}:v`
-      const versions = list.stdout
+      const images = list.stdout
         .split('\n')
         .map((line) => line.trim())
         .filter((line) => line.startsWith(prefix))
-        .map((line) => Number.parseInt(line.slice(prefix.length), 10))
-        .filter((version) => !Number.isNaN(version))
-        .sort((left, right) => right - left)
+        .map((tag) => ({ tag, suffix: tag.slice(prefix.length) }))
+        .filter((image) => /^\d+$/.test(image.suffix))
+        .map((image) => ({ tag: image.tag, version: Number.parseInt(image.suffix, 10) }))
+        .sort((left, right) => right.version - left.version)
 
-      for (const version of versions.slice(3)) {
-        const tag = `${ctx.app.name}:v${version}`
+      const availableTags = new Set(images.map((image) => image.tag))
+      const keep = new Set<string>()
+      const protectedTags = [...protectedImageTags]
+      try {
+        const currentDeploymentId = this.appRepository.getById(ctx.app.id).current_deployment_id
+        if (currentDeploymentId !== null) {
+          protectedTags.push(this.deploymentRepository.getById(currentDeploymentId).image_tag)
+        }
+      } catch (error) {
+        logger.warn('deploy', 'Không xác định được image hiện đang chạy khi dọn image', {
+          deployment_id: ctx.deployment.id,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+      for (const tag of protectedTags) {
+        if (availableTags.has(tag)) {
+          keep.add(tag)
+        }
+      }
+      for (const image of images) {
+        if (keep.size >= 3) {
+          break
+        }
+        keep.add(image.tag)
+      }
+
+      for (const image of images) {
+        if (keep.has(image.tag)) {
+          continue
+        }
+        const tag = image.tag
         if (logStep) {
           this.log(ctx, logStep, `Dọn image cũ ${tag} (giữ tối đa 3 bản).\n`, 'stdout')
         }
-        await this.ssh.exec(
-          ctx.app.vps_id,
-          `docker image rm -f ${shellQuote(tag)} >/dev/null 2>&1 || true`,
-          {
-            timeoutMs: 60_000,
-            signal: ctx.signal
+        try {
+          const removed = await this.ssh.exec(
+            ctx.app.vps_id,
+            `docker image rm ${shellQuote(tag)} >/dev/null 2>&1`,
+            { timeoutMs: 60_000 }
+          )
+          if (removed.code === 0) {
+            continue
           }
-        )
+          logger.warn('deploy', 'Không xóa được một image cũ; tiếp tục dọn các image còn lại', {
+            deployment_id: ctx.deployment.id,
+            image_tag: tag,
+            exit_code: removed.code
+          })
+        } catch (error) {
+          logger.warn('deploy', 'Lỗi SSH khi xóa image cũ; tiếp tục dọn các image còn lại', {
+            deployment_id: ctx.deployment.id,
+            image_tag: tag,
+            error: error instanceof Error ? error.message : String(error)
+          })
+        }
       }
     } catch (error) {
       logger.warn('deploy', 'Không dọn được image cũ', {

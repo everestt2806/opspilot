@@ -177,6 +177,11 @@ pnpm test -- --reporter=verbose
   rollback fail phát `step-failed DEPLOY`, không đổi current và có action log failed. Manual rollback
   từ chối target không `running`, healthcheck fail không đổi current, success/fail đều release lock.
   Node 22 `pnpm test -- --run src/main/deploy/pipeline.test.ts` = `12/12 PASS`.
+- CP2 01/09 18:07 — image retention giữ tối đa ba tag nhưng bảo vệ image current/rollback target,
+  không dùng `rm -f`, một tag xóa lỗi không chặn tag sau và cleanup không dùng signal đã abort. Hai
+  app cùng VPS được cấp `30000/30001` ở `start`; unique port/name map rõ thành
+  `PORT_EXHAUSTED/VALIDATION`; lock được tái sử dụng sau success/rollback failure/cancel. Node 22
+  focused pipeline/port/repository `19/19 PASS`, `typecheck:node PASS`.
 
 Mẫu dòng tiếp theo:
 

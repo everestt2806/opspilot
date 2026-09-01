@@ -26,6 +26,8 @@ interface StubSshOptions {
   curlOk?: (call: number) => boolean
   composeUp?: (call: number) => { code: number; stdout: string; stderr: string }
   inspectStatus?: (call: number) => string
+  imagesOutput?: (call: number) => string
+  imageRemove?: (call: number, command: string) => { code: number; stdout: string; stderr: string }
 }
 
 let testDirectory: string | null = null
@@ -81,6 +83,8 @@ function createHarness(options: StubSshOptions = {}): void {
   let composeUpCall = 0
   let inspectCall = 0
   let curlCall = 0
+  let imagesCall = 0
+  let imageRemoveCall = 0
   sshExec = vi.fn(async (_vpsId: number, command: string) => {
     if (command.includes('free -m')) {
       return { code: 0, stdout: options.precheckOutput ?? PRECHECK_OK, stderr: '' }
@@ -107,7 +111,12 @@ function createHarness(options: StubSshOptions = {}): void {
       }
     }
     if (command.includes('docker images')) {
-      return { code: 0, stdout: '', stderr: '' }
+      imagesCall += 1
+      return { code: 0, stdout: options.imagesOutput?.(imagesCall) ?? '', stderr: '' }
+    }
+    if (command.includes('docker image rm')) {
+      imageRemoveCall += 1
+      return options.imageRemove?.(imageRemoveCall, command) ?? { code: 0, stdout: '', stderr: '' }
     }
     if (command.includes('curl -fsS')) {
       curlCall += 1
@@ -362,7 +371,7 @@ describe('DeployPipeline', () => {
 
   it('auto rollback compose fail -> step DEPLOY failed, DB failed va khong doi current', async () => {
     createHarness({
-      curlOk: (call) => call === 1,
+      curlOk: (call) => call === 1 || call >= 12,
       composeUp: (call) =>
         call === 3
           ? { code: 1, stdout: '', stderr: 'compose rollback failed' }
@@ -398,6 +407,9 @@ describe('DeployPipeline', () => {
         (row) => row.action === 'rollback_auto' && row.status === 'success'
       )
     ).toBe(false)
+
+    const next = pipeline.run(deployInput())
+    expect((await waitForFinished(next.deploymentId)).status).toBe('running')
   })
 
   it('auto rollback v1 khong running -> failed va khong doi current', async () => {
@@ -493,6 +505,60 @@ describe('DeployPipeline', () => {
     expect(count.total).toBe(1)
   })
 
+  it('image retention bao ve v1 dang chay, giu toi da 3 tag va khong dung force', async () => {
+    const listedImages = [
+      'demo-api:v1',
+      'demo-api:v2',
+      'demo-api:v3',
+      'demo-api:v4',
+      'demo-api:v5',
+      'demo-api-worker:v9',
+      'demo-api:v5-extra'
+    ].join('\n')
+    createHarness({
+      curlOk: (call) => call === 1 || call === 12,
+      imagesOutput: (call) => (call === 1 ? '' : listedImages),
+      imageRemove: (call) =>
+        call === 1
+          ? { code: 1, stdout: '', stderr: 'image busy' }
+          : { code: 0, stdout: '', stderr: '' }
+    })
+    const first = pipeline.run(deployInput())
+    await waitForFinished(first.deploymentId)
+
+    vi.useFakeTimers()
+    const second = pipeline.run(deployInput())
+    await advanceFailedHealthcheck()
+    vi.useRealTimers()
+    expect((await waitForFinished(second.deploymentId)).status).toBe('rolled_back')
+
+    const removeCommands = sshExec.mock.calls
+      .map(([, command]) => command as string)
+      .filter((command) => command.includes('docker image rm'))
+    expect(removeCommands).toHaveLength(2)
+    expect(removeCommands.some((command) => command.includes("'demo-api:v3'"))).toBe(true)
+    expect(removeCommands.some((command) => command.includes("'demo-api:v2'"))).toBe(true)
+    expect(removeCommands.some((command) => command.includes("'demo-api:v1'"))).toBe(false)
+    expect(removeCommands.some((command) => command.includes('demo-api-worker'))).toBe(false)
+    expect(removeCommands.every((command) => !command.includes(' rm -f '))).toBe(true)
+  })
+
+  it('hai app khac nhau tren cung VPS chay song song va nhan port khac nhau', async () => {
+    createHarness()
+    const first = pipeline.run(deployInput({ app_name: 'demo-api' }))
+    const second = pipeline.run(deployInput({ app_name: 'worker-api' }))
+
+    expect((await waitForFinished(first.deploymentId)).status).toBe('running')
+    expect((await waitForFinished(second.deploymentId)).status).toBe('running')
+    const rows = database
+      .prepare('SELECT name, host_port FROM app ORDER BY host_port')
+      .all() as Array<{ name: string; host_port: number }>
+    expect(rows).toEqual([
+      { name: 'demo-api', host_port: 30_000 },
+      { name: 'worker-api', host_port: 30_001 }
+    ])
+  })
+
   it('khoa hai pipeline cung app: lan thu hai bao VALIDATION ngay lap tuc', () => {
     createHarness()
     pipeline.run(deployInput())
@@ -508,6 +574,13 @@ describe('DeployPipeline', () => {
     expect(finished.status).toBe('failed')
     expect(actionLogRows(deploymentId).some((row) => row.status === 'cancelled')).toBe(true)
     expect(deploymentRow(deploymentId).status).toBe('failed')
+    const cleanup = sshExec.mock.calls.find(([, command]) =>
+      (command as string).includes('docker images')
+    )
+    expect(cleanup?.[2]).toEqual({ timeoutMs: 30_000 })
+
+    const next = pipeline.run(deployInput())
+    expect((await waitForFinished(next.deploymentId)).status).toBe('running')
   })
 })
 
