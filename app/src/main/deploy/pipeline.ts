@@ -208,7 +208,7 @@ export class DeployPipeline {
       })
 
       await this.inStep(ctx, 'HEALTHCHECK', async () => {
-        const ok = await this.healthcheckOnce(ctx.app, ctx.signal)
+        const ok = await this.waitForHealthcheck(ctx.app, ctx.signal)
         this.log(
           ctx,
           'HEALTHCHECK',
@@ -857,7 +857,7 @@ export class DeployPipeline {
           )
         }
         await this.waitContainerRunning(ctx)
-        const healthOk = await this.healthcheckOnce(ctx.app, ctx.signal)
+        const healthOk = await this.waitForHealthcheck(ctx.app, ctx.signal)
         this.log(
           ctx,
           'DEPLOY',
@@ -993,18 +993,34 @@ export class DeployPipeline {
     )
   }
 
-  private async healthcheckOnce(app: App, signal: AbortSignal): Promise<boolean> {
+  /**
+   * Compose có thể báo container `running` trước khi process ứng dụng/DB sẵn sàng nhận HTTP.
+   * Rollback vì vậy phải dùng cùng cửa sổ readiness như deploy thường, không kết luận thất bại
+   * chỉ từ probe đầu tiên ngay sau `compose up`.
+   */
+  private async waitForHealthcheck(app: App, signal: AbortSignal): Promise<boolean> {
     const url = `http://127.0.0.1:${app.host_port}${app.healthcheck_path}`
-    const result = await this.ssh.exec(
-      app.vps_id,
-      `curl -fsS -m 5 -o /dev/null ${shellQuote(url)}`,
-      {
-        timeoutMs: 10_000,
-        signal,
-        retryOnReconnect: true
+    for (let attempt = 1; attempt <= HEALTHCHECK_ATTEMPTS; attempt += 1) {
+      if (signal.aborted) {
+        throw new SshAbortedError()
       }
-    )
-    return result.code === 0
+      const result = await this.ssh.exec(
+        app.vps_id,
+        `curl -fsS -m 5 -o /dev/null ${shellQuote(url)}`,
+        {
+          timeoutMs: 10_000,
+          signal,
+          retryOnReconnect: true
+        }
+      )
+      if (result.code === 0) {
+        return true
+      }
+      if (attempt < HEALTHCHECK_ATTEMPTS) {
+        await sleep(HEALTHCHECK_INTERVAL_MS, signal)
+      }
+    }
+    return false
   }
 
   private async ensureImageAvailable(ctx: RunContext, imageTag: string): Promise<void> {

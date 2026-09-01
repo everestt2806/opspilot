@@ -242,7 +242,8 @@ function currentAppId(): number {
 }
 
 async function advanceFailedHealthcheck(): Promise<void> {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
+  // Đủ cho 10 probe của deploy lỗi và 10 probe readiness của rollback lỗi.
+  for (let attempt = 0; attempt < 20; attempt += 1) {
     await vi.advanceTimersByTimeAsync(3_000)
   }
   await vi.advanceTimersByTimeAsync(100)
@@ -343,8 +344,10 @@ describe('DeployPipeline', () => {
     expect(sshExec.mock.calls.some(([, command]) => command.includes('docker build'))).toBe(false)
   })
 
-  it('healthcheck truot -> chi ghi auto rollback thanh cong sau khi v1 healthcheck dat', async () => {
-    createHarness({ curlOk: (call) => call === 1 || call === 12 })
+  it('healthcheck truot -> auto rollback cho app cu ready lai thay vi fail o probe dau', async () => {
+    // call 1: deploy v1; call 2..11: v2 lỗi; call 12: rollback vừa running nhưng app/DB
+    // chưa ready; call 13: app cũ đã ready.
+    createHarness({ curlOk: (call) => call === 1 || call === 13 })
     const first = pipeline.run(deployInput())
     expect((await waitForFinished()).status).toBe('running')
 
@@ -389,6 +392,10 @@ describe('DeployPipeline', () => {
         (row) => row.action === 'rollback_auto' && row.status === 'success'
       )
     ).toBe(true)
+    const healthProbes = sshExec.mock.calls.filter(([, command]) =>
+      (command as string).includes('curl -fsS')
+    )
+    expect(healthProbes).toHaveLength(13)
   })
 
   it('auto rollback compose fail -> step DEPLOY failed, DB failed va khong doi current', async () => {
@@ -502,7 +509,10 @@ describe('DeployPipeline', () => {
     const second = pipeline.run(deployInput())
     await waitForFinished(second.deploymentId)
 
+    vi.useFakeTimers()
     const rollback = pipeline.rollback(currentAppId(), first.deploymentId)
+    await advanceFailedHealthcheck()
+    vi.useRealTimers()
     expect((await waitForFinished(rollback.deploymentId)).status).toBe('failed')
     expect(currentDeploymentId()).toBe(second.deploymentId)
     expect(deploymentRow(rollback.deploymentId).failed_step).toBe('HEALTHCHECK')
