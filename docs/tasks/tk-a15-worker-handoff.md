@@ -8,21 +8,23 @@
 | Outcome      | `READY_FOR_LOCAL_REVIEW`    |
 | Branch       | `feat/m04-deploy-hardening` |
 | Baseline     | `d40afc9`                   |
-| Code head    | `9d35acf`                   |
-| Handoff head | CP4 — commit chứa file này  |
+| Code head    | `6fd3efd`                   |
+| Handoff head | CP5 — commit chứa file này  |
 | Remote/PR    | `CHƯA PUSH — CHƯA MỞ PR`    |
 
 ## 1. Commit CP1–CP4
 
-| CP  | Commit    | Finding/invariant           | Test tại checkpoint  |
-| --- | --------- | --------------------------- | -------------------- |
-| CP1 | `d77e4cb` | rollback truthful           | pipeline 12/12       |
-| CP2 | `cacac2f` | image retention + port      | focused 19/19        |
-| CP3 | `2783771` | diagnostic + retry boundary | focused 56/56        |
-| CP4 | file này  | docs/gate/handoff           | final gates bên dưới |
+| CP  | Commit    | Finding/invariant                 | Test tại checkpoint        |
+| --- | --------- | --------------------------------- | -------------------------- |
+| CP1 | `d77e4cb` | rollback truthful                 | pipeline 12/12             |
+| CP2 | `cacac2f` | image retention + port            | focused 19/19              |
+| CP3 | `2783771` | diagnostic + retry boundary       | focused 56/56              |
+| CP4 | `c0e7bc6` | docs/gate/handoff                 | final gates bên dưới       |
+| CP5 | `6fd3efd` | rollback readiness thật sau smoke | pipeline 22/22 · VM02 PASS |
 
 Review-fix: `9f691b0` kiểm tra target image/finished sau cleanup; `9d35acf` resolve image runtime
-qua chuỗi `is_rollback_of` và khóa regression rollback lồng.
+qua chuỗi `is_rollback_of` và khóa regression rollback lồng; `6fd3efd` thay probe rollback một lần
+bằng readiness hữu hạn sau khi smoke thật bắt được race Express/PostgreSQL startup.
 
 ## 2. File thay đổi và ngoài scope
 
@@ -34,16 +36,17 @@ qua chuỗi `is_rollback_of` và khóa regression rollback lồng.
 
 ## 3. Evidence test
 
-| Môi trường | Command                               | Exit | Kết quả                               |
-| ---------- | ------------------------------------- | ---: | ------------------------------------- |
-| Node 22    | focused deploy/repository/SSH/logger  |    0 | `58/58 PASS`                          |
-| Node 22    | lint                                  |    0 | 0 error, 16 renderer warning baseline |
-| Node 22    | typecheck                             |    0 | node + web PASS                       |
-| Node 22    | scoped Prettier                       |    0 | PASS                                  |
-| Node 22    | CLI compile (`tsconfig.scripts.json`) |    0 | PASS, không chạm VPS                  |
-| Node 22    | build                                 |    0 | 3045 modules, PASS                    |
-| Node 22    | full test dot                         |    0 | `45 files · 220/220 PASS`             |
-| VM01 smoke | chỉ khi A cho phép                    |    — | CHƯA CHẠY — không đổi trạng thái VPS  |
+| Môi trường | Command                               | Exit | Kết quả                                     |
+| ---------- | ------------------------------------- | ---: | ------------------------------------------- |
+| Node 22    | focused deploy/repository/SSH/logger  |    0 | `58/58 PASS`                                |
+| Node 22    | lint                                  |    0 | 0 error, 16 renderer warning baseline       |
+| Node 22    | typecheck                             |    0 | node + web PASS                             |
+| Node 22    | scoped Prettier                       |    0 | PASS                                        |
+| Node 22    | CLI compile (`tsconfig.scripts.json`) |    0 | PASS, không chạm VPS                        |
+| Node 22    | build                                 |    0 | 3045 modules, PASS                          |
+| Node 22    | full test dot                         |    0 | `45 files · 220/220 PASS`                   |
+| VM02 smoke | fallback vì VM01 timeout TCP/22       |    0 | auto/manual rollback + data + 3 image PASS  |
+| VM01 smoke | TCP/22 không tới được ngày 01/09      |    — | Còn tái xác nhận public URL khi VM01 online |
 
 ## 4. Đối chiếu DoD
 
@@ -59,8 +62,8 @@ qua chuỗi `is_rollback_of` và khóa regression rollback lồng.
 
 ## 5. Rủi ro/giới hạn
 
-- Chưa có bằng chứng smoke thật trên VM01; cần A cấp lệnh riêng vì smoke sẽ build/compose/xóa image
-  test trên VPS.
+- Đã có smoke thật trên VM02 và ảnh/evidence; chưa thay thế hoàn toàn gate VM01 vì VM01 timeout
+  TCP/22 và public port 30000 của VM02 chưa mở.
 - Không sửa 16 warning Prettier renderer baseline vì ngoài scope A15.
 
 ## 6. Lệnh tái hiện
@@ -86,6 +89,7 @@ pnpm test -- --reporter=dot
 | 03   | Codex/root | FIX            | diagnostic/retry/timer                                    | `2783771`  |
 | 04   | Codex/root | FIX            | missing target image + early finished                     | `9f691b0`  |
 | 05   | Codex/root | APPROVED LOCAL | runtime image qua rollback lồng; không còn BLOCKING/MAJOR | `9d35acf`  |
+| 06   | Smoke thật | FIX → PASS     | rollback probe quá sớm khi app/DB chưa ready              | `6fd3efd`  |
 
 ## 8. Xác nhận Git
 

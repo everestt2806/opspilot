@@ -203,6 +203,17 @@ pnpm test -- --reporter=dot
   handoff và truy vết đã cập nhật. Outcome `READY_FOR_LOCAL_REVIEW`.
 - HANDOFF-LOCAL 01/09 — commits `3e3e7f3..9d35acf`; code gate xanh `58/58` focused + `220/220`
   full; handoff `tk-a15-worker-handoff.md`; **CHƯA PUSH — CHƯA PR — CHƯA MERGE**.
+- SMOKE-FIX 01/09 19:10 — VM01 timeout TCP/22 cả khi WARP bật/tắt; chuyển minh bạch sang VM02
+  bằng key dự án. Smoke v1/v2 khỏe, PostgreSQL 1.000→1.001 dòng; v3 health 503 bắt lỗi thật:
+  rollback compose về v2 nhưng probe một lần quá sớm nên fail giả. GitNexus re-index + trace xác nhận
+  `handleHealthcheckFail/executeRollback → healthcheckOnce`; sửa rollback chờ readiness tối đa
+  `10 × 3s`, regression probe đầu fail/probe sau đạt. Chạy lại thật: v3 `rolled_back`, current về v2,
+  manual rollback v4 về runtime v1, dữ liệu 1.001 dòng, đúng 3 image. Pipeline `22/22`, typecheck,
+  scoped Prettier, build PASS; sáu renderer file từng timeout song song chạy tuần tự `35/35`.
+  Evidence: [`../evidence/tk-a15/2026-09-01-smoke-vm02.md`](../evidence/tk-a15/2026-09-01-smoke-vm02.md).
+- GATE-SMOKE-FIX 01/09 19:27 — commit `6fd3efd`; pipeline `22/22`, sáu renderer file tái hiện
+  tuần tự `35/35`, lint 0 error/16 warning baseline, typecheck/build PASS và full suite ổn định
+  `45 files · 220/220 PASS` với `--maxWorkers=1`. Ảnh/evidence đã lưu; chưa push/PR/merge.
 
 Mẫu dòng tiếp theo:
 

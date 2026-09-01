@@ -39,7 +39,7 @@ Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng đượ
 
 Ghi chú TK-A16 đã merge PR #24: backend parser/repository/rule/poller/ML/IPC có regression SQLite
 thật và CLI fixture; smoke VPS thật và UI nghiệm thu vẫn chờ TK-S4/B8.
-| FR-E1 | Rollback thủ công | M4 rollback + runtime image chain | focused 58/58: compose/running/healthcheck, target mất image, rollback lồng; còn smoke VM01 | 3.5 | W4 | 🔨 |
+| FR-E1 | Rollback thủ công | M4 rollback + runtime image chain | unit + smoke VM02: manual v4 về runtime v1, readiness retry, dữ liệu 1.001 dòng; còn tái xác nhận VM01 | 3.5 | W4 | 🔨 |
 | FR-E2 | Tự động rollback theo method tin cậy | M8 | demo memory leak → tự rollback | 3.4 | W5 | ⬜ |
 | FR-E3 | Ghi log toàn bộ hành động | `action_log` | màn Lịch sử có đủ loại hành động | 3.7 | W7 | ⬜ |
 
@@ -58,17 +58,17 @@ thật và CLI fixture; smoke VPS thật và UI nghiệm thu vẫn chờ TK-S4/B
 
 ## Use case → màn hình
 
-| UC    | Tên                                         | Màn hình   | Smoke test bước                                                                      | TT  |
-| ----- | ------------------------------------------- | ---------- | ------------------------------------------------------------------------------------ | --- |
-| UC-01 | Kết nối VPS mới                             | 3.1        | 1                                                                                    | ✅  |
-| UC-02 | Deploy lần đầu                              | 3.2 + 3.3  | 2                                                                                    | ✅  |
-| UC-03 | Redeploy + tự rollback khi healthcheck fail | 3.3 + 3.5  | TK-A15 local: truthful DB/event/current, image retention, diagnostic; còn smoke VM01 | 🔨  |
-| UC-04 | Rollback thủ công                           | 3.5        | 6                                                                                    | ⬜  |
-| UC-05 | Migrate sang VPS khác                       | 3.6        | —                                                                                    | ⬜  |
-| UC-06 | Dashboard vận hành                          | 3.4        | 3                                                                                    | ⬜  |
-| UC-07 | Cảnh báo + tự rollback                      | 3.4        | 4                                                                                    | ⬜  |
-| UC-08 | Gắn nhãn cảnh báo                           | 3.4 tầng 3 | 5                                                                                    | ⬜  |
-| UC-09 | Lịch sử hoạt động                           | 3.7        | —                                                                                    | ⬜  |
+| UC    | Tên                                         | Màn hình   | Smoke test bước                                                                                              | TT  |
+| ----- | ------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------ | --- |
+| UC-01 | Kết nối VPS mới                             | 3.1        | 1                                                                                                            | ✅  |
+| UC-02 | Deploy lần đầu                              | 3.2 + 3.3  | 2                                                                                                            | ✅  |
+| UC-03 | Redeploy + tự rollback khi healthcheck fail | 3.3 + 3.5  | TK-A15 `6fd3efd`: smoke VM02 v3 health 503 → `rolled_back` về v2, giữ dữ liệu/3 image; còn public smoke VM01 | 🔨  |
+| UC-04 | Rollback thủ công                           | 3.5        | 6                                                                                                            | ⬜  |
+| UC-05 | Migrate sang VPS khác                       | 3.6        | —                                                                                                            | ⬜  |
+| UC-06 | Dashboard vận hành                          | 3.4        | 3                                                                                                            | ⬜  |
+| UC-07 | Cảnh báo + tự rollback                      | 3.4        | 4                                                                                                            | ⬜  |
+| UC-08 | Gắn nhãn cảnh báo                           | 3.4 tầng 3 | 5                                                                                                            | ⬜  |
+| UC-09 | Lịch sử hoạt động                           | 3.7        | —                                                                                                            | ⬜  |
 
 ## Tiêu chí đánh giá của đề tài → nơi có số liệu
 

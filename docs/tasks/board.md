@@ -19,17 +19,17 @@
 
 ## Đang ưu tiên — W3/W4
 
-| ID     | Task                                                                 | Chủ  | Hạn   | Trạng thái | Branch                      | PR/phụ thuộc             | Ghi chú                                                    |
-| ------ | -------------------------------------------------------------------- | ---- | ----- | ---------- | --------------------------- | ------------------------ | ---------------------------------------------------------- |
-| TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A    | 08/09 | CHỜ REVIEW | `feat/m04-deploy-hardening` | code `9d35acf`           | focused 58/58 · full 220/220 · còn smoke VM01 · chưa push  |
-| TK-B4  | M5: docker stats + HTTP probe local                                  | B    | 01/09 | TUẦN NÀY   | `feat/m05-collector-probes` | TK-B2 Express đã có      | **Task B kéo ngay**                                        |
-| TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B    | 02/09 | BACKLOG    | `feat/m05-collector-output` | Sau TK-B4                | Khép blocker TK-A5                                         |
-| TK-B6  | M5: chạy collector Docker trên VM01                                  | B    | 03/09 | BACKLOG    | `feat/m05-collector-docker` | Sau TK-B5                | Không mở thêm port                                         |
-| TK-S4  | Gate dữ liệu thật: A16 + B6 trên VM01                                | Both | 04/09 | BLOCKED    | —                           | A16 đã merge; còn chờ B6 | Metric thật vào SQLite, 5 score/mẫu, reconnect không trùng |
-| TK-B8  | Monitor Dashboard: chart + score + alert UI                          | B    | 07/09 | BACKLOG    | `feat/ui-monitor-dashboard` | Sau TK-S4                | Chỉ renderer + typed IPC thật                              |
-| TK-A7  | M3: detector 3 Tier 1                                                | A    | 10/09 | BACKLOG    | `feat/m03-tier1-detectors`  | Sau A15                  | Breadth; thấp hơn đường dữ liệu                            |
-| TK-B2  | M12 còn lại: next-blog + vite-spa + fault endpoint                   | B    | 10/09 | BACKLOG    | `feat/m12-demo-apps-rest`   | Sau B8                   | Lát cắt Express đã hoàn thành #15                          |
-| TK-S5  | Gate MVP 16/24 FR + smoke/rollback/alert                             | Both | 11/09 | BACKLOG    | —                           | Sau A15/B8               | Bằng chứng vào `docs/smoke-log.md`                         |
+| ID     | Task                                                                 | Chủ  | Hạn   | Trạng thái | Branch                      | PR/phụ thuộc             | Ghi chú                                                                       |
+| ------ | -------------------------------------------------------------------- | ---- | ----- | ---------- | --------------------------- | ------------------------ | ----------------------------------------------------------------------------- |
+| TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A    | 08/09 | CHỜ REVIEW | `feat/m04-deploy-hardening` | code `6fd3efd`           | VM02 smoke auto/manual PASS · full 220/220 · VM01 TCP/22 còn chặn · chưa push |
+| TK-B4  | M5: docker stats + HTTP probe local                                  | B    | 01/09 | TUẦN NÀY   | `feat/m05-collector-probes` | TK-B2 Express đã có      | **Task B kéo ngay**                                                           |
+| TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B    | 02/09 | BACKLOG    | `feat/m05-collector-output` | Sau TK-B4                | Khép blocker TK-A5                                                            |
+| TK-B6  | M5: chạy collector Docker trên VM01                                  | B    | 03/09 | BACKLOG    | `feat/m05-collector-docker` | Sau TK-B5                | Không mở thêm port                                                            |
+| TK-S4  | Gate dữ liệu thật: A16 + B6 trên VM01                                | Both | 04/09 | BLOCKED    | —                           | A16 đã merge; còn chờ B6 | Metric thật vào SQLite, 5 score/mẫu, reconnect không trùng                    |
+| TK-B8  | Monitor Dashboard: chart + score + alert UI                          | B    | 07/09 | BACKLOG    | `feat/ui-monitor-dashboard` | Sau TK-S4                | Chỉ renderer + typed IPC thật                                                 |
+| TK-A7  | M3: detector 3 Tier 1                                                | A    | 10/09 | BACKLOG    | `feat/m03-tier1-detectors`  | Sau A15                  | Breadth; thấp hơn đường dữ liệu                                               |
+| TK-B2  | M12 còn lại: next-blog + vite-spa + fault endpoint                   | B    | 10/09 | BACKLOG    | `feat/m12-demo-apps-rest`   | Sau B8                   | Lát cắt Express đã hoàn thành #15                                             |
+| TK-S5  | Gate MVP 16/24 FR + smoke/rollback/alert                             | Both | 11/09 | BACKLOG    | —                           | Sau A15/B8               | Bằng chứng vào `docs/smoke-log.md`                                            |
 
 ## Đang bị chặn nhưng không chặn A15/B4
 
