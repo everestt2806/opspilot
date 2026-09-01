@@ -6,7 +6,11 @@ import { Client, type ClientChannel } from 'ssh2'
 
 import { AppError } from '../errors'
 import { logger } from '../logger'
-import { isRetryableConnectionError, mapSshError } from './errorMapping'
+import {
+  isRetryableConnectionError,
+  mapSshError,
+  shouldRetryCommandAfterDisconnect
+} from './errorMapping'
 import { shellQuote } from './shellQuote'
 
 /** Thông tin kết nối do main cấp (từ DB + loadSecret). Không bao giờ ra renderer. */
@@ -27,6 +31,8 @@ export interface ExecOptions {
   signal?: AbortSignal
   /** false -> không ghi lệnh vào log (lệnh chứa dữ liệu nhạy cảm, vd ghi .env). */
   logCommand?: boolean
+  /** false cho lệnh có side effect: không chạy lại lệnh sau khi connection rơi. */
+  retryOnReconnect?: boolean
 }
 
 export interface ExecResult {
@@ -83,7 +89,7 @@ export class SshManager extends EventEmitter {
       return await this.runCommand(entry, command, options)
     } catch (error) {
       const code = error instanceof AppError ? error.code : 'UNKNOWN'
-      if (isRetryableConnectionError(code) && !entry.ready) {
+      if (shouldRetryCommandAfterDisconnect(code, entry.ready, options.retryOnReconnect)) {
         // Kết nối rơi trước khi lệnh kịp chạy (không retry lệnh đã chạy — có tác dụng phụ).
         entry = await this.ensureConnected(vpsId, true)
         return await this.runCommand(entry, command, options)

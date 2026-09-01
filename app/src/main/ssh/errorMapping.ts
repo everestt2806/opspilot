@@ -20,3 +20,12 @@ export function mapSshError(error: unknown): IpcError['code'] {
 export function isRetryableConnectionError(code: IpcError['code']): boolean {
   return code === 'SSH_TIMEOUT' || code === 'SSH_HOST_UNREACHABLE'
 }
+
+/** Lệnh có side effect được caller khóa retry; probe read-only vẫn được reconnect một lần. */
+export function shouldRetryCommandAfterDisconnect(
+  code: IpcError['code'],
+  connectionReady: boolean,
+  retryOnReconnect: boolean | undefined
+): boolean {
+  return retryOnReconnect !== false && !connectionReady && isRetryableConnectionError(code)
+}

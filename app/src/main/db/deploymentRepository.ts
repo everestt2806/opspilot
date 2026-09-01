@@ -89,6 +89,29 @@ export class DeploymentRepository {
       .get(appId, beforeVersion) as Deployment | undefined
   }
 
+  /** Image thực sự của một attempt; manual rollback có image runtime của target, không phải tag vN mới. */
+  runtimeImageTag(deploymentId: number): string {
+    const row = this.database
+      .prepare(
+        `WITH RECURSIVE lineage(id, image_tag, is_rollback_of, depth) AS (
+           SELECT id, image_tag, is_rollback_of, 0 FROM deployment WHERE id = ?
+           UNION ALL
+           SELECT d.id, d.image_tag, d.is_rollback_of, lineage.depth + 1
+           FROM deployment d JOIN lineage ON d.id = lineage.is_rollback_of
+           WHERE lineage.depth < 100
+         )
+         SELECT image_tag FROM lineage ORDER BY depth DESC LIMIT 1`
+      )
+      .get(deploymentId) as { image_tag: string } | undefined
+    if (!row) {
+      throw new AppError(
+        'VALIDATION',
+        'Không tìm thấy image của deployment. Hãy tải lại lịch sử rồi thử lại.'
+      )
+    }
+    return row.image_tag
+  }
+
   update(id: number, patch: UpdateDeploymentRecord): void {
     const assignments: string[] = []
     const values: unknown[] = []

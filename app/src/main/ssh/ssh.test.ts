@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { isRetryableConnectionError, mapSshError } from './errorMapping'
+import {
+  isRetryableConnectionError,
+  mapSshError,
+  shouldRetryCommandAfterDisconnect
+} from './errorMapping'
 import { shellQuote } from './shellQuote'
 
 describe('shellQuote', () => {
@@ -58,5 +62,15 @@ describe('isRetryableConnectionError', () => {
     expect(isRetryableConnectionError('SSH_HOST_UNREACHABLE')).toBe(true)
     expect(isRetryableConnectionError('SSH_AUTH_FAILED')).toBe(false)
     expect(isRetryableConnectionError('UNKNOWN')).toBe(false)
+  })
+})
+
+describe('shouldRetryCommandAfterDisconnect', () => {
+  it('chi reconnect/retry probe duoc phep, khong retry lenh side effect', () => {
+    expect(shouldRetryCommandAfterDisconnect('SSH_TIMEOUT', false, true)).toBe(true)
+    expect(shouldRetryCommandAfterDisconnect('SSH_HOST_UNREACHABLE', false, undefined)).toBe(true)
+    expect(shouldRetryCommandAfterDisconnect('SSH_TIMEOUT', false, false)).toBe(false)
+    expect(shouldRetryCommandAfterDisconnect('SSH_TIMEOUT', true, true)).toBe(false)
+    expect(shouldRetryCommandAfterDisconnect('SSH_AUTH_FAILED', false, true)).toBe(false)
   })
 })

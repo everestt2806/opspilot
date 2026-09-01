@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { join as posixJoin } from 'node:path/posix'
 
 import type { Database as SqliteDatabase } from 'better-sqlite3'
+import { z } from 'zod'
+
 import type { App, DeployEvent, DeployInput, DeployStep, Deployment, IpcError } from '@shared/ipc'
 
 import { ActionLogRepository } from '../db/actionLogRepository'
@@ -14,7 +16,7 @@ import { detectFramework } from '../detectors'
 import { buildSourceTree } from '../detectors/sourceTree'
 import type { BuildPlan } from '../detectors/types'
 import { AppError, toIpcError } from '../errors'
-import { logger } from '../logger'
+import { logger, maskSecrets } from '../logger'
 import { SshAbortedError, SshManager } from '../ssh/manager'
 import { shellQuote } from '../ssh/shellQuote'
 import { allocatePort } from './portPolicy'
@@ -32,6 +34,20 @@ const HEALTHCHECK_ATTEMPTS = 10
 const HEALTHCHECK_INTERVAL_MS = 3_000
 const RENDER_COLLECT_INTERVAL_S = '10'
 
+const containerStateSchema = z.object({
+  Status: z.string(),
+  ExitCode: z.number().int(),
+  Error: z.string(),
+  Health: z.object({ Status: z.string() }).optional()
+})
+
+interface ContainerState {
+  status: string
+  health: string
+  exitCode: number | null
+  error: string
+}
+
 type FinalStatus = 'running' | 'failed' | 'rolled_back'
 
 function nowIso(): string {
@@ -44,15 +60,15 @@ function sleep(milliseconds: number, signal: AbortSignal): Promise<void> {
       reject(new SshAbortedError())
       return
     }
-    const timer = setTimeout(resolve, milliseconds)
-    signal.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer)
-        reject(new SshAbortedError())
-      },
-      { once: true }
-    )
+    const abortListener = (): void => {
+      clearTimeout(timer)
+      reject(new SshAbortedError())
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', abortListener)
+      resolve()
+    }, milliseconds)
+    signal.addEventListener('abort', abortListener, { once: true })
   })
 }
 
@@ -124,6 +140,13 @@ export class DeployPipeline {
     if (target.app_id !== appId) {
       throw new AppError('VALIDATION', 'Deployment không thuộc app này. Hãy tải lại rồi thử lại.')
     }
+    if (target.status !== 'running') {
+      throw new AppError(
+        'VALIDATION',
+        'Chỉ có thể rollback về deployment đã chạy thành công. Hãy chọn một phiên bản running.'
+      )
+    }
+    const targetImageTag = this.deploymentRepository.runtimeImageTag(target.id)
 
     const controller = new AbortController()
     const deployment = this.deploymentRepository.createNextVersion(app.id, app.name, null, null)
@@ -144,7 +167,7 @@ export class DeployPipeline {
       cancelled: false,
       durations: {}
     }
-    void this.executeRollback(ctx, target.image_tag, target.version, target.id).catch(
+    void this.executeRollback(ctx, targetImageTag, target.version, target.id).catch(
       (error: unknown) => {
         logger.error('deploy', 'Rollback thủ công dừng bất thường ngoài vòng bắt lỗi', {
           deployment_id: deployment.id,
@@ -164,6 +187,7 @@ export class DeployPipeline {
   ): Promise<void> {
     try {
       await this.inStep(ctx, 'DEPLOY', async () => {
+        await this.ensureImageAvailable(ctx, targetImageTag)
         await this.restoreComposeTo(ctx.app, targetImageTag)
         this.log(ctx, 'DEPLOY', `Khôi phục compose với ảnh v${toVersion}...\n`, 'stdout')
         const result = await this.execStream(
@@ -179,24 +203,46 @@ export class DeployPipeline {
             { step: 'DEPLOY', cause: new Error(result.stderr.trim() || result.stdout.trim()) }
           )
         }
-        await this.waitContainerRunning(ctx.app, ctx.signal, ctx.deployment.id)
+        await this.waitContainerRunning(ctx)
         this.log(ctx, 'DEPLOY', `App đã chạy lại với ảnh v${toVersion}.\n`, 'stdout')
       })
 
-      const healthOk = await this.inStep(ctx, 'HEALTHCHECK', async () => {
-        const ok = await this.healthcheckOnce(ctx.app, ctx.signal)
+      await this.inStep(ctx, 'HEALTHCHECK', async () => {
+        const ok = await this.waitForHealthcheck(ctx.app, ctx.signal)
         this.log(
           ctx,
           'HEALTHCHECK',
           ok ? 'Phiên bản cũ trả lời HTTP OK.\n' : 'Phiên bản cũ không trả lời healthcheck.\n',
           ok ? 'stdout' : 'stderr'
         )
-        return ok
+        if (!ok) {
+          throw new AppError(
+            'UNKNOWN',
+            'Phiên bản rollback đã khởi động nhưng healthcheck không đạt. Hãy xem log container trên VPS.',
+            { step: 'HEALTHCHECK' }
+          )
+        }
       })
 
-      await this.recordRollbackResult(ctx, targetImageTag, targetDeploymentId, healthOk)
+      await this.recordManualRollbackSuccess(ctx, targetImageTag, targetDeploymentId)
     } catch (error) {
       await this.recordFailure(ctx, error)
+      try {
+        const ipcError = toStepIpcError(error)
+        this.actionLog.insert({
+          action: 'rollback_manual',
+          status: ctx.cancelled ? 'cancelled' : 'failed',
+          vps_id: ctx.app.vps_id,
+          app_id: ctx.app.id,
+          deployment_id: ctx.deployment.id,
+          message: `Rollback thủ công app ${ctx.app.name} thất bại: ${ipcError.message}`
+        })
+      } catch (recordError) {
+        logger.warn('deploy', 'Không ghi được action_log rollback thủ công thất bại', {
+          deployment_id: ctx.deployment.id,
+          error: recordError instanceof Error ? recordError.message : String(recordError)
+        })
+      }
       this.emit({
         type: 'finished',
         deployment_id: ctx.deployment.id,
@@ -208,57 +254,34 @@ export class DeployPipeline {
     }
   }
 
-  private async recordRollbackResult(
+  private async recordManualRollbackSuccess(
     ctx: RunContext,
     targetImageTag: string,
-    targetDeploymentId: number,
-    healthOk: boolean
+    targetDeploymentId: number
   ): Promise<void> {
-    if (healthOk) {
-      this.deploymentRepository.update(ctx.deployment.id, {
-        status: 'running',
-        is_rollback_of: targetDeploymentId,
-        finished_at: nowIso(),
-        total_duration_ms: Date.now() - ctx.startedAt
-      })
-      this.appRepository.setCurrentDeployment(ctx.app.id, ctx.deployment.id)
-      this.actionLog.insert({
-        action: 'rollback_manual',
-        status: 'success',
-        vps_id: ctx.app.vps_id,
-        app_id: ctx.app.id,
-        deployment_id: ctx.deployment.id,
-        message: `Rollback thủ công app ${ctx.app.name} về ${targetImageTag} — app đã chạy lại.`
-      })
-      this.emit({
-        type: 'finished',
-        deployment_id: ctx.deployment.id,
-        status: 'running',
-        total_duration_ms: Date.now() - ctx.startedAt,
-        app_url: ctx.app.url
-      })
-    } else {
-      this.deploymentRepository.update(ctx.deployment.id, {
-        status: 'failed',
-        failed_step: 'HEALTHCHECK',
-        finished_at: nowIso(),
-        total_duration_ms: Date.now() - ctx.startedAt
-      })
-      this.actionLog.insert({
-        action: 'rollback_manual',
-        status: 'failed',
-        vps_id: ctx.app.vps_id,
-        app_id: ctx.app.id,
-        deployment_id: ctx.deployment.id,
-        message: `Rollback thủ công app ${ctx.app.name} về ${targetImageTag} thất bại — healthcheck không đạt.`
-      })
-      this.emit({
-        type: 'finished',
-        deployment_id: ctx.deployment.id,
-        status: 'failed',
-        total_duration_ms: Date.now() - ctx.startedAt
-      })
-    }
+    this.deploymentRepository.update(ctx.deployment.id, {
+      status: 'running',
+      is_rollback_of: targetDeploymentId,
+      finished_at: nowIso(),
+      total_duration_ms: Date.now() - ctx.startedAt
+    })
+    this.appRepository.setCurrentDeployment(ctx.app.id, ctx.deployment.id)
+    this.actionLog.insert({
+      action: 'rollback_manual',
+      status: 'success',
+      vps_id: ctx.app.vps_id,
+      app_id: ctx.app.id,
+      deployment_id: ctx.deployment.id,
+      message: `Rollback thủ công app ${ctx.app.name} về ${targetImageTag} — app đã chạy lại và healthcheck đạt.`
+    })
+    await this.pruneImages(ctx, null, [targetImageTag])
+    this.emit({
+      type: 'finished',
+      deployment_id: ctx.deployment.id,
+      status: 'running',
+      total_duration_ms: Date.now() - ctx.startedAt,
+      app_url: ctx.app.url
+    })
   }
 
   cancel(deploymentId: number): boolean {
@@ -500,6 +523,7 @@ export class DeployPipeline {
     return this.ssh.exec(ctx.app.vps_id, command, {
       timeoutMs,
       signal: ctx.signal,
+      retryOnReconnect: false,
       onStdout: (chunk) => this.log(ctx, step, chunk, 'stdout'),
       onStderr: (chunk) => this.log(ctx, step, chunk, 'stderr')
     })
@@ -563,7 +587,8 @@ export class DeployPipeline {
           await this.ignoreError(
             this.ssh.exec(
               ctx.app.vps_id,
-              `rm -rf ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))}`
+              `rm -rf ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))}`,
+              { retryOnReconnect: false }
             )
           )
         }
@@ -646,7 +671,9 @@ export class DeployPipeline {
       } catch (error) {
         for (const file of files) {
           await this.ignoreError(
-            this.ssh.exec(ctx.app.vps_id, `rm -f ${shellQuote(posixJoin(appDir, file.name))}`)
+            this.ssh.exec(ctx.app.vps_id, `rm -f ${shellQuote(posixJoin(appDir, file.name))}`, {
+              retryOnReconnect: false
+            })
           )
         }
         throw error
@@ -670,7 +697,9 @@ export class DeployPipeline {
         }
       } catch (error) {
         await this.ignoreError(
-          this.ssh.exec(ctx.app.vps_id, `docker image rm ${tag} >/dev/null 2>&1 || true`)
+          this.ssh.exec(ctx.app.vps_id, `docker image rm ${tag} >/dev/null 2>&1 || true`, {
+            retryOnReconnect: false
+          })
         )
         throw error
       }
@@ -689,7 +718,7 @@ export class DeployPipeline {
             cause: new Error(result.stderr.trim() || result.stdout.trim())
           })
         }
-        await this.waitContainerRunning(ctx.app, ctx.signal, ctx.deployment.id)
+        await this.waitContainerRunning(ctx)
       } catch (error) {
         await this.restorePreviousOrDown(ctx)
         throw error
@@ -709,7 +738,8 @@ export class DeployPipeline {
           `curl -fsS -m 5 -o /dev/null ${shellQuote(url)}`,
           {
             timeoutMs: 10_000,
-            signal: ctx.signal
+            signal: ctx.signal,
+            retryOnReconnect: true
           }
         )
         this.log(
@@ -738,7 +768,7 @@ export class DeployPipeline {
     try {
       if (previous) {
         this.log(ctx, 'DEPLOY', `Khôi phục phiên bản cũ v${previous.version}...\n`, 'stdout')
-        await this.restoreComposeTo(ctx.app, previous.image_tag)
+        await this.restoreComposeTo(ctx.app, this.deploymentRepository.runtimeImageTag(previous.id))
         await this.execStream(
           ctx,
           'DEPLOY',
@@ -799,48 +829,72 @@ export class DeployPipeline {
       this.finalizeFailed(ctx)
       return 'failed'
     }
+    const previousImageTag = this.deploymentRepository.runtimeImageTag(previous.id)
 
-    const rollbackStarted = Date.now()
-    this.emit({
-      type: 'step-start',
-      deployment_id: ctx.deployment.id,
-      step: 'DEPLOY',
-      ts: nowIso()
-    })
-    this.log(
-      ctx,
-      'DEPLOY',
-      `Tự rollback về v${previous.version} (healthcheck thất bại)...\n`,
-      'stdout'
-    )
     try {
-      await this.restoreComposeTo(ctx.app, previous.image_tag)
-      const result = await this.execStream(
-        ctx,
-        'DEPLOY',
-        `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker compose up -d`,
-        180_000
-      )
-      if (result.code !== 0) {
-        throw new Error(result.stderr.trim() || `compose up exit ${result.code}`)
-      }
-      await this.waitContainerRunning(ctx.app, ctx.signal, ctx.deployment.id)
-      this.log(ctx, 'DEPLOY', `Rollback về v${previous.version} xong.\n`, 'stdout')
-      await this.pruneImages(ctx, null)
+      await this.inStep(ctx, 'DEPLOY', async () => {
+        this.log(
+          ctx,
+          'DEPLOY',
+          `Tự rollback về v${previous.version} (healthcheck thất bại)...\n`,
+          'stdout'
+        )
+        await this.restoreComposeTo(ctx.app, previousImageTag)
+        const result = await this.execStream(
+          ctx,
+          'DEPLOY',
+          `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker compose up -d`,
+          180_000
+        )
+        if (result.code !== 0) {
+          throw new AppError(
+            'UNKNOWN',
+            'Tự rollback không khởi động được phiên bản cũ. Hãy xem log container trên VPS.',
+            {
+              step: 'DEPLOY',
+              cause: new Error(result.stderr.trim() || `compose up exit ${result.code}`)
+            }
+          )
+        }
+        await this.waitContainerRunning(ctx)
+        const healthOk = await this.waitForHealthcheck(ctx.app, ctx.signal)
+        this.log(
+          ctx,
+          'DEPLOY',
+          healthOk
+            ? `Rollback về v${previous.version} xong; healthcheck đạt.\n`
+            : `Rollback về v${previous.version} đã chạy nhưng healthcheck không đạt.\n`,
+          healthOk ? 'stdout' : 'stderr'
+        )
+        if (!healthOk) {
+          throw new AppError(
+            'UNKNOWN',
+            'Tự rollback đã khởi động phiên bản cũ nhưng healthcheck không đạt. Hãy xem log container trên VPS.',
+            { step: 'DEPLOY' }
+          )
+        }
+      })
+      await this.pruneImages(ctx, null, [previousImageTag])
     } catch (error) {
-      this.log(
-        ctx,
-        'DEPLOY',
-        `Rollback thất bại: ${error instanceof Error ? error.message : String(error)}\n`,
-        'stderr'
-      )
+      const ipcError = toStepIpcError(error)
+      this.finalizeFailed(ctx)
+      try {
+        this.actionLog.insert({
+          action: 'rollback_auto',
+          status: ctx.cancelled ? 'cancelled' : 'failed',
+          vps_id: ctx.app.vps_id,
+          app_id: ctx.app.id,
+          deployment_id: ctx.deployment.id,
+          message: `Tự rollback app ${ctx.app.name} về v${previous.version} thất bại: ${ipcError.message}`
+        })
+      } catch (recordError) {
+        logger.warn('deploy', 'Không ghi được action_log auto rollback thất bại', {
+          deployment_id: ctx.deployment.id,
+          error: recordError instanceof Error ? recordError.message : String(recordError)
+        })
+      }
+      return 'failed'
     }
-    this.emit({
-      type: 'step-done',
-      deployment_id: ctx.deployment.id,
-      step: 'DEPLOY',
-      duration_ms: Date.now() - rollbackStarted
-    })
 
     this.deploymentRepository.update(ctx.deployment.id, {
       status: 'rolled_back',
@@ -861,42 +915,127 @@ export class DeployPipeline {
     return 'rolled_back'
   }
 
-  private async waitContainerRunning(
-    app: App,
-    signal: AbortSignal,
-    deploymentId: number
-  ): Promise<void> {
+  private async waitContainerRunning(ctx: RunContext): Promise<void> {
     const deadline = Date.now() + 180_000
-    const container = `${app.name}-app`
     while (Date.now() < deadline) {
-      const result = await this.ssh.exec(
-        app.vps_id,
-        `docker inspect -f '{{.State.Status}}' ${shellQuote(container)} 2>/dev/null || echo missing`,
-        { timeoutMs: 15_000, signal }
-      )
-      if (result.stdout.trim() === 'running') {
+      const state = await this.inspectContainerState(ctx.app, ctx.signal)
+      if (state.status === 'running' && state.health !== 'unhealthy') {
         return
       }
-      await sleep(2_000, signal)
+      if (state.status === 'exited' || state.status === 'dead' || state.health === 'unhealthy') {
+        throw await this.containerStateError(ctx, state, false)
+      }
+      await sleep(2_000, ctx.signal)
     }
-    throw new AppError(
-      'SSH_TIMEOUT',
-      `Container ${container} không vào trạng thái running đúng hạn. Hãy xem log container trên VPS.`,
-      { step: 'DEPLOY', cause: new Error(`deployment ${deploymentId}`) }
+    const state = await this.inspectContainerState(ctx.app, ctx.signal)
+    throw await this.containerStateError(ctx, state, true)
+  }
+
+  private async inspectContainerState(app: App, signal: AbortSignal): Promise<ContainerState> {
+    const container = `${app.name}-app`
+    const result = await this.ssh.exec(
+      app.vps_id,
+      `docker inspect -f '{{json .State}}' ${shellQuote(container)} 2>/dev/null || printf 'missing'`,
+      { timeoutMs: 15_000, signal, retryOnReconnect: true }
+    )
+    const raw = result.stdout.trim()
+    if (raw === 'missing' || result.code !== 0) {
+      return { status: 'missing', health: 'none', exitCode: null, error: '' }
+    }
+
+    try {
+      const parsed = containerStateSchema.parse(JSON.parse(raw))
+      return {
+        status: parsed.Status,
+        health: parsed.Health?.Status ?? 'none',
+        exitCode: parsed.ExitCode,
+        error: maskSecrets(parsed.Error)
+      }
+    } catch (error) {
+      return {
+        status: 'unknown',
+        health: 'unknown',
+        exitCode: null,
+        error: `Không đọc được docker inspect: ${error instanceof Error ? error.message : String(error)}`
+      }
+    }
+  }
+
+  private async containerStateError(
+    ctx: RunContext,
+    state: ContainerState,
+    timedOut: boolean
+  ): Promise<AppError> {
+    const container = `${ctx.app.name}-app`
+    let safeLogs = '(không đọc được log container)'
+    try {
+      const logs = await this.ssh.exec(
+        ctx.app.vps_id,
+        `docker logs --tail 80 ${shellQuote(container)} 2>&1`,
+        { timeoutMs: 15_000, signal: ctx.signal, retryOnReconnect: true }
+      )
+      safeLogs = maskSecrets(`${logs.stdout}${logs.stderr}`).trim().slice(-8_000) || '(log trống)'
+    } catch (error) {
+      safeLogs = `Không đọc được log: ${error instanceof Error ? error.message : String(error)}`
+    }
+
+    const summary = [
+      `status=${state.status}`,
+      `health=${state.health}`,
+      `exit_code=${state.exitCode ?? 'n/a'}`,
+      `error=${state.error || 'none'}`
+    ].join(', ')
+    this.log(ctx, 'DEPLOY', `Chẩn đoán ${container}: ${summary}\n${safeLogs}\n`, 'stderr')
+    return new AppError(
+      timedOut ? 'SSH_TIMEOUT' : 'UNKNOWN',
+      `Container ${container} không sẵn sàng (${summary}). Hãy kiểm tra log container và cấu hình start/healthcheck trên VPS.`,
+      { step: 'DEPLOY', cause: new Error(`${summary}\nlogs:\n${safeLogs}`) }
     )
   }
 
-  private async healthcheckOnce(app: App, signal: AbortSignal): Promise<boolean> {
+  /**
+   * Compose có thể báo container `running` trước khi process ứng dụng/DB sẵn sàng nhận HTTP.
+   * Rollback vì vậy phải dùng cùng cửa sổ readiness như deploy thường, không kết luận thất bại
+   * chỉ từ probe đầu tiên ngay sau `compose up`.
+   */
+  private async waitForHealthcheck(app: App, signal: AbortSignal): Promise<boolean> {
     const url = `http://127.0.0.1:${app.host_port}${app.healthcheck_path}`
-    const result = await this.ssh.exec(
-      app.vps_id,
-      `curl -fsS -m 5 -o /dev/null ${shellQuote(url)}`,
-      {
-        timeoutMs: 10_000,
-        signal
+    for (let attempt = 1; attempt <= HEALTHCHECK_ATTEMPTS; attempt += 1) {
+      if (signal.aborted) {
+        throw new SshAbortedError()
       }
+      const result = await this.ssh.exec(
+        app.vps_id,
+        `curl -fsS -m 5 -o /dev/null ${shellQuote(url)}`,
+        {
+          timeoutMs: 10_000,
+          signal,
+          retryOnReconnect: true
+        }
+      )
+      if (result.code === 0) {
+        return true
+      }
+      if (attempt < HEALTHCHECK_ATTEMPTS) {
+        await sleep(HEALTHCHECK_INTERVAL_MS, signal)
+      }
+    }
+    return false
+  }
+
+  private async ensureImageAvailable(ctx: RunContext, imageTag: string): Promise<void> {
+    const result = await this.ssh.exec(
+      ctx.app.vps_id,
+      `docker image inspect ${shellQuote(imageTag)} >/dev/null 2>&1`,
+      { timeoutMs: 15_000, signal: ctx.signal, retryOnReconnect: true }
     )
-    return result.code === 0
+    if (result.code !== 0) {
+      throw new AppError(
+        'VALIDATION',
+        `Image ${imageTag} không còn trên VPS nên không thể rollback. Hãy chọn phiên bản còn image hoặc deploy lại source.`,
+        { step: 'DEPLOY' }
+      )
+    }
   }
 
   // ── Bước 7: RECORD — luôn "qua" (lỗi chỉ warn, không làm fail cả deploy) ─────
@@ -991,36 +1130,83 @@ export class DeployPipeline {
     })
   }
 
-  /** Giữ tối đa 3 image của một app (ADR-004). Lỗi chỉ warn, không làm fail deploy. */
-  private async pruneImages(ctx: RunContext, logStep: DeployStep | null): Promise<void> {
+  /** Giữ tối đa 3 image của một app (ADR-004), luôn bảo vệ image đang chạy/rollback target. */
+  private async pruneImages(
+    ctx: RunContext,
+    logStep: DeployStep | null,
+    protectedImageTags: string[] = []
+  ): Promise<void> {
     try {
       const list = await this.ssh.exec(
         ctx.app.vps_id,
         `docker images --format '{{.Repository}}:{{.Tag}}'`,
-        { timeoutMs: 30_000, signal: ctx.signal }
+        { timeoutMs: 30_000, retryOnReconnect: true }
       )
       const prefix = `${ctx.app.name}:v`
-      const versions = list.stdout
+      const images = list.stdout
         .split('\n')
         .map((line) => line.trim())
         .filter((line) => line.startsWith(prefix))
-        .map((line) => Number.parseInt(line.slice(prefix.length), 10))
-        .filter((version) => !Number.isNaN(version))
-        .sort((left, right) => right - left)
+        .map((tag) => ({ tag, suffix: tag.slice(prefix.length) }))
+        .filter((image) => /^\d+$/.test(image.suffix))
+        .map((image) => ({ tag: image.tag, version: Number.parseInt(image.suffix, 10) }))
+        .sort((left, right) => right.version - left.version)
 
-      for (const version of versions.slice(3)) {
-        const tag = `${ctx.app.name}:v${version}`
+      const availableTags = new Set(images.map((image) => image.tag))
+      const keep = new Set<string>()
+      const protectedTags = [...protectedImageTags]
+      try {
+        const currentDeploymentId = this.appRepository.getById(ctx.app.id).current_deployment_id
+        if (currentDeploymentId !== null) {
+          protectedTags.push(this.deploymentRepository.runtimeImageTag(currentDeploymentId))
+        }
+      } catch (error) {
+        logger.warn('deploy', 'Không xác định được image hiện đang chạy khi dọn image', {
+          deployment_id: ctx.deployment.id,
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+      for (const tag of protectedTags) {
+        if (availableTags.has(tag)) {
+          keep.add(tag)
+        }
+      }
+      for (const image of images) {
+        if (keep.size >= 3) {
+          break
+        }
+        keep.add(image.tag)
+      }
+
+      for (const image of images) {
+        if (keep.has(image.tag)) {
+          continue
+        }
+        const tag = image.tag
         if (logStep) {
           this.log(ctx, logStep, `Dọn image cũ ${tag} (giữ tối đa 3 bản).\n`, 'stdout')
         }
-        await this.ssh.exec(
-          ctx.app.vps_id,
-          `docker image rm -f ${shellQuote(tag)} >/dev/null 2>&1 || true`,
-          {
-            timeoutMs: 60_000,
-            signal: ctx.signal
+        try {
+          const removed = await this.ssh.exec(
+            ctx.app.vps_id,
+            `docker image rm ${shellQuote(tag)} >/dev/null 2>&1`,
+            { timeoutMs: 60_000, retryOnReconnect: false }
+          )
+          if (removed.code === 0) {
+            continue
           }
-        )
+          logger.warn('deploy', 'Không xóa được một image cũ; tiếp tục dọn các image còn lại', {
+            deployment_id: ctx.deployment.id,
+            image_tag: tag,
+            exit_code: removed.code
+          })
+        } catch (error) {
+          logger.warn('deploy', 'Lỗi SSH khi xóa image cũ; tiếp tục dọn các image còn lại', {
+            deployment_id: ctx.deployment.id,
+            image_tag: tag,
+            error: error instanceof Error ? error.message : String(error)
+          })
+        }
       }
     } catch (error) {
       logger.warn('deploy', 'Không dọn được image cũ', {
