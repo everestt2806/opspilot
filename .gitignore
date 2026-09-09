@@ -59,3 +59,4 @@ desktop.ini
 !.vscode/extensions.json
 !.vscode/settings.shared.json
 .out-scripts
+.next/
