@@ -1,0 +1,116 @@
+
+[17764:0911/032310.817:ERROR:net\disk_cache\cache_util_win.cc:25] Unable to move the cache: Access is denied. (0x5)
+[17764:0911/032310.817:ERROR:net\disk_cache\cache_util_win.cc:25] Unable to move the cache: Access is denied. (0x5)
+[17764:0911/032310.819:ERROR:net\disk_cache\cache_util_win.cc:25] Unable to move the cache: Access is denied. (0x5)
+[17764:0911/032310.822:ERROR:net\disk_cache\disk_cache.cc:236] Unable to create cache
+[17764:0911/032310.822:ERROR:gpu\ipc\host\gpu_disk_cache.cc:724] Gpu Cache Creation failed: -2
+[17764:0911/032310.822:ERROR:net\disk_cache\disk_cache.cc:236] Unable to create cache
+[17764:0911/032310.822:ERROR:gpu\ipc\host\gpu_disk_cache.cc:724] Gpu Cache Creation failed: -2
+[17764:0911/032310.822:ERROR:net\disk_cache\disk_cache.cc:236] Unable to create cache
+[17764:0911/032310.822:ERROR:gpu\ipc\host\gpu_disk_cache.cc:724] Gpu Cache Creation failed: -2
+2026-09-10T20:23:12.854Z WARN [ml] INFO:     Started server process [26044]
+INFO:     Waiting for application startup.
+2026-09-10T20:23:12.856Z WARN [ml] INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8767 (Press CTRL+C to quit)
+2026-09-10T20:23:13.369Z WARN [ml] 2026-09-10 20:23:13,369 INFO [ml] GET /health -> 200 (0.000s)
+2026-09-10T20:23:13.381Z INFO [ml] INFO:     127.0.0.1:64183 - "GET /health HTTP/1.1" 200 OK
+2026-09-10T20:23:16.912Z WARN [ml] 2026-09-10 20:23:16,912 INFO [ml] GET /health -> 200 (0.000s)
+2026-09-10T20:23:16.913Z INFO [ml] INFO:     127.0.0.1:64183 - "GET /health HTTP/1.1" 200 OK
+{"type":"step-start","deployment_id":2,"step":"PRECHECK","ts":"2026-09-10T20:23:17.054Z"}
+2026-09-10T20:23:17.952Z INFO [ssh] printf 'RAM|'; free -b | awk 'NR==2{print $2,$4}'; printf 'DISK|'; df -P -m / | tail -1; printf 'CPU|'; nproc; printf 'LOAD|'; cut -d' ' -f1 /proc/loadavg {"vps_id":2}
+2026-09-10T20:23:18.030Z INFO [ssh] printf 'RAM_MB|'; free -m | awk 'NR==2{print $7}'
+printf 'DISK_GB|'; df -BG --output=avail / | tail -1 | tr -d ' '
+printf 'DOCKER|'; docker --version 2>&1; docker compose version 2>&1 | head -1 {"vps_id":2}
+2026-09-10T20:23:18.635Z INFO [ssh] mkdir -p '/opt/opspilot/a17-notes-0911/src' {"vps_id":2}
+2026-09-10T20:23:19.096Z INFO [ssh] tar xzf - -C '/opt/opspilot/a17-notes-0911/src' {"vps_id":2}
+{"type":"log","deployment_id":2,"step":"PRECHECK","chunk":"printf 'RAM_MB|'; free -m | awk 'NR==2{print $7}'\nprintf 'DISK_GB|'; df -BG --output=avail / | tail -1 | tr -d ' '\nprintf 'DOCKER|'; docker --version 2>&1; docker compose version 2>&1 | head -1\n","stream":"stdout"}
+{"type":"step-done","deployment_id":2,"step":"PRECHECK","duration_ms":1580}
+{"type":"step-start","deployment_id":2,"step":"UPLOAD","ts":"2026-09-10T20:23:18.634Z"}
+{"type":"log","deployment_id":2,"step":"UPLOAD","chunk":"Tải lên /opt/opspilot/a17-notes-0911/src (loại node_modules/.git/dist)\n","stream":"stdout"}
+2026-09-10T20:23:19.686Z INFO [ssh] mkdir -p '/opt/opspilot/a17-notes-0911/collector' {"vps_id":2}
+2026-09-10T20:23:20.138Z INFO [ssh] tar xzf - -C '/opt/opspilot/a17-notes-0911/collector' {"vps_id":2}
+2026-09-10T20:23:20.719Z INFO [ssh] cat '/opt/opspilot/a17-notes-0911/.env' {"vps_id":2}
+{"type":"step-done","deployment_id":2,"step":"UPLOAD","duration_ms":2083}
+{"type":"step-start","deployment_id":2,"step":"RENDER","ts":"2026-09-10T20:23:20.718Z"}
+2026-09-10T20:23:21.185Z INFO [ssh] printf %s 'RlJPTSBub2RlOjIyLWFscGluZQpXT1JLRElSIC9hcHAKQ09QWSBzcmMvcGFja2FnZSouanNvbiAuLwpSVU4gbnBtIGNpIC0tb21pdD1kZXYKQ09QWSBzcmMvIC4KRVhQT1NFIDMwMDAKQ01EIFsic2giLCAiLWMiLCAibm9kZSBzZXJ2ZXIuanMiXQo=' | base64 -d > '/opt/opspilot/a17-notes-0911/Dockerfile' {"vps_id":2}
+2026-09-10T20:23:21.643Z INFO [ssh] printf %s 'c2VydmljZXM6CiAgYXBwOgogICAgaW1hZ2U6IGExNy1ub3Rlcy0wOTExOnYyCiAgICBjb250YWluZXJfbmFtZTogYTE3LW5vdGVzLTA5MTEtYXBwCiAgICBwb3J0czoKICAgICAgLSAiMzAwMDA6MzAwMCIKICAgIGVudl9maWxlOgogICAgICAtIC5lbnYKICAgIG1lbV9saW1pdDogNTEybQogICAgcmVzdGFydDogdW5sZXNzLXN0b3BwZWQKICAgIGhlYWx0aGNoZWNrOgogICAgICB0ZXN0OiBbIkNNRC1TSEVMTCIsICJ3Z2V0IC1xIC1PIC9kZXYvbnVsbCBodHRwOi8vMTI3LjAuMC4xOjMwMDAvaGVhbHRoIHx8IGV4aXQgMSJdCiAgICAgIGludGVydmFsOiAxMHMKICAgICAgdGltZW91dDogM3MKICAgICAgcmV0cmllczogMwogICAgICBzdGFydF9wZXJpb2Q6IDVzCiAgICBkZXBlbmRzX29uOgogICAgICBwb3N0Z3JlczoKICAgICAgICBjb25kaXRpb246IHNlcnZpY2VfaGVhbHRoeQogIHBvc3RncmVzOgogICAgaW1hZ2U6IHBvc3RncmVzOjE2LWFscGluZQogICAgY29udGFpbmVyX25hbWU6IGExNy1ub3Rlcy0wOTExLWRiCiAgICBlbnZpcm9ubWVudDoKICAgICAgUE9TVEdSRVNfVVNFUjogb3BzcGlsb3QKICAgICAgUE9TVEdSRVNfUEFTU1dPUkQ6ICR7UE9TVEdSRVNfUEFTU1dPUkR9CiAgICAgIFBPU1RHUkVTX0RCOiBvcHNwaWxvdAogICAgdm9sdW1lczoKICAgICAgLSAuL2RhdGEvcGc6L3Zhci9saWIvcG9zdGdyZXNxbC9kYXRhCiAgICBtZW1fbGltaXQ6IDI1Nm0KICAgIHJlc3RhcnQ6IHVubGVzcy1zdG9wcGVkCiAgICBoZWFsdGhjaGVjazoKICAgICAgdGVzdDogWyJDTUQtU0hFTEwiLCAicGdfaXNyZWFkeSAtVSBvcHNwaWxvdCAtZCBvcHNwaWxvdCJdCiAgICAgIGludGVydmFsOiA1cwogICAgICB0aW1lb3V0OiAzcwogICAgICByZXRyaWVzOiAxMgogICAgICBzdGFydF9wZXJpb2Q6IDVzCiAgY29sbGVjdG9yOgogICAgaW1hZ2U6IGExNy1ub3Rlcy0wOTExOmNvbGxlY3RvcgogICAgY29udGFpbmVyX25hbWU6IGExNy1ub3Rlcy0wOTExLWNvbGxlY3RvcgogICAgZW52aXJvbm1lbnQ6CiAgICAgIENPTExFQ1RfSU5URVJWQUxfUzogIjEwIgogICAgICBBUFBfQ09OVEFJTkVSX05BTUU6IGExNy1ub3Rlcy0wOTExLWFwcAogICAgICBBUFBfVVJMOiAiaHR0cDovL2FwcDozMDAwL2l0ZW1zP2xpbWl0PTEiCiAgICAgIERCX0RTTjogIiR7REFUQUJBU0VfVVJMOi19IgogICAgICBNRVRSSUNTX0RJUjogL3Zhci9tZXRyaWNzCiAgICAgIFBST0JFX1RJTUVPVVRfUzogIjUiCiAgICAgIEVSUk9SX1dJTkRPV19TOiAiNjAiCiAgICAgIE1BWF9GSUxFX01COiAiNTAiCiAgICB2b2x1bWVzOgogICAgICAtIC4vbWV0cmljczovdmFyL21ldHJpY3MKICAgICAgLSAvdmFyL3J1bi9kb2NrZXIuc29jazovdmFyL3J1bi9kb2NrZXIuc29jazpybwogICAgbWVtX2xpbWl0OiAxMjhtCiAgICByZXN0YXJ0OiB1bmxlc3Mtc3RvcHBlZAo=' | base64 -d > '/opt/opspilot/a17-notes-0911/docker-compose.yml' {"vps_id":2}
+{"type":"log","deployment_id":2,"step":"RENDER","chunk":"Giữ nguyên credential PostgreSQL hiện có để volume tiếp tục truy cập được.\n","stream":"stdout"}
+2026-09-10T20:23:22.531Z INFO [ssh] chmod 600 '/opt/opspilot/a17-notes-0911/.env' {"vps_id":2}
+2026-09-10T20:23:22.964Z INFO [ssh] stat -c %s '/opt/opspilot/a17-notes-0911/Dockerfile' {"vps_id":2}
+2026-09-10T20:23:23.398Z INFO [ssh] stat -c %s '/opt/opspilot/a17-notes-0911/docker-compose.yml' {"vps_id":2}
+2026-09-10T20:23:23.817Z INFO [ssh] stat -c %s '/opt/opspilot/a17-notes-0911/.env' {"vps_id":2}
+2026-09-10T20:23:24.239Z INFO [ssh] stat -c %s '/opt/opspilot/a17-notes-0911/collector/Dockerfile' {"vps_id":2}
+2026-09-10T20:23:24.660Z INFO [ssh] stat -c %s '/opt/opspilot/a17-notes-0911/collector/collect.py' {"vps_id":2}
+2026-09-10T20:23:25.086Z INFO [ssh] cd '/opt/opspilot/a17-notes-0911' && docker build -t 'a17-notes-0911:v2' . && docker build -t 'a17-notes-0911:collector' ./collector {"vps_id":2}
+{"type":"step-done","deployment_id":2,"step":"RENDER","duration_ms":4366}
+{"type":"step-start","deployment_id":2,"step":"BUILD","ts":"2026-09-10T20:23:25.085Z"}
+{"type":"log","deployment_id":2,"step":"BUILD","chunk":"$ cd '/opt/opspilot/a17-notes-0911' && docker build -t 'a17-notes-0911:v2' . && docker build -t 'a17-notes-0911:collector' ./collector\n","stream":"stdout"}
+2026-09-10T20:23:28.794Z INFO [ssh] cd '/opt/opspilot/a17-notes-0911' && docker compose up -d {"vps_id":2}
+{"type":"step-done","deployment_id":2,"step":"BUILD","duration_ms":3708}
+{"type":"step-start","deployment_id":2,"step":"DEPLOY","ts":"2026-09-10T20:23:28.794Z"}
+{"type":"log","deployment_id":2,"step":"DEPLOY","chunk":"$ cd '/opt/opspilot/a17-notes-0911' && docker compose up -d\n","stream":"stdout"}
+2026-09-10T20:23:36.079Z INFO [ssh] docker inspect -f '{{json .State}}' 'a17-notes-0911-app' 2>/dev/null || printf 'missing' {"vps_id":2}
+2026-09-10T20:23:36.497Z INFO [ssh] curl -fsS -m 5 -o /dev/null 'http://127.0.0.1:30000/health' {"vps_id":2}
+2026-09-10T20:23:36.918Z INFO [ssh] docker images --format '{{.Repository}}:{{.Tag}}' {"vps_id":2}
+{"type":"step-done","deployment_id":2,"step":"DEPLOY","duration_ms":7701}
+{"type":"step-start","deployment_id":2,"step":"HEALTHCHECK","ts":"2026-09-10T20:23:36.497Z"}
+{"type":"log","deployment_id":2,"step":"HEALTHCHECK","chunk":"[1/10] http://127.0.0.1:30000/health -> HTTP OK\n","stream":"stdout"}
+{"type":"step-done","deployment_id":2,"step":"HEALTHCHECK","duration_ms":418}
+{"type":"step-start","deployment_id":2,"step":"RECORD","ts":"2026-09-10T20:23:36.916Z"}
+{"type":"step-done","deployment_id":2,"step":"RECORD","duration_ms":672}
+{"type":"finished","deployment_id":2,"status":"running","total_duration_ms":20534,"app_url":"http://221.121.1.80:30000"}
+MARKER={"id":1001,"name":"C01 marker 2026-09-11","created_at":"2026-09-10T20:23:42.929Z"}
+2026-09-10T20:23:39.242Z INFO [ssh] printf 'RAM_MB|'; free -m | awk 'NR==2{print $7}'
+printf 'DISK_GB|'; df -BG --output=avail / | tail -1 | tr -d ' '
+printf 'DOCKER|'; docker --version 2>&1; docker compose version 2>&1 | head -1 {"vps_id":2}
+{"type":"step-start","deployment_id":3,"step":"PRECHECK","ts":"2026-09-10T20:23:39.242Z"}
+2026-09-10T20:23:39.766Z INFO [ssh] mkdir -p '/opt/opspilot/a17-notes-0911/src' {"vps_id":2}
+2026-09-10T20:23:40.227Z INFO [ssh] tar xzf - -C '/opt/opspilot/a17-notes-0911/src' {"vps_id":2}
+{"type":"log","deployment_id":3,"step":"PRECHECK","chunk":"printf 'RAM_MB|'; free -m | awk 'NR==2{print $7}'\nprintf 'DISK_GB|'; df -BG --output=avail / | tail -1 | tr -d ' '\nprintf 'DOCKER|'; docker --version 2>&1; docker compose version 2>&1 | head -1\n","stream":"stdout"}
+{"type":"step-done","deployment_id":3,"step":"PRECHECK","duration_ms":523}
+{"type":"step-start","deployment_id":3,"step":"UPLOAD","ts":"2026-09-10T20:23:39.766Z"}
+{"type":"log","deployment_id":3,"step":"UPLOAD","chunk":"Tải lên /opt/opspilot/a17-notes-0911/src (loại node_modules/.git/dist)\n","stream":"stdout"}
+2026-09-10T20:23:40.677Z INFO [ssh] stat -c %s '/opt/opspilot/a17-notes-0911/metrics/metrics.jsonl' {"vps_id":2}
+2026-09-10T20:23:40.866Z INFO [ssh] mkdir -p '/opt/opspilot/a17-notes-0911/collector' {"vps_id":2}
+2026-09-10T20:23:41.091Z INFO [ssh] tail -c +1 '/opt/opspilot/a17-notes-0911/metrics/metrics.jsonl' {"vps_id":2}
+2026-09-10T20:23:41.301Z INFO [ssh] tar xzf - -C '/opt/opspilot/a17-notes-0911/collector' {"vps_id":2}
+2026-09-10T20:23:41.538Z WARN [ml] 2026-09-10 20:23:41,538 INFO [ml.store] luu state deployment 2
+2026-09-10T20:23:41.540Z INFO [ml] INFO:     127.0.0.1:63819 - "POST /ingest HTTP/1.1" 200 OK
+2026-09-10T20:23:41.547Z WARN [ml] 2026-09-10 20:23:41,540 INFO [ml] POST /ingest -> 200 (0.016s)
+2026-09-10T20:23:41.557Z WARN [ml] 2026-09-10 20:23:41,556 INFO [ml.store] luu state deployment 2
+2026-09-10T20:23:41.559Z INFO [ml] INFO:     127.0.0.1:63820 - "POST /ingest HTTP/1.1" 200 OK
+2026-09-10T20:23:41.570Z WARN [ml] 2026-09-10 20:23:41,557 INFO [ml] POST /ingest -> 200 (0.000s)
+2026-09-10T20:23:41.574Z WARN [ml] 2026-09-10 20:23:41,573 INFO [ml] GET /status -> 200 (0.000s)
+2026-09-10T20:23:41.575Z INFO [ml] INFO:     127.0.0.1:63819 - "GET /status?deployment_id=2 HTTP/1.1" 200 OK
+2026-09-10T20:23:41.770Z INFO [ssh] cat '/opt/opspilot/a17-notes-0911/.env' {"vps_id":2}
+{"type":"step-done","deployment_id":3,"step":"UPLOAD","duration_ms":2003}
+{"type":"step-start","deployment_id":3,"step":"RENDER","ts":"2026-09-10T20:23:41.769Z"}
+2026-09-10T20:23:42.198Z INFO [ssh] printf %s 'RlJPTSBub2RlOjIyLWFscGluZQpXT1JLRElSIC9hcHAKQ09QWSBzcmMvcGFja2FnZSouanNvbiAuLwpSVU4gbnBtIGNpIC0tb21pdD1kZXYKQ09QWSBzcmMvIC4KRVhQT1NFIDMwMDAKQ01EIFsic2giLCAiLWMiLCAibm9kZSBzZXJ2ZXIuanMiXQo=' | base64 -d > '/opt/opspilot/a17-notes-0911/Dockerfile' {"vps_id":2}
+{"type":"log","deployment_id":3,"step":"RENDER","chunk":"Giữ nguyên credential PostgreSQL hiện có để volume tiếp tục truy cập được.\n","stream":"stdout"}
+2026-09-10T20:23:42.618Z INFO [ssh] printf %s 'c2VydmljZXM6CiAgYXBwOgogICAgaW1hZ2U6IGExNy1ub3Rlcy0wOTExOnYzCiAgICBjb250YWluZXJfbmFtZTogYTE3LW5vdGVzLTA5MTEtYXBwCiAgICBwb3J0czoKICAgICAgLSAiMzAwMDA6MzAwMCIKICAgIGVudl9maWxlOgogICAgICAtIC5lbnYKICAgIG1lbV9saW1pdDogNTEybQogICAgcmVzdGFydDogdW5sZXNzLXN0b3BwZWQKICAgIGhlYWx0aGNoZWNrOgogICAgICB0ZXN0OiBbIkNNRC1TSEVMTCIsICJ3Z2V0IC1xIC1PIC9kZXYvbnVsbCBodHRwOi8vMTI3LjAuMC4xOjMwMDAvaGVhbHRoIHx8IGV4aXQgMSJdCiAgICAgIGludGVydmFsOiAxMHMKICAgICAgdGltZW91dDogM3MKICAgICAgcmV0cmllczogMwogICAgICBzdGFydF9wZXJpb2Q6IDVzCiAgICBkZXBlbmRzX29uOgogICAgICBwb3N0Z3JlczoKICAgICAgICBjb25kaXRpb246IHNlcnZpY2VfaGVhbHRoeQogIHBvc3RncmVzOgogICAgaW1hZ2U6IHBvc3RncmVzOjE2LWFscGluZQogICAgY29udGFpbmVyX25hbWU6IGExNy1ub3Rlcy0wOTExLWRiCiAgICBlbnZpcm9ubWVudDoKICAgICAgUE9TVEdSRVNfVVNFUjogb3BzcGlsb3QKICAgICAgUE9TVEdSRVNfUEFTU1dPUkQ6ICR7UE9TVEdSRVNfUEFTU1dPUkR9CiAgICAgIFBPU1RHUkVTX0RCOiBvcHNwaWxvdAogICAgdm9sdW1lczoKICAgICAgLSAuL2RhdGEvcGc6L3Zhci9saWIvcG9zdGdyZXNxbC9kYXRhCiAgICBtZW1fbGltaXQ6IDI1Nm0KICAgIHJlc3RhcnQ6IHVubGVzcy1zdG9wcGVkCiAgICBoZWFsdGhjaGVjazoKICAgICAgdGVzdDogWyJDTUQtU0hFTEwiLCAicGdfaXNyZWFkeSAtVSBvcHNwaWxvdCAtZCBvcHNwaWxvdCJdCiAgICAgIGludGVydmFsOiA1cwogICAgICB0aW1lb3V0OiAzcwogICAgICByZXRyaWVzOiAxMgogICAgICBzdGFydF9wZXJpb2Q6IDVzCiAgY29sbGVjdG9yOgogICAgaW1hZ2U6IGExNy1ub3Rlcy0wOTExOmNvbGxlY3RvcgogICAgY29udGFpbmVyX25hbWU6IGExNy1ub3Rlcy0wOTExLWNvbGxlY3RvcgogICAgZW52aXJvbm1lbnQ6CiAgICAgIENPTExFQ1RfSU5URVJWQUxfUzogIjEwIgogICAgICBBUFBfQ09OVEFJTkVSX05BTUU6IGExNy1ub3Rlcy0wOTExLWFwcAogICAgICBBUFBfVVJMOiAiaHR0cDovL2FwcDozMDAwL2l0ZW1zP2xpbWl0PTEiCiAgICAgIERCX0RTTjogIiR7REFUQUJBU0VfVVJMOi19IgogICAgICBNRVRSSUNTX0RJUjogL3Zhci9tZXRyaWNzCiAgICAgIFBST0JFX1RJTUVPVVRfUzogIjUiCiAgICAgIEVSUk9SX1dJTkRPV19TOiAiNjAiCiAgICAgIE1BWF9GSUxFX01COiAiNTAiCiAgICB2b2x1bWVzOgogICAgICAtIC4vbWV0cmljczovdmFyL21ldHJpY3MKICAgICAgLSAvdmFyL3J1bi9kb2NrZXIuc29jazovdmFyL3J1bi9kb2NrZXIuc29jazpybwogICAgbWVtX2xpbWl0OiAxMjhtCiAgICByZXN0YXJ0OiB1bmxlc3Mtc3RvcHBlZAo=' | base64 -d > '/opt/opspilot/a17-notes-0911/docker-compose.yml' {"vps_id":2}
+2026-09-10T20:23:43.461Z INFO [ssh] chmod 600 '/opt/opspilot/a17-notes-0911/.env' {"vps_id":2}
+2026-09-10T20:23:43.894Z INFO [ssh] stat -c %s '/opt/opspilot/a17-notes-0911/Dockerfile' {"vps_id":2}
+2026-09-10T20:23:44.326Z INFO [ssh] stat -c %s '/opt/opspilot/a17-notes-0911/docker-compose.yml' {"vps_id":2}
+2026-09-10T20:23:44.750Z INFO [ssh] stat -c %s '/opt/opspilot/a17-notes-0911/.env' {"vps_id":2}
+2026-09-10T20:23:45.174Z INFO [ssh] stat -c %s '/opt/opspilot/a17-notes-0911/collector/Dockerfile' {"vps_id":2}
+2026-09-10T20:23:45.607Z INFO [ssh] stat -c %s '/opt/opspilot/a17-notes-0911/collector/collect.py' {"vps_id":2}
+2026-09-10T20:23:46.029Z INFO [ssh] cd '/opt/opspilot/a17-notes-0911' && docker build -t 'a17-notes-0911:v3' . && docker build -t 'a17-notes-0911:collector' ./collector {"vps_id":2}
+{"type":"step-done","deployment_id":3,"step":"RENDER","duration_ms":4259}
+{"type":"step-start","deployment_id":3,"step":"BUILD","ts":"2026-09-10T20:23:46.028Z"}
+{"type":"log","deployment_id":3,"step":"BUILD","chunk":"$ cd '/opt/opspilot/a17-notes-0911' && docker build -t 'a17-notes-0911:v3' . && docker build -t 'a17-notes-0911:collector' ./collector\n","stream":"stdout"}
+2026-09-10T20:23:48.680Z INFO [ssh] cd '/opt/opspilot/a17-notes-0911' && docker compose up -d {"vps_id":2}
+{"type":"step-done","deployment_id":3,"step":"BUILD","duration_ms":2650}
+{"type":"step-start","deployment_id":3,"step":"DEPLOY","ts":"2026-09-10T20:23:48.680Z"}
+{"type":"log","deployment_id":3,"step":"DEPLOY","chunk":"$ cd '/opt/opspilot/a17-notes-0911' && docker compose up -d\n","stream":"stdout"}
+2026-09-10T20:24:00.688Z INFO [ssh] docker inspect -f '{{json .State}}' 'a17-notes-0911-app' 2>/dev/null || printf 'missing' {"vps_id":2}
+2026-09-10T20:24:01.112Z INFO [ssh] curl -fsS -m 5 -o /dev/null 'http://127.0.0.1:30000/health' {"vps_id":2}
+{"type":"step-done","deployment_id":3,"step":"DEPLOY","duration_ms":12431}
+{"type":"step-start","deployment_id":3,"step":"HEALTHCHECK","ts":"2026-09-10T20:24:01.112Z"}
+2026-09-10T20:24:01.543Z INFO [ssh] docker images --format '{{.Repository}}:{{.Tag}}' {"vps_id":2}
+{"type":"log","deployment_id":3,"step":"HEALTHCHECK","chunk":"[1/10] http://127.0.0.1:30000/health -> HTTP OK\n","stream":"stdout"}
+{"type":"step-done","deployment_id":3,"step":"HEALTHCHECK","duration_ms":429}
+{"type":"step-start","deployment_id":3,"step":"RECORD","ts":"2026-09-10T20:24:01.542Z"}
+{"type":"step-done","deployment_id":3,"step":"RECORD","duration_ms":696}
+{"type":"finished","deployment_id":3,"status":"running","total_duration_ms":22996,"app_url":"http://221.121.1.80:30000"}
+C01_LIVE_FAIL Error: PostgreSQL marker was not preserved after redeploy
+    at WebContents.<anonymous> (D:\Developing\DuAnCNTT\tools\a17-c01-live.cjs:85:19)

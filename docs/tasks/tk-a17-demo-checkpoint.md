@@ -9,7 +9,7 @@
 Hướng dẫn thực thi: [Worker playbook](../prompts/tk-a17-worker-playbook.md).
 Yêu cầu đầy đủ: [plan mục 7–10](../24-ke-hoach-demo-theo-chang.md#7-ma-trận-đầy-đủ-yêu-cầu-giao-worker).
 Khảo sát: [preflight 11/09](tk-a17/preflight-11-09.md). Trạng thái mới:
-[C00 APPROVED](tk-a17/review-c00.md), code `d4ec3be` / docs `23cd248`; C01 chưa bắt đầu.
+[C00 APPROVED](tk-a17/review-c00.md), code `d4ec3be` / docs `23cd248`; C01 chờ review.
 Mục tiêu: A trình chiếu **tự phát hiện → tự rollback → xác minh phục hồi**. C08 bắt buộc.
 Không chia theo ngày/giờ công. Thời lượng 10s/30s/baseline/test vẫn giữ theo yêu cầu kỹ thuật.
 
@@ -135,3 +135,11 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   Đóng hai MINOR hồ sơ; chấp nhận giới hạn helper C00 theo review. Mở duy nhất C01 để A
   giao Worker, target VM02/a17-notes-0911 phải kiểm tra lại trước deploy. Không thực hiện C01,
   không push/PR/merge; task TUẦN NÀY cho lượt Worker tiếp.
+
+- START 11/09 — Worker tiếp tục HEAD hiện tại `1b447e4` sau C00 APPROVED; chỉ C01: collector
+ packaging/compose, deploy v1-v2, marker PostgreSQL, JSONL soak và failure isolation.
+- UPDATE 11/09 — C01 initial v1 fail thật vì PostgreSQL readiness; đã sửa healthcheck/
+ `depends_on: service_healthy`, test 44/44 và live v6/v7 running. Marker/volume/collector
+ soak/failure isolation đã kiểm tra; C02+ NOT_RUN.
+- HANDOFF-LOCAL 11/09 — `handoff-c01.md`, evidence `docs/evidence/tk-a17/c01/`;
+ READY_FOR_LOCAL_REVIEW. Chưa push/PR/merge.

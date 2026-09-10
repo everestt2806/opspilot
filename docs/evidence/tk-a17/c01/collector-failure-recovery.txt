@@ -1,0 +1,14 @@
+C01-T6 controlled collector failure (A17 target only)
+
+Command 1:
+ssh ... deploy@221.121.1.80 "docker stop a17-notes-0911-collector; curl -fsS http://127.0.0.1:30000/health; docker ps --filter name=a17-notes-0911-app"
+Exit: 0
+Observed: collector stopped; app returned {"ok":true,"uptime_s":778}; app container stayed Up/healthy.
+
+Command 2:
+ssh ... deploy@221.121.1.80 "cd /opt/opspilot/a17-notes-0911 && docker compose up -d collector && docker ps -a --filter name=a17-notes-0911-collector && docker inspect ..."
+Exit: 0
+Observed: one a17-notes-0911-collector container, Up, restart count 0.
+
+After 20 seconds: metrics line count 101, latest seq 101, app health {"ok":true,"uptime_s":812}.
+No app B container was stopped, restarted, or modified.

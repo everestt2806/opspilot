@@ -1,0 +1,1 @@
+﻿{"seq":91,"ts":"2026-09-10T20:38:25Z","cpu_pct":3.2,"mem_mb":18.9,"mem_pct":3.69,"mem_limit_mb":512.0,"latency_ms":22.836622083559632,"http_error_rate":0.0,"db_response_ms":14.876235974952579,"host_cpu_pct":39.0,"host_mem_pct":18.0871016252242,"container_up":1,"collector_version":"1.0.0"}

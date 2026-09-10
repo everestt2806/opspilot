@@ -14,7 +14,7 @@
 | Chặng | Worker outcome | Reviewed SHA | Verdict | Handoff/review |
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
-| C01   | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C01   | READY_FOR_LOCAL_REVIEW | local C01 commit | PENDING | [handoff](tk-a17/handoff-c01.md); Leader review cần thực hiện |
 | C02   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |

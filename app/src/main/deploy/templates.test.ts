@@ -17,7 +17,10 @@ const BASE_VARS: ComposeVars = {
   CONTAINER_PORT: '3000',
   HEALTHCHECK_PATH: '/health',
   START_COMMAND: 'node app.js',
-  COLLECT_INTERVAL_S: '10'
+  COLLECT_INTERVAL_S: '10',
+  COLLECTOR_IMAGE_TAG: 'demo-api:collector',
+  COLLECTOR_APP_PATH: '/items?limit=1',
+  APP_DEPENDS_ON: ''
 }
 
 describe('resolveTemplatesDir', () => {
@@ -35,6 +38,9 @@ describe('renderCompose', () => {
     expect(yaml).toContain('http://127.0.0.1:3000/health')
     expect(yaml).not.toContain('{{')
     expect(yaml).not.toContain('postgres')
+    expect(yaml).toContain('image: demo-api:collector')
+    expect(yaml).toContain('http://app:3000/items?limit=1')
+    expect(yaml).toContain('/var/run/docker.sock:/var/run/docker.sock:ro')
   })
 
   it('chen service postgres khi needsDb', () => {
@@ -44,6 +50,9 @@ describe('renderCompose', () => {
     expect(yaml).toContain('${POSTGRES_PASSWORD}')
     expect(yaml).toContain('./data/pg:/var/lib/postgresql/data')
     expect(yaml).not.toContain('{{')
+    expect(yaml).toContain('DB_DSN: "${DATABASE_URL:-}"')
+    expect(yaml).toContain('condition: service_healthy')
+    expect(yaml).toContain('pg_isready -U opspilot -d opspilot')
   })
 })
 

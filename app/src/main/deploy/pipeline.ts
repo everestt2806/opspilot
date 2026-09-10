@@ -33,6 +33,18 @@ const WORK_ROOT = '/opt/opspilot'
 const HEALTHCHECK_ATTEMPTS = 10
 const HEALTHCHECK_INTERVAL_MS = 3_000
 const RENDER_COLLECT_INTERVAL_S = '10'
+const COLLECTOR_IMAGE_SUFFIX = ':collector'
+
+function resolveCollectorDir(): string {
+  const collectorDir = process.env.OPSPILOT_COLLECTOR_DIR ?? join(process.cwd(), '..', 'collector')
+  if (
+    !existsSync(join(collectorDir, 'collect.py')) ||
+    !existsSync(join(collectorDir, 'Dockerfile'))
+  ) {
+    throw new AppError('UNKNOWN', 'Không tìm thấy source collector đã duyệt để đóng gói deploy.')
+  }
+  return collectorDir
+}
 
 const containerStateSchema = z.object({
   Status: z.string(),
@@ -582,6 +594,18 @@ export class DeployPipeline {
           }
         )
         this.log(ctx, 'UPLOAD', `Xong: ${formatBytes(result.bytes)}\n`, 'stdout')
+        const collectorResult = await this.ssh.uploadDir(
+          ctx.app.vps_id,
+          resolveCollectorDir(),
+          posixJoin(WORK_ROOT, ctx.app.name, 'collector'),
+          { signal: ctx.signal }
+        )
+        this.log(
+          ctx,
+          'UPLOAD',
+          `Đã đóng gói collector: ${formatBytes(collectorResult.bytes)}\n`,
+          'stdout'
+        )
       } catch (error) {
         if (ctx.newApp) {
           await this.ignoreError(
@@ -609,7 +633,13 @@ export class DeployPipeline {
         CONTAINER_PORT: String(ctx.app.container_port),
         HEALTHCHECK_PATH: ctx.app.healthcheck_path,
         START_COMMAND: plan.startCommand,
-        COLLECT_INTERVAL_S: RENDER_COLLECT_INTERVAL_S
+        COLLECT_INTERVAL_S: RENDER_COLLECT_INTERVAL_S,
+        COLLECTOR_IMAGE_TAG: `${ctx.app.name}${COLLECTOR_IMAGE_SUFFIX}`,
+        COLLECTOR_APP_PATH:
+          ctx.app.framework === 'express' ? '/items?limit=1' : ctx.app.healthcheck_path,
+        APP_DEPENDS_ON: plan.needsDb
+          ? '    depends_on:\n      postgres:\n        condition: service_healthy'
+          : ''
       }
       let renderEnv = input.env
       if (plan.needsDb && !ctx.newApp) {
@@ -668,6 +698,8 @@ export class DeployPipeline {
         await this.ssh.fileSize(ctx.app.vps_id, posixJoin(appDir, 'Dockerfile'))
         await this.ssh.fileSize(ctx.app.vps_id, posixJoin(appDir, 'docker-compose.yml'))
         await this.ssh.fileSize(ctx.app.vps_id, posixJoin(appDir, '.env'))
+        await this.ssh.fileSize(ctx.app.vps_id, posixJoin(appDir, 'collector', 'Dockerfile'))
+        await this.ssh.fileSize(ctx.app.vps_id, posixJoin(appDir, 'collector', 'collect.py'))
       } catch (error) {
         for (const file of files) {
           await this.ignoreError(
@@ -684,7 +716,10 @@ export class DeployPipeline {
   private async stepBuild(ctx: RunContext): Promise<void> {
     await this.inStep(ctx, 'BUILD', async () => {
       const tag = shellQuote(ctx.deployment.image_tag)
-      const command = `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker build -t ${tag} .`
+      const collectorTag = shellQuote(`${ctx.app.name}${COLLECTOR_IMAGE_SUFFIX}`)
+      const command =
+        `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && ` +
+        `docker build -t ${tag} . && docker build -t ${collectorTag} ./collector`
       this.log(ctx, 'BUILD', `$ ${command}\n`, 'stdout')
       try {
         const result = await this.execStream(ctx, 'BUILD', command, 900_000)
@@ -698,6 +733,11 @@ export class DeployPipeline {
       } catch (error) {
         await this.ignoreError(
           this.ssh.exec(ctx.app.vps_id, `docker image rm ${tag} >/dev/null 2>&1 || true`, {
+            retryOnReconnect: false
+          })
+        )
+        await this.ignoreError(
+          this.ssh.exec(ctx.app.vps_id, `docker image rm ${collectorTag} >/dev/null 2>&1 || true`, {
             retryOnReconnect: false
           })
         )
@@ -807,7 +847,13 @@ export class DeployPipeline {
       CONTAINER_PORT: String(app.container_port),
       HEALTHCHECK_PATH: app.healthcheck_path,
       START_COMMAND: '',
-      COLLECT_INTERVAL_S: RENDER_COLLECT_INTERVAL_S
+      COLLECT_INTERVAL_S: RENDER_COLLECT_INTERVAL_S,
+      COLLECTOR_IMAGE_TAG: `${app.name}${COLLECTOR_IMAGE_SUFFIX}`,
+      COLLECTOR_APP_PATH: app.framework === 'express' ? '/items?limit=1' : app.healthcheck_path,
+      APP_DEPENDS_ON:
+        app.needs_db === 1
+          ? '    depends_on:\n      postgres:\n        condition: service_healthy'
+          : ''
     }
     await this.ssh.writeFile(
       app.vps_id,

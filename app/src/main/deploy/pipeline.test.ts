@@ -293,6 +293,19 @@ describe('DeployPipeline', () => {
     )
     expect(composeWrite?.content).toContain('image: demo-api:v1')
     expect(composeWrite?.content).toContain('image: postgres:16-alpine')
+    expect(composeWrite?.content).toContain('image: demo-api:collector')
+    expect(composeWrite?.content).toContain('APP_URL: "http://app:3000/items?limit=1"')
+    expect(composeWrite?.content).toContain('/var/run/docker.sock:/var/run/docker.sock:ro')
+    expect(
+      sshExec.mock.calls.some(
+        ([, command]) => command.includes('docker build') && command.includes('collector')
+      )
+    ).toBe(true)
+    expect(
+      (pipeline as unknown as { ssh: { uploadDir: Mock } }).ssh.uploadDir.mock.calls.some(
+        ([, , remotePath]) => remotePath === '/opt/opspilot/demo-api/collector'
+      )
+    ).toBe(true)
 
     expect(
       actionLogRows(deploymentId).some((row) => row.action === 'deploy' && row.status === 'success')
@@ -544,6 +557,12 @@ describe('DeployPipeline', () => {
         call.remotePath.endsWith('docker-compose.yml') && call.content.includes('demo-api:v1')
     )
     expect(v1ComposeWrites).toHaveLength(3)
+    expect(v1ComposeWrites.every((call) => call.content.includes('demo-api:collector'))).toBe(true)
+    expect(
+      v1ComposeWrites.every((call) =>
+        call.content.includes('/var/run/docker.sock:/var/run/docker.sock:ro')
+      )
+    ).toBe(true)
     expect(
       writeFileCalls().some(
         (call) =>

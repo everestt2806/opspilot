@@ -1,0 +1,14 @@
+﻿STATUS
+CONTAINER ID   IMAGE                         COMMAND                  CREATED          STATUS                    PORTS                                           NAMES
+859fa016c892   a17-notes-0911:v7             "docker-entrypoint.s…"   11 minutes ago   Up 11 minutes (healthy)   0.0.0.0:30000->3000/tcp, [::]:30000->3000/tcp   a17-notes-0911-app
+38da5278972e   postgres:16-alpine            "docker-entrypoint.s…"   15 minutes ago   Up 15 minutes (healthy)   5432/tcp                                        a17-notes-0911-db
+ae4b54968de0   97c9592cd048                  "python -u collect.py"   15 minutes ago   Up 15 minutes                                                             a17-notes-0911-collector
+f085b56f8fe0   opspilot-demo-express:local   "docker-entrypoint.s…"   2 days ago       Up 2 days (healthy)       0.0.0.0:30001->3000/tcp, [::]:30001->3000/tcp   express-demo-app
+e9c40225b3e5   opspilot-collector:1.0.0      "python -u collect.py"   2 days ago       Up 2 days                                                                 express-demo-collector
+INSPECT
+/a17-notes-0911-app|a17-notes-0911:v7|0|running|healthy
+/a17-notes-0911-db|postgres:16-alpine|0|running|healthy
+METRICS
+94 /opt/opspilot/a17-notes-0911/metrics/metrics.jsonl
+BUSINESS
+[{"id":1,"name":"khoan-thu-1","created_at":"2026-09-10T20:23:39.995Z"}]
