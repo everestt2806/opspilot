@@ -4,14 +4,15 @@
 
 - Chặng / outcome / branch / ngày: C00 / `READY_FOR_LOCAL_REVIEW` / `feat/a17-demo-checkpoint` / 11/09/2026.
 - Base SHA: `683bfc6` (code baseline); kế hoạch đầu vào `ac6d8cd`; code HEAD đầu lượt `bf951f9`.
-- Code HEAD sau commit: điền SHA commit C00 bên dưới cùng file này; docs HEAD là cùng commit.
+- Code HEAD sau commit: `d4ec3be`; docs HEAD: `d4ec3be`.
 - Review chặng trước: không có; C00 là gate đầu tiên.
 - Scope: runtime/native ABI, focused baseline, SSH read-only inventory, target manifest, app boot/browser boundary. Không sửa `app/` source, collector, contract, pipeline, ML hoặc renderer.
 - Untracked `.devflow/`, `docs/ban-giao-20-08.md`, `logo.png` và stash của A được giữ nguyên.
 
 ## Commit và file
 
-- Commit list: điền sau khi commit local; bullet commit tiếng Anh.
+- Commit list: `d4ec3be` — Record verified C00 runtime, read-only inventory, target manifest,
+  evidence and local handoff; downstream stages remain NOT_RUN.
 - File C00: `docs/evidence/tk-a17/c00/`, `docs/tasks/tk-a17/handoff-c00.md`, task log/board; helper đã rà soát gồm `tools/a17-c00-native.cjs`, `tools/a17-c00-boot.cjs`, `tools/a17-c00-inventory.py`.
 - Diff scope: chỉ artifact/evidence/task records C00; không stage file ngoài danh sách.
 
