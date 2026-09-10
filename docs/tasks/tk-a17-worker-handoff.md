@@ -1,18 +1,19 @@
 # Sổ bàn giao và review — TK-A17
 
-> PLANNED. Chưa có test/runtime PASS mới trong phiên lập plan.
+> PLAN_READY 11/09. A yêu cầu kế hoạch để giao Worker triển khai.
+> Có khảo sát local [preflight](tk-a17/preflight-11-09.md); chưa có handoff/review C00.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; Worker chưa bắt đầu; Leader đã lập plan theo chặng.
+- Owner A solo; Leader hoàn thiện kế hoạch, Worker nhận C00 sau khi A giao prompt.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
-- Branch Worker dự kiến `feat/a17-demo-checkpoint`, kế thừa HEAD plan mới nhất.
+- Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
 - Chặng hiện tại C00; chặng được approve: chưa có. C08 bắt buộc, tách C08A/B/C, đều chưa bắt đầu.
 
 ## Sổ gate (Leader xác nhận verdict)
 
 | Chặng | Worker outcome | Reviewed SHA | Verdict | Handoff/review |
 | ----- | -------------- | ------------ | ------- | -------------- |
-| C00   | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C00   | PREFLIGHT_ONLY | —            | PENDING | [Khảo sát](tk-a17/preflight-11-09.md); chưa handoff |
 | C01   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C02   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |

@@ -7,6 +7,11 @@
 > Worker đọc [playbook cầm tay chỉ việc](prompts/tk-a17-worker-playbook.md) trước nhận chặng.
 > [Task điều phối](tasks/tk-a17-demo-checkpoint.md) · [Prompt](prompts/tk-a17-worker.md)
 > · [Sổ bàn giao/review](tasks/tk-a17-worker-handoff.md).
+>
+> **Bản giao Worker cập nhật 11/09:** theo yêu cầu của A, phiên hiện tại lập kế hoạch;
+> Worker nhận triển khai riêng. Mục 7–10 ánh xạ yêu cầu → chặng → bằng chứng và quy trình
+> giao việc. Khảo sát C00 đã chạy một phần, chưa có handoff/verdict APPROVED; xem
+> [ghi nhận khảo sát](tasks/tk-a17/preflight-11-09.md). Không tự mở C01.
 
 ## 1. Câu chuyện demo mới
 
@@ -103,7 +108,8 @@ B6 báo app `express-demo` trên VM02, port 30001, probe `/health`, không DB. A
 không mặc nhiên có record trong SQLite A. A tạo app demo riêng qua OpsPilot, giữ app của B.
 GitNexus context đã xác nhận renderCompose dùng ở stepRender và restoreComposeTo; source
 pollAll nối SSH/poller/repository/tick. Index FTS thiếu, đã đối chiếu source trực tiếp.
-Phiên lập/revise plan chưa chạy lại app, test code hoặc VPS; không ghi thêm runtime PASS.
+Phiên lập/revise plan **10/09** chưa chạy lại app, test code hoặc VPS; không ghi thêm runtime PASS.
+Khảo sát **11/09** được ghi riêng trong [preflight](tasks/tk-a17/preflight-11-09.md), chưa APPROVED.
 
 ## 4. Thứ tự chặng và review
 
@@ -166,3 +172,114 @@ toàn VPS/SQLite; helper fault có timeout/status/reset, không lộ secret tron
 - Worker: thực hiện/test/commit local, bàn giao đúng chặng rồi dừng chờ review.
 - Leader: review đúng SHA + evidence, yêu cầu sửa finding, approve chặng và ba phần C08A/B/C.
 - B: không có task chặn; A đã nhận phần tích hợp/UI còn thiếu theo yêu cầu solo.
+
+## 7. Ma trận đầy đủ yêu cầu giao Worker
+
+Các mã A17-R bên dưới dùng để rà phạm vi của checkpoint này, không thay FR/NFR trong
+`docs/05` hoặc tạo thêm yêu cầu đề tài. Đây là tổng hợp các yêu cầu đã ghi ở plan/task/playbook,
+bao gồm chỉnh hướng 11/09: Leader chuẩn bị kế hoạch, A giao Worker triển khai.
+
+| Mã | Yêu cầu phải giữ | Nơi thực hiện/nghiệm thu | Bằng chứng bắt buộc |
+| --- | --- | --- | --- |
+| R01 | A làm solo, nhận phần tích hợp B6/B8; A thao tác, thầy quan sát | Task điều phối; C09 | Runbook ghi rõ vai trò, không chờ B hoặc yêu cầu thầy điều khiển |
+| R02 | Có bước tiến chức năng từ website tới tự khôi phục | C01–C09 | Hai lượt toàn luồng; C07 thủ công không thay C08 |
+| R03 | Website “Sổ ghi chú nhóm” có thêm/xem/tải lại dữ liệu PostgreSQL thật | C04-T1/T3; C09 | Marker tạo từ UI, refetch/reload còn; lỗi lưu không báo thành công |
+| R04 | Người xem thấy nhanh → chậm/lỗi → tốt lại | C04-T2/T4; C06-T1; C09-T3 | Ảnh cùng thao tác, loading thật, latency đo request thật |
+| R05 | Màn Monitor dễ hiểu, tiếng Việt, có chế độ trình chiếu | C05; C08C; C09 | Hero text/icon, đồ thị chính, chi tiết thu gọn; các viewport trong file chặng |
+| R06 | Tình trạng, metric, chart, alert, version dùng nguồn thật | C02/C05/C07 | IPC/SQLite/runtime đối chiếu đúng app/current deployment; không mock trên luồng demo |
+| R07 | Collector đi cùng deploy và còn sau redeploy/rollback | C01-T1…T7; C07-T3 | Compose hai đường forward/restore, live JSONL ≥10 phút, stats/HTTP/DB |
+| R08 | SSH → SQLite không trùng/mất/trộn dữ liệu phiên bản | C02-T1…T6 | Seq/byte offset/transaction, reconnect, redeploy và rollback boundary |
+| R09 | ML thật train và score song song với rule | C03; C08C-T5 | ≥180 mẫu sạch; readiness, train provenance; 3 model + ensemble có score mới |
+| R10 | Null/stale/mất SSH/ML chưa sẵn sàng thể hiện đúng | C02/C03/C05; C08C-T2 | Test trạng thái và ảnh; không biến null thành 0 hay dữ liệu cũ thành bình thường |
+| R11 | Cảnh báo giải thích được, có nhãn Đúng/Sai và settings thật | C06-T2/T3 | Alert IDs/threshold/consecutive, nhãn đọc lại từ DB, validation/save failure |
+| R12 | Timeline và trước/trong/sau sự cố truy lại được | C06-T4/T5; C07-T5; C09-T5 | Timestamp có nguồn, median/n/window/deployment; thiếu mẫu có thông báo |
+| R13 | Apps/Versions/History nối backend thật | C07 | Accepted/finished/failure/race được xử lý; current và runtime image khớp |
+| R14 | Tự động rollback là bắt buộc, có opt-in và method tin cậy | C08A/B/C | Mặc định OFF, confirm trước bật; fault → decision → pipeline tự thực thi |
+| R15 | Chống rollback sai/lặp sau retry, stale backlog hoặc restart | C08A-T2…T4; C08B | Batch policy, app lock, durable intent, cooldown/suppression/re-arm regression |
+| R16 | Không can thiệp thủ công để tạo kết quả tự khôi phục | C08C-T3; C09-T2 | Helper/action logs: không manual rollback/reset/restart trước business verification |
+| R17 | Phục hồi phải đổi đúng image và giữ nguyên dữ liệu | C07-T3; C08C-T4; C09-T4 | R1/R2 identity khác, current pointer, ≥3 mẫu khỏe mới và marker PostgreSQL |
+| R18 | Diễn giải đúng rule và ML, không tuyên bố kết quả nghiên cứu chưa có | C03/C08C/C09 | Demo bắt buộc ghi “Tự khôi phục theo ngưỡng”; ML-trigger outcome riêng, không bịa accuracy/early detection |
+| R19 | Giữ app B, dữ liệu thật và thí nghiệm; chỉ dùng target riêng | C00/C01 và mọi live gate | Manifest, inventory/experiment check, command log; không reset VPS/SQLite |
+| R20 | Chia việc theo chặng, mỗi chặng review riêng | Task điều phối; C00–C09, C08A/B/C | Base/code/docs SHA, handoff/review riêng, không gom nhiều chặng |
+| R21 | Worker sửa/test/commit local, không push/PR/merge/subagent | Prompt Worker và sổ bàn giao | Git status/commit list; quyền remote chỉ sau lệnh riêng của A |
+| R22 | Bám contract, tái dùng code/UI/dependency đã duyệt | Mỗi file chặng | Diff đúng scope; proposal cụ thể nếu contract thiếu, không sửa ngầm |
+| R23 | Có đủ kiểm thử, ảnh/video và hướng dẫn A chạy lại | C00–C09 | Log exit/count/cwd/runtime; hai rehearsal và ít nhất một video thật ở C09 |
+| R24 | Tách giới hạn mạng khỏi trạng thái ứng dụng | C00-T5; C09-T6 | Public URL kiểm tra riêng; nếu tunnel/video thì ghi đúng hình thức |
+| R25 | Kế hoạch bao trùm mục tiêu, Worker chỉ thực hiện chặng được giao | Prompt khởi động/sửa/tiếp theo | Lượt đầu hoàn thiện C00; A chuyển handoff cho Leader trước mở C01 |
+
+R03–R18 phải còn đúng trên **cùng bản code cuối** và lượt demo C09. Kết quả từng chặng
+độc lập không đủ nếu tích hợp sau cùng làm hồi quy. FR-B2 detector 3 stack, migrate, installer
+máy sạch, memory-leak/early detection và 50 run nghiên cứu vẫn được theo dõi ở docs/05/07;
+không tự đánh hoàn thành hoặc xóa khỏi kế hoạch dài hạn vì nằm ngoài checkpoint này.
+
+## 8. Gói công việc, đầu ra và thứ tự bàn giao
+
+File chặng là nơi duy nhất ghi đầy đủ bước thi công, file được sửa và test case. Bảng này
+là mục lục giao việc để A không phải tự ghép các prompt module hoặc giao quá scope.
+
+| Lượt | Gói giao | Đầu ra hữu hình để A/Leader review | Trọng tâm kỹ thuật cần chốt |
+| --- | --- | --- | --- |
+| 1 | [C00](tasks/tk-a17/c00-baseline.md) | Baseline, manifest, lệnh mở app/website, giới hạn mạng | Interpreter/ABI, trust SSH, quyền target, experiment, kiểm chứng khảo sát 11/09 |
+| 2 | [C01](tasks/tk-a17/c01-collector-deploy.md) | App + PostgreSQL + collector từ pipeline thật, marker sau redeploy | Source packaging, compose/restore, persistent volume, secret/port |
+| 3 | [C02](tasks/tk-a17/c02-ingestion.md) | CLI live và Electron scheduler lấy metric thật vào SQLite | Byte offset, dedupe, transaction, lifecycle deployment và reconnect |
+| 4 | [C03](tasks/tk-a17/c03-ml-runtime.md) | Baseline sạch, API train/readiness, batch ML mới có số thật | Lifecycle process, 20D features hiện có, identity, down/up/null |
+| 5 | [C04](tasks/tk-a17/c04-demo-experience.md) | Website ghi chú trực quan, hai release phân biệt trong image | Request/error UX, PostgreSQL proof, version provenance |
+| 6 | [C05](tasks/tk-a17/c05-monitor-ui.md) | Monitor chỉ đọc và projection mode | State precedence, IPC race, chart window/units, stale |
+| 7 | [C06](tasks/tk-a17/c06-incident-flow.md) | Fault helper, alert/label/settings, incident timeline và summary | Fault thật, ngưỡng, re-fetch resolved, window/median |
+| 8 | [C07](tasks/tk-a17/c07-recovery.md) | Apps/Versions/History thật, rollback thủ công kiểm chứng nền | Accepted ≠ finished, target/image, dữ liệu qua phiên bản |
+| 9 | [C08A](tasks/tk-a17/c08a-decision.md) | Decision table và tests policy/candidate | Suffix cuối batch, freshness, method, target hợp lệ |
+| 10 | [C08B](tasks/tk-a17/c08b-coordinator.md) | Coordinator, durable attempt và completion integration | Crash windows, failure suppression, attribution, lock/cooldown |
+| 11 | [C08C](tasks/tk-a17/c08c-live-presentation.md) | Opt-in/timeline UI và live tự rollback có business verification | R1/R2, no manual intervention, marker, 3 mẫu khỏe mới |
+| 12 | [C09](tasks/tk-a17/c09-demo-acceptance.md) | Hai rehearsal, video/ảnh, runbook, bảng kết quả và hồ sơ review cuối | Full regression, cùng SHA, không blocker, đúng mục tiêu trình chiếu |
+
+Chuỗi phụ thuộc bắt buộc: C00 → C01 → C02 → C03 → C04 → C05 → C06 → C07 → C08A → C08B →
+C08C → C09. Không ước lượng bằng ngày/giờ công. Thời gian đo kỹ thuật vẫn phải giữ:
+collector 10s, poll 30s, baseline sạch ≥180 mẫu, cooldown 10 phút, soak collector ≥10 phút.
+
+Các helper đề xuất, flags và lệnh trong [playbook](prompts/tk-a17-worker-playbook.md) là đầu
+ra phải xây ở đúng chặng; không coi chúng đã tồn tại. C04 cho phép thêm phần chuẩn bị release
+của helper theo playbook; C02 status/verify, C06 fault/reset, C08C verification automation.
+Không tạo một helper thực hiện sẵn toàn bộ các chặng ngay từ C00.
+
+## 9. Các điểm quyết định và cách xử lý vướng mắc
+
+| Tình huống | Worker cần làm | Điều kiện tiếp tục |
+| --- | --- | --- |
+| Có code/bằng chứng cũ | Kiểm tra ancestry, SHA, command và trạng thái live; tái dùng phần đúng | Ghi rõ phần đã tự xác minh, phần chỉ tham khảo; không tick từ báo cáo cũ |
+| Target/IP/user/port khác khảo sát | Đọc cấu hình hiện tại, inventory read-only, cập nhật manifest | Target riêng không chiếm app B, tài nguyên và experiment gate đạt |
+| Không vào SSH hoặc thiếu credential | Ghi bước lỗi/exit; hoàn thiện local evidence và test plan còn độc lập | Credential được cấu hình qua cơ chế của A hoặc SSH hoạt động; không xin paste secret |
+| Public port bị chặn | Kiểm tra local health qua SSH; ghi tunnel loopback hoặc yêu cầu mở port cụ thể | C00 ghi giới hạn; C09 chứng minh đường trình chiếu thực tế và công bố fallback |
+| Boundary deployment/freshness/metadata chưa đủ contract | Nêu input, actual/expected, field/API bị ảnh hưởng và proposal tối thiểu | Leader giải quyết mismatch trước phần code phụ thuộc; việc khác trong chặng vẫn làm |
+| Full/focused test lỗi | Lưu log hiện tại, tái hiện và phân biệt baseline với regression | Sửa trong scope hoặc finding/proposal rõ; không skip/tăng timeout hàng loạt cho xanh |
+| ML chưa ready/không trigger trong lượt fault | Giữ metric/rule, hiển thị null/readiness, ghi outcome thật | C03 score thật là bắt buộc; ML-trigger bổ sung không được thay bằng trigger giả |
+| Rollback failed/uncertain sau restart | Durable log và thông báo; không tự replay/retry command | Re-arm theo policy được review, có target hợp lệ; không sửa DB để ép |
+| Helper hết timeout trước xác minh phục hồi | Ghi FAIL/INCONCLUSIVE và thời điểm cleanup | Chuẩn bị lại trạng thái sạch cho lượt mới; không lấy recovery do cleanup làm PASS |
+| Review yêu cầu sửa | Map từng finding → fix commit → regression → evidence | Leader đóng BLOCKER/MAJOR trên SHA mới; Worker không tự approve |
+
+Default kỹ thuật và UI phải bám contract/spec. Những policy nội bộ chưa có ngưỡng chốt
+(ví dụ freshness/stale và cửa sổ summary) phải được Worker ghi thành bảng input/output cùng
+lý do trong handoff của chặng; reviewer duyệt trước mở downstream. Không dùng câu “tự xử lý
+hợp lý” thay thiết kế có thể kiểm tra. Số mặc định đã chốt không được đổi để ép demo trigger.
+
+## 10. Cách A giao Worker và nhận kết quả
+
+1. Gửi [prompt khởi động](prompts/tk-a17-worker.md) cho Worker, cùng quyền truy cập repo.
+   Prompt giao **duy nhất C00**; toàn plan cung cấp bối cảnh, không cấp quyền chạy hết chuỗi.
+2. Worker đọc đúng tài liệu đầu vào, ghi branch/base/status và START, hoàn thiện C00 kể cả
+   phần handoff còn thiếu sau khảo sát. Khi có evidence hiện hữu, kiểm tra trước khi chạy lại.
+3. Cuối lượt Worker nộp `docs/tasks/tk-a17/handoff-c00.md`, evidence và commit local; cập nhật
+   board/task/sổ bàn giao. A nhận một kết quả cụ thể `READY_FOR_LOCAL_REVIEW` hoặc `BLOCKED`.
+4. A gửi handoff cho Leader. Leader đọc diff/code và bằng chứng theo đúng SHA, tạo
+   `review-c00.md` với findings/verdict. Kết quả test reviewer chạy riêng phải phân biệt
+   với kết quả Worker. Không tự tạo verdict APPROVED trong phiên chỉ lập kế hoạch.
+5. Nếu cần sửa, A dùng prompt sửa sau review. Khi APPROVED, A dùng prompt chặng tiếp theo,
+   chỉ rõ ID và review được kế thừa; lặp tới C09, riêng C08 phải qua A/B/C.
+6. Handoff mỗi chặng kèm các mã R liên quan ở mục 7 và link case/evidence, thêm `NOT_RUN`
+   cho yêu cầu chưa đến chặng. Không gọi toàn bộ yêu cầu “PASS” khi mới hoàn thành một phần.
+7. C09 trả runbook `docs/25-kich-ban-demo-monitor-recovery.md`, 2 biên bản rehearsal,
+   video thật, bảng before/after, command/test summary và reviewed SHA. Leader chỉ ghi
+   `DEMO_READY` khi đủ DoD C09; trạng thái hoàn thành task theo quy tắc merge của board.
+
+Mẫu kết quả Worker gửi A: **chặng/outcome; branch/base/code/docs SHA; commits/files;
+case PASS/FAIL/NOT_RUN và log; yêu cầu R đã phủ; handoff; blocker/việc tiếp theo;
+tình trạng app/ML/SSH/fault sau test; CHƯA PUSH — CHƯA PR — CHƯA MERGE.**

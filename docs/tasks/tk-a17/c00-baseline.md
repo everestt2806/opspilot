@@ -5,6 +5,8 @@
 Đọc [task chung](../tk-a17-demo-checkpoint.md), A15/A16 handoff, B4/B5/B6 task và
 `docs/09-moi-truong-dev.md`. Chưa cần triển khai tính năng; VPS chỉ kiểm tra read-only.
 Baseline source đã kiểm tra `683bfc6`; plan commit được kế thừa riêng, không coi là code mới.
+Khảo sát 11/09 đã có một số kết quả local tại [preflight](preflight-11-09.md).
+Worker kiểm tra artifact/HEAD rồi hoàn thiện hồ sơ chặng; khảo sát chưa thay review C00.
 
 ## Các bước Worker làm
 

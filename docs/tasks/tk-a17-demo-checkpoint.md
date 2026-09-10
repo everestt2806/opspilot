@@ -2,11 +2,13 @@
 
 | Chủ    | Branch plan                | Baseline code | Trạng thái                  |
 | ------ | -------------------------- | ------------- | --------------------------- |
-| A solo | `plan/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — C00 chưa bắt đầu |
+| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — kế hoạch sẵn giao Worker/C00 |
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
 · [Sổ bàn giao](tk-a17-worker-handoff.md).
 Hướng dẫn thực thi: [Worker playbook](../prompts/tk-a17-worker-playbook.md).
+Yêu cầu đầy đủ: [plan mục 7–10](../24-ke-hoach-demo-theo-chang.md#7-ma-trận-đầy-đủ-yêu-cầu-giao-worker).
+Khảo sát đã có: [preflight 11/09](tk-a17/preflight-11-09.md), chưa phải C00 APPROVED.
 Mục tiêu: A trình chiếu **tự phát hiện → tự rollback → xác minh phục hồi**. C08 bắt buộc.
 Không chia theo ngày/giờ công. Thời lượng 10s/30s/baseline/test vẫn giữ theo yêu cầu kỹ thuật.
 
@@ -97,5 +99,18 @@ manifest; helper phục hồi fault của chính lượt test được thực hi
   là lịch sử. Chưa implementation/test runtime mới.
 
 Worker append START/UPDATE/HANDOFF-LOCAL/REVIEW-FIX với ngày thực tế để giữ lịch sử.
+
+- START 11/09 — Worker tiếp tục từ plan HEAD `ac6d8cd74204d66ba9122ca615876480808572e4`,
+  tạo `feat/a17-demo-checkpoint`; chỉ C00: runtime/native ABI, focused tests, SSH read-only,
+  manifest và boot evidence. Giữ ba mục untracked của A và stash hiện có; không làm C01.
+- UPDATE 11/09 — A làm rõ yêu cầu: Leader lên kế hoạch chi tiết để A giao Worker, dừng
+  thực thi C00 ở mức khảo sát. Đã ghi preflight: focused 64/64, collector 26/26,
+  typecheck/build exit 0, native/boot/SSH VM02 có quan sát; chưa có handoff/review C00.
+  Bổ sung ma trận R01–R25, 12 lượt giao, xử lý blocker và prompt khởi động kế thừa HEAD.
+  Task về TUẦN NÀY để Worker nhận C00; không mở C01 hoặc tự approve kết quả khảo sát.
+- HANDOFF-LOCAL 11/09 — Bản kế hoạch nằm trong commit chứa dòng này; kiểm tra local Markdown
+  links của 10 file thành công, `git diff --check` sạch. Không chạy thêm runtime/test sản phẩm
+  sau khi A chuyển yêu cầu sang lập kế hoạch. Raw evidence/helper khảo sát vẫn local chưa commit;
+  việc tiếp theo: A gửi prompt khởi động cho Worker hoàn thiện C00. Chưa push/PR/merge.
 Chờ review: board CHỜ REVIEW kèm ID chặng. Tiếp tục/sửa: ĐANG LÀM.
 HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push/merge.

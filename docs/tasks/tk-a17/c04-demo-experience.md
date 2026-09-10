@@ -27,6 +27,9 @@ Chặng chỉ làm trải nghiệm website demo, chưa làm Monitor hoặc fault
 
 `demo-apps/express-api/public/**`, README, server chỉ sửa lỗi tối thiểu nếu API hiện hữu
 không xử lý đúng hành vi đang dùng. Không thêm schema/dependency hoặc chỉnh ML/collector.
+Cho phép phần helper chuẩn bị hai release của `app/scripts/demo-scenario.ts` và script npm
+liên quan theo playbook mục 4: dùng deploy service thật, dry-run mặc định, không chứa fault/
+auto-recovery của chặng sau. Không sửa package runtime ngoài version identity cần cho release.
 
 ## Case và DoD
 
