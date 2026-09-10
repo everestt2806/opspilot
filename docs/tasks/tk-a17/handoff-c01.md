@@ -4,7 +4,7 @@
 
 - Chặng / outcome / branch / ngày: C01 / `READY_FOR_LOCAL_REVIEW` / `feat/a17-demo-checkpoint` / 11/09/2026.
 - Base HEAD: `1b447e4` (C00 review commit); inherited C00 approved code `d4ec3be`, docs `23cd248`.
-- Code HEAD: `66cbdab`; docs HEAD: `c6c8064`.
+- Code HEAD: `66cbdab`; docs HEAD: `c10814c`.
 - C01 scope: collector packaging, compose service/DB readiness, live deploy/redeploy,
   PostgreSQL marker persistence, JSONL soak and collector failure isolation. C02+ not implemented.
 - App B, experiment data and A's untracked `.devflow/`, `docs/ban-giao-20-08.md`, `logo.png` preserved.
@@ -21,6 +21,7 @@
 - Commit list: `66cbdab` — Package collector in deploy/restore compose, add DB readiness and
   live C01 evidence/handoff; no push/PR/merge.
   `c6c8064` — Pin the C01 code/docs provenance.
+  `c10814c` — Finalize the exact documentation head.
 
 ## Case evidence
 
