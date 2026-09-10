@@ -1,6 +1,9 @@
 # Kế hoạch sau demo cơ bản — chốt ngày 30/08/2026
 
-> **Điểm vào hiện tại cho A, B và mọi AI mới.** Đọc file này sau `CLAUDE.md`, rồi chỉ đọc
+> Cập nhật 10/09: ưu tiên 3 ngày tới theo [plan demo solo](24-ke-hoach-demo-3-ngay.md)
+> và [TK-A17](tasks/tk-a17-demo-checkpoint.md). Nội dung dưới giữ làm lịch sử kế hoạch 30/08.
+
+> **Điểm vào kế hoạch ngày 30/08 cho A, B và AI.** Đọc file này sau `CLAUDE.md`, rồi chỉ đọc
 > tk-file của task mình đang nhận. Trạng thái chi tiết luôn lấy từ [`tasks/board.md`](tasks/board.md).
 
 ## 1. Baseline đã có
