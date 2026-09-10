@@ -29,7 +29,7 @@ kèm `latest.json` cho trạng thái tức thời. A (TK-A5) đọc `metrics.jso
 ## Nhật ký
 
 - UPDATE 10/09 — Code đã merge qua PR #26. A nhận bước nghiệm thu SSH tail còn lại tại
-  TK-A17/G1 cùng TK-A5/TK-S4; không yêu cầu B làm lại collector.
+  TK-A17/C02 cùng TK-A5/TK-S4; không yêu cầu B làm lại collector.
 
 - START 19/08 — dự kiến trong ngày.
 - UPDATE 19/08 — **Lùi W2** cùng chuỗi collector (quyết định dồn lực demo 24/08). Hạn dời

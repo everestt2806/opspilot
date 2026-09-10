@@ -1,65 +1,74 @@
-# Bàn giao và review — TK-A17
+# Sổ bàn giao và review — TK-A17
 
-> Mẫu đang chờ Worker. Không có test/runtime PASS mới trong phiên lập plan 10/09.
-> Giữ các mục R1/R2/R3 riêng và append lịch sử; không ghi đè kết quả cũ mất dấu.
+> PLANNED. Chưa có test/runtime PASS mới trong phiên lập plan.
+> Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-## Trạng thái hiện tại
+- Owner A solo; Worker chưa bắt đầu; Leader đã lập plan theo chặng.
+- Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
+- Branch Worker dự kiến `feat/a17-demo-checkpoint`, kế thừa HEAD plan mới nhất.
+- Chặng hiện tại C00; chặng được approve: chưa có. M8 chưa được chọn INCLUDE.
 
-- Owner: A solo; Worker: chưa bắt đầu; Leader: đã lập plan.
-- Baseline code: `683bfc6` (main sau PR #25/#26/#28).
-- Branch plan: `plan/a17-demo-checkpoint`; branch implementation dự kiến: `feat/a17-demo-checkpoint`.
-- Outcome: PLANNED; demo dự kiến 13/09, đóng băng 12/09.
-- B6 có report ngoài main: `dfc0ed7`; chưa có xác minh VPS mới từ A17.
+## Sổ gate (Leader xác nhận verdict)
 
-## Mẫu bàn giao mỗi chặng (Worker sao chép)
+| Chặng | Worker outcome | Reviewed SHA | Verdict                          | Handoff/review |
+| ----- | -------------- | ------------ | -------------------------------- | -------------- |
+| C00   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
+| C01   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
+| C02   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
+| C03   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
+| C04   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
+| C05   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
+| C06   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
+| C07   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
+| C08   | NOT_STARTED    | —            | INCLUDE/DEFERRED chưa quyết định | Chưa có        |
+| C09   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
 
-### Rn — GATE / ngày giờ
+## Mẫu `handoff-cNN.md`
 
-- Outcome: READY_FOR_LOCAL_REVIEW / BLOCKED.
-- Branch / baseline / code HEAD / docs HEAD:
-- Commit và mô tả thay đổi tiếng Anh dạng bullet:
-- File đã đổi và lý do:
-- GitNexus flow/impact hoặc fallback bằng chứng source:
+### Identity và phạm vi
 
-| Check                  | Command + cwd + runtime | Exit / count | Evidence | PASS/FAIL/NOT_RUN |
-| ---------------------- | ----------------------- | ------------ | -------- | ----------------- |
-| Focused                | Chưa chạy               | —            | —        | NOT_RUN           |
-| Typecheck/lint/format  | Chưa chạy               | —            | —        | NOT_RUN           |
-| Full suite / build     | Chưa chạy               | —            | —        | NOT_RUN           |
-| Collector / ML pytest  | Chưa chạy               | —            | —        | NOT_RUN           |
-| Live SSH + SQLite + ML | Chưa chạy               | —            | —        | NOT_RUN           |
-| UI / rehearsal         | Chưa chạy               | —            | —        | NOT_RUN           |
+- Chặng / outcome / branch / ngày thực hiện:
+- Base SHA / code HEAD / docs HEAD (docs HEAD có thể báo ở terminal sau commit):
+- Review chặng trước được kế thừa:
+- Commit list và bullet tiếng Anh mô tả thay đổi:
+- File đổi, lý do, scope ngoại lệ nếu có:
+- Diff để reviewer chạy: `git diff <base>..<code-head> -- <paths>`.
 
-- Manifest: VPS/app/path/port/container/deployment IDs; không secret.
-- Dữ liệu: range seq/time, số mẫu, duplicates, offset, score null/non-null, trạng thái train.
-- Fault: endpoint/setting/thời điểm bật-tắt; latency/status thật, alert mở/đóng/label.
-- Rollback: attempt/current/runtime image, kết quả health và marker DB trước/sau.
-- Ảnh/video và kịch bản tái hiện:
-- Máy/VPS đang để ở trạng thái nào; fault còn bật không; app/collector/ML process nào còn chạy:
-- Việc đã dọn, phạm vi và cách phục hồi (nếu có):
-- Vấn đề chưa giải quyết, tác động demo, cách tái hiện:
-- Checkpoint kế tiếp / cần reviewer quyết định:
-- Untracked/stash của A được giữ nguyên:
-- CHƯA PUSH — CHƯA MỞ PR — CHƯA MERGE.
+### Bằng chứng
 
-### Review của Leader (Worker không tự điền kết luận)
+| Case ID                  | Command + cwd + runtime | Exit/count | PASS/FAIL/NOT_RUN | Evidence path |
+| ------------------------ | ----------------------- | ---------- | ----------------- | ------------- |
+| Điền từng case của chặng | Chưa chạy               | —          | NOT_RUN           | —             |
 
-- Reviewed code SHA:
-- Verdict: APPROVED_GATE / CHANGES_REQUESTED / BLOCKED.
-- Findings: ID, mức P0/P1/P2, file/line, trigger, expected/actual, cách kiểm chứng sửa.
-- Điều kiện mở checkpoint tiếp theo hoặc P1:
+- Checklist DoD: từng checkbox map tới case/evidence, không chỉ ghi “all pass”.
+- Live manifest đã bỏ secret: host/app/path/port/container/deployment IDs.
+- Dữ liệu nguồn: seq/time range, counts, offset, duplicates, model/null state nếu áp dụng.
+- UI: route/click path, viewport, screenshot và kết quả mong đợi/quan sát.
+- Incident/recovery: fault/reset UTC, alert ID, current/runtime image, marker DB trước/sau.
+- Tình trạng laptop/VPS sau test: app/collector/ML còn chạy, fault đã reset chưa.
+- Blocker, giới hạn, phần NOT_RUN và điều kiện gỡ; không nhận test cũ làm kết quả mới.
+- Untracked/stash không bị chạm. CHƯA PUSH — CHƯA PR — CHƯA MERGE.
 
-### REVIEW-FIX của Worker
+### REVIEW-FIX (append mỗi vòng)
 
-| Finding | Fix commit | Regression / lệnh | Kết quả | Reviewer xác nhận |
-| ------- | ---------- | ----------------- | ------- | ----------------- |
-| Chưa có | —          | —                 | —       | Chờ review        |
+| Finding | Fix commit | Regression | Evidence | Reviewer xác nhận |
+| ------- | ---------- | ---------- | -------- | ----------------- |
+| Chưa có | —          | —          | —        | Chờ review        |
 
-## Gate cuối cùng
+## Mẫu `review-cNN.md` — Leader điền
 
-- [ ] G1 APPROVED: collector deploy + live SQLite + ML thật.
-- [ ] G2 APPROVED: Monitor/alert/label/settings/versions/rollback thật.
-- [ ] G3 APPROVED: test gate + hai rehearsal + evidence + runbook.
-- [ ] P1: APPROVED hoặc DEFERRED có lý do, UI/lời demo khớp khả năng thật.
-- [ ] Leader xác nhận DEMO_READY đúng SHA; không đồng nghĩa toàn bộ dự án hoàn thành.
-- [ ] Merge + DoD đủ bằng chứng thì mới đổi board HOÀN THÀNH.
+- Reviewed base/code SHA và kiểm tra có kế thừa chặng trước:
+- Gate checked: source/diff, commands, live/UI evidence nào đã kiểm tra trực tiếp:
+- Findings: ID `Cnn-Rm-xx`, BLOCKER/MAJOR/MINOR, file/line, trigger, expected/actual,
+  cách tái hiện, fix/kiểm chứng cần có. Phân biệt evidence Worker và reviewer tự chạy.
+- Verdict: APPROVED / CHANGES_REQUESTED / BLOCKED.
+- Chặng tiếp được mở; riêng C08 ghi INCLUDE hoặc DEFERRED và lý do.
+- Nếu APPROVED: liệt kê hạn chế được chấp nhận, ảnh hưởng demo và nơi theo dõi.
+
+## Gate cuối
+
+- [ ] C00–C07 APPROVED đúng SHA được kế thừa.
+- [ ] C08 APPROVED hoặc DEFERRED rõ, UI/kịch bản khớp khả năng thật.
+- [ ] C09: full tests/build, hai rehearsal, ảnh/video/runbook có bằng chứng.
+- [ ] Leader xác nhận DEMO_READY đúng SHA.
+- [ ] Merge + DoD đủ bằng chứng mới đổi board HOÀN THÀNH.

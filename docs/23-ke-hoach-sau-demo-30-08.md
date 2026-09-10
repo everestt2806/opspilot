@@ -1,6 +1,6 @@
 # Kế hoạch sau demo cơ bản — chốt ngày 30/08/2026
 
-> Cập nhật 10/09: ưu tiên 3 ngày tới theo [plan demo solo](24-ke-hoach-demo-3-ngay.md)
+> Cập nhật 10/09: ưu tiên hiện tại theo [plan demo từng chặng](24-ke-hoach-demo-theo-chang.md)
 > và [TK-A17](tasks/tk-a17-demo-checkpoint.md). Nội dung dưới giữ làm lịch sử kế hoạch 30/08.
 
 > **Điểm vào kế hoạch ngày 30/08 cho A, B và AI.** Đọc file này sau `CLAUDE.md`, rồi chỉ đọc

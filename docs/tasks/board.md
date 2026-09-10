@@ -1,7 +1,7 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
 > Quy trình bắt buộc: [`README.md`](README.md). Kế hoạch sau demo và điểm vào cho AI mới:
-> [`../24-ke-hoach-demo-3-ngay.md`](../24-ke-hoach-demo-3-ngay.md).
+> [`../24-ke-hoach-demo-theo-chang.md`](../24-ke-hoach-demo-theo-chang.md).
 >
 > Trạng thái hợp lệ: `BACKLOG · TUẦN NÀY · ĐANG LÀM · CHỜ REVIEW · HOÀN THÀNH · BLOCKED`.
 > Mỗi người tối đa **một** task `ĐANG LÀM`; Worker đổi trạng thái khi thật sự bắt đầu, không đổi
@@ -15,29 +15,31 @@
   Code B4/B5/B2 đã merge; báo cáo runtime B6 còn ở nhánh riêng, cần tái xác minh.
 - Baseline đã fetch: `origin/main@683bfc6`; PR #25 (A15), #26 (B4/B5), #28 (B2) đã merge.
 - Nhánh plan `plan/a17-demo-checkpoint` từ baseline; chưa implementation/test runtime A17.
-- P0: collector deploy kèm app → metric thật/ML → Monitor/alert/label → recovery/rollback thủ công.
-  M8 theo score là P1 có điều kiện; ngày 12/09 đóng băng, demo dự kiến 13/09.
+- P0: website ghi chú thật → người dùng thấy chậm → Monitor giải thích/cảnh báo → khôi phục →
+  website tốt lại, giữ dữ liệu; có timeline và so sánh trước/sau. Chi tiết ML thu gọn.
+- Tiến độ theo C00–C09, mỗi chặng một file và một review. C00 chưa bắt đầu; C08 (M8) tùy chọn
+  sau C07 APPROVED + Leader INCLUDE. Không chia ngày/giờ công, không tự code vượt gate.
 
 ## Đang ưu tiên — W3/W4
 
-| ID     | Task                                                                 | Chủ                   | Hạn      | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                                 |
-| ------ | -------------------------------------------------------------------- | --------------------- | -------- | ---------- | --------------------------- | --------------------------- | ----------------------------------------------------------------------- |
-| TK-A17 | Demo solo: collector/ML live + Monitor/alert + recovery/versions     | A                     | 12/09    | TUẦN NÀY   | `plan/a17-demo-checkpoint`  | `main@683bfc6`              | Plan sẵn sàng; Worker chưa bắt đầu; G1/G2/G3 + P1 có mốc cắt            |
-| TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09    | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                   | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới                  |
-| TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09    | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge               | `fe1da33`; 21/21 theo task B                                            |
-| TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | 10/09    | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                   | Code đã merge; 26/26 + smoke local theo B; DoD SSH tail khép tại A17/G1 |
-| TK-B6  | M5: collector Docker trên VPS                                        | B → A tích hợp        | 10/09    | CHỜ REVIEW | `feat/m05-collector-docker` | report `dfc0ed7` chưa merge | B báo VM02 68 mẫu/11 phút; A17/G1 tái xác minh, giữ app B               |
-| TK-S4  | Gate dữ liệu thật A16 + collector VPS                                | A solo                | 10/09    | TUẦN NÀY   | Qua TK-A17                  | G1/R1                       | Không còn chờ B; chọn VPS sau preflight                                 |
-| TK-B8  | Monitor Dashboard: chart + score + alert UI                          | A làm thay B từ 10/09 | 11/09    | TUẦN NÀY   | Qua TK-A17                  | G2/R2                       | Chưa có code Monitor UI trong main; không task song song                |
-| TK-A7  | M3: detector 3 Tier 1                                                | A                     | Sau demo | BACKLOG    | `feat/m03-tier1-detectors`  | Sau A17                     | Hoãn để ưu tiên demo dữ liệu thật                                       |
-| TK-B2  | M12: next-blog + vite-spa + fault endpoint                           | B                     | 10/09    | HOÀN THÀNH | `feat/m12-demo-apps-rest`   | #28 merge                   | 3 app Docker/fault smoke theo B; detector 3 stack chưa hoàn thành       |
-| TK-S5  | Gate MVP 16/24 FR + smoke/rollback/alert                             | A solo                | Sau A17  | BACKLOG    | —                           | A17/R3                      | A17 là checkpoint demo, không tự xác nhận 16/24 FR                      |
+| ID     | Task                                                                 | Chủ                   | Hạn      | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                                            |
+| ------ | -------------------------------------------------------------------- | --------------------- | -------- | ---------- | --------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
+| TK-A17 | Demo trực quan: website → sự cố → khôi phục → đối chiếu dữ liệu      | A                     | C09      | TUẦN NÀY   | `plan/a17-demo-checkpoint`  | `main@683bfc6`              | C00 chưa bắt đầu; file chặng C00–C09 trong `tasks/tk-a17/`; từng chặng dừng review |
+| TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09    | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                   | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới                             |
+| TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09    | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge               | `fe1da33`; 21/21 theo task B                                                       |
+| TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02      | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                   | Code đã merge; DoD SSH tail tại A17/C02                                            |
+| TK-B6  | M5: collector Docker trên VPS                                        | B → A tích hợp        | C01      | CHỜ REVIEW | `feat/m05-collector-docker` | report `dfc0ed7` chưa merge | A17/C00–C01 tái xác minh, giữ app B                                                |
+| TK-S4  | Gate dữ liệu thật A16 + collector VPS                                | A solo                | C03      | TUẦN NÀY   | Qua TK-A17                  | C01–C03                     | Collector, ingestion và ML có review riêng                                         |
+| TK-B8  | Monitor Dashboard: chart + score + alert UI                          | A làm thay B từ 10/09 | C06      | TUẦN NÀY   | Qua TK-A17                  | C05–C06                     | Monitor dễ hiểu, alert/label/settings/summary; không task song song                |
+| TK-A7  | M3: detector 3 Tier 1                                                | A                     | Sau demo | BACKLOG    | `feat/m03-tier1-detectors`  | Sau A17                     | Hoãn để ưu tiên demo dữ liệu thật                                                  |
+| TK-B2  | M12: next-blog + vite-spa + fault endpoint                           | B                     | 10/09    | HOÀN THÀNH | `feat/m12-demo-apps-rest`   | #28 merge                   | 3 app Docker/fault smoke theo B; detector 3 stack chưa hoàn thành                  |
+| TK-S5  | Gate MVP 16/24 FR + smoke/rollback/alert                             | A solo                | Sau A17  | BACKLOG    | —                           | A17/C09                     | Demo có evidence, không tự xác nhận 16/24 FR                                       |
 
 ## Phụ thuộc được xử lý trong A17 hoặc sau demo
 
 | ID    | Task                                                    | Chủ | Trạng thái | Điều kiện gỡ chặn                                          |
 | ----- | ------------------------------------------------------- | --- | ---------- | ---------------------------------------------------------- |
-| TK-A5 | M1 readFileTail + resource check — nghiệm thu file thật | A   | TUẦN NÀY   | B5 code đã merge; nghiệm thu A17/G1 cùng TK-S4             |
+| TK-A5 | M1 readFileTail + resource check — nghiệm thu file thật | A   | TUẦN NÀY   | B5 code đã merge; nghiệm thu A17/C02 cùng TK-S4            |
 | TK-S2 | Hoàn tất hồ sơ vận hành 2 VPS                           | A   | BLOCKED    | Snapshot sạch, pubkey B, DC/hạn thanh toán trong `docs/08` |
 
 ## Đã hoàn thành/merge

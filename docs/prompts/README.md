@@ -3,8 +3,9 @@
 Mục tiêu: **bất kỳ model AI nào** (Claude, GPT, Gemini, Copilot, Cursor…) cũng sinh ra code
 khớp với phần còn lại của hệ thống, ở phiên thứ nhất hay phiên thứ hai trăm.
 
-> 10/09: A làm solo checkpoint demo 3 ngày. Dùng [prompt TK-A17](tk-a17-worker.md)
-> với [task packet](../tasks/tk-a17-demo-checkpoint.md); bàn giao G1/G2/G3 cho Leader review.
+> 10/09: A làm solo demo trực quan theo chặng. Dùng [prompt TK-A17](tk-a17-worker.md)
+> với [task packet](../tasks/tk-a17-demo-checkpoint.md); mỗi lượt chỉ nhận một chặng C00–C09,
+> có handoff/review riêng. Bắt đầu C00; không tự làm hết các chặng trong một lượt.
 
 ---
 

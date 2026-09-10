@@ -1,9 +1,9 @@
 # PHÂN CÔNG MỚI — A CORE/ALGORITHMS, B UI/DELIVERY
 
-> **Ưu tiên 10–12/09/2026:** A làm solo TK-A17, bao gồm tích hợp collector/VPS và Monitor UI
-> còn thiếu của B6/B8. [Plan 3 ngày](24-ke-hoach-demo-3-ngay.md) và
+> **Ưu tiên hiện hành (cập nhật 10/09):** A làm solo TK-A17, bao gồm tích hợp collector/VPS và Monitor UI
+> còn thiếu của B6/B8. [Plan theo chặng](24-ke-hoach-demo-theo-chang.md) và
 > [board](tasks/board.md) là điểm vào hiện tại; B không có task chặn demo.
-> Worker thực thi, Leader review từng checkpoint. Phân vai dài hạn bên dưới giữ nguyên.
+> Worker thực thi đúng một chặng C00–C09, Leader review trước chặng tiếp. Phân vai dài hạn bên dưới giữ nguyên.
 
 > **Lịch sử cập nhật 30/08/2026:** TK-B9 đã merge qua PR #21 và demo cơ bản đã hoàn tất.
 > Điểm vào mới của A/B nằm ở [`23-ke-hoach-sau-demo-30-08.md`](23-ke-hoach-sau-demo-30-08.md):
