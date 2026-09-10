@@ -1,0 +1,13 @@
+{
+  "reviewed_code": "d4ec3be",
+  "reviewed_docs": "23cd248",
+  "started_utc": "2026-09-10T20:02:28.201692+00:00",
+  "command": [
+    "D:\\Developing\\DuAnCNTT\\node_modules\\.pnpm\\electron@39.8.10\\node_modules\\electron\\dist\\electron.exe",
+    "D:\\Developing\\DuAnCNTT\\tools\\a17-c00-native.cjs"
+  ],
+  "cwd": "D:\\Developing\\DuAnCNTT\\app",
+  "exit_code": 0,
+  "stdout": "\r\n{\"executable\":\"D:\\\\Developing\\\\DuAnCNTT\\\\node_modules\\\\.pnpm\\\\electron@39.8.10\\\\node_modules\\\\electron\\\\dist\\\\electron.exe\",\"node\":\"v22.22.1\",\"electron\":\"39.8.10\",\"abi\":\"140\",\"sqliteModule\":\"D:\\\\Developing\\\\DuAnCNTT\\\\node_modules\\\\.pnpm\\\\better-sqlite3@13.0.3\\\\node_modules\\\\better-sqlite3\\\\lib\\\\index.js\"}\n{\"sqlite\":\"3.53.4\",\"ok\":1}\n",
+  "stderr": ""
+}

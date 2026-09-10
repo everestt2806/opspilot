@@ -1,0 +1,14 @@
+{
+  "reviewed_code": "d4ec3be",
+  "reviewed_docs": "23cd248",
+  "started_utc": "2026-09-10T20:02:04.186334+00:00",
+  "command": [
+    "C:\\Users\\everestt28\\AppData\\Local\\pnpm\\bin\\node.exe",
+    "-p",
+    "JSON.stringify({path:process.execPath,version:process.version,abi:process.versions.modules})"
+  ],
+  "cwd": "D:\\Developing\\DuAnCNTT\\app",
+  "exit_code": 0,
+  "stdout": "{\"path\":\"C:\\\\Users\\\\everestt28\\\\AppData\\\\Local\\\\pnpm\\\\bin\\\\node.exe\",\"version\":\"v22.23.2\",\"abi\":\"127\"}\n",
+  "stderr": ""
+}

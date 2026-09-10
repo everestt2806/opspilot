@@ -31,11 +31,14 @@ Sửa code baseline nếu buộc phải làm thì tách finding/proposal cho Lea
 
 ## Case và DoD
 
-- [ ] C00-T1: Node 22 + Python venv + native DB xác minh được bằng command, exit 0.
-- [ ] C00-T2: focused deploy/monitor + collector pytest + typecheck có log/count/exit.
-- [ ] C00-T3: SSH read-only thành công, Docker/Compose và tài nguyên đủ kế hoạch.
-- [ ] C00-T4: manifest không trùng app B; experiment không bị tác động.
-- [ ] C00-T5: app boot được; link/entry hiện tại và giới hạn public access ghi rõ.
+- [x] C00-T1: Node 22 + Python venv + native DB xác minh được bằng command, exit 0.
+- [x] C00-T2: focused deploy/monitor + collector pytest + typecheck có log/count/exit.
+- [x] C00-T3: SSH read-only thành công, Docker/Compose và tài nguyên đủ kế hoạch.
+- [x] C00-T4: manifest không trùng app B; experiment không bị tác động.
+- [x] C00-T5: app boot được; link/entry hiện tại và giới hạn public access ghi rõ.
+
+Leader xác nhận 11/09 tại [review-c00](review-c00.md), code `d4ec3be` / docs `23cd248`.
+Mapping từng case tới evidence và giới hạn được chấp nhận nằm trong review.
 
 ## Evidence và review
 

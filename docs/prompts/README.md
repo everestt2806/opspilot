@@ -9,7 +9,8 @@ khớp với phần còn lại của hệ thống, ở phiên thứ nhất hay p
 > có handoff/review riêng. Bắt đầu C00; không tự làm hết các chặng trong một lượt.
 > Bản giao thi công mới: [Worker playbook](tk-a17-worker-playbook.md). C08 tự khôi phục
 > bắt buộc, tách C08A/B/C; A trình chiếu và không thao tác rollback trong cảnh tự khôi phục.
-> C00 đã khảo sát một phần, chưa APPROVED; prompt mới hướng dẫn kế thừa đúng HEAD và evidence.
+> C00 [APPROVED](../tasks/tk-a17/review-c00.md) code `d4ec3be` / docs `23cd248`;
+> prompt C01 đã điền nằm cuối review, tiếp tục HEAD chứa commit review.
 
 ---
 

@@ -12,6 +12,10 @@
 > Worker nhận triển khai riêng. Mục 7–10 ánh xạ yêu cầu → chặng → bằng chứng và quy trình
 > giao việc. Khảo sát C00 đã chạy một phần, chưa có handoff/verdict APPROVED; xem
 > [ghi nhận khảo sát](tasks/tk-a17/preflight-11-09.md). Không tự mở C01.
+>
+> **Sau review 11/09:** [C00 APPROVED](tasks/tk-a17/review-c00.md), code `d4ec3be`,
+> docs `23cd248`. Đã mở duy nhất C01 để A giao Worker; các ghi chú khảo sát phía trên
+> là lịch sử trước review. Prompt C01 đã điền ở cuối hồ sơ review.
 
 ## 1. Câu chuyện demo mới
 

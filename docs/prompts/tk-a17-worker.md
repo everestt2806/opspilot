@@ -3,7 +3,9 @@
 > Bản giao 11/09: A yêu cầu lập kế hoạch để giao Worker triển khai. Toàn bộ phạm vi nằm ở
 > [plan chi tiết](../24-ke-hoach-demo-theo-chang.md), đặc biệt ma trận R01–R25 và mục 8–10.
 > Sao chép khối đầu để giao lượt đầu; các khối sau chỉ dùng khi đã có review tương ứng.
-> Có khảo sát C00 local trước đó, nhưng chưa có chặng nào APPROVED.
+> Cập nhật sau review 11/09: [C00 APPROVED](../tasks/tk-a17/review-c00.md), code `d4ec3be`,
+> docs `23cd248`. Dùng prompt C01 đã điền tại cuối review để giao lượt tiếp.
+> Khối khởi động C00 bên dưới giữ làm mẫu lịch sử, không yêu cầu làm lại chặng đã duyệt.
 
 Prompt khởi động (chỉ C00):
 

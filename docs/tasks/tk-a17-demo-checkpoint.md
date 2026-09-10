@@ -2,13 +2,14 @@
 
 | Chủ    | Branch plan                | Baseline code | Trạng thái                  |
 | ------ | -------------------------- | ------------- | --------------------------- |
-| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — kế hoạch sẵn giao Worker/C00 |
+| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — C00 APPROVED, mở C01 |
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
 · [Sổ bàn giao](tk-a17-worker-handoff.md).
 Hướng dẫn thực thi: [Worker playbook](../prompts/tk-a17-worker-playbook.md).
 Yêu cầu đầy đủ: [plan mục 7–10](../24-ke-hoach-demo-theo-chang.md#7-ma-trận-đầy-đủ-yêu-cầu-giao-worker).
-Khảo sát đã có: [preflight 11/09](tk-a17/preflight-11-09.md), chưa phải C00 APPROVED.
+Khảo sát: [preflight 11/09](tk-a17/preflight-11-09.md). Trạng thái mới:
+[C00 APPROVED](tk-a17/review-c00.md), code `d4ec3be` / docs `23cd248`; C01 chưa bắt đầu.
 Mục tiêu: A trình chiếu **tự phát hiện → tự rollback → xác minh phục hồi**. C08 bắt buộc.
 Không chia theo ngày/giờ công. Thời lượng 10s/30s/baseline/test vẫn giữ theo yêu cầu kỹ thuật.
 
@@ -123,3 +124,14 @@ app B, dữ liệu thật và stash hiện có.
  Chưa push/PR/merge; Leader cần review target/ABI và mở C01 riêng nếu approve.
 Chờ review: board CHỜ REVIEW kèm ID chặng. Tiếp tục/sửa: ĐANG LÀM.
 HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push/merge.
+
+- START 11/09 — Leader review C00: input code `d4ec3be`, docs `23cd248`, kế thừa plan
+  `bf951f9`; kiểm tra scope/ancestry, raw evidence, native runtime và target read-only.
+  Chạy kiểm chứng độc lập có log reviewer riêng; chưa mở hoặc thực thi C01.
+- REVIEW 11/09 — [review-c00](tk-a17/review-c00.md): APPROVED code `d4ec3be` / docs `23cd248`.
+  Reviewer tự chạy focused 64/64, collector 26/26, typecheck node/web, native Node/Electron
+  và SSH VM02 exit 0; raw JSON tại `docs/evidence/tk-a17/c00/review-01/`. Đã đọc build/boot/
+  browser evidence Worker và mở ảnh, không báo các bước đó là reviewer chạy lại.
+  Đóng hai MINOR hồ sơ; chấp nhận giới hạn helper C00 theo review. Mở duy nhất C01 để A
+  giao Worker, target VM02/a17-notes-0911 phải kiểm tra lại trước deploy. Không thực hiện C01,
+  không push/PR/merge; task TUẦN NÀY cho lượt Worker tiếp.

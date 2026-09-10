@@ -20,8 +20,9 @@ quyền deploy và chưa cấp `app_id`, deployment ID hoặc host port. C01 ph�
 ## Ownership and safety
 
 - Local DB mở `mode=ro`: `app=[]`, `running_experiments=[]`; không sửa DB.
-- VM02 inventory thấy `express-demo-app`/`express-demo-collector`; cả hai vẫn healthy,
-  restart count 0. Đây là app/dữ liệu của B, không phải website A17.
+- VM02 inventory thấy `express-demo-app` healthy và `express-demo-collector` running;
+  cả hai restart count 0. Không suy healthcheck riêng cho collector. Đây là app/dữ liệu
+  của B, không phải website A17.
 - VM02 target path, container và network đều chưa tồn tại. Không deploy, restart, stop,
   fault, rollback hoặc reset trong C00.
 - Secret/key path không đưa vào manifest public; raw SSH evidence giữ command nhưng không

@@ -1,0 +1,17 @@
+{
+  "reviewed_code": "d4ec3be",
+  "reviewed_docs": "23cd248",
+  "started_utc": "2026-09-10T20:02:04.345380+00:00",
+  "command": [
+    "C:\\Users\\everestt28\\AppData\\Local\\pnpm\\bin\\node.exe",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "--maxWorkers=1",
+    "src/main/deploy",
+    "src/main/monitor"
+  ],
+  "cwd": "D:\\Developing\\DuAnCNTT\\app",
+  "exit_code": 0,
+  "stdout": "\n RUN  v4.1.10 D:/Developing/DuAnCNTT/app\n\n\n Test Files  12 passed (12)\n      Tests  64 passed (64)\n   Start at  03:02:05\n   Duration  10.95s (transform 623ms, setup 3.66s, import 2.05s, tests 1.75s, environment 2ms)\n\n",
+  "stderr": ""
+}

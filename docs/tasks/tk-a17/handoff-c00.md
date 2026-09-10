@@ -4,7 +4,7 @@
 
 - Chặng / outcome / branch / ngày: C00 / `READY_FOR_LOCAL_REVIEW` / `feat/a17-demo-checkpoint` / 11/09/2026.
 - Base SHA: `683bfc6` (code baseline); kế hoạch đầu vào `ac6d8cd`; code HEAD đầu lượt `bf951f9`.
-- Code HEAD sau commit: `d4ec3be`; docs HEAD: `adfd3f8`.
+- Code HEAD sau commit: `d4ec3be`; docs HEAD tại lúc nộp review: `23cd248` (sau `adfd3f8`).
 - Review chặng trước: không có; C00 là gate đầu tiên.
 - Scope: runtime/native ABI, focused baseline, SSH read-only inventory, target manifest, app boot/browser boundary. Không sửa `app/` source, collector, contract, pipeline, ML hoặc renderer.
 - Untracked `.devflow/`, `docs/ban-giao-20-08.md`, `logo.png` và stash của A được giữ nguyên.
@@ -14,6 +14,7 @@
 - Commit list: `d4ec3be` — Record verified C00 runtime, read-only inventory, target manifest,
   evidence and local handoff; downstream stages remain NOT_RUN.
   `adfd3f8` — Pin the C00 code/docs provenance in the handoff.
+  `23cd248` — Finalize C00 provenance before Leader review.
 - File C00: `docs/evidence/tk-a17/c00/`, `docs/tasks/tk-a17/handoff-c00.md`, task log/board; helper đã rà soát gồm `tools/a17-c00-native.cjs`, `tools/a17-c00-boot.cjs`, `tools/a17-c00-inventory.py`.
 - Diff scope: chỉ artifact/evidence/task records C00; không stage file ngoài danh sách.
 
@@ -66,3 +67,9 @@
 ## Reviewer handoff
 
 Leader review needed for native ABI interpretation, VM02 target ownership, VM01/public network limitations, and permission to open C01. `READY_FOR_LOCAL_REVIEW`; Worker stops here.
+
+### Leader review 11/09
+
+Đã review code `d4ec3be` / docs `23cd248`: [APPROVED C00](review-c00.md).
+Leader đóng hai finding hồ sơ MINOR trong commit review, không sửa helper/source sản phẩm.
+Kết quả và giới hạn kế thừa C01 nằm trong review; phần Worker handoff phía trên giữ lịch sử.

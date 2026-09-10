@@ -1,0 +1,25 @@
+{
+  "reviewed_code": "d4ec3be",
+  "reviewed_docs": "23cd248",
+  "started_utc": "2026-09-10T20:02:28.455010+00:00",
+  "command": [
+    "ssh",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "StrictHostKeyChecking=yes",
+    "-o",
+    "IdentitiesOnly=yes",
+    "-o",
+    "ConnectTimeout=10",
+    "-i",
+    "C:\\Users\\everestt28\\.ssh\\opspilot_ed25519",
+    "deploy@221.121.1.80",
+    "bash -s"
+  ],
+  "cwd": "D:\\Developing\\DuAnCNTT\\app",
+  "stdin_lf": "set -eu\ndate -u +%FT%TZ\nid -un\ndocker --version\ndocker compose version\nfree -m\ndf -Pm /opt/opspilot\ndocker ps -a --format '{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}'\ndocker inspect --format '{{.Name}}|{{.State.StartedAt}}|{{.RestartCount}}|{{.HostConfig.RestartPolicy.Name}}' express-demo-app express-demo-collector\ntest ! -e /opt/opspilot/a17-notes-0911\nif docker ps -a --format '{{.Names}}' | grep -q '^a17-notes-0911'; then exit 2; fi\nif docker network ls --format '{{.Name}}' | grep -q '^a17-notes-0911'; then exit 2; fi\necho TARGET_FREE\nps -eo comm,args | awk '/[r]un_experiment.py/ {n++} END {print \"experiment_process_count=\" n+0}'\ncurl --max-time 10 -sS -o /dev/null -w 'health_http=%{http_code}\\n' http://127.0.0.1:30001/health\n",
+  "exit_code": 0,
+  "stdout": "2026-09-10T20:02:33Z\ndeploy\nDocker version 29.7.2, build a7dcaa6\nDocker Compose version v5.5.0\n               total        used        free      shared  buff/cache   available\nMem:            3909         625         611           0        2967        3283\nSwap:              0           0           0\nFilesystem     1048576-blocks  Used Available Capacity Mounted on\n/dev/sda2               39707  6324     31716      17% /\nf085b56f8fe0|express-demo-app|opspilot-demo-express:local|Up 2 days (healthy)|0.0.0.0:30001->3000/tcp, [::]:30001->3000/tcp\ne9c40225b3e5|express-demo-collector|opspilot-collector:1.0.0|Up 2 days|\n/express-demo-app|2026-09-08T07:41:10.095487766Z|0|unless-stopped\n/express-demo-collector|2026-09-08T07:41:10.10479827Z|0|unless-stopped\nTARGET_FREE\nexperiment_process_count=0\nhealth_http=200\n",
+  "stderr": ""
+}

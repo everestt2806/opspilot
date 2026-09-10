@@ -1,19 +1,19 @@
 # Sổ bàn giao và review — TK-A17
 
-> PLAN_READY 11/09. A yêu cầu kế hoạch để giao Worker triển khai.
-> Có khảo sát local [preflight](tk-a17/preflight-11-09.md); chưa có handoff/review C00.
+> C00 APPROVED 11/09: [review](tk-a17/review-c00.md), code `d4ec3be`, docs `23cd248`.
+> Chặng tiếp được mở để A giao Worker: C01; chưa thực hiện C01.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; Leader hoàn thiện kế hoạch, Worker nhận C00 sau khi A giao prompt.
+- Owner A solo; Worker đã bàn giao C00; Leader review và mở C01 để A giao lượt tiếp.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
-- Chặng hiện tại C00; chặng được approve: chưa có. C08 bắt buộc, tách C08A/B/C, đều chưa bắt đầu.
+- Chặng được approve: C00. Chặng tiếp C01; C08 bắt buộc, tách C08A/B/C, đều chưa bắt đầu.
 
 ## Sổ gate (Leader xác nhận verdict)
 
 | Chặng | Worker outcome | Reviewed SHA | Verdict | Handoff/review |
 | ----- | -------------- | ------------ | ------- | -------------- |
-| C00   | READY_FOR_LOCAL_REVIEW | local C00 commit | PENDING | [handoff-c00](handoff-c00.md); Leader review cần thực hiện |
+| C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C02   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
