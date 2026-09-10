@@ -3,13 +3,15 @@
 > Cập nhật 10/09/2026: A làm solo, Worker thực hiện, Leader review từng chặng.
 > Kế hoạch thay bản chia 3 ngày. Không có hạn ngày/giờ công cho từng chặng;
 > tiến độ tính bằng đầu ra được nghiệm thu. Ưu tiên giảng viên không chuyên DevOps.
+> Chốt mới: A thao tác và trình chiếu; thầy quan sát. C08 tự khôi phục là bắt buộc.
+> Worker đọc [playbook cầm tay chỉ việc](prompts/tk-a17-worker-playbook.md) trước nhận chặng.
 > [Task điều phối](tasks/tk-a17-demo-checkpoint.md) · [Prompt](prompts/tk-a17-worker.md)
 > · [Sổ bàn giao/review](tasks/tk-a17-worker-handoff.md).
 
 ## 1. Câu chuyện demo mới
 
 “Đây là một website có người sử dụng. Khi website chậm, hệ thống biết chuyện gì đang xảy ra,
-báo cho người quản lý và giúp đưa website về trạng thái hoạt động tốt, giữ nguyên dữ liệu.”
+báo cho người quản lý và tự đưa website về phiên bản tốt, giữ nguyên dữ liệu.”
 
 Màn trình diễn cần cho thấy đồng thời **trải nghiệm người dùng** và **khả năng của OpsPilot**.
 Giảng viên không cần biết Docker/SSH là gì mới hiểu thành quả.
@@ -30,7 +32,7 @@ Gây lỗi là hoạt động trình diễn có công bố; không dựng cảnh
 
 Tận dụng Express + PostgreSQL và `/items` hiện có để làm trang “Sổ ghi chú nhóm”.
 Có danh sách, thêm ghi chú, tải lại, số bản ghi lấy từ nguồn thật và thời gian request vừa đo.
-Ví dụ thầy nhập “Buổi review với thầy”, rồi thấy ghi chú đó vẫn tồn tại sau rollback.
+Ví dụ A nhập “Buổi review với thầy” trên màn hình trình chiếu, rồi cho thấy ghi chú đó vẫn tồn tại sau rollback.
 Tên gọi và copy được đổi cho thân thiện; không mở rộng schema/nghiệp vụ thành sản phẩm khác.
 
 Khi chậm: nút có loading thật, thông báo “Đang tải dữ liệu…”, thời gian phản hồi sau request.
@@ -50,7 +52,7 @@ Phản hồi: … ms       Lỗi kiểm tra HTTP: … % / 60s       Phiên bản
 [Đường thời gian phản hồi + ngưỡng + marker cảnh báo/khôi phục]
 
 Sự cố: đo được … ms, vượt ngưỡng … ms qua … mẫu liên tiếp
-[Mở website] [Xem cảnh báo] [Khôi phục phiên bản…]
+[Mở website] [Xem cảnh báo] [Tự khôi phục: BẬT · phương pháp đang chọn]
 
 Trước sự cố          Trong sự cố          Sau khôi phục
 … ms / … mẫu         … ms / … mẫu         … ms / … mẫu
@@ -68,7 +70,7 @@ Ví dụ từ dữ liệu rule thật: “Thời gian phản hồi vượt 2.000
 Ví dụ từ ML: “Mô hình phát hiện mẫu vận hành khác dữ liệu nền”; chỉ nêu metric nguyên nhân
 khi detail thực sự hỗ trợ. Không dùng AI sinh văn bản/LLM hay bịa kết luận nguyên nhân gốc.
 
-Timeline: cảnh báo mở → thao tác khôi phục → kiểm tra kết quả → phục hồi được quan sát.
+Timeline: cảnh báo mở → hệ thống tự rollback → kiểm tra kết quả → phục hồi được quan sát.
 Ghi chính xác thời điểm phát hiện; nếu ghi thời điểm bắt đầu fault thì phải lấy từ helper log
 thật hoặc đánh dấu thao tác thủ công, không suy ngược từ chart.
 
@@ -86,16 +88,16 @@ Không gọi tỷ lệ lỗi của probe là tỷ lệ toàn bộ khách hàng. 
 
 Baseline kiểm tra source/merge ngày 10/09: `origin/main@683bfc6`.
 
-| Phần                     | Bằng chứng                                                 | Khoảng thiếu                                                  |
-| ------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------- |
-| Deploy/rollback backend  | A15 PR #25; smoke VM02 01/09, suite tuần tự 220/220 lúc đó | Nối collector cả deploy lẫn restore, UI phiên bản thật        |
-| Collector/JSONL          | B4/B5 PR #26, test/smoke local theo tk-file B              | Nối deploy và kiểm tra SSH → SQLite                           |
-| Demo apps/fault          | B2 PR #28                                                  | Trang Express cần câu chuyện và phản hồi trực quan            |
-| B6 VPS                   | Report `dfc0ed7` trên `origin/feat/m05-collector-docker`   | Report chưa ở main; cần tái xác minh runtime                  |
-| Monitor/ML backend       | A16 PR #24                                                 | CLI fixture không chứng minh ML thật đã train từ VPS          |
-| Monitor UI               | Chưa có trong main                                         | Làm màn tình trạng, metric, score, cảnh báo                   |
-| Apps/Versions UI         | Còn mockProjects/mockVersions                              | Thay luồng demo bằng IPC thật                                 |
-| Auto-rollback theo score | Có spec M8, chưa có implementation                         | Chặng nâng cao C08; khác rollback khi deploy healthcheck fail |
+| Phần                     | Bằng chứng                                                 | Khoảng thiếu                                            |
+| ------------------------ | ---------------------------------------------------------- | ------------------------------------------------------- |
+| Deploy/rollback backend  | A15 PR #25; smoke VM02 01/09, suite tuần tự 220/220 lúc đó | Nối collector cả deploy lẫn restore, UI phiên bản thật  |
+| Collector/JSONL          | B4/B5 PR #26, test/smoke local theo tk-file B              | Nối deploy và kiểm tra SSH → SQLite                     |
+| Demo apps/fault          | B2 PR #28                                                  | Trang Express cần câu chuyện và phản hồi trực quan      |
+| B6 VPS                   | Report `dfc0ed7` trên `origin/feat/m05-collector-docker`   | Report chưa ở main; cần tái xác minh runtime            |
+| Monitor/ML backend       | A16 PR #24                                                 | CLI fixture không chứng minh ML thật đã train từ VPS    |
+| Monitor UI               | Chưa có trong main                                         | Làm màn tình trạng, metric, score, cảnh báo             |
+| Apps/Versions UI         | Còn mockProjects/mockVersions                              | Thay luồng demo bằng IPC thật                           |
+| Auto-rollback theo score | Có spec M8, chưa có implementation                         | C08 bắt buộc; khác rollback khi deploy healthcheck fail |
 
 B6 báo app `express-demo` trên VM02, port 30001, probe `/health`, không DB. App dựng tay
 không mặc nhiên có record trong SQLite A. A tạo app demo riêng qua OpsPilot, giữ app của B.
@@ -105,38 +107,43 @@ Phiên lập/revise plan chưa chạy lại app, test code hoặc VPS; không gh
 
 ## 4. Thứ tự chặng và review
 
-| Chặng | Hồ sơ giao Worker                                                        | Kết quả nghiệm thu                                     |
-| ----- | ------------------------------------------------------------------------ | ------------------------------------------------------ |
-| C00   | [Môi trường/baseline](tasks/tk-a17/c00-baseline.md)                      | Chạy được môi trường, biết đúng target và baseline     |
-| C01   | [Deploy kèm collector](tasks/tk-a17/c01-collector-deploy.md)             | App/DB/collector thật, JSONL đúng                      |
-| C02   | [Dữ liệu SSH → SQLite](tasks/tk-a17/c02-ingestion.md)                    | Không trùng/mất/trộn dữ liệu giữa deployment           |
-| C03   | [ML thật](tasks/tk-a17/c03-ml-runtime.md)                                | Train/score thật, down/recover đúng                    |
-| C04   | [Website demo nhìn thấy chậm/nhanh](tasks/tk-a17/c04-demo-experience.md) | Thao tác ghi chú thật, loading/lỗi/latency thấy được   |
-| C05   | [Màn tình trạng dễ hiểu](tasks/tk-a17/c05-monitor-ui.md)                 | Trạng thái lớn, chart thật, chi tiết ML thu gọn        |
-| C06   | [Sự cố/cảnh báo/so sánh](tasks/tk-a17/c06-incident-flow.md)              | Fault → alert → label → reset → before/after           |
-| C07   | [Khôi phục từ giao diện](tasks/tk-a17/c07-recovery.md)                   | Rollback thật, tiến trình, xác minh dữ liệu và history |
-| C08   | [Tự khôi phục — tùy chọn](tasks/tk-a17/c08-auto-rollback.md)             | M8 hoàn chỉnh hoặc DEFERRED có lý do                   |
-| C09   | [Nghiệm thu demo](tasks/tk-a17/c09-demo-acceptance.md)                   | Hai rehearsal + video/screenshot/runbook + DEMO_READY  |
+| Chặng | Hồ sơ giao Worker                                                        | Kết quả nghiệm thu                                           |
+| ----- | ------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| C00   | [Môi trường/baseline](tasks/tk-a17/c00-baseline.md)                      | Chạy được môi trường, biết đúng target và baseline           |
+| C01   | [Deploy kèm collector](tasks/tk-a17/c01-collector-deploy.md)             | App/DB/collector thật, JSONL đúng                            |
+| C02   | [Dữ liệu SSH → SQLite](tasks/tk-a17/c02-ingestion.md)                    | Không trùng/mất/trộn dữ liệu giữa deployment                 |
+| C03   | [ML thật](tasks/tk-a17/c03-ml-runtime.md)                                | Train/score thật, down/recover đúng                          |
+| C04   | [Website demo nhìn thấy chậm/nhanh](tasks/tk-a17/c04-demo-experience.md) | Thao tác ghi chú thật, loading/lỗi/latency thấy được         |
+| C05   | [Màn tình trạng dễ hiểu](tasks/tk-a17/c05-monitor-ui.md)                 | Trạng thái lớn, chart thật, chi tiết ML thu gọn              |
+| C06   | [Sự cố/cảnh báo/so sánh](tasks/tk-a17/c06-incident-flow.md)              | Fault → alert → label → reset → before/after                 |
+| C07   | [Khôi phục từ giao diện](tasks/tk-a17/c07-recovery.md)                   | Rollback thật, tiến trình, xác minh dữ liệu và history       |
+| C08   | [Tự khôi phục bắt buộc](tasks/tk-a17/c08-auto-rollback.md)               | C08A policy → C08B coordinator → C08C live, từng phần review |
+| C09   | [Nghiệm thu demo](tasks/tk-a17/c09-demo-acceptance.md)                   | Hai rehearsal + video/screenshot/runbook + DEMO_READY        |
 
 Một lượt Worker chỉ nhận một chặng. Chặng trước APPROVED mới code chặng tiếp.
 Mỗi chặng có base SHA/code HEAD, test, evidence, handoff và review riêng; không cần PR/merge
 giữa chặng. Chặng được approve không đồng nghĩa toàn bộ demo đã sẵn sàng.
 
-P0: C00–C07 và C09. Điểm nhấn bắt buộc là phát hiện → **một thao tác khôi phục có xác nhận**
-→ website tốt lại → ghi chú còn nguyên. C08 nâng thành tự khôi phục; chỉ mở khi C07 APPROVED,
-không còn finding blocking và Leader ghi INCLUDE. Nếu DEFERRED thì vào C09; không hiển thị
-toggle giả hoặc nói app tự chữa khi thực tế người dùng bấm rollback.
+P0: C00–C09, bao gồm C08. Điểm nhấn là **phát hiện → tự quyết định → tự rollback → xác minh
+website tốt lại**, A không bấm rollback/reset trong cửa sổ đo. C07 kiểm tra nền rollback thủ công;
+C08 chia C08A (quyết định), C08B (thực thi bền vững), C08C (UI + live), từng phần review riêng.
+Không tự hạ xuống manual rồi gọi DEMO_READY; chưa đạt phải báo blocker để A quyết định phạm vi.
+
+Màn chính bắt buộc: tự khôi phục theo rule thật, nhãn rõ. ML thật train/score song song;
+chỉ demo thêm trusted ML sau khi có evidence trigger thật. Không gọi rule-triggered là ML-triggered.
+Không hứa ML phát hiện sớm hơn rule; các gate nghiên cứu M08 memory-leak/early-detection và
+50 run vẫn riêng, không đánh hoàn thành từ checkpoint functional này.
 
 Migrate, thêm detector/framework, bộ 50 run và installer máy sạch giữ backlog. Mục tiêu
 trực quan tăng bằng câu chuyện/trải nghiệm thật, không cần thêm nhiều module mới.
 
 ## 5. Trình diễn và phương án dự phòng
 
-1. Mở website + OpsPilot cạnh nhau. Mời thầy tạo ghi chú và đọc phản hồi vừa đo.
-2. Cho xem hệ thống bình thường, dữ liệu mới nhất và phiên bản đang chạy.
-3. Công bố bật mô phỏng chậm. Thầy bấm lại cùng thao tác và thấy phải chờ.
+1. A mở website + OpsPilot ở chế độ trình chiếu, tạo ghi chú và đọc phản hồi vừa đo.
+2. Cho xem dữ liệu mới nhất, phiên bản và bật tự khôi phục có xác nhận trước sự cố.
+3. A công bố bật mô phỏng chậm rồi tải lại website cho thấy tác động.
 4. OpsPilot hiện cảnh báo/đường latency; giải thích bằng câu tiếng Việt, chỉ chi tiết ML nếu hỏi.
-5. Bấm khôi phục và confirm. Theo dõi tiến trình thật, không báo xong từ ID yêu cầu.
+5. A ngừng can thiệp, theo dõi OpsPilot tự rollback; không bấm khôi phục hoặc reset fault.
 6. Bấm website lại, kiểm tra ghi chú còn nguyên. OpsPilot thể hiện mẫu mới và kết quả trước/sau.
 7. Mở nhật ký, giải thích “phát hiện, hành động, xác minh” và phần thí nghiệm sẽ làm tiếp.
 
@@ -157,5 +164,5 @@ toàn VPS/SQLite; helper fault có timeout/status/reset, không lộ secret tron
 
 - A: owner solo, giao đúng file chặng cho Worker, gửi handoff cho Leader và tập demo.
 - Worker: thực hiện/test/commit local, bàn giao đúng chặng rồi dừng chờ review.
-- Leader: review đúng SHA + evidence, yêu cầu sửa finding, approve chặng và chốt phạm vi C08.
+- Leader: review đúng SHA + evidence, yêu cầu sửa finding, approve chặng và ba phần C08A/B/C.
 - B: không có task chặn; A đã nhận phần tích hợp/UI còn thiếu theo yêu cầu solo.

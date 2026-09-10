@@ -10,7 +10,7 @@ Chặng chỉ làm trải nghiệm website demo, chưa làm Monitor hoặc fault
 
 1. Dùng source Express hiện có làm “Sổ ghi chú nhóm”: danh sách rõ ràng, input thêm ghi chú,
    nút tải lại, trạng thái lưu và số bản ghi thật. Map vào fields `/items` đang hỗ trợ.
-2. Giảng viên nhập ghi chú riêng, thấy xuất hiện sau save/refetch và reload. Khi DB unavailable
+2. A nhập ghi chú khi trình chiếu, cho thầy thấy sau save/refetch và reload. Khi DB unavailable
    hiển thị lỗi thật, không chuyển sang dữ liệu in-memory rồi bảo đã lưu PostgreSQL.
 3. Đo thời gian request nghiệp vụ thật bằng clock monotonic trình duyệt; nhãn “Lần tải từ
    trình duyệt”. Loading tồn tại đúng lúc pending, lỗi HTTP/network có retry và text dễ hiểu.
@@ -18,7 +18,9 @@ Chặng chỉ làm trải nghiệm website demo, chưa làm Monitor hoặc fault
    checkout/payment giả, không thêm database model hoặc framework mới để trông nhiều tính năng.
 5. Ghi nhận thao tác/ảnh nhanh ở baseline. Dùng fault endpoint opt-in sẵn có qua SSH thử chậm
    có giới hạn và reset sau test; không setTimeout ở frontend hoặc hardcode số ms.
-6. Deploy source đã cập nhật qua pipeline C01, giữ marker/data; deployment mới phải dùng
+6. Chuẩn bị hai release có version trong image theo playbook; /meta.version hiện có là nguồn
+   hiển thị. Không dùng env chung làm hai image báo cùng release. Ghi mapping release/image/attempt.
+7. Deploy source đã cập nhật qua pipeline C01, giữ marker/data; deployment mới phải dùng
    boundary C02 và baseline/train theo C03 trước bước fault demo tiếp theo.
 
 ## File được sửa

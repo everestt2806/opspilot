@@ -16,9 +16,10 @@
 - Baseline đã fetch: `origin/main@683bfc6`; PR #25 (A15), #26 (B4/B5), #28 (B2) đã merge.
 - Nhánh plan `plan/a17-demo-checkpoint` từ baseline; chưa implementation/test runtime A17.
 - P0: website ghi chú thật → người dùng thấy chậm → Monitor giải thích/cảnh báo → khôi phục →
-  website tốt lại, giữ dữ liệu; có timeline và so sánh trước/sau. Chi tiết ML thu gọn.
-- Tiến độ theo C00–C09, mỗi chặng một file và một review. C00 chưa bắt đầu; C08 (M8) tùy chọn
-  sau C07 APPROVED + Leader INCLUDE. Không chia ngày/giờ công, không tự code vượt gate.
+  website tốt lại, giữ dữ liệu; có timeline và so sánh trước/sau. A trình chiếu, thầy quan sát.
+- Tiến độ theo C00–C09; C08 bắt buộc, chia C08A policy/C08B coordinator/C08C live, mỗi phần
+  review riêng. Điểm nhấn tự khôi phục không manual/reset can thiệp. C00 chưa bắt đầu.
+  [Playbook Worker](../prompts/tk-a17-worker-playbook.md); không chia ngày/giờ công.
 
 ## Đang ưu tiên — W3/W4
 

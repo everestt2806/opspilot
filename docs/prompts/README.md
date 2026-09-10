@@ -6,6 +6,8 @@ khớp với phần còn lại của hệ thống, ở phiên thứ nhất hay p
 > 10/09: A làm solo demo trực quan theo chặng. Dùng [prompt TK-A17](tk-a17-worker.md)
 > với [task packet](../tasks/tk-a17-demo-checkpoint.md); mỗi lượt chỉ nhận một chặng C00–C09,
 > có handoff/review riêng. Bắt đầu C00; không tự làm hết các chặng trong một lượt.
+> Bản giao thi công mới: [Worker playbook](tk-a17-worker-playbook.md). C08 tự khôi phục
+> bắt buộc, tách C08A/B/C; A trình chiếu và không thao tác rollback trong cảnh tự khôi phục.
 
 ---
 

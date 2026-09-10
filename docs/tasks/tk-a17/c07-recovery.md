@@ -44,5 +44,5 @@ thiết và regression. Không xây M8 coordinator ở C07; không viết lại 
 
 `c07/recovery.md`: source/target/attempt/current/runtime image, thời gian accepted/finished/
 observed healthy, marker before/after, collector seq, alert IDs, history; handoff-c07.md.
-Leader review pipeline/UI race và data proof, rồi ghi C08 INCLUDE hoặc DEFERRED.
-Nếu DEFERRED, tiếp C09; không mặc định mở auto-rollback chỉ vì nút thủ công đã chạy được.
+Leader review pipeline/UI race và data proof; C07 APPROVED mới mở C08A.
+C07 chứng minh rollback thủ công, chưa đủ demo chính tự khôi phục; C08A/B/C bắt buộc.

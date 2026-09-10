@@ -2,7 +2,7 @@
 
 ## Đầu vào
 
-C00–C07 APPROVED; C08 APPROVED hoặc DEFERRED rõ. Không xây thêm module ở đây.
+C00–C07 và C08A/B/C APPROVED. Không xây thêm module ở đây.
 Mục tiêu: đóng finding, khóa bản chạy và chứng minh thầy nhìn thấy giá trị không cần đọc code.
 
 ## Các bước Worker làm
@@ -27,8 +27,10 @@ pnpm build
    phép đo chờ, expected/actual, fallback và trạng thái giữ lại sau demo.
 5. Hai lượt rehearsal từ trạng thái chuẩn bị xác định: tạo ghi chú → nhanh → fault/chậm →
    alert → recovery → nhanh + ghi chú còn. Reset fault/training đúng quy trình giữa lượt;
-   không sửa trực tiếp SQLite để làm đẹp biểu đồ. Nếu C08 deferred dùng rollback thủ công.
-6. Chụp website + OpsPilot ở các cảnh; quay ít nhất một lượt thật. Ảnh/video ghi timestamp/
+   không sửa trực tiếp SQLite để làm đẹp biểu đồ. Happy path bắt buộc tự rollback, không có A/helper can thiệp trước khi verify.
+6. A thao tác/trình chiếu, thầy chỉ quan sát. Dùng projection mode của C05/C08C, chữ đọc được
+   trên màn hình; không đặt điều kiện giảng viên tự nhập liệu hoặc điều khiển máy.
+   Chụp website + OpsPilot ở các cảnh; quay ít nhất một lượt thật. Ảnh/video ghi timestamp/
    code SHA, không secret. Screenshot thầy xem được text chính ở viewport demo, không chỉ chart.
 7. Lưu “bảng kết quả lượt demo”: time windows/n/median, alert/recovery, marker DB, image;
    phân biệt observation với đánh giá thống kê. Không công bố accuracy/% hoàn thành từ demo.
@@ -38,7 +40,7 @@ pnpm build
 ## DoD / điều kiện DEMO_READY
 
 - [ ] C09-T1: toàn bộ gate test/build có exit/count/log đúng SHA, không skip/hang bị gọi PASS.
-- [ ] C09-T2: hai lượt đầu-cuối thực tế, có thời gian chờ và kết quả lặp lại được.
+- [ ] C09-T2: hai lượt automatic đầu-cuối thực tế, log chứng minh không manual/reset trước proof.
 - [ ] C09-T3: website thể hiện tác động thật; OpsPilot giải thích sự cố bằng lời dễ hiểu.
 - [ ] C09-T4: recovery/image/DB marker có bằng chứng, collector/current deployment đúng.
 - [ ] C09-T5: before/after truy lại được mẫu, null/stale/model readiness không gây hiểu nhầm.
@@ -51,5 +53,5 @@ pnpm build
 `c09/test-summary.md`, `rehearsal-01.md`, `rehearsal-02.md`, ảnh/video và handoff-c09.md.
 Leader làm walkthrough và kiểm tra evidence: “Nhìn không nghe giải thích vẫn thấy website
 đang chậm, tool đang xử lý, website đã tốt lại” phải đúng bằng dữ liệu/thao tác thực.
-Chỉ Leader ghi DEMO_READY đúng SHA. Rule-only/không live/thiếu rollback proof là fallback
+Chỉ Leader ghi DEMO_READY đúng SHA. Không có ML score thật/không live/thiếu automatic rollback proof là fallback
 chưa đạt đủ mục tiêu, phải ghi rõ, không đổi thành hoàn thành mặc định.

@@ -1,46 +1,30 @@
-# C08 — Tự khôi phục theo score (tùy chọn, review riêng)
+# C08 — Tự khôi phục theo score: bước tiến bắt buộc
 
-## Điều kiện mở
+C08 thay đổi từ tùy chọn sang bắt buộc theo yêu cầu demo mới của A. A trình chiếu, thầy
+quan sát hệ thống tự xử lý sau khi bật fault. C07 thủ công là nền đã kiểm chứng, không thay C08.
 
-C07 APPROVED và Leader ghi INCLUDE; không còn finding blocking P0. Không có điều kiện ngày.
-Nếu DEFERRED: giữ tính năng OFF/disabled có giải thích, vào C09 và bỏ lời demo tự khôi phục.
-Đọc đủ M08/M04, IPC system:auto-rollback, schema alert.acted/monitor_setting, deploy lifecycle.
+## Thứ tự review
 
-## Các bước Worker làm
+| Phần | Đầu vào       | File giao                               | Kết quả                                           |
+| ---- | ------------- | --------------------------------------- | ------------------------------------------------- |
+| C08A | C07 APPROVED  | [Quyết định](c08a-decision.md)          | Policy/candidate đúng, chưa gọi rollback          |
+| C08B | C08A APPROVED | [Coordinator](c08b-coordinator.md)      | Completion, durable guard, restart/failure đúng   |
+| C08C | C08B APPROVED | [UI và live](c08c-live-presentation.md) | Automatic recovery thật, business verification rõ |
 
-1. Tách `shouldAutoRollback` thuần khỏi coordinator. Đếm mẫu mới liên tiếp của trusted method,
-   không đếm poll hoặc số alert; replay/null không tăng bộ đếm. Auto mặc định OFF.
-2. Chọn previous successful deployment có runtime image thật, không lấy version−1 máy móc.
-   v1/không image/busy/cooldown ghi skip reason đúng. Tái dùng app lock/pipeline hiện có.
-3. Theo dõi rollback finish thật. Chỉ update acted thành công, last_rollback_at/cooldown và
-   emit success notification sau healthy. Log phân loại automatic, không ghi manual success
-   song song. M8 không phải nhánh tự rollback khi deploy healthcheck fail của M4.
-4. Cooldown persistent sống qua restart; failure không tự retry ở poll tiếp. Coordinator
-   single-flight, handling crash/restart/shutdown không phát lệnh trùng vô hạn.
-5. UI opt-in confirm, chọn trusted method, thông báo bền và marker timeline đúng event.
-   Status not-ready/ML-down rõ; không ép ensemble trigger chỉ để đạt demo.
-6. Live ít nhất một automatic recovery và một cooldown suppression. Có thể trusted rule
-   cho kịch bản chắc chắn, phải gọi đúng “tự khôi phục theo ngưỡng”; muốn nói ML-triggered
-   thì phải có model score/alert thực sự kích hoạt và evidence riêng.
+Worker chỉ làm một phần mỗi lượt rồi dừng review. Dùng handoff-c08a/b/c.md,
+review-c08a/b/c.md và evidence c08a/b/c/ riêng. Không gom cả M8 vào một diff.
+Đọc [playbook](../../prompts/tk-a17-worker-playbook.md) và M08/contract trước code.
 
-## File được sửa
+## Tiêu chí tổng C08
 
-`app/src/main/monitor/auto-rollback.ts` mới, coordinator/wiring/test cần thiết, pipeline
-internal completion/source attribution nếu cần, UI auto settings/notification/marker.
-Không thay contract trừ proposal Leader chấp thuận; không thêm automation engine tổng quát.
+- Quyết định từ score/method thật; chống replay/stale, chọn target hợp lệ.
+- Pipeline được gọi tự động, completion/attribution/cooldown/failure đúng.
+- Website được xác minh bằng business samples mới, không chỉ /health.
+- Image/current deployment đổi thật, marker PostgreSQL còn, collector tiếp tục.
+- Không có A/helper bấm rollback/reset trước kết quả trong live window.
+- Rule-triggered live là gate bắt buộc có nhãn đúng; 3 ML+ensemble vẫn score thật.
+  ML-triggered/early-detection chỉ tuyên bố khi có evidence riêng.
 
-## Case và DoD
-
-- [ ] C08-T1: disabled/thiếu mẫu/null/replay/đúng method/cooldown có unit tests.
-- [ ] C08-T2: no target/missing image/failed attempt chain/busy/race có regression.
-- [ ] C08-T3: success sau finished, failure không retry, restart/cooldown/shutdown test.
-- [ ] C08-T4: live auto rollback + suppression, DB marker/collector/deployment boundary đúng.
-- [ ] C08-T5: notification/history/marker thể hiện đúng nguồn, không double-log manual/auto.
-- [ ] C08-T6: focused coordinator/deploy/monitor/UI, typecheck/lint/format/build PASS.
-
-## Evidence và review
-
-`c08/auto-recovery.md` gồm trigger samples, trusted method/settings, action IDs, result/
-cooldown timestamps, image/marker proof; handoff-c08.md. Leader kiểm tra retry/failure/race,
-không approve từ happy path. Code dở phải được cô lập khỏi runtime demo hoặc sửa hoàn chỉnh
-trước C09; không gọi DEFERRED nhưng để coordinator chưa kiểm thử chạy nền.
+M08 research DoD memory-leak/early-detection không tự hoàn thành từ functional gate này.
+Không còn DEFERRED để vượt C09. Nếu blocker chưa giải quyết: bàn giao BLOCKED,
+giữ auto OFF và hỏi A định hướng scope qua review, không báo DEMO_READY.

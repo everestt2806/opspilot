@@ -6,22 +6,24 @@
 - Owner A solo; Worker chưa bắt đầu; Leader đã lập plan theo chặng.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker dự kiến `feat/a17-demo-checkpoint`, kế thừa HEAD plan mới nhất.
-- Chặng hiện tại C00; chặng được approve: chưa có. M8 chưa được chọn INCLUDE.
+- Chặng hiện tại C00; chặng được approve: chưa có. C08 bắt buộc, tách C08A/B/C, đều chưa bắt đầu.
 
 ## Sổ gate (Leader xác nhận verdict)
 
-| Chặng | Worker outcome | Reviewed SHA | Verdict                          | Handoff/review |
-| ----- | -------------- | ------------ | -------------------------------- | -------------- |
-| C00   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
-| C01   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
-| C02   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
-| C03   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
-| C04   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
-| C05   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
-| C06   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
-| C07   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
-| C08   | NOT_STARTED    | —            | INCLUDE/DEFERRED chưa quyết định | Chưa có        |
-| C09   | NOT_STARTED    | —            | PENDING                          | Chưa có        |
+| Chặng | Worker outcome | Reviewed SHA | Verdict | Handoff/review |
+| ----- | -------------- | ------------ | ------- | -------------- |
+| C00   | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C01   | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C02   | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C05   | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C06   | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C07   | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C08A  | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C08B  | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C08C  | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C09   | NOT_STARTED    | —            | PENDING | Chưa có        |
 
 ## Mẫu `handoff-cNN.md`
 
@@ -62,13 +64,13 @@
 - Findings: ID `Cnn-Rm-xx`, BLOCKER/MAJOR/MINOR, file/line, trigger, expected/actual,
   cách tái hiện, fix/kiểm chứng cần có. Phân biệt evidence Worker và reviewer tự chạy.
 - Verdict: APPROVED / CHANGES_REQUESTED / BLOCKED.
-- Chặng tiếp được mở; riêng C08 ghi INCLUDE hoặc DEFERRED và lý do.
+- Chặng tiếp được mở; C08A/B/C mỗi phần cần APPROVED trước phần tiếp.
 - Nếu APPROVED: liệt kê hạn chế được chấp nhận, ảnh hưởng demo và nơi theo dõi.
 
 ## Gate cuối
 
 - [ ] C00–C07 APPROVED đúng SHA được kế thừa.
-- [ ] C08 APPROVED hoặc DEFERRED rõ, UI/kịch bản khớp khả năng thật.
+- [ ] C08A/B/C APPROVED, live tự khôi phục không có manual/reset can thiệp trước proof.
 - [ ] C09: full tests/build, hai rehearsal, ảnh/video/runbook có bằng chứng.
 - [ ] Leader xác nhận DEMO_READY đúng SHA.
 - [ ] Merge + DoD đủ bằng chứng mới đổi board HOÀN THÀNH.

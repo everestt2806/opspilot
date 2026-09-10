@@ -7,6 +7,7 @@ Bạn là Worker của OpsPilot; Leader chịu trách nhiệm review. Chỉ th�
 Đọc CLAUDE.md, docs/tasks/README.md, docs/tasks/board.md,
 docs/24-ke-hoach-demo-theo-chang.md, docs/tasks/tk-a17-demo-checkpoint.md,
 docs/tasks/tk-a17-worker-handoff.md và docs/tasks/tk-a17/c00-baseline.md.
+Đọc docs/prompts/tk-a17-worker-playbook.md để có thứ tự thi công/file/lệnh và tiêu chí demo.
 Làm theo contract/spec được chặng yêu cầu. Không code C01 hoặc chặng sau.
 
 Plan ở plan/a17-demo-checkpoint, baseline code 683bfc6. Kiểm tra git status/HEAD;
@@ -16,7 +17,8 @@ hiện có. Không checkout lùi/rebase/rewrite; giữ nguyên untracked và sta
 bullet mô tả thay đổi; UI/tài liệu tiếng Việt. Không dọn VPS/app B hoặc dữ liệu thật.
 
 Mục tiêu demo: người không biết DevOps vẫn thấy website nhanh → chậm/lỗi → cảnh báo
-→ khôi phục → website tốt lại và ghi chú còn nguyên. Mọi số liệu/hành động phải thật.
+→ OpsPilot TỰ rollback → xác minh website tốt lại và ghi chú còn nguyên. A trình chiếu,
+thầy quan sát. C08 bắt buộc, tách C08A/B/C; mọi số liệu/hành động phải thật.
 Không mở thêm framework/migrate/theme/dependency hoặc sửa contract tùy ý.
 
 Ghi START, thực hiện đúng C00, test và ghi evidence. Tạo
@@ -31,7 +33,7 @@ Prompt giao chặng tiếp theo (A thay `<NN>` bằng ID được Leader mở):
 ```text
 Thực hiện duy nhất TK-A17/C<NN> theo file chặng trong docs/tasks/tk-a17/.
 Đọc task điều phối, sổ bàn giao, review chặng trước và source/contracts liên quan.
-Xác nhận chặng trước APPROVED đúng code đang kế thừa; C08 cần quyết định INCLUDE.
+Xác nhận chặng trước APPROVED đúng code đang kế thừa; C08 theo thứ tự C08A → C08B → C08C.
 Tiếp tục HEAD hiện tại, ghi base SHA và START. Chỉ sửa scope chặng này, dùng GitNexus
 context/impact nếu khả dụng và kiểm tra source trực tiếp. Làm đầy đủ test/DoD/evidence,
 commit local tiếng Anh, tạo handoff-c<NN>.md, update board/log/sổ bàn giao rồi dừng review.

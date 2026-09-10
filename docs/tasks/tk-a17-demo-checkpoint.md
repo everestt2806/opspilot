@@ -6,26 +6,28 @@
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
 · [Sổ bàn giao](tk-a17-worker-handoff.md).
+Hướng dẫn thực thi: [Worker playbook](../prompts/tk-a17-worker-playbook.md).
+Mục tiêu: A trình chiếu **tự phát hiện → tự rollback → xác minh phục hồi**. C08 bắt buộc.
 Không chia theo ngày/giờ công. Thời lượng 10s/30s/baseline/test vẫn giữ theo yêu cầu kỹ thuật.
 
 ## 1. File giao theo thứ tự
 
-| Chặng | Phụ thuộc APPROVED               | File                                  | Phạm vi review                    |
-| ----- | -------------------------------- | ------------------------------------- | --------------------------------- |
-| C00   | Không                            | [c00](tk-a17/c00-baseline.md)         | Môi trường và target              |
-| C01   | C00                              | [c01](tk-a17/c01-collector-deploy.md) | Deploy/collector                  |
-| C02   | C01                              | [c02](tk-a17/c02-ingestion.md)        | SSH/SQLite, lifecycle deployment  |
-| C03   | C02                              | [c03](tk-a17/c03-ml-runtime.md)       | ML runtime                        |
-| C04   | C03                              | [c04](tk-a17/c04-demo-experience.md)  | Website nghiệp vụ demo            |
-| C05   | C04                              | [c05](tk-a17/c05-monitor-ui.md)       | Monitor chỉ đọc                   |
-| C06   | C05                              | [c06](tk-a17/c06-incident-flow.md)    | Alert/settings/fault/before-after |
-| C07   | C06                              | [c07](tk-a17/c07-recovery.md)         | Versions/rollback/history         |
-| C08   | C07 + Leader INCLUDE             | [c08](tk-a17/c08-auto-rollback.md)    | Tự rollback theo score, tùy chọn  |
-| C09   | C07 + C08 APPROVED hoặc DEFERRED | [c09](tk-a17/c09-demo-acceptance.md)  | Nghiệm thu toàn luồng             |
+| Chặng | Phụ thuộc APPROVED | File                                  | Phạm vi review                                 |
+| ----- | ------------------ | ------------------------------------- | ---------------------------------------------- |
+| C00   | Không              | [c00](tk-a17/c00-baseline.md)         | Môi trường và target                           |
+| C01   | C00                | [c01](tk-a17/c01-collector-deploy.md) | Deploy/collector                               |
+| C02   | C01                | [c02](tk-a17/c02-ingestion.md)        | SSH/SQLite, lifecycle deployment               |
+| C03   | C02                | [c03](tk-a17/c03-ml-runtime.md)       | ML runtime                                     |
+| C04   | C03                | [c04](tk-a17/c04-demo-experience.md)  | Website nghiệp vụ demo                         |
+| C05   | C04                | [c05](tk-a17/c05-monitor-ui.md)       | Monitor chỉ đọc                                |
+| C06   | C05                | [c06](tk-a17/c06-incident-flow.md)    | Alert/settings/fault/before-after              |
+| C07   | C06                | [c07](tk-a17/c07-recovery.md)         | Versions/rollback/history                      |
+| C08   | C07                | [c08](tk-a17/c08-auto-rollback.md)    | Bắt buộc: C08A → C08B → C08C, review từng phần |
+| C09   | C08C APPROVED      | [c09](tk-a17/c09-demo-acceptance.md)  | Nghiệm thu toàn luồng tự khôi phục             |
 
 Worker chỉ code một chặng mỗi lượt, không tự chạy cả bảng. B6/B8/S4 là scope trong A17,
 không mở task ĐANG LÀM song song. Mỗi chặng có file chi tiết gồm đầu vào, việc làm, file được
-sửa, test, DoD, evidence, trọng tâm review và điểm dừng.
+sửa, test, DoD, evidence, trọng tâm review và điểm dừng. C08A/B/C cũng dừng review riêng.
 
 ## 2. Đọc trước và quyền thực hiện
 
@@ -89,6 +91,10 @@ manifest; helper phục hồi fault của chính lượt test được thực hi
 - UPDATE 10/09 — Theo yêu cầu A, thay lịch ngày/G0–G3 bằng C00–C09 có review độc lập.
   Bổ sung website nghiệp vụ demo, màn tình trạng dễ hiểu, timeline/so sánh trước-sau;
   M8 tùy chọn theo readiness. Chưa có chặng PASS.
+
+- UPDATE 10/09 — A xác nhận tự thao tác/trình chiếu, cần bước tiến chức năng lớn: nâng C08
+  thành bắt buộc, tách C08A/B/C và thêm playbook thi công. Ghi chú “tùy chọn” trước đó chỉ
+  là lịch sử. Chưa implementation/test runtime mới.
 
 Worker append START/UPDATE/HANDOFF-LOCAL/REVIEW-FIX với ngày thực tế để giữ lịch sử.
 Chờ review: board CHỜ REVIEW kèm ID chặng. Tiếp tục/sửa: ĐANG LÀM.

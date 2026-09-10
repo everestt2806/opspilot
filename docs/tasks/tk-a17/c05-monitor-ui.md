@@ -21,7 +21,9 @@ setting/recovery thuộc chặng sau. Giữ dashboard quản lý fleet đang có
    anomaly score không gọi độ chính xác. Không làm 5 chart lớn cạnh tranh với thông điệp chính.
 6. Null là gap/“Chưa có số đo”, stale ghi lần cập nhật cuối. Ghi threshold/stale policy trong
    handoff; ngưỡng stale là presentation policy có lý do, không sửa contract silent.
-7. Bảng alert ban đầu read-only, refresh để thấy resolved/peak (tick chỉ có new_alerts).
+7. Thêm projection mode bằng renderer state: text lớn, ẩn kỹ thuật, chart/timeline chính rõ;
+   chưa tạo phase automatic giả. Không nhúng browser HTTP bằng webview đặc quyền.
+8. Bảng alert ban đầu read-only, refresh để thấy resolved/peak (tick chỉ có new_alerts).
    Không hiển thị nút thao tác giả; chưa có recovery thì entry đó để chặng C07.
 
 ## File được sửa
