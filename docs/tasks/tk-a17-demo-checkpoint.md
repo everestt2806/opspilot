@@ -109,8 +109,17 @@ Worker append START/UPDATE/HANDOFF-LOCAL/REVIEW-FIX với ngày thực tế đ�
   Bổ sung ma trận R01–R25, 12 lượt giao, xử lý blocker và prompt khởi động kế thừa HEAD.
   Task về TUẦN NÀY để Worker nhận C00; không mở C01 hoặc tự approve kết quả khảo sát.
 - HANDOFF-LOCAL 11/09 — Bản kế hoạch nằm trong commit chứa dòng này; kiểm tra local Markdown
-  links của 10 file thành công, `git diff --check` sạch. Không chạy thêm runtime/test sản phẩm
-  sau khi A chuyển yêu cầu sang lập kế hoạch. Raw evidence/helper khảo sát vẫn local chưa commit;
-  việc tiếp theo: A gửi prompt khởi động cho Worker hoàn thiện C00. Chưa push/PR/merge.
+links của 10 file thành công, `git diff --check` sạch. Không chạy thêm runtime/test sản phẩm
+sau khi A chuyển yêu cầu sang lập kế hoạch. Raw evidence/helper khảo sát vẫn local chưa commit;
+việc tiếp theo: A gửi prompt khởi động cho Worker hoàn thiện C00. Chưa push/PR/merge.
+
+- START 11/09 — Worker tiếp tục tại `bf951f9`; chỉ thực hiện C00: tái kiểm tra runtime/native
+ABI, focused tests, SSH read-only, manifest và boot/browser evidence. Không làm C01 hoặc chạm
+app B, dữ liệu thật và stash hiện có.
+- UPDATE 11/09 — C00-T1/T2/T4 PASS với runtime/lệnh đã chạy lại; VM02 read-only PASS, VM01
+ timeout được ghi rõ; public port B timeout và tunnel chỉ xem app B. Đã tạo baseline/manifest/
+ evidence và đánh dấu C01–C09 NOT_RUN. C00 chờ commit local và Leader review.
+- HANDOFF-LOCAL 11/09 — `handoff-c00.md`, evidence `docs/evidence/tk-a17/c00/`; READY_FOR_LOCAL_REVIEW.
+ Chưa push/PR/merge; Leader cần review target/ABI và mở C01 riêng nếu approve.
 Chờ review: board CHỜ REVIEW kèm ID chặng. Tiếp tục/sửa: ĐANG LÀM.
 HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push/merge.

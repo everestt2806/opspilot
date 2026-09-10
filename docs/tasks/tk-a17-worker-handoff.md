@@ -13,7 +13,7 @@
 
 | Chặng | Worker outcome | Reviewed SHA | Verdict | Handoff/review |
 | ----- | -------------- | ------------ | ------- | -------------- |
-| C00   | PREFLIGHT_ONLY | —            | PENDING | [Khảo sát](tk-a17/preflight-11-09.md); chưa handoff |
+| C00   | READY_FOR_LOCAL_REVIEW | local C00 commit | PENDING | [handoff-c00](handoff-c00.md); Leader review cần thực hiện |
 | C01   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C02   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |

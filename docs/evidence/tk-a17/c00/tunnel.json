@@ -1,0 +1,23 @@
+{
+  "command": [
+    "ssh",
+    "-N",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "StrictHostKeyChecking=yes",
+    "-o",
+    "ExitOnForwardFailure=yes",
+    "-o",
+    "ConnectTimeout=10",
+    "-o",
+    "IdentitiesOnly=yes",
+    "-i",
+    "C:\\Users\\everestt28\\.ssh\\opspilot_ed25519",
+    "-L",
+    "127.0.0.1:39011:127.0.0.1:30001",
+    "deploy@221.121.1.80"
+  ],
+  "http": 200,
+  "note": "Existing app B, GET only; tunnel closed in finally"
+}
