@@ -171,3 +171,7 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   typecheck/lint/format/build PASS; VM02 read-only app v9/DB healthy, collector running,
   restart 0, seq `1791→1792`, app B running. Mở duy nhất C02; C03–C09 đóng; task về
   TUẦN NÀY cho lượt Worker tiếp, chưa push/PR/merge.
+
+  - HANDOFF C02 11/09: live SSH/SQLite ingestion trên VM02 app 1 deployment 9 đã ghi boundary
+    trước/sau, thêm 10 metric/50 score, retry `0`, duplicate `0`; focused 71/71 và static/build PASS.
+    `handoff-c02.md` là `READY_FOR_LOCAL_REVIEW`; C03-C09 vẫn `NOT_RUN`, chưa push/PR/merge.

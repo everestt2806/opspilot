@@ -5,7 +5,7 @@
 > code `8e42856`, docs `9689ea4`. Mở duy nhất C02 để A giao Worker.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; C01 đã được Leader approve sau review-fix-02; C02 chưa bắt đầu.
+- Owner A solo; C01 đã được Leader approve sau review-fix-02; C02 đã hoàn tất Worker và chờ review.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
 - Chặng được approve: C00, C01. Chặng tiếp C02; C08 bắt buộc, tách C08A/B/C, đều chưa bắt đầu.
@@ -16,7 +16,7 @@
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
-| C02   | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C02   | READY_FOR_LOCAL_REVIEW | Chưa commit tại thời điểm ghi sổ | PENDING | [handoff](tk-a17/handoff-c02.md) / [evidence](../evidence/tk-a17/c02/ingestion.md) |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C05   | NOT_STARTED    | —            | PENDING | Chưa có        |
@@ -84,6 +84,11 @@
   nhầm là GET collection route. C01 về `REVIEW_FIX_REQUIRED`; C02 tiếp tục đóng.
 - REVIEW-FIX 02: `C01-R2-01` closed at code `8e42856`; handoff is `READY_FOR_LOCAL_REVIEW`.
   Evidence: `docs/evidence/tk-a17/c01/review-fix-02.md`; C02 and later remain `NOT_RUN`.
+
+- START/HANDOFF C02 - 11/09/2026: kế thừa VM02/app 1/deployment 9 và SQLite offset 6152 với 21 metric/105 score;
+  không reset dữ liệu. Live ingestion thêm 10 metric/50 score, retry cùng snapshot `0`, duplicate `0`;
+  focused 71/71 và typecheck/lint/format/build PASS. Handoff [handoff-c02](tk-a17/handoff-c02.md) là
+  `READY_FOR_LOCAL_REVIEW`; C03-C09 vẫn `NOT_RUN`.
 - REVIEW 03 - 11/09/2026: C01 APPROVED code `8e42856`, docs `9689ea4`; mọi finding đóng.
   Reviewer focused 75/75, collector 26/26, static/build và VM02 read-only PASS. Mở duy nhất
   C02; phải kế thừa offset 6152 cùng 21 metric/105 score rows, không reset dữ liệu.

@@ -22,6 +22,7 @@
     "scripts/seed-vps.ts",
     "scripts/reset-demo.ts",
     "scripts/try-monitor.ts",
+    "scripts/a17-c02-live.ts",
     "src/main/raw.d.ts"
   ]
 }
