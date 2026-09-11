@@ -15,7 +15,7 @@
 | Chặng | Worker outcome | Reviewed SHA | Verdict | Handoff/review |
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
-| C01   | READY_FOR_LOCAL_REVIEW | code `0d15eb5` / docs `pending-this-commit` | REVIEW_FIX_SUBMITTED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
+| C01   | READY_FOR_LOCAL_REVIEW | code `0d15eb5` / docs `dfdc465` | REVIEW_FIX_SUBMITTED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
 | C02   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
