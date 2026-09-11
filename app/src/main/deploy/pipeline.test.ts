@@ -38,6 +38,8 @@ interface StubSshOptions {
   imageRemove?: (call: number, command: string) => { code: number; stdout: string; stderr: string }
   imageAvailable?: boolean
   containerLogs?: string
+  stopCollector?: (call: number) => { code: number; stdout: string; stderr: string }
+  metricsFileMissing?: boolean
 }
 
 let testDirectory: string | null = null
@@ -95,6 +97,7 @@ function createHarness(options: StubSshOptions = {}): void {
   let curlCall = 0
   let imagesCall = 0
   let imageRemoveCall = 0
+  let stopCollectorCall = 0
   sshExec = vi.fn(async (_vpsId: number, command: string) => {
     if (command.includes('free -m')) {
       return { code: 0, stdout: options.precheckOutput ?? PRECHECK_OK, stderr: '' }
@@ -112,6 +115,16 @@ function createHarness(options: StubSshOptions = {}): void {
     }
     if (command.includes('compose down')) {
       return { code: 0, stdout: '', stderr: '' }
+    }
+    if (command.includes('compose stop collector')) {
+      stopCollectorCall += 1
+      return (
+        options.stopCollector?.(stopCollectorCall) ?? {
+          code: 0,
+          stdout: 'collector stopped',
+          stderr: ''
+        }
+      )
     }
     if (command.includes('docker inspect')) {
       inspectCall += 1
@@ -162,7 +175,10 @@ function createHarness(options: StubSshOptions = {}): void {
     uploadDir: vi.fn(async () => ({ bytes: 1_024 })),
     readFile: readFileMock,
     writeFile: writeFileMock,
-    fileSize: vi.fn(async () => 10)
+    fileSize: vi.fn(async () => 10),
+    metricSnapshot: vi.fn(async () =>
+      options.metricsFileMissing ? null : { generation: '1:1', device: 1, inode: 1, size: 10 }
+    )
   } as unknown as SshManager
 
   events = []
@@ -377,6 +393,33 @@ describe('DeployPipeline', () => {
     expect(
       actionLogRows(deploymentId).some((row) => row.action === 'deploy' && row.status === 'success')
     ).toBe(true)
+  })
+
+  it('first deploy succeeds when collector has not created metrics.jsonl', async () => {
+    createHarness({ metricsFileMissing: true })
+    const { deploymentId } = pipeline.run(deployInput())
+    expect((await waitForFinished(deploymentId)).status).toBe('running')
+    expect(
+      database
+        .prepare(
+          "SELECT state, start_offset FROM deployment_activation WHERE deployment_id=? AND reason='deploy'"
+        )
+        .get(deploymentId)
+    ).toMatchObject({ state: 'active', start_offset: 1 })
+  })
+
+  it('fails closed when collector stop/flush fails before an existing cutover', async () => {
+    createHarness({ stopCollector: () => ({ code: 1, stdout: '', stderr: 'stop failed' }) })
+    const first = pipeline.run(deployInput())
+    expect((await waitForFinished(first.deploymentId)).status).toBe('running')
+    const second = pipeline.run(deployInput())
+    expect((await waitForFinished(second.deploymentId)).status).toBe('failed')
+    expect(currentDeploymentId()).toBe(first.deploymentId)
+    expect(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM deployment_activation WHERE state='prepared'")
+        .get()
+    ).toEqual({ count: 0 })
   })
 
   it('redeploy app co san: cung port, version tang len 2', async () => {

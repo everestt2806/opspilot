@@ -122,6 +122,7 @@ export interface RunContext {
   stepLines: string[]
   failedStep: DeployStep | null
   cancelled: boolean
+  runtimeStarted: boolean
   durations: Partial<Record<DeployStep, number>>
 }
 
@@ -206,6 +207,7 @@ export class DeployPipeline {
       stepLines: [],
       failedStep: null,
       cancelled: false,
+      runtimeStarted: false,
       durations: {}
     }
     void this.executeRollback(ctx, targetImageTag, target.version, target.id).catch(
@@ -250,6 +252,7 @@ export class DeployPipeline {
           `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker compose up -d`,
           180_000
         )
+        ctx.runtimeStarted = result.code === 0 || /started|running/i.test(result.stdout)
         if (result.code !== 0) {
           throw new AppError(
             'UNKNOWN',
@@ -282,7 +285,17 @@ export class DeployPipeline {
 
       await this.recordManualRollbackSuccess(ctx, targetImageTag, targetDeploymentId)
     } catch (error) {
-      if (preparedActivationId !== null) this.activation.abort(preparedActivationId)
+      if (preparedActivationId !== null) {
+        if (ctx.runtimeStarted) {
+          this.activatePrepared(ctx, preparedActivationId)
+          preparedActivationId = null
+        } else {
+          this.activation.abort(preparedActivationId)
+        }
+      }
+      if (preparedActivationId !== null) {
+        this.activation.abort(preparedActivationId)
+      }
       await this.recordFailure(ctx, error)
       try {
         const ipcError = toStepIpcError(error)
@@ -371,10 +384,27 @@ export class DeployPipeline {
     reason: Exclude<ActivationReason, 'legacy' | 'rotation'>
   ): Promise<number> {
     const metricsPath = posixJoin(WORK_ROOT, ctx.app.name, 'metrics', 'metrics.jsonl')
-    const fileSize = await this.ssh.fileSize(ctx.app.vps_id, metricsPath)
-    const fileIdentity = await ((
-      this.ssh as SshManager & { fileIdentity?: SshManager['fileIdentity'] }
-    ).fileIdentity?.(ctx.app.vps_id, metricsPath) ?? Promise.resolve({ generation: 'legacy' }))
+    await this.stopCollectorAndFlush(ctx)
+    const sshWithSnapshot = this.ssh as SshManager & {
+      metricSnapshot?: SshManager['metricSnapshot']
+    }
+    const snapshot = sshWithSnapshot.metricSnapshot
+      ? await sshWithSnapshot.metricSnapshot(ctx.app.vps_id, metricsPath)
+      : null
+    let fileSize: number
+    let fileIdentity: { generation: string; device?: number; inode?: number }
+    if (snapshot) {
+      fileSize = snapshot.size
+      fileIdentity = snapshot
+    } else if (ctx.newApp) {
+      fileSize = 0
+      fileIdentity = { generation: 'pending-first-generation' }
+    } else {
+      fileSize = await this.ssh.fileSize(ctx.app.vps_id, metricsPath)
+      fileIdentity = await ((
+        this.ssh as SshManager & { fileIdentity?: SshManager['fileIdentity'] }
+      ).fileIdentity?.(ctx.app.vps_id, metricsPath) ?? Promise.resolve({ generation: 'legacy' }))
+    }
     const offset = (
       this.database.prepare('SELECT metrics_offset FROM app WHERE id=?').get(ctx.app.id) as {
         metrics_offset: number
@@ -387,6 +417,19 @@ export class DeployPipeline {
       fileIdentity
     )
     return this.activation.prepare(ctx.app.id, deploymentId, fileIdentity, fileSize + 1, reason)
+  }
+
+  private async stopCollectorAndFlush(ctx: RunContext): Promise<void> {
+    if (ctx.newApp) return
+    const command = `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker compose stop collector`
+    this.log(ctx, 'DEPLOY', `$ ${command}\n`, 'stdout')
+    const result = await this.execStream(ctx, 'DEPLOY', command, 60_000)
+    if (result.code !== 0) {
+      throw new AppError('UNKNOWN', 'Không thể stop/flush collector trước cutover.', {
+        step: 'DEPLOY',
+        cause: new Error(result.stderr.trim() || result.stdout.trim())
+      })
+    }
   }
 
   private activatePrepared(ctx: RunContext, activationId: number | null): void {
@@ -477,6 +520,7 @@ export class DeployPipeline {
       stepLines: [],
       failedStep: null,
       cancelled: false,
+      runtimeStarted: false,
       durations: {}
     }
   }
@@ -510,7 +554,31 @@ export class DeployPipeline {
         finalStatus = await this.handleHealthcheckFail(ctx)
       }
     } catch (error) {
-      if (preparedActivationId !== null) this.activation.abort(preparedActivationId)
+      if (preparedActivationId !== null) {
+        if (ctx.runtimeStarted) {
+          this.activatePrepared(ctx, preparedActivationId)
+          preparedActivationId = null
+          const previous = this.deploymentRepository.previousCompleted(
+            ctx.app.id,
+            ctx.deployment.version
+          )
+          if (previous) {
+            try {
+              const recovery = await this.prepareReactivation(ctx, previous.id, 'auto_rollback')
+              this.activatePrepared(ctx, recovery)
+            } catch (recoveryError) {
+              this.activation.logFailClosed(ctx.app.id)
+              logger.warn('deploy', 'Không thể tạo activation recovery sau runtime failure', {
+                deployment_id: ctx.deployment.id,
+                error:
+                  recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
+              })
+            }
+          }
+        } else {
+          this.activation.abort(preparedActivationId)
+        }
+      }
       await this.recordFailure(ctx, error)
       finalStatus = 'failed'
     } finally {
@@ -874,6 +942,7 @@ export class DeployPipeline {
       this.log(ctx, 'DEPLOY', `$ ${command}\n`, 'stdout')
       try {
         const result = await this.execStream(ctx, 'DEPLOY', command, 180_000)
+        ctx.runtimeStarted = result.code === 0 || /started|running/i.test(result.stdout)
         if (result.code !== 0) {
           throw new AppError('UNKNOWN', 'Bước chạy container thất bại. Xem log bước DEPLOY.', {
             step: 'DEPLOY',

@@ -159,7 +159,13 @@ export class ActivationRepository {
     return episode?.deploymentId ?? null
   }
 
-  rotate(appId: number, deploymentId: number, identity: StreamIdentity, endOffset: number): void {
+  rotate(
+    appId: number,
+    deploymentId: number,
+    identity: StreamIdentity,
+    endOffset: number,
+    recovered = false
+  ): void {
     this.database.transaction(() => {
       this.database
         .prepare(
@@ -178,11 +184,13 @@ export class ActivationRepository {
            VALUES (?,?,?,1,'rotation','active',?)`
         )
         .run(appId, deploymentId, identity.generation, now())
-      this.database
-        .prepare(
-          "INSERT INTO action_log (action,status,message,app_id,deployment_id) VALUES ('ssh_error','failed','Metric file generation changed; new generation opened with an explicit data-gap boundary',?,?)"
-        )
-        .run(appId, deploymentId)
+      if (!recovered) {
+        this.database
+          .prepare(
+            "INSERT INTO action_log (action,status,message,app_id,deployment_id) VALUES ('ssh_error','failed','Metric file generation changed; matching metrics.jsonl.1 was unavailable; explicit data-gap boundary opened',?,?)"
+          )
+          .run(appId, deploymentId)
+      }
     })()
   }
 

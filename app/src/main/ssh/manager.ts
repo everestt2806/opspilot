@@ -192,6 +192,28 @@ export class SshManager extends EventEmitter {
     return parsed
   }
 
+  async metricSnapshot(
+    vpsId: number,
+    remotePath: string
+  ): Promise<{ generation: string; device: number; inode: number; size: number } | null> {
+    const result = await this.exec(vpsId, `stat -c '%d:%i:%s' ${shellQuote(remotePath)} 2>&1`, {
+      retryOnReconnect: true
+    })
+    if (result.code !== 0) {
+      if (/no such file|cannot stat/i.test(result.stdout + result.stderr)) return null
+      throw new AppError('UNKNOWN', 'Không đọc được snapshot metrics.jsonl trên VPS.')
+    }
+    const value = result.stdout.trim()
+    const match = value.match(/^(\d+):(\d+):(\d+)$/)
+    if (!match) throw new AppError('UNKNOWN', 'Snapshot metrics.jsonl không hợp lệ trên VPS.')
+    return {
+      generation: `${match[1]}:${match[2]}`,
+      device: Number(match[1]),
+      inode: Number(match[2]),
+      size: Number(match[3])
+    }
+  }
+
   async fileIdentity(
     vpsId: number,
     remotePath: string

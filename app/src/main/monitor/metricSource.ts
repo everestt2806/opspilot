@@ -6,6 +6,7 @@ export interface MetricSource {
   size(): Promise<number>
   tail(fromByte: number): Promise<string>
   identity?(): Promise<{ generation: string; device?: number; inode?: number }>
+  rotated?(): Promise<MetricSource | null>
 }
 
 export class LocalMetricSource implements MetricSource {
@@ -20,6 +21,14 @@ export class LocalMetricSource implements MetricSource {
   async identity(): Promise<{ generation: string; device?: number; inode?: number }> {
     const info = await stat(this.filePath)
     return { generation: `${info.dev}:${info.ino}`, device: info.dev, inode: info.ino }
+  }
+  async rotated(): Promise<MetricSource | null> {
+    try {
+      await stat(`${this.filePath}.1`)
+      return new LocalMetricSource(`${this.filePath}.1`)
+    } catch {
+      return null
+    }
   }
 }
 
@@ -41,5 +50,16 @@ export class SshMetricSource implements MetricSource {
     return fileIdentity
       ? fileIdentity.call(this.ssh, this.vpsId, this.remotePath)
       : { generation: 'legacy' }
+  }
+
+  async rotated(): Promise<MetricSource | null> {
+    const rotatedPath = `${this.remotePath}.1`
+    try {
+      await this.ssh.fileIdentity(this.vpsId, rotatedPath)
+      await this.ssh.fileSize(this.vpsId, rotatedPath)
+      return new SshMetricSource(this.ssh, this.vpsId, rotatedPath)
+    } catch {
+      return null
+    }
   }
 }

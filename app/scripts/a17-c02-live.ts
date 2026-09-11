@@ -12,14 +12,13 @@ import { SshManager } from '../src/main/ssh/manager'
 
 const VPS_ID = 2
 const APP_ID = 1
-const DEPLOYMENT_ID = 12
 const APP_NAME = 'a17-notes-0911'
 const METRICS_PATH = `/opt/opspilot/${APP_NAME}/metrics/metrics.jsonl`
 
 type Counts = { metrics: number; scores: number; offset: number; deploymentRows: number }
 type SchedulerTick = { start: string; end: string; insertedMetrics: number; offset: number }
 
-function counts(database: ReturnType<typeof initializeDatabase>): Counts {
+function counts(database: ReturnType<typeof initializeDatabase>, deploymentId: number): Counts {
   const appRow = database.prepare('SELECT metrics_offset FROM app WHERE id=?').get(APP_ID) as {
     metrics_offset: number
   }
@@ -27,7 +26,7 @@ function counts(database: ReturnType<typeof initializeDatabase>): Counts {
   const scores = database.prepare('SELECT COUNT(*) n FROM score_sample').get() as { n: number }
   const deploymentRows = database
     .prepare('SELECT COUNT(*) n FROM metric_sample WHERE deployment_id=?')
-    .get(DEPLOYMENT_ID) as { n: number }
+    .get(deploymentId) as { n: number }
   return {
     metrics: metrics.n,
     scores: scores.n,
@@ -56,30 +55,29 @@ async function run(): Promise<void> {
 
   try {
     const target = database
-      .prepare(
-        'SELECT id, name, current_deployment_id FROM app WHERE id=? AND name=? AND current_deployment_id=?'
-      )
-      .get(APP_ID, APP_NAME, DEPLOYMENT_ID) as
+      .prepare('SELECT id, name, current_deployment_id FROM app WHERE id=? AND name=?')
+      .get(APP_ID, APP_NAME) as
       { id: number; name: string; current_deployment_id: number } | undefined
     if (!target) throw new Error('C02 target boundary mismatch')
+    const deploymentId = target.current_deployment_id
 
-    const before = counts(database)
+    const before = counts(database, deploymentId)
     const source = new SshMetricSource(ssh, VPS_ID, METRICS_PATH)
     const poller = new MonitorPoller(database)
     const sourceIdentity = await source.identity?.()
-    const first = await poller.poll(APP_ID, DEPLOYMENT_ID, source)
-    const afterFirst = counts(database)
+    const first = await poller.poll(APP_ID, deploymentId, source)
+    const afterFirst = counts(database, deploymentId)
     const frozen: MetricSource = {
       size: async () => afterFirst.offset - 1,
       tail: async () => '',
       identity: async () => sourceIdentity ?? { generation: 'legacy' }
     }
-    const retry = await poller.poll(APP_ID, DEPLOYMENT_ID, frozen)
-    const afterRetry = counts(database)
+    const retry = await poller.poll(APP_ID, deploymentId, frozen)
+    const afterRetry = counts(database, deploymentId)
 
     await ssh.disconnect(VPS_ID)
-    const reconnect = await poller.poll(APP_ID, DEPLOYMENT_ID, source)
-    const afterReconnect = counts(database)
+    const reconnect = await poller.poll(APP_ID, deploymentId, source)
+    const afterReconnect = counts(database, deploymentId)
 
     let concurrent = 0
     let maxConcurrent = 0
@@ -89,11 +87,11 @@ async function run(): Promise<void> {
       const start = new Date().toISOString()
       concurrent += 1
       maxConcurrent = Math.max(maxConcurrent, concurrent)
-      const beforeTick = counts(database)
+      const beforeTick = counts(database, deploymentId)
       try {
         await service.pollAll(ssh)
       } finally {
-        const afterTick = counts(database)
+        const afterTick = counts(database, deploymentId)
         schedulerTicks.push({
           start,
           end: new Date().toISOString(),

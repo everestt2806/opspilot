@@ -128,4 +128,67 @@ describe('C02 activation episodes', () => {
       db.prepare("SELECT COUNT(*) n FROM deployment_activation WHERE reason='rotation'").get()
     ).toEqual({ n: 2 })
   })
+
+  it('drains a matching metrics.jsonl.1 suffix before switching generation', async () => {
+    const db = seed()
+    const poller = new MonitorPoller(db)
+    const old = `${metric(1)}\n`
+    await poller.poll(1, 1, source(old, 'old'))
+    const rotatedContent = `${metric(1)}\n${metric(2)}\n`
+    const rotated: MetricSource = {
+      size: async () => Buffer.byteLength(rotatedContent),
+      tail: async (offset) =>
+        Buffer.from(rotatedContent)
+          .subarray(offset - 1)
+          .toString(),
+      identity: async () => ({ generation: 'old' })
+    }
+    const next: MetricSource = {
+      size: async () => Buffer.byteLength(`${metric(3)}\n`),
+      tail: async (offset) =>
+        Buffer.from(`${metric(3)}\n`)
+          .subarray(offset - 1)
+          .toString(),
+      identity: async () => ({ generation: 'new' }),
+      rotated: async () => rotated
+    }
+    expect(await poller.poll(1, 1, next)).toMatchObject({ inserted: 1 })
+    expect(db.prepare('SELECT deployment_id,seq FROM metric_sample ORDER BY seq').all()).toEqual([
+      { deployment_id: 1, seq: 1 },
+      { deployment_id: 1, seq: 2 },
+      { deployment_id: 1, seq: 3 }
+    ])
+    expect(
+      db.prepare("SELECT COUNT(*) AS count FROM action_log WHERE message LIKE '%data-gap%'").get()
+    ).toEqual({ count: 0 })
+    expect(db.prepare('SELECT metrics_offset FROM app WHERE id=1').get()).toEqual({
+      metrics_offset: Buffer.byteLength(`${metric(3)}\n`) + 1
+    })
+  })
+
+  it.each([
+    ['missing', async () => null],
+    [
+      'mismatched',
+      async () => ({
+        size: async () => Buffer.byteLength(`${metric(99)}\n`),
+        tail: async () => `${metric(99)}\n`,
+        identity: async () => ({ generation: 'other' })
+      })
+    ]
+  ])('logs an explicit gap when rotated file is %s', async (_label, rotated) => {
+    const db = seed()
+    const poller = new MonitorPoller(db)
+    await poller.poll(1, 1, source(`${metric(1)}\n`, 'old'))
+    const next = source(`${metric(2)}\n`, 'new')
+    next.rotated = rotated
+    await poller.poll(1, 1, next)
+    expect(
+      db.prepare("SELECT COUNT(*) AS count FROM action_log WHERE message LIKE '%data-gap%'").get()
+    ).toEqual({ count: 1 })
+    expect(db.prepare('SELECT seq FROM metric_sample ORDER BY id').all()).toEqual([
+      { seq: 1 },
+      { seq: 2 }
+    ])
+  })
 })

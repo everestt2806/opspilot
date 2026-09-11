@@ -74,7 +74,23 @@ export class MonitorPoller {
     )?.metrics_stream_generation
     const activeBeforeIdentity = activationRepository.active(target.app_id)
     if (activeBeforeIdentity && storedGeneration !== identity.generation) {
-      activationRepository.rotate(target.app_id, deploymentId, identity, offset)
+      let recovered = false
+      let oldEndOffset = offset
+      try {
+        const rotated = await source.rotated?.()
+        const rotatedIdentity = await rotated?.identity?.()
+        if (rotated && rotatedIdentity?.generation === storedGeneration) {
+          const rotatedSize = await rotated.size()
+          oldEndOffset = Math.max(offset, rotatedSize + 1)
+          if (rotatedSize + 1 > offset) {
+            await this.pollUnlocked(appId, deploymentId, rotated, onSample)
+          }
+          recovered = true
+        }
+      } catch {
+        recovered = false
+      }
+      activationRepository.rotate(target.app_id, deploymentId, identity, oldEndOffset, recovered)
       offset = 1
     }
     activationRepository.ensureLegacy(target.app_id, deploymentId, offset, identity)

@@ -55,16 +55,60 @@ function runMigrations(database: Database.Database): void {
       continue
     }
 
-    database.exec(migration.sql)
-
-    const alreadyRecorded = database
-      .prepare('SELECT 1 FROM schema_version WHERE version = ?')
-      .get(migration.version)
-
-    if (!alreadyRecorded) {
-      database.prepare('INSERT INTO schema_version (version) VALUES (?)').run(migration.version)
-    }
+    database.transaction(() => {
+      applyMigration(database, migration)
+      const alreadyRecorded = database
+        .prepare('SELECT 1 FROM schema_version WHERE version = ?')
+        .get(migration.version)
+      if (!alreadyRecorded) {
+        database.prepare('INSERT INTO schema_version (version) VALUES (?)').run(migration.version)
+      }
+    })()
   }
+}
+
+function applyMigration(database: Database.Database, migration: Migration): void {
+  if (migration.version !== 2) {
+    database.exec(migration.sql)
+    return
+  }
+
+  const columns = new Set(
+    (database.prepare('PRAGMA table_info(app)').all() as Array<{ name: string }>).map(
+      (column) => column.name
+    )
+  )
+  for (const definition of [
+    "metrics_stream_generation TEXT NOT NULL DEFAULT 'legacy'",
+    'metrics_stream_device INTEGER',
+    'metrics_stream_inode INTEGER'
+  ]) {
+    const name = definition.split(' ', 1)[0]
+    if (!columns.has(name)) database.exec(`ALTER TABLE app ADD COLUMN ${definition}`)
+  }
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS deployment_activation (
+      id INTEGER PRIMARY KEY,
+      app_id INTEGER NOT NULL REFERENCES app(id) ON DELETE CASCADE,
+      deployment_id INTEGER NOT NULL REFERENCES deployment(id) ON DELETE CASCADE,
+      stream_generation TEXT NOT NULL,
+      start_offset INTEGER NOT NULL CHECK (start_offset >= 1),
+      end_offset INTEGER CHECK (end_offset IS NULL OR end_offset >= start_offset),
+      reason TEXT NOT NULL CHECK (reason IN ('deploy','manual_rollback','auto_rollback','rotation','legacy')),
+      state TEXT NOT NULL CHECK (state IN ('prepared','active','closed','aborted')),
+      prepared_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      activated_at TEXT,
+      closed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_activation_app_range
+      ON deployment_activation(app_id, stream_generation, start_offset, end_offset);
+    CREATE INDEX IF NOT EXISTS idx_activation_deployment
+      ON deployment_activation(deployment_id, id);
+    CREATE UNIQUE INDEX IF NOT EXISTS one_prepared_activation
+      ON deployment_activation(app_id) WHERE state='prepared';
+    CREATE UNIQUE INDEX IF NOT EXISTS one_active_activation
+      ON deployment_activation(app_id) WHERE state='active';
+  `)
 }
 
 function getAppliedVersions(database: Database.Database): Set<number> {
