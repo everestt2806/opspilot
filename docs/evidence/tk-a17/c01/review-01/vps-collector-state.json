@@ -1,0 +1,25 @@
+{
+  "target": "deploy@221.121.1.80",
+  "mode": "read-only SSH",
+  "checked_utc": "2026-09-11T01:18:57.2080359Z",
+  "command_summary": "docker inspect state; docker compose ps -a collector; docker logs --tail 20; wc -l and tail metrics.jsonl",
+  "exit": 0,
+  "state": {
+    "Status": "exited",
+    "Running": false,
+    "OOMKilled": false,
+    "ExitCode": 0,
+    "StartedAt": "2026-09-10T20:23:33.696610071Z",
+    "FinishedAt": "2026-09-10T20:40:14.252346069Z"
+  },
+  "compose_status": "Exited (0) 5 hours ago",
+  "container_image": "sha256:97c9592cd0482c14b16e94dcfe14cca4075f4e568be38f5a8203a9316a970710",
+  "log_tail": "",
+  "metrics_rows": 101,
+  "last_metric": {
+    "seq": 101,
+    "ts": "2026-09-10T20:40:05Z",
+    "container_up": 1,
+    "collector_version": "1.0.0"
+  }
+}

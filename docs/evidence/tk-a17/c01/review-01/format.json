@@ -1,0 +1,18 @@
+{
+  "code": "66cbdab",
+  "docs": "f0b73aa",
+  "command": [
+    "C:\\Users\\everestt28\\AppData\\Local\\pnpm\\bin\\node.exe",
+    "node_modules/prettier/bin/prettier.cjs",
+    "--check",
+    "src/main/deploy/pipeline.ts",
+    "src/main/deploy/pipeline.test.ts",
+    "src/main/deploy/templates.ts",
+    "src/main/deploy/templates.test.ts"
+  ],
+  "cwd": "D:\\Developing\\DuAnCNTT\\app",
+  "utc": "2026-09-11T01:13:23.322242+00:00",
+  "exit": 0,
+  "stdout": "Checking formatting...\nAll matched files use Prettier code style!\n",
+  "stderr": ""
+}

@@ -1,0 +1,26 @@
+{
+  "database": "%APPDATA%/OpsPilot/opspilot.db",
+  "mode": "SQLite URI mode=ro",
+  "checked_utc": "2026-09-11T01:18:57.2080359Z",
+  "metric_score_by_deployment_method": [
+    { "deployment_id": 2, "method": "ensemble", "n": 2, "nonnull_score": 0 },
+    { "deployment_id": 2, "method": "iforest", "n": 2, "nonnull_score": 0 },
+    { "deployment_id": 2, "method": "ocsvm", "n": 2, "nonnull_score": 0 },
+    { "deployment_id": 2, "method": "rule", "n": 2, "nonnull_score": 2 },
+    { "deployment_id": 2, "method": "zscore_ewma", "n": 2, "nonnull_score": 0 },
+    { "deployment_id": 3, "method": "ensemble", "n": 11, "nonnull_score": 0 },
+    { "deployment_id": 3, "method": "iforest", "n": 11, "nonnull_score": 0 },
+    { "deployment_id": 3, "method": "ocsvm", "n": 11, "nonnull_score": 0 },
+    { "deployment_id": 3, "method": "rule", "n": 11, "nonnull_score": 11 },
+    { "deployment_id": 3, "method": "zscore_ewma", "n": 11, "nonnull_score": 0 },
+    { "deployment_id": 5, "method": "ensemble", "n": 8, "nonnull_score": 0 },
+    { "deployment_id": 5, "method": "iforest", "n": 8, "nonnull_score": 0 },
+    { "deployment_id": 5, "method": "ocsvm", "n": 8, "nonnull_score": 0 },
+    { "deployment_id": 5, "method": "rule", "n": 8, "nonnull_score": 8 },
+    { "deployment_id": 5, "method": "zscore_ewma", "n": 8, "nonnull_score": 0 }
+  ],
+  "table_counts": {
+    "alert": 0,
+    "experiment_run": 0
+  }
+}

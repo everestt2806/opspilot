@@ -1,20 +1,21 @@
 # Sổ bàn giao và review — TK-A17
 
 > C00 APPROVED 11/09: [review](tk-a17/review-c00.md), code `d4ec3be`, docs `23cd248`.
-> Chặng tiếp được mở để A giao Worker: C01; chưa thực hiện C01.
+> C01 review-01 CHANGES_REQUESTED 11/09: [review](tk-a17/review-c01.md),
+> code `66cbdab`, docs `f0b73aa`. Worker sửa C01; C02 chưa được mở.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; Worker đã bàn giao C00; Leader review và mở C01 để A giao lượt tiếp.
+- Owner A solo; Worker đã bàn giao C01; Leader yêu cầu sửa tại review-01.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
-- Chặng được approve: C00. Chặng tiếp C01; C08 bắt buộc, tách C08A/B/C, đều chưa bắt đầu.
+- Chặng được approve: C00. C01 đang sửa findings; C08 bắt buộc, tách C08A/B/C, đều chưa bắt đầu.
 
 ## Sổ gate (Leader xác nhận verdict)
 
 | Chặng | Worker outcome | Reviewed SHA | Verdict | Handoff/review |
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
-| C01   | READY_FOR_LOCAL_REVIEW | local C01 commit | PENDING | [handoff](tk-a17/handoff-c01.md); Leader review cần thực hiện |
+| C01   | REVIEW_FIX_REQUIRED | code `66cbdab` / docs `f0b73aa` | CHANGES_REQUESTED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
 | C02   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |

@@ -2,14 +2,15 @@
 
 | Chủ    | Branch plan                | Baseline code | Trạng thái                  |
 | ------ | -------------------------- | ------------- | --------------------------- |
-| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — C00 APPROVED, mở C01 |
+| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | ĐANG LÀM — sửa review C01   |
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
 · [Sổ bàn giao](tk-a17-worker-handoff.md).
 Hướng dẫn thực thi: [Worker playbook](../prompts/tk-a17-worker-playbook.md).
 Yêu cầu đầy đủ: [plan mục 7–10](../24-ke-hoach-demo-theo-chang.md#7-ma-trận-đầy-đủ-yêu-cầu-giao-worker).
 Khảo sát: [preflight 11/09](tk-a17/preflight-11-09.md). Trạng thái mới:
-[C00 APPROVED](tk-a17/review-c00.md), code `d4ec3be` / docs `23cd248`; C01 chờ review.
+[C00 APPROVED](tk-a17/review-c00.md), code `d4ec3be` / docs `23cd248`.
+[C01 CHANGES_REQUESTED](tk-a17/review-c01.md), code `66cbdab` / docs `f0b73aa`; C02 đóng.
 Mục tiêu: A trình chiếu **tự phát hiện → tự rollback → xác minh phục hồi**. C08 bắt buộc.
 Không chia theo ngày/giờ công. Thời lượng 10s/30s/baseline/test vẫn giữ theo yêu cầu kỹ thuật.
 
@@ -143,3 +144,13 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
  soak/failure isolation đã kiểm tra; C02+ NOT_RUN.
 - HANDOFF-LOCAL 11/09 — `handoff-c01.md`, evidence `docs/evidence/tk-a17/c01/`;
  READY_FOR_LOCAL_REVIEW. Chưa push/PR/merge.
+
+- START 11/09 — Leader review C01 tại code `66cbdab`, docs `f0b73aa`, kế thừa review C00
+  `1b447e4`. Đọc diff/source/evidence, chạy regression và static checks độc lập, kiểm tra
+  SQLite local cùng VM02 read-only; không deploy/restart, không sửa app B và không mở C02.
+- REVIEW 11/09 — [review-c01](tk-a17/review-c01.md): **CHANGES_REQUESTED** với 2 BLOCKER,
+  3 MAJOR, 1 MINOR. Packaged app thiếu collector resource; collector live đã exited; Express
+  generic bị ép `/items`; build fail có thể xóa shared collector tag; helper đã ingest 21 metric
+  và ghi 105 score rows của chặng C02; provenance docs chưa đúng bản nộp. Reviewer xác nhận
+  soak seq 2–91 liên tục 886 giây, focused 64/64, collector 26/26 và static checks đạt.
+  Task về ĐANG LÀM để Worker sửa C01 trên HEAD hiện tại; C02–C09 tiếp tục đóng.

@@ -72,3 +72,10 @@
 
 - Evidence root: `docs/evidence/tk-a17/c01/`.
 - CHƯA PUSH — CHƯA PR — CHƯA MERGE. Dừng tại C01 để Leader review.
+
+## Leader review 01 — 11/09/2026
+
+- Reviewed submission: code `66cbdab`, docs `f0b73aa`.
+- Verdict: **CHANGES_REQUESTED** tại [review-c01.md](review-c01.md).
+- Worker cần đóng `C01-R1-01`…`C01-R1-06`, append bảng REVIEW-FIX với commit/regression/
+  evidence mới và bàn giao lại. C02 chưa được mở; không reset dữ liệu SQLite đã phát sinh.

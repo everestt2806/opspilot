@@ -1,0 +1,25 @@
+{
+  "code": "66cbdab",
+  "docs": "f0b73aa",
+  "command": [
+    "ssh",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "StrictHostKeyChecking=yes",
+    "-o",
+    "IdentitiesOnly=yes",
+    "-o",
+    "ConnectTimeout=10",
+    "-i",
+    "C:\\Users\\everestt28\\.ssh\\opspilot_ed25519",
+    "deploy@221.121.1.80",
+    "bash -s"
+  ],
+  "cwd": "D:\\Developing\\DuAnCNTT\\app",
+  "utc": "2026-09-11T01:13:24.128979+00:00",
+  "stdin_lf": "set -eu\ndate -u +%FT%TZ\ndocker ps -a --format '{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}'\ndocker inspect --format '{{.Name}}|{{.State.StartedAt}}|{{.RestartCount}}' a17-notes-0911-app a17-notes-0911-db a17-notes-0911-collector express-demo-app express-demo-collector\ndocker image inspect --format '{{.Id}} {{.RepoTags}}' a17-notes-0911:collector a17-notes-0911:v6 a17-notes-0911:v7\nstat -c '%a %n' /opt/opspilot/a17-notes-0911/.env /opt/opspilot/a17-notes-0911/metrics\ncurl -fsS --max-time 10 http://127.0.0.1:30000/meta\necho\ncurl -fsS --max-time 10 'http://127.0.0.1:30000/items?limit=10&offset=1000'\necho\nwc -l /opt/opspilot/a17-notes-0911/metrics/metrics.jsonl\ntail -1 /opt/opspilot/a17-notes-0911/metrics/metrics.jsonl\n",
+  "exit": 0,
+  "stdout": "2026-09-11T01:13:30Z\n859fa016c892|a17-notes-0911-app|a17-notes-0911:v7|Up 5 hours (healthy)|0.0.0.0:30000->3000/tcp, [::]:30000->3000/tcp\n38da5278972e|a17-notes-0911-db|postgres:16-alpine|Up 5 hours (healthy)|5432/tcp\nae4b54968de0|a17-notes-0911-collector|97c9592cd048|Exited (0) 5 hours ago|\nf085b56f8fe0|express-demo-app|opspilot-demo-express:local|Up 2 days (healthy)|0.0.0.0:30001->3000/tcp, [::]:30001->3000/tcp\ne9c40225b3e5|express-demo-collector|opspilot-collector:1.0.0|Up 2 days|\n/a17-notes-0911-app|2026-09-10T20:27:16.035396096Z|0\n/a17-notes-0911-db|2026-09-10T20:23:33.679393901Z|0\n/a17-notes-0911-collector|2026-09-10T20:23:33.696610071Z|0\n/express-demo-app|2026-09-08T07:41:10.095487766Z|0\n/express-demo-collector|2026-09-08T07:41:10.10479827Z|0\nsha256:a51a24dccaafc654ba7339bf64e8a6262e49e745a3bdb708108138b062bd8c12 [a17-notes-0911:collector]\nsha256:ff455d40b24f598dfa2e446e0036e87f3abf57ccdac9f269bcfa2b8e8fb6997d [a17-notes-0911:v6]\nsha256:46bf30ec20583c00044967c571222885e6834601ad4168804ee756332ca3119d [a17-notes-0911:v7]\n600 /opt/opspilot/a17-notes-0911/.env\n755 /opt/opspilot/a17-notes-0911/metrics\n{\"service\":\"OpsPilot Demo Inventory\",\"version\":\"0.2.0\",\"status\":\"online\",\"runtime\":\"v22.23.2\",\"storage\":\"PostgreSQL\",\"records\":1003,\"started_at\":\"2026-09-10T20:27:16.414Z\",\"uptime_s\":17175}\n[{\"id\":1001,\"name\":\"C01 marker 2026-09-11\",\"created_at\":\"2026-09-10T20:23:42.929Z\"},{\"id\":1002,\"name\":\"C01 marker 2026-09-11\",\"created_at\":\"2026-09-10T20:25:37.188Z\"},{\"id\":1003,\"name\":\"C01 marker 2026-09-11\",\"created_at\":\"2026-09-10T20:26:54.955Z\"}]\n101 /opt/opspilot/a17-notes-0911/metrics/metrics.jsonl\n{\"seq\":101,\"ts\":\"2026-09-10T20:40:05Z\",\"cpu_pct\":0.0,\"mem_mb\":19.12,\"mem_pct\":3.74,\"mem_limit_mb\":512.0,\"latency_ms\":21.62130386568606,\"http_error_rate\":0.0,\"db_response_ms\":17.412296030670404,\"host_cpu_pct\":50.5,\"host_mem_pct\":17.66403373351919,\"container_up\":1,\"collector_version\":\"1.0.0\"}\n",
+  "stderr": ""
+}

@@ -1,0 +1,16 @@
+{
+  "code": "66cbdab",
+  "docs": "f0b73aa",
+  "command": [
+    "D:\\Developing\\DuAnCNTT\\ml-service\\.venv\\Scripts\\python.exe",
+    "-m",
+    "pytest",
+    "tests",
+    "-q"
+  ],
+  "cwd": "D:\\Developing\\DuAnCNTT\\collector",
+  "utc": "2026-09-11T01:11:46.154245+00:00",
+  "exit": 0,
+  "stdout": "..........................                                               [100%]\r\n26 passed in 0.17s\r\n",
+  "stderr": ""
+}
