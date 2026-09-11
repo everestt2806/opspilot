@@ -52,6 +52,12 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
 - Collector pytest was unavailable in the prior run because the current Python environment has no `pytest` module; collector code was not changed.
 - Handoff: `BLOCKED` pending Leader approval. No schema change, live redeploy/rollback, reset, reassignment, push, PR or merge was performed.
 
+## REVIEW-FIX provenance
+
+- Review-fix base/code HEAD: `05848d1` / `0967fb9` (no production code change in this fix).
+- Review-fix docs HEAD: `ca0b3fa`.
+- Commit: `ca0b3fa` - Record the activation-byte boundary proposal and blocker.
+
 ## Leader review 01 — 11/09/2026
 
 - Reviewed code `0967fb9`, docs submission `8e08f76`; verdict
