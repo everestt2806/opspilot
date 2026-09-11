@@ -4,7 +4,7 @@
 
 - Stage / outcome / branch / date: C02 / `READY_FOR_LOCAL_REVIEW` / `feat/a17-demo-checkpoint` / 11/09/2026.
 - Base SHA: `4510d5e` (C01 APPROVED handoff commit); inherited C01 approved code `8e42856`, docs `9689ea4`.
-- Code HEAD: `fa72a6e`; docs HEAD: `cb2f5f8`.
+- Code HEAD: `fa72a6e`; docs HEAD: `a0e2de1`.
 - Scope: SSH metric ingestion into SQLite, byte offsets, transaction/dedupe, reconnect and deployment boundary regressions. No C03/UI/fault/rollback policy/ML model.
 - Untracked `.devflow/`, `docs/ban-giao-20-08.md`, and `logo.png` were preserved.
 
