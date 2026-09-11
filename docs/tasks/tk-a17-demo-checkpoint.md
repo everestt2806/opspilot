@@ -2,7 +2,7 @@
 
 | Chủ    | Branch plan                | Baseline code | Trạng thái                  |
 | ------ | -------------------------- | ------------- | --------------------------- |
-| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | ĐANG LÀM — C02 CHANGES_REQUESTED |
+| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | ĐANG LÀM — C02 READY_FOR_LOCAL_REVIEW |
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
 · [Sổ bàn giao](tk-a17-worker-handoff.md).
@@ -11,7 +11,7 @@ Yêu cầu đầy đủ: [plan mục 7–10](../24-ke-hoach-demo-theo-chang.md#7
 Khảo sát: [preflight 11/09](tk-a17/preflight-11-09.md). Trạng thái mới:
 [C00 APPROVED](tk-a17/review-c00.md), code `d4ec3be` / docs `23cd248`.
 [C01 APPROVED review-03](tk-a17/review-c01.md), code `8e42856` / docs `9689ea4`; mở C02.
-[C02 review-03 CHANGES_REQUESTED](tk-a17/review-c02.md), code `ce1a9ff` / submitted `0e7d207`;
+[C02 review-03 CHANGES_REQUESTED](tk-a17/review-c02.md) đã được xử lý tại code `fa72a6e`;
 C03–C09 tiếp tục đóng.
 Mục tiêu: A trình chiếu **tự phát hiện → tự rollback → xác minh phục hồi**. C08 bắt buộc.
 Không chia theo ngày/giờ công. Thời lượng 10s/30s/baseline/test vẫn giữ theo yêu cầu kỹ thuật.
