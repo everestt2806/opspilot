@@ -12,11 +12,11 @@ describe('MonitorService mutations', () => {
     const db = initializeDatabase(dir)
     try {
       db.exec(
-        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('v','127.0.0.1','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'app','express',30000,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'app:v1','running'),(1,2,'app:v2','running'),(1,3,'app:v3','running'); UPDATE deployment SET is_rollback_of=1 WHERE id=3; UPDATE app SET current_deployment_id=2 WHERE id=1;"
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('v','127.0.0.1','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'app','express',30000,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'app:v1','running'),(1,2,'app:v2','running'),(1,3,'app:v3','running'),(1,4,'app:v4','running'); UPDATE deployment SET is_rollback_of=1 WHERE id=3; UPDATE deployment SET is_rollback_of=3 WHERE id=4; UPDATE app SET current_deployment_id=2 WHERE id=1;"
       )
       const activation = new ActivationRepository(db)
       activation.ensureLegacy(1, 2, 1, { generation: '1:1' })
-      const prepared = activation.prepare(1, 3, { generation: '1:1' }, 1, 'manual_rollback')
+      const prepared = activation.prepare(1, 4, { generation: '1:1' }, 1, 'manual_rollback')
       closeDatabase()
       const reopened = initializeDatabase(dir)
       const ssh = {
@@ -41,6 +41,44 @@ describe('MonitorService mutations', () => {
           .prepare("SELECT COUNT(*) AS count FROM deployment_activation WHERE state='prepared'")
           .get()
       ).toEqual({ count: 0 })
+    } finally {
+      closeDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps the prepared barrier when rollback lineage is cyclic or missing', async () => {
+    const dir = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-lineage-barrier-'))
+    const db = initializeDatabase(dir)
+    try {
+      db.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('v','127.0.0.1','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'app','express',30000,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'app:v1','running'),(1,2,'app:v2','running'); UPDATE deployment SET is_rollback_of=2 WHERE id=1; UPDATE deployment SET is_rollback_of=1 WHERE id=2; UPDATE app SET current_deployment_id=1 WHERE id=1;"
+      )
+      const activation = new ActivationRepository(db)
+      activation.ensureLegacy(1, 1, 1, { generation: '1:1' })
+      activation.prepare(1, 2, { generation: '1:1' }, 1, 'manual_rollback')
+      const ssh = {
+        exec: async () => ({ code: 0, stdout: 'app:v1|running\n', stderr: '' }),
+        metricSnapshot: async () => ({ generation: '1:1', device: 1, inode: 1, size: 0 }),
+        fileIdentity: async () => ({ generation: '1:1', device: 1, inode: 1 }),
+        fileSize: async () => 0,
+        readFileTail: async () => ({ content: '', nextOffset: 1 })
+      } as never
+
+      await new MonitorService(db).pollAll(ssh)
+
+      expect(
+        db
+          .prepare("SELECT COUNT(*) AS count FROM deployment_activation WHERE state='prepared'")
+          .get()
+      ).toEqual({ count: 1 })
+      expect(
+        db
+          .prepare(
+            "SELECT COUNT(*) AS count FROM action_log WHERE message LIKE '%lineage cannot be resolved%'"
+          )
+          .get()
+      ).toEqual({ count: 1 })
     } finally {
       closeDatabase()
       rmSync(dir, { recursive: true, force: true })
