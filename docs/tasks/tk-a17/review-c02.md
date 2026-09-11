@@ -561,3 +561,130 @@ không push/PR/merge. Giữ nguyên .devflow/, docs/ban-giao-20-08.md và logo.p
 READY_FOR_LOCAL_REVIEW khi tất cả finding và regression đã đóng; nếu cần đổi contract/schema ngoài
 amendment đã duyệt thì bàn giao BLOCKED kèm proposal trước implementation/live mutation.
 ```
+
+## 10. Review 06 — review-fix tại `4b4f82e`
+
+### Phạm vi và verdict
+
+- Reviewed code `37d9e19`, submitted HEAD `4b4f82e`, kế thừa Leader review `eaca497` hợp lệ.
+- Verdict: **CHANGES_REQUESTED**. C02 tiếp tục `REVIEW_FIX_REQUIRED`; C03–C09 đóng/`NOT_RUN`.
+- R5-01 và R5-03 đã đóng; R5-02/R5-04/R5-05/R5-06 còn phần mở. Hai regression reviewer mới
+  2/2 FAIL dù toàn bộ suite hiện hữu PASS.
+- Evidence reviewer: [review-06](../../evidence/tk-a17/c02/review-06/). Review chỉ local/read-only;
+  không deploy/rollback, không sửa SQLite/VPS/app B, không ML train/score, push/PR/merge.
+
+### Kiểm chứng độc lập
+
+| Gate | Kết quả reviewer |
+| --- | --- |
+| Exact focused Worker | 18 file, 95/95 PASS |
+| ML service | 19/19 PASS |
+| Collector | 26/26 PASS |
+| Typecheck node/web/scripts, lint, format, build | PASS; renderer 3045 modules |
+| Manual-owner/invalid-range regressions | 2/2 FAIL; 42 existing tests PASS |
+| GitNexus | analyze PASS; 26 symbol đổi, 114 affected process, risk CRITICAL |
+
+### Trạng thái finding R5
+
+| Finding | Review 06 |
+| --- | --- |
+| C02-R5-01 | CLOSED — cleanup dùng signal riêng, kiểm collector running |
+| C02-R5-02 | OPEN — forward unknown có barrier, manual/auto và restart reconciliation chưa có |
+| C02-R5-03 | CLOSED — `.1` đã đọc hết không còn false gap |
+| C02-R5-04 | PARTIAL — tail failure retry được; invalid complete line vẫn log sai byte range |
+| C02-R5-05 | PARTIAL — helper lineage đúng; raw live artifact/boundary routing chưa đủ audit |
+| C02-R5-06 | OPEN — regression matrix và provenance evidence vẫn overclaim |
+
+### C02-R6-01 — BLOCKER — manual/auto rollback suy runtime owner từ DB pointer
+
+- Vị trí: `app/src/main/deploy/pipeline.ts:439-451,243-315,1187-1265`.
+- `stopCollectorAndFlush()` gán `runtimeOwner` từ `ctx.app.current_deployment_id`. Stop collector
+  không đổi app runtime và DB pointer không chứng minh container đang chạy image nào. Với auto
+  rollback, pointer còn là previous trong khi runtime vừa chuyển sang candidate.
+- Manual rollback compose nonzero + inspect không xác định đi vào catch với owner `previous`, abort
+  prepared target và để polling mở. Regression reviewer nhận prepared count 0 thay vì barrier 1.
+  Auto rollback có cùng lỗi chuyển state khi attempt không xác minh được runtime.
+- Fix: không thay owner khi chỉ stop collector; set `unknown` trước mọi compose có thể đổi app, rồi
+  chỉ set `candidate/previous/down` từ exit + live image/state đã verify. Dùng cùng transition cho
+  forward/manual/auto; unknown phải giữ barrier. Không suy owner từ current DB pointer.
+
+### C02-R6-02 — BLOCKER — prepared barrier sau restart không có đường reconcile
+
+- Vị trí: `activation.ts:114-136`, `poller.ts:77-81`; không có startup/service recovery consumer.
+- Prepared row bền vững hiện chỉ làm poller throw. Restart không inspect runtime để activate/abort
+  atomically; deploy mới sẽ đụng unique `one_prepared_activation`. App có thể bị khóa monitor/deploy
+  vô hạn. Test mới chỉ giữ row trong cùng process, không restart/reconcile như handoff tuyên bố.
+- Fix: thêm explicit reconciliation workflow khi service/startup gặp prepared row: lock theo app,
+  đọc episode + lineage, inspect app/collector image/state, snapshot generation/offset, rồi atomically
+  activate verified owner hoặc giữ BLOCKED với action/error có thể vận hành. Không tự đoán khi SSH
+  unavailable. Test close/reopen DB + new pipeline/service cho candidate/previous/down/unknown và
+  retry sau reconnect.
+
+### C02-R6-03 — MAJOR — invalid `.1` ghi gap rỗng tại EOF
+
+- Vị trí: `app/src/main/monitor/poller.ts:97-128,149-272` và `activation.ts:185-227`.
+- Inner poll chỉ trả `hadWarnings`. Khi complete invalid line bị consume, `nextOffset=EOF`; outer
+  dùng EOF làm cả cursor và gap end, tạo `range=[EOF,EOF]` thay vì byte đã bỏ qua.
+- Regression reviewer bỏ qua `[236,247]` nhưng nhận `cursor=247 range=[247,247]`.
+- Fix: mang warning byte range thật qua parse/transaction/result; log generation, first skipped byte
+  và exclusive EOF. Test invalid ở đầu/giữa/cuối, valid rows hai phía, nhiều invalid line, UTF-8,
+  retry/dedupe, episode end và 5 score rows.
+
+### C02-R6-04 — MAJOR — coverage tiếp tục không khớp handoff
+
+- Commit chỉ thêm hai pipeline tests: cancellation cleanup thành công và forward restore unknown.
+  Chưa có cleanup start/inspect failure, manual/auto unknown, inspect timeout/disconnect hoặc
+  close/reopen reconciliation. Hai regression reviewer tìm đúng khoảng trống và đều FAIL.
+- Fix: commit đủ matrix R5/R6 qua production pipeline/poller; mỗi test phải assert owner/barrier,
+  collector state, activation ranges, action log, current pointer và retry. Handoff chỉ liệt kê case
+  thật sự có test hoặc live artifact.
+
+### C02-R6-05 — MAJOR — live evidence chưa lưu raw và routing chưa giải thích được
+
+- Helper code đã resolve lineage và verify Docker trước/sau, nhưng `ingestion.md` chỉ có prose; không
+  có raw helper JSON/events/SQL artifact như review-05 yêu cầu.
+- Evidence nói run thêm 359 metrics nhưng deployment 20 chỉ có `5 rows`, không nêu đó là metric hay
+  score, không ghi per-deployment counts hoặc activation start/end để giải thích phần còn lại vào 19.
+- Fix: không cần chạy live lại nếu raw output của run 20 còn lưu và đủ. Commit bản scrubbed gồm
+  before/target/after row+resolved image, Docker inspect, events, health exit, activation rows,
+  per-deployment metric/score counts, source generation/size, cursor before/after và arithmetic
+  `+359/+1795`. Nếu raw không còn, chỉ rerun sau local green với target runtime khác current.
+
+### Bàn giao review-fix 06 cho Worker
+
+```text
+Tiếp tục sửa duy nhất TK-A17/C02 từ HEAD chứa Leader review 06; không checkout/reset về 37d9e19
+hoặc 4b4f82e. Verdict CHANGES_REQUESTED; C03-C09 vẫn đóng/NOT_RUN.
+
+Đóng C02-R6-01...05 và phần còn mở R5-02/04/05/06. Không gán runtimeOwner trong
+stopCollectorAndFlush dựa current_deployment_id. Trước mọi compose có thể đổi app, chuyển owner sang
+unknown; chỉ xác nhận candidate/previous/down bằng exit và live Config.Image/State. Manual và auto
+rollback khi inspect/nonzero/disconnect không xác định phải giữ prepared reconciliation barrier,
+không abort rồi cho poller chạy.
+
+Thêm reconciliation thật sau process restart cho prepared row: shared app lock, đọc episode/lineage,
+inspect app+collector, snapshot stream, rồi transaction activate/abort owner đã xác minh. SSH chưa
+sẵn sàng thì giữ BLOCKED và action rõ; retry sau reconnect phải idempotent. Bao phủ close/reopen DB,
+candidate/previous/down/unknown, reconnect và deploy tiếp sau reconcile.
+
+Sửa invalid rotated line để action gap ghi đúng byte interval bị skip, không [EOF,EOF]. Mang warning
+offset/range qua parser/poller; test valid+invalid xen kẽ, nhiều invalid, UTF-8/partial, tail/DB/callback
+failure, retry/dedupe, deployment routing, activation range, offset và đúng 5 score/sample. Giữ ML
+null, không điền giả.
+
+Commit production regressions còn thiếu: cleanup start/inspect fail, forward/manual/auto unknown,
+compose nonzero/missing/wrong image, inspect timeout/disconnect, restart reconciliation và retry.
+Chạy exact focused, ML-service 19, collector 26, node/web/scripts typecheck, scoped lint, Prettier
+check và build.
+
+Khôi phục raw evidence của live deployment 20 nếu còn: helper JSON/events, row tag + resolved tag,
+Docker image/state trước/sau, health exit, activation rows, raw source generation/size, cursor và
+per-deployment metric/score counts giải thích đủ +359/+1795 và dòng “deployment-20 5 rows”. Nếu
+không còn raw thì chỉ rerun controlled VM02 sau local green, current/target khác resolved runtime.
+App B chỉ read-only; không reset/xóa/reassign PostgreSQL/SQLite, không ML train/score C03, UI/fault,
+push/PR/merge. Giữ .devflow/, docs/ban-giao-20-08.md, logo.png.
+
+Append REVIEW-FIX 06 vào evidence/handoff/board/task/sổ với exact base/code/docs HEAD và mutation
+ledger. Chỉ bàn giao READY_FOR_LOCAL_REVIEW khi regression mới cùng full gates đều PASS; nếu cần đổi
+schema/contract ngoài amendment thì bàn giao BLOCKED kèm proposal trước implementation/live mutation.
+```

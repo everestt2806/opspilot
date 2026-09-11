@@ -2,10 +2,10 @@
 
 > C00 APPROVED 11/09: [review](tk-a17/review-c00.md), code `d4ec3be`, docs `23cd248`.
 > C01 APPROVED review-03 11/09: [review](tk-a17/review-c01.md),
-> code `8e42856`, docs `9689ea4`. C02 review-05 đang CHANGES_REQUESTED.
+> code `8e42856`, docs `9689ea4`. C02 review-06 đang CHANGES_REQUESTED.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; C01 đã được Leader approve sau review-fix-02; C02 đang sửa theo review-05.
+- Owner A solo; C01 đã được Leader approve sau review-fix-02; C02 đang sửa theo review-06.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
 - Chặng được approve: C00, C01. C02 `REVIEW_FIX_REQUIRED`; C03–C09 chưa mở.
@@ -16,7 +16,7 @@
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
-| C02   | READY_FOR_LOCAL_REVIEW | code `37d9e19` / docs `9d336cb` | CHANGES_REQUESTED (review-05) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
+| C02   | READY_FOR_LOCAL_REVIEW | code `37d9e19` / docs `4b4f82e` | CHANGES_REQUESTED (review-06) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C05   | NOT_STARTED    | —            | PENDING | Chưa có        |
@@ -154,3 +154,8 @@
   Restore unknown chưa giữ reconciliation barrier; rollback 19 so raw row tag nên thực tế v16 -> v16;
   pipeline coverage được khai báo nhưng chưa commit. Mở `C02-R5-01…06`; C02 về
   `REVIEW_FIX_REQUIRED`, C03-C09 đóng/`NOT_RUN`.
+- REVIEW C02 06 - 11/09/2026: Leader review code `37d9e19`, submitted HEAD `4b4f82e`:
+  **CHANGES_REQUESTED**. Focused 95/95, ML 19/19, collector 26/26 và static/build PASS, nhưng hai
+  reviewer regressions 2/2 FAIL. Manual/auto unknown owner vẫn bỏ barrier; prepared row không có
+  restart reconciliation; invalid `.1` log `[EOF,EOF]`; coverage và raw live routing evidence chưa
+  đủ. `R5-01/03` CLOSED, mở `C02-R6-01…05`; C02 `REVIEW_FIX_REQUIRED`, C03-C09 đóng.

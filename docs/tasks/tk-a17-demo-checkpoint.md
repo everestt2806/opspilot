@@ -227,3 +227,8 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   gap giả, lỗi drain đóng qua byte chưa commit. Restore unknown chưa fail closed; rollback 19 thực tế
   v16 -> v16 do helper so row tag thay vì runtime lineage; pipeline tests được claim nhưng chưa có.
   C02 `REVIEW_FIX_REQUIRED`; C03-C09 đóng/`NOT_RUN`.
+- REVIEW C02 06 11/09 — [review-c02](tk-a17/review-c02.md): **CHANGES_REQUESTED** tại code
+  `37d9e19`, submitted `4b4f82e`. Reviewer xác nhận focused 95/95, ML 19/19, collector 26/26 và
+  static/build PASS; hai regression mới 2/2 FAIL vì manual unknown owner abort barrier và invalid
+  `.1` ghi gap rỗng tại EOF. Prepared restart chưa có reconcile; live run 20 thiếu raw/per-deployment
+  routing evidence. C02 `REVIEW_FIX_REQUIRED`; C03-C09 đóng/`NOT_RUN`.

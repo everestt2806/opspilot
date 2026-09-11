@@ -259,3 +259,15 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
   regression recovery/rotation mới đều FAIL. Không chạy live hoặc sửa SQLite/VPS/app B.
 - C02 về `REVIEW_FIX_REQUIRED`; C03–C09 tiếp tục đóng/`NOT_RUN`. Evidence:
   `docs/evidence/tk-a17/c02/review-05/`.
+
+## Leader review 06 — 11/09/2026
+
+- Reviewed code `37d9e19`, submitted HEAD `4b4f82e`; verdict **CHANGES_REQUESTED** tại
+  [review-c02.md](review-c02.md), mục 10.
+- `R5-01/03` CLOSED; `R5-02/04/05/06` còn mở. Mở `C02-R6-01…05`: manual/auto owner vẫn suy từ DB
+  pointer, prepared barrier chưa reconcile được sau restart, invalid `.1` log gap rỗng tại EOF,
+  coverage thiếu và live run 20 chưa có raw/per-deployment evidence.
+- Reviewer xác nhận focused 95/95, ML service 19/19, collector 26/26 và static/build PASS; hai
+  regression owner/gap-range mới 2/2 FAIL. Không chạy live hoặc sửa SQLite/VPS/app B.
+- C02 tiếp tục `REVIEW_FIX_REQUIRED`; C03–C09 đóng/`NOT_RUN`. Evidence:
+  `docs/evidence/tk-a17/c02/review-06/`.
