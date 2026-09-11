@@ -271,3 +271,20 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
   regression owner/gap-range mới 2/2 FAIL. Không chạy live hoặc sửa SQLite/VPS/app B.
 - C02 tiếp tục `REVIEW_FIX_REQUIRED`; C03–C09 đóng/`NOT_RUN`. Evidence:
   `docs/evidence/tk-a17/c02/review-06/`.
+
+## REVIEW-FIX 06 — 11/09/2026
+
+- Base `24c669b`; code commit `61f43df`; evidence `docs/evidence/tk-a17/c02/review-fix-06.md`.
+- Closed `C02-R6-01...05` and remaining `C02-R5-02/04/05/06`: owner is no longer inferred from
+  `current_deployment_id`; unknown compose/inspect/collector failures retain a durable prepared
+  barrier; restart reconciliation runs under the shared app lock and retries idempotently; invalid
+  rotated lines retain exact skipped byte ranges.
+- Local gates PASS: focused `18 files/96 tests`, ML `19/19`, collector `26/26`, node/web/scripts
+  typecheck, scoped lint, Prettier check, and build (`3045` renderer modules), all exit `0`.
+- Controlled VM02/A rollback: deployment `20` resolved runtime v15 -> target `19` resolved v16 ->
+  deployment `21`; Docker v16/running, health exit `0`, collector running. Real scheduler: two ticks,
+  `max_concurrent=1`, clean shutdown/process exit `0`.
+- SQLite mutation: `4836/24180/1418551` -> `5257/26285/1542238`, or `+421 metrics/+2105 scores`;
+  retry/reconnect `0`, duplicate groups `0`, deployment 21 has `5` rows. PostgreSQL and app/DB/
+  collector were verified read-only; app B was read-only only.
+- Outcome: `READY_FOR_LOCAL_REVIEW`; C03-C09 remain closed/`NOT_RUN`.

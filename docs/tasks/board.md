@@ -158,6 +158,16 @@ và exit 0; C02 `READY_FOR_LOCAL_REVIEW`. C03-C09 vẫn đóng/`NOT_RUN`, chưa 
 
 ### TK-A17 update - 11/09 C02 review-fix 05
 
+### TK-A17 update - 11/09 C02 review-fix 06
+
+C02 đóng `C02-R6-01...05` và phần còn mở R5-02/04/05/06 tại code `61f43df`: owner unknown được
+giữ qua stop/compose/inspect failure, prepared activation có reconciliation thật sau restart, và
+rotated invalid line ghi đúng byte range. Local `18 files/96 tests`, ML `19`, collector `26`,
+typecheck/lint/Prettier/build PASS. Controlled VM02 tạo deployment `21` với runtime v16/running sau
+current runtime v15; scheduler hai tick, max concurrency 1, clean exit; live SQLite `+421/+2105`,
+deployment 21 `5 rows`, retry/reconnect/duplicates `0`. C02 `READY_FOR_LOCAL_REVIEW`; C03-C09
+đóng/`NOT_RUN`.
+
 C02 đã đóng `C02-R5-01...06` tại code `37d9e19`: cleanup signal độc lập, runtime-owner state,
 durable reconciliation barrier, committed-byte rotation retry và rollback lineage/runtime inspect.
 Local focused `95/95`, ML `19/19`, collector `26/26`, typecheck/lint/Prettier/build PASS. Live

@@ -17,6 +17,11 @@
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
 | C02   | READY_FOR_LOCAL_REVIEW | code `37d9e19` / docs `4b4f82e` | CHANGES_REQUESTED (review-06) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
+REVIEW-FIX C02 06: code `61f43df`, evidence `docs/evidence/tk-a17/c02/review-fix-06.md`; R6-01...05
+and R5-02/04/05/06 closed. Local focused 18/96, ML 19/19, collector 26/26, static/build PASS.
+Controlled VM02 deployment 21 restored runtime v16/running from current v15; scheduler two ticks,
+max concurrency 1, exit 0; live mutation +421/+2105 with deployment-21 5 rows. C02
+READY_FOR_LOCAL_REVIEW; C03-C09 closed/NOT_RUN.
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C05   | NOT_STARTED    | —            | PENDING | Chưa có        |

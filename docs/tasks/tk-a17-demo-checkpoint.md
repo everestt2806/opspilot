@@ -2,6 +2,11 @@
 
 | Chủ    | Branch plan                | Baseline code | Trạng thái                  |
 | ------ | -------------------------- | ------------- | --------------------------- |
+REVIEW-FIX C02 06 (11/09/2026): code `61f43df`, evidence `docs/evidence/tk-a17/c02/review-fix-06.md`;
+R6-01...05 and R5-02/04/05/06 closed. Local focused 18/96, ML 19/19, collector 26/26,
+static/build PASS. Controlled VM02 rollback deployment 20 runtime v15 -> target 19 runtime v16 ->
+deployment 21; scheduler two ticks, max concurrency 1, clean exit; SQLite +421 metrics/+2105 scores
+and deployment-21 5 rows. C02 READY_FOR_LOCAL_REVIEW; C03-C09 remain closed/NOT_RUN.
 | A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | ĐANG LÀM — C02 READY_FOR_LOCAL_REVIEW |
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
