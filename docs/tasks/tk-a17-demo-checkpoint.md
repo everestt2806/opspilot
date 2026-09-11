@@ -192,6 +192,12 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   đóng C02-R1-01…05 bằng regression, live forward deploy/manual rollback và hai tick
   MonitorScheduler thật trên VM02. Handoff C02 `READY_FOR_LOCAL_REVIEW`; C03-C09 tiếp tục
   đóng/`NOT_RUN`, không train/score ML, UI, fault coordinator hoặc thao tác app B.
+
+- REVIEW-FIX C02 03 11/09 — Worker đóng R3-01…05 và phần còn lại R1-01 bằng first-deploy
+  boundary, collector barrier/snapshot, `.1` recovery, runtime-start failure retention và
+  atomic v1→v2 migration regression. Local focused `88/88`, collector `19/19`, static/build
+  PASS; live VM02 forward/rollback/scheduler PASS. Handoff `READY_FOR_LOCAL_REVIEW`; C03-C09
+  vẫn đóng/`NOT_RUN`.
 - REVIEW C02 03 11/09 — [review-c02](tk-a17/review-c02.md): **CHANGES_REQUESTED** tại code
   `ce1a9ff`, submitted HEAD `0e7d207`. Reviewer regression 1/1 FAIL vì first deploy đọc
   `metrics.jsonl` trước khi collector tạo file. Cutover thiếu stop/flush, rotation không drain `.1`,

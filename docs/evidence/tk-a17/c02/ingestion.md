@@ -151,3 +151,102 @@ rotation with a smaller/larger replacement file, retry/dedupe/cardinality and tr
 rollback. The focused suite passed `82` tests across `18` files. Collector pytest passed
 `19` tests using `ml-service/.venv`; typecheck, scripts typecheck, scoped lint/format and
 build all exited `0`. ML train/score, UI, fault coordinator and C03-C09 remain `NOT_RUN`.
+
+## REVIEW-FIX 03 evidence
+
+### Local regression and exact gates
+
+The focused command was run from `D:\\Developing\\DuAnCNTT\\app`:
+
+```text
+pnpm exec vitest run --maxWorkers=1 src/main/db src/main/monitor src/main/deploy src/main/shutdown.test.ts
+exit: 0; 18 files, 88 tests passed
+pnpm exec tsc -p tsconfig.scripts.json
+exit: 0
+pnpm typecheck
+exit: 0
+pnpm exec eslint src/main/db/index.ts src/main/db/index.test.ts src/main/deploy/pipeline.ts src/main/deploy/pipeline.test.ts src/main/monitor/activation.ts src/main/monitor/activation.test.ts src/main/monitor/metricSource.ts src/main/monitor/poller.ts src/main/ssh/manager.ts
+exit: 0
+pnpm exec prettier --check src/main/db/index.ts src/main/db/index.test.ts src/main/db/migrations/002_metric_activation.sql src/main/deploy/pipeline.ts src/main/deploy/pipeline.test.ts src/main/monitor/activation.ts src/main/monitor/activation.test.ts src/main/monitor/metricSource.ts src/main/monitor/poller.ts src/main/ssh/manager.ts
+exit: 0
+pnpm build
+exit: 0; renderer 3045 modules
+ml-service/.venv/Scripts/python.exe -m pytest -q
+cwd: ml-service; exit: 0; 19 passed
+```
+
+The regressions exercise production `DeployPipeline` and `MonitorPoller`: first deploy with
+missing metrics file, stop/flush failure, candidate cutover, migration v1 fixture with history
+and partial v2 reopen, matching `.1` drain, missing/mismatched `.1` explicit gap, five-score
+cardinality, dedupe and offset preservation. Migration `002` and its `schema_version` write are
+applied in one transaction; migration `001` was not edited.
+
+### Controlled live forward and rollback
+
+Target was only VM02 / app `1` / `a17-notes-0911`; commands were run from `app`:
+
+```text
+pnpm exec electron ..\\tools\\a17-c01-live.cjs
+exit: 0; forward deployments 15 and 16 running; stop/flush collector ran before each snapshot;
+PostgreSQL marker 1005 -> 1006; source snapshot identity 2050:520983 and size/boundary were
+captured by production `stat -c '%d:%i:%s'` before compose up.
+
+pnpm exec electron ..\\tools\\a17-c02-live-rollback.cjs
+first attempt: exit 1, deployment 17 failed with SSH error; no activation row was committed
+for 17 and deployment 16 remained current.
+retry: exit 0, deployment 18 running, is_rollback_of=16; stop/flush and snapshot completed,
+activation boundary was [1165732,open) after the previous episode closed at 1165732.
+```
+
+The first helper failure is retained as evidence, not counted as PASS. The successful retry
+restored the target to healthy deployment 18 using image `a17-notes-0911:v16`; no historical
+rows were reset, deleted, or reassigned.
+
+### Live raw JSONL to SQLite and scheduler
+
+Read-only SQLite after rollback and ingestion:
+
+```text
+deployment 9:  [627450,975570)
+deployment 10: [975570,976462)
+deployment 11: [976462,980273)
+deployment 12: [980273,997293)
+deployment 14: [997293,1163385)
+deployment 15: [1163385,1163965)
+deployment 16: [1163965,1165732)
+deployment 18: [1165732,open)
+current deployment=18, generation=2050:520983, offset=1167490
+```
+
+The live runner used the real `MonitorService` and `MonitorScheduler`:
+
+```text
+pnpm exec tsc -p tsconfig.scripts.json
+node scripts/prepare-cli.js
+pnpm exec electron .out-scripts/scripts/a17-c02-live.js
+cwd: app; exit: 0
+before: 3381 metrics, 16905 scores, offset 991422
+first poll: +596 metrics, +2980 scores, offset 1166319
+same-snapshot retry: +0, unchanged offset
+SSH reconnect: +1 metric, +5 scores, offset 1166612
+tick 1: inserted 0, offset 1166612
+tick 2: inserted 3, offset 1167490
+max_concurrent=1; active_after_stop=false; process exit=0
+```
+
+Final SQLite totals were `3981` metrics and `19905` scores, with zero duplicate
+`(deployment_id,seq)` groups; every inserted metric has five score rows. Raw JSONL identity and
+size after the run were `2050:520983:1168072`, latest raw sequence `3983`.
+
+### Final read-only state
+
+```text
+A17 app=running restarts=0 health=healthy image=a17-notes-0911:v16
+A17 db=running restarts=0 health=healthy
+A17 collector=running restarts=0
+PostgreSQL records=1006
+App B express-demo-app=running restarts=0
+```
+
+C03-C09 remain closed/`NOT_RUN`; no ML train/score, UI, fault coordinator or app B mutation was
+performed.

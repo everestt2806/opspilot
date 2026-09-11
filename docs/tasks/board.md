@@ -124,6 +124,13 @@ activation history, cutover/rollback, rotation và shared lock. Live VM02 forwar
 manual rollback và hai tick scheduler thật đạt; C02 `READY_FOR_LOCAL_REVIEW`. C03-C09 vẫn
 đóng/`NOT_RUN`; code/docs SHA được ghi trong handoff sau commit.
 
+### TK-A17 update - 11/09 C02 review-fix 03
+
+C02 đã đóng R3-01…05 và phần còn lại R1-01: first deploy không có metrics file, stop/flush và
+atomic snapshot, drain `.1`/gap policy, candidate runtime failure và v1→v2 partial migration.
+Local `88/88`, collector `19/19`, static/build PASS; live forward 15/16, rollback retry 18 và
+hai scheduler tick thật PASS. Handoff `READY_FOR_LOCAL_REVIEW`; C03-C09 đóng/`NOT_RUN`.
+
 ### TK-A17 update - 11/09 C02 review-03
 
 C02 **CHANGES_REQUESTED** tại code `ce1a9ff`, submitted HEAD `0e7d207`. Reviewer regression xác

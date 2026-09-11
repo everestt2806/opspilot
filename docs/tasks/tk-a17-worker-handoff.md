@@ -110,6 +110,13 @@
   forward deploy/manual rollback và hai tick scheduler thật PASS. Handoff C02 là
   `READY_FOR_LOCAL_REVIEW`; code/docs SHA sẽ được chốt ngay sau commit local. C03-C09 vẫn
   `NOT_RUN`, chưa push/PR/merge.
+
+- REVIEW-FIX C02 03 - 11/09/2026: Worker đóng C02-R3-01…05 và phần còn lại C02-R1-01 bằng
+  production DeployPipeline/MonitorPoller regressions, migration fixture v1/partial reopen,
+  collector stop/flush snapshot, `.1` recovery và candidate runtime-failure retention. Focused
+  `88/88`, collector `19/19`, typecheck/lint/format/build PASS; live VM02 forward 15/16,
+  successful rollback 18 after recorded failed attempt 17, and two scheduler ticks PASS.
+  Handoff `READY_FOR_LOCAL_REVIEW`; C03-C09 vẫn `NOT_RUN`, chưa push/PR/merge.
 - REVIEW C02 03 - 11/09/2026: Leader review code `ce1a9ff`, submitted HEAD `0e7d207`:
   **CHANGES_REQUESTED**. Mở `C02-R3-01…05`; first deploy thiếu `metrics.jsonl` fail độc lập,
   cutover chưa stop/flush collector, rotation không drain matching `.1`, post-runtime failure có thể

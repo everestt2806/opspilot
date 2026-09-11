@@ -4,7 +4,7 @@
 
 - Stage / outcome / branch / date: C02 / `READY_FOR_LOCAL_REVIEW` / `feat/a17-demo-checkpoint` / 11/09/2026.
 - Base SHA: `4510d5e` (C01 APPROVED handoff commit); inherited C01 approved code `8e42856`, docs `9689ea4`.
-- Code HEAD: `ce1a9ff`; docs HEAD: `2c0abb7` (this provenance update is the final docs commit).
+- Code HEAD: `fa72a6e`; docs HEAD: pending final review-fix-03 docs commit.
 - Scope: SSH metric ingestion into SQLite, byte offsets, transaction/dedupe, reconnect and deployment boundary regressions. No C03/UI/fault/rollback policy/ML model.
 - Untracked `.devflow/`, `docs/ban-giao-20-08.md`, and `logo.png` were preserved.
 
@@ -112,6 +112,33 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
 | C02-R1-03 | Attempt A/B history, `MISSING` raw output and arithmetic reconciliation | `docs/evidence/tk-a17/c02/ingestion.md` | CLOSED |
 | C02-R1-04 | SQLite-vs-ML crash-window limitation documented in contract/evidence | `docs/evidence/tk-a17/c02/ingestion.md` | CLOSED |
 | C02-R1-05 | This append records implementation/docs provenance after commit | `docs/tasks/tk-a17/handoff-c02.md` | CLOSED |
+
+## REVIEW-FIX 03 — 11/09/2026
+
+- Closed `C02-R3-01…05` and the remaining `C02-R1-01` gap. First deploy now establishes a
+  generation-agnostic boundary at byte `1` when `metrics.jsonl` is absent; production cutover
+  stops/flushes collector and takes one atomic identity/device/inode/size snapshot before
+  compose up. Stop/flush or snapshot failure is fail-closed.
+- Rotation drains a matching `metrics.jsonl.1` suffix under the old episode before opening the
+  new generation. Missing or mismatched `.1` records an explicit data gap. Candidate activation
+  remains auditable after runtime start even if a later deploy step fails.
+- Migration `002` and `schema_version` recording are atomic and idempotent across a populated v1
+  fixture and partial v2 reopen; migration `001` remains unchanged.
+- Regression gates: focused exact command in evidence, `18 files/88 tests`, collector venv
+  `19 passed`, scripts/node/web typechecks, ESLint, Prettier and build exit `0`.
+- Live VM02 forward deploys `15/16` passed, first rollback helper failure for deployment `17`
+  is retained as FAIL evidence, retry rollback deployment `18` passed, and real scheduler ran
+  two 30-second ticks with `max_concurrent=1`, clean stop and exit `0`.
+- Outcome: `READY_FOR_LOCAL_REVIEW`. C03-C09 remain closed/`NOT_RUN`; no ML train/score, UI,
+  fault coordinator, app B mutation, push, PR or merge.
+
+| Finding | Fix / regression | Evidence | Status |
+| --- | --- | --- | --- |
+| C02-R3-01 | First-deploy missing/empty source and stat failure paths through DeployPipeline | `docs/evidence/tk-a17/c02/ingestion.md` | CLOSED |
+| C02-R3-02 | Collector stop/flush barrier plus atomic production snapshot and fail-closed tests | `docs/evidence/tk-a17/c02/ingestion.md` | CLOSED |
+| C02-R3-03 | Production MonitorPoller matching/missing/mismatched `.1` drain/gap regressions | `docs/evidence/tk-a17/c02/ingestion.md` | CLOSED |
+| C02-R3-04 | Candidate episode retained after runtime start; manual/auto rollback paths covered | `docs/evidence/tk-a17/c02/ingestion.md` | CLOSED |
+| C02-R3-05 | Populated v1 and partial-v2 migration tests plus exact reproducible gates | `docs/evidence/tk-a17/c02/ingestion.md` | CLOSED |
 
 ## Leader review 03 — 11/09/2026
 
