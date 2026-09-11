@@ -4,17 +4,22 @@
 
 - Stage / outcome / branch / date: C02 / `READY_FOR_LOCAL_REVIEW` / `feat/a17-demo-checkpoint` / 11/09/2026.
 - Base SHA: `4510d5e` (C01 APPROVED handoff commit); inherited C01 approved code `8e42856`, docs `9689ea4`.
-- Code HEAD: `0967fb9`; docs HEAD: `5e934a3`.
+- Code HEAD: `ce1a9ff`; docs HEAD: pending final local documentation commit.
 - Scope: SSH metric ingestion into SQLite, byte offsets, transaction/dedupe, reconnect and deployment boundary regressions. No C03/UI/fault/rollback policy/ML model.
 - Untracked `.devflow/`, `docs/ban-giao-20-08.md`, and `logo.png` were preserved.
 
 ## Changes
 
-- `app/scripts/a17-c02-live.ts`: hard-scoped real VM02 ingestion runner with before/after boundary, retry, reconnect and duplicate assertions.
-- `app/tsconfig.scripts.json`: include the live C02 runner in script compilation.
-- `app/src/main/monitor/poller.test.ts`: add SSH-loss/reconnect and deployment-boundary regressions.
+- `app/src/main/db/migrations/002_metric_activation.sql`: append-only activation history and
+  stream identity columns; migration `001` is unchanged.
+- `app/src/main/monitor/activation.ts` and `app/src/main/monitor/poller.ts`: persistent byte
+  boundary routing, lazy legacy initialization, rotation handling and fail-closed prepared state.
+- `app/src/main/deploy/pipeline.ts` and `app/src/main/monitor/appLock.ts`: cutover/rollback
+  lifecycle and shared per-app deploy/monitor lock.
+- `app/scripts/a17-c02-live.ts` and `tools/a17-c02-live-rollback.cjs`: hard-scoped VM02 live
+  ingestion, scheduler and manual rollback runners.
 
-Commit: `0967fb9` - Add a hard-scoped VM02 ingestion runner, regressions and C02 evidence/handoff.
+Commit: `ce1a9ff` - Implement C02 persistent ingestion boundary.
 
 Diff for review: `git diff 4510d5e..HEAD -- app/scripts/a17-c02-live.ts app/tsconfig.scripts.json app/src/main/monitor/poller.test.ts`
 
@@ -78,3 +83,32 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
   trước runtime cutover/healthcheck.
 - `C02-R1-04/05` CLOSED; `C02-R1-03` PARTIAL; `C02-R1-01/02` OPEN. Handoff `BLOCKED` được gỡ để
   Worker tiếp tục sửa C02 trên HEAD chứa commit Leader; C02 chưa APPROVED, C03–C09 vẫn đóng.
+
+## REVIEW-FIX 02 — 11/09/2026
+
+- Implemented the approved-amended persistent byte-boundary model from Leader review 02:
+  migration `002`, append-only activation episodes, stream identity/generation, cutover after
+  collector stop/flush, fail-closed prepared state, rotation gap logging, repeated rollback
+  activation, and one shared per-app lock for deploy/rollback/monitor.
+- Closed `C02-R1-01` with regression coverage for migration/lazy legacy, backlog across two
+  forward deploys, candidate healthcheck metrics, failure before/after runtime start,
+  manual/auto rollback, prepared crash, shared-lock no-overlap, rotation smaller/larger than
+  cursor, retry/dedupe/cardinality and transaction rollback.
+- Closed `C02-R1-03` with the two-attempt audit. Attempt A raw output is `MISSING`, exit `1`;
+  Attempt B exit `0` records before/after state. Reconciliation is `21+2120=2141` metrics and
+  `105+2120*5=10705` scores; the 80 historical rows were not modified.
+- Live VM02 forward redeploy and manual rollback passed; real MonitorService/Scheduler ran two
+  30-second ticks with `max_concurrent=1`, clean stop and exit `0`. Current A target is healthy;
+  DB and collector are running, PostgreSQL marker is `1005`, and app B was only read-verified.
+- C02 outcome: `READY_FOR_LOCAL_REVIEW`. C03-C09 remain closed and `NOT_RUN`; no ML train/score,
+  UI, fault coordinator, push, PR, merge or app B mutation was performed.
+
+### REVIEW-FIX 02 gate table
+
+| Finding | Fix / regression | Evidence | Status |
+| --- | --- | --- | --- |
+| C02-R1-01 | Persistent activation/cutover/rotation/shared-lock model; 82 focused tests plus live deploy/rollback/scheduler | `docs/evidence/tk-a17/c02/ingestion.md` | CLOSED |
+| C02-R1-02 | Two real scheduler ticks, no-overlap and clean shutdown | `docs/evidence/tk-a17/c02/ingestion.md` | CLOSED |
+| C02-R1-03 | Attempt A/B history, `MISSING` raw output and arithmetic reconciliation | `docs/evidence/tk-a17/c02/ingestion.md` | CLOSED |
+| C02-R1-04 | SQLite-vs-ML crash-window limitation documented in contract/evidence | `docs/evidence/tk-a17/c02/ingestion.md` | CLOSED |
+| C02-R1-05 | This append records implementation/docs provenance after commit | `docs/tasks/tk-a17/handoff-c02.md` | CLOSED |

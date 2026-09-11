@@ -16,7 +16,7 @@
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
-| C02   | REVIEW_FIX_REQUIRED | code `0967fb9` / docs `8e08f76` | CHANGES_REQUESTED | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
+| C02   | READY_FOR_LOCAL_REVIEW | code `ce1a9ff` / docs pending local commit | PENDING REVIEW | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C05   | NOT_STARTED    | —            | PENDING | Chưa có        |
@@ -104,3 +104,9 @@
   quyết định `APPROVED_WITH_AMENDMENTS` cho implementation. Bắt buộc activation history table,
   stream generation, pre-healthcheck cutover sau collector stop/flush và shared per-app lock.
   `C02-R1-04/05` CLOSED; `R1-03` PARTIAL; `R1-01/02` OPEN. C02 về `ĐANG LÀM`, C03-C09 đóng.
+
+- REVIEW-FIX C02 02 - 11/09/2026: Worker đã đóng C02-R1-01…05 bằng migration `002`,
+  persistent activation/cutover, rotation, rollback và shared-lock regressions; live VM02
+  forward deploy/manual rollback và hai tick scheduler thật PASS. Handoff C02 là
+  `READY_FOR_LOCAL_REVIEW`; code/docs SHA sẽ được chốt ngay sau commit local. C03-C09 vẫn
+  `NOT_RUN`, chưa push/PR/merge.

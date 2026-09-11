@@ -29,7 +29,7 @@
 
 | ID     | Task                                                                 | Chủ                   | Hạn      | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                                            |
 | ------ | -------------------------------------------------------------------- | --------------------- | -------- | ---------- | --------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| TK-A17 | Demo trực quan: website → sự cố → khôi phục → đối chiếu dữ liệu      | A                     | C09      | ĐANG LÀM | `feat/a17-demo-checkpoint`  | `main@683bfc6`              | C02 CHANGES_REQUESTED; C03-C09 NOT_RUN; chưa push/PR |
+| TK-A17 | Demo trực quan: website → sự cố → khôi phục → đối chiếu dữ liệu      | A                     | C09      | ĐANG LÀM | `feat/a17-demo-checkpoint`  | `main@683bfc6`              | C02 READY_FOR_LOCAL_REVIEW; C03-C09 NOT_RUN; chưa push/PR |
 | TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09    | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                   | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới                             |
 | TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09    | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge               | `fe1da33`; 21/21 theo task B                                                       |
 | TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02      | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                   | Code đã merge; DoD SSH tail tại A17/C02                                            |
@@ -116,3 +116,10 @@ Leader **APPROVED_WITH_AMENDMENTS** chiến lược byte boundary tại `87fa868
 `deployment_activation`, file generation và cutover sau stop/flush collector trước healthcheck.
 C02 được gỡ blocker để tiếp tục implementation, trạng thái `ĐANG LÀM`; C02 chưa APPROVED và
 C03-C09 vẫn đóng/`NOT_RUN`.
+
+### TK-A17 update - 11/09 C02 review-fix 02
+
+C02 đã đóng R1-01…05 theo contract byte-boundary đã được duyệt bổ sung: migration `002`,
+activation history, cutover/rollback, rotation và shared lock. Live VM02 forward deploy,
+manual rollback và hai tick scheduler thật đạt; C02 `READY_FOR_LOCAL_REVIEW`. C03-C09 vẫn
+đóng/`NOT_RUN`; code/docs SHA được ghi trong handoff sau commit.

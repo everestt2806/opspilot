@@ -187,3 +187,8 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
 - REVIEW C02 02 11/09 — Leader **APPROVED_WITH_AMENDMENTS** proposal tại `87fa868`: dùng lịch sử
   activation theo runtime episode, stream generation và stop/flush collector trước boundary. Gỡ
   blocker để Worker tiếp tục implementation C02; C02 chưa APPROVED, C03–C09 vẫn đóng.
+
+- REVIEW-FIX C02 02 11/09 — Worker triển khai migration `002` và persistent activation boundary,
+  đóng C02-R1-01…05 bằng regression, live forward deploy/manual rollback và hai tick
+  MonitorScheduler thật trên VM02. Handoff C02 `READY_FOR_LOCAL_REVIEW`; C03-C09 tiếp tục
+  đóng/`NOT_RUN`, không train/score ML, UI, fault coordinator hoặc thao tác app B.
