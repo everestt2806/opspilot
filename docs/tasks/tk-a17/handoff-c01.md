@@ -105,3 +105,8 @@
 - `C01-R1-01/03/04/05/06` CLOSED. `C01-R1-02` tiếp tục bằng `C01-R2-01` MAJOR:
   resolver phải phân biệt GET collection `/items` với POST-only và `/items/:id`.
 - Worker chỉ sửa `C01-R2-01`, append REVIEW-FIX 02 và bàn giao lại. C02 chưa được mở.
+- REVIEW-FIX 02 - 11/09/2026: Outcome `READY_FOR_LOCAL_REVIEW`; code `8e42856`; base review
+  HEAD `f37c493`. `C01-R2-01` CLOSED: only static GET collection `/items` selects the business
+  probe; POST-only `/items` and GET `/items/:id` fall back to `/health`. Evidence:
+  `docs/evidence/tk-a17/c01/review-fix-02.md`. Focused `55/55`, typecheck/lint/format/build
+  PASS; read-only VM02 seq `372→373`; no deploy/marker; C02 and later remain `NOT_RUN`.

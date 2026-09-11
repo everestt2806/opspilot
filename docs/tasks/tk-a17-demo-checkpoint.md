@@ -164,3 +164,6 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   typecheck/lint/format/build/unpack PASS. Mở `C01-R2-01` MAJOR vì POST-only `/items` và
   GET `/items/:id` đều bị resolver nhận nhầm là GET `/items` collection; reviewer regression
   2/2 FAIL. C01 tiếp tục ĐANG LÀM, C02–C09 đóng; không push/PR/merge.
+- REVIEW-FIX 02 11/09: `C01-R2-01` closed at code `8e42856`; two route regressions and
+  focused/static/build checks PASS. Read-only VM02 seq `372→373`; no deploy/marker; C02-C09
+  remain `NOT_RUN`.

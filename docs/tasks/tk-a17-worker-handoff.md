@@ -82,3 +82,5 @@
 - REVIEW 02 - 11/09/2026: Leader xác nhận `C01-R1-01/03/04/05/06` đóng; tiếp tục
   `C01-R1-02` bằng `C01-R2-01` MAJOR. POST-only `/items` và GET `/items/:id` đang bị nhận
   nhầm là GET collection route. C01 về `REVIEW_FIX_REQUIRED`; C02 tiếp tục đóng.
+- REVIEW-FIX 02: `C01-R2-01` closed at code `8e42856`; handoff is `READY_FOR_LOCAL_REVIEW`.
+  Evidence: `docs/evidence/tk-a17/c01/review-fix-02.md`; C02 and later remain `NOT_RUN`.

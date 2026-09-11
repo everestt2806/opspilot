@@ -84,3 +84,5 @@ handed back as `READY_FOR_LOCAL_REVIEW`. C02-C09 remain closed/`NOT_RUN`; no pus
 C01 review-fix được kiểm tại code `0d15eb5`, docs `518644f`. Năm finding review-01 đã đóng;
 `C01-R2-01` MAJOR còn mở vì detector nhận nhầm POST/detail-only `/items` là GET collection
 route. Task tiếp tục `ĐANG LÀM`; C02-C09 đóng; chưa push/PR/merge.
+- C01 REVIEW-FIX 02: `C01-R2-01` closed at code `8e42856`; focused/static/build checks pass,
+  read-only VM02 seq `372→373`, no deploy/marker. Handoff is `READY_FOR_LOCAL_REVIEW`.
