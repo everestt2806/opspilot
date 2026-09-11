@@ -4,7 +4,7 @@
 
 - Stage / outcome / branch / date: C02 / `READY_FOR_LOCAL_REVIEW` / `feat/a17-demo-checkpoint` / 11/09/2026.
 - Base SHA: `4510d5e` (C01 APPROVED handoff commit); inherited C01 approved code `8e42856`, docs `9689ea4`.
-- Code HEAD before handoff: to be filled after commit; docs HEAD: to be filled after commit.
+- Code HEAD: `0967fb9`; docs HEAD: `0967fb9`.
 - Scope: SSH metric ingestion into SQLite, byte offsets, transaction/dedupe, reconnect and deployment boundary regressions. No C03/UI/fault/rollback policy/ML model.
 - Untracked `.devflow/`, `docs/ban-giao-20-08.md`, and `logo.png` were preserved.
 
@@ -13,6 +13,8 @@
 - `app/scripts/a17-c02-live.ts`: hard-scoped real VM02 ingestion runner with before/after boundary, retry, reconnect and duplicate assertions.
 - `app/tsconfig.scripts.json`: include the live C02 runner in script compilation.
 - `app/src/main/monitor/poller.test.ts`: add SSH-loss/reconnect and deployment-boundary regressions.
+
+Commit: `0967fb9` - Add a hard-scoped VM02 ingestion runner, regressions and C02 evidence/handoff.
 
 Diff for review: `git diff 4510d5e..HEAD -- app/scripts/a17-c02-live.ts app/tsconfig.scripts.json app/src/main/monitor/poller.test.ts`
 
