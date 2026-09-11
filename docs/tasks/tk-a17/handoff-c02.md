@@ -291,12 +291,12 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
 
 ## REVIEW-FIX 07 — 12/09/2026
 
-- Base `1b2f150`; code commit `cd0c4ae`; docs before append `413ec20`; evidence
+- Base `1b2f150`; code commit `65d85ac`; docs before append `413ec20`; evidence
   `docs/evidence/tk-a17/c02/review-fix-07.md`.
 - Closed `C02-R7-01...04` and remaining `C02-R6-02...05`: prepared/active rollback images resolve
   through validated lineage; cycle/missing/SSH unknown keeps the barrier; mixed-invalid rotation
   closes the old episode at committed EOF and records each invalid byte range.
-- Focused production suite: `18 files/97 tests`; ML `19/19`; collector `26/26`; node/web/scripts
+- Focused production suite: `18 files/98 tests`; ML `19/19`; collector `26/26`; node/web/scripts
   typecheck, scoped lint, Prettier and build (`3045` renderer modules) all exit `0`.
 - Read-only VM02 evidence: generation `2050:520983`, size `1720293`, cursor `1543119`; activation
   deployment 20 `[1417093,1541655)`, deployment 21 `[1541655,EOF)`; grouped counts `20=424/2120`,

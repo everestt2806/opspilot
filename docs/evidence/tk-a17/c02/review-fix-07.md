@@ -1,6 +1,6 @@
 # C02 REVIEW-FIX 07 evidence
 
-- Scope: TK-A17/C02 only. Base `1b2f150` (Leader review-07 request), code `cd0c4ae`, docs
+- Scope: TK-A17/C02 only. Base `1b2f150` (Leader review-07 request), code `65d85ac`, docs
   before this append `413ec20`. C03-C09 remain closed/`NOT_RUN`.
 - Preserved untracked `.devflow/`, `docs/ban-giao-20-08.md`, and `logo.png`.
 
@@ -19,7 +19,7 @@ All commands exited `0`:
 
 ```text
 app> pnpm exec vitest run --maxWorkers=1 src/main/db src/main/monitor src/main/deploy src/main/shutdown.test.ts
-18 files, 97 tests passed
+18 files, 98 tests passed
 app> pnpm typecheck
 app> pnpm exec tsc -p tsconfig.scripts.json --noEmit
 app> pnpm exec eslint <scoped changed production/test files>

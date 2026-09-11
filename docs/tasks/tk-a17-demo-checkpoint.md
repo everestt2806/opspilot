@@ -7,9 +7,9 @@ R6-01...05 and R5-02/04/05/06 closed. Local focused 18/96, ML 19/19, collector 2
 static/build PASS. Controlled VM02 rollback deployment 20 runtime v15 -> target 19 runtime v16 ->
 deployment 21; scheduler two ticks, max concurrency 1, clean exit; SQLite +421 metrics/+2105 scores
 and deployment-21 5 rows. C02 READY_FOR_LOCAL_REVIEW; C03-C09 remain closed/NOT_RUN.
-REVIEW-FIX C02 07 (12/09/2026): code `cd0c4ae`, evidence
+REVIEW-FIX C02 07 (12/09/2026): code `65d85ac`, evidence
 `docs/evidence/tk-a17/c02/review-fix-07.md`; R7-01...04 and R6-02...05 closed. Local focused
-18/97, ML 19/19, collector 26/26, static/build PASS. Read-only activation/source/count evidence
+18/98, ML 19/19, collector 26/26, static/build PASS. Read-only activation/source/count evidence
 proves `416+5=421` metrics and `2080+25=2105` scores for deployments 20/21. C02
 READY_FOR_LOCAL_REVIEW; C03-C09 remain closed/NOT_RUN.
 | A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | ĐANG LÀM — C02 READY_FOR_LOCAL_REVIEW |
