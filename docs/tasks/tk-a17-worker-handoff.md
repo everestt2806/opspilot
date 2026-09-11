@@ -15,7 +15,7 @@
 | Chặng | Worker outcome | Reviewed SHA | Verdict | Handoff/review |
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
-| C01   | REVIEW_FIX_REQUIRED | code `66cbdab` / docs `f0b73aa` | CHANGES_REQUESTED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
+| C01   | READY_FOR_LOCAL_REVIEW | code `0d15eb5` / docs `pending-this-commit` | REVIEW_FIX_SUBMITTED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
 | C02   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
@@ -76,3 +76,6 @@
 - [ ] C09: full tests/build, hai rehearsal, ảnh/video/runbook có bằng chứng.
 - [ ] Leader xác nhận DEMO_READY đúng SHA.
 - [ ] Merge + DoD đủ bằng chứng mới đổi board HOÀN THÀNH.
+- REVIEW-FIX 01 - 11/09/2026: C01 `C01-R1-01…06` closed at code `0d15eb5`; handoff outcome
+  is `READY_FOR_LOCAL_REVIEW`. Evidence is `docs/evidence/tk-a17/c01/review-fix-01.md`.
+  The original review SHA remains historical; C02 and later stages remain `NOT_RUN`.

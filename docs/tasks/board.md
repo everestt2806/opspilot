@@ -74,3 +74,7 @@
 3. Mở PR: chuyển `CHỜ REVIEW`, thêm link PR và kết quả gate.
 4. Merge: tick DoD, ghi `DONE`, chuyển `HOÀN THÀNH`.
 5. Vướng trên 30 phút: chuyển `BLOCKED`, ghi bằng chứng + điều kiện gỡ.
+### TK-A17 update - 11/09 review-fix
+
+TK-A17 remains `ĐANG LÀM`; C01 findings `C01-R1-01…06` are fixed in code `0d15eb5` and
+handed back as `READY_FOR_LOCAL_REVIEW`. C02-C09 remain closed/`NOT_RUN`; no push/PR/merge.

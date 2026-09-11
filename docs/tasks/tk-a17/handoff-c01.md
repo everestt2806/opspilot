@@ -79,3 +79,21 @@
 - Verdict: **CHANGES_REQUESTED** tại [review-c01.md](review-c01.md).
 - Worker cần đóng `C01-R1-01`…`C01-R1-06`, append bảng REVIEW-FIX với commit/regression/
   evidence mới và bàn giao lại. C02 chưa được mở; không reset dữ liệu SQLite đã phát sinh.
+
+## REVIEW-FIX 01 - 11/09/2026
+
+- Outcome: `READY_FOR_LOCAL_REVIEW`; code commit `0d15eb5`; docs commit is the commit that
+  contains this append. Base remains current HEAD `7e34b96`; no checkout/rebase/rewrite,
+  push, PR or merge.
+- Evidence: `docs/evidence/tk-a17/c01/review-fix-01.md`.
+- `C01-R1-01` through `C01-R1-06`: **CLOSED**. Packaging/resource resolution, verified
+  Express probe fallback, tag-safe cleanup, live collector recovery, deploy-only helper
+  isolation, and exact provenance are covered by the evidence and regressions.
+- C01-T1/T2/T3/T4/T5/T6/T7: **PASS**. T7 includes focused deploy/detector `53/53`, collector
+  `26/26`, typecheck, lint, format, electron-vite build, and successful unpacked artifact.
+- Live final state: VM02 `a17-notes-0911` app v9, PostgreSQL and collector running; collector
+  restart `0`; seq `105` through `109` increased after helper exit; marker id `1004` retained.
+  App B was untouched. Existing SQLite data was retained.
+- R01/R02/R06/R07/R17/R19/R20/R21/R22/R23/R24/R25 are mapped by this evidence; downstream
+  R04/R05/R08/R09/R10/R11/R12/R13/R14/R15/R16/R18 remain `NOT_RUN`.
+- C02, C03, C04, C05, C06, C07, C08A, C08B, C08C and C09 remain **NOT_RUN** and unopened.

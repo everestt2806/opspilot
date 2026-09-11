@@ -154,3 +154,7 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   và ghi 105 score rows của chặng C02; provenance docs chưa đúng bản nộp. Reviewer xác nhận
   soak seq 2–91 liên tục 886 giây, focused 64/64, collector 26/26 và static checks đạt.
   Task về ĐANG LÀM để Worker sửa C01 trên HEAD hiện tại; C02–C09 tiếp tục đóng.
+- REVIEW-FIX 11/09 — C01 findings `C01-R1-01…06` fixed at code `0d15eb5`; focused,
+  collector/static/build and VM02 evidence are in `tk-a17/handoff-c01.md` and
+  `docs/evidence/tk-a17/c01/review-fix-01.md`. Collector remained running after helper exit
+  and seq increased; C02-C09 remain `NOT_RUN`; outcome `READY_FOR_LOCAL_REVIEW`.
