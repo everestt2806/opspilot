@@ -110,7 +110,7 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
 - **Branch/base:** `feat/a17-demo-checkpoint`, continued from Leader-review HEAD `e80a0f9`; no
   checkout/reset to `fa72a6e` or `85f4810`.
 - **Code commit:** `c6c728c` (`Fix C02 recovery and rotation state handling`).
-- **Submitted docs HEAD:** `d57d342` (this documentation commit).
+- **Submitted docs commits:** `d57d342` (evidence/task append) and `492354d` (provenance pin).
 - **Evidence:** [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestion.md).
 
 ### C02-T / R mapping
