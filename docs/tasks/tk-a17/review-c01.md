@@ -1,7 +1,7 @@
-# Review C01 — CHANGES_REQUESTED
+# Review C01 — APPROVED
 
-> Verdict mới nhất — review 02, 11/09/2026: code `0d15eb5`, docs `518644f` vẫn
-> **CHANGES_REQUESTED** vì `C01-R2-01` MAJOR. Năm finding còn lại của review 01 đã đóng.
+> Verdict mới nhất — review 03, 11/09/2026: **APPROVED** code `8e42856`, docs `9689ea4`.
+> Toàn bộ finding review 01–02 đã đóng; mở duy nhất C02.
 
 - Reviewer: Leader (Codex/root), 11/09/2026, review 01.
 - Base/review kế thừa: `1b447e4` chứa C00 APPROVED; Worker code HEAD `66cbdab`.
@@ -197,3 +197,53 @@ Các closure đã xác nhận:
 
 Worker tiếp tục HEAD chứa commit review 02, chỉ đóng `C01-R2-01`, append REVIEW-FIX 02 và
 bàn giao lại. Không reset SQLite/VPS, không thao tác app B, không mở C02, push, PR hoặc merge.
+
+## 6. Review 03 — APPROVED
+
+- Reviewed code `8e42856`; reviewed docs HEAD `9689ea4`; base review `f37c493` là ancestor.
+- Diff chỉ thu hẹp `resolveCollectorAppPath` và thêm hai regression được yêu cầu, cùng hồ sơ
+  bàn giao. Không deploy/marker mới và không có implementation C02.
+- Verdict: **APPROVED cho C01**. `C01-R2-01` CLOSED; không còn BLOCKER/MAJOR/MINOR mở.
+- Chặng được mở để A giao Worker: **duy nhất C02** theo [file C02](c02-ingestion.md).
+  C03–C09 tiếp tục đóng; chưa DEMO_READY.
+
+Reviewer kiểm chứng riêng tại [review-03](../../evidence/tk-a17/c01/review-03/):
+
+| Gate | Kết quả reviewer |
+| --- | --- |
+| Scope/ancestry | `f37c493` là ancestor của `9689ea4`; code diff 4 dòng resolver + 22 dòng regression |
+| Focused | Deploy + detector + monitor: 13 files, 75/75 PASS trên Node 22.23.2 |
+| Static/build | Node/web typecheck, ESLint, Prettier và electron-vite build đều exit 0; renderer 3045 modules |
+| Collector kế thừa | 26/26 PASS |
+| GitNexus | Incremental analyze PASS; impact trực tiếp chỉ `stepRender` và tests, đã bao phủ bởi focused suite |
+| Live read-only | App v9/DB healthy; collector running, restart 0, seq 1791→1792; PostgreSQL 1004 records; app B running |
+
+`C01-R2-01` được đóng vì resolver giờ chỉ nhận `.get()` với static collection path `/items`
+hoặc `/items/`. Regression dương GET `/items`, generic fallback, POST-only `/items` và
+GET `/items/:id` đều PASS. Đường forward dùng resolver này; restore giữ business path đã render
+và regression rollback/restore trong focused suite tiếp tục đạt.
+
+Giới hạn được chấp nhận:
+
+1. Source scan có chủ ý bảo thủ: route động hoặc dạng khai báo khác fallback healthcheck. C04/C09
+   vẫn phải xác minh business URL thật của demo; live compose C01 đã có `/items?limit=1`.
+2. Collector không khai báo Docker healthcheck riêng; trạng thái running + seq tăng là proof C01.
+3. C01 helper isolation có regression source và bằng chứng SQLite không tăng thêm ở v8/v9.
+4. C02 phải kế thừa dữ liệu ngoài ý muốn đã được ghi trước fix: app id 1, current deployment 9,
+   `metrics_offset=6152`, 21 metric rows và 105 score rows. Không reset DB để tạo baseline sạch;
+   C02 ghi boundary trước/sau mới và chứng minh dedupe/lifecycle trên trạng thái này.
+
+A có thể giao Worker:
+
+```text
+Thực hiện duy nhất TK-A17/C02 theo docs/tasks/tk-a17/c02-ingestion.md.
+Đọc docs/tasks/tk-a17/review-c01.md, latest review 03 APPROVED code 8e42856/docs 9689ea4,
+task điều phối, board, sổ bàn giao và các contract C02 yêu cầu.
+Tiếp tục HEAD hiện tại chứa commit review C01; không checkout lùi về reviewed SHA.
+Kế thừa VM02/a17-notes-0911 app id 1, deployment 9, collector đang running và PostgreSQL
+1004 records. SQLite đã có metrics_offset=6152, 21 metric rows/105 score rows từ side effect
+C01; không reset/xóa mà phải ghi boundary trước/sau và chứng minh dedupe đúng deployment.
+Làm đủ C02-T1…T6, evidence/handoff-c02.md, cập nhật board/task/sổ và commit local.
+Không làm C03, UI, fault, rollback policy hoặc ML model; không sửa app B.
+Không push/PR/merge/subagent; bàn giao READY_FOR_LOCAL_REVIEW rồi dừng.
+```

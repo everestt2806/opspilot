@@ -2,7 +2,7 @@
 
 | Chủ    | Branch plan                | Baseline code | Trạng thái                  |
 | ------ | -------------------------- | ------------- | --------------------------- |
-| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | ĐANG LÀM — sửa C01 review-02 |
+| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — C01 APPROVED, mở C02 |
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
 · [Sổ bàn giao](tk-a17-worker-handoff.md).
@@ -10,8 +10,7 @@ Hướng dẫn thực thi: [Worker playbook](../prompts/tk-a17-worker-playbook.m
 Yêu cầu đầy đủ: [plan mục 7–10](../24-ke-hoach-demo-theo-chang.md#7-ma-trận-đầy-đủ-yêu-cầu-giao-worker).
 Khảo sát: [preflight 11/09](tk-a17/preflight-11-09.md). Trạng thái mới:
 [C00 APPROVED](tk-a17/review-c00.md), code `d4ec3be` / docs `23cd248`.
-[C01 CHANGES_REQUESTED review-02](tk-a17/review-c01.md), code `0d15eb5` / docs `518644f`;
-còn `C01-R2-01` MAJOR, C02 đóng.
+[C01 APPROVED review-03](tk-a17/review-c01.md), code `8e42856` / docs `9689ea4`; mở C02.
 Mục tiêu: A trình chiếu **tự phát hiện → tự rollback → xác minh phục hồi**. C08 bắt buộc.
 Không chia theo ngày/giờ công. Thời lượng 10s/30s/baseline/test vẫn giữ theo yêu cầu kỹ thuật.
 
@@ -167,3 +166,8 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
 - REVIEW-FIX 02 11/09: `C01-R2-01` closed at code `8e42856`; two route regressions and
   focused/static/build checks PASS. Read-only VM02 seq `372→373`; no deploy/marker; C02-C09
   remain `NOT_RUN`.
+- REVIEW 03 11/09 — [review-c01](tk-a17/review-c01.md): **APPROVED** code `8e42856`, docs
+  `9689ea4`; mọi finding review 01–02 đã đóng. Reviewer focused 75/75, collector 26/26,
+  typecheck/lint/format/build PASS; VM02 read-only app v9/DB healthy, collector running,
+  restart 0, seq `1791→1792`, app B running. Mở duy nhất C02; C03–C09 đóng; task về
+  TUẦN NÀY cho lượt Worker tiếp, chưa push/PR/merge.

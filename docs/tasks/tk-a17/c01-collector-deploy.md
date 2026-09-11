@@ -30,13 +30,13 @@ script deploy smoke/resource-path cần thiết. Không sửa Monitor UI/model/c
 
 ## Case và DoD
 
-- [ ] C01-T1: unit compose có app+DB+collector; no-DB vẫn chạy, DSN không bịa cho app không DB.
-- [ ] C01-T2: deploy/redeploy/restore regression không mất collector/volume/secret.
-- [ ] C01-T3: live ≥10 phút, JSONL parse đúng, seq liên tục, latest khớp, null có nghĩa đúng.
-- [ ] C01-T4: live stats/HTTP/DB có số thực; không lấy metric máy laptop.
-- [ ] C01-T5: marker DB tồn tại sau redeploy; port/image/current deployment có bằng chứng.
-- [ ] C01-T6: collector lỗi không làm app chết; log không secret; chạy lại không tạo container trùng.
-- [ ] C01-T7: focused deploy/template+collector tests, typecheck/lint/scoped format và build PASS.
+- [x] C01-T1: unit compose có app+DB+collector; no-DB vẫn chạy, DSN không bịa cho app không DB.
+- [x] C01-T2: deploy/redeploy/restore regression không mất collector/volume/secret.
+- [x] C01-T3: live ≥10 phút, JSONL parse đúng, seq liên tục, latest khớp, null có nghĩa đúng.
+- [x] C01-T4: live stats/HTTP/DB có số thực; không lấy metric máy laptop.
+- [x] C01-T5: marker DB tồn tại sau redeploy; port/image/current deployment có bằng chứng.
+- [x] C01-T6: collector lỗi không làm app chết; log không secret; chạy lại không tạo container trùng.
+- [x] C01-T7: focused deploy/template+collector tests, typecheck/lint/scoped format và build PASS.
 
 ## Evidence và review
 

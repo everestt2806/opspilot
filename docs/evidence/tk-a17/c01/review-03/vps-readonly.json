@@ -1,0 +1,40 @@
+{
+  "target": "deploy@221.121.1.80",
+  "mode": "read-only SSH with strict host key",
+  "checked_utc": "2026-09-11T06:25:32Z through 2026-09-11T06:25:35Z",
+  "exit": 0,
+  "app": {
+    "container": "a17-notes-0911-app",
+    "image": "a17-notes-0911:v9",
+    "state": "running",
+    "healthy": true,
+    "restart_count": 0
+  },
+  "database": {
+    "container": "a17-notes-0911-db",
+    "image": "postgres:16-alpine",
+    "state": "running",
+    "healthy": true,
+    "restart_count": 0,
+    "storage": "PostgreSQL",
+    "records": 1004
+  },
+  "collector": {
+    "container": "a17-notes-0911-collector",
+    "image": "a17-notes-0911:collector",
+    "state": "running",
+    "restart_count": 0,
+    "healthcheck": "none",
+    "first_seq": 1791,
+    "first_ts": "2026-09-11T06:25:25Z",
+    "second_seq": 1792,
+    "second_ts": "2026-09-11T06:25:35Z"
+  },
+  "app_b": {
+    "app": "express-demo-app",
+    "collector": "express-demo-collector",
+    "state": "running",
+    "restart_count": 0
+  },
+  "result": "PASS: A17 remains healthy, collector advances, and app B remains running"
+}

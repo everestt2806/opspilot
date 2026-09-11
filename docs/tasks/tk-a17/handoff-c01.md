@@ -110,3 +110,12 @@
   probe; POST-only `/items` and GET `/items/:id` fall back to `/health`. Evidence:
   `docs/evidence/tk-a17/c01/review-fix-02.md`. Focused `55/55`, typecheck/lint/format/build
   PASS; read-only VM02 seq `372→373`; no deploy/marker; C02 and later remain `NOT_RUN`.
+
+## Leader review 03 — 11/09/2026
+
+- Reviewed code `8e42856`, docs `9689ea4`; verdict **APPROVED** tại
+  [review-c01.md](review-c01.md). `C01-R2-01` và toàn bộ finding C01 đã đóng.
+- Reviewer focused 75/75, collector 26/26, typecheck/lint/format/build và VM02 read-only
+  PASS; collector seq `1791→1792`, app B vẫn running.
+- Mở duy nhất C02. C02 kế thừa offset 6152, 21 metric/105 score rows; không reset dữ liệu.
+  C03–C09 tiếp tục đóng; chưa push/PR/merge và chưa DEMO_READY.
