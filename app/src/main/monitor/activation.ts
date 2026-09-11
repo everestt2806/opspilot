@@ -88,6 +88,29 @@ export class ActivationRepository {
     return row ? this.map(row) : undefined
   }
 
+  adoptFirstGeneration(appId: number, identity: StreamIdentity): boolean {
+    const adopted = this.database.transaction(() => {
+      const episode = this.database
+        .prepare(
+          "SELECT id FROM deployment_activation WHERE app_id=? AND state='active' AND stream_generation='pending-first-generation' AND start_offset=1"
+        )
+        .get(appId) as { id: number } | undefined
+      if (!episode) return false
+      this.database
+        .prepare(
+          "UPDATE deployment_activation SET stream_generation=? WHERE id=? AND state='active'"
+        )
+        .run(identity.generation, episode.id)
+      this.database
+        .prepare(
+          'UPDATE app SET metrics_stream_generation=?, metrics_stream_device=?, metrics_stream_inode=? WHERE id=?'
+        )
+        .run(identity.generation, identity.device ?? null, identity.inode ?? null, appId)
+      return true
+    })()
+    return adopted
+  }
+
   prepared(appId: number): boolean {
     return Boolean(
       this.database
@@ -164,9 +187,15 @@ export class ActivationRepository {
     deploymentId: number,
     identity: StreamIdentity,
     endOffset: number,
-    recovered = false
+    recovered = false,
+    gapEndOffset = endOffset
   ): void {
     this.database.transaction(() => {
+      const previous = this.database
+        .prepare(
+          "SELECT stream_generation FROM deployment_activation WHERE app_id=? AND state='active'"
+        )
+        .get(appId) as { stream_generation?: string } | undefined
       this.database
         .prepare(
           "UPDATE deployment_activation SET state='closed', end_offset=?, closed_at=? WHERE app_id=? AND state='active'"
@@ -187,9 +216,13 @@ export class ActivationRepository {
       if (!recovered) {
         this.database
           .prepare(
-            "INSERT INTO action_log (action,status,message,app_id,deployment_id) VALUES ('ssh_error','failed','Metric file generation changed; matching metrics.jsonl.1 was unavailable; explicit data-gap boundary opened',?,?)"
+            "INSERT INTO action_log (action,status,message,app_id,deployment_id) VALUES ('ssh_error','failed',?, ?,?)"
           )
-          .run(appId, deploymentId)
+          .run(
+            `Metric data-gap generation gap old=${previous?.stream_generation ?? 'unknown'} new=${identity.generation} cursor=${endOffset} range=[${endOffset},${gapEndOffset}]`,
+            appId,
+            deploymentId
+          )
       }
     })()
   }

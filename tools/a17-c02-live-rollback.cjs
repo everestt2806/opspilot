@@ -36,21 +36,37 @@ async function main() {
   await win.webContents.executeJavaScript(
     'window.__c02Events = []; void window.api.on("deploy:event", (event) => window.__c02Events.push(event)); true',
   );
+  const appsBefore = await invoke(win, "app:list", 2);
+  const appBefore = appsBefore.find((item) => item.id === appId);
+  if (!appBefore) throw new Error("A17 app missing before rollback");
+  const currentBeforeId = appBefore.current_deployment_id;
   const versionsBefore = await invoke(win, "app:versions", appId);
   const currentBefore = versionsBefore.find(
-    (item) =>
-      item.status === "running" &&
-      item.id === Math.max(...versionsBefore.map((version) => version.id)),
+    (item) => item.id === currentBeforeId,
   );
   const target = versionsBefore
-    .filter(
-      (item) => item.status === "running" && item.id !== currentBefore?.id,
-    )
+    .filter((item) => item.status === "running" && item.id !== currentBeforeId)
     .sort((left, right) => right.version - left.version)[0];
   if (!target)
     throw new Error(
       `no previous running deployment: ${JSON.stringify(versionsBefore)}`,
     );
+  if (
+    !currentBefore ||
+    target.id === currentBeforeId ||
+    target.image_tag === currentBefore.image_tag
+  ) {
+    throw new Error(
+      `rollback target must differ from current: ${JSON.stringify({ currentBefore, target })}`,
+    );
+  }
+  console.log(
+    JSON.stringify({
+      type: "C02_ROLLBACK_BEFORE",
+      current: currentBefore,
+      target,
+    }),
+  );
   const started = await invoke(win, "app:rollback", appId, target.id);
   const deadline = Date.now() + 30 * 60_000;
   let finished;
@@ -64,12 +80,31 @@ async function main() {
       break;
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 500));
   }
-  if (!finished || finished.status !== "running")
+  const events = await win.webContents.executeJavaScript(
+    "window.__c02Events ?? []",
+  );
+  if (!finished || finished.status !== "running") {
+    console.error(
+      JSON.stringify({ type: "C02_ROLLBACK_ATTEMPT_FAIL", finished, events }),
+    );
     throw new Error(`rollback failed: ${JSON.stringify(finished)}`);
+  }
   const apps = await invoke(win, "app:list", 2);
   const current = apps.find((item) => item.id === appId);
   const versions = await invoke(win, "app:versions", appId);
-  console.log(JSON.stringify({ started, finished, current, versions }));
+  const after = versions.find((item) => item.id === started.deployment_id);
+  console.log(
+    JSON.stringify({
+      started,
+      finished,
+      currentBefore,
+      target,
+      after,
+      current,
+      versions,
+      events,
+    }),
+  );
   app.quit();
 }
 

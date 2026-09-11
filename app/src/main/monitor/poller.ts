@@ -48,7 +48,15 @@ export class MonitorPoller {
     source: MetricSource,
     onSample?: (sampleId: number) => Promise<void> | void
   ): Promise<{ inserted: number; nextOffset: number; sampleIds: number[]; alertIds: number[] }> {
-    return withAppLock(appId, () => this.pollUnlocked(appId, deploymentId, source, onSample))
+    const result = await withAppLock(appId, () =>
+      this.pollUnlocked(appId, deploymentId, source, onSample)
+    )
+    return {
+      inserted: result.inserted,
+      nextOffset: result.nextOffset,
+      sampleIds: result.sampleIds,
+      alertIds: result.alertIds
+    }
   }
 
   private async pollUnlocked(
@@ -56,10 +64,16 @@ export class MonitorPoller {
     deploymentId: number,
     source: MetricSource,
     onSample?: (sampleId: number) => Promise<void> | void
-  ): Promise<{ inserted: number; nextOffset: number; sampleIds: number[]; alertIds: number[] }> {
+  ): Promise<{
+    inserted: number
+    nextOffset: number
+    sampleIds: number[]
+    alertIds: number[]
+    hadWarnings: boolean
+  }> {
     const target = this.repository.getTarget(deploymentId)
     if (!target || target.app_id !== appId)
-      return { inserted: 0, nextOffset: 1, sampleIds: [], alertIds: [] }
+      return { inserted: 0, nextOffset: 1, sampleIds: [], alertIds: [], hadWarnings: false }
     const activationRepository = new ActivationRepository(this.database)
     if (activationRepository.prepared(target.app_id)) {
       activationRepository.logFailClosed(target.app_id)
@@ -73,24 +87,40 @@ export class MonitorPoller {
         .get(target.app_id) as { metrics_stream_generation: string } | undefined
     )?.metrics_stream_generation
     const activeBeforeIdentity = activationRepository.active(target.app_id)
-    if (activeBeforeIdentity && storedGeneration !== identity.generation) {
+    if (
+      activeBeforeIdentity?.generation === 'pending-first-generation' &&
+      activeBeforeIdentity.startOffset === 1 &&
+      offset === 1
+    ) {
+      activationRepository.adoptFirstGeneration(target.app_id, identity)
+    } else if (activeBeforeIdentity && storedGeneration !== identity.generation) {
       let recovered = false
       let oldEndOffset = offset
+      let gapEndOffset = offset
       try {
         const rotated = await source.rotated?.()
         const rotatedIdentity = await rotated?.identity?.()
         if (rotated && rotatedIdentity?.generation === storedGeneration) {
           const rotatedSize = await rotated.size()
+          gapEndOffset = rotatedSize + 1
           oldEndOffset = Math.max(offset, rotatedSize + 1)
           if (rotatedSize + 1 > offset) {
-            await this.pollUnlocked(appId, deploymentId, rotated, onSample)
+            const drained = await this.pollUnlocked(appId, deploymentId, rotated, onSample)
+            oldEndOffset = drained.nextOffset
+            recovered = drained.nextOffset >= rotatedSize + 1 && !drained.hadWarnings
           }
-          recovered = true
         }
       } catch {
         recovered = false
       }
-      activationRepository.rotate(target.app_id, deploymentId, identity, oldEndOffset, recovered)
+      activationRepository.rotate(
+        target.app_id,
+        deploymentId,
+        identity,
+        oldEndOffset,
+        recovered,
+        gapEndOffset
+      )
       offset = 1
     }
     activationRepository.ensureLegacy(target.app_id, deploymentId, offset, identity)
@@ -119,9 +149,10 @@ export class MonitorPoller {
     }
     const committedBytes = completeByteLength(content)
     if (committedBytes === 0)
-      return { inserted: 0, nextOffset: offset, sampleIds: [], alertIds: [] }
+      return { inserted: 0, nextOffset: offset, sampleIds: [], alertIds: [], hadWarnings: false }
     const completeContent = content.slice(0, content.lastIndexOf('\n') + 1)
     const parsed = parseMetricContent(completeContent)
+    const hadWarnings = parsed.some((item) => Boolean(item.warning))
     for (const item of parsed)
       if (item.warning) {
         logger.warn('monitor', item.warning, { app_id: appId, consumed_bytes: item.byteLength })
@@ -238,6 +269,6 @@ export class MonitorPoller {
     })
     commit()
     for (const sampleId of sampleIds) await onSample?.(sampleId)
-    return { inserted, nextOffset: offset + committedBytes, sampleIds, alertIds }
+    return { inserted, nextOffset: offset + committedBytes, sampleIds, alertIds, hadWarnings }
   }
 }

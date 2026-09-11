@@ -86,6 +86,7 @@ interface ContainerState {
 }
 
 type FinalStatus = 'running' | 'failed' | 'rolled_back'
+type RestoreStatus = 'restored' | 'not_restored' | 'unknown' | null
 
 function nowIso(): string {
   return new Date().toISOString()
@@ -123,6 +124,8 @@ export interface RunContext {
   failedStep: DeployStep | null
   cancelled: boolean
   runtimeStarted: boolean
+  collectorStopped: boolean
+  restoreStatus: RestoreStatus
   durations: Partial<Record<DeployStep, number>>
 }
 
@@ -208,6 +211,8 @@ export class DeployPipeline {
       failedStep: null,
       cancelled: false,
       runtimeStarted: false,
+      collectorStopped: false,
+      restoreStatus: null,
       durations: {}
     }
     void this.executeRollback(ctx, targetImageTag, target.version, target.id).catch(
@@ -252,8 +257,11 @@ export class DeployPipeline {
           `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker compose up -d`,
           180_000
         )
-        ctx.runtimeStarted = result.code === 0 || /started|running/i.test(result.stdout)
         if (result.code !== 0) {
+          if (await this.runtimeMatches(ctx, targetImageTag)) {
+            ctx.runtimeStarted = true
+            ctx.collectorStopped = false
+          }
           throw new AppError(
             'UNKNOWN',
             'Khởi động lại app với ảnh cũ không thành công. Hãy xem log trên VPS.',
@@ -261,6 +269,9 @@ export class DeployPipeline {
           )
         }
         await this.waitContainerRunning(ctx)
+        await this.verifyRuntimeImage(ctx, targetImageTag)
+        ctx.runtimeStarted = true
+        ctx.collectorStopped = false
         this.log(ctx, 'DEPLOY', `App đã chạy lại với ảnh v${toVersion}.\n`, 'stdout')
       })
 
@@ -285,6 +296,7 @@ export class DeployPipeline {
 
       await this.recordManualRollbackSuccess(ctx, targetImageTag, targetDeploymentId)
     } catch (error) {
+      if (ctx.collectorStopped) await this.resumeCollector(ctx)
       if (preparedActivationId !== null) {
         if (ctx.runtimeStarted) {
           this.activatePrepared(ctx, preparedActivationId)
@@ -430,6 +442,31 @@ export class DeployPipeline {
         cause: new Error(result.stderr.trim() || result.stdout.trim())
       })
     }
+    ctx.collectorStopped = true
+  }
+
+  private async resumeCollector(ctx: RunContext): Promise<void> {
+    if (!ctx.collectorStopped) return
+    const command = `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker compose start collector`
+    try {
+      const result = await this.execStream(ctx, 'DEPLOY', command, 60_000)
+      if (result.code !== 0) throw new Error(result.stderr.trim() || result.stdout.trim())
+      const state = await this.ssh.exec(
+        ctx.app.vps_id,
+        `docker inspect -f '{{json .State}}' ${shellQuote(`${ctx.app.name}-collector`)} 2>/dev/null || printf 'missing'`,
+        { timeoutMs: 15_000, signal: ctx.signal, retryOnReconnect: true }
+      )
+      if (state.code !== 0 || !/"Status"\s*:\s*"running"/.test(state.stdout)) {
+        throw new Error(`collector state not running: ${state.stdout || state.stderr}`)
+      }
+      ctx.collectorStopped = false
+    } catch (error) {
+      this.activation.logFailClosed(ctx.app.id)
+      logger.warn('deploy', 'Không thể khôi phục collector sau cutover failure', {
+        deployment_id: ctx.deployment.id,
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
   }
 
   private activatePrepared(ctx: RunContext, activationId: number | null): void {
@@ -521,6 +558,8 @@ export class DeployPipeline {
       failedStep: null,
       cancelled: false,
       runtimeStarted: false,
+      collectorStopped: false,
+      restoreStatus: null,
       durations: {}
     }
   }
@@ -554,6 +593,7 @@ export class DeployPipeline {
         finalStatus = await this.handleHealthcheckFail(ctx)
       }
     } catch (error) {
+      if (ctx.collectorStopped) await this.resumeCollector(ctx)
       if (preparedActivationId !== null) {
         if (ctx.runtimeStarted) {
           this.activatePrepared(ctx, preparedActivationId)
@@ -562,7 +602,7 @@ export class DeployPipeline {
             ctx.app.id,
             ctx.deployment.version
           )
-          if (previous) {
+          if (previous && ctx.restoreStatus === 'restored') {
             try {
               const recovery = await this.prepareReactivation(ctx, previous.id, 'auto_rollback')
               this.activatePrepared(ctx, recovery)
@@ -574,6 +614,8 @@ export class DeployPipeline {
                   recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
               })
             }
+          } else if (previous) {
+            this.activation.logFailClosed(ctx.app.id)
           }
         } else {
           this.activation.abort(preparedActivationId)
@@ -942,16 +984,22 @@ export class DeployPipeline {
       this.log(ctx, 'DEPLOY', `$ ${command}\n`, 'stdout')
       try {
         const result = await this.execStream(ctx, 'DEPLOY', command, 180_000)
-        ctx.runtimeStarted = result.code === 0 || /started|running/i.test(result.stdout)
         if (result.code !== 0) {
+          if (await this.runtimeMatches(ctx, ctx.deployment.image_tag)) {
+            ctx.runtimeStarted = true
+            ctx.collectorStopped = false
+          }
           throw new AppError('UNKNOWN', 'Bước chạy container thất bại. Xem log bước DEPLOY.', {
             step: 'DEPLOY',
             cause: new Error(result.stderr.trim() || result.stdout.trim())
           })
         }
         await this.waitContainerRunning(ctx)
+        await this.verifyRuntimeImage(ctx, ctx.deployment.image_tag)
+        ctx.runtimeStarted = true
+        ctx.collectorStopped = false
       } catch (error) {
-        await this.restorePreviousOrDown(ctx)
+        if (!ctx.runtimeStarted) await this.restorePreviousOrDown(ctx)
         throw error
       }
     })
@@ -996,25 +1044,40 @@ export class DeployPipeline {
 
   private async restorePreviousOrDown(ctx: RunContext): Promise<void> {
     const previous = this.deploymentRepository.previousCompleted(ctx.app.id, ctx.deployment.version)
+    ctx.restoreStatus = 'unknown'
     try {
       if (previous) {
         this.log(ctx, 'DEPLOY', `Khôi phục phiên bản cũ v${previous.version}...\n`, 'stdout')
         await this.restoreComposeTo(ctx.app, this.deploymentRepository.runtimeImageTag(previous.id))
-        await this.execStream(
+        const restoreResult = await this.execStream(
           ctx,
           'DEPLOY',
           `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker compose up -d`,
           180_000
         )
+        if (restoreResult.code !== 0) {
+          ctx.restoreStatus = 'not_restored'
+          throw new Error(restoreResult.stderr.trim() || restoreResult.stdout.trim())
+        }
+        await this.waitContainerRunning(ctx)
+        await this.verifyRuntimeImage(ctx, this.deploymentRepository.runtimeImageTag(previous.id))
+        ctx.collectorStopped = false
+        ctx.restoreStatus = 'restored'
         this.log(ctx, 'DEPLOY', `App đã quay lại v${previous.version}.\n`, 'stdout')
       } else {
         this.log(ctx, 'DEPLOY', 'Chưa có phiên bản cũ — dừng container (giữ volume).\n', 'stdout')
-        await this.execStream(
+        const downResult = await this.execStream(
           ctx,
           'DEPLOY',
           `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker compose down`,
           180_000
         )
+        if (downResult.code !== 0) {
+          ctx.restoreStatus = 'not_restored'
+          throw new Error(downResult.stderr.trim() || downResult.stdout.trim())
+        }
+        ctx.collectorStopped = false
+        ctx.restoreStatus = 'restored'
       }
     } catch (error) {
       this.log(
@@ -1027,6 +1090,29 @@ export class DeployPipeline {
         deployment_id: ctx.deployment.id,
         error: error instanceof Error ? error.message : String(error)
       })
+    }
+  }
+
+  private async verifyRuntimeImage(ctx: RunContext, expectedImage: string): Promise<void> {
+    const result = await this.ssh.exec(
+      ctx.app.vps_id,
+      `docker inspect -f '{{.Config.Image}}|{{.State.Status}}' ${shellQuote(`${ctx.app.name}-app`)}`,
+      { timeoutMs: 15_000, signal: ctx.signal, retryOnReconnect: true }
+    )
+    const [image, state] = result.stdout.trim().split('|')
+    if (result.code !== 0 || image !== expectedImage || state !== 'running') {
+      throw new Error(
+        `runtime restore mismatch: expected ${expectedImage}|running, got ${result.stdout.trim()}`
+      )
+    }
+  }
+
+  private async runtimeMatches(ctx: RunContext, expectedImage: string): Promise<boolean> {
+    try {
+      await this.verifyRuntimeImage(ctx, expectedImage)
+      return true
+    } catch {
+      return false
     }
   }
 
@@ -1096,6 +1182,12 @@ export class DeployPipeline {
           180_000
         )
         if (result.code !== 0) {
+          if (await this.runtimeMatches(ctx, previousImageTag)) {
+            ctx.runtimeStarted = true
+            ctx.collectorStopped = false
+            this.activatePrepared(ctx, rollbackActivationId)
+            rollbackActivationId = null
+          }
           throw new AppError(
             'UNKNOWN',
             'Tự rollback không khởi động được phiên bản cũ. Hãy xem log container trên VPS.',
@@ -1106,6 +1198,9 @@ export class DeployPipeline {
           )
         }
         await this.waitContainerRunning(ctx)
+        await this.verifyRuntimeImage(ctx, previousImageTag)
+        ctx.runtimeStarted = true
+        ctx.collectorStopped = false
         this.activatePrepared(ctx, rollbackActivationId)
         rollbackActivationId = null
         const healthOk = await this.waitForHealthcheck(ctx.app, ctx.signal)
@@ -1127,6 +1222,7 @@ export class DeployPipeline {
       })
       await this.pruneImages(ctx, null, [previousImageTag])
     } catch (error) {
+      if (ctx.collectorStopped) await this.resumeCollector(ctx)
       if (rollbackActivationId !== null) this.activation.abort(rollbackActivationId)
       const ipcError = toStepIpcError(error)
       this.finalizeFailed(ctx)

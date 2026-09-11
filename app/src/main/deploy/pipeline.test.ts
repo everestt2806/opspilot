@@ -98,6 +98,7 @@ function createHarness(options: StubSshOptions = {}): void {
   let imagesCall = 0
   let imageRemoveCall = 0
   let stopCollectorCall = 0
+  const lastComposeUpCode = new Map<string, number>()
   sshExec = vi.fn(async (_vpsId: number, command: string) => {
     if (command.includes('free -m')) {
       return { code: 0, stdout: options.precheckOutput ?? PRECHECK_OK, stderr: '' }
@@ -108,10 +109,14 @@ function createHarness(options: StubSshOptions = {}): void {
     }
     if (command.includes('compose up -d')) {
       composeUpCall += 1
-      if (options.composeUp) {
-        return options.composeUp(composeUpCall)
+      const result = options.composeUp?.(composeUpCall) ?? {
+        code: 0,
+        stdout: 'Container demo-api-app Started\n',
+        stderr: ''
       }
-      return { code: 0, stdout: 'Container demo-api-app Started\n', stderr: '' }
+      const composeApp = command.match(/apps\/([a-z0-9-]+)\s+&&/)?.[1] ?? 'demo-api'
+      lastComposeUpCode.set(composeApp, result.code)
+      return result
     }
     if (command.includes('compose down')) {
       return { code: 0, stdout: '', stderr: '' }
@@ -126,7 +131,25 @@ function createHarness(options: StubSshOptions = {}): void {
         }
       )
     }
+    if (command.includes('compose start collector')) {
+      return { code: 0, stdout: 'collector started', stderr: '' }
+    }
     if (command.includes('docker inspect')) {
+      if (command.includes('.Config.Image')) {
+        const appName = command.match(/([a-z0-9-]+)-app(?:['\s]|$)/)?.[1] ?? 'demo-api'
+        const compose = [...writeFileMock.mock.calls]
+          .reverse()
+          .find(
+            ([, path]) =>
+              String(path).endsWith('docker-compose.yml') && String(path).includes(`/${appName}/`)
+          )
+        const image = String(compose?.[2] ?? '').match(/image:\s*(\S+)/)?.[1] ?? `${appName}:v1`
+        return {
+          code: 0,
+          stdout: `${image}|${(lastComposeUpCode.get(appName) ?? 0) === 0 ? 'running' : 'exited'}\n`,
+          stderr: ''
+        }
+      }
       inspectCall += 1
       const state = options.inspectState?.(inspectCall) ?? {
         Status: options.inspectStatus?.(inspectCall) ?? 'running',

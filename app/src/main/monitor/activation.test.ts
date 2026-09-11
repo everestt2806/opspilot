@@ -191,4 +191,67 @@ describe('C02 activation episodes', () => {
       { seq: 2 }
     ])
   })
+
+  it('adopts the first real generation without opening a false gap', async () => {
+    const db = seed()
+    const activation = new ActivationRepository(db)
+    const prepared = activation.prepare(
+      1,
+      1,
+      { generation: 'pending-first-generation' },
+      1,
+      'deploy'
+    )
+    activation.activate(prepared, null)
+    db.prepare('UPDATE app SET metrics_stream_generation=? WHERE id=1').run(
+      'pending-first-generation'
+    )
+
+    await new MonitorPoller(db).poll(1, 1, source(`${metric(1)}\n`, 'device:inode'))
+
+    expect(activation.active(1)?.generation).toBe('device:inode')
+    expect(
+      db.prepare("SELECT COUNT(*) AS count FROM action_log WHERE message LIKE '%data-gap%'").get()
+    ).toEqual({ count: 0 })
+    expect(db.prepare('SELECT deployment_id, seq FROM metric_sample').all()).toEqual([
+      { deployment_id: 1, seq: 1 }
+    ])
+    expect(db.prepare('SELECT COUNT(*) AS count FROM score_sample').get()).toEqual({ count: 5 })
+  })
+
+  it('closes matching rotation only through committed bytes for a partial tail', async () => {
+    const db = seed()
+    const poller = new MonitorPoller(db)
+    const old = `${metric(1)}\n`
+    await poller.poll(1, 1, source(old, 'old'))
+    const rotatedContent = `${old}{"seq":`
+    const rotated: MetricSource = {
+      size: async () => Buffer.byteLength(rotatedContent),
+      tail: async (offset) =>
+        Buffer.from(rotatedContent)
+          .subarray(offset - 1)
+          .toString(),
+      identity: async () => ({ generation: 'old' })
+    }
+    const next = source(`${metric(2)}\n`, 'new')
+    next.rotated = async () => rotated
+
+    await poller.poll(1, 1, next)
+
+    expect(db.prepare('SELECT seq FROM metric_sample ORDER BY seq').all()).toEqual([
+      { seq: 1 },
+      { seq: 2 }
+    ])
+    expect(db.prepare('SELECT metrics_offset FROM app WHERE id=1').get()).toEqual({
+      metrics_offset: Buffer.byteLength(`${metric(2)}\n`) + 1
+    })
+    expect(
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM action_log WHERE message LIKE '%data-gap%old=old%new=new%'"
+        )
+        .get()
+    ).toEqual({ count: 1 })
+    expect(db.prepare('SELECT COUNT(*) AS count FROM score_sample').get()).toEqual({ count: 10 })
+  })
 })
