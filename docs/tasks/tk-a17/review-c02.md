@@ -688,3 +688,110 @@ Append REVIEW-FIX 06 vào evidence/handoff/board/task/sổ với exact base/code
 ledger. Chỉ bàn giao READY_FOR_LOCAL_REVIEW khi regression mới cùng full gates đều PASS; nếu cần đổi
 schema/contract ngoài amendment thì bàn giao BLOCKED kèm proposal trước implementation/live mutation.
 ```
+
+## 11. Review 07 — review-fix tại `413ec20`
+
+### Phạm vi và verdict
+
+- Reviewed code `61f43df`, submitted HEAD `413ec20`, kế thừa Leader review `24c669b` hợp lệ.
+- Verdict: **CHANGES_REQUESTED**. C02 tiếp tục `REVIEW_FIX_REQUIRED`; C03–C09 đóng/`NOT_RUN`.
+- Owner transition trước compose đã sửa đúng hướng và warning đơn ở EOF có range đúng. Reconcile
+  rollback lineage và episode có valid row sau warning vẫn sai; hai reviewer regressions 2/2 FAIL.
+- Evidence reviewer: [review-07](../../evidence/tk-a17/c02/review-07/). Review chỉ local/read-only;
+  không deploy/rollback, không sửa SQLite/VPS/app B, không ML train/score, push/PR/merge.
+
+### Kiểm chứng độc lập
+
+| Gate | Kết quả reviewer |
+| --- | --- |
+| Exact focused Worker | 18 file, 96/96 PASS |
+| ML service | 19/19 PASS |
+| Collector | 26/26 PASS |
+| Typecheck node/web/scripts, lint, format, build | PASS; renderer 3045 modules |
+| Lineage/mixed-invalid regressions | 2/2 FAIL; 17 existing tests PASS |
+| GitNexus | analyze PASS; 20 symbol đổi, 38 affected process, risk CRITICAL |
+
+### Trạng thái R6
+
+| Finding | Review 07 |
+| --- | --- |
+| C02-R6-01 | CLOSED — stop collector không còn suy owner từ DB pointer |
+| C02-R6-02 | PARTIAL — hook/barrier có; rollback lineage resolve sai và chưa test đủ |
+| C02-R6-03 | PARTIAL — single invalid EOF đúng; mixed/multiple invalid làm episode sai |
+| C02-R6-04 | OPEN — test reconciliation chỉ cover normal row tag = runtime tag |
+| C02-R6-05 | PARTIAL — compact JSON có; thiếu activation/per-deployment split và raw events |
+
+### C02-R7-01 — BLOCKER — reconciliation không resolve runtime lineage của rollback row
+
+- Vị trí: `app/src/main/monitor/service.ts:152-253`.
+- Recursive CTE anchor toàn bảng rồi subquery `WHERE id=d.id`; kết quả là row `image_tag` của prepared
+  attempt, không phải ancestor cuối theo `is_rollback_of`. Nhánh previous owner cũng đọc raw tag.
+- Regression reviewer: active deployment 2/v2, prepared deployment 3 `is_rollback_of=1`, Docker
+  v1/running. Expected prepared 3 active; actual vẫn prepared vì code so Docker v1 với row tag v3.
+- Fix: dùng một resolver runtime lineage duy nhất, tốt nhất `DeploymentRepository.runtimeImageTag()`,
+  cho cả prepared và active owner dưới app lock. Cycle/missing lineage phải giữ barrier + action rõ.
+  Test rollback chain một/nhiều tầng, active cũng là rollback row, wrong image, unknown và retry.
+
+### C02-R7-02 — BLOCKER — valid rows sau invalid `.1` nằm ngoài episode đã đóng
+
+- Vị trí: `app/src/main/monitor/poller.ts:105-140,181-190,301-309`.
+- Inner drain commit toàn bộ complete bytes và insert valid rows sau warning. Outer lại gán
+  `oldEndOffset=firstWarning.start`, nên activation episode đóng trước các valid rows vừa route vào
+  old deployment. Nhiều warning range cũng bị rút còn range đầu tiên.
+- Regression reviewer: metric 1/2/3 đều insert, nhưng old episode end 236 thay vì committed EOF 482.
+- Fix: giữ episode end bằng committed `drained.nextOffset`. Warning/data-gap là các interval độc lập;
+  ghi từng skipped range hoặc một danh sách/range union chính xác mà không cắt ownership của valid
+  bytes. Test invalid đầu/giữa/cuối, valid hai phía, nhiều invalid, UTF-8, scores/dedupe/retry.
+
+### C02-R7-03 — MAJOR — restart regression chưa chứng minh rollback reconciliation
+
+- Test mới chỉ tạo deployment thường với row tag `app:v1` bằng runtime `app:v1`, trong cùng DB handle.
+  Nó không cover `is_rollback_of`, active rollback lineage, close/reopen DB, previous/down/unknown,
+  reconnect hoặc deploy tiếp sau reconcile như R6 yêu cầu.
+- Fix: commit integration matrix qua `MonitorService` với DB close/reopen và production resolver;
+  assert activation state/ranges, current pointer không bị suy thành owner, action log, idempotent
+  second tick và new deploy sau reconcile.
+
+### C02-R7-04 — MAJOR — live split 416/5 chưa có boundary proof
+
+- `review-fix-06.md` đã có compact before/target/after và total mutation JSON. Nó nói `+421` metric
+  nhưng deployment 21 chỉ thêm/đang có `5` rows; chưa có activation start/end, generation, source size
+  hoặc per-deployment before/after để chứng minh 416 backlog thuộc deployment 20.
+- Fix: ưu tiên read-only append, không rerun live: lưu raw activation rows và SQL grouped counts/scores
+  cho deployment 20/21, cursor/source generation+size và helper events đã nhắc tới. Reconcile arithmetic
+  total `+421/+2105`, mỗi metric 5 scores, không reassign lịch sử.
+
+### Bàn giao review-fix 07 cho Worker
+
+```text
+Tiếp tục sửa duy nhất TK-A17/C02 từ HEAD chứa Leader review 07; không checkout/reset về 61f43df
+hoặc 413ec20. Verdict CHANGES_REQUESTED; C03-C09 vẫn đóng/NOT_RUN.
+
+Đóng C02-R7-01...04 và phần còn mở R6-02...05. Trong MonitorService reconciliation, bỏ CTE resolve
+lineage hiện tại hoặc sửa bằng root_id đúng; ưu tiên tái sử dụng DeploymentRepository.runtimeImageTag
+cho prepared deployment và active deployment dưới shared app lock. Prepared rollback một/nhiều tầng
+phải activate khi Docker image/state + collector + stream generation khớp resolved target. Live owner
+khớp resolved active thì abort prepared; cycle/missing/SSH unknown giữ barrier và retry idempotent.
+
+Sửa rotation mixed invalid: episode cũ luôn kết thúc tại committed drained.nextOffset, không tại
+firstWarning.start. Ghi đầy đủ từng byte range invalid riêng với generation/cursor; valid records sau
+warning vẫn nằm trong old episode audit. Bao phủ invalid đầu/giữa/cuối, valid trước/sau, nhiều warning,
+UTF-8/partial, tail/DB/callback failure, retry, dedupe, routing và 5 scores/sample.
+
+Thêm restart integration thật: tạo active v2 + prepared rollback-attempt v3 -> v1, close/reopen DB,
+khởi tạo MonitorService mới, reconcile candidate/previous/down/unknown và chạy tick lần hai. Thêm chain
+rollback nhiều tầng, active owner cũng là rollback, wrong image, reconnect và deploy tiếp sau reconcile.
+Hai reviewer regressions trong docs/evidence/tk-a17/c02/review-07 phải PASS.
+
+Không cần mutate live để sửa code. Sau local full green, lấy read-only evidence hiện tại cho deployment
+20/21: activation rows start/end/generation, grouped metric + score counts trước/sau nếu còn, source
+identity/size/cursor và raw helper events. Giải thích chính xác 421 metric chia 416/5 và đối chiếu 2105
+scores. Chỉ rerun live nếu dữ liệu cần thiết không còn và sau khi code gate xanh; target/current phải
+khác resolved runtime.
+
+Chạy exact focused, ML-service 19, collector 26, node/web/scripts typecheck, scoped lint, Prettier và
+build. Không sửa app B ngoài read-only, không reset/xóa/reassign dữ liệu, không ML train/score C03,
+UI/fault, push/PR/merge. Giữ .devflow/, docs/ban-giao-20-08.md, logo.png. Append evidence/handoff/
+board/task/sổ với exact base/code/docs HEAD; chỉ bàn giao READY_FOR_LOCAL_REVIEW khi tất cả regression
+và full gates PASS.
+```

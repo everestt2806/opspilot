@@ -288,3 +288,15 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
   retry/reconnect `0`, duplicate groups `0`, deployment 21 has `5` rows. PostgreSQL and app/DB/
   collector were verified read-only; app B was read-only only.
 - Outcome: `READY_FOR_LOCAL_REVIEW`; C03-C09 remain closed/`NOT_RUN`.
+
+## Leader review 07 — 12/09/2026
+
+- Reviewed code `61f43df`, submitted HEAD `413ec20`; verdict **CHANGES_REQUESTED** tại
+  [review-c02.md](review-c02.md), mục 11.
+- `R6-01` CLOSED; `R6-02…05` còn phần mở. Mở `C02-R7-01…04`: reconciliation CTE trả raw row tag
+  thay vì rollback lineage, valid rows sau invalid `.1` nằm ngoài episode đã đóng, restart coverage
+  thiếu rollback/close-reopen matrix và live split 416/5 thiếu activation proof.
+- Reviewer xác nhận focused 96/96, ML service 19/19, collector 26/26 và static/build PASS; hai
+  lineage/mixed-invalid regressions 2/2 FAIL. Không chạy live hoặc sửa SQLite/VPS/app B.
+- C02 tiếp tục `REVIEW_FIX_REQUIRED`; C03–C09 đóng/`NOT_RUN`. Evidence:
+  `docs/evidence/tk-a17/c02/review-07/`.

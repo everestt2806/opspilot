@@ -237,3 +237,8 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   static/build PASS; hai regression mới 2/2 FAIL vì manual unknown owner abort barrier và invalid
   `.1` ghi gap rỗng tại EOF. Prepared restart chưa có reconcile; live run 20 thiếu raw/per-deployment
   routing evidence. C02 `REVIEW_FIX_REQUIRED`; C03-C09 đóng/`NOT_RUN`.
+- REVIEW C02 07 12/09 — [review-c02](tk-a17/review-c02.md): **CHANGES_REQUESTED** tại code
+  `61f43df`, submitted `413ec20`. Reviewer xác nhận focused 96/96, ML 19/19, collector 26/26 và
+  static/build PASS; hai regression mới 2/2 FAIL vì rollback lineage resolve raw row tag và episode
+  đóng trước valid row sau invalid `.1`. Restart matrix/live boundary split chưa đủ evidence. C02
+  `REVIEW_FIX_REQUIRED`; C03-C09 đóng/`NOT_RUN`.

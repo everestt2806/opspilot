@@ -2,10 +2,10 @@
 
 > C00 APPROVED 11/09: [review](tk-a17/review-c00.md), code `d4ec3be`, docs `23cd248`.
 > C01 APPROVED review-03 11/09: [review](tk-a17/review-c01.md),
-> code `8e42856`, docs `9689ea4`. C02 review-06 đang CHANGES_REQUESTED.
+> code `8e42856`, docs `9689ea4`. C02 review-07 đang CHANGES_REQUESTED.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; C01 đã được Leader approve sau review-fix-02; C02 đang sửa theo review-06.
+- Owner A solo; C01 đã được Leader approve sau review-fix-02; C02 đang sửa theo review-07.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
 - Chặng được approve: C00, C01. C02 `REVIEW_FIX_REQUIRED`; C03–C09 chưa mở.
@@ -16,12 +16,7 @@
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
-| C02   | READY_FOR_LOCAL_REVIEW | code `37d9e19` / docs `4b4f82e` | CHANGES_REQUESTED (review-06) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
-REVIEW-FIX C02 06: code `61f43df`, evidence `docs/evidence/tk-a17/c02/review-fix-06.md`; R6-01...05
-and R5-02/04/05/06 closed. Local focused 18/96, ML 19/19, collector 26/26, static/build PASS.
-Controlled VM02 deployment 21 restored runtime v16/running from current v15; scheduler two ticks,
-max concurrency 1, exit 0; live mutation +421/+2105 with deployment-21 5 rows. C02
-READY_FOR_LOCAL_REVIEW; C03-C09 closed/NOT_RUN.
+| C02   | READY_FOR_LOCAL_REVIEW | code `61f43df` / docs `413ec20` | CHANGES_REQUESTED (review-07) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C05   | NOT_STARTED    | —            | PENDING | Chưa có        |
@@ -164,3 +159,13 @@ READY_FOR_LOCAL_REVIEW; C03-C09 closed/NOT_RUN.
   reviewer regressions 2/2 FAIL. Manual/auto unknown owner vẫn bỏ barrier; prepared row không có
   restart reconciliation; invalid `.1` log `[EOF,EOF]`; coverage và raw live routing evidence chưa
   đủ. `R5-01/03` CLOSED, mở `C02-R6-01…05`; C02 `REVIEW_FIX_REQUIRED`, C03-C09 đóng.
+- REVIEW-FIX C02 06 - 11/09/2026: Worker code `61f43df`, evidence
+  `docs/evidence/tk-a17/c02/review-fix-06.md`; local focused 96/96, ML 19/19, collector 26/26 và
+  static/build PASS. Controlled VM02 deployment 21 restored runtime v16 from v15; scheduler two
+  ticks, live mutation +421/+2105, deployment 21 có 5 metric rows. Handoff
+  `READY_FOR_LOCAL_REVIEW`; C03-C09 đóng/`NOT_RUN`.
+- REVIEW C02 07 - 12/09/2026: Leader review code `61f43df`, submitted HEAD `413ec20`:
+  **CHANGES_REQUESTED**. Focused 96/96, ML 19/19, collector 26/26 và static/build PASS, nhưng hai
+  reviewer regressions 2/2 FAIL: prepared rollback lineage không reconcile và old episode đóng trước
+  valid row sau invalid `.1`. Restart matrix cùng live activation/per-deployment split evidence chưa
+  đủ. Mở `C02-R7-01…04`; C02 `REVIEW_FIX_REQUIRED`, C03-C09 đóng/`NOT_RUN`.
