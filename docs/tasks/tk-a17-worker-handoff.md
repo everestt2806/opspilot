@@ -100,3 +100,7 @@
 - REVIEW-FIX C02 01 - 11/09/2026: Worker bàn giao `BLOCKED` tại `05848d1` vì C02-R1-01 cần Leader duyệt
   proposal boundary contract/schema trước khi đổi poller/deploy lifecycle hoặc chạy live mutation. Evidence:
   `docs/evidence/tk-a17/c02/review-fix-01.md`; C02-R1-02 `NOT_RUN`, C02-R1-03/04/05 đã ghi nhận; C03-C09 đóng.
+- REVIEW C02 02 - 11/09/2026: Leader review proposal payload `ca0b3fa`, provenance `87fa868` và
+  quyết định `APPROVED_WITH_AMENDMENTS` cho implementation. Bắt buộc activation history table,
+  stream generation, pre-healthcheck cutover sau collector stop/flush và shared per-app lock.
+  `C02-R1-04/05` CLOSED; `R1-03` PARTIAL; `R1-01/02` OPEN. C02 về `ĐANG LÀM`, C03-C09 đóng.

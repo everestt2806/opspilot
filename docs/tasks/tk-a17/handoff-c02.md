@@ -68,3 +68,13 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
   deployment 9. Tổng mutation từ C01 approved là `+2120 metrics/+10600 scores`, không chỉ batch
   cuối `+10/+50`.
 - C02 về `REVIEW_FIX_REQUIRED`; C03–C09 tiếp tục đóng. Không reset/xóa/reassign dữ liệu lịch sử.
+
+## Leader review 02 — proposal decision 11/09/2026
+
+- Reviewed proposal payload `ca0b3fa`, provenance HEAD `87fa868`; decision
+  **APPROVED_WITH_AMENDMENTS** cho implementation tại [review-c02.md](review-c02.md), mục 6.
+- Thay hai cột trên `deployment` bằng migration `002` có lịch sử activation theo runtime episode;
+  bắt buộc stream generation, shared per-app lock và boundary `size+1` sau collector stop/flush,
+  trước runtime cutover/healthcheck.
+- `C02-R1-04/05` CLOSED; `C02-R1-03` PARTIAL; `C02-R1-01/02` OPEN. Handoff `BLOCKED` được gỡ để
+  Worker tiếp tục sửa C02 trên HEAD chứa commit Leader; C02 chưa APPROVED, C03–C09 vẫn đóng.

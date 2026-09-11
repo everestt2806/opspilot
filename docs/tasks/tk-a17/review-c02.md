@@ -130,3 +130,59 @@ C03-C09 vẫn NOT_RUN; không train/score ML, không làm UI/fault/auto-rollback
 app B, không push/PR/merge/subagent. Bàn giao READY_FOR_LOCAL_REVIEW khi đủ mọi gate; nếu contract
 cần quyết định Leader thì bàn giao BLOCKED với proposal và dừng trước implementation/live mutation.
 ```
+
+## 6. Review 02 — quyết định proposal tại `87fa868`
+
+- Proposal payload `ca0b3fa`, provenance HEAD `87fa868`, kế thừa review `05848d1` hợp lệ.
+- Decision: **APPROVED_WITH_AMENDMENTS để triển khai C02**. C02 vẫn `CHANGES_REQUESTED`; C03–C09
+  tiếp tục đóng. Chi tiết quyết định và impact ở
+  [proposal-analysis](../../evidence/tk-a17/c02/review-02/proposal-analysis.md).
+- `C02-R1-04` và `C02-R1-05`: CLOSED. `C02-R1-03`: PARTIAL, vẫn thiếu lịch sử hai lượt chạy với
+  command/runtime/exit, raw output `MISSING` và phép đối soát số học như review-01 yêu cầu.
+- `C02-R1-01`: không còn blocked chờ quyết định; vẫn OPEN cho tới khi implementation, regression và
+  live redeploy/rollback đạt. `C02-R1-02` vẫn OPEN/`NOT_RUN`.
+
+Leader chấp thuận chiến lược byte boundary với các amendment bắt buộc:
+
+1. Dùng migration `002` và bảng append-only `deployment_activation`, mỗi lần runtime hoạt động là
+   một row có stream generation, start inclusive/end exclusive và lifecycle state. Không đặt một cặp
+   `metrics_start_offset/activated_at` duy nhất trên `deployment`; auto rollback tái kích hoạt cùng
+   deployment nhiều lần.
+2. Dùng một per-app async lock chung cho deploy/rollback và monitor. Dừng/flush collector trước khi
+   chụp file identity + `size + 1`; boundary nằm tại runtime cutover trước healthcheck. Metric do
+   candidate sinh trong healthcheck thuộc candidate.
+3. Failed attempt đã chạy giữ activation interval của chính candidate. Auto rollback tạo activation
+   row mới trỏ về previous deployment; manual rollback dùng deployment row mới hiện có.
+4. File identity/generation là bắt buộc. Rotation phải được nhận ra ngay cả khi file mới đã lớn hơn
+   cursor cũ; drain `.1` nếu identity khớp, nếu không thì log/expose data gap thay vì báo lossless.
+5. DB cũ lazy-init từ offset/current deployment hiện có dưới cùng lock. Giữ nguyên toàn bộ historical
+   rows. Prepared activation sau crash phải fail closed trước scheduler, có action log.
+
+### Bàn giao implementation cho Worker
+
+```text
+Tiếp tục sửa duy nhất TK-A17/C02 từ HEAD có commit Leader review 02; không checkout/reset về 87fa868.
+Proposal byte boundary được APPROVED_WITH_AMENDMENTS theo mục 6 của review-c02.md và
+docs/evidence/tk-a17/c02/review-02/proposal-analysis.md. Triển khai đúng persistent model, cutover,
+failure/rollback, rotation và shared-lock contract đã chốt; migration mới là 002, không sửa 001.
+
+Đóng C02-R1-01 bằng regression đầy đủ: v1→v2 migration/lazy legacy, backlog qua hai forward deploy,
+candidate metrics trong healthcheck, fail trước/sau runtime start, manual rollback, auto rollback tái
+kích hoạt cùng deployment, prepared crash fail-closed, scheduler/deploy no-overlap, rotation với file
+mới nhỏ hơn/lớn hơn cursor, retry/dedupe/cardinality/transaction rollback.
+
+Hoàn tất C02-R1-03 bằng lịch sử từng live runner attempt: command/cwd/runtime/exit, before/after còn
+truy xuất được, ghi raw output MISSING nếu không còn, và phép tính 21+2120=2141,
+105+2120*5=10705. Không sửa/xóa/reassign 80 historical rows.
+
+Sau khi local gates đạt, chạy live có kiểm soát chỉ VM02/a17-notes-0911: forward redeploy + manual
+rollback để chứng minh boundary bằng raw JSONL↔SQLite; chạy MonitorService + MonitorScheduler thật
+ít nhất hai tick 30s, concurrent max 1, stop/close sạch và process exit 0. Xác nhận app/DB/collector,
+PostgreSQL marker và app B sau test; phục hồi target A về trạng thái running khỏe mạnh.
+
+Chạy focused deploy/monitor/db/shutdown, collector pytest bằng ml-service/.venv,
+typecheck node/web/scripts, scoped lint/format và build. Cập nhật contract/schema, evidence,
+handoff/board/task/sổ; commit local và bàn giao READY_FOR_LOCAL_REVIEW.
+C03-C09 NOT_RUN; không train/score ML, không làm UI/fault/auto-rollback coordinator, không thao tác
+app B, không push/PR/merge/subagent.
+```

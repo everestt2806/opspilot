@@ -109,3 +109,10 @@ scheduler thật, và hồ sơ phải đối soát tổng mutation `+2120 metric
 ### TK-A17 update - C02 review-fix 01
 
 C02 `BLOCKED`: boundary backlog requires Leader approval of the byte-boundary contract/schema proposal before implementation or live mutation. C02-R1-03/04/05 are documented; C02-R1-02 remains `NOT_RUN`. C03-C09 remain closed.
+
+### TK-A17 update - 11/09 C02 proposal decision
+
+Leader **APPROVED_WITH_AMENDMENTS** chiến lược byte boundary tại `87fa868`: bắt buộc dùng lịch sử
+`deployment_activation`, file generation và cutover sau stop/flush collector trước healthcheck.
+C02 được gỡ blocker để tiếp tục implementation, trạng thái `ĐANG LÀM`; C02 chưa APPROVED và
+C03-C09 vẫn đóng/`NOT_RUN`.

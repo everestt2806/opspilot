@@ -184,3 +184,6 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   quan sát scheduler thật. Task về ĐANG LÀM; C03–C09 đóng; không push/PR/merge.
 
   - REVIEW-FIX C02 01: Worker dừng trước implementation boundary vì cần Leader duyệt proposal contract/schema byte activation. Handoff `BLOCKED`; dữ liệu 80 rows nhiễm được giữ nguyên; C03-C09 vẫn `NOT_RUN`.
+- REVIEW C02 02 11/09 — Leader **APPROVED_WITH_AMENDMENTS** proposal tại `87fa868`: dùng lịch sử
+  activation theo runtime episode, stream generation và stop/flush collector trước boundary. Gỡ
+  blocker để Worker tiếp tục implementation C02; C02 chưa APPROVED, C03–C09 vẫn đóng.
