@@ -160,6 +160,15 @@ và exit 0; C02 `READY_FOR_LOCAL_REVIEW`. C03-C09 vẫn đóng/`NOT_RUN`, chưa 
 
 ### TK-A17 update - 11/09 C02 review-fix 06
 
+### TK-A17 update - 12/09 C02 review-fix 07
+
+C02 đóng `C02-R7-01...04` và phần còn mở R6-02...05 tại code `cd0c4ae`: reconciliation dùng
+resolved rollback lineage, cycle/missing fail-closed; mixed-invalid rotation giữ valid rows trong
+episode cũ và ghi từng byte range. Local `18/97`, ML `19`, collector `26`, typecheck/lint/Prettier/
+build PASS. Read-only VM02 evidence: deployment 20 `424/2120`, deployment 21 `5/25`, activation
+boundary `[1417093,1541655)` -> `[1541655,EOF)`, giải thích `416+5=421` và `2080+25=2105`.
+C02 `READY_FOR_LOCAL_REVIEW`; C03-C09 đóng/`NOT_RUN`.
+
 C02 đóng `C02-R6-01...05` và phần còn mở R5-02/04/05/06 tại code `61f43df`: owner unknown được
 giữ qua stop/compose/inspect failure, prepared activation có reconciliation thật sau restart, và
 rotated invalid line ghi đúng byte range. Local `18 files/96 tests`, ML `19`, collector `26`,

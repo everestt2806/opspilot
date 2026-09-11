@@ -164,6 +164,11 @@
   static/build PASS. Controlled VM02 deployment 21 restored runtime v16 from v15; scheduler two
   ticks, live mutation +421/+2105, deployment 21 có 5 metric rows. Handoff
   `READY_FOR_LOCAL_REVIEW`; C03-C09 đóng/`NOT_RUN`.
+- REVIEW-FIX C02 07 - 12/09/2026: Worker code `cd0c4ae`, evidence
+  `docs/evidence/tk-a17/c02/review-fix-07.md`; R7-01...04 and R6-02...05 closed. Focused 97/97,
+  ML 19/19, collector 26/26, static/build PASS. Read-only VM02 activation/source/grouped evidence
+  explains `416+5=421` metrics and `2080+25=2105` scores. C02 `READY_FOR_LOCAL_REVIEW`;
+  C03-C09 đóng/`NOT_RUN`.
 - REVIEW C02 07 - 12/09/2026: Leader review code `61f43df`, submitted HEAD `413ec20`:
   **CHANGES_REQUESTED**. Focused 96/96, ML 19/19, collector 26/26 và static/build PASS, nhưng hai
   reviewer regressions 2/2 FAIL: prepared rollback lineage không reconcile và old episode đóng trước
