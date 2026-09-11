@@ -795,3 +795,108 @@ UI/fault, push/PR/merge. Giữ .devflow/, docs/ban-giao-20-08.md, logo.png. Appe
 board/task/sổ với exact base/code/docs HEAD; chỉ bàn giao READY_FOR_LOCAL_REVIEW khi tất cả regression
 và full gates PASS.
 ```
+
+## 12. Review 08 — review-fix tại `2503c12`
+
+### Phạm vi và verdict
+
+- Reviewed base `1b2f150`, code `65d85ac`, submitted HEAD `2503c12`; ancestry hợp lệ.
+- Verdict: **CHANGES_REQUESTED**. C02 tiếp tục `REVIEW_FIX_REQUIRED`; C03–C09 đóng/`NOT_RUN`.
+- `C02-R7-01`, `C02-R7-02` và `C02-R7-04` được đóng: multi-level runtime lineage, mixed-invalid
+  committed EOF và read-only boundary arithmetic đều đạt.
+- Recovery vẫn thiếu hai invariant của `C02-R6-02/R7-03`; reviewer regressions 0/2 PASS dù 98 test
+  hiện hữu và toàn bộ static/build gate đều PASS.
+- Evidence reviewer: [review-08](../../evidence/tk-a17/c02/review-08/). Review chỉ local/read-only;
+  không deploy/rollback, không sửa SQLite/VPS/app B, không ML train/score, push/PR/merge.
+
+### Kiểm chứng độc lập
+
+| Gate | Kết quả reviewer |
+| --- | --- |
+| Exact focused Worker | 18 file, 98/98 PASS |
+| ML service | 19/19 PASS |
+| Collector | 26/26 PASS |
+| Typecheck node/web/scripts, lint, format, build | PASS; renderer 3045 modules |
+| Recovery boundary/atomicity regressions | 0/2 PASS; 2 FAIL |
+| GitNexus | analyze PASS với FTS warning; 17 symbol, 300 affected flow, risk CRITICAL |
+
+### Trạng thái finding trước
+
+| Finding | Review 08 |
+| --- | --- |
+| C02-R7-01 | CLOSED — prepared và active dùng terminal runtime lineage; cycle/missing fail closed |
+| C02-R7-02 | CLOSED — episode cũ kết thúc tại committed EOF; từng invalid range được giữ riêng |
+| C02-R7-03 | PARTIAL — close/reopen + multi-level candidate có; boundary/atomicity/matrix còn thiếu |
+| C02-R7-04 | CLOSED — activation và grouped counts giải thích đủ split `416+5` |
+
+### C02-R8-01 — BLOCKER — reconciliation bỏ qua durable start boundary
+
+- Vị trí: `app/src/main/monitor/service.ts:157-170,206-214`.
+- Query không lấy `start_offset`; `ownerVerified` chỉ kiểm runtime image/state, collector và
+  `snapshot.generation`. Nó không chứng minh source còn đủ bytes tới boundary đã prepare.
+- Regression reviewer: prepared boundary `100`, Docker candidate/running, collector running,
+  generation đúng nhưng snapshot size `20`. Expected giữ `prepared` và pointer cũ; actual episode
+  chuyển `active`.
+- Fix: đọc chính prepared row bên trong app lock, gồm `start_offset`; chỉ activate khi snapshot tồn
+  tại, generation khớp và `snapshot.size + 1 >= start_offset`. Trường hợp missing/short/truncated phải
+  giữ barrier và log action có episode, generation, expected boundary, observed size.
+
+### C02-R8-02 — BLOCKER — activation và current pointer commit tách rời
+
+- Vị trí: `app/src/main/monitor/service.ts:215-221` và `activation.ts:148-168`.
+- `activation.activate()` tự commit transaction trước khi `UPDATE app SET current_deployment_id` chạy.
+  Nếu câu update thứ hai lỗi/crash, activation mới đã active, previous đã closed nhưng app pointer vẫn
+  trỏ deployment cũ; prepared barrier không còn để startup sau retry.
+- Regression reviewer inject SQLite trigger làm pointer update fail. Expected toàn bộ transition rollback;
+  actual prepared không còn `prepared` trong khi pointer vẫn là deployment 1.
+- Fix: bao activation transition và pointer update trong một outer SQLite transaction hoặc tạo repository
+  method duy nhất thực hiện cả hai. Regression phải inject lỗi ở pointer update và chứng minh episode,
+  pointer, offset/generation cùng giữ nguyên; bỏ lỗi và retry phải commit đúng một lần.
+
+### C02-R8-03 — MAJOR — evidence và recovery matrix vẫn chưa khớp code đã commit
+
+- `review-fix-07.md` nói restart regression chạy second tick idempotently, nhưng test tại
+  `service.test.ts:9-47` chỉ gọi `pollAll()` một lần và không assert pointer, ranges hoặc action count.
+- Cycle test không cover missing lineage như tên test; chưa có recovery regression cho previous active
+  cũng là rollback row, wrong image, collector down/missing, short snapshot, SSH reconnect, idempotent
+  retry và deploy mới sau reconcile. Query prepared rows cũng chạy trước app lock rồi chỉ kiểm “có một
+  prepared row”, thay vì đọc lại đúng `prepared_id` dưới lock.
+- Fix: commit production integration matrix. Mỗi case assert exact prepared/active/closed state,
+  `current_deployment_id`, boundary/generation, action log và second tick. Trong lock phải reload đúng
+  episode ID; stale/replaced row phải no-op fail closed.
+
+### Bàn giao review-fix 08 cho Worker
+
+```text
+Tiếp tục sửa duy nhất TK-A17/C02 từ HEAD chứa Leader review 08; không checkout/reset về 65d85ac hoặc
+2503c12. Verdict CHANGES_REQUESTED; C03-C09 vẫn đóng/NOT_RUN.
+
+Đóng C02-R8-01...03 và phần còn mở R7-03/R6-02. Trong reconcilePrepared, danh sách ngoài lock chỉ được
+dùng để lấy app ID; sau khi lấy shared app lock phải reload đúng prepared episode ID cùng deployment,
+generation và start_offset. Nếu row đã đổi/biến mất thì no-op an toàn. Resolve prepared và active runtime
+lineage dưới lock. Candidate chỉ được xác nhận khi Docker image/state, collector running, snapshot
+generation và snapshot size đều chứng minh source đã đạt durable boundary (`size + 1 >= start_offset`).
+Missing/short/truncated snapshot, cycle/missing lineage, wrong image, SSH/inspect timeout hoặc owner không
+xác định phải giữ prepared barrier và ghi action vận hành rõ; không đoán từ current_deployment_id.
+
+Gộp activation state transition và UPDATE app.current_deployment_id trong cùng một SQLite transaction.
+Inject failure tại pointer update để chứng minh previous active + prepared + pointer + stream cursor không
+đổi; bỏ failure và retry phải activate đúng một lần. Second scheduler tick phải idempotent, không tạo thêm
+activation/action giả. Abort prepared khi previous owner được xác minh cũng phải dùng row đã reload dưới
+lock và không được abort một prepared episode mới thay thế stale row.
+
+Commit regression matrix qua production MonitorService/ActivationRepository: exact boundary, boundary-1,
+missing snapshot, generation mismatch, one/multi-level prepared rollback, active owner cũng là rollback
+chain, missing/cycle lineage, candidate/previous/wrong/down owner, collector missing/down, SSH disconnect
+rồi reconnect, close/reopen DB, stale prepared replacement, injected SQLite failure, second tick và deploy
+tiếp sau reconcile. Assert state/ranges/current pointer/action count/dedupe; không claim case chưa commit.
+
+Giữ nguyên fix lineage và mixed-invalid đã đạt. Có thể xóa block legacy resolver đã comment trong
+deploymentRepository.ts khi sửa, nhưng không đổi contract ngoài phạm vi. Chạy exact focused 18 files cùng
+regressions mới, ML service 19, collector 26, node/web/scripts typecheck, scoped lint, Prettier và build.
+
+Không cần live mutation để đóng R8-01...03. Chỉ dùng read-only health nếu cần xác nhận drift; không deploy,
+rollback, reset/xóa/reassign SQLite/PostgreSQL, train/score C03, thao tác app B, push/PR/merge. Giữ nguyên
+.devflow/, docs/ban-giao-20-08.md, logo.png. Append REVIEW-FIX 08 vào evidence/handoff/board/task/sổ với
+exact base/code/docs HEAD. Chỉ bàn giao READY_FOR_LOCAL_REVIEW khi regression mới và full gates đều PASS.
+```

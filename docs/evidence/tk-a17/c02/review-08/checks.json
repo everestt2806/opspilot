@@ -1,0 +1,43 @@
+{
+  "review": "TK-A17/C02 review-08",
+  "date": "2026-09-12",
+  "reviewed_base": "1b2f150",
+  "reviewed_code": "65d85ac",
+  "submitted_head": "2503c12",
+  "scope": "local and read-only evidence review; no live mutation",
+  "checks": [
+    { "name": "ancestry", "result": "PASS" },
+    {
+      "name": "focused app suite",
+      "result": "PASS",
+      "detail": "18 files, 98 tests"
+    },
+    { "name": "ML service", "result": "PASS", "detail": "19 tests" },
+    { "name": "collector", "result": "PASS", "detail": "26 tests" },
+    {
+      "name": "static and build",
+      "result": "PASS",
+      "detail": "node/web/scripts typecheck, scoped lint, Prettier, renderer 3045 modules"
+    },
+    {
+      "name": "reviewer recovery regressions",
+      "command": "pnpm exec vitest run --maxWorkers=1 src/main/monitor/review08.temp.test.ts",
+      "result": "FAIL",
+      "detail": "0/2 passed: short source was activated; activation/pointer state split after injected pointer update failure. Temporary test removed after capture."
+    },
+    {
+      "name": "GitNexus",
+      "result": "PASS_WITH_WARNING",
+      "detail": "index succeeded with FTS unavailable warning; 17 changed symbols, 300 affected flows, critical risk"
+    }
+  ],
+  "worker_live_evidence": {
+    "reviewer_action": "read only",
+    "accepted_for": "R7-04 arithmetic and activation-boundary provenance",
+    "deployment_20": { "metrics": 424, "scores": 2120 },
+    "deployment_21": { "metrics": 5, "scores": 25 },
+    "activation_boundary": 1541655,
+    "mutation_reconciliation": "416+5=421 metrics; 2080+25=2105 scores"
+  },
+  "verdict": "CHANGES_REQUESTED"
+}

@@ -182,3 +182,11 @@ durable reconciliation barrier, committed-byte rotation retry và rollback linea
 Local focused `95/95`, ML `19/19`, collector `26/26`, typecheck/lint/Prettier/build PASS. Live
 VM02 current runtime v16 chọn target runtime v15, rollback deployment `20` healthy; scheduler hai
 tick, max concurrency 1, exit 0. C02 `READY_FOR_LOCAL_REVIEW`; C03-C09 vẫn đóng/`NOT_RUN`.
+
+### TK-A17 update - 12/09 C02 review-08
+
+C02 **CHANGES_REQUESTED** tại code `65d85ac`, submitted HEAD `2503c12`. Lineage resolver,
+mixed-invalid EOF và read-only split 416/5 đạt; focused 98/98, ML 19/19, collector 26/26 và
+static/build PASS. Hai reviewer recovery regression 0/2 PASS: snapshot ngắn hơn durable boundary
+vẫn activate và activation/current pointer không cùng transaction. Mở `C02-R8-01…03`; C02 về
+`REVIEW_FIX_REQUIRED`, C03-C09 tiếp tục đóng/`NOT_RUN`; không chạy live mutation.

@@ -247,3 +247,9 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   static/build PASS; hai regression mới 2/2 FAIL vì rollback lineage resolve raw row tag và episode
   đóng trước valid row sau invalid `.1`. Restart matrix/live boundary split chưa đủ evidence. C02
   `REVIEW_FIX_REQUIRED`; C03-C09 đóng/`NOT_RUN`.
+- REVIEW C02 08 12/09 — [review-c02](tk-a17/review-c02.md): **CHANGES_REQUESTED** tại code
+  `65d85ac`, submitted HEAD `2503c12`. Reviewer xác nhận focused 98/98, ML 19/19, collector 26/26,
+  typecheck/lint/format/build PASS và chấp nhận read-only boundary arithmetic. Hai recovery regression
+  mới 0/2 PASS: source cùng generation nhưng ngắn hơn prepared boundary vẫn activate; lỗi cập nhật
+  current pointer xảy ra sau khi activation đã commit. Mở `C02-R8-01…03`; C02 tiếp tục
+  `REVIEW_FIX_REQUIRED`, C03-C09 đóng/`NOT_RUN`.

@@ -315,3 +315,15 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
   lineage/mixed-invalid regressions 2/2 FAIL. Không chạy live hoặc sửa SQLite/VPS/app B.
 - C02 tiếp tục `REVIEW_FIX_REQUIRED`; C03–C09 đóng/`NOT_RUN`. Evidence:
   `docs/evidence/tk-a17/c02/review-07/`.
+
+## Leader review 08 — 12/09/2026
+
+- Reviewed base `1b2f150`, code `65d85ac`, submitted HEAD `2503c12`; verdict
+  **CHANGES_REQUESTED** tại [review-c02.md](review-c02.md), mục 12.
+- `R7-01/02/04` CLOSED. `R7-03/R6-02` còn mở qua `C02-R8-01…03`: reconciliation chưa kiểm
+  snapshot size đạt durable boundary, activation và current pointer commit tách transaction, và
+  committed recovery matrix/evidence chưa khớp tuyên bố second tick.
+- Reviewer xác nhận focused 98/98, ML 19/19, collector 26/26, static/build PASS; hai regression
+  boundary/atomicity mới 0/2 PASS. Worker live evidence 20/21 được chấp nhận read-only cho R7-04.
+- C02 tiếp tục `REVIEW_FIX_REQUIRED`; C03–C09 đóng/`NOT_RUN`. Evidence:
+  `docs/evidence/tk-a17/c02/review-08/`. Không cần live mutation để đóng review-fix 08.

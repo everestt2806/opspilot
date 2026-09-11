@@ -2,10 +2,10 @@
 
 > C00 APPROVED 11/09: [review](tk-a17/review-c00.md), code `d4ec3be`, docs `23cd248`.
 > C01 APPROVED review-03 11/09: [review](tk-a17/review-c01.md),
-> code `8e42856`, docs `9689ea4`. C02 review-07 đang CHANGES_REQUESTED.
+> code `8e42856`, docs `9689ea4`. C02 review-08 đang CHANGES_REQUESTED.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; C01 đã được Leader approve sau review-fix-02; C02 đang sửa theo review-07.
+- Owner A solo; C01 đã được Leader approve sau review-fix-02; C02 đang sửa theo review-08.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
 - Chặng được approve: C00, C01. C02 `REVIEW_FIX_REQUIRED`; C03–C09 chưa mở.
@@ -16,7 +16,7 @@
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
-| C02   | READY_FOR_LOCAL_REVIEW | code `61f43df` / docs `413ec20` | CHANGES_REQUESTED (review-07) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
+| C02   | READY_FOR_LOCAL_REVIEW | code `65d85ac` / docs `2503c12` | CHANGES_REQUESTED (review-08) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C05   | NOT_STARTED    | —            | PENDING | Chưa có        |
@@ -174,3 +174,8 @@
   reviewer regressions 2/2 FAIL: prepared rollback lineage không reconcile và old episode đóng trước
   valid row sau invalid `.1`. Restart matrix cùng live activation/per-deployment split evidence chưa
   đủ. Mở `C02-R7-01…04`; C02 `REVIEW_FIX_REQUIRED`, C03-C09 đóng/`NOT_RUN`.
+- REVIEW C02 08 - 12/09/2026: Leader review code `65d85ac`, submitted HEAD `2503c12`:
+  **CHANGES_REQUESTED**. Focused 98/98, ML 19/19, collector 26/26 và static/build PASS; lineage,
+  mixed-invalid và live split đã đóng. Hai recovery regression mới 0/2 PASS: source ngắn hơn durable
+  boundary vẫn activate, và pointer-update failure để activation/pointer split state. Mở
+  `C02-R8-01…03`; C02 `REVIEW_FIX_REQUIRED`, C03-C09 đóng/`NOT_RUN`.
