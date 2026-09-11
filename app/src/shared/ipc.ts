@@ -74,6 +74,11 @@ export interface Deployment {
   finished_at: string | null;
 }
 
+export interface RuntimeState {
+  image: string
+  state: string
+}
+
 export interface MetricSample {
   id: number;
   deployment_id: number;
@@ -171,6 +176,7 @@ export interface IpcInvokeMap {
   'app:list':        (vpsId?: number) => IpcResult<App[]>;
   'app:get':         (appId: number) => IpcResult<App>;
   'app:versions':    (appId: number) => IpcResult<Deployment[]>;
+  'app:runtime-inspect': (appId: number) => IpcResult<RuntimeState>;
   'app:rollback':    (appId: number, targetDeploymentId: number) => IpcResult<{ deployment_id: number }>;
   'app:stop':        (appId: number) => IpcResult<void>;
   'app:start':       (appId: number) => IpcResult<void>;

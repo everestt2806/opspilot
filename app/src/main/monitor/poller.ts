@@ -97,20 +97,26 @@ export class MonitorPoller {
       let recovered = false
       let oldEndOffset = offset
       let gapEndOffset = offset
+      let drainFailure = false
       try {
         const rotated = await source.rotated?.()
         const rotatedIdentity = await rotated?.identity?.()
         if (rotated && rotatedIdentity?.generation === storedGeneration) {
+          drainFailure = true
           const rotatedSize = await rotated.size()
           gapEndOffset = rotatedSize + 1
-          oldEndOffset = Math.max(offset, rotatedSize + 1)
-          if (rotatedSize + 1 > offset) {
+          if (offset >= rotatedSize + 1) {
+            oldEndOffset = offset
+            recovered = true
+          } else {
             const drained = await this.pollUnlocked(appId, deploymentId, rotated, onSample)
             oldEndOffset = drained.nextOffset
             recovered = drained.nextOffset >= rotatedSize + 1 && !drained.hadWarnings
           }
+          drainFailure = false
         }
-      } catch {
+      } catch (error) {
+        if (drainFailure) throw error
         recovered = false
       }
       activationRepository.rotate(

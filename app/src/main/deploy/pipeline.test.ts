@@ -40,6 +40,13 @@ interface StubSshOptions {
   containerLogs?: string
   stopCollector?: (call: number) => { code: number; stdout: string; stderr: string }
   metricsFileMissing?: boolean
+  metricSnapshot?: (
+    call: number
+  ) =>
+    | { generation: string; device?: number; inode?: number; size: number }
+    | null
+    | Promise<{ generation: string; device?: number; inode?: number; size: number } | null>
+  runtimeImage?: (appName: string, composeCall: number) => string
 }
 
 let testDirectory: string | null = null
@@ -98,6 +105,7 @@ function createHarness(options: StubSshOptions = {}): void {
   let imagesCall = 0
   let imageRemoveCall = 0
   let stopCollectorCall = 0
+  let snapshotCall = 0
   const lastComposeUpCode = new Map<string, number>()
   sshExec = vi.fn(async (_vpsId: number, command: string) => {
     if (command.includes('free -m')) {
@@ -143,7 +151,10 @@ function createHarness(options: StubSshOptions = {}): void {
             ([, path]) =>
               String(path).endsWith('docker-compose.yml') && String(path).includes(`/${appName}/`)
           )
-        const image = String(compose?.[2] ?? '').match(/image:\s*(\S+)/)?.[1] ?? `${appName}:v1`
+        const image =
+          options.runtimeImage?.(appName, composeUpCall) ??
+          String(compose?.[2] ?? '').match(/image:\s*(\S+)/)?.[1] ??
+          `${appName}:v1`
         return {
           code: 0,
           stdout: `${image}|${(lastComposeUpCode.get(appName) ?? 0) === 0 ? 'running' : 'exited'}\n`,
@@ -199,9 +210,13 @@ function createHarness(options: StubSshOptions = {}): void {
     readFile: readFileMock,
     writeFile: writeFileMock,
     fileSize: vi.fn(async () => 10),
-    metricSnapshot: vi.fn(async () =>
-      options.metricsFileMissing ? null : { generation: '1:1', device: 1, inode: 1, size: 10 }
-    )
+    metricSnapshot: vi.fn(async () => {
+      snapshotCall += 1
+      if (options.metricSnapshot) return options.metricSnapshot(snapshotCall)
+      return options.metricsFileMissing
+        ? null
+        : { generation: '1:1', device: 1, inode: 1, size: 10 }
+    })
   } as unknown as SshManager
 
   events = []
@@ -945,6 +960,81 @@ describe('DeployPipeline', () => {
 
     const next = pipeline.run(deployInput())
     expect((await waitForFinished(next.deploymentId)).status).toBe('running')
+  })
+
+  it('cleanup after cancellation uses an independent signal and verifies collector state', async () => {
+    let releaseSnapshot!: () => void
+    let snapshotEntered!: () => void
+    const entered = new Promise<void>((resolve) => {
+      snapshotEntered = resolve
+    })
+    const blocked = new Promise<void>((resolve) => {
+      releaseSnapshot = resolve
+    })
+    let snapshotCalls = 0
+    createHarness({
+      metricSnapshot: async (call) => {
+        snapshotCalls = call
+        if (call === 2) {
+          snapshotEntered()
+          await blocked
+          throw new Error('snapshot cancelled')
+        }
+        return { generation: '1:1', device: 1, inode: 1, size: 10 }
+      }
+    })
+    const first = pipeline.run(deployInput())
+    expect((await waitForFinished(first.deploymentId)).status).toBe('running')
+
+    const second = pipeline.run(deployInput())
+    await entered
+    expect(snapshotCalls).toBe(2)
+    expect(pipeline.cancel(second.deploymentId)).toBe(true)
+    releaseSnapshot()
+    expect((await waitForFinished(second.deploymentId)).status).toBe('failed')
+
+    const cleanup = sshExec.mock.calls.find(([, command]) =>
+      (command as string).includes('compose start collector')
+    )
+    expect(cleanup).toBeDefined()
+    expect((cleanup?.[2] as { signal: AbortSignal }).signal.aborted).toBe(false)
+    expect(
+      sshExec.mock.calls.some(([, command]) =>
+        (command as string).includes("docker inspect -f '{{json .State}}' 'demo-api-collector'")
+      )
+    ).toBe(true)
+    expect(actionLogRows(second.deploymentId).some((row) => row.status === 'cancelled')).toBe(true)
+  })
+
+  it('keeps a durable prepared barrier when previous restore ownership is unknown', async () => {
+    let composeCalls = 0
+    createHarness({
+      composeUp: (call) => {
+        composeCalls = call
+        return call === 2
+          ? { code: 1, stdout: 'started', stderr: 'candidate failed' }
+          : { code: 0, stdout: 'running', stderr: '' }
+      },
+      runtimeImage: (_appName, call) => (call === 3 ? 'demo-api:wrong' : 'demo-api:v1')
+    })
+    const first = pipeline.run(deployInput())
+    expect((await waitForFinished(first.deploymentId)).status).toBe('running')
+
+    const second = pipeline.run(deployInput())
+    expect((await waitForFinished(second.deploymentId)).status).toBe('failed')
+    expect(composeCalls).toBe(3)
+    expect(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM deployment_activation WHERE state='prepared'")
+        .get()
+    ).toEqual({ count: 1 })
+    expect(
+      database
+        .prepare(
+          "SELECT COUNT(*) AS count FROM action_log WHERE message LIKE '%Prepared activation requires reconciliation%'"
+        )
+        .get()
+    ).toEqual({ count: 1 })
   })
 })
 

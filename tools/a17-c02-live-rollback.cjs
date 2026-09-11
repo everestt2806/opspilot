@@ -18,6 +18,21 @@ function invoke(win, channel, ...args) {
     });
 }
 
+function resolveRuntimeImage(versions, deploymentId) {
+  const byId = new Map(versions.map((item) => [item.id, item]));
+  const seen = new Set();
+  let current = byId.get(deploymentId);
+  while (current?.is_rollback_of != null) {
+    if (seen.has(current.id))
+      throw new Error(`rollback lineage cycle at ${current.id}`);
+    seen.add(current.id);
+    current = byId.get(current.is_rollback_of);
+  }
+  if (!current)
+    throw new Error(`deployment ${deploymentId} missing from lineage`);
+  return current.image_tag;
+}
+
 async function main() {
   app.setName(appName);
   app.setAppPath(join(root, "app"));
@@ -44,8 +59,17 @@ async function main() {
   const currentBefore = versionsBefore.find(
     (item) => item.id === currentBeforeId,
   );
+  const currentRuntimeImage = resolveRuntimeImage(
+    versionsBefore,
+    currentBeforeId,
+  );
   const target = versionsBefore
-    .filter((item) => item.status === "running" && item.id !== currentBeforeId)
+    .filter(
+      (item) =>
+        item.status === "running" &&
+        item.id !== currentBeforeId &&
+        resolveRuntimeImage(versionsBefore, item.id) !== currentRuntimeImage,
+    )
     .sort((left, right) => right.version - left.version)[0];
   if (!target)
     throw new Error(
@@ -54,10 +78,20 @@ async function main() {
   if (
     !currentBefore ||
     target.id === currentBeforeId ||
-    target.image_tag === currentBefore.image_tag
+    resolveRuntimeImage(versionsBefore, target.id) === currentRuntimeImage
   ) {
     throw new Error(
       `rollback target must differ from current: ${JSON.stringify({ currentBefore, target })}`,
+    );
+  }
+  const runtimeBefore = await invoke(win, "app:runtime-inspect", appId);
+  const targetRuntimeImage = resolveRuntimeImage(versionsBefore, target.id);
+  if (
+    runtimeBefore.state !== "running" ||
+    runtimeBefore.image !== currentRuntimeImage
+  ) {
+    throw new Error(
+      `current runtime mismatch: ${JSON.stringify({ currentRuntimeImage, runtimeBefore })}`,
     );
   }
   console.log(
@@ -65,6 +99,9 @@ async function main() {
       type: "C02_ROLLBACK_BEFORE",
       current: currentBefore,
       target,
+      currentRuntimeImage,
+      targetRuntimeImage,
+      runtimeBefore,
     }),
   );
   const started = await invoke(win, "app:rollback", appId, target.id);
@@ -93,6 +130,27 @@ async function main() {
   const current = apps.find((item) => item.id === appId);
   const versions = await invoke(win, "app:versions", appId);
   const after = versions.find((item) => item.id === started.deployment_id);
+  const resolvedAfterImage = resolveRuntimeImage(
+    versions,
+    started.deployment_id,
+  );
+  const runtimeAfter = await invoke(win, "app:runtime-inspect", appId);
+  if (
+    current?.current_deployment_id !== started.deployment_id ||
+    resolvedAfterImage !== targetRuntimeImage ||
+    runtimeAfter.state !== "running" ||
+    runtimeAfter.image !== targetRuntimeImage
+  ) {
+    throw new Error(
+      `rollback runtime mismatch: ${JSON.stringify({
+        current,
+        after,
+        resolvedAfterImage,
+        targetRuntimeImage,
+        runtimeAfter,
+      })}`,
+    );
+  }
   console.log(
     JSON.stringify({
       started,
@@ -100,6 +158,8 @@ async function main() {
       currentBefore,
       target,
       after,
+      resolvedAfterImage,
+      runtimeAfter,
       current,
       versions,
       events,
