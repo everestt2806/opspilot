@@ -45,10 +45,12 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
 - SQLite ML methods remain null where null before; no fake values were filled and no ML claim is made.
 - No push, PR or merge. C03 remains `NOT_RUN`.
 
-## Blocker and handoff
+## REVIEW-FIX 01 and blocker
 
-- Collector pytest could not run because the current Python environment has no `pytest` module. This does not block C02 code evidence because collector code was not changed; reviewer may rerun with the project collector test environment.
-- Handoff: `READY_FOR_LOCAL_REVIEW`.
+- `C02-R1-01` is a contract/schema boundary decision, not a safe local resolver fix. See [`review-fix-01.md`](../../evidence/tk-a17/c02/review-fix-01.md) for the byte-boundary proposal covering deploy, failed attempt, manual/auto rollback, clock skew, rotation/restart, scheduler race and transaction routing.
+- `C02-R1-03/04/05` are documented in this review-fix; `C02-R1-02` is `NOT_RUN` because scheduler live observation would mutate the unapproved boundary state.
+- Collector pytest was unavailable in the prior run because the current Python environment has no `pytest` module; collector code was not changed.
+- Handoff: `BLOCKED` pending Leader approval. No schema change, live redeploy/rollback, reset, reassignment, push, PR or merge was performed.
 
 ## Leader review 01 — 11/09/2026
 

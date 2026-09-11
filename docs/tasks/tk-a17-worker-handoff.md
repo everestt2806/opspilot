@@ -96,3 +96,7 @@
   `0967fb9`, docs `8e08f76`. Mở `C02-R1-01…05`: boundary backlog là BLOCKER; scheduler live và
   đối soát toàn mutation là MAJOR; ML crash-window/provenance là MINOR. Reviewer xác nhận nền
   71/71, collector 26/26, static/build PASS; C03-C09 tiếp tục đóng.
+
+- REVIEW-FIX C02 01 - 11/09/2026: Worker bàn giao `BLOCKED` tại `05848d1` vì C02-R1-01 cần Leader duyệt
+  proposal boundary contract/schema trước khi đổi poller/deploy lifecycle hoặc chạy live mutation. Evidence:
+  `docs/evidence/tk-a17/c02/review-fix-01.md`; C02-R1-02 `NOT_RUN`, C02-R1-03/04/05 đã ghi nhận; C03-C09 đóng.

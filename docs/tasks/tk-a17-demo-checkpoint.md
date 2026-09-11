@@ -182,3 +182,5 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   regression boundary 1/1 FAIL. SQLite read-only có 80 rows seq `22..101` trước activation v9 bị
   gán vào deployment 9; tổng mutation C02 thực tế là `+2120 metrics/+10600 scores`. C02-T5 chưa
   quan sát scheduler thật. Task về ĐANG LÀM; C03–C09 đóng; không push/PR/merge.
+
+  - REVIEW-FIX C02 01: Worker dừng trước implementation boundary vì cần Leader duyệt proposal contract/schema byte activation. Handoff `BLOCKED`; dữ liệu 80 rows nhiễm được giữ nguyên; C03-C09 vẫn `NOT_RUN`.

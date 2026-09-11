@@ -105,3 +105,7 @@ C02 **CHANGES_REQUESTED** tại code `0967fb9`, docs `8e08f76`: poller gán 80 r
 deployment 9 bắt đầu vào deployment 9; regression reviewer 1/1 FAIL. C02-T5 cũng chưa quan sát
 scheduler thật, và hồ sơ phải đối soát tổng mutation `+2120 metrics/+10600 scores`. Task về
 `ĐANG LÀM`; C03-C09 tiếp tục đóng/`NOT_RUN`.
+
+### TK-A17 update - C02 review-fix 01
+
+C02 `BLOCKED`: boundary backlog requires Leader approval of the byte-boundary contract/schema proposal before implementation or live mutation. C02-R1-03/04/05 are documented; C02-R1-02 remains `NOT_RUN`. C03-C09 remain closed.
