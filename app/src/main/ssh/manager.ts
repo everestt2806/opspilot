@@ -192,6 +192,19 @@ export class SshManager extends EventEmitter {
     return parsed
   }
 
+  async fileIdentity(
+    vpsId: number,
+    remotePath: string
+  ): Promise<{ generation: string; device?: number; inode?: number }> {
+    const result = await this.exec(vpsId, `stat -c '%d:%i' ${shellQuote(remotePath)}`)
+    const generation = result.stdout.trim()
+    if (!/^\d+:\d+$/.test(generation)) {
+      throw new AppError('UNKNOWN', 'KhÃ´ng Ä‘á»c Ä‘Æ°á»£c identity file metrics trÃªn VPS.')
+    }
+    const [device, inode] = generation.split(':').map(Number)
+    return { generation, device, inode }
+  }
+
   async disconnect(vpsId: number): Promise<void> {
     const entry = this.entries.get(vpsId)
     if (!entry) {

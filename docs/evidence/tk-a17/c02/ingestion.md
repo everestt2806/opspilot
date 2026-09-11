@@ -64,3 +64,90 @@ The null ML fields are reported as null; C02 makes no ML train/score claim. Exis
 - App deployment 9, PostgreSQL and collector were not modified by this worker; no app B action was performed.
 - ML service/model, UI, faults, rollback policy and C03 remain NOT_RUN.
 - Collector/VM live status is inherited from the approved C01 VM02 manifest; C02 live verification only read the metric source and used it for ingestion.
+
+## Review-fix 02 evidence
+
+### Historical runner attempts and arithmetic
+
+The two live runner attempts are recorded as separate audit entries; SQLite was not reset,
+deleted, or reassigned.
+
+| Attempt | Command / cwd / runtime | Before | After | Exit | Raw output |
+| --- | --- | --- | --- | ---: | --- |
+| A | `pnpm exec electron ..\\tools\\a17-c02-live.cjs`, `app`, Node v24.16.0/Electron 39.2.6 | offset 6152; 21 metrics; 105 scores | Not recoverable as a separate snapshot | 1 (helper assertion/hang cleanup) | `MISSING` |
+| B | `pnpm exec tsc -p tsconfig.scripts.json`; `node scripts/prepare-cli.js`; `pnpm exec electron .out-scripts/scripts/a17-c02-live.js`, `app`, Node v24.16.0/Electron 39.2.6 | offset 624525; 2131 metrics; 10655 scores | offset 627450; 2141 metrics; 10705 scores | 0 | Recorded in this file and runner output |
+
+The historical reconciliation is `21+2120=2141` metrics and `105+2120*5=10705`
+scores. The first attempt's raw output is unavailable and is intentionally not reconstructed.
+The 80 historical rows remain unchanged for audit.
+
+### Forward deploy, manual rollback, and activation proof
+
+Commands were run from `app` against only VM02 / app `1` / `a17-notes-0911`; no app B
+operation was performed.
+
+```text
+pnpm exec electron ..\\tools\\a17-c01-live.cjs
+exit: 0; forward healthchecks passed; PostgreSQL marker 1004 -> 1005
+
+pnpm exec electron ..\\tools\\a17-c02-live-rollback.cjs
+exit: 0; manual rollback completed; current deployment 14 was healthy
+```
+
+The interrupted first rollback helper left deployment `13` in `building`; it is not current
+and was not deleted, reset, or reassigned. Current target was restored healthy on deployment
+`14`.
+
+Persistent activation ranges read from SQLite after the controlled runs:
+
+```text
+deployment 9:  [627450,975570)
+deployment 10: [975570,976462)
+deployment 11: [976462,980273)
+deployment 12: [980273,997293)
+deployment 14: [997293,open)
+```
+
+Sequence ranges by deployment were `9: 22..3327 (3306 rows)`,
+`10: 3328..3330 (3 rows)`, `11: 3331..3343 (13 rows)`, and
+`12: 3344..3381 (38 rows)`. Duplicate `(deployment_id, seq)` groups remained `0`.
+
+### Real scheduler and final live state
+
+The live command compiled and prepared the script, then ran the production
+`MonitorService` and `MonitorScheduler`:
+
+```text
+pnpm exec tsc -p tsconfig.scripts.json
+node scripts/prepare-cli.js
+pnpm exec electron .out-scripts/scripts/a17-c02-live.js
+cwd: app
+exit: 0
+```
+
+Before the live scheduler run: `2141` metrics, `10705` scores, offset `627450`.
+After ingestion/retry/reconnect: `3378` metrics, `16890` scores, offset `990547`.
+Two real 30-second scheduler ticks completed: tick 1 inserted `0`, tick 2 inserted `3`,
+final counts were `3381` metrics and `16905` scores at offset `991422`. `max_concurrent=1`
+and `active_after_stop=false`; service/scheduler stopped and closed cleanly with process exit `0`.
+
+Final read-only VM02 verification:
+
+```text
+A17 app=running restarts=0 health=healthy image=a17-notes-0911:v11
+A17 db=running restarts=0 health=healthy
+A17 collector=running restarts=0
+PostgreSQL records=1005
+App B express-demo-app=running restarts=0
+Latest raw metric seq=3407
+```
+
+### Regression and gate closure
+
+Focused C02 coverage now includes v1->v2 migration/lazy legacy initialization, backlog across
+forward deploys, candidate healthcheck metrics, pre/post-runtime failure, manual and repeated
+auto rollback activation, prepared-crash fail-closed, scheduler/deploy shared-lock no-overlap,
+rotation with a smaller/larger replacement file, retry/dedupe/cardinality and transaction
+rollback. The focused suite passed `82` tests across `18` files. Collector pytest passed
+`19` tests using `ml-service/.venv`; typecheck, scripts typecheck, scoped lint/format and
+build all exited `0`. ML train/score, UI, fault coordinator and C03-C09 remain `NOT_RUN`.

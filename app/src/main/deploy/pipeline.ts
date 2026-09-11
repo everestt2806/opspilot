@@ -28,6 +28,8 @@ import {
   renderDockerfile,
   type ComposeVars
 } from './templates'
+import { withAppLock } from '../monitor/appLock'
+import { ActivationRepository, type ActivationReason } from '../monitor/activation'
 
 const WORK_ROOT = '/opt/opspilot'
 const HEALTHCHECK_ATTEMPTS = 10
@@ -134,6 +136,8 @@ export class DeployPipeline {
   private readonly appRepository: AppRepository
   private readonly deploymentRepository: DeploymentRepository
   private readonly actionLog: ActionLogRepository
+  private readonly activation: ActivationRepository
+  private readonly database: SqliteDatabase
 
   /** Khoá chống 2 pipeline chạy đồng thời trên cùng một app (deploy-events mục 3). */
   private activeByApp = new Map<number, number>()
@@ -141,11 +145,13 @@ export class DeployPipeline {
 
   constructor(deps: { ssh: SshManager; db: SqliteDatabase; emit: (event: DeployEvent) => void }) {
     this.ssh = deps.ssh
+    this.database = deps.db
     this.emit = deps.emit
     this.vpsRepository = new VpsRepository(deps.db)
     this.appRepository = new AppRepository(deps.db)
     this.deploymentRepository = new DeploymentRepository(deps.db)
     this.actionLog = new ActionLogRepository(deps.db)
+    this.activation = new ActivationRepository(deps.db)
   }
 
   /** Khởi động pipeline. Phần setup (detect + tạo bản ghi + khoá) chạy đồng bộ để
@@ -220,7 +226,20 @@ export class DeployPipeline {
     toVersion: number,
     targetDeploymentId: number
   ): Promise<void> {
+    await withAppLock(ctx.app.id, () =>
+      this.executeRollbackLocked(ctx, targetImageTag, toVersion, targetDeploymentId)
+    )
+  }
+
+  private async executeRollbackLocked(
+    ctx: RunContext,
+    targetImageTag: string,
+    toVersion: number,
+    targetDeploymentId: number
+  ): Promise<void> {
+    let preparedActivationId: number | null = null
     try {
+      preparedActivationId = await this.prepareActivation(ctx, 'manual_rollback')
       await this.inStep(ctx, 'DEPLOY', async () => {
         await this.ensureImageAvailable(ctx, targetImageTag)
         await this.restoreComposeTo(ctx.app, targetImageTag)
@@ -242,6 +261,8 @@ export class DeployPipeline {
         this.log(ctx, 'DEPLOY', `App đã chạy lại với ảnh v${toVersion}.\n`, 'stdout')
       })
 
+      this.activatePrepared(ctx, preparedActivationId)
+      preparedActivationId = null
       await this.inStep(ctx, 'HEALTHCHECK', async () => {
         const ok = await this.waitForHealthcheck(ctx.app, ctx.signal)
         this.log(
@@ -261,6 +282,7 @@ export class DeployPipeline {
 
       await this.recordManualRollbackSuccess(ctx, targetImageTag, targetDeploymentId)
     } catch (error) {
+      if (preparedActivationId !== null) this.activation.abort(preparedActivationId)
       await this.recordFailure(ctx, error)
       try {
         const ipcError = toStepIpcError(error)
@@ -326,6 +348,52 @@ export class DeployPipeline {
     }
     controller.abort()
     return true
+  }
+
+  private async prepareActivation(
+    ctx: RunContext,
+    reason: Exclude<ActivationReason, 'legacy' | 'rotation'>
+  ): Promise<number> {
+    return this.prepareActivationFor(ctx, ctx.deployment.id, reason)
+  }
+
+  private async prepareReactivation(
+    ctx: RunContext,
+    deploymentId: number,
+    reason: Exclude<ActivationReason, 'legacy' | 'rotation'>
+  ): Promise<number> {
+    return this.prepareActivationFor(ctx, deploymentId, reason)
+  }
+
+  private async prepareActivationFor(
+    ctx: RunContext,
+    deploymentId: number,
+    reason: Exclude<ActivationReason, 'legacy' | 'rotation'>
+  ): Promise<number> {
+    const metricsPath = posixJoin(WORK_ROOT, ctx.app.name, 'metrics', 'metrics.jsonl')
+    const fileSize = await this.ssh.fileSize(ctx.app.vps_id, metricsPath)
+    const fileIdentity = await ((
+      this.ssh as SshManager & { fileIdentity?: SshManager['fileIdentity'] }
+    ).fileIdentity?.(ctx.app.vps_id, metricsPath) ?? Promise.resolve({ generation: 'legacy' }))
+    const offset = (
+      this.database.prepare('SELECT metrics_offset FROM app WHERE id=?').get(ctx.app.id) as {
+        metrics_offset: number
+      }
+    ).metrics_offset
+    this.activation.ensureLegacy(
+      ctx.app.id,
+      ctx.app.current_deployment_id ?? ctx.deployment.id,
+      offset,
+      fileIdentity
+    )
+    return this.activation.prepare(ctx.app.id, deploymentId, fileIdentity, fileSize + 1, reason)
+  }
+
+  private activatePrepared(ctx: RunContext, activationId: number | null): void {
+    if (activationId === null)
+      throw new AppError('UNKNOWN', 'Thiáº¿u activation boundary Ä‘Ã£ chuáº©n bá»‹.')
+    const previous = this.activation.active(ctx.app.id)
+    this.activation.activate(activationId, previous?.id ?? null)
   }
 
   // ── Setup (đồng bộ, chạy trước mọi event) ─────────────────────────────────────
@@ -416,15 +484,23 @@ export class DeployPipeline {
   // ── Vòng đời các bước ─────────────────────────────────────────────────────────
 
   private async execute(ctx: RunContext): Promise<void> {
+    await withAppLock(ctx.app.id, () => this.executeLocked(ctx))
+  }
+
+  private async executeLocked(ctx: RunContext): Promise<void> {
     let finalStatus: FinalStatus = 'failed'
     const logStream = this.openLogStream(ctx.deployment.id)
+    let preparedActivationId: number | null = null
 
     try {
       await this.stepPrecheck(ctx)
       await this.stepUpload(ctx)
       await this.stepRender(ctx)
       await this.stepBuild(ctx)
+      preparedActivationId = await this.prepareActivation(ctx, 'deploy')
       await this.stepDeploy(ctx)
+      this.activatePrepared(ctx, preparedActivationId)
+      preparedActivationId = null
       const healthOk = await this.stepHealthcheck(ctx)
 
       if (healthOk) {
@@ -434,6 +510,7 @@ export class DeployPipeline {
         finalStatus = await this.handleHealthcheckFail(ctx)
       }
     } catch (error) {
+      if (preparedActivationId !== null) this.activation.abort(preparedActivationId)
       await this.recordFailure(ctx, error)
       finalStatus = 'failed'
     } finally {
@@ -931,8 +1008,10 @@ export class DeployPipeline {
       return 'failed'
     }
     const previousImageTag = this.deploymentRepository.runtimeImageTag(previous.id)
+    let rollbackActivationId: number | null = null
 
     try {
+      rollbackActivationId = await this.prepareReactivation(ctx, previous.id, 'auto_rollback')
       await this.inStep(ctx, 'DEPLOY', async () => {
         this.log(
           ctx,
@@ -958,6 +1037,8 @@ export class DeployPipeline {
           )
         }
         await this.waitContainerRunning(ctx)
+        this.activatePrepared(ctx, rollbackActivationId)
+        rollbackActivationId = null
         const healthOk = await this.waitForHealthcheck(ctx.app, ctx.signal)
         this.log(
           ctx,
@@ -977,6 +1058,7 @@ export class DeployPipeline {
       })
       await this.pruneImages(ctx, null, [previousImageTag])
     } catch (error) {
+      if (rollbackActivationId !== null) this.activation.abort(rollbackActivationId)
       const ipcError = toStepIpcError(error)
       this.finalizeFailed(ctx)
       try {

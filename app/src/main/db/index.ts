@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import Database from 'better-sqlite3'
 
 import migration001 from './migrations/001_init.sql?raw'
+import migration002 from './migrations/002_metric_activation.sql?raw'
 
 interface Migration {
   name: string
@@ -16,6 +17,11 @@ const migrations: Migration[] = [
     name: '001_init.sql',
     version: 1,
     sql: migration001
+  },
+  {
+    name: '002_metric_activation.sql',
+    version: 2,
+    sql: migration002
   }
 ]
 

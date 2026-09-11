@@ -28,8 +28,8 @@ describe('initializeDatabase', () => {
       .prepare('SELECT MAX(version) AS version FROM schema_version')
       .get() as { version: number }
 
-    expect(tables).toHaveLength(11)
-    expect(schemaVersion.version).toBe(1)
+    expect(tables).toHaveLength(12)
+    expect(schemaVersion.version).toBe(2)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })

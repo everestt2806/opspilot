@@ -5,16 +5,19 @@ import { loadSecret } from '../src/main/crypto/credentials'
 import { closeDatabase, initializeDatabase } from '../src/main/db'
 import { VpsRepository } from '../src/main/db/vpsRepository'
 import { MonitorPoller } from '../src/main/monitor/poller'
+import { MonitorScheduler } from '../src/main/monitor/scheduler'
+import { MonitorService } from '../src/main/monitor/service'
 import { SshMetricSource, type MetricSource } from '../src/main/monitor/metricSource'
 import { SshManager } from '../src/main/ssh/manager'
 
 const VPS_ID = 2
 const APP_ID = 1
-const DEPLOYMENT_ID = 9
+const DEPLOYMENT_ID = 12
 const APP_NAME = 'a17-notes-0911'
 const METRICS_PATH = `/opt/opspilot/${APP_NAME}/metrics/metrics.jsonl`
 
 type Counts = { metrics: number; scores: number; offset: number; deploymentRows: number }
+type SchedulerTick = { start: string; end: string; insertedMetrics: number; offset: number }
 
 function counts(database: ReturnType<typeof initializeDatabase>): Counts {
   const appRow = database.prepare('SELECT metrics_offset FROM app WHERE id=?').get(APP_ID) as {
@@ -63,11 +66,13 @@ async function run(): Promise<void> {
     const before = counts(database)
     const source = new SshMetricSource(ssh, VPS_ID, METRICS_PATH)
     const poller = new MonitorPoller(database)
+    const sourceIdentity = await source.identity?.()
     const first = await poller.poll(APP_ID, DEPLOYMENT_ID, source)
     const afterFirst = counts(database)
     const frozen: MetricSource = {
       size: async () => afterFirst.offset - 1,
-      tail: async () => ''
+      tail: async () => '',
+      identity: async () => sourceIdentity ?? { generation: 'legacy' }
     }
     const retry = await poller.poll(APP_ID, DEPLOYMENT_ID, frozen)
     const afterRetry = counts(database)
@@ -75,6 +80,36 @@ async function run(): Promise<void> {
     await ssh.disconnect(VPS_ID)
     const reconnect = await poller.poll(APP_ID, DEPLOYMENT_ID, source)
     const afterReconnect = counts(database)
+
+    let concurrent = 0
+    let maxConcurrent = 0
+    const schedulerTicks: SchedulerTick[] = []
+    const service = new MonitorService(database, { autoTrain: false })
+    const scheduler = new MonitorScheduler(async () => {
+      const start = new Date().toISOString()
+      concurrent += 1
+      maxConcurrent = Math.max(maxConcurrent, concurrent)
+      const beforeTick = counts(database)
+      try {
+        await service.pollAll(ssh)
+      } finally {
+        const afterTick = counts(database)
+        schedulerTicks.push({
+          start,
+          end: new Date().toISOString(),
+          insertedMetrics: afterTick.metrics - beforeTick.metrics,
+          offset: afterTick.offset
+        })
+        concurrent -= 1
+      }
+    })
+    scheduler.start()
+    await scheduler.tick()
+    await new Promise((resolve) => setTimeout(resolve, 31_000))
+    await scheduler.stop()
+    if (scheduler.active || concurrent !== 0 || maxConcurrent > 1 || schedulerTicks.length < 2) {
+      throw new Error('C02 scheduler live gate failed')
+    }
 
     const newMetrics = afterFirst.metrics - before.metrics
     const newScores = afterFirst.scores - before.scores
@@ -111,7 +146,12 @@ async function run(): Promise<void> {
         new_scores: newScores,
         score_rows_per_new_metric: newMetrics ? newScores / newMetrics : null,
         duplicate_rows: duplicateRows.n,
-        deployment_counts: deploymentCounts
+        deployment_counts: deploymentCounts,
+        scheduler: {
+          ticks: schedulerTicks,
+          max_concurrent: maxConcurrent,
+          active_after_stop: scheduler.active
+        }
       })
     )
   } finally {
