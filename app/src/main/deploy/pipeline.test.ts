@@ -295,6 +295,28 @@ describe('DeployPipeline', () => {
     }
   })
 
+  it('Express POST-only /items route falls back to healthcheck', () => {
+    const source = mkdtempSync(join(tmpdir(), 'opspilot-express-post-only-'))
+    writeFileSync(join(source, 'package.json'), '{"dependencies":{"express":"4"}}')
+    writeFileSync(join(source, 'server.js'), "app.post('/items', handler)\n")
+    try {
+      expect(resolveCollectorAppPath('express', buildSourceTree(source), '/health')).toBe('/health')
+    } finally {
+      rmSync(source, { recursive: true, force: true })
+    }
+  })
+
+  it('Express item-detail route does not masquerade as collection GET', () => {
+    const source = mkdtempSync(join(tmpdir(), 'opspilot-express-item-detail-'))
+    writeFileSync(join(source, 'package.json'), '{"dependencies":{"express":"4"}}')
+    writeFileSync(join(source, 'server.js'), "app.get('/items/:id', handler)\n")
+    try {
+      expect(resolveCollectorAppPath('express', buildSourceTree(source), '/health')).toBe('/health')
+    } finally {
+      rmSync(source, { recursive: true, force: true })
+    }
+  })
+
   it('deploy moi thanh cong: du 7 buoc, ghi DB, .env ghi im lang', async () => {
     createHarness()
     const { deploymentId } = pipeline.run(deployInput())

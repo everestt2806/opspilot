@@ -59,9 +59,7 @@ export function resolveCollectorAppPath(
   if (framework !== 'express') return healthcheckPath
   const hasItemsRoute = sourceTree.files.some((file) => {
     const content = sourceTree.readText(file) ?? ''
-    return /\.(?:get|post|put|patch|delete|all|use)\s*\(\s*['"`]\/items(?:[/?'"`)]|$)/m.test(
-      content
-    )
+    return /\.get\s*\(\s*['"`]\/items\/?(?:['"`]\s*,|['"`]\s*\))/m.test(content)
   })
   return hasItemsRoute ? '/items?limit=1' : healthcheckPath
 }
