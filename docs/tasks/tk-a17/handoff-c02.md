@@ -208,3 +208,15 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
   recovery/rotation mới đều FAIL. Không chạy live hoặc sửa SQLite/VPS/app B.
 - C02 tiếp tục `REVIEW_FIX_REQUIRED`; C03-C09 đóng/`NOT_RUN`. Evidence:
   `docs/evidence/tk-a17/c02/review-04/`.
+
+## Leader review 05 — 11/09/2026
+
+- Reviewed code `c6c728c`, submitted HEAD `018cb70`; verdict **CHANGES_REQUESTED** tại
+  [review-c02.md](review-c02.md), mục 9.
+- Mở `C02-R5-01…06`: cleanup cancel dùng aborted signal; restore unknown bỏ barrier; matching `.1`
+  đã đọc hết ghi gap giả; lỗi drain đóng qua byte chưa commit; live rollback 19 vẫn dùng cùng runtime
+  image v16; pipeline regression được khai báo nhưng chưa commit.
+- Reviewer xác nhận focused 90/90, ML service 19/19, collector 26/26 và static/build PASS; ba
+  regression recovery/rotation mới đều FAIL. Không chạy live hoặc sửa SQLite/VPS/app B.
+- C02 về `REVIEW_FIX_REQUIRED`; C03–C09 tiếp tục đóng/`NOT_RUN`. Evidence:
+  `docs/evidence/tk-a17/c02/review-05/`.

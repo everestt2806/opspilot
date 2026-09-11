@@ -2,10 +2,10 @@
 
 > C00 APPROVED 11/09: [review](tk-a17/review-c00.md), code `d4ec3be`, docs `23cd248`.
 > C01 APPROVED review-03 11/09: [review](tk-a17/review-c01.md),
-> code `8e42856`, docs `9689ea4`. C02 review-04 đang CHANGES_REQUESTED.
+> code `8e42856`, docs `9689ea4`. C02 review-05 đang CHANGES_REQUESTED.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; C01 đã được Leader approve sau review-fix-02; C02 đang sửa theo review-04.
+- Owner A solo; C01 đã được Leader approve sau review-fix-02; C02 đang sửa theo review-05.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
 - Chặng được approve: C00, C01. C02 `REVIEW_FIX_REQUIRED`; C03–C09 chưa mở.
@@ -16,7 +16,7 @@
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
-| C02   | READY_FOR_LOCAL_REVIEW | code `c6c728c` / docs pending commit | CHANGES_REQUESTED -> fix submitted | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
+| C02   | READY_FOR_LOCAL_REVIEW | code `c6c728c` / docs `018cb70` | CHANGES_REQUESTED (review-05) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C05   | NOT_STARTED    | —            | PENDING | Chưa có        |
@@ -142,3 +142,9 @@
   chọn target `16/v16`, tạo deployment `19`, scheduler hai tick `max_concurrent=1`, exit `0`.
   Handoff C02 `READY_FOR_LOCAL_REVIEW`; submitted docs HEAD được ghi trong handoff sau commit;
   C03-C09 vẫn đóng/`NOT_RUN`, không push/PR/merge.
+- REVIEW C02 05 - 11/09/2026: Leader review code `c6c728c`, submitted HEAD `018cb70`:
+  **CHANGES_REQUESTED**. Local gates Worker đều PASS nhưng ba reviewer regression FAIL: cancel cleanup
+  dùng aborted signal, matching `.1` đã đọc hết ghi gap giả, và lỗi đọc `.1` đóng qua byte chưa commit.
+  Restore unknown chưa giữ reconciliation barrier; rollback 19 so raw row tag nên thực tế v16 -> v16;
+  pipeline coverage được khai báo nhưng chưa commit. Mở `C02-R5-01…06`; C02 về
+  `REVIEW_FIX_REQUIRED`, C03-C09 đóng/`NOT_RUN`.

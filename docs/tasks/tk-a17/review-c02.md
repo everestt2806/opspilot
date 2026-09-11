@@ -433,3 +433,131 @@ dữ liệu lịch sử; không ML train/score, UI/fault, push/PR/merge.
 Append REVIEW-FIX 04 vào evidence/handoff/board/task/sổ với exact code và submitted docs HEAD;
 commit local và bàn giao READY_FOR_LOCAL_REVIEW khi đủ mọi gate.
 ```
+
+## 9. Review 05 — review-fix tại `018cb70`
+
+### Phạm vi và verdict
+
+- Reviewed code `c6c728c`, submitted HEAD `018cb70`, kế thừa Leader review `e80a0f9` hợp lệ.
+- Verdict: **CHANGES_REQUESTED**. C02 về `REVIEW_FIX_REQUIRED`; C03–C09 tiếp tục đóng/`NOT_RUN`.
+- Các nhánh snapshot exception, first-generation và partial tail cơ bản đã tiến bộ, nhưng cleanup khi
+  cancel, restore unknown, hai trạng thái rotation và live rollback khác runtime vẫn chưa đúng.
+- Evidence reviewer: [review-05](../../evidence/tk-a17/c02/review-05/). Review chỉ local/read-only;
+  không deploy/rollback, không sửa SQLite/VPS/app B, không ML train/score, push/PR/merge.
+
+### Kiểm chứng độc lập
+
+| Gate | Kết quả reviewer |
+| --- | --- |
+| Exact focused Worker | 18 file, 90/90 PASS |
+| ML service | 19/19 PASS tại `ml-service` |
+| Collector | 26/26 PASS tại `collector` bằng venv của ML service |
+| Typecheck node/web/scripts, lint, format, build | PASS; renderer 3045 modules |
+| Reviewer recovery/rotation regressions | 3/3 FAIL; 39 existing tests PASS |
+| GitNexus | analyze PASS; 39 symbol đổi, 80 affected process, risk CRITICAL |
+
+### C02-R5-01 — BLOCKER — cleanup khi cancel dùng chính signal đã aborted
+
+- Vị trí: `app/src/main/deploy/pipeline.ts:448-469,739-751`; production behavior tại
+  `app/src/main/ssh/manager.ts:385-420`.
+- `resumeCollector()` truyền `ctx.signal` vào `compose start collector` và lệnh inspect. Khi catch do
+  user cancel, signal này đã aborted; `SshManager` từ chối lệnh cleanup ngay. Collector có thể bị
+  dừng vô hạn dù code có gọi helper.
+- Regression reviewer cancel sau stop nhận warning `error=aborted`; cleanup call mang signal
+  `aborted=true`.
+- Fix: dùng cleanup context/signal riêng có timeout chặt, không bị cancel theo operation; kiểm
+  compose exit và `collector .State.Status=running`. Ghi action có deployment/app/reason nếu cleanup
+  thất bại. Bao phủ forward, manual và auto rollback cancellation sau stop.
+
+### C02-R5-02 — BLOCKER — restore `unknown` vẫn bỏ reconciliation barrier
+
+- Vị trí: `pipeline.ts:595-623,981-1004,1045-1093`.
+- Restore chỉ đặt `runtimeStarted=true` khi candidate/previous đã verify. Nếu previous compose trả 0
+  nhưng wait/image inspect lỗi hoặc không xác định, `restoreStatus='unknown'` nhưng outer catch đi
+  nhánh `runtimeStarted=false`, abort prepared candidate và để episode previous active. Poller tiếp tục
+  dù runtime ownership chưa biết. Check `restoreStatus` hiện nằm trong nhánh đối nghịch và không bảo
+  vệ trường hợp restore vừa được thử.
+- Fix: biểu diễn runtime owner độc lập (`candidate | previous | down | unknown`) và quyết định
+  activation từ owner đã verify. `unknown` phải giữ một prepared/reconciliation barrier bền vững để
+  poller fail closed; restart phải reconcile bằng live image/state trước khi mở polling. Thêm restore
+  nonzero, missing, wrong image, inspect timeout/disconnect và process restart tests cho forward,
+  manual, auto rollback.
+
+### C02-R5-03 — MAJOR — matching `.1` đã đọc hết vẫn ghi data-gap giả
+
+- Vị trí: `app/src/main/monitor/poller.ts:97-123`.
+- Khi `rotatedSize + 1 <= offset`, không còn byte nào cần drain nhưng `recovered` vẫn false. Rotation
+  bình thường vì vậy ghi `ssh_error/failed` data-gap.
+- Regression reviewer poll hết old file rồi rotate với matching `.1`: data-gap count là 1 thay vì 0.
+- Fix: coi `oldCursor >= oldEOF` là recovered, không log loss; assert episode end, generation,
+  offset, seq, 5 score rows và retry dedupe.
+
+### C02-R5-04 — BLOCKER — lỗi đọc `.1` đóng episode qua byte chưa commit
+
+- Vị trí: `poller.ts:97-123`.
+- Code gán `oldEndOffset=rotatedSize+1` trước recursive drain. Nếu `size/tail/DB/onSample` throw,
+  catch giữ EOF này, rotate vẫn chạy và log `range=[EOF,EOF]`. Cursor thật cùng byte chưa đọc bị mất,
+  không thể retry hay audit đúng.
+- Regression reviewer: cursor thật 236, EOF 471; output sai là `cursor=471 range=[471,471]`.
+- Fix: chỉ nhận `nextOffset` từ drain đã commit; trên lỗi giữ cursor cũ và durable pending drain để
+  retry, hoặc ghi chính xác `[oldCursor,oldEOF]` trước khi chuyển generation. Test size/tail throw,
+  invalid complete line, partial UTF-8/JSON, DB rollback, callback throw/crash, retry và new file nhỏ/
+  lớn hơn cursor; assert không mất/trùng, boundary và action đúng.
+
+### C02-R5-05 — BLOCKER — live rollback 19 vẫn dùng cùng runtime image
+
+- Vị trí: `tools/a17-c02-live-rollback.cjs:36-67`; `deploymentRepository.ts:93-115`; evidence
+  `ingestion.md:190-244,291-306`.
+- Helper so raw `Deployment.image_tag`. Deployment 18 là manual rollback của 16: row tag là v18
+  nhưng evidence trước đó xác nhận runtime thật v16. Target 16 cũng resolve runtime v16. Check
+  `v18 != v16` đã qua trên row metadata, nhưng deployment 19 chỉ compose lại v16; đây chưa phải
+  rollback giữa hai runtime version khác nhau.
+- Fix: resolve `runtimeImageTag` theo toàn bộ `is_rollback_of` lineage cho current và target, cấm
+  target có cùng resolved runtime image, đồng thời đọc `.Config.Image|.State.Status` container trước/
+  sau. Chỉ chạy lại live sau khi local gates đạt; chọn/chuẩn bị current và target có runtime image
+  thật sự khác nhau, lưu raw IDs, row tags, resolved tags, inspect, events, exit, activation và health.
+
+### C02-R5-06 — MAJOR — regression đã khai báo không tồn tại trong commit
+
+- `c6c728c` chỉ thêm hai `it()` trong `activation.test.ts`; diff `pipeline.test.ts` chỉ mở rộng harness,
+  không thêm pipeline test. Handoff/evidence lại tuyên bố đã cover snapshot/DB/cancel, restore
+  exit/image/state, candidate retention và manual/auto rollback failure.
+- Fix: commit regression production cho toàn bộ matrix R4/R5; test phải fail trên code trước fix và
+  pass sau fix. Tách rõ ML-service 19 và collector 26; ghi exact command/cwd/runtime/exit/count cùng
+  final code/docs provenance, không gọi coverage chưa commit là PASS.
+
+### Bàn giao review-fix 05 cho Worker
+
+```text
+Tiếp tục sửa duy nhất TK-A17/C02 từ HEAD có commit Leader review 05; không checkout/reset về
+c6c728c hoặc 018cb70. Verdict CHANGES_REQUESTED; C03-C09 vẫn đóng/NOT_RUN.
+
+Đóng C02-R5-01...06 và giữ các invariant R1-R4. Cleanup collector phải dùng signal/timeout riêng
+để vẫn chạy sau cancel, kiểm exit + collector running và ghi failure rõ. Thay boolean rời rạc bằng
+runtime-owner state rõ ràng cho candidate/previous/down/unknown; chỉ activate owner đã verify.
+Restore unknown phải để durable reconciliation barrier, process restart/poller vẫn fail closed cho
+đến khi live image/state được reconcile.
+
+Sửa rotation: matching .1 với cursor >= EOF là recovered không gap; không gán EOF trước khi drain
+commit. Lỗi size/tail/parse/DB/callback/crash phải giữ cursor để retry hoặc log đúng identity và
+[oldCursor,oldEOF] trước switch. Không mất/trùng metric, không route sai deployment, mỗi metric vẫn
+đúng 5 score rows và ML null không bị điền giả.
+
+Sửa helper rollback resolve runtime image qua is_rollback_of lineage, không so raw row image_tag.
+Assert current id, target id, row tags, resolved runtime tags và live Docker .Config.Image/state;
+cấm cùng runtime image. Chỉ sau full local green mới chạy một controlled rollback trên VM02/app A
+với current/target thật sự khác runtime image. Giữ mọi failed attempt raw; xác minh boundary,
+SQLite/raw JSONL, scheduler hai tick, max_concurrent=1, clean shutdown và final app/DB/collector A
+healthy. App B chỉ read-only; không dùng B làm success signal; giữ PostgreSQL/SQLite lịch sử.
+
+Commit production regressions cho snapshot + DB + cancel sau stop; cleanup failure; restore
+nonzero/missing/wrong image/inspect timeout/restart; forward/manual/auto failure; fully consumed,
+complete, partial, invalid, UTF-8 và throwing/crash/retry .1. Chạy exact focused, ML-service 19,
+collector 26, node/web/scripts typecheck, scoped lint, Prettier check và build. Ghi exact
+base/code/docs HEAD, command/cwd/runtime/exit/count, mutation ledger và raw live evidence.
+
+Không sửa app B, không reset/xóa/reassign dữ liệu, không train/score ML C03, không làm UI/fault,
+không push/PR/merge. Giữ nguyên .devflow/, docs/ban-giao-20-08.md và logo.png. Chỉ bàn giao
+READY_FOR_LOCAL_REVIEW khi tất cả finding và regression đã đóng; nếu cần đổi contract/schema ngoài
+amendment đã duyệt thì bàn giao BLOCKED kèm proposal trước implementation/live mutation.
+```
