@@ -153,8 +153,8 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
 - **Outcome:** `READY_FOR_LOCAL_REVIEW`.
 - **Review base:** Leader review-05 HEAD `eaca497`; no checkout/reset to `c6c728c` or `018cb70`.
 - **Code commit:** `37d9e19`.
-- **Docs/evidence:** this handoff and `docs/evidence/tk-a17/c02/ingestion.md`; final docs commit
-  is recorded after this append.
+- **Docs/evidence:** this handoff and `docs/evidence/tk-a17/c02/ingestion.md`; docs append commit
+  `9d336cb` (final provenance pin follows).
 - **Scope:** C02-R5-01...06 closed; R1-R4 invariants retained; C03-C09 remain closed/`NOT_RUN`.
 
 | Requirement | Evidence / result |
