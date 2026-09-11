@@ -1,0 +1,34 @@
+// Temporary reviewer regression. It was removed from the worktree after the run.
+// Added to StubSshOptions:
+metricsFileMissing?: boolean
+
+// Replaced the fileSize stub with:
+fileSize: vi.fn(async (_vpsId: number, remotePath: string) => {
+  if (options.metricsFileMissing && remotePath.endsWith('/metrics/metrics.jsonl')) {
+    throw new Error('ENOENT metrics.jsonl')
+  }
+  return 10
+})
+
+// Added to the DeployPipeline suite:
+it('deploys a new app before the collector has created metrics.jsonl', async () => {
+  createHarness({ metricsFileMissing: true })
+  const { deploymentId } = pipeline.run(deployInput())
+  const finished = await waitForFinished(deploymentId)
+  expect(finished.status).toBe('running')
+})
+
+Result:
+
+FAIL src/main/deploy/pipeline.test.ts > DeployPipeline > deploys a new app before the collector has created metrics.jsonl
+AssertionError: expected 'failed' to be 'running'
+Expected: "running"
+Received: "failed"
+Test Files 1 failed (1)
+Tests 1 failed | 27 skipped (28)
+
+Production path:
+
+- executeLocked calls prepareActivation before stepDeploy.
+- prepareActivationFor calls ssh.fileSize(metrics.jsonl) without an ENOENT/new-app case.
+- The collector which creates metrics.jsonl has not started yet on a first deployment.

@@ -186,3 +186,132 @@ handoff/board/task/sổ; commit local và bàn giao READY_FOR_LOCAL_REVIEW.
 C03-C09 NOT_RUN; không train/score ML, không làm UI/fault/auto-rollback coordinator, không thao tác
 app B, không push/PR/merge/subagent.
 ```
+
+## 7. Review 03 — implementation tại `0e7d207`
+
+### Phạm vi và verdict
+
+- Reviewed code `ce1a9ff`, handoff payload `2c0abb7`, submitted HEAD `0e7d207`; ancestry từ
+  design review `a8cfd34` hợp lệ.
+- Verdict: **CHANGES_REQUESTED**. C02 chưa APPROVED; C03–C09 tiếp tục đóng/`NOT_RUN`.
+- `C02-R1-02/03/04/05` được CLOSED theo live scheduler, audit lịch sử, crash-window và provenance
+  cuối. `C02-R1-01` vẫn OPEN vì implementation chưa đáp ứng đầy đủ contract đã duyệt.
+- Reviewer chỉ chạy local. Không sửa SQLite thật, không thao tác VM02/app B, không deploy/rollback,
+  không ML train/score và không push/PR/merge.
+
+Chi tiết nguồn, regression và kết quả kiểm tra nằm tại
+[review-03](../../evidence/tk-a17/c02/review-03/).
+
+### Kiểm chứng độc lập
+
+| Gate | Kết quả reviewer |
+| --- | --- |
+| Ancestry/diff | PASS; 20 file đổi từ `a8cfd34`, chạm deployment/monitor/SSH/DB |
+| Focused db+monitor+deploy | 17 file, 81/81 PASS |
+| Focused thêm SSH | 19 file, 106/106 PASS |
+| Collector | 26/26 PASS bằng `ml-service/.venv` |
+| Typecheck/lint/format/build | PASS; renderer 3045 modules |
+| Regression app mới | 1/1 FAIL: `metrics.jsonl` chưa tồn tại làm deploy kết thúc `failed` trước lần `compose up` đầu |
+| GitNexus | analyze PASS; diff risk CRITICAL; `prepareActivationFor` CRITICAL, poll/rotation HIGH |
+| Live | Không chạy lại; chỉ đọc evidence Worker, không nhận là evidence reviewer |
+
+Con số `82/82` trên 18 file và collector 19 tests trong handoff không tái tạo được vì handoff không
+ghi exact focused command. Hai scope reviewer nêu trên đều PASS và collector hiện có 26 tests.
+
+### C02-R3-01 — BLOCKER — first deploy fail khi chưa có `metrics.jsonl`
+
+- Vị trí: `app/src/main/deploy/pipeline.ts:368-389,490-504`.
+- Trigger: app mới chưa từng chạy collector. Pipeline chụp `fileSize`/identity trước
+  `docker compose up -d`; file metric chưa được tạo nên SSH trả lỗi.
+- Actual: regression reviewer tạo đúng trạng thái `ENOENT` chỉ cho file metric; finished status là
+  `failed`. Test “deploy mới” hiện tại không thấy lỗi vì stub trả size `10` cho mọi file.
+- Expected/fix: first deploy phải dùng generation/activation khởi tạo an toàn với boundary `1` khi
+  source chưa tồn tại, rồi khởi động candidate/collector và giữ candidate healthcheck metrics cho
+  deployment đầu. Không được nuốt các lỗi source khác thành “file chưa tồn tại”.
+- Regression bắt buộc: app mới không có thư mục/file metric; app mới có file rỗng; lỗi SSH/stat thật;
+  mỗi case phải phân biệt đúng, chứng minh deploy status, activation, offset và metric routing.
+
+### C02-R3-02 — BLOCKER — thiếu stop/flush barrier nên boundary vẫn có race
+
+- Vị trí: `app/src/main/deploy/pipeline.ts:368-389,490-504,997-1058`.
+- Amendment đã duyệt yêu cầu giữ shared per-app lock, dừng/flush collector, chụp identity +
+  `size + 1`, rồi mới cutover runtime. Code chỉ có shared lock và `size + 1`; không có lệnh
+  stop/flush collector. Size và identity còn được đọc bằng hai SSH call rời nhau mà không xác nhận
+  generation ổn định.
+- Trigger: collector cũ append sau lần đọc size nhưng trước `compose up`. Byte cũ nằm sau boundary
+  và bị route cho candidate. Cửa sổ tương tự tồn tại ở manual/auto rollback.
+- Fix bắt buộc: cài barrier đúng contract cho forward deploy và rollback; snapshot identity/size phải
+  nhất quán. Nếu stop/flush hoặc snapshot thất bại, fail closed và không đổi runtime/activation.
+- Regression bắt buộc: collector append đúng trong cửa sổ cũ, identity đổi giữa stat, failure khi
+  stop/flush, cùng các đường forward/manual/auto rollback. Assert raw byte → activation episode →
+  `(deployment_id, seq)` → 5 score rows → offset.
+
+### C02-R3-03 — BLOCKER — rotation không drain `.1`, làm mất unread suffix
+
+- Vị trí: `app/src/main/monitor/poller.ts:68-89` và
+  `app/src/main/monitor/activation.ts:162-186`.
+- Actual: khi generation đổi, code đóng episode cũ ngay tại cursor, reset offset `1`, mở generation
+  mới và luôn log data gap. Không có đường mở `metrics.jsonl.1`, so identity với generation cũ hoặc
+  đọc phần `[old_cursor, old_file_end]`.
+- Expected/fix: nếu `.1` có identity khớp thì drain suffix cũ dưới episode cũ rồi mới mở generation
+  mới; chỉ ghi explicit gap khi `.1` thiếu/không khớp/không đọc được. Gap phải có old/new identity,
+  cursor và lý do đủ để vận hành đối soát.
+- Regression hiện tại không đủ vì đã ingest hết file cũ trước khi thay identity. Bổ sung rotation khi
+  file mới nhỏ hơn và lớn hơn cursor, mỗi case có unread `.1` matching; thêm missing/mismatched `.1`,
+  retry sau crash giữa drain và switch, dedupe/cardinality/offset cho cả hai generation.
+
+### C02-R3-04 — MAJOR — failure sau runtime start làm mất candidate episode
+
+- Vị trí: `app/src/main/deploy/pipeline.ts:495-515,871-887`.
+- Candidate vẫn ở `prepared` trong toàn bộ `stepDeploy`. Nếu `compose up` đã tạo runtime nhưng trả
+  lỗi, hoặc `waitContainerRunning` lỗi sau khi candidate đã ghi metric, outer catch luôn `abort()`
+  prepared row. Previous activation tiếp tục mở, nên candidate bytes có thể bị gán previous.
+- Fix bắt buộc: phân biệt failure trước runtime mutation với failure sau candidate start. Một candidate
+  đã chạy phải giữ interval của chính nó; recovery về previous phải tạo activation mới. Trạng thái DB,
+  runtime và activation phải được reconcile/fail closed khi không xác định chắc chắn.
+- Regression bắt buộc phải đi qua `DeployPipeline`, không gọi repository trực tiếp: pre-runtime fail,
+  compose partial failure, container wait failure sau start, healthcheck fail có/không previous,
+  recovery fail và retry/restart.
+
+### C02-R3-05 — MAJOR — regression/migration evidence chưa chứng minh các claim bắt buộc
+
+- Diff không sửa `pipeline.test.ts`. Ba activation tests mới thao tác repository trực tiếp; chúng
+  không kiểm candidate healthcheck metrics, pre/post-runtime failure, manual rollback, auto rollback
+  hoặc barrier scheduler/deploy theo lifecycle thật như handoff tuyên bố.
+- `index.test.ts` chỉ tạo DB mới rồi đổi expected table count/version. Không có v1→v2 migration từ
+  DB có app/deployment/metric/score/offset lịch sử. `runMigrations()` còn chạy SQL và ghi
+  `schema_version` ngoài một transaction rõ ràng, nên migration dở dang có thể để schema nửa vời và
+  lần khởi động sau lỗi duplicate `ALTER TABLE`.
+- Fix bắt buộc: thêm integration regressions qua pipeline/poller; tạo fixture DB version 1 có dữ liệu
+  rồi upgrade và chứng minh bảo toàn; làm migration + version record atomic, có test rollback/reopen
+  sau lỗi giữa migration. Handoff phải ghi exact command/count có thể chạy lại.
+
+### Bàn giao review-fix 03 cho Worker
+
+```text
+Tiếp tục sửa duy nhất TK-A17/C02 từ HEAD có commit Leader review 03; không checkout/reset về
+ce1a9ff hoặc 0e7d207. Verdict CHANGES_REQUESTED. C03-C09 vẫn đóng/NOT_RUN.
+
+Đóng C02-R3-01…05 và phần còn lại của C02-R1-01. Sửa first deploy khi metrics.jsonl chưa tồn tại;
+triển khai collector stop/flush + stable identity/size snapshot trước mọi forward/manual/auto cutover;
+drain matching metrics.jsonl.1 trước khi chuyển generation, chỉ log gap khi không thể recovery; giữ
+candidate episode nếu runtime đã bắt đầu dù deploy sau đó lỗi; làm migration 002 + schema_version
+atomic và kiểm v1→v2 có dữ liệu lịch sử.
+
+Regression phải đi qua production DeployPipeline/MonitorPoller, không chỉ gọi ActivationRepository:
+new app missing/empty metric file và stat error; old append trong cutover; identity đổi giữa snapshot;
+stop/flush fail; candidate healthcheck; failure trước/sau runtime start; healthcheck fail có/không
+previous; manual/auto rollback lặp; matching/missing/mismatched .1 với file mới nhỏ/lớn cursor; crash
+giữa drain/switch và restart. Mỗi case assert activation intervals, generation, deployment+seq,
+5 score rows, dedupe và offset. Thêm migration fixture v1 thật và partial-migration reopen.
+
+Chạy focused bằng exact command được ghi vào handoff, collector pytest từ ml-service/.venv,
+typecheck node/web/scripts, lint, prettier check và build. Chỉ sau khi local gates đạt mới chạy live
+có kiểm soát trên VM02/a17-notes-0911 để tái chứng minh forward deploy + manual rollback + ít nhất
+hai scheduler tick. Ghi rõ stop/flush, identity/size/boundary, raw JSONL/.1→SQLite và trạng thái cuối.
+Không sửa/xóa/reassign dữ liệu lịch sử; app B chỉ read-only; không ML train/score, UI/fault, push/PR/merge.
+
+Append REVIEW-FIX 03 vào handoff/evidence/board/task/sổ, commit local và bàn giao
+READY_FOR_LOCAL_REVIEW khi toàn bộ gate đạt. Nếu phát hiện cần đổi contract ngoài amendment đã duyệt,
+bàn giao BLOCKED với proposal trước implementation/live mutation.
+```

@@ -2,10 +2,10 @@
 
 > C00 APPROVED 11/09: [review](tk-a17/review-c00.md), code `d4ec3be`, docs `23cd248`.
 > C01 APPROVED review-03 11/09: [review](tk-a17/review-c01.md),
-> code `8e42856`, docs `9689ea4`. C02 review-01 đang CHANGES_REQUESTED.
+> code `8e42856`, docs `9689ea4`. C02 review-03 đang CHANGES_REQUESTED.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; C01 đã được Leader approve sau review-fix-02; C02 đang sửa theo review-01.
+- Owner A solo; C01 đã được Leader approve sau review-fix-02; C02 đang sửa theo review-03.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
 - Chặng được approve: C00, C01. C02 `REVIEW_FIX_REQUIRED`; C03–C09 chưa mở.
@@ -16,7 +16,7 @@
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
-| C02   | READY_FOR_LOCAL_REVIEW | code `ce1a9ff` / docs `2c0abb7` | PENDING REVIEW | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
+| C02   | REVIEW_FIX_REQUIRED | code `ce1a9ff` / submitted `0e7d207` | CHANGES_REQUESTED | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C05   | NOT_STARTED    | —            | PENDING | Chưa có        |
@@ -110,3 +110,9 @@
   forward deploy/manual rollback và hai tick scheduler thật PASS. Handoff C02 là
   `READY_FOR_LOCAL_REVIEW`; code/docs SHA sẽ được chốt ngay sau commit local. C03-C09 vẫn
   `NOT_RUN`, chưa push/PR/merge.
+- REVIEW C02 03 - 11/09/2026: Leader review code `ce1a9ff`, submitted HEAD `0e7d207`:
+  **CHANGES_REQUESTED**. Mở `C02-R3-01…05`; first deploy thiếu `metrics.jsonl` fail độc lập,
+  cutover chưa stop/flush collector, rotation không drain matching `.1`, post-runtime failure có thể
+  bỏ candidate episode, và regression/migration chưa chứng minh contract. Reviewer local focused
+  81/81 và 106/106, collector 26/26, static/build PASS; không chạy live. C02 về
+  `REVIEW_FIX_REQUIRED`; C03-C09 đóng/`NOT_RUN`.

@@ -112,3 +112,15 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
 | C02-R1-03 | Attempt A/B history, `MISSING` raw output and arithmetic reconciliation | `docs/evidence/tk-a17/c02/ingestion.md` | CLOSED |
 | C02-R1-04 | SQLite-vs-ML crash-window limitation documented in contract/evidence | `docs/evidence/tk-a17/c02/ingestion.md` | CLOSED |
 | C02-R1-05 | This append records implementation/docs provenance after commit | `docs/tasks/tk-a17/handoff-c02.md` | CLOSED |
+
+## Leader review 03 — 11/09/2026
+
+- Reviewed code `ce1a9ff`, handoff payload `2c0abb7`, submitted HEAD `0e7d207`; verdict
+  **CHANGES_REQUESTED** tại [review-c02.md](review-c02.md), mục 7.
+- `C02-R1-02/03/04/05` CLOSED; `C02-R1-01` vẫn OPEN. Mở `C02-R3-01…05`: first deploy thiếu
+  `metrics.jsonl` fail, cutover chưa stop/flush, rotation không drain matching `.1`, failure sau
+  runtime start có thể bỏ candidate episode, regression/migration chưa chứng minh contract.
+- Reviewer local: focused 81/81 và 106/106, collector 26/26, typecheck/lint/format/build PASS;
+  regression app mới 1/1 FAIL. Không chạy live, không sửa SQLite/VPS/app B, không push/PR/merge.
+- C02 về `REVIEW_FIX_REQUIRED`; C03-C09 tiếp tục đóng/`NOT_RUN`. Evidence reviewer:
+  `docs/evidence/tk-a17/c02/review-03/`.
