@@ -1,21 +1,21 @@
 # Sổ bàn giao và review — TK-A17
 
 > C00 APPROVED 11/09: [review](tk-a17/review-c00.md), code `d4ec3be`, docs `23cd248`.
-> C01 review-01 CHANGES_REQUESTED 11/09: [review](tk-a17/review-c01.md),
-> code `66cbdab`, docs `f0b73aa`. Worker sửa C01; C02 chưa được mở.
+> C01 review-02 CHANGES_REQUESTED 11/09: [review](tk-a17/review-c01.md),
+> code `0d15eb5`, docs `518644f`. Worker sửa `C01-R2-01`; C02 chưa được mở.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; Worker đã bàn giao C01; Leader yêu cầu sửa tại review-01.
+- Owner A solo; Worker đã bàn giao review-fix-01; Leader yêu cầu một vòng sửa C01 nữa.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
-- Chặng được approve: C00. C01 đang sửa findings; C08 bắt buộc, tách C08A/B/C, đều chưa bắt đầu.
+- Chặng được approve: C00. C01 còn một MAJOR; C08 bắt buộc, tách C08A/B/C, đều chưa bắt đầu.
 
 ## Sổ gate (Leader xác nhận verdict)
 
 | Chặng | Worker outcome | Reviewed SHA | Verdict | Handoff/review |
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
-| C01   | READY_FOR_LOCAL_REVIEW | code `0d15eb5` / docs `dfdc465` | REVIEW_FIX_SUBMITTED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
+| C01   | REVIEW_FIX_REQUIRED | code `0d15eb5` / docs `518644f` | CHANGES_REQUESTED R2 | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
 | C02   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
@@ -79,3 +79,6 @@
 - REVIEW-FIX 01 - 11/09/2026: C01 `C01-R1-01…06` closed at code `0d15eb5`; handoff outcome
   is `READY_FOR_LOCAL_REVIEW`. Evidence is `docs/evidence/tk-a17/c01/review-fix-01.md`.
   The original review SHA remains historical; C02 and later stages remain `NOT_RUN`.
+- REVIEW 02 - 11/09/2026: Leader xác nhận `C01-R1-01/03/04/05/06` đóng; tiếp tục
+  `C01-R1-02` bằng `C01-R2-01` MAJOR. POST-only `/items` và GET `/items/:id` đang bị nhận
+  nhầm là GET collection route. C01 về `REVIEW_FIX_REQUIRED`; C02 tiếp tục đóng.

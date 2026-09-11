@@ -1,5 +1,8 @@
 # Review C01 — CHANGES_REQUESTED
 
+> Verdict mới nhất — review 02, 11/09/2026: code `0d15eb5`, docs `518644f` vẫn
+> **CHANGES_REQUESTED** vì `C01-R2-01` MAJOR. Năm finding còn lại của review 01 đã đóng.
+
 - Reviewer: Leader (Codex/root), 11/09/2026, review 01.
 - Base/review kế thừa: `1b447e4` chứa C00 APPROVED; Worker code HEAD `66cbdab`.
 - Worker docs HEAD được review: `f0b73aa` (sau `c6c8064`, `c10814c`).
@@ -137,3 +140,60 @@ collector vẫn running và seq tăng. Chạy focused tests, collector tests, ty
 theo file đổi; cập nhật board/task/sổ, evidence và commit local. Không push/PR/merge/subagent.
 Bàn giao READY_FOR_LOCAL_REVIEW rồi dừng.
 ```
+
+## 5. Review 02 — review-fix-01
+
+- Reviewed code `0d15eb5`; reviewed docs HEAD `518644f`; base review `7e34b96` là ancestor.
+- Worker giữ đúng scope C01. Diff gồm pipeline/template packaging, startup guard cho helper,
+  regression và hồ sơ; không có C02 implementation, schema, Monitor UI hoặc recovery policy.
+- Verdict: **CHANGES_REQUESTED**. `C01-R1-01/03/04/05/06` CLOSED. `C01-R1-02` chưa đóng
+  hoàn toàn và được tiếp tục bằng `C01-R2-01` bên dưới. C02 tiếp tục đóng.
+
+Reviewer lưu bằng chứng riêng tại
+[review-02](../../evidence/tk-a17/c01/review-02/). GitNexus index tại `518644f` nhận 34 symbol
+đổi, 30 symbol ảnh hưởng và risk CRITICAL. `stepBuild` có risk HIGH; `restoreComposeTo` có
+risk CRITICAL vì đi vào manual/automatic rollback và healthcheck-failure restore. Reviewer
+đọc các caller trực tiếp và chạy regression deploy/restore tương ứng.
+
+| Gate | Kết quả reviewer |
+| --- | --- |
+| Focused deploy + detector + monitor | 13 files, 73/73 PASS trên Node 22.23.2 |
+| Collector | 26/26 PASS |
+| Typecheck/lint/format | Node/web typecheck exit 0; ESLint TS exit 0; Prettier TS/CJS/YAML exit 0 |
+| Build/unpack | electron-vite build exit 0, 3045 renderer modules; electron-builder unpack exit 0; collector artifact khớp SHA-256 source |
+| Helper isolation | Node regression exit 0; SQLite read-only giữ đúng 21 metric/105 score rows và offset 6152 sau v8/v9 |
+| Live VM02 | App v9 + DB healthy; collector running/restart 0; seq 234→236; marker 1004 và hai image v8/v9 còn nguyên; app B vẫn running |
+| Reviewer edge regression | 2/2 FAIL trên code review: POST-only `/items` và GET `/items/:id` đều bị chọn sai thành GET `/items?limit=1` |
+
+### C01-R2-01 — MAJOR — route detector chưa chứng minh GET collection endpoint
+
+- Kế thừa: `C01-R1-02`.
+- Vị trí: `app/src/main/deploy/pipeline.ts:55-64`; regression Worker tại
+  `app/src/main/deploy/pipeline.test.ts:278-294`.
+- Trigger 1: Express app có `POST /items` để ghi dữ liệu và `GET /health`, không có
+  `GET /items`. Trigger 2: app chỉ có `GET /items/:id`, không có collection route.
+- Expected: collector thực hiện GET nên chỉ chọn `/items?limit=1` khi source chứng minh một
+  GET-capable collection route `/items`; hai trường hợp trên phải fallback `/health`.
+- Actual: regex chấp nhận `post|put|patch|delete|use` và chấp nhận dấu `/` sau `items`, nên cả
+  hai fixture đều trả `/items?limit=1`. HTTP 404 sau đó vẫn có thể bị collector ghi như probe
+  không lỗi, đúng rủi ro của finding gốc.
+- Repro reviewer: `route-regression.test.ts.txt`; Vitest 2/2 FAIL tại `0d15eb5`.
+- Fix/regression bắt buộc: giới hạn detector vào method chấp nhận GET và static collection path
+  `/items` (có thể chấp nhận trailing slash nếu có chủ ý). Thêm hai fixture trên vào regression
+  sản phẩm, giữ fixture demo GET `/items` → business path và generic → health. Chạy lại focused,
+  typecheck/lint/format/build. Không cần deploy/marker mới nếu diff chỉ sửa resolver/test; kiểm
+  tra VM02 read-only sau test để bảo đảm collector vẫn running và seq tiếp tục tăng.
+
+Các closure đã xác nhận:
+
+- `C01-R1-01`: `extraResources` + packaged resolver đúng; reviewer tự build unpack và hash
+  `collect.py`/`Dockerfile` khớp source.
+- `C01-R1-03`: pre-existing collector tag được kiểm trước build và không bị cleanup khi build
+  fail; success/restore suite đạt.
+- `C01-R1-04`: reviewer kiểm tra sau helper hơn 20 phút, collector vẫn running và seq tăng.
+- `C01-R1-05`: scheduler/ML bị guard trong C01 helper; SQLite không phát sinh thêm metric/score.
+- `C01-R1-06`: lịch sử submission được giữ, code fix `0d15eb5`, payload docs `dfdc465` và
+  provenance commit `518644f` đối chiếu được.
+
+Worker tiếp tục HEAD chứa commit review 02, chỉ đóng `C01-R2-01`, append REVIEW-FIX 02 và
+bàn giao lại. Không reset SQLite/VPS, không thao tác app B, không mở C02, push, PR hoặc merge.

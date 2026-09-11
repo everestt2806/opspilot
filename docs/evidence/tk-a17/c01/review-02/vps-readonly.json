@@ -1,0 +1,50 @@
+{
+  "target": "deploy@221.121.1.80",
+  "mode": "read-only SSH with strict host key",
+  "checked_utc": "2026-09-11T02:05:39Z through 2026-09-11T02:06:15Z",
+  "app": {
+    "container": "a17-notes-0911-app",
+    "image": "a17-notes-0911:v9",
+    "state": "running",
+    "healthy": true,
+    "restart_count": 0,
+    "port": 30000
+  },
+  "database": {
+    "container": "a17-notes-0911-db",
+    "state": "running",
+    "healthy": true,
+    "restart_count": 0,
+    "records": 1004,
+    "marker_ids": [1001, 1002, 1003, 1004]
+  },
+  "collector": {
+    "container": "a17-notes-0911-collector",
+    "image": "a17-notes-0911:collector",
+    "state": "running",
+    "restart_count": 0,
+    "started_at": "2026-09-11T01:43:54.137063786Z",
+    "compose_app_url": "http://app:3000/items?limit=1",
+    "seq_first_check": 234,
+    "seq_second_check": 236,
+    "first_ts": "2026-09-11T02:05:55Z",
+    "second_ts": "2026-09-11T02:06:15Z"
+  },
+  "images": {
+    "collector": "sha256:184915c90ef86eb729a110cee307b852fccb05d85fe8c6108bc2964dd8d62406",
+    "v8": "sha256:2c579273ff06aa9b9e129145500f5cd5348bbcb53a26681196c684e87721b5ef",
+    "v9": "sha256:94543f95248788b3451c37376e274fc2c3ba8d3f9b02a48308181f78686fd1d8"
+  },
+  "permissions": {
+    ".env": "600",
+    "metrics": "755"
+  },
+  "app_b": {
+    "app_container": "f085b56f8fe0",
+    "collector_container": "e9c40225b3e5",
+    "state": "running",
+    "restart_count": 0
+  },
+  "result": "PASS: live state remains healthy and collector seq advances after helper exit",
+  "command_note": "The first composite command returned exit 1 only because PowerShell added CR to its final tail path after all state reads completed. A corrected single-line SSH command returned exit 0 and observed seq 234 to 236."
+}

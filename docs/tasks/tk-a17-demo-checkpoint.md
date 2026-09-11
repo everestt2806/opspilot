@@ -2,7 +2,7 @@
 
 | Chủ    | Branch plan                | Baseline code | Trạng thái                  |
 | ------ | -------------------------- | ------------- | --------------------------- |
-| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | ĐANG LÀM — sửa review C01   |
+| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | ĐANG LÀM — sửa C01 review-02 |
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
 · [Sổ bàn giao](tk-a17-worker-handoff.md).
@@ -10,7 +10,8 @@ Hướng dẫn thực thi: [Worker playbook](../prompts/tk-a17-worker-playbook.m
 Yêu cầu đầy đủ: [plan mục 7–10](../24-ke-hoach-demo-theo-chang.md#7-ma-trận-đầy-đủ-yêu-cầu-giao-worker).
 Khảo sát: [preflight 11/09](tk-a17/preflight-11-09.md). Trạng thái mới:
 [C00 APPROVED](tk-a17/review-c00.md), code `d4ec3be` / docs `23cd248`.
-[C01 CHANGES_REQUESTED](tk-a17/review-c01.md), code `66cbdab` / docs `f0b73aa`; C02 đóng.
+[C01 CHANGES_REQUESTED review-02](tk-a17/review-c01.md), code `0d15eb5` / docs `518644f`;
+còn `C01-R2-01` MAJOR, C02 đóng.
 Mục tiêu: A trình chiếu **tự phát hiện → tự rollback → xác minh phục hồi**. C08 bắt buộc.
 Không chia theo ngày/giờ công. Thời lượng 10s/30s/baseline/test vẫn giữ theo yêu cầu kỹ thuật.
 
@@ -158,3 +159,8 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   collector/static/build and VM02 evidence are in `tk-a17/handoff-c01.md` and
   `docs/evidence/tk-a17/c01/review-fix-01.md`. Collector remained running after helper exit
   and seq increased; C02-C09 remain `NOT_RUN`; outcome `READY_FOR_LOCAL_REVIEW`.
+- REVIEW 02 11/09 — Leader review code `0d15eb5`, docs `518644f`: packaged artifact, tag
+  cleanup, live collector và helper isolation đạt; independent focused 73/73, collector 26/26,
+  typecheck/lint/format/build/unpack PASS. Mở `C01-R2-01` MAJOR vì POST-only `/items` và
+  GET `/items/:id` đều bị resolver nhận nhầm là GET `/items` collection; reviewer regression
+  2/2 FAIL. C01 tiếp tục ĐANG LÀM, C02–C09 đóng; không push/PR/merge.

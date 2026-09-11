@@ -1,0 +1,82 @@
+{
+  "reviewed_code": "0d15eb5",
+  "reviewed_docs": "518644f",
+  "runtime": "Node 22.23.2",
+  "checks": [
+    {
+      "name": "focused",
+      "cwd": "app",
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 src/main/deploy src/main/detectors src/main/monitor",
+      "exit": 0,
+      "result": "13 files, 73 tests passed",
+      "duration_seconds": 9.18
+    },
+    {
+      "name": "collector",
+      "cwd": "collector",
+      "command": "../ml-service/.venv/Scripts/python.exe -m pytest tests -q",
+      "exit": 0,
+      "result": "26 passed",
+      "duration_seconds": 0.21
+    },
+    {
+      "name": "deploy-only-helper-regression",
+      "cwd": "repo root",
+      "command": "node tools/a17-c01-live-regression.test.cjs",
+      "exit": 0,
+      "result": "C01-R1-05 regression PASS"
+    },
+    {
+      "name": "typecheck-node",
+      "cwd": "app",
+      "command": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json",
+      "exit": 0
+    },
+    {
+      "name": "typecheck-web",
+      "cwd": "app",
+      "command": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.web.json",
+      "exit": 0
+    },
+    {
+      "name": "eslint-typescript",
+      "cwd": "app",
+      "command": "eslint --no-cache src/main/deploy/pipeline.ts src/main/deploy/pipeline.test.ts src/main/index.ts",
+      "exit": 0,
+      "result": "no warnings or errors"
+    },
+    {
+      "name": "prettier",
+      "cwd": "app",
+      "command": "prettier --check electron-builder.yml and changed TS/CJS files",
+      "exit": 0,
+      "result": "All matched files use Prettier code style"
+    },
+    {
+      "name": "electron-vite-build",
+      "cwd": "app",
+      "command": "node node_modules/electron-vite/bin/electron-vite.js build",
+      "exit": 0,
+      "result": "main 42 modules, preload 1 module, renderer 3045 modules",
+      "duration_seconds": 26.71
+    },
+    {
+      "name": "electron-builder-unpacked",
+      "cwd": "app",
+      "command": "node node_modules/electron-builder/cli.js --dir --config electron-builder.yml --config.asar=false --config.npmRebuild=false",
+      "exit": 0,
+      "result": "win-unpacked created with Electron 39.8.10"
+    },
+    {
+      "name": "review-route-regression",
+      "cwd": "app",
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 src/main/deploy/c01-review2.test.ts",
+      "exit": 1,
+      "result": "2/2 failed: POST-only /items and GET /items/:id both incorrectly select GET /items?limit=1"
+    }
+  ],
+  "notes": [
+    "The two CJS files are outside the app ESLint base and produce ignored-file warnings; they passed Prettier and the dedicated Node regression.",
+    "The temporary reviewer Vitest file was removed after its source and result were copied into review evidence."
+  ]
+}

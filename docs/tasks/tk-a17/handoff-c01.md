@@ -97,3 +97,11 @@
 - R01/R02/R06/R07/R17/R19/R20/R21/R22/R23/R24/R25 are mapped by this evidence; downstream
   R04/R05/R08/R09/R10/R11/R12/R13/R14/R15/R16/R18 remain `NOT_RUN`.
 - C02, C03, C04, C05, C06, C07, C08A, C08B, C08C and C09 remain **NOT_RUN** and unopened.
+
+## Leader review 02 — 11/09/2026
+
+- Reviewed review-fix submission: code `0d15eb5`, docs `518644f`.
+- Verdict vẫn **CHANGES_REQUESTED** tại [review-c01.md](review-c01.md).
+- `C01-R1-01/03/04/05/06` CLOSED. `C01-R1-02` tiếp tục bằng `C01-R2-01` MAJOR:
+  resolver phải phân biệt GET collection `/items` với POST-only và `/items/:id`.
+- Worker chỉ sửa `C01-R2-01`, append REVIEW-FIX 02 và bàn giao lại. C02 chưa được mở.

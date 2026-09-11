@@ -14,11 +14,11 @@
 - **B:** không có task chặn demo; A nhận tích hợp B6/B8 trong A17 từ 10/09 theo yêu cầu solo.
   Code B4/B5/B2 đã merge; báo cáo runtime B6 còn ở nhánh riêng, cần tái xác minh.
 - Baseline đã fetch: `origin/main@683bfc6`; PR #25 (A15), #26 (B4/B5), #28 (B2) đã merge.
-- Nhánh Worker `feat/a17-demo-checkpoint` từ plan `ac6d8cd`; kế hoạch 11/09 đang ở vòng sửa C01.
+- Nhánh Worker `feat/a17-demo-checkpoint` từ plan `ac6d8cd`; kế hoạch 11/09 đang ở vòng sửa C01 review-02.
   [Ma trận yêu cầu và quy trình giao việc](../24-ke-hoach-demo-theo-chang.md#7-ma-trận-đầy-đủ-yêu-cầu-giao-worker).
   C00 [APPROVED](tk-a17/review-c00.md): code `d4ec3be`, docs `23cd248`; có kiểm chứng reviewer riêng.
-  C01 [CHANGES_REQUESTED](tk-a17/review-c01.md): code `66cbdab`, docs `f0b73aa`;
-  Worker cần đóng 2 BLOCKER, 3 MAJOR và 1 MINOR trước review lại.
+  C01 [CHANGES_REQUESTED review-02](tk-a17/review-c01.md): code `0d15eb5`, docs `518644f`;
+  năm finding review-01 đã đóng, còn `C01-R2-01` MAJOR về xác minh GET collection route.
 - P0: website ghi chú thật → người dùng thấy chậm → Monitor giải thích/cảnh báo → khôi phục →
   website tốt lại, giữ dữ liệu; có timeline và so sánh trước/sau. A trình chiếu, thầy quan sát.
 - Tiến độ theo C00–C09; C08 bắt buộc, chia C08A policy/C08B coordinator/C08C live, mỗi phần
@@ -29,7 +29,7 @@
 
 | ID     | Task                                                                 | Chủ                   | Hạn      | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                                            |
 | ------ | -------------------------------------------------------------------- | --------------------- | -------- | ---------- | --------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| TK-A17 | Demo trực quan: website → sự cố → khôi phục → đối chiếu dữ liệu      | A                     | C09      | ĐANG LÀM  | `feat/a17-demo-checkpoint`  | `main@683bfc6`              | C01 review-01 CHANGES_REQUESTED; sửa C01, C02 đóng; chưa push/PR |
+| TK-A17 | Demo trực quan: website → sự cố → khôi phục → đối chiếu dữ liệu      | A                     | C09      | ĐANG LÀM  | `feat/a17-demo-checkpoint`  | `main@683bfc6`              | C01 review-02: sửa `C01-R2-01`; C02 đóng; chưa push/PR |
 | TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09    | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                   | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới                             |
 | TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09    | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge               | `fe1da33`; 21/21 theo task B                                                       |
 | TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02      | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                   | Code đã merge; DoD SSH tail tại A17/C02                                            |
@@ -78,3 +78,9 @@
 
 TK-A17 remains `ĐANG LÀM`; C01 findings `C01-R1-01…06` are fixed in code `0d15eb5` and
 handed back as `READY_FOR_LOCAL_REVIEW`. C02-C09 remain closed/`NOT_RUN`; no push/PR/merge.
+
+### TK-A17 update - 11/09 review-02
+
+C01 review-fix được kiểm tại code `0d15eb5`, docs `518644f`. Năm finding review-01 đã đóng;
+`C01-R2-01` MAJOR còn mở vì detector nhận nhầm POST/detail-only `/items` là GET collection
+route. Task tiếp tục `ĐANG LÀM`; C02-C09 đóng; chưa push/PR/merge.
