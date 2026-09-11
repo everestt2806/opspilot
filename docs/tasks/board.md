@@ -146,3 +146,12 @@ FAIL: snapshot fail để collector bị dừng; restore nonzero vẫn mở acti
 generation ghi data-gap giả; matching `.1` partial bị bỏ mất không gap. Retry live 18 chọn chính
 current deployment 16 nên chưa chứng minh rollback. Local 88/88, ML service 19/19, collector 26/26,
 static/build PASS. C02 về `REVIEW_FIX_REQUIRED`; C03-C09 đóng/`NOT_RUN`.
+
+### TK-A17 update - 11/09 C02 review-fix 04
+
+C02 đã đóng `C02-R4-01...06` trên code `c6c728c`: collector resume/fail-closed recovery,
+runtime image/state verification, exact current-deployment rollback target, first-generation
+adoption và committed-byte rotation gap đã có production regressions. Local gates PASS: focused
+18 files/90 tests, ML 19, collector 26, typecheck/lint/Prettier/build. VM02 live rollback
+current `18/v18` -> target `16/v16` -> deployment `19`, scheduler hai tick với max concurrency 1
+và exit 0; C02 `READY_FOR_LOCAL_REVIEW`. C03-C09 vẫn đóng/`NOT_RUN`, chưa push/PR/merge.

@@ -103,6 +103,51 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
 - C02 outcome: `READY_FOR_LOCAL_REVIEW`. C03-C09 remain closed and `NOT_RUN`; no ML train/score,
   UI, fault coordinator, push, PR, merge or app B mutation was performed.
 
+## REVIEW-FIX 04 - 11/09/2026
+
+- **Outcome:** `READY_FOR_LOCAL_REVIEW`.
+- **Scope:** only C02-R4-01...06; C03-C09 remain closed/`NOT_RUN`.
+- **Branch/base:** `feat/a17-demo-checkpoint`, continued from Leader-review HEAD `e80a0f9`; no
+  checkout/reset to `fa72a6e` or `85f4810`.
+- **Code commit:** `c6c728c` (`Fix C02 recovery and rotation state handling`).
+- **Submitted docs HEAD:** to be filled by the documentation commit that contains this append.
+- **Evidence:** [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestion.md).
+
+### C02-T / R mapping
+
+| Item | Evidence / status |
+| --- | --- |
+| C02-T1 | Live `a17-c02-live.js`: 489 new metrics, 2445 scores, exactly 5 scores/metric; PASS |
+| C02-T2 | SQLite before/after offset and counts, transaction/dedupe output; PASS |
+| C02-T3 | 90 focused tests: complete/partial/missing/mismatched rotation, warning/data-gap, first-generation adoption and retry; PASS |
+| C02-T4 | Controlled rollback: current 18/v18 -> target 16/v16 -> deployment 19, activation/runtime image and healthcheck verified; PASS |
+| C02-T5 | Real MonitorService/Scheduler: 2 ticks, `max_concurrent=1`, clean stop, process exit 0; PASS |
+| C02-T6 | ML 19, collector 26, typecheck node/web/scripts, scoped lint, Prettier check and build all exit 0; PASS |
+| C02-R4-01 | Collector resume after post-stop failures and verified collector running; production pipeline regressions; CLOSED |
+| C02-R4-02 | Restore exit/runtime image/state verification and fail-closed activation; production pipeline regressions; CLOSED |
+| C02-R4-03 | Helper exact `current_deployment_id`; target id/image differ, raw before/after attempt; CLOSED |
+| C02-R4-04 | First real generation adoption without false gap; regression and live generation evidence; CLOSED |
+| C02-R4-05 | Committed-byte rotation boundary and explicit identity/cursor/range gap for partial/invalid tails; CLOSED |
+| C02-R4-06 | Exact commands, counts, code/docs provenance and live raw output appended; CLOSED |
+
+### Commands / runtime / exit
+
+- `app`: `pnpm exec vitest run --maxWorkers=1 src/main/db src/main/monitor src/main/deploy src/main/shutdown.test.ts` -> exit 0, 18 files/90 tests.
+- `ml-service`: `..\\ml-service\\.venv\\Scripts\\python.exe -m pytest -q` -> exit 0, 19 passed.
+- `collector`: `..\\ml-service\\.venv\\Scripts\\python.exe -m pytest -q` -> exit 0, 26 passed.
+- `app`: `pnpm typecheck; pnpm exec tsc -p tsconfig.scripts.json`; scoped ESLint; scoped
+  `prettier --check`; `pnpm build` -> all exit 0, renderer 3045 modules.
+- `app`: `pnpm exec tsc -p tsconfig.scripts.json`; `node scripts/prepare-cli.js`; controlled
+  rollback helper and live scheduler runner -> both live processes exit 0.
+
+### Live status / limits
+
+- Target only VM02 / app `1` / `a17-notes-0911`; final A runtime was healthy, app/DB/collector
+  running, healthcheck passed, and deployment `19` was current using restored runtime image v16.
+- PostgreSQL data was preserved; no marker mutation, reset, delete, or historical-row reassignment
+  was performed. App B was not operated; no app B result is used to claim A17 success.
+- ML model training/scoring, UI, fault coordinator and C03-C09 are `NOT_RUN`.
+
 ### REVIEW-FIX 02 gate table
 
 | Finding | Fix / regression | Evidence | Status |

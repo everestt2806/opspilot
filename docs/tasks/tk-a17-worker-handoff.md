@@ -16,7 +16,7 @@
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
-| C02   | REVIEW_FIX_REQUIRED | code `fa72a6e` / submitted `85f4810` | CHANGES_REQUESTED | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
+| C02   | READY_FOR_LOCAL_REVIEW | code `c6c728c` / docs pending commit | CHANGES_REQUESTED -> fix submitted | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C05   | NOT_STARTED    | —            | PENDING | Chưa có        |
@@ -135,3 +135,10 @@
   static/build PASS, nhưng bốn recovery/rotation regressions đều FAIL. Mở `C02-R4-01…06` cho
   collector resume sau snapshot fail, verified restore ownership, valid live rollback target,
   first-generation adoption, partial `.1` và provenance. C02 `REVIEW_FIX_REQUIRED`; C03-C09 đóng.
+
+- REVIEW-FIX C02 04 - 11/09/2026: Worker tiếp tục từ `e80a0f9`, commit code `c6c728c`, đóng
+  `C02-R4-01...06` bằng production recovery/rollback/rotation regressions. Local focused `90/90`,
+  ML `19/19`, collector `26/26`, typecheck/lint/format/build PASS; live VM02 current `18/v18`
+  chọn target `16/v16`, tạo deployment `19`, scheduler hai tick `max_concurrent=1`, exit `0`.
+  Handoff C02 `READY_FOR_LOCAL_REVIEW`; submitted docs HEAD được ghi trong handoff sau commit;
+  C03-C09 vẫn đóng/`NOT_RUN`, không push/PR/merge.

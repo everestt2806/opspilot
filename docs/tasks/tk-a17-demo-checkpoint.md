@@ -2,7 +2,7 @@
 
 | Chủ    | Branch plan                | Baseline code | Trạng thái                  |
 | ------ | -------------------------- | ------------- | --------------------------- |
-| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | ĐANG LÀM — C02 CHANGES_REQUESTED |
+| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | ĐANG LÀM — C02 READY_FOR_LOCAL_REVIEW |
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
 · [Sổ bàn giao](tk-a17-worker-handoff.md).
@@ -209,3 +209,9 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   snapshot fail; restore nonzero vẫn mở previous activation; first generation ghi gap giả; `.1`
   partial bị đánh dấu recovered. Live retry 18 chọn chính current deployment 16 nên rollback chưa
   được chứng minh. C02 `REVIEW_FIX_REQUIRED`; C03-C09 đóng/`NOT_RUN`.
+
+- REVIEW-FIX C02 04 11/09 — Worker đóng `C02-R4-01...06` tại code `c6c728c`: recovery state
+  machine giữ collector running/fail-closed, restore kiểm exit/image/state, helper rollback dùng
+  exact current deployment, first-generation adoption và rotation chỉ commit đến byte đã xử lý.
+  Focused 90 tests, ML 19, collector 26, static/build PASS; VM02 rollback target khác current và
+  scheduler hai tick exit 0. Handoff `READY_FOR_LOCAL_REVIEW`; C03-C09 tiếp tục đóng/`NOT_RUN`.

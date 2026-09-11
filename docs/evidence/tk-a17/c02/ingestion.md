@@ -250,3 +250,65 @@ App B express-demo-app=running restarts=0
 
 C03-C09 remain closed/`NOT_RUN`; no ML train/score, UI, fault coordinator or app B mutation was
 performed.
+
+## REVIEW-FIX 04 - 11/09/2026
+
+This fix was implemented from Leader review-04 at code `e80a0f9` without checkout/reset. The
+submitted code commit is `c6c728c` and the submitted documentation commit is recorded in the
+handoff. C02-R4-01...06 are addressed; C03-C09 remain closed/`NOT_RUN`.
+
+### Local gates
+
+Commands were run from the stated directories with Node `v24.16.0`, pnpm `11.1.0`, Electron
+`39.2.6`, and Python `3.12` from `ml-service/.venv`:
+
+| Command | Exit / result |
+| --- | --- |
+| `pnpm exec vitest run --maxWorkers=1 src/main/db src/main/monitor src/main/deploy src/main/shutdown.test.ts` | 0; 18 files, 90 tests |
+| `..\\ml-service\\.venv\\Scripts\\python.exe -m pytest -q` from `ml-service` | 0; 19 passed |
+| `..\\ml-service\\.venv\\Scripts\\python.exe -m pytest -q` from `collector` | 0; 26 passed |
+| `pnpm typecheck; pnpm exec tsc -p tsconfig.scripts.json` | 0 |
+| scoped `pnpm exec eslint` on changed TypeScript files | 0; no errors |
+| scoped `pnpm exec prettier --check ...` | 0 |
+| `pnpm build` | 0; renderer 3045 modules |
+
+The focused regressions execute `DeployPipeline` and `MonitorPoller` paths. They cover collector
+resume after stop/snapshot/DB/cancel failure, restore exit/image/state validation, candidate
+retention, manual/auto rollback failure, first-generation adoption, and matching `.1` recovery
+through committed bytes. The rotation regression records an explicit identity/cursor/range
+`data-gap` for a partial tail; warnings make a matching drain non-recovered rather than silently
+closing over unprocessed bytes. The live rollback helper now reads exact `app.current_deployment_id`
+and rejects a same-id or same-image target.
+
+### Controlled live evidence
+
+Commands were run from `app` and were limited to VM02 / app `1` / `a17-notes-0911`:
+
+```text
+pnpm exec tsc -p tsconfig.scripts.json
+node scripts/prepare-cli.js
+pnpm exec electron ..\\tools\\a17-c02-live-rollback.cjs
+pnpm exec electron .out-scripts/scripts/a17-c02-live.js
+```
+
+The rollback attempt exited `0`. Before it, the helper reported current deployment `18` with
+image `a17-notes-0911:v18` and target deployment `16` with image `a17-notes-0911:v16`; the target
+therefore differed by both deployment id and image. It created deployment `19` (`is_rollback_of=16`),
+verified compose/runtime state and healthcheck, and the raw event stream showed collector
+stop/flush followed by compose start with runtime image v16. The final app pointer was deployment
+`19`; the previous failed deployment `17` remains historical and was not reset or reassigned.
+
+The real `MonitorService` and `MonitorScheduler` then ran two 30-second ticks and stopped cleanly:
+`max_concurrent=1`, `active_after_stop=false`, process exit `0`. The ingestion boundary was
+`3981 metrics / 19905 scores / offset 1167490` before polling and `4471 metrics / 22355 scores /
+offset 1311442` after reconnect and scheduler ticks. The first poll inserted `489` metrics and
+`2445` scores (`5` per metric); retry inserted `0`, duplicate `(deployment_id,seq)` groups were
+`0`, and the deployment-19 rows were routed through the activation boundary. Raw JSONL source
+identity/size and the SQLite cursor were emitted by the runner output above; no SQLite reset or
+historical-row reassignment occurred.
+
+Final A state was healthy after rollback (HTTP healthcheck passed, app/DB/collector compose
+services running). PostgreSQL was preserved and no marker mutation was performed in this fix;
+app B was not operated and remains outside the target scope (read-only status was not used as a
+success signal for A17). No ML train/score, UI, fault coordinator, push, PR, merge, or app B
+mutation was performed.
