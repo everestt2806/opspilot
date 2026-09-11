@@ -16,7 +16,7 @@
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
-| C02   | REVIEW_FIX_REQUIRED | code `ce1a9ff` / submitted `0e7d207` | CHANGES_REQUESTED | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
+| C02   | READY_FOR_LOCAL_REVIEW | code `fa72a6e` / docs `cb2f5f8` | PENDING REVIEW | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C05   | NOT_STARTED    | —            | PENDING | Chưa có        |
@@ -110,6 +110,13 @@
   forward deploy/manual rollback và hai tick scheduler thật PASS. Handoff C02 là
   `READY_FOR_LOCAL_REVIEW`; code/docs SHA sẽ được chốt ngay sau commit local. C03-C09 vẫn
   `NOT_RUN`, chưa push/PR/merge.
+
+- REVIEW-FIX C02 03 - 11/09/2026: Worker đóng C02-R3-01…05 và phần còn lại C02-R1-01 bằng
+  production DeployPipeline/MonitorPoller regressions, migration fixture v1/partial reopen,
+  collector stop/flush snapshot, `.1` recovery and candidate runtime-failure retention. Focused
+  `88/88`, collector `19/19`, typecheck/lint/format/build PASS; live VM02 forward 15/16,
+  successful rollback 18 after recorded failed attempt 17, and two scheduler ticks PASS.
+  Handoff `READY_FOR_LOCAL_REVIEW`; C03-C09 vẫn `NOT_RUN`, chưa push/PR/merge.
 
 - REVIEW-FIX C02 03 - 11/09/2026: Worker đóng C02-R3-01…05 và phần còn lại C02-R1-01 bằng
   production DeployPipeline/MonitorPoller regressions, migration fixture v1/partial reopen,
