@@ -70,10 +70,18 @@ export class MonitorPoller {
     sampleIds: number[]
     alertIds: number[]
     hadWarnings: boolean
+    warningRanges: Array<{ start: number; end: number }>
   }> {
     const target = this.repository.getTarget(deploymentId)
     if (!target || target.app_id !== appId)
-      return { inserted: 0, nextOffset: 1, sampleIds: [], alertIds: [], hadWarnings: false }
+      return {
+        inserted: 0,
+        nextOffset: 1,
+        sampleIds: [],
+        alertIds: [],
+        hadWarnings: false,
+        warningRanges: []
+      }
     const activationRepository = new ActivationRepository(this.database)
     if (activationRepository.prepared(target.app_id)) {
       activationRepository.logFailClosed(target.app_id)
@@ -97,6 +105,7 @@ export class MonitorPoller {
       let recovered = false
       let oldEndOffset = offset
       let gapEndOffset = offset
+      let warningRanges: Array<{ start: number; end: number }> = []
       let drainFailure = false
       try {
         const rotated = await source.rotated?.()
@@ -111,6 +120,10 @@ export class MonitorPoller {
           } else {
             const drained = await this.pollUnlocked(appId, deploymentId, rotated, onSample)
             oldEndOffset = drained.nextOffset
+            warningRanges = drained.warningRanges
+            const firstWarning = warningRanges[0]
+            oldEndOffset = firstWarning?.start ?? drained.nextOffset
+            gapEndOffset = firstWarning?.end ?? gapEndOffset
             recovered = drained.nextOffset >= rotatedSize + 1 && !drained.hadWarnings
           }
           drainFailure = false
@@ -155,13 +168,26 @@ export class MonitorPoller {
     }
     const committedBytes = completeByteLength(content)
     if (committedBytes === 0)
-      return { inserted: 0, nextOffset: offset, sampleIds: [], alertIds: [], hadWarnings: false }
+      return {
+        inserted: 0,
+        nextOffset: offset,
+        sampleIds: [],
+        alertIds: [],
+        hadWarnings: false,
+        warningRanges: []
+      }
     const completeContent = content.slice(0, content.lastIndexOf('\n') + 1)
     const parsed = parseMetricContent(completeContent)
-    const hadWarnings = parsed.some((item) => Boolean(item.warning))
+    const warningRanges = parsed
+      .filter((item) => Boolean(item.warning))
+      .map((item) => ({ start: offset + item.byteStart, end: offset + item.byteEnd }))
+    const hadWarnings = warningRanges.length > 0
     for (const item of parsed)
       if (item.warning) {
-        logger.warn('monitor', item.warning, { app_id: appId, consumed_bytes: item.byteLength })
+        logger.warn('monitor', item.warning, {
+          app_id: appId,
+          byte_range: [offset + item.byteStart, offset + item.byteEnd]
+        })
         this.repository.logAction(
           'ssh_error',
           'failed',
@@ -275,6 +301,13 @@ export class MonitorPoller {
     })
     commit()
     for (const sampleId of sampleIds) await onSample?.(sampleId)
-    return { inserted, nextOffset: offset + committedBytes, sampleIds, alertIds, hadWarnings }
+    return {
+      inserted,
+      nextOffset: offset + committedBytes,
+      sampleIds,
+      alertIds,
+      hadWarnings,
+      warningRanges
+    }
   }
 }

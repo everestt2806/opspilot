@@ -22,20 +22,32 @@ export interface ParsedMetricLine {
   metric: MetricLine | null
   raw: string
   byteLength: number
+  byteStart: number
+  byteEnd: number
   warning?: string
 }
 
 export function parseMetricContent(content: string): ParsedMetricLine[] {
   const lines = content.split('\n')
   if (lines.at(-1) === '') lines.pop()
+  let byteStart = 0
   return lines.map((raw) => {
     const byteLength = Buffer.byteLength(`${raw}\n`, 'utf8')
+    const start = byteStart
+    byteStart += byteLength
     try {
       const value: unknown = JSON.parse(raw)
       const metric = metricLineSchema.parse(value)
-      return { metric, raw, byteLength }
+      return { metric, raw, byteLength, byteStart: start, byteEnd: start + byteLength }
     } catch {
-      return { metric: null, raw, byteLength, warning: 'Dòng metric JSON không hợp lệ' }
+      return {
+        metric: null,
+        raw,
+        byteLength,
+        byteStart: start,
+        byteEnd: start + byteLength,
+        warning: 'Dòng metric JSON không hợp lệ'
+      }
     }
   })
 }

@@ -10,6 +10,8 @@ import { join as posixJoin } from 'node:path/posix'
 import type { IpcEventMap } from '@shared/ipc'
 import { metricLineSchema } from './metricParser'
 import type { MlApiClient } from './mlApi'
+import { ActivationRepository } from './activation'
+import { withAppLock } from './appLock'
 
 const settingPatchSchema = z
   .object({
@@ -105,6 +107,7 @@ export class MonitorService {
     emit?: (event: IpcEventMap['monitor:tick']) => void,
     mlStatus?: (status: { running: boolean; reason?: string }) => void
   ): Promise<void> {
+    await this.reconcilePrepared(ssh)
     for (const target of this.repository.listTargets()) {
       const poller = new MonitorPoller(this.db, this.repository, undefined, scorer, {
         report: (status) => this.reportMl(target.deployment_id, mlStatus, status, target.app_id)
@@ -143,6 +146,109 @@ export class MonitorService {
           scores: this.repository.listScoresBySampleIds(result.sampleIds),
           new_alerts: this.repository.listAlertsByIds(result.alertIds)
         })
+    }
+  }
+
+  /** Reconcile a prepared cutover after process restart without trusting the DB pointer. */
+  private async reconcilePrepared(ssh: SshManager): Promise<void> {
+    const rows = this.db
+      .prepare(
+        `WITH RECURSIVE lineage(id, image_tag, is_rollback_of, depth) AS (
+           SELECT d.id, d.image_tag, d.is_rollback_of, 0 FROM deployment d
+           UNION ALL SELECT p.id, p.image_tag, p.is_rollback_of, lineage.depth + 1
+           FROM deployment p JOIN lineage ON p.id = lineage.is_rollback_of WHERE lineage.depth < 100
+         )
+         SELECT pa.app_id, pa.id prepared_id, pa.deployment_id, pa.stream_generation,
+                a.vps_id, a.name app_name, d.image_tag,
+                (SELECT image_tag FROM lineage WHERE id=d.id ORDER BY depth DESC LIMIT 1) runtime_image
+         FROM deployment_activation pa
+         JOIN app a ON a.id=pa.app_id
+         JOIN deployment d ON d.id=pa.deployment_id
+         WHERE pa.state='prepared'`
+      )
+      .all() as Array<{
+      app_id: number
+      prepared_id: number
+      deployment_id: number
+      stream_generation: string
+      vps_id: number
+      app_name: string
+      runtime_image: string
+    }>
+
+    for (const row of rows) {
+      await withAppLock(row.app_id, async () => {
+        const activation = new ActivationRepository(this.db)
+        if (!activation.preparedEpisode(row.app_id)) return
+        const metricsPath = `/opt/opspilot/${row.app_name}/metrics/metrics.jsonl`
+        try {
+          const runtime = await ssh.exec(
+            row.vps_id,
+            `docker inspect -f '{{.Config.Image}}|{{.State.Status}}' ${row.app_name}-app`,
+            { timeoutMs: 15_000, retryOnReconnect: true }
+          )
+          const collector = await ssh.exec(
+            row.vps_id,
+            `docker inspect -f '{{.State.Status}}' ${row.app_name}-collector 2>/dev/null || printf 'missing'`,
+            { timeoutMs: 15_000, retryOnReconnect: true }
+          )
+          const snapshot = await ssh.metricSnapshot(row.vps_id, metricsPath)
+          const [image, state] = runtime.stdout.trim().split('|')
+          const ownerVerified =
+            runtime.code === 0 &&
+            image === row.runtime_image &&
+            state === 'running' &&
+            collector.code === 0 &&
+            collector.stdout.trim() === 'running' &&
+            snapshot?.generation === row.stream_generation
+          if (ownerVerified) {
+            const active = activation.active(row.app_id)
+            activation.activate(row.prepared_id, active?.id ?? null)
+            this.repository.logAction(
+              'deploy',
+              'success',
+              `Reconciled prepared activation ${row.prepared_id} after process restart`,
+              row.app_id,
+              row.deployment_id
+            )
+            return
+          }
+          const active = activation.active(row.app_id)
+          const currentImage = active
+            ? (
+                this.db
+                  .prepare('SELECT image_tag FROM deployment WHERE id=?')
+                  .get(active.deploymentId) as { image_tag?: string } | undefined
+              )?.image_tag
+            : undefined
+          if (runtime.code === 0 && state === 'running' && currentImage && image === currentImage) {
+            activation.abort(row.prepared_id)
+            this.repository.logAction(
+              'deploy',
+              'success',
+              `Aborted prepared activation ${row.prepared_id}; verified previous owner`,
+              row.app_id,
+              row.deployment_id
+            )
+          } else {
+            this.repository.logAction(
+              'ssh_error',
+              'failed',
+              `Prepared activation ${row.prepared_id} requires reconciliation; runtime owner unknown`,
+              row.app_id,
+              row.deployment_id
+            )
+          }
+        } catch (error) {
+          this.repository.logAction(
+            'ssh_error',
+            'failed',
+            `Prepared activation ${row.prepared_id} requires reconnect/reconciliation: ${error instanceof Error ? error.message : String(error)}`,
+            row.app_id,
+            row.deployment_id
+          )
+        }
+      })
     }
   }
 

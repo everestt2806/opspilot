@@ -346,5 +346,12 @@ describe('C02 activation episodes', () => {
       db.prepare("SELECT COUNT(*) AS count FROM action_log WHERE message LIKE '%data-gap%'").get()
     ).toEqual({ count: 1 })
     expect(db.prepare('SELECT COUNT(*) AS count FROM score_sample').get()).toEqual({ count: 10 })
+    const gap = db
+      .prepare("SELECT message FROM action_log WHERE message LIKE '%data-gap%'")
+      .get() as { message: string }
+    const invalidStart = Buffer.byteLength(old, 'utf8') + 1
+    const invalidEnd = Buffer.byteLength(invalid, 'utf8') + 1
+    expect(gap.message).toContain(`range=[${invalidStart},${invalidEnd}]`)
+    expect(gap.message).toContain(`cursor=${invalidStart}`)
   })
 })

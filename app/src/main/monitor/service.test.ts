@@ -4,8 +4,46 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { MonitorService } from './service'
 import { closeDatabase, initializeDatabase } from '../db'
+import { ActivationRepository } from './activation'
 
 describe('MonitorService mutations', () => {
+  it('reconciles a prepared activation after restart only with verified runtime and stream owner', async () => {
+    const dir = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-reconcile-'))
+    const db = initializeDatabase(dir)
+    try {
+      db.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('v','127.0.0.1','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'app','express',30000,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'app:v1','running'); UPDATE app SET current_deployment_id=1 WHERE id=1;"
+      )
+      const activation = new ActivationRepository(db)
+      activation.ensureLegacy(1, 1, 1, { generation: '1:1' })
+      const prepared = activation.prepare(1, 1, { generation: '1:1' }, 1, 'deploy')
+      const ssh = {
+        exec: async (_vps: number, command: string) => ({
+          code: 0,
+          stdout: command.includes('collector') ? 'running\n' : 'app:v1|running\n',
+          stderr: ''
+        }),
+        metricSnapshot: async () => ({ generation: '1:1', device: 1, inode: 1, size: 0 }),
+        fileIdentity: async () => ({ generation: '1:1', device: 1, inode: 1 }),
+        fileSize: async () => 0,
+        readFileTail: async () => ({ content: '', nextOffset: 1 })
+      } as never
+
+      await new MonitorService(db).pollAll(ssh)
+
+      expect(
+        db.prepare('SELECT state FROM deployment_activation WHERE id=?').get(prepared)
+      ).toEqual({ state: 'active' })
+      expect(
+        db
+          .prepare("SELECT COUNT(*) AS count FROM deployment_activation WHERE state='prepared'")
+          .get()
+      ).toEqual({ count: 0 })
+    } finally {
+      closeDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
   it('whitelist setting và label null/non-null', () => {
     const db = new Database(':memory:')
     db.exec(

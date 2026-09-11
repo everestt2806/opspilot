@@ -119,6 +119,15 @@ export class ActivationRepository {
     )
   }
 
+  preparedEpisode(appId: number): ActivationEpisode | undefined {
+    const row = this.database
+      .prepare(
+        "SELECT id,app_id,deployment_id,stream_generation,start_offset,end_offset,reason,state FROM deployment_activation WHERE app_id=? AND state='prepared' ORDER BY id LIMIT 1"
+      )
+      .get(appId) as Record<string, unknown> | undefined
+    return row ? this.map(row) : undefined
+  }
+
   prepare(
     appId: number,
     deploymentId: number,

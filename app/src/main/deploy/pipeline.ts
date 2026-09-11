@@ -448,7 +448,8 @@ export class DeployPipeline {
       })
     }
     ctx.collectorState = 'stopped'
-    ctx.runtimeOwner = ctx.app.current_deployment_id === null ? 'down' : 'previous'
+    // Stopping the collector says nothing about which app container owns runtime.
+    ctx.runtimeOwner = 'unknown'
   }
 
   private async resumeCollector(ctx: RunContext): Promise<void> {
@@ -1108,6 +1109,21 @@ export class DeployPipeline {
         if (downResult.code !== 0) {
           ctx.restoreStatus = 'not_restored'
           throw new Error(downResult.stderr.trim() || downResult.stdout.trim())
+        }
+        const inspected = await this.ssh.exec(
+          ctx.app.vps_id,
+          `docker inspect -f '{{.State.Status}}' ${shellQuote(`${ctx.app.name}-app`)} 2>/dev/null || printf 'missing'`,
+          { timeoutMs: 15_000, signal: ctx.signal, retryOnReconnect: true }
+        )
+        const downState = inspected.stdout.trim()
+        let downStatus = downState
+        try {
+          downStatus = String((JSON.parse(downState) as { Status?: string }).Status ?? downState)
+        } catch {
+          // The fallback output is intentionally kept opaque to avoid leaking inspect data.
+        }
+        if (inspected.code !== 0 || !/^(missing|exited|created|dead)$/i.test(downStatus)) {
+          throw new Error(`runtime down state is unknown (${downStatus || 'empty'})`)
         }
         ctx.runtimeOwner = 'down'
         ctx.collectorState = 'running'

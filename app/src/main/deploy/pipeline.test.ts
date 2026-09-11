@@ -613,8 +613,15 @@ describe('DeployPipeline', () => {
       )
     ).toBe(false)
 
+    // An inconclusive restore is a durable reconciliation barrier; a new deploy
+    // must not reopen polling or silently proceed over the unknown owner.
     const next = pipeline.run(deployInput())
-    expect((await waitForFinished(next.deploymentId)).status).toBe('running')
+    expect((await waitForFinished(next.deploymentId)).status).toBe('failed')
+    expect(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM deployment_activation WHERE state='prepared'")
+        .get()
+    ).toEqual({ count: 1 })
   })
 
   it('auto rollback v1 khong running -> failed va khong doi current', async () => {
