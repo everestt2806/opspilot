@@ -315,3 +315,121 @@ Append REVIEW-FIX 03 vào handoff/evidence/board/task/sổ, commit local và bà
 READY_FOR_LOCAL_REVIEW khi toàn bộ gate đạt. Nếu phát hiện cần đổi contract ngoài amendment đã duyệt,
 bàn giao BLOCKED với proposal trước implementation/live mutation.
 ```
+
+## 8. Review 04 — review-fix tại `85f4810`
+
+### Phạm vi và verdict
+
+- Reviewed code `fa72a6e`, submitted HEAD `85f4810`, kế thừa Leader review `044cc0f` hợp lệ.
+- Verdict: **CHANGES_REQUESTED**. C02 vẫn `REVIEW_FIX_REQUIRED`; C03–C09 đóng/`NOT_RUN`.
+- Migration atomic/populated-v1 và cutover snapshot cơ bản đạt. Các recovery/rotation edge case dưới
+  đây vẫn có thể dừng collector hoặc gán sai/mất metric nên C02-R1-01 và R3-02/03/04 chưa CLOSED.
+- Evidence reviewer: [review-04](../../evidence/tk-a17/c02/review-04/). Review chỉ local/read-only đối
+  với dữ liệu thật; không deploy/rollback, không thao tác app B, không ML train/score, push/PR/merge.
+
+### Kiểm chứng độc lập
+
+| Gate | Kết quả reviewer |
+| --- | --- |
+| Exact focused Worker | 18 file, 88/88 PASS |
+| ML service | 19/19 PASS tại `ml-service` |
+| Collector | 26/26 PASS tại `collector` bằng venv của ML service |
+| Typecheck node/web/scripts, lint, format, build | PASS; renderer 3045 modules |
+| Pipeline recovery regressions | 2/2 FAIL |
+| First-generation/partial-rotation regressions | 2/2 FAIL |
+| GitNexus | analyze PASS; 55 symbol đổi, 71 affected, risk CRITICAL; `prepareActivationFor` CRITICAL |
+
+### C02-R4-01 — BLOCKER — snapshot/preparation fail để collector hiện tại bị dừng
+
+- Vị trí: `app/src/main/deploy/pipeline.ts:381-437,534-579` và manual rollback `236-325`.
+- `prepareActivationFor()` dừng collector rồi mới gọi snapshot và ghi activation. Nếu snapshot/DB
+  lỗi, outer catch kết thúc deployment nhưng không restart collector. App current có thể vẫn healthy
+  trong khi nguồn metric bị tắt vô thời hạn.
+- Regression reviewer cho snapshot lần hai throw sau stop: deployment fail và không có
+  `compose start collector`/`compose up` nào sau lệnh stop.
+- Fix: quản lý ownership của collector bằng `try/finally` hoặc state machine. Sau stop thành công,
+  mọi exit trước khi compose mới nhận ownership phải khôi phục collector hiện tại và kiểm exit/state;
+  nếu khôi phục thất bại phải fail closed với trạng thái/action rõ ràng. Bao phủ forward, manual và
+  auto rollback, image validation fail, snapshot fail, DB prepare fail và cancellation.
+
+### C02-R4-02 — BLOCKER — restore nonzero vẫn mở activation cho previous
+
+- Vị trí: `app/src/main/deploy/pipeline.ts:942-955,997-1030` và recovery trong catch `558-577`.
+- `restorePreviousOrDown()` không kiểm `result.code` của restore `compose up`; nó vẫn log “đã quay
+  lại”. Catch ngoài sau đó tạo activation previous dù runtime chưa được xác nhận đã quay về previous.
+- Regression reviewer: candidate báo Started nhưng nonzero, restore previous cũng nonzero; active
+  episode cuối trỏ deployment 1 thay vì candidate deployment 2 đang cần reconcile.
+- Fix: restore phải kiểm exit, container identity/image và running state rồi trả kết quả phân biệt
+  `restored | not_restored | unknown`. Chỉ mở previous episode khi `restored`; nếu chưa xác định thì
+  giữ candidate interval/fail closed, không suy từ `current_deployment_id`. Thêm cùng contract cho
+  manual rollback fail/healthcheck fail và restart/reconcile.
+
+### C02-R4-03 — MAJOR — retry live rollback thực tế chọn chính deployment current
+
+- Vị trí: `tools/a17-c02-live-rollback.cjs:40-54`; evidence `ingestion.md:190-200`.
+- Attempt 17 fail và deployment 16 vẫn current. Vì ID lớn nhất lúc retry là failed 17,
+  `currentBefore` trở thành undefined; target filter chọn running deployment 16. Deployment 18 có
+  `is_rollback_of=16` và image v16, nên retry chỉ chạy lại chính phiên bản current.
+- Fix: lấy exact `app.current_deployment_id`, chọn target running khác current và assert trước khi gọi
+  IPC. Live rerun phải chứng minh before/current image khác target image, `is_rollback_of` đúng target,
+  activation boundary, raw rows và final health. Ghi raw error/step/output của mọi attempt fail.
+
+### C02-R4-04 — MAJOR — first generation tạo data-gap giả
+
+- Vị trí: sentinel tại `pipeline.ts:402-406`; mismatch handling `poller.ts:75-94`.
+- First deploy thành công với generation `pending-first-generation`, nhưng poll đầu thấy identity thật
+  khác sentinel, không có `.1`, rồi ghi `ssh_error/failed` data-gap. Không có byte cũ nào bị mất.
+- Regression reviewer nhận data-gap count 1 thay vì 0.
+- Fix: adopt identity đầu tiên theo một transaction khi episode pending bắt đầu ở byte 1 và chưa có
+  committed data; không đi qua loss rotation. Assert generation, episode, metric/score/offset và không
+  có action lỗi giả.
+
+### C02-R4-05 — BLOCKER — matching `.1` partial suffix bị đánh dấu recovered rồi bỏ mất
+
+- Vị trí: `app/src/main/monitor/poller.ts:75-94`.
+- Code đặt `oldEndOffset=rotatedSize+1` và `recovered=true` chỉ dựa identity match. Nếu suffix cuối
+  thiếu newline, recursive poll commit 0 byte nhưng episode cũ vẫn đóng qua toàn bộ file và không log
+  gap. Regression reviewer tái hiện đúng trường hợp này.
+- Fix: recovery phải dựa `nextOffset/committedBytes` thực tế. Chỉ đóng old episode ở byte đã commit;
+  persist trạng thái drain để retry, hoặc ghi explicit gap cho phần không thể hoàn tất với identity,
+  cursor và byte range. Test matching `.1` complete/partial/invalid/UTF-8, crash giữa drain/switch,
+  retry và file mới nhỏ/lớn cursor; assert không mất/trùng và 5 score rows.
+
+### C02-R4-06 — MINOR — coverage/provenance chưa khớp bản nộp
+
+- Sáu test mới không bao phủ bốn trigger reviewer vừa tái hiện dù handoff nói đã đóng toàn bộ
+  post-runtime/recovery. Bổ sung integration tests qua production pipeline/poller như yêu cầu trên.
+- Handoff ghi docs HEAD `1f128ed`, nhưng submitted HEAD là `85f4810`. Suite 19 tests là
+  `ml-service`, không phải collector; collector riêng hiện có 26/26. Append provenance và tách đúng
+  hai suite, giữ lịch sử cũ.
+
+### Bàn giao review-fix 04 cho Worker
+
+```text
+Tiếp tục sửa duy nhất TK-A17/C02 từ HEAD có commit Leader review 04; không checkout/reset về
+fa72a6e hoặc 85f4810. Verdict CHANGES_REQUESTED; C03-C09 vẫn đóng/NOT_RUN.
+
+Đóng C02-R4-01…06: bảo đảm collector được restart nếu bất kỳ bước nào fail sau stop và trước khi
+compose mới nhận ownership; kiểm exit + runtime image/state thật của restore trước khi mở activation
+previous; giữ candidate/fail closed khi restore unknown; sửa manual rollback các nhánh image/snapshot/
+compose/healthcheck failure theo cùng state machine. Không dùng current DB pointer để suy runtime.
+
+Sửa helper live lấy exact app.current_deployment_id, cấm target=current và chứng minh target image
+khác current. First deploy phải adopt generation thật không ghi data-gap giả. Rotation matching .1
+chỉ được recovered đến nextOffset đã commit; partial/invalid tail phải retry được hoặc ghi gap có
+identity/cursor/range, không đóng episode qua byte chưa xử lý.
+
+Thêm regression production cho: snapshot/DB/cancel fail sau stop và collector resume; restore
+nonzero/missing/wrong image; candidate partial start; manual/auto rollback fail; first generation
+adoption; .1 complete/partial/invalid/UTF-8/crash/retry. Assert runtime ownership, collector state,
+activation ranges, generation, deployment+seq, five scores, dedupe, offset và action log.
+
+Chạy exact focused, ML-service 19 tests, collector 26 tests, typecheck node/web/scripts, lint,
+prettier check và build. Sau local PASS, chạy lại manual rollback có kiểm soát trên VM02 với target
+khác current; lưu từng attempt command/runtime/exit/raw error, before/target/after IDs+images,
+activation/raw JSONL→SQLite, scheduler hai tick và final A healthy. App B chỉ read-only; giữ nguyên
+dữ liệu lịch sử; không ML train/score, UI/fault, push/PR/merge.
+
+Append REVIEW-FIX 04 vào evidence/handoff/board/task/sổ với exact code và submitted docs HEAD;
+commit local và bàn giao READY_FOR_LOCAL_REVIEW khi đủ mọi gate.
+```

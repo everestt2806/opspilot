@@ -151,3 +151,15 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
   regression app mới 1/1 FAIL. Không chạy live, không sửa SQLite/VPS/app B, không push/PR/merge.
 - C02 về `REVIEW_FIX_REQUIRED`; C03-C09 tiếp tục đóng/`NOT_RUN`. Evidence reviewer:
   `docs/evidence/tk-a17/c02/review-03/`.
+
+## Leader review 04 — 11/09/2026
+
+- Reviewed code `fa72a6e`, submitted HEAD `85f4810`; verdict **CHANGES_REQUESTED** tại
+  [review-c02.md](review-c02.md), mục 8.
+- Mở `C02-R4-01…06`: snapshot/preparation fail có thể để collector bị dừng; restore nonzero vẫn mở
+  previous activation; live retry 18 chọn chính current deployment 16; first generation ghi gap giả;
+  matching `.1` partial bị bỏ mất không gap; coverage/provenance chưa khớp.
+- Reviewer: exact focused 88/88, ML service 19/19, collector 26/26, static/build PASS; bốn regression
+  recovery/rotation mới đều FAIL. Không chạy live hoặc sửa SQLite/VPS/app B.
+- C02 tiếp tục `REVIEW_FIX_REQUIRED`; C03-C09 đóng/`NOT_RUN`. Evidence:
+  `docs/evidence/tk-a17/c02/review-04/`.

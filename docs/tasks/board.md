@@ -14,7 +14,7 @@
 - **B:** không có task chặn demo; A nhận tích hợp B6/B8 trong A17 từ 10/09 theo yêu cầu solo.
   Code B4/B5/B2 đã merge; báo cáo runtime B6 còn ở nhánh riêng, cần tái xác minh.
 - Baseline đã fetch: `origin/main@683bfc6`; PR #25 (A15), #26 (B4/B5), #28 (B2) đã merge.
-- Nhánh Worker `feat/a17-demo-checkpoint` từ plan `ac6d8cd`; C01 đã APPROVED, C02 READY_FOR_LOCAL_REVIEW.
+- Nhánh Worker `feat/a17-demo-checkpoint` từ plan `ac6d8cd`; C01 đã APPROVED, C02 sửa review-04.
   [Ma trận yêu cầu và quy trình giao việc](../24-ke-hoach-demo-theo-chang.md#7-ma-trận-đầy-đủ-yêu-cầu-giao-worker).
   C00 [APPROVED](tk-a17/review-c00.md): code `d4ec3be`, docs `23cd248`; có kiểm chứng reviewer riêng.
   C01 [APPROVED review-03](tk-a17/review-c01.md): code `8e42856`, docs `9689ea4`;
@@ -29,7 +29,7 @@
 
 | ID     | Task                                                                 | Chủ                   | Hạn      | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                                            |
 | ------ | -------------------------------------------------------------------- | --------------------- | -------- | ---------- | --------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| TK-A17 | Demo trực quan: website → sự cố → khôi phục → đối chiếu dữ liệu      | A                     | C09      | ĐANG LÀM | `feat/a17-demo-checkpoint`  | `main@683bfc6`              | C02 READY_FOR_LOCAL_REVIEW; C03-C09 NOT_RUN; chưa push/PR |
+| TK-A17 | Demo trực quan: website → sự cố → khôi phục → đối chiếu dữ liệu      | A                     | C09      | ĐANG LÀM | `feat/a17-demo-checkpoint`  | `main@683bfc6`              | C02 REVIEW_FIX_REQUIRED theo review-04; C03-C09 NOT_RUN; chưa push/PR |
 | TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09    | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                   | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới                             |
 | TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09    | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge               | `fe1da33`; 21/21 theo task B                                                       |
 | TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02      | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                   | Code đã merge; DoD SSH tail tại A17/C02                                            |
@@ -138,3 +138,11 @@ nhận first deploy fail khi `metrics.jsonl` chưa tồn tại; source review x�
 stop/flush collector, rotation không drain matching `.1`, failure sau runtime start có thể bỏ
 candidate episode và migration/regression chưa đủ contract. Local focused 81/81 và 106/106,
 collector 26/26, static/build PASS; không chạy live. C02 về `REVIEW_FIX_REQUIRED`; C03-C09 đóng.
+
+### TK-A17 update - 11/09 C02 review-04
+
+C02 **CHANGES_REQUESTED** tại code `fa72a6e`, submitted `85f4810`. Bốn regression reviewer đều
+FAIL: snapshot fail để collector bị dừng; restore nonzero vẫn mở activation previous; first
+generation ghi data-gap giả; matching `.1` partial bị bỏ mất không gap. Retry live 18 chọn chính
+current deployment 16 nên chưa chứng minh rollback. Local 88/88, ML service 19/19, collector 26/26,
+static/build PASS. C02 về `REVIEW_FIX_REQUIRED`; C03-C09 đóng/`NOT_RUN`.
