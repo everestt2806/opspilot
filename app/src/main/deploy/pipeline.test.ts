@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -11,7 +11,8 @@ import type { EncryptedCredential } from '../crypto/credentialCipher'
 import { closeDatabase, initializeDatabase } from '../db'
 import { VpsRepository } from '../db/vpsRepository'
 import type { SshManager } from '../ssh/manager'
-import { DeployPipeline } from './pipeline'
+import { DeployPipeline, resolveCollectorAppPath, resolveCollectorDir } from './pipeline'
+import { buildSourceTree } from '../detectors/sourceTree'
 
 const PRECHECK_OK = [
   'RAM_MB|2048',
@@ -25,6 +26,7 @@ interface StubSshOptions {
   precheckOutput?: string
   curlOk?: (call: number) => boolean
   composeUp?: (call: number) => { code: number; stdout: string; stderr: string }
+  buildResult?: (command: string) => { code: number; stdout: string; stderr: string }
   inspectStatus?: (call: number) => string
   inspectState?: (call: number) => {
     Status: string
@@ -98,6 +100,7 @@ function createHarness(options: StubSshOptions = {}): void {
       return { code: 0, stdout: options.precheckOutput ?? PRECHECK_OK, stderr: '' }
     }
     if (command.includes('docker build')) {
+      if (options.buildResult) return options.buildResult(command)
       return { code: 0, stdout: 'build xong\n', stderr: '' }
     }
     if (command.includes('compose up -d')) {
@@ -250,6 +253,48 @@ async function advanceFailedHealthcheck(): Promise<void> {
 }
 
 describe('DeployPipeline', () => {
+  it('packaged resource path contains the collector files', () => {
+    const resourceRoot = mkdtempSync(join(tmpdir(), 'opspilot-resources-'))
+    mkdirSync(join(resourceRoot, 'collector'))
+    writeFileSync(join(resourceRoot, 'collector', 'collect.py'), '# collector\n')
+    writeFileSync(join(resourceRoot, 'collector', 'Dockerfile'), 'FROM python:3.12\n')
+    const previous = process.env.OPSPILOT_COLLECTOR_DIR
+    const previousResourcesPath = process.resourcesPath
+    delete process.env.OPSPILOT_COLLECTOR_DIR
+    Object.defineProperty(process, 'resourcesPath', { configurable: true, value: resourceRoot })
+    try {
+      expect(resolveCollectorDir()).toBe(join(resourceRoot, 'collector'))
+    } finally {
+      if (previous === undefined) delete process.env.OPSPILOT_COLLECTOR_DIR
+      else process.env.OPSPILOT_COLLECTOR_DIR = previous
+      Object.defineProperty(process, 'resourcesPath', {
+        configurable: true,
+        value: previousResourcesPath
+      })
+      rmSync(resourceRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('Express collector probe uses verified business route and health fallback', () => {
+    const generic = mkdtempSync(join(tmpdir(), 'opspilot-express-generic-'))
+    writeFileSync(join(generic, 'package.json'), '{"dependencies":{"express":"4"}}')
+    writeFileSync(join(generic, 'server.js'), "app.get('/health', handler)\n")
+    const demo = mkdtempSync(join(tmpdir(), 'opspilot-express-demo-'))
+    writeFileSync(join(demo, 'package.json'), '{"dependencies":{"express":"4"}}')
+    writeFileSync(join(demo, 'server.js'), "app.get('/items', handler)\n")
+    try {
+      expect(resolveCollectorAppPath('express', buildSourceTree(generic), '/health')).toBe(
+        '/health'
+      )
+      expect(resolveCollectorAppPath('express', buildSourceTree(demo), '/health')).toBe(
+        '/items?limit=1'
+      )
+    } finally {
+      rmSync(generic, { recursive: true, force: true })
+      rmSync(demo, { recursive: true, force: true })
+    }
+  })
+
   it('deploy moi thanh cong: du 7 buoc, ghi DB, .env ghi im lang', async () => {
     createHarness()
     const { deploymentId } = pipeline.run(deployInput())
@@ -294,7 +339,7 @@ describe('DeployPipeline', () => {
     expect(composeWrite?.content).toContain('image: demo-api:v1')
     expect(composeWrite?.content).toContain('image: postgres:16-alpine')
     expect(composeWrite?.content).toContain('image: demo-api:collector')
-    expect(composeWrite?.content).toContain('APP_URL: "http://app:3000/items?limit=1"')
+    expect(composeWrite?.content).toContain('APP_URL: "http://app:3000/health"')
     expect(composeWrite?.content).toContain('/var/run/docker.sock:/var/run/docker.sock:ro')
     expect(
       sshExec.mock.calls.some(
@@ -338,6 +383,21 @@ describe('DeployPipeline', () => {
     )
     expect(readFileMock).toHaveBeenCalledWith(vpsId, '/opt/opspilot/demo-api/.env')
     expect(JSON.stringify(events)).not.toContain(firstPassword)
+  })
+
+  it('app build fail khong xoa collector tag dang ton tai', async () => {
+    createHarness({
+      buildResult: (command) =>
+        command.includes("docker build -t 'demo-api:v1' .")
+          ? { code: 1, stdout: '', stderr: 'app build failed' }
+          : { code: 0, stdout: 'collector ok', stderr: '' }
+    })
+    const first = pipeline.run(deployInput())
+    expect((await waitForFinished(first.deploymentId)).status).toBe('failed')
+    const removals = sshExec.mock.calls
+      .map(([, command]) => command as string)
+      .filter((command) => command.includes('docker image rm'))
+    expect(removals.some((command) => command.includes('demo-api:collector'))).toBe(false)
   })
 
   it('precheck truot -> dung o buoc PRECHECK, chua build gi', async () => {

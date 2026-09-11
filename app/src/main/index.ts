@@ -126,21 +126,25 @@ void app
       () => mainWindow,
       monitorService
     )
-    monitorScheduler = new MonitorScheduler(async () => {
-      const port = mlService?.getPort()
-      await monitorService.pollAll(
-        sshManager!,
-        port ? new MlApiClient(`http://127.0.0.1:${port}`) : undefined,
-        (event) => mainWindow?.webContents.send('monitor:tick', event),
-        (status) => emitMlStatus(status)
-      )
-    })
-    monitorScheduler.start()
+    if (process.env.OPSPILOT_C01_DEPLOY_ONLY !== '1') {
+      monitorScheduler = new MonitorScheduler(async () => {
+        const port = mlService?.getPort()
+        await monitorService.pollAll(
+          sshManager!,
+          port ? new MlApiClient(`http://127.0.0.1:${port}`) : undefined,
+          (event) => mainWindow?.webContents.send('monitor:tick', event),
+          (status) => emitMlStatus(status)
+        )
+      })
+      monitorScheduler.start()
+    }
 
     createWindow()
 
     try {
-      await mlService.start()
+      if (process.env.OPSPILOT_C01_DEPLOY_ONLY !== '1') {
+        await mlService.start()
+      }
     } catch (error) {
       logger.error('ml', 'ML service khởi động thất bại', {
         error: error instanceof Error ? error.message : String(error)

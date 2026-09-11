@@ -35,15 +35,40 @@ const HEALTHCHECK_INTERVAL_MS = 3_000
 const RENDER_COLLECT_INTERVAL_S = '10'
 const COLLECTOR_IMAGE_SUFFIX = ':collector'
 
-function resolveCollectorDir(): string {
-  const collectorDir = process.env.OPSPILOT_COLLECTOR_DIR ?? join(process.cwd(), '..', 'collector')
-  if (
-    !existsSync(join(collectorDir, 'collect.py')) ||
-    !existsSync(join(collectorDir, 'Dockerfile'))
-  ) {
+export function resolveCollectorDir(): string {
+  const candidates = [
+    process.env.OPSPILOT_COLLECTOR_DIR,
+    ...(process.resourcesPath ? [join(process.resourcesPath, 'collector')] : []),
+    join(process.cwd(), '..', 'collector')
+  ].filter((candidate): candidate is string => Boolean(candidate))
+  const collectorDir = candidates.find(
+    (candidate) =>
+      existsSync(join(candidate, 'collect.py')) && existsSync(join(candidate, 'Dockerfile'))
+  )
+  if (!collectorDir) {
     throw new AppError('UNKNOWN', 'Không tìm thấy source collector đã duyệt để đóng gói deploy.')
   }
   return collectorDir
+}
+
+export function resolveCollectorAppPath(
+  framework: App['framework'],
+  sourceTree: ReturnType<typeof buildSourceTree>,
+  healthcheckPath: string
+): string {
+  if (framework !== 'express') return healthcheckPath
+  const hasItemsRoute = sourceTree.files.some((file) => {
+    const content = sourceTree.readText(file) ?? ''
+    return /\.(?:get|post|put|patch|delete|all|use)\s*\(\s*['"`]\/items(?:[/?'"`)]|$)/m.test(
+      content
+    )
+  })
+  return hasItemsRoute ? '/items?limit=1' : healthcheckPath
+}
+
+function collectorPathFromCompose(compose: string, fallback: string): string {
+  const match = compose.match(/APP_URL:\s*["']?https?:\/\/app:\d+([^"'\s]+)?/)
+  return match?.[1] ?? fallback
 }
 
 const containerStateSchema = z.object({
@@ -635,8 +660,11 @@ export class DeployPipeline {
         START_COMMAND: plan.startCommand,
         COLLECT_INTERVAL_S: RENDER_COLLECT_INTERVAL_S,
         COLLECTOR_IMAGE_TAG: `${ctx.app.name}${COLLECTOR_IMAGE_SUFFIX}`,
-        COLLECTOR_APP_PATH:
-          ctx.app.framework === 'express' ? '/items?limit=1' : ctx.app.healthcheck_path,
+        COLLECTOR_APP_PATH: resolveCollectorAppPath(
+          ctx.app.framework,
+          buildSourceTree(input.source_path),
+          ctx.app.healthcheck_path
+        ),
         APP_DEPENDS_ON: plan.needsDb
           ? '    depends_on:\n      postgres:\n        condition: service_healthy'
           : ''
@@ -717,6 +745,8 @@ export class DeployPipeline {
     await this.inStep(ctx, 'BUILD', async () => {
       const tag = shellQuote(ctx.deployment.image_tag)
       const collectorTag = shellQuote(`${ctx.app.name}${COLLECTOR_IMAGE_SUFFIX}`)
+      const appTagExisted = await this.imageExists(ctx, tag)
+      const collectorTagExisted = await this.imageExists(ctx, collectorTag)
       const command =
         `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && ` +
         `docker build -t ${tag} . && docker build -t ${collectorTag} ./collector`
@@ -731,19 +761,36 @@ export class DeployPipeline {
           )
         }
       } catch (error) {
-        await this.ignoreError(
-          this.ssh.exec(ctx.app.vps_id, `docker image rm ${tag} >/dev/null 2>&1 || true`, {
-            retryOnReconnect: false
-          })
-        )
-        await this.ignoreError(
-          this.ssh.exec(ctx.app.vps_id, `docker image rm ${collectorTag} >/dev/null 2>&1 || true`, {
-            retryOnReconnect: false
-          })
-        )
+        if (!appTagExisted) {
+          await this.ignoreError(
+            this.ssh.exec(ctx.app.vps_id, `docker image rm ${tag} >/dev/null 2>&1 || true`, {
+              retryOnReconnect: false
+            })
+          )
+        }
+        if (!collectorTagExisted) {
+          await this.ignoreError(
+            this.ssh.exec(
+              ctx.app.vps_id,
+              `docker image rm ${collectorTag} >/dev/null 2>&1 || true`,
+              {
+                retryOnReconnect: false
+              }
+            )
+          )
+        }
         throw error
       }
     })
+  }
+
+  private async imageExists(ctx: RunContext, tag: string): Promise<boolean> {
+    const result = await this.ssh.exec(
+      ctx.app.vps_id,
+      `docker image inspect ${tag} >/dev/null 2>&1`,
+      { timeoutMs: 15_000, signal: ctx.signal, retryOnReconnect: true }
+    )
+    return result.code === 0
   }
 
   private async stepDeploy(ctx: RunContext): Promise<void> {
@@ -840,6 +887,16 @@ export class DeployPipeline {
   }
 
   private async restoreComposeTo(app: App, imageTag: string): Promise<void> {
+    let collectorAppPath = app.healthcheck_path
+    try {
+      const existingCompose = await this.ssh.readFile(
+        app.vps_id,
+        posixJoin(WORK_ROOT, app.name, 'docker-compose.yml')
+      )
+      collectorAppPath = collectorPathFromCompose(existingCompose, collectorAppPath)
+    } catch {
+      // A first deploy has no compose to preserve; healthcheck is the safe fallback.
+    }
     const vars: ComposeVars = {
       APP_NAME: app.name,
       IMAGE_TAG: imageTag,
@@ -849,7 +906,7 @@ export class DeployPipeline {
       START_COMMAND: '',
       COLLECT_INTERVAL_S: RENDER_COLLECT_INTERVAL_S,
       COLLECTOR_IMAGE_TAG: `${app.name}${COLLECTOR_IMAGE_SUFFIX}`,
-      COLLECTOR_APP_PATH: app.framework === 'express' ? '/items?limit=1' : app.healthcheck_path,
+      COLLECTOR_APP_PATH: collectorAppPath,
       APP_DEPENDS_ON:
         app.needs_db === 1
           ? '    depends_on:\n      postgres:\n        condition: service_healthy'
