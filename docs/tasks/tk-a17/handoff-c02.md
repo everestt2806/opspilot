@@ -49,3 +49,14 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
 
 - Collector pytest could not run because the current Python environment has no `pytest` module. This does not block C02 code evidence because collector code was not changed; reviewer may rerun with the project collector test environment.
 - Handoff: `READY_FOR_LOCAL_REVIEW`.
+
+## Leader review 01 — 11/09/2026
+
+- Reviewed code `0967fb9`, docs submission `8e08f76`; verdict
+  **CHANGES_REQUESTED** tại [review-c02.md](review-c02.md).
+- Findings mở: `C02-R1-01` BLOCKER; `C02-R1-02/03` MAJOR; `C02-R1-04/05` MINOR.
+- Reviewer xác nhận focused 71/71, collector 26/26 và static/build PASS. Boundary regression mới
+  1/1 FAIL; SQLite read-only cho thấy 80 rows seq `22..101` trước activation v9 đang bị gán vào
+  deployment 9. Tổng mutation từ C01 approved là `+2120 metrics/+10600 scores`, không chỉ batch
+  cuối `+10/+50`.
+- C02 về `REVIEW_FIX_REQUIRED`; C03–C09 tiếp tục đóng. Không reset/xóa/reassign dữ liệu lịch sử.

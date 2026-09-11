@@ -1,0 +1,85 @@
+Reviewer-only temporary regression run against reviewed code `0967fb9`.
+The temporary `.test.ts` file was removed after execution; this text preserves the repro.
+
+```ts
+import { mkdtempSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+
+import { afterEach, describe, expect, it } from 'vitest'
+
+import { closeDatabase, initializeDatabase } from '../db'
+import type { MetricSource } from './metricSource'
+import { MonitorPoller } from './poller'
+
+let directory = ''
+
+function metric(seq: number, ts: string): string {
+  return JSON.stringify({
+    seq,
+    ts,
+    cpu_pct: 1,
+    mem_mb: 2,
+    mem_pct: 3,
+    mem_limit_mb: 4,
+    latency_ms: null,
+    http_error_rate: 0,
+    db_response_ms: null,
+    container_up: 1,
+    host_cpu_pct: null,
+    host_mem_pct: null,
+    collector_version: '1.0.0'
+  })
+}
+
+function source(content: string): MetricSource {
+  return {
+    size: async () => Buffer.byteLength(content),
+    tail: async (offset) => Buffer.from(content).subarray(offset - 1).toString('utf8')
+  }
+}
+
+afterEach(() => {
+  closeDatabase()
+  if (directory) rmSync(directory, { recursive: true, force: true })
+})
+
+describe('C02 reviewer deployment boundary', () => {
+  it('does not assign unread pre-activation backlog to the new deployment', async () => {
+    directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-c02-review-'))
+    const db = initializeDatabase(directory)
+    db.exec(`
+      INSERT INTO vps (name,host,username,auth_type,encrypted_secret)
+      VALUES ('v','127.0.0.1','u','password','x');
+      INSERT INTO app (vps_id,name,framework,host_port,container_port)
+      VALUES (1,'app','express',30000,3000);
+      INSERT INTO deployment (app_id,version,image_tag,status,started_at,finished_at)
+      VALUES (1,1,'app:v1','running','2026-09-11T00:00:00Z','2026-09-11T00:00:01Z');
+      INSERT INTO deployment (app_id,version,image_tag,status,started_at,finished_at)
+      VALUES (1,2,'app:v2','running','2026-09-11T00:00:08Z','2026-09-11T00:00:10Z');
+      UPDATE app SET current_deployment_id=2, metrics_offset=1 WHERE id=1;
+    `)
+    const content =
+      `${metric(1, '2026-09-11T00:00:05Z')}\n` +
+      `${metric(2, '2026-09-11T00:00:20Z')}\n`
+
+    await new MonitorPoller(db).poll(1, 2, source(content))
+
+    expect(
+      db.prepare('SELECT deployment_id, seq FROM metric_sample ORDER BY seq').all()
+    ).toEqual([{ deployment_id: 2, seq: 2 }])
+  })
+})
+```
+
+Command and result:
+
+```text
+node node_modules/vitest/vitest.mjs run --maxWorkers=1 src/main/monitor/c02-review.test.ts
+FAIL  src/main/monitor/c02-review.test.ts > C02 reviewer deployment boundary
+expected: [{ deployment_id: 2, seq: 2 }]
+received: [{ deployment_id: 2, seq: 1 }, { deployment_id: 2, seq: 2 }]
+Test Files  1 failed (1)
+Tests       1 failed (1)
+Duration    1.56s
+exit        1
+```

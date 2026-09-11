@@ -1,0 +1,39 @@
+{
+  "target": "deploy@221.121.1.80",
+  "mode": "read-only SSH with strict host key",
+  "checked_utc": "2026-09-11T09:19:29Z",
+  "exit": 0,
+  "app": {
+    "container": "a17-notes-0911-app",
+    "image": "a17-notes-0911:v9",
+    "state": "running",
+    "healthy": true,
+    "restart_count": 0
+  },
+  "database": {
+    "container": "a17-notes-0911-db",
+    "state": "running",
+    "healthy": true,
+    "restart_count": 0
+  },
+  "collector": {
+    "container": "a17-notes-0911-collector",
+    "state": "running",
+    "restart_count": 0,
+    "metrics_size_bytes": 831023,
+    "raw_boundaries": [
+      { "seq": 22, "ts": "2026-09-10T20:26:55Z" },
+      { "seq": 102, "ts": "2026-09-11T01:43:57Z" },
+      { "seq": 105, "ts": "2026-09-11T01:44:25Z" },
+      { "seq": 2835, "ts": "2026-09-11T09:19:26Z", "position": "latest at inspection" }
+    ]
+  },
+  "app_b": {
+    "app": "express-demo-app",
+    "collector": "express-demo-collector",
+    "state": "running",
+    "restart_count": 0
+  },
+  "local_offset_at_inspection": 627450,
+  "result": "PASS read-only health; source kept advancing. No deploy, restart, tunnel, or mutation was performed by reviewer."
+}

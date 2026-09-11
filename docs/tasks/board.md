@@ -14,7 +14,7 @@
 - **B:** không có task chặn demo; A nhận tích hợp B6/B8 trong A17 từ 10/09 theo yêu cầu solo.
   Code B4/B5/B2 đã merge; báo cáo runtime B6 còn ở nhánh riêng, cần tái xác minh.
 - Baseline đã fetch: `origin/main@683bfc6`; PR #25 (A15), #26 (B4/B5), #28 (B2) đã merge.
-- Nhánh Worker `feat/a17-demo-checkpoint` từ plan `ac6d8cd`; C01 đã APPROVED, C02 sẵn giao Worker.
+- Nhánh Worker `feat/a17-demo-checkpoint` từ plan `ac6d8cd`; C01 đã APPROVED, C02 đang sửa review-01.
   [Ma trận yêu cầu và quy trình giao việc](../24-ke-hoach-demo-theo-chang.md#7-ma-trận-đầy-đủ-yêu-cầu-giao-worker).
   C00 [APPROVED](tk-a17/review-c00.md): code `d4ec3be`, docs `23cd248`; có kiểm chứng reviewer riêng.
   C01 [APPROVED review-03](tk-a17/review-c01.md): code `8e42856`, docs `9689ea4`;
@@ -22,14 +22,14 @@
 - P0: website ghi chú thật → người dùng thấy chậm → Monitor giải thích/cảnh báo → khôi phục →
   website tốt lại, giữ dữ liệu; có timeline và so sánh trước/sau. A trình chiếu, thầy quan sát.
 - Tiến độ theo C00–C09; C08 bắt buộc, chia C08A policy/C08B coordinator/C08C live, mỗi phần
-  review riêng. Điểm nhấn tự khôi phục không manual/reset can thiệp. C02 đã mở, chưa thực hiện.
+  review riêng. Điểm nhấn tự khôi phục không manual/reset can thiệp. C02 `CHANGES_REQUESTED`.
   [Playbook Worker](../prompts/tk-a17-worker-playbook.md); không chia ngày/giờ công.
 
 ## Đang ưu tiên — W3/W4
 
 | ID     | Task                                                                 | Chủ                   | Hạn      | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                                            |
 | ------ | -------------------------------------------------------------------- | --------------------- | -------- | ---------- | --------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| TK-A17 | Demo trực quan: website → sự cố → khôi phục → đối chiếu dữ liệu      | A                     | C09      | TUẦN NÀY | `feat/a17-demo-checkpoint`  | `main@683bfc6`              | C02 READY_FOR_LOCAL_REVIEW; C03-C09 NOT_RUN; chưa push/PR |
+| TK-A17 | Demo trực quan: website → sự cố → khôi phục → đối chiếu dữ liệu      | A                     | C09      | ĐANG LÀM | `feat/a17-demo-checkpoint`  | `main@683bfc6`              | C02 CHANGES_REQUESTED; C03-C09 NOT_RUN; chưa push/PR |
 | TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09    | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                   | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới                             |
 | TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09    | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge               | `fe1da33`; 21/21 theo task B                                                       |
 | TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02      | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                   | Code đã merge; DoD SSH tail tại A17/C02                                            |
@@ -98,3 +98,10 @@ C01 APPROVED tại code `8e42856`, docs `9689ea4`; reviewer chạy focused 75/75
 C02 đã chạy live ingestion đúng VM02/app 1/deployment 9, giữ nguyên dữ liệu SQLite kế thừa và ghi boundary trước/sau.
 Retry cùng snapshot không thêm rows, duplicate `(deployment_id, seq)=0`; focused 71/71 và static/build đều PASS.
 Handoff `docs/tasks/tk-a17/handoff-c02.md` là `READY_FOR_LOCAL_REVIEW`; C03-C09 vẫn đóng/`NOT_RUN`.
+
+### TK-A17 update - 11/09 C02 review-01
+
+C02 **CHANGES_REQUESTED** tại code `0967fb9`, docs `8e08f76`: poller gán 80 rows trước thời điểm
+deployment 9 bắt đầu vào deployment 9; regression reviewer 1/1 FAIL. C02-T5 cũng chưa quan sát
+scheduler thật, và hồ sơ phải đối soát tổng mutation `+2120 metrics/+10600 scores`. Task về
+`ĐANG LÀM`; C03-C09 tiếp tục đóng/`NOT_RUN`.

@@ -1,0 +1,55 @@
+{
+  "checked_utc": "2026-09-11T09:23:07.395Z",
+  "mode": "SQLite readonly=true, fileMustExist=true",
+  "database": "%APPDATA%/OpsPilot/opspilot.db",
+  "app": {
+    "id": 1,
+    "name": "a17-notes-0911",
+    "current_deployment_id": 9,
+    "metrics_offset": 627450
+  },
+  "deployment_9": {
+    "version": 9,
+    "started_at": "2026-09-11T01:43:53Z",
+    "finished_at": "2026-09-11T01:44:17.086Z",
+    "metric_rows": 2120,
+    "min_seq": 22,
+    "max_seq": 2141,
+    "min_ts": "2026-09-10T20:26:55Z",
+    "max_ts": "2026-09-11T07:23:45Z",
+    "rows_before_started_at": {
+      "count": 80,
+      "min_seq": 22,
+      "max_seq": 101,
+      "min_ts": "2026-09-10T20:26:55Z",
+      "max_ts": "2026-09-10T20:40:05Z"
+    }
+  },
+  "metrics_by_deployment": [
+    { "deployment_id": 2, "count": 2, "min_seq": 1, "max_seq": 2 },
+    { "deployment_id": 3, "count": 11, "min_seq": 3, "max_seq": 13 },
+    { "deployment_id": 5, "count": 8, "min_seq": 14, "max_seq": 21 },
+    { "deployment_id": 9, "count": 2120, "min_seq": 22, "max_seq": 2141 }
+  ],
+  "totals": {
+    "metrics": 2141,
+    "scores": 10705,
+    "alerts": 0,
+    "experiments": 0,
+    "duplicate_deployment_seq_groups": 0
+  },
+  "c02_delta_from_approved_c01": {
+    "baseline_metrics": 21,
+    "baseline_scores": 105,
+    "added_metrics": 2120,
+    "added_scores": 10600
+  },
+  "deployment_9_scores": {
+    "rule": { "rows": 2120, "non_null": 2120 },
+    "zscore_ewma": { "rows": 2120, "non_null": 0 },
+    "iforest": { "rows": 2120, "non_null": 0 },
+    "ocsvm": { "rows": 2120, "non_null": 0 },
+    "ensemble": { "rows": 2120, "non_null": 0 }
+  },
+  "result": "FAIL C02 boundary: 80 samples older than deployment 9 start are assigned to deployment 9"
+}

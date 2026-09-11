@@ -2,7 +2,7 @@
 
 | Chủ    | Branch plan                | Baseline code | Trạng thái                  |
 | ------ | -------------------------- | ------------- | --------------------------- |
-| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — C01 APPROVED, mở C02 |
+| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | ĐANG LÀM — C02 CHANGES_REQUESTED |
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
 · [Sổ bàn giao](tk-a17-worker-handoff.md).
@@ -11,6 +11,8 @@ Yêu cầu đầy đủ: [plan mục 7–10](../24-ke-hoach-demo-theo-chang.md#7
 Khảo sát: [preflight 11/09](tk-a17/preflight-11-09.md). Trạng thái mới:
 [C00 APPROVED](tk-a17/review-c00.md), code `d4ec3be` / docs `23cd248`.
 [C01 APPROVED review-03](tk-a17/review-c01.md), code `8e42856` / docs `9689ea4`; mở C02.
+[C02 review-01 CHANGES_REQUESTED](tk-a17/review-c02.md), code `0967fb9` / docs `8e08f76`;
+C03–C09 tiếp tục đóng.
 Mục tiêu: A trình chiếu **tự phát hiện → tự rollback → xác minh phục hồi**. C08 bắt buộc.
 Không chia theo ngày/giờ công. Thời lượng 10s/30s/baseline/test vẫn giữ theo yêu cầu kỹ thuật.
 
@@ -175,3 +177,8 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   - HANDOFF C02 11/09: live SSH/SQLite ingestion trên VM02 app 1 deployment 9 đã ghi boundary
     trước/sau, thêm 10 metric/50 score, retry `0`, duplicate `0`; focused 71/71 và static/build PASS.
     `handoff-c02.md` là `READY_FOR_LOCAL_REVIEW`; C03-C09 vẫn `NOT_RUN`, chưa push/PR/merge.
+- REVIEW C02 01 11/09 — [review-c02](tk-a17/review-c02.md): **CHANGES_REQUESTED** tại code
+  `0967fb9`, docs `8e08f76`. Reviewer focused 71/71, collector 26/26 và static/build PASS, nhưng
+  regression boundary 1/1 FAIL. SQLite read-only có 80 rows seq `22..101` trước activation v9 bị
+  gán vào deployment 9; tổng mutation C02 thực tế là `+2120 metrics/+10600 scores`. C02-T5 chưa
+  quan sát scheduler thật. Task về ĐANG LÀM; C03–C09 đóng; không push/PR/merge.
