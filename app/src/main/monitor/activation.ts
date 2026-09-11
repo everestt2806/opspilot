@@ -197,7 +197,8 @@ export class ActivationRepository {
     identity: StreamIdentity,
     endOffset: number,
     recovered = false,
-    gapEndOffset = endOffset
+    gapEndOffset = endOffset,
+    warningRanges: Array<{ start: number; end: number }> = []
   ): void {
     this.database.transaction(() => {
       const previous = this.database
@@ -223,15 +224,19 @@ export class ActivationRepository {
         )
         .run(appId, deploymentId, identity.generation, now())
       if (!recovered) {
-        this.database
-          .prepare(
-            "INSERT INTO action_log (action,status,message,app_id,deployment_id) VALUES ('ssh_error','failed',?, ?,?)"
-          )
-          .run(
-            `Metric data-gap generation gap old=${previous?.stream_generation ?? 'unknown'} new=${identity.generation} cursor=${endOffset} range=[${endOffset},${gapEndOffset}]`,
-            appId,
-            deploymentId
-          )
+        const ranges = warningRanges.length
+          ? warningRanges
+          : [{ start: endOffset, end: gapEndOffset }]
+        for (const range of ranges)
+          this.database
+            .prepare(
+              "INSERT INTO action_log (action,status,message,app_id,deployment_id) VALUES ('ssh_error','failed',?, ?,?)"
+            )
+            .run(
+              `Metric data-gap generation gap old=${previous?.stream_generation ?? 'unknown'} new=${identity.generation} cursor=${range.start} range=[${range.start},${range.end}]`,
+              appId,
+              deploymentId
+            )
       }
     })()
   }

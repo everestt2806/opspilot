@@ -12,6 +12,7 @@ import { metricLineSchema } from './metricParser'
 import type { MlApiClient } from './mlApi'
 import { ActivationRepository } from './activation'
 import { withAppLock } from './appLock'
+import { DeploymentRepository } from '../db/deploymentRepository'
 
 const settingPatchSchema = z
   .object({
@@ -151,19 +152,13 @@ export class MonitorService {
 
   /** Reconcile a prepared cutover after process restart without trusting the DB pointer. */
   private async reconcilePrepared(ssh: SshManager): Promise<void> {
+    const deployments = new DeploymentRepository(this.db)
     const rows = this.db
       .prepare(
-        `WITH RECURSIVE lineage(id, image_tag, is_rollback_of, depth) AS (
-           SELECT d.id, d.image_tag, d.is_rollback_of, 0 FROM deployment d
-           UNION ALL SELECT p.id, p.image_tag, p.is_rollback_of, lineage.depth + 1
-           FROM deployment p JOIN lineage ON p.id = lineage.is_rollback_of WHERE lineage.depth < 100
-         )
-         SELECT pa.app_id, pa.id prepared_id, pa.deployment_id, pa.stream_generation,
-                a.vps_id, a.name app_name, d.image_tag,
-                (SELECT image_tag FROM lineage WHERE id=d.id ORDER BY depth DESC LIMIT 1) runtime_image
+        `SELECT pa.app_id, pa.id prepared_id, pa.deployment_id, pa.stream_generation,
+                a.vps_id, a.name app_name
          FROM deployment_activation pa
          JOIN app a ON a.id=pa.app_id
-         JOIN deployment d ON d.id=pa.deployment_id
          WHERE pa.state='prepared'`
       )
       .all() as Array<{
@@ -180,6 +175,22 @@ export class MonitorService {
       await withAppLock(row.app_id, async () => {
         const activation = new ActivationRepository(this.db)
         if (!activation.preparedEpisode(row.app_id)) return
+        let preparedImage: string
+        let activeImage: string | undefined
+        try {
+          preparedImage = deployments.runtimeImageTag(row.deployment_id)
+          const active = activation.active(row.app_id)
+          activeImage = active ? deployments.runtimeImageTag(active.deploymentId) : undefined
+        } catch (error) {
+          this.repository.logAction(
+            'ssh_error',
+            'failed',
+            `Prepared activation ${row.prepared_id} lineage cannot be resolved; reconciliation required: ${error instanceof Error ? error.message : String(error)}`,
+            row.app_id,
+            row.deployment_id
+          )
+          return
+        }
         const metricsPath = `/opt/opspilot/${row.app_name}/metrics/metrics.jsonl`
         try {
           const runtime = await ssh.exec(
@@ -196,7 +207,7 @@ export class MonitorService {
           const [image, state] = runtime.stdout.trim().split('|')
           const ownerVerified =
             runtime.code === 0 &&
-            image === row.runtime_image &&
+            image === preparedImage &&
             state === 'running' &&
             collector.code === 0 &&
             collector.stdout.trim() === 'running' &&
@@ -204,6 +215,9 @@ export class MonitorService {
           if (ownerVerified) {
             const active = activation.active(row.app_id)
             activation.activate(row.prepared_id, active?.id ?? null)
+            this.db
+              .prepare('UPDATE app SET current_deployment_id=? WHERE id=?')
+              .run(row.deployment_id, row.app_id)
             this.repository.logAction(
               'deploy',
               'success',
@@ -213,15 +227,7 @@ export class MonitorService {
             )
             return
           }
-          const active = activation.active(row.app_id)
-          const currentImage = active
-            ? (
-                this.db
-                  .prepare('SELECT image_tag FROM deployment WHERE id=?')
-                  .get(active.deploymentId) as { image_tag?: string } | undefined
-              )?.image_tag
-            : undefined
-          if (runtime.code === 0 && state === 'running' && currentImage && image === currentImage) {
+          if (runtime.code === 0 && state === 'running' && activeImage && image === activeImage) {
             activation.abort(row.prepared_id)
             this.repository.logAction(
               'deploy',

@@ -121,9 +121,6 @@ export class MonitorPoller {
             const drained = await this.pollUnlocked(appId, deploymentId, rotated, onSample)
             oldEndOffset = drained.nextOffset
             warningRanges = drained.warningRanges
-            const firstWarning = warningRanges[0]
-            oldEndOffset = firstWarning?.start ?? drained.nextOffset
-            gapEndOffset = firstWarning?.end ?? gapEndOffset
             recovered = drained.nextOffset >= rotatedSize + 1 && !drained.hadWarnings
           }
           drainFailure = false
@@ -138,7 +135,8 @@ export class MonitorPoller {
         identity,
         oldEndOffset,
         recovered,
-        gapEndOffset
+        gapEndOffset,
+        warningRanges
       )
       offset = 1
     }

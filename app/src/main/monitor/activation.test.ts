@@ -354,4 +354,38 @@ describe('C02 activation episodes', () => {
     expect(gap.message).toContain(`range=[${invalidStart},${invalidEnd}]`)
     expect(gap.message).toContain(`cursor=${invalidStart}`)
   })
+
+  it('keeps valid rows after multiple invalid rotated lines in the old episode', async () => {
+    const db = seed()
+    const poller = new MonitorPoller(db)
+    const first = `${metric(1)}\n`
+    await poller.poll(1, 1, source(first, 'old'))
+    const rotatedContent = `${first}{bad-a}\n${metric(2)}\n{bad-b}\n`
+    const rotated: MetricSource = {
+      size: async () => Buffer.byteLength(rotatedContent),
+      tail: async (offset) =>
+        Buffer.from(rotatedContent)
+          .subarray(offset - 1)
+          .toString(),
+      identity: async () => ({ generation: 'old' })
+    }
+    const next = source(`${metric(3)}\n`, 'new')
+    next.rotated = async () => rotated
+
+    await poller.poll(1, 1, next)
+
+    expect(db.prepare('SELECT seq, deployment_id FROM metric_sample ORDER BY seq').all()).toEqual([
+      { seq: 1, deployment_id: 1 },
+      { seq: 2, deployment_id: 1 },
+      { seq: 3, deployment_id: 1 }
+    ])
+    const oldEpisode = db
+      .prepare("SELECT end_offset FROM deployment_activation WHERE stream_generation='old'")
+      .get() as { end_offset: number }
+    expect(oldEpisode.end_offset).toBe(Buffer.byteLength(rotatedContent) + 1)
+    expect(
+      db.prepare("SELECT COUNT(*) AS count FROM action_log WHERE message LIKE '%data-gap%'").get()
+    ).toEqual({ count: 2 })
+    expect(db.prepare('SELECT COUNT(*) AS count FROM score_sample').get()).toEqual({ count: 15 })
+  })
 })

@@ -91,6 +91,21 @@ export class DeploymentRepository {
 
   /** Image thực sự của một attempt; manual rollback có image runtime của target, không phải tag vN mới. */
   runtimeImageTag(deploymentId: number): string {
+    const seen = new Set<number>()
+    let currentId = deploymentId
+    for (let depth = 0; depth < 100; depth += 1) {
+      if (seen.has(currentId))
+        throw new AppError('VALIDATION', 'Rollback lineage cycle cannot be resolved.')
+      seen.add(currentId)
+      const row = this.database
+        .prepare('SELECT image_tag,is_rollback_of FROM deployment WHERE id=?')
+        .get(currentId) as { image_tag: string; is_rollback_of: number | null } | undefined
+      if (!row) throw new AppError('VALIDATION', 'Rollback lineage deployment is missing.')
+      if (row.is_rollback_of === null) return row.image_tag
+      currentId = row.is_rollback_of
+    }
+    throw new AppError('VALIDATION', 'Rollback lineage is deeper than the supported limit.')
+    /* legacy resolver retained only as historical context
     const row = this.database
       .prepare(
         `WITH RECURSIVE lineage(id, image_tag, is_rollback_of, depth) AS (
@@ -109,7 +124,7 @@ export class DeploymentRepository {
         'Không tìm thấy image của deployment. Hãy tải lại lịch sử rồi thử lại.'
       )
     }
-    return row.image_tag
+    return row.image_tag */
   }
 
   update(id: number, patch: UpdateDeploymentRecord): void {
