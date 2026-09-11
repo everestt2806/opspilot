@@ -148,6 +148,45 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
   was performed. App B was not operated; no app B result is used to claim A17 success.
 - ML model training/scoring, UI, fault coordinator and C03-C09 are `NOT_RUN`.
 
+## REVIEW-FIX 05 - 11/09/2026
+
+- **Outcome:** `READY_FOR_LOCAL_REVIEW`.
+- **Review base:** Leader review-05 HEAD `eaca497`; no checkout/reset to `c6c728c` or `018cb70`.
+- **Code commit:** `37d9e19`.
+- **Docs/evidence:** this handoff and `docs/evidence/tk-a17/c02/ingestion.md`; final docs commit
+  is recorded after this append.
+- **Scope:** C02-R5-01...06 closed; R1-R4 invariants retained; C03-C09 remain closed/`NOT_RUN`.
+
+| Requirement | Evidence / result |
+| --- | --- |
+| C02-R5-01 | Cleanup uses independent bounded signal after cancellation; compose exit and collector running state verified; failure writes action log; production regression PASS |
+| C02-R5-02 | `runtimeOwner` candidate/previous/down/unknown; unknown preserves prepared durable barrier and poller fail-closed; restore image/state/exit regressions PASS |
+| C02-R5-03 | Matching `.1` at cursor >= EOF is recovered without gap; regression PASS |
+| C02-R5-04 | Drain advances only from committed `nextOffset`; tail failure keeps old cursor/generation for retry; invalid warning logs identity/cursor/range; regression PASS |
+| C02-R5-05 | Helper resolves `is_rollback_of` lineage and verifies live Docker image/state before/after; VM02 current v16 -> target v15 -> final v15; PASS |
+| C02-R5-06 | Production regressions committed in `37d9e19`; exact gates and counts recorded in evidence; PASS |
+
+### Gate record
+
+- `app`: `pnpm exec vitest run --maxWorkers=1 src/main/db src/main/monitor src/main/deploy src/main/shutdown.test.ts` -> exit 0, 18 files/95 tests.
+- `ml-service`: `..\\ml-service\\.venv\\Scripts\\python.exe -m pytest -q` -> exit 0, 19 passed.
+- `collector`: `..\\ml-service\\.venv\\Scripts\\python.exe -m pytest -q` -> exit 0, 26 passed.
+- `app`: `pnpm typecheck; pnpm exec tsc -p tsconfig.scripts.json --noEmit`, scoped ESLint,
+  scoped Prettier check and `pnpm build` -> all exit 0; renderer 3045 modules.
+- Live compile/prepare, controlled rollback helper and scheduler runner -> exit 0.
+
+### Live mutation ledger
+
+- Target only VM02/app `1`/`a17-notes-0911`; current deployment `19` resolved/runtime v16 and
+  target deployment `15` resolved/runtime v15 were different before rollback.
+- Rollback created deployment `20` (`is_rollback_of=15`), resolved/runtime Docker image v15,
+  state running, healthcheck PASS, current pointer 20; collector stop/start was present in raw
+  deploy events.
+- SQLite before/after live ingestion: `4474/22370/1312320` -> `4833/24165/1417673` for
+  metrics/scores/offset; +359/+1795, retry 0, reconnect 0, duplicates 0, five scores/metric.
+- Scheduler: 2 real ticks, `max_concurrent=1`, clean stop, process exit 0. PostgreSQL preserved;
+  no marker mutation, reset/delete/reassignment, app B operation, or ML train/score.
+
 ### REVIEW-FIX 02 gate table
 
 | Finding | Fix / regression | Evidence | Status |

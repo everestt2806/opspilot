@@ -312,3 +312,61 @@ services running). PostgreSQL was preserved and no marker mutation was performed
 app B was not operated and remains outside the target scope (read-only status was not used as a
 success signal for A17). No ML train/score, UI, fault coordinator, push, PR, merge, or app B
 mutation was performed.
+
+## REVIEW-FIX 05 - 11/09/2026
+
+Review-05 was fixed from Leader HEAD `eaca497` without checkout/reset. Production code is
+`37d9e19`; the docs commits are recorded in the handoff. C02-R5-01...06 are closed while R1-R4
+invariants remain active. No schema change outside the approved migration-002 contract was needed.
+
+### Local commands and results
+
+Runtime was Node `v24.16.0`, pnpm `11.1.0`, Python `3.12` with `ml-service/.venv`:
+
+| CWD | Exact command | Exit / result |
+| --- | --- | --- |
+| `app` | `pnpm exec vitest run --maxWorkers=1 src/main/db src/main/monitor src/main/deploy src/main/shutdown.test.ts` | 0; 18 files, 95 tests |
+| `ml-service` | `..\\ml-service\\.venv\\Scripts\\python.exe -m pytest -q` | 0; 19 passed |
+| `collector` | `..\\ml-service\\.venv\\Scripts\\python.exe -m pytest -q` | 0; 26 passed |
+| `app` | `pnpm typecheck; pnpm exec tsc -p tsconfig.scripts.json --noEmit` | 0 |
+| `app` | scoped `pnpm exec eslint ...` | 0; no errors |
+| `app` | scoped `pnpm exec prettier --check ...` | 0 |
+| `app` | `pnpm build` | 0; renderer 3045 modules |
+
+The committed production regressions cover cancellation cleanup with an independent bounded signal,
+collector start exit/state verification, snapshot failure after stop, owner transitions for
+candidate/previous/down/unknown, prepared reconciliation fail-closed after restart, restore
+nonzero/wrong image, fully consumed matching `.1`, partial/invalid tails, UTF-8/parser warning,
+tail failure and retry, activation/cursor preservation, dedupe, deployment routing and five score
+rows. ML scores remain NULL where no model result exists; no fake score was inserted.
+
+### Controlled live mutation ledger
+
+Only VM02 / app `1` / `a17-notes-0911` was mutated after all local gates passed:
+
+```text
+pnpm exec tsc -p tsconfig.scripts.json                 # app, exit 0
+node scripts/prepare-cli.js                            # app, exit 0
+pnpm exec electron ..\\tools\\a17-c02-live-rollback.cjs # app, exit 0
+pnpm exec electron .out-scripts/scripts/a17-c02-live.js # app, exit 0
+```
+
+The raw rollback record proved lineage and live ownership: before current deployment `19` had row
+tag `a17-notes-0911:v19`, resolved runtime `v16`, and Docker `.Config.Image=...:v16`, state
+`running`; target deployment `15` had row/resolved runtime `v15`. The helper rejected same-id and
+same-resolved-image targets before IPC. Afterward deployment `20` had `is_rollback_of=15`, row tag
+v20, resolved runtime v15, Docker image v15/state running, current pointer 20, and healthcheck
+exit 0. Events retain collector stop/flush, compose recreation, collector start, runtime inspect,
+and healthcheck output. Historical failed attempt 17 and prior attempts remain in the version log.
+
+SQLite mutation before the live ingestion runner was `4474 metrics / 22370 scores / offset 1312320`.
+The run committed `359 metrics / 1795 scores`, ending at `4833 metrics / 24165 scores / offset
+1417673`; retry inserted `0`, reconnect inserted `0`, duplicate `(deployment_id,seq)` groups were
+`0`, and every new metric had five score rows. Deployment-20 routing had `5` rows and deployment-19
+received the preceding live batch; no historical row was deleted, reassigned, or reset. Scheduler
+ticks were `2`, `max_concurrent=1`, `active_after_stop=false`, and process exit `0`.
+
+Final A evidence is the live Docker/runtime inspect and healthcheck above plus successful collector
+backed JSONL polling. PostgreSQL was preserved and no marker mutation was performed. App B was not
+operated and is not a success signal; no ML training/scoring, UI, fault flow, push, PR or merge was
+performed. C03-C09 remain closed/`NOT_RUN`.

@@ -155,3 +155,11 @@ adoption và committed-byte rotation gap đã có production regressions. Local 
 18 files/90 tests, ML 19, collector 26, typecheck/lint/Prettier/build. VM02 live rollback
 current `18/v18` -> target `16/v16` -> deployment `19`, scheduler hai tick với max concurrency 1
 và exit 0; C02 `READY_FOR_LOCAL_REVIEW`. C03-C09 vẫn đóng/`NOT_RUN`, chưa push/PR/merge.
+
+### TK-A17 update - 11/09 C02 review-fix 05
+
+C02 đã đóng `C02-R5-01...06` tại code `37d9e19`: cleanup signal độc lập, runtime-owner state,
+durable reconciliation barrier, committed-byte rotation retry và rollback lineage/runtime inspect.
+Local focused `95/95`, ML `19/19`, collector `26/26`, typecheck/lint/Prettier/build PASS. Live
+VM02 current runtime v16 chọn target runtime v15, rollback deployment `20` healthy; scheduler hai
+tick, max concurrency 1, exit 0. C02 `READY_FOR_LOCAL_REVIEW`; C03-C09 vẫn đóng/`NOT_RUN`.

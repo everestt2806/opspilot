@@ -215,6 +215,12 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   exact current deployment, first-generation adoption và rotation chỉ commit đến byte đã xử lý.
   Focused 90 tests, ML 19, collector 26, static/build PASS; VM02 rollback target khác current và
   scheduler hai tick exit 0. Handoff `READY_FOR_LOCAL_REVIEW`; C03-C09 tiếp tục đóng/`NOT_RUN`.
+
+- REVIEW-FIX C02 05 11/09 — Worker đóng `C02-R5-01...06` tại code `37d9e19`: cleanup độc lập
+  với cancel, owner state/barrier durable, rotation retry theo committed cursor và helper rollback
+  lineage/runtime inspect. Focused `95/95`, ML `19/19`, collector `26/26`, static/build PASS;
+  live current runtime v16 -> target v15 -> deployment 20 healthy, scheduler hai tick. Handoff
+  `READY_FOR_LOCAL_REVIEW`; C03-C09 vẫn đóng/`NOT_RUN`.
 - REVIEW C02 05 11/09 — [review-c02](tk-a17/review-c02.md): **CHANGES_REQUESTED** tại code
   `c6c728c`, submitted `018cb70`. Exact focused 90/90, ML 19/19, collector 26/26 và static/build
   PASS, nhưng ba regression mới FAIL: cancel cleanup dùng aborted signal, rotation đã đọc hết ghi

@@ -16,7 +16,7 @@
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
-| C02   | READY_FOR_LOCAL_REVIEW | code `c6c728c` / docs `018cb70` | CHANGES_REQUESTED (review-05) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
+| C02   | READY_FOR_LOCAL_REVIEW | code `37d9e19` / docs pending commit | CHANGES_REQUESTED (review-05) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C05   | NOT_STARTED    | —            | PENDING | Chưa có        |
@@ -142,6 +142,12 @@
   chọn target `16/v16`, tạo deployment `19`, scheduler hai tick `max_concurrent=1`, exit `0`.
   Handoff C02 `READY_FOR_LOCAL_REVIEW`; submitted docs HEAD được ghi trong handoff sau commit;
   C03-C09 vẫn đóng/`NOT_RUN`, không push/PR/merge.
+
+- REVIEW-FIX C02 05 - 11/09/2026: Worker tiếp tục từ Leader review-05 `eaca497`, commit code
+  `37d9e19`, đóng `C02-R5-01...06` với 95 focused tests và đầy đủ local gates. Controlled VM02
+  rollback chứng minh current runtime v16 -> target runtime v15 -> deployment 20, Docker/state
+  và healthcheck PASS; scheduler hai tick, max concurrency 1, exit 0. Handoff C02
+  `READY_FOR_LOCAL_REVIEW`; C03-C09 đóng/`NOT_RUN`, không push/PR/merge.
 - REVIEW C02 05 - 11/09/2026: Leader review code `c6c728c`, submitted HEAD `018cb70`:
   **CHANGES_REQUESTED**. Local gates Worker đều PASS nhưng ba reviewer regression FAIL: cancel cleanup
   dùng aborted signal, matching `.1` đã đọc hết ghi gap giả, và lỗi đọc `.1` đóng qua byte chưa commit.
