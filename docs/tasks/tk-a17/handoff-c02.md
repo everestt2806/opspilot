@@ -368,3 +368,14 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
   production defect mới; review-fix tiếp theo chỉ cần test/provenance nếu tests không lộ lỗi.
 - C02 tiếp tục `REVIEW_FIX_REQUIRED`; C03–C09 đóng/`NOT_RUN`. Không cần live mutation;
   evidence reviewer: `docs/evidence/tk-a17/c02/review-09/`.
+
+## Leader review 10 — 12/09/2026
+
+- Reviewed base `35a4bfa`, production `8fe4842`, test commit `5febcbe`, submitted HEAD `313201d`;
+  verdict **APPROVED** tại [review-c02.md](review-c02.md), mục 14.
+- `C02-R9-01` và mọi finding R1–R9 CLOSED. Reviewer chạy service 22/22, focused 113/113,
+  node/web/scripts typecheck, scoped ESLint và test Prettier đều PASS.
+- ML/collector/build/live không chạy lại theo fast-track test/docs-only; production và evidence live
+  đã duyệt giữ nguyên. Không deploy/rollback hoặc thao tác app B.
+- C02 đóng. Mở duy nhất C03 theo [C03 Worker plan](c03-worker-plan.md); C04–C09 đóng/`NOT_RUN`.
+  Evidence reviewer: `docs/evidence/tk-a17/c02/review-10/`.

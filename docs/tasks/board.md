@@ -211,3 +211,10 @@ C02 **CHANGES_REQUESTED** tại code `8fe4842`, submitted HEAD `d65ead7`. Produc
 đạt; focused 99/99, ML 19/19, collector 26/26 và static/build PASS. Mở duy nhất `C02-R9-01`
 MAJOR vì recovery matrix/evidence overclaim committed tests. Không phát hiện defect production mới,
 không cần live mutation; C02 `REVIEW_FIX_REQUIRED`, C03-C09 đóng/`NOT_RUN`.
+
+### TK-A17 update - 12/09 C02 review-10
+
+C02 **APPROVED**: production `8fe4842`, tests `5febcbe`, submitted HEAD `313201d`. Reviewer
+service 22/22, focused 113/113, node/web/scripts typecheck, scoped ESLint và test Prettier PASS;
+mọi finding C02 CLOSED. Mở duy nhất C03 theo `docs/tasks/tk-a17/c03-worker-plan.md`; C04-C09
+đóng/`NOT_RUN`. Task về `TUẦN NÀY`; chưa push/PR/merge.

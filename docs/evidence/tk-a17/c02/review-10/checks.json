@@ -1,0 +1,39 @@
+{
+  "review": "TK-A17/C02 review-10",
+  "date": "2026-09-12",
+  "reviewed_base": "35a4bfa",
+  "production_code": "8fe4842",
+  "test_code": "5febcbe",
+  "submitted_head": "313201d",
+  "scope": "fast-track test and provenance closure",
+  "checks": [
+    { "name": "ancestry", "result": "PASS" },
+    { "name": "production unchanged from review-09", "result": "PASS" },
+    { "name": "service test", "result": "PASS", "detail": "22 tests" },
+    {
+      "name": "focused suite",
+      "result": "PASS",
+      "detail": "18 files, 113 tests"
+    },
+    { "name": "node/web/scripts typecheck", "result": "PASS" },
+    { "name": "scoped ESLint and test Prettier", "result": "PASS" },
+    {
+      "name": "recovery matrix mapping",
+      "result": "PASS",
+      "detail": "boundary, dependency failure, reconnect, lineage, previous-owner abort, missing lineage, lock wait, stale replacement, atomic retry and second tick are committed"
+    },
+    {
+      "name": "GitNexus",
+      "result": "PASS_WITH_WARNING",
+      "detail": "index succeeded with FTS unavailable warning; 11 changed symbols, 231 affected flows, critical risk"
+    },
+    {
+      "name": "ML, collector, build and live rerun",
+      "result": "NOT_RUN",
+      "detail": "accepted fast-track omission because production remained at previously verified 8fe4842"
+    }
+  ],
+  "live_evidence": "Prior deployment 20/21 activation and 416+5=421 / 2080+25=2105 arithmetic accepted without mutation",
+  "verdict": "APPROVED",
+  "next_stage": "C03 OPEN"
+}

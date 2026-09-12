@@ -2,13 +2,13 @@
 
 > C00 APPROVED 11/09: [review](tk-a17/review-c00.md), code `d4ec3be`, docs `23cd248`.
 > C01 APPROVED review-03 11/09: [review](tk-a17/review-c01.md),
-> code `8e42856`, docs `9689ea4`. C02 review-09 đang CHANGES_REQUESTED.
+> code `8e42856`, docs `9689ea4`. C02 APPROVED review-10; C03 đã mở.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; C01 đã được Leader approve sau review-fix-02; C02 đang sửa theo review-09.
+- Owner A solo; C02 đã được Leader approve; Worker thực hiện duy nhất C03 theo plan đã mở.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
-- Chặng được approve: C00, C01. C02 `REVIEW_FIX_REQUIRED`; C03–C09 chưa mở.
+- Chặng được approve: C00, C01, C02. C03 `OPEN`; C04–C09 chưa mở.
 
 ## Sổ gate (Leader xác nhận verdict)
 
@@ -16,8 +16,8 @@
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
-| C02   | READY_FOR_LOCAL_REVIEW | code `8fe4842` / docs `d65ead7` | CHANGES_REQUESTED (review-09) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
-| C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C02   | READY_FOR_LOCAL_REVIEW | production `8fe4842` / tests `5febcbe` / docs `313201d` | APPROVED (review-10) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
+| C03   | OPEN           | —            | PENDING | [Worker plan](tk-a17/c03-worker-plan.md) |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C05   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C06   | NOT_STARTED    | —            | PENDING | Chưa có        |
@@ -184,11 +184,12 @@
   boundary vẫn activate, và pointer-update failure để activation/pointer split state. Mở
   `C02-R8-01…03`; C02 `REVIEW_FIX_REQUIRED`, C03-C09 đóng/`NOT_RUN`.
 - REVIEW C02 09 - 12/09/2026: Leader review code `8fe4842`, submitted HEAD `d65ead7`:
-
-- REVIEW-FIX C02 09: code `5febcbe`, docs append from `d65ead7`; C02-R9-01 closed by committed
-  fail-closed, lineage/owner and concurrency/stale-row tests. Service `22/22`, focused `18 files/113
-  tests`, typecheck/scripts typecheck/scoped ESLint/Prettier PASS. Production unchanged; ML/collector/
-  build/live `NOT_RUN`; `READY_FOR_LOCAL_REVIEW`; C03-C09 closed/`NOT_RUN`.
   **CHANGES_REQUESTED**. Production R8-01/02 và full gates đạt; không có defect production mới.
   `C02-R9-01` MAJOR còn mở vì review-fix-08 khai nhiều recovery case PASS nhưng diff chỉ có một test
   mới và một test mở rộng. C02 `REVIEW_FIX_REQUIRED`; C03-C09 đóng/`NOT_RUN`; không cần live mutation.
+- REVIEW-FIX C02 09: code `5febcbe`, docs `313201d`; C02-R9-01 closed by committed fail-closed,
+  lineage/owner and concurrency/stale-row tests. Service 22/22, focused 113/113 và static gates PASS.
+  Production unchanged; ML/collector/build/live `NOT_RUN`; `READY_FOR_LOCAL_REVIEW`.
+- REVIEW C02 10 - 12/09/2026: Leader **APPROVED** production `8fe4842`, tests `5febcbe`, submitted
+  HEAD `313201d`. Mọi finding C02 CLOSED; mở duy nhất C03 theo
+  [c03-worker-plan.md](tk-a17/c03-worker-plan.md). C04-C09 đóng/`NOT_RUN`.

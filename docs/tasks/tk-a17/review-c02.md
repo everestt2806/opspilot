@@ -974,3 +974,47 @@ Không cần chạy live hoặc đọc SSH lại; giữ nguyên evidence deploym
 push/PR/merge. Giữ .devflow/, docs/ban-giao-20-08.md, logo.png. Append REVIEW-FIX 09 với exact code/docs
 HEAD và chỉ bàn giao READY_FOR_LOCAL_REVIEW khi matrix thực sự nằm trong commit và full gates PASS.
 ```
+
+## 14. Review 10 — fast-track closure tại `313201d`
+
+### Phạm vi và verdict
+
+- Reviewed base `35a4bfa`, production `8fe4842`, test commit `5febcbe`, submitted HEAD `313201d`;
+  ancestry hợp lệ và không có production diff sau review 09.
+- Verdict: **APPROVED**. `C02-R9-01`, phần còn lại `R8-03/R7-03/R6-02` và toàn bộ finding C02 đã đóng.
+- Mở duy nhất C03 theo [C03 Worker plan](c03-worker-plan.md); C04–C09 đóng/`NOT_RUN`.
+- Evidence reviewer: [review-10](../../evidence/tk-a17/c02/review-10/). Review chỉ local/test/docs;
+  không deploy/rollback, không chạy ML/collector/build/live và không thao tác app B theo fast-track đã duyệt.
+
+### Kiểm chứng độc lập
+
+| Gate | Kết quả reviewer |
+| --- | --- |
+| `service.test.ts` | 22/22 PASS |
+| Exact focused | 18 file, 113/113 PASS |
+| Node/web/scripts typecheck | PASS |
+| Scoped ESLint + test Prettier | PASS |
+| Production diff từ review 09 | Không có; production giữ tại `8fe4842` |
+| Recovery matrix audit | PASS; case đã khai map tới committed test |
+| GitNexus | analyze PASS với FTS warning; 11 symbol, 231 affected flow, risk CRITICAL |
+| ML/collector/build/live rerun | `NOT_RUN` được chấp nhận vì test/docs-only; kết quả production HEAD trước giữ nguyên |
+
+Prettier mở rộng ngoài scoped gate báo các markdown lịch sử chưa theo formatter. Đây không phải code
+regression và không chặn C02; C03 phải format các file mới/đổi thuộc chặng của mình.
+
+### Closure finding
+
+| Finding | Review 10 |
+| --- | --- |
+| C02-R8-01 | CLOSED — exact boundary, boundary-1 và dependency fail-closed committed |
+| C02-R8-02 | CLOSED — atomic transition, injected failure và retry committed |
+| C02-R8-03 | CLOSED — close/reopen, second tick, lineage/owner, reconnect và stale-row matrix committed |
+| C02-R9-01 | CLOSED — evidence đã map tới tên test thật; production không đổi |
+
+### Điều kiện chuyển C03
+
+- Kế thừa SQLite/activation/source state C02; không reset hoặc reassign lịch sử.
+- Revalidate current target/runtime/generation trước mutation; không giả định deployment 21 vẫn current.
+- Dùng real `MlServiceManager` + `MlApiClient`; baseline current deployment `>=180` sạch rồi mới train.
+- C03 mới có quyền train/score và ML lifecycle; chưa có quyền deploy/fault/UI hoặc mở C04.
+- Handoff chi tiết và fast path nằm tại [c03-worker-plan.md](c03-worker-plan.md).

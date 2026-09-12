@@ -17,7 +17,7 @@ REVIEW-FIX C02 08 (12/09/2026): code `8fe4842`, evidence
 18/99, ML 19/19, collector 26/26, static/build PASS. No live mutation; read-only deployment 20/21
 evidence retains activation boundaries and `416+5=421`, `2080+25=2105`. C02
 READY_FOR_LOCAL_REVIEW; C03-C09 remain closed/NOT_RUN.
-| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | ĐANG LÀM — C02 READY_FOR_LOCAL_REVIEW |
+| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — C02 APPROVED, C03 OPEN |
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
 · [Sổ bàn giao](tk-a17-worker-handoff.md).
@@ -26,8 +26,8 @@ Yêu cầu đầy đủ: [plan mục 7–10](../24-ke-hoach-demo-theo-chang.md#7
 Khảo sát: [preflight 11/09](tk-a17/preflight-11-09.md). Trạng thái mới:
 [C00 APPROVED](tk-a17/review-c00.md), code `d4ec3be` / docs `23cd248`.
 [C01 APPROVED review-03](tk-a17/review-c01.md), code `8e42856` / docs `9689ea4`; mở C02.
-[C02 review-04 CHANGES_REQUESTED](tk-a17/review-c02.md), code `fa72a6e` / submitted `85f4810`;
-C03–C09 tiếp tục đóng.
+[C02 APPROVED review-10](tk-a17/review-c02.md), production `8fe4842`, tests `5febcbe`,
+submitted `313201d`; mở C03 theo [Worker plan](tk-a17/c03-worker-plan.md), C04–C09 đóng.
 Mục tiêu: A trình chiếu **tự phát hiện → tự rollback → xác minh phục hồi**. C08 bắt buộc.
 Không chia theo ngày/giờ công. Thời lượng 10s/30s/baseline/test vẫn giữ theo yêu cầu kỹ thuật.
 
@@ -259,11 +259,10 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   current pointer xảy ra sau khi activation đã commit. Mở `C02-R8-01…03`; C02 tiếp tục
   `REVIEW_FIX_REQUIRED`, C03-C09 đóng/`NOT_RUN`.
 - REVIEW C02 09 12/09 — [review-c02](tk-a17/review-c02.md): **CHANGES_REQUESTED** tại code
-
-- REVIEW-FIX C02 09: code `5febcbe`, docs append from `d65ead7`; three table-driven service groups
-  committed. Service `22/22`, focused `18 files/113 tests`, typecheck/lint/Prettier PASS. Production
-  `8fe4842` unchanged; no live. C02 `READY_FOR_LOCAL_REVIEW`; C03-C09 `NOT_RUN`.
-  `8fe4842`, submitted HEAD `d65ead7`. Reload-under-lock, durable boundary và atomic pointer transition
-  đạt; focused 99/99, ML 19/19, collector 26/26 và static/build PASS. Còn `C02-R9-01` MAJOR vì
-  recovery matrix trong evidence không tồn tại đầy đủ trong committed tests. Không có production defect
-  mới và không cần live mutation; C02 `REVIEW_FIX_REQUIRED`, C03-C09 đóng/`NOT_RUN`.
+  `8fe4842`, submitted HEAD `d65ead7`. Production đạt; còn `C02-R9-01` MAJOR do recovery matrix
+  trong evidence chưa tồn tại đầy đủ trong committed tests. Không cần live mutation.
+- REVIEW-FIX C02 09: code `5febcbe`, docs `313201d`; ba nhóm regression committed. Service 22/22,
+  focused 113/113 và static gates PASS; production `8fe4842` không đổi.
+- REVIEW C02 10 12/09 — [review-c02](tk-a17/review-c02.md): **APPROVED** production `8fe4842`,
+  tests `5febcbe`, submitted HEAD `313201d`; mọi finding C02 CLOSED. Mở duy nhất C03 theo
+  [Worker plan](tk-a17/c03-worker-plan.md); C04-C09 đóng/`NOT_RUN`.

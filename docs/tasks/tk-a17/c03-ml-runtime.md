@@ -1,5 +1,8 @@
 # C03 — ML train và chấm điểm thật, có trạng thái khi chưa sẵn sàng
 
+> **OPEN sau C02 review-10 (12/09/2026).** Worker dùng execution plan tại
+> [c03-worker-plan.md](c03-worker-plan.md); C04–C09 vẫn đóng/`NOT_RUN`.
+
 ## Đầu vào
 
 C02 APPROVED. Đọc M07/M06, ML OpenAPI, schema/IPC, mlClient/mlApi/service và ml-service.
