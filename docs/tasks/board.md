@@ -233,6 +233,10 @@ rehearsal đã có task nhưng còn đóng/`NOT_RUN`. ML cùng monitor/fault/rec
   C03 is `READY_FOR_LOCAL_REVIEW`; C04/C05 and later remain closed/`NOT_RUN`, with no push/PR/merge.
 - Current C03 status: `READY_FOR_LOCAL_REVIEW` at code `c149291`, docs `bf0580a` plus bookkeeping
   `e10e74e`; the older table row is historical. C04/C05 remain `NOT_RUN`.
+- REVIEW-FIX C03 01: findings `C03-R1-01...04` closed at code `6ee83ca`; final VM02 matrix,
+  durable SQLite/profile, structured events and demo tunnel proof are in
+  `docs/evidence/tk-a17/c03/review-fix-01/`. C03 remains `READY_FOR_LOCAL_REVIEW`; C04/C05 and
+  later remain closed/`NOT_RUN`.
 
 ### TK-A17 update - 12/09 C03 review-01
 

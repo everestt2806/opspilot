@@ -1,0 +1,2348 @@
+{
+  "host": "221.121.1.80",
+  "profileDir": "D:\\Developing\\DuAnCNTT\\docs\\evidence\\tk-a17\\c03\\review-fix-01\\profile-final2",
+  "sources": [
+    {
+      "name": "Express",
+      "appId": 13,
+      "deploymentIds": [
+        1,
+        2
+      ],
+      "image": "a17-c03-review01-final2-express:v2",
+      "port": 30012,
+      "framework": "express",
+      "docker": {
+        "image": "a17-c03-review01-final2-express:v2",
+        "state": "running",
+        "health": "healthy",
+        "raw": "a17-c03-review01-final2-express:v2|running|healthy\n"
+      },
+      "http": {
+        "status": 200,
+        "body": "<!doctype html>\n<html lang=\"vi\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <meta name=\"theme-color\" content=\"#080d18\" />\n    <title>OpsPilot Demo Inventory</title>\n    <style>\n      :root {\n        color-scheme: dark;\n        --bg: #080d18;\n        --panel: rgba(15, 23, 42, 0.78);\n        --panel-solid: #0f172a;\n        --line: rgba(148, 163, 184, 0.17);\n        --text: #f8fafc;\n        --muted: #94a3b8;\n        --indigo: #818cf8;\n        --cyan: #22d3ee;\n        --green: #34d399;\n        --danger: #fb7185;\n      }\n\n      * {\n        box-sizing: border-box;\n      }\n\n      html {\n        min-width: 320px;\n        background: var(--bg);\n      }\n\n      body {\n        min-height: 100vh;\n        margin: 0;\n        overflow-x: hidden;\n        color: var(--text);\n        background:\n          radial-gradient(circle at 12% 2%, rgba(99, 102, 241, 0.2), transparent 31rem),\n          radial-gradient(circle at 90% 22%, rgba(34, 211, 238, 0.12), transparent 28rem), var(--bg);\n        font-family:\n          Inter,\n          ui-sans-serif,\n          system-ui,\n          -apple-system,\n          BlinkMacSystemFont,\n          'Segoe UI',\n          sans-serif;\n      }\n\n      button,\n      input {\n        font: inherit;\n      }\n\n      a {\n        color: inherit;\n        text-decoration: none;\n      }\n\n      .shell {\n        width: min(1180px, calc(100% - 40px));\n        margin: 0 auto;\n      }\n\n      .nav {\n        display: flex;\n        min-height: 72px;\n        align-items: center;\n        justify-content: space-between;\n        gap: 20px;\n        border-bottom: 1px solid var(--line);\n      }\n\n      .brand {\n        display: flex;\n        align-items: center;\n        gap: 12px;\n        font-weight: 750;\n        letter-spacing: -0.02em;\n      }\n\n      .brand-mark {\n        display: grid;\n        width: 36px;\n        height: 36px;\n        place-items: center;\n        border: 1px solid rgba(129, 140, 248, 0.45);\n        border-radius: 11px;\n        background: linear-gradient(145deg, #6366f1, #0891b2);\n        box-shadow: 0 10px 30px rgba(99, 102, 241, 0.28);\n      }\n\n      .brand-mark svg {\n        width: 21px;\n        height: 21px;\n      }\n\n      .live-badge,\n      .eyebrow {\n        display: inline-flex;\n        align-items: center;\n        gap: 8px;\n        color: #bbf7d0;\n        font-size: 12px;\n        font-weight: 700;\n        letter-spacing: 0.08em;\n        text-transform: uppercase;\n      }\n\n      .live-dot {\n        width: 8px;\n        height: 8px;\n        border-radius: 999px;\n        background: var(--green);\n        box-shadow: 0 0 0 5px rgba(52, 211, 153, 0.11);\n      }\n\n      .hero {\n        display: grid;\n        grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);\n        gap: 48px;\n        align-items: center;\n        padding: 78px 0 54px;\n      }\n\n      .eyebrow {\n        color: var(--cyan);\n      }\n\n      h1 {\n        max-width: 720px;\n        margin: 17px 0 18px;\n        font-size: clamp(42px, 6.2vw, 78px);\n        line-height: 0.98;\n        letter-spacing: -0.065em;\n      }\n\n      .gradient-text {\n        color: transparent;\n        background: linear-gradient(90deg, #a5b4fc 4%, #67e8f9 62%, #6ee7b7);\n        background-clip: text;\n        -webkit-background-clip: text;\n      }\n\n      .hero-copy {\n        max-width: 650px;\n        margin: 0;\n        color: var(--muted);\n        font-size: 17px;\n        line-height: 1.7;\n      }\n\n      .hero-actions {\n        display: flex;\n        flex-wrap: wrap;\n        gap: 12px;\n        margin-top: 28px;\n      }\n\n      .button {\n        display: inline-flex;\n        min-height: 42px;\n        align-items: center;\n        justify-content: center;\n        padding: 0 17px;\n        border: 1px solid var(--line);\n        border-radius: 10px;\n        background: rgba(15, 23, 42, 0.66);\n        color: #dbeafe;\n        font-size: 13px;\n        font-weight: 700;\n        cursor: pointer;\n        transition: 160ms ease;\n      }\n\n      .button:hover {\n        border-color: rgba(129, 140, 248, 0.65);\n        transform: translateY(-1px);\n      }\n\n      .button-primary {\n        border-color: transparent;\n        background: linear-gradient(100deg, #6366f1, #0891b2);\n        color: white;\n      }\n\n      .deploy-card,\n      .panel,\n      .metric-card {\n        border: 1px solid var(--line);\n        background: var(--panel);\n        box-shadow: 0 22px 60px rgba(2, 6, 23, 0.32);\n        backdrop-filter: blur(18px);\n      }\n\n      .deploy-card {\n        overflow: hidden;\n        border-radius: 18px;\n      }\n\n      .deploy-card-head {\n        display: flex;\n        align-items: center;\n        justify-content: space-between;\n        padding: 15px 18px;\n        border-bottom: 1px solid var(--line);\n        color: var(--muted);\n        font:\n          12px ui-monospace,\n          SFMono-Regular,\n          Menlo,\n          Consolas,\n          monospace;\n      }\n\n      .window-dots {\n        display: flex;\n        gap: 6px;\n      }\n\n      .window-dots i {\n        width: 8px;\n        height: 8px;\n        border-radius: 50%;\n        background: #334155;\n      }\n\n      .deploy-card-body {\n        padding: 22px;\n      }\n\n      .deploy-line {\n        display: grid;\n        grid-template-columns: 27px minmax(0, 1fr) auto;\n        align-items: center;\n        gap: 10px;\n        padding: 10px 0;\n        color: #cbd5e1;\n        font-size: 13px;\n      }\n\n      .deploy-line + .deploy-line {\n        border-top: 1px dashed rgba(148, 163, 184, 0.12);\n      }\n\n      .deploy-check {\n        display: grid;\n        width: 22px;\n        height: 22px;\n        place-items: center;\n        border-radius: 50%;\n        background: rgba(52, 211, 153, 0.13);\n        color: var(--green);\n        font-size: 12px;\n      }\n\n      .deploy-time {\n        color: #64748b;\n        font:\n          11px ui-monospace,\n          SFMono-Regular,\n          Menlo,\n          Consolas,\n          monospace;\n      }\n\n      .metrics {\n        display: grid;\n        grid-template-columns: repeat(4, minmax(0, 1fr));\n        gap: 14px;\n        margin-bottom: 36px;\n      }\n\n      .metric-card {\n        min-width: 0;\n        padding: 20px;\n        border-radius: 14px;\n      }\n\n      .metric-label {\n        display: block;\n        margin-bottom: 10px;\n        color: var(--muted);\n        font-size: 12px;\n        font-weight: 650;\n      }\n\n      .metric-value {\n        display: block;\n        overflow: hidden;\n        color: var(--text);\n        font-size: clamp(19px, 2.4vw, 28px);\n        font-weight: 760;\n        letter-spacing: -0.035em;\n        text-overflow: ellipsis;\n        white-space: nowrap;\n      }\n\n      .metric-note {\n        display: block;\n        margin-top: 7px;\n        color: #64748b;\n        font-size: 11px;\n      }\n\n      .status-good {\n        color: var(--green);\n      }\n\n      .workspace {\n        display: grid;\n        grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);\n        gap: 18px;\n        padding-bottom: 64px;\n      }\n\n      .panel {\n        min-width: 0;\n        overflow: hidden;\n        border-radius: 15px;\n      }\n\n      .panel-head {\n        display: flex;\n        align-items: center;\n        justify-content: space-between;\n        gap: 16px;\n        padding: 18px 20px;\n        border-bottom: 1px solid var(--line);\n      }\n\n      .panel-head h2 {\n        margin: 0;\n        font-size: 15px;\n        letter-spacing: -0.01em;\n      }\n\n      .panel-head span {\n        color: var(--muted);\n        font-size: 12px;\n      }\n\n      .table-wrap {\n        overflow-x: auto;\n      }\n\n      table {\n        width: 100%;\n        border-collapse: collapse;\n      }\n\n      th,\n      td {\n        padding: 13px 20px;\n        border-bottom: 1px solid rgba(148, 163, 184, 0.09);\n        text-align: left;\n      }\n\n      th {\n        color: #64748b;\n        font-size: 10px;\n        letter-spacing: 0.09em;\n        text-transform: uppercase;\n      }\n\n      td {\n        color: #cbd5e1;\n        font-size: 13px;\n      }\n\n      td:first-child,\n      .mono {\n        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n      }\n\n      .empty-row {\n        height: 160px;\n        color: var(--muted);\n        text-align: center;\n      }\n\n      .form-body {\n        padding: 20px;\n      }\n\n      label {\n        display: block;\n        margin-bottom: 9px;\n        color: var(--muted);\n        font-size: 12px;\n        font-weight: 650;\n      }\n\n      input {\n        width: 100%;\n        height: 43px;\n        padding: 0 13px;\n        border: 1px solid rgba(148, 163, 184, 0.25);\n        border-radius: 9px;\n        outline: none;\n        background: rgba(2, 6, 23, 0.48);\n        color: var(--text);\n      }\n\n      input:focus {\n        border-color: var(--indigo);\n        box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.12);\n      }\n\n      .form-body .button {\n        width: 100%;\n        margin-top: 12px;\n      }\n\n      .tech-list {\n        display: grid;\n        gap: 11px;\n        margin-top: 22px;\n        padding-top: 18px;\n        border-top: 1px solid var(--line);\n      }\n\n      .tech-row {\n        display: flex;\n        min-width: 0;\n        justify-content: space-between;\n        gap: 16px;\n        color: var(--muted);\n        font-size: 12px;\n      }\n\n      .tech-row strong {\n        overflow: hidden;\n        color: #cbd5e1;\n        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n        font-weight: 500;\n        text-overflow: ellipsis;\n        white-space: nowrap;\n      }\n\n      .toast {\n        min-height: 20px;\n        margin-top: 12px;\n        color: var(--green);\n        font-size: 12px;\n      }\n\n      .toast-error {\n        color: var(--danger);\n      }\n\n      footer {\n        padding: 0 0 34px;\n        color: #64748b;\n        font-size: 11px;\n        text-align: center;\n      }\n\n      @media (max-width: 900px) {\n        .hero,\n        .workspace {\n          grid-template-columns: 1fr;\n        }\n\n        .hero {\n          gap: 28px;\n          padding-top: 54px;\n        }\n\n        .metrics {\n          grid-template-columns: repeat(2, minmax(0, 1fr));\n        }\n      }\n\n      @media (max-width: 560px) {\n        .shell {\n          width: min(100% - 24px, 1180px);\n        }\n\n        .nav {\n          min-height: 62px;\n        }\n\n        .nav .live-badge {\n          font-size: 10px;\n        }\n\n        .hero {\n          padding-top: 40px;\n        }\n\n        h1 {\n          font-size: 44px;\n        }\n\n        .metrics {\n          grid-template-columns: 1fr;\n        }\n\n        .panel-head,\n        th,\n        td {\n          padding-inline: 14px;\n        }\n      }\n    </style>\n  </head>\n  <body>\n    <nav class=\"nav shell\">\n      <div class=\"brand\">\n        <span class=\"brand-mark\" aria-hidden=\"true\">\n          <svg viewBox=\"0 0 24 24\" fill=\"none\">\n            <path d=\"M5 15.5 12 4l7 11.5-7 4.5-7-4.5Z\" stroke=\"white\" stroke-width=\"1.7\" />\n            <path d=\"M8.5 14.8h7M12 4v16\" stroke=\"white\" stroke-width=\"1.7\" />\n          </svg>\n        </span>\n        <span>OpsPilot Demo Inventory</span>\n      </div>\n      <div class=\"live-badge\"><span class=\"live-dot\"></span> Live on VPS</div>\n    </nav>\n\n    <main class=\"shell\">\n      <section class=\"hero\">\n        <div>\n          <div class=\"eyebrow\">Deployment verified</div>\n          <h1>Source to VPS.<br /><span class=\"gradient-text\">One controlled flow.</span></h1>\n          <p class=\"hero-copy\">\n            Ứng dụng Express đang chạy thật trong Docker, kết nối PostgreSQL và được healthcheck bởi\n            OpsPilot. Tạo một bản ghi bên dưới để kiểm chứng API và dữ liệu end-to-end.\n          </p>\n          <div class=\"hero-actions\">\n            <a class=\"button button-primary\" href=\"/health\" target=\"_blank\" rel=\"noreferrer\">\n              Open healthcheck\n            </a>\n            <a class=\"button\" href=\"/items?limit=5\" target=\"_blank\" rel=\"noreferrer\">\n              Inspect JSON API\n            </a>\n          </div>\n        </div>\n\n        <div class=\"deploy-card\" aria-label=\"OpsPilot deployment pipeline\">\n          <div class=\"deploy-card-head\">\n            <div class=\"window-dots\"><i></i><i></i><i></i></div>\n            <span>opspilot / deploy</span>\n          </div>\n          <div class=\"deploy-card-body\">\n            <div class=\"deploy-line\">\n              <span class=\"deploy-check\">✓</span><span>Source detected</span\n              ><span class=\"deploy-time\">Express</span>\n            </div>\n            <div class=\"deploy-line\">\n              <span class=\"deploy-check\">✓</span><span>Docker image built</span\n              ><span class=\"deploy-time\">Node 22</span>\n            </div>\n            <div class=\"deploy-line\">\n              <span class=\"deploy-check\">✓</span><span>Containers started</span\n              ><span class=\"deploy-time\">healthy</span>\n            </div>\n            <div class=\"deploy-line\">\n              <span class=\"deploy-check\">✓</span><span>PostgreSQL connected</span\n              ><span class=\"deploy-time\">ready</span>\n            </div>\n            <div class=\"deploy-line\">\n              <span class=\"deploy-check\">✓</span><span>Public healthcheck</span\n              ><span class=\"deploy-time\">HTTP 200</span>\n            </div>\n          </div>\n        </div>\n      </section>\n\n      <section class=\"metrics\" aria-label=\"Live application metrics\">\n        <article class=\"metric-card\">\n          <span class=\"metric-label\">Service status</span>\n          <strong id=\"health-value\" class=\"metric-value status-good\">Checking…</strong>\n          <span class=\"metric-note\">GET /health</span>\n        </article>\n        <article class=\"metric-card\">\n          <span class=\"metric-label\">Storage engine</span>\n          <strong id=\"storage-value\" class=\"metric-value\">—</strong>\n          <span class=\"metric-note\">Detected at runtime</span>\n        </article>\n        <article class=\"metric-card\">\n          <span class=\"metric-label\">Inventory records</span>\n          <strong id=\"records-value\" class=\"metric-value\">—</strong>\n          <span class=\"metric-note\">Read from live API</span>\n        </article>\n        <article class=\"metric-card\">\n          <span class=\"metric-label\">Container uptime</span>\n          <strong id=\"uptime-value\" class=\"metric-value\">—</strong>\n          <span class=\"metric-note\">Since current deploy</span>\n        </article>\n      </section>\n\n      <section class=\"workspace\">\n        <article class=\"panel\">\n          <div class=\"panel-head\">\n            <h2>Latest database records</h2>\n            <span id=\"table-caption\">Loading from /items…</span>\n          </div>\n          <div class=\"table-wrap\">\n            <table>\n              <thead>\n                <tr>\n                  <th>ID</th>\n                  <th>Name</th>\n                  <th>Created at</th>\n                </tr>\n              </thead>\n              <tbody id=\"items-body\">\n                <tr>\n                  <td class=\"empty-row\" colspan=\"3\">Loading…</td>\n                </tr>\n              </tbody>\n            </table>\n          </div>\n        </article>\n\n        <aside class=\"panel\">\n          <div class=\"panel-head\">\n            <h2>Write through the API</h2>\n            <span>POST /items</span>\n          </div>\n          <div class=\"form-body\">\n            <form id=\"create-form\">\n              <label for=\"item-name\">New inventory item</label>\n              <input\n                id=\"item-name\"\n                name=\"name\"\n                maxlength=\"80\"\n                placeholder=\"demo-with-lecturer\"\n                required\n              />\n              <button id=\"create-button\" class=\"button button-primary\" type=\"submit\">\n                Create record\n              </button>\n            </form>\n            <div id=\"toast\" class=\"toast\" role=\"status\" aria-live=\"polite\"></div>\n            <div class=\"tech-list\">\n              <div class=\"tech-row\">\n                <span>App version</span><strong id=\"version-value\">—</strong>\n              </div>\n              <div class=\"tech-row\"><span>Runtime</span><strong id=\"runtime-value\">—</strong></div>\n              <div class=\"tech-row\"><span>Public host</span><strong id=\"host-value\">—</strong></div>\n            </div>\n          </div>\n        </aside>\n      </section>\n    </main>\n\n    <footer class=\"shell\">Deployed and verified by OpsPilot · Express · Docker · PostgreSQL</footer>\n\n    <script>\n      const byId = (id) => document.getElementById(id)\n      const setText = (id, value) => {\n        byId(id).textContent = String(value)\n      }\n\n      function formatUptime(seconds) {\n        const value = Math.max(0, Number(seconds) || 0)\n        const hours = Math.floor(value / 3600)\n        const minutes = Math.floor((value % 3600) / 60)\n        const secs = value % 60\n        return hours > 0\n          ? `${hours}h ${minutes}m`\n          : minutes > 0\n            ? `${minutes}m ${secs}s`\n            : `${secs}s`\n      }\n\n      async function request(url, options) {\n        const response = await fetch(url, options)\n        if (!response.ok) throw new Error(`HTTP ${response.status}`)\n        return response.json()\n      }\n\n      function renderItems(items) {\n        const body = byId('items-body')\n        body.replaceChildren()\n        if (items.length === 0) {\n          const row = document.createElement('tr')\n          const cell = document.createElement('td')\n          cell.colSpan = 3\n          cell.className = 'empty-row'\n          cell.textContent = 'No records yet.'\n          row.appendChild(cell)\n          body.appendChild(row)\n          return\n        }\n        for (const item of [...items].reverse()) {\n          const row = document.createElement('tr')\n          for (const value of [\n            item.id,\n            item.name,\n            new Date(item.created_at).toLocaleString('vi-VN')\n          ]) {\n            const cell = document.createElement('td')\n            cell.textContent = String(value)\n            row.appendChild(cell)\n          }\n          body.appendChild(row)\n        }\n      }\n\n      async function refreshDashboard() {\n        try {\n          const [meta, health] = await Promise.all([request('/meta'), request('/health')])\n          setText('health-value', health.ok ? 'Healthy' : 'Degraded')\n          setText('storage-value', meta.storage)\n          setText('records-value', Number(meta.records).toLocaleString('vi-VN'))\n          setText('uptime-value', formatUptime(health.uptime_s))\n          setText('version-value', `v${meta.version}`)\n          setText('runtime-value', meta.runtime)\n          setText('host-value', window.location.host)\n          setText('table-caption', `${Number(meta.records).toLocaleString('vi-VN')} total records`)\n          const offset = Math.max(0, Number(meta.records) - 6)\n          renderItems(await request(`/items?limit=6&offset=${offset}`))\n        } catch (error) {\n          setText('health-value', 'Unavailable')\n          byId('health-value').classList.remove('status-good')\n          setText('table-caption', error instanceof Error ? error.message : 'Request failed')\n        }\n      }\n\n      byId('create-form').addEventListener('submit', async (event) => {\n        event.preventDefault()\n        const input = byId('item-name')\n        const button = byId('create-button')\n        const toast = byId('toast')\n        const name = input.value.trim()\n        if (!name) return\n        button.disabled = true\n        button.textContent = 'Creating…'\n        toast.textContent = ''\n        toast.classList.remove('toast-error')\n        try {\n          const item = await request('/items', {\n            method: 'POST',\n            headers: { 'Content-Type': 'application/json' },\n            body: JSON.stringify({ name })\n          })\n          input.value = ''\n          toast.textContent = `Created record #${item.id} in PostgreSQL.`\n          await refreshDashboard()\n        } catch (error) {\n          toast.classList.add('toast-error')\n          toast.textContent = error instanceof Error ? error.message : 'Could not create record.'\n        } finally {\n          button.disabled = false\n          button.textContent = 'Create record'\n        }\n      })\n\n      void refreshDashboard()\n      window.setInterval(() => {\n        void request('/health')\n          .then((health) => setText('uptime-value', formatUptime(health.uptime_s)))\n          .catch(() => undefined)\n      }, 5000)\n    </script>\n  </body>\n</html>",
+        "raw": "<!doctype html>\n<html lang=\"vi\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <meta name=\"theme-color\" content=\"#080d18\" />\n    <title>OpsPilot Demo Inventory</title>\n    <style>\n      :root {\n        color-scheme: dark;\n        --bg: #080d18;\n        --panel: rgba(15, 23, 42, 0.78);\n        --panel-solid: #0f172a;\n        --line: rgba(148, 163, 184, 0.17);\n        --text: #f8fafc;\n        --muted: #94a3b8;\n        --indigo: #818cf8;\n        --cyan: #22d3ee;\n        --green: #34d399;\n        --danger: #fb7185;\n      }\n\n      * {\n        box-sizing: border-box;\n      }\n\n      html {\n        min-width: 320px;\n        background: var(--bg);\n      }\n\n      body {\n        min-height: 100vh;\n        margin: 0;\n        overflow-x: hidden;\n        color: var(--text);\n        background:\n          radial-gradient(circle at 12% 2%, rgba(99, 102, 241, 0.2), transparent 31rem),\n          radial-gradient(circle at 90% 22%, rgba(34, 211, 238, 0.12), transparent 28rem), var(--bg);\n        font-family:\n          Inter,\n          ui-sans-serif,\n          system-ui,\n          -apple-system,\n          BlinkMacSystemFont,\n          'Segoe UI',\n          sans-serif;\n      }\n\n      button,\n      input {\n        font: inherit;\n      }\n\n      a {\n        color: inherit;\n        text-decoration: none;\n      }\n\n      .shell {\n        width: min(1180px, calc(100% - 40px));\n        margin: 0 auto;\n      }\n\n      .nav {\n        display: flex;\n        min-height: 72px;\n        align-items: center;\n        justify-content: space-between;\n        gap: 20px;\n        border-bottom: 1px solid var(--line);\n      }\n\n      .brand {\n        display: flex;\n        align-items: center;\n        gap: 12px;\n        font-weight: 750;\n        letter-spacing: -0.02em;\n      }\n\n      .brand-mark {\n        display: grid;\n        width: 36px;\n        height: 36px;\n        place-items: center;\n        border: 1px solid rgba(129, 140, 248, 0.45);\n        border-radius: 11px;\n        background: linear-gradient(145deg, #6366f1, #0891b2);\n        box-shadow: 0 10px 30px rgba(99, 102, 241, 0.28);\n      }\n\n      .brand-mark svg {\n        width: 21px;\n        height: 21px;\n      }\n\n      .live-badge,\n      .eyebrow {\n        display: inline-flex;\n        align-items: center;\n        gap: 8px;\n        color: #bbf7d0;\n        font-size: 12px;\n        font-weight: 700;\n        letter-spacing: 0.08em;\n        text-transform: uppercase;\n      }\n\n      .live-dot {\n        width: 8px;\n        height: 8px;\n        border-radius: 999px;\n        background: var(--green);\n        box-shadow: 0 0 0 5px rgba(52, 211, 153, 0.11);\n      }\n\n      .hero {\n        display: grid;\n        grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);\n        gap: 48px;\n        align-items: center;\n        padding: 78px 0 54px;\n      }\n\n      .eyebrow {\n        color: var(--cyan);\n      }\n\n      h1 {\n        max-width: 720px;\n        margin: 17px 0 18px;\n        font-size: clamp(42px, 6.2vw, 78px);\n        line-height: 0.98;\n        letter-spacing: -0.065em;\n      }\n\n      .gradient-text {\n        color: transparent;\n        background: linear-gradient(90deg, #a5b4fc 4%, #67e8f9 62%, #6ee7b7);\n        background-clip: text;\n        -webkit-background-clip: text;\n      }\n\n      .hero-copy {\n        max-width: 650px;\n        margin: 0;\n        color: var(--muted);\n        font-size: 17px;\n        line-height: 1.7;\n      }\n\n      .hero-actions {\n        display: flex;\n        flex-wrap: wrap;\n        gap: 12px;\n        margin-top: 28px;\n      }\n\n      .button {\n        display: inline-flex;\n        min-height: 42px;\n        align-items: center;\n        justify-content: center;\n        padding: 0 17px;\n        border: 1px solid var(--line);\n        border-radius: 10px;\n        background: rgba(15, 23, 42, 0.66);\n        color: #dbeafe;\n        font-size: 13px;\n        font-weight: 700;\n        cursor: pointer;\n        transition: 160ms ease;\n      }\n\n      .button:hover {\n        border-color: rgba(129, 140, 248, 0.65);\n        transform: translateY(-1px);\n      }\n\n      .button-primary {\n        border-color: transparent;\n        background: linear-gradient(100deg, #6366f1, #0891b2);\n        color: white;\n      }\n\n      .deploy-card,\n      .panel,\n      .metric-card {\n        border: 1px solid var(--line);\n        background: var(--panel);\n        box-shadow: 0 22px 60px rgba(2, 6, 23, 0.32);\n        backdrop-filter: blur(18px);\n      }\n\n      .deploy-card {\n        overflow: hidden;\n        border-radius: 18px;\n      }\n\n      .deploy-card-head {\n        display: flex;\n        align-items: center;\n        justify-content: space-between;\n        padding: 15px 18px;\n        border-bottom: 1px solid var(--line);\n        color: var(--muted);\n        font:\n          12px ui-monospace,\n          SFMono-Regular,\n          Menlo,\n          Consolas,\n          monospace;\n      }\n\n      .window-dots {\n        display: flex;\n        gap: 6px;\n      }\n\n      .window-dots i {\n        width: 8px;\n        height: 8px;\n        border-radius: 50%;\n        background: #334155;\n      }\n\n      .deploy-card-body {\n        padding: 22px;\n      }\n\n      .deploy-line {\n        display: grid;\n        grid-template-columns: 27px minmax(0, 1fr) auto;\n        align-items: center;\n        gap: 10px;\n        padding: 10px 0;\n        color: #cbd5e1;\n        font-size: 13px;\n      }\n\n      .deploy-line + .deploy-line {\n        border-top: 1px dashed rgba(148, 163, 184, 0.12);\n      }\n\n      .deploy-check {\n        display: grid;\n        width: 22px;\n        height: 22px;\n        place-items: center;\n        border-radius: 50%;\n        background: rgba(52, 211, 153, 0.13);\n        color: var(--green);\n        font-size: 12px;\n      }\n\n      .deploy-time {\n        color: #64748b;\n        font:\n          11px ui-monospace,\n          SFMono-Regular,\n          Menlo,\n          Consolas,\n          monospace;\n      }\n\n      .metrics {\n        display: grid;\n        grid-template-columns: repeat(4, minmax(0, 1fr));\n        gap: 14px;\n        margin-bottom: 36px;\n      }\n\n      .metric-card {\n        min-width: 0;\n        padding: 20px;\n        border-radius: 14px;\n      }\n\n      .metric-label {\n        display: block;\n        margin-bottom: 10px;\n        color: var(--muted);\n        font-size: 12px;\n        font-weight: 650;\n      }\n\n      .metric-value {\n        display: block;\n        overflow: hidden;\n        color: var(--text);\n        font-size: clamp(19px, 2.4vw, 28px);\n        font-weight: 760;\n        letter-spacing: -0.035em;\n        text-overflow: ellipsis;\n        white-space: nowrap;\n      }\n\n      .metric-note {\n        display: block;\n        margin-top: 7px;\n        color: #64748b;\n        font-size: 11px;\n      }\n\n      .status-good {\n        color: var(--green);\n      }\n\n      .workspace {\n        display: grid;\n        grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);\n        gap: 18px;\n        padding-bottom: 64px;\n      }\n\n      .panel {\n        min-width: 0;\n        overflow: hidden;\n        border-radius: 15px;\n      }\n\n      .panel-head {\n        display: flex;\n        align-items: center;\n        justify-content: space-between;\n        gap: 16px;\n        padding: 18px 20px;\n        border-bottom: 1px solid var(--line);\n      }\n\n      .panel-head h2 {\n        margin: 0;\n        font-size: 15px;\n        letter-spacing: -0.01em;\n      }\n\n      .panel-head span {\n        color: var(--muted);\n        font-size: 12px;\n      }\n\n      .table-wrap {\n        overflow-x: auto;\n      }\n\n      table {\n        width: 100%;\n        border-collapse: collapse;\n      }\n\n      th,\n      td {\n        padding: 13px 20px;\n        border-bottom: 1px solid rgba(148, 163, 184, 0.09);\n        text-align: left;\n      }\n\n      th {\n        color: #64748b;\n        font-size: 10px;\n        letter-spacing: 0.09em;\n        text-transform: uppercase;\n      }\n\n      td {\n        color: #cbd5e1;\n        font-size: 13px;\n      }\n\n      td:first-child,\n      .mono {\n        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n      }\n\n      .empty-row {\n        height: 160px;\n        color: var(--muted);\n        text-align: center;\n      }\n\n      .form-body {\n        padding: 20px;\n      }\n\n      label {\n        display: block;\n        margin-bottom: 9px;\n        color: var(--muted);\n        font-size: 12px;\n        font-weight: 650;\n      }\n\n      input {\n        width: 100%;\n        height: 43px;\n        padding: 0 13px;\n        border: 1px solid rgba(148, 163, 184, 0.25);\n        border-radius: 9px;\n        outline: none;\n        background: rgba(2, 6, 23, 0.48);\n        color: var(--text);\n      }\n\n      input:focus {\n        border-color: var(--indigo);\n        box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.12);\n      }\n\n      .form-body .button {\n        width: 100%;\n        margin-top: 12px;\n      }\n\n      .tech-list {\n        display: grid;\n        gap: 11px;\n        margin-top: 22px;\n        padding-top: 18px;\n        border-top: 1px solid var(--line);\n      }\n\n      .tech-row {\n        display: flex;\n        min-width: 0;\n        justify-content: space-between;\n        gap: 16px;\n        color: var(--muted);\n        font-size: 12px;\n      }\n\n      .tech-row strong {\n        overflow: hidden;\n        color: #cbd5e1;\n        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;\n        font-weight: 500;\n        text-overflow: ellipsis;\n        white-space: nowrap;\n      }\n\n      .toast {\n        min-height: 20px;\n        margin-top: 12px;\n        color: var(--green);\n        font-size: 12px;\n      }\n\n      .toast-error {\n        color: var(--danger);\n      }\n\n      footer {\n        padding: 0 0 34px;\n        color: #64748b;\n        font-size: 11px;\n        text-align: center;\n      }\n\n      @media (max-width: 900px) {\n        .hero,\n        .workspace {\n          grid-template-columns: 1fr;\n        }\n\n        .hero {\n          gap: 28px;\n          padding-top: 54px;\n        }\n\n        .metrics {\n          grid-template-columns: repeat(2, minmax(0, 1fr));\n        }\n      }\n\n      @media (max-width: 560px) {\n        .shell {\n          width: min(100% - 24px, 1180px);\n        }\n\n        .nav {\n          min-height: 62px;\n        }\n\n        .nav .live-badge {\n          font-size: 10px;\n        }\n\n        .hero {\n          padding-top: 40px;\n        }\n\n        h1 {\n          font-size: 44px;\n        }\n\n        .metrics {\n          grid-template-columns: 1fr;\n        }\n\n        .panel-head,\n        th,\n        td {\n          padding-inline: 14px;\n        }\n      }\n    </style>\n  </head>\n  <body>\n    <nav class=\"nav shell\">\n      <div class=\"brand\">\n        <span class=\"brand-mark\" aria-hidden=\"true\">\n          <svg viewBox=\"0 0 24 24\" fill=\"none\">\n            <path d=\"M5 15.5 12 4l7 11.5-7 4.5-7-4.5Z\" stroke=\"white\" stroke-width=\"1.7\" />\n            <path d=\"M8.5 14.8h7M12 4v16\" stroke=\"white\" stroke-width=\"1.7\" />\n          </svg>\n        </span>\n        <span>OpsPilot Demo Inventory</span>\n      </div>\n      <div class=\"live-badge\"><span class=\"live-dot\"></span> Live on VPS</div>\n    </nav>\n\n    <main class=\"shell\">\n      <section class=\"hero\">\n        <div>\n          <div class=\"eyebrow\">Deployment verified</div>\n          <h1>Source to VPS.<br /><span class=\"gradient-text\">One controlled flow.</span></h1>\n          <p class=\"hero-copy\">\n            Ứng dụng Express đang chạy thật trong Docker, kết nối PostgreSQL và được healthcheck bởi\n            OpsPilot. Tạo một bản ghi bên dưới để kiểm chứng API và dữ liệu end-to-end.\n          </p>\n          <div class=\"hero-actions\">\n            <a class=\"button button-primary\" href=\"/health\" target=\"_blank\" rel=\"noreferrer\">\n              Open healthcheck\n            </a>\n            <a class=\"button\" href=\"/items?limit=5\" target=\"_blank\" rel=\"noreferrer\">\n              Inspect JSON API\n            </a>\n          </div>\n        </div>\n\n        <div class=\"deploy-card\" aria-label=\"OpsPilot deployment pipeline\">\n          <div class=\"deploy-card-head\">\n            <div class=\"window-dots\"><i></i><i></i><i></i></div>\n            <span>opspilot / deploy</span>\n          </div>\n          <div class=\"deploy-card-body\">\n            <div class=\"deploy-line\">\n              <span class=\"deploy-check\">✓</span><span>Source detected</span\n              ><span class=\"deploy-time\">Express</span>\n            </div>\n            <div class=\"deploy-line\">\n              <span class=\"deploy-check\">✓</span><span>Docker image built</span\n              ><span class=\"deploy-time\">Node 22</span>\n            </div>\n            <div class=\"deploy-line\">\n              <span class=\"deploy-check\">✓</span><span>Containers started</span\n              ><span class=\"deploy-time\">healthy</span>\n            </div>\n            <div class=\"deploy-line\">\n              <span class=\"deploy-check\">✓</span><span>PostgreSQL connected</span\n              ><span class=\"deploy-time\">ready</span>\n            </div>\n            <div class=\"deploy-line\">\n              <span class=\"deploy-check\">✓</span><span>Public healthcheck</span\n              ><span class=\"deploy-time\">HTTP 200</span>\n            </div>\n          </div>\n        </div>\n      </section>\n\n      <section class=\"metrics\" aria-label=\"Live application metrics\">\n        <article class=\"metric-card\">\n          <span class=\"metric-label\">Service status</span>\n          <strong id=\"health-value\" class=\"metric-value status-good\">Checking…</strong>\n          <span class=\"metric-note\">GET /health</span>\n        </article>\n        <article class=\"metric-card\">\n          <span class=\"metric-label\">Storage engine</span>\n          <strong id=\"storage-value\" class=\"metric-value\">—</strong>\n          <span class=\"metric-note\">Detected at runtime</span>\n        </article>\n        <article class=\"metric-card\">\n          <span class=\"metric-label\">Inventory records</span>\n          <strong id=\"records-value\" class=\"metric-value\">—</strong>\n          <span class=\"metric-note\">Read from live API</span>\n        </article>\n        <article class=\"metric-card\">\n          <span class=\"metric-label\">Container uptime</span>\n          <strong id=\"uptime-value\" class=\"metric-value\">—</strong>\n          <span class=\"metric-note\">Since current deploy</span>\n        </article>\n      </section>\n\n      <section class=\"workspace\">\n        <article class=\"panel\">\n          <div class=\"panel-head\">\n            <h2>Latest database records</h2>\n            <span id=\"table-caption\">Loading from /items…</span>\n          </div>\n          <div class=\"table-wrap\">\n            <table>\n              <thead>\n                <tr>\n                  <th>ID</th>\n                  <th>Name</th>\n                  <th>Created at</th>\n                </tr>\n              </thead>\n              <tbody id=\"items-body\">\n                <tr>\n                  <td class=\"empty-row\" colspan=\"3\">Loading…</td>\n                </tr>\n              </tbody>\n            </table>\n          </div>\n        </article>\n\n        <aside class=\"panel\">\n          <div class=\"panel-head\">\n            <h2>Write through the API</h2>\n            <span>POST /items</span>\n          </div>\n          <div class=\"form-body\">\n            <form id=\"create-form\">\n              <label for=\"item-name\">New inventory item</label>\n              <input\n                id=\"item-name\"\n                name=\"name\"\n                maxlength=\"80\"\n                placeholder=\"demo-with-lecturer\"\n                required\n              />\n              <button id=\"create-button\" class=\"button button-primary\" type=\"submit\">\n                Create record\n              </button>\n            </form>\n            <div id=\"toast\" class=\"toast\" role=\"status\" aria-live=\"polite\"></div>\n            <div class=\"tech-list\">\n              <div class=\"tech-row\">\n                <span>App version</span><strong id=\"version-value\">—</strong>\n              </div>\n              <div class=\"tech-row\"><span>Runtime</span><strong id=\"runtime-value\">—</strong></div>\n              <div class=\"tech-row\"><span>Public host</span><strong id=\"host-value\">—</strong></div>\n            </div>\n          </div>\n        </aside>\n      </section>\n    </main>\n\n    <footer class=\"shell\">Deployed and verified by OpsPilot · Express · Docker · PostgreSQL</footer>\n\n    <script>\n      const byId = (id) => document.getElementById(id)\n      const setText = (id, value) => {\n        byId(id).textContent = String(value)\n      }\n\n      function formatUptime(seconds) {\n        const value = Math.max(0, Number(seconds) || 0)\n        const hours = Math.floor(value / 3600)\n        const minutes = Math.floor((value % 3600) / 60)\n        const secs = value % 60\n        return hours > 0\n          ? `${hours}h ${minutes}m`\n          : minutes > 0\n            ? `${minutes}m ${secs}s`\n            : `${secs}s`\n      }\n\n      async function request(url, options) {\n        const response = await fetch(url, options)\n        if (!response.ok) throw new Error(`HTTP ${response.status}`)\n        return response.json()\n      }\n\n      function renderItems(items) {\n        const body = byId('items-body')\n        body.replaceChildren()\n        if (items.length === 0) {\n          const row = document.createElement('tr')\n          const cell = document.createElement('td')\n          cell.colSpan = 3\n          cell.className = 'empty-row'\n          cell.textContent = 'No records yet.'\n          row.appendChild(cell)\n          body.appendChild(row)\n          return\n        }\n        for (const item of [...items].reverse()) {\n          const row = document.createElement('tr')\n          for (const value of [\n            item.id,\n            item.name,\n            new Date(item.created_at).toLocaleString('vi-VN')\n          ]) {\n            const cell = document.createElement('td')\n            cell.textContent = String(value)\n            row.appendChild(cell)\n          }\n          body.appendChild(row)\n        }\n      }\n\n      async function refreshDashboard() {\n        try {\n          const [meta, health] = await Promise.all([request('/meta'), request('/health')])\n          setText('health-value', health.ok ? 'Healthy' : 'Degraded')\n          setText('storage-value', meta.storage)\n          setText('records-value', Number(meta.records).toLocaleString('vi-VN'))\n          setText('uptime-value', formatUptime(health.uptime_s))\n          setText('version-value', `v${meta.version}`)\n          setText('runtime-value', meta.runtime)\n          setText('host-value', window.location.host)\n          setText('table-caption', `${Number(meta.records).toLocaleString('vi-VN')} total records`)\n          const offset = Math.max(0, Number(meta.records) - 6)\n          renderItems(await request(`/items?limit=6&offset=${offset}`))\n        } catch (error) {\n          setText('health-value', 'Unavailable')\n          byId('health-value').classList.remove('status-good')\n          setText('table-caption', error instanceof Error ? error.message : 'Request failed')\n        }\n      }\n\n      byId('create-form').addEventListener('submit', async (event) => {\n        event.preventDefault()\n        const input = byId('item-name')\n        const button = byId('create-button')\n        const toast = byId('toast')\n        const name = input.value.trim()\n        if (!name) return\n        button.disabled = true\n        button.textContent = 'Creating…'\n        toast.textContent = ''\n        toast.classList.remove('toast-error')\n        try {\n          const item = await request('/items', {\n            method: 'POST',\n            headers: { 'Content-Type': 'application/json' },\n            body: JSON.stringify({ name })\n          })\n          input.value = ''\n          toast.textContent = `Created record #${item.id} in PostgreSQL.`\n          await refreshDashboard()\n        } catch (error) {\n          toast.classList.add('toast-error')\n          toast.textContent = error instanceof Error ? error.message : 'Could not create record.'\n        } finally {\n          button.disabled = false\n          button.textContent = 'Create record'\n        }\n      })\n\n      void refreshDashboard()\n      window.setInterval(() => {\n        void request('/health')\n          .then((health) => setText('uptime-value', formatUptime(health.uptime_s)))\n          .catch(() => undefined)\n      }, 5000)\n    </script>\n  </body>\n</html>\n\n__STATUS__:200"
+      },
+      "collector": {
+        "state": "running",
+        "restartCount": 0,
+        "raw": "running|0\n"
+      },
+      "attempts": [
+        {
+          "deploymentId": 1,
+          "eventIndexStart": 0,
+          "eventIndexEnd": 58,
+          "steps": [
+            "PRECHECK",
+            "UPLOAD",
+            "RENDER",
+            "BUILD",
+            "DEPLOY",
+            "HEALTHCHECK",
+            "RECORD"
+          ],
+          "finished": {
+            "type": "finished",
+            "deployment_id": 1,
+            "status": "running",
+            "total_duration_ms": 25240,
+            "app_url": "http://221.121.1.80:30012"
+          },
+          "events": [
+            {
+              "type": "step-start",
+              "deployment_id": 1,
+              "step": "PRECHECK",
+              "ts": "2026-09-12T16:20:32.334Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "PRECHECK",
+              "chunk": "printf 'RAM_MB|'; free -m | awk 'NR==2{print $7}'\nprintf 'DISK_GB|'; df -BG --output=avail / | tail -1 | tr -d ' '\nprintf 'PORT|'; ss -tlnp | grep ':30012 ' >/dev/null 2>&1 && echo 'USED' || echo 'FREE'\n\nprintf 'DOCKER|'; docker --version 2>&1; docker compose version 2>&1 | head -1\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "PRECHECK",
+              "chunk": "  [OK] RAM trống: 2459 MB (cần > 512 MB)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "PRECHECK",
+              "chunk": "  [OK] Disk trống: 28 GB (cần > 2 GB)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "PRECHECK",
+              "chunk": "  [OK] Cổng 30012: chưa dùng (cần chưa dùng)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "PRECHECK",
+              "chunk": "  [OK] Docker: 29.7.2 (cần đã cài)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 1,
+              "step": "PRECHECK",
+              "duration_ms": 1863
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 1,
+              "step": "UPLOAD",
+              "ts": "2026-09-12T16:20:34.198Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "UPLOAD",
+              "chunk": "Tải lên /opt/opspilot/a17-c03-review01-final2-express/src (loại node_modules/.git/dist)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "UPLOAD",
+              "chunk": "Xong: 20.5 KB\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "UPLOAD",
+              "chunk": "Đã đóng gói collector: 6.7 KB\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 1,
+              "step": "UPLOAD",
+              "duration_ms": 2065
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 1,
+              "step": "RENDER",
+              "ts": "2026-09-12T16:20:36.264Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "RENDER",
+              "chunk": "Đã ghi Dockerfile (140 bytes)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "RENDER",
+              "chunk": "Đã ghi docker-compose.yml (1532 bytes)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "RENDER",
+              "chunk": "Đã ghi .env (chmod 600) — nội dung không hiện trong log\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 1,
+              "step": "RENDER",
+              "duration_ms": 4114
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "ts": "2026-09-12T16:20:40.378Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "$ cd '/opt/opspilot/a17-c03-review01-final2-express' && docker build -t 'a17-c03-review01-final2-express:v1' . && docker build -t 'a17-c03-review01-final2-express:collector' ./collector\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "#0 building with \"default\" instance using docker driver\n\n#1 [internal] load build definition from Dockerfile\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "#1 transferring dockerfile: 179B done\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "#1 DONE 0.1s\n\n#2 [internal] load metadata for docker.io/library/node:22-alpine\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "#2 DONE 1.5s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "\n#3 [internal] load .dockerignore\n#3 transferring context: 2B done\n#3 DONE 0.1s\n\n#4 [internal] load build context\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "#4 transferring context: 72.47kB done\n#4 DONE 0.1s\n\n#5 [1/5] FROM docker.io/library/node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32\n#5 resolve docker.io/library/node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 0.1s done\n#5 DONE 0.1s\n\n#6 [3/5] COPY src/package*.json ./\n#6 CACHED\n\n#7 [4/5] RUN npm ci --omit=dev\n#7 CACHED\n\n#8 [2/5] WORKDIR /app\n#8 CACHED\n\n#9 [5/5] COPY src/ .\n#9 CACHED\n\n#10 exporting to image\n#10 exporting layers done\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "#10 exporting manifest sha256:efd58614125c73bfba9524235dd43753e179aeebee4e8a01222cd2188ad493d8 done\n#10 exporting config sha256:ae826b559b23fa120cecc6be438580b2616e28cc6de013e8e1a4b2ffeb772843 0.0s done\n#10 exporting attestation manifest sha256:a14a0a1702eea34649d8af28772cb51b2abff0afd80be57f2a4c9567af639900 0.0s done\n#10 exporting manifest list sha256:77f5b4651ff558b3b29e981eb5eec689eb879c32f1e790a8c60efade9b9d3b5a 0.0s done\n#10 naming to docker.io/library/a17-c03-review01-final2-express:v1\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "#10 naming to docker.io/library/a17-c03-review01-final2-express:v1 done\n#10 unpacking to docker.io/library/a17-c03-review01-final2-express:v1 0.0s done\n#10 DONE 0.2s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "#0 building with \"default\" instance using docker driver\n\n#1 [internal] load build definition from Dockerfile\n#1 transferring dockerfile: 564B done\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "#1 DONE 0.0s\n\n#2 [internal] load metadata for docker.io/library/python:3.12-alpine\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "#2 DONE 1.4s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "\n#3 [internal] load .dockerignore\n#3 transferring context: 2B done\n#3 DONE 0.1s\n\n#4 [internal] load build context\n#4 transferring context: 67B done\n#4 DONE 0.0s\n\n#5 [1/5] FROM docker.io/library/python:3.12-alpine@sha256:b64631e04e4920160c50fbe8d8df828f7f35f06f425cb44aa09bca53e708a35a\n#5 resolve docker.io/library/python:3.12-alpine@sha256:b64631e04e4920160c50fbe8d8df828f7f35f06f425cb44aa09bca53e708a35a\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "#5 resolve docker.io/library/python:3.12-alpine@sha256:b64631e04e4920160c50fbe8d8df828f7f35f06f425cb44aa09bca53e708a35a 0.1s done\n#5 DONE 0.1s\n\n#6 [2/5] COPY requirements.txt /tmp/requirements.txt\n#6 CACHED\n\n#7 [3/5] RUN apk add --no-cache docker-cli postgresql-libs     && apk add --no-cache --virtual .build-deps gcc musl-dev postgresql-dev     && pip install --no-cache-dir -r /tmp/requirements.txt     && apk del .build-deps\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "#7 CACHED\n\n#8 [4/5] WORKDIR /collector\n#8 CACHED\n\n#9 [5/5] COPY collect.py ./collect.py\n#9 CACHED\n\n#10 exporting to image\n#10 exporting layers done\n#10 exporting manifest sha256:4a201b5aa5facc7f9f9fc1291372277fb77b8fc270f1f769eada63b73159f443 done\n#10 exporting config sha256:8a5ac79f0749e79bdff014d3a2c040776504f598cff5eb67d4694b25bc355e7f done\n#10 exporting attestation manifest sha256:0f477c67e4010651a9d0729def2941553e181f8547d3aec6e0ce198bc5102b71 0.0s done\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "#10 exporting manifest list sha256:504dfb2d96d9f19fba37342309bd3cedd1b6eaaad7c46c15e33b7e0ff1759eb0\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "chunk": "#10 exporting manifest list sha256:504dfb2d96d9f19fba37342309bd3cedd1b6eaaad7c46c15e33b7e0ff1759eb0 0.0s done\n#10 naming to docker.io/library/a17-c03-review01-final2-express:collector done\n#10 unpacking to docker.io/library/a17-c03-review01-final2-express:collector 0.0s done\n#10 DONE 0.2s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 1,
+              "step": "BUILD",
+              "duration_ms": 6167
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "ts": "2026-09-12T16:20:47.021Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "chunk": "$ cd '/opt/opspilot/a17-c03-review01-final2-express' && docker compose up -d\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "chunk": " Network a17-c03-review01-final2-express_default Creating \n Network a17-c03-review01-final2-express_default Creating \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "chunk": " Network a17-c03-review01-final2-express_default Created \n Network a17-c03-review01-final2-express_default Created \n Container a17-c03-review01-final2-express-db Creating \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-collector Creating \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-collector Created \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-db Created \n Container a17-c03-review01-final2-express-app Creating \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-app Created \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-collector Starting \n Container a17-c03-review01-final2-express-db Starting \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-collector Started \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-db Started \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-db Waiting \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-db Healthy \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-app Starting \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-app Started \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 1,
+              "step": "DEPLOY",
+              "duration_ms": 8442
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 1,
+              "step": "HEALTHCHECK",
+              "ts": "2026-09-12T16:20:55.464Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "HEALTHCHECK",
+              "chunk": "[1/10] http://127.0.0.1:30012/health -> HTTP OK\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 1,
+              "step": "HEALTHCHECK",
+              "chunk": "Healthcheck đạt.\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 1,
+              "step": "HEALTHCHECK",
+              "duration_ms": 464
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 1,
+              "step": "RECORD",
+              "ts": "2026-09-12T16:20:55.928Z"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 1,
+              "step": "RECORD",
+              "duration_ms": 1645
+            },
+            {
+              "type": "finished",
+              "deployment_id": 1,
+              "status": "running",
+              "total_duration_ms": 25240,
+              "app_url": "http://221.121.1.80:30012"
+            }
+          ]
+        },
+        {
+          "deploymentId": 2,
+          "eventIndexStart": 59,
+          "eventIndexEnd": 114,
+          "steps": [
+            "PRECHECK",
+            "UPLOAD",
+            "RENDER",
+            "BUILD",
+            "DEPLOY",
+            "HEALTHCHECK",
+            "RECORD"
+          ],
+          "finished": {
+            "type": "finished",
+            "deployment_id": 2,
+            "status": "running",
+            "total_duration_ms": 36267,
+            "app_url": "http://221.121.1.80:30012"
+          },
+          "events": [
+            {
+              "type": "step-start",
+              "deployment_id": 2,
+              "step": "PRECHECK",
+              "ts": "2026-09-12T16:20:58.736Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "PRECHECK",
+              "chunk": "printf 'RAM_MB|'; free -m | awk 'NR==2{print $7}'\nprintf 'DISK_GB|'; df -BG --output=avail / | tail -1 | tr -d ' '\nprintf 'DOCKER|'; docker --version 2>&1; docker compose version 2>&1 | head -1\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "PRECHECK",
+              "chunk": "  [OK] RAM trống: 2398 MB (cần > 512 MB)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "PRECHECK",
+              "chunk": "  [OK] Disk trống: 28 GB (cần > 2 GB)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "PRECHECK",
+              "chunk": "  [OK] Docker: 29.7.2 (cần đã cài)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 2,
+              "step": "PRECHECK",
+              "duration_ms": 552
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 2,
+              "step": "UPLOAD",
+              "ts": "2026-09-12T16:20:59.288Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "UPLOAD",
+              "chunk": "Tải lên /opt/opspilot/a17-c03-review01-final2-express/src (loại node_modules/.git/dist)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "UPLOAD",
+              "chunk": "Xong: 20.5 KB\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "UPLOAD",
+              "chunk": "Đã đóng gói collector: 6.7 KB\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 2,
+              "step": "UPLOAD",
+              "duration_ms": 2125
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 2,
+              "step": "RENDER",
+              "ts": "2026-09-12T16:21:01.414Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "RENDER",
+              "chunk": "Giữ nguyên credential PostgreSQL hiện có để volume tiếp tục truy cập được.\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "RENDER",
+              "chunk": "Đã ghi Dockerfile (140 bytes)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "RENDER",
+              "chunk": "Đã ghi docker-compose.yml (1532 bytes)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "RENDER",
+              "chunk": "Đã ghi .env (chmod 600) — nội dung không hiện trong log\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 2,
+              "step": "RENDER",
+              "duration_ms": 4619
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "ts": "2026-09-12T16:21:06.033Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "$ cd '/opt/opspilot/a17-c03-review01-final2-express' && docker build -t 'a17-c03-review01-final2-express:v2' . && docker build -t 'a17-c03-review01-final2-express:collector' ./collector\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "#0 building with \"default\" instance using docker driver\n\n#1 [internal] load build definition from Dockerfile\n#1 transferring dockerfile: 179B done\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "#1 DONE 0.0s\n\n#2 [internal] load metadata for docker.io/library/node:22-alpine\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "#2 DONE 0.4s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "\n#3 [internal] load .dockerignore\n#3 transferring context: 2B done\n#3 DONE 0.0s\n\n#4 [internal] load build context\n#4 transferring context: 378B done\n#4 DONE 0.0s\n\n#5 [1/5] FROM docker.io/library/node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32\n#5 resolve docker.io/library/node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 0.1s done\n#5 DONE 0.1s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "\n#6 [2/5] WORKDIR /app\n#6 CACHED\n\n#7 [3/5] COPY src/package*.json ./\n#7 CACHED\n\n#8 [4/5] RUN npm ci --omit=dev\n#8 CACHED\n\n#9 [5/5] COPY src/ .\n#9 CACHED\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "\n#10 exporting to image\n#10 exporting layers done\n#10 exporting manifest sha256:efd58614125c73bfba9524235dd43753e179aeebee4e8a01222cd2188ad493d8 done\n#10 exporting config sha256:ae826b559b23fa120cecc6be438580b2616e28cc6de013e8e1a4b2ffeb772843 done\n#10 exporting attestation manifest sha256:c252e80795abf8434928846eff374285f349c4766c0fc5de492db8cce22a3a5d 0.0s done\n#10 exporting manifest list sha256:304f4e03c01decacfd12b77d159d6117f54e439b6921b9c4c7599e103aa7799b 0.0s done\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "#10 naming to docker.io/library/a17-c03-review01-final2-express:v2\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "#10 naming to docker.io/library/a17-c03-review01-final2-express:v2 done\n#10 unpacking to docker.io/library/a17-c03-review01-final2-express:v2 0.0s done\n#10 DONE 0.2s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "#0 building with \"default\" instance using docker driver\n\n#1 [internal] load build definition from Dockerfile\n#1 transferring dockerfile: 564B done\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "#1 DONE 0.0s\n\n#2 [internal] load metadata for docker.io/library/python:3.12-alpine\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "#2 DONE 0.4s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "\n#3 [internal] load .dockerignore\n#3 transferring context: 2B done\n#3 DONE 0.0s\n\n#4 [internal] load build context\n#4 transferring context: 67B done\n#4 DONE 0.0s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "\n#5 [1/5] FROM docker.io/library/python:3.12-alpine@sha256:b64631e04e4920160c50fbe8d8df828f7f35f06f425cb44aa09bca53e708a35a\n#5 resolve docker.io/library/python:3.12-alpine@sha256:b64631e04e4920160c50fbe8d8df828f7f35f06f425cb44aa09bca53e708a35a 0.1s done\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "#5 DONE 0.1s\n\n#6 [2/5] COPY requirements.txt /tmp/requirements.txt\n#6 CACHED\n\n#7 [3/5] RUN apk add --no-cache docker-cli postgresql-libs     && apk add --no-cache --virtual .build-deps gcc musl-dev postgresql-dev     && pip install --no-cache-dir -r /tmp/requirements.txt     && apk del .build-deps\n#7 CACHED\n\n#8 [4/5] WORKDIR /collector\n#8 CACHED\n\n#9 [5/5] COPY collect.py ./collect.py\n#9 CACHED\n\n#10 exporting to image\n#10 exporting layers done\n#10 exporting manifest sha256:4a201b5aa5facc7f9f9fc1291372277fb77b8fc270f1f769eada63b73159f443 done\n#10 exporting config sha256:8a5ac79f0749e79bdff014d3a2c040776504f598cff5eb67d4694b25bc355e7f done\n#10 exporting attestation manifest sha256:9bcca37f7f33891e4ab63ee88a362566f0919ed868871675089284f113beeefd 0.0s done\n#10 exporting manifest list sha256:79d0e98043cd2f4d6f18061e5e2730b56db355ebe0a31792bf9f44c07804b560\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "chunk": "#10 exporting manifest list sha256:79d0e98043cd2f4d6f18061e5e2730b56db355ebe0a31792bf9f44c07804b560 0.0s done\n#10 naming to docker.io/library/a17-c03-review01-final2-express:collector done\n#10 unpacking to docker.io/library/a17-c03-review01-final2-express:collector 0.0s done\n#10 DONE 0.2s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 2,
+              "step": "BUILD",
+              "duration_ms": 3683
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "DEPLOY",
+              "chunk": "$ cd '/opt/opspilot/a17-c03-review01-final2-express' && docker compose stop collector\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-collector Stopping \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-collector Stopped \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 2,
+              "step": "DEPLOY",
+              "ts": "2026-09-12T16:21:19.676Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "DEPLOY",
+              "chunk": "$ cd '/opt/opspilot/a17-c03-review01-final2-express' && docker compose up -d\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-db Running \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-app Recreate \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-app Recreated \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-collector Starting \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-db Waiting \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-collector Started \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-db Healthy \n Container a17-c03-review01-final2-express-app Starting \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-express-app Started \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 2,
+              "step": "DEPLOY",
+              "duration_ms": 13127
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 2,
+              "step": "HEALTHCHECK",
+              "ts": "2026-09-12T16:21:32.804Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "HEALTHCHECK",
+              "chunk": "[1/10] http://127.0.0.1:30012/health -> HTTP OK\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 2,
+              "step": "HEALTHCHECK",
+              "chunk": "Healthcheck đạt.\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 2,
+              "step": "HEALTHCHECK",
+              "duration_ms": 462
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 2,
+              "step": "RECORD",
+              "ts": "2026-09-12T16:21:33.266Z"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 2,
+              "step": "RECORD",
+              "duration_ms": 1736
+            },
+            {
+              "type": "finished",
+              "deployment_id": 2,
+              "status": "running",
+              "total_duration_ms": 36267,
+              "app_url": "http://221.121.1.80:30012"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Next.js",
+      "appId": 14,
+      "deploymentIds": [
+        3
+      ],
+      "image": "a17-c03-review01-final2-next:v1",
+      "port": 30013,
+      "framework": "nextjs",
+      "docker": {
+        "image": "a17-c03-review01-final2-next:v1",
+        "state": "running",
+        "health": "healthy",
+        "raw": "a17-c03-review01-final2-next:v1|running|healthy\n"
+      },
+      "http": {
+        "status": 200,
+        "body": "<!DOCTYPE html><html lang=\"vi\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><link rel=\"stylesheet\" href=\"/_next/static/css/a6bd0897a6770db9.css\" data-precedence=\"next\"/><link rel=\"preload\" as=\"script\" fetchPriority=\"low\" href=\"/_next/static/chunks/webpack-c8441f2d519541e3.js\"/><script src=\"/_next/static/chunks/fd9d1056-749e5812300142af.js\" async=\"\"></script><script src=\"/_next/static/chunks/117-e5476d4bdcce692a.js\" async=\"\"></script><script src=\"/_next/static/chunks/main-app-6fca1515cee9a03c.js\" async=\"\"></script><script src=\"/_next/static/chunks/972-fe008c56cc430895.js\" async=\"\"></script><script src=\"/_next/static/chunks/app/page-acb52d5a29163674.js\" async=\"\"></script><title>OpsPilot C03 Next</title><meta name=\"description\" content=\"Demo blog Next.js — đối tượng deploy/thí nghiệm của OpsPilot (M12)\"/><script src=\"/_next/static/chunks/polyfills-42372ed130431b0a.js\" noModule=\"\"></script></head><body><header><h1>OpsPilot C03 Next</h1></header><main><section><p>Demo Next.js 14 (App Router) — 2 trang đọc dữ liệu tĩnh, dùng để demo OpsPilot deploy.</p><ul><li><a href=\"/bai-viet/ops-pilot-la-gi\">OpsPilot là gì</a> — <!-- -->Đồ án tốt nghiệp: deploy web app lên VPS qua SSH kèm ML phát hiện suy giảm.</li><li><a href=\"/bai-viet/deploy-qua-ssh\">Deploy qua SSH</a> — <!-- -->Mọi lệnh trên VPS đi qua ssh exec: không agent, không mở thêm port.</li><li><a href=\"/bai-viet/phat-hien-suy-giam\">Phát hiện suy giảm</a> — <!-- -->3 model + ensemble chấm điểm từ 5 metric thu thập mỗi 10 giây.</li><li><a href=\"/bai-viet/tu-dong-rollback\">Tự động rollback</a> — <!-- -->Khi trusted_method triggered 3 lần liên tiếp, tool quay về image cũ.</li></ul></section></main><script src=\"/_next/static/chunks/webpack-c8441f2d519541e3.js\" async=\"\"></script><script>(self.__next_f=self.__next_f||[]).push([0]);self.__next_f.push([2,null])</script><script>self.__next_f.push([1,\"1:HL[\\\"/_next/static/css/a6bd0897a6770db9.css\\\",\\\"style\\\"]\\n\"])</script><script>self.__next_f.push([1,\"2:I[2846,[],\\\"\\\"]\\n4:I[2972,[\\\"972\\\",\\\"static/chunks/972-fe008c56cc430895.js\\\",\\\"931\\\",\\\"static/chunks/app/page-acb52d5a29163674.js\\\"],\\\"\\\"]\\n5:I[4707,[],\\\"\\\"]\\n6:I[6423,[],\\\"\\\"]\\n8:I[1060,[],\\\"\\\"]\\n9:[]\\n\"])</script><script>self.__next_f.push([1,\"0:[\\\"$\\\",\\\"$L2\\\",null,{\\\"buildId\\\":\\\"cnc34eb-sOsZO7M_TwsDQ\\\",\\\"assetPrefix\\\":\\\"\\\",\\\"urlParts\\\":[\\\"\\\",\\\"\\\"],\\\"initialTree\\\":[\\\"\\\",{\\\"children\\\":[\\\"__PAGE__\\\",{}]},\\\"$undefined\\\",\\\"$undefined\\\",true],\\\"initialSeedData\\\":[\\\"\\\",{\\\"children\\\":[\\\"__PAGE__\\\",{},[[\\\"$L3\\\",[\\\"$\\\",\\\"section\\\",null,{\\\"children\\\":[[\\\"$\\\",\\\"p\\\",null,{\\\"children\\\":\\\"Demo Next.js 14 (App Router) — 2 trang đọc dữ liệu tĩnh, dùng để demo OpsPilot deploy.\\\"}],[\\\"$\\\",\\\"ul\\\",null,{\\\"children\\\":[[\\\"$\\\",\\\"li\\\",\\\"ops-pilot-la-gi\\\",{\\\"children\\\":[[\\\"$\\\",\\\"$L4\\\",null,{\\\"href\\\":\\\"/bai-viet/ops-pilot-la-gi\\\",\\\"children\\\":\\\"OpsPilot là gì\\\"}],\\\" — \\\",\\\"Đồ án tốt nghiệp: deploy web app lên VPS qua SSH kèm ML phát hiện suy giảm.\\\"]}],[\\\"$\\\",\\\"li\\\",\\\"deploy-qua-ssh\\\",{\\\"children\\\":[[\\\"$\\\",\\\"$L4\\\",null,{\\\"href\\\":\\\"/bai-viet/deploy-qua-ssh\\\",\\\"children\\\":\\\"Deploy qua SSH\\\"}],\\\" — \\\",\\\"Mọi lệnh trên VPS đi qua ssh exec: không agent, không mở thêm port.\\\"]}],[\\\"$\\\",\\\"li\\\",\\\"phat-hien-suy-giam\\\",{\\\"children\\\":[[\\\"$\\\",\\\"$L4\\\",null,{\\\"href\\\":\\\"/bai-viet/phat-hien-suy-giam\\\",\\\"children\\\":\\\"Phát hiện suy giảm\\\"}],\\\" — \\\",\\\"3 model + ensemble chấm điểm từ 5 metric thu thập mỗi 10 giây.\\\"]}],[\\\"$\\\",\\\"li\\\",\\\"tu-dong-rollback\\\",{\\\"children\\\":[[\\\"$\\\",\\\"$L4\\\",null,{\\\"href\\\":\\\"/bai-viet/tu-dong-rollback\\\",\\\"children\\\":\\\"Tự động rollback\\\"}],\\\" — \\\",\\\"Khi trusted_method triggered 3 lần liên tiếp, tool quay về image cũ.\\\"]}]]}]]}],null],null],null]},[[[[\\\"$\\\",\\\"link\\\",\\\"0\\\",{\\\"rel\\\":\\\"stylesheet\\\",\\\"href\\\":\\\"/_next/static/css/a6bd0897a6770db9.css\\\",\\\"precedence\\\":\\\"next\\\",\\\"crossOrigin\\\":\\\"$undefined\\\"}]],[\\\"$\\\",\\\"html\\\",null,{\\\"lang\\\":\\\"vi\\\",\\\"children\\\":[\\\"$\\\",\\\"body\\\",null,{\\\"children\\\":[[\\\"$\\\",\\\"header\\\",null,{\\\"children\\\":[\\\"$\\\",\\\"h1\\\",null,{\\\"children\\\":\\\"OpsPilot C03 Next\\\"}]}],[\\\"$\\\",\\\"main\\\",null,{\\\"children\\\":[\\\"$\\\",\\\"$L5\\\",null,{\\\"parallelRouterKey\\\":\\\"children\\\",\\\"segmentPath\\\":[\\\"children\\\"],\\\"error\\\":\\\"$undefined\\\",\\\"errorStyles\\\":\\\"$undefined\\\",\\\"errorScripts\\\":\\\"$undefined\\\",\\\"template\\\":[\\\"$\\\",\\\"$L6\\\",null,{}],\\\"templateStyles\\\":\\\"$undefined\\\",\\\"templateScripts\\\":\\\"$undefined\\\",\\\"notFound\\\":[[\\\"$\\\",\\\"title\\\",null,{\\\"children\\\":\\\"404: This page could not be found.\\\"}],[\\\"$\\\",\\\"div\\\",null,{\\\"style\\\":{\\\"fontFamily\\\":\\\"system-ui,\\\\\\\"Segoe UI\\\\\\\",Roboto,Helvetica,Arial,sans-serif,\\\\\\\"Apple Color Emoji\\\\\\\",\\\\\\\"Segoe UI Emoji\\\\\\\"\\\",\\\"height\\\":\\\"100vh\\\",\\\"textAlign\\\":\\\"center\\\",\\\"display\\\":\\\"flex\\\",\\\"flexDirection\\\":\\\"column\\\",\\\"alignItems\\\":\\\"center\\\",\\\"justifyContent\\\":\\\"center\\\"},\\\"children\\\":[\\\"$\\\",\\\"div\\\",null,{\\\"children\\\":[[\\\"$\\\",\\\"style\\\",null,{\\\"dangerouslySetInnerHTML\\\":{\\\"__html\\\":\\\"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}\\\"}}],[\\\"$\\\",\\\"h1\\\",null,{\\\"className\\\":\\\"next-error-h1\\\",\\\"style\\\":{\\\"display\\\":\\\"inline-block\\\",\\\"margin\\\":\\\"0 20px 0 0\\\",\\\"padding\\\":\\\"0 23px 0 0\\\",\\\"fontSize\\\":24,\\\"fontWeight\\\":500,\\\"verticalAlign\\\":\\\"top\\\",\\\"lineHeight\\\":\\\"49px\\\"},\\\"children\\\":\\\"404\\\"}],[\\\"$\\\",\\\"div\\\",null,{\\\"style\\\":{\\\"display\\\":\\\"inline-block\\\"},\\\"children\\\":[\\\"$\\\",\\\"h2\\\",null,{\\\"style\\\":{\\\"fontSize\\\":14,\\\"fontWeight\\\":400,\\\"lineHeight\\\":\\\"49px\\\",\\\"margin\\\":0},\\\"children\\\":\\\"This page could not be found.\\\"}]}]]}]}]],\\\"notFoundStyles\\\":[]}]}]]}]}]],null],null],\\\"couldBeIntercepted\\\":false,\\\"initialHead\\\":[null,\\\"$L7\\\"],\\\"globalErrorComponent\\\":\\\"$8\\\",\\\"missingSlots\\\":\\\"$W9\\\"}]\\n\"])</script><script>self.__next_f.push([1,\"7:[[\\\"$\\\",\\\"meta\\\",\\\"0\\\",{\\\"name\\\":\\\"viewport\\\",\\\"content\\\":\\\"width=device-width, initial-scale=1\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"1\\\",{\\\"charSet\\\":\\\"utf-8\\\"}],[\\\"$\\\",\\\"title\\\",\\\"2\\\",{\\\"children\\\":\\\"OpsPilot C03 Next\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"3\\\",{\\\"name\\\":\\\"description\\\",\\\"content\\\":\\\"Demo blog Next.js — đối tượng deploy/thí nghiệm của OpsPilot (M12)\\\"}]]\\n3:null\\n\"])</script></body></html>",
+        "raw": "<!DOCTYPE html><html lang=\"vi\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><link rel=\"stylesheet\" href=\"/_next/static/css/a6bd0897a6770db9.css\" data-precedence=\"next\"/><link rel=\"preload\" as=\"script\" fetchPriority=\"low\" href=\"/_next/static/chunks/webpack-c8441f2d519541e3.js\"/><script src=\"/_next/static/chunks/fd9d1056-749e5812300142af.js\" async=\"\"></script><script src=\"/_next/static/chunks/117-e5476d4bdcce692a.js\" async=\"\"></script><script src=\"/_next/static/chunks/main-app-6fca1515cee9a03c.js\" async=\"\"></script><script src=\"/_next/static/chunks/972-fe008c56cc430895.js\" async=\"\"></script><script src=\"/_next/static/chunks/app/page-acb52d5a29163674.js\" async=\"\"></script><title>OpsPilot C03 Next</title><meta name=\"description\" content=\"Demo blog Next.js — đối tượng deploy/thí nghiệm của OpsPilot (M12)\"/><script src=\"/_next/static/chunks/polyfills-42372ed130431b0a.js\" noModule=\"\"></script></head><body><header><h1>OpsPilot C03 Next</h1></header><main><section><p>Demo Next.js 14 (App Router) — 2 trang đọc dữ liệu tĩnh, dùng để demo OpsPilot deploy.</p><ul><li><a href=\"/bai-viet/ops-pilot-la-gi\">OpsPilot là gì</a> — <!-- -->Đồ án tốt nghiệp: deploy web app lên VPS qua SSH kèm ML phát hiện suy giảm.</li><li><a href=\"/bai-viet/deploy-qua-ssh\">Deploy qua SSH</a> — <!-- -->Mọi lệnh trên VPS đi qua ssh exec: không agent, không mở thêm port.</li><li><a href=\"/bai-viet/phat-hien-suy-giam\">Phát hiện suy giảm</a> — <!-- -->3 model + ensemble chấm điểm từ 5 metric thu thập mỗi 10 giây.</li><li><a href=\"/bai-viet/tu-dong-rollback\">Tự động rollback</a> — <!-- -->Khi trusted_method triggered 3 lần liên tiếp, tool quay về image cũ.</li></ul></section></main><script src=\"/_next/static/chunks/webpack-c8441f2d519541e3.js\" async=\"\"></script><script>(self.__next_f=self.__next_f||[]).push([0]);self.__next_f.push([2,null])</script><script>self.__next_f.push([1,\"1:HL[\\\"/_next/static/css/a6bd0897a6770db9.css\\\",\\\"style\\\"]\\n\"])</script><script>self.__next_f.push([1,\"2:I[2846,[],\\\"\\\"]\\n4:I[2972,[\\\"972\\\",\\\"static/chunks/972-fe008c56cc430895.js\\\",\\\"931\\\",\\\"static/chunks/app/page-acb52d5a29163674.js\\\"],\\\"\\\"]\\n5:I[4707,[],\\\"\\\"]\\n6:I[6423,[],\\\"\\\"]\\n8:I[1060,[],\\\"\\\"]\\n9:[]\\n\"])</script><script>self.__next_f.push([1,\"0:[\\\"$\\\",\\\"$L2\\\",null,{\\\"buildId\\\":\\\"cnc34eb-sOsZO7M_TwsDQ\\\",\\\"assetPrefix\\\":\\\"\\\",\\\"urlParts\\\":[\\\"\\\",\\\"\\\"],\\\"initialTree\\\":[\\\"\\\",{\\\"children\\\":[\\\"__PAGE__\\\",{}]},\\\"$undefined\\\",\\\"$undefined\\\",true],\\\"initialSeedData\\\":[\\\"\\\",{\\\"children\\\":[\\\"__PAGE__\\\",{},[[\\\"$L3\\\",[\\\"$\\\",\\\"section\\\",null,{\\\"children\\\":[[\\\"$\\\",\\\"p\\\",null,{\\\"children\\\":\\\"Demo Next.js 14 (App Router) — 2 trang đọc dữ liệu tĩnh, dùng để demo OpsPilot deploy.\\\"}],[\\\"$\\\",\\\"ul\\\",null,{\\\"children\\\":[[\\\"$\\\",\\\"li\\\",\\\"ops-pilot-la-gi\\\",{\\\"children\\\":[[\\\"$\\\",\\\"$L4\\\",null,{\\\"href\\\":\\\"/bai-viet/ops-pilot-la-gi\\\",\\\"children\\\":\\\"OpsPilot là gì\\\"}],\\\" — \\\",\\\"Đồ án tốt nghiệp: deploy web app lên VPS qua SSH kèm ML phát hiện suy giảm.\\\"]}],[\\\"$\\\",\\\"li\\\",\\\"deploy-qua-ssh\\\",{\\\"children\\\":[[\\\"$\\\",\\\"$L4\\\",null,{\\\"href\\\":\\\"/bai-viet/deploy-qua-ssh\\\",\\\"children\\\":\\\"Deploy qua SSH\\\"}],\\\" — \\\",\\\"Mọi lệnh trên VPS đi qua ssh exec: không agent, không mở thêm port.\\\"]}],[\\\"$\\\",\\\"li\\\",\\\"phat-hien-suy-giam\\\",{\\\"children\\\":[[\\\"$\\\",\\\"$L4\\\",null,{\\\"href\\\":\\\"/bai-viet/phat-hien-suy-giam\\\",\\\"children\\\":\\\"Phát hiện suy giảm\\\"}],\\\" — \\\",\\\"3 model + ensemble chấm điểm từ 5 metric thu thập mỗi 10 giây.\\\"]}],[\\\"$\\\",\\\"li\\\",\\\"tu-dong-rollback\\\",{\\\"children\\\":[[\\\"$\\\",\\\"$L4\\\",null,{\\\"href\\\":\\\"/bai-viet/tu-dong-rollback\\\",\\\"children\\\":\\\"Tự động rollback\\\"}],\\\" — \\\",\\\"Khi trusted_method triggered 3 lần liên tiếp, tool quay về image cũ.\\\"]}]]}]]}],null],null],null]},[[[[\\\"$\\\",\\\"link\\\",\\\"0\\\",{\\\"rel\\\":\\\"stylesheet\\\",\\\"href\\\":\\\"/_next/static/css/a6bd0897a6770db9.css\\\",\\\"precedence\\\":\\\"next\\\",\\\"crossOrigin\\\":\\\"$undefined\\\"}]],[\\\"$\\\",\\\"html\\\",null,{\\\"lang\\\":\\\"vi\\\",\\\"children\\\":[\\\"$\\\",\\\"body\\\",null,{\\\"children\\\":[[\\\"$\\\",\\\"header\\\",null,{\\\"children\\\":[\\\"$\\\",\\\"h1\\\",null,{\\\"children\\\":\\\"OpsPilot C03 Next\\\"}]}],[\\\"$\\\",\\\"main\\\",null,{\\\"children\\\":[\\\"$\\\",\\\"$L5\\\",null,{\\\"parallelRouterKey\\\":\\\"children\\\",\\\"segmentPath\\\":[\\\"children\\\"],\\\"error\\\":\\\"$undefined\\\",\\\"errorStyles\\\":\\\"$undefined\\\",\\\"errorScripts\\\":\\\"$undefined\\\",\\\"template\\\":[\\\"$\\\",\\\"$L6\\\",null,{}],\\\"templateStyles\\\":\\\"$undefined\\\",\\\"templateScripts\\\":\\\"$undefined\\\",\\\"notFound\\\":[[\\\"$\\\",\\\"title\\\",null,{\\\"children\\\":\\\"404: This page could not be found.\\\"}],[\\\"$\\\",\\\"div\\\",null,{\\\"style\\\":{\\\"fontFamily\\\":\\\"system-ui,\\\\\\\"Segoe UI\\\\\\\",Roboto,Helvetica,Arial,sans-serif,\\\\\\\"Apple Color Emoji\\\\\\\",\\\\\\\"Segoe UI Emoji\\\\\\\"\\\",\\\"height\\\":\\\"100vh\\\",\\\"textAlign\\\":\\\"center\\\",\\\"display\\\":\\\"flex\\\",\\\"flexDirection\\\":\\\"column\\\",\\\"alignItems\\\":\\\"center\\\",\\\"justifyContent\\\":\\\"center\\\"},\\\"children\\\":[\\\"$\\\",\\\"div\\\",null,{\\\"children\\\":[[\\\"$\\\",\\\"style\\\",null,{\\\"dangerouslySetInnerHTML\\\":{\\\"__html\\\":\\\"body{color:#000;background:#fff;margin:0}.next-error-h1{border-right:1px solid rgba(0,0,0,.3)}@media (prefers-color-scheme:dark){body{color:#fff;background:#000}.next-error-h1{border-right:1px solid rgba(255,255,255,.3)}}\\\"}}],[\\\"$\\\",\\\"h1\\\",null,{\\\"className\\\":\\\"next-error-h1\\\",\\\"style\\\":{\\\"display\\\":\\\"inline-block\\\",\\\"margin\\\":\\\"0 20px 0 0\\\",\\\"padding\\\":\\\"0 23px 0 0\\\",\\\"fontSize\\\":24,\\\"fontWeight\\\":500,\\\"verticalAlign\\\":\\\"top\\\",\\\"lineHeight\\\":\\\"49px\\\"},\\\"children\\\":\\\"404\\\"}],[\\\"$\\\",\\\"div\\\",null,{\\\"style\\\":{\\\"display\\\":\\\"inline-block\\\"},\\\"children\\\":[\\\"$\\\",\\\"h2\\\",null,{\\\"style\\\":{\\\"fontSize\\\":14,\\\"fontWeight\\\":400,\\\"lineHeight\\\":\\\"49px\\\",\\\"margin\\\":0},\\\"children\\\":\\\"This page could not be found.\\\"}]}]]}]}]],\\\"notFoundStyles\\\":[]}]}]]}]}]],null],null],\\\"couldBeIntercepted\\\":false,\\\"initialHead\\\":[null,\\\"$L7\\\"],\\\"globalErrorComponent\\\":\\\"$8\\\",\\\"missingSlots\\\":\\\"$W9\\\"}]\\n\"])</script><script>self.__next_f.push([1,\"7:[[\\\"$\\\",\\\"meta\\\",\\\"0\\\",{\\\"name\\\":\\\"viewport\\\",\\\"content\\\":\\\"width=device-width, initial-scale=1\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"1\\\",{\\\"charSet\\\":\\\"utf-8\\\"}],[\\\"$\\\",\\\"title\\\",\\\"2\\\",{\\\"children\\\":\\\"OpsPilot C03 Next\\\"}],[\\\"$\\\",\\\"meta\\\",\\\"3\\\",{\\\"name\\\":\\\"description\\\",\\\"content\\\":\\\"Demo blog Next.js — đối tượng deploy/thí nghiệm của OpsPilot (M12)\\\"}]]\\n3:null\\n\"])</script></body></html>\n__STATUS__:200"
+      },
+      "collector": {
+        "state": "running",
+        "restartCount": 0,
+        "raw": "running|0\n"
+      },
+      "attempts": [
+        {
+          "deploymentId": 3,
+          "eventIndexStart": 115,
+          "eventIndexEnd": 170,
+          "steps": [
+            "PRECHECK",
+            "UPLOAD",
+            "RENDER",
+            "BUILD",
+            "DEPLOY",
+            "HEALTHCHECK",
+            "RECORD"
+          ],
+          "finished": {
+            "type": "finished",
+            "deployment_id": 3,
+            "status": "running",
+            "total_duration_ms": 20233,
+            "app_url": "http://221.121.1.80:30013"
+          },
+          "events": [
+            {
+              "type": "step-start",
+              "deployment_id": 3,
+              "step": "PRECHECK",
+              "ts": "2026-09-12T16:21:43.832Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "PRECHECK",
+              "chunk": "printf 'RAM_MB|'; free -m | awk 'NR==2{print $7}'\nprintf 'DISK_GB|'; df -BG --output=avail / | tail -1 | tr -d ' '\nprintf 'PORT|'; ss -tlnp | grep ':30013 ' >/dev/null 2>&1 && echo 'USED' || echo 'FREE'\n\nprintf 'DOCKER|'; docker --version 2>&1; docker compose version 2>&1 | head -1\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "PRECHECK",
+              "chunk": "  [OK] RAM trống: 2389 MB (cần > 512 MB)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "PRECHECK",
+              "chunk": "  [OK] Disk trống: 28 GB (cần > 2 GB)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "PRECHECK",
+              "chunk": "  [OK] Cổng 30013: chưa dùng (cần chưa dùng)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "PRECHECK",
+              "chunk": "  [OK] Docker: 29.7.2 (cần đã cài)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 3,
+              "step": "PRECHECK",
+              "duration_ms": 559
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 3,
+              "step": "UPLOAD",
+              "ts": "2026-09-12T16:21:44.391Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "UPLOAD",
+              "chunk": "Tải lên /opt/opspilot/a17-c03-review01-final2-next/src (loại node_modules/.git/dist)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "UPLOAD",
+              "chunk": "Xong: 6.5 KB\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "UPLOAD",
+              "chunk": "Đã đóng gói collector: 6.7 KB\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 3,
+              "step": "UPLOAD",
+              "duration_ms": 1941
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 3,
+              "step": "RENDER",
+              "ts": "2026-09-12T16:21:46.332Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "RENDER",
+              "chunk": "Đã ghi Dockerfile (482 bytes)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "RENDER",
+              "chunk": "Đã ghi docker-compose.yml (952 bytes)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "RENDER",
+              "chunk": "Đã ghi .env (chmod 600) — nội dung không hiện trong log\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 3,
+              "step": "RENDER",
+              "duration_ms": 4282
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "ts": "2026-09-12T16:21:50.615Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "$ cd '/opt/opspilot/a17-c03-review01-final2-next' && docker build --build-arg 'NEXT_PUBLIC_SITE_NAME=OpsPilot C03 Next' -t 'a17-c03-review01-final2-next:v1' . && docker build -t 'a17-c03-review01-final2-next:collector' ./collector\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "#0 building with \"default\" instance using docker driver\n\n#1 [internal] load build definition from Dockerfile\n#1 transferring dockerfile: 521B done\n#1 DONE 0.1s\n\n#2 [internal] load metadata for docker.io/library/node:22-alpine\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "#2 DONE 1.0s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "\n#3 [internal] load .dockerignore\n#3 transferring context: 2B done\n#3 DONE 0.1s\n\n#4 [internal] load build context\n#4 DONE 0.0s\n\n#5 [builder 1/5] FROM docker.io/library/node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32\n#5 resolve docker.io/library/node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 0.0s done\n#5 DONE 0.1s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "\n#4 [internal] load build context\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "#4 transferring context: 19.68kB done\n#4 DONE 0.1s\n\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "#6 [builder 2/5] WORKDIR /app\n#6 CACHED\n\n#7 [builder 3/5] COPY src/package*.json ./\n#7 CACHED\n\n#8 [builder 5/5] RUN mkdir -p public && npm ci && npm run build\n#8 CACHED\n\n#9 [stage-1 5/6] COPY --from=builder /app/.next ./.next\n#9 CACHED\n\n#10 [stage-1 3/6] COPY --from=builder /app/package*.json ./\n#10 CACHED\n\n#11 [builder 4/5] COPY src/ ./\n#11 CACHED\n\n#12 [stage-1 4/6] COPY --from=builder /app/node_modules ./node_modules\n#12 CACHED\n\n#13 [stage-1 6/6] COPY --from=builder /app/public ./public\n#13 CACHED\n\n#14 exporting to image\n#14 exporting layers done\n#14 exporting manifest sha256:5a864ae322fd9e5ac50758bd04597f15a42a24ee432064589c7653b528275fec done\n#14 exporting config sha256:8cde3e8d971b3d22c50a13af2842a02256107eb839a51cdaa2dd093b6fd18ada done\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "#14 exporting attestation manifest sha256:dd63ccc5d0aaf33c3693f87641744190a78e394de17f39e3b0fa8c98963cba36 0.0s done\n#14 exporting manifest list sha256:b5bdc4644fcb1662460180193ffe6059104e9eba71d20945f86b287e6da4cf1e 0.0s done\n#14 naming to docker.io/library/a17-c03-review01-final2-next:v1 done\n#14 unpacking to docker.io/library/a17-c03-review01-final2-next:v1 0.0s done\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "#14 DONE 0.2s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "#0 building with \"default\" instance using docker driver\n\n#1 [internal] load build definition from Dockerfile\n#1 transferring dockerfile: 564B done\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "#1 DONE 0.0s\n\n#2 [internal] load metadata for docker.io/library/python:3.12-alpine\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "#2 DONE 0.9s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "\n#3 [internal] load .dockerignore\n#3 transferring context: 2B done\n#3 DONE 0.0s\n\n#4 [internal] load build context\n#4 transferring context: 67B done\n#4 DONE 0.0s\n\n#5 [1/5] FROM docker.io/library/python:3.12-alpine@sha256:b64631e04e4920160c50fbe8d8df828f7f35f06f425cb44aa09bca53e708a35a\n#5 resolve docker.io/library/python:3.12-alpine@sha256:b64631e04e4920160c50fbe8d8df828f7f35f06f425cb44aa09bca53e708a35a 0.1s done\n#5 DONE 0.1s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "#6 [4/5] WORKDIR /collector\n#6 CACHED\n\n#7 [2/5] COPY requirements.txt /tmp/requirements.txt\n#7 CACHED\n\n#8 [3/5] RUN apk add --no-cache docker-cli postgresql-libs     && apk add --no-cache --virtual .build-deps gcc musl-dev postgresql-dev     && pip install --no-cache-dir -r /tmp/requirements.txt     && apk del .build-deps\n#8 CACHED\n\n#9 [5/5] COPY collect.py ./collect.py\n#9 CACHED\n\n#10 exporting to image\n#10 exporting layers done\n#10 exporting manifest sha256:4a201b5aa5facc7f9f9fc1291372277fb77b8fc270f1f769eada63b73159f443 done\n#10 exporting config sha256:8a5ac79f0749e79bdff014d3a2c040776504f598cff5eb67d4694b25bc355e7f done\n#10 exporting attestation manifest sha256:7a39de2395199590fe05463160de361195c0120e28a603048aab4fe721bf4356 0.0s done\n#10 exporting manifest list sha256:c97c2eaf10d393f6578962c64fef8bd99002760c8abe38829ce63140c9b50d14 0.0s done\n#10 naming to docker.io/library/a17-c03-review01-final2-next:collector\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "chunk": "#10 naming to docker.io/library/a17-c03-review01-final2-next:collector done\n#10 unpacking to docker.io/library/a17-c03-review01-final2-next:collector 0.0s done\n#10 DONE 0.2s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 3,
+              "step": "BUILD",
+              "duration_ms": 4848
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 3,
+              "step": "DEPLOY",
+              "ts": "2026-09-12T16:21:55.913Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "DEPLOY",
+              "chunk": "$ cd '/opt/opspilot/a17-c03-review01-final2-next' && docker compose up -d\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "DEPLOY",
+              "chunk": " Network a17-c03-review01-final2-next_default Creating \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "DEPLOY",
+              "chunk": " Network a17-c03-review01-final2-next_default Creating \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "DEPLOY",
+              "chunk": " Network a17-c03-review01-final2-next_default Created \n Network a17-c03-review01-final2-next_default Created \n Container a17-c03-review01-final2-next-collector Creating \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-next-app Creating \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-next-collector Created \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-next-app Created \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-next-collector Starting \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-next-app Starting \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-next-app Started \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-next-collector Started \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 3,
+              "step": "DEPLOY",
+              "duration_ms": 2545
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 3,
+              "step": "HEALTHCHECK",
+              "ts": "2026-09-12T16:21:58.459Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "HEALTHCHECK",
+              "chunk": "[1/10] http://127.0.0.1:30013/ -> chưa trả lời\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "HEALTHCHECK",
+              "chunk": "[2/10] http://127.0.0.1:30013/ -> HTTP OK\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 3,
+              "step": "HEALTHCHECK",
+              "chunk": "Healthcheck đạt.\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 3,
+              "step": "HEALTHCHECK",
+              "duration_ms": 3888
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 3,
+              "step": "RECORD",
+              "ts": "2026-09-12T16:22:02.347Z"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 3,
+              "step": "RECORD",
+              "duration_ms": 1718
+            },
+            {
+              "type": "finished",
+              "deployment_id": 3,
+              "status": "running",
+              "total_duration_ms": 20233,
+              "app_url": "http://221.121.1.80:30013"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Vite SPA",
+      "appId": 15,
+      "deploymentIds": [
+        4
+      ],
+      "image": "a17-c03-review01-final2-vite:v1",
+      "port": 30014,
+      "framework": "static-spa",
+      "docker": {
+        "image": "a17-c03-review01-final2-vite:v1",
+        "state": "running",
+        "health": "healthy",
+        "raw": "a17-c03-review01-final2-vite:v1|running|healthy\n"
+      },
+      "http": {
+        "status": 200,
+        "body": "<!doctype html>\n<html lang=\"vi\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>OpsPilot Demo SPA</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-C0Iw_tc2.js\"></script>\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>",
+        "raw": "<!doctype html>\n<html lang=\"vi\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>OpsPilot Demo SPA</title>\n    <script type=\"module\" crossorigin src=\"/assets/index-C0Iw_tc2.js\"></script>\n  </head>\n  <body>\n    <div id=\"root\"></div>\n  </body>\n</html>\n\n__STATUS__:200"
+      },
+      "collector": {
+        "state": "running",
+        "restartCount": 0,
+        "raw": "running|0\n"
+      },
+      "attempts": [
+        {
+          "deploymentId": 4,
+          "eventIndexStart": 171,
+          "eventIndexEnd": 244,
+          "steps": [
+            "PRECHECK",
+            "UPLOAD",
+            "RENDER",
+            "BUILD",
+            "DEPLOY",
+            "HEALTHCHECK",
+            "RECORD"
+          ],
+          "finished": {
+            "type": "finished",
+            "deployment_id": 4,
+            "status": "running",
+            "total_duration_ms": 27551,
+            "app_url": "http://221.121.1.80:30014"
+          },
+          "events": [
+            {
+              "type": "step-start",
+              "deployment_id": 4,
+              "step": "PRECHECK",
+              "ts": "2026-09-12T16:22:12.561Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "PRECHECK",
+              "chunk": "printf 'RAM_MB|'; free -m | awk 'NR==2{print $7}'\nprintf 'DISK_GB|'; df -BG --output=avail / | tail -1 | tr -d ' '\nprintf 'PORT|'; ss -tlnp | grep ':30014 ' >/dev/null 2>&1 && echo 'USED' || echo 'FREE'\n\nprintf 'DOCKER|'; docker --version 2>&1; docker compose version 2>&1 | head -1\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "PRECHECK",
+              "chunk": "  [OK] RAM trống: 2312 MB (cần > 512 MB)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "PRECHECK",
+              "chunk": "  [OK] Disk trống: 28 GB (cần > 2 GB)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "PRECHECK",
+              "chunk": "  [OK] Cổng 30014: chưa dùng (cần chưa dùng)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "PRECHECK",
+              "chunk": "  [OK] Docker: 29.7.2 (cần đã cài)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 4,
+              "step": "PRECHECK",
+              "duration_ms": 542
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 4,
+              "step": "UPLOAD",
+              "ts": "2026-09-12T16:22:13.103Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "UPLOAD",
+              "chunk": "Tải lên /opt/opspilot/a17-c03-review01-final2-vite/src (loại node_modules/.git/dist)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "UPLOAD",
+              "chunk": "Xong: 15.2 KB\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "UPLOAD",
+              "chunk": "Đã đóng gói collector: 6.7 KB\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 4,
+              "step": "UPLOAD",
+              "duration_ms": 1999
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 4,
+              "step": "RENDER",
+              "ts": "2026-09-12T16:22:15.102Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "RENDER",
+              "chunk": "Đã ghi Dockerfile (282 bytes)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "RENDER",
+              "chunk": "Đã ghi docker-compose.yml (946 bytes)\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "RENDER",
+              "chunk": "Đã ghi .env (chmod 600) — nội dung không hiện trong log\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 4,
+              "step": "RENDER",
+              "duration_ms": 4071
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "ts": "2026-09-12T16:22:19.174Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "$ cd '/opt/opspilot/a17-c03-review01-final2-vite' && docker build --build-arg 'VITE_API_URL=http://221.121.1.80:30012' -t 'a17-c03-review01-final2-vite:v1' . && docker build -t 'a17-c03-review01-final2-vite:collector' ./collector\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#0 building with \"default\" instance using docker driver\n\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#1 [internal] load build definition from Dockerfile\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#1 transferring dockerfile: 321B done\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#1 DONE 0.1s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "\n#2 [internal] load metadata for docker.io/library/node:22-alpine\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#2 DONE 0.4s\n\n#3 [internal] load metadata for docker.io/library/nginx:1.27-alpine\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#3 DONE 1.0s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#4 [internal] load .dockerignore\n#4 transferring context: 2B done\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#4 DONE 0.1s\n\n#5 [internal] load build context\n#5 DONE 0.0s\n\n#6 [stage-1 1/2] FROM docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#6 resolve docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 0.1s done\n#6 DONE 0.1s\n\n#7 [builder 1/5] FROM docker.io/library/node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32\n#7 resolve docker.io/library/node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#7 resolve docker.io/library/node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 0.1s done\n#7 DONE 0.1s\n\n#5 [internal] load build context\n#5 transferring context: 61.92kB 0.0s done\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#5 DONE 0.1s\n\n#8 [builder 2/5] WORKDIR /app\n#8 CACHED\n\n#9 [builder 3/5] COPY src/package*.json ./\n#9 CACHED\n\n#10 [builder 4/5] COPY src/ ./\n#10 CACHED\n\n#11 [builder 5/5] RUN npm ci && npm run build\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#11 6.298 \n#11 6.298 added 64 packages, and audited 65 packages in 6s\n#11 6.298 \n#11 6.298 7 packages are looking for funding\n#11 6.298   run `npm fund` for details\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#11 6.314 \n#11 6.314 2 vulnerabilities (1 moderate, 1 high)\n#11 6.314 \n#11 6.314 To address all issues (including breaking changes), run:\n#11 6.314   npm audit fix --force\n#11 6.314 \n#11 6.314 Run `npm audit` for details.\n#11 6.316 npm notice\n#11 6.316 npm notice New major version of npm available! 10.9.8 -> 12.0.2\n#11 6.316 npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.2\n#11 6.316 npm notice To update run: npm install -g npm@12.0.2\n#11 6.316 npm notice\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#11 6.587 \n#11 6.587 > @opspilot/demo-vite-spa@0.1.0 build\n#11 6.587 > vite build\n#11 6.587 \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#11 7.023 vite v5.4.21 building for production...\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#11 7.108 transforming...\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#11 9.080 ✓ 30 modules transformed.\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#11 9.401 rendering chunks...\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#11 9.415 computing gzip size...\n#11 9.431 dist/index.html                  0.33 kB │ gzip:  0.24 kB\n#11 9.431 dist/assets/index-C0Iw_tc2.js  143.56 kB │ gzip: 46.36 kB\n#11 9.432 ✓ built in 2.37s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#11 DONE 9.9s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "\n#6 [stage-1 1/2] FROM docker.io/library/nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10\n#6 CACHED\n\n#12 [stage-1 2/2] COPY --from=builder /app/dist /usr/share/nginx/html\n#12 DONE 0.1s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#13 exporting to image\n#13 exporting layers\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#13 exporting layers 0.2s done\n#13 exporting manifest sha256:1d8f58a7f276d421f693eacc04b9137e9b989c740496600397e29c5b565a7681\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#13 exporting manifest sha256:1d8f58a7f276d421f693eacc04b9137e9b989c740496600397e29c5b565a7681 0.0s done\n#13 exporting config sha256:959e50573ca1c7435236e6e39edac2cf6df8964e52f9ebf662026178ca515a85 0.0s done\n#13 exporting attestation manifest sha256:9f6bfdff91910d06ee95a7fe30885557d2c37b81a3c46c0960081df09d827221 0.0s done\n#13 exporting manifest list sha256:4fbad0753d56370ee889324f2db08b593c8665268f0daef8e1fa65c982031f0a\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#13 exporting manifest list sha256:4fbad0753d56370ee889324f2db08b593c8665268f0daef8e1fa65c982031f0a 0.1s done\n#13 naming to docker.io/library/a17-c03-review01-final2-vite:v1 done\n#13 unpacking to docker.io/library/a17-c03-review01-final2-vite:v1 0.1s done\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#13 DONE 0.5s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#0 building with \"default\" instance using docker driver\n\n#1 [internal] load build definition from Dockerfile\n#1 transferring dockerfile: 564B done\n#1 DONE 0.0s\n\n#2 [internal] load metadata for docker.io/library/python:3.12-alpine\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#2 DONE 1.0s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "\n#3 [internal] load .dockerignore\n#3 transferring context: 2B done\n#3 DONE 0.0s\n\n#4 [internal] load build context\n#4 transferring context: 67B done\n#4 DONE 0.0s\n\n#5 [1/5] FROM docker.io/library/python:3.12-alpine@sha256:b64631e04e4920160c50fbe8d8df828f7f35f06f425cb44aa09bca53e708a35a\n#5 resolve docker.io/library/python:3.12-alpine@sha256:b64631e04e4920160c50fbe8d8df828f7f35f06f425cb44aa09bca53e708a35a 0.1s done\n#5 DONE 0.1s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "\n#6 [3/5] RUN apk add --no-cache docker-cli postgresql-libs     && apk add --no-cache --virtual .build-deps gcc musl-dev postgresql-dev     && pip install --no-cache-dir -r /tmp/requirements.txt     && apk del .build-deps\n#6 CACHED\n\n#7 [4/5] WORKDIR /collector\n#7 CACHED\n\n#8 [2/5] COPY requirements.txt /tmp/requirements.txt\n#8 CACHED\n\n#9 [5/5] COPY collect.py ./collect.py\n#9 CACHED\n\n#10 exporting to image\n#10 exporting layers done\n#10 exporting manifest sha256:4a201b5aa5facc7f9f9fc1291372277fb77b8fc270f1f769eada63b73159f443 0.0s done\n#10 exporting config sha256:8a5ac79f0749e79bdff014d3a2c040776504f598cff5eb67d4694b25bc355e7f done\n#10 exporting attestation manifest sha256:645eeb9fd65ab9fa5848b116ec136b67928227f8bf0cf0d84e09e221695fb3b1\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "chunk": "#10 exporting attestation manifest sha256:645eeb9fd65ab9fa5848b116ec136b67928227f8bf0cf0d84e09e221695fb3b1 0.1s done\n#10 exporting manifest list sha256:5ad753a8a6c99eaec5e0c03c122b0631624186792c15c8df1df1315505f40587 0.0s done\n#10 naming to docker.io/library/a17-c03-review01-final2-vite:collector done\n#10 unpacking to docker.io/library/a17-c03-review01-final2-vite:collector 0.0s done\n#10 DONE 0.2s\n",
+              "stream": "stderr"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 4,
+              "step": "BUILD",
+              "duration_ms": 15821
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 4,
+              "step": "DEPLOY",
+              "ts": "2026-09-12T16:22:35.464Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "DEPLOY",
+              "chunk": "$ cd '/opt/opspilot/a17-c03-review01-final2-vite' && docker compose up -d\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "DEPLOY",
+              "chunk": " Network a17-c03-review01-final2-vite_default Creating \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "DEPLOY",
+              "chunk": " Network a17-c03-review01-final2-vite_default Creating \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "DEPLOY",
+              "chunk": " Network a17-c03-review01-final2-vite_default Created \n Network a17-c03-review01-final2-vite_default Created \n Container a17-c03-review01-final2-vite-collector Creating \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-vite-app Creating \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-vite-app Created \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-vite-collector Created \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-vite-app Starting \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-vite-collector Starting \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-vite-app Started \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "DEPLOY",
+              "chunk": " Container a17-c03-review01-final2-vite-collector Started \n",
+              "stream": "stderr"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 4,
+              "step": "DEPLOY",
+              "duration_ms": 2538
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 4,
+              "step": "HEALTHCHECK",
+              "ts": "2026-09-12T16:22:38.003Z"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "HEALTHCHECK",
+              "chunk": "[1/10] http://127.0.0.1:30014/ -> HTTP OK\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "log",
+              "deployment_id": 4,
+              "step": "HEALTHCHECK",
+              "chunk": "Healthcheck đạt.\n",
+              "stream": "stdout"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 4,
+              "step": "HEALTHCHECK",
+              "duration_ms": 450
+            },
+            {
+              "type": "step-start",
+              "deployment_id": 4,
+              "step": "RECORD",
+              "ts": "2026-09-12T16:22:38.453Z"
+            },
+            {
+              "type": "step-done",
+              "deployment_id": 4,
+              "step": "RECORD",
+              "duration_ms": 1659
+            },
+            {
+              "type": "finished",
+              "deployment_id": 4,
+              "status": "running",
+              "total_duration_ms": 27551,
+              "app_url": "http://221.121.1.80:30014"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "sqlite": {
+    "beforeClose": [
+      {
+        "id": 15,
+        "vps_id": 1,
+        "name": "a17-c03-review01-final2-vite",
+        "framework": "static-spa",
+        "host_port": 30014,
+        "container_port": 80,
+        "healthcheck_path": "/",
+        "needs_db": 0,
+        "current_deployment_id": 4,
+        "url": "http://221.121.1.80:30014",
+        "deployments": [
+          {
+            "id": 4,
+            "app_id": 15,
+            "version": 1,
+            "image_tag": "a17-c03-review01-final2-vite:v1",
+            "status": "running",
+            "failed_step": null,
+            "build_duration_ms": 15821,
+            "total_duration_ms": 25892,
+            "is_rollback_of": null,
+            "started_at": "2026-09-12T16:22:12Z",
+            "finished_at": "2026-09-12T16:22:38.453Z"
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "vps_id": 1,
+        "name": "a17-c03-review01-final2-next",
+        "framework": "nextjs",
+        "host_port": 30013,
+        "container_port": 3000,
+        "healthcheck_path": "/",
+        "needs_db": 0,
+        "current_deployment_id": 3,
+        "url": "http://221.121.1.80:30013",
+        "deployments": [
+          {
+            "id": 3,
+            "app_id": 14,
+            "version": 1,
+            "image_tag": "a17-c03-review01-final2-next:v1",
+            "status": "running",
+            "failed_step": null,
+            "build_duration_ms": 4848,
+            "total_duration_ms": 18515,
+            "is_rollback_of": null,
+            "started_at": "2026-09-12T16:21:43Z",
+            "finished_at": "2026-09-12T16:22:02.347Z"
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "vps_id": 1,
+        "name": "a17-c03-review01-final2-express",
+        "framework": "express",
+        "host_port": 30012,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 1,
+        "current_deployment_id": 2,
+        "url": "http://221.121.1.80:30012",
+        "deployments": [
+          {
+            "id": 2,
+            "app_id": 13,
+            "version": 2,
+            "image_tag": "a17-c03-review01-final2-express:v2",
+            "status": "running",
+            "failed_step": null,
+            "build_duration_ms": 3683,
+            "total_duration_ms": 34531,
+            "is_rollback_of": null,
+            "started_at": "2026-09-12T16:20:58Z",
+            "finished_at": "2026-09-12T16:21:33.266Z"
+          },
+          {
+            "id": 1,
+            "app_id": 13,
+            "version": 1,
+            "image_tag": "a17-c03-review01-final2-express:v1",
+            "status": "running",
+            "failed_step": null,
+            "build_duration_ms": 6167,
+            "total_duration_ms": 23595,
+            "is_rollback_of": null,
+            "started_at": "2026-09-12T16:20:32Z",
+            "finished_at": "2026-09-12T16:20:55.928Z"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "vps_id": 1,
+        "name": "reserved-c03-review-vite",
+        "framework": "express",
+        "host_port": 30011,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30011",
+        "deployments": []
+      },
+      {
+        "id": 11,
+        "vps_id": 1,
+        "name": "reserved-c03-review-next",
+        "framework": "express",
+        "host_port": 30010,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30010",
+        "deployments": []
+      },
+      {
+        "id": 10,
+        "vps_id": 1,
+        "name": "reserved-c03-review-express",
+        "framework": "express",
+        "host_port": 30009,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30009",
+        "deployments": []
+      },
+      {
+        "id": 9,
+        "vps_id": 1,
+        "name": "reserved-c03-final-vite",
+        "framework": "express",
+        "host_port": 30008,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30008",
+        "deployments": []
+      },
+      {
+        "id": 8,
+        "vps_id": 1,
+        "name": "reserved-c03-final-next",
+        "framework": "express",
+        "host_port": 30007,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30007",
+        "deployments": []
+      },
+      {
+        "id": 7,
+        "vps_id": 1,
+        "name": "reserved-c03-final-express",
+        "framework": "express",
+        "host_port": 30006,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30006",
+        "deployments": []
+      },
+      {
+        "id": 6,
+        "vps_id": 1,
+        "name": "reserved-c03-next",
+        "framework": "express",
+        "host_port": 30005,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30005",
+        "deployments": []
+      },
+      {
+        "id": 5,
+        "vps_id": 1,
+        "name": "reserved-c03-redeploy",
+        "framework": "express",
+        "host_port": 30004,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30004",
+        "deployments": []
+      },
+      {
+        "id": 4,
+        "vps_id": 1,
+        "name": "reserved-c03-current",
+        "framework": "express",
+        "host_port": 30003,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30003",
+        "deployments": []
+      },
+      {
+        "id": 3,
+        "vps_id": 1,
+        "name": "reserved-c03-attempt",
+        "framework": "express",
+        "host_port": 30002,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30002",
+        "deployments": []
+      },
+      {
+        "id": 2,
+        "vps_id": 1,
+        "name": "reserved-b",
+        "framework": "express",
+        "host_port": 30001,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30001",
+        "deployments": []
+      },
+      {
+        "id": 1,
+        "vps_id": 1,
+        "name": "reserved-a17",
+        "framework": "express",
+        "host_port": 30000,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30000",
+        "deployments": []
+      }
+    ],
+    "afterReopen": [
+      {
+        "id": 15,
+        "vps_id": 1,
+        "name": "a17-c03-review01-final2-vite",
+        "framework": "static-spa",
+        "host_port": 30014,
+        "container_port": 80,
+        "healthcheck_path": "/",
+        "needs_db": 0,
+        "current_deployment_id": 4,
+        "url": "http://221.121.1.80:30014",
+        "deployments": [
+          {
+            "id": 4,
+            "app_id": 15,
+            "version": 1,
+            "image_tag": "a17-c03-review01-final2-vite:v1",
+            "status": "running",
+            "failed_step": null,
+            "build_duration_ms": 15821,
+            "total_duration_ms": 25892,
+            "is_rollback_of": null,
+            "started_at": "2026-09-12T16:22:12Z",
+            "finished_at": "2026-09-12T16:22:38.453Z"
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "vps_id": 1,
+        "name": "a17-c03-review01-final2-next",
+        "framework": "nextjs",
+        "host_port": 30013,
+        "container_port": 3000,
+        "healthcheck_path": "/",
+        "needs_db": 0,
+        "current_deployment_id": 3,
+        "url": "http://221.121.1.80:30013",
+        "deployments": [
+          {
+            "id": 3,
+            "app_id": 14,
+            "version": 1,
+            "image_tag": "a17-c03-review01-final2-next:v1",
+            "status": "running",
+            "failed_step": null,
+            "build_duration_ms": 4848,
+            "total_duration_ms": 18515,
+            "is_rollback_of": null,
+            "started_at": "2026-09-12T16:21:43Z",
+            "finished_at": "2026-09-12T16:22:02.347Z"
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "vps_id": 1,
+        "name": "a17-c03-review01-final2-express",
+        "framework": "express",
+        "host_port": 30012,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 1,
+        "current_deployment_id": 2,
+        "url": "http://221.121.1.80:30012",
+        "deployments": [
+          {
+            "id": 2,
+            "app_id": 13,
+            "version": 2,
+            "image_tag": "a17-c03-review01-final2-express:v2",
+            "status": "running",
+            "failed_step": null,
+            "build_duration_ms": 3683,
+            "total_duration_ms": 34531,
+            "is_rollback_of": null,
+            "started_at": "2026-09-12T16:20:58Z",
+            "finished_at": "2026-09-12T16:21:33.266Z"
+          },
+          {
+            "id": 1,
+            "app_id": 13,
+            "version": 1,
+            "image_tag": "a17-c03-review01-final2-express:v1",
+            "status": "running",
+            "failed_step": null,
+            "build_duration_ms": 6167,
+            "total_duration_ms": 23595,
+            "is_rollback_of": null,
+            "started_at": "2026-09-12T16:20:32Z",
+            "finished_at": "2026-09-12T16:20:55.928Z"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "vps_id": 1,
+        "name": "reserved-c03-review-vite",
+        "framework": "express",
+        "host_port": 30011,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30011",
+        "deployments": []
+      },
+      {
+        "id": 11,
+        "vps_id": 1,
+        "name": "reserved-c03-review-next",
+        "framework": "express",
+        "host_port": 30010,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30010",
+        "deployments": []
+      },
+      {
+        "id": 10,
+        "vps_id": 1,
+        "name": "reserved-c03-review-express",
+        "framework": "express",
+        "host_port": 30009,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30009",
+        "deployments": []
+      },
+      {
+        "id": 9,
+        "vps_id": 1,
+        "name": "reserved-c03-final-vite",
+        "framework": "express",
+        "host_port": 30008,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30008",
+        "deployments": []
+      },
+      {
+        "id": 8,
+        "vps_id": 1,
+        "name": "reserved-c03-final-next",
+        "framework": "express",
+        "host_port": 30007,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30007",
+        "deployments": []
+      },
+      {
+        "id": 7,
+        "vps_id": 1,
+        "name": "reserved-c03-final-express",
+        "framework": "express",
+        "host_port": 30006,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30006",
+        "deployments": []
+      },
+      {
+        "id": 6,
+        "vps_id": 1,
+        "name": "reserved-c03-next",
+        "framework": "express",
+        "host_port": 30005,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30005",
+        "deployments": []
+      },
+      {
+        "id": 5,
+        "vps_id": 1,
+        "name": "reserved-c03-redeploy",
+        "framework": "express",
+        "host_port": 30004,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30004",
+        "deployments": []
+      },
+      {
+        "id": 4,
+        "vps_id": 1,
+        "name": "reserved-c03-current",
+        "framework": "express",
+        "host_port": 30003,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30003",
+        "deployments": []
+      },
+      {
+        "id": 3,
+        "vps_id": 1,
+        "name": "reserved-c03-attempt",
+        "framework": "express",
+        "host_port": 30002,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30002",
+        "deployments": []
+      },
+      {
+        "id": 2,
+        "vps_id": 1,
+        "name": "reserved-b",
+        "framework": "express",
+        "host_port": 30001,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30001",
+        "deployments": []
+      },
+      {
+        "id": 1,
+        "vps_id": 1,
+        "name": "reserved-a17",
+        "framework": "express",
+        "host_port": 30000,
+        "container_port": 3000,
+        "healthcheck_path": "/health",
+        "needs_db": 0,
+        "current_deployment_id": null,
+        "url": "http://221.121.1.80:30000",
+        "deployments": []
+      }
+    ]
+  }
+}

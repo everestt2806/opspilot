@@ -1,0 +1,9 @@
+﻿setup pid=14588 local=33012,33013,33014 remote=VM02:30012,30013,30014
+Express: status=200 contains=True body_prefix={"ok":true,"uptime_s":100}
+Next.js: status=200 contains=True body_prefix=<!DOCTYPE html><html lang="vi"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width, initial-s
+Vite SPA: status=200 contains=True body_prefix=<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-w
+teardown process_stopped=True

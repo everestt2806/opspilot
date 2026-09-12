@@ -50,6 +50,14 @@ sequence; Next v1 and Vite v1 passed it once.
   remained untouched; app B was not used as a success signal.
 - C03-T1 through C03-T7: PASS. C04 and C05: `NOT_RUN`; no ML, monitor, fault, Flask, push, PR or merge.
 
+## REVIEW-FIX 01
+
+- Code fixes and structured harness are recorded in `docs/evidence/tk-a17/c03/review-fix-01.md`.
+- Final controlled matrix uses `a17-c03-review01-final2-*`, ports `30012..30014`, persistent SQLite
+  profile close/reopen, exact per-deployment seven-step events, Docker/HTTP/collector proof and
+  repeatable SSH local-forward demo proof.
+- Prior failed attempts remain in the review-fix evidence directory; no failed log was removed.
+
 ## Leader review 01 override
 
 Đây là evidence Worker đã nộp, không phải verdict cuối. Review độc lập tại code `c149291`, docs

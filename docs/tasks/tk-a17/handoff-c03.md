@@ -56,6 +56,22 @@
 
 Evidence: [`deploy-matrix.md`](../../evidence/tk-a17/c03/deploy-matrix.md).
 
+## REVIEW-FIX 01 - 12/09/2026
+
+- Verdict from review-01 was `CHANGES_REQUESTED`; C03-R1-01...04 are now closed. Base remains
+  `c2d55ad`; final code HEAD is `6ee83ca`; docs SHA is recorded in the final local docs commit.
+- Detector dependency sections, dynamic public build args/templates, structured per-deployment
+  provenance with durable SQLite reopen, and demo-machine tunnel proof are complete.
+- Final VM02 target `a17-c03-review01-final2-*`: Express app 13 deployments 1/2 port 30012,
+  Next app 14 deployment 3 port 30013, Vite app 15 deployment 4 port 30014. All app containers
+  are `running/healthy`, HTTP 200; all collectors are `running` with restart count 0. PostgreSQL
+  marker proof is `express-marker-proof.json`.
+- Local gates: focused 61/61, collector 26/26, node/web/scripts typecheck, scoped ESLint,
+  Prettier and build exit 0. Review failures and retries are retained under
+  `docs/evidence/tk-a17/c03/review-fix-01/`.
+- Outcome: `READY_FOR_LOCAL_REVIEW`. C04/C05/C06-C09, ML, monitor/fault/recovery, Flask, app B
+  mutation, push, PR and merge remain `NOT_RUN`.
+
 ## Leader review 01 — 12/09/2026
 
 - Reviewed code `c149291`, submitted docs `dcbe3b5`; verdict **CHANGES_REQUESTED**.
