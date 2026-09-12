@@ -94,7 +94,7 @@ sửa, test, DoD, evidence, trọng tâm review và điểm dừng. C08A/B/C cũ
 
 Severity findings: BLOCKER/MAJOR/MINOR (khác ưu tiên feature P0/P1). BLOCKER/MAJOR về đúng
 đắn, dữ liệu, secret hoặc demo phải đóng trước APPROVED. CHANGES_REQUESTED thì sửa cùng chặng;
-BLOCKED cần bằng chứng và điều kiện gỡ. Chỉ C09 có verdict DEMO_READY.
+BLOCKED cần bằng chứng và điều kiện gỡ. Với phạm vi demo 14/09 đã replan, chỉ C05 có verdict DEMO_READY.
 
 ## 4. Gate chung
 
@@ -337,3 +337,6 @@ Worker append START/UPDATE/HANDOFF-LOCAL/REVIEW-FIX với ngày thực tế đ�
   passed: Node `287/287`, ML-service `19/19`, collector `26/26`, typechecks, lint, Prettier and build.
   Evidence is in `docs/evidence/tk-a17/c05/rehearsal-01/` and `rehearsal-02/`; handoff is
   `docs/tasks/tk-a17/handoff-c05.md`. C05 is `READY_FOR_LOCAL_REVIEW`; C06-C09 remain closed/`NOT_RUN`.
+- REVIEW C05 - 13/09/2026: **DEMO_READY** at rehearsal SHA `936e643`, submitted docs `e21ba1c`. Reviewer
+  independently passed Node 287/287, ML 19/19, collector 26/26 and verified jobs 25–28 plus final source/target
+  runtime, HTTP and collectors read-only. C06–C09/ML remain closed/`NOT_RUN`; no push/PR/merge.

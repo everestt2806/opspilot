@@ -40,3 +40,13 @@ Both runs proved runtime image/health, HTTP, collectors, checksums/file counts, 
 | Two consecutive runs on final code SHA                  | PASS       | rehearsal-01 and rehearsal-02                   |
 
 No push, PR or merge was performed.
+
+## Leader review — 13/09/2026
+
+- Verdict: **DEMO_READY** at rehearsal SHA `936e643`, submitted docs `e21ba1c`.
+- Independent gates: Node 50 files / 287 tests, ML 19/19 and collector 26/26 PASS. Node 22 was unavailable;
+  the successful final gate used Node 24.16.0 and this limitation remains explicit.
+- Read-only SQLite: jobs 25–28 all `completed`, `source_kept=1`, correct target ownership and no active migration.
+- Read-only SSH: rehearsal-02 Express/Next/Vite, source Vite/Express and migration targets are healthy/HTTP 200;
+  relevant collectors are running. Raw evidence secret-pattern scan returned no match.
+- Review: `docs/tasks/tk-a17/review-c05.md`; reviewer evidence: `docs/evidence/tk-a17/c05/review/README.md`.

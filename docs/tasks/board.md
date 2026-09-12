@@ -23,14 +23,14 @@
   toàn bộ finding đã đóng bằng kiểm chứng reviewer độc lập.
 - P0: deploy Express/Next/Vite thành công lên VPS; migrate stateless và PostgreSQL thành công giữa
   hai VPS, có checksum/row/marker/health proof. A trình chiếu, thầy quan sát.
-- C03 deploy đã APPROVED review-03; C04 migrate là chặng duy nhất `OPEN`, VM01 TCP 22 đang timeout;
-  C05 đóng. ML, monitor/fault và auto rollback không thuộc demo 14/09, được giữ lại sau 28/09.
+- C03 deploy và C04 migrate đã được duyệt; C05 đạt `DEMO_READY` tại rehearsal SHA `936e643`.
+  ML, monitor/fault và auto rollback không thuộc demo 14/09, được giữ lại sau 28/09.
 
 ## Đang ưu tiên — W3/W4
 
 | ID     | Task                                                                 | Chủ                   | Hạn       | Trạng thái | Branch                      | PR/phụ thuộc                   | Ghi chú                                                           |
 | ------ | -------------------------------------------------------------------- | --------------------- | --------- | ---------- | --------------------------- | ------------------------------ | ----------------------------------------------------------------- |
-| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu   | A                     | 14/09     | ĐANG LÀM   | `feat/a17-demo-checkpoint`  | C04 APPROVED_FOR_DEMO review-05 | C05 rehearsal OPEN; D1–D4 hậu demo                              |
+| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu   | A                     | 14/09     | CHỜ REVIEW | `feat/a17-demo-checkpoint`  | C05 DEMO_READY                  | Rehearsal SHA 936e643; chưa push/PR/merge                        |
 | TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09     | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                      | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới            |
 | TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09     | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge                  | `fe1da33`; 21/21 theo task B                                      |
 | TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02       | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                      | Code đã merge; DoD SSH tail tại A17/C02                           |
@@ -301,3 +301,7 @@ app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express
   VM02 -> VM01: deploy matrix Express/Next.js/Vite and migration jobs `25/26`, then `27/28`, including
   Docker/HTTP/collector, checksum, source-kept and PostgreSQL marker proof. C05 is
   `READY_FOR_LOCAL_REVIEW`; C06-C09 remain closed/`NOT_RUN`.
+- C05 REVIEW - 13/09/2026: **DEMO_READY** at rehearsal SHA `936e643`, submitted docs `e21ba1c`. Independent
+  Node 287/287, ML 19/19 and collector 26/26 PASS; SQLite jobs 25–28/ownership/no-active-job and read-only
+  final rehearsal runtime/HTTP/collector all PASS. Raw evidence secret-pattern scan clean. C06–C09/ML remain
+  closed/`NOT_RUN`; no push/PR/merge authorization is implied.

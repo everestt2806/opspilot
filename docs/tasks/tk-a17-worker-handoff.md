@@ -2,16 +2,14 @@
 
 > C00 APPROVED 11/09: [review](tk-a17/review-c00.md), code `d4ec3be`, docs `23cd248`.
 > C01 APPROVED review-03 11/09: [review](tk-a17/review-c01.md),
-> code `8e42856`, docs `9689ea4`. C02 APPROVED review-10; C03 APPROVED review-03, mở C04 migrate.
+> code `8e42856`, docs `9689ea4`. C02 APPROVED review-10; C03/C04 đã duyệt; C05 `DEMO_READY`.
 > Phạm vi 14/09: C03 deploy → C04 migrate hai VPS → C05 rehearsal; ML deferred tới ít nhất 28/09.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; C00–C03 đã được Leader approve; Worker chỉ làm C04 review-fix 02 theo
-  [review C04](tk-a17/review-c04.md).
+- Owner A solo; C00–C04 đã được Leader approve cho phạm vi demo; C05 đã `DEMO_READY` tại SHA `936e643`.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
-- Chặng được approve: C00, C01, C02, C03. C04 migrate `REVIEW_FIX_REQUIRED`; C05 acceptance chưa mở;
-  C03–C09 cũ deferred khỏi demo 14/09.
+- Chặng demo C00–C05 đã được review; C05 `DEMO_READY`. C06–C09/ML deferred khỏi demo 14/09.
 
 ## Sổ gate (Leader xác nhận verdict)
 
@@ -21,8 +19,8 @@
 | C01         | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4`                         | APPROVED                                      | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
 | C02         | READY_FOR_LOCAL_REVIEW | production `8fe4842` / tests `5febcbe` / docs `313201d` | APPROVED (review-10)                          | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
 | C03 deploy  | READY_FOR_LOCAL_REVIEW | code `c060c75` / docs `53aa07e`                         | APPROVED (review-03)                          | [Review](tk-a17/review-c03.md)                                    |
-| C04 migrate | REVIEW_FIX_REQUIRED    | code `67063ff` / submitted `06da273`                    | CHANGES_REQUESTED (review-02); live state repaired | [Handoff](tk-a17/handoff-c04.md) / [review](tk-a17/review-c04.md) |
-| C05 demo    | NOT_STARTED            | —                                                       | PENDING                                       | [Acceptance](tk-a17/c05-demo-14-09-acceptance.md)                 |
+| C04 migrate | READY_FOR_LOCAL_REVIEW | code `517233e` / submitted `499e5a2`                    | APPROVED_FOR_DEMO (review-05)                 | [Handoff](tk-a17/handoff-c04.md) / [review](tk-a17/review-c04.md) |
+| C05 demo    | READY_FOR_LOCAL_REVIEW | rehearsal `936e643` / submitted `e21ba1c`               | DEMO_READY                                    | [Handoff](tk-a17/handoff-c05.md) / [review](tk-a17/review-c05.md) |
 | ML          | DEFERRED               | —                                                       | Sau 28/09                                     | [Phạm vi giữ lại](tk-a17/c03-ml-runtime.md)                       |
 | C04–C09 cũ  | DEFERRED               | —                                                       | Sau demo                                      | Không chạy theo plan 14/09                                        |
 
@@ -74,7 +72,7 @@
 - [ ] C03: Express/Next/Vite đều deploy live thành công bằng pipeline thật.
 - [ ] C04: stateless và PostgreSQL đều migrate live thành công giữa hai VPS thật.
 - [ ] C05: full tests/build, hai rehearsal, ảnh/runbook và đường trình chiếu có bằng chứng.
-- [ ] Leader xác nhận DEMO_READY đúng SHA.
+- [x] Leader xác nhận DEMO_READY đúng rehearsal SHA `936e643` ngày 13/09/2026.
 - [ ] Merge + DoD đủ bằng chứng mới đổi board HOÀN THÀNH.
 - REVIEW-FIX 01 - 11/09/2026: C01 `C01-R1-01…06` closed at code `0d15eb5`; handoff outcome
   is `READY_FOR_LOCAL_REVIEW`. Evidence is `docs/evidence/tk-a17/c01/review-fix-01.md`.

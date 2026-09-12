@@ -1,8 +1,7 @@
 # TK-A17/C05 — Nghiệm thu và rehearsal demo 14/09/2026
 
-> **OPEN — C04 APPROVED_FOR_DEMO tại code `517233e`, submitted `499e5a2`.** Chạy một goal dài theo
-> [c05-worker-plan.md](c05-worker-plan.md). Chặng này không thêm tính năng mới; chỉ sửa blocker demo tái hiện
-> được rồi chạy lại gate liên quan.
+> **DEMO_READY — Leader review ngày 13/09/2026.** Rehearsal SHA `936e643`, submitted docs `e21ba1c`;
+> hai rehearsal liên tiếp và toàn bộ gate đã được kiểm chứng độc lập. Không mở C06–C09/ML trước demo.
 
 ## Mục tiêu
 
