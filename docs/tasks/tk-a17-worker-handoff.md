@@ -20,7 +20,7 @@
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
 | C02   | READY_FOR_LOCAL_REVIEW | production `8fe4842` / tests `5febcbe` / docs `313201d` | APPROVED (review-10) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
 | C03 deploy | READY_FOR_LOCAL_REVIEW | code `c060c75` / docs `53aa07e` | APPROVED (review-03) | [Review](tk-a17/review-c03.md) |
-| C04 migrate | OPEN | C03 inputs app 18/16 | PENDING; VM01 timeout | [Task](tk-a17/c04-migrate-two-vps.md) |
+| C04 migrate | BLOCKED | C03 inputs app 18/16 | VM01 TCP timeout; local gates PASS | [Handoff](tk-a17/handoff-c04.md) |
 | C05 demo | NOT_STARTED | —            | PENDING | [Acceptance](tk-a17/c05-demo-14-09-acceptance.md) |
 | ML    | DEFERRED       | —            | Sau 28/09 | [Phạm vi giữ lại](tk-a17/c03-ml-runtime.md) |
 | C04–C09 cũ | DEFERRED  | —            | Sau demo | Không chạy theo plan 14/09 |
