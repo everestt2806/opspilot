@@ -21,7 +21,7 @@ All commands ran after the production fix in `D:\Developing\DuAnCNTT\app` unless
 
 | Command | Runtime/result |
 | --- | --- |
-| `pnpm exec vitest run --maxWorkers=1 src/main/detectors/detectors.test.ts src/main/deploy/templates.test.ts src/main/deploy/pipeline.test.ts src/main/deploy/service.test.ts` | Node 24.16.0 / `61 passed`, exit 0 |
+| `pnpm exec vitest run --maxWorkers=1 src/main/detectors/detectors.test.ts src/main/deploy/templates.test.ts src/main/deploy/pipeline.test.ts src/main/deploy/service.test.ts` | Node 24.16.0 / `62 passed`, exit 0 |
 | `..\\ml-service\\.venv\\Scripts\\python.exe -m pytest -q` | `collector`, Python venv / `26 passed`, exit 0 |
 | `pnpm typecheck` | node + web TypeScript, exit 0 |
 | `pnpm exec tsc -p tsconfig.scripts.json --noEmit` | scripts TypeScript, exit 0 |

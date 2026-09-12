@@ -67,7 +67,7 @@ Evidence: [`deploy-matrix.md`](../../evidence/tk-a17/c03/deploy-matrix.md).
   Next app 14 deployment 3 port 30013, Vite app 15 deployment 4 port 30014. All app containers
   are `running/healthy`, HTTP 200; all collectors are `running` with restart count 0. PostgreSQL
   marker proof is `express-marker-proof.json`.
-- Local gates: focused 61/61, collector 26/26, node/web/scripts typecheck, scoped ESLint,
+- Local gates: focused 62/62, collector 26/26, node/web/scripts typecheck, scoped ESLint,
   Prettier and build exit 0. Review failures and retries are retained under
   `docs/evidence/tk-a17/c03/review-fix-01/`.
 - Outcome: `READY_FOR_LOCAL_REVIEW`. C04/C05/C06-C09, ML, monitor/fault/recovery, Flask, app B
