@@ -1,12 +1,14 @@
 import type { DetectionResult, DetectionSignal, Detector, FrameworkId, SourceTree } from './types'
 
 import { expressDetector } from './express'
+import { nextjsDetector } from './nextjs'
+import { staticSpaDetector } from './static-spa'
 
 /**
  * Lát cắt TK-A13 chỉ có detector express (đủ cho demo express-api).
  * nextjs/static-spa/flask bổ sung ở TK-A7 (M3 đầy đủ) — thêm 1 file + 1 dòng vào mảng.
  */
-export const DETECTORS: Detector[] = [expressDetector]
+export const DETECTORS: Detector[] = [nextjsDetector, staticSpaDetector, expressDetector]
 
 const EMPTY_SIGNALS: Record<FrameworkId, DetectionSignal[]> = {
   nextjs: [],

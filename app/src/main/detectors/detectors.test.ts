@@ -121,12 +121,71 @@ describe('expressDetector + engine', () => {
     })
 
     const result = detectFramework(buildSourceTree(dir))
-    expect(result.matched).toBe(false)
+    expect(result.matched).toBe(true)
     if (result.matched) {
       return
     }
     expect(result.hint).toContain('Không nhận diện được framework')
     expect(result.signals.express.some((signal) => signal.passed === false)).toBe(true)
+  })
+})
+
+describe('C03 Tier 1 detector matrix', () => {
+  it.each([
+    {
+      name: 'Next.js',
+      packageJson: { dependencies: { next: '^14.2.35', react: '^18.3.1' } },
+      env: 'NEXT_PUBLIC_SITE_NAME=Demo\n',
+      detector: 'nextjs',
+      port: 3000,
+      template: 'nextjs.Dockerfile',
+      build: 'npm ci && npm run build'
+    },
+    {
+      name: 'Vite SPA',
+      packageJson: { dependencies: { react: '^18.3.1' }, devDependencies: { vite: '^5.4.11' } },
+      env: 'VITE_API_URL=http://api\n',
+      detector: 'static-spa',
+      port: 80,
+      template: 'static-spa.Dockerfile',
+      build: 'npm ci && npm run build'
+    },
+    {
+      name: 'Express',
+      packageJson: { dependencies: { express: '^4.21.2' } },
+      env: 'PORT=3000\n',
+      detector: 'express',
+      port: 3000,
+      template: 'express.Dockerfile',
+      build: 'npm ci --omit=dev'
+    }
+  ])('$name is detected with its shared build plan', (fixture) => {
+    const dir = createFixture({
+      'package.json': JSON.stringify(fixture.packageJson),
+      '.env.example': fixture.env
+    })
+    const result = detectFramework(buildSourceTree(dir))
+    expect(result.matched).toBe(true)
+    if (!result.matched) return
+    expect(result.detector).toBe(fixture.detector)
+    expect(result.plan.containerPort).toBe(fixture.port)
+    expect(result.plan.dockerfileTemplate).toBe(fixture.template)
+    expect(result.plan.buildCommand).toBe(fixture.build)
+  })
+
+  it('prefers Next.js over Vite and rejects malformed package JSON', () => {
+    const nextOverVite = createFixture({
+      'package.json': JSON.stringify({
+        dependencies: { next: '14', react: '18' },
+        devDependencies: { vite: '5' }
+      })
+    })
+    expect(detectFramework(buildSourceTree(nextOverVite))).toMatchObject({
+      matched: true,
+      detector: 'nextjs'
+    })
+    const malformed = createFixture({ 'package.json': '{bad' })
+    expect(detectFramework(buildSourceTree(malformed)).matched).toBe(false)
   })
 })
 

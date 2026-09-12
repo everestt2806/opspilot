@@ -67,6 +67,19 @@ describe('renderDockerfile', () => {
     expect(dockerfile).not.toContain('{{')
   })
 
+  it.each(['nextjs.Dockerfile', 'static-spa.Dockerfile'])(
+    '%s renders a production template',
+    (name) => {
+      const dockerfile = renderDockerfile(name, {
+        ...BASE_VARS,
+        BUILD_COMMAND: 'npm ci && npm run build'
+      })
+      expect(dockerfile).not.toContain('{{')
+      expect(dockerfile).toContain('FROM')
+      expect(dockerfile).toContain('COPY src/package*.json')
+    }
+  )
+
   it('bao loi ro rang khi thieu bien thay the', () => {
     const missingVars = Object.fromEntries(
       Object.entries({ ...BASE_VARS, BUILD_COMMAND: 'npm ci' }).filter(

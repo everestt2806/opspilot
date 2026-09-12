@@ -964,9 +964,14 @@ export class DeployPipeline {
       const collectorTag = shellQuote(`${ctx.app.name}${COLLECTOR_IMAGE_SUFFIX}`)
       const appTagExisted = await this.imageExists(ctx, tag)
       const collectorTagExisted = await this.imageExists(ctx, collectorTag)
+      const buildArgs = Object.keys(this.requirePlan(ctx).buildArgs)
+        .map((key) => `--build-arg ${shellQuote(`${key}=${this.buildArgValue(ctx, key)}`)}`)
+        .join(' ')
+      const buildCommand =
+        buildArgs.length > 0 ? `docker build ${buildArgs} -t ${tag} .` : `docker build -t ${tag} .`
       const command =
         `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && ` +
-        `docker build -t ${tag} . && docker build -t ${collectorTag} ./collector`
+        `${buildCommand} && docker build -t ${collectorTag} ./collector`
       this.log(ctx, 'BUILD', `$ ${command}\n`, 'stdout')
       try {
         const result = await this.execStream(ctx, 'BUILD', command, 900_000)
@@ -999,6 +1004,12 @@ export class DeployPipeline {
         throw error
       }
     })
+  }
+
+  private buildArgValue(ctx: RunContext, key: string): string {
+    const inputValue = ctx.input?.env[key]
+    if (inputValue !== undefined) return inputValue
+    return this.requirePlan(ctx).buildArgs[key] ?? ''
   }
 
   private async imageExists(ctx: RunContext, tag: string): Promise<boolean> {
