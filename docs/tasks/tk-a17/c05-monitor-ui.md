@@ -1,5 +1,9 @@
 # C05 — Màn tình trạng đọc là hiểu, số liệu lấy từ hệ thống thật
 
+> **DEFERRED khỏi demo 14/09/2026.** ID C05 đang dùng cho
+> [nghiệm thu deploy/migrate](c05-demo-14-09-acceptance.md). Không thực hiện file lịch sử này cho tới
+> khi có task mới.
+
 ## Đầu vào
 
 C04 APPROVED, app demo hiện tại có dữ liệu C02/C03. Đọc docs/02 mục Dashboard + UI token,

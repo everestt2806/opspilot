@@ -1,5 +1,30 @@
 # Prompt Worker — giao đúng một chặng
 
+> **Prompt hiện hành 12/09/2026:** sao chép khối C03 ngay dưới đây. Các khối C00/C01 và chuỗi
+> ML/monitor/recovery phía sau chỉ là mẫu lịch sử.
+
+```text
+Bạn là Worker của OpsPilot; Leader chịu trách nhiệm review. Chỉ thực hiện TK-A17/C03 deploy ba
+source Tier 1 theo docs/tasks/tk-a17/c03-worker-plan.md. Đọc CLAUDE.md, docs/tasks/README.md,
+docs/tasks/board.md, docs/tasks/tk-a17-demo-checkpoint.md, docs/tasks/tk-a17-worker-handoff.md,
+docs/25-nguyen-ly-deploy-migrate-demo-14-09.md, detector/deploy contracts và hai prompt M03/M04.
+
+Kế thừa C02 APPROVED review-10 và bắt đầu từ HEAD hiện tại có commit replan 12/09; ghi exact base
+SHA/status trước sửa. Hoàn thiện detector + Dockerfile template Next.js/Vite, giữ Express, rồi bắt
+buộc deploy live thành công cả Express/Next/Vite qua DeployService/pipeline thật trên target riêng.
+Thu detector/build-plan/event/SQLite/docker/HTTP/collector proof theo C03-T1…T7. Không dùng
+Dockerfile/compose thủ công thay pipeline để báo PASS.
+
+Chỉ làm C03. Không làm C04 migrate, C05 rehearsal, ML train/score, monitor/fault/recovery, Flask,
+contract/schema/dependency mới. Không reset/xóa dữ liệu, không thao tác app B ngoài read-only, giữ
+.devflow/, docs/ban-giao-20-08.md và logo.png. Được sửa/test/commit local; không push/PR/merge hoặc
+spawn subagent.
+
+Tạo docs/evidence/tk-a17/c03/deploy-matrix.md và docs/tasks/tk-a17/handoff-c03.md; cập nhật board,
+task log và sổ bàn giao trong docs commit. Báo READY_FOR_LOCAL_REVIEW chỉ khi cả ba source live
+thành công; nếu không báo BLOCKED với evidence/điều kiện gỡ. Không tự approve hoặc mở C04.
+```
+
 > Bản giao 11/09: A yêu cầu lập kế hoạch để giao Worker triển khai. Toàn bộ phạm vi nằm ở
 > [plan chi tiết](../24-ke-hoach-demo-theo-chang.md), đặc biệt ma trận R01–R25 và mục 8–10.
 > Sao chép khối đầu để giao lượt đầu; các khối sau chỉ dùng khi đã có review tương ứng.

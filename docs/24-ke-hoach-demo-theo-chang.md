@@ -1,5 +1,14 @@
 # Demo theo chặng — nhìn thấy sự cố, hiểu cách khôi phục
 
+> **ĐÃ THAY PHẠM VI CHO DEMO 14/09/2026.** Kế hoạch C03–C09 về ML/monitor/fault/recovery bên
+> dưới được giữ làm lịch sử và deferred tới ít nhất 28/09. Chuỗi hiện hành chỉ là
+> [C03 deploy ba source](tasks/tk-a17/c03-worker-plan.md) →
+> [C04 migrate hai VPS](tasks/tk-a17/c04-migrate-two-vps.md) →
+> [C05 rehearsal](tasks/tk-a17/c05-demo-14-09-acceptance.md). Xem
+> [task điều phối](tasks/tk-a17-demo-checkpoint.md) và
+> [nguyên lý deploy/migrate](25-nguyen-ly-deploy-migrate-demo-14-09.md). Không dùng các bảng C03–C09
+> cũ bên dưới để giao Worker cho demo 14/09.
+
 > Cập nhật 10/09/2026: A làm solo, Worker thực hiện, Leader review từng chặng.
 > Kế hoạch thay bản chia 3 ngày. Không có hạn ngày/giờ công cho từng chặng;
 > tiến độ tính bằng đầu ra được nghiệm thu. Ưu tiên giảng viên không chuyên DevOps.

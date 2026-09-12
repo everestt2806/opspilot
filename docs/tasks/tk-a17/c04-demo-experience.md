@@ -1,5 +1,8 @@
 # C04 — Website demo để thầy tự thấy nhanh, chậm và dữ liệu được giữ
 
+> **DEFERRED khỏi demo 14/09/2026.** ID C04 đang dùng cho
+> [migrate hai VPS](c04-migrate-two-vps.md). Không thực hiện file lịch sử này cho tới khi có task mới.
+
 ## Đầu vào
 
 C03 APPROVED. Đọc `demo-apps/express-api/README.md`, server/public hiện có, M12 và API thực

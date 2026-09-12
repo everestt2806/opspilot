@@ -1,136 +1,143 @@
-# TK-A17/C03 — Worker execution plan
+# TK-A17/C03 — Worker plan: deploy ba loại source lên VPS
 
-## Quyền thực thi và phạm vi
+> **OPEN — ưu tiên demo 14/09/2026.** Đây là task duy nhất Worker được thực hiện ở lượt này.
+> C04 migrate và C05 rehearsal vẫn đóng cho tới khi Leader APPROVE C03.
 
-- C02 được Leader approve tại review 10: production `8fe4842`, test `5febcbe`, submitted HEAD
-  `313201d`. Worker bắt đầu từ HEAD chứa commit review 10 của Leader và ghi exact base SHA.
-- Chỉ thực hiện C03. C04–C09 tiếp tục đóng/`NOT_RUN`.
-- Mục tiêu là ML process thật do Electron/CLI quản lý, train từ baseline VM02 sạch và ghi score thật
-  vào SQLite qua `MonitorService`/`MlApiClient`; fixture hoặc mock không được dùng làm live proof.
-- Không đổi model, feature, threshold, window, ML OpenAPI, schema hoặc dependency để làm đẹp kết quả.
-  Chỉ sửa integration bug tái hiện được và phải có regression.
-- Giữ nguyên activation history, cursor và dữ liệu C02. Không reset/xóa/reassign SQLite/PostgreSQL,
-  không gọi `/reset` cho current live deployment, không deploy/rollback/fault, không thao tác app B,
-  không push/PR/merge. Giữ `.devflow/`, `docs/ban-giao-20-08.md`, `logo.png`.
+## Mục tiêu bàn giao
 
-## Đường chạy nhanh
+Hoàn thiện detector/template và chạy thành công cùng pipeline OpsPilot cho ba source Tier 1 có sẵn:
 
-Collector VM02 vẫn ghi mỗi 10 giây. Trước khi chờ baseline mới, đo backlog từ activation hiện tại tới
-EOF. Nếu current deployment đã có hoặc có thể ingest ngay ít nhất 180 mẫu sạch sau boundary, dùng chính
-backlog đó và không chờ thêm 30 phút. Không gộp sample của deployment 20 vào model deployment 21.
+1. `demo-apps/express-api` — Express có PostgreSQL;
+2. `demo-apps/next-blog` — Next.js server;
+3. `demo-apps/vite-spa` — Vite SPA tĩnh.
 
-Giữ `autoTrain:false` trong runner cho tới khi SQLite của current deployment có ít nhất 180 mẫu đã kiểm
-tra sạch. Sau đó gọi `MonitorService.trainNow()` bằng `MlApiClient` thật. Cách này tránh model tự train ở
-150 trước khi baseline đạt yêu cầu C03.
+Mỗi source phải đi qua `detect → PRECHECK → UPLOAD → RENDER → BUILD → DEPLOY → HEALTHCHECK →
+RECORD`, có deployment/runtime/HTTP proof thật trên VPS. Không được dùng `docker compose` thủ công
+thay pipeline để báo PASS.
 
-## Bước 1 — preflight không mutation
+## Base, quyền và ranh giới
 
-1. Xác nhận branch/HEAD/status và ba untracked được bảo toàn.
-2. Mở đúng Electron profile A; đọc `app.id=1`, tên `a17-notes-0911`, current deployment và VPS ID.
-3. Assert không có prepared activation; current deployment `running`; active episode khớp deployment,
-   generation và cursor C02.
-4. SSH read-only VM02: Docker image/state/restart của app A, collector và PostgreSQL; HTTP health;
-   `metrics.jsonl` identity, size, dòng cuối, seq/time hiện tại. App B chỉ inspect read-only.
-5. Xác nhận fault đang tắt và baseline candidate không có `container_up=0` hoặc lỗi probe. Ghi tiêu chí
-   clean cùng SQL/range dùng để kiểm tra, không chỉ ghi “normal”.
-6. Kiểm tra cổng 8765–8767 và process ML hiện có. Không kill process không thuộc run. Đọc trạng thái model
-   current deployment trước run; nếu đã trained từ một run khác, dừng và bàn giao BLOCKED/provenance thay
-   vì reset âm thầm.
+- Kế thừa C02 APPROVED review-10: production `8fe4842`, tests `5febcbe`, submitted `313201d`,
+  rồi bắt đầu từ HEAD chứa commit Leader sửa scope 14/09. Ghi exact base SHA trước sửa.
+- Được sửa detector, deploy template/pipeline integration, focused test, demo README và một CLI live
+  tối thiểu nếu cần để chạy service không qua UI.
+- Không làm migrate, ML train/score, monitor UI, fault, rollback tự động theo cảnh báo hoặc thí nghiệm.
+- Không sửa contract/type union, migration SQLite cũ hoặc thêm dependency. Flask Tier 2 không làm.
+- Không reset/xóa SQLite, PostgreSQL, activation/cursor hay app đang có. Dùng tên app/port riêng;
+  app B chỉ được inspect read-only.
+- Không push/PR/merge/spawn subagent. Giữ nguyên `.devflow/`, `docs/ban-giao-20-08.md`, `logo.png`.
 
-## Bước 2 — runner C03 dùng runtime thật
+Đọc trước: `CLAUDE.md`, `docs/contracts/detector-contract.ts`, mục deploy trong
+`docs/contracts/deploy-events.md`, `docs/prompts/m03-detectors.md`, `docs/prompts/m04-deploy-pipeline.md`
+và [tài liệu nguyên lý](../../25-nguyen-ly-deploy-migrate-demo-14-09.md).
 
-Tạo `app/scripts/a17-c03-live.ts` và thêm đúng file vào `app/tsconfig.scripts.json`. Runner phải:
+## Khoảng cách code hiện tại phải đóng
 
-1. Khởi tạo Electron `app`, profile A, SQLite, credential cipher, `SshManager` giống runner C02.
-2. Khởi động `MlServiceManager`, thu status callback, PID/port được cấp và `/health`; tạo
-   `MlApiClient(http://127.0.0.1:<port>)` từ `getPort()`. Không spawn uvicorn phụ bên ngoài manager.
-3. Khóa target bằng app ID/name/current deployment đã preflight. Recheck trước mỗi mutation; nếu pointer,
-   activation hoặc generation đổi thì fail closed.
-4. Dùng `MonitorService(database, { autoTrain: false })` với real client để ingest backlog/new rows. Poll
-   theo cursor C02, không đọc lại/reassign lịch sử và không tự chế sample.
-5. Có bounded wait theo collector interval 10 giây khi cần dòng mới; log từng deadline và fail rõ thay vì
-   sleep vô hạn. Mọi `finally` phải disconnect SSH, stop đúng ML child và đóng SQLite/Electron sạch.
-6. Xuất một JSON summary đã scrub secret; exit khác 0 nếu bất kỳ invariant nào sai.
+- `DETECTORS` mới đăng ký Express; chưa có `nextjs.ts` và `static-spa.ts`.
+- `templates/` mới có `express.Dockerfile`; thiếu hai template Tier 1.
+- Next/Vite có Dockerfile riêng trong demo app nhưng sản phẩm phải sinh Dockerfile từ `BuildPlan`.
+- Compose/collector/healthcheck hiện đã chạy với Express; phải chứng minh generic path vẫn đúng cho
+  Next/Vite và không làm hồi quy C01/C02.
 
-## Bước 3 — baseline và train thật
+## Bước thực hiện
 
-1. Chụp before: deployment, activation, source generation/size, SQLite offset, metric/score counts,
-   min/max seq và time.
-2. Ingest tới khi current deployment có `>=180` mẫu sạch. Xác nhận mỗi row thuộc episode hiện tại,
-   timestamp tăng, seq không duplicate và các metric dùng train không chứa trạng thái fault.
-3. Gọi `trainNow(currentDeploymentId, realClient)` đúng một lần. Ghi thời điểm bắt đầu/kết thúc, raw status
-   trước/sau, `train_sample_count`, `feature_vector_count`, `trained_at`, feature version và warnings.
-4. Assert status trả đúng deployment ID, `trained=true`, train count bằng dataset gửi và feature vectors
-   bằng `train_sample_count - 20 + 1`. Không suy model đã tồn tại chỉ từ số row SQLite.
+### C03-1 — preflight và ma trận input
 
-## Bước 4 — score sau train
+1. Ghi branch/base/status/untracked; xác nhận không có experiment đang `running`.
+2. Build `SourceTree` cho cả ba demo app; chụp `package.json`, `.env.example`, start/build script,
+   Dockerfile tham khảo, port và route health thực tế.
+3. SSH read-only VM02: Docker/resource/port/workspace hiện tại, app A và app B. Chọn ba app name mới
+   không trùng, để allocator cấp port `30000–30999`.
+4. Nếu VM02 drift hoặc thiếu quyền, tiếp tục test/code local; live outcome phải ghi BLOCKED cho tới
+   khi chính VPS đạt. Không đổi sang mock.
 
-1. Chờ ít nhất một metric mới sau thời điểm train, rồi poll bằng cùng real client.
-2. Với từng sample dùng làm proof, query đúng năm method: `rule`, `zscore_ewma`, `iforest`, `ocsvm`,
-   `ensemble`; không thiếu/trùng method.
-3. Assert bốn ML score là số hữu hạn trong `[0,1]`; `above_threshold` là boolean đúng payload; rule vẫn là
-   hàng thứ năm. Ghi range/min/max theo method và sample IDs, không chỉ tổng count.
-4. Assert timestamps/deployment ID/seq của metric và score khớp; retry cùng cursor không thêm metric/score.
+### C03-2 — detector Next.js
 
-## Bước 5 — ML down và phục hồi
+1. Thêm detector thuần priority `30`: nhận `dependencies.next`, đọc version và `.env.example`.
+2. Build plan dùng `npm ci`, `npm run build`, `npm start`, port `3000`, health `/`; phân biệt build-time
+   `NEXT_PUBLIC_*` với env server runtime để không hứa sai.
+3. Thêm `nextjs.Dockerfile` multi-stage Node 22; runtime chỉ chứa phần cần chạy, LF và template vars
+   đúng contract.
+4. Test matched/unmatched/malformed package, priority so với Vite/Express, env và render không còn
+   placeholder.
 
-1. Dùng chính `MlServiceManager.stopSync()` để dừng child của run; xác nhận callback/status down và port
-   được giải phóng. Không kill theo tên process.
-2. Chờ metric mới rồi chạy poll không có scorer, đúng như wiring Electron khi manager không có port.
-   Assert metric vẫn insert, rule score vẫn số, bốn ML method đều `NULL`, offset vẫn tiến và không có row giả.
-3. Gọi `MlServiceManager.start()` lại, tạo client từ port mới, kiểm `/health` và `/status` current deployment.
-   Model phải còn `trained=true`, train metadata và sample history được nạp từ state trên đĩa.
-4. Chờ metric mới, poll bằng client mới và assert bốn ML score hữu hạn trở lại. Tick lặp không duplicate;
-   seq tiếp tục tăng. Cuối run stop manager sạch nhưng giữ model state để phục vụ demo sau.
+### C03-3 — detector Vite SPA
 
-## Bước 6 — regression local
+1. Thêm detector thuần priority `20`: có `vite`, không có `next`; đọc version và `.env.example`.
+2. Build plan build `dist`, image runtime Nginx, container port `80`, health `/`. `VITE_*` phải được
+   truyền đúng thời điểm build; không đọc runtime env như thể bundle có thể đổi sau build.
+3. Thêm `static-spa.Dockerfile` multi-stage Node 22 → Nginx Alpine và SPA fallback nếu app cần route.
+4. Test matched/unmatched, `next+vite` chọn Next, Express+Vite chọn Vite, static asset/health và render
+   không còn placeholder.
 
-- `MonitorService`: 149/150, manual train, auto-train disabled/enabled, cooldown trong cùng process,
-  ready false, ingest exception, ML down fallback, recovery và deployment isolation.
-- `MlApiClient`: health/status/train/ingest parsing, timeout/non-2xx, null trước train, finite score sau train.
-- `MlServiceManager`: start-idempotent, port selection, health timeout, stop/restart đúng child và status.
-- ML pytest: under-150 reject, train/status, persisted restart, four scores/range, null/window behavior và
-  deployment isolation. Dùng temp state directory; không chạm live state.
-- T6: ghi và kiểm chứng runbook khi current deployment đổi: model key theo deployment ID mới, baseline
-  mới `>=180`, không copy model/state deployment cũ và không train backlog ngoài activation mới.
+### C03-4 — tích hợp pipeline chung
 
-## Gate bắt buộc
+1. Đăng ký detector theo priority; lỗi không nhận diện phải hiển thị signal cho đủ ba Tier 1.
+2. Giữ một pipeline chung. Chỉ detector/template/BuildPlan khác nhau; không copy ba pipeline.
+3. Xác nhận source upload bỏ dependency/build output, build command được quote an toàn, start command
+   đúng và secret không vào event/log.
+4. Collector dùng business route chỉ khi source có static `GET /items`; mọi source khác dùng health
+   path. Compose không ép PostgreSQL cho Next/Vite; Express demo vẫn có health-gated PostgreSQL và
+   giữ volume qua redeploy.
+5. Thêm regression cancel/fail cleanup, image tag, current deployment, port allocation và C02
+   activation lifecycle cho hai framework mới nếu code dùng chung bị chạm.
+
+### C03-5 — live deploy bắt buộc
+
+Chạy tuần tự để giảm tải VPS. Với từng source:
+
+1. gọi detector/service thật, lưu DTO/build plan đã scrub;
+2. gọi precheck và assert port chưa dùng;
+3. start pipeline, thu đủ event đúng thứ tự và `finished:success`;
+4. đối chiếu SQLite app/deployment/current pointer với `docker inspect` image/state/health;
+5. gọi HTTP loopback trên VPS và đường trình chiếu thực tế; chụp nội dung nhận diện đúng app;
+6. với Express tạo marker PostgreSQL qua API, reload và chứng minh marker còn sau một redeploy;
+7. collector của từng app running, restart count không tăng bất thường và sinh metric mới;
+8. ghi mọi lần fail ban đầu cùng fix/retry, không xóa evidence thất bại.
+
+Không dừng/xóa ba app sau proof nếu chúng là input của C04; ghi manifest bàn giao chính xác.
+
+## Case và điều kiện PASS
+
+| Case   | Điều kiện bắt buộc                                                                         |
+| ------ | ------------------------------------------------------------------------------------------ |
+| C03-T1 | Detector/priority/signal của Express, Next, Vite đúng; Flask vẫn ngoài scope               |
+| C03-T2 | Ba Dockerfile template render/build local hoặc fixture thật; không placeholder/CRLF/secret |
+| C03-T3 | Express live deploy + PostgreSQL marker + redeploy giữ marker thành công                   |
+| C03-T4 | Next.js live deploy thành công, đúng image/current deployment và HTTP nội dung app         |
+| C03-T5 | Vite SPA live deploy thành công, Nginx health và HTTP/static asset đúng                    |
+| C03-T6 | Cả ba đi qua pipeline/service thật, collector healthy; app B và dữ liệu C02 không bị đổi   |
+| C03-T7 | Focused/static/build gates PASS; runtime đóng sạch, không open handle/process mồ côi       |
+
+Nếu một trong ba source chưa live thành công thì C03 chưa PASS. Không hạ yêu cầu còn hai stack và không
+dùng Dockerfile thủ công làm bằng chứng pipeline.
+
+## Gate local
 
 ```text
-app> pnpm exec vitest run --maxWorkers=1 <focused ML/monitor/manager files>
+app> pnpm exec vitest run --maxWorkers=1 src/main/detectors/detectors.test.ts \
+     src/main/deploy/templates.test.ts src/main/deploy/pipeline.test.ts \
+     src/main/deploy/service.test.ts
 app> pnpm typecheck
 app> pnpm exec tsc -p tsconfig.scripts.json --noEmit
-app> pnpm exec eslint <changed production/test/script files>
-app> pnpm exec prettier --check <changed production/test/script/docs files>
+app> pnpm exec eslint <changed-ts-tsx-files>
+app> pnpm exec prettier --check <changed-code-doc-files>
 app> pnpm build
-ml-service> .venv\Scripts\python.exe -m pytest -q
+collector> <venv-python> -m pytest -q
 ```
 
-Chạy collector 26 tests chỉ khi collector hoặc metric contract bị sửa. Nếu chỉ thêm runner/integration ML,
-không rerun deploy/rotation live C02.
+Chạy thêm test liên quan từ diff; không skip hay tăng timeout hàng loạt. Không chạy ML pytest vì ML
+không đổi.
 
 ## Evidence và bàn giao
 
-Tạo `docs/evidence/tk-a17/c03/ml-live.md` và `docs/tasks/tk-a17/handoff-c03.md`:
+Tạo:
 
-- exact base/code/docs SHA, command/cwd/runtime/exit;
-- target IDs, image/state, activation/generation/source/cursor và clean-baseline rule;
-- baseline count, seq/time range, train/status response đã scrub;
-- before/after per-method null/non-null counts và score ranges;
-- ML stop/down/restart timeline, PID/port ownership, state persistence và recovery sample IDs;
-- SQLite mutation ledger, retry/duplicate counts, final app/collector/DB/ML state;
-- mapping riêng C03-T1…T6, phần `NOT_RUN`, giới hạn và mọi failure attempt;
-- `READY_FOR_LOCAL_REVIEW`; C04–C09 vẫn đóng. Không tự mở C04.
+- `docs/evidence/tk-a17/c03/deploy-matrix.md` và raw log đã scrub;
+- `docs/tasks/tk-a17/handoff-c03.md`;
+- cập nhật task packet, board và sổ bàn giao trong cùng docs commit.
 
-## Điều kiện PASS
-
-- C03-T1: current deployment có baseline live sạch `>=180`, provenance đầy đủ, train thật thành công.
-- C03-T2: batch sau train có đúng năm rows/sample; bốn ML score hữu hạn và trong `[0,1]`.
-- C03-T3: insufficient/not-ready/down là trạng thái thật; ML null không bị đổi thành zero.
-- C03-T4: đúng ML child được stop/restart; metric/rule tiếp tục và score ML phục hồi.
-- C03-T5: regression và gates trên PASS, không open handle/process treo.
-- C03-T6: runbook deployment mới được kiểm chứng bằng test/provenance, không tái dùng model cũ.
-
-Nếu không đủ baseline sạch, model state đã tồn tại không rõ nguồn, runtime target drift hoặc real ML client
-không phục hồi, bàn giao `BLOCKED` với evidence. Không đổi mục tiêu sang mock/rule-only và không reset để
-tạo PASS giả.
+Handoff ghi exact base/code/docs SHA, commit list, command/cwd/runtime/exit/count, mapping C03-T1…T7,
+bảng ba source với detector/build plan/app/deployment/image/port/health/URL/collector, PostgreSQL marker,
+SQLite mutation ledger, failure attempts, final VPS state và mọi `NOT_RUN`. Kết quả cuối chỉ là
+`READY_FOR_LOCAL_REVIEW` hoặc `BLOCKED`; Worker không tự APPROVE hay mở C04.

@@ -1,5 +1,14 @@
 # TK-A17 — Điều phối Worker và review từng chặng
 
+> **QUYẾT ĐỊNH PHẠM VI 12/09/2026 — áp dụng cho demo 14/09/2026 và thay phần C03–C09 cũ:**
+> demo chỉ gồm (1) deploy thành công ba source Tier 1 Express/Next.js/Vite lên VPS và
+> (2) migrate thành công stateless + PostgreSQL giữa hai VPS. Chuỗi đang áp dụng là
+> **C03 deploy → C04 migrate → C05 rehearsal**. ML, monitor sự cố và tự rollback được hoãn,
+> không mở lại trước 28/09/2026. Nếu phần lịch sử bên dưới mâu thuẫn với quyết định này thì
+> [C03 Worker plan](tk-a17/c03-worker-plan.md), [C04 migrate](tk-a17/c04-migrate-two-vps.md),
+> [C05 acceptance](tk-a17/c05-demo-14-09-acceptance.md) và
+> [tài liệu nguyên lý](../25-nguyen-ly-deploy-migrate-demo-14-09.md) thắng.
+
 | Chủ    | Branch plan                | Baseline code | Trạng thái                  |
 | ------ | -------------------------- | ------------- | --------------------------- |
 REVIEW-FIX C02 06 (11/09/2026): code `61f43df`, evidence `docs/evidence/tk-a17/c02/review-fix-06.md`;
@@ -17,7 +26,7 @@ REVIEW-FIX C02 08 (12/09/2026): code `8fe4842`, evidence
 18/99, ML 19/19, collector 26/26, static/build PASS. No live mutation; read-only deployment 20/21
 evidence retains activation boundaries and `416+5=421`, `2080+25=2105`. C02
 READY_FOR_LOCAL_REVIEW; C03-C09 remain closed/NOT_RUN.
-| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — C02 APPROVED, C03 OPEN |
+| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — C02 APPROVED, C03 DEPLOY OPEN |
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
 · [Sổ bàn giao](tk-a17-worker-handoff.md).
@@ -27,9 +36,9 @@ Khảo sát: [preflight 11/09](tk-a17/preflight-11-09.md). Trạng thái mới:
 [C00 APPROVED](tk-a17/review-c00.md), code `d4ec3be` / docs `23cd248`.
 [C01 APPROVED review-03](tk-a17/review-c01.md), code `8e42856` / docs `9689ea4`; mở C02.
 [C02 APPROVED review-10](tk-a17/review-c02.md), production `8fe4842`, tests `5febcbe`,
-submitted `313201d`; mở C03 theo [Worker plan](tk-a17/c03-worker-plan.md), C04–C09 đóng.
-Mục tiêu: A trình chiếu **tự phát hiện → tự rollback → xác minh phục hồi**. C08 bắt buộc.
-Không chia theo ngày/giờ công. Thời lượng 10s/30s/baseline/test vẫn giữ theo yêu cầu kỹ thuật.
+submitted `313201d`; mở C03 deploy theo [Worker plan](tk-a17/c03-worker-plan.md).
+Mục tiêu 14/09: A trình chiếu **nhận diện source → deploy VPS → migrate hai VPS → đối chiếu dữ liệu**.
+C04/C05 đóng cho tới review trước; các chặng ML/monitor/recovery cũ được DEFERRED.
 
 ## 1. File giao theo thứ tự
 
@@ -38,13 +47,11 @@ Không chia theo ngày/giờ công. Thời lượng 10s/30s/baseline/test vẫn 
 | C00   | Không              | [c00](tk-a17/c00-baseline.md)         | Môi trường và target                           |
 | C01   | C00                | [c01](tk-a17/c01-collector-deploy.md) | Deploy/collector                               |
 | C02   | C01                | [c02](tk-a17/c02-ingestion.md)        | SSH/SQLite, lifecycle deployment               |
-| C03   | C02                | [c03](tk-a17/c03-ml-runtime.md)       | ML runtime                                     |
-| C04   | C03                | [c04](tk-a17/c04-demo-experience.md)  | Website nghiệp vụ demo                         |
-| C05   | C04                | [c05](tk-a17/c05-monitor-ui.md)       | Monitor chỉ đọc                                |
-| C06   | C05                | [c06](tk-a17/c06-incident-flow.md)    | Alert/settings/fault/before-after              |
-| C07   | C06                | [c07](tk-a17/c07-recovery.md)         | Versions/rollback/history                      |
-| C08   | C07                | [c08](tk-a17/c08-auto-rollback.md)    | Bắt buộc: C08A → C08B → C08C, review từng phần |
-| C09   | C08C APPROVED      | [c09](tk-a17/c09-demo-acceptance.md)  | Nghiệm thu toàn luồng tự khôi phục             |
+| C03   | C02                | [deploy 3 source](tk-a17/c03-worker-plan.md) | Express + Next.js + Vite đều live PASS         |
+| C04   | C03                | [migrate 2 VPS](tk-a17/c04-migrate-two-vps.md) | Stateless + PostgreSQL đều live PASS        |
+| C05   | C04                | [demo 14/09](tk-a17/c05-demo-14-09-acceptance.md) | Hai rehearsal và DEMO_READY               |
+| ML    | Sau 28/09          | [deferred](tk-a17/c03-ml-runtime.md)  | Thu thêm dữ liệu rồi lập task/review mới       |
+| C04–C09 cũ | Sau demo      | File lịch sử tương ứng                | DEFERRED, không được Worker chạy trong lượt này |
 
 Worker chỉ code một chặng mỗi lượt, không tự chạy cả bảng. B6/B8/S4 là scope trong A17,
 không mở task ĐANG LÀM song song. Mỗi chặng có file chi tiết gồm đầu vào, việc làm, file được
@@ -59,8 +66,9 @@ sửa, test, DoD, evidence, trọng tâm review và điểm dừng. C08A/B/C cũ
 3. Ghi base SHA trước sửa, chặng trước đã approve và reviewed SHA được kế thừa.
 4. Được sửa/test/commit local. Commit/comment kỹ thuật tiếng Anh theo yêu cầu A; UI/docs
    tiếng Việt. Không push/PR/merge/spawn subagent; giữ untracked/stash của A.
-5. A nhận scope B6/B8 để làm solo. Không migrate, detector breadth, redesign shell/title bar,
-   thí nghiệm chính thức, thêm dependency/LLM API. Tái dùng AntD/Recharts/services/IPC.
+5. A nhận scope deploy/migrate để làm solo. C03 được thêm đúng detector/template Tier 1; C04 được
+   implement migrate theo contract. Không redesign shell/title bar, ML, monitor/fault, thí nghiệm,
+   dependency mới hoặc LLM API. Tái dùng AntD/services/IPC hiện có.
 6. Contract thắng. Mismatch chặn thật: lập proposal cụ thể/ảnh hưởng cho Leader trước đổi;
    schema cần migration mới. Không thêm `error_rate_source` từ bản RC đề xuất cũ.
 7. GitNexus context/impact hỗ trợ core review nếu khả dụng; xác nhận source trực tiếp.
@@ -86,9 +94,9 @@ BLOCKED cần bằng chứng và điều kiện gỡ. Chỉ C09 có verdict DEMO
 
 ## 4. Gate chung
 
-- C00 ghi Node 22/pnpm/Python venv/native ABI thực tế. C01–C08 chạy test liên quan và scoped
-  format/lint/typecheck khi đổi TS; Python đổi chạy suite liên quan. Build/smoke theo file chặng.
-- C09 chạy full suite tuần tự Node 22 và build. Không skip test hay tăng timeout hàng loạt.
+- C03/C04 chạy test liên quan và scoped format/lint/typecheck khi đổi TS; Python đổi chạy suite
+  liên quan. Build/smoke theo file chặng. C05 chạy full suite tuần tự Node 22 và build.
+  Không skip test hay tăng timeout hàng loạt.
   Process treo: thu log/chẩn đoán rồi dừng đúng process mình tạo, ghi FAIL, không báo pass
   vì mới “transform complete”. Reviewer và Worker ghi kết quả riêng theo SHA.
 - Fixture test được mock để kiểm tra logic; evidence demo/live không được mock. Screenshot
@@ -266,3 +274,7 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
 - REVIEW C02 10 12/09 — [review-c02](tk-a17/review-c02.md): **APPROVED** production `8fe4842`,
   tests `5febcbe`, submitted HEAD `313201d`; mọi finding C02 CLOSED. Mở duy nhất C03 theo
   [Worker plan](tk-a17/c03-worker-plan.md); C04-C09 đóng/`NOT_RUN`.
+
+- REPLAN 12/09 — Theo phạm vi demo 14/09 của A, thay C03–C09 cũ bằng C03 deploy ba Tier 1,
+  C04 migrate stateless/PostgreSQL giữa hai VPS và C05 rehearsal. ML cùng monitor/fault/recovery
+  deferred, không mở trước 28/09. C03 deploy là chặng duy nhất OPEN; C04/C05 đóng/`NOT_RUN`.

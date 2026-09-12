@@ -2,13 +2,15 @@
 
 > C00 APPROVED 11/09: [review](tk-a17/review-c00.md), code `d4ec3be`, docs `23cd248`.
 > C01 APPROVED review-03 11/09: [review](tk-a17/review-c01.md),
-> code `8e42856`, docs `9689ea4`. C02 APPROVED review-10; C03 đã mở.
+> code `8e42856`, docs `9689ea4`. C02 APPROVED review-10; C03 deploy ba source đã mở.
+> Phạm vi 14/09: C03 deploy → C04 migrate hai VPS → C05 rehearsal; ML deferred tới ít nhất 28/09.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; C02 đã được Leader approve; Worker thực hiện duy nhất C03 theo plan đã mở.
+- Owner A solo; C02 đã được Leader approve; Worker thực hiện duy nhất C03 deploy theo plan đã mở.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
-- Chặng được approve: C00, C01, C02. C03 `OPEN`; C04–C09 chưa mở.
+- Chặng được approve: C00, C01, C02. C03 deploy `OPEN`; C04 migrate và C05 acceptance chưa mở;
+  C03–C09 cũ deferred khỏi demo 14/09.
 
 ## Sổ gate (Leader xác nhận verdict)
 
@@ -17,15 +19,11 @@
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
 | C02   | READY_FOR_LOCAL_REVIEW | production `8fe4842` / tests `5febcbe` / docs `313201d` | APPROVED (review-10) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
-| C03   | OPEN           | —            | PENDING | [Worker plan](tk-a17/c03-worker-plan.md) |
-| C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
-| C05   | NOT_STARTED    | —            | PENDING | Chưa có        |
-| C06   | NOT_STARTED    | —            | PENDING | Chưa có        |
-| C07   | NOT_STARTED    | —            | PENDING | Chưa có        |
-| C08A  | NOT_STARTED    | —            | PENDING | Chưa có        |
-| C08B  | NOT_STARTED    | —            | PENDING | Chưa có        |
-| C08C  | NOT_STARTED    | —            | PENDING | Chưa có        |
-| C09   | NOT_STARTED    | —            | PENDING | Chưa có        |
+| C03 deploy | OPEN      | —            | PENDING | [Worker plan](tk-a17/c03-worker-plan.md) |
+| C04 migrate | NOT_STARTED | —         | PENDING | [Task](tk-a17/c04-migrate-two-vps.md) |
+| C05 demo | NOT_STARTED | —            | PENDING | [Acceptance](tk-a17/c05-demo-14-09-acceptance.md) |
+| ML    | DEFERRED       | —            | Sau 28/09 | [Phạm vi giữ lại](tk-a17/c03-ml-runtime.md) |
+| C04–C09 cũ | DEFERRED  | —            | Sau demo | Không chạy theo plan 14/09 |
 
 ## Mẫu `handoff-cNN.md`
 
@@ -69,11 +67,12 @@
 - Chặng tiếp được mở; C08A/B/C mỗi phần cần APPROVED trước phần tiếp.
 - Nếu APPROVED: liệt kê hạn chế được chấp nhận, ảnh hưởng demo và nơi theo dõi.
 
-## Gate cuối
+## Gate cuối demo 14/09
 
-- [ ] C00–C07 APPROVED đúng SHA được kế thừa.
-- [ ] C08A/B/C APPROVED, live tự khôi phục không có manual/reset can thiệp trước proof.
-- [ ] C09: full tests/build, hai rehearsal, ảnh/video/runbook có bằng chứng.
+- [x] C00–C02 APPROVED đúng SHA được kế thừa.
+- [ ] C03: Express/Next/Vite đều deploy live thành công bằng pipeline thật.
+- [ ] C04: stateless và PostgreSQL đều migrate live thành công giữa hai VPS thật.
+- [ ] C05: full tests/build, hai rehearsal, ảnh/runbook và đường trình chiếu có bằng chứng.
 - [ ] Leader xác nhận DEMO_READY đúng SHA.
 - [ ] Merge + DoD đủ bằng chứng mới đổi board HOÀN THÀNH.
 - REVIEW-FIX 01 - 11/09/2026: C01 `C01-R1-01…06` closed at code `0d15eb5`; handoff outcome
@@ -193,3 +192,7 @@
 - REVIEW C02 10 - 12/09/2026: Leader **APPROVED** production `8fe4842`, tests `5febcbe`, submitted
   HEAD `313201d`. Mọi finding C02 CLOSED; mở duy nhất C03 theo
   [c03-worker-plan.md](tk-a17/c03-worker-plan.md). C04-C09 đóng/`NOT_RUN`.
+
+- REPLAN 12/09 — A giới hạn demo 14/09 vào deploy nhiều source và migrate hai VPS. C03 cũ về ML
+  được deferred tới ít nhất 28/09; mở C03 deploy ba Tier 1. C04 migrate/C05 acceptance đã có task
+  chi tiết nhưng còn đóng. Worker kế tiếp chỉ nhận [C03](tk-a17/c03-worker-plan.md).

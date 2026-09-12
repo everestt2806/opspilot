@@ -1,5 +1,10 @@
 # Worker playbook — xây demo tự phát hiện và tự khôi phục
 
+> **DEFERRED khỏi demo 14/09/2026.** Playbook này giữ làm lịch sử cho đợt ML/monitor/recovery sau
+> 28/09. Worker hiện tại đọc trực tiếp [C03 deploy](../tasks/tk-a17/c03-worker-plan.md), sau khi
+> được review mới dùng [C04 migrate](../tasks/tk-a17/c04-migrate-two-vps.md) và
+> [C05 acceptance](../tasks/tk-a17/c05-demo-14-09-acceptance.md).
+
 > Đây là chỉ dẫn thực thi, không phải lời đề xuất. A thao tác/trình chiếu, thầy quan sát.
 > Đọc cùng [task](../tasks/tk-a17-demo-checkpoint.md) và file chặng được giao.
 > Chỉ thực hiện một chặng mỗi lượt. Chặng C08 bắt buộc, tách A/B/C để review.

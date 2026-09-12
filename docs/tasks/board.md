@@ -7,36 +7,37 @@
 > Mỗi người tối đa **một** task `ĐANG LÀM`; Worker đổi trạng thái khi thật sự bắt đầu, không đổi
 > thay người kia. `HOÀN THÀNH` chỉ sau khi PR merge `main` và đủ bằng chứng.
 
-## Điểm vào hiện tại — 11/09/2026
+## Điểm vào hiện tại — 12/09/2026
 
 - **A solo:** TK-A17 — [task packet](tk-a17-demo-checkpoint.md),
   [prompt Worker](../prompts/tk-a17-worker.md), [handoff/review](tk-a17-worker-handoff.md).
 - **B:** không có task chặn demo; A nhận tích hợp B6/B8 trong A17 từ 10/09 theo yêu cầu solo.
   Code B4/B5/B2 đã merge; báo cáo runtime B6 còn ở nhánh riêng, cần tái xác minh.
 - Baseline đã fetch: `origin/main@683bfc6`; PR #25 (A15), #26 (B4/B5), #28 (B2) đã merge.
-- Nhánh Worker `feat/a17-demo-checkpoint` từ plan `ac6d8cd`; C01 đã APPROVED, C02 sửa review-04.
-  [Ma trận yêu cầu và quy trình giao việc](../24-ke-hoach-demo-theo-chang.md#7-ma-trận-đầy-đủ-yêu-cầu-giao-worker).
+- Nhánh Worker `feat/a17-demo-checkpoint`; C00–C02 đã APPROVED. Demo 14/09 đổi phạm vi thành
+  C03 deploy ba Tier 1 → C04 migrate hai VPS → C05 rehearsal. ML deferred tới ít nhất 28/09.
+  [Task hiện hành](tk-a17-demo-checkpoint.md) ·
+  [nguyên lý deploy/migrate](../25-nguyen-ly-deploy-migrate-demo-14-09.md).
   C00 [APPROVED](tk-a17/review-c00.md): code `d4ec3be`, docs `23cd248`; có kiểm chứng reviewer riêng.
   C01 [APPROVED review-03](tk-a17/review-c01.md): code `8e42856`, docs `9689ea4`;
   toàn bộ finding đã đóng bằng kiểm chứng reviewer độc lập.
-- P0: website ghi chú thật → người dùng thấy chậm → Monitor giải thích/cảnh báo → khôi phục →
-  website tốt lại, giữ dữ liệu; có timeline và so sánh trước/sau. A trình chiếu, thầy quan sát.
-- Tiến độ theo C00–C09; C08 bắt buộc, chia C08A policy/C08B coordinator/C08C live, mỗi phần
-  review riêng. Điểm nhấn tự khôi phục không manual/reset can thiệp. C02 `CHANGES_REQUESTED`.
-  [Playbook Worker](../prompts/tk-a17-worker-playbook.md); không chia ngày/giờ công.
+- P0: deploy Express/Next/Vite thành công lên VPS; migrate stateless và PostgreSQL thành công giữa
+  hai VPS, có checksum/row/marker/health proof. A trình chiếu, thầy quan sát.
+- C03 deploy là chặng duy nhất `OPEN`; C04/C05 đóng. ML, monitor/fault và auto rollback không thuộc
+  demo 14/09, được giữ lại sau 28/09.
 
 ## Đang ưu tiên — W3/W4
 
 | ID     | Task                                                                 | Chủ                   | Hạn      | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                                            |
 | ------ | -------------------------------------------------------------------- | --------------------- | -------- | ---------- | --------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| TK-A17 | Demo trực quan: website → sự cố → khôi phục → đối chiếu dữ liệu      | A                     | C09      | ĐANG LÀM | `feat/a17-demo-checkpoint`  | `main@683bfc6`              | C02 REVIEW_FIX_REQUIRED theo review-07; C03-C09 NOT_RUN; chưa push/PR |
+| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu  | A                     | 14/09    | ĐANG LÀM | `feat/a17-demo-checkpoint`  | C02 APPROVED review-10      | C03 deploy OPEN; C04/C05 NOT_RUN; ML deferred; chưa push/PR |
 | TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09    | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                   | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới                             |
 | TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09    | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge               | `fe1da33`; 21/21 theo task B                                                       |
 | TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02      | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                   | Code đã merge; DoD SSH tail tại A17/C02                                            |
 | TK-B6  | M5: collector Docker trên VPS                                        | B → A tích hợp        | C01      | CHỜ REVIEW | `feat/m05-collector-docker` | report `dfc0ed7` chưa merge | A17/C00–C01 tái xác minh, giữ app B                                                |
-| TK-S4  | Gate dữ liệu thật A16 + collector VPS                                | A solo                | C03      | TUẦN NÀY   | Qua TK-A17                  | C01–C03                     | Collector, ingestion và ML có review riêng                                         |
-| TK-B8  | Monitor Dashboard: chart + score + alert UI                          | A làm thay B từ 10/09 | C06      | TUẦN NÀY   | Qua TK-A17                  | C05–C06                     | Monitor dễ hiểu, alert/label/settings/summary; không task song song                |
-| TK-A7  | M3: detector 3 Tier 1                                                | A                     | Sau demo | BACKLOG    | `feat/m03-tier1-detectors`  | Sau A17                     | Hoãn để ưu tiên demo dữ liệu thật                                                  |
+| TK-S4  | Gate dữ liệu thật A16 + collector VPS                                | A solo                | Sau 28/09 | BACKLOG  | Qua TK-A17                  | C01–C02 đã đạt              | Phần ML deferred để thu thêm dữ liệu                                               |
+| TK-B8  | Monitor Dashboard: chart + score + alert UI                          | A làm thay B từ 10/09 | Sau 28/09 | BACKLOG | Qua TK-A17                  | Sau demo 14/09              | Không mở song song với deploy/migrate                                              |
+| TK-A7  | M3: detector 3 Tier 1                                                | A                     | C03      | BACKLOG    | `feat/m03-tier1-detectors`  | Gộp scope vào A17/C03       | Express/Next/Vite phục vụ trực tiếp demo 14/09                                    |
 | TK-B2  | M12: next-blog + vite-spa + fault endpoint                           | B                     | 10/09    | HOÀN THÀNH | `feat/m12-demo-apps-rest`   | #28 merge                   | 3 app Docker/fault smoke theo B; detector 3 stack chưa hoàn thành                  |
 | TK-S5  | Gate MVP 16/24 FR + smoke/rollback/alert                             | A solo                | Sau A17  | BACKLOG    | —                           | A17/C09                     | Demo có evidence, không tự xác nhận 16/24 FR                                       |
 
@@ -218,3 +219,10 @@ C02 **APPROVED**: production `8fe4842`, tests `5febcbe`, submitted HEAD `313201d
 service 22/22, focused 113/113, node/web/scripts typecheck, scoped ESLint và test Prettier PASS;
 mọi finding C02 CLOSED. Mở duy nhất C03 theo `docs/tasks/tk-a17/c03-worker-plan.md`; C04-C09
 đóng/`NOT_RUN`. Task về `TUẦN NÀY`; chưa push/PR/merge.
+
+### TK-A17 update - 12/09 replan demo 14/09
+
+A đổi phạm vi demo sang hai năng lực bắt buộc thành công: deploy Express/Next/Vite lên VPS và
+migrate stateless/PostgreSQL giữa hai VPS. C03 được mở lại thành deploy matrix; C04 migrate và C05
+rehearsal đã có task nhưng còn đóng/`NOT_RUN`. ML cùng monitor/fault/recovery deferred tới ít nhất
+28/09. Tài liệu thuyết minh: `docs/25-nguyen-ly-deploy-migrate-demo-14-09.md`.
