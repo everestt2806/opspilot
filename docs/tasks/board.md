@@ -199,3 +199,10 @@ mixed-invalid EOF và read-only split 416/5 đạt; focused 98/98, ML 19/19, col
 static/build PASS. Hai reviewer recovery regression 0/2 PASS: snapshot ngắn hơn durable boundary
 vẫn activate và activation/current pointer không cùng transaction. Mở `C02-R8-01…03`; C02 về
 `REVIEW_FIX_REQUIRED`, C03-C09 tiếp tục đóng/`NOT_RUN`; không chạy live mutation.
+
+### TK-A17 update - 12/09 C02 review-09
+
+C02 **CHANGES_REQUESTED** tại code `8fe4842`, submitted HEAD `d65ead7`. Production R8-01/02
+đạt; focused 99/99, ML 19/19, collector 26/26 và static/build PASS. Mở duy nhất `C02-R9-01`
+MAJOR vì recovery matrix/evidence overclaim committed tests. Không phát hiện defect production mới,
+không cần live mutation; C02 `REVIEW_FIX_REQUIRED`, C03-C09 đóng/`NOT_RUN`.

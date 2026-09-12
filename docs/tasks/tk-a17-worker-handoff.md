@@ -2,10 +2,10 @@
 
 > C00 APPROVED 11/09: [review](tk-a17/review-c00.md), code `d4ec3be`, docs `23cd248`.
 > C01 APPROVED review-03 11/09: [review](tk-a17/review-c01.md),
-> code `8e42856`, docs `9689ea4`. C02 review-08 đang CHANGES_REQUESTED.
+> code `8e42856`, docs `9689ea4`. C02 review-09 đang CHANGES_REQUESTED.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; C01 đã được Leader approve sau review-fix-02; C02 đang sửa theo review-08.
+- Owner A solo; C01 đã được Leader approve sau review-fix-02; C02 đang sửa theo review-09.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
 - Chặng được approve: C00, C01. C02 `REVIEW_FIX_REQUIRED`; C03–C09 chưa mở.
@@ -16,7 +16,7 @@
 | ----- | -------------- | ------------ | ------- | -------------- |
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
-| C02   | READY_FOR_LOCAL_REVIEW | code `65d85ac` / docs `2503c12` | CHANGES_REQUESTED (review-08) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
+| C02   | READY_FOR_LOCAL_REVIEW | code `8fe4842` / docs `d65ead7` | CHANGES_REQUESTED (review-09) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
 | C03   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C04   | NOT_STARTED    | —            | PENDING | Chưa có        |
 | C05   | NOT_STARTED    | —            | PENDING | Chưa có        |
@@ -183,3 +183,7 @@
   mixed-invalid và live split đã đóng. Hai recovery regression mới 0/2 PASS: source ngắn hơn durable
   boundary vẫn activate, và pointer-update failure để activation/pointer split state. Mở
   `C02-R8-01…03`; C02 `REVIEW_FIX_REQUIRED`, C03-C09 đóng/`NOT_RUN`.
+- REVIEW C02 09 - 12/09/2026: Leader review code `8fe4842`, submitted HEAD `d65ead7`:
+  **CHANGES_REQUESTED**. Production R8-01/02 và full gates đạt; không có defect production mới.
+  `C02-R9-01` MAJOR còn mở vì review-fix-08 khai nhiều recovery case PASS nhưng diff chỉ có một test
+  mới và một test mở rộng. C02 `REVIEW_FIX_REQUIRED`; C03-C09 đóng/`NOT_RUN`; không cần live mutation.

@@ -900,3 +900,77 @@ rollback, reset/xóa/reassign SQLite/PostgreSQL, train/score C03, thao tác app 
 .devflow/, docs/ban-giao-20-08.md, logo.png. Append REVIEW-FIX 08 vào evidence/handoff/board/task/sổ với
 exact base/code/docs HEAD. Chỉ bàn giao READY_FOR_LOCAL_REVIEW khi regression mới và full gates đều PASS.
 ```
+
+## 13. Review 09 — review-fix tại `d65ead7`
+
+### Phạm vi và verdict
+
+- Reviewed base `deb69b9`, code `8fe4842`, submitted HEAD `d65ead7`; ancestry hợp lệ.
+- Verdict: **CHANGES_REQUESTED**. C02 tiếp tục `REVIEW_FIX_REQUIRED`; C03–C09 đóng/`NOT_RUN`.
+- Implementation của `C02-R8-01/02` đạt: row được reload dưới lock, durable boundary được kiểm và
+  activation/pointer dùng một SQLite transaction. Focused 99/99 và toàn bộ gate độc lập PASS.
+- `C02-R8-03` còn PARTIAL vì evidence khai nhiều recovery regression không có trong code test đã commit.
+- Evidence reviewer: [review-09](../../evidence/tk-a17/c02/review-09/). Không chạy live, deploy,
+  rollback, ML train/score hoặc thao tác app B; read-only evidence 20/21 tiếp tục được chấp nhận.
+
+### Kiểm chứng độc lập
+
+| Gate | Kết quả reviewer |
+| --- | --- |
+| Exact focused Worker | 18 file, 99/99 PASS |
+| ML service | 19/19 PASS |
+| Collector | 26/26 PASS |
+| Typecheck node/web/scripts, lint, format, build | PASS; renderer 3045 modules |
+| GitNexus | analyze PASS với FTS warning; 13 symbol, 300 affected flow, risk CRITICAL |
+| Audit committed recovery matrix | FAIL — một test mới + một test mở rộng không cover toàn bộ case đã khai |
+
+### Trạng thái finding R8
+
+| Finding | Review 09 |
+| --- | --- |
+| C02-R8-01 | CLOSED — `snapshot.size + 1 >= start_offset` và short-source barrier có code/test |
+| C02-R8-02 | CLOSED — injected pointer failure rollback toàn transition; retry thành công |
+| C02-R8-03 | PARTIAL — close/reopen, multi-level candidate và second tick đạt; matrix/provenance còn thiếu |
+
+### C02-R9-01 — MAJOR — regression matrix và evidence không khớp commit
+
+- Vị trí: `app/src/main/monitor/service.test.ts:10-179` và
+  `docs/evidence/tk-a17/c02/review-fix-08.md:27-38`.
+- Diff chỉ thêm một test boundary/atomic retry và mở rộng test multi-level candidate bằng second tick.
+  Cycle test cũ không tạo missing lineage dù tên nói “cyclic or missing”.
+- Không có committed reconciliation regression cho exact boundary/boundary-1, missing snapshot,
+  generation mismatch, wrong image, collector missing/down, SSH failure/reconnect, active previous owner
+  là rollback chain, previous-owner abort, missing lineage, stale prepared replacement hoặc deploy tiếp.
+  Evidence hiện ghi tất cả các case này PASS.
+- Fix: thêm test production table-driven/targeted cho các nhánh đã khai và assert episode states,
+  pointer, boundary/generation, cursor, action status/count cùng idempotent retry; hoặc sửa evidence về
+  đúng case thực sự có nhưng vẫn phải commit các case bắt buộc trong review-08. Không cần live mutation.
+
+### Bàn giao review-fix 09 cho Worker
+
+```text
+Tiếp tục duy nhất TK-A17/C02 từ HEAD chứa Leader review 09. Không checkout/reset về 8fe4842 hoặc d65ead7.
+Production fix R8-01/02 đã được Leader chấp nhận; ưu tiên không sửa production nếu regression mới không
+phát hiện lỗi. C03-C09 vẫn đóng/NOT_RUN.
+
+Đóng C02-R9-01 và phần còn lại R8-03 bằng regression đã commit, không chỉ mô tả trong evidence. Tại
+MonitorService/ActivationRepository, thêm matrix có thể table-driven cho: source đúng exact boundary
+(`size + 1 == start_offset`) và boundary-1; snapshot missing; generation mismatch; runtime wrong/down;
+collector missing/down; SSH/inspect throw rồi retry; prepared rollback một/nhiều tầng; active previous
+owner cũng resolve qua rollback lineage; missing và cycle lineage; previous-owner abort; stale prepared
+row bị thay trong lúc pollAll chờ shared app lock; close/reopen DB; pointer-update injected failure rồi
+retry; second tick; target/pointer nhìn thấy được cho workflow deploy tiếp.
+
+Mỗi case phải assert đúng prepared/active/closed/aborted rows, start/end/generation, current_deployment_id,
+metrics_offset không đổi ở failure, action type/status/count và không duplicate sau retry. Với stale-row,
+giữ app lock, cho pollAll enumerate app ID rồi thay old prepared bằng row mới trước khi nhả lock; chứng
+minh service reload row mới và không activate/abort/log success theo dữ liệu stale. Với missing lineage,
+tạo is_rollback_of trỏ ID không tồn tại thay vì chỉ dùng cycle.
+
+Sửa review-fix-08 evidence để mỗi dòng PASS map tới tên test/file/line thật; bỏ mọi claim chưa có test.
+Chạy lại exact focused, ML 19, collector 26, node/web/scripts typecheck, scoped ESLint, Prettier và build.
+Không cần chạy live hoặc đọc SSH lại; giữ nguyên evidence deployment 20/21 và arithmetic 416+5=421,
+2080+25=2105. Không deploy/rollback, reset/xóa/reassign SQLite/PostgreSQL, train/score C03, thao tác app B,
+push/PR/merge. Giữ .devflow/, docs/ban-giao-20-08.md, logo.png. Append REVIEW-FIX 09 với exact code/docs
+HEAD và chỉ bàn giao READY_FOR_LOCAL_REVIEW khi matrix thực sự nằm trong commit và full gates PASS.
+```

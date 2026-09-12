@@ -340,3 +340,14 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
   boundary/atomicity mới 0/2 PASS. Worker live evidence 20/21 được chấp nhận read-only cho R7-04.
 - C02 tiếp tục `REVIEW_FIX_REQUIRED`; C03–C09 đóng/`NOT_RUN`. Evidence:
   `docs/evidence/tk-a17/c02/review-08/`. Không cần live mutation để đóng review-fix 08.
+
+## Leader review 09 — 12/09/2026
+
+- Reviewed base `deb69b9`, code `8fe4842`, submitted HEAD `d65ead7`; verdict
+  **CHANGES_REQUESTED** tại [review-c02.md](review-c02.md), mục 13.
+- `R8-01/02` CLOSED về implementation và regression chính. `R8-03` còn PARTIAL qua
+  `C02-R9-01` MAJOR vì evidence khai một recovery matrix rộng hơn test thực tế đã commit.
+- Reviewer xác nhận focused 99/99, ML 19/19, collector 26/26 và static/build PASS. Không phát hiện
+  production defect mới; review-fix tiếp theo chỉ cần test/provenance nếu tests không lộ lỗi.
+- C02 tiếp tục `REVIEW_FIX_REQUIRED`; C03–C09 đóng/`NOT_RUN`. Không cần live mutation;
+  evidence reviewer: `docs/evidence/tk-a17/c02/review-09/`.
