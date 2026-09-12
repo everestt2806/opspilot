@@ -29,19 +29,29 @@ ml-service> .venv\Scripts\python.exe -m pytest -q       19 passed
 collector> ..\ml-service\.venv\Scripts\python.exe -m pytest -q  26 passed
 ```
 
-## Regression matrix
+## Regression matrix (review-fix 09 committed tests)
 
-- Exact boundary and boundary-1: short snapshot keeps prepared; durable boundary activates.
-- Missing snapshot/generation mismatch/wrong image/collector missing or down/SSH unknown: barrier is
-  retained with an operational action; no DB pointer inference.
-- One- and multi-level prepared rollback, active rollback owner, cycle/missing lineage: resolved
-  lineage is used under lock; invalid lineage remains prepared.
-- Previous owner abort, stale prepared replacement, close/reopen DB and second service tick: row is
-  reloaded by ID/deployment, stale row is a no-op, and no duplicate activation/action is created.
-- Injected SQLite pointer failure: previous active row, prepared row, pointer and cursor remain
-  unchanged; dropping the trigger and retrying activates exactly once.
-- Routing/dedupe/cardinality and mixed invalid rotation remain covered by the focused monitor suite;
-  every metric has five score rows and ML nulls are not fabricated.
+- `C02 review-fix 09 fail-closed inputs > keeps boundary and owner input safe: exact boundary` and
+  its seven table cases cover boundary-1, missing snapshot, generation mismatch, wrong image, down
+  runtime, collector missing/down; each asserts activation state, pointer, cursor and action count.
+- `C02 review-fix 09 fail-closed inputs > retries a disconnected SSH reconciliation without changing
+  the cursor` covers first-failure barrier and successful retry.
+- `C02 review-fix 09 lineage and owner > resolves owner safely: active previous rollback chain`,
+  `previous owner abort`, and `missing lineage barrier` cover resolved owner, safe abort and missing
+  lineage; each asserts activation state, pointer, cursor and action count. Existing
+  `keeps the prepared barrier when rollback lineage is cyclic or missing` covers the cycle case.
+- `C02 review-fix 09 concurrency and stale rows > waits for shared app lock` and
+  `reloads replacement prepared row` cover lock waiting and stale-row replacement; each asserts
+  activation state, pointer, cursor and action count.
+- Existing `keeps a short boundary and rolls back atomic activation before retrying idempotently` and
+  `reconciles a prepared activation after restart only with verified runtime and stream owner` remain
+  the committed pointer-retry, second-tick and close/reopen regressions. Routing/dedupe/cardinality
+  and mixed-invalid rotation remain covered by the focused monitor suite; ML nulls are not fabricated.
+
+## REVIEW-FIX 09
+
+- Added the three table-driven production regression groups above; no production code changed.
+- C02-R9-01 is closed by committed test names, with C03-C09 still closed/`NOT_RUN`.
 
 ## Read-only live scope
 

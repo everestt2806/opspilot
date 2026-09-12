@@ -184,6 +184,11 @@
   boundary vẫn activate, và pointer-update failure để activation/pointer split state. Mở
   `C02-R8-01…03`; C02 `REVIEW_FIX_REQUIRED`, C03-C09 đóng/`NOT_RUN`.
 - REVIEW C02 09 - 12/09/2026: Leader review code `8fe4842`, submitted HEAD `d65ead7`:
+
+- REVIEW-FIX C02 09: code `5febcbe`, docs append from `d65ead7`; C02-R9-01 closed by committed
+  fail-closed, lineage/owner and concurrency/stale-row tests. Service `22/22`, focused `18 files/113
+  tests`, typecheck/scripts typecheck/scoped ESLint/Prettier PASS. Production unchanged; ML/collector/
+  build/live `NOT_RUN`; `READY_FOR_LOCAL_REVIEW`; C03-C09 closed/`NOT_RUN`.
   **CHANGES_REQUESTED**. Production R8-01/02 và full gates đạt; không có defect production mới.
   `C02-R9-01` MAJOR còn mở vì review-fix-08 khai nhiều recovery case PASS nhưng diff chỉ có một test
   mới và một test mở rộng. C02 `REVIEW_FIX_REQUIRED`; C03-C09 đóng/`NOT_RUN`; không cần live mutation.

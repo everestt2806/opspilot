@@ -202,6 +202,11 @@ vẫn activate và activation/current pointer không cùng transaction. Mở `C0
 
 ### TK-A17 update - 12/09 C02 review-09
 
+REVIEW-FIX C02 09: code `5febcbe`, docs append from `d65ead7`; three table-driven service groups
+committed. Service `22/22`, focused `18 files/113 tests`, typecheck/scripts typecheck/scoped ESLint/
+Prettier PASS. Production `8fe4842` unchanged; no live, ML, collector or build. C02
+`READY_FOR_LOCAL_REVIEW`; C03-C09 remain closed/`NOT_RUN`.
+
 C02 **CHANGES_REQUESTED** tại code `8fe4842`, submitted HEAD `d65ead7`. Production R8-01/02
 đạt; focused 99/99, ML 19/19, collector 26/26 và static/build PASS. Mở duy nhất `C02-R9-01`
 MAJOR vì recovery matrix/evidence overclaim committed tests. Không phát hiện defect production mới,

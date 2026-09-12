@@ -50,6 +50,23 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
 - SQLite ML methods remain null where null before; no fake values were filled and no ML claim is made.
 - No push, PR or merge. C03 remains `NOT_RUN`.
 
+## REVIEW-FIX 09 - 12/09/2026
+
+- Scope: only C02 review-fix 09; base `35a4bfa`; code `5febcbe`; docs before append `d65ead7`;
+  branch `feat/a17-demo-checkpoint`. Production remains unchanged from `8fe4842`.
+- Closed `C02-R9-01` with three committed table-driven groups in `app/src/main/monitor/service.test.ts`:
+  fail-closed inputs (8 cases plus SSH retry), lineage and owner (3 cases plus existing cycle test),
+  and concurrency/stale rows (2 cases). Each new case asserts activation state, current pointer,
+  metrics offset and action count.
+- In cwd `app`, Node 24.16.0/pnpm 11.1.0: focused `pnpm exec vitest run --maxWorkers=1 src/main/db
+  src/main/monitor src/main/deploy src/main/shutdown.test.ts` exited `0` with 18 files/113 tests;
+  service-only exited `0` with 22/22 tests. `pnpm typecheck`, scripts tsc, scoped ESLint and
+  Prettier check all exited `0`.
+- ML 19, collector 26, build and live are `NOT_RUN` because this fix changed only tests/docs. No
+  VM02, PostgreSQL, SQLite history or app B mutation occurred. C03-C09 remain closed/`NOT_RUN`.
+- Evidence: [`review-fix-08.md`](../../evidence/tk-a17/c02/review-fix-08.md). Outcome:
+  `READY_FOR_LOCAL_REVIEW`.
+
 ## REVIEW-FIX 01 and blocker
 
 - `C02-R1-01` is a contract/schema boundary decision, not a safe local resolver fix. See [`review-fix-01.md`](../../evidence/tk-a17/c02/review-fix-01.md) for the byte-boundary proposal covering deploy, failed attempt, manual/auto rollback, clock skew, rotation/restart, scheduler race and transaction routing.

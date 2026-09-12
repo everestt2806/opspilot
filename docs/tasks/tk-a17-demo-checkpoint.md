@@ -259,6 +259,10 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   current pointer xảy ra sau khi activation đã commit. Mở `C02-R8-01…03`; C02 tiếp tục
   `REVIEW_FIX_REQUIRED`, C03-C09 đóng/`NOT_RUN`.
 - REVIEW C02 09 12/09 — [review-c02](tk-a17/review-c02.md): **CHANGES_REQUESTED** tại code
+
+- REVIEW-FIX C02 09: code `5febcbe`, docs append from `d65ead7`; three table-driven service groups
+  committed. Service `22/22`, focused `18 files/113 tests`, typecheck/lint/Prettier PASS. Production
+  `8fe4842` unchanged; no live. C02 `READY_FOR_LOCAL_REVIEW`; C03-C09 `NOT_RUN`.
   `8fe4842`, submitted HEAD `d65ead7`. Reload-under-lock, durable boundary và atomic pointer transition
   đạt; focused 99/99, ML 19/19, collector 26/26 và static/build PASS. Còn `C02-R9-01` MAJOR vì
   recovery matrix trong evidence không tồn tại đầy đủ trong committed tests. Không có production defect
