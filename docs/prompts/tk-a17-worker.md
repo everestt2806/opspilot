@@ -1,28 +1,26 @@
 # Prompt Worker — giao đúng một chặng
 
-> **Prompt hiện hành 12/09/2026:** sao chép khối C03 ngay dưới đây. Các khối C00/C01 và chuỗi
+> **Prompt hiện hành 12/09/2026:** sao chép khối C03 review-fix ngay dưới đây. Các khối C00/C01 và chuỗi
 > ML/monitor/recovery phía sau chỉ là mẫu lịch sử.
 
 ```text
-Bạn là Worker của OpsPilot; Leader chịu trách nhiệm review. Chỉ thực hiện TK-A17/C03 deploy ba
-source Tier 1 theo docs/tasks/tk-a17/c03-worker-plan.md. Đọc CLAUDE.md, docs/tasks/README.md,
-docs/tasks/board.md, docs/tasks/tk-a17-demo-checkpoint.md, docs/tasks/tk-a17-worker-handoff.md,
-docs/25-nguyen-ly-deploy-migrate-demo-14-09.md, detector/deploy contracts và hai prompt M03/M04.
+Tiếp tục duy nhất TK-A17/C03 từ HEAD chứa Leader review 01; không checkout/reset về c149291 hoặc
+dcbe3b5. Đọc docs/tasks/tk-a17/review-c03.md và đóng C03-R1-01…04. C04/C05 vẫn đóng/NOT_RUN.
 
-Kế thừa C02 APPROVED review-10 và bắt đầu từ HEAD hiện tại có commit replan 12/09; ghi exact base
-SHA/status trước sửa. Hoàn thiện detector + Dockerfile template Next.js/Vite, giữ Express, rồi bắt
-buộc deploy live thành công cả Express/Next/Vite qua DeployService/pipeline thật trên target riêng.
-Thu detector/build-plan/event/SQLite/docker/HTTP/collector proof theo C03-T1…T7. Không dùng
-Dockerfile/compose thủ công thay pipeline để báo PASS.
+Sửa detector đúng contract dependency section. Làm cho mọi NEXT_PUBLIC_*/VITE_* do BuildPlan sinh ra
+thực sự có hiệu lực trong Docker build, có regression nhiều key/default/override/quoting/no-arg; bỏ npm
+ci trùng và kiểm tra Next public asset. Sửa live harness thành structured output, per-deployment exact
+event assertion và raw scrubbed log. Proof phải dùng SQLite/profile bền để app:list/C04 đọc lại được,
+không seed/import record giả; close/reopen đối chiếu app/deployment/current pointer.
 
-Chỉ làm C03. Không làm C04 migrate, C05 rehearsal, ML train/score, monitor/fault/recovery, Flask,
-contract/schema/dependency mới. Không reset/xóa dữ liệu, không thao tác app B ngoài read-only, giữ
-.devflow/, docs/ban-giao-20-08.md và logo.png. Được sửa/test/commit local; không push/PR/merge hoặc
-spawn subagent.
+Chạy lại tuần tự Express/Next/Vite qua pipeline thật, giữ PostgreSQL marker qua Express redeploy, chứng
+minh build vars của Next/Vite và ba collector. Chứng minh cả ba trang từ máy demo qua đường trình chiếu
+có thể lặp lại; đóng tunnel/process sau proof. Chỉ được thay/dọn target C03 của lượt này sau khi target
+bền healthy; không chạm A17/app B ngoài read-only. Không migrate, ML, monitor/fault/recovery, Flask,
+schema/contract/dependency mới, push/PR/merge/subagent. Giữ .devflow/, docs/ban-giao-20-08.md, logo.png.
 
-Tạo docs/evidence/tk-a17/c03/deploy-matrix.md và docs/tasks/tk-a17/handoff-c03.md; cập nhật board,
-task log và sổ bàn giao trong docs commit. Báo READY_FOR_LOCAL_REVIEW chỉ khi cả ba source live
-thành công; nếu không báo BLOCKED với evidence/điều kiện gỡ. Không tự approve hoặc mở C04.
+Chạy đủ gate trong review, append REVIEW-FIX 01 với exact SHA/log/evidence và bàn giao
+READY_FOR_LOCAL_REVIEW rồi dừng. Nếu VPS/path trình chiếu không đạt, bàn giao BLOCKED; không tự mở C04.
 ```
 
 > Bản giao 11/09: A yêu cầu lập kế hoạch để giao Worker triển khai. Toàn bộ phạm vi nằm ở

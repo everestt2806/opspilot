@@ -55,3 +55,13 @@
   push, PR and merge: `NOT_RUN`.
 
 Evidence: [`deploy-matrix.md`](../../evidence/tk-a17/c03/deploy-matrix.md).
+
+## Leader review 01 — 12/09/2026
+
+- Reviewed code `c149291`, submitted docs `dcbe3b5`; verdict **CHANGES_REQUESTED**.
+- C03 về `REVIEW_FIX_REQUIRED`; mở `C03-R1-01…04` cho dependency-section contract, dynamic public
+  build args, durable/structured live provenance và đường trình chiếu từ máy demo.
+- Reviewer focused/collector/static/build gates PASS; regression mới 0/5 PASS. VM02 loopback và
+  marker vẫn PASS, nhưng ba public port timeout. Không có live mutation trong review.
+- Chi tiết: [review-c03.md](review-c03.md) và
+  [review evidence](../../evidence/tk-a17/c03/review-01/). C04/C05 tiếp tục đóng/`NOT_RUN`.

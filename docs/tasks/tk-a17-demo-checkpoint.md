@@ -26,7 +26,7 @@ REVIEW-FIX C02 08 (12/09/2026): code `8fe4842`, evidence
 18/99, ML 19/19, collector 26/26, static/build PASS. No live mutation; read-only deployment 20/21
 evidence retains activation boundaries and `416+5=421`, `2080+25=2105`. C02
 READY_FOR_LOCAL_REVIEW; C03-C09 remain closed/NOT_RUN.
-| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — C02 APPROVED, C03 DEPLOY OPEN |
+| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — C03 REVIEW_FIX_REQUIRED |
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
 · [Sổ bàn giao](tk-a17-worker-handoff.md).
@@ -37,6 +37,8 @@ Khảo sát: [preflight 11/09](tk-a17/preflight-11-09.md). Trạng thái mới:
 [C01 APPROVED review-03](tk-a17/review-c01.md), code `8e42856` / docs `9689ea4`; mở C02.
 [C02 APPROVED review-10](tk-a17/review-c02.md), production `8fe4842`, tests `5febcbe`,
 submitted `313201d`; mở C03 deploy theo [Worker plan](tk-a17/c03-worker-plan.md).
+Review C03-01 tại code `c149291`, docs `dcbe3b5`: **CHANGES_REQUESTED**; Worker sửa theo
+[review-c03.md](tk-a17/review-c03.md), C04/C05 vẫn đóng.
 Mục tiêu 14/09: A trình chiếu **nhận diện source → deploy VPS → migrate hai VPS → đối chiếu dữ liệu**.
 C04/C05 đóng cho tới review trước; các chặng ML/monitor/recovery cũ được DEFERRED.
 
@@ -284,3 +286,7 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   focused/collector/typecheck/lint/Prettier/build passed. Handoff and matrix are
   `docs/tasks/tk-a17/handoff-c03.md` and `docs/evidence/tk-a17/c03/deploy-matrix.md`;
   C04/C05 remain `NOT_RUN`.
+- REVIEW C03 01 12/09 — [review-c03](tk-a17/review-c03.md): **CHANGES_REQUESTED** tại code
+  `c149291`, submitted docs `dcbe3b5`. Mở `C03-R1-01…04` cho detector contract, dynamic public
+  build args, durable live provenance và đường trình chiếu. C03 `REVIEW_FIX_REQUIRED`; C04/C05
+  đóng/`NOT_RUN`.

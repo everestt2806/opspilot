@@ -2,14 +2,14 @@
 
 > C00 APPROVED 11/09: [review](tk-a17/review-c00.md), code `d4ec3be`, docs `23cd248`.
 > C01 APPROVED review-03 11/09: [review](tk-a17/review-c01.md),
-> code `8e42856`, docs `9689ea4`. C02 APPROVED review-10; C03 deploy ba source đã mở.
+> code `8e42856`, docs `9689ea4`. C02 APPROVED review-10; C03 đang `REVIEW_FIX_REQUIRED` sau review-01.
 > Phạm vi 14/09: C03 deploy → C04 migrate hai VPS → C05 rehearsal; ML deferred tới ít nhất 28/09.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; C02 đã được Leader approve; Worker thực hiện duy nhất C03 deploy theo plan đã mở.
+- Owner A solo; C02 đã được Leader approve; Worker chỉ sửa C03 theo `review-c03.md`.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
-- Chặng được approve: C00, C01, C02. C03 deploy `OPEN`; C04 migrate và C05 acceptance chưa mở;
+- Chặng được approve: C00, C01, C02. C03 deploy `REVIEW_FIX_REQUIRED`; C04 migrate và C05 acceptance chưa mở;
   C03–C09 cũ deferred khỏi demo 14/09.
 
 ## Sổ gate (Leader xác nhận verdict)
@@ -19,7 +19,7 @@
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
 | C02   | READY_FOR_LOCAL_REVIEW | production `8fe4842` / tests `5febcbe` / docs `313201d` | APPROVED (review-10) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
-| C03 deploy | OPEN      | —            | PENDING | [Worker plan](tk-a17/c03-worker-plan.md) |
+| C03 deploy | REVIEW_FIX_REQUIRED | code `c149291` / docs `dcbe3b5` | CHANGES_REQUESTED (review-01) | [Review](tk-a17/review-c03.md) |
 | C04 migrate | NOT_STARTED | —         | PENDING | [Task](tk-a17/c04-migrate-two-vps.md) |
 | C05 demo | NOT_STARTED | —            | PENDING | [Acceptance](tk-a17/c05-demo-14-09-acceptance.md) |
 | ML    | DEFERRED       | —            | Sau 28/09 | [Phạm vi giữ lại](tk-a17/c03-ml-runtime.md) |
@@ -205,3 +205,7 @@
 - Current C03 status override: `READY_FOR_LOCAL_REVIEW`; code `c149291`, evidence/docs commit
   `bf0580a`, bookkeeping commit `e10e74e`. The earlier C03 table row is historical; C04/C05 remain
   closed/`NOT_RUN`.
+- REVIEW C03 01 - 12/09/2026: Leader **CHANGES_REQUESTED** tại code `c149291`, submitted docs
+  `dcbe3b5`. Mở `C03-R1-01…04`; contract regression 0/5, live provenance chưa bền và đường public
+  timeout. C03 `REVIEW_FIX_REQUIRED`; C04/C05 đóng/`NOT_RUN`. Worker tiếp tục theo
+  [review-c03.md](tk-a17/review-c03.md).

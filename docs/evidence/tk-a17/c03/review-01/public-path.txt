@@ -1,0 +1,5 @@
+﻿captured_at=2026-09-12T15:44:11Z
+target=221.121.1.80
+port=30006 http=000 curl_exit=28 timeout_seconds=3
+port=30007 http=000 curl_exit=28 timeout_seconds=3
+port=30008 http=000 curl_exit=28 timeout_seconds=3

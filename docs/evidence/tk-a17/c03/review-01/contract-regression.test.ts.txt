@@ -1,0 +1,67 @@
+import { afterEach, describe, expect, it } from 'vitest'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { tmpdir } from 'node:os'
+
+import { detectFramework } from './index'
+import { buildSourceTree } from './sourceTree'
+import { renderDockerfile } from '../deploy/templates'
+
+let fixture = ''
+
+afterEach(() => {
+  if (fixture) rmSync(fixture, { recursive: true, force: true })
+})
+
+function detect(packageJson: object) {
+  fixture = mkdtempSync(join(tmpdir(), 'c03-contract-'))
+  const target = join(fixture, 'package.json')
+  mkdirSync(dirname(target), { recursive: true })
+  writeFileSync(target, JSON.stringify(packageJson), 'utf8')
+  return detectFramework(buildSourceTree(fixture))
+}
+
+function detectWithEnv(packageJson: object, env: string) {
+  fixture = mkdtempSync(join(tmpdir(), 'c03-contract-'))
+  writeFileSync(join(fixture, 'package.json'), JSON.stringify(packageJson), 'utf8')
+  writeFileSync(join(fixture, '.env.example'), env, 'utf8')
+  return detectFramework(buildSourceTree(fixture))
+}
+
+describe('C03 detector contract review', () => {
+  it('does not classify Next when next exists only in devDependencies', () => {
+    expect(detect({ devDependencies: { next: '14.2.35' } }).matched).toBe(false)
+  })
+
+  it('does not classify Vite when vite exists only in dependencies', () => {
+    expect(detect({ dependencies: { vite: '5.4.11' } }).matched).toBe(false)
+  })
+
+  it('does not classify Express when express exists only in devDependencies', () => {
+    expect(detect({ devDependencies: { express: '4.21.2' } }).matched).toBe(false)
+  })
+
+  it.each([
+    {
+      packageJson: { dependencies: { next: '14.2.35' } },
+      env: 'NEXT_PUBLIC_API_URL=https://example.test\n',
+      variable: 'NEXT_PUBLIC_API_URL'
+    },
+    {
+      packageJson: { devDependencies: { vite: '5.4.11' } },
+      env: 'VITE_SITE_NAME=Demo\n',
+      variable: 'VITE_SITE_NAME'
+    }
+  ])('declares every generated build arg in its Dockerfile', ({ packageJson, env, variable }) => {
+    const result = detectWithEnv(packageJson, env)
+    expect(result.matched).toBe(true)
+    if (!result.matched) return
+    expect(result.plan.buildArgs).toHaveProperty(variable)
+    const dockerfile = renderDockerfile(result.plan.dockerfileTemplate, {
+      BUILD_COMMAND: result.plan.buildCommand,
+      START_COMMAND: result.plan.startCommand,
+      CONTAINER_PORT: String(result.plan.containerPort)
+    })
+    expect(dockerfile).toContain(`ARG ${variable}`)
+  })
+})

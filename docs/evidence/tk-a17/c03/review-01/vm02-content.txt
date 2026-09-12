@@ -1,0 +1,9 @@
+﻿captured_at=2026-09-12T15:44:11Z
+command=ssh read-only loopback curls and marker query
+exit_code=0
+express={"ok":true,"uptime_s":20286}
+next_title=OpsPilot C03 Next
+
+vite_title=OpsPilot Demo SPA
+
+marker=c03-marker-1789207558316

@@ -49,3 +49,10 @@ sequence; Next v1 and Vite v1 passed it once.
 - Final target apps, PostgreSQL, and collectors are healthy/running. Existing A17 app/DB/collector
   remained untouched; app B was not used as a success signal.
 - C03-T1 through C03-T7: PASS. C04 and C05: `NOT_RUN`; no ML, monitor, fault, Flask, push, PR or merge.
+
+## Leader review 01 override
+
+Đây là evidence Worker đã nộp, không phải verdict cuối. Review độc lập tại code `c149291`, docs
+`dcbe3b5` có verdict **CHANGES_REQUESTED**: contract regression 0/5, live SQLite provenance không còn
+sau khi harness xóa DB tạm, và ba public URL timeout. C03 hiện `REVIEW_FIX_REQUIRED`; xem
+[`review-c03.md`](../../../tasks/tk-a17/review-c03.md) và [`review-01`](review-01/).
