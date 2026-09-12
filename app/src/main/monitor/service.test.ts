@@ -31,7 +31,16 @@ describe('MonitorService mutations', () => {
         readFileTail: async () => ({ content: '', nextOffset: 1 })
       } as never
 
-      await new MonitorService(reopened).pollAll(ssh)
+      const service = new MonitorService(reopened)
+      await service.pollAll(ssh)
+      const actionsAfterFirstTick = (
+        reopened
+          .prepare("SELECT COUNT(*) AS count FROM action_log WHERE action='deploy'")
+          .get() as {
+          count: number
+        }
+      ).count
+      await service.pollAll(ssh)
 
       expect(
         reopened.prepare('SELECT state FROM deployment_activation WHERE id=?').get(prepared)
@@ -41,6 +50,91 @@ describe('MonitorService mutations', () => {
           .prepare("SELECT COUNT(*) AS count FROM deployment_activation WHERE state='prepared'")
           .get()
       ).toEqual({ count: 0 })
+      expect(
+        (
+          reopened
+            .prepare("SELECT COUNT(*) AS count FROM action_log WHERE action='deploy'")
+            .get() as {
+            count: number
+          }
+        ).count
+      ).toBe(actionsAfterFirstTick)
+    } finally {
+      closeDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps a short boundary and rolls back atomic activation before retrying idempotently', async () => {
+    const dir = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-reconcile-boundary-'))
+    const db = initializeDatabase(dir)
+    try {
+      db.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('v','127.0.0.1','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'app','express',30000,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'app:v1','running'),(1,2,'app:v2','running'),(1,3,'app:v3','running'); UPDATE app SET current_deployment_id=2 WHERE id=1;"
+      )
+      const activation = new ActivationRepository(db)
+      activation.ensureLegacy(1, 2, 1, { generation: '1:1' })
+      const prepared = activation.prepare(1, 3, { generation: '1:1' }, 100, 'manual_rollback')
+      let sourceSize = 20
+      const ssh = {
+        exec: async (_vps: number, command: string) => ({
+          code: 0,
+          stdout: command.includes('collector') ? 'running\n' : 'app:v3|running\n',
+          stderr: ''
+        }),
+        metricSnapshot: async () => ({ generation: '1:1', device: 1, inode: 1, size: sourceSize }),
+        fileIdentity: async () => ({ generation: '1:1', device: 1, inode: 1 }),
+        fileSize: async () => 0,
+        readFileTail: async () => ({ content: '', nextOffset: 1 })
+      } as never
+      const service = new MonitorService(db)
+
+      await service.pollAll(ssh)
+      expect(
+        db.prepare('SELECT state FROM deployment_activation WHERE id=?').get(prepared)
+      ).toEqual({
+        state: 'prepared'
+      })
+      db.exec(
+        "CREATE TRIGGER fail_pointer BEFORE UPDATE OF current_deployment_id ON app BEGIN SELECT RAISE(ABORT, 'injected pointer failure'); END"
+      )
+      sourceSize = 100
+      await service.pollAll(ssh)
+      expect(
+        db.prepare('SELECT state FROM deployment_activation WHERE id=?').get(prepared)
+      ).toEqual({
+        state: 'prepared'
+      })
+      expect(db.prepare('SELECT current_deployment_id FROM app WHERE id=1').get()).toEqual({
+        current_deployment_id: 2
+      })
+      expect(
+        db
+          .prepare(
+            "SELECT state FROM deployment_activation WHERE deployment_id=2 AND state='active'"
+          )
+          .get()
+      ).toEqual({ state: 'active' })
+
+      db.exec('DROP TRIGGER fail_pointer')
+      await service.pollAll(ssh)
+      await service.pollAll(ssh)
+      expect(
+        db.prepare('SELECT state FROM deployment_activation WHERE id=?').get(prepared)
+      ).toEqual({
+        state: 'active'
+      })
+      expect(db.prepare('SELECT current_deployment_id FROM app WHERE id=1').get()).toEqual({
+        current_deployment_id: 3
+      })
+      expect(
+        db
+          .prepare("SELECT COUNT(*) AS count FROM deployment_activation WHERE state='prepared'")
+          .get()
+      ).toEqual({ count: 0 })
+      expect(
+        db.prepare("SELECT COUNT(*) AS count FROM deployment_activation WHERE state='active'").get()
+      ).toEqual({ count: 1 })
     } finally {
       closeDatabase()
       rmSync(dir, { recursive: true, force: true })

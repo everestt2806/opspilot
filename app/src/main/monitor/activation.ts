@@ -128,6 +128,41 @@ export class ActivationRepository {
     return row ? this.map(row) : undefined
   }
 
+  /** Atomically activates the reloaded row and advances the app pointer. */
+  activateAndPoint(id: number, deploymentId: number, previousId: number | null): void {
+    this.database.transaction(() => {
+      const prepared = this.database
+        .prepare('SELECT app_id,deployment_id FROM deployment_activation WHERE id=? AND state=?')
+        .get(id, 'prepared') as { app_id: number; deployment_id: number } | undefined
+      if (!prepared || prepared.deployment_id !== deploymentId)
+        throw new Error('Prepared activation changed before reconciliation')
+      if (previousId !== null) {
+        this.database
+          .prepare(
+            "UPDATE deployment_activation SET end_offset=(SELECT start_offset FROM deployment_activation WHERE id=?), state='closed', closed_at=? WHERE id=? AND state='active'"
+          )
+          .run(id, now(), previousId)
+      }
+      this.database
+        .prepare(
+          "UPDATE deployment_activation SET state='active', activated_at=? WHERE id=? AND state='prepared'"
+        )
+        .run(now(), id)
+      this.database
+        .prepare('UPDATE app SET current_deployment_id=? WHERE id=?')
+        .run(deploymentId, prepared.app_id)
+    })()
+  }
+
+  abortIfCurrent(id: number, deploymentId: number): boolean {
+    const result = this.database
+      .prepare(
+        "UPDATE deployment_activation SET state='aborted' WHERE id=? AND deployment_id=? AND state='prepared'"
+      )
+      .run(id, deploymentId)
+    return result.changes === 1
+  }
+
   prepare(
     appId: number,
     deploymentId: number,

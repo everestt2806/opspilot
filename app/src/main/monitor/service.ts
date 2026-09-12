@@ -153,105 +153,92 @@ export class MonitorService {
   /** Reconcile a prepared cutover after process restart without trusting the DB pointer. */
   private async reconcilePrepared(ssh: SshManager): Promise<void> {
     const deployments = new DeploymentRepository(this.db)
-    const rows = this.db
-      .prepare(
-        `SELECT pa.app_id, pa.id prepared_id, pa.deployment_id, pa.stream_generation,
-                a.vps_id, a.name app_name
-         FROM deployment_activation pa
-         JOIN app a ON a.id=pa.app_id
-         WHERE pa.state='prepared'`
-      )
-      .all() as Array<{
-      app_id: number
-      prepared_id: number
-      deployment_id: number
-      stream_generation: string
-      vps_id: number
-      app_name: string
-      runtime_image: string
-    }>
+    const appIds = this.db
+      .prepare("SELECT DISTINCT app_id FROM deployment_activation WHERE state='prepared'")
+      .all() as Array<{ app_id: number }>
 
-    for (const row of rows) {
-      await withAppLock(row.app_id, async () => {
+    for (const { app_id: appId } of appIds) {
+      await withAppLock(appId, async () => {
         const activation = new ActivationRepository(this.db)
-        if (!activation.preparedEpisode(row.app_id)) return
+        const prepared = activation.preparedEpisode(appId)
+        if (!prepared) return
+        const app = this.db.prepare('SELECT vps_id,name FROM app WHERE id=?').get(appId) as
+          { vps_id: number; name: string } | undefined
+        if (!app) return
         let preparedImage: string
         let activeImage: string | undefined
         try {
-          preparedImage = deployments.runtimeImageTag(row.deployment_id)
-          const active = activation.active(row.app_id)
+          preparedImage = deployments.runtimeImageTag(prepared.deploymentId)
+          const active = activation.active(appId)
           activeImage = active ? deployments.runtimeImageTag(active.deploymentId) : undefined
         } catch (error) {
           this.repository.logAction(
             'ssh_error',
             'failed',
-            `Prepared activation ${row.prepared_id} lineage cannot be resolved; reconciliation required: ${error instanceof Error ? error.message : String(error)}`,
-            row.app_id,
-            row.deployment_id
+            `Prepared activation ${prepared.id} lineage cannot be resolved; reconciliation required: ${error instanceof Error ? error.message : String(error)}`,
+            appId,
+            prepared.deploymentId
           )
           return
         }
-        const metricsPath = `/opt/opspilot/${row.app_name}/metrics/metrics.jsonl`
+        const metricsPath = `/opt/opspilot/${app.name}/metrics/metrics.jsonl`
         try {
           const runtime = await ssh.exec(
-            row.vps_id,
-            `docker inspect -f '{{.Config.Image}}|{{.State.Status}}' ${row.app_name}-app`,
+            app.vps_id,
+            `docker inspect -f '{{.Config.Image}}|{{.State.Status}}' ${app.name}-app`,
             { timeoutMs: 15_000, retryOnReconnect: true }
           )
           const collector = await ssh.exec(
-            row.vps_id,
-            `docker inspect -f '{{.State.Status}}' ${row.app_name}-collector 2>/dev/null || printf 'missing'`,
+            app.vps_id,
+            `docker inspect -f '{{.State.Status}}' ${app.name}-collector 2>/dev/null || printf 'missing'`,
             { timeoutMs: 15_000, retryOnReconnect: true }
           )
-          const snapshot = await ssh.metricSnapshot(row.vps_id, metricsPath)
+          const snapshot = await ssh.metricSnapshot(app.vps_id, metricsPath)
           const [image, state] = runtime.stdout.trim().split('|')
           const ownerVerified =
             runtime.code === 0 &&
-            image === preparedImage &&
             state === 'running' &&
             collector.code === 0 &&
             collector.stdout.trim() === 'running' &&
-            snapshot?.generation === row.stream_generation
-          if (ownerVerified) {
-            const active = activation.active(row.app_id)
-            activation.activate(row.prepared_id, active?.id ?? null)
-            this.db
-              .prepare('UPDATE app SET current_deployment_id=? WHERE id=?')
-              .run(row.deployment_id, row.app_id)
+            snapshot?.generation === prepared.generation &&
+            snapshot.size + 1 >= prepared.startOffset
+          if (ownerVerified && image === preparedImage) {
+            const active = activation.active(appId)
+            activation.activateAndPoint(prepared.id, prepared.deploymentId, active?.id ?? null)
             this.repository.logAction(
               'deploy',
               'success',
-              `Reconciled prepared activation ${row.prepared_id} after process restart`,
-              row.app_id,
-              row.deployment_id
+              `Reconciled prepared activation ${prepared.id} after process restart`,
+              appId,
+              prepared.deploymentId
             )
             return
           }
-          if (runtime.code === 0 && state === 'running' && activeImage && image === activeImage) {
-            activation.abort(row.prepared_id)
+          if (ownerVerified && activeImage && image === activeImage) {
+            activation.abortIfCurrent(prepared.id, prepared.deploymentId)
             this.repository.logAction(
               'deploy',
               'success',
-              `Aborted prepared activation ${row.prepared_id}; verified previous owner`,
-              row.app_id,
-              row.deployment_id
+              `Aborted prepared activation ${prepared.id}; verified previous owner`,
+              appId,
+              prepared.deploymentId
             )
           } else {
             this.repository.logAction(
               'ssh_error',
               'failed',
-              `Prepared activation ${row.prepared_id} requires reconciliation; runtime owner unknown`,
-              row.app_id,
-              row.deployment_id
+              `Prepared activation ${prepared.id} requires reconciliation; runtime owner or source boundary unknown`,
+              appId,
+              prepared.deploymentId
             )
           }
         } catch (error) {
           this.repository.logAction(
             'ssh_error',
             'failed',
-            `Prepared activation ${row.prepared_id} requires reconnect/reconciliation: ${error instanceof Error ? error.message : String(error)}`,
-            row.app_id,
-            row.deployment_id
+            `Prepared activation ${prepared.id} requires reconnect/reconciliation: ${error instanceof Error ? error.message : String(error)}`,
+            appId,
+            prepared.deploymentId
           )
         }
       })
