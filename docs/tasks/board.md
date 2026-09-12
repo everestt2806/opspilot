@@ -30,7 +30,7 @@
 
 | ID     | Task                                                                 | Chủ                   | Hạn       | Trạng thái | Branch                      | PR/phụ thuộc                   | Ghi chú                                                           |
 | ------ | -------------------------------------------------------------------- | --------------------- | --------- | ---------- | --------------------------- | ------------------------------ | ----------------------------------------------------------------- |
-| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu   | A                     | 14/09     | ĐANG LÀM   | `feat/a17-demo-checkpoint`  | C04 HANDOFF_REJECTED review-04 | Production diff rỗng; R3-01…05 giữ nguyên; C05 chưa mở            |
+| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu   | A                     | 14/09     | ĐANG LÀM   | `feat/a17-demo-checkpoint`  | C04 APPROVED_FOR_DEMO review-05 | C05 rehearsal OPEN; D1–D4 hậu demo                              |
 | TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09     | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                      | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới            |
 | TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09     | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge                  | `fe1da33`; 21/21 theo task B                                      |
 | TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02       | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                      | Code đã merge; DoD SSH tail tại A17/C02                           |
@@ -293,3 +293,6 @@ app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express
 - C04 REVIEW 04 - 13/09/2026: submission `478b258` **HANDOFF_REJECTED**. Focused 50/50 and typecheck pass,
   but diff from `a51f72e` has only one test plus docs and reuses jobs 21/22; no production/UI finding was fixed.
   R3-01…05 remain open and C05 remains closed/`NOT_RUN`.
+- C04 REVIEW 05 - 13/09/2026: **APPROVED_FOR_DEMO** at code `517233e`, submitted `499e5a2`. Independent
+  65/65, scripts typecheck/build and read-only jobs 23/24 target 25/26 runtime/HTTP/collector/ownership pass;
+  PostgreSQL rows/marker pass. D1–D4 move to post-demo hardening. Open only C05 rehearsal.

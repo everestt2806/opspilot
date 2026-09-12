@@ -1,8 +1,8 @@
 # TK-A17/C04 — Migrate ứng dụng thành công giữa hai VPS
 
-> **REVIEW_FIX_REQUIRED — Leader review 04 ngày 13/09/2026.** Submission `478b258` không có production/UI
-> diff và dùng lại jobs 21/22 cũ, nên không đóng finding nào của Review 03. `C04-R3-01…05` giữ nguyên; thực hiện
-> gate chống handoff rỗng trong Review 04 của [review-c04.md](review-c04.md). C05 tiếp tục đóng.
+> **APPROVED_FOR_DEMO — Leader review 05 ngày 13/09/2026.** Code `517233e`, submitted `499e5a2`; hai live
+> migration jobs 23/24 và local gates đã đạt phạm vi demo 14/9. Các hardening D1–D4 được chuyển hậu demo;
+> mở duy nhất C05 rehearsal theo [c05-worker-plan.md](c05-worker-plan.md).
 
 ## Mục tiêu
 

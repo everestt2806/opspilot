@@ -143,3 +143,14 @@ CHƯA PUSH — CHƯA PR — CHƯA MERGE.
 ## Status
 
 `READY_FOR_LOCAL_REVIEW`. C05-C09 remain closed/`NOT_RUN`; no push, PR or merge.
+
+# REVIEW 05 - 13/09/2026
+
+- **APPROVED_FOR_DEMO**: production `517233e`, submitted docs `499e5a2`; C04 happy-path acceptance for demo
+  14/9 is complete. C05 rehearsal is now OPEN.
+- Independent gates: focused 9 files / 65 tests, scripts typecheck and production build PASS. Runtime uses Node
+  24 locally despite the package requesting Node 22; C05 must run the final sequential gate on Node 22 if available.
+- Read-only SQLite: jobs 23/24 completed with `source_kept=1`; source apps 18/16 remain deployment 41/39; target
+  apps 25/26 own deployment 48/49. PostgreSQL `items` 1001 -> 1001 and marker match are persisted.
+- Read-only SSH: all four source/target apps are running/healthy/HTTP 200 and all four collectors are running.
+- Post-demo hardening D1–D4 is recorded in Review 05; it does not block C05 happy-path rehearsal.

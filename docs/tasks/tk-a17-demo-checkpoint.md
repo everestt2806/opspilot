@@ -328,3 +328,6 @@ Worker append START/UPDATE/HANDOFF-LOCAL/REVIEW-FIX với ngày thực tế đ�
 - C04 REVIEW 04 - 13/09/2026: submission `478b258` **HANDOFF_REJECTED** because production/UI diff is empty
   and jobs 21/22 are reused historical evidence. One added test passes, but R3-01…05 remain open unchanged;
   C05 remains closed/`NOT_RUN`.
+- C04 REVIEW 05 - 13/09/2026: **APPROVED_FOR_DEMO** at production `517233e`, docs `499e5a2`. Independent
+  focused 65/65, scripts typecheck/build and read-only live jobs 23/24 pass. Hardening D1–D4 moves after demo;
+  C05 rehearsal is now the only OPEN stage.

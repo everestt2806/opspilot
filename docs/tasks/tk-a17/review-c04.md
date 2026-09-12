@@ -467,3 +467,37 @@ Vite 18 rồi Express/PostgreSQL 16, keepSource=true, raw scrubbed ledger và đ
 A17/C02 data, ML, contract/dependency, push/PR/merge/subagent; giữ protected untracked files. Cập nhật handoff/
 board/task rồi bàn giao READY_FOR_LOCAL_REVIEW; không tự mở C05.
 ```
+
+## Review 05 — code `517233e`, submitted `499e5a2`
+
+### Verdict
+
+- **APPROVED_FOR_DEMO** theo phạm vi người A đã chốt cho 14/9: deploy đa source và migrate stateless +
+  Express/PostgreSQL giữa hai VPS đều phải thành công. C05 rehearsal được mở ngay.
+- Independent focused 9 files / 65 tests, scripts typecheck và production build PASS. Build chạy trên Node 24
+  và báo engine yêu cầu Node 22; C05 chịu trách nhiệm gate cuối trên Node 22 nếu máy có sẵn.
+- Read-only SQLite xác nhận jobs 23/24 `completed`, `source_kept=1`; source app 18/16 vẫn trỏ deployment 41/39
+  đúng owner; target app 25/26 trỏ deployment 48/49 đúng owner. PostgreSQL `items` 1001 -> 1001 và marker match.
+- Read-only SSH qua credential resolver thật xác nhận bốn app source/target `running|healthy|HTTP 200`; bốn
+  collector đều running. Reviewer không thực hiện live mutation.
+- Evidence: [`review-05`](../../evidence/tk-a17/c04/review-05/README.md).
+
+### Phạm vi đã chấp nhận
+
+- RESTORE dùng source/collector đã relay trên VPS và giữ `.env`; relay gắn result listener hai đầu trước khi
+  pipe, có backpressure, timeout, abort và exact-byte gate.
+- UI reload persisted job, lọc event theo job, chỉ bật confirm khi verify PASS và không tự hiện terminal khi IPC
+  mới accepted. Jobs 23/24 chứng minh hai happy path mới trên code này.
+
+### Hardening hậu demo
+
+Các mục sau chưa đạt thiết kế đầy đủ của Review 03 nhưng không chặn happy-path demo đã chứng minh:
+
+- **C04-D1:** persisted startup reconciliation/compare-and-set owner và cùng-promise cho double confirm/abort;
+- **C04-D2:** PostgreSQL DB-only -> restore -> app/collector thay vì mở app rồi stop/restore;
+- **C04-D3:** per-path SHA manifest và downtime dùng cùng clock nguồn, chốt tại target health;
+- **C04-D4:** đồng bộ `migrate:list` về source contract, bổ sung UI precheck/log/history/target URL và relay
+  error/backpressure/close-order matrix sâu hơn.
+
+Không sửa D1–D4 trong C05 trừ khi rehearsal tái hiện blocker. Sau demo tạo task hardening riêng; không tuyên bố
+chúng đã CLOSED trong báo cáo kỹ thuật.

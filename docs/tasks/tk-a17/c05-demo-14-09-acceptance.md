@@ -1,7 +1,8 @@
 # TK-A17/C05 — Nghiệm thu và rehearsal demo 14/09/2026
 
-> **CLOSED/NOT_RUN cho tới khi C04 APPROVED.** Chặng này không thêm tính năng mới; chỉ sửa blocker
-> tích hợp tái hiện được rồi chạy lại gate liên quan.
+> **OPEN — C04 APPROVED_FOR_DEMO tại code `517233e`, submitted `499e5a2`.** Chạy một goal dài theo
+> [c05-worker-plan.md](c05-worker-plan.md). Chặng này không thêm tính năng mới; chỉ sửa blocker demo tái hiện
+> được rồi chạy lại gate liên quan.
 
 ## Mục tiêu
 
