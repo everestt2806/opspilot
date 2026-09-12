@@ -90,3 +90,13 @@ CHƯA PUSH — CHƯA PR — CHƯA MERGE.
 - Fresh controlled live sequence VM02 profile 2 -> VM01 profile 1, `keepSource=true`: Vite app 18/job 21 -> target app 23, then Express/PostgreSQL app 16/job 22 -> target app 24. Both completed through the shared pipeline.
 - Source pointers remained deployment `41/39`; source recovery and HTTP checks passed before completed. PostgreSQL rows `1001 -> 1001` and marker matched. Evidence: `docs/evidence/tk-a17/c04/review-fix-02/README.md`.
 - Stale job 20 was reconciled to `rolled_back`; failed attempts were retained. C05-C09 remain closed/`NOT_RUN`.
+
+# REVIEW 03 - 13/09/2026
+
+- Leader reviewed base `611cb64`, submitted `f9fcfb5`: **CHANGES_REQUESTED**. Independent focused 49/49 and
+  node/web typecheck PASS.
+- R2-01 is closed: read-only SQLite/SSH confirmed source pointers 18->41 and 16->39, both source HTTP 200, and
+  target apps 23/24 owner/runtime healthy. Jobs 21/22 remain accepted happy-path evidence.
+- Open `C04-R3-01…05`: persisted abort/error/restart ownership, authoritative staged restore and PostgreSQL
+  order, relay close race/exact bytes, real UI state/events, and committed regressions/raw evidence.
+- C05 stays closed/`NOT_RUN`. Reviewer evidence: `docs/evidence/tk-a17/c04/review-03/README.md`.

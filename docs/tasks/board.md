@@ -30,7 +30,7 @@
 
 | ID     | Task                                                                 | Chủ                   | Hạn      | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                                            |
 | ------ | -------------------------------------------------------------------- | --------------------- | -------- | ---------- | --------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu  | A                     | 14/09    | ĐANG LÀM | `feat/a17-demo-checkpoint`  | C04 CHANGES_REQUESTED review-02 | Source live state đã phục hồi; đóng R2-01…06; C05 chưa mở |
+| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu  | A                     | 14/09    | ĐANG LÀM | `feat/a17-demo-checkpoint`  | C04 CHANGES_REQUESTED review-03 | R2-01 đóng; xử lý R3-01…05 trong một goal dài; C05 chưa mở |
 | TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09    | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                   | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới                             |
 | TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09    | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge               | `fe1da33`; 21/21 theo task B                                                       |
 | TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02      | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                   | Code đã merge; DoD SSH tail tại A17/C02                                            |
@@ -275,3 +275,7 @@ app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express
   exited after `keepSource=true`; Leader restored pointers 18->41/16->39 and source health. Open R2-01…06;
   C05 remains closed.
 - C04 REVIEW-FIX 02 - 13/09/2026: từ base `611cb64`, local gates `49/49` và static gates PASS. Fresh live VM02 -> VM01 với target mới: Vite app 18/job 21 rồi Express/PostgreSQL app 16/job 22, đều `keepSource=true`; source pointers `41/39`, source recovery/HTTP, target runtime/collector, checksum và PostgreSQL marker/rows PASS. C04 `READY_FOR_LOCAL_REVIEW`; C05-C09 đóng/`NOT_RUN`. Evidence `docs/evidence/tk-a17/c04/review-fix-02/`.
+- C04 REVIEW 03 - 13/09/2026: **CHANGES_REQUESTED** at `f9fcfb5`. R2-01 closed and read-only source/target
+  runtime plus SQLite ownership passed; jobs 21/22 remain valid happy paths. Open R3-01…05 for persisted
+  recovery, authoritative restore/DB order, relay close race, UI state and real regression/raw evidence. C05
+  remains closed/`NOT_RUN`.

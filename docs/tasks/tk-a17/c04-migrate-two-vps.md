@@ -1,8 +1,8 @@
 # TK-A17/C04 — Migrate ứng dụng thành công giữa hai VPS
 
-> **REVIEW_FIX_REQUIRED — Leader review 02 ngày 13/09/2026.** Jobs 18/19 đã chứng minh hai happy path nhưng
-> làm sai source pointer và để hai source container dừng; reviewer đã phục hồi an toàn. Thực hiện Review 02
-> trong [review-c04.md](review-c04.md) để đóng `C04-R2-01…06`; C05 tiếp tục đóng.
+> **REVIEW_FIX_REQUIRED — Leader review 03 ngày 13/09/2026.** Jobs 21/22 xác nhận lỗi source pointer/runtime
+> đã được sửa và hai happy path live đang khỏe. Còn `C04-R3-01…05` về recovery bền vững, restore từ payload,
+> relay, UI và regression/evidence. Thực hiện Review 03 trong [review-c04.md](review-c04.md); C05 tiếp tục đóng.
 
 ## Mục tiêu
 

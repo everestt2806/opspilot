@@ -181,6 +181,112 @@ Không push/PR/merge/subagent, không log secret/.env, không sửa contract/sch
 rồi dừng; không tự mở C05.
 ```
 
+## Review 03 — submitted `f9fcfb5`
+
+### Verdict và phần đã đạt
+
+- Reviewed base `611cb64`, submitted `f9fcfb5`; ancestry PASS. **CHANGES_REQUESTED**; C05 tiếp tục
+  đóng/`NOT_RUN`.
+- Independent focused command đúng hồ sơ: 6 files / 49 tests PASS; `pnpm typecheck` PASS.
+- `C04-R2-01` đã đóng: SQLite read-only xác nhận source app 18 -> deployment 41 owner 18 và app 16 ->
+  deployment 39 owner 16. Jobs 21/22 `completed`, `source_kept=1`; target app 23/24 trỏ deployment 46/47
+  đúng owner.
+- Read-only SSH xác nhận source Vite/Express và hai target đều `running|healthy`; hai source HTTP 200. Jobs
+  21/22, checksum và PostgreSQL `1001 -> 1001` được chấp nhận làm happy-path evidence. Reviewer không chạy
+  live mutation.
+- Evidence reviewer: [`review-03`](../../evidence/tk-a17/c04/review-03/README.md).
+
+### Finding còn mở
+
+#### C04-R3-01 — BLOCKING — abort/error/restart chưa có persisted idempotent owner
+
+- `terminalizing` chỉ là `Set` trong RAM. Electron restart làm mất owner/controller; constructor/main không
+  reconcile job `preparing…awaiting_confirm`, và renderer không có API reload job.
+- `createTargetApp()` vẫn chạy ngoài outer `try`; create/setup exception có thể để job `preparing`. Error path
+  nuốt lỗi cleanup và source restart, không healthcheck source nhưng vẫn ghi `rolled_back`. `cleanupTarget()`
+  xóa SQLite target dù remote `docker compose down -v` lỗi, có thể để orphan thật.
+- Lần confirm/abort thứ hai trong lúc terminalization chỉ return success sớm, thay vì chờ cùng promise/kết quả
+  persisted. Chưa có regression abort từng phase, double action, crash/reopen hoặc đúng một terminal event.
+- Fix: một persisted compare-and-set/compensation owner và một terminalization promise; PREPARE read-only trước
+  target mutation; mọi cleanup/start/health hậu điều kiện phải xác định trước terminal state. Startup reconcile
+  fail closed, không replay destructive command. Test create failure, abort mọi phase, awaiting-confirm,
+  confirm/abort đồng thời, double call và close/reopen.
+
+#### C04-R3-02 — BLOCKING — RESTORE chưa dùng payload VPS làm nguồn authoritative
+
+- RESTORE vẫn gọi `DeployPipeline.run()` với `source_path` trên desktop. Pipeline upload lại source/collector và
+  render đè `.env` vừa relay; source local mất hoặc đổi có thể làm migration fail hoặc deploy nội dung khác bản
+  đã checksum.
+- Với PostgreSQL, pipeline đã mở app/collector và ghi deployment running trước khi service stop app rồi
+  `pg_restore`. Luồng này chưa đạt DB-only -> DB healthy -> restore sạch -> mở app/collector.
+- Verify file vẫn chỉ so count + tổng byte, chưa có manifest relative-path/hash; downtime trộn clock nguồn với
+  `Date.now()` desktop và chốt sau VERIFY thay vì lúc target health đạt.
+- Fix: staged restore/build trực tiếp từ payload đã relay, giữ env theo policy kín, tách DB startup/restore/app
+  startup đúng thứ tự. Persist manifest từng path/hash; đo hai mốc downtime cùng clock nguồn tới target health.
+  Test local source missing/changed, env preservation, equal-size corruption, DB order và clock skew.
+
+#### C04-R3-03 — MAJOR — relay còn race close và thiếu regression byte/cancel
+
+- Relay đã ngừng capture binary và có timeout 900s, nhưng chỉ gọi `awaitChannelResult(output)` sau khi source
+  close. Nếu output đã phát `close` trước đó, listener bị gắn muộn và promise có thể treo đến timeout. Output
+  close sớm không nằm trong failure race; exact `bytes === expectedBytes` cũng chưa được kiểm trước rename/restore.
+- Không có test relay nào trong commit. Fix bằng cách tạo promise kết quả cho cả hai channel trước khi pipe,
+  settle/destroy đối xứng, giữ backpressure và kiểm exact size trước atomic rename. Test close-order đảo, nhiều
+  chunk, backpressure, >30s giả lập, abort/output error và bounded capture.
+
+#### C04-R3-04 — MAJOR — UI/event C04-5 vẫn chưa được sửa
+
+- Diff `611cb64..f9fcfb5` không chạm renderer, IPC contract/API hay migration repository. `MigratePage` vẫn nhận
+  event của mọi job, tự đặt `completed/rolled_back` ngay khi IPC trả về, không reload persisted job, không render
+  precheck/log/progress đầy đủ, không refresh Apps/History và không đưa URL target sau confirm.
+- Fix theo C04-5 bằng API/repository hiện có hoặc typed API không đổi schema/contract tùy ý. Confirm chỉ bật khi
+  persisted `awaiting_confirm && verify.ok`; UI chỉ chuyển terminal theo event/state thật. Thêm Testing Library
+  regression cho filtering, reload, accepted-vs-completed, verify gate, refresh và target URL.
+
+#### C04-R3-05 — MAJOR — test/evidence vẫn overclaim R2-02…06
+
+- Commit chỉ thêm assertions cho một confirm happy path; tổng focused vẫn 49. Không có state-machine failure,
+  relay, restart hoặc UI test. `review-fix-02/` chỉ có README, không có raw scrubbed ledger như hồ sơ tuyên bố.
+- Không được đánh dấu T3–T8 PASS từ static path/typecheck hoặc một stale-job live cleanup. Commit regression cho
+  R3-01…04, lưu raw scrubbed event/command JSON/log và exact before/after. Handoff phải phân biệt PASS, NOT_RUN,
+  failure/retry và không dùng lời khẳng định vượt quá artifact.
+
+### Fast-track review-fix 03 — một Worker goal dài
+
+1. Làm tuần tự R3-01 -> R3-02 -> R3-03 -> R3-04 -> R3-05 trong cùng một goal. Mỗi finding có regression trước
+   khi chạy live; không dừng sau từng finding và không tự mở C05.
+2. Chạy focused migrate/repository/SSH/deploy/IPC/UI với test count tăng thật; node/web/scripts typecheck,
+   scoped ESLint/Prettier và build. Không dùng source inspection làm test.
+3. Chỉ sau local gate xanh, chạy đúng một vòng live cuối bằng target mới: Vite app 18 rồi Express/PostgreSQL
+   app 16, `keepSource=true`. Assert source 18/16 vẫn 41/39 và khỏe, target owner/runtime/HTTP/collector,
+   per-file manifest, checksum/bytes, PostgreSQL rows/marker, event sequence/one terminal, cleanup ledger và
+   downtime đúng clock.
+4. Giữ jobs 18–22 và target còn dùng làm lịch sử; không chạm app B/A17/C02 data, ML, monitor/fault, contract,
+   dependency, push/PR/merge/subagent hay protected untracked files.
+
+### Khối giao Worker review-fix 03
+
+```text
+Tiếp tục duy nhất TK-A17/C04 từ HEAD chứa Leader Review 03; không checkout/reset về f9fcfb5. Đọc Review 03 trong
+docs/tasks/tk-a17/review-c04.md và đóng C04-R3-01…05 trong một goal dài, làm liên tục tới READY_FOR_LOCAL_REVIEW.
+C05 và ML/monitor/fault/recovery vẫn đóng/NOT_RUN.
+
+Giữ nguyên phần đã đạt: source app 18->deployment 41 và app 16->deployment 39; jobs 21/22 cùng targets 23/24 là
+lịch sử. Sửa recovery thành persisted idempotent owner, startup reconcile fail closed và terminal đúng một lần;
+mọi rollback phải cleanup xác định rồi start+health source trước terminal. PREPARE read-only trước target mutation.
+
+RESTORE phải build/render từ payload VPS đã relay, không phụ thuộc hoặc ghi đè bằng source_path desktop, giữ env
+kín, và PostgreSQL phải DB-only/healthy -> restore sạch -> app/collector. Thêm per-path SHA manifest và downtime
+cùng clock nguồn tới target health. Sửa relay bằng cách gắn promise/listener hai channel trước khi pipe, cleanup
+đối xứng và exact byte gate. Hoàn thiện UI/event/reload/filter/verify gate/refresh/target URL đúng C04-5.
+
+Commit regression thật cho state machine failure/race/restart, relay và UI; focused count phải tăng. Sau toàn bộ
+local/static/build gate xanh, chạy đúng một live sequence cuối trên target mới: Vite 18 rồi Express/PostgreSQL 16,
+keepSource=true; lưu raw scrubbed ledger và assert mọi hậu điều kiện nêu trong Review 03. Không chạm app B/A17,
+ML, contract/dependency, push/PR/merge/subagent; giữ .devflow/, docs/ban-giao-20-08.md, logo.png. Cập nhật evidence,
+handoff, board/task rồi bàn giao READY_FOR_LOCAL_REVIEW và dừng; không tự mở C05.
+```
+
 ## Review 02 — submitted `06da273`
 
 ### Verdict và live incident recovery
