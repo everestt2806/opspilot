@@ -2,6 +2,7 @@
 
 - Scope: C03 only. Base `c2d55ad`; review-01 submitted docs `dcbe3b5`; production/test changes are
   committed at `4396fb3`, `4140e47`, `6ee83ca`, and `e3a32f1`. C04/C05 remain closed/`NOT_RUN`.
+- Evidence/docs commit: `826f3a0`; bookkeeping docs commit: `279b4e8`.
 - Final live target: VM02 `221.121.1.80`, fresh workspaces `a17-c03-review01-final2-*`; existing A17,
   app B, and earlier C03 targets were read-only/preserved. No data reset, delete, or reassignment.
 

@@ -59,7 +59,8 @@ Evidence: [`deploy-matrix.md`](../../evidence/tk-a17/c03/deploy-matrix.md).
 ## REVIEW-FIX 01 - 12/09/2026
 
 - Verdict from review-01 was `CHANGES_REQUESTED`; C03-R1-01...04 are now closed. Base remains
-  `c2d55ad`; final code HEAD is `e3a32f1`; docs SHA is recorded in the final local docs commit.
+  `c2d55ad`; final code HEAD is `e3a32f1`; evidence/docs commit is `826f3a0`; bookkeeping docs
+  commit is `279b4e8`.
 - Detector dependency sections, dynamic public build args/templates, structured per-deployment
   provenance with durable SQLite reopen, and demo-machine tunnel proof are complete.
 - Final VM02 target `a17-c03-review01-final2-*`: Express app 13 deployments 1/2 port 30012,
