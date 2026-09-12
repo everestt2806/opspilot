@@ -274,3 +274,4 @@ app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express
   reached completed, but actual source pointers crossed into target deployments and both source containers were
   exited after `keepSource=true`; Leader restored pointers 18->41/16->39 and source health. Open R2-01…06;
   C05 remains closed.
+- C04 REVIEW-FIX 02 - 13/09/2026: từ base `611cb64`, local gates `49/49` và static gates PASS. Fresh live VM02 -> VM01 với target mới: Vite app 18/job 21 rồi Express/PostgreSQL app 16/job 22, đều `keepSource=true`; source pointers `41/39`, source recovery/HTTP, target runtime/collector, checksum và PostgreSQL marker/rows PASS. C04 `READY_FOR_LOCAL_REVIEW`; C05-C09 đóng/`NOT_RUN`. Evidence `docs/evidence/tk-a17/c04/review-fix-02/`.

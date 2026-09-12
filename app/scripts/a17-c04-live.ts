@@ -19,13 +19,14 @@ const SOURCE_APPS = process.env.OPSPILOT_C04_ONLY_APP_ID
 
 async function waitForTerminal(
   database: ReturnType<typeof initializeDatabase>,
-  jobId: number
+  jobId: number,
+  allowAwaitingConfirm = true
 ): Promise<string> {
   const migrations = new MigrationRepository(database)
   for (let attempt = 0; attempt < 900; attempt += 1) {
     const status = migrations.get(jobId).status
     if (
-      status === 'awaiting_confirm' ||
+      (allowAwaitingConfirm && status === 'awaiting_confirm') ||
       status === 'completed' ||
       status === 'rolled_back' ||
       status === 'failed'
@@ -87,7 +88,7 @@ async function main(): Promise<void> {
       .all() as Array<{ id: number }>
     for (const job of active) {
       service.abort(job.id)
-      await waitForTerminal(database, job.id)
+      await waitForTerminal(database, job.id, false)
     }
     for (const appId of SOURCE_APPS) {
       const source = apps.getById(appId)
@@ -100,7 +101,7 @@ async function main(): Promise<void> {
       }
       const status = await waitForTerminal(database, started.job_id)
       if (status !== 'awaiting_confirm') throw new Error(`job ${started.job_id} ended ${status}`)
-      service.confirm(started.job_id, true)
+      await service.confirm(started.job_id, true)
       const completed = await waitForTerminal(database, started.job_id)
       output.push({ ...before, status: completed, events: events.splice(0) })
       if (completed !== 'completed')

@@ -84,3 +84,9 @@ C05-C09, ML training/scoring, monitoring/fault/recovery and Flask remain `NOT_RU
 | C04-R1-01..08 | local worker changes | focused 49 tests; Vite job 18; Express/PostgreSQL job 19 | `docs/evidence/tk-a17/c04/review-fix-01/README.md` |
 
 CHƯA PUSH — CHƯA PR — CHƯA MERGE.
+# REVIEW-FIX 02 - 13/09/2026
+
+- Base `611cb64`; C04-R2-01..06 addressed. Local focused suite `49/49`, typecheck, scripts typecheck, scoped ESLint, Prettier and build exit `0`.
+- Fresh controlled live sequence VM02 profile 2 -> VM01 profile 1, `keepSource=true`: Vite app 18/job 21 -> target app 23, then Express/PostgreSQL app 16/job 22 -> target app 24. Both completed through the shared pipeline.
+- Source pointers remained deployment `41/39`; source recovery and HTTP checks passed before completed. PostgreSQL rows `1001 -> 1001` and marker matched. Evidence: `docs/evidence/tk-a17/c04/review-fix-02/README.md`.
+- Stale job 20 was reconciled to `rolled_back`; failed attempts were retained. C05-C09 remain closed/`NOT_RUN`.

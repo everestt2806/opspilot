@@ -313,3 +313,4 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   archive/restore evidence is retained, but keep-source postconditions failed: source pointers crossed to target
   deployments and both source app containers were exited. Leader recovered source pointers/runtime; R2-01…06
   must close before rerunning live or opening C05.
+- C04 REVIEW-FIX 02 - 13/09/2026: fresh target live sequence Vite app 18/job 21 then Express/PostgreSQL app 16/job 22 passed VM02 -> VM01 with `keepSource=true`; source pointers/runtime recovered and PostgreSQL marker/rows matched. Handoff `READY_FOR_LOCAL_REVIEW`; C05 remains closed/`NOT_RUN`.

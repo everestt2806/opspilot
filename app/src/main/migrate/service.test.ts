@@ -24,7 +24,7 @@ describe('MigrateService guards and confirmation', () => {
     }
   })
 
-  it('confirms a verified job and emits completed without deleting the source', () => {
+  it('confirms a verified job and emits completed without deleting the source', async () => {
     const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-confirm-'))
     const database = initializeDatabase(directory)
     try {
@@ -32,8 +32,9 @@ describe('MigrateService guards and confirmation', () => {
         "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('source','127.0.0.1','u','password','x'),('target','127.0.0.2','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'demo','express',30000,3000),(2,'demo-m123','express',30001,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'demo:v1','running'),(2,1,'demo-m123:v1','running'); UPDATE app SET current_deployment_id=1 WHERE id=1; UPDATE app SET current_deployment_id=2 WHERE id=2; INSERT INTO migration_job (app_id,source_vps_id,target_vps_id,status,verify_json) VALUES (1,1,2,'awaiting_confirm','{\"target_app_id\":2}');"
       )
       const events: unknown[] = []
-      const service = new MigrateService(database, {} as never, (event) => events.push(event))
-      service.confirm(1, true)
+      const exec = vi.fn().mockResolvedValue({ code: 0, stdout: '', stderr: '' })
+      const service = new MigrateService(database, { exec } as never, (event) => events.push(event))
+      await service.confirm(1, true)
       expect(
         database.prepare('SELECT status,source_kept FROM migration_job WHERE id=1').get()
       ).toEqual({ status: 'completed', source_kept: 1 })
@@ -46,6 +47,10 @@ describe('MigrateService guards and confirmation', () => {
         status: 'completed',
         downtime_ms: 0
       })
+      expect(database.prepare('SELECT current_deployment_id FROM app WHERE id=1').get()).toEqual({
+        current_deployment_id: 1
+      })
+      expect(exec).toHaveBeenCalled()
     } finally {
       closeDatabase()
       rmSync(directory, { recursive: true, force: true })

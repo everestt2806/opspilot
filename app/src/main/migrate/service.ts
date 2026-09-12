@@ -36,6 +36,7 @@ export class MigrateService {
   private readonly deployments: DeploymentRepository
   private readonly vps: VpsRepository
   private readonly actions: ActionLogRepository
+  private readonly terminalizing = new Set<number>()
 
   constructor(
     private readonly database: Database.Database,
@@ -69,43 +70,51 @@ export class MigrateService {
     return { job_id: job.id }
   }
 
-  confirm(jobId: number, keepSource: boolean): void {
+  async confirm(jobId: number, keepSource: boolean): Promise<void> {
     const job = this.migrations.get(jobId)
     if (job.status !== 'awaiting_confirm') {
       throw new AppError('VALIDATION', 'Chỉ có thể xác nhận lượt migrate đang chờ xác nhận.')
     }
     const target = this.findTargetApp(job)
-    this.database.transaction(() => {
-      this.database
-        .prepare('UPDATE app SET current_deployment_id=? WHERE id=?')
-        .run(target.current_deployment_id, job.app_id)
-      this.migrations.update(job.id, { status: 'completed', source_kept: keepSource ? 1 : 0 })
-      this.actions.insert({
-        action: 'migrate_confirm',
-        status: 'success',
-        vps_id: job.target_vps_id,
-        app_id: job.app_id,
-        detail_json: JSON.stringify({
-          job_id: job.id,
-          target_app_id: target.id,
-          source_kept: keepSource
-        })
-      })
-      this.emit({
-        type: 'finished',
-        job_id: job.id,
-        status: 'completed',
-        downtime_ms: job.downtime_ms ?? 0
-      })
-    })()
-    if (!keepSource) {
-      void this.ssh.exec(
-        job.source_vps_id,
-        `cd ${shellQuote(this.appDir(job.app_id))} && docker compose down`,
-        {
-          retryOnReconnect: false
+    if (this.terminalizing.has(jobId)) return
+    this.terminalizing.add(jobId)
+    try {
+      if (keepSource) {
+        await this.startSourceAndVerify(job)
+      } else {
+        const result = await this.ssh.exec(
+          job.source_vps_id,
+          `cd ${shellQuote(this.appDir(job.app_id))} && docker compose down`,
+          { retryOnReconnect: false, timeoutMs: 120_000 }
+        )
+        if (result.code !== 0) {
+          throw new AppError('UNKNOWN', 'Không dọn được app nguồn sau khi xác nhận migrate.', {
+            cause: new Error(result.stderr.trim() || result.stdout.trim())
+          })
         }
-      )
+      }
+      this.database.transaction(() => {
+        this.migrations.update(job.id, { status: 'completed', source_kept: keepSource ? 1 : 0 })
+        this.actions.insert({
+          action: 'migrate_confirm',
+          status: 'success',
+          vps_id: job.target_vps_id,
+          app_id: job.app_id,
+          detail_json: JSON.stringify({
+            job_id: job.id,
+            target_app_id: target.id,
+            source_kept: keepSource
+          })
+        })
+        this.emit({
+          type: 'finished',
+          job_id: job.id,
+          status: 'completed',
+          downtime_ms: job.downtime_ms ?? 0
+        })
+      })()
+    } finally {
+      this.terminalizing.delete(jobId)
     }
   }
 
@@ -113,23 +122,55 @@ export class MigrateService {
     const job = this.migrations.get(jobId)
     if (job.status === 'completed' || job.status === 'rolled_back') return
     this.jobs.get(jobId)?.abort()
+    if (this.terminalizing.has(jobId)) return
+    if (job.status === 'awaiting_confirm') {
+      this.terminalizing.add(jobId)
+      void this.rollbackAwaiting(job).finally(() => this.terminalizing.delete(jobId))
+      return
+    }
+  }
+
+  private async rollbackAwaiting(job: MigrationJob): Promise<void> {
     const target = this.findTargetApp(job)
-    void this.cleanupTarget(job, target).finally(() => {
-      this.migrations.update(job.id, { status: 'rolled_back', source_kept: 1 })
-      this.actions.insert({
-        action: 'migrate_abort',
-        status: 'cancelled',
-        vps_id: job.source_vps_id,
-        app_id: job.app_id,
-        detail_json: JSON.stringify({ job_id: job.id, target_app_id: target.id })
-      })
-      this.emit({
-        type: 'finished',
-        job_id: job.id,
-        status: 'rolled_back',
-        downtime_ms: job.downtime_ms ?? 0
-      })
+    await this.cleanupTarget(job, target)
+    await this.startSourceAndVerify(job)
+    if (this.migrations.get(job.id).status === 'rolled_back') return
+    this.migrations.update(job.id, { status: 'rolled_back', source_kept: 1 })
+    this.actions.insert({
+      action: 'migrate_abort',
+      status: 'cancelled',
+      vps_id: job.source_vps_id,
+      app_id: job.app_id,
+      detail_json: JSON.stringify({ job_id: job.id, target_app_id: target.id })
     })
+    this.emit({
+      type: 'finished',
+      job_id: job.id,
+      status: 'rolled_back',
+      downtime_ms: job.downtime_ms ?? 0
+    })
+  }
+
+  private async startSourceAndVerify(job: MigrationJob): Promise<void> {
+    const result = await this.ssh.exec(
+      job.source_vps_id,
+      `cd ${shellQuote(this.appDir(job.app_id))} && docker compose start app`,
+      { retryOnReconnect: false, timeoutMs: 120_000 }
+    )
+    if (result.code !== 0)
+      throw new AppError('UNKNOWN', 'Không khởi động lại được app nguồn.', {
+        cause: new Error(result.stderr.trim() || result.stdout.trim())
+      })
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const health = await this.ssh.exec(
+        job.source_vps_id,
+        `curl -fsS -m 5 -o /dev/null ${shellQuote(`http://127.0.0.1:${this.apps.getById(job.app_id).host_port}${this.apps.getById(job.app_id).healthcheck_path}`)}`,
+        { retryOnReconnect: true, timeoutMs: 10_000 }
+      )
+      if (health.code === 0) return
+      await new Promise((resolve) => setTimeout(resolve, 1_000))
+    }
+    throw new AppError('UNKNOWN', 'App nguồn chưa healthy sau khi khởi động lại.')
   }
 
   private validateInput(input: MigrateInput): App {

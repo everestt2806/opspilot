@@ -200,7 +200,11 @@ export class SshManager extends EventEmitter {
     const input = await this.openExecChannel(source, `cat ${shellQuote(sourcePath)}`, {})
     const output = await this.openExecChannel(target, `cat > ${shellQuote(targetPath)}`, {})
     let bytes = 0
-    const result = this.awaitChannelResult(input, { signal: options.signal })
+    const result = this.awaitChannelResult(
+      input,
+      { signal: options.signal, timeoutMs: 900_000 },
+      false
+    )
     const failure = new Promise<never>((_, reject) => {
       output.on('error', reject)
       output.stderr.on('data', (chunk: Buffer) => {
@@ -214,10 +218,20 @@ export class SshManager extends EventEmitter {
     })
     output.on('drain', () => input.resume())
     input.on('end', () => output.end())
-    const sourceResult = await Promise.race([result, failure])
-    if (sourceResult.code !== 0) throw new AppError('UNKNOWN', 'Đọc artifact nguồn thất bại.')
-    const targetResult = await this.awaitChannelResult(output, { signal: options.signal })
-    if (targetResult.code !== 0) throw new AppError('UNKNOWN', 'Ghi artifact đích thất bại.')
+    try {
+      const sourceResult = await Promise.race([result, failure])
+      if (sourceResult.code !== 0) throw new AppError('UNKNOWN', 'Đọc artifact nguồn thất bại.')
+      const targetResult = await this.awaitChannelResult(
+        output,
+        { signal: options.signal, timeoutMs: 900_000 },
+        false
+      )
+      if (targetResult.code !== 0) throw new AppError('UNKNOWN', 'Ghi artifact đích thất bại.')
+    } catch (error) {
+      input.destroy()
+      output.destroy()
+      throw error
+    }
     return { bytes }
   }
 
@@ -423,7 +437,8 @@ export class SshManager extends EventEmitter {
 
   private awaitChannelResult(
     channel: ClientChannel,
-    options: ExecOptions = {}
+    options: ExecOptions = {},
+    captureOutput = true
   ): Promise<ExecResult> {
     return new Promise<ExecResult>((resolve, reject) => {
       let exitCode = -1
@@ -463,7 +478,7 @@ export class SshManager extends EventEmitter {
           return
         }
         const text = chunk.toString('utf8')
-        stdout += text
+        if (captureOutput) stdout += text
         options.onStdout?.(text)
       })
 
@@ -472,7 +487,7 @@ export class SshManager extends EventEmitter {
           return
         }
         const text = chunk.toString('utf8')
-        stderr += text
+        if (captureOutput) stderr += text
         options.onStderr?.(text)
       })
 
