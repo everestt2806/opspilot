@@ -3,7 +3,8 @@
 ## Identity and gates
 
 - Scope: C04 only; C05-C09, ML, monitor/fault/recovery and app B mutation remain NOT_RUN.
-- Branch `feat/a17-demo-checkpoint`; review-fix base `1ff2743`.
+- Branch `feat/a17-demo-checkpoint`; review-fix base `1ff2743`; code/docs HEAD `517233e` before this bookkeeping commit.
+- Exact `git diff --name-status a51f72e..HEAD` and `git diff --stat a51f72e..HEAD` were run before handoff; the diff includes production pipeline/migration/repository/IPC, SSH relay, renderer UI/test and evidence/handoff bookkeeping.
 - Local command from `app`: `pnpm exec vitest run --maxWorkers=1 src/main/migrate/repository.test.ts src/main/migrate/service.test.ts src/main/deploy/precheck.test.ts src/main/deploy/pipeline.test.ts src/main/deploy/service.test.ts src/main/ipc.test.ts src/main/ssh/ssh.test.ts src/main/db/index.test.ts src/renderer/src/pages/MigratePage.test.tsx` — exit 0, 9 files / 65 tests.
 - `pnpm typecheck`, `pnpm exec tsc -p tsconfig.scripts.json --noEmit`, scoped ESLint, scoped Prettier check and `pnpm build` — all exit 0.
 

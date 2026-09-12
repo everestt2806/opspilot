@@ -120,7 +120,8 @@ CHƯA PUSH — CHƯA PR — CHƯA MERGE.
 
 # REVIEW-FIX 03 - 13/09/2026
 
-- Base `1ff2743`; production migration/pipeline/repository/IPC, SSH relay and MigratePage changes are present. Evidence: `docs/evidence/tk-a17/c04/review-fix-03/README.md`.
+- Base `1ff2743`; code/docs HEAD `517233e` before this bookkeeping commit. Production migration/pipeline/repository/IPC, SSH relay and MigratePage changes are present. Evidence: `docs/evidence/tk-a17/c04/review-fix-03/README.md`.
+- Exact commands run: `git diff --name-status a51f72e..HEAD` and `git diff --stat a51f72e..HEAD`; the output includes the required production, relay, renderer and regression files.
 - Local focused suite: 9 files / 65 tests PASS; node/web typecheck, scripts typecheck, scoped ESLint, Prettier and build PASS.
 - Fresh controlled VM02 profile 2 -> VM01 profile 1 sequence with `keepSource=true`: Vite app 18/job 23, then Express/PostgreSQL app 16/job 24. Both completed through the shared pipeline with runtime/HTTP/collector, checksum/file and PostgreSQL marker proof.
 - The invalid Electron-as-Node harness attempt exited 1 before mutation and remains recorded; full Electron retry passed. No data reset/delete/reassign and no app B mutation.
