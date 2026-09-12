@@ -187,6 +187,42 @@ describe('C03 Tier 1 detector matrix', () => {
     const malformed = createFixture({ 'package.json': '{bad' })
     expect(detectFramework(buildSourceTree(malformed)).matched).toBe(false)
   })
+
+  it.each([
+    {
+      name: 'Next only in devDependencies is not Next.js',
+      packageJson: { devDependencies: { next: '14' } },
+      detector: 'none'
+    },
+    {
+      name: 'Vite only in dependencies is not Vite SPA',
+      packageJson: { dependencies: { vite: '5' } },
+      detector: 'none'
+    },
+    {
+      name: 'Express only in devDependencies is not Express',
+      packageJson: { devDependencies: { express: '4' } },
+      detector: 'none'
+    },
+    {
+      name: 'Next dependency wins over Vite devDependency',
+      packageJson: { dependencies: { next: '14' }, devDependencies: { vite: '5' } },
+      detector: 'nextjs'
+    },
+    {
+      name: 'Vite devDependency wins over Express dependency',
+      packageJson: { dependencies: { express: '4' }, devDependencies: { vite: '5' } },
+      detector: 'static-spa'
+    }
+  ])('$name', (fixture) => {
+    const dir = createFixture({ 'package.json': JSON.stringify(fixture.packageJson) })
+    const result = detectFramework(buildSourceTree(dir))
+    if (fixture.detector === 'none') {
+      expect(result.matched).toBe(false)
+    } else {
+      expect(result).toMatchObject({ matched: true, detector: fixture.detector })
+    }
+  })
 })
 
 function createFixture(files: Record<string, string>): string {

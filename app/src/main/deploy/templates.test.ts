@@ -5,6 +5,7 @@ import {
   buildEnvFile,
   readEnvValue,
   renderCompose,
+  renderBuildArgs,
   renderDockerfile,
   resolveTemplatesDir,
   type ComposeVars
@@ -72,13 +73,31 @@ describe('renderDockerfile', () => {
     (name) => {
       const dockerfile = renderDockerfile(name, {
         ...BASE_VARS,
-        BUILD_COMMAND: 'npm ci && npm run build'
+        BUILD_COMMAND: 'npm ci && npm run build',
+        BUILD_ARGS: 'ARG NEXT_PUBLIC_API_URL\nENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}'
       })
       expect(dockerfile).not.toContain('{{')
       expect(dockerfile).toContain('FROM')
       expect(dockerfile).toContain('COPY src/package*.json')
+      expect(dockerfile).toContain('ARG NEXT_PUBLIC_API_URL')
     }
   )
+
+  it('renders every public build key without demo-specific template names', () => {
+    const buildArgs = renderBuildArgs({
+      NEXT_PUBLIC_API_URL: 'https://api.example.test',
+      NEXT_PUBLIC_SITE_NAME: 'A name with spaces',
+      VITE_SITE_NAME: 'A $value'
+    })
+    expect(buildArgs).toContain(
+      'ARG NEXT_PUBLIC_API_URL\nENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}'
+    )
+    expect(buildArgs).toContain(
+      'ARG NEXT_PUBLIC_SITE_NAME\nENV NEXT_PUBLIC_SITE_NAME=${NEXT_PUBLIC_SITE_NAME}'
+    )
+    expect(buildArgs).toContain('ARG VITE_SITE_NAME\nENV VITE_SITE_NAME=${VITE_SITE_NAME}')
+    expect(renderBuildArgs({})).toBe('')
+  })
 
   it('bao loi ro rang khi thieu bien thay the', () => {
     const missingVars = Object.fromEntries(

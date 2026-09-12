@@ -1,9 +1,7 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
-ARG VITE_API_URL
-ENV VITE_API_URL=$VITE_API_URL
+{{BUILD_ARGS}}
 COPY src/package*.json ./
-RUN npm ci
 COPY src/ ./
 RUN {{BUILD_COMMAND}}
 

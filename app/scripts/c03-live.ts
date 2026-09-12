@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -8,6 +8,7 @@ import { AppRepository } from '../src/main/db/appRepository'
 import { DeploymentRepository } from '../src/main/db/deploymentRepository'
 import { VpsRepository } from '../src/main/db/vpsRepository'
 import { DeployPipeline } from '../src/main/deploy/pipeline'
+import { DeployService } from '../src/main/deploy/service'
 import { SshManager, type SshConnectionInfo } from '../src/main/ssh/manager'
 
 const host = process.env.OPSPILOT_C03_HOST ?? '221.121.1.80'
@@ -32,9 +33,18 @@ type SourceResult = {
   image: string
   port: number
   framework: string
-  health: string
-  http: string
-  collector: string
+  docker: { image: string; state: string; health: string; raw: string }
+  http: { status: number; body: string; raw: string }
+  collector: { state: string; restartCount: number; raw: string }
+  attempts: DeploymentEvidence[]
+}
+
+type DeploymentEvidence = {
+  deploymentId: number
+  eventIndexStart: number
+  eventIndexEnd: number
+  steps: string[]
+  finished: Extract<DeployEvent, { type: 'finished' }>
   events: DeployEvent[]
 }
 
@@ -71,9 +81,19 @@ async function deploy(
   appId: number
   deploymentId: number
   finished: Extract<DeployEvent, { type: 'finished' }>
+  evidence: DeploymentEvidence
 }> {
+  const eventIndexStart = events.length
   const started = pipeline.run({ vps_id: vpsId, app_name: appName, source_path: sourcePath, env })
   const finished = await waitForFinished(events, started.deploymentId)
+  const deploymentEvents = events.filter((event) => event.deployment_id === started.deploymentId)
+  const steps = deploymentEvents
+    .filter((event) => event.type === 'step-done')
+    .map((event) => event.step)
+  const expectedSteps = ['PRECHECK', 'UPLOAD', 'RENDER', 'BUILD', 'DEPLOY', 'HEALTHCHECK', 'RECORD']
+  if (finished.status === 'running' && JSON.stringify(steps) !== JSON.stringify(expectedSteps)) {
+    throw new Error(`deployment ${started.deploymentId} emitted invalid steps: ${steps.join(',')}`)
+  }
   if (finished.status !== 'running') {
     const failed = events.filter(
       (event) => event.type === 'step-failed' && event.deployment_id === started.deploymentId
@@ -85,7 +105,19 @@ async function deploy(
   }
   const app = new AppRepository(database).getByVpsAndName(vpsId, appName)
   if (!app) throw new Error(`missing SQLite app ${appName}`)
-  return { appId: app.id, deploymentId: started.deploymentId, finished }
+  return {
+    appId: app.id,
+    deploymentId: started.deploymentId,
+    finished,
+    evidence: {
+      deploymentId: started.deploymentId,
+      eventIndexStart,
+      eventIndexEnd: events.length - 1,
+      steps,
+      finished,
+      events: deploymentEvents
+    }
+  }
 }
 
 async function inspect(
@@ -93,23 +125,54 @@ async function inspect(
   vpsId: number,
   appName: string,
   port: number
-): Promise<{ health: string; http: string; collector: string }> {
-  const command = [
+): Promise<{
+  docker: SourceResult['docker']
+  http: SourceResult['http']
+  collector: SourceResult['collector']
+}> {
+  const appResult = await ssh.exec(
+    vpsId,
     `docker inspect --format '{{.Config.Image}}|{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' ${appName}-app`,
-    `curl -fsS http://127.0.0.1:${port}/`,
-    `docker inspect --format '{{.Config.Image}}|{{.State.Status}}|{{.RestartCount}}' ${appName}-collector`
-  ].join(" && printf '\\n' && ")
-  const result = await ssh.exec(vpsId, command, { timeoutMs: 30_000, retryOnReconnect: true })
-  if (result.code !== 0) throw new Error(result.stderr || result.stdout)
-  const [health = '', http = '', collector = ''] = result.stdout.trim().split('\n')
-  return { health, http, collector }
+    { timeoutMs: 30_000, retryOnReconnect: true }
+  )
+  const httpResult = await ssh.exec(
+    vpsId,
+    `curl -sS -w '\n__STATUS__:%{http_code}' http://127.0.0.1:${port}/`,
+    { timeoutMs: 30_000, retryOnReconnect: true }
+  )
+  const collectorResult = await ssh.exec(
+    vpsId,
+    `docker inspect --format '{{.State.Status}}|{{.RestartCount}}' ${appName}-collector`,
+    { timeoutMs: 30_000, retryOnReconnect: true }
+  )
+  if (appResult.code !== 0 || httpResult.code !== 0 || collectorResult.code !== 0) {
+    throw new Error(
+      [appResult, httpResult, collectorResult].map((result) => result.stderr).join('\n')
+    )
+  }
+  const [image = '', state = '', health = ''] = appResult.stdout.trim().split('|')
+  const statusMatch = httpResult.stdout.match(/\n__STATUS__:(\d+)\s*$/)
+  const body = statusMatch
+    ? httpResult.stdout.slice(0, statusMatch.index).trimEnd()
+    : httpResult.stdout
+  const [collectorState = '', restartCount = ''] = collectorResult.stdout.trim().split('|')
+  return {
+    docker: { image, state, health, raw: appResult.stdout },
+    http: { status: Number(statusMatch?.[1] ?? 0), body, raw: httpResult.stdout },
+    collector: {
+      state: collectorState,
+      restartCount: Number(restartCount),
+      raw: collectorResult.stdout
+    }
+  }
 }
 
 let database: ReturnType<typeof initializeDatabase>
 
 async function main(): Promise<void> {
-  const dir = mkdtempSync(join(tmpdir(), 'opspilot-c03-live-'))
-  database = initializeDatabase(dir)
+  const profileDir =
+    process.env.OPSPILOT_C03_PROFILE ?? mkdtempSync(join(tmpdir(), 'opspilot-c03-profile-'))
+  database = initializeDatabase(profileDir)
   const ssh = new SshManager(() => config)
   const events: DeployEvent[] = []
   const vps = new VpsRepository(database).create({
@@ -198,7 +261,7 @@ async function main(): Promise<void> {
       port: expressApp.host_port,
       framework: expressApp.framework,
       ...expressState,
-      events: events.slice()
+      attempts: [express.evidence, redeploy.evidence]
     })
 
     const next = await deploy(pipeline, events, vps.id, nextName, join(sourceRoot, 'next-blog'), {
@@ -213,7 +276,7 @@ async function main(): Promise<void> {
       port: nextApp.host_port,
       framework: nextApp.framework,
       ...(await inspect(ssh, vps.id, nextName, nextApp.host_port)),
-      events: events.slice()
+      attempts: [next.evidence]
     })
 
     const vite = await deploy(pipeline, events, vps.id, viteName, join(sourceRoot, 'vite-spa'), {
@@ -228,17 +291,29 @@ async function main(): Promise<void> {
       port: viteApp.host_port,
       framework: viteApp.framework,
       ...(await inspect(ssh, vps.id, viteName, viteApp.host_port)),
-      events: events.slice()
+      attempts: [vite.evidence]
     })
 
     const db = new AppRepository(database)
       .listByVps(vps.id)
       .map((app) => ({ ...app, deployments: new DeploymentRepository(database).listByApp(app.id) }))
-    console.log(JSON.stringify({ host, sources: results, sqlite: db }, null, 2))
+    closeDatabase()
+    database = initializeDatabase(profileDir)
+    const reopenedService = new DeployService({ ssh, db: database, emit: () => undefined })
+    const reopened = reopenedService.listApps(vps.id).map((app) => ({
+      ...app,
+      deployments: new DeploymentRepository(database).listByApp(app.id)
+    }))
+    console.log(
+      JSON.stringify(
+        { host, profileDir, sources: results, sqlite: { beforeClose: db, afterReopen: reopened } },
+        null,
+        2
+      )
+    )
   } finally {
     await ssh.disconnectAll()
     closeDatabase()
-    rmSync(dir, { recursive: true, force: true })
   }
 }
 

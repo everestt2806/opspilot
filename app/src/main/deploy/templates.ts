@@ -85,6 +85,13 @@ export function renderDockerfile(dockerfileTemplate: string, vars: Record<string
   return renderTemplate(readTemplateFile(dockerfileTemplate), vars).trimEnd() + '\n'
 }
 
+/** Keep Docker build inputs aligned with every public key emitted by a detector. */
+export function renderBuildArgs(buildArgs: Record<string, string>): string {
+  return Object.keys(buildArgs)
+    .map((key) => `ARG ${key}\nENV ${key}=\${${key}}`)
+    .join('\n')
+}
+
 /**
  * Nội dung .env ghi lên VPS (chmod 600, ghi lặng — bất biến 3 deploy-events).
  * needsDb -> tự sinh DATABASE_URL + POSTGRES_PASSWORD nếu người dùng chưa truyền.

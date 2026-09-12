@@ -24,6 +24,7 @@ import { runPrecheck } from './precheck'
 import {
   buildEnvFile,
   readEnvValue,
+  renderBuildArgs,
   renderCompose,
   renderDockerfile,
   type ComposeVars
@@ -918,7 +919,8 @@ export class DeployPipeline {
           name: 'Dockerfile',
           content: renderDockerfile(plan.dockerfileTemplate, {
             ...vars,
-            BUILD_COMMAND: plan.buildCommand
+            BUILD_COMMAND: plan.buildCommand,
+            BUILD_ARGS: renderBuildArgs(plan.buildArgs)
           })
         },
         { name: 'docker-compose.yml', content: renderCompose(vars, plan.needsDb) },

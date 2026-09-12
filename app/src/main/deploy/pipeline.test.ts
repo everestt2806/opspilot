@@ -77,8 +77,7 @@ function createHarness(options: StubSshOptions = {}): void {
       name: 'demo-api',
       main: 'app.js',
       scripts: { start: 'node app.js' },
-      dependencies: { express: '^4.19.2' },
-      devDependencies: { pg: '^8.11.0' }
+      dependencies: { express: '^4.19.2', pg: '^8.11.0' }
     }),
     'utf8'
   )

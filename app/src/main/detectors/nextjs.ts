@@ -1,25 +1,17 @@
 import type { BuildPlan, DetectionSignal, Detector, SourceTree } from './types'
 
-type PackageJson = {
-  dependencies?: Record<string, string>
-  devDependencies?: Record<string, string>
-}
-
+type PackageJson = { dependencies?: Record<string, string> }
 const DB_DRIVERS = ['pg', 'prisma', 'typeorm', 'sequelize']
 
 function packageJson(tree: SourceTree): PackageJson | undefined {
   return tree.readJson<PackageJson>('package.json')
 }
-
 function dependencies(tree: SourceTree): Record<string, string> {
-  const pkg = packageJson(tree)
-  return { ...pkg?.devDependencies, ...pkg?.dependencies }
+  return packageJson(tree)?.dependencies ?? {}
 }
-
 function version(value: string | undefined): string | undefined {
   return value?.replace(/^[\^~>=<]/, '')
 }
-
 function envKeys(tree: SourceTree): string[] {
   const keys: string[] = []
   for (const line of (tree.readText('.env.example') ?? '').split('\n')) {
@@ -28,7 +20,6 @@ function envKeys(tree: SourceTree): string[] {
   }
   return keys
 }
-
 function envDefaults(tree: SourceTree): Record<string, string> {
   const values: Record<string, string> = {}
   for (const line of (tree.readText('.env.example') ?? '').split('\n')) {
@@ -49,9 +40,9 @@ export const nextjsDetector: Detector = {
     const pkg = packageJson(tree)
     const deps = dependencies(tree)
     return [
-      { description: 'package.json tồn tại', passed: pkg !== undefined },
+      { description: 'package.json exists', passed: pkg !== undefined },
       {
-        description: "dependencies có 'next'",
+        description: "dependencies contains 'next'",
         passed: deps.next !== undefined,
         found: version(deps.next)
       }
