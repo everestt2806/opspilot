@@ -196,8 +196,8 @@
 - REPLAN 12/09 — A giới hạn demo 14/09 vào deploy nhiều source và migrate hai VPS. C03 cũ về ML
   được deferred tới ít nhất 28/09; mở C03 deploy ba Tier 1. C04 migrate/C05 acceptance đã có task
   chi tiết nhưng còn đóng. Worker kế tiếp chỉ nhận [C03](tk-a17/c03-worker-plan.md).
-- HANDOFF C03 - 12/09/2026: Outcome `READY_FOR_LOCAL_REVIEW`; code `c149291`; docs/evidence were
-  added locally in this update. C03-T1...T7 PASS with the VM02 Express/Next.js/Vite matrix, shared
+- HANDOFF C03 - 12/09/2026: Outcome `READY_FOR_LOCAL_REVIEW`; base `c2d55ad`; code `c149291`;
+  docs/evidence commit `bf0580a`; C03-T1...T7 PASS with the VM02 Express/Next.js/Vite matrix, shared
   pipeline events, deployment IDs, runtime images, Docker health, HTTP, collector and PostgreSQL
   marker proof. Focused `55/55`, collector `26/26`, node/web and scripts typecheck, scoped
   ESLint/Prettier and build PASS. C04/C05/C06-C09 remain closed/`NOT_RUN`; no ML, monitor, fault,
