@@ -246,3 +246,8 @@
   `keepSource=true`. Reviewer đã phục hồi pointer 18->41, 16->39 trong transaction rồi start đúng hai source;
   final healthy/HTTP 200. Mở `C04-R2-01…06` cho confirm/source-kept, idempotent recovery, bounded relay,
   authoritative restore, UI/events và regression/raw evidence. C05 tiếp tục đóng/`NOT_RUN`.
+- HANDOFF C05 - 13/09/2026: `READY_FOR_LOCAL_REVIEW`, code `936e643`; full local gates and two
+  consecutive fresh rehearsals pass on the same SHA. Deploy matrix and migration jobs `25/26`, `27/28`
+  prove Docker/HTTP/collector, checksum, source-kept and PostgreSQL marker results. Evidence and runbook:
+  `docs/evidence/tk-a17/c05/`, `docs/tasks/tk-a17/handoff-c05.md`, and
+  `docs/26-kich-ban-demo-deploy-migrate-14-09.md`. C06-C09 remain closed/`NOT_RUN`; no ML or app B mutation.

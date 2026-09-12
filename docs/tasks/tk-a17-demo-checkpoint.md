@@ -331,3 +331,9 @@ Worker append START/UPDATE/HANDOFF-LOCAL/REVIEW-FIX với ngày thực tế đ�
 - C04 REVIEW 05 - 13/09/2026: **APPROVED_FOR_DEMO** at production `517233e`, docs `499e5a2`. Independent
   focused 65/65, scripts typecheck/build and read-only live jobs 23/24 pass. Hardening D1–D4 moves after demo;
   C05 rehearsal is now the only OPEN stage.
+- HANDOFF C05 - 13/09/2026: code `936e643`; two consecutive fresh rehearsals passed on the same SHA.
+  Deploys Express/Next.js/Vite passed the shared seven-step pipeline; Vite and Express/PostgreSQL migrations
+  passed with `keepSource=true`, checksums, runtime/HTTP/collector and PostgreSQL marker proof. Full gates
+  passed: Node `287/287`, ML-service `19/19`, collector `26/26`, typechecks, lint, Prettier and build.
+  Evidence is in `docs/evidence/tk-a17/c05/rehearsal-01/` and `rehearsal-02/`; handoff is
+  `docs/tasks/tk-a17/handoff-c05.md`. C05 is `READY_FOR_LOCAL_REVIEW`; C06-C09 remain closed/`NOT_RUN`.

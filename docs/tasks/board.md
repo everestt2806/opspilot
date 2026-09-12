@@ -296,3 +296,8 @@ app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express
 - C04 REVIEW 05 - 13/09/2026: **APPROVED_FOR_DEMO** at code `517233e`, submitted `499e5a2`. Independent
   65/65, scripts typecheck/build and read-only jobs 23/24 target 25/26 runtime/HTTP/collector/ownership pass;
   PostgreSQL rows/marker pass. D1–D4 move to post-demo hardening. Open only C05 rehearsal.
+- C05 HANDOFF - 13/09/2026: code `936e643`; full local gates pass (`287` Node tests, `19` ML-service,
+  `26` collector) with typecheck, lint, Prettier and build. Two consecutive fresh rehearsals pass on
+  VM02 -> VM01: deploy matrix Express/Next.js/Vite and migration jobs `25/26`, then `27/28`, including
+  Docker/HTTP/collector, checksum, source-kept and PostgreSQL marker proof. C05 is
+  `READY_FOR_LOCAL_REVIEW`; C06-C09 remain closed/`NOT_RUN`.
