@@ -538,6 +538,8 @@ export class DeployPipeline {
       if (app.vps_id !== vps.id) {
         throw new AppError('VALIDATION', 'App không thuộc VPS đã chọn. Hãy chọn lại.')
       }
+      // A pre-created migration target is still a first deployment and has no collector to stop.
+      newApp = app.current_deployment_id === null
     } else {
       const existing = this.appRepository.getByVpsAndName(vps.id, name)
       if (existing) {

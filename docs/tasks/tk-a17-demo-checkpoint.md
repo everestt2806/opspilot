@@ -308,3 +308,4 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
 - REVIEW C03 03 13/09 — [review-c03](tk-a17/review-c03.md): **APPROVED** code `c060c75`, submitted
   `53aa07e`. Mọi finding C03 CLOSED; mở duy nhất C04 với Vite app 18 và Express app 16. VM01 TCP 22
   timeout tại preflight, nên C04 live chưa thể PASS; C05 tiếp tục đóng.
+- C04 REVIEW-FIX 01 - 13/09/2026: Vite app 18/job 18 then Express/PostgreSQL app 16/job 19 passed live VM02 -> VM01 with `keepSource=true`; local gates and evidence are complete. Handoff is `READY_FOR_LOCAL_REVIEW`; C05 remains closed/`NOT_RUN`.

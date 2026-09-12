@@ -50,12 +50,33 @@ See [`docs/evidence/tk-a17/c04/README.md`](../../evidence/tk-a17/c04/README.md).
 
 ## NOT_RUN
 
-C05-C09, ML training/scoring, monitoring/fault/recovery, Flask, and all live C04 migration outcomes remain `NOT_RUN`.
+C05-C09, ML training/scoring, monitoring/fault/recovery and Flask remain `NOT_RUN`. The live C04 outcomes are recorded below.
+
+## REVIEW-FIX 01 - 13/09/2026
+
+- Base `e78b4ea`; fixes cover stateless archive handling, PostgreSQL probe/restore ordering, SSH relay streaming, first-deploy targets, persisted error detail and persisted probe verification.
+- Local focused `49/49`; node/web/scripts typecheck, scoped ESLint, Prettier and build exit `0`.
+- Controlled live sequence VM02 profile 2 -> VM01 profile 1 with `keepSource=true`: Vite app 18/job 18 PASS, then Express/PostgreSQL app 16/job 19 PASS. Checksum, files, runtime/HTTP, collector, marker and source-kept proof are recorded in [`review-fix-01`](../../evidence/tk-a17/c04/review-fix-01/README.md).
+- Failed attempts remain in SQLite/action history. C05-C09, ML, monitor/fault/recovery and app B mutation remain `NOT_RUN`.
+
+### Checklist result
+
+| Case | Result | Evidence |
+| --- | --- | --- |
+| C04-T1 stateless live success | PASS live | job 18 |
+| C04-T2 PostgreSQL live success | PASS live | job 19 |
+| C04-T3 precheck/validation guards | PASS local/live | focused suite and events |
+| C04-T4 transfer/checksum | PASS | relay progress and SHA |
+| C04-T5 failure cleanup | PASS path; failures retained | action history |
+| C04-T6 verify/confirm gate | PASS | service suite and jobs 18/19 |
+| C04-T7 cancel/race/idempotency | PASS local | repository/service suite |
+| C04-T8 IPC/events | PASS local | typecheck/build |
+| C04-T9 two real VPS migrations | PASS live | jobs 18 then 19 |
 
 ## REVIEW-FIX
 
 | Finding                    | Fix commit | Regression                                 | Evidence                             |
 | -------------------------- | ---------- | ------------------------------------------ | ------------------------------------ |
-| C04 initial implementation | pending    | 49 local focused tests; live cases blocked | `docs/evidence/tk-a17/c04/README.md` |
+| C04-R1-01..08 | local worker changes | focused 49 tests; Vite job 18; Express/PostgreSQL job 19 | `docs/evidence/tk-a17/c04/review-fix-01/README.md` |
 
 CHƯA PUSH — CHƯA PR — CHƯA MERGE.

@@ -151,7 +151,28 @@ export class MigrateService {
 
   private async run(job: MigrationJob, source: App, signal: AbortSignal): Promise<void> {
     const target = this.createTargetApp(source, job.target_vps_id)
-    this.migrations.update(job.id, { verify_json: JSON.stringify({ target_app_id: target.id }) })
+    let sourceProbe: string
+    try {
+      sourceProbe = await this.readProbe(job.source_vps_id, source, signal)
+    } catch (error) {
+      await this.cleanupTarget(job, target)
+      this.migrations.update(job.id, { status: 'rolled_back', failed_step: 'PREPARE' })
+      this.emit({ type: 'finished', job_id: job.id, status: 'rolled_back', downtime_ms: 0 })
+      this.actions.insert({
+        action: 'migrate_start',
+        status: 'failed',
+        vps_id: source.vps_id,
+        app_id: source.id,
+        detail_json: JSON.stringify({
+          job_id: job.id,
+          error: describeMigrationError(error)
+        })
+      })
+      return
+    }
+    this.migrations.update(job.id, {
+      verify_json: JSON.stringify({ target_app_id: target.id, source_probe: sourceProbe })
+    })
     const sourceDir = this.appDir(source.id)
     const targetDir = this.appDir(target.id)
     let freezeAt = 0
@@ -183,7 +204,7 @@ export class MigrateService {
           status: 'transferring',
           bytes_transferred: artifacts.bytes
         })
-        await this.transfer(job, targetDir, signal)
+        await this.transfer(job, targetDir, signal, artifacts.bytes)
         return undefined
       })
       await this.step(job, 'RESTORE', signal, async () => {
@@ -192,6 +213,7 @@ export class MigrateService {
           {
             vps_id: job.target_vps_id,
             app_name: target.name,
+            app_id: target.id,
             source_path: this.sourcePath(source.id),
             env: {}
           },
@@ -201,7 +223,7 @@ export class MigrateService {
         if (source.needs_db === 1) {
           await this.execOk(
             job.target_vps_id,
-            `cd ${shellQuote(targetDir)} && cat ${shellQuote(`opspilot-migrate-${job.id}.dump`)} | docker compose exec -T postgres pg_restore -U opspilot -d opspilot -`,
+            `cd ${shellQuote(targetDir)} && docker compose stop app && docker compose exec -T postgres pg_isready -U opspilot -d opspilot && cat ${shellQuote(`opspilot-migrate-${job.id}.dump`)} | docker compose exec -T postgres sh -c 'cat > /tmp/opspilot-migrate-${job.id}.dump' && docker compose exec -T postgres pg_restore --clean --if-exists --no-owner --no-privileges --exit-on-error -U opspilot -d opspilot /tmp/opspilot-migrate-${job.id}.dump && docker compose exec -T postgres rm -f /tmp/opspilot-migrate-${job.id}.dump && docker compose up -d app collector`,
             signal
           )
         }
@@ -248,7 +270,7 @@ export class MigrateService {
         app_id: source.id,
         detail_json: JSON.stringify({
           job_id: job.id,
-          error: error instanceof Error ? error.message : String(error)
+          error: describeMigrationError(error)
         })
       })
     } finally {
@@ -338,7 +360,7 @@ export class MigrateService {
       source.needs_db === 1 ? ` -C /tmp ${shellQuote(dump.slice('/tmp/'.length))}` : ''
     await this.execOk(
       job.source_vps_id,
-      `tar czf ${shellQuote(archive)} --exclude='data/pg' -C ${shellQuote(sourceDir)} src collector Dockerfile docker-compose.yml .env data${dumpEntry}`,
+      `tar czf ${shellQuote(archive)} --exclude='data/pg' -C ${shellQuote(sourceDir)} src collector Dockerfile docker-compose.yml .env $(test -d ${shellQuote(`${sourceDir}/data`)} && printf data)${dumpEntry}`,
       signal,
       true
     )
@@ -356,22 +378,47 @@ export class MigrateService {
     return { bytes: artifact.size, artifacts: [artifact] }
   }
 
-  private async transfer(job: MigrationJob, targetDir: string, signal: AbortSignal): Promise<void> {
+  private async transfer(
+    job: MigrationJob,
+    targetDir: string,
+    signal: AbortSignal,
+    expectedBytes: number
+  ): Promise<void> {
     const archive = `/tmp/opspilot-migrate-${job.id}.tar.gz`
     const stagedArchive = `/tmp/opspilot-migrate-${job.id}.staged.tar.gz`
-    const encoded = await this.ssh.exec(job.source_vps_id, `base64 -w0 ${shellQuote(archive)}`, {
-      signal,
-      timeoutMs: 900_000
-    })
-    await this.ssh.writeFile(
+    const relay = this.ssh.relayFile
+    if (typeof relay !== 'function') {
+      throw new AppError(
+        'UNKNOWN',
+        'SSH relay stream chưa sẵn sàng; không dùng transfer toàn bộ RAM.',
+        {
+          step: 'TRANSFER'
+        }
+      )
+    }
+    const transfer = await relay.call(
+      this.ssh,
+      job.source_vps_id,
+      archive,
       job.target_vps_id,
-      `/tmp/opspilot-migrate-${job.id}.b64`,
-      encoded.stdout,
-      { silent: true }
+      stagedArchive,
+      {
+        signal,
+        onProgress: (bytes) => {
+          this.emit({
+            type: 'progress',
+            job_id: job.id,
+            step: 'TRANSFER',
+            percent: Math.min(99, Math.round((bytes / Math.max(1, expectedBytes)) * 100)),
+            detail: `${bytes} bytes`
+          })
+        }
+      }
     )
+    this.migrations.update(job.id, { bytes_transferred: transfer.bytes })
     const checksum = await this.ssh.exec(
       job.target_vps_id,
-      `base64 -d /tmp/opspilot-migrate-${job.id}.b64 > ${shellQuote(stagedArchive)} && sha256sum ${shellQuote(stagedArchive)}`,
+      `sha256sum ${shellQuote(stagedArchive)}`,
       { signal, timeoutMs: 900_000, retryOnReconnect: false }
     )
     const expected = await this.ssh.exec(job.source_vps_id, `sha256sum ${shellQuote(archive)}`, {
@@ -430,7 +477,9 @@ export class MigrateService {
     const tableCounts =
       source.needs_db === 1 ? await this.tableCounts(job, source, target, signal) : []
     const marker =
-      source.needs_db === 1 ? await this.markerMatch(job, source, target, signal) : null
+      source.needs_db === 1
+        ? await this.markerMatch(job, target, this.savedProbe(this.migrations.get(job.id)), signal)
+        : null
     const filesOk =
       sourceFiles.count === targetFiles.count && sourceFiles.bytes === targetFiles.bytes
     const tablesOk = tableCounts.every((row) => row.ok)
@@ -461,7 +510,7 @@ export class MigrateService {
   ): Promise<{ count: number; bytes: number }> {
     const result = await this.ssh.exec(
       vpsId,
-      `find ${shellQuote(directory)} -type f ! -path ${shellQuote(`${directory}/data/pg/*`)} ! -name 'opspilot-migrate-*.dump' -printf '%s\\n' | awk '{count+=1; bytes+=$1} END {printf "%d|%d", count+0, bytes+0}'`,
+      `for root in src collector data; do if test -d ${shellQuote(directory)}/$root; then find ${shellQuote(directory)}/$root -type f ! -path '*/pg/*' ! -path '*/node_modules/*' ! -path '*/.git/*' ! -path '*/dist/*' ! -name 'opspilot-migrate-*.dump' -printf '%s\\n'; fi; done | awk '{count+=1; bytes+=$1} END {printf "%d|%d", count+0, bytes+0}'`,
       { signal }
     )
     if (result.code !== 0)
@@ -505,27 +554,42 @@ export class MigrateService {
     })
   }
 
+  private savedProbe(job: MigrationJob): string {
+    try {
+      return String(
+        (JSON.parse(job.verify_json ?? '{}') as { source_probe?: string }).source_probe ?? ''
+      )
+    } catch {
+      return ''
+    }
+  }
+
+  private async readProbe(vpsId: number, app: App, signal: AbortSignal): Promise<string> {
+    const path = app.needs_db === 1 ? '/items?limit=10&offset=1000' : app.healthcheck_path
+    const result = await this.ssh.exec(
+      vpsId,
+      `curl -m 10 -fsS http://127.0.0.1:${app.host_port}${path}`,
+      { signal }
+    )
+    if (result.code !== 0)
+      throw new AppError('UNKNOWN', 'Không đọc được business probe nguồn.', { step: 'PREPARE' })
+    return result.stdout
+  }
+
   private async markerMatch(
     job: MigrationJob,
-    source: App,
     target: App,
+    sourceBody: string,
     signal: AbortSignal
   ): Promise<{ source: boolean; target: boolean }> {
-    const read = async (vpsId: number, app: App): Promise<string> => {
-      const result = await this.ssh.exec(
-        vpsId,
-        `curl -fsS http://127.0.0.1:${app.host_port}${app.healthcheck_path}`,
-        { signal }
-      )
-      return result.code === 0 ? result.stdout : ''
-    }
-    const [sourceBody, targetBody] = await Promise.all([
-      read(job.source_vps_id, source),
-      read(job.target_vps_id, target)
-    ])
+    const result = await this.ssh.exec(
+      job.target_vps_id,
+      `curl -fsS http://127.0.0.1:${target.host_port}${target.needs_db === 1 ? '/items?limit=10&offset=1000' : target.healthcheck_path}`,
+      { signal }
+    )
     return {
       source: sourceBody.length > 0,
-      target: targetBody.length > 0 && sourceBody === targetBody
+      target: result.code === 0 && result.stdout === sourceBody
     }
   }
 
@@ -536,7 +600,7 @@ export class MigrateService {
       {
         label: 'Artifact checksum',
         source: verify.checksums.map((item) => item.sha256).join(','),
-        target: verify.checksums.map((item) => item.sha256).join(','),
+        target: verify.checksums.map((item) => item.target_sha256 ?? 'missing').join(','),
         ok: verify.checksums.length > 0
       },
       {
@@ -607,4 +671,17 @@ export class MigrateService {
     if (!row?.source_path) throw new AppError('VALIDATION', 'Không tìm thấy source path của app.')
     return row.source_path
   }
+}
+
+function describeMigrationError(error: unknown): string {
+  if (error instanceof AppError) {
+    const cause =
+      error.context.cause instanceof Error
+        ? error.context.cause.message
+        : error.context.cause === undefined
+          ? ''
+          : String(error.context.cause)
+    return `${error.code}: ${error.userMessage}${cause ? `; ${cause}` : ''}`
+  }
+  return error instanceof Error ? error.message : String(error)
 }

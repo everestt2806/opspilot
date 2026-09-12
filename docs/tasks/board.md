@@ -269,3 +269,4 @@ C03 **APPROVED** tại code `c060c75`, submitted `53aa07e`. Reviewer focused 65/
 apps/deployments, ciphertext/master key, Electron resolver SSH, unsafe-profile cleanup và tunnel ba
 app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express app 16/deployment 39. VM01
 `221.121.1.79:22` đang timeout nên Worker code/test trước; live hai VPS chưa được phép báo PASS.
+- C04 REVIEW-FIX 01 - 13/09/2026: local `49/49`, typecheck/scripts typecheck, scoped ESLint, Prettier and build passed. VM02 profile 2 -> VM01 profile 1 live sequence passed in order: Vite app 18/job 18, then Express/PostgreSQL app 16/job 19, both `keepSource=true`. Evidence: `docs/evidence/tk-a17/c04/review-fix-01/`; handoff `READY_FOR_LOCAL_REVIEW`. C05-C09 remain closed/`NOT_RUN`.

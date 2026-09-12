@@ -47,6 +47,11 @@ export interface UploadOptions {
   signal?: AbortSignal
 }
 
+export interface RelayOptions {
+  signal?: AbortSignal
+  onProgress?: (bytes: number) => void
+}
+
 export interface SshStatusEvent {
   vpsId: number
   status: 'online' | 'offline'
@@ -180,6 +185,40 @@ export class SshManager extends EventEmitter {
     if (options.mode !== undefined) {
       await this.runCommand(entry, `chmod ${options.mode.toString(8)} ${pathQuoted}`)
     }
+  }
+
+  /** Relay one remote file through the desktop with channel backpressure. */
+  async relayFile(
+    sourceVpsId: number,
+    sourcePath: string,
+    targetVpsId: number,
+    targetPath: string,
+    options: RelayOptions = {}
+  ): Promise<{ bytes: number }> {
+    const source = await this.ensureConnected(sourceVpsId)
+    const target = await this.ensureConnected(targetVpsId)
+    const input = await this.openExecChannel(source, `cat ${shellQuote(sourcePath)}`, {})
+    const output = await this.openExecChannel(target, `cat > ${shellQuote(targetPath)}`, {})
+    let bytes = 0
+    const result = this.awaitChannelResult(input, { signal: options.signal })
+    const failure = new Promise<never>((_, reject) => {
+      output.on('error', reject)
+      output.stderr.on('data', (chunk: Buffer) => {
+        if (chunk.length > 0) reject(new Error(chunk.toString('utf8')))
+      })
+    })
+    input.on('data', (chunk: Buffer) => {
+      bytes += chunk.length
+      options.onProgress?.(bytes)
+      if (!output.write(chunk)) input.pause()
+    })
+    output.on('drain', () => input.resume())
+    input.on('end', () => output.end())
+    const sourceResult = await Promise.race([result, failure])
+    if (sourceResult.code !== 0) throw new AppError('UNKNOWN', 'Đọc artifact nguồn thất bại.')
+    const targetResult = await this.awaitChannelResult(output, { signal: options.signal })
+    if (targetResult.code !== 0) throw new AppError('UNKNOWN', 'Ghi artifact đích thất bại.')
+    return { bytes }
   }
 
   async fileSize(vpsId: number, remotePath: string): Promise<number> {
