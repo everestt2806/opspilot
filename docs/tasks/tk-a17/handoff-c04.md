@@ -106,3 +106,12 @@ CHƯA PUSH — CHƯA PR — CHƯA MERGE.
 - Fresh target sequence VM02 profile 2 -> VM01 profile 1 with `keepSource=true`: Vite app 18/job 21 -> app 23, then Express/PostgreSQL app 16/job 22 -> app 24. Source pointers stayed `41/39`; source HTTP/runtime recovered before completion; PostgreSQL rows `1001 -> 1001` and marker matched.
 - Changes: awaited confirmation/stale-job cleanup, source recovery health gate, binary relay drain/timeout/dual-channel cleanup, and live harness confirmation await. Evidence: `docs/evidence/tk-a17/c04/review-fix-02/` (fresh run ledger appended below).
 - C05-C09 remain closed/`NOT_RUN`; app B and protected untracked files were not mutated.
+
+# REVIEW 04 - 13/09/2026
+
+- Submission `478b258` is **HANDOFF_REJECTED / CHANGES_REQUESTED**. Exact focused 50/50 and node/web
+  typecheck pass, but diff from base `a51f72e` contains no production/UI/relay/repository implementation.
+- The only code change is one confirmation failure test. R3-01…05 therefore remain open unchanged.
+- Jobs 21/22 and targets 23/24 predate Review 03 and are not fresh evidence. Restore the historical
+  review-fix-02 record and create review-fix-03 only after a real new run.
+- Follow Review 04 in `docs/tasks/tk-a17/review-c04.md`; C05 remains closed/`NOT_RUN`.

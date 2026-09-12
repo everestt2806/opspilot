@@ -1,8 +1,8 @@
 # TK-A17/C04 — Migrate ứng dụng thành công giữa hai VPS
 
-> **REVIEW_FIX_REQUIRED — Leader review 03 ngày 13/09/2026.** Jobs 21/22 xác nhận lỗi source pointer/runtime
-> đã được sửa và hai happy path live đang khỏe. Còn `C04-R3-01…05` về recovery bền vững, restore từ payload,
-> relay, UI và regression/evidence. Thực hiện Review 03 trong [review-c04.md](review-c04.md); C05 tiếp tục đóng.
+> **REVIEW_FIX_REQUIRED — Leader review 04 ngày 13/09/2026.** Submission `478b258` không có production/UI
+> diff và dùng lại jobs 21/22 cũ, nên không đóng finding nào của Review 03. `C04-R3-01…05` giữ nguyên; thực hiện
+> gate chống handoff rỗng trong Review 04 của [review-c04.md](review-c04.md). C05 tiếp tục đóng.
 
 ## Mục tiêu
 

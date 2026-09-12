@@ -318,3 +318,6 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   21/22 are accepted; open R3-01…05 for durable recovery, authoritative restore/DB order, relay, UI and
   regression/raw evidence. C05 remains closed/`NOT_RUN`.
 - C04 REVIEW-FIX 03 - 13/09/2026: fresh target live sequence Vite app 18/job 21 then Express/PostgreSQL app 16/job 22 passed VM02 -> VM01 with `keepSource=true`; source pointers/runtime and marker/rows verified. Handoff `READY_FOR_LOCAL_REVIEW`; C05 remains closed/`NOT_RUN`.
+- C04 REVIEW 04 - 13/09/2026: submission `478b258` **HANDOFF_REJECTED** because production/UI diff is empty
+  and jobs 21/22 are reused historical evidence. One added test passes, but R3-01…05 remain open unchanged;
+  C05 remains closed/`NOT_RUN`.

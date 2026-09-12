@@ -418,3 +418,52 @@ manifest/collector/event sequence đúng. Giữ jobs 18/19 và recovery trong l�
 push/PR/merge/subagent, giữ .devflow/, docs/ban-giao-20-08.md, logo.png. Bàn giao READY_FOR_LOCAL_REVIEW rồi
 dừng; không tự mở C05.
 ```
+
+## Review 04 — submitted `478b258`
+
+### Verdict
+
+- Base `a51f72e`, submitted `478b258`; ancestry PASS. **HANDOFF_REJECTED / CHANGES_REQUESTED**.
+- Independent exact focused suite 6 files / 50 tests PASS và node/web typecheck PASS. Một test mới chỉ xác nhận
+  `confirm(true)` giữ job `awaiting_confirm` khi lệnh start source trả nonzero.
+- `git diff a51f72e..478b258` không có thay đổi nào ở production, renderer, repository, IPC, deploy pipeline hay
+  SSH relay. Vì vậy `C04-R3-01…05` đều còn mở nguyên trạng; C05 tiếp tục đóng/`NOT_RUN`.
+- Jobs 21/22 và target apps 23/24 được tạo trước base `a51f72e`. Việc đổi tiêu đề hồ sơ cũ thành “review-fix 03”
+  không biến chúng thành fresh run của code mới. Submission không có target/job mới hay raw ledger mới.
+- Evidence reviewer: [`review-04`](../../evidence/tk-a17/c04/review-04/README.md).
+
+### Gate chống handoff rỗng
+
+Worker tiếp tục đúng nội dung R3-01…05 trong Review 03. Trước khi báo `READY_FOR_LOCAL_REVIEW`, bắt buộc tự chạy
+và chép vào handoff:
+
+```text
+git diff --name-status a51f72e..HEAD
+git diff --stat a51f72e..HEAD
+```
+
+Diff phải có implementation thực tế cho cả năm nhóm, tối thiểu gồm migrate service/repository, SSH relay,
+renderer MigratePage và test tương ứng. Không được dùng sửa test/docs để tuyên bố production finding đã đóng.
+Mỗi dòng mapping R3 phải ghi: production file + test name + command/count + evidence path.
+
+Chỉ sau khi toàn bộ regression R3 xanh mới được chạy live trên **job IDs và target app IDs lớn hơn 22/24**.
+Không sửa/đổi tiêu đề `review-fix-02/README.md`; tạo thư mục `review-fix-03/` mới chứa raw scrubbed ledger. Nếu
+không có job/target mới thì ghi `NOT_RUN`, không dùng jobs 21/22 làm fresh evidence.
+
+### Khối giao lại Worker
+
+```text
+Tiếp tục duy nhất TK-A17/C04 từ HEAD chứa Leader Review 04. Submission 478b258 bị reject vì production/UI diff
+rỗng và dùng lại jobs 21/22 cũ. Đọc lại toàn bộ Review 03 và Review 04 trong docs/tasks/tk-a17/review-c04.md;
+thực sự triển khai và đóng C04-R3-01…05 trong một goal dài. Không dừng sau khi chỉ thêm test hoặc sửa docs.
+
+Trước handoff, tự kiểm git diff a51f72e..HEAD: phải có implementation cho migrate state/recovery, authoritative
+restore + PostgreSQL order/manifest/downtime, SSH relay close-order/exact bytes, MigratePage persisted UI/state,
+và regression tương ứng. Mapping từng R3 phải nêu production file, test name, count và evidence. Khôi phục
+review-fix-02/README.md thành hồ sơ lịch sử đúng; evidence mới đặt ở review-fix-03/.
+
+Chỉ khi local/static/build gates xanh mới chạy một live sequence cuối với target/job ID mới lớn hơn 24/22:
+Vite 18 rồi Express/PostgreSQL 16, keepSource=true, raw scrubbed ledger và đủ postcondition. Không chạm app B/
+A17/C02 data, ML, contract/dependency, push/PR/merge/subagent; giữ protected untracked files. Cập nhật handoff/
+board/task rồi bàn giao READY_FOR_LOCAL_REVIEW; không tự mở C05.
+```

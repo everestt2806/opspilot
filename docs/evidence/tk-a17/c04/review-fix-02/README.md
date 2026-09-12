@@ -1,6 +1,4 @@
-# TK-A17/C04 review-fix 03 evidence
-
-Review-fix 03 base: `a51f72e`. Fresh live jobs are 21/22 on new target apps 23/24; the prior review-fix 02 ledger remains historical.
+# TK-A17/C04 review-fix 02 evidence
 
 ## Identity
 
@@ -14,7 +12,7 @@ Exact focused command in `app`:
 
 `pnpm exec vitest run --maxWorkers=1 src/main/migrate/repository.test.ts src/main/migrate/service.test.ts src/main/deploy/precheck.test.ts src/main/deploy/pipeline.test.ts src/main/deploy/service.test.ts src/main/ipc.test.ts`
 
-PASS: 6 files / 50 tests. `pnpm typecheck`, scripts typecheck, scoped ESLint, scoped Prettier and `pnpm build` all exited 0.
+PASS: 6 files / 49 tests. `pnpm typecheck`, scripts typecheck, scoped ESLint, scoped Prettier and `pnpm build` all exited 0.
 
 Review-fix changes serialize confirmation/abort, keep the source deployment pointer unchanged, recover and health-check a source for `keepSource=true`, avoid relay stdout accumulation, close both relay channels on error, and make the live harness await confirmation and stale-job cleanup.
 
