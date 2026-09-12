@@ -246,6 +246,16 @@ section và dynamic public build args bị Dockerfile bỏ qua. Live harness xó
 event provenance không đáng tin và ba public port timeout. Mở `C03-R1-01…04`; C03
 `REVIEW_FIX_REQUIRED`, C04/C05 tiếp tục đóng/`NOT_RUN`.
 
+### TK-A17 update - C03 review-fix 02
+
+C03 `READY_FOR_LOCAL_REVIEW` at code `c060c75` from base `2a15615`. `C03-R2-01...02` are closed:
+the live helper uses the real OpsPilot userData credential flow and VM02 resolver, and the exact
+detector-plan/build-arg/Dockerfile regression is committed. Real apps `16/17/18` and deployments
+`38/39/40/41` are healthy on ports `30015..30017`; Docker/HTTP/collector, SQLite reopen and the
+Express PostgreSQL marker proof are in `docs/evidence/tk-a17/c03/review-fix-02/`. Focused `65/65`,
+node/web/scripts typecheck, scoped ESLint/Prettier and build pass. C04-C09 remain closed/`NOT_RUN`;
+app B is read-only, with no ML, push, PR or merge.
+
 ### TK-A17 update - 13/09 C03 review-02
 
 C03 **CHANGES_REQUESTED** tại code `e3a32f1`, submitted `8e60243`. Detector/template production,

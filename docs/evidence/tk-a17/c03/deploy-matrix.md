@@ -68,3 +68,14 @@ sau khi harness xóa DB tạm, và ba public URL timeout. C03 hiện `REVIEW_FIX
 Review-02 tại `e3a32f1` / `8e60243` tiếp tục **CHANGES_REQUESTED** vì credential/profile thật chưa
 đạt và exact integration regression còn 2 fail. Trạng thái mới nhất nằm trong
 [`review-c03.md`](../../../tasks/tk-a17/review-c03.md).
+
+## REVIEW-FIX 02
+
+- Base `2a15615`; code `c060c75`; findings `C03-R2-01...02` CLOSED.
+- Real-profile matrix: apps `16/17/18`, deployments `38/39/40/41`, Express `30015` (`38 -> 39`),
+  Next.js `30016`, Vite `30017`. Seven pipeline steps, Docker health, HTTP 200, collectors,
+  SQLite close/reopen and PostgreSQL marker retention all passed.
+- Durable output is `review-fix-02/live-real-profile.json`; scrubbed credential proof is
+  `review-fix-02/credential-audit-real.json`; occupied-port failures remain as `live-retry-*.txt`.
+- Focused `65/65`, node/web/scripts typecheck, scoped ESLint, Prettier and build passed. C04-C09
+  remain `NOT_RUN`; app B was read-only only.

@@ -83,6 +83,20 @@ Evidence: [`deploy-matrix.md`](../../evidence/tk-a17/c03/deploy-matrix.md).
 - Chi tiết: [review-c03.md](review-c03.md) và
   [review evidence](../../evidence/tk-a17/c03/review-01/). C04/C05 tiếp tục đóng/`NOT_RUN`.
 
+## REVIEW-FIX 02 - 13/09/2026
+
+- Base `2a15615`; code `c060c75`; scope only `C03-R2-01...02`; C04-C09 remain `NOT_RUN`.
+- R2-01 CLOSED: the helper uses real Electron userData, VM02 VPS ID 2, `createCredentialCipher`,
+  `loadSecret`, and the real SSH resolver. Apps `16/17/18` and deployments `38/39/40/41` survived
+  database close/reopen and `DeployService.listApps` readback. Scrubbed credential audit:
+  `../../evidence/tk-a17/c03/review-fix-02/credential-audit-real.json`.
+- R2-02 CLOSED: detector-plan/build-arg/Dockerfile integration regression committed; focused suite
+  `65/65` passed. Final VM02 ports are Express `30015`, Next.js `30016`, Vite `30017`; Docker,
+  HTTP 200, collectors and PostgreSQL marker proof passed.
+- Node/web/scripts typecheck, scoped ESLint, Prettier and build exit `0`; failed occupied-port raw
+  attempts remain in `live-retry-*.txt`. Outcome: `READY_FOR_LOCAL_REVIEW`; no app B mutation,
+  C04-C09, ML or push/PR/merge.
+
 ## Leader review 02 — 13/09/2026
 
 - Reviewed code `e3a32f1`, submitted HEAD `8e60243`; verdict **CHANGES_REQUESTED**.

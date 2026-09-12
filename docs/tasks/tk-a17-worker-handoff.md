@@ -213,6 +213,13 @@
   `dcbe3b5`. Mở `C03-R1-01…04`; contract regression 0/5, live provenance chưa bền và đường public
   timeout. C03 `REVIEW_FIX_REQUIRED`; C04/C05 đóng/`NOT_RUN`. Worker tiếp tục theo
   [review-c03.md](tk-a17/review-c03.md).
+- REVIEW-FIX C03 02 - 13/09/2026: code `c060c75`, base `2a15615`; `C03-R2-01...02` closed. The
+  helper now uses real userData/safeStorage-backed credentials and the actual VM02 resolver; fresh
+  real-profile apps `16/17/18` with deployments `38/39/40/41` are healthy on ports `30015..30017`.
+  Credential audit is scrubbed, exact build-arg integration regression is committed, and focused
+  `65/65` plus typecheck/scripts typecheck, scoped ESLint/Prettier and build pass. C03 is
+  `READY_FOR_LOCAL_REVIEW`; C04-C09 remain closed/`NOT_RUN`, with no app B mutation or push/PR/merge.
+
 - REVIEW C03 02 - 13/09/2026: Leader **CHANGES_REQUESTED** tại code `e3a32f1`, submitted
   `8e60243`. R1-01, production R1-02 và R1-04 đạt; R1-03 chưa đóng. Mở `C03-R2-01…02` vì profile
   phụ chứa plaintext private key/không dùng được bằng resolver thật, C03 apps vắng khỏi app DB thật
