@@ -169,6 +169,10 @@
   ML 19/19, collector 26/26, static/build PASS. Read-only VM02 activation/source/grouped evidence
   explains `416+5=421` metrics and `2080+25=2105` scores. C02 `READY_FOR_LOCAL_REVIEW`;
   C03-C09 đóng/`NOT_RUN`.
+- REVIEW-FIX C02 08 - 12/09/2026: Worker code `8fe4842`, evidence
+  `docs/evidence/tk-a17/c02/review-fix-08.md`; R8-01...03 and R7-03/R6-02 closed. Focused 99/99,
+  ML 19/19, collector 26/26, static/build PASS. No live mutation; read-only deployment 20/21
+  evidence and exact 421/2105 arithmetic retained. C02 `READY_FOR_LOCAL_REVIEW`; C03-C09 closed.
 - REVIEW C02 07 - 12/09/2026: Leader review code `61f43df`, submitted HEAD `413ec20`:
   **CHANGES_REQUESTED**. Focused 96/96, ML 19/19, collector 26/26 và static/build PASS, nhưng hai
   reviewer regressions 2/2 FAIL: prepared rollback lineage không reconcile và old episode đóng trước

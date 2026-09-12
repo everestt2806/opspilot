@@ -304,6 +304,19 @@ See [`docs/evidence/tk-a17/c02/ingestion.md`](../../evidence/tk-a17/c02/ingestio
 - Final A17 app v16/running, collector/DB healthy, HTTP 200; app B read-only only. Outcome:
   `READY_FOR_LOCAL_REVIEW`; C03-C09 remain closed/`NOT_RUN`.
 
+## REVIEW-FIX 08 — 12/09/2026
+
+- Base `deb69b9`; code commit `8fe4842`; docs before append `2503c12`; evidence
+  `docs/evidence/tk-a17/c02/review-fix-08.md`.
+- Closed `C02-R8-01...03` and remaining `C02-R7-03/R6-02`: app IDs are enumerated outside the
+  lock only, prepared rows are reloaded under lock, source durable boundary is verified, and
+  activation plus current pointer are one SQLite transaction.
+- Local gates PASS: focused `18 files/99 tests`, ML `19/19`, collector `26/26`, node/web/scripts
+  typecheck, scoped lint, Prettier and build (`3045` modules), all exit `0`.
+- No live mutation. Existing read-only VM02 evidence remains deployment 20 `424/2120`, deployment
+  21 `5/25`, activation `[1417093,1541655)` -> `[1541655,EOF)`, and `416+5=421` / `2080+25=2105`.
+- Outcome: `READY_FOR_LOCAL_REVIEW`; C03-C09 remain closed/`NOT_RUN`.
+
 ## Leader review 07 — 12/09/2026
 
 - Reviewed code `61f43df`, submitted HEAD `413ec20`; verdict **CHANGES_REQUESTED** tại

@@ -162,6 +162,15 @@ và exit 0; C02 `READY_FOR_LOCAL_REVIEW`. C03-C09 vẫn đóng/`NOT_RUN`, chưa 
 
 ### TK-A17 update - 12/09 C02 review-fix 07
 
+### TK-A17 update - 12/09 C02 review-fix 08
+
+C02 đóng `C02-R8-01...03` và phần còn mở R7-03/R6-02 tại code `8fe4842`: reconcile reload prepared
+episode dưới shared lock, kiểm boundary `size+1`, và activation/pointer cùng SQLite transaction.
+Production regressions cover short/missing/mismatch snapshot, lineage cycle/missing, stale row,
+close/reopen, injected pointer failure, retry và second tick. Local `18/99`, ML `19`, collector
+`26`, typecheck/lint/Prettier/build PASS. Không live mutation; evidence deployment 20/21 và
+`416+5=421`, `2080+25=2105` giữ nguyên. C02 `READY_FOR_LOCAL_REVIEW`; C03-C09 đóng/`NOT_RUN`.
+
 C02 đóng `C02-R7-01...04` và phần còn mở R6-02...05 tại code `65d85ac`: reconciliation dùng
 resolved rollback lineage, cycle/missing fail-closed; mixed-invalid rotation giữ valid rows trong
 episode cũ và ghi từng byte range. Local `18/98`, ML `19`, collector `26`, typecheck/lint/Prettier/

@@ -12,6 +12,11 @@ REVIEW-FIX C02 07 (12/09/2026): code `65d85ac`, evidence
 18/98, ML 19/19, collector 26/26, static/build PASS. Read-only activation/source/count evidence
 proves `416+5=421` metrics and `2080+25=2105` scores for deployments 20/21. C02
 READY_FOR_LOCAL_REVIEW; C03-C09 remain closed/NOT_RUN.
+REVIEW-FIX C02 08 (12/09/2026): code `8fe4842`, evidence
+`docs/evidence/tk-a17/c02/review-fix-08.md`; R8-01...03 and R7-03/R6-02 closed. Local focused
+18/99, ML 19/19, collector 26/26, static/build PASS. No live mutation; read-only deployment 20/21
+evidence retains activation boundaries and `416+5=421`, `2080+25=2105`. C02
+READY_FOR_LOCAL_REVIEW; C03-C09 remain closed/NOT_RUN.
 | A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | ĐANG LÀM — C02 READY_FOR_LOCAL_REVIEW |
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
