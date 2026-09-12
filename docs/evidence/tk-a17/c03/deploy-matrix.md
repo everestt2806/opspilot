@@ -64,3 +64,7 @@ sequence; Next v1 and Vite v1 passed it once.
 `dcbe3b5` có verdict **CHANGES_REQUESTED**: contract regression 0/5, live SQLite provenance không còn
 sau khi harness xóa DB tạm, và ba public URL timeout. C03 hiện `REVIEW_FIX_REQUIRED`; xem
 [`review-c03.md`](../../../tasks/tk-a17/review-c03.md) và [`review-01`](review-01/).
+
+Review-02 tại `e3a32f1` / `8e60243` tiếp tục **CHANGES_REQUESTED** vì credential/profile thật chưa
+đạt và exact integration regression còn 2 fail. Trạng thái mới nhất nằm trong
+[`review-c03.md`](../../../tasks/tk-a17/review-c03.md).

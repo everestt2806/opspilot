@@ -82,3 +82,12 @@ Evidence: [`deploy-matrix.md`](../../evidence/tk-a17/c03/deploy-matrix.md).
   marker vẫn PASS, nhưng ba public port timeout. Không có live mutation trong review.
 - Chi tiết: [review-c03.md](review-c03.md) và
   [review evidence](../../evidence/tk-a17/c03/review-01/). C04/C05 tiếp tục đóng/`NOT_RUN`.
+
+## Leader review 02 — 13/09/2026
+
+- Reviewed code `e3a32f1`, submitted HEAD `8e60243`; verdict **CHANGES_REQUESTED**.
+- Detector/template production, VM02 health và tunnel teardown đạt. Exact reviewer suite còn hai
+  integration failures; profile phụ lưu private key plaintext và không xuất hiện trong app DB thật.
+- Mở `C03-R2-01…02`; C03 tiếp tục `REVIEW_FIX_REQUIRED`, C04/C05 đóng/`NOT_RUN`.
+- Chi tiết: [review-c03.md](review-c03.md), evidence
+  [review-02](../../evidence/tk-a17/c03/review-02/). Review không live mutation.

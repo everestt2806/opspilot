@@ -30,7 +30,7 @@
 
 | ID     | Task                                                                 | Chủ                   | Hạn      | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                                            |
 | ------ | -------------------------------------------------------------------- | --------------------- | -------- | ---------- | --------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu  | A                     | 14/09    | ĐANG LÀM | `feat/a17-demo-checkpoint`  | C03 CHANGES_REQUESTED R1    | C03 REVIEW_FIX_REQUIRED; C04/C05 NOT_RUN; ML deferred; chưa push/PR |
+| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu  | A                     | 14/09    | ĐANG LÀM | `feat/a17-demo-checkpoint`  | C03 CHANGES_REQUESTED R2    | C03 credential/profile fix; C04/C05 NOT_RUN; ML deferred; chưa push/PR |
 | TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09    | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                   | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới                             |
 | TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09    | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge               | `fe1da33`; 21/21 theo task B                                                       |
 | TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02      | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                   | Code đã merge; DoD SSH tail tại A17/C02                                            |
@@ -245,3 +245,10 @@ loopback/health/marker đạt, nhưng reviewer contract regression `0/5`: detect
 section và dynamic public build args bị Dockerfile bỏ qua. Live harness xóa DB tạm, parse multiline/
 event provenance không đáng tin và ba public port timeout. Mở `C03-R1-01…04`; C03
 `REVIEW_FIX_REQUIRED`, C04/C05 tiếp tục đóng/`NOT_RUN`.
+
+### TK-A17 update - 13/09 C03 review-02
+
+C03 **CHANGES_REQUESTED** tại code `e3a32f1`, submitted `8e60243`. Detector/template production,
+VM02 health và tunnel teardown đạt; committed focused 62/62. Blocker còn lại: profile phụ lưu private
+key plaintext dưới nhãn AES-GCM và app 13–15 không có trong DB `app:list` thật. Exact reviewer suite
+còn 2 integration case fail do thiếu `BUILD_ARGS`. Mở `C03-R2-01…02`; C04/C05 tiếp tục đóng.

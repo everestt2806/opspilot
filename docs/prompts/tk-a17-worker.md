@@ -1,26 +1,26 @@
 # Prompt Worker — giao đúng một chặng
 
-> **Prompt hiện hành 12/09/2026:** sao chép khối C03 review-fix ngay dưới đây. Các khối C00/C01 và chuỗi
+> **Prompt hiện hành 13/09/2026:** sao chép khối C03 review-fix 02 ngay dưới đây. Các khối C00/C01 và chuỗi
 > ML/monitor/recovery phía sau chỉ là mẫu lịch sử.
 
 ```text
-Tiếp tục duy nhất TK-A17/C03 từ HEAD chứa Leader review 01; không checkout/reset về c149291 hoặc
-dcbe3b5. Đọc docs/tasks/tk-a17/review-c03.md và đóng C03-R1-01…04. C04/C05 vẫn đóng/NOT_RUN.
+Tiếp tục duy nhất TK-A17/C03 từ HEAD chứa Leader review 02; không checkout/reset về e3a32f1 hoặc
+8e60243. Đọc mục Review 02 trong docs/tasks/tk-a17/review-c03.md và đóng C03-R2-01…02. C04/C05 vẫn
+đóng/NOT_RUN.
 
-Sửa detector đúng contract dependency section. Làm cho mọi NEXT_PUBLIC_*/VITE_* do BuildPlan sinh ra
-thực sự có hiệu lực trong Docker build, có regression nhiều key/default/override/quoting/no-arg; bỏ npm
-ci trùng và kiểm tra Next public asset. Sửa live harness thành structured output, per-deployment exact
-event assertion và raw scrubbed log. Proof phải dùng SQLite/profile bền để app:list/C04 đọc lại được,
-không seed/import record giả; close/reopen đối chiếu app/deployment/current pointer.
+BLOCKER: c03-live đang ghi nguyên private key vào encrypted_secret với IV/tag giả, còn app 13–15 nằm
+trong DB phụ nên UI/app:list thật không thấy và loadSecret không dùng được. Chuyển helper sang Electron,
+dùng đúng %APPDATA%/OpsPilot userData, createCredentialCipher + loadSecret và reuse VM02 ID 2 như
+a17-c02-live.ts. Deploy ba app C03 mới qua chính DB thật; close/reopen rồi chứng minh listApps và một
+SSH/inspect qua resolver thật. Không seed/import record giả, không in/commit secret hoặc DB/master key.
 
-Chạy lại tuần tự Express/Next/Vite qua pipeline thật, giữ PostgreSQL marker qua Express redeploy, chứng
-minh build vars của Next/Vite và ba collector. Chứng minh cả ba trang từ máy demo qua đường trình chiếu
-có thể lặp lại; đóng tunnel/process sau proof. Chỉ được thay/dọn target C03 của lượt này sau khi target
-bền healthy; không chạm A17/app B ngoài read-only. Không migrate, ML, monitor/fault/recovery, Flask,
-schema/contract/dependency mới, push/PR/merge/subagent. Giữ .devflow/, docs/ban-giao-20-08.md, logo.png.
-
-Chạy đủ gate trong review, append REVIEW-FIX 01 với exact SHA/log/evidence và bàn giao
-READY_FOR_LOCAL_REVIEW rồi dừng. Nếu VPS/path trình chiếu không đạt, bàn giao BLOCKED; không tự mở C04.
+Commit regression tích hợp 5 reviewer cases: plan.buildArgs -> renderBuildArgs -> renderDockerfile;
+mọi dynamic key và no-args đều PASS. Chạy fast-track gates trong review. Live lại Express/Next/Vite,
+marker qua redeploy, collectors, tunnel ba app và teardown. Khi target mới healthy, xóa bốn profile DB
+C03 phụ chứa plaintext key và audit boolean chứng minh sạch; giữ scrubbed logs. Không chạm app A17/app B
+ngoài read-only; không migrate, ML, Flask, schema/contract/dependency, push/PR/merge/subagent. Giữ
+.devflow/, docs/ban-giao-20-08.md, logo.png. Append REVIEW-FIX 02, bàn giao READY_FOR_LOCAL_REVIEW rồi
+dừng; không tự mở C04.
 ```
 
 > Bản giao 11/09: A yêu cầu lập kế hoạch để giao Worker triển khai. Toàn bộ phạm vi nằm ở

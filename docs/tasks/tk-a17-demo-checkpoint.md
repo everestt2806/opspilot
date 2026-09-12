@@ -293,3 +293,7 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   `c149291`, submitted docs `dcbe3b5`. Mở `C03-R1-01…04` cho detector contract, dynamic public
   build args, durable live provenance và đường trình chiếu. C03 `REVIEW_FIX_REQUIRED`; C04/C05
   đóng/`NOT_RUN`.
+- REVIEW C03 02 13/09 — [review-c03](tk-a17/review-c03.md): **CHANGES_REQUESTED** tại code
+  `e3a32f1`, submitted `8e60243`. Mở `C03-R2-01…02`: thay profile plaintext/DB phụ bằng actual
+  OpsPilot userData + credential resolver thật và đóng hai reviewer integration regressions. C04/C05
+  tiếp tục đóng/`NOT_RUN`.

@@ -1,0 +1,34 @@
+{
+  "audited_at": "2026-09-12T17:02:47.451Z",
+  "database": "C:\\Users\\everestt28\\AppData\\Roaming\\OpsPilot\\opspilot.db",
+  "vps": [
+    {
+      "id": 1,
+      "name": "VM01",
+      "host": "221.121.1.79",
+      "port": 22,
+      "username": "root",
+      "auth_type": "password",
+      "last_status": "unknown"
+    },
+    {
+      "id": 2,
+      "name": "VM02",
+      "host": "221.121.1.80",
+      "port": 22,
+      "username": "deploy",
+      "auth_type": "key",
+      "last_status": "online"
+    }
+  ],
+  "apps": [
+    {
+      "id": 1,
+      "vps_id": 2,
+      "name": "a17-notes-0911",
+      "framework": "express",
+      "host_port": 30000,
+      "current_deployment_id": 21
+    }
+  ]
+}

@@ -63,3 +63,10 @@ All commands ran after the production fix in `D:\Developing\DuAnCNTT\app` unless
 - Outcome: `READY_FOR_LOCAL_REVIEW`; Worker does not self-approve C03 and does not open C04.
 - C04/C05 and later, ML, monitor/fault/recovery, Flask, app B mutation, push, PR and merge:
   `NOT_RUN`.
+
+## Leader review 02 override
+
+Review độc lập tại `e3a32f1` / `8e60243` có verdict **CHANGES_REQUESTED**. R1-03 chưa đóng: profile
+phụ lưu private key plaintext dưới nhãn AES-GCM và các app 13–15 không nằm trong app DB thật. Exact
+reviewer integration còn 2 fail. C03 hiện `REVIEW_FIX_REQUIRED`; xem
+[`review-c03.md`](../../../tasks/tk-a17/review-c03.md) và [`review-02`](review-02/).

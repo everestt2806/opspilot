@@ -1,6 +1,6 @@
 # TK-A17/C03 — Worker plan: deploy ba loại source lên VPS
 
-> **REVIEW_FIX_REQUIRED — review-01 ngày 12/09/2026.** Worker tiếp tục duy nhất C03 theo
+> **REVIEW_FIX_REQUIRED — review-02 ngày 13/09/2026.** Worker tiếp tục duy nhất C03 theo
 > [review-c03.md](review-c03.md); không làm lại từ base cũ. Đây là task duy nhất Worker được thực hiện.
 > C04 migrate và C05 rehearsal vẫn đóng cho tới khi Leader APPROVE C03.
 
