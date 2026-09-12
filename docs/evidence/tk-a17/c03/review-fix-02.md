@@ -56,3 +56,10 @@
 - Outcome: `READY_FOR_LOCAL_REVIEW`; Worker does not self-approve C03 and does not open C04.
 - C04-C09, ML train/score, monitor/fault/recovery, Flask, app B mutation, push, PR and merge:
   `NOT_RUN`.
+
+## Leader review 03
+
+Leader independently verified focused 65/65, actual userData records, credential resolver/at-rest
+properties, unsafe-profile cleanup and a fresh three-app tunnel. C03 is **APPROVED** at code `c060c75`,
+submitted `53aa07e`; see [`review-c03.md`](../../../tasks/tk-a17/review-c03.md) and
+[`review-03`](review-03/). C04 is now open; VM01 TCP 22 is currently unreachable.

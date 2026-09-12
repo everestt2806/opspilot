@@ -1,7 +1,8 @@
 # TK-A17/C04 — Migrate ứng dụng thành công giữa hai VPS
 
-> **CLOSED/NOT_RUN cho tới khi C03 APPROVED.** Khi mở, Worker chỉ làm C04 và dừng bàn giao để
-> Leader review trước C05.
+> **OPEN — C03 APPROVED review-03 ngày 13/09/2026.** Worker chỉ làm C04 và dừng bàn giao để
+> Leader review trước C05. VM01 đang TCP timeout; vẫn hoàn thiện code/test, nhưng live outcome phải
+> `BLOCKED` cho tới khi hai VPS thật cùng truy cập được.
 
 ## Mục tiêu
 
@@ -15,9 +16,14 @@ AWAITING_CONFIRM → completed`. Demo chọn `keepSource=true`; không xóa ngu�
 
 ## Điều kiện mở và preflight đầu tiên
 
-- C03 đã APPROVED; ba app source có manifest, deployment, image, port và health proof.
+- C03 APPROVED tại code `c060c75`, docs `53aa07e`. Input thật trong OpsPilot userData:
+  - stateless: VM02 ID 2, Vite app 18, deployment 41, port 30017;
+  - PostgreSQL: VM02 ID 2, Express app 16, current deployment 39, port 30015, marker
+    `c03-marker-1789234314659`;
+  - Next app 17/deployment 40/port 30016 chỉ giữ làm deploy proof, không bắt buộc migrate.
 - Hai VPS có profile riêng trong SQLite, SSH/Docker hoạt động và không có experiment `running`.
-- VM01 từng TCP timeout tại C00. Worker phải kiểm lại VM01 và VM02 read-only trước code live helper.
+- VM01 profile ID 1 tiếp tục TCP timeout tại Leader review-03. Worker phải kiểm lại VM01 và VM02
+  read-only trước code live helper.
   C04 không thể PASS nếu chỉ một VPS truy cập được hoặc dùng hai container trên cùng VPS.
 - Chọn app/port đích riêng, không đè app B hoặc app A17 hiện hữu. Ghi dung lượng backup dự kiến,
   disk đích, port đích và clock offset.

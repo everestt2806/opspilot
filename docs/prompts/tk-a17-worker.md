@@ -1,26 +1,31 @@
 # Prompt Worker — giao đúng một chặng
 
-> **Prompt hiện hành 13/09/2026:** sao chép khối C03 review-fix 02 ngay dưới đây. Các khối C00/C01 và chuỗi
+> **Prompt hiện hành 13/09/2026:** sao chép khối C04 ngay dưới đây. Các khối C00/C01/C03 và chuỗi
 > ML/monitor/recovery phía sau chỉ là mẫu lịch sử.
 
 ```text
-Tiếp tục duy nhất TK-A17/C03 từ HEAD chứa Leader review 02; không checkout/reset về e3a32f1 hoặc
-8e60243. Đọc mục Review 02 trong docs/tasks/tk-a17/review-c03.md và đóng C03-R2-01…02. C04/C05 vẫn
-đóng/NOT_RUN.
+Tiếp tục duy nhất TK-A17/C04 từ HEAD chứa Leader approval C03 review-03. Đọc
+docs/tasks/tk-a17/c04-migrate-two-vps.md, docs/25-nguyen-ly-deploy-migrate-demo-14-09.md, migrate IPC/
+schema contracts và C03 handoff/review. Không làm lại C03; C05 và ML vẫn đóng.
 
-BLOCKER: c03-live đang ghi nguyên private key vào encrypted_secret với IV/tag giả, còn app 13–15 nằm
-trong DB phụ nên UI/app:list thật không thấy và loadSecret không dùng được. Chuyển helper sang Electron,
-dùng đúng %APPDATA%/OpsPilot userData, createCredentialCipher + loadSecret và reuse VM02 ID 2 như
-a17-c02-live.ts. Deploy ba app C03 mới qua chính DB thật; close/reopen rồi chứng minh listApps và một
-SSH/inspect qua resolver thật. Không seed/import record giả, không in/commit secret hoặc DB/master key.
+Input thật trong %APPDATA%/OpsPilot: source VM02 ID 2; Vite app 18/deployment 41/port 30017 cho
+stateless; Express app 16/current deployment 39/port 30015 và marker c03-marker-1789234314659 cho
+PostgreSQL. App A17 ID 1, Next app 17 và app B chỉ read-only. Target bắt buộc VM01 profile ID 1.
 
-Commit regression tích hợp 5 reviewer cases: plan.buildArgs -> renderBuildArgs -> renderDockerfile;
-mọi dynamic key và no-args đều PASS. Chạy fast-track gates trong review. Live lại Express/Next/Vite,
-marker qua redeploy, collectors, tunnel ba app và teardown. Khi target mới healthy, xóa bốn profile DB
-C03 phụ chứa plaintext key và audit boolean chứng minh sạch; giữ scrubbed logs. Không chạm app A17/app B
-ngoài read-only; không migrate, ML, Flask, schema/contract/dependency, push/PR/merge/subagent. Giữ
-.devflow/, docs/ban-giao-20-08.md, logo.png. Append REVIEW-FIX 02, bàn giao READY_FOR_LOCAL_REVIEW rồi
-dừng; không tự mở C04.
+VM01 221.121.1.79:22 đang TCP timeout ở Leader preflight. Kiểm lại cả hai VPS qua resolver thật ngay
+đầu lượt, rồi vẫn hoàn thiện toàn bộ MigrateService/repository/IPC/UI và C04-T1…T8 bằng test độc lập.
+Không đổi sang hai container cùng VM02 hay VPS khác. Chỉ chạy C04-T9 live khi VM01 truy cập được; nếu
+vẫn timeout, handoff cuối BLOCKED với code/test/evidence hoàn chỉnh và điều kiện gỡ cụ thể.
+
+Thực hiện đúng state machine PREPARE→FREEZE→BACKUP→TRANSFER→RESTORE→VERIFY→AWAITING_CONFIRM→completed,
+keepSource=true. Stateless và PostgreSQL đều phải có checksum/size/HTTP; PostgreSQL bắt buộc pg_dump
+-Fc, row counts và marker. Mọi lỗi/cancel phải start lại nguồn, dọn partial target đúng phạm vi và
+không cho confirm sai. UI dùng app:list/vps:list/event/verify_json thật, không timer/số/IP hard-code.
+
+Không đổi schema 001/002, IPC contract, dependency, detector, ML/monitor/fault; nếu contract thiếu thì
+proposal rồi dừng phần phụ thuộc. Không log/download .env/secret, không chạm app B, không push/PR/merge/
+subagent; giữ .devflow/, docs/ban-giao-20-08.md, logo.png. Commit code/test/docs, lưu raw scrubbed
+evidence và bàn giao READY_FOR_LOCAL_REVIEW chỉ khi C04-T1…T9 đạt; nếu VM01 chưa lên thì BLOCKED.
 ```
 
 > Bản giao 11/09: A yêu cầu lập kế hoạch để giao Worker triển khai. Toàn bộ phạm vi nằm ở

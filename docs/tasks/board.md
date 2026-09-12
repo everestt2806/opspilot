@@ -7,14 +7,14 @@
 > Mỗi người tối đa **một** task `ĐANG LÀM`; Worker đổi trạng thái khi thật sự bắt đầu, không đổi
 > thay người kia. `HOÀN THÀNH` chỉ sau khi PR merge `main` và đủ bằng chứng.
 
-## Điểm vào hiện tại — 12/09/2026
+## Điểm vào hiện tại — 13/09/2026
 
 - **A solo:** TK-A17 — [task packet](tk-a17-demo-checkpoint.md),
   [prompt Worker](../prompts/tk-a17-worker.md), [handoff/review](tk-a17-worker-handoff.md).
 - **B:** không có task chặn demo; A nhận tích hợp B6/B8 trong A17 từ 10/09 theo yêu cầu solo.
   Code B4/B5/B2 đã merge; báo cáo runtime B6 còn ở nhánh riêng, cần tái xác minh.
 - Baseline đã fetch: `origin/main@683bfc6`; PR #25 (A15), #26 (B4/B5), #28 (B2) đã merge.
-- Nhánh Worker `feat/a17-demo-checkpoint`; C00–C02 đã APPROVED. Demo 14/09 đổi phạm vi thành
+- Nhánh Worker `feat/a17-demo-checkpoint`; C00–C03 đã APPROVED. Demo 14/09 đổi phạm vi thành
   C03 deploy ba Tier 1 → C04 migrate hai VPS → C05 rehearsal. ML deferred tới ít nhất 28/09.
   [Task hiện hành](tk-a17-demo-checkpoint.md) ·
   [nguyên lý deploy/migrate](../25-nguyen-ly-deploy-migrate-demo-14-09.md).
@@ -23,14 +23,14 @@
   toàn bộ finding đã đóng bằng kiểm chứng reviewer độc lập.
 - P0: deploy Express/Next/Vite thành công lên VPS; migrate stateless và PostgreSQL thành công giữa
   hai VPS, có checksum/row/marker/health proof. A trình chiếu, thầy quan sát.
-- C03 deploy là chặng duy nhất `OPEN`; C04/C05 đóng. ML, monitor/fault và auto rollback không thuộc
-  demo 14/09, được giữ lại sau 28/09.
+- C03 deploy đã APPROVED review-03; C04 migrate là chặng duy nhất `OPEN`, VM01 TCP 22 đang timeout;
+  C05 đóng. ML, monitor/fault và auto rollback không thuộc demo 14/09, được giữ lại sau 28/09.
 
 ## Đang ưu tiên — W3/W4
 
 | ID     | Task                                                                 | Chủ                   | Hạn      | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                                            |
 | ------ | -------------------------------------------------------------------- | --------------------- | -------- | ---------- | --------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu  | A                     | 14/09    | ĐANG LÀM | `feat/a17-demo-checkpoint`  | C03 CHANGES_REQUESTED R2    | C03 credential/profile fix; C04/C05 NOT_RUN; ML deferred; chưa push/PR |
+| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu  | A                     | 14/09    | ĐANG LÀM | `feat/a17-demo-checkpoint`  | C03 APPROVED review-03      | C04 OPEN; VM01 TCP timeout; C05 NOT_RUN; ML deferred; chưa push/PR |
 | TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09    | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                   | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới                             |
 | TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09    | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge               | `fe1da33`; 21/21 theo task B                                                       |
 | TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02      | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                   | Code đã merge; DoD SSH tail tại A17/C02                                            |
@@ -262,3 +262,10 @@ C03 **CHANGES_REQUESTED** tại code `e3a32f1`, submitted `8e60243`. Detector/te
 VM02 health và tunnel teardown đạt; committed focused 62/62. Blocker còn lại: profile phụ lưu private
 key plaintext dưới nhãn AES-GCM và app 13–15 không có trong DB `app:list` thật. Exact reviewer suite
 còn 2 integration case fail do thiếu `BUILD_ARGS`. Mở `C03-R2-01…02`; C04/C05 tiếp tục đóng.
+
+### TK-A17 update - 13/09 C03 review-03
+
+C03 **APPROVED** tại code `c060c75`, submitted `53aa07e`. Reviewer focused 65/65, actual userData
+apps/deployments, ciphertext/master key, Electron resolver SSH, unsafe-profile cleanup và tunnel ba
+app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express app 16/deployment 39. VM01
+`221.121.1.79:22` đang timeout nên Worker code/test trước; live hai VPS chưa được phép báo PASS.

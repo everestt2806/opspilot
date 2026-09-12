@@ -69,6 +69,9 @@ Review-02 tại `e3a32f1` / `8e60243` tiếp tục **CHANGES_REQUESTED** vì cre
 đạt và exact integration regression còn 2 fail. Trạng thái mới nhất nằm trong
 [`review-c03.md`](../../../tasks/tk-a17/review-c03.md).
 
+Review-03 đã **APPROVED** C03 tại code `c060c75`, submitted `53aa07e`, sau independent actual-profile,
+resolver, cleanup, focused 65/65 và tunnel proof. C04 được mở với input app 18 và app 16.
+
 ## REVIEW-FIX 02
 
 - Base `2a15615`; code `c060c75`; findings `C03-R2-01...02` CLOSED.

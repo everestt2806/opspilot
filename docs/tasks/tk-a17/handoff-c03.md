@@ -105,3 +105,12 @@ Evidence: [`deploy-matrix.md`](../../evidence/tk-a17/c03/deploy-matrix.md).
 - Mở `C03-R2-01…02`; C03 tiếp tục `REVIEW_FIX_REQUIRED`, C04/C05 đóng/`NOT_RUN`.
 - Chi tiết: [review-c03.md](review-c03.md), evidence
   [review-02](../../evidence/tk-a17/c03/review-02/). Review không live mutation.
+
+## Leader review 03 — 13/09/2026
+
+- Reviewed code `c060c75`, submitted docs/evidence `53aa07e`; verdict **APPROVED**.
+- Reviewer focused 65/65; actual userData apps/deployments, credential ciphertext/master key,
+  Electron resolver SSH, unsafe-profile cleanup và tunnel ba app đều PASS. Mọi finding C03 CLOSED.
+- Mở duy nhất C04 với Vite app 18/deployment 41 và Express app 16/current deployment 39. VM01 profile
+  ID 1 đang TCP timeout; C04 code/test được làm ngay nhưng live phải chờ hai VPS truy cập được.
+- Evidence: [review-03](../../evidence/tk-a17/c03/review-03/). C05 và ML vẫn đóng/`NOT_RUN`.

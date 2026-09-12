@@ -2,14 +2,14 @@
 
 > C00 APPROVED 11/09: [review](tk-a17/review-c00.md), code `d4ec3be`, docs `23cd248`.
 > C01 APPROVED review-03 11/09: [review](tk-a17/review-c01.md),
-> code `8e42856`, docs `9689ea4`. C02 APPROVED review-10; C03 đang `REVIEW_FIX_REQUIRED` sau review-02.
+> code `8e42856`, docs `9689ea4`. C02 APPROVED review-10; C03 APPROVED review-03, mở C04 migrate.
 > Phạm vi 14/09: C03 deploy → C04 migrate hai VPS → C05 rehearsal; ML deferred tới ít nhất 28/09.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; C02 đã được Leader approve; Worker chỉ sửa C03 theo `review-c03.md`.
+- Owner A solo; C00–C03 đã được Leader approve; Worker chỉ làm C04 theo task migrate.
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
-- Chặng được approve: C00, C01, C02. C03 deploy `REVIEW_FIX_REQUIRED`; C04 migrate và C05 acceptance chưa mở;
+- Chặng được approve: C00, C01, C02, C03. C04 migrate `OPEN`; C05 acceptance chưa mở;
   C03–C09 cũ deferred khỏi demo 14/09.
 
 ## Sổ gate (Leader xác nhận verdict)
@@ -19,8 +19,8 @@
 | C00   | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248` | APPROVED | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
 | C01   | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4` | APPROVED | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
 | C02   | READY_FOR_LOCAL_REVIEW | production `8fe4842` / tests `5febcbe` / docs `313201d` | APPROVED (review-10) | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
-| C03 deploy | REVIEW_FIX_REQUIRED | code `e3a32f1` / docs `8e60243` | CHANGES_REQUESTED (review-02) | [Review](tk-a17/review-c03.md) |
-| C04 migrate | NOT_STARTED | —         | PENDING | [Task](tk-a17/c04-migrate-two-vps.md) |
+| C03 deploy | READY_FOR_LOCAL_REVIEW | code `c060c75` / docs `53aa07e` | APPROVED (review-03) | [Review](tk-a17/review-c03.md) |
+| C04 migrate | OPEN | C03 inputs app 18/16 | PENDING; VM01 timeout | [Task](tk-a17/c04-migrate-two-vps.md) |
 | C05 demo | NOT_STARTED | —            | PENDING | [Acceptance](tk-a17/c05-demo-14-09-acceptance.md) |
 | ML    | DEFERRED       | —            | Sau 28/09 | [Phạm vi giữ lại](tk-a17/c03-ml-runtime.md) |
 | C04–C09 cũ | DEFERRED  | —            | Sau demo | Không chạy theo plan 14/09 |
@@ -224,3 +224,7 @@
   `8e60243`. R1-01, production R1-02 và R1-04 đạt; R1-03 chưa đóng. Mở `C03-R2-01…02` vì profile
   phụ chứa plaintext private key/không dùng được bằng resolver thật, C03 apps vắng khỏi app DB thật
   và exact reviewer integration còn 2 fail. C04/C05 đóng/`NOT_RUN`.
+- REVIEW C03 03 - 13/09/2026: Leader **APPROVED** code `c060c75`, submitted `53aa07e` sau
+  independent focused 65/65, actual userData/credential resolver/cleanup và tunnel proof. Mọi finding
+  C03 CLOSED. Mở duy nhất C04; source Vite app 18/deployment 41 và Express app 16/deployment 39.
+  VM01 profile ID 1 đang TCP timeout nên live C04 chưa thể PASS.

@@ -1,8 +1,7 @@
 # TK-A17/C03 — Worker plan: deploy ba loại source lên VPS
 
-> **REVIEW_FIX_REQUIRED — review-02 ngày 13/09/2026.** Worker tiếp tục duy nhất C03 theo
-> [review-c03.md](review-c03.md); không làm lại từ base cũ. Đây là task duy nhất Worker được thực hiện.
-> C04 migrate và C05 rehearsal vẫn đóng cho tới khi Leader APPROVE C03.
+> **APPROVED — review-03 ngày 13/09/2026.** C03 đã đóng; không làm lại. Chặng hiện hành là
+> [C04 migrate hai VPS](c04-migrate-two-vps.md); C05 vẫn đóng.
 
 ## Mục tiêu bàn giao
 

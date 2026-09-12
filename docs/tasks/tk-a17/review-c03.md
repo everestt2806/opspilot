@@ -211,3 +211,40 @@ ngoài read-only; không migrate, ML, Flask, schema/contract/dependency, push/PR
 .devflow/, docs/ban-giao-20-08.md, logo.png. Append REVIEW-FIX 02, bàn giao READY_FOR_LOCAL_REVIEW rồi
 dừng; không tự mở C04.
 ```
+
+## Review 03 — approval tại `53aa07e`
+
+### Verdict
+
+- Reviewed Leader base `2a15615`, code `c060c75`, submitted docs/evidence `53aa07e`; ancestry hợp lệ.
+- **APPROVED**. `C03-R2-01`, `C03-R2-02` và toàn bộ finding C03 đã đóng.
+- Mở duy nhất [C04 migrate hai VPS](c04-migrate-two-vps.md). C05 và các chặng sau tiếp tục
+  đóng/`NOT_RUN`; ML vẫn deferred tới ít nhất 28/09.
+- Evidence reviewer: [`review-03`](../../evidence/tk-a17/c03/review-03/).
+
+### Kiểm chứng độc lập
+
+| Gate                     | Kết quả                                                              |
+| ------------------------ | -------------------------------------------------------------------- |
+| Focused committed suite  | 4 file, 65/65 PASS                                                   |
+| Actual OpsPilot userData | Apps 16/17/18, current deployments 39/40/41 PASS                     |
+| Credential at rest       | Không có OpenSSH marker; IV 12, tag 16, protected master key tồn tại |
+| Electron resolver SSH    | `createCredentialCipher` + `loadSecret` + Docker SSH exit 0          |
+| Unsafe C03 profiles      | Bốn profile cũ đều không còn                                         |
+| Reviewer tunnel          | Ba app đúng nội dung; PID/listeners đã đóng                          |
+| VM02 final state         | Apps/DB healthy; collectors running/restart 0                        |
+
+`C03-R2-01` CLOSED vì profile thật vừa cho `app:list` thấy source vừa giải mã/SSH được qua đúng main
+resolver; không còn plaintext profile. `C03-R2-02` CLOSED bằng integration matrix
+detector-plan → `renderBuildArgs` → `renderDockerfile`, bao gồm Next/Vite nhiều key và Express no-args.
+
+### Chuyển giao C04
+
+- Source stateless: VM02 profile ID 2, Vite app 18, deployment 41, port 30017.
+- Source PostgreSQL: VM02 profile ID 2, Express app 16, current deployment 39, port 30015, marker
+  `c03-marker-1789234314659`.
+- Next app 17/deployment 40/port 30016 tiếp tục giữ làm deploy proof; không bắt buộc migrate.
+- App A17 ID 1 và app B chỉ read-only. Không dùng các app/profile C03 cũ làm input.
+- Reviewer preflight xác nhận VM01 profile ID 1 vẫn TCP timeout tại `221.121.1.79:22`. C04 được mở để
+  code/test ngay, nhưng live C04 phải `BLOCKED` cho tới khi VM01 truy cập được; không đổi thành hai
+  container trên VM02 hay tự chọn VPS khác.
