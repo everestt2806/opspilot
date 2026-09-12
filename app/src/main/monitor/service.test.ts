@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { MonitorService } from './service'
 import { closeDatabase, initializeDatabase } from '../db'
 import { ActivationRepository } from './activation'
+import { withAppLock } from './appLock'
 
 describe('MonitorService mutations', () => {
   it('reconciles a prepared activation after restart only with verified runtime and stream owner', async () => {
@@ -561,4 +562,298 @@ describe('MonitorService mutations', () => {
       rmSync(dir, { recursive: true, force: true })
     }
   })
+})
+
+type ReconcileFixture = {
+  id: number
+  image: string
+  rollbackOf?: number
+}
+
+function createReconcileFixture(
+  prefix: string,
+  deployments: ReconcileFixture[],
+  currentId: number,
+  preparedId: number,
+  startOffset = 100
+): { db: ReturnType<typeof initializeDatabase>; dir: string; preparedId: number } {
+  const dir = mkdtempSync(join(process.env.TEMP ?? '.', prefix))
+  const db = initializeDatabase(dir)
+  db.exec(
+    "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('v','127.0.0.1','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'app','express',30000,3000);"
+  )
+  for (const deployment of deployments) {
+    db.prepare(
+      'INSERT INTO deployment (id,app_id,version,image_tag,status,is_rollback_of) VALUES (?,?,?,?,?,?)'
+    ).run(deployment.id, 1, deployment.id, deployment.image, 'running', null)
+  }
+  const lineageRows = deployments.filter((deployment) => deployment.rollbackOf !== undefined)
+  if (lineageRows.length > 0) {
+    // Build broken-lineage fixtures only after valid rows exist.
+    db.pragma('foreign_keys = OFF')
+    for (const deployment of lineageRows) {
+      db.prepare('UPDATE deployment SET is_rollback_of=? WHERE id=?').run(
+        deployment.rollbackOf,
+        deployment.id
+      )
+    }
+    db.pragma('foreign_keys = ON')
+  }
+  db.prepare('UPDATE app SET current_deployment_id=? WHERE id=1').run(currentId)
+  const activation = new ActivationRepository(db)
+  activation.ensureLegacy(1, currentId, 1, { generation: 'fixture' })
+  const prepared = activation.prepare(
+    1,
+    preparedId,
+    { generation: 'fixture' },
+    startOffset,
+    'manual_rollback'
+  )
+  return { db, dir, preparedId: prepared }
+}
+
+function reconcileSsh(options: {
+  image?: string
+  state?: string
+  collector?: string
+  generation?: string
+  size?: number | null
+  throwOnce?: boolean
+}): SshManagerLike {
+  let throwOnce = options.throwOnce ?? false
+  return {
+    exec: async (_vpsId: number, command: string) => {
+      if (throwOnce) {
+        throwOnce = false
+        throw new Error('SSH disconnected')
+      }
+      if (command.includes('collector'))
+        return { code: 0, stdout: `${options.collector ?? 'running'}\n`, stderr: '' }
+      return {
+        code: 0,
+        stdout: `${options.image ?? 'app:v2'}|${options.state ?? 'running'}\n`,
+        stderr: ''
+      }
+    },
+    metricSnapshot: async () =>
+      options.size === null
+        ? null
+        : {
+            generation: options.generation ?? 'fixture',
+            device: 1,
+            inode: 1,
+            size: options.size ?? 100
+          },
+    fileIdentity: async () => ({
+      generation: options.generation ?? 'fixture',
+      device: 1,
+      inode: 1
+    }),
+    fileSize: async () => 0,
+    readFileTail: async () => ({ content: '', nextByte: 1 })
+  } as never
+}
+
+type SshManagerLike = Parameters<MonitorService['pollAll']>[0]
+
+function stateCounts(
+  db: ReturnType<typeof initializeDatabase>,
+  preparedId: number
+): {
+  prepared: unknown
+  current: unknown
+  offset: unknown
+  actions: number
+} {
+  return {
+    prepared: db.prepare('SELECT state FROM deployment_activation WHERE id=?').get(preparedId),
+    current: db.prepare('SELECT current_deployment_id FROM app WHERE id=1').get(),
+    offset: db.prepare('SELECT metrics_offset FROM app WHERE id=1').get(),
+    actions: (db.prepare('SELECT COUNT(*) AS count FROM action_log').get() as { count: number })
+      .count
+  }
+}
+
+describe('C02 review-fix 09 fail-closed inputs', () => {
+  it.each([
+    { name: 'exact boundary', size: 99, expected: 'active' },
+    { name: 'boundary-1', size: 98, expected: 'prepared' },
+    { name: 'missing snapshot', size: null, expected: 'prepared' },
+    { name: 'generation mismatch', size: 100, generation: 'other', expected: 'prepared' },
+    { name: 'wrong image', size: 100, image: 'app:wrong', expected: 'prepared' },
+    { name: 'down runtime', size: 100, state: 'exited', expected: 'prepared' },
+    { name: 'collector missing', size: 100, collector: 'missing', expected: 'prepared' },
+    { name: 'collector down', size: 100, collector: 'exited', expected: 'prepared' }
+  ])('keeps boundary and owner input safe: $name', async (testCase) => {
+    const fixture = createReconcileFixture(
+      'opspilot-r8-input-',
+      [
+        { id: 1, image: 'app:v1' },
+        { id: 2, image: 'app:v2' }
+      ],
+      1,
+      2
+    )
+    try {
+      const service = new MonitorService(fixture.db)
+      await service.pollAll(
+        reconcileSsh({ ...testCase, generation: testCase.generation ?? 'fixture' })
+      )
+      const counts = stateCounts(fixture.db, fixture.preparedId)
+      expect(counts.prepared).toEqual({ state: testCase.expected })
+      expect(counts.current).toEqual({
+        current_deployment_id: testCase.expected === 'active' ? 2 : 1
+      })
+      expect(counts.offset).toEqual({ metrics_offset: 1 })
+      expect(counts.actions).toBeGreaterThan(0)
+    } finally {
+      closeDatabase()
+      rmSync(fixture.dir, { recursive: true, force: true })
+    }
+  })
+
+  it('retries a disconnected SSH reconciliation without changing the cursor', async () => {
+    const fixture = createReconcileFixture(
+      'opspilot-r8-reconnect-',
+      [
+        { id: 1, image: 'app:v1' },
+        { id: 2, image: 'app:v2' }
+      ],
+      1,
+      2
+    )
+    try {
+      const ssh = reconcileSsh({ image: 'app:v2', size: 100, throwOnce: true })
+      const service = new MonitorService(fixture.db)
+      await service.pollAll(ssh)
+      expect(stateCounts(fixture.db, fixture.preparedId).prepared).toEqual({ state: 'prepared' })
+      await service.pollAll(ssh)
+      expect(stateCounts(fixture.db, fixture.preparedId).prepared).toEqual({ state: 'active' })
+      expect(fixture.db.prepare('SELECT metrics_offset FROM app WHERE id=1').get()).toEqual({
+        metrics_offset: 1
+      })
+    } finally {
+      closeDatabase()
+      rmSync(fixture.dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('C02 review-fix 09 lineage and owner', () => {
+  it.each([
+    {
+      name: 'active previous rollback chain',
+      deployments: [
+        { id: 1, image: 'app:v1' },
+        { id: 2, image: 'app:v2', rollbackOf: 1 },
+        { id: 3, image: 'app:v3', rollbackOf: 2 }
+      ],
+      currentId: 2,
+      preparedId: 3,
+      runtime: 'app:v1',
+      expected: 'active',
+      current: 3
+    },
+    {
+      name: 'previous owner abort',
+      deployments: [
+        { id: 1, image: 'app:v1' },
+        { id: 2, image: 'app:v2', rollbackOf: 1 },
+        { id: 3, image: 'app:v3' }
+      ],
+      currentId: 2,
+      preparedId: 3,
+      runtime: 'app:v1',
+      expected: 'aborted',
+      current: 2
+    },
+    {
+      name: 'missing lineage barrier',
+      deployments: [
+        { id: 1, image: 'app:v1' },
+        { id: 2, image: 'app:v2', rollbackOf: 99 }
+      ],
+      currentId: 1,
+      preparedId: 2,
+      runtime: 'app:v2',
+      expected: 'prepared',
+      current: 1
+    }
+  ])('resolves owner safely: $name', async (testCase) => {
+    const fixture = createReconcileFixture(
+      'opspilot-r8-lineage-',
+      testCase.deployments,
+      testCase.currentId,
+      testCase.preparedId,
+      100
+    )
+    try {
+      await new MonitorService(fixture.db).pollAll(
+        reconcileSsh({ image: testCase.runtime, size: 100 })
+      )
+      const counts = stateCounts(fixture.db, fixture.preparedId)
+      expect(counts.prepared).toEqual({ state: testCase.expected })
+      expect(counts.current).toEqual({ current_deployment_id: testCase.current })
+      expect(counts.offset).toEqual({ metrics_offset: 1 })
+      expect(counts.actions).toBeGreaterThan(0)
+    } finally {
+      closeDatabase()
+      rmSync(fixture.dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('C02 review-fix 09 concurrency and stale rows', () => {
+  it.each([{ name: 'waits for shared app lock' }, { name: 'reloads replacement prepared row' }])(
+    '$name',
+    async ({ name }) => {
+      const fixture = createReconcileFixture(
+        `opspilot-r8-concurrency-${name.replaceAll(' ', '-')}-`,
+        [
+          { id: 1, image: 'app:v1' },
+          { id: 2, image: 'app:v2' },
+          { id: 3, image: 'app:v3' }
+        ],
+        1,
+        2,
+        100
+      )
+      try {
+        const activation = new ActivationRepository(fixture.db)
+        let release!: () => void
+        const held = new Promise<void>((resolve) => {
+          release = resolve
+        })
+        const lock = withAppLock(1, () => held)
+        const servicePromise = new MonitorService(fixture.db).pollAll(
+          reconcileSsh({ image: name.includes('replacement') ? 'app:v3' : 'app:v2', size: 100 })
+        )
+        await Promise.resolve()
+        if (name.includes('replacement')) {
+          activation.abort(fixture.preparedId)
+          activation.prepare(1, 3, { generation: 'fixture' }, 100, 'manual_rollback')
+        }
+        release()
+        await lock
+        await servicePromise
+        const expectedId = name.includes('replacement')
+          ? (
+              fixture.db
+                .prepare('SELECT id FROM deployment_activation WHERE deployment_id=3')
+                .get() as { id: number }
+            ).id
+          : fixture.preparedId
+        const counts = stateCounts(fixture.db, expectedId)
+        expect(counts.prepared).toEqual({ state: 'active' })
+        expect(counts.current).toEqual({
+          current_deployment_id: name.includes('replacement') ? 3 : 2
+        })
+        expect(counts.offset).toEqual({ metrics_offset: 1 })
+        expect(counts.actions).toBeGreaterThan(0)
+      } finally {
+        closeDatabase()
+        rmSync(fixture.dir, { recursive: true, force: true })
+      }
+    }
+  )
 })
