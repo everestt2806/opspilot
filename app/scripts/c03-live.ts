@@ -1,31 +1,21 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { tmpdir } from 'node:os'
+import { app } from 'electron'
 
 import type { DeployEvent } from '../src/shared/ipc'
+import { createCredentialCipher } from '../src/main/crypto/masterKey'
+import { loadSecret } from '../src/main/crypto/credentials'
 import { closeDatabase, initializeDatabase } from '../src/main/db'
 import { AppRepository } from '../src/main/db/appRepository'
 import { DeploymentRepository } from '../src/main/db/deploymentRepository'
 import { VpsRepository } from '../src/main/db/vpsRepository'
 import { DeployPipeline } from '../src/main/deploy/pipeline'
 import { DeployService } from '../src/main/deploy/service'
-import { SshManager, type SshConnectionInfo } from '../src/main/ssh/manager'
+import { SshManager } from '../src/main/ssh/manager'
 
-const host = process.env.OPSPILOT_C03_HOST ?? '221.121.1.80'
-const username = process.env.OPSPILOT_C03_USER ?? 'deploy'
-const keyPath = process.env.OPSPILOT_C03_KEY ?? 'C:/Users/everestt28/.ssh/opspilot_ed25519'
-const keySecret = readFileSync(keyPath, 'utf8')
-const runName = process.env.OPSPILOT_C03_RUN ?? 'a17-c03-0912'
+const runName = process.env.OPSPILOT_C03_RUN ?? `c03r2-${Date.now().toString().slice(-8)}`
 const repoRoot = resolve(__dirname, '..', '..', '..')
 const sourceRoot = join(repoRoot, 'demo-apps')
-
-const config: SshConnectionInfo = {
-  host,
-  port: Number(process.env.OPSPILOT_C03_PORT ?? 22),
-  username,
-  authType: 'key',
-  secret: keySecret
-}
 
 type SourceResult = {
   name: string
@@ -172,56 +162,63 @@ async function inspect(
 let database: ReturnType<typeof initializeDatabase>
 
 async function main(): Promise<void> {
-  const profileDir =
-    process.env.OPSPILOT_C03_PROFILE ?? mkdtempSync(join(tmpdir(), 'opspilot-c03-profile-'))
-  database = initializeDatabase(profileDir)
-  const ssh = new SshManager(() => config)
-  const events: DeployEvent[] = []
-  const vps = new VpsRepository(database).create({
-    name: 'C03-VM02',
-    host,
-    port: config.port,
-    username,
-    auth_type: 'key',
-    credential: {
-      crypto_scheme: 'aes_256_gcm',
-      encrypted_secret: Buffer.from(keySecret),
-      iv: Buffer.alloc(12, 1),
-      auth_tag: Buffer.alloc(16, 2)
+  app.setAppUserModelId('vn.opspilot.desktop')
+  app.setName('OpsPilot')
+  await app.whenReady()
+  const userDataPath = app.getPath('userData')
+  database = initializeDatabase(userDataPath)
+  const cipher = createCredentialCipher(userDataPath)
+  const vpsRepository = new VpsRepository(database)
+  const ssh = new SshManager((vpsId) => {
+    const vps = vpsRepository.getById(vpsId)
+    return {
+      host: vps.host,
+      port: vps.port,
+      username: vps.username,
+      authType: vps.auth_type,
+      secret: loadSecret(database, cipher, vpsId)
     }
   })
-  // VM02 already owns 30000 (A17) and 30001 (app B); reserve them in the
-  // temporary SQLite allocator so the real pipeline selects fresh ports.
-  const appRepository = new AppRepository(database)
-  const reservations: Array<[string, number]> = [
-    ['reserved-a17', 30000],
-    ['reserved-b', 30001],
-    ['reserved-c03-attempt', 30002],
-    ['reserved-c03-current', 30003],
-    ['reserved-c03-redeploy', 30004],
-    ['reserved-c03-next', 30005],
-    ['reserved-c03-final-express', 30006],
-    ['reserved-c03-final-next', 30007],
-    ['reserved-c03-final-vite', 30008],
-    ['reserved-c03-review-express', 30009],
-    ['reserved-c03-review-next', 30010],
-    ['reserved-c03-review-vite', 30011]
-  ]
-  for (const [name, port] of reservations) {
-    appRepository.create({
-      vps_id: vps.id,
-      name,
-      framework: 'express',
-      source_path: sourceRoot,
-      host_port: port,
-      container_port: 3000,
-      healthcheck_path: '/health',
-      needs_db: 0
-    })
-  }
+  const events: DeployEvent[] = []
+  const vps = vpsRepository.getById(Number(process.env.OPSPILOT_C03_VPS_ID ?? 2))
   const pipeline = new DeployPipeline({ ssh, db: database, emit: (event) => events.push(event) })
   const results: SourceResult[] = []
   try {
+    if (process.env.OPSPILOT_C03_AUDIT_ONLY === '1') {
+      const credential = database
+        .prepare(
+          'SELECT crypto_scheme, length(encrypted_secret) encrypted_secret_length, length(iv) iv_length, length(auth_tag) auth_tag_length FROM vps WHERE id=?'
+        )
+        .get(vps.id) as {
+        crypto_scheme: string
+        encrypted_secret_length: number
+        iv_length: number
+        auth_tag_length: number
+      }
+      const secret = loadSecret(database, cipher, vps.id)
+      const proof = await ssh.exec(vps.id, 'docker version --format "{{.Server.Version}}"', {
+        timeoutMs: 30_000,
+        retryOnReconnect: true
+      })
+      if (proof.code !== 0) throw new Error('credential audit SSH proof failed')
+      const output = {
+        userDataPath,
+        vps_id: vps.id,
+        credential: {
+          crypto_scheme: credential.crypto_scheme,
+          encrypted_secret_length: credential.encrypted_secret_length,
+          iv_length: credential.iv_length,
+          auth_tag_length: credential.auth_tag_length,
+          decryptable: secret.length > 0,
+          master_key_protected: existsSync(join(userDataPath, 'credential-master-key.protected'))
+        },
+        resolver: { ssh_exit: proof.code, docker_server_version: proof.stdout.trim() }
+      }
+      const evidencePath = process.env.OPSPILOT_C03_EVIDENCE
+      if (evidencePath) writeFileSync(evidencePath, `${JSON.stringify(output, null, 2)}\n`, 'utf8')
+      console.log(JSON.stringify(output, null, 2))
+      return
+    }
     const expressName = `${runName}-express`
     const nextName = `${runName}-next`
     const viteName = `${runName}-vite`
@@ -288,7 +285,7 @@ async function main(): Promise<void> {
     })
 
     const vite = await deploy(pipeline, events, vps.id, viteName, join(sourceRoot, 'vite-spa'), {
-      VITE_API_URL: `http://${host}:${expressApp.host_port}`
+      VITE_API_URL: `http://${vps.host}:${expressApp.host_port}`
     })
     const viteApp = new AppRepository(database).getById(vite.appId)
     results.push({
@@ -306,17 +303,27 @@ async function main(): Promise<void> {
       .listByVps(vps.id)
       .map((app) => ({ ...app, deployments: new DeploymentRepository(database).listByApp(app.id) }))
     closeDatabase()
-    database = initializeDatabase(profileDir)
+    database = initializeDatabase(userDataPath)
     const reopenedService = new DeployService({ ssh, db: database, emit: () => undefined })
     const reopened = reopenedService.listApps(vps.id).map((app) => ({
       ...app,
       deployments: new DeploymentRepository(database).listByApp(app.id)
     }))
+    const resolverProof = await ssh.exec(vps.id, 'docker version --format "{{.Server.Version}}"', {
+      timeoutMs: 30_000,
+      retryOnReconnect: true
+    })
+    if (resolverProof.code !== 0) throw new Error('reopened credential resolver SSH proof failed')
     const output = {
-      host,
-      profileDir,
+      host: vps.host,
+      userDataPath,
       sources: results,
-      sqlite: { beforeClose: db, afterReopen: reopened }
+      sqlite: { beforeClose: db, afterReopen: reopened },
+      reopened_resolver: {
+        vps_id: vps.id,
+        ssh_exit: resolverProof.code,
+        docker_server_version: resolverProof.stdout.trim()
+      }
     }
     const evidencePath = process.env.OPSPILOT_C03_EVIDENCE
     if (evidencePath) writeFileSync(evidencePath, `${JSON.stringify(output, null, 2)}\n`, 'utf8')
@@ -324,10 +331,11 @@ async function main(): Promise<void> {
   } finally {
     await ssh.disconnectAll()
     closeDatabase()
+    app.quit()
   }
 }
 
 void main().catch((error: unknown) => {
   console.error(error)
-  process.exitCode = 1
+  process.exit(1)
 })

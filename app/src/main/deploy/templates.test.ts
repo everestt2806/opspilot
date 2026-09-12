@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 import { AppError } from '../errors'
 import {
@@ -10,6 +13,17 @@ import {
   resolveTemplatesDir,
   type ComposeVars
 } from './templates'
+import { detectFramework } from '../detectors'
+import { buildSourceTree } from '../detectors/sourceTree'
+
+let fixture: string | undefined
+
+afterEach(() => {
+  if (fixture) {
+    rmSync(fixture, { recursive: true, force: true })
+    fixture = undefined
+  }
+})
 
 const BASE_VARS: ComposeVars = {
   APP_NAME: 'demo-api',
@@ -99,6 +113,64 @@ describe('renderDockerfile', () => {
     expect(buildArgs).toContain('ARG VITE_SITE_NAME\nENV VITE_SITE_NAME=${VITE_SITE_NAME}')
     expect(buildArgs).toContain('ARG VITE_API_URL\nENV VITE_API_URL=${VITE_API_URL}')
     expect(renderBuildArgs({})).toBe('')
+  })
+
+  it.each([
+    {
+      name: 'Next.js defaults and override-safe values',
+      packageJson: { dependencies: { next: '14' } },
+      env: 'NEXT_PUBLIC_API_URL=https://default.test\nNEXT_PUBLIC_SITE_NAME=Default\n',
+      template: 'nextjs.Dockerfile',
+      buildCommand: 'npm ci && npm run build',
+      startCommand: 'npm start',
+      port: '3000',
+      keys: ['NEXT_PUBLIC_API_URL', 'NEXT_PUBLIC_SITE_NAME']
+    },
+    {
+      name: 'Vite defaults and override-safe values',
+      packageJson: { devDependencies: { vite: '5' } },
+      env: 'VITE_API_URL=https://default.test\nVITE_SITE_NAME=Default\n',
+      template: 'static-spa.Dockerfile',
+      buildCommand: 'npm ci && npm run build',
+      startCommand: 'nginx -g "daemon off;"',
+      port: '80',
+      keys: ['VITE_API_URL', 'VITE_SITE_NAME']
+    },
+    {
+      name: 'Express without build args',
+      packageJson: { dependencies: { express: '4' } },
+      env: '',
+      template: 'express.Dockerfile',
+      buildCommand: 'npm ci --omit=dev',
+      startCommand: 'node app.js',
+      port: '3000',
+      keys: []
+    }
+  ])('$name keeps the detector plan connected to Dockerfile rendering', (testCase) => {
+    fixture = mkdtempSync(join(tmpdir(), 'c03-build-args-'))
+    mkdirSync(fixture, { recursive: true })
+    writeFileSync(join(fixture, 'package.json'), JSON.stringify(testCase.packageJson), 'utf8')
+    if (testCase.env) writeFileSync(join(fixture, '.env.example'), testCase.env, 'utf8')
+
+    const result = detectFramework(buildSourceTree(fixture))
+    expect(result.matched).toBe(true)
+    if (!result.matched) return
+
+    expect(result.plan.dockerfileTemplate).toBe(testCase.template)
+    const buildArgs = renderBuildArgs(result.plan.buildArgs)
+    const dockerfile = renderDockerfile(result.plan.dockerfileTemplate, {
+      BUILD_COMMAND: testCase.buildCommand,
+      START_COMMAND: testCase.startCommand,
+      CONTAINER_PORT: testCase.port,
+      BUILD_ARGS: buildArgs
+    })
+    for (const key of testCase.keys) {
+      expect(result.plan.buildArgs).toHaveProperty(key)
+      expect(buildArgs).toContain(`ARG ${key}`)
+      expect(dockerfile).toContain(`ARG ${key}`)
+      expect(dockerfile).toContain(`ENV ${key}=\${${key}}`)
+    }
+    if (testCase.keys.length === 0) expect(buildArgs).toBe('')
   })
 
   it('bao loi ro rang khi thieu bien thay the', () => {
