@@ -202,7 +202,10 @@ async function main(): Promise<void> {
     ['reserved-c03-next', 30005],
     ['reserved-c03-final-express', 30006],
     ['reserved-c03-final-next', 30007],
-    ['reserved-c03-final-vite', 30008]
+    ['reserved-c03-final-vite', 30008],
+    ['reserved-c03-review-express', 30009],
+    ['reserved-c03-review-next', 30010],
+    ['reserved-c03-review-vite', 30011]
   ]
   for (const [name, port] of reservations) {
     appRepository.create({
