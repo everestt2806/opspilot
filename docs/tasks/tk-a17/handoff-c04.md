@@ -6,7 +6,7 @@
 - Branch: `feat/a17-demo-checkpoint`
 - Base SHA: `4635a9bfa280a95078c365d3bebed0f1825e750b`
 - Code HEAD: `259bc58`
-- Docs HEAD: `3ffe8a8`
+- Docs HEAD: `6ccd592`
 - Previous stage: C03 approved; C05-C09 remain `NOT_RUN`.
 - Scope: migration service/repository, IPC wiring, and real migration UI only. No app B mutation.
 
