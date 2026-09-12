@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -14,6 +14,7 @@ import { SshManager, type SshConnectionInfo } from '../src/main/ssh/manager'
 const host = process.env.OPSPILOT_C03_HOST ?? '221.121.1.80'
 const username = process.env.OPSPILOT_C03_USER ?? 'deploy'
 const keyPath = process.env.OPSPILOT_C03_KEY ?? 'C:/Users/everestt28/.ssh/opspilot_ed25519'
+const keySecret = readFileSync(keyPath, 'utf8')
 const runName = process.env.OPSPILOT_C03_RUN ?? 'a17-c03-0912'
 const repoRoot = resolve(__dirname, '..', '..', '..')
 const sourceRoot = join(repoRoot, 'demo-apps')
@@ -23,7 +24,7 @@ const config: SshConnectionInfo = {
   port: Number(process.env.OPSPILOT_C03_PORT ?? 22),
   username,
   authType: 'key',
-  secret: keyPath
+  secret: keySecret
 }
 
 type SourceResult = {
@@ -130,6 +131,7 @@ async function inspect(
   http: SourceResult['http']
   collector: SourceResult['collector']
 }> {
+  await new Promise((resolve) => setTimeout(resolve, 7_000))
   const appResult = await ssh.exec(
     vpsId,
     `docker inspect --format '{{.Config.Image}}|{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' ${appName}-app`,
@@ -183,7 +185,7 @@ async function main(): Promise<void> {
     auth_type: 'key',
     credential: {
       crypto_scheme: 'aes_256_gcm',
-      encrypted_secret: Buffer.from(keyPath),
+      encrypted_secret: Buffer.from(keySecret),
       iv: Buffer.alloc(12, 1),
       auth_tag: Buffer.alloc(16, 2)
     }
@@ -197,7 +199,10 @@ async function main(): Promise<void> {
     ['reserved-c03-attempt', 30002],
     ['reserved-c03-current', 30003],
     ['reserved-c03-redeploy', 30004],
-    ['reserved-c03-next', 30005]
+    ['reserved-c03-next', 30005],
+    ['reserved-c03-final-express', 30006],
+    ['reserved-c03-final-next', 30007],
+    ['reserved-c03-final-vite', 30008]
   ]
   for (const [name, port] of reservations) {
     appRepository.create({
@@ -304,13 +309,15 @@ async function main(): Promise<void> {
       ...app,
       deployments: new DeploymentRepository(database).listByApp(app.id)
     }))
-    console.log(
-      JSON.stringify(
-        { host, profileDir, sources: results, sqlite: { beforeClose: db, afterReopen: reopened } },
-        null,
-        2
-      )
-    )
+    const output = {
+      host,
+      profileDir,
+      sources: results,
+      sqlite: { beforeClose: db, afterReopen: reopened }
+    }
+    const evidencePath = process.env.OPSPILOT_C03_EVIDENCE
+    if (evidencePath) writeFileSync(evidencePath, `${JSON.stringify(output, null, 2)}\n`, 'utf8')
+    console.log(JSON.stringify(output, null, 2))
   } finally {
     await ssh.disconnectAll()
     closeDatabase()
