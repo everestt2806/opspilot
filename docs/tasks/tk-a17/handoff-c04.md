@@ -55,6 +55,7 @@ C05-C09, ML training/scoring, monitoring/fault/recovery and Flask remain `NOT_RU
 ## REVIEW-FIX 01 - 13/09/2026
 
 - Base `e78b4ea`; fixes cover stateless archive handling, PostgreSQL probe/restore ordering, SSH relay streaming, first-deploy targets, persisted error detail and persisted probe verification.
+- Submitted code HEAD: `67063ff`; submitted docs HEAD is the commit containing this handoff update.
 - Local focused `49/49`; node/web/scripts typecheck, scoped ESLint, Prettier and build exit `0`.
 - Controlled live sequence VM02 profile 2 -> VM01 profile 1 with `keepSource=true`: Vite app 18/job 18 PASS, then Express/PostgreSQL app 16/job 19 PASS. Checksum, files, runtime/HTTP, collector, marker and source-kept proof are recorded in [`review-fix-01`](../../evidence/tk-a17/c04/review-fix-01/README.md).
 - Failed attempts remain in SQLite/action history. C05-C09, ML, monitor/fault/recovery and app B mutation remain `NOT_RUN`.

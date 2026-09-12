@@ -2,7 +2,7 @@
 
 ## Identity
 
-- Branch: `feat/a17-demo-checkpoint`; review-fix base `e78b4ea`.
+- Branch: `feat/a17-demo-checkpoint`; review-fix base `e78b4ea`; code HEAD before this docs-only update `67063ff`.
 - Source VM02 profile 2 (`221.121.1.80`); target VM01 profile 1 (`221.121.1.79`).
 - C05-C09 remain `NOT_RUN`; app B was not mutated.
 
