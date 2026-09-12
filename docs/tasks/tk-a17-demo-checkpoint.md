@@ -278,3 +278,9 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
 - REPLAN 12/09 — Theo phạm vi demo 14/09 của A, thay C03–C09 cũ bằng C03 deploy ba Tier 1,
   C04 migrate stateless/PostgreSQL giữa hai VPS và C05 rehearsal. ML cùng monitor/fault/recovery
   deferred, không mở trước 28/09. C03 deploy là chặng duy nhất OPEN; C04/C05 đóng/`NOT_RUN`.
+- HANDOFF C03 12/09: Worker completed only C03 at code `c149291`. Express, Next.js and Vite were
+  detected correctly, rendered by the shared DeployPipeline and proved live on VM02 with deployment,
+  image, Docker health, HTTP and collector evidence. The Express PostgreSQL marker survived redeploy;
+  focused/collector/typecheck/lint/Prettier/build passed. Handoff and matrix are
+  `docs/tasks/tk-a17/handoff-c03.md` and `docs/evidence/tk-a17/c03/deploy-matrix.md`;
+  C04/C05 remain `NOT_RUN`.

@@ -226,3 +226,8 @@ A đổi phạm vi demo sang hai năng lực bắt buộc thành công: deploy E
 migrate stateless/PostgreSQL giữa hai VPS. C03 được mở lại thành deploy matrix; C04 migrate và C05
 rehearsal đã có task nhưng còn đóng/`NOT_RUN`. ML cùng monitor/fault/recovery deferred tới ít nhất
 28/09. Tài liệu thuyết minh: `docs/25-nguyen-ly-deploy-migrate-demo-14-09.md`.
+- REVIEW-FIX C03 - 12/09/2026: Worker code `c149291`; deploy matrix and handoff created. Express,
+  Next.js and Vite each passed the real `PRECHECK -> UPLOAD -> RENDER -> BUILD -> DEPLOY ->
+  HEALTHCHECK -> RECORD` pipeline on VM02; Express redeploy retained the PostgreSQL marker. Focused
+  `55/55`, collector `26/26`, typecheck/scripts typecheck, scoped ESLint/Prettier and build passed.
+  C03 is `READY_FOR_LOCAL_REVIEW`; C04/C05 and later remain closed/`NOT_RUN`, with no push/PR/merge.
