@@ -1,8 +1,8 @@
 # TK-A17/C04 — Migrate ứng dụng thành công giữa hai VPS
 
 > **REVIEW_FIX_REQUIRED — Leader review 01 ngày 13/09/2026.** Thực hiện
-> [review-c04.md](review-c04.md) để đóng `C04-R1-01…08`; C05 tiếp tục đóng. VM01 đang TCP timeout;
-> sau khi local fix đạt, live outcome vẫn phải `BLOCKED_EXTERNAL` cho tới khi hai VPS thật cùng truy cập được.
+> [review-c04.md](review-c04.md) để đóng `C04-R1-01…08`; C05 tiếp tục đóng. VM01 đã được bật SSH và
+> Leader xác nhận TCP/22 + actual credential resolver PASS; sau khi local fix đạt phải chạy đủ hai live case.
 
 ## Mục tiêu
 
@@ -22,8 +22,8 @@ AWAITING_CONFIRM → completed`. Demo chọn `keepSource=true`; không xóa ngu�
     `c03-marker-1789234314659`;
   - Next app 17/deployment 40/port 30016 chỉ giữ làm deploy proof, không bắt buộc migrate.
 - Hai VPS có profile riêng trong SQLite, SSH/Docker hoạt động và không có experiment `running`.
-- VM01 profile ID 1 tiếp tục TCP timeout tại Leader review-03. Worker phải kiểm lại VM01 và VM02
-  read-only trước code live helper.
+- VM01 profile ID 1 từng TCP timeout tại Leader review-03, nhưng đã được bật SSH và xác nhận resolver PASS
+  sau review C04-01. Worker vẫn phải kiểm lại VM01 và VM02 read-only ngay trước code live helper.
   C04 không thể PASS nếu chỉ một VPS truy cập được hoặc dùng hai container trên cùng VPS.
 - Chọn app/port đích riêng, không đè app B hoặc app A17 hiện hữu. Ghi dung lượng backup dự kiến,
   disk đích, port đích và clock offset.

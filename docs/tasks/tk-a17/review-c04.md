@@ -5,8 +5,8 @@
 ### Phạm vi và verdict
 
 - Reviewed base `4635a9b`, code `259bc58`, submitted docs HEAD `24d1f93`; ancestry hợp lệ.
-- Verdict: **CHANGES_REQUESTED**. C04 chuyển sang `REVIEW_FIX_REQUIRED`; live C04 vẫn bị chặn ngoài hệ
-  thống do VM01 `221.121.1.79:22` TCP timeout. C05 và các chặng sau tiếp tục đóng/`NOT_RUN`.
+- Verdict: **CHANGES_REQUESTED**. C04 chuyển sang `REVIEW_FIX_REQUIRED`. Blocker VM01 đã được gỡ sau
+  review: TCP/22 và SSH qua credential resolver thật đều PASS. C05 và các chặng sau tiếp tục đóng/`NOT_RUN`.
 - Reviewer chỉ chạy test local, đọc source/contract và TCP probe read-only; không chạy migrate, không sửa
   VM02, app B, SQLite/PostgreSQL thật hoặc các file untracked của A.
 - Evidence reviewer: [`review-01`](../../evidence/tk-a17/c04/review-01/README.md).
@@ -21,6 +21,10 @@
 | VM02 `221.121.1.80:22`                   | TCP connect PASS                                |
 | Live migrate / mutation                  | NOT_RUN                                         |
 | Contract/source review                   | **8 finding mở; hai success path chưa khả thi** |
+
+Unblock recheck sau review: VM01 TCP/22 PASS; OpsPilot actual userData profile ID 1 giải mã được credential,
+SSH resolver chạy `docker version --format "{{.Server.Version}}"` exit 0 và trả server `29.7.2`. Không có
+remote mutation trong recheck.
 
 GitNexus đánh dấu diff có mức ảnh hưởng `critical` và 300 affected symbols/processes. Index chưa nhận diện
 đầy đủ class migrate mới, nên source, schema và task C04 là nguồn quyết định cho các finding dưới đây.
@@ -134,9 +138,8 @@ GitNexus đánh dấu diff có mức ảnh hưởng `critical` và 300 affected 
    SSH endpoint giả và assert exact sequence/artifact/order.
 2. **Wave B — làm mutation an toàn:** R1-04, R1-05, R1-06; test failure/cancel/restart/race trước khi live.
 3. **Wave C — hoàn thiện demo:** R1-07, R1-08; chạy focused + deploy regression + typecheck/lint/Prettier/build.
-4. Probe lại cả hai VPS read-only. Nếu VM01 còn timeout, bàn giao `BLOCKED_EXTERNAL` với toàn bộ local test
-   PASS. Nếu VM01 mở, chạy tuần tự stateless trước rồi PostgreSQL, luôn `keepSource=true`; chỉ mở C05 sau khi
-   hai lượt live và reviewer review đều PASS.
+4. Probe lại cả hai VPS read-only ngay trước mutation, rồi chạy tuần tự stateless trước và PostgreSQL sau,
+   luôn `keepSource=true`; chỉ mở C05 sau khi hai lượt live và reviewer review đều PASS.
 
 ### Gate đóng review-fix 01
 
@@ -147,7 +150,7 @@ GitNexus đánh dấu diff có mức ảnh hưởng `critical` và 300 affected 
    action, race và crash/reopen; terminal event đúng một lần và source cuối cùng chạy ở mọi nhánh rollback.
 4. VM01/VM02 read-only preflight ghi profile ID, disk/port/clock/artifact estimate. Không thay target âm thầm,
    không dùng hai container cùng VPS để thay C04-T9.
-5. Khi hai VPS thật cùng reachable: chạy app 18 stateless và app 16 PostgreSQL tuần tự; verify artifact SHA/size,
+5. Hai VPS hiện cùng reachable: chạy app 18 stateless và app 16 PostgreSQL tuần tự; verify artifact SHA/size,
    per-file manifest, table counts, marker, runtime/HTTP, downtime từ source clock, target URL, source-kept và
    app B unchanged. Nếu chưa reachable, live vẫn `BLOCKED_EXTERNAL`, tuyệt đối không báo READY/PASS.
 
@@ -171,8 +174,8 @@ replay destructive sau crash. Hoàn thiện UI bằng precheck/progress/log/veri
 state, chỉ enable confirm khi verify.ok và refresh Apps/History/target URL sau completed.
 
 Commit regression đầy đủ trước hoặc cùng fix; không dùng static source làm bằng chứng PASS. Chạy local gates trong
-review. Probe lại VM01/VM02 read-only: nếu VM01 còn timeout thì bàn giao BLOCKED_EXTERNAL dù local xanh; nếu cả
-hai mở thì mới chạy tuần tự Vite app 18 rồi Express/PostgreSQL app 16, luôn keepSource=true, giữ marker và app B.
+review. Probe lại VM01/VM02 read-only ngay trước mutation, rồi chạy tuần tự Vite app 18 và Express/PostgreSQL
+app 16, luôn keepSource=true, giữ marker và app B.
 Không push/PR/merge/subagent, không log secret/.env, không sửa contract/schema/dependency tuỳ ý. Giữ nguyên
 .devflow/, docs/ban-giao-20-08.md và logo.png. Append REVIEW-FIX 01 vào evidence/handoff, bàn giao đúng trạng thái
 rồi dừng; không tự mở C05.

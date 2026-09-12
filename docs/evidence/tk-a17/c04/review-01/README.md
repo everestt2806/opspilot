@@ -19,6 +19,21 @@
 | TCP connect `221.121.1.79:22`, 5 s              | `False`                 |
 | TCP connect `221.121.1.80:22`, 5 s              | `True`                  |
 
+## VM01 unblock recheck
+
+After SSH accept was enabled, the reviewer reran read-only checks:
+
+| Check                              | Result                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------- |
+| TCP connect `221.121.1.79:22`, 5 s | `True`                                                                    |
+| Actual OpsPilot userData/profile   | ID 1, credential decryptable                                              |
+| Credential storage metadata        | AES-256-GCM; IV 12 bytes; auth tag 16 bytes; protected master key present |
+| Resolver SSH command               | exit 0                                                                    |
+| Docker server version              | `29.7.2`                                                                  |
+
+The audit used `OPSPILOT_C03_AUDIT_ONLY=1` and the same `createCredentialCipher` + `loadSecret` resolver as
+Electron main. It did not print the secret or perform remote mutation.
+
 Focused command:
 
 ```text
@@ -44,5 +59,5 @@ The committed tests pass but do not execute the migration state machine. Direct 
 8. Four service tests and one repository test do not substantiate C04-T1/T2/T4/T5/T6/T7/T8.
 
 Full expected behavior and regression gates are recorded in
-[`review-c04.md`](../../../../tasks/tk-a17/review-c04.md). VM01 remains an independent external blocker, but it
-does not account for these local implementation defects.
+[`review-c04.md`](../../../../tasks/tk-a17/review-c04.md). VM01 has since been unblocked; the local implementation
+defects must be closed before either live migration is run.

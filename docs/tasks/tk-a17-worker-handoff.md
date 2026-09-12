@@ -15,16 +15,16 @@
 
 ## Sổ gate (Leader xác nhận verdict)
 
-| Chặng       | Worker outcome                         | Reviewed SHA                                            | Verdict                                         | Handoff/review                                                    |
-| ----------- | -------------------------------------- | ------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------- |
-| C00         | READY_FOR_LOCAL_REVIEW                 | code `d4ec3be` / docs `23cd248`                         | APPROVED                                        | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
-| C01         | READY_FOR_LOCAL_REVIEW                 | code `8e42856` / docs `9689ea4`                         | APPROVED                                        | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
-| C02         | READY_FOR_LOCAL_REVIEW                 | production `8fe4842` / tests `5febcbe` / docs `313201d` | APPROVED (review-10)                            | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
-| C03 deploy  | READY_FOR_LOCAL_REVIEW                 | code `c060c75` / docs `53aa07e`                         | APPROVED (review-03)                            | [Review](tk-a17/review-c03.md)                                    |
-| C04 migrate | REVIEW_FIX_REQUIRED + BLOCKED_EXTERNAL | code `259bc58` / submitted `24d1f93`                    | CHANGES_REQUESTED (review-01); VM01 TCP timeout | [Handoff](tk-a17/handoff-c04.md) / [review](tk-a17/review-c04.md) |
-| C05 demo    | NOT_STARTED                            | —                                                       | PENDING                                         | [Acceptance](tk-a17/c05-demo-14-09-acceptance.md)                 |
-| ML          | DEFERRED                               | —                                                       | Sau 28/09                                       | [Phạm vi giữ lại](tk-a17/c03-ml-runtime.md)                       |
-| C04–C09 cũ  | DEFERRED                               | —                                                       | Sau demo                                        | Không chạy theo plan 14/09                                        |
+| Chặng       | Worker outcome         | Reviewed SHA                                            | Verdict                                       | Handoff/review                                                    |
+| ----------- | ---------------------- | ------------------------------------------------------- | --------------------------------------------- | ----------------------------------------------------------------- |
+| C00         | READY_FOR_LOCAL_REVIEW | code `d4ec3be` / docs `23cd248`                         | APPROVED                                      | [handoff](tk-a17/handoff-c00.md) / [review](tk-a17/review-c00.md) |
+| C01         | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4`                         | APPROVED                                      | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
+| C02         | READY_FOR_LOCAL_REVIEW | production `8fe4842` / tests `5febcbe` / docs `313201d` | APPROVED (review-10)                          | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
+| C03 deploy  | READY_FOR_LOCAL_REVIEW | code `c060c75` / docs `53aa07e`                         | APPROVED (review-03)                          | [Review](tk-a17/review-c03.md)                                    |
+| C04 migrate | REVIEW_FIX_REQUIRED    | code `259bc58` / submitted `24d1f93`                    | CHANGES_REQUESTED (review-01); VM01 unblocked | [Handoff](tk-a17/handoff-c04.md) / [review](tk-a17/review-c04.md) |
+| C05 demo    | NOT_STARTED            | —                                                       | PENDING                                       | [Acceptance](tk-a17/c05-demo-14-09-acceptance.md)                 |
+| ML          | DEFERRED               | —                                                       | Sau 28/09                                     | [Phạm vi giữ lại](tk-a17/c03-ml-runtime.md)                       |
+| C04–C09 cũ  | DEFERRED               | —                                                       | Sau demo                                      | Không chạy theo plan 14/09                                        |
 
 ## Mẫu `handoff-cNN.md`
 
@@ -236,3 +236,6 @@
   PostgreSQL restore/marker chưa có success path, transfer không bounded/streaming, PREPARE mutation sớm,
   confirm pointer sai ownership, abort/restart chưa idempotent, UI/events và regression thiếu. C04 là
   `REVIEW_FIX_REQUIRED + BLOCKED_EXTERNAL`; C05 tiếp tục đóng/`NOT_RUN`.
+- C04 UNBLOCK - 13/09/2026: sau khi SSH accept được bật, Leader xác nhận VM01 `221.121.1.79:22` TCP PASS
+  và actual OpsPilot userData/profile ID 1 giải mã credential + SSH resolver PASS; Docker server `29.7.2`.
+  Không có remote mutation. Bỏ `BLOCKED_EXTERNAL`; Worker phải đóng R1-01…08 rồi chạy đủ hai live case.

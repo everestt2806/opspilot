@@ -1,5 +1,9 @@
 # TK-A17/C04 handoff
 
+> Historical Worker handoff at submitted `24d1f93`. Leader review 01 changed C04 to
+> `REVIEW_FIX_REQUIRED`; VM01 was subsequently unblocked with TCP and actual credential resolver SSH PASS.
+> Continue from [`review-c04.md`](review-c04.md), not from the blocker instruction below.
+
 ## Identity and scope
 
 - Stage/outcome: C04 / `BLOCKED`
