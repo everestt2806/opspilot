@@ -4,6 +4,7 @@
 
 - Status: `READY_FOR_LOCAL_REVIEW`; scope only C05. C06-C09 remain closed/`NOT_RUN`.
 - Branch `feat/a17-demo-checkpoint`; code SHA used for both rehearsals: `936e643`.
+- Submitted docs commits: `70d7779` (handoff/evidence bookkeeping) and `993c359` (raw rehearsal logs).
 - Runbook: `docs/26-kich-ban-demo-deploy-migrate-14-09.md`.
 
 ## Full gates
