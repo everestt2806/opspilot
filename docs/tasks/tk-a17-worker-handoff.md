@@ -202,3 +202,6 @@
   marker proof. Focused `55/55`, collector `26/26`, node/web and scripts typecheck, scoped
   ESLint/Prettier and build PASS. C04/C05/C06-C09 remain closed/`NOT_RUN`; no ML, monitor, fault,
   Flask, app B mutation, push, PR or merge.
+- Current C03 status override: `READY_FOR_LOCAL_REVIEW`; code `c149291`, evidence/docs commit
+  `bf0580a`, bookkeeping commit `e10e74e`. The earlier C03 table row is historical; C04/C05 remain
+  closed/`NOT_RUN`.

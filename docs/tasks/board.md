@@ -231,3 +231,5 @@ rehearsal đã có task nhưng còn đóng/`NOT_RUN`. ML cùng monitor/fault/rec
   HEALTHCHECK -> RECORD` pipeline on VM02; Express redeploy retained the PostgreSQL marker. Focused
   `55/55`, collector `26/26`, typecheck/scripts typecheck, scoped ESLint/Prettier and build passed.
   C03 is `READY_FOR_LOCAL_REVIEW`; C04/C05 and later remain closed/`NOT_RUN`, with no push/PR/merge.
+- Current C03 status: `READY_FOR_LOCAL_REVIEW` at code `c149291`, docs `bf0580a` plus bookkeeping
+  `e10e74e`; the older table row is historical. C04/C05 remain `NOT_RUN`.
