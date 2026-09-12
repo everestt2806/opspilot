@@ -180,3 +180,135 @@ Không push/PR/merge/subagent, không log secret/.env, không sửa contract/sch
 .devflow/, docs/ban-giao-20-08.md và logo.png. Append REVIEW-FIX 01 vào evidence/handoff, bàn giao đúng trạng thái
 rồi dừng; không tự mở C05.
 ```
+
+## Review 02 — submitted `06da273`
+
+### Verdict và live incident recovery
+
+- Reviewed review base `e78b4ea`, code `67063ff`, submitted docs `06da273`; ancestry hợp lệ.
+- **CHANGES_REQUESTED**. Hai happy path live job 18/19 đã đạt backup/transfer/restore/verify và được giữ làm
+  evidence, nhưng C04 chưa an toàn để mở C05. Mở `C04-R2-01…06`; C05 tiếp tục đóng/`NOT_RUN`.
+- Independent focused suite `49/49` và node/web typecheck PASS. Diff code **không có test file nào thay đổi**;
+  đây vẫn là đúng 4 service tests + 1 repository test của bản bị review 01.
+- Reviewer đọc actual OpsPilot SQLite và phát hiện confirm của hai job đã gắn pointer chéo app:
+  - source app 18 -> deployment 44 thuộc target app 21;
+  - source app 16 -> deployment 45 thuộc target app 22.
+- Read-only SSH inspect cho thấy cả source container 18 và 16 đều `exited`, trái claim “source-kept/restarted”.
+  Reviewer đã thực hiện recovery tối thiểu đã được C04 yêu cầu:
+  - transaction local đưa app 18 -> deployment 41 và app 16 -> deployment 39 sau khi kiểm tra owner/status;
+  - `docker compose start app` đúng hai source trên VM02;
+  - hậu kiểm: Vite `v1|running|healthy|HTTP 200`, Express `v2|running|healthy|HTTP 200`;
+  - target app 21/22 giữ pointer 44/45 đúng owner, không bị sửa; PostgreSQL, app B và target runtime không bị
+    mutation trong recovery.
+- Evidence reviewer: [`review-02`](../../evidence/tk-a17/c04/review-02/README.md).
+
+### Finding mở
+
+#### C04-R2-01 — BLOCKING — confirm(true) làm hỏng source pointer và không giữ source chạy
+
+- Vị trí: `app/src/main/migrate/service.ts:72-110,190-198,241-250`.
+- `confirm()` vẫn ghi `target.current_deployment_id` vào `job.app_id` là source app. Actual jobs 18/19 chứng
+  minh pointer owner sai. Sau FREEZE, success path không có lệnh start source; `keepSource=true` chỉ ghi flag,
+  nên cả hai source thực tế `exited`.
+- Fix: với keep-source, source giữ nguyên `current_deployment_id`, start source và đợi runtime/HTTP healthy
+  trước terminal `completed`; target giữ deployment của chính target. Confirm transaction chỉ ghi state/pointer
+  hợp lệ, không emit trong transaction. Nhánh dọn nguồn không được fire-and-forget: chỉ completed khi remote
+  cleanup có kết quả xác định. Thêm regression ownership và source runtime cho cả hai lựa chọn.
+
+#### C04-R2-02 — BLOCKING — abort/error/restart vẫn không idempotent
+
+- Vị trí: `service.ts:54-69,112-133,152-179,251-278,308-338,629-638`.
+- `abort()` vẫn cleanup song song với catch của `run()`, có thể xoá hai lần/phát hai terminal event. Abort ở
+  `awaiting_confirm` không có controller và không start source. Target vẫn được tạo trước PREPARE/outer try;
+  create/setup failure có thể để job active. Không có list/get/reconcile khi Electron restart.
+- Fix: một persisted owner/CAS compensation path; abort signal hoặc takeover tuần tự, start + health source trước
+  rolled_back, đúng một terminal event/action. Reconcile startup fail closed, không tự replay destructive.
+  PREPARE read-only trước target row/workspace và mọi setup error phải terminal. Test abort từng phase,
+  awaiting-confirm, double abort/confirm, concurrent deploy/migrate, create failure và close/reopen.
+
+#### C04-R2-03 — MAJOR — relay mới vẫn gom toàn bộ binary vào RAM và cancel có thể bỏ tiến trình đích
+
+- Vị trí: `app/src/main/ssh/manager.ts:101-146,168-207,424-505`.
+- `relayFile()` gọi `awaitChannelResult(input)`. Helper này gắn listener thứ hai, chuyển từng binary chunk sang
+  UTF-8 rồi cộng vào `stdout`; vì vậy archive vẫn được materialize toàn bộ trong memory. Nó còn dùng timeout
+  mặc định 30 giây, nên file lớn bị cắt dù migrate cho phép 15 phút.
+- Signal chỉ gắn vào input trong lúc relay; output chưa được await nên abort/error có thể để `cat > .staged`
+  sống và partial file mở. Failure promise cũng không destroy cả hai channel.
+- Fix: primitive drain-only không capture stdout cho binary, timeout migrate truyền rõ, pipeline/backpressure
+  chuẩn và settle đóng cả hai channel trên mọi exit. Assert exact `bytes === expectedBytes` trước checksum/rename.
+  Test multi-chunk, forced backpressure, >30s simulated transfer, abort/output error và memory bound.
+
+#### C04-R2-04 — MAJOR — RESTORE vẫn dùng source desktop và mở app trước restore DB
+
+- Vị trí: `service.ts:210-230,344-378,446-520`; `deploy/pipeline.ts:511-595,826-960`.
+- Pipeline nhận `source_path` local, rồi upload lại `src/collector` lên target; artifact vừa relay không phải nguồn
+  build authoritative. Migration sẽ fail nếu folder desktop đã di chuyển và có thể deploy nội dung khác VPS.
+- Pipeline render ghi đè `.env` đã migrate; env ứng dụng ngoài DB bị mất. Pipeline cũng đánh dấu deployment
+  running sau khi app/collector đã mở, rồi migrate mới stop app và `pg_restore`. Live nhỏ đã qua nhưng thứ tự
+  vẫn trái contract DB-only -> restore -> app/collector.
+- File verify vẫn chỉ so count + tổng byte, không manifest relative-path/hash; hai nội dung khác cùng size có thể
+  PASS. Downtime bắt đầu bằng clock nguồn nhưng kết thúc bằng `Date.now()` desktop và sau toàn bộ VERIFY, không
+  dừng lúc target health OK.
+- Fix: build/render từ payload đã relay hoặc immutable snapshot tương ứng; giữ env kín với policy DB credential
+  rõ. Tách staged target deploy để PostgreSQL healthy/restore trước app. Lưu manifest từng path/hash; đo cả hai
+  mốc bằng clock nguồn và chốt tại target health. Regression source local missing/changed, env preservation,
+  equal-size corruption, DB command order và downtime.
+
+#### C04-R2-05 — MAJOR — UI/event finding R1-07 chưa được sửa
+
+- Diff `e78b4ea..67063ff` không chạm `MigratePage.tsx`, IPC contract hay repository API. Service mới chỉ phát
+  progress ở TRANSFER; vẫn không có precheck numbers/log stream, job reload/filter, verify gate bền, refresh
+  Apps/History hoặc target URL sau confirm.
+- Fix toàn bộ R1-07 và thêm Testing Library regression cho state/event thực. UI không được tự hiện terminal khi
+  IPC chỉ mới accepted; reload trang giữa migration phải hiện persisted state và chỉ enable confirm khi
+  `awaiting_confirm && verify.ok`.
+
+#### C04-R2-06 — MAJOR — evidence/test đang overclaim T3–T8 và che mất live postcondition fail
+
+- Commit `67063ff` không đổi test; `review-fix-01` chỉ có README, không có raw scrubbed output/events/commands.
+  Harness chỉ assert job `completed`; không assert source container, pointer ownership, target owner, exact event
+  sequence, app B before/after hoặc cleanup. Vì vậy handoff vẫn báo source restarted dù actual là `exited`.
+- Các dòng T4/T5/T6/T7/T8 không được suy PASS từ checksum happy path, failed-job existence, typecheck/build hoặc
+  source inspection. Commit regression tương ứng R2-01…05 và lưu JSON/log scrubbed của run mới. Evidence phải
+  có exact before/after pointer + runtime/HTTP/collector/marker, events đúng thứ tự/một terminal và cleanup ledger.
+
+### Fast-track gate review-fix 02
+
+1. Sửa theo thứ tự R2-01 -> R2-02 -> R2-03 -> R2-04 -> R2-05 -> R2-06. Không tiếp tục live khi R2-01…05
+   chưa có regression PASS.
+2. Giữ jobs 18/19 và reviewer recovery làm lịch sử. Trước run mới, assert source app 18/16 lần lượt trỏ 41/39,
+   target 21/22 trỏ 44/45, bốn pointer đều owner đúng, source/target healthy và không có active migration.
+3. Local gate phải tăng test count thực: migrate state machine success/failure, SSH relay, repository/recovery,
+   IPC và UI; chạy deploy regression, node/web/scripts typecheck, ESLint, Prettier, build.
+4. Live lại bằng **target mới** tuần tự Vite rồi Express/PostgreSQL, `keepSource=true`. Sau mỗi confirm, assert
+   cả source và target `running/healthy/HTTP 200`, source pointer không đổi/owner đúng, target pointer owner đúng,
+   checksum/manifest, collector, row counts/marker, downtime và đúng một terminal event. Không dùng job 18/19
+   làm bằng chứng code mới.
+5. Chỉ cleanup target C04 cũ sau khi replacement healthy và có ledger; không chạm app B/A17, ML, monitor/fault,
+   schema/contract/dependency, push/PR/merge/subagent. C05 vẫn đóng cho tới Leader approval.
+
+### Khối giao Worker review-fix 02
+
+```text
+Tiếp tục duy nhất TK-A17/C04 từ HEAD chứa Leader review 02; không checkout/reset về 67063ff/06da273. Đọc mục
+Review 02 trong docs/tasks/tk-a17/review-c04.md và đóng C04-R2-01…06. C05 và ML/monitor/fault/recovery vẫn
+đóng/NOT_RUN.
+
+Ưu tiên sửa incident thật trước: confirm(true) không được đổi source app sang deployment của target; phải start
+và healthcheck source trước completed để keepSource giữ cả hai bên chạy. Reviewer đã phục hồi app 18->41,
+app 16->39 và start hai source; không đảo lại. Gom abort/error/restart vào một persisted idempotent compensation
+path với đúng một terminal event. Sửa relay để không dùng awaitChannelResult có stdout accumulation, có timeout
+rõ, destroy cả hai channel khi abort/error và exact byte check.
+
+RESTORE phải dùng payload VPS đã relay làm nguồn authoritative, không phụ thuộc/overwrite bằng source_path desktop,
+không làm mất env, và PostgreSQL phải restore trước khi mở app/collector. Verify manifest per-path/hash và đo
+downtime bằng clock nguồn tới target health. Hoàn thiện precheck/state/UI/event/reload/refresh còn nguyên từ R1.
+Commit regression thật cho state machine, relay và UI; count phải tăng, không dùng typecheck/source inspection để
+báo T4-T8 PASS.
+
+Sau local gates, chạy hai target mới tuần tự Vite app 18 rồi Express/PostgreSQL app 16 với keepSource=true; lưu
+raw scrubbed evidence và assert postcondition source+target healthy, pointer owner đúng, marker/rows/checksum/
+manifest/collector/event sequence đúng. Giữ jobs 18/19 và recovery trong lịch sử. Không chạm app B/A17, không
+push/PR/merge/subagent, giữ .devflow/, docs/ban-giao-20-08.md, logo.png. Bàn giao READY_FOR_LOCAL_REVIEW rồi
+dừng; không tự mở C05.
+```

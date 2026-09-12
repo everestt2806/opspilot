@@ -30,7 +30,7 @@
 
 | ID     | Task                                                                 | Chủ                   | Hạn      | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                                            |
 | ------ | -------------------------------------------------------------------- | --------------------- | -------- | ---------- | --------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu  | A                     | 14/09    | BLOCKED | `feat/a17-demo-checkpoint`  | C03 APPROVED review-03      | C04 BLOCKED: VM01 TCP timeout; C05-C09 NOT_RUN; chưa push/PR |
+| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu  | A                     | 14/09    | ĐANG LÀM | `feat/a17-demo-checkpoint`  | C04 CHANGES_REQUESTED review-02 | Source live state đã phục hồi; đóng R2-01…06; C05 chưa mở |
 | TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09    | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                   | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới                             |
 | TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09    | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge               | `fe1da33`; 21/21 theo task B                                                       |
 | TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02      | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                   | Code đã merge; DoD SSH tail tại A17/C02                                            |
@@ -270,3 +270,7 @@ apps/deployments, ciphertext/master key, Electron resolver SSH, unsafe-profile c
 app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express app 16/deployment 39. VM01
 `221.121.1.79:22` đang timeout nên Worker code/test trước; live hai VPS chưa được phép báo PASS.
 - C04 REVIEW-FIX 01 - 13/09/2026: local `49/49`, typecheck/scripts typecheck, scoped ESLint, Prettier and build passed. VM02 profile 2 -> VM01 profile 1 live sequence passed in order: Vite app 18/job 18, then Express/PostgreSQL app 16/job 19, both `keepSource=true`. Evidence: `docs/evidence/tk-a17/c04/review-fix-01/`; handoff `READY_FOR_LOCAL_REVIEW`. C05-C09 remain closed/`NOT_RUN`.
+- C04 REVIEW 02 - 13/09/2026: **CHANGES_REQUESTED** at code `67063ff`, submitted `06da273`. Jobs 18/19
+  reached completed, but actual source pointers crossed into target deployments and both source containers were
+  exited after `keepSource=true`; Leader restored pointers 18->41/16->39 and source health. Open R2-01…06;
+  C05 remains closed.

@@ -26,7 +26,7 @@ REVIEW-FIX C02 08 (12/09/2026): code `8fe4842`, evidence
 18/99, ML 19/19, collector 26/26, static/build PASS. No live mutation; read-only deployment 20/21
 evidence retains activation boundaries and `416+5=421`, `2080+25=2105`. C02
 READY_FOR_LOCAL_REVIEW; C03-C09 remain closed/NOT_RUN.
-| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — C03 APPROVED, C04 OPEN |
+| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — C04 REVIEW_FIX_REQUIRED |
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
 · [Sổ bàn giao](tk-a17-worker-handoff.md).
@@ -309,3 +309,7 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   `53aa07e`. Mọi finding C03 CLOSED; mở duy nhất C04 với Vite app 18 và Express app 16. VM01 TCP 22
   timeout tại preflight, nên C04 live chưa thể PASS; C05 tiếp tục đóng.
 - C04 REVIEW-FIX 01 - 13/09/2026: Vite app 18/job 18 then Express/PostgreSQL app 16/job 19 passed live VM02 -> VM01 with `keepSource=true`; local gates and evidence are complete. Handoff is `READY_FOR_LOCAL_REVIEW`; C05 remains closed/`NOT_RUN`.
+- C04 REVIEW 02 - 13/09/2026: **CHANGES_REQUESTED** at code `67063ff`, submitted `06da273`. Happy-path
+  archive/restore evidence is retained, but keep-source postconditions failed: source pointers crossed to target
+  deployments and both source app containers were exited. Leader recovered source pointers/runtime; R2-01…06
+  must close before rerunning live or opening C05.

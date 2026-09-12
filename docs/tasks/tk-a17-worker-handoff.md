@@ -6,7 +6,7 @@
 > Phạm vi 14/09: C03 deploy → C04 migrate hai VPS → C05 rehearsal; ML deferred tới ít nhất 28/09.
 > Mỗi chặng tạo handoff/review riêng trong `docs/tasks/tk-a17/`; không ghi đè lịch sử.
 
-- Owner A solo; C00–C03 đã được Leader approve; Worker chỉ làm C04 review-fix 01 theo
+- Owner A solo; C00–C03 đã được Leader approve; Worker chỉ làm C04 review-fix 02 theo
   [review C04](tk-a17/review-c04.md).
 - Baseline code `683bfc6`; branch plan `plan/a17-demo-checkpoint`.
 - Branch Worker đã tạo `feat/a17-demo-checkpoint`, có cập nhật kế hoạch 11/09; tiếp tục HEAD hiện tại.
@@ -21,7 +21,7 @@
 | C01         | READY_FOR_LOCAL_REVIEW | code `8e42856` / docs `9689ea4`                         | APPROVED                                      | [handoff](tk-a17/handoff-c01.md) / [review](tk-a17/review-c01.md) |
 | C02         | READY_FOR_LOCAL_REVIEW | production `8fe4842` / tests `5febcbe` / docs `313201d` | APPROVED (review-10)                          | [handoff](tk-a17/handoff-c02.md) / [review](tk-a17/review-c02.md) |
 | C03 deploy  | READY_FOR_LOCAL_REVIEW | code `c060c75` / docs `53aa07e`                         | APPROVED (review-03)                          | [Review](tk-a17/review-c03.md)                                    |
-| C04 migrate | REVIEW_FIX_REQUIRED    | code `259bc58` / submitted `24d1f93`                    | CHANGES_REQUESTED (review-01); VM01 unblocked | [Handoff](tk-a17/handoff-c04.md) / [review](tk-a17/review-c04.md) |
+| C04 migrate | REVIEW_FIX_REQUIRED    | code `67063ff` / submitted `06da273`                    | CHANGES_REQUESTED (review-02); live state repaired | [Handoff](tk-a17/handoff-c04.md) / [review](tk-a17/review-c04.md) |
 | C05 demo    | NOT_STARTED            | —                                                       | PENDING                                       | [Acceptance](tk-a17/c05-demo-14-09-acceptance.md)                 |
 | ML          | DEFERRED               | —                                                       | Sau 28/09                                     | [Phạm vi giữ lại](tk-a17/c03-ml-runtime.md)                       |
 | C04–C09 cũ  | DEFERRED               | —                                                       | Sau demo                                      | Không chạy theo plan 14/09                                        |
@@ -239,3 +239,10 @@
 - C04 UNBLOCK - 13/09/2026: sau khi SSH accept được bật, Leader xác nhận VM01 `221.121.1.79:22` TCP PASS
   và actual OpsPilot userData/profile ID 1 giải mã credential + SSH resolver PASS; Docker server `29.7.2`.
   Không có remote mutation. Bỏ `BLOCKED_EXTERNAL`; Worker phải đóng R1-01…08 rồi chạy đủ hai live case.
+- REVIEW-FIX C04 01 - 13/09/2026: Worker submitted code `67063ff`, docs `06da273`; jobs 18/19 reported
+  Vite và Express/PostgreSQL live PASS VM02 -> VM01, local focused vẫn 49/49.
+- REVIEW C04 02 - 13/09/2026: Leader **CHANGES_REQUESTED**. Actual SQLite chứng minh source app 18/16 bị
+  gắn deployment của target app 21/22 và SSH inspect cho thấy cả hai source container `exited` sau
+  `keepSource=true`. Reviewer đã phục hồi pointer 18->41, 16->39 trong transaction rồi start đúng hai source;
+  final healthy/HTTP 200. Mở `C04-R2-01…06` cho confirm/source-kept, idempotent recovery, bounded relay,
+  authoritative restore, UI/events và regression/raw evidence. C05 tiếp tục đóng/`NOT_RUN`.

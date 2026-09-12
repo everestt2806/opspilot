@@ -3,6 +3,9 @@
 > Historical Worker handoff at submitted `24d1f93`. Leader review 01 changed C04 to
 > `REVIEW_FIX_REQUIRED`; VM01 was subsequently unblocked with TCP and actual credential resolver SSH PASS.
 > Continue from [`review-c04.md`](review-c04.md), not from the blocker instruction below.
+>
+> Leader review 02 tại submitted `06da273`: **CHANGES_REQUESTED**. Jobs 18/19 giữ làm historical evidence;
+> source pointer/container đã được reviewer phục hồi. Worker tiếp tục `C04-R2-01…06`, không mở C05.
 
 ## Identity and scope
 

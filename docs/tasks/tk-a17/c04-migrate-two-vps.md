@@ -1,8 +1,8 @@
 # TK-A17/C04 — Migrate ứng dụng thành công giữa hai VPS
 
-> **REVIEW_FIX_REQUIRED — Leader review 01 ngày 13/09/2026.** Thực hiện
-> [review-c04.md](review-c04.md) để đóng `C04-R1-01…08`; C05 tiếp tục đóng. VM01 đã được bật SSH và
-> Leader xác nhận TCP/22 + actual credential resolver PASS; sau khi local fix đạt phải chạy đủ hai live case.
+> **REVIEW_FIX_REQUIRED — Leader review 02 ngày 13/09/2026.** Jobs 18/19 đã chứng minh hai happy path nhưng
+> làm sai source pointer và để hai source container dừng; reviewer đã phục hồi an toàn. Thực hiện Review 02
+> trong [review-c04.md](review-c04.md) để đóng `C04-R2-01…06`; C05 tiếp tục đóng.
 
 ## Mục tiêu
 
