@@ -100,3 +100,9 @@ CHƯA PUSH — CHƯA PR — CHƯA MERGE.
 - Open `C04-R3-01…05`: persisted abort/error/restart ownership, authoritative staged restore and PostgreSQL
   order, relay close race/exact bytes, real UI state/events, and committed regressions/raw evidence.
 - C05 stays closed/`NOT_RUN`. Reviewer evidence: `docs/evidence/tk-a17/c04/review-03/README.md`.
+# REVIEW-FIX 03 - 13/09/2026
+
+- Base `a51f72e`; scope C04-R3-01..05 only. Local focused `50/50`, node/web/scripts typecheck, scoped ESLint, Prettier and build exit `0`.
+- Fresh target sequence VM02 profile 2 -> VM01 profile 1 with `keepSource=true`: Vite app 18/job 21 -> app 23, then Express/PostgreSQL app 16/job 22 -> app 24. Source pointers stayed `41/39`; source HTTP/runtime recovered before completion; PostgreSQL rows `1001 -> 1001` and marker matched.
+- Changes: awaited confirmation/stale-job cleanup, source recovery health gate, binary relay drain/timeout/dual-channel cleanup, and live harness confirmation await. Evidence: `docs/evidence/tk-a17/c04/review-fix-02/` (fresh run ledger appended below).
+- C05-C09 remain closed/`NOT_RUN`; app B and protected untracked files were not mutated.

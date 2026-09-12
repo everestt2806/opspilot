@@ -75,6 +75,26 @@ describe('MigrateService guards and confirmation', () => {
     }
   })
 
+  it('keeps an awaiting job when source recovery fails during confirmation', async () => {
+    const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-recovery-'))
+    const database = initializeDatabase(directory)
+    try {
+      database.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('source','127.0.0.1','u','password','x'),('target','127.0.0.2','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port) VALUES (1,'demo', 'express',30000,3000),(2,'demo-m123','express',30001,3000); INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,1,'demo:v1','running'),(2,1,'demo-m123:v1','running'); UPDATE app SET current_deployment_id=1 WHERE id=1; UPDATE app SET current_deployment_id=2 WHERE id=2; INSERT INTO migration_job (app_id,source_vps_id,target_vps_id,status,verify_json) VALUES (1,1,2,'awaiting_confirm','{\"target_app_id\":2}');"
+      )
+      const exec = vi.fn().mockResolvedValue({ code: 1, stdout: '', stderr: 'source unavailable' })
+      const service = new MigrateService(database, { exec } as never, vi.fn())
+      await expect(service.confirm(1, true)).rejects.toThrow()
+      expect(database.prepare('SELECT status FROM migration_job WHERE id=1').get()).toEqual({
+        status: 'awaiting_confirm'
+      })
+      expect(exec).toHaveBeenCalledTimes(1)
+    } finally {
+      closeDatabase()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
   it('rejects a second active migration before any remote command', () => {
     const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-active-'))
     const database = initializeDatabase(directory)

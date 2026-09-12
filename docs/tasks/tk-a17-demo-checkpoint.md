@@ -317,3 +317,4 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
 - C04 REVIEW 03 - 13/09/2026: **CHANGES_REQUESTED** at `f9fcfb5`. Source ownership/runtime fix and live jobs
   21/22 are accepted; open R3-01…05 for durable recovery, authoritative restore/DB order, relay, UI and
   regression/raw evidence. C05 remains closed/`NOT_RUN`.
+- C04 REVIEW-FIX 03 - 13/09/2026: fresh target live sequence Vite app 18/job 21 then Express/PostgreSQL app 16/job 22 passed VM02 -> VM01 with `keepSource=true`; source pointers/runtime and marker/rows verified. Handoff `READY_FOR_LOCAL_REVIEW`; C05 remains closed/`NOT_RUN`.

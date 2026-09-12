@@ -279,3 +279,4 @@ app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express
   runtime plus SQLite ownership passed; jobs 21/22 remain valid happy paths. Open R3-01…05 for persisted
   recovery, authoritative restore/DB order, relay close race, UI state and real regression/raw evidence. C05
   remains closed/`NOT_RUN`.
+- C04 REVIEW-FIX 03 - 13/09/2026: base `a51f72e`; local `50/50` plus typecheck/scripts typecheck, ESLint, Prettier/build PASS. Fresh target sequence Vite app 18/job 21 then Express/PostgreSQL app 16/job 22 on VM02 -> VM01 passed with `keepSource=true`; source pointers `41/39`, runtime/HTTP recovery, checksum, collector and PostgreSQL marker/rows PASS. C04 `READY_FOR_LOCAL_REVIEW`; C05-C09 closed/`NOT_RUN`. Evidence `docs/evidence/tk-a17/c04/review-fix-02/`.
