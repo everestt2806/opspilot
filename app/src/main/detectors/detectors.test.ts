@@ -223,6 +223,28 @@ describe('C03 Tier 1 detector matrix', () => {
       expect(result).toMatchObject({ matched: true, detector: fixture.detector })
     }
   })
+
+  it('keeps two public vars per framework in the BuildPlan defaults', () => {
+    const nextDir = createFixture({
+      'package.json': JSON.stringify({ dependencies: { next: '14' } }),
+      '.env.example': 'NEXT_PUBLIC_API_URL=https://default.test\nNEXT_PUBLIC_SITE_NAME=Default\n'
+    })
+    const next = detectFramework(buildSourceTree(nextDir))
+    expect(next.matched && next.plan.buildArgs).toEqual({
+      NEXT_PUBLIC_API_URL: 'https://default.test',
+      NEXT_PUBLIC_SITE_NAME: 'Default'
+    })
+
+    const viteDir = createFixture({
+      'package.json': JSON.stringify({ devDependencies: { vite: '5' } }),
+      '.env.example': 'VITE_API_URL=https://default.test\nVITE_SITE_NAME=Default\n'
+    })
+    const vite = detectFramework(buildSourceTree(viteDir))
+    expect(vite.matched && vite.plan.buildArgs).toEqual({
+      VITE_API_URL: 'https://default.test',
+      VITE_SITE_NAME: 'Default'
+    })
+  })
 })
 
 function createFixture(files: Record<string, string>): string {

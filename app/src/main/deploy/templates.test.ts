@@ -87,7 +87,8 @@ describe('renderDockerfile', () => {
     const buildArgs = renderBuildArgs({
       NEXT_PUBLIC_API_URL: 'https://api.example.test',
       NEXT_PUBLIC_SITE_NAME: 'A name with spaces',
-      VITE_SITE_NAME: 'A $value'
+      VITE_SITE_NAME: 'A $value',
+      VITE_API_URL: 'https://api.example.test'
     })
     expect(buildArgs).toContain(
       'ARG NEXT_PUBLIC_API_URL\nENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}'
@@ -96,6 +97,7 @@ describe('renderDockerfile', () => {
       'ARG NEXT_PUBLIC_SITE_NAME\nENV NEXT_PUBLIC_SITE_NAME=${NEXT_PUBLIC_SITE_NAME}'
     )
     expect(buildArgs).toContain('ARG VITE_SITE_NAME\nENV VITE_SITE_NAME=${VITE_SITE_NAME}')
+    expect(buildArgs).toContain('ARG VITE_API_URL\nENV VITE_API_URL=${VITE_API_URL}')
     expect(renderBuildArgs({})).toBe('')
   })
 
