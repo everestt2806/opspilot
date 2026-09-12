@@ -286,7 +286,7 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   focused/collector/typecheck/lint/Prettier/build passed. Handoff and matrix are
   `docs/tasks/tk-a17/handoff-c03.md` and `docs/evidence/tk-a17/c03/deploy-matrix.md`;
   C04/C05 remain `NOT_RUN`.
-- REVIEW-FIX C03 01 12/09: C03-R1-01...04 closed at code `6ee83ca`; focused/collector/static
+- REVIEW-FIX C03 01 12/09: C03-R1-01...04 closed at code `e3a32f1`; focused/collector/static
   gates pass, final VM02 matrix and repeatable demo-machine tunnel proof are recorded. Handoff is
   `READY_FOR_LOCAL_REVIEW`; C04/C05 remain `NOT_RUN`.
 - REVIEW C03 01 12/09 — [review-c03](tk-a17/review-c03.md): **CHANGES_REQUESTED** tại code

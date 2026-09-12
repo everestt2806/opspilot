@@ -205,7 +205,7 @@
 - Current C03 status override: `READY_FOR_LOCAL_REVIEW`; code `c149291`, evidence/docs commit
   `bf0580a`, bookkeeping commit `e10e74e`. The earlier C03 table row is historical; C04/C05 remain
   closed/`NOT_RUN`.
-- REVIEW-FIX C03 01 - 12/09/2026: `C03-R1-01...04` closed; code `6ee83ca`; docs/evidence commit
+- REVIEW-FIX C03 01 - 12/09/2026: `C03-R1-01...04` closed; code `e3a32f1`; docs/evidence commit
   will be recorded after this append. Outcome `READY_FOR_LOCAL_REVIEW`. Final VM02 matrix,
   structured per-deployment events, durable SQLite close/reopen and demo tunnel proof are recorded
   in `docs/evidence/tk-a17/c03/review-fix-01/`. C04/C05/C06-C09 remain closed/`NOT_RUN`.
