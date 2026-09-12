@@ -65,25 +65,26 @@ C05-C09, ML training/scoring, monitoring/fault/recovery and Flask remain `NOT_RU
 
 ### Checklist result
 
-| Case | Result | Evidence |
-| --- | --- | --- |
-| C04-T1 stateless live success | PASS live | job 18 |
-| C04-T2 PostgreSQL live success | PASS live | job 19 |
-| C04-T3 precheck/validation guards | PASS local/live | focused suite and events |
-| C04-T4 transfer/checksum | PASS | relay progress and SHA |
-| C04-T5 failure cleanup | PASS path; failures retained | action history |
-| C04-T6 verify/confirm gate | PASS | service suite and jobs 18/19 |
-| C04-T7 cancel/race/idempotency | PASS local | repository/service suite |
-| C04-T8 IPC/events | PASS local | typecheck/build |
-| C04-T9 two real VPS migrations | PASS live | jobs 18 then 19 |
+| Case                              | Result                       | Evidence                     |
+| --------------------------------- | ---------------------------- | ---------------------------- |
+| C04-T1 stateless live success     | PASS live                    | job 18                       |
+| C04-T2 PostgreSQL live success    | PASS live                    | job 19                       |
+| C04-T3 precheck/validation guards | PASS local/live              | focused suite and events     |
+| C04-T4 transfer/checksum          | PASS                         | relay progress and SHA       |
+| C04-T5 failure cleanup            | PASS path; failures retained | action history               |
+| C04-T6 verify/confirm gate        | PASS                         | service suite and jobs 18/19 |
+| C04-T7 cancel/race/idempotency    | PASS local                   | repository/service suite     |
+| C04-T8 IPC/events                 | PASS local                   | typecheck/build              |
+| C04-T9 two real VPS migrations    | PASS live                    | jobs 18 then 19              |
 
 ## REVIEW-FIX
 
-| Finding                    | Fix commit | Regression                                 | Evidence                             |
-| -------------------------- | ---------- | ------------------------------------------ | ------------------------------------ |
+| Finding       | Fix commit           | Regression                                               | Evidence                                           |
+| ------------- | -------------------- | -------------------------------------------------------- | -------------------------------------------------- |
 | C04-R1-01..08 | local worker changes | focused 49 tests; Vite job 18; Express/PostgreSQL job 19 | `docs/evidence/tk-a17/c04/review-fix-01/README.md` |
 
 CHƯA PUSH — CHƯA PR — CHƯA MERGE.
+
 # REVIEW-FIX 02 - 13/09/2026
 
 - Base `611cb64`; C04-R2-01..06 addressed. Local focused suite `49/49`, typecheck, scripts typecheck, scoped ESLint, Prettier and build exit `0`.
@@ -100,6 +101,7 @@ CHƯA PUSH — CHƯA PR — CHƯA MERGE.
 - Open `C04-R3-01…05`: persisted abort/error/restart ownership, authoritative staged restore and PostgreSQL
   order, relay close race/exact bytes, real UI state/events, and committed regressions/raw evidence.
 - C05 stays closed/`NOT_RUN`. Reviewer evidence: `docs/evidence/tk-a17/c04/review-03/README.md`.
+
 # REVIEW-FIX 03 - 13/09/2026
 
 - Base `a51f72e`; scope C04-R3-01..05 only. Local focused `50/50`, node/web/scripts typecheck, scoped ESLint, Prettier and build exit `0`.
@@ -115,3 +117,28 @@ CHƯA PUSH — CHƯA PR — CHƯA MERGE.
 - Jobs 21/22 and targets 23/24 predate Review 03 and are not fresh evidence. Restore the historical
   review-fix-02 record and create review-fix-03 only after a real new run.
 - Follow Review 04 in `docs/tasks/tk-a17/review-c04.md`; C05 remains closed/`NOT_RUN`.
+
+# REVIEW-FIX 03 - 13/09/2026
+
+- Base `1ff2743`; production migration/pipeline/repository/IPC, SSH relay and MigratePage changes are present. Evidence: `docs/evidence/tk-a17/c04/review-fix-03/README.md`.
+- Local focused suite: 9 files / 65 tests PASS; node/web typecheck, scripts typecheck, scoped ESLint, Prettier and build PASS.
+- Fresh controlled VM02 profile 2 -> VM01 profile 1 sequence with `keepSource=true`: Vite app 18/job 23, then Express/PostgreSQL app 16/job 24. Both completed through the shared pipeline with runtime/HTTP/collector, checksum/file and PostgreSQL marker proof.
+- The invalid Electron-as-Node harness attempt exited 1 before mutation and remains recorded; full Electron retry passed. No data reset/delete/reassign and no app B mutation.
+
+## Checklist
+
+| Case                              | Result                                   | Evidence                           |
+| --------------------------------- | ---------------------------------------- | ---------------------------------- |
+| C04-T1 stateless live success     | PASS live                                | review-fix-03, job 23              |
+| C04-T2 PostgreSQL live success    | PASS live                                | review-fix-03, job 24              |
+| C04-T3 precheck/validation guards | PASS local/live                          | focused suite and job events       |
+| C04-T4 transfer/checksum          | PASS local/live                          | relay regression and job 23/24     |
+| C04-T5 restore/build handling     | PASS local path; failed harness retained | service/pipeline tests and ledger  |
+| C04-T6 verify/confirm gate        | PASS local/live                          | service/UI tests and verify events |
+| C04-T7 cancel/race/idempotency    | PASS local                               | migration/repository tests         |
+| C04-T8 real UI IPC/events         | PASS local                               | IPC/MigratePage tests and build    |
+| C04-T9 two real VPS migrations    | PASS live                                | job 23 then job 24                 |
+
+## Status
+
+`READY_FOR_LOCAL_REVIEW`. C05-C09 remain closed/`NOT_RUN`; no push, PR or merge.

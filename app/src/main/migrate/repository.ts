@@ -46,6 +46,12 @@ export class MigrationRepository {
     return row
   }
 
+  list(): MigrationJob[] {
+    return this.database
+      .prepare('SELECT * FROM migration_job ORDER BY id DESC')
+      .all() as MigrationJob[]
+  }
+
   activeForApp(appId: number): MigrationJob | undefined {
     return this.database
       .prepare(

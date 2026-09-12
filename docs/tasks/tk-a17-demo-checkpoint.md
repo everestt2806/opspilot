@@ -9,24 +9,24 @@
 > [C05 acceptance](tk-a17/c05-demo-14-09-acceptance.md) và
 > [tài liệu nguyên lý](../25-nguyen-ly-deploy-migrate-demo-14-09.md) thắng.
 
-| Chủ    | Branch plan                | Baseline code | Trạng thái                  |
-| ------ | -------------------------- | ------------- | --------------------------- |
-REVIEW-FIX C02 06 (11/09/2026): code `61f43df`, evidence `docs/evidence/tk-a17/c02/review-fix-06.md`;
-R6-01...05 and R5-02/04/05/06 closed. Local focused 18/96, ML 19/19, collector 26/26,
-static/build PASS. Controlled VM02 rollback deployment 20 runtime v15 -> target 19 runtime v16 ->
-deployment 21; scheduler two ticks, max concurrency 1, clean exit; SQLite +421 metrics/+2105 scores
-and deployment-21 5 rows. C02 READY_FOR_LOCAL_REVIEW; C03-C09 remain closed/NOT_RUN.
-REVIEW-FIX C02 07 (12/09/2026): code `65d85ac`, evidence
-`docs/evidence/tk-a17/c02/review-fix-07.md`; R7-01...04 and R6-02...05 closed. Local focused
-18/98, ML 19/19, collector 26/26, static/build PASS. Read-only activation/source/count evidence
-proves `416+5=421` metrics and `2080+25=2105` scores for deployments 20/21. C02
-READY_FOR_LOCAL_REVIEW; C03-C09 remain closed/NOT_RUN.
-REVIEW-FIX C02 08 (12/09/2026): code `8fe4842`, evidence
-`docs/evidence/tk-a17/c02/review-fix-08.md`; R8-01...03 and R7-03/R6-02 closed. Local focused
-18/99, ML 19/19, collector 26/26, static/build PASS. No live mutation; read-only deployment 20/21
-evidence retains activation boundaries and `416+5=421`, `2080+25=2105`. C02
-READY_FOR_LOCAL_REVIEW; C03-C09 remain closed/NOT_RUN.
-| A solo | `feat/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — C04 REVIEW_FIX_REQUIRED |
+| Chủ                                                                                                   | Branch plan                | Baseline code | Trạng thái                         |
+| ----------------------------------------------------------------------------------------------------- | -------------------------- | ------------- | ---------------------------------- |
+| REVIEW-FIX C02 06 (11/09/2026): code `61f43df`, evidence `docs/evidence/tk-a17/c02/review-fix-06.md`; |
+| R6-01...05 and R5-02/04/05/06 closed. Local focused 18/96, ML 19/19, collector 26/26,                 |
+| static/build PASS. Controlled VM02 rollback deployment 20 runtime v15 -> target 19 runtime v16 ->     |
+| deployment 21; scheduler two ticks, max concurrency 1, clean exit; SQLite +421 metrics/+2105 scores   |
+| and deployment-21 5 rows. C02 READY_FOR_LOCAL_REVIEW; C03-C09 remain closed/NOT_RUN.                  |
+| REVIEW-FIX C02 07 (12/09/2026): code `65d85ac`, evidence                                              |
+| `docs/evidence/tk-a17/c02/review-fix-07.md`; R7-01...04 and R6-02...05 closed. Local focused          |
+| 18/98, ML 19/19, collector 26/26, static/build PASS. Read-only activation/source/count evidence       |
+| proves `416+5=421` metrics and `2080+25=2105` scores for deployments 20/21. C02                       |
+| READY_FOR_LOCAL_REVIEW; C03-C09 remain closed/NOT_RUN.                                                |
+| REVIEW-FIX C02 08 (12/09/2026): code `8fe4842`, evidence                                              |
+| `docs/evidence/tk-a17/c02/review-fix-08.md`; R8-01...03 and R7-03/R6-02 closed. Local focused         |
+| 18/99, ML 19/19, collector 26/26, static/build PASS. No live mutation; read-only deployment 20/21     |
+| evidence retains activation boundaries and `416+5=421`, `2080+25=2105`. C02                           |
+| READY_FOR_LOCAL_REVIEW; C03-C09 remain closed/NOT_RUN.                                                |
+| A solo                                                                                                | `feat/a17-demo-checkpoint` | `683bfc6`     | TUẦN NÀY — C04 REVIEW_FIX_REQUIRED |
 
 [Plan tổng](../24-ke-hoach-demo-theo-chang.md) · [Prompt](../prompts/tk-a17-worker.md)
 · [Sổ bàn giao](tk-a17-worker-handoff.md).
@@ -46,16 +46,16 @@ C04/C05 đóng cho tới review trước; các chặng ML/monitor/recovery cũ �
 
 ## 1. File giao theo thứ tự
 
-| Chặng | Phụ thuộc APPROVED | File                                  | Phạm vi review                                 |
-| ----- | ------------------ | ------------------------------------- | ---------------------------------------------- |
-| C00   | Không              | [c00](tk-a17/c00-baseline.md)         | Môi trường và target                           |
-| C01   | C00                | [c01](tk-a17/c01-collector-deploy.md) | Deploy/collector                               |
-| C02   | C01                | [c02](tk-a17/c02-ingestion.md)        | SSH/SQLite, lifecycle deployment               |
-| C03   | C02                | [deploy 3 source](tk-a17/c03-worker-plan.md) | Express + Next.js + Vite đều live PASS         |
-| C04   | C03                | [migrate 2 VPS](tk-a17/c04-migrate-two-vps.md) | Stateless + PostgreSQL đều live PASS        |
-| C05   | C04                | [demo 14/09](tk-a17/c05-demo-14-09-acceptance.md) | Hai rehearsal và DEMO_READY               |
-| ML    | Sau 28/09          | [deferred](tk-a17/c03-ml-runtime.md)  | Thu thêm dữ liệu rồi lập task/review mới       |
-| C04–C09 cũ | Sau demo      | File lịch sử tương ứng                | DEFERRED, không được Worker chạy trong lượt này |
+| Chặng      | Phụ thuộc APPROVED | File                                              | Phạm vi review                                  |
+| ---------- | ------------------ | ------------------------------------------------- | ----------------------------------------------- |
+| C00        | Không              | [c00](tk-a17/c00-baseline.md)                     | Môi trường và target                            |
+| C01        | C00                | [c01](tk-a17/c01-collector-deploy.md)             | Deploy/collector                                |
+| C02        | C01                | [c02](tk-a17/c02-ingestion.md)                    | SSH/SQLite, lifecycle deployment                |
+| C03        | C02                | [deploy 3 source](tk-a17/c03-worker-plan.md)      | Express + Next.js + Vite đều live PASS          |
+| C04        | C03                | [migrate 2 VPS](tk-a17/c04-migrate-two-vps.md)    | Stateless + PostgreSQL đều live PASS            |
+| C05        | C04                | [demo 14/09](tk-a17/c05-demo-14-09-acceptance.md) | Hai rehearsal và DEMO_READY                     |
+| ML         | Sau 28/09          | [deferred](tk-a17/c03-ml-runtime.md)              | Thu thêm dữ liệu rồi lập task/review mới        |
+| C04–C09 cũ | Sau demo           | File lịch sử tương ứng                            | DEFERRED, không được Worker chạy trong lượt này |
 
 Worker chỉ code một chặng mỗi lượt, không tự chạy cả bảng. B6/B8/S4 là scope trong A17,
 không mở task ĐANG LÀM song song. Mỗi chặng có file chi tiết gồm đầu vào, việc làm, file được
@@ -140,20 +140,20 @@ Worker append START/UPDATE/HANDOFF-LOCAL/REVIEW-FIX với ngày thực tế đ�
   Bổ sung ma trận R01–R25, 12 lượt giao, xử lý blocker và prompt khởi động kế thừa HEAD.
   Task về TUẦN NÀY để Worker nhận C00; không mở C01 hoặc tự approve kết quả khảo sát.
 - HANDOFF-LOCAL 11/09 — Bản kế hoạch nằm trong commit chứa dòng này; kiểm tra local Markdown
-links của 10 file thành công, `git diff --check` sạch. Không chạy thêm runtime/test sản phẩm
-sau khi A chuyển yêu cầu sang lập kế hoạch. Raw evidence/helper khảo sát vẫn local chưa commit;
-việc tiếp theo: A gửi prompt khởi động cho Worker hoàn thiện C00. Chưa push/PR/merge.
+  links của 10 file thành công, `git diff --check` sạch. Không chạy thêm runtime/test sản phẩm
+  sau khi A chuyển yêu cầu sang lập kế hoạch. Raw evidence/helper khảo sát vẫn local chưa commit;
+  việc tiếp theo: A gửi prompt khởi động cho Worker hoàn thiện C00. Chưa push/PR/merge.
 
 - START 11/09 — Worker tiếp tục tại `bf951f9`; chỉ thực hiện C00: tái kiểm tra runtime/native
-ABI, focused tests, SSH read-only, manifest và boot/browser evidence. Không làm C01 hoặc chạm
-app B, dữ liệu thật và stash hiện có.
+  ABI, focused tests, SSH read-only, manifest và boot/browser evidence. Không làm C01 hoặc chạm
+  app B, dữ liệu thật và stash hiện có.
 - UPDATE 11/09 — C00-T1/T2/T4 PASS với runtime/lệnh đã chạy lại; VM02 read-only PASS, VM01
- timeout được ghi rõ; public port B timeout và tunnel chỉ xem app B. Đã tạo baseline/manifest/
- evidence và đánh dấu C01–C09 NOT_RUN. C00 chờ commit local và Leader review.
+  timeout được ghi rõ; public port B timeout và tunnel chỉ xem app B. Đã tạo baseline/manifest/
+  evidence và đánh dấu C01–C09 NOT_RUN. C00 chờ commit local và Leader review.
 - HANDOFF-LOCAL 11/09 — `handoff-c00.md`, evidence `docs/evidence/tk-a17/c00/`; READY_FOR_LOCAL_REVIEW.
- Chưa push/PR/merge; Leader cần review target/ABI và mở C01 riêng nếu approve.
-Chờ review: board CHỜ REVIEW kèm ID chặng. Tiếp tục/sửa: ĐANG LÀM.
-HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push/merge.
+  Chưa push/PR/merge; Leader cần review target/ABI và mở C01 riêng nếu approve.
+  Chờ review: board CHỜ REVIEW kèm ID chặng. Tiếp tục/sửa: ĐANG LÀM.
+  HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push/merge.
 
 - START 11/09 — Leader review C00: input code `d4ec3be`, docs `23cd248`, kế thừa plan
   `bf951f9`; kiểm tra scope/ancestry, raw evidence, native runtime và target read-only.
@@ -167,12 +167,12 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   không push/PR/merge; task TUẦN NÀY cho lượt Worker tiếp.
 
 - START 11/09 — Worker tiếp tục HEAD hiện tại `1b447e4` sau C00 APPROVED; chỉ C01: collector
- packaging/compose, deploy v1-v2, marker PostgreSQL, JSONL soak và failure isolation.
+  packaging/compose, deploy v1-v2, marker PostgreSQL, JSONL soak và failure isolation.
 - UPDATE 11/09 — C01 initial v1 fail thật vì PostgreSQL readiness; đã sửa healthcheck/
- `depends_on: service_healthy`, test 44/44 và live v6/v7 running. Marker/volume/collector
- soak/failure isolation đã kiểm tra; C02+ NOT_RUN.
+  `depends_on: service_healthy`, test 44/44 và live v6/v7 running. Marker/volume/collector
+  soak/failure isolation đã kiểm tra; C02+ NOT_RUN.
 - HANDOFF-LOCAL 11/09 — `handoff-c01.md`, evidence `docs/evidence/tk-a17/c01/`;
- READY_FOR_LOCAL_REVIEW. Chưa push/PR/merge.
+  READY_FOR_LOCAL_REVIEW. Chưa push/PR/merge.
 
 - START 11/09 — Leader review C01 tại code `66cbdab`, docs `f0b73aa`, kế thừa review C00
   `1b447e4`. Đọc diff/source/evidence, chạy regression và static checks độc lập, kiểm tra
@@ -204,6 +204,7 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   - HANDOFF C02 11/09: live SSH/SQLite ingestion trên VM02 app 1 deployment 9 đã ghi boundary
     trước/sau, thêm 10 metric/50 score, retry `0`, duplicate `0`; focused 71/71 và static/build PASS.
     `handoff-c02.md` là `READY_FOR_LOCAL_REVIEW`; C03-C09 vẫn `NOT_RUN`, chưa push/PR/merge.
+
 - REVIEW C02 01 11/09 — [review-c02](tk-a17/review-c02.md): **CHANGES_REQUESTED** tại code
   `0967fb9`, docs `8e08f76`. Reviewer focused 71/71, collector 26/26 và static/build PASS, nhưng
   regression boundary 1/1 FAIL. SQLite read-only có 80 rows seq `22..101` trước activation v9 bị
@@ -211,6 +212,7 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   quan sát scheduler thật. Task về ĐANG LÀM; C03–C09 đóng; không push/PR/merge.
 
   - REVIEW-FIX C02 01: Worker dừng trước implementation boundary vì cần Leader duyệt proposal contract/schema byte activation. Handoff `BLOCKED`; dữ liệu 80 rows nhiễm được giữ nguyên; C03-C09 vẫn `NOT_RUN`.
+
 - REVIEW C02 02 11/09 — Leader **APPROVED_WITH_AMENDMENTS** proposal tại `87fa868`: dùng lịch sử
   activation theo runtime episode, stream generation và stop/flush collector trước boundary. Gỡ
   blocker để Worker tiếp tục implementation C02; C02 chưa APPROVED, C03–C09 vẫn đóng.
@@ -318,6 +320,11 @@ HOÀN THÀNH chỉ sau merge và đủ DoD; DEMO_READY không cấp quyền push
   21/22 are accepted; open R3-01…05 for durable recovery, authoritative restore/DB order, relay, UI and
   regression/raw evidence. C05 remains closed/`NOT_RUN`.
 - C04 REVIEW-FIX 03 - 13/09/2026: fresh target live sequence Vite app 18/job 21 then Express/PostgreSQL app 16/job 22 passed VM02 -> VM01 with `keepSource=true`; source pointers/runtime and marker/rows verified. Handoff `READY_FOR_LOCAL_REVIEW`; C05 remains closed/`NOT_RUN`.
+- C04 REVIEW-FIX 03 - 13/09/2026: production migration/pipeline/relay/UI changes and regressions are complete;
+  focused `65/65` plus typecheck/scripts typecheck, ESLint, Prettier and build PASS. Fresh VM02 -> VM01 jobs
+  23/24 (Vite then Express/PostgreSQL, `keepSource=true`) completed with artifact/runtime/HTTP/collector and
+  marker proof. Handoff/evidence: `docs/tasks/tk-a17/handoff-c04.md` and
+  `docs/evidence/tk-a17/c04/review-fix-03/`; C05-C09 remain closed/`NOT_RUN`.
 - C04 REVIEW 04 - 13/09/2026: submission `478b258` **HANDOFF_REJECTED** because production/UI diff is empty
   and jobs 21/22 are reused historical evidence. One added test passes, but R3-01…05 remain open unchanged;
   C05 remains closed/`NOT_RUN`.

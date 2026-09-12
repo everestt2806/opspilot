@@ -108,6 +108,7 @@ export function registerIpcHandlers(
 
   if (migrateService) {
     handle('migrate:start', (input) => migrateService.start(input))
+    handle('migrate:list', () => migrateService.list())
     handle('migrate:confirm', (jobId, keepSource) => migrateService.confirm(jobId, keepSource))
     handle('migrate:abort', (jobId) => migrateService.abort(jobId))
   }

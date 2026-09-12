@@ -38,6 +38,8 @@ const HEALTHCHECK_INTERVAL_MS = 3_000
 const RENDER_COLLECT_INTERVAL_S = '10'
 const COLLECTOR_IMAGE_SUFFIX = ':collector'
 
+type DeployInputWithRemoteSource = DeployInput & { remote_source_path?: string }
+
 export function resolveCollectorDir(): string {
   const candidates = [
     process.env.OPSPILOT_COLLECTOR_DIR,
@@ -828,6 +830,14 @@ export class DeployPipeline {
   private async stepUpload(ctx: RunContext): Promise<void> {
     await this.inStep(ctx, 'UPLOAD', async () => {
       const srcDir = posixJoin(WORK_ROOT, ctx.app.name, 'src')
+      const input = this.requireInput(ctx) as DeployInputWithRemoteSource
+      if (input.remote_source_path) {
+        // Migration already verified the VPS-relayed payload; never fall back to desktop source.
+        await this.ssh.fileSize(ctx.app.vps_id, posixJoin(input.remote_source_path, 'src'))
+        await this.ssh.fileSize(ctx.app.vps_id, posixJoin(input.remote_source_path, 'collector'))
+        this.log(ctx, 'UPLOAD', `Dùng payload đã relay tại ${input.remote_source_path}\n`, 'stdout')
+        return
+      }
       this.log(ctx, 'UPLOAD', `Tải lên ${srcDir} (loại node_modules/.git/dist)\n`, 'stdout')
       try {
         const result = await this.ssh.uploadDir(
@@ -890,7 +900,17 @@ export class DeployPipeline {
           : ''
       }
       let renderEnv = input.env
-      if (plan.needsDb && !ctx.newApp) {
+      const remoteSource = (input as DeployInputWithRemoteSource).remote_source_path
+      if (remoteSource) {
+        const existingEnv = await this.ssh.readFile(ctx.app.vps_id, posixJoin(appDir, '.env'))
+        renderEnv = { ...input.env }
+        for (const line of existingEnv.split(/\r?\n/)) {
+          const separator = line.indexOf('=')
+          if (separator > 0 && !line.startsWith('#')) {
+            renderEnv[line.slice(0, separator)] = line.slice(separator + 1)
+          }
+        }
+      } else if (plan.needsDb && !ctx.newApp) {
         const existingEnv = await this.ssh.readFile(ctx.app.vps_id, posixJoin(appDir, '.env'))
         const existingPassword = readEnvValue(existingEnv, 'POSTGRES_PASSWORD')
         const existingDatabaseUrl = readEnvValue(existingEnv, 'DATABASE_URL')

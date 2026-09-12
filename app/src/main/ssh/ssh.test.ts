@@ -1,3 +1,4 @@
+import { PassThrough } from 'node:stream'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -6,6 +7,33 @@ import {
   shouldRetryCommandAfterDisconnect
 } from './errorMapping'
 import { shellQuote } from './shellQuote'
+import { relayStreams, SshAbortedError } from './manager'
+
+describe('relayStreams', () => {
+  it('preserves multi-chunk bytes and reports progress', async () => {
+    const input = new PassThrough()
+    const output = new PassThrough()
+    const chunks: Buffer[] = []
+    output.on('data', (chunk) => chunks.push(chunk))
+    const progress: number[] = []
+    const transfer = relayStreams(input, output, { onProgress: (bytes) => progress.push(bytes) })
+    input.end(Buffer.from([0, 1, 255, 2]))
+    await expect(transfer).resolves.toEqual({ bytes: 4 })
+    expect(Buffer.concat(chunks)).toEqual(Buffer.from([0, 1, 255, 2]))
+    expect(progress.at(-1)).toBe(4)
+  })
+
+  it('fails and destroys both streams on abort', async () => {
+    const input = new PassThrough()
+    const output = new PassThrough()
+    const controller = new AbortController()
+    const transfer = relayStreams(input, output, { signal: controller.signal })
+    controller.abort()
+    await expect(transfer).rejects.toBeInstanceOf(SshAbortedError)
+    expect(input.destroyed).toBe(true)
+    expect(output.destroyed).toBe(true)
+  })
+})
 
 describe('shellQuote', () => {
   it('boc binh thuong', () => {

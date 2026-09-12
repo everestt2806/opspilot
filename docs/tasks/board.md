@@ -28,18 +28,18 @@
 
 ## Đang ưu tiên — W3/W4
 
-| ID     | Task                                                                 | Chủ                   | Hạn      | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                                            |
-| ------ | -------------------------------------------------------------------- | --------------------- | -------- | ---------- | --------------------------- | --------------------------- | ---------------------------------------------------------------------------------- |
-| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu  | A                     | 14/09    | ĐANG LÀM | `feat/a17-demo-checkpoint`  | C04 HANDOFF_REJECTED review-04 | Production diff rỗng; R3-01…05 giữ nguyên; C05 chưa mở |
-| TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09    | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                   | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới                             |
-| TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09    | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge               | `fe1da33`; 21/21 theo task B                                                       |
-| TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02      | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                   | Code đã merge; DoD SSH tail tại A17/C02                                            |
-| TK-B6  | M5: collector Docker trên VPS                                        | B → A tích hợp        | C01      | CHỜ REVIEW | `feat/m05-collector-docker` | report `dfc0ed7` chưa merge | A17/C00–C01 tái xác minh, giữ app B                                                |
-| TK-S4  | Gate dữ liệu thật A16 + collector VPS                                | A solo                | Sau 28/09 | BACKLOG  | Qua TK-A17                  | C01–C02 đã đạt              | Phần ML deferred để thu thêm dữ liệu                                               |
-| TK-B8  | Monitor Dashboard: chart + score + alert UI                          | A làm thay B từ 10/09 | Sau 28/09 | BACKLOG | Qua TK-A17                  | Sau demo 14/09              | Không mở song song với deploy/migrate                                              |
-| TK-A7  | M3: detector 3 Tier 1                                                | A                     | C03      | BACKLOG    | `feat/m03-tier1-detectors`  | Gộp scope vào A17/C03       | Express/Next/Vite phục vụ trực tiếp demo 14/09                                    |
-| TK-B2  | M12: next-blog + vite-spa + fault endpoint                           | B                     | 10/09    | HOÀN THÀNH | `feat/m12-demo-apps-rest`   | #28 merge                   | 3 app Docker/fault smoke theo B; detector 3 stack chưa hoàn thành                  |
-| TK-S5  | Gate MVP 16/24 FR + smoke/rollback/alert                             | A solo                | Sau A17  | BACKLOG    | —                           | A17/C09                     | Demo có evidence, không tự xác nhận 16/24 FR                                       |
+| ID     | Task                                                                 | Chủ                   | Hạn       | Trạng thái | Branch                      | PR/phụ thuộc                   | Ghi chú                                                           |
+| ------ | -------------------------------------------------------------------- | --------------------- | --------- | ---------- | --------------------------- | ------------------------------ | ----------------------------------------------------------------- |
+| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu   | A                     | 14/09     | ĐANG LÀM   | `feat/a17-demo-checkpoint`  | C04 HANDOFF_REJECTED review-04 | Production diff rỗng; R3-01…05 giữ nguyên; C05 chưa mở            |
+| TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09     | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                      | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới            |
+| TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09     | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge                  | `fe1da33`; 21/21 theo task B                                      |
+| TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02       | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                      | Code đã merge; DoD SSH tail tại A17/C02                           |
+| TK-B6  | M5: collector Docker trên VPS                                        | B → A tích hợp        | C01       | CHỜ REVIEW | `feat/m05-collector-docker` | report `dfc0ed7` chưa merge    | A17/C00–C01 tái xác minh, giữ app B                               |
+| TK-S4  | Gate dữ liệu thật A16 + collector VPS                                | A solo                | Sau 28/09 | BACKLOG    | Qua TK-A17                  | C01–C02 đã đạt                 | Phần ML deferred để thu thêm dữ liệu                              |
+| TK-B8  | Monitor Dashboard: chart + score + alert UI                          | A làm thay B từ 10/09 | Sau 28/09 | BACKLOG    | Qua TK-A17                  | Sau demo 14/09                 | Không mở song song với deploy/migrate                             |
+| TK-A7  | M3: detector 3 Tier 1                                                | A                     | C03       | BACKLOG    | `feat/m03-tier1-detectors`  | Gộp scope vào A17/C03          | Express/Next/Vite phục vụ trực tiếp demo 14/09                    |
+| TK-B2  | M12: next-blog + vite-spa + fault endpoint                           | B                     | 10/09     | HOÀN THÀNH | `feat/m12-demo-apps-rest`   | #28 merge                      | 3 app Docker/fault smoke theo B; detector 3 stack chưa hoàn thành |
+| TK-S5  | Gate MVP 16/24 FR + smoke/rollback/alert                             | A solo                | Sau A17   | BACKLOG    | —                           | A17/C09                        | Demo có evidence, không tự xác nhận 16/24 FR                      |
 
 ## Phụ thuộc được xử lý trong A17 hoặc sau demo
 
@@ -75,6 +75,7 @@
 3. Mở PR: chuyển `CHỜ REVIEW`, thêm link PR và kết quả gate.
 4. Merge: tick DoD, ghi `DONE`, chuyển `HOÀN THÀNH`.
 5. Vướng trên 30 phút: chuyển `BLOCKED`, ghi bằng chứng + điều kiện gỡ.
+
 ### TK-A17 update - 11/09 review-fix
 
 TK-A17 remains `ĐANG LÀM`; C01 findings `C01-R1-01…06` are fixed in code `0d15eb5` and
@@ -85,6 +86,7 @@ handed back as `READY_FOR_LOCAL_REVIEW`. C02-C09 remain closed/`NOT_RUN`; no pus
 C01 review-fix được kiểm tại code `0d15eb5`, docs `518644f`. Năm finding review-01 đã đóng;
 `C01-R2-01` MAJOR còn mở vì detector nhận nhầm POST/detail-only `/items` là GET collection
 route. Task tiếp tục `ĐANG LÀM`; C02-C09 đóng; chưa push/PR/merge.
+
 - C01 REVIEW-FIX 02: `C01-R2-01` closed at code `8e42856`; focused/static/build checks pass,
   read-only VM02 seq `372→373`, no deploy/marker. Handoff is `READY_FOR_LOCAL_REVIEW`.
 
@@ -226,9 +228,10 @@ A đổi phạm vi demo sang hai năng lực bắt buộc thành công: deploy E
 migrate stateless/PostgreSQL giữa hai VPS. C03 được mở lại thành deploy matrix; C04 migrate và C05
 rehearsal đã có task nhưng còn đóng/`NOT_RUN`. ML cùng monitor/fault/recovery deferred tới ít nhất
 28/09. Tài liệu thuyết minh: `docs/25-nguyen-ly-deploy-migrate-demo-14-09.md`.
+
 - REVIEW-FIX C03 - 12/09/2026: Worker code `c149291`; deploy matrix and handoff created. Express,
   Next.js and Vite each passed the real `PRECHECK -> UPLOAD -> RENDER -> BUILD -> DEPLOY ->
-  HEALTHCHECK -> RECORD` pipeline on VM02; Express redeploy retained the PostgreSQL marker. Focused
+HEALTHCHECK -> RECORD` pipeline on VM02; Express redeploy retained the PostgreSQL marker. Focused
   `55/55`, collector `26/26`, typecheck/scripts typecheck, scoped ESLint/Prettier and build passed.
   C03 is `READY_FOR_LOCAL_REVIEW`; C04/C05 and later remain closed/`NOT_RUN`, with no push/PR/merge.
 - Current C03 status: `READY_FOR_LOCAL_REVIEW` at code `c149291`, docs `bf0580a` plus bookkeeping
@@ -269,6 +272,7 @@ C03 **APPROVED** tại code `c060c75`, submitted `53aa07e`. Reviewer focused 65/
 apps/deployments, ciphertext/master key, Electron resolver SSH, unsafe-profile cleanup và tunnel ba
 app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express app 16/deployment 39. VM01
 `221.121.1.79:22` đang timeout nên Worker code/test trước; live hai VPS chưa được phép báo PASS.
+
 - C04 REVIEW-FIX 01 - 13/09/2026: local `49/49`, typecheck/scripts typecheck, scoped ESLint, Prettier and build passed. VM02 profile 2 -> VM01 profile 1 live sequence passed in order: Vite app 18/job 18, then Express/PostgreSQL app 16/job 19, both `keepSource=true`. Evidence: `docs/evidence/tk-a17/c04/review-fix-01/`; handoff `READY_FOR_LOCAL_REVIEW`. C05-C09 remain closed/`NOT_RUN`.
 - C04 REVIEW 02 - 13/09/2026: **CHANGES_REQUESTED** at code `67063ff`, submitted `06da273`. Jobs 18/19
   reached completed, but actual source pointers crossed into target deployments and both source containers were
@@ -280,6 +284,12 @@ app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express
   recovery, authoritative restore/DB order, relay close race, UI state and real regression/raw evidence. C05
   remains closed/`NOT_RUN`.
 - C04 REVIEW-FIX 03 - 13/09/2026: base `a51f72e`; local `50/50` plus typecheck/scripts typecheck, ESLint, Prettier/build PASS. Fresh target sequence Vite app 18/job 21 then Express/PostgreSQL app 16/job 22 on VM02 -> VM01 passed with `keepSource=true`; source pointers `41/39`, runtime/HTTP recovery, checksum, collector and PostgreSQL marker/rows PASS. C04 `READY_FOR_LOCAL_REVIEW`; C05-C09 closed/`NOT_RUN`. Evidence `docs/evidence/tk-a17/c04/review-fix-02/`.
+- C04 REVIEW-FIX 03 - 13/09/2026: production migration restore uses the VPS-relayed payload through the shared
+  pipeline; persisted migration IPC/MigratePage state and relay exact-byte/backpressure regressions are present.
+  Focused `65/65`, typecheck/scripts typecheck, scoped ESLint, Prettier and build PASS. Fresh jobs `23` (Vite 18)
+  then `24` (Express/PostgreSQL 16), VM02 -> VM01, `keepSource=true`, completed with runtime/HTTP/collector,
+  checksum/file and marker proof. Handoff/evidence are under `docs/tasks/tk-a17/handoff-c04.md` and
+  `docs/evidence/tk-a17/c04/review-fix-03/`; C05-C09 remain closed/`NOT_RUN`.
 - C04 REVIEW 04 - 13/09/2026: submission `478b258` **HANDOFF_REJECTED**. Focused 50/50 and typecheck pass,
   but diff from `a51f72e` has only one test plus docs and reuses jobs 21/22; no production/UI finding was fixed.
   R3-01…05 remain open and C05 remains closed/`NOT_RUN`.

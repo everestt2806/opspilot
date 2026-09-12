@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import type { Readable, Writable } from 'node:stream'
 import * as tar from 'tar'
 
 import type { IpcError } from '@shared/ipc'
@@ -50,6 +51,47 @@ export interface UploadOptions {
 export interface RelayOptions {
   signal?: AbortSignal
   onProgress?: (bytes: number) => void
+}
+
+/** Copy a remote artifact without buffering it in the desktop process. */
+export function relayStreams(
+  input: Readable,
+  output: Writable,
+  options: Pick<RelayOptions, 'signal' | 'onProgress'> = {}
+): Promise<{ bytes: number }> {
+  return new Promise((resolve, reject) => {
+    let bytes = 0
+    let settled = false
+    const finish = (error?: unknown): void => {
+      if (settled) return
+      settled = true
+      if (error) reject(error)
+      else resolve({ bytes })
+    }
+    const abort = (): void => {
+      input.destroy()
+      output.destroy()
+      finish(new SshAbortedError())
+    }
+    if (options.signal?.aborted) {
+      abort()
+      return
+    }
+    options.signal?.addEventListener('abort', abort, { once: true })
+    input.on('data', (chunk: Buffer) => {
+      bytes += chunk.length
+      options.onProgress?.(bytes)
+      if (!output.write(chunk)) input.pause()
+    })
+    output.on('drain', () => input.resume())
+    input.once('error', finish)
+    output.once('error', finish)
+    input.once('end', () => output.end())
+    output.once('finish', () => {
+      options.signal?.removeEventListener('abort', abort)
+      finish()
+    })
+  })
 }
 
 export interface SshStatusEvent {
@@ -205,27 +247,23 @@ export class SshManager extends EventEmitter {
       { signal: options.signal, timeoutMs: 900_000 },
       false
     )
+    const outputResult = this.awaitChannelResult(
+      output,
+      { signal: options.signal, timeoutMs: 900_000 },
+      false
+    )
     const failure = new Promise<never>((_, reject) => {
       output.on('error', reject)
       output.stderr.on('data', (chunk: Buffer) => {
         if (chunk.length > 0) reject(new Error(chunk.toString('utf8')))
       })
     })
-    input.on('data', (chunk: Buffer) => {
-      bytes += chunk.length
-      options.onProgress?.(bytes)
-      if (!output.write(chunk)) input.pause()
-    })
-    output.on('drain', () => input.resume())
-    input.on('end', () => output.end())
+    const relay = relayStreams(input, output, options)
     try {
       const sourceResult = await Promise.race([result, failure])
       if (sourceResult.code !== 0) throw new AppError('UNKNOWN', 'Đọc artifact nguồn thất bại.')
-      const targetResult = await this.awaitChannelResult(
-        output,
-        { signal: options.signal, timeoutMs: 900_000 },
-        false
-      )
+      const targetResult = await outputResult
+      bytes = (await relay).bytes
       if (targetResult.code !== 0) throw new AppError('UNKNOWN', 'Ghi artifact đích thất bại.')
     } catch (error) {
       input.destroy()

@@ -1,7 +1,7 @@
 import { join as posixJoin } from 'node:path/posix'
 
 import type Database from 'better-sqlite3'
-import type { App, MigrateEvent, MigrateInput } from '@shared/ipc'
+import type { App, MigrateEvent, MigrateInput, MigrateJobView } from '@shared/ipc'
 
 import { AppRepository } from '../db/appRepository'
 import { ActionLogRepository } from '../db/actionLogRepository'
@@ -68,6 +68,10 @@ export class MigrateService {
       () => undefined
     )
     return { job_id: job.id }
+  }
+
+  list(): MigrateJobView[] {
+    return this.migrations.list()
   }
 
   async confirm(jobId: number, keepSource: boolean): Promise<void> {
@@ -191,14 +195,29 @@ export class MigrateService {
   }
 
   private async run(job: MigrationJob, source: App, signal: AbortSignal): Promise<void> {
-    const target = this.createTargetApp(source, job.target_vps_id)
+    let target: App | null = null
     let sourceProbe: string
     try {
+      target = this.createTargetApp(source, job.target_vps_id)
       sourceProbe = await this.readProbe(job.source_vps_id, source, signal)
     } catch (error) {
-      await this.cleanupTarget(job, target)
-      this.migrations.update(job.id, { status: 'rolled_back', failed_step: 'PREPARE' })
-      this.emit({ type: 'finished', job_id: job.id, status: 'rolled_back', downtime_ms: 0 })
+      if (target) await this.cleanupTarget(job, target)
+      let recovered = true
+      try {
+        await this.startSourceAndVerify(job)
+      } catch {
+        recovered = false
+      }
+      this.migrations.update(job.id, {
+        status: recovered ? 'rolled_back' : 'failed',
+        failed_step: 'PREPARE'
+      })
+      this.emit({
+        type: 'finished',
+        job_id: job.id,
+        status: recovered ? 'rolled_back' : 'failed',
+        downtime_ms: 0
+      })
       this.actions.insert({
         action: 'migrate_start',
         status: 'failed',
@@ -206,11 +225,12 @@ export class MigrateService {
         app_id: source.id,
         detail_json: JSON.stringify({
           job_id: job.id,
-          error: describeMigrationError(error)
+          error: `${describeMigrationError(error)}; source_recovered=${recovered}`
         })
       })
       return
     }
+    if (!target) return
     this.migrations.update(job.id, {
       verify_json: JSON.stringify({ target_app_id: target.id, source_probe: sourceProbe })
     })
@@ -256,8 +276,9 @@ export class MigrateService {
             app_name: target.name,
             app_id: target.id,
             source_path: this.sourcePath(source.id),
+            remote_source_path: targetDir,
             env: {}
-          },
+          } as Parameters<DeployPipeline['run']>[0],
           signal
         )
         await this.waitDeployment(started.deploymentId, signal)
@@ -297,13 +318,22 @@ export class MigrateService {
         })
       }
       await this.cleanupTarget(job, target)
-      await this.ssh
-        .exec(job.source_vps_id, `cd ${shellQuote(sourceDir)} && docker compose start app`, {
-          retryOnReconnect: false
-        })
-        .catch(() => undefined)
-      this.migrations.update(job.id, { status: 'rolled_back', failed_step: failedStep })
-      this.emit({ type: 'finished', job_id: job.id, status: 'rolled_back', downtime_ms: 0 })
+      let recovered = true
+      try {
+        await this.startSourceAndVerify(job)
+      } catch {
+        recovered = false
+      }
+      this.migrations.update(job.id, {
+        status: recovered ? 'rolled_back' : 'failed',
+        failed_step: failedStep
+      })
+      this.emit({
+        type: 'finished',
+        job_id: job.id,
+        status: recovered ? 'rolled_back' : 'failed',
+        downtime_ms: 0
+      })
       this.actions.insert({
         action: 'migrate_start',
         status: 'failed',
@@ -311,7 +341,7 @@ export class MigrateService {
         app_id: source.id,
         detail_json: JSON.stringify({
           job_id: job.id,
-          error: describeMigrationError(error)
+          error: `${describeMigrationError(error)}; source_recovered=${recovered}`
         })
       })
     } finally {
@@ -456,6 +486,12 @@ export class MigrateService {
         }
       }
     )
+    if (transfer.bytes !== expectedBytes) {
+      throw new AppError('UNKNOWN', 'Artifact truyền chưa đủ byte; không giải nén file partial.', {
+        step: 'TRANSFER',
+        cause: new Error(`expected=${expectedBytes}, actual=${transfer.bytes}`)
+      })
+    }
     this.migrations.update(job.id, { bytes_transferred: transfer.bytes })
     const checksum = await this.ssh.exec(
       job.target_vps_id,
@@ -667,15 +703,20 @@ export class MigrateService {
     ]
   }
 
-  private async cleanupTarget(job: MigrationJob, target: App): Promise<void> {
-    await this.ssh
-      .exec(
+  private async cleanupTarget(job: MigrationJob, target: App): Promise<boolean> {
+    let remoteClean = false
+    try {
+      const result = await this.ssh.exec(
         job.target_vps_id,
-        `cd ${shellQuote(this.appDir(target.id))} && docker compose down -v || true`,
+        `cd ${shellQuote(this.appDir(target.id))} && docker compose down -v`,
         { retryOnReconnect: false }
       )
-      .catch(() => undefined)
-    this.database.prepare('DELETE FROM app WHERE id=?').run(target.id)
+      remoteClean = result.code === 0
+    } catch {
+      remoteClean = false
+    }
+    if (remoteClean) this.database.prepare('DELETE FROM app WHERE id=?').run(target.id)
+    return remoteClean
   }
 
   private async execOk(
