@@ -1,8 +1,8 @@
 # TK-A17/C04 — Migrate ứng dụng thành công giữa hai VPS
 
-> **OPEN — C03 APPROVED review-03 ngày 13/09/2026.** Worker chỉ làm C04 và dừng bàn giao để
-> Leader review trước C05. VM01 đang TCP timeout; vẫn hoàn thiện code/test, nhưng live outcome phải
-> `BLOCKED` cho tới khi hai VPS thật cùng truy cập được.
+> **REVIEW_FIX_REQUIRED — Leader review 01 ngày 13/09/2026.** Thực hiện
+> [review-c04.md](review-c04.md) để đóng `C04-R1-01…08`; C05 tiếp tục đóng. VM01 đang TCP timeout;
+> sau khi local fix đạt, live outcome vẫn phải `BLOCKED_EXTERNAL` cho tới khi hai VPS thật cùng truy cập được.
 
 ## Mục tiêu
 
