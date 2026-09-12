@@ -20,6 +20,7 @@ import { MonitorService } from './monitor/service'
 import { MonitorScheduler } from './monitor/scheduler'
 import { MlApiClient } from './monitor/mlApi'
 import { shutdownRuntime } from './shutdown'
+import { MigrateService } from './migrate/service'
 
 let mainWindow: BrowserWindow | null = null
 let mlService: MlServiceManager | null = null
@@ -116,6 +117,9 @@ void app
 
     const historyService = new HistoryService(new ActionLogRepository(database))
     const monitorService = new MonitorService(database)
+    const migrateService = new MigrateService(database, sshManager, (event) => {
+      mainWindow?.webContents.send('migrate:event', event)
+    })
 
     registerIpcHandlers(
       mlService,
@@ -124,7 +128,8 @@ void app
       deployService,
       historyService,
       () => mainWindow,
-      monitorService
+      monitorService,
+      migrateService
     )
     if (process.env.OPSPILOT_C01_DEPLOY_ONLY !== '1') {
       monitorScheduler = new MonitorScheduler(async () => {

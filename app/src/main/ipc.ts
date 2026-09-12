@@ -13,6 +13,7 @@ import { scanVpsEnvironment } from './vps/scanService'
 import type { VpsService } from './vps/service'
 import type { MonitorService } from './monitor/service'
 import { MlApiClient } from './monitor/mlApi'
+import type { MigrateService } from './migrate/service'
 
 export interface WindowController {
   minimize(): void
@@ -48,7 +49,8 @@ export function registerIpcHandlers(
   deployService: DeployService,
   historyService: HistoryService,
   getWindow: () => WindowController | null,
-  monitorService?: MonitorService
+  monitorService?: MonitorService,
+  migrateService?: MigrateService
 ): void {
   handle('vps:list', () => vpsService.list())
   handle('vps:create', (input) => vpsService.create(input))
@@ -103,6 +105,12 @@ export function registerIpcHandlers(
   handle('app:rollback', (appId, targetDeploymentId) =>
     deployService.rollback(appId, targetDeploymentId)
   )
+
+  if (migrateService) {
+    handle('migrate:start', (input) => migrateService.start(input))
+    handle('migrate:confirm', (jobId, keepSource) => migrateService.confirm(jobId, keepSource))
+    handle('migrate:abort', (jobId) => migrateService.abort(jobId))
+  }
 
   handle('history:list', (filter) => historyService.list(filter))
 
