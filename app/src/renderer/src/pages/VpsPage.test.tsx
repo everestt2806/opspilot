@@ -7,6 +7,7 @@ import type { ActionLogEntry, App, Vps, VpsResources } from '@shared/ipc'
 import { useUiState } from '../store/uiState'
 import { useVpsStore } from '../store/vpsStore'
 import { VpsPage } from './VpsPage'
+import { strings } from '../strings'
 
 const VPS_A: Vps = {
   id: 1,
@@ -110,12 +111,10 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
 
     render(<VpsPage />)
 
-    expect(
-      await screen.findByText('No VPS yet. Add your first VPS to start deploying.')
-    ).toBeTruthy()
-    expect(screen.getByText('Add your first VPS')).toBeTruthy()
+    expect(await screen.findByText(strings.vps.empty)).toBeTruthy()
+    expect(screen.getByText(strings.vps.createFirst)).toBeTruthy()
     expect(screen.getByLabelText('Total VPS').textContent).toContain('0')
-    expect(screen.queryByText('Back to VPS list')).toBeNull()
+    expect(screen.queryByText(strings.vps.backToList)).toBeNull()
   })
 
   it('error: vps:list loi -> Alert co nut Thu lai goi lai list', async () => {
@@ -133,8 +132,8 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
 
     render(<VpsPage />)
 
-    expect(await screen.findByText('Could not load the VPS list')).toBeTruthy()
-    fireEvent.click(screen.getByText('Retry'))
+    expect(await screen.findByText(strings.vps.loadError)).toBeTruthy()
+    fireEvent.click(screen.getByText(strings.common.retry))
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
   })
 
@@ -188,16 +187,16 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
 
     await waitFor(() => expect(screen.getByText('VM01')).toBeTruthy())
     expect(screen.getByText('VM02')).toBeTruthy()
-    expect(screen.queryByText('Back to VPS list')).toBeNull()
+    expect(screen.queryByText(strings.vps.backToList)).toBeNull()
 
     fireEvent.click(screen.getByText('VM02'))
     await waitFor(() => {
-      expect(screen.getByLabelText('Back to VPS list')).toBeTruthy()
+      expect(screen.getByLabelText(strings.vps.backToList)).toBeTruthy()
       expect(screen.getByText('VM02')).toBeTruthy()
     })
     expect(screen.queryByText('VM01')).toBeNull()
 
-    fireEvent.click(screen.getByLabelText('Back to VPS list'))
+    fireEvent.click(screen.getByLabelText(strings.vps.backToList))
     await waitFor(() => expect(screen.getByText('VM01')).toBeTruthy())
     expect(screen.getByText('VM02')).toBeTruthy()
   })
@@ -295,7 +294,7 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
     fireEvent.click(await screen.findByText('Activity'))
     expect(await screen.findByText('Deploy succeeded')).toBeTruthy()
 
-    fireEvent.click(screen.getByLabelText('Back to VPS list'))
+    fireEvent.click(screen.getByLabelText(strings.vps.backToList))
     await waitFor(() => expect(screen.getByText('VM02')).toBeTruthy())
     fireEvent.click(screen.getByText('VM02'))
     fireEvent.click(await screen.findByText('Activity'))
@@ -320,10 +319,8 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
     fireEvent.click((await screen.findAllByText('Delete VPS'))[0])
     fireEvent.click((await screen.findAllByText('Delete VPS'))[1])
 
-    await waitFor(() =>
-      expect(screen.getByText('No VPS yet. Add your first VPS to start deploying.')).toBeTruthy()
-    )
-    expect(screen.queryByText('Back to VPS list')).toBeNull()
+    await waitFor(() => expect(screen.getByText(strings.vps.empty)).toBeTruthy())
+    expect(screen.queryByText(strings.vps.backToList)).toBeNull()
   })
 
   it('checkbox cot chon: danh dau VPS cap nhat selectedVpsIds cho header chinh', async () => {
@@ -356,7 +353,7 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
 
     await waitFor(() => expect(getResources).toHaveBeenCalledTimes(2))
 
-    fireEvent.click(screen.getAllByText('Refresh')[0])
+    fireEvent.click(screen.getAllByText(strings.vps.checkResources)[0])
     await waitFor(() => expect(getResources).toHaveBeenCalledTimes(4))
   })
 })

@@ -6,12 +6,12 @@ export const strings = {
   },
   navigation: {
     vps: 'VPS',
-    apps: 'Apps',
-    deploy: 'Deploy',
-    dashboard: 'Dashboard',
-    migrate: 'Migrate',
-    history: 'History',
-    settings: 'Settings'
+    apps: 'Ứng dụng',
+    deploy: 'Triển khai',
+    dashboard: 'Tổng quan',
+    migrate: 'Di chuyển',
+    history: 'Lịch sử',
+    settings: 'Cài đặt'
   },
   status: {
     ssh: 'SSH',
@@ -21,15 +21,15 @@ export const strings = {
     unknown: 'Not connected'
   },
   common: {
-    cancel: 'Cancel',
-    notAvailable: 'Not available',
-    refresh: 'Refresh',
-    retry: 'Retry',
-    save: 'Save',
-    close: 'Close',
-    back: 'Back',
-    confirm: 'Confirm',
-    saveError: 'Could not save the VPS'
+    cancel: 'Hủy',
+    notAvailable: 'Chưa có',
+    refresh: 'Làm mới',
+    retry: 'Thử lại',
+    save: 'Lưu',
+    close: 'Đóng',
+    back: 'Quay lại',
+    confirm: 'Xác nhận',
+    saveError: 'Không thể lưu VPS'
   },
   pipeline: {
     title: 'Deploy Pipeline (Dynamic)',
@@ -78,14 +78,14 @@ export const strings = {
   },
   vps: {
     title: 'Servers',
-    description: 'Fleet overview and server control panel for OpsPilot.',
-    create: 'Add VPS',
-    createFirst: 'Add your first VPS',
-    listCardTitle: 'Server list',
-    empty: 'No VPS yet. Add your first VPS to start deploying.',
-    loadError: 'Could not load the VPS list',
-    checkResources: 'Refresh',
-    backToList: 'Back to VPS list',
+    description: 'Tổng quan đội máy và bảng điều khiển VPS của OpsPilot.',
+    create: 'Thêm VPS',
+    createFirst: 'Thêm VPS đầu tiên',
+    listCardTitle: 'Danh sách VPS',
+    empty: 'Chưa có VPS. Hãy thêm VPS đầu tiên để bắt đầu triển khai.',
+    loadError: 'Không thể tải danh sách VPS',
+    checkResources: 'Làm mới',
+    backToList: 'Quay lại danh sách VPS',
     columns: {
       name: 'Name',
       ip: 'IP',
@@ -275,18 +275,18 @@ export const strings = {
     summaryLabel: 'Tóm tắt hệ thống',
     refresh: 'Refresh',
     stats: {
-      vpsOnline: 'VPS online',
-      appsRunning: 'Apps running',
-      deploy24h: 'Deploys in 24h',
-      lastDeploy: 'Last deploy'
+      vpsOnline: 'VPS đang hoạt động',
+      appsRunning: 'Ứng dụng đang chạy',
+      deploy24h: 'Lần triển khai trong 24 giờ',
+      lastDeploy: 'Triển khai gần nhất'
     },
     recent: {
-      title: 'Recent activity',
-      columnTime: 'Time',
-      columnAction: 'Action',
+      title: 'Hoạt động gần đây',
+      columnTime: 'Thời gian',
+      columnAction: 'Tác vụ',
       columnVps: 'VPS',
-      columnStatus: 'Status',
-      columnMessage: 'Message',
+      columnStatus: 'Trạng thái',
+      columnMessage: 'Thông báo',
       empty: 'No activity yet. Deploy your first app to see history here.',
       deployNow: 'Deploy now',
       unknownVps: 'Deleted VPS',
@@ -302,14 +302,14 @@ export const strings = {
       failed: 'Failed',
       cancelled: 'Cancelled'
     },
-    emptyVps: 'No VPS yet. Add your first VPS to start deploying.',
-    addVps: 'Add VPS',
-    loadFailed: 'Could not load the dashboard data.',
-    retry: 'Retry'
+    emptyVps: 'Chưa có VPS. Hãy thêm VPS đầu tiên để bắt đầu triển khai.',
+    addVps: 'Thêm VPS',
+    loadFailed: 'Không thể tải dữ liệu tổng quan.',
+    retry: 'Thử lại'
   },
   history: {
-    title: 'History',
-    description: 'Browse deploys, rollbacks and alerts.',
+    title: 'Lịch sử',
+    description: 'Xem các lần triển khai, khôi phục và cảnh báo.',
     filters: {
       action: 'Action',
       actionAll: 'All',

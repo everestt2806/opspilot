@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DbDatabase, DbSchemaTable, DbUser } from '@shared/ipc'
 
 import { VpsDatabaseTab } from './VpsDatabaseTab'
+import { strings } from '../strings'
 
 const DB_BLOG: DbDatabase = { oid: 99, name: 'blog', size_bytes: 13_107_200, table_count: 3 }
 const DB_EMPTY: DbDatabase = { oid: 100, name: 'store', size_bytes: 1024, table_count: 0 }
@@ -220,7 +221,7 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
     render(<VpsDatabaseTab vpsId={7} />)
 
     expect(await screen.findByText('Could not load databases.')).toBeTruthy()
-    fireEvent.click(screen.getByText('Retry'))
+    fireEvent.click(screen.getByText(strings.common.retry))
     await waitFor(() => expect(listDatabases).toHaveBeenCalledTimes(2))
   })
 

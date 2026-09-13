@@ -7,6 +7,7 @@ import type { Vps, VpsResources } from '@shared/ipc'
 
 import { ServerSelector } from './ServerSelector'
 import type { RowResourceState } from '../vpsResources'
+import { strings } from '../strings'
 
 const VPS_A: Vps = {
   id: 1,
@@ -91,8 +92,8 @@ describe('ServerSelector — bang danh sach VPS', () => {
     const onAddVps = vi.fn()
     renderSelector({ items: [], onAddVps })
 
-    expect(screen.getByText('No VPS yet. Add your first VPS to start deploying.')).toBeTruthy()
-    fireEvent.click(screen.getByText('Add your first VPS'))
+    expect(screen.getByText(strings.vps.empty)).toBeTruthy()
+    fireEvent.click(screen.getByText(strings.vps.createFirst))
     expect(onAddVps).toHaveBeenCalledTimes(1)
   })
 
@@ -100,7 +101,7 @@ describe('ServerSelector — bang danh sach VPS', () => {
     renderSelector({ items: [VPS_A], resources: { 1: { status: 'success', data: RES } } })
 
     const card = document.querySelector('.server-list-card') as HTMLElement
-    expect(within(card).queryByRole('button', { name: 'Add VPS' })).toBeNull()
+    expect(within(card).queryByRole('button', { name: strings.vps.create })).toBeNull()
   })
 
   it('2 VPS online/offline: cot Status + Site + bam dong goi onSelect', () => {

@@ -113,10 +113,10 @@ describe('DashboardPage', () => {
 
     await screen.findByText(strings.dashboard.title)
 
-    expect(statCell('VPS online').textContent).toContain('1 / 2')
-    expect(statCell('Apps running').textContent).toContain('1 / 2')
-    expect(statCell('Deploys in 24h').textContent).toContain('2')
-    expect(statCell('Last deploy').textContent).toMatch(/ago|just now/)
+    expect(statCell(strings.dashboard.stats.vpsOnline).textContent).toContain('1 / 2')
+    expect(statCell(strings.dashboard.stats.appsRunning).textContent).toContain('1 / 2')
+    expect(statCell(strings.dashboard.stats.deploy24h).textContent).toContain('2')
+    expect(statCell(strings.dashboard.stats.lastDeploy).textContent).toMatch(/ago|just now/)
 
     expect(screen.getAllByText('Deployed v7 successfully.').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Rollback failed.').length).toBeGreaterThan(0)
@@ -141,10 +141,8 @@ describe('DashboardPage', () => {
     })
     render(<DashboardPage onOpenVps={onOpenVps} />)
 
-    expect(
-      await screen.findByText('No VPS yet. Add your first VPS to start deploying.')
-    ).toBeTruthy()
-    fireEvent.click(screen.getByText('Add VPS'))
+    expect(await screen.findByText(strings.dashboard.emptyVps)).toBeTruthy()
+    fireEvent.click(screen.getByText(strings.dashboard.addVps))
     expect(onOpenVps).toHaveBeenCalled()
   })
 
@@ -166,7 +164,7 @@ describe('DashboardPage', () => {
     render(<DashboardPage />)
 
     expect(await screen.findByText('Khong doc duoc DB.')).toBeTruthy()
-    fireEvent.click(screen.getByText('Retry'))
+    fireEvent.click(screen.getByText(strings.dashboard.retry))
     expect(await screen.findByText(strings.dashboard.title)).toBeTruthy()
   })
 })
