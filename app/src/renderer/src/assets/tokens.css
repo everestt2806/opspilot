@@ -8,6 +8,9 @@
   --bg-elevated: rgba(255, 255, 255, 0.9);
   --bg-panel-translucent: rgba(255, 255, 255, 0.75);
   --bg-elevated-translucent: rgba(255, 255, 255, 0.9);
+  --surface-card: rgba(255, 255, 255, 0.75);
+  --font-ui: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Cascadia Mono', Consolas, monospace;
   --border: rgba(0, 0, 0, 0.12);
   --border-input: rgba(0, 0, 0, 0.2);
   --border-input-hover: rgba(0, 0, 0, 0.35);
@@ -49,6 +52,9 @@
   --bg-elevated: rgba(255, 255, 255, 0.065);
   --bg-panel-translucent: rgba(255, 255, 255, 0.045);
   --bg-elevated-translucent: rgba(255, 255, 255, 0.065);
+  --surface-card: rgba(255, 255, 255, 0.045);
+  --font-ui: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Cascadia Mono', Consolas, monospace;
   --border: rgba(255, 255, 255, 0.06);
   --border-input: rgba(255, 255, 255, 0.12);
   --border-input-hover: rgba(255, 255, 255, 0.2);

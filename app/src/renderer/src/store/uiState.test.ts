@@ -1,23 +1,24 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest'
-
-import { useUiState } from './uiState'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 describe('uiState theme preference', () => {
   beforeEach(() => {
     localStorage.clear()
-    useUiState.setState({ theme: 'dark' })
+    vi.resetModules()
   })
 
-  it('uses dark when no session has been stored', () => {
+  it('uses dark when storage is empty', async () => {
+    const { useUiState } = await import('./uiState')
     expect(useUiState.getState().theme).toBe('dark')
   })
 
-  it('persists an explicitly selected light theme', async () => {
-    useUiState.getState().setTheme('light')
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(JSON.parse(localStorage.getItem('opspilot-ui-session') ?? '{}').state.theme).toBe(
-      'light'
+  it('rehydrates an explicitly persisted light theme', async () => {
+    localStorage.setItem(
+      'opspilot-ui-session',
+      JSON.stringify({ state: { theme: 'light', activePage: 'settings' }, version: 0 })
     )
+    const { useUiState } = await import('./uiState')
+    await useUiState.persist.rehydrate()
+    expect(useUiState.getState().theme).toBe('light')
   })
 })

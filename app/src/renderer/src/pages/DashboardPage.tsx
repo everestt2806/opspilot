@@ -5,18 +5,7 @@ import {
   ReloadOutlined,
   RocketOutlined
 } from '@ant-design/icons'
-import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  Empty,
-  Space,
-  Table,
-  Tag,
-  Tooltip,
-  Typography
-} from 'antd'
+import { Alert, Badge, Button, Card, Empty, Space, Table, Tag, Tooltip, Typography } from 'antd'
 
 import type { ActionLogEntry, App, IpcError, Vps } from '@shared/ipc'
 

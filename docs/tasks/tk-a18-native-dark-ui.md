@@ -165,6 +165,9 @@ Reviewer phải trả lời **có** cho cả sáu câu:
 - `UPDATE 13/09` — Checkpoint shell pass tại `cfc7a8d`; renderer dark default/persist, title bar, navigation, Settings Appearance và density tokens đã hoạt động. Focused `8/8`, typecheck/build/lint pass.
 - `HANDOFF-LOCAL 13/09` — Local review package gồm renderer changes, scrubbed `docs/evidence/tk-a18/after/`, `docs/evidence/tk-a18/README.md` và `docs/tasks/tk-a18/handoff.md`; full app `289/289` + ML `19/19`, no push/PR/merge. Baseline `before/` chưa có, ghi rõ là DoD gap.
 - `UPDATE 13/09` — Checkpoint workflow/evidence pass tại `cee7d9a`; chuẩn bị checkpoint cuối với task log, board và handoff đồng bộ.
+- `UPDATE 13/09` — Review-Fix 02 F0 `3710d55`, F1 `0654bb0`, F2 `36dec2d`; F3 đã bổ sung regression thật, capture profile tạm và evidence review-02.
+- `HANDOFF-LOCAL 13/09` — Đã đóng mapping R1-01…07 trong handoff; Mica `MICA_FALLBACK`, không live mutation, dừng `READY_FOR_LOCAL_REVIEW`.
+- `UPDATE 13/09` — Review-Fix 02 full gate: app `291/291`, ML `19/19`, typecheck/lint/build PASS; Prettier còn 2 boundary files không được sửa theo scope.
 - `PLAN 13/09` — Leader mở TK-A18 theo yêu cầu: native desktop hơn, dark mặc định, giảm web/AI
   slop; khóa backend/live và giữ `936e643` làm rollback point. Worker chưa bắt đầu.
 - `REVIEW 13/09` — Leader review submission `c35e797`: `CHANGES_REQUESTED`; mở A18-R1-01…07.

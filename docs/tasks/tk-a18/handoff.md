@@ -1,6 +1,6 @@
 # TK-A18 — Handoff
 
-- Status: `REVIEW_FIX_REQUIRED`
+- Status: `READY_FOR_LOCAL_REVIEW`
 - Branch: `feat/a18-native-dark-ui`
 - Parent before task packet: `66ab90b`
 - Stable demo rollback point: `936e643`
@@ -9,13 +9,23 @@
 
 ## Local handoff
 
-- Code checkpoints: `cfc7a8d` (`ui: establish native dark shell`), `cee7d9a` (`ui: restyle desktop workflows`), final local HEAD (`test: verify native dark renderer`).
+- Code checkpoints: `3710d55` (F0), `0654bb0` (F1), `36dec2d` (F2), final local HEAD (F3).
 - Visible changes: dark-first persisted theme, compact frameless title bar with only app/caption/window controls, pane/sidebar navigation, restrained surface tokens, compact summary strips, flat Settings appearance section, and shared desktop density across renderer screens.
 - Regression coverage: default dark and persisted light theme, title-bar IPC controls, existing Deploy/Migrate action/state tests, and full existing renderer suite.
-- Tests: `pnpm test` = app `289/289`, ML `19/19`, exit 0; `pnpm typecheck` exit 0; `pnpm lint` exit 0; `pnpm build` exit 0. Focused renderer tests `8/8`, exit 0.
-- Prettier: touched renderer files pass; full `pnpm exec prettier --check .` is blocked by 50 pre-existing generated `.out-scripts`/cache files outside the task change.
-- Visual evidence: `docs/evidence/tk-a18/after/`; scrubbed host/IP values. `before/` baseline is not available and is a known DoD gap.
+- Tests: `pnpm test` = app `291/291` across 53 files, ML `19/19`, exit 0; `pnpm typecheck`/`pnpm lint`/`pnpm build` exit 0. Focused Review-Fix tests `6/6`, exit 0.
+- Prettier: generated `.out-scripts/` and `.pytest_cache/` are ignored as planned; full check still reports only pre-existing boundary files `src/main/detectors/types.ts` and `src/shared/ipc.ts`, which remain untouched by scope.
+- Visual evidence: `docs/evidence/tk-a18/review-02/`; before/after baseline copied as instructed and host/IP values scrubbed.
 - No live mutation, backend/contract/preload/shared change, push, PR, or merge was performed. Worker stops at `READY_FOR_LOCAL_REVIEW`.
+
+## Review-Fix 02 handoff
+
+- F0 `3710d55`: native Windows `titleBarOverlay`/Snap Layout path, Mica option, safe fallback, and no duplicate HTML caption buttons.
+- F1 `0654bb0`: Fluent token primitives, Segoe/Cascadia typography, sidebar/table/control states, focus-visible/reduced-motion rules, and generated/cache Prettier ignore.
+- F2 `36dec2d`: Dashboard summary strip, VPS semantic FleetSummary cells/loading skeleton, Settings two-column Appearance UI and deferred ML/rollback row.
+- F3 final local HEAD: fresh-store theme tests, Settings behavior test, native window/AppTitleBar tests, temporary-profile scrubbed capture and documentation.
+- R1-01…07 mapping is closed in code/tests/evidence; Deploy/Migrate IPC and state semantics were not changed.
+- Evidence: `docs/evidence/tk-a18/review-02/`; verdict `MICA_FALLBACK`; no live VPS, ML, collector, deploy, migrate or reset run.
+- Remaining risk: Apps/Deploy/Migrate/History source structure is unchanged beyond shared primitives; Prettier boundary files remain unchanged by scope.
 
 Worker cập nhật file này khi bàn giao local: code/docs SHA, thay đổi theo từng màn, test count,
 visual evidence, phần DoD chưa đạt và xác nhận không live mutation/push/PR/merge.

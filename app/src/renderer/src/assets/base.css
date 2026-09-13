@@ -16,7 +16,7 @@ body,
 body {
   color: var(--text-primary);
   background: var(--bg-base);
-  font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--font-ui);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -28,6 +28,6 @@ pre,
 .mono-input input,
 .mono-input textarea,
 .mono-text {
-  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
