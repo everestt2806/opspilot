@@ -116,11 +116,11 @@ describe('ServerSelector — bang danh sach VPS', () => {
 
     expect(screen.getByText('VM01')).toBeTruthy()
     expect(screen.getByText('VM02')).toBeTruthy()
-    expect(screen.getByText('Online')).toBeTruthy()
-    expect(screen.getAllByText('Offline').length).toBeGreaterThan(0)
+    expect(screen.getByText(strings.vps.status.online)).toBeTruthy()
+    expect(screen.getAllByText(strings.vps.status.offline).length).toBeGreaterThan(0)
     expect(screen.getByText('221.121.1.79')).toBeTruthy()
     expect(screen.getByText('29.4.3')).toBeTruthy()
-    expect(screen.getByText('No Docker')).toBeTruthy()
+    expect(screen.getByText(strings.vpsControl.selector.dockerMissing)).toBeTruthy()
 
     const table = document.querySelector('.server-list-table') as HTMLElement
     expect(within(table).getByText('2')).toBeTruthy()
@@ -205,7 +205,7 @@ describe('ServerSelector — bang danh sach VPS', () => {
       onDelete
     })
 
-    fireEvent.click(screen.getByLabelText('Delete VPS VM02'))
+    fireEvent.click(screen.getByLabelText(strings.vps.actions.delete('VM02')))
     expect(onDelete).toHaveBeenCalledWith(VPS_B)
     expect(onSelect).not.toHaveBeenCalled()
   })
@@ -232,7 +232,7 @@ describe('ServerSelector — bang danh sach VPS', () => {
 
     fireEvent.click(screen.getByLabelText('Filter by status'))
     const menu = await screen.findByRole('menu')
-    fireEvent.click(within(menu).getByText('Offline'))
+    fireEvent.click(within(menu).getByText(strings.vps.status.offline))
     expect(screen.queryByText('VM01')).toBeNull()
     expect(screen.getByText('VM02')).toBeTruthy()
   })

@@ -88,17 +88,23 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
 
     // Chưa điền gì mà bấm OK -> lỗi validate, không gọi kênh
     const dialog = await screen.findByRole('dialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create database' }))
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: strings.vpsControl.database.createDatabase })
+    )
     await waitFor(() => expect(create).not.toHaveBeenCalled())
     expect(await screen.findByText('Enter a database name.')).toBeTruthy()
 
     fireEvent.change(input, { target: { value: 'Shop' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create database' }))
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: strings.vpsControl.database.createDatabase })
+    )
     await waitFor(() => expect(create).not.toHaveBeenCalled())
     expect(await screen.findByText('Lowercase letters, digits and underscores only.')).toBeTruthy()
 
     fireEvent.change(input, { target: { value: 'shop' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create database' }))
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: strings.vpsControl.database.createDatabase })
+    )
 
     await waitFor(() => expect(create).toHaveBeenCalledWith('db:create-database', 7, 'shop'))
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
@@ -124,7 +130,9 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
 
     fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'app_user' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 's3cret' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create user' }))
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: strings.vpsControl.database.createUser })
+    )
 
     await waitFor(() =>
       expect(create).toHaveBeenCalledWith('db:create-user', 7, {

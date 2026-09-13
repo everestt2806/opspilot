@@ -147,12 +147,12 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
 
     render(<VpsPage />)
 
-    expect((await screen.findAllByText('Checking')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText(strings.vps.status.checking)).length).toBeGreaterThan(0)
 
     await act(async () => {
       resolveResources({ ok: true, data: RES })
     })
-    expect(await screen.findAllByText('Online')).toBeTruthy()
+    expect(await screen.findAllByText(strings.vps.status.online)).toBeTruthy()
   })
 
   it('fleet summary: checking/unknown khong bi tinh nham thanh online/offline; tong app dung', async () => {
@@ -171,8 +171,10 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
 
     await waitFor(() => expect(screen.getByLabelText('Total VPS').textContent).toContain('2'))
     const fleet = document.querySelector('.panel-fleet') as HTMLElement
-    expect(within(fleet).getByLabelText('Online').textContent).toContain('1')
-    expect(within(fleet).getByLabelText('Offline').textContent).toContain('1')
+    expect(within(fleet).getByLabelText(strings.vpsControl.fleet.online).textContent).toContain('1')
+    expect(within(fleet).getByLabelText(strings.vpsControl.fleet.offline).textContent).toContain(
+      '1'
+    )
     expect(within(fleet).getByLabelText('Total apps').textContent).toContain('1')
   })
 
@@ -236,7 +238,7 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
     expect(await screen.findByText('Main IP')).toBeTruthy()
     await waitFor(() => expect(document.querySelector('.panel-info-sidebar')).toBeTruthy())
 
-    fireEvent.click(await screen.findByText('Apps & deploy'))
+    fireEvent.click(await screen.findByText(strings.vpsControl.tabs.apps))
     expect(await screen.findByText('express-api')).toBeTruthy()
     expect(screen.getByText('v3')).toBeTruthy()
 
@@ -254,8 +256,8 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
 
     render(<VpsPage />)
     fireEvent.click(await screen.findByText('VM01'))
-    fireEvent.click(await screen.findByText('Apps & deploy'))
-    fireEvent.click(await screen.findByText('Deploy new app'))
+    fireEvent.click(await screen.findByText(strings.vpsControl.tabs.apps))
+    fireEvent.click(await screen.findByText(strings.vpsControl.apps.deployNew))
 
     expect(useUiState.getState().deployPreselect).toEqual({ vpsId: 1 })
     expect(useUiState.getState().activePage).toBe('deploy')
@@ -272,7 +274,7 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
 
     render(<VpsPage />)
     fireEvent.click(await screen.findByText('VM01'))
-    fireEvent.click(await screen.findByText('Activity'))
+    fireEvent.click(await screen.findByText(strings.vpsControl.tabs.activity))
     await waitFor(() => expect(history).toHaveBeenCalledWith({ vps_id: 1, limit: 20, offset: 0 }))
     expect(await screen.findByText('Deploy succeeded')).toBeTruthy()
   })
@@ -291,13 +293,13 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
 
     render(<VpsPage />)
     fireEvent.click(await screen.findByText('VM01'))
-    fireEvent.click(await screen.findByText('Activity'))
+    fireEvent.click(await screen.findByText(strings.vpsControl.tabs.activity))
     expect(await screen.findByText('Deploy succeeded')).toBeTruthy()
 
     fireEvent.click(screen.getByLabelText(strings.vps.backToList))
     await waitFor(() => expect(screen.getByText('VM02')).toBeTruthy())
     fireEvent.click(screen.getByText('VM02'))
-    fireEvent.click(await screen.findByText('Activity'))
+    fireEvent.click(await screen.findByText(strings.vpsControl.tabs.activity))
     await waitFor(() => expect(screen.queryByText('Deploy succeeded')).toBeNull())
   })
 
@@ -315,9 +317,9 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
 
     render(<VpsPage />)
     fireEvent.click(await screen.findByText('VM01'))
-    fireEvent.click(await screen.findByLabelText('Delete VPS VM01'))
-    fireEvent.click((await screen.findAllByText('Delete VPS'))[0])
-    fireEvent.click((await screen.findAllByText('Delete VPS'))[1])
+    fireEvent.click(await screen.findByLabelText(strings.vps.actions.delete('VM01')))
+    fireEvent.click((await screen.findAllByText(strings.vps.delete.confirm))[0])
+    fireEvent.click((await screen.findAllByText(strings.vps.delete.confirm))[1])
 
     await waitFor(() => expect(screen.getByText(strings.vps.empty)).toBeTruthy())
     expect(screen.queryByText(strings.vps.backToList)).toBeNull()

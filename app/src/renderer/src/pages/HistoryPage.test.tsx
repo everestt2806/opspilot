@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ActionLogEntry, Vps } from '@shared/ipc'
 
 import { HistoryPage } from './HistoryPage'
+import { strings } from '../strings'
 
 const VPS_A: Vps = {
   id: 1,
@@ -86,7 +87,7 @@ describe('HistoryPage', () => {
     )
     expect((await screen.findAllByText('Deployed v7 successfully.')).length).toBeGreaterThan(0)
     expect((await screen.findAllByText('Rollback failed.')).length).toBeGreaterThan(0)
-    expect(screen.getByText('Auto rollback')).toBeTruthy()
+    expect(screen.getByText(strings.dashboard.actions.rollback_auto)).toBeTruthy()
 
     fireEvent.click(screen.getByRole('row', { name: /Deployed v7 successfully\./ }))
     expect(await screen.findByText('Activity details')).toBeTruthy()
@@ -108,7 +109,7 @@ describe('HistoryPage', () => {
 
     expect(await screen.findByText('Could not load the history.')).toBeTruthy()
     expect(screen.getByText('Khong doc duoc DB.')).toBeTruthy()
-    fireEvent.click(screen.getByText('Retry'))
+    fireEvent.click(screen.getByText(strings.history.retry))
     await waitFor(() => expect(invoke).toHaveBeenCalledTimes(3))
   })
 
@@ -125,7 +126,7 @@ describe('HistoryPage', () => {
     await waitFor(() => expect(document.querySelector('.ant-select-dropdown')).toBeTruthy())
     const dropdown = document.querySelector('.ant-select-dropdown')
     if (!dropdown) throw new Error('dropdown khong mo')
-    fireEvent.click(within(dropdown as HTMLElement).getByText('Deploy'))
+    fireEvent.click(within(dropdown as HTMLElement).getByText(strings.dashboard.actions.deploy))
 
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith(

@@ -1,7 +1,7 @@
 export const strings = {
   app: {
     name: 'OpsPilot',
-    noSelection: 'No VPS selected',
+    noSelection: 'Chưa chọn VPS',
     vpsSelected: (count: number) => `${count} VPS selected`
   },
   navigation: {
@@ -16,9 +16,9 @@ export const strings = {
   status: {
     ssh: 'SSH',
     mlService: 'ML service',
-    running: 'Running',
-    stopped: 'Stopped',
-    unknown: 'Not connected'
+    running: 'Đang chạy',
+    stopped: 'Đã dừng',
+    unknown: 'Chưa kết nối'
   },
   common: {
     cancel: 'Hủy',
@@ -32,52 +32,52 @@ export const strings = {
     saveError: 'Không thể lưu VPS'
   },
   pipeline: {
-    title: 'Deploy Pipeline (Dynamic)',
+    title: 'Luồng triển khai',
     status: {
-      completed: 'Completed',
-      in_progress: 'Running',
-      error: 'Failed',
-      pending: 'Pending'
+      completed: 'Hoàn tất',
+      in_progress: 'Đang chạy',
+      error: 'Thất bại',
+      pending: 'Đang chờ'
     },
     steps: {
-      PRECHECK: { title: 'Precheck', desc: 'Check VPS RAM / Disk / Port' },
-      UPLOAD: { title: 'Upload', desc: 'Push source code to the VPS' },
-      RENDER: { title: 'Render', desc: 'Generate Dockerfile & Compose' },
-      BUILD: { title: 'Build', desc: 'Run Docker build' },
-      DEPLOY: { title: 'Deploy', desc: 'Start container & swap port' },
-      HEALTHCHECK: { title: 'Healthcheck', desc: 'Verify HTTP GET live' },
-      RECORD: { title: 'Record', desc: 'Save version info to DB' }
+      PRECHECK: { title: 'Kiểm tra trước', desc: 'Kiểm tra RAM / đĩa / cổng VPS' },
+      UPLOAD: { title: 'Tải lên', desc: 'Đẩy mã nguồn lên VPS' },
+      RENDER: { title: 'Dựng cấu hình', desc: 'Tạo Dockerfile và Compose' },
+      BUILD: { title: 'Biên dịch', desc: 'Chạy Docker build' },
+      DEPLOY: { title: 'Triển khai', desc: 'Khởi động container và đổi cổng' },
+      HEALTHCHECK: { title: 'Kiểm tra sống', desc: 'Xác minh HTTP GET' },
+      RECORD: { title: 'Ghi nhận', desc: 'Lưu phiên bản vào cơ sở dữ liệu' }
     },
     banner: {
       success: (time: string) => `Deploy succeeded in ${time}`,
-      openApp: 'Open app',
-      viewDashboard: 'View dashboard',
+      openApp: 'Mở ứng dụng',
+      viewDashboard: 'Xem tổng quan',
       error: (step: string) => `Deploy failed at step [${step}] — check the error log below`,
       rollback: 'Roll back to previous version'
     }
   },
   projects: {
-    title: 'Projects & Deploy Launcher',
-    description: 'Pick a project to deploy a new version or watch the current pipeline.',
-    deployNew: 'Deploy new version',
-    newProject: '+ New project',
-    searchPlaceholder: 'Search projects...',
-    statusOnline: 'Online',
-    statusOffline: 'Offline',
-    statusDeploying: 'Deploying'
+    title: 'Ứng dụng và triển khai',
+    description: 'Chọn ứng dụng để triển khai phiên bản mới hoặc theo dõi luồng hiện tại.',
+    deployNew: 'Triển khai phiên bản mới',
+    newProject: '+ Ứng dụng mới',
+    searchPlaceholder: 'Tìm ứng dụng...',
+    statusOnline: 'Đang hoạt động',
+    statusOffline: 'Ngoại tuyến',
+    statusDeploying: 'Đang triển khai'
   },
   wizard: {
-    title: 'Deploy Wizard — 4 Steps',
-    step1: '1. Source',
-    step2: '2. Detect',
-    step3: '3. Configuration',
-    step4: '4. Precheck & Deploy',
-    detectSuccess: 'Framework detected successfully!',
-    precheckOk: 'All RAM / Disk / Port checks passed. Ready to deploy.',
-    startDeploy: 'Confirm Deploy'
+    title: 'Trình triển khai — 4 bước',
+    step1: '1. Nguồn',
+    step2: '2. Nhận diện',
+    step3: '3. Cấu hình',
+    step4: '4. Kiểm tra và triển khai',
+    detectSuccess: 'Đã nhận diện framework.',
+    precheckOk: 'Đã đạt các kiểm tra RAM / đĩa / cổng. Sẵn sàng triển khai.',
+    startDeploy: 'Xác nhận triển khai'
   },
   vps: {
-    title: 'Servers',
+    title: 'Máy chủ',
     description: 'Tổng quan đội máy và bảng điều khiển VPS của OpsPilot.',
     create: 'Thêm VPS',
     createFirst: 'Thêm VPS đầu tiên',
@@ -89,7 +89,7 @@ export const strings = {
     columns: {
       name: 'Name',
       ip: 'IP',
-      status: 'Status',
+      status: 'Trạng thái',
       docker: 'Docker',
       resources: 'CPU / RAM / Disk',
       site: 'Site',
@@ -97,20 +97,20 @@ export const strings = {
       actions: 'Actions'
     },
     status: {
-      online: 'Online',
-      offline: 'Offline',
-      unknown: 'Not checked',
-      checking: 'Checking'
+      online: 'Đang hoạt động',
+      offline: 'Ngoại tuyến',
+      unknown: 'Chưa kiểm tra',
+      checking: 'Đang kiểm tra'
     },
     actions: {
-      edit: (name: string) => `Edit VPS ${name}`,
-      delete: (name: string) => `Delete VPS ${name}`
+      edit: (name: string) => `Sửa VPS ${name}`,
+      delete: (name: string) => `Xóa VPS ${name}`
     },
     delete: {
-      title: 'Delete VPS?',
+      title: 'Xóa VPS?',
       description: (name: string) =>
         `VPS "${name}" will be removed from OpsPilot. Apps running on the server are not deleted.`,
-      confirm: 'Delete VPS'
+      confirm: 'Xóa VPS'
     },
     fields: {
       name: 'VPS name',
@@ -143,8 +143,8 @@ export const strings = {
       incomplete: 'Fill in all fields before checking.'
     },
     check: {
-      button: 'Check connection',
-      retry: 'Check again',
+      button: 'Kiểm tra kết nối',
+      retry: 'Kiểm tra lại',
       idleHint:
         'Fill in the details and click check — the app will try the SSH connection and explain the cause with a fix if it fails.',
       checking: 'Checking connection…',
@@ -273,7 +273,7 @@ export const strings = {
   dashboard: {
     title: 'Tổng quan',
     summaryLabel: 'Tóm tắt hệ thống',
-    refresh: 'Refresh',
+    refresh: 'Làm mới',
     stats: {
       vpsOnline: 'VPS đang hoạt động',
       appsRunning: 'Ứng dụng đang chạy',
@@ -287,20 +287,20 @@ export const strings = {
       columnVps: 'VPS',
       columnStatus: 'Trạng thái',
       columnMessage: 'Thông báo',
-      empty: 'No activity yet. Deploy your first app to see history here.',
-      deployNow: 'Deploy now',
-      unknownVps: 'Deleted VPS',
-      unknownAction: 'Other'
+      empty: 'Chưa có hoạt động. Hãy triển khai ứng dụng đầu tiên để xem lịch sử.',
+      deployNow: 'Triển khai ngay',
+      unknownVps: 'VPS đã xóa',
+      unknownAction: 'Khác'
     },
     actions: {
-      deploy: 'Deploy',
-      rollback_auto: 'Auto rollback',
-      rollback_manual: 'Manual rollback'
+      deploy: 'Triển khai',
+      rollback_auto: 'Khôi phục tự động',
+      rollback_manual: 'Khôi phục thủ công'
     },
     statuses: {
-      success: 'Succeeded',
-      failed: 'Failed',
-      cancelled: 'Cancelled'
+      success: 'Thành công',
+      failed: 'Thất bại',
+      cancelled: 'Đã hủy'
     },
     emptyVps: 'Chưa có VPS. Hãy thêm VPS đầu tiên để bắt đầu triển khai.',
     addVps: 'Thêm VPS',
@@ -311,18 +311,18 @@ export const strings = {
     title: 'Lịch sử',
     description: 'Xem các lần triển khai, khôi phục và cảnh báo.',
     filters: {
-      action: 'Action',
-      actionAll: 'All',
+      action: 'Tác vụ',
+      actionAll: 'Tất cả',
       vps: 'VPS',
       vpsAll: 'All VPS',
-      timeRange: 'Time range'
+      timeRange: 'Khoảng thời gian'
     },
     columns: {
-      time: 'Time',
-      action: 'Action',
+      time: 'Thời gian',
+      action: 'Tác vụ',
       vps: 'VPS',
-      status: 'Status',
-      message: 'Message'
+      status: 'Trạng thái',
+      message: 'Thông báo'
     },
     detail: {
       title: 'Activity details',
@@ -339,15 +339,15 @@ export const strings = {
   },
   vpsControl: {
     tabs: {
-      overview: 'Overview',
-      apps: 'Apps & deploy',
-      database: 'Database',
-      activity: 'Activity'
+      overview: 'Tổng quan',
+      apps: 'Ứng dụng và triển khai',
+      database: 'Cơ sở dữ liệu',
+      activity: 'Hoạt động'
     },
     fleet: {
       totalVps: 'Total VPS',
-      online: 'Online',
-      offline: 'Offline',
+      online: 'Đang hoạt động',
+      offline: 'Ngoại tuyến',
       totalApps: 'Total apps'
     },
     selector: {
@@ -358,7 +358,7 @@ export const strings = {
       copyIp: 'Copy IP',
       pageTotal: (from: number, to: number, total: number) => `${from}-${to} of ${total}`,
       noSelection: 'Select a VPS from the list on the left to view details.',
-      dockerMissing: 'No Docker',
+      dockerMissing: 'Chưa có Docker',
       appsCount: (count: number) => (count === 0 ? 'No apps' : `${count} apps`)
     },
     overview: {
@@ -378,9 +378,9 @@ export const strings = {
       lastSeen: 'Last seen',
       neverSeen: 'Never connected',
       checkedAt: (time: string) => `Resources checked at ${time}`,
-      checkConnection: 'Check & diagnose connection',
-      copyCommand: 'Copy SSH command',
-      copied: 'Copied'
+      checkConnection: 'Kiểm tra và chẩn đoán kết nối',
+      copyCommand: 'Sao chép lệnh SSH',
+      copied: 'Đã sao chép'
     },
     header: {
       mainIp: 'Main IP',
@@ -402,12 +402,12 @@ export const strings = {
       retryResources: 'Retry'
     },
     apps: {
-      title: 'Apps on this server',
-      deployNew: 'Deploy new app',
-      redeploy: 'Redeploy',
-      openApp: 'Open app',
-      empty: 'No apps on this server yet.',
-      emptyHint: 'Deploy your first app to start monitoring and managing it here.',
+      title: 'Ứng dụng trên máy chủ',
+      deployNew: 'Triển khai ứng dụng mới',
+      redeploy: 'Triển khai lại',
+      openApp: 'Mở ứng dụng',
+      empty: 'Chưa có ứng dụng trên máy chủ này.',
+      emptyHint: 'Hãy triển khai ứng dụng đầu tiên để bắt đầu quản lý tại đây.',
       loadFailed: 'Could not load apps on this server.',
       columns: {
         name: 'Name',
@@ -415,23 +415,23 @@ export const strings = {
         port: 'Port',
         url: 'URL',
         version: 'Version',
-        status: 'Status',
+        status: 'Trạng thái',
         actions: 'Actions'
       },
       status: {
-        running: 'Running',
-        failed: 'Failed',
-        building: 'Building',
-        deploying: 'Deploying',
-        stopped: 'Stopped',
-        rolled_back: 'Rolled back',
-        none: 'No deployment'
+        running: 'Đang chạy',
+        failed: 'Thất bại',
+        building: 'Đang biên dịch',
+        deploying: 'Đang triển khai',
+        stopped: 'Đã dừng',
+        rolled_back: 'Đã khôi phục',
+        none: 'Chưa triển khai'
       }
     },
     activity: {
-      title: 'Recent activity',
-      empty: 'No activity on this server yet.',
-      emptyHint: 'Deploy or manage apps to see actions logged here.',
+      title: 'Hoạt động gần đây',
+      empty: 'Chưa có hoạt động trên máy chủ này.',
+      emptyHint: 'Triển khai hoặc quản lý ứng dụng để xem nhật ký tại đây.',
       loadFailed: 'Could not load activity for this server.'
     },
     database: {

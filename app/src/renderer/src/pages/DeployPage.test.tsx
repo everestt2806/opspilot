@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeployEvent, DetectionResultDto, Vps } from '@shared/ipc'
 
 import { DeployPage } from './DeployPage'
+import { strings } from '../strings'
 
 const { termInstances, terminalOptions } = vi.hoisted(() => {
   const termInstances: Array<{
@@ -190,7 +191,7 @@ describe('DeployPage — wizard va log', () => {
     })
     expect(screen.getByText('http://203.0.113.55:30000')).toBeTruthy()
 
-    fireEvent.click(screen.getByText('Deploy'))
+    fireEvent.click(screen.getByText(strings.deploy.review.deploy))
 
     expect(await screen.findByText('Deploy log')).toBeTruthy()
     expect(screen.getByText('Live output')).toBeTruthy()
@@ -236,7 +237,7 @@ describe('DeployPage — wizard va log', () => {
 
     render(<DeployPage />)
     await reachStep3(invoke)
-    fireEvent.click(screen.getByText('Deploy'))
+    fireEvent.click(screen.getByText(strings.deploy.review.deploy))
     await screen.findByText('Deploy log')
 
     emit({ type: 'step-start', deployment_id: 7, step: 'BUILD', ts: '2026-08-19T10:00:00Z' })
@@ -275,7 +276,7 @@ describe('DeployPage — wizard va log', () => {
 
     render(<DeployPage />)
     await reachStep3(invoke)
-    fireEvent.click(screen.getByText('Deploy'))
+    fireEvent.click(screen.getByText(strings.deploy.review.deploy))
     await screen.findByText('Deploy log')
 
     fireEvent.click(screen.getByText('Cancel deploy'))
@@ -324,6 +325,9 @@ describe('DeployPage — wizard va log', () => {
     expect(
       screen.getByText('Precheck is not green — fix it on the VPS, then click Check again.')
     ).toBeTruthy()
-    expect((screen.getByText('Deploy').closest('button') as HTMLButtonElement).disabled).toBe(true)
+    expect(
+      (screen.getByText(strings.deploy.review.deploy).closest('button') as HTMLButtonElement)
+        .disabled
+    ).toBe(true)
   })
 })

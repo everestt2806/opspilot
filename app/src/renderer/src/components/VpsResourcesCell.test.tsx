@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { VpsResources } from '@shared/ipc'
 
 import { VpsResourcesCell } from './VpsResourcesCell'
+import { strings } from '../strings'
 
 const RES: VpsResources = {
   ram_total_mb: 4096,
@@ -23,7 +24,7 @@ describe('VpsResourcesCell — 4 state', () => {
 
   it('loading: spinner dang kiem tra', () => {
     render(<VpsResourcesCell vpsName="VM01" state={{ status: 'loading' }} onRetry={() => {}} />)
-    expect(screen.getByLabelText('Checking')).toBeTruthy()
+    expect(screen.getByLabelText(strings.vps.status.checking)).toBeTruthy()
   })
 
   it('success: 3 thanh RAM/Disk/CPU voi so lieu thuc', () => {

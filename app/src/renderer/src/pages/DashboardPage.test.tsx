@@ -120,11 +120,11 @@ describe('DashboardPage', () => {
 
     expect(screen.getAllByText('Deployed v7 successfully.').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Rollback failed.').length).toBeGreaterThan(0)
-    expect(screen.getByText('Deploy')).toBeTruthy()
-    expect(screen.getByText('Auto rollback')).toBeTruthy()
-    expect(screen.getByText('Succeeded')).toBeTruthy()
-    expect(screen.getByText('Failed')).toBeTruthy()
-    expect(screen.getByText('Cancelled')).toBeTruthy()
+    expect(screen.getByText(strings.dashboard.actions.deploy)).toBeTruthy()
+    expect(screen.getByText(strings.dashboard.actions.rollback_auto)).toBeTruthy()
+    expect(screen.getByText(strings.dashboard.statuses.success)).toBeTruthy()
+    expect(screen.getByText(strings.dashboard.statuses.failed)).toBeTruthy()
+    expect(screen.getByText(strings.dashboard.statuses.cancelled)).toBeTruthy()
 
     expect(invoke).toHaveBeenCalledWith('history:list', { limit: 10, offset: 0 })
     expect(invoke).toHaveBeenCalledWith(
