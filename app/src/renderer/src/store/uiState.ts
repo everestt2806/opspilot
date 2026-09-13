@@ -35,7 +35,7 @@ interface UiState {
 export const useUiState = create<UiState>()(
   persist(
     (set) => ({
-      theme: 'light',
+      theme: 'dark',
       activePage: 'vps',
       selectedVpsId: null,
       activePanelTab: 'overview',

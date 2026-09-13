@@ -11,9 +11,9 @@ const FONT_UI = "'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe U
 const FONT_MONO = "'IBM Plex Mono', 'JetBrains Mono', Consolas, monospace"
 
 const shared: ThemeConfig['token'] = {
-  colorPrimary: '#6366F1',
-  borderRadius: 8,
-  controlHeight: 36,
+  colorPrimary: '#4F9CF9',
+  borderRadius: 5,
+  controlHeight: 33,
   fontFamily: FONT_UI,
   fontFamilyCode: FONT_MONO,
   fontSize: 13

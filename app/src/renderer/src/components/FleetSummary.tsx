@@ -20,7 +20,7 @@ export function FleetSummary({
   loading
 }: FleetSummaryProps): React.JSX.Element {
   return (
-    <div className="panel-fleet">
+    <div className="panel-fleet summary-strip">
       <Card aria-label={strings.vpsControl.fleet.totalVps}>
         <Statistic title={strings.vpsControl.fleet.totalVps} value={total} loading={loading} />
       </Card>

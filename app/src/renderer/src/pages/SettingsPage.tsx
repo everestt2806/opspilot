@@ -9,11 +9,14 @@ import {
   Select,
   Space,
   Switch,
+  Segmented,
   Typography
 } from 'antd'
 import { SettingOutlined, WarningOutlined } from '@ant-design/icons'
 
 import { fonts } from '../tokens'
+import { useUiState } from '../store/uiState'
+import type { ThemeMode } from '../utils/themeTokens'
 
 export function SettingsPage(): React.JSX.Element {
   const { modal, message } = AntApp.useApp()
@@ -21,6 +24,8 @@ export function SettingsPage(): React.JSX.Element {
   const [trustedMethod, setTrustedMethod] = useState('iforest')
   const [cpuThreshold, setCpuThreshold] = useState(85)
   const [ramThreshold, setRamThreshold] = useState(90)
+  const themeMode = useUiState((state) => state.theme)
+  const setTheme = useUiState((state) => state.setTheme)
 
   const handleToggleAutoRollback = (checked: boolean): void => {
     if (checked) {
@@ -52,13 +57,29 @@ export function SettingsPage(): React.JSX.Element {
         <div>
           <Typography.Title level={2} style={{ color: 'var(--text-primary)', margin: 0 }}>
             <SettingOutlined style={{ marginRight: 10, color: 'var(--info)' }} />
-            Monitoring Settings & Trusted ML Methods
+            Cài đặt giám sát
           </Typography.Title>
           <Typography.Text type="secondary">
-            Configure the Rule Baseline thresholds, pick the trusted ML method and toggle
-            Auto-Rollback.
+            Ngưỡng rule, phương pháp tin cậy và tự động rollback.
           </Typography.Text>
         </div>
+      </div>
+
+      <div className="settings-section">
+        <div>
+          <Typography.Text strong>Giao diện</Typography.Text>
+          <Typography.Paragraph type="secondary">
+            Chọn giao diện cho phiên làm việc này.
+          </Typography.Paragraph>
+        </div>
+        <Segmented<ThemeMode>
+          value={themeMode}
+          onChange={setTheme}
+          options={[
+            { value: 'dark', label: 'Tối' },
+            { value: 'light', label: 'Sáng' }
+          ]}
+        />
       </div>
 
       <Card style={styles.card} styles={{ body: { background: 'transparent', padding: 24 } }}>

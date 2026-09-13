@@ -1081,3 +1081,160 @@
     width: min(100%, 260px);
   }
 }
+
+/* Native desktop density: connected panes and restrained elevation. */
+.app-titlebar {
+  height: 34px;
+  min-height: 34px;
+  background: var(--bg-base);
+}
+
+.app-titlebar-brand {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.app-titlebar-caption {
+  color: var(--text-muted);
+}
+
+.app-shell,
+.ant-layout-sider,
+.ant-menu {
+  background: var(--bg-base) !important;
+}
+
+.app-navigation {
+  padding: 8px 6px;
+}
+
+.app-navigation .ant-menu-item {
+  height: 34px;
+  line-height: 34px;
+  margin: 2px 0;
+  border-radius: 5px;
+  color: var(--text-secondary);
+}
+
+.app-navigation .ant-menu-item-selected {
+  color: var(--text-primary) !important;
+  background: var(--bg-elevated) !important;
+  box-shadow: inset 2px 0 var(--info);
+}
+
+.content {
+  padding: 14px 16px;
+}
+
+.page-panel {
+  min-height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.page-heading {
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.page-heading .ant-typography-title,
+.page-heading h1,
+.page-heading h2,
+.page-heading h3 {
+  font-size: 17px !important;
+  font-weight: 600;
+}
+
+.page-heading .ant-typography {
+  margin-bottom: 0;
+}
+
+.ant-card {
+  border-radius: 5px;
+  box-shadow: none;
+}
+
+.ant-card-head {
+  min-height: 40px;
+  padding-inline: 12px;
+  border-bottom-color: var(--border);
+}
+
+.ant-card-body {
+  padding: 12px;
+}
+
+.panel-fleet {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.summary-strip > .ant-col {
+  max-width: none;
+  width: auto;
+}
+
+.summary-strip .ant-card {
+  height: 100%;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.summary-strip .ant-statistic-title {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.summary-strip .ant-statistic-content {
+  font-family: 'IBM Plex Mono', Consolas, monospace;
+  font-size: 20px;
+}
+
+.panel-fleet .ant-card {
+  background: var(--bg-panel);
+}
+
+.settings-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 720px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-section .ant-typography {
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .content {
+    padding: 10px;
+  }
+
+  .settings-section {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -55,12 +55,9 @@ function renderPage(activePage: PageKey, open: (page: string) => void): React.JS
 
 function App(): React.JSX.Element {
   const themeMode = useUiState((state) => state.theme)
-  const setTheme = useUiState((state) => state.setTheme)
   const activePage = useUiState((state) => state.activePage)
   const setActivePage = useUiState((state) => state.setActivePage)
-  const selectedVpsIds = useUiState((state) => state.selectedVpsIds)
   const [collapsed, setCollapsed] = useState(false)
-  const [mlRunning, setMlRunning] = useState(false)
 
   // activePage lưu dạng string (session) — rào lại về PageKey hợp lệ trước khi render.
   const page: PageKey = menuItems.some((item) => item.key === activePage)
@@ -72,27 +69,11 @@ function App(): React.JSX.Element {
     document.documentElement.dataset.theme = themeMode
   }, [themeMode])
 
-  useEffect(() => {
-    void window.api.invoke('system:ml-status').then((result) => {
-      setMlRunning(result.ok && result.data.running)
-    })
-
-    return window.api.on('system:ml-status', (status) => {
-      setMlRunning(status.running)
-    })
-  }, [])
-
   return (
     <ConfigProvider theme={themeTokens[themeMode]}>
       <AntApp>
         <div className="app-window">
-          <AppTitleBar
-            pageTitle={pageTitle}
-            selectedVpsCount={selectedVpsIds.length}
-            mlRunning={mlRunning}
-            themeMode={themeMode}
-            onThemeChange={setTheme}
-          />
+          <AppTitleBar pageTitle={pageTitle} />
           <Layout className="app-shell">
             <Layout.Sider
               width={220}

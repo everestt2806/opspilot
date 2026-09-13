@@ -157,6 +157,7 @@ Reviewer phải trả lời **có** cho cả sáu câu:
 
 ## Nhật ký
 
+- `START 13/09` — Worker bắt đầu trên branch `feat/a18-native-dark-ui`: khóa phạm vi renderer-only, giữ nguyên file untracked của A, dựng dark shell trước rồi restyle 7 màn, test/evidence/handoff ở checkpoint cuối.
 - `PLAN 13/09` — Leader mở TK-A18 theo yêu cầu: native desktop hơn, dark mặc định, giảm web/AI
   slop; khóa backend/live và giữ `936e643` làm rollback point. Worker chưa bắt đầu.
 

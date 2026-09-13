@@ -206,7 +206,7 @@ export function DashboardPage({ onOpenVps, onOpenDeploy }: DashboardPageProps): 
       </div>
 
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <Row gutter={16}>
+        <Row className="summary-strip" gutter={8}>
           <Col span={6}>
             <Card>
               <Statistic

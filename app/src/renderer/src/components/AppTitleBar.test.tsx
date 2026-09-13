@@ -31,15 +31,7 @@ describe('AppTitleBar', () => {
   })
 
   it('hien page title va dieu khien cua so qua IPC', async () => {
-    render(
-      <AppTitleBar
-        pageTitle="Servers"
-        selectedVpsCount={0}
-        mlRunning
-        themeMode="light"
-        onThemeChange={vi.fn()}
-      />
-    )
+    render(<AppTitleBar pageTitle="Servers" />)
 
     expect(screen.getByText('OpsPilot — Servers')).toBeTruthy()
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('window:is-maximized'))
@@ -55,15 +47,7 @@ describe('AppTitleBar', () => {
   })
 
   it('dong bo icon khi main process gui su kien maximize', async () => {
-    render(
-      <AppTitleBar
-        pageTitle="Deploy"
-        selectedVpsCount={1}
-        mlRunning
-        themeMode="light"
-        onThemeChange={vi.fn()}
-      />
-    )
+    render(<AppTitleBar pageTitle="Deploy" />)
     await waitFor(() => expect(maximizeListener).toBeTypeOf('function'))
 
     act(() => maximizeListener?.({ maximized: true }))
