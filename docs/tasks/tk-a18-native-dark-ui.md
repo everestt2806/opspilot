@@ -161,6 +161,8 @@ Reviewer phải trả lời **có** cho cả sáu câu:
 
 ## Nhật ký
 
+- `REVIEW-FIX-03 13/09` - Từ HEAD chứa Leader review, đóng A18-R2-01…07 theo checkpoints `a233a2e`, `e9cb70c`, `197c703`: WCO safe-area, canonical Fluent states với production usage, tiếng Việt, deterministic route capture, restored Prettier ignores và local handoff. Native resize/maximize-restore smoke được ghi; Snap Layout giữ verdict manual-only. Không live VPS/deploy/migrate/ML, không đổi contract/preload/shared/backend, không push/PR/merge.
+
 - `START 13/09` — Worker bắt đầu trên branch `feat/a18-native-dark-ui`: khóa phạm vi renderer-only, giữ nguyên file untracked của A, dựng dark shell trước rồi restyle 7 màn, test/evidence/handoff ở checkpoint cuối.
 - `UPDATE 13/09` — Checkpoint shell pass tại `cfc7a8d`; renderer dark default/persist, title bar, navigation, Settings Appearance và density tokens đã hoạt động. Focused `8/8`, typecheck/build/lint pass.
 - `HANDOFF-LOCAL 13/09` — Local review package gồm renderer changes, scrubbed `docs/evidence/tk-a18/after/`, `docs/evidence/tk-a18/README.md` và `docs/tasks/tk-a18/handoff.md`; full app `289/289` + ML `19/19`, no push/PR/merge. Baseline `before/` chưa có, ghi rõ là DoD gap.

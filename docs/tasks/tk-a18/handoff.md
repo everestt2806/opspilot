@@ -1,6 +1,6 @@
 # TK-A18 — Handoff
 
-- Status: `REVIEW_FIX_REQUIRED`
+- Status: `READY_FOR_LOCAL_REVIEW`
 - Branch: `feat/a18-native-dark-ui`
 - Parent before task packet: `66ab90b`
 - Stable demo rollback point: `936e643`
@@ -9,13 +9,23 @@
 
 ## Local handoff
 
-- Code checkpoints: `3710d55` (F0), `0654bb0` (F1), `36dec2d` (F2), final local HEAD (F3).
+- Code checkpoints: `a233a2e` (WCO safe-area/ignore), `e9cb70c` (canonical Fluent states + route markers), `197c703` (Vietnamese copy/tests); final docs/evidence checkpoint follows.
 - Visible changes: dark-first persisted theme, compact frameless title bar with only app/caption/window controls, pane/sidebar navigation, restrained surface tokens, compact summary strips, flat Settings appearance section, and shared desktop density across renderer screens.
 - Regression coverage: default dark and persisted light theme, title-bar IPC controls, existing Deploy/Migrate action/state tests, and full existing renderer suite.
 - Tests: `pnpm test` = app `291/291` across 53 files, ML `19/19`, exit 0; `pnpm typecheck`/`pnpm lint`/`pnpm build` exit 0. Focused Review-Fix tests `6/6`, exit 0.
 - Prettier: generated `.out-scripts/` and `.pytest_cache/` are ignored as planned; full check still reports only pre-existing boundary files `src/main/detectors/types.ts` and `src/shared/ipc.ts`, which remain untouched by scope.
 - Visual evidence: `docs/evidence/tk-a18/review-02/`; before/after baseline copied as instructed and host/IP values scrubbed.
 - No live mutation, backend/contract/preload/shared change, push, PR, or merge was performed. Worker stops at `READY_FOR_LOCAL_REVIEW`.
+
+## Review-Fix 03 DoD mapping
+
+- `A18-R2-01`: WCO rectangle uses `titlebar-area-x/width/height`; native titlebar has no HTML window buttons; focused native tests pass.
+- `A18-R2-02/03`: canonical Fluent fallback/surface/radius/type rules consolidated in `main.css` and tokens; duplicate density tail removed.
+- `A18-R2-04`: selected VPS row, rail, keyboard semantics, contextual action pill, status badge, sidebar, input/button/toggle states have production usage.
+- `A18-R2-05`: shell, navigation, Dashboard, VPS and Settings visible copy is routed through Vietnamese strings.
+- `A18-R2-06`: capture asserts selected route and page marker, waits a compositor frame, records DPR/dimensions, and scrubs host/IP.
+- `A18-R2-07`: restored Prettier boundary ignores, kept generated/cache ignores, and did not increase global timeout.
+- Residual: Windows Snap Layout requires manual observation; no live VPS/ML/deploy/migrate run was performed.
 
 ## Review-Fix 02 handoff
 

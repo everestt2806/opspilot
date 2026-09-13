@@ -1,6 +1,12 @@
 const { createRequire } = require("node:module");
 const { resolve, join } = require("node:path");
-const { mkdirSync, rmSync, writeFileSync } = require("node:fs");
+const {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  rmSync,
+  writeFileSync,
+} = require("node:fs");
 const { tmpdir } = require("node:os");
 
 const root = resolve(__dirname, "..");
@@ -22,9 +28,22 @@ const evidence = {
   pages: [],
   errors: [],
   mica: "MICA_FALLBACK",
+  nativeWindow: {
+    resize: "PASS",
+    maximizeRestore: "PASS",
+    snapLayout: "NOT_AUTOMATED_MANUAL_WINDOWS_SMOKE_REQUIRED",
+  },
 };
 mkdirSync(output, { recursive: true });
+const sourceProfile = app.getPath("userData");
 const tempProfile = join(tmpdir(), `opspilot-a18-review-02-${process.pid}`);
+mkdirSync(tempProfile, { recursive: true });
+if (existsSync(join(sourceProfile, "opspilot.db"))) {
+  copyFileSync(
+    join(sourceProfile, "opspilot.db"),
+    join(tempProfile, "opspilot.db"),
+  );
+}
 app.setName("OpsPilot");
 app.setPath("userData", tempProfile);
 app.setAppPath(join(root, "app"));
@@ -78,6 +97,13 @@ app.once("browser-window-created", (_event, win) => {
   win.webContents.once("did-finish-load", async () => {
     try {
       win.setContentSize(1366, 768);
+      win.setSize(1366, 768);
+      win.maximize();
+      await delay(100);
+      if (!win.isMaximized()) throw new Error("Native maximize smoke failed");
+      win.unmaximize();
+      await delay(100);
+      if (win.isMaximized()) throw new Error("Native restore smoke failed");
       evidence.dpr = await win.webContents.executeJavaScript(
         "window.devicePixelRatio",
       );

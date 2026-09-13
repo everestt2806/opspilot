@@ -4,6 +4,8 @@
 > [`../24-ke-hoach-demo-theo-chang.md`](../24-ke-hoach-demo-theo-chang.md).
 >
 > Trạng thái hợp lệ: `BACKLOG · TUẦN NÀY · ĐANG LÀM · CHỜ REVIEW · HOÀN THÀNH · BLOCKED`.
+
+TK-A18 Review-Fix 03: `READY_FOR_LOCAL_REVIEW` tại local checkpoints `a233a2e`, `e9cb70c`, `197c703`; A18-R2-01…07 đã đóng, Snap Layout ghi manual-only, không push/PR/merge.
 > Mỗi người tối đa **một** task `ĐANG LÀM`; Worker đổi trạng thái khi thật sự bắt đầu, không đổi
 > thay người kia. `HOÀN THÀNH` chỉ sau khi PR merge `main` và đủ bằng chứng.
 
