@@ -161,6 +161,11 @@ Reviewer phải trả lời **có** cho cả sáu câu:
 
 ## Nhật ký
 
+- `OWNER-POLISH-04 13/09` — Từ `7f7ec04`, sửa nhanh cho bản demo tại `ef3b530`: nền/sidebar kiểu
+  desktop editor, bỏ selected fill/pill và dùng rail 2 px, bỏ card bao trang, giảm title/radius/shadow,
+  giới hạn header/button/Select/Table/Steps trong pane. Fresh capture đủ 7 route; app `291/291`,
+  focused Deploy `5/5`, typecheck/lint/Prettier/build PASS. Không live mutation, push/PR/merge.
+
 - `REVIEW-FIX-03 13/09` - Từ HEAD chứa Leader review, đóng A18-R2-01…07 theo checkpoints `a233a2e`, `e9cb70c`, `197c703`: WCO safe-area, canonical Fluent states với production usage, tiếng Việt, deterministic route capture, restored Prettier ignores và local handoff. Native resize/maximize-restore smoke được ghi; Snap Layout giữ verdict manual-only. Không live VPS/deploy/migrate/ML, không đổi contract/preload/shared/backend, không push/PR/merge.
 
 - `START 13/09` — Worker bắt đầu trên branch `feat/a18-native-dark-ui`: khóa phạm vi renderer-only, giữ nguyên file untracked của A, dựng dark shell trước rồi restyle 7 màn, test/evidence/handoff ở checkpoint cuối.

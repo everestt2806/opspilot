@@ -1,5 +1,15 @@
 # TK-A18 Review 02 evidence
 
+## Owner polish 04 — fresh evidence
+
+- Bộ `after/` hiện tại được chụp lại từ production build của code checkpoint `ef3b530` sau yêu cầu
+  sửa nhanh UI cho demo.
+- Capture gồm đủ bảy route ở 1366×768 và Deploy/Migrate ở 1920×1080. Metadata ghi DPR 1.5,
+  `MICA_FALLBACK`, native resize/maximize-restore PASS và Snap Layout manual-only.
+- Kiểm tra ảnh xác nhận selected navigation chỉ dùng rail 2 px, page wrapper không còn card lớn,
+  tiêu đề đã thu gọn và action/selector/steps nằm trong pane.
+- Capture dùng profile tạm, scrub host/IP và không thực hiện live deploy, migrate hay mutation VPS.
+
 ## Review-Fix 03 acceptance note
 
 - Capture now asserts the selected menu and `[data-page-key]` marker, waits for a compositor frame, records DPR/dimensions, copies the local DB fixture when available, and scrubs host/IP values.

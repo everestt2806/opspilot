@@ -7,6 +7,20 @@
 - Task packet: [`../tk-a18-native-dark-ui.md`](../tk-a18-native-dark-ui.md)
 - Evidence: `docs/evidence/tk-a18/`
 
+## Owner polish 04 — bản gọn cho demo
+
+- Code checkpoint: `ef3b530`, xuất phát từ `7f7ec04`.
+- Giảm giao diện về nhịp desktop kiểu VS Code: nền tối đặc có phân vùng, card phẳng, radius nhỏ,
+  tiêu đề 20 px và primary action xanh trầm.
+- Navigation chính, navigation trong panel và danh mục Settings không còn selected fill/pill; trạng
+  thái hiện hành dùng vạch accent 2 px và màu chữ.
+- Bỏ khung card bao toàn trang, giới hạn nội dung 1100 px, cho header/action tự wrap, giới hạn Select,
+  Table và Steps trong pane để tránh chồng hoặc tràn ngang ở 1366×768.
+- Fresh capture: `docs/evidence/tk-a18/review-02/after/`, bảy route 1366×768 và Deploy/Migrate
+  1920×1080; `capture.json` exit 0, DPR 1.5, resize/maximize-restore PASS, Snap Layout manual-only.
+- Gates: app `291/291`; focused Deploy `5/5`; typecheck, lint, scoped Prettier và production build
+  (3045 modules) PASS. Không live mutation, backend/contract change, push, PR hoặc merge.
+
 ## Local handoff
 
 - Code checkpoints: `a233a2e` (WCO safe-area/ignore), `e9cb70c` (canonical Fluent states + route markers), `197c703` (initial Vietnamese copy/tests), `e3df697` (complete Vietnamese copy/tests), `9eff0cc` (evidence/docs); final bookkeeping checkpoint follows.

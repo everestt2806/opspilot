@@ -5,7 +5,10 @@
 >
 > Trạng thái hợp lệ: `BACKLOG · TUẦN NÀY · ĐANG LÀM · CHỜ REVIEW · HOÀN THÀNH · BLOCKED`.
 
-TK-A18 Review-Fix 03: `READY_FOR_LOCAL_REVIEW` tại local checkpoints `a233a2e`, `e9cb70c`, `197c703`; A18-R2-01…07 đã đóng, Snap Layout ghi manual-only, không push/PR/merge.
+TK-A18 Owner polish 04: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `ef3b530`; giao diện demo đã
+gọn theo nhịp desktop/VS Code, tab active chỉ còn rail 2 px, header/action không tràn pane; Snap Layout
+ghi manual-only, không push/PR/merge.
+
 > Mỗi người tối đa **một** task `ĐANG LÀM`; Worker đổi trạng thái khi thật sự bắt đầu, không đổi
 > thay người kia. `HOÀN THÀNH` chỉ sau khi PR merge `main` và đủ bằng chứng.
 
@@ -33,19 +36,19 @@ TK-A18 Review-Fix 03: `READY_FOR_LOCAL_REVIEW` tại local checkpoints `a233a2e`
 
 ## Đang ưu tiên — W3/W4
 
-| ID     | Task                                                                 | Chủ                   | Hạn       | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                           |
-| ------ | -------------------------------------------------------------------- | --------------------- | --------- | ---------- | --------------------------- | --------------------------- | ----------------------------------------------------------------- |
-| TK-A18 | UI Windows 11 Fluent, Mica/native titlebar, dark mặc định            | A/Worker              | 14/09     | CHỜ REVIEW | `feat/a18-native-dark-ui`   | READY_FOR_LOCAL_REVIEW      | R2-01…07 fixed locally; checkpoints `a233a2e`, `e9cb70c`, `197c703`, `e3df697`, `9eff0cc`; Snap manual-only |
-| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu   | A                     | 14/09     | CHỜ REVIEW | `feat/a17-demo-checkpoint`  | C05 DEMO_READY              | Rehearsal SHA 936e643; chưa push/PR/merge                         |
-| TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09     | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                   | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới            |
-| TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09     | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge               | `fe1da33`; 21/21 theo task B                                      |
-| TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02       | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                   | Code đã merge; DoD SSH tail tại A17/C02                           |
-| TK-B6  | M5: collector Docker trên VPS                                        | B → A tích hợp        | C01       | CHỜ REVIEW | `feat/m05-collector-docker` | report `dfc0ed7` chưa merge | A17/C00–C01 tái xác minh, giữ app B                               |
-| TK-S4  | Gate dữ liệu thật A16 + collector VPS                                | A solo                | Sau 28/09 | BACKLOG    | Qua TK-A17                  | C01–C02 đã đạt              | Phần ML deferred để thu thêm dữ liệu                              |
-| TK-B8  | Monitor Dashboard: chart + score + alert UI                          | A làm thay B từ 10/09 | Sau 28/09 | BACKLOG    | Qua TK-A17                  | Sau demo 14/09              | Không mở song song với deploy/migrate                             |
-| TK-A7  | M3: detector 3 Tier 1                                                | A                     | C03       | BACKLOG    | `feat/m03-tier1-detectors`  | Gộp scope vào A17/C03       | Express/Next/Vite phục vụ trực tiếp demo 14/09                    |
-| TK-B2  | M12: next-blog + vite-spa + fault endpoint                           | B                     | 10/09     | HOÀN THÀNH | `feat/m12-demo-apps-rest`   | #28 merge                   | 3 app Docker/fault smoke theo B; detector 3 stack chưa hoàn thành |
-| TK-S5  | Gate MVP 16/24 FR + smoke/rollback/alert                             | A solo                | Sau A17   | BACKLOG    | —                           | A17/C09                     | Demo có evidence, không tự xác nhận 16/24 FR                      |
+| ID     | Task                                                                 | Chủ                   | Hạn       | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                                                      |
+| ------ | -------------------------------------------------------------------- | --------------------- | --------- | ---------- | --------------------------- | --------------------------- | -------------------------------------------------------------------------------------------- |
+| TK-A18 | UI Windows 11 Fluent, Mica/native titlebar, dark mặc định            | A/Worker              | 14/09     | CHỜ REVIEW | `feat/a18-native-dark-ui`   | READY_FOR_LOCAL_REVIEW      | Owner polish `ef3b530`: VS Code density, rail active, overflow containment; Snap manual-only |
+| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu   | A                     | 14/09     | CHỜ REVIEW | `feat/a17-demo-checkpoint`  | C05 DEMO_READY              | Rehearsal SHA 936e643; chưa push/PR/merge                                                    |
+| TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09     | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                   | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới                                       |
+| TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09     | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge               | `fe1da33`; 21/21 theo task B                                                                 |
+| TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02       | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                   | Code đã merge; DoD SSH tail tại A17/C02                                                      |
+| TK-B6  | M5: collector Docker trên VPS                                        | B → A tích hợp        | C01       | CHỜ REVIEW | `feat/m05-collector-docker` | report `dfc0ed7` chưa merge | A17/C00–C01 tái xác minh, giữ app B                                                          |
+| TK-S4  | Gate dữ liệu thật A16 + collector VPS                                | A solo                | Sau 28/09 | BACKLOG    | Qua TK-A17                  | C01–C02 đã đạt              | Phần ML deferred để thu thêm dữ liệu                                                         |
+| TK-B8  | Monitor Dashboard: chart + score + alert UI                          | A làm thay B từ 10/09 | Sau 28/09 | BACKLOG    | Qua TK-A17                  | Sau demo 14/09              | Không mở song song với deploy/migrate                                                        |
+| TK-A7  | M3: detector 3 Tier 1                                                | A                     | C03       | BACKLOG    | `feat/m03-tier1-detectors`  | Gộp scope vào A17/C03       | Express/Next/Vite phục vụ trực tiếp demo 14/09                                               |
+| TK-B2  | M12: next-blog + vite-spa + fault endpoint                           | B                     | 10/09     | HOÀN THÀNH | `feat/m12-demo-apps-rest`   | #28 merge                   | 3 app Docker/fault smoke theo B; detector 3 stack chưa hoàn thành                            |
+| TK-S5  | Gate MVP 16/24 FR + smoke/rollback/alert                             | A solo                | Sau A17   | BACKLOG    | —                           | A17/C09                     | Demo có evidence, không tự xác nhận 16/24 FR                                                 |
 
 ## Phụ thuộc được xử lý trong A17 hoặc sau demo
 
