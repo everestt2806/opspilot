@@ -17,7 +17,9 @@
   "nativeWindow": {
     "resize": "PASS",
     "maximizeRestore": "PASS",
-    "snapLayout": "NOT_AUTOMATED_MANUAL_WINDOWS_SMOKE_REQUIRED"
+    "snapLayout": "NOT_AUTOMATED_MANUAL_WINDOWS_SMOKE_REQUIRED",
+    "titlebarControls": "PASS",
+    "titlebarScreenshot": "titlebar-native-controls.png"
   },
   "exitCode": 0
 }

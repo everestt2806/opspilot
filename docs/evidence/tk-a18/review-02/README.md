@@ -1,5 +1,13 @@
 # TK-A18 Review 02 evidence
 
+## Titlebar fix 05 — native whole-window evidence
+
+- `after/titlebar-native-controls.png` được chụp từ toàn bộ cửa sổ Windows của production build
+  `30747f1`, vì `webContents.capturePage()` không chứa các nút caption native.
+- Ảnh xác nhận brand và caption nằm trong WCO available rectangle, ba nút minimize/maximize/close ở
+  vùng native bên phải, không chồng lớp drag và không có block màu lệch tại đường nối.
+- Profile smoke là profile tạm; không đọc hoặc sửa VPS thật. Snap Layout tiếp tục được ghi manual-only.
+
 ## Owner polish 04 — fresh evidence
 
 - Bộ `after/` hiện tại được chụp lại từ production build của code checkpoint `ef3b530` sau yêu cầu

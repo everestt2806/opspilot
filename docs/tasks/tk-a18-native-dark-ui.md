@@ -161,6 +161,11 @@ Reviewer phải trả lời **có** cho cả sáu câu:
 
 ## Nhật ký
 
+- `TITLEBAR-FIX-05 13/09` — Sửa root cause WCO tại `30747f1`: thay spacer rỗng bằng drag region dùng
+  đúng `titlebar-area-x/width/height`, tách outer no-drag strip và đồng bộ màu native overlay. Whole-window
+  Windows capture xác nhận min/max/close, caption và brand không chồng. App `291/291`, focused `3/3`,
+  typecheck/lint/Prettier/build PASS; Snap Layout giữ manual-only.
+
 - `OWNER-POLISH-04 13/09` — Từ `7f7ec04`, sửa nhanh cho bản demo tại `ef3b530`: nền/sidebar kiểu
   desktop editor, bỏ selected fill/pill và dùng rail 2 px, bỏ card bao trang, giảm title/radius/shadow,
   giới hạn header/button/Select/Table/Steps trong pane. Fresh capture đủ 7 route; app `291/291`,

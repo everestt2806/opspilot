@@ -7,6 +7,19 @@
 - Task packet: [`../tk-a18-native-dark-ui.md`](../tk-a18-native-dark-ui.md)
 - Evidence: `docs/evidence/tk-a18/`
 
+## Titlebar fix 05 — Window Controls Overlay
+
+- Code checkpoint: `30747f1`, xuất phát từ Owner polish `e01ffa3`.
+- Root cause: `.app-titlebar-right` rỗng chiếm vùng titlebar khả dụng nhưng brand/caption vẫn layout
+  theo toàn cửa sổ; drag region vì thế không tuân theo rectangle của WCO. Màu native overlay
+  `#202020` cũng lệch với shell `#181818`.
+- Fix: dùng `.app-titlebar-drag-region` thật với `env(titlebar-area-x/width/height)`, để outer strip
+  `no-drag`, bỏ spacer sai và đồng bộ overlay/symbol/background với dark shell.
+- Native whole-window smoke trên Windows xác nhận brand/caption và ba nút minimize/maximize/close
+  không chồng nhau, nền nối liền. Evidence: `review-02/after/titlebar-native-controls.png`.
+- Gates: focused titlebar/window options `3/3`, app `291/291`, typecheck, lint, scoped Prettier và
+  production build 3045 modules PASS. Snap Layout vẫn manual-only.
+
 ## Owner polish 04 — bản gọn cho demo
 
 - Code checkpoint: `ef3b530`, xuất phát từ `7f7ec04`.
