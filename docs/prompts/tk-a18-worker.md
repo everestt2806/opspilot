@@ -1,7 +1,7 @@
 # Prompt Worker — TK-A18 native dark desktop UI
 
-> Review hiện hành: [`../tasks/tk-a18/review-02-fluent-plan.md`](../tasks/tk-a18/review-02-fluent-plan.md).
-> Dùng prompt F0–F3 ở cuối Review 02; tài liệu đó thay hướng dẫn Review 01/task gốc khi mâu thuẫn.
+> Review hiện hành: [`../tasks/tk-a18/review-02-result.md`](../tasks/tk-a18/review-02-result.md).
+> Dùng prompt Review-Fix 03 ở cuối file kết quả; kế hoạch Fluent vẫn là nguồn yêu cầu/DoD nền.
 
 ```text
 Thực hiện một goal dài duy nhất TK-A18 trong repo hiện tại: sửa code, test, chụp evidence và commit

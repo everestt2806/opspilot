@@ -168,6 +168,10 @@ Reviewer phải trả lời **có** cho cả sáu câu:
 - `UPDATE 13/09` — Review-Fix 02 F0 `3710d55`, F1 `0654bb0`, F2 `36dec2d`; F3 đã bổ sung regression thật, capture profile tạm và evidence review-02.
 - `HANDOFF-LOCAL 13/09` — Đã đóng mapping R1-01…07 trong handoff; Mica `MICA_FALLBACK`, không live mutation, dừng `READY_FOR_LOCAL_REVIEW`.
 - `UPDATE 13/09` — Review-Fix 02 full gate: app `291/291`, ML `19/19`, typecheck/lint/build PASS; Prettier còn 2 boundary files không được sửa theo scope.
+- `REVIEW 13/09` — Leader kiểm độc lập `d99d7c5`: `CHANGES_REQUESTED`, mở A18-R2-01…07. Titlebar
+  dùng sai WCO safe-area nên caption chồng brand; Mica fallback vẫn flat; type/state/language chưa đạt;
+  evidence sai route/khác data. Reviewer full app `290/291`, Prettier còn đỏ; xem
+  `docs/tasks/tk-a18/review-02-result.md`.
 - `PLAN 13/09` — Leader mở TK-A18 theo yêu cầu: native desktop hơn, dark mặc định, giảm web/AI
   slop; khóa backend/live và giữ `936e643` làm rollback point. Worker chưa bắt đầu.
 - `REVIEW 13/09` — Leader review submission `c35e797`: `CHANGES_REQUESTED`; mở A18-R1-01…07.

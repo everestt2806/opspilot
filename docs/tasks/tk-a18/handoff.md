@@ -1,6 +1,6 @@
 # TK-A18 — Handoff
 
-- Status: `READY_FOR_LOCAL_REVIEW`
+- Status: `REVIEW_FIX_REQUIRED`
 - Branch: `feat/a18-native-dark-ui`
 - Parent before task packet: `66ab90b`
 - Stable demo rollback point: `936e643`
@@ -44,3 +44,12 @@ visual evidence, phần DoD chưa đạt và xác nhận không live mutation/pu
   Window Controls Overlay/Mica. Không đổi IPC contract hoặc backend.
 - Evidence kỹ thuật: `docs/evidence/tk-a18/review-02/research.md`.
 - Trạng thái vẫn `REVIEW_FIX_REQUIRED`; production code chưa đổi sau Review 01.
+
+## Leader review submission Review-Fix 02
+
+- Verdict tại `d99d7c5`: `CHANGES_REQUESTED`.
+- Findings hiện hành: A18-R2-01…07 trong [`review-02-result.md`](review-02-result.md).
+- Blocker chính: WCO safe-area làm caption chồng brand; Mica fallback vẫn flat; type/state chưa áp dụng;
+  UI còn trộn ngôn ngữ; evidence trễ/sai route và không cùng data; full test/Prettier đỏ.
+- Reviewer evidence: `docs/evidence/tk-a18/review-02/leader-review.md`.
+- Không chạy live mutation; chưa push/PR/merge.
