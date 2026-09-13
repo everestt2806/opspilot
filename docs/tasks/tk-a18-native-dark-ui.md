@@ -1,5 +1,9 @@
 # TK-A18 — Làm mới UI desktop native, dark mặc định
 
+> **Nguồn thực thi hiện hành:** [`tk-a18/review-02-fluent-plan.md`](tk-a18/review-02-fluent-plan.md).
+> Review 02 thay thế hướng dẫn/DoD cũ khi mâu thuẫn, cho phép chạm `BrowserWindow` để dùng Window
+> Controls Overlay/Mica và khóa ba màn mẫu Dashboard, VPS, Settings theo đánh giá Fluent ngày 13/09.
+
 | Chủ      | Hạn        | Branch                    | Brief                                                        | Ưu tiên |
 | -------- | ---------- | ------------------------- | ------------------------------------------------------------ | ------- |
 | A/Worker | 14/09/2026 | `feat/a18-native-dark-ui` | [`../prompts/tk-a18-worker.md`](../prompts/tk-a18-worker.md) | P0 demo |
@@ -167,6 +171,10 @@ Reviewer phải trả lời **có** cho cả sáu câu:
   Dark shell đạt nhưng bốn page chính không có source diff, visual vẫn card/web, Settings hiển thị
   ML/auto rollback giả, theme tests chưa kiểm rehydrate và capture xóa storage thật. Baseline before
   được waive; xem `docs/tasks/tk-a18/review-01.md`.
+- `REPLAN 13/09` — A cung cấp đánh giá chuyên gia Windows 11 Fluent. Leader mở Review 02, đổi titlebar
+  sang Window Controls Overlay native để có Snap Layout, cho phép Mica/fallback, chốt type/token/state và
+  ba màn đối chiếu Dashboard/VPS/Settings. Review 02 thay phần thực thi Review 01; chưa sửa production
+  code, chưa push/PR/merge.
 
 ## Lệnh tái hiện
 

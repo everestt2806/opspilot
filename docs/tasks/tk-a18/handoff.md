@@ -25,3 +25,12 @@ visual evidence, phần DoD chưa đạt và xác nhận không live mutation/pu
 - Verdict: `CHANGES_REQUESTED` tại submission `c35e797`.
 - Findings: A18-R1-01…07 trong [`review-01.md`](review-01.md).
 - Baseline `before/` được waive; không tái tạo. Fix renderer/evidence local, không live mutation.
+
+## Leader replan — Review 02
+
+- Kế hoạch hiện hành: [`review-02-fluent-plan.md`](review-02-fluent-plan.md).
+- Phạm vi mẫu: Dashboard, VPS, Settings; các route còn lại chỉ nhận token/state dùng chung và smoke.
+- Ngoại lệ theo yêu cầu mới của A: được sửa `app/src/main/index.ts` và test tương ứng để dùng native
+  Window Controls Overlay/Mica. Không đổi IPC contract hoặc backend.
+- Evidence kỹ thuật: `docs/evidence/tk-a18/review-02/research.md`.
+- Trạng thái vẫn `REVIEW_FIX_REQUIRED`; production code chưa đổi sau Review 01.

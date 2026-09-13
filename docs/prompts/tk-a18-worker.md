@@ -1,7 +1,7 @@
 # Prompt Worker — TK-A18 native dark desktop UI
 
-> Review hiện hành: [`../tasks/tk-a18/review-01.md`](../tasks/tk-a18/review-01.md). Nếu file review có
-> verdict `CHANGES_REQUESTED`, prompt fix ở cuối file review thay cho prompt khởi tạo bên dưới.
+> Review hiện hành: [`../tasks/tk-a18/review-02-fluent-plan.md`](../tasks/tk-a18/review-02-fluent-plan.md).
+> Dùng prompt F0–F3 ở cuối Review 02; tài liệu đó thay hướng dẫn Review 01/task gốc khi mâu thuẫn.
 
 ```text
 Thực hiện một goal dài duy nhất TK-A18 trong repo hiện tại: sửa code, test, chụp evidence và commit
