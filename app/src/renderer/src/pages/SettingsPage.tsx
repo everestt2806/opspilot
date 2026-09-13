@@ -1,145 +1,61 @@
-import { useState } from 'react'
-import {
-  App as AntApp,
-  Alert,
-  Button,
-  Form,
-  InputNumber,
-  Select,
-  Space,
-  Switch,
-  Segmented,
-  Typography
-} from 'antd'
-import { SettingOutlined, WarningOutlined } from '@ant-design/icons'
+import { Segmented, Typography } from 'antd'
+import { SettingOutlined } from '@ant-design/icons'
 
-import { fonts } from '../tokens'
+import { strings } from '../strings'
 import { useUiState } from '../store/uiState'
 import type { ThemeMode } from '../utils/themeTokens'
 
 export function SettingsPage(): React.JSX.Element {
-  const { modal, message } = AntApp.useApp()
-  const [autoRollback, setAutoRollback] = useState(true)
-  const [trustedMethod, setTrustedMethod] = useState('iforest')
-  const [cpuThreshold, setCpuThreshold] = useState(85)
-  const [ramThreshold, setRamThreshold] = useState(90)
   const themeMode = useUiState((state) => state.theme)
   const setTheme = useUiState((state) => state.setTheme)
 
-  const handleToggleAutoRollback = (checked: boolean): void => {
-    if (checked) {
-      modal.confirm({
-        title: 'Enable Auto-Rollback?',
-        icon: <WarningOutlined style={{ color: 'var(--warning)' }} />,
-        content:
-          'When enabled, the app will automatically roll back to the previous version as soon as a trusted ML method detects an anomaly above the threshold. Make sure you understand the operating procedure.',
-        okText: 'Enable',
-        cancelText: 'Cancel',
-        onOk() {
-          setAutoRollback(true)
-          message.success('Auto-Rollback enabled.')
-        }
-      })
-    } else {
-      setAutoRollback(false)
-      message.info('Auto-Rollback disabled.')
-    }
-  }
-
-  const handleSave = (): void => {
-    message.success('Monitoring settings saved successfully!')
-  }
-
   return (
-    <section className="page-panel">
+    <section className="page-panel settings-page">
       <div className="page-heading">
         <div>
           <Typography.Title level={2} style={{ color: 'var(--text-primary)', margin: 0 }}>
-            <SettingOutlined style={{ marginRight: 10, color: 'var(--info)' }} />
-            Cài đặt giám sát
+            <SettingOutlined style={{ marginRight: 10, color: 'var(--accent)' }} />
+            {strings.settings.title}
           </Typography.Title>
-          <Typography.Text type="secondary">
-            Ngưỡng rule, phương pháp tin cậy và tự động rollback.
-          </Typography.Text>
+          <Typography.Text type="secondary">{strings.settings.description}</Typography.Text>
         </div>
       </div>
-
-      <div className="settings-section">
-        <div>
-          <Typography.Text strong>Giao diện</Typography.Text>
-          <Typography.Paragraph type="secondary">
-            Chọn giao diện cho phiên làm việc này.
-          </Typography.Paragraph>
-        </div>
-        <Segmented<ThemeMode>
-          value={themeMode}
-          onChange={setTheme}
-          options={[
-            { value: 'dark', label: 'Tối' },
-            { value: 'light', label: 'Sáng' }
-          ]}
-        />
-      </div>
-
-      <div className="settings-form-panel">
-        <Form layout="vertical" style={{ maxWidth: 600 }}>
-          <Form.Item label="Rule Baseline Threshold - CPU (%)">
-            <InputNumber
-              min={1}
-              max={100}
-              value={cpuThreshold}
-              onChange={(val) => setCpuThreshold(val ?? 85)}
-              style={{ width: '100%', fontFamily: fonts.mono }}
-            />
-          </Form.Item>
-
-          <Form.Item label="Rule Baseline Threshold - RAM (%)">
-            <InputNumber
-              min={1}
-              max={100}
-              value={ramThreshold}
-              onChange={(val) => setRamThreshold(val ?? 90)}
-              style={{ width: '100%', fontFamily: fonts.mono }}
-            />
-          </Form.Item>
-
-          <Form.Item label="Trusted ML Method (Trusted Method for Auto-Rollback)">
-            <Select
-              value={trustedMethod}
-              onChange={setTrustedMethod}
+      <div className="settings-layout">
+        <nav className="settings-categories" aria-label={strings.settings.categoriesLabel}>
+          <button type="button" className="settings-category settings-category-active">
+            {strings.settings.appearance}
+          </button>
+          <span className="settings-category settings-category-disabled">
+            {strings.settings.monitoringCategory}
+          </span>
+        </nav>
+        <div className="settings-sections">
+          <section className="settings-section">
+            <div>
+              <Typography.Text strong>{strings.settings.appearance}</Typography.Text>
+              <Typography.Paragraph type="secondary">
+                {strings.settings.appearanceDescription}
+              </Typography.Paragraph>
+            </div>
+            <Segmented<ThemeMode>
+              aria-label={strings.settings.appearance}
+              value={themeMode}
+              onChange={setTheme}
               options={[
-                { value: 'iforest', label: 'Isolation Forest (Purple - Recommended)' },
-                { value: 'ensemble', label: 'Ensemble Method (Green)' },
-                { value: 'zscore_ewma', label: 'Z-Score EWMA (Blue)' },
-                { value: 'ocsvm', label: 'One-Class SVM (Pink)' }
+                { value: 'dark', label: strings.settings.dark },
+                { value: 'light', label: strings.settings.light }
               ]}
             />
-          </Form.Item>
-
-          <Form.Item label="Enable Auto-Rollback (Auto-Rollback Trigger)">
-            <Space size="middle">
-              <Switch checked={autoRollback} onChange={handleToggleAutoRollback} />
-              <Typography.Text type="secondary">
-                {autoRollback ? 'ON (Active)' : 'OFF (Disabled)'}
-              </Typography.Text>
-            </Space>
-          </Form.Item>
-
-          {autoRollback && (
-            <Alert
-              type="warning"
-              showIcon
-              message="Auto-Rollback is active with trusted method: Isolation Forest."
-              style={{ marginBottom: 24 }}
-            />
-          )}
-
-          <Form.Item style={{ marginTop: 20 }}>
-            <Button type="primary" size="large" onClick={handleSave}>
-              Save Settings
-            </Button>
-          </Form.Item>
-        </Form>
+          </section>
+          <section className="settings-section settings-section-readonly">
+            <div>
+              <Typography.Text strong>{strings.settings.monitoring}</Typography.Text>
+              <Typography.Paragraph type="secondary">
+                {strings.settings.deferred}
+              </Typography.Paragraph>
+            </div>
+          </section>
+        </div>
       </div>
     </section>
   )

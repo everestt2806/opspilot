@@ -10,11 +10,8 @@ import {
   Badge,
   Button,
   Card,
-  Col,
   Empty,
-  Row,
   Space,
-  Statistic,
   Table,
   Tag,
   Tooltip,
@@ -206,40 +203,28 @@ export function DashboardPage({ onOpenVps, onOpenDeploy }: DashboardPageProps): 
       </div>
 
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
-        <Row className="summary-strip" gutter={8}>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title={strings.dashboard.stats.vpsOnline}
-                value={onlineCount}
-                suffix={`/ ${vpsList.length}`}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title={strings.dashboard.stats.appsRunning}
-                value={runningApps}
-                suffix={`/ ${apps.length}`}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic title={strings.dashboard.stats.deploy24h} value={deploy24h} />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card>
-              <Statistic
-                title={strings.dashboard.stats.lastDeploy}
-                value={lastDeploy ? relativeTime(lastDeploy.ts) : '—'}
-                valueStyle={{ fontSize: 16, whiteSpace: 'nowrap' }}
-              />
-            </Card>
-          </Col>
-        </Row>
+        <div className="summary-strip" aria-label={strings.dashboard.summaryLabel}>
+          <div className="summary-cell">
+            <span>{strings.dashboard.stats.vpsOnline}</span>
+            <strong>
+              {onlineCount} / {vpsList.length}
+            </strong>
+          </div>
+          <div className="summary-cell">
+            <span>{strings.dashboard.stats.appsRunning}</span>
+            <strong>
+              {runningApps} / {apps.length}
+            </strong>
+          </div>
+          <div className="summary-cell">
+            <span>{strings.dashboard.stats.deploy24h}</span>
+            <strong>{deploy24h}</strong>
+          </div>
+          <div className="summary-cell">
+            <span>{strings.dashboard.stats.lastDeploy}</span>
+            <strong>{lastDeploy ? relativeTime(lastDeploy.ts) : '—'}</strong>
+          </div>
+        </div>
 
         <Card title={strings.dashboard.recent.title} styles={{ body: { padding: 0 } }}>
           <Table<ActionLogEntry>

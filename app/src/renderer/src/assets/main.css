@@ -1184,37 +1184,47 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 0;
+  border: 1px solid var(--stroke-divider);
+  border-radius: 8px;
+  background: var(--surface-card, var(--bg-panel));
 }
 
-.summary-strip > .ant-col {
-  max-width: none;
-  width: auto;
+.summary-cell {
+  display: flex;
+  min-height: 72px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 16px;
 }
 
-.summary-strip .ant-card {
-  height: auto;
-  border: 1px solid var(--border);
-  background: var(--bg-panel);
+.summary-cell + .summary-cell {
+  border-left: 1px solid var(--stroke-divider);
 }
 
-.summary-strip .ant-card-body {
-  padding: 10px 12px;
+.summary-cell span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.summary-cell strong {
+  color: var(--text-primary);
+  font-family: var(--font-mono, 'Cascadia Mono', Consolas, monospace);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.summary-cell-success strong {
+  color: var(--success);
+}
+.summary-cell-danger strong {
+  color: var(--danger);
 }
 
 .settings-form-panel {
   max-width: 720px;
   padding: 16px 0;
   border-bottom: 1px solid var(--border);
-}
-
-.summary-strip .ant-statistic-title {
-  color: var(--text-secondary);
-  font-size: 11px;
-}
-
-.summary-strip .ant-statistic-content {
-  font-family: 'IBM Plex Mono', Consolas, monospace;
-  font-size: 20px;
 }
 
 .panel-fleet .ant-card {
@@ -1233,6 +1243,45 @@
 
 .settings-section .ant-typography {
   margin: 0;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 720px);
+  gap: 24px;
+  max-width: 960px;
+}
+
+.settings-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 12px;
+  border-right: 1px solid var(--stroke-divider);
+}
+
+.settings-category {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+}
+
+.settings-category-active {
+  background: var(--fill-selected);
+  color: var(--text-primary);
+}
+
+.settings-category-disabled {
+  color: var(--text-disabled);
+}
+
+.settings-section-readonly {
+  align-items: flex-start;
 }
 
 :focus-visible {

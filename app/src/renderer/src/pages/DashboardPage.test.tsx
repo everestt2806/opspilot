@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ActionLogEntry, App, Vps } from '@shared/ipc'
 
 import { DashboardPage } from './DashboardPage'
+import { strings } from '../strings'
 
 const VPS_A: Vps = {
   id: 1,
@@ -88,13 +89,13 @@ const happyHandlers: Record<string, InvokeHandler> = {
   }
 }
 
-function statCard(label: string): HTMLElement {
+function statCell(label: string): HTMLElement {
   const title = screen.getByText(label)
-  const card = title.closest('.ant-card')
-  if (!card || !(card instanceof HTMLElement)) {
-    throw new Error(`Khong tim thay card cua "${label}"`)
+  const cell = title.closest('.summary-cell')
+  if (!cell || !(cell instanceof HTMLElement)) {
+    throw new Error(`Khong tim thay summary cell cua "${label}"`)
   }
-  return card
+  return cell
 }
 
 beforeEach(() => {
@@ -110,12 +111,12 @@ describe('DashboardPage', () => {
     const invoke = mockApi(happyHandlers)
     render(<DashboardPage onOpenVps={() => {}} onOpenDeploy={() => {}} />)
 
-    await screen.findByText('Overview')
+    await screen.findByText(strings.dashboard.title)
 
-    expect(within(statCard('VPS online')).getByText('1')).toBeTruthy()
-    expect(within(statCard('Apps running')).getByText('1')).toBeTruthy()
-    expect(within(statCard('Deploys in 24h')).getByText('2')).toBeTruthy()
-    expect(within(statCard('Last deploy')).getByText(/ago|just now/)).toBeTruthy()
+    expect(statCell('VPS online').textContent).toContain('1 / 2')
+    expect(statCell('Apps running').textContent).toContain('1 / 2')
+    expect(statCell('Deploys in 24h').textContent).toContain('2')
+    expect(statCell('Last deploy').textContent).toMatch(/ago|just now/)
 
     expect(screen.getAllByText('Deployed v7 successfully.').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Rollback failed.').length).toBeGreaterThan(0)
@@ -166,6 +167,6 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByText('Khong doc duoc DB.')).toBeTruthy()
     fireEvent.click(screen.getByText('Retry'))
-    expect(await screen.findByText('Overview')).toBeTruthy()
+    expect(await screen.findByText(strings.dashboard.title)).toBeTruthy()
   })
 })

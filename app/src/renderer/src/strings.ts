@@ -271,7 +271,8 @@ export const strings = {
     }
   },
   dashboard: {
-    title: 'Overview',
+    title: 'Tổng quan',
+    summaryLabel: 'Tóm tắt hệ thống',
     refresh: 'Refresh',
     stats: {
       vpsOnline: 'VPS online',
@@ -510,6 +511,18 @@ export const strings = {
       itemGit: 'Git',
       itemWorkdir: 'Workspace /opt/opspilot'
     }
+  },
+  settings: {
+    title: 'Cài đặt',
+    description: 'Giao diện và trạng thái các tính năng đang phát triển.',
+    appearance: 'Giao diện',
+    appearanceDescription: 'Chọn giao diện cho phiên làm việc này.',
+    categoriesLabel: 'Nhóm cài đặt',
+    monitoringCategory: 'Giám sát',
+    dark: 'Tối',
+    light: 'Sáng',
+    monitoring: 'Giám sát ML và rollback tự động',
+    deferred: 'Đang phát triển, dự kiến sau 28/09'
   },
   appearance: {
     label: 'Appearance',

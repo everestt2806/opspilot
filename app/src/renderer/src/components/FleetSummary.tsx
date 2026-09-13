@@ -1,4 +1,4 @@
-import { Card, Statistic } from 'antd'
+import { Skeleton } from 'antd'
 
 import { strings } from '../strings'
 
@@ -20,29 +20,29 @@ export function FleetSummary({
   loading
 }: FleetSummaryProps): React.JSX.Element {
   return (
-    <div className="panel-fleet summary-strip">
-      <Card aria-label={strings.vpsControl.fleet.totalVps}>
-        <Statistic title={strings.vpsControl.fleet.totalVps} value={total} loading={loading} />
-      </Card>
-      <Card aria-label={strings.vpsControl.fleet.online}>
-        <Statistic
-          title={strings.vpsControl.fleet.online}
-          value={online}
-          valueStyle={{ color: 'var(--success)' }}
-          loading={loading}
-        />
-      </Card>
-      <Card aria-label={strings.vpsControl.fleet.offline}>
-        <Statistic
-          title={strings.vpsControl.fleet.offline}
-          value={offline}
-          valueStyle={{ color: 'var(--danger)' }}
-          loading={loading}
-        />
-      </Card>
-      <Card aria-label={strings.vpsControl.fleet.totalApps}>
-        <Statistic title={strings.vpsControl.fleet.totalApps} value={appCount} loading={loading} />
-      </Card>
+    <div className="panel-fleet summary-strip" aria-busy={loading}>
+      <div className="summary-cell" aria-label={strings.vpsControl.fleet.totalVps}>
+        <span>{strings.vpsControl.fleet.totalVps}</span>
+        {loading ? <Skeleton active paragraph={false} /> : <strong>{total}</strong>}
+      </div>
+      <div
+        className="summary-cell summary-cell-success"
+        aria-label={strings.vpsControl.fleet.online}
+      >
+        <span>{strings.vpsControl.fleet.online}</span>
+        {loading ? <Skeleton active paragraph={false} /> : <strong>{online}</strong>}
+      </div>
+      <div
+        className="summary-cell summary-cell-danger"
+        aria-label={strings.vpsControl.fleet.offline}
+      >
+        <span>{strings.vpsControl.fleet.offline}</span>
+        {loading ? <Skeleton active paragraph={false} /> : <strong>{offline}</strong>}
+      </div>
+      <div className="summary-cell" aria-label={strings.vpsControl.fleet.totalApps}>
+        <span>{strings.vpsControl.fleet.totalApps}</span>
+        {loading ? <Skeleton active paragraph={false} /> : <strong>{appCount}</strong>}
+      </div>
     </div>
   )
 }
