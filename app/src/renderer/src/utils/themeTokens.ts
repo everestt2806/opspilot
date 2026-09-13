@@ -7,11 +7,11 @@ import type { ThemeConfig } from 'antd'
  *  khai trong base.css. */
 export type ThemeMode = 'light' | 'dark'
 
-const FONT_UI = "'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-const FONT_MONO = "'IBM Plex Mono', 'JetBrains Mono', Consolas, monospace"
+const FONT_UI = "'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif"
+const FONT_MONO = "'Cascadia Mono', Consolas, monospace"
 
 const shared: ThemeConfig['token'] = {
-  colorPrimary: '#4F9CF9',
+  colorPrimary: '#60CDFF',
   borderRadius: 5,
   controlHeight: 33,
   fontFamily: FONT_UI,
@@ -44,20 +44,20 @@ export const themeTokens: Record<ThemeMode, ThemeConfig> = {
     algorithm: theme.darkAlgorithm,
     token: {
       ...shared,
-      colorInfo: '#818CF8',
-      colorSuccess: '#34D399',
-      colorWarning: '#FBBF24',
-      colorError: '#F87171',
-      colorBgBase: '#0F172A',
-      colorBgContainer: '#1E293B',
-      colorBgElevated: '#273449',
-      colorBorder: '#334155',
-      colorBorderSecondary: '#334155',
-      colorText: '#F1F5F9',
-      colorTextSecondary: '#94A3B8',
-      colorTextTertiary: '#64748B',
-      colorTextPlaceholder: '#64748B',
-      colorLink: '#A5B4FC'
+      colorInfo: '#60CDFF',
+      colorSuccess: '#4CC2A3',
+      colorWarning: '#F4C152',
+      colorError: '#F28B82',
+      colorBgBase: '#202020',
+      colorBgContainer: 'rgba(255,255,255,0.045)',
+      colorBgElevated: 'rgba(255,255,255,0.065)',
+      colorBorder: 'rgba(255,255,255,0.06)',
+      colorBorderSecondary: 'rgba(255,255,255,0.12)',
+      colorText: 'rgba(255,255,255,0.9)',
+      colorTextSecondary: 'rgba(255,255,255,0.62)',
+      colorTextTertiary: 'rgba(255,255,255,0.45)',
+      colorTextPlaceholder: 'rgba(255,255,255,0.36)',
+      colorLink: '#60CDFF'
     }
   }
 }
