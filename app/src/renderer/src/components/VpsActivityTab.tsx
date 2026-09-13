@@ -205,6 +205,7 @@ export function VpsActivityTab({ vpsId }: VpsActivityTabProps): React.JSX.Elemen
               <Descriptions.Item label={strings.history.detail.status}>
                 {selected.status ? (
                   <Badge
+                    className="status-badge"
                     status={STATUS_BADGE[selected.status]}
                     text={statusLabel(selected.status)}
                   />

@@ -1092,32 +1092,23 @@
   }
 }
 
-/* Native desktop density: connected panes and restrained elevation. */
-.app-titlebar {
-  height: 34px;
-  min-height: 34px;
-  background: var(--bg-base);
-}
-
+/* Canonical Fluent desktop layer. */
 .app-titlebar-brand {
   font-weight: 600;
   color: var(--text-primary);
 }
-
 .app-titlebar-caption {
   color: var(--text-muted);
 }
-
 .app-shell,
 .ant-layout-sider,
 .ant-menu {
-  background: var(--bg-base) !important;
+  background: var(--window-fallback) !important;
 }
-
 .app-navigation {
   padding: 8px 6px;
+  background: var(--sidebar-fallback) !important;
 }
-
 .app-navigation .ant-menu-item {
   height: 34px;
   line-height: 34px;
@@ -1125,74 +1116,60 @@
   border-radius: 5px;
   color: var(--text-secondary);
 }
-
-.app-navigation .ant-menu-item-selected {
-  color: var(--text-primary) !important;
-  background: var(--bg-elevated) !important;
-  box-shadow: inset 2px 0 var(--info);
+.app-navigation .ant-menu-item:hover {
+  background: var(--fill-hover) !important;
+  color: var(--text-primary);
 }
-
+.app-navigation .ant-menu-item-selected {
+  background: var(--fill-selected) !important;
+  color: var(--text-primary) !important;
+  box-shadow: inset 3px 0 var(--accent);
+}
 .content {
   padding: 14px 16px;
+  background: var(--content-fallback);
 }
-
 .page-panel {
   min-height: 100%;
+  max-width: 1100px;
   padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
 }
-
 .page-heading {
   align-items: center;
   gap: 12px;
   margin-bottom: 12px;
   padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--stroke-divider);
 }
-
-.page-heading .ant-typography-title,
-.page-heading h1,
-.page-heading h2,
-.page-heading h3 {
-  font-size: 17px !important;
-  font-weight: 600;
-}
-
 .page-heading .ant-typography {
   margin-bottom: 0;
 }
-
 .ant-card {
-  border-radius: 5px;
-  box-shadow: none;
+  border-radius: 8px;
+  border-color: var(--stroke-divider);
+  background: var(--surface-card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
-
 .ant-card-head {
   min-height: 40px;
   padding-inline: 12px;
-  border-bottom-color: var(--border);
+  border-bottom-color: var(--stroke-divider);
 }
-
 .ant-card-body {
   padding: 12px;
 }
-
 .panel-fleet {
   gap: 8px;
   margin-bottom: 12px;
 }
-
 .summary-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin: 0;
   border: 1px solid var(--stroke-divider);
   border-radius: 8px;
-  background: var(--surface-card, var(--bg-panel));
+  background: var(--surface-card);
 }
-
 .summary-cell {
   display: flex;
   min-height: 72px;
@@ -1201,40 +1178,25 @@
   gap: 4px;
   padding: 10px 16px;
 }
-
 .summary-cell + .summary-cell {
   border-left: 1px solid var(--stroke-divider);
 }
-
 .summary-cell span {
   color: var(--text-secondary);
   font-size: 12px;
 }
-
 .summary-cell strong {
   color: var(--text-primary);
-  font-family: var(--font-mono, 'Cascadia Mono', Consolas, monospace);
+  font-family: var(--font-mono);
   font-size: 20px;
   font-weight: 600;
 }
-
 .summary-cell-success strong {
   color: var(--success);
 }
 .summary-cell-danger strong {
   color: var(--danger);
 }
-
-.settings-form-panel {
-  max-width: 720px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.panel-fleet .ant-card {
-  background: var(--bg-panel);
-}
-
 .settings-section {
   display: flex;
   align-items: center;
@@ -1242,20 +1204,17 @@
   gap: 16px;
   max-width: 720px;
   padding: 12px 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--stroke-divider);
 }
-
 .settings-section .ant-typography {
   margin: 0;
 }
-
 .settings-layout {
   display: grid;
   grid-template-columns: 180px minmax(0, 720px);
   gap: 24px;
   max-width: 960px;
 }
-
 .settings-categories {
   display: flex;
   flex-direction: column;
@@ -1263,7 +1222,6 @@
   padding-right: 12px;
   border-right: 1px solid var(--stroke-divider);
 }
-
 .settings-category {
   min-height: 36px;
   padding: 0 10px;
@@ -1274,73 +1232,73 @@
   font: inherit;
   text-align: left;
 }
-
 .settings-category-active {
   background: var(--fill-selected);
   color: var(--text-primary);
 }
-
 .settings-category-disabled {
   color: var(--text-disabled);
 }
-
 .settings-section-readonly {
   align-items: flex-start;
 }
-
 :focus-visible {
-  outline: 2px solid var(--info);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-
 .ant-layout-sider-trigger {
   height: 36px;
   border-top: 1px solid var(--stroke-divider);
   background: var(--sidebar-fallback) !important;
   color: var(--text-secondary);
 }
-
 .ant-table-tbody > tr > td {
   border-bottom-color: var(--stroke-divider) !important;
 }
-
 .ant-table-tbody > tr:hover > td {
   background: var(--fill-hover) !important;
 }
-
+.server-list-table .server-row-selected > td {
+  background: var(--fill-selected) !important;
+}
+.server-list-table .server-row-selected > td:first-child {
+  box-shadow: inset 3px 0 var(--accent);
+}
 .ant-btn-primary {
   background: var(--accent);
   color: var(--accent-foreground);
 }
-
 .ant-btn-primary:hover {
   background: var(--accent-hover) !important;
 }
-
 .ant-btn-primary:active {
   background: var(--accent-pressed) !important;
 }
-
+.ant-btn:disabled {
+  color: var(--text-disabled);
+}
 .ant-input:focus,
 .ant-input-affix-wrapper-focused,
 .ant-select-focused .ant-select-selector {
   border-color: var(--accent) !important;
   box-shadow: inset 0 -2px 0 var(--accent) !important;
 }
-
 .status-badge {
   border: 0;
   border-radius: 999px;
   background: var(--fill-selected);
   color: var(--text-primary);
 }
-
 .action-pill {
   border: 1px solid var(--stroke-control);
   border-radius: 999px;
   cursor: pointer;
 }
-
+.action-pill:hover,
+.action-pill:focus-visible {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1350,17 +1308,14 @@
     animation-duration: 0.01ms !important;
   }
 }
-
 @media (max-width: 640px) {
   .content {
     padding: 10px;
   }
-
   .settings-section {
     align-items: flex-start;
     flex-direction: column;
   }
-
   .summary-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

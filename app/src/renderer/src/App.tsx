@@ -97,7 +97,9 @@ function App(): React.JSX.Element {
               />
             </Layout.Sider>
             <Layout>
-              <Layout.Content className="content">{renderPage(page, setActivePage)}</Layout.Content>
+              <Layout.Content className="content" data-page-key={page}>
+                {renderPage(page, setActivePage)}
+              </Layout.Content>
             </Layout>
           </Layout>
         </div>

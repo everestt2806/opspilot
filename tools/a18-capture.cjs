@@ -32,6 +32,19 @@ process.env.OPSPILOT_C01_DEPLOY_ONLY = "1";
 
 const delay = (ms) =>
   new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+async function waitForRoute(win, page) {
+  const deadline = Date.now() + 5000;
+  while (Date.now() < deadline) {
+    const state = await win.webContents.executeJavaScript(`(() => {
+      const selected = document.querySelector('.app-navigation .ant-menu-item-selected');
+      const content = document.querySelector('[data-page-key]');
+      return { selected: selected?.getAttribute('data-menu-id') ?? '', page: content?.getAttribute('data-page-key') ?? '' };
+    })()`);
+    if (state.page === page && state.selected.endsWith(`-${page}`)) return;
+    await delay(50);
+  }
+  throw new Error(`Route assertion failed for ${page}`);
+}
 const scrub = (win) =>
   win.webContents.executeJavaScript(`(() => {
   const walk = (node) => {
@@ -72,10 +85,13 @@ app.once("browser-window-created", (_event, win) => {
       for (const page of pages) {
         if (page !== "vps") {
           await win.webContents.executeJavaScript(
-            `document.querySelector('.ant-menu-item[data-menu-id$="-${page}"]')?.click()`,
+            `document.querySelector('.app-navigation .ant-menu-item[data-menu-id$="-${page}"]')?.click()`,
           );
-          await delay(300);
         }
+        await waitForRoute(win, page);
+        await win.webContents.executeJavaScript(
+          "new Promise(requestAnimationFrame)",
+        );
         await scrub(win);
         await delay(100);
         const image = await win.webContents.capturePage();
@@ -86,9 +102,12 @@ app.once("browser-window-created", (_event, win) => {
       for (const page of ["deploy", "migrate"]) {
         win.setContentSize(1920, 1080);
         await win.webContents.executeJavaScript(
-          `document.querySelector('.ant-menu-item[data-menu-id$="-${page}"]')?.click()`,
+          `document.querySelector('.app-navigation .ant-menu-item[data-menu-id$="-${page}"]')?.click()`,
         );
-        await delay(500);
+        await waitForRoute(win, page);
+        await win.webContents.executeJavaScript(
+          "new Promise(requestAnimationFrame)",
+        );
         await scrub(win);
         await delay(100);
         const filename = `${page}-1920x1080.png`;

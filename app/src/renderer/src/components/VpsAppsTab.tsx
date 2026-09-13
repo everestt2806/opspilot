@@ -150,7 +150,9 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
       key: 'status',
       width: 110,
       render: (_: unknown, app: AppRow) => (
-        <Tag color={statusColor(app.deployStatus)}>{statusLabel(app.deployStatus)}</Tag>
+        <Tag className="status-badge" color={statusColor(app.deployStatus)}>
+          {statusLabel(app.deployStatus)}
+        </Tag>
       )
     },
     {
@@ -159,10 +161,20 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
       width: 180,
       render: (_: unknown, app: AppRow) => (
         <Space size="small">
-          <Button size="small" icon={<ExportOutlined />} onClick={() => void openApp(app.url)}>
+          <Button
+            className="action-pill"
+            size="small"
+            icon={<ExportOutlined />}
+            onClick={() => void openApp(app.url)}
+          >
             {strings.vpsControl.apps.openApp}
           </Button>
-          <Button size="small" icon={<RocketOutlined />} onClick={() => goDeploy(app.id)}>
+          <Button
+            className="action-pill"
+            size="small"
+            icon={<RocketOutlined />}
+            onClick={() => goDeploy(app.id)}
+          >
             {strings.vpsControl.apps.redeploy}
           </Button>
         </Space>
