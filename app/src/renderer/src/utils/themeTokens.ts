@@ -11,9 +11,9 @@ const FONT_UI = "'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif"
 const FONT_MONO = "'Cascadia Mono', Consolas, monospace"
 
 const shared: ThemeConfig['token'] = {
-  colorPrimary: '#60CDFF',
-  borderRadius: 5,
-  controlHeight: 33,
+  colorPrimary: '#0E639C',
+  borderRadius: 3,
+  controlHeight: 30,
   fontFamily: FONT_UI,
   fontFamilyCode: FONT_MONO,
   fontSize: 13
@@ -44,20 +44,20 @@ export const themeTokens: Record<ThemeMode, ThemeConfig> = {
     algorithm: theme.darkAlgorithm,
     token: {
       ...shared,
-      colorInfo: '#60CDFF',
+      colorInfo: '#007ACC',
       colorSuccess: '#4CC2A3',
       colorWarning: '#F4C152',
       colorError: '#F28B82',
-      colorBgBase: '#202020',
-      colorBgContainer: 'rgba(255,255,255,0.045)',
-      colorBgElevated: 'rgba(255,255,255,0.065)',
-      colorBorder: 'rgba(255,255,255,0.06)',
-      colorBorderSecondary: 'rgba(255,255,255,0.12)',
-      colorText: 'rgba(255,255,255,0.9)',
-      colorTextSecondary: 'rgba(255,255,255,0.62)',
-      colorTextTertiary: 'rgba(255,255,255,0.45)',
-      colorTextPlaceholder: 'rgba(255,255,255,0.36)',
-      colorLink: '#60CDFF'
+      colorBgBase: '#1E1E1E',
+      colorBgContainer: '#252526',
+      colorBgElevated: '#2A2D2E',
+      colorBorder: '#333333',
+      colorBorderSecondary: '#3C3C3C',
+      colorText: '#CCCCCC',
+      colorTextSecondary: '#969696',
+      colorTextTertiary: '#737373',
+      colorTextPlaceholder: '#656565',
+      colorLink: '#4DAAFC'
     }
   }
 }
