@@ -68,6 +68,13 @@ const VPS_A: Vps = {
   created_at: '2026-08-19T00:00:00Z'
 }
 
+const VPS_B: Vps = {
+  ...VPS_A,
+  id: 2,
+  name: 'VM02',
+  host: '203.0.113.56'
+}
+
 const SOURCE_PATH = 'D:\\src\\express-api'
 
 const MATCHED: DetectionResultDto = {
@@ -172,6 +179,23 @@ async function reachStep3(invoke: ReturnType<typeof vi.fn>): Promise<void> {
 }
 
 describe('DeployPage — wizard va log', () => {
+  it('hien thi va cho chon tat ca VPS trong danh sach trien khai', async () => {
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'vps:list': async () => ({ ok: true, data: [VPS_A, VPS_B] })
+    })
+
+    render(<DeployPage />)
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 1))
+    const target = screen.getByRole('combobox')
+    expect(screen.getByRole('option', { name: 'VM01 — 203.0.113.55:22' })).toBeTruthy()
+    expect(screen.getByRole('option', { name: 'VM02 — 203.0.113.56:22' })).toBeTruthy()
+    fireEvent.change(target, { target: { value: '2' } })
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 2))
+  })
+
   it('happy path: chon VPS tu dong, detect, dien env, precheck, deploy, log live, mo URL', async () => {
     const { emit, invoke } = mockApi(handersHappy)
 
