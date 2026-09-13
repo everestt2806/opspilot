@@ -23,6 +23,7 @@
   font-size: 12px;
   user-select: none;
   -webkit-app-region: drag;
+  padding-right: env(titlebar-area-width, 0px);
 }
 
 .app-titlebar-brand {
@@ -60,6 +61,11 @@
   height: 100%;
   justify-self: end;
   -webkit-app-region: no-drag;
+}
+
+.app-titlebar-right {
+  width: env(titlebar-area-width, 0px);
+  min-width: env(titlebar-area-width, 0px);
 }
 
 .app-titlebar-status {

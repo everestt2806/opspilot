@@ -21,6 +21,7 @@ import { MonitorScheduler } from './monitor/scheduler'
 import { MlApiClient } from './monitor/mlApi'
 import { shutdownRuntime } from './shutdown'
 import { MigrateService } from './migrate/service'
+import { getMainWindowOptions } from './windowOptions'
 
 let mainWindow: BrowserWindow | null = null
 let mlService: MlServiceManager | null = null
@@ -33,25 +34,7 @@ function emitMlStatus(status: { running: boolean; reason?: string }): void {
 }
 
 function createWindow(): void {
-  mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 900,
-    minHeight: 600,
-    frame: false,
-    titleBarStyle: 'hidden',
-    titleBarOverlay: false,
-    show: false,
-    autoHideMenuBar: true,
-    backgroundColor: '#0F1115',
-    icon,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true
-    }
-  })
+  mainWindow = new BrowserWindow(getMainWindowOptions(join(__dirname, '../preload/index.js'), icon))
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
   mainWindow.on('maximize', () => {
