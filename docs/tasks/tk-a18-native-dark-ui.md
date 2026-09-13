@@ -158,6 +158,9 @@ Reviewer phải trả lời **có** cho cả sáu câu:
 ## Nhật ký
 
 - `START 13/09` — Worker bắt đầu trên branch `feat/a18-native-dark-ui`: khóa phạm vi renderer-only, giữ nguyên file untracked của A, dựng dark shell trước rồi restyle 7 màn, test/evidence/handoff ở checkpoint cuối.
+- `UPDATE 13/09` — Checkpoint shell pass tại `cfc7a8d`; renderer dark default/persist, title bar, navigation, Settings Appearance và density tokens đã hoạt động. Focused `8/8`, typecheck/build/lint pass.
+- `HANDOFF-LOCAL 13/09` — Local review package gồm renderer changes, scrubbed `docs/evidence/tk-a18/after/`, `docs/evidence/tk-a18/README.md` và `docs/tasks/tk-a18/handoff.md`; full app `289/289` + ML `19/19`, no push/PR/merge. Baseline `before/` chưa có, ghi rõ là DoD gap.
+- `UPDATE 13/09` — Checkpoint workflow/evidence pass tại `cee7d9a`; chuẩn bị checkpoint cuối với task log, board và handoff đồng bộ.
 - `PLAN 13/09` — Leader mở TK-A18 theo yêu cầu: native desktop hơn, dark mặc định, giảm web/AI
   slop; khóa backend/live và giữ `936e643` làm rollback point. Worker chưa bắt đầu.
 
