@@ -14,5 +14,10 @@
   ],
   "errors": [],
   "mica": "MICA_FALLBACK",
+  "nativeWindow": {
+    "resize": "PASS",
+    "maximizeRestore": "PASS",
+    "snapLayout": "NOT_AUTOMATED_MANUAL_WINDOWS_SMOKE_REQUIRED"
+  },
   "exitCode": 0
 }
