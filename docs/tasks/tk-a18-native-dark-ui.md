@@ -163,6 +163,10 @@ Reviewer phải trả lời **có** cho cả sáu câu:
 - `UPDATE 13/09` — Checkpoint workflow/evidence pass tại `cee7d9a`; chuẩn bị checkpoint cuối với task log, board và handoff đồng bộ.
 - `PLAN 13/09` — Leader mở TK-A18 theo yêu cầu: native desktop hơn, dark mặc định, giảm web/AI
   slop; khóa backend/live và giữ `936e643` làm rollback point. Worker chưa bắt đầu.
+- `REVIEW 13/09` — Leader review submission `c35e797`: `CHANGES_REQUESTED`; mở A18-R1-01…07.
+  Dark shell đạt nhưng bốn page chính không có source diff, visual vẫn card/web, Settings hiển thị
+  ML/auto rollback giả, theme tests chưa kiểm rehydrate và capture xóa storage thật. Baseline before
+  được waive; xem `docs/tasks/tk-a18/review-01.md`.
 
 ## Lệnh tái hiện
 

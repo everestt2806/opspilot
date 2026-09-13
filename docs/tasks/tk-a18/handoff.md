@@ -1,6 +1,6 @@
 # TK-A18 — Handoff
 
-- Status: `READY_FOR_LOCAL_REVIEW`
+- Status: `REVIEW_FIX_REQUIRED`
 - Branch: `feat/a18-native-dark-ui`
 - Parent before task packet: `66ab90b`
 - Stable demo rollback point: `936e643`
@@ -19,3 +19,9 @@
 
 Worker cập nhật file này khi bàn giao local: code/docs SHA, thay đổi theo từng màn, test count,
 visual evidence, phần DoD chưa đạt và xác nhận không live mutation/push/PR/merge.
+
+## Leader review 01
+
+- Verdict: `CHANGES_REQUESTED` tại submission `c35e797`.
+- Findings: A18-R1-01…07 trong [`review-01.md`](review-01.md).
+- Baseline `before/` được waive; không tái tạo. Fix renderer/evidence local, không live mutation.
