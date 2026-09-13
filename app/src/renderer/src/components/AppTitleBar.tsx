@@ -8,14 +8,15 @@ interface AppTitleBarProps {
 export function AppTitleBar({ pageTitle }: AppTitleBarProps): React.JSX.Element {
   return (
     <header className="app-titlebar">
-      <div className="app-titlebar-brand" aria-label="OpsPilot">
-        <img src={opsPilotLogo} alt="" aria-hidden="true" />
-        <span>OpsPilot</span>
+      <div className="app-titlebar-drag-region">
+        <div className="app-titlebar-brand" aria-label="OpsPilot">
+          <img src={opsPilotLogo} alt="" aria-hidden="true" />
+          <span>OpsPilot</span>
+        </div>
+        <div className="app-titlebar-caption" title={`OpsPilot — ${pageTitle}`}>
+          OpsPilot — {pageTitle}
+        </div>
       </div>
-      <div className="app-titlebar-caption" title={`OpsPilot — ${pageTitle}`}>
-        OpsPilot — {pageTitle}
-      </div>
-      <div className="app-titlebar-right" aria-hidden="true" />
     </header>
   )
 }

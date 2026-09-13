@@ -9,12 +9,12 @@ describe('native Windows window options', () => {
     expect(options.frame).toBeUndefined()
     expect(options.titleBarStyle).toBe('hidden')
     expect(options.titleBarOverlay).toEqual({
-      color: '#202020',
-      symbolColor: '#FFFFFF',
+      color: '#181818',
+      symbolColor: '#CCCCCC',
       height: 34
     })
     expect(options.backgroundMaterial).toBe('mica')
-    expect(options.backgroundColor).toBe('#202020')
+    expect(options.backgroundColor).toBe('#1E1E1E')
   })
 
   it('keeps a safe non-Windows fallback', () => {

@@ -13,11 +13,11 @@ export function getMainWindowOptions(
     minWidth: 900,
     minHeight: 600,
     titleBarStyle: 'hidden',
-    titleBarOverlay: isWindows ? { color: '#202020', symbolColor: '#FFFFFF', height: 34 } : false,
+    titleBarOverlay: isWindows ? { color: '#181818', symbolColor: '#CCCCCC', height: 34 } : false,
     backgroundMaterial: isWindows ? 'mica' : 'none',
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: '#202020',
+    backgroundColor: '#1E1E1E',
     icon,
     webPreferences: {
       preload,
