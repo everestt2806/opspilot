@@ -274,19 +274,15 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
     render(<VpsPage />)
     fireEvent.click(await screen.findByText('VM01'))
     fireEvent.click(await screen.findByText('Activity'))
-    await waitFor(() =>
-      expect(history).toHaveBeenCalledWith({ vps_id: 1, limit: 20, offset: 0 })
-    )
+    await waitFor(() => expect(history).toHaveBeenCalledWith({ vps_id: 1, limit: 20, offset: 0 }))
     expect(await screen.findByText('Deploy succeeded')).toBeTruthy()
   })
 
   it('doi VPS trong tab Activity: khong hien du lieu cu cua VPS truoc', async () => {
-    const history = vi
-      .fn()
-      .mockImplementation(async (filter: { vps_id?: number }) => ({
-        ok: true,
-        data: filter.vps_id === 1 ? [ACTIVITY] : []
-      }))
+    const history = vi.fn().mockImplementation(async (filter: { vps_id?: number }) => ({
+      ok: true,
+      data: filter.vps_id === 1 ? [ACTIVITY] : []
+    }))
     mockApi({
       'vps:list': async () => ({ ok: true, data: [VPS_A, VPS_B] }),
       'vps:get-resources': async () => ({ ok: true, data: RES }),

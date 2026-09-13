@@ -1186,9 +1186,19 @@
 }
 
 .summary-strip .ant-card {
-  height: 100%;
+  height: auto;
   border: 1px solid var(--border);
   background: var(--bg-panel);
+}
+
+.summary-strip .ant-card-body {
+  padding: 10px 12px;
+}
+
+.settings-form-panel {
+  max-width: 720px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
 }
 
 .summary-strip .ant-statistic-title {

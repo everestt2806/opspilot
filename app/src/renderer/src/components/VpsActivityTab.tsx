@@ -116,11 +116,7 @@ export function VpsActivityTab({ vpsId }: VpsActivityTabProps): React.JSX.Elemen
       key: 'status',
       width: 110,
       render: (status: ActionLogEntry['status']) =>
-        status ? (
-          <Badge status={STATUS_BADGE[status]} text={statusLabel(status)} />
-        ) : (
-          '—'
-        )
+        status ? <Badge status={STATUS_BADGE[status]} text={statusLabel(status)} /> : '—'
     },
     {
       title: strings.history.columns.message,

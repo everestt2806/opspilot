@@ -271,13 +271,14 @@ export function VpsPage(): React.JSX.Element {
                 }
                 action={
                   <Space>
-                    <Button
-                      size="small"
-                      onClick={() => void refreshResources([selectedVps.id])}
-                    >
+                    <Button size="small" onClick={() => void refreshResources([selectedVps.id])}>
                       {strings.common.retry}
                     </Button>
-                    <Button size="small" type="text" onClick={() => setResourceBannerDismissed(true)}>
+                    <Button
+                      size="small"
+                      type="text"
+                      onClick={() => setResourceBannerDismissed(true)}
+                    >
                       {strings.vpsControl.resourceBanner.markRead}
                     </Button>
                   </Space>

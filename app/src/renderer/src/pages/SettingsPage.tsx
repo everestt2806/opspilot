@@ -3,7 +3,6 @@ import {
   App as AntApp,
   Alert,
   Button,
-  Card,
   Form,
   InputNumber,
   Select,
@@ -82,7 +81,7 @@ export function SettingsPage(): React.JSX.Element {
         />
       </div>
 
-      <Card style={styles.card} styles={{ body: { background: 'transparent', padding: 24 } }}>
+      <div className="settings-form-panel">
         <Form layout="vertical" style={{ maxWidth: 600 }}>
           <Form.Item label="Rule Baseline Threshold - CPU (%)">
             <InputNumber
@@ -141,15 +140,7 @@ export function SettingsPage(): React.JSX.Element {
             </Button>
           </Form.Item>
         </Form>
-      </Card>
+      </div>
     </section>
   )
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  card: {
-    backgroundColor: 'var(--bg-panel)',
-    borderColor: 'var(--border)',
-    borderRadius: 8
-  }
 }
