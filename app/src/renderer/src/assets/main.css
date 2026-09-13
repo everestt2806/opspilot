@@ -23,7 +23,6 @@
   font-size: 12px;
   user-select: none;
   -webkit-app-region: drag;
-  padding-right: env(titlebar-area-width, 0px);
 }
 
 .app-titlebar-brand {
@@ -64,8 +63,13 @@
 }
 
 .app-titlebar-right {
+  position: absolute;
+  top: 0;
+  left: env(titlebar-area-x, 100%);
   width: env(titlebar-area-width, 0px);
-  min-width: env(titlebar-area-width, 0px);
+  height: env(titlebar-area-height, 34px);
+  min-width: 0;
+  pointer-events: none;
 }
 
 .app-titlebar-status {
