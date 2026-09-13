@@ -9,7 +9,7 @@
 
 ## Local handoff
 
-- Code checkpoints: `a233a2e` (WCO safe-area/ignore), `e9cb70c` (canonical Fluent states + route markers), `197c703` (Vietnamese copy/tests), `9eff0cc` (evidence/docs); final bookkeeping checkpoint follows.
+- Code checkpoints: `a233a2e` (WCO safe-area/ignore), `e9cb70c` (canonical Fluent states + route markers), `197c703` (initial Vietnamese copy/tests), `e3df697` (complete Vietnamese copy/tests), `9eff0cc` (evidence/docs); final bookkeeping checkpoint follows.
 - Visible changes: dark-first persisted theme, compact frameless title bar with only app/caption/window controls, pane/sidebar navigation, restrained surface tokens, compact summary strips, flat Settings appearance section, and shared desktop density across renderer screens.
 - Regression coverage: default dark and persisted light theme, title-bar IPC controls, existing Deploy/Migrate action/state tests, and full existing renderer suite.
 - Tests: `pnpm test` = app `291/291` across 53 files, ML `19/19`, exit 0; `pnpm typecheck`/`pnpm lint`/`pnpm build` exit 0. Focused Review-Fix tests `6/6`, exit 0.
