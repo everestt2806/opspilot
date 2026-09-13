@@ -235,10 +235,9 @@
   min-height: 380px;
 }
 
-.deploy-vps-select {
-  width: 100%;
+.deploy-vps-select,
+.migrate-native-select {
   height: 32px;
-  margin-top: 8px;
   padding: 0 32px 0 11px;
   border: 1px solid var(--border-input);
   border-radius: 2px;
@@ -250,13 +249,35 @@
   color-scheme: dark;
 }
 
-.deploy-vps-select:hover {
+.deploy-vps-select {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.migrate-native-select {
+  min-width: 240px;
+  max-width: 100%;
+}
+
+.migrate-source-select {
+  min-width: 280px;
+}
+
+.deploy-vps-select:hover,
+.migrate-native-select:hover:not(:disabled) {
   border-color: var(--border-input-hover);
 }
 
-.deploy-vps-select:focus {
+.deploy-vps-select:focus,
+.migrate-native-select:focus {
   border-color: var(--accent);
   box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.migrate-native-select:disabled {
+  color: var(--text-disabled);
+  cursor: not-allowed;
+  opacity: 0.65;
 }
 
 .deploy-signal-row {

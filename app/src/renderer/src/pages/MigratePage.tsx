@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DeploymentUnitOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Select, Space, Steps, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Space, Steps, Table, Tag, Typography } from 'antd'
 
 import type { App, MigrateEvent, MigrateJobView, Vps } from '@shared/ipc'
 
@@ -135,26 +135,42 @@ export function MigratePage(): React.JSX.Element {
 
       <Card style={{ marginTop: 20 }}>
         <Space wrap>
-          <Select
-            placeholder="Chọn app nguồn"
-            style={{ minWidth: 280 }}
-            value={appId}
-            onChange={setAppId}
-            options={apps.map((item) => ({
-              label: `${item.name} · VPS ${item.vps_id}`,
-              value: item.id
-            }))}
-          />
-          <Select
-            placeholder="Chọn VPS đích"
-            style={{ minWidth: 240 }}
-            value={targetVpsId}
-            onChange={setTargetVpsId}
-            options={targets.map((item) => ({
-              label: `${item.name} · ${item.host}`,
-              value: item.id
-            }))}
-          />
+          <select
+            className="migrate-native-select migrate-source-select"
+            aria-label="Chọn app nguồn"
+            value={appId ?? ''}
+            onChange={(event) => {
+              setAppId(Number(event.currentTarget.value))
+              setTargetVpsId(undefined)
+            }}
+          >
+            <option value="" disabled>
+              Chọn app nguồn
+            </option>
+            {apps.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name} ·{' '}
+                {vps.find((candidate) => candidate.id === item.vps_id)?.name ??
+                  `VPS ${item.vps_id}`}
+              </option>
+            ))}
+          </select>
+          <select
+            className="migrate-native-select"
+            aria-label="Chọn VPS đích"
+            value={targetVpsId ?? ''}
+            disabled={!source}
+            onChange={(event) => setTargetVpsId(Number(event.currentTarget.value))}
+          >
+            <option value="" disabled>
+              Chọn VPS đích
+            </option>
+            {targets.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name} · {item.host}
+              </option>
+            ))}
+          </select>
           <Button
             type="primary"
             onClick={() => void start()}

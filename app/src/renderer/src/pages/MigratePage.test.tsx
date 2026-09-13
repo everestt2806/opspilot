@@ -49,6 +49,28 @@ const job: MigrateJobView = {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('MigratePage persisted state', () => {
+  it('chon app nguon va VPS dich bang control native de bat dau migration', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'app:list') return { ok: true, data: [app] }
+      if (channel === 'vps:list') return { ok: true, data: [vps] }
+      if (channel === 'migrate:list') return { ok: true, data: [] }
+      if (channel === 'migrate:start') return { ok: true, data: { job_id: 8 } }
+      throw new Error(`unexpected ${channel}`)
+    })
+    vi.stubGlobal('api', { invoke, on: () => () => {} })
+
+    render(<MigratePage />)
+    const sourceSelect = await screen.findByRole('combobox', { name: 'Chọn app nguồn' })
+    fireEvent.change(sourceSelect, { target: { value: '1' } })
+    const targetSelect = screen.getByRole('combobox', { name: 'Chọn VPS đích' })
+    fireEvent.change(targetSelect, { target: { value: '2' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu migrate' }))
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('migrate:start', { app_id: 1, target_vps_id: 2 })
+    )
+  })
+
   it('reloads awaiting confirmation and uses the persisted job id', async () => {
     const invoke = vi.fn(async (channel: string) => {
       if (channel === 'app:list') return { ok: true, data: [app] }
