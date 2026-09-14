@@ -42,6 +42,9 @@ export type ComposeVars = {
   HEALTHCHECK_PATH: string
   START_COMMAND: string
   COLLECT_INTERVAL_S: string
+  COLLECTOR_IMAGE_TAG: string
+  COLLECTOR_APP_PATH: string
+  APP_DEPENDS_ON: string
 }
 
 const POSTGRES_SERVICE_YAML = `  postgres:
@@ -54,15 +57,25 @@ const POSTGRES_SERVICE_YAML = `  postgres:
     volumes:
       - ./data/pg:/var/lib/postgresql/data
     mem_limit: 256m
-    restart: unless-stopped`
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opspilot -d opspilot"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s`
 
 /** Compose cho mọi framework: service app + postgres nếu needsDb (volume ./data/pg). */
 export function renderCompose(vars: ComposeVars, needsDb: boolean): string {
   const template = readTemplateFile('docker-compose.template.yml')
   const extra = needsDb ? renderTemplate(POSTGRES_SERVICE_YAML, vars) : ''
+  const appDependsOn = needsDb
+    ? '    depends_on:\n      postgres:\n        condition: service_healthy'
+    : ''
   return (
     renderTemplate(template, {
       ...vars,
+      APP_DEPENDS_ON: appDependsOn,
       EXTRA_SERVICES: extra
     }).trimEnd() + '\n'
   )
@@ -70,6 +83,13 @@ export function renderCompose(vars: ComposeVars, needsDb: boolean): string {
 
 export function renderDockerfile(dockerfileTemplate: string, vars: Record<string, string>): string {
   return renderTemplate(readTemplateFile(dockerfileTemplate), vars).trimEnd() + '\n'
+}
+
+/** Keep Docker build inputs aligned with every public key emitted by a detector. */
+export function renderBuildArgs(buildArgs: Record<string, string>): string {
+  return Object.keys(buildArgs)
+    .map((key) => `ARG ${key}\nENV ${key}=\${${key}}`)
+    .join('\n')
 }
 
 /**

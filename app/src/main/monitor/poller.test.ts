@@ -104,6 +104,46 @@ describe('MonitorPoller ingest', () => {
     })
   })
 
+  it('mất SSH giữ offset, reconnect nạp bù và không tạo mẫu giả', async () => {
+    const db = seed()
+    const poller = new MonitorPoller(db)
+    let disconnected = true
+    const reconnecting: MetricSource = {
+      size: async () => {
+        if (disconnected) throw new Error('ssh down')
+        return Buffer.byteLength(`${metric(1)}\n${metric(2)}\n`)
+      },
+      tail: async (offset) => {
+        if (disconnected) throw new Error('ssh down')
+        const content = `${metric(1)}\n${metric(2)}\n`
+        return content.slice(Buffer.byteLength(content.slice(0, offset - 1), 'utf8'))
+      }
+    }
+    await expect(poller.poll(1, 1, reconnecting)).rejects.toThrow()
+    expect(
+      (db.prepare('SELECT metrics_offset FROM app WHERE id=1').get() as { metrics_offset: number })
+        .metrics_offset
+    ).toBe(1)
+    disconnected = false
+    expect(await poller.poll(1, 1, reconnecting)).toMatchObject({ inserted: 2 })
+    expect((db.prepare('SELECT COUNT(*) n FROM metric_sample').get() as { n: number }).n).toBe(2)
+  })
+
+  it('deployment boundary không nhập lại backlog vào deployment mới', async () => {
+    const db = seed()
+    const poller = new MonitorPoller(db)
+    await poller.poll(1, 1, source(`${metric(1)}\n`))
+    db.exec(
+      "INSERT INTO deployment (app_id,version,image_tag,status) VALUES (1,2,'app:v2','running'); UPDATE deployment SET status='stopped' WHERE id=1; UPDATE app SET current_deployment_id=2 WHERE id=1;"
+    )
+    const result = await poller.poll(1, 2, source(`${metric(1)}\n${metric(2)}\n`))
+    expect(result.inserted).toBe(1)
+    expect(db.prepare('SELECT deployment_id, seq FROM metric_sample ORDER BY id').all()).toEqual([
+      { deployment_id: 1, seq: 1 },
+      { deployment_id: 2, seq: 2 }
+    ])
+  })
+
   it('gọi ML tuần tự, ghi score động và fallback NULL khi service lỗi', async () => {
     const db = seed()
     const order: number[] = []

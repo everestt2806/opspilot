@@ -20,6 +20,8 @@ import { MonitorService } from './monitor/service'
 import { MonitorScheduler } from './monitor/scheduler'
 import { MlApiClient } from './monitor/mlApi'
 import { shutdownRuntime } from './shutdown'
+import { MigrateService } from './migrate/service'
+import { getMainWindowOptions } from './windowOptions'
 
 let mainWindow: BrowserWindow | null = null
 let mlService: MlServiceManager | null = null
@@ -32,25 +34,7 @@ function emitMlStatus(status: { running: boolean; reason?: string }): void {
 }
 
 function createWindow(): void {
-  mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
-    minWidth: 900,
-    minHeight: 600,
-    frame: false,
-    titleBarStyle: 'hidden',
-    titleBarOverlay: false,
-    show: false,
-    autoHideMenuBar: true,
-    backgroundColor: '#0F1115',
-    icon,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true
-    }
-  })
+  mainWindow = new BrowserWindow(getMainWindowOptions(join(__dirname, '../preload/index.js'), icon))
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
   mainWindow.on('maximize', () => {
@@ -116,6 +100,9 @@ void app
 
     const historyService = new HistoryService(new ActionLogRepository(database))
     const monitorService = new MonitorService(database)
+    const migrateService = new MigrateService(database, sshManager, (event) => {
+      mainWindow?.webContents.send('migrate:event', event)
+    })
 
     registerIpcHandlers(
       mlService,
@@ -124,23 +111,28 @@ void app
       deployService,
       historyService,
       () => mainWindow,
-      monitorService
+      monitorService,
+      migrateService
     )
-    monitorScheduler = new MonitorScheduler(async () => {
-      const port = mlService?.getPort()
-      await monitorService.pollAll(
-        sshManager!,
-        port ? new MlApiClient(`http://127.0.0.1:${port}`) : undefined,
-        (event) => mainWindow?.webContents.send('monitor:tick', event),
-        (status) => emitMlStatus(status)
-      )
-    })
-    monitorScheduler.start()
+    if (process.env.OPSPILOT_C01_DEPLOY_ONLY !== '1') {
+      monitorScheduler = new MonitorScheduler(async () => {
+        const port = mlService?.getPort()
+        await monitorService.pollAll(
+          sshManager!,
+          port ? new MlApiClient(`http://127.0.0.1:${port}`) : undefined,
+          (event) => mainWindow?.webContents.send('monitor:tick', event),
+          (status) => emitMlStatus(status)
+        )
+      })
+      monitorScheduler.start()
+    }
 
     createWindow()
 
     try {
-      await mlService.start()
+      if (process.env.OPSPILOT_C01_DEPLOY_ONLY !== '1') {
+        await mlService.start()
+      }
     } catch (error) {
       logger.error('ml', 'ML service khởi động thất bại', {
         error: error instanceof Error ? error.message : String(error)

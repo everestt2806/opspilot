@@ -1,0 +1,35 @@
+// Temporary reviewer regressions; removed from the worktree after the run.
+
+it('cleanup can resume collector after cancellation', async () => {
+  // Cancel the second deployment from metricSnapshot(), after collector stop succeeded.
+  // The SSH stub honors an already-aborted signal like production SshManager.
+  // Expected cleanup command signal: not aborted.
+  // Actual cleanup command signal: aborted; production SshManager rejects it immediately.
+})
+
+it('fully consumed matching rotated file does not log a gap', async () => {
+  // Poll an old file fully, rotate, and expose a matching metrics.jsonl.1 with no unread bytes.
+  // Expected data-gap action rows: 0.
+  // Actual data-gap action rows: 1.
+})
+
+it('rotated read error logs the unprocessed byte range', async () => {
+  // The matching .1 contains one unread complete line, but tail() throws before any new commit.
+  // Expected: cursor remains at 236 and gap range is [236,471].
+  // Actual: cursor is advanced to 471 and range is [471,471].
+})
+
+Result:
+
+FAIL cleanup can resume collector after cancellation
+AssertionError: expected true to be false
+WARN Không thể khôi phục collector sau cutover failure, error=aborted
+
+FAIL fully consumed matching rotated file does not log a gap
+AssertionError: expected { count: 1 } to deeply equal { count: 0 }
+
+FAIL rotated read error logs the unprocessed byte range
+AssertionError: expected cursor=236, received cursor=471 range=[471,471]
+
+Test Files 2 failed (2)
+Tests 3 failed | 39 passed (42)

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -11,7 +11,8 @@ import type { EncryptedCredential } from '../crypto/credentialCipher'
 import { closeDatabase, initializeDatabase } from '../db'
 import { VpsRepository } from '../db/vpsRepository'
 import type { SshManager } from '../ssh/manager'
-import { DeployPipeline } from './pipeline'
+import { DeployPipeline, resolveCollectorAppPath, resolveCollectorDir } from './pipeline'
+import { buildSourceTree } from '../detectors/sourceTree'
 
 const PRECHECK_OK = [
   'RAM_MB|2048',
@@ -25,6 +26,7 @@ interface StubSshOptions {
   precheckOutput?: string
   curlOk?: (call: number) => boolean
   composeUp?: (call: number) => { code: number; stdout: string; stderr: string }
+  buildResult?: (command: string) => { code: number; stdout: string; stderr: string }
   inspectStatus?: (call: number) => string
   inspectState?: (call: number) => {
     Status: string
@@ -36,6 +38,15 @@ interface StubSshOptions {
   imageRemove?: (call: number, command: string) => { code: number; stdout: string; stderr: string }
   imageAvailable?: boolean
   containerLogs?: string
+  stopCollector?: (call: number) => { code: number; stdout: string; stderr: string }
+  metricsFileMissing?: boolean
+  metricSnapshot?: (
+    call: number
+  ) =>
+    | { generation: string; device?: number; inode?: number; size: number }
+    | null
+    | Promise<{ generation: string; device?: number; inode?: number; size: number } | null>
+  runtimeImage?: (appName: string, composeCall: number) => string
 }
 
 let testDirectory: string | null = null
@@ -66,8 +77,7 @@ function createHarness(options: StubSshOptions = {}): void {
       name: 'demo-api',
       main: 'app.js',
       scripts: { start: 'node app.js' },
-      dependencies: { express: '^4.19.2' },
-      devDependencies: { pg: '^8.11.0' }
+      dependencies: { express: '^4.19.2', pg: '^8.11.0' }
     }),
     'utf8'
   )
@@ -93,24 +103,63 @@ function createHarness(options: StubSshOptions = {}): void {
   let curlCall = 0
   let imagesCall = 0
   let imageRemoveCall = 0
+  let stopCollectorCall = 0
+  let snapshotCall = 0
+  const lastComposeUpCode = new Map<string, number>()
   sshExec = vi.fn(async (_vpsId: number, command: string) => {
     if (command.includes('free -m')) {
       return { code: 0, stdout: options.precheckOutput ?? PRECHECK_OK, stderr: '' }
     }
     if (command.includes('docker build')) {
+      if (options.buildResult) return options.buildResult(command)
       return { code: 0, stdout: 'build xong\n', stderr: '' }
     }
     if (command.includes('compose up -d')) {
       composeUpCall += 1
-      if (options.composeUp) {
-        return options.composeUp(composeUpCall)
+      const result = options.composeUp?.(composeUpCall) ?? {
+        code: 0,
+        stdout: 'Container demo-api-app Started\n',
+        stderr: ''
       }
-      return { code: 0, stdout: 'Container demo-api-app Started\n', stderr: '' }
+      const composeApp = command.match(/apps\/([a-z0-9-]+)\s+&&/)?.[1] ?? 'demo-api'
+      lastComposeUpCode.set(composeApp, result.code)
+      return result
     }
     if (command.includes('compose down')) {
       return { code: 0, stdout: '', stderr: '' }
     }
+    if (command.includes('compose stop collector')) {
+      stopCollectorCall += 1
+      return (
+        options.stopCollector?.(stopCollectorCall) ?? {
+          code: 0,
+          stdout: 'collector stopped',
+          stderr: ''
+        }
+      )
+    }
+    if (command.includes('compose start collector')) {
+      return { code: 0, stdout: 'collector started', stderr: '' }
+    }
     if (command.includes('docker inspect')) {
+      if (command.includes('.Config.Image')) {
+        const appName = command.match(/([a-z0-9-]+)-app(?:['\s]|$)/)?.[1] ?? 'demo-api'
+        const compose = [...writeFileMock.mock.calls]
+          .reverse()
+          .find(
+            ([, path]) =>
+              String(path).endsWith('docker-compose.yml') && String(path).includes(`/${appName}/`)
+          )
+        const image =
+          options.runtimeImage?.(appName, composeUpCall) ??
+          String(compose?.[2] ?? '').match(/image:\s*(\S+)/)?.[1] ??
+          `${appName}:v1`
+        return {
+          code: 0,
+          stdout: `${image}|${(lastComposeUpCode.get(appName) ?? 0) === 0 ? 'running' : 'exited'}\n`,
+          stderr: ''
+        }
+      }
       inspectCall += 1
       const state = options.inspectState?.(inspectCall) ?? {
         Status: options.inspectStatus?.(inspectCall) ?? 'running',
@@ -159,7 +208,14 @@ function createHarness(options: StubSshOptions = {}): void {
     uploadDir: vi.fn(async () => ({ bytes: 1_024 })),
     readFile: readFileMock,
     writeFile: writeFileMock,
-    fileSize: vi.fn(async () => 10)
+    fileSize: vi.fn(async () => 10),
+    metricSnapshot: vi.fn(async () => {
+      snapshotCall += 1
+      if (options.metricSnapshot) return options.metricSnapshot(snapshotCall)
+      return options.metricsFileMissing
+        ? null
+        : { generation: '1:1', device: 1, inode: 1, size: 10 }
+    })
   } as unknown as SshManager
 
   events = []
@@ -250,6 +306,70 @@ async function advanceFailedHealthcheck(): Promise<void> {
 }
 
 describe('DeployPipeline', () => {
+  it('packaged resource path contains the collector files', () => {
+    const resourceRoot = mkdtempSync(join(tmpdir(), 'opspilot-resources-'))
+    mkdirSync(join(resourceRoot, 'collector'))
+    writeFileSync(join(resourceRoot, 'collector', 'collect.py'), '# collector\n')
+    writeFileSync(join(resourceRoot, 'collector', 'Dockerfile'), 'FROM python:3.12\n')
+    const previous = process.env.OPSPILOT_COLLECTOR_DIR
+    const previousResourcesPath = process.resourcesPath
+    delete process.env.OPSPILOT_COLLECTOR_DIR
+    Object.defineProperty(process, 'resourcesPath', { configurable: true, value: resourceRoot })
+    try {
+      expect(resolveCollectorDir()).toBe(join(resourceRoot, 'collector'))
+    } finally {
+      if (previous === undefined) delete process.env.OPSPILOT_COLLECTOR_DIR
+      else process.env.OPSPILOT_COLLECTOR_DIR = previous
+      Object.defineProperty(process, 'resourcesPath', {
+        configurable: true,
+        value: previousResourcesPath
+      })
+      rmSync(resourceRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('Express collector probe uses verified business route and health fallback', () => {
+    const generic = mkdtempSync(join(tmpdir(), 'opspilot-express-generic-'))
+    writeFileSync(join(generic, 'package.json'), '{"dependencies":{"express":"4"}}')
+    writeFileSync(join(generic, 'server.js'), "app.get('/health', handler)\n")
+    const demo = mkdtempSync(join(tmpdir(), 'opspilot-express-demo-'))
+    writeFileSync(join(demo, 'package.json'), '{"dependencies":{"express":"4"}}')
+    writeFileSync(join(demo, 'server.js'), "app.get('/items', handler)\n")
+    try {
+      expect(resolveCollectorAppPath('express', buildSourceTree(generic), '/health')).toBe(
+        '/health'
+      )
+      expect(resolveCollectorAppPath('express', buildSourceTree(demo), '/health')).toBe(
+        '/items?limit=1'
+      )
+    } finally {
+      rmSync(generic, { recursive: true, force: true })
+      rmSync(demo, { recursive: true, force: true })
+    }
+  })
+
+  it('Express POST-only /items route falls back to healthcheck', () => {
+    const source = mkdtempSync(join(tmpdir(), 'opspilot-express-post-only-'))
+    writeFileSync(join(source, 'package.json'), '{"dependencies":{"express":"4"}}')
+    writeFileSync(join(source, 'server.js'), "app.post('/items', handler)\n")
+    try {
+      expect(resolveCollectorAppPath('express', buildSourceTree(source), '/health')).toBe('/health')
+    } finally {
+      rmSync(source, { recursive: true, force: true })
+    }
+  })
+
+  it('Express item-detail route does not masquerade as collection GET', () => {
+    const source = mkdtempSync(join(tmpdir(), 'opspilot-express-item-detail-'))
+    writeFileSync(join(source, 'package.json'), '{"dependencies":{"express":"4"}}')
+    writeFileSync(join(source, 'server.js'), "app.get('/items/:id', handler)\n")
+    try {
+      expect(resolveCollectorAppPath('express', buildSourceTree(source), '/health')).toBe('/health')
+    } finally {
+      rmSync(source, { recursive: true, force: true })
+    }
+  })
+
   it('deploy moi thanh cong: du 7 buoc, ghi DB, .env ghi im lang', async () => {
     createHarness()
     const { deploymentId } = pipeline.run(deployInput())
@@ -293,10 +413,50 @@ describe('DeployPipeline', () => {
     )
     expect(composeWrite?.content).toContain('image: demo-api:v1')
     expect(composeWrite?.content).toContain('image: postgres:16-alpine')
+    expect(composeWrite?.content).toContain('image: demo-api:collector')
+    expect(composeWrite?.content).toContain('APP_URL: "http://app:3000/health"')
+    expect(composeWrite?.content).toContain('/var/run/docker.sock:/var/run/docker.sock:ro')
+    expect(
+      sshExec.mock.calls.some(
+        ([, command]) => command.includes('docker build') && command.includes('collector')
+      )
+    ).toBe(true)
+    expect(
+      (pipeline as unknown as { ssh: { uploadDir: Mock } }).ssh.uploadDir.mock.calls.some(
+        ([, , remotePath]) => remotePath === '/opt/opspilot/demo-api/collector'
+      )
+    ).toBe(true)
 
     expect(
       actionLogRows(deploymentId).some((row) => row.action === 'deploy' && row.status === 'success')
     ).toBe(true)
+  })
+
+  it('first deploy succeeds when collector has not created metrics.jsonl', async () => {
+    createHarness({ metricsFileMissing: true })
+    const { deploymentId } = pipeline.run(deployInput())
+    expect((await waitForFinished(deploymentId)).status).toBe('running')
+    expect(
+      database
+        .prepare(
+          "SELECT state, start_offset FROM deployment_activation WHERE deployment_id=? AND reason='deploy'"
+        )
+        .get(deploymentId)
+    ).toMatchObject({ state: 'active', start_offset: 1 })
+  })
+
+  it('fails closed when collector stop/flush fails before an existing cutover', async () => {
+    createHarness({ stopCollector: () => ({ code: 1, stdout: '', stderr: 'stop failed' }) })
+    const first = pipeline.run(deployInput())
+    expect((await waitForFinished(first.deploymentId)).status).toBe('running')
+    const second = pipeline.run(deployInput())
+    expect((await waitForFinished(second.deploymentId)).status).toBe('failed')
+    expect(currentDeploymentId()).toBe(first.deploymentId)
+    expect(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM deployment_activation WHERE state='prepared'")
+        .get()
+    ).toEqual({ count: 0 })
   })
 
   it('redeploy app co san: cung port, version tang len 2', async () => {
@@ -325,6 +485,21 @@ describe('DeployPipeline', () => {
     )
     expect(readFileMock).toHaveBeenCalledWith(vpsId, '/opt/opspilot/demo-api/.env')
     expect(JSON.stringify(events)).not.toContain(firstPassword)
+  })
+
+  it('app build fail khong xoa collector tag dang ton tai', async () => {
+    createHarness({
+      buildResult: (command) =>
+        command.includes("docker build -t 'demo-api:v1' .")
+          ? { code: 1, stdout: '', stderr: 'app build failed' }
+          : { code: 0, stdout: 'collector ok', stderr: '' }
+    })
+    const first = pipeline.run(deployInput())
+    expect((await waitForFinished(first.deploymentId)).status).toBe('failed')
+    const removals = sshExec.mock.calls
+      .map(([, command]) => command as string)
+      .filter((command) => command.includes('docker image rm'))
+    expect(removals.some((command) => command.includes('demo-api:collector'))).toBe(false)
   })
 
   it('precheck truot -> dung o buoc PRECHECK, chua build gi', async () => {
@@ -437,8 +612,15 @@ describe('DeployPipeline', () => {
       )
     ).toBe(false)
 
+    // An inconclusive restore is a durable reconciliation barrier; a new deploy
+    // must not reopen polling or silently proceed over the unknown owner.
     const next = pipeline.run(deployInput())
-    expect((await waitForFinished(next.deploymentId)).status).toBe('running')
+    expect((await waitForFinished(next.deploymentId)).status).toBe('failed')
+    expect(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM deployment_activation WHERE state='prepared'")
+        .get()
+    ).toEqual({ count: 1 })
   })
 
   it('auto rollback v1 khong running -> failed va khong doi current', async () => {
@@ -544,6 +726,12 @@ describe('DeployPipeline', () => {
         call.remotePath.endsWith('docker-compose.yml') && call.content.includes('demo-api:v1')
     )
     expect(v1ComposeWrites).toHaveLength(3)
+    expect(v1ComposeWrites.every((call) => call.content.includes('demo-api:collector'))).toBe(true)
+    expect(
+      v1ComposeWrites.every((call) =>
+        call.content.includes('/var/run/docker.sock:/var/run/docker.sock:ro')
+      )
+    ).toBe(true)
     expect(
       writeFileCalls().some(
         (call) =>
@@ -778,6 +966,81 @@ describe('DeployPipeline', () => {
 
     const next = pipeline.run(deployInput())
     expect((await waitForFinished(next.deploymentId)).status).toBe('running')
+  })
+
+  it('cleanup after cancellation uses an independent signal and verifies collector state', async () => {
+    let releaseSnapshot!: () => void
+    let snapshotEntered!: () => void
+    const entered = new Promise<void>((resolve) => {
+      snapshotEntered = resolve
+    })
+    const blocked = new Promise<void>((resolve) => {
+      releaseSnapshot = resolve
+    })
+    let snapshotCalls = 0
+    createHarness({
+      metricSnapshot: async (call) => {
+        snapshotCalls = call
+        if (call === 2) {
+          snapshotEntered()
+          await blocked
+          throw new Error('snapshot cancelled')
+        }
+        return { generation: '1:1', device: 1, inode: 1, size: 10 }
+      }
+    })
+    const first = pipeline.run(deployInput())
+    expect((await waitForFinished(first.deploymentId)).status).toBe('running')
+
+    const second = pipeline.run(deployInput())
+    await entered
+    expect(snapshotCalls).toBe(2)
+    expect(pipeline.cancel(second.deploymentId)).toBe(true)
+    releaseSnapshot()
+    expect((await waitForFinished(second.deploymentId)).status).toBe('failed')
+
+    const cleanup = sshExec.mock.calls.find(([, command]) =>
+      (command as string).includes('compose start collector')
+    )
+    expect(cleanup).toBeDefined()
+    expect((cleanup?.[2] as { signal: AbortSignal }).signal.aborted).toBe(false)
+    expect(
+      sshExec.mock.calls.some(([, command]) =>
+        (command as string).includes("docker inspect -f '{{json .State}}' 'demo-api-collector'")
+      )
+    ).toBe(true)
+    expect(actionLogRows(second.deploymentId).some((row) => row.status === 'cancelled')).toBe(true)
+  })
+
+  it('keeps a durable prepared barrier when previous restore ownership is unknown', async () => {
+    let composeCalls = 0
+    createHarness({
+      composeUp: (call) => {
+        composeCalls = call
+        return call === 2
+          ? { code: 1, stdout: 'started', stderr: 'candidate failed' }
+          : { code: 0, stdout: 'running', stderr: '' }
+      },
+      runtimeImage: (_appName, call) => (call === 3 ? 'demo-api:wrong' : 'demo-api:v1')
+    })
+    const first = pipeline.run(deployInput())
+    expect((await waitForFinished(first.deploymentId)).status).toBe('running')
+
+    const second = pipeline.run(deployInput())
+    expect((await waitForFinished(second.deploymentId)).status).toBe('failed')
+    expect(composeCalls).toBe(3)
+    expect(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM deployment_activation WHERE state='prepared'")
+        .get()
+    ).toEqual({ count: 1 })
+    expect(
+      database
+        .prepare(
+          "SELECT COUNT(*) AS count FROM action_log WHERE message LIKE '%Prepared activation requires reconciliation%'"
+        )
+        .get()
+    ).toEqual({ count: 1 })
   })
 })
 

@@ -20,6 +20,12 @@ extraResources:
     to: templates
     filter:
       - '**/*'
+  - from: ../collector
+    to: collector
+    filter:
+      - '**/*'
+      - '!**/__pycache__/**'
+      - '!**/.pytest_cache/**'
 npmRebuild: false
 win:
   icon: resources/icon.png

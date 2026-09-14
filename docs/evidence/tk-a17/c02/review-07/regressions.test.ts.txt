@@ -1,0 +1,26 @@
+// Temporary reviewer regressions; removed from the worktree after the run.
+
+it('reconciles a prepared rollback through its runtime-image lineage', async () => {
+  // Active deployment 2 runs app:v2. Prepared deployment 3 is a manual rollback row whose
+  // is_rollback_of points to deployment 1/app:v1. Live Docker reports app:v1|running.
+  // Expected: prepared deployment 3 becomes active.
+  // Actual: it remains prepared because reconciliation resolves row tag app:v3, not lineage v1.
+})
+
+it('keeps the old episode through valid committed rows after an invalid line', async () => {
+  // Matching .1 contains: old metric 1, an invalid complete line, then valid metric 2.
+  // New generation contains metric 3. All three valid metrics are inserted.
+  // Expected old episode end: committed EOF 482.
+  // Actual old episode end: first warning start 236.
+})
+
+Result:
+
+FAIL reconciles a prepared rollback through its runtime-image lineage
+AssertionError: expected state active, received prepared
+
+FAIL keeps the old episode through valid committed rows after an invalid line
+AssertionError: expected end_offset 482, received 236
+
+Test Files 2 failed (2)
+Tests 2 failed | 17 passed (19)

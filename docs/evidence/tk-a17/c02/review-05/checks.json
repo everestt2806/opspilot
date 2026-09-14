@@ -1,0 +1,59 @@
+{
+  "reviewed_code": "c6c728c",
+  "reviewed_submission": "018cb70",
+  "review_base": "e80a0f9",
+  "runtime": "Node 24.16.0, pnpm 11.1.0, Python 3.12",
+  "checks": [
+    {
+      "name": "ancestry",
+      "command": "git merge-base --is-ancestor e80a0f9 018cb70",
+      "exit": 0
+    },
+    {
+      "name": "worker-exact-focused",
+      "cwd": "app",
+      "command": "pnpm exec vitest run --maxWorkers=1 src/main/db src/main/monitor src/main/deploy src/main/shutdown.test.ts",
+      "exit": 0,
+      "result": "18 files, 90 tests passed"
+    },
+    {
+      "name": "ml-service",
+      "cwd": "ml-service",
+      "command": ".venv/Scripts/python.exe -m pytest -q",
+      "exit": 0,
+      "result": "19 passed"
+    },
+    {
+      "name": "collector",
+      "cwd": "collector",
+      "command": "../ml-service/.venv/Scripts/python.exe -m pytest -q",
+      "exit": 0,
+      "result": "26 passed"
+    },
+    {
+      "name": "typecheck-lint-format-build",
+      "cwd": "app",
+      "command": "pnpm typecheck; pnpm exec tsc -p tsconfig.scripts.json --noEmit; scoped eslint; scoped prettier --check; pnpm build",
+      "exit": 0,
+      "result": "renderer 3045 modules"
+    },
+    {
+      "name": "reviewer-new-recovery-rotation-regressions",
+      "cwd": "app",
+      "command": "pnpm exec vitest run --maxWorkers=1 src/main/deploy/pipeline.test.ts src/main/monitor/activation.test.ts",
+      "exit": 1,
+      "result": "3/3 reviewer regressions failed; 39 existing tests passed"
+    }
+  ],
+  "gitnexus": {
+    "analyze": "PASS with FTS unavailable warning; 3785 nodes, 11149 edges, 153 clusters, 300 flows",
+    "detect_changes": "11 files, 39 changed symbols, 80 affected processes, CRITICAL"
+  },
+  "scope": {
+    "vps_mutation": false,
+    "sqlite_persisted_mutation": false,
+    "app_b_mutation": false,
+    "ml_train_or_score": false,
+    "push_pr_merge": false
+  }
+}

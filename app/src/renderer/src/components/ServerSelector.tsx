@@ -212,6 +212,7 @@ export function ServerSelector({
       align: 'center' as const,
       render: (_: unknown, vps: Vps) => (
         <Button
+          className="action-pill"
           danger
           type="text"
           size="small"
@@ -306,8 +307,13 @@ export function ServerSelector({
           }}
           onRow={(vps) => ({
             onClick: () => onSelect(vps),
-            style: { cursor: 'pointer' }
+            onKeyDown: (event) => {
+              if (event.key === 'Enter' || event.key === ' ') onSelect(vps)
+            },
+            'aria-selected': selectedIds.includes(vps.id),
+            tabIndex: 0
           })}
+          rowClassName={(vps) => (selectedIds.includes(vps.id) ? 'server-row-selected' : '')}
         />
       )}
     </Card>

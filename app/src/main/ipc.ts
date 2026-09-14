@@ -13,6 +13,7 @@ import { scanVpsEnvironment } from './vps/scanService'
 import type { VpsService } from './vps/service'
 import type { MonitorService } from './monitor/service'
 import { MlApiClient } from './monitor/mlApi'
+import type { MigrateService } from './migrate/service'
 
 export interface WindowController {
   minimize(): void
@@ -48,7 +49,8 @@ export function registerIpcHandlers(
   deployService: DeployService,
   historyService: HistoryService,
   getWindow: () => WindowController | null,
-  monitorService?: MonitorService
+  monitorService?: MonitorService,
+  migrateService?: MigrateService
 ): void {
   handle('vps:list', () => vpsService.list())
   handle('vps:create', (input) => vpsService.create(input))
@@ -85,9 +87,31 @@ export function registerIpcHandlers(
   handle('app:list', (vpsId) => deployService.listApps(vpsId))
   handle('app:get', (appId) => deployService.getApp(appId))
   handle('app:versions', (appId) => deployService.versions(appId))
+  handle('app:runtime-inspect', async (appId) => {
+    const target = deployService.getApp(appId)
+    const result = await ssh.exec(
+      target.vps_id,
+      `docker inspect -f '{{.Config.Image}}|{{.State.Status}}' ${target.name}-app`,
+      { timeoutMs: 15_000, retryOnReconnect: true }
+    )
+    const [image, state] = result.stdout.trim().split('|')
+    if (result.code !== 0 || !image || !state) {
+      throw new AppError('UNKNOWN', `Không xác minh được runtime app ${target.name}.`, {
+        cause: new Error(result.stderr.trim() || result.stdout.trim())
+      })
+    }
+    return { image, state }
+  })
   handle('app:rollback', (appId, targetDeploymentId) =>
     deployService.rollback(appId, targetDeploymentId)
   )
+
+  if (migrateService) {
+    handle('migrate:start', (input) => migrateService.start(input))
+    handle('migrate:list', () => migrateService.list())
+    handle('migrate:confirm', (jobId, keepSource) => migrateService.confirm(jobId, keepSource))
+    handle('migrate:abort', (jobId) => migrateService.abort(jobId))
+  }
 
   handle('history:list', (filter) => historyService.list(filter))
 

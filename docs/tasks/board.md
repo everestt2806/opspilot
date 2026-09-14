@@ -1,41 +1,60 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
 > Quy trình bắt buộc: [`README.md`](README.md). Kế hoạch sau demo và điểm vào cho AI mới:
-> [`../23-ke-hoach-sau-demo-30-08.md`](../23-ke-hoach-sau-demo-30-08.md).
+> [`../24-ke-hoach-demo-theo-chang.md`](../24-ke-hoach-demo-theo-chang.md).
 >
 > Trạng thái hợp lệ: `BACKLOG · TUẦN NÀY · ĐANG LÀM · CHỜ REVIEW · HOÀN THÀNH · BLOCKED`.
+
+TK-A18 Titlebar fix 05: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `30747f1`; WCO drag region dùng
+đúng rectangle, native controls không còn chồng caption và màu overlay đã liền shell; Snap Layout ghi
+manual-only, không push/PR/merge.
+
 > Mỗi người tối đa **một** task `ĐANG LÀM`; Worker đổi trạng thái khi thật sự bắt đầu, không đổi
 > thay người kia. `HOÀN THÀNH` chỉ sau khi PR merge `main` và đủ bằng chứng.
 
-## Điểm vào hiện tại — 01/09/2026
+## Điểm vào hiện tại — 13/09/2026
 
-- **A:** TK-A15 — M4 Deploy Hardening. Hồ sơ/prompt Worker:
-  [`tk-a15-m4-deploy-hardening.md`](tk-a15-m4-deploy-hardening.md).
-- **B:** TK-B5 — ghi metrics.jsonl + latest.json, seq/fsync/rotation. Hồ sơ:
-  [`tk-b5-m5-jsonl.md`](tk-b5-m5-jsonl.md).
-- Baseline chung: `origin/main` commit `d40afc9`; PR #24 (TK-A16 Monitor backend) đã merge.
-- Demo VPS Management + Express/PostgreSQL Deploy cơ bản với giảng viên đã hoàn tất. P0 hiện tại
-  là `collector → metrics.jsonl → poller → SQLite/ML → Dashboard`, không phải polish thêm demo cũ.
+- **A/Worker:** TK-A18 — [task UI native dark](tk-a18-native-dark-ui.md),
+  [prompt Worker](../prompts/tk-a18-worker.md), [handoff](tk-a18/handoff.md). Tạo branch mới từ HEAD
+  chứa task packet; giữ `936e643` làm mốc demo ổn định.
+- **A17:** đã `DEMO_READY` cho deploy/migrate; [task packet](tk-a17-demo-checkpoint.md),
+  [handoff/review](tk-a17-worker-handoff.md). Không mở lại C06–C09 trong TK-A18.
+- **B:** không có task chặn demo; A nhận tích hợp B6/B8 trong A17 từ 10/09 theo yêu cầu solo.
+  Code B4/B5/B2 đã merge; báo cáo runtime B6 còn ở nhánh riêng, cần tái xác minh.
+- Baseline đã fetch: `origin/main@683bfc6`; PR #25 (A15), #26 (B4/B5), #28 (B2) đã merge.
+- Nhánh Worker `feat/a17-demo-checkpoint`; C00–C03 đã APPROVED. Demo 14/09 đổi phạm vi thành
+  C03 deploy ba Tier 1 → C04 migrate hai VPS → C05 rehearsal. ML deferred tới ít nhất 28/09.
+  [Task hiện hành](tk-a17-demo-checkpoint.md) ·
+  [nguyên lý deploy/migrate](../25-nguyen-ly-deploy-migrate-demo-14-09.md).
+  C00 [APPROVED](tk-a17/review-c00.md): code `d4ec3be`, docs `23cd248`; có kiểm chứng reviewer riêng.
+  C01 [APPROVED review-03](tk-a17/review-c01.md): code `8e42856`, docs `9689ea4`;
+  toàn bộ finding đã đóng bằng kiểm chứng reviewer độc lập.
+- P0: deploy Express/Next/Vite thành công lên VPS; migrate stateless và PostgreSQL thành công giữa
+  hai VPS, có checksum/row/marker/health proof. A trình chiếu, thầy quan sát.
+- C03 deploy và C04 migrate đã được duyệt; C05 đạt `DEMO_READY` tại rehearsal SHA `936e643`.
+  ML, monitor/fault và auto rollback không thuộc demo 14/09, được giữ lại sau 28/09.
 
 ## Đang ưu tiên — W3/W4
 
-| ID     | Task                                                                 | Chủ  | Hạn   | Trạng thái | Branch                      | PR/phụ thuộc             | Ghi chú                                                                       |
-| ------ | -------------------------------------------------------------------- | ---- | ----- | ---------- | --------------------------- | ------------------------ | ----------------------------------------------------------------------------- |
-| TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A    | 08/09 | CHỜ REVIEW | `feat/m04-deploy-hardening` | code `6fd3efd`           | VM02 smoke auto/manual PASS · full 220/220 · VM01 TCP/22 còn chặn · chưa push |
-| TK-B4  | M5: docker stats + HTTP probe local                                  | B    | 01/09 | CHỜ REVIEW | `feat/m05-collector-probes` | TK-B2 Express đã có      | code `fe1da33` đã push · 21/21 · mở PR cuối chuỗi B4–B5 (chỉ đạo B)             |
-| TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B    | 02/09 | ĐANG LÀM   | `feat/m05-collector-output` | Sau TK-B4                | START 01/09 · pytest 26/26 · smoke 10,5 phút 64 dòng PASS · khép blocker TK-A5                               |
-| TK-B6  | M5: chạy collector Docker trên VM01                                  | B    | 03/09 | BACKLOG    | `feat/m05-collector-docker` | Sau TK-B5                | Không mở thêm port                                                            |
-| TK-S4  | Gate dữ liệu thật: A16 + B6 trên VM01                                | Both | 04/09 | BLOCKED    | —                           | A16 đã merge; còn chờ B6 | Metric thật vào SQLite, 5 score/mẫu, reconnect không trùng                    |
-| TK-B8  | Monitor Dashboard: chart + score + alert UI                          | B    | 07/09 | BACKLOG    | `feat/ui-monitor-dashboard` | Sau TK-S4                | Chỉ renderer + typed IPC thật                                                 |
-| TK-A7  | M3: detector 3 Tier 1                                                | A    | 10/09 | BACKLOG    | `feat/m03-tier1-detectors`  | Sau A15                  | Breadth; thấp hơn đường dữ liệu                                               |
-| TK-B2  | M12 còn lại: next-blog + vite-spa + fault endpoint                   | B    | 10/09 | CHỜ REVIEW | `feat/m12-demo-apps-rest`   | Kéo trước B8 (B8 chờ S4) | Code xong 08/09 · 3 app docker OK · fault 5 endpoint smoke PASS · chưa push |
-| TK-S5  | Gate MVP 16/24 FR + smoke/rollback/alert                             | Both | 11/09 | BACKLOG    | —                           | Sau A15/B8               | Bằng chứng vào `docs/smoke-log.md`                                            |
+| ID     | Task                                                                 | Chủ                   | Hạn       | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                                               |
+| ------ | -------------------------------------------------------------------- | --------------------- | --------- | ---------- | --------------------------- | --------------------------- | ------------------------------------------------------------------------------------- |
+| TK-A18 | UI Windows 11 Fluent, Mica/native titlebar, dark mặc định            | A/Worker              | 14/09     | CHỜ REVIEW | `feat/a18-native-dark-ui`   | READY_FOR_LOCAL_REVIEW      | Titlebar `30747f1`: correct WCO rectangle, native controls verified; Snap manual-only |
+| TK-A17 | Demo 14/09: deploy đa source → migrate hai VPS → đối chiếu dữ liệu   | A                     | 14/09     | CHỜ REVIEW | `feat/a17-demo-checkpoint`  | C05 DEMO_READY              | Rehearsal SHA 936e643; chưa push/PR/merge                                             |
+| TK-A15 | M4 hardening: rollback thật + 3 image + diagnostic/retry + lock port | A                     | 08/09     | HOÀN THÀNH | `feat/m04-deploy-hardening` | #25 merge                   | Evidence VM02 01/09 và full 220/220; A17 chạy gate mới                                |
+| TK-B4  | M5: docker stats + HTTP probe local                                  | B                     | 01/09     | HOÀN THÀNH | `feat/m05-collector-probes` | Gộp #26 merge               | `fe1da33`; 21/21 theo task B                                                          |
+| TK-B5  | M5: metrics.jsonl + latest.json, seq/fsync/rotation                  | B → A nghiệm thu      | C02       | CHỜ REVIEW | `feat/m05-collector-output` | #26 merge                   | Code đã merge; DoD SSH tail tại A17/C02                                               |
+| TK-B6  | M5: collector Docker trên VPS                                        | B → A tích hợp        | C01       | CHỜ REVIEW | `feat/m05-collector-docker` | report `dfc0ed7` chưa merge | A17/C00–C01 tái xác minh, giữ app B                                                   |
+| TK-S4  | Gate dữ liệu thật A16 + collector VPS                                | A solo                | Sau 28/09 | BACKLOG    | Qua TK-A17                  | C01–C02 đã đạt              | Phần ML deferred để thu thêm dữ liệu                                                  |
+| TK-B8  | Monitor Dashboard: chart + score + alert UI                          | A làm thay B từ 10/09 | Sau 28/09 | BACKLOG    | Qua TK-A17                  | Sau demo 14/09              | Không mở song song với deploy/migrate                                                 |
+| TK-A7  | M3: detector 3 Tier 1                                                | A                     | C03       | BACKLOG    | `feat/m03-tier1-detectors`  | Gộp scope vào A17/C03       | Express/Next/Vite phục vụ trực tiếp demo 14/09                                        |
+| TK-B2  | M12: next-blog + vite-spa + fault endpoint                           | B                     | 10/09     | HOÀN THÀNH | `feat/m12-demo-apps-rest`   | #28 merge                   | 3 app Docker/fault smoke theo B; detector 3 stack chưa hoàn thành                     |
+| TK-S5  | Gate MVP 16/24 FR + smoke/rollback/alert                             | A solo                | Sau A17   | BACKLOG    | —                           | A17/C09                     | Demo có evidence, không tự xác nhận 16/24 FR                                          |
 
-## Đang bị chặn nhưng không chặn A15/B4
+## Phụ thuộc được xử lý trong A17 hoặc sau demo
 
 | ID    | Task                                                    | Chủ | Trạng thái | Điều kiện gỡ chặn                                          |
 | ----- | ------------------------------------------------------- | --- | ---------- | ---------------------------------------------------------- |
-| TK-A5 | M1 readFileTail + resource check — nghiệm thu file thật | A   | BLOCKED    | TK-B5 sinh `metrics.jsonl`; đóng tại TK-S4                 |
+| TK-A5 | M1 readFileTail + resource check — nghiệm thu file thật | A   | TUẦN NÀY   | B5 code đã merge; nghiệm thu A17/C02 cùng TK-S4            |
 | TK-S2 | Hoàn tất hồ sơ vận hành 2 VPS                           | A   | BLOCKED    | Snapshot sạch, pubkey B, DC/hạn thanh toán trong `docs/08` |
 
 ## Đã hoàn thành/merge
@@ -65,3 +84,233 @@
 3. Mở PR: chuyển `CHỜ REVIEW`, thêm link PR và kết quả gate.
 4. Merge: tick DoD, ghi `DONE`, chuyển `HOÀN THÀNH`.
 5. Vướng trên 30 phút: chuyển `BLOCKED`, ghi bằng chứng + điều kiện gỡ.
+
+### TK-A17 update - 11/09 review-fix
+
+TK-A17 remains `ĐANG LÀM`; C01 findings `C01-R1-01…06` are fixed in code `0d15eb5` and
+handed back as `READY_FOR_LOCAL_REVIEW`. C02-C09 remain closed/`NOT_RUN`; no push/PR/merge.
+
+### TK-A17 update - 11/09 review-02
+
+C01 review-fix được kiểm tại code `0d15eb5`, docs `518644f`. Năm finding review-01 đã đóng;
+`C01-R2-01` MAJOR còn mở vì detector nhận nhầm POST/detail-only `/items` là GET collection
+route. Task tiếp tục `ĐANG LÀM`; C02-C09 đóng; chưa push/PR/merge.
+
+- C01 REVIEW-FIX 02: `C01-R2-01` closed at code `8e42856`; focused/static/build checks pass,
+  read-only VM02 seq `372→373`, no deploy/marker. Handoff is `READY_FOR_LOCAL_REVIEW`.
+
+### TK-A17 update - 11/09 review-03
+
+C01 APPROVED tại code `8e42856`, docs `9689ea4`; reviewer chạy focused 75/75, collector
+26/26, typecheck/lint/format/build và VM02 read-only seq `1791→1792` đều đạt. Task về
+`TUẦN NÀY`; mở duy nhất C02, C03-C09 đóng; chưa push/PR/merge.
+
+### TK-A17 update - 11/09 C02 handoff
+
+C02 đã chạy live ingestion đúng VM02/app 1/deployment 9, giữ nguyên dữ liệu SQLite kế thừa và ghi boundary trước/sau.
+Retry cùng snapshot không thêm rows, duplicate `(deployment_id, seq)=0`; focused 71/71 và static/build đều PASS.
+Handoff `docs/tasks/tk-a17/handoff-c02.md` là `READY_FOR_LOCAL_REVIEW`; C03-C09 vẫn đóng/`NOT_RUN`.
+
+### TK-A17 update - 11/09 C02 review-01
+
+C02 **CHANGES_REQUESTED** tại code `0967fb9`, docs `8e08f76`: poller gán 80 rows trước thời điểm
+deployment 9 bắt đầu vào deployment 9; regression reviewer 1/1 FAIL. C02-T5 cũng chưa quan sát
+scheduler thật, và hồ sơ phải đối soát tổng mutation `+2120 metrics/+10600 scores`. Task về
+`ĐANG LÀM`; C03-C09 tiếp tục đóng/`NOT_RUN`.
+
+### TK-A17 update - C02 review-fix 01
+
+C02 `BLOCKED`: boundary backlog requires Leader approval of the byte-boundary contract/schema proposal before implementation or live mutation. C02-R1-03/04/05 are documented; C02-R1-02 remains `NOT_RUN`. C03-C09 remain closed.
+
+### TK-A17 update - 11/09 C02 proposal decision
+
+Leader **APPROVED_WITH_AMENDMENTS** chiến lược byte boundary tại `87fa868`: bắt buộc dùng lịch sử
+`deployment_activation`, file generation và cutover sau stop/flush collector trước healthcheck.
+C02 được gỡ blocker để tiếp tục implementation, trạng thái `ĐANG LÀM`; C02 chưa APPROVED và
+C03-C09 vẫn đóng/`NOT_RUN`.
+
+### TK-A17 update - 11/09 C02 review-fix 02
+
+C02 đã đóng R1-01…05 theo contract byte-boundary đã được duyệt bổ sung: migration `002`,
+activation history, cutover/rollback, rotation và shared lock. Live VM02 forward deploy,
+manual rollback và hai tick scheduler thật đạt; C02 `READY_FOR_LOCAL_REVIEW`. C03-C09 vẫn
+đóng/`NOT_RUN`; code/docs SHA được ghi trong handoff sau commit.
+
+### TK-A17 update - 11/09 C02 review-fix 03
+
+C02 đã đóng R3-01…05 và phần còn lại R1-01: first deploy không có metrics file, stop/flush và
+atomic snapshot, drain `.1`/gap policy, candidate runtime failure và v1→v2 partial migration.
+Local `88/88`, collector `19/19`, static/build PASS; live forward 15/16, rollback retry 18 và
+hai scheduler tick thật PASS. Handoff `READY_FOR_LOCAL_REVIEW`; C03-C09 đóng/`NOT_RUN`.
+
+### TK-A17 update - 11/09 C02 review-03
+
+C02 **CHANGES_REQUESTED** tại code `ce1a9ff`, submitted HEAD `0e7d207`. Reviewer regression xác
+nhận first deploy fail khi `metrics.jsonl` chưa tồn tại; source review xác nhận cutover chưa
+stop/flush collector, rotation không drain matching `.1`, failure sau runtime start có thể bỏ
+candidate episode và migration/regression chưa đủ contract. Local focused 81/81 và 106/106,
+collector 26/26, static/build PASS; không chạy live. C02 về `REVIEW_FIX_REQUIRED`; C03-C09 đóng.
+
+### TK-A17 update - 11/09 C02 review-04
+
+C02 **CHANGES_REQUESTED** tại code `fa72a6e`, submitted `85f4810`. Bốn regression reviewer đều
+FAIL: snapshot fail để collector bị dừng; restore nonzero vẫn mở activation previous; first
+generation ghi data-gap giả; matching `.1` partial bị bỏ mất không gap. Retry live 18 chọn chính
+current deployment 16 nên chưa chứng minh rollback. Local 88/88, ML service 19/19, collector 26/26,
+static/build PASS. C02 về `REVIEW_FIX_REQUIRED`; C03-C09 đóng/`NOT_RUN`.
+
+### TK-A17 update - 11/09 C02 review-fix 04
+
+C02 đã đóng `C02-R4-01...06` trên code `c6c728c`: collector resume/fail-closed recovery,
+runtime image/state verification, exact current-deployment rollback target, first-generation
+adoption và committed-byte rotation gap đã có production regressions. Local gates PASS: focused
+18 files/90 tests, ML 19, collector 26, typecheck/lint/Prettier/build. VM02 live rollback
+current `18/v18` -> target `16/v16` -> deployment `19`, scheduler hai tick với max concurrency 1
+và exit 0; C02 `READY_FOR_LOCAL_REVIEW`. C03-C09 vẫn đóng/`NOT_RUN`, chưa push/PR/merge.
+
+### TK-A17 update - 11/09 C02 review-fix 05
+
+### TK-A17 update - 11/09 C02 review-fix 06
+
+### TK-A17 update - 12/09 C02 review-fix 07
+
+### TK-A17 update - 12/09 C02 review-fix 08
+
+C02 đóng `C02-R8-01...03` và phần còn mở R7-03/R6-02 tại code `8fe4842`: reconcile reload prepared
+episode dưới shared lock, kiểm boundary `size+1`, và activation/pointer cùng SQLite transaction.
+Production regressions cover short/missing/mismatch snapshot, lineage cycle/missing, stale row,
+close/reopen, injected pointer failure, retry và second tick. Local `18/99`, ML `19`, collector
+`26`, typecheck/lint/Prettier/build PASS. Không live mutation; evidence deployment 20/21 và
+`416+5=421`, `2080+25=2105` giữ nguyên. C02 `READY_FOR_LOCAL_REVIEW`; C03-C09 đóng/`NOT_RUN`.
+
+C02 đóng `C02-R7-01...04` và phần còn mở R6-02...05 tại code `65d85ac`: reconciliation dùng
+resolved rollback lineage, cycle/missing fail-closed; mixed-invalid rotation giữ valid rows trong
+episode cũ và ghi từng byte range. Local `18/98`, ML `19`, collector `26`, typecheck/lint/Prettier/
+build PASS. Read-only VM02 evidence: deployment 20 `424/2120`, deployment 21 `5/25`, activation
+boundary `[1417093,1541655)` -> `[1541655,EOF)`, giải thích `416+5=421` và `2080+25=2105`.
+C02 `READY_FOR_LOCAL_REVIEW`; C03-C09 đóng/`NOT_RUN`.
+
+C02 đóng `C02-R6-01...05` và phần còn mở R5-02/04/05/06 tại code `61f43df`: owner unknown được
+giữ qua stop/compose/inspect failure, prepared activation có reconciliation thật sau restart, và
+rotated invalid line ghi đúng byte range. Local `18 files/96 tests`, ML `19`, collector `26`,
+typecheck/lint/Prettier/build PASS. Controlled VM02 tạo deployment `21` với runtime v16/running sau
+current runtime v15; scheduler hai tick, max concurrency 1, clean exit; live SQLite `+421/+2105`,
+deployment 21 `5 rows`, retry/reconnect/duplicates `0`. C02 `READY_FOR_LOCAL_REVIEW`; C03-C09
+đóng/`NOT_RUN`.
+
+C02 đã đóng `C02-R5-01...06` tại code `37d9e19`: cleanup signal độc lập, runtime-owner state,
+durable reconciliation barrier, committed-byte rotation retry và rollback lineage/runtime inspect.
+Local focused `95/95`, ML `19/19`, collector `26/26`, typecheck/lint/Prettier/build PASS. Live
+VM02 current runtime v16 chọn target runtime v15, rollback deployment `20` healthy; scheduler hai
+tick, max concurrency 1, exit 0. C02 `READY_FOR_LOCAL_REVIEW`; C03-C09 vẫn đóng/`NOT_RUN`.
+
+### TK-A17 update - 12/09 C02 review-08
+
+C02 **CHANGES_REQUESTED** tại code `65d85ac`, submitted HEAD `2503c12`. Lineage resolver,
+mixed-invalid EOF và read-only split 416/5 đạt; focused 98/98, ML 19/19, collector 26/26 và
+static/build PASS. Hai reviewer recovery regression 0/2 PASS: snapshot ngắn hơn durable boundary
+vẫn activate và activation/current pointer không cùng transaction. Mở `C02-R8-01…03`; C02 về
+`REVIEW_FIX_REQUIRED`, C03-C09 tiếp tục đóng/`NOT_RUN`; không chạy live mutation.
+
+### TK-A17 update - 12/09 C02 review-09
+
+REVIEW-FIX C02 09: code `5febcbe`, docs append from `d65ead7`; three table-driven service groups
+committed. Service `22/22`, focused `18 files/113 tests`, typecheck/scripts typecheck/scoped ESLint/
+Prettier PASS. Production `8fe4842` unchanged; no live, ML, collector or build. C02
+`READY_FOR_LOCAL_REVIEW`; C03-C09 remain closed/`NOT_RUN`.
+
+C02 **CHANGES_REQUESTED** tại code `8fe4842`, submitted HEAD `d65ead7`. Production R8-01/02
+đạt; focused 99/99, ML 19/19, collector 26/26 và static/build PASS. Mở duy nhất `C02-R9-01`
+MAJOR vì recovery matrix/evidence overclaim committed tests. Không phát hiện defect production mới,
+không cần live mutation; C02 `REVIEW_FIX_REQUIRED`, C03-C09 đóng/`NOT_RUN`.
+
+### TK-A17 update - 12/09 C02 review-10
+
+C02 **APPROVED**: production `8fe4842`, tests `5febcbe`, submitted HEAD `313201d`. Reviewer
+service 22/22, focused 113/113, node/web/scripts typecheck, scoped ESLint và test Prettier PASS;
+mọi finding C02 CLOSED. Mở duy nhất C03 theo `docs/tasks/tk-a17/c03-worker-plan.md`; C04-C09
+đóng/`NOT_RUN`. Task về `TUẦN NÀY`; chưa push/PR/merge.
+
+### TK-A17 update - 12/09 replan demo 14/09
+
+A đổi phạm vi demo sang hai năng lực bắt buộc thành công: deploy Express/Next/Vite lên VPS và
+migrate stateless/PostgreSQL giữa hai VPS. C03 được mở lại thành deploy matrix; C04 migrate và C05
+rehearsal đã có task nhưng còn đóng/`NOT_RUN`. ML cùng monitor/fault/recovery deferred tới ít nhất
+28/09. Tài liệu thuyết minh: `docs/25-nguyen-ly-deploy-migrate-demo-14-09.md`.
+
+- REVIEW-FIX C03 - 12/09/2026: Worker code `c149291`; deploy matrix and handoff created. Express,
+  Next.js and Vite each passed the real `PRECHECK -> UPLOAD -> RENDER -> BUILD -> DEPLOY ->
+HEALTHCHECK -> RECORD` pipeline on VM02; Express redeploy retained the PostgreSQL marker. Focused
+  `55/55`, collector `26/26`, typecheck/scripts typecheck, scoped ESLint/Prettier and build passed.
+  C03 is `READY_FOR_LOCAL_REVIEW`; C04/C05 and later remain closed/`NOT_RUN`, with no push/PR/merge.
+- Current C03 status: `READY_FOR_LOCAL_REVIEW` at code `c149291`, docs `bf0580a` plus bookkeeping
+  `e10e74e`; the older table row is historical. C04/C05 remain `NOT_RUN`.
+- REVIEW-FIX C03 01: findings `C03-R1-01...04` closed at code `e3a32f1`; final VM02 matrix,
+  durable SQLite/profile, structured events and demo tunnel proof are in
+  `docs/evidence/tk-a17/c03/review-fix-01/`. C03 remains `READY_FOR_LOCAL_REVIEW`; C04/C05 and
+  later remain closed/`NOT_RUN`.
+
+### TK-A17 update - 12/09 C03 review-01
+
+C03 **CHANGES_REQUESTED** tại code `c149291`, submitted docs `dcbe3b5`. Worker gates và VM02
+loopback/health/marker đạt, nhưng reviewer contract regression `0/5`: detector trộn sai dependency
+section và dynamic public build args bị Dockerfile bỏ qua. Live harness xóa DB tạm, parse multiline/
+event provenance không đáng tin và ba public port timeout. Mở `C03-R1-01…04`; C03
+`REVIEW_FIX_REQUIRED`, C04/C05 tiếp tục đóng/`NOT_RUN`.
+
+### TK-A17 update - C03 review-fix 02
+
+C03 `READY_FOR_LOCAL_REVIEW` at code `c060c75` from base `2a15615`. `C03-R2-01...02` are closed:
+the live helper uses the real OpsPilot userData credential flow and VM02 resolver, and the exact
+detector-plan/build-arg/Dockerfile regression is committed. Real apps `16/17/18` and deployments
+`38/39/40/41` are healthy on ports `30015..30017`; Docker/HTTP/collector, SQLite reopen and the
+Express PostgreSQL marker proof are in `docs/evidence/tk-a17/c03/review-fix-02/`. Focused `65/65`,
+node/web/scripts typecheck, scoped ESLint/Prettier and build pass. C04-C09 remain closed/`NOT_RUN`;
+app B is read-only, with no ML, push, PR or merge.
+
+### TK-A17 update - 13/09 C03 review-02
+
+C03 **CHANGES_REQUESTED** tại code `e3a32f1`, submitted `8e60243`. Detector/template production,
+VM02 health và tunnel teardown đạt; committed focused 62/62. Blocker còn lại: profile phụ lưu private
+key plaintext dưới nhãn AES-GCM và app 13–15 không có trong DB `app:list` thật. Exact reviewer suite
+còn 2 integration case fail do thiếu `BUILD_ARGS`. Mở `C03-R2-01…02`; C04/C05 tiếp tục đóng.
+
+### TK-A17 update - 13/09 C03 review-03
+
+C03 **APPROVED** tại code `c060c75`, submitted `53aa07e`. Reviewer focused 65/65, actual userData
+apps/deployments, ciphertext/master key, Electron resolver SSH, unsafe-profile cleanup và tunnel ba
+app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express app 16/deployment 39. VM01
+`221.121.1.79:22` đang timeout nên Worker code/test trước; live hai VPS chưa được phép báo PASS.
+
+- C04 REVIEW-FIX 01 - 13/09/2026: local `49/49`, typecheck/scripts typecheck, scoped ESLint, Prettier and build passed. VM02 profile 2 -> VM01 profile 1 live sequence passed in order: Vite app 18/job 18, then Express/PostgreSQL app 16/job 19, both `keepSource=true`. Evidence: `docs/evidence/tk-a17/c04/review-fix-01/`; handoff `READY_FOR_LOCAL_REVIEW`. C05-C09 remain closed/`NOT_RUN`.
+- C04 REVIEW 02 - 13/09/2026: **CHANGES_REQUESTED** at code `67063ff`, submitted `06da273`. Jobs 18/19
+  reached completed, but actual source pointers crossed into target deployments and both source containers were
+  exited after `keepSource=true`; Leader restored pointers 18->41/16->39 and source health. Open R2-01…06;
+  C05 remains closed.
+- C04 REVIEW-FIX 02 - 13/09/2026: từ base `611cb64`, local gates `49/49` và static gates PASS. Fresh live VM02 -> VM01 với target mới: Vite app 18/job 21 rồi Express/PostgreSQL app 16/job 22, đều `keepSource=true`; source pointers `41/39`, source recovery/HTTP, target runtime/collector, checksum và PostgreSQL marker/rows PASS. C04 `READY_FOR_LOCAL_REVIEW`; C05-C09 đóng/`NOT_RUN`. Evidence `docs/evidence/tk-a17/c04/review-fix-02/`.
+- C04 REVIEW 03 - 13/09/2026: **CHANGES_REQUESTED** at `f9fcfb5`. R2-01 closed and read-only source/target
+  runtime plus SQLite ownership passed; jobs 21/22 remain valid happy paths. Open R3-01…05 for persisted
+  recovery, authoritative restore/DB order, relay close race, UI state and real regression/raw evidence. C05
+  remains closed/`NOT_RUN`.
+- C04 REVIEW-FIX 03 - 13/09/2026: base `a51f72e`; local `50/50` plus typecheck/scripts typecheck, ESLint, Prettier/build PASS. Fresh target sequence Vite app 18/job 21 then Express/PostgreSQL app 16/job 22 on VM02 -> VM01 passed with `keepSource=true`; source pointers `41/39`, runtime/HTTP recovery, checksum, collector and PostgreSQL marker/rows PASS. C04 `READY_FOR_LOCAL_REVIEW`; C05-C09 closed/`NOT_RUN`. Evidence `docs/evidence/tk-a17/c04/review-fix-02/`.
+- C04 REVIEW-FIX 03 - 13/09/2026: production migration restore uses the VPS-relayed payload through the shared
+  pipeline; persisted migration IPC/MigratePage state and relay exact-byte/backpressure regressions are present.
+  Focused `65/65`, typecheck/scripts typecheck, scoped ESLint, Prettier and build PASS. Fresh jobs `23` (Vite 18)
+  then `24` (Express/PostgreSQL 16), VM02 -> VM01, `keepSource=true`, completed with runtime/HTTP/collector,
+  checksum/file and marker proof. Handoff/evidence are under `docs/tasks/tk-a17/handoff-c04.md` and
+  `docs/evidence/tk-a17/c04/review-fix-03/`; C05-C09 remain closed/`NOT_RUN`.
+- C04 REVIEW 04 - 13/09/2026: submission `478b258` **HANDOFF_REJECTED**. Focused 50/50 and typecheck pass,
+  but diff from `a51f72e` has only one test plus docs and reuses jobs 21/22; no production/UI finding was fixed.
+  R3-01…05 remain open and C05 remains closed/`NOT_RUN`.
+- C04 REVIEW 05 - 13/09/2026: **APPROVED_FOR_DEMO** at code `517233e`, submitted `499e5a2`. Independent
+  65/65, scripts typecheck/build and read-only jobs 23/24 target 25/26 runtime/HTTP/collector/ownership pass;
+  PostgreSQL rows/marker pass. D1–D4 move to post-demo hardening. Open only C05 rehearsal.
+- C05 HANDOFF - 13/09/2026: code `936e643`; full local gates pass (`287` Node tests, `19` ML-service,
+  `26` collector) with typecheck, lint, Prettier and build. Two consecutive fresh rehearsals pass on
+  VM02 -> VM01: deploy matrix Express/Next.js/Vite and migration jobs `25/26`, then `27/28`, including
+  Docker/HTTP/collector, checksum, source-kept and PostgreSQL marker proof. C05 is
+  `READY_FOR_LOCAL_REVIEW`; C06-C09 remain closed/`NOT_RUN`.
+- C05 REVIEW - 13/09/2026: **DEMO_READY** at rehearsal SHA `936e643`, submitted docs `e21ba1c`. Independent
+  Node 287/287, ML 19/19 and collector 26/26 PASS; SQLite jobs 25–28/ownership/no-active-job and read-only
+  final rehearsal runtime/HTTP/collector all PASS. Raw evidence secret-pattern scan clean. C06–C09/ML remain
+  closed/`NOT_RUN`; no push/PR/merge authorization is implied.

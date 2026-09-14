@@ -1,20 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import {
-  Alert,
-  Button,
-  Empty,
-  Space,
-  Spin,
-  Table,
-  Tag,
-  Typography
-} from 'antd'
-import {
-  ExportOutlined,
-  PlusOutlined,
-  ReloadOutlined,
-  RocketOutlined
-} from '@ant-design/icons'
+import { Alert, Button, Empty, Space, Spin, Table, Tag, Typography } from 'antd'
+import { ExportOutlined, PlusOutlined, ReloadOutlined, RocketOutlined } from '@ant-design/icons'
 
 import type { App, Deployment, IpcError } from '@shared/ipc'
 
@@ -139,9 +125,7 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
       title: strings.vpsControl.apps.columns.port,
       key: 'port',
       width: 80,
-      render: (_: unknown, app: AppRow) => (
-        <span className="mono-text">{app.host_port}</span>
-      )
+      render: (_: unknown, app: AppRow) => <span className="mono-text">{app.host_port}</span>
     },
     {
       title: strings.vpsControl.apps.columns.url,
@@ -166,7 +150,9 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
       key: 'status',
       width: 110,
       render: (_: unknown, app: AppRow) => (
-        <Tag color={statusColor(app.deployStatus)}>{statusLabel(app.deployStatus)}</Tag>
+        <Tag className="status-badge" color={statusColor(app.deployStatus)}>
+          {statusLabel(app.deployStatus)}
+        </Tag>
       )
     },
     {
@@ -176,13 +162,19 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
       render: (_: unknown, app: AppRow) => (
         <Space size="small">
           <Button
+            className="action-pill"
             size="small"
             icon={<ExportOutlined />}
             onClick={() => void openApp(app.url)}
           >
             {strings.vpsControl.apps.openApp}
           </Button>
-          <Button size="small" icon={<RocketOutlined />} onClick={() => goDeploy(app.id)}>
+          <Button
+            className="action-pill"
+            size="small"
+            icon={<RocketOutlined />}
+            onClick={() => goDeploy(app.id)}
+          >
             {strings.vpsControl.apps.redeploy}
           </Button>
         </Space>
@@ -246,7 +238,13 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
       )}
 
       {!loading && rows.length > 0 && (
-        <Table<AppRow> rowKey="id" size="small" dataSource={rows} columns={columns} pagination={false} />
+        <Table<AppRow>
+          rowKey="id"
+          size="small"
+          dataSource={rows}
+          columns={columns}
+          pagination={false}
+        />
       )}
     </div>
   )

@@ -1,0 +1,116 @@
+# Handoff C03 - TK-A17
+
+## Outcome
+
+- `READY_FOR_LOCAL_REVIEW`; scope is only C03. Branch `feat/a17-demo-checkpoint`.
+- Base `c2d55ad`; code `c149291`; submitted docs commit is recorded after this append.
+- C02 review-10 was approved before starting. C04/C05 remain `NOT_RUN`.
+
+## Implementation
+
+- Added pure priority-30 Next.js and priority-20 Vite SPA detectors; Express remains priority 10.
+- Added `templates/nextjs.Dockerfile` and `templates/static-spa.Dockerfile`; both are rendered by
+  the existing shared `DeployPipeline`.
+- Build-time `NEXT_PUBLIC_*` and `VITE_*` values are passed as Docker build args; runtime secrets
+  remain in the generated `.env` path.
+- Added `scripts/c03-live.ts` and registered it in `tsconfig.scripts.json` for the controlled VM02
+  matrix. No new dependency or contract/schema change.
+
+## C03 mapping
+
+| Item | Evidence / result |
+| --- | --- |
+| C03-T1 | Detector matrix tests and live DTOs identify Express, Next.js and Vite correctly; Flask untouched. |
+| C03-T2 | Template tests render all three Dockerfiles without placeholders; live BUILD succeeded for all three. |
+| C03-T3 | Express pipeline v1/v2 succeeded; PostgreSQL marker survived redeploy; deployment IDs 1/2 in temporary SQLite. |
+| C03-T4 | Next pipeline deployment 3 succeeded, image `a17-c03-final-next:v1`, port 30007, Docker health and HTTP 200. |
+| C03-T5 | Vite pipeline deployment 4 succeeded, image `a17-c03-final-vite:v1`, port 30008, Nginx health and HTTP 200. |
+| C03-T6 | All sources used the same PRECHECK/UPLOAD/RENDER/BUILD/DEPLOY/HEALTHCHECK/RECORD pipeline; collectors running/restart 0. A17 and B were not mutated. |
+| C03-T7 | Focused/static/build gates pass; live harness closed SSH/database cleanly. |
+
+## Commands and counts
+
+- cwd `app`, Node 24.16.0/pnpm 11.1.0: focused command in evidence -> exit 0, 4 files/55 tests.
+- cwd `collector`, Python `ml-service/.venv`: pytest -> exit 0, 26 passed.
+- cwd `app`: node/web typecheck, scripts typecheck, scoped ESLint, scoped Prettier and build -> all
+  exit 0; renderer build transformed 3045 modules.
+- Live command: `pnpm exec tsc -p tsconfig.scripts.json; node scripts/prepare-cli.js; node
+  .out-scripts/scripts/c03-live.js`, cwd `app`, key-auth SSH to VM02; final exit 0. The raw failed
+  attempts remain in terminal/evidence ledger and were not used as PASS.
+
+## Live mutation ledger
+
+- Target workspace names: `a17-c03-final-express`, `a17-c03-final-next`, `a17-c03-final-vite`.
+- Express SQLite: app 7, deployment 1 then 2, current 2, image v2, port 30006; marker
+  `c03-marker-1789207558316` remained after redeploy.
+- Next SQLite: app 8, deployment 3, current 3, image v1, port 30007.
+- Vite SQLite: app 9, deployment 4, current 4, image v1, port 30008.
+- Final read-only Docker proof: all six app/collector containers `running`, app health `healthy`,
+  restart count `0`; HTTP `200` for all three app routes.
+- Existing A17 app on 30000 and B app on 30001 were not operated; no reset/delete/reassign occurred.
+
+## Deferred scope
+
+- C04 migrate, C05 rehearsal, ML train/score, monitor/fault/recovery, Flask, UI, app B mutation,
+  push, PR and merge: `NOT_RUN`.
+
+Evidence: [`deploy-matrix.md`](../../evidence/tk-a17/c03/deploy-matrix.md).
+
+## REVIEW-FIX 01 - 12/09/2026
+
+- Verdict from review-01 was `CHANGES_REQUESTED`; C03-R1-01...04 are now closed. Base remains
+  `c2d55ad`; final code HEAD is `e3a32f1`; evidence/docs commit is `826f3a0`; final docs HEAD is
+  `c82288d` (bookkeeping `279b4e8`).
+- Detector dependency sections, dynamic public build args/templates, structured per-deployment
+  provenance with durable SQLite reopen, and demo-machine tunnel proof are complete.
+- Final VM02 target `a17-c03-review01-final2-*`: Express app 13 deployments 1/2 port 30012,
+  Next app 14 deployment 3 port 30013, Vite app 15 deployment 4 port 30014. All app containers
+  are `running/healthy`, HTTP 200; all collectors are `running` with restart count 0. PostgreSQL
+  marker proof is `express-marker-proof.json`.
+- Local gates: focused 62/62, collector 26/26, node/web/scripts typecheck, scoped ESLint,
+  Prettier and build exit 0. Review failures and retries are retained under
+  `docs/evidence/tk-a17/c03/review-fix-01/`.
+- Outcome: `READY_FOR_LOCAL_REVIEW`. C04/C05/C06-C09, ML, monitor/fault/recovery, Flask, app B
+  mutation, push, PR and merge remain `NOT_RUN`.
+
+## Leader review 01 — 12/09/2026
+
+- Reviewed code `c149291`, submitted docs `dcbe3b5`; verdict **CHANGES_REQUESTED**.
+- C03 về `REVIEW_FIX_REQUIRED`; mở `C03-R1-01…04` cho dependency-section contract, dynamic public
+  build args, durable/structured live provenance và đường trình chiếu từ máy demo.
+- Reviewer focused/collector/static/build gates PASS; regression mới 0/5 PASS. VM02 loopback và
+  marker vẫn PASS, nhưng ba public port timeout. Không có live mutation trong review.
+- Chi tiết: [review-c03.md](review-c03.md) và
+  [review evidence](../../evidence/tk-a17/c03/review-01/). C04/C05 tiếp tục đóng/`NOT_RUN`.
+
+## REVIEW-FIX 02 - 13/09/2026
+
+- Base `2a15615`; code `c060c75`; scope only `C03-R2-01...02`; C04-C09 remain `NOT_RUN`.
+- R2-01 CLOSED: the helper uses real Electron userData, VM02 VPS ID 2, `createCredentialCipher`,
+  `loadSecret`, and the real SSH resolver. Apps `16/17/18` and deployments `38/39/40/41` survived
+  database close/reopen and `DeployService.listApps` readback. Scrubbed credential audit:
+  `../../evidence/tk-a17/c03/review-fix-02/credential-audit-real.json`.
+- R2-02 CLOSED: detector-plan/build-arg/Dockerfile integration regression committed; focused suite
+  `65/65` passed. Final VM02 ports are Express `30015`, Next.js `30016`, Vite `30017`; Docker,
+  HTTP 200, collectors and PostgreSQL marker proof passed.
+- Node/web/scripts typecheck, scoped ESLint, Prettier and build exit `0`; failed occupied-port raw
+  attempts remain in `live-retry-*.txt`. Outcome: `READY_FOR_LOCAL_REVIEW`; no app B mutation,
+  C04-C09, ML or push/PR/merge.
+
+## Leader review 02 — 13/09/2026
+
+- Reviewed code `e3a32f1`, submitted HEAD `8e60243`; verdict **CHANGES_REQUESTED**.
+- Detector/template production, VM02 health và tunnel teardown đạt. Exact reviewer suite còn hai
+  integration failures; profile phụ lưu private key plaintext và không xuất hiện trong app DB thật.
+- Mở `C03-R2-01…02`; C03 tiếp tục `REVIEW_FIX_REQUIRED`, C04/C05 đóng/`NOT_RUN`.
+- Chi tiết: [review-c03.md](review-c03.md), evidence
+  [review-02](../../evidence/tk-a17/c03/review-02/). Review không live mutation.
+
+## Leader review 03 — 13/09/2026
+
+- Reviewed code `c060c75`, submitted docs/evidence `53aa07e`; verdict **APPROVED**.
+- Reviewer focused 65/65; actual userData apps/deployments, credential ciphertext/master key,
+  Electron resolver SSH, unsafe-profile cleanup và tunnel ba app đều PASS. Mọi finding C03 CLOSED.
+- Mở duy nhất C04 với Vite app 18/deployment 41 và Express app 16/current deployment 39. VM01 profile
+  ID 1 đang TCP timeout; C04 code/test được làm ngay nhưng live phải chờ hai VPS truy cập được.
+- Evidence: [review-03](../../evidence/tk-a17/c03/review-03/). C05 và ML vẫn đóng/`NOT_RUN`.

@@ -1,0 +1,34 @@
+{
+  "reviewed": {
+    "code": "c060c75",
+    "submitted": "53aa07e",
+    "leader_base": "2a15615"
+  },
+  "focused": { "files": 4, "passed": 65, "failed": 0, "exit": 0 },
+  "actual_profile": {
+    "vps_id": 2,
+    "apps": [
+      { "id": 16, "current_deployment_id": 39, "port": 30015 },
+      { "id": 17, "current_deployment_id": 40, "port": 30016 },
+      { "id": 18, "current_deployment_id": 41, "port": 30017 }
+    ],
+    "credential_plaintext_key_markers": false,
+    "iv_bytes": 12,
+    "auth_tag_bytes": 16,
+    "protected_master_key": true,
+    "resolver_ssh_exit": 0
+  },
+  "unsafe_profiles_present": false,
+  "tunnel": {
+    "ports": [33015, 33016, 33017],
+    "content_checks_passed": 3,
+    "pid_alive_after": false,
+    "listeners_after": 0
+  },
+  "vm01_preflight": {
+    "host": "221.121.1.79",
+    "port": 22,
+    "tcp": false,
+    "ping": false
+  }
+}

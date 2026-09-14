@@ -1,0 +1,56 @@
+{
+  "reviewed_code": "8e42856",
+  "reviewed_docs": "9689ea4",
+  "base_review": "f37c493",
+  "runtime": "Node 22.23.2",
+  "checks": [
+    {
+      "name": "focused",
+      "cwd": "app",
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 src/main/deploy src/main/detectors src/main/monitor",
+      "exit": 0,
+      "result": "13 files, 75 tests passed",
+      "duration_seconds": 9.61
+    },
+    {
+      "name": "typecheck-node",
+      "cwd": "app",
+      "command": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json",
+      "exit": 0
+    },
+    {
+      "name": "typecheck-web",
+      "cwd": "app",
+      "command": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.web.json",
+      "exit": 0
+    },
+    {
+      "name": "lint-format",
+      "cwd": "app",
+      "command": "eslint --no-cache pipeline.ts pipeline.test.ts; prettier --check pipeline.ts pipeline.test.ts",
+      "exit": 0,
+      "result": "no ESLint output; all matched files use Prettier style"
+    },
+    {
+      "name": "electron-vite-build",
+      "cwd": "app",
+      "command": "node node_modules/electron-vite/bin/electron-vite.js build",
+      "exit": 0,
+      "result": "main 42 modules, preload 1 module, renderer 3045 modules",
+      "duration_seconds": 21.53
+    },
+    {
+      "name": "collector",
+      "cwd": "collector",
+      "command": "../ml-service/.venv/Scripts/python.exe -m pytest tests -q",
+      "exit": 0,
+      "result": "26 passed",
+      "duration_seconds": 0.22
+    }
+  ],
+  "gitnexus": {
+    "analyze": "PASS with FTS unavailable warning",
+    "detect_changes": "14 changed symbols, no affected process in summary, LOW",
+    "resolveCollectorAppPath_impact": "4 upstream symbols, HIGH; direct callers are stepRender and pipeline tests"
+  }
+}

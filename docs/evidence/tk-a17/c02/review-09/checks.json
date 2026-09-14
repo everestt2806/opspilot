@@ -1,0 +1,43 @@
+{
+  "review": "TK-A17/C02 review-09",
+  "date": "2026-09-12",
+  "reviewed_base": "deb69b9",
+  "reviewed_code": "8fe4842",
+  "submitted_head": "d65ead7",
+  "scope": "local source, tests, and read-only evidence review",
+  "checks": [
+    { "name": "ancestry", "result": "PASS" },
+    {
+      "name": "focused app suite",
+      "result": "PASS",
+      "detail": "18 files, 99 tests"
+    },
+    { "name": "ML service", "result": "PASS", "detail": "19 tests" },
+    { "name": "collector", "result": "PASS", "detail": "26 tests" },
+    {
+      "name": "static and build",
+      "result": "PASS",
+      "detail": "node/web/scripts typecheck, scoped ESLint, Prettier, renderer 3045 modules"
+    },
+    {
+      "name": "GitNexus",
+      "result": "PASS_WITH_WARNING",
+      "detail": "index succeeded with FTS unavailable warning; 13 changed symbols, 300 affected flows, critical risk"
+    },
+    {
+      "name": "committed recovery coverage audit",
+      "result": "FAIL",
+      "detail": "Only one new test plus one extended test are present. Evidence claims stale replacement, missing lineage, previous-owner rollback, wrong image, missing/down collector, missing/mismatched snapshot, SSH unknown, and next-deploy coverage that is not committed."
+    }
+  ],
+  "accepted_implementation": [
+    "prepared row reload under shared app lock",
+    "snapshot size plus one boundary check",
+    "atomic activation, previous close, and current pointer transition",
+    "injected pointer failure rollback and retry",
+    "second tick idempotency",
+    "existing lineage and mixed-invalid fixes"
+  ],
+  "live": "NOT_RUN by reviewer; prior deployment 20/21 read-only arithmetic remains accepted",
+  "verdict": "CHANGES_REQUESTED"
+}

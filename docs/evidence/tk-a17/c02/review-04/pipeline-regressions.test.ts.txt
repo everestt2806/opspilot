@@ -1,0 +1,26 @@
+// Temporary reviewer regressions; removed from the worktree after the run.
+
+it('restarts the existing collector when snapshot fails after stop', async () => {
+  // First snapshot succeeds. The second throws after `compose stop collector` returned 0.
+  // Expected: a subsequent compose up/start restores the existing collector.
+  // Actual: no start/up command followed the stop; deployment finished failed.
+})
+
+it('keeps candidate activation when restoring previous runtime returns nonzero', async () => {
+  // compose call 1: first deploy succeeds
+  // compose call 2: candidate reports Started but exits nonzero
+  // compose call 3: restore previous exits nonzero
+  // Expected active activation: candidate deployment 2, pending explicit reconciliation.
+  // Actual active activation: previous deployment 1.
+})
+
+Result:
+
+FAIL restarts the existing collector when snapshot fails after stop
+AssertionError: expected false to be true
+
+FAIL keeps candidate activation when restoring previous runtime returns nonzero
+AssertionError: expected { deployment_id: 1 } to deeply equal { deployment_id: 2 }
+
+Test Files 1 failed (1)
+Tests 2 failed | 29 skipped (31)

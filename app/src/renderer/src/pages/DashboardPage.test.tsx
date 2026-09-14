@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ActionLogEntry, App, Vps } from '@shared/ipc'
 
 import { DashboardPage } from './DashboardPage'
+import { strings } from '../strings'
 
 const VPS_A: Vps = {
   id: 1,
@@ -88,13 +89,13 @@ const happyHandlers: Record<string, InvokeHandler> = {
   }
 }
 
-function statCard(label: string): HTMLElement {
+function statCell(label: string): HTMLElement {
   const title = screen.getByText(label)
-  const card = title.closest('.ant-card')
-  if (!card || !(card instanceof HTMLElement)) {
-    throw new Error(`Khong tim thay card cua "${label}"`)
+  const cell = title.closest('.summary-cell')
+  if (!cell || !(cell instanceof HTMLElement)) {
+    throw new Error(`Khong tim thay summary cell cua "${label}"`)
   }
-  return card
+  return cell
 }
 
 beforeEach(() => {
@@ -110,20 +111,20 @@ describe('DashboardPage', () => {
     const invoke = mockApi(happyHandlers)
     render(<DashboardPage onOpenVps={() => {}} onOpenDeploy={() => {}} />)
 
-    await screen.findByText('Overview')
+    await screen.findByText(strings.dashboard.title)
 
-    expect(within(statCard('VPS online')).getByText('1')).toBeTruthy()
-    expect(within(statCard('Apps running')).getByText('1')).toBeTruthy()
-    expect(within(statCard('Deploys in 24h')).getByText('2')).toBeTruthy()
-    expect(within(statCard('Last deploy')).getByText(/ago|just now/)).toBeTruthy()
+    expect(statCell(strings.dashboard.stats.vpsOnline).textContent).toContain('1 / 2')
+    expect(statCell(strings.dashboard.stats.appsRunning).textContent).toContain('1 / 2')
+    expect(statCell(strings.dashboard.stats.deploy24h).textContent).toContain('2')
+    expect(statCell(strings.dashboard.stats.lastDeploy).textContent).toMatch(/ago|just now/)
 
     expect(screen.getAllByText('Deployed v7 successfully.').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Rollback failed.').length).toBeGreaterThan(0)
-    expect(screen.getByText('Deploy')).toBeTruthy()
-    expect(screen.getByText('Auto rollback')).toBeTruthy()
-    expect(screen.getByText('Succeeded')).toBeTruthy()
-    expect(screen.getByText('Failed')).toBeTruthy()
-    expect(screen.getByText('Cancelled')).toBeTruthy()
+    expect(screen.getByText(strings.dashboard.actions.deploy)).toBeTruthy()
+    expect(screen.getByText(strings.dashboard.actions.rollback_auto)).toBeTruthy()
+    expect(screen.getByText(strings.dashboard.statuses.success)).toBeTruthy()
+    expect(screen.getByText(strings.dashboard.statuses.failed)).toBeTruthy()
+    expect(screen.getByText(strings.dashboard.statuses.cancelled)).toBeTruthy()
 
     expect(invoke).toHaveBeenCalledWith('history:list', { limit: 10, offset: 0 })
     expect(invoke).toHaveBeenCalledWith(
@@ -140,10 +141,8 @@ describe('DashboardPage', () => {
     })
     render(<DashboardPage onOpenVps={onOpenVps} />)
 
-    expect(
-      await screen.findByText('No VPS yet. Add your first VPS to start deploying.')
-    ).toBeTruthy()
-    fireEvent.click(screen.getByText('Add VPS'))
+    expect(await screen.findByText(strings.dashboard.emptyVps)).toBeTruthy()
+    fireEvent.click(screen.getByText(strings.dashboard.addVps))
     expect(onOpenVps).toHaveBeenCalled()
   })
 
@@ -165,7 +164,7 @@ describe('DashboardPage', () => {
     render(<DashboardPage />)
 
     expect(await screen.findByText('Khong doc duoc DB.')).toBeTruthy()
-    fireEvent.click(screen.getByText('Retry'))
-    expect(await screen.findByText('Overview')).toBeTruthy()
+    fireEvent.click(screen.getByText(strings.dashboard.retry))
+    expect(await screen.findByText(strings.dashboard.title)).toBeTruthy()
   })
 })

@@ -14,4 +14,22 @@ services:
       timeout: 3s
       retries: 3
       start_period: 5s
+{{APP_DEPENDS_ON}}
 {{EXTRA_SERVICES}}
+  collector:
+    image: {{COLLECTOR_IMAGE_TAG}}
+    container_name: {{APP_NAME}}-collector
+    environment:
+      COLLECT_INTERVAL_S: "{{COLLECT_INTERVAL_S}}"
+      APP_CONTAINER_NAME: {{APP_NAME}}-app
+      APP_URL: "http://app:{{CONTAINER_PORT}}{{COLLECTOR_APP_PATH}}"
+      DB_DSN: "${DATABASE_URL:-}"
+      METRICS_DIR: /var/metrics
+      PROBE_TIMEOUT_S: "5"
+      ERROR_WINDOW_S: "60"
+      MAX_FILE_MB: "50"
+    volumes:
+      - ./metrics:/var/metrics
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    mem_limit: 128m
+    restart: unless-stopped

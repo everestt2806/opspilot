@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Vps, VpsScanResult } from '@shared/ipc'
 
 import { VpsOverviewTab } from './VpsOverviewTab'
+import { strings } from '../strings'
 
 const VPS: Vps = {
   id: 1,
@@ -126,7 +127,7 @@ describe('VpsOverviewTab — card Environment scan', () => {
       await screen.findByText('Không kết nối được SSH. Kiểm tra firewall rồi thử lại.')
     ).toBeTruthy()
 
-    fireEvent.click(screen.getByText('Retry'))
+    fireEvent.click(screen.getByText(strings.common.retry))
     await waitFor(() => expect(scan).toHaveBeenCalledTimes(2))
     expect((await scanListEl()).querySelector('.scan-item')).toBeTruthy()
   })
@@ -137,7 +138,7 @@ describe('VpsOverviewTab — card Environment scan', () => {
     renderTab()
 
     expect(await screen.findByText('Could not scan the server.')).toBeTruthy()
-    fireEvent.click(screen.getByText('Retry'))
+    fireEvent.click(screen.getByText(strings.common.retry))
     const list = document.querySelector('.scan-list')
     expect(list).toBeNull()
   })

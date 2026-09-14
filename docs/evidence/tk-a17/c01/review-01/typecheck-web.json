@@ -1,0 +1,18 @@
+{
+  "code": "66cbdab",
+  "docs": "f0b73aa",
+  "command": [
+    "C:\\Users\\everestt28\\AppData\\Local\\pnpm\\bin\\node.exe",
+    "node_modules/typescript/bin/tsc",
+    "--noEmit",
+    "-p",
+    "tsconfig.web.json",
+    "--composite",
+    "false"
+  ],
+  "cwd": "D:\\Developing\\DuAnCNTT\\app",
+  "utc": "2026-09-11T01:11:57.087568+00:00",
+  "exit": 0,
+  "stdout": "",
+  "stderr": ""
+}

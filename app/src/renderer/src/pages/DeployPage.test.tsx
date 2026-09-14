@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeployEvent, DetectionResultDto, Vps } from '@shared/ipc'
 
 import { DeployPage } from './DeployPage'
+import { strings } from '../strings'
 
 const { termInstances, terminalOptions } = vi.hoisted(() => {
   const termInstances: Array<{
@@ -65,6 +66,13 @@ const VPS_A: Vps = {
   last_status: 'unknown',
   last_seen_at: null,
   created_at: '2026-08-19T00:00:00Z'
+}
+
+const VPS_B: Vps = {
+  ...VPS_A,
+  id: 2,
+  name: 'VM02',
+  host: '203.0.113.56'
 }
 
 const SOURCE_PATH = 'D:\\src\\express-api'
@@ -171,6 +179,23 @@ async function reachStep3(invoke: ReturnType<typeof vi.fn>): Promise<void> {
 }
 
 describe('DeployPage — wizard va log', () => {
+  it('hien thi va cho chon tat ca VPS trong danh sach trien khai', async () => {
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'vps:list': async () => ({ ok: true, data: [VPS_A, VPS_B] })
+    })
+
+    render(<DeployPage />)
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 1))
+    const target = screen.getByRole('combobox')
+    expect(screen.getByRole('option', { name: 'VM01 — 203.0.113.55:22' })).toBeTruthy()
+    expect(screen.getByRole('option', { name: 'VM02 — 203.0.113.56:22' })).toBeTruthy()
+    fireEvent.change(target, { target: { value: '2' } })
+
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 2))
+  })
+
   it('happy path: chon VPS tu dong, detect, dien env, precheck, deploy, log live, mo URL', async () => {
     const { emit, invoke } = mockApi(handersHappy)
 
@@ -190,7 +215,7 @@ describe('DeployPage — wizard va log', () => {
     })
     expect(screen.getByText('http://203.0.113.55:30000')).toBeTruthy()
 
-    fireEvent.click(screen.getByText('Deploy'))
+    fireEvent.click(screen.getByText(strings.deploy.review.deploy))
 
     expect(await screen.findByText('Deploy log')).toBeTruthy()
     expect(screen.getByText('Live output')).toBeTruthy()
@@ -236,7 +261,7 @@ describe('DeployPage — wizard va log', () => {
 
     render(<DeployPage />)
     await reachStep3(invoke)
-    fireEvent.click(screen.getByText('Deploy'))
+    fireEvent.click(screen.getByText(strings.deploy.review.deploy))
     await screen.findByText('Deploy log')
 
     emit({ type: 'step-start', deployment_id: 7, step: 'BUILD', ts: '2026-08-19T10:00:00Z' })
@@ -275,7 +300,7 @@ describe('DeployPage — wizard va log', () => {
 
     render(<DeployPage />)
     await reachStep3(invoke)
-    fireEvent.click(screen.getByText('Deploy'))
+    fireEvent.click(screen.getByText(strings.deploy.review.deploy))
     await screen.findByText('Deploy log')
 
     fireEvent.click(screen.getByText('Cancel deploy'))
@@ -324,6 +349,9 @@ describe('DeployPage — wizard va log', () => {
     expect(
       screen.getByText('Precheck is not green — fix it on the VPS, then click Check again.')
     ).toBeTruthy()
-    expect((screen.getByText('Deploy').closest('button') as HTMLButtonElement).disabled).toBe(true)
+    expect(
+      (screen.getByText(strings.deploy.review.deploy).closest('button') as HTMLButtonElement)
+        .disabled
+    ).toBe(true)
   })
 })

@@ -1,0 +1,278 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import type { Mock } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import type { DeployEvent, DeployInput } from '@shared/ipc'
+
+import type { EncryptedCredential } from '../crypto/credentialCipher'
+import { closeDatabase, initializeDatabase } from '../db'
+import { VpsRepository } from '../db/vpsRepository'
+import type { SshManager } from '../ssh/manager'
+import { DeployPipeline } from './pipeline'
+
+const PRECHECK_OK = [
+  'RAM_MB|2048',
+  'DISK_GB|20',
+  'PORT|FREE',
+  'DOCKER|Docker version 27.1.0, build 6312585',
+  'Docker Compose version v2.29.1'
+].join('\n')
+
+interface StubSshOptions {
+  precheckOutput?: string
+  curlOk?: (call: number) => boolean
+  composeUp?: (call: number) => { code: number; stdout: string; stderr: string }
+  inspectStatus?: (call: number) => string
+  inspectState?: (call: number) => {
+    Status: string
+    ExitCode: number
+    Error: string
+    Health?: { Status: string }
+  }
+  imagesOutput?: (call: number) => string
+  imageRemove?: (call: number, command: string) => { code: number; stdout: string; stderr: string }
+  imageAvailable?: boolean
+  containerLogs?: string
+}
+
+let testDirectory: string | null = null
+let sourceDirectory: string | null = null
+let vpsId = 0
+let database: ReturnType<typeof initializeDatabase>
+let sshExec: Mock
+let writeFileMock: Mock
+let readFileMock: Mock
+let events: DeployEvent[]
+let pipeline: DeployPipeline
+
+afterEach(() => {
+  vi.useRealTimers()
+  closeDatabase()
+  if (testDirectory) {
+    rmSync(testDirectory, { recursive: true, force: true })
+    testDirectory = null
+  }
+})
+
+function createHarness(options: StubSshOptions = {}): void {
+  testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-pipeline-'))
+  sourceDirectory = mkdtempSync(join(tmpdir(), 'opspilot-source-'))
+  writeFileSync(
+    join(sourceDirectory, 'package.json'),
+    JSON.stringify({
+      name: 'demo-api',
+      main: 'app.js',
+      scripts: { start: 'node app.js' },
+      dependencies: { express: '^4.19.2' },
+      devDependencies: { pg: '^8.11.0' }
+    }),
+    'utf8'
+  )
+  writeFileSync(
+    join(sourceDirectory, 'app.js'),
+    "const express = require('express'); const app = express(); app.get('/health', (q, s) => s.json({ok:true})); app.listen(3000)\n",
+    'utf8'
+  )
+
+  database = initializeDatabase(testDirectory)
+  const vps = new VpsRepository(database).create({
+    name: 'VM Test',
+    host: '203.0.113.55',
+    port: 22,
+    username: 'root',
+    auth_type: 'password',
+    credential: fakeCredential('cipher')
+  })
+  vpsId = vps.id
+
+  let composeUpCall = 0
+  let inspectCall = 0
+  let curlCall = 0
+  let imagesCall = 0
+  let imageRemoveCall = 0
+  sshExec = vi.fn(async (_vpsId: number, command: string) => {
+    if (command.includes('free -m')) {
+      return { code: 0, stdout: options.precheckOutput ?? PRECHECK_OK, stderr: '' }
+    }
+    if (command.includes('docker build')) {
+      return { code: 0, stdout: 'build xong\n', stderr: '' }
+    }
+    if (command.includes('compose up -d')) {
+      composeUpCall += 1
+      if (options.composeUp) {
+        return options.composeUp(composeUpCall)
+      }
+      return { code: 0, stdout: 'Container demo-api-app Started\n', stderr: '' }
+    }
+    if (command.includes('compose down')) {
+      return { code: 0, stdout: '', stderr: '' }
+    }
+    if (command.includes('docker inspect')) {
+      inspectCall += 1
+      const state = options.inspectState?.(inspectCall) ?? {
+        Status: options.inspectStatus?.(inspectCall) ?? 'running',
+        ExitCode: 0,
+        Error: '',
+        Health: { Status: 'healthy' }
+      }
+      return {
+        code: 0,
+        stdout: `${JSON.stringify(state)}\n`,
+        stderr: ''
+      }
+    }
+    if (command.includes('docker images')) {
+      imagesCall += 1
+      return { code: 0, stdout: options.imagesOutput?.(imagesCall) ?? '', stderr: '' }
+    }
+    if (command.includes('docker image inspect')) {
+      return options.imageAvailable === false
+        ? { code: 1, stdout: '', stderr: 'No such image' }
+        : { code: 0, stdout: '', stderr: '' }
+    }
+    if (command.includes('docker image rm')) {
+      imageRemoveCall += 1
+      return options.imageRemove?.(imageRemoveCall, command) ?? { code: 0, stdout: '', stderr: '' }
+    }
+    if (command.includes('docker logs --tail')) {
+      return { code: 0, stdout: options.containerLogs ?? '', stderr: '' }
+    }
+    if (command.includes('curl -fsS')) {
+      curlCall += 1
+      return options.curlOk?.(curlCall) === false
+        ? { code: 7, stdout: '', stderr: 'khong tra loi' }
+        : { code: 0, stdout: '', stderr: '' }
+    }
+    throw new Error(`Lệnh ngoài script: ${command}`)
+  })
+
+  writeFileMock = vi.fn(async () => undefined)
+  readFileMock = vi.fn(async (_vpsId: number, remotePath: string) => {
+    const previous = [...writeFileMock.mock.calls].reverse().find(([, path]) => path === remotePath)
+    return previous?.[2] ?? ''
+  })
+  const stubSsh = {
+    exec: sshExec,
+    uploadDir: vi.fn(async () => ({ bytes: 1_024 })),
+    readFile: readFileMock,
+    writeFile: writeFileMock,
+    fileSize: vi.fn(async () => 10)
+  } as unknown as SshManager
+
+  events = []
+  pipeline = new DeployPipeline({
+    ssh: stubSsh,
+    db: database,
+    emit: (event) => events.push(event)
+  })
+}
+
+function deployInput(overrides: Partial<DeployInput> = {}): DeployInput {
+  return {
+    vps_id: vpsId,
+    app_name: 'demo-api',
+    source_path: sourceDirectory ?? '',
+    env: {},
+    ...overrides
+  }
+}
+
+async function waitForFinished(
+  deploymentId?: number,
+  timeoutMs = 8_000
+): Promise<Extract<DeployEvent, { type: 'finished' }>> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const finished = events.find(
+      (event) =>
+        event.type === 'finished' &&
+        (deploymentId === undefined || event.deployment_id === deploymentId)
+    )
+    if (finished) {
+      return finished as Extract<DeployEvent, { type: 'finished' }>
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  throw new Error(`Khong nhan duoc finished. Events: ${JSON.stringify(events)}`)
+}
+
+function deploymentRow(deploymentId: number): {
+  status: string
+  version: number
+  failed_step: string | null
+} {
+  return database
+    .prepare('SELECT status, version, failed_step FROM deployment WHERE id = ?')
+    .get(deploymentId) as { status: string; version: number; failed_step: string | null }
+}
+
+function actionLogRows(deploymentId: number): Array<{ action: string; status: string | null }> {
+  return database
+    .prepare('SELECT action, status FROM action_log WHERE deployment_id = ?')
+    .all(deploymentId) as Array<{ action: string; status: string | null }>
+}
+
+function writeFileCalls(): Array<{
+  remotePath: string
+  content: string
+  options: { mode?: number; silent?: boolean }
+}> {
+  return writeFileMock.mock.calls.map(([, remotePath, content, options]) => ({
+    remotePath,
+    content,
+    options: options as { mode?: number; silent?: boolean }
+  }))
+}
+
+function currentDeploymentId(): number {
+  const row = database
+    .prepare('SELECT current_deployment_id FROM app WHERE name = ?')
+    .get('demo-api') as { current_deployment_id: number }
+  return row.current_deployment_id
+}
+
+function currentAppId(): number {
+  const row = database.prepare('SELECT id FROM app WHERE name = ?').get('demo-api') as {
+    id: number
+  }
+  return row.id
+}
+
+async function advanceFailedHealthcheck(): Promise<void> {
+  // Đủ cho 10 probe của deploy lỗi và 10 probe readiness của rollback lỗi.
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await vi.advanceTimersByTimeAsync(3_000)
+  }
+  await vi.advanceTimersByTimeAsync(100)
+}
+
+
+function fakeCredential(value: string): EncryptedCredential {
+  return { crypto_scheme: 'safe_storage', encrypted_secret: Buffer.from(value), iv: null, auth_tag: null }
+}
+
+describe('C01 reviewer regressions', () => {
+  it('does not probe the demo-only items route for a generic Express app', async () => {
+    createHarness() // fixture only implements /health, not /items
+    pipeline.run(deployInput())
+    expect((await waitForFinished()).status).toBe('running')
+    const compose = writeFileCalls().find(call => call.remotePath.endsWith('docker-compose.yml'))!
+    expect(compose.content).toContain('APP_URL: "http://app:3000/health"')
+  })
+  it('a failed app build leaves the shared collector image tag untouched', async () => {
+    createHarness()
+    pipeline.run(deployInput())
+    expect((await waitForFinished()).status).toBe('running')
+    const previous = sshExec.getMockImplementation()!
+    sshExec.mockImplementation(async (...args) => args[1].includes('docker build')
+      ? { code: 1, stdout: '', stderr: 'app build failed before collector build' }
+      : previous(...args))
+    const { deploymentId } = pipeline.run(deployInput())
+    expect((await waitForFinished(deploymentId)).status).toBe('failed')
+    expect(sshExec.mock.calls.some(([,command]) =>
+      command.includes('docker image rm') && command.includes('demo-api:collector'))).toBe(false)
+  })
+})

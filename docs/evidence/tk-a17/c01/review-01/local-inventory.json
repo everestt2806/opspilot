@@ -1,0 +1,96 @@
+{
+  "app": [
+    {
+      "id": 1,
+      "name": "a17-notes-0911",
+      "vps_id": 2,
+      "host_port": 30000,
+      "current_deployment_id": 7,
+      "metrics_offset": 6152
+    }
+  ],
+  "deployments": [
+    {
+      "id": 1,
+      "app_id": 1,
+      "version": 1,
+      "status": "failed",
+      "failed_step": "DEPLOY",
+      "image_tag": "a17-notes-0911:v1"
+    },
+    {
+      "id": 2,
+      "app_id": 1,
+      "version": 2,
+      "status": "running",
+      "failed_step": null,
+      "image_tag": "a17-notes-0911:v2"
+    },
+    {
+      "id": 3,
+      "app_id": 1,
+      "version": 3,
+      "status": "running",
+      "failed_step": null,
+      "image_tag": "a17-notes-0911:v3"
+    },
+    {
+      "id": 4,
+      "app_id": 1,
+      "version": 4,
+      "status": "running",
+      "failed_step": null,
+      "image_tag": "a17-notes-0911:v4"
+    },
+    {
+      "id": 5,
+      "app_id": 1,
+      "version": 5,
+      "status": "running",
+      "failed_step": null,
+      "image_tag": "a17-notes-0911:v5"
+    },
+    {
+      "id": 6,
+      "app_id": 1,
+      "version": 6,
+      "status": "running",
+      "failed_step": null,
+      "image_tag": "a17-notes-0911:v6"
+    },
+    {
+      "id": 7,
+      "app_id": 1,
+      "version": 7,
+      "status": "running",
+      "failed_step": null,
+      "image_tag": "a17-notes-0911:v7"
+    }
+  ],
+  "metrics": [
+    {
+      "deployment_id": 2,
+      "n": 2,
+      "min_seq": 1,
+      "max_seq": 2
+    },
+    {
+      "deployment_id": 3,
+      "n": 11,
+      "min_seq": 3,
+      "max_seq": 13
+    },
+    {
+      "deployment_id": 5,
+      "n": 8,
+      "min_seq": 14,
+      "max_seq": 21
+    }
+  ],
+  "score_counts": [
+    {
+      "n": 105
+    }
+  ],
+  "experiments": []
+}

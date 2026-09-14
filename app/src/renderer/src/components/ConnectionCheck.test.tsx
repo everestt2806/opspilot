@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { VpsConnectionCheck, VpsDiagnosis, VpsInput } from '@shared/ipc'
 
 import { CheckFailedError, ConnectionCheck } from './ConnectionCheck'
+import { strings } from '../strings'
 
 const VALUES: VpsInput = {
   name: 'VM01',
@@ -73,7 +74,7 @@ describe('ConnectionCheck', () => {
     const runCheck = vi.fn()
     render(<ConnectionCheck getValues={() => VALUES} runCheck={runCheck} />)
 
-    expect(screen.getByText('Check connection')).toBeTruthy()
+    expect(screen.getByText(strings.vps.check.button)).toBeTruthy()
     expect(screen.getByText(/Fill in the details and click check/)).toBeTruthy()
     expect(runCheck).not.toHaveBeenCalled()
   })
@@ -82,8 +83,8 @@ describe('ConnectionCheck', () => {
     const gate = deferred<VpsConnectionCheck>()
     render(<ConnectionCheck getValues={() => VALUES} runCheck={() => gate.promise} />)
 
-    fireEvent.click(screen.getByText('Check connection'))
-    expect(screen.getByText('Checking connection…')).toBeTruthy()
+    fireEvent.click(screen.getByText(strings.vps.check.button))
+    expect(screen.getByText(strings.vps.check.checking)).toBeTruthy()
 
     await act(async () => {
       gate.resolve(OK_RESULT)
@@ -95,7 +96,7 @@ describe('ConnectionCheck', () => {
     const runCheck = vi.fn(() => gate.promise)
     render(<ConnectionCheck getValues={() => VALUES} runCheck={runCheck} />)
 
-    fireEvent.click(screen.getByText('Check connection'))
+    fireEvent.click(screen.getByText(strings.vps.check.button))
     await act(async () => {
       gate.resolve(NO_DOCKER_RESULT)
     })
@@ -111,7 +112,7 @@ describe('ConnectionCheck', () => {
     const gate = deferred<VpsConnectionCheck>()
     render(<ConnectionCheck getValues={() => VALUES} runCheck={() => gate.promise} />)
 
-    fireEvent.click(screen.getByText('Check connection'))
+    fireEvent.click(screen.getByText(strings.vps.check.button))
     await act(async () => {
       gate.resolve(FIREWALL_RESULT)
     })
@@ -128,7 +129,7 @@ describe('ConnectionCheck', () => {
       .mockRejectedValue(new CheckFailedError('Fill in all fields first.', 'raw: missing field'))
     render(<ConnectionCheck getValues={() => VALUES} runCheck={runCheck} />)
 
-    fireEvent.click(screen.getByText('Check connection'))
+    fireEvent.click(screen.getByText(strings.vps.check.button))
     expect(await screen.findByText('Fill in all fields first.')).toBeTruthy()
     expect(screen.getByText(/raw: missing field/)).toBeTruthy()
   })
@@ -142,14 +143,14 @@ describe('ConnectionCheck', () => {
       .mockReturnValueOnce(secondGate.promise)
     render(<ConnectionCheck getValues={() => VALUES} runCheck={runCheck} />)
 
-    fireEvent.click(screen.getByText('Check connection'))
+    fireEvent.click(screen.getByText(strings.vps.check.button))
     await act(async () => {
       firstGate.resolve(FIREWALL_RESULT)
     })
 
-    fireEvent.click(screen.getByText('Check again'))
+    fireEvent.click(screen.getByText(strings.vps.check.retry))
     expect(runCheck).toHaveBeenCalledTimes(2)
-    expect(screen.getByText('Checking connection…')).toBeTruthy()
+    expect(screen.getByText(strings.vps.check.checking)).toBeTruthy()
 
     await act(async () => {
       secondGate.resolve(OK_RESULT)
@@ -165,13 +166,13 @@ describe('ConnectionCheck', () => {
     const gate = deferred<VpsConnectionCheck>()
     render(<ConnectionCheck getValues={() => VALUES} runCheck={() => gate.promise} vpsId={1} />)
 
-    fireEvent.click(screen.getByText('Check connection'))
+    fireEvent.click(screen.getByText(strings.vps.check.button))
     await act(async () => {
       gate.resolve(NO_DOCKER_RESULT)
     })
 
     expect(screen.getByText('Docker is not installed on the server')).toBeTruthy()
-    fireEvent.click(screen.getByText('Install Docker now'))
+    fireEvent.click(screen.getByText(strings.vps.install.button))
     expect((await screen.findAllByText('Install Docker on this VPS?')).length).toBeGreaterThan(0)
     fireEvent.click(screen.getByText('Install Docker'))
 
@@ -185,7 +186,7 @@ describe('ConnectionCheck', () => {
     const gate = deferred<VpsConnectionCheck>()
     render(<ConnectionCheck getValues={() => VALUES} runCheck={() => gate.promise} />)
 
-    fireEvent.click(screen.getByText('Check connection'))
+    fireEvent.click(screen.getByText(strings.vps.check.button))
     await act(async () => {
       gate.resolve(NO_DOCKER_RESULT)
     })
@@ -193,6 +194,6 @@ describe('ConnectionCheck', () => {
     expect(
       screen.getByText('Save the VPS first, then reopen this dialog to install Docker.')
     ).toBeTruthy()
-    expect(screen.queryByText('Install Docker now')).toBeNull()
+    expect(screen.queryByText(strings.vps.install.button)).toBeNull()
   })
 })

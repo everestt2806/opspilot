@@ -304,15 +304,17 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
   const vpsField = (
     <div>
       <Typography.Text strong>{strings.deploy.vpsLabel}</Typography.Text>
-      <Select
-        style={{ width: '100%', marginTop: 8 }}
-        value={vpsId}
-        onChange={(id) => void selectVps(id)}
-        options={vpsList.map((vps) => ({
-          value: vps.id,
-          label: `${vps.name} — ${vps.host}:${vps.port}`
-        }))}
-      />
+      <select
+        className="deploy-vps-select"
+        value={vpsId ?? ''}
+        onChange={(event) => void selectVps(Number(event.currentTarget.value))}
+      >
+        {vpsList.map((vps) => (
+          <option key={vps.id} value={vps.id}>
+            {vps.name} — {vps.host}:{vps.port}
+          </option>
+        ))}
+      </select>
     </div>
   )
 

@@ -74,6 +74,11 @@ export interface Deployment {
   finished_at: string | null;
 }
 
+export interface RuntimeState {
+  image: string
+  state: string
+}
+
 export interface MetricSample {
   id: number;
   deployment_id: number;
@@ -171,6 +176,7 @@ export interface IpcInvokeMap {
   'app:list':        (vpsId?: number) => IpcResult<App[]>;
   'app:get':         (appId: number) => IpcResult<App>;
   'app:versions':    (appId: number) => IpcResult<Deployment[]>;
+  'app:runtime-inspect': (appId: number) => IpcResult<RuntimeState>;
   'app:rollback':    (appId: number, targetDeploymentId: number) => IpcResult<{ deployment_id: number }>;
   'app:stop':        (appId: number) => IpcResult<void>;
   'app:start':       (appId: number) => IpcResult<void>;
@@ -188,6 +194,7 @@ export interface IpcInvokeMap {
 
   // ── Migrate (UC-05) ────────────────────────────────────────────────────────
   'migrate:start':   (input: MigrateInput) => IpcResult<{ job_id: number }>;
+  'migrate:list':    () => IpcResult<MigrateJobView[]>;
   'migrate:confirm': (jobId: number, keepSource: boolean) => IpcResult<void>;
   'migrate:abort':   (jobId: number) => IpcResult<void>;
 
@@ -309,6 +316,25 @@ export type DetectionResultDto =
 export interface MigrateInput {
   app_id: number;
   target_vps_id: number;
+}
+
+export type MigrateJobStatus =
+  | 'preparing' | 'backing_up' | 'transferring' | 'restoring' | 'verifying'
+  | 'awaiting_confirm' | 'completed' | 'failed' | 'rolled_back';
+
+export interface MigrateJobView {
+  id: number;
+  app_id: number;
+  source_vps_id: number;
+  target_vps_id: number;
+  status: MigrateJobStatus;
+  failed_step: string | null;
+  downtime_ms: number | null;
+  bytes_transferred: number | null;
+  verify_json: string | null;
+  source_kept: 0 | 1 | null;
+  started_at: string;
+  finished_at: string | null;
 }
 
 export interface HistoryFilter {

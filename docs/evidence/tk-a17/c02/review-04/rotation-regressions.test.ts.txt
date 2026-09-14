@@ -1,0 +1,26 @@
+// Temporary reviewer regressions; removed from the worktree after the run.
+
+it('adopts the first real generation without logging a false data gap', async () => {
+  // Reproduce the first-deploy active episode at byte 1 with generation
+  // `pending-first-generation`, then poll the first real file generation.
+  // Expected data-gap action rows: 0.
+  // Actual data-gap action rows: 1.
+})
+
+it('logs a gap when matching rotated suffix ends with an unconsumed partial line', async () => {
+  // Poll one complete old line, then rotate to a matching .1 containing one additional JSON
+  // record without the terminating newline. The inner poll commits zero bytes from that suffix.
+  // Expected: the unconsumed suffix remains recoverable or an explicit gap is recorded.
+  // Actual: the old episode is closed at file size + 1, `recovered=true`, and no gap is logged.
+})
+
+Result:
+
+FAIL adopts the first real generation without logging a false data gap
+AssertionError: expected { count: 1 } to deeply equal { count: 0 }
+
+FAIL logs a gap when matching rotated suffix ends with an unconsumed partial line
+AssertionError: expected { count: 0 } to deeply equal { count: 1 }
+
+Test Files 1 failed (1)
+Tests 2 failed | 6 skipped (8)

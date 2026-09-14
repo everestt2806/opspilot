@@ -1,0 +1,20 @@
+{
+  "started_utc": "2026-09-10T19:49:46.583186+00:00",
+  "command": [
+    "curl.exe",
+    "--connect-timeout",
+    "5",
+    "--max-time",
+    "10",
+    "-sS",
+    "-o",
+    "NUL",
+    "-w",
+    "HTTP=%{http_code}",
+    "http://221.121.1.80:30001/"
+  ],
+  "cwd": "D:\\Developing\\DuAnCNTT\\app",
+  "exit_code": 28,
+  "stdout": "HTTP=000",
+  "stderr": "curl: (28) Connection timed out after 5011 milliseconds\r\n"
+}

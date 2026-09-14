@@ -1,0 +1,19 @@
+﻿{
+    "audited_at":  "2026-09-12T17:02:55.2318566Z",
+    "reported_pid":  14588,
+    "pid_alive":  false,
+    "ports":  [
+                  {
+                      "port":  33012,
+                      "listening":  false
+                  },
+                  {
+                      "port":  33013,
+                      "listening":  false
+                  },
+                  {
+                      "port":  33014,
+                      "listening":  false
+                  }
+              ]
+}

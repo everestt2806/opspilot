@@ -9,6 +9,13 @@ lục rất được đánh giá cao trong báo cáo.
 
 Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng được · ⏸ hoãn (ghi lý do)
 
+> 10/09 — Checkpoint demo solo: [TK-A17](tasks/tk-a17-demo-checkpoint.md).
+> A15/B4/B5/B2 đã có code merge (#25/#26/#28); runtime B6 còn báo cáo trên nhánh
+> `dfc0ed7`, Monitor UI chưa có trong main. A17 ưu tiên FR-D1…D5, FR-B7/FR-E1
+> và luồng UC-06/08/09. Các chặng C00–C09 có review riêng; website nghiệp vụ, Monitor dễ hiểu
+> và before/after là cách trình diễn các chức năng thật. FR-E2 functional (M8, C08A/B/C) nay là P0 bắt buộc cho demo tự khôi phục; early-detection research vẫn riêng. Chưa tick thêm yêu cầu
+> trong phiên lập plan; Worker cập nhật bằng chứng từng gate, Leader xác nhận.
+
 ---
 
 ## Yêu cầu chức năng

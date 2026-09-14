@@ -1,0 +1,19 @@
+{
+  "mode": "SQLite URI mode=ro",
+  "database": "%APPDATA%/OpsPilot/opspilot.db",
+  "app": {
+    "id": 1,
+    "name": "a17-notes-0911",
+    "current_deployment_id": 9,
+    "metrics_offset": 6152
+  },
+  "metrics": [
+    { "deployment_id": 2, "n": 2, "min_seq": 1, "max_seq": 2 },
+    { "deployment_id": 3, "n": 11, "min_seq": 3, "max_seq": 13 },
+    { "deployment_id": 5, "n": 8, "min_seq": 14, "max_seq": 21 }
+  ],
+  "score_rows": 105,
+  "experiment_rows": 0,
+  "alert_rows": 0,
+  "result": "PASS: v8/v9 helper did not ingest additional metrics or scores"
+}

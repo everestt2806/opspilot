@@ -6,6 +6,8 @@ import type { MetricSource } from './metricSource'
 import { MonitorRepository } from './repository'
 import { AlertTracker } from './alertTracker'
 import { evaluateRule } from './rules'
+import { ActivationRepository } from './activation'
+import { withAppLock } from './appLock'
 import type { MetricLine } from './metricParser'
 import type { MlIngestResponse, MlStatusResponse, MlTrainResponse } from './mlApi'
 
@@ -46,10 +48,99 @@ export class MonitorPoller {
     source: MetricSource,
     onSample?: (sampleId: number) => Promise<void> | void
   ): Promise<{ inserted: number; nextOffset: number; sampleIds: number[]; alertIds: number[] }> {
+    const result = await withAppLock(appId, () =>
+      this.pollUnlocked(appId, deploymentId, source, onSample)
+    )
+    return {
+      inserted: result.inserted,
+      nextOffset: result.nextOffset,
+      sampleIds: result.sampleIds,
+      alertIds: result.alertIds
+    }
+  }
+
+  private async pollUnlocked(
+    appId: number,
+    deploymentId: number,
+    source: MetricSource,
+    onSample?: (sampleId: number) => Promise<void> | void
+  ): Promise<{
+    inserted: number
+    nextOffset: number
+    sampleIds: number[]
+    alertIds: number[]
+    hadWarnings: boolean
+    warningRanges: Array<{ start: number; end: number }>
+  }> {
     const target = this.repository.getTarget(deploymentId)
     if (!target || target.app_id !== appId)
-      return { inserted: 0, nextOffset: 1, sampleIds: [], alertIds: [] }
+      return {
+        inserted: 0,
+        nextOffset: 1,
+        sampleIds: [],
+        alertIds: [],
+        hadWarnings: false,
+        warningRanges: []
+      }
+    const activationRepository = new ActivationRepository(this.database)
+    if (activationRepository.prepared(target.app_id)) {
+      activationRepository.logFailClosed(target.app_id)
+      throw new MetricSourceError('Activation metrics chÆ°a hoÃ n táº¥t; monitor Ä‘Ã£ fail-closed.')
+    }
+    const identity = (await source.identity?.()) ?? { generation: 'legacy' }
     let offset = target.metrics_offset
+    const storedGeneration = (
+      this.database
+        .prepare('SELECT metrics_stream_generation FROM app WHERE id=?')
+        .get(target.app_id) as { metrics_stream_generation: string } | undefined
+    )?.metrics_stream_generation
+    const activeBeforeIdentity = activationRepository.active(target.app_id)
+    if (
+      activeBeforeIdentity?.generation === 'pending-first-generation' &&
+      activeBeforeIdentity.startOffset === 1 &&
+      offset === 1
+    ) {
+      activationRepository.adoptFirstGeneration(target.app_id, identity)
+    } else if (activeBeforeIdentity && storedGeneration !== identity.generation) {
+      let recovered = false
+      let oldEndOffset = offset
+      let gapEndOffset = offset
+      let warningRanges: Array<{ start: number; end: number }> = []
+      let drainFailure = false
+      try {
+        const rotated = await source.rotated?.()
+        const rotatedIdentity = await rotated?.identity?.()
+        if (rotated && rotatedIdentity?.generation === storedGeneration) {
+          drainFailure = true
+          const rotatedSize = await rotated.size()
+          gapEndOffset = rotatedSize + 1
+          if (offset >= rotatedSize + 1) {
+            oldEndOffset = offset
+            recovered = true
+          } else {
+            const drained = await this.pollUnlocked(appId, deploymentId, rotated, onSample)
+            oldEndOffset = drained.nextOffset
+            warningRanges = drained.warningRanges
+            recovered = drained.nextOffset >= rotatedSize + 1 && !drained.hadWarnings
+          }
+          drainFailure = false
+        }
+      } catch (error) {
+        if (drainFailure) throw error
+        recovered = false
+      }
+      activationRepository.rotate(
+        target.app_id,
+        deploymentId,
+        identity,
+        oldEndOffset,
+        recovered,
+        gapEndOffset,
+        warningRanges
+      )
+      offset = 1
+    }
+    activationRepository.ensureLegacy(target.app_id, deploymentId, offset, identity)
     let size: number
     try {
       size = await source.size()
@@ -75,12 +166,26 @@ export class MonitorPoller {
     }
     const committedBytes = completeByteLength(content)
     if (committedBytes === 0)
-      return { inserted: 0, nextOffset: offset, sampleIds: [], alertIds: [] }
+      return {
+        inserted: 0,
+        nextOffset: offset,
+        sampleIds: [],
+        alertIds: [],
+        hadWarnings: false,
+        warningRanges: []
+      }
     const completeContent = content.slice(0, content.lastIndexOf('\n') + 1)
     const parsed = parseMetricContent(completeContent)
+    const warningRanges = parsed
+      .filter((item) => Boolean(item.warning))
+      .map((item) => ({ start: offset + item.byteStart, end: offset + item.byteEnd }))
+    const hadWarnings = warningRanges.length > 0
     for (const item of parsed)
       if (item.warning) {
-        logger.warn('monitor', item.warning, { app_id: appId, consumed_bytes: item.byteLength })
+        logger.warn('monitor', item.warning, {
+          app_id: appId,
+          byte_range: [offset + item.byteStart, offset + item.byteEnd]
+        })
         this.repository.logAction(
           'ssh_error',
           'failed',
@@ -89,16 +194,26 @@ export class MonitorPoller {
           deploymentId
         )
       }
-    const newItems = parsed.filter(
-      (item) => item.metric && !this.repository.hasSample(deploymentId, item.metric.seq)
+    const episodes = activationRepository.episodes(target.app_id, identity.generation)
+    let itemOffset = offset
+    const routedItems = parsed.map((item) => {
+      const startOffset = itemOffset
+      itemOffset += item.byteLength
+      return { item, routeDeploymentId: activationRepository.route(episodes, startOffset) }
+    })
+    const newItems = routedItems.filter(
+      ({ item, routeDeploymentId }) =>
+        item.metric &&
+        routeDeploymentId !== null &&
+        !this.repository.hasSample(routeDeploymentId, item.metric.seq)
     )
     const mlResults = new Map<number, MlIngestResponse>()
     let ingestFailed = false
     if (this.scorer) {
-      for (const item of newItems) {
-        if (!item.metric) continue
+      for (const { item, routeDeploymentId } of newItems) {
+        if (!item.metric || routeDeploymentId === null) continue
         try {
-          mlResults.set(item.metric.seq, await this.scorer.ingest(deploymentId, item.metric))
+          mlResults.set(item.metric.seq, await this.scorer.ingest(routeDeploymentId, item.metric))
         } catch {
           ingestFailed = true
           this.mlStatus?.report({ running: false, reason: 'ML ingest không phản hồi' })
@@ -111,10 +226,10 @@ export class MonitorPoller {
     const sampleIds: number[] = []
     const alertIds: number[] = []
     const commit = this.database.transaction(() => {
-      for (const item of newItems) {
-        if (!item.metric) continue
+      for (const { item, routeDeploymentId } of newItems) {
+        if (!item.metric || routeDeploymentId === null) continue
         const id = this.repository.insertSample({
-          deploymentId,
+          deploymentId: routeDeploymentId,
           line: item.metric,
           rawJson: item.raw,
           tsLocal: new Date().toISOString()
@@ -125,7 +240,7 @@ export class MonitorPoller {
           const rule = evaluateRule(sample, target.setting)
           this.repository.insertScore({
             metricSampleId: id,
-            deploymentId,
+            deploymentId: routeDeploymentId,
             ts: sample.ts_vps,
             method: 'rule',
             score: rule.violated ? 1 : 0,
@@ -133,7 +248,7 @@ export class MonitorPoller {
             detail: JSON.stringify({ reasons: rule.reasons })
           })
           const ruleAlertId = this.tracker.update({
-            deploymentId,
+            deploymentId: routeDeploymentId,
             metricSampleId: id,
             ts: sample.ts_vps,
             method: 'rule',
@@ -147,7 +262,7 @@ export class MonitorPoller {
           for (const method of ['zscore_ewma', 'iforest', 'ocsvm', 'ensemble'] as const)
             this.repository.insertScore({
               metricSampleId: id,
-              deploymentId,
+              deploymentId: routeDeploymentId,
               ts: sample.ts_vps,
               method,
               score: mlResults.get(item.metric.seq)?.scores[method] ?? null,
@@ -163,7 +278,7 @@ export class MonitorPoller {
             const result = mlResults.get(item.metric.seq)
             const score = result?.scores[method] ?? null
             const mlAlertId = this.tracker.update({
-              deploymentId,
+              deploymentId: routeDeploymentId,
               metricSampleId: id,
               ts: sample.ts_vps,
               method,
@@ -184,6 +299,13 @@ export class MonitorPoller {
     })
     commit()
     for (const sampleId of sampleIds) await onSample?.(sampleId)
-    return { inserted, nextOffset: offset + committedBytes, sampleIds, alertIds }
+    return {
+      inserted,
+      nextOffset: offset + committedBytes,
+      sampleIds,
+      alertIds,
+      hadWarnings,
+      warningRanges
+    }
   }
 }

@@ -1,0 +1,26 @@
+// Temporary reviewer regressions; removed from the worktree after the run.
+
+it('keeps a barrier when manual rollback ownership cannot be verified', async () => {
+  // Deploy v1 and v2, then make manual rollback compose return nonzero while runtime inspect
+  // reports an image that is neither the current nor target image.
+  // Expected: one prepared activation remains as the durable reconciliation barrier.
+  // Actual: stopCollectorAndFlush inferred `previous` from current_deployment_id and the catch
+  // aborted the prepared activation; prepared count was zero.
+})
+
+it('reports the skipped invalid rotated byte interval', async () => {
+  // Poll one old line, then expose a matching .1 with one complete invalid JSON line.
+  // Expected gap cursor/range: cursor=236 range=[236,247].
+  // Actual: cursor=247 range=[247,247].
+})
+
+Result:
+
+FAIL keeps a barrier when manual rollback ownership cannot be verified
+AssertionError: expected { count: 0 } to deeply equal { count: 1 }
+
+FAIL reports the skipped invalid rotated byte interval
+AssertionError: expected cursor=236, received cursor=247 range=[247,247]
+
+Test Files 2 failed (2)
+Tests 2 failed | 42 passed (44)

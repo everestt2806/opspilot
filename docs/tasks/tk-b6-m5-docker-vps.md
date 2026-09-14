@@ -27,6 +27,10 @@ dùng được" của gate G0.
 
 ## Nhật ký
 
+- UPDATE 10/09 — A nhận phần tích hợp/nghiệm thu trong TK-A17 theo yêu cầu demo solo.
+  Báo cáo B6 của B ở `origin/feat/m05-collector-docker@dfc0ed7` ghi VM02 68 mẫu/11 phút,
+  chưa thuộc main. Giữ nguyên bằng chứng trên nhánh đó; A17/C00–C02 kiểm tra runtime và SSH tail.
+
 - START 20/08 — VPS đã mua từ 19/08 (TK-S2), điều kiện cần đã có.
 - UPDATE 19/08 — **Lùi W2** cùng chuỗi collector (quyết định dồn lực demo 24/08). Hạn dời
   28/08; VPS vẫn sẵn sàng (2 máy nghiệm thu 6/6) nên không mất điều kiện gì.

@@ -72,6 +72,9 @@ CREATE TABLE app (
 
   -- Vị trí đọc tiếp trong metrics.jsonl (byte offset, 1-based cho `tail -c +N`)
   metrics_offset    INTEGER NOT NULL DEFAULT 1,
+  metrics_stream_generation TEXT NOT NULL DEFAULT 'legacy',
+  metrics_stream_device INTEGER,
+  metrics_stream_inode INTEGER,
 
   current_deployment_id INTEGER,               -- FK mềm tới deployment(id), tránh vòng lặp
   created_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
@@ -104,6 +107,24 @@ CREATE TABLE deployment (
   UNIQUE (app_id, version)
 );
 CREATE INDEX idx_deployment_app_started ON deployment(app_id, started_at DESC);
+
+CREATE TABLE deployment_activation (
+  id INTEGER PRIMARY KEY,
+  app_id INTEGER NOT NULL REFERENCES app(id) ON DELETE CASCADE,
+  deployment_id INTEGER NOT NULL REFERENCES deployment(id) ON DELETE CASCADE,
+  stream_generation TEXT NOT NULL,
+  start_offset INTEGER NOT NULL CHECK (start_offset >= 1),
+  end_offset INTEGER CHECK (end_offset IS NULL OR end_offset >= start_offset),
+  reason TEXT NOT NULL CHECK (reason IN ('deploy','manual_rollback','auto_rollback','rotation','legacy')),
+  state TEXT NOT NULL CHECK (state IN ('prepared','active','closed','aborted')),
+  prepared_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  activated_at TEXT,
+  closed_at TEXT
+);
+CREATE INDEX idx_activation_app_range ON deployment_activation(app_id, stream_generation, start_offset, end_offset);
+CREATE INDEX idx_activation_deployment ON deployment_activation(deployment_id, id);
+CREATE UNIQUE INDEX one_prepared_activation ON deployment_activation(app_id) WHERE state='prepared';
+CREATE UNIQUE INDEX one_active_activation ON deployment_activation(app_id) WHERE state='active';
 
 -- =============================================================================
 -- C. CẤU HÌNH GIÁM SÁT  (FR-D3, FR-E2 — M6, M8)

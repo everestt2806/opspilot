@@ -13,6 +13,16 @@ const FAULT_ENABLED = process.env.ENABLE_FAULT_ENDPOINTS === 'true'
 
 const app = express()
 app.use(express.json())
+// Vite demo runs on a different public port, so allow its browser requests and
+// expose the count header used by the UI. This demo API does not use cookies.
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Expose-Headers', 'X-Total-Count')
+  if (req.method === 'OPTIONS') return res.sendStatus(204)
+  next()
+})
 app.use(express.static(path.join(__dirname, 'public')))
 
 // ── Lớp lưu trữ ──────────────────────────────────────────────────────────────

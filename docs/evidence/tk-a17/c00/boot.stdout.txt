@@ -1,0 +1,11 @@
+
+2026-09-10T18:57:02.501Z INFO [ssh] printf 'RAM|'; free -b | awk 'NR==2{print $2,$4}'; printf 'DISK|'; df -P -m / | tail -1; printf 'CPU|'; nproc; printf 'LOAD|'; cut -d' ' -f1 /proc/loadavg {"vps_id":2}
+2026-09-10T18:57:15.426Z WARN [ml] INFO:     Started server process [8380]
+INFO:     Waiting for application startup.
+2026-09-10T18:57:15.430Z WARN [ml] INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8765 (Press CTRL+C to quit)
+2026-09-10T18:57:15.854Z WARN [ml] 2026-09-10 18:57:15,854 INFO [ml] GET /health -> 200 (0.015s)
+2026-09-10T18:57:15.872Z INFO [ml] INFO:     127.0.0.1:56912 - "GET /health HTTP/1.1" 200 OK
+2026-09-10T18:57:15.929Z WARN [ml] 2026-09-10 18:57:15,929 INFO [ml] GET /health -> 200 (0.000s)
+2026-09-10T18:57:15.932Z INFO [ml] INFO:     127.0.0.1:56912 - "GET /health HTTP/1.1" 200 OK
+{"startedUtc":"2026-09-10T18:56:58.476Z","errors":[],"frames":1,"ml":{"ok":true,"data":{"running":true,"version":"0.1.0","uptime_s":0.765}},"renderer":{"title":"OpsPilot","url":"file:///D:/Developing/DuAnCNTT/app/out/renderer/index.html","text":"OpsPilot\nOpsPilot — VPS\nML service: Running\nLight\nDark\nVPS\nApps\nDeploy\nDashboard\nMigrate\nHistory\nSettings\nServers\nFleet overview and server control panel for OpsPilot.\nRefresh\nAdd VPS\nTotal VPS\n2\nOnline\n1\nOffline\n0\nTotal apps\n0\nServer list\n\tName\tIP\tStatus\tDocker\tSite\tLast connection\tActions\n\n\t\nName\n\t\nIP\n\t\nStatus\n\t\nDocker\n\t\nSite\n\t\nLast connection\n\t\nActions\n\n\n\t\nVM02\t221.121.1.80\n\tOnline\t\n29.7.2\t0\t9 days ago\t\n\n\n\t\nVM01\t221.121.1.79\n\tChecking\t\nNo Docker\t0\tChecking\n\t\n1-2 of 2\n1\n10 / page","viewport":[1367,769],"ipc":"function"},"windowCount":1,"exitCode":0,"finishedUtc":"2026-09-10T18:57:17.639Z"}

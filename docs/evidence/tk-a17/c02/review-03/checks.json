@@ -1,0 +1,81 @@
+{
+  "reviewed_code": "ce1a9ff",
+  "reviewed_submission": "0e7d207",
+  "approved_design_base": "a8cfd34",
+  "runtime": "Node 24.16.0, pnpm 11.1.0",
+  "checks": [
+    {
+      "name": "ancestry",
+      "command": "git merge-base --is-ancestor a8cfd34 ce1a9ff",
+      "exit": 0,
+      "result": "approved design review is an ancestor of the implementation"
+    },
+    {
+      "name": "focused-db-monitor-deploy",
+      "cwd": "app",
+      "command": "pnpm exec vitest run --maxWorkers=1 src/main/db src/main/monitor src/main/deploy",
+      "exit": 0,
+      "result": "17 files, 81 tests passed"
+    },
+    {
+      "name": "focused-with-ssh",
+      "cwd": "app",
+      "command": "pnpm exec vitest run --maxWorkers=1 src/main/db src/main/monitor src/main/deploy src/main/ssh",
+      "exit": 0,
+      "result": "19 files, 106 tests passed"
+    },
+    {
+      "name": "reviewer-new-app-regression",
+      "cwd": "app",
+      "command": "pnpm exec vitest run --maxWorkers=1 src/main/deploy/pipeline.test.ts -t before-the-collector --reporter=verbose",
+      "exit": 1,
+      "result": "new deployment finished failed when metrics.jsonl was ENOENT before the first compose up"
+    },
+    {
+      "name": "collector",
+      "cwd": "collector",
+      "command": "../ml-service/.venv/Scripts/python.exe -m pytest -q",
+      "exit": 0,
+      "result": "26 passed"
+    },
+    {
+      "name": "typecheck",
+      "cwd": "app",
+      "command": "pnpm typecheck",
+      "exit": 0
+    },
+    {
+      "name": "lint",
+      "cwd": "app",
+      "command": "pnpm exec eslint <C02 changed TypeScript files>",
+      "exit": 0
+    },
+    {
+      "name": "format",
+      "cwd": "app",
+      "command": "pnpm exec prettier --check <C02 changed source and migration files>",
+      "exit": 0
+    },
+    {
+      "name": "build",
+      "cwd": "app",
+      "command": "pnpm build",
+      "exit": 0,
+      "result": "main/preload/renderer built; renderer 3045 modules"
+    }
+  ],
+  "gitnexus": {
+    "analyze": "PASS with FTS unavailable warning; 3737 nodes, 10555 edges, 299 flows",
+    "detect_changes": "92 changed symbols, 54 affected, CRITICAL",
+    "prepareActivationFor": "CRITICAL; 7 upstream symbols, 6 affected processes",
+    "MonitorPoller.pollUnlocked": "HIGH; 10 upstream symbols, 3 affected processes",
+    "ActivationRepository.rotate": "HIGH; 7 upstream symbols, 3 affected processes"
+  },
+  "scope": {
+    "vps_mutation": false,
+    "sqlite_mutation": false,
+    "app_b_mutation": false,
+    "ml_train_or_score": false,
+    "push_pr_merge": false
+  }
+}

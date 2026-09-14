@@ -15,7 +15,11 @@ function readPackageJson(tree: SourceTree): PackageJson | undefined {
 
 function nodeDeps(tree: SourceTree): Record<string, string> {
   const pkg = readPackageJson(tree)
-  return { ...pkg?.devDependencies, ...pkg?.dependencies }
+  return pkg?.dependencies ?? {}
+}
+
+function hasVite(tree: SourceTree): boolean {
+  return readPackageJson(tree)?.devDependencies?.vite !== undefined
 }
 
 function stripVersion(value: string | undefined): string | undefined {
@@ -58,7 +62,7 @@ export const expressDetector: Detector = {
 
   detect(tree: SourceTree): boolean {
     const deps = nodeDeps(tree)
-    return deps.express !== undefined && deps.next === undefined && deps.vite === undefined
+    return deps.express !== undefined && deps.next === undefined && !hasVite(tree)
   },
 
   explain(tree: SourceTree): DetectionSignal[] {
@@ -82,8 +86,8 @@ export const expressDetector: Detector = {
       },
       {
         description: "không có 'vite'",
-        passed: deps.vite === undefined,
-        found: stripVersion(deps.vite)
+        passed: !hasVite(tree),
+        found: stripVersion(readPackageJson(tree)?.devDependencies?.vite)
       }
     ]
   },

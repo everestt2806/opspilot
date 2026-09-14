@@ -1,0 +1,25 @@
+{
+  "viewport": "1366x768",
+  "dpr": 1.5,
+  "pages": [
+    "vps-1366x768.png",
+    "apps-1366x768.png",
+    "deploy-1366x768.png",
+    "dashboard-1366x768.png",
+    "migrate-1366x768.png",
+    "history-1366x768.png",
+    "settings-1366x768.png",
+    "deploy-1920x1080.png",
+    "migrate-1920x1080.png"
+  ],
+  "errors": [],
+  "mica": "MICA_FALLBACK",
+  "nativeWindow": {
+    "resize": "PASS",
+    "maximizeRestore": "PASS",
+    "snapLayout": "NOT_AUTOMATED_MANUAL_WINDOWS_SMOKE_REQUIRED",
+    "titlebarControls": "PASS",
+    "titlebarScreenshot": "titlebar-native-controls.png"
+  },
+  "exitCode": 0
+}

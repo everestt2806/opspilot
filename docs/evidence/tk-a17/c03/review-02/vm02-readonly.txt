@@ -1,0 +1,11 @@
+﻿captured_at=2026-09-12T17:02:49.3109738Z
+exit_code=0
+a17-c03-review01-final2-vite-collector|a17-c03-review01-final2-vite:collector|running|Up 40 minutes
+a17-c03-review01-final2-vite-app|a17-c03-review01-final2-vite:v1|running|Up 40 minutes (healthy)
+a17-c03-review01-final2-next-app|a17-c03-review01-final2-next:v1|running|Up 40 minutes (healthy)
+a17-c03-review01-final2-next-collector|a17-c03-review01-final2-next:collector|running|Up 40 minutes
+a17-c03-review01-final2-express-app|a17-c03-review01-final2-express:v2|running|Up 41 minutes (healthy)
+a17-c03-review01-final2-express-db|postgres:16-alpine|running|Up 42 minutes (healthy)
+a17-c03-review01-final2-express-collector|504dfb2d96d9|running|Up 41 minutes
+express-demo-app|opspilot-demo-express:local|running|Up 4 days (healthy)
+express-demo-collector|opspilot-collector:1.0.0|running|Up 4 days

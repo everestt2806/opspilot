@@ -5,12 +5,7 @@ import type { Vps } from '@shared/ipc'
 
 import { strings } from '../strings'
 import { localDateTime, relativeTime } from '../utils/format'
-import {
-  formatGb,
-  formatMb,
-  resourcePercents,
-  type RowResourceState
-} from '../vpsResources'
+import { formatGb, formatMb, resourcePercents, type RowResourceState } from '../vpsResources'
 
 interface VpsInfoSidebarProps {
   vps: Vps
@@ -62,7 +57,10 @@ export function VpsInfoSidebar({
 
       {resources?.status === 'success' && <ResourceGauges data={resources.data} />}
 
-      <div className="panel-spec-list" style={{ marginTop: resources?.status === 'success' ? 0 : 8 }}>
+      <div
+        className="panel-spec-list"
+        style={{ marginTop: resources?.status === 'success' ? 0 : 8 }}
+      >
         {resources?.status === 'success' && (
           <>
             <SpecRow
@@ -101,11 +99,7 @@ export function VpsInfoSidebar({
   )
 }
 
-function ResourceGauges({
-  data
-}: {
-  data: import('@shared/ipc').VpsResources
-}): React.JSX.Element {
+function ResourceGauges({ data }: { data: import('@shared/ipc').VpsResources }): React.JSX.Element {
   const { ram, cpu } = resourcePercents(data)
   const gauges = [
     { label: strings.vpsControl.sidebar.cpu, percent: cpu },

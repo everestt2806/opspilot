@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { VpsDiagnosis } from '@shared/ipc'
 
 import { DiagnosisPanel } from './DiagnosisPanel'
+import { strings } from '../strings'
 
 // Fixture là case thật từ TK-A10: firewall WiService chặn toàn bộ inbound.
 const WISERVICE_FIREWALL: VpsDiagnosis = {
@@ -33,7 +34,7 @@ describe('DiagnosisPanel', () => {
     const onRetry = vi.fn()
     render(<DiagnosisPanel diagnosis={WISERVICE_FIREWALL} onRetry={onRetry} />)
 
-    const button = screen.getByText('Check again')
+    const button = screen.getByText(strings.vps.check.retry)
     expect(button).toBeTruthy()
     button.click()
     expect(onRetry).toHaveBeenCalledTimes(1)

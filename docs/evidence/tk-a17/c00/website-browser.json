@@ -1,0 +1,18 @@
+{
+  "started_utc": "2026-09-10T19:49:53.418982+00:00",
+  "command": [
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "--headless=new",
+    "--disable-gpu",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--user-data-dir=D:\\Developing\\DuAnCNTT\\tmp\\a17-c00-browser",
+    "--window-size=1366,768",
+    "--screenshot=D:\\Developing\\DuAnCNTT\\docs\\evidence\\tk-a17\\c00\\website-via-ssh.png",
+    "http://127.0.0.1:39011/"
+  ],
+  "cwd": "D:\\Developing\\DuAnCNTT\\app",
+  "exit_code": 0,
+  "stdout": "",
+  "stderr": "315798 bytes written to file D:\\Developing\\DuAnCNTT\\docs\\evidence\\tk-a17\\c00\\website-via-ssh.png\r\n"
+}

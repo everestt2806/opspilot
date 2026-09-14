@@ -1,0 +1,16 @@
+{
+  "reviewed_code": "d4ec3be",
+  "reviewed_docs": "23cd248",
+  "started_utc": "2026-09-10T20:02:16.260046+00:00",
+  "command": [
+    "D:\\Developing\\DuAnCNTT\\ml-service\\.venv\\Scripts\\python.exe",
+    "-m",
+    "pytest",
+    "tests",
+    "-q"
+  ],
+  "cwd": "D:\\Developing\\DuAnCNTT\\collector",
+  "exit_code": 0,
+  "stdout": "..........................                                               [100%]\r\n26 passed in 0.23s\r\n",
+  "stderr": ""
+}

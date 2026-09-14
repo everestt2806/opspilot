@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { FleetSummary } from './FleetSummary'
+import { strings } from '../strings'
 
 interface FleetSummaryProps {
   total: number
@@ -21,8 +22,8 @@ describe('FleetSummary — 4 o so lieu', () => {
     renderSummary({ total: 3, online: 2, offline: 1, appCount: 5, loading: false })
 
     expect(screen.getByLabelText('Total VPS').textContent).toContain('3')
-    expect(screen.getByLabelText('Online').textContent).toContain('2')
-    expect(screen.getByLabelText('Offline').textContent).toContain('1')
+    expect(screen.getByLabelText(strings.vpsControl.fleet.online).textContent).toContain('2')
+    expect(screen.getByLabelText(strings.vpsControl.fleet.offline).textContent).toContain('1')
     expect(screen.getByLabelText('Total apps').textContent).toContain('5')
   })
 

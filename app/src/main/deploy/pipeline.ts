@@ -24,15 +24,55 @@ import { runPrecheck } from './precheck'
 import {
   buildEnvFile,
   readEnvValue,
+  renderBuildArgs,
   renderCompose,
   renderDockerfile,
   type ComposeVars
 } from './templates'
+import { withAppLock } from '../monitor/appLock'
+import { ActivationRepository, type ActivationReason } from '../monitor/activation'
 
 const WORK_ROOT = '/opt/opspilot'
 const HEALTHCHECK_ATTEMPTS = 10
 const HEALTHCHECK_INTERVAL_MS = 3_000
 const RENDER_COLLECT_INTERVAL_S = '10'
+const COLLECTOR_IMAGE_SUFFIX = ':collector'
+
+type DeployInputWithRemoteSource = DeployInput & { remote_source_path?: string }
+
+export function resolveCollectorDir(): string {
+  const candidates = [
+    process.env.OPSPILOT_COLLECTOR_DIR,
+    ...(process.resourcesPath ? [join(process.resourcesPath, 'collector')] : []),
+    join(process.cwd(), '..', 'collector')
+  ].filter((candidate): candidate is string => Boolean(candidate))
+  const collectorDir = candidates.find(
+    (candidate) =>
+      existsSync(join(candidate, 'collect.py')) && existsSync(join(candidate, 'Dockerfile'))
+  )
+  if (!collectorDir) {
+    throw new AppError('UNKNOWN', 'Không tìm thấy source collector đã duyệt để đóng gói deploy.')
+  }
+  return collectorDir
+}
+
+export function resolveCollectorAppPath(
+  framework: App['framework'],
+  sourceTree: ReturnType<typeof buildSourceTree>,
+  healthcheckPath: string
+): string {
+  if (framework !== 'express') return healthcheckPath
+  const hasItemsRoute = sourceTree.files.some((file) => {
+    const content = sourceTree.readText(file) ?? ''
+    return /\.get\s*\(\s*['"`]\/items\/?(?:['"`]\s*,|['"`]\s*\))/m.test(content)
+  })
+  return hasItemsRoute ? '/items?limit=1' : healthcheckPath
+}
+
+function collectorPathFromCompose(compose: string, fallback: string): string {
+  const match = compose.match(/APP_URL:\s*["']?https?:\/\/app:\d+([^"'\s]+)?/)
+  return match?.[1] ?? fallback
+}
 
 const containerStateSchema = z.object({
   Status: z.string(),
@@ -49,6 +89,9 @@ interface ContainerState {
 }
 
 type FinalStatus = 'running' | 'failed' | 'rolled_back'
+type RestoreStatus = 'restored' | 'not_restored' | 'unknown' | null
+type RuntimeOwner = 'candidate' | 'previous' | 'down' | 'unknown'
+type CollectorState = 'running' | 'stopped' | 'unknown'
 
 function nowIso(): string {
   return new Date().toISOString()
@@ -85,6 +128,9 @@ export interface RunContext {
   stepLines: string[]
   failedStep: DeployStep | null
   cancelled: boolean
+  runtimeOwner: RuntimeOwner
+  collectorState: CollectorState
+  restoreStatus: RestoreStatus
   durations: Partial<Record<DeployStep, number>>
 }
 
@@ -99,6 +145,8 @@ export class DeployPipeline {
   private readonly appRepository: AppRepository
   private readonly deploymentRepository: DeploymentRepository
   private readonly actionLog: ActionLogRepository
+  private readonly activation: ActivationRepository
+  private readonly database: SqliteDatabase
 
   /** Khoá chống 2 pipeline chạy đồng thời trên cùng một app (deploy-events mục 3). */
   private activeByApp = new Map<number, number>()
@@ -106,11 +154,13 @@ export class DeployPipeline {
 
   constructor(deps: { ssh: SshManager; db: SqliteDatabase; emit: (event: DeployEvent) => void }) {
     this.ssh = deps.ssh
+    this.database = deps.db
     this.emit = deps.emit
     this.vpsRepository = new VpsRepository(deps.db)
     this.appRepository = new AppRepository(deps.db)
     this.deploymentRepository = new DeploymentRepository(deps.db)
     this.actionLog = new ActionLogRepository(deps.db)
+    this.activation = new ActivationRepository(deps.db)
   }
 
   /** Khởi động pipeline. Phần setup (detect + tạo bản ghi + khoá) chạy đồng bộ để
@@ -165,6 +215,9 @@ export class DeployPipeline {
       stepLines: [],
       failedStep: null,
       cancelled: false,
+      runtimeOwner: 'unknown',
+      collectorState: 'running',
+      restoreStatus: null,
       durations: {}
     }
     void this.executeRollback(ctx, targetImageTag, target.version, target.id).catch(
@@ -185,7 +238,20 @@ export class DeployPipeline {
     toVersion: number,
     targetDeploymentId: number
   ): Promise<void> {
+    await withAppLock(ctx.app.id, () =>
+      this.executeRollbackLocked(ctx, targetImageTag, toVersion, targetDeploymentId)
+    )
+  }
+
+  private async executeRollbackLocked(
+    ctx: RunContext,
+    targetImageTag: string,
+    toVersion: number,
+    targetDeploymentId: number
+  ): Promise<void> {
+    let preparedActivationId: number | null = null
     try {
+      preparedActivationId = await this.prepareActivation(ctx, 'manual_rollback')
       await this.inStep(ctx, 'DEPLOY', async () => {
         await this.ensureImageAvailable(ctx, targetImageTag)
         await this.restoreComposeTo(ctx.app, targetImageTag)
@@ -197,6 +263,10 @@ export class DeployPipeline {
           180_000
         )
         if (result.code !== 0) {
+          if (await this.runtimeMatches(ctx, targetImageTag)) {
+            ctx.runtimeOwner = 'candidate'
+            ctx.collectorState = 'running'
+          }
           throw new AppError(
             'UNKNOWN',
             'Khởi động lại app với ảnh cũ không thành công. Hãy xem log trên VPS.',
@@ -204,9 +274,14 @@ export class DeployPipeline {
           )
         }
         await this.waitContainerRunning(ctx)
+        await this.verifyRuntimeImage(ctx, targetImageTag)
+        ctx.runtimeOwner = 'candidate'
+        ctx.collectorState = 'running'
         this.log(ctx, 'DEPLOY', `App đã chạy lại với ảnh v${toVersion}.\n`, 'stdout')
       })
 
+      this.activatePrepared(ctx, preparedActivationId)
+      preparedActivationId = null
       await this.inStep(ctx, 'HEALTHCHECK', async () => {
         const ok = await this.waitForHealthcheck(ctx.app, ctx.signal)
         this.log(
@@ -226,6 +301,21 @@ export class DeployPipeline {
 
       await this.recordManualRollbackSuccess(ctx, targetImageTag, targetDeploymentId)
     } catch (error) {
+      if (ctx.signal.aborted) ctx.cancelled = true
+      if (ctx.collectorState === 'stopped') await this.resumeCollector(ctx)
+      if (preparedActivationId !== null) {
+        if (ctx.runtimeOwner === 'candidate') {
+          this.activatePrepared(ctx, preparedActivationId)
+          preparedActivationId = null
+        } else if (ctx.runtimeOwner === 'unknown') {
+          this.activation.logFailClosed(ctx.app.id)
+        } else {
+          this.activation.abort(preparedActivationId)
+        }
+      }
+      if (preparedActivationId !== null && ctx.runtimeOwner !== 'unknown') {
+        this.activation.abort(preparedActivationId)
+      }
       await this.recordFailure(ctx, error)
       try {
         const ipcError = toStepIpcError(error)
@@ -293,6 +383,131 @@ export class DeployPipeline {
     return true
   }
 
+  private async prepareActivation(
+    ctx: RunContext,
+    reason: Exclude<ActivationReason, 'legacy' | 'rotation'>
+  ): Promise<number> {
+    return this.prepareActivationFor(ctx, ctx.deployment.id, reason)
+  }
+
+  private async prepareReactivation(
+    ctx: RunContext,
+    deploymentId: number,
+    reason: Exclude<ActivationReason, 'legacy' | 'rotation'>
+  ): Promise<number> {
+    return this.prepareActivationFor(ctx, deploymentId, reason)
+  }
+
+  private async prepareActivationFor(
+    ctx: RunContext,
+    deploymentId: number,
+    reason: Exclude<ActivationReason, 'legacy' | 'rotation'>
+  ): Promise<number> {
+    const metricsPath = posixJoin(WORK_ROOT, ctx.app.name, 'metrics', 'metrics.jsonl')
+    await this.stopCollectorAndFlush(ctx)
+    const sshWithSnapshot = this.ssh as SshManager & {
+      metricSnapshot?: SshManager['metricSnapshot']
+    }
+    const snapshot = sshWithSnapshot.metricSnapshot
+      ? await sshWithSnapshot.metricSnapshot(ctx.app.vps_id, metricsPath)
+      : null
+    let fileSize: number
+    let fileIdentity: { generation: string; device?: number; inode?: number }
+    if (snapshot) {
+      fileSize = snapshot.size
+      fileIdentity = snapshot
+    } else if (ctx.newApp) {
+      fileSize = 0
+      fileIdentity = { generation: 'pending-first-generation' }
+    } else {
+      fileSize = await this.ssh.fileSize(ctx.app.vps_id, metricsPath)
+      fileIdentity = await ((
+        this.ssh as SshManager & { fileIdentity?: SshManager['fileIdentity'] }
+      ).fileIdentity?.(ctx.app.vps_id, metricsPath) ?? Promise.resolve({ generation: 'legacy' }))
+    }
+    const offset = (
+      this.database.prepare('SELECT metrics_offset FROM app WHERE id=?').get(ctx.app.id) as {
+        metrics_offset: number
+      }
+    ).metrics_offset
+    this.activation.ensureLegacy(
+      ctx.app.id,
+      ctx.app.current_deployment_id ?? ctx.deployment.id,
+      offset,
+      fileIdentity
+    )
+    return this.activation.prepare(ctx.app.id, deploymentId, fileIdentity, fileSize + 1, reason)
+  }
+
+  private async stopCollectorAndFlush(ctx: RunContext): Promise<void> {
+    if (ctx.newApp) return
+    const command = `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker compose stop collector`
+    this.log(ctx, 'DEPLOY', `$ ${command}\n`, 'stdout')
+    const result = await this.execStream(ctx, 'DEPLOY', command, 60_000)
+    if (result.code !== 0) {
+      throw new AppError('UNKNOWN', 'Không thể stop/flush collector trước cutover.', {
+        step: 'DEPLOY',
+        cause: new Error(result.stderr.trim() || result.stdout.trim())
+      })
+    }
+    ctx.collectorState = 'stopped'
+    // Stopping the collector says nothing about which app container owns runtime.
+    ctx.runtimeOwner = 'unknown'
+  }
+
+  private async resumeCollector(ctx: RunContext): Promise<void> {
+    if (ctx.collectorState !== 'stopped') return
+    const command = `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker compose start collector`
+    try {
+      const cleanupController = new AbortController()
+      const cleanupTimer = setTimeout(() => cleanupController.abort(), 60_000)
+      let result: { code: number; stdout: string; stderr: string }
+      try {
+        result = await this.ssh.exec(ctx.app.vps_id, command, {
+          timeoutMs: 60_000,
+          signal: cleanupController.signal,
+          retryOnReconnect: false,
+          onStdout: (chunk) => this.log(ctx, 'DEPLOY', chunk, 'stdout'),
+          onStderr: (chunk) => this.log(ctx, 'DEPLOY', chunk, 'stderr')
+        })
+      } finally {
+        clearTimeout(cleanupTimer)
+      }
+      if (result.code !== 0) throw new Error(result.stderr.trim() || result.stdout.trim())
+      const state = await this.ssh.exec(
+        ctx.app.vps_id,
+        `docker inspect -f '{{json .State}}' ${shellQuote(`${ctx.app.name}-collector`)} 2>/dev/null || printf 'missing'`,
+        { timeoutMs: 15_000, signal: AbortSignal.timeout(15_000), retryOnReconnect: true }
+      )
+      if (state.code !== 0 || !/"Status"\s*:\s*"running"/.test(state.stdout)) {
+        throw new Error(`collector state not running: ${state.stdout || state.stderr}`)
+      }
+      ctx.collectorState = 'running'
+    } catch (error) {
+      ctx.collectorState = 'unknown'
+      this.activation.logFailClosed(ctx.app.id)
+      this.actionLog.insert({
+        action: 'ssh_error',
+        status: 'failed',
+        vps_id: ctx.app.vps_id,
+        app_id: ctx.app.id,
+        deployment_id: ctx.deployment.id,
+        message: `Collector cleanup failed after cutover: ${error instanceof Error ? error.message : String(error)}`
+      })
+      logger.warn('deploy', 'Không thể khôi phục collector sau cutover failure', {
+        deployment_id: ctx.deployment.id,
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
+  private activatePrepared(ctx: RunContext, activationId: number | null): void {
+    if (activationId === null)
+      throw new AppError('UNKNOWN', 'Thiáº¿u activation boundary Ä‘Ã£ chuáº©n bá»‹.')
+    const previous = this.activation.active(ctx.app.id)
+    this.activation.activate(activationId, previous?.id ?? null)
+  }
+
   // ── Setup (đồng bộ, chạy trước mọi event) ─────────────────────────────────────
 
   private setup(input: DeployInput, signal?: AbortSignal): RunContext {
@@ -325,6 +540,8 @@ export class DeployPipeline {
       if (app.vps_id !== vps.id) {
         throw new AppError('VALIDATION', 'App không thuộc VPS đã chọn. Hãy chọn lại.')
       }
+      // A pre-created migration target is still a first deployment and has no collector to stop.
+      newApp = app.current_deployment_id === null
     } else {
       const existing = this.appRepository.getByVpsAndName(vps.id, name)
       if (existing) {
@@ -374,6 +591,9 @@ export class DeployPipeline {
       stepLines: [],
       failedStep: null,
       cancelled: false,
+      runtimeOwner: newApp ? 'down' : 'unknown',
+      collectorState: 'running',
+      restoreStatus: null,
       durations: {}
     }
   }
@@ -381,15 +601,23 @@ export class DeployPipeline {
   // ── Vòng đời các bước ─────────────────────────────────────────────────────────
 
   private async execute(ctx: RunContext): Promise<void> {
+    await withAppLock(ctx.app.id, () => this.executeLocked(ctx))
+  }
+
+  private async executeLocked(ctx: RunContext): Promise<void> {
     let finalStatus: FinalStatus = 'failed'
     const logStream = this.openLogStream(ctx.deployment.id)
+    let preparedActivationId: number | null = null
 
     try {
       await this.stepPrecheck(ctx)
       await this.stepUpload(ctx)
       await this.stepRender(ctx)
       await this.stepBuild(ctx)
+      preparedActivationId = await this.prepareActivation(ctx, 'deploy')
       await this.stepDeploy(ctx)
+      this.activatePrepared(ctx, preparedActivationId)
+      preparedActivationId = null
       const healthOk = await this.stepHealthcheck(ctx)
 
       if (healthOk) {
@@ -399,6 +627,37 @@ export class DeployPipeline {
         finalStatus = await this.handleHealthcheckFail(ctx)
       }
     } catch (error) {
+      if (ctx.signal.aborted) ctx.cancelled = true
+      if (ctx.collectorState === 'stopped') await this.resumeCollector(ctx)
+      if (preparedActivationId !== null) {
+        if (ctx.runtimeOwner === 'candidate') {
+          this.activatePrepared(ctx, preparedActivationId)
+          preparedActivationId = null
+          const previous = this.deploymentRepository.previousCompleted(
+            ctx.app.id,
+            ctx.deployment.version
+          )
+          if (previous && ctx.restoreStatus === 'restored') {
+            try {
+              const recovery = await this.prepareReactivation(ctx, previous.id, 'auto_rollback')
+              this.activatePrepared(ctx, recovery)
+            } catch (recoveryError) {
+              this.activation.logFailClosed(ctx.app.id)
+              logger.warn('deploy', 'Không thể tạo activation recovery sau runtime failure', {
+                deployment_id: ctx.deployment.id,
+                error:
+                  recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
+              })
+            }
+          } else if (previous) {
+            this.activation.logFailClosed(ctx.app.id)
+          }
+        } else if (ctx.runtimeOwner === 'unknown') {
+          this.activation.logFailClosed(ctx.app.id)
+        } else {
+          this.activation.abort(preparedActivationId)
+        }
+      }
       await this.recordFailure(ctx, error)
       finalStatus = 'failed'
     } finally {
@@ -571,6 +830,14 @@ export class DeployPipeline {
   private async stepUpload(ctx: RunContext): Promise<void> {
     await this.inStep(ctx, 'UPLOAD', async () => {
       const srcDir = posixJoin(WORK_ROOT, ctx.app.name, 'src')
+      const input = this.requireInput(ctx) as DeployInputWithRemoteSource
+      if (input.remote_source_path) {
+        // Migration already verified the VPS-relayed payload; never fall back to desktop source.
+        await this.ssh.fileSize(ctx.app.vps_id, posixJoin(input.remote_source_path, 'src'))
+        await this.ssh.fileSize(ctx.app.vps_id, posixJoin(input.remote_source_path, 'collector'))
+        this.log(ctx, 'UPLOAD', `Dùng payload đã relay tại ${input.remote_source_path}\n`, 'stdout')
+        return
+      }
       this.log(ctx, 'UPLOAD', `Tải lên ${srcDir} (loại node_modules/.git/dist)\n`, 'stdout')
       try {
         const result = await this.ssh.uploadDir(
@@ -582,6 +849,18 @@ export class DeployPipeline {
           }
         )
         this.log(ctx, 'UPLOAD', `Xong: ${formatBytes(result.bytes)}\n`, 'stdout')
+        const collectorResult = await this.ssh.uploadDir(
+          ctx.app.vps_id,
+          resolveCollectorDir(),
+          posixJoin(WORK_ROOT, ctx.app.name, 'collector'),
+          { signal: ctx.signal }
+        )
+        this.log(
+          ctx,
+          'UPLOAD',
+          `Đã đóng gói collector: ${formatBytes(collectorResult.bytes)}\n`,
+          'stdout'
+        )
       } catch (error) {
         if (ctx.newApp) {
           await this.ignoreError(
@@ -609,10 +888,29 @@ export class DeployPipeline {
         CONTAINER_PORT: String(ctx.app.container_port),
         HEALTHCHECK_PATH: ctx.app.healthcheck_path,
         START_COMMAND: plan.startCommand,
-        COLLECT_INTERVAL_S: RENDER_COLLECT_INTERVAL_S
+        COLLECT_INTERVAL_S: RENDER_COLLECT_INTERVAL_S,
+        COLLECTOR_IMAGE_TAG: `${ctx.app.name}${COLLECTOR_IMAGE_SUFFIX}`,
+        COLLECTOR_APP_PATH: resolveCollectorAppPath(
+          ctx.app.framework,
+          buildSourceTree(input.source_path),
+          ctx.app.healthcheck_path
+        ),
+        APP_DEPENDS_ON: plan.needsDb
+          ? '    depends_on:\n      postgres:\n        condition: service_healthy'
+          : ''
       }
       let renderEnv = input.env
-      if (plan.needsDb && !ctx.newApp) {
+      const remoteSource = (input as DeployInputWithRemoteSource).remote_source_path
+      if (remoteSource) {
+        const existingEnv = await this.ssh.readFile(ctx.app.vps_id, posixJoin(appDir, '.env'))
+        renderEnv = { ...input.env }
+        for (const line of existingEnv.split(/\r?\n/)) {
+          const separator = line.indexOf('=')
+          if (separator > 0 && !line.startsWith('#')) {
+            renderEnv[line.slice(0, separator)] = line.slice(separator + 1)
+          }
+        }
+      } else if (plan.needsDb && !ctx.newApp) {
         const existingEnv = await this.ssh.readFile(ctx.app.vps_id, posixJoin(appDir, '.env'))
         const existingPassword = readEnvValue(existingEnv, 'POSTGRES_PASSWORD')
         const existingDatabaseUrl = readEnvValue(existingEnv, 'DATABASE_URL')
@@ -643,7 +941,8 @@ export class DeployPipeline {
           name: 'Dockerfile',
           content: renderDockerfile(plan.dockerfileTemplate, {
             ...vars,
-            BUILD_COMMAND: plan.buildCommand
+            BUILD_COMMAND: plan.buildCommand,
+            BUILD_ARGS: renderBuildArgs(plan.buildArgs)
           })
         },
         { name: 'docker-compose.yml', content: renderCompose(vars, plan.needsDb) },
@@ -668,6 +967,8 @@ export class DeployPipeline {
         await this.ssh.fileSize(ctx.app.vps_id, posixJoin(appDir, 'Dockerfile'))
         await this.ssh.fileSize(ctx.app.vps_id, posixJoin(appDir, 'docker-compose.yml'))
         await this.ssh.fileSize(ctx.app.vps_id, posixJoin(appDir, '.env'))
+        await this.ssh.fileSize(ctx.app.vps_id, posixJoin(appDir, 'collector', 'Dockerfile'))
+        await this.ssh.fileSize(ctx.app.vps_id, posixJoin(appDir, 'collector', 'collect.py'))
       } catch (error) {
         for (const file of files) {
           await this.ignoreError(
@@ -684,7 +985,17 @@ export class DeployPipeline {
   private async stepBuild(ctx: RunContext): Promise<void> {
     await this.inStep(ctx, 'BUILD', async () => {
       const tag = shellQuote(ctx.deployment.image_tag)
-      const command = `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker build -t ${tag} .`
+      const collectorTag = shellQuote(`${ctx.app.name}${COLLECTOR_IMAGE_SUFFIX}`)
+      const appTagExisted = await this.imageExists(ctx, tag)
+      const collectorTagExisted = await this.imageExists(ctx, collectorTag)
+      const buildArgs = Object.keys(this.requirePlan(ctx).buildArgs)
+        .map((key) => `--build-arg ${shellQuote(`${key}=${this.buildArgValue(ctx, key)}`)}`)
+        .join(' ')
+      const buildCommand =
+        buildArgs.length > 0 ? `docker build ${buildArgs} -t ${tag} .` : `docker build -t ${tag} .`
+      const command =
+        `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && ` +
+        `${buildCommand} && docker build -t ${collectorTag} ./collector`
       this.log(ctx, 'BUILD', `$ ${command}\n`, 'stdout')
       try {
         const result = await this.execStream(ctx, 'BUILD', command, 900_000)
@@ -696,14 +1007,42 @@ export class DeployPipeline {
           )
         }
       } catch (error) {
-        await this.ignoreError(
-          this.ssh.exec(ctx.app.vps_id, `docker image rm ${tag} >/dev/null 2>&1 || true`, {
-            retryOnReconnect: false
-          })
-        )
+        if (!appTagExisted) {
+          await this.ignoreError(
+            this.ssh.exec(ctx.app.vps_id, `docker image rm ${tag} >/dev/null 2>&1 || true`, {
+              retryOnReconnect: false
+            })
+          )
+        }
+        if (!collectorTagExisted) {
+          await this.ignoreError(
+            this.ssh.exec(
+              ctx.app.vps_id,
+              `docker image rm ${collectorTag} >/dev/null 2>&1 || true`,
+              {
+                retryOnReconnect: false
+              }
+            )
+          )
+        }
         throw error
       }
     })
+  }
+
+  private buildArgValue(ctx: RunContext, key: string): string {
+    const inputValue = ctx.input?.env[key]
+    if (inputValue !== undefined) return inputValue
+    return this.requirePlan(ctx).buildArgs[key] ?? ''
+  }
+
+  private async imageExists(ctx: RunContext, tag: string): Promise<boolean> {
+    const result = await this.ssh.exec(
+      ctx.app.vps_id,
+      `docker image inspect ${tag} >/dev/null 2>&1`,
+      { timeoutMs: 15_000, signal: ctx.signal, retryOnReconnect: true }
+    )
+    return result.code === 0
   }
 
   private async stepDeploy(ctx: RunContext): Promise<void> {
@@ -713,14 +1052,21 @@ export class DeployPipeline {
       try {
         const result = await this.execStream(ctx, 'DEPLOY', command, 180_000)
         if (result.code !== 0) {
+          if (await this.runtimeMatches(ctx, ctx.deployment.image_tag)) {
+            ctx.runtimeOwner = 'candidate'
+            ctx.collectorState = 'running'
+          }
           throw new AppError('UNKNOWN', 'Bước chạy container thất bại. Xem log bước DEPLOY.', {
             step: 'DEPLOY',
             cause: new Error(result.stderr.trim() || result.stdout.trim())
           })
         }
         await this.waitContainerRunning(ctx)
+        await this.verifyRuntimeImage(ctx, ctx.deployment.image_tag)
+        ctx.runtimeOwner = 'candidate'
+        ctx.collectorState = 'running'
       } catch (error) {
-        await this.restorePreviousOrDown(ctx)
+        if (ctx.runtimeOwner !== 'candidate') await this.restorePreviousOrDown(ctx)
         throw error
       }
     })
@@ -765,25 +1111,58 @@ export class DeployPipeline {
 
   private async restorePreviousOrDown(ctx: RunContext): Promise<void> {
     const previous = this.deploymentRepository.previousCompleted(ctx.app.id, ctx.deployment.version)
+    ctx.runtimeOwner = 'unknown'
+    ctx.restoreStatus = 'unknown'
     try {
       if (previous) {
         this.log(ctx, 'DEPLOY', `Khôi phục phiên bản cũ v${previous.version}...\n`, 'stdout')
         await this.restoreComposeTo(ctx.app, this.deploymentRepository.runtimeImageTag(previous.id))
-        await this.execStream(
+        const restoreResult = await this.execStream(
           ctx,
           'DEPLOY',
           `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker compose up -d`,
           180_000
         )
+        if (restoreResult.code !== 0) {
+          ctx.restoreStatus = 'not_restored'
+          throw new Error(restoreResult.stderr.trim() || restoreResult.stdout.trim())
+        }
+        await this.waitContainerRunning(ctx)
+        await this.verifyRuntimeImage(ctx, this.deploymentRepository.runtimeImageTag(previous.id))
+        ctx.runtimeOwner = 'previous'
+        ctx.collectorState = 'running'
+        ctx.restoreStatus = 'restored'
         this.log(ctx, 'DEPLOY', `App đã quay lại v${previous.version}.\n`, 'stdout')
       } else {
         this.log(ctx, 'DEPLOY', 'Chưa có phiên bản cũ — dừng container (giữ volume).\n', 'stdout')
-        await this.execStream(
+        const downResult = await this.execStream(
           ctx,
           'DEPLOY',
           `cd ${shellQuote(posixJoin(WORK_ROOT, ctx.app.name))} && docker compose down`,
           180_000
         )
+        if (downResult.code !== 0) {
+          ctx.restoreStatus = 'not_restored'
+          throw new Error(downResult.stderr.trim() || downResult.stdout.trim())
+        }
+        const inspected = await this.ssh.exec(
+          ctx.app.vps_id,
+          `docker inspect -f '{{.State.Status}}' ${shellQuote(`${ctx.app.name}-app`)} 2>/dev/null || printf 'missing'`,
+          { timeoutMs: 15_000, signal: ctx.signal, retryOnReconnect: true }
+        )
+        const downState = inspected.stdout.trim()
+        let downStatus = downState
+        try {
+          downStatus = String((JSON.parse(downState) as { Status?: string }).Status ?? downState)
+        } catch {
+          // The fallback output is intentionally kept opaque to avoid leaking inspect data.
+        }
+        if (inspected.code !== 0 || !/^(missing|exited|created|dead)$/i.test(downStatus)) {
+          throw new Error(`runtime down state is unknown (${downStatus || 'empty'})`)
+        }
+        ctx.runtimeOwner = 'down'
+        ctx.collectorState = 'running'
+        ctx.restoreStatus = 'restored'
       }
     } catch (error) {
       this.log(
@@ -799,7 +1178,40 @@ export class DeployPipeline {
     }
   }
 
+  private async verifyRuntimeImage(ctx: RunContext, expectedImage: string): Promise<void> {
+    const result = await this.ssh.exec(
+      ctx.app.vps_id,
+      `docker inspect -f '{{.Config.Image}}|{{.State.Status}}' ${shellQuote(`${ctx.app.name}-app`)}`,
+      { timeoutMs: 15_000, signal: ctx.signal, retryOnReconnect: true }
+    )
+    const [image, state] = result.stdout.trim().split('|')
+    if (result.code !== 0 || image !== expectedImage || state !== 'running') {
+      throw new Error(
+        `runtime restore mismatch: expected ${expectedImage}|running, got ${result.stdout.trim()}`
+      )
+    }
+  }
+
+  private async runtimeMatches(ctx: RunContext, expectedImage: string): Promise<boolean> {
+    try {
+      await this.verifyRuntimeImage(ctx, expectedImage)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   private async restoreComposeTo(app: App, imageTag: string): Promise<void> {
+    let collectorAppPath = app.healthcheck_path
+    try {
+      const existingCompose = await this.ssh.readFile(
+        app.vps_id,
+        posixJoin(WORK_ROOT, app.name, 'docker-compose.yml')
+      )
+      collectorAppPath = collectorPathFromCompose(existingCompose, collectorAppPath)
+    } catch {
+      // A first deploy has no compose to preserve; healthcheck is the safe fallback.
+    }
     const vars: ComposeVars = {
       APP_NAME: app.name,
       IMAGE_TAG: imageTag,
@@ -807,7 +1219,13 @@ export class DeployPipeline {
       CONTAINER_PORT: String(app.container_port),
       HEALTHCHECK_PATH: app.healthcheck_path,
       START_COMMAND: '',
-      COLLECT_INTERVAL_S: RENDER_COLLECT_INTERVAL_S
+      COLLECT_INTERVAL_S: RENDER_COLLECT_INTERVAL_S,
+      COLLECTOR_IMAGE_TAG: `${app.name}${COLLECTOR_IMAGE_SUFFIX}`,
+      COLLECTOR_APP_PATH: collectorAppPath,
+      APP_DEPENDS_ON:
+        app.needs_db === 1
+          ? '    depends_on:\n      postgres:\n        condition: service_healthy'
+          : ''
     }
     await this.ssh.writeFile(
       app.vps_id,
@@ -830,8 +1248,10 @@ export class DeployPipeline {
       return 'failed'
     }
     const previousImageTag = this.deploymentRepository.runtimeImageTag(previous.id)
+    let rollbackActivationId: number | null = null
 
     try {
+      rollbackActivationId = await this.prepareReactivation(ctx, previous.id, 'auto_rollback')
       await this.inStep(ctx, 'DEPLOY', async () => {
         this.log(
           ctx,
@@ -847,6 +1267,12 @@ export class DeployPipeline {
           180_000
         )
         if (result.code !== 0) {
+          if (await this.runtimeMatches(ctx, previousImageTag)) {
+            ctx.runtimeOwner = 'candidate'
+            ctx.collectorState = 'running'
+            this.activatePrepared(ctx, rollbackActivationId)
+            rollbackActivationId = null
+          }
           throw new AppError(
             'UNKNOWN',
             'Tự rollback không khởi động được phiên bản cũ. Hãy xem log container trên VPS.',
@@ -857,6 +1283,11 @@ export class DeployPipeline {
           )
         }
         await this.waitContainerRunning(ctx)
+        await this.verifyRuntimeImage(ctx, previousImageTag)
+        ctx.runtimeOwner = 'candidate'
+        ctx.collectorState = 'running'
+        this.activatePrepared(ctx, rollbackActivationId)
+        rollbackActivationId = null
         const healthOk = await this.waitForHealthcheck(ctx.app, ctx.signal)
         this.log(
           ctx,
@@ -876,6 +1307,13 @@ export class DeployPipeline {
       })
       await this.pruneImages(ctx, null, [previousImageTag])
     } catch (error) {
+      if (ctx.signal.aborted) ctx.cancelled = true
+      if (ctx.collectorState === 'stopped') await this.resumeCollector(ctx)
+      if (rollbackActivationId !== null && ctx.runtimeOwner !== 'unknown') {
+        this.activation.abort(rollbackActivationId)
+      } else if (rollbackActivationId !== null) {
+        this.activation.logFailClosed(ctx.app.id)
+      }
       const ipcError = toStepIpcError(error)
       this.finalizeFailed(ctx)
       try {

@@ -121,12 +121,129 @@ describe('expressDetector + engine', () => {
     })
 
     const result = detectFramework(buildSourceTree(dir))
-    expect(result.matched).toBe(false)
+    expect(result.matched).toBe(true)
     if (result.matched) {
       return
     }
     expect(result.hint).toContain('Không nhận diện được framework')
     expect(result.signals.express.some((signal) => signal.passed === false)).toBe(true)
+  })
+})
+
+describe('C03 Tier 1 detector matrix', () => {
+  it.each([
+    {
+      name: 'Next.js',
+      packageJson: { dependencies: { next: '^14.2.35', react: '^18.3.1' } },
+      env: 'NEXT_PUBLIC_SITE_NAME=Demo\n',
+      detector: 'nextjs',
+      port: 3000,
+      template: 'nextjs.Dockerfile',
+      build: 'npm ci && npm run build'
+    },
+    {
+      name: 'Vite SPA',
+      packageJson: { dependencies: { react: '^18.3.1' }, devDependencies: { vite: '^5.4.11' } },
+      env: 'VITE_API_URL=http://api\n',
+      detector: 'static-spa',
+      port: 80,
+      template: 'static-spa.Dockerfile',
+      build: 'npm ci && npm run build'
+    },
+    {
+      name: 'Express',
+      packageJson: { dependencies: { express: '^4.21.2' } },
+      env: 'PORT=3000\n',
+      detector: 'express',
+      port: 3000,
+      template: 'express.Dockerfile',
+      build: 'npm ci --omit=dev'
+    }
+  ])('$name is detected with its shared build plan', (fixture) => {
+    const dir = createFixture({
+      'package.json': JSON.stringify(fixture.packageJson),
+      '.env.example': fixture.env
+    })
+    const result = detectFramework(buildSourceTree(dir))
+    expect(result.matched).toBe(true)
+    if (!result.matched) return
+    expect(result.detector).toBe(fixture.detector)
+    expect(result.plan.containerPort).toBe(fixture.port)
+    expect(result.plan.dockerfileTemplate).toBe(fixture.template)
+    expect(result.plan.buildCommand).toBe(fixture.build)
+  })
+
+  it('prefers Next.js over Vite and rejects malformed package JSON', () => {
+    const nextOverVite = createFixture({
+      'package.json': JSON.stringify({
+        dependencies: { next: '14', react: '18' },
+        devDependencies: { vite: '5' }
+      })
+    })
+    expect(detectFramework(buildSourceTree(nextOverVite))).toMatchObject({
+      matched: true,
+      detector: 'nextjs'
+    })
+    const malformed = createFixture({ 'package.json': '{bad' })
+    expect(detectFramework(buildSourceTree(malformed)).matched).toBe(false)
+  })
+
+  it.each([
+    {
+      name: 'Next only in devDependencies is not Next.js',
+      packageJson: { devDependencies: { next: '14' } },
+      detector: 'none'
+    },
+    {
+      name: 'Vite only in dependencies is not Vite SPA',
+      packageJson: { dependencies: { vite: '5' } },
+      detector: 'none'
+    },
+    {
+      name: 'Express only in devDependencies is not Express',
+      packageJson: { devDependencies: { express: '4' } },
+      detector: 'none'
+    },
+    {
+      name: 'Next dependency wins over Vite devDependency',
+      packageJson: { dependencies: { next: '14' }, devDependencies: { vite: '5' } },
+      detector: 'nextjs'
+    },
+    {
+      name: 'Vite devDependency wins over Express dependency',
+      packageJson: { dependencies: { express: '4' }, devDependencies: { vite: '5' } },
+      detector: 'static-spa'
+    }
+  ])('$name', (fixture) => {
+    const dir = createFixture({ 'package.json': JSON.stringify(fixture.packageJson) })
+    const result = detectFramework(buildSourceTree(dir))
+    if (fixture.detector === 'none') {
+      expect(result.matched).toBe(false)
+    } else {
+      expect(result).toMatchObject({ matched: true, detector: fixture.detector })
+    }
+  })
+
+  it('keeps two public vars per framework in the BuildPlan defaults', () => {
+    const nextDir = createFixture({
+      'package.json': JSON.stringify({ dependencies: { next: '14' } }),
+      '.env.example': 'NEXT_PUBLIC_API_URL=https://default.test\nNEXT_PUBLIC_SITE_NAME=Default\n'
+    })
+    const next = detectFramework(buildSourceTree(nextDir))
+    expect(next.matched && next.plan.buildArgs).toEqual({
+      NEXT_PUBLIC_API_URL: 'https://default.test',
+      NEXT_PUBLIC_SITE_NAME: 'Default'
+    })
+
+    const viteDir = createFixture({
+      'package.json': JSON.stringify({ devDependencies: { vite: '5' } }),
+      '.env.example': 'VITE_API_URL=https://default.test\nVITE_SITE_NAME=Default\n'
+    })
+    const vite = detectFramework(buildSourceTree(viteDir))
+    expect(vite.matched && vite.plan.buildArgs).toEqual({
+      VITE_API_URL: 'https://default.test',
+      VITE_SITE_NAME: 'Default'
+    })
   })
 })
 

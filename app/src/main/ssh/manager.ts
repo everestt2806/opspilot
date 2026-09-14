@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import type { Readable, Writable } from 'node:stream'
 import * as tar from 'tar'
 
 import type { IpcError } from '@shared/ipc'
@@ -45,6 +46,52 @@ export interface UploadOptions {
   exclude?: string[]
   onProgress?: (bytes: number) => void
   signal?: AbortSignal
+}
+
+export interface RelayOptions {
+  signal?: AbortSignal
+  onProgress?: (bytes: number) => void
+}
+
+/** Copy a remote artifact without buffering it in the desktop process. */
+export function relayStreams(
+  input: Readable,
+  output: Writable,
+  options: Pick<RelayOptions, 'signal' | 'onProgress'> = {}
+): Promise<{ bytes: number }> {
+  return new Promise((resolve, reject) => {
+    let bytes = 0
+    let settled = false
+    const finish = (error?: unknown): void => {
+      if (settled) return
+      settled = true
+      if (error) reject(error)
+      else resolve({ bytes })
+    }
+    const abort = (): void => {
+      input.destroy()
+      output.destroy()
+      finish(new SshAbortedError())
+    }
+    if (options.signal?.aborted) {
+      abort()
+      return
+    }
+    options.signal?.addEventListener('abort', abort, { once: true })
+    input.on('data', (chunk: Buffer) => {
+      bytes += chunk.length
+      options.onProgress?.(bytes)
+      if (!output.write(chunk)) input.pause()
+    })
+    output.on('drain', () => input.resume())
+    input.once('error', finish)
+    output.once('error', finish)
+    input.once('end', () => output.end())
+    output.once('finish', () => {
+      options.signal?.removeEventListener('abort', abort)
+      finish()
+    })
+  })
 }
 
 export interface SshStatusEvent {
@@ -182,6 +229,50 @@ export class SshManager extends EventEmitter {
     }
   }
 
+  /** Relay one remote file through the desktop with channel backpressure. */
+  async relayFile(
+    sourceVpsId: number,
+    sourcePath: string,
+    targetVpsId: number,
+    targetPath: string,
+    options: RelayOptions = {}
+  ): Promise<{ bytes: number }> {
+    const source = await this.ensureConnected(sourceVpsId)
+    const target = await this.ensureConnected(targetVpsId)
+    const input = await this.openExecChannel(source, `cat ${shellQuote(sourcePath)}`, {})
+    const output = await this.openExecChannel(target, `cat > ${shellQuote(targetPath)}`, {})
+    let bytes = 0
+    const result = this.awaitChannelResult(
+      input,
+      { signal: options.signal, timeoutMs: 900_000 },
+      false
+    )
+    const outputResult = this.awaitChannelResult(
+      output,
+      { signal: options.signal, timeoutMs: 900_000 },
+      false
+    )
+    const failure = new Promise<never>((_, reject) => {
+      output.on('error', reject)
+      output.stderr.on('data', (chunk: Buffer) => {
+        if (chunk.length > 0) reject(new Error(chunk.toString('utf8')))
+      })
+    })
+    const relay = relayStreams(input, output, options)
+    try {
+      const sourceResult = await Promise.race([result, failure])
+      if (sourceResult.code !== 0) throw new AppError('UNKNOWN', 'Đọc artifact nguồn thất bại.')
+      const targetResult = await outputResult
+      bytes = (await relay).bytes
+      if (targetResult.code !== 0) throw new AppError('UNKNOWN', 'Ghi artifact đích thất bại.')
+    } catch (error) {
+      input.destroy()
+      output.destroy()
+      throw error
+    }
+    return { bytes }
+  }
+
   async fileSize(vpsId: number, remotePath: string): Promise<number> {
     const entry = await this.ensureConnected(vpsId)
     const result = await this.runCommand(entry, `stat -c %s ${shellQuote(remotePath)}`)
@@ -190,6 +281,41 @@ export class SshManager extends EventEmitter {
       throw new AppError('UNKNOWN', 'Không đọc được kích thước file trên VPS.')
     }
     return parsed
+  }
+
+  async metricSnapshot(
+    vpsId: number,
+    remotePath: string
+  ): Promise<{ generation: string; device: number; inode: number; size: number } | null> {
+    const result = await this.exec(vpsId, `stat -c '%d:%i:%s' ${shellQuote(remotePath)} 2>&1`, {
+      retryOnReconnect: true
+    })
+    if (result.code !== 0) {
+      if (/no such file|cannot stat/i.test(result.stdout + result.stderr)) return null
+      throw new AppError('UNKNOWN', 'Không đọc được snapshot metrics.jsonl trên VPS.')
+    }
+    const value = result.stdout.trim()
+    const match = value.match(/^(\d+):(\d+):(\d+)$/)
+    if (!match) throw new AppError('UNKNOWN', 'Snapshot metrics.jsonl không hợp lệ trên VPS.')
+    return {
+      generation: `${match[1]}:${match[2]}`,
+      device: Number(match[1]),
+      inode: Number(match[2]),
+      size: Number(match[3])
+    }
+  }
+
+  async fileIdentity(
+    vpsId: number,
+    remotePath: string
+  ): Promise<{ generation: string; device?: number; inode?: number }> {
+    const result = await this.exec(vpsId, `stat -c '%d:%i' ${shellQuote(remotePath)}`)
+    const generation = result.stdout.trim()
+    if (!/^\d+:\d+$/.test(generation)) {
+      throw new AppError('UNKNOWN', 'KhÃ´ng Ä‘á»c Ä‘Æ°á»£c identity file metrics trÃªn VPS.')
+    }
+    const [device, inode] = generation.split(':').map(Number)
+    return { generation, device, inode }
   }
 
   async disconnect(vpsId: number): Promise<void> {
@@ -349,7 +475,8 @@ export class SshManager extends EventEmitter {
 
   private awaitChannelResult(
     channel: ClientChannel,
-    options: ExecOptions = {}
+    options: ExecOptions = {},
+    captureOutput = true
   ): Promise<ExecResult> {
     return new Promise<ExecResult>((resolve, reject) => {
       let exitCode = -1
@@ -389,7 +516,7 @@ export class SshManager extends EventEmitter {
           return
         }
         const text = chunk.toString('utf8')
-        stdout += text
+        if (captureOutput) stdout += text
         options.onStdout?.(text)
       })
 
@@ -398,7 +525,7 @@ export class SshManager extends EventEmitter {
           return
         }
         const text = chunk.toString('utf8')
-        stderr += text
+        if (captureOutput) stderr += text
         options.onStderr?.(text)
       })
 

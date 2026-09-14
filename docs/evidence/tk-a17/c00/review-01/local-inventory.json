@@ -1,0 +1,25 @@
+{
+  "path": "C:\\Users\\everestt28\\AppData\\Roaming\\OpsPilot\\opspilot.db",
+  "mode": "ro",
+  "started_utc": "2026-09-10T20:02:28.447269+00:00",
+  "vps": [
+    {
+      "id": 1,
+      "name": "VM01",
+      "host": "221.121.1.79",
+      "port": 22,
+      "username": "root",
+      "auth_type": "password"
+    },
+    {
+      "id": 2,
+      "name": "VM02",
+      "host": "221.121.1.80",
+      "port": 22,
+      "username": "deploy",
+      "auth_type": "key"
+    }
+  ],
+  "apps": [],
+  "running_experiments": []
+}

@@ -1,0 +1,7 @@
+captured_at=2026-09-12T17:57:49Z
+host=221.121.1.79
+port=22
+tcp_test_succeeded=false
+ping_succeeded=false
+actual_profile_vps_id=1
+note=Electron resolver audit could not complete while TCP 22 was unreachable; no mutation performed.

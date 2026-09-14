@@ -1,0 +1,11 @@
+{
+  "started_utc": "2026-09-10T19:49:45.956518+00:00",
+  "command": [
+    "C:\\Users\\everestt28\\AppData\\Local\\pnpm\\bin\\node.exe",
+    "D:\\Developing\\DuAnCNTT\\tools\\a17-c00-native.cjs"
+  ],
+  "cwd": "D:\\Developing\\DuAnCNTT\\app",
+  "exit_code": 0,
+  "stdout": "{\"executable\":\"C:\\\\Users\\\\everestt28\\\\AppData\\\\Local\\\\pnpm\\\\bin\\\\node.exe\",\"node\":\"v22.23.2\",\"electron\":null,\"abi\":\"127\",\"sqliteModule\":\"D:\\\\Developing\\\\DuAnCNTT\\\\node_modules\\\\.pnpm\\\\better-sqlite3@13.0.3\\\\node_modules\\\\better-sqlite3\\\\lib\\\\index.js\"}\n{\"sqlite\":\"3.53.4\",\"ok\":1}\n",
+  "stderr": ""
+}

@@ -1,0 +1,60 @@
+{
+  "reviewed_code": "0967fb9",
+  "reviewed_docs": "8e08f76",
+  "base_review": "4510d5e",
+  "runtime": "Node 22.23.2",
+  "checks": [
+    {
+      "name": "focused-monitor-deploy",
+      "cwd": "app",
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 src/main/monitor src/main/deploy",
+      "exit": 0,
+      "result": "12 files, 71 tests passed"
+    },
+    {
+      "name": "reviewer-boundary-regression",
+      "cwd": "app",
+      "command": "node node_modules/vitest/vitest.mjs run --maxWorkers=1 src/main/monitor/c02-review.test.ts",
+      "exit": 1,
+      "result": "1 file, 1 test failed; pre-activation seq 1 and post-activation seq 2 were both assigned to deployment 2"
+    },
+    {
+      "name": "typecheck-node",
+      "cwd": "app",
+      "command": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json",
+      "exit": 0
+    },
+    {
+      "name": "typecheck-scripts",
+      "cwd": "app",
+      "command": "node node_modules/typescript/bin/tsc --noEmit -p tsconfig.scripts.json",
+      "exit": 0
+    },
+    {
+      "name": "lint-format",
+      "cwd": "app",
+      "command": "eslint poller.test.ts a17-c02-live.ts; prettier --check poller.test.ts a17-c02-live.ts",
+      "exit": 0,
+      "result": "no ESLint output; all matched files use Prettier style"
+    },
+    {
+      "name": "electron-vite-build",
+      "cwd": "app",
+      "command": "node node_modules/electron-vite/bin/electron-vite.js build",
+      "exit": 0,
+      "result": "renderer 3045 modules"
+    },
+    {
+      "name": "collector",
+      "cwd": "collector",
+      "command": "../ml-service/.venv/Scripts/python.exe -m pytest tests -q",
+      "exit": 0,
+      "result": "26 passed"
+    }
+  ],
+  "gitnexus": {
+    "analyze": "PASS with FTS unavailable warning",
+    "detect_changes": "31 changed symbols, 6 affected, HIGH",
+    "MonitorPoller.poll_impact": "8 upstream symbols, HIGH; direct production caller MonitorService.pollAll"
+  }
+}

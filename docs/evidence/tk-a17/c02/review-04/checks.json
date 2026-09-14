@@ -1,0 +1,73 @@
+{
+  "reviewed_code": "fa72a6e",
+  "reviewed_submission": "85f4810",
+  "review_base": "044cc0f",
+  "runtime": "Node 24.16.0, pnpm 11.1.0",
+  "checks": [
+    {
+      "name": "ancestry",
+      "command": "git merge-base --is-ancestor 044cc0f 85f4810",
+      "exit": 0
+    },
+    {
+      "name": "worker-exact-focused",
+      "cwd": "app",
+      "command": "pnpm exec vitest run --maxWorkers=1 src/main/db src/main/monitor src/main/deploy src/main/shutdown.test.ts",
+      "exit": 0,
+      "result": "18 files, 88 tests passed"
+    },
+    {
+      "name": "ml-service",
+      "cwd": "ml-service",
+      "command": ".venv/Scripts/python.exe -m pytest -q",
+      "exit": 0,
+      "result": "19 passed"
+    },
+    {
+      "name": "collector",
+      "cwd": "collector",
+      "command": "../ml-service/.venv/Scripts/python.exe -m pytest -q",
+      "exit": 0,
+      "result": "26 passed"
+    },
+    {
+      "name": "typecheck-node-web-scripts",
+      "cwd": "app",
+      "command": "pnpm typecheck; pnpm exec tsc -p tsconfig.scripts.json --noEmit",
+      "exit": 0
+    },
+    {
+      "name": "lint-format-build",
+      "cwd": "app",
+      "command": "scoped eslint; scoped prettier --check; pnpm build",
+      "exit": 0,
+      "result": "renderer 3045 modules"
+    },
+    {
+      "name": "reviewer-pipeline-recovery-regressions",
+      "cwd": "app",
+      "command": "pnpm exec vitest run --maxWorkers=1 src/main/deploy/pipeline.test.ts -t snapshot-fails-or-restore-nonzero --reporter=verbose",
+      "exit": 1,
+      "result": "2/2 failed: collector was not restarted after snapshot error; active deployment became previous even though restore compose returned nonzero"
+    },
+    {
+      "name": "reviewer-generation-rotation-regressions",
+      "cwd": "app",
+      "command": "pnpm exec vitest run --maxWorkers=1 src/main/monitor/activation.test.ts -t first-generation-or-partial-rotated --reporter=verbose",
+      "exit": 1,
+      "result": "2/2 failed: first real generation logged a false data gap; matching .1 with an unconsumed partial suffix was marked recovered without a gap"
+    }
+  ],
+  "gitnexus": {
+    "analyze": "PASS with FTS unavailable warning; 3785 nodes, 11149 edges, 300 flows",
+    "detect_changes": "55 changed symbols, 71 affected, CRITICAL",
+    "prepareActivationFor": "CRITICAL; 7 upstream symbols and 5 affected processes"
+  },
+  "scope": {
+    "vps_mutation": false,
+    "sqlite_persisted_mutation": false,
+    "app_b_mutation": false,
+    "ml_train_or_score": false,
+    "push_pr_merge": false
+  }
+}

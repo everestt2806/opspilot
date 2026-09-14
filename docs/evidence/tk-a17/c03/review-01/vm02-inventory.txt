@@ -1,0 +1,12 @@
+﻿captured_at=2026-09-12T15:44:11Z
+command=ssh read-only docker ps filter
+exit_code=0
+a17-c03-final-vite-app|a17-c03-final-vite:v1|running|Up 6 hours (healthy)
+a17-c03-final-vite-collector|a17-c03-final-vite:collector|running|Up 6 hours
+a17-c03-final-next-app|a17-c03-final-next:v1|running|Up 6 hours (healthy)
+a17-c03-final-next-collector|a17-c03-final-next:collector|running|Up 6 hours
+a17-c03-final-express-app|a17-c03-final-express:v2|running|Up 6 hours (healthy)
+a17-c03-final-express-db|postgres:16-alpine|running|Up 6 hours (healthy)
+a17-c03-final-express-collector|fc6683a91052|running|Up 6 hours
+express-demo-app|opspilot-demo-express:local|running|Up 4 days (healthy)
+express-demo-collector|opspilot-collector:1.0.0|running|Up 4 days

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DbDatabase, DbSchemaTable, DbUser } from '@shared/ipc'
 
 import { VpsDatabaseTab } from './VpsDatabaseTab'
+import { strings } from '../strings'
 
 const DB_BLOG: DbDatabase = { oid: 99, name: 'blog', size_bytes: 13_107_200, table_count: 3 }
 const DB_EMPTY: DbDatabase = { oid: 100, name: 'store', size_bytes: 1024, table_count: 0 }
@@ -87,17 +88,23 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
 
     // Chưa điền gì mà bấm OK -> lỗi validate, không gọi kênh
     const dialog = await screen.findByRole('dialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create database' }))
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: strings.vpsControl.database.createDatabase })
+    )
     await waitFor(() => expect(create).not.toHaveBeenCalled())
     expect(await screen.findByText('Enter a database name.')).toBeTruthy()
 
     fireEvent.change(input, { target: { value: 'Shop' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create database' }))
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: strings.vpsControl.database.createDatabase })
+    )
     await waitFor(() => expect(create).not.toHaveBeenCalled())
     expect(await screen.findByText('Lowercase letters, digits and underscores only.')).toBeTruthy()
 
     fireEvent.change(input, { target: { value: 'shop' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create database' }))
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: strings.vpsControl.database.createDatabase })
+    )
 
     await waitFor(() => expect(create).toHaveBeenCalledWith('db:create-database', 7, 'shop'))
     await waitFor(() => expect(list).toHaveBeenCalledTimes(2))
@@ -123,7 +130,9 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
 
     fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'app_user' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 's3cret' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create user' }))
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: strings.vpsControl.database.createUser })
+    )
 
     await waitFor(() =>
       expect(create).toHaveBeenCalledWith('db:create-user', 7, {
@@ -220,7 +229,7 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
     render(<VpsDatabaseTab vpsId={7} />)
 
     expect(await screen.findByText('Could not load databases.')).toBeTruthy()
-    fireEvent.click(screen.getByText('Retry'))
+    fireEvent.click(screen.getByText(strings.common.retry))
     await waitFor(() => expect(listDatabases).toHaveBeenCalledTimes(2))
   })
 
