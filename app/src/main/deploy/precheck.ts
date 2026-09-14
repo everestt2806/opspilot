@@ -1,10 +1,12 @@
 import type { PrecheckResult } from '@shared/ipc'
 
+import { AppError } from '../errors'
 import type { SshManager } from '../ssh/manager'
 
 /** Ngưỡng precheck đã chốt (m04): RAM >512MB · disk >2GB · port chưa dùng · Docker có. */
 export const RAM_MIN_MB = 512
 export const DISK_MIN_GB = 2
+export const LISTENING_PORTS_COMMAND = 'ss -H -ltn'
 
 export interface BaselineRaw {
   ramFreeMb: number
@@ -19,6 +21,35 @@ export type PrecheckDetail = {
   passed: boolean
   dockerVersion: string | null
   portUsed: boolean
+}
+
+/** Đọc các cổng TCP đang listen thật trên VPS để không phụ thuộc riêng vào SQLite local. */
+export async function listListeningPorts(
+  ssh: SshManager,
+  vpsId: number,
+  signal?: AbortSignal
+): Promise<number[]> {
+  const result = await ssh.exec(vpsId, LISTENING_PORTS_COMMAND, { signal, timeoutMs: 30_000 })
+  if (result.code !== 0) {
+    throw new AppError(
+      'PRECHECK_FAILED',
+      'Không đọc được danh sách cổng đang dùng trên VPS. Hãy kiểm tra quyền chạy ss rồi thử lại.'
+    )
+  }
+  return parseListeningPorts(result.stdout)
+}
+
+export function parseListeningPorts(output: string): number[] {
+  const ports = new Set<number>()
+  for (const line of output.split(/\r?\n/)) {
+    const fields = line.trim().split(/\s+/)
+    const localAddress = fields[3]
+    const match = localAddress?.match(/:(\d+)$/)
+    if (!match?.[1]) continue
+    const port = Number.parseInt(match[1], 10)
+    if (Number.isInteger(port) && port > 0 && port <= 65_535) ports.add(port)
+  }
+  return [...ports].sort((left, right) => left - right)
 }
 
 /** Một lệnh đọc-only, tách phần bằng marker để log gọn và parse chắc. */

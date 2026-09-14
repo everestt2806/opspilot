@@ -286,6 +286,8 @@ export interface DeployInput {
   vps_id: number;
   /** Thiếu -> tạo app mới; có -> redeploy app đã tồn tại */
   app_id?: number;
+  /** Cổng public đã được precheck chọn cho app mới; pipeline vẫn kiểm tra lại trước deploy. */
+  host_port?: number;
   app_name: string;
   source_path: string;
   /** Env do người dùng điền ở bước 3 của wizard, gồm cả secret */

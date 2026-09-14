@@ -41,7 +41,7 @@ describe('DeployService.precheck', () => {
     expect(result.checks.map((check) => check.label)).not.toContain('Cổng 30000')
   })
 
-  it('van kiem tra cong du kien doi voi app moi', async () => {
+  it('bo qua ca cong trong SQLite va cong dang listen that tren VPS', async () => {
     const { service, exec, vpsId } = createHarness()
 
     const result = await service.precheck({
@@ -51,9 +51,11 @@ describe('DeployService.precheck', () => {
       env: {}
     })
 
-    expect(result.assigned_host_port).toBe(30_001)
-    expect(exec.mock.calls[0][1]).toContain("printf 'PORT|'")
-    expect(exec.mock.calls[0][1]).toContain(':30001 ')
+    expect(result.assigned_host_port).toBe(30_002)
+    expect(exec).toHaveBeenCalledTimes(2)
+    expect(exec.mock.calls[0][1]).toBe('ss -H -ltn')
+    expect(exec.mock.calls[1][1]).toContain("printf 'PORT|'")
+    expect(exec.mock.calls[1][1]).toContain(':30002 ')
   })
 })
 
@@ -83,16 +85,20 @@ function createHarness(): {
     healthcheck_path: '/health',
     needs_db: 0
   })
-  const exec = vi.fn(async () => ({
-    code: 0,
-    stdout: [
-      'RAM_MB|2048',
-      'DISK_GB|20',
-      'PORT|FREE',
-      'DOCKER|Docker version 29.7.2, build 1234'
-    ].join('\n'),
-    stderr: ''
-  }))
+  const exec = vi.fn(async (_vpsId: number, command: string) =>
+    command === 'ss -H -ltn'
+      ? { code: 0, stdout: 'LISTEN 0 4096 0.0.0.0:30001 0.0.0.0:*', stderr: '' }
+      : {
+          code: 0,
+          stdout: [
+            'RAM_MB|2048',
+            'DISK_GB|20',
+            'PORT|FREE',
+            'DOCKER|Docker version 29.7.2, build 1234'
+          ].join('\n'),
+          stderr: ''
+        }
+  )
   const ssh = { exec } as unknown as SshManager
 
   return {

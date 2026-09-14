@@ -257,7 +257,7 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
   async function startDeploy(): Promise<void> {
     if (!precheck?.passed) return
     setStartError(null)
-    const input = buildInput()
+    const input = { ...buildInput(), host_port: precheck.assigned_host_port }
     const result = await window.api.invoke('deploy:start', input)
     if (!result.ok) {
       setStartError(result.error.message)
