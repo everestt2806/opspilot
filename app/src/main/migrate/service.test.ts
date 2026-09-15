@@ -403,4 +403,125 @@ describe('MigrateService guards and confirmation', () => {
       rmSync(directory, { recursive: true, force: true })
     }
   })
+
+  it('polls target health until the app listens after restore restarts it', async () => {
+    const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-health-'))
+    const database = initializeDatabase(directory)
+    try {
+      database.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('target','127.0.0.2','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port,healthcheck_path) VALUES (1,'demo-m123','express',30001,3000,'/health');"
+      )
+      const exec = vi
+        .fn()
+        .mockResolvedValueOnce({ code: 7, stdout: '', stderr: 'refused' })
+        .mockResolvedValueOnce({ code: 7, stdout: '', stderr: 'refused' })
+        .mockResolvedValue({ code: 0, stdout: '200', stderr: '' })
+      const service = new MigrateService(database, { exec } as never, vi.fn())
+      const privateService = service as unknown as {
+        waitTargetHealthy(
+          job: { target_vps_id: number },
+          target: App,
+          signal: AbortSignal
+        ): Promise<boolean>
+      }
+      const target = database
+        .prepare("SELECT a.*, 'http://127.0.0.2:' || a.host_port AS url FROM app a WHERE id=1")
+        .get() as App
+
+      vi.useFakeTimers()
+      let result: boolean | undefined
+      const resultPromise = privateService
+        .waitTargetHealthy({ target_vps_id: 1 }, target, new AbortController().signal)
+        .then((value) => {
+          result = value
+          return value
+        })
+      for (let tick = 0; result === undefined && tick < 20; tick += 1) {
+        await vi.advanceTimersByTimeAsync(1_000)
+      }
+      await resultPromise
+
+      expect(result).toBe(true)
+      expect(exec).toHaveBeenCalledTimes(3)
+      expect(String(exec.mock.calls[0]?.[1])).toContain('http://127.0.0.1:30001/health')
+    } finally {
+      vi.useRealTimers()
+      closeDatabase()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('gives up target health after 10 failed attempts', async () => {
+    const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-health-miss-'))
+    const database = initializeDatabase(directory)
+    try {
+      database.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('target','127.0.0.2','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port,healthcheck_path) VALUES (1,'demo-m123','express',30001,3000,'/health');"
+      )
+      const exec = vi.fn().mockResolvedValue({ code: 7, stdout: '', stderr: 'refused' })
+      const service = new MigrateService(database, { exec } as never, vi.fn())
+      const privateService = service as unknown as {
+        waitTargetHealthy(
+          job: { target_vps_id: number },
+          target: App,
+          signal: AbortSignal
+        ): Promise<boolean>
+      }
+      const target = database
+        .prepare("SELECT a.*, 'http://127.0.0.2:' || a.host_port AS url FROM app a WHERE id=1")
+        .get() as App
+
+      vi.useFakeTimers()
+      let result: boolean | undefined
+      const resultPromise = privateService
+        .waitTargetHealthy({ target_vps_id: 1 }, target, new AbortController().signal)
+        .then((value) => {
+          result = value
+          return value
+        })
+      for (let tick = 0; result === undefined && tick < 30; tick += 1) {
+        await vi.advanceTimersByTimeAsync(1_000)
+      }
+      await resultPromise
+
+      expect(result).toBe(false)
+      expect(exec).toHaveBeenCalledTimes(10)
+    } finally {
+      vi.useRealTimers()
+      closeDatabase()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('throws immediately when the migration signal is already aborted', async () => {
+    const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-health-abort-'))
+    const database = initializeDatabase(directory)
+    try {
+      database.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('target','127.0.0.2','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port,healthcheck_path) VALUES (1,'demo-m123','express',30001,3000,'/health');"
+      )
+      const exec = vi.fn()
+      const service = new MigrateService(database, { exec } as never, vi.fn())
+      const privateService = service as unknown as {
+        waitTargetHealthy(
+          job: { target_vps_id: number },
+          target: App,
+          signal: AbortSignal
+        ): Promise<boolean>
+      }
+      const target = database
+        .prepare("SELECT a.*, 'http://127.0.0.2:' || a.host_port AS url FROM app a WHERE id=1")
+        .get() as App
+      const controller = new AbortController()
+      controller.abort()
+
+      await expect(
+        privateService.waitTargetHealthy({ target_vps_id: 1 }, target, controller.signal)
+      ).rejects.toMatchObject({ userMessage: 'Migration đã bị huỷ.' })
+      expect(exec).not.toHaveBeenCalled()
+    } finally {
+      closeDatabase()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
 })

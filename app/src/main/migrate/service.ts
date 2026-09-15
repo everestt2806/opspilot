@@ -667,6 +667,26 @@ export class MigrateService {
     )
   }
 
+  /** VERIFY đợi app đích sẵn sàng: RESTORE vừa `compose up -d` lại app sau pg_restore
+   *  nên container cần vài giây để listen — poll thay vì curl một lần. */
+  private async waitTargetHealthy(
+    job: MigrationJob,
+    target: App,
+    signal: AbortSignal
+  ): Promise<boolean> {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      if (signal.aborted) throw new AppError('UNKNOWN', 'Migration đã bị huỷ.')
+      const health = await this.ssh.exec(
+        job.target_vps_id,
+        `curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1:${target.host_port}${target.healthcheck_path}`,
+        { signal }
+      )
+      if (health.code === 0 && health.stdout.trim().startsWith('2')) return true
+      await new Promise((resolve) => setTimeout(resolve, 1_000))
+    }
+    return false
+  }
+
   private async verify(
     job: MigrationJob,
     source: App,
@@ -674,11 +694,7 @@ export class MigrateService {
     artifacts: { artifacts: Artifact[] },
     signal: AbortSignal
   ): Promise<Verify> {
-    const targetHealth = await this.ssh.exec(
-      job.target_vps_id,
-      `curl -fsS -o /dev/null -w '%{http_code}' http://127.0.0.1:${target.host_port}${target.healthcheck_path}`,
-      { signal }
-    )
+    const targetHealthy = await this.waitTargetHealthy(job, target, signal)
     const targetRuntime = await this.ssh.exec(
       job.target_vps_id,
       `docker inspect -f '{{.Config.Image}}|{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' ${shellQuote(`${target.name}-app`)}`,
@@ -695,9 +711,7 @@ export class MigrateService {
       targetArchive.code === 0 &&
       targetArchive.stdout.trim().split(/\s+/)[0] === artifacts.artifacts[0]?.sha256
     const health =
-      targetHealth.code === 0 &&
-      targetHealth.stdout.trim().startsWith('2') &&
-      targetRuntime.stdout.includes('|running|')
+      targetHealthy && targetRuntime.stdout.includes('|running|')
     const tableCounts =
       source.needs_db === 1 ? await this.tableCounts(job, source, target, signal) : []
     const marker =
