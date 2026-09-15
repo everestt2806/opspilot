@@ -292,4 +292,236 @@ describe('MigrateService guards and confirmation', () => {
       rmSync(directory, { recursive: true, force: true })
     }
   })
+
+  it('passes the migrated .env into the restore pipeline so build-time env is not lost', async () => {
+    const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-env-'))
+    const database = initializeDatabase(directory)
+    try {
+      database.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('source','127.0.0.1','u','password','x'),('target','127.0.0.2','u','password','x'); INSERT INTO app (vps_id,name,framework,source_path,host_port,container_port) VALUES (1,'demo','static-spa','C:/demo',30000,80),(2,'demo-m123','static-spa','C:/demo',30001,80);"
+      )
+      const readFile = vi
+        .fn()
+        .mockResolvedValue('VITE_API_URL=http://221.121.1.80:30001\nPORT=3000\n')
+      const run = vi.fn().mockReturnValue({ deploymentId: 7 })
+      const service = new MigrateService(
+        database,
+        { exec: vi.fn(), readFile } as never,
+        vi.fn(),
+        () => ({ run }) as never
+      )
+      const privateService = service as unknown as {
+        startRestoreDeployment(
+          job: { id: number; target_vps_id: number },
+          source: App,
+          target: App,
+          targetDir: string,
+          signal: AbortSignal
+        ): Promise<number>
+      }
+      const source = database
+        .prepare("SELECT a.*, 'http://127.0.0.1:' || a.host_port AS url FROM app a WHERE id=1")
+        .get() as App
+      const target = database
+        .prepare("SELECT a.*, 'http://127.0.0.2:' || a.host_port AS url FROM app a WHERE id=2")
+        .get() as App
+      const signal = new AbortController().signal
+
+      const deploymentId = await privateService.startRestoreDeployment(
+        { id: 5, target_vps_id: 2 },
+        source,
+        target,
+        '/opt/opspilot/demo-m123',
+        signal
+      )
+
+      expect(deploymentId).toBe(7)
+      expect(readFile).toHaveBeenCalledWith(2, '/opt/opspilot/demo-m123/.env')
+      expect(run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          remote_source_path: '/opt/opspilot/demo-m123',
+          env: { VITE_API_URL: 'http://221.121.1.80:30001', PORT: '3000' }
+        }),
+        signal
+      )
+    } finally {
+      closeDatabase()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to empty env when the migrated .env cannot be read', async () => {
+    const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-env-miss-'))
+    const database = initializeDatabase(directory)
+    try {
+      database.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('source','127.0.0.1','u','password','x'),('target','127.0.0.2','u','password','x'); INSERT INTO app (vps_id,name,framework,source_path,host_port,container_port) VALUES (1,'demo','static-spa','C:/demo',30000,80),(2,'demo-m123','static-spa','C:/demo',30001,80);"
+      )
+      const readFile = vi.fn().mockRejectedValue(new Error('ssh dropped'))
+      const run = vi.fn().mockReturnValue({ deploymentId: 8 })
+      const events: unknown[] = []
+      const service = new MigrateService(
+        database,
+        { exec: vi.fn(), readFile } as never,
+        (event) => events.push(event),
+        () => ({ run }) as never
+      )
+      const privateService = service as unknown as {
+        startRestoreDeployment(
+          job: { id: number; target_vps_id: number },
+          source: App,
+          target: App,
+          targetDir: string,
+          signal: AbortSignal
+        ): Promise<number>
+      }
+      const source = database
+        .prepare("SELECT a.*, 'http://127.0.0.1:' || a.host_port AS url FROM app a WHERE id=1")
+        .get() as App
+      const target = database
+        .prepare("SELECT a.*, 'http://127.0.0.2:' || a.host_port AS url FROM app a WHERE id=2")
+        .get() as App
+      const signal = new AbortController().signal
+
+      const deploymentId = await privateService.startRestoreDeployment(
+        { id: 6, target_vps_id: 2 },
+        source,
+        target,
+        '/opt/opspilot/demo-m123',
+        signal
+      )
+
+      expect(deploymentId).toBe(8)
+      expect(run).toHaveBeenCalledWith(expect.objectContaining({ env: {} }), signal)
+      const logs = events.filter(
+        (event): event is { type: 'log'; chunk: string } =>
+          typeof event === 'object' && event !== null && (event as { type?: string }).type === 'log'
+      )
+      expect(logs.some((event) => event.chunk.includes('Không đọc được .env'))).toBe(true)
+    } finally {
+      closeDatabase()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('polls target health until the app listens after restore restarts it', async () => {
+    const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-health-'))
+    const database = initializeDatabase(directory)
+    try {
+      database.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('target','127.0.0.2','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port,healthcheck_path) VALUES (1,'demo-m123','express',30001,3000,'/health');"
+      )
+      const exec = vi
+        .fn()
+        .mockResolvedValueOnce({ code: 7, stdout: '', stderr: 'refused' })
+        .mockResolvedValueOnce({ code: 7, stdout: '', stderr: 'refused' })
+        .mockResolvedValue({ code: 0, stdout: '200', stderr: '' })
+      const service = new MigrateService(database, { exec } as never, vi.fn())
+      const privateService = service as unknown as {
+        waitTargetHealthy(
+          job: { target_vps_id: number },
+          target: App,
+          signal: AbortSignal
+        ): Promise<boolean>
+      }
+      const target = database
+        .prepare("SELECT a.*, 'http://127.0.0.2:' || a.host_port AS url FROM app a WHERE id=1")
+        .get() as App
+
+      vi.useFakeTimers()
+      let result: boolean | undefined
+      const resultPromise = privateService
+        .waitTargetHealthy({ target_vps_id: 1 }, target, new AbortController().signal)
+        .then((value) => {
+          result = value
+          return value
+        })
+      for (let tick = 0; result === undefined && tick < 20; tick += 1) {
+        await vi.advanceTimersByTimeAsync(1_000)
+      }
+      await resultPromise
+
+      expect(result).toBe(true)
+      expect(exec).toHaveBeenCalledTimes(3)
+      expect(String(exec.mock.calls[0]?.[1])).toContain('http://127.0.0.1:30001/health')
+    } finally {
+      vi.useRealTimers()
+      closeDatabase()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('gives up target health after 10 failed attempts', async () => {
+    const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-health-miss-'))
+    const database = initializeDatabase(directory)
+    try {
+      database.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('target','127.0.0.2','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port,healthcheck_path) VALUES (1,'demo-m123','express',30001,3000,'/health');"
+      )
+      const exec = vi.fn().mockResolvedValue({ code: 7, stdout: '', stderr: 'refused' })
+      const service = new MigrateService(database, { exec } as never, vi.fn())
+      const privateService = service as unknown as {
+        waitTargetHealthy(
+          job: { target_vps_id: number },
+          target: App,
+          signal: AbortSignal
+        ): Promise<boolean>
+      }
+      const target = database
+        .prepare("SELECT a.*, 'http://127.0.0.2:' || a.host_port AS url FROM app a WHERE id=1")
+        .get() as App
+
+      vi.useFakeTimers()
+      let result: boolean | undefined
+      const resultPromise = privateService
+        .waitTargetHealthy({ target_vps_id: 1 }, target, new AbortController().signal)
+        .then((value) => {
+          result = value
+          return value
+        })
+      for (let tick = 0; result === undefined && tick < 30; tick += 1) {
+        await vi.advanceTimersByTimeAsync(1_000)
+      }
+      await resultPromise
+
+      expect(result).toBe(false)
+      expect(exec).toHaveBeenCalledTimes(10)
+    } finally {
+      vi.useRealTimers()
+      closeDatabase()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('throws immediately when the migration signal is already aborted', async () => {
+    const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-health-abort-'))
+    const database = initializeDatabase(directory)
+    try {
+      database.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('target','127.0.0.2','u','password','x'); INSERT INTO app (vps_id,name,framework,host_port,container_port,healthcheck_path) VALUES (1,'demo-m123','express',30001,3000,'/health');"
+      )
+      const exec = vi.fn()
+      const service = new MigrateService(database, { exec } as never, vi.fn())
+      const privateService = service as unknown as {
+        waitTargetHealthy(
+          job: { target_vps_id: number },
+          target: App,
+          signal: AbortSignal
+        ): Promise<boolean>
+      }
+      const target = database
+        .prepare("SELECT a.*, 'http://127.0.0.2:' || a.host_port AS url FROM app a WHERE id=1")
+        .get() as App
+      const controller = new AbortController()
+      controller.abort()
+
+      await expect(
+        privateService.waitTargetHealthy({ target_vps_id: 1 }, target, controller.signal)
+      ).rejects.toMatchObject({ userMessage: 'Migration đã bị huỷ.' })
+      expect(exec).not.toHaveBeenCalled()
+    } finally {
+      closeDatabase()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
 })

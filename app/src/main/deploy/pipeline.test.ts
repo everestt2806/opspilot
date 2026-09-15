@@ -305,6 +305,25 @@ async function advanceFailedHealthcheck(): Promise<void> {
   await vi.advanceTimersByTimeAsync(100)
 }
 
+function createViteSource(envExample = 'VITE_API_URL=http://localhost:3000\n'): string {
+  const viteSource = mkdtempSync(join(tmpdir(), 'opspilot-vite-source-'))
+  writeFileSync(
+    join(viteSource, 'package.json'),
+    JSON.stringify({ name: 'demo-spa', devDependencies: { vite: '5' } }),
+    'utf8'
+  )
+  writeFileSync(join(viteSource, '.env.example'), envExample, 'utf8')
+  return viteSource
+}
+
+function appBuildCommand(): string {
+  const command = sshExec.mock.calls
+    .map((call) => String(call[1]))
+    .find((entry) => entry.includes('docker build'))
+  expect(command).toBeDefined()
+  return command as string
+}
+
 describe('DeployPipeline', () => {
   it('packaged resource path contains the collector files', () => {
     const resourceRoot = mkdtempSync(join(tmpdir(), 'opspilot-resources-'))
@@ -442,6 +461,36 @@ describe('DeployPipeline', () => {
     expect(database.prepare('SELECT host_port FROM app WHERE name = ?').get('demo-api')).toEqual({
       host_port: 30024
     })
+  })
+
+  it('build arg VITE_API_URL dung env nguoi dung nhap, khong dung default .env.example', async () => {
+    createHarness()
+    const viteSource = createViteSource()
+    try {
+      const { deploymentId } = pipeline.run(
+        deployInput({ source_path: viteSource, env: { VITE_API_URL: 'http://203.0.113.55:30001' } })
+      )
+      expect((await waitForFinished(deploymentId)).status).toBe('running')
+
+      const buildCommand = appBuildCommand()
+      expect(buildCommand).toContain('VITE_API_URL=http://203.0.113.55:30001')
+      expect(buildCommand).not.toContain('VITE_API_URL=http://localhost:3000')
+    } finally {
+      rmSync(viteSource, { recursive: true, force: true })
+    }
+  })
+
+  it('build arg roi ve default .env.example khi env rong (deploy thuong giu nguyen hanh vi)', async () => {
+    createHarness()
+    const viteSource = createViteSource()
+    try {
+      const { deploymentId } = pipeline.run(deployInput({ source_path: viteSource }))
+      expect((await waitForFinished(deploymentId)).status).toBe('running')
+
+      expect(appBuildCommand()).toContain('VITE_API_URL=http://localhost:3000')
+    } finally {
+      rmSync(viteSource, { recursive: true, force: true })
+    }
   })
 
   it('first deploy succeeds when collector has not created metrics.jsonl', async () => {
