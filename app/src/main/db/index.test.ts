@@ -31,7 +31,7 @@ describe('initializeDatabase', () => {
       .get() as { version: number }
 
     expect(tables).toHaveLength(12)
-    expect(schemaVersion.version).toBe(2)
+    expect(schemaVersion.version).toBe(3)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -62,8 +62,15 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 2
+      version: 3
     })
+    expect(
+      database
+        .prepare(
+          "SELECT COUNT(*) AS count FROM pragma_table_info('migration_job') WHERE name='error_message'"
+        )
+        .get()
+    ).toEqual({ count: 1 })
     expect(
       database
         .prepare(

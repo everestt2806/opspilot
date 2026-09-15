@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpsPilot Demo Inventory</title>
+    <style>
+      :root {
+        --bg: #f5f6f8;
+        --panel: #ffffff;
+        --border: #e3e6ea;
+        --border-strong: #cfd4da;
+        --text: #1f2328;
+        --muted: #57606a;
+        --faint: #8b949e;
+        --accent: #0e639c;
+        --accent-hover: #1177bb;
+        --green: #107c41;
+        --red: #c42b1c;
+        --mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          14px/1.6 'Segoe UI', system-ui,
+          -apple-system, sans-serif;
+      }
+
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      /* ── Thanh trên ── */
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 56px;
+        padding: 0 24px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 600;
+        font-size: 14px;
+      }
+
+      .brand-mark {
+        display: grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        border: 1px solid var(--border-strong);
+        border-radius: 5px;
+        background: var(--panel);
+      }
+
+      .brand-mark svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 3px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--green);
+      }
+
+      /* ── Khung trang ── */
+      .page {
+        width: min(1080px, calc(100% - 48px));
+        margin: 0 auto;
+        padding: 32px 0 48px;
+      }
+
+      .page-heading {
+        margin-bottom: 24px;
+      }
+
+      .page-heading h1 {
+        margin: 0 0 6px;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+
+      .page-heading p {
+        margin: 0 0 12px;
+        max-width: 640px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .page-links {
+        display: flex;
+        gap: 16px;
+        font-size: 12px;
+        font-family: var(--mono);
+      }
+
+      /* ── Thẻ số liệu ── */
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .metric-card {
+        padding: 14px 16px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--panel);
+      }
+
+      .metric-label {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .metric-value {
+        display: block;
+        overflow: hidden;
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .metric-note {
+        display: block;
+        margin-top: 3px;
+        color: var(--faint);
+        font-size: 11px;
+        font-family: var(--mono);
+      }
+
+      .status-good {
+        color: var(--green);
+      }
+
+      /* ── Lưới nội dung ── */
+      .workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.6fr);
+        gap: 12px;
+        align-items: start;
+      }
+
+      .panel {
+        overflow: hidden;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--panel);
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .panel-head h2 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .panel-head span {
+        color: var(--faint);
+        font-size: 11px;
+        font-family: var(--mono);
+      }
+
+      /* ── Bảng ── */
+      .table-wrap {
+        overflow-x: auto;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        font-size: 13px;
+      }
+
+      tr:last-child td {
+        border-bottom: none;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      td:first-child {
+        width: 70px;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      .empty-row {
+        height: 120px;
+        color: var(--faint);
+        text-align: center;
+      }
+
+      /* ── Form ── */
+      .form-body {
+        padding: 16px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      input {
+        width: 100%;
+        height: 34px;
+        padding: 0 10px;
+        border: 1px solid var(--border-strong);
+        border-radius: 3px;
+        outline: none;
+        background: var(--panel);
+        color: var(--text);
+        font: inherit;
+        font-size: 13px;
+      }
+
+      input:focus {
+        border-color: var(--accent);
+        box-shadow: inset 0 -2px 0 var(--accent);
+      }
+
+      button {
+        width: 100%;
+        height: 34px;
+        margin-top: 10px;
+        padding: 0 14px;
+        border: 1px solid transparent;
+        border-radius: 3px;
+        background: var(--accent);
+        color: #fff;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: var(--accent-hover);
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+
+      .toast {
+        min-height: 18px;
+        margin-top: 10px;
+        color: var(--green);
+        font-size: 12px;
+      }
+
+      .toast-error {
+        color: var(--red);
+      }
+
+      .tech-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+      }
+
+      .tech-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .tech-row strong {
+        overflow: hidden;
+        color: var(--text);
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 500;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      footer {
+        padding: 20px 0;
+        border-top: 1px solid var(--border);
+        color: var(--faint);
+        font-size: 11px;
+        text-align: center;
+      }
+
+      /* ── Responsive ── */
+      @media (max-width: 900px) {
+        .workspace {
+          grid-template-columns: 1fr;
+        }
+
+        .metrics {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 560px) {
+        .page {
+          width: calc(100% - 24px);
+        }
+
+        .topbar {
+          padding: 0 12px;
+        }
+
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+
+        th,
+        td {
+          padding-inline: 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M5 15.5 12 4l7 11.5-7 4.5-7-4.5Z" stroke="#57606A" stroke-width="1.7" />
+            <path d="M8.5 14.8h7M12 4v16" stroke="#57606A" stroke-width="1.7" />
+          </svg>
+        </span>
+        <span>OpsPilot Demo Inventory</span>
+      </div>
+      <span class="status-badge"><span class="status-dot"></span> Live on VPS</span>
+    </nav>
+
+    <main class="page">
+      <section class="page-heading">
+        <h1>Inventory API</h1>
+        <p>
+          Ứng dụng Express đang chạy trong Docker trên VPS, lưu dữ liệu PostgreSQL và được OpsPilot
+          healthcheck định kỳ. Tạo một bản ghi bên dưới để kiểm chứng dữ liệu end-to-end.
+        </p>
+        <div class="page-links">
+          <a href="/health" target="_blank" rel="noreferrer">GET /health</a>
+          <a href="/items?limit=5" target="_blank" rel="noreferrer">GET /items</a>
+          <a href="/meta" target="_blank" rel="noreferrer">GET /meta</a>
+        </div>
+      </section>
+
+      <section class="metrics" aria-label="Số liệu ứng dụng">
+        <article class="metric-card">
+          <span class="metric-label">Trạng thái dịch vụ</span>
+          <strong id="health-value" class="metric-value status-good">Đang kiểm tra…</strong>
+          <span class="metric-note">GET /health</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Lưu trữ</span>
+          <strong id="storage-value" class="metric-value">—</strong>
+          <span class="metric-note">phát hiện lúc runtime</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Số bản ghi</span>
+          <strong id="records-value" class="metric-value">—</strong>
+          <span class="metric-note">đọc từ API trực tiếp</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">Uptime</span>
+          <strong id="uptime-value" class="metric-value">—</strong>
+          <span class="metric-note">từ lần deploy hiện tại</span>
+        </article>
+      </section>
+
+      <section class="workspace">
+        <article class="panel">
+          <div class="panel-head">
+            <h2>Bản ghi mới nhất</h2>
+            <span id="table-caption">Đang tải /items…</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Tên</th>
+                  <th>Thời điểm tạo</th>
+                </tr>
+              </thead>
+              <tbody id="items-body">
+                <tr>
+                  <td class="empty-row" colspan="3">Đang tải…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <aside class="panel">
+          <div class="panel-head">
+            <h2>Tạo bản ghi qua API</h2>
+            <span>POST /items</span>
+          </div>
+          <div class="form-body">
+            <form id="create-form">
+              <label for="item-name">Tên bản ghi mới</label>
+              <input
+                id="item-name"
+                name="name"
+                maxlength="80"
+                placeholder="MARKER-DEMO-1409"
+                required
+              />
+              <button id="create-button" type="submit">Tạo bản ghi</button>
+            </form>
+            <div id="toast" class="toast" role="status" aria-live="polite"></div>
+            <div class="tech-list">
+              <div class="tech-row"><span>Phiên bản app</span><strong id="version-value">—</strong></div>
+              <div class="tech-row"><span>Runtime</span><strong id="runtime-value">—</strong></div>
+              <div class="tech-row"><span>Host công khai</span><strong id="host-value">—</strong></div>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <footer class="page">Deploy bởi OpsPilot · Express · Docker · PostgreSQL</footer>
+
+    <script>
+      const byId = (id) => document.getElementById(id)
+      const setText = (id, value) => {
+        byId(id).textContent = String(value)
+      }
+
+      function formatUptime(seconds) {
+        const value = Math.max(0, Number(seconds) || 0)
+        const hours = Math.floor(value / 3600)
+        const minutes = Math.floor((value % 3600) / 60)
+        const secs = value % 60
+        return hours > 0
+          ? `${hours}h ${minutes}m`
+          : minutes > 0
+            ? `${minutes}m ${secs}s`
+            : `${secs}s`
+      }
+
+      async function request(url, options) {
+        const response = await fetch(url, options)
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response.json()
+      }
+
+      function renderItems(items) {
+        const body = byId('items-body')
+        body.replaceChildren()
+        if (items.length === 0) {
+          const row = document.createElement('tr')
+          const cell = document.createElement('td')
+          cell.colSpan = 3
+          cell.className = 'empty-row'
+          cell.textContent = 'Chưa có bản ghi nào.'
+          row.appendChild(cell)
+          body.appendChild(row)
+          return
+        }
+        for (const item of [...items].reverse()) {
+          const row = document.createElement('tr')
+          for (const value of [
+            item.id,
+            item.name,
+            new Date(item.created_at).toLocaleString('vi-VN')
+          ]) {
+            const cell = document.createElement('td')
+            cell.textContent = String(value)
+            row.appendChild(cell)
+          }
+          body.appendChild(row)
+        }
+      }
+
+      async function refreshDashboard() {
+        try {
+          const [meta, health] = await Promise.all([request('/meta'), request('/health')])
+          setText('health-value', health.ok ? 'Healthy' : 'Degraded')
+          setText('storage-value', meta.storage)
+          setText('records-value', Number(meta.records).toLocaleString('vi-VN'))
+          setText('uptime-value', formatUptime(health.uptime_s))
+          setText('version-value', `v${meta.version}`)
+          setText('runtime-value', meta.runtime)
+          setText('host-value', window.location.host)
+          setText('table-caption', `${Number(meta.records).toLocaleString('vi-VN')} bản ghi`)
+          const offset = Math.max(0, Number(meta.records) - 6)
+          renderItems(await request(`/items?limit=6&offset=${offset}`))
+        } catch (error) {
+          setText('health-value', 'Không khả dụng')
+          byId('health-value').classList.remove('status-good')
+          setText('table-caption', error instanceof Error ? error.message : 'Request failed')
+        }
+      }
+
+      byId('create-form').addEventListener('submit', async (event) => {
+        event.preventDefault()
+        const input = byId('item-name')
+        const button = byId('create-button')
+        const toast = byId('toast')
+        const name = input.value.trim()
+        if (!name) return
+        button.disabled = true
+        button.textContent = 'Đang tạo…'
+        toast.textContent = ''
+        toast.classList.remove('toast-error')
+        try {
+          const item = await request('/items', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+          })
+          input.value = ''
+          toast.textContent = `Đã tạo bản ghi #${item.id} trong PostgreSQL.`
+          await refreshDashboard()
+        } catch (error) {
+          toast.classList.add('toast-error')
+          toast.textContent = error instanceof Error ? error.message : 'Không tạo được bản ghi.'
+        } finally {
+          button.disabled = false
+          button.textContent = 'Tạo bản ghi'
+        }
+      })
+
+      void refreshDashboard()
+      window.setInterval(() => {
+        void request('/health')
+          .then((health) => setText('uptime-value', formatUptime(health.uptime_s)))
+          .catch(() => undefined)
+      }, 5000)
+    </script>
+  </body>
+</html>

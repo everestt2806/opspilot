@@ -20,7 +20,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { VpsPage } from './pages/VpsPage'
 import { strings } from './strings'
 import { useUiState } from './store/uiState'
-import { themeTokens } from './utils/themeTokens'
+import { TITLEBAR_OVERLAY, applyTheme, themeTokens } from './utils/themeTokens'
 
 type PageKey = 'vps' | 'apps' | 'deploy' | 'dashboard' | 'migrate' | 'history' | 'settings'
 
@@ -66,7 +66,9 @@ function App(): React.JSX.Element {
   const pageTitle = menuItems.find((item) => item.key === page)?.label ?? strings.app.name
 
   useEffect(() => {
-    document.documentElement.dataset.theme = themeMode
+    applyTheme(themeMode)
+    // Đổi luôn màu nút minimize/close của overlay native Windows cho khớp theme.
+    window.api?.invoke('window:set-titlebar-overlay', TITLEBAR_OVERLAY[themeMode]).catch(() => {})
   }, [themeMode])
 
   return (
@@ -75,22 +77,19 @@ function App(): React.JSX.Element {
         <div className="app-window">
           <AppTitleBar pageTitle={pageTitle} />
           <Layout className="app-shell">
+            {/* Không đặt theme="dark" ở đây: antd sẽ dùng bộ navy #001529 mặc định
+                thay vì token trong themeTokens — sidebar lệch tông với nền xám. */}
             <Layout.Sider
-              width={220}
-              collapsedWidth={56}
+              width={216}
+              collapsedWidth={48}
               collapsible
               collapsed={collapsed}
               onCollapse={setCollapsed}
               breakpoint="lg"
-              onBreakpoint={(broken) => {
-                if (broken) setCollapsed(true)
-              }}
-              theme={themeMode === 'dark' ? 'dark' : 'light'}
             >
               <Menu
                 className="app-navigation"
                 mode="inline"
-                theme={themeMode === 'dark' ? 'dark' : 'light'}
                 selectedKeys={[page]}
                 items={menuItems}
                 onClick={({ key }) => setActivePage(key as PageKey)}

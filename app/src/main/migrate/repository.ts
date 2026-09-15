@@ -18,6 +18,7 @@ export interface MigrationJob {
   target_vps_id: number
   status: MigrationStatus
   failed_step: string | null
+  error_message: string | null
   downtime_ms: number | null
   bytes_transferred: number | null
   verify_json: string | null
@@ -69,6 +70,7 @@ export class MigrationRepository {
         MigrationJob,
         | 'status'
         | 'failed_step'
+        | 'error_message'
         | 'downtime_ms'
         | 'bytes_transferred'
         | 'verify_json'

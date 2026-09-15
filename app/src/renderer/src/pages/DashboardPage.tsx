@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import {
-  DashboardOutlined,
-  CloudServerOutlined,
-  ReloadOutlined,
-  RocketOutlined
-} from '@ant-design/icons'
+import { CloudServerOutlined, ReloadOutlined, RocketOutlined } from '@ant-design/icons'
 import { Alert, Badge, Button, Card, Empty, Space, Table, Tag, Tooltip, Typography } from 'antd'
 
 import type { ActionLogEntry, App, IpcError, Vps } from '@shared/ipc'
 
+import { PageHeader } from '../components/PageHeader'
 import { strings } from '../strings'
 import { localDateTime, relativeTime } from '../utils/format'
 
@@ -179,17 +175,14 @@ export function DashboardPage({ onOpenVps, onOpenDeploy }: DashboardPageProps): 
 
   return (
     <section className="page-panel">
-      <div className="page-heading">
-        <div>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            <DashboardOutlined style={{ marginRight: 8, color: 'var(--info)' }} />
-            {strings.dashboard.title}
-          </Typography.Title>
-        </div>
-        <Button icon={<ReloadOutlined />} loading={loading} onClick={reload}>
-          {strings.dashboard.refresh}
-        </Button>
-      </div>
+      <PageHeader
+        title={strings.dashboard.title}
+        actions={
+          <Button icon={<ReloadOutlined />} loading={loading} onClick={reload}>
+            {strings.dashboard.refresh}
+          </Button>
+        }
+      />
 
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <div className="summary-strip" aria-label={strings.dashboard.summaryLabel}>

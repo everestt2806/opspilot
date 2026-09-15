@@ -28,6 +28,8 @@ import {
 
 import type { App, DeployInput, DetectionResultDto, PrecheckResult, Vps } from '@shared/ipc'
 
+import { PageHeader } from '../components/PageHeader'
+
 import { strings } from '../strings'
 import { useUiState } from '../store/uiState'
 import { applyEvent, initialSteps, SEVEN_STEPS, type RunView } from './deployRun'
@@ -320,15 +322,7 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
 
   return (
     <section className="page-panel">
-      <div className="page-heading">
-        <div>
-          <Typography.Title level={2} style={{ color: 'var(--text-primary)', margin: 0 }}>
-            <RocketOutlined style={{ marginRight: 10, color: 'var(--info)' }} />
-            {strings.deploy.title}
-          </Typography.Title>
-          <Typography.Text type="secondary">{strings.deploy.description}</Typography.Text>
-        </div>
-      </div>
+      <PageHeader title={strings.deploy.title} description={strings.deploy.description} />
 
       {vpsList.length === 0 ? (
         <Empty description={strings.deploy.noVps} />
@@ -825,23 +819,17 @@ function DeployLogView({
 
   return (
     <section className="page-panel">
-      <div className="page-heading">
-        <div>
-          <Typography.Title level={2} style={{ color: 'var(--text-primary)', margin: 0 }}>
-            <RocketOutlined style={{ marginRight: 10, color: 'var(--info)' }} />
-            {strings.deploy.log.title}
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            {appName}
-            {vpsName ? ` — ${vpsName}` : ''}
-          </Typography.Text>
-        </div>
-        {!finished && (
-          <Button danger icon={<StopOutlined />} onClick={() => setCancelOpen(true)}>
-            {strings.deploy.log.cancel}
-          </Button>
-        )}
-      </div>
+      <PageHeader
+        title={strings.deploy.log.title}
+        description={`${appName}${vpsName ? ` — ${vpsName}` : ''}`}
+        actions={
+          !finished ? (
+            <Button danger icon={<StopOutlined />} onClick={() => setCancelOpen(true)}>
+              {strings.deploy.log.cancel}
+            </Button>
+          ) : undefined
+        }
+      />
 
       <Steps size="small" items={stepItems} />
 

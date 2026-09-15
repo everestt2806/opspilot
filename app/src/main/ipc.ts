@@ -21,6 +21,8 @@ export interface WindowController {
   unmaximize(): void
   isMaximized(): boolean
   close(): void
+  /** Chỉ có trên Windows (titleBarOverlay); nền tảng khác bỏ qua. */
+  setTitleBarOverlay?(overlay: { color: string; symbolColor: string }): void
 }
 
 type Channel = keyof IpcInvokeMap
@@ -162,5 +164,9 @@ export function registerIpcHandlers(
   handle('window:is-maximized', () => ({ maximized: getWindow()?.isMaximized() ?? false }))
   handle('window:close', () => {
     getWindow()?.close()
+  })
+  handle('window:set-titlebar-overlay', (overlay) => {
+    if (process.platform !== 'win32') return
+    getWindow()?.setTitleBarOverlay?.(overlay)
   })
 }

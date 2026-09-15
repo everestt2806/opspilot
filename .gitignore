@@ -60,3 +60,6 @@ desktop.ini
 !.vscode/settings.shared.json
 .out-scripts
 .next/
+
+# ── Scratch sandbox của AI agent, không thuộc source ──────────
+.devflow/

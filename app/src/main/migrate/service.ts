@@ -1,7 +1,7 @@
 import { join as posixJoin } from 'node:path/posix'
 
 import type Database from 'better-sqlite3'
-import type { App, MigrateEvent, MigrateInput, MigrateJobView } from '@shared/ipc'
+import type { App, MigrateEvent, MigrateInput, MigrateJobView, MigrateStep } from '@shared/ipc'
 
 import { AppRepository } from '../db/appRepository'
 import { ActionLogRepository } from '../db/actionLogRepository'
@@ -11,12 +11,22 @@ import { AppError } from '../errors'
 import { withAppLock } from '../monitor/appLock'
 import { DeployPipeline } from '../deploy/pipeline'
 import { allocatePort } from '../deploy/portPolicy'
-import { runPrecheck } from '../deploy/precheck'
+import { listListeningPorts, runPrecheck } from '../deploy/precheck'
 import type { SshManager } from '../ssh/manager'
 import { shellQuote } from '../ssh/shellQuote'
 import { MigrationRepository, type MigrationJob } from './repository'
 
 const WORK_ROOT = '/opt/opspilot'
+
+/** Map status đang chạy về tên bước để ghi log đúng ngữ cảnh khi lỗi. */
+const STATUS_TO_STEP: Record<string, MigrateStep> = {
+  preparing: 'PREPARE',
+  backing_up: 'BACKUP',
+  transferring: 'TRANSFER',
+  restoring: 'RESTORE',
+  verifying: 'VERIFY',
+  awaiting_confirm: 'AWAITING_CONFIRM'
+}
 
 type Artifact = { name: string; size: number; sha256: string; target_sha256?: string }
 type Verify = {
@@ -74,6 +84,12 @@ export class MigrateService {
     return this.migrations.list()
   }
 
+  /** Ghi một dòng log migrate: vừa stream sang UI vừa in ra console main process. */
+  private log(jobId: number, step: MigrateStep, message: string): void {
+    console.log(`[migrate:${jobId}] [${step}] ${message}`)
+    this.emit({ type: 'log', job_id: jobId, step, chunk: `${message}\n` })
+  }
+
   async confirm(jobId: number, keepSource: boolean): Promise<void> {
     const job = this.migrations.get(jobId)
     if (job.status !== 'awaiting_confirm') {
@@ -117,6 +133,7 @@ export class MigrateService {
           downtime_ms: job.downtime_ms ?? 0
         })
       })()
+      await this.cleanupArtifacts(job)
     } finally {
       this.terminalizing.delete(jobId)
     }
@@ -136,10 +153,19 @@ export class MigrateService {
 
   private async rollbackAwaiting(job: MigrationJob): Promise<void> {
     const target = this.findTargetApp(job)
+    this.log(
+      job.id,
+      'AWAITING_CONFIRM',
+      'Người dùng huỷ migrate — dọn app đích và khôi phục nguồn…'
+    )
     await this.cleanupTarget(job, target)
     await this.startSourceAndVerify(job)
     if (this.migrations.get(job.id).status === 'rolled_back') return
-    this.migrations.update(job.id, { status: 'rolled_back', source_kept: 1 })
+    this.migrations.update(job.id, {
+      status: 'rolled_back',
+      source_kept: 1,
+      error_message: 'Người dùng huỷ migrate (abort) sau khi verify đạt.'
+    })
     this.actions.insert({
       action: 'migrate_abort',
       status: 'cancelled',
@@ -147,12 +173,14 @@ export class MigrateService {
       app_id: job.app_id,
       detail_json: JSON.stringify({ job_id: job.id, target_app_id: target.id })
     })
+    this.log(job.id, 'AWAITING_CONFIRM', 'Đã rollback về app nguồn, giữ nguyên dữ liệu nguồn.')
     this.emit({
       type: 'finished',
       job_id: job.id,
       status: 'rolled_back',
       downtime_ms: job.downtime_ms ?? 0
     })
+    await this.cleanupArtifacts(job)
   }
 
   private async startSourceAndVerify(job: MigrationJob): Promise<void> {
@@ -198,39 +226,23 @@ export class MigrateService {
     let target: App | null = null
     let sourceProbe: string
     try {
-      target = this.createTargetApp(source, job.target_vps_id)
+      target = await this.createTargetApp(source, job.target_vps_id, signal)
       sourceProbe = await this.readProbe(job.source_vps_id, source, signal)
     } catch (error) {
-      if (target) await this.cleanupTarget(job, target)
-      let recovered = true
-      try {
-        await this.startSourceAndVerify(job)
-      } catch {
-        recovered = false
-      }
-      this.migrations.update(job.id, {
-        status: recovered ? 'rolled_back' : 'failed',
-        failed_step: 'PREPARE'
-      })
-      this.emit({
-        type: 'finished',
-        job_id: job.id,
-        status: recovered ? 'rolled_back' : 'failed',
-        downtime_ms: 0
-      })
-      this.actions.insert({
-        action: 'migrate_start',
-        status: 'failed',
-        vps_id: source.vps_id,
-        app_id: source.id,
-        detail_json: JSON.stringify({
-          job_id: job.id,
-          error: `${describeMigrationError(error)}; source_recovered=${recovered}`
-        })
-      })
+      await this.finishFailed(job, source, target, 'PREPARE', 'PREPARE', error)
       return
     }
     if (!target) return
+    this.log(
+      job.id,
+      'PREPARE',
+      `Migrate app "${source.name}" từ VPS nguồn (id ${job.source_vps_id}) sang VPS đích (id ${job.target_vps_id}).`
+    )
+    this.log(
+      job.id,
+      'PREPARE',
+      `App đích "${target.name}" nhận port ${target.host_port} (đã né port đang listen trên VPS đích).`
+    )
     this.migrations.update(job.id, {
       verify_json: JSON.stringify({ target_app_id: target.id, source_probe: sourceProbe })
     })
@@ -244,13 +256,32 @@ export class MigrateService {
           port: target.host_port,
           signal
         })
-        if (!detail.passed)
-          throw new AppError('PRECHECK_FAILED', 'VPS đích không đạt precheck.', { step: 'PREPARE' })
+        for (const check of detail.checks) {
+          this.log(
+            job.id,
+            'PREPARE',
+            `${check.ok ? 'PASS' : 'FAIL'} · ${check.label}: ${check.actual} (cần ${check.required})`
+          )
+        }
+        if (!detail.passed) {
+          const failed = detail.checks
+            .filter((check) => !check.ok)
+            .map((check) => `${check.label}: ${check.actual} (cần ${check.required})`)
+            .join('; ')
+          throw new AppError('PRECHECK_FAILED', `VPS đích không đạt precheck: ${failed}.`, {
+            step: 'PREPARE'
+          })
+        }
         await this.execOk(job.target_vps_id, `mkdir -p ${shellQuote(targetDir)}`, signal)
       })
       await this.step(job, 'FREEZE', signal, async () => {
         const now = await this.ssh.exec(job.source_vps_id, 'date +%s%3N', { signal })
         freezeAt = Number(now.stdout.trim()) || Date.now()
+        this.log(
+          job.id,
+          'FREEZE',
+          `Dừng app nguồn để tạo điểm nhất quán (freeze tại ${new Date(freezeAt).toISOString()}).`
+        )
         await this.execOk(
           job.source_vps_id,
           `cd ${shellQuote(sourceDir)} && docker compose stop app`,
@@ -281,72 +312,118 @@ export class MigrateService {
           } as Parameters<DeployPipeline['run']>[0],
           signal
         )
+        this.log(
+          job.id,
+          'RESTORE',
+          `Deploy lại app đích "${target.name}" (deployment ${started.deploymentId})…`
+        )
         await this.waitDeployment(started.deploymentId, signal)
+        this.log(job.id, 'RESTORE', 'App đích đã running.')
         if (source.needs_db === 1) {
+          this.log(job.id, 'RESTORE', 'pg_restore dữ liệu PostgreSQL vào app đích…')
           await this.execOk(
             job.target_vps_id,
             `cd ${shellQuote(targetDir)} && docker compose stop app && docker compose exec -T postgres pg_isready -U opspilot -d opspilot && cat ${shellQuote(`opspilot-migrate-${job.id}.dump`)} | docker compose exec -T postgres sh -c 'cat > /tmp/opspilot-migrate-${job.id}.dump' && docker compose exec -T postgres pg_restore --clean --if-exists --no-owner --no-privileges --exit-on-error -U opspilot -d opspilot /tmp/opspilot-migrate-${job.id}.dump && docker compose exec -T postgres rm -f /tmp/opspilot-migrate-${job.id}.dump && docker compose up -d app collector`,
             signal
           )
+          this.log(job.id, 'RESTORE', 'pg_restore xong, khởi động lại app đích.')
         }
       })
       const verify = await this.step(job, 'VERIFY', signal, async () =>
         this.verify(job, source, target, artifacts, signal)
       )
       lastVerify = verify
+      for (const row of this.verifyRows(verify)) {
+        this.log(
+          job.id,
+          'VERIFY',
+          `${row.ok ? 'PASS' : 'FAIL'} · ${row.label}: nguồn ${row.source} | đích ${row.target}`
+        )
+      }
       this.emit({ type: 'verify-result', job_id: job.id, rows: this.verifyRows(verify) })
       if (!verify.ok) {
         throw new AppError('UNKNOWN', 'Đối chiếu migrate không đạt; không cho xác nhận.', {
           step: 'VERIFY'
         })
       }
+      const downtime = Math.max(0, Date.now() - freezeAt)
       this.migrations.update(job.id, {
         status: 'awaiting_confirm',
-        downtime_ms: Math.max(0, Date.now() - freezeAt),
+        downtime_ms: downtime,
         verify_json: JSON.stringify({ ...verify, target_app_id: target.id })
       })
+      this.log(
+        job.id,
+        'AWAITING_CONFIRM',
+        `Mọi hạng mục verify đạt. Downtime nguồn ${downtime} ms. Chờ xác nhận giữ/dọn nguồn.`
+      )
       this.emit({
         type: 'awaiting-confirm',
         job_id: job.id,
-        downtime_ms: Math.max(0, Date.now() - freezeAt)
+        downtime_ms: downtime
       })
     } catch (error) {
-      const failedStep = this.migrations.get(job.id).status
+      const failedStatus = this.migrations.get(job.id).status
       if (lastVerify) {
         this.migrations.update(job.id, {
           verify_json: JSON.stringify({ ...lastVerify, target_app_id: target.id })
         })
       }
-      await this.cleanupTarget(job, target)
-      let recovered = true
-      try {
-        await this.startSourceAndVerify(job)
-      } catch {
-        recovered = false
-      }
-      this.migrations.update(job.id, {
-        status: recovered ? 'rolled_back' : 'failed',
-        failed_step: failedStep
-      })
-      this.emit({
-        type: 'finished',
-        job_id: job.id,
-        status: recovered ? 'rolled_back' : 'failed',
-        downtime_ms: 0
-      })
-      this.actions.insert({
-        action: 'migrate_start',
-        status: 'failed',
-        vps_id: job.source_vps_id,
-        app_id: source.id,
-        detail_json: JSON.stringify({
-          job_id: job.id,
-          error: `${describeMigrationError(error)}; source_recovered=${recovered}`
-        })
-      })
+      await this.finishFailed(
+        job,
+        source,
+        target,
+        STATUS_TO_STEP[failedStatus] ?? 'VERIFY',
+        failedStatus,
+        error
+      )
     } finally {
       this.jobs.delete(job.id)
     }
+  }
+
+  /**
+   * Đường về khi migrate lỗi: log lý do + gợi ý xử lý, dọn app đích, khôi phục
+   * nguồn, ghi lại status và error_message để UI hiện lại sau khi mở lại app.
+   */
+  private async finishFailed(
+    job: MigrationJob,
+    source: App,
+    target: App | null,
+    step: MigrateStep,
+    failedStep: string,
+    error: unknown
+  ): Promise<void> {
+    const reason = describeMigrationError(error)
+    this.log(job.id, step, `LỖI ở bước ${failedStep}: ${reason}`)
+    this.log(job.id, step, `Gợi ý xử lý: ${migrationHint(error)}`)
+    if (target) await this.cleanupTarget(job, target)
+    let recovered = true
+    try {
+      await this.startSourceAndVerify(job)
+      this.log(job.id, step, 'App nguồn đã khởi động lại và healthy — rollback an toàn.')
+    } catch (recoveryError) {
+      recovered = false
+      this.log(
+        job.id,
+        step,
+        `Không khôi phục được app nguồn: ${describeMigrationError(recoveryError)} — hãy SSH vào VPS nguồn, vào thư mục app và chạy "docker compose ps app", "docker compose logs app" để xem nguyên nhân.`
+      )
+    }
+    const status = recovered ? 'rolled_back' : 'failed'
+    this.migrations.update(job.id, { status, failed_step: failedStep, error_message: reason })
+    this.emit({ type: 'finished', job_id: job.id, status, downtime_ms: 0, error: reason })
+    await this.cleanupArtifacts(job)
+    this.actions.insert({
+      action: 'migrate_start',
+      status: 'failed',
+      vps_id: job.source_vps_id,
+      app_id: source.id,
+      detail_json: JSON.stringify({
+        job_id: job.id,
+        error: `${reason}; source_recovered=${recovered}`
+      })
+    })
   }
 
   private async step<T>(
@@ -376,14 +453,19 @@ export class MigrateService {
     return value
   }
 
-  private createTargetApp(source: App, targetVpsId: number): App {
+  private async createTargetApp(
+    source: App,
+    targetVpsId: number,
+    signal: AbortSignal
+  ): Promise<App> {
     const name = `${source.name.slice(0, 21)}-m${Date.now().toString().slice(-7)}`
+    const remotePorts = await listListeningPorts(this.ssh, targetVpsId, signal)
     return this.apps.create({
       vps_id: targetVpsId,
       name,
       framework: source.framework,
       source_path: this.sourcePath(source.id),
-      host_port: allocatePort(this.apps.usedPorts(targetVpsId)),
+      host_port: allocatePort([...this.apps.usedPorts(targetVpsId), ...remotePorts]),
       container_port: source.container_port,
       healthcheck_path: source.healthcheck_path,
       needs_db: source.needs_db
@@ -420,15 +502,27 @@ export class MigrateService {
   ): Promise<{ bytes: number; artifacts: Artifact[] }> {
     const archive = `/tmp/opspilot-migrate-${job.id}.tar.gz`
     const dump = `/tmp/opspilot-migrate-${job.id}.dump`
-    if (source.needs_db === 1)
+    // fs.protected_regular=2 (mặc định Ubuntu mới) chặn ghi đè file /tmp cũ thuộc
+    // user khác — artifact của lượt migrate trước (job id trùng sau khi reset DB)
+    // có thể thuộc user SSH cũ. Xoá sẵn trước khi tạo để không bị "Permission denied".
+    await this.execOk(
+      job.source_vps_id,
+      `rm -f ${shellQuote(archive)} ${shellQuote(dump)}`,
+      signal,
+      true
+    )
+    if (source.needs_db === 1) {
+      this.log(job.id, 'BACKUP', 'pg_dump PostgreSQL trên VPS nguồn…')
       await this.execOk(
         job.source_vps_id,
         `cd ${shellQuote(sourceDir)} && docker compose exec -T postgres pg_dump -Fc -U opspilot opspilot > ${shellQuote(dump)}`,
         signal,
         true
       )
+    }
     const dumpEntry =
       source.needs_db === 1 ? ` -C /tmp ${shellQuote(dump.slice('/tmp/'.length))}` : ''
+    this.log(job.id, 'BACKUP', `Đóng gói artifact ${archive}…`)
     await this.execOk(
       job.source_vps_id,
       `tar czf ${shellQuote(archive)} --exclude='data/pg' -C ${shellQuote(sourceDir)} src collector Dockerfile docker-compose.yml .env $(test -d ${shellQuote(`${sourceDir}/data`)} && printf data)${dumpEntry}`,
@@ -446,6 +540,11 @@ export class MigrateService {
       sha256: lines[0] ?? '',
       size: Number(lines.at(-1) ?? 0)
     }
+    this.log(
+      job.id,
+      'BACKUP',
+      `Artifact ${(artifact.size / 1_048_576).toFixed(2)} MB, sha256 ${artifact.sha256.slice(0, 16)}…`
+    )
     return { bytes: artifact.size, artifacts: [artifact] }
   }
 
@@ -467,6 +566,9 @@ export class MigrateService {
         }
       )
     }
+    // Cùng lý do xoá artifact cũ ở backup: "cat >" vào file /tmp cũ thuộc user
+    // khác trên VPS đích cũng bị fs.protected_regular=2 chặn.
+    await this.execOk(job.target_vps_id, `rm -f ${shellQuote(stagedArchive)}`, signal, true)
     const transfer = await relay.call(
       this.ssh,
       job.source_vps_id,
@@ -485,6 +587,11 @@ export class MigrateService {
           })
         }
       }
+    )
+    this.log(
+      job.id,
+      'TRANSFER',
+      `Relay xong: ${transfer.bytes} bytes (kỳ vọng ${expectedBytes}) từ VPS nguồn sang VPS đích.`
     )
     if (transfer.bytes !== expectedBytes) {
       throw new AppError('UNKNOWN', 'Artifact truyền chưa đủ byte; không giải nén file partial.', {
@@ -512,6 +619,12 @@ export class MigrateService {
         'Checksum artifact đích không khớp; không giải nén file partial.',
         { step: 'TRANSFER' }
       )
+    this.log(
+      job.id,
+      'TRANSFER',
+      `Checksum SHA-256 đích khớp nguồn (${checksum.stdout.trim().split(/\s+/)[0].slice(0, 16)}…).`
+    )
+    this.log(job.id, 'TRANSFER', 'Giải nén artifact vào thư mục app đích…')
     await this.execOk(
       job.target_vps_id,
       `mv ${shellQuote(stagedArchive)} ${shellQuote(archive)} && tar xzf ${shellQuote(archive)} -C ${shellQuote(targetDir)}`,
@@ -703,12 +816,32 @@ export class MigrateService {
     ]
   }
 
+  /** Dọn artifact /tmp trên cả hai VPS sau khi job kết thúc: tránh /tmp đầy và tránh
+   *  lần sau bị fs.protected_regular chặn vì file cũ thuộc user khác. Best-effort. */
+  private async cleanupArtifacts(job: MigrationJob): Promise<void> {
+    const remove = `rm -f ${[
+      `/tmp/opspilot-migrate-${job.id}.tar.gz`,
+      `/tmp/opspilot-migrate-${job.id}.staged.tar.gz`,
+      `/tmp/opspilot-migrate-${job.id}.dump`
+    ]
+      .map(shellQuote)
+      .join(' ')}`
+    await Promise.allSettled([
+      this.ssh.exec(job.source_vps_id, remove, { retryOnReconnect: false }),
+      this.ssh.exec(job.target_vps_id, remove, { retryOnReconnect: false })
+    ])
+  }
+
   private async cleanupTarget(job: MigrationJob, target: App): Promise<boolean> {
     let remoteClean = false
     try {
       const result = await this.ssh.exec(
         job.target_vps_id,
-        `cd ${shellQuote(this.appDir(target.id))} && docker compose down -v`,
+        [
+          `target_dir=${shellQuote(this.appDir(target.id))}`,
+          'if [ -f "$target_dir/docker-compose.yml" ]; then cd "$target_dir" && docker compose down -v; fi',
+          'rm -rf -- "$target_dir"'
+        ].join('; '),
         { retryOnReconnect: false }
       )
       remoteClean = result.code === 0
@@ -731,8 +864,13 @@ export class MigrateService {
       retryOnReconnect: false,
       logCommand: silent ? false : undefined
     })
-    if (result.code !== 0)
-      throw new AppError('UNKNOWN', result.stderr.trim() || `remote command exit ${result.code}`)
+    if (result.code !== 0) {
+      const output = result.stderr.trim() || result.stdout.trim() || 'không có output'
+      throw new AppError(
+        'UNKNOWN',
+        `Lệnh remote thất bại (exit ${result.code}) — ${command.slice(0, 160)}${command.length > 160 ? '…' : ''}: ${output}`
+      )
+    }
   }
 
   private async waitDeployment(deploymentId: number, signal: AbortSignal): Promise<void> {
@@ -766,4 +904,31 @@ function describeMigrationError(error: unknown): string {
     return `${error.code}: ${error.userMessage}${cause ? `; ${cause}` : ''}`
   }
   return error instanceof Error ? error.message : String(error)
+}
+
+/** Gợi ý khắc phục theo loại lỗi migrate — giúp người dùng biết bước tiếp theo thay vì chỉ thấy "rolled_back". */
+function migrationHint(error: unknown): string {
+  if (error instanceof AppError) {
+    if (error.code === 'PRECHECK_FAILED')
+      return 'VPS đích chưa đạt điều kiện. SSH vào VPS đích kiểm tra: "free -m" (RAM), "df -h /" (disk), "docker --version" (Docker), "ss -tlnp" (port đang dùng); port bị chiếm thường do container cũ — "docker ps" để xem. Sau đó chạy lại migrate.'
+    if (error.code === 'PORT_EXHAUSTED')
+      return 'Dải port 30000-30999 trên VPS đích đã hết. Gỡ bớt app/container cũ trên VPS đích rồi chạy lại migrate.'
+    if (error.code === 'SSH_TIMEOUT')
+      return 'Lệnh SSH vượt thời gian chờ. Kiểm tra mạng từ máy này tới VPS (và tình trạng overload của VPS), rồi chạy lại migrate.'
+  }
+  const message = error instanceof Error ? error.message : String(error)
+  if (message.includes('Permission denied') && message.includes('/tmp/opspilot-migrate'))
+    return 'VPS còn file artifact cũ của lượt migrate trước trong /tmp (có thể thuộc user khác; Linux chặn ghi đè qua fs.protected_regular). SSH vào VPS chạy "rm -f /tmp/opspilot-migrate-*" rồi chạy lại migrate.'
+  if (message.includes('Checksum artifact đích không khớp') || message.includes('chưa đủ byte'))
+    return 'Artifact truyền bị lệch giữa hai VPS. Kiểm tra dung lượng /tmp trên cả hai VPS ("df -h /tmp") và độ ổn định mạng, rồi chạy lại migrate.'
+  if (message.includes('Deploy đích thất bại') || message.includes('Deploy đích không kết thúc'))
+    return 'Deploy app đích lỗi. Vào Lịch sử và mở log deploy của app đích (bước BUILD/HEALTHCHECK) để xem nguyên nhân build/khởi động trên VPS đích.'
+  if (message.includes('Đối chiếu migrate không đạt'))
+    return 'Một hạng mục VERIFY không khớp (checksum / file / row count / health). Xem các dòng FAIL trong bảng verify phía trên để biết hạng mục cụ thể.'
+  if (
+    message.includes('Không khởi động lại được app nguồn') ||
+    message.includes('chưa healthy sau khi khởi động lại')
+  )
+    return 'App nguồn chưa chạy lại được sau rollback. SSH vào VPS nguồn, vào thư mục app và chạy "docker compose ps app" cùng "docker compose logs app" để xem nguyên nhân rồi "docker compose start app".'
+  return 'Xem dòng "LỖI ở bước …" phía trên để biết lệnh/thông báo lỗi cụ thể. Lỗi SSH thường do mạng hoặc credential; lỗi docker compose do trạng thái VPS.'
 }

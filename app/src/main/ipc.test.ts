@@ -55,7 +55,8 @@ describe('handle', () => {
         maximized = false
       }),
       isMaximized: vi.fn(() => maximized),
-      close: vi.fn()
+      close: vi.fn(),
+      setTitleBarOverlay: vi.fn()
     }
 
     registerIpcHandlers(
@@ -66,7 +67,7 @@ describe('handle', () => {
       {} as never,
       () => window
     )
-    const callbackFor = (channel: string): ((event: unknown) => Promise<unknown>) => {
+    const callbackFor = (channel: string): ((...args: unknown[]) => Promise<unknown>) => {
       const callback = handleMock.mock.calls.find(([registered]) => registered === channel)?.[1]
       expect(callback).toBeTypeOf('function')
       return callback
@@ -88,6 +89,20 @@ describe('handle', () => {
     await callbackFor('window:close')({})
     expect(window.minimize).toHaveBeenCalledOnce()
     expect(window.close).toHaveBeenCalledOnce()
+
+    await expect(
+      callbackFor('window:set-titlebar-overlay')(
+        {},
+        {
+          color: '#F3F4F6',
+          symbolColor: '#333333'
+        }
+      )
+    ).resolves.toEqual({ ok: true, data: undefined })
+    expect(window.setTitleBarOverlay).toHaveBeenCalledWith({
+      color: '#F3F4F6',
+      symbolColor: '#333333'
+    })
   })
 
   it('monitor handlers doc va sua SQLite that', async () => {

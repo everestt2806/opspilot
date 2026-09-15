@@ -225,6 +225,8 @@ export interface IpcInvokeMap {
   'window:toggle-maximize': () => IpcResult<{ maximized: boolean }>;
   'window:is-maximized': () => IpcResult<{ maximized: boolean }>;
   'window:close': () => IpcResult<void>;
+  /** Đổi màu nút minimize/maximize/close của overlay native Windows theo theme. */
+  'window:set-titlebar-overlay': (overlay: { color: string; symbolColor: string }) => IpcResult<void>;
 }
 
 export interface VpsInput {
@@ -331,6 +333,7 @@ export interface MigrateJobView {
   target_vps_id: number;
   status: MigrateJobStatus;
   failed_step: string | null;
+  error_message: string | null;
   downtime_ms: number | null;
   bytes_transferred: number | null;
   verify_json: string | null;
@@ -471,4 +474,5 @@ export type MigrateEvent =
   | { type: 'verify-result'; job_id: number;
       rows: Array<{ label: string; source: string; target: string; ok: boolean }> }
   | { type: 'awaiting-confirm'; job_id: number; downtime_ms: number }
-  | { type: 'finished'; job_id: number; status: 'completed' | 'failed' | 'rolled_back'; downtime_ms: number };
+  | { type: 'finished'; job_id: number; status: 'completed' | 'failed' | 'rolled_back';
+      downtime_ms: number; error?: string };

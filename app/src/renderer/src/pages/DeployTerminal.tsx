@@ -7,12 +7,14 @@ import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 
 import { strings } from '../strings'
-import type { DeployStep } from '@shared/ipc'
+import { TERM_COLORS } from '../utils/themeTokens'
 
 interface DeployTerminalProps {
   buffer: string
-  activeStep?: DeployStep
+  activeStep?: string
   completedSteps: number
+  /** Tổng số bước hiển thị ở thanh tiến trình; mặc định 7 bước của deploy. */
+  totalSteps?: number
   status: 'streaming' | 'success' | 'failed'
 }
 
@@ -20,6 +22,7 @@ export function DeployTerminal({
   buffer,
   activeStep,
   completedSteps,
+  totalSteps = 7,
   status
 }: DeployTerminalProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -42,11 +45,7 @@ export function DeployTerminal({
       fontFamily: "Consolas, 'Courier New', monospace",
       lineHeight: 1.25,
       scrollback: 5000,
-      theme: {
-        background: '#0B0E14',
-        foreground: '#D7DBE4',
-        cursor: '#60A5FA'
-      }
+      theme: { ...TERM_COLORS }
     })
     const fit = new FitAddon()
     const search = new SearchAddon()
@@ -119,7 +118,7 @@ export function DeployTerminal({
           />
           <span className="deploy-terminal-title">{strings.deploy.log.liveOutput}</span>
           <span className="deploy-terminal-progress">
-            {activeStep ?? strings.deploy.log.finished} · {completedSteps}/7
+            {activeStep ?? strings.deploy.log.finished} · {completedSteps}/{totalSteps}
           </span>
         </div>
         <Space size={4} className="deploy-terminal-actions">

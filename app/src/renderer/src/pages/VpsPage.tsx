@@ -1,15 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Button, Modal, Space, Tooltip, Typography } from 'antd'
-import {
-  ArrowLeftOutlined,
-  CloudServerOutlined,
-  PlusOutlined,
-  ReloadOutlined
-} from '@ant-design/icons'
+import { ArrowLeftOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 
 import type { Vps, VpsInput } from '@shared/ipc'
 
 import { FleetSummary } from '../components/FleetSummary'
+import { PageHeader } from '../components/PageHeader'
 import { ServerSelector } from '../components/ServerSelector'
 import { VpsDetail } from '../components/VpsDetail'
 import { VpsFormModal, type VpsFormValues } from '../components/VpsFormModal'
@@ -174,27 +170,24 @@ export function VpsPage(): React.JSX.Element {
 
       {isListView ? (
         <>
-          <div className="page-heading">
-            <div>
-              <Typography.Title level={2} style={{ color: 'var(--text-primary)', margin: 0 }}>
-                <CloudServerOutlined style={{ marginRight: 10, color: 'var(--info)' }} />
-                {strings.vps.title}
-              </Typography.Title>
-              <Typography.Text type="secondary">{strings.vps.description}</Typography.Text>
-            </div>
-            <Space>
-              <Button
-                icon={<ReloadOutlined />}
-                disabled={items.length === 0}
-                onClick={() => void refreshResources()}
-              >
-                {strings.vps.checkResources}
-              </Button>
-              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-                {strings.vps.create}
-              </Button>
-            </Space>
-          </div>
+          <PageHeader
+            title={strings.vps.title}
+            description={strings.vps.description}
+            actions={
+              <>
+                <Button
+                  icon={<ReloadOutlined />}
+                  disabled={items.length === 0}
+                  onClick={() => void refreshResources()}
+                >
+                  {strings.vps.checkResources}
+                </Button>
+                <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                  {strings.vps.create}
+                </Button>
+              </>
+            }
+          />
 
           {loadError && (
             <Alert

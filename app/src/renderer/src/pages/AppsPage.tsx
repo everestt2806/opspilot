@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import {
-  AppstoreOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   CloudServerOutlined,
@@ -29,8 +28,8 @@ import {
 } from 'antd'
 
 import { mockProjects, type ProjectItem } from '../mockData'
+import { PageHeader } from '../components/PageHeader'
 import { strings } from '../strings'
-import { fonts } from '../tokens'
 
 interface VersionHistoryItem {
   id: string
@@ -101,17 +100,10 @@ export function AppsPage(): React.JSX.Element {
 
   return (
     <section className="page-panel">
-      <div className="page-heading">
-        <div>
-          <Typography.Title level={2} style={{ color: 'var(--text-primary)', margin: 0 }}>
-            <AppstoreOutlined style={{ marginRight: 10, color: 'var(--info)' }} />
-            Application & Version Management (UC-03 / UC-04)
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            Overview details, deploy version history and safe 2-step rollback.
-          </Typography.Text>
-        </div>
-      </div>
+      <PageHeader
+        title="Application & Version Management (UC-03 / UC-04)"
+        description="Overview details, deploy version history and safe 2-step rollback."
+      />
 
       <Row gutter={[20, 20]}>
         {/* Left 30%: App Selection List */}
@@ -150,7 +142,11 @@ export function AppsPage(): React.JSX.Element {
                     </Typography.Text>
                     <Typography.Text
                       code
-                      style={{ fontFamily: fonts.mono, fontSize: 11, color: 'var(--success)' }}
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 11,
+                        color: 'var(--success)'
+                      }}
                     >
                       {app.currentVersion}
                     </Typography.Text>
@@ -210,7 +206,7 @@ export function AppsPage(): React.JSX.Element {
                             children: (
                               <Space>
                                 <CloudServerOutlined style={{ color: 'var(--info)' }} />
-                                <Typography.Text code style={{ fontFamily: fonts.mono }}>
+                                <Typography.Text code style={{ fontFamily: 'var(--font-mono)' }}>
                                   {selectedApp.vpsHost}:3000
                                 </Typography.Text>
                               </Space>
@@ -223,7 +219,7 @@ export function AppsPage(): React.JSX.Element {
                           {
                             label: 'Running version',
                             children: (
-                              <Tag color="success" style={{ fontFamily: fonts.mono }}>
+                              <Tag color="success" style={{ fontFamily: 'var(--font-mono)' }}>
                                 {selectedApp.currentVersion}
                               </Tag>
                             )
@@ -265,7 +261,7 @@ export function AppsPage(): React.JSX.Element {
                                   <Typography.Text
                                     code
                                     style={{
-                                      fontFamily: fonts.mono,
+                                      fontFamily: 'var(--font-mono)',
                                       fontSize: 15,
                                       fontWeight: 700
                                     }}
@@ -278,7 +274,9 @@ export function AppsPage(): React.JSX.Element {
                                   {ver.status === 'failed' && <Tag color="error">✗ FAILED</Tag>}
                                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                                     Commit:{' '}
-                                    <code style={{ fontFamily: fonts.mono }}>{ver.commitHash}</code>
+                                    <code style={{ fontFamily: 'var(--font-mono)' }}>
+                                      {ver.commitHash}
+                                    </code>
                                   </Typography.Text>
                                 </Space>
 
@@ -365,7 +363,7 @@ export function AppsPage(): React.JSX.Element {
               onChange={(e) => setConfirmInput(e.target.value)}
               size="large"
               style={{
-                fontFamily: fonts.mono,
+                fontFamily: 'var(--font-mono)',
                 borderColor: isRollbackAllowed ? 'var(--success)' : 'var(--border)'
               }}
             />
@@ -384,11 +382,11 @@ const styles: Record<string, React.CSSProperties> = {
   card: {
     backgroundColor: 'var(--bg-panel)',
     borderColor: 'var(--border)',
-    borderRadius: 8
+    borderRadius: 3
   },
   appItem: {
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 3,
     border: '1px solid var(--border)',
     cursor: 'pointer',
     transition: 'all 0.2s ease'
@@ -407,7 +405,7 @@ const styles: Record<string, React.CSSProperties> = {
   timelineContent: {
     backgroundColor: 'var(--bg-elevated)',
     padding: '10px 14px',
-    borderRadius: 8,
+    borderRadius: 3,
     border: '1px solid var(--border)',
     marginBottom: 12
   },

@@ -15,10 +15,10 @@ import {
   Typography
 } from 'antd'
 import type { Dayjs } from 'dayjs'
-import { HistoryOutlined } from '@ant-design/icons'
 
 import type { ActionLogEntry, IpcError, Vps } from '@shared/ipc'
 
+import { PageHeader } from '../components/PageHeader'
 import { strings } from '../strings'
 import { localDateTime, relativeTime } from '../utils/format'
 
@@ -202,15 +202,7 @@ export function HistoryPage(): React.JSX.Element {
 
   return (
     <section className="page-panel">
-      <div className="page-heading">
-        <div>
-          <Typography.Title level={2} style={{ color: 'var(--text-primary)', margin: 0 }}>
-            <HistoryOutlined style={{ marginRight: 10, color: 'var(--info)' }} />
-            {strings.history.title}
-          </Typography.Title>
-          <Typography.Text type="secondary">{strings.history.description}</Typography.Text>
-        </div>
-      </div>
+      <PageHeader title={strings.history.title} description={strings.history.description} />
 
       <Space wrap size={8} style={{ marginBottom: 12 }}>
         <Select
