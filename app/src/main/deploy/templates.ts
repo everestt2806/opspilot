@@ -131,3 +131,20 @@ export function readEnvValue(content: string, key: string): string | undefined {
   }
   return undefined
 }
+
+/** Parse nội dung .env thành bảng key→value; bỏ comment, dòng trống và giá trị rỗng.
+ *  Giữ nguyên quote và dấu '=' lồng trong value để round-trip đúng với buildEnvFile
+ *  và env_file của docker compose. */
+export function parseEnvFile(content: string): Record<string, string> {
+  const values: Record<string, string> = {}
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (line.length === 0 || line.startsWith('#')) continue
+    const separator = line.indexOf('=')
+    if (separator <= 0) continue
+    const value = line.slice(separator + 1)
+    if (value.length === 0) continue
+    values[line.slice(0, separator)] = value
+  }
+  return values
+}

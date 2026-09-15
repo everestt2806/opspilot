@@ -12,6 +12,7 @@ import { withAppLock } from '../monitor/appLock'
 import { DeployPipeline } from '../deploy/pipeline'
 import { allocatePort } from '../deploy/portPolicy'
 import { listListeningPorts, runPrecheck } from '../deploy/precheck'
+import { parseEnvFile } from '../deploy/templates'
 import type { SshManager } from '../ssh/manager'
 import { shellQuote } from '../ssh/shellQuote'
 import { MigrationRepository, type MigrationJob } from './repository'
@@ -300,24 +301,8 @@ export class MigrateService {
         return undefined
       })
       await this.step(job, 'RESTORE', signal, async () => {
-        const pipeline = this.deployFactory(() => undefined as never)
-        const started = pipeline.run(
-          {
-            vps_id: job.target_vps_id,
-            app_name: target.name,
-            app_id: target.id,
-            source_path: this.sourcePath(source.id),
-            remote_source_path: targetDir,
-            env: {}
-          } as Parameters<DeployPipeline['run']>[0],
-          signal
-        )
-        this.log(
-          job.id,
-          'RESTORE',
-          `Deploy lại app đích "${target.name}" (deployment ${started.deploymentId})…`
-        )
-        await this.waitDeployment(started.deploymentId, signal)
+        const deploymentId = await this.startRestoreDeployment(job, source, target, targetDir, signal)
+        await this.waitDeployment(deploymentId, signal)
         this.log(job.id, 'RESTORE', 'App đích đã running.')
         if (source.needs_db === 1) {
           this.log(job.id, 'RESTORE', 'pg_restore dữ liệu PostgreSQL vào app đích…')
@@ -451,6 +436,55 @@ export class MigrateService {
     const value = await action()
     this.emit({ type: 'step-done', job_id: job.id, step, duration_ms: Date.now() - started })
     return value
+  }
+
+  /**
+   * Deploy lại app đích bằng pipeline. Truyền env đọc từ `.env` đã migrate vì
+   * biến build-time (VITE_*, NEXT_PUBLIC_*) bị đóng vào bundle lúc `docker build`
+   * trên VPS đích — nếu để rỗng, image mới rơi về default trong `.env.example`
+   * của source (ví dụ VITE_API_URL=http://localhost:3000) và app gọi nhầm API.
+   */
+  private async startRestoreDeployment(
+    job: MigrationJob,
+    source: App,
+    target: App,
+    targetDir: string,
+    signal: AbortSignal
+  ): Promise<number> {
+    const env = await this.readRestoredEnv(job, targetDir)
+    const pipeline = this.deployFactory(() => undefined as never)
+    const started = pipeline.run(
+      {
+        vps_id: job.target_vps_id,
+        app_name: target.name,
+        app_id: target.id,
+        source_path: this.sourcePath(source.id),
+        remote_source_path: targetDir,
+        env
+      } as Parameters<DeployPipeline['run']>[0],
+      signal
+    )
+    this.log(
+      job.id,
+      'RESTORE',
+      `Deploy lại app đích "${target.name}" (deployment ${started.deploymentId})…`
+    )
+    return started.deploymentId
+  }
+
+  /** Đọc `.env` đã migrate trên VPS đích; lỗi thì rơi về env rỗng (hành vi cũ)
+   *  thay vì làm hỏng cả lượt migrate. */
+  private async readRestoredEnv(
+    job: MigrationJob,
+    targetDir: string
+  ): Promise<Record<string, string>> {
+    try {
+      const content = await this.ssh.readFile(job.target_vps_id, posixJoin(targetDir, '.env'))
+      return parseEnvFile(content)
+    } catch {
+      this.log(job.id, 'RESTORE', 'Không đọc được .env đã migrate — dùng default build args.')
+      return {}
+    }
   }
 
   private async createTargetApp(

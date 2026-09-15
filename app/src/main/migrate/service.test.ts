@@ -292,4 +292,115 @@ describe('MigrateService guards and confirmation', () => {
       rmSync(directory, { recursive: true, force: true })
     }
   })
+
+  it('passes the migrated .env into the restore pipeline so build-time env is not lost', async () => {
+    const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-env-'))
+    const database = initializeDatabase(directory)
+    try {
+      database.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('source','127.0.0.1','u','password','x'),('target','127.0.0.2','u','password','x'); INSERT INTO app (vps_id,name,framework,source_path,host_port,container_port) VALUES (1,'demo','static-spa','C:/demo',30000,80),(2,'demo-m123','static-spa','C:/demo',30001,80);"
+      )
+      const readFile = vi
+        .fn()
+        .mockResolvedValue('VITE_API_URL=http://221.121.1.80:30001\nPORT=3000\n')
+      const run = vi.fn().mockReturnValue({ deploymentId: 7 })
+      const service = new MigrateService(
+        database,
+        { exec: vi.fn(), readFile } as never,
+        vi.fn(),
+        () => ({ run }) as never
+      )
+      const privateService = service as unknown as {
+        startRestoreDeployment(
+          job: { id: number; target_vps_id: number },
+          source: App,
+          target: App,
+          targetDir: string,
+          signal: AbortSignal
+        ): Promise<number>
+      }
+      const source = database
+        .prepare("SELECT a.*, 'http://127.0.0.1:' || a.host_port AS url FROM app a WHERE id=1")
+        .get() as App
+      const target = database
+        .prepare("SELECT a.*, 'http://127.0.0.2:' || a.host_port AS url FROM app a WHERE id=2")
+        .get() as App
+      const signal = new AbortController().signal
+
+      const deploymentId = await privateService.startRestoreDeployment(
+        { id: 5, target_vps_id: 2 },
+        source,
+        target,
+        '/opt/opspilot/demo-m123',
+        signal
+      )
+
+      expect(deploymentId).toBe(7)
+      expect(readFile).toHaveBeenCalledWith(2, '/opt/opspilot/demo-m123/.env')
+      expect(run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          remote_source_path: '/opt/opspilot/demo-m123',
+          env: { VITE_API_URL: 'http://221.121.1.80:30001', PORT: '3000' }
+        }),
+        signal
+      )
+    } finally {
+      closeDatabase()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to empty env when the migrated .env cannot be read', async () => {
+    const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-env-miss-'))
+    const database = initializeDatabase(directory)
+    try {
+      database.exec(
+        "INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES ('source','127.0.0.1','u','password','x'),('target','127.0.0.2','u','password','x'); INSERT INTO app (vps_id,name,framework,source_path,host_port,container_port) VALUES (1,'demo','static-spa','C:/demo',30000,80),(2,'demo-m123','static-spa','C:/demo',30001,80);"
+      )
+      const readFile = vi.fn().mockRejectedValue(new Error('ssh dropped'))
+      const run = vi.fn().mockReturnValue({ deploymentId: 8 })
+      const events: unknown[] = []
+      const service = new MigrateService(
+        database,
+        { exec: vi.fn(), readFile } as never,
+        (event) => events.push(event),
+        () => ({ run }) as never
+      )
+      const privateService = service as unknown as {
+        startRestoreDeployment(
+          job: { id: number; target_vps_id: number },
+          source: App,
+          target: App,
+          targetDir: string,
+          signal: AbortSignal
+        ): Promise<number>
+      }
+      const source = database
+        .prepare("SELECT a.*, 'http://127.0.0.1:' || a.host_port AS url FROM app a WHERE id=1")
+        .get() as App
+      const target = database
+        .prepare("SELECT a.*, 'http://127.0.0.2:' || a.host_port AS url FROM app a WHERE id=2")
+        .get() as App
+      const signal = new AbortController().signal
+
+      const deploymentId = await privateService.startRestoreDeployment(
+        { id: 6, target_vps_id: 2 },
+        source,
+        target,
+        '/opt/opspilot/demo-m123',
+        signal
+      )
+
+      expect(deploymentId).toBe(8)
+      expect(run).toHaveBeenCalledWith(expect.objectContaining({ env: {} }), signal)
+      const logs = events.filter(
+        (event): event is { type: 'log'; chunk: string } =>
+          typeof event === 'object' && event !== null && (event as { type?: string }).type === 'log'
+      )
+      expect(logs.some((event) => event.chunk.includes('Không đọc được .env'))).toBe(true)
+    } finally {
+      closeDatabase()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
 })

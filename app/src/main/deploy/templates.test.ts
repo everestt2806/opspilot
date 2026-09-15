@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os'
 import { AppError } from '../errors'
 import {
   buildEnvFile,
+  parseEnvFile,
   readEnvValue,
   renderCompose,
   renderBuildArgs,
@@ -226,5 +227,31 @@ describe('buildEnvFile', () => {
     expect(readEnvValue(content, 'POSTGRES_PASSWORD')).toBe('abc=123')
     expect(readEnvValue(content, 'DATABASE_URL')).toBe('postgresql://x')
     expect(readEnvValue(content, 'MISSING')).toBeUndefined()
+  })
+})
+
+describe('parseEnvFile', () => {
+  it('parse cac dong KEY=VALUE va bo comment, dong trong, gia tri rong', () => {
+    expect(
+      parseEnvFile(
+        '# managed\nVITE_API_URL=http://221.121.1.80:30001\n\nPORT=3000\nEMPTY=\ndong-khong-co-dau-bang\n'
+      )
+    ).toEqual({ VITE_API_URL: 'http://221.121.1.80:30001', PORT: '3000' })
+  })
+
+  it('giu nguyen dau bang long trong value, quote va chiu CRLF', () => {
+    expect(
+      parseEnvFile(
+        'DATABASE_URL=postgresql://user:pw@postgres:5432/db\r\nSITE_NAME="Ops Pilot"\r\n'
+      )
+    ).toEqual({
+      DATABASE_URL: 'postgresql://user:pw@postgres:5432/db',
+      SITE_NAME: '"Ops Pilot"'
+    })
+  })
+
+  it('file rong hoac chi co comment tra bang rong', () => {
+    expect(parseEnvFile('')).toEqual({})
+    expect(parseEnvFile('# Khong can bien moi truong nao\n')).toEqual({})
   })
 })
