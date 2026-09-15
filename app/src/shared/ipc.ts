@@ -225,6 +225,8 @@ export interface IpcInvokeMap {
   'window:toggle-maximize': () => IpcResult<{ maximized: boolean }>;
   'window:is-maximized': () => IpcResult<{ maximized: boolean }>;
   'window:close': () => IpcResult<void>;
+  /** Đổi màu nút minimize/maximize/close của overlay native Windows theo theme. */
+  'window:set-titlebar-overlay': (overlay: { color: string; symbolColor: string }) => IpcResult<void>;
 }
 
 export interface VpsInput {
@@ -286,6 +288,8 @@ export interface DeployInput {
   vps_id: number;
   /** Thiếu -> tạo app mới; có -> redeploy app đã tồn tại */
   app_id?: number;
+  /** Cổng public đã được precheck chọn cho app mới; pipeline vẫn kiểm tra lại trước deploy. */
+  host_port?: number;
   app_name: string;
   source_path: string;
   /** Env do người dùng điền ở bước 3 của wizard, gồm cả secret */
@@ -329,6 +333,7 @@ export interface MigrateJobView {
   target_vps_id: number;
   status: MigrateJobStatus;
   failed_step: string | null;
+  error_message: string | null;
   downtime_ms: number | null;
   bytes_transferred: number | null;
   verify_json: string | null;
@@ -469,4 +474,5 @@ export type MigrateEvent =
   | { type: 'verify-result'; job_id: number;
       rows: Array<{ label: string; source: string; target: string; ok: boolean }> }
   | { type: 'awaiting-confirm'; job_id: number; downtime_ms: number }
-  | { type: 'finished'; job_id: number; status: 'completed' | 'failed' | 'rolled_back'; downtime_ms: number };
+  | { type: 'finished'; job_id: number; status: 'completed' | 'failed' | 'rolled_back';
+      downtime_ms: number; error?: string };

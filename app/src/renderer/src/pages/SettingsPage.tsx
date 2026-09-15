@@ -1,6 +1,6 @@
 import { Segmented, Typography } from 'antd'
-import { SettingOutlined } from '@ant-design/icons'
 
+import { PageHeader } from '../components/PageHeader'
 import { strings } from '../strings'
 import { useUiState } from '../store/uiState'
 import type { ThemeMode } from '../utils/themeTokens'
@@ -11,15 +11,7 @@ export function SettingsPage(): React.JSX.Element {
 
   return (
     <section className="page-panel settings-page">
-      <div className="page-heading">
-        <div>
-          <Typography.Title level={2} style={{ color: 'var(--text-primary)', margin: 0 }}>
-            <SettingOutlined style={{ marginRight: 10, color: 'var(--accent)' }} />
-            {strings.settings.title}
-          </Typography.Title>
-          <Typography.Text type="secondary">{strings.settings.description}</Typography.Text>
-        </div>
-      </div>
+      <PageHeader title={strings.settings.title} description={strings.settings.description} />
       <div className="settings-layout">
         <nav className="settings-categories" aria-label={strings.settings.categoriesLabel}>
           <button type="button" className="settings-category settings-category-active">

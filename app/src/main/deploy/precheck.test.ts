@@ -1,6 +1,27 @@
 import { describe, expect, it } from 'vitest'
 
-import { baselineCommand, evaluateBaseline, parseBaselineOutput, RAM_MIN_MB } from './precheck'
+import {
+  baselineCommand,
+  evaluateBaseline,
+  parseBaselineOutput,
+  parseListeningPorts,
+  RAM_MIN_MB
+} from './precheck'
+
+describe('parseListeningPorts', () => {
+  it('tach port IPv4 va IPv6 tu ss, loai trung va sap xep', () => {
+    expect(
+      parseListeningPorts(
+        [
+          'LISTEN 0 4096 0.0.0.0:30023 0.0.0.0:*',
+          'LISTEN 0 4096 [::]:30000 [::]:*',
+          'LISTEN 0 4096 0.0.0.0:30000 0.0.0.0:*',
+          'LISTEN 0 128 127.0.0.1:22 0.0.0.0:*'
+        ].join('\n')
+      )
+    ).toEqual([22, 30000, 30023])
+  })
+})
 
 describe('baselineCommand', () => {
   it('gom RAM/DISK/DOCKER vao mot lenh doc-only', () => {

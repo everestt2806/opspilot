@@ -1,0 +1,212 @@
+:root {
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --border: #e3e6ea;
+  --border-strong: #cfd4da;
+  --text: #1f2328;
+  --muted: #57606a;
+  --faint: #8b949e;
+  --accent: #0e639c;
+  --accent-hover: #1177bb;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    14px/1.7 'Segoe UI',
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+/* ── Header ── */
+.site-header {
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.site-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: min(720px, calc(100% - 32px));
+  min-height: 56px;
+  margin: 0 auto;
+}
+
+.site-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.site-brand:hover {
+  text-decoration: none;
+}
+
+.site-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  color: var(--muted);
+}
+
+.site-brand-mark svg {
+  width: 15px;
+  height: 15px;
+}
+
+.site-header-note {
+  color: var(--faint);
+  font-size: 11px;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+}
+
+/* ── Nội dung ── */
+.site-main {
+  flex: 1;
+  width: min(720px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 32px 0;
+}
+
+.page-heading {
+  margin-bottom: 20px;
+}
+
+.page-heading h1 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.page-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ── Danh sách bài ── */
+.post-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.post-item {
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+}
+
+.post-title {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.post-title:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.post-excerpt {
+  margin: 4px 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.post-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.post-read {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.post-read:hover {
+  text-decoration: underline;
+}
+
+/* ── Trang chi tiết ── */
+.post-article {
+  padding: 8px 0 0;
+}
+
+.post-back {
+  display: inline-block;
+  margin-bottom: 18px;
+  color: var(--accent);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.post-back:hover {
+  text-decoration: underline;
+}
+
+.post-article h1 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.post-article-meta {
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.post-article p {
+  margin: 0 0 14px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* ── Footer ── */
+.site-footer {
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+  color: var(--faint);
+  font-size: 11px;
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  .site-header-note {
+    display: none;
+  }
+}

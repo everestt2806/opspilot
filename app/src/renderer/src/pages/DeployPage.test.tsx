@@ -223,6 +223,7 @@ describe('DeployPage — wizard va log', () => {
     expect(invoke).toHaveBeenCalledWith('deploy:start', {
       vps_id: 1,
       app_id: undefined,
+      host_port: 30000,
       app_name: 'express-api',
       source_path: SOURCE_PATH,
       env: { PORT: '3000', SECRET_KEY: 'sekret' }

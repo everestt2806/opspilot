@@ -19,7 +19,7 @@ import { AppError, toIpcError } from '../errors'
 import { logger, maskSecrets } from '../logger'
 import { SshAbortedError, SshManager } from '../ssh/manager'
 import { shellQuote } from '../ssh/shellQuote'
-import { allocatePort } from './portPolicy'
+import { allocatePort, PORT_RANGE } from './portPolicy'
 import { runPrecheck } from './precheck'
 import {
   buildEnvFile,
@@ -547,13 +547,32 @@ export class DeployPipeline {
       if (existing) {
         app = existing
       } else {
+        const requestedPort = input.host_port
+        if (
+          requestedPort !== undefined &&
+          (!Number.isInteger(requestedPort) ||
+            requestedPort < PORT_RANGE.first ||
+            requestedPort > PORT_RANGE.last)
+        ) {
+          throw new AppError(
+            'VALIDATION',
+            `Cổng deploy phải nằm trong dải ${PORT_RANGE.first}-${PORT_RANGE.last}. Hãy chạy precheck lại.`
+          )
+        }
+        const usedPorts = this.appRepository.usedPorts(vps.id)
+        if (requestedPort !== undefined && usedPorts.includes(requestedPort)) {
+          throw new AppError(
+            'PORT_EXHAUSTED',
+            'Cổng deploy vừa được cấp cho app khác. Hãy chạy precheck lại rồi thử lại.'
+          )
+        }
         newApp = true
         app = this.appRepository.create({
           vps_id: vps.id,
           name,
           framework: detection.detector,
           source_path: input.source_path,
-          host_port: allocatePort(this.appRepository.usedPorts(vps.id)),
+          host_port: requestedPort ?? allocatePort(usedPorts),
           container_port: plan.containerPort,
           healthcheck_path: plan.healthcheckPath,
           needs_db: plan.needsDb ? 1 : 0

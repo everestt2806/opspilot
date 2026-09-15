@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { DeploymentUnitOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Space, Steps, Table, Tag, Typography } from 'antd'
 
 import type { App, MigrateEvent, MigrateJobView, Vps } from '@shared/ipc'
+import { PageHeader } from '../components/PageHeader'
+import { DeployTerminal } from './DeployTerminal'
 
 const steps = ['PREPARE', 'FREEZE', 'BACKUP', 'TRANSFER', 'RESTORE', 'VERIFY', 'AWAITING_CONFIRM']
 
@@ -19,6 +20,9 @@ export function MigratePage(): React.JSX.Element {
     Array<{ label: string; source: string; target: string; ok: boolean }>
   >([])
   const [error, setError] = useState<string>()
+  const [logs, setLogs] = useState('')
+  const [doneCount, setDoneCount] = useState(0)
+  const [failReason, setFailReason] = useState<string>()
   const [verifyOk, setVerifyOk] = useState(false)
   const [awaitingConfirm, setAwaitingConfirm] = useState(false)
   const activeJobId = useRef<number | undefined>(undefined)
@@ -27,8 +31,13 @@ export function MigratePage(): React.JSX.Element {
     if (activeJobId.current !== undefined && event.job_id !== activeJobId.current) return
     activeJobId.current = event.job_id
     setJobId(event.job_id)
+    if (event.type === 'log') {
+      setLogs((prev) => prev + event.chunk)
+      return
+    }
     if ('step' in event) setStep(Math.max(0, steps.indexOf(event.step)))
     if (event.type === 'step-start') setStatus(event.step)
+    if (event.type === 'step-done') setDoneCount((count) => count + 1)
     if (event.type === 'step-done') setStatus(`${event.step} hoàn tất`)
     if (event.type === 'verify-result') {
       setRows(event.rows)
@@ -44,9 +53,12 @@ export function MigratePage(): React.JSX.Element {
       setDowntime(event.downtime_ms)
       setAwaitingConfirm(false)
       if (event.status === 'completed') {
+        setFailReason(undefined)
         void window.api.invoke('app:list').then((result) => {
           if (result.ok) setApps(result.data)
         })
+      } else if (event.error) {
+        setFailReason(event.error)
       }
     }
   }
@@ -67,6 +79,12 @@ export function MigratePage(): React.JSX.Element {
           setStatus(latest.status === 'awaiting_confirm' ? 'Đang chờ xác nhận' : latest.status)
           setDowntime(latest.downtime_ms ?? undefined)
           setAwaitingConfirm(latest.status === 'awaiting_confirm')
+          if (latest.status === 'failed' || latest.status === 'rolled_back') {
+            setFailReason(
+              latest.error_message ??
+                `Lỗi ở bước ${latest.failed_step ?? 'không xác định'} (không có chi tiết).`
+            )
+          }
           if (latest.verify_json) {
             try {
               const verify = JSON.parse(latest.verify_json) as {
@@ -94,6 +112,9 @@ export function MigratePage(): React.JSX.Element {
     setAwaitingConfirm(false)
     setVerifyOk(false)
     setRows([])
+    setLogs('')
+    setDoneCount(0)
+    setFailReason(undefined)
     const result = await window.api.invoke('migrate:start', {
       app_id: appId,
       target_vps_id: targetVpsId
@@ -123,18 +144,13 @@ export function MigratePage(): React.JSX.Element {
 
   return (
     <section className="page-panel">
-      <div className="page-heading">
-        <Typography.Title level={2} style={{ color: 'var(--text-primary)', margin: 0 }}>
-          <DeploymentUnitOutlined style={{ marginRight: 10, color: 'var(--info)' }} />
-          Migrate giữa hai VPS
-        </Typography.Title>
-        <Typography.Text type="secondary">
-          PREPARE → FREEZE → BACKUP → TRANSFER → RESTORE → VERIFY
-        </Typography.Text>
-      </div>
+      <PageHeader
+        title="Migrate giữa hai VPS"
+        description="PREPARE → FREEZE → BACKUP → TRANSFER → RESTORE → VERIFY"
+      />
 
-      <Card style={{ marginTop: 20 }}>
-        <Space wrap>
+      <div className="page-stack">
+        <Space wrap className="migrate-toolbar">
           <select
             className="migrate-native-select migrate-source-select"
             aria-label="Chọn app nguồn"
@@ -182,45 +198,71 @@ export function MigratePage(): React.JSX.Element {
             Huỷ & rollback
           </Button>
         </Space>
-      </Card>
 
-      {error && <Alert type="error" showIcon message={error} style={{ marginTop: 20 }} />}
-      <Card style={{ marginTop: 20 }}>
-        <Steps current={step} items={steps.map((title) => ({ title }))} />
-        <Typography.Paragraph style={{ marginTop: 20 }}>
-          Trạng thái: <Tag color={status === 'completed' ? 'success' : 'processing'}>{status}</Tag>
-          {downtime !== undefined && ` Downtime: ${downtime} ms`}
-        </Typography.Paragraph>
-        {rows.length > 0 && (
-          <Table
-            pagination={false}
-            rowKey="label"
-            dataSource={rows}
-            columns={[
-              { title: 'Hạng mục', dataIndex: 'label' },
-              { title: 'Nguồn', dataIndex: 'source' },
-              { title: 'Đích', dataIndex: 'target' },
-              {
-                title: 'Kết quả',
-                dataIndex: 'ok',
-                render: (ok: boolean) => (
-                  <Tag color={ok ? 'success' : 'error'}>{ok ? 'PASS' : 'FAIL'}</Tag>
-                )
-              }
-            ]}
+        {error && <Alert type="error" showIcon message={error} />}
+        {failReason && (
+          <Alert
+            type="error"
+            showIcon
+            message={`Migrate thất bại và ${
+              status === 'failed' ? 'nguồn chưa khôi phục được' : 'đã rollback về app nguồn'
+            } — xem lý do và gợi ý xử lý trong log bên dưới.`}
+            description={failReason}
           />
         )}
-        {awaitingConfirm && status === 'Đang chờ xác nhận' && (
-          <Space style={{ marginTop: 20 }}>
-            <Button type="primary" onClick={() => void confirm(true)} disabled={!verifyOk}>
-              Xác nhận, giữ nguồn
-            </Button>
-            <Button danger onClick={() => void confirm(false)} disabled={!verifyOk}>
-              Xác nhận, dọn nguồn
-            </Button>
-          </Space>
-        )}
-      </Card>
+        <Card>
+          <Steps size="small" current={step} items={steps.map((title) => ({ title }))} />
+          <Typography.Paragraph style={{ marginTop: 16, marginBottom: 0 }}>
+            Trạng thái:{' '}
+            <Tag color={status === 'completed' ? 'success' : 'processing'}>{status}</Tag>
+            {downtime !== undefined && ` Downtime: ${downtime} ms`}
+          </Typography.Paragraph>
+          {rows.length > 0 && (
+            <Table
+              pagination={false}
+              rowKey="label"
+              dataSource={rows}
+              columns={[
+                { title: 'Hạng mục', dataIndex: 'label' },
+                { title: 'Nguồn', dataIndex: 'source' },
+                { title: 'Đích', dataIndex: 'target' },
+                {
+                  title: 'Kết quả',
+                  dataIndex: 'ok',
+                  render: (ok: boolean) => (
+                    <Tag color={ok ? 'success' : 'error'}>{ok ? 'PASS' : 'FAIL'}</Tag>
+                  )
+                }
+              ]}
+            />
+          )}
+          {awaitingConfirm && status === 'Đang chờ xác nhận' && (
+            <Space style={{ marginTop: 16 }}>
+              <Button type="primary" onClick={() => void confirm(true)} disabled={!verifyOk}>
+                Xác nhận, giữ nguồn
+              </Button>
+              <Button danger onClick={() => void confirm(false)} disabled={!verifyOk}>
+                Xác nhận, dọn nguồn
+              </Button>
+            </Space>
+          )}
+        </Card>
+        <DeployTerminal
+          buffer={logs}
+          activeStep={running && step >= 0 ? steps[step] : undefined}
+          completedSteps={doneCount}
+          totalSteps={steps.length}
+          status={
+            running
+              ? 'streaming'
+              : status === 'completed'
+                ? 'success'
+                : doneCount > 0
+                  ? 'failed'
+                  : 'streaming'
+          }
+        />
+      </div>
     </section>
   )
 }

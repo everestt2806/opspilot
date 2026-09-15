@@ -18,7 +18,7 @@ import { buildSourceTree } from '../detectors/sourceTree'
 import type { SshManager } from '../ssh/manager'
 import { DeployPipeline } from './pipeline'
 import { allocatePort } from './portPolicy'
-import { runPrecheck, toPrecheckResult } from './precheck'
+import { listListeningPorts, runPrecheck, toPrecheckResult } from './precheck'
 
 /**
  * Lớp dịch vụ cho các kênh detect/deploy/app — mọi handler IPC đi qua đây,
@@ -79,7 +79,11 @@ export class DeployService {
     const existingApp =
       input.app_id === undefined ? undefined : this.appRepository.getById(input.app_id)
     const assignedPort =
-      existingApp?.host_port ?? allocatePort(this.appRepository.usedPorts(vps.id))
+      existingApp?.host_port ??
+      allocatePort([
+        ...this.appRepository.usedPorts(vps.id),
+        ...(await listListeningPorts(this.ssh, vps.id))
+      ])
 
     // Khi redeploy, chính phiên bản hiện tại đang giữ cổng này. Pipeline sẽ thay container
     // bằng compose up nên chỉ kiểm tra cổng trống đối với app mới.

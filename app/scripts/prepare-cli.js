@@ -18,6 +18,10 @@ copyFileSync(
   join('src', 'main', 'db', 'migrations', '002_metric_activation.sql'),
   join(migrationDir, '002_metric_activation.sql')
 )
+copyFileSync(
+  join('src', 'main', 'db', 'migrations', '003_migration_error_message.sql'),
+  join(migrationDir, '003_migration_error_message.sql')
+)
 
 let code = readFileSync(compiledIndex, 'utf8')
 const before = code
@@ -28,6 +32,10 @@ code = code.replace(
 code = code.replace(
   'require("./migrations/002_metric_activation.sql?raw")',
   "require('node:fs').readFileSync(require('node:path').join(__dirname, 'migrations', '002_metric_activation.sql'), 'utf8')"
+)
+code = code.replace(
+  'require("./migrations/003_migration_error_message.sql?raw")',
+  "require('node:fs').readFileSync(require('node:path').join(__dirname, 'migrations', '003_migration_error_message.sql'), 'utf8')"
 )
 if (code === before) {
   console.error('prepare-cli: khong tim thay dong require ?raw trong db/index.js da bien dich')

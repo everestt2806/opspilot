@@ -38,6 +38,7 @@ const job: MigrateJobView = {
   target_vps_id: 2,
   status: 'awaiting_confirm',
   failed_step: null,
+  error_message: null,
   downtime_ms: 12,
   bytes_transferred: 4,
   verify_json: JSON.stringify({ ok: true }),
@@ -87,5 +88,26 @@ describe('MigratePage persisted state', () => {
     expect((buttons[0] as HTMLButtonElement).disabled).toBe(false)
     fireEvent.click(buttons[0])
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('migrate:confirm', 7, true))
+  })
+
+  it('hien ly do rollback tu job da luu khi mo lai app', async () => {
+    const failedJob: MigrateJobView = {
+      ...job,
+      status: 'rolled_back',
+      failed_step: 'preparing',
+      error_message:
+        'PRECHECK_FAILED: VPS đích không đạt precheck: Cổng 30000: đang dùng (cần chưa dùng).'
+    }
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'app:list') return { ok: true, data: [app] }
+      if (channel === 'vps:list') return { ok: true, data: [vps] }
+      if (channel === 'migrate:list') return { ok: true, data: [failedJob] }
+      throw new Error(`unexpected ${channel}`)
+    })
+    vi.stubGlobal('api', { invoke, on: () => () => {} })
+
+    render(<MigratePage />)
+    expect(await screen.findByText(/đã rollback về app nguồn/)).toBeTruthy()
+    expect(await screen.findByText(/Cổng 30000: đang dùng/)).toBeTruthy()
   })
 })

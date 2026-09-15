@@ -432,6 +432,18 @@ describe('DeployPipeline', () => {
     ).toBe(true)
   })
 
+  it('deploy moi dung dung host port da duoc remote precheck chon', async () => {
+    createHarness()
+    const { deploymentId } = pipeline.run({ ...deployInput(), host_port: 30024 })
+    const finished = await waitForFinished(deploymentId)
+
+    expect(finished.status).toBe('running')
+    expect(finished.app_url).toBe('http://203.0.113.55:30024')
+    expect(database.prepare('SELECT host_port FROM app WHERE name = ?').get('demo-api')).toEqual({
+      host_port: 30024
+    })
+  })
+
   it('first deploy succeeds when collector has not created metrics.jsonl', async () => {
     createHarness({ metricsFileMissing: true })
     const { deploymentId } = pipeline.run(deployInput())

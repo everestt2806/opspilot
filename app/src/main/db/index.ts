@@ -5,6 +5,7 @@ import Database from 'better-sqlite3'
 
 import migration001 from './migrations/001_init.sql?raw'
 import migration002 from './migrations/002_metric_activation.sql?raw'
+import migration003 from './migrations/003_migration_error_message.sql?raw'
 
 interface Migration {
   name: string
@@ -22,6 +23,11 @@ const migrations: Migration[] = [
     name: '002_metric_activation.sql',
     version: 2,
     sql: migration002
+  },
+  {
+    name: '003_migration_error_message.sql',
+    version: 3,
+    sql: migration003
   }
 ]
 
