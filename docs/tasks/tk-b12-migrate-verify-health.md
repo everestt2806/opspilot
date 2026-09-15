@@ -48,7 +48,7 @@ thật vẫn fail đúng sau ~10 giây poll.
 - [x] Test mới pass: `waitTargetHealthy` 3 case (fail 2 lần rồi 200 → true; luôn fail → false
       sau đúng 10 lần; signal đã abort → throw, không gọi SSH).
 - [x] Toàn bộ `vitest run` 311/311 pass; `pnpm typecheck` (node + web) pass.
-- [ ] Live rehearsal: migrate `demo1609-express` VM02 → VM01, giữ nguồn. Kỳ vọng: đủ 7 bước,
+- [x] Live rehearsal: migrate `demo1609-express` VM02 → VM01, giữ nguồn. Kỳ vọng: đủ 7 bước,
       bảng verify mọi hàng PASS, tới Đang chờ xác nhận → completed; URL trên VM01 có
       `MARKER` + 1000 items.
 - [ ] A duyệt rồi mới push / mở PR (gộp chung PR với TK-B10).
@@ -62,6 +62,9 @@ thật vẫn fail đúng sau ~10 giây poll.
   Full `vitest run` 311/311, typecheck node/web PASS. Local commit trên
   `fix/migrate-verify-health-race` (stacked trên `fix/migrate-build-time-env`); chưa push —
   chờ A duyệt. Còn: live rehearsal Express VM02 → VM01.
+- UPDATE 15/09 — Live rehearsal PASS (B xác nhận): migrate Express VM02 → VM01 giữ nguồn qua
+  đủ 7 bước, verify toàn PASS, hoàn tất. Push + mở PR #31 (gộp với TK-B10, head
+  `fix/migrate-verify-health-race` tại `7576848`). Task chuyển `CHỜ REVIEW`.
 
 ## Lệnh tái hiện
 
@@ -78,5 +81,5 @@ kỳ vọng 7 bước đủ, verify toàn PASS (trước fix: fail đúng bướ
 
 ## PR
 
-Chưa mở — chờ A duyệt push theo quy ước nhóm. Dự kiến gộp chung PR với TK-B10 vì cùng file
-`migrate/service.ts`.
+#31 — gộp chung với TK-B10 vì cùng file `migrate/service.ts`; head `fix/migrate-verify-health-race`
+(bao gồm cả 3 commit của `fix/migrate-build-time-env`).

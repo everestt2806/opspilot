@@ -38,9 +38,9 @@ sau TRANSFER) và truyền vào pipeline khi deploy lại — giữ nguyên th�
 - [x] Test mới pass: `parseEnvFile` 3 case, `startRestoreDeployment` 2 case, pipeline regression
       2 case (user env thắng default / env rỗng rơi về default).
 - [x] Toàn bộ `vitest run` 308/308 pass; `pnpm typecheck` (node + web) pass.
-- [ ] Live rehearsal: migrate Vite VM02 → VM01, mở trang trên VM01 thấy `API health: OK`;
+- [x] Live rehearsal: migrate Vite VM02 → VM01, mở trang trên VM01 thấy `API health: OK`;
       log BUILD trên VM01 có `--build-arg VITE_API_URL=<URL Express thật>`.
-- [ ] A duyệt rồi mới push / mở PR.
+- [x] A duyệt rồi mới push / mở PR.
 
 ## Nhật ký
 
@@ -51,6 +51,9 @@ sau TRANSFER) và truyền vào pipeline khi deploy lại — giữ nguyên th�
   trong migrate service, de-dup parser trong pipeline; thêm 7 test. Full `vitest run` 308/308,
   typecheck node/web PASS. Local commit trên `fix/migrate-build-time-env`; chưa push — chờ A duyệt.
   Còn: live rehearsal trên VM02/VM01.
+- UPDATE 15/09 — Live rehearsal PASS (B xác nhận): migrate Vite VM02 → VM01 giữ nguồn, trang trên
+  VM01 hiện `API health: OK` (trước fix: `Failed to fetch`). Push + mở PR #31 gộp với TK-B12
+  (head `fix/migrate-verify-health-race`). Task chuyển `CHỜ REVIEW`.
 
 ## Lệnh tái hiện
 
@@ -67,4 +70,4 @@ Live: deploy `demo\sources\express-api` lên VM02 → deploy `demo\sources\vite-
 
 ## PR
 
-Chưa mở — chờ A duyệt push theo quy ước nhóm.
+#31 — gộp chung với TK-B12 (head `fix/migrate-verify-health-race` chứa cả 3 commit của nhánh này).
