@@ -23,6 +23,7 @@ import { allocatePort, PORT_RANGE } from './portPolicy'
 import { runPrecheck } from './precheck'
 import {
   buildEnvFile,
+  parseEnvFile,
   readEnvValue,
   renderBuildArgs,
   renderCompose,
@@ -922,13 +923,7 @@ export class DeployPipeline {
       const remoteSource = (input as DeployInputWithRemoteSource).remote_source_path
       if (remoteSource) {
         const existingEnv = await this.ssh.readFile(ctx.app.vps_id, posixJoin(appDir, '.env'))
-        renderEnv = { ...input.env }
-        for (const line of existingEnv.split(/\r?\n/)) {
-          const separator = line.indexOf('=')
-          if (separator > 0 && !line.startsWith('#')) {
-            renderEnv[line.slice(0, separator)] = line.slice(separator + 1)
-          }
-        }
+        renderEnv = { ...input.env, ...parseEnvFile(existingEnv) }
       } else if (plan.needsDb && !ctx.newApp) {
         const existingEnv = await this.ssh.readFile(ctx.app.vps_id, posixJoin(appDir, '.env'))
         const existingPassword = readEnvValue(existingEnv, 'POSTGRES_PASSWORD')
