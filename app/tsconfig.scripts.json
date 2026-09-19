@@ -22,6 +22,7 @@
     "scripts/seed-vps.ts",
     "scripts/reset-demo.ts",
     "scripts/clean-demo-vms.ts",
+    "scripts/e2e-demo-test.ts",
     "scripts/try-monitor.ts",
     "scripts/a17-c02-live.ts",
     "scripts/a17-c04-live.ts",

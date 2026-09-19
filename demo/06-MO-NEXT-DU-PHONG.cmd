@@ -1,3 +1,3 @@
 @echo off
-start "" "http://127.0.0.1:33025"
+start "" "http://127.0.0.1:33001"
 exit /b 0

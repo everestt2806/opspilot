@@ -547,6 +547,10 @@ export class DeployPipeline {
       const existing = this.appRepository.getByVpsAndName(vps.id, name)
       if (existing) {
         app = existing
+        // App chưa từng deploy thành công (current_deployment_id === null — ví dụ lượt
+        // deploy đầu fail từ PRECHECK) vẫn là first deployment: chưa có collector hay
+        // metrics file để cutover, đi nhánh đó sẽ fail "no container to start".
+        newApp = app.current_deployment_id === null
       } else {
         const requestedPort = input.host_port
         if (

@@ -1,8 +1,10 @@
 # KỊCH BẢN DEMO OPSPILOT CHI TIẾT — DEPLOY VÀ MIGRATE
 
-**Ngày demo:** 14/09/2026  
+**Ngày demo:** 16/09/2026  
 **Phạm vi:** deploy ba loại source Express, Next.js, Vite lên VM02; migrate Vite và Express/PostgreSQL từ VM02 sang VM01.  
 **Không demo:** ML, train/score, fault injection, auto rollback.
+
+> **Trạng thái rehearsal (15–16/09/2026):** toàn bộ kịch bản này đã chạy trên đúng hai VPS demo và pass 11/12 check — gồm đủ 3 deploy, healthcheck, marker, và cả 2 migrate (giữ nguồn). Check duy nhất còn lại là mở trình duyệt tới Next.js từ bên ngoài: port `30001` đang bị firewall nhà cung cấp WiService chặn (app vẫn healthy trên VPS). Cần mở port này trong portal WiService trước demo — xem `04-KE-HOACH-CHONG-LOI.md`.
 
 ---
 
@@ -321,10 +323,12 @@ NEXT_PUBLIC_SITE_NAME     OpsPilot Demo 14-09
 1. Chờ precheck xanh rồi bấm Deploy.
 2. Next build thường lâu hơn Express/Vite; không bấm Deploy lần hai khi log vẫn đang chạy.
 3. Chờ đủ bảy bước PASS.
-4. Mở URL.
+4. Mở URL. Với hai VPS vừa dọn sạch, Next.js thường được cấp port `30001`.
 5. Header phải hiển thị `OpsPilot Demo 14-09`.
 6. Mở trang chủ và ít nhất một bài viết.
 7. Trong Apps/Versions, kiểm tra container healthy, HTTP 2xx và image `vN`.
+
+Nếu URL Next (`...:30001`) không mở được từ trình duyệt trong khi Express/Vite mở bình thường: app vẫn chạy bình thường trên VPS, chỉ có port này đang bị firewall WiService chặn. Dùng đường tunnel `06-MO-NEXT-DU-PHONG.cmd` (xem `04-KE-HOACH-CHONG-LOI.md`) và cứ tiếp tục phần Vite — không dừng buổi demo.
 
 Câu thuyết minh:
 
@@ -423,6 +427,10 @@ PREPARE → FREEZE → BACKUP → TRANSFER → RESTORE → VERIFY → AWAITING_C
 - `AWAITING_CONFIRM`: mọi verify đã xong, chờ người dùng quyết định giữ hay dọn nguồn.
 
 Trong demo luôn chọn **Xác nhận, giữ nguồn**. Nguồn VM02 tiếp tục là fallback và evidence phải có `source_kept=true`.
+
+### Tên app và port ở đích
+
+App migrate sang VM01 được tạo với tên mới kèm suffix ngẫu nhiên, ví dụ `demo1409-vite-m4563192`. Đó là hành vi mặc định để không đụng app trùng tên — không phải lỗi. URL mới hiện trong màn kết quả migrate; ghi lại để mở nghiệm thu. Port ở VM01 cũng được cấp tự động tuần tự (app migrate đầu thường nhận `30000`, app thứ hai `30001`).
 
 ---
 
