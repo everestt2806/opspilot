@@ -243,7 +243,8 @@ export interface VpsConnectionCheck {
  *  bằng tiếng Việt để người mới tự xử lý được — case mẫu: firewall nhà cung cấp chặn toàn bộ
  *  inbound (máy vẫn "Running" nhưng mọi cổng timeout, không từ chối). */
 export interface VpsDiagnosis {
-  code: 'HOST_NOT_FOUND' | 'PORT_TIMEOUT' | 'PORT_CLOSED' | 'SSH_AUTH_FAILED' | 'SSH_HANDSHAKE_TIMEOUT';
+  code: 'HOST_NOT_FOUND' | 'PORT_TIMEOUT' | 'PORT_CLOSED' | 'SSH_AUTH_FAILED' | 'SSH_HANDSHAKE_TIMEOUT'
+      | 'PORT_BLOCKED_EXTERNAL';
   /** Chuyện gì xảy ra — một câu ngắn */
   title: string;
   /** Vì sao app kết luận vậy — 1-2 câu */
