@@ -27,6 +27,7 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | [`23-ke-hoach-sau-demo-30-08.md`](23-ke-hoach-sau-demo-30-08.md) | Lịch sử kế hoạch sau demo 30/08; ưu tiên mới ở docs/24 và board | Khi cần lịch sử phân công |
 | [`24-ke-hoach-demo-theo-chang.md`](24-ke-hoach-demo-theo-chang.md) | Kế hoạch giao Worker: yêu cầu R01–R25, C00–C09, C08A/B/C, evidence và review | Điểm vào hiện tại, cập nhật 11/09 |
 | [`25-nguyen-ly-deploy-migrate-demo-14-09.md`](25-nguyen-ly-deploy-migrate-demo-14-09.md) | Nguyên lý từng loại deploy/migrate, phạm vi và bằng chứng demo 14/09 | Đọc trước khi giao C03/C04 hoặc trình bày demo |
+| [`27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-detector.md`](27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-detector.md) | Kế hoạch hợp nhất phần chưa tự động: publish/firewall, DNS/domain, Doctor, dữ liệu ML, detector và backlog tối ưu | Khi lập task sau demo hoặc chốt phạm vi P0–P3 |
 
 ## Kỹ thuật
 

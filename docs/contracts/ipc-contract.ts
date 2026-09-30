@@ -72,6 +72,8 @@ export interface Deployment {
   is_rollback_of: number | null;
   started_at: string;
   finished_at: string | null;
+  exposure_status: 'reachable' | 'degraded' | 'tunnel_only' | 'not_checked';
+  exposure_evidence_json: string | null;
 }
 
 export interface MetricSample {
@@ -166,6 +168,56 @@ export interface IpcInvokeMap {
   /** Trả về ngay khi pipeline khởi động; tiến độ theo dõi qua kênh 'deploy:event' */
   'deploy:start':    (input: DeployInput) => IpcResult<{ deployment_id: number }>;
   'deploy:cancel':   (deploymentId: number) => IpcResult<void>;
+  'doctor:diagnose': (input: { deployment_id: number | null; evidence: DoctorEvidenceInput }) =>
+    IpcResult<{
+      code: string;
+      title: string;
+      confidence: 'high' | 'medium' | 'low';
+      evidence: string[];
+      fix_id: string | null;
+      verify_probe: string | null;
+      safe_to_auto_fix: boolean;
+      abstained: boolean;
+    }>;
+  'doctor:fix': (input: { fix_id: string; deployment_id: number }) =>
+    IpcResult<{
+      status: 'fixed' | 'verified' | 'failed' | 'manual';
+      message: string;
+      exposure_status?: 'reachable' | 'degraded' | 'tunnel_only' | 'not_checked';
+    }>;
+  'domain:plan': (input: {
+    hostname: string;
+    target: string;
+    app_port: number;
+    mode: 'direct_port' | 'shared_ingress' | 'named_tunnel';
+  }) => IpcResult<{
+    hostname: string;
+    mode: 'direct_port' | 'shared_ingress' | 'named_tunnel';
+    record_type: 'A' | 'AAAA' | 'CNAME';
+    record_name: string;
+    target: string;
+    direct_url: string;
+    public_url: string;
+    instructions: string[];
+  }>;
+  'domain:check': (hostname: string, target: string, record_type?: 'A' | 'AAAA' | 'CNAME') =>
+    IpcResult<{ status: 'propagated' | 'wrong_target' | 'nxdomain' | 'error'; observed: string[] }>;
+  'domain:upsert': (input: {
+    deployment_id: number;
+    hostname: string;
+    mode: 'direct_port' | 'shared_ingress' | 'named_tunnel';
+    provider: 'cloudflare';
+    api_token: string;
+    zone_id: string;
+  }) => IpcResult<{
+    hostname: string;
+    record_type: 'A' | 'AAAA' | 'CNAME';
+    record_name: string;
+    target: string;
+    public_url: string;
+    status: 'pending' | 'propagated' | 'active' | 'conflict' | 'failed' | 'disabled';
+    message: string;
+  }>;
 
   // ── App & version (UC-03, UC-04) ───────────────────────────────────────────
   'app:list':        (vpsId?: number) => IpcResult<App[]>;
@@ -280,6 +332,31 @@ export interface DeployInput {
   source_path: string;
   /** Env do người dùng điền ở bước 3 của wizard, gồm cả secret */
   env: Record<string, string>;
+}
+
+/** Evidence đã redacted gửi vào Doctor; không nhận secret value. */
+export interface DoctorEvidenceInput {
+  step?: string;
+  error_code?: string;
+  logs?: string;
+  container_state?: {
+    status?: string;
+    exit_code?: number;
+    health?: string;
+    oom_killed?: boolean;
+  };
+  disk_free_mb?: number;
+  inode_free_pct?: number;
+  listener_port?: number;
+  expected_port?: number;
+  http_status_by_path?: Record<string, number>;
+  db_error?: string;
+  required_env?: string[];
+  present_env?: string[];
+  dns_status?: 'propagated' | 'pending' | 'wrong_target' | 'nxdomain' | 'error';
+  external_probe?: 'reachable' | 'unreachable';
+  docker_available?: boolean;
+  ssh_transient?: boolean;
 }
 
 export interface PrecheckResult {
@@ -428,7 +505,20 @@ export type DeployEvent =
   | { type: 'step-done'; deployment_id: number; step: DeployStep; duration_ms: number }
   | { type: 'step-failed'; deployment_id: number; step: DeployStep; error: IpcError; last_log_lines: string[] }
   | { type: 'finished'; deployment_id: number; status: 'running' | 'failed' | 'rolled_back';
-      total_duration_ms: number; app_url?: string };
+      total_duration_ms: number; app_url?: string;
+      /** Trạng thái truy cập ngoài sau khi runtime đã healthy nội bộ. */
+      exposure_status?: 'reachable' | 'degraded' | 'tunnel_only' | 'not_checked';
+      /** Evidence đã redacted để UI/Doctor hiển thị, không chứa credential. */
+      exposure_evidence?: {
+        status: 'reachable' | 'degraded' | 'tunnel_only' | 'not_checked';
+        url: string;
+        external_probe: 'reachable' | 'unreachable' | 'not_run';
+        ufw_state: 'active' | 'inactive' | 'unknown' | 'not_checked';
+        ufw_reconciled: boolean;
+        cloud_firewall: 'not_configured' | 'reconciled' | 'failed';
+        diagnosis: VpsDiagnosis | null;
+        checked_at: string;
+      } };
 
 export type MigrateEvent =
   | { type: 'step-start'; job_id: number; step: MigrateStep; ts: string }
