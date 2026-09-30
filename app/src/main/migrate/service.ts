@@ -301,7 +301,13 @@ export class MigrateService {
         return undefined
       })
       await this.step(job, 'RESTORE', signal, async () => {
-        const deploymentId = await this.startRestoreDeployment(job, source, target, targetDir, signal)
+        const deploymentId = await this.startRestoreDeployment(
+          job,
+          source,
+          target,
+          targetDir,
+          signal
+        )
         await this.waitDeployment(deploymentId, signal)
         this.log(job.id, 'RESTORE', 'App đích đã running.')
         if (source.needs_db === 1) {
@@ -710,8 +716,7 @@ export class MigrateService {
     const checksumOk =
       targetArchive.code === 0 &&
       targetArchive.stdout.trim().split(/\s+/)[0] === artifacts.artifacts[0]?.sha256
-    const health =
-      targetHealthy && targetRuntime.stdout.includes('|running|')
+    const health = targetHealthy && targetRuntime.stdout.includes('|running|')
     const tableCounts =
       source.needs_db === 1 ? await this.tableCounts(job, source, target, signal) : []
     const marker =

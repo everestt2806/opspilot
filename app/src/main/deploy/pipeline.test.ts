@@ -395,7 +395,8 @@ describe('DeployPipeline', () => {
     const finished = await waitForFinished()
 
     expect(finished.status).toBe('running')
-    expect(finished.app_url).toBe('http://203.0.113.55:30000')
+    expect(finished.exposure_status).toBe('not_checked')
+    expect(finished.app_url).toBeUndefined()
 
     const steps = events
       .filter((event) => event.type === 'step-done')
@@ -457,7 +458,8 @@ describe('DeployPipeline', () => {
     const finished = await waitForFinished(deploymentId)
 
     expect(finished.status).toBe('running')
-    expect(finished.app_url).toBe('http://203.0.113.55:30024')
+    expect(finished.exposure_status).toBe('not_checked')
+    expect(finished.app_url).toBeUndefined()
     expect(database.prepare('SELECT host_port FROM app WHERE name = ?').get('demo-api')).toEqual({
       host_port: 30024
     })
@@ -1102,6 +1104,290 @@ describe('DeployPipeline', () => {
         )
         .get()
     ).toEqual({ count: 1 })
+  })
+
+  describe('Publish, Reachability & Exposure', () => {
+    it('khi loopback healthcheck pass và external probe fail: không rollback app healthy, ghi status running và exposure degraded', async () => {
+      createHarness()
+      const mockReconcile = vi.fn().mockResolvedValue({
+        status: 'degraded',
+        url: 'http://203.0.113.55:30000',
+        external_probe: 'unreachable',
+        ufw_state: 'active',
+        ufw_reconciled: true,
+        cloud_firewall: 'not_configured',
+        diagnosis: {
+          code: 'PORT_BLOCKED_EXTERNAL',
+          title: 'Cổng 30000 bị chặn từ bên ngoài',
+          cause: 'Firewall',
+          fixes: ['Mở cổng 30000']
+        },
+        checked_at: new Date().toISOString()
+      })
+
+      const pipelineWithExposure = new DeployPipeline({
+        ssh: (pipeline as unknown as { ssh: SshManager }).ssh,
+        db: database,
+        emit: (event) => events.push(event),
+        exposure: { reconcile: mockReconcile }
+      })
+
+      const handle = pipelineWithExposure.run(deployInput())
+      const finished = await waitForFinished(handle.deploymentId)
+
+      expect(finished.status).toBe('running')
+      expect(finished.exposure_status).toBe('degraded')
+      expect(finished.app_url).toBeUndefined()
+
+      const row = database
+        .prepare(
+          'SELECT status, exposure_status, exposure_evidence_json FROM deployment WHERE id = ?'
+        )
+        .get(handle.deploymentId) as {
+        status: string
+        exposure_status: string
+        exposure_evidence_json: string
+      }
+      expect(row.status).toBe('running')
+      expect(row.exposure_status).toBe('degraded')
+      expect(row.exposure_evidence_json).toContain('PORT_BLOCKED_EXTERNAL')
+      expect(mockReconcile).toHaveBeenCalledTimes(1)
+    })
+
+    it('khi loopback healthcheck pass và external probe ok: ghi status running và exposure reachable', async () => {
+      createHarness()
+      const mockReconcile = vi.fn().mockResolvedValue({
+        status: 'reachable',
+        url: 'http://203.0.113.55:30000',
+        external_probe: 'reachable',
+        ufw_state: 'active',
+        ufw_reconciled: true,
+        cloud_firewall: 'not_configured',
+        diagnosis: null,
+        checked_at: new Date().toISOString()
+      })
+
+      const pipelineWithExposure = new DeployPipeline({
+        ssh: (pipeline as unknown as { ssh: SshManager }).ssh,
+        db: database,
+        emit: (event) => events.push(event),
+        exposure: { reconcile: mockReconcile }
+      })
+
+      const handle = pipelineWithExposure.run(deployInput())
+      const finished = await waitForFinished(handle.deploymentId)
+
+      expect(finished.status).toBe('running')
+      expect(finished.exposure_status).toBe('reachable')
+      expect(finished.app_url).toBe('http://203.0.113.55:30000')
+
+      const row = database
+        .prepare('SELECT status, exposure_status FROM deployment WHERE id = ?')
+        .get(handle.deploymentId) as { status: string; exposure_status: string }
+      expect(row.status).toBe('running')
+      expect(row.exposure_status).toBe('reachable')
+    })
+
+    it('khi loopback healthcheck fail: không gọi publishExposure và rollback', async () => {
+      createHarness({
+        curlOk: () => false,
+        inspectState: () => ({ Status: 'running', ExitCode: 0, Error: '' })
+      })
+      const mockReconcile = vi.fn()
+
+      const pipelineWithExposure = new DeployPipeline({
+        ssh: (pipeline as unknown as { ssh: SshManager }).ssh,
+        db: database,
+        emit: (event) => events.push(event),
+        exposure: { reconcile: mockReconcile }
+      })
+
+      vi.useFakeTimers()
+      const handle = pipelineWithExposure.run(deployInput())
+      await advanceFailedHealthcheck()
+      vi.useRealTimers()
+
+      const finished = await waitForFinished(handle.deploymentId)
+
+      expect(finished.status).toBe('failed')
+      expect(mockReconcile).not.toHaveBeenCalled()
+    })
+
+    it('khi thiếu ExposureManager: ghi status running, exposure not_checked và không trả app_url', async () => {
+      createHarness()
+      const pipelineWithoutExposure = new DeployPipeline({
+        ssh: (pipeline as unknown as { ssh: SshManager }).ssh,
+        db: database,
+        emit: (event) => events.push(event)
+      })
+
+      const handle = pipelineWithoutExposure.run(deployInput())
+      const finished = await waitForFinished(handle.deploymentId)
+
+      expect(finished.status).toBe('running')
+      expect(finished.exposure_status).toBe('not_checked')
+      expect(finished.app_url).toBeUndefined()
+
+      const row = database
+        .prepare(
+          'SELECT status, exposure_status, exposure_evidence_json FROM deployment WHERE id = ?'
+        )
+        .get(handle.deploymentId) as {
+        status: string
+        exposure_status: string
+        exposure_evidence_json: string | null
+      }
+      expect(row.status).toBe('running')
+      expect(row.exposure_status).toBe('not_checked')
+      expect(row.exposure_evidence_json).toBeNull()
+    })
+
+    it('khi publish ném ngoại lệ: giữ status running, exposure degraded, log đã che secret và không gán nhầm mã', async () => {
+      createHarness()
+      const mockReconcile = vi
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            'Failed connecting to cloud provider with token=secret_token_123&password=super_secret_pw'
+          )
+        )
+
+      const pipelineWithExposure = new DeployPipeline({
+        ssh: (pipeline as unknown as { ssh: SshManager }).ssh,
+        db: database,
+        emit: (event) => events.push(event),
+        exposure: { reconcile: mockReconcile }
+      })
+
+      const handle = pipelineWithExposure.run(deployInput())
+      const finished = await waitForFinished(handle.deploymentId)
+
+      expect(finished.status).toBe('running')
+      expect(finished.exposure_status).toBe('degraded')
+      expect(finished.app_url).toBeUndefined()
+      // Bắt lỗi gán nhầm mã: không gán PORT_BLOCKED_EXTERNAL hoặc kết luận cloud firewall failed khi chưa có bằng chứng
+      expect(finished.exposure_evidence?.diagnosis).toBeFalsy()
+      expect(finished.exposure_evidence?.cloud_firewall).not.toBe('failed')
+
+      const healthcheckLogs = events
+        .filter((e) => e.type === 'log' && e.step === 'HEALTHCHECK')
+        .map((e) => (e.type === 'log' ? e.chunk : ''))
+        .join('')
+      expect(healthcheckLogs).toContain('Publish chưa hoàn tất')
+      expect(healthcheckLogs).not.toContain('secret_token_123')
+      expect(healthcheckLogs).not.toContain('super_secret_pw')
+      expect(healthcheckLogs).toContain('token=***')
+
+      const row = database
+        .prepare(
+          'SELECT status, exposure_status, exposure_evidence_json FROM deployment WHERE id = ?'
+        )
+        .get(handle.deploymentId) as {
+        status: string
+        exposure_status: string
+        exposure_evidence_json: string | null
+      }
+      expect(row.status).toBe('running')
+      expect(row.exposure_status).toBe('degraded')
+      expect(row.exposure_evidence_json).toBeNull()
+    })
+
+    it('rollback thủ công khi thiếu ExposureManager: ghi running, exposure not_checked và không trả app_url', async () => {
+      createHarness()
+      const pipelineWithoutExposure = new DeployPipeline({
+        ssh: (pipeline as unknown as { ssh: SshManager }).ssh,
+        db: database,
+        emit: (event) => events.push(event)
+      })
+
+      const first = pipelineWithoutExposure.run(deployInput())
+      await waitForFinished(first.deploymentId)
+      const second = pipelineWithoutExposure.run(deployInput())
+      await waitForFinished(second.deploymentId)
+
+      const rollback = pipelineWithoutExposure.rollback(currentAppId(), first.deploymentId)
+      const finished = await waitForFinished(rollback.deploymentId)
+
+      expect(finished.status).toBe('running')
+      expect(finished.exposure_status).toBe('not_checked')
+      expect(finished.app_url).toBeUndefined()
+
+      const row = database
+        .prepare(
+          'SELECT status, exposure_status, exposure_evidence_json FROM deployment WHERE id = ?'
+        )
+        .get(rollback.deploymentId) as {
+        status: string
+        exposure_status: string
+        exposure_evidence_json: string | null
+      }
+      expect(row.status).toBe('running')
+      expect(row.exposure_status).toBe('not_checked')
+      expect(row.exposure_evidence_json).toBeNull()
+    })
+
+    it('rollback thủ công khi publish ném ngoại lệ: giữ running, exposure degraded, log đã che secret và không gán nhầm mã', async () => {
+      createHarness()
+      const mockReconcile = vi
+        .fn()
+        .mockResolvedValueOnce({
+          status: 'reachable',
+          url: 'http://203.0.113.55:30000',
+          external_probe: 'reachable',
+          ufw_state: 'active',
+          ufw_reconciled: true,
+          cloud_firewall: 'not_configured',
+          diagnosis: null,
+          checked_at: new Date().toISOString()
+        })
+        .mockRejectedValue(
+          new Error(
+            'Cloud API error with Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.token123 and secret: my_secret_key'
+          )
+        )
+
+      const pipelineWithExposure = new DeployPipeline({
+        ssh: (pipeline as unknown as { ssh: SshManager }).ssh,
+        db: database,
+        emit: (event) => events.push(event),
+        exposure: { reconcile: mockReconcile }
+      })
+
+      const first = pipelineWithExposure.run(deployInput())
+      await waitForFinished(first.deploymentId)
+
+      const rollback = pipelineWithExposure.rollback(currentAppId(), first.deploymentId)
+      const finished = await waitForFinished(rollback.deploymentId)
+
+      expect(finished.status).toBe('running')
+      expect(finished.exposure_status).toBe('degraded')
+      expect(finished.app_url).toBeUndefined()
+      // Bắt lỗi gán nhầm mã: không gán PORT_BLOCKED_EXTERNAL hoặc kết luận cloud firewall failed khi chưa có bằng chứng
+      expect(finished.exposure_evidence?.diagnosis).toBeFalsy()
+      expect(finished.exposure_evidence?.cloud_firewall).not.toBe('failed')
+
+      const rollbackLogs = events
+        .filter((e) => e.type === 'log' && e.step === 'HEALTHCHECK')
+        .map((e) => (e.type === 'log' ? e.chunk : ''))
+        .join('')
+      expect(rollbackLogs).toContain('Publish chưa hoàn tất')
+      expect(rollbackLogs).not.toContain('my_secret_key')
+      expect(rollbackLogs).not.toContain('eyJhbGciOi')
+      expect(rollbackLogs).toContain('Bearer ***')
+
+      const row = database
+        .prepare(
+          'SELECT status, exposure_status, exposure_evidence_json FROM deployment WHERE id = ?'
+        )
+        .get(rollback.deploymentId) as {
+        status: string
+        exposure_status: string
+        exposure_evidence_json: string | null
+      }
+      expect(row.status).toBe('running')
+      expect(row.exposure_status).toBe('degraded')
+      expect(row.exposure_evidence_json).toBeNull()
+    })
   })
 })
 

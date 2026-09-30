@@ -30,8 +30,8 @@ describe('initializeDatabase', () => {
       .prepare('SELECT MAX(version) AS version FROM schema_version')
       .get() as { version: number }
 
-    expect(tables).toHaveLength(12)
-    expect(schemaVersion.version).toBe(3)
+    expect(tables).toHaveLength(15)
+    expect(schemaVersion.version).toBe(4)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -62,7 +62,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 3
+      version: 4
     })
     expect(
       database
@@ -81,5 +81,50 @@ describe('initializeDatabase', () => {
     closeDatabase()
     testDirectory = null
     expect(initializeDatabase(path.replace('opspilot.db', ''))).toBeTruthy()
+  })
+
+  it('migration 004: ho tro 4 trang thai exposure, luu evidence json va chan trang thai khong hop le', () => {
+    testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v4-'))
+    const database = initializeDatabase(testDirectory)
+
+    database.exec(
+      "INSERT INTO vps (id, name, host, username, auth_type, encrypted_secret) VALUES (1, 'v', 'h', 'u', 'password', 'x')"
+    )
+    database.exec(
+      "INSERT INTO app (id, vps_id, name, framework, host_port, container_port) VALUES (1, 1, 'demo', 'express', 3000, 3000)"
+    )
+
+    const validStatuses = ['reachable', 'degraded', 'tunnel_only', 'not_checked'] as const
+    for (const [index, status] of validStatuses.entries()) {
+      const depId = index + 1
+      database
+        .prepare(
+          'INSERT INTO deployment (id, app_id, version, image_tag, status, exposure_status, exposure_evidence_json) VALUES (?, 1, ?, ?, ?, ?, ?)'
+        )
+        .run(depId, depId, `demo:v${depId}`, 'running', status, JSON.stringify({ status }))
+
+      const row = database
+        .prepare('SELECT exposure_status, exposure_evidence_json FROM deployment WHERE id = ?')
+        .get(depId) as { exposure_status: string; exposure_evidence_json: string }
+      expect(row.exposure_status).toBe(status)
+      expect(JSON.parse(row.exposure_evidence_json)).toEqual({ status })
+    }
+
+    // Default exposure_status is 'not_checked'
+    database.exec(
+      "INSERT INTO deployment (id, app_id, version, image_tag, status) VALUES (99, 1, 99, 'demo:v99', 'running')"
+    )
+    const defaultRow = database
+      .prepare('SELECT exposure_status, exposure_evidence_json FROM deployment WHERE id = 99')
+      .get() as { exposure_status: string; exposure_evidence_json: string | null }
+    expect(defaultRow.exposure_status).toBe('not_checked')
+    expect(defaultRow.exposure_evidence_json).toBeNull()
+
+    // Invalid exposure_status should throw CHECK constraint error
+    expect(() => {
+      database.exec(
+        "INSERT INTO deployment (id, app_id, version, image_tag, status, exposure_status) VALUES (100, 1, 100, 'demo:v100', 'running', 'invalid_status')"
+      )
+    }).toThrow(/CHECK constraint failed/i)
   })
 })

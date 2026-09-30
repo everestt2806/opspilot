@@ -17,6 +17,7 @@ import { detectFramework } from '../detectors'
 import { buildSourceTree } from '../detectors/sourceTree'
 import type { SshManager } from '../ssh/manager'
 import { DeployPipeline } from './pipeline'
+import { SshExposureManager } from './exposure'
 import { allocatePort } from './portPolicy'
 import { listListeningPorts, runPrecheck, toPrecheckResult } from './precheck'
 
@@ -33,7 +34,10 @@ export class DeployService {
 
   constructor(deps: { ssh: SshManager; db: SqliteDatabase; emit: (event: DeployEvent) => void }) {
     this.ssh = deps.ssh
-    this.pipeline = new DeployPipeline(deps)
+    this.pipeline = new DeployPipeline({
+      ...deps,
+      exposure: new SshExposureManager(deps.ssh)
+    })
     this.vpsRepository = new VpsRepository(deps.db)
     this.appRepository = new AppRepository(deps.db)
     this.deploymentRepository = new DeploymentRepository(deps.db)

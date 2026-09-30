@@ -32,6 +32,9 @@ import {
 } from './templates'
 import { withAppLock } from '../monitor/appLock'
 import { ActivationRepository, type ActivationReason } from '../monitor/activation'
+import { DoctorRepository } from '../doctor/repository'
+import { diagnose, redactEvidence, redactText, type DoctorEvidence } from '../doctor/engine'
+import { type ExposureEvidence, type ExposureManager, type ExposureStatus } from './exposure'
 
 const WORK_ROOT = '/opt/opspilot'
 const HEALTHCHECK_ATTEMPTS = 10
@@ -133,6 +136,8 @@ export interface RunContext {
   collectorState: CollectorState
   restoreStatus: RestoreStatus
   durations: Partial<Record<DeployStep, number>>
+  exposureStatus: ExposureStatus
+  exposureEvidence: ExposureEvidence | null
 }
 
 /**
@@ -148,12 +153,19 @@ export class DeployPipeline {
   private readonly actionLog: ActionLogRepository
   private readonly activation: ActivationRepository
   private readonly database: SqliteDatabase
+  private readonly exposure: ExposureManager | null
+  private readonly doctor: DoctorRepository
 
   /** Khoá chống 2 pipeline chạy đồng thời trên cùng một app (deploy-events mục 3). */
   private activeByApp = new Map<number, number>()
   private controllers = new Map<number, AbortController>()
 
-  constructor(deps: { ssh: SshManager; db: SqliteDatabase; emit: (event: DeployEvent) => void }) {
+  constructor(deps: {
+    ssh: SshManager
+    db: SqliteDatabase
+    emit: (event: DeployEvent) => void
+    exposure?: ExposureManager
+  }) {
     this.ssh = deps.ssh
     this.database = deps.db
     this.emit = deps.emit
@@ -162,6 +174,8 @@ export class DeployPipeline {
     this.deploymentRepository = new DeploymentRepository(deps.db)
     this.actionLog = new ActionLogRepository(deps.db)
     this.activation = new ActivationRepository(deps.db)
+    this.exposure = deps.exposure ?? null
+    this.doctor = new DoctorRepository(deps.db)
   }
 
   /** Khởi động pipeline. Phần setup (detect + tạo bản ghi + khoá) chạy đồng bộ để
@@ -219,7 +233,9 @@ export class DeployPipeline {
       runtimeOwner: 'unknown',
       collectorState: 'running',
       restoreStatus: null,
-      durations: {}
+      durations: {},
+      exposureStatus: 'not_checked',
+      exposureEvidence: null
     }
     void this.executeRollback(ctx, targetImageTag, target.version, target.id).catch(
       (error: unknown) => {
@@ -300,6 +316,7 @@ export class DeployPipeline {
         }
       })
 
+      await this.publishExposure(ctx)
       await this.recordManualRollbackSuccess(ctx, targetImageTag, targetDeploymentId)
     } catch (error) {
       if (ctx.signal.aborted) ctx.cancelled = true
@@ -353,6 +370,8 @@ export class DeployPipeline {
     this.deploymentRepository.update(ctx.deployment.id, {
       status: 'running',
       is_rollback_of: targetDeploymentId,
+      exposure_status: ctx.exposureStatus,
+      exposure_evidence_json: ctx.exposureEvidence ? JSON.stringify(ctx.exposureEvidence) : null,
       finished_at: nowIso(),
       total_duration_ms: Date.now() - ctx.startedAt
     })
@@ -371,7 +390,9 @@ export class DeployPipeline {
       deployment_id: ctx.deployment.id,
       status: 'running',
       total_duration_ms: Date.now() - ctx.startedAt,
-      app_url: ctx.app.url
+      app_url: ctx.exposureStatus === 'reachable' ? ctx.app.url : undefined,
+      exposure_status: ctx.exposureStatus,
+      exposure_evidence: ctx.exposureEvidence ?? undefined
     })
   }
 
@@ -618,7 +639,9 @@ export class DeployPipeline {
       runtimeOwner: newApp ? 'down' : 'unknown',
       collectorState: 'running',
       restoreStatus: null,
-      durations: {}
+      durations: {},
+      exposureStatus: 'not_checked',
+      exposureEvidence: null
     }
   }
 
@@ -645,6 +668,7 @@ export class DeployPipeline {
       const healthOk = await this.stepHealthcheck(ctx)
 
       if (healthOk) {
+        await this.publishExposure(ctx)
         await this.recordSuccess(ctx)
         finalStatus = 'running'
       } else {
@@ -690,7 +714,11 @@ export class DeployPipeline {
         deployment_id: ctx.deployment.id,
         status: finalStatus,
         total_duration_ms: Date.now() - ctx.startedAt,
-        app_url: finalStatus === 'running' ? ctx.app.url : undefined
+        app_url:
+          finalStatus === 'running' && ctx.exposureStatus === 'reachable' ? ctx.app.url : undefined,
+        exposure_status: finalStatus === 'running' ? ctx.exposureStatus : undefined,
+        exposure_evidence:
+          finalStatus === 'running' ? (ctx.exposureEvidence ?? undefined) : undefined
       })
       this.release(ctx.app.id, ctx.deployment.id)
       logStream.end()
@@ -1125,6 +1153,58 @@ export class DeployPipeline {
     })
   }
 
+  /**
+   * Kiểm tra publish sau loopback healthcheck. Exposure failure không rollback app healthy;
+   * deployment được ghi running/degraded để Doctor có thể tiếp tục sửa firewall/DNS.
+   */
+  private async publishExposure(ctx: RunContext): Promise<void> {
+    if (!this.exposure) {
+      ctx.exposureStatus = 'not_checked'
+      ctx.exposureEvidence = null
+      return
+    }
+
+    try {
+      const evidence = await this.exposure.reconcile({
+        vps: this.vpsRepository.getById(ctx.app.vps_id),
+        app: ctx.app,
+        signal: ctx.signal
+      })
+      ctx.exposureEvidence = evidence
+      ctx.exposureStatus = evidence.status
+      this.log(
+        ctx,
+        'HEALTHCHECK',
+        `Publish: ${evidence.status}; external probe=${evidence.external_probe}; ufw=${evidence.ufw_state}\n`,
+        evidence.status === 'reachable' ? 'stdout' : 'stderr'
+      )
+      if (evidence.diagnosis) {
+        this.log(ctx, 'HEALTHCHECK', `Doctor: ${evidence.diagnosis.title}\n`, 'stderr')
+        const doctorEvidence: DoctorEvidence = redactEvidence({
+          step: 'HEALTHCHECK',
+          externalProbe:
+            evidence.external_probe === 'not_run' ? undefined : evidence.external_probe,
+          listenerPort: ctx.app.host_port,
+          expectedPort: ctx.app.host_port,
+          containerState: { status: 'running' },
+          logs: evidence.diagnosis.cause
+        })
+        this.doctor.create({
+          deploymentId: ctx.deployment.id,
+          trigger: 'deploy',
+          evidence: doctorEvidence,
+          diagnosis: diagnose(doctorEvidence)
+        })
+      }
+    } catch (error) {
+      const rawMessage = error instanceof Error ? error.message : String(error)
+      const safeMessage = redactText(maskSecrets(rawMessage))
+      ctx.exposureStatus = 'degraded'
+      ctx.exposureEvidence = null
+      this.log(ctx, 'HEALTHCHECK', `Publish chưa hoàn tất: ${safeMessage}\n`, 'stderr')
+    }
+  }
+
   // ── Nhánh lỗi & hồi phục ─────────────────────────────────────────────────────
 
   private async restorePreviousOrDown(ctx: RunContext): Promise<void> {
@@ -1323,6 +1403,7 @@ export class DeployPipeline {
           )
         }
       })
+      await this.publishExposure(ctx)
       await this.pruneImages(ctx, null, [previousImageTag])
     } catch (error) {
       if (ctx.signal.aborted) ctx.cancelled = true
@@ -1506,6 +1587,8 @@ export class DeployPipeline {
     try {
       this.deploymentRepository.update(ctx.deployment.id, {
         status: 'running',
+        exposure_status: ctx.exposureStatus,
+        exposure_evidence_json: ctx.exposureEvidence ? JSON.stringify(ctx.exposureEvidence) : null,
         finished_at: nowIso(),
         build_duration_ms: ctx.durations.BUILD ?? null,
         total_duration_ms: Date.now() - ctx.startedAt
@@ -1525,8 +1608,16 @@ export class DeployPipeline {
         vps_id: ctx.app.vps_id,
         app_id: ctx.app.id,
         deployment_id: ctx.deployment.id,
-        message: `Deploy v${ctx.deployment.version} app ${ctx.app.name}: thành công — ${ctx.app.url}`,
-        detail_json: JSON.stringify({ url: ctx.app.url, version: ctx.deployment.version })
+        message:
+          ctx.exposureStatus === 'reachable'
+            ? `Deploy v${ctx.deployment.version} app ${ctx.app.name}: thành công — ${ctx.app.url}`
+            : `Deploy v${ctx.deployment.version} app ${ctx.app.name}: app healthy nhưng publish ở trạng thái ${ctx.exposureStatus}.`,
+        detail_json: JSON.stringify({
+          url: ctx.app.url,
+          version: ctx.deployment.version,
+          exposure_status: ctx.exposureStatus,
+          exposure_evidence: ctx.exposureEvidence
+        })
       })
     } catch (error) {
       logger.warn('deploy', 'Bước RECORD không ghi được action_log', {
@@ -1549,6 +1640,27 @@ export class DeployPipeline {
 
   private async recordFailure(ctx: RunContext, error: unknown): Promise<void> {
     const ipcError = toStepIpcError(error)
+    // Mỗi deploy failure tạo một Doctor run với evidence đã redacted. Điều này cho phép
+    // UI/support mở chẩn đoán ngay cả khi failure xảy ra trước HEALTHCHECK (BUILD/DEPLOY).
+    try {
+      const evidence = redactEvidence({
+        step: ctx.failedStep ?? ctx.currentStep ?? undefined,
+        errorCode: ipcError.code,
+        logs: ctx.stepLines.join('\n'),
+        sshTransient: ['SSH_TIMEOUT', 'SSH_HOST_UNREACHABLE'].includes(ipcError.code)
+      })
+      this.doctor.create({
+        deploymentId: ctx.deployment.id,
+        trigger: 'deploy',
+        evidence,
+        diagnosis: diagnose(evidence)
+      })
+    } catch (doctorError) {
+      logger.warn('deploy', 'Không ghi được Doctor run cho deploy failure', {
+        deployment_id: ctx.deployment.id,
+        error: doctorError instanceof Error ? doctorError.message : String(doctorError)
+      })
+    }
     try {
       this.deploymentRepository.update(ctx.deployment.id, {
         status: 'failed',
