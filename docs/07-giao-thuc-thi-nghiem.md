@@ -40,13 +40,19 @@ Cả 3 câu đều trả lời được bằng dữ liệu của cùng 50 run �
 nghĩa. Load generator chạy **trên chính VPS** (không phải từ laptop) để jitter internet không
 lẫn vào số đo.
 
-> **Ghi chú rà soát 28/07/2026 — đề xuất, chưa đổi contract:** collector hiện chỉ nhìn thấy
-> status code của health probe 10 giây/lần; status code của 5 request/giây do load generator
-> tạo ra chưa đi vào `http_error_rate`. Vì vậy lập luận “có load generator thì error rate bớt
-> nhiễu” chưa đúng với đường dữ liệu hiện tại. Đề xuất ưu tiên: load generator công bố bộ đếm
-> request/5xx theo cửa sổ 60 giây (file JSON ghi nguyên tử hoặc endpoint nội bộ), collector đọc
-> bộ đếm đó khi chạy thí nghiệm; khi không có load generator mới fallback về health probe.
-> Cần ghi nguồn của error rate vào `raw_json`/`meta.json` để không trộn hai cách đo mà không biết.
+> **Đã áp dụng 19/09/2026 (rà soát 28/07):** trước đây collector chỉ thấy status code của health
+> probe 10 giây/lần; status code của 5 request/giây do load generator tạo ra không đi vào
+> `http_error_rate`, nên lập luận “có load generator thì error rate bớt nhiễu” chưa đúng đường dữ
+> liệu. **Cách vá (phương án A):** load generator ghi bộ đếm request/5xx theo cửa sổ 60 giây ra
+> `loadgen_counter.json` (ghi nguyên tử tmp+replace); collector đọc file đó mỗi cycle khi còn mới
+> (tuổi ≤ `LOADGEN_MAX_AGE_S`) để tính `http_error_rate = errors_5xx/requests` trên 5 req/s; khi
+> file thiếu/cũ/hỏng thì **fallback** về cửa sổ health probe cũ. Nguồn được ghi vào `raw_json`
+> qua cột phụ `http_error_rate_source` (`loadgen`|`probe`|null) + `loadgen_requests` để phân tích
+> không trộn hai cách đo. Không mở thêm port (chỉ đọc file), không đổi giao thức mạng, không đổi
+> `FEATURE_VERSION`. Chi tiết: `experiments/load_gen/loadgen.py`, `collector/collect.py`,
+> `DECISIONS.md` dòng `[exp] 2026-09-19`. Test: `read_loadgen_error_rate` + `build_metric` chọn
+> nguồn (10 test trong `collector/tests/test_loadgen_error_rate.py`).
+> **Mức độ tích hợp hiện tại:** collector mới có logic đọc counter (`read_loadgen_error_rate` và fallback probe), chưa được nối vào runtime (pipeline/deploy chưa mount volume `/var/metrics/loadgen_counter.json` cho collector chạy thật trong production).
 
 **Vì sao `mem_limit: 512m`:** memory leak cần một trần xác định thì đường cong mới tái lập
 được giữa 10 lần lặp; không giới hạn thì kết quả phụ thuộc RAM còn trống của VPS lúc đó.

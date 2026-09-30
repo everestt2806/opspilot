@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 COLLECTOR_VERSION = "1.0.0"
 METRIC_FIELDS = (
     "seq",
@@ -22,6 +21,11 @@ METRIC_FIELDS = (
     "mem_limit_mb",
     "latency_ms",
     "http_error_rate",
+    # Nguồn của http_error_rate ("loadgen" | "probe" | None) + số request trong cửa sổ khi dùng
+    # load generator. Ghi để phân tích không trộn hai cách đo (docs/07 mục 2). Cột phụ, không phá
+    # payload cũ: poller lưu nguyên dòng vào metric_sample.raw_json; các cột chuẩn không đổi.
+    "http_error_rate_source",
+    "loadgen_requests",
     "db_response_ms",
     "host_cpu_pct",
     "host_mem_pct",
@@ -40,9 +44,14 @@ class Config:
     db_dsn: str = ""
     metrics_dir: Path = Path("/var/metrics")
     max_file_mb: float = 50.0
+    # Đường dẫn file bộ đếm do load generator ghi (TK-S6, docs/07 mục 2). Khi tồn tại và còn
+    # mới, collector lấy http_error_rate từ đây (đo trên 5 req/s) thay cho ước lượng từ 1
+    # probe/10s. Rỗng hoặc file cũ/thiếu -> fallback về cửa sổ probe cũ.
+    loadgen_counter_path: str = ""
+    loadgen_max_age_s: float = 30.0
 
     @classmethod
-    def from_env(cls) -> "Config":
+    def from_env(cls) -> Config:
         return cls(
             interval_s=_env_float("COLLECT_INTERVAL_S", 10.0),
             app_container_name=os.getenv("APP_CONTAINER_NAME", ""),
@@ -52,6 +61,8 @@ class Config:
             db_dsn=os.getenv("DB_DSN", ""),
             metrics_dir=Path(os.getenv("METRICS_DIR", "/var/metrics")),
             max_file_mb=_env_float("MAX_FILE_MB", 50.0),
+            loadgen_counter_path=os.getenv("LOADGEN_COUNTER_PATH", ""),
+            loadgen_max_age_s=_env_float("LOADGEN_MAX_AGE_S", 30.0),
         )
 
 
@@ -153,7 +164,7 @@ def probe_http(url: str, timeout_s: float) -> tuple[float | None, int | None]:
         response = requests.get(url, timeout=timeout_s)
         latency_ms = (time.perf_counter() - started) * 1000
         return latency_ms, response.status_code
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None, None
 
 
@@ -164,12 +175,14 @@ def probe_db(dsn: str, timeout_s: float) -> float | None:
         import psycopg2
 
         started = time.perf_counter()
-        with psycopg2.connect(dsn, connect_timeout=max(1, int(timeout_s))) as connection:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT 1")
-                cursor.fetchone()
+        with (
+            psycopg2.connect(dsn, connect_timeout=max(1, int(timeout_s))) as connection,
+            connection.cursor() as cursor,
+        ):
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
         return (time.perf_counter() - started) * 1000
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
 
 
@@ -258,15 +271,62 @@ def update_error_window(
     return sum(item[1] for item in errors) / len(errors) if errors else None
 
 
+def read_loadgen_error_rate(
+    counter_path: str, wall_now: float, max_age_s: float
+) -> tuple[float | None, int | None]:
+    """Đọc http_error_rate từ file bộ đếm của load generator (TK-S6, docs/07 mục 2).
+
+    Load generator ghi nguyên tử `{window_s, requests, errors_5xx, ts, ...}`. Chỉ tin file
+    khi còn mới (tuổi ≤ max_age_s so với đồng hồ tường) và có ≥1 request trong cửa sổ. Trả
+    (error_rate, requests_trong_cua_so). File thiếu/hỏng/cũ/rỗng -> (None, None) để caller
+    fallback về cửa sổ probe cũ. Thuần theo đối số, test không cần load generator thật.
+    """
+    if not counter_path:
+        return None, None
+    try:
+        raw = Path(counter_path).read_text(encoding="utf-8")
+        payload = json.loads(raw)
+    except (OSError, json.JSONDecodeError):
+        return None, None
+    if not isinstance(payload, dict):
+        return None, None
+    ts = payload.get("ts")
+    if isinstance(ts, str):
+        try:
+            written = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+            if max_age_s > 0 and wall_now - written > max_age_s:
+                return None, None  # số cũ: load generator đã dừng -> đừng dùng số đóng băng
+        except ValueError:
+            pass
+    requests_count = payload.get("requests")
+    errors_count = payload.get("errors_5xx")
+    if not isinstance(requests_count, int) or not isinstance(errors_count, int):
+        return None, None
+    if requests_count <= 0:
+        return None, None
+    return errors_count / requests_count, requests_count
+
+
 def build_metric(seq: int, config: Config, errors: deque[tuple[float, bool]]) -> dict[str, Any]:
     stats = read_docker_stats(config.app_container_name)
     latency_ms, status_code = probe_http(config.app_url, config.probe_timeout_s)
     now = time.monotonic()
-    error_rate = (
+    probe_error_rate = (
         update_error_window(errors, now, status_code, config.error_window_s)
         if config.app_url
         else None
     )
+    # Ưu tiên số của load generator (5 req/s) khi chạy thí nghiệm; nếu không có thì dùng ước
+    # lượng từ probe. Ghi nguồn vào raw_json để phân tích không trộn hai cách đo (docs/07 mục 2).
+    loadgen_rate, loadgen_requests = read_loadgen_error_rate(
+        config.loadgen_counter_path, time.time(), config.loadgen_max_age_s
+    )
+    if loadgen_rate is not None:
+        error_rate = loadgen_rate
+        error_rate_source = "loadgen"
+    else:
+        error_rate = probe_error_rate
+        error_rate_source = "probe" if config.app_url else None
     host_cpu, host_mem = read_host_metrics()
     return {
         "seq": seq,
@@ -277,6 +337,8 @@ def build_metric(seq: int, config: Config, errors: deque[tuple[float, bool]]) ->
         "mem_limit_mb": stats.get("mem_limit_mb") if stats else None,
         "latency_ms": latency_ms,
         "http_error_rate": error_rate,
+        "http_error_rate_source": error_rate_source,
+        "loadgen_requests": loadgen_requests,
         "db_response_ms": probe_db(config.db_dsn, config.probe_timeout_s),
         "host_cpu_pct": host_cpu,
         "host_mem_pct": host_mem,
@@ -309,7 +371,7 @@ def run() -> None:
                 config.max_file_mb,
             )
             sequence += 1
-        except Exception as exc:  # collector must keep running after a bad probe or disk hiccup
+        except Exception as exc:  # noqa: BLE001 - collector must keep running after a bad probe or disk hiccup
             print(f"collector error: {exc}", flush=True)
         time.sleep(max(0.0, config.interval_s - (time.perf_counter() - started)))
 
