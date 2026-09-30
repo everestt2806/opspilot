@@ -100,7 +100,7 @@ describe('assessReachability', () => {
 describe('probeExternalReachable', () => {
   it('reachable neu bat ky lan nao thong', async () => {
     const probe = vi
-      .fn<[string], Promise<boolean>>()
+      .fn<(url: string) => Promise<boolean>>()
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true)
     const outcome = await probeExternalReachable('http://x:30001/', 3, probe)
@@ -109,14 +109,14 @@ describe('probeExternalReachable', () => {
   })
 
   it('unreachable khi moi lan deu fail, thu du so lan', async () => {
-    const probe = vi.fn<[string], Promise<boolean>>().mockResolvedValue(false)
+    const probe = vi.fn<(url: string) => Promise<boolean>>().mockResolvedValue(false)
     const outcome = await probeExternalReachable('http://x:30001/', 3, probe)
     expect(outcome).toBe('unreachable')
     expect(probe).toHaveBeenCalledTimes(3)
   })
 
   it('it nhat 1 lan du truyen attempts < 1', async () => {
-    const probe = vi.fn<[string], Promise<boolean>>().mockResolvedValue(false)
+    const probe = vi.fn<(url: string) => Promise<boolean>>().mockResolvedValue(false)
     await probeExternalReachable('http://x:30001/', 0, probe)
     expect(probe).toHaveBeenCalledTimes(1)
   })
