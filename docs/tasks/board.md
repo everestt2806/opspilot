@@ -50,7 +50,8 @@ manual-only, không push/PR/merge.
 | L7 | UI Exposure, Doctor, Đa ngôn ngữ (4 locales) & Deploy Guard | Worker | 30/09 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `82a5d5d` | Chưa merge `main`; 20 files; DeployPage, AppsPage, SettingsPage, 4 locales; 479 Vitest pass, build pass; GUI thực `NOT_RUN` (headless) |
 | L8 | Cấu hình .gitignore, cập nhật Board & Handoff | Worker | 30/09 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `f870b6f` | Chưa merge `main`; 3 files (.gitignore, board.md, HANDOFF.md); loại trừ công cụ AI cục bộ, hồ sơ bàn giao hoàn chỉnh |
 | P2b-1 | Migration 005: attempt_index 1..3 & unique 3 trường cho experiment_run | Worker | 01/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `25a3bac` | Migration runner tắt foreign_keys trước tx, kiểm tra toàn vẹn ID/alert và foreign_key_check trước commit; test rollback và migrate thành công trực tiếp trên kết nối; 9 test DB pass |
-| P2b-2 | Attempt lifecycle trong run_store.py (TK-S6) | Worker | 01/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit cục bộ (P2b-2) | start_run cấp attempt 1..3 nguyên tử trong BEGIN IMMEDIATE, kiểm soát retry sau abort, từ chối sau completed, bảo toàn tx ownership; 135 pytest pass |
+| P2b-2 | Attempt lifecycle trong run_store.py (TK-S6) | Worker | 01/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `5547a85` | start_run cấp attempt 1..3 nguyên tử trong BEGIN IMMEDIATE, kiểm soát retry sau abort, từ chối sau completed, bảo toàn tx ownership; 135 pytest pass |
+| P2b-3 | Export và analyze theo attempt (TK-S6) | Worker | 01/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit cục bộ (P2b-3) | export_run độc quyền thư mục run_<scen>_<rep>_att<att>, ghi attempt_index; main_table bỏ qua run aborted, operational telemetry riêng; 140 pytest pass |
 
 ### Task theo dõi song song / sau demo
 

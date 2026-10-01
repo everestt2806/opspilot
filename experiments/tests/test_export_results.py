@@ -6,6 +6,8 @@ import sqlite3
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from export_results import export_run, run_dir_for
@@ -13,10 +15,11 @@ from export_results import export_run, run_dir_for
 # Schema tối thiểu đủ cho export (các bảng export_run đụng tới). Cột khớp docs/contracts/schema.sql.
 _SCHEMA = """
 CREATE TABLE experiment_run (
-  id INTEGER PRIMARY KEY, scenario TEXT, repeat_index INTEGER, deployment_id INTEGER,
-  vps_id INTEGER, baseline_start_ts TEXT, train_at_ts TEXT, fault_start_ts TEXT,
-  fault_end_ts TEXT, run_end_ts TEXT, clock_offset_ms INTEGER, detection_grace_s INTEGER,
-  train_sample_count INTEGER, fault_params_json TEXT, status TEXT, abort_reason TEXT
+  id INTEGER PRIMARY KEY, scenario TEXT, repeat_index INTEGER, attempt_index INTEGER DEFAULT 1,
+  deployment_id INTEGER, vps_id INTEGER, baseline_start_ts TEXT, train_at_ts TEXT,
+  fault_start_ts TEXT, fault_end_ts TEXT, run_end_ts TEXT, clock_offset_ms INTEGER,
+  detection_grace_s INTEGER, train_sample_count INTEGER, fault_params_json TEXT,
+  status TEXT, abort_reason TEXT
 );
 CREATE TABLE metric_sample (
   id INTEGER PRIMARY KEY, deployment_id INTEGER, seq INTEGER, ts_vps TEXT, ts_local TEXT,
@@ -138,9 +141,72 @@ def test_export_never_touches_vps_table(tmp_path):
 
 
 def test_missing_run_raises(tmp_path):
-    import pytest
-
     conn = sqlite3.connect(":memory:")
     _seed(conn)
     with pytest.raises(ValueError):
         export_run(conn, run_id=999, out_dir=tmp_path / "x")
+
+
+def test_export_distinct_attempt_directories(tmp_path):
+    """Xác nhận hai attempt khác nhau xuất ra hai thư mục độc lập (_att1 và _att2)."""
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(_SCHEMA)
+    conn.execute(
+        "INSERT INTO experiment_run (id, scenario, repeat_index, attempt_index, deployment_id, vps_id, "
+        "fault_start_ts, fault_end_ts, train_at_ts, clock_offset_ms, detection_grace_s, status, abort_reason) "
+        "VALUES (1, 'cpu_spike', 1, 1, 42, 1, '2000.0', '3200.0', '1000.0', 120, 60, 'aborted', 'vps_reboot')"
+    )
+    conn.execute(
+        "INSERT INTO experiment_run (id, scenario, repeat_index, attempt_index, deployment_id, vps_id, "
+        "fault_start_ts, fault_end_ts, train_at_ts, clock_offset_ms, detection_grace_s, status) "
+        "VALUES (2, 'cpu_spike', 1, 2, 42, 1, '2000.0', '3200.0', '1000.0', 120, 60, 'completed')"
+    )
+    conn.commit()
+
+    out_att1 = run_dir_for(tmp_path, "cpu_spike", 1, attempt_index=1)
+    out_att2 = run_dir_for(tmp_path, "cpu_spike", 1, attempt_index=2)
+
+    assert out_att1.name == "run_cpu_spike_1_att1"
+    assert out_att2.name == "run_cpu_spike_1_att2"
+
+    export_run(conn, run_id=1, out_dir=out_att1)
+    export_run(conn, run_id=2, out_dir=out_att2)
+
+    assert out_att1.exists()
+    assert out_att2.exists()
+    assert out_att1 != out_att2
+
+    meta1 = json.loads((out_att1 / "meta.json").read_text(encoding="utf-8"))
+    meta2 = json.loads((out_att2 / "meta.json").read_text(encoding="utf-8"))
+    assert meta1["attempt_index"] == 1
+    assert meta1["status"] == "aborted"
+    assert meta2["attempt_index"] == 2
+    assert meta2["status"] == "completed"
+
+    with (out_att1 / "experiment_run.csv").open(newline="", encoding="utf-8") as stream:
+        rows1 = list(csv.DictReader(stream))
+    assert rows1[0]["attempt_index"] == "1"
+    assert rows1[0]["status"] == "aborted"
+
+    with (out_att2 / "experiment_run.csv").open(newline="", encoding="utf-8") as stream:
+        rows2 = list(csv.DictReader(stream))
+    assert rows2[0]["attempt_index"] == "2"
+    assert rows2[0]["status"] == "completed"
+
+
+def test_export_refuses_when_directory_already_exists(tmp_path):
+    """Xác nhận export_run từ chối ghi đè khi thư mục đã tồn tại trước đó."""
+    conn = sqlite3.connect(":memory:")
+    _seed(conn)
+    out = run_dir_for(tmp_path, "memory_leak", 1, attempt_index=1)
+    export_run(conn, run_id=7, out_dir=out)
+
+    # 1. Thư mục đã xuất rồi, xuất lại lần 2 phải từ chối FileExistsError
+    with pytest.raises(FileExistsError, match="Quy định giao thức cấm ghi đè"):
+        export_run(conn, run_id=7, out_dir=out)
+
+    # 2. Thư mục đã tồn tại trước (dù rỗng), cũng bị từ chối
+    pre_existing = tmp_path / "run_pre_existing"
+    pre_existing.mkdir()
+    with pytest.raises(FileExistsError, match="đã tồn tại"):
+        export_run(conn, run_id=7, out_dir=pre_existing)

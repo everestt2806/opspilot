@@ -215,7 +215,6 @@ def start_run(
     conn: sqlite3.Connection,
     scenario: str,
     repeat_index: int,
-    attempt_index: int | None = None,
     deployment_id: int | None = None,
     vps_id: int | None = None,
     baseline_start_ts: str | float | datetime | None = None,
@@ -224,6 +223,7 @@ def start_run(
     fault_params_json: str | None = None,
     notes: str | None = None,
     auto_commit: bool = True,
+    attempt_index: int | None = None,
 ) -> int:
     """Bắt đầu một run thí nghiệm mới ở trạng thái 'running'.
 

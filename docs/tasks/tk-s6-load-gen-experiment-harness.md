@@ -117,10 +117,10 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
       - Quản lý transaction minh bạch: chỉ commit/rollback transaction do chính hàm mở, không huỷ hoặc tự commit thay đổi có trước của caller trên cùng connection.
       - Hoàn tất (`status='completed'`) hoặc huỷ (`status='aborted'` với `abort_reason` bắt buộc).
       - Truy vấn `count_phase_a_samples()` so sánh mốc thời gian với độ chính xác microsecond đầy đủ, không cắt xén phần lẻ trước khi lọc mẫu trong cửa sổ nửa mở `[start, end)` (kể cả khi đọc từ mốc đã lưu).
-      - Giới hạn schema hiện tại: `UNIQUE(scenario, repeat_index)` trong `docs/contracts/schema.sql` hiện ngăn lưu retry sau khi abort (giữ nguyên schema v1, chờ Leader quyết định giải pháp).
-- [x] pytest liên quan xanh: **135 passed** (collect 26, loadgen_error_rate 9, loadgen 9,
-      labeling 11, metrics 9, scheduler 9, protocol 12, analyze 7, export 6, manifest 5, run_store 23;
-      trước P2a là 112 passed, P2b-1 là 128 passed).
+- [x] Quản lý vòng đời attempt & schema migration 005 (P2b): bổ sung `attempt_index` 1..3, ràng buộc `UNIQUE(scenario, repeat_index, attempt_index)`, cấp attempt kế tiếp sau abort, từ chối sau completed, bảo đảm `export_results.py` độc quyền thư mục theo attempt (`run_<scenario>_<repeat>_att<attempt>`) và `analyze.py` lọc run completed vào bảng benchmark, tách riêng operational telemetry cho run aborted.
+- [x] pytest liên quan xanh: **140 passed** (collect 26, loadgen_error_rate 9, loadgen 9,
+      labeling 11, metrics 9, scheduler 9, protocol 12, analyze 9, export 8, manifest 5, run_store 24;
+      trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed).
       Chưa nối CLI/SSH/poller/loadgen/alert, chưa chạy VPS thật, không push/PR/merge.
 
 ## Nhật ký
@@ -167,17 +167,22 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
   (4) Cấm export_run() âm thầm ghi đè thư mục attempt đã tồn tại trên đĩa.
   (5) Chuẩn hoá kiến trúc: main_table() là nơi đọc CSV và lọc status == 'completed' trước khi gọi hàm tính toán thuần analyze_run().
 - 01/10 mốc Triển khai P2b-1 (`eb46147`, `25a3bac`) & Tinh chỉnh Migration 005 — Triển khai migration 005 thêm cột attempt_index (1..3, mặc định 1 cho dữ liệu cũ) và unique (scenario, repeat_index, attempt_index). Runner tắt foreign keys trước transaction và kiểm tra ngoại lệ `currentFk !== 0`; kiểm tra toàn vẹn ID run, liên kết alert.experiment_run_id và foreign_key_check ngay trong transaction trước commit; khối finally khôi phục `foreign_keys = ON`. Test kiểm tra toàn bộ trạng thái rollback và áp dụng thành công trực tiếp trên cùng một kết nối DB chạy migration, loại bỏ khẳng định dựa vào kết nối mở lại; kiểm tra CHECK constraint (1..3) và UNIQUE 3 trường.
-- 01/10 mốc Triển khai P2b-2 — Hoàn tất attempt lifecycle trong `experiments/run_store.py`:
+- 01/10 mốc Triển khai P2b-2 (`5547a85`) — Hoàn tất attempt lifecycle trong `experiments/run_store.py`:
   - `start_run()` bắt buộc attempt đầu là 1 (tự động hoặc tường minh = 1; từ chối nếu truyền khác 1).
   - Cấp attempt kế tiếp = prev_attempt + 1 sau khi attempt trước bị aborted, tối đa 3 attempts (tối đa 2 lần retry).
   - Từ chối mọi run sau khi đã completed, kể cả khi caller truyền attempt tường minh.
   - Toàn bộ logic kiểm tra và cấp phát attempt được thực thi nguyên tử trong cùng transaction `BEGIN IMMEDIATE`.
   - Bảo toàn quyền sở hữu transaction của caller (hỗ trợ `auto_commit=False` và từ chối an toàn khi `in_transaction=True`).
   - Cập nhật test suite cho schema migration 005 và bổ sung các ca kiểm thử: cấp attempt tự động, attempt tường minh, từ chối nhảy số/lặp số, từ chối sau completed, ràng buộc DB SQLite, và hai kết nối cạnh tranh retry; đạt mốc **135 passed** pytest.
+- 01/10 mốc Triển khai P2b-3 — Export và analyze theo attempt (TK-S6):
+  - `export_results.py`: bổ sung `attempt_index` vào `experiment_run.csv` và `meta.json`; `run_dir_for()` định dạng `run_<scenario>_<repeat>_att<attempt>`; chiếm thư mục bằng thao tác tạo độc quyền (`mkdir(exist_ok=False)`), từ chối và ném `FileExistsError` nếu thư mục đã tồn tại trước đó.
+  - `analyze.py`: `main_table()` đọc `experiment_run.csv` và bỏ qua các run có `status != 'completed'` trước khi đọc `float(fault_start_ts)` hoặc `score_sample.csv`, chống lỗi vỡ bảng khi run aborted thiếu mốc thời gian; bổ sung `collect_operational_telemetry()` và `operational_table()` theo dõi riêng tỷ lệ thành công attempt 1, retry attempt 2-3 và lý do abort.
+  - `run_store.py`: chuyển tham số `attempt_index` về cuối chữ ký `start_run()` để bảo toàn tương thích tham số vị trí với 11 đối số có trước.
+  - Cập nhật `docs/07` mục 8 định dạng thư mục artifact; test suite bổ sung 5 ca kiểm thử đạt mốc **140 passed** pytest.
 
 ## Lệnh tái hiện
 
-Test thuần (135 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed):
+Test thuần (140 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed):
 
 ```
 ml-service/.venv/Scripts/python.exe -m pytest \

@@ -192,7 +192,7 @@ Các bước (mỗi bước ghi `action_log`; lỗi ở bất kỳ đâu → `st
 
 1. SQLite bật **WAL**.
 2. Sau **mỗi** run, `export_results.py` xuất CSV vào
-   `experiments/results/run_<scenario>_<n>/`:
+   `experiments/results/run_<scenario>_<n>_att<attempt>/`:
    `metric_sample.csv` · `score_sample.csv` · `alert.csv` · `experiment_run.csv` ·
    `meta.json` (git commit hash, collector_version, protocol_version, feature_version, ngưỡng đang dùng).
 3. **Commit + push ngay** (CSV nhỏ, không cần LFS). **Không commit file `.db`** — nó chứa

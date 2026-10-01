@@ -885,3 +885,52 @@ def test_microsecond_boundary_counting_from_saved_milestones(
     )
     # Mẫu 11, 12, 13 được đếm (= 3 mẫu)
     assert count == 3
+
+
+def test_start_run_positional_arguments_compatibility(conn: sqlite3.Connection) -> None:
+    """Xác nhận chuyển attempt_index về cuối chữ ký start_run bảo toàn tương thích tham số vị trí."""
+    # 1. Gọi với 11 tham số vị trí theo đúng thứ tự cũ trước P2b
+    # (conn, scenario, repeat_index, deployment_id, vps_id, baseline_start_ts, clock_offset_ms,
+    #  detection_grace_s, fault_params_json, notes, auto_commit)
+    r1 = start_run(
+        conn,
+        "cpu_spike",
+        1,
+        42,
+        1,
+        "2026-09-30T10:00:00Z",
+        50,
+        60,
+        '{"load": 80}',
+        "positional 11 args",
+        True,
+    )
+    run1 = get_run(conn, r1)
+    assert run1 is not None
+    assert run1["attempt_index"] == 1
+    assert run1["scenario"] == "cpu_spike"
+    assert run1["repeat_index"] == 1
+    assert run1["notes"] == "positional 11 args"
+
+    # Abort run 1 để cho phép retry
+    abort_run(conn, r1, "test abort for positional retry")
+
+    # 2. Gọi với 12 tham số vị trí (tham số thứ 12 là attempt_index=2)
+    r2 = start_run(
+        conn,
+        "cpu_spike",
+        1,
+        42,
+        1,
+        "2026-09-30T10:10:00Z",
+        50,
+        60,
+        '{"load": 80}',
+        "positional 12 args",
+        True,
+        2,
+    )
+    run2 = get_run(conn, r2)
+    assert run2 is not None
+    assert run2["attempt_index"] == 2
+    assert run2["notes"] == "positional 12 args"

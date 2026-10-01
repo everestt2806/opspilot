@@ -11,8 +11,10 @@ from analyze import (
     Aggregate,
     aggregate,
     analyze_run,
+    collect_operational_telemetry,
     load_run,
     main_table,
+    operational_table,
     read_run_meta,
     read_score_csv,
 )
@@ -244,3 +246,102 @@ def test_load_run_preserves_existing_protocol_version(tmp_path):
 
     manifest, _metrics, _scores = load_run(run_dir)
     assert manifest["protocol_version"] == "1.0"
+
+
+def test_main_table_skips_aborted_runs_even_with_missing_timestamps(tmp_path):
+    """Xác nhận main_table bỏ qua run aborted thiếu mốc thời gian mà không làm vỡ phân tích."""
+    # 1. Thư mục run aborted: không có mốc thời gian hoàn chỉnh (trống chuỗi)
+    aborted_dir = tmp_path / "run_cpu_spike_1_att1"
+    aborted_dir.mkdir()
+    (aborted_dir / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,abort_reason,fault_start_ts,fault_end_ts,train_at_ts\n"
+        "cpu_spike,1,1,aborted,vps_reboot_timeout,,,\n",
+        encoding="utf-8",
+    )
+    (aborted_dir / "score_sample.csv").write_text(
+        "method,ts_vps,above_threshold\n", encoding="utf-8"
+    )
+
+    # 2. Thư mục run completed: có đầy đủ dữ liệu
+    completed_dir = tmp_path / "run_cpu_spike_1_att2"
+    completed_dir.mkdir()
+    (completed_dir / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,fault_start_ts,fault_end_ts,train_at_ts\n"
+        "cpu_spike,1,2,completed,2000.0,3200.0,1000.0\n",
+        encoding="utf-8",
+    )
+    (completed_dir / "score_sample.csv").write_text(
+        "method,ts_vps,above_threshold\n"
+        "ensemble,2100.0,1\n"
+        "ensemble,2110.0,1\n"
+        "rule,2100.0,1\n"
+        "rule,2110.0,1\n"
+        "rule,2120.0,1\n",
+        encoding="utf-8",
+    )
+
+    # Khi phân tích cả 2 run, main_table phải lọc bỏ aborted_dir trước khi đọc float(fault_start_ts),
+    # không vấp ValueError và chỉ tổng hợp run completed.
+    table = main_table([aborted_dir, completed_dir], grace_s=60.0)
+    assert "| Method | Precision | Recall | F1 | Delay (s) | #censored |" in table
+    for method in METHODS:
+        assert f"| {method} |" in table
+
+
+def test_operational_telemetry_and_table(tmp_path):
+    """Xác nhận thu thập dữ liệu vận hành và bảng operational telemetry từ các run (gồm cả aborted)."""
+    # Run 1: attempt 1 aborted do ssh_timeout
+    r1 = tmp_path / "run_error_burst_1_att1"
+    r1.mkdir()
+    (r1 / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,abort_reason\n"
+        "error_burst,1,1,aborted,ssh_timeout\n",
+        encoding="utf-8",
+    )
+
+    # Run 2: retry attempt 2 completed
+    r2 = tmp_path / "run_error_burst_1_att2"
+    r2.mkdir()
+    (r2 / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,abort_reason\n"
+        "error_burst,1,2,completed,\n",
+        encoding="utf-8",
+    )
+
+    # Run 3: attempt 1 completed ngay lần đầu
+    r3 = tmp_path / "run_error_burst_2_att1"
+    r3.mkdir()
+    (r3 / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,abort_reason\n"
+        "error_burst,2,1,completed,\n",
+        encoding="utf-8",
+    )
+
+    # Run 4: attempt 1 aborted do oom_kill
+    r4 = tmp_path / "run_slow_db_1_att1"
+    r4.mkdir()
+    (r4 / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,abort_reason\n"
+        "slow_db,1,1,aborted,oom_kill\n",
+        encoding="utf-8",
+    )
+
+    dirs = [r1, r2, r3, r4]
+    telemetry = collect_operational_telemetry(dirs)
+
+    assert telemetry.total_runs == 4
+    assert telemetry.completed_runs == 2
+    assert telemetry.aborted_runs == 2
+    assert telemetry.first_attempt_success_count == 1
+    assert telemetry.retry_success_count == 1
+    assert telemetry.abort_reasons == {"ssh_timeout": 1, "oom_kill": 1}
+    assert telemetry.attempts_distribution == {1: 3, 2: 1}
+
+    table = operational_table(dirs)
+    assert "| Total Runs Exported | 4 |" in table
+    assert "| Completed Runs | 2 |" in table
+    assert "| Aborted Runs | 2 |" in table
+    assert "| First-Attempt Success | 1 |" in table
+    assert "| Retry Success (Att 2-3) | 1 |" in table
+    assert "ssh_timeout: 1" in table
+    assert "oom_kill: 1" in table

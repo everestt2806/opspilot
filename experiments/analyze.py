@@ -183,12 +183,21 @@ def _fmt(value: float | None, digits: int = 3) -> str:
 def main_table(
     run_dirs: list[Path], grace_s: float = 60.0
 ) -> str:  # pragma: no cover - I/O ráp nối
-    """Ráp bảng chính Markdown (docs/07 mục 9.1) từ nhiều thư mục run. Mỗi ô mean±std [CI]."""
+    """Ráp bảng chính Markdown (docs/07 mục 9.1) từ nhiều thư mục run. Mỗi ô mean±std [CI].
+
+    docs/07 & TK-S6 P2b-3:
+    Lọc status: chỉ phân tích các run có status='completed'. Bỏ qua run aborted/running
+    trước khi đọc score_sample.csv hoặc gọi analyze_run(). Run aborted được giữ làm
+    dữ liệu vận hành riêng biệt.
+    """
     per_method: dict[str, dict[str, list]] = {
         m: {"f1": [], "precision": [], "recall": [], "delay": []} for m in METHODS
     }
     for run_dir in run_dirs:
         meta = read_run_meta(run_dir / "experiment_run.csv")
+        if meta.get("status") != "completed":
+            continue
+
         scores = read_score_csv(run_dir / "score_sample.csv")
         results = analyze_run(
             scores,
@@ -216,6 +225,80 @@ def main_table(
             f"| {method} | {_fmt(p.mean)} | {_fmt(rec.mean)} | {_fmt(f1.mean)} "
             f"| {_fmt(d.mean, 1)} | {d.censored} |"
         )
+    return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class OperationalTelemetry:
+    total_runs: int
+    completed_runs: int
+    aborted_runs: int
+    first_attempt_success_count: int
+    retry_success_count: int
+    abort_reasons: dict[str, int]
+    attempts_distribution: dict[int, int]
+
+
+def collect_operational_telemetry(run_dirs: list[Path]) -> OperationalTelemetry:
+    """Thu thập dữ liệu vận hành từ danh sách run_dirs: tách bạch run completed và aborted."""
+    total = len(run_dirs)
+    completed = 0
+    aborted = 0
+    first_attempt_success = 0
+    retry_success = 0
+    abort_reasons: dict[str, int] = defaultdict(int)
+    attempts_distribution: dict[int, int] = defaultdict(int)
+
+    for run_dir in run_dirs:
+        meta_file = run_dir / "experiment_run.csv"
+        if not meta_file.exists():
+            continue
+        meta = read_run_meta(meta_file)
+        status = meta.get("status", "")
+        att_str = meta.get("attempt_index", "1")
+        try:
+            attempt_idx = int(att_str) if att_str else 1
+        except ValueError:
+            attempt_idx = 1
+        attempts_distribution[attempt_idx] += 1
+
+        if status == "completed":
+            completed += 1
+            if attempt_idx == 1:
+                first_attempt_success += 1
+            else:
+                retry_success += 1
+        elif status == "aborted":
+            aborted += 1
+            reason = meta.get("abort_reason") or "unspecified"
+            abort_reasons[reason] += 1
+
+    return OperationalTelemetry(
+        total_runs=total,
+        completed_runs=completed,
+        aborted_runs=aborted,
+        first_attempt_success_count=first_attempt_success,
+        retry_success_count=retry_success,
+        abort_reasons=dict(abort_reasons),
+        attempts_distribution=dict(attempts_distribution),
+    )
+
+
+def operational_table(run_dirs: list[Path]) -> str:
+    """Tạo bảng Markdown báo cáo độ ổn định vận hành và hạ tầng từ các run (gồm cả aborted)."""
+    telemetry = collect_operational_telemetry(run_dirs)
+    lines = [
+        "| Metric | Value |",
+        "|---|---|",
+        f"| Total Runs Exported | {telemetry.total_runs} |",
+        f"| Completed Runs | {telemetry.completed_runs} |",
+        f"| Aborted Runs | {telemetry.aborted_runs} |",
+        f"| First-Attempt Success | {telemetry.first_attempt_success_count} |",
+        f"| Retry Success (Att 2-3) | {telemetry.retry_success_count} |",
+    ]
+    if telemetry.abort_reasons:
+        reasons_str = "; ".join(f"{r}: {c}" for r, c in telemetry.abort_reasons.items())
+        lines.append(f"| Abort Reasons Breakdown | {reasons_str} |")
     return "\n".join(lines)
 
 

@@ -67,6 +67,7 @@ _RUN_COLS = [
     "id",
     "scenario",
     "repeat_index",
+    "attempt_index",
     "deployment_id",
     "vps_id",
     "baseline_start_ts",
@@ -88,16 +89,40 @@ def _write_csv(path: Path, columns: list[str], rows: list[sqlite3.Row]) -> int:
         writer = csv.writer(stream)
         writer.writerow(columns)
         for row in rows:
-            writer.writerow([row[c] for c in columns])
+            keys = row.keys() if hasattr(row, "keys") else []
+            writer.writerow(
+                [
+                    row[c] if c in keys else (1 if c == "attempt_index" else None)
+                    for c in columns
+                ]
+            )
     return len(rows)
 
 
 def export_run(
     conn: sqlite3.Connection, run_id: int, out_dir: Path, meta_extra: dict | None = None
 ) -> dict[str, int]:
-    """Xuất một run ra CSV + meta.json. Trả số dòng mỗi file. Thuần theo `conn` (test với :memory:)."""
+    """Xuất một run ra CSV + meta.json. Trả số dòng mỗi file. Thuần theo `conn` (test với :memory:).
+
+    Quy định giao thức (TK-S6 P2b-3):
+      - Chiếm thư mục bằng thao tác tạo độc quyền (exclusive mkdir).
+      - Nếu thư mục đã tồn tại trước đó, từ chối và ném FileExistsError trước khi thực hiện ghi.
+      - Ghi attempt_index vào experiment_run.csv và meta.json.
+    """
+    if out_dir.exists():
+        raise FileExistsError(
+            f"Thư mục kết quả '{out_dir}' đã tồn tại. Quy định giao thức cấm ghi đè artifact của attempt đã tồn tại."
+        )
+
+    out_dir.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        out_dir.mkdir(parents=False, exist_ok=False)
+    except FileExistsError as err:
+        raise FileExistsError(
+            f"Thư mục kết quả '{out_dir}' đã được chiếm bởi tiến trình khác. Quy định giao thức cấm ghi đè artifact."
+        ) from err
+
     conn.row_factory = sqlite3.Row
-    out_dir.mkdir(parents=True, exist_ok=True)
 
     run_rows = conn.execute(
         "SELECT * FROM experiment_run WHERE id = ?", (run_id,)
@@ -131,14 +156,19 @@ def export_run(
         ),
     }
 
+    first_run = run_rows[0]
+    keys = first_run.keys() if hasattr(first_run, "keys") else []
+    attempt_index = first_run["attempt_index"] if "attempt_index" in keys else 1
+
     meta = {
         "run_id": run_id,
-        "scenario": run_rows[0]["scenario"],
-        "repeat_index": run_rows[0]["repeat_index"],
+        "scenario": first_run["scenario"],
+        "repeat_index": first_run["repeat_index"],
+        "attempt_index": attempt_index,
         "protocol_version": DEFAULT_PROTOCOL_VERSION,
-        "status": run_rows[0]["status"],
-        "clock_offset_ms": run_rows[0]["clock_offset_ms"],
-        "detection_grace_s": run_rows[0]["detection_grace_s"],
+        "status": first_run["status"],
+        "clock_offset_ms": first_run["clock_offset_ms"],
+        "detection_grace_s": first_run["detection_grace_s"],
         "counts": counts,
     }
     if meta_extra:
@@ -151,6 +181,8 @@ def export_run(
     return counts
 
 
-def run_dir_for(results_root: Path, scenario: str, repeat_index: int) -> Path:
-    """Thư mục chuẩn docs/07 mục 8: results/run_<scenario>_<n>/."""
-    return results_root / f"run_{scenario}_{repeat_index}"
+def run_dir_for(
+    results_root: Path, scenario: str, repeat_index: int, attempt_index: int = 1
+) -> Path:
+    """Thư mục chuẩn docs/07 mục 8: results/run_<scenario>_<repeat>_att<attempt_index>/."""
+    return results_root / f"run_{scenario}_{repeat_index}_att{attempt_index}"
