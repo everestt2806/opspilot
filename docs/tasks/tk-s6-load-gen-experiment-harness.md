@@ -118,9 +118,9 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
       - Hoàn tất (`status='completed'`) hoặc huỷ (`status='aborted'` với `abort_reason` bắt buộc).
       - Truy vấn `count_phase_a_samples()` so sánh mốc thời gian với độ chính xác microsecond đầy đủ, không cắt xén phần lẻ trước khi lọc mẫu trong cửa sổ nửa mở `[start, end)` (kể cả khi đọc từ mốc đã lưu).
       - Giới hạn schema hiện tại: `UNIQUE(scenario, repeat_index)` trong `docs/contracts/schema.sql` hiện ngăn lưu retry sau khi abort (giữ nguyên schema v1, chờ Leader quyết định giải pháp).
-- [x] pytest liên quan xanh: **128 passed** (collect 26, loadgen_error_rate 9, loadgen 9,
-      labeling 11, metrics 9, scheduler 9, protocol 12, analyze 7, export 6, manifest 5, run_store 16;
-      trước P2a đạt mốc 112 passed).
+- [x] pytest liên quan xanh: **135 passed** (collect 26, loadgen_error_rate 9, loadgen 9,
+      labeling 11, metrics 9, scheduler 9, protocol 12, analyze 7, export 6, manifest 5, run_store 23;
+      trước P2a là 112 passed, P2b-1 là 128 passed).
       Chưa nối CLI/SSH/poller/loadgen/alert, chưa chạy VPS thật, không push/PR/merge.
 
 ## Nhật ký
@@ -166,11 +166,18 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
   (3) Quy định nghiêm ngặt: chỉ cấp attempt 2/3 khi attempt trước đó đã aborted; sau completed phải từ chối chạy lại, kể cả khi caller truyền attempt tường minh.
   (4) Cấm export_run() âm thầm ghi đè thư mục attempt đã tồn tại trên đĩa.
   (5) Chuẩn hoá kiến trúc: main_table() là nơi đọc CSV và lọc status == 'completed' trước khi gọi hàm tính toán thuần analyze_run().
-- 01/10 mốc Triển khai P2b-1 (`eb46147`) & Tinh chỉnh Migration 005 — Triển khai migration 005 thêm cột attempt_index (1..3, mặc định 1 cho dữ liệu cũ) và unique (scenario, repeat_index, attempt_index). Runner tắt foreign keys trước transaction và kiểm tra ngoại lệ `currentFk !== 0`; kiểm tra toàn vẹn ID run, liên kết alert.experiment_run_id và foreign_key_check ngay trong transaction trước commit; khối finally khôi phục `foreign_keys = ON`. Test kiểm tra toàn bộ trạng thái rollback và áp dụng thành công trực tiếp trên cùng một kết nối DB chạy migration, loại bỏ khẳng định dựa vào kết nối mở lại; kiểm tra CHECK constraint (1..3) và UNIQUE 3 trường.
+- 01/10 mốc Triển khai P2b-1 (`eb46147`, `25a3bac`) & Tinh chỉnh Migration 005 — Triển khai migration 005 thêm cột attempt_index (1..3, mặc định 1 cho dữ liệu cũ) và unique (scenario, repeat_index, attempt_index). Runner tắt foreign keys trước transaction và kiểm tra ngoại lệ `currentFk !== 0`; kiểm tra toàn vẹn ID run, liên kết alert.experiment_run_id và foreign_key_check ngay trong transaction trước commit; khối finally khôi phục `foreign_keys = ON`. Test kiểm tra toàn bộ trạng thái rollback và áp dụng thành công trực tiếp trên cùng một kết nối DB chạy migration, loại bỏ khẳng định dựa vào kết nối mở lại; kiểm tra CHECK constraint (1..3) và UNIQUE 3 trường.
+- 01/10 mốc Triển khai P2b-2 — Hoàn tất attempt lifecycle trong `experiments/run_store.py`:
+  - `start_run()` bắt buộc attempt đầu là 1 (tự động hoặc tường minh = 1; từ chối nếu truyền khác 1).
+  - Cấp attempt kế tiếp = prev_attempt + 1 sau khi attempt trước bị aborted, tối đa 3 attempts (tối đa 2 lần retry).
+  - Từ chối mọi run sau khi đã completed, kể cả khi caller truyền attempt tường minh.
+  - Toàn bộ logic kiểm tra và cấp phát attempt được thực thi nguyên tử trong cùng transaction `BEGIN IMMEDIATE`.
+  - Bảo toàn quyền sở hữu transaction của caller (hỗ trợ `auto_commit=False` và từ chối an toàn khi `in_transaction=True`).
+  - Cập nhật test suite cho schema migration 005 và bổ sung các ca kiểm thử: cấp attempt tự động, attempt tường minh, từ chối nhảy số/lặp số, từ chối sau completed, ràng buộc DB SQLite, và hai kết nối cạnh tranh retry; đạt mốc **135 passed** pytest.
 
 ## Lệnh tái hiện
 
-Test thuần (128 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed):
+Test thuần (135 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed):
 
 ```
 ml-service/.venv/Scripts/python.exe -m pytest \

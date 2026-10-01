@@ -38,16 +38,20 @@ CÁC NGUYÊN TẮC THIẾT KẾ VÀ RÀNG BUỘC:
      bảo đảm các mẫu tại đúng giây biên có phần thập phân được phân loại chính xác, kể cả khi
      đếm từ mốc đã lưu trong DB.
 
-5. GIỚI HẠN SCHEMA HIỆN TẠI VÀ LƯU Ý CHO LEADER:
-   Bảng experiment_run trong docs/contracts/schema.sql có ràng buộc:
-       UNIQUE (scenario, repeat_index)
-   Nếu một lần chạy bị 'aborted', bản ghi đó vẫn tồn tại trong SQLite và chiếm giữ cặp
-   (scenario, repeat_index). Do đó, việc retry ngay kịch bản và lần lặp đó sẽ bị SQLite chặn
-   (IntegrityError: UNIQUE constraint failed).
-   Tại Checkpoint P2a, chúng ta KHÔNG tự ý thay đổi file docs/contracts/schema.sql.
-   Giới hạn này được bảo toàn và ghi nhận để Tech Lead / Leader quyết định giải pháp
-   (ví dụ: thêm cột attempt_index và đổi UNIQUE thành (scenario, repeat_index, attempt_index))
-   ở các bước tiếp theo.
+5. VÒNG ĐỜI ATTEMPT & RETRY (TK-S6 P2b-2, Schema Migration 005):
+   Bảng experiment_run tuân thủ schema migration 005:
+       attempt_index INTEGER NOT NULL DEFAULT 1 CHECK (attempt_index BETWEEN 1 AND 3)
+       UNIQUE (scenario, repeat_index, attempt_index)
+   Quy tắc cấp phát và kiểm tra attempt trong start_run() (nguyên tử trong BEGIN IMMEDIATE):
+     - Lần chạy đầu tiên của cặp (scenario, repeat_index) bắt buộc có attempt_index = 1.
+       Nếu caller truyền attempt_index tường minh khác 1 -> từ chối với RunStoreError.
+     - Sau khi attempt trước đó bị 'aborted': cho phép cấp attempt kế tiếp = prev_attempt + 1,
+       tối đa 3 attempts (tối đa 2 lần retry). Vượt quá 3 attempts -> từ chối với RunStoreError.
+       Nếu caller truyền attempt_index tường minh, bắt buộc phải khớp đúng expected_attempt,
+       nghiêm cấm nhảy cóc (nhảy số) hoặc lặp lại attempt cũ.
+     - Sau khi đã 'completed': khoá vĩnh viễn cặp (scenario, repeat_index). Mọi yêu cầu chạy thêm
+       attempt mới (kể cả khi caller truyền attempt_index tường minh = 2 hoặc 3) đều bị từ chối
+       dứt khoát với RunStoreError.
 """
 
 from __future__ import annotations
@@ -149,7 +153,9 @@ def normalize_ts(ts: str | float | datetime) -> str:
                 val = float(s)
                 dt_utc = datetime.fromtimestamp(val, tz=timezone.utc)
                 if dt_utc.microsecond > 0:
-                    return dt_utc.isoformat(timespec="microseconds").replace("+00:00", "Z")
+                    return dt_utc.isoformat(timespec="microseconds").replace(
+                        "+00:00", "Z"
+                    )
                 return dt_utc.isoformat(timespec="seconds").replace("+00:00", "Z")
             except ValueError:
                 pass
@@ -169,7 +175,9 @@ def normalize_ts(ts: str | float | datetime) -> str:
     raise TypeError(f"Kiểu dữ liệu timestamp không được hỗ trợ: {type(ts)}")
 
 
-def _row_to_dict(cursor: sqlite3.Cursor, row: sqlite3.Row | tuple[Any, ...]) -> dict[str, Any]:
+def _row_to_dict(
+    cursor: sqlite3.Cursor, row: sqlite3.Row | tuple[Any, ...]
+) -> dict[str, Any]:
     if hasattr(row, "keys"):
         return dict(row)  # type: ignore[call-overload]
     return {col[0]: row[i] for i, col in enumerate(cursor.description)}
@@ -207,6 +215,7 @@ def start_run(
     conn: sqlite3.Connection,
     scenario: str,
     repeat_index: int,
+    attempt_index: int | None = None,
     deployment_id: int | None = None,
     vps_id: int | None = None,
     baseline_start_ts: str | float | datetime | None = None,
@@ -218,24 +227,39 @@ def start_run(
 ) -> int:
     """Bắt đầu một run thí nghiệm mới ở trạng thái 'running'.
 
-    Quy tắc Single Active Run & Tính nguyên tử (Atomic Check-and-Create):
-      - Nếu connection đang ở trong một transaction chưa commit/rollback (in_transaction=True),
+    Quy tắc Single Active Run & Cấp phát Attempt nguyên tử (Atomic Check-and-Create):
+      - Nếu connection đang ở trong transaction chưa hoàn tất (in_transaction=True),
         hàm từ chối ngay (ném RunStoreError) vì không thể mở BEGIN IMMEDIATE để bảo đảm tính nguyên tử.
       - Mở transaction BEGIN IMMEDIATE để lấy khoá ghi tức thì, ngăn chặn hiện tượng
         race condition khi hai kết nối SQLite cùng cố gắng khởi tạo run đồng thời.
-      - Kiểm tra trong transaction xem đã có run nào running hay chưa; nếu có thì ném
-        ActiveRunExistsError và rollback sạch sẽ.
+      - Kiểm tra trong transaction:
+        1. Single Active Run: nếu đang có run ở trạng thái 'running' -> ném ActiveRunExistsError.
+        2. Attempt Lifecycle (TK-S6 P2b-2):
+           - Lần chạy đầu tiên của (scenario, repeat_index): attempt bắt buộc là 1.
+             Nếu caller truyền attempt_index != 1 -> ném RunStoreError.
+           - Nếu attempt trước đó đã 'completed': từ chối chạy lại vĩnh viễn (kể cả khi caller
+             truyền attempt_index tường minh) -> ném RunStoreError.
+           - Nếu attempt trước đó bị 'aborted': cấp attempt kế tiếp = prev_attempt + 1, tối đa 3.
+             Nếu vượt quá 3 -> ném RunStoreError.
+             Nếu caller truyền attempt_index tường minh: bắt buộc phải bằng expected_attempt,
+             từ chối nếu nhảy số hoặc lặp lại attempt cũ -> ném RunStoreError.
       - Chuẩn hoá baseline_start_ts về định dạng ISO UTC (bảo tồn microsecond nếu có).
-
-    Lưu ý: Nếu cặp (scenario, repeat_index) đã tồn tại trong DB (kể cả đã completed hay aborted),
-    SQLite sẽ ném sqlite3.IntegrityError do ràng buộc UNIQUE(scenario, repeat_index) của schema v1.
+      - Nếu auto_commit=True, commit transaction; nếu auto_commit=False, giữ nguyên quyền commit cho caller.
     """
     if scenario not in VALID_SCENARIOS:
         raise ValueError(
             f"Kịch bản '{scenario}' không hợp lệ. Phải thuộc: {', '.join(VALID_SCENARIOS)}"
         )
-    if not isinstance(repeat_index, int) or repeat_index < 1:
+    if type(repeat_index) is not int or repeat_index < 1:
         raise ValueError("repeat_index phải là số nguyên >= 1")
+
+    if attempt_index is not None:
+        if type(attempt_index) is not int:
+            raise ValueError("attempt_index phải là số nguyên (1..3) hoặc None")
+        if not (1 <= attempt_index <= 3):
+            raise ValueError(
+                f"attempt_index ({attempt_index}) không hợp lệ; phải nằm trong khoảng 1..3"
+            )
 
     if conn.in_transaction:
         raise RunStoreError(
@@ -243,35 +267,97 @@ def start_run(
             "start_run() bắt buộc mở BEGIN IMMEDIATE để bảo đảm tính nguyên tử của quy tắc Single Active Run."
         )
 
-    norm_baseline = normalize_ts(baseline_start_ts) if baseline_start_ts is not None else None
+    norm_baseline = (
+        normalize_ts(baseline_start_ts) if baseline_start_ts is not None else None
+    )
 
     conn.execute("BEGIN IMMEDIATE")
 
     try:
         cur = conn.cursor()
+        # 1. Kiểm tra Single Active Run
         cur.execute(
-            "SELECT id, scenario, repeat_index FROM experiment_run WHERE status = 'running' LIMIT 1"
+            "SELECT id, scenario, repeat_index, attempt_index FROM experiment_run WHERE status = 'running' LIMIT 1"
         )
         active = cur.fetchone()
         if active is not None:
             active_id = active[0] if not hasattr(active, "keys") else active["id"]
             active_sc = active[1] if not hasattr(active, "keys") else active["scenario"]
-            active_rep = active[2] if not hasattr(active, "keys") else active["repeat_index"]
+            active_rep = (
+                active[2] if not hasattr(active, "keys") else active["repeat_index"]
+            )
+            active_att = (
+                active[3] if not hasattr(active, "keys") else active["attempt_index"]
+            )
             raise ActiveRunExistsError(
-                f"Không thể bắt đầu run mới: đang có run đang chạy (id={active_id}, scenario='{active_sc}', repeat_index={active_rep})"
+                f"Không thể bắt đầu run mới: đang có run đang chạy (id={active_id}, scenario='{active_sc}', repeat_index={active_rep}, attempt_index={active_att})"
             )
 
+        # 2. Kiểm tra lịch sử attempt của cặp (scenario, repeat_index) trong cùng transaction
+        cur.execute(
+            """
+            SELECT attempt_index, status
+            FROM experiment_run
+            WHERE scenario = ? AND repeat_index = ?
+            ORDER BY attempt_index DESC
+            LIMIT 1
+            """,
+            (scenario, repeat_index),
+        )
+        prev_row = cur.fetchone()
+
+        if prev_row is None:
+            # Chưa có attempt nào tồn tại (lần chạy đầu tiên) -> bắt buộc attempt_index = 1
+            if attempt_index is not None and attempt_index != 1:
+                raise RunStoreError(
+                    f"Kịch bản '{scenario}' repeat {repeat_index} chưa chạy lần nào; attempt đầu tiên bắt buộc phải là 1."
+                )
+            assigned_attempt = 1
+        else:
+            prev_attempt = (
+                prev_row[0]
+                if not hasattr(prev_row, "keys")
+                else prev_row["attempt_index"]
+            )
+            prev_status = (
+                prev_row[1] if not hasattr(prev_row, "keys") else prev_row["status"]
+            )
+
+            if prev_status == "completed":
+                # Từ chối sau completed, kể cả khi caller truyền attempt tường minh
+                raise RunStoreError(
+                    f"Kịch bản '{scenario}' repeat {repeat_index} đã hoàn tất thành công (completed) ở attempt {prev_attempt}. Không được phép chạy thêm attempt mới."
+                )
+            elif prev_status == "aborted":
+                # Chỉ cấp attempt kế tiếp sau aborted, tối đa 3
+                expected_attempt = prev_attempt + 1
+                if expected_attempt > 3:
+                    raise RunStoreError(
+                        f"Kịch bản '{scenario}' repeat {repeat_index} đã đạt giới hạn tối đa 3 attempts (tối đa 2 lần retry theo protocol)."
+                    )
+                if attempt_index is not None and attempt_index != expected_attempt:
+                    raise RunStoreError(
+                        f"attempt_index không hợp lệ cho kịch bản '{scenario}' repeat {repeat_index}: caller yêu cầu attempt {attempt_index}, nhưng attempt kế tiếp hợp lệ bắt buộc phải là {expected_attempt} (sau attempt {prev_attempt} bị aborted)."
+                    )
+                assigned_attempt = expected_attempt
+            else:
+                raise RunStoreError(
+                    f"Kịch bản '{scenario}' repeat {repeat_index} có attempt trước đó ở trạng thái không hợp lệ: '{prev_status}'"
+                )
+
+        # 3. Nạp bản ghi mới với attempt_index hợp lệ và status = 'running'
         cur.execute(
             """
             INSERT INTO experiment_run (
-                scenario, repeat_index, deployment_id, vps_id,
+                scenario, repeat_index, attempt_index, deployment_id, vps_id,
                 baseline_start_ts, clock_offset_ms, detection_grace_s,
                 fault_params_json, notes, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'running')
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running')
             """,
             (
                 scenario,
                 repeat_index,
+                assigned_attempt,
                 deployment_id,
                 vps_id,
                 norm_baseline,
@@ -283,7 +369,9 @@ def start_run(
         )
         run_id = cur.lastrowid
         if run_id is None:
-            raise RunStoreError("Không lấy được lastrowid sau khi insert experiment_run")
+            raise RunStoreError(
+                "Không lấy được lastrowid sau khi insert experiment_run"
+            )
 
         if auto_commit:
             conn.commit()

@@ -38,6 +38,7 @@ CREATE TABLE experiment_run (
   scenario         TEXT    NOT NULL CHECK (scenario IN
                      ('memory_leak','cpu_spike','error_burst','slow_db','latency_creep')),
   repeat_index     INTEGER NOT NULL,
+  attempt_index    INTEGER NOT NULL DEFAULT 1 CHECK (attempt_index BETWEEN 1 AND 3),
   deployment_id    INTEGER REFERENCES deployment(id) ON DELETE SET NULL,
   vps_id           INTEGER REFERENCES vps(id),
   baseline_start_ts TEXT,
@@ -53,7 +54,7 @@ CREATE TABLE experiment_run (
                          CHECK (status IN ('running','completed','aborted')),
   abort_reason      TEXT,
   notes             TEXT,
-  UNIQUE (scenario, repeat_index)
+  UNIQUE (scenario, repeat_index, attempt_index)
 );
 CREATE TABLE metric_sample (
   id              INTEGER PRIMARY KEY,
@@ -149,10 +150,12 @@ def test_start_run_and_query(conn: sqlite3.Connection) -> None:
     assert run["clock_offset_ms"] == 45
     assert run["detection_grace_s"] == 60
     assert run["fault_params_json"] == '{"rate_mb_per_min": 5}'
+    assert run["attempt_index"] == 1
 
     active = get_active_run(conn)
     assert active is not None
     assert active["id"] == run_id
+    assert active["attempt_index"] == 1
 
 
 def test_start_run_with_epoch_input_normalizes_to_iso(conn: sqlite3.Connection) -> None:
@@ -168,6 +171,7 @@ def test_start_run_with_epoch_input_normalizes_to_iso(conn: sqlite3.Connection) 
     run = get_run(conn, run_id)
     assert run is not None
     assert run["baseline_start_ts"] == "2026-09-30T10:00:00Z"
+    assert run["attempt_index"] == 1
 
 
 def test_start_run_rejects_when_in_active_transaction(conn: sqlite3.Connection) -> None:
@@ -187,6 +191,21 @@ def test_start_run_validation(conn: sqlite3.Connection) -> None:
 
     with pytest.raises(ValueError, match="repeat_index"):
         start_run(conn, scenario="memory_leak", repeat_index=0)
+
+    with pytest.raises(ValueError, match="repeat_index"):
+        start_run(conn, scenario="memory_leak", repeat_index=True)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="attempt_index"):
+        start_run(conn, scenario="memory_leak", repeat_index=1, attempt_index=0)
+
+    with pytest.raises(ValueError, match="attempt_index"):
+        start_run(conn, scenario="memory_leak", repeat_index=1, attempt_index=4)
+
+    with pytest.raises(ValueError, match="attempt_index"):
+        start_run(conn, scenario="memory_leak", repeat_index=1, attempt_index="1")  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="attempt_index"):
+        start_run(conn, scenario="memory_leak", repeat_index=1, attempt_index=True)  # type: ignore[arg-type]
 
 
 def test_single_active_run_rule(conn: sqlite3.Connection) -> None:
@@ -288,7 +307,9 @@ def test_update_phase_schedule(conn: sqlite3.Connection) -> None:
         update_phase_schedule(conn, run_id=9999, train_at_ts="2026-10-01T10:30:00Z")
 
 
-def test_update_phase_schedule_rejects_when_not_running(conn: sqlite3.Connection) -> None:
+def test_update_phase_schedule_rejects_when_not_running(
+    conn: sqlite3.Connection,
+) -> None:
     """Từ chối cập nhật mốc pha khi run đã completed hoặc aborted."""
     # 1. Run đã completed
     r1 = start_run(conn, scenario="error_burst", repeat_index=1)
@@ -303,7 +324,9 @@ def test_update_phase_schedule_rejects_when_not_running(conn: sqlite3.Connection
         update_phase_schedule(conn, run_id=r2, train_at_ts="2026-10-01T10:30:00Z")
 
 
-def test_transaction_ownership_when_caller_has_uncommitted_work(conn: sqlite3.Connection) -> None:
+def test_transaction_ownership_when_caller_has_uncommitted_work(
+    conn: sqlite3.Connection,
+) -> None:
     """Xác nhận helper chỉ commit/rollback transaction do chính nó mở.
 
     Khi caller đã có transaction mở trước đó:
@@ -322,7 +345,10 @@ def test_transaction_ownership_when_caller_has_uncommitted_work(conn: sqlite3.Co
 
     # Caller quyết định rollback: cả deployment 777 lẫn train_at_ts đều được rollback
     conn.rollback()
-    assert conn.execute("SELECT COUNT(*) FROM deployment WHERE id = 777").fetchone()[0] == 0
+    assert (
+        conn.execute("SELECT COUNT(*) FROM deployment WHERE id = 777").fetchone()[0]
+        == 0
+    )
     run_after_rb = get_run(conn, run_id)
     assert run_after_rb is not None
     assert run_after_rb["train_at_ts"] is None
@@ -333,7 +359,10 @@ def test_transaction_ownership_when_caller_has_uncommitted_work(conn: sqlite3.Co
     assert conn.in_transaction is True
     conn.commit()
 
-    assert conn.execute("SELECT COUNT(*) FROM deployment WHERE id = 777").fetchone()[0] == 1
+    assert (
+        conn.execute("SELECT COUNT(*) FROM deployment WHERE id = 777").fetchone()[0]
+        == 1
+    )
     run_after_cm = get_run(conn, run_id)
     assert run_after_cm is not None
     assert run_after_cm["status"] == "completed"
@@ -349,7 +378,10 @@ def test_transaction_ownership_when_caller_has_uncommitted_work(conn: sqlite3.Co
     assert conn.in_transaction is True
     conn.commit()
     # Bản ghi 888 được lưu an toàn
-    assert conn.execute("SELECT COUNT(*) FROM deployment WHERE id = 888").fetchone()[0] == 1
+    assert (
+        conn.execute("SELECT COUNT(*) FROM deployment WHERE id = 888").fetchone()[0]
+        == 1
+    )
 
     # 4. Thao tác thất bại (InvalidRunStateError) trên abort/update_phase_schedule
     conn.execute("INSERT INTO deployment (id) VALUES (999)")
@@ -359,7 +391,10 @@ def test_transaction_ownership_when_caller_has_uncommitted_work(conn: sqlite3.Co
 
     assert conn.in_transaction is True
     conn.commit()
-    assert conn.execute("SELECT COUNT(*) FROM deployment WHERE id = 999").fetchone()[0] == 1
+    assert (
+        conn.execute("SELECT COUNT(*) FROM deployment WHERE id = 999").fetchone()[0]
+        == 1
+    )
 
 
 def test_state_updates_atomic_with_status_running_condition(tmp_path: Path) -> None:
@@ -447,27 +482,266 @@ def test_abort_run(conn: sqlite3.Connection) -> None:
         abort_run(conn, run_id=run_id, reason="Abort lại")
 
 
-def test_unique_scenario_repeat_constraint_after_abort(conn: sqlite3.Connection) -> None:
-    """Xác nhận giới hạn schema hiện tại: UNIQUE(scenario, repeat_index) ngăn retry sau abort.
+def test_attempt_first_run_must_be_one(conn: sqlite3.Connection) -> None:
+    """Lần chạy đầu tiên của (scenario, repeat_index) bắt buộc phải là attempt 1."""
+    # 1. Tự động gán attempt 1 khi attempt_index=None
+    r1 = start_run(conn, scenario="latency_creep", repeat_index=1)
+    run1 = get_run(conn, r1)
+    assert run1 is not None
+    assert run1["attempt_index"] == 1
+    abort_run(conn, run_id=r1, reason="Test abort 1")
 
-    Vì schema chưa có attempt_index, bản ghi aborted vẫn giữ khoá (scenario, repeat_index).
-    Khi thử retry mà chưa sửa schema, SQLite sẽ ném IntegrityError.
+    # 2. Truyền tường minh attempt_index=1 cho scenario khác chưa chạy -> thành công
+    r2 = start_run(conn, scenario="memory_leak", repeat_index=1, attempt_index=1)
+    run2 = get_run(conn, r2)
+    assert run2 is not None
+    assert run2["attempt_index"] == 1
+    abort_run(conn, run_id=r2, reason="Test abort 2")
+
+    # 3. Truyền tường minh attempt_index=2 khi chưa chạy lần nào -> từ chối ngay với RunStoreError
+    with pytest.raises(RunStoreError, match="attempt đầu tiên bắt buộc phải là 1"):
+        start_run(conn, scenario="cpu_spike", repeat_index=1, attempt_index=2)
+
+    # 4. Truyền tường minh attempt_index=3 khi chưa chạy lần nào -> từ chối ngay với RunStoreError
+    with pytest.raises(RunStoreError, match="attempt đầu tiên bắt buộc phải là 1"):
+        start_run(conn, scenario="cpu_spike", repeat_index=1, attempt_index=3)
+
+
+def test_attempt_retry_lifecycle_after_aborted(conn: sqlite3.Connection) -> None:
+    """Quy trình cấp attempt tự động sau khi aborted: 1 -> 2 -> 3 -> kịch trần (từ chối attempt 4)."""
+    # Attempt 1
+    r1 = start_run(conn, scenario="error_burst", repeat_index=1)
+    assert get_run(conn, r1)["attempt_index"] == 1
+    abort_run(conn, run_id=r1, reason="NTP clock skew 2500ms > 2000ms")
+
+    # Attempt 2 (tự động cấp = 2)
+    r2 = start_run(conn, scenario="error_burst", repeat_index=1)
+    assert get_run(conn, r2)["attempt_index"] == 2
+    abort_run(conn, run_id=r2, reason="Không đủ 180 mẫu pha A (chỉ có 140)")
+
+    # Attempt 3 (tự động cấp = 3)
+    r3 = start_run(conn, scenario="error_burst", repeat_index=1)
+    assert get_run(conn, r3)["attempt_index"] == 3
+    abort_run(conn, run_id=r3, reason="Mất kết nối SSH tới VPS")
+
+    # Cố gắng retry lần thứ 3 (attempt 4) -> từ chối với RunStoreError
+    with pytest.raises(RunStoreError, match="đã đạt giới hạn tối đa 3 attempts"):
+        start_run(conn, scenario="error_burst", repeat_index=1)
+
+    # Repeat khác vẫn bắt đầu từ attempt 1 bình thường
+    r_rep2 = start_run(conn, scenario="error_burst", repeat_index=2)
+    assert get_run(conn, r_rep2)["attempt_index"] == 1
+
+
+def test_attempt_explicit_valid_matching_expected(conn: sqlite3.Connection) -> None:
+    """Caller truyền attempt_index tường minh đúng theo thứ tự hợp lệ."""
+    r1 = start_run(conn, scenario="slow_db", repeat_index=1, attempt_index=1)
+    assert get_run(conn, r1)["attempt_index"] == 1
+    abort_run(conn, run_id=r1, reason="Fault timeout")
+
+    # Truyền đúng attempt 2
+    r2 = start_run(conn, scenario="slow_db", repeat_index=1, attempt_index=2)
+    assert get_run(conn, r2)["attempt_index"] == 2
+    abort_run(conn, run_id=r2, reason="Loadgen crash")
+
+    # Truyền đúng attempt 3
+    r3 = start_run(conn, scenario="slow_db", repeat_index=1, attempt_index=3)
+    assert get_run(conn, r3)["attempt_index"] == 3
+
+
+def test_attempt_invalid_sequence_jumping_and_repeating(
+    conn: sqlite3.Connection,
+) -> None:
+    """Từ chối khi caller truyền attempt_index sai thứ tự (nhảy số hoặc lặp lại attempt cũ)."""
+    r1 = start_run(conn, scenario="latency_creep", repeat_index=1)
+    abort_run(conn, run_id=r1, reason="Network partition")
+
+    # Sau attempt 1 bị abort:
+    # 1. Nhảy cóc lên attempt 3 -> từ chối
+    with pytest.raises(
+        RunStoreError,
+        match="caller yêu cầu attempt 3, nhưng attempt kế tiếp hợp lệ bắt buộc phải là 2",
+    ):
+        start_run(conn, scenario="latency_creep", repeat_index=1, attempt_index=3)
+
+    # 2. Lặp lại attempt 1 -> từ chối
+    with pytest.raises(
+        RunStoreError,
+        match="caller yêu cầu attempt 1, nhưng attempt kế tiếp hợp lệ bắt buộc phải là 2",
+    ):
+        start_run(conn, scenario="latency_creep", repeat_index=1, attempt_index=1)
+
+    # Chạy attempt 2 thành công rồi abort
+    r2 = start_run(conn, scenario="latency_creep", repeat_index=1, attempt_index=2)
+    abort_run(conn, run_id=r2, reason="Memory limit exceeded")
+
+    # Sau attempt 2 bị abort:
+    # 3. Lặp lại attempt 2 -> từ chối
+    with pytest.raises(
+        RunStoreError,
+        match="caller yêu cầu attempt 2, nhưng attempt kế tiếp hợp lệ bắt buộc phải là 3",
+    ):
+        start_run(conn, scenario="latency_creep", repeat_index=1, attempt_index=2)
+
+    # 4. Lặp lại attempt 1 -> từ chối
+    with pytest.raises(
+        RunStoreError,
+        match="caller yêu cầu attempt 1, nhưng attempt kế tiếp hợp lệ bắt buộc phải là 3",
+    ):
+        start_run(conn, scenario="latency_creep", repeat_index=1, attempt_index=1)
+
+
+def test_attempt_rejection_after_completed(conn: sqlite3.Connection) -> None:
+    """Sau khi một attempt đã 'completed', khoá vĩnh viễn cặp (scenario, repeat_index).
+
+    Từ chối mọi yêu cầu khởi tạo mới, kể cả khi caller truyền attempt_index tường minh.
     """
-    run_id = start_run(conn, scenario="latency_creep", repeat_index=1)
-    abort_run(conn, run_id=run_id, reason="Mất kết nối SSH tới VPS")
+    # 1. Trường hợp hoàn tất ngay ở attempt 1
+    r1 = start_run(conn, scenario="cpu_spike", repeat_index=1)
+    complete_run(conn, run_id=r1, run_end_ts="2026-10-01T11:15:00Z")
 
+    # Không truyền attempt_index -> từ chối
+    with pytest.raises(
+        RunStoreError, match="đã hoàn tất thành công \\(completed\\) ở attempt 1"
+    ):
+        start_run(conn, scenario="cpu_spike", repeat_index=1)
+
+    # Truyền tường minh attempt 2 -> vẫn từ chối dứt khoát
+    with pytest.raises(
+        RunStoreError, match="đã hoàn tất thành công \\(completed\\) ở attempt 1"
+    ):
+        start_run(conn, scenario="cpu_spike", repeat_index=1, attempt_index=2)
+
+    # Truyền tường minh attempt 3 -> vẫn từ chối dứt khoát
+    with pytest.raises(
+        RunStoreError, match="đã hoàn tất thành công \\(completed\\) ở attempt 1"
+    ):
+        start_run(conn, scenario="cpu_spike", repeat_index=1, attempt_index=3)
+
+    # 2. Trường hợp attempt 1 bị abort, attempt 2 hoàn tất (completed)
+    r2_1 = start_run(conn, scenario="memory_leak", repeat_index=2)
+    abort_run(conn, run_id=r2_1, reason="Collector lag")
+    r2_2 = start_run(conn, scenario="memory_leak", repeat_index=2)
+    assert get_run(conn, r2_2)["attempt_index"] == 2
+    complete_run(conn, run_id=r2_2, run_end_ts="2026-10-01T12:00:00Z")
+
+    # Không truyền attempt_index -> từ chối vì đã completed ở attempt 2
+    with pytest.raises(
+        RunStoreError, match="đã hoàn tất thành công \\(completed\\) ở attempt 2"
+    ):
+        start_run(conn, scenario="memory_leak", repeat_index=2)
+
+    # Truyền attempt_index=3 -> vẫn từ chối dứt khoát
+    with pytest.raises(
+        RunStoreError, match="đã hoàn tất thành công \\(completed\\) ở attempt 2"
+    ):
+        start_run(conn, scenario="memory_leak", repeat_index=2, attempt_index=3)
+
+
+def test_sqlite_constraints_unique_and_check(conn: sqlite3.Connection) -> None:
+    """Kiểm tra ràng buộc cấp DB: UNIQUE (scenario, repeat_index, attempt_index) và CHECK (attempt_index BETWEEN 1 AND 3)."""
+    # 1. Cho phép insert các attempt khác nhau cho cùng (scenario, repeat_index)
+    conn.execute(
+        "INSERT INTO experiment_run (scenario, repeat_index, attempt_index, status) VALUES ('slow_db', 5, 1, 'aborted')"
+    )
+    conn.execute(
+        "INSERT INTO experiment_run (scenario, repeat_index, attempt_index, status) VALUES ('slow_db', 5, 2, 'completed')"
+    )
+    conn.commit()
+
+    # 2. Cố tình insert trùng (scenario, repeat_index, attempt_index) -> IntegrityError
+    with pytest.raises(sqlite3.IntegrityError, match="UNIQUE constraint failed"):
+        conn.execute(
+            "INSERT INTO experiment_run (scenario, repeat_index, attempt_index, status) VALUES ('slow_db', 5, 2, 'running')"
+        )
+
+    # 3. Cố tình insert attempt_index < 1 -> CHECK constraint failed
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint failed"):
+        conn.execute(
+            "INSERT INTO experiment_run (scenario, repeat_index, attempt_index, status) VALUES ('slow_db', 5, 0, 'running')"
+        )
+
+    # 4. Cố tình insert attempt_index > 3 -> CHECK constraint failed
+    with pytest.raises(sqlite3.IntegrityError, match="CHECK constraint failed"):
+        conn.execute(
+            "INSERT INTO experiment_run (scenario, repeat_index, attempt_index, status) VALUES ('slow_db', 5, 4, 'running')"
+        )
+
+
+def test_concurrent_retry_start_across_two_connections(tmp_path: Path) -> None:
+    """Hai kết nối đồng thời cùng cố gắng khởi tạo retry (attempt 2) sau khi attempt 1 bị abort."""
+    db_file = tmp_path / "concurrent_retry.db"
+    setup_conn = sqlite3.connect(db_file)
+    setup_conn.executescript(_SCHEMA)
+    setup_conn.commit()
+    setup_conn.close()
+
+    # Chạy và abort attempt 1
+    c_init = sqlite3.connect(db_file, timeout=5.0)
+    r1 = start_run(c_init, scenario="cpu_spike", repeat_index=1)
+    abort_run(c_init, run_id=r1, reason="Aborted to test concurrent retry")
+    c_init.close()
+
+    results: list[tuple[str, str | int]] = []
+    barrier = threading.Barrier(2)
+
+    def worker(worker_id: str) -> None:
+        c = sqlite3.connect(db_file, timeout=5.0)
+        barrier.wait()
+        try:
+            rid = start_run(c, scenario="cpu_spike", repeat_index=1)
+            results.append((worker_id, rid))
+        except ActiveRunExistsError:
+            results.append((worker_id, "REJECTED_ACTIVE_EXISTS"))
+        except (sqlite3.Error, RunStoreError) as e:
+            results.append((worker_id, f"ERROR_{type(e).__name__}"))
+        finally:
+            c.close()
+
+    t1 = threading.Thread(target=worker, args=("W1",))
+    t2 = threading.Thread(target=worker, args=("W2",))
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    # Đúng 1 thread thành công nhận ID số nguyên, thread còn lại bị từ chối
+    statuses = [r[1] for r in results]
+    assert "REJECTED_ACTIVE_EXISTS" in statuses
+    successes = [s for s in statuses if isinstance(s, int)]
+    assert len(successes) == 1
+
+    # Kiểm tra attempt của run thành công là 2
+    c_check = sqlite3.connect(db_file)
+    active = get_active_run(c_check)
+    assert active is not None
+    assert active["id"] == successes[0]
+    assert active["attempt_index"] == 2
+    c_check.close()
+
+
+def test_start_run_caller_transaction_ownership(conn: sqlite3.Connection) -> None:
+    """Xác nhận start_run(..., auto_commit=False) trao quyền quản lý transaction cho caller."""
+    # 1. Caller gọi start_run với auto_commit=False -> transaction mở
+    r1 = start_run(conn, scenario="slow_db", repeat_index=1, auto_commit=False)
+    assert conn.in_transaction is True
+
+    # Caller quyết định rollback -> run không được lưu
+    conn.rollback()
+    assert get_run(conn, r1) is None
     assert get_active_run(conn) is None
 
-    # Cố gắng retry cùng scenario và repeat_index -> SQLite IntegrityError
-    with pytest.raises(sqlite3.IntegrityError, match="UNIQUE constraint failed"):
-        start_run(conn, scenario="latency_creep", repeat_index=1)
+    # 2. Caller gọi lại và commit -> run được lưu thành công
+    r2 = start_run(conn, scenario="slow_db", repeat_index=1, auto_commit=False)
+    assert conn.in_transaction is True
+    conn.commit()
+    assert get_run(conn, r2) is not None
+    assert get_run(conn, r2)["attempt_index"] == 1
 
-    # Nhưng scenario khác hoặc repeat_index khác thì thành công
-    new_run_id = start_run(conn, scenario="latency_creep", repeat_index=2)
-    assert new_run_id > 0
 
-
-def test_count_phase_a_samples_fractional_boundary_precision(conn: sqlite3.Connection) -> None:
+def test_count_phase_a_samples_fractional_boundary_precision(
+    conn: sqlite3.Connection,
+) -> None:
     """Kiểm tra độ chính xác đầy đủ khi ranh giới có phần thập phân:
 
     Cửa sổ là nửa mở [start, end) = [2026-09-30T10:00:00.500Z, 2026-09-30T10:30:00.500Z)
@@ -511,7 +785,7 @@ def test_count_phase_a_samples_fractional_boundary_precision(conn: sqlite3.Conne
         conn,
         deployment_id=dep_id,
         baseline_start_ts=1790762400.5,  # 10:00:00.500000Z
-        train_at_ts=1790764200.5,        # 10:30:00.500000Z
+        train_at_ts=1790764200.5,  # 10:30:00.500000Z
     )
     # Kỳ vọng: mẫu 10:00:01, 10:15:00, 10:30:00 được đếm (= 3 mẫu).
     # Mẫu 10:00:00 và 10:30:01 bị loại trừ.
@@ -540,7 +814,9 @@ def test_count_phase_a_samples_fractional_boundary_precision(conn: sqlite3.Conne
     assert count_exact_sec == 3
 
 
-def test_microsecond_boundary_counting_from_saved_milestones(conn: sqlite3.Connection) -> None:
+def test_microsecond_boundary_counting_from_saved_milestones(
+    conn: sqlite3.Connection,
+) -> None:
     """Kiểm tra đếm mẫu Pha A từ các mốc thời gian microsecond đã được lưu trong DB experiment_run:
 
     Start mốc: 1790762400.123456 -> 2026-09-30T10:00:00.123456Z
@@ -551,7 +827,13 @@ def test_microsecond_boundary_counting_from_saved_milestones(conn: sqlite3.Conne
     start_float = 1790762400.123456
     end_float = 1790764200.654321
 
-    run_id = start_run(conn, scenario="error_burst", repeat_index=1, deployment_id=dep_id, baseline_start_ts=start_float)
+    run_id = start_run(
+        conn,
+        scenario="error_burst",
+        repeat_index=1,
+        deployment_id=dep_id,
+        baseline_start_ts=start_float,
+    )
     update_phase_schedule(conn, run_id=run_id, train_at_ts=end_float)
 
     # Đọc mốc từ DB ra để xác nhận bảo tồn microsecond
