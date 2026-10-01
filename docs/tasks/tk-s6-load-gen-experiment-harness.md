@@ -106,11 +106,18 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
       Còn lại thao tác vận hành: chạy trên 2 VPS WiService thật → sinh `results/run_error_burst_1/`.
       Đã kiểm smoke đầu-cuối với DB giả: export 221 metric + 1105 score → analyze ra bảng đúng.
 - [x] `analyze.py` in P/R/F1 + detection delay cho 5 method từ CSV, có grace-sweep {0,30,60,120} +
-      CI 95% (t, n=10). Test `test_analyze.py` (10) + smoke: ML delay 120s vs rule 420s, số nhất quán.
-- [x] `DECISIONS.md` (`[exp] 2026-09-19`) + `docs/07` mục 2 cập nhật cách vá data-path.
-- [x] pytest liên quan xanh: **100 passed** (collect 26, loadgen_error_rate 9, loadgen 9,
-      labeling 11, metrics 9, scheduler 9, protocol 12, analyze 10, export 5).
-      Không chồng run: orchestrator chỉ điều phối, người gọi kiểm `status='running'` trước.
+      CI 95% (t, n=10). Test `test_analyze.py` (7) + smoke: ML delay 120s vs rule 420s, số nhất quán.
+- [x] `DECISIONS.md` (`[exp] 2026-09-19`, `[exp] 2026-10-01`) + `docs/07` mục 2, 7 cập nhật cách vá data-path và protocol.
+- [x] Quản lý vòng đời `experiment_run` (P2a - `experiments/run_store.py`):
+      - Bắt đầu run trong transaction và từ chối khi đã có run `running` (Quy tắc Single Active Run).
+      - Cập nhật các mốc thời gian pha (`train_at_ts`, `fault_start_ts`, `fault_end_ts`, `train_sample_count`).
+      - Hoàn tất (`status='completed'`) hoặc huỷ (`status='aborted'` với `abort_reason` bắt buộc).
+      - Truy vấn `count_phase_a_samples()` đếm chính xác mẫu theo `deployment_id` và cửa sổ thời gian `[baseline_start_ts, train_at_ts)`.
+      - Giới hạn schema hiện tại: `UNIQUE(scenario, repeat_index)` trong `docs/contracts/schema.sql` hiện ngăn lưu retry sau khi abort (giữ nguyên schema v1, chờ Leader quyết định giải pháp).
+- [x] pytest liên quan xanh: **120 passed** (collect 26, loadgen_error_rate 9, loadgen 9,
+      labeling 11, metrics 9, scheduler 9, protocol 12, analyze 7, export 6, manifest 5, run_store 8;
+      trước P2a đạt mốc 112 passed).
+      Chưa nối CLI/SSH/poller/loadgen/alert, chưa chạy VPS thật, không push/PR/merge.
 
 ## Nhật ký
 
@@ -135,10 +142,18 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
   đầu-cuối DB giả: export 221 metric + 1105 score → analyze ra bảng, ML delay 120s vs rule 420s.
   Phát hiện + ghi rõ mâu thuẫn docs/07: latency_creep +50ms/phút chỉ đạt 1000ms trong 20', không
   chạm 2000ms như cột kỳ vọng — theo đúng tham số tường minh, cần A quyết trước khi chạy 50 run.
+- 01/10 mốc Protocol (`2121d15`, `0fa0069`) — Chốt protocol versioning, export_run ghi protocol_version,
+  analyze đọc tương thích ngược legacy-pre-pilot, hiệu chỉnh độ trễ latency_creep, đạt mốc **112 passed**.
+- 01/10 mốc Kiểm kê kỹ thuật (`10acaa9`) — Bổ sung mục Bàn giao kỹ thuật chi tiết trong tài liệu TK-S6.
+- 01/10 mốc P2a — Module `run_store.py` quản lý `experiment_run` (start_run với single active run rule,
+  update_phase_schedule, complete_run, abort_run kèm reason, count_phase_a_samples đếm mẫu trong đúng
+  cửa sổ pha A). Viết 8 unit test trong `test_run_store.py`, nâng tổng số test từ 112 lên **120 passed**.
+  Ghi nhận rõ giới hạn `UNIQUE(scenario, repeat_index)` hiện ngăn lưu retry sau abort để Leader quyết
+  định sau. Chưa nối CLI/SSH/poller/loadgen/alert, chưa chạy VPS.
 
 ## Lệnh tái hiện
 
-Test thuần (100 passed, chạy trên Windows dev, không cần VPS/DB):
+Test thuần (120 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed):
 
 ```
 ml-service/.venv/Scripts/python.exe -m pytest \
