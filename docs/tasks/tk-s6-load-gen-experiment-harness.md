@@ -157,6 +157,9 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
   `complete_run()` và `abort_run()`: chỉ commit/rollback transaction do chính hàm mở, bảo toàn quyền
   commit/rollback của caller đối với các bản ghi chưa commit trước đó. Cập nhật `normalize_ts()` giữ
   microsecond đầy đủ; thêm test đếm mẫu chính xác từ các mốc microsecond đã lưu trong DB. Đạt mốc **128 passed**.
+- 01/10 mốc Thiết kế Kỹ thuật P2b — Lập đặc tả thiết kế kỹ thuật cho Checkpoint P2b: cơ chế hỗ trợ attempt_index 1..3,
+  ràng buộc UNIQUE(scenario, repeat_index, attempt_index), giải pháp migration SQLite an toàn chống mất foreign key
+  alert.experiment_run_id, quy chuẩn thay đổi run_store, export_results và xử lý tách bạch run aborted khỏi benchmark trong analyze.py.
 
 ## Lệnh tái hiện
 
@@ -366,6 +369,218 @@ flowchart TD
   # 3. Phân tích kết quả và in bảng Markdown chương 5
   python experiments/analyze.py experiments/results/
   ```
+
+## Thiết kế Kỹ thuật Checkpoint P2b: Hỗ trợ attempt_index 1..3, UNIQUE(scenario, repeat_index, attempt_index) và Xử lý Run Aborted/Completed
+
+### 1. Bối cảnh, Mục tiêu & Yêu cầu Giao thức
+- **Yêu cầu giao thức (`docs/07` mục 7)**:
+  - Khi một run thí nghiệm bị abort (do lệch đồng hồ NTP vượt ngưỡng > 2000 ms, không đủ 180 mẫu ở pha A, sự cố mạng/VPS, v.v.), giao thức cho phép retry tối đa 2 lần. Tức là với mỗi cặp `(scenario, repeat_index)`, có thể có tối đa **3 lần thử** (`attempt_index` từ 1 đến 3).
+  - Schema v1 (`docs/contracts/schema.sql` dòng 326) hiện tại có ràng buộc: `UNIQUE (scenario, repeat_index)`. Ràng buộc này khiến SQLite ném `sqlite3.IntegrityError` ngay khi cố gắng lưu bản ghi retry (attempt 2), ngăn cản việc ghi nhận lịch sử run bị huỷ và thực hiện retry.
+- **Mục tiêu của Checkpoint P2b**:
+  - Bổ sung cột `attempt_index INTEGER NOT NULL DEFAULT 1 CHECK (attempt_index BETWEEN 1 AND 3)`.
+  - Nâng cấp ràng buộc tính duy nhất thành: `UNIQUE (scenario, repeat_index, attempt_index)`.
+  - Giữ nguyên 100% các giá trị `id` hiện có và dữ liệu trong bảng `experiment_run`.
+  - Bảo toàn toàn vẹn tham chiếu khoá ngoại `alert.experiment_run_id REFERENCES experiment_run(id) ON DELETE SET NULL`.
+  - Backfill tất cả các bản ghi hiện có với `attempt_index = 1`.
+  - Bảo đảm kiểm tra `PRAGMA foreign_key_check` sạch sẽ 100% sau khi migration.
+
+### 2. Phương án Nâng cấp Schema SQLite (Migration Runner & An toàn Khoá Ngoại)
+- **Hiện trạng Migration Runner (`app/src/main/db/index.ts`)**:
+  - Tại `initializeDatabase()`, SQLite được cấu hình: `db.pragma('foreign_keys = ON')`.
+  - Migration runner thực thi từng file migration bằng cách bọc toàn bộ trong `database.transaction(() => { applyMigration(...); })()`.
+- **Phân tích bẫy SQLite (The SQLite Table Recreation Trap)**:
+  1. *Bẫy no-op của `PRAGMA foreign_keys` trong transaction*:
+     Theo đặc tả chính thức của SQLite: `PRAGMA foreign_keys = OFF` là **no-op** nếu được thực thi bên trong một transaction đang mở (`database.transaction(...)`). Do đó, nếu chỉ viết `PRAGMA foreign_keys = OFF` trong file migration `.sql`, SQLite sẽ hoàn toàn bỏ qua và foreign keys vẫn ở trạng thái `ON`!
+  2. *Nguy cơ mất trắng dữ liệu do `ON DELETE SET NULL`*:
+     Bảng `alert` có ràng buộc: `experiment_run_id INTEGER REFERENCES experiment_run(id) ON DELETE SET NULL`.
+     Nếu foreign keys đang `ON`, khi migration thực thi `DROP TABLE experiment_run` (để hoàn tất việc tái tạo bảng), SQLite kích hoạt trigger cascade `ON DELETE SET NULL`. Toàn bộ giá trị `experiment_run_id` trong bảng `alert` sẽ bị **xoá sạch thành `NULL` ngay lập tức**, gây mất mát liên kết dữ liệu không thể phục hồi!
+  3. *Hạn chế của `ALTER TABLE RENAME TO`*:
+     Kể từ SQLite 3.25.0, khi đổi tên bảng `experiment_run` thành `old_experiment_run` trong khi foreign keys đang `ON`, SQLite tự động cập nhật định nghĩa foreign key của bảng `alert` trỏ sang `old_experiment_run`. Vì vậy, khi thực hiện `DROP TABLE old_experiment_run`, hiệu ứng cascade `SET NULL` vẫn xảy ra.
+- **Phương án giải quyết triệt để trong Migration Runner**:
+  - Để tái tạo bảng theo đúng quy trình chuẩn 12 bước của SQLite (12-step schema migration), thao tác tắt `foreign_keys` **bắt buộc phải nằm ngoài transaction**, trước khi `database.transaction()` bắt đầu.
+  - Thiết kế nâng cấp `runMigrations()` trong `app/src/main/db/index.ts`:
+    - Thêm thuộc tính tuỳ chọn `disableForeignKeys?: boolean` vào interface `Migration` (hoặc kiểm tra version = 5).
+    - **Trình tự thực thi an toàn**:
+      1. *Trước transaction*: Kiểm tra và tắt foreign keys ở cấp kết nối:
+         ```typescript
+         const wasFkEnabled = database.pragma('foreign_keys', { simple: true }) === 1
+         if (migration.disableForeignKeys && wasFkEnabled) {
+           database.pragma('foreign_keys = OFF')
+         }
+         ```
+      2. *Bên trong transaction*: Thực thi file migration `005_experiment_run_attempt.sql`:
+         - Bước a: Tạo bảng mới `new_experiment_run` với cấu trúc đầy đủ, thêm cột `attempt_index INTEGER NOT NULL DEFAULT 1 CHECK (attempt_index BETWEEN 1 AND 3)` và ràng buộc `UNIQUE (scenario, repeat_index, attempt_index)`.
+         - Bước b: Sao chép dữ liệu từ `experiment_run` sang `new_experiment_run`, map chính xác từng cột theo tên, gán `COALESCE(attempt_index, 1)` (hoặc giá trị hằng số 1) cho dữ liệu cũ, giữ nguyên 100% các giá trị `id` nguyên bản.
+         - Bước c: Xoá bảng cũ: `DROP TABLE experiment_run;` (an toàn tuyệt đối vì foreign keys đã tắt từ trước transaction, không kích hoạt `ON DELETE SET NULL` trên bảng `alert`).
+         - Bước d: Đổi tên bảng mới: `ALTER TABLE new_experiment_run RENAME TO experiment_run;`.
+         - Bước e: Tạo lại các chỉ mục (indexes) nếu có.
+      3. *Sau transaction (trong khối `finally`)*:
+         - Bật lại foreign keys:
+           ```typescript
+           if (migration.disableForeignKeys && wasFkEnabled) {
+             database.pragma('foreign_keys = ON')
+             const fkErrors = database.pragma('foreign_key_check')
+             if (fkErrors.length > 0) {
+               throw new Error(`Migration ${migration.name} vi phạm kiểm tra foreign_key_check: ${JSON.stringify(fkErrors)}`)
+             }
+           }
+           ```
+         - Hậu kiểm bắt buộc: Chạy `database.pragma('foreign_key_check')`. Nếu có bất kỳ vi phạm nào, ném ngoại lệ dừng ứng dụng ngay lập tức.
+- **Nội dung SQL của migration `005_experiment_run_attempt.sql` (bên trong transaction)**:
+  ```sql
+  -- Migration 005: Thêm attempt_index (1..3) và đổi UNIQUE(scenario, repeat_index, attempt_index)
+  CREATE TABLE new_experiment_run (
+    id                INTEGER PRIMARY KEY,
+    scenario          TEXT    NOT NULL CHECK (scenario IN
+                       ('memory_leak','cpu_spike','error_burst','slow_db','latency_creep')),
+    repeat_index      INTEGER NOT NULL,          -- 1..10
+    attempt_index     INTEGER NOT NULL DEFAULT 1 CHECK (attempt_index BETWEEN 1 AND 3), -- 1..3
+    deployment_id     INTEGER REFERENCES deployment(id) ON DELETE SET NULL,
+    vps_id            INTEGER REFERENCES vps(id),
+
+    -- Các mốc thời gian, TẤT CẢ quy về đồng hồ VPS
+    baseline_start_ts TEXT,
+    train_at_ts       TEXT,                     -- lúc gọi POST /train
+    fault_start_ts    TEXT,
+    fault_end_ts      TEXT,
+    run_end_ts        TEXT,
+
+    clock_offset_ms   INTEGER NOT NULL DEFAULT 0,   -- đo tại thời điểm bắt đầu run
+    detection_grace_s INTEGER NOT NULL DEFAULT 60,  -- độ trễ hợp lý sau fault_start, xem docs/07
+    train_sample_count INTEGER,
+
+    fault_params_json TEXT,                     -- {"rate_mb_per_min":5,...} để tái lập
+    status            TEXT NOT NULL DEFAULT 'running'
+                           CHECK (status IN ('running','completed','aborted')),
+    abort_reason      TEXT,
+    notes             TEXT,
+
+    UNIQUE (scenario, repeat_index, attempt_index)
+  );
+
+  INSERT INTO new_experiment_run (
+    id, scenario, repeat_index, attempt_index,
+    deployment_id, vps_id,
+    baseline_start_ts, train_at_ts, fault_start_ts, fault_end_ts, run_end_ts,
+    clock_offset_ms, detection_grace_s, train_sample_count,
+    fault_params_json, status, abort_reason, notes
+  )
+  SELECT
+    id, scenario, repeat_index, 1,
+    deployment_id, vps_id,
+    baseline_start_ts, train_at_ts, fault_start_ts, fault_end_ts, run_end_ts,
+    clock_offset_ms, detection_grace_s, train_sample_count,
+    fault_params_json, status, abort_reason, notes
+  FROM experiment_run;
+
+  DROP TABLE experiment_run;
+
+  ALTER TABLE new_experiment_run RENAME TO experiment_run;
+  ```
+
+### 3. Thay đổi cần thiết cho `experiments/run_store.py`
+- **Mở rộng chữ ký hàm `start_run()`**:
+  - Thêm tham số: `attempt_index: int | None = None`.
+  - Kiểm tra hợp lệ nếu `attempt_index` được truyền vào: bắt buộc `isinstance(attempt_index, int)` và `1 <= attempt_index <= 3` (ném `ValueError` nếu vi phạm).
+- **Cơ chế tự động cấp phát attempt (Auto-increment attempt) trong transaction `BEGIN IMMEDIATE`**:
+  - Để chống race condition, toàn bộ logic kiểm tra và cấp phát attempt diễn ra bên trong transaction `BEGIN IMMEDIATE`:
+    1. Kiểm tra Single Active Run: `SELECT id FROM experiment_run WHERE status = 'running'` (nếu có, ném `ActiveRunExistsError`).
+    2. Nếu `attempt_index is None`:
+       Truy vấn attempt cao nhất đã tồn tại cho kịch bản và lần lặp:
+       ```sql
+       SELECT COALESCE(MAX(attempt_index), 0) + 1
+       FROM experiment_run
+       WHERE scenario = ? AND repeat_index = ?
+       ```
+       Nếu kết quả tính ra `> 3`: ném `RunStoreError(f"Kịch bản '{scenario}' repeat {repeat_index} đã đạt giới hạn tối đa 3 attempts (tối đa 2 lần retry).")`.
+    3. Nếu `attempt_index` được chỉ định tường minh:
+       Kiểm tra xem attempt đó đã tồn tại chưa hoặc để SQLite bắt ràng buộc `UNIQUE (scenario, repeat_index, attempt_index)`.
+    4. Thực hiện câu lệnh SQL nạp bản ghi mới với `attempt_index` đã xác định:
+       ```sql
+       INSERT INTO experiment_run (
+           scenario, repeat_index, attempt_index, deployment_id, vps_id,
+           baseline_start_ts, clock_offset_ms, detection_grace_s,
+           fault_params_json, notes, status
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'running')
+       ```
+- **Hàm `abort_run()` & `complete_run()`**:
+  - `abort_run()`: Nhận `run_id` và `abort_reason` (bắt buộc không rỗng). Cập nhật `status = 'aborted'`, ghi nhận mốc thời gian huỷ. Bản ghi này vẫn giữ nguyên `attempt_index` (ví dụ: attempt 1 bị abort). Khi runner quyết định chạy lại kịch bản này, lần gọi `start_run()` tiếp theo sẽ tự động được cấp `attempt_index = 2`.
+  - `complete_run()`: Cập nhật `status = 'completed'`, hoàn tất vòng đời của attempt hiện tại.
+- **Hàm `count_phase_a_samples()` và các hàm truy vấn**:
+  - `count_phase_a_samples()` lọc theo `deployment_id` và khoảng thời gian `[baseline_start_ts, train_at_ts)` của chính run đó, giữ nguyên độ chính xác microsecond.
+  - Các hàm đọc `get_run()` và `get_active_run()` trả về dict bao gồm trường `attempt_index`.
+
+### 4. Thay đổi cần thiết cho `experiments/export_results.py`
+- **Cập nhật danh sách cột xuất `_RUN_COLS`**:
+  - Bổ sung `"attempt_index"` vào danh sách cột xuất `_RUN_COLS`:
+    ```python
+    _RUN_COLS = [
+        "id",
+        "scenario",
+        "repeat_index",
+        "attempt_index",
+        "deployment_id",
+        "vps_id",
+        "baseline_start_ts",
+        "train_at_ts",
+        "fault_start_ts",
+        "fault_end_ts",
+        "run_end_ts",
+        "clock_offset_ms",
+        "detection_grace_s",
+        "train_sample_count",
+        "fault_params_json",
+        "status",
+        "abort_reason",
+    ]
+    ```
+  - Đảm bảo file `experiment_run.csv` chứa cột này để công cụ phân tích ngoại tuyến đọc được.
+- **Cập nhật `meta.json`**:
+  - Trong dictionary `meta`, bổ sung trường: `"attempt_index": run_rows[0]["attempt_index"]`.
+- **Quy tắc tổ chức thư mục xuất kết quả (`run_dir_for`)**:
+  - Hiện tại hàm `run_dir_for(results_root, scenario, repeat_index)` trả về `results/run_<scenario>_<repeat_index>`.
+  - *Vấn đề*: Nếu run ở attempt 1 bị abort và được xuất ra thư mục, sau đó attempt 2 chạy thành công thì việc xuất vào cùng tên thư mục sẽ ghi đè và làm mất dữ liệu của attempt 1 (làm mất bằng chứng phân tích lỗi).
+  - *Thiết kế điều chỉnh*:
+    - Cập nhật hàm thành: `run_dir_for(results_root, scenario, repeat_index, attempt_index: int = 1) -> Path`.
+    - Quy ước đặt tên thư mục:
+      - Định dạng phân biệt attempt: `run_<scenario>_<repeat_index>_att<attempt_index>` (ví dụ: `run_error_burst_1_att1`, `run_error_burst_1_att2`).
+      - Cho phép runner/CLI chỉ định thư mục đầu ra dựa trên `attempt_index` của run đang xuất để không bao giờ ghi đè dữ liệu run cũ.
+
+### 5. Thay đổi cần thiết cho `experiments/analyze.py` (Xử lý Run Aborted vs Completed)
+- **Tách biệt dữ liệu đánh giá mô hình (Benchmark Evaluation)**:
+  - Hiện tại hàm `main_table()` và `analyze_run()` đọc `experiment_run.csv` mà chưa kiểm tra trạng thái `status`. Nếu gặp run bị abort, các mốc thời gian pha C (`fault_start_ts`, `fault_end_ts`) có thể là `None` hoặc run kết thúc sớm, dẫn đến lỗi phân tích hoặc làm lệch chỉ số.
+  - **Quy tắc bắt buộc**:
+    1. Khi duyệt qua các thư mục `run_dirs`: Đọc metadata của run (`experiment_run.csv` hoặc `meta.json`).
+    2. Kiểm tra trường `status`:
+       - **CHỈ đưa các run có `status == 'completed'`** vào ma trận nhầm lẫn (confusion matrix), tính toán Precision, Recall, F1, và độ trễ phát hiện (detection delay).
+       - Các run có `status == 'aborted'` **tuyệt đối không được gộp vào bảng kết quả chính** (Bảng 5.x báo cáo khoá luận).
+       - *Lý do*: Run bị abort không đạt đủ điều kiện hoàn thành pha C (20 phút tiêm lỗi) và pha D (10 phút phục hồi), việc đưa vào sẽ sinh ra các mẫu nhãn thiếu hoặc mẫu censored giả tạo, làm sai lệch giá trị khoa học của benchmark.
+- **Bổ sung báo cáo độ ổn định vận hành & hạ tầng (Operational Reliability Telemetry)**:
+  - Dữ liệu của các run bị abort không bị bỏ phí mà được dùng cho một module phân tích riêng biệt:
+    1. *Thống kê tỷ lệ thành công theo lần thử*: Tỷ lệ hoàn thành ở attempt 1 (First-Attempt Success Rate) vs số lần phải retry ở attempt 2 và attempt 3.
+    2. *Phân tích nguyên nhân huỷ*: Thống kê phân phối các giá trị `abort_reason` (ví dụ: `clock_skew_too_large`, `insufficient_phase_a_samples`, `ssh_connection_lost`, `collector_unresponsive`).
+    3. Trích xuất bảng số liệu này phục vụ phần Thảo luận/Đánh giá tính sẵn sàng của hệ thống giám sát trong báo cáo tốt nghiệp.
+
+### 6. Kế hoạch Kiểm thử & Tiêu chí Nghiệm thu (Verification & Acceptance Criteria)
+1. **Kiểm thử Migration SQLite (độc lập trên môi trường Node/Electron & Python)**:
+   - Tạo DB mẫu chứa dữ liệu schema v1: gồm các bản ghi `experiment_run` (đầy đủ các kịch bản) và các bản ghi trong `alert` có `experiment_run_id` trỏ tới.
+   - Kích hoạt migration runner thực hiện nâng cấp:
+     - Xác nhận `PRAGMA foreign_keys = OFF` hoạt động đúng trước transaction.
+     - Sau migration, xác nhận toàn bộ `alert.experiment_run_id` **vẫn giữ nguyên giá trị ban đầu, không có bất kỳ dòng nào bị chuyển thành NULL**.
+     - Xác nhận `PRAGMA foreign_key_check` trả về 0 lỗi.
+     - Xác nhận toàn bộ bản ghi cũ trong `experiment_run` được backfill `attempt_index = 1`.
+2. **Kiểm thử Unit Test cho `run_store.py`**:
+   - Khởi tạo run với `attempt_index` mặc định (tự động = 1).
+   - Abort run đầu tiên với lý do cụ thể.
+   - Khởi tạo retry cho cùng `scenario` và `repeat_index` mà không truyền `attempt_index`: xác nhận run mới nhận `attempt_index = 2`.
+   - Abort tiếp và thử attempt 3: thành công (`attempt_index = 3`).
+   - Cố gắng khởi tạo attempt 4: xác nhận ném lỗi `RunStoreError` vì vượt quá trần 3 attempts.
+   - Kiểm tra ràng buộc `UNIQUE (scenario, repeat_index, attempt_index)` ở tầng SQLite khi cố ý insert trùng attempt.
+   - Xác nhận quy tắc Single Active Run và transaction ownership vẫn được bảo toàn nguyên vẹn.
+3. **Kiểm thử Export & Analyze**:
+   - `export_run()` xuất đầy đủ `attempt_index` trong cả `experiment_run.csv` và `meta.json`.
+   - `analyze.py` tự động bỏ qua các run `status == 'aborted'`, chỉ tính toán bảng P/R/F1 trên các run `status == 'completed'`.
+   - Bổ sung test kiểm tra hàm thống kê độ ổn định (Operational Telemetry) trên tập hợp gồm cả run completed và run aborted.
 
 ## PR
 
