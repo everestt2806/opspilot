@@ -111,14 +111,14 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
       CI 95% (t, n=10). Test `test_analyze.py` (7) + smoke: ML delay 120s vs rule 420s, số nhất quán.
 - [x] `DECISIONS.md` (`[exp] 2026-09-19`, `[exp] 2026-10-01`) + `docs/07` mục 2, 7 cập nhật cách vá data-path và protocol.
 - [x] Quản lý vòng đời `experiment_run` (P2a - `experiments/run_store.py`):
-      - Bắt đầu run trong transaction nguyên tử `BEGIN IMMEDIATE` và từ chối khi đã có run `running` (Quy tắc Single Active Run, chống race condition giữa hai kết nối/threads).
-      - Chuẩn hoá các mốc thời gian về định dạng ISO 8601 UTC tương thích `metric_sample.ts_vps` của collector (chấp nhận cả epoch seconds float/int từ runner và ISO string).
-      - Cập nhật các mốc thời gian pha (`train_at_ts`, `fault_start_ts`, `fault_end_ts`, `train_sample_count`), từ chối cập nhật khi run không còn `running`.
+      - Bắt đầu run trong transaction nguyên tử `BEGIN IMMEDIATE` và từ chối khi đã có run `running` (Quy tắc Single Active Run); từ chối nếu connection đang có transaction chưa kết thúc (`in_transaction=True`).
+      - Chuẩn hoá các mốc thời gian về định dạng ISO 8601 UTC tương thích `metric_sample.ts_vps` của collector (chấp nhận cả epoch seconds float/int từ runner và ISO string, bảo tồn độ chính xác thập phân).
+      - Cập nhật các mốc thời gian pha (`train_at_ts`, `fault_start_ts`, `fault_end_ts`, `train_sample_count`), hoàn tất hoặc huỷ run bằng điều kiện SQL `status = 'running'` chống ghi đè khi kết nối khác vừa thay đổi trạng thái.
       - Hoàn tất (`status='completed'`) hoặc huỷ (`status='aborted'` với `abort_reason` bắt buộc).
-      - Truy vấn `count_phase_a_samples()` đếm chính xác mẫu theo `deployment_id` và cửa sổ thời gian `[baseline_start_ts, train_at_ts)` đã chuẩn hoá.
+      - Truy vấn `count_phase_a_samples()` so sánh mốc thời gian với độ chính xác đầy đủ (full precision), không cắt mili giây trước khi lọc mẫu trong cửa sổ nửa mở `[start, end)`.
       - Giới hạn schema hiện tại: `UNIQUE(scenario, repeat_index)` trong `docs/contracts/schema.sql` hiện ngăn lưu retry sau khi abort (giữ nguyên schema v1, chờ Leader quyết định giải pháp).
-- [x] pytest liên quan xanh: **124 passed** (collect 26, loadgen_error_rate 9, loadgen 9,
-      labeling 11, metrics 9, scheduler 9, protocol 12, analyze 7, export 6, manifest 5, run_store 12;
+- [x] pytest liên quan xanh: **126 passed** (collect 26, loadgen_error_rate 9, loadgen 9,
+      labeling 11, metrics 9, scheduler 9, protocol 12, analyze 7, export 6, manifest 5, run_store 14;
       trước P2a đạt mốc 112 passed).
       Chưa nối CLI/SSH/poller/loadgen/alert, chưa chạy VPS thật, không push/PR/merge.
 
@@ -148,19 +148,18 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
 - 01/10 mốc Protocol (`2121d15`, `0fa0069`) — Chốt protocol versioning, export_run ghi protocol_version,
   analyze đọc tương thích ngược legacy-pre-pilot, hiệu chỉnh độ trễ latency_creep, đạt mốc **112 passed**.
 - 01/10 mốc Kiểm kê kỹ thuật (`10acaa9`) — Bổ sung mục Bàn giao kỹ thuật chi tiết trong tài liệu TK-S6.
-- 01/10 mốc P2a (`1d0ed0a`) — Module `run_store.py` quản lý `experiment_run` (start_run với single active run rule,
+- 01/10 mốc P2a (`1d0ed0a`, `4658c47`) — Module `run_store.py` quản lý `experiment_run` (start_run với single active run rule,
   update_phase_schedule, complete_run, abort_run kèm reason, count_phase_a_samples đếm mẫu trong đúng
   cửa sổ pha A). Ghi nhận rõ giới hạn `UNIQUE(scenario, repeat_index)` hiện ngăn lưu retry sau abort để Leader quyết
   định sau. Chưa nối CLI/SSH/poller/loadgen/alert, chưa chạy VPS.
-- 01/10 mốc Sửa P2a — Bổ sung tính nguyên tử giữa hai kết nối SQLite qua `BEGIN IMMEDIATE` trong `start_run()`;
-  chuẩn hoá mốc thời gian về ISO 8601 UTC tương thích `metric_sample.ts_vps` (chấp nhận epoch float từ runner);
-  từ chối cập nhật mốc pha nếu run không còn `running`. Viết thêm 4 test (tổng 12 test trong `test_run_store.py`),
-  nâng tổng số test lên **124 passed**. Sửa DoD cũ để không nói rằng chỉ còn thao tác vận hành VPS, nêu rõ các
-  khoảng trống kỹ thuật còn lại trước pilot.
+- 01/10 mốc Tinh chỉnh P2a — So sánh mốc thời gian trong `count_phase_a_samples()` với độ chính xác thập phân đầy đủ
+  (không cắt mili giây, xử lý chuẩn ranh giới thập phân); từ chối `start_run()` khi connection đã ở trong transaction;
+  cập nhật trạng thái và mốc pha nguyên tử bằng điều kiện SQL `status = 'running'` chống ghi đè chéo giữa các kết nối.
+  Viết thêm test đạt mốc **126 passed**.
 
 ## Lệnh tái hiện
 
-Test thuần (124 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed):
+Test thuần (126 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed):
 
 ```
 ml-service/.venv/Scripts/python.exe -m pytest \

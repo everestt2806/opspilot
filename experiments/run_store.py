@@ -5,31 +5,32 @@ Tuân thủ nghiêm ngặt schema tại docs/contracts/schema.sql (bảng experi
 CÁC NGUYÊN TẮC THIẾT KẾ VÀ RÀNG BUỘC:
 1. Quy tắc Single Active Run & Tính nguyên tử (Atomic Check-and-Create):
    Tại một thời điểm chỉ cho phép duy nhất một run có status='running'. Hàm start_run()
-   sử dụng BEGIN IMMEDIATE để khoá ghi ngay lập tức trên SQLite, kiểm tra sự tồn tại của
-   run đang running và nạp bản ghi mới trong cùng một transaction nguyên tử. Nếu hai kết nối
-   hoặc hai luồng cùng gọi start_run() đồng thời, một kết nối thành công và kết nối còn lại
-   sẽ bị chặn/từ chối với ActiveRunExistsError, triệt tiêu hoàn toàn race condition.
+   bắt buộc mở transaction BEGIN IMMEDIATE để lấy khoá ghi tức thì trên SQLite, kiểm tra
+   sự tồn tại của run đang running và nạp bản ghi mới trong cùng một transaction nguyên tử.
+   - Nếu connection đang ở trong một transaction chưa hoàn tất (in_transaction=True), start_run()
+     từ chối ngay (ném RunStoreError) vì không thể bảo đảm tính nguyên tử của BEGIN IMMEDIATE.
+   - Nếu hai kết nối hoặc hai luồng cùng gọi start_run() đồng thời, một kết nối thành công và
+     kết nối còn lại sẽ bị chặn/từ chối với ActiveRunExistsError, triệt tiêu hoàn toàn race condition.
 
-2. Quản lý vòng đời run:
-   - start_run(): Khởi tạo bản ghi với status='running', trả về run_id.
-   - update_phase_schedule(): Ghi nhận các mốc pha (train_at_ts, fault_start_ts, fault_end_ts, train_sample_count).
-     TỪ CHỐI cập nhật (ném InvalidRunStateError) nếu run không còn ở trạng thái 'running'.
-   - complete_run(): Kết thúc run bình thường (status='completed') và ghi mốc run_end_ts.
-   - abort_run(): Huỷ run bất thường (status='aborted') kèm lý do bắt buộc (abort_reason) và run_end_ts.
+2. Cập nhật trạng thái và mốc pha nguyên tử với điều kiện SQL (status='running'):
+   - update_phase_schedule(), complete_run(), abort_run() đều sử dụng điều kiện:
+     `WHERE id = ? AND status = 'running'`
+     trực tiếp trong câu lệnh SQL UPDATE.
+   - Cơ chế này ngăn chặn tuyệt đối việc ghi đè hoặc sửa đổi một run vừa kết thúc/bị huỷ
+     ở một kết nối khác (tránh race condition giữa complete/abort/update).
+   - Nếu rowcount == 0, hàm kiểm tra lại cơ sở dữ liệu để ném đúng lỗi RunNotFoundError
+     (nếu run_id không tồn tại) hoặc InvalidRunStateError (nếu run không còn 'running').
 
-3. Chuẩn hoá mốc thời gian đồng bộ với Collector:
-   Toàn bộ các mốc thời gian (baseline_start_ts, train_at_ts, fault_start_ts, fault_end_ts, run_end_ts)
-   đều được chuẩn hoá qua normalize_ts() về định dạng ISO 8601 UTC (YYYY-MM-DDTHH:MM:SSZ).
-   Hàm này chấp nhận đầu vào là epoch seconds (float/int do runner hoặc protocol.py cung cấp),
-   datetime object, hoặc chuỗi ISO, đảm bảo tương thích 100% với cột metric_sample.ts_vps do
-   collector ghi nhận.
+3. Chuẩn hoá và so sánh mốc thời gian với độ chính xác đầy đủ (Full Precision):
+   - normalize_ts() chuẩn hoá mốc thời gian về định dạng ISO 8601 UTC (YYYY-MM-DDTHH:MM:SSZ hoặc
+     có phần lẻ mili giây YYYY-MM-DDTHH:MM:SS.sssZ), chấp nhận epoch seconds (float/int do runner
+     cung cấp), datetime object, hoặc chuỗi ISO.
+   - to_epoch_seconds() chuyển đổi bất kỳ dạng timestamp nào sang epoch float đầy đủ.
+   - count_phase_a_samples() so sánh mốc thời gian với độ chính xác thập phân đầy đủ,
+     không cắt/làm tròn phần mili giây trước khi lọc mẫu trong cửa sổ nửa mở [start, end),
+     bảo đảm các mẫu tại đúng giây biên có phần thập phân được phân loại chính xác.
 
-4. Truy vấn đếm mẫu Pha A (docs/07 §7.6):
-   - count_phase_a_samples(): Đếm số dòng metric_sample theo deployment_id trong đúng cửa sổ
-     nửa mở [baseline_start_ts, train_at_ts) sau khi đã chuẩn hoá về ISO UTC. Tuyệt đối không
-     đếm gộp toàn bộ deployment để tránh dính mẫu rác cũ từ các lần thử nghiệm trước.
-
-5. GIỚI HẠN SCHEMA HIỆN TẠI VÀ LƯU Ý CHO LEADER:
+4. GIỚI HẠN SCHEMA HIỆN TẠI VÀ LƯU Ý CHO LEADER:
    Bảng experiment_run trong docs/contracts/schema.sql có ràng buộc:
        UNIQUE (scenario, repeat_index)
    Nếu một lần chạy bị 'aborted', bản ghi đó vẫn tồn tại trong SQLite và chiếm giữ cặp
@@ -74,26 +75,17 @@ class InvalidRunStateError(RunStoreError):
     """Ném ra khi thao tác không hợp lệ với trạng thái hiện tại của run."""
 
 
-def normalize_ts(ts: str | float | datetime) -> str:
-    """Chuẩn hoá mốc thời gian về định dạng ISO 8601 UTC (YYYY-MM-DDTHH:MM:SSZ).
-
-    Định dạng này khớp hoàn toàn với collector.collect.utc_timestamp() và metric_sample.ts_vps.
-    Hỗ trợ đầu vào:
-      - epoch seconds (float/int, e.g. time.time(), vps_epoch_ms / 1000)
-      - datetime object (có hoặc không có múi giờ; nếu ngây thơ giả định UTC)
-      - chuỗi ISO 8601 (ví dụ '2026-10-01T10:00:00Z', '2026-10-01T17:00:00+07:00')
-      - chuỗi số biểu thị epoch (ví dụ '1790762400.0')
-    """
+def to_epoch_seconds(ts: str | float | datetime) -> float:
+    """Chuyển đổi timestamp bất kỳ sang epoch seconds (float) với độ chính xác đầy đủ."""
     if ts is None:
         raise ValueError("Timestamp không được là None")
 
+    if isinstance(ts, (int, float)):
+        return float(ts)
+
     if isinstance(ts, datetime):
         dt = ts if ts.tzinfo is not None else ts.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-
-    if isinstance(ts, (int, float)):
-        dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
-        return dt.isoformat(timespec="seconds").replace("+00:00", "Z")
+        return dt.timestamp()
 
     if isinstance(ts, str):
         s = ts.strip()
@@ -102,9 +94,7 @@ def normalize_ts(ts: str | float | datetime) -> str:
         # Chuỗi số thuần biểu thị epoch (không chứa '-' ngày tháng hay ':' giờ phút)
         if "-" not in s and ":" not in s:
             try:
-                val = float(s)
-                dt = datetime.fromtimestamp(val, tz=timezone.utc)
-                return dt.isoformat(timespec="seconds").replace("+00:00", "Z")
+                return float(s)
             except ValueError:
                 pass
 
@@ -113,9 +103,58 @@ def normalize_ts(ts: str | float | datetime) -> str:
             dt = datetime.fromisoformat(iso_str)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            else:
-                dt = dt.astimezone(timezone.utc)
-            return dt.isoformat(timespec="seconds").replace("+00:00", "Z")
+            return dt.timestamp()
+        except ValueError as err:
+            raise ValueError(f"Không thể phân tích timestamp '{ts}': {err}") from err
+
+    raise TypeError(f"Kiểu dữ liệu timestamp không được hỗ trợ: {type(ts)}")
+
+
+def normalize_ts(ts: str | float | datetime) -> str:
+    """Chuẩn hoá mốc thời gian về định dạng ISO 8601 UTC.
+
+    Bảo tồn phần thập phân giây (milliseconds) nếu có, hoặc giữ định dạng giây tròn nếu không có phần lẻ.
+    """
+    if ts is None:
+        raise ValueError("Timestamp không được là None")
+
+    if isinstance(ts, datetime):
+        dt = ts if ts.tzinfo is not None else ts.replace(tzinfo=timezone.utc)
+        dt_utc = dt.astimezone(timezone.utc)
+        if dt_utc.microsecond > 0:
+            return dt_utc.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        return dt_utc.isoformat(timespec="seconds").replace("+00:00", "Z")
+
+    if isinstance(ts, (int, float)):
+        val = float(ts)
+        dt_utc = datetime.fromtimestamp(val, tz=timezone.utc)
+        if dt_utc.microsecond > 0:
+            return dt_utc.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        return dt_utc.isoformat(timespec="seconds").replace("+00:00", "Z")
+
+    if isinstance(ts, str):
+        s = ts.strip()
+        if not s:
+            raise ValueError("Timestamp chuỗi không được để trống")
+        if "-" not in s and ":" not in s:
+            try:
+                val = float(s)
+                dt_utc = datetime.fromtimestamp(val, tz=timezone.utc)
+                if dt_utc.microsecond > 0:
+                    return dt_utc.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+                return dt_utc.isoformat(timespec="seconds").replace("+00:00", "Z")
+            except ValueError:
+                pass
+
+        iso_str = s.replace("Z", "+00:00") if s.endswith("Z") else s
+        try:
+            dt = datetime.fromisoformat(iso_str)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            dt_utc = dt.astimezone(timezone.utc)
+            if dt_utc.microsecond > 0:
+                return dt_utc.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            return dt_utc.isoformat(timespec="seconds").replace("+00:00", "Z")
         except ValueError as err:
             raise ValueError(f"Không thể phân tích timestamp '{ts}': {err}") from err
 
@@ -172,11 +211,13 @@ def start_run(
     """Bắt đầu một run thí nghiệm mới ở trạng thái 'running'.
 
     Quy tắc Single Active Run & Tính nguyên tử (Atomic Check-and-Create):
+      - Nếu connection đang ở trong một transaction chưa commit/rollback (in_transaction=True),
+        hàm từ chối ngay (ném RunStoreError) vì không thể mở BEGIN IMMEDIATE để bảo đảm tính nguyên tử.
       - Mở transaction BEGIN IMMEDIATE để lấy khoá ghi tức thì, ngăn chặn hiện tượng
         race condition khi hai kết nối SQLite cùng cố gắng khởi tạo run đồng thời.
       - Kiểm tra trong transaction xem đã có run nào running hay chưa; nếu có thì ném
-        ActiveRunExistsError và huỷ transaction.
-      - Chuẩn hoá baseline_start_ts về định dạng ISO UTC (YYYY-MM-DDTHH:MM:SSZ).
+        ActiveRunExistsError và rollback sạch sẽ.
+      - Chuẩn hoá baseline_start_ts về định dạng ISO UTC (bảo tồn mili giây nếu có).
 
     Lưu ý: Nếu cặp (scenario, repeat_index) đã tồn tại trong DB (kể cả đã completed hay aborted),
     SQLite sẽ ném sqlite3.IntegrityError do ràng buộc UNIQUE(scenario, repeat_index) của schema v1.
@@ -188,11 +229,15 @@ def start_run(
     if not isinstance(repeat_index, int) or repeat_index < 1:
         raise ValueError("repeat_index phải là số nguyên >= 1")
 
+    if conn.in_transaction:
+        raise RunStoreError(
+            "Không thể gọi start_run() khi connection đang ở trong transaction chưa hoàn tất (in_transaction=True). "
+            "start_run() bắt buộc mở BEGIN IMMEDIATE để bảo đảm tính nguyên tử của quy tắc Single Active Run."
+        )
+
     norm_baseline = normalize_ts(baseline_start_ts) if baseline_start_ts is not None else None
 
-    in_external_tx = conn.in_transaction
-    if not in_external_tx:
-        conn.execute("BEGIN IMMEDIATE")
+    conn.execute("BEGIN IMMEDIATE")
 
     try:
         cur = conn.cursor()
@@ -232,12 +277,12 @@ def start_run(
         if run_id is None:
             raise RunStoreError("Không lấy được lastrowid sau khi insert experiment_run")
 
-        if auto_commit and not in_external_tx:
+        if auto_commit:
             conn.commit()
 
         return int(run_id)
     except Exception:
-        if not in_external_tx and conn.in_transaction:
+        if conn.in_transaction:
             conn.rollback()
         raise
 
@@ -255,22 +300,11 @@ def update_phase_schedule(
 ) -> None:
     """Cập nhật các mốc thời gian pha và thông tin tiến trình của run.
 
-    RÀNG BUỘC:
+    Cập nhật nguyên tử với điều kiện SQL `status = 'running'`:
       - Từ chối cập nhật nếu run không còn ở trạng thái 'running' (ném InvalidRunStateError).
-      - Mọi mốc thời gian đều được chuẩn hoá về ISO UTC tương thích collector.
+      - Ngăn ngừa sửa đổi run vừa kết thúc hoặc bị abort ở một kết nối khác.
+      - Mọi mốc thời gian đều được chuẩn hoá về ISO UTC bảo tồn độ chính xác.
     """
-    cur = conn.cursor()
-    cur.execute("SELECT id, status FROM experiment_run WHERE id = ?", (run_id,))
-    row = cur.fetchone()
-    if row is None:
-        raise RunNotFoundError(f"Không tìm thấy experiment_run với id={run_id}")
-
-    current_status = row[1] if not hasattr(row, "keys") else row["status"]
-    if current_status != "running":
-        raise InvalidRunStateError(
-            f"Run id={run_id} đang ở trạng thái '{current_status}', không thể cập nhật mốc pha (chỉ 'running' mới có thể cập nhật)"
-        )
-
     updates: list[str] = []
     params: list[Any] = []
 
@@ -293,11 +327,38 @@ def update_phase_schedule(
         updates.append("notes = ?")
         params.append(str(notes))
 
-    if updates:
-        params.append(run_id)
-        cur.execute(f"UPDATE experiment_run SET {', '.join(updates)} WHERE id = ?", params)
-        if auto_commit:
-            conn.commit()
+    cur = conn.cursor()
+    if not updates:
+        cur.execute("SELECT id, status FROM experiment_run WHERE id = ?", (run_id,))
+        row = cur.fetchone()
+        if row is None:
+            raise RunNotFoundError(f"Không tìm thấy experiment_run với id={run_id}")
+        current_status = row[1] if not hasattr(row, "keys") else row["status"]
+        if current_status != "running":
+            raise InvalidRunStateError(
+                f"Run id={run_id} đang ở trạng thái '{current_status}', không thể cập nhật mốc pha (chỉ 'running' mới có thể cập nhật)"
+            )
+        return
+
+    params.append(run_id)
+    cur.execute(
+        f"UPDATE experiment_run SET {', '.join(updates)} WHERE id = ? AND status = 'running'",
+        params,
+    )
+    if cur.rowcount == 0:
+        cur.execute("SELECT id, status FROM experiment_run WHERE id = ?", (run_id,))
+        row = cur.fetchone()
+        if conn.in_transaction:
+            conn.rollback()
+        if row is None:
+            raise RunNotFoundError(f"Không tìm thấy experiment_run với id={run_id}")
+        current_status = row[1] if not hasattr(row, "keys") else row["status"]
+        raise InvalidRunStateError(
+            f"Run id={run_id} đang ở trạng thái '{current_status}', không thể cập nhật mốc pha (chỉ 'running' mới có thể cập nhật)"
+        )
+
+    if auto_commit:
+        conn.commit()
 
 
 def complete_run(
@@ -307,30 +368,22 @@ def complete_run(
     notes: str | None = None,
     auto_commit: bool = True,
 ) -> None:
-    """Đánh dấu run hoàn tất bình thường (status='completed') và ghi nhận run_end_ts chuẩn ISO UTC."""
+    """Đánh dấu run hoàn tất bình thường (status='completed') và ghi nhận run_end_ts chuẩn ISO UTC.
+
+    Cập nhật nguyên tử với điều kiện SQL `WHERE id = ? AND status = 'running'`.
+    """
     if run_end_ts is None:
         raise ValueError("run_end_ts không được để trống khi hoàn tất run")
 
     norm_end = normalize_ts(run_end_ts)
-
     cur = conn.cursor()
-    cur.execute("SELECT id, status FROM experiment_run WHERE id = ?", (run_id,))
-    row = cur.fetchone()
-    if row is None:
-        raise RunNotFoundError(f"Không tìm thấy experiment_run với id={run_id}")
-
-    current_status = row[1] if not hasattr(row, "keys") else row["status"]
-    if current_status != "running":
-        raise InvalidRunStateError(
-            f"Run id={run_id} đang ở trạng thái '{current_status}', không thể hoàn tất (chỉ 'running' mới có thể complete)"
-        )
 
     if notes is not None:
         cur.execute(
             """
             UPDATE experiment_run
             SET status = 'completed', run_end_ts = ?, notes = ?
-            WHERE id = ?
+            WHERE id = ? AND status = 'running'
             """,
             (norm_end, str(notes), run_id),
         )
@@ -339,9 +392,21 @@ def complete_run(
             """
             UPDATE experiment_run
             SET status = 'completed', run_end_ts = ?
-            WHERE id = ?
+            WHERE id = ? AND status = 'running'
             """,
             (norm_end, run_id),
+        )
+
+    if cur.rowcount == 0:
+        cur.execute("SELECT id, status FROM experiment_run WHERE id = ?", (run_id,))
+        row = cur.fetchone()
+        if conn.in_transaction:
+            conn.rollback()
+        if row is None:
+            raise RunNotFoundError(f"Không tìm thấy experiment_run với id={run_id}")
+        current_status = row[1] if not hasattr(row, "keys") else row["status"]
+        raise InvalidRunStateError(
+            f"Run id={run_id} đang ở trạng thái '{current_status}', không thể hoàn tất (chỉ 'running' mới có thể complete)"
         )
 
     if auto_commit:
@@ -355,29 +420,20 @@ def abort_run(
     run_end_ts: str | float | datetime | None = None,
     auto_commit: bool = True,
 ) -> None:
-    """Huỷ run thí nghiệm (status='aborted') kèm lý do huỷ bắt buộc và run_end_ts chuẩn ISO UTC."""
+    """Huỷ run thí nghiệm (status='aborted') kèm lý do huỷ bắt buộc và run_end_ts chuẩn ISO UTC.
+
+    Cập nhật nguyên tử với điều kiện SQL `WHERE id = ? AND status = 'running'`.
+    """
     if not reason or not str(reason).strip():
         raise ValueError("Lý do abort (reason) là bắt buộc và không được để trống")
 
     norm_end = normalize_ts(run_end_ts) if run_end_ts is not None else None
-
     cur = conn.cursor()
-    cur.execute("SELECT id, status FROM experiment_run WHERE id = ?", (run_id,))
-    row = cur.fetchone()
-    if row is None:
-        raise RunNotFoundError(f"Không tìm thấy experiment_run với id={run_id}")
-
-    current_status = row[1] if not hasattr(row, "keys") else row["status"]
-    if current_status != "running":
-        raise InvalidRunStateError(
-            f"Run id={run_id} đang ở trạng thái '{current_status}', không thể abort (chỉ 'running' mới có thể abort)"
-        )
-
     cur.execute(
         """
         UPDATE experiment_run
         SET status = 'aborted', abort_reason = ?, run_end_ts = ?
-        WHERE id = ?
+        WHERE id = ? AND status = 'running'
         """,
         (
             str(reason).strip(),
@@ -385,6 +441,18 @@ def abort_run(
             run_id,
         ),
     )
+
+    if cur.rowcount == 0:
+        cur.execute("SELECT id, status FROM experiment_run WHERE id = ?", (run_id,))
+        row = cur.fetchone()
+        if conn.in_transaction:
+            conn.rollback()
+        if row is None:
+            raise RunNotFoundError(f"Không tìm thấy experiment_run với id={run_id}")
+        current_status = row[1] if not hasattr(row, "keys") else row["status"]
+        raise InvalidRunStateError(
+            f"Run id={run_id} đang ở trạng thái '{current_status}', không thể abort (chỉ 'running' mới có thể abort)"
+        )
 
     if auto_commit:
         conn.commit()
@@ -399,26 +467,26 @@ def count_phase_a_samples(
     """Đếm số mẫu metric_sample thuộc deployment_id trong cửa sổ Pha A [baseline_start_ts, train_at_ts).
 
     docs/07 §7.5 & §7.6:
-    Chỉ các mẫu có ts_vps nằm trong khoảng [baseline_start_ts, train_at_ts) mới hợp lệ
-    để tính số lượng mẫu huấn luyện. Các mốc thời gian đều được chuẩn hoá về ISO UTC
-    tương thích với cột ts_vps của collector.
+    Chỉ các mẫu có ts_vps nằm trong khoảng nửa mở [baseline_start_ts, train_at_ts) mới hợp lệ.
+    So sánh mốc thời gian với độ chính xác thập phân đầy đủ (full precision), không cắt phần
+    mili giây trước khi lọc mẫu, bảo đảm xử lý chính xác các trường hợp ranh giới có phần lẻ.
     """
     if baseline_start_ts is None or train_at_ts is None:
         raise ValueError("baseline_start_ts và train_at_ts không được để trống")
 
-    start_str = normalize_ts(baseline_start_ts)
-    end_str = normalize_ts(train_at_ts)
+    start_sec = to_epoch_seconds(baseline_start_ts)
+    end_sec = to_epoch_seconds(train_at_ts)
 
     cur = conn.cursor()
     cur.execute(
-        """
-        SELECT COUNT(*)
-        FROM metric_sample
-        WHERE deployment_id = ?
-          AND ts_vps >= ?
-          AND ts_vps < ?
-        """,
-        (deployment_id, start_str, end_str),
+        "SELECT ts_vps FROM metric_sample WHERE deployment_id = ?",
+        (deployment_id,),
     )
-    row = cur.fetchone()
-    return int(row[0]) if row else 0
+    count = 0
+    for row in cur.fetchall():
+        ts_raw = row[0] if not hasattr(row, "keys") else row["ts_vps"]
+        if ts_raw is not None:
+            sample_sec = to_epoch_seconds(ts_raw)
+            if start_sec <= sample_sec < end_sec:
+                count += 1
+    return count

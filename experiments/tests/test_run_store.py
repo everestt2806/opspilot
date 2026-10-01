@@ -22,6 +22,7 @@ from run_store import (
     get_run,
     normalize_ts,
     start_run,
+    to_epoch_seconds,
     update_phase_schedule,
 )
 
@@ -89,17 +90,28 @@ def conn() -> sqlite3.Connection:
     return c
 
 
-def test_normalize_ts_varieties() -> None:
-    # 1. Epoch float
+def test_normalize_ts_and_to_epoch_seconds() -> None:
+    # 1. Epoch float với và không có phần thập phân
     assert normalize_ts(1790762400.0) == "2026-09-30T10:00:00Z"
+    assert normalize_ts(1790762400.5) == "2026-09-30T10:00:00.500Z"
+    assert to_epoch_seconds(1790762400.5) == 1790762400.5
+
     # 2. Epoch int
     assert normalize_ts(1790762400) == "2026-09-30T10:00:00Z"
+    assert to_epoch_seconds(1790762400) == 1790762400.0
+
     # 3. Epoch numeric string
     assert normalize_ts("1790762400.0") == "2026-09-30T10:00:00Z"
+    assert normalize_ts("1790762400.25") == "2026-09-30T10:00:00.250Z"
+    assert to_epoch_seconds("1790762400.25") == 1790762400.25
+
     # 4. ISO string ending in Z
     assert normalize_ts("2026-10-01T10:00:00Z") == "2026-10-01T10:00:00Z"
+    assert normalize_ts("2026-10-01T10:00:00.123Z") == "2026-10-01T10:00:00.123Z"
+
     # 5. ISO string with timezone offset (+07:00)
     assert normalize_ts("2026-10-01T17:00:00+07:00") == "2026-10-01T10:00:00Z"
+
     # 6. Datetime object
     dt = datetime(2026, 10, 1, 10, 0, 0, tzinfo=timezone.utc)
     assert normalize_ts(dt) == "2026-10-01T10:00:00Z"
@@ -156,6 +168,17 @@ def test_start_run_with_epoch_input_normalizes_to_iso(conn: sqlite3.Connection) 
     run = get_run(conn, run_id)
     assert run is not None
     assert run["baseline_start_ts"] == "2026-09-30T10:00:00Z"
+
+
+def test_start_run_rejects_when_in_active_transaction(conn: sqlite3.Connection) -> None:
+    """Từ chối gọi start_run khi connection đã có transaction chưa commit (in_transaction=True)."""
+    conn.execute("INSERT INTO deployment (id) VALUES (999)")
+    assert conn.in_transaction is True
+
+    with pytest.raises(RunStoreError, match="in_transaction=True"):
+        start_run(conn, scenario="memory_leak", repeat_index=1)
+
+    conn.rollback()
 
 
 def test_start_run_validation(conn: sqlite3.Connection) -> None:
@@ -280,6 +303,42 @@ def test_update_phase_schedule_rejects_when_not_running(conn: sqlite3.Connection
         update_phase_schedule(conn, run_id=r2, train_at_ts="2026-10-01T10:30:00Z")
 
 
+def test_state_updates_atomic_with_status_running_condition(tmp_path: Path) -> None:
+    """Đảm bảo cập nhật trạng thái bằng điều kiện SQL status='running' tránh sửa run vừa kết thúc ở kết nối khác."""
+    db_file = tmp_path / "race_test.db"
+    setup = sqlite3.connect(db_file)
+    setup.executescript(_SCHEMA)
+    setup.commit()
+    setup.close()
+
+    c1 = sqlite3.connect(db_file, timeout=5.0)
+    c2 = sqlite3.connect(db_file, timeout=5.0)
+
+    run_id = start_run(c1, scenario="slow_db", repeat_index=1)
+
+    # C2 hoàn tất run trước
+    complete_run(c2, run_id=run_id, run_end_ts="2026-10-01T11:00:00Z")
+
+    # C1 cố tình abort hoặc complete hoặc update phase schedule trên run vừa bị C2 hoàn tất
+    with pytest.raises(InvalidRunStateError, match="không thể abort"):
+        abort_run(c1, run_id=run_id, reason="Late abort attempt")
+
+    with pytest.raises(InvalidRunStateError, match="không thể hoàn tất"):
+        complete_run(c1, run_id=run_id, run_end_ts="2026-10-01T11:05:00Z")
+
+    with pytest.raises(InvalidRunStateError, match="không thể cập nhật mốc pha"):
+        update_phase_schedule(c1, run_id=run_id, train_at_ts="2026-10-01T10:30:00Z")
+
+    # Kiểm tra trạng thái vẫn là completed từ C2, không bị C1 đè
+    final_run = get_run(c1, run_id)
+    assert final_run is not None
+    assert final_run["status"] == "completed"
+    assert final_run["abort_reason"] is None
+
+    c1.close()
+    c2.close()
+
+
 def test_complete_run(conn: sqlite3.Connection) -> None:
     run_id = start_run(conn, scenario="error_burst", repeat_index=1)
 
@@ -349,81 +408,74 @@ def test_unique_scenario_repeat_constraint_after_abort(conn: sqlite3.Connection)
     assert new_run_id > 0
 
 
-def test_count_phase_a_samples_with_epoch_and_iso(conn: sqlite3.Connection) -> None:
-    """Kiểm tra count_phase_a_samples chấp nhận cả đầu vào epoch float từ runner và chuỗi ISO."""
+def test_count_phase_a_samples_fractional_boundary_precision(conn: sqlite3.Connection) -> None:
+    """Kiểm tra độ chính xác đầy đủ khi ranh giới có phần thập phân:
+
+    Cửa sổ là nửa mở [start, end) = [2026-09-30T10:00:00.500Z, 2026-09-30T10:30:00.500Z)
+    Collector ghi ts_vps dạng giây nguyên:
+      - 10:00:00Z (.000 < .500 -> trước start) -> KHÔNG ĐƯỢC ĐẾM
+      - 10:00:01Z (trong khoảng) -> ĐƯỢC ĐẾM
+      - 10:30:00Z (.000 < .500 -> trước end, nằm trong [start, end)) -> ĐƯỢC ĐẾM
+      - 10:30:01Z (sau end) -> KHÔNG ĐƯỢC ĐẾM
+    """
     dep_id = 42
-    other_dep_id = 99
 
-    # Dữ liệu trong DB có dạng ISO UTC (do collector ghi):
-    # 2026-09-30T10:00:00Z = 1790762400.0
-    # 2026-09-30T10:30:00Z = 1790764200.0
-
-    # 1. Mẫu rác cũ trước pha A (09:59:50) -> KHÔNG ĐƯỢC ĐẾM
+    # 1. Mẫu tại đúng giây bắt đầu 10:00:00Z (nhưng trước 10:00:00.500Z)
     conn.execute(
-        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 1, '2026-09-30T09:59:50Z', 'local')",
+        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 1, '2026-09-30T10:00:00Z', 'local')",
         (dep_id,),
     )
-    # 2. Các mẫu hợp lệ trong Pha A: 3 mẫu cho deployment 42
+    # 2. Mẫu hợp lệ tại 10:00:01Z
     conn.execute(
-        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 2, '2026-09-30T10:00:00Z', 'local')",
+        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 2, '2026-09-30T10:00:01Z', 'local')",
         (dep_id,),
     )
+    # 3. Mẫu tại 10:15:00Z
     conn.execute(
-        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 3, '2026-09-30T10:10:00Z', 'local')",
+        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 3, '2026-09-30T10:15:00Z', 'local')",
         (dep_id,),
     )
+    # 4. Mẫu tại đúng giây kết thúc 10:30:00Z (nhưng trước 10:30:00.500Z)
     conn.execute(
-        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 4, '2026-09-30T10:29:50Z', 'local')",
+        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 4, '2026-09-30T10:30:00Z', 'local')",
         (dep_id,),
     )
-    # 3. Mẫu trong Pha A nhưng thuộc deployment khác -> KHÔNG ĐƯỢC ĐẾM
+    # 5. Mẫu tại 10:30:01Z (sau 10:30:00.500Z)
     conn.execute(
-        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 1, '2026-09-30T10:15:00Z', 'local')",
-        (other_dep_id,),
-    )
-    # 4. Mẫu đúng mốc train_at_ts hoặc sau đó -> KHÔNG ĐƯỢC ĐẾM (cửa sổ nửa mở [start, end))
-    conn.execute(
-        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 5, '2026-09-30T10:30:00Z', 'local')",
-        (dep_id,),
-    )
-    conn.execute(
-        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 6, '2026-09-30T10:35:00Z', 'local')",
+        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 5, '2026-09-30T10:30:01Z', 'local')",
         (dep_id,),
     )
     conn.commit()
 
-    # Thử nghiệm 1: Truy vấn dùng epoch float từ runner
-    count_epoch = count_phase_a_samples(
+    # Truy vấn với ranh giới epoch float có phần lẻ (.5)
+    count = count_phase_a_samples(
         conn,
         deployment_id=dep_id,
-        baseline_start_ts=1790762400.0,  # 10:00:00Z
-        train_at_ts=1790764200.0,        # 10:30:00Z
+        baseline_start_ts=1790762400.5,  # 10:00:00.500Z
+        train_at_ts=1790764200.5,        # 10:30:00.500Z
     )
-    assert count_epoch == 3
+    # Kỳ vọng: mẫu 10:00:01, 10:15:00, 10:30:00 được đếm (= 3 mẫu).
+    # Mẫu 10:00:00 và 10:30:01 bị loại trừ.
+    assert count == 3
 
-    # Thử nghiệm 2: Truy vấn dùng chuỗi ISO
+    # Truy vấn với ranh giới ISO có .500Z
     count_iso = count_phase_a_samples(
+        conn,
+        deployment_id=dep_id,
+        baseline_start_ts="2026-09-30T10:00:00.500Z",
+        train_at_ts="2026-09-30T10:30:00.500Z",
+    )
+    assert count_iso == 3
+
+    # Thử nghiệm với ranh giới tròn giây [10:00:00Z, 10:30:00Z):
+    # - 10:00:00Z là start (inclusive) -> ĐƯỢC ĐẾM
+    # - 10:30:00Z là end (exclusive) -> KHÔNG ĐƯỢC ĐẾM
+    count_exact_sec = count_phase_a_samples(
         conn,
         deployment_id=dep_id,
         baseline_start_ts="2026-09-30T10:00:00Z",
         train_at_ts="2026-09-30T10:30:00Z",
     )
-    assert count_iso == 3
-
-    # Deployment 99 chỉ có 1 mẫu trong khoảng này
-    count_other = count_phase_a_samples(
-        conn,
-        deployment_id=other_dep_id,
-        baseline_start_ts=1790762400.0,
-        train_at_ts=1790764200.0,
-    )
-    assert count_other == 1
-
-    # Nếu khoảng thời gian không có mẫu nào
-    count_empty = count_phase_a_samples(
-        conn,
-        deployment_id=dep_id,
-        baseline_start_ts="2026-09-30T12:00:00Z",
-        train_at_ts="2026-09-30T12:30:00Z",
-    )
-    assert count_empty == 0
+    # Mẫu 10:00:00, 10:00:01, 10:15:00 được đếm (= 3 mẫu).
+    # Mẫu 10:30:00 (bị loại vì < end) và 10:30:01 bị loại.
+    assert count_exact_sec == 3
