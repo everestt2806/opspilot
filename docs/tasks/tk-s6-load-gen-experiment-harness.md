@@ -179,12 +179,14 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
   - `analyze.py`: `main_table()` tiếp tục bỏ qua các run không completed (`aborted`, `running`), nhưng đối với run `completed` yêu cầu nghiêm ngặt file `score_sample.csv` phải tồn tại cùng các mốc `train_at_ts`, `fault_start_ts`, `fault_end_ts` hợp lệ (thiếu hoặc sai ném `ValueError` chỉ rõ tên thư mục run, không dùng mốc 1000.0 hay score rỗng); bổ sung `collect_operational_telemetry()` và `operational_table()` theo dõi riêng tỷ lệ thành công attempt 1, retry attempt 2-3 và lý do abort; CLI `cli_main()` đếm riêng số run completed ở tiêu đề bảng chính (`{completed} run completed (tổng {total} run)`) đồng thời in `operational_table()` hiển thị các run aborted và lý do huỷ; hỗ trợ tìm và phân tích run aborted thiếu hoàn toàn `score_sample.csv`.
   - `run_store.py`: chuyển tham số `attempt_index` về cuối chữ ký `start_run()` để bảo toàn tương thích tham số vị trí với 11 đối số có trước.
   - Cập nhật `docs/07` mục 8 định dạng thư mục artifact; test suite bổ sung thêm ca kiểm thử đạt mốc **145 passed** pytest.
-- 02/10 mốc Triển khai P2c-1 — Gắn trực tiếp `alert.experiment_run_id` khi tạo alert trong poller (TK-S6):
-  - `AlertTracker.update()`: nhận tham số `experimentRunId?: number | null`, ghi trực tiếp vào câu lệnh `INSERT INTO alert (..., experiment_run_id)` khi alert được tạo mới, tuyệt đối không dùng UPDATE hàng loạt.
+- 02/10 mốc Triển khai P2c-1 (`7150601` & bản sửa) — Gắn trực tiếp `alert.experiment_run_id` khi tạo alert trong poller (TK-S6):
+  - `AlertTracker.update()`: nhận tham số `experimentRunId?: number | null`, trước khi `INSERT INTO alert` thực hiện kiểm tra `first.ts_vps` của mẫu đầu chuỗi kích hoạt; nếu chuỗi vượt ngưỡng bắt đầu trước `baseline_start_ts`, gán `NULL` thay vì gắn run. Ghi trực tiếp giá trị vào câu lệnh `INSERT INTO alert (..., experiment_run_id)`, tuyệt đối không dùng UPDATE hàng loạt.
   - `MonitorPoller`: trong transaction xử lý metric mẫu, xác định run đang `running` trên cùng `routeDeploymentId` và đối chiếu thời điểm mẫu (`sample.ts_vps`) nằm trong khung thời gian của run (`baseline_start_ts` đến `run_end_ts`); truyền `experimentRunId` vào `AlertTracker.update()` cho cả alert từ rule và ML (zscore_ewma, iforest, ocsvm, ensemble).
-  - Loại trừ nghiêm ngặt: gán `NULL` khi không có run phù hợp, khi mẫu thuộc backlog cũ trước `baseline_start_ts`, khi mẫu thuộc deployment khác, hoặc khi run đã kết thúc (`completed` hoặc `aborted`).
+  - Chuẩn hoá kiểm tra thời gian: nếu thiếu hoặc không parse được thời gian mẫu/baseline thì xử lý theo hướng không gắn run (`return false`); loại bỏ hoàn toàn việc so sánh chuỗi dự phòng.
+  - Xử lý lỗi cơ sở dữ liệu: phân biệt rõ giữa trường hợp "không có run phù hợp" (trả về `null`) với lỗi truy vấn DB (được ném ra ngoại lệ để rollback transaction, không nuốt lỗi bằng `catch { return null }`).
+  - Loại trừ nghiêm ngặt: gán `NULL` khi không có run phù hợp, khi chuỗi bắt đầu trước `baseline_start_ts`, khi mẫu thuộc deployment khác, hoặc khi run đã kết thúc (`completed` hoặc `aborted`).
   - Bảo toàn 100% hành vi monitor thông thường khi không chạy thí nghiệm (alert nhận `NULL`).
-  - Cập nhật test suite: 3 test trong `alertTracker.test.ts`, 11 test trong `poller.test.ts`, toàn bộ 58 vitest monitor pass. Giữ pilot thực tế `NOT_RUN`.
+  - Cập nhật test suite: 3 test trong `alertTracker.test.ts`, 16 test trong `poller.test.ts` (bao gồm test ranh giới run bắt đầu giữa chuỗi mẫu, alert ML, ca aborted thực sự tạo sau khi kết thúc run, và ném lỗi truy vấn DB); đạt mốc **63 passed** vitest monitor. Giữ pilot thực tế `NOT_RUN`.
 
 ## Lệnh tái hiện
 

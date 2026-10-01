@@ -4,7 +4,7 @@ import { logger } from '../logger'
 import { completeByteLength, parseMetricContent } from './metricParser'
 import type { MetricSource } from './metricSource'
 import { MonitorRepository } from './repository'
-import { AlertTracker } from './alertTracker'
+import { AlertTracker, isSampleInRunWindow } from './alertTracker'
 import { evaluateRule } from './rules'
 import { ActivationRepository } from './activation'
 import { withAppLock } from './appLock'
@@ -27,43 +27,6 @@ function ensembleAbove(result: MlIngestResponse | undefined, threshold: number):
       (method) => result.scores[method] !== null && result.scores[method]! > threshold
     ).length >= 2
   )
-}
-function parseTimestampMs(val: string | number | null | undefined): number | null {
-  if (val === null || val === undefined) return null
-  if (typeof val === 'number') return Number.isFinite(val) ? (val < 1e11 ? val * 1000 : val) : null
-  const s = String(val).trim()
-  if (!s) return null
-  const num = Number(s)
-  if (!Number.isNaN(num) && /^-?\d+(\.\d+)?$/.test(s)) {
-    return num < 1e11 ? num * 1000 : num
-  }
-  const parsed = Date.parse(s)
-  return Number.isNaN(parsed) ? null : parsed
-}
-
-function isSampleInRunWindow(
-  sampleTs: string,
-  startTs: string | null,
-  endTs: string | null
-): boolean {
-  const sampleMs = parseTimestampMs(sampleTs)
-  if (startTs !== null) {
-    const startMs = parseTimestampMs(startTs)
-    if (sampleMs !== null && startMs !== null) {
-      if (sampleMs < startMs) return false
-    } else {
-      if (sampleTs < startTs) return false
-    }
-  }
-  if (endTs !== null) {
-    const endMs = parseTimestampMs(endTs)
-    if (sampleMs !== null && endMs !== null) {
-      if (sampleMs > endMs) return false
-    } else {
-      if (sampleTs > endTs) return false
-    }
-  }
-  return true
 }
 
 export interface MlStatusReporter {
@@ -351,26 +314,22 @@ export class MonitorPoller {
   }
 
   private getMatchingExperimentRunId(deploymentId: number, tsVps: string): number | null {
-    try {
-      const run = this.database
-        .prepare(
-          `SELECT id, baseline_start_ts, run_end_ts
-           FROM experiment_run
-           WHERE status = 'running'
-             AND deployment_id = ?
-           ORDER BY id DESC
-           LIMIT 1`
-        )
-        .get(deploymentId) as
-        { id: number; baseline_start_ts: string | null; run_end_ts: string | null } | undefined
-      if (!run) return null
+    const run = this.database
+      .prepare(
+        `SELECT id, baseline_start_ts, run_end_ts
+         FROM experiment_run
+         WHERE status = 'running'
+           AND deployment_id = ?
+         ORDER BY id DESC
+         LIMIT 1`
+      )
+      .get(deploymentId) as
+      { id: number; baseline_start_ts: string | null; run_end_ts: string | null } | undefined
+    if (!run) return null
 
-      if (!isSampleInRunWindow(tsVps, run.baseline_start_ts, run.run_end_ts)) {
-        return null
-      }
-      return run.id
-    } catch {
+    if (!isSampleInRunWindow(tsVps, run.baseline_start_ts, run.run_end_ts)) {
       return null
     }
+    return run.id
   }
 }

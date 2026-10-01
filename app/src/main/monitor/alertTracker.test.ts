@@ -121,10 +121,13 @@ describe('AlertTracker', () => {
   it('ghi trực tiếp experiment_run_id khi tạo alert và mặc định null khi không truyền', () => {
     const db = new Database(':memory:')
     db.exec(
-      'CREATE TABLE score_sample (id INTEGER PRIMARY KEY, deployment_id INTEGER, method TEXT, above_threshold INTEGER, metric_sample_id INTEGER, score REAL, ts_vps TEXT); CREATE TABLE alert (id INTEGER PRIMARY KEY, deployment_id INTEGER, metric_sample_id INTEGER, method TEXT, ts_vps TEXT, ts_resolved TEXT, peak_score REAL, detail_json TEXT, experiment_run_id INTEGER); CREATE TABLE action_log (id INTEGER PRIMARY KEY, action TEXT, status TEXT, message TEXT, deployment_id INTEGER)'
+      'CREATE TABLE score_sample (id INTEGER PRIMARY KEY, deployment_id INTEGER, method TEXT, above_threshold INTEGER, metric_sample_id INTEGER, score REAL, ts_vps TEXT); CREATE TABLE alert (id INTEGER PRIMARY KEY, deployment_id INTEGER, metric_sample_id INTEGER, method TEXT, ts_vps TEXT, ts_resolved TEXT, peak_score REAL, detail_json TEXT, experiment_run_id INTEGER); CREATE TABLE action_log (id INTEGER PRIMARY KEY, action TEXT, status TEXT, message TEXT, deployment_id INTEGER); CREATE TABLE experiment_run (id INTEGER PRIMARY KEY, status TEXT, baseline_start_ts TEXT, run_end_ts TEXT, deployment_id INTEGER);'
     )
+    db.prepare(
+      "INSERT INTO experiment_run (id, status, baseline_start_ts, run_end_ts, deployment_id) VALUES (42, 'running', '2026-01-01T00:00:00Z', NULL, 1)"
+    ).run()
     const tracker = new AlertTracker(db)
-    // 1. Alert với experimentRunId = 42
+    // 1. Alert với experimentRunId = 42 khi first.ts_vps nằm sau baseline_start_ts
     for (let i = 1; i <= 3; i += 1) {
       db.prepare('INSERT INTO score_sample VALUES (?,?,?,?,?,?,?)').run(
         i,
@@ -178,5 +181,36 @@ describe('AlertTracker', () => {
       experiment_run_id: number | null
     }
     expect(alertWithoutRun.experiment_run_id).toBeNull()
+
+    // 3. Chuỗi bắt đầu trước baseline_start_ts (first.ts_vps < baseline_start_ts) -> null
+    db.prepare(
+      "INSERT INTO experiment_run (id, status, baseline_start_ts, run_end_ts, deployment_id) VALUES (43, 'running', '2026-01-01T00:00:08Z', NULL, 3)"
+    ).run()
+    for (let i = 7; i <= 9; i += 1) {
+      db.prepare('INSERT INTO score_sample VALUES (?,?,?,?,?,?,?)').run(
+        i,
+        3,
+        'rule',
+        1,
+        i,
+        1,
+        `2026-01-01T00:00:0${i}Z`
+      )
+      tracker.update({
+        deploymentId: 3,
+        metricSampleId: i,
+        ts: `2026-01-01T00:00:0${i}Z`,
+        method: 'rule',
+        score: 1,
+        above: true,
+        threshold: 0,
+        consecutive: 3,
+        experimentRunId: 43
+      })
+    }
+    const alertPreBaseline = db.prepare('SELECT experiment_run_id FROM alert WHERE id=3').get() as {
+      experiment_run_id: number | null
+    }
+    expect(alertPreBaseline.experiment_run_id).toBeNull()
   })
 })

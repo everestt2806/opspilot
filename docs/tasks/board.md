@@ -52,7 +52,7 @@ manual-only, không push/PR/merge.
 | P2b-1 | Migration 005: attempt_index 1..3 & unique 3 trường cho experiment_run | Worker | 01/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `25a3bac` | Migration runner tắt foreign_keys trước tx, kiểm tra toàn vẹn ID/alert và foreign_key_check trước commit; test rollback và migrate thành công trực tiếp trên kết nối; 9 test DB pass |
 | P2b-2 | Attempt lifecycle trong run_store.py (TK-S6) | Worker | 01/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `5547a85` | start_run cấp attempt 1..3 nguyên tử trong BEGIN IMMEDIATE, kiểm soát retry sau abort, từ chối sau completed, bảo toàn tx ownership; 135 pytest pass |
 | P2b-3 | Export và analyze theo attempt (TK-S6) | Worker | 01/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `6f5405b`, `50343e5`, `604685a` | export_run độc quyền thư mục, bảo vệ meta_extra không đè DB; main_table yêu cầu đủ dữ liệu với completed và bỏ qua aborted; 145 pytest pass |
-| P2c-1 | Gắn alert.experiment_run_id trực tiếp khi tạo alert trong poller | Worker | 02/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit local P2c-1 | Gắn trực tiếp experiment_run_id khi tạo alert trong tx poller theo deployment và timestamp window, không UPDATE hàng loạt, loại trừ backlog/ended run; 58 vitest monitor pass, pilot NOT_RUN |
+| P2c-1 | Gắn alert.experiment_run_id trực tiếp khi tạo alert trong poller | Worker | 02/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `7150601`, bản sửa | Gắn trực tiếp experiment_run_id khi tạo alert trong tx poller theo deployment và first.ts_vps, không UPDATE hàng loạt, loại trừ chuỗi bắt đầu trước baseline/ended run, ném lỗi truy vấn DB thay vì nuốt; 63 vitest monitor pass, pilot NOT_RUN |
 
 ### Task theo dõi song song / sau demo
 
