@@ -162,11 +162,11 @@ python experiments/run_experiment.py --scenario memory_leak --repeat 1..10 --vps
 Các bước (mỗi bước ghi `action_log`; lỗi ở bất kỳ đâu → `status='aborted'` + lý do, và
 **tự động chạy lại run đó ở cuối hàng đợi**, tối đa 2 lần):
 
-> **Ghi chú rà soát 28/07/2026 — đề xuất, chưa đổi schema:** contract hiện có
-> `UNIQUE(scenario, repeat_index)`, nên không thể lưu riêng run bị huỷ và lần retry cùng chỉ số.
-> Đề xuất thêm `attempt_index` (1..3), đổi unique thành
-> `(scenario, repeat_index, attempt_index)`, và export theo thư mục có attempt. `analyze.py`
-> chỉ lấy attempt `completed` vào bảng chính nhưng vẫn báo cáo đầy đủ số attempt bị huỷ và lý do.
+> **Ghi chú rà soát (Đã hoàn tất ở Migration 005, P2b):** Schema đã bổ sung cột
+> `attempt_index` (1..3, mặc định 1 cho dữ liệu legacy) và cập nhật ràng buộc
+> `UNIQUE(scenario, repeat_index, attempt_index)`. Export dữ liệu theo thư mục có attempt
+> (`run_<scenario>_<repeat>_att<N>`). `analyze.py` chỉ lấy attempt `completed` vào bảng chính
+> đồng thời báo cáo đầy đủ số attempt bị huỷ và lý do trong bảng vận hành (`operational_table()`).
 
 1. Đo lệch đồng hồ → huỷ nếu `|offset| > 2000ms`.
 2. `docker compose down -v` trên VPS, deploy lại app demo từ đầu → `deployment_id` mới.

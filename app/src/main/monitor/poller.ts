@@ -28,6 +28,44 @@ function ensembleAbove(result: MlIngestResponse | undefined, threshold: number):
     ).length >= 2
   )
 }
+function parseTimestampMs(val: string | number | null | undefined): number | null {
+  if (val === null || val === undefined) return null
+  if (typeof val === 'number') return Number.isFinite(val) ? (val < 1e11 ? val * 1000 : val) : null
+  const s = String(val).trim()
+  if (!s) return null
+  const num = Number(s)
+  if (!Number.isNaN(num) && /^-?\d+(\.\d+)?$/.test(s)) {
+    return num < 1e11 ? num * 1000 : num
+  }
+  const parsed = Date.parse(s)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
+function isSampleInRunWindow(
+  sampleTs: string,
+  startTs: string | null,
+  endTs: string | null
+): boolean {
+  const sampleMs = parseTimestampMs(sampleTs)
+  if (startTs !== null) {
+    const startMs = parseTimestampMs(startTs)
+    if (sampleMs !== null && startMs !== null) {
+      if (sampleMs < startMs) return false
+    } else {
+      if (sampleTs < startTs) return false
+    }
+  }
+  if (endTs !== null) {
+    const endMs = parseTimestampMs(endTs)
+    if (sampleMs !== null && endMs !== null) {
+      if (sampleMs > endMs) return false
+    } else {
+      if (sampleTs > endTs) return false
+    }
+  }
+  return true
+}
+
 export interface MlStatusReporter {
   report(status: { running: boolean; reason?: string }): void
 }
@@ -237,6 +275,7 @@ export class MonitorPoller {
         if (id !== 0) {
           inserted += 1
           const sample = this.repository.getMetric(id)
+          const experimentRunId = this.getMatchingExperimentRunId(routeDeploymentId, sample.ts_vps)
           const rule = evaluateRule(sample, target.setting)
           this.repository.insertScore({
             metricSampleId: id,
@@ -256,7 +295,8 @@ export class MonitorPoller {
             above: rule.violated,
             threshold: 0,
             consecutive: target.setting.rule_consecutive,
-            detail: JSON.stringify({ reasons: rule.reasons })
+            detail: JSON.stringify({ reasons: rule.reasons }),
+            experimentRunId
           })
           if (ruleAlertId) alertIds.push(ruleAlertId)
           for (const method of ['zscore_ewma', 'iforest', 'ocsvm', 'ensemble'] as const)
@@ -288,7 +328,8 @@ export class MonitorPoller {
                   ? ensembleAbove(result, target.setting.ml_score_threshold)
                   : score !== null && score > target.setting.ml_score_threshold,
               threshold: target.setting.ml_score_threshold,
-              consecutive: target.setting.ml_consecutive
+              consecutive: target.setting.ml_consecutive,
+              experimentRunId
             })
             if (mlAlertId) alertIds.push(mlAlertId)
           }
@@ -306,6 +347,30 @@ export class MonitorPoller {
       alertIds,
       hadWarnings,
       warningRanges
+    }
+  }
+
+  private getMatchingExperimentRunId(deploymentId: number, tsVps: string): number | null {
+    try {
+      const run = this.database
+        .prepare(
+          `SELECT id, baseline_start_ts, run_end_ts
+           FROM experiment_run
+           WHERE status = 'running'
+             AND deployment_id = ?
+           ORDER BY id DESC
+           LIMIT 1`
+        )
+        .get(deploymentId) as
+        { id: number; baseline_start_ts: string | null; run_end_ts: string | null } | undefined
+      if (!run) return null
+
+      if (!isSampleInRunWindow(tsVps, run.baseline_start_ts, run.run_end_ts)) {
+        return null
+      }
+      return run.id
+    } catch {
+      return null
     }
   }
 }

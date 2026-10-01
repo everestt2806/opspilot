@@ -174,11 +174,17 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
   - Toàn bộ logic kiểm tra và cấp phát attempt được thực thi nguyên tử trong cùng transaction `BEGIN IMMEDIATE`.
   - Bảo toàn quyền sở hữu transaction của caller (hỗ trợ `auto_commit=False` và từ chối an toàn khi `in_transaction=True`).
   - Cập nhật test suite cho schema migration 005 và bổ sung các ca kiểm thử: cấp attempt tự động, attempt tường minh, từ chối nhảy số/lặp số, từ chối sau completed, ràng buộc DB SQLite, và hai kết nối cạnh tranh retry; đạt mốc **135 passed** pytest.
-- 01/10 mốc Triển khai P2b-3 (`6f5405b`, `50343e5` & bản sửa) — Export và analyze theo attempt (TK-S6):
+- 01/10 mốc Triển khai P2b-3 (`6f5405b`, `50343e5`, `604685a`) — Export và analyze theo attempt (TK-S6):
   - `export_results.py`: bổ sung `attempt_index` vào `experiment_run.csv` và `meta.json`; `run_dir_for()` định dạng `run_<scenario>_<repeat>_att<attempt>`; kiểm tra run tồn tại trong DB trước khi chiếm thư mục (ID không tồn tại thì ném `ValueError` và không tạo thư mục); chiếm thư mục bằng thao tác tạo độc quyền (`mkdir(exist_ok=False)`), từ chối và ném `FileExistsError` nếu thư mục đã tồn tại trước đó; `_write_csv()` chỉ cho phép fallback `attempt_index=1` cho dữ liệu legacy, thiếu cột khác ném `KeyError`; ngăn `meta_extra` ghi đè các trường định danh/trạng thái lấy từ DB (`run_id`, `scenario`, `repeat_index`, `attempt_index`, `status`), bảo đảm CSV và meta luôn khớp.
   - `analyze.py`: `main_table()` tiếp tục bỏ qua các run không completed (`aborted`, `running`), nhưng đối với run `completed` yêu cầu nghiêm ngặt file `score_sample.csv` phải tồn tại cùng các mốc `train_at_ts`, `fault_start_ts`, `fault_end_ts` hợp lệ (thiếu hoặc sai ném `ValueError` chỉ rõ tên thư mục run, không dùng mốc 1000.0 hay score rỗng); bổ sung `collect_operational_telemetry()` và `operational_table()` theo dõi riêng tỷ lệ thành công attempt 1, retry attempt 2-3 và lý do abort; CLI `cli_main()` đếm riêng số run completed ở tiêu đề bảng chính (`{completed} run completed (tổng {total} run)`) đồng thời in `operational_table()` hiển thị các run aborted và lý do huỷ; hỗ trợ tìm và phân tích run aborted thiếu hoàn toàn `score_sample.csv`.
   - `run_store.py`: chuyển tham số `attempt_index` về cuối chữ ký `start_run()` để bảo toàn tương thích tham số vị trí với 11 đối số có trước.
   - Cập nhật `docs/07` mục 8 định dạng thư mục artifact; test suite bổ sung thêm ca kiểm thử đạt mốc **145 passed** pytest.
+- 02/10 mốc Triển khai P2c-1 — Gắn trực tiếp `alert.experiment_run_id` khi tạo alert trong poller (TK-S6):
+  - `AlertTracker.update()`: nhận tham số `experimentRunId?: number | null`, ghi trực tiếp vào câu lệnh `INSERT INTO alert (..., experiment_run_id)` khi alert được tạo mới, tuyệt đối không dùng UPDATE hàng loạt.
+  - `MonitorPoller`: trong transaction xử lý metric mẫu, xác định run đang `running` trên cùng `routeDeploymentId` và đối chiếu thời điểm mẫu (`sample.ts_vps`) nằm trong khung thời gian của run (`baseline_start_ts` đến `run_end_ts`); truyền `experimentRunId` vào `AlertTracker.update()` cho cả alert từ rule và ML (zscore_ewma, iforest, ocsvm, ensemble).
+  - Loại trừ nghiêm ngặt: gán `NULL` khi không có run phù hợp, khi mẫu thuộc backlog cũ trước `baseline_start_ts`, khi mẫu thuộc deployment khác, hoặc khi run đã kết thúc (`completed` hoặc `aborted`).
+  - Bảo toàn 100% hành vi monitor thông thường khi không chạy thí nghiệm (alert nhận `NULL`).
+  - Cập nhật test suite: 3 test trong `alertTracker.test.ts`, 11 test trong `poller.test.ts`, toàn bộ 58 vitest monitor pass. Giữ pilot thực tế `NOT_RUN`.
 
 ## Lệnh tái hiện
 
@@ -294,12 +300,10 @@ python experiments/analyze.py experiments/results/   # in bảng chính
 2. **Thiếu liên kết ghi bản ghi vòng đời `experiment_run` vào SQLite**:
    - `run_experiment.py` hoàn toàn không có câu lệnh SQLite nào: không tạo bản ghi `experiment_run` (trạng thái `running`), không cập nhật `baseline_start_ts`, `train_at_ts`, `fault_start_ts`, `fault_end_ts`, `status='completed'/'aborted'`.
    - Trong khi đó, `export_results.py` bắt buộc phải có dòng `experiment_run` tương ứng trong DB để xuất ra `experiment_run.csv` và `meta.json`.
-3. **Mối liên kết giữa `alert` và `experiment_run_id` bị hở**:
-   - `alertTracker.ts` trong app hiện tại chỉ insert vào `alert` các trường `(deployment_id, metric_sample_id, method, ts_vps, peak_score, detail_json)` mà KHÔNG điền trường `experiment_run_id`.
-   - **Không áp dụng giải pháp UPDATE hàng loạt** theo deployment và thời gian vì thiếu an toàn, dễ gây nhầm lẫn hoặc ghi đè dữ liệu giữa các run.
-   - **Đề xuất giải pháp có kiểm soát**:
-     - *Cách A (Gắn trực tiếp khi tạo)*: Bổ sung tham số `experiment_run_id?: number | null` vào hàm `AlertTracker.update()` và câu lệnh `INSERT INTO alert`. Khi có run thí nghiệm đang active, poller truyền trực tiếp ID này vào.
-     - *Cách B (Quy tắc không chồng run — Single Active Run)*: Tuân thủ nghiêm ngặt quy tắc `CLAUDE.md` mục 9: tại một thời điểm chỉ cho phép duy nhất 1 run có `status='running'`. Hệ thống giám sát lưu context `active_experiment_run_id` để tự động gán chính xác cho các alert phát sinh trong phiên.
+3. **Mối liên kết giữa `alert` và `experiment_run_id` (Đã hoàn tất ở Checkpoint P2c-1)**:
+   - `AlertTracker.update()` và câu lệnh `INSERT INTO alert` đã nhận và điền trực tiếp `experiment_run_id` khi tạo alert mới.
+   - `MonitorPoller` trong transaction tự động tra cứu run `running` trên cùng `routeDeploymentId` và trong timestamp window (`baseline_start_ts` đến `run_end_ts`) để truyền vào, không dùng UPDATE hàng loạt.
+   - Khi không có run phù hợp, mẫu thuộc backlog cũ, deployment khác hoặc run đã kết thúc, `experiment_run_id` được giữ `NULL`.
 4. **Chưa có cơ chế điều phối tự động tải (Loadgen) và Deploy trên VPS qua SSH**:
    - Đoạn `run_experiment.py:77` mới chỉ là chú thích: `# 2-4. (Deploy sạch / POST /reset / start load-gen) — thực hiện qua pipeline app + compose thí nghiệm`.
    - Chưa có hàm SSH để `docker compose up -d` container loadgen và dừng loadgen ở teardown.

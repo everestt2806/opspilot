@@ -6,7 +6,7 @@ describe('AlertTracker', () => {
   it('mở một alert, cập nhật peak và resolve sau ba mẫu thấp', () => {
     const db = new Database(':memory:')
     db.exec(
-      'CREATE TABLE score_sample (id INTEGER PRIMARY KEY, deployment_id INTEGER, method TEXT, above_threshold INTEGER, metric_sample_id INTEGER, score REAL, ts_vps TEXT); CREATE TABLE alert (id INTEGER PRIMARY KEY, deployment_id INTEGER, metric_sample_id INTEGER, method TEXT, ts_vps TEXT, ts_resolved TEXT, peak_score REAL, detail_json TEXT); CREATE TABLE action_log (id INTEGER PRIMARY KEY, action TEXT, status TEXT, message TEXT, deployment_id INTEGER)'
+      'CREATE TABLE score_sample (id INTEGER PRIMARY KEY, deployment_id INTEGER, method TEXT, above_threshold INTEGER, metric_sample_id INTEGER, score REAL, ts_vps TEXT); CREATE TABLE alert (id INTEGER PRIMARY KEY, deployment_id INTEGER, metric_sample_id INTEGER, method TEXT, ts_vps TEXT, ts_resolved TEXT, peak_score REAL, detail_json TEXT, experiment_run_id INTEGER); CREATE TABLE action_log (id INTEGER PRIMARY KEY, action TEXT, status TEXT, message TEXT, deployment_id INTEGER)'
     )
     const tracker = new AlertTracker(db)
     for (let i = 1; i <= 3; i += 1) {
@@ -61,7 +61,7 @@ describe('AlertTracker', () => {
   it('khôi phục chuỗi high/low sau restart và theo dõi độc lập năm method', () => {
     const db = new Database(':memory:')
     db.exec(
-      'CREATE TABLE score_sample (id INTEGER PRIMARY KEY, deployment_id INTEGER, method TEXT, above_threshold INTEGER, metric_sample_id INTEGER, score REAL, ts_vps TEXT); CREATE TABLE alert (id INTEGER PRIMARY KEY, deployment_id INTEGER, metric_sample_id INTEGER, method TEXT, ts_vps TEXT, ts_resolved TEXT, peak_score REAL, detail_json TEXT); CREATE TABLE action_log (id INTEGER PRIMARY KEY, action TEXT, status TEXT, message TEXT, deployment_id INTEGER)'
+      'CREATE TABLE score_sample (id INTEGER PRIMARY KEY, deployment_id INTEGER, method TEXT, above_threshold INTEGER, metric_sample_id INTEGER, score REAL, ts_vps TEXT); CREATE TABLE alert (id INTEGER PRIMARY KEY, deployment_id INTEGER, metric_sample_id INTEGER, method TEXT, ts_vps TEXT, ts_resolved TEXT, peak_score REAL, detail_json TEXT, experiment_run_id INTEGER); CREATE TABLE action_log (id INTEGER PRIMARY KEY, action TEXT, status TEXT, message TEXT, deployment_id INTEGER)'
     )
     const methods = ['rule', 'zscore_ewma', 'iforest', 'ocsvm', 'ensemble'] as const
     let id = 1
@@ -116,5 +116,67 @@ describe('AlertTracker', () => {
         }
       ).ts_resolved
     ).not.toBeNull()
+  })
+
+  it('ghi trực tiếp experiment_run_id khi tạo alert và mặc định null khi không truyền', () => {
+    const db = new Database(':memory:')
+    db.exec(
+      'CREATE TABLE score_sample (id INTEGER PRIMARY KEY, deployment_id INTEGER, method TEXT, above_threshold INTEGER, metric_sample_id INTEGER, score REAL, ts_vps TEXT); CREATE TABLE alert (id INTEGER PRIMARY KEY, deployment_id INTEGER, metric_sample_id INTEGER, method TEXT, ts_vps TEXT, ts_resolved TEXT, peak_score REAL, detail_json TEXT, experiment_run_id INTEGER); CREATE TABLE action_log (id INTEGER PRIMARY KEY, action TEXT, status TEXT, message TEXT, deployment_id INTEGER)'
+    )
+    const tracker = new AlertTracker(db)
+    // 1. Alert với experimentRunId = 42
+    for (let i = 1; i <= 3; i += 1) {
+      db.prepare('INSERT INTO score_sample VALUES (?,?,?,?,?,?,?)').run(
+        i,
+        1,
+        'rule',
+        1,
+        i,
+        1,
+        `2026-01-01T00:00:0${i}Z`
+      )
+      tracker.update({
+        deploymentId: 1,
+        metricSampleId: i,
+        ts: `2026-01-01T00:00:0${i}Z`,
+        method: 'rule',
+        score: 1,
+        above: true,
+        threshold: 0,
+        consecutive: 3,
+        experimentRunId: 42
+      })
+    }
+    const alertWithRun = db.prepare('SELECT experiment_run_id FROM alert WHERE id=1').get() as {
+      experiment_run_id: number | null
+    }
+    expect(alertWithRun.experiment_run_id).toBe(42)
+
+    // 2. Alert khác không có experimentRunId -> null
+    for (let i = 4; i <= 6; i += 1) {
+      db.prepare('INSERT INTO score_sample VALUES (?,?,?,?,?,?,?)').run(
+        i,
+        2,
+        'rule',
+        1,
+        i,
+        1,
+        `2026-01-01T00:00:0${i}Z`
+      )
+      tracker.update({
+        deploymentId: 2,
+        metricSampleId: i,
+        ts: `2026-01-01T00:00:0${i}Z`,
+        method: 'rule',
+        score: 1,
+        above: true,
+        threshold: 0,
+        consecutive: 3
+      })
+    }
+    const alertWithoutRun = db.prepare('SELECT experiment_run_id FROM alert WHERE id=2').get() as {
+      experiment_run_id: number | null
+    }
+    expect(alertWithoutRun.experiment_run_id).toBeNull()
   })
 })

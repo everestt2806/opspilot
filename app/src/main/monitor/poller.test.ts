@@ -23,6 +23,22 @@ const metric = (seq: number): string =>
     host_mem_pct: null,
     collector_version: '1.0.0'
   })
+const alertMetric = (seq: number, ts?: string): string =>
+  JSON.stringify({
+    seq,
+    ts: ts ?? `2026-08-30T00:00:${String(seq).padStart(2, '0')}Z`,
+    cpu_pct: 95,
+    mem_mb: 2,
+    mem_pct: 95,
+    mem_limit_mb: 4,
+    latency_ms: null,
+    http_error_rate: 0,
+    db_response_ms: null,
+    container_up: 1,
+    host_cpu_pct: null,
+    host_mem_pct: null,
+    collector_version: '1.0.0'
+  })
 const source = (content: string): MetricSource => ({
   size: async () => Buffer.byteLength(content),
   tail: async (offset) => content.slice(Buffer.byteLength(content.slice(0, offset - 1), 'utf8'))
@@ -172,5 +188,119 @@ describe('MonitorPoller ingest', () => {
         .prepare("SELECT score FROM score_sample WHERE metric_sample_id=2 AND method='zscore_ewma'")
         .get()
     ).toEqual({ score: null })
+  })
+
+  it('gắn alert.experiment_run_id khi sample khớp với run đang running cùng deployment và trong khung thời gian', async () => {
+    const db = seed()
+    const poller = new MonitorPoller(db)
+    db.prepare(
+      `INSERT INTO experiment_run (id, scenario, repeat_index, attempt_index, deployment_id, baseline_start_ts, status)
+       VALUES (10, 'cpu_spike', 1, 1, 1, '2026-08-30T00:00:00Z', 'running')`
+    ).run()
+
+    const content = `${alertMetric(1)}\n${alertMetric(2)}\n${alertMetric(3)}\n`
+    const res = await poller.poll(1, 1, source(content))
+    expect(res.alertIds.length).toBeGreaterThan(0)
+    const alert = db
+      .prepare('SELECT id, experiment_run_id FROM alert WHERE id=?')
+      .get(res.alertIds[0]) as {
+      id: number
+      experiment_run_id: number | null
+    }
+    expect(alert.experiment_run_id).toBe(10)
+  })
+
+  it('không gắn experiment_run_id cho alert phát sinh từ backlog cũ trước baseline_start_ts', async () => {
+    const db = seed()
+    const poller = new MonitorPoller(db)
+    // Run bắt đầu lúc 00:05:00Z, nhưng sample là 00:00:01Z..00:00:03Z (backlog cũ)
+    db.prepare(
+      `INSERT INTO experiment_run (id, scenario, repeat_index, attempt_index, deployment_id, baseline_start_ts, status)
+       VALUES (11, 'cpu_spike', 1, 1, 1, '2026-08-30T00:05:00Z', 'running')`
+    ).run()
+
+    const content = `${alertMetric(1)}\n${alertMetric(2)}\n${alertMetric(3)}\n`
+    const res = await poller.poll(1, 1, source(content))
+    expect(res.alertIds.length).toBeGreaterThan(0)
+    const alert = db
+      .prepare('SELECT id, experiment_run_id FROM alert WHERE id=?')
+      .get(res.alertIds[0]) as {
+      id: number
+      experiment_run_id: number | null
+    }
+    expect(alert.experiment_run_id).toBeNull()
+  })
+
+  it('không gắn experiment_run_id khi alert thuộc deployment khác với run đang running', async () => {
+    const db = seed()
+    const poller = new MonitorPoller(db)
+    // Insert deployment 2 để thoả mãn foreign key
+    db.prepare(
+      "INSERT INTO deployment (id, app_id, version, image_tag, status) VALUES (2, 1, 2, 'app:v2', 'running')"
+    ).run()
+    // Run đang chạy gắn với deployment 2
+    db.prepare(
+      `INSERT INTO experiment_run (id, scenario, repeat_index, attempt_index, deployment_id, baseline_start_ts, status)
+       VALUES (12, 'cpu_spike', 1, 1, 2, '2026-08-30T00:00:00Z', 'running')`
+    ).run()
+
+    // Poller chạy cho deployment 1
+    const content = `${alertMetric(1)}\n${alertMetric(2)}\n${alertMetric(3)}\n`
+    const res = await poller.poll(1, 1, source(content))
+    expect(res.alertIds.length).toBeGreaterThan(0)
+    const alert = db
+      .prepare('SELECT id, experiment_run_id FROM alert WHERE id=?')
+      .get(res.alertIds[0]) as {
+      id: number
+      experiment_run_id: number | null
+    }
+    expect(alert.experiment_run_id).toBeNull()
+  })
+
+  it('không gắn experiment_run_id khi run đã kết thúc (completed hoặc aborted)', async () => {
+    const db = seed()
+    const poller = new MonitorPoller(db)
+    // Run đã completed
+    db.prepare(
+      `INSERT INTO experiment_run (id, scenario, repeat_index, attempt_index, deployment_id, baseline_start_ts, run_end_ts, status)
+       VALUES (13, 'cpu_spike', 1, 1, 1, '2026-08-30T00:00:00Z', '2026-08-30T00:10:00Z', 'completed')`
+    ).run()
+
+    const content = `${alertMetric(1)}\n${alertMetric(2)}\n${alertMetric(3)}\n`
+    const res = await poller.poll(1, 1, source(content))
+    expect(res.alertIds.length).toBeGreaterThan(0)
+    const alert = db
+      .prepare('SELECT id, experiment_run_id FROM alert WHERE id=?')
+      .get(res.alertIds[0]) as {
+      id: number
+      experiment_run_id: number | null
+    }
+    expect(alert.experiment_run_id).toBeNull()
+
+    // Kiểm tra tương tự với aborted
+    db.prepare("UPDATE experiment_run SET status='aborted' WHERE id=13").run()
+    const alert2 = db
+      .prepare('SELECT id, experiment_run_id FROM alert WHERE id=?')
+      .get(res.alertIds[0]) as {
+      id: number
+      experiment_run_id: number | null
+    }
+    expect(alert2.experiment_run_id).toBeNull()
+  })
+
+  it('giữ nguyên hành vi monitor thông thường khi không có experiment_run và để experiment_run_id là NULL', async () => {
+    const db = seed()
+    const poller = new MonitorPoller(db)
+    // Không có experiment_run trong DB
+    const content = `${alertMetric(1)}\n${alertMetric(2)}\n${alertMetric(3)}\n`
+    const res = await poller.poll(1, 1, source(content))
+    expect(res.alertIds.length).toBeGreaterThan(0)
+    const alert = db
+      .prepare('SELECT id, experiment_run_id FROM alert WHERE id=?')
+      .get(res.alertIds[0]) as {
+      id: number
+      experiment_run_id: number | null
+    }
+    expect(alert.experiment_run_id).toBeNull()
   })
 })

@@ -14,6 +14,7 @@ export class AlertTracker {
     threshold: number
     consecutive: number
     detail?: string
+    experimentRunId?: number | null
   }): number | null {
     const rows = this.db
       .prepare(
@@ -50,7 +51,7 @@ export class AlertTracker {
       const first = rows[input.consecutive - 1]
       const result = this.db
         .prepare(
-          'INSERT INTO alert (deployment_id,metric_sample_id,method,ts_vps,peak_score,detail_json) VALUES (?,?,?,?,?,?)'
+          'INSERT INTO alert (deployment_id,metric_sample_id,method,ts_vps,peak_score,detail_json,experiment_run_id) VALUES (?,?,?,?,?,?,?)'
         )
         .run(
           input.deploymentId,
@@ -58,7 +59,8 @@ export class AlertTracker {
           input.method,
           first.ts_vps,
           Math.max(...rows.slice(0, input.consecutive).map((row) => row.score ?? 0)),
-          input.detail ?? null
+          input.detail ?? null,
+          input.experimentRunId ?? null
         )
       this.db
         .prepare('INSERT INTO action_log (action,status,message,deployment_id) VALUES (?,?,?,?)')
