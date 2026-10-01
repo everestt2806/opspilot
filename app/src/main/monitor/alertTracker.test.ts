@@ -212,6 +212,37 @@ describe('AlertTracker', () => {
       experiment_run_id: number | null
     }
     expect(alertPreBaseline.experiment_run_id).toBeNull()
+
+    // 4. Chuỗi với mẫu giây nguyên trước baseline microsecond 500µs -> null
+    db.prepare(
+      "INSERT INTO experiment_run (id, status, baseline_start_ts, run_end_ts, deployment_id) VALUES (44, 'running', '2026-01-01T00:00:10.000500Z', NULL, 4)"
+    ).run()
+    for (let i = 10; i <= 12; i += 1) {
+      db.prepare('INSERT INTO score_sample VALUES (?,?,?,?,?,?,?)').run(
+        i,
+        4,
+        'rule',
+        1,
+        i,
+        1,
+        `2026-01-01T00:00:${i}Z`
+      )
+      tracker.update({
+        deploymentId: 4,
+        metricSampleId: i,
+        ts: `2026-01-01T00:00:${i}Z`,
+        method: 'rule',
+        score: 1,
+        above: true,
+        threshold: 0,
+        consecutive: 3,
+        experimentRunId: 44
+      })
+    }
+    const alertSubMs = db.prepare('SELECT experiment_run_id FROM alert WHERE id=4').get() as {
+      experiment_run_id: number | null
+    }
+    expect(alertSubMs.experiment_run_id).toBeNull()
   })
 
   describe('parseTimestampUs & isSampleInRunWindow', () => {
@@ -241,18 +272,25 @@ describe('AlertTracker', () => {
       expect(parseTimestampUs(Infinity)).toBeNull()
     })
 
-    it('so sánh cửa sổ chạy chính xác đến microsecond và từ chối timestamp sai', () => {
+    it('so sánh cửa sổ chạy chính xác đến microsecond cho cả mốc có phần lẻ và giây nguyên', () => {
       const baseline = '2026-08-30T00:00:01.000500Z'
       const runEnd = '2026-08-30T00:00:10.000000Z'
 
       // Trước baseline 500µs -> false
       expect(isSampleInRunWindow('2026-08-30T00:00:01Z', baseline, runEnd)).toBe(false)
-      // Bằng baseline -> true
+      // Mẫu có phần lẻ đúng bằng baseline -> true
       expect(isSampleInRunWindow('2026-08-30T00:00:01.000500Z', baseline, runEnd)).toBe(true)
-      // Sau baseline 1µs -> true
+      // Mẫu có phần lẻ sau baseline 1µs -> true
       expect(isSampleInRunWindow('2026-08-30T00:00:01.000501Z', baseline, runEnd)).toBe(true)
+      // Mẫu giây nguyên sau baseline (lúc 00:00:02Z > baseline) -> true
+      expect(isSampleInRunWindow('2026-08-30T00:00:02Z', baseline, runEnd)).toBe(true)
+      // Mẫu giây nguyên sau baseline microsecond ở giây trước đó (00:00:00.500000Z) -> true
+      expect(
+        isSampleInRunWindow('2026-08-30T00:00:01Z', '2026-08-30T00:00:00.500000Z', runEnd)
+      ).toBe(true)
       // Sau runEnd 1µs -> false
       expect(isSampleInRunWindow('2026-08-30T00:00:10.000001Z', baseline, runEnd)).toBe(false)
+      expect(isSampleInRunWindow('2026-08-30T00:00:11Z', baseline, runEnd)).toBe(false)
 
       // Timestamp sai định dạng
       expect(isSampleInRunWindow('bad-sample', baseline, runEnd)).toBe(false)

@@ -40,4 +40,13 @@ describe('metric parser', () => {
     expect(parseMetricContent(`${JSON.stringify(invalid)}\n${line(2)}\n`)[0]?.metric).toBeNull()
     expect(parseMetricContent(`${JSON.stringify(invalid)}\n${line(2)}\n`)[1]?.metric?.seq).toBe(2)
   })
+
+  it('từ chối timestamp có phần lẻ giây theo hợp đồng docs/contracts/metric-format.md', () => {
+    const fractional = JSON.parse(line(1))
+    fractional.ts = '2026-08-30T00:00:01.000500Z'
+    const result = parseMetricContent(`${JSON.stringify(fractional)}\n${line(2)}\n`)
+    expect(result[0]?.metric).toBeNull()
+    expect(result[0]?.warning).toBe('Dòng metric JSON không hợp lệ')
+    expect(result[1]?.metric?.seq).toBe(2)
+  })
 })

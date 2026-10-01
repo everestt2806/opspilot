@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export const metricLineSchema = z.object({
   seq: z.number().int().positive(),
-  ts: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/),
+  ts: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/),
   cpu_pct: z.number().finite().min(0).nullable(),
   mem_mb: z.number().finite().min(0).nullable(),
   mem_pct: z.number().finite().min(0).max(100).nullable(),
