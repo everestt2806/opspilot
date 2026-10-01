@@ -5,6 +5,7 @@
 --   - 002_metric_activation.sql (byte-boundary activation)
 --   - 003_migration_error_message.sql (thông điệp lỗi migrate)
 --   - 004_publish_doctor_domain.sql (exposure, doctor, domain)
+--   - 005_experiment_run_attempt.sql (attempt_index, unique 3 trường cho experiment_run)
 --
 -- QUY ƯỚC BẮT BUỘC:
 --   * Mọi cột thời gian: TEXT, ISO-8601 UTC, dạng '2026-07-27T10:00:00Z'

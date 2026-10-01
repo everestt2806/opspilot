@@ -166,6 +166,7 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
   (3) Quy định nghiêm ngặt: chỉ cấp attempt 2/3 khi attempt trước đó đã aborted; sau completed phải từ chối chạy lại, kể cả khi caller truyền attempt tường minh.
   (4) Cấm export_run() âm thầm ghi đè thư mục attempt đã tồn tại trên đĩa.
   (5) Chuẩn hoá kiến trúc: main_table() là nơi đọc CSV và lọc status == 'completed' trước khi gọi hàm tính toán thuần analyze_run().
+- 01/10 mốc Triển khai P2b-1 (`eb46147`) & Tinh chỉnh Migration 005 — Triển khai migration 005 thêm cột attempt_index (1..3, mặc định 1 cho dữ liệu cũ) và unique (scenario, repeat_index, attempt_index). Runner tắt foreign keys trước transaction và kiểm tra ngoại lệ `currentFk !== 0`; kiểm tra toàn vẹn ID run, liên kết alert.experiment_run_id và foreign_key_check ngay trong transaction trước commit; khối finally khôi phục `foreign_keys = ON`. Test kiểm tra toàn bộ trạng thái rollback và áp dụng thành công trực tiếp trên cùng một kết nối DB chạy migration, loại bỏ khẳng định dựa vào kết nối mở lại; kiểm tra CHECK constraint (1..3) và UNIQUE 3 trường.
 
 ## Lệnh tái hiện
 

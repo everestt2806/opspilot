@@ -75,7 +75,7 @@ export function closeDatabase(): void {
   }
 }
 
-function runMigrations(database: Database.Database): void {
+export function runMigrations(database: Database.Database): void {
   const applied = getAppliedVersions(database)
 
   for (const migration of migrations.toSorted((left, right) =>
@@ -106,6 +106,10 @@ function runMigration005(database: Database.Database, migration: Migration): voi
   const wasFkEnabled = database.pragma('foreign_keys', { simple: true }) === 1
   if (wasFkEnabled) {
     database.pragma('foreign_keys = OFF')
+    const currentFk = database.pragma('foreign_keys', { simple: true })
+    if (currentFk !== 0) {
+      throw new Error('Không thể tắt foreign_keys trước transaction cho migration 005')
+    }
   }
 
   try {
@@ -123,7 +127,9 @@ function runMigration005(database: Database.Database, migration: Migration): voi
         .all() as Array<{ id: number; experiment_run_id: number }>
 
       const preNullAlertCount = (
-        database.prepare('SELECT COUNT(*) AS c FROM alert WHERE experiment_run_id IS NULL').get() as {
+        database
+          .prepare('SELECT COUNT(*) AS c FROM alert WHERE experiment_run_id IS NULL')
+          .get() as {
           c: number
         }
       ).c
@@ -181,7 +187,9 @@ function runMigration005(database: Database.Database, migration: Migration): voi
 
       // 7. Kiểm tra không có alert nào bị cascade SET NULL
       const postNullAlertCount = (
-        database.prepare('SELECT COUNT(*) AS c FROM alert WHERE experiment_run_id IS NULL').get() as {
+        database
+          .prepare('SELECT COUNT(*) AS c FROM alert WHERE experiment_run_id IS NULL')
+          .get() as {
           c: number
         }
       ).c

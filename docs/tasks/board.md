@@ -49,6 +49,7 @@ manual-only, không push/PR/merge.
 | L6 | Detector Tier 1 (Next/Express/Vite) & CLI try-detect | Worker | 30/09 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `ad86736` | Chưa merge `main`; 9 files; detector 65 test tổng pass (57 unit + 8 CLI integration), CLI 3 demo apps pass, build pass |
 | L7 | UI Exposure, Doctor, Đa ngôn ngữ (4 locales) & Deploy Guard | Worker | 30/09 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `82a5d5d` | Chưa merge `main`; 20 files; DeployPage, AppsPage, SettingsPage, 4 locales; 479 Vitest pass, build pass; GUI thực `NOT_RUN` (headless) |
 | L8 | Cấu hình .gitignore, cập nhật Board & Handoff | Worker | 30/09 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `f870b6f` | Chưa merge `main`; 3 files (.gitignore, board.md, HANDOFF.md); loại trừ công cụ AI cục bộ, hồ sơ bàn giao hoàn chỉnh |
+| P2b-1 | Migration 005: attempt_index 1..3 & unique 3 trường cho experiment_run | Worker | 01/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `eb46147` | Migration runner tắt foreign_keys trước tx, kiểm tra toàn vẹn ID/alert và foreign_key_check trước commit; test rollback và migrate thành công trực tiếp trên kết nối; 13 test DB pass |
 
 ### Task theo dõi song song / sau demo
 
