@@ -106,15 +106,17 @@ Theo kế hoạch tại `docs/27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-
 ### 2.4. L3+L4+L5 — Backend Publish, Doctor Engine, Safe Fix, Domain & DNS
 - **Trạng thái**: Đã commit local gộp `13591ba` (`feat(backend): publish exposure pipeline, doctor rule engine va domain dns assistant (L3+L4+L5)`). Trạng thái `CHỜ REVIEW` (chưa merge vào `main`).
 - **Lý do gộp**: `app/src/main/ipc.ts` và `app/src/main/ipc.test.ts` nhập khẩu đồng thời các module Doctor (L4) và Domain (L5). Gộp L3+L4+L5 thành một commit backend nguyên tử nhằm đảm bảo tính toàn vẹn của các phụ thuộc giữa các module backend và loại bỏ bóc tách hunk thủ công.
-- **Tệp triển khai (25 files)**:
-  - **L3 (Publish/Reachability/Firewall)**:
-    - `app/src/main/deploy/reachability.ts`: Logic thuần kiểm tra ufw, probe HTTP external có retry/timeout, sinh chẩn đoán `PORT_BLOCKED_EXTERNAL`.
-    - `app/src/main/deploy/exposure.ts`: `ExposureManager` điều phối subphase publish sau khi loopback healthcheck pass. Không rollback ứng dụng đang healthy khi publish thất bại (ghi nhận `degraded`). Khi thiếu manager, ghi nhận `not_checked`.
-    - `app/src/main/deploy/firewall.ts`: Idempotent UFW rule manager, hỗ trợ comment tag và dọn dẹp an toàn.
-    - `app/src/main/deploy/pipeline.ts`: Tích hợp publish subphase trước `RECORD`.
+- **Tệp triển khai (đúng 25 files theo đối chiếu `git show --format= --name-only 13591ba`)**:
+  - *(Lưu ý về `reachability.ts`: Module thuần `app/src/main/deploy/reachability.ts` đã có từ commit `29ed4d3`, backend L3 tái sử dụng module này cho kiểm tra UFW và external probe mà không sửa đổi file trong commit `13591ba`).*
+  - **L3 (Publish/Reachability/Firewall — 12 files)**:
     - `app/src/main/db/migrations/004_publish_doctor_domain.sql`: Migration tạo bảng `doctor_run`, `doctor_action`, `domain_binding` và cập nhật cột bảng `deployment`.
-    - `app/src/main/db/index.ts`, `app/src/main/db/index.test.ts`, `app/src/main/db/deploymentRepository.ts`.
-    - `app/src/main/deploy/service.ts`, `app/src/main/migrate/service.ts`.
+    - `app/src/main/db/index.ts` & `app/src/main/db/index.test.ts`: Thực thi migration 004 khi khởi tạo DB và test tích hợp.
+    - `app/src/main/db/deploymentRepository.ts`: CRUD `exposure_status` và `exposure_evidence_json`.
+    - `app/src/main/deploy/exposure.ts` & `app/src/main/deploy/exposure.test.ts`: `ExposureManager` điều phối subphase publish sau khi loopback healthcheck pass (7 tests pass). Không rollback ứng dụng đang healthy khi publish thất bại (ghi nhận `degraded`). Khi thiếu manager, ghi nhận `not_checked`.
+    - `app/src/main/deploy/firewall.ts` & `app/src/main/deploy/firewall.test.ts`: Idempotent UFW rule manager, hỗ trợ comment tag và dọn dẹp an toàn (6 tests pass).
+    - `app/src/main/deploy/pipeline.ts` & `app/src/main/deploy/pipeline.test.ts`: Tích hợp publish subphase trước `RECORD` trong DeployPipeline (37 tests pass).
+    - `app/src/main/deploy/service.ts`: Khởi tạo ExposureManager.
+    - `app/src/main/migrate/service.ts`: Đảm bảo type hygiene cho migrate service.
   - **L4 (Doctor Engine & Safe Fix)**:
     - `app/src/main/doctor/engine.ts`: Nhận diện 12 failure classes (UFW blocked, wrong port, OOM, crash loop, build failure, etc.) với confidence và abstention khi dữ liệu mơ hồ.
     - `app/src/main/doctor/fix.ts`: Cơ chế Safe Fix chỉ mở firewall khi thỏa mãn đủ điều kiện (run pending, deployment-app-VPS khớp, app healthy nội bộ nhưng external unreachable). Preflight fail-closed nếu mất kết nối SSH. Verify kết quả sau khi sửa và cập nhật bảng `doctor_run`, `doctor_action`.
@@ -127,7 +129,7 @@ Theo kế hoạch tại `docs/27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-
   - **IPC Dispatch**:
     - `app/src/main/ipc.ts` & `app/src/main/ipc.test.ts`: Đăng ký đầy đủ các kênh `doctor:*` và `domain:*`.
 - **Xác minh qua test thực tế**:
-  - `reachability.test.ts`: **15 tests pass**.
+  - `reachability.test.ts`: **15 tests pass** (module reachability.ts có từ 29ed4d3, test sửa cú pháp mock ở ae029c5).
   - `exposure.test.ts`: **7 tests pass**.
   - `firewall.test.ts`: **6 tests pass**.
   - `pipeline.test.ts`: **37 tests pass**.
@@ -277,8 +279,9 @@ Mục này cung cấp bảng đối chiếu chi tiết toàn bộ các file đã
 | | `app/src/shared/ipc.ts` | **Đã commit trong `d86a319`** | Mirror TypeScript types dùng chung renderer và main process |
 | | `docs/27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-detector.md` | **Đã commit trong `d86a319`** | Kế hoạch tổng thể hợp nhất sau demo |
 | | `docs/README.md` | **Đã commit trong `d86a319`** | Cập nhật mục lục liên kết tới tài liệu 27 |
-| **Fix test** | `app/src/main/deploy/reachability.test.ts` | **Đã commit trong `ae029c5`** | Sửa cú pháp mock vi.fn<(url: string) => Promise<boolean>>(), 15/15 tests pass |
-| **L3+L4+L5** | `app/src/main/db/migrations/004_publish_doctor_domain.sql` | **Đã commit trong `13591ba`** | DDL migration tạo bảng doctor_run, doctor_action, domain_binding |
+| *(Tiền đề L3)* | `app/src/main/deploy/reachability.ts` | **Đã có từ `29ed4d3`** | Logic thuần parse UFW và probe HTTP external; backend L3 sử dụng trực tiếp, không commit lại trong `13591ba` |
+| **Fix test** | `app/src/main/deploy/reachability.test.ts` | **Đã commit trong `ae029c5`** | Sửa cú pháp mock vi.fn<(url: string) => Promise<boolean>>(), 15/15 tests pass (sửa lỗi kế thừa từ `29ed4d3`) |
+| **L3+L4+L5** | `app/src/main/db/migrations/004_publish_doctor_domain.sql` | **Đã commit trong `13591ba`** | DDL migration tạo bảng doctor_run, doctor_action, domain_binding (đúng 25 files theo `git show --format= --name-only 13591ba`) |
 | | `app/src/main/db/index.ts` | **Đã commit trong `13591ba`** | Thực thi migration 004 khi khởi tạo DB |
 | | `app/src/main/db/index.test.ts` | **Đã commit trong `13591ba`** | Test migration 004 và khởi tạo DB |
 | | `app/src/main/db/deploymentRepository.ts` | **Đã commit trong `13591ba`** | CRUD exposure_status và exposure_evidence_json |
@@ -286,7 +289,6 @@ Mục này cung cấp bảng đối chiếu chi tiết toàn bộ các file đã
 | | `app/src/main/deploy/exposure.test.ts` | **Đã commit trong `13591ba`** | 7 tests cho ExposureManager và 4 trạng thái exposure |
 | | `app/src/main/deploy/firewall.ts` | **Đã commit trong `13591ba`** | Quản lý rule UFW idempotent có comment tag |
 | | `app/src/main/deploy/firewall.test.ts` | **Đã commit trong `13591ba`** | 6 tests cho firewall manager |
-| | `app/src/main/deploy/reachability.ts` | **Đã commit trong `13591ba`** | Logic thuần parse UFW và probe HTTP external |
 | | `app/src/main/deploy/pipeline.ts` | **Đã commit trong `13591ba`** | Nối phase publish sau loopback healthcheck trong DeployPipeline |
 | | `app/src/main/deploy/pipeline.test.ts` | **Đã commit trong `13591ba`** | 37 tests deploy pipeline bao gồm publish integration |
 | | `app/src/main/deploy/service.ts` | **Đã commit trong `13591ba`** | Deploy service khởi tạo ExposureManager |
@@ -364,6 +366,7 @@ Lịch sử commit thực tế đã phản ánh trung thực quá trình giải 
    - `app/src/main/ipc.ts` và `app/src/main/ipc.test.ts` nhập khẩu đồng thời các module của Doctor (`./doctor/*`) và Domain (`./domain/*`).
    - Việc gộp L3, L4, L5 thành một commit backend duy nhất đã loại bỏ nguy cơ đứt gãy phụ thuộc giữa các commit lẻ.
    - File migration 004 thực thi (`app/src/main/db/migrations/004_publish_doctor_domain.sql`) được đưa vào commit backend này để đồng bộ với `app/src/main/db/index.ts`.
+   - File module thuần `app/src/main/deploy/reachability.ts` đã có sẵn từ commit `29ed4d3` và được backend L3 sử dụng trực tiếp trong `DeployPipeline` / `ExposureManager` (không nằm trong danh sách 25 files của commit `13591ba`, đã đối chiếu chính xác qua `git show --format= --name-only 13591ba`).
    - **Xác minh cổng chất lượng (Gate)**: Trên checkout riêng tại SHA `13591ba`, toàn bộ 418 Vitest tests, typecheck Node/Web và electron-vite build đều **PASS** (418/418 tests pass).
 
 ---
