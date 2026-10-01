@@ -11,6 +11,7 @@ from analyze import (
     Aggregate,
     aggregate,
     analyze_run,
+    cli_main,
     collect_operational_telemetry,
     load_run,
     main_table,
@@ -345,3 +346,61 @@ def test_operational_telemetry_and_table(tmp_path):
     assert "| Retry Success (Att 2-3) | 1 |" in table
     assert "ssh_timeout: 1" in table
     assert "oom_kill: 1" in table
+
+
+def test_cli_analyze_with_completed_and_aborted_runs_missing_scores_and_timestamps(
+    tmp_path,
+):
+    """Xác nhận CLI analyze.py đếm riêng run completed ở tiêu đề, in operational_table()
+
+    khi có đầu vào gồm một run completed và một run aborted thiếu cả score và mốc thời gian.
+    """
+    import io
+
+    # 1. Thư mục run aborted: thiếu score_sample.csv HOÀN TOÀN, mốc thời gian trống rỗng
+    aborted_dir = tmp_path / "run_cpu_spike_1_att1"
+    aborted_dir.mkdir()
+    (aborted_dir / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,abort_reason,fault_start_ts,fault_end_ts,train_at_ts\n"
+        "cpu_spike,1,1,aborted,vps_reboot_timeout,,,\n",
+        encoding="utf-8",
+    )
+    # Cố tình KHÔNG tạo score_sample.csv cho aborted_dir!
+
+    # 2. Thư mục run completed: có đầy đủ score và mốc thời gian
+    completed_dir = tmp_path / "run_cpu_spike_1_att2"
+    completed_dir.mkdir()
+    (completed_dir / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,fault_start_ts,fault_end_ts,train_at_ts\n"
+        "cpu_spike,1,2,completed,2000.0,3200.0,1000.0\n",
+        encoding="utf-8",
+    )
+    (completed_dir / "score_sample.csv").write_text(
+        "method,ts_vps,above_threshold\n"
+        "ensemble,2100.0,1\n"
+        "ensemble,2110.0,1\n"
+        "rule,2100.0,1\n"
+        "rule,2110.0,1\n"
+        "rule,2120.0,1\n",
+        encoding="utf-8",
+    )
+
+    buf = io.StringIO()
+    ret = cli_main([str(tmp_path)], stdout=buf)
+    assert ret == 0
+    output = buf.getvalue()
+
+    # Tiêu đề bảng chính đếm riêng run completed
+    assert (
+        "# Bảng chính — 1 run completed (tổng 2 run), grace=60s (docs/07 mục 9.1)"
+        in output
+    )
+    assert "| Method | Precision | Recall | F1 | Delay (s) | #censored |" in output
+
+    # In operational_table() để thấy rõ run aborted và lý do huỷ
+    assert "## Báo cáo vận hành (Operational Telemetry)" in output
+    assert "| Total Runs Exported | 2 |" in output
+    assert "| Completed Runs | 1 |" in output
+    assert "| Aborted Runs | 1 |" in output
+    assert "vps_reboot_timeout: 1" in output
+    assert "## Grace-sweep" in output

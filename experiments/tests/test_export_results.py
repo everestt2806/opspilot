@@ -140,11 +140,37 @@ def test_export_never_touches_vps_table(tmp_path):
         assert "encrypted_secret" not in blob
 
 
-def test_missing_run_raises(tmp_path):
+def test_missing_run_raises_and_does_not_create_directory(tmp_path):
+    """Xác nhận nếu run không tồn tại thì ném lỗi và KHÔNG tạo thư mục rác trên đĩa."""
     conn = sqlite3.connect(":memory:")
     _seed(conn)
-    with pytest.raises(ValueError):
-        export_run(conn, run_id=999, out_dir=tmp_path / "x")
+    target = tmp_path / "never_created_dir"
+    with pytest.raises(ValueError, match="không tồn tại"):
+        export_run(conn, run_id=999, out_dir=target)
+    assert not target.exists()
+
+
+def test_write_csv_strictness_and_legacy_attempt_fallback(tmp_path):
+    """_write_csv chỉ cho phép fallback attempt_index=1 cho legacy; thiếu cột khác phải ném KeyError."""
+    from export_results import _write_csv
+
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute("CREATE TABLE legacy_run (id INT, scenario TEXT, status TEXT)")
+    conn.execute("INSERT INTO legacy_run VALUES (1, 'cpu_spike', 'completed')")
+    rows = conn.execute("SELECT * FROM legacy_run").fetchall()
+
+    csv_path = tmp_path / "legacy.csv"
+    # Fallback cho attempt_index = 1 thành công với dữ liệu legacy
+    count = _write_csv(csv_path, ["id", "scenario", "status", "attempt_index"], rows)
+    assert count == 1
+    with csv_path.open(encoding="utf-8") as f:
+        reader = list(csv.DictReader(f))
+    assert reader[0]["attempt_index"] == "1"
+
+    # Thiếu cột khác ngoài attempt_index phải ném KeyError
+    with pytest.raises(KeyError, match="Thiếu cột bắt buộc 'notes'"):
+        _write_csv(tmp_path / "fail.csv", ["id", "scenario", "notes"], rows)
 
 
 def test_export_distinct_attempt_directories(tmp_path):

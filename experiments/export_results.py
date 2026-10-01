@@ -89,13 +89,19 @@ def _write_csv(path: Path, columns: list[str], rows: list[sqlite3.Row]) -> int:
         writer = csv.writer(stream)
         writer.writerow(columns)
         for row in rows:
-            keys = row.keys() if hasattr(row, "keys") else []
-            writer.writerow(
-                [
-                    row[c] if c in keys else (1 if c == "attempt_index" else None)
-                    for c in columns
-                ]
-            )
+            keys = set(row.keys()) if hasattr(row, "keys") else set()
+            vals = []
+            for c in columns:
+                if c in keys:
+                    vals.append(row[c])
+                elif c == "attempt_index":
+                    # Fallback chỉ cho phép với attempt_index cho dữ liệu legacy
+                    vals.append(1)
+                else:
+                    raise KeyError(
+                        f"Thiếu cột bắt buộc '{c}' trong bản ghi SQLite để xuất CSV"
+                    )
+            writer.writerow(vals)
     return len(rows)
 
 
@@ -105,10 +111,19 @@ def export_run(
     """Xuất một run ra CSV + meta.json. Trả số dòng mỗi file. Thuần theo `conn` (test với :memory:).
 
     Quy định giao thức (TK-S6 P2b-3):
+      - Kiểm tra run tồn tại trong cơ sở dữ liệu trước khi thực hiện chiếm thư mục.
       - Chiếm thư mục bằng thao tác tạo độc quyền (exclusive mkdir).
       - Nếu thư mục đã tồn tại trước đó, từ chối và ném FileExistsError trước khi thực hiện ghi.
       - Ghi attempt_index vào experiment_run.csv và meta.json.
     """
+    conn.row_factory = sqlite3.Row
+
+    run_rows = conn.execute(
+        "SELECT * FROM experiment_run WHERE id = ?", (run_id,)
+    ).fetchall()
+    if not run_rows:
+        raise ValueError(f"experiment_run id={run_id} không tồn tại")
+
     if out_dir.exists():
         raise FileExistsError(
             f"Thư mục kết quả '{out_dir}' đã tồn tại. Quy định giao thức cấm ghi đè artifact của attempt đã tồn tại."
@@ -121,14 +136,6 @@ def export_run(
         raise FileExistsError(
             f"Thư mục kết quả '{out_dir}' đã được chiếm bởi tiến trình khác. Quy định giao thức cấm ghi đè artifact."
         ) from err
-
-    conn.row_factory = sqlite3.Row
-
-    run_rows = conn.execute(
-        "SELECT * FROM experiment_run WHERE id = ?", (run_id,)
-    ).fetchall()
-    if not run_rows:
-        raise ValueError(f"experiment_run id={run_id} không tồn tại")
     deployment_id = run_rows[0]["deployment_id"]
 
     metric_rows = conn.execute(

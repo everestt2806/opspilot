@@ -194,16 +194,25 @@ def main_table(
         m: {"f1": [], "precision": [], "recall": [], "delay": []} for m in METHODS
     }
     for run_dir in run_dirs:
-        meta = read_run_meta(run_dir / "experiment_run.csv")
+        meta_file = run_dir / "experiment_run.csv"
+        if not meta_file.exists():
+            continue
+        meta = read_run_meta(meta_file)
         if meta.get("status") != "completed":
             continue
 
-        scores = read_score_csv(run_dir / "score_sample.csv")
+        f_start = meta.get("fault_start_ts")
+        f_end = meta.get("fault_end_ts")
+        if not f_start or not f_end:
+            continue
+
+        score_file = run_dir / "score_sample.csv"
+        scores = read_score_csv(score_file) if score_file.exists() else []
         results = analyze_run(
             scores,
-            fault_start_ts=meta["fault_start_ts"],
-            fault_end_ts=meta["fault_end_ts"],
-            holdout_start_ts=meta["train_at_ts"],
+            fault_start_ts=f_start,
+            fault_end_ts=f_end,
+            holdout_start_ts=meta.get("train_at_ts") or 1000.0,
             grace_s=grace_s,
         )
         for r in results:
@@ -302,12 +311,10 @@ def operational_table(run_dirs: list[Path]) -> str:
     return "\n".join(lines)
 
 
-def find_run_dirs(results_root: Path) -> list[Path]:  # pragma: no cover - quét thư mục
-    """Mọi thư mục con có đủ experiment_run.csv + score_sample.csv dưới results_root."""
+def find_run_dirs(results_root: Path) -> list[Path]:
+    """Mọi thư mục con có experiment_run.csv dưới results_root."""
     return sorted(
-        d
-        for d in results_root.rglob("run_*")
-        if (d / "experiment_run.csv").exists() and (d / "score_sample.csv").exists()
+        d for d in results_root.rglob("run_*") if (d / "experiment_run.csv").exists()
     )
 
 
@@ -400,15 +407,14 @@ def summarize(directory: Path, grace_s: int = 60) -> list[dict[str, Any]]:
     return rows
 
 
-if (
-    __name__ == "__main__"
-):  # pragma: no cover - CLI mỏng, logic đã test qua main_table/analyze_run
+def cli_main(argv: list[str] | None = None, stdout: Any = None) -> int:
+    """CLI phân tích kết quả thí nghiệm (docs/07 mục 9)."""
     import argparse
     import sys
 
-    # Console Windows mặc định cp1252 không in được tiếng Việt -> ép UTF-8 (Python 3.7+).
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    out = stdout if stdout is not None else sys.stdout
+    if hasattr(out, "reconfigure"):
+        out.reconfigure(encoding="utf-8")
 
     parser = argparse.ArgumentParser(
         description="Phân tích kết quả thí nghiệm (docs/07 mục 9)"
@@ -419,7 +425,7 @@ if (
     parser.add_argument(
         "--grace", type=float, default=60.0, help="detection grace (giây)"
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     root = Path(args.results_root)
     run_dirs = find_run_dirs(root)
@@ -428,11 +434,23 @@ if (
     if not run_dirs:
         raise SystemExit(f"Không tìm thấy thư mục run nào dưới {root}")
 
-    print(
-        f"# Bảng chính — {len(run_dirs)} run, grace={args.grace:.0f}s (docs/07 mục 9.1)\n"
+    telemetry = collect_operational_telemetry(run_dirs)
+
+    out.write(
+        f"# Bảng chính — {telemetry.completed_runs} run completed (tổng {telemetry.total_runs} run), grace={args.grace:.0f}s (docs/07 mục 9.1)\n\n"
     )
-    print(main_table(run_dirs, grace_s=args.grace))
-    print("\n## Grace-sweep (docs/07 mục 5)")
+    out.write(main_table(run_dirs, grace_s=args.grace))
+    out.write("\n\n## Báo cáo vận hành (Operational Telemetry)\n\n")
+    out.write(operational_table(run_dirs))
+    out.write("\n\n## Grace-sweep (docs/07 mục 5)\n")
     for grace_val in GRACE_SWEEP_S:
-        print(f"\n### grace = {grace_val}s\n")
-        print(main_table(run_dirs, grace_s=float(grace_val)))
+        out.write(f"\n### grace = {grace_val}s\n\n")
+        out.write(main_table(run_dirs, grace_s=float(grace_val)))
+        out.write("\n")
+    return 0
+
+
+if __name__ == "__main__":  # pragma: no cover
+    import sys
+
+    sys.exit(cli_main())
