@@ -179,7 +179,7 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
   - `analyze.py`: `main_table()` tiếp tục bỏ qua các run không completed (`aborted`, `running`), nhưng đối với run `completed` yêu cầu nghiêm ngặt file `score_sample.csv` phải tồn tại cùng các mốc `train_at_ts`, `fault_start_ts`, `fault_end_ts` hợp lệ (thiếu hoặc sai ném `ValueError` chỉ rõ tên thư mục run, không dùng mốc 1000.0 hay score rỗng); bổ sung `collect_operational_telemetry()` và `operational_table()` theo dõi riêng tỷ lệ thành công attempt 1, retry attempt 2-3 và lý do abort; CLI `cli_main()` đếm riêng số run completed ở tiêu đề bảng chính (`{completed} run completed (tổng {total} run)`) đồng thời in `operational_table()` hiển thị các run aborted và lý do huỷ; hỗ trợ tìm và phân tích run aborted thiếu hoàn toàn `score_sample.csv`.
   - `run_store.py`: chuyển tham số `attempt_index` về cuối chữ ký `start_run()` để bảo toàn tương thích tham số vị trí với 11 đối số có trước.
   - Cập nhật `docs/07` mục 8 định dạng thư mục artifact; test suite bổ sung thêm ca kiểm thử đạt mốc **145 passed** pytest.
-- 02/10 mốc Triển khai P2c-1 (`7150601`, `5c40780`, `f9e1f12` & bản hoàn thiện) — Gắn trực tiếp `alert.experiment_run_id` khi tạo alert trong poller (TK-S6):
+- 02/10 mốc Triển khai P2c-1 (`7150601`, `5c40780`, `f9e1f12`, `fe7901b`) — Gắn trực tiếp `alert.experiment_run_id` khi tạo alert trong poller (TK-S6):
   - `AlertTracker.update()`: nhận tham số `experimentRunId?: number | null`, trước khi `INSERT INTO alert` thực hiện kiểm tra `first.ts_vps` của mẫu đầu chuỗi kích hoạt; nếu chuỗi vượt ngưỡng bắt đầu trước `baseline_start_ts`, gán `NULL` thay vì gắn run. Ghi trực tiếp giá trị vào câu lệnh `INSERT INTO alert (..., experiment_run_id)`, tuyệt đối không dùng UPDATE hàng loạt.
   - `MonitorPoller`: trong transaction xử lý metric mẫu, xác định run đang `running` trên cùng `routeDeploymentId` và đối chiếu thời điểm mẫu (`sample.ts_vps`) nằm trong khung thời gian của run (`baseline_start_ts` đến `run_end_ts`); truyền `experimentRunId` vào `AlertTracker.update()` cho cả alert từ rule và ML (zscore_ewma, iforest, ocsvm, ensemble).
   - So sánh timestamp chính xác đến microsecond (`parseTimestampUs` dùng `BigInt`): loại bỏ hoàn toàn `Date.parse()` và làm tròn mili giây gây mất phần lẻ thời gian; hỗ trợ đầy đủ ISO 8601 UTC và epoch seconds (dạng số hoặc chuỗi float/int); so sánh an toàn mẫu giây nguyên với `baseline_start_ts` chứa microsecond.
@@ -189,6 +189,12 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
   - Loại trừ nghiêm ngặt: gán `NULL` khi không có run phù hợp, khi chuỗi bắt đầu trước `baseline_start_ts`, khi mẫu thuộc deployment khác, hoặc khi run đã kết thúc (`completed` hoặc `aborted`).
   - Bảo toàn 100% hành vi monitor thông thường khi không chạy thí nghiệm (alert nhận `NULL`).
   - Cập nhật test suite: 4 test trong `metricParser.test.ts` (thêm test từ chối timestamp có phần lẻ theo contract), 5 test trong `alertTracker.test.ts` (kiểm tra trực tiếp `isSampleInRunWindow` với mẫu có phần lẻ và AlertTracker với baseline microsecond), 19 test trong `poller.test.ts` (test tích hợp mẫu giây nguyên `...01Z` trước baseline `...01.000500Z` không gắn run, sau baseline gắn đúng; test timestamp mẫu sai định dạng và baseline sai định dạng); đạt mốc **69 passed** vitest monitor. Giữ pilot thực tế `NOT_RUN`.
+- 02/10 mốc Thiết kế P2c-2 (Docs only) — Thiết kế runner run_experiment.py, các adapter còn thiếu và kế hoạch phân rã (TK-S6):
+  - Thiết kế luồng thực thi runner: `start_run()` được gọi ngay đầu attempt trước bước đo lệch đồng hồ để ghi nhận bản ghi kể cả khi abort do clock skew (> 2000ms) hoặc lỗi kết nối SSH; mỗi attempt dùng một `deployment_id` mới độc lập để không lẫn metric/score/alert giữa các lần retry; ghi các mốc pha qua API `run_store.py`; đếm mẫu pha A chuẩn xác bằng `count_phase_a_samples()`; chỉ gọi `complete_run()` sau khi poller đã nạp hết dữ liệu và 4 cổng `check_integrity()` đều PASS; xử lý ngoại lệ gọi `abort_run()` và luôn cleanup (`reset_fault`, dừng loadgen/poller, đóng kết nối) trong khối `finally`.
+  - Làm rõ 4 adapter còn thiếu: Deploy Adapter (cấp deployment sạch), Headless Poller & Scorer Adapter (Node CLI script tái sử dụng `MonitorPoller` và `AlertTracker`), ML Service Adapter (quản lý health, `/reset`, `/train`), và Loadgen Adapter (giải quyết trần hằng số cứng 30 phút cho run 75 phút).
+  - Phân rã thành 4 checkpoint code nhỏ tiếp theo (P2d-1..P2d-4) kèm tiêu chí kiểm thử offline giả lập trên Windows/RAM trước khi chạy trên VPS thật.
+  - Tổng hợp 3 quyết định kỹ thuật cần Leader chốt (trần loadgen 75 phút, công nghệ headless poller, cơ chế cấp deployment cho retry).
+  - Giữ pilot thực tế `NOT_RUN`.
 
 ## Lệnh tái hiện
 
@@ -677,6 +683,194 @@ flowchart TD
    - **Kiểm thử cấm ghi đè export**: Gọi `export_run()` lần thứ hai vào cùng một thư mục attempt đã tồn tại và không rỗng: xác nhận ném `FileExistsError` và bảo toàn file cũ.
    - `main_table()` đọc danh sách thư mục gồm cả run `completed` và run `aborted`: xác nhận `main_table()` lọc bỏ các run `aborted`, chỉ đọc score và gọi `analyze_run()` cho các run `completed`.
    - Bổ sung test kiểm tra hàm thống kê độ ổn định (Operational Telemetry) trên tập hợp gồm cả run completed và run aborted.
+
+## Thiết kế Kỹ thuật Checkpoint P2c-2: Runner run_experiment.py, Adapter & Kế hoạch Phân rã P2d
+
+*(Tài liệu thiết kế kiến trúc chuẩn bị cho phân đoạn P2d, cập nhật ngày 02/10/2026)*
+
+> ⚠️ **NGUYÊN TẮC BẢO TOÀN TRẠNG THÁI PILOT**: Toàn bộ nội dung dưới đây là đặc tả thiết kế và kiến trúc cho việc lập trình module runner và adapter. Toàn bộ luồng thí nghiệm pilot thực tế trên VPS thật vẫn giữ nguyên trạng thái **`NOT_RUN`**.
+
+### 1. Luồng thực thi cốt lõi của `run_experiment.py` (End-to-End Execution Flow)
+
+Nhằm đảm bảo dữ liệu nghiên cứu khoa học có độ tin cậy tuyệt đối, runner phải tuân thủ nghiêm ngặt nguyên tắc **ghi nhận mọi thất bại hạ tầng (Auditability)**, **cách ly hoàn toàn dữ liệu giữa các lần thử (Isolation)**, và **luôn dọn dẹp sạch tài nguyên (Fail-Safe Cleanup)**.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant R as Runner (run_experiment.py)
+    participant DB as SQLite DB (run_store)
+    participant SSH as VPS SSH / App
+    participant P as Headless Poller
+    participant ML as ML Service
+
+    Note over R,DB: BƯỚC 1: CẤP DEPLOYMENT & TẠO ATTEMPT
+    R->>DB: 1. Tạo deployment sạch mới cho attempt (dep_id)
+    R->>DB: 2. start_run(scenario, repeat, dep_id) -> run_id, attempt_index (1..3)
+
+    Note over R,SSH: BƯỚC 2: CLOCK SKEW GATE (TRƯỚC PHA A)
+    R->>SSH: 3. Đo clock_offset_ms (SSH / NTP)
+    alt Clock skew > 2000ms hoặc lỗi kết nối SSH
+        R->>DB: abort_run(run_id, "clock_skew_too_large: ...")
+        Note over R: Dừng attempt, ghi nhận lỗi hạ tầng vào DB
+    end
+
+    Note over R,ML: BƯỚC 3: RESET & KHỞI ĐỘNG
+    R->>ML: 4. POST /reset (xoá mô hình cũ)
+    R->>SSH: 5. Reset fault app & khởi động loadgen (5 req/s)
+    R->>P: 6. Khởi động Headless Poller (dep_id, run_id)
+
+    Note over R,DB: BƯỚC 4: PHA A (BASELINE 30 PHÚT)
+    R->>DB: 7. update_phase_schedule(baseline_start_ts)
+    Note over R: Chờ 1800s (Phase A)
+    R->>DB: 8. count_phase_a_samples(dep_id, baseline_start_ts, train_at_ts)
+    alt Mẫu < 180 (thiếu mẫu)
+        R->>DB: abort_run(run_id, "insufficient_phase_a_samples")
+    else Đủ >= 180 mẫu
+        R->>ML: 9. POST /train (huấn luyện baseline)
+    end
+
+    Note over R,SSH: BƯỚC 5 & 6: PHA B (HOLDOUT 15') & PHA C (FAULT 20')
+    R->>DB: 10. update_phase_schedule(train_at_ts) -> Chờ 900s
+    R->>SSH: 11. plan_fault & POST /debug/fault -> update_phase_schedule(fault_start_ts)
+    Note over R: Chờ 1200s (Phase C Fault)
+
+    Note over R,SSH: BƯỚC 7: PHA D (RECOVERY 10')
+    R->>SSH: 12. POST /debug/reset -> update_phase_schedule(fault_end_ts)
+    Note over R: Chờ 600s (Phase D Recovery)
+    R->>SSH: 13. Dừng loadgen
+
+    Note over R,P: BƯỚC 8: DRAINING & INTEGRITY GATE
+    R->>P: 14. Drain metrics (chờ tối đa 30s) -> Dừng poller
+    R->>DB: 15. Kiểm tra 4 cổng check_integrity() & đủ score/alert
+    alt Integrity Check FAIL
+        R->>DB: abort_run(run_id, reason)
+    else All Gates PASS
+        R->>DB: 16. complete_run(run_id, ...)
+    end
+
+    Note over R,SSH: KHỐI FINALLY (LUÔN DỌN DẸP AN TOÀN)
+    R->>SSH: 17. reset_fault + dừng container + đóng SSH/DB
+```
+
+#### Quy tắc thực thi 10 bước chi tiết:
+
+1. **Vòng lặp Attempt & Cấp Deployment sạch (Fresh Deployment per Attempt)**:
+   - Mỗi repeat `(scenario, repeat_index)` hỗ trợ tối đa 3 lần thử (`attempt_index = 1..3`).
+   - **Bắt buộc**: Mỗi attempt phải gắn với một `deployment_id` mới trong bảng `deployment`. Việc này ngăn chặn tuyệt đối tình trạng `metric_sample`, `score_sample`, hay `alert` của lần thử trước (đã abort) bị hòa lẫn vào attempt đang chạy hoặc export nhầm.
+2. **Khởi tạo bản ghi Attempt trong SQLite TRƯỚC các bước có thể Abort**:
+   - Gọi `start_run(conn, scenario, repeat_index, vps_id, deployment_id, auto_commit=True)` **ngay tại dòng đầu tiên của attempt**.
+   - Mục đích: Nếu bước đo lệch đồng hồ (Clock Skew) vượt ngưỡng (> 2000ms), hoặc kết nối SSH/mạng tới VPS bị từ chối, exception được bắt và gọi `abort_run(conn, run_id, abort_reason=...)` ngay lập tức. Lỗi hạ tầng được lưu lại chính xác trong cơ sở dữ liệu làm bằng chứng phục vụ Operational Telemetry, không bị mất dấu như khi tạo run sau gate.
+3. **Đo độ lệch đồng hồ (Clock Skew Gate)**:
+   - Đo `offset_ms` giữa máy runner và VPS (thông qua giao thức SSH Paramiko / HTTP endpoint).
+   - Nếu `clock_skew_too_large(abs(offset_ms))` (vượt 2000.0ms theo `protocol.py`): Gọi `abort_run()` với lý do cụ thể và ném `ClockSkewError`.
+4. **Chuẩn bị môi trường & Dọn dẹp trạng thái cũ**:
+   - Gọi ML Service `POST /reset` để xóa sạch baseline/ngưỡng của mô hình từ các run trước.
+   - Gọi App demo `POST /debug/reset` để đảm bảo ứng dụng không còn dính cờ fault injection cũ.
+   - Khởi động Headless Poller gắn với `deployment_id` và `run_id`.
+   - Khởi động tiến trình/container Load Generator (tần suất chuẩn 5 req/s).
+5. **Pha A (Thu thập Baseline 30 phút, 180 mẫu)**:
+   - Lấy mốc thời gian UTC hiện tại, cập nhật `baseline_start_ts` qua `update_phase_schedule()`.
+   - Chờ đủ 1800 giây (`PHASE_A_S`).
+   - Lấy mốc `train_at_ts`. Đếm chính xác số mẫu metric thu thập được bằng hàm `count_phase_a_samples(conn, deployment_id, baseline_start_ts, train_at_ts)` trong khoảng thời gian `[baseline_start_ts, train_at_ts)`.
+   - Kiểm tra `enough_train_samples(count)`. Nếu số mẫu `< 180` (do mất mạng, rơi rụng gói tin): ném lỗi và gọi `abort_run(conn, run_id, "insufficient_phase_a_samples")`.
+   - Khi đủ điều kiện: Kích hoạt huấn luyện ML Service qua `POST /train` (truyền mảng mẫu baseline).
+6. **Pha B (Holdout bình thường 15 phút, 90 mẫu)**:
+   - Cập nhật `train_at_ts` vào DB qua `update_phase_schedule()`.
+   - Chờ đủ 900 giây (`PHASE_B_S`) để kiểm tra độ ổn định của mô hình khi chưa có lỗi.
+7. **Pha C (Tác động Lỗi Fault Injection 20 phút, 120 mẫu)**:
+   - Cập nhật `fault_start_ts` qua `update_phase_schedule()`.
+   - Lập kế hoạch lỗi bằng `plan_fault(scenario)` và kích hoạt lỗi trên app demo qua endpoint `POST /debug/fault` (với tham số scenario tương ứng).
+   - Chờ đủ 1200 giây (`PHASE_C_S`).
+8. **Pha D (Phục hồi Recovery 10 phút, 60 mẫu)**:
+   - Cập nhật `fault_end_ts` qua `update_phase_schedule()`.
+   - Khôi phục trạng thái app demo qua `POST /debug/reset`.
+   - Chờ đủ 600 giây (`PHASE_D_S`) để quan sát khả năng hạ cảnh báo và phục hồi của mô hình.
+   - Cập nhật `run_end_ts` qua `update_phase_schedule()`. Dừng Load Generator.
+9. **Draining dữ liệu & Cổng kiểm tra toàn vẹn (Integrity Gate)**:
+   - Cho phép Headless Poller có cửa sổ "drain" (tối đa 30 giây) để kéo nốt các mẫu metric cuối cùng từ VPS về SQLite.
+   - Dừng Headless Poller.
+   - Truy vấn toàn bộ danh sách `metric_timestamps` của run từ SQLite và chạy kiểm tra qua `check_integrity(timestamps, baseline_start_ts, train_at_ts, fault_start_ts, fault_end_ts, run_end_ts)`.
+   - Xác nhận có đủ điểm dị thường trong `score_sample` và kiểm tra bảng `alert`.
+   - Nếu bất kỳ cổng nào vi phạm (ví dụ khoảng cách giữa 2 mẫu `max_gap_s > 120s`, hoặc tổng thời gian không đạt): gọi `abort_run(conn, run_id, "integrity_check_failed: ...")`.
+10. **Chốt hoàn thành run (`complete_run`)**:
+    - Chỉ khi toàn bộ các cổng kiểm tra toàn vẹn đều PASS, runner mới gọi `complete_run(conn, run_id, clock_offset_ms=..., train_sample_count=..., fault_params_json=...)` chuyển trạng thái sang `completed`.
+11. **Khối `finally` (Dọn dẹp an toàn tuyệt đối)**:
+    - Mọi mã điều khiển trong attempt được bọc trong khối `try ... except ... finally`.
+    - Trong khối `finally`, bất kể thành công hay thất bại/abort:
+      1. Luôn gửi lệnh `POST /debug/reset` tới app demo để đảm bảo app không bị kẹt trong trạng thái tiêm lỗi.
+      2. Luôn dừng container hoặc tiến trình loadgen.
+      3. Luôn dừng tiến trình Headless Poller.
+      4. Đóng an toàn các kết nối SSH và SQLite connection.
+
+---
+
+### 2. Đặc tả 4 Adapter còn thiếu & Hướng xử lý
+
+Để `run_experiment.py` có thể vận hành tự động hoá không cần GUI Electron, 4 adapter sau cần được hoàn thiện:
+
+#### Adapter 1: Deployer Adapter (`experiments/adapters/deploy_adapter.py`)
+- **Nhiệm vụ**: Cung cấp `deployment_id` hợp lệ và sạch sẽ cho mỗi attempt.
+- **Phân tích hiện trạng**: Trong luồng sản phẩm đầy đủ, deployment được khởi tạo từ wizard giao diện Electron, bao gồm đóng gói code, push Dockerfile, cấu hình Nginx/UFW và ghi bản ghi vào bảng `deployment`. Tuy nhiên, trong môi trường kiểm thử thí nghiệm lặp lại 30 run (mỗi run 75 phút), việc build lại toàn bộ image từ đầu cho mỗi attempt là quá tốn kém và không cần thiết nếu container app demo vẫn đang chạy bình thường.
+- **Giải pháp thiết kế**:
+  - Viết module `DeployAdapter` tương tác trực tiếp với cơ sở dữ liệu SQLite:
+    - Khi bắt đầu attempt mới: Tạo một bản ghi mới trong bảng `deployment` với trạng thái `active`, phiên bản tự tăng, liên kết với `app_id` và `vps_id` tương ứng.
+    - Kiểm tra tính sống (Health Check) của container app demo trên VPS qua HTTP endpoint `GET /health`.
+    - Nếu container app demo bị lỗi hoặc không phản hồi: Gửi lệnh qua SSH (hoặc Docker API) để restart container app demo và khôi phục trạng thái sạch.
+
+#### Adapter 2: Headless Poller & Scorer Adapter (`experiments/adapters/poller_adapter.py` & `app/scripts/headless-poller.ts`)
+- **Nhiệm vụ**: Chạy tiến trình kéo metric từ VPS về SQLite, đẩy mẫu qua ML service chấm điểm (`score_sample`), và kích hoạt bộ theo dõi cảnh báo (`AlertTracker`) gán đúng `experiment_run_id` (đã hoàn thiện tại P2c-1).
+- **Phân tích hiện trạng**: Toàn bộ logic `MonitorPoller` và `AlertTracker` được viết bằng TypeScript trong `app/src/main/monitor/`. Nếu viết lại một poller thuần bằng Python trong `experiments/`, ta sẽ phải duplicate hơn 1,500 dòng code phức tạp (xử lý parse metric line, sliding window, batch insert SQLite, retry chấm điểm ML, so sánh microsecond).
+- **Giải pháp thiết kế (Khuyến nghị cao nhất)**:
+  - Tạo một script CLI Node.js độc lập: `app/scripts/headless-poller.ts`.
+  - Script này nhận các tham số dòng lệnh: `--deployment-id <id>`, `--vps-id <id>`, `--db-path <path>`, `--ml-url <url>`, `--drain-and-exit`.
+  - Script sử dụng trực tiếp các class `MonitorPoller` và `AlertTracker` hiện có mà không cần giao diện Electron.
+  - Phía Python, `PollerAdapter` sử dụng `subprocess.Popen` để spawn tiến trình `pnpm exec tsx app/scripts/headless-poller.ts`. Adapter quản lý tín hiệu dừng (`SIGINT` / `SIGTERM`) và hỗ trợ cơ chế flush/drain dữ liệu trước khi thoát.
+
+#### Adapter 3: ML Service Adapter (`experiments/adapters/ml_client.py`)
+- **Nhiệm vụ**: Giao tiếp chuẩn xác với dịch vụ Python FastAPI `ml-service` (cổng 8000).
+- **Phân tích hiện trạng**: `run_experiment.py` hiện tại mới chỉ có một hàm trợ giúp đơn giản `post_json()`, chưa có quản lý timeout, retry khi mạng lag, hay xử lý chi tiết phản hồi lỗi của FastAPI.
+- **Giải pháp thiết kế**:
+  - Xây dựng class `MlClient(base_url: str, timeout_s: float = 10.0)`:
+    - `check_health() -> bool`: Kiểm tra `GET /health`, đảm bảo dịch vụ đã sẵn sàng và 4 thuật toán (Z-Score EWMA, Isolation Forest, One-Class SVM, Ensemble) đã được load.
+    - `reset_models() -> dict`: Gọi `POST /reset` để xóa sạch toàn bộ model đã huấn luyện và reset bộ nhớ đệm trạng thái.
+    - `train_models(samples: list[dict]) -> dict`: Gọi `POST /train` với payload danh sách mẫu Pha A; có cơ chế timeout mở rộng (ví dụ 60s) vì quá trình huấn luyện SVM/iForest trên 180 mẫu cần vài giây.
+    - Bắt và phân loại các ngoại lệ `MlServiceConnectionError`, `MlServiceTrainingError`.
+
+#### Adapter 4: Loadgen Adapter & Phương án Trần 30 phút (`experiments/adapters/loadgen_adapter.py`)
+- **Nhiệm vụ**: Điều khiển tải liên tục 5 req/s trong suốt 75 phút thí nghiệm.
+- **Phân tích xung đột kỹ thuật**:
+  - Hằng số `MAX_DURATION_S = 30 * 60` (1800.0s / 30 phút) đang bị hard-code trong `experiments/load_gen/loadgen.py`.
+  - Giao thức `docs/07` yêu cầu run chạy liên tục 75 phút (4500s). Nếu truyền tham số thời lượng lớn hơn 1800s, logic hiện tại trong `loadgen.py` sẽ tự động cắt ngắn (cap) thời gian chạy về 1800s và tắt tiến trình.
+- **Đề xuất hai phương án kỹ thuật**:
+  - *Phương án A (Khuyến nghị)*: Bổ sung khả năng override cấu hình qua biến môi trường hoặc tham số CLI trong `loadgen.py`:
+    `MAX_DURATION_S = _env_float("LOADGEN_MAX_DURATION_S", 4500.0)`.
+    Khi đó Load Generator chạy 1 tiến trình liên tục suốt 75 phút. Hàng đợi trượt `Counter(counter_window_s=60.0)` duy trì mượt mà, không xảy ra hiện tượng reset cửa sổ đo lường.
+  - *Phương án B (Phân đoạn Segmented Loadgen)*: Chạy 3 lượt liên tiếp ($\le 1800$s: 1800s + 1800s + 900s) với khoảng nghỉ chuyển tiếp $< 5$s. Phương án này đòi hỏi bổ sung ghi nhận `counter_reset_at` vào `meta.json` và cập nhật `analyze.py` để bù đắp 60 giây ramp-up đầu mỗi phân đoạn.
+
+---
+
+### 3. Kế hoạch Phân rã Checkpoint Code tiếp theo (P2d-1 đến P2d-4)
+
+Nhằm tuân thủ quy trình phát triển an toàn, chia nhỏ rủi ro và có thể kiểm thử tự động ngoại tuyến (Offline Mock Testing trên Windows/RAM), phân đoạn P2d được chia thành 4 checkpoint cụ thể:
+
+| Checkpoint | Nội dung triển khai chính | Phạm vi File | Tiêu chí Kiểm thử Ngoại tuyến (Offline Test) |
+|---|---|---|---|
+| **P2d-1** | **ML Client Adapter & Deploy Helper** | `experiments/adapters/ml_client.py`, `experiments/adapters/deploy_adapter.py`, `experiments/tests/test_adapters.py` | - Test mock HTTP calls (`responses`/`pytest-mock`) cho `check_health`, `reset_models`, `train_models`.<br>- Test SQLite in-memory cho `DeployAdapter`: tạo deployment record mới, tăng version, liên kết foreign key chuẩn. |
+| **P2d-2** | **Headless Poller CLI & Python Poller Adapter** | `app/scripts/headless-poller.ts`, `experiments/adapters/poller_adapter.py`, `app/src/main/monitor/poller.headless.test.ts` | - Chạy headless poller trên RAM SQLite: kéo metric giả lập, gọi ML scoring, gán `experiment_run_id` chính xác.<br>- Test adapter Python: start tiến trình con, stop an toàn qua tín hiệu, drain metrics đúng hạn. |
+| **P2d-3** | **Loadgen Remote Controller & Tháo gỡ trần 30 phút** | `experiments/load_gen/loadgen.py`, `experiments/adapters/loadgen_adapter.py`, `experiments/tests/test_loadgen_adapter.py` | - Cập nhật cấu hình trần linh hoạt trong `loadgen.py`.<br>- Unit test class `LoadgenAdapter` điều khiển container/tiến trình qua SSH mock hoặc local execution.<br>- Xác nhận counter đo lường ổn định suốt thời lượng mô phỏng. |
+| **P2d-4** | **Tích hợp Runner `run_experiment.py` Hoàn chỉnh & E2E Sim** | `experiments/run_experiment.py`, `experiments/tests/test_runner_e2e.py` | - Tích hợp đầy đủ 10 bước của Runner với vòng đời attempt (1..3), xử lý clock skew gate, phase timestamps, count phase A samples, integrity gate, và cleanup.<br>- **End-to-End Simulation Test**: Giả lập toàn bộ chu trình trên RAM SQLite (Attempt 1 abort do skew $\to$ Attempt 2 retry thành công $\to$ export $\to$ analyze). |
+
+---
+
+### 4. Bảng Tổng hợp 3 Quyết định Kỹ thuật cần Tech Lead (A) Phê duyệt
+
+| STT | Vấn đề Kỹ thuật | Phương án A (Đề xuất) | Phương án B (Dự phòng) | Tác động & Lý do Khuyến nghị |
+|:---:|---|---|---|---|
+| **1** | **Trần thời gian Load Generator 75 phút** | Nâng trần hoặc cho phép override biến môi trường `LOADGEN_MAX_DURATION_S = 4500.0` để chạy liên tục 1 tiến trình duy nhất suốt 75 phút. | Giữ nguyên trần 1800s trong `loadgen.py`, runner điều phối 3 phân đoạn nối tiếp ($\le 30$ phút) với khoảng chuyển tiếp $< 5$s. | **Chọn Phương án A**: Giữ cửa sổ trượt 60s của Counter liên tục, không gây nhiễu tỷ lệ lỗi trong giai đoạn chuyển đoạn; phân tích kết quả ở `analyze.py` hoàn toàn trong sáng. |
+| **2** | **Kiến trúc Headless Poller** | Viết CLI script Node.js `app/scripts/headless-poller.ts` (chạy qua `pnpm exec tsx`) để tái sử dụng 100% logic TypeScript của `MonitorPoller` và `AlertTracker`. | Viết lại một module Poller & Scorer hoàn toàn bằng Python trong thư mục `experiments/`. | **Chọn Phương án A**: Tiết kiệm thời gian, loại bỏ rủi ro lệch chuẩn (divergence) logic giữa bản chạy Electron và bản chạy thí nghiệm CLI; bảo toàn toàn bộ công sức gắn `alert.experiment_run_id` vừa hoàn thiện ở P2c-1. |
+| **3** | **Cơ chế cấp Deployment sạch cho Retry Attempt** | Tạo một bản ghi mới trong bảng `deployment` SQLite (tăng version, trạng thái active) và gửi lệnh reset app demo trên VPS; không build lại image. | Kích hoạt lại toàn bộ pipeline deploy từ đầu (đóng gói git, build container image, tạo compose mới trên VPS). | **Chọn Phương án A**: Rút ngắn thời gian retry từ hàng chục phút xuống dưới 2 giây; đảm bảo tính độc lập dữ liệu tuyệt đối trong DB (`deployment_id` riêng) mà không lãng phí tài nguyên mạng/VPS. |
+
+---
 
 ## PR
 
