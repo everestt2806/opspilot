@@ -145,7 +145,7 @@ phải lỗ hổng của tool.
 | 2 | `cpu_spike` | `GET /debug/cpu?ms=x` busy-loop, x tăng bậc thang | x: 20→400ms, +20ms mỗi phút | tăng dần | ML bắt sớm nhờ slope của cpu + latency |
 | 3 | `error_burst` | `GET /debug/error-rate?p=x` trả 500 với xác suất p | p = 0.3 **đột ngột**, bật ở phút 0 của pha C | **đột ngột** | rule bắt nhanh ngang ML — kỳ vọng ML **không** thắng ở đây, và đó là kết quả trung thực đáng báo cáo |
 | 4 | `slow_db` | `SELECT pg_sleep(x)` chèn trước mỗi query | x: 0.05→1.5s, tăng mỗi phút | tăng dần | `db_response_ms` + `latency_ms` cùng trôi |
-| 5 | `latency_creep` | Middleware delay tăng dần | +50ms mỗi phút, tối đa 2500ms | tăng dần | kịch bản khó nhất cho rule: trong 20 phút pha C chỉ đạt ~1000ms nên rule tĩnh (ngưỡng 2000ms) không vượt ngưỡng trong pha C (censored); ML phát hiện sớm nhờ trôi độ trễ/slope |
+| 5 | `latency_creep` | Middleware delay tăng dần | +50ms mỗi phút, tối đa 2500ms | tăng dần | +50ms/phút tạo tối đa khoảng 1.000 ms delay bổ sung ở cuối pha; việc latency quan sát vượt 2.000 ms và ML có phát hiện sớm hay không là kết quả cần đo, không khẳng định trước |
 
 **Kịch bản 3 tồn tại có chủ đích:** một đồ án nói "ML thắng ở mọi kịch bản" là đáng ngờ.
 Có một kịch bản mà rule ngang hoặc thắng làm cho toàn bộ kết quả đáng tin hơn, và cho phép
@@ -201,9 +201,10 @@ Các bước (mỗi bước ghi `action_log`; lỗi ở bất kỳ đâu → `st
    cứ lúc nào, trên máy nào, kể cả sau khi VPS đã trả.
 5. `meta.json` có `git_commit` để biết chính xác dữ liệu này sinh ra bởi phiên bản code nào.
    Đổi code giữa chừng mà quên ghi là mất khả năng giải thích outlier.
-6. `protocol_version` được tách riêng khỏi `feature_version` trong `meta.json` (mặc định `"1.0"`).
-   Khi đọc dữ liệu cũ trước pilot chưa có trường này, parser tự động fallback về `"legacy-pre-pilot"`
-   để bảo đảm tương thích ngược (xem `experiments/manifest.py`).
+6. `protocol_version` được tách riêng khỏi `feature_version` trong `meta.json` (mặc định `"1.0"`,
+   tự động ghi nhận qua `export_run()`). Khi đọc dữ liệu cũ trước pilot chưa có trường này, parser
+   (cả `experiments/manifest.py` và `load_run()` trong `experiments/analyze.py`) tự động fallback
+   về `"legacy-pre-pilot"` để bảo đảm tương thích ngược.
 
 ---
 

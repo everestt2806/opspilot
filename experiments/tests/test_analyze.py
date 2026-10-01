@@ -11,6 +11,7 @@ from analyze import (
     Aggregate,
     aggregate,
     analyze_run,
+    load_run,
     main_table,
     read_run_meta,
     read_score_csv,
@@ -40,7 +41,9 @@ def test_analyze_run_perfect_detection_for_one_method():
             (2120.0, True),  # TP
         ],
     )
-    results = {r.method: r for r in analyze_run(rows, FAULT_START, FAULT_END, HOLDOUT, 60.0)}
+    results = {
+        r.method: r for r in analyze_run(rows, FAULT_START, FAULT_END, HOLDOUT, 60.0)
+    }
     ens = results["ensemble"]
     # 3 mẫu ANOMALY: 2100 streak=1 (chưa đủ 2 -> FN), 2110 & 2120 triggered (TP) -> recall 2/3.
     # Đây là cơ chế consecutive đúng: mẫu ANOMALY đầu tiên luôn là FN nếu consecutive>=2.
@@ -53,14 +56,18 @@ def test_analyze_run_perfect_detection_for_one_method():
 def test_analyze_run_censored_when_never_triggered():
     rows = _score_rows("iforest", [(2100.0, False), (2200.0, True), (3000.0, False)])
     # iforest consecutive=2 nhưng không có 2 True liên tiếp -> không bao giờ triggered
-    results = {r.method: r for r in analyze_run(rows, FAULT_START, FAULT_END, HOLDOUT, 60.0)}
+    results = {
+        r.method: r for r in analyze_run(rows, FAULT_START, FAULT_END, HOLDOUT, 60.0)
+    }
     assert results["iforest"].detection_delay_s is None  # censored
     assert results["iforest"].recall == 0.0
 
 
 def test_analyze_run_missing_method_returns_none():
     rows = _score_rows("rule", [(2100.0, True), (2110.0, True), (2120.0, True)])
-    results = {r.method: r for r in analyze_run(rows, FAULT_START, FAULT_END, HOLDOUT, 60.0)}
+    results = {
+        r.method: r for r in analyze_run(rows, FAULT_START, FAULT_END, HOLDOUT, 60.0)
+    }
     # các method khác không có dòng -> toàn None
     assert results["ocsvm"].precision is None
     assert results["ocsvm"].detection_delay_s is None
@@ -77,8 +84,12 @@ def test_analyze_run_covers_all_five_methods():
 def test_grace_changes_labels():
     # 1 mẫu tại 2030 (trong grace 60 -> EXCLUDED; nhưng grace 0 -> ANOMALY).
     rows = _score_rows("rule", [(2030.0, True), (2040.0, True), (2050.0, True)])
-    res60 = {r.method: r for r in analyze_run(rows, FAULT_START, FAULT_END, HOLDOUT, 60.0)}["rule"]
-    res0 = {r.method: r for r in analyze_run(rows, FAULT_START, FAULT_END, HOLDOUT, 0.0)}["rule"]
+    res60 = {
+        r.method: r for r in analyze_run(rows, FAULT_START, FAULT_END, HOLDOUT, 60.0)
+    }["rule"]
+    res0 = {
+        r.method: r for r in analyze_run(rows, FAULT_START, FAULT_END, HOLDOUT, 0.0)
+    }["rule"]
     # grace 60: cả 3 mẫu EXCLUDED -> không TP/FN -> recall None
     assert res60.recall is None
     # grace 0: 3 mẫu ANOMALY, rule consecutive=3 -> mẫu thứ 3 triggered -> có TP
@@ -103,7 +114,9 @@ def test_aggregate_counts_censored_none():
 
 def test_aggregate_all_none():
     agg = aggregate([None, None])
-    assert agg == Aggregate(n=0, mean=None, std=None, ci95_low=None, ci95_high=None, censored=2)
+    assert agg == Aggregate(
+        n=0, mean=None, std=None, ci95_low=None, ci95_high=None, censored=2
+    )
 
 
 def test_aggregate_single_value_no_ci():
@@ -203,3 +216,31 @@ def test_export_results_to_analyze_roundtrip_iso_utc(tmp_path):
     assert "| Method | Precision | Recall | F1 | Delay (s) | #censored |" in table
     for method in METHODS:
         assert f"| {method} |" in table
+
+
+def test_load_run_missing_protocol_version_defaults_to_legacy(tmp_path):
+    run_dir = tmp_path / "legacy_run"
+    run_dir.mkdir()
+    (run_dir / "meta.json").write_text(
+        '{"scenario": "latency_creep", "repeat_index": 1}', encoding="utf-8"
+    )
+    (run_dir / "metric_sample.csv").write_text("seq,ts_vps\n", encoding="utf-8")
+    (run_dir / "score_sample.csv").write_text("method,ts_vps\n", encoding="utf-8")
+
+    manifest, _metrics, _scores = load_run(run_dir)
+    assert manifest["protocol_version"] == "legacy-pre-pilot"
+    assert manifest["scenario"] == "latency_creep"
+
+
+def test_load_run_preserves_existing_protocol_version(tmp_path):
+    run_dir = tmp_path / "modern_run"
+    run_dir.mkdir()
+    (run_dir / "meta.json").write_text(
+        '{"scenario": "latency_creep", "repeat_index": 1, "protocol_version": "1.0"}',
+        encoding="utf-8",
+    )
+    (run_dir / "metric_sample.csv").write_text("seq,ts_vps\n", encoding="utf-8")
+    (run_dir / "score_sample.csv").write_text("method,ts_vps\n", encoding="utf-8")
+
+    manifest, _metrics, _scores = load_run(run_dir)
+    assert manifest["protocol_version"] == "1.0"

@@ -12,8 +12,8 @@ Năm kịch bản (docs/07 mục 6), pha C = 20 phút = 1200s:
   latency_creep GET /debug/latency?ms=x   x: +50ms/phút, trần 2500  (xem GHI CHÚ dưới)
 
 GHI CHÚ latency_creep (chốt trước pilot, DECISIONS.md 2026-10-01): giữ đúng lịch +50ms/phút
-(pha C 20 phút đạt ~1000ms, trần 2500ms). Kỳ vọng trong docs/07 đã đồng bộ: rule tĩnh với
-ngưỡng 2000ms sẽ không kích hoạt trong 20 phút pha C (censored); ML phát hiện sớm sự trôi dạt.
+(trần 2500ms). Lịch này tạo tối đa khoảng 1.000 ms delay bổ sung ở cuối pha; việc latency quan sát
+vượt 2.000 ms và ML có phát hiện sớm hay không là kết quả cần đo, không khẳng định trước.
 """
 
 from __future__ import annotations

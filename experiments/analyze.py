@@ -26,6 +26,15 @@ except ImportError:
     from experiments.labeling import RunWindows, label_series, triggered_series
     from experiments.metrics import confusion, detection_delay_s
 
+try:
+    from manifest import LEGACY_PROTOCOL_DEFAULT
+except ImportError:
+    try:
+        from experiments.manifest import LEGACY_PROTOCOL_DEFAULT
+    except ImportError:
+        LEGACY_PROTOCOL_DEFAULT = "legacy-pre-pilot"
+
+
 GRACE_SWEEP_S = (0, 30, 60, 120)
 METHODS = ("rule", "zscore_ewma", "iforest", "ocsvm", "ensemble")
 # consecutive dùng chung: rule=3, ML=2 (docs/07 mục 5, monitor_setting mặc định).
@@ -171,7 +180,9 @@ def _fmt(value: float | None, digits: int = 3) -> str:
     return "—" if value is None else f"{value:.{digits}f}"
 
 
-def main_table(run_dirs: list[Path], grace_s: float = 60.0) -> str:  # pragma: no cover - I/O ráp nối
+def main_table(
+    run_dirs: list[Path], grace_s: float = 60.0
+) -> str:  # pragma: no cover - I/O ráp nối
     """Ráp bảng chính Markdown (docs/07 mục 9.1) từ nhiều thư mục run. Mỗi ô mean±std [CI]."""
     per_method: dict[str, dict[str, list]] = {
         m: {"f1": [], "precision": [], "recall": [], "delay": []} for m in METHODS
@@ -233,6 +244,8 @@ def load_run(
     directory: Path,
 ) -> tuple[dict[str, Any], list[dict[str, str]], list[dict[str, str]]]:
     manifest = json.loads((directory / "meta.json").read_text(encoding="utf-8"))
+    if not manifest.get("protocol_version"):
+        manifest["protocol_version"] = LEGACY_PROTOCOL_DEFAULT
     with (directory / "metric_sample.csv").open(newline="", encoding="utf-8") as handle:
         metrics = list(csv.DictReader(handle))
     with (directory / "score_sample.csv").open(newline="", encoding="utf-8") as handle:
@@ -304,7 +317,9 @@ def summarize(directory: Path, grace_s: int = 60) -> list[dict[str, Any]]:
     return rows
 
 
-if __name__ == "__main__":  # pragma: no cover - CLI mỏng, logic đã test qua main_table/analyze_run
+if (
+    __name__ == "__main__"
+):  # pragma: no cover - CLI mỏng, logic đã test qua main_table/analyze_run
     import argparse
     import sys
 
@@ -315,8 +330,12 @@ if __name__ == "__main__":  # pragma: no cover - CLI mỏng, logic đã test qua
     parser = argparse.ArgumentParser(
         description="Phân tích kết quả thí nghiệm (docs/07 mục 9)"
     )
-    parser.add_argument("results_root", help="Thư mục experiments/results/ (hoặc 1 thư mục run)")
-    parser.add_argument("--grace", type=float, default=60.0, help="detection grace (giây)")
+    parser.add_argument(
+        "results_root", help="Thư mục experiments/results/ (hoặc 1 thư mục run)"
+    )
+    parser.add_argument(
+        "--grace", type=float, default=60.0, help="detection grace (giây)"
+    )
     args = parser.parse_args()
 
     root = Path(args.results_root)

@@ -70,9 +70,19 @@ def test_export_writes_five_artifacts(tmp_path):
     out = run_dir_for(tmp_path, "memory_leak", 1)
     counts = export_run(conn, run_id=7, out_dir=out)
 
-    assert counts == {"metric_sample": 3, "score_sample": 2, "alert": 1, "experiment_run": 1}
-    for name in ("metric_sample.csv", "score_sample.csv", "alert.csv", "experiment_run.csv",
-                 "meta.json"):
+    assert counts == {
+        "metric_sample": 3,
+        "score_sample": 2,
+        "alert": 1,
+        "experiment_run": 1,
+    }
+    for name in (
+        "metric_sample.csv",
+        "score_sample.csv",
+        "alert.csv",
+        "experiment_run.csv",
+        "meta.json",
+    ):
         assert (out / name).exists()
 
 
@@ -93,12 +103,26 @@ def test_meta_json_records_run(tmp_path):
     conn = sqlite3.connect(":memory:")
     _seed(conn)
     out = run_dir_for(tmp_path, "memory_leak", 1)
-    export_run(conn, run_id=7, out_dir=out, meta_extra={"git_commit": "abc123",
-                                                        "feature_version": "1"})
+    export_run(
+        conn,
+        run_id=7,
+        out_dir=out,
+        meta_extra={"git_commit": "abc123", "feature_version": "1"},
+    )
     meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
     assert meta["scenario"] == "memory_leak"
     assert meta["git_commit"] == "abc123"
     assert meta["clock_offset_ms"] == 120
+    assert meta["protocol_version"] == "1.0"
+
+
+def test_export_run_custom_protocol_version(tmp_path):
+    conn = sqlite3.connect(":memory:")
+    _seed(conn)
+    out = run_dir_for(tmp_path, "memory_leak", 2)
+    export_run(conn, run_id=7, out_dir=out, meta_extra={"protocol_version": "2.0"})
+    meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+    assert meta["protocol_version"] == "2.0"
 
 
 def test_export_never_touches_vps_table(tmp_path):
