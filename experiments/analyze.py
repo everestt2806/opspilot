@@ -198,21 +198,37 @@ def main_table(
         if not meta_file.exists():
             continue
         meta = read_run_meta(meta_file)
+        # Tiếp tục bỏ qua các run không completed (aborted, running, v.v.)
         if meta.get("status") != "completed":
             continue
 
-        f_start = meta.get("fault_start_ts")
-        f_end = meta.get("fault_end_ts")
-        if not f_start or not f_end:
-            continue
-
+        # Với run completed: bắt buộc score_sample.csv phải tồn tại
         score_file = run_dir / "score_sample.csv"
-        scores = read_score_csv(score_file) if score_file.exists() else []
+        if not score_file.is_file():
+            raise ValueError(
+                f"Run completed tại thư mục '{run_dir}' thiếu file bắt buộc 'score_sample.csv'"
+            )
+
+        # Bắt buộc các mốc thời gian train_at_ts, fault_start_ts, fault_end_ts phải tồn tại và hợp lệ
+        for ts_col in ("train_at_ts", "fault_start_ts", "fault_end_ts"):
+            val = meta.get(ts_col)
+            if not val or not str(val).strip():
+                raise ValueError(
+                    f"Run completed tại thư mục '{run_dir}' thiếu mốc thời gian bắt buộc '{ts_col}'"
+                )
+            try:
+                _parse_ts(val)
+            except Exception as err:
+                raise ValueError(
+                    f"Run completed tại thư mục '{run_dir}' có mốc '{ts_col}'='{val}' không hợp lệ: {err}"
+                ) from err
+
+        scores = read_score_csv(score_file)
         results = analyze_run(
             scores,
-            fault_start_ts=f_start,
-            fault_end_ts=f_end,
-            holdout_start_ts=meta.get("train_at_ts") or 1000.0,
+            fault_start_ts=meta["fault_start_ts"],
+            fault_end_ts=meta["fault_end_ts"],
+            holdout_start_ts=meta["train_at_ts"],
             grace_s=grace_s,
         )
         for r in results:

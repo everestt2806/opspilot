@@ -236,3 +236,51 @@ def test_export_refuses_when_directory_already_exists(tmp_path):
     pre_existing.mkdir()
     with pytest.raises(FileExistsError, match="đã tồn tại"):
         export_run(conn, run_id=7, out_dir=pre_existing)
+
+
+def test_export_meta_extra_cannot_overwrite_db_fields(tmp_path):
+    """Xác nhận meta_extra không thể ghi đè các trường định danh/trạng thái lấy từ DB,
+
+    và dữ liệu trong experiment_run.csv cùng meta.json luôn khớp nhau.
+    """
+    conn = sqlite3.connect(":memory:")
+    conn.executescript(_SCHEMA)
+    conn.execute(
+        "INSERT INTO experiment_run (id, scenario, repeat_index, attempt_index, deployment_id, vps_id, "
+        "fault_start_ts, fault_end_ts, train_at_ts, clock_offset_ms, detection_grace_s, status, abort_reason) "
+        "VALUES (10, 'error_burst', 2, 1, 42, 1, '2000.0', '3200.0', '1000.0', 120, 60, 'aborted', 'oom_kill')"
+    )
+    conn.commit()
+
+    out_dir = run_dir_for(tmp_path, "error_burst", 2, attempt_index=1)
+    malicious_extra = {
+        "run_id": 9999,
+        "scenario": "latency_creep",
+        "repeat_index": 99,
+        "attempt_index": 3,
+        "status": "completed",
+        "git_commit": "abc1234",
+    }
+    export_run(conn, run_id=10, out_dir=out_dir, meta_extra=malicious_extra)
+
+    meta = json.loads((out_dir / "meta.json").read_text(encoding="utf-8"))
+    with (out_dir / "experiment_run.csv").open(newline="", encoding="utf-8") as stream:
+        csv_rows = list(csv.DictReader(stream))
+    assert len(csv_rows) == 1
+    csv_row = csv_rows[0]
+
+    # Các trường bảo vệ trong meta.json PHẢI giữ nguyên giá trị từ DB
+    assert meta["run_id"] == 10
+    assert meta["scenario"] == "error_burst"
+    assert meta["repeat_index"] == 2
+    assert meta["attempt_index"] == 1
+    assert meta["status"] == "aborted"
+    # Trường không nằm trong danh sách bảo vệ được cập nhật bình thường
+    assert meta["git_commit"] == "abc1234"
+
+    # CSV và meta.json luôn luôn khớp nhau
+    assert str(meta["run_id"]) == csv_row["id"]
+    assert meta["scenario"] == csv_row["scenario"]
+    assert str(meta["repeat_index"]) == csv_row["repeat_index"]
+    assert str(meta["attempt_index"]) == csv_row["attempt_index"]
+    assert meta["status"] == csv_row["status"]

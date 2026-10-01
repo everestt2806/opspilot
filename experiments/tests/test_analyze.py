@@ -4,6 +4,8 @@ import sqlite3
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from analyze import (
@@ -404,3 +406,138 @@ def test_cli_analyze_with_completed_and_aborted_runs_missing_scores_and_timestam
     assert "| Aborted Runs | 1 |" in output
     assert "vps_reboot_timeout: 1" in output
     assert "## Grace-sweep" in output
+
+
+def test_main_table_completed_missing_data_raises_clear_errors(tmp_path):
+    """Xác nhận main_table ném lỗi rõ ràng chỉ tên thư mục và trường/file thiếu với run completed."""
+    # 1. Completed run thiếu file score_sample.csv
+    no_score_dir = tmp_path / "run_completed_no_score"
+    no_score_dir.mkdir()
+    (no_score_dir / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "cpu_spike,completed,1000.0,2000.0,3200.0\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ValueError, match="thiếu file bắt buộc 'score_sample.csv'"
+    ) as exc_info:
+        main_table([no_score_dir])
+    assert str(no_score_dir) in str(exc_info.value)
+
+    score_content = "method,ts_vps,above_threshold\nensemble,2100.0,1\n"
+
+    # 2. Completed run thiếu train_at_ts
+    no_train_dir = tmp_path / "run_completed_no_train"
+    no_train_dir.mkdir()
+    (no_train_dir / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "cpu_spike,completed,,2000.0,3200.0\n",
+        encoding="utf-8",
+    )
+    (no_train_dir / "score_sample.csv").write_text(score_content, encoding="utf-8")
+    with pytest.raises(
+        ValueError, match="thiếu mốc thời gian bắt buộc 'train_at_ts'"
+    ) as exc_info:
+        main_table([no_train_dir])
+    assert str(no_train_dir) in str(exc_info.value)
+
+    # 3. Completed run thiếu fault_start_ts
+    no_fstart_dir = tmp_path / "run_completed_no_fstart"
+    no_fstart_dir.mkdir()
+    (no_fstart_dir / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "cpu_spike,completed,1000.0,,3200.0\n",
+        encoding="utf-8",
+    )
+    (no_fstart_dir / "score_sample.csv").write_text(score_content, encoding="utf-8")
+    with pytest.raises(
+        ValueError, match="thiếu mốc thời gian bắt buộc 'fault_start_ts'"
+    ) as exc_info:
+        main_table([no_fstart_dir])
+    assert str(no_fstart_dir) in str(exc_info.value)
+
+    # 4. Completed run thiếu fault_end_ts
+    no_fend_dir = tmp_path / "run_completed_no_fend"
+    no_fend_dir.mkdir()
+    (no_fend_dir / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "cpu_spike,completed,1000.0,2000.0,\n",
+        encoding="utf-8",
+    )
+    (no_fend_dir / "score_sample.csv").write_text(score_content, encoding="utf-8")
+    with pytest.raises(
+        ValueError, match="thiếu mốc thời gian bắt buộc 'fault_end_ts'"
+    ) as exc_info:
+        main_table([no_fend_dir])
+    assert str(no_fend_dir) in str(exc_info.value)
+
+    # 5. Completed run có mốc không hợp lệ (sai định dạng)
+    invalid_ts_dir = tmp_path / "run_completed_invalid_ts"
+    invalid_ts_dir.mkdir()
+    (invalid_ts_dir / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "cpu_spike,completed,1000.0,invalid_timestamp,3200.0\n",
+        encoding="utf-8",
+    )
+    (invalid_ts_dir / "score_sample.csv").write_text(score_content, encoding="utf-8")
+    with pytest.raises(
+        ValueError, match="có mốc 'fault_start_ts'='invalid_timestamp' không hợp lệ"
+    ) as exc_info:
+        main_table([invalid_ts_dir])
+    assert str(invalid_ts_dir) in str(exc_info.value)
+
+
+def test_main_table_aborted_and_running_missing_data_are_safely_skipped(tmp_path):
+    """Xác nhận các run aborted hoặc running dù thiếu bất kỳ file/mốc nào vẫn được bỏ qua an toàn."""
+    # 1. Aborted run thiếu toàn bộ (không score, không mốc)
+    aborted_empty = tmp_path / "run_aborted_empty"
+    aborted_empty.mkdir()
+    (aborted_empty / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "cpu_spike,aborted,,,\n",
+        encoding="utf-8",
+    )
+
+    # 2. Aborted run có mốc sai định dạng
+    aborted_invalid_ts = tmp_path / "run_aborted_invalid_ts"
+    aborted_invalid_ts.mkdir()
+    (aborted_invalid_ts / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "slow_db,aborted,corrupt,corrupt,corrupt\n",
+        encoding="utf-8",
+    )
+
+    # 3. Running run thiếu score và thiếu mốc
+    running_dir = tmp_path / "run_still_running"
+    running_dir.mkdir()
+    (running_dir / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "error_burst,running,,,\n",
+        encoding="utf-8",
+    )
+
+    # 4. Completed run hợp lệ
+    completed_valid = tmp_path / "run_completed_valid"
+    completed_valid.mkdir()
+    (completed_valid / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "cpu_spike,completed,1000.0,2000.0,3200.0\n",
+        encoding="utf-8",
+    )
+    (completed_valid / "score_sample.csv").write_text(
+        "method,ts_vps,above_threshold\n"
+        "ensemble,2100.0,1\n"
+        "ensemble,2110.0,1\n"
+        "rule,2100.0,1\n"
+        "rule,2110.0,1\n"
+        "rule,2120.0,1\n",
+        encoding="utf-8",
+    )
+
+    table = main_table(
+        [aborted_empty, aborted_invalid_ts, running_dir, completed_valid],
+        grace_s=60.0,
+    )
+    assert "| Method | Precision | Recall | F1 | Delay (s) | #censored |" in table
+    for method in METHODS:
+        assert f"| {method} |" in table

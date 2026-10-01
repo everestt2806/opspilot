@@ -167,6 +167,14 @@ def export_run(
     keys = first_run.keys() if hasattr(first_run, "keys") else []
     attempt_index = first_run["attempt_index"] if "attempt_index" in keys else 1
 
+    PROTECTED_META_KEYS = {
+        "run_id",
+        "scenario",
+        "repeat_index",
+        "attempt_index",
+        "status",
+    }
+
     meta = {
         "run_id": run_id,
         "scenario": first_run["scenario"],
@@ -179,9 +187,10 @@ def export_run(
         "counts": counts,
     }
     if meta_extra:
-        meta.update(
-            meta_extra
-        )  # git_commit, collector_version, protocol_version, feature_version, ngưỡng (docs/07)
+        # Ngăn meta_extra ghi đè các trường định danh/trạng thái lấy từ DB (TK-S6 P2b-3)
+        for k, v in meta_extra.items():
+            if k not in PROTECTED_META_KEYS:
+                meta[k] = v
     (out_dir / "meta.json").write_text(
         json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8"
     )
