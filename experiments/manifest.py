@@ -2,6 +2,12 @@
 
 Module chỉ dùng thư viện chuẩn để có thể chạy offline trên máy phân tích. Manifest được ghi
 ngay sau mỗi phase và không chứa credential.
+
+Hướng dẫn đọc dữ liệu cũ (backward compatibility):
+Các run trước khi chốt protocol version có thể không có trường `protocol_version` trong `meta.json`.
+Khi đọc dữ liệu cũ bằng `read_manifest()` hoặc `RunManifest.from_dict()`, hệ thống sẽ tự động gán
+giá trị mặc định `legacy-pre-pilot` (hoặc giá trị tuỳ chọn được truyền vào) để phân biệt rõ ràng
+với protocol phiên bản hiện tại (`1.0`), bảo đảm tính toàn vẹn và không làm crash các script phân tích.
 """
 
 from __future__ import annotations
@@ -10,10 +16,13 @@ import hashlib
 import json
 import os
 import subprocess
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+DEFAULT_PROTOCOL_VERSION: str = "1.0"
+LEGACY_PROTOCOL_DEFAULT: str = "legacy-pre-pilot"
 
 
 @dataclass
@@ -25,6 +34,7 @@ class RunManifest:
     deployment_id: int | None = None
     git_commit: str = "unknown"
     collector_version: str = "unknown"
+    protocol_version: str = DEFAULT_PROTOCOL_VERSION
     feature_version: str = "v1-5metrics-4feats-w20"
     random_state: int = 42
     clock_offset_ms: int = 0
@@ -60,9 +70,8 @@ class RunManifest:
             errors.append("attempt_index phải nằm trong 1..3")
         if abs(self.clock_offset_ms) > 2000:
             errors.append("clock_skew vượt 2000ms")
-        if (
-            self.status == "completed"
-            and self.actual_sample_count < int(self.expected_sample_count * 0.9)
+        if self.status == "completed" and self.actual_sample_count < int(
+            self.expected_sample_count * 0.9
         ):
             errors.append("sample count dưới 90% kỳ vọng")
         if self.largest_gap_s is not None and self.largest_gap_s > 120:
@@ -73,6 +82,25 @@ class RunManifest:
         payload = asdict(self)
         payload["integrity_errors"] = self.validate()
         return payload
+
+    @classmethod
+    def from_dict(
+        cls,
+        payload: dict[str, Any],
+        default_protocol_version: str = LEGACY_PROTOCOL_DEFAULT,
+    ) -> RunManifest:
+        """Khôi phục RunManifest từ dict.
+
+        Hỗ trợ đọc dữ liệu cũ: nếu thiếu 'protocol_version', tự động gán default_protocol_version
+        ('legacy-pre-pilot'). Bỏ qua các trường ngoài schema (như 'integrity_errors').
+        """
+        data = dict(payload)
+        data.pop("integrity_errors", None)
+        if "protocol_version" not in data or data["protocol_version"] is None:
+            data["protocol_version"] = default_protocol_version
+        valid_fields = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in data.items() if k in valid_fields}
+        return cls(**filtered)
 
 
 def git_commit(repo: Path | None = None) -> str:
@@ -97,6 +125,17 @@ def write_manifest(path: Path, manifest: RunManifest) -> None:
     path.write_text(
         json.dumps(manifest.to_json(), ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
+    )
+
+
+def read_manifest(
+    path: Path,
+    default_protocol_version: str = LEGACY_PROTOCOL_DEFAULT,
+) -> RunManifest:
+    """Đọc RunManifest từ file JSON, tương thích ngược với dữ liệu cũ thiếu protocol_version."""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return RunManifest.from_dict(
+        payload, default_protocol_version=default_protocol_version
     )
 
 
