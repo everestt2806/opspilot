@@ -4,13 +4,16 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { closeDatabase, initializeDatabase } from './index'
+import { closeDatabase, initializeDatabase, setMigration005TestInterceptor } from './index'
 import Database from 'better-sqlite3'
 import migration001 from './migrations/001_init.sql?raw'
+import migration003 from './migrations/003_migration_error_message.sql?raw'
+import migration004 from './migrations/004_publish_doctor_domain.sql?raw'
 
 let testDirectory: string | null = null
 
 afterEach(() => {
+  setMigration005TestInterceptor(null)
   closeDatabase()
   if (testDirectory) {
     rmSync(testDirectory, { recursive: true, force: true })
@@ -31,7 +34,7 @@ describe('initializeDatabase', () => {
       .get() as { version: number }
 
     expect(tables).toHaveLength(15)
-    expect(schemaVersion.version).toBe(4)
+    expect(schemaVersion.version).toBe(5)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -62,7 +65,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 4
+      version: 5
     })
     expect(
       database
@@ -125,6 +128,172 @@ describe('initializeDatabase', () => {
       database.exec(
         "INSERT INTO deployment (id, app_id, version, image_tag, status, exposure_status) VALUES (100, 1, 100, 'demo:v100', 'running', 'invalid_status')"
       )
+    }).toThrow(/CHECK constraint failed/i)
+  })
+
+  it('migration 005: rollback sach se khi loi duoc tiem giua migration, bao toan DB v4 cu va chay lai thanh cong', () => {
+    testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v5-'))
+    const path = join(testDirectory, 'opspilot.db')
+
+    // 1. Tạo DB v4 với dữ liệu hoàn chỉnh
+    const v4Db = new Database(path)
+    v4Db.pragma('journal_mode = WAL')
+    v4Db.pragma('foreign_keys = ON')
+
+    // Áp dụng migrations 1..4
+    v4Db.exec(migration001)
+    v4Db.exec(`
+      ALTER TABLE app ADD COLUMN metrics_stream_generation TEXT NOT NULL DEFAULT 'legacy';
+      ALTER TABLE app ADD COLUMN metrics_stream_device INTEGER;
+      ALTER TABLE app ADD COLUMN metrics_stream_inode INTEGER;
+      CREATE TABLE IF NOT EXISTS deployment_activation (
+        id INTEGER PRIMARY KEY,
+        app_id INTEGER NOT NULL REFERENCES app(id) ON DELETE CASCADE,
+        deployment_id INTEGER NOT NULL REFERENCES deployment(id) ON DELETE CASCADE,
+        stream_generation TEXT NOT NULL,
+        start_offset INTEGER NOT NULL CHECK (start_offset >= 1),
+        end_offset INTEGER CHECK (end_offset IS NULL OR end_offset >= start_offset),
+        reason TEXT NOT NULL CHECK (reason IN ('deploy','manual_rollback','auto_rollback','rotation','legacy')),
+        state TEXT NOT NULL CHECK (state IN ('prepared','active','closed','aborted')),
+        prepared_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+        activated_at TEXT,
+        closed_at TEXT
+      );
+    `)
+    v4Db.exec(migration003)
+    v4Db.exec(migration004)
+
+    for (let v = 1; v <= 4; v++) {
+      v4Db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(v)
+    }
+
+    // Nạp dữ liệu tiền đề
+    v4Db.exec("INSERT INTO vps (id, name, host, username, auth_type, encrypted_secret) VALUES (1, 'v', 'h', 'u', 'password', 'x')")
+    v4Db.exec("INSERT INTO app (id, vps_id, name, framework, host_port, container_port) VALUES (1, 1, 'demo', 'express', 3000, 3000)")
+    v4Db.exec("INSERT INTO deployment (id, app_id, version, image_tag, status) VALUES (1, 1, 1, 'demo:v1', 'running')")
+
+    // Nạp 3 bản ghi experiment_run v4 (chưa có cột attempt_index, có ID nhảy cóc)
+    v4Db.exec(`
+      INSERT INTO experiment_run (id, scenario, repeat_index, deployment_id, vps_id, status)
+      VALUES (10, 'cpu_spike', 1, 1, 1, 'completed');
+
+      INSERT INTO experiment_run (id, scenario, repeat_index, deployment_id, vps_id, status, abort_reason)
+      VALUES (20, 'memory_leak', 1, 1, 1, 'aborted', 'clock_skew_too_large');
+
+      INSERT INTO experiment_run (id, scenario, repeat_index, deployment_id, vps_id, status)
+      VALUES (30, 'error_burst', 2, 1, 1, 'running');
+    `)
+
+    // Nạp các bản ghi alert có liên kết tới experiment_run
+    v4Db.exec(`
+      INSERT INTO alert (id, deployment_id, method, ts_vps, peak_score, experiment_run_id)
+      VALUES (101, 1, 'rule', '2026-10-01T12:00:00Z', 1.0, 10);
+
+      INSERT INTO alert (id, deployment_id, method, ts_vps, peak_score, experiment_run_id)
+      VALUES (102, 1, 'iforest', '2026-10-01T12:05:00Z', 0.95, 20);
+
+      INSERT INTO alert (id, deployment_id, method, ts_vps, peak_score, experiment_run_id)
+      VALUES (103, 1, 'ocsvm', '2026-10-01T12:10:00Z', 0.88, NULL);
+    `)
+
+    v4Db.close()
+
+    // 2. KỊCH BẢN A: TIÊM LỖI GIỮA MIGRATION 005
+    setMigration005TestInterceptor(() => {
+      throw new Error('Loi mo phong duoc tiem giua migration 005')
+    })
+
+    // Khởi tạo DB sẽ cố gắng chạy migration 005 và văng lỗi do interceptor
+    expect(() => initializeDatabase(testDirectory!)).toThrow(/Loi mo phong duoc tiem giua migration 005/)
+
+    // Mở lại DB độc lập để kiểm tra tính toàn vẹn của DB cũ sau rollback
+    const verifyDb = new Database(path)
+
+    // a. Version vẫn dừng ở 4, migration 5 CHƯA được ghi nhận
+    const verRow = verifyDb.prepare('SELECT MAX(version) AS version FROM schema_version').get() as { version: number }
+    expect(verRow.version).toBe(4)
+
+    // b. Bảng experiment_run vẫn giữ nguyên cấu trúc schema v4 cũ (KHÔNG có cột attempt_index)
+    const hasAttemptCol = (
+      verifyDb.prepare("SELECT COUNT(*) AS c FROM pragma_table_info('experiment_run') WHERE name = 'attempt_index'").get() as { c: number }
+    ).c
+    expect(hasAttemptCol).toBe(0)
+
+    // c. Ràng buộc cũ UNIQUE(scenario, repeat_index) vẫn còn
+    expect(() => {
+      verifyDb.exec("INSERT INTO experiment_run (id, scenario, repeat_index) VALUES (99, 'cpu_spike', 1)")
+    }).toThrow(/UNIQUE constraint failed/i)
+
+    // d. Dữ liệu cũ của experiment_run còn nguyên vẹn 100%
+    const oldRuns = verifyDb.prepare('SELECT id, scenario, repeat_index, status FROM experiment_run ORDER BY id').all()
+    expect(oldRuns).toEqual([
+      { id: 10, scenario: 'cpu_spike', repeat_index: 1, status: 'completed' },
+      { id: 20, scenario: 'memory_leak', repeat_index: 1, status: 'aborted' },
+      { id: 30, scenario: 'error_burst', repeat_index: 2, status: 'running' }
+    ])
+
+    // e. Từng cặp alert.id -> experiment_run_id còn nguyên vẹn
+    const oldAlerts = verifyDb.prepare('SELECT id, experiment_run_id FROM alert ORDER BY id').all()
+    expect(oldAlerts).toEqual([
+      { id: 101, experiment_run_id: 10 },
+      { id: 102, experiment_run_id: 20 },
+      { id: 103, experiment_run_id: null }
+    ])
+
+    // f. Trạng thái foreign_keys ở ngoài transaction vẫn được khôi phục là ON (1)
+    expect(verifyDb.pragma('foreign_keys', { simple: true })).toBe(1)
+    verifyDb.close()
+
+    // 3. KỊCH BẢN B: CHẠY LẠI THÀNH CÔNG (Sau khi gỡ lỗi tiêm)
+    setMigration005TestInterceptor(null)
+
+    const database = initializeDatabase(testDirectory!)
+
+    // a. Version nâng lên 5
+    const successVer = database.prepare('SELECT MAX(version) AS version FROM schema_version').get() as { version: number }
+    expect(successVer.version).toBe(5)
+
+    // b. Bảng experiment_run đã có cột attempt_index và backfill = 1 cho tất cả bản ghi cũ
+    const postRuns = database.prepare('SELECT id, scenario, repeat_index, attempt_index, status FROM experiment_run ORDER BY id').all()
+    expect(postRuns).toEqual([
+      { id: 10, scenario: 'cpu_spike', repeat_index: 1, attempt_index: 1, status: 'completed' },
+      { id: 20, scenario: 'memory_leak', repeat_index: 1, attempt_index: 1, status: 'aborted' },
+      { id: 30, scenario: 'error_burst', repeat_index: 2, attempt_index: 1, status: 'running' }
+    ])
+
+    // c. Giữ nguyên chính xác tập ID run
+    const postRunIds = (database.prepare('SELECT id FROM experiment_run ORDER BY id').all() as Array<{ id: number }>).map((r) => r.id)
+    expect(postRunIds).toEqual([10, 20, 30])
+
+    // d. Giữ nguyên chính xác từng cặp alert.id -> experiment_run_id
+    const postAlerts = database.prepare('SELECT id, experiment_run_id FROM alert ORDER BY id').all()
+    expect(postAlerts).toEqual([
+      { id: 101, experiment_run_id: 10 },
+      { id: 102, experiment_run_id: 20 },
+      { id: 103, experiment_run_id: null }
+    ])
+
+    // e. foreign_key_check sạch sẽ
+    const fkErrors = database.pragma('foreign_key_check') as Array<unknown>
+    expect(fkErrors).toEqual([])
+
+    // f. Ràng buộc mới UNIQUE(scenario, repeat_index, attempt_index) hoạt động:
+    // Cho phép chèn attempt 2 cho kịch bản cpu_spike repeat 1 (trước đây bị chặn ở schema v1)
+    database.exec("INSERT INTO experiment_run (id, scenario, repeat_index, attempt_index, status) VALUES (40, 'cpu_spike', 1, 2, 'running')")
+    const newRun = database.prepare('SELECT id, attempt_index FROM experiment_run WHERE id = 40').get()
+    expect(newRun).toEqual({ id: 40, attempt_index: 2 })
+
+    // Nhưng chèn trùng (cpu_spike, 1, 1) hoặc (cpu_spike, 1, 2) sẽ bị chặn
+    expect(() => {
+      database.exec("INSERT INTO experiment_run (id, scenario, repeat_index, attempt_index) VALUES (41, 'cpu_spike', 1, 1)")
+    }).toThrow(/UNIQUE constraint failed/i)
+
+    // CHECK constraint attempt_index BETWEEN 1 AND 3 hoạt động
+    expect(() => {
+      database.exec("INSERT INTO experiment_run (id, scenario, repeat_index, attempt_index) VALUES (42, 'slow_db', 1, 4)")
+    }).toThrow(/CHECK constraint failed/i)
+    expect(() => {
+      database.exec("INSERT INTO experiment_run (id, scenario, repeat_index, attempt_index) VALUES (43, 'slow_db', 1, 0)")
     }).toThrow(/CHECK constraint failed/i)
   })
 })

@@ -299,6 +299,7 @@ CREATE TABLE experiment_run (
   scenario         TEXT    NOT NULL CHECK (scenario IN
                      ('memory_leak','cpu_spike','error_burst','slow_db','latency_creep')),
   repeat_index     INTEGER NOT NULL,          -- 1..10
+  attempt_index    INTEGER NOT NULL DEFAULT 1 CHECK (attempt_index BETWEEN 1 AND 3), -- 1..3
   deployment_id    INTEGER REFERENCES deployment(id) ON DELETE SET NULL,
   vps_id           INTEGER REFERENCES vps(id),
 
@@ -319,11 +320,9 @@ CREATE TABLE experiment_run (
   abort_reason      TEXT,
   notes             TEXT,
 
-  -- GHI CHÚ RÀ SOÁT 2026-07-28 — đề xuất, chưa áp dụng:
-  -- Protocol cho phép retry tối đa 2 lần nhưng unique hiện tại không lưu được từng attempt.
-  -- Phương án đề xuất: thêm attempt_index INTEGER NOT NULL DEFAULT 1 và đổi unique thành
-  -- UNIQUE (scenario, repeat_index, attempt_index). Giữ nguyên schema v1 cho tới khi chốt.
-  UNIQUE (scenario, repeat_index)
+  -- GHI CHÚ RÀ SOÁT 2026-10-01 (P2b-1, migration 005):
+  -- Bổ sung attempt_index (1..3) và đổi UNIQUE thành (scenario, repeat_index, attempt_index).
+  UNIQUE (scenario, repeat_index, attempt_index)
 );
 
 -- =============================================================================

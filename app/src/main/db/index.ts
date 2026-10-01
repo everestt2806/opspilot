@@ -7,6 +7,7 @@ import migration001 from './migrations/001_init.sql?raw'
 import migration002 from './migrations/002_metric_activation.sql?raw'
 import migration003 from './migrations/003_migration_error_message.sql?raw'
 import migration004 from './migrations/004_publish_doctor_domain.sql?raw'
+import migration005 from './migrations/005_experiment_run_attempt.sql?raw'
 
 interface Migration {
   name: string
@@ -34,21 +35,38 @@ const migrations: Migration[] = [
     name: '004_publish_doctor_domain.sql',
     version: 4,
     sql: migration004
+  },
+  {
+    name: '005_experiment_run_attempt.sql',
+    version: 5,
+    sql: migration005
   }
 ]
 
 export let db: Database.Database
+
+export let migration005TestInterceptor: ((database: Database.Database) => void) | null = null
+
+export function setMigration005TestInterceptor(
+  interceptor: ((database: Database.Database) => void) | null
+): void {
+  migration005TestInterceptor = interceptor
+}
 
 export function initializeDatabase(userDataPath: string): Database.Database {
   const databasePath = join(userDataPath, 'opspilot.db')
   mkdirSync(dirname(databasePath), { recursive: true })
 
   db = new Database(databasePath)
-  db.pragma('journal_mode = WAL')
-  db.pragma('foreign_keys = ON')
-  runMigrations(db)
-
-  return db
+  try {
+    db.pragma('journal_mode = WAL')
+    db.pragma('foreign_keys = ON')
+    runMigrations(db)
+    return db
+  } catch (error) {
+    db.close()
+    throw error
+  }
 }
 
 export function closeDatabase(): void {
@@ -67,6 +85,11 @@ function runMigrations(database: Database.Database): void {
       continue
     }
 
+    if (migration.version === 5) {
+      runMigration005(database, migration)
+      continue
+    }
+
     database.transaction(() => {
       applyMigration(database, migration)
       const alreadyRecorded = database
@@ -76,6 +99,110 @@ function runMigrations(database: Database.Database): void {
         database.prepare('INSERT INTO schema_version (version) VALUES (?)').run(migration.version)
       }
     })()
+  }
+}
+
+function runMigration005(database: Database.Database, migration: Migration): void {
+  const wasFkEnabled = database.pragma('foreign_keys', { simple: true }) === 1
+  if (wasFkEnabled) {
+    database.pragma('foreign_keys = OFF')
+  }
+
+  try {
+    database.transaction(() => {
+      // 1. Snapshot tiền migration
+      const preRunRows = database
+        .prepare('SELECT id FROM experiment_run ORDER BY id')
+        .all() as Array<{ id: number }>
+      const preRunIds = preRunRows.map((r) => r.id)
+
+      const preAlertPairs = database
+        .prepare(
+          'SELECT id, experiment_run_id FROM alert WHERE experiment_run_id IS NOT NULL ORDER BY id'
+        )
+        .all() as Array<{ id: number; experiment_run_id: number }>
+
+      const preNullAlertCount = (
+        database.prepare('SELECT COUNT(*) AS c FROM alert WHERE experiment_run_id IS NULL').get() as {
+          c: number
+        }
+      ).c
+
+      // 2. Thực thi DDL/DML của migration 005
+      database.exec(migration.sql)
+
+      // 3. Test interceptor (nếu có để kiểm thử lỗi được tiêm giữa migration)
+      if (migration005TestInterceptor) {
+        migration005TestInterceptor(database)
+      }
+
+      // 4. Kiểm tra foreign_key_check trước khi commit
+      const fkErrors = database.pragma('foreign_key_check') as Array<unknown>
+      if (fkErrors.length > 0) {
+        throw new Error(`Migration 005 vi phạm foreign_key_check: ${JSON.stringify(fkErrors)}`)
+      }
+
+      // 5. Kiểm tra giữ nguyên chính xác tập ID run
+      const postRunRows = database
+        .prepare('SELECT id FROM experiment_run ORDER BY id')
+        .all() as Array<{ id: number }>
+      const postRunIds = postRunRows.map((r) => r.id)
+      if (
+        postRunIds.length !== preRunIds.length ||
+        !postRunIds.every((id, idx) => id === preRunIds[idx])
+      ) {
+        throw new Error(
+          `Migration 005 không bảo toàn tập ID experiment_run: trước=[${preRunIds.join(',')}], sau=[${postRunIds.join(',')}]`
+        )
+      }
+
+      // 6. Kiểm tra giữ nguyên từng cặp alert.id -> experiment_run_id
+      const postAlertPairs = database
+        .prepare(
+          'SELECT id, experiment_run_id FROM alert WHERE experiment_run_id IS NOT NULL ORDER BY id'
+        )
+        .all() as Array<{ id: number; experiment_run_id: number }>
+
+      if (postAlertPairs.length !== preAlertPairs.length) {
+        throw new Error(
+          `Migration 005 làm thay đổi số lượng alert có experiment_run_id: trước=${preAlertPairs.length}, sau=${postAlertPairs.length}`
+        )
+      }
+
+      for (let i = 0; i < preAlertPairs.length; i++) {
+        const pre = preAlertPairs[i]
+        const post = postAlertPairs[i]
+        if (pre.id !== post.id || pre.experiment_run_id !== post.experiment_run_id) {
+          throw new Error(
+            `Migration 005 làm sai lệch liên kết alert: alert id=${pre.id} trước trỏ tới run ${pre.experiment_run_id}, sau trỏ tới ${post?.experiment_run_id}`
+          )
+        }
+      }
+
+      // 7. Kiểm tra không có alert nào bị cascade SET NULL
+      const postNullAlertCount = (
+        database.prepare('SELECT COUNT(*) AS c FROM alert WHERE experiment_run_id IS NULL').get() as {
+          c: number
+        }
+      ).c
+      if (postNullAlertCount !== preNullAlertCount) {
+        throw new Error(
+          `Migration 005 làm tăng số alert có experiment_run_id = NULL: trước=${preNullAlertCount}, sau=${postNullAlertCount}`
+        )
+      }
+
+      // 8. Ghi nhận version 5 vào schema_version
+      const alreadyRecorded = database
+        .prepare('SELECT 1 FROM schema_version WHERE version = ?')
+        .get(migration.version)
+      if (!alreadyRecorded) {
+        database.prepare('INSERT INTO schema_version (version) VALUES (?)').run(migration.version)
+      }
+    })()
+  } finally {
+    if (wasFkEnabled) {
+      database.pragma('foreign_keys = ON')
+    }
   }
 }
 
