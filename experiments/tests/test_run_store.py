@@ -91,10 +91,10 @@ def conn() -> sqlite3.Connection:
 
 
 def test_normalize_ts_and_to_epoch_seconds() -> None:
-    # 1. Epoch float với và không có phần thập phân
+    # 1. Epoch float với và không có phần thập phân (bảo tồn microseconds)
     assert normalize_ts(1790762400.0) == "2026-09-30T10:00:00Z"
-    assert normalize_ts(1790762400.5) == "2026-09-30T10:00:00.500Z"
-    assert to_epoch_seconds(1790762400.5) == 1790762400.5
+    assert normalize_ts(1790762400.123456) == "2026-09-30T10:00:00.123456Z"
+    assert to_epoch_seconds(1790762400.123456) == 1790762400.123456
 
     # 2. Epoch int
     assert normalize_ts(1790762400) == "2026-09-30T10:00:00Z"
@@ -102,12 +102,12 @@ def test_normalize_ts_and_to_epoch_seconds() -> None:
 
     # 3. Epoch numeric string
     assert normalize_ts("1790762400.0") == "2026-09-30T10:00:00Z"
-    assert normalize_ts("1790762400.25") == "2026-09-30T10:00:00.250Z"
+    assert normalize_ts("1790762400.25") == "2026-09-30T10:00:00.250000Z"
     assert to_epoch_seconds("1790762400.25") == 1790762400.25
 
     # 4. ISO string ending in Z
     assert normalize_ts("2026-10-01T10:00:00Z") == "2026-10-01T10:00:00Z"
-    assert normalize_ts("2026-10-01T10:00:00.123Z") == "2026-10-01T10:00:00.123Z"
+    assert normalize_ts("2026-10-01T10:00:00.123456Z") == "2026-10-01T10:00:00.123456Z"
 
     # 5. ISO string with timezone offset (+07:00)
     assert normalize_ts("2026-10-01T17:00:00+07:00") == "2026-10-01T10:00:00Z"
@@ -303,6 +303,65 @@ def test_update_phase_schedule_rejects_when_not_running(conn: sqlite3.Connection
         update_phase_schedule(conn, run_id=r2, train_at_ts="2026-10-01T10:30:00Z")
 
 
+def test_transaction_ownership_when_caller_has_uncommitted_work(conn: sqlite3.Connection) -> None:
+    """Xác nhận helper chỉ commit/rollback transaction do chính nó mở.
+
+    Khi caller đã có transaction mở trước đó:
+      - Thao tác thành công KHÔNG tự ý commit thay đổi của caller; caller có toàn quyền rollback/commit.
+      - Thao tác thất bại KHÔNG huỷ (rollback) thay đổi chưa commit của caller; caller vẫn có thể commit.
+    """
+    run_id = start_run(conn, scenario="slow_db", repeat_index=1)
+
+    # 1. Thao tác thành công + caller rollback
+    conn.execute("INSERT INTO deployment (id) VALUES (777)")
+    assert conn.in_transaction is True
+
+    update_phase_schedule(conn, run_id=run_id, train_at_ts="2026-10-01T10:30:00Z")
+    # Transaction của caller vẫn đang mở, chưa bị hàm tự ý commit!
+    assert conn.in_transaction is True
+
+    # Caller quyết định rollback: cả deployment 777 lẫn train_at_ts đều được rollback
+    conn.rollback()
+    assert conn.execute("SELECT COUNT(*) FROM deployment WHERE id = 777").fetchone()[0] == 0
+    run_after_rb = get_run(conn, run_id)
+    assert run_after_rb is not None
+    assert run_after_rb["train_at_ts"] is None
+
+    # 2. Thao tác thành công + caller commit
+    conn.execute("INSERT INTO deployment (id) VALUES (777)")
+    complete_run(conn, run_id=run_id, run_end_ts="2026-10-01T11:00:00Z")
+    assert conn.in_transaction is True
+    conn.commit()
+
+    assert conn.execute("SELECT COUNT(*) FROM deployment WHERE id = 777").fetchone()[0] == 1
+    run_after_cm = get_run(conn, run_id)
+    assert run_after_cm is not None
+    assert run_after_cm["status"] == "completed"
+
+    # 3. Thao tác thất bại (RunNotFoundError) KHÔNG huỷ transaction có trước của caller
+    conn.execute("INSERT INTO deployment (id) VALUES (888)")
+    assert conn.in_transaction is True
+
+    with pytest.raises(RunNotFoundError):
+        complete_run(conn, run_id=9999, run_end_ts="2026-10-01T11:00:00Z")
+
+    # Transaction của caller không bị huỷ!
+    assert conn.in_transaction is True
+    conn.commit()
+    # Bản ghi 888 được lưu an toàn
+    assert conn.execute("SELECT COUNT(*) FROM deployment WHERE id = 888").fetchone()[0] == 1
+
+    # 4. Thao tác thất bại (InvalidRunStateError) trên abort/update_phase_schedule
+    conn.execute("INSERT INTO deployment (id) VALUES (999)")
+    with pytest.raises(InvalidRunStateError):
+        # run_id đã completed ở bước 2, gọi abort phải ném InvalidRunStateError
+        abort_run(conn, run_id=run_id, reason="Late abort attempt")
+
+    assert conn.in_transaction is True
+    conn.commit()
+    assert conn.execute("SELECT COUNT(*) FROM deployment WHERE id = 999").fetchone()[0] == 1
+
+
 def test_state_updates_atomic_with_status_running_condition(tmp_path: Path) -> None:
     """Đảm bảo cập nhật trạng thái bằng điều kiện SQL status='running' tránh sửa run vừa kết thúc ở kết nối khác."""
     db_file = tmp_path / "race_test.db"
@@ -451,8 +510,8 @@ def test_count_phase_a_samples_fractional_boundary_precision(conn: sqlite3.Conne
     count = count_phase_a_samples(
         conn,
         deployment_id=dep_id,
-        baseline_start_ts=1790762400.5,  # 10:00:00.500Z
-        train_at_ts=1790764200.5,        # 10:30:00.500Z
+        baseline_start_ts=1790762400.5,  # 10:00:00.500000Z
+        train_at_ts=1790764200.5,        # 10:30:00.500000Z
     )
     # Kỳ vọng: mẫu 10:00:01, 10:15:00, 10:30:00 được đếm (= 3 mẫu).
     # Mẫu 10:00:00 và 10:30:01 bị loại trừ.
@@ -479,3 +538,68 @@ def test_count_phase_a_samples_fractional_boundary_precision(conn: sqlite3.Conne
     # Mẫu 10:00:00, 10:00:01, 10:15:00 được đếm (= 3 mẫu).
     # Mẫu 10:30:00 (bị loại vì < end) và 10:30:01 bị loại.
     assert count_exact_sec == 3
+
+
+def test_microsecond_boundary_counting_from_saved_milestones(conn: sqlite3.Connection) -> None:
+    """Kiểm tra đếm mẫu Pha A từ các mốc thời gian microsecond đã được lưu trong DB experiment_run:
+
+    Start mốc: 1790762400.123456 -> 2026-09-30T10:00:00.123456Z
+    End mốc:   1790764200.654321 -> 2026-09-30T10:30:00.654321Z
+    """
+    dep_id = 42
+
+    start_float = 1790762400.123456
+    end_float = 1790764200.654321
+
+    run_id = start_run(conn, scenario="error_burst", repeat_index=1, deployment_id=dep_id, baseline_start_ts=start_float)
+    update_phase_schedule(conn, run_id=run_id, train_at_ts=end_float)
+
+    # Đọc mốc từ DB ra để xác nhận bảo tồn microsecond
+    run = get_run(conn, run_id)
+    assert run is not None
+    saved_start = run["baseline_start_ts"]
+    saved_end = run["train_at_ts"]
+    assert saved_start == "2026-09-30T10:00:00.123456Z"
+    assert saved_end == "2026-09-30T10:30:00.654321Z"
+
+    # Nạp mẫu thử nghiệm
+    # 1. 10:00:00Z (.000000 < .123456 -> trước start) -> KHÔNG ĐƯỢC ĐẾM
+    conn.execute(
+        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 10, '2026-09-30T10:00:00Z', 'local')",
+        (dep_id,),
+    )
+    # 2. Đúng mốc start 10:00:00.123456Z (start là inclusive) -> ĐƯỢC ĐẾM
+    conn.execute(
+        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 11, '2026-09-30T10:00:00.123456Z', 'local')",
+        (dep_id,),
+    )
+    # 3. Mẫu tại 10:15:00Z -> ĐƯỢC ĐẾM
+    conn.execute(
+        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 12, '2026-09-30T10:15:00Z', 'local')",
+        (dep_id,),
+    )
+    # 4. Mẫu tại 10:30:00Z (.000000 < .654321 -> trước end) -> ĐƯỢC ĐẾM
+    conn.execute(
+        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 13, '2026-09-30T10:30:00Z', 'local')",
+        (dep_id,),
+    )
+    # 5. Đúng mốc end 10:30:00.654321Z (end là exclusive) -> KHÔNG ĐƯỢC ĐẾM
+    conn.execute(
+        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 14, '2026-09-30T10:30:00.654321Z', 'local')",
+        (dep_id,),
+    )
+    # 6. Mẫu sau end 10:30:01Z -> KHÔNG ĐƯỢC ĐẾM
+    conn.execute(
+        "INSERT INTO metric_sample (deployment_id, seq, ts_vps, ts_local) VALUES (?, 15, '2026-09-30T10:30:01Z', 'local')",
+        (dep_id,),
+    )
+    conn.commit()
+
+    count = count_phase_a_samples(
+        conn,
+        deployment_id=dep_id,
+        baseline_start_ts=saved_start,
+        train_at_ts=saved_end,
+    )
+    # Mẫu 11, 12, 13 được đếm (= 3 mẫu)
+    assert count == 3

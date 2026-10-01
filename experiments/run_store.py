@@ -12,7 +12,14 @@ CÁC NGUYÊN TẮC THIẾT KẾ VÀ RÀNG BUỘC:
    - Nếu hai kết nối hoặc hai luồng cùng gọi start_run() đồng thời, một kết nối thành công và
      kết nối còn lại sẽ bị chặn/từ chối với ActiveRunExistsError, triệt tiêu hoàn toàn race condition.
 
-2. Cập nhật trạng thái và mốc pha nguyên tử với điều kiện SQL (status='running'):
+2. Quản lý transaction minh bạch (Transaction Ownership):
+   - update_phase_schedule(), complete_run(), abort_run() chỉ commit hoặc rollback transaction
+     do chính hàm mở (khi caller chưa mở transaction trước đó trên connection).
+   - Tuyệt đối không tự commit hoặc rollback các thay đổi chưa hoàn tất do caller tạo ra trước đó.
+     Nếu caller đã ở trong transaction (in_transaction=True), toàn bộ quyền commit/rollback
+     vẫn thuộc về caller.
+
+3. Cập nhật trạng thái và mốc pha nguyên tử với điều kiện SQL (status='running'):
    - update_phase_schedule(), complete_run(), abort_run() đều sử dụng điều kiện:
      `WHERE id = ? AND status = 'running'`
      trực tiếp trong câu lệnh SQL UPDATE.
@@ -21,16 +28,17 @@ CÁC NGUYÊN TẮC THIẾT KẾ VÀ RÀNG BUỘC:
    - Nếu rowcount == 0, hàm kiểm tra lại cơ sở dữ liệu để ném đúng lỗi RunNotFoundError
      (nếu run_id không tồn tại) hoặc InvalidRunStateError (nếu run không còn 'running').
 
-3. Chuẩn hoá và so sánh mốc thời gian với độ chính xác đầy đủ (Full Precision):
+4. Chuẩn hoá và so sánh mốc thời gian với độ chính xác đầy đủ (Microsecond Precision):
    - normalize_ts() chuẩn hoá mốc thời gian về định dạng ISO 8601 UTC (YYYY-MM-DDTHH:MM:SSZ hoặc
-     có phần lẻ mili giây YYYY-MM-DDTHH:MM:SS.sssZ), chấp nhận epoch seconds (float/int do runner
+     có phần lẻ microsecond YYYY-MM-DDTHH:MM:SS.ffffffZ), chấp nhận epoch seconds (float/int do runner
      cung cấp), datetime object, hoặc chuỗi ISO.
    - to_epoch_seconds() chuyển đổi bất kỳ dạng timestamp nào sang epoch float đầy đủ.
-   - count_phase_a_samples() so sánh mốc thời gian với độ chính xác thập phân đầy đủ,
-     không cắt/làm tròn phần mili giây trước khi lọc mẫu trong cửa sổ nửa mở [start, end),
-     bảo đảm các mẫu tại đúng giây biên có phần thập phân được phân loại chính xác.
+   - count_phase_a_samples() so sánh mốc thời gian với độ chính xác thập phân đầy đủ (đến microsecond),
+     không cắt/làm tròn phần lẻ trước khi lọc mẫu trong cửa sổ nửa mở [start, end),
+     bảo đảm các mẫu tại đúng giây biên có phần thập phân được phân loại chính xác, kể cả khi
+     đếm từ mốc đã lưu trong DB.
 
-4. GIỚI HẠN SCHEMA HIỆN TẠI VÀ LƯU Ý CHO LEADER:
+5. GIỚI HẠN SCHEMA HIỆN TẠI VÀ LƯU Ý CHO LEADER:
    Bảng experiment_run trong docs/contracts/schema.sql có ràng buộc:
        UNIQUE (scenario, repeat_index)
    Nếu một lần chạy bị 'aborted', bản ghi đó vẫn tồn tại trong SQLite và chiếm giữ cặp
@@ -113,7 +121,7 @@ def to_epoch_seconds(ts: str | float | datetime) -> float:
 def normalize_ts(ts: str | float | datetime) -> str:
     """Chuẩn hoá mốc thời gian về định dạng ISO 8601 UTC.
 
-    Bảo tồn phần thập phân giây (milliseconds) nếu có, hoặc giữ định dạng giây tròn nếu không có phần lẻ.
+    Bảo tồn phần thập phân giây (microseconds) nếu có, hoặc giữ định dạng giây tròn nếu không có phần lẻ.
     """
     if ts is None:
         raise ValueError("Timestamp không được là None")
@@ -122,14 +130,14 @@ def normalize_ts(ts: str | float | datetime) -> str:
         dt = ts if ts.tzinfo is not None else ts.replace(tzinfo=timezone.utc)
         dt_utc = dt.astimezone(timezone.utc)
         if dt_utc.microsecond > 0:
-            return dt_utc.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            return dt_utc.isoformat(timespec="microseconds").replace("+00:00", "Z")
         return dt_utc.isoformat(timespec="seconds").replace("+00:00", "Z")
 
     if isinstance(ts, (int, float)):
         val = float(ts)
         dt_utc = datetime.fromtimestamp(val, tz=timezone.utc)
         if dt_utc.microsecond > 0:
-            return dt_utc.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            return dt_utc.isoformat(timespec="microseconds").replace("+00:00", "Z")
         return dt_utc.isoformat(timespec="seconds").replace("+00:00", "Z")
 
     if isinstance(ts, str):
@@ -141,7 +149,7 @@ def normalize_ts(ts: str | float | datetime) -> str:
                 val = float(s)
                 dt_utc = datetime.fromtimestamp(val, tz=timezone.utc)
                 if dt_utc.microsecond > 0:
-                    return dt_utc.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+                    return dt_utc.isoformat(timespec="microseconds").replace("+00:00", "Z")
                 return dt_utc.isoformat(timespec="seconds").replace("+00:00", "Z")
             except ValueError:
                 pass
@@ -153,7 +161,7 @@ def normalize_ts(ts: str | float | datetime) -> str:
                 dt = dt.replace(tzinfo=timezone.utc)
             dt_utc = dt.astimezone(timezone.utc)
             if dt_utc.microsecond > 0:
-                return dt_utc.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+                return dt_utc.isoformat(timespec="microseconds").replace("+00:00", "Z")
             return dt_utc.isoformat(timespec="seconds").replace("+00:00", "Z")
         except ValueError as err:
             raise ValueError(f"Không thể phân tích timestamp '{ts}': {err}") from err
@@ -217,7 +225,7 @@ def start_run(
         race condition khi hai kết nối SQLite cùng cố gắng khởi tạo run đồng thời.
       - Kiểm tra trong transaction xem đã có run nào running hay chưa; nếu có thì ném
         ActiveRunExistsError và rollback sạch sẽ.
-      - Chuẩn hoá baseline_start_ts về định dạng ISO UTC (bảo tồn mili giây nếu có).
+      - Chuẩn hoá baseline_start_ts về định dạng ISO UTC (bảo tồn microsecond nếu có).
 
     Lưu ý: Nếu cặp (scenario, repeat_index) đã tồn tại trong DB (kể cả đã completed hay aborted),
     SQLite sẽ ném sqlite3.IntegrityError do ràng buộc UNIQUE(scenario, repeat_index) của schema v1.
@@ -302,9 +310,11 @@ def update_phase_schedule(
 
     Cập nhật nguyên tử với điều kiện SQL `status = 'running'`:
       - Từ chối cập nhật nếu run không còn ở trạng thái 'running' (ném InvalidRunStateError).
-      - Ngăn ngừa sửa đổi run vừa kết thúc hoặc bị abort ở một kết nối khác.
+      - Quản lý transaction: chỉ commit/rollback khi transaction do chính hàm mở; không
+        huỷ hoặc commit thay đổi có trước của caller trên cùng connection.
       - Mọi mốc thời gian đều được chuẩn hoá về ISO UTC bảo tồn độ chính xác.
     """
+    caller_had_tx = conn.in_transaction
     updates: list[str] = []
     params: list[Any] = []
 
@@ -331,6 +341,8 @@ def update_phase_schedule(
     if not updates:
         cur.execute("SELECT id, status FROM experiment_run WHERE id = ?", (run_id,))
         row = cur.fetchone()
+        if not caller_had_tx and conn.in_transaction:
+            conn.rollback()
         if row is None:
             raise RunNotFoundError(f"Không tìm thấy experiment_run với id={run_id}")
         current_status = row[1] if not hasattr(row, "keys") else row["status"]
@@ -348,7 +360,7 @@ def update_phase_schedule(
     if cur.rowcount == 0:
         cur.execute("SELECT id, status FROM experiment_run WHERE id = ?", (run_id,))
         row = cur.fetchone()
-        if conn.in_transaction:
+        if not caller_had_tx and conn.in_transaction:
             conn.rollback()
         if row is None:
             raise RunNotFoundError(f"Không tìm thấy experiment_run với id={run_id}")
@@ -357,7 +369,7 @@ def update_phase_schedule(
             f"Run id={run_id} đang ở trạng thái '{current_status}', không thể cập nhật mốc pha (chỉ 'running' mới có thể cập nhật)"
         )
 
-    if auto_commit:
+    if auto_commit and not caller_had_tx:
         conn.commit()
 
 
@@ -371,10 +383,12 @@ def complete_run(
     """Đánh dấu run hoàn tất bình thường (status='completed') và ghi nhận run_end_ts chuẩn ISO UTC.
 
     Cập nhật nguyên tử với điều kiện SQL `WHERE id = ? AND status = 'running'`.
+    Chỉ commit/rollback khi transaction do chính hàm mở; không can thiệp transaction của caller.
     """
     if run_end_ts is None:
         raise ValueError("run_end_ts không được để trống khi hoàn tất run")
 
+    caller_had_tx = conn.in_transaction
     norm_end = normalize_ts(run_end_ts)
     cur = conn.cursor()
 
@@ -400,7 +414,7 @@ def complete_run(
     if cur.rowcount == 0:
         cur.execute("SELECT id, status FROM experiment_run WHERE id = ?", (run_id,))
         row = cur.fetchone()
-        if conn.in_transaction:
+        if not caller_had_tx and conn.in_transaction:
             conn.rollback()
         if row is None:
             raise RunNotFoundError(f"Không tìm thấy experiment_run với id={run_id}")
@@ -409,7 +423,7 @@ def complete_run(
             f"Run id={run_id} đang ở trạng thái '{current_status}', không thể hoàn tất (chỉ 'running' mới có thể complete)"
         )
 
-    if auto_commit:
+    if auto_commit and not caller_had_tx:
         conn.commit()
 
 
@@ -423,10 +437,12 @@ def abort_run(
     """Huỷ run thí nghiệm (status='aborted') kèm lý do huỷ bắt buộc và run_end_ts chuẩn ISO UTC.
 
     Cập nhật nguyên tử với điều kiện SQL `WHERE id = ? AND status = 'running'`.
+    Chỉ commit/rollback khi transaction do chính hàm mở; không can thiệp transaction của caller.
     """
     if not reason or not str(reason).strip():
         raise ValueError("Lý do abort (reason) là bắt buộc và không được để trống")
 
+    caller_had_tx = conn.in_transaction
     norm_end = normalize_ts(run_end_ts) if run_end_ts is not None else None
     cur = conn.cursor()
     cur.execute(
@@ -445,7 +461,7 @@ def abort_run(
     if cur.rowcount == 0:
         cur.execute("SELECT id, status FROM experiment_run WHERE id = ?", (run_id,))
         row = cur.fetchone()
-        if conn.in_transaction:
+        if not caller_had_tx and conn.in_transaction:
             conn.rollback()
         if row is None:
             raise RunNotFoundError(f"Không tìm thấy experiment_run với id={run_id}")
@@ -454,7 +470,7 @@ def abort_run(
             f"Run id={run_id} đang ở trạng thái '{current_status}', không thể abort (chỉ 'running' mới có thể abort)"
         )
 
-    if auto_commit:
+    if auto_commit and not caller_had_tx:
         conn.commit()
 
 
@@ -468,8 +484,9 @@ def count_phase_a_samples(
 
     docs/07 §7.5 & §7.6:
     Chỉ các mẫu có ts_vps nằm trong khoảng nửa mở [baseline_start_ts, train_at_ts) mới hợp lệ.
-    So sánh mốc thời gian với độ chính xác thập phân đầy đủ (full precision), không cắt phần
-    mili giây trước khi lọc mẫu, bảo đảm xử lý chính xác các trường hợp ranh giới có phần lẻ.
+    So sánh mốc thời gian với độ chính xác thập phân đầy đủ (đến microsecond), không cắt phần
+    lẻ trước khi lọc mẫu, bảo đảm xử lý chính xác các trường hợp ranh giới có phần thập phân
+    kể cả khi đọc từ mốc đã lưu.
     """
     if baseline_start_ts is None or train_at_ts is None:
         raise ValueError("baseline_start_ts và train_at_ts không được để trống")

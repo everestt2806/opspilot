@@ -112,13 +112,14 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
 - [x] `DECISIONS.md` (`[exp] 2026-09-19`, `[exp] 2026-10-01`) + `docs/07` mục 2, 7 cập nhật cách vá data-path và protocol.
 - [x] Quản lý vòng đời `experiment_run` (P2a - `experiments/run_store.py`):
       - Bắt đầu run trong transaction nguyên tử `BEGIN IMMEDIATE` và từ chối khi đã có run `running` (Quy tắc Single Active Run); từ chối nếu connection đang có transaction chưa kết thúc (`in_transaction=True`).
-      - Chuẩn hoá các mốc thời gian về định dạng ISO 8601 UTC tương thích `metric_sample.ts_vps` của collector (chấp nhận cả epoch seconds float/int từ runner và ISO string, bảo tồn độ chính xác thập phân).
+      - Chuẩn hoá các mốc thời gian về định dạng ISO 8601 UTC tương thích `metric_sample.ts_vps` của collector (chấp nhận cả epoch seconds float/int từ runner và ISO string, bảo tồn microsecond).
       - Cập nhật các mốc thời gian pha (`train_at_ts`, `fault_start_ts`, `fault_end_ts`, `train_sample_count`), hoàn tất hoặc huỷ run bằng điều kiện SQL `status = 'running'` chống ghi đè khi kết nối khác vừa thay đổi trạng thái.
+      - Quản lý transaction minh bạch: chỉ commit/rollback transaction do chính hàm mở, không huỷ hoặc tự commit thay đổi có trước của caller trên cùng connection.
       - Hoàn tất (`status='completed'`) hoặc huỷ (`status='aborted'` với `abort_reason` bắt buộc).
-      - Truy vấn `count_phase_a_samples()` so sánh mốc thời gian với độ chính xác đầy đủ (full precision), không cắt mili giây trước khi lọc mẫu trong cửa sổ nửa mở `[start, end)`.
+      - Truy vấn `count_phase_a_samples()` so sánh mốc thời gian với độ chính xác microsecond đầy đủ, không cắt xén phần lẻ trước khi lọc mẫu trong cửa sổ nửa mở `[start, end)` (kể cả khi đọc từ mốc đã lưu).
       - Giới hạn schema hiện tại: `UNIQUE(scenario, repeat_index)` trong `docs/contracts/schema.sql` hiện ngăn lưu retry sau khi abort (giữ nguyên schema v1, chờ Leader quyết định giải pháp).
-- [x] pytest liên quan xanh: **126 passed** (collect 26, loadgen_error_rate 9, loadgen 9,
-      labeling 11, metrics 9, scheduler 9, protocol 12, analyze 7, export 6, manifest 5, run_store 14;
+- [x] pytest liên quan xanh: **128 passed** (collect 26, loadgen_error_rate 9, loadgen 9,
+      labeling 11, metrics 9, scheduler 9, protocol 12, analyze 7, export 6, manifest 5, run_store 16;
       trước P2a đạt mốc 112 passed).
       Chưa nối CLI/SSH/poller/loadgen/alert, chưa chạy VPS thật, không push/PR/merge.
 
@@ -148,18 +149,18 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
 - 01/10 mốc Protocol (`2121d15`, `0fa0069`) — Chốt protocol versioning, export_run ghi protocol_version,
   analyze đọc tương thích ngược legacy-pre-pilot, hiệu chỉnh độ trễ latency_creep, đạt mốc **112 passed**.
 - 01/10 mốc Kiểm kê kỹ thuật (`10acaa9`) — Bổ sung mục Bàn giao kỹ thuật chi tiết trong tài liệu TK-S6.
-- 01/10 mốc P2a (`1d0ed0a`, `4658c47`) — Module `run_store.py` quản lý `experiment_run` (start_run với single active run rule,
-  update_phase_schedule, complete_run, abort_run kèm reason, count_phase_a_samples đếm mẫu trong đúng
-  cửa sổ pha A). Ghi nhận rõ giới hạn `UNIQUE(scenario, repeat_index)` hiện ngăn lưu retry sau abort để Leader quyết
-  định sau. Chưa nối CLI/SSH/poller/loadgen/alert, chưa chạy VPS.
-- 01/10 mốc Tinh chỉnh P2a — So sánh mốc thời gian trong `count_phase_a_samples()` với độ chính xác thập phân đầy đủ
-  (không cắt mili giây, xử lý chuẩn ranh giới thập phân); từ chối `start_run()` khi connection đã ở trong transaction;
-  cập nhật trạng thái và mốc pha nguyên tử bằng điều kiện SQL `status = 'running'` chống ghi đè chéo giữa các kết nối.
-  Viết thêm test đạt mốc **126 passed**.
+- 01/10 mốc P2a (`1d0ed0a`, `4658c47`, `a7e6d58`) — Module `run_store.py` quản lý `experiment_run`
+  (start_run với single active run rule, update_phase_schedule, complete_run, abort_run kèm reason,
+  count_phase_a_samples đếm mẫu trong đúng cửa sổ pha A với full precision). Ghi nhận rõ giới hạn
+  `UNIQUE(scenario, repeat_index)` hiện ngăn lưu retry sau abort để Leader quyết định sau.
+- 01/10 mốc Chuẩn hoá Transaction & Microseconds P2a — Sửa quản lý transaction của `update_phase_schedule()`,
+  `complete_run()` và `abort_run()`: chỉ commit/rollback transaction do chính hàm mở, bảo toàn quyền
+  commit/rollback của caller đối với các bản ghi chưa commit trước đó. Cập nhật `normalize_ts()` giữ
+  microsecond đầy đủ; thêm test đếm mẫu chính xác từ các mốc microsecond đã lưu trong DB. Đạt mốc **128 passed**.
 
 ## Lệnh tái hiện
 
-Test thuần (126 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed):
+Test thuần (128 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed):
 
 ```
 ml-service/.venv/Scripts/python.exe -m pytest \
