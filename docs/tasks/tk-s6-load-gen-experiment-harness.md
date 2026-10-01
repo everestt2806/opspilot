@@ -193,6 +193,158 @@ python experiments/analyze.py experiments/results/   # in bảng chính
 - Toàn bộ phương án chia chặng 75 phút, mount host path và các cờ cảnh báo trên **hoàn toàn là đề xuất kỹ thuật offline, chưa coi là đã triển khai** trong code hay cấu hình compose của sản phẩm.
 - Giữ nguyên giới hạn 30 phút và hành vi cap hiện tại trong code; tuyệt đối **không chạy pilot trên VPS** trước khi đề xuất này được Tech Lead (A) phê duyệt.
 
+## Kiểm kê đường chạy pilot ML (run_experiment.py → Lấy mẫu & Ghi run → export_results.py → analyze.py)
+
+*(Đối chiếu thực tế triển khai với đặc tả `docs/07-giao-thuc-thi-nghiem.md`, cập nhật ngày 01/10/2026)*
+
+> ⚠️ **LƯU Ý CỐT LÕI VỀ TÍNH SẴN SÀNG**: Toàn bộ các module logic thuần dưới đây đã có unit test pass 100% (112 test trong môi trường giả lập/RAM/Windows). Tuy nhiên, **toàn bộ luồng pilot thực tế (kết nối VPS thật, app thật, loadgen thật, poller kéo metric thật vào SQLite) là CHƯA CHẠY THẬT (NOT_RUN)**.
+
+### 1. Đối chiếu tổng thể với `docs/07`
+
+| Giai đoạn / Bước theo `docs/07` | Module tương ứng | Trạng thái hiện tại | Đánh giá tính sẵn sàng |
+|---|---|---|---|
+| **1. Đo lệch đồng hồ & Gate skew (docs/07 §3, §7.1)** | `protocol.py:clock_offset_ms`, `clock_skew_too_large`, `run_experiment.py:measure_clock_offset_ms` | Logic thuần + SSH paramiko đã có unit test | **Hàm sẵn sàng** (luồng pilot thật trên VPS: **CHƯA CHẠY**) |
+| **2. Deploy app demo sạch (docs/07 §7.2)** | `run_experiment.py:77` (chỉ là comment TODO) | Khung / Chưa tự động hoá | **Chưa nối**: Phụ thuộc pipeline deploy thủ công hoặc app Electron |
+| **3. Reset ML service (docs/07 §7.3)** | `run_experiment.py:post_json` (`POST /reset`) | Đã test gọi HTTP POST | **Hàm sẵn sàng** (cần ml-service chạy thật cổng 8000) |
+| **4. Khởi động Loadgen trên VPS (docs/07 §2, §7.4)** | `experiments/load_gen/loadgen.py` | Đã có container script, chưa có mã SSH điều khiển | **Chưa nối**: Cần lệnh SSH start/stop container trên VPS |
+| **5. Pha A: Thu 180 mẫu baseline (docs/07 §4, §7.5)** | `run_experiment.py:wait_phase`, `protocol.py:PHASE_A_S` | Đã test logic chờ 30' | **Khung**: Cần poller kéo metric thật từ VPS về DB local |
+| **6. Kiểm tra mẫu Pha A & Trigger Train (docs/07 §7.6)** | `protocol.py:enough_train_samples`, `run_experiment.py:post_json` (`POST /train`) | Logic thuần đã có test; CLI bị chặn | **Khung**: Cần hàm đếm mẫu chuẩn trong đúng cửa sổ Pha A |
+| **7. Pha B: Holdout bình thường 15' (docs/07 §4, §7.7)** | `run_experiment.py:wait_phase` | Đã test logic chờ 15' | **Hàm sẵn sàng** (chờ pipeline poller/scorer thật) |
+| **8. Pha C: Tác động Fault 20' (docs/07 §6, §7.8)** | `faults/scheduler.py:plan_fault`, `apply_plan` | Logic lịch fault pass 100% unit test | **Hàm sẵn sàng** (cần app demo thật có `ENABLE_FAULT_ENDPOINTS=true`) |
+| **9. Pha D: Recovery 10' & Reset Fault (docs/07 §4, §7.9)** | `faults/scheduler.py:reset_fault`, `run_experiment.py:wait_phase` | Đã test logic `POST /debug/reset` | **Hàm sẵn sàng** |
+| **10. Kiểm tra toàn vẹn sau run (docs/07 §7.10)** | `protocol.py:check_integrity` | Đã test 4 cổng kiểm tra toàn vẹn | **Hàm sẵn sàng** (đã test 12 ca kiểm tra) |
+| **11. Ghi bản ghi vòng đời run (docs/07 §7, schema.sql)** | Bảng `experiment_run`, `experiments/manifest.py` | Manifest độc lập đã có test; DB run chưa nối | **Thiếu**: `run_experiment.py` chưa ghi/cập nhật SQLite `experiment_run` |
+| **12. Xuất dữ liệu ngoại tuyến (docs/07 §8)** | `export_results.py:export_run` | Đã test xuất 5 artifacts trên DB giả lập | **Hàm sẵn sàng**: Xuất đủ CSV/meta.json, ghi `protocol_version: "1.0"` |
+| **13. Phân tích kết quả (docs/07 §9)** | `analyze.py:analyze_run`, `main_table`, `summarize` | Đã test phân tích offline, sweep grace, CI 95% | **Hàm sẵn sàng**: Đọc CSV offline, tương thích ngược dữ liệu cũ |
+
+### 2. Chi tiết các hàm/module đã có unit test pass (Chạy offline trên Windows/RAM, chưa phải luồng pilot thật)
+
+1. **Lập lịch và áp dụng Fault (`experiments/faults/scheduler.py`)**:
+   - Thuần túy, deterministic, không I/O phụ thuộc mạng khi lập kế hoạch (`plan_fault`).
+   - Đủ 5 kịch bản: `memory_leak` (120 lần +5MB/10s), `cpu_spike` (20→400ms ramp), `error_burst` (abrupt p=0.3 ở phút 0), `slow_db` (0.05→1.5s ramp), `latency_creep` (+50ms/phút, trần 2500ms).
+   - Hàm `apply_plan()` và `reset_fault()` đã được kiểm tra thứ tự gửi request bằng đồng hồ giả lập và monkeypatch.
+2. **Cơ chế đo lệch đồng hồ và chia mốc pha (`experiments/protocol.py`)**:
+   - Đo offset `vps_epoch_ms - local_epoch_ms`, abort nếu `|offset| > 2000ms`.
+   - Lập mốc 5 pha A-D (`phase_schedule`) chuẩn xác đến từng giây.
+   - Bốn cổng kiểm tra toàn vẹn sau run (`check_integrity`): số lượng mẫu $\ge 90\%$, không có khoảng trống $> 120$s, đủ 5 score_sample cho mỗi metric_sample, không có điểm null ở pha B/C/D.
+3. **Bộ sinh tải và đo lỗi HTTP (`experiments/load_gen/` & `collector/collect.py`)**:
+   - `loadgen.py`: Đã có test phân phối request 70/20/10 (seed 42), kiểm tra cơ chế Counter cửa sổ trượt 60s và ghi file nguyên tử.
+   - `collect.py`: Hàm `read_loadgen_error_rate` đã test đọc file counter của loadgen khi còn mới (tuổi $\le 30$s) để tính `http_error_rate`, fallback probe khi thiếu file.
+4. **Trình xuất dữ liệu kết quả (`experiments/export_results.py`)**:
+   - Đã test xuất đủ 5 artifacts chuẩn trên DB SQLite in-memory: `metric_sample.csv`, `score_sample.csv`, `alert.csv`, `experiment_run.csv`, `meta.json`.
+   - Đã tích hợp `protocol_version: "1.0"` vào `meta.json` của run mới.
+   - Tuyệt đối an toàn: chỉ SELECT các bảng thí nghiệm, không bao giờ đụng bảng `vps` (chứa credential SSH).
+5. **Trình phân tích kết quả ngoại tuyến (`experiments/analyze.py`)**:
+   - Đã test tính toán P/R/F1, detection delay (xử lý censored), t-distribution 95% CI trên 10 run.
+   - Quét độ nhạy `grace ∈ {0, 30, 60, 120}` giây.
+   - Hỗ trợ tương thích ngược: `load_run()` tự động nhận diện run cũ thiếu `protocol_version` là `"legacy-pre-pilot"`.
+6. **Mô hình Manifest & Integrity Gate (`experiments/manifest.py`)**:
+   - Tách biệt `protocol_version` ("1.0") và `feature_version` ("v1-5metrics-4feats-w20").
+   - Hỗ trợ hàm `from_dict()` và `read_manifest()` fallback dữ liệu cũ.
+
+### 3. Các điểm còn là khung / TODO / Gián đoạn (Gaps & Stubs)
+
+1. **CLI `run_experiment.py` chưa thể thực thi độc lập**:
+   - Entry point `if __name__ == "__main__":` hiện tại đang ném `raise SystemExit("run_experiment.py là khung điều phối; tích hợp đếm mẫu + deploy do lớp app gọi...")`.
+   - Hàm đếm mẫu `args.get_sample_count()` chưa được cài đặt. Để thỏa mãn `docs/07 §7.6`, việc đếm mẫu **bắt buộc phải đếm trong đúng cửa sổ thời gian pha A** (`ts_vps BETWEEN baseline_start_ts AND train_at_ts` của run hiện tại), không được đếm gộp toàn bộ deployment vì có thể dính mẫu rác cũ.
+2. **Thiếu liên kết ghi bản ghi vòng đời `experiment_run` vào SQLite**:
+   - `run_experiment.py` hoàn toàn không có câu lệnh SQLite nào: không tạo bản ghi `experiment_run` (trạng thái `running`), không cập nhật `baseline_start_ts`, `train_at_ts`, `fault_start_ts`, `fault_end_ts`, `status='completed'/'aborted'`.
+   - Trong khi đó, `export_results.py` bắt buộc phải có dòng `experiment_run` tương ứng trong DB để xuất ra `experiment_run.csv` và `meta.json`.
+3. **Mối liên kết giữa `alert` và `experiment_run_id` bị hở**:
+   - `alertTracker.ts` trong app hiện tại chỉ insert vào `alert` các trường `(deployment_id, metric_sample_id, method, ts_vps, peak_score, detail_json)` mà KHÔNG điền trường `experiment_run_id`.
+   - **Không áp dụng giải pháp UPDATE hàng loạt** theo deployment và thời gian vì thiếu an toàn, dễ gây nhầm lẫn hoặc ghi đè dữ liệu giữa các run.
+   - **Đề xuất giải pháp có kiểm soát**:
+     - *Cách A (Gắn trực tiếp khi tạo)*: Bổ sung tham số `experiment_run_id?: number | null` vào hàm `AlertTracker.update()` và câu lệnh `INSERT INTO alert`. Khi có run thí nghiệm đang active, poller truyền trực tiếp ID này vào.
+     - *Cách B (Quy tắc không chồng run — Single Active Run)*: Tuân thủ nghiêm ngặt quy tắc `CLAUDE.md` mục 9: tại một thời điểm chỉ cho phép duy nhất 1 run có `status='running'`. Hệ thống giám sát lưu context `active_experiment_run_id` để tự động gán chính xác cho các alert phát sinh trong phiên.
+4. **Chưa có cơ chế điều phối tự động tải (Loadgen) và Deploy trên VPS qua SSH**:
+   - Đoạn `run_experiment.py:77` mới chỉ là chú thích: `# 2-4. (Deploy sạch / POST /reset / start load-gen) — thực hiện qua pipeline app + compose thí nghiệm`.
+   - Chưa có hàm SSH để `docker compose up -d` container loadgen và dừng loadgen ở teardown.
+   - Thiếu cấu trúc `try...finally` bao bọc toàn bộ `run_once()` để bảo đảm khi gặp lỗi mạng/abort giữa chừng thì luôn gọi `reset_fault()` và dừng container loadgen.
+5. **Gián đoạn pipeline thu thập số liệu (Poller & Scorer)**:
+   - Bộ kéo metric từ VPS về local (`MonitorPoller` trong `app/src/main/monitor/poller.ts`) hiện phụ thuộc vào runtime Electron (chạy khi ứng dụng desktop mở).
+   - Chưa có script headless (Node/Python) để kéo `metrics.jsonl` và tính điểm score khi chạy thử nghiệm bằng dòng lệnh mà không mở GUI OpsPilot.
+6. **Trần an toàn 30 phút là hằng cứng trong code (`MAX_DURATION_S`)**:
+   - Trong `experiments/load_gen/loadgen.py:39`, `MAX_DURATION_S = 30 * 60` (1800.0 giây) là **hằng số cứng trong code**.
+   - Biến môi trường chỉ có `LOADGEN_DURATION_S`, nhưng giá trị này luôn bị hàm `min(raw_duration, float(MAX_DURATION_S))` trong `Config.from_env()` chặn ở mức tối đa 1800 giây.
+   - Biến mang tên `LOADGEN_MAX_DURATION_S` **hoàn toàn không tồn tại trong code và không có bất kỳ tác dụng nào**.
+   - Để chạy đủ 75 phút cho run theo `docs/07`, bắt buộc phải:
+     - Hoặc sửa hằng số cứng `MAX_DURATION_S` trong `loadgen.py` khi được Tech Lead phê duyệt.
+     - Hoặc thực hiện chạy phân đoạn nối tiếp 3 chặng ($\le 30$ phút/chặng) theo đề xuất kỹ thuật.
+
+### 4. Điều kiện hạ tầng bắt buộc trước khi chạy Pilot
+
+1. **Hạ tầng VPS (`docs/08`)**:
+   - 02 VPS WiService (VN) cùng cấu hình (preset Cheap 2: 2 vCPU, 4GB RAM, 40GB SSD), cùng region/datacenter.
+   - Cài đặt sẵn Docker Engine, Docker Compose plugin.
+   - Dịch vụ NTP `systemd-timesyncd` đang hoạt động (`timedatectl status`), bảo đảm độ lệch đồng hồ với máy điều khiển $< 2.000$ ms.
+2. **App Demo (`express-api`)**:
+   - Build và chạy container `demo-apps/express-api`.
+   - Biến môi trường bắt buộc: `ENABLE_FAULT_ENDPOINTS=true`.
+   - Cổng host được mở (dải 30000–30999) và truy cập được từ bên ngoài hoặc qua SSH port forwarding.
+3. **Dịch vụ ML Service (`ml-service`)**:
+   - Khởi động `ml-service` (`uvicorn main:app --port 8000`) trên máy điều khiển local.
+   - Sẵn sàng phản hồi các endpoint `/reset`, `/train`, `/ingest` hoặc `/predict`.
+4. **Collector & Loadgen volume mount**:
+   - Script `collector/collect.py` chạy trên VPS (qua systemd hoặc compose service phụ), đọc số liệu container Docker và probe `/health` mỗi 10s.
+   - Chia sẻ volume file counter giữa container loadgen và collector tại `/opt/opspilot/<app>/loadgen_counter.json` (hoặc mount host path tương đương).
+5. **Quyền truy cập & Credential**:
+   - SSH key không mật khẩu (hoặc SSH agent) cho tài khoản root/admin trên VPS.
+   - SQLite DB local chứa deployment hợp lệ (có `app_id`, `vps_id`, `host_port`).
+
+### 5. Thứ tự sửa tối thiểu để chạy được 1 run pilot thật đầu-cuối
+
+```mermaid
+flowchart TD
+    B1["Bước 1: Cầu nối SQLite & experiment_run<br/>(Tạo bản ghi run_id, update timestamps, gán có kiểm soát alert.experiment_run_id)"] --> B2["Bước 2: Hoàn thiện CLI runner<br/>(Đếm mẫu đúng pha A từ SQLite, gỡ SystemExit, thêm try/finally)"]
+    B2 --> B3["Bước 3: Headless Poller & Scorer<br/>(Kéo metrics.jsonl về DB local & chấm điểm không phụ thuộc Electron GUI)"]
+    B3 --> B4["Bước 4: Điều phối Loadgen & Mount Volume VPS<br/>(Cấu hình chia sẻ counter file, giải quyết trần hằng cứng 30 phút)"]
+    B4 --> B5["Bước 5: Quy trình thực thi Pilot 1 kịch bản<br/>(Chuẩn bị hạ tầng -> Chạy orchestrator -> export_run -> analyze)"]
+```
+
+1. **Bước 1 — Cầu nối SQLite cho `experiment_run` và gán `alert.experiment_run_id` có kiểm soát**:
+   - Khởi tạo run: `INSERT INTO experiment_run (scenario, repeat_index, deployment_id, vps_id, clock_offset_ms, baseline_start_ts, status) VALUES (..., 'running') RETURNING id`.
+   - Cập nhật khi kết thúc: `UPDATE experiment_run SET fault_start_ts=?, fault_end_ts=?, train_at_ts=?, run_end_ts=?, status='completed'|'aborted', abort_reason=? WHERE id=?`.
+   - Gán `alert.experiment_run_id`: Triển khai theo Cách A (truyền `experiment_run_id` vào `AlertTracker.update()` khi insert alert) hoặc Cách B (áp dụng quy tắc Single Active Run trong context poller). **Tuyệt đối không dùng câu lệnh UPDATE hàng loạt**.
+2. **Bước 2 — Hoàn thiện CLI Runner trong `run_experiment.py`**:
+   - Bổ sung tham số nhận đường dẫn DB hoặc kết nối ứng dụng.
+   - Viết hàm `get_sample_count()` truy vấn chính xác trong khoảng thời gian pha A: `SELECT COUNT(*) FROM metric_sample WHERE deployment_id = ? AND ts_vps >= baseline_start_ts AND ts_vps < train_at_ts`.
+   - Gỡ bỏ `raise SystemExit(...)` ở block `if __name__ == '__main__':`.
+   - Thêm khối `try ... finally` trong `run_once()` để bảo đảm luôn gọi `reset_fault()` và tắt loadgen khi run dừng hoặc gặp lỗi mạng.
+3. **Bước 3 — Tạo runner Headless Poller/Scorer (hoặc CLI script cầu nối)**:
+   - Dựng script cầu nối tái sử dụng `MonitorPoller` để kéo `metrics.jsonl` từ VPS và gọi ML service chấm điểm ngầm suốt thời gian chạy thí nghiệm mà không cần bật Electron App.
+4. **Bước 4 — Điều phối Loadgen & Mount Volume trên VPS**:
+   - Thêm hàm SSH helper trong `run_experiment.py` để khởi động/dừng container loadgen.
+   - Đảm bảo mount đường dẫn file counter khớp giữa loadgen và collector: `-v /opt/opspilot/<app>:/var/metrics`.
+   - Giải quyết giới hạn thời lượng: Trình Tech Lead duyệt phương án sửa hằng số cứng `MAX_DURATION_S = 4500` trong `loadgen.py` hoặc kích hoạt kịch bản điều phối nối 3 segment (vì biến `LOADGEN_MAX_DURATION_S` không có tác dụng).
+5. **Bước 5 — Quy trình chuẩn bị và thực thi kiểm tra Pilot 1 kịch bản**:
+
+> ⚠️ **LƯU Ý QUAN TRỌNG VỀ CÁC LỆNH DƯỚI ĐÂY**:
+> Các câu lệnh trong mục này là **VÍ DỤ THIẾT KẾ MỤC TIÊU (HIỆN CHƯA THỂ CHẠY TRỰC TIẾP)**.
+> - Cờ `--db-path` hiện chưa có trong parser của `run_experiment.py`.
+> - Đường dẫn `app/opspilot.db` và `run_id=1` là giá trị giả định minh hoạ, cơ sở dữ liệu thật chưa có bản ghi này.
+> - Runner `run_experiment.py` hiện tại sẽ ném `SystemExit` ngay khi gọi từ terminal.
+> Cần hoàn thành các Bước 1–4 trước khi thực hiện quy trình dưới đây:
+
+- **Giai đoạn chuẩn bị**:
+  1. Kiểm tra 2 VPS WiService hoạt động, Docker chạy và NTP đồng bộ: `ssh root@<vps_ip> "timedatectl status"`.
+  2. Deploy demo app `express-api` với biến môi trường `ENABLE_FAULT_ENDPOINTS=true`.
+  3. Bật ML service local: `uvicorn ml-service.main:app --port 8000`.
+  4. Tạo bản ghi deployment hợp lệ trong DB local để lấy `deployment_id`.
+- **Giai đoạn thực thi (Cú pháp mục tiêu sau khi hoàn thiện Bước 1–4)**:
+  ```bash
+  # [MÃ GIẢ ĐỊNH MỤC TIÊU - CHƯA CHẠY ĐƯỢC HIỆN TẠI]
+  # 1. Điều phối run kịch bản (ví dụ error_burst)
+  python experiments/run_experiment.py --scenario error_burst --repeat 1 --vps 1 \
+    --app-url http://<vps_ip>:<host_port> --ml-url http://127.0.0.1:8000 \
+    --deployment-id <id> --ssh-host <vps_ip> --db-path <duong_dan_db_that>
+
+  # 2. Xuất dữ liệu sau khi run hoàn tất (thay <id_run_that> bằng ID thực tế được sinh)
+  python -c "import sqlite3, experiments.export_results as exp; conn = sqlite3.connect('<duong_dan_db_that>'); exp.export_run(conn, run_id=<id_run_that>, out_dir=__import__('pathlib').Path('experiments/results/run_error_burst_1'))"
+
+  # 3. Phân tích kết quả và in bảng Markdown chương 5
+  python experiments/analyze.py experiments/results/
+  ```
+
 ## PR
 
 Chưa mở — chờ A cho phép push theo quy ước nhóm (`README.md` mục 2).
