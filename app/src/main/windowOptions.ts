@@ -20,7 +20,7 @@ export function getMainWindowOptions(
     titleBarStyle: 'hidden',
     titleBarOverlay: isWindows ? { height: 34, ...INITIAL_TITLEBAR_OVERLAY } : false,
     backgroundMaterial: isWindows ? 'mica' : 'none',
-    show: false,
+    show: true,
     autoHideMenuBar: true,
     backgroundColor: '#1E1E1E',
     icon,

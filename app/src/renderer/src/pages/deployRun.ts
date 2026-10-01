@@ -22,7 +22,12 @@ export interface RunView {
   steps: Record<DeployStep, StepUi>
   buffer: string
   error?: IpcError
-  finished?: { status: FinalStatus; totalDurationMs: number; appUrl?: string }
+  finished?: {
+    status: FinalStatus
+    totalDurationMs: number
+    appUrl?: string
+    exposureStatus?: 'reachable' | 'degraded' | 'tunnel_only' | 'not_checked'
+  }
 }
 
 export function initialSteps(): Record<DeployStep, StepUi> {
@@ -59,7 +64,8 @@ export function applyEvent(prev: RunView, event: DeployEvent): RunView {
         finished: {
           status: event.status,
           totalDurationMs: event.total_duration_ms,
-          appUrl: event.app_url
+          appUrl: event.app_url,
+          exposureStatus: event.exposure_status
         }
       }
   }

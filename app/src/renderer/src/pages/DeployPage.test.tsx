@@ -6,6 +6,7 @@ import type { DeployEvent, DetectionResultDto, Vps } from '@shared/ipc'
 
 import { DeployPage } from './DeployPage'
 import { strings } from '../strings'
+import { useUiState } from '../store/uiState'
 
 const { termInstances, terminalOptions } = vi.hoisted(() => {
   const termInstances: Array<{
@@ -135,7 +136,11 @@ function mockApi(handlers: Record<string, InvokeHandler>): {
   return {
     emit: (event) => {
       act(() => {
-        eventHandlers['deploy:event']?.(event)
+        const handler = eventHandlers['deploy:event']
+        if (!handler) {
+          throw new Error('deploy:event listener is not registered yet!')
+        }
+        handler(event)
       })
     },
     invoke
@@ -144,6 +149,7 @@ function mockApi(handlers: Record<string, InvokeHandler>): {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  useUiState.setState({ locale: 'en' })
   termInstances.length = 0
   terminalOptions.length = 0
 })
@@ -354,5 +360,169 @@ describe('DeployPage — wizard va log', () => {
       (screen.getByText(strings.deploy.review.deploy).closest('button') as HTMLButtonElement)
         .disabled
     ).toBe(true)
+  })
+
+  it('exposure bi degraded: Doctor chan doan, hien Safe auto-fix, fix xong cap nhat reachable va hien nut Mo app', async () => {
+    const { emit, invoke } = mockApi({
+      ...handersHappy,
+      'doctor:diagnose': async () => ({
+        ok: true,
+        data: {
+          fix_id: 'fix_ufw_port',
+          safe_to_auto_fix: true,
+          title: 'Mở cổng UFW 30000',
+          confidence: 'high',
+          evidence: ['Cổng 30000 bị UFW chặn'],
+          suggested_action: 'Mở cổng 30000 trên UFW'
+        }
+      }),
+      'doctor:fix': async () => ({
+        ok: true,
+        data: {
+          action_id: 1,
+          fix_id: 'fix_ufw_port',
+          status: 'verified',
+          exposure_status: 'reachable',
+          message: 'Đã mở cổng 30000 trên UFW và kiểm tra thành công.'
+        }
+      })
+    })
+
+    render(<DeployPage />)
+    await reachStep3(invoke)
+    fireEvent.click(screen.getByText(strings.deploy.review.deploy))
+    await screen.findByText('Deploy log')
+
+    emit({
+      type: 'finished',
+      deployment_id: 7,
+      status: 'running',
+      total_duration_ms: 12000,
+      exposure_status: 'degraded'
+    })
+
+    expect(await screen.findByText(strings.deploy.exposure.degradedTitle)).toBeTruthy()
+    expect(screen.getByText(strings.deploy.exposure.blockedHint)).toBeTruthy()
+    expect(screen.getByText(strings.deploy.doctor.diagnose)).toBeTruthy()
+    expect(screen.queryByText(strings.deploy.doctor.autoFix)).toBeNull()
+
+    // Chạy Doctor diagnose
+    fireEvent.click(screen.getByText(strings.deploy.doctor.diagnose))
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('doctor:diagnose', {
+        deployment_id: 7,
+        evidence: {
+          logs: '',
+          container_state: { status: 'running' },
+          external_probe: 'unreachable'
+        }
+      })
+    )
+
+    // Bằng chứng chẩn đoán và nút Safe auto-fix xuất hiện
+    expect(await screen.findByText(/Mở cổng UFW 30000/)).toBeTruthy()
+    const autoFixBtn = screen.getByText(strings.deploy.doctor.autoFix)
+    expect(autoFixBtn).toBeTruthy()
+
+    // Chạy Safe auto-fix
+    fireEvent.click(autoFixBtn)
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('doctor:fix', {
+        fix_id: 'fix_ufw_port',
+        deployment_id: 7
+      })
+    )
+
+    // Reactive update: trạng thái chuyển sang reachable, banner thành công và nút Open app xuất hiện
+    await waitFor(
+      () => {
+        expect(screen.queryByText(strings.deploy.exposure.degradedTitle)).toBeNull()
+        expect(screen.getAllByText(strings.deploy.log.openApp).length).toBeGreaterThan(0)
+        expect(screen.getAllByText(/Deploy succeeded/).length).toBeGreaterThan(0)
+        expect(screen.getByText('http://203.0.113.55:30000')).toBeTruthy()
+      },
+      { timeout: 10000 }
+    )
+  })
+
+  it('named_tunnel bi vo hieu hoa khi chua co CNAME target hop le', async () => {
+    const { emit, invoke } = mockApi(handersHappy)
+
+    render(<DeployPage />)
+    await reachStep3(invoke)
+    fireEvent.click(screen.getByText(strings.deploy.review.deploy))
+
+    // Bảo đảm deploy:start đã được gọi và trạng thái deploy (Deploy log, Live output) đã sẵn sàng
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('deploy:start', expect.anything()))
+    expect(await screen.findByText('Deploy log')).toBeTruthy()
+    expect(await screen.findByText('Live output')).toBeTruthy()
+
+    emit({
+      type: 'finished',
+      deployment_id: 7,
+      status: 'running',
+      total_duration_ms: 10000,
+      app_url: 'http://203.0.113.55:30000'
+    })
+
+    // Chờ kết quả UI Domain xuất hiện với thời gian phù hợp
+    expect(
+      await screen.findByText(strings.deploy.domain.title, {}, { timeout: 10000 })
+    ).toBeTruthy()
+    const select = screen.getByRole('combobox', { name: 'Domain mode' })
+    expect(select).toBeTruthy()
+
+    fireEvent.mouseDown(select)
+    const disabledOption = await screen.findByText(
+      strings.deploy.domain.namedTunnelDisabled,
+      {},
+      { timeout: 10000 }
+    )
+    expect(disabledOption.closest('.ant-select-item-option-disabled')).toBeTruthy()
+  })
+
+  it('đổi ngôn ngữ theo bốn ngôn ngữ và cập nhật nội dung DeployPage', async () => {
+    mockApi(handersHappy)
+    useUiState.setState({ locale: 'vi' })
+
+    const { rerender } = render(<DeployPage />)
+
+    // 1. Tiếng Việt
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Triển khai ứng dụng' })
+    ).toBeTruthy()
+    expect(screen.getByText('Chọn thư mục')).toBeTruthy()
+    expect(screen.getByText('Thư mục mã nguồn')).toBeTruthy()
+
+    // 2. English
+    act(() => {
+      useUiState.setState({ locale: 'en' })
+    })
+    rerender(<DeployPage />)
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Deploy an application' })
+    ).toBeTruthy()
+    expect(screen.getByText('Choose folder')).toBeTruthy()
+    expect(screen.getByText('Source folder')).toBeTruthy()
+
+    // 3. 简体中文
+    act(() => {
+      useUiState.setState({ locale: 'cn' })
+    })
+    rerender(<DeployPage />)
+    expect(await screen.findByRole('heading', { level: 1, name: '部署应用程序' })).toBeTruthy()
+    expect(screen.getByText('选择文件夹')).toBeTruthy()
+    expect(screen.getByText('源码文件夹')).toBeTruthy()
+
+    // 4. 日本語
+    act(() => {
+      useUiState.setState({ locale: 'jp' })
+    })
+    rerender(<DeployPage />)
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'アプリケーションデプロイ' })
+    ).toBeTruthy()
+    expect(screen.getByText('フォルダを選択')).toBeTruthy()
+    expect(screen.getByText('ソースフォルダ')).toBeTruthy()
   })
 })

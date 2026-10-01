@@ -1,13 +1,17 @@
 import { Segmented, Typography } from 'antd'
 
 import { PageHeader } from '../components/PageHeader'
-import { strings } from '../strings'
+import { useStrings } from '../strings'
 import { useUiState } from '../store/uiState'
+import type { LocaleMode } from '../store/uiState'
 import type { ThemeMode } from '../utils/themeTokens'
 
 export function SettingsPage(): React.JSX.Element {
+  const strings = useStrings()
   const themeMode = useUiState((state) => state.theme)
   const setTheme = useUiState((state) => state.setTheme)
+  const locale = useUiState((state) => state.locale)
+  const setLocale = useUiState((state) => state.setLocale)
 
   return (
     <section className="page-panel settings-page">
@@ -36,6 +40,25 @@ export function SettingsPage(): React.JSX.Element {
               options={[
                 { value: 'dark', label: strings.settings.dark },
                 { value: 'light', label: strings.settings.light }
+              ]}
+            />
+          </section>
+          <section className="settings-section">
+            <div>
+              <Typography.Text strong>{strings.settings.language}</Typography.Text>
+              <Typography.Paragraph type="secondary">
+                {strings.settings.languageDescription}
+              </Typography.Paragraph>
+            </div>
+            <Segmented<LocaleMode>
+              aria-label={strings.settings.language}
+              value={locale}
+              onChange={setLocale}
+              options={[
+                { value: 'en', label: strings.settings.languages.en },
+                { value: 'vi', label: strings.settings.languages.vi },
+                { value: 'cn', label: strings.settings.languages.cn },
+                { value: 'jp', label: strings.settings.languages.jp }
               ]}
             />
           </section>

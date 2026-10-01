@@ -13,7 +13,7 @@ import { loadSecret } from '../src/main/crypto/credentials'
 import { createCredentialCipher } from '../src/main/crypto/masterKey'
 import { closeDatabase, initializeDatabase } from '../src/main/db'
 import { VpsRepository } from '../src/main/db/vpsRepository'
-import { SshManager } from '../src/main/ssh/manager'
+import { SshManager, type ExecResult } from '../src/main/ssh/manager'
 
 app.setAppUserModelId('vn.opspilot.desktop')
 app.setName('OpsPilot')
@@ -25,13 +25,13 @@ const APPLY = process.argv.includes('--apply')
 const CLEAN_COMMAND = [
   'set -u',
   // 1. compose down -v (xoá cả volume) mọi project có compose file trong /opt/opspilot
-  "for d in /opt/opspilot/*/; do d=\"${d%/}\"; [ -f \"$d/docker-compose.yml\" ] || continue; echo \"down: $d\"; (cd \"$d\" && docker compose down -v --remove-orphans) || true; done",
+  'for d in /opt/opspilot/*/; do d="${d%/}"; [ -f "$d/docker-compose.yml" ] || continue; echo "down: $d"; (cd "$d" && docker compose down -v --remove-orphans) || true; done',
   // 2. container sót của mọi compose project (kể cả project không còn workspace)
   'docker ps -aq --filter label=com.docker.compose.project | xargs -r docker rm -f || true',
   // 3. volume sót
   'docker volume ls -q --filter label=com.docker.compose.project | xargs -r docker volume rm -f || true',
   // 4. image app đặt tên theo project; cộng thêm vài repo cố định của demo cũ
-  "for d in /opt/opspilot/*/; do p=$(basename \"$d\"); docker images -q \"$p\" | sort -u | xargs -r docker image rm -f || true; done",
+  'for d in /opt/opspilot/*/; do p=$(basename "$d"); docker images -q "$p" | sort -u | xargs -r docker image rm -f || true; done',
   'docker images -q opspilot-demo-express | xargs -r docker image rm -f || true',
   'docker images -q opspilot-collector | xargs -r docker image rm -f || true',
   // 5. xoá toàn bộ workspace
@@ -43,7 +43,7 @@ const VERIFY_COMMAND = [
   'test -z "$(docker ps -aq --filter label=com.docker.compose.project)"',
   'test -z "$(docker volume ls -q --filter label=com.docker.compose.project)"',
   'test -z "$(ls -A /opt/opspilot 2>/dev/null)"',
-  '! ss -ltn | awk \'NR > 1 {print $4}\' | grep -Eq \'(:|])300[0-9][0-9]$\''
+  "! ss -ltn | awk 'NR > 1 {print $4}' | grep -Eq '(:|])300[0-9][0-9]$'"
 ].join(' && ')
 
 const LIST_COMMAND = [
@@ -55,7 +55,13 @@ const LIST_COMMAND = [
   "ss -ltn | awk 'NR > 1 {print $4}' | grep -E '(:|])300[0-9][0-9]$' | sort || true"
 ].join('; ')
 
-async function run(ssh: SshManager, vpsId: number, title: string, command: string, timeoutMs: number) {
+async function run(
+  ssh: SshManager,
+  vpsId: number,
+  title: string,
+  command: string,
+  timeoutMs: number
+): Promise<ExecResult> {
   console.log(`\n--- ${title} ---`)
   const result = await ssh.exec(vpsId, command, { timeoutMs })
   if (result.stdout.trim()) console.log(result.stdout.trim())
@@ -91,7 +97,9 @@ async function main(): Promise<void> {
       if (verify.code !== 0) {
         throw new Error(`${target.name} chưa sạch hoàn toàn (exit ${verify.code}).`)
       }
-      console.log(`[PASS] ${target.name}: sạch — không compose project, không workspace, port 30xxx tự do.`)
+      console.log(
+        `[PASS] ${target.name}: sạch — không compose project, không workspace, port 30xxx tự do.`
+      )
       await run(ssh, target.id, 'sau khi dọn', LIST_COMMAND, 30_000)
     }
   } finally {

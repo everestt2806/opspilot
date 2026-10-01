@@ -36,7 +36,10 @@ function emitMlStatus(status: { running: boolean; reason?: string }): void {
 function createWindow(): void {
   mainWindow = new BrowserWindow(getMainWindowOptions(join(__dirname, '../preload/index.js'), icon))
 
-  mainWindow.on('ready-to-show', () => mainWindow?.show())
+  mainWindow.on('ready-to-show', () => {
+    mainWindow?.show()
+    mainWindow?.focus()
+  })
   mainWindow.on('maximize', () => {
     mainWindow?.webContents.send('window:maximized-changed', { maximized: true })
   })
@@ -52,12 +55,21 @@ function createWindow(): void {
     }
     return { action: 'deny' }
   })
+  mainWindow.webContents.on(
+    'did-fail-load',
+    (_event, errorCode, errorDescription, validatedURL) => {
+      logger.error('renderer', `Failed to load ${validatedURL}: ${errorDescription} (${errorCode})`)
+    }
+  )
 
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
     void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  mainWindow.show()
+  mainWindow.focus()
 }
 
 void app

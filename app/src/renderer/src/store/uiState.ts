@@ -10,11 +10,14 @@ export interface DeployPreselect {
   appId?: number
 }
 
+export type LocaleMode = 'en' | 'vi' | 'cn' | 'jp'
+
 /** Trạng thái phiên UI: lưu session người dùng (theme, trang, VPS đang chọn, tab,
  *  bộ lọc) để thoát ra vào lại vẫn khôi phục đúng chỗ cũ. Chỉ lưu *trạng thái UI*
  *  — số liệu (VPS/resources/apps/history) luôn fetch mới khi mở lại. */
 interface UiState {
   theme: ThemeMode
+  locale: LocaleMode
   activePage: string
   selectedVpsId: number | null
   activePanelTab: PanelTabKey
@@ -23,6 +26,7 @@ interface UiState {
   /** Các VPS người dùng đánh dấu ở cột checkbox Server list — để header chính đếm số máy đang chọn */
   selectedVpsIds: number[]
   setTheme: (theme: ThemeMode) => void
+  setLocale: (locale: LocaleMode) => void
   setActivePage: (page: string) => void
   setSelectedVpsId: (vpsId: number | null) => void
   setActivePanelTab: (tab: PanelTabKey) => void
@@ -36,6 +40,7 @@ export const useUiState = create<UiState>()(
   persist(
     (set) => ({
       theme: 'dark',
+      locale: 'vi',
       activePage: 'vps',
       selectedVpsId: null,
       activePanelTab: 'overview',
@@ -43,6 +48,7 @@ export const useUiState = create<UiState>()(
       deployPreselect: null,
       selectedVpsIds: [],
       setTheme: (theme) => set({ theme }),
+      setLocale: (locale) => set({ locale }),
       setActivePage: (activePage) => set({ activePage }),
       setSelectedVpsId: (selectedVpsId) => set({ selectedVpsId }),
       setActivePanelTab: (activePanelTab) => set({ activePanelTab }),

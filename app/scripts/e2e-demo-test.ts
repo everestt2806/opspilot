@@ -133,9 +133,8 @@ async function main(): Promise<void> {
     })
     const f1 = await waitFor(
       () =>
-        deployEvents.find(
-          (e) => e.type === 'finished' && e.deployment_id === d1.deploymentId
-        ) as Extract<DeployEvent, { type: 'finished' }> | undefined,
+        deployEvents.find((e) => e.type === 'finished' && e.deployment_id === d1.deploymentId) as
+          Extract<DeployEvent, { type: 'finished' }> | undefined,
       30 * 60_000,
       'deploy express xong'
     )
@@ -159,9 +158,8 @@ async function main(): Promise<void> {
     })
     const f2 = await waitFor(
       () =>
-        deployEvents.find(
-          (e) => e.type === 'finished' && e.deployment_id === d2.deploymentId
-        ) as Extract<DeployEvent, { type: 'finished' }> | undefined,
+        deployEvents.find((e) => e.type === 'finished' && e.deployment_id === d2.deploymentId) as
+          Extract<DeployEvent, { type: 'finished' }> | undefined,
       30 * 60_000,
       'deploy next xong'
     )
@@ -171,8 +169,9 @@ async function main(): Promise<void> {
 
     // ── 3. Deploy vite-spa lên VM02 (VITE_API_URL = URL express) ────────────────
     console.log('\n===== 3/6 DEPLOY vite-spa -> VM02 =====')
-    const expressUrl = (appRepository.getByVpsAndName(vm02.id, 'demo1409-express') as { url: string })
-      .url
+    const expressUrl = (
+      appRepository.getByVpsAndName(vm02.id, 'demo1409-express') as { url: string }
+    ).url
     console.log(`  VITE_API_URL=${expressUrl}`)
     const d3 = pipeline.run({
       vps_id: vm02.id,
@@ -182,9 +181,8 @@ async function main(): Promise<void> {
     })
     const f3 = await waitFor(
       () =>
-        deployEvents.find(
-          (e) => e.type === 'finished' && e.deployment_id === d3.deploymentId
-        ) as Extract<DeployEvent, { type: 'finished' }> | undefined,
+        deployEvents.find((e) => e.type === 'finished' && e.deployment_id === d3.deploymentId) as
+          Extract<DeployEvent, { type: 'finished' }> | undefined,
       30 * 60_000,
       'deploy vite xong'
     )
@@ -252,9 +250,8 @@ async function main(): Promise<void> {
     const { job_id: viteJobId } = migrate.start({ app_id: viteApp.id, target_vps_id: vm01.id })
     await waitFor(
       () =>
-        migrateEvents.find(
-          (e) => e.type === 'awaiting-confirm' && e.job_id === viteJobId
-        ) as MigrateEvent | undefined,
+        migrateEvents.find((e) => e.type === 'awaiting-confirm' && e.job_id === viteJobId) as
+          MigrateEvent | undefined,
       30 * 60_000,
       'migrate vite xong'
     )
@@ -291,9 +288,8 @@ async function main(): Promise<void> {
     })
     await waitFor(
       () =>
-        migrateEvents.find(
-          (e) => e.type === 'awaiting-confirm' && e.job_id === expressJobId
-        ) as MigrateEvent | undefined,
+        migrateEvents.find((e) => e.type === 'awaiting-confirm' && e.job_id === expressJobId) as
+          MigrateEvent | undefined,
       30 * 60_000,
       'migrate express xong'
     )
@@ -302,7 +298,11 @@ async function main(): Promise<void> {
       return
     }
     if (expressJob.status !== 'awaiting_confirm') {
-      record('6 migrate express', 'FAIL', `status=${expressJob.status} err=${expressJob.error_message}`)
+      record(
+        '6 migrate express',
+        'FAIL',
+        `status=${expressJob.status} err=${expressJob.error_message}`
+      )
       return
     }
     const expressVerify = JSON.parse(expressJob.verify_json || '{}') as {

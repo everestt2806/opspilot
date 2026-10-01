@@ -30,17 +30,10 @@ import type { App, DeployInput, DetectionResultDto, PrecheckResult, Vps } from '
 
 import { PageHeader } from '../components/PageHeader'
 
-import { strings } from '../strings'
+import { useStrings } from '../strings'
 import { useUiState } from '../store/uiState'
 import { applyEvent, initialSteps, SEVEN_STEPS, type RunView } from './deployRun'
 import { DeployTerminal } from './DeployTerminal'
-
-const WIZARD_STEPS = [
-  { title: strings.deploy.steps.source },
-  { title: strings.deploy.steps.detect },
-  { title: strings.deploy.steps.config },
-  { title: strings.deploy.steps.review }
-]
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
@@ -70,6 +63,13 @@ interface DeployPageProps {
 }
 
 export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Element {
+  const strings = useStrings()
+  const wizardSteps = [
+    { title: strings.deploy.steps.source },
+    { title: strings.deploy.steps.detect },
+    { title: strings.deploy.steps.config },
+    { title: strings.deploy.steps.review }
+  ]
   const deployPreselect = useUiState((state) => state.deployPreselect)
   const clearDeployPreselect = useUiState((state) => state.clearDeployPreselect)
   const [vpsList, setVpsList] = useState<Vps[]>([])
@@ -139,7 +139,11 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
     return window.api.on('deploy:event', (event) => {
       const current = runRef.current
       if (!current || event.deployment_id !== current.deploymentId) return
-      setRun((prev) => (prev ? applyEvent(prev, event) : prev))
+      setRun((prev) => {
+        const next = prev ? applyEvent(prev, event) : prev
+        runRef.current = next
+        return next
+      })
     })
   }, [])
 
@@ -265,16 +269,19 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
       setStartError(result.error.message)
       return
     }
-    setRun({
+    const nextRun: RunView = {
       deploymentId: result.data.deployment_id,
       steps: initialSteps(),
       buffer: ''
-    })
+    }
+    runRef.current = nextRun
+    setRun(nextRun)
     setRunStartedAt(Date.now())
     setElapsedTick(0)
   }
 
   function resetWizard(): void {
+    runRef.current = null
     setRun(null)
     setRunStartedAt(null)
     setPrecheck(null)
@@ -283,9 +290,10 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
     setStep(0)
   }
 
-  function openApp(): void {
-    if (run?.finished?.appUrl) {
-      void window.api.invoke('system:open-external', run.finished.appUrl)
+  function openApp(url?: string): void {
+    const target = url || runRef.current?.finished?.appUrl || run?.finished?.appUrl
+    if (target) {
+      void window.api.invoke('system:open-external', target)
     }
   }
 
@@ -296,6 +304,14 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
         elapsed={elapsedTick}
         appName={appName}
         vpsName={vpsList.find((vps) => vps.id === vpsId)?.name ?? ''}
+        defaultAppUrl={precheck?.app_url}
+        onRunUpdate={(updater) =>
+          setRun((prev) => {
+            const next = prev ? updater(prev) : prev
+            runRef.current = next
+            return next
+          })
+        }
         onOpenApp={openApp}
         onOpenDashboard={onOpenDashboard}
         onBack={resetWizard}
@@ -328,7 +344,7 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
         <Empty description={strings.deploy.noVps} />
       ) : (
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <Steps size="small" current={step} items={WIZARD_STEPS} />
+          <Steps size="small" current={step} items={wizardSteps} />
 
           {step === 0 && (
             <div className="deploy-step-body">
@@ -591,11 +607,11 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
                       rowKey="label"
                       dataSource={precheck.checks}
                       columns={[
-                        { title: 'Check', dataIndex: 'label' },
-                        { title: 'Required', dataIndex: 'required' },
-                        { title: 'Actual', dataIndex: 'actual' },
+                        { title: strings.deploy.review.columns.check, dataIndex: 'label' },
+                        { title: strings.deploy.review.columns.required, dataIndex: 'required' },
+                        { title: strings.deploy.review.columns.actual, dataIndex: 'actual' },
                         {
-                          title: 'Result',
+                          title: strings.deploy.review.columns.result,
                           key: 'ok',
                           render: (_, check) =>
                             check.ok ? (
@@ -717,6 +733,7 @@ function EnvRow({
   onChange,
   onRemove
 }: EnvRowProps): React.JSX.Element {
+  const strings = useStrings()
   return (
     <div className="deploy-env-row">
       <div className="deploy-env-key">
@@ -761,7 +778,9 @@ interface DeployLogViewProps {
   elapsed: number
   appName: string
   vpsName: string
-  onOpenApp: () => void
+  defaultAppUrl?: string
+  onRunUpdate: (updater: (prev: RunView) => RunView) => void
+  onOpenApp: (url?: string) => void
   onOpenDashboard?: () => void
   onBack: () => void
 }
@@ -771,12 +790,34 @@ function DeployLogView({
   elapsed,
   appName,
   vpsName,
+  defaultAppUrl,
+  onRunUpdate,
   onOpenApp,
   onOpenDashboard,
   onBack
 }: DeployLogViewProps): React.JSX.Element {
+  const strings = useStrings()
   const [cancelOpen, setCancelOpen] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
+  const [doctorBusy, setDoctorBusy] = useState(false)
+  const [doctorMessage, setDoctorMessage] = useState<string | null>(null)
+  const [doctorFixId, setDoctorFixId] = useState<string | null>(null)
+  const [doctorSafeToFix, setDoctorSafeToFix] = useState(false)
+  const [domainName, setDomainName] = useState('')
+  const [cloudflareToken, setCloudflareToken] = useState('')
+  const [cloudflareZoneId, setCloudflareZoneId] = useState('')
+  const [domainMode, setDomainMode] = useState<'direct_port' | 'shared_ingress' | 'named_tunnel'>(
+    'direct_port'
+  )
+  const [domainMessage, setDomainMessage] = useState<string | null>(null)
+  const [domainPlan, setDomainPlan] = useState<{
+    hostname: string
+    target: string
+    record_type: 'A' | 'AAAA' | 'CNAME'
+    record_name: string
+    public_url: string
+    instructions: string[]
+  } | null>(null)
   const { finished } = run
   const displayElapsed = finished ? finished.totalDurationMs : elapsed
   const failedStep = run.error
@@ -799,6 +840,128 @@ function DeployLogView({
     }
     setCancelError(null)
     setCancelOpen(false)
+  }
+
+  async function runDoctor(): Promise<void> {
+    if (!finished) return
+    setDoctorBusy(true)
+    setDoctorMessage(null)
+    const result = await window.api.invoke('doctor:diagnose', {
+      deployment_id: run.deploymentId,
+      evidence: {
+        logs: run.buffer,
+        container_state: {
+          status: finished.status === 'running' ? 'running' : 'failed'
+        },
+        external_probe: finished.exposureStatus === 'degraded' ? 'unreachable' : undefined
+      }
+    })
+    setDoctorBusy(false)
+    if (!result.ok) {
+      setDoctorMessage(result.error.message)
+      return
+    }
+    setDoctorFixId(result.data.fix_id)
+    setDoctorSafeToFix(result.data.safe_to_auto_fix)
+    const evidenceDetails =
+      result.data.evidence.length > 0 ? ` — ${result.data.evidence.join('; ')}` : ''
+    setDoctorMessage(`${result.data.title} (${result.data.confidence})${evidenceDetails}`)
+  }
+
+  async function fixWithDoctor(): Promise<void> {
+    if (!doctorFixId || !finished) return
+    setDoctorBusy(true)
+    const result = await window.api.invoke('doctor:fix', {
+      fix_id: doctorFixId,
+      deployment_id: run.deploymentId
+    })
+    setDoctorBusy(false)
+    if (!result.ok) {
+      setDoctorMessage(result.error.message)
+    } else {
+      setDoctorMessage(result.data.message)
+      if (result.data.status === 'verified') {
+        setDoctorSafeToFix(false)
+        if (result.data.exposure_status === 'reachable') {
+          onRunUpdate((prev) => {
+            if (!prev.finished) return prev
+            return {
+              ...prev,
+              finished: {
+                ...prev.finished,
+                exposureStatus: 'reachable',
+                appUrl: prev.finished.appUrl || defaultAppUrl
+              }
+            }
+          })
+        }
+      }
+    }
+  }
+
+  async function prepareDomain(): Promise<void> {
+    if (!domainName.trim() || !appUrl) return
+    if (domainMode === 'named_tunnel') {
+      setDomainMessage(strings.deploy.domain.namedTunnelError)
+      return
+    }
+    try {
+      const parsed = new URL(appUrl)
+      const result = await window.api.invoke('domain:plan', {
+        hostname: domainName,
+        target: parsed.hostname,
+        app_port: Number(parsed.port || 80),
+        mode: domainMode
+      })
+      if (!result.ok) {
+        setDomainMessage(result.error.message)
+        return
+      }
+      setDomainPlan(result.data)
+      setDomainMessage(strings.deploy.domain.generatedHint)
+    } catch (error) {
+      setDomainMessage(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  async function verifyDomain(): Promise<void> {
+    if (!domainPlan) return
+    const result = await window.api.invoke(
+      'domain:check',
+      domainPlan.record_name,
+      domainPlan.target,
+      domainPlan.record_type
+    )
+    setDomainMessage(
+      result.ok
+        ? strings.deploy.domain.dnsStatus(result.data.status, result.data.observed)
+        : result.error.message
+    )
+  }
+
+  async function upsertDomain(): Promise<void> {
+    if (domainMode === 'named_tunnel') {
+      setDomainMessage(strings.deploy.domain.namedTunnelError)
+      return
+    }
+    if (!domainPlan || !cloudflareToken.trim() || !cloudflareZoneId.trim()) {
+      setDomainMessage(strings.deploy.domain.cfMissing)
+      return
+    }
+    const result = await window.api.invoke('domain:upsert', {
+      deployment_id: run.deploymentId,
+      hostname: domainPlan.hostname,
+      mode: domainMode,
+      provider: 'cloudflare',
+      api_token: cloudflareToken,
+      zone_id: cloudflareZoneId
+    })
+    if (!result.ok) {
+      setDomainMessage(result.error.message)
+      return
+    }
+    setCloudflareToken('')
+    setDomainMessage(strings.deploy.domain.currentStatus(result.data.message, result.data.status))
   }
 
   const stepItems = SEVEN_STEPS.map((step) => {
@@ -836,19 +999,44 @@ function DeployLogView({
       {finished?.status === 'running' && (
         <Alert
           className="page-alert"
-          type="success"
+          type={finished.exposureStatus === 'degraded' ? 'warning' : 'success'}
           showIcon
-          message={strings.deploy.log.success(formatDuration(finished.totalDurationMs))}
-          description={appUrl ? <Typography.Text code>{appUrl}</Typography.Text> : undefined}
+          message={
+            finished.exposureStatus === 'degraded'
+              ? strings.deploy.exposure.degradedTitle
+              : strings.deploy.log.success(formatDuration(finished.totalDurationMs))
+          }
+          description={
+            <Space direction="vertical" size="small">
+              {appUrl ? (
+                <Typography.Text code>{appUrl}</Typography.Text>
+              ) : (
+                <Typography.Text type="secondary">
+                  {strings.deploy.exposure.blockedHint}
+                </Typography.Text>
+              )}
+              {doctorMessage && <Typography.Text>{doctorMessage}</Typography.Text>}
+            </Space>
+          }
           action={
             <Space>
               {appUrl && (
-                <Button type="primary" onClick={onOpenApp}>
+                <Button type="primary" onClick={() => onOpenApp(appUrl)}>
                   {strings.deploy.log.openApp}
                 </Button>
               )}
               {onOpenDashboard && (
                 <Button onClick={onOpenDashboard}>{strings.deploy.log.viewDashboard}</Button>
+              )}
+              {finished.exposureStatus === 'degraded' && (
+                <Button loading={doctorBusy} onClick={() => void runDoctor()}>
+                  {strings.deploy.doctor.diagnose}
+                </Button>
+              )}
+              {doctorSafeToFix && doctorFixId && (
+                <Button type="primary" loading={doctorBusy} onClick={() => void fixWithDoctor()}>
+                  {strings.deploy.doctor.autoFix}
+                </Button>
               )}
             </Space>
           }
@@ -876,7 +1064,104 @@ function DeployLogView({
               </Space>
             ) : undefined
           }
+          action={
+            <Space>
+              <Button loading={doctorBusy} onClick={() => void runDoctor()}>
+                {strings.deploy.doctor.diagnose}
+              </Button>
+              {doctorSafeToFix && doctorFixId && (
+                <Button type="primary" loading={doctorBusy} onClick={() => void fixWithDoctor()}>
+                  {strings.deploy.doctor.autoFix}
+                </Button>
+              )}
+            </Space>
+          }
         />
+      )}
+
+      {finished?.status === 'running' && (
+        <div className="page-panel" style={{ marginTop: 16 }}>
+          <Typography.Title level={5}>{strings.deploy.domain.title}</Typography.Title>
+          <Space wrap>
+            <Input
+              placeholder={strings.deploy.domain.placeholder}
+              value={domainName}
+              onChange={(event) => setDomainName(event.target.value)}
+              style={{ width: 240 }}
+            />
+            <Select
+              aria-label={strings.deploy.domain.modeLabel}
+              value={domainMode}
+              onChange={setDomainMode}
+              options={[
+                { value: 'direct_port', label: strings.deploy.domain.directPort },
+                { value: 'shared_ingress', label: strings.deploy.domain.sharedIngress },
+                {
+                  value: 'named_tunnel',
+                  label: strings.deploy.domain.namedTunnelDisabled,
+                  disabled: true
+                }
+              ]}
+              style={{ width: 280 }}
+            />
+            <Button
+              onClick={() => void prepareDomain()}
+              disabled={!domainName.trim() || !appUrl || domainMode === 'named_tunnel'}
+            >
+              {strings.deploy.domain.generateRecord}
+            </Button>
+            {domainPlan && (
+              <Button onClick={() => void verifyDomain()}>
+                {strings.deploy.domain.verifyPropagation}
+              </Button>
+            )}
+          </Space>
+          {domainPlan && (
+            <Space wrap style={{ marginTop: 12 }}>
+              <Input.Password
+                aria-label={strings.deploy.domain.cfTokenLabel}
+                placeholder={strings.deploy.domain.cfTokenPlaceholder}
+                value={cloudflareToken}
+                onChange={(event) => setCloudflareToken(event.target.value)}
+                style={{ width: 300 }}
+              />
+              <Input
+                aria-label={strings.deploy.domain.cfZoneLabel}
+                placeholder={strings.deploy.domain.cfZonePlaceholder}
+                value={cloudflareZoneId}
+                onChange={(event) => setCloudflareZoneId(event.target.value)}
+                style={{ width: 240 }}
+              />
+              <Button
+                type="primary"
+                onClick={() => void upsertDomain()}
+                disabled={
+                  !cloudflareToken.trim() ||
+                  !cloudflareZoneId.trim() ||
+                  domainMode === 'named_tunnel'
+                }
+              >
+                {strings.deploy.domain.cfUpdate}
+              </Button>
+            </Space>
+          )}
+          {domainPlan && (
+            <Descriptions column={1} size="small" style={{ marginTop: 12 }}>
+              <Descriptions.Item label={strings.deploy.domain.recordLabel}>
+                <Typography.Text code>
+                  {domainPlan.record_type} {domainPlan.record_name} → {domainPlan.target}
+                </Typography.Text>
+              </Descriptions.Item>
+              <Descriptions.Item label={strings.deploy.domain.targetUrlLabel}>
+                <Typography.Text code>{domainPlan.public_url}</Typography.Text>
+              </Descriptions.Item>
+              <Descriptions.Item label={strings.deploy.domain.instructionsLabel}>
+                {domainPlan.instructions.join(' ')}
+              </Descriptions.Item>
+            </Descriptions>
+          )}
+          {domainMessage && <Typography.Text type="secondary">{domainMessage}</Typography.Text>}
+        </div>
       )}
 
       <DeployTerminal
@@ -902,7 +1187,7 @@ function DeployLogView({
         </Space>
         <Space>
           {finished && appUrl && (
-            <Button type="primary" onClick={onOpenApp}>
+            <Button type="primary" onClick={() => onOpenApp(appUrl)}>
               {strings.deploy.log.openApp}
             </Button>
           )}
