@@ -13,9 +13,9 @@ Tài liệu này phản ánh trung thực trạng thái mã nguồn trên nhánh
 
 Các mức phân loại:
 - **[XÁC MINH — ĐÃ CHẠY VÀ THẤY KẾT QUẢ THỰC TẾ]**: Đã chạy lệnh trực tiếp trong môi trường local, có log và exit code 0.
-- **[ĐÃ COMMIT LOCAL TRÊN NHÁNH feat/deploy-reachability — CHỜ REVIEW CỦA LEADER]**: Đã hoàn tất các vòng lặp kiểm thử hồi quy và đã tạo các commit local cho L2 (`e2959f7`), L1a (`d86a319`), fix test (`ae029c5`), backend L3+L4+L5 (`13591ba`), L6 (`ad86736`), L7 (`82a5d5d`), và L8 (đang thực hiện commit local gồm `.gitignore`, `docs/tasks/board.md`, `HANDOFF.md`). Toàn bộ ở trạng thái `CHỜ REVIEW` (chưa merge vào `main`, không tự ý push/PR/merge).
+- **[ĐÃ COMMIT LOCAL TRÊN NHÁNH feat/deploy-reachability — CHỜ REVIEW CỦA LEADER]**: Đã hoàn tất các vòng lặp kiểm thử hồi quy và đã tạo các commit local cho L2 (`e2959f7`), L1a (`d86a319`), fix test (`ae029c5`), backend L3+L4+L5 (`13591ba`), L6 (`ad86736`), L7 (`82a5d5d`), và L8 (`f870b6f`). Toàn bộ ở trạng thái `CHỜ REVIEW` (chưa merge vào `main`, không tự ý push/PR/merge).
 - **[NOT_RUN — NGOÀI PHẠM VI WORKER HOẶC MÔI TRƯỜNG HEADLESS]**:
-  - **GUI thực tế [NOT_RUN]**: Môi trường agent chạy không có màn hình đồ họa tương tác (headless), không mở cửa sổ Electron để test tay; kiểm chứng hoàn toàn qua 63 file / 479 Vitest jsdom tests, typecheck, lint và production build.
+  - **GUI thực tế [NOT_RUN]**: Môi trường agent chạy không có màn hình đồ họa tương tác (headless), không mở cửa sổ Electron để test tay; kiểm chứng qua 63 file / 479 Vitest jsdom tests, typecheck, lint và production build.
   - **VPS thật / Ingress Cloudflare thật / DNS thật [NOT_RUN]**: Phụ thuộc hạ tầng VPS live và API token ngoài phạm vi worker local (đã kiểm chứng qua fake SSH, mock probe và unit/integration tests).
   - **50 run ML chính thức [NOT_RUN]**: Cần môi trường VPS live để thu thập dữ liệu thật (harness offline đã pass 106 tests).
 
@@ -51,12 +51,12 @@ ml-service/.venv/Scripts/python.exe -m pytest ml-service/tests -q
 
 Theo kế hoạch tại `docs/27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-detector.md`, Worker đã thực hiện toàn bộ các checkpoint từ L1a đến L8 và tạo các commit local tương ứng trên nhánh `feat/deploy-reachability`:
 1. **L2**: Commit `e2959f7` — Tích hợp bộ thí nghiệm ML TK-S6 offline (106 tests pytest pass, Ruff pass).
-2. **L1a**: Commit `d86a319` — Đồng bộ contract IPC, DeployEvent, Doctor, Domain, DB schema và migration 004 DDL.
+2. **L1a**: Commit `d86a319` — Đồng bộ contract IPC, DeployEvent, Doctor, Domain, DB schema contract (`docs/contracts/schema.sql`; migration 004 thực thi thuộc commit backend `13591ba`). Lưu ý: typecheck tại riêng commit này đã FAILED do lỗi test kế thừa và chỉ PASS sau commit `ae029c5`.
 3. **Fix test reachability (Ngoại lệ kế thừa 29ed4d3)**: Commit `ae029c5` — Sửa cú pháp mock `vi.fn<(url: string) => Promise<boolean>>()` cho `reachability.test.ts` (15 tests pass).
-4. **L3+L4+L5 (Gộp Backend)**: Commit `13591ba` — Backend Publish, Reachability, Firewall, Doctor Rule Engine, Safe Fix fail-closed, Domain DNS assistant và IPC dispatch (418 Vitest pass, build pass).
+4. **L3+L4+L5 (Gộp Backend)**: Commit `13591ba` — Backend Publish, Reachability, Firewall, Doctor Rule Engine, Safe Fix fail-closed, Domain DNS assistant, migration 004 thực thi và IPC dispatch (418 Vitest pass, build pass).
 5. **L6**: Commit `ad86736` — Detector Tier 1 (Next.js, Express, Vite) và CLI `try-detect` (detector 65 test tổng pass, CLI 3 demo apps pass, build pass).
 6. **L7**: Commit `82a5d5d` — UI Exposure, Doctor drawer, cô lập state giữa các app, Đa ngôn ngữ 4 locales, guard named_tunnel (479 Vitest pass, build pass; GUI thực `NOT_RUN`).
-7. **L8**: Commit local — Vệ sinh repo (.gitignore công cụ AI cục bộ), cập nhật bảng task `board.md` và `HANDOFF.md`.
+7. **L8**: Commit `f870b6f` — Vệ sinh repo (.gitignore công cụ AI cục bộ), cập nhật bảng task `board.md` và `HANDOFF.md`.
 
 ### Ràng buộc xuyên suốt
 - **Không tự ý push, mở PR hoặc merge** khi chưa có lệnh từ Leader. Toàn bộ thay đổi giữ trạng thái `CHỜ REVIEW`.
@@ -73,11 +73,11 @@ Theo kế hoạch tại `docs/27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-
 - **Tệp triển khai**:
   - `docs/contracts/ipc-contract.ts`: Đồng bộ `Deployment.exposure_status`, `Deployment.exposure_evidence_json`, channels `doctor:*` (`doctor:diagnose`, `doctor:fix`, `doctor:history`) và `domain:*` (`domain:plan`, `domain:upsert`, `domain:delete`, `domain:check-propagation`, `domain:list`).
   - `docs/contracts/deploy-events.md`: Cập nhật đặc tả event `finished` với `exposure_status` (`reachable`, `degraded`, `tunnel_only`, `not_checked`) và `exposure_evidence`. Làm rõ hành vi UFW có điều kiện và external probe; ghi nhận `PORT_BLOCKED_EXTERNAL` là diagnosis trong evidence.
-  - `docs/contracts/schema.sql` & `app/src/main/db/migrations/004_publish_doctor_domain.sql`: Bổ sung định nghĩa các bảng `doctor_run`, `doctor_action`, `domain_binding` và các cột `exposure_status`, `exposure_evidence_json` trong bảng `deployment`.
+  - `docs/contracts/schema.sql`: Bổ sung định nghĩa schema contract cho các bảng `doctor_run`, `doctor_action`, `domain_binding` và các cột `exposure_status`, `exposure_evidence_json` trong bảng `deployment` (file migration 004 thực thi trong codebase Electron `app/src/main/db/migrations/004_publish_doctor_domain.sql` thuộc commit backend `13591ba`).
   - `DECISIONS.md`: Ghi nhận quyết định kiến trúc cho exposure state, Doctor rule engine và Domain DNS assistant.
   - `app/src/shared/ipc.ts`: TypeScript mirror các types contract dùng chung trong Electron app.
   - `docs/27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-detector.md` & `docs/README.md`: Kế hoạch chi tiết và liên kết tài liệu.
-- **Xác minh sau commit**: TypeScript app typecheck pass trên checkout độc lập tại SHA `d86a319`.
+- **Xác minh sau commit**: Trên checkout độc lập tại riêng commit L1a `d86a319`, typecheck (`pnpm --dir app run typecheck:node`) đã **FAILED** do lỗi cú pháp mock Vitest trong `reachability.test.ts` kế thừa từ commit `29ed4d3`; lỗi này chỉ được khắc phục và typecheck chính thức PASS sau commit sửa test `ae029c5`.
 
 ### 2.2. L2 — Tích hợp Bộ thí nghiệm ML TK-S6 Offline
 - **Trạng thái**: Đã commit local `e2959f7` (`feat(experiments): loadgen harness, fault injection scheduler va protocol thi nghiem (L2 / TK-S6)`). Trạng thái `CHỜ REVIEW` (chưa merge vào `main`).
@@ -105,7 +105,7 @@ Theo kế hoạch tại `docs/27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-
 
 ### 2.4. L3+L4+L5 — Backend Publish, Doctor Engine, Safe Fix, Domain & DNS
 - **Trạng thái**: Đã commit local gộp `13591ba` (`feat(backend): publish exposure pipeline, doctor rule engine va domain dns assistant (L3+L4+L5)`). Trạng thái `CHỜ REVIEW` (chưa merge vào `main`).
-- **Lý do gộp**: `app/src/main/ipc.ts` và `app/src/main/ipc.test.ts` nhập khẩu đồng thời các module Doctor (L4) và Domain (L5). Gộp L3+L4+L5 thành một commit backend nguyên tử đảm bảo tính toàn vẹn, loại bỏ bóc tách hunk thủ công và giữ cho lịch sử `git bisect` luôn xanh.
+- **Lý do gộp**: `app/src/main/ipc.ts` và `app/src/main/ipc.test.ts` nhập khẩu đồng thời các module Doctor (L4) và Domain (L5). Gộp L3+L4+L5 thành một commit backend nguyên tử nhằm đảm bảo tính toàn vẹn của các phụ thuộc giữa các module backend và loại bỏ bóc tách hunk thủ công.
 - **Tệp triển khai (25 files)**:
   - **L3 (Publish/Reachability/Firewall)**:
     - `app/src/main/deploy/reachability.ts`: Logic thuần kiểm tra ufw, probe HTTP external có retry/timeout, sinh chẩn đoán `PORT_BLOCKED_EXTERNAL`.
@@ -171,11 +171,11 @@ Theo kế hoạch tại `docs/27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-
 - **Xác minh qua test thực tế**:
   - Toàn bộ Vitest app: **63 file, 479/479 tests pass**.
   - `typecheck:node`, `typecheck:web`, scripts typecheck pass; ESLint pass (0 errors, 0 warnings); electron-vite build pass.
-  - **Ghi nhận kiểm chứng GUI thực tế**: **NOT_RUN** (do môi trường agent headless, không có màn hình đồ họa; toàn bộ hành vi UI và tương tác state đã được kiểm chứng 100% qua jsdom unit/integration tests).
+  - **Ghi nhận kiểm chứng GUI thực tế**: **NOT_RUN** (do môi trường agent headless, không có màn hình đồ họa; các hành vi UI và tương tác state đã được kiểm chứng qua các suite jsdom unit/integration tests với 479 Vitest tests pass).
   - **Ghi nhận kiểm chứng VPS thật**: **NOT_RUN** (phụ thuộc hạ tầng live ngoài phạm vi worker local).
 
 ### 2.7. L8 — Vệ sinh Repo, Cập nhật Board và Handoff
-- **Trạng thái**: Đang thực hiện commit local gồm 3 files (`.gitignore`, `docs/tasks/board.md`, `HANDOFF.md`), trạng thái `CHỜ REVIEW` (đang chờ Leader review, chưa merge vào `main`).
+- **Trạng thái**: Đã commit local `f870b6f` (`docs(handoff): cap nhat ho so ban giao, tien do board.md va bo sung gitignore (L8)`). Trạng thái `CHỜ REVIEW` (chờ Leader review, chưa merge vào `main`).
 - **Tệp triển khai**:
   - `.gitignore`: Bổ sung bỏ qua đúng các thư mục công cụ cục bộ của AI sandbox (`.autoclaw/`, `.claude/`, `.clinerules`, `.clinerules/`), bảo đảm không bỏ sót mã nguồn cần lưu trong repository.
   - `docs/tasks/board.md`: Cập nhật bảng task Checkpoint L1a–L8 phản ánh chính xác các SHA commit thực tế, ghi nhận trạng thái `CHỜ REVIEW` (chưa merge `main`), bổ sung mục cập nhật chi tiết ngày 30/09/2026.
@@ -197,15 +197,15 @@ Theo kế hoạch tại `docs/27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-
 | **TypeScript Typecheck** | `pnpm --dir app run typecheck` & `pnpm --dir app exec tsc --noEmit -p tsconfig.scripts.json` | **PASS**, 0 lỗi |
 | **ESLint** | `pnpm --dir app lint` | **PASS**, 0 lỗi, 0 cảnh báo |
 | **Electron Production Build** | `pnpm --dir app run build` | **PASS**, electron-vite build thành công |
-| **GUI thực tế (Tương tác Desktop trực tiếp)** | Không thực hiện trong môi trường agent headless | **NOT_RUN** (đã bao phủ 100% qua 479 tests jsdom) |
-| **VPS thật / Cloudflare API live** | Phụ thuộc hạ tầng live ngoài phạm vi local | **NOT_RUN** (đã bao phủ qua mock SSH/DNS/probe) |
+| **GUI thực tế (Tương tác Desktop trực tiếp)** | Không thực hiện trong môi trường agent headless | **NOT_RUN** (kiểm chứng tự động qua 479 tests jsdom) |
+| **VPS thật / Cloudflare API live** | Phụ thuộc hạ tầng live ngoài phạm vi local | **NOT_RUN** (kiểm chứng tự động qua mock SSH/DNS/probe) |
 | **Git Hygiene** | `git diff --check` | **PASS**, 0 lỗi whitespace / conflict marker |
 
 ---
 
 ## 4. Những phần CHƯA LÀM / Chờ Leader quyết định
 
-1. **Push / PR / Merge vào `main`**: Các commit local L2 (`e2959f7`), L1a (`d86a319`), fix test (`ae029c5`), backend L3+L4+L5 (`13591ba`), L6 (`ad86736`), L7 (`82a5d5d`) và L8 đã được tạo trên nhánh `feat/deploy-reachability`. Worker tuân thủ tuyệt đối chỉ thị không push, không mở PR, không merge vào `main`. Toàn bộ đều ở trạng thái `CHỜ REVIEW` chờ Leader nghiệm thu.
+1. **Push / PR / Merge vào `main`**: Các commit local L2 (`e2959f7`), L1a (`d86a319`), fix test (`ae029c5`), backend L3+L4+L5 (`13591ba`), L6 (`ad86736`), L7 (`82a5d5d`) và L8 (`f870b6f`) đã được tạo trên nhánh `feat/deploy-reachability`. Worker tuân thủ tuyệt đối chỉ thị không push, không mở PR, không merge vào `main`. Toàn bộ đều ở trạng thái `CHỜ REVIEW` chờ Leader nghiệm thu.
 2. **Review và nghiệm thu của Leader**: Leader tự kiểm chứng theo hướng dẫn ở Mục 5 và quyết định merge.
 3. **Thử nghiệm trên VPS thật [NOT_RUN]**:
    - Chạy 50 run ML chính thức (hiện đã hoàn tất code harness, test và pilot dry-run).
@@ -227,7 +227,7 @@ Theo kế hoạch tại `docs/27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-
    - `ae029c5`: Fix test mock reachability.test.ts (ngoại lệ 29ed4d3)
    - `d86a319`: L1a Contract IPC, DB schema, DeployEvent
    - `e2959f7`: L2 ML experiment harness TK-S6 offline
-   - `<SHA-L8>`: L8 .gitignore, board.md, HANDOFF.md
+   - `f870b6f`: L8 .gitignore, board.md, HANDOFF.md
 2. Chạy `git status --short` để xác nhận worktree sạch.
 3. Chạy `git diff --check` để xác nhận chất lượng định dạng.
 4. Chạy `pnpm --dir app test` để xác nhận 479 unit/integration test của app Electron.
@@ -272,7 +272,7 @@ Mục này cung cấp bảng đối chiếu chi tiết toàn bộ các file đã
 | | `experiments/tests/test_scheduler.py` | **Đã commit trong `e2959f7`** | 9 tests scheduler fault injection |
 | **L1a** | `docs/contracts/ipc-contract.ts` | **Đã commit trong `d86a319`** | Đồng bộ kiểu IPC cho exposure, Doctor, Domain |
 | | `docs/contracts/deploy-events.md` | **Đã commit trong `d86a319`** | Đặc tả event finished và các trạng thái exposure |
-| | `docs/contracts/schema.sql` | **Đã commit trong `d86a319`** | Bổ sung bảng doctor_run, doctor_action, domain_binding và cột exposure |
+| | `docs/contracts/schema.sql` | **Đã commit trong `d86a319`** | Schema contract cho bảng doctor_run, doctor_action, domain_binding và cột exposure (migration thực thi thuộc commit 13591ba) |
 | | `DECISIONS.md` | **Đã commit trong `d86a319`** | Ghi nhận quyết định kiến trúc exposure, Doctor, Domain |
 | | `app/src/shared/ipc.ts` | **Đã commit trong `d86a319`** | Mirror TypeScript types dùng chung renderer và main process |
 | | `docs/27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-detector.md` | **Đã commit trong `d86a319`** | Kế hoạch tổng thể hợp nhất sau demo |
@@ -333,9 +333,9 @@ Mục này cung cấp bảng đối chiếu chi tiết toàn bộ các file đã
 | | `app/vitest.config.ts` | **Đã commit trong `82a5d5d`** | Tăng hook timeout cho test suite |
 | | `app/scripts/clean-demo-vms.ts` | **Đã commit trong `82a5d5d`** | Type annotation và formatting script dọn dẹp |
 | | `app/scripts/e2e-demo-test.ts` | **Đã commit trong `82a5d5d`** | Type annotation và formatting script e2e demo |
-| **L8** | `.gitignore` | **Commit local L8** | Bỏ qua thư mục công cụ AI sandbox (`.autoclaw/`, `.claude/`, `.clinerules`, `.clinerules/`) |
-| | `docs/tasks/board.md` | **Commit local L8** | Cập nhật tiến độ bảng task L1a–L8, phản ánh các SHA commit thực tế |
-| | `HANDOFF.md` | **Commit local L8** | Hồ sơ bàn giao chi tiết và bản đối chiếu kiểm kê tích hợp |
+| **L8** | `.gitignore` | **Đã commit trong `f870b6f`** | Bỏ qua thư mục công cụ AI sandbox (`.autoclaw/`, `.claude/`, `.clinerules`, `.clinerules/`) |
+| | `docs/tasks/board.md` | **Đã commit trong `f870b6f`** | Cập nhật tiến độ bảng task L1a–L8, phản ánh các SHA commit thực tế |
+| | `HANDOFF.md` | **Đã commit trong `f870b6f`** | Hồ sơ bàn giao chi tiết và bản đối chiếu kiểm kê tích hợp |
 
 ---
 
@@ -352,18 +352,19 @@ Trong phiên tích hợp L2, toàn bộ 9 file ở trạng thái MM/AM đã đư
 8. `experiments/tests/test_labeling.py` — Gắn nhãn ground truth không leakage.
 9. `experiments/tests/test_scheduler.py` — 9 tests scheduler fault injection.
 
-> **Kết quả kiểm chứng**: Trên checkout riêng tại commit `e2959f7`, toàn bộ 106 tests Pytest (`experiments/` và `collector/tests/`) cùng Ruff lint đều **PASS 100%**.
+> **Kết quả kiểm chứng**: Trên checkout riêng tại commit `e2959f7`, toàn bộ 106 tests Pytest (`experiments/` và `collector/tests/`) cùng Ruff lint đều **PASS** (106/106 tests pass).
 
 ---
 
-### 6.3. Kiểm chứng tính nguyên tử và git bisect của các commit backend
+### 6.3. Kiểm chứng tính nguyên tử của các commit backend
 
-Lịch sử commit thực tế đã giải quyết triệt để tính phụ thuộc chéo giữa các phase:
-1. **Ngoại lệ sửa test `ae029c5`**: Sửa lỗi kế thừa từ commit `29ed4d3` trong `reachability.test.ts` (cú pháp mock Vitest), bảo đảm test reachability độc lập đạt 15/15 PASS trước khi đưa vào backend pipeline.
+Lịch sử commit thực tế đã phản ánh trung thực quá trình giải quyết các phụ thuộc chéo:
+1. **Lỗi test kế thừa tại L1a và ngoại lệ sửa test `ae029c5`**: Trên checkout độc lập tại riêng commit L1a `d86a319`, typecheck `pnpm --dir app run typecheck:node` đã FAILED do lỗi cú pháp mock Vitest trong `reachability.test.ts` kế thừa từ commit `29ed4d3`. Commit ngoại lệ `ae029c5` đã sửa dứt điểm lỗi cú pháp mock Vitest này, đưa 15/15 tests reachability và typecheck về trạng thái PASS trước khi chuyển sang các module backend tiếp theo.
 2. **Gộp nguyên tử L3+L4+L5 (`13591ba`)**:
    - `app/src/main/ipc.ts` và `app/src/main/ipc.test.ts` nhập khẩu đồng thời các module của Doctor (`./doctor/*`) và Domain (`./domain/*`).
    - Việc gộp L3, L4, L5 thành một commit backend duy nhất đã loại bỏ nguy cơ đứt gãy phụ thuộc giữa các commit lẻ.
-   - **Xác minh cổng chất lượng (Gate)**: Trên checkout riêng tại SHA `13591ba`, toàn bộ 418 Vitest tests, typecheck Node/Web và electron-vite build đều **PASS 100%**, bảo đảm lịch sử `git bisect` luôn xanh.
+   - File migration 004 thực thi (`app/src/main/db/migrations/004_publish_doctor_domain.sql`) được đưa vào commit backend này để đồng bộ với `app/src/main/db/index.ts`.
+   - **Xác minh cổng chất lượng (Gate)**: Trên checkout riêng tại SHA `13591ba`, toàn bộ 418 Vitest tests, typecheck Node/Web và electron-vite build đều **PASS** (418/418 tests pass).
 
 ---
 
