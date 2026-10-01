@@ -1,19 +1,73 @@
 import type Database from 'better-sqlite3'
 import type { DetectionMethod } from '@shared/ipc'
 
-export function parseTimestampMs(val: string | number | null | undefined): number | null {
+function parseNumericEpochUs(s: string): bigint | null {
+  const match = /^(-?\d+)(?:\.(\d+))?$/.exec(s)
+  if (!match) return null
+  try {
+    const isNeg = match[1].startsWith('-')
+    const sec = BigInt(match[1].replace('-', ''))
+    const fracStr = match[2] || ''
+    const frac = BigInt(fracStr.padEnd(6, '0').slice(0, 6))
+    const total = sec * 1000000n + frac
+    return isNeg ? -total : total
+  } catch {
+    return null
+  }
+}
+
+export function parseTimestampUs(val: string | number | null | undefined): bigint | null {
   if (val === null || val === undefined) return null
   if (typeof val === 'number') {
-    return Number.isFinite(val) ? (val < 1e11 ? Math.round(val * 1000) : Math.round(val)) : null
+    if (!Number.isFinite(val)) return null
+    return parseNumericEpochUs(val.toString())
   }
   const s = String(val).trim()
   if (!s) return null
-  const num = Number(s)
-  if (!Number.isNaN(num) && /^-?\d+(\.\d+)?$/.test(s)) {
-    return num < 1e11 ? Math.round(num * 1000) : Math.round(num)
+  if (/^-?\d+(?:\.\d+)?$/.test(s)) return parseNumericEpochUs(s)
+
+  const m =
+    /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:Z|([+-])(\d{2}):?(\d{2}))?$/.exec(
+      s
+    )
+  if (m) {
+    const y = Number(m[1]),
+      mo = Number(m[2]),
+      d = Number(m[3])
+    const h = Number(m[4]),
+      min = Number(m[5]),
+      sec = Number(m[6])
+    if (mo < 1 || mo > 12 || d < 1 || d > 31 || h > 23 || min > 59 || sec > 59) return null
+    const dt = new Date(Date.UTC(y, mo - 1, d, h, min, sec))
+    if (
+      dt.getUTCFullYear() !== y ||
+      dt.getUTCMonth() !== mo - 1 ||
+      dt.getUTCDate() !== d ||
+      dt.getUTCHours() !== h ||
+      dt.getUTCMinutes() !== min ||
+      dt.getUTCSeconds() !== sec
+    ) {
+      return null
+    }
+    let secMs = BigInt(dt.getTime())
+    if (m[8]) {
+      const sign = m[8] === '-' ? -1n : 1n
+      const offH = BigInt(m[9])
+      const offM = BigInt(m[10])
+      if (offH > 23n || offM > 59n) return null
+      const offsetMs = sign * (offH * 60n + offM) * 60n * 1000n
+      secMs -= offsetMs
+    }
+    const fracStr = m[7] || ''
+    const us = BigInt(fracStr.padEnd(6, '0').slice(0, 6))
+    return secMs * 1000n + us
   }
-  const parsed = Date.parse(s)
-  return Number.isNaN(parsed) ? null : parsed
+  return null
+}
+
+export function parseTimestampMs(val: string | number | null | undefined): number | null {
+  const us = parseTimestampUs(val)
+  return us === null ? null : Number(us / 1000n)
 }
 
 export function isSampleInRunWindow(
@@ -22,18 +76,18 @@ export function isSampleInRunWindow(
   endTs: string | null | undefined
 ): boolean {
   if (!sampleTs) return false
-  const sampleMs = parseTimestampMs(sampleTs)
-  if (sampleMs === null) return false
+  const sampleUs = parseTimestampUs(sampleTs)
+  if (sampleUs === null) return false
 
   if (!startTs) return false
-  const startMs = parseTimestampMs(startTs)
-  if (startMs === null) return false
-  if (sampleMs < startMs) return false
+  const startUs = parseTimestampUs(startTs)
+  if (startUs === null) return false
+  if (sampleUs < startUs) return false
 
   if (endTs !== null && endTs !== undefined && endTs !== '') {
-    const endMs = parseTimestampMs(endTs)
-    if (endMs === null) return false
-    if (sampleMs > endMs) return false
+    const endUs = parseTimestampUs(endTs)
+    if (endUs === null) return false
+    if (sampleUs > endUs) return false
   }
 
   return true

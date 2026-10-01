@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
-import { AlertTracker } from './alertTracker'
+import { AlertTracker, isSampleInRunWindow, parseTimestampUs } from './alertTracker'
 
 describe('AlertTracker', () => {
   it('mở một alert, cập nhật peak và resolve sau ba mẫu thấp', () => {
@@ -212,5 +212,53 @@ describe('AlertTracker', () => {
       experiment_run_id: number | null
     }
     expect(alertPreBaseline.experiment_run_id).toBeNull()
+  })
+
+  describe('parseTimestampUs & isSampleInRunWindow', () => {
+    it('phân tích chính xác timestamp microsecond cho ISO UTC và epoch seconds', () => {
+      expect(parseTimestampUs('2026-08-30T00:00:01Z')).toBe(1788048001000000n)
+      expect(parseTimestampUs('2026-08-30T00:00:01.000500Z')).toBe(1788048001000500n)
+      expect(parseTimestampUs('2026-08-30T00:00:01.000501Z')).toBe(1788048001000501n)
+      expect(parseTimestampUs('2026-08-30T00:00:01.5Z')).toBe(1788048001500000n)
+
+      // Epoch seconds (number & string)
+      expect(parseTimestampUs(1788048001)).toBe(1788048001000000n)
+      expect(parseTimestampUs(1788048001.0005)).toBe(1788048001000500n)
+      expect(parseTimestampUs('1788048001.000500')).toBe(1788048001000500n)
+      expect(parseTimestampUs('1788048001')).toBe(1788048001000000n)
+
+      // Số âm
+      expect(parseTimestampUs(-0.5)).toBe(-500000n)
+      expect(parseTimestampUs('-1.5')).toBe(-1500000n)
+
+      // Giá trị không hợp lệ
+      expect(parseTimestampUs(null)).toBeNull()
+      expect(parseTimestampUs(undefined)).toBeNull()
+      expect(parseTimestampUs('')).toBeNull()
+      expect(parseTimestampUs('invalid-ts')).toBeNull()
+      expect(parseTimestampUs('2026-02-30T00:00:00Z')).toBeNull()
+      expect(parseTimestampUs(NaN)).toBeNull()
+      expect(parseTimestampUs(Infinity)).toBeNull()
+    })
+
+    it('so sánh cửa sổ chạy chính xác đến microsecond và từ chối timestamp sai', () => {
+      const baseline = '2026-08-30T00:00:01.000500Z'
+      const runEnd = '2026-08-30T00:00:10.000000Z'
+
+      // Trước baseline 500µs -> false
+      expect(isSampleInRunWindow('2026-08-30T00:00:01Z', baseline, runEnd)).toBe(false)
+      // Bằng baseline -> true
+      expect(isSampleInRunWindow('2026-08-30T00:00:01.000500Z', baseline, runEnd)).toBe(true)
+      // Sau baseline 1µs -> true
+      expect(isSampleInRunWindow('2026-08-30T00:00:01.000501Z', baseline, runEnd)).toBe(true)
+      // Sau runEnd 1µs -> false
+      expect(isSampleInRunWindow('2026-08-30T00:00:10.000001Z', baseline, runEnd)).toBe(false)
+
+      // Timestamp sai định dạng
+      expect(isSampleInRunWindow('bad-sample', baseline, runEnd)).toBe(false)
+      expect(isSampleInRunWindow('2026-08-30T00:00:02Z', 'bad-baseline', runEnd)).toBe(false)
+      expect(isSampleInRunWindow('2026-08-30T00:00:02Z', null, runEnd)).toBe(false)
+      expect(isSampleInRunWindow('2026-08-30T00:00:02Z', baseline, 'bad-run-end')).toBe(false)
+    })
   })
 })
