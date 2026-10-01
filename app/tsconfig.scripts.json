@@ -24,6 +24,7 @@
     "scripts/clean-demo-vms.ts",
     "scripts/e2e-demo-test.ts",
     "scripts/try-monitor.ts",
+    "scripts/try-detect.ts",
     "scripts/a17-c02-live.ts",
     "scripts/a17-c04-live.ts",
     "scripts/c03-live.ts",

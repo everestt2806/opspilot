@@ -1,70 +1,103 @@
 import type { BuildPlan, DetectionSignal, Detector, SourceTree } from './types'
+import {
+  dependencyVersion,
+  detectPort,
+  envExampleKeys,
+  publicBuildArgs,
+  readPackage,
+  resolveNextStart
+} from './helpers'
 
-type PackageJson = { dependencies?: Record<string, string> }
 const DB_DRIVERS = ['pg', 'prisma', 'typeorm', 'sequelize']
-
-function packageJson(tree: SourceTree): PackageJson | undefined {
-  return tree.readJson<PackageJson>('package.json')
-}
-function dependencies(tree: SourceTree): Record<string, string> {
-  return packageJson(tree)?.dependencies ?? {}
-}
-function version(value: string | undefined): string | undefined {
-  return value?.replace(/^[\^~>=<]/, '')
-}
-function envKeys(tree: SourceTree): string[] {
-  const keys: string[] = []
-  for (const line of (tree.readText('.env.example') ?? '').split('\n')) {
-    const match = line.match(/^([A-Z][A-Z0-9_]*)=/)
-    if (match?.[1] && !keys.includes(match[1])) keys.push(match[1])
-  }
-  return keys
-}
-function envDefaults(tree: SourceTree): Record<string, string> {
-  const values: Record<string, string> = {}
-  for (const line of (tree.readText('.env.example') ?? '').split('\n')) {
-    const match = line.match(/^([A-Z][A-Z0-9_]*)=(.*)$/)
-    if (match?.[1] && match[1].startsWith('NEXT_PUBLIC_')) values[match[1]] = match[2]
-  }
-  return values
-}
 
 export const nextjsDetector: Detector = {
   id: 'nextjs',
   displayName: 'Next.js',
   priority: 30,
-  detect(tree): boolean {
-    return dependencies(tree).next !== undefined
+
+  detect(tree: SourceTree): boolean {
+    const pkg = readPackage(tree)
+    if (pkg?.dependencies?.next === undefined) {
+      return false
+    }
+    const resolution = resolveNextStart(tree)
+    const portInfo = detectPort(tree, resolution.entry, 3000)
+    if (!portInfo.valid) {
+      return false
+    }
+
+    if (
+      resolution.reason?.includes('không phải lệnh chạy') ||
+      resolution.reason?.includes('không tồn tại')
+    ) {
+      return false
+    }
+
+    const hasCodeFiles = tree.files.some(
+      (f) =>
+        /\.(?:js|ts|jsx|tsx|mjs|cjs)$/.test(f) &&
+        !f.startsWith('node_modules/') &&
+        !f.startsWith('.git/')
+    )
+    if (hasCodeFiles && !resolution.certain) {
+      return false
+    }
+
+    return true
   },
-  explain(tree): DetectionSignal[] {
-    const pkg = packageJson(tree)
-    const deps = dependencies(tree)
+
+  explain(tree: SourceTree): DetectionSignal[] {
+    const pkg = readPackage(tree)
+    const nextDep = pkg?.dependencies?.next
+    const nextDevDep = pkg?.devDependencies?.next
+    const resolution = resolveNextStart(tree)
+    const portInfo = detectPort(tree, resolution.entry, 3000)
     return [
-      { description: 'package.json exists', passed: pkg !== undefined },
       {
-        description: "dependencies contains 'next'",
-        passed: deps.next !== undefined,
-        found: version(deps.next)
+        description: 'package.json tồn tại',
+        passed: pkg !== undefined
+      },
+      {
+        description: "dependencies có 'next'",
+        passed: nextDep !== undefined,
+        found: dependencyVersion(nextDep ?? nextDevDep)
+      },
+      {
+        description: 'lệnh start / cấu trúc thư mục Next.js xác định',
+        passed: resolution.certain,
+        found: resolution.certain ? resolution.startCommand : resolution.reason
+      },
+      {
+        description: 'cổng lắng nghe hợp lệ',
+        passed: portInfo.valid,
+        found: portInfo.valid ? `${portInfo.port} (${portInfo.source})` : portInfo.error
       }
     ]
   },
-  buildPlan(tree): BuildPlan {
-    const deps = dependencies(tree)
-    const requiredEnv = ['NODE_ENV', ...envKeys(tree)]
+
+  buildPlan(tree: SourceTree): BuildPlan {
+    const pkg = readPackage(tree)
+    const deps = pkg?.dependencies ?? {}
+    const requiredEnv = ['NODE_ENV', ...envExampleKeys(tree)]
     const needsDb = DB_DRIVERS.some((driver) => deps[driver] !== undefined)
-    if (needsDb && !requiredEnv.includes('DATABASE_URL')) requiredEnv.push('DATABASE_URL')
+    if (needsDb && !requiredEnv.includes('DATABASE_URL')) {
+      requiredEnv.push('DATABASE_URL')
+    }
+    const resolution = resolveNextStart(tree)
+    const portInfo = detectPort(tree, resolution.entry, 3000)
+
     return {
       dockerfileTemplate: 'nextjs.Dockerfile',
-      buildArgs: envDefaults(tree),
+      buildArgs: publicBuildArgs(tree, 'NEXT_PUBLIC_'),
       buildCommand: 'npm ci && npm run build',
-      startCommand: 'npm start',
-      containerPort: 3000,
+      startCommand: resolution.startCommand || 'npm start',
+      containerPort: portInfo.port,
       healthcheckPath: '/',
       requiredEnv: [...new Set(requiredEnv)],
       optionalEnv: [],
       needsDb,
       manualSteps: [],
-      detectedVersion: version(deps.next)
+      detectedVersion: dependencyVersion(deps.next)
     }
   }
 }
