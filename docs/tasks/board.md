@@ -36,6 +36,22 @@ manual-only, không push/PR/merge.
 
 ## Đang ưu tiên — W3/W4
 
+### Checkpoint L1a–L8 (Tự động hóa pipeline, domain, Doctor, ML và detector) — feat/deploy-reachability
+
+> Các checkpoint L1a–L7 đã hoàn tất triển khai thành các commit local trên nhánh `feat/deploy-reachability` và vượt qua gate kiểm chứng độc lập (L2 `e2959f7`, L1a `d86a319`, fix test `ae029c5`, backend L3+L4+L5 `13591ba`, L6 `ad86736`, L7 `82a5d5d`). Riêng L8 đang thực hiện commit local gồm `.gitignore`, `docs/tasks/board.md`, `HANDOFF.md` và chờ Leader review. Do chưa merge vào `main` (không tự ý push/PR/merge), tất cả đều giữ trạng thái `CHỜ REVIEW`.
+
+| ID | Task | Chủ | Hạn | Trạng thái | Branch | Commit / Phụ thuộc | Ghi chú |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| L2 | Tích hợp bộ thí nghiệm ML TK-S6 offline | Worker | 30/09 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `e2959f7` | Chưa merge `main`; 25 files; 71 test experiments + 35 test collector PASS (106/106 pytest), Ruff pass; target check, kill-switch |
+| L1a | Đồng bộ contract IPC, DeployEvent, Doctor, Domain và DB Schema | Worker | 30/09 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `d86a319` | Chưa merge `main`; 7 files; ipc-contract, deploy-events, schema.sql, migration 004 DDL, DECISIONS, app/src/shared/ipc.ts |
+| Fix | Sửa mock reachability.test.ts (ngoại lệ kế thừa 29ed4d3) | Worker | 30/09 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `ae029c5` | Chưa merge `main`; 1 file; đổi cú pháp vi.fn<(url: string) => Promise<boolean>>(), 15/15 tests pass |
+| L3+L4+L5 | Backend Publish, Reachability, Doctor Engine, Safe Fix, Domain & DNS | Worker | 30/09 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `13591ba` | Chưa merge `main`; 25 files; 4 exposure states, idempotent UFW, external probe, Doctor 12 classes, Safe Fix fail-closed, Cloudflare DNS; 418 Vitest pass, build pass |
+| L6 | Detector Tier 1 (Next/Express/Vite) & CLI try-detect | Worker | 30/09 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `ad86736` | Chưa merge `main`; 9 files; detector 65 test tổng pass (57 unit + 8 CLI integration), CLI 3 demo apps pass, build pass |
+| L7 | UI Exposure, Doctor, Đa ngôn ngữ (4 locales) & Deploy Guard | Worker | 30/09 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `82a5d5d` | Chưa merge `main`; 20 files; DeployPage, AppsPage, SettingsPage, 4 locales; 479 Vitest pass, build pass; GUI thực `NOT_RUN` (headless) |
+| L8 | Cấu hình .gitignore, cập nhật Board & Handoff | Worker | 30/09 | CHỜ REVIEW | `feat/deploy-reachability` | Đang chuẩn bị commit | Chưa merge `main`; 3 files (.gitignore, board.md, HANDOFF.md); loại trừ công cụ AI cục bộ, hồ sơ bàn giao hoàn chỉnh |
+
+### Task theo dõi song song / sau demo
+
 | ID     | Task                                                                 | Chủ                   | Hạn       | Trạng thái | Branch                      | PR/phụ thuộc                | Ghi chú                                                                               |
 | ------ | -------------------------------------------------------------------- | --------------------- | --------- | ---------- | --------------------------- | --------------------------- | ------------------------------------------------------------------------------------- |
 | TK-B12 | Fix migrate Express fail ở VERIFY: health race sau pg_restore       | B (A review)          | 17/09     | CHỜ REVIEW | `fix/migrate-verify-health-race` | #31 (gộp TK-B10)     | Live pass: 7 bước, verify toàn PASS; [hồ sơ](tk-b12-migrate-verify-health.md) |
@@ -317,3 +333,14 @@ app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express
   Node 287/287, ML 19/19 and collector 26/26 PASS; SQLite jobs 25–28/ownership/no-active-job and read-only
   final rehearsal runtime/HTTP/collector all PASS. Raw evidence secret-pattern scan clean. C06–C09/ML remain
   closed/`NOT_RUN`; no push/PR/merge authorization is implied.
+
+### Checkpoint L1a–L8 update - 30/09/2026 (Worker bàn giao hoàn tất các commit local)
+
+Đã hoàn thành rà soát, kiểm chứng độc lập và tạo các commit local trên nhánh `feat/deploy-reachability` (tuân thủ nghiêm ngặt không push/PR/merge vào `main`, giữ nguyên trạng thái `CHỜ REVIEW`):
+- **L2 (ML Experiment Harness TK-S6 — commit `e2959f7`):** 25 files. Tích hợp chọn lọc từ `feat/experiment-harness`, bổ sung target check, 30-phút runtime limit, file-based kill-switch, UTC ISO timestamp parsing. Đã stage toàn bộ 9 file MM/AM theo bản working tree mới nhất. Gate kiểm chứng: 71 test experiments + 35 test collector (tổng 106/106 pytest pass), Ruff lint pass. (ml-service 19/19 pytest pass độc lập).
+- **L1a (Contracts & Schema — commit `d86a319`):** 7 files. Đồng bộ `ipc-contract.ts`, `deploy-events.md`, `schema.sql`, `DECISIONS.md`, `app/src/shared/ipc.ts`, `docs/27-...md` và `docs/README.md`. Gate kiểm chứng: TypeScript app typecheck pass.
+- **Fix test reachability (Ngoại lệ kế thừa 29ed4d3 — commit `ae029c5`):** 1 file `app/src/main/deploy/reachability.test.ts`. Sửa cú pháp mock `vi.fn<(url: string) => Promise<boolean>>()`. Gate kiểm chứng: `typecheck:node` pass, 15/15 tests reachability pass.
+- **L3+L4+L5 (Backend Publish, Doctor, Domain & Safe Fix — commit `13591ba`):** 25 files. Gộp toàn bộ backend để bảo đảm tính nguyên tử và bisect xanh: migration 004, ExposureManager, UFW idempotent manager, DeployPipeline publish subphase, DoctorRuleEngine (12 failure classes), DoctorFixService (safe-fix fail-closed), Domain DNS assistant (Cloudflare scoped token, SQL race guard), `ipc.ts` và `ipc.test.ts`. Gate kiểm chứng: typecheck:node & web pass, 418 Vitest pass, build pass.
+- **L6 (Detector & try-detect CLI — commit `ad86736`):** 9 files. Engine nhận diện Next.js, Express, Vite; package manager detection; port semantics regex; start script validation; CLI script `try-detect.ts`, `package.json`, `tsconfig.scripts.json`. Gate kiểm chứng: typecheck Node/Web/scripts pass, detector 65 test tổng pass (57 unit + 8 CLI integration tests trong `detectors.test.ts`), CLI 3 demo apps pass, build pass.
+- **L7 (UI Exposure, Doctor & Đa ngôn ngữ — commit `82a5d5d`):** 20 files. Exposure badge (`reachable`, `degraded`, `tunnel_only`, `not_checked`), Doctor drawer, cô lập state giữa các app, disabled `named_tunnel` khi thiếu CNAME target, đa ngôn ngữ 4 locales (`vi`, `en`, `ja`, `zh`) qua `useStrings`, window options, locales, vitest timeout, demo scripts. Gate kiểm chứng: typecheck Node/Web/scripts pass, ESLint pass, 479/479 Vitest pass, build pass. Ghi nhận: GUI thực tế `NOT_RUN` (do môi trường agent headless, đã bao phủ 100% qua jsdom tests); VPS thật `NOT_RUN` (phụ thuộc hạ tầng ngoài).
+- **L8 (Vệ sinh repo & Tài liệu — commit local L8):** 3 files (`.gitignore`, `docs/tasks/board.md`, `HANDOFF.md`). Bổ sung bỏ qua công cụ AI sandbox (`.autoclaw/`, `.claude/`, `.clinerules`, `.clinerules/`), không đưa công cụ cục bộ (`.agents/`, `SKILL.md`, `run.ps1`, `start-opspilot.bat`) vào git, cập nhật toàn diện bảng task và hồ sơ bàn giao. Trạng thái: `CHỜ REVIEW` (đang chờ Leader review).
