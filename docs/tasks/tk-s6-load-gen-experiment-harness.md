@@ -253,10 +253,24 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
     - 5 unit tests TypeScript trong `app/src/main/monitor/headlessPoller.test.ts` kiểm thử trên SQLite RAM (`:memory:`): xác nhận nạp metric, chấm score (cả rule và ML), gán đúng `alert.experiment_run_id`, auto-train bị vô hiệu hoá, chu trình drain vận hành chính xác, đóng DB tự động khi drain, ném lỗi strict khi đọc metric khởi động thất bại, và ném lỗi strict khi poll vét cuối thất bại mà không báo drained giả.
     - 12 unit tests Python trong `experiments/tests/test_poller_adapter.py` kiểm thử giao tiếp tiến trình qua SQLite file thật trên đĩa: kiểm thử non-blocking start, nạp metric & gán alert run ID, drain thành công, drain timeout dừng process tree, context manager cleanup khi lỗi, từ chối RAM DB, từ chối DB mismatch, phát hiện lỗi startup crash, xác nhận 3 biến env kế thừa bị xoá, bắt lỗi poll vét cuối khi drain, bắt lỗi đọc metric trước khi ready, xác nhận secret trong stdout khi crash không bị lọt vào exception message, và xác nhận luồng log dài 10,000 dòng giữ kích thước bộ đệm O(1).
     - Toàn bộ suite đạt **217 passed** pytest (nâng từ 213), Ruff format & lint clean; toàn bộ test suite frontend đạt **508 passed** Vitest (nâng từ 506), `pnpm typecheck` (tsc node + tsc web) và `tsc -p tsconfig.scripts.json` trong `app/` đạt PASS; `git diff --check` sạch; giữ pilot thực tế **`NOT_RUN`**.
+- 02/10 mốc Triển khai P2d-3 (`fd1d84a`) — Loadgen Adapter & Cấu hình Pilot 4500s Tường minh (TK-S6):
+  - `experiments/load_gen/loadgen.py`:
+    - Định nghĩa `DEFAULT_MAX_DURATION_S = 1800.0`s (30 phút mặc định) và `PILOT_MAX_DURATION_S = 4500.0`s (75 phút khi bật pilot tường minh); duy trì `MAX_DURATION_S = 1800` tương thích ngược.
+    - Bổ sung trường `allow_pilot_4500: bool = False` vào `Config`.
+    - Kiểm soát trần thời lượng ở cả 3 tầng: `Config.from_env()` (đọc `LOADGEN_PILOT_4500`), `Config.__post_init__()` và `run()`, bảo đảm caller không thể lách qua cấu hình trực tiếp hay biến môi trường khi chưa có cờ pilot tường minh.
+  - `experiments/adapters/loadgen_adapter.py`: triển khai `LoadgenAdapter` và `LoadgenHandle`:
+    - Bắt buộc kiểm tra target URL hợp lệ và thuộc allowlist lab an toàn (`validate_target`) trước khi spawn.
+    - Điều khiển một tiến trình/container sinh tải 5 req/s duy nhất xuyên suốt toàn bộ các pha A, B, C, D (75 phút / 4500s), bảo đảm bộ đếm Counter cửa sổ trượt 60s không bị ngắt quãng hay reset về 0 ở các ranh giới pha.
+    - Hỗ trợ cả 2 chế độ điều khiển: SSH Remote (Docker container trên VPS qua mock/Paramiko SSH client) và Local Process (subprocess Python cục bộ phục vụ mock/test).
+    - Hỗ trợ cơ chế dừng êm dịu (`stop`) và dọn dẹp triệt để (`cleanup`) qua Context Manager (`with adapter.start(...) as handle:`).
+  - Kiểm thử & Chất lượng:
+    - 15 unit tests trong `experiments/load_gen/tests/test_loadgen.py` (bổ sung 3 test mới): xác nhận trần thời lượng trong `from_env()`, giới hạn tối đa 4500s của pilot, và tự động cap về 1800s khi khởi tạo trực tiếp không có cờ pilot.
+    - 11 unit tests trong `experiments/tests/test_loadgen_adapter.py`: kiểm thử start/stop qua mock SSH, start/stop cục bộ, từ chối target không hợp lệ, từ chối rate_rps sai, phát hiện lỗi khởi động SSH và local spawn, dọn dẹp cleanup qua context manager cho cả SSH và local, xác nhận 2 giới hạn thời lượng (1800s mặc định vs 4500s pilot), chứng minh Counter 60s không bị reset khi chuyển tiếp giữa các pha, và hỗ trợ SSH client dạng callable.
+    - Toàn bộ suite đạt **231 passed** pytest (nâng từ 217), Ruff format & lint clean; toàn bộ test suite frontend đạt **508 passed** Vitest; `git diff --check` sạch; giữ pilot thực tế **`NOT_RUN`**.
 
 ## Lệnh tái hiện
 
-Test thuần (217 passed pytest, 508 passed vitest, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed, P2b-3 là 145 passed, P2d-1a là 180 passed, P2d-1b bản đầu là 188 passed, P2d-1b lần 2 là 194 passed, P2d-1b lần 3 là 200 passed, P2d-1b kiểm tra DB là 203 passed, P2d-1b bảo mật env/stderr là 205 passed, P2d-2 poller adapter là 213 passed, P2d-2 củng cố strict/secret/buffer là 217 passed):
+Test thuần (231 passed pytest, 508 passed vitest, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed, P2b-3 là 145 passed, P2d-1a là 180 passed, P2d-1b bản đầu là 188 passed, P2d-1b lần 2 là 194 passed, P2d-1b lần 3 là 200 passed, P2d-1b kiểm tra DB là 203 passed, P2d-1b bảo mật env/stderr là 205 passed, P2d-2 poller adapter là 213 passed, P2d-2 củng cố strict là 217 passed, P2d-3 loadgen adapter là 231 passed):
 
 ```
 ml-service/.venv/Scripts/python.exe -m pytest \
