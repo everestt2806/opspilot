@@ -56,6 +56,7 @@ describe('renderCompose', () => {
     expect(yaml).not.toContain('postgres')
     expect(yaml).toContain('image: demo-api:collector')
     expect(yaml).toContain('http://app:3000/items?limit=1')
+    expect(yaml).toContain('LOADGEN_COUNTER_PATH: /var/metrics/loadgen_counter.json')
     expect(yaml).toContain('/var/run/docker.sock:/var/run/docker.sock:ro')
   })
 

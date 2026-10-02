@@ -25,6 +25,7 @@ services:
       APP_URL: "http://app:{{CONTAINER_PORT}}{{COLLECTOR_APP_PATH}}"
       DB_DSN: "${DATABASE_URL:-}"
       METRICS_DIR: /var/metrics
+      LOADGEN_COUNTER_PATH: /var/metrics/loadgen_counter.json
       PROBE_TIMEOUT_S: "5"
       ERROR_WINDOW_S: "60"
       MAX_FILE_MB: "50"

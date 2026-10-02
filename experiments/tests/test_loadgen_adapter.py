@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import shlex
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
+from collector.collect import read_loadgen_error_rate
 from experiments.adapters.loadgen_adapter import (
     LoadgenAdapter,
     LoadgenExecutionError,
@@ -24,7 +27,7 @@ from experiments.load_gen.loadgen import (
 
 
 class MockSshClient:
-    """Mock SSH client ghi lại các lệnh thực thi và trả về kết quả giả lập."""
+    """Mock SSH client ghi lại các lệnh thực thi và mô phỏng trạng thái container."""
 
     def __init__(
         self,
@@ -32,12 +35,23 @@ class MockSshClient:
         stdout: str = "",
         stderr: str = "",
         handlers: dict[str, tuple[int, str, str]] | None = None,
+        simulate_docker: bool = True,
     ) -> None:
         self.exit_code = exit_code
         self.stdout = stdout
         self.stderr = stderr
         self.handlers = handlers or {}
+        self.simulate_docker = simulate_docker
+        self.containers: dict[str, str] = {}
         self.executed_commands: list[str] = []
+
+    def _extract_container_name(self, command: str) -> str:
+        parts = command.split()
+        if "--name" in parts:
+            idx = parts.index("--name")
+            if idx + 1 < len(parts):
+                return parts[idx + 1].strip("'\"")
+        return parts[-1].strip("'\"")
 
     def exec_command(
         self, command: str, timeout: float | None = None
@@ -45,13 +59,50 @@ class MockSshClient:
         self.executed_commands.append(command)
         for pattern, response in self.handlers.items():
             if pattern in command:
-                return response
+                code, out, err = response
+                c_name = self._extract_container_name(command)
+                if "docker stop" in command and code == 0:
+                    self.containers[c_name] = "exited"
+                elif "docker rm" in command and (
+                    code == 0 or "no such container" in err.lower()
+                ):
+                    self.containers.pop(c_name, None)
+                elif "docker rm" in command and "removing" in err.lower():
+                    self.containers[c_name] = "removing"
+                elif "docker inspect" in command and code == 0 and out.strip():
+                    self.containers[c_name] = out.strip().lower()
+                return code, out, err
+
+        if self.simulate_docker:
+            c_name = self._extract_container_name(command)
+            if "docker run" in command:
+                self.containers[c_name] = "running"
+                return self.exit_code, self.stdout or "mock-cid\n", self.stderr
+            if "docker stop" in command:
+                if self.exit_code == 0:
+                    self.containers[c_name] = "exited"
+                return self.exit_code, self.stdout or f"{c_name}\n", self.stderr
+            if "docker rm" in command:
+                if self.exit_code == 0:
+                    self.containers.pop(c_name, None)
+                return self.exit_code, self.stdout or f"{c_name}\n", self.stderr
+            if "docker inspect" in command:
+                if c_name not in self.containers:
+                    return (
+                        1,
+                        "",
+                        f"Error response from daemon: No such container: {c_name}",
+                    )
+                return 0, f"{self.containers[c_name]}\n", ""
+            if "docker logs" in command:
+                return 0, "", ""
+
         return self.exit_code, self.stdout, self.stderr
 
 
 def test_loadgen_adapter_start_and_stop_ssh_mock() -> None:
     """Kiểm thử: start và stop loadgen container trên VPS qua mock SSH."""
-    mock_ssh = MockSshClient(exit_code=0, stdout="container-12345\n")
+    mock_ssh = MockSshClient(exit_code=0)
     adapter = LoadgenAdapter(default_rate_rps=5.0)
 
     handle = adapter.start(
@@ -69,11 +120,16 @@ def test_loadgen_adapter_start_and_stop_ssh_mock() -> None:
     assert handle.allow_pilot_4500 is False
     assert handle.docker_network == "host"
     assert handle.counter_mount_dir == "/opt/opspilot/demo-app/metrics"
+    assert handle.container_name == "opspilot-loadgen"
 
     # Kiểm tra lệnh SSH đã thực thi
-    assert len(mock_ssh.executed_commands) == 2
-    # 1. Pre-cleanup
-    assert "docker rm -f opspilot-loadgen" in mock_ssh.executed_commands[0]
+    # 1. Pre-check inspect (container chưa tồn tại, tránh rm -f mù)
+    assert (
+        "docker inspect -f '{{.State.Status}}' opspilot-loadgen"
+        in mock_ssh.executed_commands[0]
+    )
+    # Tuyệt đối không gọi docker rm -f mù trước run khi container chưa tồn tại
+    assert not any("docker rm -f" in cmd for cmd in mock_ssh.executed_commands[:2])
     # 2. Docker run
     run_cmd = mock_ssh.executed_commands[1]
     assert "docker run -d --name opspilot-loadgen" in run_cmd
@@ -83,12 +139,22 @@ def test_loadgen_adapter_start_and_stop_ssh_mock() -> None:
     assert "-e LOADGEN_DURATION_S=1800.0" in run_cmd
     assert "-e LOADGEN_PILOT_4500=false" in run_cmd
     assert "-v /opt/opspilot/demo-app/metrics:/var/metrics" in run_cmd
+    # 3. Post-run verify running
+    assert (
+        "docker inspect -f '{{.State.Status}}' opspilot-loadgen"
+        in mock_ssh.executed_commands[2]
+    )
 
     # Stop container
     handle.stop()
     assert handle.is_running is False
-    assert len(mock_ssh.executed_commands) == 3
-    assert "docker stop -t 2 opspilot-loadgen" in mock_ssh.executed_commands[2]
+    # 4. Docker stop
+    assert "docker stop -t 2 opspilot-loadgen" in mock_ssh.executed_commands[3]
+    # 5. Post-stop verify exited
+    assert (
+        "docker inspect -f '{{.State.Status}}' opspilot-loadgen"
+        in mock_ssh.executed_commands[4]
+    )
 
 
 def test_loadgen_adapter_start_and_stop_local(tmp_path: Path) -> None:
@@ -222,7 +288,8 @@ def test_loadgen_adapter_cleanup_context_manager_ssh() -> None:
     assert saved_handle.is_running is False
     # Xác nhận docker rm -f đã được gọi trong khối cleanup
     assert any(
-        "docker rm -f opspilot-loadgen" in cmd for cmd in mock_ssh.executed_commands
+        f"docker rm -f {saved_handle.container_name}" in cmd
+        for cmd in mock_ssh.executed_commands
     )
 
 
@@ -271,6 +338,7 @@ def test_loadgen_adapter_two_duration_limits_default_vs_pilot() -> None:
     )
     assert handle_default_4500.effective_duration_s == DEFAULT_MAX_DURATION_S
     assert handle_default_4500.effective_duration_s == 1800.0
+    handle_default_4500.stop()
 
     handle_default_huge = adapter.start(
         app_url="http://127.0.0.1:3000",
@@ -280,6 +348,7 @@ def test_loadgen_adapter_two_duration_limits_default_vs_pilot() -> None:
         ssh_client=mock_ssh,
     )
     assert handle_default_huge.effective_duration_s == 1800.0
+    handle_default_huge.stop()
 
     # Nếu truyền nhỏ hơn 1800s thì tôn trọng giá trị đó
     handle_default_short = adapter.start(
@@ -290,6 +359,7 @@ def test_loadgen_adapter_two_duration_limits_default_vs_pilot() -> None:
         ssh_client=mock_ssh,
     )
     assert handle_default_short.effective_duration_s == 600.0
+    handle_default_short.stop()
 
     # 2. Chế độ PILOT TƯỜNG MINH (allow_pilot_4500=True):
     # Cho phép mở rộng lên tới 4500s (PILOT_MAX_DURATION_S)
@@ -302,6 +372,7 @@ def test_loadgen_adapter_two_duration_limits_default_vs_pilot() -> None:
     )
     assert handle_pilot_4500.effective_duration_s == PILOT_MAX_DURATION_S
     assert handle_pilot_4500.effective_duration_s == 4500.0
+    handle_pilot_4500.stop()
 
     # Nếu truyền vượt quá 4500s (ví dụ 99999s), cap tối đa tại 4500s
     handle_pilot_huge = adapter.start(
@@ -312,6 +383,7 @@ def test_loadgen_adapter_two_duration_limits_default_vs_pilot() -> None:
         ssh_client=mock_ssh,
     )
     assert handle_pilot_huge.effective_duration_s == 4500.0
+    handle_pilot_huge.stop()
 
 
 def test_loadgen_adapter_counter_not_reset_across_phases() -> None:
@@ -362,9 +434,23 @@ def test_loadgen_adapter_counter_not_reset_across_phases() -> None:
 def test_loadgen_adapter_callable_ssh_mock() -> None:
     """Kiểm thử: hỗ trợ ssh_client dạng callable (cmd) -> (code, stdout, stderr)."""
     recorded: list[str] = []
+    state = {"status": None}
 
     def mock_runner(cmd: str) -> tuple[int, str, str]:
         recorded.append(cmd)
+        if "docker run" in cmd:
+            state["status"] = "running"
+            return 0, "mock-out", ""
+        if "docker stop" in cmd:
+            state["status"] = "exited"
+            return 0, "mock-out", ""
+        if "docker rm" in cmd:
+            state["status"] = None
+            return 0, "mock-out", ""
+        if "docker inspect" in cmd:
+            if state["status"] is None:
+                return 1, "", "No such container"
+            return 0, f"{state['status']}\n", ""
         return 0, "mock-out", ""
 
     adapter = LoadgenAdapter()
@@ -494,7 +580,6 @@ def test_loadgen_adapter_docker_stop_failure_raises_error_and_not_marked_stopped
                 "",
                 "Error response from daemon: cannot stop container: context deadline exceeded",
             ),
-            "docker inspect": (0, "running\n", ""),
         },
     )
     adapter = LoadgenAdapter()
@@ -509,8 +594,10 @@ def test_loadgen_adapter_docker_stop_failure_raises_error_and_not_marked_stopped
     with pytest.raises(LoadgenExecutionError) as exc_info:
         handle.stop()
 
-    assert "Không thể dừng container" in str(exc_info.value)
-    assert "mã 1" in str(exc_info.value)
+    assert "vẫn đang chạy hoặc trạng thái không hợp lệ sau lệnh dừng" in str(
+        exc_info.value
+    )
+    assert "mã=1" in str(exc_info.value)
     assert "context deadline exceeded" in str(exc_info.value)
 
     # KHÔNG ĐƯỢC đánh dấu stopped giả!
@@ -525,12 +612,11 @@ def test_loadgen_adapter_docker_rm_failure_raises_error_and_not_marked_stopped()
     mock_ssh = MockSshClient(
         exit_code=0,
         handlers={
-            "docker rm -f opspilot-loadgen": (
+            "docker rm -f": (
                 1,
                 "",
                 "Error response from daemon: removal of container is already in progress",
             ),
-            "docker inspect": (0, "removing\n", ""),
         },
     )
     adapter = LoadgenAdapter()
@@ -545,8 +631,8 @@ def test_loadgen_adapter_docker_rm_failure_raises_error_and_not_marked_stopped()
     with pytest.raises(LoadgenExecutionError) as exc_info:
         handle.cleanup()
 
-    assert "Không thể dọn dẹp container" in str(exc_info.value)
-    assert "mã 1" in str(exc_info.value)
+    assert "chưa biến mất sau lệnh dọn dẹp" in str(exc_info.value)
+    assert "mã=1" in str(exc_info.value)
     assert "removal of container is already in progress" in str(exc_info.value)
 
     # KHÔNG ĐƯỢC đánh dấu stopped giả!
@@ -559,10 +645,10 @@ def test_loadgen_adapter_docker_rm_already_removed_is_safe() -> None:
     mock_ssh = MockSshClient(
         exit_code=0,
         handlers={
-            "docker rm -f opspilot-loadgen": (
+            "docker rm -f": (
                 1,
                 "",
-                "Error response from daemon: No such container: opspilot-loadgen",
+                "Error response from daemon: No such container",
             ),
         },
     )
@@ -600,3 +686,201 @@ def test_loadgen_adapter_invalid_container_or_network_name() -> None:
             docker_network="bad net$",
             ssh_client=mock_ssh,
         )
+
+
+def test_loadgen_adapter_container_exits_immediately_raises_error() -> None:
+    """Kiểm thử: container kết thúc ngay sau khi spawn (exited) -> ném LoadgenStartupError và dọn dẹp."""
+    # Khi pre-check inspect chạy: trả về mã 1 (chưa có container)
+    # Khi docker run -d chạy: trả về mã 0
+    # Khi post-check inspect chạy: trả về mã 0 nhưng status là exited (thoát ngay!)
+    mock_ssh = MockSshClient(
+        exit_code=0,
+        handlers={
+            "docker run -d": (0, "c-failed-123\n", ""),
+            "docker logs": (
+                0,
+                "Fatal: database connection refused on startup\n",
+                "",
+            ),
+            "docker rm -f": (0, "", ""),
+        },
+        simulate_docker=False,
+    )
+    # Lần 1 (pre-check): chưa tồn tại -> trả 1
+    # Lần 2 (post-check): container đã exited -> trả 0, "exited\n"
+    inspect_calls = 0
+
+    def mock_inspect(cmd: str, timeout: float | None = None) -> tuple[int, str, str]:
+        nonlocal inspect_calls
+        mock_ssh.executed_commands.append(cmd)
+        inspect_calls += 1
+        if inspect_calls == 1:
+            return 1, "", "Error response from daemon: No such container"
+        return 0, "exited\n", ""
+
+    mock_ssh.exec_command = mock_inspect  # type: ignore[assignment]
+    # Ghi đè lại handler run và logs
+    original_inspect = mock_inspect
+
+    def router(cmd: str, timeout: float | None = None) -> tuple[int, str, str]:
+        if "docker inspect" in cmd:
+            return original_inspect(cmd, timeout)
+        mock_ssh.executed_commands.append(cmd)
+        if "docker run" in cmd:
+            return 0, "c-failed-123\n", ""
+        if "docker logs" in cmd:
+            return 0, "Fatal: database connection refused on startup\n", ""
+        if "docker rm" in cmd:
+            return 0, "", ""
+        return 0, "", ""
+
+    mock_ssh.exec_command = router  # type: ignore[assignment]
+    adapter = LoadgenAdapter()
+
+    with pytest.raises(LoadgenStartupError) as exc_info:
+        adapter.start(
+            app_url="http://127.0.0.1:3000",
+            app_name="demo-app",
+            ssh_client=mock_ssh,
+        )
+
+    err = str(exc_info.value)
+    assert "không ở trạng thái running sau khi khởi chạy" in err
+    assert "status=exited" in err
+    assert "Fatal: database connection refused" in err
+    # Đã gọi dọn dẹp container hỏng
+    assert any("docker rm -f" in cmd for cmd in mock_ssh.executed_commands)
+
+
+def test_loadgen_adapter_docker_stop_exit_code_zero_but_still_running_raises_error() -> (
+    None
+):
+    """Kiểm thử: docker stop trả mã 0 nhưng container vẫn running -> ném LoadgenExecutionError và KHÔNG đặt _is_stopped=True."""
+    mock_ssh = MockSshClient(
+        exit_code=0,
+        handlers={
+            "docker stop": (0, "stopped-ok\n", ""),
+            "docker inspect": (0, "running\n", ""),
+        },
+        simulate_docker=False,
+    )
+    # Thiết lập pre-check inspect trả mã 1 để vượt qua start
+    inspect_calls = 0
+
+    def router(cmd: str, timeout: float | None = None) -> tuple[int, str, str]:
+        nonlocal inspect_calls
+        mock_ssh.executed_commands.append(cmd)
+        if "docker inspect" in cmd:
+            inspect_calls += 1
+            if inspect_calls == 1:
+                return 1, "", "No such container"
+            # Sau run và sau stop đều trả running
+            return 0, "running\n", ""
+        if "docker run" in cmd:
+            return 0, "cid-123\n", ""
+        if "docker stop" in cmd:
+            # Lệnh stop trả mã 0 thành công
+            return 0, "cid-123\n", ""
+        return 0, "", ""
+
+    mock_ssh.exec_command = router  # type: ignore[assignment]
+    adapter = LoadgenAdapter()
+    handle = adapter.start(
+        app_url="http://127.0.0.1:3000",
+        app_name="demo-app",
+        ssh_client=mock_ssh,
+    )
+    assert handle.is_running is True
+
+    # Gọi stop() -> Bị lỗi vì inspect vẫn thấy running mặc dù docker stop trả mã 0
+    with pytest.raises(LoadgenExecutionError) as exc_info:
+        handle.stop()
+
+    err = str(exc_info.value)
+    assert "vẫn đang chạy hoặc trạng thái không hợp lệ sau lệnh dừng" in err
+    assert "status=running" in err
+    assert "mã=0" in err
+
+    # KHÔNG được đặt _is_stopped=True
+    assert handle._is_stopped is False
+    assert handle.is_running is True
+
+
+def test_loadgen_adapter_and_collector_shared_counter_mount_path(
+    tmp_path: Path,
+) -> None:
+    """Kiểm thử: đường file chung từ mount của loadgen (/var/metrics/loadgen_counter.json) đến collector đọc (read_loadgen_error_rate)."""
+    # 1. Giả lập thư mục mount trên host: /opt/opspilot/demo-app/metrics
+    host_metrics_dir = tmp_path / "opt" / "opspilot" / "demo-app" / "metrics"
+    host_metrics_dir.mkdir(parents=True, exist_ok=True)
+    shared_counter_file = host_metrics_dir / "loadgen_counter.json"
+
+    # 2. Kiểm tra template docker-compose: collector mount ./metrics:/var/metrics và có LOADGEN_COUNTER_PATH
+    repo_root = Path(__file__).parents[2]
+    compose_template = (
+        repo_root / "templates" / "docker-compose.template.yml"
+    ).read_text(encoding="utf-8")
+    assert "LOADGEN_COUNTER_PATH: /var/metrics/loadgen_counter.json" in compose_template
+    assert "./metrics:/var/metrics" in compose_template
+
+    # 3. Giả lập Loadgen container ghi counter vào mount path
+    now_wall = time.time()
+    now_iso = (
+        datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    )
+    counter_payload = {
+        "window_s": 60.0,
+        "requests": 300,
+        "errors_5xx": 15,
+        "ts": now_iso,
+        "source": "loadgen",
+    }
+    shared_counter_file.write_text(json.dumps(counter_payload), encoding="utf-8")
+
+    # 4. Collector đọc từ đường dẫn file được mount
+    error_rate, req_count = read_loadgen_error_rate(
+        str(shared_counter_file), wall_now=now_wall, max_age_s=30.0
+    )
+    assert error_rate == pytest.approx(15 / 300)
+    assert req_count == 300
+
+
+def test_loadgen_adapter_avoids_blind_rm_and_protects_running_container() -> None:
+    """Kiểm thử: tránh docker rm -f mù khi container không tồn tại, và từ chối xoá mù nếu container đang running."""
+    # Ca 1: Container chưa tồn tại -> không có lệnh docker rm -f nào được gọi trước docker run
+    mock_ssh = MockSshClient(exit_code=0, simulate_docker=True)
+    adapter = LoadgenAdapter()
+
+    handle = adapter.start(
+        app_url="http://127.0.0.1:3000",
+        app_name="crm-app",
+        ssh_client=mock_ssh,
+    )
+    assert handle.is_running is True
+    # Container name tự động theo app_name: opspilot-loadgen-crm-app
+    assert handle.container_name == "opspilot-loadgen-crm-app"
+
+    # Xác nhận các lệnh: inspect pre-check, run, inspect post-check (tuyệt đối KHÔNG có rm -f mù trước run)
+    pre_run_cmds = [
+        cmd for cmd in mock_ssh.executed_commands if "docker run" not in cmd
+    ]
+    assert not any("docker rm -f" in cmd for cmd in pre_run_cmds)
+
+    # Ca 2: Container ĐANG CHẠY của một phiên khác -> từ chối xoá mù, ném LoadgenStartupError
+    running_ssh = MockSshClient(
+        exit_code=0,
+        handlers={
+            "docker inspect": (0, "running\n", ""),
+        },
+        simulate_docker=False,
+    )
+    with pytest.raises(LoadgenStartupError) as exc_info:
+        adapter.start(
+            app_url="http://127.0.0.1:3000",
+            app_name="crm-app",
+            ssh_client=running_ssh,
+        )
+
+    assert "đang chạy trên VPS" in str(exc_info.value)
+    assert "Tránh xoá mù để không làm gián đoạn phiên khác" in str(exc_info.value)
+    assert not any("docker rm -f" in cmd for cmd in running_ssh.executed_commands)
