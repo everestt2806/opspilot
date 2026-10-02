@@ -394,16 +394,20 @@ def attach_deployment_id(
     Ràng buộc và quy tắc kiểm tra (TK-S6 P2d-1a):
       1. Ràng buộc trạng thái: Chỉ cho phép gắn deployment_id khi run đang ở trạng thái 'running'.
          Nếu run đã 'completed' hoặc 'aborted', ném InvalidRunStateError.
-      2. Kiểm tra tồn tại và khớp VPS:
-         - deployment_id bắt buộc phải tồn tại trong bảng `deployment`.
-         - Nếu deployment liên kết với bảng `app` có `vps_id` và run có `vps_id`, hai `vps_id`
-           bắt buộc phải trùng khớp. Không cho phép gắn deployment của VPS khác vào run.
-      3. Bất biến một deployment duy nhất (Không đổi ID):
-         - Nếu run đã có deployment_id và trùng khớp với deployment_id truyền vào: idempotent (no-op).
-         - Nếu run đã có deployment_id khác: từ chối với RunStoreError.
-      4. Cập nhật nguyên tử chống race condition:
+      2. Kiểm tra bất biến một deployment duy nhất (Không đổi ID):
+         Nếu run đã gắn deployment_id khác, từ chối ngay với RunStoreError.
+      3. Xác thực bắt buộc cùng VPS (không có fallback bỏ qua kiểm tra, áp dụng cả khi gắn lại cùng ID):
+         - run.vps_id bắt buộc khác NULL.
+         - Schema cơ sở dữ liệu bắt buộc có đủ bảng deployment, app, vps và các cột quan hệ
+           (deployment.app_id, app.vps_id).
+         - Quan hệ deployment -> app -> vps bắt buộc toàn vẹn: deployment có app_id hợp lệ,
+           app tồn tại và có vps_id hợp lệ, vps tồn tại trong bảng vps.
+         - vps_id của app bắt buộc phải trùng khớp với run.vps_id.
+         - Nếu không xác minh được cùng VPS vì bất kỳ lý do nào -> từ chối dứt khoát với RunStoreError.
+      4. Idempotent: Nếu đã gắn đúng deployment_id đó và xác minh cùng VPS thành công -> no-op.
+      5. Cập nhật nguyên tử chống race condition:
          `UPDATE experiment_run SET deployment_id = ? WHERE id = ? AND status = 'running' AND (deployment_id IS NULL OR deployment_id = ?)`
-      5. Quản lý transaction minh bạch (Transaction Ownership):
+      6. Quản lý transaction minh bạch (Transaction Ownership):
          Chỉ commit khi `auto_commit=True` và caller chưa mở transaction (`not caller_had_tx`).
     """
     if type(run_id) is not int or run_id <= 0:
@@ -438,36 +442,64 @@ def attach_deployment_id(
             f"Run id={run_id} đang ở trạng thái '{run_status}', chỉ có thể gắn deployment_id khi status='running'"
         )
 
-    if existing_dep_id is not None:
-        if existing_dep_id == deployment_id:
-            return
+    # Nếu run đã gắn deployment_id khác -> từ chối ngay lập tức
+    if existing_dep_id is not None and existing_dep_id != deployment_id:
         if not caller_had_tx and conn.in_transaction:
             conn.rollback()
         raise RunStoreError(
             f"Run id={run_id} đã được gắn deployment_id={existing_dep_id}, không thể đổi sang deployment_id={deployment_id}"
         )
 
-    # 2. Kiểm tra deployment tồn tại và xác thực VPS
+    # 2. Xác thực bắt buộc cùng VPS (không có fallback, áp dụng cả khi gắn lại cùng ID)
+    if run_vps_id is None:
+        if not caller_had_tx and conn.in_transaction:
+            conn.rollback()
+        raise RunStoreError(
+            f"Run id={run_id} có vps_id=NULL, không thể xác minh cùng VPS với deployment id={deployment_id}"
+        )
+
+    # 2a. Kiểm tra schema: các bảng và cột bắt buộc
+    cur.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('deployment', 'app', 'vps')"
+    )
+    tables = {row[0] for row in cur.fetchall()}
+    missing_tables = [t for t in ("deployment", "app", "vps") if t not in tables]
+    if missing_tables:
+        if not caller_had_tx and conn.in_transaction:
+            conn.rollback()
+        raise RunStoreError(
+            f"Cơ sở dữ liệu thiếu bảng bắt buộc để xác minh quan hệ deployment -> app -> vps: {', '.join(missing_tables)}"
+        )
+
     cur.execute("PRAGMA table_info(deployment)")
-    columns = {row[1] for row in cur.fetchall()}
-    has_app_id = "app_id" in columns
-
-    if has_app_id:
-        cur.execute(
-            """
-            SELECT d.id, a.vps_id
-            FROM deployment d
-            LEFT JOIN app a ON d.app_id = a.id
-            WHERE d.id = ?
-            """,
-            (deployment_id,),
-        )
-    else:
-        cur.execute(
-            "SELECT id, NULL AS vps_id FROM deployment WHERE id = ?",
-            (deployment_id,),
+    dep_cols = {row[1] for row in cur.fetchall()}
+    if "app_id" not in dep_cols:
+        if not caller_had_tx and conn.in_transaction:
+            conn.rollback()
+        raise RunStoreError(
+            "Bảng deployment thiếu cột 'app_id', không thể xác minh quan hệ cùng VPS"
         )
 
+    cur.execute("PRAGMA table_info(app)")
+    app_cols = {row[1] for row in cur.fetchall()}
+    if "vps_id" not in app_cols:
+        if not caller_had_tx and conn.in_transaction:
+            conn.rollback()
+        raise RunStoreError(
+            "Bảng app thiếu cột 'vps_id', không thể xác minh quan hệ cùng VPS"
+        )
+
+    # 2b. Truy vấn quan hệ deployment -> app -> vps
+    cur.execute(
+        """
+        SELECT d.id, d.app_id, a.id AS app_pk, a.vps_id AS app_vps, v.id AS vps_pk
+        FROM deployment d
+        LEFT JOIN app a ON d.app_id = a.id
+        LEFT JOIN vps v ON a.vps_id = v.id
+        WHERE d.id = ?
+        """,
+        (deployment_id,),
+    )
     dep_row = cur.fetchone()
     if dep_row is None:
         if not caller_had_tx and conn.in_transaction:
@@ -476,15 +508,52 @@ def attach_deployment_id(
             f"Deployment id={deployment_id} không tồn tại trong cơ sở dữ liệu"
         )
 
-    dep_vps_id = dep_row[1] if not hasattr(dep_row, "keys") else dep_row["vps_id"]
-    if run_vps_id is not None and dep_vps_id is not None and dep_vps_id != run_vps_id:
+    dep_app_id = dep_row[1] if not hasattr(dep_row, "keys") else dep_row["app_id"]
+    app_pk = dep_row[2] if not hasattr(dep_row, "keys") else dep_row["app_pk"]
+    app_vps = dep_row[3] if not hasattr(dep_row, "keys") else dep_row["app_vps"]
+    vps_pk = dep_row[4] if not hasattr(dep_row, "keys") else dep_row["vps_pk"]
+
+    if dep_app_id is None:
         if not caller_had_tx and conn.in_transaction:
             conn.rollback()
         raise RunStoreError(
-            f"Deployment id={deployment_id} thuộc VPS id={dep_vps_id}, không khớp với VPS id={run_vps_id} của run id={run_id}"
+            f"Deployment id={deployment_id} có app_id=NULL, không thể xác minh quan hệ cùng VPS"
         )
 
-    # 3. Cập nhật nguyên tử
+    if app_pk is None:
+        if not caller_had_tx and conn.in_transaction:
+            conn.rollback()
+        raise RunStoreError(
+            f"Deployment id={deployment_id} tham chiếu tới app_id={dep_app_id} không tồn tại trong bảng app"
+        )
+
+    if app_vps is None:
+        if not caller_had_tx and conn.in_transaction:
+            conn.rollback()
+        raise RunStoreError(
+            f"App id={dep_app_id} có vps_id=NULL, không thể xác minh quan hệ cùng VPS"
+        )
+
+    if vps_pk is None:
+        if not caller_had_tx and conn.in_transaction:
+            conn.rollback()
+        raise RunStoreError(
+            f"App id={dep_app_id} tham chiếu tới vps_id={app_vps} không tồn tại trong bảng vps"
+        )
+
+    if app_vps != run_vps_id:
+        if not caller_had_tx and conn.in_transaction:
+            conn.rollback()
+        raise RunStoreError(
+            f"Deployment id={deployment_id} thuộc VPS id={app_vps}, không khớp với VPS id={run_vps_id} của run id={run_id}"
+        )
+
+    # 3. Đã xác minh đúng cùng VPS:
+    # Nếu run đã gắn đúng deployment_id này từ trước -> idempotent return (no-op)
+    if existing_dep_id == deployment_id:
+        return
+
+    # 4. Cập nhật nguyên tử
     cur.execute(
         """
         UPDATE experiment_run

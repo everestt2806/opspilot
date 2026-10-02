@@ -1134,3 +1134,153 @@ def test_attach_deployment_id_thread_race_competition(tmp_path: Path) -> None:
     assert final_run is not None
     assert final_run["deployment_id"] in (42, 99)
     check_conn.close()
+
+
+def test_attach_deployment_id_rejects_when_run_vps_id_is_null(
+    conn: sqlite3.Connection,
+) -> None:
+    # 1. Gắn lần đầu khi run.vps_id là NULL -> từ chối
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=None)
+    with pytest.raises(RunStoreError, match="có vps_id=NULL"):
+        attach_deployment_id(conn, run_id, 42)
+
+    # Abort run 1 để giải phóng Single Active Run
+    abort_run(conn, run_id, "abort to test r2")
+
+    # 2. Gắn lại cùng ID khi run.vps_id là NULL -> vẫn bắt buộc từ chối
+    r2 = start_run(conn, "cpu_spike", 1, deployment_id=42, vps_id=None)
+    with pytest.raises(RunStoreError, match="có vps_id=NULL"):
+        attach_deployment_id(conn, r2, 42)
+
+
+def test_attach_deployment_id_rejects_when_deployment_app_id_is_null(
+    conn: sqlite3.Connection,
+) -> None:
+    conn.execute("INSERT INTO deployment (id, app_id) VALUES (501, NULL)")
+    conn.commit()
+
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+    with pytest.raises(RunStoreError, match="có app_id=NULL"):
+        attach_deployment_id(conn, run_id, 501)
+
+    abort_run(conn, run_id, "abort to test r2")
+
+    # Gắn lại cùng ID khi deployment.app_id là NULL -> vẫn bắt buộc từ chối
+    r2 = start_run(conn, "cpu_spike", 1, deployment_id=501, vps_id=1)
+    with pytest.raises(RunStoreError, match="có app_id=NULL"):
+        attach_deployment_id(conn, r2, 501)
+
+
+def test_attach_deployment_id_rejects_when_app_not_found(
+    conn: sqlite3.Connection,
+) -> None:
+    conn.execute("INSERT INTO deployment (id, app_id) VALUES (502, 9999)")
+    conn.commit()
+
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+    with pytest.raises(RunStoreError, match="tham chiếu tới app_id=9999 không tồn tại"):
+        attach_deployment_id(conn, run_id, 502)
+
+
+def test_attach_deployment_id_rejects_when_app_vps_id_is_null() -> None:
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    c.executescript(
+        _SCHEMA.replace(
+            "vps_id INTEGER NOT NULL REFERENCES vps(id)",
+            "vps_id INTEGER REFERENCES vps(id)",
+        )
+    )
+    c.execute("INSERT INTO vps (id) VALUES (1)")
+    c.execute("INSERT INTO app (id, vps_id) VALUES (503, NULL)")
+    c.execute("INSERT INTO deployment (id, app_id) VALUES (503, 503)")
+    c.commit()
+
+    run_id = start_run(c, "memory_leak", 1, deployment_id=None, vps_id=1)
+    with pytest.raises(RunStoreError, match="có vps_id=NULL"):
+        attach_deployment_id(c, run_id, 503)
+
+    abort_run(c, run_id, "abort to test r2")
+
+    # Gắn lại cùng ID khi app.vps_id là NULL -> vẫn bắt buộc từ chối
+    r2 = start_run(c, "cpu_spike", 1, deployment_id=503, vps_id=1)
+    with pytest.raises(RunStoreError, match="có vps_id=NULL"):
+        attach_deployment_id(c, r2, 503)
+
+
+def test_attach_deployment_id_rejects_when_vps_not_found(
+    conn: sqlite3.Connection,
+) -> None:
+    conn.execute("INSERT INTO app (id, vps_id) VALUES (504, 9999)")
+    conn.execute("INSERT INTO deployment (id, app_id) VALUES (504, 504)")
+    conn.commit()
+
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+    with pytest.raises(RunStoreError, match="tham chiếu tới vps_id=9999 không tồn tại"):
+        attach_deployment_id(conn, run_id, 504)
+
+
+def test_attach_deployment_id_rejects_when_schema_missing_table() -> None:
+    # Database thiếu bảng 'app'
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    c.executescript(_SCHEMA)
+    c.execute("DROP TABLE app")
+    c.execute("INSERT INTO vps (id) VALUES (1)")
+    c.commit()
+
+    r = start_run(c, "memory_leak", 1, deployment_id=None, vps_id=1)
+    with pytest.raises(RunStoreError, match="thiếu bảng bắt buộc"):
+        attach_deployment_id(c, r, 42)
+
+
+def test_attach_deployment_id_rejects_when_schema_missing_column() -> None:
+    # 1. Bảng deployment thiếu cột app_id
+    c1 = sqlite3.connect(":memory:")
+    c1.row_factory = sqlite3.Row
+    c1.executescript(_SCHEMA)
+    c1.execute("ALTER TABLE deployment DROP COLUMN app_id")
+    c1.execute("INSERT INTO vps (id) VALUES (1)")
+    c1.execute("INSERT INTO app (id, vps_id) VALUES (1, 1)")
+    c1.execute("INSERT INTO deployment (id) VALUES (42)")
+    c1.commit()
+
+    r1 = start_run(c1, "memory_leak", 1, deployment_id=None, vps_id=1)
+    with pytest.raises(RunStoreError, match="thiếu cột 'app_id'"):
+        attach_deployment_id(c1, r1, 42)
+
+    # 2. Bảng app thiếu cột vps_id
+    c2 = sqlite3.connect(":memory:")
+    c2.row_factory = sqlite3.Row
+    c2.executescript(_SCHEMA)
+    c2.execute("ALTER TABLE app DROP COLUMN vps_id")
+    c2.execute("INSERT INTO vps (id) VALUES (1)")
+    c2.execute("INSERT INTO app (id) VALUES (1)")
+    c2.execute("INSERT INTO deployment (id, app_id) VALUES (42, 1)")
+    c2.commit()
+
+    r2 = start_run(c2, "memory_leak", 1, deployment_id=None, vps_id=1)
+    with pytest.raises(RunStoreError, match="thiếu cột 'vps_id'"):
+        attach_deployment_id(c2, r2, 42)
+
+
+def test_attach_deployment_id_error_preserves_caller_transaction(
+    conn: sqlite3.Connection,
+) -> None:
+    # Caller mở transaction, thực hiện một thay đổi trước đó
+    run_id = start_run(
+        conn, "memory_leak", 1, deployment_id=None, vps_id=None
+    )  # vps_id=NULL
+    conn.execute("BEGIN")
+    conn.execute("INSERT INTO app (id, vps_id) VALUES (999, 1)")
+
+    # Gọi attach_deployment_id gặp lỗi (do run.vps_id là NULL)
+    with pytest.raises(RunStoreError):
+        attach_deployment_id(conn, run_id, 42, auto_commit=True)
+
+    # Transaction của caller vẫn còn hiệu lực (chưa bị rollback)
+    assert conn.in_transaction is True
+    # Caller có thể commit thay đổi của mình thành công
+    conn.commit()
+    row = conn.execute("SELECT id FROM app WHERE id = 999").fetchone()
+    assert row is not None

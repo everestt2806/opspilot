@@ -197,22 +197,23 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
   - Load generator: giữ nguyên trần an toàn mặc định 1800 giây; chỉ cho phép mở rộng 4500 giây khi có cấu hình pilot tường minh (`LOADGEN_PILOT_4500=true`).
   - Phân rã 4 checkpoint nhỏ: chỉ rõ **P2d-1** triển khai `DeployAdapter` & `attach_deployment_id` kèm kiểm thử ca deploy lỗi (giữ bản ghi failed, abort attempt, cho phép retry attempt kế tiếp).
   - Ghi nhận quyết định kiến trúc vào `DECISIONS.md`, cập nhật `board.md`; giữ pilot thực tế `NOT_RUN`.
-- 02/10 mốc Triển khai P2d-1a (`4f5af9d`, ban đầu `a7d9df7`) — Helper attach_deployment_id và ML Client (TK-S6):
+- 02/10 mốc Triển khai P2d-1a (`17c4589`) — Helper attach_deployment_id và ML Client (TK-S6):
   - `experiments/run_store.py`: triển khai `attach_deployment_id(conn, run_id, deployment_id, auto_commit=True)`.
     - Kiểm tra run tồn tại và ở trạng thái `'running'`; từ chối nếu run đã `'completed'` hoặc `'aborted'` (`InvalidRunStateError`).
-    - Kiểm tra `deployment_id` tồn tại trong bảng `deployment`; đối chiếu `vps_id` của app với `vps_id` của run, từ chối nếu khác VPS (`RunStoreError`).
-    - Bất biến một deployment duy nhất: nếu run đã có `deployment_id` trùng khớp thì idempotent (no-op); nếu run đã gắn `deployment_id` khác thì từ chối (`RunStoreError`).
+    - Bắt buộc xác minh quan hệ cùng VPS: `run.vps_id` bắt buộc khác NULL; schema bắt buộc có đủ bảng `deployment`, `app`, `vps` và các cột `deployment.app_id`, `app.vps_id`; quan hệ `deployment -> app -> vps` bắt buộc toàn vẹn; từ chối dứt khoát nếu thiếu thông tin xác minh hoặc khác VPS (`RunStoreError`).
+    - Loại bỏ hoàn toàn mọi nhánh fallback cho phép bỏ qua kiểm tra VPS; áp dụng quy tắc kiểm tra này kể cả khi gắn lại cùng `deployment_id`.
+    - Bất biến một deployment duy nhất: nếu run đã có `deployment_id` trùng khớp và xác minh cùng VPS thành công thì idempotent (no-op); nếu run đã gắn `deployment_id` khác thì từ chối (`RunStoreError`).
     - Cập nhật nguyên tử chống race condition bằng SQL: `UPDATE experiment_run SET deployment_id = ? WHERE id = ? AND status = 'running' AND (deployment_id IS NULL OR deployment_id = ?)`.
-    - Bảo toàn quyền sở hữu transaction của caller: chỉ commit khi `auto_commit=True` và `not conn.in_transaction`.
+    - Bảo toàn quyền sở hữu transaction của caller: chỉ commit khi `auto_commit=True` và `not conn.in_transaction` (`caller_had_tx`), không rollback transaction caller đã mở khi gặp lỗi.
   - `experiments/adapters/ml_client.py`: triển khai lớp `MlClient` giao tiếp HTTP với FastAPI `ml-service` (cổng 8000) sử dụng `urllib.request` từ thư viện chuẩn (zero external dependencies).
     - Triển khai đầy đủ các endpoint: `check_health()` (`GET /health`), `get_status(deployment_id)` (`GET /status?deployment_id=...`), `reset_models(deployment_id)` (`POST /reset`), `train_models(deployment_id, samples)` (`POST /train`).
     - Phân lớp ngoại lệ rõ ràng: `MlClientError`, `MlConnectionError`, `MlResponseError` (kèm `status_code` và `response_text`).
-  - Unit test: bổ sung 11 test cho `attach_deployment_id` trong `test_run_store.py` (bao gồm ca hợp lệ, idempotent, đổi ID khác, deployment không tồn tại, lệch VPS, run đã abort/completed, caller transaction rollback, 2 kết nối cạnh tranh, và thread race condition); 15 test mock HTTP ngoại tuyến trong `test_ml_client.py`.
-  - Toàn bộ suite đạt **172 passed** pytest (nâng từ 145), Ruff lint clean, Ruff format clean; giữ pilot thực tế **`NOT_RUN`**.
+  - Unit test: bổ sung 19 test cho `attach_deployment_id` trong `test_run_store.py` (bao gồm ca hợp lệ, idempotent, đổi ID khác, deployment không tồn tại, lệch VPS, run.vps_id NULL, deployment.app_id NULL, app không tồn tại, app.vps_id NULL, vps không tồn tại, schema thiếu bảng/cột, run đã abort/completed, caller transaction rollback & preserve, 2 kết nối cạnh tranh, và thread race condition); 15 test mock HTTP ngoại tuyến trong `test_ml_client.py`.
+  - Toàn bộ suite đạt **180 passed** pytest (nâng từ 145 ban đầu, 172 ở bản đầu), Ruff lint clean, Ruff format clean; giữ pilot thực tế **`NOT_RUN`**.
 
 ## Lệnh tái hiện
 
-Test thuần (172 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed, P2b-3 là 145 passed, P2d-1a là 172 passed):
+Test thuần (180 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed, P2b-3 là 145 passed, P2d-1a bản đầu là 172 passed, P2d-1a hoàn thiện là 180 passed):
 
 ```
 ml-service/.venv/Scripts/python.exe -m pytest \
