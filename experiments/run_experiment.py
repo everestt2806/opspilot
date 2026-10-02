@@ -21,13 +21,16 @@ import inspect
 import logging
 import os
 import sqlite3
+import stat
 import subprocess
 import sys
+import tempfile
 import time
+import types
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 # Đảm bảo đường dẫn import tương đối và tuyệt đối
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -80,6 +83,22 @@ class ExperimentError(Exception):
     """Lớp cơ sở cho toàn bộ các ngoại lệ trong orchestrator thí nghiệm."""
 
 
+class SshError(ExperimentError):
+    """Ngoại lệ chung cho lỗi kết nối hoặc thực thi SSH."""
+
+
+class UnsupportedAuthTypeError(SshError):
+    """Ném ra khi kiểu xác thực SSH chưa được hỗ trợ (ví dụ: password với OpenSSH CLI)."""
+
+
+class SshAuthenticationError(SshError):
+    """Ném ra khi xác thực SSH thất bại (sai key, permission denied)."""
+
+
+class SshHostKeyError(SshError):
+    """Ném ra khi kiểm tra host key thất bại (Host key verification failed)."""
+
+
 class ClockSkewError(ExperimentError):
     """Ném ra khi độ lệch đồng hồ giữa VPS và máy local vượt ngưỡng an toàn (>2000ms)."""
 
@@ -127,7 +146,10 @@ class SystemSshClient:
 
     Bảo mật:
       - Tuyệt đối không in, ghi log hoặc lưu raw credential ra đĩa hoặc DB.
+      - Sử dụng temporary file phân quyền chặt (0600) khi credential là private key string và dọn dẹp khi đóng.
       - __repr__ và chuỗi ngoại lệ tự động khử / ẩn secret (hiển thị '******').
+      - Bắt buộc kiểm tra host key (StrictHostKeyChecking=yes), không tắt host key checking.
+      - Chỉ hỗ trợ kiểu xác thực 'key'; từ chối kiểu 'password' chưa hỗ trợ non-interactively.
     """
 
     def __init__(
@@ -137,6 +159,8 @@ class SystemSshClient:
         username: str = "root",
         auth_type: str = "key",
         secret: str | None = None,
+        key_file: str | Path | None = None,
+        known_hosts_file: str | Path | None = None,
         timeout: float = 15.0,
     ) -> None:
         self.host = host or "127.0.0.1"
@@ -145,6 +169,60 @@ class SystemSshClient:
         self.auth_type = auth_type or "key"
         self._secret = secret
         self.timeout = float(timeout)
+        self.known_hosts_file = str(known_hosts_file) if known_hosts_file else None
+
+        if self.auth_type != "key":
+            raise UnsupportedAuthTypeError(
+                f"Unsupported SSH auth_type '{self.auth_type}': OpenSSH CLI only supports 'key' authentication non-interactively"
+            )
+
+        self._temp_dir: tempfile.TemporaryDirectory[str] | None = None
+        self._effective_key_file: Path | None = None
+
+        if key_file is not None:
+            self._effective_key_file = Path(key_file)
+        elif self._secret:
+            try:
+                candidate = Path(self._secret)
+                if candidate.is_file():
+                    self._effective_key_file = candidate
+                else:
+                    self._create_temp_key_file(self._secret)
+            except OSError:
+                self._create_temp_key_file(self._secret)
+
+    def _create_temp_key_file(self, content: str) -> None:
+        self._temp_dir = tempfile.TemporaryDirectory(prefix="opspilot_ssh_")
+        key_path = Path(self._temp_dir.name) / "id_rsa"
+        key_path.write_text(content, encoding="utf-8")
+        try:
+            os.chmod(key_path, stat.S_IRUSR | stat.S_IWUSR)
+        except OSError:
+            pass
+        self._effective_key_file = key_path
+
+    def close(self) -> None:
+        """Dọn dẹp temporary key file và thư mục tạm nếu có."""
+        if self._temp_dir is not None:
+            try:
+                self._temp_dir.cleanup()
+            except OSError:
+                pass
+            self._temp_dir = None
+
+    def __del__(self) -> None:
+        self.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: types.TracebackType | None,
+    ) -> None:
+        self.close()
 
     def __repr__(self) -> str:
         return (
@@ -162,14 +240,32 @@ class SystemSshClient:
             "-o",
             "BatchMode=yes",
             "-o",
-            "StrictHostKeyChecking=no",
-            "-o",
-            "UserKnownHostsFile=/dev/null",
-            "-o",
-            f"ConnectTimeout={max(1, int(min(effective_timeout, 10)))}",
-            f"{self.username}@{self.host}",
-            cmd,
+            "StrictHostKeyChecking=yes",
         ]
+        if self._effective_key_file is not None:
+            ssh_args.extend(
+                [
+                    "-i",
+                    str(self._effective_key_file),
+                    "-o",
+                    "IdentitiesOnly=yes",
+                ]
+            )
+        if self.known_hosts_file is not None:
+            ssh_args.extend(
+                [
+                    "-o",
+                    f"UserKnownHostsFile={self.known_hosts_file}",
+                ]
+            )
+        ssh_args.extend(
+            [
+                "-o",
+                f"ConnectTimeout={max(1, int(min(effective_timeout, 10)))}",
+                f"{self.username}@{self.host}",
+                cmd,
+            ]
+        )
         try:
             res = subprocess.run(
                 ssh_args,
@@ -196,12 +292,43 @@ class SystemSshClient:
         """Hỗ trợ giao diện tương thích Paramiko / _exec_ssh."""
         return self.exec(cmd, timeout=timeout)
 
+    def verify_connection(self, timeout: float = 10.0) -> None:
+        """Xác thực kết nối SSH thật sự tới host trước khi tiếp tục.
+
+        Chạy một lệnh no-op ('true') để kiểm tra tính hợp lệ của credential và host key.
+        Ném ra ngoại lệ tương ứng nếu xác thực hoặc kiểm tra host key thất bại.
+        """
+        code, _stdout, stderr = self.exec("true", timeout=timeout)
+        if code == 0:
+            return
+
+        lower_err = stderr.lower()
+        if (
+            "host key verification failed" in lower_err
+            or "host identification has changed" in lower_err
+            or "no hostkey alg" in lower_err
+        ):
+            raise SshHostKeyError(
+                f"SSH Host Key verification failed for {self.username}@{self.host}:{self.port}: {stderr.strip()}"
+            )
+
+        if "permission denied" in lower_err or "authentication failed" in lower_err:
+            raise SshAuthenticationError(
+                f"SSH authentication failed for {self.username}@{self.host}:{self.port}: {stderr.strip()}"
+            )
+
+        raise SshError(
+            f"SSH connection failed (code {code}) for {self.username}@{self.host}:{self.port}: {stderr.strip()}"
+        )
+
 
 def resolve_ssh_client(
     conn: sqlite3.Connection,
     vps_id: int,
+    ssh_key_file: str | Path | None = None,
     ssh_secret: str | None = None,
     ssh_client: Any | None = None,
+    known_hosts_file: str | Path | None = None,
 ) -> Any | None:
     """Xác định SSH client hợp lệ từ vps table và credential an toàn.
 
@@ -209,20 +336,24 @@ def resolve_ssh_client(
       - Không in hoặc lưu credential ra màn hình/log/đĩa/DB.
       - Ưu tiên:
         1. ssh_client truyền tường minh.
-        2. Tạo SystemSshClient từ bản ghi vps kết hợp secret từ:
-           - Tham số ssh_secret
-           - Biến môi trường OPSPILOT_SSH_SECRET hoặc OPSPILOT_DEPLOY_SECRET
+        2. Tạo SystemSshClient từ bản ghi vps kết hợp key_file hoặc secret từ:
+           - Tham số ssh_key_file hoặc biến môi trường OPSPILOT_SSH_KEY_FILE
+           - Tham số ssh_secret hoặc biến môi trường OPSPILOT_SSH_SECRET, OPSPILOT_DEPLOY_SECRET
+      - Kiểm tra auth_type từ vps table; từ chối rõ kiểu chưa hỗ trợ (ví dụ 'password').
       - Trả về None nếu không đủ thông tin kết nối an toàn.
     """
     if ssh_client is not None:
         return ssh_client
 
-    secret = (
+    effective_key_file = ssh_key_file or os.environ.get("OPSPILOT_SSH_KEY_FILE")
+    effective_secret = (
         ssh_secret
         or os.environ.get("OPSPILOT_SSH_SECRET")
         or os.environ.get("OPSPILOT_DEPLOY_SECRET")
     )
-    if not secret or not str(secret).strip():
+    if not effective_key_file and (
+        not effective_secret or not str(effective_secret).strip()
+    ):
         return None
 
     try:
@@ -243,12 +374,21 @@ def resolve_ssh_client(
     username = row[2] or "root"
     auth_type = row[3] or "key"
 
+    if auth_type != "key":
+        raise UnsupportedAuthTypeError(
+            f"Unsupported SSH auth_type '{auth_type}': only 'key' authentication is supported"
+        )
+
+    effective_known_hosts = known_hosts_file or os.environ.get("OPSPILOT_KNOWN_HOSTS")
+
     return SystemSshClient(
         host=host,
         port=port,
         username=username,
         auth_type=auth_type,
-        secret=str(secret).strip(),
+        secret=str(effective_secret).strip() if effective_secret else None,
+        key_file=effective_key_file,
+        known_hosts_file=effective_known_hosts,
     )
 
 
@@ -463,6 +603,7 @@ def run_attempt(
     app_url: str,
     ml_url: str = "http://127.0.0.1:8000",
     ssh_client: Any | None = None,
+    ssh_key_file: str | Path | None = None,
     deploy_adapter: DeployAdapter | None = None,
     ml_client: MlClient | None = None,
     poller_adapter: PollerAdapter | None = None,
@@ -493,6 +634,7 @@ def run_attempt(
         app_url: URL truy cập app demo trên VPS (ví dụ "http://127.0.0.1:3000").
         ml_url: URL của ML Service (mặc định "http://127.0.0.1:8000").
         ssh_client: Client SSH kết nối tới VPS (hoặc Mock SSH).
+        ssh_key_file: Đường dẫn file SSH private key (hoặc đọc từ OPSPILOT_SSH_KEY_FILE).
         deploy_adapter: Adapter deploy app.
         ml_client: Client giao tiếp ML Service.
         poller_adapter: Adapter Headless Poller.
@@ -562,15 +704,47 @@ def run_attempt(
             or os.environ.get("OPSPILOT_SSH_SECRET")
             or os.environ.get("OPSPILOT_DEPLOY_SECRET")
         )
+        resolved_key_file = ssh_key_file or os.environ.get("OPSPILOT_SSH_KEY_FILE")
         if ssh_client is None:
-            ssh_client = resolve_ssh_client(
-                conn, vps_id=vps_id, ssh_secret=resolved_ssh_secret
-            )
+            try:
+                ssh_client = resolve_ssh_client(
+                    conn,
+                    vps_id=vps_id,
+                    ssh_key_file=resolved_key_file,
+                    ssh_secret=resolved_ssh_secret,
+                )
+            except UnsupportedAuthTypeError as e:
+                reason = f"unsupported_auth_type: {e}"
+                abort_run(conn, run_id, reason=reason, auto_commit=True)
+                raise ExperimentError(reason) from e
 
         if ssh_client is None:
             reason = "missing_ssh_client: Yêu cầu SSH client hợp lệ để kết nối VPS"
             abort_run(conn, run_id, reason=reason, auto_commit=True)
             raise ExperimentError(reason)
+
+        # Xác thực kết nối SSH thật sự theo auth_type và host key; không coi việc tạo client là đã kết nối
+        if hasattr(ssh_client, "verify_connection") and callable(
+            ssh_client.verify_connection
+        ):
+            try:
+                ssh_client.verify_connection()
+            except UnsupportedAuthTypeError as e:
+                reason = f"unsupported_auth_type: {e}"
+                abort_run(conn, run_id, reason=reason, auto_commit=True)
+                raise ExperimentError(reason) from e
+            except SshHostKeyError as e:
+                reason = f"ssh_host_key_error: {e}"
+                abort_run(conn, run_id, reason=reason, auto_commit=True)
+                raise ExperimentError(reason) from e
+            except SshAuthenticationError as e:
+                reason = f"ssh_auth_error: {e}"
+                abort_run(conn, run_id, reason=reason, auto_commit=True)
+                raise ExperimentError(reason) from e
+            except SshError as e:
+                reason = f"ssh_connect_error: {e}"
+                abort_run(conn, run_id, reason=reason, auto_commit=True)
+                raise ExperimentError(reason) from e
 
         # =========================================================================
         # BƯỚC 2: Đo độ lệch đồng hồ (Clock Skew Gate)
@@ -975,6 +1149,16 @@ def run_attempt(
             except Exception as e:  # noqa: BLE001
                 logger.debug("Bỏ qua lỗi khi poller stop trong finally: %s", e)
 
+        if (
+            ssh_client is not None
+            and hasattr(ssh_client, "close")
+            and callable(ssh_client.close)
+        ):
+            try:
+                ssh_client.close()
+            except Exception as e:  # noqa: BLE001
+                logger.debug("Bỏ qua lỗi khi đóng ssh_client trong finally: %s", e)
+
         try:
             conn.close()
         except sqlite3.Error as e:
@@ -991,6 +1175,7 @@ def run_experiment(
     app_url: str,
     max_attempts: int = 3,
     allow_pilot_4500: bool = False,
+    ssh_key_file: str | Path | None = None,
     ssh_secret: str | None = None,
     **kwargs: Any,
 ) -> RunResult:
@@ -1006,6 +1191,7 @@ def run_experiment(
             source_path=source_path,
             app_url=app_url,
             allow_pilot_4500=allow_pilot_4500,
+            ssh_key_file=ssh_key_file,
             ssh_secret=ssh_secret,
             raise_on_abort=False,
             **kwargs,
@@ -1081,9 +1267,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Bật chế độ pilot chạy tối đa 4500s (75 phút)",
     )
     parser.add_argument(
-        "--ssh-secret",
+        "--ssh-key-file",
         default=None,
-        help="SSH secret (password hoặc private key) cho kết nối VPS (không in/lưu ra đĩa)",
+        help="Đường dẫn file SSH private key để xác thực kết nối VPS an toàn (không truyền raw secret qua argv)",
     )
     return parser
 
@@ -1102,7 +1288,7 @@ if __name__ == "__main__":  # pragma: no cover
         ml_url=args.ml_url,
         max_attempts=args.max_attempts,
         allow_pilot_4500=args.allow_pilot_4500,
-        ssh_secret=args.ssh_secret,
+        ssh_key_file=args.ssh_key_file,
     )
     print(
         f"KẾT QUẢ RUN: status={result.status}, attempt={result.attempt_index}, run_id={result.run_id}"

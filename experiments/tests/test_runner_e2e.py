@@ -565,13 +565,40 @@ class MockLoadgenAdapter(LoadgenAdapter):
 class MockSshClient:
     """Mock SSH client cho phép đo đồng hồ và thực thi lệnh giả lập."""
 
-    def __init__(self, exit_code: int = 0, stdout: str = "", stderr: str = "") -> None:
+    def __init__(
+        self,
+        exit_code: int = 0,
+        stdout: str = "",
+        stderr: str = "",
+        verify_fail: Exception | None = None,
+    ) -> None:
         self.exit_code = exit_code
         self.stdout = stdout
         self.stderr = stderr
+        self.verify_fail = verify_fail
         self.executed_commands: list[str] = []
 
-    def exec(self, cmd: str) -> tuple[int, str, str]:
+    def verify_connection(self, timeout: float = 10.0) -> None:
+        if self.verify_fail is not None:
+            raise self.verify_fail
+        if self.exit_code != 0:
+            lower = self.stderr.lower()
+            if (
+                "host key verification failed" in lower
+                or "host identification has changed" in lower
+            ):
+                from experiments.run_experiment import SshHostKeyError
+
+                raise SshHostKeyError(self.stderr)
+            if "permission denied" in lower or "authentication failed" in lower:
+                from experiments.run_experiment import SshAuthenticationError
+
+                raise SshAuthenticationError(self.stderr)
+            from experiments.run_experiment import SshError
+
+            raise SshError(self.stderr)
+
+    def exec(self, cmd: str, timeout: float | None = None) -> tuple[int, str, str]:
         self.executed_commands.append(cmd)
         if "date" in cmd:
             return 0, str(int(1727800000.0 * 1000)), ""
@@ -1332,8 +1359,14 @@ def test_cli_resolves_ssh_client_and_does_not_abort_from_missing_ssh(
     )
     conn.commit()
 
-    # 1. Kiểm tra parser CLI có hỗ trợ các cờ mới
+    # 1a. Bảo mật argv: --ssh-secret chứa chuỗi thô bị loại bỏ khỏi parser và từ chối khi gọi
     parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["--ssh-secret", "super_secret_ssh_key_data"])
+
+    # 1b. CLI hỗ trợ truyền đường dẫn key qua --ssh-key-file và cờ pilot
+    key_file = tmp_path / "test_id_rsa"
+    key_file.write_text("test_key_content", encoding="utf-8")
     cli_args = parser.parse_args(
         [
             "--scenario",
@@ -1342,25 +1375,28 @@ def test_cli_resolves_ssh_client_and_does_not_abort_from_missing_ssh(
             str(db_file),
             "--app-url",
             "http://127.0.0.1:3000",
-            "--ssh-secret",
-            "super_secret_ssh_key_data",
+            "--ssh-key-file",
+            str(key_file),
             "--allow-pilot-4500",
         ]
     )
-    assert cli_args.ssh_secret == "super_secret_ssh_key_data"
+    assert cli_args.ssh_key_file == str(key_file)
     assert cli_args.allow_pilot_4500 is True
 
-    # 2. resolve_ssh_client từ tham số ssh_secret
-    client_from_arg = resolve_ssh_client(conn, vps_id=1, ssh_secret=cli_args.ssh_secret)
+    # 2. resolve_ssh_client từ tham số ssh_key_file
+    client_from_arg = resolve_ssh_client(
+        conn, vps_id=1, ssh_key_file=cli_args.ssh_key_file
+    )
     assert isinstance(client_from_arg, SystemSshClient)
     assert client_from_arg.host == "192.168.1.100"
     assert client_from_arg.port == 2222
     assert client_from_arg.username == "ops_user"
     assert client_from_arg.auth_type == "key"
+    assert client_from_arg._effective_key_file == key_file
 
     # Bảo mật: __repr__ phải che giấu credential hoàn toàn, không in raw secret
     repr_str = repr(client_from_arg)
-    assert "super_secret_ssh_key_data" not in repr_str
+    assert "super_secret" not in repr_str
     assert "secret=******" in repr_str
 
     # 3. resolve_ssh_client từ biến môi trường OPSPILOT_SSH_SECRET
@@ -1371,6 +1407,10 @@ def test_cli_resolves_ssh_client_and_does_not_abort_from_missing_ssh(
     assert "secret=******" in repr(client_from_env)
 
     # 4. Khi ssh_client=None nhưng có OPSPILOT_SSH_SECRET, run_attempt tự động phân giải SSH client và không abort vì missing_ssh_client
+    monkeypatch.setattr(
+        SystemSshClient, "verify_connection", lambda self, *a, **kw: None
+    )
+
     clock = SimulatedClock()
     deploy_adapter = MockDeployAdapter()
     ml_client = MockMlClient()
@@ -1521,3 +1561,355 @@ def test_e2e_phase_c_process_death_aborts_attempt(tmp_path: Path) -> None:
     assert res2.status == "aborted"
     assert "apply_fault_failed" in (res2.abort_reason or "")
     assert "Headless Poller bị dừng bất thường trong Pha C" in (res2.abort_reason or "")
+
+
+def test_system_ssh_client_transport_uses_credentials_and_strict_host_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Kiểm thử mức transport: SystemSshClient truyền đúng credential (-i), IdentitiesOnly, StrictHostKeyChecking=yes, và không để lộ secret trong argv."""
+    import subprocess
+
+    from experiments.run_experiment import SystemSshClient
+
+    captured_cmds: list[list[str]] = []
+
+    def mock_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        captured_cmds.append(list(args))
+        return subprocess.CompletedProcess(
+            args=args, returncode=0, stdout="success\n", stderr=""
+        )
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    secret_raw = "MOCK_PRIVATE_KEY_PLAINTEXT_SECRET_12345"
+
+    # 1. Khởi tạo bằng raw secret -> phải tạo temp key file, dùng -i, và StrictHostKeyChecking=yes
+    client1 = SystemSshClient(
+        host="10.0.0.1",
+        port=2222,
+        username="deployer",
+        auth_type="key",
+        secret=secret_raw,
+    )
+    assert client1._effective_key_file is not None
+    assert client1._effective_key_file.is_file()
+    assert client1._effective_key_file.read_text(encoding="utf-8") == secret_raw
+
+    code, _stdout, _stderr = client1.exec("uptime")
+    assert code == 0
+    assert len(captured_cmds) == 1
+    cmd_args = captured_cmds[0]
+
+    # Kiểm tra các tham số an toàn bắt buộc trong lệnh SSH:
+    assert "-p" in cmd_args and cmd_args[cmd_args.index("-p") + 1] == "2222"
+    assert "StrictHostKeyChecking=yes" in cmd_args
+    assert "StrictHostKeyChecking=no" not in cmd_args
+    assert "UserKnownHostsFile=/dev/null" not in cmd_args
+    assert "-i" in cmd_args and cmd_args[cmd_args.index("-i") + 1] == str(
+        client1._effective_key_file
+    )
+    assert "IdentitiesOnly=yes" in cmd_args
+    assert "deployer@10.0.0.1" in cmd_args
+    assert "uptime" in cmd_args
+
+    # Tuyệt đối không có chuỗi secret thô trong argv của tiến trình ssh!
+    for arg in cmd_args:
+        assert secret_raw not in arg
+
+    # Dọn dẹp: close() phải xoá file key tạm
+    temp_key_path = client1._effective_key_file
+    client1.close()
+    assert not temp_key_path.exists()
+
+    # 2. Khởi tạo bằng file key có sẵn và known_hosts_file tuỳ biến
+    existing_key = tmp_path / "custom_id_rsa"
+    existing_key.write_text("existing_key_data", encoding="utf-8")
+    known_hosts = tmp_path / "known_hosts"
+    known_hosts.write_text("10.0.0.1 ssh-rsa AAAAB3NzaC1yc2E...", encoding="utf-8")
+
+    captured_cmds.clear()
+    with SystemSshClient(
+        host="10.0.0.2",
+        port=22,
+        username="root",
+        auth_type="key",
+        key_file=existing_key,
+        known_hosts_file=known_hosts,
+    ) as client2:
+        client2.exec("whoami")
+        assert len(captured_cmds) == 1
+        cmd2_args = captured_cmds[0]
+        assert "-i" in cmd2_args and cmd2_args[cmd2_args.index("-i") + 1] == str(
+            existing_key
+        )
+        assert f"UserKnownHostsFile={known_hosts}" in cmd2_args
+        assert "StrictHostKeyChecking=yes" in cmd2_args
+
+    # File key ngoài không bị xoá sau khi đóng client
+    assert existing_key.exists()
+
+
+def test_ssh_bad_credentials_aborts_attempt_before_deploy(tmp_path: Path) -> None:
+    """Kiểm thử: Sai credential SSH (Permission denied) làm attempt abort ngay trước khi deploy (deploy_adapter không bao giờ được gọi)."""
+    db_file = tmp_path / "opspilot.db"
+    _init_test_db(db_file)
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    poller_adapter = MockPollerAdapter(clock=clock, sample_count=450, time_scale=0.001)
+    loadgen_adapter = MockLoadgenAdapter()
+
+    # SSH client trả về lỗi xác thực Permission denied
+    ssh_client = MockSshClient(
+        exit_code=255,
+        stderr="root@127.0.0.1: Permission denied (publickey,password).",
+    )
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=ssh_client,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=lambda *a, **kw: None,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=0.001,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+
+    assert res.status == "aborted"
+    assert "ssh_auth_error" in (res.abort_reason or "")
+    assert "Permission denied" in (res.abort_reason or "")
+    # Cốt lõi: deploy_adapter không được gọi dù chỉ 1 lần
+    assert deploy_adapter.call_count == 0
+    assert len(loadgen_adapter.handles) == 0
+
+
+def test_ssh_bad_host_key_aborts_attempt_before_deploy(tmp_path: Path) -> None:
+    """Kiểm thử: Lỗi host key (Host key verification failed) làm attempt abort ngay trước khi deploy."""
+    db_file = tmp_path / "opspilot.db"
+    _init_test_db(db_file)
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    poller_adapter = MockPollerAdapter(clock=clock, sample_count=450, time_scale=0.001)
+    loadgen_adapter = MockLoadgenAdapter()
+
+    # SSH client trả về lỗi host key verification
+    ssh_client = MockSshClient(
+        exit_code=255,
+        stderr="Host key verification failed.\r\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\r\n@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @",
+    )
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=ssh_client,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=lambda *a, **kw: None,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=0.001,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+
+    assert res.status == "aborted"
+    assert "ssh_host_key_error" in (res.abort_reason or "")
+    assert "Host key verification failed" in (res.abort_reason or "")
+    # Deploy adapter tuyệt đối không được gọi
+    assert deploy_adapter.call_count == 0
+    assert len(loadgen_adapter.handles) == 0
+
+
+def test_ssh_unsupported_auth_type_aborts_attempt_before_deploy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Kiểm thử: Kiểu xác thực không hỗ trợ (auth_type='password') bị từ chối rõ ràng và abort trước deploy."""
+    db_file = tmp_path / "opspilot.db"
+    _init_test_db(db_file)
+
+    conn = sqlite3.connect(db_file)
+    conn.execute("UPDATE vps SET auth_type = 'password' WHERE id = 1")
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setenv("OPSPILOT_SSH_SECRET", "super_secret_ssh_password")
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    poller_adapter = MockPollerAdapter(clock=clock, sample_count=450, time_scale=0.001)
+    loadgen_adapter = MockLoadgenAdapter()
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=None,  # Kích hoạt resolve_ssh_client từ vps auth_type='password'
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=lambda *a, **kw: None,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=0.001,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+
+    assert res.status == "aborted"
+    assert "unsupported_auth_type" in (res.abort_reason or "")
+    assert "only 'key' authentication is supported" in (res.abort_reason or "")
+    # Deploy adapter tuyệt đối không được gọi
+    assert deploy_adapter.call_count == 0
+    assert len(loadgen_adapter.handles) == 0
+
+
+def test_ssh_secret_never_persisted_in_argv_log_or_db(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Kiểm thử: Secret SSH không bao giờ xuất hiện trong argv của tiến trình, log hệ thống, hay database SQLite."""
+    import logging
+    import subprocess
+
+    from experiments.run_experiment import SystemSshClient
+
+    db_file = tmp_path / "opspilot.db"
+    _init_test_db(db_file)
+
+    secret_str = "SUPER_SECRET_SSH_KEY_PAYLOAD_ABC_987654321"
+
+    # 1. Kiểm tra argv khi SystemSshClient thực thi lệnh
+    executed_args: list[str] = []
+
+    def mock_run(args: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        executed_args.extend(args)
+        # Giả lập remote server echo lại nội dung
+        return subprocess.CompletedProcess(
+            args=args,
+            returncode=0,
+            stdout=f"Output with echo: {secret_str}\n",
+            stderr=f"Error with echo: {secret_str}\n",
+        )
+
+    monkeypatch.setattr(subprocess, "run", mock_run)
+
+    client = SystemSshClient(
+        host="127.0.0.1",
+        port=22,
+        username="root",
+        auth_type="key",
+        secret=secret_str,
+    )
+
+    with caplog.at_level(logging.DEBUG):
+        # 1a. Kiểm tra argv
+        code, stdout, stderr = client.exec("test_cmd")
+        assert code == 0
+        for arg in executed_args:
+            assert secret_str not in arg
+
+        # 1b. Khử secret trong stdout/stderr trả về
+        assert secret_str not in stdout
+        assert "******" in stdout
+        assert secret_str not in stderr
+        assert "******" in stderr
+
+        # 1c. Kiểm tra repr(client)
+        assert secret_str not in repr(client)
+        assert "secret=******" in repr(client)
+
+        client.close()
+
+    # 1d. Kiểm tra log
+    assert secret_str not in caplog.text
+
+    # 2. Kiểm tra khi chạy run_attempt lưu bản ghi vào SQLite DB
+    conn = sqlite3.connect(db_file)
+    conn.execute(
+        "UPDATE vps SET host = '127.0.0.1', port = 22, username = 'root', auth_type = 'key' WHERE id = 1"
+    )
+    conn.commit()
+
+    monkeypatch.setenv("OPSPILOT_SSH_SECRET", secret_str)
+    monkeypatch.setattr(
+        SystemSshClient, "verify_connection", lambda self, *a, **kw: None
+    )
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    poller_adapter = MockPollerAdapter(clock=clock, sample_count=450, time_scale=0.001)
+    loadgen_adapter = MockLoadgenAdapter()
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=None,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=lambda *a, **kw: None,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=0.001,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+    assert res.status == "completed"
+
+    # Kiểm tra toàn bộ cơ sở dữ liệu SQLite: không có bất kỳ bảng hay cột nào chứa secret_str
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM experiment_run")
+    rows = cur.fetchall()
+    for row in rows:
+        for val in row:
+            if val is not None:
+                assert secret_str not in str(val)
+
+    cur.execute("SELECT * FROM deployment")
+    for row in cur.fetchall():
+        for val in row:
+            if val is not None:
+                assert secret_str not in str(val)
+
+    conn.close()
