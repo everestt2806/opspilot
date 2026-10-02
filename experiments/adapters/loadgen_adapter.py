@@ -178,12 +178,66 @@ class LoadgenHandle:
 
     @property
     def is_running(self) -> bool:
-        """Kiểm tra xem phiên sinh tải còn đang chạy không."""
+        """Kiểm tra xem phiên sinh tải còn đang chạy không (truy vấn trạng thái thực tế)."""
         if self._is_stopped:
             return False
-        if self.mode == "local" and self.proc is not None:
-            return self.proc.poll() is None
+        if self.mode == "local":
+            return self.proc is not None and self.proc.poll() is None
+        if self.mode == "ssh":
+            status = self.get_container_status()
+            return status == "running"
         return not self._is_stopped
+
+    def assert_running(self) -> None:
+        """Xác thực phiên sinh tải đang thực sự chạy trên máy chủ (SSH) hoặc cục bộ (local).
+
+        Phương thức này cho phép runner kiểm tra trạng thái sống thực tế của container qua SSH
+        trong suốt các pha A-D thay vì chỉ dựa vào cờ nội bộ trong handle.
+
+        Raises:
+            LoadgenExecutionError: Nếu container/tiến trình đã dừng, chết, không tìm thấy hoặc mất kết nối SSH.
+        """
+        if self._is_stopped:
+            raise LoadgenExecutionError(
+                f"Phiên sinh tải '{self.container_name or 'local'}' đã bị đánh dấu dừng."
+            )
+
+        if self.mode == "local":
+            if self.proc is None or self.proc.poll() is not None:
+                exit_code = self.proc.poll() if self.proc is not None else None
+                raise LoadgenExecutionError(
+                    f"Tiến trình sinh tải cục bộ không còn chạy (mã={exit_code})."
+                )
+            return
+
+        if self.mode == "ssh":
+            if not self.ssh_client or not self.container_name:
+                raise LoadgenExecutionError(
+                    "Thiếu ssh_client hoặc container_name trong chế độ SSH."
+                )
+            quoted = shlex.quote(self.container_name)
+            try:
+                code, out, err = _exec_ssh(
+                    self.ssh_client,
+                    f"docker inspect -f '{{{{.State.Status}}}}' {quoted}",
+                    timeout=5.0,
+                )
+            except Exception as e:
+                raise LoadgenExecutionError(
+                    f"Lỗi SSH khi kiểm tra trạng thái container '{self.container_name}': {e}"
+                ) from e
+
+            if code != 0:
+                err_clean = err.strip() or out.strip()
+                raise LoadgenExecutionError(
+                    f"Container '{self.container_name}' không tồn tại hoặc không thể inspect trên VPS (mã={code}): {err_clean or 'lỗi không xác định'}"
+                )
+
+            status = out.strip().lower()
+            if status != "running":
+                raise LoadgenExecutionError(
+                    f"Container '{self.container_name}' không còn ở trạng thái running trên VPS (status={status or 'unknown'})."
+                )
 
     def get_container_status(self) -> str | None:
         """Lấy trạng thái hiện tại của container trên VPS (nếu ở chế độ SSH)."""
@@ -247,35 +301,36 @@ class LoadgenHandle:
                     ) from e
 
                 # Bắt buộc xác nhận container đã thực sự dừng hoặc đã không còn
-                status = self.get_container_status()
-                if status is None:
-                    # Kiểm tra inspect trực tiếp để xem có phải container không tồn tại
-                    _inspect_code, inspect_out, inspect_err = _exec_ssh(
+                try:
+                    inspect_code, inspect_out, inspect_err = _exec_ssh(
                         self.ssh_client,
                         f"docker inspect -f '{{{{.State.Status}}}}' {quoted}",
                         timeout=5.0,
                     )
-                    err_msg = (
-                        inspect_err.strip() or inspect_out.strip() or stderr.strip()
-                    ).lower()
-                    if (
-                        "no such container" in err_msg
-                        or "not found" in err_msg
-                        or not err_msg
-                    ):
+                except Exception as e:
+                    raise LoadgenExecutionError(
+                        f"Lỗi SSH khi xác nhận trạng thái container '{self.container_name}' sau khi dừng: {e}"
+                    ) from e
+
+                if inspect_code == 0:
+                    status = inspect_out.strip().lower()
+                    if status in ("exited", "dead"):
                         self._is_stopped = True
                         return
+                    # Nếu trạng thái còn chạy (running) hoặc không hợp lệ, báo lỗi và KHÔNG đặt _is_stopped=True
                     raise LoadgenExecutionError(
-                        f"Không thể xác nhận trạng thái container '{self.container_name}' sau khi dừng (status=unknown, mã={exit_code}): {err_msg}"
+                        f"Container '{self.container_name}' vẫn đang chạy hoặc trạng thái không hợp lệ sau lệnh dừng (mã={exit_code}, status={status or 'unknown'}): {stderr.strip() or stdout.strip()}"
                     )
 
-                if status in ("exited", "dead"):
+                # inspect_code != 0: Chỉ chấp nhận nếu Docker báo lỗi rõ ràng "No such container"
+                err_clean = inspect_err.strip() or inspect_out.strip() or stderr.strip()
+                err_lower = err_clean.lower()
+                if "no such container" in err_lower:
                     self._is_stopped = True
                     return
 
-                # Nếu trạng thái còn chạy (running) hoặc không xác định, báo lỗi và KHÔNG đặt _is_stopped=True
                 raise LoadgenExecutionError(
-                    f"Container '{self.container_name}' vẫn đang chạy hoặc trạng thái không hợp lệ sau lệnh dừng (mã={exit_code}, status={status}): {stderr.strip() or stdout.strip()}"
+                    f"Không thể xác nhận trạng thái container '{self.container_name}' sau khi dừng (mã={inspect_code}): {err_clean or 'lỗi rỗng hoặc mất kết nối'}"
                 )
 
             self._is_stopped = True
@@ -308,31 +363,33 @@ class LoadgenHandle:
                     ) from e
 
                 # Bắt buộc xác nhận container đã thực sự biến mất khỏi hệ thống
-                inspect_code, inspect_out, inspect_err = _exec_ssh(
-                    self.ssh_client,
-                    f"docker inspect -f '{{{{.State.Status}}}}' {quoted}",
-                    timeout=5.0,
-                )
-                err_msg = (
-                    inspect_err.strip() or inspect_out.strip() or stderr.strip()
-                ).lower()
-
-                if inspect_code != 0:
-                    if (
-                        "no such container" in err_msg
-                        or "not found" in err_msg
-                        or not err_msg
-                    ):
-                        self._is_stopped = True
-                        return
-                    raise LoadgenExecutionError(
-                        f"Không thể xác nhận container '{self.container_name}' đã biến mất sau cleanup (mã={exit_code}): {err_msg}"
+                try:
+                    inspect_code, inspect_out, inspect_err = _exec_ssh(
+                        self.ssh_client,
+                        f"docker inspect -f '{{{{.State.Status}}}}' {quoted}",
+                        timeout=5.0,
                     )
+                except Exception as e:
+                    raise LoadgenExecutionError(
+                        f"Lỗi SSH khi xác nhận container '{self.container_name}' đã biến mất sau cleanup: {e}"
+                    ) from e
 
                 # inspect_code == 0 nghĩa là container VẪN CÒN TỒN TẠI!
-                status = inspect_out.strip().lower() or "unknown"
+                if inspect_code == 0:
+                    status = inspect_out.strip().lower() or "unknown"
+                    raise LoadgenExecutionError(
+                        f"Container '{self.container_name}' chưa biến mất sau lệnh dọn dẹp (mã={exit_code}, status={status}): {stderr.strip() or stdout.strip()}"
+                    )
+
+                # inspect_code != 0: Chỉ chấp nhận nếu Docker báo lỗi rõ ràng "No such container"
+                err_clean = inspect_err.strip() or inspect_out.strip() or stderr.strip()
+                err_lower = err_clean.lower()
+                if "no such container" in err_lower:
+                    self._is_stopped = True
+                    return
+
                 raise LoadgenExecutionError(
-                    f"Container '{self.container_name}' chưa biến mất sau lệnh dọn dẹp (mã={exit_code}, status={status}): {stderr.strip() or stdout.strip()}"
+                    f"Không thể xác nhận container '{self.container_name}' đã biến mất sau cleanup (mã={inspect_code}): {err_clean or 'lỗi rỗng hoặc mất kết nối'}"
                 )
             self._is_stopped = True
 

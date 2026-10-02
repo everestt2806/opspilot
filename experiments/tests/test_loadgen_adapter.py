@@ -148,12 +148,11 @@ def test_loadgen_adapter_start_and_stop_ssh_mock() -> None:
     # Stop container
     handle.stop()
     assert handle.is_running is False
-    # 4. Docker stop
-    assert "docker stop -t 2 opspilot-loadgen" in mock_ssh.executed_commands[3]
-    # 5. Post-stop verify exited
+    # 4. Docker stop và 5. Post-stop verify exited (do is_running ở dòng trên đã thực thi 1 lượt inspect)
+    assert "docker stop -t 2 opspilot-loadgen" in mock_ssh.executed_commands[4]
     assert (
         "docker inspect -f '{{.State.Status}}' opspilot-loadgen"
-        in mock_ssh.executed_commands[4]
+        in mock_ssh.executed_commands[5]
     )
 
 
@@ -884,3 +883,155 @@ def test_loadgen_adapter_avoids_blind_rm_and_protects_running_container() -> Non
     assert "đang chạy trên VPS" in str(exc_info.value)
     assert "Tránh xoá mù để không làm gián đoạn phiên khác" in str(exc_info.value)
     assert not any("docker rm -f" in cmd for cmd in running_ssh.executed_commands)
+
+
+def test_loadgen_adapter_docker_stop_inspect_empty_error_raises_execution_error() -> (
+    None
+):
+    """Kiểm thử: sau docker stop, inspect trả lỗi mã khác 0 nhưng stderr rỗng (không có 'No such container') -> ném LoadgenExecutionError và giữ _is_stopped=False."""
+    mock_ssh = MockSshClient(exit_code=0, simulate_docker=True)
+    adapter = LoadgenAdapter()
+
+    handle = adapter.start(
+        app_url="http://127.0.0.1:3000",
+        app_name="demo-app",
+        ssh_client=mock_ssh,
+    )
+    assert handle.is_running is True
+
+    # Cài đặt router: docker stop trả về 0, nhưng inspect sau stop trả về (1, "", "")
+    # (lỗi rỗng, không phải "No such container")
+    def router(cmd: str, timeout: float | None = None) -> tuple[int, str, str]:
+        mock_ssh.executed_commands.append(cmd)
+        if "docker stop" in cmd:
+            return 0, "demo-app\n", ""
+        if "docker inspect" in cmd:
+            # Lỗi rỗng: exit code 1, không có message lỗi rõ ràng
+            return 1, "", ""
+        return 0, "", ""
+
+    mock_ssh.exec_command = router  # type: ignore[assignment]
+
+    with pytest.raises(LoadgenExecutionError) as exc_info:
+        handle.stop()
+
+    err = str(exc_info.value)
+    assert "Không thể xác nhận trạng thái container" in err
+    assert "lỗi rỗng hoặc mất kết nối" in err
+    assert "mã=1" in err
+
+    # Bắt buộc giữ _is_stopped = False
+    assert handle._is_stopped is False
+
+
+def test_loadgen_adapter_docker_cleanup_inspect_empty_error_raises_execution_error() -> (
+    None
+):
+    """Kiểm thử: sau cleanup (docker rm -f), inspect trả lỗi rỗng -> ném LoadgenExecutionError và giữ _is_stopped=False."""
+    mock_ssh = MockSshClient(exit_code=0, simulate_docker=True)
+    adapter = LoadgenAdapter()
+
+    handle = adapter.start(
+        app_url="http://127.0.0.1:3000",
+        app_name="demo-app",
+        ssh_client=mock_ssh,
+    )
+    assert handle.is_running is True
+
+    # Cài đặt router: docker rm -f trả về 0, nhưng inspect sau cleanup trả về (1, "", "")
+    def router(cmd: str, timeout: float | None = None) -> tuple[int, str, str]:
+        mock_ssh.executed_commands.append(cmd)
+        if "docker rm" in cmd:
+            return 0, "", ""
+        if "docker inspect" in cmd:
+            return 1, "", ""
+        return 0, "", ""
+
+    mock_ssh.exec_command = router  # type: ignore[assignment]
+
+    with pytest.raises(LoadgenExecutionError) as exc_info:
+        handle.cleanup()
+
+    err = str(exc_info.value)
+    assert "Không thể xác nhận container" in err
+    assert "đã biến mất sau cleanup" in err
+    assert "lỗi rỗng hoặc mất kết nối" in err
+    assert "mã=1" in err
+
+    # Bắt buộc giữ _is_stopped = False
+    assert handle._is_stopped is False
+
+
+def test_loadgen_adapter_container_dies_after_successful_start_detected_by_runner() -> (
+    None
+):
+    """Kiểm thử: container chết sau khi start thành công được phát hiện qua is_running và assert_running().
+
+    Runner trong suốt các pha A-D gọi assert_running() để phát hiện container bị thoát sớm,
+    không dựa riêng vào cờ _is_stopped trong handle.
+    """
+    mock_ssh = MockSshClient(exit_code=0, simulate_docker=True)
+    adapter = LoadgenAdapter()
+
+    handle = adapter.start(
+        app_url="http://127.0.0.1:3000",
+        app_name="demo-app",
+        ssh_client=mock_ssh,
+    )
+    # Lúc đầu container đang chạy thực tế
+    assert handle.is_running is True
+    handle.assert_running()  # Không ném lỗi
+
+    # Ca 1: Container bị crash/exit trên VPS trong quá trình thí nghiệm (status='exited')
+    mock_ssh.containers[handle.container_name] = "exited"
+
+    # is_running truy vấn thực tế trên VPS và trả về False dù _is_stopped vẫn là False!
+    assert handle._is_stopped is False
+    assert handle.is_running is False
+
+    with pytest.raises(LoadgenExecutionError) as exc_info:
+        handle.assert_running()
+
+    err_exited = str(exc_info.value)
+    assert "không còn ở trạng thái running trên VPS" in err_exited
+    assert "status=exited" in err_exited
+
+    # Ca 2: Container bị xoá hoặc biến mất hoàn toàn trên VPS
+    mock_ssh.containers.pop(handle.container_name, None)
+    assert handle.is_running is False
+
+    with pytest.raises(LoadgenExecutionError) as exc_info_gone:
+        handle.assert_running()
+
+    err_gone = str(exc_info_gone.value)
+    assert "không tồn tại hoặc không thể inspect trên VPS" in err_gone
+    assert "No such container" in err_gone
+
+
+def test_loadgen_adapter_assert_running_ssh_connection_error() -> None:
+    """Kiểm thử: khi mất kết nối SSH khi runner kiểm tra sống, assert_running() ném LoadgenExecutionError."""
+    mock_ssh = MockSshClient(exit_code=0, simulate_docker=True)
+    adapter = LoadgenAdapter()
+
+    handle = adapter.start(
+        app_url="http://127.0.0.1:3000",
+        app_name="demo-app",
+        ssh_client=mock_ssh,
+    )
+    assert handle.is_running is True
+
+    # Giả lập mất kết nối SSH
+    def broken_ssh(cmd: str, timeout: float | None = None) -> tuple[int, str, str]:
+        raise RuntimeError("SSH connection reset by peer")
+
+    mock_ssh.exec_command = broken_ssh  # type: ignore[assignment]
+
+    # is_running an toàn trả về False
+    assert handle.is_running is False
+
+    # assert_running ném LoadgenExecutionError với nguyên nhân SSH
+    with pytest.raises(LoadgenExecutionError) as exc_info:
+        handle.assert_running()
+
+    assert "Lỗi SSH khi kiểm tra trạng thái container" in str(exc_info.value)
+    assert "SSH connection reset by peer" in str(exc_info.value)
