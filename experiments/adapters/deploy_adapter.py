@@ -287,6 +287,11 @@ class DeployAdapter:
             # 2. Chuẩn bị biến môi trường (Truyền SSH secret và env_vars an toàn qua env)
             proc_env = os.environ.copy()
             proc_env["ELECTRON_RUN_AS_NODE"] = "1"
+            # Xoá ba biến kế thừa từ tiến trình cha để không làm lọt cấu hình cũ hoặc secret không mong muốn
+            proc_env.pop("OPSPILOT_APP_ENV_JSON", None)
+            proc_env.pop("OPSPILOT_SSH_SECRET", None)
+            proc_env.pop("OPSPILOT_DEPLOY_SECRET", None)
+
             if ssh_secret:
                 proc_env["OPSPILOT_SSH_SECRET"] = ssh_secret
             if env_vars:
@@ -340,7 +345,6 @@ class DeployAdapter:
         finished_event: dict[str, Any] | None = None
         error_event: dict[str, Any] | None = None
         steps: list[dict[str, Any]] = []
-        stderr_lines: list[str] = []
         raw_stdout_lines: list[str] = []
 
         deadline = time.monotonic() + effective_timeout
@@ -362,7 +366,6 @@ class DeployAdapter:
                 continue
 
             if stream_name == "stderr":
-                stderr_lines.append(_clean(line))
                 continue
 
             raw_line = line.strip()
@@ -484,8 +487,6 @@ class DeployAdapter:
             err_msg = ""
             if error_event and "error" in error_event:
                 err_msg = str(error_event["error"])
-            elif stderr_lines:
-                err_msg = "".join(stderr_lines).strip()
             elif proc.returncode != 0:
                 err_msg = f"CLI thoát với mã lỗi {proc.returncode} trước khi cấp deployment_id"
             else:
@@ -501,8 +502,8 @@ class DeployAdapter:
         # Nhánh 2: Đã có ID nhưng không có event finished hoặc output sai định dạng
         if finished_event is None:
             detail = ""
-            if stderr_lines:
-                detail = "".join(stderr_lines).strip()
+            if error_event and "error" in error_event:
+                detail = str(error_event["error"])
             elif proc.returncode != 0:
                 detail = f"CLI thoát với mã lỗi {proc.returncode} mà không phát event 'finished'"
             else:

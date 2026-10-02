@@ -1011,3 +1011,143 @@ def test_deploy_pre_spawn_error_sanitizes_secret_in_exception(
     assert secret_token not in abort_reason
     assert secret_env not in abort_reason
     assert "***REDACTED***" in abort_reason
+
+
+def test_deploy_inherited_env_vars_cleared(
+    file_db: tuple[sqlite3.Connection, Path],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    conn, db_file = file_db
+    conn.execute(
+        "INSERT INTO deployment (id, app_id, status) VALUES (25, 1, 'running')"
+    )
+    conn.commit()
+
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    # Giả lập môi trường tiến trình cha có sẵn 3 biến kế thừa
+    monkeypatch.setenv("OPSPILOT_APP_ENV_JSON", '{"STALE": "stale_value"}')
+    monkeypatch.setenv("OPSPILOT_SSH_SECRET", "stale_ssh_secret")
+    monkeypatch.setenv("OPSPILOT_DEPLOY_SECRET", "stale_deploy_secret")
+
+    # Script con kiểm tra:
+    # 1. 3 biến kế thừa đã bị xoá khỏi proc_env khi caller không truyền
+    # 2. Phát assigned và finished bình thường
+    mock_script = (
+        "import sys, os, json\n"
+        "assert 'OPSPILOT_APP_ENV_JSON' not in os.environ, 'OPSPILOT_APP_ENV_JSON bi ke thua'\n"
+        "assert 'OPSPILOT_SSH_SECRET' not in os.environ, 'OPSPILOT_SSH_SECRET bi ke thua'\n"
+        "assert 'OPSPILOT_DEPLOY_SECRET' not in os.environ, 'OPSPILOT_DEPLOY_SECRET bi ke thua'\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 25}), flush=True)\n"
+        "print(json.dumps({'event': 'finished', 'deployment_id': 25, 'status': 'running'}), flush=True)\n"
+        "sys.exit(0)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=5.0,
+    )
+
+    # Caller không truyền ssh_secret và env_vars -> kiểm tra proc_env sạch
+    res = adapter.deploy(
+        conn=conn,
+        run_id=run_id,
+        vps_id=1,
+        app_name="demo-app",
+        source_path=tmp_path,
+        db_path=db_file,
+        ssh_secret=None,
+        env_vars=None,
+    )
+
+    assert res.deployment_id == 25
+    assert res.status == "running"
+
+
+def test_deploy_simulated_stderr_secret_not_leaked_in_exception_or_db(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    conn.execute(
+        "INSERT INTO deployment (id, app_id, status) VALUES (26, 1, 'running')"
+    )
+    conn.commit()
+
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    # Script con giả lập lỗi in secret từ DB (Python không biết chuỗi secret này) ra stderr và crash
+    db_secret_simulated = "super_classified_db_cipher_password_xyz"
+    mock_script = (
+        "import sys\n"
+        f"print('FATAL ERROR: Failed connecting with credential {db_secret_simulated}', file=sys.stderr, flush=True)\n"
+        "sys.exit(1)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=5.0,
+    )
+
+    with pytest.raises(DeployPreIdError) as exc_info:
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+            # Caller không biết và không truyền secret này
+            ssh_secret=None,
+            env_vars=None,
+        )
+
+    # 1. Exception ném ra ngoài không chứa secret giả lập trên stderr
+    err_str = str(exc_info.value)
+    assert db_secret_simulated not in err_str
+    assert "CLI thoát với mã lỗi 1 trước khi cấp deployment_id" in err_str
+
+    # 2. SQLite DB abort_reason không chứa secret giả lập trên stderr
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "aborted"
+    abort_reason = run_row["abort_reason"] or ""
+    assert db_secret_simulated not in abort_reason
+    assert "CLI thoát với mã lỗi 1 trước khi cấp deployment_id" in abort_reason
+
+    # 3. Thử nghiệm tương tự cho Nhánh 2 (đã cấp assigned ID nhưng crash không phát finished)
+    run_id2 = start_run(conn, "cpu_spike", 1, deployment_id=None, vps_id=1)
+    mock_script_branch2 = (
+        "import sys, json\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 26}), flush=True)\n"
+        f"print('FATAL UNHANDLED DUMP: secret_token={db_secret_simulated}', file=sys.stderr, flush=True)\n"
+        "sys.exit(2)\n"
+    )
+
+    adapter2 = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script_branch2],
+        default_timeout_s=5.0,
+    )
+
+    with pytest.raises(DeployProtocolError) as exc_info2:
+        adapter2.deploy(
+            conn=conn,
+            run_id=run_id2,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+            ssh_secret=None,
+            env_vars=None,
+        )
+
+    err_str2 = str(exc_info2.value)
+    assert db_secret_simulated not in err_str2
+    assert "CLI thoát với mã lỗi 2 mà không phát event 'finished'" in err_str2
+
+    run_row2 = get_run(conn, run_id2)
+    assert run_row2 is not None
+    assert run_row2["status"] == "aborted"
+    abort_reason2 = run_row2["abort_reason"] or ""
+    assert db_secret_simulated not in abort_reason2
+    assert "CLI thoát với mã lỗi 2 mà không phát event 'finished'" in abort_reason2
