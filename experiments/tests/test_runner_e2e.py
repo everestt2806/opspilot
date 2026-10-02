@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import sqlite3
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -48,8 +49,10 @@ from experiments.protocol import (
     PHASE_C_S,
 )
 from experiments.run_experiment import (
+    measure_clock_offset_ms,
     run_attempt,
     run_experiment,
+    wait_with_checks,
 )
 from experiments.run_store import (
     abort_run,
@@ -294,35 +297,48 @@ class MockPollerHandle:
         self.is_alive = True
         self.is_drained = False
 
-        conn = sqlite3.connect(self.db_path)
-        cur = conn.cursor()
-        offset_s = 0.0
-        if self.experiment_run_id is not None:
-            cur.execute(
-                "SELECT clock_offset_ms FROM experiment_run WHERE id = ?",
-                (self.experiment_run_id,),
-            )
-            row = cur.fetchone()
-            if row and row[0]:
-                offset_s = row[0] / 1000.0
-        self.start_epoch = clock.now() + offset_s
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            offset_s = 0.0
+            if self.experiment_run_id is not None:
+                cur.execute(
+                    "SELECT clock_offset_ms FROM experiment_run WHERE id = ?",
+                    (self.experiment_run_id,),
+                )
+                row = cur.fetchone()
+                if row and row[0]:
+                    offset_s = row[0] / 1000.0
+            self.start_epoch = clock.now() + offset_s
 
-        # Ghi trước các mẫu metric_sample của Pha A vào DB
-        phase_a_count = min(self.sample_count, 180)
-        for i in range(phase_a_count):
-            t_epoch = self.start_epoch + (i * 10.0 * self.time_scale)
-            t_iso = normalize_ts(t_epoch)
-            cur.execute(
-                """
-                INSERT INTO metric_sample (
-                    deployment_id, seq, ts_vps, ts_local, cpu_pct, mem_mb, mem_pct,
-                    latency_ms, http_error_rate, container_up, host_cpu_pct, host_mem_pct
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 10.0, 20.0)
-                """,
-                (self.deployment_id, i + 1, t_iso, t_iso, 25.0, 120.0, 30.0, 15.0, 0.0),
-            )
-        conn.commit()
-        conn.close()
+            # Ghi trước các mẫu metric_sample của Pha A vào DB
+            phase_a_count = min(self.sample_count, 180)
+            for i in range(phase_a_count):
+                t_epoch = self.start_epoch + (i * 10.0 * self.time_scale)
+                t_iso = normalize_ts(t_epoch)
+                cur.execute(
+                    """
+                    INSERT INTO metric_sample (
+                        deployment_id, seq, ts_vps, ts_local, cpu_pct, mem_mb, mem_pct,
+                        latency_ms, http_error_rate, container_up, host_cpu_pct, host_mem_pct
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 10.0, 20.0)
+                    """,
+                    (
+                        self.deployment_id,
+                        i + 1,
+                        t_iso,
+                        t_iso,
+                        25.0,
+                        120.0,
+                        30.0,
+                        15.0,
+                        0.0,
+                    ),
+                )
+            conn.commit()
+            conn.close()
+        except sqlite3.OperationalError:
+            pass
 
     def get_last_error(self) -> str | None:
         return None
@@ -412,14 +428,14 @@ class MockPollerHandle:
             conn.commit()
         finally:
             conn.close()
-        return PollerDrainResult(exit_code=0)
+        return PollerDrainResult(exit_code=0, status="drained")
 
     def stop(self) -> None:
         self.is_alive = False
 
 
 class MockPollerAdapter(PollerAdapter):
-    """PollerAdapter giả lập tạo ra MockPollerHandle."""
+    """PollerAdapter giả lập tạo ra MockPollerHandle theo đúng chữ ký chuẩn của PollerAdapter.start()."""
 
     def __init__(
         self,
@@ -437,15 +453,29 @@ class MockPollerAdapter(PollerAdapter):
 
     def start(
         self,
-        db_path: Path | str,
-        deployment_id: int,
-        experiment_run_id: int | None = None,
-        **kwargs: Any,
+        conn: sqlite3.Connection,
+        db_path: str | Path | None = None,
+        interval_ms: int | None = None,
+        ml_url: str | None = None,
+        mock_metrics_file: str | Path | None = None,
+        ssh_secret: str | None = None,
+        startup_timeout_s: float = 10.0,
+        cli_cmd: Sequence[str] | None = None,
     ) -> MockPollerHandle:
+        # Lấy experiment_run_id và deployment_id từ DB giống như Headless Poller thật
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, deployment_id FROM experiment_run WHERE status = 'running' ORDER BY id DESC LIMIT 1"
+        )
+        row = cur.fetchone()
+        exp_run_id = row[0] if row else None
+        dep_id = row[1] if row and row[1] is not None else 1
+
+        actual_db_path = Path(db_path) if db_path is not None else Path("test.db")
         handle = MockPollerHandle(
-            db_path=Path(db_path),
-            deployment_id=deployment_id,
-            experiment_run_id=experiment_run_id,
+            db_path=actual_db_path,
+            deployment_id=dep_id,
+            experiment_run_id=exp_run_id,
             clock=self.clock,
             sample_count=self.sample_count,
             missing_scores=self.missing_scores,
@@ -458,7 +488,11 @@ class MockPollerAdapter(PollerAdapter):
 class MockLoadgenHandle(LoadgenHandle):
     """LoadgenHandle giả lập."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        fail_stop: bool = False,
+        fail_cleanup: bool = False,
+    ) -> None:
         super().__init__(
             mode="ssh",
             app_url="http://127.0.0.1:3000",
@@ -470,6 +504,8 @@ class MockLoadgenHandle(LoadgenHandle):
         self._mock_running = True
         self.stopped_count = 0
         self.cleanup_count = 0
+        self.fail_stop = fail_stop
+        self.fail_cleanup = fail_cleanup
 
     @property
     def is_running(self) -> bool:
@@ -484,12 +520,17 @@ class MockLoadgenHandle(LoadgenHandle):
             )
 
     def stop(self, timeout_s: float = 5.0) -> None:
+        if self.fail_stop:
+            raise LoadgenExecutionError("Mô phỏng lỗi khi dừng container loadgen")
         self._is_stopped = True
         self._mock_running = False
         self.stopped_count += 1
 
     def cleanup(self) -> None:
+        if self.fail_cleanup:
+            raise LoadgenExecutionError("Mô phỏng lỗi khi dọn dẹp container loadgen")
         self._is_stopped = True
+        self._is_cleaned = True
         self._mock_running = False
         self.cleanup_count += 1
 
@@ -497,14 +538,39 @@ class MockLoadgenHandle(LoadgenHandle):
 class MockLoadgenAdapter(LoadgenAdapter):
     """LoadgenAdapter giả lập."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        fail_stop: bool = False,
+        fail_cleanup: bool = False,
+    ) -> None:
         super().__init__()
         self.handles: list[MockLoadgenHandle] = []
+        self.fail_stop = fail_stop
+        self.fail_cleanup = fail_cleanup
 
     def start(self, *args: Any, **kwargs: Any) -> MockLoadgenHandle:
-        handle = MockLoadgenHandle()
+        handle = MockLoadgenHandle(
+            fail_stop=self.fail_stop,
+            fail_cleanup=self.fail_cleanup,
+        )
         self.handles.append(handle)
         return handle
+
+
+class MockSshClient:
+    """Mock SSH client cho phép đo đồng hồ và thực thi lệnh giả lập."""
+
+    def __init__(self, exit_code: int = 0, stdout: str = "", stderr: str = "") -> None:
+        self.exit_code = exit_code
+        self.stdout = stdout
+        self.stderr = stderr
+        self.executed_commands: list[str] = []
+
+    def exec(self, cmd: str) -> tuple[int, str, str]:
+        self.executed_commands.append(cmd)
+        if "date" in cmd:
+            return 0, str(int(1727800000.0 * 1000)), ""
+        return self.exit_code, self.stdout, self.stderr
 
 
 # =============================================================================
@@ -550,6 +616,7 @@ def test_e2e_attempt_1_abort_then_attempt_2_success_export_and_analyze(
         app_name="express-api",
         source_path=tmp_path / "mock_src",
         app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
         deploy_adapter=deploy_adapter,
         ml_client=ml_client,
         poller_adapter=poller_adapter,
@@ -683,6 +750,7 @@ def test_e2e_clock_skew_too_large_aborts_attempt(tmp_path: Path) -> None:
         app_name="express-api",
         source_path=tmp_path / "src",
         app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
         deploy_adapter=deploy_adapter,
         clock_fn=clock.now,
         sleeper_fn=clock.sleep,
@@ -721,6 +789,7 @@ def test_e2e_insufficient_phase_a_samples_aborts_attempt(tmp_path: Path) -> None
         app_name="express-api",
         source_path=tmp_path / "src",
         app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
         deploy_adapter=deploy_adapter,
         ml_client=ml_client,
         poller_adapter=poller_adapter,
@@ -774,6 +843,7 @@ def test_e2e_integrity_gate_failure_aborts_attempt(tmp_path: Path) -> None:
         app_name="express-api",
         source_path=tmp_path / "src",
         app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
         deploy_adapter=deploy_adapter,
         ml_client=ml_client,
         poller_adapter=poller_adapter,
@@ -822,6 +892,7 @@ def test_e2e_loadgen_death_during_wait_aborts_attempt(tmp_path: Path) -> None:
         app_name="express-api",
         source_path=tmp_path / "src",
         app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
         deploy_adapter=deploy_adapter,
         ml_client=ml_client,
         poller_adapter=poller_adapter,
@@ -837,3 +908,350 @@ def test_e2e_loadgen_death_during_wait_aborts_attempt(tmp_path: Path) -> None:
 
     assert res.status == "aborted"
     assert "không còn chạy trên VPS" in (res.abort_reason or "")
+
+
+# =============================================================================
+# CÁC TEST CASES MỚI BỔ SUNG CHO P2d-4 FIX
+# =============================================================================
+
+
+def test_poller_adapter_signature_strict() -> None:
+    """Kiểm thử: Chữ ký của PollerAdapter.start() phải chuẩn, không chứa deployment_id hay experiment_run_id."""
+    import inspect
+
+    sig = inspect.signature(PollerAdapter.start)
+    param_names = list(sig.parameters.keys())
+    assert "self" in param_names
+    assert "conn" in param_names
+    assert "deployment_id" not in param_names
+    assert "experiment_run_id" not in param_names
+
+    class StrictPollerAdapter(PollerAdapter):
+        def start(self, conn: sqlite3.Connection, **kwargs: Any) -> Any:
+            if "deployment_id" in kwargs:
+                raise TypeError("unexpected keyword argument 'deployment_id'")
+            if "experiment_run_id" in kwargs:
+                raise TypeError("unexpected keyword argument 'experiment_run_id'")
+            mock_handle = MockPollerHandle(
+                db_path=Path("test.db"),
+                deployment_id=1,
+                experiment_run_id=1,
+                clock=SimulatedClock(),
+            )
+            return mock_handle
+
+    strict_adapter = StrictPollerAdapter()
+    test_conn = sqlite3.connect(":memory:")
+    handle = strict_adapter.start(
+        conn=test_conn, db_path="test.db", ml_url="http://127.0.0.1:8000"
+    )
+    assert handle is not None
+    test_conn.close()
+
+
+def test_e2e_missing_ssh_client_aborts_attempt(tmp_path: Path) -> None:
+    """Kiểm thử: Thiếu SSH client -> abort trước clock gate có lý do, không trả offset 0 và không chạy loadgen local."""
+    db_file = tmp_path / "opspilot.db"
+    _init_test_db(db_file)
+
+    deploy_adapter = MockDeployAdapter()
+    loadgen_adapter = MockLoadgenAdapter()
+
+    # 1. measure_clock_offset_ms trực tiếp phải ném lỗi khi thiếu SSH
+    with pytest.raises(ValueError, match="Yêu cầu ssh_client hợp lệ"):
+        measure_clock_offset_ms(ssh_client=None)
+
+    # 2. run_attempt phải abort ngay trước clock gate
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=None,
+        deploy_adapter=deploy_adapter,
+        loadgen_adapter=loadgen_adapter,
+        raise_on_abort=False,
+    )
+
+    assert res.status == "aborted"
+    assert "missing_ssh_client" in (res.abort_reason or "")
+    assert deploy_adapter.call_count == 0
+    assert len(loadgen_adapter.handles) == 0
+
+
+def test_e2e_reset_fault_step4_failure_aborts_attempt(tmp_path: Path) -> None:
+    """Kiểm thử: Lỗi reset_fault tại Bước 4 -> abort attempt và không ghi completed."""
+    db_file = tmp_path / "opspilot.db"
+    _init_test_db(db_file)
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    ssh_client = MockSshClient()
+    poller_adapter = MockPollerAdapter(clock=clock)
+    loadgen_adapter = MockLoadgenAdapter()
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=ssh_client,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        reset_fault_fn=lambda url: False,  # Báo lỗi reset fault
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        measure_clock_fn=lambda *a, **kw: 0,
+        raise_on_abort=False,
+    )
+
+    assert res.status == "aborted"
+    assert "reset_fault_failed" in (res.abort_reason or "")
+    assert res.status != "completed"
+
+
+def test_e2e_apply_fault_failure_aborts_attempt(tmp_path: Path) -> None:
+    """Kiểm thử: Lỗi áp dụng fault tại Pha C -> abort attempt và không ghi completed."""
+    db_file = tmp_path / "opspilot.db"
+    _init_test_db(db_file)
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    ssh_client = MockSshClient()
+    time_scale = 0.001
+    poller_adapter = MockPollerAdapter(
+        clock=clock, sample_count=450, time_scale=time_scale
+    )
+    loadgen_adapter = MockLoadgenAdapter()
+
+    def failing_apply_fault(url: str, plan: Any, **kw: Any) -> None:
+        raise RuntimeError("Lỗi mạng khi gọi endpoint fault")
+
+    res = run_attempt(
+        scenario="cpu_spike",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=ssh_client,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=failing_apply_fault,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=time_scale,
+        measure_clock_fn=lambda *a, **kw: 0,
+        raise_on_abort=False,
+    )
+
+    assert res.status == "aborted"
+    assert "apply_fault_failed" in (res.abort_reason or "")
+    assert res.status != "completed"
+
+
+def test_e2e_reset_fault_step8_failure_aborts_attempt(tmp_path: Path) -> None:
+    """Kiểm thử: Lỗi reset fault tại đầu Pha D (Bước 8) -> abort attempt và không ghi completed."""
+    db_file = tmp_path / "opspilot.db"
+    _init_test_db(db_file)
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    ssh_client = MockSshClient()
+    time_scale = 0.001
+    poller_adapter = MockPollerAdapter(
+        clock=clock, sample_count=450, time_scale=time_scale
+    )
+    loadgen_adapter = MockLoadgenAdapter()
+
+    reset_calls = 0
+
+    def mock_reset_fault(url: str) -> bool:
+        nonlocal reset_calls
+        reset_calls += 1
+        # Lần 1 (Step 4) thành công, Lần 2 (Step 8) thất bại
+        return reset_calls == 1
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=ssh_client,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=lambda *a, **kw: None,
+        reset_fault_fn=mock_reset_fault,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=time_scale,
+        measure_clock_fn=lambda *a, **kw: 0,
+        raise_on_abort=False,
+    )
+
+    assert res.status == "aborted"
+    assert "reset_fault_failed" in (res.abort_reason or "")
+    assert res.status != "completed"
+
+
+def test_e2e_loadgen_stop_failure_aborts_attempt(tmp_path: Path) -> None:
+    """Kiểm thử: Lỗi khi loadgen stop -> abort attempt và không ghi completed."""
+    db_file = tmp_path / "opspilot.db"
+    _init_test_db(db_file)
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    ssh_client = MockSshClient()
+    time_scale = 0.001
+    poller_adapter = MockPollerAdapter(
+        clock=clock, sample_count=450, time_scale=time_scale
+    )
+    loadgen_adapter = MockLoadgenAdapter(fail_stop=True)
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=ssh_client,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=lambda *a, **kw: None,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=time_scale,
+        measure_clock_fn=lambda *a, **kw: 0,
+        raise_on_abort=False,
+    )
+
+    assert res.status == "aborted"
+    assert "loadgen_stop_failed" in (res.abort_reason or "")
+    assert res.status != "completed"
+
+
+def test_e2e_loadgen_cleanup_failure_aborts_attempt(tmp_path: Path) -> None:
+    """Kiểm thử: Lỗi khi loadgen cleanup -> abort attempt và không ghi completed."""
+    db_file = tmp_path / "opspilot.db"
+    _init_test_db(db_file)
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    ssh_client = MockSshClient()
+    time_scale = 0.001
+    poller_adapter = MockPollerAdapter(
+        clock=clock, sample_count=450, time_scale=time_scale
+    )
+    loadgen_adapter = MockLoadgenAdapter(fail_cleanup=True)
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=ssh_client,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=lambda *a, **kw: None,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=time_scale,
+        measure_clock_fn=lambda *a, **kw: 0,
+        raise_on_abort=False,
+    )
+
+    assert res.status == "aborted"
+    assert "loadgen_cleanup_failed" in (res.abort_reason or "")
+    assert res.status != "completed"
+
+
+def test_e2e_poller_death_during_wait_aborts_attempt(tmp_path: Path) -> None:
+    """Kiểm thử: Headless poller chết giữa chừng -> wait_with_checks phát hiện và huỷ attempt mà không ném AttributeError."""
+    db_file = tmp_path / "opspilot.db"
+    _init_test_db(db_file)
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    ssh_client = MockSshClient()
+    time_scale = 0.001
+    check_interval = 0.1
+    poller_adapter = MockPollerAdapter(
+        clock=clock, sample_count=450, time_scale=time_scale
+    )
+    loadgen_adapter = MockLoadgenAdapter()
+
+    # Can thiệp để poller chết ngay trong Phase A
+    def simulate_crash_clock_sleep(sec: float) -> None:
+        clock.current_time += sec
+        if poller_adapter.handles:
+            poller_adapter.handles[-1].is_alive = False
+
+    res = run_attempt(
+        scenario="latency_creep",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=ssh_client,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=simulate_crash_clock_sleep,
+        time_scale=time_scale,
+        check_interval_s=check_interval,
+        measure_clock_fn=lambda *args, **kwargs: 0,
+        raise_on_abort=False,
+    )
+
+    assert res.status == "aborted"
+    assert "Headless Poller bị dừng bất thường" in (res.abort_reason or "")
+
+
+def test_e2e_wait_with_checks_stalled_clock_raises_error() -> None:
+    """Kiểm thử: wait_with_checks() phải ném lỗi nếu đồng hồ không tiến sau sleeper_fn."""
+    with pytest.raises(RuntimeError, match="Đồng hồ không tiến"):
+        wait_with_checks(
+            duration_s=10.0,
+            check_interval_s=1.0,
+            sleeper_fn=lambda s: None,  # không làm gì, đồng hồ không chạy
+            clock_fn=lambda: 1000.0,  # luôn trả về 1000.0 cố định
+        )

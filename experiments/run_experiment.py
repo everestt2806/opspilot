@@ -125,7 +125,7 @@ def measure_clock_offset_ms(
 ) -> int:
     """Đo độ lệch đồng hồ giữa VPS và máy local (vps_ms - local_ms)."""
     if ssh_client is None:
-        return 0
+        raise ValueError("Yêu cầu ssh_client hợp lệ để đo độ lệch đồng hồ VPS")
 
     local_start = clock_fn() * 1000.0
     code, stdout, stderr = _exec_ssh(ssh_client, "date +%s%3N", timeout=5.0)
@@ -300,16 +300,24 @@ def wait_with_checks(
         if loadgen_handle is not None:
             loadgen_handle.assert_running()
         if poller_handle is not None and not poller_handle.is_alive:
-            last_err = poller_handle.get_last_error()
+            err_msg: str | None = None
+            if hasattr(poller_handle, "get_last_error"):
+                err_msg = poller_handle.get_last_error()
+            elif hasattr(poller_handle, "proc") and poller_handle.proc is not None:
+                ret = poller_handle.proc.poll()
+                err_msg = f"tiến trình đã thoát (exit_code={ret})"
             raise RuntimeError(
-                f"Headless Poller bị dừng bất thường trong quá trình chờ: {last_err or 'tiến trình đã thoát'}"
+                f"Headless Poller bị dừng bất thường trong quá trình chờ: {err_msg or 'tiến trình đã thoát'}"
             )
 
         step = min(remaining, check_interval_s)
         prev = now
         sleeper_fn(step)
-        if clock_fn() <= prev:
-            break
+        now_after = clock_fn()
+        if now_after <= prev:
+            raise RuntimeError(
+                f"Đồng hồ không tiến sau khi chờ {step}s (prev={prev}, now={now_after})"
+            )
 
 
 def run_attempt(
@@ -413,6 +421,12 @@ def run_attempt(
             repeat_index,
         )
 
+        # Runner/CLI phải có SSH client hợp lệ trước clock gate; thiếu SSH thì abort có lý do, không trả offset 0 và không chạy loadgen local
+        if ssh_client is None:
+            reason = "missing_ssh_client: Yêu cầu SSH client hợp lệ để kết nối VPS"
+            abort_run(conn, run_id, reason=reason, auto_commit=True)
+            raise ExperimentError(reason)
+
         # =========================================================================
         # BƯỚC 2: Đo độ lệch đồng hồ (Clock Skew Gate)
         # =========================================================================
@@ -460,13 +474,25 @@ def run_attempt(
         # =========================================================================
         m_client = ml_client or MlClient(base_url=ml_url)
         m_client.reset_models(deployment_id=deployment_id)
-        _reset_fault(app_url)
+
+        try:
+            reset_ok = _reset_fault(app_url)
+        except Exception as e:  # noqa: BLE001
+            reset_ok = False
+            reset_err = str(e)
+        else:
+            reset_err = "status != 200"
+
+        if not reset_ok:
+            reason = f"reset_fault_failed: {reset_err}"
+            abort_run(conn, run_id, reason=reason, auto_commit=True)
+            raise ExperimentError(f"Không thể reset fault trước khi chạy: {reset_err}")
 
         p_adapter = poller_adapter or PollerAdapter()
         poller_handle = p_adapter.start(
+            conn=conn,
             db_path=db_file,
-            deployment_id=deployment_id,
-            experiment_run_id=run_id,
+            ml_url=ml_url,
             cli_cmd=custom_poller_cmd,
         )
 
@@ -556,7 +582,12 @@ def run_attempt(
         )
 
         fault_plan = plan_fault(scenario, duration_s=PHASE_C_S)
-        _apply_fault(app_url, fault_plan, sleep_fn=sleeper_fn, now_fn=clock_fn)
+        try:
+            _apply_fault(app_url, fault_plan, sleep_fn=sleeper_fn, now_fn=clock_fn)
+        except Exception as e:
+            reason = f"apply_fault_failed: {e}"
+            abort_run(conn, run_id, reason=reason, auto_commit=True)
+            raise ExperimentError(f"Áp dụng fault thất bại: {e}") from e
 
         # Tính thời gian còn lại của Pha C
         elapsed_c = (clock_fn() + (offset_ms / 1000.0)) - fault_start_epoch
@@ -578,7 +609,19 @@ def run_attempt(
         # =========================================================================
         # BƯỚC 8: Pha D (Phục hồi 10 phút, reset fault) -> Dừng Load Generator
         # =========================================================================
-        _reset_fault(app_url)
+        try:
+            reset_ok = _reset_fault(app_url)
+        except Exception as e:  # noqa: BLE001
+            reset_ok = False
+            reset_err = str(e)
+        else:
+            reset_err = "status != 200"
+
+        if not reset_ok:
+            reason = f"reset_fault_failed: {reset_err}"
+            abort_run(conn, run_id, reason=reason, auto_commit=True)
+            raise ExperimentError(f"Không thể reset fault ở đầu Pha D: {reset_err}")
+
         phase_d_dur = PHASE_D_S * time_scale
         wait_with_checks(
             phase_d_dur,
@@ -590,12 +633,34 @@ def run_attempt(
         )
 
         # Dừng Load Generator ở cuối Pha D
-        loadgen_handle.stop()
+        try:
+            loadgen_handle.stop()
+        except Exception as e:
+            reason = f"loadgen_stop_failed: {e}"
+            abort_run(conn, run_id, reason=reason, auto_commit=True)
+            raise ExperimentError(f"Dừng load generator thất bại: {e}") from e
 
         # =========================================================================
         # BƯỚC 9: Draining dữ liệu & Cổng kiểm tra toàn vẹn (Integrity Gate)
         # =========================================================================
-        poller_handle.drain(timeout_s=30.0)
+        try:
+            drain_res = poller_handle.drain(timeout_s=30.0)
+            if drain_res.status != "drained" or drain_res.exit_code != 0:
+                raise RuntimeError(
+                    f"drain thất bại với status={drain_res.status}, exit_code={drain_res.exit_code}"
+                )
+        except Exception as e:
+            reason = f"poller_drain_failed: {e}"
+            abort_run(conn, run_id, reason=reason, auto_commit=True)
+            raise ExperimentError(f"Drain poller thất bại: {e}") from e
+
+        # Dọn dẹp container loadgen và kiểm tra cleanup thành công trước khi hoàn thành run
+        try:
+            loadgen_handle.cleanup()
+        except Exception as e:
+            reason = f"loadgen_cleanup_failed: {e}"
+            abort_run(conn, run_id, reason=reason, auto_commit=True)
+            raise ExperimentError(f"Dọn dẹp container loadgen thất bại: {e}") from e
 
         run_end_epoch = clock_fn() + (offset_ms / 1000.0)
         run_end_ts = normalize_ts(run_end_epoch)
@@ -724,13 +789,13 @@ def run_attempt(
         if loadgen_handle is not None:
             try:
                 loadgen_handle.cleanup()
-            except (OSError, RuntimeError) as e:
+            except Exception as e:  # noqa: BLE001
                 logger.debug("Bỏ qua lỗi khi loadgen cleanup trong finally: %s", e)
 
         if poller_handle is not None and poller_handle.is_alive:
             try:
                 poller_handle.stop()
-            except (OSError, RuntimeError) as e:
+            except Exception as e:  # noqa: BLE001
                 logger.debug("Bỏ qua lỗi khi poller stop trong finally: %s", e)
 
         try:

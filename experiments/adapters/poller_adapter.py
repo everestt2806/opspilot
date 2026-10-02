@@ -159,6 +159,14 @@ class PollerHandle:
     def is_alive(self) -> bool:
         return self.proc.poll() is None
 
+    def get_last_error(self) -> str | None:
+        """Lấy thông tin lỗi gần nhất từ stderr hoặc exit code."""
+        if self._recent_stderr:
+            return self._clean("\n".join(self._recent_stderr))
+        if self.proc.poll() is not None and self.proc.returncode != 0:
+            return f"Tiến trình poller thoát với mã lỗi {self.proc.returncode}"
+        return None
+
     def _clean(self, text: str) -> str:
         return sanitize_text(text, self._secrets_to_redact)
 

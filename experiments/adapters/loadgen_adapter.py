@@ -175,6 +175,7 @@ class LoadgenHandle:
         self.ssh_client = ssh_client
         self.stop_file = stop_file
         self._is_stopped = False
+        self._is_cleaned = False
 
     @property
     def is_running(self) -> bool:
@@ -337,6 +338,9 @@ class LoadgenHandle:
 
     def cleanup(self) -> None:
         """Dọn dẹp triệt để tiến trình hoặc container sinh tải."""
+        if self._is_cleaned:
+            return
+
         if self.mode == "local":
             if self.proc and self.proc.poll() is None:
                 _kill_process_tree(self.proc)
@@ -350,6 +354,7 @@ class LoadgenHandle:
                     f"Không thể dừng tiến trình loadgen cục bộ khi cleanup (PID {self.proc.pid})"
                 )
             self._is_stopped = True
+            self._is_cleaned = True
         elif self.mode == "ssh":
             if self.ssh_client and self.container_name:
                 quoted = shlex.quote(self.container_name)
@@ -386,12 +391,14 @@ class LoadgenHandle:
                 err_lower = err_clean.lower()
                 if "no such container" in err_lower:
                     self._is_stopped = True
+                    self._is_cleaned = True
                     return
 
                 raise LoadgenExecutionError(
                     f"Không thể xác nhận container '{self.container_name}' đã biến mất sau cleanup (mã={inspect_code}): {err_clean or 'lỗi rỗng hoặc mất kết nối'}"
                 )
             self._is_stopped = True
+            self._is_cleaned = True
 
     def __enter__(self) -> Self:
         return self

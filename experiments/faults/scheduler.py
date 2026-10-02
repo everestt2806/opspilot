@@ -143,16 +143,27 @@ def apply_plan(
             sleep_fn(min(1.0, target - now_fn()))
         try:
             if requests is not None:
-                requests.get(f"{app_base_url.rstrip('/')}{action.path}", timeout=5)
+                resp = requests.get(
+                    f"{app_base_url.rstrip('/')}{action.path}", timeout=5
+                )
+                if resp.status_code != 200:
+                    raise RuntimeError(
+                        f"fault action {action.path} trả mã {resp.status_code}"
+                    )
             else:
                 import urllib.request
 
                 with urllib.request.urlopen(
                     f"{app_base_url.rstrip('/')}{action.path}", timeout=5
-                ):
-                    pass
-        except Exception as exc:  # noqa: BLE001
-            print(f"fault action lỗi ({action.path}): {exc}", flush=True)
+                ) as resp:
+                    if resp.status != 200:
+                        raise RuntimeError(
+                            f"fault action {action.path} trả mã {resp.status}"
+                        )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Lỗi khi thực hiện fault action ({action.path}): {exc}"
+            ) from exc
 
 
 def reset_fault(app_base_url: str) -> bool:  # pragma: no cover
