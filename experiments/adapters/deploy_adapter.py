@@ -120,21 +120,43 @@ def resolve_db_path(
     conn: sqlite3.Connection,
     explicit_path: str | Path | None = None,
 ) -> Path:
-    """Xác định đường dẫn file SQLite DB từ tham số tường minh hoặc connection."""
-    if explicit_path is not None:
-        return Path(explicit_path).resolve()
+    """Xác định đường dẫn file SQLite DB từ connection và xác thực tính đồng nhất.
 
+    Ràng buộc (TK-S6 P2d-1b):
+      - Database SQLite bắt buộc phải là file thật trên đĩa để CLI TypeScript có thể chia sẻ
+        cùng cơ sở dữ liệu với Python experiment runner.
+      - Connection chạy trong RAM (:memory: hoặc file rỗng) phải bị từ chối dứt khoát.
+      - Nếu caller truyền explicit_path (db_path), đường dẫn chuẩn hoá bắt buộc phải trùng khớp
+        với file database chính ('main') của SQLite connection; bất kỳ sự sai khác nào
+        phải bị từ chối và abort attempt trước khi spawn.
+    """
     rows = conn.execute("PRAGMA database_list").fetchall()
+    main_file: str | None = None
     for row in rows:
         name = row[1] if not hasattr(row, "keys") else row["name"]
         file_path = row[2] if not hasattr(row, "keys") else row["file"]
-        if name == "main" and file_path:
-            return Path(file_path).resolve()
+        if name == "main":
+            main_file = file_path
+            break
 
-    raise ValueError(
-        "Không thể tự động xác định file SQLite DB từ connection (có thể do dùng in-memory ':memory:'). "
-        "Hãy truyền db_path tường minh cho DeployAdapter."
-    )
+    if not main_file or not str(main_file).strip():
+        raise ValueError(
+            "Connection SQLite là database trong RAM (:memory:), không có file trên đĩa để CLI chia sẻ cùng cơ sở dữ liệu."
+        )
+
+    resolved_main = Path(main_file).resolve()
+
+    if explicit_path is not None:
+        resolved_explicit = Path(explicit_path).resolve()
+        if os.path.normcase(str(resolved_explicit)) != os.path.normcase(
+            str(resolved_main)
+        ):
+            raise ValueError(
+                f"db_path được truyền ('{resolved_explicit}') không khớp với file database chính của SQLite connection ('{resolved_main}')."
+            )
+        return resolved_explicit
+
+    return resolved_main
 
 
 def get_default_cli_cmd() -> list[str]:
@@ -282,10 +304,16 @@ class DeployAdapter:
                 popen_kwargs["start_new_session"] = True
 
             proc = subprocess.Popen(cmd, **popen_kwargs)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - Bọc mọi ngoại lệ trước spawn để abort attempt và khử secret
             clean_err = _clean(str(e))
             self._safe_abort(conn, run_id, f"deploy_pre_id_error: {clean_err}")
-            raise
+            # Lỗi trước spawn phải ném ngoại lệ đã khử secret
+            try:
+                raise type(e)(clean_err).with_traceback(e.__traceback__) from None
+            except TypeError:
+                raise DeployPreIdError(
+                    f"deploy_pre_id_error: {clean_err}"
+                ).with_traceback(e.__traceback__) from None
 
         output_queue: queue.Queue[tuple[str, str]] = queue.Queue()
 
@@ -610,10 +638,10 @@ class DeployAdapter:
                 pass
 
     def _safe_abort(self, conn: sqlite3.Connection, run_id: int, reason: str) -> None:
-        """Gọi abort_run an toàn, nuốt ngoại lệ nếu run đã bị huỷ trước đó."""
+        """Gọi abort_run an toàn, nuốt ngoại lệ nếu run đã bị huỷ trước đó hoặc DB lỗi."""
         try:
             abort_run(conn, run_id, reason=reason, auto_commit=True)
-        except RunStoreError:
+        except (RunStoreError, sqlite3.Error):
             pass
 
     def _abort_and_kill(

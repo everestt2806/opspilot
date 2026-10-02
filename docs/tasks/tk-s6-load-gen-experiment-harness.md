@@ -229,15 +229,17 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
     - Bảo mật tuyệt đối & quản lý tiến trình:
       - Tạo process group riêng (`start_new_session=True` trên POSIX) trước khi dùng `killpg` để tránh gửi nhầm tín hiệu sang tiến trình cha.
       - Đường mặc định bắt buộc cả binary Electron và CLI đã biên dịch, không fallback sang wrapper `spawnSync` (`run-as-node.js`) hoặc Node thường để Python quản lý trực tiếp tiến trình Electron con.
-      - Khử SSH secret và toàn bộ giá trị `env_vars` đệ quy ngay tại mức event CLI (`sanitize_obj()`), `stderr`, `stdout` và trước khi trả về `DeployResult.steps`.
-      - Bọc toàn bộ khâu kiểm tra đầu vào (`vps_id`, `app_name`, `source_path`), tìm CLI và `subprocess.Popen` để tự động gọi `abort_run()` đối với run đang `running` kèm lý do đã khử secret trước khi re-raise.
+      - Khử SSH secret và toàn bộ giá trị `env_vars` đệ quy ngay trong `app/scripts/deploy-cli.ts` (`serializeCliEvent()`, `sanitizeObject()`, `sanitizeText()`) trước mọi event stdout, kể cả `error.message` và `error.technical`, cũng như tại adapter Python (`sanitize_obj()`), `stderr`, `stdout` và `DeployResult.steps`.
+      - Xác nhận `db_path`: chuẩn hoá và đối chiếu bắt buộc phải trùng file `main` của SQLite connection; nếu DB trong RAM (`:memory:`) hoặc đường dẫn khác thì từ chối ngay lập tức và gọi `abort_run()` trước khi spawn tiến trình con.
+      - Bọc toàn bộ khâu kiểm tra đầu vào (`vps_id`, `app_name`, `source_path`, `resolve_db_path`), tìm CLI và `subprocess.Popen` để tự động gọi `abort_run()` đối với run đang `running` và ném ngoại lệ đã được khử sạch secret trước khi re-raise.
   - Kiểm thử & Chất lượng:
-    - 20 unit tests kiểm thử mock ngoại tuyến toàn diện trong `experiments/tests/test_deploy_adapter.py` (bao gồm ca thành công, deploy lỗi giữ bản ghi failed & retry attempt 2, lỗi trước ID, timeout sau ID, timeout trước ID, output sai định dạng, gán assigned lặp, lệch deployment_id ở finished, exit code khác 0, SQLite status không phải running, env_vars ngoài command line, khử sạch secret khỏi abort_reason/exception, bắt buộc Electron binary & compiled CLI không fallback, input validation failure tự abort run, spawn failure tự abort run, khử secret tại event/steps/url, và cấu hình process group POSIX).
-    - Toàn bộ suite đạt **200 passed** pytest (nâng từ 194), Ruff format & lint clean; `pnpm typecheck` (497 Vitest pass, 0 type error) và `tsc -p tsconfig.scripts.json` trong `app/` đạt PASS; `git diff --check` sạch; giữ pilot thực tế **`NOT_RUN`**.
+    - 23 unit tests kiểm thử mock ngoại tuyến trong `experiments/tests/test_deploy_adapter.py` (bao gồm ca thành công, deploy lỗi giữ bản ghi failed & retry attempt 2, lỗi trước ID, timeout sau ID, timeout trước ID, output sai định dạng, gán assigned lặp, lệch deployment_id ở finished, exit code khác 0, SQLite status không phải running, env_vars ngoài command line, khử sạch secret khỏi abort_reason/exception, bắt buộc Electron binary & compiled CLI không fallback, input validation failure tự abort run, spawn failure tự abort run, khử secret tại event/steps/url, cấu hình process group POSIX, kiểm tra đối chiếu db_path mismatch, từ chối RAM DB, và khử secret trong ngoại lệ trước spawn).
+    - 6 unit tests TypeScript trong `app/src/main/deploy/eventSerializer.test.ts` kiểm thử khử secret đệ quy cho event serializer (`serializeCliEvent`, `sanitizeObject`, `sanitizeText`).
+    - Toàn bộ suite đạt **203 passed** pytest (nâng từ 200), Ruff format & lint clean; toàn bộ test suite frontend đạt **503 passed** Vitest (nâng từ 497), `pnpm typecheck` (tsc node + tsc web) và `tsc -p tsconfig.scripts.json` trong `app/` đạt PASS; `git diff --check` sạch; giữ pilot thực tế **`NOT_RUN`**.
 
 ## Lệnh tái hiện
 
-Test thuần (200 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed, P2b-3 là 145 passed, P2d-1a là 180 passed, P2d-1b bản đầu là 188 passed, P2d-1b lần 2 là 194 passed, P2d-1b hoàn thiện là 200 passed):
+Test thuần (203 passed pytest, 503 passed vitest, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed, P2b-3 là 145 passed, P2d-1a là 180 passed, P2d-1b bản đầu là 188 passed, P2d-1b lần 2 là 194 passed, P2d-1b lần 3 là 200 passed, P2d-1b hoàn thiện là 203 passed):
 
 ```
 ml-service/.venv/Scripts/python.exe -m pytest \

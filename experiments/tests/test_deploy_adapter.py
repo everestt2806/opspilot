@@ -375,15 +375,32 @@ def test_deploy_credential_security_not_leaked(
     assert res.status == "running"
 
 
-def test_resolve_db_path_auto_and_memory() -> None:
-    # 1. Connection in-memory không tự resolve được file path
+def test_resolve_db_path_ram_and_mismatch(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+
+    # 1. Connection in-memory không có file -> từ chối cả khi không truyền lẫn khi truyền explicit_path
     mem_conn = sqlite3.connect(":memory:")
-    with pytest.raises(ValueError, match="Không thể tự động xác định file SQLite DB"):
+    with pytest.raises(ValueError, match="database trong RAM"):
         resolve_db_path(mem_conn)
 
-    # 2. Truyền db_path tường minh -> thành công
-    p = resolve_db_path(mem_conn, "custom/path.db")
-    assert p.name == "path.db"
+    with pytest.raises(ValueError, match="database trong RAM"):
+        resolve_db_path(mem_conn, "custom/path.db")
+
+    # 2. Connection file thật:
+    # 2a. Tự động resolve từ connection -> khớp đúng db_file
+    p_auto = resolve_db_path(conn)
+    assert p_auto == db_file.resolve()
+
+    # 2b. Truyền db_path trùng khớp -> thành công
+    p_explicit = resolve_db_path(conn, db_file)
+    assert p_explicit == db_file.resolve()
+
+    # 2c. Truyền db_path khác -> ném ValueError từ chối
+    other_db = tmp_path / "other.db"
+    with pytest.raises(ValueError, match="không khớp với file database chính"):
+        resolve_db_path(conn, other_db)
 
 
 def test_deploy_assigned_more_than_once_rejected(
@@ -899,3 +916,98 @@ def test_deploy_posix_start_new_session(
         )
         assert res2.deployment_id == 19
         assert "start_new_session" not in mock_popen.call_args[1]
+
+
+def test_deploy_db_mismatch_aborts_run_before_spawn(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, _ = file_db
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    adapter = DeployAdapter()
+    mismatch_db = tmp_path / "mismatch.db"
+
+    with pytest.raises(ValueError, match="không khớp với file database chính"):
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=mismatch_db,
+        )
+
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "aborted"
+    assert "deploy_pre_id_error" in (run_row["abort_reason"] or "")
+    assert "không khớp" in (run_row["abort_reason"] or "")
+
+
+def test_deploy_ram_db_aborts_run_before_spawn(tmp_path: Path) -> None:
+    mem_conn = sqlite3.connect(":memory:")
+    mem_conn.row_factory = sqlite3.Row
+    mem_conn.executescript(_SCHEMA)
+    mem_conn.execute("INSERT INTO vps (id) VALUES (1)")
+    mem_conn.execute("INSERT INTO app (id, vps_id) VALUES (1, 1)")
+    mem_conn.commit()
+
+    run_id = start_run(mem_conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    adapter = DeployAdapter()
+
+    with pytest.raises(ValueError, match="database trong RAM"):
+        adapter.deploy(
+            conn=mem_conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+        )
+
+    run_row = get_run(mem_conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "aborted"
+    assert "deploy_pre_id_error" in (run_row["abort_reason"] or "")
+    assert "database trong RAM" in (run_row["abort_reason"] or "")
+
+
+def test_deploy_pre_spawn_error_sanitizes_secret_in_exception(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, _ = file_db
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    adapter = DeployAdapter()
+    secret_token = "secret_ssh_token_ultra_999"
+    secret_env = "env_pass_secret_888"
+
+    # Đường dẫn db_path chứa secret_token
+    bad_db_path = tmp_path / f"mismatch_{secret_token}.db"
+
+    with pytest.raises(ValueError) as exc_info:
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=bad_db_path,
+            ssh_secret=secret_token,
+            env_vars={"API_KEY": secret_env},
+        )
+
+    # Ngoại lệ ném ra ngoài caller bắt buộc đã được khử secret
+    err_msg = str(exc_info.value)
+    assert secret_token not in err_msg
+    assert secret_env not in err_msg
+    assert "***REDACTED***" in err_msg
+
+    # DB abort_reason cũng được khử secret
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "aborted"
+    abort_reason = run_row["abort_reason"] or ""
+    assert secret_token not in abort_reason
+    assert secret_env not in abort_reason
+    assert "***REDACTED***" in abort_reason

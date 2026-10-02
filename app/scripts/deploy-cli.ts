@@ -8,7 +8,14 @@ import { loadSecret } from '../src/main/crypto/credentials'
 import { VpsRepository } from '../src/main/db/vpsRepository'
 import { DeployPipeline } from '../src/main/deploy/pipeline'
 import { SshManager } from '../src/main/ssh/manager'
+import {
+  sanitizeObject,
+  sanitizeText,
+  serializeCliEvent
+} from '../src/main/deploy/eventSerializer'
 import type { DeployEvent, DeployInput } from '../src/shared/ipc'
+
+export { sanitizeObject, sanitizeText, serializeCliEvent }
 
 interface CliArgs {
   dbPath?: string
@@ -40,12 +47,20 @@ function parseArgs(args: string[]): CliArgs {
   return result
 }
 
-function emitError(message: string): never {
-  console.log(JSON.stringify({ event: 'error', error: message }))
-  process.exit(1)
-}
-
 async function main(): Promise<void> {
+  const secrets: string[] = []
+  if (process.env.OPSPILOT_SSH_SECRET?.trim()) {
+    secrets.push(process.env.OPSPILOT_SSH_SECRET)
+  }
+  if (process.env.OPSPILOT_DEPLOY_SECRET?.trim()) {
+    secrets.push(process.env.OPSPILOT_DEPLOY_SECRET)
+  }
+
+  function emitError(message: string): never {
+    console.log(serializeCliEvent({ event: 'error', error: message }, secrets))
+    process.exit(1)
+  }
+
   const cliArgs = parseArgs(process.argv.slice(2))
 
   const dbPath = cliArgs.dbPath ?? process.env.OPSPILOT_DB_PATH
@@ -81,6 +96,11 @@ async function main(): Promise<void> {
   if (rawEnvJson) {
     try {
       appEnv = JSON.parse(rawEnvJson) as Record<string, string>
+      for (const v of Object.values(appEnv)) {
+        if (typeof v === 'string' && v.trim().length > 0 && !secrets.includes(v)) {
+          secrets.push(v)
+        }
+      }
     } catch {
       emitError('Biến môi trường OPSPILOT_APP_ENV_JSON không phải là chuỗi JSON hợp lệ.')
     }
@@ -134,6 +154,10 @@ async function main(): Promise<void> {
     )
   }
 
+  if (!secrets.includes(resolvedSecret)) {
+    secrets.push(resolvedSecret)
+  }
+
   const ssh = new SshManager((targetVpsId) => {
     const targetVps = vpsRepository.getById(targetVpsId)
     let secret = process.env.OPSPILOT_SSH_SECRET ?? process.env.OPSPILOT_DEPLOY_SECRET
@@ -171,43 +195,55 @@ async function main(): Promise<void> {
       switch (event.type) {
         case 'step-start':
           console.log(
-            JSON.stringify({
-              event: 'step_start',
-              step: event.step,
-              deployment_id: event.deployment_id
-            })
+            serializeCliEvent(
+              {
+                event: 'step_start',
+                step: event.step,
+                deployment_id: event.deployment_id
+              },
+              secrets
+            )
           )
           break
         case 'step-done':
           console.log(
-            JSON.stringify({
-              event: 'step_done',
-              step: event.step,
-              deployment_id: event.deployment_id,
-              duration_ms: event.duration_ms
-            })
+            serializeCliEvent(
+              {
+                event: 'step_done',
+                step: event.step,
+                deployment_id: event.deployment_id,
+                duration_ms: event.duration_ms
+              },
+              secrets
+            )
           )
           break
         case 'step-failed':
           console.log(
-            JSON.stringify({
-              event: 'step_failed',
-              step: event.step,
-              deployment_id: event.deployment_id,
-              error: event.error.message,
-              technical: event.error.technical
-            })
+            serializeCliEvent(
+              {
+                event: 'step_failed',
+                step: event.step,
+                deployment_id: event.deployment_id,
+                error: event.error.message,
+                technical: event.error.technical
+              },
+              secrets
+            )
           )
           break
         case 'finished':
           console.log(
-            JSON.stringify({
-              event: 'finished',
-              deployment_id: event.deployment_id,
-              status: event.status,
-              app_url: event.app_url,
-              total_duration_ms: event.total_duration_ms
-            })
+            serializeCliEvent(
+              {
+                event: 'finished',
+                deployment_id: event.deployment_id,
+                status: event.status,
+                app_url: event.app_url,
+                total_duration_ms: event.total_duration_ms
+              },
+              secrets
+            )
           )
           finishedResolver(event)
           break
@@ -241,18 +277,24 @@ async function main(): Promise<void> {
     runResult = pipeline.run(deployInput)
     activeDeploymentId = runResult.deploymentId
     console.log(
-      JSON.stringify({
-        event: 'assigned',
-        deployment_id: runResult.deploymentId
-      })
+      serializeCliEvent(
+        {
+          event: 'assigned',
+          deployment_id: runResult.deploymentId
+        },
+        secrets
+      )
     )
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     console.log(
-      JSON.stringify({
-        event: 'error',
-        error: message
-      })
+      serializeCliEvent(
+        {
+          event: 'error',
+          error: message
+        },
+        secrets
+      )
     )
     try {
       database.close()
@@ -271,4 +313,6 @@ async function main(): Promise<void> {
   process.exit(0)
 }
 
-void main()
+if (typeof require !== 'undefined' && require.main === module) {
+  void main()
+}
