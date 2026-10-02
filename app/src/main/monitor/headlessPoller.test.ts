@@ -237,4 +237,85 @@ describe('HeadlessPoller (TypeScript / SQLite RAM)', () => {
     // Sau khi drain với autoCloseDb=true, DB đã đóng -> truy vấn sẽ ném lỗi
     expect(() => db.prepare('SELECT 1').get()).toThrow()
   })
+
+  it('chế độ strict ném lỗi khi đọc metric thất bại lúc khởi động (không phát ready)', async () => {
+    const db = createMemoryDb()
+    seedDb(db)
+
+    const failingSsh: SshManagerLike = {
+      exec: async () => ({ code: 0, stdout: 'running\n', stderr: '' }),
+      metricSnapshot: async () => ({ generation: '1:1', device: 1, inode: 1, size: 100 }),
+      fileIdentity: async () => ({ generation: '1:1', device: 1, inode: 1 }),
+      fileSize: async () => 100,
+      readFileTail: async () => {
+        throw new Error('Mất kết nối SSH khi đọc tail')
+      }
+    }
+
+    const pollerStrict = new HeadlessPoller({
+      db,
+      ssh: failingSsh,
+      strict: true,
+      autoCloseDb: false
+    })
+
+    await expect(pollerStrict.start()).rejects.toThrow('Không đọc được metrics.jsonl')
+    expect(pollerStrict.active).toBe(false)
+    expect(pollerStrict.closed).toBe(false)
+
+    // Đối chiếu: nếu strict=false thì nuốt lỗi MetricSourceError và vẫn chạy
+    const pollerNonStrict = new HeadlessPoller({
+      db,
+      ssh: failingSsh,
+      strict: false,
+      autoCloseDb: false
+    })
+    await pollerNonStrict.start()
+    expect(pollerNonStrict.active).toBe(true)
+    await pollerNonStrict.drain()
+
+    db.close()
+  })
+
+  it('chế độ strict ném lỗi khi poll vét cuối cùng thất bại trong drain (không báo drained giả)', async () => {
+    const db = createMemoryDb()
+    seedDb(db)
+
+    let shouldFail = false
+    const sshSource = {
+      ssh: {
+        exec: async () => ({ code: 0, stdout: 'running\n', stderr: '' }),
+        metricSnapshot: async () => ({ generation: '1:1', device: 1, inode: 1, size: 100 }),
+        fileIdentity: async () => ({ generation: '1:1', device: 1, inode: 1 }),
+        fileSize: async () => 100,
+        readFileTail: async () => {
+          if (shouldFail) {
+            throw new Error('Lỗi SSH trong poll vét cuối')
+          }
+          return { content: `${makeMetric(1, 10)}\n`, nextOffset: 100 }
+        }
+      } as SshManagerLike
+    }
+
+    const poller = new HeadlessPoller({
+      db,
+      ssh: sshSource.ssh,
+      strict: true,
+      autoCloseDb: true
+    })
+
+    await poller.start()
+    expect(poller.active).toBe(true)
+
+    // Kích hoạt lỗi trước khi drain
+    shouldFail = true
+
+    await expect(poller.drain()).rejects.toThrow('Không đọc được metrics.jsonl')
+    // Không được đánh dấu closed/drained thành công
+    expect(poller.closed).toBe(false)
+    // DB không bị đóng nếu poll vét thất bại
+    expect(() => db.prepare('SELECT 1').get()).not.toThrow()
+
+    db.close()
+  })
 })

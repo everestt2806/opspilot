@@ -7,6 +7,7 @@ import Database from 'better-sqlite3'
 import { createCredentialCipher } from '../src/main/crypto/masterKey'
 import { loadSecret } from '../src/main/crypto/credentials'
 import { VpsRepository } from '../src/main/db/vpsRepository'
+import { serializeCliEvent } from '../src/main/deploy/eventSerializer'
 import { HeadlessPoller, type SshManagerLike } from '../src/main/monitor/headlessPoller'
 import { MlApiClient } from '../src/main/monitor/mlApi'
 import { SshManager } from '../src/main/ssh/manager'
@@ -76,36 +77,43 @@ function createMockSsh(filePath: string): SshManagerLike {
         const buf = readFileSync(filePath)
         const content = buf.subarray(Math.max(0, fromByte - 1)).toString('utf8')
         return { content, nextOffset: fromByte + Buffer.byteLength(content, 'utf8') }
-      } catch {
-        return { content: '', nextOffset: fromByte }
+      } catch (err: unknown) {
+        throw new Error(
+          `Không đọc được file metric giả lập: ${err instanceof Error ? err.message : String(err)}`
+        )
       }
     }
   }
 }
 
 async function main(): Promise<void> {
+  const secrets: string[] = []
+  if (process.env.OPSPILOT_SSH_SECRET?.trim()) {
+    secrets.push(process.env.OPSPILOT_SSH_SECRET)
+  }
+  if (process.env.OPSPILOT_DEPLOY_SECRET?.trim()) {
+    secrets.push(process.env.OPSPILOT_DEPLOY_SECRET)
+  }
+
+  function emitEvent(event: Record<string, unknown>): void {
+    console.log(serializeCliEvent(event, secrets))
+  }
+
+  function emitError(message: string): never {
+    emitEvent({ status: 'error', error: message })
+    process.exit(1)
+  }
+
   const cliArgs = parseArgs(process.argv.slice(2))
 
   const dbPath = cliArgs.dbPath ?? process.env.OPSPILOT_DB_PATH
   if (!dbPath) {
-    console.log(
-      JSON.stringify({
-        status: 'error',
-        error: 'Thiếu đường dẫn SQLite DB (--db hoặc biến môi trường OPSPILOT_DB_PATH).'
-      })
-    )
-    process.exit(1)
+    emitError('Thiếu đường dẫn SQLite DB (--db hoặc biến môi trường OPSPILOT_DB_PATH).')
   }
 
   const resolvedDbPath = resolve(dbPath)
   if (!existsSync(resolvedDbPath)) {
-    console.log(
-      JSON.stringify({
-        status: 'error',
-        error: `File SQLite DB không tồn tại: ${resolvedDbPath}`
-      })
-    )
-    process.exit(1)
+    emitError(`File SQLite DB không tồn tại: ${resolvedDbPath}`)
   }
 
   let database: Database.Database
@@ -113,13 +121,7 @@ async function main(): Promise<void> {
     database = new Database(resolvedDbPath)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
-    console.log(
-      JSON.stringify({
-        status: 'error',
-        error: `Không thể mở SQLite DB: ${msg}`
-      })
-    )
-    process.exit(1)
+    emitError(`Không thể mở SQLite DB: ${msg}`)
   }
 
   let ssh: SshManager | SshManagerLike
@@ -139,6 +141,9 @@ async function main(): Promise<void> {
       if (!secret || !secret.trim()) {
         throw new Error(`SSH credential cho VPS id=${targetVpsId} bị rỗng hoặc không hợp lệ.`)
       }
+      if (!secrets.includes(secret)) {
+        secrets.push(secret)
+      }
       return {
         host: targetVps.host,
         port: targetVps.port,
@@ -152,12 +157,14 @@ async function main(): Promise<void> {
   const mlUrl = cliArgs.mlUrl ?? process.env.OPSPILOT_ML_URL
   const scorer = mlUrl ? new MlApiClient(mlUrl) : undefined
 
+  // Strict mode = true: lỗi đọc metric hoặc đóng DB ném lỗi ngay lập tức
   const poller = new HeadlessPoller({
     db: database,
     ssh,
     scorer,
     intervalMs: cliArgs.intervalMs ?? 5000,
-    autoCloseDb: true
+    autoCloseDb: true,
+    strict: true
   })
 
   // Đăng ký nhận drain qua stdin
@@ -173,11 +180,11 @@ async function main(): Promise<void> {
     drained = true
     try {
       await poller.drain()
-      console.log(JSON.stringify({ status: 'drained' }))
+      emitEvent({ status: 'drained' })
       process.exit(0)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      console.error(`[headless-poller] Lỗi trong quá trình drain: ${msg}`)
+      emitEvent({ status: 'error', error: `Lỗi trong quá trình drain: ${msg}` })
       process.exit(1)
     }
   }
@@ -197,20 +204,13 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => void performDrain())
   process.on('SIGINT', () => void performDrain())
 
-  // Bắt đầu chu trình poll
+  // Bắt đầu chu trình poll (strict mode: nếu lỗi đọc metric thì throw ngay)
   try {
     await poller.start()
-    // Thông báo cho tiến trình cha đã sẵn sàng
-    console.log(JSON.stringify({ status: 'ready' }))
+    emitEvent({ status: 'ready' })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
-    console.log(
-      JSON.stringify({
-        status: 'error',
-        error: `Không thể khởi chạy HeadlessPoller: ${msg}`
-      })
-    )
-    process.exit(1)
+    emitError(`Không thể khởi chạy HeadlessPoller: ${msg}`)
   }
 }
 

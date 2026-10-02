@@ -8,10 +8,14 @@ Nhiệm vụ:
     poll vét một lần, đóng DB và chờ thông báo `{"status": "drained"}` với exit code 0.
   - Quản lý an toàn tiến trình: timeout và dọn dẹp sạch toàn bộ cây tiến trình
     con khi gặp lỗi hoặc dừng khẩn cấp.
+  - Bảo mật tuyệt đối: chỉ dùng event giao thức JSON đã qua khử secret để báo lỗi;
+    không ghép stdout thô vào exception; giới hạn log bằng ring-buffer O(1) để chạy 75 phút
+    không tích luỹ bộ nhớ vô hạn.
 """
 
 from __future__ import annotations
 
+import collections
 import json
 import os
 import queue
@@ -26,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Self
 
-from experiments.adapters.deploy_adapter import resolve_db_path
+from experiments.adapters.deploy_adapter import resolve_db_path, sanitize_text
 
 
 class PollerAdapterError(Exception):
@@ -134,13 +138,17 @@ class PollerHandle:
         self,
         proc: subprocess.Popen[str],
         db_path: Path,
-        stdout_queue: queue.Queue[str | None],
-        stderr_queue: queue.Queue[str | None],
+        events_queue: queue.Queue[dict[str, Any]],
+        recent_stdout: collections.deque[str],
+        recent_stderr: collections.deque[str],
+        secrets_to_redact: list[str] | None = None,
     ) -> None:
         self.proc = proc
         self.db_path = db_path
-        self._stdout_queue = stdout_queue
-        self._stderr_queue = stderr_queue
+        self._events_queue = events_queue
+        self._recent_stdout = recent_stdout
+        self._recent_stderr = recent_stderr
+        self._secrets_to_redact = list(secrets_to_redact or [])
         self._is_drained = False
 
     @property
@@ -150,6 +158,9 @@ class PollerHandle:
     @property
     def is_alive(self) -> bool:
         return self.proc.poll() is None
+
+    def _clean(self, text: str) -> str:
+        return sanitize_text(text, self._secrets_to_redact)
 
     def drain(self, timeout_s: float = 30.0) -> PollerDrainResult:
         """Gửi lệnh drain qua stdin và chờ tiến trình hoàn tất thu gom dữ liệu."""
@@ -169,54 +180,53 @@ class PollerHandle:
             except OSError as e:
                 _kill_process_tree(self.proc)
                 raise PollerProtocolError(
-                    f"Không thể gửi 'drain' qua stdin: {e}"
+                    f"Không thể gửi 'drain' qua stdin: {self._clean(str(e))}"
                 ) from e
 
         # 2. Chờ tiến trình kết thúc và phát event drained
         deadline = time.monotonic() + timeout_s
         drained_event_received = False
+        error_event: dict[str, Any] | None = None
 
         while time.monotonic() < deadline:
-            # Kiểm tra stdout queue
+            # Kiểm tra event từ queue
             try:
-                line = self._stdout_queue.get(timeout=0.1)
-                if line is not None:
-                    trimmed = line.strip()
-                    if trimmed.startswith("{") and trimmed.endswith("}"):
-                        try:
-                            parsed = json.loads(trimmed)
-                            if parsed.get("status") == "drained":
-                                drained_event_received = True
-                        except json.JSONDecodeError:
-                            pass
+                event = self._events_queue.get(timeout=0.05)
+                if event.get("status") == "drained":
+                    drained_event_received = True
+                elif event.get("status") == "error":
+                    error_event = event
             except queue.Empty:
                 pass
 
             # Kiểm tra tiến trình đã thoát chưa
             ret = self.proc.poll()
             if ret is not None:
-                # Đọc nốt các dòng còn lại trong queue
-                while not self._stdout_queue.empty():
+                # Đọc nốt các event còn lại trong queue
+                while not self._events_queue.empty():
                     try:
-                        line = self._stdout_queue.get_nowait()
-                        if line:
-                            trimmed = line.strip()
-                            if trimmed.startswith("{") and trimmed.endswith("}"):
-                                try:
-                                    parsed = json.loads(trimmed)
-                                    if parsed.get("status") == "drained":
-                                        drained_event_received = True
-                                except json.JSONDecodeError:
-                                    pass
+                        event = self._events_queue.get_nowait()
+                        if event.get("status") == "drained":
+                            drained_event_received = True
+                        elif event.get("status") == "error":
+                            error_event = event
                     except queue.Empty:
                         break
 
                 if ret != 0:
+                    _kill_process_tree(self.proc)
+                    if error_event and "error" in error_event:
+                        err_msg = self._clean(str(error_event["error"]))
+                    else:
+                        err_msg = (
+                            f"Headless Poller thoát với mã lỗi {ret} trong khi drain"
+                        )
                     raise PollerProtocolError(
-                        f"Headless Poller thoát với mã lỗi {ret} trong khi drain"
+                        f"Headless Poller drain thất bại: {err_msg}"
                     )
 
                 if not drained_event_received:
+                    _kill_process_tree(self.proc)
                     raise PollerProtocolError(
                         "Headless Poller đã thoát nhưng không phát event 'drained'"
                     )
@@ -273,10 +283,18 @@ class PollerAdapter:
         cli_cmd: Sequence[str] | None = None,
     ) -> PollerHandle:
         """Khởi chạy Headless Poller không chặn, chờ xác nhận ready và trả về PollerHandle."""
-        # 1. Xác thực SQLite DB (bắt buộc file thật trên đĩa, từ chối :memory:)
+        # 1. Tập hợp các chuỗi secret cần che giấu
+        secrets_to_redact: list[str] = []
+        if ssh_secret:
+            secrets_to_redact.append(ssh_secret)
+
+        def _clean(text: str) -> str:
+            return sanitize_text(text, secrets_to_redact)
+
+        # 2. Xác thực SQLite DB (bắt buộc file thật trên đĩa, từ chối :memory:)
         target_db_path = resolve_db_path(conn, db_path)
 
-        # 2. Chuẩn bị biến môi trường (xoá biến kế thừa, cấu hình an toàn)
+        # 3. Chuẩn bị biến môi trường (xoá biến kế thừa, cấu hình an toàn)
         proc_env = os.environ.copy()
         proc_env["ELECTRON_RUN_AS_NODE"] = "1"
         proc_env.pop("OPSPILOT_APP_ENV_JSON", None)
@@ -286,7 +304,7 @@ class PollerAdapter:
         if ssh_secret:
             proc_env["OPSPILOT_SSH_SECRET"] = ssh_secret
 
-        # 3. Chuẩn bị command line
+        # 4. Chuẩn bị command line
         cmd = list(
             cli_cmd
             if cli_cmd is not None
@@ -308,7 +326,7 @@ class PollerAdapter:
             mock_path = Path(mock_metrics_file).resolve()
             cmd.extend(["--mock-metrics-file", str(mock_path)])
 
-        # 4. Khởi chạy tiến trình CLI
+        # 5. Khởi chạy tiến trình CLI
         popen_kwargs: dict[str, Any] = {
             "stdin": subprocess.PIPE,
             "stdout": subprocess.PIPE,
@@ -323,75 +341,102 @@ class PollerAdapter:
         try:
             proc = subprocess.Popen(cmd, **popen_kwargs)
         except Exception as e:
-            raise PollerStartupError(f"Không thể spawn tiến trình CLI: {e}") from e
+            raise PollerStartupError(
+                f"Không thể spawn tiến trình CLI: {_clean(str(e))}"
+            ) from e
 
-        stdout_queue: queue.Queue[str | None] = queue.Queue()
-        stderr_queue: queue.Queue[str | None] = queue.Queue()
+        # Hàng đợi sự kiện giao thức máy đọc được và bộ đệm ring-buffer O(1)
+        # Giới hạn maxlen=50 để chạy 75 phút không tích lũy bộ nhớ vô hạn
+        events_queue: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=200)
+        recent_stdout: collections.deque[str] = collections.deque(maxlen=50)
+        recent_stderr: collections.deque[str] = collections.deque(maxlen=50)
 
-        def _reader(pipe: Any, q: queue.Queue[str | None]) -> None:
+        def _stdout_reader(pipe: Any) -> None:
             try:
                 for line in iter(pipe.readline, ""):
-                    q.put(line)
+                    trimmed = line.strip()
+                    if trimmed.startswith("{") and trimmed.endswith("}"):
+                        try:
+                            parsed = json.loads(trimmed)
+                            if isinstance(parsed, dict) and "status" in parsed:
+                                try:
+                                    events_queue.put_nowait(parsed)
+                                except queue.Full:
+                                    pass
+                        except json.JSONDecodeError:
+                            pass
+                    recent_stdout.append(trimmed)
             finally:
-                q.put(None)
+                try:
+                    pipe.close()
+                except OSError:
+                    pass
+
+        def _stderr_reader(pipe: Any) -> None:
+            try:
+                for line in iter(pipe.readline, ""):
+                    recent_stderr.append(line.strip())
+            finally:
                 try:
                     pipe.close()
                 except OSError:
                     pass
 
         t_out = threading.Thread(
-            target=_reader, args=(proc.stdout, stdout_queue), daemon=True
+            target=_stdout_reader, args=(proc.stdout,), daemon=True
         )
         t_err = threading.Thread(
-            target=_reader, args=(proc.stderr, stderr_queue), daemon=True
+            target=_stderr_reader, args=(proc.stderr,), daemon=True
         )
         t_out.start()
         t_err.start()
 
-        # 5. Chờ tín hiệu {"status": "ready"}
+        # 6. Chờ tín hiệu {"status": "ready"}
         deadline = time.monotonic() + startup_timeout_s
         is_ready = False
         startup_err: str | None = None
 
         while time.monotonic() < deadline:
+            # Kiểm tra event từ queue
+            try:
+                event = events_queue.get(timeout=0.05)
+                if event.get("status") == "ready":
+                    is_ready = True
+                    break
+                if event.get("status") == "error":
+                    startup_err = _clean(str(event.get("error", "Lỗi không xác định")))
+                    break
+            except queue.Empty:
+                pass
+
             # Kiểm tra tiến trình có chết sớm không
             ret = proc.poll()
             if ret is not None:
-                # Đọc lỗi nếu có
-                err_chunks: list[str] = []
-                while not stdout_queue.empty():
-                    l_out = stdout_queue.get_nowait()
-                    if l_out:
-                        err_chunks.append(l_out.strip())
                 _kill_process_tree(proc)
-                msg = " ".join(err_chunks) or f"Mã thoát {ret}"
-                raise PollerStartupError(
-                    f"Headless Poller kết thúc đột ngột trước khi ready: {msg}"
-                )
+                # Đọc event lỗi còn sót trong queue nếu có
+                while not events_queue.empty():
+                    try:
+                        ev = events_queue.get_nowait()
+                        if ev.get("status") == "error":
+                            startup_err = _clean(
+                                str(ev.get("error", "Lỗi không xác định"))
+                            )
+                    except queue.Empty:
+                        break
 
-            try:
-                line = stdout_queue.get(timeout=0.1)
-                if line is not None:
-                    trimmed = line.strip()
-                    if trimmed.startswith("{") and trimmed.endswith("}"):
-                        try:
-                            parsed = json.loads(trimmed)
-                            if parsed.get("status") == "ready":
-                                is_ready = True
-                                break
-                            if parsed.get("status") == "error":
-                                startup_err = str(parsed.get("error"))
-                                break
-                        except json.JSONDecodeError:
-                            pass
-            except queue.Empty:
-                pass
+                if startup_err:
+                    raise PollerStartupError(
+                        f"Headless Poller khởi động thất bại: {startup_err}"
+                    )
+                raise PollerStartupError(
+                    f"Headless Poller kết thúc đột ngột với mã lỗi {ret} trước khi ready"
+                )
 
         if not is_ready:
             _kill_process_tree(proc)
             if startup_err:
                 raise PollerStartupError(
-                    f"Lỗi khởi động Headless Poller: {startup_err}"
+                    f"Headless Poller khởi động thất bại: {startup_err}"
                 )
             raise PollerStartupError(
                 f"Headless Poller không phát tín hiệu 'ready' trong {startup_timeout_s:.1f}s"
@@ -400,8 +445,10 @@ class PollerAdapter:
         return PollerHandle(
             proc=proc,
             db_path=target_db_path,
-            stdout_queue=stdout_queue,
-            stderr_queue=stderr_queue,
+            events_queue=events_queue,
+            recent_stdout=recent_stdout,
+            recent_stderr=recent_stderr,
+            secrets_to_redact=secrets_to_redact,
         )
 
     def drain(

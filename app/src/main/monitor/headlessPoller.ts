@@ -33,6 +33,7 @@ export interface HeadlessPollerOptions {
   scorer?: MonitorRuntime
   intervalMs?: number
   autoCloseDb?: boolean
+  strict?: boolean
 }
 
 export class HeadlessPoller {
@@ -45,8 +46,12 @@ export class HeadlessPoller {
   private readonly intervalMs: number
 
   constructor(private readonly options: HeadlessPollerOptions) {
-    // Tắt auto-train vì runner sẽ điều khiển pha train theo đặc tả TK-S6
-    this.service = new MonitorService(options.db, { autoTrain: false })
+    // Tắt auto-train vì runner sẽ điều khiển pha train theo đặc tả TK-S6.
+    // Bật strict mode (mặc định true) để mọi lỗi đọc metric/DB đều ném ra ngoài, không phát ready/drained giả.
+    this.service = new MonitorService(options.db, {
+      autoTrain: false,
+      strict: options.strict ?? true
+    })
     this.intervalMs = Math.max(100, options.intervalMs ?? 5000)
   }
 
@@ -54,7 +59,7 @@ export class HeadlessPoller {
     if (this.isClosed || this.isDraining) {
       throw new Error('Không thể khởi động poller đã đóng hoặc đang drain')
     }
-    // Thực hiện lượt poll đầu tiên ngay khi start
+    // Thực hiện lượt poll đầu tiên ngay khi start. Trong strict mode, nếu lỗi thì ném ra ngoài ngay
     await this.pollOnce()
 
     // Khởi tạo vòng lặp chu kỳ
@@ -95,35 +100,17 @@ export class HeadlessPoller {
       this.timer = null
     }
 
-    // 2. Chờ lượt đang chạy
+    // 2. Chờ lượt đang chạy kết thúc
     if (this.currentPollPromise) {
-      try {
-        await this.currentPollPromise
-      } catch (err: unknown) {
-        logger.warn('monitor', 'Lượt poll đang chạy kết thúc với lỗi trong lúc drain', {
-          error: err instanceof Error ? err.message : String(err)
-        })
-      }
+      await this.currentPollPromise
     }
 
-    // 3. Poll vét một lần
-    try {
-      await this.service.pollAll(this.options.ssh as SshManager, this.options.scorer)
-    } catch (err: unknown) {
-      logger.warn('monitor', 'Poll vét cuối cùng gặp lỗi', {
-        error: err instanceof Error ? err.message : String(err)
-      })
-    }
+    // 3. Poll vét một lần (bắt buộc thành công, không nuốt lỗi để tránh drained giả)
+    await this.service.pollAll(this.options.ssh as SshManager, this.options.scorer)
 
-    // 4. Đóng DB nếu autoCloseDb không bị tắt
+    // 4. Đóng DB nếu autoCloseDb không bị tắt (bắt buộc thành công trước khi báo drained)
     if (this.options.autoCloseDb !== false) {
-      try {
-        this.options.db.close()
-      } catch (err: unknown) {
-        logger.warn('monitor', 'Lỗi khi đóng SQLite DB trong drain', {
-          error: err instanceof Error ? err.message : String(err)
-        })
-      }
+      this.options.db.close()
     }
 
     this.isClosed = true

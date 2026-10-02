@@ -452,3 +452,127 @@ def test_poller_adapter_inherited_env_vars_cleared(
     res = handle.drain(timeout_s=5.0)
     assert res.status == "drained"
     assert res.exit_code == 0
+
+
+def test_poller_adapter_final_sweep_poll_error(
+    file_db: tuple[sqlite3.Connection, Path],
+) -> None:
+    """Kiểm thử: Lỗi poll vét cuối khi drain làm CLI trả event error mã 1, adapter ném PollerProtocolError."""
+    conn, db_file = file_db
+
+    mock_script = (
+        "import sys, json\n"
+        "print(json.dumps({'status': 'ready'}), flush=True)\n"
+        "line = sys.stdin.readline()\n"
+        "if line.strip() == 'drain':\n"
+        "    print(json.dumps({'status': 'error', 'error': 'Lỗi trong quá trình drain: Không đọc được metrics.jsonl'}), flush=True)\n"
+        "    sys.exit(1)\n"
+        "sys.exit(2)\n"
+    )
+
+    adapter = PollerAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_drain_timeout_s=5.0,
+    )
+
+    handle = adapter.start(conn=conn, db_path=db_file, startup_timeout_s=5.0)
+    assert handle.is_alive is True
+
+    with pytest.raises(PollerProtocolError) as exc_info:
+        handle.drain(timeout_s=5.0)
+
+    assert "Không đọc được metrics.jsonl" in str(exc_info.value)
+    assert handle.is_drained is False
+    assert handle.is_alive is False
+
+
+def test_poller_adapter_metric_read_error_before_ready(
+    file_db: tuple[sqlite3.Connection, Path],
+) -> None:
+    """Kiểm thử: Lỗi đọc metric trước khi ready làm CLI trả event error mã 1, adapter ném PollerStartupError."""
+    conn, db_file = file_db
+
+    mock_script = (
+        "import sys, json\n"
+        "print(json.dumps({'status': 'error', 'error': 'Không thể khởi chạy HeadlessPoller: Không đọc được metrics.jsonl'}), flush=True)\n"
+        "sys.exit(1)\n"
+    )
+
+    adapter = PollerAdapter(default_cli_cmd=[sys.executable, "-c", mock_script])
+
+    with pytest.raises(PollerStartupError) as exc_info:
+        adapter.start(conn=conn, db_path=db_file, startup_timeout_s=5.0)
+
+    assert "Không thể khởi chạy HeadlessPoller" in str(exc_info.value)
+    assert "Không đọc được metrics.jsonl" in str(exc_info.value)
+
+
+def test_poller_adapter_secret_in_stdout_not_leaked_on_crash(
+    file_db: tuple[sqlite3.Connection, Path],
+) -> None:
+    """Kiểm thử: Khi tiến trình CLI crash và dump secret vào stdout/stderr, adapter không leak secret vào exception."""
+    conn, db_file = file_db
+
+    sensitive_secret = "super_secret_ssh_credential_xyz123"
+    mock_crash_script = (
+        "import sys\n"
+        f"sys.stdout.write('Traceback: failed to connect with key {sensitive_secret}\\n')\n"
+        "sys.stdout.flush()\n"
+        f"sys.stderr.write('Fatal error: secret={sensitive_secret}\\n')\n"
+        "sys.stderr.flush()\n"
+        "sys.exit(1)\n"
+    )
+
+    adapter = PollerAdapter(default_cli_cmd=[sys.executable, "-c", mock_crash_script])
+
+    with pytest.raises(PollerStartupError) as exc_info:
+        adapter.start(
+            conn=conn,
+            db_path=db_file,
+            ssh_secret=sensitive_secret,
+            startup_timeout_s=5.0,
+        )
+
+    err_str = str(exc_info.value)
+    assert sensitive_secret not in err_str
+    assert "kết thúc đột ngột với mã lỗi 1 trước khi ready" in err_str
+
+
+def test_poller_adapter_long_log_stream(
+    file_db: tuple[sqlite3.Connection, Path],
+) -> None:
+    """Kiểm thử: Luồng log kéo dài (10,000 dòng) không làm tràn bộ nhớ, ring buffer giữ O(1) và drain sạch."""
+    conn, db_file = file_db
+
+    mock_long_script = (
+        "import sys, json\n"
+        "print(json.dumps({'status': 'ready'}), flush=True)\n"
+        "for i in range(10000):\n"
+        "    sys.stdout.write(f'tick log line {i}: sample recorded\\n')\n"
+        "    sys.stderr.write(f'stderr debug line {i}\\n')\n"
+        "sys.stdout.flush()\n"
+        "sys.stderr.flush()\n"
+        "line = sys.stdin.readline()\n"
+        "if line.strip() == 'drain':\n"
+        "    print(json.dumps({'status': 'drained'}), flush=True)\n"
+        "    sys.exit(0)\n"
+        "sys.exit(1)\n"
+    )
+
+    adapter = PollerAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_long_script],
+        default_drain_timeout_s=10.0,
+    )
+
+    handle = adapter.start(conn=conn, db_path=db_file, startup_timeout_s=5.0)
+    assert handle.is_alive is True
+
+    time.sleep(0.5)
+
+    res = handle.drain(timeout_s=10.0)
+    assert res.status == "drained"
+    assert res.exit_code == 0
+
+    assert len(handle._recent_stdout) <= 50
+    assert len(handle._recent_stderr) <= 50
+    assert handle._events_queue.qsize() <= 10
