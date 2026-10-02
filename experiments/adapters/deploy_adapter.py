@@ -6,11 +6,15 @@ Ràng buộc và quy tắc (TK-S6 P2d-1b):
   2. Truyền env_vars và secrets qua kênh an toàn ngoài command line:
      - env_vars truyền qua biến môi trường OPSPILOT_APP_ENV_JSON, tuyệt đối không đưa vào command line.
      - SSH secret truyền qua biến môi trường OPSPILOT_SSH_SECRET.
+     - Khử SSH secret và mọi giá trị env_vars ngay tại event CLI, stderr, stdout và trước khi trả DeployResult.steps.
      - Tuyệt đối không ghi secret vào event, exception message hoặc abort_reason.
   3. Quản lý tiến trình và dừng triệt để cả cây tiến trình:
-     - Python quản lý trực tiếp tiến trình Electron con hoặc dừng cả cây tiến trình (taskkill /F /T trên Windows,
-       process group trên POSIX) khi timeout hoặc có lỗi, không để deploy tiếp tục sau khi attempt đã abort.
-  4. Siết chặt giao thức event:
+     - Tạo process group riêng (start_new_session=True trên POSIX) trước khi dùng killpg.
+     - Với đường mặc định, bắt buộc cả binary Electron và CLI đã biên dịch, không fallback sang wrapper
+       spawnSync (run-as-node.js) hoặc Node thường để Python quản lý trực tiếp tiến trình Electron con.
+     - Khi timeout hoặc có lỗi, dừng cả cây tiến trình (taskkill /F /T trên Windows, killpg trên POSIX).
+  4. Siết chặt giao thức event và bảo vệ toàn diện:
+     - Bọc cả khâu kiểm tra đầu vào, tìm CLI và subprocess.Popen để tự động abort_run() khi xảy ra lỗi với lý do đã khử secret.
      - Thông điệp 'assigned' chỉ được nhận đúng một lần.
      - Thông điệp 'finished' bắt buộc có deployment_id trùng khớp với assigned_deployment_id.
      - Thành công bắt buộc thỏa mãn đồng thời: exit code của CLI là 0 VÀ bản ghi deployment trong SQLite có status='running'.
@@ -94,6 +98,24 @@ def sanitize_text(text: str, secrets: Sequence[str]) -> str:
     return sanitized
 
 
+def sanitize_obj(obj: Any, secrets: Sequence[str]) -> Any:
+    """Đệ quy khử secret khỏi chuỗi, list, tuple, dict."""
+    if not secrets:
+        return obj
+    if isinstance(obj, str):
+        return sanitize_text(obj, secrets)
+    if isinstance(obj, dict):
+        return {
+            sanitize_text(str(k), secrets): sanitize_obj(v, secrets)
+            for k, v in obj.items()
+        }
+    if isinstance(obj, list):
+        return [sanitize_obj(item, secrets) for item in obj]
+    if isinstance(obj, tuple):
+        return tuple(sanitize_obj(item, secrets) for item in obj)
+    return obj
+
+
 def resolve_db_path(
     conn: sqlite3.Connection,
     explicit_path: str | Path | None = None,
@@ -116,7 +138,12 @@ def resolve_db_path(
 
 
 def get_default_cli_cmd() -> list[str]:
-    """Tìm lệnh mặc định để gọi CLI deploy-cli.ts qua Electron trực tiếp hoặc Node."""
+    """Tìm lệnh mặc định để gọi CLI deploy-cli qua binary Electron trực tiếp.
+
+    Bắt buộc cả binary Electron và file CLI đã biên dịch (.out-scripts/scripts/deploy-cli.js).
+    Không fallback sang wrapper spawnSync (run-as-node.js) hoặc Node thường để Python
+    có thể quản lý và dừng trực tiếp cả cây tiến trình Electron.
+    """
     repo_root = Path(__file__).resolve().parent.parent.parent
     app_dir = repo_root / "app"
     compiled_cli = app_dir / ".out-scripts" / "scripts" / "deploy-cli.js"
@@ -138,14 +165,19 @@ def get_default_cli_cmd() -> list[str]:
     else:
         electron_bin = app_dir / "node_modules" / "electron" / "dist" / "electron"
 
-    if electron_bin.exists() and compiled_cli.exists():
-        return [str(electron_bin), str(compiled_cli)]
+    if not electron_bin.exists():
+        raise FileNotFoundError(
+            f"Không tìm thấy binary Electron tại '{electron_bin}'. "
+            "Bắt buộc có binary Electron để quản lý tiến trình trực tiếp, không dùng wrapper spawnSync."
+        )
 
-    run_as_node = app_dir / "scripts" / "run-as-node.js"
-    if run_as_node.exists() and compiled_cli.exists():
-        return ["node", str(run_as_node), str(compiled_cli)]
+    if not compiled_cli.exists():
+        raise FileNotFoundError(
+            f"Không tìm thấy file CLI đã biên dịch tại '{compiled_cli}'. "
+            "Hãy chạy 'pnpm --prefix app exec tsc -p tsconfig.scripts.json' để biên dịch deploy-cli.ts."
+        )
 
-    return ["node", str(compiled_cli)]
+    return [str(electron_bin), str(compiled_cli)]
 
 
 class DeployAdapter:
@@ -179,63 +211,81 @@ class DeployAdapter:
         """Thực hiện deploy app demo lên VPS, gắn deployment_id ngay khi nhận ID và theo dõi kết quả."""
         if type(run_id) is not int or run_id <= 0:
             raise ValueError("run_id phải là số nguyên dương")
-        if type(vps_id) is not int or vps_id <= 0:
-            raise ValueError("vps_id phải là số nguyên dương")
-        if not app_name or not app_name.strip():
-            raise ValueError("app_name không được để trống")
 
-        source_path_resolved = Path(source_path).resolve()
-        target_db_path = resolve_db_path(conn, db_path)
-        effective_timeout = (
-            float(timeout_s) if timeout_s is not None else self.default_timeout_s
-        )
-
-        # Tập hợp các chuỗi secret cần che giấu
+        # Tập hợp các chuỗi secret cần che giấu trước bất kỳ bước xử lý nào
         secrets_to_redact: list[str] = []
         if ssh_secret:
             secrets_to_redact.append(ssh_secret)
         if env_vars:
-            secrets_to_redact.extend(
-                [v for v in env_vars.values() if v and len(v.strip()) > 0]
-            )
+            for v in env_vars.values():
+                s = str(v)
+                if s.strip():
+                    secrets_to_redact.append(s)
 
         def _clean(text: str) -> str:
             return sanitize_text(text, secrets_to_redact)
 
-        # 1. Chuẩn bị command line (TUYỆT ĐỐI KHÔNG ĐƯA CREDENTIAL / ENV_VARS VÀO COMMAND LINE)
-        base_cmd = list(
-            cli_cmd
-            if cli_cmd is not None
-            else (self.default_cli_cmd or get_default_cli_cmd())
-        )
-        cmd = list(base_cmd)
-        cmd.extend(["--db", str(target_db_path)])
-        cmd.extend(["--vps-id", str(vps_id)])
-        cmd.extend(["--app-name", app_name.strip()])
-        cmd.extend(["--source-path", str(source_path_resolved)])
+        def _clean_obj(data: Any) -> Any:
+            return sanitize_obj(data, secrets_to_redact)
 
-        if app_id is not None:
-            cmd.extend(["--app-id", str(app_id)])
-        if host_port is not None:
-            cmd.extend(["--host-port", str(host_port)])
+        proc: subprocess.Popen[str] | None = None
 
-        # 2. Chuẩn bị biến môi trường (Truyền SSH secret và env_vars an toàn qua env)
-        proc_env = os.environ.copy()
-        proc_env["ELECTRON_RUN_AS_NODE"] = "1"
-        if ssh_secret:
-            proc_env["OPSPILOT_SSH_SECRET"] = ssh_secret
-        if env_vars:
-            proc_env["OPSPILOT_APP_ENV_JSON"] = json.dumps(dict(env_vars))
+        # Bọc toàn bộ khâu kiểm tra đầu vào, tìm CLI và Popen để tự động abort run đang running nếu có lỗi
+        try:
+            if type(vps_id) is not int or vps_id <= 0:
+                raise ValueError("vps_id phải là số nguyên dương")
+            if not app_name or not app_name.strip():
+                raise ValueError("app_name không được để trống")
+            if not source_path or not str(source_path).strip():
+                raise ValueError("source_path không được để trống")
 
-        # 3. Khởi chạy tiến trình CLI
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-            env=proc_env,
-        )
+            source_path_resolved = Path(source_path).resolve()
+            target_db_path = resolve_db_path(conn, db_path)
+            effective_timeout = (
+                float(timeout_s) if timeout_s is not None else self.default_timeout_s
+            )
+
+            # 1. Chuẩn bị command line (TUYỆT ĐỐI KHÔNG ĐƯA CREDENTIAL / ENV_VARS VÀO COMMAND LINE)
+            base_cmd = list(
+                cli_cmd
+                if cli_cmd is not None
+                else (self.default_cli_cmd or get_default_cli_cmd())
+            )
+            cmd = list(base_cmd)
+            cmd.extend(["--db", str(target_db_path)])
+            cmd.extend(["--vps-id", str(vps_id)])
+            cmd.extend(["--app-name", app_name.strip()])
+            cmd.extend(["--source-path", str(source_path_resolved)])
+
+            if app_id is not None:
+                cmd.extend(["--app-id", str(app_id)])
+            if host_port is not None:
+                cmd.extend(["--host-port", str(host_port)])
+
+            # 2. Chuẩn bị biến môi trường (Truyền SSH secret và env_vars an toàn qua env)
+            proc_env = os.environ.copy()
+            proc_env["ELECTRON_RUN_AS_NODE"] = "1"
+            if ssh_secret:
+                proc_env["OPSPILOT_SSH_SECRET"] = ssh_secret
+            if env_vars:
+                proc_env["OPSPILOT_APP_ENV_JSON"] = json.dumps(dict(env_vars))
+
+            # 3. Khởi chạy tiến trình CLI (tạo process group riêng trên POSIX)
+            popen_kwargs: dict[str, Any] = {
+                "stdout": subprocess.PIPE,
+                "stderr": subprocess.PIPE,
+                "text": True,
+                "bufsize": 1,
+                "env": proc_env,
+            }
+            if sys.platform != "win32":
+                popen_kwargs["start_new_session"] = True
+
+            proc = subprocess.Popen(cmd, **popen_kwargs)
+        except Exception as e:
+            clean_err = _clean(str(e))
+            self._safe_abort(conn, run_id, f"deploy_pre_id_error: {clean_err}")
+            raise
 
         output_queue: queue.Queue[tuple[str, str]] = queue.Queue()
 
@@ -284,18 +334,21 @@ class DeployAdapter:
                 continue
 
             if stream_name == "stderr":
-                stderr_lines.append(line)
+                stderr_lines.append(_clean(line))
                 continue
 
             raw_line = line.strip()
             if not raw_line:
                 continue
-            raw_stdout_lines.append(raw_line)
+            raw_stdout_lines.append(_clean(raw_line))
 
             # Phân tích thông điệp máy đọc được
             event_obj = self._parse_json_event(raw_line)
             if event_obj is None:
                 continue
+
+            # Khử secret ngay lập tức tại mức event CLI
+            event_obj = _clean_obj(event_obj)
 
             evt_type = event_obj.get("event")
 
@@ -508,7 +561,7 @@ class DeployAdapter:
             status="running",
             app_url=_clean(str(finished_event.get("app_url") or "")) or None,
             total_duration_ms=finished_event.get("total_duration_ms"),
-            steps=tuple(steps),
+            steps=tuple(_clean_obj(steps)),
         )
 
     def _parse_json_event(self, line: str) -> dict[str, Any] | None:

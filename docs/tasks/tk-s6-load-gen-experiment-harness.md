@@ -226,14 +226,18 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
       - `finished.deployment_id` bắt buộc phải khớp với `assigned_deployment_id`.
       - Deploy thành công bắt buộc thỏa mãn đồng thời: exit code của CLI là 0 VÀ bản ghi `deployment` trong SQLite có `status == 'running'`.
     - Khi deploy thất bại (`finished` với `status != 'running'`, CLI crash, timeout, hoặc protocol error): **giữ nguyên bản ghi deployment ở trạng thái `'failed'` trong SQLite DB** làm bằng chứng kiểm toán (audit trail), gọi `abort_run(conn, run_id, reason=...)`, ném ngoại lệ tương ứng (`DeployFailedError`, `DeployPreIdError`, `DeployTimeoutError`, `DeployProtocolError`), đảm bảo attempt lifecycle cho phép retry attempt kế tiếp.
-    - Bảo mật tuyệt đối: SSH secret và các giá trị trong `env_vars` được truyền an toàn qua biến môi trường, tự động lọc sạch và thay thế bằng `***REDACTED***` trong toàn bộ event, exception message và `abort_reason`.
+    - Bảo mật tuyệt đối & quản lý tiến trình:
+      - Tạo process group riêng (`start_new_session=True` trên POSIX) trước khi dùng `killpg` để tránh gửi nhầm tín hiệu sang tiến trình cha.
+      - Đường mặc định bắt buộc cả binary Electron và CLI đã biên dịch, không fallback sang wrapper `spawnSync` (`run-as-node.js`) hoặc Node thường để Python quản lý trực tiếp tiến trình Electron con.
+      - Khử SSH secret và toàn bộ giá trị `env_vars` đệ quy ngay tại mức event CLI (`sanitize_obj()`), `stderr`, `stdout` và trước khi trả về `DeployResult.steps`.
+      - Bọc toàn bộ khâu kiểm tra đầu vào (`vps_id`, `app_name`, `source_path`), tìm CLI và `subprocess.Popen` để tự động gọi `abort_run()` đối với run đang `running` kèm lý do đã khử secret trước khi re-raise.
   - Kiểm thử & Chất lượng:
-    - 14 unit tests kiểm thử mock ngoại tuyến toàn diện trong `experiments/tests/test_deploy_adapter.py` (bao gồm ca thành công, deploy lỗi giữ bản ghi failed & retry attempt 2, lỗi trước ID, timeout sau ID, timeout trước ID, output sai định dạng, gán assigned lặp, lệch deployment_id ở finished, exit code khác 0, SQLite status không phải running, env_vars ngoài command line, và khử sạch secret khỏi abort_reason/exception).
-    - Toàn bộ suite đạt **194 passed** pytest (nâng từ 188), Ruff clean; `pnpm typecheck` (497 Vitest pass, 0 type error) và `tsc -p tsconfig.scripts.json` trong `app/` đạt PASS; giữ pilot thực tế **`NOT_RUN`**.
+    - 20 unit tests kiểm thử mock ngoại tuyến toàn diện trong `experiments/tests/test_deploy_adapter.py` (bao gồm ca thành công, deploy lỗi giữ bản ghi failed & retry attempt 2, lỗi trước ID, timeout sau ID, timeout trước ID, output sai định dạng, gán assigned lặp, lệch deployment_id ở finished, exit code khác 0, SQLite status không phải running, env_vars ngoài command line, khử sạch secret khỏi abort_reason/exception, bắt buộc Electron binary & compiled CLI không fallback, input validation failure tự abort run, spawn failure tự abort run, khử secret tại event/steps/url, và cấu hình process group POSIX).
+    - Toàn bộ suite đạt **200 passed** pytest (nâng từ 194), Ruff format & lint clean; `pnpm typecheck` (497 Vitest pass, 0 type error) và `tsc -p tsconfig.scripts.json` trong `app/` đạt PASS; `git diff --check` sạch; giữ pilot thực tế **`NOT_RUN`**.
 
 ## Lệnh tái hiện
 
-Test thuần (194 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed, P2b-3 là 145 passed, P2d-1a là 180 passed, P2d-1b bản đầu là 188 passed, P2d-1b hoàn thiện là 194 passed):
+Test thuần (200 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed, P2b-3 là 145 passed, P2d-1a là 180 passed, P2d-1b bản đầu là 188 passed, P2d-1b lần 2 là 194 passed, P2d-1b hoàn thiện là 200 passed):
 
 ```
 ml-service/.venv/Scripts/python.exe -m pytest \

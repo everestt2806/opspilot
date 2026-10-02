@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -14,7 +16,9 @@ from experiments.adapters.deploy_adapter import (
     DeployPreIdError,
     DeployProtocolError,
     DeployTimeoutError,
+    get_default_cli_cmd,
     resolve_db_path,
+    sanitize_obj,
 )
 from experiments.run_store import get_run, start_run
 
@@ -638,3 +642,260 @@ def test_deploy_secrets_redacted_from_abort_reason_and_exceptions(
     assert "super_secret_token_123" not in abort_reason
     assert "env_secret_pass_456" not in abort_reason
     assert "***REDACTED***" in abort_reason
+
+
+def test_sanitize_obj_nested() -> None:
+    data = {
+        "token": "my_secret_token",
+        "nested": [
+            {"sub": "my_secret_token", "num": 123},
+            "plain_text",
+        ],
+        "safe": True,
+    }
+    cleaned = sanitize_obj(data, ["my_secret_token"])
+    assert cleaned["token"] == "***REDACTED***"
+    assert cleaned["nested"][0]["sub"] == "***REDACTED***"
+    assert cleaned["nested"][0]["num"] == 123
+    assert cleaned["nested"][1] == "plain_text"
+    assert cleaned["safe"] is True
+
+
+def test_get_default_cli_cmd_requires_electron_and_compiled_cli(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_exists = Path.exists
+
+    # 1. Cả 2 file tồn tại -> trả về danh sách 2 phần tử
+    def mock_both_exist(self: Path) -> bool:
+        s = str(self)
+        if "electron" in s or "deploy-cli.js" in s:
+            return True
+        return original_exists(self)
+
+    monkeypatch.setattr(Path, "exists", mock_both_exist)
+    cmd = get_default_cli_cmd()
+    assert len(cmd) == 2
+    assert "deploy-cli.js" in cmd[1]
+
+    # 2. Thiếu binary Electron -> ném FileNotFoundError, tuyệt đối không fallback sang Node hoặc run-as-node.js
+    def mock_no_electron(self: Path) -> bool:
+        s = str(self)
+        if "electron" in s and ("dist" in s or "node_modules" in s):
+            return False
+        if "deploy-cli.js" in s:
+            return True
+        return original_exists(self)
+
+    monkeypatch.setattr(Path, "exists", mock_no_electron)
+    with pytest.raises(FileNotFoundError, match="Không tìm thấy binary Electron"):
+        get_default_cli_cmd()
+
+    # 3. Thiếu file CLI biên dịch -> ném FileNotFoundError
+    def mock_no_compiled_cli(self: Path) -> bool:
+        s = str(self)
+        if "deploy-cli.js" in s:
+            return False
+        if "electron" in s:
+            return True
+        return original_exists(self)
+
+    monkeypatch.setattr(Path, "exists", mock_no_compiled_cli)
+    with pytest.raises(FileNotFoundError, match="Không tìm thấy file CLI đã biên dịch"):
+        get_default_cli_cmd()
+
+
+def test_deploy_input_validation_failure_aborts_run(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    adapter = DeployAdapter()
+
+    # 1. app_name rỗng -> abort run và ném ValueError
+    with pytest.raises(ValueError, match="app_name không được để trống"):
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="",
+            source_path=tmp_path,
+            db_path=db_file,
+        )
+
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "aborted"
+    assert "deploy_pre_id_error" in (run_row["abort_reason"] or "")
+    assert "app_name không được để trống" in (run_row["abort_reason"] or "")
+
+    # 2. vps_id không hợp lệ trên run mới -> abort run và ném ValueError
+    run_id2 = start_run(conn, "cpu_spike", 1, deployment_id=None, vps_id=1)
+    with pytest.raises(ValueError, match="vps_id phải là số nguyên dương"):
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id2,
+            vps_id=-1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+        )
+
+    run_row2 = get_run(conn, run_id2)
+    assert run_row2 is not None
+    assert run_row2["status"] == "aborted"
+    assert "deploy_pre_id_error" in (run_row2["abort_reason"] or "")
+
+
+def test_deploy_spawn_failure_aborts_run(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    adapter = DeployAdapter(
+        default_cli_cmd=["non_existent_binary_xyz_12345"],
+        default_timeout_s=5.0,
+    )
+
+    with pytest.raises((FileNotFoundError, OSError)):
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+        )
+
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "aborted"
+    assert "deploy_pre_id_error" in (run_row["abort_reason"] or "")
+
+
+def test_deploy_events_and_steps_sanitized(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    conn.execute(
+        "INSERT INTO deployment (id, app_id, status) VALUES (18, 1, 'running')"
+    )
+    conn.commit()
+
+    run_id = start_run(conn, "cpu_spike", 1, deployment_id=None, vps_id=1)
+
+    mock_script = (
+        "import sys, json\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 18}), flush=True)\n"
+        "print(json.dumps({'event': 'step_start', 'step': 'BUILD_super_ssh_pass', 'detail': 'custom_env_secret_123'}), flush=True)\n"
+        "print(json.dumps({'event': 'step_done', 'step': 'BUILD_super_ssh_pass', 'log': 'Deployed with custom_env_secret_123'}), flush=True)\n"
+        "print(json.dumps({'event': 'finished', 'deployment_id': 18, 'status': 'running', 'app_url': 'http://super_ssh_pass:custom_env_secret_123@127.0.0.1:3000'}), flush=True)\n"
+        "sys.exit(0)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=5.0,
+    )
+
+    res = adapter.deploy(
+        conn=conn,
+        run_id=run_id,
+        vps_id=1,
+        app_name="demo-app",
+        source_path=tmp_path,
+        db_path=db_file,
+        ssh_secret="super_ssh_pass",
+        env_vars={"API_KEY": "custom_env_secret_123"},
+    )
+
+    assert res.deployment_id == 18
+    assert res.status == "running"
+    # app_url đã được khử
+    assert "super_ssh_pass" not in (res.app_url or "")
+    assert "custom_env_secret_123" not in (res.app_url or "")
+    assert "***REDACTED***" in (res.app_url or "")
+
+    # res.steps đã được khử triệt để ngay tại mức event
+    assert len(res.steps) == 2
+    for step in res.steps:
+        step_str = json.dumps(step)
+        assert "super_ssh_pass" not in step_str
+        assert "custom_env_secret_123" not in step_str
+        assert "***REDACTED***" in step_str
+
+
+def test_deploy_posix_start_new_session(
+    file_db: tuple[sqlite3.Connection, Path],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    conn, db_file = file_db
+    conn.execute(
+        "INSERT INTO deployment (id, app_id, status) VALUES (19, 1, 'running')"
+    )
+    conn.commit()
+
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    # 1. Trên POSIX (Linux/macOS): phải truyền start_new_session=True
+    monkeypatch.setattr(sys, "platform", "linux")
+
+    with patch("subprocess.Popen") as mock_popen:
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = 0
+        mock_proc.returncode = 0
+        mock_proc.stdout.readline.side_effect = [
+            '{"event": "assigned", "deployment_id": 19}\n',
+            '{"event": "finished", "deployment_id": 19, "status": "running"}\n',
+            "",
+        ]
+        mock_proc.stderr.readline.side_effect = [""]
+        mock_popen.return_value = mock_proc
+
+        adapter = DeployAdapter(default_cli_cmd=["dummy_cli"])
+        res = adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+        )
+        assert res.deployment_id == 19
+        assert mock_popen.call_args[1].get("start_new_session") is True
+
+    # Kết thúc run_id trước khi khởi tạo run tiếp theo để tuân thủ quy tắc Single Active Run
+    from experiments.run_store import abort_run
+
+    abort_run(conn, run_id, reason="test part 1 finished")
+
+    # 2. Trên Windows: KHÔNG truyền start_new_session
+    monkeypatch.setattr(sys, "platform", "win32")
+    run_id2 = start_run(conn, "slow_db", 1, deployment_id=None, vps_id=1)
+
+    with patch("subprocess.Popen") as mock_popen:
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = 0
+        mock_proc.returncode = 0
+        mock_proc.stdout.readline.side_effect = [
+            '{"event": "assigned", "deployment_id": 19}\n',
+            '{"event": "finished", "deployment_id": 19, "status": "running"}\n',
+            "",
+        ]
+        mock_proc.stderr.readline.side_effect = [""]
+        mock_popen.return_value = mock_proc
+
+        adapter = DeployAdapter(default_cli_cmd=["dummy_cli"])
+        res2 = adapter.deploy(
+            conn=conn,
+            run_id=run_id2,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+        )
+        assert res2.deployment_id == 19
+        assert "start_new_session" not in mock_popen.call_args[1]
