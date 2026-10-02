@@ -126,10 +126,13 @@ def plan_fault(scenario: str, duration_s: int = FAULT_DURATION_S) -> FaultPlan:
 def apply_plan(
     app_base_url: str, plan: FaultPlan, sleep_fn=None, now_fn=None
 ) -> None:  # pragma: no cover
-    """Bắn lịch fault theo thời gian thực tới app demo. Chỉ chạy trong run thật (cần requests + app)."""
+    """Bắn lịch fault theo thời gian thực tới app demo. Chạy trong run thật (ưu tiên requests, fallback urllib)."""
     import time
 
-    import requests
+    try:
+        import requests
+    except ModuleNotFoundError:
+        requests = None
 
     sleep_fn = sleep_fn or time.sleep
     now_fn = now_fn or time.monotonic
@@ -139,17 +142,39 @@ def apply_plan(
         while now_fn() < target:
             sleep_fn(min(1.0, target - now_fn()))
         try:
-            requests.get(f"{app_base_url.rstrip('/')}{action.path}", timeout=5)
+            if requests is not None:
+                requests.get(f"{app_base_url.rstrip('/')}{action.path}", timeout=5)
+            else:
+                import urllib.request
+
+                with urllib.request.urlopen(
+                    f"{app_base_url.rstrip('/')}{action.path}", timeout=5
+                ):
+                    pass
         except Exception as exc:  # noqa: BLE001
             print(f"fault action lỗi ({action.path}): {exc}", flush=True)
 
 
 def reset_fault(app_base_url: str) -> bool:  # pragma: no cover
     """Tắt mọi hiệu ứng fault (POST /debug/reset). Gọi ở cuối pha C."""
-    import requests
-
     try:
+        import requests
+
         response = requests.post(f"{app_base_url.rstrip('/')}/debug/reset", timeout=5)
         return response.status_code == 200
+    except ModuleNotFoundError:
+        import urllib.error
+        import urllib.request
+
+        try:
+            req = urllib.request.Request(
+                f"{app_base_url.rstrip('/')}/debug/reset",
+                data=b"",
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=5) as response:
+                return response.status == 200
+        except Exception:  # noqa: BLE001
+            return False
     except Exception:  # noqa: BLE001
         return False
