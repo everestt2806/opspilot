@@ -1,13 +1,15 @@
 # Hồ sơ Preflight Thí nghiệm Pilot TK-S6 (1 Kịch bản 75 Phút)
 
-> ⚠️ **NGUYÊN TẮC BẢO TOÀN TRẠNG THÁI PILOT**:
-> Hồ sơ này chuẩn bị đầy đủ các điều kiện kỹ thuật, cấu hình, và kế hoạch thu hồi phục vụ chạy pilot một kịch bản đầu–cuối.
-> **Toàn bộ hạ tầng VPS thật và tải 75 phút vẫn được giữ nghiêm ngặt ở trạng thái `NOT_RUN`**.
-> Tuyệt đối không kết nối mạng tới VPS, không chạy tải thực tế, không push/PR/merge vào nhánh chính khi chưa có phê duyệt từ Tech Lead / Giảng viên hướng dẫn.
+> ⚠️ **TRẠNG THÁI HIỆN TẠI: NOT_READY / NOT_RUN**
+> - **NOT_READY**: Đã phát hiện **02 khoảng trống runtime (runtime gaps)** cần khắc phục trong mã nguồn / quy trình trước khi có thể khởi chạy (xem chi tiết tại Mục 1.1, Mục 3.2 và Mục 4.2).
+> - **NOT_RUN**: Toàn bộ hạ tầng VPS thật và bài kiểm tra tải 75 phút được giữ nghiêm ngặt ở trạng thái `NOT_RUN` (không mở kết nối SSH, không phát tải thực tế, không đổi trạng thái).
+> - **Cam kết Git**: Chỉ lưu trữ cục bộ trên nhánh `feat/deploy-reachability`, tuyệt đối không tự ý push/PR/merge vào nhánh chính khi chưa có phê duyệt từ Tech Lead / Giảng viên hướng dẫn.
 
 ---
 
 ## 1. Bảng Tổng hợp Điều kiện Preflight & Trạng thái Kiểm chứng
+
+### 1.1. Bảng Đánh giá Điều kiện Kỹ thuật
 
 | STT | Hạng mục kiểm tra | Tiêu chuẩn kỹ thuật bắt buộc | Lệnh / Bằng chứng xác minh cục bộ | Trạng thái |
 | :---: | :--- | :--- | :--- | :---: |
@@ -26,6 +28,20 @@
 | **13** | **Đồng bộ giờ NTP VPS** | Dịch vụ `systemd-timesyncd` đang active, độ lệch $\|offset\| \le 2000$ ms | Cần kết nối SSH đo clock skew thực tế qua `measure_clock_offset_ms` | **NOT_RUN** |
 | **14** | **Cổng mạng & UFW VPS** | Mở cổng SSH (22 hoặc custom) và dải cổng demo app (30000–30999) | Cần kiểm tra firewall VPS qua lệnh `ufw status` trên máy chủ | **NOT_RUN** |
 | **15** | **Live Pilot 75 phút** | Chạy toàn bộ chu trình Pha A–D (4500s) với tải 5 req/s trên VPS | Giữ nguyên trạng thái an toàn theo cam kết đồ án | **NOT_RUN** |
+| **16** | **Runtime Gap 1: Env App** | Runner chưa truyền `ENABLE_FAULT_ENDPOINTS=true` khi gọi `DeployAdapter.deploy()` | Demo app trên VPS sẽ tắt `/debug/*` (trả về 404), khiến Pha C thất bại | **NOT_READY** |
+| **17** | **Runtime Gap 2: Credential** | Cờ `--ssh-key-file` không tự cấp credential cho `DeployAdapter` & `PollerAdapter` | Thiếu `OPSPILOT_SSH_SECRET` hoặc bản ghi mã hoá trong DB sẽ gây abort ở Bước 3 | **NOT_READY** |
+
+### 1.2. Chi tiết 02 Khoảng trống Runtime (Runtime Gaps)
+
+1. **Runtime Gap 1 — Biến môi trường `ENABLE_FAULT_ENDPOINTS` khi deploy**:
+   - *Thực trạng*: Khi `run_experiment.py` thực hiện Bước 3 gọi `deploy_adapter.deploy()`, adapter này kích hoạt `deploy-cli.ts` để sinh file `.env` và `docker-compose.yml` trên VPS. Hiện tại runner không truyền biến môi trường `ENABLE_FAULT_ENDPOINTS=true` vào cấu hình triển khai của ứng dụng.
+   - *Hậu quả*: Mã nguồn [`demo-apps/express-api/server.js`](file:///D:/Developing/DuAnCNTT/demo-apps/express-api/server.js) kiểm tra `if (process.env.ENABLE_FAULT_ENDPOINTS !== 'true') return res.status(404)`. Do thiếu biến này, toàn bộ các request tiêm lỗi `/debug/*` trong Pha C sẽ nhận mã HTTP 404, khiến thí nghiệm không thể kích hoạt fault theo đúng kế hoạch.
+   - *Hành động khắc phục trước khi chạy*: Runner cần truyền `ENABLE_FAULT_ENDPOINTS=true` thông qua biến môi trường `OPSPILOT_APP_ENV_JSON` của `DeployAdapter`.
+
+2. **Runtime Gap 2 — Cơ chế cấp phát Credential giữa Runner, DeployAdapter và PollerAdapter**:
+   - *Thực trạng*: Tham số `--ssh-key-file` trên CLI của `run_experiment.py` chỉ được nạp cho `SystemSshClient` của chính runner (dùng để đo độ lệch đồng hồ, điều khiển container loadgen và gọi HTTP reset). Tuy nhiên, `DeployAdapter` (tiến trình Electron `deploy-cli.ts`) và `PollerAdapter` (tiến trình Electron `headless-poller.ts`) hoạt động độc lập và lấy SSH secret từ biến môi trường `OPSPILOT_SSH_SECRET` hoặc giải mã bản ghi VPS trong SQLite DB (`loadSecret(database, cipher, vpsId)`).
+   - *Hậu quả*: Việc truyền `--ssh-key-file` vào runner không tự động chuyển tiếp private key thành credential cho deploy hay poller. Nếu biến môi trường `OPSPILOT_SSH_SECRET` không được thiết lập đồng thời, `deploy-cli.ts` và `headless-poller.ts` sẽ lập tức báo lỗi thiếu credential và attempt bị abort ngay tại Bước 3.
+   - *Hành động khắc phục trước khi chạy*: Cần đồng bộ nạp private key vào biến môi trường `OPSPILOT_SSH_SECRET` hoặc tạo bản ghi VPS hợp lệ đã mã hoá trong SQLite database.
 
 ---
 
@@ -50,251 +66,245 @@ Khi nhận lệnh khởi chạy pilot thực tế từ Tech Lead, người thự
    - Cho phép cổng SSH (mặc định 22 hoặc cổng được cấp).
    - Cho phép dải cổng host cho ứng dụng demo: `30000:30999/tcp`.
    - Cho phép container Docker truy cập ra ngoài mạng (NAT/MASQUERADE) để tải package nếu cần build.
-5. **Bản ghi trong cơ sở dữ liệu SQLite (`vps` table)**:
-   Trước khi chạy runner, SQLite DB cần có bản ghi VPS hợp lệ:
-   ```sql
-   INSERT INTO vps (id, name, host, port, username, auth_type, encrypted_secret)
-   VALUES (1, 'vps-wiservice-01', '<vps_ip>', 22, 'root', 'key', X'00');
-   ```
+5. **Cấu hình Bản ghi VPS trong SQLite (`vps` table) với Credential Mã hoá Hợp lệ**:
+   - Bảng `vps` sử dụng cơ chế bảo mật khóa mã hoá `aes_256_gcm` ([`app/src/main/crypto/credentials.ts`](file:///D:/Developing/DuAnCNTT/app/src/main/crypto/credentials.ts)). Cột `encrypted_secret` bắt buộc phải là dữ liệu nhị phân (BLOB) được mã hoá bằng master key của OpsPilot, đi kèm giá trị khởi tạo `iv` (12 bytes) và mã xác thực `auth_tag` (16 bytes).
+   - **Tuyệt đối không chèn giá trị giả lập như `X'00'`**: Nếu chèn dữ liệu thô hoặc dummy hex, hàm giải mã `loadSecret()` sẽ ném lỗi `SSH_AUTH_FAILED` và dừng toàn bộ tiến trình.
+   - **Quy trình chuẩn bị bản ghi**:
+     - *Cách 1 (Khuyến nghị)*: Mở giao diện OpsPilot UI, vào mục *Cài đặt (Settings) -> Quản lý VPS* và nhấn *Thêm VPS*. Nhập IP, port, user và private key; hệ thống sẽ tự động gọi `createCredentialCipher()` để mã hoá an toàn vào cơ sở dữ liệu.
+     - *Cách 2 (Script)*: Sử dụng hàm mã hoá `AesGcmCredentialCipher.encrypt(secret)` từ master key của ứng dụng để chèn bản ghi với đầy đủ `crypto_scheme='aes_256_gcm'`, `encrypted_secret`, `iv`, và `auth_tag`.
 
 ---
 
 ## 3. SSH Key, Known Hosts & Cơ chế Credential Dùng chung
 
-### 3.1. Cấu hình Khóa SSH & Xác thực Host Key
+### 3.1. Cấu hình Khóa SSH & Xác thực Host Key Bắt buộc
 - **Định dạng khóa**: Khóa riêng SSH OpenSSH (Ed25519: `id_ed25519` hoặc RSA 4096: `id_rsa`).
 - **Passphrase**: Khóa không cài đặt passphrase (hoặc được load sẵn vào `ssh-agent`) để hỗ trợ runner chạy tự động không tương tác.
-- **Phân quyền tập tin**: Trên hệ thống POSIX, file khóa riêng phải có quyền `0600` (`chmod 600 ~/.ssh/id_rsa`).
-- **Kiểm tra Host Key**:
-  - Tuyệt đối không tắt kiểm tra host key (`StrictHostKeyChecking=yes`).
-  - Runner không bao giờ chuyển hướng `UserKnownHostsFile` về `/dev/null`.
-  - Trước khi chạy, thêm host key của VPS vào file known_hosts cục bộ:
-    ```bash
-    ssh-keyscan -p <vps_port> <vps_ip> >> ~/.ssh/known_hosts
-    ```
-  - Hoặc chỉ định file known hosts riêng qua biến `OPSPILOT_KNOWN_HOSTS`.
+- **Phân quyền tập tin**: Trên hệ thống POSIX, file khóa riêng phải có quyền `0600` (`chmod 600 ~/.ssh/id_rsa`). Trên Windows, chỉ cho phép tài khoản người dùng hiện tại có quyền đọc (`icacls`).
+- **Xác thực Fingerprint Host Key qua Kênh Tin cậy**:
+  - `StrictHostKeyChecking=yes` luôn được bật; runner không bao giờ chuyển hướng `UserKnownHostsFile` về `/dev/null`.
+  - **Bắt buộc đối soát fingerprint**: Không được chạy `ssh-keyscan` và tự động ghi mù quáng vào file `known_hosts` vì điều này vô hiệu hoá khả năng ngăn chặn tấn công Man-In-The-Middle (MITM).
+  - **Quy trình xác minh 3 bước**:
+    1. Lấy fingerprint chính thức từ kênh tin cậy ngoài luồng (Dashboard nhà cung cấp WiService hoặc VNC Console):
+       ```bash
+       ssh-keygen -l -f /etc/ssh/ssh_host_ed25519_key.pub
+       # Ví dụ output: 256 SHA256:7uK+... (ED25519)
+       ```
+    2. Quét fingerprint từ máy điều khiển:
+       ```powershell
+       ssh-keyscan -p <vps_port> <vps_ip> | ssh-keygen -lf -
+       ```
+    3. Chỉ khi chuỗi fingerprint trùng khớp 100%, mới được thêm khóa máy chủ vào `~/.ssh/known_hosts`:
+       ```powershell
+       ssh-keyscan -p <vps_port> <vps_ip> | Out-File -Append -Encoding ascii "$HOME\.ssh\known_hosts"
+       ```
 
-### 3.2. Cơ chế Credential Dùng chung (Runner, DeployAdapter, Headless Poller)
-Để bảo đảm tính an toàn và ngăn chặn rò rỉ credential:
+### 3.2. Cơ chế Credential Dùng chung & Giải pháp Cầu nối
 1. **Loại bỏ hoàn toàn `--ssh-secret` khỏi dòng lệnh (`argv`)**:
-   - Lệnh gọi CLI của `run_experiment.py` chỉ chấp nhận cờ `--ssh-key-file <duong_dan_file_key>`.
-   - Ngăn chặn triệt để nguy cơ các tiến trình khác trên hệ điều hành đọc được secret thông qua bảng tiến trình (`ps aux`, `Get-Process`).
-2. **Kênh truyền Credential an toàn**:
-   - Biến môi trường: `OPSPILOT_SSH_KEY_FILE` (đường dẫn file khóa).
-   - Hoặc biến môi trường nội bộ: `OPSPILOT_SSH_SECRET` / `OPSPILOT_DEPLOY_SECRET` (chỉ dùng khi nạp bí mật trong bộ nhớ hoặc pipeline CI).
-3. **Cơ chế xử lý của DeployAdapter**:
-   - Nhận thông tin cấu hình nhạy cảm qua biến môi trường `OPSPILOT_APP_ENV_JSON`.
-   - Trước khi spawn tiến trình con (deploy-cli / docker), tự động xóa sạch các biến môi trường nhạy cảm kế thừa khỏi môi trường tiến trình con.
-4. **Cơ chế xử lý của Headless Poller**:
-   - Poller kết nối trực tiếp tới SQLite DB bằng đường dẫn file trên đĩa (`db_path`), không nhận password hay private key qua tham số CLI.
-5. **Chính sách Khử Secret (Sanitization)**:
+   - Runner CLI chỉ chấp nhận `--ssh-key-file <duong_dan_file_key>`.
+   - Ngăn chặn nguy cơ lộ bí mật qua bảng tiến trình hệ thống (`Get-Process`, `ps`).
+2. **Giải pháp cầu nối cho Runtime Gap 2**:
+   - Do `deploy-cli.ts` và `headless-poller.ts` yêu cầu secret từ môi trường khi DB chưa có bản ghi mã hoá, người vận hành cần thiết lập đồng thời biến môi trường `OPSPILOT_SSH_SECRET`:
+     ```powershell
+     $env:OPSPILOT_SSH_KEY_FILE = "$HOME\.ssh\opspilot_vps_key"
+     $env:OPSPILOT_SSH_SECRET = (Get-Content -Raw "$env:OPSPILOT_SSH_KEY_FILE")
+     ```
+3. **Chính sách Khử Secret (Sanitization)**:
    - `SystemSshClient.__repr__` luôn ẩn secret (`secret=******`).
    - Mọi thông báo lỗi, log, và stdout/stderr của lệnh SSH tự động thay thế chuỗi secret bằng `******`.
-   - Bản ghi `experiment_run` (cột `abort_reason`, `notes`, `fault_params_json`) và bảng `deployment` trong SQLite cam kết 100% không chứa chuỗi secret thô.
+   - Bảng `experiment_runs` (cột `abort_reason`, `notes`, `fault_params_json`) và bảng `deployment` cam kết không chứa chuỗi secret thô.
 
 ---
 
-## 4. Ứng dụng Demo (`express-api`) & Cấu hình Fault Injection
+## 4. Ứng dụng Demo (`express-api`) & Phân tích Rủi ro Kịch bản Lỗi
 
 ### 4.1. Cấu trúc Mã nguồn Cục bộ
-Thư mục: `demo-apps/express-api/`
-- `package.json`: Khai báo phụ thuộc `express`, `pg` (không có dependency thừa).
-- `server.js`: Web server xử lý logic API sản phẩm, phân trang, seed 1000 bản ghi (fallback bộ nhớ khi không có PostgreSQL).
-- `Dockerfile`: Multi-stage / lightweight Node.js runtime.
+Thư mục: [`demo-apps/express-api/`](file:///D:/Developing/DuAnCNTT/demo-apps/express-api)
+- `package.json`: Khai báo phụ thuộc `express`, `pg`.
+- `server.js`: Web server xử lý logic API sản phẩm, phân trang, seed dữ liệu mẫu.
+- `Dockerfile`: Multi-stage lightweight Node.js runtime.
 - `public/`: Giao diện web tĩnh HTML/JS kiểm tra trực quan.
 
-### 4.2. Biến Môi trường Bắt buộc khi Triển khai Thí nghiệm
-Khi deploy ứng dụng demo phục vụ thí nghiệm pilot, bắt buộc phải truyền biến môi trường:
+### 4.2. Yêu cầu Biến Môi trường & Khắc phục Runtime Gap 1
+Để kích hoạt các route `/debug/*`, ứng dụng bắt buộc phải có biến môi trường:
 ```bash
 ENABLE_FAULT_ENDPOINTS=true
 PORT=3000
 ```
-*(Nếu `ENABLE_FAULT_ENDPOINTS` khác `"true"`, toàn bộ các route `/debug/*` sẽ trả về `404 Not Found` để bảo vệ an toàn cho ứng dụng).*
+Trước khi chạy pilot thực tế, runner cần bảo đảm truyền `ENABLE_FAULT_ENDPOINTS=true` vào cấu hình triển khai của ứng dụng.
 
-### 4.3. Bảng Ánh xạ 5 Kịch bản Lỗi (Docs/07 Mục 6) và Endpoint Ứng dụng
-Toàn bộ các endpoint `/debug/*` và `/health` đều được miễn nhiễm khỏi middleware gây chậm/lỗi, bảo đảm bảng điều khiển luôn phản hồi ngay cả khi app suy giảm nghiêm trọng:
+### 4.3. Bảng Phân tích 5 Kịch bản Lỗi & Cảnh báo Rủi ro OOM
 
-| Kịch bản (`--scenario`) | Endpoint tác động | Phương thức | Tham số & Quy luật tác động (Pha C: 1200 giây) |
-| :--- | :--- | :---: | :--- |
-| **`memory_leak`** | `/debug/leak` | `GET` | `?mb=5`: Cấp phát thêm 5MB mỗi 10 giây (120 lần, tổng cộng 600MB). Mảng lưu trữ toàn cục giữ tham chiếu khiến GC không thể thu hồi. |
-| **`cpu_spike`** | `/debug/cpu` | `GET` | `?ms=x`: Ramp tuyến tính từ 20ms lên 400ms (+20ms mỗi phút). Busy-loop chặn event loop khiến CPU container tăng vọt. |
-| **`error_burst`** | `/debug/error-rate` | `GET` | `?p=0.3`: Kích hoạt đột ngột một lần duy nhất tại phút 0 của Pha C. 30% tổng số request nhận HTTP 500. |
-| **`slow_db`** | `/debug/slow-db` | `GET` | `?sec=x`: Ramp tuyến tính từ 0.05s lên 1.5s mỗi phút. Chèn lệnh `pg_sleep(x)` vào truy vấn database PostgreSQL. |
-| **`latency_creep`** | `/debug/latency` | `GET` | `?ms=x`: Tăng dần +50ms mỗi phút, đạt trần tối đa 2500ms. Chèn `setTimeout` trì hoãn phản hồi HTTP của toàn bộ request ứng dụng. |
-| **Reset chung** | `/debug/reset` | `POST` | Xóa sạch toàn bộ buffer rò rỉ, giải phóng bộ nhớ, đưa toàn bộ tham số delay/error/cpu về 0. |
+| Kịch bản (`--scenario`) | Endpoint tác động | Tham số & Quy luật tác động (Pha C: 1200 giây) | Mức độ rủi ro hệ thống |
+| :--- | :--- | :--- | :---: |
+| **`cpu_spike`** *(Khuyến nghị số 1)* | `/debug/cpu?ms=x` | Ramp tuyến tính 20ms $\rightarrow$ 400ms (+20ms mỗi phút). Tăng tải event loop. | **Thấp** (Rất an toàn, không sập container) |
+| **`latency_creep`** *(Khuyến nghị số 2)* | `/debug/latency?ms=x` | Tăng dần +50ms mỗi phút, trần 2500ms qua `setTimeout`. | **Thấp** (An toàn, mô phỏng nghẽn mạng) |
+| **`slow_db`** | `/debug/slow-db?sec=x` | Ramp 0.05s $\rightarrow$ 1.5s mỗi phút chèn `pg_sleep`. | **Trung bình** (Phụ thuộc DB PostgreSQL) |
+| **`error_burst`** | `/debug/error-rate?p=0.3` | Bật một lần duy nhất tại phút 0 của Pha C, 30% request trả HTTP 500. | **Thấp** (An toàn, kiểm tra bộ đếm lỗi) |
+| **`memory_leak`** *(Nguy cơ OOM)* | `/debug/leak?mb=5` | Cấp phát 5MB mỗi 10 giây (120 lần, tổng cộng 600MB). | **RẤT CAO (Nguy cơ OOM Killer)** |
 
-Endpoint sức khoẻ: `GET /health` trả về `{"ok": true, "uptime_s": ...}` với HTTP 200 (không chịu ảnh hưởng của fault injection — đây chính là bài toán cốt lõi: healthcheck nhị phân vẫn xanh trong khi chất lượng dịch vụ đã suy giảm, đòi hỏi OpsPilot phải phát hiện qua ML).
+> ⚠️ **CẢNH BÁO RỦI RO OOM CHO KỊCH BẢN `memory_leak`**:
+> - Kịch bản `memory_leak` cấp phát tổng cộng **600 MB** trong 1200 giây của Pha C.
+> - Nếu container ứng dụng áp dụng giới hạn bộ nhớ tiêu chuẩn **512 MB** (`mem_limit: 512m`), container sẽ chạm ngưỡng trần cgroup ở khoảng giây thứ 1000 (khoảng lần tiêm thứ 85).
+> - Khi đó, cơ chế Linux Kernel OOM Killer sẽ gửi tín hiệu `SIGKILL` hủy diệt ngay lập tức tiến trình Node.js!
+> - Hậu quả: Ứng dụng sập hoàn toàn (connection refused), không thể quan sát quá trình suy thoái tiệm tiến và làm gãy hoàn toàn việc đánh giá khả năng tự phục hồi trong Pha D (3900–4500s).
+> - **Khuyến nghị**: Đối với lượt chạy pilot đầu tiên trên VPS thật, **bắt buộc lựa chọn kịch bản `cpu_spike` hoặc `latency_creep`** để bảo đảm tính ổn định của hạ tầng và hoàn thành trọn vẹn 75 phút thử nghiệm.
 
 ---
 
 ## 5. Dịch vụ Học máy (ML Service)
 
 ### 5.1. Khởi động Dịch vụ Cục bộ
-Dịch vụ ML Service chạy trên máy điều khiển local để xử lý huấn luyện mô hình và chấm điểm bất thường:
-```bash
-# Kích hoạt môi trường và khởi động ML Service
-cd ml-service
-.venv/Scripts/python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000
+Dịch vụ ML Service chạy trên máy điều khiển local:
+```powershell
+cd D:\Developing\DuAnCNTT\ml-service
+& ".\.venv\Scripts\python.exe" -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-### 5.2. Các Endpoint Bắt buộc & Vai trò trong Chu trình Thí nghiệm
-- `GET http://127.0.0.1:8000/health`: Kiểm tra ML Service sẵn sàng. Trả về `{"status": "ok", "version": "0.1.0"}`.
-- `POST http://127.0.0.1:8000/reset`: Gọi tại Bước 4 (trước khi bắt đầu Pha A) để xóa sạch các mô hình đã huấn luyện của deployment cũ, bảo đảm tính độc lập giữa các run.
-- `POST http://127.0.0.1:8000/train`: Gọi tại Bước 5 (cuối Pha A, sau 30 phút baseline). Yêu cầu tối thiểu 162 mẫu metric (90% của 180 mẫu). Huấn luyện đồng thời 3 mô hình học máy:
-  1. **Isolation Forest** (`iforest`)
-  2. **One-Class SVM** (`ocsvm`)
-  3. **Z-Score / EWMA** (`zscore_ewma`)
-- `GET http://127.0.0.1:8000/status`: Truy vấn trạng thái mô hình của deployment (`is_trained: true/false`, số mẫu đã học).
+### 5.2. Các Endpoint Bắt buộc
+- `GET http://127.0.0.1:8000/health`: Kiểm tra sẵn sàng (`{"status": "ok", "version": "0.1.0"}`).
+- `POST http://127.0.0.1:8000/reset`: Xóa sạch mô hình cũ trước khi bắt đầu Pha A.
+- `POST http://127.0.0.1:8000/train`: Huấn luyện tại cuối Pha A (yêu cầu $\ge 162$ mẫu metric sạch).
+- `GET http://127.0.0.1:8000/status`: Kiểm tra trạng thái mô hình (`is_trained: true/false`).
 
 ---
 
 ## 6. Đường Counter Chia sẻ giữa Load Generator & Collector
 
-### 6.1. Nguyên lý Hoạt động & Kiến trúc Mount
-Để Collector đọc được số liệu lỗi HTTP do Load Generator ghi nhận mà không cần gọi API qua mạng:
 1. **Container Load Generator**:
-   - Sinh tải liên tục 5 req/s vào app demo.
-   - Sử dụng bộ đếm trượt 60 giây (`Counter(counter_window_s=60.0)`).
+   - Tên container thực tế khi triển khai: `opspilot-loadgen-express-api`.
+   - Sinh tải liên tục 5 req/s với bộ đếm trượt 60 giây (`Counter(counter_window_s=60.0)`).
    - Ghi định kỳ file JSON tại `/var/metrics/loadgen_counter.json`.
-   - File JSON chứa cấu trúc:
-     ```json
-     {
-       "window_s": 60.0,
-       "total_requests": 300,
-       "error_requests": 0,
-       "error_rate": 0.0,
-       "timestamp": 1727800060.0
-     }
-     ```
 2. **Mount Thư mục Chia sẻ trên VPS**:
-   - Đường dẫn thư mục host: `/opt/opspilot/{app_name}/metrics/`.
-   - Lệnh Docker Run của Loadgen mount:
-     `-v /opt/opspilot/{app_name}/metrics:/var/metrics`
-   - File counter thực tế nằm tại:
-     `/opt/opspilot/{app_name}/metrics/loadgen_counter.json`.
+   - Thư mục host: `/opt/opspilot/{app_name}/metrics/`.
+   - Lệnh Docker Run mount: `-v /opt/opspilot/{app_name}/metrics:/var/metrics`.
+   - File counter thực tế: `/opt/opspilot/{app_name}/metrics/loadgen_counter.json`.
 3. **Container Collector**:
-   - Trong `templates/docker-compose.template.yml`:
-     ```yaml
-     collector:
-       environment:
-         LOADGEN_COUNTER_PATH: /var/metrics/loadgen_counter.json
-       volumes:
-         - ./metrics:/var/metrics
-     ```
-   - Thư mục `./metrics` trong thư mục triển khai của app (`/opt/opspilot/{app_name}`) chính là thư mục host `/opt/opspilot/{app_name}/metrics/`.
-   - Collector gọi hàm `collector.collect.read_loadgen_error_rate()` đọc trực tiếp file counter này mỗi chu kỳ 10 giây và điền vào trường `http_error_rate` của bảng `metric_sample`.
+   - Collector mount `./metrics:/var/metrics` với biến `LOADGEN_COUNTER_PATH=/var/metrics/loadgen_counter.json`.
+   - Gọi hàm [`read_loadgen_error_rate`](file:///D:/Developing/DuAnCNTT/collector/collect.py#L32-L47) đọc file trực tiếp mỗi 10 giây.
 
 ---
 
-## 7. Quy trình Thực thi Pilot 1 Kịch bản (Runbook)
+## 7. Quy trình Thực thi Pilot 1 Kịch bản bằng PowerShell (Runbook)
+
+Toàn bộ các lệnh dưới đây được viết bằng **PowerShell** tương thích trực tiếp với môi trường Windows hiện tại:
 
 ### Bước 1: Khởi động ML Service trên máy điều khiển local
-```bash
-cd D:/Developing/DuAnCNTT/ml-service
-.venv/Scripts/python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000
+```powershell
+cd D:\Developing\DuAnCNTT\ml-service
+& ".\.venv\Scripts\python.exe" -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
-Xác nhận service đã sẵn sàng:
-```bash
-curl -s http://127.0.0.1:8000/health
-# Kỳ vọng: {"status":"ok","version":"0.1.0"}
-```
-
-### Bước 2: Thiết lập Biến Môi trường Credential (trên máy local)
-```bash
-# Thiết lập đường dẫn file SSH key (an toàn, không lộ secret qua argv)
-export OPSPILOT_SSH_KEY_FILE="$HOME/.ssh/opspilot_vps_key"
+Kiểm tra phản hồi:
+```powershell
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/health"
+# Kỳ vọng: @{ status = "ok"; version = "0.1.0" }
 ```
 
-### Bước 3: Khởi chạy Orchestrator Thí nghiệm (Ví dụ kịch bản `memory_leak`)
-Lệnh chạy điều phối 10 bước chuẩn hoá, tự động bật cờ pilot 4500s:
-```bash
-cd D:/Developing/DuAnCNTT
-ml-service/.venv/Scripts/python.exe experiments/run_experiment.py \
-  --scenario memory_leak \
-  --repeat 1 \
-  --vps-id 1 \
-  --db-path app/opspilot.db \
-  --app-name express-api \
-  --source-path demo-apps/express-api \
-  --app-url http://<vps_ip>:30001 \
-  --ml-url http://127.0.0.1:8000 \
-  --ssh-key-file "$OPSPILOT_SSH_KEY_FILE" \
+### Bước 2: Thiết lập Biến Môi trường Credential An toàn
+```powershell
+# Đường dẫn file SSH private key
+$env:OPSPILOT_SSH_KEY_FILE = "$HOME\.ssh\opspilot_vps_key"
+
+# Khắc phục Runtime Gap 2: Nạp SSH secret cho DeployAdapter & PollerAdapter
+$env:OPSPILOT_SSH_SECRET = (Get-Content -Raw "$env:OPSPILOT_SSH_KEY_FILE")
+```
+
+### Bước 3: Khởi chạy Orchestrator Thí nghiệm (Kịch bản ít rủi ro: `cpu_spike`)
+```powershell
+cd D:\Developing\DuAnCNTT
+& ".\ml-service\.venv\Scripts\python.exe" experiments\run_experiment.py `
+  --scenario cpu_spike `
+  --repeat 1 `
+  --vps-id 1 `
+  --db-path app\opspilot.db `
+  --app-name express-api `
+  --source-path demo-apps\express-api `
+  --app-url "http://<vps_ip>:30001" `
+  --ml-url "http://127.0.0.1:8000" `
+  --ssh-key-file "$env:OPSPILOT_SSH_KEY_FILE" `
   --allow-pilot-4500
 ```
 
-*Tiến trình diễn ra tự động qua 4 pha:*
-- **Pha A (0–1800s)**: Thu thập 180 mẫu baseline bình thường $\rightarrow$ Tự động gọi `POST /train`.
-- **Pha B (1800–2700s)**: Holdout đánh giá mô hình bình thường trong 15 phút (90 mẫu).
-- **Pha C (2700–3900s)**: Tiêm lỗi `memory_leak` (`/debug/leak?mb=5` mỗi 10s) suốt 20 phút (120 mẫu).
-- **Pha D (3900–4500s)**: Phục hồi, tắt fault, thu thập 10 phút (60 mẫu) $\rightarrow$ Dừng Loadgen.
-- **Kết thúc (4500s)**: Drain Headless Poller $\rightarrow$ Chạy Integrity Gate $\rightarrow$ Đóng run `completed`.
+### Bước 4: Lấy `run_id` Thực tế từ Cơ sở Dữ liệu & Xuất Kết quả
+Không dùng giá trị cố định `run_id=1`, trích xuất trực tiếp `run_id` mới nhất vừa thực hiện:
+```powershell
+# Truy vấn ID thực tế từ bảng experiment_runs
+$RUN_ID = (& ".\ml-service\.venv\Scripts\python.exe" -c "import sqlite3; conn = sqlite3.connect('app/opspilot.db'); cur = conn.cursor(); cur.execute('SELECT id FROM experiment_runs ORDER BY id DESC LIMIT 1'); row = cur.fetchone(); print(row[0] if row else ''); conn.close()")
 
-### Bước 4: Xuất Kết quả Thí nghiệm ra CSV & Parquet
-Sau khi run hoàn tất (giả định `run_id=1`), xuất dữ liệu sang thư mục kết quả:
-```bash
-ml-service/.venv/Scripts/python.exe -c "
+if (-not $RUN_ID) {
+    Write-Error "Không tìm thấy bản ghi experiment_runs nào trong cơ sở dữ liệu!"
+    exit 1
+}
+
+Write-Host ">>> Đang xuất dữ liệu cho Run ID thực tế: $RUN_ID" -ForegroundColor Cyan
+
+# Thực hiện xuất kết quả ra thư mục theo run_id thực
+& ".\ml-service\.venv\Scripts\python.exe" -c @"
 import sqlite3
 from pathlib import Path
 from experiments.export_results import export_run
 
 conn = sqlite3.connect('app/opspilot.db')
-export_run(conn, run_id=1, out_dir=Path('experiments/results/run_memory_leak_1'))
+out_dir = Path('experiments/results/run_cpu_spike_$RUN_ID')
+export_run(conn, run_id=int('$RUN_ID'), out_dir=out_dir)
 conn.close()
-print('Xuat ket qua thanh cong!')
-"
+print(f'Xuất kết quả thành công vào thư mục: {out_dir}')
+"@
 ```
 
-### Bước 5: Phân tích Dữ liệu & Xuất Bảng Markdown Báo cáo
-```bash
-ml-service/.venv/Scripts/python.exe experiments/analyze.py experiments/results/
+### Bước 5: Phân tích Dữ liệu & Xuất Báo cáo So sánh
+```powershell
+& ".\ml-service\.venv\Scripts\python.exe" experiments\analyze.py experiments\results\
 ```
-Lệnh sẽ tính toán đầy đủ các chỉ số: F1-score, Precision, Recall, Detection Delay ($T_{detect}$), False Alarm Rate ($FAR_{clean}$), và in bảng Markdown đối soát 5 phương pháp phát hiện bất thường.
 
 ---
 
 ## 8. Kế hoạch Thu hồi & Xử lý Sự cố Khẩn cấp (Rollback & Emergency Teardown)
 
-Trong trường hợp thí nghiệm gặp sự cố giữa chừng (mất kết nối mạng, lệch đồng hồ, container bị crash, hoặc người điều khiển muốn hủy gấp):
-
-### 8.1. Thu hồi Cục bộ từ Orchestrator
-Runner `run_experiment.py` đã trang bị sẵn khối `finally:` tự động thực thi khi bị ngắt (`Ctrl+C` hoặc Exception):
-1. Tự động gọi `reset_fault()` tới app demo để tắt toàn bộ hiệu ứng lỗi.
-2. Tự động gọi `loadgen_handle.cleanup()` để dừng và xoá container load generator.
-3. Tự động gọi `poller_handle.stop()` để dừng tiến trình con Headless Poller.
-4. Đóng kết nối SSH và SQLite database, cập nhật trạng thái `status='aborted'` cùng lý do huỷ vào DB.
+### 8.1. Thu hồi Cục bộ Tự động qua Khối `finally` của Runner
+Khi runner gặp ngoại lệ hoặc bị ngắt (`Ctrl+C`), khối `finally` sẽ:
+1. Gọi `reset_fault()` tắt toàn bộ hiệu ứng lỗi.
+2. Gọi `loadgen_handle.cleanup()` dừng container `opspilot-loadgen-express-api`.
+3. Gọi `poller_handle.stop()` dừng tiến trình Headless Poller.
+4. Cập nhật `status='aborted'` và lưu lý do huỷ vào SQLite.
 
 ### 8.2. Quy trình Thu hồi Khẩn cấp Thủ công trên VPS (Manual Teardown)
-Nếu máy điều khiển local bị mất nguồn hoặc ngắt kết nối đột ngột khiến khối `finally` không thể hoàn tất, thực hiện thủ công các lệnh sau qua SSH:
+Nếu máy local bị ngắt đột ngột, thực hiện thủ công các bước sau:
 
-1. **Tắt ngay lập tức hiệu ứng Fault trên App Demo**:
-   ```bash
-   curl -s -X POST http://<vps_ip>:<host_port>/debug/reset
+1. **Tắt hiệu ứng lỗi trên ứng dụng demo**:
+   ```powershell
+   Invoke-RestMethod -Method Post -Uri "http://<vps_ip>:30001/debug/reset"
    ```
-2. **Dừng và xoá container Load Generator**:
+2. **Dừng và xoá đúng tên container loadgen thực tế (`opspilot-loadgen-express-api`)**:
    ```bash
-   ssh -i ~/.ssh/id_rsa root@<vps_ip> "docker stop loadgen-express-api && docker rm loadgen-express-api"
+   ssh -i ~/.ssh/id_rsa root@<vps_ip> "docker stop opspilot-loadgen-express-api && docker rm opspilot-loadgen-express-api"
    ```
-3. **Dừng và dọn dẹp sạch sẽ toàn bộ dịch vụ ứng dụng demo & collector**:
+3. **Dừng app & collector nhưng BẢO LƯU VOLUME (không dùng cờ `-v`)**:
    ```bash
-   ssh -i ~/.ssh/id_rsa root@<vps_ip> "cd /opt/opspilot/express-api && docker compose down -v"
+   ssh -i ~/.ssh/id_rsa root@<vps_ip> "cd /opt/opspilot/express-api && docker compose down"
    ```
-4. **Kiểm tra và dọn dẹp container mồ côi (nếu có)**:
-   ```bash
-   ssh -i ~/.ssh/id_rsa root@<vps_ip> "docker ps -a --filter 'name=express-api' -q | xargs -r docker rm -f"
-   ```
-5. **Cập nhật trạng thái trong SQLite DB local**:
-   Nếu run bị treo ở trạng thái `running`, chạy câu lệnh SQL để đóng attempt:
-   ```sql
-   UPDATE experiment_run
-   SET status = 'aborted', abort_reason = 'manual_emergency_teardown'
-   WHERE status = 'running';
+   *(Lưu ý: Không dùng cờ `-v` để bảo tồn dữ liệu metrics và lịch sử DB phục vụ đối soát).*
+4. **Cô lập và bảo vệ các tài nguyên khác**:
+   Tuyệt đối không chạy lệnh `docker rm -f` mù trên các container khác đang chạy trên VPS.
+5. **Cập nhật trạng thái trong SQLite DB cục bộ cho đúng `run_id`**:
+   ```powershell
+   & ".\ml-service\.venv\Scripts\python.exe" -c @"
+   import sqlite3
+   conn = sqlite3.connect('app/opspilot.db')
+   conn.execute(\"UPDATE experiment_runs SET status = 'aborted', abort_reason = 'manual_emergency_teardown' WHERE id = ? AND status = 'running'\", (int('$RUN_ID'),))
+   conn.commit()
+   conn.close()
+   print('Đã chuyển trạng thái Run $RUN_ID sang aborted thành công!')
+   "@
    ```
 
 ---
 
-## 9. Kết luận & Cam kết Kỷ luật Thực thi
+## 9. Kết luận & Điều kiện Tiên quyết trước khi Kích hoạt Pilot
 
-- **Hồ sơ preflight hoàn chỉnh**: Đã chuẩn bị đầy đủ 100% tài liệu điều kiện hạ tầng, cơ chế khóa SSH/known_hosts, credential dùng chung an toàn, app demo, ML service, đường counter và runbook lệnh chạy/thu hồi khẩn cấp.
-- **Xác minh cục bộ**: Toàn bộ 10 hạng mục có thể kiểm tra offline đều đạt trạng thái **`PASS`** (268/268 test harness pass, 19/19 test ML pass, Node syntax server.js pass, compose template pass).
-- **Trạng thái Pilot**: Duy trì trạng thái **`NOT_RUN`** trên VPS thực tế. Không thực hiện bất kỳ lệnh kết nối SSH hoặc bắn tải nào ra ngoài môi trường local.
-- **Kỷ luật Git**: Chỉ lưu trữ cục bộ, không push/PR/merge.
+1. **Trạng thái Pilot**: Duy trì nghiêm ngặt **`NOT_READY / NOT_RUN`**.
+2. **Điều kiện tiên quyết để chuyển sang `READY`**:
+   - Khắc phục **Runtime Gap 1**: Cập nhật runner truyền `ENABLE_FAULT_ENDPOINTS=true` khi deploy app.
+   - Khắc phục **Runtime Gap 2**: Đồng bộ cơ chế cấp phát credential cho `DeployAdapter` và `PollerAdapter`.
+   - Xác minh fingerprint khóa máy chủ VPS qua kênh tin cậy trước khi ghi vào `known_hosts`.
+   - Chọn kịch bản an toàn `cpu_spike` hoặc `latency_creep` cho lượt chạy đầu tiên (tránh kịch bản `memory_leak` vượt trần 512 MB gây OOM).
