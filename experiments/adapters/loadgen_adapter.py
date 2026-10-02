@@ -16,10 +16,13 @@ Nhiệm vụ:
 from __future__ import annotations
 
 import os
+import re
+import shlex
 import signal
 import subprocess
 import sys
 import time
+import urllib.parse
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Self
@@ -154,6 +157,8 @@ class LoadgenHandle:
         effective_duration_s: float,
         allow_pilot_4500: bool,
         container_name: str | None = None,
+        docker_network: str | None = None,
+        counter_mount_dir: str | None = None,
         proc: subprocess.Popen[Any] | None = None,
         ssh_client: Any | None = None,
         stop_file: Path | None = None,
@@ -164,6 +169,8 @@ class LoadgenHandle:
         self.effective_duration_s = effective_duration_s
         self.allow_pilot_4500 = allow_pilot_4500
         self.container_name = container_name
+        self.docker_network = docker_network
+        self.counter_mount_dir = counter_mount_dir
         self.proc = proc
         self.ssh_client = ssh_client
         self.stop_file = stop_file
@@ -177,6 +184,28 @@ class LoadgenHandle:
         if self.mode == "local" and self.proc is not None:
             return self.proc.poll() is None
         return not self._is_stopped
+
+    def get_container_status(self) -> str | None:
+        """Lấy trạng thái hiện tại của container trên VPS (nếu ở chế độ SSH)."""
+        if self.mode != "ssh" or not self.ssh_client or not self.container_name:
+            return None
+        quoted = shlex.quote(self.container_name)
+        try:
+            code, out, _ = _exec_ssh(
+                self.ssh_client,
+                f"docker inspect -f '{{{{.State.Status}}}}' {quoted}",
+                timeout=5.0,
+            )
+            return out.strip().lower() if code == 0 and out.strip() else None
+        except (
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            LoadgenError,
+            subprocess.SubprocessError,
+        ):
+            return None
 
     def stop(self, timeout_s: float = 5.0) -> None:
         """Dừng êm dịu phiên sinh tải."""
@@ -198,22 +227,40 @@ class LoadgenHandle:
                     self.proc.wait(timeout=timeout_s)
                 except subprocess.TimeoutExpired:
                     _kill_process_tree(self.proc)
+            if self.proc and self.proc.poll() is None:
+                raise LoadgenExecutionError(
+                    f"Không thể dừng tiến trình loadgen cục bộ (PID {self.proc.pid})"
+                )
             self._is_stopped = True
         elif self.mode == "ssh":
             if self.ssh_client and self.container_name:
+                quoted = shlex.quote(self.container_name)
                 try:
-                    _exec_ssh(
+                    exit_code, stdout, stderr = _exec_ssh(
                         self.ssh_client,
-                        f"docker stop -t 2 {self.container_name}",
+                        f"docker stop -t 2 {quoted}",
                         timeout=timeout_s + 5.0,
                     )
-                except (
-                    OSError,
-                    RuntimeError,
-                    LoadgenError,
-                    subprocess.SubprocessError,
-                ):
-                    pass
+                except Exception as e:
+                    raise LoadgenExecutionError(
+                        f"Lỗi SSH khi dừng container '{self.container_name}': {e}"
+                    ) from e
+
+                if exit_code != 0:
+                    err_msg = (stderr.strip() or stdout.strip()).lower()
+                    if "no such container" in err_msg or "not found" in err_msg:
+                        self._is_stopped = True
+                        return
+
+                    status = self.get_container_status()
+                    if status in ("exited", "dead"):
+                        self._is_stopped = True
+                        return
+
+                    raise LoadgenExecutionError(
+                        f"Không thể dừng container '{self.container_name}' (mã {exit_code}, status={status or 'unknown'}): {stderr.strip() or stdout.strip()}"
+                    )
+
             self._is_stopped = True
 
     def cleanup(self) -> None:
@@ -226,18 +273,33 @@ class LoadgenHandle:
                     self.stop_file.unlink(missing_ok=True)
                 except OSError:
                     pass
+            if self.proc and self.proc.poll() is None:
+                raise LoadgenExecutionError(
+                    f"Không thể dừng tiến trình loadgen cục bộ khi cleanup (PID {self.proc.pid})"
+                )
             self._is_stopped = True
         elif self.mode == "ssh":
             if self.ssh_client and self.container_name:
+                quoted = shlex.quote(self.container_name)
                 try:
-                    _exec_ssh(self.ssh_client, f"docker rm -f {self.container_name}")
-                except (
-                    OSError,
-                    RuntimeError,
-                    LoadgenError,
-                    subprocess.SubprocessError,
-                ):
-                    pass
+                    exit_code, stdout, stderr = _exec_ssh(
+                        self.ssh_client, f"docker rm -f {quoted}"
+                    )
+                except Exception as e:
+                    raise LoadgenExecutionError(
+                        f"Lỗi SSH khi dọn dẹp container '{self.container_name}': {e}"
+                    ) from e
+
+                if exit_code != 0:
+                    err_msg = (stderr.strip() or stdout.strip()).lower()
+                    if "no such container" in err_msg or "not found" in err_msg:
+                        self._is_stopped = True
+                        return
+
+                    status = self.get_container_status()
+                    raise LoadgenExecutionError(
+                        f"Không thể dọn dẹp container '{self.container_name}' (mã {exit_code}, status={status or 'unknown'}): {stderr.strip() or stdout.strip()}"
+                    )
             self._is_stopped = True
 
     def __enter__(self) -> Self:
@@ -276,6 +338,8 @@ class LoadgenAdapter:
         container_name: str = "opspilot-loadgen",
         image_tag: str = "opspilot/loadgen:latest",
         counter_mount_dir: str | None = None,
+        docker_network: str | None = None,
+        app_name: str | None = None,
         ssh_client: Any | None = None,
         local: bool = False,
         allow_hosts: Sequence[str] | None = None,
@@ -313,28 +377,59 @@ class LoadgenAdapter:
 
         # 4. Chế độ SSH Remote (chạy Docker container trên VPS)
         if ssh_client is not None and not local:
-            # 4.1. Pre-cleanup container cũ nếu có
+            # 4.1. Xác thực container_name và docker_network
+            if not re.match(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$", container_name):
+                raise ValueError(f"container_name không hợp lệ: {container_name}")
+            if docker_network and not re.match(
+                r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*$", docker_network
+            ):
+                raise ValueError(f"docker_network không hợp lệ: {docker_network}")
+
+            # 4.2. Bắt buộc mount counter vào đường dẫn host mà collector thực sự đọc
+            mount_host_dir = counter_mount_dir
+            if not mount_host_dir:
+                if not app_name:
+                    raise ValueError(
+                        "Bắt buộc cung cấp counter_mount_dir hoặc app_name trong chế độ SSH để mount bộ đếm counter "
+                        "vào đường dẫn host mà collector thực sự đọc (/opt/opspilot/<app>/metrics)"
+                    )
+                mount_host_dir = f"/opt/opspilot/{app_name}/metrics"
+
+            # 4.3. Xác định Docker network phù hợp để loadgen truy cập được app
+            parsed_host = urllib.parse.urlparse(app_url).hostname or ""
+            if docker_network:
+                network = docker_network
+            elif parsed_host == "app":
+                if not app_name:
+                    raise ValueError(
+                        "app_name là bắt buộc khi target sử dụng hostname 'app' mà không chỉ định docker_network"
+                    )
+                network = f"{app_name}_default"
+            else:
+                network = "host"
+
+            # 4.4. Pre-cleanup container cũ nếu có
+            quoted_container_name = shlex.quote(container_name)
             try:
                 _exec_ssh(
-                    ssh_client, f"docker rm -f {container_name} 2>/dev/null || true"
+                    ssh_client,
+                    f"docker rm -f {quoted_container_name} 2>/dev/null || true",
                 )
             except (OSError, RuntimeError, LoadgenError, subprocess.SubprocessError):
                 pass
 
-            # 4.2. Xây dựng lệnh Docker run
+            # 4.5. Xây dựng lệnh Docker run với quote an toàn tuyệt đối cho mọi tham số
             pilot_env = "true" if allow_pilot_4500 else "false"
-            mount_arg = (
-                f"-v {counter_mount_dir}:/var/metrics" if counter_mount_dir else ""
-            )
             docker_cmd = (
-                f"docker run -d --name {container_name} "
-                f"-e APP_URL='{app_url}' "
-                f"-e LOADGEN_RATE_RPS={rate} "
-                f"-e LOADGEN_DURATION_S={effective_duration} "
-                f"-e LOADGEN_PILOT_4500={pilot_env} "
-                f"-e LOADGEN_WINDOW_S={counter_window_s} "
-                f"{mount_arg} "
-                f"{image_tag}"
+                f"docker run -d --name {quoted_container_name} "
+                f"--network {shlex.quote(network)} "
+                f"-e APP_URL={shlex.quote(app_url)} "
+                f"-e LOADGEN_RATE_RPS={shlex.quote(str(rate))} "
+                f"-e LOADGEN_DURATION_S={shlex.quote(str(effective_duration))} "
+                f"-e LOADGEN_PILOT_4500={shlex.quote(pilot_env)} "
+                f"-e LOADGEN_WINDOW_S={shlex.quote(str(counter_window_s))} "
+                f"-v {shlex.quote(str(mount_host_dir))}:/var/metrics "
+                f"{shlex.quote(image_tag)}"
             ).strip()
 
             exit_code, stdout, stderr = _exec_ssh(ssh_client, docker_cmd)
@@ -350,6 +445,8 @@ class LoadgenAdapter:
                 effective_duration_s=effective_duration,
                 allow_pilot_4500=allow_pilot_4500,
                 container_name=container_name,
+                docker_network=network,
+                counter_mount_dir=str(mount_host_dir),
                 ssh_client=ssh_client,
             )
 

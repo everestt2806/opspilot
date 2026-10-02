@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import sys
 import time
 from pathlib import Path
@@ -10,6 +11,7 @@ import pytest
 
 from experiments.adapters.loadgen_adapter import (
     LoadgenAdapter,
+    LoadgenExecutionError,
     LoadgenHandle,
     LoadgenStartupError,
     LoadgenTargetError,
@@ -24,16 +26,26 @@ from experiments.load_gen.loadgen import (
 class MockSshClient:
     """Mock SSH client ghi lại các lệnh thực thi và trả về kết quả giả lập."""
 
-    def __init__(self, exit_code: int = 0, stdout: str = "", stderr: str = "") -> None:
+    def __init__(
+        self,
+        exit_code: int = 0,
+        stdout: str = "",
+        stderr: str = "",
+        handlers: dict[str, tuple[int, str, str]] | None = None,
+    ) -> None:
         self.exit_code = exit_code
         self.stdout = stdout
         self.stderr = stderr
+        self.handlers = handlers or {}
         self.executed_commands: list[str] = []
 
     def exec_command(
         self, command: str, timeout: float | None = None
     ) -> tuple[int, str, str]:
         self.executed_commands.append(command)
+        for pattern, response in self.handlers.items():
+            if pattern in command:
+                return response
         return self.exit_code, self.stdout, self.stderr
 
 
@@ -55,6 +67,8 @@ def test_loadgen_adapter_start_and_stop_ssh_mock() -> None:
     assert handle.is_running is True
     assert handle.effective_duration_s == 1800.0
     assert handle.allow_pilot_4500 is False
+    assert handle.docker_network == "host"
+    assert handle.counter_mount_dir == "/opt/opspilot/demo-app/metrics"
 
     # Kiểm tra lệnh SSH đã thực thi
     assert len(mock_ssh.executed_commands) == 2
@@ -63,7 +77,8 @@ def test_loadgen_adapter_start_and_stop_ssh_mock() -> None:
     # 2. Docker run
     run_cmd = mock_ssh.executed_commands[1]
     assert "docker run -d --name opspilot-loadgen" in run_cmd
-    assert "-e APP_URL='http://127.0.0.1:3000'" in run_cmd
+    assert "--network host" in run_cmd
+    assert "-e APP_URL=http://127.0.0.1:3000" in run_cmd
     assert "-e LOADGEN_RATE_RPS=5.0" in run_cmd
     assert "-e LOADGEN_DURATION_S=1800.0" in run_cmd
     assert "-e LOADGEN_PILOT_4500=false" in run_cmd
@@ -157,6 +172,7 @@ def test_loadgen_adapter_startup_error_ssh_failure() -> None:
     with pytest.raises(LoadgenStartupError) as exc_info:
         adapter.start(
             app_url="http://127.0.0.1:3000",
+            app_name="demo-app",
             ssh_client=failing_ssh,
         )
 
@@ -192,7 +208,11 @@ def test_loadgen_adapter_cleanup_context_manager_ssh() -> None:
     saved_handle: LoadgenHandle | None = None
     with (
         pytest.raises(RuntimeError, match="Simulation skew error"),
-        adapter.start(app_url="http://127.0.0.1:3000", ssh_client=mock_ssh) as handle,
+        adapter.start(
+            app_url="http://127.0.0.1:3000",
+            app_name="demo-app",
+            ssh_client=mock_ssh,
+        ) as handle,
     ):
         saved_handle = handle
         assert handle.is_running is True
@@ -246,6 +266,7 @@ def test_loadgen_adapter_two_duration_limits_default_vs_pilot() -> None:
         app_url="http://127.0.0.1:3000",
         duration_s=4500.0,
         allow_pilot_4500=False,
+        app_name="demo-app",
         ssh_client=mock_ssh,
     )
     assert handle_default_4500.effective_duration_s == DEFAULT_MAX_DURATION_S
@@ -255,6 +276,7 @@ def test_loadgen_adapter_two_duration_limits_default_vs_pilot() -> None:
         app_url="http://127.0.0.1:3000",
         duration_s=99999.0,
         allow_pilot_4500=False,
+        app_name="demo-app",
         ssh_client=mock_ssh,
     )
     assert handle_default_huge.effective_duration_s == 1800.0
@@ -264,6 +286,7 @@ def test_loadgen_adapter_two_duration_limits_default_vs_pilot() -> None:
         app_url="http://127.0.0.1:3000",
         duration_s=600.0,
         allow_pilot_4500=False,
+        app_name="demo-app",
         ssh_client=mock_ssh,
     )
     assert handle_default_short.effective_duration_s == 600.0
@@ -274,6 +297,7 @@ def test_loadgen_adapter_two_duration_limits_default_vs_pilot() -> None:
         app_url="http://127.0.0.1:3000",
         duration_s=4500.0,
         allow_pilot_4500=True,
+        app_name="demo-app",
         ssh_client=mock_ssh,
     )
     assert handle_pilot_4500.effective_duration_s == PILOT_MAX_DURATION_S
@@ -284,6 +308,7 @@ def test_loadgen_adapter_two_duration_limits_default_vs_pilot() -> None:
         app_url="http://127.0.0.1:3000",
         duration_s=99999.0,
         allow_pilot_4500=True,
+        app_name="demo-app",
         ssh_client=mock_ssh,
     )
     assert handle_pilot_huge.effective_duration_s == 4500.0
@@ -345,6 +370,7 @@ def test_loadgen_adapter_callable_ssh_mock() -> None:
     adapter = LoadgenAdapter()
     handle = adapter.start(
         app_url="http://127.0.0.1:3000",
+        app_name="demo-app",
         ssh_client=mock_runner,
         container_name="callable-loadgen",
     )
@@ -356,3 +382,221 @@ def test_loadgen_adapter_callable_ssh_mock() -> None:
     handle.stop()
     assert handle.is_running is False
     assert any("docker stop -t 2 callable-loadgen" in c for c in recorded)
+
+
+def test_loadgen_adapter_ssh_shell_injection_protection_with_quotes_and_special_chars() -> (
+    None
+):
+    """Kiểm thử: URL chứa dấu ' và ký tự shell ($ ; & |) được escape an toàn, không thể chèn lệnh."""
+    mock_ssh = MockSshClient(exit_code=0)
+    adapter = LoadgenAdapter()
+
+    # URL hợp lệ trên loopback chứa dấu nháy đơn, chấm phẩy, biến môi trường và lệnh shell
+    malicious_url = "http://127.0.0.1:3000/items?search='foo'&injection=$(touch /tmp/pwned);echo 'hacked'|id"
+
+    handle = adapter.start(
+        app_url=malicious_url,
+        app_name="demo-app",
+        ssh_client=mock_ssh,
+    )
+
+    assert handle.is_running is True
+    run_cmd = mock_ssh.executed_commands[1]
+
+    # Phân tích lệnh shell bằng shlex.split giống hệt như shell POSIX trên VPS
+    tokens = shlex.split(run_cmd)
+
+    # 1. Chứng minh các từ khoá shell độc hại KHÔNG trở thành command độc lập
+    assert "touch" not in tokens
+    assert "/tmp/pwned" not in tokens
+    assert "echo" not in tokens
+    assert "hacked" not in tokens
+    assert "id" not in tokens
+    assert "|" not in tokens
+    assert ";" not in tokens
+
+    # 2. Toàn bộ chuỗi URL và query độc hại được truyền nguyên vẹn dưới dạng 1 tham số duy nhất vào APP_URL
+    app_url_arg = next(t for t in tokens if t.startswith("APP_URL="))
+    assert app_url_arg == f"APP_URL={malicious_url}"
+
+
+def test_loadgen_adapter_docker_network_and_counter_mount_mapping() -> None:
+    """Kiểm thử: Mapping mạng Docker và mount counter đường host collector đọc."""
+    mock_ssh = MockSshClient(exit_code=0)
+    adapter = LoadgenAdapter()
+
+    # Ca 1: Target là host nội bộ 'app' -> tự động chọn network '<app_name>_default' và mount '/opt/opspilot/<app_name>/metrics'
+    handle_internal = adapter.start(
+        app_url="http://app:3000/api",
+        app_name="express-demo",
+        ssh_client=mock_ssh,
+    )
+    assert handle_internal.docker_network == "express-demo_default"
+    assert handle_internal.counter_mount_dir == "/opt/opspilot/express-demo/metrics"
+    run_cmd_1 = mock_ssh.executed_commands[1]
+    assert "--network express-demo_default" in run_cmd_1
+    assert "-v /opt/opspilot/express-demo/metrics:/var/metrics" in run_cmd_1
+
+    # Ca 2: Target là 127.0.0.1 -> tự động chọn network 'host'
+    mock_ssh.executed_commands.clear()
+    handle_host = adapter.start(
+        app_url="http://127.0.0.1:3000",
+        app_name="next-app",
+        ssh_client=mock_ssh,
+    )
+    assert handle_host.docker_network == "host"
+    assert handle_host.counter_mount_dir == "/opt/opspilot/next-app/metrics"
+    run_cmd_2 = mock_ssh.executed_commands[1]
+    assert "--network host" in run_cmd_2
+    assert "-v /opt/opspilot/next-app/metrics:/var/metrics" in run_cmd_2
+
+    # Ca 3: Chỉ định tường minh docker_network và counter_mount_dir
+    mock_ssh.executed_commands.clear()
+    handle_explicit = adapter.start(
+        app_url="http://127.0.0.1:3000",
+        docker_network="custom-overlay",
+        counter_mount_dir="/var/custom/opspilot/metrics",
+        ssh_client=mock_ssh,
+    )
+    assert handle_explicit.docker_network == "custom-overlay"
+    assert handle_explicit.counter_mount_dir == "/var/custom/opspilot/metrics"
+    run_cmd_3 = mock_ssh.executed_commands[1]
+    assert "--network custom-overlay" in run_cmd_3
+    assert "-v /var/custom/opspilot/metrics:/var/metrics" in run_cmd_3
+
+    # Ca 4: Thiếu cả app_name và counter_mount_dir trong chế độ SSH -> Bị từ chối ngay lập tức
+    with pytest.raises(
+        ValueError, match="Bắt buộc cung cấp counter_mount_dir hoặc app_name"
+    ):
+        adapter.start(app_url="http://127.0.0.1:3000", ssh_client=mock_ssh)
+
+    # Ca 5: Dùng host 'app' nhưng không có app_name và không chỉ định docker_network -> Bị từ chối
+    with pytest.raises(
+        ValueError,
+        match="app_name là bắt buộc khi target sử dụng hostname 'app'",
+    ):
+        adapter.start(
+            app_url="http://app:3000",
+            counter_mount_dir="/opt/opspilot/demo/metrics",
+            ssh_client=mock_ssh,
+        )
+
+
+def test_loadgen_adapter_docker_stop_failure_raises_error_and_not_marked_stopped() -> (
+    None
+):
+    """Kiểm thử: Khi docker stop thất bại, ném LoadgenExecutionError và KHÔNG đánh dấu stopped giả."""
+    mock_ssh = MockSshClient(
+        exit_code=0,
+        handlers={
+            "docker stop": (
+                1,
+                "",
+                "Error response from daemon: cannot stop container: context deadline exceeded",
+            ),
+            "docker inspect": (0, "running\n", ""),
+        },
+    )
+    adapter = LoadgenAdapter()
+    handle = adapter.start(
+        app_url="http://127.0.0.1:3000",
+        app_name="demo-app",
+        ssh_client=mock_ssh,
+    )
+    assert handle.is_running is True
+
+    # Gọi stop() -> Bị lỗi
+    with pytest.raises(LoadgenExecutionError) as exc_info:
+        handle.stop()
+
+    assert "Không thể dừng container" in str(exc_info.value)
+    assert "mã 1" in str(exc_info.value)
+    assert "context deadline exceeded" in str(exc_info.value)
+
+    # KHÔNG ĐƯỢC đánh dấu stopped giả!
+    assert handle._is_stopped is False
+    assert handle.is_running is True
+
+
+def test_loadgen_adapter_docker_rm_failure_raises_error_and_not_marked_stopped() -> (
+    None
+):
+    """Kiểm thử: Khi docker rm -f thất bại, ném LoadgenExecutionError và KHÔNG đánh dấu stopped giả."""
+    mock_ssh = MockSshClient(
+        exit_code=0,
+        handlers={
+            "docker rm -f opspilot-loadgen": (
+                1,
+                "",
+                "Error response from daemon: removal of container is already in progress",
+            ),
+            "docker inspect": (0, "removing\n", ""),
+        },
+    )
+    adapter = LoadgenAdapter()
+    handle = adapter.start(
+        app_url="http://127.0.0.1:3000",
+        app_name="demo-app",
+        ssh_client=mock_ssh,
+    )
+    assert handle.is_running is True
+
+    # Gọi cleanup() -> Bị lỗi
+    with pytest.raises(LoadgenExecutionError) as exc_info:
+        handle.cleanup()
+
+    assert "Không thể dọn dẹp container" in str(exc_info.value)
+    assert "mã 1" in str(exc_info.value)
+    assert "removal of container is already in progress" in str(exc_info.value)
+
+    # KHÔNG ĐƯỢC đánh dấu stopped giả!
+    assert handle._is_stopped is False
+    assert handle.is_running is True
+
+
+def test_loadgen_adapter_docker_rm_already_removed_is_safe() -> None:
+    """Kiểm thử: Khi container đã bị xoá trước đó (No such container), cleanup hoàn tất an toàn và đánh dấu stopped."""
+    mock_ssh = MockSshClient(
+        exit_code=0,
+        handlers={
+            "docker rm -f opspilot-loadgen": (
+                1,
+                "",
+                "Error response from daemon: No such container: opspilot-loadgen",
+            ),
+        },
+    )
+    adapter = LoadgenAdapter()
+    handle = adapter.start(
+        app_url="http://127.0.0.1:3000",
+        app_name="demo-app",
+        ssh_client=mock_ssh,
+    )
+    assert handle.is_running is True
+
+    # Gọi cleanup() khi container không còn nữa -> an toàn, không ném lỗi
+    handle.cleanup()
+    assert handle.is_running is False
+    assert handle._is_stopped is True
+
+
+def test_loadgen_adapter_invalid_container_or_network_name() -> None:
+    """Kiểm thử: từ chối container_name hoặc docker_network chứa ký tự không an toàn."""
+    mock_ssh = MockSshClient(exit_code=0)
+    adapter = LoadgenAdapter()
+
+    with pytest.raises(ValueError, match="container_name không hợp lệ"):
+        adapter.start(
+            app_url="http://127.0.0.1:3000",
+            app_name="demo-app",
+            container_name="bad;name",
+            ssh_client=mock_ssh,
+        )
+
+    with pytest.raises(ValueError, match="docker_network không hợp lệ"):
+        adapter.start(
+            app_url="http://127.0.0.1:3000",
+            app_name="demo-app",
+            docker_network="bad net$",
+            ssh_client=mock_ssh,
+        )
