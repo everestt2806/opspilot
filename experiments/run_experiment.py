@@ -17,8 +17,11 @@ Thực hiện quy trình 10 bước chuẩn hoá của TK-S6:
 from __future__ import annotations
 
 import argparse
+import inspect
 import logging
+import os
 import sqlite3
+import subprocess
 import sys
 import time
 from collections.abc import Callable, Sequence
@@ -117,6 +120,136 @@ class RunResult:
     fault_end_ts: str | None = None
     run_end_ts: str | None = None
     clock_offset_ms: int = 0
+
+
+class SystemSshClient:
+    """SSH Client thực thi lệnh từ xa bằng công cụ ssh của hệ thống (OpenSSH).
+
+    Bảo mật:
+      - Tuyệt đối không in, ghi log hoặc lưu raw credential ra đĩa hoặc DB.
+      - __repr__ và chuỗi ngoại lệ tự động khử / ẩn secret (hiển thị '******').
+    """
+
+    def __init__(
+        self,
+        host: str,
+        port: int = 22,
+        username: str = "root",
+        auth_type: str = "key",
+        secret: str | None = None,
+        timeout: float = 15.0,
+    ) -> None:
+        self.host = host or "127.0.0.1"
+        self.port = int(port or 22)
+        self.username = username or "root"
+        self.auth_type = auth_type or "key"
+        self._secret = secret
+        self.timeout = float(timeout)
+
+    def __repr__(self) -> str:
+        return (
+            f"<SystemSshClient host={self.host!r} port={self.port} "
+            f"user={self.username!r} auth_type={self.auth_type!r} secret=******>"
+        )
+
+    def exec(self, cmd: str, timeout: float | None = None) -> tuple[int, str, str]:
+        """Thực thi lệnh shell trên VPS qua ssh binary."""
+        effective_timeout = timeout if timeout is not None else self.timeout
+        ssh_args = [
+            "ssh",
+            "-p",
+            str(self.port),
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            f"ConnectTimeout={max(1, int(min(effective_timeout, 10)))}",
+            f"{self.username}@{self.host}",
+            cmd,
+        ]
+        try:
+            res = subprocess.run(
+                ssh_args,
+                capture_output=True,
+                text=True,
+                timeout=effective_timeout,
+                check=False,
+            )
+            stdout = res.stdout
+            stderr = res.stderr
+            if self._secret:
+                stdout = stdout.replace(self._secret, "******")
+                stderr = stderr.replace(self._secret, "******")
+            return res.returncode, stdout, stderr
+        except subprocess.TimeoutExpired:
+            return 124, "", f"SSH command timed out after {effective_timeout}s"
+        except Exception as e:  # noqa: BLE001
+            err_msg = str(e)
+            if self._secret:
+                err_msg = err_msg.replace(self._secret, "******")
+            return 1, "", f"SSH execution error: {err_msg}"
+
+    def exec_command(self, cmd: str, timeout: float = 15.0) -> tuple[int, str, str]:
+        """Hỗ trợ giao diện tương thích Paramiko / _exec_ssh."""
+        return self.exec(cmd, timeout=timeout)
+
+
+def resolve_ssh_client(
+    conn: sqlite3.Connection,
+    vps_id: int,
+    ssh_secret: str | None = None,
+    ssh_client: Any | None = None,
+) -> Any | None:
+    """Xác định SSH client hợp lệ từ vps table và credential an toàn.
+
+    Bảo mật:
+      - Không in hoặc lưu credential ra màn hình/log/đĩa/DB.
+      - Ưu tiên:
+        1. ssh_client truyền tường minh.
+        2. Tạo SystemSshClient từ bản ghi vps kết hợp secret từ:
+           - Tham số ssh_secret
+           - Biến môi trường OPSPILOT_SSH_SECRET hoặc OPSPILOT_DEPLOY_SECRET
+      - Trả về None nếu không đủ thông tin kết nối an toàn.
+    """
+    if ssh_client is not None:
+        return ssh_client
+
+    secret = (
+        ssh_secret
+        or os.environ.get("OPSPILOT_SSH_SECRET")
+        or os.environ.get("OPSPILOT_DEPLOY_SECRET")
+    )
+    if not secret or not str(secret).strip():
+        return None
+
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT host, port, username, auth_type FROM vps WHERE id = ?",
+            (vps_id,),
+        )
+        row = cur.fetchone()
+    except (sqlite3.Error, OSError):
+        return None
+
+    if not row:
+        return None
+
+    host = row[0] or "127.0.0.1"
+    port = int(row[1] or 22)
+    username = row[2] or "root"
+    auth_type = row[3] or "key"
+
+    return SystemSshClient(
+        host=host,
+        port=port,
+        username=username,
+        auth_type=auth_type,
+        secret=str(secret).strip(),
+    )
 
 
 def measure_clock_offset_ms(
@@ -341,7 +474,8 @@ def run_attempt(
     time_scale: float = 1.0,
     check_interval_s: float = 10.0,
     measure_clock_fn: Callable[..., int] | None = None,
-    allow_pilot_4500: bool = True,
+    allow_pilot_4500: bool = False,
+    ssh_secret: str | None = None,
     loadgen_counter_mount_dir: str | None = None,
     custom_poller_cmd: Sequence[str] | None = None,
     custom_deploy_cmd: Sequence[str] | None = None,
@@ -368,7 +502,8 @@ def run_attempt(
         time_scale: Hệ số co giãn thời gian (1.0 là thời gian thật, <1.0 cho test mô phỏng).
         check_interval_s: Khoảng chu kỳ kiểm tra trạng thái sống của tiến trình khi chờ.
         measure_clock_fn: Hàm đo clock skew (nếu muốn override).
-        allow_pilot_4500: Cờ cho phép chạy loadgen 4500s.
+        allow_pilot_4500: Cờ cho phép chạy loadgen 4500s (mặc định False, phải bật tường minh).
+        ssh_secret: SSH secret (nếu không đọc từ env OPSPILOT_SSH_SECRET / OPSPILOT_DEPLOY_SECRET).
         loadgen_counter_mount_dir: Thư mục mount counter trên host.
         custom_poller_cmd: Lệnh thực thi poller tuỳ biến.
         custom_deploy_cmd: Lệnh thực thi deploy CLI tuỳ biến.
@@ -422,6 +557,16 @@ def run_attempt(
         )
 
         # Runner/CLI phải có SSH client hợp lệ trước clock gate; thiếu SSH thì abort có lý do, không trả offset 0 và không chạy loadgen local
+        resolved_ssh_secret = (
+            ssh_secret
+            or os.environ.get("OPSPILOT_SSH_SECRET")
+            or os.environ.get("OPSPILOT_DEPLOY_SECRET")
+        )
+        if ssh_client is None:
+            ssh_client = resolve_ssh_client(
+                conn, vps_id=vps_id, ssh_secret=resolved_ssh_secret
+            )
+
         if ssh_client is None:
             reason = "missing_ssh_client: Yêu cầu SSH client hợp lệ để kết nối VPS"
             abort_run(conn, run_id, reason=reason, auto_commit=True)
@@ -451,6 +596,12 @@ def run_attempt(
         # =========================================================================
         # BƯỚC 3: Deploy thật App Demo: gắn deployment_id ngay khi cấp và giữ failed nếu lỗi
         # =========================================================================
+        # Từ chối run 75 phút trước deploy nếu chưa bật pilot tường minh
+        if not allow_pilot_4500:
+            reason = "pilot_mode_required: Chạy thí nghiệm 75 phút (4500s) bắt buộc bật cờ allow_pilot_4500 tường minh"
+            abort_run(conn, run_id, reason=reason, auto_commit=True)
+            raise ExperimentError(reason)
+
         d_adapter = deploy_adapter or DeployAdapter()
         try:
             deploy_res = d_adapter.deploy(
@@ -460,6 +611,7 @@ def run_attempt(
                 app_name=app_name,
                 source_path=source_path,
                 db_path=db_file,
+                ssh_secret=resolved_ssh_secret,
                 cli_cmd=custom_deploy_cmd,
             )
             deployment_id = deploy_res.deployment_id
@@ -493,6 +645,7 @@ def run_attempt(
             conn=conn,
             db_path=db_file,
             ml_url=ml_url,
+            ssh_secret=resolved_ssh_secret,
             cli_cmd=custom_poller_cmd,
         )
 
@@ -582,8 +735,32 @@ def run_attempt(
         )
 
         fault_plan = plan_fault(scenario, duration_s=PHASE_C_S)
+
+        def phase_c_check() -> None:
+            if loadgen_handle is not None:
+                loadgen_handle.assert_running()
+            if poller_handle is not None and not poller_handle.is_alive:
+                err_msg: str | None = None
+                if hasattr(poller_handle, "get_last_error"):
+                    err_msg = poller_handle.get_last_error()
+                elif hasattr(poller_handle, "proc") and poller_handle.proc is not None:
+                    ret = poller_handle.proc.poll()
+                    err_msg = f"tiến trình đã thoát (exit_code={ret})"
+                raise RuntimeError(
+                    f"Headless Poller bị dừng bất thường trong Pha C: {err_msg or 'tiến trình đã thoát'}"
+                )
+
         try:
-            _apply_fault(app_url, fault_plan, sleep_fn=sleeper_fn, now_fn=clock_fn)
+            apply_kwargs: dict[str, Any] = {
+                "sleep_fn": sleeper_fn,
+                "now_fn": clock_fn,
+            }
+            sig = inspect.signature(_apply_fault)
+            if "check_fn" in sig.parameters or any(
+                p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+            ):
+                apply_kwargs["check_fn"] = phase_c_check
+            _apply_fault(app_url, fault_plan, **apply_kwargs)
         except Exception as e:
             reason = f"apply_fault_failed: {e}"
             abort_run(conn, run_id, reason=reason, auto_commit=True)
@@ -813,6 +990,8 @@ def run_experiment(
     source_path: Path | str,
     app_url: str,
     max_attempts: int = 3,
+    allow_pilot_4500: bool = False,
+    ssh_secret: str | None = None,
     **kwargs: Any,
 ) -> RunResult:
     """Điều phối toàn bộ quá trình chạy thí nghiệm, tự động retry khi attempt trước bị abort (tối đa max_attempts lần)."""
@@ -826,6 +1005,8 @@ def run_experiment(
             app_name=app_name,
             source_path=source_path,
             app_url=app_url,
+            allow_pilot_4500=allow_pilot_4500,
+            ssh_secret=ssh_secret,
             raise_on_abort=False,
             **kwargs,
         )
@@ -892,6 +1073,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=3,
         help="Số lần thử tối đa (1..3)",
     )
+    parser.add_argument(
+        "--allow-pilot-4500",
+        "--pilot",
+        action="store_true",
+        default=False,
+        help="Bật chế độ pilot chạy tối đa 4500s (75 phút)",
+    )
+    parser.add_argument(
+        "--ssh-secret",
+        default=None,
+        help="SSH secret (password hoặc private key) cho kết nối VPS (không in/lưu ra đĩa)",
+    )
     return parser
 
 
@@ -908,6 +1101,8 @@ if __name__ == "__main__":  # pragma: no cover
         app_url=args.app_url,
         ml_url=args.ml_url,
         max_attempts=args.max_attempts,
+        allow_pilot_4500=args.allow_pilot_4500,
+        ssh_secret=args.ssh_secret,
     )
     print(
         f"KẾT QUẢ RUN: status={result.status}, attempt={result.attempt_index}, run_id={result.run_id}"

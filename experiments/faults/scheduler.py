@@ -18,6 +18,7 @@ vượt 2.000 ms và ML có phát hiện sớm hay không là kết quả cần 
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 FAULT_DURATION_S = 1200  # pha C = 20 phút (docs/07 mục 4)
@@ -124,7 +125,11 @@ def plan_fault(scenario: str, duration_s: int = FAULT_DURATION_S) -> FaultPlan:
 
 
 def apply_plan(
-    app_base_url: str, plan: FaultPlan, sleep_fn=None, now_fn=None
+    app_base_url: str,
+    plan: FaultPlan,
+    sleep_fn=None,
+    now_fn=None,
+    check_fn: Callable[[], None] | None = None,
 ) -> None:  # pragma: no cover
     """Bắn lịch fault theo thời gian thực tới app demo. Chạy trong run thật (ưu tiên requests, fallback urllib)."""
     import time
@@ -137,10 +142,16 @@ def apply_plan(
     sleep_fn = sleep_fn or time.sleep
     now_fn = now_fn or time.monotonic
     started = now_fn()
+    if check_fn is not None:
+        check_fn()
     for action in plan.actions:
         target = started + action.offset_s
         while now_fn() < target:
+            if check_fn is not None:
+                check_fn()
             sleep_fn(min(1.0, target - now_fn()))
+        if check_fn is not None:
+            check_fn()
         try:
             if requests is not None:
                 resp = requests.get(

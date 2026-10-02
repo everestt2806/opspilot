@@ -64,7 +64,12 @@ from experiments.run_store import (
 # Schema SQLite kiểm thử tối thiểu nhưng đầy đủ toàn bộ bảng và trường cho TK-S6
 _TEST_SCHEMA = """
 CREATE TABLE vps (
-  id INTEGER PRIMARY KEY
+  id INTEGER PRIMARY KEY,
+  name TEXT,
+  host TEXT DEFAULT '127.0.0.1',
+  port INTEGER DEFAULT 22,
+  username TEXT DEFAULT 'root',
+  auth_type TEXT DEFAULT 'key'
 );
 
 CREATE TABLE app (
@@ -628,6 +633,7 @@ def test_e2e_attempt_1_abort_then_attempt_2_success_export_and_analyze(
         time_scale=time_scale,
         check_interval_s=check_interval,
         measure_clock_fn=lambda *args, **kwargs: 15,  # Skew 15ms an toàn
+        allow_pilot_4500=True,
         max_attempts=3,
     )
 
@@ -800,6 +806,7 @@ def test_e2e_insufficient_phase_a_samples_aborts_attempt(tmp_path: Path) -> None
         time_scale=time_scale,
         check_interval_s=check_interval,
         measure_clock_fn=lambda *args, **kwargs: 0,
+        allow_pilot_4500=True,
         raise_on_abort=False,
     )
 
@@ -855,6 +862,7 @@ def test_e2e_integrity_gate_failure_aborts_attempt(tmp_path: Path) -> None:
         time_scale=time_scale,
         check_interval_s=check_interval,
         measure_clock_fn=lambda *args, **kwargs: 0,
+        allow_pilot_4500=True,
         raise_on_abort=False,
     )
 
@@ -903,6 +911,7 @@ def test_e2e_loadgen_death_during_wait_aborts_attempt(tmp_path: Path) -> None:
         time_scale=time_scale,
         check_interval_s=check_interval,
         measure_clock_fn=lambda *args, **kwargs: 0,
+        allow_pilot_4500=True,
         raise_on_abort=False,
     )
 
@@ -1011,6 +1020,7 @@ def test_e2e_reset_fault_step4_failure_aborts_attempt(tmp_path: Path) -> None:
         clock_fn=clock.now,
         sleeper_fn=clock.sleep,
         measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
         raise_on_abort=False,
     )
 
@@ -1056,6 +1066,7 @@ def test_e2e_apply_fault_failure_aborts_attempt(tmp_path: Path) -> None:
         sleeper_fn=clock.sleep,
         time_scale=time_scale,
         measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
         raise_on_abort=False,
     )
 
@@ -1106,6 +1117,7 @@ def test_e2e_reset_fault_step8_failure_aborts_attempt(tmp_path: Path) -> None:
         sleeper_fn=clock.sleep,
         time_scale=time_scale,
         measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
         raise_on_abort=False,
     )
 
@@ -1148,6 +1160,7 @@ def test_e2e_loadgen_stop_failure_aborts_attempt(tmp_path: Path) -> None:
         sleeper_fn=clock.sleep,
         time_scale=time_scale,
         measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
         raise_on_abort=False,
     )
 
@@ -1190,6 +1203,7 @@ def test_e2e_loadgen_cleanup_failure_aborts_attempt(tmp_path: Path) -> None:
         sleeper_fn=clock.sleep,
         time_scale=time_scale,
         measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
         raise_on_abort=False,
     )
 
@@ -1239,6 +1253,7 @@ def test_e2e_poller_death_during_wait_aborts_attempt(tmp_path: Path) -> None:
         time_scale=time_scale,
         check_interval_s=check_interval,
         measure_clock_fn=lambda *args, **kwargs: 0,
+        allow_pilot_4500=True,
         raise_on_abort=False,
     )
 
@@ -1255,3 +1270,254 @@ def test_e2e_wait_with_checks_stalled_clock_raises_error() -> None:
             sleeper_fn=lambda s: None,  # không làm gì, đồng hồ không chạy
             clock_fn=lambda: 1000.0,  # luôn trả về 1000.0 cố định
         )
+
+
+def test_e2e_pilot_flag_disabled_aborts_before_deploy(tmp_path: Path) -> None:
+    """Kiểm thử: Khi không bật cờ allow_pilot_4500 (mặc định), attempt bị huỷ trước deploy."""
+    db_file = tmp_path / "opspilot.db"
+    _init_test_db(db_file)
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    ssh_client = MockSshClient()
+    loadgen_adapter = MockLoadgenAdapter()
+    poller_adapter = MockPollerAdapter(clock=clock)
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=ssh_client,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=False,  # Mặc định False
+        raise_on_abort=False,
+    )
+
+    assert res.status == "aborted"
+    assert "pilot_mode_required" in (res.abort_reason or "")
+    # Tuyệt đối không gọi deploy_adapter khi chưa bật cờ pilot
+    assert deploy_adapter.call_count == 0
+    assert len(loadgen_adapter.handles) == 0
+
+
+def test_cli_resolves_ssh_client_and_does_not_abort_from_missing_ssh(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Kiểm thử: CLI nối SSH client hợp lệ bằng credential an toàn, không luôn abort vì thiếu SSH."""
+    from experiments.run_experiment import (
+        SystemSshClient,
+        build_parser,
+        resolve_ssh_client,
+    )
+
+    db_file = tmp_path / "opspilot.db"
+    _init_test_db(db_file)
+
+    # Đảm bảo bảng vps có thông tin host, username
+    conn = sqlite3.connect(db_file)
+    conn.execute(
+        "UPDATE vps SET host = '192.168.1.100', port = 2222, username = 'ops_user', auth_type = 'key' WHERE id = 1"
+    )
+    conn.commit()
+
+    # 1. Kiểm tra parser CLI có hỗ trợ các cờ mới
+    parser = build_parser()
+    cli_args = parser.parse_args(
+        [
+            "--scenario",
+            "memory_leak",
+            "--db-path",
+            str(db_file),
+            "--app-url",
+            "http://127.0.0.1:3000",
+            "--ssh-secret",
+            "super_secret_ssh_key_data",
+            "--allow-pilot-4500",
+        ]
+    )
+    assert cli_args.ssh_secret == "super_secret_ssh_key_data"
+    assert cli_args.allow_pilot_4500 is True
+
+    # 2. resolve_ssh_client từ tham số ssh_secret
+    client_from_arg = resolve_ssh_client(conn, vps_id=1, ssh_secret=cli_args.ssh_secret)
+    assert isinstance(client_from_arg, SystemSshClient)
+    assert client_from_arg.host == "192.168.1.100"
+    assert client_from_arg.port == 2222
+    assert client_from_arg.username == "ops_user"
+    assert client_from_arg.auth_type == "key"
+
+    # Bảo mật: __repr__ phải che giấu credential hoàn toàn, không in raw secret
+    repr_str = repr(client_from_arg)
+    assert "super_secret_ssh_key_data" not in repr_str
+    assert "secret=******" in repr_str
+
+    # 3. resolve_ssh_client từ biến môi trường OPSPILOT_SSH_SECRET
+    monkeypatch.setenv("OPSPILOT_SSH_SECRET", "env_secret_key_999")
+    client_from_env = resolve_ssh_client(conn, vps_id=1)
+    assert isinstance(client_from_env, SystemSshClient)
+    assert "env_secret_key_999" not in repr(client_from_env)
+    assert "secret=******" in repr(client_from_env)
+
+    # 4. Khi ssh_client=None nhưng có OPSPILOT_SSH_SECRET, run_attempt tự động phân giải SSH client và không abort vì missing_ssh_client
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    poller_adapter = MockPollerAdapter(clock=clock, sample_count=450, time_scale=0.001)
+    loadgen_adapter = MockLoadgenAdapter()
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=None,  # Để None để kích hoạt resolve_ssh_client
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=lambda *a, **kw: None,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=0.001,
+        measure_clock_fn=lambda client, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+
+    # Không bị abort vì missing_ssh_client!
+    assert (res.abort_reason or "") != "missing_ssh_client"
+    assert "missing_ssh_client" not in (res.abort_reason or "")
+    assert res.status == "completed"
+
+    conn.close()
+
+
+def test_e2e_phase_c_process_death_aborts_attempt(tmp_path: Path) -> None:
+    """Kiểm thử: Loadgen hoặc Poller chết giữa Phase C (khi apply_plan đang chờ/gửi fault) -> abort attempt."""
+    db_file = tmp_path / "opspilot.db"
+    _init_test_db(db_file)
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    ssh_client = MockSshClient()
+    time_scale = 0.001
+    check_interval = 0.1
+
+    # Trường hợp 1: Loadgen container chết khi apply_plan đang chờ giữa các actions
+    poller_adapter = MockPollerAdapter(
+        clock=clock, sample_count=450, time_scale=time_scale
+    )
+    loadgen_adapter = MockLoadgenAdapter()
+
+    def crashing_apply_fault_loadgen(
+        url: str,
+        plan: Any,
+        sleep_fn: Any = None,
+        now_fn: Any = None,
+        check_fn: Any = None,
+    ) -> None:
+        # Giả lập loadgen chết ngay khi apply_plan bắt đầu
+        if loadgen_adapter.handles:
+            loadgen_adapter.handles[-1]._mock_running = False
+        # Gọi check_fn định kỳ
+        if check_fn:
+            check_fn()
+
+    res = run_attempt(
+        scenario="cpu_spike",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=ssh_client,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=crashing_apply_fault_loadgen,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=time_scale,
+        check_interval_s=check_interval,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+
+    assert res.status == "aborted"
+    assert "apply_fault_failed" in (res.abort_reason or "")
+    assert "không còn chạy trên VPS" in (res.abort_reason or "")
+    # Cleanup phải được gọi trong finally
+    assert loadgen_adapter.handles[-1]._is_cleaned is True
+
+    # Trường hợp 2: Poller chết khi apply_plan đang gửi fault trong Phase C
+    db_file2 = tmp_path / "opspilot_poller_crash.db"
+    _init_test_db(db_file2)
+    clock2 = SimulatedClock()
+    deploy_adapter2 = MockDeployAdapter()
+    ml_client2 = MockMlClient()
+    poller_adapter2 = MockPollerAdapter(
+        clock=clock2, sample_count=450, time_scale=time_scale
+    )
+    loadgen_adapter2 = MockLoadgenAdapter()
+
+    def crashing_apply_fault_poller(
+        url: str,
+        plan: Any,
+        sleep_fn: Any = None,
+        now_fn: Any = None,
+        check_fn: Any = None,
+    ) -> None:
+        # Giả lập poller chết giữa chừng
+        if poller_adapter2.handles:
+            poller_adapter2.handles[-1].is_alive = False
+        if check_fn:
+            check_fn()
+
+    res2 = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file2,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=ssh_client,
+        deploy_adapter=deploy_adapter2,
+        ml_client=ml_client2,
+        poller_adapter=poller_adapter2,
+        loadgen_adapter=loadgen_adapter2,
+        apply_fault_fn=crashing_apply_fault_poller,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock2.now,
+        sleeper_fn=clock2.sleep,
+        time_scale=time_scale,
+        check_interval_s=check_interval,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+
+    assert res2.status == "aborted"
+    assert "apply_fault_failed" in (res2.abort_reason or "")
+    assert "Headless Poller bị dừng bất thường trong Pha C" in (res2.abort_reason or "")

@@ -50,7 +50,7 @@ def test_slow_db_ramps_005_to_15():
 def test_latency_creep_50ms_per_min_capped():
     plan = plan_fault("latency_creep")
     assert len(plan.actions) == 20
-    assert plan.actions[0].path == "/debug/latency?ms=50"    # phút 0 -> 50
+    assert plan.actions[0].path == "/debug/latency?ms=50"  # phút 0 -> 50
     assert plan.actions[1].path == "/debug/latency?ms=100"
     # phút 19 -> 50*20 = 1000 (không chạm trần 2500 trong 20')
     assert plan.actions[-1].path == "/debug/latency?ms=1000"
@@ -114,3 +114,36 @@ def test_apply_plan_fires_in_order_with_fake_clock():
     assert len(calls) == 20
     assert calls[0].endswith("/debug/cpu?ms=20")
     assert calls[-1].endswith("/debug/cpu?ms=400")
+
+
+def test_apply_plan_aborts_when_check_fn_raises():
+    """Kiểm thử: apply_plan dừng ngay lập tức khi check_fn phát hiện tiến trình chết."""
+    import faults.scheduler as sched
+
+    fake_now = {"t": 0.0}
+
+    def now_fn():
+        return fake_now["t"]
+
+    check_call_count = 0
+
+    def check_fn():
+        nonlocal check_call_count
+        check_call_count += 1
+        if check_call_count >= 2:
+            raise RuntimeError("loadgen chết trong khi chờ fault")
+
+    def sleep_fn(step):
+        fake_now["t"] += step
+
+    plan = plan_fault("cpu_spike")
+    with pytest.raises(RuntimeError, match="loadgen chết trong khi chờ fault"):
+        sched.apply_plan(
+            "http://app:3000",
+            plan,
+            sleep_fn=sleep_fn,
+            now_fn=now_fn,
+            check_fn=check_fn,
+        )
+
+    assert check_call_count == 2
