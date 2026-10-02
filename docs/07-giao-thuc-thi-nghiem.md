@@ -170,15 +170,15 @@ Các bước (mỗi bước ghi `action_log`; lỗi ở bất kỳ đâu → `st
 
 1. Tạo bản ghi `experiment_run` (`start_run(conn, scenario, repeat_index, vps_id=vps_id)`) **trước các bước SSH/deploy có thể lỗi**; `status='running'`, cấp `attempt_index` (1..3), `deployment_id` tạm thời là `NULL`.
 2. Đo lệch đồng hồ qua SSH (`measure_clock_offset_ms`) → nếu `|offset| > 2000ms` hoặc mất kết nối SSH: huỷ run (`abort_run(conn, run_id, "clock_skew_too_large: ...")`), sửa NTP rồi chạy lại.
-3. Deploy thật app demo lên VPS: chạy quy trình deploy thật để cấp `deployment_id` mới. Nếu deploy lỗi (SSH timeout, docker compose error, container crash, healthcheck timeout) → huỷ run (`abort_run(conn, run_id, "deploy_failed: ...")`) và **tuyệt đối không tạo deployment giả**; nếu deploy thật thành công → gắn `deployment_id` thật vào run (`attach_deployment_id(conn, run_id, deployment_id)`).
-4. `POST /reset` cho ML service, khởi động headless poller (sử dụng toolchain TypeScript hiện có của repo qua `scripts/run-as-node.js`).
+3. Deploy thật app demo lên VPS: chạy quy trình deploy thật, **gắn `deployment_id` ngay khi pipeline trả ID** (`attach_deployment_id(conn, run_id, deployment_id)`) rồi chờ kết quả deploy. Nếu deploy lỗi (SSH timeout, docker compose error, container crash, healthcheck timeout) → **giữ nguyên bản ghi deployment ở trạng thái `'failed'`** trong DB (audit trail) và huỷ run (`abort_run(conn, run_id, "deploy_failed: ...")`); nếu deploy thành công (`status='running'`) → tiếp tục các bước kế tiếp.
+4. `POST /reset` cho ML service, khởi động headless poller (sử dụng toolchain TypeScript hiện có của repo, điều khiển tiến trình con Electron để drain/dừng an toàn).
 5. Khởi động load generator container (giữ trần an toàn mặc định 1800 giây; chỉ cho phép 4500 giây khi có cấu hình pilot tường minh).
 6. Pha A (30'): cập nhật `baseline_start_ts`, chờ 30'. Đếm mẫu bằng `count_phase_a_samples()` và kiểm tra qua `enough_train_samples()`: **mục tiêu 180 mẫu, tối thiểu 162 mẫu** (ngưỡng 90%). Số mẫu thiếu >10% (< 162 mẫu) → huỷ run (`abort_reason='insufficient_phase_a_samples'`). Khi đủ điều kiện → kích hoạt `POST /train` và cập nhật `train_at_ts`.
 7. Pha B (15'): holdout 90 mẫu, cập nhật mốc pha.
-8. Pha C (20'): cập nhật `fault_start_ts` → kích hoạt lịch fault bằng `plan_fault(scenario)` và thực thi qua `apply_plan(app_base_url, plan)` → chờ 20'.
+8. Pha C (20'): cập nhật `fault_start_ts` → kích hoạt lịch fault bằng `plan_fault(scenario)` và thực thi qua `apply_plan(app_base_url, plan)`. Vì `apply_plan()` đã tự chờ và thực thi theo lịch thời gian thực đến action cuối cùng, runner chỉ chờ phần thời gian còn lại: `remaining_s = max(0.0, (fault_start_epoch + 1200) - now_epoch)`, đặt mốc `fault_end_ts = fault_start_ts + 1200s` (`FAULT_DURATION_S = 1200`), **tuyệt đối không chờ thêm 1200s** sau khi `apply_plan()` kết thúc.
 9. Pha D (10'): tắt fault bằng `reset_fault(app_base_url)`, cập nhật `fault_end_ts` → chờ 10' → dừng load generator, cập nhật `run_end_ts`.
 10. Draining & Kiểm tra tính toàn vẹn ngay sau mỗi run (`check_integrity`):
-    - Đợi headless poller nạp hết metric còn đọng trên VPS (tối đa 30s) rồi dừng poller.
+    - Ra lệnh drain tới headless poller qua stdin (chờ tối đa 30s) để kéo nốt metric còn đọng trên VPS rồi dừng poller.
     - Số mẫu thực tế ≥ 90% số mẫu lý thuyết (tối thiểu **≥ 405 mẫu** trên tổng 450 mẫu lý thuyết của toàn run 75 phút đo ở chu kỳ 10s: 180 Pha A + 90 Pha B + 120 Pha C + 60 Pha D; thay thế mốc cũ 462 mẫu/77 phút).
     - Không có khoảng trống >2 phút giữa 2 mẫu liên tiếp (`max_gap_s <= 120s`).
     - Mỗi `metric_sample` có đúng **5** dòng `score_sample`.
