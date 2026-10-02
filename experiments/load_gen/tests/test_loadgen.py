@@ -128,7 +128,9 @@ def test_config_caps_duration_to_max(monkeypatch):
 
 def test_validate_target_safety():
     # Loopback / internal allowed
-    host, port = validate_target("http://127.0.0.1:3000", ("localhost", "127.0.0.1", "app"))
+    host, port = validate_target(
+        "http://127.0.0.1:3000", ("localhost", "127.0.0.1", "app")
+    )
     assert host == "127.0.0.1"
     assert port == 3000
 
@@ -166,3 +168,28 @@ def test_run_validates_target_and_respects_kill_switch(tmp_path, monkeypatch):
     )
     run(config_ok)
     assert counter_path.exists()
+
+
+def test_config_pilot_duration_from_env(monkeypatch):
+    monkeypatch.setenv("LOADGEN_PILOT_4500", "true")
+    monkeypatch.setenv("LOADGEN_DURATION_S", "4500")
+    config = Config.from_env()
+    assert config.duration_s == 4500.0
+    assert config.allow_pilot_4500 is True
+
+
+def test_config_pilot_duration_caps_at_4500(monkeypatch):
+    monkeypatch.setenv("LOADGEN_PILOT_4500", "true")
+    monkeypatch.setenv("LOADGEN_DURATION_S", "99999")
+    config = Config.from_env()
+    assert config.duration_s == 4500.0
+
+
+def test_config_direct_instantiation_caps_without_pilot():
+    # Trực tiếp khởi tạo mà không có allow_pilot_4500: bị cap về 1800.0s
+    config = Config(duration_s=4500.0, allow_pilot_4500=False)
+    assert config.duration_s == 1800.0
+
+    # Khi bật allow_pilot_4500=True: cho phép tới 4500.0s và cap ở 4500.0s
+    config2 = Config(duration_s=5000.0, allow_pilot_4500=True)
+    assert config2.duration_s == 4500.0

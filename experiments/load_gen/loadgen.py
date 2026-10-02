@@ -36,7 +36,9 @@ LOADGEN_VERSION = "1.0.0"
 
 # Giới hạn an toàn (không phải công cụ DDoS)
 MAX_RPS = 50.0
-MAX_DURATION_S = 30 * 60
+DEFAULT_MAX_DURATION_S = 30 * 60.0  # 1800.0s (30 phút mặc định)
+PILOT_MAX_DURATION_S = 75 * 60.0  # 4500.0s (75 phút cho pilot tường minh)
+MAX_DURATION_S = int(DEFAULT_MAX_DURATION_S)  # Giữ tương thích ngược
 
 # Mix cố định (docs/07): cộng dồn để chọn theo một lần random().
 # 0.00–0.70 GET list · 0.70–0.90 GET detail · 0.90–1.00 POST create.
@@ -75,12 +77,15 @@ def _is_private_or_loopback(host: str) -> bool:
     except socket.gaierror:
         return False
     return all(
-        ipaddress.ip_address(item[4][0]).is_private or ipaddress.ip_address(item[4][0]).is_loopback
+        ipaddress.ip_address(item[4][0]).is_private
+        or ipaddress.ip_address(item[4][0]).is_loopback
         for item in addresses
     )
 
 
-def validate_target(url: str, allowlist: set[str] | tuple[str, ...] | None = None) -> tuple[str, int]:
+def validate_target(
+    url: str, allowlist: set[str] | tuple[str, ...] | None = None
+) -> tuple[str, int]:
     """Bắt buộc kiểm tra target trước khi chạy. Từ chối host public không nằm trong allowlist."""
     allowed = set(allowlist) if allowlist else set()
     parsed = urllib.parse.urlparse(url)
@@ -103,17 +108,41 @@ class Config:
     detail_max_id: int = 1000  # seed 1000 bản ghi (server.js SEED_COUNT)
     random_state: int = 42
     request_timeout_s: float = 5.0
-    duration_s: float = float(MAX_DURATION_S)
+    duration_s: float = float(DEFAULT_MAX_DURATION_S)
     stop_file: Path = Path("loadgen.stop")
     allow_hosts: tuple[str, ...] = ("localhost", "127.0.0.1", "::1", "app")
+    allow_pilot_4500: bool = False
+
+    def __post_init__(self) -> None:
+        max_limit = (
+            PILOT_MAX_DURATION_S if self.allow_pilot_4500 else DEFAULT_MAX_DURATION_S
+        )
+        effective = (
+            min(self.duration_s, float(max_limit))
+            if self.duration_s > 0
+            else float(max_limit)
+        )
+        object.__setattr__(self, "duration_s", effective)
 
     @classmethod
     def from_env(cls) -> Config:
         rate = _env_float("LOADGEN_RATE_RPS", 5.0)
         rate = min(rate, MAX_RPS)
-        raw_duration = _env_float("LOADGEN_DURATION_S", float(MAX_DURATION_S))
-        duration = min(raw_duration, float(MAX_DURATION_S)) if raw_duration > 0 else float(MAX_DURATION_S)
-        allow_env = os.getenv("LOADGEN_ALLOW_HOSTS", os.getenv("LOADGEN_ALLOW_HOST", ""))
+        allow_pilot = os.getenv("LOADGEN_PILOT_4500", "").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+        max_limit = PILOT_MAX_DURATION_S if allow_pilot else DEFAULT_MAX_DURATION_S
+        raw_duration = _env_float("LOADGEN_DURATION_S", float(DEFAULT_MAX_DURATION_S))
+        duration = (
+            min(raw_duration, float(max_limit))
+            if raw_duration > 0
+            else float(max_limit)
+        )
+        allow_env = os.getenv(
+            "LOADGEN_ALLOW_HOSTS", os.getenv("LOADGEN_ALLOW_HOST", "")
+        )
         hosts = {"localhost", "127.0.0.1", "::1", "app"}
         if allow_env:
             hosts.update(h.strip() for h in allow_env.split(",") if h.strip())
@@ -130,6 +159,7 @@ class Config:
             duration_s=duration,
             stop_file=Path(os.getenv("LOADGEN_STOP_FILE", "loadgen.stop")),
             allow_hosts=tuple(sorted(hosts)),
+            allow_pilot_4500=allow_pilot,
         )
 
 
@@ -140,7 +170,9 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
-def pick_request(rng: random.Random, detail_max_id: int) -> tuple[str, str, dict[str, Any] | None]:
+def pick_request(
+    rng: random.Random, detail_max_id: int
+) -> tuple[str, str, dict[str, Any] | None]:
     """Chọn 1 request theo mix cố định. Trả (method, path, json_body|None).
 
     Thuần + nhận rng để test tái lập được với cùng seed.
@@ -244,11 +276,14 @@ def run(config: Config | None = None) -> None:  # pragma: no cover - vòng lặp
     if config.rate_rps <= 0 or config.rate_rps > MAX_RPS:
         raise ValueError(f"rate_rps phải trong (0, {MAX_RPS}]")
 
-    # 2. Giới hạn mọi lần chạy tối đa 30 phút
+    # 2. Giới hạn thời lượng: mặc định tối đa 1800s, chỉ cho phép mở tối đa 4500s khi bật pilot tường minh
+    max_limit = (
+        PILOT_MAX_DURATION_S if config.allow_pilot_4500 else DEFAULT_MAX_DURATION_S
+    )
     effective_duration = (
-        min(config.duration_s, float(MAX_DURATION_S))
+        min(config.duration_s, float(max_limit))
         if config.duration_s > 0
-        else float(MAX_DURATION_S)
+        else float(max_limit)
     )
     stop_file = config.stop_file
 
@@ -277,7 +312,9 @@ def run(config: Config | None = None) -> None:  # pragma: no cover - vòng lặp
 
         # Ghi bộ đếm mỗi ~1s để collector (chu kỳ 10s) luôn có số mới.
         if started - last_counter_write >= 1.0:
-            write_counter(config.counter_path, counter.snapshot(time.monotonic()), _utc_iso())
+            write_counter(
+                config.counter_path, counter.snapshot(time.monotonic()), _utc_iso()
+            )
             last_counter_write = started
 
         elapsed = time.perf_counter() - started
