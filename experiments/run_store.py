@@ -13,18 +13,18 @@ CÁC NGUYÊN TẮC THIẾT KẾ VÀ RÀNG BUỘC:
      kết nối còn lại sẽ bị chặn/từ chối với ActiveRunExistsError, triệt tiêu hoàn toàn race condition.
 
 2. Quản lý transaction minh bạch (Transaction Ownership):
-   - update_phase_schedule(), complete_run(), abort_run() chỉ commit hoặc rollback transaction
-     do chính hàm mở (khi caller chưa mở transaction trước đó trên connection).
+   - attach_deployment_id(), update_phase_schedule(), complete_run(), abort_run() chỉ commit
+     hoặc rollback transaction do chính hàm mở (khi caller chưa mở transaction trước đó trên connection).
    - Tuyệt đối không tự commit hoặc rollback các thay đổi chưa hoàn tất do caller tạo ra trước đó.
      Nếu caller đã ở trong transaction (in_transaction=True), toàn bộ quyền commit/rollback
      vẫn thuộc về caller.
 
-3. Cập nhật trạng thái và mốc pha nguyên tử với điều kiện SQL (status='running'):
-   - update_phase_schedule(), complete_run(), abort_run() đều sử dụng điều kiện:
+3. Cập nhật trạng thái, deployment_id và mốc pha nguyên tử với điều kiện SQL (status='running'):
+   - attach_deployment_id(), update_phase_schedule(), complete_run(), abort_run() đều sử dụng điều kiện:
      `WHERE id = ? AND status = 'running'`
      trực tiếp trong câu lệnh SQL UPDATE.
    - Cơ chế này ngăn chặn tuyệt đối việc ghi đè hoặc sửa đổi một run vừa kết thúc/bị huỷ
-     ở một kết nối khác (tránh race condition giữa complete/abort/update).
+     ở một kết nối khác (tránh race condition giữa complete/abort/update/attach).
    - Nếu rowcount == 0, hàm kiểm tra lại cơ sở dữ liệu để ném đúng lỗi RunNotFoundError
      (nếu run_id không tồn tại) hoặc InvalidRunStateError (nếu run không còn 'running').
 
@@ -381,6 +381,146 @@ def start_run(
         if conn.in_transaction:
             conn.rollback()
         raise
+
+
+def attach_deployment_id(
+    conn: sqlite3.Connection,
+    run_id: int,
+    deployment_id: int,
+    auto_commit: bool = True,
+) -> None:
+    """Gắn deployment_id vào experiment_run sau khi deploy thật thành công trên VPS.
+
+    Ràng buộc và quy tắc kiểm tra (TK-S6 P2d-1a):
+      1. Ràng buộc trạng thái: Chỉ cho phép gắn deployment_id khi run đang ở trạng thái 'running'.
+         Nếu run đã 'completed' hoặc 'aborted', ném InvalidRunStateError.
+      2. Kiểm tra tồn tại và khớp VPS:
+         - deployment_id bắt buộc phải tồn tại trong bảng `deployment`.
+         - Nếu deployment liên kết với bảng `app` có `vps_id` và run có `vps_id`, hai `vps_id`
+           bắt buộc phải trùng khớp. Không cho phép gắn deployment của VPS khác vào run.
+      3. Bất biến một deployment duy nhất (Không đổi ID):
+         - Nếu run đã có deployment_id và trùng khớp với deployment_id truyền vào: idempotent (no-op).
+         - Nếu run đã có deployment_id khác: từ chối với RunStoreError.
+      4. Cập nhật nguyên tử chống race condition:
+         `UPDATE experiment_run SET deployment_id = ? WHERE id = ? AND status = 'running' AND (deployment_id IS NULL OR deployment_id = ?)`
+      5. Quản lý transaction minh bạch (Transaction Ownership):
+         Chỉ commit khi `auto_commit=True` và caller chưa mở transaction (`not caller_had_tx`).
+    """
+    if type(run_id) is not int or run_id <= 0:
+        raise ValueError("run_id phải là số nguyên dương")
+    if type(deployment_id) is not int or deployment_id <= 0:
+        raise ValueError("deployment_id phải là số nguyên dương")
+
+    caller_had_tx = conn.in_transaction
+    cur = conn.cursor()
+
+    # 1. Kiểm tra run tồn tại, trạng thái, và deployment_id hiện tại
+    cur.execute(
+        "SELECT id, status, vps_id, deployment_id FROM experiment_run WHERE id = ?",
+        (run_id,),
+    )
+    run_row = cur.fetchone()
+    if run_row is None:
+        if not caller_had_tx and conn.in_transaction:
+            conn.rollback()
+        raise RunNotFoundError(f"Không tìm thấy experiment_run với id={run_id}")
+
+    run_status = run_row[1] if not hasattr(run_row, "keys") else run_row["status"]
+    run_vps_id = run_row[2] if not hasattr(run_row, "keys") else run_row["vps_id"]
+    existing_dep_id = (
+        run_row[3] if not hasattr(run_row, "keys") else run_row["deployment_id"]
+    )
+
+    if run_status != "running":
+        if not caller_had_tx and conn.in_transaction:
+            conn.rollback()
+        raise InvalidRunStateError(
+            f"Run id={run_id} đang ở trạng thái '{run_status}', chỉ có thể gắn deployment_id khi status='running'"
+        )
+
+    if existing_dep_id is not None:
+        if existing_dep_id == deployment_id:
+            return
+        if not caller_had_tx and conn.in_transaction:
+            conn.rollback()
+        raise RunStoreError(
+            f"Run id={run_id} đã được gắn deployment_id={existing_dep_id}, không thể đổi sang deployment_id={deployment_id}"
+        )
+
+    # 2. Kiểm tra deployment tồn tại và xác thực VPS
+    cur.execute("PRAGMA table_info(deployment)")
+    columns = {row[1] for row in cur.fetchall()}
+    has_app_id = "app_id" in columns
+
+    if has_app_id:
+        cur.execute(
+            """
+            SELECT d.id, a.vps_id
+            FROM deployment d
+            LEFT JOIN app a ON d.app_id = a.id
+            WHERE d.id = ?
+            """,
+            (deployment_id,),
+        )
+    else:
+        cur.execute(
+            "SELECT id, NULL AS vps_id FROM deployment WHERE id = ?",
+            (deployment_id,),
+        )
+
+    dep_row = cur.fetchone()
+    if dep_row is None:
+        if not caller_had_tx and conn.in_transaction:
+            conn.rollback()
+        raise RunStoreError(
+            f"Deployment id={deployment_id} không tồn tại trong cơ sở dữ liệu"
+        )
+
+    dep_vps_id = dep_row[1] if not hasattr(dep_row, "keys") else dep_row["vps_id"]
+    if run_vps_id is not None and dep_vps_id is not None and dep_vps_id != run_vps_id:
+        if not caller_had_tx and conn.in_transaction:
+            conn.rollback()
+        raise RunStoreError(
+            f"Deployment id={deployment_id} thuộc VPS id={dep_vps_id}, không khớp với VPS id={run_vps_id} của run id={run_id}"
+        )
+
+    # 3. Cập nhật nguyên tử
+    cur.execute(
+        """
+        UPDATE experiment_run
+        SET deployment_id = ?
+        WHERE id = ? AND status = 'running' AND (deployment_id IS NULL OR deployment_id = ?)
+        """,
+        (deployment_id, run_id, deployment_id),
+    )
+
+    if cur.rowcount == 0:
+        cur.execute(
+            "SELECT id, status, deployment_id FROM experiment_run WHERE id = ?",
+            (run_id,),
+        )
+        post_row = cur.fetchone()
+        if not caller_had_tx and conn.in_transaction:
+            conn.rollback()
+        if post_row is None:
+            raise RunNotFoundError(f"Không tìm thấy experiment_run với id={run_id}")
+        current_st = (
+            post_row[1] if not hasattr(post_row, "keys") else post_row["status"]
+        )
+        current_dep = (
+            post_row[2] if not hasattr(post_row, "keys") else post_row["deployment_id"]
+        )
+        if current_st != "running":
+            raise InvalidRunStateError(
+                f"Run id={run_id} đang ở trạng thái '{current_st}', chỉ có thể gắn deployment_id khi status='running'"
+            )
+        if current_dep is not None and current_dep != deployment_id:
+            raise RunStoreError(
+                f"Run id={run_id} đã được gắn deployment_id={current_dep}, không thể đổi sang deployment_id={deployment_id}"
+            )
+
+    if auto_commit and not caller_had_tx:
+        conn.commit()
 
 
 def update_phase_schedule(

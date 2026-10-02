@@ -189,7 +189,7 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
   - Loại trừ nghiêm ngặt: gán `NULL` khi không có run phù hợp, khi chuỗi bắt đầu trước `baseline_start_ts`, khi mẫu thuộc deployment khác, hoặc khi run đã kết thúc (`completed` hoặc `aborted`).
   - Bảo toàn 100% hành vi monitor thông thường khi không chạy thí nghiệm (alert nhận `NULL`).
   - Cập nhật test suite: 4 test trong `metricParser.test.ts` (thêm test từ chối timestamp có phần lẻ theo contract), 5 test trong `alertTracker.test.ts` (kiểm tra trực tiếp `isSampleInRunWindow` với mẫu có phần lẻ và AlertTracker với baseline microsecond), 19 test trong `poller.test.ts` (test tích hợp mẫu giây nguyên `...01Z` trước baseline `...01.000500Z` không gắn run, sau baseline gắn đúng; test timestamp mẫu sai định dạng và baseline sai định dạng); đạt mốc **69 passed** vitest monitor. Giữ pilot thực tế `NOT_RUN`.
-- 02/10 mốc Thiết kế P2c-2 (Docs only) — Thiết kế runner run_experiment.py, adapter và kế hoạch phân rã (TK-S6):
+- 02/10 mốc Thiết kế P2c-2 (`b029eef`, Docs only) — Thiết kế runner run_experiment.py, adapter và kế hoạch phân rã (TK-S6):
   - Luồng runner chuẩn hoá: `start_run()` được gọi ngay đầu attempt trước các bước SSH/deploy có thể thất bại (`deployment_id` ban đầu để `NULL`) nhằm ghi nhận mọi lỗi hạ tầng vào DB (clock skew, SSH error); deploy thật app demo lên VPS, gắn `deployment_id` ngay khi pipeline trả ID rồi chờ kết quả, nếu deploy lỗi thì giữ nguyên bản ghi deployment ở trạng thái `'failed'` và `abort_run()` (không khẳng định "không có bản ghi"); nếu deploy thành công thì tiếp tục các pha.
   - Sửa mốc thời gian pha C: đặt `fault_end_ts` tại mốc `fault_start_ts + 1200s`; do `apply_plan()` đã tự chờ và thực thi theo lịch thời gian thực đến action cuối cùng, runner chỉ chờ phần thời gian còn lại đến `fault_end_ts`, tuyệt đối không chờ thêm 1200s.
   - Điều khiển headless poller: thiết kế cơ chế drain/dừng điều khiển tiến trình con Electron qua stdin (`drain\n`); nhận diện thực tế `run-as-node.js` hiện tại dùng `spawnSync` (chặn đồng bộ) để có phương án spawn async không chặn.
@@ -197,10 +197,22 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
   - Load generator: giữ nguyên trần an toàn mặc định 1800 giây; chỉ cho phép mở rộng 4500 giây khi có cấu hình pilot tường minh (`LOADGEN_PILOT_4500=true`).
   - Phân rã 4 checkpoint nhỏ: chỉ rõ **P2d-1** triển khai `DeployAdapter` & `attach_deployment_id` kèm kiểm thử ca deploy lỗi (giữ bản ghi failed, abort attempt, cho phép retry attempt kế tiếp).
   - Ghi nhận quyết định kiến trúc vào `DECISIONS.md`, cập nhật `board.md`; giữ pilot thực tế `NOT_RUN`.
+- 02/10 mốc Triển khai P2d-1a (`4f5af9d`, ban đầu `a7d9df7`) — Helper attach_deployment_id và ML Client (TK-S6):
+  - `experiments/run_store.py`: triển khai `attach_deployment_id(conn, run_id, deployment_id, auto_commit=True)`.
+    - Kiểm tra run tồn tại và ở trạng thái `'running'`; từ chối nếu run đã `'completed'` hoặc `'aborted'` (`InvalidRunStateError`).
+    - Kiểm tra `deployment_id` tồn tại trong bảng `deployment`; đối chiếu `vps_id` của app với `vps_id` của run, từ chối nếu khác VPS (`RunStoreError`).
+    - Bất biến một deployment duy nhất: nếu run đã có `deployment_id` trùng khớp thì idempotent (no-op); nếu run đã gắn `deployment_id` khác thì từ chối (`RunStoreError`).
+    - Cập nhật nguyên tử chống race condition bằng SQL: `UPDATE experiment_run SET deployment_id = ? WHERE id = ? AND status = 'running' AND (deployment_id IS NULL OR deployment_id = ?)`.
+    - Bảo toàn quyền sở hữu transaction của caller: chỉ commit khi `auto_commit=True` và `not conn.in_transaction`.
+  - `experiments/adapters/ml_client.py`: triển khai lớp `MlClient` giao tiếp HTTP với FastAPI `ml-service` (cổng 8000) sử dụng `urllib.request` từ thư viện chuẩn (zero external dependencies).
+    - Triển khai đầy đủ các endpoint: `check_health()` (`GET /health`), `get_status(deployment_id)` (`GET /status?deployment_id=...`), `reset_models(deployment_id)` (`POST /reset`), `train_models(deployment_id, samples)` (`POST /train`).
+    - Phân lớp ngoại lệ rõ ràng: `MlClientError`, `MlConnectionError`, `MlResponseError` (kèm `status_code` và `response_text`).
+  - Unit test: bổ sung 11 test cho `attach_deployment_id` trong `test_run_store.py` (bao gồm ca hợp lệ, idempotent, đổi ID khác, deployment không tồn tại, lệch VPS, run đã abort/completed, caller transaction rollback, 2 kết nối cạnh tranh, và thread race condition); 15 test mock HTTP ngoại tuyến trong `test_ml_client.py`.
+  - Toàn bộ suite đạt **172 passed** pytest (nâng từ 145), Ruff lint clean, Ruff format clean; giữ pilot thực tế **`NOT_RUN`**.
 
 ## Lệnh tái hiện
 
-Test thuần (145 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed, P2b-3 khởi đầu là 140 passed):
+Test thuần (172 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed, P2b-3 là 145 passed, P2d-1a là 172 passed):
 
 ```
 ml-service/.venv/Scripts/python.exe -m pytest \
@@ -905,11 +917,12 @@ sequenceDiagram
 
 ### 3. Kế hoạch Phân rã Checkpoint Code tiếp theo (P2d-1 đến P2d-4)
 
-Nhằm tuân thủ quy trình phát triển an toàn, chia nhỏ rủi ro và có thể kiểm thử tự động ngoại tuyến (Offline Mock Testing trên Windows/RAM), phân đoạn P2d được chia thành 4 checkpoint cụ thể:
+Nhằm tuân thủ quy trình phát triển an toàn, chia nhỏ rủi ro và có thể kiểm thử tự động ngoại tuyến (Offline Mock Testing trên Windows/RAM), phân đoạn P2d được chia thành 5 checkpoint cụ thể:
 
 | Checkpoint | Nội dung triển khai chính | Phạm vi File | Tiêu chí Kiểm thử Ngoại tuyến (Offline Test) |
 |---|---|---|---|
-| **P2d-1** | **Deploy Adapter & Helper `attach_deployment_id` + ML Client** | `experiments/adapters/deploy_adapter.py`, `experiments/run_store.py`, `experiments/adapters/ml_client.py`, `experiments/tests/test_adapters.py` | - **Kiểm thử Deploy Thành công**: gắn `deployment_id` vào run, chuyển sang Pha A.<br>- **Kiểm thử Ca Deploy Lỗi (Deploy Failure Test)**: Giả lập deploy thất bại (status='failed'), xác nhận runner gắn `deployment_id` của bản ghi failed vào `experiment_run`, gọi `abort_run()` với lý do rõ ràng, **giữ nguyên bản ghi deployment failed trong DB**, và kiểm tra attempt lifecycle cho phép retry attempt 2.<br>- Test mock HTTP cho ML Client (`check_health`, `reset_models`, `train_models`). |
+| **P2d-1a** | **Helper `attach_deployment_id` & ML Client** | `experiments/run_store.py`, `experiments/adapters/ml_client.py`, `experiments/tests/test_run_store.py`, `experiments/tests/test_ml_client.py` | - `attach_deployment_id` chỉ gắn deployment tồn tại vào run running, kiểm tra khớp VPS, giữ quyền tx caller, chống race condition.<br>- `MlClient` hỗ trợ `/health`, `/status`, `/reset` (`{"deployment_id": int}`), `/train` (`{"deployment_id": int, "samples": [...]}`), bọc ngoại lệ rõ ràng.<br>- 11 unit test trong `test_run_store.py` và 15 test mock HTTP ngoại tuyến trong `test_ml_client.py`. |
+| **P2d-1b** | **Deploy Adapter & Test Deploy Failure** | `experiments/adapters/deploy_adapter.py`, `experiments/tests/test_deploy_adapter.py` | - **Kiểm thử Deploy Thành công**: gắn `deployment_id` vào run, chuyển sang Pha A.<br>- **Kiểm thử Ca Deploy Lỗi (Deploy Failure Test)**: Giả lập deploy thất bại (status='failed'), xác nhận runner gắn `deployment_id` của bản ghi failed vào `experiment_run`, gọi `abort_run()` với lý do rõ ràng, **giữ nguyên bản ghi deployment failed trong DB**, và kiểm tra attempt lifecycle cho phép retry attempt 2. |
 | **P2d-2** | **Headless Poller CLI & Python Poller Adapter (Non-blocking & Drainable)** | `app/scripts/headless-poller.ts`, `experiments/adapters/poller_adapter.py`, `app/tsconfig.scripts.json`, `app/package.json` | - Biên dịch qua `tsconfig.scripts.json`, chạy bằng Electron runtime (`ELECTRON_RUN_AS_NODE=1`).<br>- Chạy headless poller trên RAM SQLite: kéo metric giả lập, gọi ML scoring, gán `experiment_run_id` chính xác.<br>- Test adapter Python: start tiến trình con không chặn, gửi lệnh `"drain\n"` qua stdin, xác nhận poller vét hết metric và thoát sạch code 0. |
 | **P2d-3** | **Loadgen Adapter & Cấu hình Pilot 4500s Tường minh** | `experiments/load_gen/loadgen.py`, `experiments/adapters/loadgen_adapter.py`, `experiments/tests/test_loadgen_adapter.py` | - Cập nhật `loadgen.py` hỗ trợ cờ pilot tường minh mở trần 4500s, mặc định giữ an toàn 1800s.<br>- Unit test class `LoadgenAdapter` điều khiển container/tiến trình qua SSH mock hoặc local execution.<br>- Xác nhận counter đo lường ổn định suốt thời lượng mô phỏng. |
 | **P2d-4** | **Tích hợp Runner `run_experiment.py` Hoàn chỉnh & E2E Sim** | `experiments/run_experiment.py`, `experiments/tests/test_runner_e2e.py` | - Tích hợp đầy đủ 10 bước của Runner với vòng đời attempt (1..3), xử lý clock skew gate, phase timestamps, count phase A samples (mục tiêu 180, min 162), timing Pha C chuẩn (`fault_end_ts = fault_start_ts + 1200s`), integrity gate (75' / 450 mẫu, min 405), và cleanup `finally`.<br>- **End-to-End Simulation Test**: Giả lập toàn bộ chu trình trên RAM SQLite (Attempt 1 abort do skew/deploy $\to$ Attempt 2 retry thành công $\to$ export $\to$ analyze). |

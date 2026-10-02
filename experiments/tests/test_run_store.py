@@ -16,6 +16,7 @@ from run_store import (
     RunNotFoundError,
     RunStoreError,
     abort_run,
+    attach_deployment_id,
     complete_run,
     count_phase_a_samples,
     get_active_run,
@@ -27,11 +28,16 @@ from run_store import (
 )
 
 _SCHEMA = """
-CREATE TABLE deployment (
-  id INTEGER PRIMARY KEY
-);
 CREATE TABLE vps (
   id INTEGER PRIMARY KEY
+);
+CREATE TABLE app (
+  id INTEGER PRIMARY KEY,
+  vps_id INTEGER NOT NULL REFERENCES vps(id)
+);
+CREATE TABLE deployment (
+  id INTEGER PRIMARY KEY,
+  app_id INTEGER REFERENCES app(id)
 );
 CREATE TABLE experiment_run (
   id               INTEGER PRIMARY KEY,
@@ -84,9 +90,10 @@ def conn() -> sqlite3.Connection:
     c = sqlite3.connect(":memory:")
     c.row_factory = sqlite3.Row
     c.executescript(_SCHEMA)
-    c.execute("INSERT INTO deployment (id) VALUES (42)")
-    c.execute("INSERT INTO deployment (id) VALUES (99)")
     c.execute("INSERT INTO vps (id) VALUES (1)")
+    c.execute("INSERT INTO app (id, vps_id) VALUES (1, 1)")
+    c.execute("INSERT INTO deployment (id, app_id) VALUES (42, 1)")
+    c.execute("INSERT INTO deployment (id, app_id) VALUES (99, 1)")
     c.commit()
     return c
 
@@ -934,3 +941,196 @@ def test_start_run_positional_arguments_compatibility(conn: sqlite3.Connection) 
     assert run2 is not None
     assert run2["attempt_index"] == 2
     assert run2["notes"] == "positional 12 args"
+
+
+def test_attach_deployment_id_success(conn: sqlite3.Connection) -> None:
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+    run_before = get_run(conn, run_id)
+    assert run_before is not None
+    assert run_before["deployment_id"] is None
+    assert run_before["status"] == "running"
+
+    attach_deployment_id(conn, run_id, 42)
+
+    run_after = get_run(conn, run_id)
+    assert run_after is not None
+    assert run_after["deployment_id"] == 42
+    assert run_after["status"] == "running"
+
+
+def test_attach_deployment_id_idempotent(conn: sqlite3.Connection) -> None:
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+    attach_deployment_id(conn, run_id, 42)
+    # Gắn lại đúng deployment_id đó -> không lỗi (no-op)
+    attach_deployment_id(conn, run_id, 42)
+    run = get_run(conn, run_id)
+    assert run is not None
+    assert run["deployment_id"] == 42
+
+
+def test_attach_deployment_id_different_id_fails(conn: sqlite3.Connection) -> None:
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+    attach_deployment_id(conn, run_id, 42)
+
+    with pytest.raises(RunStoreError, match="không thể đổi sang deployment_id=99"):
+        attach_deployment_id(conn, run_id, 99)
+
+    run = get_run(conn, run_id)
+    assert run is not None
+    assert run["deployment_id"] == 42
+
+
+def test_attach_deployment_id_nonexistent_deployment(conn: sqlite3.Connection) -> None:
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+    with pytest.raises(RunStoreError, match="không tồn tại"):
+        attach_deployment_id(conn, run_id, 99999)
+
+
+def test_attach_deployment_id_mismatched_vps(conn: sqlite3.Connection) -> None:
+    conn.execute("INSERT INTO vps (id) VALUES (2)")
+    conn.execute("INSERT INTO app (id, vps_id) VALUES (2, 2)")
+    conn.execute("INSERT INTO deployment (id, app_id) VALUES (202, 2)")
+    conn.commit()
+
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+    with pytest.raises(RunStoreError, match="thuộc VPS id=2, không khớp với VPS id=1"):
+        attach_deployment_id(conn, run_id, 202)
+
+
+def test_attach_deployment_id_run_not_found(conn: sqlite3.Connection) -> None:
+    with pytest.raises(RunNotFoundError):
+        attach_deployment_id(conn, 99999, 42)
+
+
+def test_attach_deployment_id_run_aborted_or_completed(
+    conn: sqlite3.Connection,
+) -> None:
+    r1 = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+    abort_run(conn, r1, "abort early")
+    with pytest.raises(
+        InvalidRunStateError, match="chỉ có thể gắn deployment_id khi status='running'"
+    ):
+        attach_deployment_id(conn, r1, 42)
+
+    r2 = start_run(conn, "cpu_spike", 1, deployment_id=None, vps_id=1)
+    complete_run(conn, r2, "2026-10-02T10:00:00Z")
+    with pytest.raises(
+        InvalidRunStateError, match="chỉ có thể gắn deployment_id khi status='running'"
+    ):
+        attach_deployment_id(conn, r2, 42)
+
+
+def test_attach_deployment_id_invalid_inputs(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ValueError, match="run_id phải là số nguyên dương"):
+        attach_deployment_id(conn, 0, 42)
+    with pytest.raises(ValueError, match="run_id phải là số nguyên dương"):
+        attach_deployment_id(conn, -1, 42)
+    with pytest.raises(ValueError, match="run_id phải là số nguyên dương"):
+        attach_deployment_id(conn, "1", 42)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="deployment_id phải là số nguyên dương"):
+        attach_deployment_id(conn, 1, 0)
+    with pytest.raises(ValueError, match="deployment_id phải là số nguyên dương"):
+        attach_deployment_id(conn, 1, -5)
+
+
+def test_attach_deployment_id_preserves_caller_transaction(
+    conn: sqlite3.Connection,
+) -> None:
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+    conn.execute("BEGIN")
+    attach_deployment_id(conn, run_id, 42, auto_commit=True)
+    assert conn.in_transaction is True
+    conn.rollback()
+
+    run = get_run(conn, run_id)
+    assert run is not None
+    assert run["deployment_id"] is None
+
+
+def test_attach_deployment_id_two_competing_connections(tmp_path: Path) -> None:
+    db_file = tmp_path / "competing_attach.db"
+    c_init = sqlite3.connect(str(db_file))
+    c_init.executescript(_SCHEMA)
+    c_init.execute("INSERT INTO vps (id) VALUES (1)")
+    c_init.execute("INSERT INTO app (id, vps_id) VALUES (1, 1)")
+    c_init.execute("INSERT INTO deployment (id, app_id) VALUES (42, 1)")
+    c_init.execute("INSERT INTO deployment (id, app_id) VALUES (99, 1)")
+    c_init.commit()
+    c_init.close()
+
+    conn1 = sqlite3.connect(str(db_file), timeout=10.0)
+    conn1.row_factory = sqlite3.Row
+    conn2 = sqlite3.connect(str(db_file), timeout=10.0)
+    conn2.row_factory = sqlite3.Row
+
+    try:
+        run_id = start_run(conn1, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+        # Conn 1 gắn deployment 42
+        attach_deployment_id(conn1, run_id, 42)
+
+        # Conn 2 cố gắn deployment 99 -> thất bại
+        with pytest.raises(RunStoreError, match="không thể đổi sang deployment_id=99"):
+            attach_deployment_id(conn2, run_id, 99)
+
+        run = get_run(conn2, run_id)
+        assert run is not None
+        assert run["deployment_id"] == 42
+    finally:
+        conn1.close()
+        conn2.close()
+
+
+def test_attach_deployment_id_thread_race_competition(tmp_path: Path) -> None:
+    db_file = tmp_path / "thread_race.db"
+    c_init = sqlite3.connect(str(db_file))
+    c_init.executescript(_SCHEMA)
+    c_init.execute("INSERT INTO vps (id) VALUES (1)")
+    c_init.execute("INSERT INTO app (id, vps_id) VALUES (1, 1)")
+    c_init.execute("INSERT INTO deployment (id, app_id) VALUES (42, 1)")
+    c_init.execute("INSERT INTO deployment (id, app_id) VALUES (99, 1)")
+    c_init.commit()
+    c_init.close()
+
+    main_conn = sqlite3.connect(str(db_file), timeout=10.0)
+    main_conn.row_factory = sqlite3.Row
+    run_id = start_run(main_conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+    main_conn.close()
+
+    results: list[tuple[str, str | None]] = []
+    lock = threading.Lock()
+    barrier = threading.Barrier(2)
+
+    def worker(dep_id: int) -> None:
+        c = sqlite3.connect(str(db_file), timeout=10.0)
+        c.row_factory = sqlite3.Row
+        try:
+            barrier.wait()
+            attach_deployment_id(c, run_id, dep_id)
+            with lock:
+                results.append((f"dep_{dep_id}", "success"))
+        except RunStoreError as err:
+            with lock:
+                results.append((f"dep_{dep_id}", f"rejected: {err}"))
+        finally:
+            c.close()
+
+    t1 = threading.Thread(target=worker, args=(42,))
+    t2 = threading.Thread(target=worker, args=(99,))
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    # Một worker thành công, worker kia bị từ chối
+    successes = [r for r in results if r[1] == "success"]
+    rejections = [r for r in results if r[1] is not None and "rejected" in r[1]]
+    assert len(successes) == 1
+    assert len(rejections) == 1
+
+    check_conn = sqlite3.connect(str(db_file))
+    check_conn.row_factory = sqlite3.Row
+    final_run = get_run(check_conn, run_id)
+    assert final_run is not None
+    assert final_run["deployment_id"] in (42, 99)
+    check_conn.close()
