@@ -1,0 +1,382 @@
+"""Unit tests cho DeployAdapter (TK-S6 P2d-1b) kiểm thử hoàn toàn ngoại tuyến (Offline Mock)."""
+
+from __future__ import annotations
+
+import sqlite3
+import sys
+from pathlib import Path
+
+import pytest
+
+from experiments.adapters.deploy_adapter import (
+    DeployAdapter,
+    DeployFailedError,
+    DeployPreIdError,
+    DeployProtocolError,
+    DeployTimeoutError,
+    resolve_db_path,
+)
+from experiments.run_store import get_run, start_run
+
+_SCHEMA = """
+CREATE TABLE vps (
+  id INTEGER PRIMARY KEY
+);
+CREATE TABLE app (
+  id INTEGER PRIMARY KEY,
+  vps_id INTEGER NOT NULL REFERENCES vps(id)
+);
+CREATE TABLE deployment (
+  id INTEGER PRIMARY KEY,
+  app_id INTEGER REFERENCES app(id),
+  status TEXT NOT NULL DEFAULT 'running'
+);
+CREATE TABLE experiment_run (
+  id               INTEGER PRIMARY KEY,
+  scenario         TEXT    NOT NULL CHECK (scenario IN
+                     ('memory_leak','cpu_spike','error_burst','slow_db','latency_creep')),
+  repeat_index     INTEGER NOT NULL,
+  attempt_index    INTEGER NOT NULL DEFAULT 1 CHECK (attempt_index BETWEEN 1 AND 3),
+  deployment_id    INTEGER REFERENCES deployment(id) ON DELETE SET NULL,
+  vps_id           INTEGER REFERENCES vps(id),
+  baseline_start_ts TEXT,
+  train_at_ts       TEXT,
+  fault_start_ts    TEXT,
+  fault_end_ts      TEXT,
+  run_end_ts        TEXT,
+  clock_offset_ms   INTEGER NOT NULL DEFAULT 0,
+  detection_grace_s INTEGER NOT NULL DEFAULT 60,
+  train_sample_count INTEGER,
+  fault_params_json TEXT,
+  status            TEXT NOT NULL DEFAULT 'running'
+                         CHECK (status IN ('running','completed','aborted')),
+  notes             TEXT,
+  abort_reason      TEXT,
+  created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+  UNIQUE(scenario, repeat_index, attempt_index)
+);
+"""
+
+
+@pytest.fixture
+def file_db(tmp_path: Path) -> tuple[sqlite3.Connection, Path]:
+    """Tạo database SQLite trên đĩa để có thể resolve_db_path tự động."""
+    db_file = tmp_path / "test_opspilot.db"
+    conn = sqlite3.connect(str(db_file), timeout=5.0)
+    conn.row_factory = sqlite3.Row
+    conn.executescript(_SCHEMA)
+    conn.execute("INSERT INTO vps (id) VALUES (1)")
+    conn.execute("INSERT INTO app (id, vps_id) VALUES (1, 1)")
+    conn.commit()
+    yield conn, db_file
+    conn.close()
+
+
+def test_deploy_success(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    conn.execute(
+        "INSERT INTO deployment (id, app_id, status) VALUES (10, 1, 'running')"
+    )
+    conn.commit()
+
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    mock_script = (
+        "import sys, time, json\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 10}), flush=True)\n"
+        "print(json.dumps({'event': 'step_start', 'step': 'PRECHECK', 'deployment_id': 10}), flush=True)\n"
+        "print(json.dumps({'event': 'step_done', 'step': 'PRECHECK', 'deployment_id': 10, 'duration_ms': 50}), flush=True)\n"
+        "print(json.dumps({'event': 'finished', 'deployment_id': 10, 'status': 'running', 'app_url': 'http://127.0.0.1:3000', 'total_duration_ms': 500}), flush=True)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=5.0,
+    )
+
+    res = adapter.deploy(
+        conn=conn,
+        run_id=run_id,
+        vps_id=1,
+        app_name="demo-app",
+        source_path=tmp_path,
+        db_path=db_file,
+    )
+
+    assert res.deployment_id == 10
+    assert res.status == "running"
+    assert res.app_url == "http://127.0.0.1:3000"
+    assert res.total_duration_ms == 500
+    assert len(res.steps) == 2
+
+    # Kiểm tra DB: run_id đã được gắn deployment_id=10 ngay lập tức và giữ running
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "running"
+    assert run_row["deployment_id"] == 10
+
+
+def test_deploy_failure_aborts_run_and_preserves_failed_deployment(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    # DeployPipeline sẽ tạo bản ghi deployment status='failed' khi build lỗi
+    conn.execute("INSERT INTO deployment (id, app_id, status) VALUES (11, 1, 'failed')")
+    conn.commit()
+
+    run_id = start_run(conn, "cpu_spike", 1, deployment_id=None, vps_id=1)
+
+    mock_script = (
+        "import sys, time, json\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 11}), flush=True)\n"
+        "print(json.dumps({'event': 'step_failed', 'step': 'BUILD', 'deployment_id': 11, 'error': 'Docker build syntax error'}), flush=True)\n"
+        "print(json.dumps({'event': 'finished', 'deployment_id': 11, 'status': 'failed', 'error': 'Docker build syntax error'}), flush=True)\n"
+        "sys.exit(1)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=5.0,
+    )
+
+    with pytest.raises(
+        DeployFailedError, match="Docker build syntax error"
+    ) as exc_info:
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+        )
+
+    assert exc_info.value.deployment_id == 11
+
+    # Kiểm tra DB:
+    # 1. Run bị abort và lưu abort_reason rõ ràng
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "aborted"
+    assert run_row["deployment_id"] == 11
+    assert "deploy_failed" in (run_row["abort_reason"] or "")
+
+    # 2. Bản ghi deployment 11 VẪN ĐƯỢC GIỮ NGUYÊN trong DB với status='failed' (audit trail)
+    dep_row = conn.execute("SELECT id, status FROM deployment WHERE id = 11").fetchone()
+    assert dep_row is not None
+    assert dep_row["status"] == "failed"
+
+    # 3. Attempt lifecycle: attempt tiếp theo được cấp index = 2
+    r2 = start_run(conn, "cpu_spike", 1, deployment_id=None, vps_id=1)
+    r2_row = get_run(conn, r2)
+    assert r2_row is not None
+    assert r2_row["attempt_index"] == 2
+
+
+def test_deploy_error_before_id(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    run_id = start_run(conn, "slow_db", 1, deployment_id=None, vps_id=1)
+
+    mock_script = (
+        "import sys, json\n"
+        "print(json.dumps({'event': 'error', 'error': 'Thư mục source không tồn tại'}), flush=True)\n"
+        "sys.exit(1)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=5.0,
+    )
+
+    with pytest.raises(DeployPreIdError, match="Thư mục source không tồn tại"):
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+        )
+
+    # DB: run bị abort với deployment_id=None
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "aborted"
+    assert run_row["deployment_id"] is None
+    assert "deploy_pre_id_error" in (run_row["abort_reason"] or "")
+
+
+def test_deploy_timeout_after_assigned(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    conn.execute(
+        "INSERT INTO deployment (id, app_id, status) VALUES (12, 1, 'running')"
+    )
+    conn.commit()
+
+    run_id = start_run(conn, "latency_creep", 1, deployment_id=None, vps_id=1)
+
+    # Script phát assigned rồi treo lâu hơn timeout (0.3s)
+    mock_script = (
+        "import sys, time, json\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 12}), flush=True)\n"
+        "time.sleep(5.0)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=0.3,
+    )
+
+    with pytest.raises(DeployTimeoutError) as exc_info:
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+        )
+
+    assert exc_info.value.deployment_id == 12
+
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "aborted"
+    assert run_row["deployment_id"] == 12
+    assert "deploy_timeout" in (run_row["abort_reason"] or "")
+
+
+def test_deploy_timeout_before_assigned(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    run_id = start_run(conn, "latency_creep", 1, deployment_id=None, vps_id=1)
+
+    # Script treo không phát ra thông điệp gì
+    mock_script = "import time\ntime.sleep(5.0)\n"
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=0.3,
+    )
+
+    with pytest.raises(DeployTimeoutError) as exc_info:
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+        )
+
+    assert exc_info.value.deployment_id is None
+
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "aborted"
+    assert run_row["deployment_id"] is None
+    assert "deploy_timeout" in (run_row["abort_reason"] or "")
+
+
+def test_deploy_malformed_protocol(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    conn.execute(
+        "INSERT INTO deployment (id, app_id, status) VALUES (13, 1, 'running')"
+    )
+    conn.commit()
+
+    run_id = start_run(conn, "error_burst", 1, deployment_id=None, vps_id=1)
+
+    # Script phát assigned nhưng thoát bất thường không có finished
+    mock_script = (
+        "import sys, json\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 13}), flush=True)\n"
+        "print('UNEXPECTED CRASH OUTPUT', file=sys.stderr, flush=True)\n"
+        "sys.exit(2)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=5.0,
+    )
+
+    with pytest.raises(DeployProtocolError) as exc_info:
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+        )
+
+    assert exc_info.value.deployment_id == 13
+
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "aborted"
+    assert run_row["deployment_id"] == 13
+    assert "deploy_protocol_error" in (run_row["abort_reason"] or "")
+
+
+def test_deploy_credential_security_not_leaked(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    conn.execute(
+        "INSERT INTO deployment (id, app_id, status) VALUES (14, 1, 'running')"
+    )
+    conn.commit()
+
+    run_id = start_run(conn, "error_burst", 1, deployment_id=None, vps_id=1)
+
+    # Script kiểm tra:
+    # 1. Secret được truyền qua biến môi trường OPSPILOT_SSH_SECRET
+    # 2. Secret KHÔNG xuất hiện trong sys.argv
+    mock_script = (
+        "import sys, os, json\n"
+        "secret = os.environ.get('OPSPILOT_SSH_SECRET')\n"
+        "assert secret == 'super_sensitive_password_xyz'\n"
+        "for arg in sys.argv:\n"
+        "    assert 'super_sensitive_password_xyz' not in arg\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 14}), flush=True)\n"
+        "print(json.dumps({'event': 'finished', 'deployment_id': 14, 'status': 'running'}), flush=True)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=5.0,
+    )
+
+    res = adapter.deploy(
+        conn=conn,
+        run_id=run_id,
+        vps_id=1,
+        app_name="demo-app",
+        source_path=tmp_path,
+        db_path=db_file,
+        ssh_secret="super_sensitive_password_xyz",
+    )
+
+    assert res.deployment_id == 14
+    assert res.status == "running"
+
+
+def test_resolve_db_path_auto_and_memory() -> None:
+    # 1. Connection in-memory không tự resolve được file path
+    mem_conn = sqlite3.connect(":memory:")
+    with pytest.raises(ValueError, match="Không thể tự động xác định file SQLite DB"):
+        resolve_db_path(mem_conn)
+
+    # 2. Truyền db_path tường minh -> thành công
+    p = resolve_db_path(mem_conn, "custom/path.db")
+    assert p.name == "path.db"

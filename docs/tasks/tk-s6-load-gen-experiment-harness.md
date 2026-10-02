@@ -197,7 +197,7 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
   - Load generator: giữ nguyên trần an toàn mặc định 1800 giây; chỉ cho phép mở rộng 4500 giây khi có cấu hình pilot tường minh (`LOADGEN_PILOT_4500=true`).
   - Phân rã 4 checkpoint nhỏ: chỉ rõ **P2d-1** triển khai `DeployAdapter` & `attach_deployment_id` kèm kiểm thử ca deploy lỗi (giữ bản ghi failed, abort attempt, cho phép retry attempt kế tiếp).
   - Ghi nhận quyết định kiến trúc vào `DECISIONS.md`, cập nhật `board.md`; giữ pilot thực tế `NOT_RUN`.
-- 02/10 mốc Triển khai P2d-1a (`17c4589`) — Helper attach_deployment_id và ML Client (TK-S6):
+- 02/10 mốc Triển khai P2d-1a (`17c4589`, sửa `e1a3103`) — Helper attach_deployment_id và ML Client (TK-S6):
   - `experiments/run_store.py`: triển khai `attach_deployment_id(conn, run_id, deployment_id, auto_commit=True)`.
     - Kiểm tra run tồn tại và ở trạng thái `'running'`; từ chối nếu run đã `'completed'` hoặc `'aborted'` (`InvalidRunStateError`).
     - Bắt buộc xác minh quan hệ cùng VPS: `run.vps_id` bắt buộc khác NULL; schema bắt buộc có đủ bảng `deployment`, `app`, `vps` và các cột `deployment.app_id`, `app.vps_id`; quan hệ `deployment -> app -> vps` bắt buộc toàn vẹn; từ chối dứt khoát nếu thiếu thông tin xác minh hoặc khác VPS (`RunStoreError`).
@@ -210,10 +210,28 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
     - Phân lớp ngoại lệ rõ ràng: `MlClientError`, `MlConnectionError`, `MlResponseError` (kèm `status_code` và `response_text`).
   - Unit test: bổ sung 19 test cho `attach_deployment_id` trong `test_run_store.py` (bao gồm ca hợp lệ, idempotent, đổi ID khác, deployment không tồn tại, lệch VPS, run.vps_id NULL, deployment.app_id NULL, app không tồn tại, app.vps_id NULL, vps không tồn tại, schema thiếu bảng/cột, run đã abort/completed, caller transaction rollback & preserve, 2 kết nối cạnh tranh, và thread race condition); 15 test mock HTTP ngoại tuyến trong `test_ml_client.py`.
   - Toàn bộ suite đạt **180 passed** pytest (nâng từ 145 ban đầu, 172 ở bản đầu), Ruff lint clean, Ruff format clean; giữ pilot thực tế **`NOT_RUN`**.
+- 02/10 mốc Triển khai P2d-1b — Deploy Adapter & Test Deploy Failure (TK-S6):
+  - `app/scripts/deploy-cli.ts`: CLI TypeScript mỏng vận hành `DeployPipeline` trên chính file SQLite DB của thí nghiệm (không tự tạo deployment bằng SQL thuần, không dùng DB tạm của `try-deploy.ts`). CLI lắng nghe và phát các sự kiện JSON máy đọc được qua stdout:
+    - Khi nhận được `deployment_id` từ `pipeline.run()`: phát ngay lập tức `{"event": "assigned", "deployment_id": <id>}`.
+    - Phát các sự kiện tiến độ bước: `step_start`, `step_done`, `step_failed`.
+    - Khi hoàn thành pipeline: phát `{"event": "finished", "deployment_id": <id>, "status": "running"|"failed", ...}`.
+    - Bắt lỗi pre-validation/detect/DB trước khi có ID: phát `{"event": "error", "error": ...}` và thoát với mã lỗi.
+  - `experiments/adapters/deploy_adapter.py`: triển khai lớp `DeployAdapter` điều phối quy trình deploy từ Python:
+    - Spawn tiến trình CLI không chặn (`subprocess.Popen`), đọc dòng song song qua background threads hỗ trợ timeout tin cậy.
+    - Ngay khi nhận được sự kiện `assigned`: lập tức gọi `attach_deployment_id(conn, run_id, deployment_id, auto_commit=True)` để gắn vào `experiment_run`.
+    - Khi deploy thành công (`finished` với `status == 'running'`): trả về `DeployResult` sẵn sàng cho Pha A.
+    - Khi deploy thất bại (`finished` với `status == 'failed'`): **giữ nguyên bản ghi deployment ở trạng thái `'failed'` trong SQLite DB** làm bằng chứng kiểm toán (audit trail), gọi `abort_run(conn, run_id, reason=...)`, ném `DeployFailedError(..., deployment_id=...)`, đảm bảo attempt lifecycle cho phép retry attempt kế tiếp.
+    - Xử lý lỗi trước khi có ID (pre-check, validate app/VPS, detect framework fail): gọi `abort_run()`, ném `DeployPreIdError`.
+    - Xử lý timeout: terminate/kill tiến trình CLI, gọi `abort_run()`, ném `DeployTimeoutError`.
+    - Xử lý output sai định dạng / process crash: gọi `abort_run()`, ném `DeployProtocolError`.
+    - Bảo mật tuyệt đối: SSH secret được truyền an toàn qua biến môi trường `OPSPILOT_SSH_SECRET`, tuyệt đối không đưa vào command line argument hay log/exception message.
+  - Kiểm thử & Chất lượng:
+    - 8 unit tests kiểm thử mock ngoại tuyến toàn diện trong `experiments/tests/test_deploy_adapter.py` (ca thành công, ca deploy lỗi giữ bản ghi failed & retry attempt 2, lỗi trước ID, timeout sau ID, timeout trước ID, output sai định dạng, bảo mật credential không lộ, và resolve DB path).
+    - Toàn bộ suite đạt **188 passed** pytest (nâng từ 180), Ruff clean; `pnpm typecheck` và `tsc -p tsconfig.scripts.json` trong `app/` đạt PASS; giữ pilot thực tế **`NOT_RUN`**.
 
 ## Lệnh tái hiện
 
-Test thuần (180 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed, P2b-3 là 145 passed, P2d-1a bản đầu là 172 passed, P2d-1a hoàn thiện là 180 passed):
+Test thuần (188 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed, P2b-3 là 145 passed, P2d-1a là 180 passed, P2d-1b là 188 passed):
 
 ```
 ml-service/.venv/Scripts/python.exe -m pytest \

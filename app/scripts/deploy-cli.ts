@@ -1,0 +1,243 @@
+import { existsSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+
+import Database from 'better-sqlite3'
+
+import { createCredentialCipher } from '../src/main/crypto/masterKey'
+import { loadSecret } from '../src/main/crypto/credentials'
+import { VpsRepository } from '../src/main/db/vpsRepository'
+import { DeployPipeline } from '../src/main/deploy/pipeline'
+import { SshManager } from '../src/main/ssh/manager'
+import type { DeployEvent, DeployInput } from '../src/shared/ipc'
+
+interface CliArgs {
+  dbPath?: string
+  vpsId?: number
+  appName?: string
+  sourcePath?: string
+  appId?: number
+  hostPort?: number
+  envJson?: string
+}
+
+function parseArgs(args: string[]): CliArgs {
+  const result: CliArgs = {}
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]
+    if (arg === '--db' && i + 1 < args.length) {
+      result.dbPath = args[++i]
+    } else if (arg === '--vps-id' && i + 1 < args.length) {
+      result.vpsId = Number.parseInt(args[++i], 10)
+    } else if (arg === '--app-name' && i + 1 < args.length) {
+      result.appName = args[++i]
+    } else if (arg === '--source-path' && i + 1 < args.length) {
+      result.sourcePath = args[++i]
+    } else if (arg === '--app-id' && i + 1 < args.length) {
+      result.appId = Number.parseInt(args[++i], 10)
+    } else if (arg === '--host-port' && i + 1 < args.length) {
+      result.hostPort = Number.parseInt(args[++i], 10)
+    } else if (arg === '--env-json' && i + 1 < args.length) {
+      result.envJson = args[++i]
+    }
+  }
+  return result
+}
+
+function emitError(message: string): never {
+  console.log(JSON.stringify({ event: 'error', error: message }))
+  process.exit(1)
+}
+
+async function main(): Promise<void> {
+  const cliArgs = parseArgs(process.argv.slice(2))
+
+  const dbPath = cliArgs.dbPath ?? process.env.OPSPILOT_DB_PATH
+  if (!dbPath) {
+    emitError('Thiếu đường dẫn SQLite DB (--db hoặc biến môi trường OPSPILOT_DB_PATH).')
+  }
+
+  const resolvedDbPath = resolve(dbPath)
+  if (!existsSync(resolvedDbPath)) {
+    emitError(`File SQLite DB không tồn tại: ${resolvedDbPath}`)
+  }
+
+  if (!cliArgs.vpsId || Number.isNaN(cliArgs.vpsId) || cliArgs.vpsId <= 0) {
+    emitError('Tham số --vps-id phải là số nguyên dương.')
+  }
+
+  if (!cliArgs.appName || !cliArgs.appName.trim()) {
+    emitError('Thiếu tên app (--app-name).')
+  }
+
+  if (!cliArgs.sourcePath) {
+    emitError('Thiếu đường dẫn source app (--source-path).')
+  }
+
+  const resolvedSourcePath = resolve(cliArgs.sourcePath)
+  if (!existsSync(resolvedSourcePath)) {
+    emitError(`Thư mục source app không tồn tại: ${resolvedSourcePath}`)
+  }
+
+  let appEnv: Record<string, string> = {}
+  if (cliArgs.envJson) {
+    try {
+      appEnv = JSON.parse(cliArgs.envJson) as Record<string, string>
+    } catch {
+      emitError('Tham số --env-json không phải là chuỗi JSON hợp lệ.')
+    }
+  }
+
+  let database: Database.Database
+  try {
+    database = new Database(resolvedDbPath)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    emitError(`Không thể mở SQLite DB: ${msg}`)
+  }
+
+  const vpsRepository = new VpsRepository(database)
+  try {
+    vpsRepository.getById(cliArgs.vpsId)
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    try {
+      database.close()
+    } catch {}
+    emitError(`Không tìm thấy VPS id=${cliArgs.vpsId} trong DB: ${msg}`)
+  }
+
+  const ssh = new SshManager((targetVpsId) => {
+    const vps = vpsRepository.getById(targetVpsId)
+    let secret = process.env.OPSPILOT_SSH_SECRET ?? process.env.OPSPILOT_DEPLOY_SECRET
+    if (!secret) {
+      const userDataPath = process.env.OPSPILOT_USER_DATA_DIR ?? dirname(resolvedDbPath)
+      try {
+        const cipher = createCredentialCipher(userDataPath)
+        secret = loadSecret(database, cipher, targetVpsId)
+      } catch {
+        secret = ''
+      }
+    }
+    return {
+      host: vps.host,
+      port: vps.port,
+      username: vps.username,
+      authType: vps.auth_type,
+      secret
+    }
+  })
+
+  let activeDeploymentId: number | null = null
+  let finishedResolver!: (event: Extract<DeployEvent, { type: 'finished' }>) => void
+  const finishedPromise = new Promise<Extract<DeployEvent, { type: 'finished' }>>((resolve) => {
+    finishedResolver = resolve
+  })
+
+  const pipeline = new DeployPipeline({
+    ssh,
+    db: database,
+    emit: (event: DeployEvent) => {
+      switch (event.type) {
+        case 'step-start':
+          console.log(
+            JSON.stringify({
+              event: 'step_start',
+              step: event.step,
+              deployment_id: event.deployment_id
+            })
+          )
+          break
+        case 'step-done':
+          console.log(
+            JSON.stringify({
+              event: 'step_done',
+              step: event.step,
+              deployment_id: event.deployment_id,
+              duration_ms: event.duration_ms
+            })
+          )
+          break
+        case 'step-failed':
+          console.log(
+            JSON.stringify({
+              event: 'step_failed',
+              step: event.step,
+              deployment_id: event.deployment_id,
+              error: event.error.message,
+              technical: event.error.technical
+            })
+          )
+          break
+        case 'finished':
+          console.log(
+            JSON.stringify({
+              event: 'finished',
+              deployment_id: event.deployment_id,
+              status: event.status,
+              app_url: event.app_url,
+              total_duration_ms: event.total_duration_ms
+            })
+          )
+          finishedResolver(event)
+          break
+      }
+    }
+  })
+
+  process.on('SIGINT', () => {
+    if (activeDeploymentId !== null) {
+      try {
+        pipeline.cancel(activeDeploymentId)
+      } catch {}
+    }
+    try {
+      database.close()
+    } catch {}
+    process.exit(130)
+  })
+
+  const deployInput: DeployInput = {
+    vps_id: cliArgs.vpsId,
+    app_name: cliArgs.appName,
+    source_path: resolvedSourcePath,
+    env: appEnv,
+    app_id: cliArgs.appId,
+    host_port: cliArgs.hostPort
+  }
+
+  let runResult: { deploymentId: number }
+  try {
+    runResult = pipeline.run(deployInput)
+    activeDeploymentId = runResult.deploymentId
+    console.log(
+      JSON.stringify({
+        event: 'assigned',
+        deployment_id: runResult.deploymentId
+      })
+    )
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.log(
+      JSON.stringify({
+        event: 'error',
+        error: message
+      })
+    )
+    try {
+      database.close()
+    } catch {}
+    process.exit(1)
+  }
+
+  const finished = await finishedPromise
+  try {
+    database.close()
+  } catch {}
+
+  if (finished.status !== 'running') {
+    process.exit(1)
+  }
+  process.exit(0)
+}
+
+void main()
