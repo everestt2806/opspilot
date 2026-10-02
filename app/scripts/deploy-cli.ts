@@ -17,7 +17,6 @@ interface CliArgs {
   sourcePath?: string
   appId?: number
   hostPort?: number
-  envJson?: string
 }
 
 function parseArgs(args: string[]): CliArgs {
@@ -36,8 +35,6 @@ function parseArgs(args: string[]): CliArgs {
       result.appId = Number.parseInt(args[++i], 10)
     } else if (arg === '--host-port' && i + 1 < args.length) {
       result.hostPort = Number.parseInt(args[++i], 10)
-    } else if (arg === '--env-json' && i + 1 < args.length) {
-      result.envJson = args[++i]
     }
   }
   return result
@@ -78,12 +75,14 @@ async function main(): Promise<void> {
     emitError(`Thư mục source app không tồn tại: ${resolvedSourcePath}`)
   }
 
+  // Nhận env_vars qua biến môi trường OPSPILOT_APP_ENV_JSON, không qua command line
   let appEnv: Record<string, string> = {}
-  if (cliArgs.envJson) {
+  const rawEnvJson = process.env.OPSPILOT_APP_ENV_JSON
+  if (rawEnvJson) {
     try {
-      appEnv = JSON.parse(cliArgs.envJson) as Record<string, string>
+      appEnv = JSON.parse(rawEnvJson) as Record<string, string>
     } catch {
-      emitError('Tham số --env-json không phải là chuỗi JSON hợp lệ.')
+      emitError('Biến môi trường OPSPILOT_APP_ENV_JSON không phải là chuỗi JSON hợp lệ.')
     }
   }
 
@@ -106,23 +105,55 @@ async function main(): Promise<void> {
     emitError(`Không tìm thấy VPS id=${cliArgs.vpsId} trong DB: ${msg}`)
   }
 
+  // Xác thực bắt buộc SSH credential: không âm thầm dùng chuỗi rỗng
+  let resolvedSecret = process.env.OPSPILOT_SSH_SECRET ?? process.env.OPSPILOT_DEPLOY_SECRET
+  if (!resolvedSecret) {
+    const userDataPath = process.env.OPSPILOT_USER_DATA_DIR ?? dirname(resolvedDbPath)
+    try {
+      const cipher = createCredentialCipher(userDataPath)
+      resolvedSecret = loadSecret(database, cipher, cliArgs.vpsId)
+    } catch (cause: unknown) {
+      const msg = cause instanceof Error ? cause.message : String(cause)
+      try {
+        database.close()
+      } catch {}
+      emitError(
+        `Không lấy được SSH credential cho VPS id=${cliArgs.vpsId}: ${msg}. ` +
+          'Hãy cung cấp biến môi trường OPSPILOT_SSH_SECRET hoặc cấu hình credential hợp lệ.'
+      )
+    }
+  }
+
+  if (!resolvedSecret || !resolvedSecret.trim()) {
+    try {
+      database.close()
+    } catch {}
+    emitError(
+      `SSH credential cho VPS id=${cliArgs.vpsId} bị rỗng. ` +
+        'Hãy cung cấp biến môi trường OPSPILOT_SSH_SECRET hoặc cấu hình credential hợp lệ.'
+    )
+  }
+
   const ssh = new SshManager((targetVpsId) => {
-    const vps = vpsRepository.getById(targetVpsId)
+    const targetVps = vpsRepository.getById(targetVpsId)
     let secret = process.env.OPSPILOT_SSH_SECRET ?? process.env.OPSPILOT_DEPLOY_SECRET
     if (!secret) {
-      const userDataPath = process.env.OPSPILOT_USER_DATA_DIR ?? dirname(resolvedDbPath)
-      try {
+      if (targetVpsId === cliArgs.vpsId && resolvedSecret) {
+        secret = resolvedSecret
+      } else {
+        const userDataPath = process.env.OPSPILOT_USER_DATA_DIR ?? dirname(resolvedDbPath)
         const cipher = createCredentialCipher(userDataPath)
         secret = loadSecret(database, cipher, targetVpsId)
-      } catch {
-        secret = ''
       }
     }
+    if (!secret || !secret.trim()) {
+      throw new Error(`SSH credential cho VPS id=${targetVpsId} bị rỗng hoặc không hợp lệ.`)
+    }
     return {
-      host: vps.host,
-      port: vps.port,
-      username: vps.username,
-      authType: vps.auth_type,
+      host: targetVps.host,
+      port: targetVps.port,
+      username: targetVps.username,
+      authType: targetVps.auth_type,
       secret
     }
   })

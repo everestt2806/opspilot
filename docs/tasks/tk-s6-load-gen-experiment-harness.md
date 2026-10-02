@@ -210,28 +210,30 @@ cho `grace ∈ {0,30,60,120}` (`docs/07`). Xuất bảng cho báo cáo.
     - Phân lớp ngoại lệ rõ ràng: `MlClientError`, `MlConnectionError`, `MlResponseError` (kèm `status_code` và `response_text`).
   - Unit test: bổ sung 19 test cho `attach_deployment_id` trong `test_run_store.py` (bao gồm ca hợp lệ, idempotent, đổi ID khác, deployment không tồn tại, lệch VPS, run.vps_id NULL, deployment.app_id NULL, app không tồn tại, app.vps_id NULL, vps không tồn tại, schema thiếu bảng/cột, run đã abort/completed, caller transaction rollback & preserve, 2 kết nối cạnh tranh, và thread race condition); 15 test mock HTTP ngoại tuyến trong `test_ml_client.py`.
   - Toàn bộ suite đạt **180 passed** pytest (nâng từ 145 ban đầu, 172 ở bản đầu), Ruff lint clean, Ruff format clean; giữ pilot thực tế **`NOT_RUN`**.
-- 02/10 mốc Triển khai P2d-1b — Deploy Adapter & Test Deploy Failure (TK-S6):
+- 02/10 mốc Triển khai P2d-1b (`11d6ff4`) — Deploy Adapter & Test Deploy Failure (TK-S6):
   - `app/scripts/deploy-cli.ts`: CLI TypeScript mỏng vận hành `DeployPipeline` trên chính file SQLite DB của thí nghiệm (không tự tạo deployment bằng SQL thuần, không dùng DB tạm của `try-deploy.ts`). CLI lắng nghe và phát các sự kiện JSON máy đọc được qua stdout:
     - Khi nhận được `deployment_id` từ `pipeline.run()`: phát ngay lập tức `{"event": "assigned", "deployment_id": <id>}`.
     - Phát các sự kiện tiến độ bước: `step_start`, `step_done`, `step_failed`.
     - Khi hoàn thành pipeline: phát `{"event": "finished", "deployment_id": <id>, "status": "running"|"failed", ...}`.
     - Bắt lỗi pre-validation/detect/DB trước khi có ID: phát `{"event": "error", "error": ...}` và thoát với mã lỗi.
+    - Nhận `env_vars` qua biến môi trường `OPSPILOT_APP_ENV_JSON` (loại bỏ hoàn toàn `--env-json` khỏi command line).
+    - Kiểm tra bắt buộc SSH credential: nếu thiếu hoặc không giải mã được thì báo lỗi dứt khoát và thoát mã 1, tuyệt đối không âm thầm dùng chuỗi rỗng.
   - `experiments/adapters/deploy_adapter.py`: triển khai lớp `DeployAdapter` điều phối quy trình deploy từ Python:
-    - Spawn tiến trình CLI không chặn (`subprocess.Popen`), đọc dòng song song qua background threads hỗ trợ timeout tin cậy.
+    - Spawn tiến trình Electron con trực tiếp (`ELECTRON_RUN_AS_NODE=1`) hoặc dừng toàn bộ cây tiến trình (`taskkill /F /T` trên Windows, process group trên POSIX) khi timeout/lỗi; không để deploy tiếp tục sau khi attempt đã abort.
     - Ngay khi nhận được sự kiện `assigned`: lập tức gọi `attach_deployment_id(conn, run_id, deployment_id, auto_commit=True)` để gắn vào `experiment_run`.
-    - Khi deploy thành công (`finished` với `status == 'running'`): trả về `DeployResult` sẵn sàng cho Pha A.
-    - Khi deploy thất bại (`finished` với `status == 'failed'`): **giữ nguyên bản ghi deployment ở trạng thái `'failed'` trong SQLite DB** làm bằng chứng kiểm toán (audit trail), gọi `abort_run(conn, run_id, reason=...)`, ném `DeployFailedError(..., deployment_id=...)`, đảm bảo attempt lifecycle cho phép retry attempt kế tiếp.
-    - Xử lý lỗi trước khi có ID (pre-check, validate app/VPS, detect framework fail): gọi `abort_run()`, ném `DeployPreIdError`.
-    - Xử lý timeout: terminate/kill tiến trình CLI, gọi `abort_run()`, ném `DeployTimeoutError`.
-    - Xử lý output sai định dạng / process crash: gọi `abort_run()`, ném `DeployProtocolError`.
-    - Bảo mật tuyệt đối: SSH secret được truyền an toàn qua biến môi trường `OPSPILOT_SSH_SECRET`, tuyệt đối không đưa vào command line argument hay log/exception message.
+    - Siết chặt giao thức event:
+      - Thông điệp `assigned` chỉ được nhận đúng 1 lần (từ chối và abort nếu nhận lặp).
+      - `finished.deployment_id` bắt buộc phải khớp với `assigned_deployment_id`.
+      - Deploy thành công bắt buộc thỏa mãn đồng thời: exit code của CLI là 0 VÀ bản ghi `deployment` trong SQLite có `status == 'running'`.
+    - Khi deploy thất bại (`finished` với `status != 'running'`, CLI crash, timeout, hoặc protocol error): **giữ nguyên bản ghi deployment ở trạng thái `'failed'` trong SQLite DB** làm bằng chứng kiểm toán (audit trail), gọi `abort_run(conn, run_id, reason=...)`, ném ngoại lệ tương ứng (`DeployFailedError`, `DeployPreIdError`, `DeployTimeoutError`, `DeployProtocolError`), đảm bảo attempt lifecycle cho phép retry attempt kế tiếp.
+    - Bảo mật tuyệt đối: SSH secret và các giá trị trong `env_vars` được truyền an toàn qua biến môi trường, tự động lọc sạch và thay thế bằng `***REDACTED***` trong toàn bộ event, exception message và `abort_reason`.
   - Kiểm thử & Chất lượng:
-    - 8 unit tests kiểm thử mock ngoại tuyến toàn diện trong `experiments/tests/test_deploy_adapter.py` (ca thành công, ca deploy lỗi giữ bản ghi failed & retry attempt 2, lỗi trước ID, timeout sau ID, timeout trước ID, output sai định dạng, bảo mật credential không lộ, và resolve DB path).
-    - Toàn bộ suite đạt **188 passed** pytest (nâng từ 180), Ruff clean; `pnpm typecheck` và `tsc -p tsconfig.scripts.json` trong `app/` đạt PASS; giữ pilot thực tế **`NOT_RUN`**.
+    - 14 unit tests kiểm thử mock ngoại tuyến toàn diện trong `experiments/tests/test_deploy_adapter.py` (bao gồm ca thành công, deploy lỗi giữ bản ghi failed & retry attempt 2, lỗi trước ID, timeout sau ID, timeout trước ID, output sai định dạng, gán assigned lặp, lệch deployment_id ở finished, exit code khác 0, SQLite status không phải running, env_vars ngoài command line, và khử sạch secret khỏi abort_reason/exception).
+    - Toàn bộ suite đạt **194 passed** pytest (nâng từ 188), Ruff clean; `pnpm typecheck` (497 Vitest pass, 0 type error) và `tsc -p tsconfig.scripts.json` trong `app/` đạt PASS; giữ pilot thực tế **`NOT_RUN`**.
 
 ## Lệnh tái hiện
 
-Test thuần (188 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed, P2b-3 là 145 passed, P2d-1a là 180 passed, P2d-1b là 188 passed):
+Test thuần (194 passed, chạy trên Windows dev, không cần VPS/DB; trước P2a là 112 passed, P2b-1 là 128 passed, P2b-2 là 135 passed, P2b-3 là 145 passed, P2d-1a là 180 passed, P2d-1b bản đầu là 188 passed, P2d-1b hoàn thiện là 194 passed):
 
 ```
 ml-service/.venv/Scripts/python.exe -m pytest \

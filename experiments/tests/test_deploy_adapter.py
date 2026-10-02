@@ -380,3 +380,261 @@ def test_resolve_db_path_auto_and_memory() -> None:
     # 2. Truyền db_path tường minh -> thành công
     p = resolve_db_path(mem_conn, "custom/path.db")
     assert p.name == "path.db"
+
+
+def test_deploy_assigned_more_than_once_rejected(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    conn.execute(
+        "INSERT INTO deployment (id, app_id, status) VALUES (10, 1, 'running')"
+    )
+    conn.execute(
+        "INSERT INTO deployment (id, app_id, status) VALUES (11, 1, 'running')"
+    )
+    conn.commit()
+
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    mock_script = (
+        "import sys, json\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 10}), flush=True)\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 11}), flush=True)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=5.0,
+    )
+
+    with pytest.raises(DeployProtocolError, match="nhiều hơn một lần"):
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+        )
+
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "aborted"
+    assert "nhiều hơn một lần" in (run_row["abort_reason"] or "")
+
+
+def test_deploy_finished_id_mismatch_rejected(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    conn.execute(
+        "INSERT INTO deployment (id, app_id, status) VALUES (10, 1, 'running')"
+    )
+    conn.commit()
+
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    # CLI phát assigned 10 nhưng finished với deployment_id 99
+    mock_script = (
+        "import sys, json\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 10}), flush=True)\n"
+        "print(json.dumps({'event': 'finished', 'deployment_id': 99, 'status': 'running'}), flush=True)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=5.0,
+    )
+
+    with pytest.raises(
+        DeployProtocolError, match="không khớp với assigned deployment_id"
+    ):
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+        )
+
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "aborted"
+    assert "không khớp" in (run_row["abort_reason"] or "")
+
+
+def test_deploy_success_requires_exit_code_zero(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    conn.execute(
+        "INSERT INTO deployment (id, app_id, status) VALUES (10, 1, 'running')"
+    )
+    conn.commit()
+
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    # CLI phát finished status='running' nhưng process exit code là 1
+    mock_script = (
+        "import sys, json\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 10}), flush=True)\n"
+        "print(json.dumps({'event': 'finished', 'deployment_id': 10, 'status': 'running'}), flush=True)\n"
+        "sys.exit(1)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=5.0,
+    )
+
+    with pytest.raises(DeployProtocolError, match="thoát với mã lỗi 1"):
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+        )
+
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "aborted"
+
+
+def test_deploy_success_requires_sqlite_deployment_running(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    # Trong DB, bản ghi deployment vẫn ở status 'failed' hoặc 'building'
+    conn.execute("INSERT INTO deployment (id, app_id, status) VALUES (10, 1, 'failed')")
+    conn.commit()
+
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    mock_script = (
+        "import sys, json\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 10}), flush=True)\n"
+        "print(json.dumps({'event': 'finished', 'deployment_id': 10, 'status': 'running'}), flush=True)\n"
+        "sys.exit(0)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=5.0,
+    )
+
+    with pytest.raises(
+        DeployProtocolError, match="có status='failed', bắt buộc phải là 'running'"
+    ):
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+        )
+
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    assert run_row["status"] == "aborted"
+
+
+def test_deploy_env_vars_passed_via_env_not_command_line(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    conn.execute(
+        "INSERT INTO deployment (id, app_id, status) VALUES (15, 1, 'running')"
+    )
+    conn.commit()
+
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    # CLI kiểm tra:
+    # 1. OPSPILOT_APP_ENV_JSON chứa đúng JSON env_vars
+    # 2. --env-json KHÔNG xuất hiện trong sys.argv
+    # 3. Giá trị secret trong env KHÔNG nằm trong sys.argv
+    mock_script = (
+        "import sys, os, json\n"
+        "raw_env = os.environ.get('OPSPILOT_APP_ENV_JSON')\n"
+        "assert raw_env is not None\n"
+        "env_data = json.loads(raw_env)\n"
+        "assert env_data['DB_PASS'] == 'secret_db_pass_999'\n"
+        "for arg in sys.argv:\n"
+        "    assert '--env-json' not in arg\n"
+        "    assert 'secret_db_pass_999' not in arg\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 15}), flush=True)\n"
+        "print(json.dumps({'event': 'finished', 'deployment_id': 15, 'status': 'running'}), flush=True)\n"
+        "sys.exit(0)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=5.0,
+    )
+
+    res = adapter.deploy(
+        conn=conn,
+        run_id=run_id,
+        vps_id=1,
+        app_name="demo-app",
+        source_path=tmp_path,
+        db_path=db_file,
+        env_vars={"DB_USER": "postgres", "DB_PASS": "secret_db_pass_999"},
+    )
+
+    assert res.deployment_id == 15
+    assert res.status == "running"
+
+
+def test_deploy_secrets_redacted_from_abort_reason_and_exceptions(
+    file_db: tuple[sqlite3.Connection, Path], tmp_path: Path
+) -> None:
+    conn, db_file = file_db
+    conn.execute("INSERT INTO deployment (id, app_id, status) VALUES (16, 1, 'failed')")
+    conn.commit()
+
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    # CLI cố tình in ra lỗi chứa cả ssh_secret và env secret
+    mock_script = (
+        "import sys, json\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 16}), flush=True)\n"
+        "print(json.dumps({'event': 'finished', 'deployment_id': 16, 'status': 'failed', "
+        "'error': 'Build failed with token super_secret_token_123 and pass env_secret_pass_456'}), flush=True)\n"
+        "sys.exit(1)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=5.0,
+    )
+
+    with pytest.raises(DeployFailedError) as exc_info:
+        adapter.deploy(
+            conn=conn,
+            run_id=run_id,
+            vps_id=1,
+            app_name="demo-app",
+            source_path=tmp_path,
+            db_path=db_file,
+            ssh_secret="super_secret_token_123",
+            env_vars={"API_KEY": "env_secret_pass_456"},
+        )
+
+    err_str = str(exc_info.value)
+    # Tuyệt đối không chứa secret bản rõ
+    assert "super_secret_token_123" not in err_str
+    assert "env_secret_pass_456" not in err_str
+    assert "***REDACTED***" in err_str
+
+    # Trong DB abort_reason cũng tuyệt đối không chứa secret bản rõ
+    run_row = get_run(conn, run_id)
+    assert run_row is not None
+    abort_reason = run_row["abort_reason"] or ""
+    assert "super_secret_token_123" not in abort_reason
+    assert "env_secret_pass_456" not in abort_reason
+    assert "***REDACTED***" in abort_reason

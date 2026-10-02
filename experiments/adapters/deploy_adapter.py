@@ -3,21 +3,19 @@
 Ràng buộc và quy tắc (TK-S6 P2d-1b):
   1. Sử dụng cùng cơ sở dữ liệu SQLite: Không tự tạo deployment bằng SQL thuần và không dùng
      DB tạm (như try-deploy.ts). Gọi CLI TypeScript mỏng vận hành trên chính file DB của thí nghiệm.
-  2. Gắn deployment_id ngay khi nhận ID:
-     CLI phát thông điệp máy đọc được 'assigned' kèm deployment_id. Adapter lập tức gọi
-     attach_deployment_id(conn, run_id, deployment_id) để gắn vào experiment_run đang running.
-  3. Chờ kết quả và xử lý lỗi:
-     - Nếu deploy thành công (finished với status='running'): trả về DeployResult.
-     - Nếu deploy thất bại (finished với status='failed'): giữ nguyên bản ghi deployment failed
-       trong SQLite (audit trail), gọi abort_run(conn, run_id, reason=...), và ném DeployFailedError.
-     - Nếu lỗi trước khi có ID (CLI lỗi pre-check/validation/crashes trước khi phát assigned):
-       gọi abort_run(conn, run_id, reason=...), ném DeployPreIdError.
-     - Nếu timeout: terminate tiến trình CLI, gọi abort_run(conn, run_id, reason=...), ném DeployTimeoutError.
-     - Nếu output sai định dạng / process crash bất thường: gọi abort_run(conn, run_id, reason=...),
-       ném DeployProtocolError.
-  4. Bảo mật credential:
-     Tuyệt đối không log, in hoặc đưa SSH secret/password vào exception message hay CLI command line
-     (nếu truyền cho subprocess, truyền qua biến môi trường OPSPILOT_SSH_SECRET).
+  2. Truyền env_vars và secrets qua kênh an toàn ngoài command line:
+     - env_vars truyền qua biến môi trường OPSPILOT_APP_ENV_JSON, tuyệt đối không đưa vào command line.
+     - SSH secret truyền qua biến môi trường OPSPILOT_SSH_SECRET.
+     - Tuyệt đối không ghi secret vào event, exception message hoặc abort_reason.
+  3. Quản lý tiến trình và dừng triệt để cả cây tiến trình:
+     - Python quản lý trực tiếp tiến trình Electron con hoặc dừng cả cây tiến trình (taskkill /F /T trên Windows,
+       process group trên POSIX) khi timeout hoặc có lỗi, không để deploy tiếp tục sau khi attempt đã abort.
+  4. Siết chặt giao thức event:
+     - Thông điệp 'assigned' chỉ được nhận đúng một lần.
+     - Thông điệp 'finished' bắt buộc có deployment_id trùng khớp với assigned_deployment_id.
+     - Thành công bắt buộc thỏa mãn đồng thời: exit code của CLI là 0 VÀ bản ghi deployment trong SQLite có status='running'.
+     - Khi có bất kỳ lỗi nào: giữ nguyên bản ghi deployment trong DB làm bằng chứng kiểm toán (audit trail),
+       huỷ attempt bằng abort_run() kèm lý do rõ ràng đã được khử secret.
 """
 
 from __future__ import annotations
@@ -25,8 +23,10 @@ from __future__ import annotations
 import json
 import os
 import queue
+import signal
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 from collections.abc import Mapping, Sequence
@@ -83,14 +83,24 @@ class DeployResult:
     steps: Sequence[dict[str, Any]] = ()
 
 
+def sanitize_text(text: str, secrets: Sequence[str]) -> str:
+    """Loại bỏ triệt để các chuỗi secret khỏi thông điệp log/lỗi/abort_reason."""
+    if not text:
+        return text
+    sanitized = text
+    for sec in secrets:
+        if sec and len(sec.strip()) > 0:
+            sanitized = sanitized.replace(sec, "***REDACTED***")
+    return sanitized
+
+
 def resolve_db_path(
     conn: sqlite3.Connection,
     explicit_path: str | Path | None = None,
 ) -> Path:
     """Xác định đường dẫn file SQLite DB từ tham số tường minh hoặc connection."""
     if explicit_path is not None:
-        p = Path(explicit_path).resolve()
-        return p
+        return Path(explicit_path).resolve()
 
     rows = conn.execute("PRAGMA database_list").fetchall()
     for row in rows:
@@ -106,14 +116,35 @@ def resolve_db_path(
 
 
 def get_default_cli_cmd() -> list[str]:
-    """Tìm lệnh mặc định để gọi CLI deploy-cli.ts qua Electron/Node."""
+    """Tìm lệnh mặc định để gọi CLI deploy-cli.ts qua Electron trực tiếp hoặc Node."""
     repo_root = Path(__file__).resolve().parent.parent.parent
     app_dir = repo_root / "app"
     compiled_cli = app_dir / ".out-scripts" / "scripts" / "deploy-cli.js"
-    run_as_node = app_dir / "scripts" / "run-as-node.js"
 
+    # 1. Tìm binary Electron để Python quản lý trực tiếp tiến trình con Electron
+    if sys.platform == "win32":
+        electron_bin = app_dir / "node_modules" / "electron" / "dist" / "electron.exe"
+    elif sys.platform == "darwin":
+        electron_bin = (
+            app_dir
+            / "node_modules"
+            / "electron"
+            / "dist"
+            / "Electron.app"
+            / "Contents"
+            / "MacOS"
+            / "Electron"
+        )
+    else:
+        electron_bin = app_dir / "node_modules" / "electron" / "dist" / "electron"
+
+    if electron_bin.exists() and compiled_cli.exists():
+        return [str(electron_bin), str(compiled_cli)]
+
+    run_as_node = app_dir / "scripts" / "run-as-node.js"
     if run_as_node.exists() and compiled_cli.exists():
         return ["node", str(run_as_node), str(compiled_cli)]
+
     return ["node", str(compiled_cli)]
 
 
@@ -159,7 +190,19 @@ class DeployAdapter:
             float(timeout_s) if timeout_s is not None else self.default_timeout_s
         )
 
-        # 1. Chuẩn bị command line (TUYỆT ĐỐI KHÔNG ĐƯA CREDENTIAL VÀO CMD)
+        # Tập hợp các chuỗi secret cần che giấu
+        secrets_to_redact: list[str] = []
+        if ssh_secret:
+            secrets_to_redact.append(ssh_secret)
+        if env_vars:
+            secrets_to_redact.extend(
+                [v for v in env_vars.values() if v and len(v.strip()) > 0]
+            )
+
+        def _clean(text: str) -> str:
+            return sanitize_text(text, secrets_to_redact)
+
+        # 1. Chuẩn bị command line (TUYỆT ĐỐI KHÔNG ĐƯA CREDENTIAL / ENV_VARS VÀO COMMAND LINE)
         base_cmd = list(
             cli_cmd
             if cli_cmd is not None
@@ -175,13 +218,14 @@ class DeployAdapter:
             cmd.extend(["--app-id", str(app_id)])
         if host_port is not None:
             cmd.extend(["--host-port", str(host_port)])
-        if env_vars:
-            cmd.extend(["--env-json", json.dumps(dict(env_vars))])
 
-        # 2. Chuẩn bị biến môi trường (Truyền SSH secret an toàn qua env)
+        # 2. Chuẩn bị biến môi trường (Truyền SSH secret và env_vars an toàn qua env)
         proc_env = os.environ.copy()
+        proc_env["ELECTRON_RUN_AS_NODE"] = "1"
         if ssh_secret:
             proc_env["OPSPILOT_SSH_SECRET"] = ssh_secret
+        if env_vars:
+            proc_env["OPSPILOT_APP_ENV_JSON"] = json.dumps(dict(env_vars))
 
         # 3. Khởi chạy tiến trình CLI
         proc = subprocess.Popen(
@@ -255,11 +299,24 @@ class DeployAdapter:
 
             evt_type = event_obj.get("event")
 
-            # Sự kiện 1: Gán deployment_id ngay khi nhận ID
+            # Sự kiện 1: Gán deployment_id ngay khi nhận ID (chỉ được nhận đúng một lần)
             if evt_type == "assigned":
                 dep_id = event_obj.get("deployment_id")
                 if not isinstance(dep_id, int) or dep_id <= 0:
                     abort_reason = "deploy_protocol_error: Thông điệp 'assigned' chứa deployment_id không hợp lệ"
+                    self._abort_and_kill(
+                        proc, conn, run_id, abort_reason, assigned_deployment_id
+                    )
+                    raise DeployProtocolError(
+                        abort_reason, deployment_id=assigned_deployment_id
+                    )
+
+                if assigned_deployment_id is not None:
+                    # VI PHẠM: assigned nhiều hơn một lần
+                    abort_reason = (
+                        f"deploy_protocol_error: Nhận thông điệp 'assigned' nhiều hơn một lần "
+                        f"(id ban đầu={assigned_deployment_id}, id mới={dep_id})"
+                    )
                     self._abort_and_kill(
                         proc, conn, run_id, abort_reason, assigned_deployment_id
                     )
@@ -274,9 +331,10 @@ class DeployAdapter:
                         conn, run_id, assigned_deployment_id, auto_commit=True
                     )
                 except RunStoreError as e:
+                    clean_err = _clean(str(e))
                     abort_reason = (
                         f"attach_deployment_failed: Không thể gắn deployment_id={assigned_deployment_id} "
-                        f"vào run id={run_id}: {e}"
+                        f"vào run id={run_id}: {clean_err}"
                     )
                     self._abort_and_kill(
                         proc, conn, run_id, abort_reason, assigned_deployment_id
@@ -287,23 +345,43 @@ class DeployAdapter:
                 steps.append(event_obj)
 
             elif evt_type == "finished":
+                fin_dep_id = event_obj.get("deployment_id")
+                # VI PHẠM: finished.deployment_id không khớp với assigned_deployment_id
+                if (
+                    assigned_deployment_id is None
+                    or fin_dep_id != assigned_deployment_id
+                ):
+                    abort_reason = (
+                        f"deploy_protocol_error: finished.deployment_id ({fin_dep_id}) "
+                        f"không khớp với assigned deployment_id ({assigned_deployment_id})"
+                    )
+                    self._abort_and_kill(
+                        proc, conn, run_id, abort_reason, assigned_deployment_id
+                    )
+                    raise DeployProtocolError(
+                        abort_reason, deployment_id=assigned_deployment_id
+                    )
+
                 finished_event = event_obj
 
             elif evt_type == "error":
                 error_event = event_obj
 
-        # Thu gom tiến trình
+        # Thu gom tiến trình khi timeout
         if timed_out:
-            self._abort_and_kill(
-                proc,
-                conn,
-                run_id,
+            abort_reason = _clean(
                 f"deploy_timeout: Quá thời gian chờ {effective_timeout:.1f}s"
                 + (
                     f" sau khi cấp deployment_id={assigned_deployment_id}"
                     if assigned_deployment_id
                     else " trước khi nhận deployment_id"
-                ),
+                )
+            )
+            self._abort_and_kill(
+                proc,
+                conn,
+                run_id,
+                abort_reason,
                 assigned_deployment_id,
             )
             reason = f"Quá thời gian chờ {effective_timeout:.1f}s" + (
@@ -316,9 +394,9 @@ class DeployAdapter:
         try:
             proc.wait(timeout=5.0)
         except subprocess.TimeoutExpired:
-            self._terminate_proc(proc)
+            self._kill_process_tree(proc)
 
-        # 4. Kiểm tra các nhánh kết quả
+        # 4. Kiểm tra các nhánh kết quả theo giao thức siết chặt
 
         # Nhánh 1: Lỗi trước khi có ID
         if assigned_deployment_id is None:
@@ -332,9 +410,12 @@ class DeployAdapter:
             else:
                 err_msg = "CLI kết thúc mà không phát thông điệp 'assigned' chứa deployment_id"
 
-            abort_reason = f"deploy_pre_id_error: {err_msg}"
-            self._safe_abort(conn, run_id, abort_reason)
-            raise DeployPreIdError(f"Deploy thất bại trước khi có ID: {err_msg}")
+            clean_err = _clean(err_msg)
+            abort_reason = f"deploy_pre_id_error: {clean_err}"
+            self._abort_and_kill(
+                proc, conn, run_id, abort_reason, assigned_deployment_id
+            )
+            raise DeployPreIdError(f"Deploy thất bại trước khi có ID: {clean_err}")
 
         # Nhánh 2: Đã có ID nhưng không có event finished hoặc output sai định dạng
         if finished_event is None:
@@ -346,20 +427,21 @@ class DeployAdapter:
             else:
                 detail = "CLI kết thúc mà không phát event 'finished'"
 
-            abort_reason = f"deploy_protocol_error: {detail}"
-            self._safe_abort(conn, run_id, abort_reason)
+            clean_err = _clean(detail)
+            abort_reason = f"deploy_protocol_error: {clean_err}"
+            self._abort_and_kill(
+                proc, conn, run_id, abort_reason, assigned_deployment_id
+            )
             raise DeployProtocolError(
-                f"CLI không phát event finished cho deployment {assigned_deployment_id}: {detail}",
+                f"CLI không phát event finished cho deployment {assigned_deployment_id}: {clean_err}",
                 deployment_id=assigned_deployment_id,
             )
 
-        # Nhánh 3: Deploy thất bại (status != 'running')
+        # Nhánh 3: Deploy thất bại (finished.status != 'running')
         finished_status = finished_event.get("status")
         if finished_status != "running":
-            # Bản ghi deployment trong SQLite VẪN ĐƯỢC GIỮ NGUYÊN trạng thái 'failed'
             err_detail = finished_event.get("error")
             if not err_detail:
-                # Tìm lỗi từ step_failed gần nhất
                 failed_steps = [s for s in steps if s.get("event") == "step_failed"]
                 if failed_steps:
                     last_step = failed_steps[-1]
@@ -367,18 +449,64 @@ class DeployAdapter:
                 else:
                     err_detail = f"Pipeline kết thúc với status='{finished_status}'"
 
-            abort_reason = f"deploy_failed: {err_detail}"
-            self._safe_abort(conn, run_id, abort_reason)
+            clean_err = _clean(err_detail)
+            abort_reason = f"deploy_failed: {clean_err}"
+            # Bản ghi deployment trong SQLite VẪN ĐƯỢC GIỮ NGUYÊN (audit trail)
+            self._abort_and_kill(
+                proc, conn, run_id, abort_reason, assigned_deployment_id
+            )
             raise DeployFailedError(
-                f"Deploy thất bại: {err_detail}",
+                f"Deploy thất bại: {clean_err}",
                 deployment_id=assigned_deployment_id,
             )
 
-        # Nhánh 4: Deploy thành công
+        # Nhánh 4: finished.status == 'running' nhưng phải kiểm tra:
+        # 4a. Exit code bắt buộc = 0
+        if proc.returncode != 0:
+            abort_reason = f"deploy_protocol_error: Finished thành công nhưng CLI thoát với mã lỗi {proc.returncode}"
+            self._abort_and_kill(
+                proc, conn, run_id, abort_reason, assigned_deployment_id
+            )
+            raise DeployProtocolError(
+                abort_reason, deployment_id=assigned_deployment_id
+            )
+
+        # 4b. Deployment trong SQLite bắt buộc có status='running'
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, status FROM deployment WHERE id = ?",
+            (assigned_deployment_id,),
+        )
+        dep_row = cur.fetchone()
+        if dep_row is None:
+            abort_reason = f"deploy_protocol_error: Không tìm thấy bản ghi deployment id={assigned_deployment_id} trong SQLite DB"
+            self._abort_and_kill(
+                proc, conn, run_id, abort_reason, assigned_deployment_id
+            )
+            raise DeployProtocolError(
+                abort_reason, deployment_id=assigned_deployment_id
+            )
+
+        actual_status = (
+            dep_row[1] if not hasattr(dep_row, "keys") else dep_row["status"]
+        )
+        if actual_status != "running":
+            abort_reason = (
+                f"deploy_protocol_error: Deployment id={assigned_deployment_id} trong SQLite có status='{actual_status}', "
+                "bắt buộc phải là 'running'"
+            )
+            self._abort_and_kill(
+                proc, conn, run_id, abort_reason, assigned_deployment_id
+            )
+            raise DeployProtocolError(
+                abort_reason, deployment_id=assigned_deployment_id
+            )
+
+        # Thành công tuyệt đối
         return DeployResult(
             deployment_id=assigned_deployment_id,
             status="running",
-            app_url=finished_event.get("app_url"),
+            app_url=_clean(str(finished_event.get("app_url") or "")) or None,
             total_duration_ms=finished_event.get("total_duration_ms"),
             steps=tuple(steps),
         )
@@ -395,11 +523,32 @@ class DeployAdapter:
             return None
         return None
 
-    def _terminate_proc(self, proc: subprocess.Popen[str]) -> None:
-        """Dừng tiến trình con an toàn."""
+    def _kill_process_tree(self, proc: subprocess.Popen[str]) -> None:
+        """Dừng triệt để toàn bộ cây tiến trình (bao gồm cả tiến trình con Electron nếu có)."""
+        if proc.poll() is not None:
+            return
+
+        pid = proc.pid
+        if sys.platform == "win32":
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(pid)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                    timeout=5.0,
+                )
+            except (OSError, subprocess.SubprocessError):
+                pass
+        else:
+            try:
+                os.killpg(os.getpgid(pid), signal.SIGKILL)
+            except (OSError, ProcessLookupError):
+                pass
+
         try:
             proc.terminate()
-            proc.wait(timeout=2.0)
+            proc.wait(timeout=1.0)
         except (OSError, subprocess.SubprocessError):
             try:
                 proc.kill()
@@ -416,12 +565,12 @@ class DeployAdapter:
 
     def _abort_and_kill(
         self,
-        proc: subprocess.Popen,
+        proc: subprocess.Popen[str],
         conn: sqlite3.Connection,
         run_id: int,
         reason: str,
         deployment_id: int | None,
     ) -> None:
-        """Huỷ tiến trình và gọi abort_run."""
-        self._terminate_proc(proc)
+        """Dừng cây tiến trình CLI và gọi abort_run."""
+        self._kill_process_tree(proc)
         self._safe_abort(conn, run_id, reason)
