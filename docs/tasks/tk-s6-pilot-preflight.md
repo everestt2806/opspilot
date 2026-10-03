@@ -22,7 +22,7 @@
 | **7** | **Đọc Counter Collector** | `read_loadgen_error_rate` phân tích cửa sổ trượt 60s đúng chuẩn | `pytest collector/tests/test_loadgen_error_rate.py` (9/9 passed) | **PASS** |
 | **8** | **CLI Security & Argv** | Loại bỏ hoàn toàn `--ssh-secret` khỏi argv; nhận `--ssh-key-file` an toàn; cờ `--allow-pilot-4500` | `pytest experiments/tests/test_runner_e2e.py` (22/22 passed, bắt lỗi `--ssh-secret`) | **PASS** |
 | **9** | **SSH Transport Gate** | `SystemSshClient` dùng `-i`, `IdentitiesOnly=yes`, `StrictHostKeyChecking=yes`, `verify_connection()` | Unit test mức transport trong `test_runner_e2e.py` (chứng minh abort trước deploy) | **PASS** |
-| **10** | **Schema SQLite** | Hỗ trợ `attempt_index 1..3`, `UNIQUE(scenario, repeat_index, attempt_index)`, khoá ngoại ON | `pytest experiments/tests/test_run_store.py` (43/43 passed) | **PASS** |
+| **10** | **Schema SQLite** | Hỗ trợ bảng `experiment_run`, `attempt_index 1..3`, `UNIQUE(scenario, repeat_index, attempt_index)`, khoá ngoại ON | `pytest experiments/tests/test_run_store.py` (43/43 passed) | **PASS** |
 | **11** | **VPS Specs & OS** | 02 VPS WiService (2 vCPU, 4GB RAM, 40GB SSD, Ubuntu 22.04 LTS / Debian 12) | Phụ thuộc hạ tầng nhà cung cấp WiService VN | **NOT_RUN** |
 | **12** | **Docker trên VPS** | Docker Engine $\ge 24.0$, Docker Compose plugin $\ge v2.20$ | Cần SSH vào VPS thực thi `docker --version && docker compose version` | **NOT_RUN** |
 | **13** | **Đồng bộ giờ NTP VPS** | Dịch vụ `systemd-timesyncd` đang active, độ lệch $\|offset\| \le 2000$ ms | Cần kết nối SSH đo clock skew thực tế qua `measure_clock_offset_ms` | **NOT_RUN** |
@@ -77,27 +77,32 @@ Khi nhận lệnh khởi chạy pilot thực tế từ Tech Lead, người thự
 
 ## 3. SSH Key, Known Hosts & Cơ chế Credential Dùng chung
 
-### 3.1. Cấu hình Khóa SSH & Xác thực Host Key Bắt buộc
+### 3.1. Cấu hình Khóa SSH & Xác thực Host Key Bắt buộc (Quy trình 1 lần Quét An toàn)
 - **Định dạng khóa**: Khóa riêng SSH OpenSSH (Ed25519: `id_ed25519` hoặc RSA 4096: `id_rsa`).
 - **Passphrase**: Khóa không cài đặt passphrase (hoặc được load sẵn vào `ssh-agent`) để hỗ trợ runner chạy tự động không tương tác.
 - **Phân quyền tập tin**: Trên hệ thống POSIX, file khóa riêng phải có quyền `0600` (`chmod 600 ~/.ssh/id_rsa`). Trên Windows, chỉ cho phép tài khoản người dùng hiện tại có quyền đọc (`icacls`).
-- **Xác thực Fingerprint Host Key qua Kênh Tin cậy**:
+- **Quy trình Xác minh Fingerprint Host Key qua Kênh Tin cậy**:
   - `StrictHostKeyChecking=yes` luôn được bật; runner không bao giờ chuyển hướng `UserKnownHostsFile` về `/dev/null`.
-  - **Bắt buộc đối soát fingerprint**: Không được chạy `ssh-keyscan` và tự động ghi mù quáng vào file `known_hosts` vì điều này vô hiệu hoá khả năng ngăn chặn tấn công Man-In-The-Middle (MITM).
-  - **Quy trình xác minh 3 bước**:
-    1. Lấy fingerprint chính thức từ kênh tin cậy ngoài luồng (Dashboard nhà cung cấp WiService hoặc VNC Console):
-       ```bash
-       ssh-keygen -l -f /etc/ssh/ssh_host_ed25519_key.pub
-       # Ví dụ output: 256 SHA256:7uK+... (ED25519)
-       ```
-    2. Quét fingerprint từ máy điều khiển:
-       ```powershell
-       ssh-keyscan -p <vps_port> <vps_ip> | ssh-keygen -lf -
-       ```
-    3. Chỉ khi chuỗi fingerprint trùng khớp 100%, mới được thêm khóa máy chủ vào `~/.ssh/known_hosts`:
-       ```powershell
-       ssh-keyscan -p <vps_port> <vps_ip> | Out-File -Append -Encoding ascii "$HOME\.ssh\known_hosts"
-       ```
+  - **Chống MITM bằng cơ chế 1 lần quét**: Không được chạy `ssh-keyscan` lần 1 để kiểm tra rồi chạy lại `ssh-keyscan` lần 2 ghi vào file (vì kết nối lần 2 có thể bị tấn công xen giữa). Phải lưu kết quả quét duy nhất vào file tạm, đối soát fingerprint, rồi ghi chính file đó vào `known_hosts`:
+  ```powershell
+  $VPS_HOST = "<vps_ip>"
+  $VPS_PORT = 22
+  $tempScannedKey = "$HOME\.ssh\temp_scanned_key.pub"
+
+  # Bước 1: Quét đúng MỘT lần và lưu vào tệp tạm thời
+  & ssh-keyscan -p $VPS_PORT $VPS_HOST | Out-File -FilePath $tempScannedKey -Encoding ascii
+
+  # Bước 2: Trích xuất fingerprint từ CHÍNH tệp tạm này để đối chiếu
+  & ssh-keygen -lf $tempScannedKey
+  # Ví dụ output: 256 SHA256:abc123xyz... root@vps (ED25519)
+
+  # Bước 3: Người vận hành đối chiếu fingerprint hiển thị với fingerprint chính thức từ WiService console:
+  #         (Lệnh trên VPS console: ssh-keygen -l -f /etc/ssh/ssh_host_ed25519_key.pub)
+  #         CHỈ KHI TRÙNG KHỚP 100%, mới ghi CHÍNH tệp tạm này vào known_hosts:
+  Get-Content $tempScannedKey | Out-File -Append -Encoding ascii "$HOME\.ssh\known_hosts"
+  Remove-Item $tempScannedKey -ErrorAction SilentlyContinue
+  Write-Host "Đã xác thực và ghi nhận host key vào known_hosts thành công." -ForegroundColor Green
+  ```
 
 ### 3.2. Cơ chế Credential Dùng chung & Giải pháp Cầu nối
 1. **Loại bỏ hoàn toàn `--ssh-secret` khỏi dòng lệnh (`argv`)**:
@@ -112,7 +117,7 @@ Khi nhận lệnh khởi chạy pilot thực tế từ Tech Lead, người thự
 3. **Chính sách Khử Secret (Sanitization)**:
    - `SystemSshClient.__repr__` luôn ẩn secret (`secret=******`).
    - Mọi thông báo lỗi, log, và stdout/stderr của lệnh SSH tự động thay thế chuỗi secret bằng `******`.
-   - Bảng `experiment_runs` (cột `abort_reason`, `notes`, `fault_params_json`) và bảng `deployment` cam kết không chứa chuỗi secret thô.
+   - Bảng `experiment_run` (cột `abort_reason`, `notes`, `fault_params_json`) và bảng `deployment` cam kết không chứa chuỗi secret thô.
 
 ---
 
@@ -187,7 +192,7 @@ cd D:\Developing\DuAnCNTT\ml-service
 
 ## 7. Quy trình Thực thi Pilot 1 Kịch bản bằng PowerShell (Runbook)
 
-Toàn bộ các lệnh dưới đây được viết bằng **PowerShell** tương thích trực tiếp với môi trường Windows hiện tại:
+Toàn bộ các lệnh dưới đây được viết bằng **PowerShell** tương thích trực tiếp với môi trường Windows hiện tại, thực thi Python ổn định qua cơ chế pipe:
 
 ### Bước 1: Khởi động ML Service trên máy điều khiển local
 ```powershell
@@ -200,56 +205,120 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8000/health"
 # Kỳ vọng: @{ status = "ok"; version = "0.1.0" }
 ```
 
-### Bước 2: Thiết lập Biến Môi trường Credential An toàn
-```powershell
-# Đường dẫn file SSH private key
-$env:OPSPILOT_SSH_KEY_FILE = "$HOME\.ssh\opspilot_vps_key"
+### Bước 2: Xác nhận Đường dẫn SQLite DB Thật từ Electron userData & Thiết lập Credential
+> ⚠️ **LƯU Ý VỀ ĐƯỜNG DẪN DATABASE**:
+> Khi người vận hành thêm VPS thông qua OpsPilot UI, bản ghi VPS và khóa credential đã mã hoá được lưu tại database của Electron (`app.getPath('userData')/opspilot.db`).
+> Tuyệt đối không dùng mặc định `app/opspilot.db` nếu chưa xác nhận đó là file DB đang dùng, vì sẽ gây lỗi không tìm thấy VPS hoặc thiếu khóa mã hoá!
 
-# Khắc phục Runtime Gap 2: Nạp SSH secret cho DeployAdapter & PollerAdapter
+```powershell
+cd D:\Developing\DuAnCNTT
+
+# 1. Xác nhận đường dẫn DB thực tế từ Electron userData (hoặc biến OPSPILOT_USER_DATA_DIR)
+$DB_PATH = "$env:APPDATA\opspilot\opspilot.db"
+if (-not (Test-Path $DB_PATH)) {
+    # Fallback cho môi trường test/dev nếu dùng đường dẫn khác:
+    $DB_PATH = "app\opspilot.db"
+}
+if (-not (Test-Path $DB_PATH)) {
+    Write-Error "Không tìm thấy cơ sở dữ liệu OpsPilot tại: $DB_PATH. Vui lòng mở OpsPilot Desktop để khởi tạo hoặc kiểm tra APPDATA."
+    exit 1
+}
+Write-Host ">>> Sử dụng cơ sở dữ liệu: $DB_PATH" -ForegroundColor Green
+
+# 2. Thiết lập đường dẫn file khóa SSH và nạp biến môi trường cho DeployAdapter & PollerAdapter
+$env:OPSPILOT_SSH_KEY_FILE = "$HOME\.ssh\opspilot_vps_key"
 $env:OPSPILOT_SSH_SECRET = (Get-Content -Raw "$env:OPSPILOT_SSH_KEY_FILE")
 ```
 
-### Bước 3: Khởi chạy Orchestrator Thí nghiệm (Kịch bản ít rủi ro: `cpu_spike`)
+### Bước 3: Khởi chạy Orchestrator Thí nghiệm (Kịch bản khuyến nghị: `cpu_spike`)
 ```powershell
-cd D:\Developing\DuAnCNTT
-& ".\ml-service\.venv\Scripts\python.exe" experiments\run_experiment.py `
-  --scenario cpu_spike `
-  --repeat 1 `
-  --vps-id 1 `
-  --db-path app\opspilot.db `
+$SCENARIO = "cpu_spike"
+$REPEAT = 1
+$VPS_ID = 1
+$VPS_HOST = "<vps_ip>"
+$APP_PORT = 30001
+
+Write-Host ">>> Bắt đầu thực thi pilot: scenario=$SCENARIO, repeat=$REPEAT, vps_id=$VPS_ID" -ForegroundColor Cyan
+
+# Thực thi runner và bắt toàn bộ output + exit code
+$runnerOutput = & ".\ml-service\.venv\Scripts\python.exe" experiments\run_experiment.py `
+  --scenario $SCENARIO `
+  --repeat $REPEAT `
+  --vps-id $VPS_ID `
+  --db-path $DB_PATH `
   --app-name express-api `
   --source-path demo-apps\express-api `
-  --app-url "http://<vps_ip>:30001" `
+  --app-url "http://${VPS_HOST}:${APP_PORT}" `
   --ml-url "http://127.0.0.1:8000" `
   --ssh-key-file "$env:OPSPILOT_SSH_KEY_FILE" `
-  --allow-pilot-4500
+  --allow-pilot-4500 2>&1
+$runnerExitCode = $LASTEXITCODE
+
+# Hiển thị log runner
+$runnerOutput | ForEach-Object { Write-Host $_ }
 ```
 
-### Bước 4: Lấy `run_id` Thực tế từ Cơ sở Dữ liệu & Xuất Kết quả
-Không dùng giá trị cố định `run_id=1`, trích xuất trực tiếp `run_id` mới nhất vừa thực hiện:
-```powershell
-# Truy vấn ID thực tế từ bảng experiment_runs
-$RUN_ID = (& ".\ml-service\.venv\Scripts\python.exe" -c "import sqlite3; conn = sqlite3.connect('app/opspilot.db'); cur = conn.cursor(); cur.execute('SELECT id FROM experiment_runs ORDER BY id DESC LIMIT 1'); row = cur.fetchone(); print(row[0] if row else ''); conn.close()")
+### Bước 4: Bắt `run_id` từ Runner, Đối chiếu Database & Xuất Kết quả
+Không chọn bản ghi mới nhất chung (`ORDER BY id DESC LIMIT 1` mù quáng); bắt buộc trích xuất đúng `run_id` từ kết quả runner và kiểm tra chéo các trường `scenario`, `repeat_index`, `status` trong bảng `experiment_run`:
 
-if (-not $RUN_ID) {
-    Write-Error "Không tìm thấy bản ghi experiment_runs nào trong cơ sở dữ liệu!"
+```powershell
+# 1. Bắt run_id từ output của runner
+$match = [regex]::Match(($runnerOutput -join "`n"), "run_id=(\d+)")
+if (-not $match.Success) {
+    Write-Error "Không tìm thấy run_id trong kết quả trả về của runner! ExitCode=$runnerExitCode"
+    exit 1
+}
+$RUN_ID = [int]$match.Groups[1].Value
+Write-Host ">>> Bắt được Run ID từ runner: $RUN_ID (Runner ExitCode=$runnerExitCode)" -ForegroundColor Cyan
+
+# 2. Đối chiếu scenario/repeat/status trong DB trước khi export
+$validatePy = @"
+import sys, sqlite3
+conn = sqlite3.connect(r'$DB_PATH')
+cur = conn.cursor()
+cur.execute("SELECT id, scenario, repeat_index, status FROM experiment_run WHERE id = ?", (${RUN_ID},))
+row = cur.fetchone()
+conn.close()
+
+if not row:
+    print(f"LỖI: Không tìm thấy run_id=${RUN_ID} trong bảng experiment_run!", file=sys.stderr)
+    sys.exit(1)
+
+r_id, sc, rep, st = row
+if sc != '$SCENARIO' or rep != ${REPEAT}:
+    print(f"LỖI: Bản ghi run {r_id} (scenario={sc}, repeat={rep}) không khớp tham số chạy ('$SCENARIO', ${REPEAT})!", file=sys.stderr)
+    sys.exit(2)
+
+if $runnerExitCode != 0 or st != 'completed':
+    print(f"CẢNH BÁO: Run {r_id} chưa đạt completed (runner_exit=$runnerExitCode, status='{st}'). Huỷ export!", file=sys.stderr)
+    sys.exit(3)
+
+print(f"ĐỐI CHIẾU HỢP LỆ: run_id={r_id}, scenario={sc}, repeat_index={rep}, status={st}")
+"@
+$validatePy | & ".\ml-service\.venv\Scripts\python.exe" -
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Đối chiếu dữ liệu cơ sở dữ liệu thất bại! Dừng quy trình xuất kết quả."
     exit 1
 }
 
-Write-Host ">>> Đang xuất dữ liệu cho Run ID thực tế: $RUN_ID" -ForegroundColor Cyan
-
-# Thực hiện xuất kết quả ra thư mục theo run_id thực
-& ".\ml-service\.venv\Scripts\python.exe" -c @"
+# 3. Xuất kết quả sang thư mục artifact riêng biệt
+Write-Host ">>> Đang xuất dữ liệu artifact cho Run ID: $RUN_ID" -ForegroundColor Cyan
+$exportPy = @"
 import sqlite3
 from pathlib import Path
 from experiments.export_results import export_run
 
-conn = sqlite3.connect('app/opspilot.db')
-out_dir = Path('experiments/results/run_cpu_spike_$RUN_ID')
-export_run(conn, run_id=int('$RUN_ID'), out_dir=out_dir)
+conn = sqlite3.connect(r'$DB_PATH')
+out_dir = Path('experiments/results/run_${SCENARIO}_${RUN_ID}')
+export_run(conn, run_id=${RUN_ID}, out_dir=out_dir)
 conn.close()
 print(f'Xuất kết quả thành công vào thư mục: {out_dir}')
 "@
+$exportPy | & ".\ml-service\.venv\Scripts\python.exe" -
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Xuất kết quả thất bại!"
+    exit 1
+}
 ```
 
 ### Bước 5: Phân tích Dữ liệu & Xuất Báo cáo So sánh
@@ -263,40 +332,60 @@ print(f'Xuất kết quả thành công vào thư mục: {out_dir}')
 
 ### 8.1. Thu hồi Cục bộ Tự động qua Khối `finally` của Runner
 Khi runner gặp ngoại lệ hoặc bị ngắt (`Ctrl+C`), khối `finally` sẽ:
-1. Gọi `reset_fault()` tắt toàn bộ hiệu ứng lỗi.
-2. Gọi `loadgen_handle.cleanup()` dừng container `opspilot-loadgen-express-api`.
+1. Gọi `reset_fault()` tắt toàn bộ hiệu ứng lỗi trên app demo.
+2. Gọi `loadgen_handle.cleanup()` dừng và xoá container `opspilot-loadgen-express-api`.
 3. Gọi `poller_handle.stop()` dừng tiến trình Headless Poller.
 4. Cập nhật `status='aborted'` và lưu lý do huỷ vào SQLite.
 
-### 8.2. Quy trình Thu hồi Khẩn cấp Thủ công trên VPS (Manual Teardown)
-Nếu máy local bị ngắt đột ngột, thực hiện thủ công các bước sau:
+### 8.2. Quy trình Thu hồi Khẩn cấp Thủ công trên VPS bằng PowerShell (Manual Teardown)
+Nếu máy local bị ngắt đột ngột, người vận hành thực thi kịch bản PowerShell dưới đây bằng cùng thông tin kết nối và khóa đã xác minh; **chỉ thao tác đúng tài nguyên của pilot**:
 
-1. **Tắt hiệu ứng lỗi trên ứng dụng demo**:
-   ```powershell
-   Invoke-RestMethod -Method Post -Uri "http://<vps_ip>:30001/debug/reset"
-   ```
-2. **Dừng và xoá đúng tên container loadgen thực tế (`opspilot-loadgen-express-api`)**:
-   ```bash
-   ssh -i ~/.ssh/id_rsa root@<vps_ip> "docker stop opspilot-loadgen-express-api && docker rm opspilot-loadgen-express-api"
-   ```
-3. **Dừng app & collector nhưng BẢO LƯU VOLUME (không dùng cờ `-v`)**:
-   ```bash
-   ssh -i ~/.ssh/id_rsa root@<vps_ip> "cd /opt/opspilot/express-api && docker compose down"
-   ```
-   *(Lưu ý: Không dùng cờ `-v` để bảo tồn dữ liệu metrics và lịch sử DB phục vụ đối soát).*
-4. **Cô lập và bảo vệ các tài nguyên khác**:
-   Tuyệt đối không chạy lệnh `docker rm -f` mù trên các container khác đang chạy trên VPS.
-5. **Cập nhật trạng thái trong SQLite DB cục bộ cho đúng `run_id`**:
-   ```powershell
-   & ".\ml-service\.venv\Scripts\python.exe" -c @"
-   import sqlite3
-   conn = sqlite3.connect('app/opspilot.db')
-   conn.execute(\"UPDATE experiment_runs SET status = 'aborted', abort_reason = 'manual_emergency_teardown' WHERE id = ? AND status = 'running'\", (int('$RUN_ID'),))
-   conn.commit()
-   conn.close()
-   print('Đã chuyển trạng thái Run $RUN_ID sang aborted thành công!')
-   "@
-   ```
+```powershell
+# Cấu hình chính xác đối tượng VPS và phiên pilot cần thu hồi
+$VPS_HOST = "<vps_ip>"
+$VPS_PORT = 22
+$VPS_USER = "root"
+$SSH_KEY_FILE = "$HOME\.ssh\opspilot_vps_key"
+$APP_PORT = 30001
+$RUN_ID = "<run_id_can_thu_hoi>"
+
+Write-Host ">>> Bắt đầu quy trình thu hồi khẩn cấp cho pilot run_id=$RUN_ID trên ${VPS_HOST}:${VPS_PORT}..." -ForegroundColor Yellow
+
+# 1. Tắt hiệu ứng fault trên app demo qua HTTP (nếu ứng dụng còn phản hồi)
+try {
+    Invoke-RestMethod -Method Post -Uri "http://${VPS_HOST}:${APP_PORT}/debug/reset" -TimeoutSec 5
+    Write-Host "1/4: Đã gửi lệnh reset fault tới app demo thành công." -ForegroundColor Green
+} catch {
+    Write-Warning "1/4: Không thể gọi /debug/reset (app có thể đã dừng): $_"
+}
+
+# 2. Dừng và xoá đúng container loadgen thực tế của pilot (opspilot-loadgen-express-api)
+$sshBaseArgs = @("-i", $SSH_KEY_FILE, "-p", $VPS_PORT, "-o", "StrictHostKeyChecking=yes", "${VPS_USER}@${VPS_HOST}")
+Write-Host "2/4: Đang dừng container loadgen opspilot-loadgen-express-api..."
+& ssh @sshBaseArgs "docker stop opspilot-loadgen-express-api && docker rm opspilot-loadgen-express-api"
+
+# 3. Dừng app & collector nhưng BẢO LƯU VOLUME (không dùng cờ -v để giữ nguyên dữ liệu metrics và SQLite)
+Write-Host "3/4: Đang dừng compose service của app demo (bảo lưu volume)..."
+& ssh @sshBaseArgs "cd /opt/opspilot/express-api && docker compose down"
+
+# 4. Cập nhật trạng thái aborted cho đúng bản ghi $RUN_ID trong bảng experiment_run
+Write-Host "4/4: Đang cập nhật trạng thái aborted cho run_id=$RUN_ID trong cơ sở dữ liệu..."
+$abortPy = @"
+import sqlite3
+conn = sqlite3.connect(r'$DB_PATH')
+cur = conn.cursor()
+cur.execute(
+    "UPDATE experiment_run SET status = 'aborted', abort_reason = 'manual_emergency_teardown' WHERE id = ? AND status = 'running'",
+    (${RUN_ID},)
+)
+conn.commit()
+print(f'Đã cập nhật aborted cho run_id=${RUN_ID}, số dòng cập nhật: {cur.rowcount}')
+conn.close()
+"@
+$abortPy | & ".\ml-service\.venv\Scripts\python.exe" -
+
+Write-Host ">>> Quy trình thu hồi khẩn cấp hoàn tất an toàn." -ForegroundColor Green
+```
 
 ---
 
@@ -304,7 +393,7 @@ Nếu máy local bị ngắt đột ngột, thực hiện thủ công các bư�
 
 1. **Trạng thái Pilot**: Duy trì nghiêm ngặt **`NOT_READY / NOT_RUN`**.
 2. **Điều kiện tiên quyết để chuyển sang `READY`**:
-   - Khắc phục **Runtime Gap 1**: Cập nhật runner truyền `ENABLE_FAULT_ENDPOINTS=true` khi deploy app.
+   - Khắc phục **Runtime Gap 1**: Cập nhật runner truyền `ENABLE_FAULT_ENDPOINTS=true` khi deploy app qua `DeployAdapter`.
    - Khắc phục **Runtime Gap 2**: Đồng bộ cơ chế cấp phát credential cho `DeployAdapter` và `PollerAdapter`.
-   - Xác minh fingerprint khóa máy chủ VPS qua kênh tin cậy trước khi ghi vào `known_hosts`.
+   - Xác minh fingerprint khóa máy chủ VPS qua kênh tin cậy ngoài luồng và lưu vào `known_hosts` theo quy trình 1 lần quét an toàn.
    - Chọn kịch bản an toàn `cpu_spike` hoặc `latency_creep` cho lượt chạy đầu tiên (tránh kịch bản `memory_leak` vượt trần 512 MB gây OOM).
