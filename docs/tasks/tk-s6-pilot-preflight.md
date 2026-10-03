@@ -105,15 +105,16 @@ Khi nhận lệnh khởi chạy pilot thực tế từ Tech Lead, người thự
   }
 
   # Bước 2: Chỉ chấp nhận ĐÚNG MỘT dòng ed25519 cho host/port đã chọn.
-  # Với port khác 22, chỉ nhận đúng dạng [host]:port, không nhận dòng host trần.
-  # Với port 22, nhận dạng host hoặc [host]:22.
+  # So khớp toàn bộ token host, kết thúc bằng khoảng trắng trước ssh-ed25519 (không dùng \b sau host/port).
+  # Với port 22, token host là $VPS_HOST hoặc [$VPS_HOST]:22.
+  # Với port khác 22, chỉ nhận đúng dạng [$VPS_HOST]:$VPS_PORT, không nhận dòng host trần.
   $expectedHostPattern = if ([int]$VPS_PORT -eq 22) {
-      "^(?:$([regex]::Escape($VPS_HOST))|$([regex]::Escape("[$VPS_HOST]:22")))\b"
+      "^(?:$([regex]::Escape($VPS_HOST))|$([regex]::Escape("[$VPS_HOST]:22")))\s+ssh-ed25519\b"
   } else {
-      "^$([regex]::Escape("[$VPS_HOST]:$VPS_PORT"))\b"
+      "^$([regex]::Escape("[$VPS_HOST]:$VPS_PORT"))\s+ssh-ed25519\b"
   }
   $keyLines = @(Get-Content $tempScannedKey | Where-Object {
-      $_ -notmatch '^\s*#' -and $_ -match '\bssh-ed25519\b' -and ($_ -match $expectedHostPattern)
+      $_ -notmatch '^\s*#' -and ($_ -match $expectedHostPattern)
   })
 
   if ($keyLines.Count -ne 1) {
