@@ -262,21 +262,42 @@ $runnerOutput | ForEach-Object { Write-Host $_ }
 Không chọn bản ghi mới nhất chung (`ORDER BY id DESC LIMIT 1` mù quáng); bắt buộc trích xuất đúng `run_id` từ kết quả runner và kiểm tra chéo các trường `scenario`, `repeat_index`, `status` trong bảng `experiment_run`:
 
 ```powershell
-# 1. Bắt run_id từ output của runner
-$match = [regex]::Match(($runnerOutput -join "`n"), "run_id=(\d+)")
-if (-not $match.Success) {
-    Write-Error "Không tìm thấy run_id trong kết quả trả về của runner! ExitCode=$runnerExitCode"
-    exit 1
-}
-$RUN_ID = [int]$match.Groups[1].Value
-Write-Host ">>> Bắt được Run ID từ runner: $RUN_ID (Runner ExitCode=$runnerExitCode)" -ForegroundColor Cyan
+# 1. Bắt thông tin run_id, attempt và status từ kết quả cuối cùng của runner (RightToLeft để lấy attempt mới nhất khi có retry)
+$runnerText = $runnerOutput -join "`n"
+$match = [regex]::Match(
+    $runnerText,
+    'status=(?<status>\w+),\s*attempt=(?<attempt>\d+),\s*run_id=(?<run_id>\d+)',
+    [System.Text.RegularExpressions.RegexOptions]::RightToLeft
+)
 
-# 2. Đối chiếu scenario/repeat/status trong DB trước khi export
+if ($match.Success) {
+    $FINAL_STATUS = $match.Groups["status"].Value
+    $ATTEMPT_INDEX = [int]$match.Groups["attempt"].Value
+    $RUN_ID = [int]$match.Groups["run_id"].Value
+} else {
+    # Fallback nếu runner bị ngắt bất ngờ trước khi in tổng kết:
+    $fallbackMatch = [regex]::Match(
+        $runnerText,
+        'run_id=(?<run_id>\d+)',
+        [System.Text.RegularExpressions.RegexOptions]::RightToLeft
+    )
+    if (-not $fallbackMatch.Success) {
+        Write-Error "Không tìm thấy run_id trong kết quả trả về của runner! ExitCode=$runnerExitCode"
+        exit 1
+    }
+    $RUN_ID = [int]$fallbackMatch.Groups["run_id"].Value
+    $FINAL_STATUS = "unknown"
+    $ATTEMPT_INDEX = 1
+}
+
+Write-Host ">>> Bắt được từ runner: RUN_ID=$RUN_ID (Attempt=$ATTEMPT_INDEX, Status=$FINAL_STATUS, Runner ExitCode=$runnerExitCode)" -ForegroundColor Cyan
+
+# 2. Đối chiếu scenario/repeat/attempt/status trong bảng experiment_run trước khi export
 $validatePy = @"
 import sys, sqlite3
 conn = sqlite3.connect(r'$DB_PATH')
 cur = conn.cursor()
-cur.execute("SELECT id, scenario, repeat_index, status FROM experiment_run WHERE id = ?", (${RUN_ID},))
+cur.execute("SELECT id, scenario, repeat_index, attempt_index, status FROM experiment_run WHERE id = ?", (${RUN_ID},))
 row = cur.fetchone()
 conn.close()
 
@@ -284,16 +305,20 @@ if not row:
     print(f"LỖI: Không tìm thấy run_id=${RUN_ID} trong bảng experiment_run!", file=sys.stderr)
     sys.exit(1)
 
-r_id, sc, rep, st = row
+r_id, sc, rep, att, st = row
 if sc != '$SCENARIO' or rep != ${REPEAT}:
     print(f"LỖI: Bản ghi run {r_id} (scenario={sc}, repeat={rep}) không khớp tham số chạy ('$SCENARIO', ${REPEAT})!", file=sys.stderr)
     sys.exit(2)
 
-if $runnerExitCode != 0 or st != 'completed':
-    print(f"CẢNH BÁO: Run {r_id} chưa đạt completed (runner_exit=$runnerExitCode, status='{st}'). Huỷ export!", file=sys.stderr)
+if att != ${ATTEMPT_INDEX}:
+    print(f"LỖI: Attempt trong DB ({att}) không khớp attempt từ runner (${ATTEMPT_INDEX})!", file=sys.stderr)
     sys.exit(3)
 
-print(f"ĐỐI CHIẾU HỢP LỆ: run_id={r_id}, scenario={sc}, repeat_index={rep}, status={st}")
+if $runnerExitCode != 0 or st != 'completed':
+    print(f"CẢNH BÁO: Run {r_id} chưa đạt completed (runner_exit=$runnerExitCode, status='{st}'). Huỷ export!", file=sys.stderr)
+    sys.exit(4)
+
+print(f"ĐỐI CHIẾU HỢP LỆ: run_id={r_id}, scenario={sc}, repeat_index={rep}, attempt_index={att}, status={st}")
 "@
 $validatePy | & ".\ml-service\.venv\Scripts\python.exe" -
 if ($LASTEXITCODE -ne 0) {
