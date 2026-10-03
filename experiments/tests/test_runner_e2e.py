@@ -50,6 +50,7 @@ from experiments.protocol import (
 )
 from experiments.run_experiment import (
     ExperimentError,
+    SshKeyFileError,
     UnsupportedAppError,
     measure_clock_offset_ms,
     run_attempt,
@@ -200,6 +201,7 @@ class MockDeployAdapter(DeployAdapter):
         self.deployed_ids: list[int] = []
         self.deployed_env_vars: list[Any] = []
         self.deployed_kwargs: list[dict[str, Any]] = []
+        self.deployed_ssh_secrets: list[str | None] = []
 
     def deploy(
         self,
@@ -215,6 +217,7 @@ class MockDeployAdapter(DeployAdapter):
         self.deployed_ids.append(dep_id)
         self.deployed_env_vars.append(kwargs.get("env_vars"))
         self.deployed_kwargs.append(dict(kwargs))
+        self.deployed_ssh_secrets.append(kwargs.get("ssh_secret"))
 
         cur = conn.cursor()
         cur.execute(
@@ -462,6 +465,8 @@ class MockPollerAdapter(PollerAdapter):
         self.missing_scores = missing_scores
         self.time_scale = time_scale
         self.handles: list[MockPollerHandle] = []
+        self.started_ssh_secrets: list[str | None] = []
+        self.started_kwargs: list[dict[str, Any]] = []
 
     def start(
         self,
@@ -474,6 +479,18 @@ class MockPollerAdapter(PollerAdapter):
         startup_timeout_s: float = 10.0,
         cli_cmd: Sequence[str] | None = None,
     ) -> MockPollerHandle:
+        self.started_ssh_secrets.append(ssh_secret)
+        self.started_kwargs.append(
+            {
+                "db_path": db_path,
+                "interval_ms": interval_ms,
+                "ml_url": ml_url,
+                "mock_metrics_file": mock_metrics_file,
+                "ssh_secret": ssh_secret,
+                "startup_timeout_s": startup_timeout_s,
+                "cli_cmd": cli_cmd,
+            }
+        )
         # Lấy experiment_run_id và deployment_id từ DB giống như Headless Poller thật
         cur = conn.cursor()
         cur.execute(
@@ -2098,3 +2115,369 @@ def test_runner_deploy_adapter_does_not_leak_fault_env_in_argv(
     assert res.deployment_id == 55
     assert res.status == "running"
     conn.close()
+
+
+def test_runner_ssh_key_file_propagates_to_deploy_and_poller(
+    tmp_path: Path,
+) -> None:
+    db_file = tmp_path / "test.db"
+    _init_test_db(db_file)
+
+    key_file = tmp_path / "id_ed25519"
+    key_content = "-----BEGIN OPENSSH PRIVATE KEY-----\ntest_secret_payload_12345\n-----END OPENSSH PRIVATE KEY-----"
+    key_file.write_text(key_content, encoding="utf-8")
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    poller_adapter = MockPollerAdapter(clock=clock, sample_count=450, time_scale=0.001)
+    loadgen_adapter = MockLoadgenAdapter()
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
+        ssh_key_file=key_file,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=lambda *a, **kw: None,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=0.001,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+    assert res.status == "completed"
+    assert deploy_adapter.call_count == 1
+    assert deploy_adapter.deployed_ssh_secrets[-1] == key_content
+    assert len(poller_adapter.started_ssh_secrets) == 1
+    assert poller_adapter.started_ssh_secrets[-1] == key_content
+    assert deploy_adapter.deployed_ssh_secrets[-1] == poller_adapter.started_ssh_secrets[-1]
+
+
+def test_runner_ssh_key_file_wins_over_stale_env_secret(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_file = tmp_path / "test.db"
+    _init_test_db(db_file)
+
+    monkeypatch.setenv("OPSPILOT_SSH_SECRET", "stale_old_secret_from_env_999")
+    monkeypatch.setenv("OPSPILOT_DEPLOY_SECRET", "stale_old_deploy_secret_888")
+
+    key_file = tmp_path / "explicit_key.pem"
+    key_content = "explicit_key_data_from_file_777"
+    key_file.write_text(key_content, encoding="utf-8")
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    poller_adapter = MockPollerAdapter(clock=clock, sample_count=450, time_scale=0.001)
+    loadgen_adapter = MockLoadgenAdapter()
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
+        ssh_key_file=key_file,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=lambda *a, **kw: None,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=0.001,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+    assert res.status == "completed"
+    assert deploy_adapter.deployed_ssh_secrets[-1] == key_content
+    assert poller_adapter.started_ssh_secrets[-1] == key_content
+    assert deploy_adapter.deployed_ssh_secrets[-1] != "stale_old_secret_from_env_999"
+    assert poller_adapter.started_ssh_secrets[-1] != "stale_old_secret_from_env_999"
+
+
+def test_runner_ssh_key_file_missing_aborts_before_deploy(
+    tmp_path: Path,
+) -> None:
+    db_file = tmp_path / "test.db"
+    _init_test_db(db_file)
+
+    missing_key = tmp_path / "nonexistent_key_file.pem"
+    deploy_adapter = MockDeployAdapter()
+
+    # 1. Với raise_on_abort=False
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
+        ssh_key_file=missing_key,
+        deploy_adapter=deploy_adapter,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+    assert res.status == "aborted"
+    assert "ssh_key_file_error" in res.abort_reason
+    assert "không tồn tại" in res.abort_reason
+    assert deploy_adapter.call_count == 0
+
+    # 2. Với raise_on_abort=True
+    with pytest.raises(SshKeyFileError, match="không tồn tại"):
+        run_attempt(
+            scenario="memory_leak",
+            repeat_index=1,
+            vps_id=1,
+            db_path=db_file,
+            app_name="express-api",
+            source_path=tmp_path / "src",
+            app_url="http://127.0.0.1:3000",
+            ssh_client=MockSshClient(),
+            ssh_key_file=missing_key,
+            deploy_adapter=deploy_adapter,
+            measure_clock_fn=lambda *a, **kw: 0,
+            allow_pilot_4500=True,
+            raise_on_abort=True,
+        )
+    assert deploy_adapter.call_count == 0
+
+
+def test_runner_ssh_key_file_empty_aborts_before_deploy(
+    tmp_path: Path,
+) -> None:
+    db_file = tmp_path / "test.db"
+    _init_test_db(db_file)
+
+    empty_key = tmp_path / "empty_key_file.pem"
+    empty_key.write_text("   \n\t  \n  ", encoding="utf-8")
+    deploy_adapter = MockDeployAdapter()
+
+    # 1. Với raise_on_abort=False
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
+        ssh_key_file=empty_key,
+        deploy_adapter=deploy_adapter,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+    assert res.status == "aborted"
+    assert "ssh_key_file_error" in res.abort_reason
+    assert "rỗng" in res.abort_reason
+    assert deploy_adapter.call_count == 0
+
+    # 2. Với raise_on_abort=True
+    with pytest.raises(SshKeyFileError, match="rỗng"):
+        run_attempt(
+            scenario="memory_leak",
+            repeat_index=1,
+            vps_id=1,
+            db_path=db_file,
+            app_name="express-api",
+            source_path=tmp_path / "src",
+            app_url="http://127.0.0.1:3000",
+            ssh_client=MockSshClient(),
+            ssh_key_file=empty_key,
+            deploy_adapter=deploy_adapter,
+            measure_clock_fn=lambda *a, **kw: 0,
+            allow_pilot_4500=True,
+            raise_on_abort=True,
+        )
+    assert deploy_adapter.call_count == 0
+
+
+def test_runner_ssh_key_file_unreadable_aborts_before_deploy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_file = tmp_path / "test.db"
+    _init_test_db(db_file)
+
+    # 1. Đường dẫn là thư mục (không phải file)
+    key_dir = tmp_path / "key_directory"
+    key_dir.mkdir()
+    deploy_adapter = MockDeployAdapter()
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
+        ssh_key_file=key_dir,
+        deploy_adapter=deploy_adapter,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+    assert res.status == "aborted"
+    assert "ssh_key_file_error" in res.abort_reason
+    assert "không phải là file" in res.abort_reason
+    assert deploy_adapter.call_count == 0
+
+    # 2. Lỗi đọc file (PermissionError)
+    valid_key = tmp_path / "perm_key.pem"
+    valid_key.write_text("valid_content", encoding="utf-8")
+
+    orig_read_text = Path.read_text
+
+    def mock_failing_read(self: Path, *args: Any, **kwargs: Any) -> str:
+        if self == valid_key:
+            raise PermissionError("Access is denied")
+        return orig_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", mock_failing_read)
+
+    res2 = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
+        ssh_key_file=valid_key,
+        deploy_adapter=deploy_adapter,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+    assert res2.status == "aborted"
+    assert "ssh_key_file_error" in res2.abort_reason
+    assert "PermissionError" in res2.abort_reason
+    assert deploy_adapter.call_count == 0
+
+
+def test_runner_ssh_key_file_credential_security_no_leak(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    db_file = tmp_path / "test.db"
+    _init_test_db(db_file)
+
+    secret_key_token = "UNIQUE_SUPER_SECRET_KEY_PAYLOAD_ABCXYZ_987654321"
+    key_file = tmp_path / "secret_key.pem"
+    key_file.write_text(secret_key_token, encoding="utf-8")
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    poller_adapter = MockPollerAdapter(clock=clock, sample_count=450, time_scale=0.001)
+    loadgen_adapter = MockLoadgenAdapter()
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
+        ssh_key_file=key_file,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=lambda *a, **kw: None,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=0.001,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+    assert res.status == "completed"
+
+    # Kiểm tra log không chứa secret
+    assert secret_key_token not in caplog.text
+
+    # Kiểm tra toàn bộ cơ sở dữ liệu SQLite
+    conn = sqlite3.connect(db_file)
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM experiment_run")
+    for row in cur.fetchall():
+        for val in row:
+            if val is not None:
+                assert secret_key_token not in str(val)
+
+    cur.execute("SELECT * FROM deployment")
+    for row in cur.fetchall():
+        for val in row:
+            if val is not None:
+                assert secret_key_token not in str(val)
+    conn.close()
+
+
+def test_runner_credential_fallback_when_no_key_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_file = tmp_path / "test.db"
+    _init_test_db(db_file)
+
+    monkeypatch.delenv("OPSPILOT_SSH_KEY_FILE", raising=False)
+    monkeypatch.setenv("OPSPILOT_SSH_SECRET", "standard_fallback_env_secret_111")
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    poller_adapter = MockPollerAdapter(clock=clock, sample_count=450, time_scale=0.001)
+    loadgen_adapter = MockLoadgenAdapter()
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
+        ssh_key_file=None,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=lambda *a, **kw: None,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=0.001,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+    assert res.status == "completed"
+    assert deploy_adapter.deployed_ssh_secrets[-1] == "standard_fallback_env_secret_111"
+    assert poller_adapter.started_ssh_secrets[-1] == "standard_fallback_env_secret_111"

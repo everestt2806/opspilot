@@ -103,6 +103,10 @@ class SshHostKeyError(SshError):
     """Ném ra khi kiểm tra host key thất bại (Host key verification failed)."""
 
 
+class SshKeyFileError(ExperimentError):
+    """Ném ra khi file SSH private key được chỉ định bị thiếu, rỗng hoặc không thể đọc."""
+
+
 class ClockSkewError(ExperimentError):
     """Ném ra khi độ lệch đồng hồ giữa VPS và máy local vượt ngưỡng an toàn (>2000ms)."""
 
@@ -326,6 +330,31 @@ class SystemSshClient:
         )
 
 
+def read_ssh_key_file(key_file: str | Path) -> str:
+    """Đọc và xác thực nội dung file SSH private key.
+
+    Bảo mật:
+      - Tuyệt đối không đưa nội dung private key vào thông điệp ngoại lệ hoặc log.
+      - Ném SshKeyFileError nếu file không tồn tại, là thư mục, rỗng hoặc lỗi quyền đọc.
+    """
+    path = Path(key_file)
+    if not path.exists():
+        raise SshKeyFileError(f"File private key '{path}' không tồn tại")
+    if not path.is_file():
+        raise SshKeyFileError(f"Đường dẫn private key '{path}' không phải là file")
+    try:
+        content = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise SshKeyFileError(
+            f"Không thể đọc file private key '{path}': {type(e).__name__}"
+        ) from None
+
+    stripped = content.strip()
+    if not stripped:
+        raise SshKeyFileError(f"File private key '{path}' rỗng")
+    return stripped
+
+
 def resolve_ssh_client(
     conn: sqlite3.Connection,
     vps_id: int,
@@ -355,6 +384,12 @@ def resolve_ssh_client(
         or os.environ.get("OPSPILOT_SSH_SECRET")
         or os.environ.get("OPSPILOT_DEPLOY_SECRET")
     )
+    if effective_key_file:
+        try:
+            effective_secret = read_ssh_key_file(effective_key_file)
+        except SshKeyFileError:
+            pass
+
     if not effective_key_file and (
         not effective_secret or not str(effective_secret).strip()
     ):
@@ -703,12 +738,41 @@ def run_attempt(
         )
 
         # Runner/CLI phải có SSH client hợp lệ trước clock gate; thiếu SSH thì abort có lý do, không trả offset 0 và không chạy loadgen local
+        # Credential resolution (TK-S6 P2d-6b):
+        # Khi có --ssh-key-file (hoặc OPSPILOT_SSH_KEY_FILE), đọc private key từ file
+        # và chuyển qua kênh ssh_secret cho cả DeployAdapter và PollerAdapter;
+        # runner tiếp tục dùng file để SSH.
+        # Key file được chỉ định tường minh phải thắng secret cũ kế thừa từ môi trường.
+        raw_key_arg = (
+            ssh_key_file
+            if ssh_key_file is not None
+            else os.environ.get("OPSPILOT_SSH_KEY_FILE")
+        )
+        specified_key_file: str | Path | None = None
+        if raw_key_arg is not None:
+            if isinstance(raw_key_arg, str) and not raw_key_arg.strip():
+                reason = "ssh_key_file_error: Đường dẫn SSH key file rỗng"
+                abort_run(conn, run_id, reason=reason, auto_commit=True)
+                raise SshKeyFileError(reason)
+            specified_key_file = raw_key_arg
+
         resolved_ssh_secret = (
             ssh_secret
             or os.environ.get("OPSPILOT_SSH_SECRET")
             or os.environ.get("OPSPILOT_DEPLOY_SECRET")
         )
-        resolved_key_file = ssh_key_file or os.environ.get("OPSPILOT_SSH_KEY_FILE")
+        resolved_key_file = specified_key_file
+
+        if specified_key_file:
+            try:
+                key_content = read_ssh_key_file(specified_key_file)
+                # Key file được chỉ định tường minh phải thắng secret cũ kế thừa từ môi trường
+                resolved_ssh_secret = key_content
+            except SshKeyFileError as e:
+                reason = f"ssh_key_file_error: {e}"
+                abort_run(conn, run_id, reason=reason, auto_commit=True)
+                raise
+
         if ssh_client is None:
             try:
                 ssh_client = resolve_ssh_client(
