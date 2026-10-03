@@ -1,4 +1,4 @@
-﻿/* OpsPilot UI Redesign Prototype Styles
+/* OpsPilot UI Redesign Prototype Styles
  * Modern Desktop App-Centric Styling (Dark & Light)
  * Designed for 1280x800 and 1366x768 viewports
  */
@@ -156,6 +156,19 @@ body {
 .titlebar-center {
   color: var(--text-muted);
   font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.titlebar-mock-notice {
+  font-size: 10px;
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
 }
 
 .titlebar-right {
@@ -198,10 +211,10 @@ body {
   overflow: hidden;
 }
 
-/* Single Main Sidebar (App-Centric) */
+/* Single Main Sidebar */
 .main-sidebar {
-  width: 230px;
-  min-width: 230px;
+  width: 220px;
+  min-width: 220px;
   background-color: var(--bg-sidebar);
   border-right: 1px solid var(--border-subtle);
   display: flex;
@@ -215,51 +228,33 @@ body {
   overflow-y: auto;
 }
 
-.sidebar-fleet-selector {
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border-subtle);
+.sidebar-header-action {
+  padding: 12px 12px 8px;
 }
 
-.fleet-selector-button {
+.btn-deploy-action {
   width: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 10px;
-  background: var(--bg-card-subtle);
-  border: 1px solid var(--border-subtle);
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--color-primary);
+  color: #ffffff;
+  border: 1px solid var(--color-primary);
   border-radius: var(--radius-md);
-  color: var(--text-primary);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: background 0.15s, transform 0.05s;
 }
 
-.fleet-selector-button:hover {
-  border-color: var(--border-medium);
-}
-
-.fleet-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-success);
-  display: inline-block;
-  margin-right: 6px;
+.btn-deploy-action:hover {
+  background: var(--color-primary-hover);
 }
 
 .sidebar-nav-group {
-  padding: 12px 8px 4px;
-}
-
-.nav-group-title {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 700;
-  color: var(--text-muted);
-  padding: 0 8px 6px;
+  padding: 8px 8px 4px;
 }
 
 .sidebar-nav-list {
@@ -323,14 +318,8 @@ body {
   border: 1px solid var(--border-subtle);
 }
 
-.nav-badge.warning {
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-  border-color: var(--color-warning-border);
-}
-
 .sidebar-bottom {
-  padding: 12px 14px;
+  padding: 12px;
   border-top: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
@@ -528,6 +517,34 @@ body {
 }
 .status-pill.neutral .status-pill-dot { background: var(--text-muted); }
 
+/* Mock / Future Concept Tags */
+.mock-tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.mock-notice-box {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px dashed var(--color-warning-border);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  font-size: 11.5px;
+  color: var(--color-warning);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
 /* Horizontal Tabs Header */
 .horizontal-tabs-nav {
   display: flex;
@@ -711,7 +728,7 @@ body {
   cursor: pointer;
 }
 
-/* Verification State Banners */
+/* Alert Banners */
 .alert-banner {
   padding: 12px 14px;
   border-radius: var(--radius-md);
@@ -819,4 +836,128 @@ body {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   color: var(--text-primary);
+}
+/* Sidebar Action Button */
+.sidebar-action-container {
+  padding: 10px 12px 6px 12px;
+}
+
+.btn-deploy-action {
+  width: 100%;
+  justify-content: center;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: var(--radius-md);
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.25);
+}
+
+/* Modal */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay.active {
+  display: flex;
+}
+
+.modal-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  max-width: 520px;
+  width: 90%;
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  animation: modalFadeIn 0.15s ease-out;
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-card-subtle);
+}
+
+.modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.modal-close-btn:hover {
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--bg-card-subtle);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.form-select, .form-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+
+.form-select:focus, .form-input:focus {
+  border-color: var(--color-primary);
 }
