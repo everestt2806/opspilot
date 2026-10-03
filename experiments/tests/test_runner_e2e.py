@@ -2161,7 +2161,10 @@ def test_runner_ssh_key_file_propagates_to_deploy_and_poller(
     assert deploy_adapter.deployed_ssh_secrets[-1] == key_content
     assert len(poller_adapter.started_ssh_secrets) == 1
     assert poller_adapter.started_ssh_secrets[-1] == key_content
-    assert deploy_adapter.deployed_ssh_secrets[-1] == poller_adapter.started_ssh_secrets[-1]
+    assert (
+        deploy_adapter.deployed_ssh_secrets[-1]
+        == poller_adapter.started_ssh_secrets[-1]
+    )
 
 
 def test_runner_ssh_key_file_wins_over_stale_env_secret(
@@ -2481,3 +2484,201 @@ def test_runner_credential_fallback_when_no_key_file(
     assert res.status == "completed"
     assert deploy_adapter.deployed_ssh_secrets[-1] == "standard_fallback_env_secret_111"
     assert poller_adapter.started_ssh_secrets[-1] == "standard_fallback_env_secret_111"
+
+
+def test_read_ssh_key_file_preserves_trailing_newline_and_passes_to_adapters(
+    tmp_path: Path,
+) -> None:
+    """Kiểm tra read_ssh_key_file bảo lưu nguyên vẹn nội dung file (kể cả newline cuối)
+
+    và truyền nguyên vẹn tới DeployAdapter và PollerAdapter.
+    """
+    from experiments.run_experiment import read_ssh_key_file
+
+    db_file = tmp_path / "test.db"
+    _init_test_db(db_file)
+
+    key_with_newline = (
+        "-----BEGIN OPENSSH PRIVATE KEY-----\n"
+        "b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW\n"
+        "-----END OPENSSH PRIVATE KEY-----\n\n"
+    )
+    key_file = tmp_path / "test_newline_key.pem"
+    key_file.write_text(key_with_newline, encoding="utf-8")
+
+    # 1. read_ssh_key_file trả nguyên nội dung, không strip newline cuối
+    content = read_ssh_key_file(key_file)
+    assert content == key_with_newline
+    assert content.endswith("\n\n")
+
+    # 2. run_attempt truyền đúng chuỗi có newline cuối vào cả 2 adapter
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    poller_adapter = MockPollerAdapter(clock=clock, sample_count=450, time_scale=0.001)
+    loadgen_adapter = MockLoadgenAdapter()
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
+        ssh_key_file=key_file,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=lambda *a, **kw: None,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=0.001,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+    assert res.status == "completed"
+    assert deploy_adapter.deployed_ssh_secrets[-1] == key_with_newline
+    assert poller_adapter.started_ssh_secrets[-1] == key_with_newline
+
+
+def test_read_ssh_key_file_called_only_once_during_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Chứng minh file private key chỉ được đọc ĐÚNG MỘT LẦN trong suốt chu trình run_attempt."""
+    import experiments.run_experiment as runner_mod
+
+    db_file = tmp_path / "test.db"
+    _init_test_db(db_file)
+
+    key_file = tmp_path / "single_read_key.pem"
+    key_file.write_text("VALID_SINGLE_READ_KEY_DATA\n", encoding="utf-8")
+
+    read_calls = 0
+    original_read = runner_mod.read_ssh_key_file
+
+    def counting_read(path: Any) -> str:
+        nonlocal read_calls
+        read_calls += 1
+        return original_read(path)
+
+    monkeypatch.setattr(runner_mod, "read_ssh_key_file", counting_read)
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    poller_adapter = MockPollerAdapter(clock=clock, sample_count=450, time_scale=0.001)
+    loadgen_adapter = MockLoadgenAdapter()
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
+        ssh_key_file=key_file,
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=lambda *a, **kw: None,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=0.001,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+    assert res.status == "completed"
+    assert read_calls == 1, f"Yêu cầu chỉ đọc key 1 lần nhưng đã đọc {read_calls} lần!"
+
+
+def test_resolve_ssh_client_invalid_key_with_stale_env_secret_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Chứng minh resolve_ssh_client KHÔNG nuốt SshKeyFileError để rơi về secret môi trường cũ.
+
+    Khi key file đã chỉ định mà bị lỗi, phải fail closed ngay lập tức.
+    """
+    from experiments.run_experiment import resolve_ssh_client
+
+    db_file = tmp_path / "test.db"
+    _init_test_db(db_file)
+    conn = sqlite3.connect(db_file)
+    conn.execute(
+        "UPDATE vps SET host = '127.0.0.1', port = 22, username = 'root', auth_type = 'key' WHERE id = 1"
+    )
+    conn.commit()
+
+    # Cài đặt secret cũ còn sót lại trong môi trường
+    monkeypatch.setenv("OPSPILOT_SSH_SECRET", "stale_old_secret_from_env_123")
+    monkeypatch.setenv("OPSPILOT_DEPLOY_SECRET", "stale_deploy_secret_456")
+
+    # 1. File không tồn tại -> phải ném SshKeyFileError, không được trả về client dùng secret môi trường
+    missing_key = tmp_path / "nonexistent.pem"
+    with pytest.raises(SshKeyFileError, match="không tồn tại"):
+        resolve_ssh_client(conn, vps_id=1, ssh_key_file=missing_key)
+
+    # 2. File rỗng -> phải ném SshKeyFileError, không rơi về secret môi trường
+    empty_key = tmp_path / "empty.pem"
+    empty_key.write_text("   \n\t  \n", encoding="utf-8")
+    with pytest.raises(SshKeyFileError, match="rỗng"):
+        resolve_ssh_client(conn, vps_id=1, ssh_key_file=empty_key)
+
+    # 3. Chuỗi đường dẫn rỗng -> phải ném SshKeyFileError
+    with pytest.raises(SshKeyFileError, match="rỗng"):
+        resolve_ssh_client(conn, vps_id=1, ssh_key_file="   ")
+
+    # 4. Khi chỉ định qua biến môi trường OPSPILOT_SSH_KEY_FILE bị lỗi
+    monkeypatch.setenv("OPSPILOT_SSH_KEY_FILE", str(missing_key))
+    with pytest.raises(SshKeyFileError, match="không tồn tại"):
+        resolve_ssh_client(conn, vps_id=1)
+
+    conn.close()
+
+
+def test_runner_invalid_key_file_with_stale_env_secret_aborts_without_deploy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Chứng minh run_attempt khi key file chỉ định bị lỗi kèm secret môi trường cũ
+
+    sẽ abort ngay lập tức trước deploy, không fallback dùng secret môi trường cũ.
+    """
+    db_file = tmp_path / "test.db"
+    _init_test_db(db_file)
+
+    monkeypatch.setenv("OPSPILOT_SSH_SECRET", "stale_env_secret_should_never_win")
+    missing_key = tmp_path / "ghost_key.pem"
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    poller_adapter = MockPollerAdapter(clock=clock)
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
+        ssh_key_file=missing_key,
+        deploy_adapter=deploy_adapter,
+        poller_adapter=poller_adapter,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+    assert res.status == "aborted"
+    assert "ssh_key_file_error" in res.abort_reason
+    assert "không tồn tại" in res.abort_reason
+    assert deploy_adapter.call_count == 0
+    assert len(poller_adapter.started_ssh_secrets) == 0

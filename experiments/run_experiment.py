@@ -287,6 +287,10 @@ class SystemSshClient:
             if self._secret:
                 stdout = stdout.replace(self._secret, "******")
                 stderr = stderr.replace(self._secret, "******")
+                stripped_sec = self._secret.strip()
+                if stripped_sec:
+                    stdout = stdout.replace(stripped_sec, "******")
+                    stderr = stderr.replace(stripped_sec, "******")
             return res.returncode, stdout, stderr
         except subprocess.TimeoutExpired:
             return 124, "", f"SSH command timed out after {effective_timeout}s"
@@ -294,6 +298,9 @@ class SystemSshClient:
             err_msg = str(e)
             if self._secret:
                 err_msg = err_msg.replace(self._secret, "******")
+                stripped_sec = self._secret.strip()
+                if stripped_sec:
+                    err_msg = err_msg.replace(stripped_sec, "******")
             return 1, "", f"SSH execution error: {err_msg}"
 
     def exec_command(self, cmd: str, timeout: float = 15.0) -> tuple[int, str, str]:
@@ -336,6 +343,7 @@ def read_ssh_key_file(key_file: str | Path) -> str:
     Bảo mật:
       - Tuyệt đối không đưa nội dung private key vào thông điệp ngoại lệ hoặc log.
       - Ném SshKeyFileError nếu file không tồn tại, là thư mục, rỗng hoặc lỗi quyền đọc.
+      - Dùng .strip() chỉ để kiểm tra rỗng, bảo lưu nguyên vẹn nội dung file (kể cả newline cuối).
     """
     path = Path(key_file)
     if not path.exists():
@@ -349,10 +357,9 @@ def read_ssh_key_file(key_file: str | Path) -> str:
             f"Không thể đọc file private key '{path}': {type(e).__name__}"
         ) from None
 
-    stripped = content.strip()
-    if not stripped:
+    if not content.strip():
         raise SshKeyFileError(f"File private key '{path}' rỗng")
-    return stripped
+    return content
 
 
 def resolve_ssh_client(
@@ -378,17 +385,31 @@ def resolve_ssh_client(
     if ssh_client is not None:
         return ssh_client
 
-    effective_key_file = ssh_key_file or os.environ.get("OPSPILOT_SSH_KEY_FILE")
-    effective_secret = (
-        ssh_secret
-        or os.environ.get("OPSPILOT_SSH_SECRET")
-        or os.environ.get("OPSPILOT_DEPLOY_SECRET")
+    raw_key_file = (
+        ssh_key_file
+        if ssh_key_file is not None
+        else os.environ.get("OPSPILOT_SSH_KEY_FILE")
     )
-    if effective_key_file:
-        try:
+    effective_key_file: str | Path | None = None
+    if raw_key_file is not None:
+        if isinstance(raw_key_file, str) and not raw_key_file.strip():
+            raise SshKeyFileError("Đường dẫn SSH key file rỗng")
+        effective_key_file = raw_key_file
+
+    if effective_key_file is not None:
+        # Key file được chỉ định tường minh (override secret môi trường):
+        # Tránh đọc key hai lần nếu caller đã đọc và truyền ssh_secret hợp lệ
+        if ssh_secret is not None and str(ssh_secret).strip():
+            effective_secret = ssh_secret
+        else:
             effective_secret = read_ssh_key_file(effective_key_file)
-        except SshKeyFileError:
-            pass
+    else:
+        # Fallback về secret từ môi trường khi không chỉ định key file
+        effective_secret = (
+            ssh_secret
+            or os.environ.get("OPSPILOT_SSH_SECRET")
+            or os.environ.get("OPSPILOT_DEPLOY_SECRET")
+        )
 
     if not effective_key_file and (
         not effective_secret or not str(effective_secret).strip()
@@ -425,7 +446,7 @@ def resolve_ssh_client(
         port=port,
         username=username,
         auth_type=auth_type,
-        secret=str(effective_secret).strip() if effective_secret else None,
+        secret=str(effective_secret) if effective_secret else None,
         key_file=effective_key_file,
         known_hosts_file=effective_known_hosts,
     )
@@ -781,6 +802,10 @@ def run_attempt(
                     ssh_key_file=resolved_key_file,
                     ssh_secret=resolved_ssh_secret,
                 )
+            except SshKeyFileError as e:
+                reason = f"ssh_key_file_error: {e}"
+                abort_run(conn, run_id, reason=reason, auto_commit=True)
+                raise
             except UnsupportedAuthTypeError as e:
                 reason = f"unsupported_auth_type: {e}"
                 abort_run(conn, run_id, reason=reason, auto_commit=True)
