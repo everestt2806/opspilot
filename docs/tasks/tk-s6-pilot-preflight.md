@@ -104,12 +104,16 @@ Khi nhận lệnh khởi chạy pilot thực tế từ Tech Lead, người thự
       exit 1
   }
 
-  # Bước 2: Chỉ chấp nhận ĐÚNG MỘT dòng ed25519 cho host/port đã chọn
-  $expectedHostPrefix = if ([int]$VPS_PORT -eq 22) { "$VPS_HOST" } else { "[$VPS_HOST]:$VPS_PORT" }
-  $escPrefix = [regex]::Escape($expectedHostPrefix)
-  $escHost = [regex]::Escape($VPS_HOST)
+  # Bước 2: Chỉ chấp nhận ĐÚNG MỘT dòng ed25519 cho host/port đã chọn.
+  # Với port khác 22, chỉ nhận đúng dạng [host]:port, không nhận dòng host trần.
+  # Với port 22, nhận dạng host hoặc [host]:22.
+  $expectedHostPattern = if ([int]$VPS_PORT -eq 22) {
+      "^(?:$([regex]::Escape($VPS_HOST))|$([regex]::Escape("[$VPS_HOST]:22")))\b"
+  } else {
+      "^$([regex]::Escape("[$VPS_HOST]:$VPS_PORT"))\b"
+  }
   $keyLines = @(Get-Content $tempScannedKey | Where-Object {
-      $_ -notmatch '^\s*#' -and $_ -match 'ssh-ed25519' -and ($_ -match "^(?:$escPrefix|$escHost)\b")
+      $_ -notmatch '^\s*#' -and $_ -match '\bssh-ed25519\b' -and ($_ -match $expectedHostPattern)
   })
 
   if ($keyLines.Count -ne 1) {
@@ -412,7 +416,7 @@ Khi runner gặp ngoại lệ hoặc bị ngắt (`Ctrl+C`), khối `finally` s�
 ### 8.2. Quy trình Thu hồi Khẩn cấp Thủ công Độc lập trên VPS bằng PowerShell (Standalone Manual Teardown)
 Nếu máy local bị ngắt đột ngột hoặc phiên chạy gặp sự cố nghiêm trọng cần dừng ngay lập tức, người vận hành thực thi kịch bản PowerShell dưới đây. Kịch bản này được thiết kế **hoàn toàn độc lập** (không phụ thuộc vào biến môi trường hay state từ các bước trước), **chỉ thao tác đúng tài nguyên của pilot**:
 - **Tự động xác định Repo Root & đường dẫn SQLite DB thật** khi mở cửa sổ PowerShell mới ở bất kỳ thư mục nào (tìm kiếm thư mục gốc dự án chứa `experiments/run_store.py` và `ml-service/.venv`, ưu tiên Electron `userData`).
-- **Xác minh tiền điều kiện TRƯỚC MỌI LỆNH HTTP/SSH**: kiểm tra `$RUN_ID` là số nguyên dương, đang ở trạng thái `running`, có `deployment_id` hợp lệ thuộc app `express-api` và đúng `host` của VPS mục tiêu. **Nếu sai hoặc thiếu bất kỳ điều kiện nào, kịch bản lập tức dừng, tuyệt đối không gửi HTTP `/debug/reset` hay bất kỳ lệnh SSH nào**.
+- **Xác minh tiền điều kiện TRƯỚC MỌI LỆNH HTTP/SSH**: kiểm tra `$RUN_ID` là số nguyên dương; `run` đang `running`; `deployment` đang `running` và là `app.current_deployment_id`; `run.vps_id` khớp VPS của app (`app.vps_id`); các thông số `host`, SSH `port`, `username` và `app.host_port` khớp hoàn toàn các biến đích. **Nếu sai hoặc thiếu bất kỳ giá trị nào, kịch bản lập tức dừng, tuyệt đối không gửi HTTP `/debug/reset` hay bất kỳ lệnh SSH nào**.
 - **Kiểm tra exit code (`$LASTEXITCODE`) sau từng lệnh SSH**: nếu thao tác dừng container loadgen hoặc dừng app compose thất bại, **lập tức dừng kịch bản (không cập nhật DB)** để người vận hành xử lý trực tiếp.
 - **Cập nhật run an toàn qua `abort_run()`**: ghi nhận đồng thời `status = 'aborted'`, `abort_reason = 'manual_emergency_teardown'`, và `run_end_ts` chuẩn ISO 8601 UTC; nếu gặp `InvalidRunStateError`, kịch bản **báo lỗi thất bại và dừng ngay lập tức**, không bao giờ in "hoàn tất an toàn".
 
@@ -489,17 +493,21 @@ if (-not [int]::TryParse($RUN_ID, [ref]$parsedRunId) -or $parsedRunId -le 0) {
 
 # Tiền điều kiện an toàn: TRƯỚC KHI GỬI BẤT KỲ LỆNH HTTP HOẶC SSH NÀO:
 # - Run phải có status = 'running' (nếu completed/aborted -> DỪNG NGAY)
-# - Phải có deployment_id hợp lệ (không được NULL)
-# - App của deployment phải đúng tên 'express-api' (tránh tác động nhầm app khác)
-# - VPS của app phải khớp chính xác host $VPS_HOST (tránh tác động nhầm máy chủ)
-# Sai hoặc thiếu bất kỳ điều kiện nào -> DỪNG NGAY LẬP TỨC!
+# - Deployment phải đang running và là app.current_deployment_id
+# - run.vps_id phải khớp VPS của app (app.vps_id)
+# - App phải đúng tên 'express-api'
+# - Các biến đích host, SSH port, username, app.host_port phải khớp hoàn toàn cấu hình trong DB
+# Sai hoặc thiếu bất kỳ giá trị nào -> DỪNG NGAY LẬP TỨC!
 $precheckPy = @"
 import sys, sqlite3
 sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 run_id = int(sys.argv[1])
 db_path = sys.argv[2]
-expected_host = sys.argv[3]
+target_host = sys.argv[3]
+target_ssh_port = int(sys.argv[4])
+target_user = sys.argv[5]
+target_app_port = int(sys.argv[6])
 expected_app = "express-api"
 
 conn = sqlite3.connect(db_path)
@@ -508,9 +516,19 @@ cur.execute('''
     SELECT
         r.id,
         r.status,
+        r.vps_id,
         r.deployment_id,
+        d.id,
+        d.status,
+        a.id,
+        a.vps_id,
+        a.name,
+        a.host_port,
+        a.current_deployment_id,
+        v.id,
         v.host,
-        a.name
+        v.port,
+        v.username
     FROM experiment_run r
     LEFT JOIN deployment d ON r.deployment_id = d.id
     LEFT JOIN app a ON d.app_id = a.id
@@ -524,29 +542,67 @@ if not row:
     print(f"PRECHECK_FAILED: Không tìm thấy run_id={run_id} trong bảng experiment_run", file=sys.stderr)
     sys.exit(2)
 
-run_id, status, dep_id, actual_host, app_name = row
+(
+    r_id, r_status, r_vps_id, r_dep_id,
+    d_id, d_status,
+    a_id, a_vps_id, a_name, a_host_port, a_curr_dep_id,
+    v_id, v_host, v_port, v_user
+) = row
 
-if status != 'running':
-    print(f"PRECHECK_FAILED: Run {run_id} đang ở trạng thái '{status}' (không phải 'running'). Tuyệt đối không thu hồi từ xa!", file=sys.stderr)
+# 1. Xác nhận run đang running
+if r_status != 'running':
+    print(f"PRECHECK_FAILED: Run {run_id} đang ở trạng thái '{r_status}' (không phải 'running'). Tuyệt đối không thu hồi từ xa!", file=sys.stderr)
     sys.exit(3)
 
-if dep_id is None:
+# 2. Xác nhận deployment tồn tại và đang running
+if r_dep_id is None or d_id is None:
     print(f"PRECHECK_FAILED: Run {run_id} chưa được gắn deployment_id. Không xác định được phiên deploy để thu hồi!", file=sys.stderr)
     sys.exit(4)
 
-if app_name != expected_app:
-    print(f"PRECHECK_FAILED: Run {run_id} thuộc app '{app_name}' (kỳ vọng '{expected_app}'). Dừng để tránh xoá nhầm app khác!", file=sys.stderr)
+if d_status != 'running':
+    print(f"PRECHECK_FAILED: Deployment {d_id} của run {run_id} đang ở trạng thái '{d_status}' (không phải 'running')!", file=sys.stderr)
     sys.exit(5)
 
-if not actual_host or actual_host != expected_host:
-    print(f"PRECHECK_FAILED: Run {run_id} gắn với VPS host '{actual_host}' (không khớp target '{expected_host}'). Dừng để tránh tác động nhầm máy chủ!", file=sys.stderr)
+# 3. Xác nhận deployment là app.current_deployment_id
+if a_curr_dep_id is None or a_curr_dep_id != d_id:
+    print(f"PRECHECK_FAILED: Deployment {d_id} không phải là current_deployment_id của app (app.current_deployment_id='{a_curr_dep_id}')!", file=sys.stderr)
     sys.exit(6)
 
-print(f"PRECHECK_PASSED: Run {run_id} hợp lệ (status='running', deployment={dep_id}, app='{app_name}', host='{actual_host}')")
+# 4. Xác nhận đúng app express-api
+if a_name != expected_app:
+    print(f"PRECHECK_FAILED: Run {run_id} thuộc app '{a_name}' (kỳ vọng '{expected_app}'). Dừng để tránh xoá nhầm app khác!", file=sys.stderr)
+    sys.exit(7)
+
+# 5. Xác nhận run.vps_id khớp VPS của app (app.vps_id)
+if r_vps_id is None or a_vps_id is None or r_vps_id != a_vps_id:
+    print(f"PRECHECK_FAILED: run.vps_id ({r_vps_id}) không khớp app.vps_id ({a_vps_id}) hoặc bị thiếu!", file=sys.stderr)
+    sys.exit(8)
+
+# 6. Xác nhận vps.host khớp biến đích
+if not v_host or v_host != target_host:
+    print(f"PRECHECK_FAILED: VPS host trong DB '{v_host}' không khớp biến đích '{target_host}'!", file=sys.stderr)
+    sys.exit(9)
+
+# 7. Xác nhận vps.port (SSH port) khớp biến đích
+if v_port is None or int(v_port) != target_ssh_port:
+    print(f"PRECHECK_FAILED: VPS SSH port trong DB '{v_port}' không khớp biến đích '{target_ssh_port}'!", file=sys.stderr)
+    sys.exit(10)
+
+# 8. Xác nhận vps.username khớp biến đích
+if not v_user or v_user != target_user:
+    print(f"PRECHECK_FAILED: VPS username trong DB '{v_user}' không khớp biến đích '{target_user}'!", file=sys.stderr)
+    sys.exit(11)
+
+# 9. Xác nhận app.host_port khớp biến đích
+if a_host_port is None or int(a_host_port) != target_app_port:
+    print(f"PRECHECK_FAILED: App host_port trong DB '{a_host_port}' không khớp biến đích '{target_app_port}'!", file=sys.stderr)
+    sys.exit(12)
+
+print(f"PRECHECK_PASSED: Run {run_id} và Deployment {d_id} running, app='{a_name}:{a_host_port}', vps='{v_user}@{v_host}:{v_port}' (vps_id={r_vps_id})")
 "@
 
 $env:PYTHONPATH = "$REPO_ROOT;$REPO_ROOT\experiments"
-$precheckResult = $precheckPy | & $PYTHON_BIN - $parsedRunId $DB_PATH $VPS_HOST
+$precheckResult = $precheckPy | & $PYTHON_BIN - $parsedRunId $DB_PATH $VPS_HOST $VPS_PORT $VPS_USER $APP_PORT
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Tiền điều kiện thu hồi thất bại (exit code $LASTEXITCODE)! Dừng toàn bộ quy trình, không gửi lệnh HTTP hoặc SSH từ xa."
     exit $LASTEXITCODE
