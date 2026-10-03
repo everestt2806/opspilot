@@ -87,6 +87,10 @@ class SshError(ExperimentError):
     """Ngoại lệ chung cho lỗi kết nối hoặc thực thi SSH."""
 
 
+class UnsupportedAppError(ExperimentError):
+    """Ném ra khi ứng dụng không được hỗ trợ trong orchestrator thí nghiệm pilot."""
+
+
 class UnsupportedAuthTypeError(SshError):
     """Ném ra khi kiểu xác thực SSH chưa được hỗ trợ (ví dụ: password với OpenSSH CLI)."""
 
@@ -776,6 +780,16 @@ def run_attempt(
             abort_run(conn, run_id, reason=reason, auto_commit=True)
             raise ExperimentError(reason)
 
+        # Chỉ hỗ trợ pilot cho ứng dụng express-api (không bật cho app khác)
+        if app_name != "express-api":
+            reason = f"unsupported_pilot_app: Ứng dụng '{app_name}' không hỗ trợ thí nghiệm pilot (chỉ hỗ trợ 'express-api')"
+            abort_run(conn, run_id, reason=reason, auto_commit=True)
+            raise UnsupportedAppError(reason)
+
+        deploy_env_vars: dict[str, str] | None = None
+        if allow_pilot_4500 and app_name == "express-api":
+            deploy_env_vars = {"ENABLE_FAULT_ENDPOINTS": "true"}
+
         d_adapter = deploy_adapter or DeployAdapter()
         try:
             deploy_res = d_adapter.deploy(
@@ -785,6 +799,7 @@ def run_attempt(
                 app_name=app_name,
                 source_path=source_path,
                 db_path=db_file,
+                env_vars=deploy_env_vars,
                 ssh_secret=resolved_ssh_secret,
                 cli_cmd=custom_deploy_cmd,
             )

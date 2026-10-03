@@ -1,7 +1,7 @@
 # Hồ sơ Preflight Thí nghiệm Pilot TK-S6 (1 Kịch bản 75 Phút)
 
 > ⚠️ **TRẠNG THÁI HIỆN TẠI: NOT_READY / NOT_RUN**
-> - **NOT_READY**: Đã phát hiện **02 khoảng trống runtime (runtime gaps)** cần khắc phục trong mã nguồn / quy trình trước khi có thể khởi chạy (xem chi tiết tại Mục 1.1, Mục 3.2 và Mục 4.2).
+> - **NOT_READY**: Đã khắc phục **Runtime Gap 1** (P2d-6a: runner tự động truyền `ENABLE_FAULT_ENDPOINTS=true` khi pilot `express-api` và từ chối app khác). Vẫn còn **Runtime Gap 2** (chưa đồng bộ cơ chế cấp credential từ `--ssh-key-file` sang `DeployAdapter` & `PollerAdapter`) cần giải quyết trước khi chạy live (xem chi tiết tại Mục 1.1, Mục 1.2 và Mục 4.2).
 > - **NOT_RUN**: Toàn bộ hạ tầng VPS thật và bài kiểm tra tải 75 phút được giữ nghiêm ngặt ở trạng thái `NOT_RUN` (không mở kết nối SSH, không phát tải thực tế, không đổi trạng thái).
 > - **Cam kết Git**: Chỉ lưu trữ cục bộ trên nhánh `feat/deploy-reachability`, tuyệt đối không tự ý push/PR/merge vào nhánh chính khi chưa có phê duyệt từ Tech Lead / Giảng viên hướng dẫn.
 
@@ -14,13 +14,13 @@
 | STT | Hạng mục kiểm tra | Tiêu chuẩn kỹ thuật bắt buộc | Lệnh / Bằng chứng xác minh cục bộ | Trạng thái |
 | :---: | :--- | :--- | :--- | :---: |
 | **1** | **Python Environment** | Python 3.12+ với đầy đủ virtualenv, pytest, ruff | `ml-service/.venv/Scripts/python.exe --version` (Python 3.12.10) | **PASS** |
-| **2** | **Bộ kiểm thử Harness** | 268/268 unit & integration tests experiments + collector pass | `pytest experiments/ collector/tests/` (268 passed in 20.25s) | **PASS** |
+| **2** | **Bộ kiểm thử Harness** | 272/272 unit & integration tests experiments + collector pass | `pytest experiments/ collector/tests/` (272 passed in 32.70s) | **PASS** |
 | **3** | **Cấu trúc Demo App** | `demo-apps/express-api` có `package.json`, `server.js`, `Dockerfile`, `public/` | Kiểm tra file và cú pháp Node: `node -c demo-apps/express-api/server.js` | **PASS** |
 | **4** | **Fault Routes Demo App** | Đầy đủ `/health` (miễn nhiễm), `/debug/*` (leak, cpu, error-rate, slow-db, latency, reset) | Soát mã nguồn `server.js` (lines 187, 275–319); bảo vệ bởi `ENABLE_FAULT_ENDPOINTS=true` | **PASS** |
 | **5** | **ML Service Local** | FastAPI service có các endpoint `/health`, `/status`, `/train`, `/reset`, `/ingest` | `pytest ml-service/tests/` (19/19 tests passed in 25.53s) | **PASS** |
 | **6** | **Counter Path Mapping** | Đồng bộ `/var/metrics/loadgen_counter.json` giữa loadgen container và collector | Soát `templates/docker-compose.template.yml` (lines 28, 33) & `LoadgenAdapter` mount | **PASS** |
 | **7** | **Đọc Counter Collector** | `read_loadgen_error_rate` phân tích cửa sổ trượt 60s đúng chuẩn | `pytest collector/tests/test_loadgen_error_rate.py` (9/9 passed) | **PASS** |
-| **8** | **CLI Security & Argv** | Loại bỏ hoàn toàn `--ssh-secret` khỏi argv; nhận `--ssh-key-file` an toàn; cờ `--allow-pilot-4500` | `pytest experiments/tests/test_runner_e2e.py` (22/22 passed, bắt lỗi `--ssh-secret`) | **PASS** |
+| **8** | **CLI Security & Argv** | Loại bỏ hoàn toàn `--ssh-secret` khỏi argv; nhận `--ssh-key-file` an toàn; cờ `--allow-pilot-4500` | `pytest experiments/tests/test_runner_e2e.py` (26/26 passed, bắt lỗi `--ssh-secret`) | **PASS** |
 | **9** | **SSH Transport Gate** | `SystemSshClient` dùng `-i`, `IdentitiesOnly=yes`, `StrictHostKeyChecking=yes`, `verify_connection()` | Unit test mức transport trong `test_runner_e2e.py` (chứng minh abort trước deploy) | **PASS** |
 | **10** | **Schema SQLite** | Hỗ trợ bảng `experiment_run`, `attempt_index 1..3`, `UNIQUE(scenario, repeat_index, attempt_index)`, khoá ngoại ON | `pytest experiments/tests/test_run_store.py` (43/43 passed) | **PASS** |
 | **11** | **VPS Specs & OS** | 02 VPS WiService (2 vCPU, 4GB RAM, 40GB SSD, Ubuntu 22.04 LTS / Debian 12) | Phụ thuộc hạ tầng nhà cung cấp WiService VN | **NOT_RUN** |
@@ -28,17 +28,17 @@
 | **13** | **Đồng bộ giờ NTP VPS** | Dịch vụ `systemd-timesyncd` đang active, độ lệch $\|offset\| \le 2000$ ms | Cần kết nối SSH đo clock skew thực tế qua `measure_clock_offset_ms` | **NOT_RUN** |
 | **14** | **Cổng mạng & UFW VPS** | Mở cổng SSH (22 hoặc custom) và dải cổng demo app (30000–30999) | Cần kiểm tra firewall VPS qua lệnh `ufw status` trên máy chủ | **NOT_RUN** |
 | **15** | **Live Pilot 75 phút** | Chạy toàn bộ chu trình Pha A–D (4500s) với tải 5 req/s trên VPS | Giữ nguyên trạng thái an toàn theo cam kết đồ án | **NOT_RUN** |
-| **16** | **Runtime Gap 1: Env App** | Runner chưa truyền `ENABLE_FAULT_ENDPOINTS=true` khi gọi `DeployAdapter.deploy()` | Demo app trên VPS sẽ tắt `/debug/*` (trả về 404), khiến Pha C thất bại | **NOT_READY** |
+| **16** | **Runtime Gap 1: Env App** | Runner truyền `ENABLE_FAULT_ENDPOINTS=true` khi pilot tường minh cho `express-api`, từ chối app khác | Đã giải quyết (P2d-6a): `experiments/run_experiment.py` truyền `env_vars={"ENABLE_FAULT_ENDPOINTS": "true"}` qua `DeployAdapter.deploy()`, kiểm thử 26/26 tests e2e pass | **PASS** |
 | **17** | **Runtime Gap 2: Credential** | Cờ `--ssh-key-file` không tự cấp credential cho `DeployAdapter` & `PollerAdapter` | Thiếu `OPSPILOT_SSH_SECRET` hoặc bản ghi mã hoá trong DB sẽ gây abort ở Bước 3 | **NOT_READY** |
 
 ### 1.2. Chi tiết 02 Khoảng trống Runtime (Runtime Gaps)
 
-1. **Runtime Gap 1 — Biến môi trường `ENABLE_FAULT_ENDPOINTS` khi deploy**:
-   - *Thực trạng*: Khi `run_experiment.py` thực hiện Bước 3 gọi `deploy_adapter.deploy()`, adapter này kích hoạt `deploy-cli.ts` để sinh file `.env` và `docker-compose.yml` trên VPS. Hiện tại runner không truyền biến môi trường `ENABLE_FAULT_ENDPOINTS=true` vào cấu hình triển khai của ứng dụng.
+1. **Runtime Gap 1 — Biến môi trường `ENABLE_FAULT_ENDPOINTS` khi deploy (ĐÃ KHẮC PHỤC - P2d-6a)**:
+   - *Thực trạng trước sửa đổi*: Khi `run_experiment.py` thực hiện Bước 3 gọi `deploy_adapter.deploy()`, adapter này kích hoạt `deploy-cli.ts` để sinh file `.env` và `docker-compose.yml` trên VPS. Trước đây runner không truyền biến môi trường `ENABLE_FAULT_ENDPOINTS=true` vào cấu hình triển khai của ứng dụng.
    - *Hậu quả*: Mã nguồn [`demo-apps/express-api/server.js`](file:///D:/Developing/DuAnCNTT/demo-apps/express-api/server.js) kiểm tra `if (process.env.ENABLE_FAULT_ENDPOINTS !== 'true') return res.status(404)`. Do thiếu biến này, toàn bộ các request tiêm lỗi `/debug/*` trong Pha C sẽ nhận mã HTTP 404, khiến thí nghiệm không thể kích hoạt fault theo đúng kế hoạch.
-   - *Hành động khắc phục trước khi chạy*: Runner cần truyền `ENABLE_FAULT_ENDPOINTS=true` thông qua biến môi trường `OPSPILOT_APP_ENV_JSON` của `DeployAdapter`.
+   - *Giải pháp đã triển khai (P2d-6a)*: Khi chạy pilot tường minh (`allow_pilot_4500=True`) cho `express-api`, `run_attempt` tự động truyền `env_vars={"ENABLE_FAULT_ENDPOINTS": "true"}` vào `DeployAdapter.deploy()`. `DeployAdapter` truyền biến qua `OPSPILOT_APP_ENV_JSON` môi trường (không đưa vào `argv`), và khử secret khỏi log/error. Với các ứng dụng khác (`app_name != "express-api"`), runner dừng trước deploy với lỗi `UnsupportedAppError` (`unsupported_pilot_app`). Nếu chưa bật cờ pilot tường minh, mặc định dừng trước deploy với lỗi `pilot_mode_required`.
 
-2. **Runtime Gap 2 — Cơ chế cấp phát Credential giữa Runner, DeployAdapter và PollerAdapter**:
+2. **Runtime Gap 2 — Cơ chế cấp phát Credential giữa Runner, DeployAdapter và PollerAdapter (VẪN CẦN GIẢI QUYẾT - NOT_READY)**:
    - *Thực trạng*: Tham số `--ssh-key-file` trên CLI của `run_experiment.py` chỉ được nạp cho `SystemSshClient` của chính runner (dùng để đo độ lệch đồng hồ, điều khiển container loadgen và gọi HTTP reset). Tuy nhiên, `DeployAdapter` (tiến trình Electron `deploy-cli.ts`) và `PollerAdapter` (tiến trình Electron `headless-poller.ts`) hoạt động độc lập và lấy SSH secret từ biến môi trường `OPSPILOT_SSH_SECRET` hoặc giải mã bản ghi VPS trong SQLite DB (`loadSecret(database, cipher, vpsId)`).
    - *Hậu quả*: Việc truyền `--ssh-key-file` vào runner không tự động chuyển tiếp private key thành credential cho deploy hay poller. Nếu biến môi trường `OPSPILOT_SSH_SECRET` không được thiết lập đồng thời, `deploy-cli.ts` và `headless-poller.ts` sẽ lập tức báo lỗi thiếu credential và attempt bị abort ngay tại Bước 3.
    - *Hành động khắc phục trước khi chạy*: Cần đồng bộ nạp private key vào biến môi trường `OPSPILOT_SSH_SECRET` hoặc tạo bản ghi VPS hợp lệ đã mã hoá trong SQLite database.
@@ -182,13 +182,13 @@ Thư mục: [`demo-apps/express-api/`](file:///D:/Developing/DuAnCNTT/demo-apps/
 - `Dockerfile`: Multi-stage lightweight Node.js runtime.
 - `public/`: Giao diện web tĩnh HTML/JS kiểm tra trực quan.
 
-### 4.2. Yêu cầu Biến Môi trường & Khắc phục Runtime Gap 1
+### 4.2. Yêu cầu Biến Môi trường & Khắc phục Runtime Gap 1 (Đã hoàn thành trong P2d-6a)
 Để kích hoạt các route `/debug/*`, ứng dụng bắt buộc phải có biến môi trường:
 ```bash
 ENABLE_FAULT_ENDPOINTS=true
 PORT=3000
 ```
-Trước khi chạy pilot thực tế, runner cần bảo đảm truyền `ENABLE_FAULT_ENDPOINTS=true` vào cấu hình triển khai của ứng dụng.
+Trong P2d-6a, runner `experiments/run_experiment.py` đã tự động cấu hình truyền `env_vars={"ENABLE_FAULT_ENDPOINTS": "true"}` qua `DeployAdapter.deploy()` khi chạy pilot tường minh cho `express-api`. Biến môi trường được truyền an toàn qua biến tiến trình `OPSPILOT_APP_ENV_JSON` tới CLI TypeScript, không lộ ra dòng lệnh (`argv`), và tự động bị từ chối nếu deploy ứng dụng khác (`UnsupportedAppError`). Mặc định khi chưa bật cờ pilot tường minh (`allow_pilot_4500=False`), runner huỷ run trước deploy (`pilot_mode_required`).
 
 ### 4.3. Bảng Phân tích 5 Kịch bản Lỗi & Cảnh báo Rủi ro OOM
 
@@ -691,7 +691,7 @@ Write-Host ">>> Quy trình thu hồi khẩn cấp hoàn tất an toàn." -Foregr
 
 1. **Trạng thái Pilot**: Duy trì nghiêm ngặt **`NOT_READY / NOT_RUN`**.
 2. **Điều kiện tiên quyết để chuyển sang `READY`**:
-   - Khắc phục **Runtime Gap 1**: Cập nhật runner truyền `ENABLE_FAULT_ENDPOINTS=true` khi deploy app qua `DeployAdapter`.
-   - Khắc phục **Runtime Gap 2**: Đồng bộ cơ chế cấp phát credential cho `DeployAdapter` và `PollerAdapter`.
+   - Khắc phục **Runtime Gap 1**: **ĐÃ HOÀN THÀNH** (P2d-6a: runner tự động truyền `ENABLE_FAULT_ENDPOINTS=true` khi pilot `express-api` và từ chối app khác).
+   - Khắc phục **Runtime Gap 2**: **VẪN CẦN GIẢI QUYẾT** (Đồng bộ cơ chế cấp phát credential từ `--ssh-key-file` cho `DeployAdapter` và `PollerAdapter`).
    - Xác minh fingerprint khóa máy chủ VPS qua kênh tin cậy ngoài luồng và lưu vào `known_hosts` theo quy trình 1 lần quét an toàn.
    - Chọn kịch bản an toàn `cpu_spike` hoặc `latency_creep` cho lượt chạy đầu tiên (tránh kịch bản `memory_leak` vượt trần 512 MB gây OOM).

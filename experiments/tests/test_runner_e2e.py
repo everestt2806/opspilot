@@ -49,6 +49,8 @@ from experiments.protocol import (
     PHASE_C_S,
 )
 from experiments.run_experiment import (
+    ExperimentError,
+    UnsupportedAppError,
     measure_clock_offset_ms,
     run_attempt,
     run_experiment,
@@ -58,6 +60,7 @@ from experiments.run_store import (
     abort_run,
     attach_deployment_id,
     normalize_ts,
+    start_run,
     to_epoch_seconds,
 )
 
@@ -195,6 +198,8 @@ class MockDeployAdapter(DeployAdapter):
         self.failure_attempts = failure_attempts or set()
         self.call_count = 0
         self.deployed_ids: list[int] = []
+        self.deployed_env_vars: list[Any] = []
+        self.deployed_kwargs: list[dict[str, Any]] = []
 
     def deploy(
         self,
@@ -208,6 +213,8 @@ class MockDeployAdapter(DeployAdapter):
         self.call_count += 1
         dep_id = 100 + self.call_count
         self.deployed_ids.append(dep_id)
+        self.deployed_env_vars.append(kwargs.get("env_vars"))
+        self.deployed_kwargs.append(dict(kwargs))
 
         cur = conn.cursor()
         cur.execute(
@@ -1912,4 +1919,182 @@ def test_ssh_secret_never_persisted_in_argv_log_or_db(
             if val is not None:
                 assert secret_str not in str(val)
 
+    conn.close()
+
+
+def test_runner_pilot_express_api_passes_fault_endpoints_env(
+    tmp_path: Path,
+) -> None:
+    db_file = tmp_path / "test.db"
+    _init_test_db(db_file)
+
+    clock = SimulatedClock()
+    deploy_adapter = MockDeployAdapter()
+    ml_client = MockMlClient()
+    poller_adapter = MockPollerAdapter(clock=clock, sample_count=450, time_scale=0.001)
+    loadgen_adapter = MockLoadgenAdapter()
+
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
+        deploy_adapter=deploy_adapter,
+        ml_client=ml_client,
+        poller_adapter=poller_adapter,
+        loadgen_adapter=loadgen_adapter,
+        apply_fault_fn=lambda *a, **kw: None,
+        reset_fault_fn=lambda url: True,
+        clock_fn=clock.now,
+        sleeper_fn=clock.sleep,
+        time_scale=0.001,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+    assert res.status == "completed"
+    assert deploy_adapter.call_count == 1
+    assert deploy_adapter.deployed_env_vars[-1] == {"ENABLE_FAULT_ENDPOINTS": "true"}
+
+
+def test_runner_pilot_default_disabled_aborts_before_deploy(
+    tmp_path: Path,
+) -> None:
+    db_file = tmp_path / "test.db"
+    _init_test_db(db_file)
+
+    deploy_adapter = MockDeployAdapter()
+
+    # 1. Với raise_on_abort=False (trả về RunResult status='aborted')
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="express-api",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
+        deploy_adapter=deploy_adapter,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=False,
+        raise_on_abort=False,
+    )
+    assert res.status == "aborted"
+    assert "pilot_mode_required" in res.abort_reason
+    assert deploy_adapter.call_count == 0
+
+    # 2. Với raise_on_abort=True (ném ngoại lệ ExperimentError)
+    with pytest.raises(ExperimentError, match="pilot_mode_required"):
+        run_attempt(
+            scenario="memory_leak",
+            repeat_index=1,
+            vps_id=1,
+            db_path=db_file,
+            app_name="express-api",
+            source_path=tmp_path / "src",
+            app_url="http://127.0.0.1:3000",
+            ssh_client=MockSshClient(),
+            deploy_adapter=deploy_adapter,
+            measure_clock_fn=lambda *a, **kw: 0,
+            allow_pilot_4500=False,
+            raise_on_abort=True,
+        )
+    assert deploy_adapter.call_count == 0
+
+
+def test_runner_unsupported_app_aborts_before_deploy(
+    tmp_path: Path,
+) -> None:
+    db_file = tmp_path / "test.db"
+    _init_test_db(db_file)
+
+    deploy_adapter = MockDeployAdapter()
+
+    # 1. Với raise_on_abort=False
+    res = run_attempt(
+        scenario="memory_leak",
+        repeat_index=1,
+        vps_id=1,
+        db_path=db_file,
+        app_name="next-blog",
+        source_path=tmp_path / "src",
+        app_url="http://127.0.0.1:3000",
+        ssh_client=MockSshClient(),
+        deploy_adapter=deploy_adapter,
+        measure_clock_fn=lambda *a, **kw: 0,
+        allow_pilot_4500=True,
+        raise_on_abort=False,
+    )
+    assert res.status == "aborted"
+    assert "unsupported_pilot_app" in res.abort_reason
+    assert "next-blog" in res.abort_reason
+    assert deploy_adapter.call_count == 0
+
+    # 2. Với raise_on_abort=True
+    with pytest.raises(UnsupportedAppError, match="unsupported_pilot_app"):
+        run_attempt(
+            scenario="memory_leak",
+            repeat_index=1,
+            vps_id=1,
+            db_path=db_file,
+            app_name="vite-spa",
+            source_path=tmp_path / "src",
+            app_url="http://127.0.0.1:3000",
+            ssh_client=MockSshClient(),
+            deploy_adapter=deploy_adapter,
+            measure_clock_fn=lambda *a, **kw: 0,
+            allow_pilot_4500=True,
+            raise_on_abort=True,
+        )
+    assert deploy_adapter.call_count == 0
+
+
+def test_runner_deploy_adapter_does_not_leak_fault_env_in_argv(
+    tmp_path: Path,
+) -> None:
+    db_file = tmp_path / "test.db"
+    _init_test_db(db_file)
+    conn = sqlite3.connect(db_file)
+    conn.execute(
+        "INSERT INTO deployment (id, app_id, status) VALUES (55, 1, 'running')"
+    )
+    conn.commit()
+
+    run_id = start_run(conn, "memory_leak", 1, deployment_id=None, vps_id=1)
+
+    mock_script = (
+        "import sys, os, json\n"
+        "raw_env = os.environ.get('OPSPILOT_APP_ENV_JSON')\n"
+        "assert raw_env is not None, 'OPSPILOT_APP_ENV_JSON must be set in env'\n"
+        "env_data = json.loads(raw_env)\n"
+        "assert env_data.get('ENABLE_FAULT_ENDPOINTS') == 'true'\n"
+        "for arg in sys.argv:\n"
+        "    assert 'ENABLE_FAULT_ENDPOINTS' not in arg\n"
+        "    assert '--env-json' not in arg\n"
+        "print(json.dumps({'event': 'assigned', 'deployment_id': 55}), flush=True)\n"
+        "print(json.dumps({'event': 'finished', 'deployment_id': 55, 'status': 'running'}), flush=True)\n"
+        "sys.exit(0)\n"
+    )
+
+    adapter = DeployAdapter(
+        default_cli_cmd=[sys.executable, "-c", mock_script],
+        default_timeout_s=5.0,
+    )
+
+    res = adapter.deploy(
+        conn=conn,
+        run_id=run_id,
+        vps_id=1,
+        app_name="express-api",
+        source_path=tmp_path,
+        db_path=db_file,
+        env_vars={"ENABLE_FAULT_ENDPOINTS": "true"},
+    )
+    assert res.deployment_id == 55
+    assert res.status == "running"
     conn.close()
