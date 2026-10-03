@@ -77,31 +77,63 @@ Khi nhận lệnh khởi chạy pilot thực tế từ Tech Lead, người thự
 
 ## 3. SSH Key, Known Hosts & Cơ chế Credential Dùng chung
 
-### 3.1. Cấu hình Khóa SSH & Xác thực Host Key Bắt buộc (Quy trình 1 lần Quét An toàn)
+### 3.1. Cấu hình Khóa SSH & Xác thực Host Key Bắt buộc (Quy trình Quét Riêng ed25519)
 - **Định dạng khóa**: Khóa riêng SSH OpenSSH (Ed25519: `id_ed25519` hoặc RSA 4096: `id_rsa`).
 - **Passphrase**: Khóa không cài đặt passphrase (hoặc được load sẵn vào `ssh-agent`) để hỗ trợ runner chạy tự động không tương tác.
 - **Phân quyền tập tin**: Trên hệ thống POSIX, file khóa riêng phải có quyền `0600` (`chmod 600 ~/.ssh/id_rsa`). Trên Windows, chỉ cho phép tài khoản người dùng hiện tại có quyền đọc (`icacls`).
-- **Quy trình Xác minh Fingerprint Host Key qua Kênh Tin cậy**:
+- **Quy trình Quét Riêng ed25519, Đối soát Fingerprint & Ghi Nhận An toàn**:
   - `StrictHostKeyChecking=yes` luôn được bật; runner không bao giờ chuyển hướng `UserKnownHostsFile` về `/dev/null`.
-  - **Chống MITM bằng cơ chế 1 lần quét**: Không được chạy `ssh-keyscan` lần 1 để kiểm tra rồi chạy lại `ssh-keyscan` lần 2 ghi vào file (vì kết nối lần 2 có thể bị tấn công xen giữa). Phải lưu kết quả quét duy nhất vào file tạm, đối soát fingerprint, rồi ghi chính file đó vào `known_hosts`:
+  - **Chống MITM bằng cơ chế 1 lần quét riêng biệt**: Quét riêng loại khóa `ed25519` bằng cờ `-t ed25519`, lưu kết quả duy nhất vào tệp tạm thời, kiểm tra tệp quét có dữ liệu, trích xuất chuỗi SHA256 fingerprint và đối chiếu trực tiếp với fingerprint chính thức được cấp từ WiService console ngoài luồng. **Chỉ khi trùng khớp 100%, mới được ghi nhận chính khóa ed25519 này vào `known_hosts`**:
+
   ```powershell
   $VPS_HOST = "<vps_ip>"
   $VPS_PORT = 22
-  $tempScannedKey = "$HOME\.ssh\temp_scanned_key.pub"
+  $tempScannedKey = "$HOME\.ssh\temp_scanned_key_ed25519.pub"
+  $EXPECTED_FINGERPRINT = "<SHA256_fingerprint_lay_tu_wiservice_console>"
 
-  # Bước 1: Quét đúng MỘT lần và lưu vào tệp tạm thời
-  & ssh-keyscan -p $VPS_PORT $VPS_HOST | Out-File -FilePath $tempScannedKey -Encoding ascii
+  # Bước 0: Đảm bảo thư mục ~/.ssh tồn tại
+  if (-not (Test-Path "$HOME\.ssh")) {
+      New-Item -ItemType Directory -Path "$HOME\.ssh" -Force | Out-Null
+  }
 
-  # Bước 2: Trích xuất fingerprint từ CHÍNH tệp tạm này để đối chiếu
-  & ssh-keygen -lf $tempScannedKey
-  # Ví dụ output: 256 SHA256:abc123xyz... root@vps (ED25519)
+  # Bước 1: Quét RIÊNG khóa ed25519 đúng MỘT lần và lưu vào tệp tạm thời
+  & ssh-keyscan -t ed25519 -p $VPS_PORT $VPS_HOST | Out-File -FilePath $tempScannedKey -Encoding ascii
+  if ($LASTEXITCODE -ne 0 -or -not (Test-Path $tempScannedKey) -or (Get-Item $tempScannedKey).Length -eq 0) {
+      Write-Error "ssh-keyscan thất bại hoặc không nhận được khóa ed25519 từ máy chủ ${VPS_HOST}:${VPS_PORT}!"
+      Remove-Item $tempScannedKey -ErrorAction SilentlyContinue
+      exit 1
+  }
 
-  # Bước 3: Người vận hành đối chiếu fingerprint hiển thị với fingerprint chính thức từ WiService console:
+  # Bước 2: Kiểm tra kết quả quét chứa định dạng ssh-ed25519 và trích xuất chuỗi fingerprint từ CHÍNH tệp tạm này
+  $keyLines = Get-Content $tempScannedKey | Where-Object { $_ -match 'ssh-ed25519' }
+  if (-not $keyLines) {
+      Write-Error "Kết quả quét không chứa bản ghi khóa ssh-ed25519 hợp lệ từ máy chủ ${VPS_HOST}:${VPS_PORT}!"
+      Remove-Item $tempScannedKey -ErrorAction SilentlyContinue
+      exit 1
+  }
+
+  $fpOutput = & ssh-keygen -lf $tempScannedKey
+  $fpMatch = [regex]::Match($fpOutput, 'SHA256:[A-Za-z0-9+/=]+')
+  if (-not $fpMatch.Success) {
+      Write-Error "Không thể trích xuất chuỗi SHA256 fingerprint từ tệp khóa tạm: $fpOutput"
+      Remove-Item $tempScannedKey -ErrorAction SilentlyContinue
+      exit 1
+  }
+  $ACTUAL_FINGERPRINT = $fpMatch.Value
+  Write-Host "Fingerprint ed25519 quét được: $ACTUAL_FINGERPRINT"
+
+  # Bước 3: Đối chiếu với fingerprint chính thức được cấp qua kênh tin cậy ngoài luồng
   #         (Lệnh trên VPS console: ssh-keygen -l -f /etc/ssh/ssh_host_ed25519_key.pub)
-  #         CHỈ KHI TRÙNG KHỚP 100%, mới ghi CHÍNH tệp tạm này vào known_hosts:
-  Get-Content $tempScannedKey | Out-File -Append -Encoding ascii "$HOME\.ssh\known_hosts"
+  if ($ACTUAL_FINGERPRINT -ne $EXPECTED_FINGERPRINT) {
+      Write-Error "CẢNH BÁO NGUY HIỂM: Fingerprint KHÔNG KHỚP! Kỳ vọng: $EXPECTED_FINGERPRINT, thực tế: $ACTUAL_FINGERPRINT. Nguy cơ Man-In-The-Middle! Hủy bỏ quy trình."
+      Remove-Item $tempScannedKey -ErrorAction SilentlyContinue
+      exit 1
+  }
+
+  # Bước 4: CHỈ KHI TRÙNG KHỚP 100%, mới ghi CHÍNH khóa ed25519 đã xác minh này vào known_hosts:
+  $keyLines | Out-File -Append -Encoding ascii "$HOME\.ssh\known_hosts"
   Remove-Item $tempScannedKey -ErrorAction SilentlyContinue
-  Write-Host "Đã xác thực và ghi nhận host key vào known_hosts thành công." -ForegroundColor Green
+  Write-Host "Đã xác thực và ghi nhận chính xác host key ed25519 vào known_hosts thành công." -ForegroundColor Green
   ```
 
 ### 3.2. Cơ chế Credential Dùng chung & Giải pháp Cầu nối
@@ -362,53 +394,139 @@ Khi runner gặp ngoại lệ hoặc bị ngắt (`Ctrl+C`), khối `finally` s�
 3. Gọi `poller_handle.stop()` dừng tiến trình Headless Poller.
 4. Cập nhật `status='aborted'` và lưu lý do huỷ vào SQLite.
 
-### 8.2. Quy trình Thu hồi Khẩn cấp Thủ công trên VPS bằng PowerShell (Manual Teardown)
-Nếu máy local bị ngắt đột ngột, người vận hành thực thi kịch bản PowerShell dưới đây bằng cùng thông tin kết nối và khóa đã xác minh; **chỉ thao tác đúng tài nguyên của pilot**:
+### 8.2. Quy trình Thu hồi Khẩn cấp Thủ công Độc lập trên VPS bằng PowerShell (Standalone Manual Teardown)
+Nếu máy local bị ngắt đột ngột hoặc phiên chạy gặp sự cố nghiêm trọng cần dừng ngay lập tức, người vận hành thực thi kịch bản PowerShell dưới đây. Kịch bản này được thiết kế **hoàn toàn độc lập** (không phụ thuộc vào biến môi trường hay state từ các bước trước), **chỉ thao tác đúng tài nguyên của pilot**:
+- **Tự động xác định đường dẫn SQLite DB thật** (ưu tiên Electron `userData`, fallback đường dẫn chuẩn).
+- **Kiểm tra tính hợp lệ của `$RUN_ID`** (bắt buộc số nguyên dương và xác minh tồn tại trong bảng `experiment_run`).
+- **Kiểm tra exit code (`$LASTEXITCODE`) sau từng lệnh SSH**: nếu thao tác dừng container loadgen hoặc dừng app compose thất bại, **lập tức dừng kịch bản** để người vận hành xử lý trực tiếp, không tự ý đánh dấu aborted trong DB.
+- **Cập nhật run an toàn qua `abort_run()`**: ghi nhận đồng thời `status = 'aborted'`, `abort_reason = 'manual_emergency_teardown'`, và `run_end_ts` chuẩn ISO 8601 UTC.
 
 ```powershell
+# ==============================================================================
+# QUY TRÌNH THU HỒI KHẨN CẤP THỦ CÔNG ĐỘC LẬP (STANDALONE MANUAL TEARDOWN)
+# ==============================================================================
+
 # Cấu hình chính xác đối tượng VPS và phiên pilot cần thu hồi
 $VPS_HOST = "<vps_ip>"
 $VPS_PORT = 22
 $VPS_USER = "root"
 $SSH_KEY_FILE = "$HOME\.ssh\opspilot_vps_key"
 $APP_PORT = 30001
-$RUN_ID = "<run_id_can_thu_hoi>"
+$RUN_ID = "<run_id_can_thu_hoi>"   # Thay bằng RUN_ID cụ thể (số nguyên dương)
 
-Write-Host ">>> Bắt đầu quy trình thu hồi khẩn cấp cho pilot run_id=$RUN_ID trên ${VPS_HOST}:${VPS_PORT}..." -ForegroundColor Yellow
+Write-Host ">>> Bắt đầu quy trình thu hồi khẩn cấp độc lập cho run_id=$RUN_ID trên ${VPS_HOST}:${VPS_PORT}..." -ForegroundColor Yellow
 
-# 1. Tắt hiệu ứng fault trên app demo qua HTTP (nếu ứng dụng còn phản hồi)
-try {
-    Invoke-RestMethod -Method Post -Uri "http://${VPS_HOST}:${APP_PORT}/debug/reset" -TimeoutSec 5
-    Write-Host "1/4: Đã gửi lệnh reset fault tới app demo thành công." -ForegroundColor Green
-} catch {
-    Write-Warning "1/4: Không thể gọi /debug/reset (app có thể đã dừng): $_"
+# --- BƯỚC 1: Xác định đường dẫn SQLite DB thật từ Electron userData ---
+$DB_PATH = $null
+if ($env:OPSPILOT_USER_DATA_DIR -and (Test-Path "$env:OPSPILOT_USER_DATA_DIR\opspilot.db")) {
+    $DB_PATH = "$env:OPSPILOT_USER_DATA_DIR\opspilot.db"
+} elseif (Test-Path "$env:APPDATA\opspilot\opspilot.db") {
+    $DB_PATH = "$env:APPDATA\opspilot\opspilot.db"
+} elseif (Test-Path "app\opspilot.db") {
+    $DB_PATH = "app\opspilot.db"
 }
 
-# 2. Dừng và xoá đúng container loadgen thực tế của pilot (opspilot-loadgen-express-api)
-$sshBaseArgs = @("-i", $SSH_KEY_FILE, "-p", $VPS_PORT, "-o", "StrictHostKeyChecking=yes", "${VPS_USER}@${VPS_HOST}")
-Write-Host "2/4: Đang dừng container loadgen opspilot-loadgen-express-api..."
-& ssh @sshBaseArgs "docker stop opspilot-loadgen-express-api && docker rm opspilot-loadgen-express-api"
+if (-not $DB_PATH -or -not (Test-Path $DB_PATH)) {
+    Write-Error "Không thể xác định cơ sở dữ liệu OpsPilot hợp lệ (đã kiểm tra OPSPILOT_USER_DATA_DIR, APPDATA\opspilot\opspilot.db, app\opspilot.db)!"
+    exit 1
+}
+Write-Host "1/6: Đã xác định cơ sở dữ liệu: $DB_PATH" -ForegroundColor Green
 
-# 3. Dừng app & collector nhưng BẢO LƯU VOLUME (không dùng cờ -v để giữ nguyên dữ liệu metrics và SQLite)
-Write-Host "3/4: Đang dừng compose service của app demo (bảo lưu volume)..."
-& ssh @sshBaseArgs "cd /opt/opspilot/express-api && docker compose down"
+# --- BƯỚC 2: Kiểm tra tính hợp lệ của $RUN_ID và sự tồn tại trong DB ---
+$parsedRunId = 0
+if (-not [int]::TryParse($RUN_ID, [ref]$parsedRunId) -or $parsedRunId -le 0) {
+    Write-Error "RUN_ID không hợp lệ: '$RUN_ID'. RUN_ID bắt buộc phải là một số nguyên dương cụ thể!"
+    exit 1
+}
 
-# 4. Cập nhật trạng thái aborted cho đúng bản ghi $RUN_ID trong bảng experiment_run
-Write-Host "4/4: Đang cập nhật trạng thái aborted cho run_id=$RUN_ID trong cơ sở dữ liệu..."
-$abortPy = @"
-import sqlite3
-conn = sqlite3.connect(r'$DB_PATH')
+$checkRunPy = @"
+import sys, sqlite3
+run_id, db_path = int(sys.argv[1]), sys.argv[2]
+conn = sqlite3.connect(db_path)
 cur = conn.cursor()
-cur.execute(
-    "UPDATE experiment_run SET status = 'aborted', abort_reason = 'manual_emergency_teardown' WHERE id = ? AND status = 'running'",
-    (${RUN_ID},)
-)
-conn.commit()
-print(f'Đã cập nhật aborted cho run_id=${RUN_ID}, số dòng cập nhật: {cur.rowcount}')
+cur.execute("SELECT id, status FROM experiment_run WHERE id = ?", (run_id,))
+row = cur.fetchone()
 conn.close()
+if not row:
+    print(f"NOT_FOUND: Không tìm thấy run_id={run_id} trong bảng experiment_run")
+    sys.exit(2)
+print(f"FOUND:{row[1]}")
 "@
-$abortPy | & ".\ml-service\.venv\Scripts\python.exe" -
+$runCheckResult = $checkRunPy | & ".\ml-service\.venv\Scripts\python.exe" - $parsedRunId $DB_PATH
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Kiểm tra run trong DB thất bại: $runCheckResult"
+    exit 1
+}
+$currentStatus = ($runCheckResult -split ":")[1].Trim()
+Write-Host "2/6: Đã xác minh run_id=$parsedRunId trong DB (trạng thái hiện tại: '$currentStatus')." -ForegroundColor Green
 
+# --- BƯỚC 3: Tắt hiệu ứng fault trên app demo qua HTTP (best-effort) ---
+try {
+    Invoke-RestMethod -Method Post -Uri "http://${VPS_HOST}:${APP_PORT}/debug/reset" -TimeoutSec 5
+    Write-Host "3/6: Đã gửi lệnh reset fault tới app demo thành công." -ForegroundColor Green
+} catch {
+    Write-Warning "3/6: Không thể gọi /debug/reset (app có thể đã dừng): $_"
+}
+
+# --- BƯỚC 4: Dừng & xoá container loadgen (kiểm tra exit code và dừng nếu lỗi) ---
+if (-not (Test-Path $SSH_KEY_FILE)) {
+    Write-Error "Không tìm thấy file khóa SSH tại: $SSH_KEY_FILE"
+    exit 1
+}
+$sshBaseArgs = @("-i", $SSH_KEY_FILE, "-p", $VPS_PORT, "-o", "StrictHostKeyChecking=yes", "${VPS_USER}@${VPS_HOST}")
+
+Write-Host "4/6: Đang dừng container loadgen opspilot-loadgen-express-api..."
+& ssh @sshBaseArgs "docker stop opspilot-loadgen-express-api && docker rm opspilot-loadgen-express-api"
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Lỗi SSH: Dừng/xoá container loadgen opspilot-loadgen-express-api thất bại (exit code $LASTEXITCODE). Dừng quy trình thu hồi khẩn cấp!"
+    exit $LASTEXITCODE
+}
+Write-Host "4/6: Dừng và xoá container loadgen thành công." -ForegroundColor Green
+
+# --- BƯỚC 5: Dừng app demo bảo lưu volume (kiểm tra exit code và dừng nếu lỗi) ---
+Write-Host "5/6: Đang dừng compose service của app demo (bảo lưu volume)..."
+& ssh @sshBaseArgs "cd /opt/opspilot/express-api && docker compose down"
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Lỗi SSH: Dừng app demo docker compose thất bại (exit code $LASTEXITCODE). Dừng quy trình thu hồi khẩn cấp!"
+    exit $LASTEXITCODE
+}
+Write-Host "5/6: Dừng compose service thành công (đã bảo lưu volume)." -ForegroundColor Green
+
+# --- BƯỚC 6: Cập nhật abort_run() kèm run_end_ts chuẩn ISO UTC ---
+Write-Host "6/6: Đang cập nhật trạng thái aborted kèm run_end_ts cho run_id=$parsedRunId qua abort_run()..."
+$abortPy = @"
+import sys
+import sqlite3
+from datetime import datetime, timezone
+from experiments.run_store import abort_run, InvalidRunStateError, RunNotFoundError
+
+sys.stdout.reconfigure(encoding='utf-8')
+run_id = int(sys.argv[1])
+db_path = sys.argv[2]
+conn = sqlite3.connect(db_path)
+try:
+    abort_run(
+        conn=conn,
+        run_id=run_id,
+        reason='manual_emergency_teardown',
+        run_end_ts=datetime.now(timezone.utc),
+        auto_commit=True,
+    )
+    print(f"ABORT_SUCCESS: Đã cập nhật aborted và run_end_ts cho run_id={run_id}")
+except InvalidRunStateError as e:
+    print(f"ALREADY_TERMINATED: Run {run_id} không ở trạng thái running ({e})")
+except Exception as e:
+    print(f"ABORT_ERROR: Lỗi cập nhật run: {e}")
+    sys.exit(1)
+finally:
+    conn.close()
+"@
+$abortResult = $abortPy | & ".\ml-service\.venv\Scripts\python.exe" - $parsedRunId $DB_PATH
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Cập nhật abort_run() trong cơ sở dữ liệu thất bại: $abortResult"
+    exit $LASTEXITCODE
+}
+Write-Host "$abortResult" -ForegroundColor Green
 Write-Host ">>> Quy trình thu hồi khẩn cấp hoàn tất an toàn." -ForegroundColor Green
 ```
 
