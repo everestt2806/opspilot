@@ -104,25 +104,40 @@ Khi nhận lệnh khởi chạy pilot thực tế từ Tech Lead, người thự
       exit 1
   }
 
-  # Bước 2: Kiểm tra kết quả quét chứa định dạng ssh-ed25519 và trích xuất chuỗi fingerprint từ CHÍNH tệp tạm này
-  $keyLines = Get-Content $tempScannedKey | Where-Object { $_ -match 'ssh-ed25519' }
-  if (-not $keyLines) {
-      Write-Error "Kết quả quét không chứa bản ghi khóa ssh-ed25519 hợp lệ từ máy chủ ${VPS_HOST}:${VPS_PORT}!"
+  # Bước 2: Chỉ chấp nhận ĐÚNG MỘT dòng ed25519 cho host/port đã chọn
+  $expectedHostPrefix = if ([int]$VPS_PORT -eq 22) { "$VPS_HOST" } else { "[$VPS_HOST]:$VPS_PORT" }
+  $escPrefix = [regex]::Escape($expectedHostPrefix)
+  $escHost = [regex]::Escape($VPS_HOST)
+  $keyLines = @(Get-Content $tempScannedKey | Where-Object {
+      $_ -notmatch '^\s*#' -and $_ -match 'ssh-ed25519' -and ($_ -match "^(?:$escPrefix|$escHost)\b")
+  })
+
+  if ($keyLines.Count -ne 1) {
+      Write-Error "Kết quả quét không hợp lệ: kỳ vọng đúng 1 dòng ed25519 cho ${VPS_HOST}:${VPS_PORT}, nhưng nhận được $($keyLines.Count) dòng!"
       Remove-Item $tempScannedKey -ErrorAction SilentlyContinue
       exit 1
   }
+  $verifiedLine = $keyLines[0]
+  # Ghi đè đúng dòng khóa duy nhất này vào tệp tạm để phân tích
+  $verifiedLine | Out-File -FilePath $tempScannedKey -Encoding ascii
 
-  $fpOutput = & ssh-keygen -lf $tempScannedKey
+  # Bước 3: Kiểm tra exit code của ssh-keygen và trích xuất chuỗi fingerprint
+  $fpOutput = & ssh-keygen -lf $tempScannedKey 2>&1
+  if ($LASTEXITCODE -ne 0) {
+      Write-Error "ssh-keygen thất bại (exit code $LASTEXITCODE) khi đọc khóa ed25519: $fpOutput"
+      Remove-Item $tempScannedKey -ErrorAction SilentlyContinue
+      exit $LASTEXITCODE
+  }
   $fpMatch = [regex]::Match($fpOutput, 'SHA256:[A-Za-z0-9+/=]+')
   if (-not $fpMatch.Success) {
-      Write-Error "Không thể trích xuất chuỗi SHA256 fingerprint từ tệp khóa tạm: $fpOutput"
+      Write-Error "Không thể trích xuất chuỗi SHA256 fingerprint từ output ssh-keygen: $fpOutput"
       Remove-Item $tempScannedKey -ErrorAction SilentlyContinue
       exit 1
   }
   $ACTUAL_FINGERPRINT = $fpMatch.Value
   Write-Host "Fingerprint ed25519 quét được: $ACTUAL_FINGERPRINT"
 
-  # Bước 3: Đối chiếu với fingerprint chính thức được cấp qua kênh tin cậy ngoài luồng
+  # Bước 4: Đối chiếu với fingerprint chính thức được cấp qua kênh tin cậy ngoài luồng
   #         (Lệnh trên VPS console: ssh-keygen -l -f /etc/ssh/ssh_host_ed25519_key.pub)
   if ($ACTUAL_FINGERPRINT -ne $EXPECTED_FINGERPRINT) {
       Write-Error "CẢNH BÁO NGUY HIỂM: Fingerprint KHÔNG KHỚP! Kỳ vọng: $EXPECTED_FINGERPRINT, thực tế: $ACTUAL_FINGERPRINT. Nguy cơ Man-In-The-Middle! Hủy bỏ quy trình."
@@ -130,10 +145,10 @@ Khi nhận lệnh khởi chạy pilot thực tế từ Tech Lead, người thự
       exit 1
   }
 
-  # Bước 4: CHỈ KHI TRÙNG KHỚP 100%, mới ghi CHÍNH khóa ed25519 đã xác minh này vào known_hosts:
-  $keyLines | Out-File -Append -Encoding ascii "$HOME\.ssh\known_hosts"
+  # Bước 5: CHỈ KHI TRÙNG KHỚP 100%, mới ghi ĐÚNG dòng ed25519 đã xác minh này vào known_hosts:
+  $verifiedLine | Out-File -Append -Encoding ascii "$HOME\.ssh\known_hosts"
   Remove-Item $tempScannedKey -ErrorAction SilentlyContinue
-  Write-Host "Đã xác thực và ghi nhận chính xác host key ed25519 vào known_hosts thành công." -ForegroundColor Green
+  Write-Host "Đã xác thực và ghi nhận chính xác 1 dòng host key ed25519 vào known_hosts thành công." -ForegroundColor Green
   ```
 
 ### 3.2. Cơ chế Credential Dùng chung & Giải pháp Cầu nối
@@ -396,10 +411,10 @@ Khi runner gặp ngoại lệ hoặc bị ngắt (`Ctrl+C`), khối `finally` s�
 
 ### 8.2. Quy trình Thu hồi Khẩn cấp Thủ công Độc lập trên VPS bằng PowerShell (Standalone Manual Teardown)
 Nếu máy local bị ngắt đột ngột hoặc phiên chạy gặp sự cố nghiêm trọng cần dừng ngay lập tức, người vận hành thực thi kịch bản PowerShell dưới đây. Kịch bản này được thiết kế **hoàn toàn độc lập** (không phụ thuộc vào biến môi trường hay state từ các bước trước), **chỉ thao tác đúng tài nguyên của pilot**:
-- **Tự động xác định đường dẫn SQLite DB thật** (ưu tiên Electron `userData`, fallback đường dẫn chuẩn).
-- **Kiểm tra tính hợp lệ của `$RUN_ID`** (bắt buộc số nguyên dương và xác minh tồn tại trong bảng `experiment_run`).
-- **Kiểm tra exit code (`$LASTEXITCODE`) sau từng lệnh SSH**: nếu thao tác dừng container loadgen hoặc dừng app compose thất bại, **lập tức dừng kịch bản** để người vận hành xử lý trực tiếp, không tự ý đánh dấu aborted trong DB.
-- **Cập nhật run an toàn qua `abort_run()`**: ghi nhận đồng thời `status = 'aborted'`, `abort_reason = 'manual_emergency_teardown'`, và `run_end_ts` chuẩn ISO 8601 UTC.
+- **Tự động xác định Repo Root & đường dẫn SQLite DB thật** khi mở cửa sổ PowerShell mới ở bất kỳ thư mục nào (tìm kiếm thư mục gốc dự án chứa `experiments/run_store.py` và `ml-service/.venv`, ưu tiên Electron `userData`).
+- **Xác minh tiền điều kiện TRƯỚC MỌI LỆNH HTTP/SSH**: kiểm tra `$RUN_ID` là số nguyên dương, đang ở trạng thái `running`, có `deployment_id` hợp lệ thuộc app `express-api` và đúng `host` của VPS mục tiêu. **Nếu sai hoặc thiếu bất kỳ điều kiện nào, kịch bản lập tức dừng, tuyệt đối không gửi HTTP `/debug/reset` hay bất kỳ lệnh SSH nào**.
+- **Kiểm tra exit code (`$LASTEXITCODE`) sau từng lệnh SSH**: nếu thao tác dừng container loadgen hoặc dừng app compose thất bại, **lập tức dừng kịch bản (không cập nhật DB)** để người vận hành xử lý trực tiếp.
+- **Cập nhật run an toàn qua `abort_run()`**: ghi nhận đồng thời `status = 'aborted'`, `abort_reason = 'manual_emergency_teardown'`, và `run_end_ts` chuẩn ISO 8601 UTC; nếu gặp `InvalidRunStateError`, kịch bản **báo lỗi thất bại và dừng ngay lập tức**, không bao giờ in "hoàn tất an toàn".
 
 ```powershell
 # ==============================================================================
@@ -416,49 +431,127 @@ $RUN_ID = "<run_id_can_thu_hoi>"   # Thay bằng RUN_ID cụ thể (số nguyên
 
 Write-Host ">>> Bắt đầu quy trình thu hồi khẩn cấp độc lập cho run_id=$RUN_ID trên ${VPS_HOST}:${VPS_PORT}..." -ForegroundColor Yellow
 
-# --- BƯỚC 1: Xác định đường dẫn SQLite DB thật từ Electron userData ---
+# --- BƯỚC 1: Tự động xác định Repo Root & SQLite DB thật khi mở PowerShell mới ---
+$REPO_ROOT = $null
+$possibleRoots = @(
+    (Get-Location).Path,
+    $PSScriptRoot,
+    "D:\Developing\DuAnCNTT"
+)
+foreach ($candidate in $possibleRoots) {
+    if (-not $candidate) { continue }
+    $dir = $candidate
+    while ($dir -and (Test-Path $dir)) {
+        if ((Test-Path "$dir\experiments\run_store.py") -and (Test-Path "$dir\ml-service\.venv\Scripts\python.exe")) {
+            $REPO_ROOT = (Get-Item $dir).FullName
+            break
+        }
+        $parent = Split-Path -Parent $dir
+        if (-not $parent -or $parent -eq $dir) { break }
+        $dir = $parent
+    }
+    if ($REPO_ROOT) { break }
+}
+
+if (-not $REPO_ROOT) {
+    Write-Error "Không thể xác định thư mục gốc của repository OpsPilot! Vui lòng cd vào repo trước khi chạy."
+    exit 1
+}
+$PYTHON_BIN = "$REPO_ROOT\ml-service\.venv\Scripts\python.exe"
+if (-not (Test-Path $PYTHON_BIN)) {
+    Write-Error "Không tìm thấy môi trường Python ảo tại: $PYTHON_BIN"
+    exit 1
+}
+
+# Tự động xác định đường dẫn SQLite DB thật từ Electron userData
 $DB_PATH = $null
 if ($env:OPSPILOT_USER_DATA_DIR -and (Test-Path "$env:OPSPILOT_USER_DATA_DIR\opspilot.db")) {
-    $DB_PATH = "$env:OPSPILOT_USER_DATA_DIR\opspilot.db"
+    $DB_PATH = (Get-Item "$env:OPSPILOT_USER_DATA_DIR\opspilot.db").FullName
 } elseif (Test-Path "$env:APPDATA\opspilot\opspilot.db") {
-    $DB_PATH = "$env:APPDATA\opspilot\opspilot.db"
-} elseif (Test-Path "app\opspilot.db") {
-    $DB_PATH = "app\opspilot.db"
+    $DB_PATH = (Get-Item "$env:APPDATA\opspilot\opspilot.db").FullName
+} elseif (Test-Path "$REPO_ROOT\app\opspilot.db") {
+    $DB_PATH = (Get-Item "$REPO_ROOT\app\opspilot.db").FullName
 }
 
 if (-not $DB_PATH -or -not (Test-Path $DB_PATH)) {
-    Write-Error "Không thể xác định cơ sở dữ liệu OpsPilot hợp lệ (đã kiểm tra OPSPILOT_USER_DATA_DIR, APPDATA\opspilot\opspilot.db, app\opspilot.db)!"
+    Write-Error "Không thể xác định cơ sở dữ liệu OpsPilot hợp lệ (đã kiểm tra OPSPILOT_USER_DATA_DIR, APPDATA\opspilot\opspilot.db, $REPO_ROOT\app\opspilot.db)!"
     exit 1
 }
-Write-Host "1/6: Đã xác định cơ sở dữ liệu: $DB_PATH" -ForegroundColor Green
+Write-Host "1/6: Đã xác định Repo Root: $REPO_ROOT" -ForegroundColor Green
+Write-Host "     Đã xác định Cơ sở dữ liệu: $DB_PATH" -ForegroundColor Green
 
-# --- BƯỚC 2: Kiểm tra tính hợp lệ của $RUN_ID và sự tồn tại trong DB ---
+# --- BƯỚC 2: Kiểm tra RUN_ID & Xác minh tiền điều kiện trong DB TRƯỚC MỌI LỆNH HTTP/SSH ---
 $parsedRunId = 0
 if (-not [int]::TryParse($RUN_ID, [ref]$parsedRunId) -or $parsedRunId -le 0) {
     Write-Error "RUN_ID không hợp lệ: '$RUN_ID'. RUN_ID bắt buộc phải là một số nguyên dương cụ thể!"
     exit 1
 }
 
-$checkRunPy = @"
+# Tiền điều kiện an toàn: TRƯỚC KHI GỬI BẤT KỲ LỆNH HTTP HOẶC SSH NÀO:
+# - Run phải có status = 'running' (nếu completed/aborted -> DỪNG NGAY)
+# - Phải có deployment_id hợp lệ (không được NULL)
+# - App của deployment phải đúng tên 'express-api' (tránh tác động nhầm app khác)
+# - VPS của app phải khớp chính xác host $VPS_HOST (tránh tác động nhầm máy chủ)
+# Sai hoặc thiếu bất kỳ điều kiện nào -> DỪNG NGAY LẬP TỨC!
+$precheckPy = @"
 import sys, sqlite3
-run_id, db_path = int(sys.argv[1]), sys.argv[2]
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
+run_id = int(sys.argv[1])
+db_path = sys.argv[2]
+expected_host = sys.argv[3]
+expected_app = "express-api"
+
 conn = sqlite3.connect(db_path)
 cur = conn.cursor()
-cur.execute("SELECT id, status FROM experiment_run WHERE id = ?", (run_id,))
+cur.execute('''
+    SELECT
+        r.id,
+        r.status,
+        r.deployment_id,
+        v.host,
+        a.name
+    FROM experiment_run r
+    LEFT JOIN deployment d ON r.deployment_id = d.id
+    LEFT JOIN app a ON d.app_id = a.id
+    LEFT JOIN vps v ON a.vps_id = v.id
+    WHERE r.id = ?
+''', (run_id,))
 row = cur.fetchone()
 conn.close()
+
 if not row:
-    print(f"NOT_FOUND: Không tìm thấy run_id={run_id} trong bảng experiment_run")
+    print(f"PRECHECK_FAILED: Không tìm thấy run_id={run_id} trong bảng experiment_run", file=sys.stderr)
     sys.exit(2)
-print(f"FOUND:{row[1]}")
+
+run_id, status, dep_id, actual_host, app_name = row
+
+if status != 'running':
+    print(f"PRECHECK_FAILED: Run {run_id} đang ở trạng thái '{status}' (không phải 'running'). Tuyệt đối không thu hồi từ xa!", file=sys.stderr)
+    sys.exit(3)
+
+if dep_id is None:
+    print(f"PRECHECK_FAILED: Run {run_id} chưa được gắn deployment_id. Không xác định được phiên deploy để thu hồi!", file=sys.stderr)
+    sys.exit(4)
+
+if app_name != expected_app:
+    print(f"PRECHECK_FAILED: Run {run_id} thuộc app '{app_name}' (kỳ vọng '{expected_app}'). Dừng để tránh xoá nhầm app khác!", file=sys.stderr)
+    sys.exit(5)
+
+if not actual_host or actual_host != expected_host:
+    print(f"PRECHECK_FAILED: Run {run_id} gắn với VPS host '{actual_host}' (không khớp target '{expected_host}'). Dừng để tránh tác động nhầm máy chủ!", file=sys.stderr)
+    sys.exit(6)
+
+print(f"PRECHECK_PASSED: Run {run_id} hợp lệ (status='running', deployment={dep_id}, app='{app_name}', host='{actual_host}')")
 "@
-$runCheckResult = $checkRunPy | & ".\ml-service\.venv\Scripts\python.exe" - $parsedRunId $DB_PATH
+
+$env:PYTHONPATH = "$REPO_ROOT;$REPO_ROOT\experiments"
+$precheckResult = $precheckPy | & $PYTHON_BIN - $parsedRunId $DB_PATH $VPS_HOST
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Kiểm tra run trong DB thất bại: $runCheckResult"
-    exit 1
+    Write-Error "Tiền điều kiện thu hồi thất bại (exit code $LASTEXITCODE)! Dừng toàn bộ quy trình, không gửi lệnh HTTP hoặc SSH từ xa."
+    exit $LASTEXITCODE
 }
-$currentStatus = ($runCheckResult -split ":")[1].Trim()
-Write-Host "2/6: Đã xác minh run_id=$parsedRunId trong DB (trạng thái hiện tại: '$currentStatus')." -ForegroundColor Green
+Write-Host "2/6: $precheckResult" -ForegroundColor Green
 
 # --- BƯỚC 3: Tắt hiệu ứng fault trên app demo qua HTTP (best-effort) ---
 try {
@@ -478,7 +571,7 @@ $sshBaseArgs = @("-i", $SSH_KEY_FILE, "-p", $VPS_PORT, "-o", "StrictHostKeyCheck
 Write-Host "4/6: Đang dừng container loadgen opspilot-loadgen-express-api..."
 & ssh @sshBaseArgs "docker stop opspilot-loadgen-express-api && docker rm opspilot-loadgen-express-api"
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Lỗi SSH: Dừng/xoá container loadgen opspilot-loadgen-express-api thất bại (exit code $LASTEXITCODE). Dừng quy trình thu hồi khẩn cấp!"
+    Write-Error "Lỗi SSH: Dừng/xoá container loadgen opspilot-loadgen-express-api thất bại (exit code $LASTEXITCODE). Dừng quy trình thu hồi khẩn cấp (không cập nhật DB)!"
     exit $LASTEXITCODE
 }
 Write-Host "4/6: Dừng và xoá container loadgen thành công." -ForegroundColor Green
@@ -487,7 +580,7 @@ Write-Host "4/6: Dừng và xoá container loadgen thành công." -ForegroundCol
 Write-Host "5/6: Đang dừng compose service của app demo (bảo lưu volume)..."
 & ssh @sshBaseArgs "cd /opt/opspilot/express-api && docker compose down"
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Lỗi SSH: Dừng app demo docker compose thất bại (exit code $LASTEXITCODE). Dừng quy trình thu hồi khẩn cấp!"
+    Write-Error "Lỗi SSH: Dừng app demo docker compose thất bại (exit code $LASTEXITCODE). Dừng quy trình thu hồi khẩn cấp (không cập nhật DB)!"
     exit $LASTEXITCODE
 }
 Write-Host "5/6: Dừng compose service thành công (đã bảo lưu volume)." -ForegroundColor Green
@@ -498,11 +591,14 @@ $abortPy = @"
 import sys
 import sqlite3
 from datetime import datetime, timezone
-from experiments.run_store import abort_run, InvalidRunStateError, RunNotFoundError
 
 sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
 run_id = int(sys.argv[1])
 db_path = sys.argv[2]
+
+from experiments.run_store import abort_run, InvalidRunStateError, RunNotFoundError
+
 conn = sqlite3.connect(db_path)
 try:
     abort_run(
@@ -514,16 +610,18 @@ try:
     )
     print(f"ABORT_SUCCESS: Đã cập nhật aborted và run_end_ts cho run_id={run_id}")
 except InvalidRunStateError as e:
-    print(f"ALREADY_TERMINATED: Run {run_id} không ở trạng thái running ({e})")
+    print(f"ABORT_FAILED: Thất bại do run_id={run_id} không ở trạng thái running ({e})", file=sys.stderr)
+    sys.exit(1)
 except Exception as e:
-    print(f"ABORT_ERROR: Lỗi cập nhật run: {e}")
+    print(f"ABORT_FAILED: Lỗi cập nhật run: {e}", file=sys.stderr)
     sys.exit(1)
 finally:
     conn.close()
 "@
-$abortResult = $abortPy | & ".\ml-service\.venv\Scripts\python.exe" - $parsedRunId $DB_PATH
+
+$abortResult = $abortPy | & $PYTHON_BIN - $parsedRunId $DB_PATH
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "Cập nhật abort_run() trong cơ sở dữ liệu thất bại: $abortResult"
+    Write-Error "Cập nhật abort_run() trong cơ sở dữ liệu THẤT BẠI (exit code $LASTEXITCODE)!"
     exit $LASTEXITCODE
 }
 Write-Host "$abortResult" -ForegroundColor Green
