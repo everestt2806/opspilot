@@ -23,11 +23,11 @@
 | **8** | **CLI Security & Argv** | Loại bỏ hoàn toàn `--ssh-secret` khỏi argv; nhận `--ssh-key-file` an toàn; cấp credential tự động cho Deploy/Poller; cờ `--allow-pilot-4500` | `pytest experiments/tests/test_runner_e2e.py` (37/37 passed, bắt lỗi `--ssh-secret`) | **PASS** |
 | **9** | **SSH Transport Gate** | `SystemSshClient` dùng `-i`, `IdentitiesOnly=yes`, `StrictHostKeyChecking=yes`, `verify_connection()` | Unit test mức transport trong `test_runner_e2e.py` (chứng minh abort trước deploy) | **PASS** |
 | **10** | **Schema SQLite** | Hỗ trợ bảng `experiment_run`, `attempt_index 1..3`, `UNIQUE(scenario, repeat_index, attempt_index)`, khoá ngoại ON | `pytest experiments/tests/test_run_store.py` (43/43 passed) | **PASS** |
-| **11** | **VPS Specs & OS** | 02 VPS WiService (2 vCPU, 4GB RAM, 40GB SSD, Ubuntu 22.04 LTS / Debian 12) | Phụ thuộc hạ tầng nhà cung cấp WiService VN | **NOT_RUN** |
-| **12** | **Docker trên VPS** | Docker Engine $\ge 24.0$, Docker Compose plugin $\ge v2.20$ | Cần SSH vào VPS thực thi `docker --version && docker compose version` | **NOT_RUN** |
-| **13** | **Đồng bộ giờ NTP VPS** | Dịch vụ `systemd-timesyncd` đang active, độ lệch $\|offset\| \le 2000$ ms | Cần kết nối SSH đo clock skew thực tế qua `measure_clock_offset_ms` | **NOT_RUN** |
-| **14** | **Cổng mạng & UFW VPS** | Mở cổng SSH (22 hoặc custom) và dải cổng demo app (30000–30999) | Cần kiểm tra firewall VPS qua lệnh `ufw status` trên máy chủ | **NOT_RUN** |
-| **15** | **Live Pilot 75 phút** | Chạy toàn bộ chu trình Pha A–D (4500s) với tải 5 req/s trên VPS | Giữ nguyên trạng thái an toàn theo cam kết đồ án | **NOT_RUN** |
+| **11** | **VPS Specs & OS** | 02 VPS WiService (2 vCPU, 4GB RAM, 40GB SSD, Ubuntu 22.04 LTS / Debian 12) | Khảo sát P2d-7: Bị chặn bởi kết nối mạng & xác thực host key; xem tk-s6-pilot-p2d7-vps-audit.md | **NOT_RUN** |
+| **12** | **Docker trên VPS** | Docker Engine $\ge 24.0$, Docker Compose plugin $\ge v2.20$ | Khảo sát P2d-7: Bị chặn bởi kết nối mạng & xác thực host key; xem tk-s6-pilot-p2d7-vps-audit.md | **NOT_RUN** |
+| **13** | **Đồng bộ giờ NTP VPS** | Dịch vụ `systemd-timesyncd` đang active, độ lệch $\|offset\| \le 2000$ ms | Khảo sát P2d-7: Bị chặn bởi kết nối mạng; xem tk-s6-pilot-p2d7-vps-audit.md | **NOT_RUN** |
+| **14** | **Cổng mạng & UFW VPS** | Mở cổng SSH (22 hoặc custom) và dải cổng demo app (30000–30999) | Khảo sát P2d-7: Cổng 22 TCP timeout từ bên ngoài (TcpTestSucceeded: False); xem tk-s6-pilot-p2d7-vps-audit.md | **BLOCKED** |
+| **15** | **Live Pilot 75 phút** | Chạy toàn bộ chu trình Pha A–D (4500s) với tải 5 req/s trên VPS | Giữ nguyên trạng thái an toàn theo cam kết đồ án; chưa đủ điều kiện hạ tầng | **NOT_RUN** |
 | **16** | **Runtime Gap 1: Env App** | Runner truyền `ENABLE_FAULT_ENDPOINTS=true` khi pilot tường minh cho `express-api`, từ chối app khác | Đã giải quyết (P2d-6a): `experiments/run_experiment.py` truyền `env_vars={"ENABLE_FAULT_ENDPOINTS": "true"}` qua `DeployAdapter.deploy()`, kiểm thử 26/26 tests e2e pass | **PASS** |
 | **17** | **Runtime Gap 2: Credential** | Cờ `--ssh-key-file` tự động đọc private key và cấp phát đồng bộ cho `DeployAdapter` & `PollerAdapter` | Đã giải quyết (P2d-6b): `experiments/run_experiment.py` đọc key file an toàn (bảo lưu newline cuối, chỉ đọc 1 lần), nạp vào `ssh_secret` của cả 2 adapter, override env cũ, fail closed khi lỗi; 37/37 tests e2e pass | **PASS** |
 
@@ -46,6 +46,11 @@
 ---
 
 ## 2. Chi tiết Điều kiện Hạ tầng VPS (Remote Checklist — NOT_RUN)
+
+> ⚠️ **Kết quả khảo sát chỉ đọc P2d-7 (03/10/2026)**:
+> - Biên bản kiểm tra chi tiết đã được lập tại [`tk-s6-pilot-p2d7-vps-audit.md`](tk-s6-pilot-p2d7-vps-audit.md).
+> - Hiện tại **Cổng SSH 22 TCP timeout** từ máy điều khiển ngoại vi (`Test-NetConnection` false), chưa có fingerprint chính thức được xác nhận qua kênh tin cậy ngoài luồng WiService console (`$EXPECTED_FINGERPRINT` chưa nạp), và bản ghi DB `vps` id=2 hiện có `auth_type='password'` (runner chỉ hỗ trợ `key`).
+> - Theo nguyên tắc an toàn fail-closed: Toàn bộ các bước kiểm tra trực tiếp trên VPS và chạy thử nghiệm tiếp tục được giữ ở trạng thái **`BLOCKED / NOT_RUN`** (không tự chấp nhận host key, không sửa firewall, không deploy).
 
 Khi nhận lệnh khởi chạy pilot thực tế từ Tech Lead, người thực hiện cần kiểm tra các thông số sau trên VPS:
 
