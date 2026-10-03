@@ -26,7 +26,7 @@
 | **11** | **VPS Specs & OS** | 02 VPS WiService (2 vCPU, 4GB RAM, 40GB SSD, Ubuntu 22.04 LTS / Debian 12) | Khảo sát P2d-7: Bị chặn bởi kết nối mạng & xác thực host key; xem tk-s6-pilot-p2d7-vps-audit.md | **NOT_RUN** |
 | **12** | **Docker trên VPS** | Docker Engine $\ge 24.0$, Docker Compose plugin $\ge v2.20$ | Khảo sát P2d-7: Bị chặn bởi kết nối mạng & xác thực host key; xem tk-s6-pilot-p2d7-vps-audit.md | **NOT_RUN** |
 | **13** | **Đồng bộ giờ NTP VPS** | Dịch vụ `systemd-timesyncd` đang active, độ lệch $\|offset\| \le 2000$ ms | Khảo sát P2d-7: Bị chặn bởi kết nối mạng; xem tk-s6-pilot-p2d7-vps-audit.md | **NOT_RUN** |
-| **14** | **Cổng mạng & UFW VPS** | Mở cổng SSH (22 hoặc custom) và dải cổng demo app (30000–30999) | Khảo sát P2d-7: Cổng 22 TCP timeout từ bên ngoài (TcpTestSucceeded: False); xem tk-s6-pilot-p2d7-vps-audit.md | **BLOCKED** |
+| **14** | **Cổng mạng & UFW VPS** | Mở cổng SSH (22 hoặc custom) và dải cổng demo app (30000–30999) | Khảo sát P2d-7: Quan sát cổng 22 TCP timeout từ máy điều khiển, chưa kết luận nguyên nhân do VPS tắt hay firewall; xem tk-s6-pilot-p2d7-vps-audit.md | **BLOCKED** |
 | **15** | **Live Pilot 75 phút** | Chạy toàn bộ chu trình Pha A–D (4500s) với tải 5 req/s trên VPS | Giữ nguyên trạng thái an toàn theo cam kết đồ án; chưa đủ điều kiện hạ tầng | **NOT_RUN** |
 | **16** | **Runtime Gap 1: Env App** | Runner truyền `ENABLE_FAULT_ENDPOINTS=true` khi pilot tường minh cho `express-api`, từ chối app khác | Đã giải quyết (P2d-6a): `experiments/run_experiment.py` truyền `env_vars={"ENABLE_FAULT_ENDPOINTS": "true"}` qua `DeployAdapter.deploy()`, kiểm thử 26/26 tests e2e pass | **PASS** |
 | **17** | **Runtime Gap 2: Credential** | Cờ `--ssh-key-file` tự động đọc private key và cấp phát đồng bộ cho `DeployAdapter` & `PollerAdapter` | Đã giải quyết (P2d-6b): `experiments/run_experiment.py` đọc key file an toàn (bảo lưu newline cuối, chỉ đọc 1 lần), nạp vào `ssh_secret` của cả 2 adapter, override env cũ, fail closed khi lỗi; 37/37 tests e2e pass | **PASS** |
@@ -49,8 +49,9 @@
 
 > ⚠️ **Kết quả khảo sát chỉ đọc P2d-7 (03/10/2026)**:
 > - Biên bản kiểm tra chi tiết đã được lập tại [`tk-s6-pilot-p2d7-vps-audit.md`](tk-s6-pilot-p2d7-vps-audit.md).
-> - Hiện tại **Cổng SSH 22 TCP timeout** từ máy điều khiển ngoại vi (`Test-NetConnection` false), chưa có fingerprint chính thức được xác nhận qua kênh tin cậy ngoài luồng WiService console (`$EXPECTED_FINGERPRINT` chưa nạp), và bản ghi DB `vps` id=2 hiện có `auth_type='password'` (runner chỉ hỗ trợ `key`).
-> - Theo nguyên tắc an toàn fail-closed: Toàn bộ các bước kiểm tra trực tiếp trên VPS và chạy thử nghiệm tiếp tục được giữ ở trạng thái **`BLOCKED / NOT_RUN`** (không tự chấp nhận host key, không sửa firewall, không deploy).
+> - Ghi nhận **TCP port 22 timeout khi quan sát từ máy điều khiển** (`Test-NetConnection` false), chưa kết luận nguyên nhân cụ thể do VPS đang tắt hay do firewall/lớp mạng chặn; chưa có fingerprint chính thức được xác nhận qua kênh tin cậy ngoài luồng WiService console (`$EXPECTED_FINGERPRINT` chưa nạp).
+> - Để chạy bằng key, cần đồng thời: cấu hình bản ghi VPS `auth_type='key'`, đúng `username` và public key được cấp quyền trên VPS, rồi mới cung cấp private key qua `--ssh-key-file`. Cung cấp key file đơn lẻ không vượt qua được `auth_type='password'` của bản ghi DB `vps` id=2 hiện tại; không sửa DB trực tiếp trong checkpoint này.
+> - Theo nguyên tắc an toàn fail-closed: Toàn bộ các bước kiểm tra trực tiếp trên VPS và chạy thử nghiệm tiếp tục được giữ ở trạng thái **`BLOCKED / NOT_RUN`** (không tự chấp nhận host key, không sửa firewall/DB, không deploy).
 
 Khi nhận lệnh khởi chạy pilot thực tế từ Tech Lead, người thực hiện cần kiểm tra các thông số sau trên VPS:
 
