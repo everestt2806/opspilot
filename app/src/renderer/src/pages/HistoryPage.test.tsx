@@ -90,7 +90,7 @@ describe('HistoryPage', { timeout: 30000 }, () => {
     expect(screen.getByText(strings.dashboard.actions.rollback_auto)).toBeTruthy()
 
     fireEvent.click(screen.getByRole('row', { name: /Deployed v7 successfully\./ }))
-    expect(await screen.findByText('Activity details')).toBeTruthy()
+    expect(await screen.findByText(strings.history.detail.title)).toBeTruthy()
     expect(screen.getByText('step')).toBeTruthy()
     expect(screen.getByText('HEALTHCHECK')).toBeTruthy()
     expect(screen.getByText('duration_ms')).toBeTruthy()
@@ -107,7 +107,7 @@ describe('HistoryPage', { timeout: 30000 }, () => {
     })
     render(<HistoryPage />)
 
-    expect(await screen.findByText('Could not load the history.')).toBeTruthy()
+    expect(await screen.findByText(strings.history.loadFailed)).toBeTruthy()
     expect(screen.getByText('Khong doc duoc DB.')).toBeTruthy()
     fireEvent.click(screen.getByText(strings.history.retry))
     await waitFor(() => expect(invoke).toHaveBeenCalledTimes(3))

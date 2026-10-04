@@ -483,6 +483,24 @@ const BASE_EN_STRINGS = {
       status: 'Status',
       message: 'Message'
     },
+    actions: {
+      deploy: 'Deploy',
+      rollback_auto: 'Auto rollback',
+      rollback_manual: 'Manual rollback',
+      scan: 'Environment scan',
+      install_docker: 'Install Docker',
+      restart: 'Restart app',
+      stop: 'Stop app',
+      migrate_start: 'Start migration',
+      migrate_confirm: 'Confirm migration',
+      migrate_abort: 'Abort migration',
+      ssh_error: 'SSH connection error'
+    },
+    statuses: {
+      success: 'Success',
+      failed: 'Failed',
+      cancelled: 'Cancelled'
+    },
     detail: {
       title: 'Activity details',
       time: 'Time',
@@ -873,7 +891,66 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       appsRunning: 'Bản ghi triển khai',
       deploy24h: 'Lượt deploy 24h qua',
       lastDeploy: 'Lần deploy gần nhất'
+    },
+    actions: {
+      deploy: 'Triển khai',
+      rollback_auto: 'Tự động khôi phục',
+      rollback_manual: 'Khôi phục thủ công'
+    },
+    statuses: {
+      success: 'Thành công',
+      failed: 'Thất bại',
+      cancelled: 'Đã hủy'
     }
+  },
+  history: {
+    ...BASE_EN_STRINGS.history,
+    title: 'Nhật ký hoạt động',
+    description: 'Xem các lần triển khai, khôi phục và cảnh báo.',
+    filters: {
+      action: 'Thao tác',
+      actionAll: 'Tất cả thao tác',
+      vps: 'Máy chủ',
+      vpsAll: 'Tất cả máy chủ',
+      timeRange: 'Khoảng thời gian'
+    },
+    columns: {
+      time: 'Thời gian',
+      action: 'Thao tác',
+      vps: 'Máy chủ',
+      status: 'Trạng thái',
+      message: 'Thông điệp'
+    },
+    actions: {
+      deploy: 'Triển khai',
+      rollback_auto: 'Tự động khôi phục',
+      rollback_manual: 'Khôi phục thủ công',
+      scan: 'Quét môi trường',
+      install_docker: 'Cài đặt Docker',
+      restart: 'Khởi động lại',
+      stop: 'Dừng ứng dụng',
+      migrate_start: 'Bắt đầu di chuyển',
+      migrate_confirm: 'Xác nhận di chuyển',
+      migrate_abort: 'Hủy di chuyển',
+      ssh_error: 'Lỗi kết nối SSH'
+    },
+    statuses: {
+      success: 'Thành công',
+      failed: 'Thất bại',
+      cancelled: 'Đã hủy'
+    },
+    detail: {
+      title: 'Chi tiết hoạt động',
+      time: 'Thời gian',
+      vps: 'Máy chủ',
+      status: 'Trạng thái',
+      message: 'Thông điệp',
+      fields: 'Chi tiết bổ sung',
+      emptyFields: 'Không có chi tiết bổ sung.'
+    },
+    empty: 'Không có hoạt động nào khớp với bộ lọc.',
+    loadFailed: 'Không thể tải lịch sử hoạt động.',
+    retry: 'Thử lại'
   },
   deploy: {
     ...BASE_EN_STRINGS.deploy,
@@ -1244,7 +1321,66 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       appsRunning: '已记录的部署',
       deploy24h: '过去 24 小时部署',
       lastDeploy: '最近部署'
+    },
+    actions: {
+      deploy: '部署',
+      rollback_auto: '自动回滚',
+      rollback_manual: '手动回滚'
+    },
+    statuses: {
+      success: '成功',
+      failed: '失败',
+      cancelled: '已取消'
     }
+  },
+  history: {
+    ...BASE_EN_STRINGS.history,
+    title: '审计日志',
+    description: '查看部署、回滚和告警记录。',
+    filters: {
+      action: '操作',
+      actionAll: '全部操作',
+      vps: '服务器',
+      vpsAll: '全部服务器',
+      timeRange: '时间范围'
+    },
+    columns: {
+      time: '时间',
+      action: '操作',
+      vps: '服务器',
+      status: '状态',
+      message: '信息'
+    },
+    actions: {
+      deploy: '部署',
+      rollback_auto: '自动回滚',
+      rollback_manual: '手动回滚',
+      scan: '环境检查',
+      install_docker: '安装 Docker',
+      restart: '重启应用',
+      stop: '停止应用',
+      migrate_start: '开始迁移',
+      migrate_confirm: '确认迁移',
+      migrate_abort: '中止迁移',
+      ssh_error: 'SSH 连接错误'
+    },
+    statuses: {
+      success: '成功',
+      failed: '失败',
+      cancelled: '已取消'
+    },
+    detail: {
+      title: '动态详情',
+      time: '时间',
+      vps: '服务器',
+      status: '状态',
+      message: '信息',
+      fields: '附加信息',
+      emptyFields: '无附加信息。'
+    },
+    empty: '没有符合该筛选条件的活动。',
+    loadFailed: '无法加载历史记录。',
+    retry: '重试'
   },
   deploy: {
     ...BASE_EN_STRINGS.deploy,
@@ -1606,7 +1742,66 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       appsRunning: '記録されたデプロイ',
       deploy24h: '過去24時間のデプロイ',
       lastDeploy: '最終デプロイ'
+    },
+    actions: {
+      deploy: 'デプロイ',
+      rollback_auto: '自動ロールバック',
+      rollback_manual: '手動ロールバック'
+    },
+    statuses: {
+      success: '成功',
+      failed: '失敗',
+      cancelled: 'キャンセル済'
     }
+  },
+  history: {
+    ...BASE_EN_STRINGS.history,
+    title: '監査ログ',
+    description: 'デプロイ、ロールバック、アラートの履歴を確認します。',
+    filters: {
+      action: '操作',
+      actionAll: 'すべての操作',
+      vps: 'サーバー',
+      vpsAll: 'すべてのサーバー',
+      timeRange: '期間'
+    },
+    columns: {
+      time: '日時',
+      action: '操作',
+      vps: 'サーバー',
+      status: 'ステータス',
+      message: 'メッセージ'
+    },
+    actions: {
+      deploy: 'デプロイ',
+      rollback_auto: '自動ロールバック',
+      rollback_manual: '手動ロールバック',
+      scan: '環境スキャン',
+      install_docker: 'Docker インストール',
+      restart: 'アプリ再起動',
+      stop: 'アプリ停止',
+      migrate_start: '移行開始',
+      migrate_confirm: '移行確認',
+      migrate_abort: '移行中止',
+      ssh_error: 'SSH 接続エラー'
+    },
+    statuses: {
+      success: '成功',
+      failed: '失敗',
+      cancelled: 'キャンセル済'
+    },
+    detail: {
+      title: 'アクティビティ詳細',
+      time: '日時',
+      vps: 'サーバー',
+      status: 'ステータス',
+      message: 'メッセージ',
+      fields: '詳細項目',
+      emptyFields: '詳細項目はありません。'
+    },
+    empty: '条件に一致するアクティビティはありません。',
+    loadFailed: '履歴を読み込めませんでした。',
+    retry: '再試行'
   },
   deploy: {
     ...BASE_EN_STRINGS.deploy,
@@ -1884,6 +2079,15 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
       },
       log: { ...BASE_EN_STRINGS.deploy.log, ...VI_OVERRIDES.deploy?.log }
     },
+    history: {
+      ...BASE_EN_STRINGS.history,
+      ...VI_OVERRIDES.history,
+      filters: { ...BASE_EN_STRINGS.history.filters, ...VI_OVERRIDES.history?.filters },
+      columns: { ...BASE_EN_STRINGS.history.columns, ...VI_OVERRIDES.history?.columns },
+      actions: { ...BASE_EN_STRINGS.history.actions, ...VI_OVERRIDES.history?.actions },
+      statuses: { ...BASE_EN_STRINGS.history.statuses, ...VI_OVERRIDES.history?.statuses },
+      detail: { ...BASE_EN_STRINGS.history.detail, ...VI_OVERRIDES.history?.detail }
+    },
     settings: {
       ...BASE_EN_STRINGS.settings,
       ...VI_OVERRIDES.settings,
@@ -1958,6 +2162,15 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
       },
       log: { ...BASE_EN_STRINGS.deploy.log, ...CN_OVERRIDES.deploy?.log }
     },
+    history: {
+      ...BASE_EN_STRINGS.history,
+      ...CN_OVERRIDES.history,
+      filters: { ...BASE_EN_STRINGS.history.filters, ...CN_OVERRIDES.history?.filters },
+      columns: { ...BASE_EN_STRINGS.history.columns, ...CN_OVERRIDES.history?.columns },
+      actions: { ...BASE_EN_STRINGS.history.actions, ...CN_OVERRIDES.history?.actions },
+      statuses: { ...BASE_EN_STRINGS.history.statuses, ...CN_OVERRIDES.history?.statuses },
+      detail: { ...BASE_EN_STRINGS.history.detail, ...CN_OVERRIDES.history?.detail }
+    },
     settings: {
       ...BASE_EN_STRINGS.settings,
       ...CN_OVERRIDES.settings,
@@ -2031,6 +2244,15 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
         }
       },
       log: { ...BASE_EN_STRINGS.deploy.log, ...JP_OVERRIDES.deploy?.log }
+    },
+    history: {
+      ...BASE_EN_STRINGS.history,
+      ...JP_OVERRIDES.history,
+      filters: { ...BASE_EN_STRINGS.history.filters, ...JP_OVERRIDES.history?.filters },
+      columns: { ...BASE_EN_STRINGS.history.columns, ...JP_OVERRIDES.history?.columns },
+      actions: { ...BASE_EN_STRINGS.history.actions, ...JP_OVERRIDES.history?.actions },
+      statuses: { ...BASE_EN_STRINGS.history.statuses, ...JP_OVERRIDES.history?.statuses },
+      detail: { ...BASE_EN_STRINGS.history.detail, ...JP_OVERRIDES.history?.detail }
     },
     settings: {
       ...BASE_EN_STRINGS.settings,

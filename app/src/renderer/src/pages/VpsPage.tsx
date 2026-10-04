@@ -49,6 +49,12 @@ export function VpsPage(): React.JSX.Element {
 
   const isListView = selectedVpsId === null
 
+  const handleVpsUpdated = useCallback(() => {
+    if (selectedVpsId !== null) {
+      void refreshVps(selectedVpsId)
+    }
+  }, [selectedVpsId, refreshVps])
+
   useEffect(() => {
     void load()
   }, [load])
@@ -307,7 +313,7 @@ export function VpsPage(): React.JSX.Element {
               onCheckConnection={() => openEdit(selectedVps)}
               onEdit={() => openEdit(selectedVps)}
               onDelete={() => deleteVps(selectedVps)}
-              onDockerInstalled={() => void refreshVps(selectedVps.id)}
+              onDockerInstalled={handleVpsUpdated}
             />
           </>
         )

@@ -86,7 +86,7 @@ describe('VpsOverviewTab — card Environment scan', () => {
     const scan = vi.fn().mockResolvedValue({ ok: true, data: SCAN_RESULT })
     mockApi({ 'vps:scan': scan })
 
-    renderTab()
+    const { onDockerInstalled } = renderTab()
 
     const list = await scanListEl()
     expect(scan).toHaveBeenCalledWith('vps:scan', 1)
@@ -103,8 +103,12 @@ describe('VpsOverviewTab — card Environment scan', () => {
     expect(within(list).getByText('Not installed')).toBeTruthy()
     expect(within(list).getByText('Workspace /opt/opspilot')).toBeTruthy()
 
+    // Quét xong báo cho cha refresh Machine info (last seen + Docker version)
+    await waitFor(() => expect(onDockerInstalled).toHaveBeenCalledTimes(1))
+
     fireEvent.click(screen.getByText('Scan again'))
     await waitFor(() => expect(scan).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(onDockerInstalled).toHaveBeenCalledTimes(2))
   })
 
   it('vps:scan thành công chỉ gọi vps:scan, không tự gọi vps:get-resources cho fleet', async () => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Alert,
   Button,
@@ -80,12 +80,18 @@ export function VpsOverviewTab({
   const [scanResult, setScanResult] = useState<VpsScanResult | null>(null)
   const [scanError, setScanError] = useState<string | null>(null)
 
+  const onDockerInstalledRef = useRef(onDockerInstalled)
+  useEffect(() => {
+    onDockerInstalledRef.current = onDockerInstalled
+  }, [onDockerInstalled])
+
   const applyScan = useCallback(
     (result: IpcResult<VpsScanResult>): void => {
       setScanPhase(result.ok ? 'done' : 'error')
       setScanResult(result.ok ? result.data : null)
       if (result.ok) {
         setScanError(null)
+        onDockerInstalledRef.current?.()
         return
       }
       const message = result.error.message

@@ -379,4 +379,80 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
     fireEvent.click(migrateBtn)
     expect(useUiState.getState().activePage).toBe('migrate')
   })
+
+  it('sau vps:scan thanh cong: lam moi rieng ban ghi VPS (docker_version, last_seen_at) khong goi lai vps:get-resources cho fleet va khong bi quet lap', async () => {
+    const vpsInitial: Vps = {
+      ...VPS_A,
+      docker_version: null,
+      last_seen_at: null
+    }
+    const vpsUpdated: Vps = {
+      ...VPS_A,
+      docker_version: '27.1.1',
+      last_seen_at: '2026-08-23T10:00:00Z'
+    }
+
+    let listCallCount = 0
+    const listHandler = vi.fn().mockImplementation(() => {
+      listCallCount++
+      return Promise.resolve({
+        ok: true,
+        data: [listCallCount === 1 ? vpsInitial : vpsUpdated, VPS_B]
+      })
+    })
+
+    const getResources = vi.fn().mockResolvedValue({ ok: true, data: RES })
+    const scanHandler = vi.fn().mockResolvedValue({
+      ok: true,
+      data: {
+        scanned_at: '2026-08-23T10:00:00Z',
+        ssh_ok: true,
+        items: [
+          { key: 'ssh', ok: true, version: null },
+          { key: 'docker', ok: true, version: '27.1.1' },
+          { key: 'compose', ok: true, version: 'v2.29.1' },
+          { key: 'node', ok: true, version: 'v20.11.1' },
+          { key: 'git', ok: true, version: '2.43.0' },
+          { key: 'workdir', ok: true, version: null }
+        ]
+      }
+    })
+
+    mockApi({
+      'vps:list': listHandler,
+      'vps:get-resources': getResources,
+      'vps:scan': scanHandler,
+      'app:list': async () => ({ ok: true, data: [] })
+    })
+
+    render(<VpsPage />)
+
+    // Lúc load ban đầu: get-resources được gọi cho 2 máy (fleet)
+    await waitFor(() => expect(screen.getByText(vpsInitial.name)).toBeTruthy())
+    expect(getResources).toHaveBeenCalledTimes(2)
+
+    // Bấm vào VM01 để mở trang chi tiết (mặc định tab Overview)
+    fireEvent.click(screen.getByText(vpsInitial.name))
+
+    // Khi tab Overview mở, vps:scan tự động chạy
+    await waitFor(() => expect(scanHandler).toHaveBeenCalledTimes(1))
+
+    await waitFor(() => expect(listHandler).toHaveBeenCalledTimes(2))
+
+    // Scan thành công kích hoạt làm mới riêng VPS qua refreshVps (gọi vps:list)
+    // Sau khi cập nhật, Docker version '27.1.1' được hiển thị ở bảng Machine info
+    await waitFor(() => {
+      const machineCard = screen
+        .getByText(strings.vpsControl.overview.machineTitle)
+        .closest('.ant-card')
+      expect(machineCard).toBeTruthy()
+      expect(within(machineCard as HTMLElement).getByText('27.1.1')).toBeTruthy()
+    })
+
+    // Quan trọng: get-resources KHÔNG bị gọi thêm lần nào nữa (vẫn là 2 lần ban đầu của fleet)
+    expect(getResources).toHaveBeenCalledTimes(2)
+
+    // Giữ callback ổn định: vps:scan KHÔNG bị quét lặp vô hạn (chỉ đúng 1 lần khi mở tab)
+    expect(scanHandler).toHaveBeenCalledTimes(1)
+  })
 })
