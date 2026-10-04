@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Button, Empty, Space, Spin, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Empty, Space, Spin, Table, Tag, Tooltip, Typography } from 'antd'
 import { ExportOutlined, PlusOutlined, ReloadOutlined, RocketOutlined } from '@ant-design/icons'
 
 import type { App, Deployment, IpcError } from '@shared/ipc'
@@ -194,12 +194,23 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
     {
       title: strings.vpsControl.apps.columns.version,
       key: 'version',
-      width: 90,
+      width: 105,
       align: 'center' as const,
       render: (_: unknown, app: AppRow) => {
         if (app.currentVersion !== null) return `v${app.currentVersion}`
-        if (app.current_deployment_id !== null) return `#${app.current_deployment_id}`
-        return '—'
+        if (app.current_deployment_id !== null) {
+          if (app.isMismatch || app.versionsError) {
+            return <Typography.Text type="secondary">—</Typography.Text>
+          }
+          return (
+            <Tooltip title={`${strings.apps.deploymentIdTitle}: #${app.current_deployment_id}`}>
+              <span className="mono-text" style={{ fontSize: 12 }}>
+                ID: #{app.current_deployment_id}
+              </span>
+            </Tooltip>
+          )
+        }
+        return <Typography.Text type="secondary">—</Typography.Text>
       }
     },
     {

@@ -48,19 +48,23 @@ function mockApi(handlers: Record<string, InvokeHandler>): void {
   })
 }
 
-function renderTab(): { onDockerInstalled: ReturnType<typeof vi.fn> } {
+function renderTab(
+  resources?: import('../vpsResources').RowResourceState,
+  onRefreshResources = vi.fn()
+): { onDockerInstalled: ReturnType<typeof vi.fn>; onRefreshResources: ReturnType<typeof vi.fn> } {
   const onDockerInstalled = vi.fn()
   render(
     <VpsOverviewTab
       vps={VPS}
-      onRefreshResources={() => undefined}
+      resources={resources}
+      onRefreshResources={onRefreshResources}
       onCheckConnection={() => undefined}
       onEdit={() => undefined}
       onDelete={() => undefined}
       onDockerInstalled={onDockerInstalled}
     />
   )
-  return { onDockerInstalled }
+  return { onDockerInstalled, onRefreshResources }
 }
 
 async function scanListEl(): Promise<HTMLElement> {
@@ -141,5 +145,54 @@ describe('VpsOverviewTab — card Environment scan', () => {
     fireEvent.click(screen.getByText(strings.common.retry))
     const list = document.querySelector('.scan-list')
     expect(list).toBeNull()
+  })
+
+  it('card Tài nguyên: hiển thị thông số CPU/RAM/Disk, gauges và nút refresh độc lập với scan', async () => {
+    mockApi({ 'vps:scan': async () => ({ ok: true, data: SCAN_RESULT }) })
+    const refreshResources = vi.fn()
+
+    renderTab(
+      {
+        status: 'success',
+        data: {
+          ram_total_mb: 4096,
+          ram_free_mb: 1024,
+          disk_total_gb: 40,
+          disk_free_gb: 28,
+          cpu_count: 2,
+          load_avg_1m: 0.5
+        },
+        fetchedAt: Date.now()
+      },
+      refreshResources
+    )
+
+    // Hiển thị card Tài nguyên hệ thống
+    expect(screen.getByText(strings.vpsControl.overview.resourcesTitle)).toBeTruthy()
+    // Hiển thị cores và load average
+    expect(screen.getByText('2')).toBeTruthy()
+    expect(screen.getByText('0.50')).toBeTruthy()
+    // Bấm nút Refresh trong card tài nguyên chỉ gọi refreshResources, không quét scan
+    const refreshBtn = screen.getByRole('button', { name: new RegExp(strings.common.refresh, 'i') })
+    fireEvent.click(refreshBtn)
+    expect(refreshResources).toHaveBeenCalledTimes(1)
+  })
+
+  it('card Tài nguyên báo lỗi: hiển thị Alert lỗi và nút Thử lại', async () => {
+    mockApi({ 'vps:scan': async () => ({ ok: true, data: SCAN_RESULT }) })
+    const refreshResources = vi.fn()
+
+    renderTab(
+      {
+        status: 'error',
+        message: 'SSH connection timeout reading /proc/meminfo'
+      },
+      refreshResources
+    )
+
+    expect(screen.getByText(strings.vpsControl.sidebar.resourceError)).toBeTruthy()
+    expect(screen.getByText('SSH connection timeout reading /proc/meminfo')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(strings.common.retry, 'i') }))
+    expect(refreshResources).toHaveBeenCalledTimes(1)
   })
 })

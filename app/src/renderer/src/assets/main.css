@@ -695,6 +695,25 @@
   min-width: 0;
 }
 
+.vps-detail-fullwidth {
+  width: 100%;
+}
+
+.panel-detail-card {
+  width: 100%;
+  border-radius: 4px;
+}
+
+.vps-detail-tabs .ant-tabs-nav {
+  margin-bottom: 16px;
+}
+
+.vps-overview-resources-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .panel-selector-full {
   width: 100%;
 }
@@ -2446,7 +2465,6 @@
   overflow-y: auto;
   padding: 20px 24px;
 }
-
 
 /* Status dots */
 .status-dot {

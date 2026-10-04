@@ -127,7 +127,7 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
 
     // 2. App 2 (mismatch current_deployment_id = 999): KHÔNG được fallback sang v5, KHÔNG được ghi "Chưa triển khai", hiện "Không tìm thấy (#999)"
     expect(screen.queryByText('v5')).toBeNull()
-    expect(screen.getByText('#999')).toBeTruthy()
+    expect(screen.queryByText('#999')).toBeNull() // Không hiển thị ID trần giả vờ làm version
     expect(screen.getByText('Không tìm thấy (#999)')).toBeTruthy()
 
     // 3. App 3 (current_deployment_id === null): hiển thị "Chưa triển khai"

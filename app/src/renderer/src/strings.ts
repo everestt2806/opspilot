@@ -498,8 +498,8 @@ const BASE_EN_STRINGS = {
   },
   vpsControl: {
     tabs: {
-      overview: 'Overview',
-      apps: 'Applications & Deployments',
+      overview: 'Overview & Resources',
+      apps: 'Server Applications',
       database: 'Database',
       activity: 'Activity'
     },
@@ -527,7 +527,11 @@ const BASE_EN_STRINGS = {
     },
     overview: {
       machineTitle: 'Machine info',
-      resourcesTitle: 'Resources',
+      resourcesTitle: 'System resources (CPU / RAM / Disk)',
+      resourcesEmpty: 'Resources have not been checked in this session yet.',
+      resourcesRefresh: 'Read resources',
+      gaugesTitle: 'Resource usage',
+      specsTitle: 'Resource specifications',
       actionsTitle: 'Quick actions',
       utilitiesTitle: 'Utilities',
       dangerTitle: 'Danger zone',
@@ -599,6 +603,10 @@ const BASE_EN_STRINGS = {
       loadFailed: 'Could not load activity for this server.'
     },
     database: {
+      notSupportedTitle: 'Database management not supported',
+      notSupportedDesc:
+        'No database service handler (db:*) is registered in the main process for this server.',
+      notSupported: 'Database management is not supported yet on this server.',
       usersTitle: 'Database users',
       usersEmpty: 'No database users on this server yet.',
       createUser: 'Create user',
@@ -748,6 +756,12 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   },
   vpsControl: {
     ...BASE_EN_STRINGS.vpsControl,
+    tabs: {
+      overview: 'Tổng quan & Tài nguyên',
+      apps: 'Ứng dụng trên máy chủ',
+      database: 'Cơ sở dữ liệu',
+      activity: 'Hoạt động'
+    },
     fleet: {
       totalVps: 'Tổng VPS',
       checkedNow: 'Vừa kiểm tra',
@@ -769,6 +783,32 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       noSelection: 'Chọn một VPS từ danh sách bên trái để xem chi tiết.',
       dockerMissing: 'Chưa cài Docker',
       appsCount: (count: number) => (count === 0 ? 'Chưa có app' : `${count} ứng dụng`)
+    },
+    overview: {
+      ...BASE_EN_STRINGS.vpsControl.overview,
+      machineTitle: 'Thông tin máy chủ',
+      resourcesTitle: 'Tài nguyên hệ thống (CPU / RAM / Disk)',
+      resourcesEmpty: 'Chưa đọc tài nguyên trong phiên này.',
+      resourcesRefresh: 'Đọc tài nguyên',
+      gaugesTitle: 'Mức sử dụng tài nguyên',
+      specsTitle: 'Thông số tài nguyên',
+      checkedAt: (time: string) => `Đã kiểm tra tài nguyên: ${time}`,
+      dockerMissing: 'Chưa cài Docker',
+      neverSeen: 'Chưa từng kết nối',
+      host: 'Máy chủ',
+      sshPort: 'Cổng SSH',
+      username: 'Tài khoản',
+      providerRegion: 'Nhà cung cấp / Khu vực',
+      docker: 'Docker',
+      createdAt: 'Thời điểm thêm',
+      lastSeen: 'Lần kiểm tra cuối'
+    },
+    database: {
+      ...BASE_EN_STRINGS.vpsControl.database,
+      notSupportedTitle: 'Chưa hỗ trợ cơ sở dữ liệu',
+      notSupportedDesc:
+        'Hiện chưa có handler quản lý cơ sở dữ liệu (db:*) trong tiến trình chính cho máy chủ này.',
+      notSupported: 'Chưa hỗ trợ quản lý cơ sở dữ liệu trên máy chủ này.'
     }
   },
   dashboard: {
@@ -1032,6 +1072,12 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   },
   vpsControl: {
     ...BASE_EN_STRINGS.vpsControl,
+    tabs: {
+      overview: '概览与资源',
+      apps: '服务器应用',
+      database: '数据库',
+      activity: '活动记录'
+    },
     fleet: {
       totalVps: 'VPS 总数',
       checkedNow: '刚刚检查',
@@ -1053,6 +1099,31 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       noSelection: '从左侧列表中选择 VPS 以查看详情。',
       dockerMissing: '未安装 Docker',
       appsCount: (count: number) => (count === 0 ? '无应用' : `${count} 个应用`)
+    },
+    overview: {
+      ...BASE_EN_STRINGS.vpsControl.overview,
+      machineTitle: '机器信息',
+      resourcesTitle: '系统资源 (CPU / 内存 / 磁盘)',
+      resourcesEmpty: '当前会话尚未检查资源。',
+      resourcesRefresh: '读取资源',
+      gaugesTitle: '资源使用率',
+      specsTitle: '资源规格',
+      checkedAt: (time: string) => `资源检查时间：${time}`,
+      dockerMissing: '未安装 Docker',
+      neverSeen: '从未连接',
+      host: '主机',
+      sshPort: 'SSH 端口',
+      username: '用户名',
+      providerRegion: '服务商 / 区域',
+      docker: 'Docker',
+      createdAt: '添加时间',
+      lastSeen: '最后检查'
+    },
+    database: {
+      ...BASE_EN_STRINGS.vpsControl.database,
+      notSupportedTitle: '暂不支持数据库',
+      notSupportedDesc: '当前主进程未注册此服务器的数据库管理处理器 (db:*)。',
+      notSupported: '此服务器暂不支持数据库管理。'
     }
   },
   dashboard: {
@@ -1306,6 +1377,12 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   },
   vpsControl: {
     ...BASE_EN_STRINGS.vpsControl,
+    tabs: {
+      overview: '概要・リソース',
+      apps: 'サーバー上のアプリ',
+      database: 'データベース',
+      activity: 'アクティビティ'
+    },
     fleet: {
       totalVps: 'VPS 合計',
       checkedNow: '確認済み',
@@ -1327,6 +1404,32 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       noSelection: '左側のリストから VPS を選択して詳細を表示します。',
       dockerMissing: 'Docker 未インストール',
       appsCount: (count: number) => (count === 0 ? 'アプリなし' : `${count} 個のアプリ`)
+    },
+    overview: {
+      ...BASE_EN_STRINGS.vpsControl.overview,
+      machineTitle: 'サーバー情報',
+      resourcesTitle: 'システムリソース (CPU / RAM / ディスク)',
+      resourcesEmpty: 'このセッションではまだリソースを確認していません。',
+      resourcesRefresh: 'リソース取得',
+      gaugesTitle: 'リソース使用率',
+      specsTitle: 'リソーススペック',
+      checkedAt: (time: string) => `リソース確認日時: ${time}`,
+      dockerMissing: 'Docker 未インストール',
+      neverSeen: '接続履歴なし',
+      host: 'ホスト',
+      sshPort: 'SSH ポート',
+      username: 'ユーザー名',
+      providerRegion: 'プロバイダー / リージョン',
+      docker: 'Docker',
+      createdAt: '追加日時',
+      lastSeen: '最終確認'
+    },
+    database: {
+      ...BASE_EN_STRINGS.vpsControl.database,
+      notSupportedTitle: 'データベース未サポート',
+      notSupportedDesc:
+        '現在、このサーバーのデータベース管理ハンドラー (db:*) は登録されていません。',
+      notSupported: 'このサーバーではデータベース管理はまだサポートされていません。'
     }
   },
   dashboard: {
@@ -1563,9 +1666,11 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     vpsControl: {
       ...BASE_EN_STRINGS.vpsControl,
       ...VI_OVERRIDES.vpsControl,
+      tabs: { ...BASE_EN_STRINGS.vpsControl.tabs, ...VI_OVERRIDES.vpsControl?.tabs },
       fleet: { ...BASE_EN_STRINGS.vpsControl.fleet, ...VI_OVERRIDES.vpsControl?.fleet },
       selector: { ...BASE_EN_STRINGS.vpsControl.selector, ...VI_OVERRIDES.vpsControl?.selector },
-      overview: { ...BASE_EN_STRINGS.vpsControl.overview, ...VI_OVERRIDES.vpsControl?.overview }
+      overview: { ...BASE_EN_STRINGS.vpsControl.overview, ...VI_OVERRIDES.vpsControl?.overview },
+      database: { ...BASE_EN_STRINGS.vpsControl.database, ...VI_OVERRIDES.vpsControl?.database }
     },
     dashboard: {
       ...BASE_EN_STRINGS.dashboard,
@@ -1624,9 +1729,11 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     vpsControl: {
       ...BASE_EN_STRINGS.vpsControl,
       ...CN_OVERRIDES.vpsControl,
+      tabs: { ...BASE_EN_STRINGS.vpsControl.tabs, ...CN_OVERRIDES.vpsControl?.tabs },
       fleet: { ...BASE_EN_STRINGS.vpsControl.fleet, ...CN_OVERRIDES.vpsControl?.fleet },
       selector: { ...BASE_EN_STRINGS.vpsControl.selector, ...CN_OVERRIDES.vpsControl?.selector },
-      overview: { ...BASE_EN_STRINGS.vpsControl.overview, ...CN_OVERRIDES.vpsControl?.overview }
+      overview: { ...BASE_EN_STRINGS.vpsControl.overview, ...CN_OVERRIDES.vpsControl?.overview },
+      database: { ...BASE_EN_STRINGS.vpsControl.database, ...CN_OVERRIDES.vpsControl?.database }
     },
     dashboard: {
       ...BASE_EN_STRINGS.dashboard,
@@ -1685,9 +1792,11 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     vpsControl: {
       ...BASE_EN_STRINGS.vpsControl,
       ...JP_OVERRIDES.vpsControl,
+      tabs: { ...BASE_EN_STRINGS.vpsControl.tabs, ...JP_OVERRIDES.vpsControl?.tabs },
       fleet: { ...BASE_EN_STRINGS.vpsControl.fleet, ...JP_OVERRIDES.vpsControl?.fleet },
       selector: { ...BASE_EN_STRINGS.vpsControl.selector, ...JP_OVERRIDES.vpsControl?.selector },
-      overview: { ...BASE_EN_STRINGS.vpsControl.overview, ...JP_OVERRIDES.vpsControl?.overview }
+      overview: { ...BASE_EN_STRINGS.vpsControl.overview, ...JP_OVERRIDES.vpsControl?.overview },
+      database: { ...BASE_EN_STRINGS.vpsControl.database, ...JP_OVERRIDES.vpsControl?.database }
     },
     dashboard: {
       ...BASE_EN_STRINGS.dashboard,

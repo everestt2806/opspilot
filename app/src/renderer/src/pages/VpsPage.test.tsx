@@ -238,15 +238,16 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
     render(<VpsPage />)
     fireEvent.click(await screen.findByText('VM01'))
 
-    // Overview: card thông tin nhanh (IP/port/SSH) + sidebar Server info hiển thị
+    // Overview: card thông tin nhanh (IP/port/SSH) + card Tài nguyên hệ thống hiển thị toàn chiều rộng
     expect(await screen.findByText('Main IP')).toBeTruthy()
-    await waitFor(() => expect(document.querySelector('.panel-info-sidebar')).toBeTruthy())
+    expect(screen.getByText(strings.vpsControl.overview.resourcesTitle)).toBeTruthy()
+    expect(document.querySelector('.panel-info-sidebar')).toBeNull()
 
     fireEvent.click(await screen.findByText(strings.vpsControl.tabs.apps))
     expect(await screen.findByText('express-api')).toBeTruthy()
     expect(screen.getByText('v3')).toBeTruthy()
 
-    // Tab khác: card thông tin nhanh + sidebar ẩn, nội dung chiếm full
+    // Tab khác: nội dung tab Overview ẩn, bảng app chiếm toàn chiều rộng
     await waitFor(() => expect(screen.queryByText('Main IP')).toBeNull())
     expect(document.querySelector('.panel-info-sidebar')).toBeNull()
   })

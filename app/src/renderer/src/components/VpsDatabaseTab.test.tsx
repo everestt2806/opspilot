@@ -26,6 +26,7 @@ type InvokeHandler = (...args: unknown[]) => Promise<unknown>
 
 function mockApi(handlers: Record<string, InvokeHandler>): void {
   vi.stubGlobal('api', {
+    hasHandler: (channel: string) => Boolean(handlers[channel]),
     invoke: (channel: string, ...args: unknown[]) => {
       const handler = handlers[channel]
       if (!handler) return Promise.reject(new Error(`No handler registered for '${channel}'`))
@@ -268,5 +269,19 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
     expect(screen.queryByText('blog_admin')).toBeNull()
     fireEvent.click(screen.getByLabelText('Back to databases'))
     expect(await screen.findByText('blog_admin')).toBeTruthy()
+  })
+
+  it('khi main chưa hỗ trợ handler db: hiển thị rõ "Chưa hỗ trợ" và không gọi IPC db:*', async () => {
+    const invoke = vi.fn()
+    vi.stubGlobal('api', {
+      hasHandler: () => false,
+      invoke,
+      on: () => () => {}
+    })
+
+    render(<VpsDatabaseTab vpsId={7} />)
+
+    expect(await screen.findByText(strings.vpsControl.database.notSupportedTitle)).toBeTruthy()
+    expect(invoke).not.toHaveBeenCalled()
   })
 })
