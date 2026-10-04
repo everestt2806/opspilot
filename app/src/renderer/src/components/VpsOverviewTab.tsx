@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   Alert,
   Button,
@@ -21,7 +21,8 @@ import {
 
 import type { IpcResult, Vps, VpsResources, VpsScanItem, VpsScanResult } from '@shared/ipc'
 
-import { strings, useStrings } from '../strings'
+import { useUiState } from '../store/uiState'
+import { useStrings } from '../strings'
 import { localDateTime, relativeTime } from '../utils/format'
 import { formatGb, formatMb, resourcePercents, type RowResourceState } from '../vpsResources'
 import { VpsOverviewActionBar } from './VpsOverviewActionBar'
@@ -42,11 +43,11 @@ type ScanPhase = 'scanning' | 'done' | 'error'
 async function invokeScan(vpsId: number): Promise<IpcResult<VpsScanResult>> {
   try {
     return await window.api.invoke('vps:scan', vpsId)
-  } catch {
+  } catch (err) {
     // Kênh chưa nối (bản cũ của main) — báo lỗi trung thực thay vì unhandled rejection
     return {
       ok: false,
-      error: { code: 'UNKNOWN', message: strings.vpsControl.scan.failed }
+      error: { code: 'UNKNOWN', message: err instanceof Error ? err.message : String(err) }
     }
   }
 }
@@ -62,6 +63,7 @@ export function VpsOverviewTab({
   onDockerInstalled
 }: VpsOverviewTabProps): React.JSX.Element {
   const strings = useStrings()
+  const locale = useUiState((state) => state.locale)
   const scanItemLabels: Record<VpsScanItem['key'], string> = {
     ssh: strings.vpsControl.scan.itemSsh,
     docker: strings.vpsControl.scan.itemDocker,
@@ -77,11 +79,6 @@ export function VpsOverviewTab({
   const [scanPhase, setScanPhase] = useState<ScanPhase>('scanning')
   const [scanResult, setScanResult] = useState<VpsScanResult | null>(null)
   const [scanError, setScanError] = useState<string | null>(null)
-  const onDockerInstalledRef = useRef(onDockerInstalled)
-
-  useEffect(() => {
-    onDockerInstalledRef.current = onDockerInstalled
-  }, [onDockerInstalled])
 
   const applyScan = useCallback(
     (result: IpcResult<VpsScanResult>): void => {
@@ -89,7 +86,6 @@ export function VpsOverviewTab({
       setScanResult(result.ok ? result.data : null)
       if (result.ok) {
         setScanError(null)
-        onDockerInstalledRef.current()
         return
       }
       const message = result.error.message
@@ -178,14 +174,16 @@ export function VpsOverviewTab({
               <Tooltip title={localDateTime(new Date(resources.fetchedAt).toISOString())}>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   {strings.vpsControl.overview.checkedAt(
-                    relativeTime(new Date(resources.fetchedAt).toISOString())
+                    relativeTime(new Date(resources.fetchedAt).toISOString(), undefined, locale)
                   )}
                 </Typography.Text>
               </Tooltip>
             ) : vps.last_seen_at ? (
               <Tooltip title={localDateTime(vps.last_seen_at)}>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {strings.vpsControl.overview.checkedAt(relativeTime(vps.last_seen_at))}
+                  {strings.vpsControl.overview.checkedAt(
+                    relativeTime(vps.last_seen_at, undefined, locale)
+                  )}
                 </Typography.Text>
               </Tooltip>
             ) : null}
@@ -305,7 +303,9 @@ export function VpsOverviewTab({
           <Descriptions.Item label={strings.vpsControl.overview.lastSeen}>
             {vps.last_seen_at ? (
               <Tooltip title={localDateTime(vps.last_seen_at)}>
-                <span className="mono-text">{relativeTime(vps.last_seen_at)}</span>
+                <span className="mono-text">
+                  {relativeTime(vps.last_seen_at, undefined, locale)}
+                </span>
               </Tooltip>
             ) : (
               <Typography.Text type="secondary">

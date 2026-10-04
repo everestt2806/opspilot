@@ -173,17 +173,18 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
       title: strings.vpsControl.apps.columns.framework,
       dataIndex: 'framework',
       key: 'framework',
-      width: 110
+      width: 95
     },
     {
       title: strings.vpsControl.apps.columns.port,
       key: 'port',
-      width: 80,
+      width: 65,
       render: (_: unknown, app: AppRow) => <span className="mono-text">{app.host_port}</span>
     },
     {
       title: strings.vpsControl.apps.columns.url,
       key: 'url',
+      width: 170,
       ellipsis: true,
       render: (_: unknown, app: AppRow) => (
         <Typography.Link className="mono-text" onClick={() => void openApp(app.url)}>
@@ -194,7 +195,7 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
     {
       title: strings.vpsControl.apps.columns.version,
       key: 'version',
-      width: 105,
+      width: 85,
       align: 'center' as const,
       render: (_: unknown, app: AppRow) => {
         if (app.currentVersion !== null) return `v${app.currentVersion}`
@@ -216,7 +217,7 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
     {
       title: strings.vpsControl.apps.columns.status,
       key: 'status',
-      width: 170,
+      width: 165,
       render: (_: unknown, app: AppRow) => (
         <Tag className="status-badge" color={statusColor(app)}>
           {statusLabel(app)}
@@ -226,9 +227,9 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
     {
       title: strings.vpsControl.apps.columns.actions,
       key: 'actions',
-      width: 180,
+      width: 235,
       render: (_: unknown, app: AppRow) => (
-        <Space size="small">
+        <Space size={4} wrap={false}>
           <Button
             className="action-pill"
             size="small"
@@ -312,6 +313,7 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
           dataSource={rows}
           columns={columns}
           pagination={false}
+          className="vps-apps-table"
         />
       )}
     </div>

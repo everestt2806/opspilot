@@ -532,7 +532,6 @@ const BASE_EN_STRINGS = {
       resourcesRefresh: 'Read resources',
       gaugesTitle: 'Resource usage',
       specsTitle: 'Resource specifications',
-      actionsTitle: 'Quick actions',
       utilitiesTitle: 'Utilities',
       dangerTitle: 'Danger zone',
       host: 'Host',
@@ -547,6 +546,7 @@ const BASE_EN_STRINGS = {
       neverSeen: 'Never connected',
       checkedAt: (time: string) => `Resources checked at ${time}`,
       checkConnection: 'Check & diagnose connection',
+      actionsTitle: 'Server actions',
       copyCommand: 'Copy SSH command',
       copied: 'Copied'
     },
@@ -604,8 +604,7 @@ const BASE_EN_STRINGS = {
     },
     database: {
       notSupportedTitle: 'Database management not supported',
-      notSupportedDesc:
-        'No database service handler (db:*) is registered in the main process for this server.',
+      notSupportedDesc: 'Database management for this server is not yet available in OpsPilot.',
       notSupported: 'Database management is not supported yet on this server.',
       usersTitle: 'Database users',
       usersEmpty: 'No database users on this server yet.',
@@ -784,6 +783,25 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       dockerMissing: 'Chưa cài Docker',
       appsCount: (count: number) => (count === 0 ? 'Chưa có app' : `${count} ứng dụng`)
     },
+    header: {
+      mainIp: 'IP chính',
+      sshPort: 'Cổng SSH',
+      sshCommand: 'Lệnh SSH'
+    },
+    sidebar: {
+      title: 'Thông tin máy chủ',
+      cpu: 'Tải CPU',
+      ram: 'Mức dùng RAM',
+      cores: 'Số nhân CPU',
+      disk: 'Ổ đĩa',
+      ramTotal: 'Tổng RAM',
+      loadAvg: 'Tải trung bình (1m)',
+      docker: 'Docker',
+      lastSeen: 'Lần kiểm tra cuối',
+      checking: 'Đang đọc tài nguyên hệ thống…',
+      resourceError: 'Không thể đọc tài nguyên máy chủ',
+      retryResources: 'Thử lại'
+    },
     overview: {
       ...BASE_EN_STRINGS.vpsControl.overview,
       machineTitle: 'Thông tin máy chủ',
@@ -801,13 +819,50 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       providerRegion: 'Nhà cung cấp / Khu vực',
       docker: 'Docker',
       createdAt: 'Thời điểm thêm',
-      lastSeen: 'Lần kiểm tra cuối'
+      lastSeen: 'Lần kiểm tra cuối',
+      checkConnection: 'Kiểm tra & chẩn đoán kết nối',
+      actionsTitle: 'Thao tác máy chủ',
+      copyCommand: 'Sao chép lệnh SSH',
+      copied: 'Đã sao chép'
+    },
+    apps: {
+      title: 'Ứng dụng trên máy chủ',
+      deployNew: 'Triển khai ứng dụng mới',
+      redeploy: 'Triển khai lại',
+      openApp: 'Mở app',
+      empty: 'Chưa có ứng dụng nào trên máy chủ này.',
+      emptyHint: 'Triển khai ứng dụng đầu tiên để quản lý tại đây.',
+      loadFailed: 'Không thể tải danh sách ứng dụng trên máy chủ.',
+      columns: {
+        name: 'Tên',
+        framework: 'Framework',
+        port: 'Cổng',
+        url: 'URL',
+        version: 'Phiên bản',
+        status: 'Trạng thái',
+        actions: 'Thao tác'
+      },
+      status: {
+        running: 'Đang chạy',
+        failed: 'Thất bại',
+        building: 'Đang đóng gói',
+        deploying: 'Đang triển khai',
+        stopped: 'Đã dừng',
+        rolled_back: 'Đã khôi phục',
+        none: 'Chưa triển khai'
+      }
+    },
+    activity: {
+      title: 'Hoạt động gần đây',
+      empty: 'Chưa có hoạt động nào trên máy chủ này.',
+      emptyHint: 'Triển khai hoặc quản lý ứng dụng để xem nhật ký tại đây.',
+      loadFailed: 'Không thể tải nhật ký hoạt động cho máy chủ này.'
     },
     database: {
       ...BASE_EN_STRINGS.vpsControl.database,
       notSupportedTitle: 'Chưa hỗ trợ cơ sở dữ liệu',
       notSupportedDesc:
-        'Hiện chưa có handler quản lý cơ sở dữ liệu (db:*) trong tiến trình chính cho máy chủ này.',
+        'Tính năng quản lý cơ sở dữ liệu trên máy chủ hiện chưa khả dụng trong OpsPilot.',
       notSupported: 'Chưa hỗ trợ quản lý cơ sở dữ liệu trên máy chủ này.'
     }
   },
@@ -1100,6 +1155,25 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       dockerMissing: '未安装 Docker',
       appsCount: (count: number) => (count === 0 ? '无应用' : `${count} 个应用`)
     },
+    header: {
+      mainIp: '主 IP',
+      sshPort: 'SSH 端口',
+      sshCommand: 'SSH 命令'
+    },
+    sidebar: {
+      title: '服务器信息',
+      cpu: 'CPU 负载',
+      ram: '内存使用',
+      cores: 'CPU 核心数',
+      disk: '磁盘',
+      ramTotal: '总内存',
+      loadAvg: '平均负载 (1m)',
+      docker: 'Docker',
+      lastSeen: '最后检查',
+      checking: '正在读取系统资源…',
+      resourceError: '无法读取服务器资源',
+      retryResources: '重试'
+    },
     overview: {
       ...BASE_EN_STRINGS.vpsControl.overview,
       machineTitle: '机器信息',
@@ -1117,12 +1191,49 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       providerRegion: '服务商 / 区域',
       docker: 'Docker',
       createdAt: '添加时间',
-      lastSeen: '最后检查'
+      lastSeen: '最后检查',
+      checkConnection: '检查并诊断连接',
+      actionsTitle: '服务器操作',
+      copyCommand: '复制 SSH 命令',
+      copied: '已复制'
+    },
+    apps: {
+      title: '服务器上的应用',
+      deployNew: '部署新应用',
+      redeploy: '重新部署',
+      openApp: '打开应用',
+      empty: '此服务器上暂无应用。',
+      emptyHint: '部署第一个应用以在此开始管理。',
+      loadFailed: '无法加载此服务器上的应用。',
+      columns: {
+        name: '名称',
+        framework: '框架',
+        port: '端口',
+        url: 'URL',
+        version: '版本',
+        status: '状态',
+        actions: '操作'
+      },
+      status: {
+        running: '运行中',
+        failed: '失败',
+        building: '构建中',
+        deploying: '部署中',
+        stopped: '已停止',
+        rolled_back: '已回滚',
+        none: '未部署'
+      }
+    },
+    activity: {
+      title: '近期活动',
+      empty: '此服务器上暂无活动。',
+      emptyHint: '部署或管理应用以在此查看日志。',
+      loadFailed: '无法加载此服务器的活动日志。'
     },
     database: {
       ...BASE_EN_STRINGS.vpsControl.database,
       notSupportedTitle: '暂不支持数据库',
-      notSupportedDesc: '当前主进程未注册此服务器的数据库管理处理器 (db:*)。',
+      notSupportedDesc: 'OpsPilot 目前尚未支持此服务器的数据库管理功能。',
       notSupported: '此服务器暂不支持数据库管理。'
     }
   },
@@ -1405,6 +1516,25 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       dockerMissing: 'Docker 未インストール',
       appsCount: (count: number) => (count === 0 ? 'アプリなし' : `${count} 個のアプリ`)
     },
+    header: {
+      mainIp: 'メイン IP',
+      sshPort: 'SSH ポート',
+      sshCommand: 'SSH コマンド'
+    },
+    sidebar: {
+      title: 'サーバー情報',
+      cpu: 'CPU 負荷',
+      ram: 'メモリ使用率',
+      cores: 'CPU コア数',
+      disk: 'ディスク',
+      ramTotal: '総メモリ',
+      loadAvg: '平均負荷 (1m)',
+      docker: 'Docker',
+      lastSeen: '最終確認',
+      checking: 'システムリソースを取得中…',
+      resourceError: 'サーバーリソースを取得できません',
+      retryResources: '再試行'
+    },
     overview: {
       ...BASE_EN_STRINGS.vpsControl.overview,
       machineTitle: 'サーバー情報',
@@ -1422,13 +1552,50 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       providerRegion: 'プロバイダー / リージョン',
       docker: 'Docker',
       createdAt: '追加日時',
-      lastSeen: '最終確認'
+      lastSeen: '最終確認',
+      checkConnection: '接続確認・診断',
+      actionsTitle: 'サーバー操作',
+      copyCommand: 'SSH コマンドをコピー',
+      copied: 'コピー完了'
+    },
+    apps: {
+      title: 'サーバー上のアプリ',
+      deployNew: '新規アプリをデプロイ',
+      redeploy: '再デプロイ',
+      openApp: 'アプリを開く',
+      empty: 'このサーバーにはまだアプリがありません。',
+      emptyHint: '最初のアプリをデプロイして管理を開始してください。',
+      loadFailed: 'このサーバーのアプリ一覧を読み込めませんでした。',
+      columns: {
+        name: '名前',
+        framework: 'フレームワーク',
+        port: 'ポート',
+        url: 'URL',
+        version: 'バージョン',
+        status: 'ステータス',
+        actions: '操作'
+      },
+      status: {
+        running: '稼働中',
+        failed: '失敗',
+        building: 'ビルド中',
+        deploying: 'デプロイ中',
+        stopped: '停止中',
+        rolled_back: 'ロールバック済',
+        none: '未デプロイ'
+      }
+    },
+    activity: {
+      title: '最近のアクティビティ',
+      empty: 'このサーバーのアクティビティはまだありません。',
+      emptyHint: 'アプリをデプロイまたは管理するとログが表示されます。',
+      loadFailed: 'このサーバーのアクティビティログを読み込めませんでした。'
     },
     database: {
       ...BASE_EN_STRINGS.vpsControl.database,
       notSupportedTitle: 'データベース未サポート',
       notSupportedDesc:
-        '現在、このサーバーのデータベース管理ハンドラー (db:*) は登録されていません。',
+        'OpsPilot では現在、このサーバーのデータベース管理機能をサポートしていません。',
       notSupported: 'このサーバーではデータベース管理はまだサポートされていません。'
     }
   },
@@ -1670,6 +1837,17 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
       fleet: { ...BASE_EN_STRINGS.vpsControl.fleet, ...VI_OVERRIDES.vpsControl?.fleet },
       selector: { ...BASE_EN_STRINGS.vpsControl.selector, ...VI_OVERRIDES.vpsControl?.selector },
       overview: { ...BASE_EN_STRINGS.vpsControl.overview, ...VI_OVERRIDES.vpsControl?.overview },
+      header: { ...BASE_EN_STRINGS.vpsControl.header, ...VI_OVERRIDES.vpsControl?.header },
+      sidebar: { ...BASE_EN_STRINGS.vpsControl.sidebar, ...VI_OVERRIDES.vpsControl?.sidebar },
+      apps: {
+        ...BASE_EN_STRINGS.vpsControl.apps,
+        ...VI_OVERRIDES.vpsControl?.apps,
+        columns: {
+          ...BASE_EN_STRINGS.vpsControl.apps.columns,
+          ...VI_OVERRIDES.vpsControl?.apps?.columns
+        }
+      },
+      activity: { ...BASE_EN_STRINGS.vpsControl.activity, ...VI_OVERRIDES.vpsControl?.activity },
       database: { ...BASE_EN_STRINGS.vpsControl.database, ...VI_OVERRIDES.vpsControl?.database }
     },
     dashboard: {
@@ -1733,6 +1911,17 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
       fleet: { ...BASE_EN_STRINGS.vpsControl.fleet, ...CN_OVERRIDES.vpsControl?.fleet },
       selector: { ...BASE_EN_STRINGS.vpsControl.selector, ...CN_OVERRIDES.vpsControl?.selector },
       overview: { ...BASE_EN_STRINGS.vpsControl.overview, ...CN_OVERRIDES.vpsControl?.overview },
+      header: { ...BASE_EN_STRINGS.vpsControl.header, ...CN_OVERRIDES.vpsControl?.header },
+      sidebar: { ...BASE_EN_STRINGS.vpsControl.sidebar, ...CN_OVERRIDES.vpsControl?.sidebar },
+      apps: {
+        ...BASE_EN_STRINGS.vpsControl.apps,
+        ...CN_OVERRIDES.vpsControl?.apps,
+        columns: {
+          ...BASE_EN_STRINGS.vpsControl.apps.columns,
+          ...CN_OVERRIDES.vpsControl?.apps?.columns
+        }
+      },
+      activity: { ...BASE_EN_STRINGS.vpsControl.activity, ...CN_OVERRIDES.vpsControl?.activity },
       database: { ...BASE_EN_STRINGS.vpsControl.database, ...CN_OVERRIDES.vpsControl?.database }
     },
     dashboard: {
@@ -1796,6 +1985,17 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
       fleet: { ...BASE_EN_STRINGS.vpsControl.fleet, ...JP_OVERRIDES.vpsControl?.fleet },
       selector: { ...BASE_EN_STRINGS.vpsControl.selector, ...JP_OVERRIDES.vpsControl?.selector },
       overview: { ...BASE_EN_STRINGS.vpsControl.overview, ...JP_OVERRIDES.vpsControl?.overview },
+      header: { ...BASE_EN_STRINGS.vpsControl.header, ...JP_OVERRIDES.vpsControl?.header },
+      sidebar: { ...BASE_EN_STRINGS.vpsControl.sidebar, ...JP_OVERRIDES.vpsControl?.sidebar },
+      apps: {
+        ...BASE_EN_STRINGS.vpsControl.apps,
+        ...JP_OVERRIDES.vpsControl?.apps,
+        columns: {
+          ...BASE_EN_STRINGS.vpsControl.apps.columns,
+          ...JP_OVERRIDES.vpsControl?.apps?.columns
+        }
+      },
+      activity: { ...BASE_EN_STRINGS.vpsControl.activity, ...JP_OVERRIDES.vpsControl?.activity },
       database: { ...BASE_EN_STRINGS.vpsControl.database, ...JP_OVERRIDES.vpsControl?.database }
     },
     dashboard: {

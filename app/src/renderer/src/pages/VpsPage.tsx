@@ -27,6 +27,7 @@ export function VpsPage(): React.JSX.Element {
   const loadError = useVpsStore((state) => state.loadError)
   const resources = useVpsStore((state) => state.resources)
   const load = useVpsStore((state) => state.load)
+  const refreshVps = useVpsStore((state) => state.refreshVps)
   const refreshResources = useVpsStore((state) => state.refreshResources)
 
   const selectedVpsId = useUiState((state) => state.selectedVpsId)
@@ -306,7 +307,7 @@ export function VpsPage(): React.JSX.Element {
               onCheckConnection={() => openEdit(selectedVps)}
               onEdit={() => openEdit(selectedVps)}
               onDelete={() => deleteVps(selectedVps)}
-              onDockerInstalled={() => void load()}
+              onDockerInstalled={() => void refreshVps(selectedVps.id)}
             />
           </>
         )

@@ -40,6 +40,7 @@ import { tablesToDdl } from '../utils/sqlDdl'
 
 interface VpsDatabaseTabProps {
   vpsId: number
+  supported?: boolean
 }
 
 interface CreateUserValues {
@@ -85,32 +86,16 @@ async function callDb<T>(
   }
 }
 
-/** Kiểm tra xem main process có hỗ trợ các handler `db:*` hay không.
- *  Trong app thật, main process chưa đăng ký các handler db:* nên trả về false,
- *  tránh ném lỗi "No handler registered for 'db:*'". */
-function isDbHandlerSupported(): boolean {
-  const api = window.api as unknown as {
-    hasHandler?: (channel: string) => boolean
-    supportedHandlers?: string[] | Set<string>
-  }
-  if (typeof api?.hasHandler === 'function') {
-    return api.hasHandler('db:list-databases')
-  }
-  if (api?.supportedHandlers) {
-    return Array.isArray(api.supportedHandlers)
-      ? api.supportedHandlers.includes('db:list-databases')
-      : api.supportedHandlers.has('db:list-databases')
-  }
-  return false
-}
-
 /** Tab Database — quản lý user + database trên Postgres của VPS: 2 bảng kèm nút
  *  Create mở popup, bấm dòng database xuống trang thiết kế schema (kéo-thả,
  *  PK/FK, import file, SQL preview, lưu schema lên server). */
-export function VpsDatabaseTab({ vpsId }: VpsDatabaseTabProps): React.JSX.Element {
+export function VpsDatabaseTab({
+  vpsId,
+  supported = false
+}: VpsDatabaseTabProps): React.JSX.Element {
   const strings = useStrings()
   const db = strings.vpsControl.database
-  const isSupported = isDbHandlerSupported()
+  const isSupported = supported
 
   const [users, setUsers] = useState<DbUser[] | null>(null)
   const [usersError, setUsersError] = useState<IpcError | null>(null)

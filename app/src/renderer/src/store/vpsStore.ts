@@ -10,6 +10,7 @@ interface VpsStore {
   loadError: string | null
   resources: Record<number, RowResourceState | undefined>
   load: () => Promise<void>
+  refreshVps: (id: number) => Promise<void>
   refreshResources: (ids?: number[]) => Promise<void>
 }
 
@@ -29,6 +30,18 @@ export const useVpsStore = create<VpsStore>((set, get) => ({
     }
     set({ loading: false, items: result.data })
     await get().refreshResources(result.data.map((vps) => vps.id))
+  },
+
+  async refreshVps(id: number): Promise<void> {
+    const result = await window.api.invoke('vps:list')
+    if (result.ok) {
+      const updated = result.data.find((vps) => vps.id === id)
+      if (updated) {
+        set((state) => ({
+          items: state.items.map((vps) => (vps.id === id ? updated : vps))
+        }))
+      }
+    }
   },
 
   async refreshResources(ids?: number[]): Promise<void> {

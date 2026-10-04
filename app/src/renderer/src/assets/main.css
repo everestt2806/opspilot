@@ -2654,3 +2654,15 @@
   border-radius: 6px;
   padding: 16px 20px;
 }
+
+.vps-apps-table {
+  width: 100%;
+}
+
+.vps-apps-table .ant-table-cell {
+  white-space: nowrap;
+}
+
+.vps-apps-table .action-pill {
+  white-space: nowrap;
+}

@@ -6,7 +6,7 @@ import {
   ReloadOutlined
 } from '@ant-design/icons'
 
-import { strings } from '../strings'
+import { useStrings } from '../strings'
 
 interface VpsOverviewActionBarProps {
   vpsName: string
@@ -41,6 +41,7 @@ export function VpsOverviewActionBar({
   onInstallDocker,
   onDelete
 }: VpsOverviewActionBarProps): React.JSX.Element {
+  const strings = useStrings()
   const actions: BarAction[] = [
     {
       key: 'refresh',
