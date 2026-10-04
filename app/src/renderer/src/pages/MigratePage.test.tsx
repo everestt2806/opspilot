@@ -61,6 +61,7 @@ describe('MigratePage persisted state', () => {
     vi.stubGlobal('api', { invoke, on: () => () => {} })
 
     render(<MigratePage />)
+    await screen.findByText(/demo · VPS 1/)
     const sourceSelect = await screen.findByRole('combobox', { name: 'Chọn app nguồn' })
     fireEvent.change(sourceSelect, { target: { value: '1' } })
     const targetSelect = screen.getByRole('combobox', { name: 'Chọn VPS đích' })

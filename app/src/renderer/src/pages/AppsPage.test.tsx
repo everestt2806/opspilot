@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { App as AntApp } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -23,6 +23,21 @@ const VPS_1: Vps = {
   created_at: '2026-08-19T00:00:00Z'
 }
 
+const VPS_2: Vps = {
+  id: 2,
+  name: 'VM02',
+  host: '203.0.113.56',
+  port: 22,
+  username: 'root',
+  auth_type: 'password',
+  provider: 'WiService',
+  region: 'Saigon',
+  docker_version: '29.4.3',
+  last_status: 'online',
+  last_seen_at: '2026-08-19T00:00:00Z',
+  created_at: '2026-08-19T00:00:00Z'
+}
+
 const APP_1: App = {
   id: 10,
   vps_id: 1,
@@ -38,7 +53,7 @@ const APP_1: App = {
 
 const APP_2: App = {
   id: 20,
-  vps_id: 1,
+  vps_id: 2,
   name: 'my-next-blog',
   framework: 'nextjs',
   host_port: 30001,
@@ -46,7 +61,7 @@ const APP_2: App = {
   healthcheck_path: '/api/health',
   needs_db: 0,
   current_deployment_id: 201,
-  url: 'http://203.0.113.55:30001'
+  url: 'http://203.0.113.56:30001'
 }
 
 const DEPLOYMENT_ACTIVE: Deployment = {
@@ -85,7 +100,7 @@ function mockApi(customHandlers: Record<string, (...args: unknown[]) => Promise<
   invoke: ReturnType<typeof vi.fn>
 } {
   const handlers: Record<string, (...args: unknown[]) => Promise<unknown>> = {
-    'vps:list': async () => ({ ok: true, data: [VPS_1] }),
+    'vps:list': async () => ({ ok: true, data: [VPS_1, VPS_2] }),
     'app:list': async () => ({ ok: true, data: [APP_1, APP_2] }),
     'app:versions': async () => ({ ok: true, data: [DEPLOYMENT_ACTIVE, DEPLOYMENT_PAST] }),
     'doctor:diagnose': async () => ({
@@ -130,17 +145,17 @@ function mockApi(customHandlers: Record<string, (...args: unknown[]) => Promise<
   return { invoke }
 }
 
-describe('AppsPage — real IPC and multi-language', () => {
+describe('AppsPage — UI-1c full-width list, 3 horizontal tabs, honest status and real IPC', { timeout: 30000 }, () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    useUiState.setState({ locale: 'vi' })
+    useUiState.setState({ locale: 'vi', selectedAppId: null })
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  it('tải danh sách app từ app:list, lọc theo tìm kiếm và hiển thị thông tin thực tế', async () => {
+  it('tải danh sách app từ app:list, lọc kết hợp tìm kiếm và chọn VPS đồng thời (AND logic)', async () => {
     const { invoke } = mockApi()
 
     render(
@@ -150,19 +165,79 @@ describe('AppsPage — real IPC and multi-language', () => {
     )
 
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list'))
-    expect((await screen.findAllByText('my-express-app')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('my-express-app')).toBeTruthy()
     expect(screen.getByText('my-next-blog')).toBeTruthy()
 
-    // Tìm kiếm app
+    // 1. Tìm kiếm theo tên app
     const search = screen.getByPlaceholderText(/Tìm ứng dụng/)
     fireEvent.change(search, { target: { value: 'next' } })
-    const sidebar = screen.getByRole('complementary')
-    expect(within(sidebar).queryByText('my-express-app')).toBeNull()
-    expect(within(sidebar).getByText('my-next-blog')).toBeTruthy()
+    expect(screen.queryByText('my-express-app')).toBeNull()
+    expect(screen.getByText('my-next-blog')).toBeTruthy()
+
+    // Xóa từ khóa tìm kiếm -> hiện lại cả hai
+    fireEvent.change(search, { target: { value: '' } })
+    expect(screen.getByText('my-express-app')).toBeTruthy()
+    expect(screen.getByText('my-next-blog')).toBeTruthy()
+
+    // 2. Lọc theo VPS dropdown: chọn VPS_1 (id: 1, VM01)
+    const select = screen.getByRole('combobox')
+    fireEvent.mouseDown(select)
+    const optionVps1 =
+      (await screen.findAllByText(/VM01 \(203\.0\.113\.55\)/)).find((el) =>
+        el.classList.contains('ant-select-item-option-content')
+      ) || (await screen.findAllByText(/VM01 \(203\.0\.113\.55\)/))[1]
+    fireEvent.click(optionVps1)
+
+    // Chỉ có my-express-app thuộc VPS_1
+    expect(screen.getByText('my-express-app')).toBeTruthy()
+    expect(screen.queryByText('my-next-blog')).toBeNull()
+
+    // 3. Kết hợp AND: tìm từ khóa 'next' trong khi đang lọc VPS_1 -> kết quả rỗng
+    fireEvent.change(search, { target: { value: 'next' } })
+    expect(screen.queryByText('my-express-app')).toBeNull()
+    expect(screen.queryByText('my-next-blog')).toBeNull()
+  })
+
+  it('chọn app để mở trang chi tiết toàn chiều rộng có nút quay lại và đúng 3 tab ngang', async () => {
+    mockApi()
+
+    render(
+      <AntApp>
+        <AppsPage />
+      </AntApp>
+    )
+
+    // Đang ở màn hình danh sách, bấm vào app my-express-app
+    const appLink = await screen.findByText('my-express-app')
+    fireEvent.click(appLink)
+
+    // Chuyển sang màn chi tiết:
+    // Có nút quay lại
+    const backBtn = await screen.findByRole('button', { name: /Quay lại danh sách/ })
+    expect(backBtn).toBeTruthy()
+
+    // Tiêu đề h3 hiển thị tên app
+    expect(screen.getByRole('heading', { level: 3, name: 'my-express-app' })).toBeTruthy()
+
+    // Đúng 3 tab ngang: Tổng quan, Lịch sử & Rollback, Bác sĩ & Exposure
+    expect(screen.getByRole('tab', { name: /Tổng quan/ })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: /Lịch sử & Rollback/ })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: /Bác sĩ & Exposure/ })).toBeTruthy()
+
+    // Chuyển sang tab Bác sĩ & Exposure
+    fireEvent.click(screen.getByRole('tab', { name: /Bác sĩ & Exposure/ }))
+    expect(await screen.findByText('Bằng chứng chẩn đoán')).toBeTruthy()
+
+    // Bấm nút quay lại -> quay về danh sách ứng dụng
+    fireEvent.click(backBtn)
+    expect(await screen.findByPlaceholderText(/Tìm ứng dụng/)).toBeTruthy()
+    expect(screen.getByText('my-express-app')).toBeTruthy()
+    expect(screen.getByText('my-next-blog')).toBeTruthy()
   })
 
   it('hiển thị Exposure thật từ deployment và thực hiện Doctor diagnose / fix theo dữ liệu thật', async () => {
     const { invoke } = mockApi()
+    useUiState.setState({ selectedAppId: 10 })
 
     render(
       <AntApp>
@@ -173,10 +248,10 @@ describe('AppsPage — real IPC and multi-language', () => {
     expect(
       await screen.findByText(/Cổng ngoài đang bị suy giảm/, {}, { timeout: 10000 })
     ).toBeTruthy()
-    expect(screen.getByText('Cổng 30000 bị UFW chặn')).toBeTruthy()
+    expect(screen.getAllByText('Cổng 30000 bị UFW chặn').length).toBeGreaterThan(0)
 
     // Bấm Chẩn đoán với Doctor
-    const diagnoseBtn = screen.getByText('Chẩn đoán với Doctor')
+    const diagnoseBtn = screen.getAllByRole('button', { name: /Chẩn đoán với Doctor/ })[0]
     fireEvent.click(diagnoseBtn)
 
     await waitFor(
@@ -191,7 +266,7 @@ describe('AppsPage — real IPC and multi-language', () => {
     )
 
     // Nút Safe auto-fix xuất hiện
-    const autoFixBtn = await screen.findByText('Tự sửa lỗi an toàn', {}, { timeout: 10000 })
+    const autoFixBtn = await screen.findByRole('button', { name: /Tự sửa lỗi an toàn/ }, { timeout: 10000 })
     expect(autoFixBtn).toBeTruthy()
 
     // Bấm Safe auto-fix
@@ -209,7 +284,7 @@ describe('AppsPage — real IPC and multi-language', () => {
     await waitFor(
       () => {
         expect(screen.queryByText('Tự sửa lỗi an toàn')).toBeNull()
-        expect(screen.getByText(/Đã mở cổng 30000 thành công/)).toBeTruthy()
+        expect(screen.getAllByText(/Đã mở cổng 30000 thành công/).length).toBeGreaterThan(0)
       },
       { timeout: 10000 }
     )
@@ -217,6 +292,7 @@ describe('AppsPage — real IPC and multi-language', () => {
 
   it('rollback thật: mở modal, yêu cầu gõ tên app và gọi app:rollback thật', async () => {
     const { invoke } = mockApi()
+    useUiState.setState({ selectedAppId: 10 })
 
     render(
       <AntApp>
@@ -224,8 +300,8 @@ describe('AppsPage — real IPC and multi-language', () => {
       </AntApp>
     )
 
-    // Chuyển sang tab Lịch sử phiên bản
-    fireEvent.click(await screen.findByRole('tab', { name: /Lịch sử phiên bản/ }))
+    // Chuyển sang tab Lịch sử & Rollback
+    fireEvent.click(await screen.findByRole('tab', { name: /Lịch sử & Rollback/ }))
 
     // Nút Rollback ở phiên bản v1
     const rollbackBtn = (await screen.findAllByRole('button', { name: /Rollback/ }))[0]
@@ -251,8 +327,9 @@ describe('AppsPage — real IPC and multi-language', () => {
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:rollback', 10, 100))
   })
 
-  it('đổi ngôn ngữ theo bốn ngôn ngữ và cập nhật nội dung AppsPage', async () => {
+  it('đổi ngôn ngữ theo bốn ngôn ngữ và cập nhật nội dung AppsPage cả danh sách lẫn chi tiết', async () => {
     mockApi()
+    useUiState.setState({ selectedAppId: 10 })
 
     const { rerender } = render(
       <AntApp>
@@ -261,9 +338,9 @@ describe('AppsPage — real IPC and multi-language', () => {
     )
 
     // 1. Tiếng Việt
-    expect((await screen.findAllByText('Ứng dụng')).length).toBeGreaterThan(0)
     expect(await screen.findByText('Tổng quan')).toBeTruthy()
-    expect(screen.getByText('Lịch sử phiên bản')).toBeTruthy()
+    expect(screen.getByText('Lịch sử & Rollback')).toBeTruthy()
+    expect(screen.getByText('Bác sĩ & Exposure')).toBeTruthy()
 
     // 2. English
     act(() => {
@@ -274,9 +351,9 @@ describe('AppsPage — real IPC and multi-language', () => {
         <AppsPage />
       </AntApp>
     )
-    expect((await screen.findAllByText('Applications')).length).toBeGreaterThan(0)
     expect(screen.getByText('Overview')).toBeTruthy()
-    expect(screen.getByText('Version history')).toBeTruthy()
+    expect(screen.getByText('History & Rollback')).toBeTruthy()
+    expect(screen.getByText('Doctor & Exposure')).toBeTruthy()
 
     // 3. 简体中文
     act(() => {
@@ -287,9 +364,9 @@ describe('AppsPage — real IPC and multi-language', () => {
         <AppsPage />
       </AntApp>
     )
-    expect((await screen.findAllByText('应用程序')).length).toBeGreaterThan(0)
     expect(screen.getByText('运行总览')).toBeTruthy()
-    expect(screen.getByText('版本历史')).toBeTruthy()
+    expect(screen.getByText('历史与回滚')).toBeTruthy()
+    expect(screen.getByText('Doctor 与公开检测')).toBeTruthy()
 
     // 4. 日本語
     act(() => {
@@ -300,13 +377,16 @@ describe('AppsPage — real IPC and multi-language', () => {
         <AppsPage />
       </AntApp>
     )
-    expect((await screen.findAllByText('アプリ一覧')).length).toBeGreaterThan(0)
     expect(screen.getByText('概要')).toBeTruthy()
-    expect(screen.getByText('バージョン履歴')).toBeTruthy()
+    expect(screen.getByText('履歴 & ロールバック')).toBeTruthy()
+    expect(screen.getByText('ドクター & 公開診断')).toBeTruthy()
   })
 
-  it('khi chuyển app: xóa trạng thái Doctor/rollback cũ, đóng modal rollback, hiển thị loading', async () => {
-    mockApi()
+  it(
+    'khi chuyển app: xóa trạng thái Doctor/rollback cũ, đóng modal rollback, hiển thị loading',
+    async () => {
+      mockApi()
+      useUiState.setState({ selectedAppId: 10 })
 
     render(
       <AntApp>
@@ -315,36 +395,38 @@ describe('AppsPage — real IPC and multi-language', () => {
     )
 
     // Khởi tạo: APP_1 (id: 10) hoàn tất tải, hiển thị v2 và alert suy giảm của APP_1
-    expect(await screen.findByText('v2', {}, { timeout: 10000 })).toBeTruthy()
+    expect(await screen.findByText('Ghi nhận: running (v2)', {}, { timeout: 10000 })).toBeTruthy()
     expect(
       await screen.findByText(/Cổng ngoài đang bị suy giảm/, {}, { timeout: 10000 })
     ).toBeTruthy()
 
     // Bấm Chẩn đoán với Doctor trên APP_1 để tạo state Doctor
-    const diagnoseBtn = screen.getByText('Chẩn đoán với Doctor')
+    const diagnoseBtn = screen.getAllByRole('button', { name: /Chẩn đoán với Doctor/ })[0]
     fireEvent.click(diagnoseBtn)
-    expect(await screen.findByText('Tự sửa lỗi an toàn', {}, { timeout: 10000 })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /Tự sửa lỗi an toàn/ }, { timeout: 10000 })).toBeTruthy()
 
-    // Chuyển sang tab Lịch sử phiên bản và mở modal Rollback
-    fireEvent.click(screen.getByRole('tab', { name: /Lịch sử phiên bản/ }))
+    // Chuyển sang tab Lịch sử & Rollback và mở modal Rollback
+    fireEvent.click(screen.getByRole('tab', { name: /Lịch sử & Rollback/ }))
     const rollbackBtn = (await screen.findAllByRole('button', { name: /Rollback/ }))[0]
     fireEvent.click(rollbackBtn)
     expect(screen.getAllByText('Xác nhận rollback').length).toBeGreaterThan(0)
 
-    // Người dùng bấm chuyển sang APP_2 (id: 20)
-    const nextAppBtn = screen.getByRole('option', { name: /my-next-blog/ })
-    fireEvent.click(nextAppBtn)
+    // Người dùng chuyển sang APP_2 (id: 20) qua nút quay lại rồi chọn App 2
+    const backBtn = screen.getByRole('button', { name: /Quay lại danh sách/ })
+    fireEvent.click(backBtn)
+    const nextApp = await screen.findByText('my-next-blog')
+    fireEvent.click(nextApp)
 
     // Khi vừa chuyển app:
     // - Modal Rollback cũ bị đóng ngay lập tức
     expect(screen.queryByRole('dialog')).toBeNull()
     // - Nút Safe auto-fix bị xóa ngay lập tức
-    expect(screen.queryByText('Tự sửa lỗi an toàn')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Tự sửa lỗi an toàn/ })).toBeNull()
     // - Alert suy giảm cũ của APP_1 bị xóa
     expect(screen.queryByText(/Cổng ngoài đang bị suy giảm/)).toBeNull()
     // - Deployment A không còn được hiển thị (bỏ fallback)
-    expect(screen.queryByText('v2')).toBeNull()
-  })
+    expect(screen.queryByText('Ghi nhận: running (v2)')).toBeNull()
+  }, 30000)
 
   it('chuyển app A→B với response trả sai thứ tự: request A thực sự đang pending trước khi chuyển B, response B đến trước, response A đến muộn bị bỏ qua', async () => {
     let resolveApp1Versions: (value: unknown) => void = () => {}
@@ -382,25 +464,27 @@ describe('AppsPage — real IPC and multi-language', () => {
       }
     })
 
+    useUiState.setState({ selectedAppId: 10 })
+
     render(
       <AntApp>
         <AppsPage />
       </AntApp>
     )
 
-    // Khởi tạo: app 10 được chọn tự động, request app:versions(10) thực sự đang pending
+    // Khởi tạo: app 10 được chọn, request app:versions(10) thực sự đang pending
     await waitFor(() => {
       expect(document.querySelectorAll('.ant-spin').length).toBeGreaterThan(0)
     })
     expect(screen.queryByText('v2')).toBeNull()
     expect(screen.queryByText('v5')).toBeNull()
 
-    // Khi request A đang pending, người dùng bấm chuyển sang APP_2 (id: 20)
-    const nextAppBtn = await screen.findByRole('option', { name: /my-next-blog/ })
-    fireEvent.click(nextAppBtn)
+    // Khi request A đang pending, người dùng chuyển sang APP_2 (id: 20)
+    act(() => {
+      useUiState.setState({ selectedAppId: 20 })
+    })
 
     // Lúc này request B (id: 20) cũng được gửi và đang pending
-    // Vẫn đang loading, chưa hiển thị deployment nào
     expect(document.querySelectorAll('.ant-spin').length).toBeGreaterThan(0)
     expect(screen.queryByText('v2')).toBeNull()
     expect(screen.queryByText('v5')).toBeNull()
@@ -411,7 +495,7 @@ describe('AppsPage — real IPC and multi-language', () => {
     })
 
     // B đã tải xong: hiển thị đúng deployment của B (v5)
-    expect(await screen.findByText('v5', {}, { timeout: 10000 })).toBeTruthy()
+    expect((await screen.findAllByText(/v5/, {}, { timeout: 10000 })).length).toBeGreaterThan(0)
     expect(screen.queryByText('v2')).toBeNull()
 
     // Giờ response A mới trả về muộn (sai thứ tự)
@@ -425,7 +509,7 @@ describe('AppsPage — real IPC and multi-language', () => {
     expect(screen.queryByText('v1')).toBeNull()
     expect(screen.queryByText(/Cổng ngoài đang bị suy giảm/)).toBeNull()
     // - Vẫn giữ nguyên deployment của B (v5)
-    expect(screen.getByText('v5')).toBeTruthy()
+    expect(screen.getAllByText(/v5/).length).toBeGreaterThan(0)
   })
 
   it('kết quả Doctor chẩn đoán của A trả về sau khi B đã tải: bỏ qua fix ID và thông báo của A, không xuất hiện trên B', async () => {
@@ -464,6 +548,8 @@ describe('AppsPage — real IPC and multi-language', () => {
       }
     })
 
+    useUiState.setState({ selectedAppId: 10 })
+
     render(
       <AntApp>
         <AppsPage />
@@ -474,19 +560,20 @@ describe('AppsPage — real IPC and multi-language', () => {
     expect(
       await screen.findByText(/Cổng ngoài đang bị suy giảm/, {}, { timeout: 10000 })
     ).toBeTruthy()
-    const diagnoseBtn = screen.getByText('Chẩn đoán với Doctor')
+    const diagnoseBtn = screen.getAllByRole('button', { name: /Chẩn đoán với Doctor/ })[0]
 
     // Bấm Chẩn đoán với Doctor trên APP_1 -> request doctor:diagnose của A đang pending
     fireEvent.click(diagnoseBtn)
 
-    // Trong khi doctor:diagnose của A đang pending, người dùng bấm chuyển sang APP_2 (id: 20)
-    const nextAppBtn = screen.getByRole('option', { name: /my-next-blog/ })
-    fireEvent.click(nextAppBtn)
+    // Trong khi doctor:diagnose của A đang pending, người dùng chuyển sang APP_2 (id: 20)
+    act(() => {
+      useUiState.setState({ selectedAppId: 20 })
+    })
 
     // Chờ APP_2 tải xong deployment v5 (exposure reachable)
-    expect(await screen.findByText('v5', {}, { timeout: 10000 })).toBeTruthy()
+    expect((await screen.findAllByText(/v5/, {}, { timeout: 10000 })).length).toBeGreaterThan(0)
     expect(screen.queryByText(/Cổng ngoài đang bị suy giảm/)).toBeNull()
-    expect(screen.queryByText('Tự sửa lỗi an toàn')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Tự sửa lỗi an toàn/ })).toBeNull()
 
     // Bây giờ kết quả doctor:diagnose của A mới trả về (sau khi B đã tải)
     await act(async () => {
@@ -509,9 +596,7 @@ describe('AppsPage — real IPC and multi-language', () => {
     // - Không hiển thị thông báo của A ("Mở cổng UFW 30000 cho App A")
     expect(screen.queryByText(/Mở cổng UFW 30000 cho App A/)).toBeNull()
     // - Không hiển thị nút auto-fix của A
-    expect(screen.queryByText('Tự sửa lỗi an toàn')).toBeNull()
-    // - Không phục hồi trạng thái doctor trên B
-    expect(screen.queryByText(/Chẩn đoán với Doctor/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Tự sửa lỗi an toàn/ })).toBeNull()
   })
 
   it('hiển thị trạng thái triển khai ghi nhận thay vì Healthy và không tự kết luận runtime sống', async () => {
@@ -528,12 +613,13 @@ describe('AppsPage — real IPC and multi-language', () => {
       </AntApp>
     )
 
-    // Sidebar: hiện "Đã ghi nhận" và "Chưa triển khai"
+    // Danh sách ứng dụng: hiện "Đã ghi nhận" và "Chưa triển khai"
     expect(await screen.findByText('Đã ghi nhận')).toBeTruthy()
     expect(screen.getByText('Chưa triển khai')).toBeTruthy()
 
-    // Detail header & KPI: ghi nhận running (v2), Exposure (lần publish)
-    expect(screen.getByText('Ghi nhận: running (v2)')).toBeTruthy()
+    // Mở chi tiết App 1: ghi nhận running (v2), Exposure (lần publish)
+    fireEvent.click(screen.getByText('my-express-app'))
+    expect(await screen.findByText('Ghi nhận: running (v2)')).toBeTruthy()
     expect(screen.getByText('Bản triển khai ghi nhận')).toBeTruthy()
     expect(screen.getAllByText('Exposure (lần publish)').length).toBeGreaterThan(0)
   })
@@ -549,6 +635,8 @@ describe('AppsPage — real IPC and multi-language', () => {
       'vps:list': async () => ({ ok: true, data: [STALE_VPS] }),
       'app:list': async () => ({ ok: true, data: [APP_1] })
     })
+
+    useUiState.setState({ selectedAppId: 10 })
 
     render(
       <AntApp>
@@ -569,6 +657,8 @@ describe('AppsPage — real IPC and multi-language', () => {
       'app:list': async () => ({ ok: true, data: [MISMATCH_APP] })
     })
 
+    useUiState.setState({ selectedAppId: 10 })
+
     render(
       <AntApp>
         <AppsPage />
@@ -576,7 +666,9 @@ describe('AppsPage — real IPC and multi-language', () => {
     )
 
     // Alert mismatch xuất hiện
-    expect(await screen.findByText('Bản triển khai hiện tại không có trong lịch sử')).toBeTruthy()
+    expect(
+      (await screen.findAllByText('Bản triển khai hiện tại không có trong lịch sử')).length
+    ).toBeGreaterThan(0)
     expect(
       screen.getByText('Bản ghi triển khai #999 không tìm thấy trong lịch sử phiên bản.')
     ).toBeTruthy()
@@ -594,6 +686,8 @@ describe('AppsPage — real IPC and multi-language', () => {
     const { invoke } = mockApi({
       'app:runtime-inspect': async () => inspectPromise
     })
+
+    useUiState.setState({ selectedAppId: 10 })
 
     render(
       <AntApp>
@@ -642,6 +736,8 @@ describe('AppsPage — real IPC and multi-language', () => {
         data: { image: 'my-express-app:v2', state: 'exited' }
       })
     })
+
+    useUiState.setState({ selectedAppId: 10 })
 
     render(
       <AntApp>

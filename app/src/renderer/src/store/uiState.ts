@@ -20,6 +20,7 @@ interface UiState {
   locale: LocaleMode
   activePage: string
   selectedVpsId: number | null
+  selectedAppId: number | null
   activePanelTab: PanelTabKey
   vpsSearch: string
   deployPreselect: DeployPreselect | null
@@ -29,6 +30,7 @@ interface UiState {
   setLocale: (locale: LocaleMode) => void
   setActivePage: (page: string) => void
   setSelectedVpsId: (vpsId: number | null) => void
+  setSelectedAppId: (appId: number | null) => void
   setActivePanelTab: (tab: PanelTabKey) => void
   setVpsSearch: (search: string) => void
   setDeployPreselect: (preselect: DeployPreselect | null) => void
@@ -43,6 +45,7 @@ export const useUiState = create<UiState>()(
       locale: 'vi',
       activePage: 'apps',
       selectedVpsId: null,
+      selectedAppId: null,
       activePanelTab: 'overview',
       vpsSearch: '',
       deployPreselect: null,
@@ -51,6 +54,7 @@ export const useUiState = create<UiState>()(
       setLocale: (locale) => set({ locale }),
       setActivePage: (activePage) => set({ activePage }),
       setSelectedVpsId: (selectedVpsId) => set({ selectedVpsId }),
+      setSelectedAppId: (selectedAppId) => set({ selectedAppId }),
       setActivePanelTab: (activePanelTab) => set({ activePanelTab }),
       setVpsSearch: (vpsSearch) => set({ vpsSearch }),
       setDeployPreselect: (deployPreselect) => set({ deployPreselect }),

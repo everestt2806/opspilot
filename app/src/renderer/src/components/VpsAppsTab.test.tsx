@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { App, Deployment } from '@shared/ipc'
 import { VpsAppsTab } from './VpsAppsTab'
-import { strings } from '../strings'
 
 function mockApi(handlers: Record<string, (...args: unknown[]) => Promise<unknown>>): void {
   window.api = {
@@ -91,8 +90,11 @@ const VERSIONS: Deployment[] = [
   }
 ]
 
+import { useUiState } from '../store/uiState'
+
 describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => {
   beforeEach(() => {
+    useUiState.setState({ locale: 'vi' })
     mockApi({
       'app:list': async () => ({
         ok: true,
@@ -110,23 +112,32 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
     cleanup()
   })
 
-  it('chỉ dùng đúng current_deployment_id, không fallback sang phiên bản đầu tiên khi ID không khớp', async () => {
-    render(<VpsAppsTab vpsId={10} />)
+  it('chỉ dùng đúng current_deployment_id, đổi nhãn trạng thái deployment thành "Ghi nhận: …" và dùng locale hiện tại', async () => {
+    const { rerender } = render(<VpsAppsTab vpsId={10} />)
 
     // Chờ tải xong bảng app
     expect(await screen.findByText('app-matched')).toBeTruthy()
     expect(screen.getByText('app-mismatched')).toBeTruthy()
     expect(screen.getByText('app-no-deploy')).toBeTruthy()
 
-    // 1. App 1 (khớp current_deployment_id = 101): hiển thị v3 và status running
+    // 1. App 1 (khớp current_deployment_id = 101): hiển thị v3 và status "Ghi nhận: running (v3)"
     expect(screen.getByText('v3')).toBeTruthy()
+    expect(screen.getByText('Ghi nhận: running (v3)')).toBeTruthy()
 
     // 2. App 2 (mismatch current_deployment_id = 999): KHÔNG được fallback sang v5 của versions[0]
     expect(screen.queryByText('v5')).toBeNull()
+    // App 2 và App 3 hiển thị "Chưa triển khai"
+    expect(screen.getAllByText('Chưa triển khai').length).toBe(2)
 
     // 3. Status của app-matched (running) KHÔNG được tô màu xanh (ant-tag-success)
-    const runningTag = screen.getByText(strings.vpsControl.apps.status.running).closest('.ant-tag')
+    const runningTag = screen.getByText('Ghi nhận: running (v3)').closest('.ant-tag')
     expect(runningTag).toBeTruthy()
     expect(runningTag?.classList.contains('ant-tag-success')).toBe(false)
+
+    // 4. Đổi locale sang 'en' -> nhãn đổi thành "Recorded: running (v3)"
+    useUiState.setState({ locale: 'en' })
+    rerender(<VpsAppsTab vpsId={10} />)
+    expect(await screen.findByText('Recorded: running (v3)')).toBeTruthy()
+    expect(screen.getAllByText('Not deployed').length).toBe(2)
   })
 })

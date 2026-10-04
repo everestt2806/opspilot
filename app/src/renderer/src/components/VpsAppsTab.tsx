@@ -4,7 +4,7 @@ import { ExportOutlined, PlusOutlined, ReloadOutlined, RocketOutlined } from '@a
 
 import type { App, Deployment, IpcError } from '@shared/ipc'
 
-import { strings } from '../strings'
+import { useStrings } from '../strings'
 import { useUiState } from '../store/uiState'
 
 interface AppRow extends App {
@@ -52,11 +52,13 @@ async function fetchAppRows(vpsId: number): Promise<AppRowsResult> {
 
 /** Tab ứng dụng & deploy — danh sách app trên VPS + điều hướng Deploy Wizard. */
 export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
+  const strings = useStrings()
   const [rows, setRows] = useState<AppRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<IpcError | null>(null)
   const setActivePage = useUiState((state) => state.setActivePage)
   const setDeployPreselect = useUiState((state) => state.setDeployPreselect)
+  const setSelectedAppId = useUiState((state) => state.setSelectedAppId)
 
   const load = useCallback(async () => {
     const result = await fetchAppRows(vpsId)
@@ -98,10 +100,12 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
     await window.api.invoke('system:open-external', url)
   }
 
-  const statusLabel = (status: Deployment['status'] | null): string => {
-    if (!status) return strings.vpsControl.apps.status.none
-    const map = strings.vpsControl.apps.status as Record<string, string>
-    return map[status] ?? status
+  const statusLabel = (app: AppRow): string => {
+    if (!app.deployStatus) return strings.apps.statusNotDeployed
+    if (app.currentVersion !== null) {
+      return strings.apps.recordedStatus(app.deployStatus, app.currentVersion)
+    }
+    return `${strings.apps.statusRecordedDeployed}: ${app.deployStatus}`
   }
 
   const statusColor = (status: Deployment['status'] | null): string => {
@@ -117,7 +121,17 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
       title: strings.vpsControl.apps.columns.name,
       dataIndex: 'name',
       key: 'name',
-      render: (name: string) => <Typography.Text strong>{name}</Typography.Text>
+      render: (name: string, app: AppRow) => (
+        <Typography.Link
+          strong
+          onClick={() => {
+            setSelectedAppId(app.id)
+            setActivePage('apps')
+          }}
+        >
+          {name}
+        </Typography.Link>
+      )
     },
     {
       title: strings.vpsControl.apps.columns.framework,
@@ -152,10 +166,10 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
     {
       title: strings.vpsControl.apps.columns.status,
       key: 'status',
-      width: 110,
+      width: 140,
       render: (_: unknown, app: AppRow) => (
         <Tag className="status-badge" color={statusColor(app.deployStatus)}>
-          {statusLabel(app.deployStatus)}
+          {statusLabel(app)}
         </Tag>
       )
     },

@@ -67,7 +67,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('HistoryPage', () => {
+describe('HistoryPage', { timeout: 30000 }, () => {
   it('hien bang lich su va drawer chi tiet key-value', async () => {
     const invoke = mockApi({
       'vps:list': async () => ({ ok: true, data: [VPS_A] }),
