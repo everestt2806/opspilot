@@ -15,13 +15,15 @@ export const ANTD_LOCALES: Record<LocaleMode, Locale> = {
 
 export interface LocaleStrings {
   navigation: {
-    vps: string
-    apps: string
-    deploy: string
     dashboard: string
+    apps: string
+    vps: string
+    activity: string
+    settings: string
+    deploy: string
+    deployAction: string
     migrate: string
     history: string
-    settings: string
   }
   sections: {
     operations: string
@@ -41,13 +43,15 @@ export interface LocaleStrings {
 export const LOCALES: Record<LocaleMode, LocaleStrings> = {
   vi: {
     navigation: {
-      vps: 'VPS',
-      apps: 'Ứng dụng',
-      deploy: 'Triển khai',
       dashboard: 'Tổng quan',
+      apps: 'Ứng dụng',
+      vps: 'Máy chủ',
+      activity: 'Hoạt động',
+      settings: 'Cài đặt',
+      deploy: 'Triển khai',
+      deployAction: '+ Triển khai',
       migrate: 'Di chuyển',
-      history: 'Lịch sử',
-      settings: 'Cài đặt'
+      history: 'Hoạt động'
     },
     sections: {
       operations: 'VẬN HÀNH',
@@ -65,13 +69,15 @@ export const LOCALES: Record<LocaleMode, LocaleStrings> = {
   },
   en: {
     navigation: {
-      vps: 'VPS Fleet',
-      apps: 'Applications',
-      deploy: 'Deploy',
       dashboard: 'Dashboard',
+      apps: 'Applications',
+      vps: 'Servers',
+      activity: 'Activity',
+      settings: 'Settings',
+      deploy: 'Deploy',
+      deployAction: '+ Deploy',
       migrate: 'Migrate',
-      history: 'Audit Log',
-      settings: 'Settings'
+      history: 'Activity'
     },
     sections: {
       operations: 'OPERATIONS',
@@ -89,13 +95,15 @@ export const LOCALES: Record<LocaleMode, LocaleStrings> = {
   },
   cn: {
     navigation: {
-      vps: 'VPS 集群',
-      apps: '应用程序',
-      deploy: '部署服务',
-      dashboard: '运行总览',
-      migrate: '数据迁移',
-      history: '操作历史',
-      settings: '系统设置'
+      dashboard: '总览',
+      apps: '应用',
+      vps: '服务器',
+      activity: '操作动态',
+      settings: '系统设置',
+      deploy: '部署',
+      deployAction: '+ 部署',
+      migrate: '迁移',
+      history: '操作动态'
     },
     sections: {
       operations: '运行运维',
@@ -113,13 +121,15 @@ export const LOCALES: Record<LocaleMode, LocaleStrings> = {
   },
   jp: {
     navigation: {
-      vps: 'VPS サーバー',
-      apps: 'アプリ一覧',
-      deploy: 'デプロイ',
       dashboard: 'ダッシュボード',
-      migrate: 'サーバー移行',
-      history: '操作履歴',
-      settings: 'システム設定'
+      apps: 'アプリ',
+      vps: 'サーバー',
+      activity: 'アクティビティ',
+      settings: 'システム設定',
+      deploy: 'デプロイ',
+      deployAction: '+ デプロイ',
+      migrate: '移行',
+      history: 'アクティビティ'
     },
     sections: {
       operations: '運用',

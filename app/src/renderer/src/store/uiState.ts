@@ -41,7 +41,7 @@ export const useUiState = create<UiState>()(
     (set) => ({
       theme: 'dark',
       locale: 'vi',
-      activePage: 'vps',
+      activePage: 'apps',
       selectedVpsId: null,
       activePanelTab: 'overview',
       vpsSearch: '',

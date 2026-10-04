@@ -96,14 +96,14 @@ Nhằm đảm bảo giai đoạn hiện thực hóa UI-1 tập trung tuyệt đ�
 ### 4.1. Hợp đồng IPC hiện có sẵn sàng cho UI-1
 Các kênh IPC đã có sẵn trong [`app/src/shared/ipc.ts`](file:///D:/Developing/DuAnCNTT/app/src/shared/ipc.ts):
 * **Ứng dụng**:
-  * `app:list`, `app:get`: Lấy danh sách và thông tin chi tiết ứng dụng.
+  * `app:list`, `app:get`: Lấy danh sách và thông tin cấu hình ứng dụng (lưu ý: `app:get` trả về bản ghi `App`, không trả trạng thái runtime; trạng thái runtime thuộc về `app:runtime-inspect`).
   * `app:versions`, `app:rollback`: Xem lịch sử phiên bản triển khai và kích hoạt rollback.
   * `doctor:diagnose`, `doctor:fix`, `domain:check`: Chẩn đoán cấu hình mạng, binding cổng và domain exposure.
 * **Máy chủ VPS**:
   * `vps:list`: Lấy danh sách máy chủ, địa chỉ IP, cổng SSH, người dùng, `last_seen_at`.
-  * `vps:scan(vpsId)`: Quét và cập nhật thông tin tài nguyên cho máy chủ đã lưu trong hệ thống.
+  * `vps:scan(vpsId)`: Quét và cập nhật công cụ cơ bản (SSH, Docker, Compose, Git, Workdir) cho máy chủ đã lưu trong hệ thống (lưu ý: `vps:scan` không trả CPU/RAM).
   * `vps:get-resources(vpsId)`: Đọc tài nguyên CPU count, RAM, Disk của VPS từ cache/scan.
-  * `database:list(vpsId)`, `database:types`: Đọc danh sách cơ sở dữ liệu trên máy chủ.
+  * Cơ sở dữ liệu: `database:list` và `database:types` không tồn tại; hợp đồng IPC khai báo `db:list-databases` nhưng cần kiểm tra lại handler main trước khi gọi để đảm bảo dùng được (tránh lỗi khi handler main chưa đăng ký).
   * `vps:test-connection(input: VpsInput)`: **Chỉ dùng** cho form thêm mới hoặc chỉnh sửa VPS chưa lưu (truyền thông số kết nối mới).
 
 ### 4.2. Danh mục chuyển sang Backlog Backend riêng (Ngoài phạm vi UI-1)
@@ -143,13 +143,13 @@ Bộ tiêu chí nghiệm thu UI-1 được định nghĩa tinh gọn, tập trun
 
 ### AC-3: Bố cục Tab ngang tại các trang chi tiết (Chỉ làm tab dùng được bằng IPC hiện có)
 * [ ] **AC-3.1 (Chi tiết Ứng dụng - Đúng 3 tab)**: Trang Chi tiết Ứng dụng sử dụng hệ thống Tab ngang gồm đúng 3 tab được hỗ trợ bởi IPC hiện có:
-  1. *Tổng quan*: Hiển thị thông tin runtime (`app:get`), metrics (`monitor:samples`), cấu hình cổng và link VPS.
+  1. *Tổng quan*: Hiển thị thông tin cấu hình (`app:get`), trạng thái runtime (`app:runtime-inspect`), metrics (`monitor:samples`), cấu hình cổng và link VPS.
   2. *Lịch sử & Rollback*: Bảng deployment (`app:versions`) kèm nút Rollback gọi IPC `app:rollback` với hộp thoại xác nhận an toàn.
   3. *Bác sĩ & Exposure*: Chẩn đoán kết nối và kiểm tra domain (`doctor:diagnose`, `domain:check`).
 * [ ] **AC-3.2 (Chi tiết Máy chủ VPS - Đúng 4 tab)**: Trang Chi tiết VPS sử dụng hệ thống Tab ngang gồm đúng 4 tab được hỗ trợ bởi IPC hiện có:
-  1. *Tổng quan & Tài nguyên*: Thông số CPU, RAM, Disk từ IPC `vps:get-resources` và nút quét `vps:scan(vpsId)`.
+  1. *Tổng quan & Tài nguyên*: Thông số CPU, RAM, Disk từ IPC `vps:get-resources` và nút quét công cụ `vps:scan(vpsId)` (lưu ý: `vps:scan` không trả CPU/RAM).
   2. *Ứng dụng trên máy chủ*: Bảng các ứng dụng thuộc VPS này từ IPC `app:list(vpsId)` kèm liên kết điều hướng sang chi tiết app.
-  3. *Cơ sở dữ liệu*: Danh sách database đang chạy từ IPC `database:list(vpsId)`.
+  3. *Cơ sở dữ liệu*: Danh sách database từ `db:list-databases(vpsId)` (cần kiểm tra lại handler main trước khi gọi; không có `database:list` hay `database:types`).
   4. *Hoạt động*: Lịch sử deployment và sự kiện gần đây trên VPS từ DB SQLite.
 * [ ] **AC-3.3 (Loại bỏ triệt để Sub-sidebars)**: Xóa bỏ hoàn toàn `apps-sidebar` trong trang Ứng dụng, cũng như `VpsNavSidebar` và `VpsInfoSidebar` trong trang Chi tiết VPS.
 * [ ] **AC-3.4 (Backlog rõ ràng)**: Env editor, live logs, Docker storage, host-key verification và connection audit được giữ ở backlog backend; không yêu cầu tab hoạt động hoặc dữ liệu mẫu trong app thật của UI-1.

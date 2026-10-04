@@ -72,7 +72,7 @@ export function MigratePage(): React.JSX.Element {
       if (appResult.ok) setApps(appResult.data)
       if (vpsResult.ok) setVps(vpsResult.data)
       if (migrationResult.ok) {
-        const latest = migrationResult.data[0] as MigrateJobView | undefined
+        const latest = migrationResult.data?.[0] as MigrateJobView | undefined
         if (latest) {
           activeJobId.current = latest.id
           setJobId(latest.id)

@@ -261,7 +261,7 @@ describe('AppsPage — real IPC and multi-language', () => {
 
     // 1. Tiếng Việt
     expect((await screen.findAllByText('Ứng dụng')).length).toBeGreaterThan(0)
-    expect(screen.getByText('Tổng quan')).toBeTruthy()
+    expect(await screen.findByText('Tổng quan')).toBeTruthy()
     expect(screen.getByText('Lịch sử phiên bản')).toBeTruthy()
 
     // 2. English

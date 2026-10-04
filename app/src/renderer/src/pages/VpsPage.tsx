@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Button, Modal, Space, Tooltip, Typography } from 'antd'
-import { ArrowLeftOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import {
+  ArrowLeftOutlined,
+  DeploymentUnitOutlined,
+  PlusOutlined,
+  ReloadOutlined
+} from '@ant-design/icons'
 
 import type { Vps, VpsInput } from '@shared/ipc'
 
@@ -175,6 +180,12 @@ export function VpsPage(): React.JSX.Element {
             description={strings.vps.description}
             actions={
               <>
+                <Button
+                  icon={<DeploymentUnitOutlined />}
+                  onClick={() => useUiState.getState().setActivePage('migrate')}
+                >
+                  {strings.navigation.migrate}
+                </Button>
                 <Button
                   icon={<ReloadOutlined />}
                   disabled={items.length === 0}

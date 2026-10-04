@@ -16,6 +16,7 @@ import {
   Typography
 } from 'antd'
 import {
+  ArrowLeftOutlined,
   CheckCircleFilled,
   ClockCircleOutlined,
   CloseCircleFilled,
@@ -60,9 +61,10 @@ const APP_NAME_RE = /^[a-z0-9][a-z0-9-]*$/
 
 interface DeployPageProps {
   onOpenDashboard?: () => void
+  onBack?: () => void
 }
 
-export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Element {
+export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.JSX.Element {
   const strings = useStrings()
   const wizardSteps = [
     { title: strings.deploy.steps.source },
@@ -338,7 +340,17 @@ export function DeployPage({ onOpenDashboard }: DeployPageProps): React.JSX.Elem
 
   return (
     <section className="page-panel">
-      <PageHeader title={strings.deploy.title} description={strings.deploy.description} />
+      <PageHeader
+        title={strings.deploy.title}
+        description={strings.deploy.description}
+        actions={
+          onBack ? (
+            <Button icon={<ArrowLeftOutlined />} onClick={onBack}>
+              {strings.common.back}
+            </Button>
+          ) : undefined
+        }
+      />
 
       {vpsList.length === 0 ? (
         <Empty description={strings.deploy.noVps} />
@@ -986,11 +998,18 @@ function DeployLogView({
         title={strings.deploy.log.title}
         description={`${appName}${vpsName ? ` — ${vpsName}` : ''}`}
         actions={
-          !finished ? (
-            <Button danger icon={<StopOutlined />} onClick={() => setCancelOpen(true)}>
-              {strings.deploy.log.cancel}
-            </Button>
-          ) : undefined
+          <Space>
+            {onBack && finished && (
+              <Button icon={<ArrowLeftOutlined />} onClick={onBack}>
+                {strings.common.back}
+              </Button>
+            )}
+            {!finished ? (
+              <Button danger icon={<StopOutlined />} onClick={() => setCancelOpen(true)}>
+                {strings.deploy.log.cancel}
+              </Button>
+            ) : undefined}
+          </Space>
         }
       />
 
