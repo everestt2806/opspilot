@@ -94,6 +94,8 @@ export function AppsPage(): React.JSX.Element {
   const [rollbackTarget, setRollbackTarget] = useState<Deployment | null>(null)
   const [confirmInput, setConfirmInput] = useState('')
   const [rollbackBusy, setRollbackBusy] = useState(false)
+  const [appsError, setAppsError] = useState<string | null>(null)
+  const [versionsError, setVersionsError] = useState<string | null>(null)
 
   const vpsResources = useVpsStore((state) => state.resources)
   const [liveInspectState, setLiveInspectState] = useState<{
@@ -117,6 +119,7 @@ export function AppsPage(): React.JSX.Element {
     setLoadedAppId(null)
     setDeployments([])
     setDeploymentsLoading(id !== null)
+    setVersionsError(null)
     // Xóa trạng thái Doctor/rollback/inspect cũ
     setDoctorBusy(false)
     setDoctorMessage(null)
@@ -160,22 +163,66 @@ export function AppsPage(): React.JSX.Element {
     }
   }, [selectedAppId])
 
-  const refreshData = useCallback(async (appId?: number): Promise<void> => {
-    const targetId = appId ?? activeAppIdRef.current
-    const [appRes, vpsRes] = await Promise.all([
-      window.api.invoke('app:list'),
-      window.api.invoke('vps:list')
-    ])
-    if (vpsRes.ok) setVpsList(vpsRes.data)
-    if (appRes.ok) setApps(appRes.data)
-    if (targetId !== null) {
-      const res = await window.api.invoke('app:versions', targetId)
-      if (activeAppIdRef.current === targetId && res.ok) {
-        setDeployments(res.data.filter((d: Deployment) => d.app_id === targetId))
-        setLoadedAppId(targetId)
+  const reloadVersions = useCallback(
+    async (appId: number): Promise<void> => {
+      if (activeAppIdRef.current !== appId) return
+      setDeploymentsLoading(true)
+      setVersionsError(null)
+      try {
+        const res = await window.api.invoke('app:versions', appId)
+        if (activeAppIdRef.current !== appId) return
+        if (res.ok) {
+          const matching = res.data.filter((dep: Deployment) => dep.app_id === appId)
+          setDeployments(matching)
+          setVersionsError(null)
+        } else {
+          setDeployments([])
+          setVersionsError(res.error?.message || strings.apps.versionsLoadError)
+        }
+        setLoadedAppId(appId)
+      } finally {
+        if (activeAppIdRef.current === appId) {
+          setDeploymentsLoading(false)
+        }
       }
-    }
-  }, [])
+    },
+    [strings]
+  )
+
+  const refreshData = useCallback(
+    async (appId?: number): Promise<void> => {
+      const targetId = appId ?? activeAppIdRef.current
+      setLoading(true)
+      setAppsError(null)
+      const [appRes, vpsRes] = await Promise.all([
+        window.api.invoke('app:list'),
+        window.api.invoke('vps:list')
+      ])
+      if (vpsRes.ok) setVpsList(vpsRes.data)
+      if (appRes.ok) {
+        setApps(appRes.data)
+        setAppsError(null)
+      } else {
+        setApps([])
+        setAppsError(appRes.error?.message || strings.apps.loadError)
+      }
+      if (targetId !== null) {
+        const res = await window.api.invoke('app:versions', targetId)
+        if (activeAppIdRef.current === targetId) {
+          if (res.ok) {
+            setDeployments(res.data.filter((d: Deployment) => d.app_id === targetId))
+            setVersionsError(null)
+          } else {
+            setDeployments([])
+            setVersionsError(res.error?.message || strings.apps.versionsLoadError)
+          }
+          setLoadedAppId(targetId)
+        }
+      }
+      setLoading(false)
+    },
+    [strings]
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -188,17 +235,21 @@ export function AppsPage(): React.JSX.Element {
       if (vpsRes.ok) setVpsList(vpsRes.data)
       if (appRes.ok) {
         setApps(appRes.data)
+        setAppsError(null)
         if (selectedAppId !== null && !appRes.data.some((a) => a.id === selectedAppId)) {
           setSelectedAppId(null)
           activeAppIdRef.current = null
         }
+      } else {
+        setApps([])
+        setAppsError(appRes.error?.message || strings.apps.loadError)
       }
       setLoading(false)
     })()
     return () => {
       cancelled = true
     }
-  }, [selectedAppId, setSelectedAppId])
+  }, [selectedAppId, setSelectedAppId, strings])
 
   useEffect(() => {
     if (selectedAppId === null) {
@@ -210,6 +261,7 @@ export function AppsPage(): React.JSX.Element {
     activeAppIdRef.current = reqAppId
 
     void (async () => {
+      setVersionsError(null)
       setDeploymentsLoading(true)
       try {
         const res = await window.api.invoke('app:versions', reqAppId)
@@ -220,8 +272,10 @@ export function AppsPage(): React.JSX.Element {
         if (res.ok) {
           const matching = res.data.filter((dep: Deployment) => dep.app_id === reqAppId)
           setDeployments(matching)
+          setVersionsError(null)
         } else {
           setDeployments([])
+          setVersionsError(res.error?.message || strings.apps.versionsLoadError)
         }
         setLoadedAppId(reqAppId)
       } finally {
@@ -234,7 +288,7 @@ export function AppsPage(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [selectedAppId])
+  }, [selectedAppId, strings])
 
   const isVersionsReady =
     !deploymentsLoading &&
@@ -258,6 +312,7 @@ export function AppsPage(): React.JSX.Element {
   const hasCurrentDeploymentMismatch =
     selectedApp !== null &&
     isVersionsReady &&
+    !versionsError &&
     selectedApp.current_deployment_id !== null &&
     activeDeployment === null
 
@@ -471,6 +526,21 @@ export function AppsPage(): React.JSX.Element {
           </Typography.Text>
         </div>
 
+        {appsError && (
+          <Alert
+            type="error"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={strings.apps.loadError}
+            description={appsError}
+            action={
+              <Button size="small" danger onClick={() => void refreshData()}>
+                {strings.common.retry}
+              </Button>
+            }
+          />
+        )}
+
         {loading ? (
           <div style={{ padding: 48, textAlign: 'center' }}>
             <Spin size="default" />
@@ -481,6 +551,7 @@ export function AppsPage(): React.JSX.Element {
             size="middle"
             dataSource={filteredApps}
             pagination={false}
+            locale={{ emptyText: strings.apps.empty }}
             onRow={(app) => ({
               onClick: () => selectApp(app.id),
               style: { cursor: 'pointer' }
@@ -534,9 +605,9 @@ export function AppsPage(): React.JSX.Element {
                 )
               },
               {
-                title: strings.apps.version,
-                key: 'version',
-                width: 110,
+                title: strings.apps.deploymentIdTitle,
+                key: 'deployment_id',
+                width: 130,
                 render: (_: unknown, app: App) => (
                   <span className="mono-text">
                     {app.current_deployment_id ? `#${app.current_deployment_id}` : '—'}
@@ -630,15 +701,24 @@ export function AppsPage(): React.JSX.Element {
               <Typography.Title level={3} style={{ margin: 0 }}>
                 {selectedApp.name}
               </Typography.Title>
-              <span className={`apps-status apps-status-${activeDeployment ? 'info' : 'neutral'}`}>
+              <span
+                className={`apps-status apps-status-${activeDeployment ? 'info' : versionsError ? 'error' : 'neutral'}`}
+              >
                 <span
-                  className={`status-dot status-dot-${activeDeployment ? 'info' : 'neutral'}`}
+                  className={`status-dot status-dot-${activeDeployment ? 'info' : versionsError ? 'error' : 'neutral'}`}
                 />
-                {activeDeployment
-                  ? strings.apps.recordedStatus(activeDeployment.status, activeDeployment.version)
-                  : selectedApp.current_deployment_id === null
-                    ? strings.apps.statusNotDeployed
-                    : strings.apps.currentDeploymentNotFound}
+                {isVersionsLoading
+                  ? strings.apps.loadingVersions
+                  : versionsError
+                    ? strings.apps.versionsLoadError
+                    : activeDeployment
+                      ? strings.apps.recordedStatus(
+                          activeDeployment.status,
+                          activeDeployment.version
+                        )
+                      : selectedApp.current_deployment_id === null
+                        ? strings.apps.statusNotDeployed
+                        : strings.apps.currentDeploymentNotFound}
               </span>
             </div>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
@@ -686,6 +766,8 @@ export function AppsPage(): React.JSX.Element {
           <strong className="apps-kpi-value">
             {isVersionsLoading ? (
               <Spin size="small" />
+            ) : versionsError ? (
+              <span style={{ color: 'var(--error)' }}>{strings.apps.versionsLoadError}</span>
             ) : activeDeployment ? (
               <>
                 <span
@@ -743,6 +825,21 @@ export function AppsPage(): React.JSX.Element {
           </strong>
         </div>
       </div>
+
+      {versionsError && (
+        <Alert
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={strings.apps.versionsLoadError}
+          description={versionsError}
+          action={
+            <Button size="small" danger onClick={() => void reloadVersions(selectedApp.id)}>
+              {strings.common.retry}
+            </Button>
+          }
+        />
+      )}
 
       {hasCurrentDeploymentMismatch && (
         <Alert
@@ -991,6 +1088,31 @@ export function AppsPage(): React.JSX.Element {
                       </Typography.Text>
                     </Space>
                   </div>
+                ) : versionsError ? (
+                  <div style={{ padding: 16 }}>
+                    <Alert
+                      type="error"
+                      showIcon
+                      message={strings.apps.versionsLoadError}
+                      description={versionsError}
+                      action={
+                        <Button
+                          size="small"
+                          danger
+                          onClick={() => void reloadVersions(selectedApp.id)}
+                        >
+                          {strings.common.retry}
+                        </Button>
+                      }
+                    />
+                  </div>
+                ) : currentAppDeployments.length === 0 ? (
+                  <div style={{ padding: 24, textAlign: 'center' }}>
+                    <Empty
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      description={strings.apps.noDeploymentsYet}
+                    />
+                  </div>
                 ) : (
                   <ol className="apps-version-list">
                     {currentAppDeployments.map((dep) => {
@@ -1063,12 +1185,6 @@ export function AppsPage(): React.JSX.Element {
                         </li>
                       )
                     })}
-                    {currentAppDeployments.length === 0 && (
-                      <Empty
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                        description={strings.apps.emptyDeployments}
-                      />
-                    )}
                   </ol>
                 )}
               </div>
@@ -1084,6 +1200,24 @@ export function AppsPage(): React.JSX.Element {
             ),
             children: (
               <div className="apps-tab-content">
+                {versionsError && (
+                  <Alert
+                    type="error"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message={strings.apps.versionsLoadError}
+                    description={versionsError}
+                    action={
+                      <Button
+                        size="small"
+                        danger
+                        onClick={() => void reloadVersions(selectedApp.id)}
+                      >
+                        {strings.common.retry}
+                      </Button>
+                    }
+                  />
+                )}
                 <div className="apps-section-heading">
                   <div>
                     <h3>{strings.apps.doctorExposureTitle}</h3>

@@ -91,6 +91,7 @@ const VERSIONS: Deployment[] = [
 ]
 
 import { useUiState } from '../store/uiState'
+import { getStrings } from '../strings'
 
 describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => {
   beforeEach(() => {
@@ -124,20 +125,51 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
     expect(screen.getByText('v3')).toBeTruthy()
     expect(screen.getByText('Ghi nhận: running (v3)')).toBeTruthy()
 
-    // 2. App 2 (mismatch current_deployment_id = 999): KHÔNG được fallback sang v5 của versions[0]
+    // 2. App 2 (mismatch current_deployment_id = 999): KHÔNG được fallback sang v5, KHÔNG được ghi "Chưa triển khai", hiện "Không tìm thấy (#999)"
     expect(screen.queryByText('v5')).toBeNull()
-    // App 2 và App 3 hiển thị "Chưa triển khai"
-    expect(screen.getAllByText('Chưa triển khai').length).toBe(2)
+    expect(screen.getByText('#999')).toBeTruthy()
+    expect(screen.getByText('Không tìm thấy (#999)')).toBeTruthy()
 
-    // 3. Status của app-matched (running) KHÔNG được tô màu xanh (ant-tag-success)
+    // 3. App 3 (current_deployment_id === null): hiển thị "Chưa triển khai"
+    expect(screen.getByText('Chưa triển khai')).toBeTruthy()
+
+    // 4. Status của app-matched (running) KHÔNG được tô màu xanh (ant-tag-success)
     const runningTag = screen.getByText('Ghi nhận: running (v3)').closest('.ant-tag')
     expect(runningTag).toBeTruthy()
     expect(runningTag?.classList.contains('ant-tag-success')).toBe(false)
 
-    // 4. Đổi locale sang 'en' -> nhãn đổi thành "Recorded: running (v3)"
+    // 5. Đổi locale sang 'en' -> nhãn đổi theo locale
     useUiState.setState({ locale: 'en' })
     rerender(<VpsAppsTab vpsId={10} />)
     expect(await screen.findByText('Recorded: running (v3)')).toBeTruthy()
-    expect(screen.getAllByText('Not deployed').length).toBe(2)
+    expect(screen.getByText('Record not found (#999)')).toBeTruthy()
+    expect(screen.getByText('Not deployed')).toBeTruthy()
+  })
+
+  it('lỗi tải versions không được ghi "Chưa triển khai" nếu current_deployment_id có giá trị', async () => {
+    mockApi({
+      'app:list': async () => ({
+        ok: true,
+        data: [APP_MATCHING, APP_NO_DEPLOYMENT]
+      }),
+      'app:versions': async () => ({
+        ok: false,
+        error: { code: 'FAIL', message: 'Network timeout' }
+      })
+    })
+
+    render(<VpsAppsTab vpsId={10} />)
+
+    expect(await screen.findByText('app-matched')).toBeTruthy()
+    expect(screen.getByText('app-no-deploy')).toBeTruthy()
+
+    // App 1 có current_deployment_id = 101 nhưng lỗi versions -> KHÔNG được ghi "Chưa triển khai", hiện versionsLoadError
+    const expectedError = getStrings('vi').apps.versionsLoadError
+    expect(screen.getByText(expectedError)).toBeTruthy()
+    const errorTag = screen.getByText(expectedError).closest('.ant-tag')
+    expect(errorTag?.classList.contains('ant-tag-error')).toBe(true)
+
+    // App 3 không có deployment (current_deployment_id = null) -> ghi "Chưa triển khai"
+    expect(screen.getByText('Chưa triển khai')).toBeTruthy()
   })
 })

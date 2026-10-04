@@ -10,6 +10,8 @@ import { useUiState } from '../store/uiState'
 interface AppRow extends App {
   currentVersion: number | null
   deployStatus: Deployment['status'] | null
+  versionsError?: string | null
+  isMismatch?: boolean
 }
 
 interface VpsAppsTabProps {
@@ -29,20 +31,40 @@ async function fetchAppRows(vpsId: number): Promise<AppRowsResult> {
   const enriched = await Promise.all(
     listResult.data.map(async (app) => {
       if (app.current_deployment_id === null) {
-        return { ...app, currentVersion: null, deployStatus: null }
+        return {
+          ...app,
+          currentVersion: null,
+          deployStatus: null,
+          versionsError: null,
+          isMismatch: false
+        }
       }
       const versionsResult = await window.api.invoke('app:versions', app.id)
-      if (!versionsResult.ok || versionsResult.data.length === 0) {
-        return { ...app, currentVersion: null, deployStatus: null }
+      if (!versionsResult.ok) {
+        return {
+          ...app,
+          currentVersion: null,
+          deployStatus: null,
+          versionsError: versionsResult.error.message || 'Error',
+          isMismatch: false
+        }
       }
       const current = versionsResult.data.find((d) => d.id === app.current_deployment_id)
       if (!current) {
-        return { ...app, currentVersion: null, deployStatus: null }
+        return {
+          ...app,
+          currentVersion: null,
+          deployStatus: null,
+          versionsError: null,
+          isMismatch: true
+        }
       }
       return {
         ...app,
         currentVersion: current.version,
-        deployStatus: current.status
+        deployStatus: current.status,
+        versionsError: null,
+        isMismatch: false
       }
     })
   )
@@ -101,18 +123,32 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
   }
 
   const statusLabel = (app: AppRow): string => {
-    if (!app.deployStatus) return strings.apps.statusNotDeployed
-    if (app.currentVersion !== null) {
-      return strings.apps.recordedStatus(app.deployStatus, app.currentVersion)
+    if (app.current_deployment_id === null) {
+      return strings.apps.statusNotDeployed
     }
-    return `${strings.apps.statusRecordedDeployed}: ${app.deployStatus}`
+    if (app.versionsError) {
+      return strings.apps.versionsLoadError
+    }
+    if (app.isMismatch) {
+      return strings.apps.recordMismatch(app.current_deployment_id)
+    }
+    if (app.deployStatus) {
+      if (app.currentVersion !== null) {
+        return strings.apps.recordedStatus(app.deployStatus, app.currentVersion)
+      }
+      return `${strings.apps.statusRecordedDeployed}: ${app.deployStatus}`
+    }
+    return strings.apps.recordMismatch(app.current_deployment_id)
   }
 
-  const statusColor = (status: Deployment['status'] | null): string => {
-    if (!status) return 'default'
-    if (status === 'running') return 'default'
-    if (status === 'failed') return 'error'
-    if (status === 'building' || status === 'deploying') return 'processing'
+  const statusColor = (app: AppRow): string => {
+    if (app.current_deployment_id === null) return 'default'
+    if (app.versionsError) return 'error'
+    if (app.isMismatch) return 'warning'
+    if (!app.deployStatus) return 'default'
+    if (app.deployStatus === 'running') return 'default'
+    if (app.deployStatus === 'failed') return 'error'
+    if (app.deployStatus === 'building' || app.deployStatus === 'deploying') return 'processing'
     return 'default'
   }
 
@@ -158,17 +194,20 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
     {
       title: strings.vpsControl.apps.columns.version,
       key: 'version',
-      width: 80,
+      width: 90,
       align: 'center' as const,
-      render: (_: unknown, app: AppRow) =>
-        app.currentVersion !== null ? `v${app.currentVersion}` : '—'
+      render: (_: unknown, app: AppRow) => {
+        if (app.currentVersion !== null) return `v${app.currentVersion}`
+        if (app.current_deployment_id !== null) return `#${app.current_deployment_id}`
+        return '—'
+      }
     },
     {
       title: strings.vpsControl.apps.columns.status,
       key: 'status',
-      width: 140,
+      width: 170,
       render: (_: unknown, app: AppRow) => (
-        <Tag className="status-badge" color={statusColor(app.deployStatus)}>
+        <Tag className="status-badge" color={statusColor(app)}>
           {statusLabel(app)}
         </Tag>
       )
