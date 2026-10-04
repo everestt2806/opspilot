@@ -49,7 +49,7 @@ export const LOCALES: Record<LocaleMode, LocaleStrings> = {
       activity: 'Hoạt động',
       settings: 'Cài đặt',
       deploy: 'Triển khai',
-      deployAction: '+ Triển khai',
+      deployAction: 'Triển khai',
       migrate: 'Di chuyển',
       history: 'Hoạt động'
     },
@@ -75,7 +75,7 @@ export const LOCALES: Record<LocaleMode, LocaleStrings> = {
       activity: 'Activity',
       settings: 'Settings',
       deploy: 'Deploy',
-      deployAction: '+ Deploy',
+      deployAction: 'Deploy',
       migrate: 'Migrate',
       history: 'Activity'
     },
@@ -101,7 +101,7 @@ export const LOCALES: Record<LocaleMode, LocaleStrings> = {
       activity: '操作动态',
       settings: '系统设置',
       deploy: '部署',
-      deployAction: '+ 部署',
+      deployAction: '部署',
       migrate: '迁移',
       history: '操作动态'
     },
@@ -127,7 +127,7 @@ export const LOCALES: Record<LocaleMode, LocaleStrings> = {
       activity: 'アクティビティ',
       settings: 'システム設定',
       deploy: 'デプロイ',
-      deployAction: '+ デプロイ',
+      deployAction: 'デプロイ',
       migrate: '移行',
       history: 'アクティビティ'
     },

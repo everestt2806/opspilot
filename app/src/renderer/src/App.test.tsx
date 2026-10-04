@@ -61,14 +61,17 @@ describe('resolveActivePage', () => {
 })
 
 describe('App — UI-1a Desktop Shell & Navigation', () => {
-  it('hien thi dung 5 muc dieu huong chinh tren sidebar, nut deploy action va secondary migrate', () => {
+  it('hien thi dung 5 muc dieu huong chinh tren sidebar va nut deploy action', () => {
     useUiState.setState({ locale: 'vi', activePage: 'apps' })
     const { container } = render(<App />)
 
-    // Nut Deploy action
-    expect(screen.getByRole('button', { name: '+ Triển khai' })).toBeTruthy()
+    // Nut Deploy action: dung 1 icon plus va chu Trien khai (khong co 2 dau cong)
+    const deployBtn = screen.getByRole('button', { name: 'Triển khai' })
+    expect(deployBtn).toBeTruthy()
+    expect(deployBtn.querySelector('.anticon-plus')).toBeTruthy()
+    expect(deployBtn.textContent).toBe('Triển khai')
 
-    // 5 muc dieu huong chinh
+    // 5 muc dieu huong chinh tren sidebar
     const nav = container.querySelector('.app-sidebar-nav')
     expect(nav).toBeTruthy()
     const navButtons = nav?.querySelectorAll('button')
@@ -79,20 +82,22 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
     expect(screen.getByRole('button', { name: 'Hoạt động' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Cài đặt' })).toBeTruthy()
 
-    // Hanh dong phu Migrate
-    expect(screen.getByRole('button', { name: 'Di chuyển' })).toBeTruthy()
+    // Sidebar khong con nut secondary migrate o day
+    expect(container.querySelector('.app-sidebar-secondary')).toBeNull()
+    const allSidebarButtons = container.querySelectorAll('.app-sidebar button')
+    expect(allSidebarButtons.length).toBe(6) // 1 deploy action + 5 nav items
 
     // Khong co status bar hay chu Ready co dinh
     expect(container.querySelector('.app-statusbar')).toBeNull()
     expect(container.querySelector('.app-sidebar-footer')).toBeNull()
   })
 
-  it('dieu huong sang Deploy qua nut + Triển khai va co the quay lai apps', () => {
+  it('dieu huong sang Deploy qua nut Triển khai va co the quay lai apps', () => {
     useUiState.setState({ locale: 'vi', activePage: 'apps' })
     render(<App />)
 
-    // Bam + Trien khai
-    fireEvent.click(screen.getByRole('button', { name: '+ Triển khai' }))
+    // Bam Trien khai
+    fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
     expect(useUiState.getState().activePage).toBe('deploy')
 
     // DeployPage co nut Quay lai
@@ -102,11 +107,15 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
     expect(useUiState.getState().activePage).toBe('apps')
   })
 
-  it('dieu huong sang Migrate qua nut phu va mo dung trang', () => {
-    useUiState.setState({ locale: 'vi', activePage: 'apps' })
+  it('giu loi vao MigratePage qua nut Di chuyển / Migrate o trang VPS', () => {
+    useUiState.setState({ locale: 'vi', activePage: 'vps' })
     render(<App />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Di chuyển' }))
+    // O trang VPS co nut hanh dong 'Di chuyển'
+    const migrateBtn = screen.getByRole('button', { name: /Di chuyển/i })
+    expect(migrateBtn).toBeTruthy()
+
+    fireEvent.click(migrateBtn)
     expect(useUiState.getState().activePage).toBe('migrate')
     expect(screen.getByText('Migrate giữa hai VPS')).toBeTruthy()
   })
@@ -116,19 +125,18 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
     render(<App />)
 
     // EN
-    expect(screen.getByRole('button', { name: '+ Deploy' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Deploy' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Dashboard' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Applications' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Servers' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Activity' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Settings' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Migrate' })).toBeTruthy()
 
     // VI
     act(() => {
       useUiState.getState().setLocale('vi')
     })
-    expect(screen.getByRole('button', { name: '+ Triển khai' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Triển khai' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Tổng quan' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Ứng dụng' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Máy chủ' })).toBeTruthy()
@@ -139,7 +147,7 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
     act(() => {
       useUiState.getState().setLocale('cn')
     })
-    expect(screen.getByRole('button', { name: '+ 部署' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '部署' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '总览' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '应用' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '服务器' })).toBeTruthy()
@@ -150,7 +158,7 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
     act(() => {
       useUiState.getState().setLocale('jp')
     })
-    expect(screen.getByRole('button', { name: '+ デプロイ' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'デプロイ' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'ダッシュボード' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'アプリ' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'サーバー' })).toBeTruthy()
@@ -165,7 +173,7 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
     // Tren trang Settings co segmented ngon ngu
     fireEvent.click(screen.getByText('Tiếng Việt'))
     expect(useUiState.getState().locale).toBe('vi')
-    expect(screen.getByRole('button', { name: '+ Triển khai' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Triển khai' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Ứng dụng' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Cài đặt' })).toBeTruthy()
   })

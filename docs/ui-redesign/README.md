@@ -67,8 +67,8 @@ Toàn bộ 24 ảnh chụp bản dựng hiện tại trong [docs/ui-redesign/scr
 Prototype tương tác độc lập được lưu trữ tại [docs/ui-redesign/prototype/](file:///D:/Developing/DuAnCNTT/docs/ui-redesign/prototype/):
 * Các file mã nguồn: [`index.html`](file:///D:/Developing/DuAnCNTT/docs/ui-redesign/prototype/index.html), [`styles.css`](file:///D:/Developing/DuAnCNTT/docs/ui-redesign/prototype/styles.css), [`app.js`](file:///D:/Developing/DuAnCNTT/docs/ui-redesign/prototype/app.js).
 
-### 3.1. Các điểm cải tiến nổi bật trong Prototype
-1. **Sidebar cố định 5 mục & Nút Action Deploy**: `Tổng quan`, `Ứng dụng`, `Máy chủ`, `Hoạt động`, `Cài đặt`. Nút `+ Triển khai` điều hướng sang màn `DeployPage` hiện có kèm preselect app/VPS.
+### 3.1. Các điểm cải tiến nổi bật trong Prototype & UI-1a Shell
+1. **Sidebar cố định 5 mục & Nút Action Deploy**: `Tổng quan`, `Ứng dụng`, `Máy chủ`, `Hoạt động`, `Cài đặt`. Nút `+ Triển khai` (icon `+` cùng nhãn `Triển khai`, không lặp dấu cộng) điều hướng sang màn `DeployPage` hiện có kèm preselect app/VPS. Lối vào MigratePage được bố trí qua nút hành động trên trang Máy chủ (`VpsPage`), giữ sidebar tinh giản đúng 5 mục chính.
 2. **Sửa nút Ops Fleet chuẩn CSS**: Nút chọn fleet trong sidebar được đồng bộ màu nền và viền theo biến theme (`var(--bg-card-subtle)`), không còn bị trắng mặc định trên nền tối.
 3. **Nhãn Prototype gọn, dễ thấy**: Đặt nhãn `Prototype · Dữ liệu mẫu` trực quan trên thanh tiêu đề. Các thông báo tương tác (alert) đều ghi rõ tiền tố `[Mô phỏng Prototype]` để xác nhận chỉ là mô phỏng giao diện.
 4. **Tìm kiếm và Lọc VPS hoạt động kết hợp đồng thời**:
@@ -138,7 +138,7 @@ Bộ tiêu chí nghiệm thu UI-1 được định nghĩa tinh gọn, tập trun
 
 ### AC-2: Hệ thống Điều hướng 5 mục & Nút Action Deploy
 * [ ] **AC-2.1 (5 mục điều hướng)**: Sidebar chứa đúng 5 mục: `Tổng quan`, `Ứng dụng`, `Máy chủ`, `Hoạt động`, `Cài đặt`. Thứ tự hiển thị đặt `Ứng dụng` lên vị trí ưu tiên cao hơn `Máy chủ`.
-* [ ] **AC-2.2 (Nút Action Deploy)**: Nút `+ Triển khai` là nút hành động nổi bật trên sidebar. Khi bấm, điều hướng sang màn `DeployPage` hiện có (gọi `setActivePage('deploy')`) và truyền preselect (`appId`, `vpsId`) nếu đang ở ngữ cảnh ứng dụng hoặc máy chủ; không tạo modal chạy deploy mới.
+* [ ] **AC-2.2 (Nút Action Deploy)**: Nút `Triển khai` (có icon `+` PlusOutlined, không lặp dấu cộng) là nút hành động nổi bật trên sidebar. Khi bấm, điều hướng sang màn `DeployPage` hiện có (gọi `setActivePage('deploy')`) và truyền preselect (`appId`, `vpsId`) nếu đang ở ngữ cảnh ứng dụng hoặc máy chủ; không tạo modal chạy deploy mới. Lối vào MigratePage nằm tại nút hành động trên trang Máy chủ.
 * [ ] **AC-2.3 (Loại bỏ dead menus)**: Không giữ lại bất kỳ menu nào chỉ hiển thị hộp thoại `alert()` hoặc trang trống (ví dụ: gộp chức năng Doctor vào trang chi tiết tương ứng thay vì để menu riêng lẻ).
 
 ### AC-3: Bố cục Tab ngang tại các trang chi tiết (Chỉ làm tab dùng được bằng IPC hiện có)

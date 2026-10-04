@@ -2416,46 +2416,6 @@
   background: var(--accent);
 }
 
-.app-sidebar-secondary {
-  margin-top: auto;
-  padding: 8px 8px 12px;
-  border-top: 1px solid var(--border);
-}
-
-.app-sidebar-secondary-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-muted);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  text-align: left;
-  cursor: pointer;
-  transition: all 120ms ease;
-}
-
-.app-sidebar-secondary-btn:hover {
-  background: var(--fill-hover);
-  color: var(--text-primary);
-}
-
-.app-sidebar-secondary-btn-active {
-  background: var(--fill-selected);
-  color: var(--text-primary);
-  border-color: var(--border);
-}
-
-.app-sidebar-secondary-icon {
-  font-size: 14px;
-}
-
 .app-main {
   display: flex;
   flex: 1;

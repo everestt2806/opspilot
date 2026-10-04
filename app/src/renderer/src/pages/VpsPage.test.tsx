@@ -358,4 +358,20 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
     fireEvent.click(screen.getAllByText(strings.vps.checkResources)[0])
     await waitFor(() => expect(getResources).toHaveBeenCalledTimes(4))
   })
+
+  it('nut Migrate tren PageHeader chuyen activePage ve migrate', async () => {
+    mockApi({
+      'vps:list': async () => ({ ok: true, data: [VPS_A] }),
+      'vps:get-resources': async () => ({ ok: true, data: RES }),
+      'app:list': async () => ({ ok: true, data: [] })
+    })
+
+    render(<VpsPage />)
+    const migrateBtn = screen.getByRole('button', {
+      name: new RegExp(strings.navigation.migrate, 'i')
+    })
+    expect(migrateBtn).toBeTruthy()
+    fireEvent.click(migrateBtn)
+    expect(useUiState.getState().activePage).toBe('migrate')
+  })
 })

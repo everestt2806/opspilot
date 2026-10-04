@@ -3,7 +3,6 @@ import {
   AppstoreOutlined,
   CloudServerOutlined,
   DashboardOutlined,
-  DeploymentUnitOutlined,
   HistoryOutlined,
   PlusOutlined,
   SettingOutlined
@@ -99,19 +98,6 @@ function App(): React.JSX.Element {
                   </button>
                 ))}
               </nav>
-
-              <div className="app-sidebar-secondary">
-                <button
-                  type="button"
-                  className={`app-sidebar-secondary-btn${page === 'migrate' ? ' app-sidebar-secondary-btn-active' : ''}`}
-                  onClick={() => setActivePage('migrate')}
-                  aria-label={t.navigation.migrate}
-                  aria-current={page === 'migrate' ? 'page' : undefined}
-                >
-                  <DeploymentUnitOutlined className="app-sidebar-secondary-icon" />
-                  <span>{t.navigation.migrate}</span>
-                </button>
-              </div>
             </aside>
 
             <main className="app-main">

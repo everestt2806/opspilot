@@ -648,6 +648,15 @@ const BASE_EN_STRINGS = {
 }
 
 const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
+  navigation: {
+    vps: 'Máy chủ',
+    apps: 'Ứng dụng',
+    deploy: 'Triển khai',
+    dashboard: 'Tổng quan',
+    migrate: 'Di chuyển',
+    history: 'Hoạt động',
+    settings: 'Cài đặt'
+  },
   common: {
     cancel: 'Hủy',
     notAvailable: 'Chưa có',
@@ -829,6 +838,15 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
 }
 
 const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
+  navigation: {
+    vps: '服务器',
+    apps: '应用',
+    deploy: '部署',
+    dashboard: '总览',
+    migrate: '迁移',
+    history: '操作动态',
+    settings: '系统设置'
+  },
   common: {
     cancel: '取消',
     notAvailable: '暂无',
@@ -1003,6 +1021,15 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
 }
 
 const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
+  navigation: {
+    vps: 'サーバー',
+    apps: 'アプリ',
+    deploy: 'デプロイ',
+    dashboard: 'ダッシュボード',
+    migrate: '移行',
+    history: 'アクティビティ',
+    settings: 'システム設定'
+  },
   common: {
     cancel: 'キャンセル',
     notAvailable: 'なし',
@@ -1189,6 +1216,7 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     ...BASE_EN_STRINGS,
     ...VI_OVERRIDES,
     common: { ...BASE_EN_STRINGS.common, ...VI_OVERRIDES.common },
+    navigation: { ...BASE_EN_STRINGS.navigation, ...VI_OVERRIDES.navigation },
     apps: { ...BASE_EN_STRINGS.apps, ...VI_OVERRIDES.apps },
     deploy: {
       ...BASE_EN_STRINGS.deploy,
@@ -1217,6 +1245,7 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     ...BASE_EN_STRINGS,
     ...CN_OVERRIDES,
     common: { ...BASE_EN_STRINGS.common, ...CN_OVERRIDES.common },
+    navigation: { ...BASE_EN_STRINGS.navigation, ...CN_OVERRIDES.navigation },
     apps: { ...BASE_EN_STRINGS.apps, ...CN_OVERRIDES.apps },
     deploy: {
       ...BASE_EN_STRINGS.deploy,
@@ -1245,6 +1274,7 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     ...BASE_EN_STRINGS,
     ...JP_OVERRIDES,
     common: { ...BASE_EN_STRINGS.common, ...JP_OVERRIDES.common },
+    navigation: { ...BASE_EN_STRINGS.navigation, ...JP_OVERRIDES.navigation },
     apps: { ...BASE_EN_STRINGS.apps, ...JP_OVERRIDES.apps },
     deploy: {
       ...BASE_EN_STRINGS.deploy,
