@@ -1,7 +1,7 @@
 /**
  * OpsPilot UI Redesign Prototype Controller
  * App-centric navigation, 5 fixed sidebar items, Deploy action button,
- * combined search & filter, honest trust model, and dynamic object detail views.
+ * combined search & filter, honest last_seen_at labels, and UI-1 IPC scope alignment.
  */
 
 // Global State
@@ -15,7 +15,7 @@ let currentVpsObj = null;
 let appSearchQuery = '';
 let appSelectedVps = 'all';
 
-// Mock Data Models
+// Mock Data Models aligned with UI-1 IPC Capabilities
 const APPS_DATA = {
   'express-api': {
     name: 'express-api',
@@ -42,25 +42,11 @@ const APPS_DATA = {
       { id: '#dep-101 (v2)', image: 'express-api:v2 (commit 90af231)', time: '01/10/2026 14:10:05', duration: '42.1s', status: 'failed', statusClass: 'danger', active: false, note: 'Lỗi HEALTHCHECK: Port 3000 timeout' },
       { id: '#dep-095 (v1)', image: 'express-api:v1 (commit 11e40fa)', time: '30/09/2026 09:00:00', duration: '15.0s', status: 'rolled_back', statusClass: 'neutral', active: false, note: 'Bản dựng khởi tạo ban đầu' }
     ],
-    env: [
-      { key: 'NODE_ENV', val: 'production', note: 'Chế độ runtime Express' },
-      { key: 'PORT', val: '3000', note: 'Cổng ứng dụng lắng nghe' },
-      { key: 'ENABLE_FAULT_ENDPOINTS', val: 'true', note: 'Bật theo chỉ thị P2d-6a cho pilot runner' },
-      { key: 'DATABASE_URL', val: 'postgres://app_user:••••••••••@103.179.185.76:5432/appdb', note: 'Đã che mật khẩu (Masked)' }
-    ],
     doctor: [
       { item: 'Binding cổng máy chủ', status: 'PASS', statusClass: 'success', note: 'docker-proxy lắng nghe trên 0.0.0.0:3000' },
       { item: 'Firewall UFW trên VPS', status: 'PASS', statusClass: 'success', note: 'Luật UFW cho phép TCP/3000 từ mọi nguồn' },
       { item: 'Probe Healthcheck', status: 'PASS', statusClass: 'success', note: 'GET http://103.179.185.76:3000/health -> 200 OK (2ms)' },
       { item: 'Domain & Ingress', status: 'CHƯA BẬT', statusClass: 'neutral', note: 'Chế độ Direct Port, chưa gắn Reverse Proxy' }
-    ],
-    logs: [
-      { ts: '[2026-10-03T22:45:12Z]', level: '[INFO]', msg: 'Starting Express server on port 3000...' },
-      { ts: '[2026-10-03T22:45:13Z]', level: '[INFO]', msg: 'Connected to PostgreSQL at 103.179.185.76:5432/appdb' },
-      { ts: '[2026-10-03T22:45:13Z]', level: '[INFO]', msg: 'Fault endpoints enabled: /__fault/kill, /__fault/delay' },
-      { ts: '[2026-10-03T22:45:15Z]', level: '[INFO]', msg: 'Healthcheck probe received: GET /health 200 (1ms)' },
-      { ts: '[2026-10-03T23:01:22Z]', level: '[INFO]', msg: 'GET /api/v1/users 200 (14ms)' },
-      { ts: '[2026-10-03T23:15:40Z]', level: '[INFO]', msg: 'GET /health 200 (2ms)' }
     ]
   },
 
@@ -87,20 +73,10 @@ const APPS_DATA = {
       { id: '#dep-088 (v2)', image: 'next-blog:v2 (commit c99120e)', time: '02/10/2026 14:30:00', duration: '28.4s', status: 'running', statusClass: 'success', active: true, note: 'Tối ưu Server-Side Rendering cache' },
       { id: '#dep-070 (v1)', image: 'next-blog:v1 (commit 45f8a1b)', time: '28/09/2026 11:00:00', duration: '31.2s', status: 'stopped', statusClass: 'neutral', active: false, note: 'Bản khởi tạo Next.js portal' }
     ],
-    env: [
-      { key: 'NODE_ENV', val: 'production', note: 'Next.js production runtime' },
-      { key: 'PORT', val: '3000', note: 'Cổng nội bộ container' },
-      { key: 'NEXT_PUBLIC_API_URL', val: 'http://103.179.185.76:3000', note: 'Liên kết tới express-api' }
-    ],
     doctor: [
       { item: 'Binding cổng máy chủ', status: 'PASS', statusClass: 'success', note: 'docker-proxy lắng nghe trên 0.0.0.0:3001' },
       { item: 'Firewall UFW trên VPS', status: 'PASS', statusClass: 'success', note: 'Port 3001 ACCEPT' },
       { item: 'Probe Healthcheck', status: 'PASS', statusClass: 'success', note: 'GET http://103.179.185.76:3001/api/health -> 200 OK' }
-    ],
-    logs: [
-      { ts: '[2026-10-02T14:30:15Z]', level: '[INFO]', msg: '▲ Next.js 14.2.5 server ready on port 3000' },
-      { ts: '[2026-10-02T14:30:16Z]', level: '[INFO]', msg: 'Compiled /api/health in 120ms' },
-      { ts: '[2026-10-02T14:30:18Z]', level: '[INFO]', msg: 'Healthcheck probe: GET /api/health 200' }
     ]
   },
 
@@ -113,7 +89,7 @@ const APPS_DATA = {
     hostPort: '8080',
     containerPort: '80/tcp',
     healthPath: '/',
-    status: 'Chưa đối soát VPS (Stale)',
+    status: 'Chưa đối soát VPS',
     statusClass: 'warning',
     exposure: 'Host Unverified',
     image: 'vite-dashboard:v1',
@@ -126,33 +102,28 @@ const APPS_DATA = {
     deployments: [
       { id: '#dep-042 (v1)', image: 'vite-dashboard:v1 (commit ea11029)', time: '20/09/2026 10:15:00', duration: '12.0s', status: 'running', statusClass: 'warning', active: true, note: 'Bản dựng Staging (VPS chưa quét lại)' }
     ],
-    env: [
-      { key: 'VITE_API_URL', val: 'http://103.179.185.77:3000', note: 'API Backend nội bộ Staging' },
-      { key: 'NGINX_PORT', val: '80', note: 'Nginx static server' }
-    ],
     doctor: [
       { item: 'Binding cổng máy chủ', status: 'CẢNH BÁO', statusClass: 'warning', note: 'Chưa quét lại thông tin cổng trong 13 ngày' },
-      { item: 'Firewall UFW trên VPS', status: 'CHƯA RÕ', statusClass: 'neutral', note: 'Cần SSH keyscan & ping' },
+      { item: 'Firewall UFW trên VPS', status: 'CHƯA RÕ', statusClass: 'neutral', note: 'Cần SSH scan' },
       { item: 'Probe Healthcheck', status: 'PASS', statusClass: 'success', note: 'GET http://103.179.185.77:8080/ -> 200 OK' }
-    ],
-    logs: [
-      { ts: '[2026-09-20T10:15:10Z]', level: '[INFO]', msg: 'nginx/1.25.4 worker process 1 started' },
-      { ts: '[2026-09-20T10:15:12Z]', level: '[INFO]', msg: 'Configuration test successful' }
     ]
   }
 };
 
 const VPS_DATA = {
   'VM01-Prod': {
+    id: 1,
     name: 'VM01-Prod',
     host: '103.179.185.76',
     port: '22',
     user: 'deployer',
     os: 'Ubuntu 22.04 LTS (x86_64)',
     authType: 'SSH Key File',
-    status: 'Đã kết nối (Reachable)',
+    status: 'Đã kết nối',
     statusClass: 'success',
     badgeText: 'Đã kết nối',
+    lastSeen: 'Đã kiểm tra lúc 22:44:48',
+    lastSeenSub: '2 phút trước · vps:scan OK',
     cpu: '24.5%',
     cpuWidth: '24.5%',
     cpuSub: 'Load avg: 0.98, 1.12',
@@ -162,33 +133,33 @@ const VPS_DATA = {
     disk: '38 / 120 GB',
     diskWidth: '32%',
     diskSub: 'Còn trống: 82 GB',
-    uptime: 'Chrony OK · Uptime 45 ngày',
     dockerVersion: '27.1.1 · Compose v2.29.1',
     storageDriver: 'overlay2 (ext4)',
     cgroupDriver: 'systemd (v2)',
-    hostKeyType: 'ssh-ed25519',
-    fingerprint: 'SHA256:4t7Zq91wJkWu...ed25519 (Quét qua ssh-keyscan)',
-    fingerprintStatus: 'Chưa đối chiếu qua kênh tin cậy',
-    fingerprintClass: 'neutral',
     apps: ['express-api', 'next-blog'],
-    storage: { images: '3.4 GB (52% thu hồi)', containers: '45 MB', volumes: '2.1 GB' },
+    databases: [
+      { type: 'PostgreSQL 16', name: 'appdb', port: '5432', mem: '124 MB', status: 'Running' }
+    ],
     activities: [
       { time: '03/10/2026 22:45:10', type: 'Deploy Execution', desc: 'Deploy express-api v4 qua runner bằng private key', status: 'Thành công', statusClass: 'success' },
-      { time: '03/10/2026 22:44:50', type: 'Preflight Check', desc: 'Kiểm tra Docker socket & dung lượng đĩa', status: 'Đạt', statusClass: 'success' },
-      { time: '03/10/2026 22:44:48', type: 'SSH Ping', desc: 'Xác thực deployer@103.179.185.76:22 thành công', status: 'PASS', statusClass: 'success' }
+      { time: '03/10/2026 22:44:50', type: 'Preflight Check', desc: 'P2d-6b: Đọc SSH private key từ file, kiểm tra Docker socket', status: 'Đạt', statusClass: 'success' },
+      { time: '03/10/2026 22:44:48', type: 'Scan (vps:scan)', desc: 'Quét tài nguyên deployer@103.179.185.76:22 thành công', status: 'PASS', statusClass: 'success' }
     ]
   },
 
   'VM02-Staging': {
+    id: 2,
     name: 'VM02-Staging',
     host: '103.179.185.77',
     port: '2222',
     user: 'ubuntu',
     os: 'Ubuntu 20.04 LTS (x86_64)',
     authType: 'Password Auth',
-    status: 'Chưa xác minh (Stale - 13 ngày)',
+    status: 'Chưa kiểm tra gần đây',
     statusClass: 'warning',
-    badgeText: 'Chưa xác minh',
+    badgeText: 'Chưa kiểm tra gần đây',
+    lastSeen: 'Chưa kiểm tra gần đây',
+    lastSeenSub: '13 ngày trước · Quy tắc hiển thị >24h',
     cpu: '12.0%',
     cpuWidth: '12%',
     cpuSub: 'Load avg: 0.15 (Cũ)',
@@ -198,32 +169,32 @@ const VPS_DATA = {
     disk: '18 / 60 GB',
     diskWidth: '30%',
     diskSub: 'Còn trống: 42 GB',
-    uptime: '13 ngày trước chưa quét lại',
     dockerVersion: '24.0.7 · Compose v2.21.0',
     storageDriver: 'overlay2 (ext4)',
     cgroupDriver: 'systemd (v2)',
-    hostKeyType: 'ssh-ed25519',
-    fingerprint: 'SHA256:7v8Wq2...ed25519 (Quét 13 ngày trước)',
-    fingerprintStatus: 'Chưa đối chiếu lại (Stale)',
-    fingerprintClass: 'warning',
     apps: ['vite-dashboard'],
-    storage: { images: '1.2 GB', containers: '15 MB', volumes: '500 MB' },
+    databases: [
+      { type: 'PostgreSQL 16', name: 'staging_db', port: '5432', mem: '98 MB', status: 'Running' }
+    ],
     activities: [
       { time: '20/09/2026 10:15:00', type: 'Deploy Execution', desc: 'Deploy vite-dashboard v1', status: 'Thành công', statusClass: 'success' },
-      { time: '20/09/2026 10:00:00', type: 'SSH Ping', desc: 'Xác thực password ubuntu@103.179.185.77:2222', status: 'PASS', statusClass: 'success' }
+      { time: '20/09/2026 10:00:00', type: 'Scan (vps:scan)', desc: 'Xác thực password ubuntu@103.179.185.77:2222', status: 'PASS', statusClass: 'success' }
     ]
   },
 
   'VM03-Cloud-Expired': {
+    id: 3,
     name: 'VM03-Cloud-Expired',
     host: '192.168.1.99',
     port: '22',
     user: 'root',
     os: 'Không thể xác định (Mất kết nối)',
     authType: 'SSH Key File',
-    status: 'Mất kết nối (Unreachable / Timeout)',
+    status: 'Mất kết nối',
     statusClass: 'danger',
     badgeText: 'Mất kết nối',
+    lastSeen: 'Mất kết nối (Timeout)',
+    lastSeenSub: 'TCP connection timeout 192.168.1.99:22',
     cpu: 'N/A',
     cpuWidth: '0%',
     cpuSub: 'Không thể đọc thông số',
@@ -233,18 +204,13 @@ const VPS_DATA = {
     disk: 'N/A',
     diskWidth: '0%',
     diskSub: 'Không thể đọc thông số',
-    uptime: 'Mất kết nối TCP/22',
     dockerVersion: 'N/A',
     storageDriver: 'N/A',
     cgroupDriver: 'N/A',
-    hostKeyType: 'Không xác định',
-    fingerprint: 'N/A (Connection Timeout)',
-    fingerprintStatus: 'Lỗi kết nối SSH',
-    fingerprintClass: 'danger',
     apps: [],
-    storage: { images: 'N/A', containers: 'N/A', volumes: 'N/A' },
+    databases: [],
     activities: [
-      { time: '15/09/2026 09:12:00', type: 'SSH Ping', desc: 'TCP connection timeout 192.168.1.99:22', status: 'Timeout', statusClass: 'danger' },
+      { time: '15/09/2026 09:12:00', type: 'Scan (vps:scan)', desc: 'TCP connection timeout 192.168.1.99:22', status: 'Timeout', statusClass: 'danger' },
       { time: '10/09/2026 08:00:00', type: 'SSH Handshake', desc: 'SSH authentication rejected (Key expired)', status: 'Auth Failed', statusClass: 'danger' }
     ]
   }
@@ -264,7 +230,8 @@ function switchView(viewId) {
     'vps': 'nav-btn-vps',
     'vps-detail': 'nav-btn-vps',
     'activity': 'nav-btn-activity',
-    'settings': 'nav-btn-settings'
+    'settings': 'nav-btn-settings',
+    'deploy': null
   };
 
   const activeBtnId = navMap[viewId];
@@ -299,6 +266,8 @@ function switchView(viewId) {
       titleContext.textContent = 'Nhật ký Hoạt động';
     } else if (viewId === 'settings') {
       titleContext.textContent = 'Cài đặt Hệ thống';
+    } else if (viewId === 'deploy') {
+      titleContext.textContent = 'Triển khai (DeployPage)';
     }
   }
 
@@ -307,7 +276,7 @@ function switchView(viewId) {
 }
 
 
-// Open App Detail View (Dynamic Rendering)
+// Open App Detail View (Dynamic Rendering - 3 UI-1 Tabs)
 function openAppDetail(appName) {
   const app = APPS_DATA[appName];
   if (!app) return;
@@ -377,16 +346,6 @@ function renderAppDetail(app) {
     </tr>
   `).join('');
 
-  // Env Tab
-  const envTbody = document.getElementById('app-env-tbody');
-  envTbody.innerHTML = app.env.map(e => `
-    <tr>
-      <td><span class="code-pill">${e.key}</span></td>
-      <td><code>${e.val}</code></td>
-      <td>${e.note}</td>
-    </tr>
-  `).join('');
-
   // Doctor Tab
   const docTbody = document.getElementById('app-doctor-tbody');
   docTbody.innerHTML = app.doctor.map(doc => `
@@ -396,21 +355,10 @@ function renderAppDetail(app) {
       <td>${doc.note}</td>
     </tr>
   `).join('');
-
-  // Logs Tab
-  document.getElementById('logs-container-label').textContent = `Container: ${app.containerName}`;
-  const term = document.getElementById('terminal-content');
-  term.innerHTML = app.logs.map(l => `
-    <div class="log-line">
-      <span class="log-ts">${l.ts}</span>
-      <span class="log-info">${l.level}</span>
-      <span>${l.msg}</span>
-    </div>
-  `).join('');
 }
 
 
-// Open VPS Detail View (Dynamic Rendering)
+// Open VPS Detail View (Dynamic Rendering - 4 UI-1 Tabs)
 function openVpsDetail(vpsName) {
   const vps = VPS_DATA[vpsName];
   if (!vps) return;
@@ -447,8 +395,8 @@ function renderVpsDetail(vps) {
   document.getElementById('vps-metric-disk-sub').textContent = vps.diskSub;
   document.getElementById('vps-metric-disk-bar').style.width = vps.diskWidth;
 
-  document.getElementById('vps-metric-time-val').textContent = vps.statusClass === 'success' ? 'Chrony OK' : (vps.statusClass === 'warning' ? 'Cảnh báo lệch giờ' : 'N/A');
-  document.getElementById('vps-metric-time-sub').textContent = vps.uptime;
+  document.getElementById('vps-metric-time-val').textContent = vps.lastSeen;
+  document.getElementById('vps-metric-time-sub').textContent = vps.lastSeenSub;
 
   // Docker Runtime Info
   const dockerTbody = document.getElementById('vps-docker-tbody');
@@ -495,55 +443,22 @@ function renderVpsDetail(vps) {
     }).join('');
   }
 
-  // Storage Tab
-  const storageTbody = document.getElementById('vps-storage-tbody');
-  storageTbody.innerHTML = `
-    <tr>
-      <td>Images</td>
-      <td>4</td>
-      <td>${vps.apps.length}</td>
-      <td>${vps.storage.images}</td>
-      <td>1.2 GB</td>
-    </tr>
-    <tr>
-      <td>Containers</td>
-      <td>${vps.apps.length}</td>
-      <td>${vps.apps.length}</td>
-      <td>${vps.storage.containers}</td>
-      <td>10 MB</td>
-    </tr>
-    <tr>
-      <td>Local Volumes</td>
-      <td>2</td>
-      <td>2</td>
-      <td>${vps.storage.volumes}</td>
-      <td>0 B</td>
-    </tr>
-  `;
-
-  // Security Tab (Honest Trust Model)
-  const secTbody = document.getElementById('vps-security-tbody');
-  secTbody.innerHTML = `
-    <tr>
-      <td style="color: var(--text-muted); width: 180px;">Loại khóa Host</td>
-      <td><span class="code-pill">${vps.hostKeyType}</span></td>
-    </tr>
-    <tr>
-      <td style="color: var(--text-muted);">Fingerprint quan sát</td>
-      <td><span class="code-pill">${vps.fingerprint}</span></td>
-    </tr>
-    <tr>
-      <td style="color: var(--text-muted);">Đối chiếu Host Key</td>
-      <td>
-        <span class="status-pill ${vps.fingerprintClass}">${vps.fingerprintStatus}</span>
-        <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">* Lệnh ssh-keyscan (TOFU) không thể coi là xác minh host. Cần đối chiếu fingerprint tin cậy ngoài.</div>
-      </td>
-    </tr>
-    <tr>
-      <td style="color: var(--text-muted);">Cơ chế SSH Auth</td>
-      <td><code>${vps.authType}</code></td>
-    </tr>
-  `;
+  // Databases Tab (database:list IPC)
+  document.getElementById('vps-tab-db-badge').textContent = `${vps.databases.length} DB`;
+  const dbTbody = document.getElementById('vps-database-tbody');
+  if (vps.databases.length === 0) {
+    dbTbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">Không có cơ sở dữ liệu nào trên máy chủ này.</td></tr>`;
+  } else {
+    dbTbody.innerHTML = vps.databases.map(db => `
+      <tr>
+        <td><strong>${db.type}</strong></td>
+        <td><code>${db.name}</code></td>
+        <td><span class="code-pill">:${db.port}</span></td>
+        <td>${db.mem}</td>
+        <td><span class="status-pill success"><span class="status-pill-dot"></span>${db.status}</span></td>
+      </tr>
+    `).join('');
+  }
 
   // Activity Tab
   const actTbody = document.getElementById('vps-activity-tbody');
@@ -620,40 +535,40 @@ function applyAppFilters() {
 }
 
 function refreshAppsList() {
-  alert('Đã đồng bộ trạng thái container mới nhất từ các máy chủ VPS.');
+  alert('[Mô phỏng Prototype] Đã đồng bộ danh sách ứng dụng từ cơ sở dữ liệu cục bộ qua IPC app:list. (Chỉ mô phỏng giao diện)');
 }
 
 
-// Deploy Modal (Global Action)
-function openDeployModal(appName) {
+// Deploy Page Navigation with Preselect (UI-1 Design Decision)
+function openDeployPage(appName, vpsName) {
   const targetApp = appName || 'express-api';
-  const select = document.getElementById('modal-deploy-app-select');
+  const app = APPS_DATA[targetApp];
+
+  const select = document.getElementById('deploy-page-app-select');
   if (select) select.value = targetApp;
 
-  onDeployAppChange(targetApp);
+  const targetInput = document.getElementById('deploy-page-vps-target');
+  if (app && targetInput) {
+    targetInput.value = `${app.vpsName} (${app.vpsHost}:${app.vpsPort})`;
+  } else if (vpsName && targetInput) {
+    targetInput.value = vpsName;
+  }
 
-  const modal = document.getElementById('deploy-modal');
-  if (modal) modal.style.display = 'flex';
+  switchView('deploy');
 }
 
-function closeDeployModal() {
-  const modal = document.getElementById('deploy-modal');
-  if (modal) modal.style.display = 'none';
-}
-
-function onDeployAppChange(appName) {
+function onDeployPageAppChange(appName) {
   const app = APPS_DATA[appName];
-  const targetInput = document.getElementById('modal-deploy-vps-target');
+  const targetInput = document.getElementById('deploy-page-vps-target');
   if (app && targetInput) {
     targetInput.value = `${app.vpsName} (${app.vpsHost}:${app.vpsPort})`;
   }
 }
 
-function executeMockDeploy() {
-  const select = document.getElementById('modal-deploy-app-select');
+function simulateDeploy() {
+  const select = document.getElementById('deploy-page-app-select');
   const appName = select ? select.value : 'express-api';
-  closeDeployModal();
-  alert(`Bắt đầu chạy preflight và build mới cho ${appName}... Quá trình deploy sẽ được ghi nhận vào Nhật ký Hoạt động.`);
+  alert(`[Mô phỏng Prototype] Đã kích hoạt quy trình triển khai cho ${appName} qua DeployPage/runner. (Chỉ mô phỏng giao diện, không chạy thật)`);
 }
 
 
@@ -675,41 +590,35 @@ function toggleTheme() {
 
 // Diagnostics & Rollback Handlers
 function runDoctorCheck() {
-  alert('Doctor đang chẩn đoán DNS, socket binding và firewall... Kết quả: MỌI CHỈ SỐ BÌNH THƯỜNG.');
+  alert('[Mô phỏng Prototype] Gọi IPC doctor:diagnose... Kết quả: MỌI CHỈ SỐ BÌNH THƯỜNG. (Chỉ mô phỏng giao diện)');
 }
 
 function rollbackTo(version) {
-  if (confirm(`Bạn có chắc chắn muốn thực hiện Rollback về phiên bản ${version} ngay lập tức không? Hệ thống sẽ chuyển lưu lượng về container phiên bản trước.`)) {
-    alert(`Rollback thành công về ${version}! Đã cập nhật router.`);
+  if (confirm(`[Mô phỏng Prototype] Bạn có muốn gọi IPC app:rollback về phiên bản ${version} không?`)) {
+    alert(`[Mô phỏng Prototype] Rollback hoàn tất về ${version}. (Chỉ mô phỏng giao diện, không chạy thật)`);
   }
 }
 
 function confirmRollbackModal() {
-  const promptVal = prompt('Nhập chính xác tên ứng dụng "express-api" để xác nhận rollback về phiên bản trước:');
+  const promptVal = prompt('[Mô phỏng Prototype] Nhập tên ứng dụng "express-api" để xác nhận rollback:');
   if (promptVal === 'express-api') {
-    alert('Xác nhận thành công! Đang kích hoạt Rollback về phiên bản trước...');
+    alert('[Mô phỏng Prototype] Xác nhận thành công! Đã kích hoạt rollback về phiên bản trước. (Chỉ mô phỏng giao diện)');
   } else if (promptVal !== null) {
-    alert('Tên xác nhận không khớp! Hủy bỏ rollback an toàn.');
-  }
-}
-
-function clearLogs() {
-  const term = document.getElementById('terminal-content');
-  if (term) {
-    term.innerHTML = '<div class="log-line"><span class="log-ts">[LOG]</span> <span class="log-info">[INFO]</span> <span>Màn hình log đã được xóa. Đang lắng nghe luồng stdout...</span></div>';
+    alert('[Mô phỏng Prototype] Tên xác nhận không khớp! Hủy rollback an toàn.');
   }
 }
 
 function scanFleet() {
-  alert('Đang quét nhanh SSH tất cả máy chủ trong Fleet...');
+  alert('[Mô phỏng Prototype] Đang lặp qua danh sách VPS và gọi IPC vps:scan(vpsId) cho từng máy chủ. (Chỉ mô phỏng giao diện)');
 }
 
-function testVpsConnection() {
-  alert('Đang gửi lệnh SSH ping kiểm tra kết nối...');
+function scanVps(vpsName, vpsId) {
+  alert(`[Mô phỏng Prototype] Gọi IPC vps:scan(${vpsId}) để cập nhật tài nguyên cho máy chủ ${vpsName}. (Chỉ mô phỏng giao diện)`);
 }
 
-function scanVpsResources() {
-  alert('Đang quét tài nguyên CPU/RAM/Disk từ xa...');
+function scanCurrentVps() {
+  if (!currentVpsObj) return;
+  scanVps(currentVpsObj.name, currentVpsObj.id);
 }
 
 

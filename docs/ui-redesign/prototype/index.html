@@ -18,13 +18,13 @@
         <span>OpsPilot</span>
       </div>
       <span class="titlebar-badge">v0.2-redesign</span>
-      <span class="mock-tag" style="background: var(--bg-card); font-size: 11px; border-color: var(--border-color); color: var(--text-muted);" title="UI sản phẩm thật sẽ sử dụng titlebarOverlay native của Electron">[Minh họa titlebar — UI thật dùng titlebarOverlay native]</span>
+      <span class="prototype-badge">Prototype · Dữ liệu mẫu</span>
     </div>
     <div class="titlebar-center">
       <span id="titlebar-context">Ứng dụng</span>
     </div>
     <div class="titlebar-right">
-      <span style="font-size: 11px; color: var(--text-muted); font-style: italic;">[Khu vực nút hệ thống — Do native titlebarOverlay render]</span>
+      <span style="font-size: 11px; color: var(--text-muted); font-style: italic;">[Khu vực nút hệ thống — titlebarOverlay native]</span>
     </div>
   </header>
 
@@ -44,9 +44,9 @@
           </button>
         </div>
 
-        <!-- Global Action Button: Deploy -->
+        <!-- Global Action Button: Deploy (Navigates to DeployPage with preselect) -->
         <div class="sidebar-action-container">
-          <button class="btn btn-primary btn-deploy-action" onclick="openDeployModal()">
+          <button class="btn btn-primary btn-deploy-action" onclick="openDeployPage()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             <span>+ Triển khai</span>
           </button>
@@ -98,7 +98,7 @@
                   </svg>
                   <span>Máy chủ</span>
                 </span>
-                <span class="nav-badge warning" title="1 máy chủ cũ/chưa quét lại, 1 máy mất kết nối">!</span>
+                <span class="nav-badge warning" title="1 máy chủ chưa kiểm tra gần đây, 1 máy mất kết nối">!</span>
               </button>
             </li>
 
@@ -169,7 +169,7 @@
             <button class="btn btn-secondary" onclick="switchView('apps')">
               <span>Xem ứng dụng</span>
             </button>
-            <button class="btn btn-primary" onclick="openDeployModal()">
+            <button class="btn btn-primary" onclick="openDeployPage()">
               <span>+ Triển khai mới</span>
             </button>
           </div>
@@ -193,9 +193,9 @@
               <span class="metric-sub">6 Thành công · 1 Thất bại</span>
             </div>
             <div class="metric-box">
-              <span class="metric-label">Trạng thái Khóa bảo vệ</span>
-              <span class="metric-value" style="color: var(--color-primary)">BẬT</span>
-              <span class="metric-sub">Fail-closed khi lỗi xác thực</span>
+              <span class="metric-label">Quy tắc hiển thị kiểm tra</span>
+              <span class="metric-value" style="color: var(--color-primary)">24 Giờ</span>
+              <span class="metric-sub">Đánh dấu cũ khi quá hạn kiểm tra</span>
             </div>
           </div>
 
@@ -231,7 +231,7 @@
                     <td><strong>vite-dashboard</strong></td>
                     <td><code>:8080</code></td>
                     <td>VM02-Staging</td>
-                    <td><span class="status-pill warning"><span class="status-pill-dot"></span>Cảnh báo</span></td>
+                    <td><span class="status-pill warning"><span class="status-pill-dot"></span>Chưa kiểm tra gần đây</span></td>
                   </tr>
                 </tbody>
               </table>
@@ -247,7 +247,7 @@
                   <tr>
                     <th>Máy chủ</th>
                     <th>IP / Cổng</th>
-                    <th>SSH Auth</th>
+                    <th>Lần kiểm tra gần nhất</th>
                     <th>Trạng thái</th>
                   </tr>
                 </thead>
@@ -255,19 +255,19 @@
                   <tr class="table-row-clickable" onclick="openVpsDetail('VM01-Prod')">
                     <td><strong>VM01-Prod</strong></td>
                     <td><code>103.179.185.76:22</code></td>
-                    <td>Key</td>
+                    <td>Đã kiểm tra lúc 22:44:48</td>
                     <td><span class="status-pill success"><span class="status-pill-dot"></span>Đã kết nối</span></td>
                   </tr>
                   <tr class="table-row-clickable" onclick="openVpsDetail('VM02-Staging')">
                     <td><strong>VM02-Staging</strong></td>
                     <td><code>103.179.185.77:2222</code></td>
-                    <td>Password</td>
-                    <td><span class="status-pill warning"><span class="status-pill-dot"></span>Chưa xác minh (Cũ)</span></td>
+                    <td>Chưa kiểm tra gần đây (13 ngày)</td>
+                    <td><span class="status-pill warning"><span class="status-pill-dot"></span>Chưa kiểm tra</span></td>
                   </tr>
                   <tr class="table-row-clickable" onclick="openVpsDetail('VM03-Cloud-Expired')">
                     <td><strong>VM03-Cloud-Expired</strong></td>
                     <td><code>192.168.1.99:22</code></td>
-                    <td>Key</td>
+                    <td>Timeout kết nối</td>
                     <td><span class="status-pill danger"><span class="status-pill-dot"></span>Mất kết nối</span></td>
                   </tr>
                 </tbody>
@@ -303,9 +303,9 @@
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
               <span>Làm mới</span>
             </button>
-            <button class="btn btn-primary" onclick="openDeployModal()">
+            <button class="btn btn-primary" onclick="openDeployPage()">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              <span>Tạo ứng dụng mới</span>
+              <span>+ Triển khai mới</span>
             </button>
           </div>
         </div>
@@ -338,7 +338,7 @@
                   <th>Phiên bản hiện tại</th>
                   <th>Máy chủ hạ tầng (VPS)</th>
                   <th>Cổng truy cập</th>
-                  <th>Trạng thái VPS</th>
+                  <th>Tình trạng kiểm tra VPS</th>
                   <th style="text-align: right">Thao tác</th>
                 </tr>
               </thead>
@@ -370,11 +370,11 @@
                     </a>
                   </td>
                   <td>
-                    <span class="status-pill success" style="font-size: 10.5px;">Đã kết nối</span>
+                    <span class="status-pill success" style="font-size: 10.5px;">Đã kiểm tra (2m trước)</span>
                   </td>
                   <td style="text-align: right" onclick="event.stopPropagation()">
                     <button class="btn btn-secondary btn-sm" onclick="openAppDetail('express-api')">Chi tiết</button>
-                    <button class="btn btn-secondary btn-sm" onclick="openDeployModal('express-api')">Deploy</button>
+                    <button class="btn btn-secondary btn-sm" onclick="openDeployPage('express-api', 'VM01-Prod')">Deploy</button>
                   </td>
                 </tr>
 
@@ -405,11 +405,11 @@
                     </a>
                   </td>
                   <td>
-                    <span class="status-pill success" style="font-size: 10.5px;">Đã kết nối</span>
+                    <span class="status-pill success" style="font-size: 10.5px;">Đã kiểm tra (2m trước)</span>
                   </td>
                   <td style="text-align: right" onclick="event.stopPropagation()">
                     <button class="btn btn-secondary btn-sm" onclick="openAppDetail('next-blog')">Chi tiết</button>
-                    <button class="btn btn-secondary btn-sm" onclick="openDeployModal('next-blog')">Deploy</button>
+                    <button class="btn btn-secondary btn-sm" onclick="openDeployPage('next-blog', 'VM01-Prod')">Deploy</button>
                   </td>
                 </tr>
 
@@ -438,7 +438,7 @@
                     <span style="color: var(--text-muted);">:8080 (Internal)</span>
                   </td>
                   <td>
-                    <span class="status-pill warning" style="font-size: 10.5px;" title="VPS chưa quét lại trong 13 ngày">Chưa xác minh</span>
+                    <span class="status-pill warning" style="font-size: 10.5px;" title="VPS chưa kiểm tra lại trong 13 ngày">Chưa kiểm tra (13 ngày)</span>
                   </td>
                   <td style="text-align: right" onclick="event.stopPropagation()">
                     <button class="btn btn-secondary btn-sm" onclick="openAppDetail('vite-dashboard')">Chi tiết</button>
@@ -453,7 +453,8 @@
 
 
       <!-- =====================================================================
-           VIEW 2: CHI TIẾT ỨNG DỤNG (APP DETAIL - HORIZONTAL TABS)
+           VIEW 2: CHI TIẾT ỨNG DỤNG (APP DETAIL - 3 TABS DÙNG ĐƯỢC BẰNG IPC)
+           (UI-1: Tổng quan & Sức khỏe, Lịch sử & Rollback, Bác sĩ & Exposure)
            ================================================================== -->
       <div class="view-container" id="view-app-detail">
         <div class="page-top-bar">
@@ -479,16 +480,16 @@
             </button>
             <button class="btn btn-danger btn-sm" onclick="confirmRollbackModal()">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
-              <span>Rollback tức thì</span>
+              <span>Rollback</span>
             </button>
-            <button class="btn btn-primary" onclick="openDeployModal(currentApp)">
+            <button class="btn btn-primary" onclick="openDeployPage(currentApp, currentAppObj ? currentAppObj.vpsName : undefined)">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
               <span>Triển khai phiên bản mới</span>
             </button>
           </div>
         </div>
 
-        <!-- App Detail Horizontal Tabs Nav -->
+        <!-- App Detail Horizontal Tabs Nav (Chỉ 3 tabs UI-1 hỗ trợ bằng IPC) -->
         <nav class="horizontal-tabs-nav" aria-label="Tabs chi tiết ứng dụng">
           <button class="tab-btn active" onclick="switchAppTab('app-tab-overview', this)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
@@ -499,17 +500,9 @@
             <span>Lịch sử & Rollback</span>
             <span class="tab-badge" id="app-detail-versions-badge">4 phiên bản</span>
           </button>
-          <button class="tab-btn" onclick="switchAppTab('app-tab-config', this)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-            <span>Biến môi trường (.env)</span>
-          </button>
           <button class="tab-btn" onclick="switchAppTab('app-tab-doctor', this)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>
             <span>Bác sĩ & Exposure</span>
-          </button>
-          <button class="tab-btn" onclick="switchAppTab('app-tab-logs', this)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
-            <span>Logs trực tiếp</span>
           </button>
         </nav>
 
@@ -520,7 +513,7 @@
           <div class="tab-pane active" id="app-tab-overview">
             <div style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
               <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">Thông số đo lường hiệu năng Container:</span>
-              <span class="mock-tag">[Dữ liệu mẫu — Chưa có IPC metrics container tức thời]</span>
+              <span class="mock-tag">[Dữ liệu mẫu — CPU/RAM container tức thời thuộc Backlog Backend]</span>
             </div>
 
             <div class="grid-4">
@@ -597,8 +590,8 @@
                       <td><span id="detail-overview-docker-ver">Docker 27.1.1 · Compose v2.29.1</span></td>
                     </tr>
                     <tr>
-                      <td style="color: var(--text-muted);">Fingerprint SSH</td>
-                      <td><span class="status-pill neutral" style="font-size: 10.5px;">Chưa đối chiếu kênh tin cậy</span></td>
+                      <td style="color: var(--text-muted);">Kiểm tra gần nhất</td>
+                      <td><span class="status-pill success" style="font-size: 10.5px;">Đã kiểm tra lúc 22:44:48</span></td>
                     </tr>
                   </tbody>
                 </table>
@@ -628,34 +621,7 @@
             </div>
           </div>
 
-          <!-- TAB 3: CONFIG & ENV (FUTURE IDEA / BACKEND BACKLOG) -->
-          <div class="tab-pane" id="app-tab-config">
-            <div class="mock-notice-box">
-              <span class="mock-tag" style="margin-bottom: 6px;">[Ý tưởng tương lai / Dữ liệu mẫu — Thuộc Backend Backlog]</span>
-              <div>Hiện tại Backend chưa hỗ trợ IPC đọc hoặc sửa trực tiếp biến môi trường runtime trên container từ xa. Bảng bên dưới minh họa giao diện quản trị .env dự kiến cho UI-2 sau khi backend hoàn thành API tương ứng.</div>
-            </div>
-
-            <div class="card">
-              <div class="card-header">
-                <h3 class="card-title">Biến môi trường (.env runtime)</h3>
-                <span class="mock-tag">[Chế độ xem trước — Chưa có IPC sửa biến]</span>
-              </div>
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Khóa (Key)</th>
-                    <th>Giá trị (Value)</th>
-                    <th>Ghi chú</th>
-                  </tr>
-                </thead>
-                <tbody id="app-env-tbody">
-                  <!-- Populated dynamically by renderAppDetail -->
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- TAB 4: DOCTOR & EXPOSURE -->
+          <!-- TAB 3: DOCTOR & EXPOSURE -->
           <div class="tab-pane" id="app-tab-doctor">
             <div class="alert-banner info">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
@@ -684,34 +650,12 @@
             </div>
           </div>
 
-          <!-- TAB 5: LIVE LOGS (FUTURE IDEA / BACKEND BACKLOG) -->
-          <div class="tab-pane" id="app-tab-logs">
-            <div class="mock-notice-box">
-              <span class="mock-tag" style="margin-bottom: 6px;">[Ý tưởng tương lai / Dữ liệu mẫu — Thuộc Backend Backlog]</span>
-              <div>Backend hiện tại chưa hỗ trợ kênh IPC stream log container theo thời gian thực (<code>docker logs -f</code>). Luồng stdout hiển thị dưới đây là dữ liệu mẫu phục vụ kiểm thử bố cục giao diện terminal.</div>
-            </div>
-
-            <div class="toolbar-row">
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <span class="status-pill success"><span class="status-pill-dot"></span>Mô phỏng stdout</span>
-                <span style="font-size: 11.5px; color: var(--text-muted);" id="logs-container-label">Container: opspilot-express-api-1</span>
-              </div>
-              <div style="display: flex; gap: 8px;">
-                <button class="btn btn-secondary btn-sm" onclick="clearLogs()">Xóa màn hình</button>
-              </div>
-            </div>
-            <div class="terminal-window" id="terminal-content">
-              <!-- Populated dynamically by renderAppDetail -->
-            </div>
-          </div>
-
         </div>
       </div>
 
 
       <!-- =====================================================================
            VIEW 3: DANH SÁCH MÁY CHỦ VPS (HẠ TẦNG / INFRASTRUCTURE FLEET)
-           Demonstrating Verified vs Unverified/Stale vs Unreachable
            ================================================================== -->
       <div class="view-container" id="view-vps">
         <div class="page-top-bar">
@@ -725,17 +669,17 @@
               <h1 class="page-title">Hạ tầng Máy chủ (VPS Fleet)</h1>
               <span class="status-pill warning">
                 <span class="status-pill-dot"></span>
-                <span>1 Cần xác minh lại</span>
+                <span>1 Chưa kiểm tra gần đây</span>
               </span>
             </div>
-            <p class="page-subtitle">Quản lý kết nối SSH, thông tin Docker và trạng thái đối soát của máy chủ hạ tầng.</p>
+            <p class="page-subtitle">Quản lý kết nối SSH, phiên bản Docker và tình trạng kiểm tra máy chủ (Mốc 24h là quy tắc hiển thị độ mới).</p>
           </div>
           <div class="top-bar-actions">
             <button class="btn btn-secondary" onclick="scanFleet()">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
               <span>Quét toàn bộ Fleet</span>
             </button>
-            <button class="btn btn-primary" onclick="alert('Mở form thêm máy chủ VPS mới...')">
+            <button class="btn btn-primary" onclick="alert('[Mô phỏng Prototype] Mở form thêm VPS mới có VpsInput (dùng vps:test-connection).')">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               <span>Thêm máy chủ</span>
             </button>
@@ -768,11 +712,12 @@
                 </div>
                 <div style="display: flex; justify-content: space-between;">
                   <span>Lần kiểm tra cuối:</span>
-                  <span style="color: var(--color-success)">2 phút trước</span>
+                  <span style="color: var(--color-success)">Đã kiểm tra lúc 22:44:48</span>
                 </div>
               </div>
-              <div style="display: flex; justify-content: flex-end; gap: 6px;">
-                <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation(); openVpsDetail('VM01-Prod')">Quản trị máy chủ</button>
+              <div style="display: flex; justify-content: flex-end; gap: 6px;" onclick="event.stopPropagation()">
+                <button class="btn btn-secondary btn-sm" onclick="scanVps('VM01-Prod', 1)">Quét (vps:scan)</button>
+                <button class="btn btn-secondary btn-sm" onclick="openVpsDetail('VM01-Prod')">Quản trị máy chủ</button>
               </div>
             </div>
 
@@ -785,19 +730,20 @@
                 </div>
                 <span class="status-pill warning">
                   <span class="status-pill-dot"></span>
-                  <span>Chưa xác minh</span>
+                  <span>Chưa kiểm tra gần đây</span>
                 </span>
               </div>
               <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
                 <div>Host: <span class="code-pill">103.179.185.77:2222</span> (user: ubuntu)</div>
-                <div>Xác thực: <span class="code-pill">Password</span> · Cần quét lại</div>
+                <div>Xác thực: <span class="code-pill">Password</span></div>
               </div>
               <div class="alert-banner warning" style="padding: 8px 10px; font-size: 11px; margin-bottom: 12px;">
                 <div>
-                  <strong>Trạng thái cũ (Stale):</strong> Lần kiểm tra cuối <strong>13 ngày trước</strong>. Cần quét đối soát SSH trước khi deploy.
+                  <strong>Quy tắc hiển thị:</strong> Chưa kiểm tra lại trong <strong>13 ngày qua</strong> (>24h). Cần quét lại trước khi thao tác.
                 </div>
               </div>
               <div style="display: flex; justify-content: flex-end; gap: 6px;" onclick="event.stopPropagation()">
+                <button class="btn btn-primary btn-sm" style="background: var(--color-warning); border-color: var(--color-warning);" onclick="scanVps('VM02-Staging', 2)">Quét lại (vps:scan)</button>
                 <button class="btn btn-secondary btn-sm" onclick="openVpsDetail('VM02-Staging')">Quản trị máy chủ</button>
               </div>
             </div>
@@ -824,6 +770,7 @@
                 </div>
               </div>
               <div style="display: flex; justify-content: flex-end; gap: 6px;" onclick="event.stopPropagation()">
+                <button class="btn btn-secondary btn-sm" onclick="scanVps('VM03-Cloud-Expired', 3)">Thử lại (vps:scan)</button>
                 <button class="btn btn-secondary btn-sm" onclick="openVpsDetail('VM03-Cloud-Expired')">Chi tiết lỗi</button>
               </div>
             </div>
@@ -834,8 +781,8 @@
 
 
       <!-- =====================================================================
-           VIEW 4: CHI TIẾT MÁY CHỦ VPS (VPS DETAIL - SINGLE HORIZONTAL TABS)
-           (Eliminating Nested Dual Sidebars completely!)
+           VIEW 4: CHI TIẾT MÁY CHỦ VPS (VPS DETAIL - 4 TABS DÙNG ĐƯỢC BẰNG IPC)
+           (UI-1: Tổng quan/Tài nguyên, Ứng dụng, Cơ sở dữ liệu, Hoạt động)
            ================================================================== -->
       <div class="view-container" id="view-vps-detail">
         <div class="page-top-bar">
@@ -856,18 +803,14 @@
             <p class="page-subtitle" id="detail-vps-subtitle">Hệ điều hành: Ubuntu 22.04 LTS | Người dùng SSH: deployer | Xác thực: Key File</p>
           </div>
           <div class="top-bar-actions">
-            <button class="btn btn-secondary" onclick="testVpsConnection()">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-              <span>Kiểm tra kết nối</span>
-            </button>
-            <button class="btn btn-secondary" onclick="scanVpsResources()">
+            <button class="btn btn-secondary" onclick="scanCurrentVps()">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-              <span>Quét tài nguyên</span>
+              <span>Quét máy chủ (vps:scan)</span>
             </button>
           </div>
         </div>
 
-        <!-- Horizontal Tabs Replacing Nested Sidebars -->
+        <!-- Horizontal Tabs Replacing Nested Sidebars (Chỉ 4 tabs UI-1 hỗ trợ bằng IPC) -->
         <nav class="horizontal-tabs-nav" aria-label="Tabs chi tiết máy chủ">
           <button class="tab-btn active" onclick="switchVpsTab('vps-tab-specs', this)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
@@ -878,17 +821,14 @@
             <span>Ứng dụng trên máy chủ</span>
             <span class="tab-badge" id="vps-tab-apps-badge">2 apps</span>
           </button>
-          <button class="tab-btn" onclick="switchVpsTab('vps-tab-docker', this)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
-            <span>Docker & Lưu trữ</span>
-          </button>
-          <button class="tab-btn" onclick="switchVpsTab('vps-tab-security', this)">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-            <span>Bảo mật & Host Key</span>
+          <button class="tab-btn" onclick="switchVpsTab('vps-tab-database', this)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+            <span>Cơ sở dữ liệu</span>
+            <span class="tab-badge" id="vps-tab-db-badge">1 DB</span>
           </button>
           <button class="tab-btn" onclick="switchVpsTab('vps-tab-activity', this)">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            <span>Nhật ký kết nối</span>
+            <span>Hoạt động</span>
           </button>
         </nav>
 
@@ -897,7 +837,7 @@
           <!-- TAB 1: SPECS & HARDWARE -->
           <div class="tab-pane active" id="vps-tab-specs">
             <div style="margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
-              <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">Thông số phần cứng từ IPC vps:get-resources:</span>
+              <span style="font-size: 12px; color: var(--text-secondary); font-weight: 500;">Thông số phần cứng từ IPC <code>vps:get-resources</code> và <code>vps:scan</code>:</span>
               <span class="mock-tag">[Dữ liệu mẫu — CPU/RAM tức thời chưa có IPC realtime]</span>
             </div>
 
@@ -927,9 +867,9 @@
                 </div>
               </div>
               <div class="metric-box">
-                <span class="metric-label">Đồng bộ giờ & Uptime</span>
-                <span class="metric-value" style="color: var(--color-success)" id="vps-metric-time-val">Chrony OK</span>
-                <span class="metric-sub" id="vps-metric-time-sub">Uptime: 45 ngày</span>
+                <span class="metric-label">Tình trạng kiểm tra</span>
+                <span class="metric-value" style="color: var(--color-success)" id="vps-metric-time-val">Đã kiểm tra</span>
+                <span class="metric-sub" id="vps-metric-time-sub">22:44:48</span>
               </div>
             </div>
 
@@ -967,58 +907,30 @@
             </div>
           </div>
 
-          <!-- TAB 3: DOCKER & STORAGE (FUTURE IDEA / BACKEND BACKLOG) -->
-          <div class="tab-pane" id="vps-tab-docker">
-            <div class="mock-notice-box">
-              <span class="mock-tag" style="margin-bottom: 6px;">[Ý tưởng tương lai / Dữ liệu mẫu — Thuộc Backend Backlog]</span>
-              <div>Hiện tại chưa có IPC đọc chi tiết <code>docker system df</code> hoặc thực hiện <code>docker system prune</code> an toàn. Bảng dưới đây minh họa chức năng quản lý dung lượng lưu trữ dự kiến.</div>
-            </div>
-
+          <!-- TAB 3: DATABASE (DÙNG ĐƯỢC BẰNG IPC database:list) -->
+          <div class="tab-pane" id="vps-tab-database">
             <div class="card">
               <div class="card-header">
-                <h3 class="card-title">Dung lượng Docker Storage</h3>
-                <span class="mock-tag">[Chưa có IPC Prune]</span>
+                <h3 class="card-title">Cơ sở dữ liệu đang chạy (IPC database:list)</h3>
               </div>
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Loại đối tượng</th>
-                    <th>Số lượng</th>
-                    <th>Đang hoạt động</th>
-                    <th>Dung lượng chiếm dụng</th>
-                    <th>Có thể thu hồi</th>
+                    <th>Loại DB</th>
+                    <th>Tên Database / Instance</th>
+                    <th>Cổng</th>
+                    <th>Bộ nhớ</th>
+                    <th>Trạng thái</th>
                   </tr>
                 </thead>
-                <tbody id="vps-storage-tbody">
+                <tbody id="vps-database-tbody">
                   <!-- Populated dynamically by renderVpsDetail -->
                 </tbody>
               </table>
             </div>
           </div>
 
-          <!-- TAB 4: SECURITY & HOST KEY (HONEST TRUST MODEL) -->
-          <div class="tab-pane" id="vps-tab-security">
-            <div class="alert-banner info">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-              <div>
-                <strong>Mô hình xác minh Host Key trung thực:</strong> Lệnh <code>ssh-keyscan</code> (TOFU) không thể coi là xác minh host. Để xác minh an toàn, cần có bảng lưu <code>trusted_fingerprint</code> từ nguồn tin cậy ngoài để đối chiếu.
-              </div>
-            </div>
-
-            <div class="card">
-              <div class="card-header">
-                <h3 class="card-title">Xác thực Khóa Máy chủ SSH (Host Key Verification)</h3>
-                <span class="mock-tag" id="vps-security-mock-tag">[Chưa có IPC đối chiếu fingerprint]</span>
-              </div>
-              <table class="data-table">
-                <tbody id="vps-security-tbody">
-                  <!-- Populated dynamically by renderVpsDetail -->
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- TAB 5: ACTIVITY AUDIT -->
+          <!-- TAB 4: ACTIVITY AUDIT -->
           <div class="tab-pane" id="vps-tab-activity">
             <div class="data-table-container">
               <table class="data-table">
@@ -1059,7 +971,7 @@
             <p class="page-subtitle">Nhật ký sự kiện triển khai, kiểm tra preflight, phiên SSH và chẩn đoán doctor toàn hệ thống.</p>
           </div>
           <div class="top-bar-actions">
-            <button class="btn btn-secondary" onclick="alert('Đã tải lại nhật ký mới nhất.')">Làm mới</button>
+            <button class="btn btn-secondary" onclick="alert('[Mô phỏng Prototype] Đã tải lại nhật ký mới nhất.')">Làm mới</button>
           </div>
         </div>
 
@@ -1107,14 +1019,14 @@
                 <tr>
                   <td>20/09/2026 10:00:00</td>
                   <td><strong>VM02-Staging</strong></td>
-                  <td>SSH Ping</td>
-                  <td>Kiểm tra kết nối định kỳ qua password</td>
-                  <td><span class="status-pill warning">Cũ (13 ngày)</span></td>
+                  <td>Scan (vps:scan)</td>
+                  <td>Quét máy chủ qua password</td>
+                  <td><span class="status-pill warning">Chưa quét lại (13 ngày)</span></td>
                 </tr>
                 <tr>
                   <td>15/09/2026 09:12:00</td>
                   <td><strong>VM03-Cloud-Expired</strong></td>
-                  <td>SSH Ping</td>
+                  <td>Scan (vps:scan)</td>
                   <td>TCP connection timeout 192.168.1.99:22</td>
                   <td><span class="status-pill danger">Timeout</span></td>
                 </tr>
@@ -1190,51 +1102,68 @@
         </div>
       </div>
 
-    </main>
-  </div>
 
-
-  <!-- Global Modal: Deploy Wizard Mockup -->
-  <div class="modal-overlay" id="deploy-modal" style="display: none;">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <h3 class="modal-title">Triển khai Ứng dụng</h3>
-          <span class="mock-tag">[Minh họa hành động toàn cục — Wizard]</span>
-        </div>
-        <button class="modal-close-btn" onclick="closeDeployModal()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label class="form-label">Chọn Ứng dụng</label>
-          <select class="form-select" id="modal-deploy-app-select" onchange="onDeployAppChange(this.value)">
-            <option value="express-api">express-api (Node.js Express / VM01-Prod)</option>
-            <option value="next-blog">next-blog (Next.js 14 SSR / VM01-Prod)</option>
-            <option value="vite-dashboard">vite-dashboard (Vite / VM02-Staging)</option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Máy chủ đích (Target VPS)</label>
-          <input type="text" class="form-input" id="modal-deploy-vps-target" value="VM01-Prod (103.179.185.76:22)" readonly style="background: var(--bg-card-subtle);">
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">Commit / Git Branch / Image Tag</label>
-          <input type="text" class="form-input" value="main (commit 7a82b9c)">
-        </div>
-
-        <div class="alert-banner info" style="margin-bottom: 0;">
+      <!-- =====================================================================
+           VIEW 7: TRANG TRIỂN KHAI (DEPLOY PAGE / WIZARD MINH HỌA)
+           (UI-1: Nút + Triển khai điều hướng sang DeployPage hiện có với preselect)
+           ================================================================== -->
+      <div class="view-container" id="view-deploy">
+        <div class="page-top-bar">
           <div>
-            <strong>Quy trình thực thi:</strong> Preflight check SSH → Kiểm tra Docker daemon & dung lượng đĩa → Build/Pull Image → Khởi chạy container → Probe Healthcheck.
+            <div class="breadcrumb-trail">
+              <span>Bảng điều khiển</span>
+              <span>/</span>
+              <span>Triển khai (DeployPage)</span>
+            </div>
+            <div class="page-title-row">
+              <h1 class="page-title">Quy trình Triển khai (Deploy Wizard)</h1>
+            </div>
+            <p class="page-subtitle">Điều hướng sang DeployPage hiện có của OpsPilot với thông số preselect ứng dụng và máy chủ.</p>
+          </div>
+        </div>
+
+        <div class="tab-content-area">
+          <div class="alert-banner info" style="margin-bottom: 20px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            <div>
+              <strong>Quy ước điều hướng UI-1:</strong> Nút <code>+ Triển khai</code> kích hoạt chuyển trang sang <code>DeployPage</code> hiện có trong <code>App.tsx</code> (gọi <code>setActivePage('deploy')</code>) và truyền giá trị preselect (ứng dụng, máy chủ). Không tạo modal deploy riêng lẻ.
+            </div>
+          </div>
+
+          <div class="card" style="max-width: 680px;">
+            <div class="card-header">
+              <h3 class="card-title">Cấu hình Triển khai</h3>
+            </div>
+            <div style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+              <div class="form-group">
+                <label class="form-label">Ứng dụng mục tiêu (Preselected)</label>
+                <select class="form-select" id="deploy-page-app-select" onchange="onDeployPageAppChange(this.value)">
+                  <option value="express-api">express-api (Node.js Express)</option>
+                  <option value="next-blog">next-blog (Next.js 14 SSR)</option>
+                  <option value="vite-dashboard">vite-dashboard (Vite / Nginx)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Máy chủ đích (Target VPS)</label>
+                <input type="text" class="form-input" id="deploy-page-vps-target" value="VM01-Prod (103.179.185.76:22)" readonly style="background: var(--bg-card-subtle);">
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Commit / Git Branch / Image Tag</label>
+                <input type="text" class="form-input" value="main (commit 7a82b9c)">
+              </div>
+
+              <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px;">
+                <button class="btn btn-secondary" onclick="switchView('apps')">Quay lại danh sách App</button>
+                <button class="btn btn-primary" onclick="simulateDeploy()">Bắt đầu Triển khai</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeDeployModal()">Hủy bỏ</button>
-        <button class="btn btn-primary" onclick="executeMockDeploy()">Bắt đầu Triển khai</button>
-      </div>
-    </div>
+
+    </main>
   </div>
 
   <script src="app.js"></script>
