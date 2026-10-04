@@ -42,9 +42,10 @@ export const useVpsStore = create<VpsStore>((set, get) => ({
     await Promise.all(
       target.map(async (id) => {
         const result = await window.api.invoke('vps:get-resources', id)
+        const fetchedAt = Date.now()
         const entry: RowResourceState = result.ok
-          ? { status: 'success', data: result.data }
-          : { status: 'error', message: result.error.message }
+          ? { status: 'success', data: result.data, fetchedAt }
+          : { status: 'error', message: result.error.message, fetchedAt }
         set((state) => ({ resources: { ...state.resources, [id]: entry } }))
       })
     )

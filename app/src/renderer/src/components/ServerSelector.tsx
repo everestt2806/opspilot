@@ -27,7 +27,12 @@ import type { Vps } from '@shared/ipc'
 
 import { useStrings } from '../strings'
 import { localDateTime, relativeTime } from '../utils/format'
-import { rowDisplayStatus, type RowDisplayStatus, type RowResourceState } from '../vpsResources'
+import {
+  rowDisplayStatus,
+  useTicker,
+  type RowDisplayStatus,
+  type RowResourceState
+} from '../vpsResources'
 
 export type StatusFilterKey = 'all' | RowDisplayStatus | 'online' | 'offline'
 
@@ -37,6 +42,8 @@ interface ServerSelectorProps {
   appCounts: Record<number, number>
   loading: boolean
   search: string
+  /** Thời điểm đánh giá (ms) — nếu truyền từ ngoài thì đồng bộ với ticker của trang */
+  now?: number
   /** Id các VPS đang đánh dấu ở cột checkbox — state chung để header chính đếm số máy đang chọn */
   selectedIds: number[]
   onSelect: (vps: Vps) => void
@@ -55,6 +62,7 @@ export function ServerSelector({
   appCounts,
   loading,
   search,
+  now,
   selectedIds,
   onSelect,
   onSearchChange,
@@ -84,12 +92,15 @@ export function ServerSelector({
     { key: 'unknown', label: strings.vpsControl.selector.filterUnknown }
   ]
 
+  const internalNow = useTicker(5000)
+  const currentNow = now ?? internalNow
+
   const visible = useMemo(() => {
     const query = search.trim().toLowerCase()
     return items.filter((vps) => {
       if (query && !`${vps.name} ${vps.host}`.toLowerCase().includes(query)) return false
       if (statusFilter === 'all') return true
-      const actual = rowDisplayStatus(vps, resources[vps.id])
+      const actual = rowDisplayStatus(vps, resources[vps.id], currentNow)
       if (statusFilter === 'check_failed' || (statusFilter as string) === 'offline') {
         return actual === 'check_failed'
       }
@@ -98,7 +109,7 @@ export function ServerSelector({
       }
       return actual === statusFilter
     })
-  }, [items, resources, search, statusFilter])
+  }, [items, resources, search, statusFilter, currentNow])
 
   async function copyIp(host: string, event: React.MouseEvent): Promise<void> {
     event.stopPropagation()
@@ -146,7 +157,7 @@ export function ServerSelector({
       width: 100,
       align: 'center' as const,
       render: (_: unknown, vps: Vps) => {
-        const tag = STATUS_TAG[rowDisplayStatus(vps, resources[vps.id])]
+        const tag = STATUS_TAG[rowDisplayStatus(vps, resources[vps.id], currentNow)]
         return <Tag color={tag.color}>{tag.label}</Tag>
       }
     },
@@ -182,7 +193,7 @@ export function ServerSelector({
       key: 'lastConnection',
       width: 148,
       render: (_: unknown, vps: Vps) => {
-        const status = rowDisplayStatus(vps, resources[vps.id])
+        const status = rowDisplayStatus(vps, resources[vps.id], currentNow)
         if (status === 'check_failed' || status === 'checking') {
           return (
             <span onClick={(event) => event.stopPropagation()} role="presentation">
@@ -197,6 +208,17 @@ export function ServerSelector({
                 onClick={() => onRetryResources(vps.id)}
               />
             </span>
+          )
+        }
+        const resState = resources[vps.id]
+        if (status === 'checked_now' && resState?.status === 'success' && resState.fetchedAt) {
+          const iso = new Date(resState.fetchedAt).toISOString()
+          return (
+            <Tooltip title={localDateTime(iso)}>
+              <span className="mono-text" style={{ fontSize: 12 }}>
+                {relativeTime(iso)}
+              </span>
+            </Tooltip>
           )
         }
         if (vps.last_seen_at) {

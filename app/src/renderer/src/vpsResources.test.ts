@@ -147,4 +147,39 @@ describe('evaluateVpsStatus & rowDisplayStatus — quy tac trang thai trung thuc
     expect(rowDisplayStatus(vps, undefined, baseNow)).toBe('recent_past')
     expect(isVpsCheckedNow(vps, undefined, baseNow)).toBe(false)
   })
+
+  it('het han nhan Vua kiem tra: fetchedAt vuot TTL 60s -> quay ve trang thai DB (recent_past / stale / unknown)', () => {
+    // 1. Con trong TTL (10s truoc): van la checked_now
+    const freshState = { status: 'success' as const, data: RES, fetchedAt: baseNow - 10_000 }
+    const freshRes = evaluateVpsStatus(VPS, freshState, baseNow)
+    expect(freshRes.key).toBe('checked_now')
+    expect(freshRes.isFresh).toBe(true)
+    expect(freshRes.checkedAt).toBe(baseNow - 10_000)
+    expect(isVpsCheckedNow(VPS, freshState, baseNow)).toBe(true)
+
+    // 2. Het han TTL (65s truoc): DB co last_seen_at 2h truoc -> recent_past
+    const twoHoursAgo = new Date(baseNow - 2 * 60 * 60 * 1000).toISOString()
+    const vpsWithRecentDb = { ...VPS, last_seen_at: twoHoursAgo }
+    const expiredState = { status: 'success' as const, data: RES, fetchedAt: baseNow - 65_000 }
+    const expiredRes = evaluateVpsStatus(vpsWithRecentDb, expiredState, baseNow)
+    expect(expiredRes.key).toBe('recent_past')
+    expect(expiredRes.source).toBe('db_record')
+    expect(expiredRes.isFresh).toBe(false)
+    expect(isVpsCheckedNow(vpsWithRecentDb, expiredState, baseNow)).toBe(false)
+
+    // 3. Het han TTL: DB co last_seen_at 14 ngay truoc -> stale
+    const fourteenDaysAgo = new Date(baseNow - 14 * 24 * 60 * 60 * 1000).toISOString()
+    const vpsWithStaleDb = { ...VPS, last_seen_at: fourteenDaysAgo }
+    const staleRes = evaluateVpsStatus(vpsWithStaleDb, expiredState, baseNow)
+    expect(staleRes.key).toBe('stale')
+    expect(staleRes.source).toBe('db_record')
+    expect(isVpsCheckedNow(vpsWithStaleDb, expiredState, baseNow)).toBe(false)
+
+    // 4. Het han TTL: DB chua tung ket noi (null) -> unknown
+    const vpsNeverSeen = { ...VPS, last_seen_at: null }
+    const unknownRes = evaluateVpsStatus(vpsNeverSeen, expiredState, baseNow)
+    expect(unknownRes.key).toBe('unknown')
+    expect(unknownRes.source).toBe('db_record')
+    expect(isVpsCheckedNow(vpsNeverSeen, expiredState, baseNow)).toBe(false)
+  })
 })

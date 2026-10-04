@@ -17,7 +17,7 @@ import { VpsFormModal, type VpsFormValues } from '../components/VpsFormModal'
 import { useStrings } from '../strings'
 import { useUiState } from '../store/uiState'
 import { useVpsStore } from '../store/vpsStore'
-import { rowDisplayStatus } from '../vpsResources'
+import { rowDisplayStatus, useTicker } from '../vpsResources'
 
 /** VPS Control Panel — luồng 2 màn: danh sách fleet → trang chi tiết từng máy (FlashPanel). */
 export function VpsPage(): React.JSX.Element {
@@ -155,10 +155,12 @@ export function VpsPage(): React.JSX.Element {
     await load()
   }
 
+  const now = useTicker(5000)
+
   let checkedNow = 0
   let checkFailed = 0
   for (const vps of items) {
-    const status = rowDisplayStatus(vps, resources[vps.id])
+    const status = rowDisplayStatus(vps, resources[vps.id], now)
     if (status === 'checked_now') checkedNow += 1
     else if (status === 'check_failed') checkFailed += 1
   }
@@ -238,6 +240,7 @@ export function VpsPage(): React.JSX.Element {
             appCounts={appCounts}
             loading={loading}
             search={vpsSearch}
+            now={now}
             selectedIds={selectedVpsIds}
             onSelect={(vps) => {
               setSelectedVpsId(vps.id)

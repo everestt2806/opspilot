@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { App, Deployment, Vps } from '@shared/ipc'
 import { AppsPage } from './AppsPage'
+import { strings } from '../strings'
 import { useUiState } from '../store/uiState'
 
 const VPS_1: Vps = {
@@ -626,9 +627,41 @@ describe('AppsPage — real IPC and multi-language', () => {
       })
     })
 
-    const retryBtn = screen.getByRole('button', { name: /Thử lại/ })
+    const retryBtn = screen.getByRole('button', {
+      name: new RegExp(`${strings.apps.recheckLive}|${strings.common.retry}`)
+    })
     fireEvent.click(retryBtn)
 
     expect(await screen.findByText('Live: running')).toBeTruthy()
+  })
+
+  it('runtime inspect trạng thái exited: hiển thị màu error (đỏ), không tô xanh success, có nút kiểm tra lại', async () => {
+    mockApi({
+      'app:runtime-inspect': async () => ({
+        ok: true,
+        data: { image: 'my-express-app:v2', state: 'exited' }
+      })
+    })
+
+    render(
+      <AntApp>
+        <AppsPage />
+      </AntApp>
+    )
+
+    const inspectBtn = await screen.findByRole('button', { name: /Kiểm tra runtime/ })
+    fireEvent.click(inspectBtn)
+
+    // Tag hiển thị Live: exited
+    const stateTag = await screen.findByText('Live: exited')
+    expect(stateTag).toBeTruthy()
+
+    // Phải có class error (ant-tag-error), tuyệt đối không tô màu success
+    const tagEl = stateTag.closest('.ant-tag')
+    expect(tagEl?.classList.contains('ant-tag-error')).toBe(true)
+    expect(tagEl?.classList.contains('ant-tag-success')).toBe(false)
+
+    // Có nút "Kiểm tra lại"
+    expect(screen.getByRole('button', { name: strings.apps.recheckLive })).toBeTruthy()
   })
 })

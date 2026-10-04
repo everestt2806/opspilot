@@ -28,13 +28,17 @@ async function fetchAppRows(vpsId: number): Promise<AppRowsResult> {
 
   const enriched = await Promise.all(
     listResult.data.map(async (app) => {
+      if (app.current_deployment_id === null) {
+        return { ...app, currentVersion: null, deployStatus: null }
+      }
       const versionsResult = await window.api.invoke('app:versions', app.id)
       if (!versionsResult.ok || versionsResult.data.length === 0) {
         return { ...app, currentVersion: null, deployStatus: null }
       }
-      const current =
-        versionsResult.data.find((d) => d.id === app.current_deployment_id) ??
-        versionsResult.data[0]
+      const current = versionsResult.data.find((d) => d.id === app.current_deployment_id)
+      if (!current) {
+        return { ...app, currentVersion: null, deployStatus: null }
+      }
       return {
         ...app,
         currentVersion: current.version,
@@ -102,7 +106,7 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
 
   const statusColor = (status: Deployment['status'] | null): string => {
     if (!status) return 'default'
-    if (status === 'running') return 'success'
+    if (status === 'running') return 'default'
     if (status === 'failed') return 'error'
     if (status === 'building' || status === 'deploying') return 'processing'
     return 'default'

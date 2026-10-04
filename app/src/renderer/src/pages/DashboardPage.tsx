@@ -8,7 +8,7 @@ import { PageHeader } from '../components/PageHeader'
 import { useStrings } from '../strings'
 import { useVpsStore } from '../store/vpsStore'
 import { localDateTime, relativeTime } from '../utils/format'
-import { isVpsCheckedNow } from '../vpsResources'
+import { isVpsCheckedNow, useTicker } from '../vpsResources'
 
 interface DashboardPageProps {
   onOpenVps?: () => void
@@ -33,6 +33,7 @@ const STATUS_BADGE: Record<
 export function DashboardPage({ onOpenVps, onOpenDeploy }: DashboardPageProps): React.JSX.Element {
   const strings = useStrings()
   const resources = useVpsStore((state) => state.resources)
+  const now = useTicker(5000)
   const [vpsList, setVpsList] = useState<Vps[]>([])
   const [apps, setApps] = useState<App[]>([])
   const [recent, setRecent] = useState<ActionLogEntry[]>([])
@@ -117,7 +118,9 @@ export function DashboardPage({ onOpenVps, onOpenDeploy }: DashboardPageProps): 
   }
 
   const vpsNameById = new Map(vpsList.map((vps) => [vps.id, vps.name]))
-  const checkedNowCount = vpsList.filter((vps) => isVpsCheckedNow(vps, resources[vps.id])).length
+  const checkedNowCount = vpsList.filter((vps) =>
+    isVpsCheckedNow(vps, resources[vps.id], now)
+  ).length
   const recordedApps = apps.filter((app) => app.current_deployment_id !== null).length
   const lastDeploy = recent.find((row) => row.action === 'deploy')
 

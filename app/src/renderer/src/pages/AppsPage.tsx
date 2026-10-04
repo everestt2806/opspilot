@@ -23,6 +23,7 @@ import {
   Spin,
   Tabs,
   Tag,
+  Tooltip,
   Typography
 } from 'antd'
 
@@ -30,6 +31,7 @@ import type { App, Deployment, Vps } from '@shared/ipc'
 import { PageHeader } from '../components/PageHeader'
 import { useVpsStore } from '../store/vpsStore'
 import { useStrings } from '../strings'
+import { localDateTime, relativeTime } from '../utils/format'
 import { evaluateVpsStatus } from '../vpsResources'
 
 function formatDuration(ms: number): string {
@@ -47,6 +49,15 @@ function formatTime(isoString: string): string {
   } catch {
     return isoString
   }
+}
+
+function getRuntimeTagColor(state?: string): 'success' | 'error' | 'warning' | 'default' {
+  if (!state) return 'default'
+  const norm = state.toLowerCase().trim()
+  if (norm === 'running') return 'success'
+  if (norm === 'exited' || norm === 'dead') return 'error'
+  if (norm === 'restarting' || norm === 'paused') return 'warning'
+  return 'default'
 }
 
 export function AppsPage(): React.JSX.Element {
@@ -78,6 +89,7 @@ export function AppsPage(): React.JSX.Element {
     state?: string
     image?: string
     error?: string
+    checkedAt?: number
   }>({ status: 'idle' })
 
   const activeAppIdRef = useRef<number | null>(null)
@@ -104,26 +116,37 @@ export function AppsPage(): React.JSX.Element {
     setLiveInspectState({ status: 'idle' })
   }
 
-  const inspectLive = async (): Promise<void> => {
-    if (!selectedApp) return
-    const targetAppId = selectedApp.id
+  const inspectLive = useCallback(async (): Promise<void> => {
+    if (selectedAppId === null) return
+    const targetAppId = selectedAppId
     setLiveInspectState({ status: 'checking' })
     try {
       const res = await window.api.invoke('app:runtime-inspect', targetAppId)
       if (activeAppIdRef.current !== targetAppId) return
+      const checkedAt = Date.now()
       if (res.ok) {
-        setLiveInspectState({ status: 'success', state: res.data.state, image: res.data.image })
+        setLiveInspectState({
+          status: 'success',
+          state: res.data.state,
+          image: res.data.image,
+          checkedAt
+        })
       } else {
-        setLiveInspectState({ status: 'unverified', error: res.error.message })
+        setLiveInspectState({
+          status: 'unverified',
+          error: res.error.message,
+          checkedAt
+        })
       }
     } catch (err: unknown) {
       if (activeAppIdRef.current !== targetAppId) return
       setLiveInspectState({
         status: 'unverified',
-        error: err instanceof Error ? err.message : String(err)
+        error: err instanceof Error ? err.message : String(err),
+        checkedAt: Date.now()
       })
     }
-  }
+  }, [selectedAppId])
 
   const refreshData = useCallback(async (appId?: number): Promise<void> => {
     const targetId = appId ?? activeAppIdRef.current
@@ -682,7 +705,7 @@ export function AppsPage(): React.JSX.Element {
                           {selectedApp.needs_db ? strings.apps.dbYes : strings.apps.dbNo}
                         </Descriptions.Item>
                         <Descriptions.Item label={strings.apps.runtime}>
-                          <Space size="small">
+                          <Space size="small" wrap align="center">
                             {liveInspectState.status === 'idle' && (
                               <Button
                                 size="small"
@@ -699,22 +722,66 @@ export function AppsPage(): React.JSX.Element {
                               </Tag>
                             )}
                             {liveInspectState.status === 'success' && (
-                              <Tag color="success">
-                                {strings.apps.liveState(liveInspectState.state ?? 'running')}
-                              </Tag>
-                            )}
-                            {liveInspectState.status === 'unverified' && (
-                              <Space size="small">
-                                <Tag color="default">{strings.apps.liveUnverified}</Tag>
+                              <>
+                                <Tag color={getRuntimeTagColor(liveInspectState.state)}>
+                                  {strings.apps.liveState(liveInspectState.state ?? 'running')}
+                                </Tag>
+                                {liveInspectState.checkedAt && (
+                                  <Tooltip
+                                    title={localDateTime(
+                                      new Date(liveInspectState.checkedAt).toISOString()
+                                    )}
+                                  >
+                                    <span
+                                      className="mono-text"
+                                      style={{ fontSize: 12, color: 'var(--text-secondary)' }}
+                                    >
+                                      {relativeTime(
+                                        new Date(liveInspectState.checkedAt).toISOString()
+                                      )}
+                                    </span>
+                                  </Tooltip>
+                                )}
                                 <Button
                                   size="small"
                                   type="text"
                                   icon={<ReloadOutlined />}
+                                  aria-label={strings.apps.recheckLive}
                                   onClick={() => void inspectLive()}
                                 >
-                                  {strings.common.retry}
+                                  {strings.apps.recheckLive}
                                 </Button>
-                              </Space>
+                              </>
+                            )}
+                            {liveInspectState.status === 'unverified' && (
+                              <>
+                                <Tag color="default">{strings.apps.liveUnverified}</Tag>
+                                {liveInspectState.checkedAt && (
+                                  <Tooltip
+                                    title={localDateTime(
+                                      new Date(liveInspectState.checkedAt).toISOString()
+                                    )}
+                                  >
+                                    <span
+                                      className="mono-text"
+                                      style={{ fontSize: 12, color: 'var(--text-secondary)' }}
+                                    >
+                                      {relativeTime(
+                                        new Date(liveInspectState.checkedAt).toISOString()
+                                      )}
+                                    </span>
+                                  </Tooltip>
+                                )}
+                                <Button
+                                  size="small"
+                                  type="text"
+                                  icon={<ReloadOutlined />}
+                                  aria-label={strings.apps.recheckLive}
+                                  onClick={() => void inspectLive()}
+                                >
+                                  {strings.apps.recheckLive}
+                                </Button>
+                              </>
                             )}
                           </Space>
                         </Descriptions.Item>
