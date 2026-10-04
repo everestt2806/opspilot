@@ -14,13 +14,14 @@ import { PageHeader } from '../components/PageHeader'
 import { ServerSelector } from '../components/ServerSelector'
 import { VpsDetail } from '../components/VpsDetail'
 import { VpsFormModal, type VpsFormValues } from '../components/VpsFormModal'
-import { strings } from '../strings'
+import { useStrings } from '../strings'
 import { useUiState } from '../store/uiState'
 import { useVpsStore } from '../store/vpsStore'
 import { rowDisplayStatus } from '../vpsResources'
 
 /** VPS Control Panel — luồng 2 màn: danh sách fleet → trang chi tiết từng máy (FlashPanel). */
 export function VpsPage(): React.JSX.Element {
+  const strings = useStrings()
   const items = useVpsStore((state) => state.items)
   const loading = useVpsStore((state) => state.loading)
   const loadError = useVpsStore((state) => state.loadError)
@@ -132,7 +133,7 @@ export function VpsPage(): React.JSX.Element {
         }
       })
     },
-    [load, modal]
+    [load, modal, strings]
   )
 
   const submitForm = async (values: VpsFormValues): Promise<void> => {
@@ -154,12 +155,12 @@ export function VpsPage(): React.JSX.Element {
     await load()
   }
 
-  let online = 0
-  let offline = 0
+  let checkedNow = 0
+  let checkFailed = 0
   for (const vps of items) {
     const status = rowDisplayStatus(vps, resources[vps.id])
-    if (status === 'online') online += 1
-    else if (status === 'offline') offline += 1
+    if (status === 'checked_now') checkedNow += 1
+    else if (status === 'check_failed') checkFailed += 1
   }
   const totalApps = Object.values(appCounts).reduce((sum, count) => sum + count, 0)
 
@@ -223,8 +224,10 @@ export function VpsPage(): React.JSX.Element {
 
           <FleetSummary
             total={items.length}
-            online={online}
-            offline={offline}
+            checkedNow={checkedNow}
+            checkFailed={checkFailed}
+            online={checkedNow}
+            offline={checkFailed}
             appCount={totalApps}
             loading={loading}
           />

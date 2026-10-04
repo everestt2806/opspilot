@@ -28,7 +28,9 @@ import {
 
 import type { App, Deployment, Vps } from '@shared/ipc'
 import { PageHeader } from '../components/PageHeader'
+import { useVpsStore } from '../store/vpsStore'
 import { useStrings } from '../strings'
+import { evaluateVpsStatus } from '../vpsResources'
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
@@ -70,6 +72,14 @@ export function AppsPage(): React.JSX.Element {
   const [confirmInput, setConfirmInput] = useState('')
   const [rollbackBusy, setRollbackBusy] = useState(false)
 
+  const vpsResources = useVpsStore((state) => state.resources)
+  const [liveInspectState, setLiveInspectState] = useState<{
+    status: 'idle' | 'checking' | 'success' | 'unverified'
+    state?: string
+    image?: string
+    error?: string
+  }>({ status: 'idle' })
+
   const activeAppIdRef = useRef<number | null>(null)
   const doctorReqIdRef = useRef(0)
   const rollbackReqIdRef = useRef(0)
@@ -83,7 +93,7 @@ export function AppsPage(): React.JSX.Element {
     setLoadedAppId(null)
     setDeployments([])
     setDeploymentsLoading(true)
-    // Xóa trạng thái Doctor/rollback cũ
+    // Xóa trạng thái Doctor/rollback/inspect cũ
     setDoctorBusy(false)
     setDoctorMessage(null)
     setDoctorFixId(null)
@@ -91,6 +101,28 @@ export function AppsPage(): React.JSX.Element {
     setRollbackTarget(null)
     setConfirmInput('')
     setRollbackBusy(false)
+    setLiveInspectState({ status: 'idle' })
+  }
+
+  const inspectLive = async (): Promise<void> => {
+    if (!selectedApp) return
+    const targetAppId = selectedApp.id
+    setLiveInspectState({ status: 'checking' })
+    try {
+      const res = await window.api.invoke('app:runtime-inspect', targetAppId)
+      if (activeAppIdRef.current !== targetAppId) return
+      if (res.ok) {
+        setLiveInspectState({ status: 'success', state: res.data.state, image: res.data.image })
+      } else {
+        setLiveInspectState({ status: 'unverified', error: res.error.message })
+      }
+    } catch (err: unknown) {
+      if (activeAppIdRef.current !== targetAppId) return
+      setLiveInspectState({
+        status: 'unverified',
+        error: err instanceof Error ? err.message : String(err)
+      })
+    }
   }
 
   const refreshData = useCallback(async (appId?: number): Promise<void> => {
@@ -188,11 +220,20 @@ export function AppsPage(): React.JSX.Element {
     selectedApp && isVersionsReady ? deployments.filter((dep) => dep.app_id === selectedApp.id) : []
 
   const activeDeployment =
-    selectedApp && isVersionsReady
-      ? (currentAppDeployments.find((dep) => dep.id === selectedApp.current_deployment_id) ??
-        currentAppDeployments[0] ??
-        null)
+    selectedApp && isVersionsReady && selectedApp.current_deployment_id !== null
+      ? (currentAppDeployments.find((dep) => dep.id === selectedApp.current_deployment_id) ?? null)
       : null
+
+  const hasCurrentDeploymentMismatch =
+    selectedApp !== null &&
+    isVersionsReady &&
+    selectedApp.current_deployment_id !== null &&
+    activeDeployment === null
+
+  const isVpsStale =
+    selectedVps !== null
+      ? evaluateVpsStatus(selectedVps, vpsResources[selectedVps.id]).key === 'stale'
+      : false
 
   const isRunning = isVersionsReady && activeDeployment?.status === 'running'
   const isRollbackAllowed =
@@ -376,10 +417,12 @@ export function AppsPage(): React.JSX.Element {
                       </span>
                       <span className="apps-list-item-status">
                         <span
-                          className={`status-dot status-dot-${app.current_deployment_id ? 'success' : 'neutral'}`}
+                          className={`status-dot status-dot-${app.current_deployment_id ? 'info' : 'neutral'}`}
                           aria-hidden="true"
                         />
-                        {app.current_deployment_id ? strings.apps.healthy : strings.apps.unhealthy}
+                        {app.current_deployment_id
+                          ? strings.apps.statusRecordedDeployed
+                          : strings.apps.statusNotDeployed}
                       </span>
                     </span>
                     <span className="apps-list-item-version mono-text">port {app.host_port}</span>
@@ -411,12 +454,19 @@ export function AppsPage(): React.JSX.Element {
                   <div className="apps-detail-name-row">
                     <h2 className="apps-detail-name">{selectedApp.name}</h2>
                     <span
-                      className={`apps-status apps-status-${isRunning ? 'success' : 'neutral'}`}
+                      className={`apps-status apps-status-${activeDeployment ? 'info' : 'neutral'}`}
                     >
                       <span
-                        className={`status-dot status-dot-${isRunning ? 'success' : 'neutral'}`}
+                        className={`status-dot status-dot-${activeDeployment ? 'info' : 'neutral'}`}
                       />
-                      {isRunning ? strings.apps.healthy : strings.apps.unhealthy}
+                      {activeDeployment
+                        ? strings.apps.recordedStatus(
+                            activeDeployment.status,
+                            activeDeployment.version
+                          )
+                        : selectedApp.current_deployment_id === null
+                          ? strings.apps.statusNotDeployed
+                          : strings.apps.currentDeploymentNotFound}
                     </span>
                   </div>
                   <span className="apps-detail-subtitle">
@@ -442,17 +492,21 @@ export function AppsPage(): React.JSX.Element {
 
             <div className="apps-kpi-grid">
               <div className="apps-kpi">
-                <span className="apps-kpi-label">{strings.apps.runtime}</span>
-                <strong className={`apps-kpi-value apps-kpi-${isRunning ? 'success' : 'neutral'}`}>
+                <span className="apps-kpi-label">{strings.apps.recordedTitle}</span>
+                <strong className="apps-kpi-value">
                   {isVersionsLoading ? (
                     <Spin size="small" />
-                  ) : (
+                  ) : activeDeployment ? (
                     <>
                       <span
-                        className={`status-dot status-dot-${isRunning ? 'success' : 'neutral'}`}
+                        className={`status-dot status-dot-${activeDeployment.status === 'running' ? 'info' : 'neutral'}`}
                       />
-                      {isRunning ? strings.apps.healthy : strings.apps.unhealthy}
+                      {activeDeployment.status} (v{activeDeployment.version})
                     </>
+                  ) : selectedApp.current_deployment_id === null ? (
+                    strings.apps.statusNotDeployed
+                  ) : (
+                    strings.apps.currentDeploymentNotFound
                   )}
                 </strong>
               </div>
@@ -475,7 +529,7 @@ export function AppsPage(): React.JSX.Element {
                 </strong>
               </div>
               <div className="apps-kpi">
-                <span className="apps-kpi-label">{strings.apps.exposureTitle}</span>
+                <span className="apps-kpi-label">{strings.apps.exposurePublishResult}</span>
                 <strong className="apps-kpi-value">
                   {isVersionsLoading ? (
                     <Spin size="small" />
@@ -499,6 +553,27 @@ export function AppsPage(): React.JSX.Element {
                 </strong>
               </div>
             </div>
+
+            {hasCurrentDeploymentMismatch && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message={strings.apps.currentDeploymentNotFound}
+                description={strings.apps.currentDeploymentMismatchDesc(
+                  selectedApp.current_deployment_id!
+                )}
+              />
+            )}
+
+            {isVpsStale && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message={strings.apps.vpsStaleNotice}
+              />
+            )}
 
             {!isVersionsLoading && activeDeployment?.exposure_status === 'degraded' && (
               <Alert
@@ -606,7 +681,44 @@ export function AppsPage(): React.JSX.Element {
                         <Descriptions.Item label={strings.apps.db}>
                           {selectedApp.needs_db ? strings.apps.dbYes : strings.apps.dbNo}
                         </Descriptions.Item>
-                        <Descriptions.Item label={strings.apps.exposureTitle}>
+                        <Descriptions.Item label={strings.apps.runtime}>
+                          <Space size="small">
+                            {liveInspectState.status === 'idle' && (
+                              <Button
+                                size="small"
+                                icon={<ReloadOutlined />}
+                                onClick={() => void inspectLive()}
+                              >
+                                {strings.apps.inspectLive}
+                              </Button>
+                            )}
+                            {liveInspectState.status === 'checking' && (
+                              <Tag color="processing">
+                                <Spin size="small" style={{ marginRight: 6 }} />
+                                {strings.vps.status.checking}
+                              </Tag>
+                            )}
+                            {liveInspectState.status === 'success' && (
+                              <Tag color="success">
+                                {strings.apps.liveState(liveInspectState.state ?? 'running')}
+                              </Tag>
+                            )}
+                            {liveInspectState.status === 'unverified' && (
+                              <Space size="small">
+                                <Tag color="default">{strings.apps.liveUnverified}</Tag>
+                                <Button
+                                  size="small"
+                                  type="text"
+                                  icon={<ReloadOutlined />}
+                                  onClick={() => void inspectLive()}
+                                >
+                                  {strings.common.retry}
+                                </Button>
+                              </Space>
+                            )}
+                          </Space>
+                        </Descriptions.Item>
+                        <Descriptions.Item label={strings.apps.exposurePublishResult}>
                           {isVersionsLoading ? (
                             <Spin size="small" />
                           ) : (

@@ -22,6 +22,15 @@ const BASE_EN_STRINGS = {
     stopped: 'Stopped',
     unknown: 'Not connected'
   },
+  vpsStatus: {
+    checking: 'Checking…',
+    checkedNow: 'Checked just now',
+    checkFailed: 'Check failed',
+    stale: 'Not checked recently',
+    unknown: 'Unknown',
+    recentPast: 'Checked recently',
+    reportedOffline: 'Offline (previous check)'
+  },
   common: {
     cancel: 'Cancel',
     notAvailable: 'N/A',
@@ -99,10 +108,14 @@ const BASE_EN_STRINGS = {
       actions: 'Actions'
     },
     status: {
-      online: 'Online',
-      offline: 'Offline',
-      unknown: 'Not checked',
-      checking: 'Checking'
+      online: 'Checked now',
+      offline: 'Check failed',
+      unknown: 'Unknown',
+      checking: 'Checking…',
+      checkedNow: 'Checked now',
+      checkFailed: 'Check failed',
+      stale: 'Not checked recently',
+      recentPast: 'Checked recently'
     },
     actions: {
       edit: (name: string) => `Edit VPS ${name}`,
@@ -323,6 +336,19 @@ const BASE_EN_STRINGS = {
     emptyHint: 'Deploy your first application to manage it here.',
     emptySearch: 'No matching applications found',
     selectAppHint: 'Select an application from the list to view details',
+    statusRecordedDeployed: 'Recorded',
+    statusNotDeployed: 'Not deployed',
+    recordedTitle: 'Recorded deployment',
+    recordedStatus: (status: string, version: number) => `Recorded: ${status} (v${version})`,
+    currentDeploymentNotFound: 'Current deployment not found in history',
+    currentDeploymentMismatchDesc: (id: number) =>
+      `Deployment record #${id} could not be found in version history.`,
+    vpsStaleNotice: 'Server not checked recently (>24h)',
+    inspectLive: 'Live inspect',
+    liveUnverified: 'Unverified',
+    liveRunning: 'Live: Running',
+    liveState: (state: string) => `Live: ${state}`,
+    exposurePublishResult: 'Exposure (publish record)',
     runtime: 'Runtime',
     healthy: 'Running · Healthy',
     unhealthy: 'Needs attention',
@@ -383,8 +409,8 @@ const BASE_EN_STRINGS = {
     summaryLabel: 'System summary',
     refresh: 'Refresh',
     stats: {
-      vpsOnline: 'Online VPS',
-      appsRunning: 'Running applications',
+      vpsOnline: 'VPS checked now',
+      appsRunning: 'Recorded deployments',
       deploy24h: 'Deploys in last 24h',
       lastDeploy: 'Last deployment'
     },
@@ -454,15 +480,20 @@ const BASE_EN_STRINGS = {
     },
     fleet: {
       totalVps: 'Total VPS',
-      online: 'Online',
-      offline: 'Offline',
+      checkedNow: 'Checked now',
+      checkFailed: 'Check failed',
+      online: 'Checked now',
+      offline: 'Check failed',
       totalApps: 'Total apps'
     },
     selector: {
       searchPlaceholder: 'Search by name or host…',
       filterAll: 'All statuses',
       filterButton: 'Filter by status',
-      filterUnknown: 'Not checked',
+      filterCheckedNow: 'Checked now',
+      filterCheckFailed: 'Check failed',
+      filterStale: 'Not checked recently',
+      filterUnknown: 'Unknown',
       copyIp: 'Copy IP',
       pageTotal: (from: number, to: number, total: number) => `${from}-${to} of ${total}`,
       noSelection: 'Select a VPS from the list on the left to view details.',
@@ -648,6 +679,15 @@ const BASE_EN_STRINGS = {
 }
 
 const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
+  vpsStatus: {
+    checking: 'Đang kiểm tra…',
+    checkedNow: 'Vừa kiểm tra',
+    checkFailed: 'Không thể kiểm tra',
+    stale: 'Chưa kiểm tra gần đây',
+    unknown: 'Chưa rõ',
+    recentPast: 'Đã kiểm tra gần đây',
+    reportedOffline: 'Ngoại tuyến (lần kiểm tra trước)'
+  },
   navigation: {
     vps: 'Máy chủ',
     apps: 'Ứng dụng',
@@ -667,6 +707,53 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     back: 'Quay lại',
     confirm: 'Xác nhận',
     saveError: 'Không thể lưu VPS'
+  },
+  vps: {
+    ...BASE_EN_STRINGS.vps,
+    status: {
+      online: 'Vừa kiểm tra',
+      offline: 'Không thể kiểm tra',
+      unknown: 'Chưa rõ',
+      checking: 'Đang kiểm tra…',
+      checkedNow: 'Vừa kiểm tra',
+      checkFailed: 'Không thể kiểm tra',
+      stale: 'Chưa kiểm tra gần đây',
+      recentPast: 'Đã kiểm tra gần đây'
+    }
+  },
+  vpsControl: {
+    ...BASE_EN_STRINGS.vpsControl,
+    fleet: {
+      totalVps: 'Tổng VPS',
+      checkedNow: 'Vừa kiểm tra',
+      checkFailed: 'Không thể kiểm tra',
+      online: 'Vừa kiểm tra',
+      offline: 'Không thể kiểm tra',
+      totalApps: 'Tổng ứng dụng'
+    },
+    selector: {
+      searchPlaceholder: 'Tìm theo tên hoặc host…',
+      filterAll: 'Tất cả trạng thái',
+      filterButton: 'Lọc theo trạng thái',
+      filterCheckedNow: 'Vừa kiểm tra',
+      filterCheckFailed: 'Không thể kiểm tra',
+      filterStale: 'Chưa kiểm tra gần đây',
+      filterUnknown: 'Chưa rõ',
+      copyIp: 'Sao chép IP',
+      pageTotal: (from: number, to: number, total: number) => `${from}-${to} trong ${total}`,
+      noSelection: 'Chọn một VPS từ danh sách bên trái để xem chi tiết.',
+      dockerMissing: 'Chưa cài Docker',
+      appsCount: (count: number) => (count === 0 ? 'Chưa có app' : `${count} ứng dụng`)
+    }
+  },
+  dashboard: {
+    ...BASE_EN_STRINGS.dashboard,
+    stats: {
+      vpsOnline: 'VPS vừa kiểm tra',
+      appsRunning: 'Bản ghi triển khai',
+      deploy24h: 'Lượt deploy 24h qua',
+      lastDeploy: 'Lần deploy gần nhất'
+    }
   },
   deploy: {
     ...BASE_EN_STRINGS.deploy,
@@ -759,6 +846,19 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     emptyHint: 'Hãy triển khai ứng dụng đầu tiên để bắt đầu quản lý tại đây.',
     emptySearch: 'Không tìm thấy ứng dụng phù hợp',
     selectAppHint: 'Chọn một ứng dụng từ danh sách để xem chi tiết',
+    statusRecordedDeployed: 'Đã ghi nhận',
+    statusNotDeployed: 'Chưa triển khai',
+    recordedTitle: 'Bản triển khai ghi nhận',
+    recordedStatus: (status: string, version: number) => `Ghi nhận: ${status} (v${version})`,
+    currentDeploymentNotFound: 'Bản triển khai hiện tại không có trong lịch sử',
+    currentDeploymentMismatchDesc: (id: number) =>
+      `Bản ghi triển khai #${id} không tìm thấy trong lịch sử phiên bản.`,
+    vpsStaleNotice: 'Máy chủ chưa kiểm tra gần đây (>24h)',
+    inspectLive: 'Kiểm tra runtime',
+    liveUnverified: 'Chưa xác minh',
+    liveRunning: 'Live: Đang chạy',
+    liveState: (state: string) => `Live: ${state}`,
+    exposurePublishResult: 'Exposure (lần publish)',
     runtime: 'Runtime',
     healthy: 'Đang chạy · Healthy',
     unhealthy: 'Cần kiểm tra',
@@ -838,6 +938,15 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
 }
 
 const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
+  vpsStatus: {
+    checking: '正在检查…',
+    checkedNow: '刚刚检查',
+    checkFailed: '无法检查',
+    stale: '近期未检查',
+    unknown: '未知',
+    recentPast: '近期已检查',
+    reportedOffline: '离线（上次检查）'
+  },
   navigation: {
     vps: '服务器',
     apps: '应用',
@@ -857,6 +966,53 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     back: '返回',
     confirm: '确认',
     saveError: '无法保存 VPS'
+  },
+  vps: {
+    ...BASE_EN_STRINGS.vps,
+    status: {
+      online: '刚刚检查',
+      offline: '无法检查',
+      unknown: '未知',
+      checking: '正在检查…',
+      checkedNow: '刚刚检查',
+      checkFailed: '无法检查',
+      stale: '近期未检查',
+      recentPast: '近期已检查'
+    }
+  },
+  vpsControl: {
+    ...BASE_EN_STRINGS.vpsControl,
+    fleet: {
+      totalVps: 'VPS 总数',
+      checkedNow: '刚刚检查',
+      checkFailed: '无法检查',
+      online: '刚刚检查',
+      offline: '无法检查',
+      totalApps: '应用总数'
+    },
+    selector: {
+      searchPlaceholder: '按名称或主机搜索…',
+      filterAll: '全部状态',
+      filterButton: '按状态筛选',
+      filterCheckedNow: '刚刚检查',
+      filterCheckFailed: '无法检查',
+      filterStale: '近期未检查',
+      filterUnknown: '未知',
+      copyIp: '复制 IP',
+      pageTotal: (from: number, to: number, total: number) => `${from}-${to} / 共 ${total}`,
+      noSelection: '从左侧列表中选择 VPS 以查看详情。',
+      dockerMissing: '未安装 Docker',
+      appsCount: (count: number) => (count === 0 ? '无应用' : `${count} 个应用`)
+    }
+  },
+  dashboard: {
+    ...BASE_EN_STRINGS.dashboard,
+    stats: {
+      vpsOnline: '刚刚检查的 VPS',
+      appsRunning: '已记录的部署',
+      deploy24h: '过去 24 小时部署',
+      lastDeploy: '最近部署'
+    }
   },
   deploy: {
     ...BASE_EN_STRINGS.deploy,
@@ -945,6 +1101,18 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     emptyHint: '部署首个应用以在此处开始管理。',
     emptySearch: '未找到匹配的应用',
     selectAppHint: '从列表中选择一个应用以查看详情',
+    statusRecordedDeployed: '已记录',
+    statusNotDeployed: '未部署',
+    recordedTitle: '记录的部署',
+    recordedStatus: (status: string, version: number) => `记录: ${status} (v${version})`,
+    currentDeploymentNotFound: '历史记录中未找到当前部署',
+    currentDeploymentMismatchDesc: (id: number) => `在版本历史记录中未找到部署记录 #${id}。`,
+    vpsStaleNotice: '服务器近期未检查 (>24h)',
+    inspectLive: '运行时检查',
+    liveUnverified: '未验证',
+    liveRunning: '实时: 运行中',
+    liveState: (state: string) => `实时: ${state}`,
+    exposurePublishResult: '对外暴露 (发布记录)',
     runtime: '运行环境',
     healthy: '运行中 · 正常',
     unhealthy: '需检查',
@@ -1021,6 +1189,15 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
 }
 
 const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
+  vpsStatus: {
+    checking: '確認中…',
+    checkedNow: '確認済み',
+    checkFailed: '確認できませんでした',
+    stale: '最近未確認',
+    unknown: '不明',
+    recentPast: '最近確認済み',
+    reportedOffline: 'オフライン（前回の確認）'
+  },
   navigation: {
     vps: 'サーバー',
     apps: 'アプリ',
@@ -1040,6 +1217,53 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     back: '戻る',
     confirm: '確認',
     saveError: 'VPSを保存できませんでした'
+  },
+  vps: {
+    ...BASE_EN_STRINGS.vps,
+    status: {
+      online: '確認済み',
+      offline: '確認できませんでした',
+      unknown: '不明',
+      checking: '確認中…',
+      checkedNow: '確認済み',
+      checkFailed: '確認できませんでした',
+      stale: '最近未確認',
+      recentPast: '最近確認済み'
+    }
+  },
+  vpsControl: {
+    ...BASE_EN_STRINGS.vpsControl,
+    fleet: {
+      totalVps: 'VPS 合計',
+      checkedNow: '確認済み',
+      checkFailed: '確認できませんでした',
+      online: '確認済み',
+      offline: '確認できませんでした',
+      totalApps: 'アプリ合計'
+    },
+    selector: {
+      searchPlaceholder: '名前またはホストで検索…',
+      filterAll: 'すべてのステータス',
+      filterButton: 'ステータスで絞り込み',
+      filterCheckedNow: '確認済み',
+      filterCheckFailed: '確認できませんでした',
+      filterStale: '最近未確認',
+      filterUnknown: '不明',
+      copyIp: 'IP をコピー',
+      pageTotal: (from: number, to: number, total: number) => `${from}-${to} / 全 ${total}`,
+      noSelection: '左側のリストから VPS を選択して詳細を表示します。',
+      dockerMissing: 'Docker 未インストール',
+      appsCount: (count: number) => (count === 0 ? 'アプリなし' : `${count} 個のアプリ`)
+    }
+  },
+  dashboard: {
+    ...BASE_EN_STRINGS.dashboard,
+    stats: {
+      vpsOnline: '確認済みの VPS',
+      appsRunning: '記録されたデプロイ',
+      deploy24h: '過去24時間のデプロイ',
+      lastDeploy: '最終デプロイ'
+    }
   },
   deploy: {
     ...BASE_EN_STRINGS.deploy,
@@ -1132,6 +1356,19 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     emptyHint: '最初のアプリをデプロイしてここで管理を開始します。',
     emptySearch: '該当するアプリが見つかりません',
     selectAppHint: '詳細を表示するアプリを選択してください',
+    statusRecordedDeployed: '記録済み',
+    statusNotDeployed: '未デプロイ',
+    recordedTitle: '記録されたデプロイ',
+    recordedStatus: (status: string, version: number) => `記録: ${status} (v${version})`,
+    currentDeploymentNotFound: '履歴に現在のデプロイが見つかりません',
+    currentDeploymentMismatchDesc: (id: number) =>
+      `バージョン履歴にデプロイ記録 #${id} が見つかりませんでした。`,
+    vpsStaleNotice: 'サーバーは最近未確認です (>24h)',
+    inspectLive: 'ランタイム確認',
+    liveUnverified: '未検証',
+    liveRunning: 'ライブ: 実行中',
+    liveState: (state: string) => `ライブ: ${state}`,
+    exposurePublishResult: '外部公開 (公開時の記録)',
     runtime: 'ランタイム',
     healthy: '実行中 · 正常',
     unhealthy: '要確認',
@@ -1217,7 +1454,39 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     ...VI_OVERRIDES,
     common: { ...BASE_EN_STRINGS.common, ...VI_OVERRIDES.common },
     navigation: { ...BASE_EN_STRINGS.navigation, ...VI_OVERRIDES.navigation },
-    apps: { ...BASE_EN_STRINGS.apps, ...VI_OVERRIDES.apps },
+    vpsStatus: { ...BASE_EN_STRINGS.vpsStatus, ...VI_OVERRIDES.vpsStatus },
+    vps: {
+      ...BASE_EN_STRINGS.vps,
+      ...VI_OVERRIDES.vps,
+      status: { ...BASE_EN_STRINGS.vps.status, ...VI_OVERRIDES.vps?.status },
+      columns: { ...BASE_EN_STRINGS.vps.columns, ...VI_OVERRIDES.vps?.columns },
+      actions: { ...BASE_EN_STRINGS.vps.actions, ...VI_OVERRIDES.vps?.actions },
+      resources: { ...BASE_EN_STRINGS.vps.resources, ...VI_OVERRIDES.vps?.resources }
+    },
+    vpsControl: {
+      ...BASE_EN_STRINGS.vpsControl,
+      ...VI_OVERRIDES.vpsControl,
+      fleet: { ...BASE_EN_STRINGS.vpsControl.fleet, ...VI_OVERRIDES.vpsControl?.fleet },
+      selector: { ...BASE_EN_STRINGS.vpsControl.selector, ...VI_OVERRIDES.vpsControl?.selector },
+      overview: { ...BASE_EN_STRINGS.vpsControl.overview, ...VI_OVERRIDES.vpsControl?.overview }
+    },
+    dashboard: {
+      ...BASE_EN_STRINGS.dashboard,
+      ...VI_OVERRIDES.dashboard,
+      stats: { ...BASE_EN_STRINGS.dashboard.stats, ...VI_OVERRIDES.dashboard?.stats },
+      actions: { ...BASE_EN_STRINGS.dashboard.actions, ...VI_OVERRIDES.dashboard?.actions },
+      statuses: { ...BASE_EN_STRINGS.dashboard.statuses, ...VI_OVERRIDES.dashboard?.statuses },
+      recent: { ...BASE_EN_STRINGS.dashboard.recent, ...VI_OVERRIDES.dashboard?.recent }
+    },
+    apps: {
+      ...BASE_EN_STRINGS.apps,
+      ...VI_OVERRIDES.apps,
+      tabs: { ...BASE_EN_STRINGS.apps.tabs, ...VI_OVERRIDES.apps?.tabs },
+      exposureStatus: {
+        ...BASE_EN_STRINGS.apps.exposureStatus,
+        ...VI_OVERRIDES.apps?.exposureStatus
+      }
+    },
     deploy: {
       ...BASE_EN_STRINGS.deploy,
       ...VI_OVERRIDES.deploy,
@@ -1246,7 +1515,39 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     ...CN_OVERRIDES,
     common: { ...BASE_EN_STRINGS.common, ...CN_OVERRIDES.common },
     navigation: { ...BASE_EN_STRINGS.navigation, ...CN_OVERRIDES.navigation },
-    apps: { ...BASE_EN_STRINGS.apps, ...CN_OVERRIDES.apps },
+    vpsStatus: { ...BASE_EN_STRINGS.vpsStatus, ...CN_OVERRIDES.vpsStatus },
+    vps: {
+      ...BASE_EN_STRINGS.vps,
+      ...CN_OVERRIDES.vps,
+      status: { ...BASE_EN_STRINGS.vps.status, ...CN_OVERRIDES.vps?.status },
+      columns: { ...BASE_EN_STRINGS.vps.columns, ...CN_OVERRIDES.vps?.columns },
+      actions: { ...BASE_EN_STRINGS.vps.actions, ...CN_OVERRIDES.vps?.actions },
+      resources: { ...BASE_EN_STRINGS.vps.resources, ...CN_OVERRIDES.vps?.resources }
+    },
+    vpsControl: {
+      ...BASE_EN_STRINGS.vpsControl,
+      ...CN_OVERRIDES.vpsControl,
+      fleet: { ...BASE_EN_STRINGS.vpsControl.fleet, ...CN_OVERRIDES.vpsControl?.fleet },
+      selector: { ...BASE_EN_STRINGS.vpsControl.selector, ...CN_OVERRIDES.vpsControl?.selector },
+      overview: { ...BASE_EN_STRINGS.vpsControl.overview, ...CN_OVERRIDES.vpsControl?.overview }
+    },
+    dashboard: {
+      ...BASE_EN_STRINGS.dashboard,
+      ...CN_OVERRIDES.dashboard,
+      stats: { ...BASE_EN_STRINGS.dashboard.stats, ...CN_OVERRIDES.dashboard?.stats },
+      actions: { ...BASE_EN_STRINGS.dashboard.actions, ...CN_OVERRIDES.dashboard?.actions },
+      statuses: { ...BASE_EN_STRINGS.dashboard.statuses, ...CN_OVERRIDES.dashboard?.statuses },
+      recent: { ...BASE_EN_STRINGS.dashboard.recent, ...CN_OVERRIDES.dashboard?.recent }
+    },
+    apps: {
+      ...BASE_EN_STRINGS.apps,
+      ...CN_OVERRIDES.apps,
+      tabs: { ...BASE_EN_STRINGS.apps.tabs, ...CN_OVERRIDES.apps?.tabs },
+      exposureStatus: {
+        ...BASE_EN_STRINGS.apps.exposureStatus,
+        ...CN_OVERRIDES.apps?.exposureStatus
+      }
+    },
     deploy: {
       ...BASE_EN_STRINGS.deploy,
       ...CN_OVERRIDES.deploy,
@@ -1275,7 +1576,39 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     ...JP_OVERRIDES,
     common: { ...BASE_EN_STRINGS.common, ...JP_OVERRIDES.common },
     navigation: { ...BASE_EN_STRINGS.navigation, ...JP_OVERRIDES.navigation },
-    apps: { ...BASE_EN_STRINGS.apps, ...JP_OVERRIDES.apps },
+    vpsStatus: { ...BASE_EN_STRINGS.vpsStatus, ...JP_OVERRIDES.vpsStatus },
+    vps: {
+      ...BASE_EN_STRINGS.vps,
+      ...JP_OVERRIDES.vps,
+      status: { ...BASE_EN_STRINGS.vps.status, ...JP_OVERRIDES.vps?.status },
+      columns: { ...BASE_EN_STRINGS.vps.columns, ...JP_OVERRIDES.vps?.columns },
+      actions: { ...BASE_EN_STRINGS.vps.actions, ...JP_OVERRIDES.vps?.actions },
+      resources: { ...BASE_EN_STRINGS.vps.resources, ...JP_OVERRIDES.vps?.resources }
+    },
+    vpsControl: {
+      ...BASE_EN_STRINGS.vpsControl,
+      ...JP_OVERRIDES.vpsControl,
+      fleet: { ...BASE_EN_STRINGS.vpsControl.fleet, ...JP_OVERRIDES.vpsControl?.fleet },
+      selector: { ...BASE_EN_STRINGS.vpsControl.selector, ...JP_OVERRIDES.vpsControl?.selector },
+      overview: { ...BASE_EN_STRINGS.vpsControl.overview, ...JP_OVERRIDES.vpsControl?.overview }
+    },
+    dashboard: {
+      ...BASE_EN_STRINGS.dashboard,
+      ...JP_OVERRIDES.dashboard,
+      stats: { ...BASE_EN_STRINGS.dashboard.stats, ...JP_OVERRIDES.dashboard?.stats },
+      actions: { ...BASE_EN_STRINGS.dashboard.actions, ...JP_OVERRIDES.dashboard?.actions },
+      statuses: { ...BASE_EN_STRINGS.dashboard.statuses, ...JP_OVERRIDES.dashboard?.statuses },
+      recent: { ...BASE_EN_STRINGS.dashboard.recent, ...JP_OVERRIDES.dashboard?.recent }
+    },
+    apps: {
+      ...BASE_EN_STRINGS.apps,
+      ...JP_OVERRIDES.apps,
+      tabs: { ...BASE_EN_STRINGS.apps.tabs, ...JP_OVERRIDES.apps?.tabs },
+      exposureStatus: {
+        ...BASE_EN_STRINGS.apps.exposureStatus,
+        ...JP_OVERRIDES.apps?.exposureStatus
+      }
+    },
     deploy: {
       ...BASE_EN_STRINGS.deploy,
       ...JP_OVERRIDES.deploy,

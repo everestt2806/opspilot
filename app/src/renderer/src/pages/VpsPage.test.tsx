@@ -113,7 +113,7 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
 
     expect(await screen.findByText(strings.vps.empty)).toBeTruthy()
     expect(screen.getByText(strings.vps.createFirst)).toBeTruthy()
-    expect(screen.getByLabelText('Total VPS').textContent).toContain('0')
+    expect(screen.getByLabelText(strings.vpsControl.fleet.totalVps).textContent).toContain('0')
     expect(screen.queryByText(strings.vps.backToList)).toBeNull()
   })
 
@@ -169,13 +169,17 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
 
     render(<VpsPage />)
 
-    await waitFor(() => expect(screen.getByLabelText('Total VPS').textContent).toContain('2'))
+    await waitFor(() =>
+      expect(screen.getByLabelText(strings.vpsControl.fleet.totalVps).textContent).toContain('2')
+    )
     const fleet = document.querySelector('.panel-fleet') as HTMLElement
     expect(within(fleet).getByLabelText(strings.vpsControl.fleet.online).textContent).toContain('1')
     expect(within(fleet).getByLabelText(strings.vpsControl.fleet.offline).textContent).toContain(
       '1'
     )
-    expect(within(fleet).getByLabelText('Total apps').textContent).toContain('1')
+    expect(within(fleet).getByLabelText(strings.vpsControl.fleet.totalApps).textContent).toContain(
+      '1'
+    )
   })
 
   it('list truoc: bam dong VM02 chuyen sang trang chi tiết, Back quay ve danh sach', async () => {

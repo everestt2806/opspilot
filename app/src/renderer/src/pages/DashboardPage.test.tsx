@@ -6,6 +6,7 @@ import type { ActionLogEntry, App, Vps } from '@shared/ipc'
 
 import { DashboardPage } from './DashboardPage'
 import { strings } from '../strings'
+import { useVpsStore } from '../store/vpsStore'
 
 const VPS_A: Vps = {
   id: 1,
@@ -100,6 +101,7 @@ function statCell(label: string): HTMLElement {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  useVpsStore.setState({ resources: {} })
 })
 
 afterEach(() => {
@@ -107,13 +109,14 @@ afterEach(() => {
 })
 
 describe('DashboardPage', () => {
-  it('hien thi thong ke tong quan va bang hoat dong gan day', async () => {
+  it('hien thi thong ke tong quan va bang hoat dong gan day (0/2 khi chua probe trong phien)', async () => {
     const invoke = mockApi(happyHandlers)
     render(<DashboardPage onOpenVps={() => {}} onOpenDeploy={() => {}} />)
 
     await screen.findByText(strings.dashboard.title)
 
-    expect(statCell(strings.dashboard.stats.vpsOnline).textContent).toContain('1 / 2')
+    // Khong dem last_status='online' tu DB: chua probe trong phien nen la 0 / 2
+    expect(statCell(strings.dashboard.stats.vpsOnline).textContent).toContain('0 / 2')
     expect(statCell(strings.dashboard.stats.appsRunning).textContent).toContain('1 / 2')
     expect(statCell(strings.dashboard.stats.deploy24h).textContent).toContain('2')
     expect(statCell(strings.dashboard.stats.lastDeploy).textContent).toMatch(/ago|just now/)
@@ -131,6 +134,29 @@ describe('DashboardPage', () => {
       'history:list',
       expect.objectContaining({ actions: ['deploy'], limit: 200, offset: 0 })
     )
+  })
+
+  it('tinh dung so VPS online khi co ket qua probe trong phien', async () => {
+    useVpsStore.setState({
+      resources: {
+        1: {
+          status: 'success',
+          data: {
+            ram_total_mb: 4096,
+            ram_free_mb: 1024,
+            disk_total_gb: 40,
+            disk_free_gb: 20,
+            cpu_count: 2,
+            load_avg_1m: 0.2
+          }
+        }
+      }
+    })
+    mockApi(happyHandlers)
+    render(<DashboardPage />)
+
+    await screen.findByText(strings.dashboard.title)
+    expect(statCell(strings.dashboard.stats.vpsOnline).textContent).toContain('1 / 2')
   })
 
   it('khong co VPS thi hien empty state va nap sang man VPS', async () => {

@@ -4,8 +4,11 @@ import type { Vps, VpsResources } from '@shared/ipc'
 
 import {
   clampPercent,
+  evaluateVpsStatus,
   formatGb,
   formatMb,
+  isVpsCheckedNow,
+  isVpsCheckFailed,
   resourcePercents,
   rowDisplayStatus
 } from './vpsResources'
@@ -66,15 +69,82 @@ describe('formatMb / formatGb', () => {
   })
 })
 
-describe('rowDisplayStatus', () => {
-  it('trang thai tai nguyen live duoc uu tien hon last_status trong DB', () => {
-    expect(rowDisplayStatus(VPS, undefined)).toBe('unknown')
-    expect(rowDisplayStatus({ ...VPS, last_status: 'online' }, undefined)).toBe('online')
+describe('evaluateVpsStatus & rowDisplayStatus — quy tac trang thai trung thuc', () => {
+  const baseNow = Date.parse('2026-10-04T12:00:00Z')
 
-    expect(rowDisplayStatus(VPS, { status: 'loading' })).toBe('checking')
-    expect(rowDisplayStatus(VPS, { status: 'success', data: RES })).toBe('online')
-    expect(rowDisplayStatus(VPS, { status: 'error', message: 'sshd khong tra loi' })).toBe(
-      'offline'
+  it('VPS vua kiem tra: thanh cong trong phien -> checked_now (isFresh: true)', () => {
+    const res = evaluateVpsStatus(VPS, { status: 'success', data: RES }, baseNow)
+    expect(res.key).toBe('checked_now')
+    expect(res.source).toBe('session_probe')
+    expect(res.isFresh).toBe(true)
+    expect(rowDisplayStatus(VPS, { status: 'success', data: RES }, baseNow)).toBe('checked_now')
+    expect(isVpsCheckedNow(VPS, { status: 'success', data: RES }, baseNow)).toBe(true)
+    expect(isVpsCheckFailed(VPS, { status: 'success', data: RES }, baseNow)).toBe(false)
+  })
+
+  it('loi doc tai nguyen: check_failed, khong tu ket luan VPS offline', () => {
+    const res = evaluateVpsStatus(VPS, { status: 'error', message: 'sshd khong tra loi' }, baseNow)
+    expect(res.key).toBe('check_failed')
+    expect(res.source).toBe('session_probe')
+    expect(res.isFresh).toBe(false)
+    expect(rowDisplayStatus(VPS, { status: 'error', message: 'sshd khong tra loi' }, baseNow)).toBe(
+      'check_failed'
     )
+    expect(isVpsCheckFailed(VPS, { status: 'error', message: 'sshd khong tra loi' }, baseNow)).toBe(
+      true
+    )
+    expect(isVpsCheckedNow(VPS, { status: 'error', message: 'sshd khong tra loi' }, baseNow)).toBe(
+      false
+    )
+  })
+
+  it('dang kiem tra: loading -> checking', () => {
+    const res = evaluateVpsStatus(VPS, { status: 'loading' }, baseNow)
+    expect(res.key).toBe('checking')
+    expect(res.source).toBe('session_probe')
+    expect(rowDisplayStatus(VPS, { status: 'loading' }, baseNow)).toBe('checking')
+  })
+
+  it('chua tung ket noi: last_seen_at null -> unknown du DB co last_status online', () => {
+    const vps = { ...VPS, last_seen_at: null, last_status: 'online' as const }
+    const res = evaluateVpsStatus(vps, undefined, baseNow)
+    expect(res.key).toBe('unknown')
+    expect(res.source).toBe('db_record')
+    expect(rowDisplayStatus(vps, undefined, baseNow)).toBe('unknown')
+    expect(isVpsCheckedNow(vps, undefined, baseNow)).toBe(false)
+  })
+
+  it('14 ngay chua kiem tra: >24h -> stale (chua kiem tra gan day)', () => {
+    const fourteenDaysAgo = new Date(baseNow - 14 * 24 * 60 * 60 * 1000).toISOString()
+    const vps = { ...VPS, last_seen_at: fourteenDaysAgo, last_status: 'online' as const }
+    const res = evaluateVpsStatus(vps, undefined, baseNow)
+    expect(res.key).toBe('stale')
+    expect(res.source).toBe('db_record')
+    expect(rowDisplayStatus(vps, undefined, baseNow)).toBe('stale')
+    expect(isVpsCheckedNow(vps, undefined, baseNow)).toBe(false)
+  })
+
+  it('timestamp khong hop le: sai dinh dang -> unknown', () => {
+    const vps = { ...VPS, last_seen_at: 'sai-dinh-dang-ngay', last_status: 'online' as const }
+    const res = evaluateVpsStatus(vps, undefined, baseNow)
+    expect(res.key).toBe('unknown')
+    expect(rowDisplayStatus(vps, undefined, baseNow)).toBe('unknown')
+  })
+
+  it('timestamp tuong lai vuot 60s -> unknown', () => {
+    const futureDate = new Date(baseNow + 2 * 60 * 60 * 1000).toISOString()
+    const vps = { ...VPS, last_seen_at: futureDate, last_status: 'online' as const }
+    const res = evaluateVpsStatus(vps, undefined, baseNow)
+    expect(res.key).toBe('unknown')
+    expect(rowDisplayStatus(vps, undefined, baseNow)).toBe('unknown')
+  })
+
+  it('da kiem tra trong 24h: recent_past, khong bao gio coi la checked_now', () => {
+    const twoHoursAgo = new Date(baseNow - 2 * 60 * 60 * 1000).toISOString()
+    const vps = { ...VPS, last_seen_at: twoHoursAgo, last_status: 'online' as const }
+    const res = evaluateVpsStatus(vps, undefined, baseNow)
+    expect(res.key).toBe('recent_past')
+    expect(rowDisplayStatus(vps, undefined, baseNow)).toBe('recent_past')
+    expect(isVpsCheckedNow(vps, undefined, baseNow)).toBe(false)
   })
 })

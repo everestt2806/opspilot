@@ -25,11 +25,11 @@ import {
 
 import type { Vps } from '@shared/ipc'
 
-import { strings } from '../strings'
+import { useStrings } from '../strings'
 import { localDateTime, relativeTime } from '../utils/format'
 import { rowDisplayStatus, type RowDisplayStatus, type RowResourceState } from '../vpsResources'
 
-export type StatusFilterKey = 'all' | RowDisplayStatus
+export type StatusFilterKey = 'all' | RowDisplayStatus | 'online' | 'offline'
 
 interface ServerSelectorProps {
   items: Vps[]
@@ -48,21 +48,6 @@ interface ServerSelectorProps {
   onRetryResources: (vpsId: number) => void
 }
 
-const STATUS_TAG: Record<RowDisplayStatus, { color: string; label: string }> = {
-  checking: { color: 'processing', label: strings.vps.status.checking },
-  online: { color: 'success', label: strings.vps.status.online },
-  offline: { color: 'error', label: strings.vps.status.offline },
-  unknown: { color: 'default', label: strings.vps.status.unknown }
-}
-
-const FILTER_MENU: MenuProps['items'] = [
-  { key: 'all', label: strings.vpsControl.selector.filterAll },
-  { key: 'online', label: strings.vps.status.online },
-  { key: 'offline', label: strings.vps.status.offline },
-  { key: 'checking', label: strings.vps.status.checking },
-  { key: 'unknown', label: strings.vpsControl.selector.filterUnknown }
-]
-
 /** Danh sách VPS — header bảng luôn hiện; toolbar search + filter dropdown. */
 export function ServerSelector({
   items,
@@ -78,15 +63,40 @@ export function ServerSelector({
   onDelete,
   onRetryResources
 }: ServerSelectorProps): React.JSX.Element {
+  const strings = useStrings()
   const [statusFilter, setStatusFilter] = useState<StatusFilterKey>('all')
   const [pageSize, setPageSize] = useState(10)
+
+  const STATUS_TAG: Record<RowDisplayStatus, { color: string; label: string }> = {
+    checking: { color: 'processing', label: strings.vps.status.checking },
+    checked_now: { color: 'success', label: strings.vps.status.checkedNow },
+    check_failed: { color: 'error', label: strings.vps.status.checkFailed },
+    stale: { color: 'warning', label: strings.vps.status.stale },
+    unknown: { color: 'default', label: strings.vps.status.unknown },
+    recent_past: { color: 'default', label: strings.vps.status.recentPast }
+  }
+
+  const FILTER_MENU: MenuProps['items'] = [
+    { key: 'all', label: strings.vpsControl.selector.filterAll },
+    { key: 'checked_now', label: strings.vpsControl.selector.filterCheckedNow },
+    { key: 'check_failed', label: strings.vpsControl.selector.filterCheckFailed },
+    { key: 'stale', label: strings.vpsControl.selector.filterStale },
+    { key: 'unknown', label: strings.vpsControl.selector.filterUnknown }
+  ]
 
   const visible = useMemo(() => {
     const query = search.trim().toLowerCase()
     return items.filter((vps) => {
       if (query && !`${vps.name} ${vps.host}`.toLowerCase().includes(query)) return false
       if (statusFilter === 'all') return true
-      return rowDisplayStatus(vps, resources[vps.id]) === statusFilter
+      const actual = rowDisplayStatus(vps, resources[vps.id])
+      if (statusFilter === 'check_failed' || (statusFilter as string) === 'offline') {
+        return actual === 'check_failed'
+      }
+      if (statusFilter === 'checked_now' || (statusFilter as string) === 'online') {
+        return actual === 'checked_now'
+      }
+      return actual === statusFilter
     })
   }, [items, resources, search, statusFilter])
 
@@ -173,10 +183,10 @@ export function ServerSelector({
       width: 148,
       render: (_: unknown, vps: Vps) => {
         const status = rowDisplayStatus(vps, resources[vps.id])
-        if (status === 'offline' || status === 'checking') {
+        if (status === 'check_failed' || status === 'checking') {
           return (
             <span onClick={(event) => event.stopPropagation()} role="presentation">
-              <Tag color={status === 'offline' ? 'error' : 'processing'}>
+              <Tag color={status === 'check_failed' ? 'error' : 'processing'}>
                 {STATUS_TAG[status].label}
               </Tag>
               <Button
@@ -190,13 +200,16 @@ export function ServerSelector({
           )
         }
         if (vps.last_seen_at) {
-          return (
-            <Tooltip title={localDateTime(vps.last_seen_at)}>
-              <span className="mono-text" style={{ fontSize: 12 }}>
-                {relativeTime(vps.last_seen_at)}
-              </span>
-            </Tooltip>
-          )
+          const seenMs = Date.parse(vps.last_seen_at)
+          if (!Number.isNaN(seenMs) && seenMs <= Date.now() + 60_000) {
+            return (
+              <Tooltip title={localDateTime(vps.last_seen_at)}>
+                <span className="mono-text" style={{ fontSize: 12 }}>
+                  {relativeTime(vps.last_seen_at)}
+                </span>
+              </Tooltip>
+            )
+          }
         }
         return (
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>

@@ -5,8 +5,10 @@ import { Alert, Badge, Button, Card, Empty, Space, Table, Tag, Tooltip, Typograp
 import type { ActionLogEntry, App, IpcError, Vps } from '@shared/ipc'
 
 import { PageHeader } from '../components/PageHeader'
-import { strings } from '../strings'
+import { useStrings } from '../strings'
+import { useVpsStore } from '../store/vpsStore'
 import { localDateTime, relativeTime } from '../utils/format'
+import { isVpsCheckedNow } from '../vpsResources'
 
 interface DashboardPageProps {
   onOpenVps?: () => void
@@ -29,6 +31,8 @@ const STATUS_BADGE: Record<
 }
 
 export function DashboardPage({ onOpenVps, onOpenDeploy }: DashboardPageProps): React.JSX.Element {
+  const strings = useStrings()
+  const resources = useVpsStore((state) => state.resources)
   const [vpsList, setVpsList] = useState<Vps[]>([])
   const [apps, setApps] = useState<App[]>([])
   const [recent, setRecent] = useState<ActionLogEntry[]>([])
@@ -113,8 +117,8 @@ export function DashboardPage({ onOpenVps, onOpenDeploy }: DashboardPageProps): 
   }
 
   const vpsNameById = new Map(vpsList.map((vps) => [vps.id, vps.name]))
-  const onlineCount = vpsList.filter((vps) => vps.last_status === 'online').length
-  const runningApps = apps.filter((app) => app.current_deployment_id !== null).length
+  const checkedNowCount = vpsList.filter((vps) => isVpsCheckedNow(vps, resources[vps.id])).length
+  const recordedApps = apps.filter((app) => app.current_deployment_id !== null).length
   const lastDeploy = recent.find((row) => row.action === 'deploy')
 
   const columns = [
@@ -186,16 +190,16 @@ export function DashboardPage({ onOpenVps, onOpenDeploy }: DashboardPageProps): 
 
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
         <div className="summary-strip" aria-label={strings.dashboard.summaryLabel}>
-          <div className="summary-cell">
+          <div className="summary-cell" aria-label={strings.dashboard.stats.vpsOnline}>
             <span>{strings.dashboard.stats.vpsOnline}</span>
             <strong>
-              {onlineCount} / {vpsList.length}
+              {checkedNowCount} / {vpsList.length}
             </strong>
           </div>
-          <div className="summary-cell">
+          <div className="summary-cell" aria-label={strings.dashboard.stats.appsRunning}>
             <span>{strings.dashboard.stats.appsRunning}</span>
             <strong>
-              {runningApps} / {apps.length}
+              {recordedApps} / {apps.length}
             </strong>
           </div>
           <div className="summary-cell">

@@ -512,4 +512,123 @@ describe('AppsPage — real IPC and multi-language', () => {
     // - Không phục hồi trạng thái doctor trên B
     expect(screen.queryByText(/Chẩn đoán với Doctor/)).toBeNull()
   })
+
+  it('hiển thị trạng thái triển khai ghi nhận thay vì Healthy và không tự kết luận runtime sống', async () => {
+    mockApi({
+      'app:list': async () => ({
+        ok: true,
+        data: [APP_1, { ...APP_2, current_deployment_id: null }]
+      })
+    })
+
+    render(
+      <AntApp>
+        <AppsPage />
+      </AntApp>
+    )
+
+    // Sidebar: hiện "Đã ghi nhận" và "Chưa triển khai"
+    expect(await screen.findByText('Đã ghi nhận')).toBeTruthy()
+    expect(screen.getByText('Chưa triển khai')).toBeTruthy()
+
+    // Detail header & KPI: ghi nhận running (v2), Exposure (lần publish)
+    expect(screen.getByText('Ghi nhận: running (v2)')).toBeTruthy()
+    expect(screen.getByText('Bản triển khai ghi nhận')).toBeTruthy()
+    expect(screen.getAllByText('Exposure (lần publish)').length).toBeGreaterThan(0)
+  })
+
+  it('app có deployment ID nhưng VPS target chưa kiểm tra gần đây (>24h) -> hiện cảnh báo vpsStaleNotice', async () => {
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
+    const STALE_VPS: Vps = {
+      ...VPS_1,
+      last_seen_at: fourteenDaysAgo
+    }
+
+    mockApi({
+      'vps:list': async () => ({ ok: true, data: [STALE_VPS] }),
+      'app:list': async () => ({ ok: true, data: [APP_1] })
+    })
+
+    render(
+      <AntApp>
+        <AppsPage />
+      </AntApp>
+    )
+
+    expect(await screen.findByText('Máy chủ chưa kiểm tra gần đây (>24h)')).toBeTruthy()
+  })
+
+  it('current deployment ID không tìm thấy trong lịch sử phiên bản -> không fallback vào deployments[0], hiện cảnh báo mismatch', async () => {
+    const MISMATCH_APP: App = {
+      ...APP_1,
+      current_deployment_id: 999
+    }
+
+    mockApi({
+      'app:list': async () => ({ ok: true, data: [MISMATCH_APP] })
+    })
+
+    render(
+      <AntApp>
+        <AppsPage />
+      </AntApp>
+    )
+
+    // Alert mismatch xuất hiện
+    expect(await screen.findByText('Bản triển khai hiện tại không có trong lịch sử')).toBeTruthy()
+    expect(
+      screen.getByText('Bản ghi triển khai #999 không tìm thấy trong lịch sử phiên bản.')
+    ).toBeTruthy()
+
+    // Không fallback vào v2 hay v1 làm activeDeployment
+    expect(screen.queryByText('Ghi nhận: running (v2)')).toBeNull()
+  })
+
+  it('kiểm tra runtime theo yêu cầu (app:runtime-inspect): lỗi hoặc timeout hiện Chưa xác minh, không đổi thành Healthy', async () => {
+    let inspectResolve: (val: unknown) => void = () => {}
+    const inspectPromise = new Promise((res) => {
+      inspectResolve = res
+    })
+
+    const { invoke } = mockApi({
+      'app:runtime-inspect': async () => inspectPromise
+    })
+
+    render(
+      <AntApp>
+        <AppsPage />
+      </AntApp>
+    )
+
+    // Bấm nút "Kiểm tra runtime"
+    const inspectBtn = await screen.findByRole('button', { name: /Kiểm tra runtime/ })
+    fireEvent.click(inspectBtn)
+
+    expect(invoke).toHaveBeenCalledWith('app:runtime-inspect', 10)
+
+    // Lỗi từ IPC runtime inspect
+    await act(async () => {
+      inspectResolve({
+        ok: false,
+        error: { code: 'SSH_TIMEOUT', message: 'SSH timeout 15s when running docker inspect' }
+      })
+    })
+
+    // Hiện "Chưa xác minh", tuyệt đối không đổi thành Healthy
+    expect(await screen.findByText('Chưa xác minh')).toBeTruthy()
+    expect(screen.queryByText('Đang chạy · Healthy')).toBeNull()
+
+    // Thử lại thành công -> Hiện "Live: running"
+    mockApi({
+      'app:runtime-inspect': async () => ({
+        ok: true,
+        data: { image: 'my-express-app:v2', state: 'running' }
+      })
+    })
+
+    const retryBtn = screen.getByRole('button', { name: /Thử lại/ })
+    fireEvent.click(retryBtn)
+
+    expect(await screen.findByText('Live: running')).toBeTruthy()
+  })
 })
