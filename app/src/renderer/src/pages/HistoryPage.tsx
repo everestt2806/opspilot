@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Alert,
   Badge,
@@ -25,6 +25,7 @@ import { useStrings } from '../strings'
 import { localDateTime, relativeTime } from '../utils/format'
 
 const PAGE_SIZE = 20
+const FETCH_LIMIT = PAGE_SIZE + 1
 
 type HistoryFilter = {
   actions?: string[]
@@ -125,43 +126,7 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
     { value: 'ssh_error', label: strings.history.actions.ssh_error }
   ]
 
-  const load = useCallback(
-    async (
-      targetPage: number,
-      currentActions: string[],
-      currentVpsId: number | undefined,
-      currentRange: [Dayjs, Dayjs] | null
-    ) => {
-      const reqId = ++reqIdRef.current
-      try {
-        const filter: HistoryFilter = {
-          actions: currentActions.length > 0 ? currentActions : undefined,
-          vps_id: currentVpsId,
-          from_ts: currentRange ? currentRange[0].startOf('day').toDate().toISOString() : undefined,
-          to_ts: currentRange ? currentRange[1].endOf('day').toDate().toISOString() : undefined,
-          limit: PAGE_SIZE,
-          offset: (targetPage - 1) * PAGE_SIZE
-        }
-        const result = await window.api.invoke('history:list', filter)
-        if (reqId !== reqIdRef.current) return
-        if (!result.ok) {
-          setError(result.error)
-          return
-        }
-        const data = Array.isArray(result.data) ? result.data : []
-        setError(null)
-        setRows(data)
-        const isFull = data.length === PAGE_SIZE
-        setHasMore(isFull)
-        setTotal(isFull ? targetPage * PAGE_SIZE + 1 : (targetPage - 1) * PAGE_SIZE + data.length)
-      } finally {
-        if (reqId === reqIdRef.current) {
-          setLoading(false)
-        }
-      }
-    },
-    []
-  )
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     void (async () => {
@@ -171,12 +136,55 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
   }, [])
 
   useEffect(() => {
-    void load(page, actions, vpsId, range)
-  }, [page, actions, vpsId, range, load])
+    let cancelled = false
+    const reqId = ++reqIdRef.current
+    void (async () => {
+      try {
+        const filter: HistoryFilter = {
+          actions: actions.length > 0 ? actions : undefined,
+          vps_id: vpsId,
+          from_ts: range ? range[0].startOf('day').toDate().toISOString() : undefined,
+          to_ts: range ? range[1].endOf('day').toDate().toISOString() : undefined,
+          limit: FETCH_LIMIT,
+          offset: (page - 1) * PAGE_SIZE
+        }
+        const result = await window.api.invoke('history:list', filter)
+        if (cancelled || reqId !== reqIdRef.current) return
+        if (!result.ok) {
+          setError(result.error)
+          setRows([])
+          return
+        }
+        const rawData = Array.isArray(result.data) ? result.data : []
+        const hasNext = rawData.length > PAGE_SIZE
+        const displayData = hasNext ? rawData.slice(0, PAGE_SIZE) : rawData
+
+        setError(null)
+        setRows(displayData)
+        setHasMore(hasNext)
+        setTotal(hasNext ? page * PAGE_SIZE + 1 : (page - 1) * PAGE_SIZE + displayData.length)
+      } catch (err) {
+        if (!cancelled && reqId === reqIdRef.current) {
+          setError({
+            code: 'UNKNOWN',
+            message: err instanceof Error ? err.message : String(err)
+          })
+          setRows([])
+        }
+      } finally {
+        if (!cancelled && reqId === reqIdRef.current) {
+          setLoading(false)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [page, actions, vpsId, range, reloadKey])
 
   function reload(): void {
     setLoading(true)
-    void load(page, actions, vpsId, range)
+    setReloadKey((k) => k + 1)
   }
 
   function handleActionsChange(value: string[]): void {
@@ -360,7 +368,7 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
           style: { cursor: 'pointer' }
         })}
         pagination={
-          rows.length === 0 && !loading
+          (rows.length === 0 && page === 1 && !loading) || error !== null
             ? false
             : {
                 current: page,
@@ -373,8 +381,8 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
                   hasMore
                     ? strings.history.pagination.pageMore(from, to)
                     : strings.history.pagination.pageTotal(
-                        from,
-                        to,
+                        rows.length === 0 ? 0 : from,
+                        rows.length === 0 ? 0 : to,
                         (page - 1) * PAGE_SIZE + rows.length
                       ),
                 locale: {
@@ -385,7 +393,20 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
         }
         locale={{
           emptyText: (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={strings.history.empty} />
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={page > 1 ? strings.history.emptyPage : strings.history.empty}
+            >
+              {page > 1 && !loading && !error && (
+                <Button
+                  type="primary"
+                  size="small"
+                  onClick={() => handlePageChange(Math.max(1, page - 1))}
+                >
+                  {strings.history.pagination.prevPageAction}
+                </Button>
+              )}
+            </Empty>
           )
         }}
       />

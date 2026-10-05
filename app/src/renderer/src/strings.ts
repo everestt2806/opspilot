@@ -534,11 +534,13 @@ const BASE_EN_STRINGS = {
       emptyFields: 'No extra details.'
     },
     empty: 'No activity matches this filter.',
+    emptyPage: 'This page has no records.',
     loadFailed: 'Could not load the history.',
     retry: 'Retry',
     pagination: {
       prev: 'Previous page',
       next: 'Next page',
+      prevPageAction: 'Go back to previous page',
       page: (page: number) => `Page ${page}`,
       pageTotal: (from: number, to: number, total: number) => `${from}–${to} of ${total}`,
       pageMore: (from: number, to: number) => `${from}–${to} (more records available)`
@@ -1021,11 +1023,13 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       emptyFields: 'Không có chi tiết bổ sung.'
     },
     empty: 'Không có hoạt động nào khớp với bộ lọc.',
+    emptyPage: 'Trang này không có bản ghi nào.',
     loadFailed: 'Không thể tải lịch sử hoạt động.',
     retry: 'Thử lại',
     pagination: {
       prev: 'Trang trước',
       next: 'Trang kế',
+      prevPageAction: 'Quay về trang trước',
       page: (page: number) => `Trang ${page}`,
       pageTotal: (from: number, to: number, total: number) => `${from}–${to} trong ${total}`,
       pageMore: (from: number, to: number) => `${from}–${to} (còn bản ghi)`
@@ -1500,11 +1504,13 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       emptyFields: '无附加信息。'
     },
     empty: '没有符合该筛选条件的活动。',
+    emptyPage: '此页暂无记录。',
     loadFailed: '无法加载历史记录。',
     retry: '重试',
     pagination: {
       prev: '上一页',
       next: '下一页',
+      prevPageAction: '返回上一页',
       page: (page: number) => `第 ${page} 页`,
       pageTotal: (from: number, to: number, total: number) => `${from}–${to} / 共 ${total}`,
       pageMore: (from: number, to: number) => `${from}–${to} (还有更多)`
@@ -1970,11 +1976,13 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       emptyFields: '詳細項目はありません。'
     },
     empty: '条件に一致するアクティビティはありません。',
+    emptyPage: 'このページにはレコードがありません。',
     loadFailed: '履歴を読み込めませんでした。',
     retry: '再試行',
     pagination: {
       prev: '前のページ',
       next: '次のページ',
+      prevPageAction: '前のページに戻る',
       page: (page: number) => `${page} ページ`,
       pageTotal: (from: number, to: number, total: number) => `${from}–${to} / 全 ${total}`,
       pageMore: (from: number, to: number) => `${from}–${to} (続きあり)`
