@@ -35,7 +35,14 @@ import { PageHeader } from '../components/PageHeader'
 
 import { useStrings } from '../strings'
 import { type DeployPreselect, useUiState } from '../store/uiState'
-import { applyEvent, initialSteps, SEVEN_STEPS, type RunView } from './deployRun'
+import {
+  applyEvent,
+  getConfigSignature,
+  initialSteps,
+  isSecretKey,
+  SEVEN_STEPS,
+  type RunView
+} from './deployRun'
 import { DeployTerminal } from './DeployTerminal'
 
 function formatDuration(ms: number): string {
@@ -53,18 +60,6 @@ function toAppName(path: string): string {
     .replace(/[^a-z0-9-]/g, '-')
     .replace(/^-+/, '')
   return cleaned.slice(0, 40) || 'app'
-}
-
-function isSecretKey(key: string): boolean {
-  return /(secret|password|token|api[-_]?key|private[-_]?key)/i.test(key)
-}
-
-function getConfigSignature(input: DeployInput): string {
-  const sortedEnv = Object.keys(input.env)
-    .sort()
-    .map((k) => `${k}=${input.env[k]}`)
-    .join(';')
-  return `${input.vps_id}::${input.app_id ?? ''}::${input.app_name}::${input.source_path}::${sortedEnv}`
 }
 
 const APP_NAME_RE = /^[a-z0-9][a-z0-9-]*$/
@@ -1016,17 +1011,14 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                         <Space wrap size={[8, 4]}>
                           {Object.entries(envValues)
                             .filter(([, v]) => v.trim() !== '')
-                            .map(([key, value]) => {
-                              const secret = isSecretKey(key)
-                              return (
-                                <Tag key={key} className="deploy-env-tag">
-                                  <Typography.Text strong>{key}</Typography.Text>=
-                                  <Typography.Text type={secret ? 'secondary' : undefined}>
-                                    {secret ? '••••••••' : value}
-                                  </Typography.Text>
-                                </Tag>
-                              )
-                            })}
+                            .map(([key]) => (
+                              <Tag key={key} className="deploy-env-tag">
+                                <Typography.Text strong>{key}</Typography.Text>{' '}
+                                <Typography.Text type="secondary">
+                                  ({strings.deploy.review.envConfigured})
+                                </Typography.Text>
+                              </Tag>
+                            ))}
                         </Space>
                       )}
                     </Descriptions.Item>

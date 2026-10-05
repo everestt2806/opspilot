@@ -1,4 +1,23 @@
-import type { DeployEvent, DeployStep, IpcError } from '@shared/ipc'
+import type { DeployEvent, DeployInput, DeployStep, IpcError } from '@shared/ipc'
+
+export function isSecretKey(key: string): boolean {
+  return /(secret|password|token|api[-_]?key|private[-_]?key|auth|credential|(database|redis|db|postgres|mysql|mongo|amqp)[-_]?url|.*[-_]?(uri|dsn|connection[-_]?string)$)/i.test(
+    key
+  )
+}
+
+export function getConfigSignature(input: DeployInput): string {
+  const sortedEnvEntries = Object.keys(input.env ?? {})
+    .sort()
+    .map((k) => [k, input.env[k]])
+  return JSON.stringify({
+    vps_id: input.vps_id,
+    app_id: input.app_id ?? null,
+    app_name: input.app_name,
+    source_path: input.source_path,
+    env: sortedEnvEntries
+  })
+}
 
 export const SEVEN_STEPS: DeployStep[] = [
   'PRECHECK',

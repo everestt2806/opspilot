@@ -2,9 +2,10 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { App, DeployEvent, DetectionResultDto, Vps } from '@shared/ipc'
+import type { App, DeployEvent, DeployInput, DetectionResultDto, Vps } from '@shared/ipc'
 
 import { DeployPage } from './DeployPage'
+import { getConfigSignature, isSecretKey } from './deployRun'
 import { strings } from '../strings'
 import { useUiState } from '../store/uiState'
 
@@ -1243,7 +1244,7 @@ describe('DeployPage — wizard va log', () => {
     )
   })
 
-  it('man Review hien thi tom tat dich trien khai va che gia tri secret', async () => {
+  it('man Review chi hien thi ten bien moi truong va trang thai da cau hinh, khong lo gia tri', async () => {
     const { invoke } = mockApi(handersHappy)
 
     render(<DeployPage />)
@@ -1255,12 +1256,224 @@ describe('DeployPage — wizard va log', () => {
     expect(screen.getByText('express-api')).toBeTruthy()
     expect(screen.getByText(SOURCE_PATH)).toBeTruthy()
 
-    // Hiển thị env: PORT hiển thị giá trị, SECRET_KEY bị che
+    // Hiển thị env: chỉ hiển thị tên biến và trạng thái đã cấu hình, không hiển thị giá trị của bất kỳ biến nào
     expect(screen.getByText('PORT')).toBeTruthy()
-    expect(screen.getByText('3000')).toBeTruthy()
     expect(screen.getByText('SECRET_KEY')).toBeTruthy()
-    expect(screen.getByText('••••••••')).toBeTruthy()
+    expect(screen.getAllByText(`(${strings.deploy.review.envConfigured})`).length).toBe(2)
+    expect(screen.queryByText('3000')).toBeNull()
     expect(screen.queryByText('sekret')).toBeNull()
+    expect(screen.queryByText('••••••••')).toBeNull()
+  })
+
+  it('URL chua mat khau gia: khong xuat hien trong DOM Review, tooltip hay copy; precheck va deploy:start van nhan dung IPC', async () => {
+    const fakePassword = 'SuperSecretFakePassword123!'
+    const fakeDbUrl = `postgres://app_user:${fakePassword}@internal-db.example.com:5432/app_prod?sslmode=require`
+    const fakeRedisUrl = `redis://:${fakePassword}@redis.internal:6379/1`
+    const fakeMongoUri = `mongodb://admin:${fakePassword}@mongo.internal:27017/analytics`
+    const fakeDsn = `https://key:${fakePassword}@sentry.internal/42`
+    const fakeConnStr = `Server=tcp:sql.internal,1433;Database=orders;User Id=app;Password=${fakePassword};`
+
+    const detectionWithUrls: DetectionResultDto = {
+      ...MATCHED,
+      required_env: [
+        'PORT',
+        'DATABASE_URL',
+        'REDIS_URL',
+        'MONGODB_URI',
+        'SENTRY_DSN',
+        'DB_CONNECTION_STRING'
+      ]
+    }
+
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'deploy:detect': async () => ({ ok: true, data: detectionWithUrls })
+    })
+
+    render(<DeployPage />)
+
+    // Step 0: Chọn thư mục -> detect
+    fireEvent.click(await screen.findByText('Choose folder'))
+    await waitFor(() => expect(screen.getByDisplayValue(SOURCE_PATH)).toBeTruthy())
+    fireEvent.click(screen.getByText('Next'))
+
+    // Step 1: Detect
+    await screen.findByText('Express.js')
+    fireEvent.click(screen.getByText('Next'))
+
+    // Step 2: Cấu hình — kiểm tra các ô nhập nhạy cảm đều có type="password"
+    await screen.findByLabelText('PORT')
+    const portInput = screen.getByLabelText('PORT') as HTMLInputElement
+    expect(portInput.type).toBe('text')
+
+    const dbInput = screen.getByLabelText('DATABASE_URL') as HTMLInputElement
+    expect(dbInput.type).toBe('password')
+
+    const redisInput = screen.getByLabelText('REDIS_URL') as HTMLInputElement
+    expect(redisInput.type).toBe('password')
+
+    const mongoInput = screen.getByLabelText('MONGODB_URI') as HTMLInputElement
+    expect(mongoInput.type).toBe('password')
+
+    const dsnInput = screen.getByLabelText('SENTRY_DSN') as HTMLInputElement
+    expect(dsnInput.type).toBe('password')
+
+    const connStrInput = screen.getByLabelText('DB_CONNECTION_STRING') as HTMLInputElement
+    expect(connStrInput.type).toBe('password')
+
+    // Nhập giá trị nhạy cảm chứa mật khẩu giả
+    fireEvent.change(portInput, { target: { value: '8080' } })
+    fireEvent.change(dbInput, { target: { value: fakeDbUrl } })
+    fireEvent.change(redisInput, { target: { value: fakeRedisUrl } })
+    fireEvent.change(mongoInput, { target: { value: fakeMongoUri } })
+    fireEvent.change(dsnInput, { target: { value: fakeDsn } })
+    fireEvent.change(connStrInput, { target: { value: fakeConnStr } })
+
+    // Bấm Next sang Step 3 Review & Precheck
+    fireEvent.click(screen.getByText('Next'))
+    await screen.findByText('RAM trống')
+
+    // 1. DOM Review: mật khẩu giả và full URLs KHÔNG xuất hiện trong DOM
+    const bodyText = document.body.textContent ?? ''
+    expect(bodyText).not.toContain(fakePassword)
+    expect(bodyText).not.toContain('postgres://app_user')
+    expect(bodyText).not.toContain('redis://')
+    expect(bodyText).not.toContain('mongodb://')
+    expect(bodyText).not.toContain('sentry.internal')
+    expect(bodyText).not.toContain('sql.internal')
+    expect(bodyText).not.toContain('8080')
+
+    // Kiểm tra không xuất hiện trong bất kỳ attribute nào (title, tooltip, aria, etc.)
+    const allElements = Array.from(document.body.querySelectorAll('*'))
+    for (const el of allElements) {
+      for (const attr of Array.from(el.attributes)) {
+        expect(attr.value).not.toContain(fakePassword)
+        expect(attr.value).not.toContain('postgres://app_user')
+        expect(attr.value).not.toContain('redis://')
+        expect(attr.value).not.toContain('mongodb://')
+        expect(attr.value).not.toContain('sentry.internal')
+        expect(attr.value).not.toContain('sql.internal')
+      }
+    }
+
+    // Tên biến và trạng thái đã cấu hình hiển thị đầy đủ
+    expect(screen.getByText('PORT')).toBeTruthy()
+    expect(screen.getByText('DATABASE_URL')).toBeTruthy()
+    expect(screen.getByText('REDIS_URL')).toBeTruthy()
+    expect(screen.getByText('MONGODB_URI')).toBeTruthy()
+    expect(screen.getByText('SENTRY_DSN')).toBeTruthy()
+    expect(screen.getByText('DB_CONNECTION_STRING')).toBeTruthy()
+    expect(screen.getAllByText(`(${strings.deploy.review.envConfigured})`).length).toBe(6)
+
+    // 2. deploy:precheck nhận đầy đủ và đúng giá trị qua IPC
+    expect(invoke).toHaveBeenCalledWith('deploy:precheck', {
+      vps_id: 1,
+      app_id: undefined,
+      app_name: 'express-api',
+      source_path: SOURCE_PATH,
+      env: {
+        PORT: '8080',
+        DATABASE_URL: fakeDbUrl,
+        REDIS_URL: fakeRedisUrl,
+        MONGODB_URI: fakeMongoUri,
+        SENTRY_DSN: fakeDsn,
+        DB_CONNECTION_STRING: fakeConnStr
+      }
+    })
+
+    // 3. deploy:start nhận đúng giá trị qua IPC khi bấm Triển khai
+    const deployBtn = screen.getByRole('button', {
+      name: new RegExp(strings.deploy.review.deploy, 'i')
+    })
+    fireEvent.click(deployBtn)
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('deploy:start', {
+        vps_id: 1,
+        app_id: undefined,
+        app_name: 'express-api',
+        source_path: SOURCE_PATH,
+        host_port: 30000,
+        env: {
+          PORT: '8080',
+          DATABASE_URL: fakeDbUrl,
+          REDIS_URL: fakeRedisUrl,
+          MONGODB_URI: fakeMongoUri,
+          SENTRY_DSN: fakeDsn,
+          DB_CONNECTION_STRING: fakeConnStr
+        }
+      })
+    )
+  })
+
+  it('isSecretKey nhan dien dung cac khoa nhay cam gom DATABASE_URL, REDIS_URL, URI, DSN, CONNECTION_STRING', () => {
+    // Các khóa nhạy cảm phải trả về true
+    expect(isSecretKey('DATABASE_URL')).toBe(true)
+    expect(isSecretKey('database_url')).toBe(true)
+    expect(isSecretKey('REDIS_URL')).toBe(true)
+    expect(isSecretKey('DB_URL')).toBe(true)
+    expect(isSecretKey('POSTGRES_URL')).toBe(true)
+    expect(isSecretKey('MYSQL_URL')).toBe(true)
+    expect(isSecretKey('MONGO_URL')).toBe(true)
+    expect(isSecretKey('MONGODB_URI')).toBe(true)
+    expect(isSecretKey('DATABASE_URI')).toBe(true)
+    expect(isSecretKey('URI')).toBe(true)
+    expect(isSecretKey('SENTRY_DSN')).toBe(true)
+    expect(isSecretKey('DSN')).toBe(true)
+    expect(isSecretKey('AZURE_STORAGE_CONNECTION_STRING')).toBe(true)
+    expect(isSecretKey('DB_CONNECTION_STRING')).toBe(true)
+    expect(isSecretKey('CONNECTION_STRING')).toBe(true)
+    expect(isSecretKey('SECRET_KEY')).toBe(true)
+    expect(isSecretKey('API_KEY')).toBe(true)
+    expect(isSecretKey('PASSWORD')).toBe(true)
+    expect(isSecretKey('AUTH_TOKEN')).toBe(true)
+
+    // Các biến không nhạy cảm
+    expect(isSecretKey('PORT')).toBe(false)
+    expect(isSecretKey('NODE_ENV')).toBe(false)
+    expect(isSecretKey('APP_URL')).toBe(false)
+    expect(isSecretKey('HOST')).toBe(false)
+  })
+
+  it('getConfigSignature bieu dien khong nhap nhang, khong trung chu ky khi gia tri chua ; hoac =', () => {
+    const base: DeployInput = {
+      vps_id: 1,
+      app_name: 'test-app',
+      source_path: 'D:\\src',
+      env: {}
+    }
+
+    // Tình huống 1: Một biến chứa chuỗi giả lập phân tách "KEY2=bar"
+    const sig1 = getConfigSignature({
+      ...base,
+      env: { KEY1: 'val;KEY2=bar' }
+    })
+    const sig2 = getConfigSignature({
+      ...base,
+      env: { KEY1: 'val', KEY2: 'bar' }
+    })
+    expect(sig1).not.toBe(sig2)
+
+    // Tình huống 2: Key hoặc giá trị chứa dấu =
+    const sig3 = getConfigSignature({
+      ...base,
+      env: { 'A=B': 'C' }
+    })
+    const sig4 = getConfigSignature({
+      ...base,
+      env: { A: 'B=C' }
+    })
+    expect(sig3).not.toBe(sig4)
+
+    // Tình huống 3: Giá trị chứa dấu ; và nhiều dấu =
+    const sig5 = getConfigSignature({
+      ...base,
+      env: { DATABASE_URL: 'postgres://user:p;w=d@host:5432/db?ssl=true;timeout=10' }
+    })
+    const sig6 = getConfigSignature({
+      ...base,
+      env: { DATABASE_URL: 'postgres://user:p;w=d@host:5432/db?ssl=true;timeout=20' }
+    })
+    expect(sig5).not.toBe(sig6)
   })
 
   it('thong bao thieu bien bat buoc ban dia hoa cho 4 ngon ngu', async () => {
