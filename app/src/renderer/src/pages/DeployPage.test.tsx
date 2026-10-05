@@ -519,6 +519,9 @@ describe('DeployPage — wizard va log', () => {
     ).toBeTruthy()
     expect(screen.getByText('Chọn thư mục')).toBeTruthy()
     expect(screen.getByText('Thư mục mã nguồn')).toBeTruthy()
+    expect(
+      screen.getByText('Chữ thường a-z, chữ số và dấu gạch ngang — phải bắt đầu bằng chữ cái.')
+    ).toBeTruthy()
 
     // 2. English
     act(() => {
@@ -530,6 +533,9 @@ describe('DeployPage — wizard va log', () => {
     ).toBeTruthy()
     expect(screen.getByText('Choose folder')).toBeTruthy()
     expect(screen.getByText('Source folder')).toBeTruthy()
+    expect(
+      screen.getByText('Lowercase a-z, digits and dashes — must start with a letter.')
+    ).toBeTruthy()
 
     // 3. 简体中文
     act(() => {
@@ -539,6 +545,7 @@ describe('DeployPage — wizard va log', () => {
     expect(await screen.findByRole('heading', { level: 1, name: '部署应用程序' })).toBeTruthy()
     expect(screen.getByText('选择文件夹')).toBeTruthy()
     expect(screen.getByText('源码文件夹')).toBeTruthy()
+    expect(screen.getByText('仅限小写字母 a-z、数字和连字符，且必须以字母开头。')).toBeTruthy()
 
     // 4. 日本語
     act(() => {
@@ -550,6 +557,9 @@ describe('DeployPage — wizard va log', () => {
     ).toBeTruthy()
     expect(screen.getByText('フォルダを選択')).toBeTruthy()
     expect(screen.getByText('ソースフォルダ')).toBeTruthy()
+    expect(
+      screen.getByText('英小文字 a-z、数字、ハイフン（先頭は英文字である必要があります）。')
+    ).toBeTruthy()
   })
 
   it('preselect voi app ton tai: giu nguyen VPS va app sau khi load, dien dung appName, truyen dung app_id len precheck', async () => {
@@ -761,5 +771,189 @@ describe('DeployPage — wizard va log', () => {
 
     expect(await screen.findByText(strings.deploy.noVps)).toBeTruthy()
     expect(screen.queryByText(strings.deploy.vpsLoadError)).toBeNull()
+  })
+
+  it('doi VPS khi app:list dang cho: vo hieu hoa Tiep tuc va bo app_id cu ngay', async () => {
+    let resolveVps2Apps: (val: unknown) => void = () => {}
+    const vps2AppsPromise = new Promise((res) => {
+      resolveVps2Apps = res
+    })
+
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'vps:list': async () => ({ ok: true, data: [VPS_A, VPS_B] }),
+      'app:list': async (id) => {
+        if (id === 1) return { ok: true, data: [APP_1] }
+        await vps2AppsPromise
+        return { ok: true, data: [APP_2] }
+      }
+    })
+
+    render(<DeployPage />)
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 1))
+
+    // Chọn thư mục nguồn
+    fireEvent.click(await screen.findByText('Choose folder'))
+    await waitFor(() => expect(screen.getByDisplayValue(SOURCE_PATH)).toBeTruthy())
+
+    // Chuyển sang Ứng dụng hiện có và chọn APP_1
+    fireEvent.click(screen.getByRole('radio', { name: strings.deploy.targetApp.existing }))
+    const appSelect = await screen.findByRole('combobox', {
+      name: strings.deploy.targetApp.selectApp
+    })
+    fireEvent.change(appSelect, { target: { value: '10' } })
+
+    // Lúc này nút Tiếp tục đã enabled
+    const nextBtn = screen.getByRole('button', { name: strings.deploy.next }) as HTMLButtonElement
+    expect(nextBtn.disabled).toBe(false)
+
+    // Đổi sang VPS 2 (app:list đang chờ)
+    const vpsSelect = screen.getAllByRole('combobox')[0]
+    fireEvent.change(vpsSelect, { target: { value: '2' } })
+
+    // Ngay trong lúc app:list đang chờ:
+    // 1. Nút Tiếp tục bị vô hiệu hoá
+    expect(nextBtn.disabled).toBe(true)
+    // 2. Hiển thị trạng thái đang tải app
+    expect(screen.getByText(strings.deploy.appLoading)).toBeTruthy()
+
+    // Cho app:list VPS 2 resolve
+    act(() => {
+      resolveVps2Apps(undefined)
+    })
+    await waitFor(() => expect(screen.queryByText(strings.deploy.appLoading)).toBeNull())
+
+    // Sau khi tải xong, app đầu tiên KHÔNG tự chọn: giá trị appSelect vẫn là -1
+    const updatedAppSelect = screen.getByRole('combobox', {
+      name: strings.deploy.targetApp.selectApp
+    }) as HTMLSelectElement
+    expect(updatedAppSelect.value).toBe('-1')
+    expect(nextBtn.disabled).toBe(true)
+  })
+
+  it('chon app sau khi tai o che do ung dung hien co va chay precheck voi dung cap VPS/app', async () => {
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'vps:list': async () => ({ ok: true, data: [VPS_A, VPS_B] }),
+      'app:list': async (id) => {
+        if (id === 1) return { ok: true, data: [APP_1] }
+        return { ok: true, data: [APP_2] }
+      }
+    })
+
+    render(<DeployPage />)
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 1))
+
+    // Chọn thư mục nguồn
+    fireEvent.click(await screen.findByText('Choose folder'))
+    await waitFor(() => expect(screen.getByDisplayValue(SOURCE_PATH)).toBeTruthy())
+
+    // Đổi sang VPS 2
+    const vpsSelect = screen.getAllByRole('combobox')[0]
+    fireEvent.change(vpsSelect, { target: { value: '2' } })
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 2))
+
+    // Chọn radio Ứng dụng hiện có
+    fireEvent.click(screen.getByRole('radio', { name: strings.deploy.targetApp.existing }))
+
+    // Tiếp tục vẫn disabled vì chưa chọn app
+    const nextBtn = screen.getByRole('button', { name: strings.deploy.next }) as HTMLButtonElement
+    expect(nextBtn.disabled).toBe(true)
+
+    // Chọn APP_2 từ combobox
+    const appSelect = screen.getByRole('combobox', {
+      name: strings.deploy.targetApp.selectApp
+    })
+    fireEvent.change(appSelect, { target: { value: '20' } })
+
+    // Giờ Tiếp tục đã enabled
+    expect(nextBtn.disabled).toBe(false)
+    fireEvent.click(nextBtn)
+
+    // Đi qua Step 1 (Detect)
+    await screen.findByText('Express.js')
+    fireEvent.click(screen.getByText('Next'))
+
+    // Step 2 (Config)
+    await screen.findByLabelText('PORT')
+    fireEvent.change(screen.getByLabelText('PORT'), { target: { value: '3000' } })
+    fireEvent.change(screen.getByLabelText('SECRET_KEY'), { target: { value: 'sekret' } })
+    fireEvent.click(screen.getByText('Next'))
+
+    // Step 3 (Review & Precheck)
+    await screen.findByText('RAM trống')
+    expect(invoke).toHaveBeenCalledWith('deploy:precheck', {
+      vps_id: 2,
+      app_id: 20,
+      app_name: 'app-on-vps-2',
+      source_path: SOURCE_PATH,
+      env: { PORT: '3000', SECRET_KEY: 'sekret' }
+    })
+  })
+
+  it('retry vps:list giu nguyen preselect cho den khi ap dung thanh cong', async () => {
+    useUiState.setState({ deployPreselect: { vpsId: 2, appId: 20 } })
+    let callCount = 0
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'vps:list': async () => {
+        callCount++
+        if (callCount === 1) {
+          return { ok: false, error: { message: 'Network timeout' } }
+        }
+        return { ok: true, data: [VPS_A, VPS_B] }
+      },
+      'app:list': async (id) => (id === 2 ? { ok: true, data: [APP_2] } : { ok: true, data: [] })
+    })
+
+    render(<DeployPage />)
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('vps:list'))
+
+    // Lần 1 lỗi: hiển thị alert kèm nút Thử lại
+    expect(await screen.findByText(strings.deploy.vpsLoadError)).toBeTruthy()
+    expect(screen.getByText('Network timeout')).toBeTruthy()
+
+    // Bấm nút Thử lại
+    const retryBtn = screen.getByRole('button', { name: strings.common.retry })
+    fireEvent.click(retryBtn)
+
+    // Lần 2 thành công: preselect vẫn giữ nguyên VPS 2 và APP 2!
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 2))
+    expect(await screen.findByRole('option', { name: 'VM02 — 203.0.113.56:22' })).toBeTruthy()
+    expect(screen.getByRole('option', { name: /app-on-vps-2 — port 30001/ })).toBeTruthy()
+
+    // Sau khi áp dụng thành công, preselect trong store đã được xóa
+    expect(useUiState.getState().deployPreselect).toBeNull()
+  })
+
+  it('hien thi trang thai dang tai ban dau thay cho thong bao chua co VPS thoang qua', async () => {
+    let resolveVpsList: (val: unknown) => void = () => {}
+    const vpsListPromise = new Promise((res) => {
+      resolveVpsList = res
+    })
+
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'vps:list': async () => {
+        await vpsListPromise
+        return { ok: true, data: [] }
+      }
+    })
+
+    render(<DeployPage />)
+    expect(invoke).toHaveBeenCalledWith('vps:list')
+
+    // Trong lúc đang tải: hiển thị spinner loading, KHÔNG hiển thị thông báo chưa có VPS
+    expect(screen.getByText(strings.deploy.vpsLoading)).toBeTruthy()
+    expect(screen.queryByText(strings.deploy.noVps)).toBeNull()
+
+    // Cho vps:list hoàn thành với danh sách rỗng
+    act(() => {
+      resolveVpsList(undefined)
+    })
+
+    // Bây giờ mới hiển thị thông báo chưa có VPS
+    expect(await screen.findByText(strings.deploy.noVps)).toBeTruthy()
+    expect(screen.queryByText(strings.deploy.vpsLoading)).toBeNull()
   })
 })

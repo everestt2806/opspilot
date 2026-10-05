@@ -76,7 +76,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   const deployPreselect = useUiState((state) => state.deployPreselect)
   const clearDeployPreselect = useUiState((state) => state.clearDeployPreselect)
   const [vpsList, setVpsList] = useState<Vps[]>([])
-  const [vpsLoading, setVpsLoading] = useState(false)
+  const [vpsLoading, setVpsLoading] = useState(true)
   const [vpsLoadError, setVpsLoadError] = useState<string | null>(null)
   const [preselectVpsError, setPreselectVpsError] = useState<string | null>(null)
 
@@ -110,6 +110,17 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   const runRef = useRef<RunView | null>(null)
   const appListReqIdRef = useRef(0)
   const initialLoadedRef = useRef(false)
+  const activePreselectRef = useRef<DeployPreselect | null>(deployPreselect)
+  const targetModeRef = useRef(targetMode)
+
+  useEffect(() => {
+    targetModeRef.current = targetMode
+  }, [targetMode])
+
+  const clearPreselectSession = useCallback((): void => {
+    activePreselectRef.current = null
+    clearDeployPreselect()
+  }, [clearDeployPreselect])
 
   const selectVps = useCallback(
     async (id: number, preselectedAppId?: number, isPreselect = false): Promise<void> => {
@@ -122,98 +133,104 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
       setPrecheckError(null)
       setStartError(null)
 
+      // Bỏ app_id cũ ngay lập tức khi đổi VPS
+      setAppSelect(-1)
+      if (targetModeRef.current === 'existing') {
+        setAppName('')
+      }
+
       const result = await window.api.invoke('app:list', id)
       if (appListReqIdRef.current !== reqId) return
       setAppsLoading(false)
 
       if (!result.ok) {
         setAppLoadError(result.error.message)
+        setApps([])
         return
       }
 
       const fetchedApps = result.data
       setApps(fetchedApps)
 
-      if (preselectedAppId !== undefined) {
+      if (preselectedAppId !== undefined && isPreselect) {
         const found = fetchedApps.find((app) => app.id === preselectedAppId)
         if (found) {
           setAppSelect(found.id)
           setAppName(found.name)
           setTargetMode('existing')
+          activePreselectRef.current = null
+          clearDeployPreselect()
         } else {
           setAppSelect(preselectedAppId)
           setTargetMode('existing')
           setPreselectAppError(strings.deploy.preselectAppNotFound)
         }
-      } else if (!isPreselect) {
-        setTargetMode((prevMode) => {
-          if (prevMode === 'existing') {
-            if (fetchedApps.length > 0) {
-              setAppSelect(fetchedApps[0].id)
-              setAppName(fetchedApps[0].name)
-              return 'existing'
-            }
-            setAppSelect(-1)
-            return 'new'
-          }
-          return prevMode
-        })
-      }
-    },
-    [strings]
-  )
-
-  const loadVpsList = useCallback(
-    async (preselectToUse?: DeployPreselect | null): Promise<void> => {
-      setVpsLoading(true)
-      setVpsLoadError(null)
-      setPreselectVpsError(null)
-
-      const result = await window.api.invoke('vps:list')
-      setVpsLoading(false)
-
-      if (!result.ok) {
-        setVpsLoadError(result.error.message)
-        return
-      }
-
-      const fetchedVps = result.data
-      setVpsList(fetchedVps)
-
-      if (preselectToUse?.vpsId) {
-        const vpsMatch = fetchedVps.find((v) => v.id === preselectToUse.vpsId)
-        if (vpsMatch) {
-          await selectVps(preselectToUse.vpsId, preselectToUse.appId, true)
-        } else {
-          setVpsId(preselectToUse.vpsId)
-          if (preselectToUse.appId !== undefined) {
-            setAppSelect(preselectToUse.appId)
-            setTargetMode('existing')
-          }
-          setPreselectVpsError(strings.deploy.preselectVpsNotFound)
+      } else if (isPreselect) {
+        activePreselectRef.current = null
+        clearDeployPreselect()
+      } else {
+        // Khi đổi VPS không phải preselect:
+        // Yêu cầu chọn rõ ứng dụng trên VPS mới, không tự chọn app đầu tiên
+        setAppSelect(-1)
+        if (targetModeRef.current === 'existing') {
+          setAppName('')
+        } else if (sourcePath) {
+          setAppName(toAppName(sourcePath))
         }
-      } else if (fetchedVps.length > 0) {
-        await selectVps(fetchedVps[0].id)
       }
     },
-    [selectVps, strings]
+    [clearDeployPreselect, sourcePath, strings]
   )
+
+  const loadVpsList = useCallback(async (): Promise<void> => {
+    setVpsLoading(true)
+    setVpsLoadError(null)
+    setPreselectVpsError(null)
+
+    const result = await window.api.invoke('vps:list')
+    setVpsLoading(false)
+
+    if (!result.ok) {
+      setVpsLoadError(result.error.message)
+      // Giữ nguyên activePreselectRef.current qua lỗi và nút Thử lại!
+      return
+    }
+
+    const fetchedVps = result.data
+    setVpsList(fetchedVps)
+
+    const pre = activePreselectRef.current
+    if (pre?.vpsId) {
+      const vpsMatch = fetchedVps.find((v) => v.id === pre.vpsId)
+      if (vpsMatch) {
+        await selectVps(pre.vpsId, pre.appId, true)
+      } else {
+        setVpsId(pre.vpsId)
+        if (pre.appId !== undefined) {
+          setAppSelect(pre.appId)
+          setTargetMode('existing')
+        }
+        setPreselectVpsError(strings.deploy.preselectVpsNotFound)
+      }
+    } else if (fetchedVps.length > 0) {
+      await selectVps(fetchedVps[0].id)
+    }
+  }, [selectVps, strings])
 
   useEffect(() => {
     runRef.current = run
   }, [run])
 
   useEffect(() => {
+    if (deployPreselect) {
+      activePreselectRef.current = deployPreselect
+    }
     if (!deployPreselect && initialLoadedRef.current) {
       return
     }
     initialLoadedRef.current = true
-    const currentPre = deployPreselect
-    if (currentPre) {
-      clearDeployPreselect()
-    }
-    void loadVpsList(currentPre)
-  }, [deployPreselect, clearDeployPreselect, loadVpsList])
+    void loadVpsList()
+  }, [deployPreselect, loadVpsList])
 
   useEffect(() => {
     return window.api.on('deploy:event', (event) => {
@@ -251,7 +268,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     const result = await window.api.invoke('system:pick-folder')
     if (!result.ok || !result.data.path) return
     setSourcePath(result.data.path)
-    if (targetMode === 'new' || appSelect === -1) {
+    if (targetMode === 'new') {
       setAppName(toAppName(result.data.path))
     }
     setDetection(null)
@@ -263,7 +280,12 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   }
 
   async function continueFromSource(): Promise<void> {
-    if (!vpsId || !sourcePath || detecting) return
+    if (vpsLoading || appsLoading || !vpsId || !sourcePath || detecting) return
+    if (targetMode === 'existing') {
+      if (appSelect === -1 || !apps.some((app) => app.id === appSelect)) return
+    } else if (targetMode === 'new') {
+      if (!appName.trim() || !APP_NAME_RE.test(appName)) return
+    }
     if (!detection) {
       const ok = await runDetect(sourcePath)
       if (!ok) return
@@ -302,17 +324,24 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   }
 
   function buildInput(): DeployInput {
+    const validApp =
+      targetMode === 'existing' && appSelect > 0 ? apps.find((app) => app.id === appSelect) : null
+
     return {
       vps_id: vpsId as number,
-      app_id: appSelect === -1 ? undefined : appSelect,
-      app_name: appName,
+      app_id: validApp ? validApp.id : undefined,
+      app_name: validApp ? validApp.name : appName.trim(),
       source_path: sourcePath as string,
       env: Object.fromEntries(Object.entries(envValues).filter(([, value]) => value.trim() !== ''))
     }
   }
 
   async function runPrecheck(): Promise<void> {
-    if (!vpsId || !sourcePath) return
+    if (!vpsId || !sourcePath || vpsLoading || appsLoading) return
+    if (targetMode === 'existing') {
+      const validApp = apps.find((app) => app.id === appSelect)
+      if (!validApp) return
+    }
     setPrechecking(true)
     setPrecheckError(null)
     const result = await window.api.invoke('deploy:precheck', buildInput())
@@ -408,7 +437,13 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
       <select
         className="deploy-vps-select"
         value={vpsId ?? ''}
-        onChange={(event) => void selectVps(Number(event.currentTarget.value))}
+        onChange={(event) => {
+          const nextVpsId = Number(event.currentTarget.value)
+          clearPreselectSession()
+          setPreselectVpsError(null)
+          setPreselectAppError(null)
+          void selectVps(nextVpsId)
+        }}
       >
         {vpsList.map((vps) => (
           <option key={vps.id} value={vps.id}>
@@ -425,7 +460,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
           description={vpsId ? `VPS ID: ${vpsId}` : undefined}
           action={
             <Space>
-              <Button size="small" onClick={() => void loadVpsList(null)}>
+              <Button size="small" onClick={() => void loadVpsList()}>
                 {strings.common.retry}
               </Button>
               {vpsList.length > 0 && (
@@ -433,6 +468,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                   size="small"
                   type="primary"
                   onClick={() => {
+                    clearPreselectSession()
                     setPreselectVpsError(null)
                     void selectVps(vpsList[0].id)
                   }}
@@ -461,14 +497,30 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
         }
       />
 
-      {vpsLoadError ? (
+      {vpsLoading && vpsList.length === 0 ? (
+        <div
+          className="deploy-initial-loading"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '64px 0'
+          }}
+        >
+          <Spin size="large" />
+          <Typography.Text type="secondary" style={{ marginTop: 16 }}>
+            {strings.deploy.vpsLoading}
+          </Typography.Text>
+        </div>
+      ) : vpsLoadError ? (
         <Alert
           type="error"
           showIcon
           message={strings.deploy.vpsLoadError}
           description={vpsLoadError}
           action={
-            <Button size="small" onClick={() => void loadVpsList(null)}>
+            <Button size="small" onClick={() => void loadVpsList()}>
               {strings.common.retry}
             </Button>
           }
@@ -491,6 +543,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                       value={targetMode}
                       onChange={(e) => {
                         const newMode = e.target.value as 'new' | 'existing'
+                        clearPreselectSession()
                         setTargetMode(newMode)
                         setPreselectAppError(null)
                         if (newMode === 'new') {
@@ -499,13 +552,8 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                             setAppName(toAppName(sourcePath))
                           }
                         } else {
-                          if (apps.length > 0) {
-                            const chosen = apps.find((a) => a.id === appSelect) || apps[0]
-                            setAppSelect(chosen.id)
-                            setAppName(chosen.name)
-                          } else {
-                            setAppSelect(-1)
-                          }
+                          setAppSelect(-1)
+                          setAppName('')
                         }
                       }}
                     >
@@ -537,7 +585,11 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                               size="small"
                               onClick={() => {
                                 if (vpsId)
-                                  void selectVps(vpsId, appSelect === -1 ? undefined : appSelect)
+                                  void selectVps(
+                                    vpsId,
+                                    appSelect === -1 ? undefined : appSelect,
+                                    Boolean(activePreselectRef.current)
+                                  )
                               }}
                             >
                               {strings.common.retry}
@@ -565,6 +617,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                                 size="small"
                                 type="primary"
                                 onClick={() => {
+                                  clearPreselectSession()
                                   setPreselectAppError(null)
                                   setTargetMode('new')
                                   setAppSelect(-1)
@@ -587,11 +640,20 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                           value={appSelect}
                           onChange={(e) => {
                             const selectedId = Number(e.currentTarget.value)
-                            setAppSelect(selectedId)
-                            const target = apps.find((app) => app.id === selectedId)
-                            if (target) setAppName(target.name)
+                            if (selectedId > 0) {
+                              clearPreselectSession()
+                              setAppSelect(selectedId)
+                              const target = apps.find((app) => app.id === selectedId)
+                              if (target) setAppName(target.name)
+                            } else {
+                              setAppSelect(-1)
+                              setAppName('')
+                            }
                           }}
                         >
+                          <option value="-1" disabled>
+                            {strings.deploy.targetApp.selectAppPlaceholder}
+                          </option>
                           {apps.map((app) => (
                             <option key={app.id} value={app.id}>
                               {app.name} — port {app.host_port}
@@ -617,7 +679,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                         onChange={(e) => setAppName(e.target.value)}
                       />
                       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        {strings.deploy.config.appNameRule}
+                        {strings.deploy.targetApp.appNameRule}
                       </Typography.Text>
                     </div>
                   )}
@@ -745,6 +807,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                     style={{ width: '100%', marginTop: 8 }}
                     value={appSelect}
                     onChange={(value) => {
+                      clearPreselectSession()
                       setAppSelect(value)
                       if (value === -1) {
                         setTargetMode('new')
@@ -927,13 +990,18 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
               <Button
                 type="primary"
                 disabled={
+                  vpsLoading ||
+                  appsLoading ||
                   !vpsId ||
                   !sourcePath ||
                   detecting ||
                   Boolean(vpsLoadError) ||
                   Boolean(preselectVpsError) ||
                   Boolean(preselectAppError) ||
-                  (targetMode === 'existing' && (appSelect === -1 || Boolean(appLoadError))) ||
+                  (targetMode === 'existing' &&
+                    (appSelect === -1 ||
+                      Boolean(appLoadError) ||
+                      !apps.some((a) => a.id === appSelect))) ||
                   (targetMode === 'new' && (!appName.trim() || !APP_NAME_RE.test(appName)))
                 }
                 onClick={() => void continueFromSource()}
