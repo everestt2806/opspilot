@@ -63,7 +63,8 @@ export function DashboardPage({
   const [vpsList, setVpsList] = useState<Vps[]>([])
   const [apps, setApps] = useState<App[]>([])
   const [recent, setRecent] = useState<ActionLogEntry[]>([])
-  const [deploy24h, setDeploy24h] = useState(0)
+  const [deploy24h, setDeploy24h] = useState<string>('0')
+  const [lastDeploy, setLastDeploy] = useState<ActionLogEntry | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<IpcError | null>(null)
 
@@ -106,11 +107,23 @@ export function DashboardPage({
         setError(dayResult.error)
         return
       }
+      const lastDeployResult = await window.api.invoke('history:list', {
+        actions: ['deploy'],
+        limit: 1,
+        offset: 0
+      })
+      if (!lastDeployResult.ok) {
+        setError(lastDeployResult.error)
+        return
+      }
       setError(null)
-      setVpsList(vpsResult.data)
-      setApps(appResult.data)
-      setRecent(recentResult.data)
-      setDeploy24h(dayResult.data.length)
+      setVpsList(Array.isArray(vpsResult.data) ? vpsResult.data : [])
+      setApps(Array.isArray(appResult.data) ? appResult.data : [])
+      setRecent(Array.isArray(recentResult.data) ? recentResult.data : [])
+      const dayList = Array.isArray(dayResult.data) ? dayResult.data : []
+      setDeploy24h(dayList.length >= 200 ? '≥200' : String(dayList.length))
+      const lastDeployList = Array.isArray(lastDeployResult.data) ? lastDeployResult.data : []
+      setLastDeploy(lastDeployList[0] ?? null)
     } finally {
       setLoading(false)
     }
@@ -161,7 +174,6 @@ export function DashboardPage({
     isVpsCheckedNow(vps, resources[vps.id], now)
   ).length
   const recordedApps = apps.filter((app) => app.current_deployment_id !== null).length
-  const lastDeploy = recent.find((row) => row.action === 'deploy')
 
   function handleAppClick(app: App): void {
     setSelectedAppId(app.id)

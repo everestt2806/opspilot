@@ -535,7 +535,14 @@ const BASE_EN_STRINGS = {
     },
     empty: 'No activity matches this filter.',
     loadFailed: 'Could not load the history.',
-    retry: 'Retry'
+    retry: 'Retry',
+    pagination: {
+      prev: 'Previous page',
+      next: 'Next page',
+      page: (page: number) => `Page ${page}`,
+      pageTotal: (from: number, to: number, total: number) => `${from}–${to} of ${total}`,
+      pageMore: (from: number, to: number) => `${from}–${to} (more records available)`
+    }
   },
   vpsControl: {
     tabs: {
@@ -1015,7 +1022,14 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     empty: 'Không có hoạt động nào khớp với bộ lọc.',
     loadFailed: 'Không thể tải lịch sử hoạt động.',
-    retry: 'Thử lại'
+    retry: 'Thử lại',
+    pagination: {
+      prev: 'Trang trước',
+      next: 'Trang kế',
+      page: (page: number) => `Trang ${page}`,
+      pageTotal: (from: number, to: number, total: number) => `${from}–${to} trong ${total}`,
+      pageMore: (from: number, to: number) => `${from}–${to} (còn bản ghi)`
+    }
   },
   deploy: {
     ...BASE_EN_STRINGS.deploy,
@@ -1487,7 +1501,14 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     empty: '没有符合该筛选条件的活动。',
     loadFailed: '无法加载历史记录。',
-    retry: '重试'
+    retry: '重试',
+    pagination: {
+      prev: '上一页',
+      next: '下一页',
+      page: (page: number) => `第 ${page} 页`,
+      pageTotal: (from: number, to: number, total: number) => `${from}–${to} / 共 ${total}`,
+      pageMore: (from: number, to: number) => `${from}–${to} (还有更多)`
+    }
   },
   deploy: {
     ...BASE_EN_STRINGS.deploy,
@@ -1950,7 +1971,14 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     empty: '条件に一致するアクティビティはありません。',
     loadFailed: '履歴を読み込めませんでした。',
-    retry: '再試行'
+    retry: '再試行',
+    pagination: {
+      prev: '前のページ',
+      next: '次のページ',
+      page: (page: number) => `${page} ページ`,
+      pageTotal: (from: number, to: number, total: number) => `${from}–${to} / 全 ${total}`,
+      pageMore: (from: number, to: number) => `${from}–${to} (続きあり)`
+    }
   },
   deploy: {
     ...BASE_EN_STRINGS.deploy,
@@ -2236,7 +2264,8 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
       columns: { ...BASE_EN_STRINGS.history.columns, ...VI_OVERRIDES.history?.columns },
       actions: { ...BASE_EN_STRINGS.history.actions, ...VI_OVERRIDES.history?.actions },
       statuses: { ...BASE_EN_STRINGS.history.statuses, ...VI_OVERRIDES.history?.statuses },
-      detail: { ...BASE_EN_STRINGS.history.detail, ...VI_OVERRIDES.history?.detail }
+      detail: { ...BASE_EN_STRINGS.history.detail, ...VI_OVERRIDES.history?.detail },
+      pagination: { ...BASE_EN_STRINGS.history.pagination, ...VI_OVERRIDES.history?.pagination }
     },
     settings: {
       ...BASE_EN_STRINGS.settings,
@@ -2320,7 +2349,8 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
       columns: { ...BASE_EN_STRINGS.history.columns, ...CN_OVERRIDES.history?.columns },
       actions: { ...BASE_EN_STRINGS.history.actions, ...CN_OVERRIDES.history?.actions },
       statuses: { ...BASE_EN_STRINGS.history.statuses, ...CN_OVERRIDES.history?.statuses },
-      detail: { ...BASE_EN_STRINGS.history.detail, ...CN_OVERRIDES.history?.detail }
+      detail: { ...BASE_EN_STRINGS.history.detail, ...CN_OVERRIDES.history?.detail },
+      pagination: { ...BASE_EN_STRINGS.history.pagination, ...CN_OVERRIDES.history?.pagination }
     },
     settings: {
       ...BASE_EN_STRINGS.settings,
@@ -2404,7 +2434,8 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
       columns: { ...BASE_EN_STRINGS.history.columns, ...JP_OVERRIDES.history?.columns },
       actions: { ...BASE_EN_STRINGS.history.actions, ...JP_OVERRIDES.history?.actions },
       statuses: { ...BASE_EN_STRINGS.history.statuses, ...JP_OVERRIDES.history?.statuses },
-      detail: { ...BASE_EN_STRINGS.history.detail, ...JP_OVERRIDES.history?.detail }
+      detail: { ...BASE_EN_STRINGS.history.detail, ...JP_OVERRIDES.history?.detail },
+      pagination: { ...BASE_EN_STRINGS.history.pagination, ...JP_OVERRIDES.history?.pagination }
     },
     settings: {
       ...BASE_EN_STRINGS.settings,

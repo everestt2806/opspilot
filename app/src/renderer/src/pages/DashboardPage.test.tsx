@@ -279,4 +279,75 @@ describe('DashboardPage', () => {
     // Reset về Vietnamese cho các test tiếp theo
     useUiState.setState({ locale: 'vi' })
   })
+
+  it('lay lan trien khai gan nhat bang truy van history:list rieng biet ma khong suy ra tu 10 hoat dong gan nhat', async () => {
+    // 10 hoạt động gần nhất toàn là scan và restart (không có deploy nào)
+    const recentWithoutDeploy: ActionLogEntry[] = [
+      logEntry({ id: 10, action: 'scan', message: 'Scanned VM01' }),
+      logEntry({ id: 11, action: 'restart', message: 'Restarted VM01' })
+    ]
+    const dedicatedDeployLog = logEntry({
+      id: 99,
+      action: 'deploy',
+      ts: '2026-08-10T12:00:00Z',
+      message: 'Dedicated deploy log v5'
+    })
+
+    const invoke = mockApi({
+      'vps:list': async () => ({ ok: true, data: [VPS_A] }),
+      'app:list': async () => ({ ok: true, data: [APP_A] }),
+      'history:list': async (filter) => {
+        const f = filter as { actions?: string[]; limit?: number }
+        if (f.actions && f.actions.includes('deploy') && f.limit === 1) {
+          return { ok: true, data: [dedicatedDeployLog] }
+        }
+        if (f.actions && f.actions.includes('deploy') && f.limit === 200) {
+          return { ok: true, data: [dedicatedDeployLog] }
+        }
+        return { ok: true, data: recentWithoutDeploy }
+      }
+    })
+
+    render(<DashboardPage />)
+    await screen.findByText(strings.dashboard.title)
+
+    // Xác nhận history:list được gọi đúng để lấy lần deploy gần nhất
+    expect(invoke).toHaveBeenCalledWith('history:list', {
+      actions: ['deploy'],
+      limit: 1,
+      offset: 0
+    })
+
+    // Dù trong 10 hoạt động gần nhất không có deploy, ô Lần triển khai gần nhất vẫn hiển thị đúng
+    const lastDeployCell = statCell(strings.dashboard.stats.lastDeploy)
+    expect(lastDeployCell.textContent).not.toBe('—')
+    expect(lastDeployCell.textContent).toMatch(/ago|just now|trước|vừa xong/)
+  })
+
+  it('thong ke 24 gio neu cham moc 200 thi hien thi ro >=200 chu khong ghi 200 chinh xac', async () => {
+    const cappedArray = Array.from({ length: 200 }, (_, i) =>
+      logEntry({ id: 1000 + i, action: 'deploy' })
+    )
+
+    mockApi({
+      'vps:list': async () => ({ ok: true, data: [VPS_A] }),
+      'app:list': async () => ({ ok: true, data: [APP_A] }),
+      'history:list': async (filter) => {
+        const f = filter as { actions?: string[]; limit?: number }
+        if (f.actions && f.actions.includes('deploy') && f.limit === 200) {
+          return { ok: true, data: cappedArray }
+        }
+        if (f.actions && f.actions.includes('deploy') && f.limit === 1) {
+          return { ok: true, data: [cappedArray[0]] }
+        }
+        return { ok: true, data: RECENT }
+      }
+    })
+
+    render(<DashboardPage />)
+    await screen.findByText(strings.dashboard.title)
+
+    // Thống kê 24h hiển thị rõ ràng "≥200"
+    expect(statCell(strings.dashboard.stats.deploy24h).textContent).toContain('≥200')
+  })
 })

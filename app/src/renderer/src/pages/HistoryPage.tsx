@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Alert,
   Badge,
@@ -25,7 +25,6 @@ import { useStrings } from '../strings'
 import { localDateTime, relativeTime } from '../utils/format'
 
 const PAGE_SIZE = 20
-const QUERY_LIMIT = 200
 
 type HistoryFilter = {
   actions?: string[]
@@ -95,6 +94,10 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
   const [vpsId, setVpsId] = useState<number | undefined>(undefined)
   const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null)
   const [selected, setSelected] = useState<ActionLogEntry | null>(null)
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
+  const reqIdRef = useRef(0)
 
   function actionLabel(action: string): string {
     const historyActions = strings.history.actions as Record<string, string> | undefined
@@ -122,27 +125,43 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
     { value: 'ssh_error', label: strings.history.actions.ssh_error }
   ]
 
-  const load = useCallback(async () => {
-    try {
-      const filter: HistoryFilter = {
-        actions: actions.length > 0 ? actions : undefined,
-        vps_id: vpsId,
-        from_ts: range ? range[0].startOf('day').toDate().toISOString() : undefined,
-        to_ts: range ? range[1].endOf('day').toDate().toISOString() : undefined,
-        limit: QUERY_LIMIT,
-        offset: 0
+  const load = useCallback(
+    async (
+      targetPage: number,
+      currentActions: string[],
+      currentVpsId: number | undefined,
+      currentRange: [Dayjs, Dayjs] | null
+    ) => {
+      const reqId = ++reqIdRef.current
+      try {
+        const filter: HistoryFilter = {
+          actions: currentActions.length > 0 ? currentActions : undefined,
+          vps_id: currentVpsId,
+          from_ts: currentRange ? currentRange[0].startOf('day').toDate().toISOString() : undefined,
+          to_ts: currentRange ? currentRange[1].endOf('day').toDate().toISOString() : undefined,
+          limit: PAGE_SIZE,
+          offset: (targetPage - 1) * PAGE_SIZE
+        }
+        const result = await window.api.invoke('history:list', filter)
+        if (reqId !== reqIdRef.current) return
+        if (!result.ok) {
+          setError(result.error)
+          return
+        }
+        const data = Array.isArray(result.data) ? result.data : []
+        setError(null)
+        setRows(data)
+        const isFull = data.length === PAGE_SIZE
+        setHasMore(isFull)
+        setTotal(isFull ? targetPage * PAGE_SIZE + 1 : (targetPage - 1) * PAGE_SIZE + data.length)
+      } finally {
+        if (reqId === reqIdRef.current) {
+          setLoading(false)
+        }
       }
-      const result = await window.api.invoke('history:list', filter)
-      if (!result.ok) {
-        setError(result.error)
-        return
-      }
-      setError(null)
-      setRows(result.data)
-    } finally {
-      setLoading(false)
-    }
-  }, [actions, vpsId, range])
+    },
+    []
+  )
 
   useEffect(() => {
     void (async () => {
@@ -152,20 +171,39 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
   }, [])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    void load(page, actions, vpsId, range)
+  }, [page, actions, vpsId, range, load])
 
   function reload(): void {
     setLoading(true)
-    void load()
+    void load(page, actions, vpsId, range)
+  }
+
+  function handleActionsChange(value: string[]): void {
+    setLoading(true)
+    setActions(value)
+    setPage(1)
+  }
+
+  function handleVpsChange(value: number | undefined): void {
+    setLoading(true)
+    setVpsId(value)
+    setPage(1)
   }
 
   function handleRangeChange(dates: [Dayjs | null, Dayjs | null] | null): void {
+    setLoading(true)
     if (dates && dates[0] && dates[1]) {
       setRange([dates[0], dates[1]])
     } else {
       setRange(null)
     }
+    setPage(1)
+  }
+
+  function handlePageChange(newPage: number): void {
+    setLoading(true)
+    setPage(newPage)
   }
 
   const vpsNameById = new Map(vpsList.map((vps) => [vps.id, vps.name]))
@@ -275,7 +313,7 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
           aria-label={strings.history.filters.action}
           style={{ minWidth: 200 }}
           value={actions}
-          onChange={setActions}
+          onChange={handleActionsChange}
           options={actionOptions}
         />
         <Select
@@ -284,7 +322,7 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
           aria-label={strings.history.filters.vps}
           style={{ minWidth: 160 }}
           value={vpsId}
-          onChange={(value) => setVpsId(value)}
+          onChange={handleVpsChange}
           options={vpsList.map((vps) => ({ value: vps.id, label: `${vps.name} — ${vps.host}` }))}
         />
         <DatePicker.RangePicker
@@ -321,11 +359,30 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
           onClick: () => setSelected(record),
           style: { cursor: 'pointer' }
         })}
-        pagination={{
-          pageSize: PAGE_SIZE,
-          showSizeChanger: false,
-          hideOnSinglePage: true
-        }}
+        pagination={
+          rows.length === 0 && !loading
+            ? false
+            : {
+                current: page,
+                pageSize: PAGE_SIZE,
+                total: total,
+                showSizeChanger: false,
+                hideOnSinglePage: false,
+                onChange: handlePageChange,
+                showTotal: (_totalCount, [from, to]) =>
+                  hasMore
+                    ? strings.history.pagination.pageMore(from, to)
+                    : strings.history.pagination.pageTotal(
+                        from,
+                        to,
+                        (page - 1) * PAGE_SIZE + rows.length
+                      ),
+                locale: {
+                  prev_page: strings.history.pagination.prev,
+                  next_page: strings.history.pagination.next
+                }
+              }
+        }
         locale={{
           emptyText: (
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={strings.history.empty} />
