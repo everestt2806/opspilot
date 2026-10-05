@@ -1518,5 +1518,254 @@ describe('DeployPage — wizard va log', () => {
     rerender(<DeployPage />)
     fireEvent.click(screen.getByText('次へ'))
     expect(await screen.findByText('必須の環境変数が不足しています: SECRET_KEY。')).toBeTruthy()
+
+    act(() => {
+      useUiState.setState({ locale: 'en' })
+    })
+  })
+
+  it('khoa dong bo nut Bat dau trien khai ngay khi click, rapid double-click chi goi deploy:start mot lan', async () => {
+    let deployStartCallCount = 0
+    let resolveDeployStart: (val: unknown) => void = () => {}
+    const deployStartPromise = new Promise((resolve) => {
+      resolveDeployStart = resolve
+    })
+
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'deploy:start': async () => {
+        deployStartCallCount++
+        return deployStartPromise
+      }
+    })
+
+    render(<DeployPage />)
+    await reachStep3(invoke)
+
+    const deployBtn = screen.getByRole('button', {
+      name: new RegExp(strings.deploy.review.deploy, 'i')
+    })
+    expect(deployBtn).toBeTruthy()
+
+    // Bấm nhanh liên tiếp 2 lần
+    fireEvent.click(deployBtn)
+    fireEvent.click(deployBtn)
+
+    // Chỉ có 1 cuộc gọi deploy:start được gửi đi
+    expect(deployStartCallCount).toBe(1)
+    expect(invoke).toHaveBeenCalledWith('deploy:start', expect.anything())
+
+    // Nút hiển thị trạng thái đang gửi và bị disable
+    await waitFor(() => {
+      expect(screen.getByText(strings.deploy.review.starting)).toBeTruthy()
+    })
+
+    // Giải quyết promise thành công
+    await act(async () => {
+      resolveDeployStart({ ok: true, data: { deployment_id: 101 } })
+    })
+
+    // Chuyển sang màn hình Deploy log
+    expect(await screen.findByText('Deploy log')).toBeTruthy()
+  })
+
+  it('deploy:start that bai: mo khoa lai nut va hien thi thong bao loi', async () => {
+    let deployStartCalls = 0
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'deploy:start': async () => {
+        deployStartCalls++
+        if (deployStartCalls === 1) {
+          return {
+            ok: false,
+            error: {
+              code: 'SSH_TIMEOUT',
+              message: 'Lỗi kết nối SSH timeout khi bắt đầu triển khai'
+            }
+          }
+        }
+        return { ok: true, data: { deployment_id: 102 } }
+      }
+    })
+
+    render(<DeployPage />)
+    await reachStep3(invoke)
+
+    const deployBtn = screen.getByRole('button', {
+      name: new RegExp(strings.deploy.review.deploy, 'i')
+    })
+    fireEvent.click(deployBtn)
+
+    // Hiển thị lỗi
+    expect(await screen.findByText('Lỗi kết nối SSH timeout khi bắt đầu triển khai')).toBeTruthy()
+
+    // Nút được mở khóa lại và có thể bấm tiếp
+    await waitFor(() => {
+      const retryBtn = screen.getByRole('button', {
+        name: new RegExp(strings.deploy.review.deploy, 'i')
+      })
+      expect((retryBtn as HTMLButtonElement).disabled).toBe(false)
+    })
+
+    // Thử lại lần 2 thành công
+    const retryBtn = screen.getByRole('button', {
+      name: new RegExp(strings.deploy.review.deploy, 'i')
+    })
+    fireEvent.click(retryBtn)
+
+    expect(await screen.findByText('Deploy log')).toBeTruthy()
+    expect(deployStartCalls).toBe(2)
+  })
+
+  it('hien thi cac buoc deploy bang nhan de hieu o 4 ngon ngu tren man tien do', async () => {
+    const { invoke } = mockApi(handersHappy)
+    const { rerender } = render(<DeployPage />)
+    await reachStep3(invoke)
+    fireEvent.click(
+      screen.getByRole('button', { name: new RegExp(strings.deploy.review.deploy, 'i') })
+    )
+    await screen.findByText('Deploy log')
+
+    // 1. English
+    act(() => {
+      useUiState.setState({ locale: 'en' })
+    })
+    rerender(<DeployPage />)
+    expect(screen.getByText('Precheck')).toBeTruthy()
+    expect(screen.getByText('Upload source')).toBeTruthy()
+    expect(screen.getByText('Render templates')).toBeTruthy()
+    expect(screen.getByText('Build image')).toBeTruthy()
+    expect(screen.getByText('Start container')).toBeTruthy()
+    expect(screen.getByText('Healthcheck')).toBeTruthy()
+    expect(screen.getByText('Record status')).toBeTruthy()
+
+    // 2. Tiếng Việt
+    act(() => {
+      useUiState.setState({ locale: 'vi' })
+    })
+    rerender(<DeployPage />)
+    expect(screen.getByText('Kiểm tra trước')).toBeTruthy()
+    expect(screen.getByText('Tải mã nguồn')).toBeTruthy()
+    expect(screen.getByText('Dựng cấu hình')).toBeTruthy()
+    expect(screen.getByText('Đóng gói ảnh')).toBeTruthy()
+    expect(screen.getByText('Chạy container')).toBeTruthy()
+    expect(screen.getByText('Kiểm tra dịch vụ')).toBeTruthy()
+    expect(screen.getByText('Lưu trạng thái')).toBeTruthy()
+
+    // 3. 简体中文
+    act(() => {
+      useUiState.setState({ locale: 'cn' })
+    })
+    rerender(<DeployPage />)
+    expect(screen.getByText('预检检查')).toBeTruthy()
+    expect(screen.getByText('上传源码')).toBeTruthy()
+    expect(screen.getByText('生成配置')).toBeTruthy()
+    expect(screen.getByText('构建镜像')).toBeTruthy()
+    expect(screen.getByText('启动容器')).toBeTruthy()
+    expect(screen.getByText('健康检查')).toBeTruthy()
+    expect(screen.getByText('记录状态')).toBeTruthy()
+
+    // 4. 日本語
+    act(() => {
+      useUiState.setState({ locale: 'jp' })
+    })
+    rerender(<DeployPage />)
+    expect(screen.getByText('事前チェック')).toBeTruthy()
+    expect(screen.getByText('ソースコード転送')).toBeTruthy()
+    expect(screen.getByText('設定生成')).toBeTruthy()
+    expect(screen.getByText('イメージ構築')).toBeTruthy()
+    expect(screen.getByText('コンテナ起動')).toBeTruthy()
+    expect(screen.getByText('ヘルスチェック')).toBeTruthy()
+    expect(screen.getByText('状態記録')).toBeTruthy()
+
+    // Trả locale về 'en' cho các test khác
+    act(() => {
+      useUiState.setState({ locale: 'en' })
+    })
+  })
+
+  it('tach ro runtime da chay khoi truy cap ngoai theo reachable, degraded, tunnel_only, not_checked', async () => {
+    const { emit, invoke } = mockApi(handersHappy)
+    render(<DeployPage />)
+    await reachStep3(invoke)
+    fireEvent.click(
+      screen.getByRole('button', { name: new RegExp(strings.deploy.review.deploy, 'i') })
+    )
+    await screen.findByText('Deploy log')
+
+    // Trường hợp 1: reachable
+    emit({
+      type: 'finished',
+      deployment_id: 7,
+      status: 'running',
+      total_duration_ms: 10000,
+      app_url: 'http://203.0.113.55:30000',
+      exposure_status: 'reachable'
+    })
+
+    expect(await screen.findByText(strings.deploy.exposure.reachableTitle)).toBeTruthy()
+    expect(screen.getByText(strings.deploy.exposure.runtimeTag)).toBeTruthy()
+    expect(screen.getByText(strings.deploy.exposure.reachableTag)).toBeTruthy()
+    expect(screen.getByText(strings.deploy.exposure.reachableDesc)).toBeTruthy()
+    expect(screen.getAllByText(strings.deploy.log.openApp).length).toBeGreaterThan(0)
+
+    // Trường hợp 2: degraded — không có nút Mở app
+    emit({
+      type: 'finished',
+      deployment_id: 7,
+      status: 'running',
+      total_duration_ms: 10000,
+      app_url: 'http://203.0.113.55:30000',
+      exposure_status: 'degraded'
+    })
+    expect(await screen.findByText(strings.deploy.exposure.degradedTitle)).toBeTruthy()
+    expect(screen.getByText(strings.deploy.exposure.runtimeTag)).toBeTruthy()
+    expect(screen.getByText(strings.deploy.exposure.degradedTag)).toBeTruthy()
+    expect(screen.getByText(strings.deploy.exposure.blockedHint)).toBeTruthy()
+    expect(screen.queryByText(strings.deploy.log.openApp)).toBeNull()
+    expect(screen.getByText(strings.deploy.doctor.diagnose)).toBeTruthy()
+
+    // Trường hợp 3: tunnel_only
+    emit({
+      type: 'finished',
+      deployment_id: 7,
+      status: 'running',
+      total_duration_ms: 10000,
+      app_url: 'https://tunnel.internal.domain',
+      exposure_status: 'tunnel_only'
+    })
+    expect(await screen.findByText(strings.deploy.exposure.tunnelOnlyTitle)).toBeTruthy()
+    expect(screen.getByText(strings.deploy.exposure.runtimeTag)).toBeTruthy()
+    expect(screen.getByText(strings.deploy.exposure.tunnelOnlyTag)).toBeTruthy()
+    expect(screen.getByText(strings.deploy.exposure.tunnelOnlyDesc)).toBeTruthy()
+    expect(screen.getAllByText(strings.deploy.log.openApp).length).toBeGreaterThan(0)
+
+    // Trường hợp 4: not_checked
+    emit({
+      type: 'finished',
+      deployment_id: 7,
+      status: 'running',
+      total_duration_ms: 10000,
+      app_url: 'http://203.0.113.55:30000',
+      exposure_status: 'not_checked'
+    })
+    expect(await screen.findByText(strings.deploy.exposure.notCheckedTitle)).toBeTruthy()
+    expect(screen.getByText(strings.deploy.exposure.runtimeTag)).toBeTruthy()
+    expect(screen.getByText(strings.deploy.exposure.notCheckedTag)).toBeTruthy()
+    expect(screen.getByText(strings.deploy.exposure.notCheckedDesc)).toBeTruthy()
+    expect(screen.getAllByText(strings.deploy.log.openApp).length).toBeGreaterThan(0)
+
+    // Trường hợp 5: reachable nhưng app_url rỗng — không hiện nút Mở app
+    emit({
+      type: 'finished',
+      deployment_id: 7,
+      status: 'running',
+      total_duration_ms: 10000,
+      app_url: '',
+      exposure_status: 'reachable'
+    })
+    await waitFor(() => {
+      expect(screen.queryByText(strings.deploy.log.openApp)).toBeNull()
+    })
   })
 })

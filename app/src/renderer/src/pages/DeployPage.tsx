@@ -108,11 +108,13 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   const [prechecking, setPrechecking] = useState(false)
   const [precheckError, setPrecheckError] = useState<string | null>(null)
   const [startError, setStartError] = useState<string | null>(null)
+  const [starting, setStarting] = useState(false)
   const [templateOpen, setTemplateOpen] = useState(false)
   const [run, setRun] = useState<RunView | null>(null)
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null)
   const [elapsedTick, setElapsedTick] = useState(0)
 
+  const startPendingRef = useRef(false)
   const runRef = useRef<RunView | null>(null)
   const appListReqIdRef = useRef(0)
   const precheckReqIdRef = useRef(0)
@@ -411,28 +413,43 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   }
 
   async function startDeploy(): Promise<void> {
+    if (startPendingRef.current) return
     const currentInput = buildInput()
     const currentSignature = getConfigSignature(currentInput)
     if (!precheck?.passed || precheckSignature !== currentSignature || prechecking) return
+
+    startPendingRef.current = true
+    setStarting(true)
     setStartError(null)
     const input = { ...currentInput, host_port: precheck.assigned_host_port }
-    const result = await window.api.invoke('deploy:start', input)
-    if (!result.ok) {
-      setStartError(result.error.message)
-      return
+
+    try {
+      const result = await window.api.invoke('deploy:start', input)
+      if (!result.ok) {
+        startPendingRef.current = false
+        setStarting(false)
+        setStartError(result.error.message)
+        return
+      }
+      const nextRun: RunView = {
+        deploymentId: result.data.deployment_id,
+        steps: initialSteps(),
+        buffer: ''
+      }
+      runRef.current = nextRun
+      setRun(nextRun)
+      setRunStartedAt(Date.now())
+      setElapsedTick(0)
+    } catch (err: unknown) {
+      startPendingRef.current = false
+      setStarting(false)
+      setStartError(err instanceof Error ? err.message : String(err))
     }
-    const nextRun: RunView = {
-      deploymentId: result.data.deployment_id,
-      steps: initialSteps(),
-      buffer: ''
-    }
-    runRef.current = nextRun
-    setRun(nextRun)
-    setRunStartedAt(Date.now())
-    setElapsedTick(0)
   }
 
   function resetWizard(): void {
+    startPendingRef.current = false
+    setStarting(false)
     runRef.current = null
     setRun(null)
     setRunStartedAt(null)
@@ -1167,11 +1184,12 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
             {step === 3 && (
               <Button
                 type="primary"
-                icon={<RocketOutlined />}
-                disabled={!precheck?.passed || !isPrecheckValid || prechecking}
+                icon={starting ? <LoadingOutlined /> : <RocketOutlined />}
+                loading={starting}
+                disabled={!precheck?.passed || !isPrecheckValid || prechecking || starting}
                 onClick={() => void startDeploy()}
               >
-                {strings.deploy.review.deploy}
+                {starting ? strings.deploy.review.starting : strings.deploy.review.deploy}
               </Button>
             )}
           </Space>
@@ -1332,6 +1350,43 @@ function DeployLogView({
       ? 'success'
       : 'failed'
 
+  const exposureStatus: 'reachable' | 'degraded' | 'tunnel_only' | 'not_checked' =
+    finished?.exposureStatus ?? (appUrl ? 'reachable' : 'not_checked')
+
+  const canOpenApp = Boolean(
+    finished &&
+    finished.status === 'running' &&
+    appUrl &&
+    appUrl.trim() !== '' &&
+    exposureStatus !== 'degraded'
+  )
+
+  let exposureAlertType: 'success' | 'warning' | 'info' = 'success'
+  let exposureTitle = strings.deploy.exposure.reachableTitle
+  let exposureDescription = strings.deploy.exposure.reachableDesc
+  let exposureTagColor: 'success' | 'warning' | 'cyan' | 'default' = 'success'
+  let exposureTagLabel = strings.deploy.exposure.reachableTag
+
+  if (exposureStatus === 'degraded') {
+    exposureAlertType = 'warning'
+    exposureTitle = strings.deploy.exposure.degradedTitle
+    exposureDescription = strings.deploy.exposure.blockedHint
+    exposureTagColor = 'warning'
+    exposureTagLabel = strings.deploy.exposure.degradedTag
+  } else if (exposureStatus === 'tunnel_only') {
+    exposureAlertType = 'info'
+    exposureTitle = strings.deploy.exposure.tunnelOnlyTitle
+    exposureDescription = strings.deploy.exposure.tunnelOnlyDesc
+    exposureTagColor = 'cyan'
+    exposureTagLabel = strings.deploy.exposure.tunnelOnlyTag
+  } else if (exposureStatus === 'not_checked') {
+    exposureAlertType = 'info'
+    exposureTitle = strings.deploy.exposure.notCheckedTitle
+    exposureDescription = strings.deploy.exposure.notCheckedDesc
+    exposureTagColor = 'default'
+    exposureTagLabel = strings.deploy.exposure.notCheckedTag
+  }
+
   async function doCancel(): Promise<void> {
     const result = await window.api.invoke('deploy:cancel', run.deploymentId)
     if (!result.ok) {
@@ -1474,8 +1529,10 @@ function DeployLogView({
       ) : state.status === 'failed' ? (
         <CloseCircleFilled className="step-icon-fail" />
       ) : undefined
+    const stepLabel = strings.deploy.log.steps?.[step] ?? step
     return {
-      title: state.status === 'done' ? `${step} · ${formatDuration(state.durationMs)}` : step,
+      title:
+        state.status === 'done' ? `${stepLabel} · ${formatDuration(state.durationMs)}` : stepLabel,
       icon
     }
   })
@@ -1506,20 +1563,20 @@ function DeployLogView({
       {finished?.status === 'running' && (
         <Alert
           className="page-alert"
-          type={finished.exposureStatus === 'degraded' ? 'warning' : 'success'}
+          type={exposureAlertType}
           showIcon
-          message={
-            finished.exposureStatus === 'degraded'
-              ? strings.deploy.exposure.degradedTitle
-              : strings.deploy.log.success(formatDuration(finished.totalDurationMs))
-          }
+          message={exposureTitle}
           description={
-            <Space direction="vertical" size="small">
-              {appUrl ? (
-                <Typography.Text code>{appUrl}</Typography.Text>
-              ) : (
-                <Typography.Text type="secondary">
-                  {strings.deploy.exposure.blockedHint}
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Space wrap>
+                <Tag color="success">{strings.deploy.exposure.runtimeTag}</Tag>
+                <Tag color={exposureTagColor}>{exposureTagLabel}</Tag>
+                <Tag>{strings.deploy.log.success(formatDuration(finished.totalDurationMs))}</Tag>
+              </Space>
+              <Typography.Text type="secondary">{exposureDescription}</Typography.Text>
+              {canOpenApp && (
+                <Typography.Text code copyable>
+                  {appUrl}
                 </Typography.Text>
               )}
               {doctorMessage && <Typography.Text>{doctorMessage}</Typography.Text>}
@@ -1527,7 +1584,7 @@ function DeployLogView({
           }
           action={
             <Space>
-              {appUrl && (
+              {canOpenApp && (
                 <Button type="primary" onClick={() => onOpenApp(appUrl)}>
                   {strings.deploy.log.openApp}
                 </Button>
@@ -1535,7 +1592,7 @@ function DeployLogView({
               {onOpenDashboard && (
                 <Button onClick={onOpenDashboard}>{strings.deploy.log.viewDashboard}</Button>
               )}
-              {finished.exposureStatus === 'degraded' && (
+              {exposureStatus === 'degraded' && (
                 <Button loading={doctorBusy} onClick={() => void runDoctor()}>
                   {strings.deploy.doctor.diagnose}
                 </Button>
@@ -1693,7 +1750,7 @@ function DeployLogView({
           </Tag>
         </Space>
         <Space>
-          {finished && appUrl && (
+          {canOpenApp && (
             <Button type="primary" onClick={() => onOpenApp(appUrl)}>
               {strings.deploy.log.openApp}
             </Button>

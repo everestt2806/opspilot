@@ -286,6 +286,7 @@ const BASE_EN_STRINGS = {
       retry: 'Check again',
       urlLabel: 'URL to use',
       deploy: 'Deploy',
+      starting: 'Starting deploy…',
       deployDisabled: 'Precheck is not green — fix it on the VPS, then click Check again.',
       error: 'Could not run the precheck.',
       columns: {
@@ -296,9 +297,23 @@ const BASE_EN_STRINGS = {
       }
     },
     exposure: {
+      runtimeRunning: 'Runtime container is running',
+      reachableTitle: 'Runtime running — External port reachable',
+      reachableDesc: 'Application is deployed and reachable from external network.',
       degradedTitle: 'External port degraded / unreachable',
       blockedHint:
         'External port may be blocked by firewall. Run Doctor to diagnose and auto-fix safely.',
+      tunnelOnlyTitle: 'Runtime running — Private tunnel only',
+      tunnelOnlyDesc:
+        'Application is running securely via internal network or Cloudflare Tunnel without public host ports.',
+      notCheckedTitle: 'Runtime running — External reachability not checked',
+      notCheckedDesc:
+        'Container is running. External connectivity check to host port has not been performed.',
+      reachableTag: 'External: Reachable',
+      degradedTag: 'External: Degraded',
+      tunnelOnlyTag: 'External: Tunnel only',
+      notCheckedTag: 'External: Not checked',
+      runtimeTag: 'Runtime: Running',
       reachable: 'External port reachable'
     },
     doctor: {
@@ -333,6 +348,15 @@ const BASE_EN_STRINGS = {
     },
     log: {
       title: 'Deploy log',
+      steps: {
+        PRECHECK: 'Precheck',
+        UPLOAD: 'Upload source',
+        RENDER: 'Render templates',
+        BUILD: 'Build image',
+        DEPLOY: 'Start container',
+        HEALTHCHECK: 'Healthcheck',
+        RECORD: 'Record status'
+      },
       running: 'Deploying',
       success: (duration: string) => `Deploy succeeded in ${duration}`,
       failedStep: (step: string) => `Failed at step ${step}`,
@@ -1120,6 +1144,7 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       retry: 'Kiểm tra lại',
       urlLabel: 'URL dự kiến',
       deploy: 'Bắt đầu triển khai',
+      starting: 'Đang bắt đầu triển khai…',
       deployDisabled: 'Kiểm tra chưa đạt — hãy xử lý trên VPS rồi bấm Kiểm tra lại.',
       error: 'Không thể chạy kiểm tra trước.',
       columns: {
@@ -1130,9 +1155,25 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       }
     },
     exposure: {
+      ...BASE_EN_STRINGS.deploy.exposure,
+      runtimeRunning: 'Container ứng dụng đang chạy',
+      reachableTitle: 'Ứng dụng đang chạy — Truy cập ngoài bình thường',
+      reachableDesc:
+        'Ứng dụng đã được triển khai thành công và sẵn sàng nhận kết nối từ bên ngoài.',
       degradedTitle: 'Cổng ngoài bị suy giảm hoặc chưa truy cập được',
       blockedHint:
         'Cổng ngoài có thể đang bị firewall chặn. Chạy Doctor để chẩn đoán và khắc phục an toàn.',
+      tunnelOnlyTitle: 'Ứng dụng đang chạy — Chế độ đường hầm riêng (Tunnel only)',
+      tunnelOnlyDesc:
+        'Ứng dụng đang chạy an toàn qua mạng nội bộ hoặc Cloudflare Tunnel, không mở cổng public trực tiếp.',
+      notCheckedTitle: 'Ứng dụng đang chạy — Chưa kiểm tra truy cập ngoài',
+      notCheckedDesc:
+        'Container đang chạy. Chưa thực hiện kiểm tra kết nối từ Internet tới cổng máy chủ.',
+      reachableTag: 'Truy cập ngoài: Đạt',
+      degradedTag: 'Truy cập ngoài: Bị chặn',
+      tunnelOnlyTag: 'Truy cập ngoài: Tunnel riêng',
+      notCheckedTag: 'Truy cập ngoài: Chưa kiểm tra',
+      runtimeTag: 'Runtime: Đang chạy',
       reachable: 'Cổng ngoài sẵn sàng và có thể truy cập'
     },
     doctor: {
@@ -1168,6 +1209,15 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     log: {
       ...BASE_EN_STRINGS.deploy.log,
       title: 'Nhật ký triển khai',
+      steps: {
+        PRECHECK: 'Kiểm tra trước',
+        UPLOAD: 'Tải mã nguồn',
+        RENDER: 'Dựng cấu hình',
+        BUILD: 'Đóng gói ảnh',
+        DEPLOY: 'Chạy container',
+        HEALTHCHECK: 'Kiểm tra dịch vụ',
+        RECORD: 'Lưu trạng thái'
+      },
       openApp: 'Mở ứng dụng',
       viewDashboard: 'Xem tổng quan',
       cancel: 'Hủy triển khai',
@@ -1632,6 +1682,7 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       retry: '重新检查',
       urlLabel: '访问地址',
       deploy: '开始部署',
+      starting: '正在启动部署…',
       deployDisabled: '预检未通过 — 请先在 VPS 上处理问题后重试。',
       error: '无法执行预检。',
       columns: {
@@ -1642,8 +1693,21 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       }
     },
     exposure: {
+      ...BASE_EN_STRINGS.deploy.exposure,
+      runtimeRunning: '应用容器正在运行',
+      reachableTitle: '应用运行中 — 外部端口访问正常',
+      reachableDesc: '应用已成功部署并可从外部网络正常访问。',
       degradedTitle: '外部端口降级或无法访问',
       blockedHint: '外部端口可能被防火墙拦截。运行 Doctor 进行诊断并安全修复。',
+      tunnelOnlyTitle: '应用运行中 — 专用隧道模式 (Tunnel only)',
+      tunnelOnlyDesc: '应用正在通过内部网络或 Cloudflare Tunnel 安全运行，未开放公共主机端口。',
+      notCheckedTitle: '应用运行中 — 未检测外部可访问性',
+      notCheckedDesc: '容器正在运行。尚未执行外部网络连通性检测。',
+      reachableTag: '外部访问: 正常',
+      degradedTag: '外部访问: 受阻',
+      tunnelOnlyTag: '外部访问: 专属隧道',
+      notCheckedTag: '外部访问: 未检测',
+      runtimeTag: '运行时: 运行中',
       reachable: '外部端口正常可访问'
     },
     doctor: {
@@ -1678,6 +1742,15 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     log: {
       ...BASE_EN_STRINGS.deploy.log,
       title: '部署日志',
+      steps: {
+        PRECHECK: '预检检查',
+        UPLOAD: '上传源码',
+        RENDER: '生成配置',
+        BUILD: '构建镜像',
+        DEPLOY: '启动容器',
+        HEALTHCHECK: '健康检查',
+        RECORD: '记录状态'
+      },
       openApp: '打开应用',
       viewDashboard: '查看总览',
       cancel: '取消部署',
@@ -2137,6 +2210,7 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       retry: '再チェック',
       urlLabel: 'アクセスURL',
       deploy: 'デプロイ開始',
+      starting: 'デプロイ開始中…',
       deployDisabled: '事前チェック未通過 — VPSで問題を解消して再チェックしてください。',
       error: '事前チェックを実行できませんでした。',
       columns: {
@@ -2147,9 +2221,23 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       }
     },
     exposure: {
+      ...BASE_EN_STRINGS.deploy.exposure,
+      runtimeRunning: 'ランタイムコンテナが稼働中',
+      reachableTitle: '稼働中 — 外部ポートアクセス正常',
+      reachableDesc: 'アプリケーションはデプロイされ、外部ネットワークからアクセス可能です。',
       degradedTitle: '外部ポートが劣化またはアクセス不能',
       blockedHint:
         '外部ポートがファイアウォールでブロックされている可能性があります。Doctorで診断し安全に自動修復してください。',
+      tunnelOnlyTitle: '稼働中 — プライベートトンネル専用 (Tunnel only)',
+      tunnelOnlyDesc:
+        'アプリケーションは内部ネットワークまたは Cloudflare Tunnel 経由で安全に稼働しており、公開ホストポートはありません。',
+      notCheckedTitle: '稼働中 — 外部アクセスの未確認',
+      notCheckedDesc: 'コンテナは稼働中です。ホストポートへの外部接続確認は実行されていません。',
+      reachableTag: '外部アクセス: 正常',
+      degradedTag: '外部アクセス: 制限あり',
+      tunnelOnlyTag: '外部アクセス: トンネル専用',
+      notCheckedTag: '外部アクセス: 未確認',
+      runtimeTag: 'ランタイム: 稼働中',
       reachable: '外部ポートは正常にアクセス可能'
     },
     doctor: {
@@ -2185,6 +2273,15 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     log: {
       ...BASE_EN_STRINGS.deploy.log,
       title: 'デプロイログ',
+      steps: {
+        PRECHECK: '事前チェック',
+        UPLOAD: 'ソースコード転送',
+        RENDER: '設定生成',
+        BUILD: 'イメージ構築',
+        DEPLOY: 'コンテナ起動',
+        HEALTHCHECK: 'ヘルスチェック',
+        RECORD: '状態記録'
+      },
       openApp: 'アプリを開く',
       viewDashboard: 'ダッシュボードを表示',
       cancel: 'デプロイを中止',
@@ -2387,7 +2484,14 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
           ...VI_OVERRIDES.deploy?.review?.columns
         }
       },
-      log: { ...BASE_EN_STRINGS.deploy.log, ...VI_OVERRIDES.deploy?.log },
+      log: {
+        ...BASE_EN_STRINGS.deploy.log,
+        ...VI_OVERRIDES.deploy?.log,
+        steps: {
+          ...BASE_EN_STRINGS.deploy.log.steps,
+          ...VI_OVERRIDES.deploy?.log?.steps
+        }
+      },
       config: { ...BASE_EN_STRINGS.deploy.config, ...VI_OVERRIDES.deploy?.config },
       targetApp: { ...BASE_EN_STRINGS.deploy.targetApp, ...VI_OVERRIDES.deploy?.targetApp }
     },
@@ -2474,7 +2578,14 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
           ...CN_OVERRIDES.deploy?.review?.columns
         }
       },
-      log: { ...BASE_EN_STRINGS.deploy.log, ...CN_OVERRIDES.deploy?.log },
+      log: {
+        ...BASE_EN_STRINGS.deploy.log,
+        ...CN_OVERRIDES.deploy?.log,
+        steps: {
+          ...BASE_EN_STRINGS.deploy.log.steps,
+          ...CN_OVERRIDES.deploy?.log?.steps
+        }
+      },
       config: { ...BASE_EN_STRINGS.deploy.config, ...CN_OVERRIDES.deploy?.config },
       targetApp: { ...BASE_EN_STRINGS.deploy.targetApp, ...CN_OVERRIDES.deploy?.targetApp }
     },
@@ -2561,7 +2672,14 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
           ...JP_OVERRIDES.deploy?.review?.columns
         }
       },
-      log: { ...BASE_EN_STRINGS.deploy.log, ...JP_OVERRIDES.deploy?.log },
+      log: {
+        ...BASE_EN_STRINGS.deploy.log,
+        ...JP_OVERRIDES.deploy?.log,
+        steps: {
+          ...BASE_EN_STRINGS.deploy.log.steps,
+          ...JP_OVERRIDES.deploy?.log?.steps
+        }
+      },
       config: { ...BASE_EN_STRINGS.deploy.config, ...JP_OVERRIDES.deploy?.config },
       targetApp: { ...BASE_EN_STRINGS.deploy.targetApp, ...JP_OVERRIDES.deploy?.targetApp }
     },
