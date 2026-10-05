@@ -431,19 +431,39 @@ const BASE_EN_STRINGS = {
   },
   dashboard: {
     title: 'Dashboard',
+    description: 'System overview, managed applications, and recent activities.',
     summaryLabel: 'System summary',
     refresh: 'Refresh',
+    viewApps: 'View applications',
+    viewVps: 'View servers',
+    deployAction: '+ Deploy',
     stats: {
       vpsOnline: 'VPS checked now',
       appsRunning: 'Recorded deployments',
       deploy24h: 'Deploys in last 24h',
       lastDeploy: 'Last deployment'
     },
+    apps: {
+      title: 'Managed applications',
+      description: 'Applications deployed across infrastructure nodes.',
+      viewAll: 'View all',
+      columnName: 'Application',
+      columnPort: 'Port',
+      columnVps: 'Server',
+      columnStatus: 'Recorded status',
+      empty: 'No applications deployed yet.',
+      deployApp: 'Deploy application',
+      openApp: 'Open app',
+      statusDeployed: 'Recorded: Deployed',
+      statusNotDeployed: 'Not deployed'
+    },
     recent: {
       title: 'Recent activity',
+      description: 'Audit log of operations across all servers.',
+      viewAll: 'View audit log',
       columnTime: 'Time',
       columnAction: 'Action',
-      columnVps: 'VPS',
+      columnVps: 'Server',
       columnStatus: 'Status',
       columnMessage: 'Message',
       empty: 'No activity yet. Deploy your first application to see audit history.',
@@ -471,15 +491,17 @@ const BASE_EN_STRINGS = {
     description: 'View deployments, rollbacks, and alerts.',
     filters: {
       action: 'Action',
-      actionAll: 'All',
-      vps: 'VPS',
-      vpsAll: 'All VPS',
-      timeRange: 'Time range'
+      actionAll: 'All actions',
+      vps: 'Server',
+      vpsAll: 'All servers',
+      timeRange: 'Time range',
+      startDate: 'Start date',
+      endDate: 'End date'
     },
     columns: {
       time: 'Time',
       action: 'Action',
-      vps: 'VPS',
+      vps: 'Server',
       status: 'Status',
       message: 'Message'
     },
@@ -504,7 +526,8 @@ const BASE_EN_STRINGS = {
     detail: {
       title: 'Activity details',
       time: 'Time',
-      vps: 'VPS',
+      vps: 'Server',
+      action: 'Action',
       status: 'Status',
       message: 'Message',
       fields: 'Extra details',
@@ -886,11 +909,46 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   },
   dashboard: {
     ...BASE_EN_STRINGS.dashboard,
+    title: 'Tổng quan hệ thống',
+    description: 'Theo dõi tình trạng ứng dụng, máy chủ hạ tầng và các phiên triển khai gần nhất.',
+    summaryLabel: 'Tóm tắt hệ thống',
+    refresh: 'Làm mới',
+    viewApps: 'Xem ứng dụng',
+    viewVps: 'Xem máy chủ',
+    deployAction: '+ Triển khai',
     stats: {
       vpsOnline: 'VPS vừa kiểm tra',
       appsRunning: 'Bản ghi triển khai',
-      deploy24h: 'Lượt deploy 24h qua',
-      lastDeploy: 'Lần deploy gần nhất'
+      deploy24h: 'Lượt triển khai 24h qua',
+      lastDeploy: 'Lần triển khai gần nhất'
+    },
+    apps: {
+      title: 'Ứng dụng đang quản lý',
+      description: 'Danh sách ứng dụng được triển khai trên các cụm máy chủ.',
+      viewAll: 'Xem tất cả',
+      columnName: 'Ứng dụng',
+      columnPort: 'Cổng',
+      columnVps: 'Máy chủ',
+      columnStatus: 'Trạng thái ghi nhận',
+      empty: 'Chưa có ứng dụng nào được triển khai.',
+      deployApp: 'Triển khai ứng dụng',
+      openApp: 'Mở ứng dụng',
+      statusDeployed: 'Đã ghi nhận triển khai',
+      statusNotDeployed: 'Chưa triển khai'
+    },
+    recent: {
+      title: 'Hoạt động gần đây',
+      description: 'Nhật ký các thao tác triển khai và bảo trì hệ thống.',
+      viewAll: 'Xem toàn bộ hoạt động',
+      columnTime: 'Thời gian',
+      columnAction: 'Thao tác',
+      columnVps: 'Máy chủ',
+      columnStatus: 'Trạng thái',
+      columnMessage: 'Thông điệp',
+      empty: 'Chưa có hoạt động nào. Hãy triển khai ứng dụng đầu tiên để xem nhật ký.',
+      deployNow: 'Triển khai ngay',
+      unknownVps: 'VPS đã xóa',
+      unknownAction: 'Khác'
     },
     actions: {
       deploy: 'Triển khai',
@@ -901,7 +959,11 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       success: 'Thành công',
       failed: 'Thất bại',
       cancelled: 'Đã hủy'
-    }
+    },
+    emptyVps: 'Chưa có VPS nào được đăng ký. Hãy thêm VPS đầu tiên để bắt đầu triển khai.',
+    addVps: 'Thêm VPS',
+    loadFailed: 'Không thể tải dữ liệu tổng quan.',
+    retry: 'Thử lại'
   },
   history: {
     ...BASE_EN_STRINGS.history,
@@ -912,7 +974,9 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       actionAll: 'Tất cả thao tác',
       vps: 'Máy chủ',
       vpsAll: 'Tất cả máy chủ',
-      timeRange: 'Khoảng thời gian'
+      timeRange: 'Khoảng thời gian',
+      startDate: 'Từ ngày',
+      endDate: 'Đến ngày'
     },
     columns: {
       time: 'Thời gian',
@@ -943,6 +1007,7 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       title: 'Chi tiết hoạt động',
       time: 'Thời gian',
       vps: 'Máy chủ',
+      action: 'Thao tác',
       status: 'Trạng thái',
       message: 'Thông điệp',
       fields: 'Chi tiết bổ sung',
@@ -1316,11 +1381,46 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   },
   dashboard: {
     ...BASE_EN_STRINGS.dashboard,
+    title: '系统总览',
+    description: '监控应用状态、基础设施服务器和最新部署情况。',
+    summaryLabel: '系统摘要',
+    refresh: '刷新',
+    viewApps: '查看应用',
+    viewVps: '查看服务器',
+    deployAction: '+ 部署',
     stats: {
       vpsOnline: '刚刚检查的 VPS',
       appsRunning: '已记录的部署',
       deploy24h: '过去 24 小时部署',
       lastDeploy: '最近部署'
+    },
+    apps: {
+      title: '管理的应用',
+      description: '部署在基础设施服务器节点上的应用。',
+      viewAll: '查看全部',
+      columnName: '应用',
+      columnPort: '端口',
+      columnVps: '服务器',
+      columnStatus: '记录状态',
+      empty: '暂无已部署应用。',
+      deployApp: '部署应用',
+      openApp: '打开应用',
+      statusDeployed: '已记录部署',
+      statusNotDeployed: '未部署'
+    },
+    recent: {
+      title: '近期活动',
+      description: '跨所有服务器的操作审计日志。',
+      viewAll: '查看完整日志',
+      columnTime: '时间',
+      columnAction: '操作',
+      columnVps: '服务器',
+      columnStatus: '状态',
+      columnMessage: '信息',
+      empty: '暂无活动记录。部署首个应用以查看审计历史。',
+      deployNow: '立即部署',
+      unknownVps: '已删除 VPS',
+      unknownAction: '其他'
     },
     actions: {
       deploy: '部署',
@@ -1331,7 +1431,11 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       success: '成功',
       failed: '失败',
       cancelled: '已取消'
-    }
+    },
+    emptyVps: '暂无已注册 VPS。添加首个 VPS 以开始部署。',
+    addVps: '添加 VPS',
+    loadFailed: '无法加载总览数据。',
+    retry: '重试'
   },
   history: {
     ...BASE_EN_STRINGS.history,
@@ -1342,7 +1446,9 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       actionAll: '全部操作',
       vps: '服务器',
       vpsAll: '全部服务器',
-      timeRange: '时间范围'
+      timeRange: '时间范围',
+      startDate: '开始日期',
+      endDate: '结束日期'
     },
     columns: {
       time: '时间',
@@ -1373,6 +1479,7 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       title: '动态详情',
       time: '时间',
       vps: '服务器',
+      action: '操作',
       status: '状态',
       message: '信息',
       fields: '附加信息',
@@ -1737,11 +1844,46 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   },
   dashboard: {
     ...BASE_EN_STRINGS.dashboard,
+    title: 'システム概要',
+    description: 'アプリケーションの状態、インフラサーバー、直近のデプロイを監視します。',
+    summaryLabel: 'システム概要',
+    refresh: '更新',
+    viewApps: 'アプリ一覧',
+    viewVps: 'サーバー一覧',
+    deployAction: '+ デプロイ',
     stats: {
       vpsOnline: '確認済みの VPS',
       appsRunning: '記録されたデプロイ',
       deploy24h: '過去24時間のデプロイ',
       lastDeploy: '最終デプロイ'
+    },
+    apps: {
+      title: '管理中のアプリ',
+      description: 'インフラサーバーノード上にデプロイされたアプリケーション。',
+      viewAll: 'すべて表示',
+      columnName: 'アプリ',
+      columnPort: 'ポート',
+      columnVps: 'サーバー',
+      columnStatus: '記録ステータス',
+      empty: 'デプロイされたアプリはありません。',
+      deployApp: 'アプリをデプロイ',
+      openApp: 'アプリを開く',
+      statusDeployed: '記録済デプロイ',
+      statusNotDeployed: '未デプロイ'
+    },
+    recent: {
+      title: '最近のアクティビティ',
+      description: '全サーバーの操作監査ログ。',
+      viewAll: 'すべてのログを表示',
+      columnTime: '日時',
+      columnAction: '操作',
+      columnVps: 'サーバー',
+      columnStatus: 'ステータス',
+      columnMessage: 'メッセージ',
+      empty: 'アクティビティはまだありません。最初のアプリをデプロイして履歴を確認してください。',
+      deployNow: '今すぐデプロイ',
+      unknownVps: '削除済 VPS',
+      unknownAction: 'その他'
     },
     actions: {
       deploy: 'デプロイ',
@@ -1752,7 +1894,11 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       success: '成功',
       failed: '失敗',
       cancelled: 'キャンセル済'
-    }
+    },
+    emptyVps: 'VPS が登録されていません。最初の VPS を追加してデプロイを開始してください。',
+    addVps: 'VPS を追加',
+    loadFailed: 'ダッシュボードのデータを読み込めませんでした。',
+    retry: '再試行'
   },
   history: {
     ...BASE_EN_STRINGS.history,
@@ -1763,7 +1909,9 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       actionAll: 'すべての操作',
       vps: 'サーバー',
       vpsAll: 'すべてのサーバー',
-      timeRange: '期間'
+      timeRange: '期間',
+      startDate: '開始日',
+      endDate: '終了日'
     },
     columns: {
       time: '日時',
@@ -1794,6 +1942,7 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       title: 'アクティビティ詳細',
       time: '日時',
       vps: 'サーバー',
+      action: '操作',
       status: 'ステータス',
       message: 'メッセージ',
       fields: '詳細項目',
@@ -2049,6 +2198,7 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
       ...BASE_EN_STRINGS.dashboard,
       ...VI_OVERRIDES.dashboard,
       stats: { ...BASE_EN_STRINGS.dashboard.stats, ...VI_OVERRIDES.dashboard?.stats },
+      apps: { ...BASE_EN_STRINGS.dashboard.apps, ...VI_OVERRIDES.dashboard?.apps },
       actions: { ...BASE_EN_STRINGS.dashboard.actions, ...VI_OVERRIDES.dashboard?.actions },
       statuses: { ...BASE_EN_STRINGS.dashboard.statuses, ...VI_OVERRIDES.dashboard?.statuses },
       recent: { ...BASE_EN_STRINGS.dashboard.recent, ...VI_OVERRIDES.dashboard?.recent }
@@ -2132,6 +2282,7 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
       ...BASE_EN_STRINGS.dashboard,
       ...CN_OVERRIDES.dashboard,
       stats: { ...BASE_EN_STRINGS.dashboard.stats, ...CN_OVERRIDES.dashboard?.stats },
+      apps: { ...BASE_EN_STRINGS.dashboard.apps, ...CN_OVERRIDES.dashboard?.apps },
       actions: { ...BASE_EN_STRINGS.dashboard.actions, ...CN_OVERRIDES.dashboard?.actions },
       statuses: { ...BASE_EN_STRINGS.dashboard.statuses, ...CN_OVERRIDES.dashboard?.statuses },
       recent: { ...BASE_EN_STRINGS.dashboard.recent, ...CN_OVERRIDES.dashboard?.recent }
@@ -2215,6 +2366,7 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
       ...BASE_EN_STRINGS.dashboard,
       ...JP_OVERRIDES.dashboard,
       stats: { ...BASE_EN_STRINGS.dashboard.stats, ...JP_OVERRIDES.dashboard?.stats },
+      apps: { ...BASE_EN_STRINGS.dashboard.apps, ...JP_OVERRIDES.dashboard?.apps },
       actions: { ...BASE_EN_STRINGS.dashboard.actions, ...JP_OVERRIDES.dashboard?.actions },
       statuses: { ...BASE_EN_STRINGS.dashboard.statuses, ...JP_OVERRIDES.dashboard?.statuses },
       recent: { ...BASE_EN_STRINGS.dashboard.recent, ...JP_OVERRIDES.dashboard?.recent }

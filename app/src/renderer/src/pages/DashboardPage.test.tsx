@@ -6,6 +6,7 @@ import type { ActionLogEntry, App, Vps } from '@shared/ipc'
 
 import { DashboardPage } from './DashboardPage'
 import { strings } from '../strings'
+import { useUiState } from '../store/uiState'
 import { useVpsStore } from '../store/vpsStore'
 
 const VPS_A: Vps = {
@@ -119,7 +120,9 @@ describe('DashboardPage', () => {
     expect(statCell(strings.dashboard.stats.vpsOnline).textContent).toContain('0 / 2')
     expect(statCell(strings.dashboard.stats.appsRunning).textContent).toContain('1 / 2')
     expect(statCell(strings.dashboard.stats.deploy24h).textContent).toContain('2')
-    expect(statCell(strings.dashboard.stats.lastDeploy).textContent).toMatch(/ago|just now/)
+    expect(statCell(strings.dashboard.stats.lastDeploy).textContent).toMatch(
+      /ago|just now|trước|vừa xong/
+    )
 
     expect(screen.getAllByText('Deployed v7 successfully.').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Rollback failed.').length).toBeGreaterThan(0)
@@ -192,5 +195,88 @@ describe('DashboardPage', () => {
     expect(await screen.findByText('Khong doc duoc DB.')).toBeTruthy()
     fireEvent.click(screen.getByText(strings.dashboard.retry))
     expect(await screen.findByText(strings.dashboard.title)).toBeTruthy()
+  })
+
+  it('hien thi bang ung dung uu tien dau tien voi trang thai ghi nhan, ho tro dieu huong apps va vps', async () => {
+    const onOpenApps = vi.fn()
+    const onOpenVps = vi.fn()
+    const onOpenDeploy = vi.fn()
+    mockApi(happyHandlers)
+
+    render(
+      <DashboardPage onOpenApps={onOpenApps} onOpenVps={onOpenVps} onOpenDeploy={onOpenDeploy} />
+    )
+
+    await screen.findByText(strings.dashboard.title)
+
+    // Bảng ứng dụng đang quản lý hiển thị ưu tiên
+    expect(screen.getByText(strings.dashboard.apps.title)).toBeTruthy()
+    expect(screen.getByText('blog-demo')).toBeTruthy()
+    expect(screen.getByText('api-demo')).toBeTruthy()
+
+    // Phân biệt trạng thái đã ghi nhận (không tự khẳng định running/healthy)
+    expect(screen.getByText(`${strings.dashboard.apps.statusDeployed} (#7)`)).toBeTruthy()
+    expect(screen.getByText(strings.dashboard.apps.statusNotDeployed)).toBeTruthy()
+
+    // Bấm xem tất cả ứng dụng
+    fireEvent.click(screen.getByText(strings.dashboard.apps.viewAll))
+    expect(onOpenApps).toHaveBeenCalled()
+
+    // Bấm vào ứng dụng lưu selectedAppId và gọi onOpenApps
+    fireEvent.click(screen.getByText('blog-demo'))
+    expect(useUiState.getState().selectedAppId).toBe(1)
+
+    // Bấm vào máy chủ trên bảng lưu selectedVpsId và gọi onOpenVps
+    const vpsLinks = screen.getAllByText('VM01')
+    expect(vpsLinks.length).toBeGreaterThan(0)
+    fireEvent.click(vpsLinks[0])
+    expect(onOpenVps).toHaveBeenCalled()
+    expect(useUiState.getState().selectedVpsId).toBe(1)
+
+    // Bấm nút Triển khai trên header
+    fireEvent.click(screen.getByText(strings.dashboard.deployAction))
+    expect(onOpenDeploy).toHaveBeenCalled()
+  })
+
+  it('cap nhat dung toan bo nhan va thoi gian tuong doi khi doi 4 ngon ngu', async () => {
+    mockApi(happyHandlers)
+
+    // Test English
+    useUiState.setState({ locale: 'en' })
+    const { rerender } = render(<DashboardPage />)
+    await screen.findByText('Dashboard')
+    expect(
+      screen.getByText('System overview, managed applications, and recent activities.')
+    ).toBeTruthy()
+    expect(screen.getByText('Managed applications')).toBeTruthy()
+    expect(screen.getByText('Recent activity')).toBeTruthy()
+    expect(statCell('Last deployment').textContent).toMatch(/ago|just now/)
+
+    // Test Vietnamese
+    useUiState.setState({ locale: 'vi' })
+    rerender(<DashboardPage />)
+    await screen.findByText('Tổng quan hệ thống')
+    expect(screen.getByText('Ứng dụng đang quản lý')).toBeTruthy()
+    expect(screen.getByText('Hoạt động gần đây')).toBeTruthy()
+    expect(statCell('Lần triển khai gần nhất').textContent).toMatch(/trước|vừa xong/)
+
+    // Test Chinese
+    useUiState.setState({ locale: 'cn' })
+    rerender(<DashboardPage />)
+    await screen.findByText('系统总览')
+    expect(screen.getByText('管理的应用')).toBeTruthy()
+    expect(screen.getByText('近期活动')).toBeTruthy()
+    expect(statCell('最近部署').textContent).toMatch(/前|刚刚/)
+
+    // Test Japanese
+    useUiState.setState({ locale: 'jp' })
+    rerender(<DashboardPage />)
+    await screen.findByText('システム概要')
+    expect(screen.getByText('管理中のアプリ')).toBeTruthy()
+    expect(screen.getByText('最近のアクティビティ')).toBeTruthy()
+    expect(statCell('最終デプロイ').textContent).toMatch(/前|たった今/)
+
+    // Reset về Vietnamese cho các test tiếp theo
+    useUiState.setState({ locale: 'vi' })
   })
 })

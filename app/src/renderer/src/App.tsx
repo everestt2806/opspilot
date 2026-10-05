@@ -25,13 +25,26 @@ import { resolveActivePage, type ActivePageKey, type NavPageKey } from './utils/
 function renderPage(page: ActivePageKey, open: (page: string) => void): React.JSX.Element {
   switch (page) {
     case 'dashboard':
-      return <DashboardPage onOpenVps={() => open('vps')} onOpenDeploy={() => open('deploy')} />
+      return (
+        <DashboardPage
+          onOpenApps={() => open('apps')}
+          onOpenVps={() => open('vps')}
+          onOpenDeploy={() => open('deploy')}
+          onOpenActivity={() => open('activity')}
+        />
+      )
     case 'apps':
       return <AppsPage />
     case 'vps':
       return <VpsPage />
     case 'activity':
-      return <HistoryPage />
+      return (
+        <HistoryPage
+          onOpenVps={() => open('vps')}
+          onOpenApps={() => open('apps')}
+          onOpenDeploy={() => open('deploy')}
+        />
+      )
     case 'settings':
       return <SettingsPage />
     case 'deploy':

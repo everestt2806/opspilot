@@ -135,4 +135,109 @@ describe('HistoryPage', { timeout: 30000 }, () => {
       )
     )
   })
+
+  it('drawer chi tiet co nut dieu huong sang VPS va Ứng dụng', async () => {
+    const onOpenVps = vi.fn()
+    const onOpenApps = vi.fn()
+    mockApi({
+      'vps:list': async () => ({ ok: true, data: [VPS_A] }),
+      'history:list': async () => ({ ok: true, data: ROWS })
+    })
+
+    render(<HistoryPage onOpenVps={onOpenVps} onOpenApps={onOpenApps} />)
+    await screen.findByText('Deployed v7 successfully.')
+
+    fireEvent.click(screen.getByRole('row', { name: /Deployed v7 successfully\./ }))
+    expect(await screen.findByText(strings.history.detail.title)).toBeTruthy()
+
+    // Nút xem máy chủ trong Drawer
+    const vpsBtn = screen.getByText(strings.dashboard.viewVps)
+    fireEvent.click(vpsBtn)
+    expect(onOpenVps).toHaveBeenCalled()
+
+    // Bấm lại dòng để mở lại drawer
+    fireEvent.click(screen.getByRole('row', { name: /Deployed v7 successfully\./ }))
+    expect(await screen.findByText(strings.history.detail.title)).toBeTruthy()
+
+    // Nút mở ứng dụng trong Drawer
+    const appBtn = screen.getByText(strings.dashboard.apps.openApp)
+    fireEvent.click(appBtn)
+    expect(onOpenApps).toHaveBeenCalled()
+  })
+
+  it('ban dia hoa toan bo nhan, cot, filter va relativeTime tren 4 ngon ngu', async () => {
+    mockApi({
+      'vps:list': async () => ({ ok: true, data: [VPS_A] }),
+      'history:list': async () => ({ ok: true, data: ROWS })
+    })
+
+    const { useUiState } = await import('../store/uiState')
+
+    // 1. Tiếng Việt (vi)
+    useUiState.setState({ locale: 'vi' })
+    const { rerender } = render(<HistoryPage />)
+    await screen.findByText('Nhật ký hoạt động')
+    expect(screen.getByText('Thời gian')).toBeTruthy()
+    expect(screen.getByText('Thao tác')).toBeTruthy()
+    expect(screen.getByText('Máy chủ')).toBeTruthy()
+    expect(screen.getByText('Trạng thái')).toBeTruthy()
+    expect(screen.getByText('Thông điệp')).toBeTruthy()
+    expect(screen.getByText('Tất cả thao tác')).toBeTruthy()
+    expect(screen.getByText('Tất cả máy chủ')).toBeTruthy()
+    expect(screen.getByText('Triển khai')).toBeTruthy()
+    expect(screen.getByText('Tự động khôi phục')).toBeTruthy()
+    expect(screen.getByText('Thành công')).toBeTruthy()
+    expect(screen.getByText('Thất bại')).toBeTruthy()
+
+    // 2. English (en)
+    useUiState.setState({ locale: 'en' })
+    rerender(<HistoryPage />)
+    await screen.findByText('Audit Log')
+    expect(screen.getByText('Time')).toBeTruthy()
+    expect(screen.getByText('Action')).toBeTruthy()
+    expect(screen.getByText('Server')).toBeTruthy()
+    expect(screen.getByText('Status')).toBeTruthy()
+    expect(screen.getByText('Message')).toBeTruthy()
+    expect(screen.getByText('All actions')).toBeTruthy()
+    expect(screen.getByText('All servers')).toBeTruthy()
+    expect(screen.getByText('Deploy')).toBeTruthy()
+    expect(screen.getByText('Auto rollback')).toBeTruthy()
+    expect(screen.getByText('Success')).toBeTruthy()
+    expect(screen.getByText('Failed')).toBeTruthy()
+
+    // 3. 简体中文 (cn)
+    useUiState.setState({ locale: 'cn' })
+    rerender(<HistoryPage />)
+    await screen.findByText('审计日志')
+    expect(screen.getByText('时间')).toBeTruthy()
+    expect(screen.getByText('操作')).toBeTruthy()
+    expect(screen.getByText('服务器')).toBeTruthy()
+    expect(screen.getByText('状态')).toBeTruthy()
+    expect(screen.getByText('信息')).toBeTruthy()
+    expect(screen.getByText('全部操作')).toBeTruthy()
+    expect(screen.getByText('全部服务器')).toBeTruthy()
+    expect(screen.getByText('部署')).toBeTruthy()
+    expect(screen.getByText('自动回滚')).toBeTruthy()
+    expect(screen.getByText('成功')).toBeTruthy()
+    expect(screen.getByText('失败')).toBeTruthy()
+
+    // 4. 日本語 (jp)
+    useUiState.setState({ locale: 'jp' })
+    rerender(<HistoryPage />)
+    await screen.findByText('監査ログ')
+    expect(screen.getByText('日時')).toBeTruthy()
+    expect(screen.getByText('操作')).toBeTruthy()
+    expect(screen.getByText('サーバー')).toBeTruthy()
+    expect(screen.getByText('ステータス')).toBeTruthy()
+    expect(screen.getByText('メッセージ')).toBeTruthy()
+    expect(screen.getByText('すべての操作')).toBeTruthy()
+    expect(screen.getByText('すべてのサーバー')).toBeTruthy()
+    expect(screen.getByText('デプロイ')).toBeTruthy()
+    expect(screen.getByText('自動ロールバック')).toBeTruthy()
+    expect(screen.getByText('成功')).toBeTruthy()
+    expect(screen.getByText('失敗')).toBeTruthy()
+
+    // Reset về vi
+    useUiState.setState({ locale: 'vi' })
+  })
 })
