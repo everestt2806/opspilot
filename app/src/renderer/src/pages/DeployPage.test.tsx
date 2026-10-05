@@ -956,4 +956,119 @@ describe('DeployPage — wizard va log', () => {
     expect(await screen.findByText(strings.deploy.noVps)).toBeTruthy()
     expect(screen.queryByText(strings.deploy.vpsLoading)).toBeNull()
   })
+
+  it('nhap ten tuy chinh -> chon/doi thu muc -> doi VPS -> deploy:precheck xac nhan app_name van dung', async () => {
+    let currentFolder = 'D:\\src\\express-api'
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'vps:list': async () => ({ ok: true, data: [VPS_A, VPS_B] }),
+      'app:list': async () => ({ ok: true, data: [] }),
+      'system:pick-folder': async () => ({ ok: true, data: { path: currentFolder } })
+    })
+
+    render(<DeployPage />)
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 1))
+
+    // 1. Nhập tên tùy chỉnh ở bước Nguồn
+    const nameInput = screen.getByPlaceholderText('my-app') as HTMLInputElement
+    fireEvent.change(nameInput, { target: { value: 'custom-app-service' } })
+    expect(nameInput.value).toBe('custom-app-service')
+
+    // 2. Chọn thư mục lần 1
+    fireEvent.click(screen.getByText(strings.deploy.pickFolder))
+    await waitFor(() => expect(screen.getByDisplayValue('D:\\src\\express-api')).toBeTruthy())
+    // Tên tùy chỉnh vẫn giữ nguyên, không bị ghi đè bởi express-api
+    expect(nameInput.value).toBe('custom-app-service')
+
+    // 3. Đổi thư mục lần 2
+    currentFolder = 'D:\\projects\\another-tool'
+    fireEvent.click(screen.getByText(strings.deploy.pickAgain))
+    await waitFor(() => expect(screen.getByDisplayValue('D:\\projects\\another-tool')).toBeTruthy())
+    // Tên tùy chỉnh vẫn giữ nguyên, không bị ghi đè bởi another-tool
+    expect(nameInput.value).toBe('custom-app-service')
+
+    // 4. Đổi VPS sang VPS 2
+    const vpsSelect = screen.getAllByRole('combobox')[0]
+    fireEvent.change(vpsSelect, { target: { value: '2' } })
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 2))
+    // Tên tùy chỉnh vẫn giữ nguyên sau khi đổi VPS
+    expect(nameInput.value).toBe('custom-app-service')
+
+    // 5. Đi tiếp wizard tới Step 3 (Review / Precheck)
+    const nextBtn = screen.getByRole('button', { name: strings.deploy.next })
+    fireEvent.click(nextBtn)
+
+    // Step 1: Detect
+    await screen.findByText('Express.js')
+    fireEvent.click(screen.getByText('Next'))
+
+    // Step 2: Config - kiểm tra input tên ứng dụng vẫn là tên tùy chỉnh
+    await screen.findByLabelText('PORT')
+    expect(screen.getByDisplayValue('custom-app-service')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('PORT'), { target: { value: '3000' } })
+    fireEvent.change(screen.getByLabelText('SECRET_KEY'), { target: { value: 'sekret' } })
+    fireEvent.click(screen.getByText('Next'))
+
+    // Step 3: Review & Precheck
+    await screen.findByText('RAM trống')
+    expect(invoke).toHaveBeenCalledWith('deploy:precheck', {
+      vps_id: 2,
+      app_id: undefined,
+      app_name: 'custom-app-service',
+      source_path: 'D:\\projects\\another-tool',
+      env: { PORT: '3000', SECRET_KEY: 'sekret' }
+    })
+  })
+
+  it('doi giua hai che do ung dung moi va hien co khong mang ten app hien co sang app moi', async () => {
+    const currentFolder = 'D:\\src\\express-api'
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'vps:list': async () => ({ ok: true, data: [VPS_A] }),
+      'app:list': async () => ({ ok: true, data: [APP_1] }),
+      'system:pick-folder': async () => ({ ok: true, data: { path: currentFolder } })
+    })
+
+    render(<DeployPage />)
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 1))
+
+    // Tình huống A: Người dùng nhập tên tùy chỉnh
+    const nameInput = screen.getByPlaceholderText('my-app') as HTMLInputElement
+    fireEvent.change(nameInput, { target: { value: 'my-custom-tool' } })
+    expect(nameInput.value).toBe('my-custom-tool')
+
+    // Chuyển sang chế độ "Ứng dụng hiện có"
+    fireEvent.click(screen.getByRole('radio', { name: strings.deploy.targetApp.existing }))
+
+    // Chọn APP_1 ('preselected-api')
+    const appSelect = screen.getByRole('combobox', {
+      name: strings.deploy.targetApp.selectApp
+    })
+    fireEvent.change(appSelect, { target: { value: '10' } })
+
+    // Chuyển lại về chế độ "Ứng dụng mới"
+    fireEvent.click(screen.getByRole('radio', { name: strings.deploy.targetApp.new }))
+
+    // Input tên ứng dụng mới vẫn là 'my-custom-tool', KHÔNG bị đổi thành 'preselected-api'
+    const restoredInput = screen.getByPlaceholderText('my-app') as HTMLInputElement
+    expect(restoredInput.value).toBe('my-custom-tool')
+
+    // Tình huống B: Khi chưa nhập tên mà chỉ chọn thư mục
+    fireEvent.change(restoredInput, { target: { value: '' } })
+    fireEvent.click(screen.getByText(strings.deploy.pickFolder))
+    await waitFor(() => expect(screen.getByDisplayValue('D:\\src\\express-api')).toBeTruthy())
+    expect(restoredInput.value).toBe('express-api')
+
+    // Chuyển sang "Ứng dụng hiện có" và chọn APP_1
+    fireEvent.click(screen.getByRole('radio', { name: strings.deploy.targetApp.existing }))
+    fireEvent.change(screen.getByRole('combobox', { name: strings.deploy.targetApp.selectApp }), {
+      target: { value: '10' }
+    })
+
+    // Chuyển lại về "Ứng dụng mới"
+    fireEvent.click(screen.getByRole('radio', { name: strings.deploy.targetApp.new }))
+    const currentInput = screen.getByPlaceholderText('my-app') as HTMLInputElement
+    // Không bị mang tên 'preselected-api' sang app mới
+    expect(currentInput.value).toBe('express-api')
+  })
 })

@@ -92,7 +92,8 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   const [detection, setDetection] = useState<DetectionResultDto | null>(null)
   const [detecting, setDetecting] = useState(false)
   const [detectError, setDetectError] = useState<string | null>(null)
-  const [appName, setAppName] = useState('')
+  const [newAppName, setNewAppName] = useState('')
+  const [userEditedNewAppName, setUserEditedNewAppName] = useState(false)
   const [envValues, setEnvValues] = useState<Record<string, string>>({})
   const [optionalKeys, setOptionalKeys] = useState<string[]>([])
   const [pendingOptional, setPendingOptional] = useState<string | undefined>(undefined)
@@ -117,6 +118,10 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     targetModeRef.current = targetMode
   }, [targetMode])
 
+  const selectedExistingApp =
+    targetMode === 'existing' && appSelect > 0 ? apps.find((app) => app.id === appSelect) : null
+  const appName = targetMode === 'existing' ? (selectedExistingApp?.name ?? '') : newAppName
+
   const clearPreselectSession = useCallback((): void => {
     activePreselectRef.current = null
     clearDeployPreselect()
@@ -135,9 +140,6 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
 
       // Bỏ app_id cũ ngay lập tức khi đổi VPS
       setAppSelect(-1)
-      if (targetModeRef.current === 'existing') {
-        setAppName('')
-      }
 
       const result = await window.api.invoke('app:list', id)
       if (appListReqIdRef.current !== reqId) return
@@ -156,7 +158,6 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
         const found = fetchedApps.find((app) => app.id === preselectedAppId)
         if (found) {
           setAppSelect(found.id)
-          setAppName(found.name)
           setTargetMode('existing')
           activePreselectRef.current = null
           clearDeployPreselect()
@@ -169,17 +170,12 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
         activePreselectRef.current = null
         clearDeployPreselect()
       } else {
-        // Khi đổi VPS không phải preselect:
-        // Yêu cầu chọn rõ ứng dụng trên VPS mới, không tự chọn app đầu tiên
+        // Khi đổi VPS: giữ nguyên tên đã nhập của ứng dụng mới, không ghi đè;
+        // yêu cầu chọn rõ ứng dụng trên VPS mới nếu ở chế độ existing
         setAppSelect(-1)
-        if (targetModeRef.current === 'existing') {
-          setAppName('')
-        } else if (sourcePath) {
-          setAppName(toAppName(sourcePath))
-        }
       }
     },
-    [clearDeployPreselect, sourcePath, strings]
+    [clearDeployPreselect, strings]
   )
 
   const loadVpsList = useCallback(async (): Promise<void> => {
@@ -268,8 +264,9 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     const result = await window.api.invoke('system:pick-folder')
     if (!result.ok || !result.data.path) return
     setSourcePath(result.data.path)
-    if (targetMode === 'new') {
-      setAppName(toAppName(result.data.path))
+    // Chỉ gợi ý tên ứng dụng mới từ thư mục khi người dùng chưa tự nhập tên
+    if (targetMode === 'new' && !userEditedNewAppName) {
+      setNewAppName(toAppName(result.data.path))
     }
     setDetection(null)
     setDetectError(null)
@@ -284,7 +281,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     if (targetMode === 'existing') {
       if (appSelect === -1 || !apps.some((app) => app.id === appSelect)) return
     } else if (targetMode === 'new') {
-      if (!appName.trim() || !APP_NAME_RE.test(appName)) return
+      if (!newAppName.trim() || !APP_NAME_RE.test(newAppName.trim())) return
     }
     if (!detection) {
       const ok = await runDetect(sourcePath)
@@ -330,7 +327,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     return {
       vps_id: vpsId as number,
       app_id: validApp ? validApp.id : undefined,
-      app_name: validApp ? validApp.name : appName.trim(),
+      app_name: validApp ? validApp.name : newAppName.trim(),
       source_path: sourcePath as string,
       env: Object.fromEntries(Object.entries(envValues).filter(([, value]) => value.trim() !== ''))
     }
@@ -548,12 +545,11 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                         setPreselectAppError(null)
                         if (newMode === 'new') {
                           setAppSelect(-1)
-                          if (sourcePath) {
-                            setAppName(toAppName(sourcePath))
+                          if (!userEditedNewAppName && !newAppName.trim() && sourcePath) {
+                            setNewAppName(toAppName(sourcePath))
                           }
                         } else {
                           setAppSelect(-1)
-                          setAppName('')
                         }
                       }}
                     >
@@ -621,7 +617,9 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                                   setPreselectAppError(null)
                                   setTargetMode('new')
                                   setAppSelect(-1)
-                                  if (sourcePath) setAppName(toAppName(sourcePath))
+                                  if (!userEditedNewAppName && !newAppName.trim() && sourcePath) {
+                                    setNewAppName(toAppName(sourcePath))
+                                  }
                                 }}
                               >
                                 {strings.deploy.switchToNewApp}
@@ -643,11 +641,8 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                             if (selectedId > 0) {
                               clearPreselectSession()
                               setAppSelect(selectedId)
-                              const target = apps.find((app) => app.id === selectedId)
-                              if (target) setAppName(target.name)
                             } else {
                               setAppSelect(-1)
-                              setAppName('')
                             }
                           }}
                         >
@@ -675,8 +670,11 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                       <Input
                         className="mono-input"
                         placeholder="my-app"
-                        value={appName}
-                        onChange={(e) => setAppName(e.target.value)}
+                        value={newAppName}
+                        onChange={(e) => {
+                          setNewAppName(e.target.value)
+                          setUserEditedNewAppName(e.target.value.trim().length > 0)
+                        }}
                       />
                       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                         {strings.deploy.targetApp.appNameRule}
@@ -805,18 +803,19 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                   <Typography.Text strong>{strings.deploy.config.appLabel}</Typography.Text>
                   <Select
                     style={{ width: '100%', marginTop: 8 }}
-                    value={appSelect}
+                    value={targetMode === 'existing' ? appSelect : -1}
                     onChange={(value) => {
                       clearPreselectSession()
-                      setAppSelect(value)
                       if (value === -1) {
                         setTargetMode('new')
-                        if (sourcePath && !appName) setAppName(toAppName(sourcePath))
+                        setAppSelect(-1)
+                        if (!userEditedNewAppName && !newAppName.trim() && sourcePath) {
+                          setNewAppName(toAppName(sourcePath))
+                        }
                         return
                       }
                       setTargetMode('existing')
-                      const target = apps.find((app) => app.id === value)
-                      if (target) setAppName(target.name)
+                      setAppSelect(value)
                     }}
                     options={[
                       { value: -1, label: strings.deploy.config.newApp },
@@ -833,8 +832,11 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                     style={{ marginTop: 8 }}
                     className="mono-input"
                     value={appName}
-                    disabled={appSelect !== -1}
-                    onChange={(event) => setAppName(event.target.value)}
+                    disabled={targetMode === 'existing'}
+                    onChange={(event) => {
+                      setNewAppName(event.target.value)
+                      setUserEditedNewAppName(event.target.value.trim().length > 0)
+                    }}
                   />
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                     {strings.deploy.config.appNameRule}
