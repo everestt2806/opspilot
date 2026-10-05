@@ -212,6 +212,22 @@ const BASE_EN_STRINGS = {
       review: 'Review & Deploy'
     },
     vpsLabel: 'Target VPS',
+    vpsLoadError: 'Could not load VPS list',
+    appLoadError: 'Could not load applications for this VPS',
+    appLoading: 'Loading applications…',
+    preselectVpsNotFound: 'Preselected VPS was not found or has been removed.',
+    preselectAppNotFound: 'Preselected application is no longer associated with this VPS.',
+    chooseAvailableVps: 'Select available VPS',
+    switchToNewApp: 'Deploy as new app',
+    targetApp: {
+      title: 'Target application',
+      mode: 'Deployment target',
+      new: 'New application',
+      existing: 'Existing application',
+      selectApp: 'Select application',
+      noApps: 'No applications found on this VPS (will deploy as a new application)',
+      appName: 'Application name'
+    },
     sourceLabel: 'Source folder',
     pickFolder: 'Choose folder',
     pickAgain: 'Choose again',
@@ -1041,6 +1057,22 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     description:
       'Chọn thư mục mã nguồn — ứng dụng tự nhận diện framework và triển khai lên VPS qua SSH.',
     vpsLabel: 'Máy chủ VPS triển khai',
+    vpsLoadError: 'Không thể tải danh sách máy chủ',
+    appLoadError: 'Không thể tải danh sách ứng dụng của máy chủ này',
+    appLoading: 'Đang tải danh sách ứng dụng…',
+    preselectVpsNotFound: 'Máy chủ được chọn trước không tồn tại hoặc đã bị xóa.',
+    preselectAppNotFound: 'Ứng dụng được chọn trước không còn thuộc máy chủ này.',
+    chooseAvailableVps: 'Chọn máy chủ có sẵn',
+    switchToNewApp: 'Chuyển sang ứng dụng mới',
+    targetApp: {
+      title: 'Ứng dụng đích',
+      mode: 'Đích triển khai',
+      new: 'Ứng dụng mới',
+      existing: 'Ứng dụng hiện có',
+      selectApp: 'Chọn ứng dụng',
+      noApps: 'Chưa có ứng dụng nào trên VPS này (sẽ triển khai dưới dạng ứng dụng mới)',
+      appName: 'Tên ứng dụng'
+    },
     sourceLabel: 'Thư mục mã nguồn',
     noVps: 'Chưa có VPS nào. Hãy thêm VPS ở màn hình Máy chủ trước khi triển khai.',
     pickFolder: 'Chọn thư mục',
@@ -1521,6 +1553,22 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     title: '部署应用程序',
     description: '选择源码文件夹 — 系统将自动识别框架并通过 SSH 部署到 VPS。',
     vpsLabel: '目标 VPS',
+    vpsLoadError: '无法加载 VPS 列表',
+    appLoadError: '无法加载此 VPS 的应用列表',
+    appLoading: '正在加载应用列表…',
+    preselectVpsNotFound: '预选的 VPS 不存在或已被删除。',
+    preselectAppNotFound: '预选的应用不再属于此 VPS。',
+    chooseAvailableVps: '选择可用 VPS',
+    switchToNewApp: '切换为新建应用',
+    targetApp: {
+      title: '目标应用',
+      mode: '部署目标',
+      new: '新建应用',
+      existing: '现有应用',
+      selectApp: '选择应用',
+      noApps: '此 VPS 上暂无应用（将作为新应用部署）',
+      appName: '应用名称'
+    },
     sourceLabel: '源码文件夹',
     noVps: '暂无可用的 VPS。部署前请先在 VPS 页面添加。',
     pickFolder: '选择文件夹',
@@ -1994,6 +2042,22 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     description:
       'ソースフォルダを選択 — フレームワークを自動検出してSSH経由でVPSにデプロイします。',
     vpsLabel: '対象 VPS',
+    vpsLoadError: 'VPS 一覧を読み込めませんでした',
+    appLoadError: 'この VPS のアプリケーション一覧を読み込めませんでした',
+    appLoading: 'アプリケーション一覧を読み込み中…',
+    preselectVpsNotFound: '事前に選択された VPS が見つからないか、削除されました。',
+    preselectAppNotFound: '事前に選択されたアプリケーションはこの VPS に存在しません。',
+    chooseAvailableVps: '利用可能な VPS を選択',
+    switchToNewApp: '新規アプリに変更',
+    targetApp: {
+      title: 'デプロイ先アプリケーション',
+      mode: 'デプロイ対象',
+      new: '新規アプリケーション',
+      existing: '既存アプリケーション',
+      selectApp: 'アプリケーションを選択',
+      noApps: 'この VPS にはまだアプリケーションがありません（新規アプリとしてデプロイされます）',
+      appName: 'アプリケーション名'
+    },
     sourceLabel: 'ソースフォルダ',
     noVps: 'VPSがありません。デプロイ前にVPS画面で追加してください。',
     pickFolder: 'フォルダを選択',
@@ -2263,7 +2327,8 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
           ...VI_OVERRIDES.deploy?.review?.columns
         }
       },
-      log: { ...BASE_EN_STRINGS.deploy.log, ...VI_OVERRIDES.deploy?.log }
+      log: { ...BASE_EN_STRINGS.deploy.log, ...VI_OVERRIDES.deploy?.log },
+      targetApp: { ...BASE_EN_STRINGS.deploy.targetApp, ...VI_OVERRIDES.deploy?.targetApp }
     },
     history: {
       ...BASE_EN_STRINGS.history,
@@ -2348,7 +2413,8 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
           ...CN_OVERRIDES.deploy?.review?.columns
         }
       },
-      log: { ...BASE_EN_STRINGS.deploy.log, ...CN_OVERRIDES.deploy?.log }
+      log: { ...BASE_EN_STRINGS.deploy.log, ...CN_OVERRIDES.deploy?.log },
+      targetApp: { ...BASE_EN_STRINGS.deploy.targetApp, ...CN_OVERRIDES.deploy?.targetApp }
     },
     history: {
       ...BASE_EN_STRINGS.history,
@@ -2433,7 +2499,8 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
           ...JP_OVERRIDES.deploy?.review?.columns
         }
       },
-      log: { ...BASE_EN_STRINGS.deploy.log, ...JP_OVERRIDES.deploy?.log }
+      log: { ...BASE_EN_STRINGS.deploy.log, ...JP_OVERRIDES.deploy?.log },
+      targetApp: { ...BASE_EN_STRINGS.deploy.targetApp, ...JP_OVERRIDES.deploy?.targetApp }
     },
     history: {
       ...BASE_EN_STRINGS.history,

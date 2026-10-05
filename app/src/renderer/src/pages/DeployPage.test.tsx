@@ -2,7 +2,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { DeployEvent, DetectionResultDto, Vps } from '@shared/ipc'
+import type { App, DeployEvent, DetectionResultDto, Vps } from '@shared/ipc'
 
 import { DeployPage } from './DeployPage'
 import { strings } from '../strings'
@@ -74,6 +74,32 @@ const VPS_B: Vps = {
   id: 2,
   name: 'VM02',
   host: '203.0.113.56'
+}
+
+const APP_1: App = {
+  id: 10,
+  vps_id: 1,
+  name: 'preselected-api',
+  framework: 'express',
+  host_port: 30000,
+  container_port: 3000,
+  healthcheck_path: '/health',
+  needs_db: 0,
+  current_deployment_id: 1,
+  url: 'http://203.0.113.55:30000'
+}
+
+const APP_2: App = {
+  id: 20,
+  vps_id: 2,
+  name: 'app-on-vps-2',
+  framework: 'express',
+  host_port: 30001,
+  container_port: 3000,
+  healthcheck_path: '/health',
+  needs_db: 0,
+  current_deployment_id: 2,
+  url: 'http://203.0.113.56:30001'
 }
 
 const SOURCE_PATH = 'D:\\src\\express-api'
@@ -524,5 +550,216 @@ describe('DeployPage — wizard va log', () => {
     ).toBeTruthy()
     expect(screen.getByText('フォルダを選択')).toBeTruthy()
     expect(screen.getByText('ソースフォルダ')).toBeTruthy()
+  })
+
+  it('preselect voi app ton tai: giu nguyen VPS va app sau khi load, dien dung appName, truyen dung app_id len precheck', async () => {
+    useUiState.setState({ deployPreselect: { vpsId: 1, appId: 10 } })
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'vps:list': async () => ({ ok: true, data: [VPS_A, VPS_B] }),
+      'app:list': async (id) => (id === 1 ? { ok: true, data: [APP_1] } : { ok: true, data: [] })
+    })
+
+    render(<DeployPage />)
+
+    // Chờ tải xong và kiểm tra VPS + app được giữ nguyên
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 1))
+    expect(screen.getByRole('option', { name: 'VM01 — 203.0.113.55:22' })).toBeTruthy()
+
+    // Radio Ứng dụng hiện có được chọn
+    const existingRadio = screen.getByRole('radio', { name: strings.deploy.targetApp.existing })
+    expect((existingRadio as HTMLInputElement).checked).toBe(true)
+
+    // Combobox app hiển thị tên APP_1
+    expect(screen.getByRole('option', { name: /preselected-api — port 30000/ })).toBeTruthy()
+
+    // Chọn thư mục mã nguồn: appName không bị ghi đè thành tên thư mục
+    fireEvent.click(await screen.findByText('Choose folder'))
+    await waitFor(() => expect(screen.getByDisplayValue(SOURCE_PATH)).toBeTruthy())
+
+    // Đi tiếp tới review/precheck
+    fireEvent.click(screen.getByText('Next'))
+    await screen.findByText('Express.js')
+    fireEvent.click(screen.getByText('Next'))
+    await screen.findByLabelText('PORT')
+    fireEvent.change(screen.getByLabelText('PORT'), { target: { value: '3000' } })
+    fireEvent.change(screen.getByLabelText('SECRET_KEY'), { target: { value: 'sekret' } })
+    fireEvent.click(screen.getByText('Next'))
+    await screen.findByText('RAM trống')
+
+    // Precheck nhận đúng app_id: 10 và app_name: 'preselected-api'
+    expect(invoke).toHaveBeenCalledWith('deploy:precheck', {
+      vps_id: 1,
+      app_id: 10,
+      app_name: 'preselected-api',
+      source_path: SOURCE_PATH,
+      env: { PORT: '3000', SECRET_KEY: 'sekret' }
+    })
+  })
+
+  it('preselect voi app khong ton tai tren VPS: hien thi loi co nut chuyen sang app moi, khong am tham doi sang app/VPS khac', async () => {
+    useUiState.setState({ deployPreselect: { vpsId: 1, appId: 999 } })
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'vps:list': async () => ({ ok: true, data: [VPS_A] }),
+      'app:list': async () => ({ ok: true, data: [APP_1] })
+    })
+
+    render(<DeployPage />)
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 1))
+
+    // Banner lỗi xuất hiện giải thích app không thuộc VPS
+    expect(await screen.findByText(strings.deploy.preselectAppNotFound)).toBeTruthy()
+    expect(screen.getByText('App ID: 999')).toBeTruthy()
+
+    // Nút Next bị vô hiệu hoá
+    const nextBtn = screen.getByRole('button', { name: strings.deploy.next }) as HTMLButtonElement
+    expect(nextBtn.disabled).toBe(true)
+
+    // Bấm nút khôi phục: "Chuyển sang ứng dụng mới"
+    const switchBtn = screen.getByText(strings.deploy.switchToNewApp)
+    fireEvent.click(switchBtn)
+
+    // Lỗi biến mất và chuyển sang chế độ ứng dụng mới
+    expect(screen.queryByText(strings.deploy.preselectAppNotFound)).toBeNull()
+    const newRadio = screen.getByRole('radio', { name: strings.deploy.targetApp.new })
+    expect((newRadio as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('preselect voi VPS khong ton tai: hien thi loi co nut chon VPS co san, khong am tham doi VPS', async () => {
+    useUiState.setState({ deployPreselect: { vpsId: 888, appId: 10 } })
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'vps:list': async () => ({ ok: true, data: [VPS_A, VPS_B] })
+    })
+
+    render(<DeployPage />)
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('vps:list'))
+
+    // Banner lỗi xuất hiện
+    expect(await screen.findByText(strings.deploy.preselectVpsNotFound)).toBeTruthy()
+    expect(screen.getByText('VPS ID: 888')).toBeTruthy()
+
+    // Không âm thầm gọi app:list với VPS khác
+    expect(invoke).not.toHaveBeenCalledWith('app:list', 1)
+
+    // Nút Next bị vô hiệu hoá
+    const nextBtn = screen.getByRole('button', { name: strings.deploy.next }) as HTMLButtonElement
+    expect(nextBtn.disabled).toBe(true)
+
+    // Bấm nút khôi phục: "Chọn máy chủ có sẵn"
+    const chooseBtn = screen.getByText(strings.deploy.chooseAvailableVps)
+    fireEvent.click(chooseBtn)
+
+    // Lỗi biến mất và chọn VPS 1
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 1))
+    expect(screen.queryByText(strings.deploy.preselectVpsNotFound)).toBeNull()
+  })
+
+  it('app:list gap loi: hien thi thong bao kem nut thu lai', async () => {
+    let callCount = 0
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'vps:list': async () => ({ ok: true, data: [VPS_A] }),
+      'app:list': async () => {
+        callCount++
+        if (callCount === 1) {
+          return { ok: false, error: { message: 'SSH connection refused' } }
+        }
+        return { ok: true, data: [APP_1] }
+      }
+    })
+
+    render(<DeployPage />)
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 1))
+
+    // Chuyển sang radio Ứng dụng hiện có để xem app:list
+    fireEvent.click(screen.getByRole('radio', { name: strings.deploy.targetApp.existing }))
+
+    // Hiển thị lỗi appLoadError
+    expect(await screen.findByText(strings.deploy.appLoadError)).toBeTruthy()
+    expect(screen.getByText('SSH connection refused')).toBeTruthy()
+
+    // Bấm nút thử lại
+    fireEvent.click(screen.getByRole('button', { name: strings.common.retry }))
+
+    // Gọi lại app:list lần 2 thành công, hiển thị APP_1
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(3)) // 1 vps:list + 2 app:list
+    expect(await screen.findByRole('option', { name: /preselected-api — port 30000/ })).toBeTruthy()
+    expect(screen.queryByText(strings.deploy.appLoadError)).toBeNull()
+  })
+
+  it('doi VPS nhanh: phan hoi cu cua app:list khong ghi de danh sach app cua VPS moi', async () => {
+    let resolveVps1: (val: unknown) => void = () => {}
+    const vps1Promise = new Promise((res) => {
+      resolveVps1 = res
+    })
+
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'vps:list': async () => ({ ok: true, data: [VPS_A, VPS_B] }),
+      'app:list': async (id) => {
+        if (id === 1) {
+          await vps1Promise
+          return { ok: true, data: [APP_1] }
+        }
+        return { ok: true, data: [APP_2] }
+      }
+    })
+
+    render(<DeployPage />)
+
+    // Khởi tạo app:list(1) nhưng bị hoãn
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 1))
+
+    // Người dùng nhanh tay đổi sang VPS 2
+    const vpsSelect = screen.getByRole('combobox')
+    fireEvent.change(vpsSelect, { target: { value: '2' } })
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 2))
+
+    // Bật chế độ existing để kiểm tra danh sách app
+    fireEvent.click(screen.getByRole('radio', { name: strings.deploy.targetApp.existing }))
+
+    // VPS 2 đã trả về APP_2
+    expect(await screen.findByRole('option', { name: /app-on-vps-2 — port 30001/ })).toBeTruthy()
+
+    // Bây giờ phản hồi cũ của VPS 1 mới hoàn thành
+    act(() => {
+      resolveVps1(undefined)
+    })
+
+    // Danh sách vẫn giữ APP_2, không bị APP_1 ghi đè
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: /app-on-vps-2 — port 30001/ })).toBeTruthy()
+    })
+    expect(screen.queryByRole('option', { name: /preselected-api/ })).toBeNull()
+  })
+
+  it('phan biet loi vps:list voi danh sach VPS rong', async () => {
+    // 1. Khi vps:list bị lỗi: hiển thị Alert kèm nút Thử lại, không hiển thị Empty
+    const { invoke: invokeError } = mockApi({
+      ...handersHappy,
+      'vps:list': async () => ({ ok: false, error: { message: 'Database connection failed' } })
+    })
+
+    const { unmount } = render(<DeployPage />)
+    await waitFor(() => expect(invokeError).toHaveBeenCalledWith('vps:list'))
+
+    expect(await screen.findByText(strings.deploy.vpsLoadError)).toBeTruthy()
+    expect(screen.getByText('Database connection failed')).toBeTruthy()
+    expect(screen.queryByText(strings.deploy.noVps)).toBeNull()
+    unmount()
+
+    // 2. Khi vps:list thành công nhưng rỗng: hiển thị Empty, không hiển thị Alert lỗi
+    const { invoke: invokeEmpty } = mockApi({
+      ...handersHappy,
+      'vps:list': async () => ({ ok: true, data: [] })
+    })
+
+    render(<DeployPage />)
+    await waitFor(() => expect(invokeEmpty).toHaveBeenCalledWith('vps:list'))
+
+    expect(await screen.findByText(strings.deploy.noVps)).toBeTruthy()
+    expect(screen.queryByText(strings.deploy.vpsLoadError)).toBeNull()
   })
 })
