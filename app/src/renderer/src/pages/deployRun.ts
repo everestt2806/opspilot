@@ -6,6 +6,18 @@ export function isSecretKey(key: string): boolean {
   )
 }
 
+export function isValidHttpUrl(url: string | undefined | null): boolean {
+  if (!url || typeof url !== 'string') return false
+  const trimmed = url.trim()
+  if (!trimmed) return false
+  try {
+    const parsed = new URL(trimmed)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 export function getConfigSignature(input: DeployInput): string {
   const sortedEnvEntries = Object.keys(input.env ?? {})
     .sort()

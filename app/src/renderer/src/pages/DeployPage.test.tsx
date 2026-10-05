@@ -319,7 +319,10 @@ describe('DeployPage — wizard va log', () => {
     })
     emit({ type: 'finished', deployment_id: 7, status: 'failed', total_duration_ms: 30000 })
 
-    expect((await screen.findAllByText('Failed at step BUILD')).length).toBeGreaterThan(0)
+    expect(
+      (await screen.findAllByText(strings.deploy.log.failedStep(strings.deploy.log.steps.BUILD)))
+        .length
+    ).toBeGreaterThan(0)
     expect(screen.getByText('Build that bai. Kiem tra build command.')).toBeTruthy()
     await waitFor(() => expect(writtenLog()).toContain('ERROR: npm install that bai'))
     expect(screen.queryByText('Open app')).toBeNull()
@@ -1740,7 +1743,7 @@ describe('DeployPage — wizard va log', () => {
     expect(screen.getByText(strings.deploy.exposure.tunnelOnlyDesc)).toBeTruthy()
     expect(screen.getAllByText(strings.deploy.log.openApp).length).toBeGreaterThan(0)
 
-    // Trường hợp 4: not_checked
+    // Trường hợp 4: not_checked — không hiện nút Mở app vì chưa xác nhận truy cập
     emit({
       type: 'finished',
       deployment_id: 7,
@@ -1753,7 +1756,7 @@ describe('DeployPage — wizard va log', () => {
     expect(screen.getByText(strings.deploy.exposure.runtimeTag)).toBeTruthy()
     expect(screen.getByText(strings.deploy.exposure.notCheckedTag)).toBeTruthy()
     expect(screen.getByText(strings.deploy.exposure.notCheckedDesc)).toBeTruthy()
-    expect(screen.getAllByText(strings.deploy.log.openApp).length).toBeGreaterThan(0)
+    expect(screen.queryByText(strings.deploy.log.openApp)).toBeNull()
 
     // Trường hợp 5: reachable nhưng app_url rỗng — không hiện nút Mở app
     emit({
@@ -1767,5 +1770,292 @@ describe('DeployPage — wizard va log', () => {
     await waitFor(() => {
       expect(screen.queryByText(strings.deploy.log.openApp)).toBeNull()
     })
+  })
+
+  it('luu tam deploy:event khi cho ID va chi ap dung event dung deployment (ke ca finished den som), bo qua event deployment khac', async () => {
+    let resolveDeployStart: (val: unknown) => void = () => {}
+    const deployStartPromise = new Promise((resolve) => {
+      resolveDeployStart = resolve
+    })
+
+    const { emit, invoke } = mockApi({
+      ...handersHappy,
+      'deploy:start': async () => deployStartPromise
+    })
+
+    render(<DeployPage />)
+    await reachStep3(invoke)
+
+    // Bấm bắt đầu triển khai, deploy:start đang chờ xử lý
+    fireEvent.click(
+      screen.getByRole('button', { name: new RegExp(strings.deploy.review.deploy, 'i') })
+    )
+
+    // Các event đến trong lúc chờ deploy:start trả ID:
+    // 1. Log và step của deployment 7 (deployment đúng)
+    emit({
+      type: 'log',
+      deployment_id: 7,
+      step: 'PRECHECK',
+      chunk: 'early precheck log for 7\n',
+      stream: 'stdout'
+    })
+    emit({
+      type: 'step-start',
+      deployment_id: 7,
+      step: 'PRECHECK',
+      ts: '2026-08-19T10:00:00Z'
+    })
+    emit({
+      type: 'step-done',
+      deployment_id: 7,
+      step: 'PRECHECK',
+      duration_ms: 1200
+    })
+
+    // 2. Event của deployment khác (999) đến xen kẽ
+    emit({
+      type: 'log',
+      deployment_id: 999,
+      step: 'UPLOAD',
+      chunk: 'foreign deployment log\n',
+      stream: 'stdout'
+    })
+    emit({
+      type: 'step-start',
+      deployment_id: 999,
+      step: 'UPLOAD',
+      ts: '2026-08-19T10:00:01Z'
+    })
+
+    // 3. Finished đến sớm cho deployment 7
+    emit({
+      type: 'finished',
+      deployment_id: 7,
+      status: 'running',
+      total_duration_ms: 5000,
+      app_url: 'http://203.0.113.55:30000',
+      exposure_status: 'reachable'
+    })
+
+    // deploy:start trả ID 7
+    await act(async () => {
+      resolveDeployStart({ ok: true, data: { deployment_id: 7 } })
+    })
+
+    // Màn hình tiến độ xuất hiện và đã nhận đủ event của deployment 7
+    expect(await screen.findByText('Deploy log')).toBeTruthy()
+    expect(screen.getByText('1s')).toBeTruthy()
+    expect(screen.getByText(strings.deploy.exposure.reachableTitle)).toBeTruthy()
+    expect(screen.getAllByText(strings.deploy.log.openApp).length).toBeGreaterThan(0)
+
+    // Log terminal chứa nội dung deployment 7, không chứa log deployment 999
+    const logs = writtenLog()
+    expect(logs).toContain('early precheck log for 7')
+    expect(logs).not.toContain('foreign deployment log')
+  })
+
+  it('xoa bo dem event khi deploy:start loi, thu lai hoac reset wizard', async () => {
+    let deployStartCount = 0
+    let resolveDeployStart: (val: unknown) => void = () => {}
+
+    const { emit, invoke } = mockApi({
+      ...handersHappy,
+      'deploy:start': async () => {
+        deployStartCount++
+        if (deployStartCount === 1) {
+          return new Promise((resolve) => {
+            resolveDeployStart = resolve
+          })
+        }
+        return { ok: true, data: { deployment_id: 88 } }
+      }
+    })
+
+    render(<DeployPage />)
+    await reachStep3(invoke)
+
+    // Bấm triển khai lần 1
+    fireEvent.click(
+      screen.getByRole('button', { name: new RegExp(strings.deploy.review.deploy, 'i') })
+    )
+
+    // Gửi log trong lúc chờ lần 1
+    emit({
+      type: 'log',
+      deployment_id: 77,
+      step: 'PRECHECK',
+      chunk: 'discarded old log attempt 1\n',
+      stream: 'stdout'
+    })
+
+    // Lần 1 thất bại
+    await act(async () => {
+      resolveDeployStart({
+        ok: false,
+        error: { code: 'START_FAILED', message: 'Khai báo deploy thất bại' }
+      })
+    })
+
+    expect(await screen.findByText('Khai báo deploy thất bại')).toBeTruthy()
+
+    // Bấm thử lại (lần 2)
+    const retryBtn = screen.getByRole('button', {
+      name: new RegExp(strings.deploy.review.deploy, 'i')
+    })
+    fireEvent.click(retryBtn)
+
+    // Gửi log cho deployment 88
+    emit({
+      type: 'log',
+      deployment_id: 88,
+      step: 'PRECHECK',
+      chunk: 'new log attempt 2\n',
+      stream: 'stdout'
+    })
+    emit({
+      type: 'finished',
+      deployment_id: 88,
+      status: 'running',
+      total_duration_ms: 2000,
+      app_url: 'http://203.0.113.55:30000',
+      exposure_status: 'reachable'
+    })
+
+    expect(await screen.findByText('Deploy log')).toBeTruthy()
+    const logs = writtenLog()
+    expect(logs).toContain('new log attempt 2')
+    expect(logs).not.toContain('discarded old log attempt 1')
+
+    // Reset wizard
+    const backBtn = await screen.findByRole('button', {
+      name: new RegExp(strings.deploy.log.backToWizard, 'i')
+    })
+    fireEvent.click(backBtn)
+
+    // Trở lại step 0
+    await waitFor(() => {
+      expect(screen.getByText(strings.deploy.steps.source)).toBeTruthy()
+    })
+  })
+
+  it('ban dia hoa nhan buoc trong failedStep tren man tien do va footer', async () => {
+    const { emit, invoke } = mockApi(handersHappy)
+    const { rerender } = render(<DeployPage />)
+    await reachStep3(invoke)
+
+    fireEvent.click(
+      screen.getByRole('button', { name: new RegExp(strings.deploy.review.deploy, 'i') })
+    )
+    await screen.findByText('Deploy log')
+
+    // Chuyển sang tiếng Việt
+    act(() => {
+      useUiState.setState({ locale: 'vi' })
+    })
+    rerender(<DeployPage />)
+    await screen.findByText('Nhật ký triển khai')
+
+    // Giả lập bước HEALTHCHECK thất bại
+    emit({
+      type: 'step-start',
+      deployment_id: 7,
+      step: 'HEALTHCHECK',
+      ts: '2026-08-19T10:00:00Z'
+    })
+    emit({
+      type: 'step-failed',
+      deployment_id: 7,
+      step: 'HEALTHCHECK',
+      error: { code: 'HEALTHCHECK_FAILED', message: 'Container khong phan hoi tren cong 3000' },
+      last_log_lines: []
+    })
+    emit({
+      type: 'finished',
+      deployment_id: 7,
+      status: 'failed',
+      total_duration_ms: 8000
+    })
+
+    // Thông báo lỗi phải hiển thị nhãn tiếng Việt "Kiểm tra dịch vụ", không phải "HEALTHCHECK"
+    expect(await screen.findAllByText('Thất bại ở bước Kiểm tra dịch vụ')).toBeTruthy()
+
+    act(() => {
+      useUiState.setState({ locale: 'en' })
+    })
+  })
+
+  it('tu choi mo app voi URL khong phai HTTP(S) hoac chua duoc xac nhan', async () => {
+    const { emit, invoke } = mockApi(handersHappy)
+    render(<DeployPage />)
+    await reachStep3(invoke)
+
+    fireEvent.click(
+      screen.getByRole('button', { name: new RegExp(strings.deploy.review.deploy, 'i') })
+    )
+    await screen.findByText('Deploy log')
+
+    // Case 1: tunnel_only nhưng URL không hợp lệ (javascript:)
+    emit({
+      type: 'finished',
+      deployment_id: 7,
+      status: 'running',
+      total_duration_ms: 5000,
+      app_url: 'javascript:alert(1)',
+      exposure_status: 'tunnel_only'
+    })
+    await waitFor(() => {
+      expect(screen.queryByText(strings.deploy.log.openApp)).toBeNull()
+    })
+
+    // Case 2: reachable nhưng URL ftp://
+    emit({
+      type: 'finished',
+      deployment_id: 7,
+      status: 'running',
+      total_duration_ms: 5000,
+      app_url: 'ftp://ftp.example.com',
+      exposure_status: 'reachable'
+    })
+    await waitFor(() => {
+      expect(screen.queryByText(strings.deploy.log.openApp)).toBeNull()
+    })
+
+    // Case 3: degraded với URL hợp lệ -> không hiện nút
+    emit({
+      type: 'finished',
+      deployment_id: 7,
+      status: 'running',
+      total_duration_ms: 5000,
+      app_url: 'https://valid.example.com',
+      exposure_status: 'degraded'
+    })
+    await waitFor(() => {
+      expect(screen.queryByText(strings.deploy.log.openApp)).toBeNull()
+    })
+
+    // Case 4: not_checked với URL hợp lệ -> không hiện nút
+    emit({
+      type: 'finished',
+      deployment_id: 7,
+      status: 'running',
+      total_duration_ms: 5000,
+      app_url: 'https://valid.example.com',
+      exposure_status: 'not_checked'
+    })
+    await waitFor(() => {
+      expect(screen.queryByText(strings.deploy.log.openApp)).toBeNull()
+    })
+
+    // Case 5: tunnel_only với URL HTTPS hợp lệ -> hiện nút
+    emit({
+      type: 'finished',
+      deployment_id: 7,
+      status: 'running',
+      total_duration_ms: 5000,
+      app_url: 'https://secure.tunnel.domain.com',
+      exposure_status: 'tunnel_only'
+    })
+    expect(await screen.findAllByText(strings.deploy.log.openApp)).toBeTruthy()
   })
 })

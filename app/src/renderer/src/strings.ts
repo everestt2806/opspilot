@@ -1220,10 +1220,23 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       },
       openApp: 'Mở ứng dụng',
       viewDashboard: 'Xem tổng quan',
+      running: 'Đang triển khai',
+      success: (duration: string) => `Triển khai thành công trong ${duration}`,
+      failedStep: (step: string) => `Thất bại ở bước ${step}`,
+      rolledBack: 'Kiểm tra dịch vụ thất bại — đã tự động rollback về phiên bản trước.',
+      toolbar: {
+        copy: 'Sao chép',
+        search: 'Tìm kiếm',
+        searchPlaceholder: 'Tìm trong nhật ký…'
+      },
+      liveOutput: 'Nhật ký trực tiếp',
+      finished: 'Hoàn tất',
       cancel: 'Hủy triển khai',
       cancelConfirm: 'Dừng',
       cancelAsk:
         'Dừng triển khai giữa chừng? Tùy bước hiện tại, ứng dụng cũ được giữ nguyên hoặc dọn dẹp.',
+      scrollDown: 'Cuộn xuống dưới',
+      empty: 'Chưa có nhật ký. Đang chuẩn bị…',
       backToWizard: 'Quay lại wizard'
     }
   },
@@ -1753,9 +1766,22 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       },
       openApp: '打开应用',
       viewDashboard: '查看总览',
+      running: '正在部署',
+      success: (duration: string) => `部署成功，耗时 ${duration}`,
+      failedStep: (step: string) => `在 ${step} 步骤失败`,
+      rolledBack: '健康检查失败 — 已自动回滚至上一版本。',
+      toolbar: {
+        copy: '复制',
+        search: '查找',
+        searchPlaceholder: '在日志中搜索…'
+      },
+      liveOutput: '实时日志',
+      finished: '已完成',
       cancel: '取消部署',
       cancelConfirm: '停止',
       cancelAsk: '确定中途停止部署吗？根据当前步骤，旧应用将被保留或清理。',
+      scrollDown: '滚动到底部',
+      empty: '暂无日志。准备中…',
       backToWizard: '返回向导'
     }
   },
@@ -2284,10 +2310,23 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       },
       openApp: 'アプリを開く',
       viewDashboard: 'ダッシュボードを表示',
+      running: 'デプロイ中',
+      success: (duration: string) => `デプロイ完了 (${duration})`,
+      failedStep: (step: string) => `ステップ ${step} で失敗`,
+      rolledBack: 'ヘルスチェックに失敗しました — 前のバージョンに自動ロールバックされました。',
+      toolbar: {
+        copy: 'コピー',
+        search: '検索',
+        searchPlaceholder: 'ログ内を検索…'
+      },
+      liveOutput: 'ライブ出力',
+      finished: '完了',
       cancel: 'デプロイを中止',
       cancelConfirm: '中止',
       cancelAsk:
         '途中でデプロイを中止しますか？ステップに応じて、既存アプリが保持またはクリーンアップされます。',
+      scrollDown: '最下部へスクロール',
+      empty: 'ログがまだありません。準備中…',
       backToWizard: 'ウィザードに戻る'
     }
   },
@@ -2490,6 +2529,10 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
         steps: {
           ...BASE_EN_STRINGS.deploy.log.steps,
           ...VI_OVERRIDES.deploy?.log?.steps
+        },
+        toolbar: {
+          ...BASE_EN_STRINGS.deploy.log.toolbar,
+          ...VI_OVERRIDES.deploy?.log?.toolbar
         }
       },
       config: { ...BASE_EN_STRINGS.deploy.config, ...VI_OVERRIDES.deploy?.config },
@@ -2584,6 +2627,10 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
         steps: {
           ...BASE_EN_STRINGS.deploy.log.steps,
           ...CN_OVERRIDES.deploy?.log?.steps
+        },
+        toolbar: {
+          ...BASE_EN_STRINGS.deploy.log.toolbar,
+          ...CN_OVERRIDES.deploy?.log?.toolbar
         }
       },
       config: { ...BASE_EN_STRINGS.deploy.config, ...CN_OVERRIDES.deploy?.config },
@@ -2678,6 +2725,10 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
         steps: {
           ...BASE_EN_STRINGS.deploy.log.steps,
           ...JP_OVERRIDES.deploy?.log?.steps
+        },
+        toolbar: {
+          ...BASE_EN_STRINGS.deploy.log.toolbar,
+          ...JP_OVERRIDES.deploy?.log?.toolbar
         }
       },
       config: { ...BASE_EN_STRINGS.deploy.config, ...JP_OVERRIDES.deploy?.config },

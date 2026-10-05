@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { DeployEvent } from '@shared/ipc'
 
-import { applyEvent, initialSteps, type RunView } from './deployRun'
+import { applyEvent, initialSteps, isValidHttpUrl, type RunView } from './deployRun'
 
 const ESC = String.fromCharCode(27)
 
@@ -74,5 +74,30 @@ describe('applyEvent', () => {
       totalDurationMs: 15000,
       appUrl: 'http://203.0.113.55:30000'
     })
+  })
+})
+
+describe('isValidHttpUrl', () => {
+  it('chap nhan URL http va https hop le', () => {
+    expect(isValidHttpUrl('http://203.0.113.55:3000')).toBe(true)
+    expect(isValidHttpUrl('https://example.com')).toBe(true)
+    expect(isValidHttpUrl('https://my-app.cfargotunnel.com/test?q=1')).toBe(true)
+    expect(isValidHttpUrl('   http://localhost:8080   ')).toBe(true)
+  })
+
+  it('tu choi cac scheme khong an toan hoac khong phai web', () => {
+    expect(isValidHttpUrl('javascript:alert(1)')).toBe(false)
+    expect(isValidHttpUrl('file:///etc/passwd')).toBe(false)
+    expect(isValidHttpUrl('ftp://ftp.example.com')).toBe(false)
+    expect(isValidHttpUrl('data:text/html;base64,PHNjcmlwdD4=')).toBe(false)
+  })
+
+  it('tu choi chuoi rong, chuoi khong hop le hoac null/undefined', () => {
+    expect(isValidHttpUrl('')).toBe(false)
+    expect(isValidHttpUrl('   ')).toBe(false)
+    expect(isValidHttpUrl(undefined)).toBe(false)
+    expect(isValidHttpUrl(null)).toBe(false)
+    expect(isValidHttpUrl('localhost:3000')).toBe(false)
+    expect(isValidHttpUrl('not a valid url')).toBe(false)
   })
 })

@@ -29,7 +29,14 @@ import {
   StopOutlined
 } from '@ant-design/icons'
 
-import type { App, DeployInput, DetectionResultDto, PrecheckResult, Vps } from '@shared/ipc'
+import type {
+  App,
+  DeployEvent,
+  DeployInput,
+  DetectionResultDto,
+  PrecheckResult,
+  Vps
+} from '@shared/ipc'
 
 import { PageHeader } from '../components/PageHeader'
 
@@ -40,10 +47,13 @@ import {
   getConfigSignature,
   initialSteps,
   isSecretKey,
+  isValidHttpUrl,
   SEVEN_STEPS,
   type RunView
 } from './deployRun'
 import { DeployTerminal } from './DeployTerminal'
+
+const MAX_BUFFERED_EVENTS = 200
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
@@ -115,6 +125,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   const [elapsedTick, setElapsedTick] = useState(0)
 
   const startPendingRef = useRef(false)
+  const pendingEventsRef = useRef<DeployEvent[]>([])
   const runRef = useRef<RunView | null>(null)
   const appListReqIdRef = useRef(0)
   const precheckReqIdRef = useRef(0)
@@ -245,12 +256,22 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   useEffect(() => {
     return window.api.on('deploy:event', (event) => {
       const current = runRef.current
-      if (!current || event.deployment_id !== current.deploymentId) return
-      setRun((prev) => {
-        const next = prev ? applyEvent(prev, event) : prev
-        runRef.current = next
-        return next
-      })
+      if (current) {
+        if (event.deployment_id !== current.deploymentId) return
+        setRun((prev) => {
+          const next = prev ? applyEvent(prev, event) : prev
+          runRef.current = next
+          return next
+        })
+        return
+      }
+
+      if (startPendingRef.current) {
+        if (pendingEventsRef.current.length >= MAX_BUFFERED_EVENTS) {
+          pendingEventsRef.current.shift()
+        }
+        pendingEventsRef.current.push(event)
+      }
     })
   }, [])
 
@@ -418,6 +439,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     const currentSignature = getConfigSignature(currentInput)
     if (!precheck?.passed || precheckSignature !== currentSignature || prechecking) return
 
+    pendingEventsRef.current = []
     startPendingRef.current = true
     setStarting(true)
     setStartError(null)
@@ -428,14 +450,28 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
       if (!result.ok) {
         startPendingRef.current = false
         setStarting(false)
+        pendingEventsRef.current = []
         setStartError(result.error.message)
         return
       }
-      const nextRun: RunView = {
-        deploymentId: result.data.deployment_id,
+
+      const deploymentId = result.data.deployment_id
+      let nextRun: RunView = {
+        deploymentId,
         steps: initialSteps(),
         buffer: ''
       }
+
+      // Sau khi nhận ID, chỉ áp dụng event đúng deployment, kể cả finished đến sớm
+      const earlyEvents = pendingEventsRef.current.filter(
+        (evt) => evt.deployment_id === deploymentId
+      )
+      pendingEventsRef.current = []
+
+      for (const evt of earlyEvents) {
+        nextRun = applyEvent(nextRun, evt)
+      }
+
       runRef.current = nextRun
       setRun(nextRun)
       setRunStartedAt(Date.now())
@@ -443,6 +479,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     } catch (err: unknown) {
       startPendingRef.current = false
       setStarting(false)
+      pendingEventsRef.current = []
       setStartError(err instanceof Error ? err.message : String(err))
     }
   }
@@ -450,6 +487,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   function resetWizard(): void {
     startPendingRef.current = false
     setStarting(false)
+    pendingEventsRef.current = []
     runRef.current = null
     setRun(null)
     setRunStartedAt(null)
@@ -460,7 +498,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
 
   function openApp(url?: string): void {
     const target = url || runRef.current?.finished?.appUrl || run?.finished?.appUrl
-    if (target) {
+    if (target && isValidHttpUrl(target)) {
       void window.api.invoke('system:open-external', target)
     }
   }
@@ -1353,13 +1391,11 @@ function DeployLogView({
   const exposureStatus: 'reachable' | 'degraded' | 'tunnel_only' | 'not_checked' =
     finished?.exposureStatus ?? (appUrl ? 'reachable' : 'not_checked')
 
+  const isAccessConfirmed = exposureStatus === 'reachable' || exposureStatus === 'tunnel_only'
   const canOpenApp = Boolean(
-    finished &&
-    finished.status === 'running' &&
-    appUrl &&
-    appUrl.trim() !== '' &&
-    exposureStatus !== 'degraded'
+    finished && finished.status === 'running' && isAccessConfirmed && isValidHttpUrl(appUrl)
   )
+  const failedStepLabel = failedStep ? (strings.deploy.log.steps?.[failedStep] ?? failedStep) : '—'
 
   let exposureAlertType: 'success' | 'warning' | 'info' = 'success'
   let exposureTitle = strings.deploy.exposure.reachableTitle
@@ -1531,8 +1567,14 @@ function DeployLogView({
       ) : undefined
     const stepLabel = strings.deploy.log.steps?.[step] ?? step
     return {
-      title:
-        state.status === 'done' ? `${stepLabel} · ${formatDuration(state.durationMs)}` : stepLabel,
+      title: (
+        <div className="deploy-step-cell">
+          <span className="deploy-step-title">{stepLabel}</span>
+          {state.status === 'done' && (
+            <span className="deploy-step-duration">{formatDuration(state.durationMs)}</span>
+          )}
+        </div>
+      ),
       icon
     }
   })
@@ -1558,7 +1600,7 @@ function DeployLogView({
         }
       />
 
-      <Steps size="small" items={stepItems} />
+      <Steps className="deploy-log-steps" size="small" responsive={false} items={stepItems} />
 
       {finished?.status === 'running' && (
         <Alert
@@ -1614,7 +1656,7 @@ function DeployLogView({
           message={
             finished.status === 'rolled_back'
               ? strings.deploy.log.rolledBack
-              : strings.deploy.log.failedStep(failedStep ?? '—')
+              : strings.deploy.log.failedStep(failedStepLabel)
           }
           description={
             run.error ? (
@@ -1745,7 +1787,7 @@ function DeployLogView({
             {finished
               ? finished.status === 'running'
                 ? strings.deploy.log.success(formatDuration(finished.totalDurationMs))
-                : strings.deploy.log.failedStep(failedStep ?? '—')
+                : strings.deploy.log.failedStep(failedStepLabel)
               : strings.deploy.log.running}
           </Tag>
         </Space>

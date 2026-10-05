@@ -6,7 +6,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 
-import { strings } from '../strings'
+import { useStrings } from '../strings'
 import { TERM_COLORS } from '../utils/themeTokens'
 
 interface DeployTerminalProps {
@@ -25,6 +25,7 @@ export function DeployTerminal({
   totalSteps = 7,
   status
 }: DeployTerminalProps): React.JSX.Element {
+  const strings = useStrings()
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const searchRef = useRef<SearchAddon | null>(null)
@@ -118,7 +119,11 @@ export function DeployTerminal({
           />
           <span className="deploy-terminal-title">{strings.deploy.log.liveOutput}</span>
           <span className="deploy-terminal-progress">
-            {activeStep ?? strings.deploy.log.finished} · {completedSteps}/{totalSteps}
+            {activeStep
+              ? (strings.deploy.log.steps?.[activeStep as keyof typeof strings.deploy.log.steps] ??
+                activeStep)
+              : strings.deploy.log.finished}{' '}
+            · {completedSteps}/{totalSteps}
           </span>
         </div>
         <Space size={4} className="deploy-terminal-actions">
