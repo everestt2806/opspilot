@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Button,
+  Card,
   Descriptions,
   Drawer,
   Empty,
@@ -58,6 +59,14 @@ function isSecretKey(key: string): boolean {
   return /(secret|password|token|api[-_]?key|private[-_]?key)/i.test(key)
 }
 
+function getConfigSignature(input: DeployInput): string {
+  const sortedEnv = Object.keys(input.env)
+    .sort()
+    .map((k) => `${k}=${input.env[k]}`)
+    .join(';')
+  return `${input.vps_id}::${input.app_id ?? ''}::${input.app_name}::${input.source_path}::${sortedEnv}`
+}
+
 const APP_NAME_RE = /^[a-z0-9][a-z0-9-]*$/
 
 interface DeployPageProps {
@@ -100,6 +109,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   const [configError, setConfigError] = useState<string | null>(null)
   const [step, setStep] = useState(0)
   const [precheck, setPrecheck] = useState<PrecheckResult | null>(null)
+  const [precheckSignature, setPrecheckSignature] = useState<string | null>(null)
   const [prechecking, setPrechecking] = useState(false)
   const [precheckError, setPrecheckError] = useState<string | null>(null)
   const [startError, setStartError] = useState<string | null>(null)
@@ -110,9 +120,17 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
 
   const runRef = useRef<RunView | null>(null)
   const appListReqIdRef = useRef(0)
+  const precheckReqIdRef = useRef(0)
   const initialLoadedRef = useRef(false)
   const activePreselectRef = useRef<DeployPreselect | null>(deployPreselect)
   const targetModeRef = useRef(targetMode)
+
+  const invalidatePrecheck = useCallback((): void => {
+    precheckReqIdRef.current++
+    setPrecheck(null)
+    setPrecheckSignature(null)
+    setPrecheckError(null)
+  }, [])
 
   useEffect(() => {
     targetModeRef.current = targetMode
@@ -134,8 +152,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
       setAppsLoading(true)
       setAppLoadError(null)
       setPreselectAppError(null)
-      setPrecheck(null)
-      setPrecheckError(null)
+      invalidatePrecheck()
       setStartError(null)
 
       // Bỏ app_id cũ ngay lập tức khi đổi VPS
@@ -175,7 +192,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
         setAppSelect(-1)
       }
     },
-    [clearDeployPreselect, strings]
+    [clearDeployPreselect, invalidatePrecheck, strings]
   )
 
   const loadVpsList = useCallback(async (): Promise<void> => {
@@ -263,6 +280,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   async function pickFolder(): Promise<void> {
     const result = await window.api.invoke('system:pick-folder')
     if (!result.ok || !result.data.path) return
+    invalidatePrecheck()
     setSourcePath(result.data.path)
     // Chỉ gợi ý tên ứng dụng mới từ thư mục khi người dùng chưa tự nhập tên
     if (targetMode === 'new' && !userEditedNewAppName) {
@@ -270,7 +288,6 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     }
     setDetection(null)
     setDetectError(null)
-    setPrecheck(null)
     setOptionalKeys([])
     setEnvValues({})
     void runDetect(result.data.path)
@@ -301,17 +318,20 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   }
 
   function setEnv(key: string, value: string): void {
+    invalidatePrecheck()
     setEnvValues((prev) => ({ ...prev, [key]: value }))
   }
 
   function addOptional(): void {
     if (!pendingOptional || !matches) return
+    invalidatePrecheck()
     setOptionalKeys((prev) => [...prev, pendingOptional])
     setEnv(pendingOptional, '')
     setPendingOptional(undefined)
   }
 
   function removeOptional(key: string): void {
+    invalidatePrecheck()
     setOptionalKeys((prev) => prev.filter((item) => item !== key))
     setEnvValues((prev) => {
       const next = { ...prev }
@@ -320,7 +340,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     })
   }
 
-  function buildInput(): DeployInput {
+  const buildInput = useCallback((): DeployInput => {
     const validApp =
       targetMode === 'existing' && appSelect > 0 ? apps.find((app) => app.id === appSelect) : null
 
@@ -331,24 +351,53 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
       source_path: sourcePath as string,
       env: Object.fromEntries(Object.entries(envValues).filter(([, value]) => value.trim() !== ''))
     }
-  }
+  }, [appSelect, apps, envValues, newAppName, sourcePath, targetMode, vpsId])
 
-  async function runPrecheck(): Promise<void> {
+  const currentConfigSignature = useMemo(() => {
+    if (!vpsId || !sourcePath) return ''
+    return getConfigSignature(buildInput())
+  }, [buildInput, sourcePath, vpsId])
+
+  const isPrecheckValid =
+    Boolean(precheck) && Boolean(precheckSignature) && precheckSignature === currentConfigSignature
+
+  const runPrecheck = useCallback(async (): Promise<void> => {
     if (!vpsId || !sourcePath || vpsLoading || appsLoading) return
     if (targetMode === 'existing') {
       const validApp = apps.find((app) => app.id === appSelect)
       if (!validApp) return
     }
+    const currentInput = buildInput()
+    const targetSignature = getConfigSignature(currentInput)
+    const reqId = ++precheckReqIdRef.current
+
     setPrechecking(true)
+    setPrecheck(null)
+    setPrecheckSignature(null)
     setPrecheckError(null)
-    const result = await window.api.invoke('deploy:precheck', buildInput())
-    setPrechecking(false)
-    if (!result.ok) {
-      setPrecheckError(result.error.message)
-      return
+
+    try {
+      const result = await window.api.invoke('deploy:precheck', currentInput)
+      if (precheckReqIdRef.current !== reqId) return
+      if (getConfigSignature(buildInput()) !== targetSignature) return
+
+      setPrechecking(false)
+      if (!result.ok) {
+        setPrecheck(null)
+        setPrecheckSignature(null)
+        setPrecheckError(result.error.message)
+        return
+      }
+      setPrecheck(result.data)
+      setPrecheckSignature(targetSignature)
+    } catch (err: unknown) {
+      if (precheckReqIdRef.current !== reqId) return
+      setPrechecking(false)
+      setPrecheck(null)
+      setPrecheckSignature(null)
+      setPrecheckError(err instanceof Error ? err.message : String(err))
     }
-    setPrecheck(result.data)
-  }
+  }, [apps, appsLoading, buildInput, sourcePath, targetMode, appSelect, vpsId, vpsLoading])
 
   async function continueFromConfig(): Promise<void> {
     if (!matches) return
@@ -358,18 +407,20 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     }
     const missing = requiredMissing()
     if (missing.length > 0) {
-      setConfigError(`Missing required variables: ${missing.join(', ')}.`)
+      setConfigError(strings.deploy.config.missingRequired(missing))
       return
     }
     setConfigError(null)
-    await runPrecheck()
     setStep(3)
+    await runPrecheck()
   }
 
   async function startDeploy(): Promise<void> {
-    if (!precheck?.passed) return
+    const currentInput = buildInput()
+    const currentSignature = getConfigSignature(currentInput)
+    if (!precheck?.passed || precheckSignature !== currentSignature || prechecking) return
     setStartError(null)
-    const input = { ...buildInput(), host_port: precheck.assigned_host_port }
+    const input = { ...currentInput, host_port: precheck.assigned_host_port }
     const result = await window.api.invoke('deploy:start', input)
     if (!result.ok) {
       setStartError(result.error.message)
@@ -390,8 +441,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     runRef.current = null
     setRun(null)
     setRunStartedAt(null)
-    setPrecheck(null)
-    setPrecheckError(null)
+    invalidatePrecheck()
     setStartError(null)
     setStep(0)
   }
@@ -541,6 +591,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                       onChange={(e) => {
                         const newMode = e.target.value as 'new' | 'existing'
                         clearPreselectSession()
+                        invalidatePrecheck()
                         setTargetMode(newMode)
                         setPreselectAppError(null)
                         if (newMode === 'new') {
@@ -614,6 +665,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                                 type="primary"
                                 onClick={() => {
                                   clearPreselectSession()
+                                  invalidatePrecheck()
                                   setPreselectAppError(null)
                                   setTargetMode('new')
                                   setAppSelect(-1)
@@ -638,6 +690,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                           value={appSelect}
                           onChange={(e) => {
                             const selectedId = Number(e.currentTarget.value)
+                            invalidatePrecheck()
                             if (selectedId > 0) {
                               clearPreselectSession()
                               setAppSelect(selectedId)
@@ -672,6 +725,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                         placeholder="my-app"
                         value={newAppName}
                         onChange={(e) => {
+                          invalidatePrecheck()
                           setNewAppName(e.target.value)
                           setUserEditedNewAppName(e.target.value.trim().length > 0)
                         }}
@@ -806,6 +860,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                     value={targetMode === 'existing' ? appSelect : -1}
                     onChange={(value) => {
                       clearPreselectSession()
+                      invalidatePrecheck()
                       if (value === -1) {
                         setTargetMode('new')
                         setAppSelect(-1)
@@ -834,6 +889,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                     value={appName}
                     disabled={targetMode === 'existing'}
                     onChange={(event) => {
+                      invalidatePrecheck()
                       setNewAppName(event.target.value)
                       setUserEditedNewAppName(event.target.value.trim().length > 0)
                     }}
@@ -915,8 +971,80 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
           {step === 3 && (
             <div className="deploy-step-body">
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                <Space size="small">
-                  <Typography.Text strong>{strings.deploy.review.title}</Typography.Text>
+                <Card size="small" className="deploy-review-summary-card">
+                  <Descriptions
+                    title={strings.deploy.review.summaryTitle}
+                    column={2}
+                    size="small"
+                    bordered
+                  >
+                    <Descriptions.Item label={strings.deploy.review.targetVps}>
+                      <Typography.Text strong>
+                        {vpsList.find((v) => v.id === vpsId)?.name ??
+                          (vpsId ? `VPS #${vpsId}` : '—')}
+                      </Typography.Text>
+                      {vpsList.find((v) => v.id === vpsId) && (
+                        <Typography.Text type="secondary">
+                          {' '}
+                          ({vpsList.find((v) => v.id === vpsId)?.host}:
+                          {vpsList.find((v) => v.id === vpsId)?.port})
+                        </Typography.Text>
+                      )}
+                    </Descriptions.Item>
+                    <Descriptions.Item label={strings.deploy.review.targetApp}>
+                      <Space size="small">
+                        <Tag color={targetMode === 'existing' ? 'blue' : 'green'}>
+                          {targetMode === 'existing'
+                            ? strings.deploy.targetApp.existing
+                            : strings.deploy.targetApp.new}
+                        </Tag>
+                        <Typography.Text code strong>
+                          {appName || '—'}
+                        </Typography.Text>
+                      </Space>
+                    </Descriptions.Item>
+                    <Descriptions.Item label={strings.deploy.review.sourcePath} span={2}>
+                      <Typography.Text code>{sourcePath || '—'}</Typography.Text>
+                    </Descriptions.Item>
+                    <Descriptions.Item label={strings.deploy.review.envList} span={2}>
+                      {Object.keys(envValues).filter((k) => envValues[k].trim() !== '').length ===
+                      0 ? (
+                        <Typography.Text type="secondary">
+                          {strings.deploy.review.noEnv}
+                        </Typography.Text>
+                      ) : (
+                        <Space wrap size={[8, 4]}>
+                          {Object.entries(envValues)
+                            .filter(([, v]) => v.trim() !== '')
+                            .map(([key, value]) => {
+                              const secret = isSecretKey(key)
+                              return (
+                                <Tag key={key} className="deploy-env-tag">
+                                  <Typography.Text strong>{key}</Typography.Text>=
+                                  <Typography.Text type={secret ? 'secondary' : undefined}>
+                                    {secret ? '••••••••' : value}
+                                  </Typography.Text>
+                                </Tag>
+                              )
+                            })}
+                        </Space>
+                      )}
+                    </Descriptions.Item>
+                  </Descriptions>
+                </Card>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginTop: 4
+                  }}
+                >
+                  <Space size="small">
+                    <Typography.Text strong>{strings.deploy.review.title}</Typography.Text>
+                    {prechecking && <Spin size="small" />}
+                  </Space>
                   <Button
                     size="small"
                     icon={<ReloadOutlined />}
@@ -925,24 +1053,40 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                   >
                     {strings.deploy.review.retry}
                   </Button>
-                </Space>
+                </div>
+
                 {prechecking && (
-                  <Space size="small">
-                    <Spin size="small" />
-                    <Typography.Text type="secondary">
-                      {strings.deploy.review.checking}
-                    </Typography.Text>
-                  </Space>
+                  <Alert
+                    type="info"
+                    showIcon
+                    icon={<Spin size="small" />}
+                    message={strings.deploy.review.checking}
+                  />
                 )}
+
                 {precheckError && (
                   <Alert
                     type="error"
                     showIcon
                     message={strings.deploy.review.error}
-                    description={precheckError}
+                    description={
+                      <div>
+                        <div>{precheckError}</div>
+                        <Button
+                          size="small"
+                          type="primary"
+                          danger
+                          style={{ marginTop: 8 }}
+                          onClick={() => void runPrecheck()}
+                        >
+                          {strings.deploy.review.retry}
+                        </Button>
+                      </div>
+                    }
                   />
                 )}
-                {precheck && !prechecking && (
+
+                {precheck && !prechecking && isPrecheckValid && (
                   <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                     <Table
                       size="small"
@@ -965,9 +1109,11 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                         }
                       ]}
                     />
-                    <Descriptions column={1} size="small">
+                    <Descriptions column={1} size="small" bordered>
                       <Descriptions.Item label={strings.deploy.review.urlLabel}>
-                        <Typography.Text code>{precheck.app_url}</Typography.Text>
+                        <Typography.Text code copyable>
+                          {precheck.app_url}
+                        </Typography.Text>
                         <Typography.Text type="secondary">
                           {' '}
                           (port {precheck.assigned_host_port})
@@ -975,10 +1121,15 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                       </Descriptions.Item>
                     </Descriptions>
                     {!precheck.passed && (
-                      <Alert type="info" showIcon message={strings.deploy.review.deployDisabled} />
+                      <Alert
+                        type="warning"
+                        showIcon
+                        message={strings.deploy.review.deployDisabled}
+                      />
                     )}
                   </Space>
                 )}
+
                 {startError && <Alert type="error" showIcon message={startError} />}
               </Space>
             </div>
@@ -1025,7 +1176,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
               <Button
                 type="primary"
                 icon={<RocketOutlined />}
-                disabled={!precheck?.passed || prechecking}
+                disabled={!precheck?.passed || !isPrecheckValid || prechecking}
                 onClick={() => void startDeploy()}
               >
                 {strings.deploy.review.deploy}

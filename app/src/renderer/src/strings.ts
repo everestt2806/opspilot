@@ -269,9 +269,17 @@ const BASE_EN_STRINGS = {
         'Secrets are encrypted locally, written only to the .env file on the VPS, and never shown in logs.',
       dbUrlHint:
         'DATABASE_URL: leave empty to let the tool create Postgres with a random password.',
-      manualTitle: 'Manual steps after deploy'
+      manualTitle: 'Manual steps after deploy',
+      missingRequired: (keys: string[]) => `Missing required variables: ${keys.join(', ')}.`
     },
     review: {
+      summaryTitle: 'Deployment summary',
+      targetVps: 'Target VPS',
+      targetApp: 'Target application',
+      sourcePath: 'Source folder',
+      envList: 'Environment variables',
+      noEnv: 'None',
+      checksTitle: 'Precheck results',
       title: 'Check VPS before deploy',
       checking: 'Running precheck…',
       retry: 'Check again',
@@ -1081,7 +1089,8 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     config: {
       ...BASE_EN_STRINGS.deploy.config,
-      appNameRule: 'Chữ thường a-z, chữ số và dấu gạch ngang — phải bắt đầu bằng chữ cái.'
+      appNameRule: 'Chữ thường a-z, chữ số và dấu gạch ngang — phải bắt đầu bằng chữ cái.',
+      missingRequired: (keys: string[]) => `Thiếu các biến môi trường bắt buộc: ${keys.join(', ')}.`
     },
     sourceLabel: 'Thư mục mã nguồn',
     noVps: 'Chưa có VPS nào. Hãy thêm VPS ở màn hình Máy chủ trước khi triển khai.',
@@ -1097,6 +1106,13 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     review: {
       ...BASE_EN_STRINGS.deploy.review,
+      summaryTitle: 'Tóm tắt cấu hình triển khai',
+      targetVps: 'Máy chủ VPS',
+      targetApp: 'Ứng dụng đích',
+      sourcePath: 'Thư mục mã nguồn',
+      envList: 'Biến môi trường',
+      noEnv: 'Không có',
+      checksTitle: 'Kết quả kiểm tra',
       title: 'Kiểm tra VPS trước khi triển khai',
       checking: 'Đang kiểm tra trước…',
       retry: 'Kiểm tra lại',
@@ -1584,7 +1600,8 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     config: {
       ...BASE_EN_STRINGS.deploy.config,
-      appNameRule: '仅限小写字母 a-z、数字和连字符，且必须以字母开头。'
+      appNameRule: '仅限小写字母 a-z、数字和连字符，且必须以字母开头。',
+      missingRequired: (keys: string[]) => `缺少必需的环境变量: ${keys.join(', ')}。`
     },
     sourceLabel: '源码文件夹',
     noVps: '暂无可用的 VPS。部署前请先在 VPS 页面添加。',
@@ -1600,6 +1617,13 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     review: {
       ...BASE_EN_STRINGS.deploy.review,
+      summaryTitle: '部署配置摘要',
+      targetVps: '目标 VPS',
+      targetApp: '目标应用',
+      sourcePath: '源码文件夹',
+      envList: '环境变量',
+      noEnv: '无',
+      checksTitle: '预检结果',
       title: '部署前检查 VPS',
       checking: '正在进行预检…',
       retry: '重新检查',
@@ -2080,7 +2104,8 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     config: {
       ...BASE_EN_STRINGS.deploy.config,
-      appNameRule: '英小文字 a-z、数字、ハイフン（先頭は英文字である必要があります）。'
+      appNameRule: '英小文字 a-z、数字、ハイフン（先頭は英文字である必要があります）。',
+      missingRequired: (keys: string[]) => `必須の環境変数が不足しています: ${keys.join(', ')}。`
     },
     sourceLabel: 'ソースフォルダ',
     noVps: 'VPSがありません。デプロイ前にVPS画面で追加してください。',
@@ -2096,6 +2121,13 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     review: {
       ...BASE_EN_STRINGS.deploy.review,
+      summaryTitle: 'デプロイ設定概要',
+      targetVps: '対象 VPS',
+      targetApp: '対象アプリケーション',
+      sourcePath: 'ソースフォルダ',
+      envList: '環境変数',
+      noEnv: 'なし',
+      checksTitle: '事前チェック結果',
       title: 'デプロイ前 VPS チェック',
       checking: '事前チェック実行中…',
       retry: '再チェック',

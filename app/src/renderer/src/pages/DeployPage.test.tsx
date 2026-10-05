@@ -1071,4 +1071,239 @@ describe('DeployPage — wizard va log', () => {
     // Không bị mang tên 'preselected-api' sang app mới
     expect(currentInput.value).toBe('express-api')
   })
+
+  it('pass cu -> sua cau hinh -> precheck loi: vo hieu hoa pass cu, khong cho deploy:start', async () => {
+    let precheckShouldFail = false
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'deploy:precheck': async () => {
+        if (precheckShouldFail) {
+          return { ok: false, error: { message: 'RAM khong du tren VPS' } }
+        }
+        return { ok: true, data: PRECHECK_PASS }
+      }
+    })
+
+    render(<DeployPage />)
+    await reachStep3(invoke)
+
+    // Bước Review lần 1: precheck đạt
+    expect(await screen.findByText('RAM trống')).toBeTruthy()
+    const deployBtn = screen.getByRole('button', {
+      name: new RegExp(strings.deploy.review.deploy, 'i')
+    }) as HTMLButtonElement
+    expect(deployBtn.disabled).toBe(false)
+
+    // Quay lại Bước 2 (Config) và sửa cấu hình (đổi PORT)
+    fireEvent.click(screen.getByText(strings.deploy.back))
+    await screen.findByLabelText('PORT')
+    fireEvent.change(screen.getByLabelText('PORT'), { target: { value: '4000' } })
+
+    // Đặt precheck lần 2 lỗi
+    precheckShouldFail = true
+
+    // Đi tiếp tới Bước 3
+    fireEvent.click(screen.getByText(strings.deploy.next))
+
+    // Kết quả pass cũ bị xóa, hiển thị lỗi mới
+    expect(await screen.findByText('RAM khong du tren VPS')).toBeTruthy()
+    expect(screen.queryByText('RAM trống')).toBeNull()
+
+    // Nút Deploy bị vô hiệu hóa
+    const updatedDeployBtn = screen.getByRole('button', {
+      name: new RegExp(strings.deploy.review.deploy, 'i')
+    }) as HTMLButtonElement
+    expect(updatedDeployBtn.disabled).toBe(true)
+    fireEvent.click(updatedDeployBtn)
+    expect(invoke).not.toHaveBeenCalledWith('deploy:start', expect.anything())
+  })
+
+  it('phan hoi precheck ve sai thu tu: khong ghi de cau hinh moi va khong giu pass cu', async () => {
+    let resolveFirstPrecheck: (val: unknown) => void = () => {}
+    const firstPrecheckPromise = new Promise((res) => {
+      resolveFirstPrecheck = res
+    })
+    let precheckCallCount = 0
+
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'deploy:precheck': async () => {
+        precheckCallCount++
+        if (precheckCallCount === 1) {
+          await firstPrecheckPromise
+          return { ok: true, data: { ...PRECHECK_PASS, assigned_host_port: 30000 } }
+        }
+        return { ok: false, error: { message: 'Port 8080 is already in use' } }
+      }
+    })
+
+    render(<DeployPage />)
+
+    // Đi tới bước 2
+    fireEvent.click(await screen.findByText('Choose folder'))
+    await waitFor(() => expect(screen.getByDisplayValue(SOURCE_PATH)).toBeTruthy())
+    fireEvent.click(screen.getByText('Next'))
+    await screen.findByText('Express.js')
+    fireEvent.click(screen.getByText('Next'))
+    await screen.findByLabelText('PORT')
+    fireEvent.change(screen.getByLabelText('PORT'), { target: { value: '3000' } })
+    fireEvent.change(screen.getByLabelText('SECRET_KEY'), { target: { value: 'sekret' } })
+
+    // Bấm Next sang bước 3 (Kích hoạt precheck 1 - đang pending)
+    fireEvent.click(screen.getByText('Next'))
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('deploy:precheck', expect.anything()))
+
+    // Quay lại ngay bước 2 và đổi PORT sang 8080
+    fireEvent.click(screen.getByText(strings.deploy.back))
+    await screen.findByLabelText('PORT')
+    fireEvent.change(screen.getByLabelText('PORT'), { target: { value: '8080' } })
+
+    // Bấm Next sang bước 3 (Kích hoạt precheck 2 - resolve ngay lập tức với lỗi)
+    fireEvent.click(screen.getByText('Next'))
+    expect(await screen.findByText('Port 8080 is already in use')).toBeTruthy()
+    const deployBtn = screen.getByRole('button', {
+      name: new RegExp(strings.deploy.review.deploy, 'i')
+    }) as HTMLButtonElement
+    expect(deployBtn.disabled).toBe(true)
+
+    // Bây giờ cho precheck 1 hoàn thành (về muộn / sai thứ tự)
+    await act(async () => {
+      resolveFirstPrecheck(undefined)
+    })
+
+    // Precheck 1 về muộn không được ghi đè, Deploy vẫn disabled
+    expect(screen.getByText('Port 8080 is already in use')).toBeTruthy()
+    const deployBtnAfter = screen.getByRole('button', {
+      name: new RegExp(strings.deploy.review.deploy, 'i')
+    }) as HTMLButtonElement
+    expect(deployBtnAfter.disabled).toBe(true)
+    fireEvent.click(deployBtnAfter)
+    expect(invoke).not.toHaveBeenCalledWith('deploy:start', expect.anything())
+  })
+
+  it('lan kiem tra moi dat thi deploy:start nhan dung input va assigned_host_port moi nhat', async () => {
+    let precheckCallCount = 0
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'deploy:precheck': async () => {
+        precheckCallCount++
+        if (precheckCallCount === 1) {
+          return {
+            ok: true,
+            data: {
+              ...PRECHECK_PASS,
+              assigned_host_port: 30000,
+              app_url: 'http://203.0.113.55:30000'
+            }
+          }
+        }
+        return {
+          ok: true,
+          data: {
+            ...PRECHECK_PASS,
+            assigned_host_port: 30008,
+            app_url: 'http://203.0.113.55:30008'
+          }
+        }
+      }
+    })
+
+    render(<DeployPage />)
+    await reachStep3(invoke)
+
+    // Precheck 1 có port 30000
+    expect(await screen.findByText(/port 30000/)).toBeTruthy()
+
+    // Quay lại sửa SECRET_KEY
+    fireEvent.click(screen.getByText(strings.deploy.back))
+    await screen.findByLabelText('SECRET_KEY')
+    fireEvent.change(screen.getByLabelText('SECRET_KEY'), { target: { value: 'super-new-secret' } })
+
+    // Đi tiếp sang Bước 3, precheck lần 2 chạy
+    fireEvent.click(screen.getByText(strings.deploy.next))
+    expect(await screen.findByText(/port 30008/)).toBeTruthy()
+
+    // Bấm Triển khai
+    const deployBtn = screen.getByRole('button', {
+      name: new RegExp(strings.deploy.review.deploy, 'i')
+    }) as HTMLButtonElement
+    expect(deployBtn.disabled).toBe(false)
+    fireEvent.click(deployBtn)
+
+    // deploy:start phải nhận đúng assigned_host_port 30008 và SECRET_KEY mới
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('deploy:start', {
+        vps_id: 1,
+        app_id: undefined,
+        app_name: 'express-api',
+        source_path: SOURCE_PATH,
+        host_port: 30008,
+        env: { PORT: '3000', SECRET_KEY: 'super-new-secret' }
+      })
+    )
+  })
+
+  it('man Review hien thi tom tat dich trien khai va che gia tri secret', async () => {
+    const { invoke } = mockApi(handersHappy)
+
+    render(<DeployPage />)
+    await reachStep3(invoke)
+
+    // Hiển thị tóm tắt VPS, target app, source path
+    expect(await screen.findByText(strings.deploy.review.summaryTitle)).toBeTruthy()
+    expect(screen.getByText(/VM01/)).toBeTruthy()
+    expect(screen.getByText('express-api')).toBeTruthy()
+    expect(screen.getByText(SOURCE_PATH)).toBeTruthy()
+
+    // Hiển thị env: PORT hiển thị giá trị, SECRET_KEY bị che
+    expect(screen.getByText('PORT')).toBeTruthy()
+    expect(screen.getByText('3000')).toBeTruthy()
+    expect(screen.getByText('SECRET_KEY')).toBeTruthy()
+    expect(screen.getByText('••••••••')).toBeTruthy()
+    expect(screen.queryByText('sekret')).toBeNull()
+  })
+
+  it('thong bao thieu bien bat buoc ban dia hoa cho 4 ngon ngu', async () => {
+    mockApi(handersHappy)
+
+    // Đi tới bước 2 Config
+    const { rerender } = render(<DeployPage />)
+    fireEvent.click(await screen.findByText('Choose folder'))
+    await waitFor(() => expect(screen.getByDisplayValue(SOURCE_PATH)).toBeTruthy())
+    fireEvent.click(screen.getByText('Next'))
+    await screen.findByText('Express.js')
+    fireEvent.click(screen.getByText('Next'))
+
+    // Chỉ điền PORT, để trống SECRET_KEY
+    await screen.findByLabelText('PORT')
+    fireEvent.change(screen.getByLabelText('PORT'), { target: { value: '3000' } })
+
+    // 1. English
+    fireEvent.click(screen.getByText('Next'))
+    expect(await screen.findByText('Missing required variables: SECRET_KEY.')).toBeTruthy()
+
+    // 2. Tiếng Việt
+    act(() => {
+      useUiState.setState({ locale: 'vi' })
+    })
+    rerender(<DeployPage />)
+    fireEvent.click(screen.getByText('Tiếp tục'))
+    expect(await screen.findByText('Thiếu các biến môi trường bắt buộc: SECRET_KEY.')).toBeTruthy()
+
+    // 3. 简体中文
+    act(() => {
+      useUiState.setState({ locale: 'cn' })
+    })
+    rerender(<DeployPage />)
+    fireEvent.click(screen.getByText('下一步'))
+    expect(await screen.findByText('缺少必需的环境变量: SECRET_KEY。')).toBeTruthy()
+
+    // 4. 日本語
+    act(() => {
+      useUiState.setState({ locale: 'jp' })
+    })
+    rerender(<DeployPage />)
+    fireEvent.click(screen.getByText('次へ'))
+    expect(await screen.findByText('必須の環境変数が不足しています: SECRET_KEY。')).toBeTruthy()
+  })
 })
