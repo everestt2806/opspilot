@@ -1274,49 +1274,150 @@
   padding-left: 20px;
 }
 
-.deploy-log-steps {
-  margin-block: 8px 16px;
-}
+/* ── 7.5. Deploy progress 7 steps bar ────────────────────────────────────── */
 
-.deploy-log-steps .ant-steps-item {
+.deploy-steps-container {
+  display: flex;
+  width: 100%;
+  margin-block: 8px 18px;
+  padding: 0;
+  align-items: flex-start;
+  user-select: none;
   overflow: visible;
 }
 
-.deploy-log-steps .ant-steps-item-container {
+.deploy-step-col {
+  flex: 1 1 0%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.deploy-step-track {
+  width: 100%;
+  height: 24px;
   display: flex;
   align-items: center;
+  justify-content: center;
+  position: relative;
 }
 
-.deploy-log-steps .ant-steps-item-content {
-  min-width: 0;
-  vertical-align: middle;
+.deploy-step-line {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: var(--border);
+  transition: background 0.25s ease;
 }
 
-.deploy-log-steps .ant-steps-item-title {
-  padding-inline-end: 6px !important;
-  line-height: 1.2 !important;
-  overflow: visible !important;
+.deploy-step-line-prev {
+  left: 0;
+  right: 50%;
+  margin-right: 15px;
 }
 
-.deploy-step-cell {
-  display: inline-flex;
+.deploy-step-line-next {
+  left: 50%;
+  right: 0;
+  margin-left: 15px;
+}
+
+.deploy-step-line-active {
+  background: var(--success);
+}
+
+.deploy-step-marker {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  background: var(--content-bg);
+}
+
+.deploy-step-badge {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--content-bg);
+  line-height: 1;
+}
+
+.deploy-step-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.deploy-step-icon-done {
+  color: var(--success);
+}
+
+.deploy-step-icon-running {
+  color: var(--primary);
+  font-size: 18px;
+}
+
+.deploy-step-icon-failed {
+  color: var(--danger);
+}
+
+.deploy-step-meta {
+  margin-top: 6px;
+  display: flex;
   flex-direction: column;
-  vertical-align: middle;
-  line-height: 1.2;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  padding-inline: 2px;
+  box-sizing: border-box;
 }
 
-.deploy-step-title {
+.deploy-step-label {
   font-size: 12px;
+  line-height: 1.3;
   font-weight: 500;
+  color: var(--text-primary);
+  text-align: center;
   white-space: nowrap;
 }
 
-.deploy-step-duration {
+.deploy-step-pending .deploy-step-label {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.deploy-step-running .deploy-step-label {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.deploy-step-failed .deploy-step-label {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.deploy-step-time {
   font-size: 11px;
-  color: var(--text-secondary);
   font-family: var(--font-mono, monospace);
+  color: var(--text-secondary);
   line-height: 1.2;
-  margin-top: 1px;
+  margin-top: 2px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 /* ── 8. Terminal deploy/migrate ──────────────────────────────────────────── */

@@ -1555,30 +1555,6 @@ function DeployLogView({
     setDomainMessage(strings.deploy.domain.currentStatus(result.data.message, result.data.status))
   }
 
-  const stepItems = SEVEN_STEPS.map((step) => {
-    const state = run.steps[step]
-    const icon =
-      state.status === 'done' ? (
-        <CheckCircleFilled className="step-icon-ok" />
-      ) : state.status === 'running' ? (
-        <LoadingOutlined />
-      ) : state.status === 'failed' ? (
-        <CloseCircleFilled className="step-icon-fail" />
-      ) : undefined
-    const stepLabel = strings.deploy.log.steps?.[step] ?? step
-    return {
-      title: (
-        <div className="deploy-step-cell">
-          <span className="deploy-step-title">{stepLabel}</span>
-          {state.status === 'done' && (
-            <span className="deploy-step-duration">{formatDuration(state.durationMs)}</span>
-          )}
-        </div>
-      ),
-      icon
-    }
-  })
-
   return (
     <section className="page-panel">
       <PageHeader
@@ -1600,7 +1576,62 @@ function DeployLogView({
         }
       />
 
-      <Steps className="deploy-log-steps" size="small" responsive={false} items={stepItems} />
+      <div className="deploy-steps-container" role="list" aria-label={strings.deploy.log.title}>
+        {SEVEN_STEPS.map((step, idx) => {
+          const state = run.steps[step]
+          const stepLabel = strings.deploy.log.steps?.[step] ?? step
+          const isDone = state.status === 'done'
+          const isRunning = state.status === 'running'
+          const isFailed = state.status === 'failed'
+          const isFirst = idx === 0
+          const isLast = idx === SEVEN_STEPS.length - 1
+
+          const lineBeforeActive = isDone || isRunning || isFailed
+          const lineAfterActive = isDone
+
+          return (
+            <div
+              key={step}
+              className={`deploy-step-col deploy-step-${state.status}`}
+              role="listitem"
+            >
+              <div className="deploy-step-track">
+                {!isFirst && (
+                  <div
+                    className={`deploy-step-line deploy-step-line-prev ${
+                      lineBeforeActive ? 'deploy-step-line-active' : ''
+                    }`}
+                  />
+                )}
+                <div className="deploy-step-marker">
+                  {isDone ? (
+                    <CheckCircleFilled className="deploy-step-icon deploy-step-icon-done" />
+                  ) : isRunning ? (
+                    <LoadingOutlined className="deploy-step-icon deploy-step-icon-running" />
+                  ) : isFailed ? (
+                    <CloseCircleFilled className="deploy-step-icon deploy-step-icon-failed" />
+                  ) : (
+                    <span className="deploy-step-badge">{idx + 1}</span>
+                  )}
+                </div>
+                {!isLast && (
+                  <div
+                    className={`deploy-step-line deploy-step-line-next ${
+                      lineAfterActive ? 'deploy-step-line-active' : ''
+                    }`}
+                  />
+                )}
+              </div>
+              <div className="deploy-step-meta">
+                <span className="deploy-step-label">{stepLabel}</span>
+                {isDone && state.durationMs !== undefined && (
+                  <span className="deploy-step-time">{formatDuration(state.durationMs)}</span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
 
       {finished?.status === 'running' && (
         <Alert
