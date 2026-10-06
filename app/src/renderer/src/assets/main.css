@@ -1554,62 +1554,98 @@
 
 /* ── 9. Settings ─────────────────────────────────────────────────────────── */
 
-.settings-layout {
-  display: grid;
-  grid-template-columns: 160px minmax(0, 720px);
-  gap: 16px;
-}
-
-.settings-categories {
+.settings-page {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding-right: 12px;
-  border-right: 1px solid var(--border);
 }
 
-.settings-category {
-  min-height: 34px;
-  padding: 0 10px;
-  border: 0;
-  background: transparent;
-  color: var(--text-secondary);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+.settings-card-wrapper {
+  max-width: 680px;
+  width: 100%;
 }
 
-.settings-category:hover:not(:disabled) {
-  background: var(--fill-hover);
-  color: var(--text-primary);
+.settings-card {
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  border-radius: 6px;
+  box-shadow: none;
 }
 
-.settings-category-active {
-  background: var(--fill-selected);
-  color: var(--text-primary);
+.settings-card .ant-card-body {
+  padding: 16px 20px;
 }
 
-.settings-category-disabled {
-  color: var(--text-disabled);
-  cursor: default;
-}
-
-.settings-section {
+.settings-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  max-width: 720px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
+  gap: 20px;
+  padding: 6px 0;
 }
 
-.settings-section .ant-typography {
+.settings-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.settings-row-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.settings-row-desc.ant-typography {
   margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-secondary);
 }
 
-.settings-section-readonly {
-  align-items: flex-start;
+.settings-row-control {
+  flex: 0 0 auto;
+}
+
+.settings-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 12px 0;
+}
+
+/* Accessibility & keyboard focus for Segmented control */
+.settings-row-control .ant-segmented {
+  background: var(--fill-secondary);
+  border: 1px solid var(--border);
+  padding: 2px;
+}
+
+.settings-row-control .ant-segmented-item {
+  color: var(--text-secondary);
+  transition: all 0.15s ease-in-out;
+}
+
+.settings-row-control .ant-segmented-item:hover:not(.ant-segmented-item-disabled) {
+  color: var(--text-primary);
+}
+
+.settings-row-control .ant-segmented-item-selected {
+  background: var(--fill-selected) !important;
+  color: var(--text-primary) !important;
+  font-weight: 600;
+}
+
+/* Clear keyboard focus states */
+.settings-row-control .ant-segmented-item:has(.ant-segmented-item-input:focus-visible),
+.settings-row-control .ant-segmented-item-input:focus-visible + .ant-segmented-item-label {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 1px !important;
+  border-radius: 4px;
+}
+
+.settings-row-control .ant-segmented:focus-within {
+  border-color: var(--accent);
 }
 
 /* ── 10. Chi tiết khác ────────────────────────────────────────────────────── */
@@ -1779,21 +1815,9 @@
     width: min(100%, 260px);
   }
 
-  .settings-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .settings-categories {
-    flex-direction: row;
-    gap: 4px;
-    overflow-x: auto;
-    padding-right: 0;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .settings-category {
-    flex: 0 0 auto;
+  .settings-row {
+    flex-wrap: wrap;
+    gap: 12px;
   }
 }
 
