@@ -186,6 +186,16 @@ export function MigratePage(): React.JSX.Element {
   const preIdEventsRef = useRef<MigrateEvent[]>([])
   const jobsStateRef = useRef<Record<number, JobRuntimeState>>({})
   const logsByJobRef = useRef<Record<number, string>>({})
+  const terminalJobStatusRef = useRef<
+    Record<
+      number,
+      {
+        status: 'completed' | 'failed' | 'rolled_back'
+        downtime_ms?: number
+        error?: string
+      }
+    >
+  >({})
 
   // Confirmation modal states
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
@@ -199,17 +209,18 @@ export function MigratePage(): React.JSX.Element {
     )
   }, [jobsList])
 
-  // Selectable jobs include all active jobs PLUS the current job if it just finished
+  // Selectable jobs include all known jobs (both active and finished) so users can inspect them
   const selectableJobs = useMemo(() => {
-    const result = [...activeJobs]
-    if (jobContext && !result.some((j) => j.id === jobContext.jobId)) {
-      const current = jobsList.find((j) => j.id === jobContext.jobId)
-      if (current) {
-        result.push(current)
+    const seen = new Set<number>()
+    const result: MigrateJobView[] = []
+    for (const j of jobsList) {
+      if (!seen.has(j.id)) {
+        seen.add(j.id)
+        result.push(j)
       }
     }
     return result
-  }, [activeJobs, jobContext, jobsList])
+  }, [jobsList])
 
   const isRunning = status === 'running'
   const isJobActive = isStarting || isRunning || status === 'awaiting_confirmation'
@@ -315,6 +326,8 @@ export function MigratePage(): React.JSX.Element {
       if (event.status === 'completed') {
         nextStatus = 'completed'
         nextFailReason = undefined
+        nextStep = MIGRATE_STEPS.length - 1
+        nextDoneCount = MIGRATE_STEPS.length
       } else if (event.status === 'failed') {
         nextStatus = 'failed'
         nextFailReason = event.error
@@ -322,6 +335,10 @@ export function MigratePage(): React.JSX.Element {
         nextStatus = 'rolled_back'
         nextFailReason = event.error
       }
+    }
+
+    if (terminalJobStatusRef.current[event.job_id]) {
+      nextStatus = terminalJobStatusRef.current[event.job_id].status
     }
 
     const st: JobRuntimeState = {
@@ -363,11 +380,23 @@ export function MigratePage(): React.JSX.Element {
 
   const handleEvent = useCallback(
     (event: MigrateEvent): void => {
-      // 1. Keep jobsList status updated
+      // 1. Keep jobsList status updated and record terminal status
       if (event.type === 'finished') {
+        terminalJobStatusRef.current[event.job_id] = {
+          status: event.status as 'completed' | 'failed' | 'rolled_back',
+          downtime_ms: event.downtime_ms,
+          error: event.error
+        }
         setJobsList((prev) =>
           prev.map((j) =>
-            j.id === event.job_id ? { ...j, status: event.status as MigrateJobStatus } : j
+            j.id === event.job_id
+              ? {
+                  ...j,
+                  status: event.status as MigrateJobStatus,
+                  downtime_ms: event.downtime_ms ?? j.downtime_ms,
+                  error_message: event.error ?? j.error_message
+                }
+              : j
           )
         )
       } else if (event.type === 'awaiting-confirm') {
@@ -387,6 +416,77 @@ export function MigratePage(): React.JSX.Element {
       applyEventToJobState(event)
     },
     [applyEventToJobState]
+  )
+
+  const processMigrationList = useCallback(
+    (rawList: MigrateJobView[]) => {
+      const list = rawList.map((j) => {
+        const terminal = terminalJobStatusRef.current[j.id]
+        if (terminal) {
+          return {
+            ...j,
+            status: terminal.status as MigrateJobStatus,
+            downtime_ms: terminal.downtime_ms ?? j.downtime_ms,
+            error_message: terminal.error ?? j.error_message
+          }
+        }
+        return j
+      })
+      setJobsList(list)
+
+      // Populate jobsStateRef for each job in list
+      for (const j of list) {
+        const terminal = terminalJobStatusRef.current[j.id]
+        const existing = jobsStateRef.current[j.id]
+        if (existing) {
+          jobsStateRef.current[j.id] = {
+            ...existing,
+            appId: j.app_id,
+            sourceVpsId: j.source_vps_id,
+            targetVpsId: j.target_vps_id,
+            status: terminal ? terminal.status : existing.status,
+            downtime: terminal?.downtime_ms ?? existing.downtime,
+            failReason: terminal?.error ?? existing.failReason
+          }
+        } else {
+          const initialState = initJobStateFromView(j)
+          if (terminal) {
+            initialState.status = terminal.status
+            initialState.downtime = terminal.downtime_ms ?? initialState.downtime
+            initialState.failReason = terminal.error ?? initialState.failReason
+            if (terminal.status === 'completed') {
+              initialState.doneCount = MIGRATE_STEPS.length
+              initialState.step = MIGRATE_STEPS.length - 1
+            }
+          }
+          jobsStateRef.current[j.id] = initialState
+        }
+      }
+
+      // Drain any pre-fetch events received
+      if (preIdEventsRef.current.length > 0) {
+        const pendingEvents = [...preIdEventsRef.current]
+        preIdEventsRef.current = []
+        for (const ev of pendingEvents) {
+          applyEventToJobState(ev)
+        }
+      }
+
+      const active = list.filter(
+        (j) => j.status !== 'completed' && j.status !== 'failed' && j.status !== 'rolled_back'
+      )
+      const currentId = activeJobId.current
+      const currentStillInList = currentId !== undefined && list.some((j) => j.id === currentId)
+      const targetToRestore = currentStillInList
+        ? list.find((j) => j.id === currentId)
+        : active.length > 0
+          ? active[0]
+          : list[0]
+      if (targetToRestore) {
+        switchToJob(targetToRestore.id)
+      }
+    },
+    [applyEventToJobState, switchToJob]
   )
 
   const executeLoad = useCallback(
@@ -413,40 +513,7 @@ export function MigratePage(): React.JSX.Element {
         if (!migrationResult.ok) {
           errors.push(`Không thể tải danh sách migrate: ${migrationResult.error.message}`)
         } else {
-          const list = migrationResult.data ?? []
-          setJobsList(list)
-
-          // Populate jobsStateRef for each job in list
-          for (const j of list) {
-            const existing = jobsStateRef.current[j.id]
-            if (existing) {
-              jobsStateRef.current[j.id] = {
-                ...existing,
-                appId: j.app_id,
-                sourceVpsId: j.source_vps_id,
-                targetVpsId: j.target_vps_id
-              }
-            } else {
-              jobsStateRef.current[j.id] = initJobStateFromView(j)
-            }
-          }
-
-          // Drain any pre-fetch events received
-          if (preIdEventsRef.current.length > 0) {
-            const pendingEvents = [...preIdEventsRef.current]
-            preIdEventsRef.current = []
-            for (const ev of pendingEvents) {
-              applyEventToJobState(ev)
-            }
-          }
-
-          const active = list.filter(
-            (j) => j.status !== 'completed' && j.status !== 'failed' && j.status !== 'rolled_back'
-          )
-          const targetToRestore = active.length > 0 ? active[0] : list[0]
-          if (targetToRestore) {
-            switchToJob(targetToRestore.id)
-          }
+          processMigrationList(migrationResult.data ?? [])
         }
 
         if (errors.length > 0) {
@@ -460,7 +527,7 @@ export function MigratePage(): React.JSX.Element {
         }
       }
     },
-    [applyEventToJobState, switchToJob]
+    [processMigrationList]
   )
 
   useEffect(() => {
@@ -483,40 +550,7 @@ export function MigratePage(): React.JSX.Element {
         if (!migrationResult.ok) {
           errors.push(`Không thể tải danh sách migrate: ${migrationResult.error.message}`)
         } else {
-          const list = migrationResult.data ?? []
-          setJobsList(list)
-
-          // Populate jobsStateRef for each job in list
-          for (const j of list) {
-            const existing = jobsStateRef.current[j.id]
-            if (existing) {
-              jobsStateRef.current[j.id] = {
-                ...existing,
-                appId: j.app_id,
-                sourceVpsId: j.source_vps_id,
-                targetVpsId: j.target_vps_id
-              }
-            } else {
-              jobsStateRef.current[j.id] = initJobStateFromView(j)
-            }
-          }
-
-          // Drain any pre-fetch events received
-          if (preIdEventsRef.current.length > 0) {
-            const pendingEvents = [...preIdEventsRef.current]
-            preIdEventsRef.current = []
-            for (const ev of pendingEvents) {
-              applyEventToJobState(ev)
-            }
-          }
-
-          const active = list.filter(
-            (j) => j.status !== 'completed' && j.status !== 'failed' && j.status !== 'rolled_back'
-          )
-          const targetToRestore = active.length > 0 ? active[0] : list[0]
-          if (targetToRestore) {
-            switchToJob(targetToRestore.id)
-          }
+          processMigrationList(migrationResult.data ?? [])
         }
 
         if (errors.length > 0) {
@@ -533,7 +567,7 @@ export function MigratePage(): React.JSX.Element {
       cancelled = true
       unsubscribe()
     }
-  }, [applyEventToJobState, handleEvent, switchToJob])
+  }, [handleEvent, processMigrationList])
 
   const start = async (): Promise<void> => {
     if (
@@ -574,15 +608,16 @@ export function MigratePage(): React.JSX.Element {
         preIdEventsRef.current = []
       } else {
         const newJobId = result.data.job_id
+        const terminal = terminalJobStatusRef.current[newJobId]
         const newJobView: MigrateJobView = {
           id: newJobId,
           app_id: draftAppId,
           source_vps_id: selectedSource.vps_id,
           target_vps_id: draftTargetVpsId,
-          status: 'preparing',
+          status: terminal ? (terminal.status as MigrateJobStatus) : 'preparing',
           failed_step: null,
-          error_message: null,
-          downtime_ms: null,
+          error_message: terminal?.error ?? null,
+          downtime_ms: terminal?.downtime_ms ?? null,
           bytes_transferred: null,
           verify_json: null,
           source_kept: null,
@@ -596,14 +631,14 @@ export function MigratePage(): React.JSX.Element {
           appId: draftAppId,
           sourceVpsId: selectedSource.vps_id,
           targetVpsId: draftTargetVpsId,
-          status: 'running',
-          step: 0,
+          status: terminal ? terminal.status : 'running',
+          step: terminal?.status === 'completed' ? MIGRATE_STEPS.length - 1 : 0,
           currentStep: 'PREPARE',
-          doneCount: 0,
-          downtime: undefined,
+          doneCount: terminal?.status === 'completed' ? MIGRATE_STEPS.length : 0,
+          downtime: terminal?.downtime_ms ?? undefined,
           rows: [],
           verifyOk: false,
-          failReason: undefined
+          failReason: terminal?.error ?? undefined
         }
         jobsStateRef.current[newJobId] = newJobState
         activeJobId.current = newJobId

@@ -734,6 +734,12 @@ describe('MigratePage UI-1j-a', () => {
       downtime_ms: 350
     })
 
+    // Cho UI cap nhat hoan toan truoc khi tim va chon Job B
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: /#20.*Hoàn tất/ })).toBeTruthy()
+      expect(screen.getByText(/Có 1 tiến trình đang hoạt động/)).toBeTruthy()
+    })
+
     // Now switch selector to Job B
     const jobSelector = screen.getByRole('combobox', {
       name: 'Chọn tiến trình cần theo dõi'
@@ -829,6 +835,77 @@ describe('MigratePage UI-1j-a', () => {
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith('migrate:confirm', 10, true)
+    })
+  })
+
+  it('neu finished den truoc khi migrate:list tra du lieu cu, trang thai ket thuc tu event phai thang ban danh sach cu', async () => {
+    const app2: App = { ...app, id: 2, name: 'worker-service' }
+    const targetVps3: Vps = { ...targetVps, id: 3, name: 'backup-node', host: '192.168.1.30' }
+    const jobA: MigrateJobView = {
+      ...baseJob,
+      id: 10,
+      status: 'transferring'
+    }
+    const staleJobB: MigrateJobView = {
+      ...baseJob,
+      id: 20,
+      app_id: 2,
+      target_vps_id: 3,
+      status: 'transferring' // Stale data from backend snapshot
+    }
+
+    let resolveList: (value: { ok: true; data: MigrateJobView[] }) => void
+    const listPromise = new Promise<{ ok: true; data: MigrateJobView[] }>((res) => {
+      resolveList = res
+    })
+    let eventCallback: ((event: MigrateEvent) => void) | undefined
+
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'app:list') return { ok: true, data: [app, app2] }
+      if (channel === 'vps:list') return { ok: true, data: [sourceVps, targetVps, targetVps3] }
+      if (channel === 'migrate:list') return listPromise
+      throw new Error(`unexpected ${channel}`)
+    })
+    const on = vi.fn((_channel: string, cb: (event: MigrateEvent) => void) => {
+      eventCallback = cb
+      return () => {}
+    })
+    vi.stubGlobal('api', { invoke, on })
+
+    render(<MigratePage />)
+
+    // Event finished arrives for Job 20 while migrate:list is STILL pending
+    eventCallback!({
+      type: 'finished',
+      job_id: 20,
+      status: 'completed',
+      downtime_ms: 280
+    })
+
+    // Now migrate:list resolves with STALE data (Job 20 still transferring in list)
+    resolveList!({ ok: true, data: [jobA, staleJobB] })
+
+    // Active job should be Job 10 (since Job 20 is already finished)
+    await waitFor(() => {
+      expect(screen.getByText('Job ID:').parentElement?.textContent).toContain('#10')
+      expect(screen.getByText('Đang chạy')).toBeTruthy()
+      expect(screen.getByText(/Có 1 tiến trình đang hoạt động/)).toBeTruthy()
+    })
+
+    // In selector, Job 20 must display "Hoàn tất" because terminal event beats stale list
+    expect(screen.getByRole('option', { name: /#20.*Hoàn tất/ })).toBeTruthy()
+
+    // Switch to Job 20
+    const jobSelector = screen.getByRole('combobox', {
+      name: 'Chọn tiến trình cần theo dõi'
+    }) as HTMLSelectElement
+    fireEvent.change(jobSelector, { target: { value: '20' } })
+
+    // Job 20 must show completed status with downtime, NOT running
+    await waitFor(() => {
+      expect(screen.getByText('Job ID:').parentElement?.textContent).toContain('#20')
+      expect(screen.getByText('Hoàn tất')).toBeTruthy()
+      expect(screen.getByText(/280 ms/)).toBeTruthy()
     })
   })
 })
