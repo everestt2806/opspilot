@@ -32,7 +32,8 @@ describe('SettingsPage', () => {
     expect(useUiState.getState().theme).toBe('dark')
 
     // Verified: No fake settings or buttons
-    expect(screen.queryByText(/Save|Lưu|enabled|active/i)).toBeNull()
+    expect(screen.queryByRole('button', { name: /save|lưu/i })).toBeNull()
+    expect(screen.queryByText(/^(save|lưu|enabled|active)$/i)).toBeNull()
   })
 
   it('does not contain sub-category sidebar or deferred monitoring section or outdated release dates', () => {
@@ -63,7 +64,9 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Cài đặt' })).toBeTruthy()
     expect(screen.getByText('Tùy chọn giao diện và ngôn ngữ hiển thị của hệ thống.')).toBeTruthy()
     expect(screen.getByText('Giao diện')).toBeTruthy()
-    expect(screen.getByText('Chọn giao diện cho phiên làm việc này.')).toBeTruthy()
+    expect(
+      screen.getByText('Chọn giao diện hiển thị, được lưu cho những lần mở ứng dụng sau.')
+    ).toBeTruthy()
     expect(screen.getByText('Ngôn ngữ hiển thị')).toBeTruthy()
     expect(screen.getByText('Chọn ngôn ngữ giao diện cho hệ thống OpsPilot.')).toBeTruthy()
     expect(screen.getByText('Tối')).toBeTruthy()
@@ -75,7 +78,7 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeTruthy()
     expect(screen.getByText('Appearance and display language preferences.')).toBeTruthy()
     expect(screen.getByText('Appearance')).toBeTruthy()
-    expect(screen.getByText('Select theme for this session.')).toBeTruthy()
+    expect(screen.getByText('Select interface theme, saved for future app launches.')).toBeTruthy()
     expect(screen.getByText('Display Language')).toBeTruthy()
     expect(screen.getByText('Select user interface language for OpsPilot.')).toBeTruthy()
     expect(screen.getByText('Dark')).toBeTruthy()
@@ -87,7 +90,9 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'システム設定' })).toBeTruthy()
     expect(screen.getByText('システムの外観および表示言語の設定。')).toBeTruthy()
     expect(screen.getByText('外観')).toBeTruthy()
-    expect(screen.getByText('このセッションのテーマを選択します。')).toBeTruthy()
+    expect(
+      screen.getByText('テーマを選択します。設定は次回以降のアプリ起動時にも保持されます。')
+    ).toBeTruthy()
     expect(screen.getByText('表示言語')).toBeTruthy()
     expect(screen.getByText('OpsPilot の表示言語を選択してください。')).toBeTruthy()
     expect(screen.getByText('ダーク')).toBeTruthy()
@@ -99,7 +104,7 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('heading', { level: 1, name: '系统设置' })).toBeTruthy()
     expect(screen.getByText('系统界面外观与显示语言偏好设置。')).toBeTruthy()
     expect(screen.getByText('界面外观')).toBeTruthy()
-    expect(screen.getByText('选择当前会话的主题。')).toBeTruthy()
+    expect(screen.getByText('选择界面主题，设置将保存并在下次打开应用时保持。')).toBeTruthy()
     expect(screen.getByText('界面语言')).toBeTruthy()
     expect(screen.getByText('选择 OpsPilot 系统显示语言。')).toBeTruthy()
     expect(screen.getByText('深色')).toBeTruthy()
