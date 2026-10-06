@@ -16,6 +16,9 @@ interface DeployTerminalProps {
   /** Tổng số bước hiển thị ở thanh tiến trình; mặc định 7 bước của deploy. */
   totalSteps?: number
   status: 'streaming' | 'success' | 'failed'
+  title?: string
+  stepLabel?: string
+  emptyText?: string
 }
 
 export function DeployTerminal({
@@ -23,7 +26,10 @@ export function DeployTerminal({
   activeStep,
   completedSteps,
   totalSteps = 7,
-  status
+  status,
+  title,
+  stepLabel,
+  emptyText
 }: DeployTerminalProps): React.JSX.Element {
   const strings = useStrings()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -117,12 +123,14 @@ export function DeployTerminal({
             className={`deploy-terminal-live-dot deploy-terminal-live-dot-${status}`}
             aria-hidden="true"
           />
-          <span className="deploy-terminal-title">{strings.deploy.log.liveOutput}</span>
+          <span className="deploy-terminal-title">{title ?? strings.deploy.log.liveOutput}</span>
           <span className="deploy-terminal-progress">
-            {activeStep
-              ? (strings.deploy.log.steps?.[activeStep as keyof typeof strings.deploy.log.steps] ??
-                activeStep)
-              : strings.deploy.log.finished}{' '}
+            {stepLabel ??
+              (activeStep
+                ? (strings.deploy.log.steps?.[
+                    activeStep as keyof typeof strings.deploy.log.steps
+                  ] ?? activeStep)
+                : strings.deploy.log.finished)}{' '}
             · {completedSteps}/{totalSteps}
           </span>
         </div>
@@ -154,7 +162,7 @@ export function DeployTerminal({
       <div className="deploy-terminal-xterm" ref={containerRef} />
       {buffer.length === 0 && (
         <Typography.Text type="secondary" className="deploy-terminal-empty">
-          {strings.deploy.log.empty}
+          {emptyText ?? strings.deploy.log.empty}
         </Typography.Text>
       )}
       {scrolledUp && (

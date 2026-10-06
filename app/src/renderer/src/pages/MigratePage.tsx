@@ -1,16 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Alert, Button, Card, Descriptions, Modal, Space, Table, Tag, Typography } from 'antd'
 import {
-  Alert,
-  Button,
-  Card,
-  Descriptions,
-  Modal,
-  Space,
-  Steps,
-  Table,
-  Tag,
-  Typography
-} from 'antd'
+  ArrowRightOutlined,
+  CheckCircleFilled,
+  CloseCircleFilled,
+  LoadingOutlined
+} from '@ant-design/icons'
 
 import type {
   App,
@@ -21,6 +16,7 @@ import type {
   Vps
 } from '@shared/ipc'
 import { PageHeader } from '../components/PageHeader'
+import { useStrings } from '../strings'
 import { DeployTerminal } from './DeployTerminal'
 
 export type MigrateLifecycleStatus =
@@ -46,6 +42,7 @@ interface JobRuntimeState {
   rows: Array<{ label: string; source: string; target: string; ok: boolean }>
   verifyOk: boolean
   failReason?: string
+  stepDurations: Partial<Record<MigrateStep, number>>
 }
 
 const MIGRATE_STEPS: readonly MigrateStep[] = [
@@ -57,6 +54,16 @@ const MIGRATE_STEPS: readonly MigrateStep[] = [
   'VERIFY',
   'AWAITING_CONFIRM'
 ]
+
+const MAX_LOG_CHARS_PER_JOB = 100_000
+
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  if (minutes > 0) return `${minutes}m${seconds}s`
+  return `${seconds}s`
+}
 
 const STATUS_META: Record<
   MigrateLifecycleStatus,
@@ -143,11 +150,14 @@ function initJobStateFromView(job: MigrateJobView): JobRuntimeState {
     downtime: job.downtime_ms ?? undefined,
     rows,
     verifyOk,
-    failReason
+    failReason,
+    stepDurations: {}
   }
 }
 
 export function MigratePage(): React.JSX.Element {
+  const strings = useStrings()
+
   const [apps, setApps] = useState<App[]>([])
   const [vps, setVps] = useState<Vps[]>([])
   const [jobsList, setJobsList] = useState<MigrateJobView[]>([])
@@ -173,6 +183,7 @@ export function MigratePage(): React.JSX.Element {
   const [doneCount, setDoneCount] = useState(0)
   const [failReason, setFailReason] = useState<string>()
   const [verifyOk, setVerifyOk] = useState(false)
+  const [stepDurations, setStepDurations] = useState<Partial<Record<MigrateStep, number>>>({})
 
   // Loading & error states
   const [loading, setLoading] = useState(false)
@@ -182,10 +193,12 @@ export function MigratePage(): React.JSX.Element {
   const [isStarting, setIsStarting] = useState(false)
   const startingRef = useRef(false)
 
-  // Separate pre-ID queue and known jobs runtime store
+  // Separate pre-ID queue, known jobs runtime store & bounded memory logs
   const preIdEventsRef = useRef<MigrateEvent[]>([])
   const jobsStateRef = useRef<Record<number, JobRuntimeState>>({})
   const logsByJobRef = useRef<Record<number, string>>({})
+  const truncatedLogsByJobRef = useRef<Record<number, boolean>>({})
+  const [isLogTruncated, setIsLogTruncated] = useState(false)
   const terminalJobStatusRef = useRef<
     Record<
       number,
@@ -265,16 +278,29 @@ export function MigratePage(): React.JSX.Element {
     setRows(targetState.rows)
     setVerifyOk(targetState.verifyOk)
     setFailReason(targetState.failReason)
+    setStepDurations(targetState.stepDurations ?? {})
     setLogs(logsByJobRef.current[jobId] ?? '')
+    setIsLogTruncated(Boolean(truncatedLogsByJobRef.current[jobId]))
     setConfirmModalOpen(false)
   }, [])
 
   const applyEventToJobState = useCallback((event: MigrateEvent): void => {
-    // 1. Logs: directly append to string store without capping/queueing
+    // 1. Logs: bounded in-memory store per job
     if (event.type === 'log') {
-      logsByJobRef.current[event.job_id] = (logsByJobRef.current[event.job_id] ?? '') + event.chunk
-      if (activeJobId.current === event.job_id) {
-        setLogs((prev) => prev + event.chunk)
+      const existing = logsByJobRef.current[event.job_id] ?? ''
+      const combined = existing + event.chunk
+      if (combined.length > MAX_LOG_CHARS_PER_JOB) {
+        logsByJobRef.current[event.job_id] = combined.slice(-MAX_LOG_CHARS_PER_JOB)
+        truncatedLogsByJobRef.current[event.job_id] = true
+        if (activeJobId.current === event.job_id) {
+          setLogs(logsByJobRef.current[event.job_id])
+          setIsLogTruncated(true)
+        }
+      } else {
+        logsByJobRef.current[event.job_id] = combined
+        if (activeJobId.current === event.job_id) {
+          setLogs((prev) => prev + event.chunk)
+        }
       }
       return
     }
@@ -292,7 +318,8 @@ export function MigratePage(): React.JSX.Element {
       downtime: undefined,
       rows: [],
       verifyOk: false,
-      failReason: undefined
+      failReason: undefined,
+      stepDurations: {}
     }
 
     let nextStep = current.step
@@ -307,6 +334,7 @@ export function MigratePage(): React.JSX.Element {
     let nextVerifyOk = current.verifyOk
     let nextDowntime = current.downtime
     let nextFailReason = current.failReason
+    let nextStepDurations = current.stepDurations ?? {}
 
     if (event.type === 'step-start') {
       nextStatus = 'running'
@@ -314,6 +342,7 @@ export function MigratePage(): React.JSX.Element {
     } else if (event.type === 'step-done') {
       nextDoneCount += 1
       nextCurrentStep = `${event.step} hoàn tất`
+      nextStepDurations = { ...nextStepDurations, [event.step]: event.duration_ms }
     } else if (event.type === 'verify-result') {
       nextRows = event.rows
       nextVerifyOk = event.rows.every((row) => row.ok)
@@ -350,7 +379,8 @@ export function MigratePage(): React.JSX.Element {
       rows: nextRows,
       verifyOk: nextVerifyOk,
       downtime: nextDowntime,
-      failReason: nextFailReason
+      failReason: nextFailReason,
+      stepDurations: nextStepDurations
     }
     jobsStateRef.current[event.job_id] = st
 
@@ -364,6 +394,7 @@ export function MigratePage(): React.JSX.Element {
       setRows(st.rows)
       setVerifyOk(st.verifyOk)
       setFailReason(st.failReason)
+      setStepDurations(st.stepDurations)
 
       if (event.type === 'finished') {
         setConfirmModalOpen(false)
@@ -590,6 +621,8 @@ export function MigratePage(): React.JSX.Element {
     setVerifyOk(false)
     setRows([])
     setLogs('')
+    setIsLogTruncated(false)
+    setStepDurations({})
     setDoneCount(0)
     setFailReason(undefined)
     setStatus('running')
@@ -638,9 +671,11 @@ export function MigratePage(): React.JSX.Element {
           downtime: terminal?.downtime_ms ?? undefined,
           rows: [],
           verifyOk: false,
-          failReason: terminal?.error ?? undefined
+          failReason: terminal?.error ?? undefined,
+          stepDurations: {}
         }
         jobsStateRef.current[newJobId] = newJobState
+        truncatedLogsByJobRef.current[newJobId] = false
         activeJobId.current = newJobId
 
         // Drain buffered pre-ID events matching newJobId
@@ -709,18 +744,15 @@ export function MigratePage(): React.JSX.Element {
   }
 
   return (
-    <section className="page-panel">
-      <PageHeader
-        title="Migrate giữa hai VPS"
-        description="PREPARE → FREEZE → BACKUP → TRANSFER → RESTORE → VERIFY"
-      />
+    <section className="page-panel migrate-page-panel">
+      <PageHeader title={strings.migrate.title} description={strings.migrate.description} />
 
       <div className="page-stack">
         {loadError && (
           <Alert
             type="error"
             showIcon
-            message="Lỗi tải danh sách"
+            message={strings.migrate.loadError}
             description={loadError}
             action={
               <Button
@@ -730,7 +762,7 @@ export function MigratePage(): React.JSX.Element {
                 onClick={() => void executeLoad(true)}
                 loading={loading}
               >
-                Thử lại
+                {strings.migrate.actions.retry}
               </Button>
             }
           />
@@ -740,8 +772,8 @@ export function MigratePage(): React.JSX.Element {
           <Alert
             type="info"
             showIcon
-            message="Chưa có ứng dụng nào"
-            description="Chưa có ứng dụng nào trên các máy chủ để thực hiện di chuyển."
+            message={strings.migrate.noApps}
+            description={strings.migrate.noAppsDesc}
           />
         )}
 
@@ -750,12 +782,12 @@ export function MigratePage(): React.JSX.Element {
             <Space wrap align="center">
               <Typography.Text strong>
                 {activeJobs.length > 0
-                  ? `Có ${activeJobs.length} tiến trình đang hoạt động:`
-                  : 'Danh sách tiến trình di chuyển:'}
+                  ? strings.migrate.activeJobsCount(activeJobs.length)
+                  : strings.migrate.jobsListTitle}
               </Typography.Text>
               <select
                 className="migrate-native-select migrate-job-selector"
-                aria-label="Chọn tiến trình cần theo dõi"
+                aria-label={strings.migrate.selectJobAria}
                 value={jobContext?.jobId ?? ''}
                 onChange={(event) => {
                   const selectedId = Number(event.target.value)
@@ -766,12 +798,17 @@ export function MigratePage(): React.JSX.Element {
                   const itemApp = apps.find((candidate) => candidate.id === j.app_id)
                   const itemSourceVps = vps.find((candidate) => candidate.id === j.source_vps_id)
                   const itemTargetVps = vps.find((candidate) => candidate.id === j.target_vps_id)
-                  const label = STATUS_META[mapJobStatus(j.status)]?.label ?? j.status
+                  const statusMapped = mapJobStatus(j.status)
+                  const label =
+                    strings.migrate.statuses[statusMapped] ??
+                    STATUS_META[statusMapped]?.label ??
+                    j.status
                   return (
                     <option key={j.id} value={j.id}>
-                      Job #{j.id} · {itemApp?.name ?? `App #${j.app_id}`} (
-                      {itemSourceVps?.name ?? `VPS #${j.source_vps_id}`} →{' '}
-                      {itemTargetVps?.name ?? `VPS #${j.target_vps_id}`}) · {label}
+                      Job #{j.id} · {itemApp?.name ?? strings.migrate.overview.noApp(j.app_id)} (
+                      {itemSourceVps?.name ?? strings.migrate.overview.noVps(j.source_vps_id)} →{' '}
+                      {itemTargetVps?.name ?? strings.migrate.overview.noVps(j.target_vps_id)}) ·{' '}
+                      {label}
                     </option>
                   )
                 })}
@@ -780,83 +817,103 @@ export function MigratePage(): React.JSX.Element {
           </Card>
         )}
 
-        <Space wrap className="migrate-toolbar">
-          <select
-            className="migrate-native-select migrate-source-select"
-            aria-label="Chọn app nguồn"
-            value={draftAppId ?? ''}
-            disabled={isJobActive}
-            onChange={(event) => {
-              setDraftAppId(Number(event.currentTarget.value))
-              setDraftTargetVpsId(undefined)
-            }}
+        <Card size="small" className="migrate-setup-card">
+          <Space
+            wrap
+            className="migrate-toolbar"
+            style={{ width: '100%', justifyContent: 'space-between' }}
           >
-            <option value="" disabled>
-              Chọn app nguồn
-            </option>
-            {apps.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name} ·{' '}
-                {vps.find((candidate) => candidate.id === item.vps_id)?.name ??
-                  `VPS ${item.vps_id}`}
-              </option>
-            ))}
-          </select>
+            <Space wrap>
+              <select
+                className="migrate-native-select migrate-source-select"
+                aria-label={strings.migrate.draft.sourceLabel}
+                value={draftAppId ?? ''}
+                disabled={isJobActive}
+                onChange={(event) => {
+                  setDraftAppId(Number(event.currentTarget.value))
+                  setDraftTargetVpsId(undefined)
+                }}
+              >
+                <option value="" disabled>
+                  {strings.migrate.draft.sourceLabel}
+                </option>
+                {apps.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} ·{' '}
+                    {vps.find((candidate) => candidate.id === item.vps_id)?.name ??
+                      `VPS ${item.vps_id}`}
+                  </option>
+                ))}
+              </select>
 
-          <select
-            className="migrate-native-select"
-            aria-label="Chọn VPS đích"
-            value={draftTargetVpsId ?? ''}
-            disabled={isJobActive || !draftSource}
-            onChange={(event) => setDraftTargetVpsId(Number(event.currentTarget.value))}
-          >
-            <option value="" disabled>
-              Chọn VPS đích
-            </option>
-            {draftTargets.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name} · {item.host}
-              </option>
-            ))}
-          </select>
+              <select
+                className="migrate-native-select"
+                aria-label={strings.migrate.draft.targetLabel}
+                value={draftTargetVpsId ?? ''}
+                disabled={isJobActive || !draftSource}
+                onChange={(event) => setDraftTargetVpsId(Number(event.currentTarget.value))}
+              >
+                <option value="" disabled>
+                  {strings.migrate.draft.targetLabel}
+                </option>
+                {draftTargets.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name} · {item.host}
+                  </option>
+                ))}
+              </select>
+            </Space>
 
-          <Button
-            type="primary"
-            onClick={() => void start()}
-            disabled={isJobActive || !draftSource || draftTargetVpsId === undefined}
-            loading={isStarting}
-          >
-            Bắt đầu migrate
-          </Button>
+            <Space wrap>
+              <Button
+                type="primary"
+                onClick={() => void start()}
+                disabled={isJobActive || !draftSource || draftTargetVpsId === undefined}
+                loading={isStarting}
+              >
+                {strings.migrate.draft.startBtn}
+              </Button>
 
-          <Button danger onClick={() => void abort()} disabled={!canAbort}>
-            Huỷ & rollback
-          </Button>
-        </Space>
+              <Button danger onClick={() => void abort()} disabled={!canAbort}>
+                {strings.migrate.actions.abort}
+              </Button>
+            </Space>
+          </Space>
+        </Card>
 
         {jobContext && (
-          <Card size="small" className="migrate-job-banner">
-            <Space wrap size="middle">
-              <span>
-                <strong>Job ID:</strong> #{jobContext.jobId}
-              </span>
-              <span>
-                <strong>Ứng dụng:</strong>{' '}
-                {jobApp?.name ?? (jobContext.appId ? `App #${jobContext.appId}` : '—')}
-              </span>
-              <span>
-                <strong>VPS nguồn:</strong>{' '}
-                {jobSourceVps?.name ??
-                  (jobContext.sourceVpsId ? `VPS #${jobContext.sourceVpsId}` : '—')}
-                {jobSourceVps?.host ? ` (${jobSourceVps.host})` : ''}
-              </span>
-              <span>
-                <strong>VPS đích:</strong>{' '}
-                {jobTargetVps?.name ??
-                  (jobContext.targetVpsId ? `VPS #${jobContext.targetVpsId}` : '—')}
-                {jobTargetVps?.host ? ` (${jobTargetVps.host})` : ''}
-              </span>
-            </Space>
+          <Card size="small" className="migrate-job-banner migrate-overview-card">
+            <div className="migrate-overview-grid">
+              <div className="migrate-overview-endpoints">
+                <span>
+                  <strong>{strings.migrate.overview.jobId}</strong> #{jobContext.jobId}
+                </span>
+                <Typography.Text type="secondary">|</Typography.Text>
+                <span>
+                  <strong>{strings.migrate.overview.sourceApp}:</strong>{' '}
+                  {jobApp?.name ??
+                    (jobContext.appId ? strings.migrate.overview.noApp(jobContext.appId) : '—')}
+                </span>
+                <Typography.Text type="secondary">|</Typography.Text>
+                <span>
+                  <strong>{strings.migrate.overview.sourceVps}:</strong>{' '}
+                  {jobSourceVps?.name ??
+                    (jobContext.sourceVpsId
+                      ? strings.migrate.overview.noVps(jobContext.sourceVpsId)
+                      : '—')}
+                  {jobSourceVps?.host ? ` (${jobSourceVps.host})` : ''}
+                </span>
+                <ArrowRightOutlined style={{ color: 'var(--text-muted)', fontSize: 12 }} />
+                <span>
+                  <strong>{strings.migrate.overview.targetVps}:</strong>{' '}
+                  {jobTargetVps?.name ??
+                    (jobContext.targetVpsId
+                      ? strings.migrate.overview.noVps(jobContext.targetVpsId)
+                      : '—')}
+                  {jobTargetVps?.host ? ` (${jobTargetVps.host})` : ''}
+                </span>
+              </div>
+            </div>
           </Card>
         )}
 
@@ -875,143 +932,262 @@ export function MigratePage(): React.JSX.Element {
           />
         )}
 
-        <Card>
-          <Steps
-            size="small"
-            current={step}
-            status={
-              status === 'failed'
-                ? 'error'
-                : status === 'completed'
-                  ? 'finish'
-                  : status === 'awaiting_confirmation'
-                    ? 'process'
-                    : undefined
-            }
-            items={MIGRATE_STEPS.map((title) => ({ title }))}
+        {status === 'completed' && (
+          <Alert
+            type="success"
+            showIcon
+            message={strings.migrate.alerts.completedTitle}
+            description={strings.migrate.alerts.completedDesc}
           />
+        )}
 
-          <Typography.Paragraph style={{ marginTop: 16, marginBottom: 0 }}>
-            Trạng thái: <Tag color={STATUS_META[status].color}>{STATUS_META[status].label}</Tag>
-            {currentStep && isRunning && ` (${currentStep})`}
-            {downtime !== undefined && ` · Downtime: ${downtime} ms`}
-          </Typography.Paragraph>
+        <Card size="small" className="migrate-steps-card">
+          <div className="deploy-steps-container" role="list" aria-label="7 bước tiến độ di chuyển">
+            {MIGRATE_STEPS.map((stepKey, idx) => {
+              let stepStatus: 'done' | 'running' | 'failed' | 'pending' = 'pending'
+              if (status === 'completed') {
+                stepStatus = 'done'
+              } else if (status === 'failed' || status === 'rolled_back') {
+                if (idx < step) stepStatus = 'done'
+                else if (idx === step) stepStatus = 'failed'
+                else stepStatus = 'pending'
+              } else if (status === 'awaiting_confirmation') {
+                if (idx < 6) stepStatus = 'done'
+                else if (idx === 6) stepStatus = 'running'
+              } else if (status === 'running') {
+                if (idx < step) stepStatus = 'done'
+                else if (idx === step) stepStatus = 'running'
+                else stepStatus = 'pending'
+              }
 
-          {rows.length > 0 && (
+              const stepLabel = strings.migrate.stepLabels[stepKey] ?? stepKey
+              const isDone = stepStatus === 'done'
+              const isRunning = stepStatus === 'running'
+              const isFailed = stepStatus === 'failed'
+              const isFirst = idx === 0
+              const isLast = idx === MIGRATE_STEPS.length - 1
+
+              const lineBeforeActive = isDone || isRunning || isFailed
+              const lineAfterActive = isDone
+
+              return (
+                <div
+                  key={stepKey}
+                  className={`deploy-step-col deploy-step-${stepStatus}`}
+                  role="listitem"
+                >
+                  <div className="deploy-step-track">
+                    {!isFirst && (
+                      <div
+                        className={`deploy-step-line deploy-step-line-prev ${
+                          lineBeforeActive ? 'deploy-step-line-active' : ''
+                        }`}
+                      />
+                    )}
+                    <div className="deploy-step-marker">
+                      {isDone ? (
+                        <CheckCircleFilled className="deploy-step-icon deploy-step-icon-done" />
+                      ) : isRunning ? (
+                        <LoadingOutlined className="deploy-step-icon deploy-step-icon-running" />
+                      ) : isFailed ? (
+                        <CloseCircleFilled className="deploy-step-icon deploy-step-icon-failed" />
+                      ) : (
+                        <span className="deploy-step-badge">{idx + 1}</span>
+                      )}
+                    </div>
+                    {!isLast && (
+                      <div
+                        className={`deploy-step-line deploy-step-line-next ${
+                          lineAfterActive ? 'deploy-step-line-active' : ''
+                        }`}
+                      />
+                    )}
+                  </div>
+                  <div className="deploy-step-meta">
+                    <span className="deploy-step-label">{stepLabel}</span>
+                    {stepDurations[stepKey] !== undefined && isDone && (
+                      <span className="deploy-step-time">
+                        {formatDuration(stepDurations[stepKey]!)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div
+            style={{
+              marginTop: 14,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 8
+            }}
+          >
+            <Typography.Text style={{ fontSize: 13 }}>
+              Trạng thái:{' '}
+              <Tag color={STATUS_META[status].color}>
+                {strings.migrate.statuses[status] ?? STATUS_META[status].label}
+              </Tag>
+              {currentStep && isRunning && ` (${currentStep})`}
+              {downtime !== undefined && ` · ${strings.migrate.overview.downtime(downtime)}`}
+            </Typography.Text>
+          </div>
+        </Card>
+
+        {rows.length > 0 && (
+          <Card
+            size="small"
+            className="migrate-verify-card"
+            title={strings.migrate.verify.title}
+            extra={
+              <Tag color={verifyOk ? 'success' : 'error'}>
+                {verifyOk ? strings.migrate.verify.ok : strings.migrate.verify.fail}
+              </Tag>
+            }
+          >
             <Table
-              style={{ marginTop: 12 }}
+              size="small"
               pagination={false}
               rowKey="label"
               dataSource={rows}
               columns={[
-                { title: 'Hạng mục', dataIndex: 'label' },
-                { title: 'Nguồn', dataIndex: 'source' },
-                { title: 'Đích', dataIndex: 'target' },
+                { title: strings.migrate.verify.columns.item, dataIndex: 'label' },
+                { title: strings.migrate.verify.columns.source, dataIndex: 'source' },
+                { title: strings.migrate.verify.columns.target, dataIndex: 'target' },
                 {
-                  title: 'Kết quả',
+                  title: strings.migrate.verify.columns.status,
                   dataIndex: 'ok',
                   render: (ok: boolean) => (
-                    <Tag color={ok ? 'success' : 'error'}>{ok ? 'PASS' : 'FAIL'}</Tag>
+                    <Tag color={ok ? 'success' : 'error'}>
+                      {ok ? strings.migrate.verify.ok : strings.migrate.verify.fail}
+                    </Tag>
                   )
                 }
               ]}
             />
-          )}
+          </Card>
+        )}
 
-          {status === 'awaiting_confirmation' && (
-            <div className="migrate-confirm-box" style={{ marginTop: 16 }}>
+        {status === 'awaiting_confirmation' && (
+          <div className="migrate-confirm-box">
+            <Alert
+              type={verifyOk ? 'info' : 'warning'}
+              showIcon
+              message={
+                verifyOk
+                  ? strings.migrate.alerts.awaitingTitle
+                  : strings.migrate.alerts.notPassedVerify
+              }
+              description={
+                verifyOk
+                  ? strings.migrate.alerts.awaitingDesc
+                  : 'Chỉ cho phép xác nhận khi kết quả kiểm tra tính toàn vẹn (VERIFY) đạt tất cả tiêu chí.'
+              }
+              action={
+                <Button
+                  type="primary"
+                  onClick={() => setConfirmModalOpen(true)}
+                  disabled={!verifyOk}
+                >
+                  {strings.migrate.actions.confirm}
+                </Button>
+              }
+            />
+          </div>
+        )}
+
+        <div className="migrate-terminal-card">
+          {isLogTruncated && (
+            <div className="migrate-truncated-notice" role="status">
               <Alert
-                type={verifyOk ? 'info' : 'warning'}
+                type="warning"
                 showIcon
-                message={
-                  verifyOk
-                    ? 'Quá trình kiểm tra (VERIFY) đã đạt. Sẵn sàng hoàn tất di chuyển.'
-                    : 'Chưa đạt kết quả kiểm tra (VERIFY) — không thể xác nhận.'
-                }
-                description={
-                  verifyOk
-                    ? 'Nhấn nút bên dưới để xem chi tiết và xác nhận lựa chọn xử lý container trên VPS nguồn.'
-                    : 'Chỉ cho phép xác nhận khi kết quả kiểm tra tính toàn vẹn (VERIFY) đạt tất cả tiêu chí.'
-                }
-                action={
-                  <Button
-                    type="primary"
-                    onClick={() => setConfirmModalOpen(true)}
-                    disabled={!verifyOk}
-                  >
-                    Xác nhận di chuyển
-                  </Button>
-                }
+                message={strings.migrate.terminal.truncatedNotice}
+                style={{ marginBottom: 8 }}
               />
             </div>
           )}
-        </Card>
 
-        <DeployTerminal
-          buffer={logs}
-          activeStep={isRunning && step >= 0 ? MIGRATE_STEPS[step] : undefined}
-          completedSteps={doneCount}
-          totalSteps={MIGRATE_STEPS.length}
-          status={
-            isRunning
-              ? 'streaming'
-              : status === 'completed'
-                ? 'success'
-                : status === 'failed' || status === 'rolled_back'
-                  ? 'failed'
-                  : 'streaming'
-          }
-        />
+          <DeployTerminal
+            title={strings.migrate.terminal.title}
+            stepLabel={strings.migrate.terminal.stepLabel}
+            emptyText={strings.migrate.terminal.emptyText}
+            buffer={logs}
+            activeStep={
+              isRunning && step >= 0 ? strings.migrate.steps[MIGRATE_STEPS[step]] : undefined
+            }
+            completedSteps={doneCount}
+            totalSteps={MIGRATE_STEPS.length}
+            status={
+              isRunning
+                ? 'streaming'
+                : status === 'completed'
+                  ? 'success'
+                  : status === 'failed' || status === 'rolled_back'
+                    ? 'failed'
+                    : 'streaming'
+            }
+          />
+        </div>
       </div>
 
       {confirmModalOpen && status === 'awaiting_confirmation' && jobContext && (
         <Modal
           open={confirmModalOpen && status === 'awaiting_confirmation'}
           onCancel={() => !isConfirming && setConfirmModalOpen(false)}
-          title="Xác nhận hoàn tất di chuyển ứng dụng"
+          title={strings.migrate.modal.title}
           footer={null}
           destroyOnHidden
         >
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             <Descriptions size="small" column={1} bordered>
-              <Descriptions.Item label="Ứng dụng">
+              <Descriptions.Item label={strings.migrate.overview.sourceApp}>
                 <strong>
-                  {jobApp?.name ?? (jobContext.appId ? `App #${jobContext.appId}` : '—')}
+                  {jobApp?.name ??
+                    (jobContext.appId ? strings.migrate.overview.noApp(jobContext.appId) : '—')}
                 </strong>
               </Descriptions.Item>
-              <Descriptions.Item label="VPS nguồn">
+              <Descriptions.Item label={strings.migrate.overview.sourceVps}>
                 {jobSourceVps?.name ??
-                  (jobContext.sourceVpsId ? `VPS #${jobContext.sourceVpsId}` : '—')}
+                  (jobContext.sourceVpsId
+                    ? strings.migrate.overview.noVps(jobContext.sourceVpsId)
+                    : '—')}
                 {jobSourceVps?.host ? ` (${jobSourceVps.host})` : ''}
               </Descriptions.Item>
-              <Descriptions.Item label="VPS đích">
+              <Descriptions.Item label={strings.migrate.overview.targetVps}>
                 {jobTargetVps?.name ??
-                  (jobContext.targetVpsId ? `VPS #${jobContext.targetVpsId}` : '—')}
+                  (jobContext.targetVpsId
+                    ? strings.migrate.overview.noVps(jobContext.targetVpsId)
+                    : '—')}
                 {jobTargetVps?.host ? ` (${jobTargetVps.host})` : ''}
               </Descriptions.Item>
               {downtime !== undefined && (
-                <Descriptions.Item label="Downtime ghi nhận">{downtime} ms</Descriptions.Item>
+                <Descriptions.Item label="Downtime ghi nhận">
+                  {strings.migrate.overview.downtime(downtime)}
+                </Descriptions.Item>
               )}
             </Descriptions>
 
             <div style={{ marginTop: 8 }}>
               <Typography.Paragraph strong style={{ marginBottom: 6 }}>
-                Vui lòng chọn một trong hai phương án kết thúc:
+                {strings.migrate.modal.desc}
               </Typography.Paragraph>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 4 }}>
-                • <strong>Giữ app nguồn:</strong> Tiếp tục duy trì container ứng dụng chạy trên VPS
-                nguồn làm bản dự phòng song song.
+                • <strong>{strings.migrate.modal.keepSourceBtn}:</strong>{' '}
+                {strings.migrate.modal.keepSourceDesc.replace(/^[^:]+:\s*/, '')}
               </Typography.Paragraph>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-                • <strong>Dừng app nguồn bằng docker compose down:</strong> Thực hiện lệnh{' '}
-                <code>docker compose down</code> trên VPS nguồn để dừng ứng dụng và giải phóng tài
-                nguyên.
+                • <strong>{strings.migrate.modal.stopSourceBtn}:</strong>{' '}
+                {strings.migrate.modal.stopSourceDesc.replace(/^[^:]+:\s*/, '')}
               </Typography.Paragraph>
             </div>
 
             <Space style={{ width: '100%', justifyContent: 'flex-end', marginTop: 16 }} wrap>
               <Button onClick={() => setConfirmModalOpen(false)} disabled={isConfirming}>
-                Hủy
+                {strings.migrate.modal.cancelBtn}
               </Button>
               <Button
                 type="primary"
@@ -1019,7 +1195,7 @@ export function MigratePage(): React.JSX.Element {
                 disabled={isConfirming || status !== 'awaiting_confirmation' || !verifyOk}
                 loading={isConfirming && confirmChoice === true}
               >
-                Giữ app nguồn
+                {strings.migrate.modal.keepSourceBtn}
               </Button>
               <Button
                 danger
@@ -1027,7 +1203,7 @@ export function MigratePage(): React.JSX.Element {
                 disabled={isConfirming || status !== 'awaiting_confirmation' || !verifyOk}
                 loading={isConfirming && confirmChoice === false}
               >
-                Dừng app nguồn bằng docker compose down
+                {strings.migrate.modal.stopSourceBtn}
               </Button>
             </Space>
           </Space>

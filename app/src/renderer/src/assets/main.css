@@ -2836,3 +2836,46 @@
 .vps-apps-table .action-pill {
   white-space: nowrap;
 }
+
+/* ── 8.5. Migrate Page Styles ────────────────────────────────────────────── */
+
+.migrate-page-panel {
+  width: 100%;
+}
+
+.migrate-active-jobs-card,
+.migrate-job-selector-card,
+.migrate-setup-card,
+.migrate-overview-card,
+.migrate-steps-card,
+.migrate-verify-card,
+.migrate-terminal-card {
+  width: 100%;
+  border-color: var(--border);
+  background: var(--bg-panel);
+}
+
+.migrate-overview-grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.migrate-overview-endpoints {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.migrate-truncated-notice {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--warning);
+  font-style: italic;
+}
+

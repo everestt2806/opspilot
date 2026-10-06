@@ -805,6 +805,111 @@ const BASE_EN_STRINGS = {
     label: 'Appearance',
     light: 'Light',
     dark: 'Dark'
+  },
+  migrate: {
+    title: 'Migrate between two VPS',
+    description: 'PREPARE → FREEZE → BACKUP → TRANSFER → RESTORE → VERIFY',
+    loadError: 'Failed to load list',
+    noApps: 'No applications yet',
+    noAppsDesc: 'There are no applications on the servers to perform migration.',
+    activeJobsCount: (count: number) =>
+      `There ${count > 1 ? 'are' : 'is'} ${count} active migration process${count > 1 ? 'es' : ''}:`,
+    jobsListTitle: 'Migration processes list:',
+    selectJobAria: 'Select process to monitor',
+    draft: {
+      sourceLabel: 'Select source app',
+      sourcePlaceholder: '-- Select source application --',
+      targetLabel: 'Select target VPS',
+      targetPlaceholder: '-- Select target VPS --',
+      startBtn: 'Start migration',
+      startingBtn: 'Starting...'
+    },
+    overview: {
+      jobId: 'Job ID:',
+      sourceApp: 'Source app',
+      sourceVps: 'Source VPS',
+      targetVps: 'Target VPS',
+      downtime: (ms: number) => `Downtime: ${ms} ms`,
+      noApp: (id: number) => `App #${id}`,
+      noVps: (id: number) => `VPS #${id}`
+    },
+    statuses: {
+      idle: 'Not started',
+      running: 'Running',
+      awaiting_confirmation: 'Awaiting confirmation',
+      completed: 'Completed',
+      failed: 'Failed',
+      rolled_back: 'Rolled back'
+    },
+    steps: {
+      PREPARE: 'PREPARE',
+      FREEZE: 'FREEZE',
+      BACKUP: 'BACKUP',
+      TRANSFER: 'TRANSFER',
+      RESTORE: 'RESTORE',
+      VERIFY: 'VERIFY',
+      AWAITING_CONFIRM: 'CONFIRM'
+    },
+    stepLabels: {
+      PREPARE: 'Prepare',
+      FREEZE: 'Freeze',
+      BACKUP: 'Backup',
+      TRANSFER: 'Transfer',
+      RESTORE: 'Restore',
+      VERIFY: 'Verify',
+      AWAITING_CONFIRM: 'Confirm'
+    },
+    actions: {
+      abort: 'Abort & rollback',
+      aborting: 'Aborting...',
+      confirm: 'Confirm migration',
+      confirming: 'Confirming...',
+      retry: 'Retry'
+    },
+    alerts: {
+      awaitingTitle: 'Awaiting Migration Confirmation',
+      awaitingDesc:
+        'Application backup, transfer, and verification have succeeded. Please confirm to finalize.',
+      completedTitle: 'Migration Completed Successfully',
+      completedDesc: 'The application has been successfully migrated to the target VPS.',
+      failedTitle: 'Migration Failed',
+      failedConsequence:
+        'Source application could not be restored automatically. Please check the logs below.',
+      rolledBackTitle: 'Rolled Back',
+      rolledBackDesc:
+        'Migration was aborted or failed and has been safely rolled back to the source application.',
+      notPassedVerify: 'Verification (VERIFY) not passed yet'
+    },
+    verify: {
+      title: 'Verification Results (VERIFY)',
+      columns: {
+        item: 'Item',
+        source: 'Source',
+        target: 'Target',
+        status: 'Status'
+      },
+      ok: 'Passed',
+      fail: 'Failed',
+      empty: 'No verification data available yet'
+    },
+    terminal: {
+      title: 'Live Migration Log',
+      empty: 'Waiting for migration logs...',
+      emptyText: 'Waiting for migration logs...',
+      stepLabel: 'Step',
+      truncatedNotice: '[Notice: Older logs truncated to optimize memory. Displaying recent logs]'
+    },
+    modal: {
+      title: 'Confirm Application Migration Completion',
+      desc: 'Verification checks passed. Please choose how to handle the source application:',
+      keepSourceBtn: 'Keep source app',
+      keepSourceDesc:
+        'Keep source app: The source container remains running. You can manually inspect the target VPS and decommission the source later.',
+      stopSourceBtn: 'Stop source app using docker compose down',
+      stopSourceDesc:
+        'Stop source app using docker compose down: Stop the source application immediately to avoid data divergence and release resources.',
+      cancelBtn: 'Close'
+    }
   }
 }
 
@@ -1354,6 +1459,109 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       cn: '简体中文',
       jp: '日本語'
     }
+  },
+  migrate: {
+    title: 'Migrate giữa hai VPS',
+    description: 'PREPARE → FREEZE → BACKUP → TRANSFER → RESTORE → VERIFY',
+    loadError: 'Lỗi tải danh sách',
+    noApps: 'Chưa có ứng dụng nào',
+    noAppsDesc: 'Chưa có ứng dụng nào trên các máy chủ để thực hiện di chuyển.',
+    activeJobsCount: (count: number) => `Có ${count} tiến trình đang hoạt động:`,
+    jobsListTitle: 'Danh sách tiến trình di chuyển:',
+    selectJobAria: 'Chọn tiến trình cần theo dõi',
+    draft: {
+      sourceLabel: 'Chọn app nguồn',
+      sourcePlaceholder: '-- Chọn ứng dụng nguồn --',
+      targetLabel: 'Chọn VPS đích',
+      targetPlaceholder: '-- Chọn VPS đích --',
+      startBtn: 'Bắt đầu migrate',
+      startingBtn: 'Đang bắt đầu...'
+    },
+    overview: {
+      jobId: 'Job ID:',
+      sourceApp: 'App nguồn',
+      sourceVps: 'VPS nguồn',
+      targetVps: 'VPS đích',
+      downtime: (ms: number) => `Downtime: ${ms} ms`,
+      noApp: (id: number) => `App #${id}`,
+      noVps: (id: number) => `VPS #${id}`
+    },
+    statuses: {
+      idle: 'Chưa bắt đầu',
+      running: 'Đang chạy',
+      awaiting_confirmation: 'Chờ xác nhận',
+      completed: 'Hoàn tất',
+      failed: 'Thất bại',
+      rolled_back: 'Đã rollback'
+    },
+    steps: {
+      PREPARE: 'PREPARE',
+      FREEZE: 'FREEZE',
+      BACKUP: 'BACKUP',
+      TRANSFER: 'TRANSFER',
+      RESTORE: 'RESTORE',
+      VERIFY: 'VERIFY',
+      AWAITING_CONFIRM: 'CONFIRM'
+    },
+    stepLabels: {
+      PREPARE: 'Chuẩn bị',
+      FREEZE: 'Đóng băng',
+      BACKUP: 'Sao lưu',
+      TRANSFER: 'Truyền dữ liệu',
+      RESTORE: 'Khôi phục',
+      VERIFY: 'Kiểm tra',
+      AWAITING_CONFIRM: 'Xác nhận'
+    },
+    actions: {
+      abort: 'Huỷ & rollback',
+      aborting: 'Đang huỷ...',
+      confirm: 'Xác nhận di chuyển',
+      confirming: 'Đang xác nhận...',
+      retry: 'Thử lại'
+    },
+    alerts: {
+      awaitingTitle: 'Chờ xác nhận hoàn tất',
+      awaitingDesc:
+        'Đã sao lưu, truyền dữ liệu và kiểm tra (VERIFY) thành công. Vui lòng xác nhận xử lý app nguồn để hoàn tất.',
+      completedTitle: 'Di chuyển hoàn tất',
+      completedDesc: 'Ứng dụng đã được di chuyển thành công sang VPS đích.',
+      failedTitle: 'Quá trình di chuyển thất bại',
+      failedConsequence: 'nguồn chưa khôi phục được',
+      rolledBackTitle: 'Đã rollback',
+      rolledBackDesc: 'Quá trình di chuyển đã được huỷ và hoàn trả trạng thái về app nguồn.',
+      notPassedVerify: 'Chưa đạt kết quả kiểm tra (VERIFY)'
+    },
+    verify: {
+      title: 'Kết quả kiểm tra (VERIFY)',
+      columns: {
+        item: 'Hạng mục',
+        source: 'Nguồn',
+        target: 'Đích',
+        status: 'Trạng thái'
+      },
+      ok: 'Đạt',
+      fail: 'Không đạt',
+      empty: 'Chưa có dữ liệu kiểm tra'
+    },
+    terminal: {
+      title: 'Nhật ký di chuyển trực tiếp',
+      empty: 'Đang chờ log di chuyển...',
+      emptyText: 'Đang chờ log di chuyển...',
+      stepLabel: 'Bước',
+      truncatedNotice:
+        '[Lưu ý: Phần log cũ đã được lược bỏ để tối ưu bộ nhớ. Đang hiển thị log mới nhất]'
+    },
+    modal: {
+      title: 'Xác nhận hoàn tất di chuyển ứng dụng',
+      desc: 'Đã kiểm tra đạt. Vui lòng chọn cách xử lý app nguồn:',
+      keepSourceBtn: 'Giữ app nguồn',
+      keepSourceDesc:
+        'Giữ app nguồn: Tiếp tục duy trì container app nguồn chạy song song, có thể tắt thủ công sau khi kiểm tra xong.',
+      stopSourceBtn: 'Dừng app nguồn bằng docker compose down',
+      stopSourceDesc:
+        'Dừng app nguồn bằng docker compose down: Dừng và tắt container app nguồn trên VPS cũ ngay lập tức.',
+      cancelBtn: 'Đóng'
+    }
   }
 }
 
@@ -1888,6 +2096,106 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       vi: 'Tiếng Việt',
       cn: '简体中文',
       jp: '日本語'
+    }
+  },
+  migrate: {
+    title: 'VPS 之间迁移',
+    description: 'PREPARE → FREEZE → BACKUP → TRANSFER → RESTORE → VERIFY',
+    loadError: '加载列表失败',
+    noApps: '暂无应用',
+    noAppsDesc: '服务器上暂无可执行迁移的应用。',
+    activeJobsCount: (count: number) => `有 ${count} 个迁移进程正在运行：`,
+    jobsListTitle: '迁移进程列表：',
+    selectJobAria: '选择要监控的迁移进程',
+    draft: {
+      sourceLabel: '选择源应用',
+      sourcePlaceholder: '-- 选择源应用 --',
+      targetLabel: '选择目标 VPS',
+      targetPlaceholder: '-- 选择目标 VPS --',
+      startBtn: '开始迁移',
+      startingBtn: '正在启动...'
+    },
+    overview: {
+      jobId: '任务 ID:',
+      sourceApp: '源应用',
+      sourceVps: '源 VPS',
+      targetVps: '目标 VPS',
+      downtime: (ms: number) => `Downtime: ${ms} ms`,
+      noApp: (id: number) => `应用 #${id}`,
+      noVps: (id: number) => `VPS #${id}`
+    },
+    statuses: {
+      idle: '未开始',
+      running: '运行中',
+      awaiting_confirmation: '等待确认',
+      completed: '已完成',
+      failed: '失败',
+      rolled_back: '已回滚'
+    },
+    steps: {
+      PREPARE: 'PREPARE',
+      FREEZE: 'FREEZE',
+      BACKUP: 'BACKUP',
+      TRANSFER: 'TRANSFER',
+      RESTORE: 'RESTORE',
+      VERIFY: 'VERIFY',
+      AWAITING_CONFIRM: 'CONFIRM'
+    },
+    stepLabels: {
+      PREPARE: '准备',
+      FREEZE: '冻结',
+      BACKUP: '备份',
+      TRANSFER: '传输',
+      RESTORE: '恢复',
+      VERIFY: '验证',
+      AWAITING_CONFIRM: '确认'
+    },
+    actions: {
+      abort: '中止并回滚',
+      aborting: '正在中止...',
+      confirm: '确认迁移',
+      confirming: '正在确认...',
+      retry: '重试'
+    },
+    alerts: {
+      awaitingTitle: '等待迁移确认',
+      awaitingDesc: '应用已备份、传输并完成验证 (VERIFY)。请确认源应用的处理方式以完成迁移。',
+      completedTitle: '迁移完成',
+      completedDesc: '应用已成功迁移至目标 VPS。',
+      failedTitle: '迁移失败',
+      failedConsequence: '源应用未能自动恢复。详情请查看下方日志。',
+      rolledBackTitle: '已回滚',
+      rolledBackDesc: '迁移任务已中止并安全回滚至源应用。',
+      notPassedVerify: '尚未通过验证检查 (VERIFY)'
+    },
+    verify: {
+      title: '验证检查结果 (VERIFY)',
+      columns: {
+        item: '检查项目',
+        source: '源端',
+        target: '目标端',
+        status: '状态'
+      },
+      ok: '通过',
+      fail: '未通过',
+      empty: '暂无验证检查数据'
+    },
+    terminal: {
+      title: '迁移实时日志',
+      empty: '等待迁移日志流...',
+      emptyText: '等待迁移日志流...',
+      stepLabel: '步骤',
+      truncatedNotice: '[提示：已截断较早的日志以优化内存，当前展示最新日志]'
+    },
+    modal: {
+      title: '确认完成应用迁移',
+      desc: '验证检查已通过。请选择如何处理源应用：',
+      keepSourceBtn: '保留源应用',
+      keepSourceDesc: '保留源应用：源容器继续保持运行，可在人工核对目标服务器无误后再手动清理。',
+      stopSourceBtn: '使用 docker compose down 停止源应用',
+      stopSourceDesc:
+        '使用 docker compose down 停止源应用：立即在源 VPS 执行 docker compose down，避免写入冲突并释放资源。',
+      cancelBtn: '关闭'
     }
   }
 }
@@ -2435,6 +2743,109 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       cn: '简体中文',
       jp: '日本語'
     }
+  },
+  migrate: {
+    title: 'VPS間マイグレーション',
+    description: 'PREPARE → FREEZE → BACKUP → TRANSFER → RESTORE → VERIFY',
+    loadError: 'リストの取得に失敗しました',
+    noApps: 'アプリがありません',
+    noAppsDesc: '移行可能なアプリケーションがサーバー上に存在しません。',
+    activeJobsCount: (count: number) => `${count} 件の移行プロセスが進行中です:`,
+    jobsListTitle: '移行プロセス一覧:',
+    selectJobAria: '監視する移行プロセスを選択',
+    draft: {
+      sourceLabel: '移行元アプリを選択',
+      sourcePlaceholder: '-- 移行元アプリを選択 --',
+      targetLabel: '移行先VPSを選択',
+      targetPlaceholder: '-- 移行先VPSを選択 --',
+      startBtn: '移行開始',
+      startingBtn: '開始中...'
+    },
+    overview: {
+      jobId: 'ジョブID:',
+      sourceApp: '移行元アプリ',
+      sourceVps: '移行元VPS',
+      targetVps: '移行先VPS',
+      downtime: (ms: number) => `Downtime: ${ms} ms`,
+      noApp: (id: number) => `アプリ #${id}`,
+      noVps: (id: number) => `VPS #${id}`
+    },
+    statuses: {
+      idle: '未開始',
+      running: '実行中',
+      awaiting_confirmation: '確認待ち',
+      completed: '完了',
+      failed: '失敗',
+      rolled_back: 'ロールバック済み'
+    },
+    steps: {
+      PREPARE: 'PREPARE',
+      FREEZE: 'FREEZE',
+      BACKUP: 'BACKUP',
+      TRANSFER: 'TRANSFER',
+      RESTORE: 'RESTORE',
+      VERIFY: 'VERIFY',
+      AWAITING_CONFIRM: 'CONFIRM'
+    },
+    stepLabels: {
+      PREPARE: '準備',
+      FREEZE: '停止',
+      BACKUP: 'バックアップ',
+      TRANSFER: 'データ転送',
+      RESTORE: '復元',
+      VERIFY: '検証',
+      AWAITING_CONFIRM: '確認'
+    },
+    actions: {
+      abort: '中止 & ロールバック',
+      aborting: '中止処理中...',
+      confirm: '移行を確認',
+      confirming: '確認処理中...',
+      retry: '再試行'
+    },
+    alerts: {
+      awaitingTitle: '移行の完了確認待ち',
+      awaitingDesc:
+        'バックアップ、転送および検証（VERIFY）が正常に完了しました。移行元アプリの扱いを選択して完了してください。',
+      completedTitle: '移行が完了しました',
+      completedDesc: 'アプリケーションが移行先VPSに正常に移行されました。',
+      failedTitle: '移行に失敗しました',
+      failedConsequence: '移行元アプリの自動復旧が完了していません。ログを確認してください。',
+      rolledBackTitle: 'ロールバック完了',
+      rolledBackDesc: '移行処理が中止され、移行元アプリの状態へ安全にロールバックされました。',
+      notPassedVerify: '検証チェック（VERIFY）が未完了です'
+    },
+    verify: {
+      title: '検証結果（VERIFY）',
+      columns: {
+        item: '項目',
+        source: '移行元',
+        target: '移行先',
+        status: 'ステータス'
+      },
+      ok: '合格',
+      fail: '不合格',
+      empty: '検証データがまだありません'
+    },
+    terminal: {
+      title: '移行リアルタイムログ',
+      empty: '移行ログの出力を待機しています...',
+      emptyText: '移行ログの出力を待機しています...',
+      stepLabel: 'ステップ',
+      truncatedNotice:
+        '[通知: メモリ最適化のため古いログを省略しました。最新のログを表示しています]'
+    },
+    modal: {
+      title: 'アプリ移行の完了確認',
+      desc: '検証に合格しました。移行元アプリの処理方法を選択してください:',
+      keepSourceBtn: '移行元アプリを保持',
+      keepSourceDesc:
+        '移行元アプリを保持: 移行元コンテナを実行したまま維持します。移行先を確認した後に手動で削除できます。',
+      stopSourceBtn: 'docker compose down で移行元アプリを停止',
+      stopSourceDesc:
+        'docker compose down で移行元アプリを停止: 移行元VPSで直ちに docker compose down を実行し、データ競合を防ぎリソースを解放します。',
+      cancelBtn: '閉じる'
+    }
   }
 }
 
@@ -2536,6 +2947,27 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
       ...BASE_EN_STRINGS.settings,
       ...VI_OVERRIDES.settings,
       languages: { ...BASE_EN_STRINGS.settings.languages, ...VI_OVERRIDES.settings?.languages }
+    },
+    migrate: {
+      ...BASE_EN_STRINGS.migrate,
+      ...VI_OVERRIDES.migrate,
+      draft: { ...BASE_EN_STRINGS.migrate.draft, ...VI_OVERRIDES.migrate?.draft },
+      overview: { ...BASE_EN_STRINGS.migrate.overview, ...VI_OVERRIDES.migrate?.overview },
+      statuses: { ...BASE_EN_STRINGS.migrate.statuses, ...VI_OVERRIDES.migrate?.statuses },
+      steps: { ...BASE_EN_STRINGS.migrate.steps, ...VI_OVERRIDES.migrate?.steps },
+      stepLabels: { ...BASE_EN_STRINGS.migrate.stepLabels, ...VI_OVERRIDES.migrate?.stepLabels },
+      actions: { ...BASE_EN_STRINGS.migrate.actions, ...VI_OVERRIDES.migrate?.actions },
+      alerts: { ...BASE_EN_STRINGS.migrate.alerts, ...VI_OVERRIDES.migrate?.alerts },
+      verify: {
+        ...BASE_EN_STRINGS.migrate.verify,
+        ...VI_OVERRIDES.migrate?.verify,
+        columns: {
+          ...BASE_EN_STRINGS.migrate.verify.columns,
+          ...VI_OVERRIDES.migrate?.verify?.columns
+        }
+      },
+      terminal: { ...BASE_EN_STRINGS.migrate.terminal, ...VI_OVERRIDES.migrate?.terminal },
+      modal: { ...BASE_EN_STRINGS.migrate.modal, ...VI_OVERRIDES.migrate?.modal }
     }
   },
   cn: {
@@ -2634,6 +3066,27 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
       ...BASE_EN_STRINGS.settings,
       ...CN_OVERRIDES.settings,
       languages: { ...BASE_EN_STRINGS.settings.languages, ...CN_OVERRIDES.settings?.languages }
+    },
+    migrate: {
+      ...BASE_EN_STRINGS.migrate,
+      ...CN_OVERRIDES.migrate,
+      draft: { ...BASE_EN_STRINGS.migrate.draft, ...CN_OVERRIDES.migrate?.draft },
+      overview: { ...BASE_EN_STRINGS.migrate.overview, ...CN_OVERRIDES.migrate?.overview },
+      statuses: { ...BASE_EN_STRINGS.migrate.statuses, ...CN_OVERRIDES.migrate?.statuses },
+      steps: { ...BASE_EN_STRINGS.migrate.steps, ...CN_OVERRIDES.migrate?.steps },
+      stepLabels: { ...BASE_EN_STRINGS.migrate.stepLabels, ...CN_OVERRIDES.migrate?.stepLabels },
+      actions: { ...BASE_EN_STRINGS.migrate.actions, ...CN_OVERRIDES.migrate?.actions },
+      alerts: { ...BASE_EN_STRINGS.migrate.alerts, ...CN_OVERRIDES.migrate?.alerts },
+      verify: {
+        ...BASE_EN_STRINGS.migrate.verify,
+        ...CN_OVERRIDES.migrate?.verify,
+        columns: {
+          ...BASE_EN_STRINGS.migrate.verify.columns,
+          ...CN_OVERRIDES.migrate?.verify?.columns
+        }
+      },
+      terminal: { ...BASE_EN_STRINGS.migrate.terminal, ...CN_OVERRIDES.migrate?.terminal },
+      modal: { ...BASE_EN_STRINGS.migrate.modal, ...CN_OVERRIDES.migrate?.modal }
     }
   },
   jp: {
@@ -2732,6 +3185,27 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
       ...BASE_EN_STRINGS.settings,
       ...JP_OVERRIDES.settings,
       languages: { ...BASE_EN_STRINGS.settings.languages, ...JP_OVERRIDES.settings?.languages }
+    },
+    migrate: {
+      ...BASE_EN_STRINGS.migrate,
+      ...JP_OVERRIDES.migrate,
+      draft: { ...BASE_EN_STRINGS.migrate.draft, ...JP_OVERRIDES.migrate?.draft },
+      overview: { ...BASE_EN_STRINGS.migrate.overview, ...JP_OVERRIDES.migrate?.overview },
+      statuses: { ...BASE_EN_STRINGS.migrate.statuses, ...JP_OVERRIDES.migrate?.statuses },
+      steps: { ...BASE_EN_STRINGS.migrate.steps, ...JP_OVERRIDES.migrate?.steps },
+      stepLabels: { ...BASE_EN_STRINGS.migrate.stepLabels, ...JP_OVERRIDES.migrate?.stepLabels },
+      actions: { ...BASE_EN_STRINGS.migrate.actions, ...JP_OVERRIDES.migrate?.actions },
+      alerts: { ...BASE_EN_STRINGS.migrate.alerts, ...JP_OVERRIDES.migrate?.alerts },
+      verify: {
+        ...BASE_EN_STRINGS.migrate.verify,
+        ...JP_OVERRIDES.migrate?.verify,
+        columns: {
+          ...BASE_EN_STRINGS.migrate.verify.columns,
+          ...JP_OVERRIDES.migrate?.verify?.columns
+        }
+      },
+      terminal: { ...BASE_EN_STRINGS.migrate.terminal, ...JP_OVERRIDES.migrate?.terminal },
+      modal: { ...BASE_EN_STRINGS.migrate.modal, ...JP_OVERRIDES.migrate?.modal }
     }
   }
 }
