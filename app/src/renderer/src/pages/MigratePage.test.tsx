@@ -627,4 +627,208 @@ describe('MigratePage UI-1j-a', () => {
       expect(screen.getByText('Database')).toBeTruthy()
     })
   })
+
+  it('A ket thuc khi B van chay, B van luon tim va chon duoc', async () => {
+    const app2: App = { ...app, id: 2, name: 'worker-service' }
+    const targetVps3: Vps = { ...targetVps, id: 3, name: 'backup-node', host: '192.168.1.30' }
+    const jobA: MigrateJobView = { ...baseJob, id: 10, status: 'transferring' }
+    const jobB: MigrateJobView = {
+      ...baseJob,
+      id: 20,
+      app_id: 2,
+      target_vps_id: 3,
+      status: 'transferring'
+    }
+
+    let eventCallback: ((event: MigrateEvent) => void) | undefined
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'app:list') return { ok: true, data: [app, app2] }
+      if (channel === 'vps:list') return { ok: true, data: [sourceVps, targetVps, targetVps3] }
+      if (channel === 'migrate:list') return { ok: true, data: [jobA, jobB] }
+      throw new Error(`unexpected ${channel}`)
+    })
+    const on = vi.fn((_channel: string, cb: (event: MigrateEvent) => void) => {
+      eventCallback = cb
+      return () => {}
+    })
+    vi.stubGlobal('api', { invoke, on })
+
+    render(<MigratePage />)
+    expect(await screen.findByText(/Có 2 tiến trình đang hoạt động/)).toBeTruthy()
+
+    // Initially Job A is displayed
+    expect(screen.getByText('Job ID:').parentElement?.textContent).toContain('#10')
+
+    // Job A finishes while Job B is still running
+    eventCallback!({
+      type: 'finished',
+      job_id: 10,
+      status: 'completed',
+      downtime_ms: 120
+    })
+
+    // Screen reflects Job A has completed
+    await waitFor(() => {
+      expect(screen.getByText('Hoàn tất')).toBeTruthy()
+    })
+
+    // Job selector is STILL accessible because Job B is still running!
+    const jobSelector = screen.getByRole('combobox', {
+      name: 'Chọn tiến trình cần theo dõi'
+    }) as HTMLSelectElement
+    expect(jobSelector).toBeTruthy()
+
+    // Switch to Job B
+    fireEvent.change(jobSelector, { target: { value: '20' } })
+
+    // Screen now displays Job B
+    expect(screen.getByText('Job ID:').parentElement?.textContent).toContain('#20')
+    expect(screen.getByText('worker-service')).toBeTruthy()
+    expect(screen.getByText('Đang chạy')).toBeTruthy()
+  })
+
+  it('B nhan hon 100 log roi finished luc khong duoc chon, cap nhat trang thai va khong lam roi finished', async () => {
+    const app2: App = { ...app, id: 2, name: 'worker-service' }
+    const targetVps3: Vps = { ...targetVps, id: 3, name: 'backup-node', host: '192.168.1.30' }
+    const jobA: MigrateJobView = { ...baseJob, id: 10, status: 'awaiting_confirm' }
+    const jobB: MigrateJobView = {
+      ...baseJob,
+      id: 20,
+      app_id: 2,
+      target_vps_id: 3,
+      status: 'transferring'
+    }
+
+    let eventCallback: ((event: MigrateEvent) => void) | undefined
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'app:list') return { ok: true, data: [app, app2] }
+      if (channel === 'vps:list') return { ok: true, data: [sourceVps, targetVps, targetVps3] }
+      if (channel === 'migrate:list') return { ok: true, data: [jobA, jobB] }
+      throw new Error(`unexpected ${channel}`)
+    })
+    const on = vi.fn((_channel: string, cb: (event: MigrateEvent) => void) => {
+      eventCallback = cb
+      return () => {}
+    })
+    vi.stubGlobal('api', { invoke, on })
+
+    render(<MigratePage />)
+    expect(await screen.findByText('Chờ xác nhận')).toBeTruthy()
+    expect(screen.getByText('Job ID:').parentElement?.textContent).toContain('#10')
+
+    // While looking at Job A, send >100 log events for Job B
+    for (let i = 1; i <= 105; i++) {
+      eventCallback!({
+        type: 'log',
+        job_id: 20,
+        step: 'TRANSFER',
+        chunk: `[LOG_${i}] Transferring block ${i}\n`
+      })
+    }
+
+    // Now send finished event for Job B
+    eventCallback!({
+      type: 'finished',
+      job_id: 20,
+      status: 'completed',
+      downtime_ms: 350
+    })
+
+    // Now switch selector to Job B
+    const jobSelector = screen.getByRole('combobox', {
+      name: 'Chọn tiến trình cần theo dõi'
+    }) as HTMLSelectElement
+    fireEvent.change(jobSelector, { target: { value: '20' } })
+
+    // Verify Job B is rendered with terminal completed status and full logs
+    await waitFor(() => {
+      expect(screen.getByText('Job ID:').parentElement?.textContent).toContain('#20')
+      expect(screen.getByText('Hoàn tất')).toBeTruthy()
+      expect(screen.getByText(/350 ms/)).toBeTruthy()
+      expect(screen.getByText(/\[LOG_105\]/)).toBeTruthy()
+    })
+
+    // Verify copy buffer preserves early logs as well
+    const writeText = vi.fn()
+    Object.assign(navigator, { clipboard: { writeText } })
+    fireEvent.click(screen.getByRole('button', { name: /Sao chép/ }))
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('[LOG_1]'))
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('[LOG_105]'))
+  })
+
+  it('chuyen A<->B khong lan tien do hoac gui sai job ID', async () => {
+    const app2: App = { ...app, id: 2, name: 'worker-service' }
+    const targetVps3: Vps = { ...targetVps, id: 3, name: 'backup-node', host: '192.168.1.30' }
+    const jobA: MigrateJobView = {
+      ...baseJob,
+      id: 10,
+      app_id: 1,
+      target_vps_id: 2,
+      status: 'awaiting_confirm',
+      verify_json: JSON.stringify({
+        ok: true,
+        rows: [{ label: 'DatabaseSchema', source: '5 tables', target: '5 tables', ok: true }]
+      })
+    }
+    const jobB: MigrateJobView = {
+      ...baseJob,
+      id: 20,
+      app_id: 2,
+      target_vps_id: 3,
+      status: 'transferring',
+      verify_json: null
+    }
+
+    const invoke = vi.fn(async (channel: string, ...args: unknown[]) => {
+      if (channel === 'app:list') return { ok: true, data: [app, app2] }
+      if (channel === 'vps:list') return { ok: true, data: [sourceVps, targetVps, targetVps3] }
+      if (channel === 'migrate:list') return { ok: true, data: [jobA, jobB] }
+      if (channel === 'migrate:abort') return { ok: true, data: undefined }
+      if (channel === 'migrate:confirm') return { ok: true, data: undefined }
+      throw new Error(`unexpected ${channel}: ${JSON.stringify(args)}`)
+    })
+    vi.stubGlobal('api', { invoke, on: () => () => {} })
+
+    render(<MigratePage />)
+    expect(await screen.findByText('DatabaseSchema')).toBeTruthy()
+    expect(screen.getByText('Job ID:').parentElement?.textContent).toContain('#10')
+    expect(screen.getByText('Chờ xác nhận')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Xác nhận di chuyển' })).toBeTruthy()
+
+    // Switch to Job B
+    const jobSelector = screen.getByRole('combobox', {
+      name: 'Chọn tiến trình cần theo dõi'
+    }) as HTMLSelectElement
+    fireEvent.change(jobSelector, { target: { value: '20' } })
+
+    // On Job B: verify table from Job A must NOT be displayed!
+    expect(screen.getByText('Job ID:').parentElement?.textContent).toContain('#20')
+    expect(screen.getByText('Đang chạy')).toBeTruthy()
+    expect(screen.queryByText('DatabaseSchema')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Xác nhận di chuyển' })).toBeNull()
+
+    // Clicking abort on Job B must send Job ID 20
+    const cancelBtn = screen.getByRole('button', { name: 'Huỷ & rollback' })
+    fireEvent.click(cancelBtn)
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('migrate:abort', 20)
+    })
+
+    // Switch back to Job A
+    fireEvent.change(jobSelector, { target: { value: '10' } })
+
+    // On Job A: DatabaseSchema and confirmation are restored
+    expect(screen.getByText('Job ID:').parentElement?.textContent).toContain('#10')
+    expect(screen.getByText('DatabaseSchema')).toBeTruthy()
+    expect(screen.getByText('Chờ xác nhận')).toBeTruthy()
+
+    // Confirm Job A must send Job ID 10
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận di chuyển' }))
+    expect(await screen.findByText('Xác nhận hoàn tất di chuyển ứng dụng')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Giữ app nguồn' }))
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('migrate:confirm', 10, true)
+    })
+  })
 })
