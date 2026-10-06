@@ -414,4 +414,217 @@ describe('MigratePage UI-1j-a', () => {
       expect(screen.getByText('Chưa có ứng dụng nào')).toBeTruthy()
     })
   })
+
+  it('khoa doi app/VPS va migrate:start khi cho xac nhan, giu nguyen ngu canh job goc', async () => {
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'app:list') return { ok: true, data: [app] }
+      if (channel === 'vps:list') return { ok: true, data: [sourceVps, targetVps] }
+      if (channel === 'migrate:list') return { ok: true, data: [baseJob] }
+      throw new Error(`unexpected ${channel}`)
+    })
+    vi.stubGlobal('api', { invoke, on: () => () => {} })
+
+    render(<MigratePage />)
+    expect(await screen.findByText('Chờ xác nhận')).toBeTruthy()
+
+    const sourceSelect = screen.getByRole('combobox', {
+      name: 'Chọn app nguồn'
+    }) as HTMLSelectElement
+    const targetSelect = screen.getByRole('combobox', {
+      name: 'Chọn VPS đích'
+    }) as HTMLSelectElement
+    const startBtn = screen.getByRole('button', {
+      name: 'Bắt đầu migrate'
+    }) as HTMLButtonElement
+
+    // Both selects and start button are locked when awaiting confirmation
+    expect(sourceSelect.disabled).toBe(true)
+    expect(targetSelect.disabled).toBe(true)
+    expect(startBtn.disabled).toBe(true)
+
+    // Job banner displays correct context of active job
+    expect(screen.getByText(/#7/)).toBeTruthy()
+    expect(screen.getByText('demo-service')).toBeTruthy()
+  })
+
+  it('cho phep migrate:abort rollback khi o trang thai cho xac nhan', async () => {
+    const invoke = vi.fn(async (channel: string, ...args: unknown[]) => {
+      if (channel === 'app:list') return { ok: true, data: [app] }
+      if (channel === 'vps:list') return { ok: true, data: [sourceVps, targetVps] }
+      if (channel === 'migrate:list') return { ok: true, data: [baseJob] }
+      if (channel === 'migrate:abort') return { ok: true, data: undefined }
+      throw new Error(`unexpected ${channel}: ${JSON.stringify(args)}`)
+    })
+    vi.stubGlobal('api', { invoke, on: () => () => {} })
+
+    render(<MigratePage />)
+    expect(await screen.findByText('Chờ xác nhận')).toBeTruthy()
+
+    const cancelBtn = screen.getByRole('button', {
+      name: 'Huỷ & rollback'
+    }) as HTMLButtonElement
+    // Must be ENABLED during awaiting_confirmation
+    expect(cancelBtn.disabled).toBe(false)
+
+    fireEvent.click(cancelBtn)
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('migrate:abort', 7)
+    })
+  })
+
+  it('cho chon job can theo doi khi co nhieu job hoat dong, gan dung event va hanh dong', async () => {
+    const app2: App = { ...app, id: 2, name: 'worker-service' }
+    const targetVps3: Vps = { ...targetVps, id: 3, name: 'backup-node', host: '192.168.1.30' }
+    const activeJobA: MigrateJobView = { ...baseJob, id: 10, status: 'awaiting_confirm' }
+    const activeJobB: MigrateJobView = {
+      ...baseJob,
+      id: 20,
+      app_id: 2,
+      target_vps_id: 3,
+      status: 'transferring'
+    }
+
+    let eventCallback: ((event: MigrateEvent) => void) | undefined
+    const invoke = vi.fn(async (channel: string, ...args: unknown[]) => {
+      if (channel === 'app:list') return { ok: true, data: [app, app2] }
+      if (channel === 'vps:list') return { ok: true, data: [sourceVps, targetVps, targetVps3] }
+      if (channel === 'migrate:list') return { ok: true, data: [activeJobA, activeJobB] }
+      if (channel === 'migrate:abort') return { ok: true, data: undefined }
+      throw new Error(`unexpected ${channel}: ${JSON.stringify(args)}`)
+    })
+    const on = vi.fn((_channel: string, cb: (event: MigrateEvent) => void) => {
+      eventCallback = cb
+      return () => {}
+    })
+    vi.stubGlobal('api', { invoke, on })
+
+    render(<MigratePage />)
+    expect(await screen.findByText(/Có 2 tiến trình đang hoạt động/)).toBeTruthy()
+
+    // Initially job 10 is selected
+    expect(screen.getByText('Job ID:').parentElement?.textContent).toContain('#10')
+    expect(screen.getByText('Chờ xác nhận')).toBeTruthy()
+
+    // Switch to Job 20
+    const jobSelector = screen.getByRole('combobox', {
+      name: 'Chọn tiến trình cần theo dõi'
+    }) as HTMLSelectElement
+    expect(jobSelector.value).toBe('10')
+    fireEvent.change(jobSelector, { target: { value: '20' } })
+
+    // Screen updates to Job 20
+    expect(screen.getByText('Job ID:').parentElement?.textContent).toContain('#20')
+    expect(screen.getByText('worker-service')).toBeTruthy()
+    expect(screen.getByText('Đang chạy')).toBeTruthy()
+
+    // Emit event for Job 10 - must NOT alter Job 20's screen
+    eventCallback!({
+      type: 'finished',
+      job_id: 10,
+      status: 'failed',
+      downtime_ms: 100,
+      error: 'FAIL_JOB_10'
+    })
+
+    expect(screen.queryByText('FAIL_JOB_10')).toBeNull()
+    expect(screen.getByText('Job ID:').parentElement?.textContent).toContain('#20')
+    expect(screen.getByText('Đang chạy')).toBeTruthy()
+
+    // Huỷ & rollback operates on Job 20, NOT Job 10
+    const cancelBtn = screen.getByRole('button', { name: 'Huỷ & rollback' })
+    fireEvent.click(cancelBtn)
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith('migrate:abort', 20)
+    })
+  })
+
+  it('ngu canh modal lay tu job context va tu dong dong/khoa modal khi nhan event ket thuc', async () => {
+    let eventCallback: ((event: MigrateEvent) => void) | undefined
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'app:list') return { ok: true, data: [app] }
+      if (channel === 'vps:list') return { ok: true, data: [sourceVps, targetVps] }
+      if (channel === 'migrate:list') return { ok: true, data: [baseJob] }
+      throw new Error(`unexpected ${channel}`)
+    })
+    const on = vi.fn((_channel: string, cb: (event: MigrateEvent) => void) => {
+      eventCallback = cb
+      return () => {}
+    })
+    vi.stubGlobal('api', { invoke, on })
+
+    render(<MigratePage />)
+    expect(await screen.findByText('Chờ xác nhận')).toBeTruthy()
+
+    // Open modal
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận di chuyển' }))
+    expect(await screen.findByText('Xác nhận hoàn tất di chuyển ứng dụng')).toBeTruthy()
+
+    // Modal has fixed context details
+    expect(screen.getAllByText('demo-service').length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/source-node/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/target-node/).length).toBeGreaterThan(0)
+
+    // Receive terminal event for active job while modal is open
+    eventCallback!({
+      type: 'finished',
+      job_id: 7,
+      status: 'rolled_back',
+      downtime_ms: 120,
+      error: 'Đã rollback về app nguồn do sự cố'
+    })
+
+    // Modal must be automatically closed & unmounted
+    await waitFor(() => {
+      expect(screen.queryByText('Xác nhận hoàn tất di chuyển ứng dụng')).toBeNull()
+    })
+    // Screen reflects terminal rolled_back state
+    expect(screen.getByText('Đã rollback')).toBeTruthy()
+    expect(screen.getByText(/Đã rollback về app nguồn do sự cố/)).toBeTruthy()
+  })
+
+  it('xu ly event den trong luc tai danh sach truoc khi khoi phuc job', async () => {
+    let resolveList: (value: { ok: true; data: MigrateJobView[] }) => void
+    const listPromise = new Promise<{ ok: true; data: MigrateJobView[] }>((res) => {
+      resolveList = res
+    })
+    let eventCallback: ((event: MigrateEvent) => void) | undefined
+
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'app:list') return { ok: true, data: [app] }
+      if (channel === 'vps:list') return { ok: true, data: [sourceVps, targetVps] }
+      if (channel === 'migrate:list') return listPromise
+      throw new Error(`unexpected ${channel}`)
+    })
+    const on = vi.fn((_channel: string, cb: (event: MigrateEvent) => void) => {
+      eventCallback = cb
+      return () => {}
+    })
+    vi.stubGlobal('api', { invoke, on })
+
+    render(<MigratePage />)
+
+    // Events arrive while migrate:list is still fetching
+    eventCallback!({
+      type: 'log',
+      job_id: 7,
+      step: 'TRANSFER',
+      chunk: '[EARLY_LIST_FETCH_LOG] Synchronizing files...'
+    })
+    eventCallback!({
+      type: 'verify-result',
+      job_id: 7,
+      rows: [{ label: 'Database', source: '5 tables', target: '5 tables', ok: true }]
+    })
+
+    // Now migrate:list finishes
+    resolveList!({ ok: true, data: [baseJob] })
+
+    // Both the early log and verify row must be rendered after job restore
+    await waitFor(() => {
+      expect(screen.getByText(/#7/)).toBeTruthy()
+      expect(screen.getByText('[EARLY_LIST_FETCH_LOG] Synchronizing files...')).toBeTruthy()
+      expect(screen.getByText('Database')).toBeTruthy()
+    })
+  })
 })

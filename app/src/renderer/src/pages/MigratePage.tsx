@@ -26,6 +26,13 @@ import { DeployTerminal } from './DeployTerminal'
 export type MigrateLifecycleStatus =
   'idle' | 'running' | 'awaiting_confirmation' | 'completed' | 'failed' | 'rolled_back'
 
+interface ActiveJobContext {
+  jobId: number
+  appId: number
+  sourceVpsId: number
+  targetVpsId: number
+}
+
 const MIGRATE_STEPS: readonly MigrateStep[] = [
   'PREPARE',
   'FREEZE',
@@ -76,9 +83,17 @@ function mapJobStatus(jobStatus: MigrateJobStatus): MigrateLifecycleStatus {
 export function MigratePage(): React.JSX.Element {
   const [apps, setApps] = useState<App[]>([])
   const [vps, setVps] = useState<Vps[]>([])
-  const [appId, setAppId] = useState<number>()
-  const [targetVpsId, setTargetVpsId] = useState<number>()
-  const [jobId, setJobId] = useState<number>()
+  const [jobsList, setJobsList] = useState<MigrateJobView[]>([])
+
+  // Draft picker state for preparing a new migration job
+  const [draftAppId, setDraftAppId] = useState<number>()
+  const [draftTargetVpsId, setDraftTargetVpsId] = useState<number>()
+
+  // Fixed active job context (cannot be manipulated by draft picker)
+  const [jobContext, setJobContext] = useState<ActiveJobContext | null>(null)
+  const activeJobId = useRef<number | undefined>(undefined)
+
+  // Progress, terminal & validation states
   const [step, setStep] = useState(-1)
   const [currentStep, setCurrentStep] = useState<string>()
   const [status, setStatus] = useState<MigrateLifecycleStatus>('idle')
@@ -96,11 +111,11 @@ export function MigratePage(): React.JSX.Element {
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  // Double submit prevention & early event buffering
+  // Double submit prevention & buffering
   const [isStarting, setIsStarting] = useState(false)
   const startingRef = useRef(false)
   const earlyEventsRef = useRef<MigrateEvent[]>([])
-  const activeJobId = useRef<number | undefined>(undefined)
+  const logsByJobRef = useRef<Record<number, string>>({})
 
   // Confirmation modal states
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
@@ -108,9 +123,35 @@ export function MigratePage(): React.JSX.Element {
   const [confirmChoice, setConfirmChoice] = useState<boolean | null>(null)
   const confirmingRef = useRef(false)
 
+  const activeJobs = useMemo(() => {
+    return jobsList.filter(
+      (j) => j.status !== 'completed' && j.status !== 'failed' && j.status !== 'rolled_back'
+    )
+  }, [jobsList])
+
+  const isRunning = status === 'running'
+  const isJobActive = isStarting || isRunning || status === 'awaiting_confirmation'
+  const canAbort =
+    jobContext !== null && (status === 'running' || status === 'awaiting_confirmation')
+
+  const draftSource = apps.find((item) => item.id === draftAppId)
+  const draftTargets = useMemo(
+    () => vps.filter((item) => item.id !== draftSource?.vps_id),
+    [draftSource, vps]
+  )
+
+  const jobApp = jobContext ? apps.find((item) => item.id === jobContext.appId) : undefined
+  const jobSourceVps = jobContext
+    ? vps.find((item) => item.id === jobContext.sourceVpsId)
+    : undefined
+  const jobTargetVps = jobContext
+    ? vps.find((item) => item.id === jobContext.targetVpsId)
+    : undefined
+
   const applyEvent = useCallback((event: MigrateEvent): void => {
     if (event.type === 'log') {
       setLogs((prev) => prev + event.chunk)
+      logsByJobRef.current[event.job_id] = (logsByJobRef.current[event.job_id] ?? '') + event.chunk
       return
     }
     if ('step' in event && event.step) {
@@ -135,6 +176,11 @@ export function MigratePage(): React.JSX.Element {
     }
     if (event.type === 'finished') {
       setDowntime(event.downtime_ms)
+      // Close & lock modal immediately upon receiving terminal event
+      setConfirmModalOpen(false)
+      setIsConfirming(false)
+      confirmingRef.current = false
+
       if (event.status === 'completed') {
         setStatus('completed')
         setFailReason(undefined)
@@ -153,68 +199,112 @@ export function MigratePage(): React.JSX.Element {
 
   const handleEvent = useCallback(
     (event: MigrateEvent): void => {
-      // 1. If currently starting and waiting for job ID: buffer early event
+      // Keep jobsList status updated
+      if (event.type === 'finished') {
+        setJobsList((prev) =>
+          prev.map((j) =>
+            j.id === event.job_id ? { ...j, status: event.status as MigrateJobStatus } : j
+          )
+        )
+      } else if (event.type === 'awaiting-confirm') {
+        setJobsList((prev) =>
+          prev.map((j) => (j.id === event.job_id ? { ...j, status: 'awaiting_confirm' } : j))
+        )
+      }
+
+      // 1. If currently starting or no job has been selected yet: buffer event
       if (startingRef.current || activeJobId.current === undefined) {
-        if (earlyEventsRef.current.length < 50) {
+        if (earlyEventsRef.current.length < 100) {
           earlyEventsRef.current.push(event)
         }
         return
       }
 
-      // 2. Reject events from other jobs
+      // 2. Reject events from other jobs (buffer them in case user switches)
       if (event.job_id !== activeJobId.current) {
+        if (earlyEventsRef.current.length < 100) {
+          earlyEventsRef.current.push(event)
+        }
         return
       }
 
-      // 3. Apply event
+      // 3. Apply event to the currently active job
       applyEvent(event)
     },
     [applyEvent]
   )
 
-  const restoreJob = useCallback((job: MigrateJobView) => {
-    activeJobId.current = job.id
-    setJobId(job.id)
-    setAppId(job.app_id)
-    setTargetVpsId(job.target_vps_id)
-
-    const mapped = mapJobStatus(job.status)
-    setStatus(mapped)
-    setDowntime(job.downtime_ms ?? undefined)
-
-    if (mapped === 'failed' || mapped === 'rolled_back') {
-      setFailReason(
-        job.error_message ??
-          `Lỗi ở bước ${job.failed_step ?? 'không xác định'} (không có chi tiết).`
-      )
-    } else {
-      setFailReason(undefined)
-    }
-
-    if (job.status === 'awaiting_confirm') {
-      setStep(MIGRATE_STEPS.indexOf('AWAITING_CONFIRM'))
-    } else if (job.status === 'completed') {
-      setStep(MIGRATE_STEPS.length - 1)
-    } else if (job.failed_step) {
-      const idx = MIGRATE_STEPS.indexOf(job.failed_step.toUpperCase() as MigrateStep)
-      setStep(idx >= 0 ? idx : 0)
-    }
-
-    if (job.verify_json) {
-      try {
-        const verify = JSON.parse(job.verify_json) as {
-          ok?: boolean
-          rows?: Array<{ label: string; source: string; target: string; ok: boolean }>
-        }
-        setVerifyOk(verify.ok === true)
-        if (Array.isArray(verify.rows)) {
-          setRows(verify.rows)
-        }
-      } catch {
-        setVerifyOk(false)
+  const restoreJob = useCallback(
+    (job: MigrateJobView) => {
+      activeJobId.current = job.id
+      const context: ActiveJobContext = {
+        jobId: job.id,
+        appId: job.app_id,
+        sourceVpsId: job.source_vps_id,
+        targetVpsId: job.target_vps_id
       }
-    }
-  }, [])
+      setJobContext(context)
+      setDraftAppId(job.app_id)
+      setDraftTargetVpsId(job.target_vps_id)
+
+      const mapped = mapJobStatus(job.status)
+      setStatus(mapped)
+      setDowntime(job.downtime_ms ?? undefined)
+      setConfirmModalOpen(false)
+
+      if (mapped === 'failed' || mapped === 'rolled_back') {
+        setFailReason(
+          job.error_message ??
+            `Lỗi ở bước ${job.failed_step ?? 'không xác định'} (không có chi tiết).`
+        )
+      } else {
+        setFailReason(undefined)
+      }
+
+      if (job.status === 'awaiting_confirm') {
+        setStep(MIGRATE_STEPS.indexOf('AWAITING_CONFIRM'))
+      } else if (job.status === 'completed') {
+        setStep(MIGRATE_STEPS.length - 1)
+      } else if (job.failed_step) {
+        const idx = MIGRATE_STEPS.indexOf(job.failed_step.toUpperCase() as MigrateStep)
+        setStep(idx >= 0 ? idx : 0)
+      } else {
+        setStep(0)
+      }
+
+      if (job.verify_json) {
+        try {
+          const verify = JSON.parse(job.verify_json) as {
+            ok?: boolean
+            rows?: Array<{ label: string; source: string; target: string; ok: boolean }>
+          }
+          setVerifyOk(verify.ok === true)
+          if (Array.isArray(verify.rows)) {
+            setRows(verify.rows)
+          } else {
+            setRows([])
+          }
+        } catch {
+          setVerifyOk(false)
+          setRows([])
+        }
+      } else {
+        setVerifyOk(false)
+        setRows([])
+      }
+
+      // Restore logs from per-job buffer
+      setLogs(logsByJobRef.current[job.id] ?? '')
+
+      // Drain early events for this job
+      const matching = earlyEventsRef.current.filter((ev) => ev.job_id === job.id)
+      earlyEventsRef.current = earlyEventsRef.current.filter((ev) => ev.job_id !== job.id)
+      for (const ev of matching) {
+        applyEvent(ev)
+      }
+    },
+    [applyEvent]
+  )
 
   const executeLoad = useCallback(
     async (showLoading: boolean) => {
@@ -240,9 +330,14 @@ export function MigratePage(): React.JSX.Element {
         if (!migrationResult.ok) {
           errors.push(`Không thể tải danh sách migrate: ${migrationResult.error.message}`)
         } else {
-          const latest = migrationResult.data?.[0] as MigrateJobView | undefined
-          if (latest) {
-            restoreJob(latest)
+          const list = migrationResult.data ?? []
+          setJobsList(list)
+          const active = list.filter(
+            (j) => j.status !== 'completed' && j.status !== 'failed' && j.status !== 'rolled_back'
+          )
+          const targetToRestore = active.length > 0 ? active[0] : list[0]
+          if (targetToRestore) {
+            restoreJob(targetToRestore)
           }
         }
 
@@ -280,9 +375,14 @@ export function MigratePage(): React.JSX.Element {
         if (!migrationResult.ok) {
           errors.push(`Không thể tải danh sách migrate: ${migrationResult.error.message}`)
         } else {
-          const latest = migrationResult.data?.[0] as MigrateJobView | undefined
-          if (latest) {
-            restoreJob(latest)
+          const list = migrationResult.data ?? []
+          setJobsList(list)
+          const active = list.filter(
+            (j) => j.status !== 'completed' && j.status !== 'failed' && j.status !== 'rolled_back'
+          )
+          const targetToRestore = active.length > 0 ? active[0] : list[0]
+          if (targetToRestore) {
+            restoreJob(targetToRestore)
           }
         }
 
@@ -302,22 +402,19 @@ export function MigratePage(): React.JSX.Element {
     }
   }, [restoreJob, handleEvent])
 
-  const source = apps.find((item) => item.id === appId)
-  const sourceVps = vps.find((item) => item.id === source?.vps_id)
-  const targetVps = vps.find((item) => item.id === targetVpsId)
-  const targets = useMemo(() => vps.filter((item) => item.id !== source?.vps_id), [source, vps])
-  const isRunning = status === 'running'
-
   const start = async (): Promise<void> => {
     if (
       startingRef.current ||
       isStarting ||
-      isRunning ||
-      appId === undefined ||
-      targetVpsId === undefined
+      isJobActive ||
+      draftAppId === undefined ||
+      draftTargetVpsId === undefined
     ) {
       return
     }
+
+    const selectedSource = apps.find((item) => item.id === draftAppId)
+    if (!selectedSource) return
 
     startingRef.current = true
     setIsStarting(true)
@@ -334,8 +431,8 @@ export function MigratePage(): React.JSX.Element {
 
     try {
       const result = await window.api.invoke('migrate:start', {
-        app_id: appId,
-        target_vps_id: targetVpsId
+        app_id: draftAppId,
+        target_vps_id: draftTargetVpsId
       })
 
       if (!result.ok) {
@@ -345,15 +442,36 @@ export function MigratePage(): React.JSX.Element {
       } else {
         const newJobId = result.data.job_id
         activeJobId.current = newJobId
-        setJobId(newJobId)
+        const context: ActiveJobContext = {
+          jobId: newJobId,
+          appId: draftAppId,
+          sourceVpsId: selectedSource.vps_id,
+          targetVpsId: draftTargetVpsId
+        }
+        setJobContext(context)
+
+        const newJobView: MigrateJobView = {
+          id: newJobId,
+          app_id: draftAppId,
+          source_vps_id: selectedSource.vps_id,
+          target_vps_id: draftTargetVpsId,
+          status: 'preparing',
+          failed_step: null,
+          error_message: null,
+          downtime_ms: null,
+          bytes_transferred: null,
+          verify_json: null,
+          source_kept: null,
+          started_at: new Date().toISOString(),
+          finished_at: null
+        }
+        setJobsList((prev) => [newJobView, ...prev.filter((j) => j.id !== newJobId)])
 
         // Drain buffered early events
-        const buffered = [...earlyEventsRef.current]
-        earlyEventsRef.current = []
-        for (const ev of buffered) {
-          if (ev.job_id === newJobId) {
-            applyEvent(ev)
-          }
+        const matching = earlyEventsRef.current.filter((ev) => ev.job_id === newJobId)
+        earlyEventsRef.current = earlyEventsRef.current.filter((ev) => ev.job_id !== newJobId)
+        for (const ev of matching) {
+          applyEvent(ev)
         }
       }
     } catch (err: unknown) {
@@ -367,14 +485,22 @@ export function MigratePage(): React.JSX.Element {
   }
 
   const handleConfirm = async (keepSource: boolean): Promise<void> => {
-    if (confirmingRef.current || isConfirming || jobId === undefined || !verifyOk) return
+    if (
+      confirmingRef.current ||
+      isConfirming ||
+      jobContext === null ||
+      status !== 'awaiting_confirmation' ||
+      !verifyOk
+    ) {
+      return
+    }
     confirmingRef.current = true
     setIsConfirming(true)
     setConfirmChoice(keepSource)
     setError(undefined)
 
     try {
-      const result = await window.api.invoke('migrate:confirm', jobId, keepSource)
+      const result = await window.api.invoke('migrate:confirm', jobContext.jobId, keepSource)
       if (!result.ok) {
         setError(result.error.message)
       } else {
@@ -390,10 +516,12 @@ export function MigratePage(): React.JSX.Element {
   }
 
   const abort = async (): Promise<void> => {
-    if (jobId === undefined || !isRunning) return
+    if (jobContext === null || (status !== 'running' && status !== 'awaiting_confirmation')) {
+      return
+    }
     setError(undefined)
     try {
-      const result = await window.api.invoke('migrate:abort', jobId)
+      const result = await window.api.invoke('migrate:abort', jobContext.jobId)
       if (!result.ok) {
         setError(result.error.message)
       }
@@ -439,15 +567,51 @@ export function MigratePage(): React.JSX.Element {
           />
         )}
 
+        {activeJobs.length > 1 && (
+          <Card size="small" className="migrate-active-jobs-card">
+            <Space wrap align="center">
+              <Typography.Text strong>
+                Có {activeJobs.length} tiến trình đang hoạt động:
+              </Typography.Text>
+              <select
+                className="migrate-native-select migrate-job-selector"
+                aria-label="Chọn tiến trình cần theo dõi"
+                value={jobContext?.jobId ?? ''}
+                onChange={(event) => {
+                  const selectedId = Number(event.currentTarget.value)
+                  const targetJob = jobsList.find((j) => j.id === selectedId)
+                  if (targetJob) {
+                    restoreJob(targetJob)
+                  }
+                }}
+              >
+                {activeJobs.map((j) => {
+                  const itemApp = apps.find((candidate) => candidate.id === j.app_id)
+                  const itemSourceVps = vps.find((candidate) => candidate.id === j.source_vps_id)
+                  const itemTargetVps = vps.find((candidate) => candidate.id === j.target_vps_id)
+                  const label = STATUS_META[mapJobStatus(j.status)]?.label ?? j.status
+                  return (
+                    <option key={j.id} value={j.id}>
+                      Job #{j.id} · {itemApp?.name ?? `App #${j.app_id}`} (
+                      {itemSourceVps?.name ?? `VPS #${j.source_vps_id}`} →{' '}
+                      {itemTargetVps?.name ?? `VPS #${j.target_vps_id}`}) · {label}
+                    </option>
+                  )
+                })}
+              </select>
+            </Space>
+          </Card>
+        )}
+
         <Space wrap className="migrate-toolbar">
           <select
             className="migrate-native-select migrate-source-select"
             aria-label="Chọn app nguồn"
-            value={appId ?? ''}
-            disabled={isRunning || isStarting}
+            value={draftAppId ?? ''}
+            disabled={isJobActive}
             onChange={(event) => {
-              setAppId(Number(event.currentTarget.value))
-              setTargetVpsId(undefined)
+              setDraftAppId(Number(event.currentTarget.value))
+              setDraftTargetVpsId(undefined)
             }}
           >
             <option value="" disabled>
@@ -465,14 +629,14 @@ export function MigratePage(): React.JSX.Element {
           <select
             className="migrate-native-select"
             aria-label="Chọn VPS đích"
-            value={targetVpsId ?? ''}
-            disabled={!source || isRunning || isStarting}
-            onChange={(event) => setTargetVpsId(Number(event.currentTarget.value))}
+            value={draftTargetVpsId ?? ''}
+            disabled={isJobActive || !draftSource}
+            onChange={(event) => setDraftTargetVpsId(Number(event.currentTarget.value))}
           >
             <option value="" disabled>
               Chọn VPS đích
             </option>
-            {targets.map((item) => (
+            {draftTargets.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name} · {item.host}
               </option>
@@ -482,35 +646,38 @@ export function MigratePage(): React.JSX.Element {
           <Button
             type="primary"
             onClick={() => void start()}
-            disabled={isRunning || isStarting || !source || targetVpsId === undefined}
+            disabled={isJobActive || !draftSource || draftTargetVpsId === undefined}
             loading={isStarting}
           >
             Bắt đầu migrate
           </Button>
 
-          <Button danger onClick={() => void abort()} disabled={jobId === undefined || !isRunning}>
+          <Button danger onClick={() => void abort()} disabled={!canAbort}>
             Huỷ & rollback
           </Button>
         </Space>
 
-        {jobId !== undefined && (
+        {jobContext && (
           <Card size="small" className="migrate-job-banner">
             <Space wrap size="middle">
               <span>
-                <strong>Job ID:</strong> #{jobId}
+                <strong>Job ID:</strong> #{jobContext.jobId}
               </span>
               <span>
-                <strong>Ứng dụng:</strong> {source?.name ?? (appId ? `App #${appId}` : '—')}
+                <strong>Ứng dụng:</strong>{' '}
+                {jobApp?.name ?? (jobContext.appId ? `App #${jobContext.appId}` : '—')}
               </span>
               <span>
                 <strong>VPS nguồn:</strong>{' '}
-                {sourceVps?.name ?? (source?.vps_id ? `VPS #${source.vps_id}` : '—')}
-                {sourceVps?.host ? ` (${sourceVps.host})` : ''}
+                {jobSourceVps?.name ??
+                  (jobContext.sourceVpsId ? `VPS #${jobContext.sourceVpsId}` : '—')}
+                {jobSourceVps?.host ? ` (${jobSourceVps.host})` : ''}
               </span>
               <span>
                 <strong>VPS đích:</strong>{' '}
-                {targetVps?.name ?? (targetVpsId ? `VPS #${targetVpsId}` : '—')}
-                {targetVps?.host ? ` (${targetVps.host})` : ''}
+                {jobTargetVps?.name ??
+                  (jobContext.targetVpsId ? `VPS #${jobContext.targetVpsId}` : '—')}
+                {jobTargetVps?.host ? ` (${jobTargetVps.host})` : ''}
               </span>
             </Space>
           </Card>
@@ -620,9 +787,9 @@ export function MigratePage(): React.JSX.Element {
         />
       </div>
 
-      {confirmModalOpen && (
+      {confirmModalOpen && status === 'awaiting_confirmation' && jobContext && (
         <Modal
-          open={confirmModalOpen}
+          open={confirmModalOpen && status === 'awaiting_confirmation'}
           onCancel={() => !isConfirming && setConfirmModalOpen(false)}
           title="Xác nhận hoàn tất di chuyển ứng dụng"
           footer={null}
@@ -631,15 +798,19 @@ export function MigratePage(): React.JSX.Element {
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             <Descriptions size="small" column={1} bordered>
               <Descriptions.Item label="Ứng dụng">
-                <strong>{source?.name ?? (appId ? `App #${appId}` : '—')}</strong>
+                <strong>
+                  {jobApp?.name ?? (jobContext.appId ? `App #${jobContext.appId}` : '—')}
+                </strong>
               </Descriptions.Item>
               <Descriptions.Item label="VPS nguồn">
-                {sourceVps?.name ?? (source?.vps_id ? `VPS #${source.vps_id}` : '—')}
-                {sourceVps?.host ? ` (${sourceVps.host})` : ''}
+                {jobSourceVps?.name ??
+                  (jobContext.sourceVpsId ? `VPS #${jobContext.sourceVpsId}` : '—')}
+                {jobSourceVps?.host ? ` (${jobSourceVps.host})` : ''}
               </Descriptions.Item>
               <Descriptions.Item label="VPS đích">
-                {targetVps?.name ?? (targetVpsId ? `VPS #${targetVpsId}` : '—')}
-                {targetVps?.host ? ` (${targetVps.host})` : ''}
+                {jobTargetVps?.name ??
+                  (jobContext.targetVpsId ? `VPS #${jobContext.targetVpsId}` : '—')}
+                {jobTargetVps?.host ? ` (${jobTargetVps.host})` : ''}
               </Descriptions.Item>
               {downtime !== undefined && (
                 <Descriptions.Item label="Downtime ghi nhận">{downtime} ms</Descriptions.Item>
@@ -668,7 +839,7 @@ export function MigratePage(): React.JSX.Element {
               <Button
                 type="primary"
                 onClick={() => void handleConfirm(true)}
-                disabled={isConfirming || !verifyOk}
+                disabled={isConfirming || status !== 'awaiting_confirmation' || !verifyOk}
                 loading={isConfirming && confirmChoice === true}
               >
                 Giữ app nguồn
@@ -676,7 +847,7 @@ export function MigratePage(): React.JSX.Element {
               <Button
                 danger
                 onClick={() => void handleConfirm(false)}
-                disabled={isConfirming || !verifyOk}
+                disabled={isConfirming || status !== 'awaiting_confirmation' || !verifyOk}
                 loading={isConfirming && confirmChoice === false}
               >
                 Dừng app nguồn bằng docker compose down
