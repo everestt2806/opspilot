@@ -972,6 +972,7 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   },
   vps: {
     ...BASE_EN_STRINGS.vps,
+    backToList: 'Quay lại danh sách máy chủ',
     status: {
       online: 'Vừa kiểm tra',
       offline: 'Không thể kiểm tra',
@@ -1651,6 +1652,7 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   },
   vps: {
     ...BASE_EN_STRINGS.vps,
+    backToList: '返回服务器列表',
     status: {
       online: '刚刚检查',
       offline: '无法检查',
@@ -2309,6 +2311,7 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   },
   vps: {
     ...BASE_EN_STRINGS.vps,
+    backToList: 'サーバー一覧に戻る',
     status: {
       online: '確認済み',
       offline: '確認できませんでした',

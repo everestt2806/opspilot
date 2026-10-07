@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import App from './App'
 import { useUiState } from './store/uiState'
+import { useVpsStore } from './store/vpsStore'
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: class {
@@ -32,8 +33,26 @@ beforeEach(() => {
   useUiState.setState({ locale: 'en', activePage: 'apps' })
   vi.stubGlobal('api', {
     invoke: vi.fn(async (channel: string) => {
-      if (channel === 'vps:list' || channel === 'app:list' || channel === 'migrate:list') {
+      if (
+        channel === 'vps:list' ||
+        channel === 'app:list' ||
+        channel === 'migrate:list' ||
+        channel === 'app:versions'
+      ) {
         return { ok: true, data: [] }
+      }
+      if (channel === 'vps:get-resources') {
+        return {
+          ok: true,
+          data: {
+            ram_total_mb: 4096,
+            ram_free_mb: 2048,
+            disk_total_gb: 40,
+            disk_free_gb: 20,
+            cpu_count: 2,
+            load_avg_1m: 0.1
+          }
+        }
       }
       return { ok: true, data: undefined }
     }),
@@ -184,5 +203,216 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
 
     // Map thanh activity (HistoryPage)
     expect(container.querySelector('[data-page-key="activity"]')).toBeTruthy()
+  })
+
+  it('bam nut Trien khai khi dang xem chi tiet app: goi app:get va truyen dung {appId, vpsId} sang deploy', async () => {
+    useUiState.setState({
+      locale: 'vi',
+      activePage: 'apps',
+      selectedAppId: 42,
+      deployPreselect: null
+    })
+    const invokeMock = vi.fn(async (channel: string, ...args: unknown[]) => {
+      if (channel === 'app:get' && args[0] === 42) {
+        return { ok: true, data: { id: 42, vps_id: 8, name: 'my-app' } }
+      }
+      if (channel === 'vps:list' || channel === 'app:list' || channel === 'app:versions') {
+        return { ok: true, data: [] }
+      }
+      return { ok: true, data: undefined }
+    })
+    vi.stubGlobal('api', { invoke: invokeMock, on: vi.fn(() => () => {}) })
+
+    render(<App />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
+    })
+
+    expect(invokeMock).toHaveBeenCalledWith('app:get', 42)
+    expect(useUiState.getState().deployPreselect).toEqual({ appId: 42, vpsId: 8 })
+    expect(useUiState.getState().activePage).toBe('deploy')
+  })
+
+  it('bam nut Trien khai khi dang xem chi tiet VPS: truyen {vpsId} sang deploy', async () => {
+    const invokeMock = vi.fn(async (channel: string) => {
+      if (channel === 'vps:list') {
+        return {
+          ok: true,
+          data: [
+            {
+              id: 9,
+              name: 'VM09',
+              host: '1.2.3.4',
+              port: 22,
+              username: 'root',
+              auth_type: 'key',
+              provider: 'test',
+              region: 'test',
+              docker_version: '27',
+              last_status: 'online',
+              last_seen_at: null,
+              created_at: ''
+            }
+          ]
+        }
+      }
+      if (channel === 'app:list' || channel === 'app:versions') {
+        return { ok: true, data: [] }
+      }
+      if (channel === 'vps:get-resources') {
+        return {
+          ok: true,
+          data: {
+            ram_total_mb: 4096,
+            ram_free_mb: 2048,
+            disk_total_gb: 40,
+            disk_free_gb: 20,
+            cpu_count: 2,
+            load_avg_1m: 0.1
+          }
+        }
+      }
+      return { ok: true, data: undefined }
+    })
+    vi.stubGlobal('api', { invoke: invokeMock, on: vi.fn(() => () => {}) })
+
+    useVpsStore.setState({
+      items: [
+        {
+          id: 9,
+          name: 'VM09',
+          host: '1.2.3.4',
+          port: 22,
+          username: 'root',
+          auth_type: 'key',
+          provider: 'test',
+          region: 'test',
+          docker_version: '27',
+          last_status: 'online',
+          last_seen_at: null,
+          created_at: ''
+        }
+      ]
+    })
+    useUiState.setState({ locale: 'vi', activePage: 'vps', deployPreselect: null })
+    render(<App />)
+
+    await act(async () => {
+      useUiState.getState().setSelectedVpsId(9)
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
+
+    expect(useUiState.getState().deployPreselect).toEqual({ vpsId: 9 })
+    expect(useUiState.getState().activePage).toBe('deploy')
+  })
+
+  it('bam nut Trien khai o trang khac hoac man danh sach: xoa preselect cu va mo Deploy mac dinh', () => {
+    // Trường hợp 1: Ở dashboard với session còn lưu ID cũ từ trước
+    useUiState.setState({
+      locale: 'vi',
+      activePage: 'dashboard',
+      selectedAppId: 10,
+      selectedVpsId: 20,
+      deployPreselect: { appId: 10, vpsId: 20 }
+    })
+    const { unmount } = render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
+    expect(useUiState.getState().deployPreselect).toBeNull()
+    expect(useUiState.getState().activePage).toBe('deploy')
+    unmount()
+
+    // Trường hợp 2: Ở màn danh sách apps (selectedAppId = null)
+    useUiState.setState({
+      locale: 'vi',
+      activePage: 'apps',
+      selectedAppId: null,
+      deployPreselect: { vpsId: 5 }
+    })
+    render(<App />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
+    expect(useUiState.getState().deployPreselect).toBeNull()
+    expect(useUiState.getState().activePage).toBe('deploy')
+  })
+
+  it('chan ket qua app:get den muon khi nguoi dung da doi trang hoac doi ngu canh', async () => {
+    useUiState.setState({
+      locale: 'vi',
+      activePage: 'apps',
+      selectedAppId: 42,
+      deployPreselect: null
+    })
+
+    let resolveAppGet: (val: unknown) => void = () => {}
+    const appGetPromise = new Promise((resolve) => {
+      resolveAppGet = resolve
+    })
+
+    const invokeMock = vi.fn(async (channel: string, ...args: unknown[]) => {
+      if (channel === 'app:get' && args[0] === 42) {
+        return appGetPromise
+      }
+      return { ok: true, data: [] }
+    })
+    vi.stubGlobal('api', { invoke: invokeMock, on: vi.fn(() => () => {}) })
+
+    render(<App />)
+
+    // Bấm Triển khai trong khi xem app 42
+    fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
+    expect(invokeMock).toHaveBeenCalledWith('app:get', 42)
+
+    // Trong khi app:get đang chờ phản hồi, người dùng bấm chuyển sang Settings
+    act(() => {
+      useUiState.getState().setActivePage('settings')
+    })
+    expect(useUiState.getState().activePage).toBe('settings')
+
+    // Giờ app:get mới trả về kết quả
+    await act(async () => {
+      resolveAppGet({ ok: true, data: { id: 42, vps_id: 8, name: 'my-app' } })
+    })
+
+    // Kết quả đến muộn phải bị bỏ qua: KHÔNG chuyển sang deploy, KHÔNG ghi đè preselect
+    expect(useUiState.getState().activePage).toBe('settings')
+    expect(useUiState.getState().deployPreselect).toBeNull()
+  })
+
+  it('xu ly loi tai app:get an toan va mo Deploy mac dinh, khong lam crash app', async () => {
+    useUiState.setState({
+      locale: 'vi',
+      activePage: 'apps',
+      selectedAppId: 99,
+      deployPreselect: { vpsId: 1 }
+    })
+
+    const invokeMock = vi.fn(async (channel: string) => {
+      if (channel === 'app:get') {
+        throw new Error('IPC connection error')
+      }
+      return { ok: true, data: [] }
+    })
+    vi.stubGlobal('api', { invoke: invokeMock, on: vi.fn(() => () => {}) })
+
+    render(<App />)
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
+    })
+
+    // Không crash, xóa preselect cũ và mở Deploy mặc định
+    expect(useUiState.getState().deployPreselect).toBeNull()
+    expect(useUiState.getState().activePage).toBe('deploy')
+  })
+
+  it('strings.vps.backToList duoc dinh nghia va dung cho ca 4 ngon ngu', async () => {
+    const { getStrings } = await import('./strings')
+    expect(getStrings('vi').vps.backToList).toBe('Quay lại danh sách máy chủ')
+    expect(getStrings('cn').vps.backToList).toBe('返回服务器列表')
+    expect(getStrings('jp').vps.backToList).toBe('サーバー一覧に戻る')
+    expect(getStrings('en').vps.backToList).toBe('Back to VPS list')
   })
 })

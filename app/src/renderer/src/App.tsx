@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import {
   AppstoreOutlined,
   CloudServerOutlined,
@@ -76,6 +76,52 @@ function App(): React.JSX.Element {
     window.api?.invoke('window:set-titlebar-overlay', TITLEBAR_OVERLAY[themeMode]).catch(() => {})
   }, [themeMode])
 
+  const deployRequestIdRef = useRef(0)
+
+  const handleDeployClick = async (): Promise<void> => {
+    const rawPage = useUiState.getState().activePage
+    const currentPage = resolveActivePage(rawPage)
+    const currentAppId = useUiState.getState().selectedAppId
+    const currentVpsId = useUiState.getState().selectedVpsId
+
+    if (currentPage === 'apps' && currentAppId !== null) {
+      const requestId = ++deployRequestIdRef.current
+      try {
+        const res = await window.api?.invoke('app:get', currentAppId)
+        if (requestId !== deployRequestIdRef.current) return
+        const latestPage = resolveActivePage(useUiState.getState().activePage)
+        const latestAppId = useUiState.getState().selectedAppId
+        if (latestPage !== 'apps' || latestAppId !== currentAppId) return
+
+        if (res?.ok && res.data && typeof res.data.vps_id === 'number') {
+          useUiState.getState().setDeployPreselect({ appId: currentAppId, vpsId: res.data.vps_id })
+          setActivePage('deploy')
+        } else {
+          useUiState.getState().setDeployPreselect(null)
+          setActivePage('deploy')
+        }
+      } catch {
+        if (requestId !== deployRequestIdRef.current) return
+        const latestPage = resolveActivePage(useUiState.getState().activePage)
+        const latestAppId = useUiState.getState().selectedAppId
+        if (latestPage !== 'apps' || latestAppId !== currentAppId) return
+
+        useUiState.getState().setDeployPreselect(null)
+        setActivePage('deploy')
+      }
+      return
+    }
+
+    if (currentPage === 'vps' && currentVpsId !== null) {
+      useUiState.getState().setDeployPreselect({ vpsId: currentVpsId })
+      setActivePage('deploy')
+      return
+    }
+
+    useUiState.getState().setDeployPreselect(null)
+    setActivePage('deploy')
+  }
+
   return (
     <ConfigProvider theme={themeTokens[themeMode]} locale={ANTD_LOCALES[locale]}>
       <AntApp>
@@ -87,7 +133,7 @@ function App(): React.JSX.Element {
                 <button
                   type="button"
                   className="app-sidebar-deploy-btn"
-                  onClick={() => setActivePage('deploy')}
+                  onClick={() => void handleDeployClick()}
                   aria-label={t.navigation.deployAction}
                 >
                   <PlusOutlined className="app-sidebar-deploy-icon" />
