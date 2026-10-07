@@ -377,6 +377,12 @@ const BASE_EN_STRINGS = {
       scrollDown: 'Scroll to bottom',
       empty: 'No logs yet. Preparing…',
       backToWizard: 'Back to wizard'
+    },
+    actionErrors: {
+      loadFailed: 'Could not load application details for deployment.',
+      mismatchedId: 'Application data returned does not match the active application.',
+      missingVps: 'Application is not linked to a valid server (VPS).',
+      ipcError: (error: string) => `Connection error while loading application: ${error}`
     }
   },
   apps: {
@@ -1367,6 +1373,12 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       scrollDown: 'Cuộn xuống dưới',
       empty: 'Chưa có nhật ký. Đang chuẩn bị…',
       backToWizard: 'Quay lại wizard'
+    },
+    actionErrors: {
+      loadFailed: 'Không thể tải thông tin ứng dụng để triển khai.',
+      mismatchedId: 'Dữ liệu ứng dụng trả về không khớp với ứng dụng đang chọn.',
+      missingVps: 'Ứng dụng chưa được liên kết với máy chủ (VPS) hợp lệ.',
+      ipcError: (error: string) => `Lỗi kết nối khi tải thông tin ứng dụng: ${error}`
     }
   },
   apps: {
@@ -2039,6 +2051,12 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       scrollDown: '滚动到底部',
       empty: '暂无日志。准备中…',
       backToWizard: '返回向导'
+    },
+    actionErrors: {
+      loadFailed: '无法加载用于部署的应用信息。',
+      mismatchedId: '返回的应用数据与当前选中的应用不一致。',
+      missingVps: '应用未关联有效的目标服务器 (VPS)。',
+      ipcError: (error: string) => `加载应用信息失败：${error}`
     }
   },
   apps: {
@@ -2704,6 +2722,12 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       scrollDown: '最下部へスクロール',
       empty: 'ログがまだありません。準備中…',
       backToWizard: 'ウィザードに戻る'
+    },
+    actionErrors: {
+      loadFailed: 'デプロイ対象のアプリケーション情報を読み込めませんでした。',
+      mismatchedId: '返却されたアプリケーションデータが選択中のアプリと一致しません。',
+      missingVps: 'アプリケーションに有効な対象サーバー (VPS) が設定されていません。',
+      ipcError: (error: string) => `アプリケーション情報の読み込みエラー: ${error}`
     }
   },
   apps: {
@@ -3038,7 +3062,8 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
         }
       },
       config: { ...BASE_EN_STRINGS.deploy.config, ...VI_OVERRIDES.deploy?.config },
-      targetApp: { ...BASE_EN_STRINGS.deploy.targetApp, ...VI_OVERRIDES.deploy?.targetApp }
+      targetApp: { ...BASE_EN_STRINGS.deploy.targetApp, ...VI_OVERRIDES.deploy?.targetApp },
+      actionErrors: { ...BASE_EN_STRINGS.deploy.actionErrors, ...VI_OVERRIDES.deploy?.actionErrors }
     },
     history: {
       ...BASE_EN_STRINGS.history,
@@ -3162,7 +3187,8 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
         }
       },
       config: { ...BASE_EN_STRINGS.deploy.config, ...CN_OVERRIDES.deploy?.config },
-      targetApp: { ...BASE_EN_STRINGS.deploy.targetApp, ...CN_OVERRIDES.deploy?.targetApp }
+      targetApp: { ...BASE_EN_STRINGS.deploy.targetApp, ...CN_OVERRIDES.deploy?.targetApp },
+      actionErrors: { ...BASE_EN_STRINGS.deploy.actionErrors, ...CN_OVERRIDES.deploy?.actionErrors }
     },
     history: {
       ...BASE_EN_STRINGS.history,
@@ -3286,7 +3312,8 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
         }
       },
       config: { ...BASE_EN_STRINGS.deploy.config, ...JP_OVERRIDES.deploy?.config },
-      targetApp: { ...BASE_EN_STRINGS.deploy.targetApp, ...JP_OVERRIDES.deploy?.targetApp }
+      targetApp: { ...BASE_EN_STRINGS.deploy.targetApp, ...JP_OVERRIDES.deploy?.targetApp },
+      actionErrors: { ...BASE_EN_STRINGS.deploy.actionErrors, ...JP_OVERRIDES.deploy?.actionErrors }
     },
     history: {
       ...BASE_EN_STRINGS.history,

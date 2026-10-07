@@ -7,7 +7,7 @@ import {
   PlusOutlined,
   SettingOutlined
 } from '@ant-design/icons'
-import { App as AntApp, ConfigProvider } from 'antd'
+import { App as AntApp, ConfigProvider, message } from 'antd'
 
 import { AppsPage } from './pages/AppsPage'
 import { AppTitleBar } from './components/AppTitleBar'
@@ -21,6 +21,7 @@ import { useUiState } from './store/uiState'
 import { TITLEBAR_OVERLAY, applyTheme, themeTokens } from './utils/themeTokens'
 import { ANTD_LOCALES, LOCALES } from './utils/locales'
 import { resolveActivePage, type ActivePageKey, type NavPageKey } from './utils/navigation'
+import { useStrings } from './strings'
 
 function renderPage(page: ActivePageKey, open: (page: string) => void): React.JSX.Element {
   switch (page) {
@@ -55,9 +56,13 @@ function renderPage(page: ActivePageKey, open: (page: string) => void): React.JS
 }
 
 function App(): React.JSX.Element {
+  const [messageApi, messageContextHolder] = message.useMessage()
+  const strings = useStrings()
+
   const themeMode = useUiState((state) => state.theme)
   const locale = useUiState((state) => state.locale)
   const rawActivePage = useUiState((state) => state.activePage)
+  const selectedAppId = useUiState((state) => state.selectedAppId)
   const setActivePage = useUiState((state) => state.setActivePage)
 
   const t = LOCALES[locale]
@@ -77,15 +82,45 @@ function App(): React.JSX.Element {
   }, [themeMode])
 
   const deployRequestIdRef = useRef(0)
+  const lastContextRef = useRef<{ page: ActivePageKey; appId: number | null }>({
+    page,
+    appId: selectedAppId
+  })
+
+  // Invalidate any in-flight app:get immediately when page or selectedAppId changes,
+  // even if the user switches away and back to the same value later.
+  useEffect(() => {
+    lastContextRef.current = {
+      page: resolveActivePage(useUiState.getState().activePage),
+      appId: useUiState.getState().selectedAppId
+    }
+
+    const unsub = useUiState.subscribe((state) => {
+      const newPage = resolveActivePage(state.activePage)
+      const newAppId = state.selectedAppId
+      if (newPage !== lastContextRef.current.page || newAppId !== lastContextRef.current.appId) {
+        lastContextRef.current = { page: newPage, appId: newAppId }
+        deployRequestIdRef.current++
+      }
+    })
+
+    return unsub
+  }, [])
+
+  useEffect(() => {
+    deployRequestIdRef.current++
+  }, [page, selectedAppId])
 
   const handleDeployClick = async (): Promise<void> => {
+    // Invalidate any prior deploy attempt immediately upon every new click
+    const requestId = ++deployRequestIdRef.current
+
     const rawPage = useUiState.getState().activePage
     const currentPage = resolveActivePage(rawPage)
     const currentAppId = useUiState.getState().selectedAppId
     const currentVpsId = useUiState.getState().selectedVpsId
 
     if (currentPage === 'apps' && currentAppId !== null) {
-      const requestId = ++deployRequestIdRef.current
       try {
         const res = await window.api?.invoke('app:get', currentAppId)
         if (requestId !== deployRequestIdRef.current) return
@@ -93,21 +128,45 @@ function App(): React.JSX.Element {
         const latestAppId = useUiState.getState().selectedAppId
         if (latestPage !== 'apps' || latestAppId !== currentAppId) return
 
-        if (res?.ok && res.data && typeof res.data.vps_id === 'number') {
-          useUiState.getState().setDeployPreselect({ appId: currentAppId, vpsId: res.data.vps_id })
-          setActivePage('deploy')
+        if (res?.ok) {
+          const app = res.data
+          const isAppValid =
+            app &&
+            typeof app === 'object' &&
+            app.id === currentAppId &&
+            typeof app.vps_id === 'number' &&
+            Number.isInteger(app.vps_id) &&
+            app.vps_id > 0
+
+          if (isAppValid) {
+            useUiState.getState().setDeployPreselect({ appId: currentAppId, vpsId: app.vps_id })
+            setActivePage('deploy')
+          } else if (app && app.id !== currentAppId) {
+            messageApi.error(strings.deploy.actionErrors.mismatchedId)
+          } else {
+            messageApi.error(strings.deploy.actionErrors.missingVps)
+          }
         } else {
-          useUiState.getState().setDeployPreselect(null)
-          setActivePage('deploy')
+          const detail =
+            res && 'error' in res && res.error
+              ? typeof res.error === 'string'
+                ? res.error
+                : res.error.message || ''
+              : ''
+          messageApi.error(
+            detail
+              ? strings.deploy.actionErrors.ipcError(detail)
+              : strings.deploy.actionErrors.loadFailed
+          )
         }
-      } catch {
+      } catch (err: unknown) {
         if (requestId !== deployRequestIdRef.current) return
         const latestPage = resolveActivePage(useUiState.getState().activePage)
         const latestAppId = useUiState.getState().selectedAppId
         if (latestPage !== 'apps' || latestAppId !== currentAppId) return
 
-        useUiState.getState().setDeployPreselect(null)
-        setActivePage('deploy')
+        const errMsg = err instanceof Error ? err.message : String(err)
+        messageApi.error(strings.deploy.actionErrors.ipcError(errMsg))
       }
       return
     }
@@ -125,6 +184,7 @@ function App(): React.JSX.Element {
   return (
     <ConfigProvider theme={themeTokens[themeMode]} locale={ANTD_LOCALES[locale]}>
       <AntApp>
+        {messageContextHolder}
         <div className="app-window">
           <AppTitleBar />
           <div className="app-shell">

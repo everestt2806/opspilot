@@ -2,6 +2,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { App as AppModel, Deployment, Vps } from '@shared/ipc'
 import App from './App'
 import { useUiState } from './store/uiState'
 import { useVpsStore } from './store/vpsStore'
@@ -30,6 +31,7 @@ vi.mock('@xterm/addon-search', () => ({
 }))
 
 beforeEach(() => {
+  vi.clearAllMocks()
   useUiState.setState({ locale: 'en', activePage: 'apps' })
   vi.stubGlobal('api', {
     invoke: vi.fn(async (channel: string) => {
@@ -205,32 +207,116 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
     expect(container.querySelector('[data-page-key="activity"]')).toBeTruthy()
   })
 
-  it('bam nut Trien khai khi dang xem chi tiet app: goi app:get va truyen dung {appId, vpsId} sang deploy', async () => {
+  const fixtureApps: AppModel[] = [
+    {
+      id: 42,
+      vps_id: 8,
+      name: 'web-prod',
+      framework: 'express',
+      host_port: 3000,
+      container_port: 3000,
+      healthcheck_path: '/health',
+      needs_db: 0,
+      current_deployment_id: 101,
+      url: 'http://1.2.3.4:3000'
+    },
+    {
+      id: 43,
+      vps_id: 8,
+      name: 'api-service',
+      framework: 'express',
+      host_port: 8000,
+      container_port: 8000,
+      healthcheck_path: '/health',
+      needs_db: 0,
+      current_deployment_id: 102,
+      url: 'http://1.2.3.4:8000'
+    }
+  ]
+
+  const fixtureVpsList: Vps[] = [
+    {
+      id: 8,
+      name: 'VPS-SG-01',
+      host: '1.2.3.4',
+      port: 22,
+      username: 'root',
+      auth_type: 'key',
+      provider: 'aws',
+      region: 'ap-southeast-1',
+      docker_version: '27.0.0',
+      last_status: 'online',
+      last_seen_at: null,
+      created_at: '2026-01-01T00:00:00Z'
+    }
+  ]
+
+  const fixtureDeployments: Deployment[] = [
+    {
+      id: 101,
+      app_id: 42,
+      version: 1,
+      image_tag: 'web-prod:v1.0.0',
+      status: 'running',
+      failed_step: null,
+      build_duration_ms: 12000,
+      total_duration_ms: 15000,
+      is_rollback_of: null,
+      started_at: '2026-01-01T00:00:00Z',
+      finished_at: '2026-01-01T00:05:00Z',
+      exposure_status: 'reachable',
+      exposure_evidence_json: null
+    },
+    {
+      id: 102,
+      app_id: 43,
+      version: 1,
+      image_tag: 'api-service:v1.0.0',
+      status: 'running',
+      failed_step: null,
+      build_duration_ms: 8000,
+      total_duration_ms: 11000,
+      is_rollback_of: null,
+      started_at: '2026-01-01T00:00:00Z',
+      finished_at: '2026-01-01T00:05:00Z',
+      exposure_status: 'reachable',
+      exposure_evidence_json: null
+    }
+  ]
+
+  it('bam nut Trien khai khi dang xem chi tiet app fixture thuc su: goi app:get va truyen dung {appId, vpsId}', async () => {
+    const invokeMock = vi.fn(async (channel: string, ...args: unknown[]) => {
+      if (channel === 'app:get' && args[0] === 42) {
+        return { ok: true, data: { ...fixtureApps[0] } }
+      }
+      if (channel === 'app:list') return { ok: true, data: fixtureApps }
+      if (channel === 'vps:list') return { ok: true, data: fixtureVpsList }
+      if (channel === 'app:versions') return { ok: true, data: fixtureDeployments }
+      return { ok: true, data: undefined }
+    })
+    vi.stubGlobal('api', { invoke: invokeMock, on: vi.fn(() => () => {}) })
+
     useUiState.setState({
       locale: 'vi',
       activePage: 'apps',
       selectedAppId: 42,
       deployPreselect: null
     })
-    const invokeMock = vi.fn(async (channel: string, ...args: unknown[]) => {
-      if (channel === 'app:get' && args[0] === 42) {
-        return { ok: true, data: { id: 42, vps_id: 8, name: 'my-app' } }
-      }
-      if (channel === 'vps:list' || channel === 'app:list' || channel === 'app:versions') {
-        return { ok: true, data: [] }
-      }
-      return { ok: true, data: undefined }
-    })
-    vi.stubGlobal('api', { invoke: invokeMock, on: vi.fn(() => () => {}) })
+
+    const setDeployPreselectSpy = vi.spyOn(useUiState.getState(), 'setDeployPreselect')
 
     render(<App />)
+
+    // Xác nhận app fixture 42 thực sự hiển thị trên màn hình chi tiết (có nút quay lại và tên app)
+    expect(await screen.findByRole('heading', { level: 3, name: 'web-prod' })).toBeTruthy()
+    expect(screen.getByTestId('app-detail-back-btn')).toBeTruthy()
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
     })
 
     expect(invokeMock).toHaveBeenCalledWith('app:get', 42)
-    expect(useUiState.getState().deployPreselect).toEqual({ appId: 42, vpsId: 8 })
+    expect(setDeployPreselectSpy).toHaveBeenCalledWith({ appId: 42, vpsId: 8 })
     expect(useUiState.getState().activePage).toBe('deploy')
   })
 
@@ -338,7 +424,23 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
     expect(useUiState.getState().activePage).toBe('deploy')
   })
 
-  it('chan ket qua app:get den muon khi nguoi dung da doi trang hoac doi ngu canh', async () => {
+  it('roi trang roi quay lai cung app: vo hieu hoa yeu cau app:get dang cho, khong nhay sang deploy', async () => {
+    let resolveAppGet: (val: unknown) => void = () => {}
+    const pendingPromise = new Promise((resolve) => {
+      resolveAppGet = resolve
+    })
+
+    const invokeMock = vi.fn(async (channel: string, ...args: unknown[]) => {
+      if (channel === 'app:get' && args[0] === 42) {
+        return pendingPromise
+      }
+      if (channel === 'app:list') return { ok: true, data: fixtureApps }
+      if (channel === 'vps:list') return { ok: true, data: fixtureVpsList }
+      if (channel === 'app:versions') return { ok: true, data: fixtureDeployments }
+      return { ok: true, data: undefined }
+    })
+    vi.stubGlobal('api', { invoke: invokeMock, on: vi.fn(() => () => {}) })
+
     useUiState.setState({
       locale: 'vi',
       activePage: 'apps',
@@ -346,66 +448,264 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
       deployPreselect: null
     })
 
-    let resolveAppGet: (val: unknown) => void = () => {}
-    const appGetPromise = new Promise((resolve) => {
-      resolveAppGet = resolve
-    })
-
-    const invokeMock = vi.fn(async (channel: string, ...args: unknown[]) => {
-      if (channel === 'app:get' && args[0] === 42) {
-        return appGetPromise
-      }
-      return { ok: true, data: [] }
-    })
-    vi.stubGlobal('api', { invoke: invokeMock, on: vi.fn(() => () => {}) })
-
     render(<App />)
+    expect(await screen.findByRole('heading', { level: 3, name: 'web-prod' })).toBeTruthy()
+    expect(screen.getByTestId('app-detail-back-btn')).toBeTruthy()
 
     // Bấm Triển khai trong khi xem app 42
     fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
     expect(invokeMock).toHaveBeenCalledWith('app:get', 42)
 
-    // Trong khi app:get đang chờ phản hồi, người dùng bấm chuyển sang Settings
-    act(() => {
-      useUiState.getState().setActivePage('settings')
-    })
-    expect(useUiState.getState().activePage).toBe('settings')
-
-    // Giờ app:get mới trả về kết quả
+    // Người dùng rời sang Dashboard
     await act(async () => {
-      resolveAppGet({ ok: true, data: { id: 42, vps_id: 8, name: 'my-app' } })
+      useUiState.getState().setActivePage('dashboard')
+    })
+    expect(useUiState.getState().activePage).toBe('dashboard')
+
+    // Người dùng quay lại trang Apps cùng app 42
+    await act(async () => {
+      useUiState.getState().setActivePage('apps')
+    })
+    expect(useUiState.getState().activePage).toBe('apps')
+    expect(await screen.findByRole('heading', { level: 3, name: 'web-prod' })).toBeTruthy()
+
+    // Giờ app:get của lần bấm cũ mới trả về kết quả
+    await act(async () => {
+      resolveAppGet({ ok: true, data: { ...fixtureApps[0] } })
     })
 
-    // Kết quả đến muộn phải bị bỏ qua: KHÔNG chuyển sang deploy, KHÔNG ghi đè preselect
-    expect(useUiState.getState().activePage).toBe('settings')
+    // Yêu cầu cũ đã bị vô hiệu hóa: người dùng vẫn ở lại trang Apps, KHÔNG nhảy sang Deploy
+    expect(useUiState.getState().activePage).toBe('apps')
+    expect(useUiState.getState().selectedAppId).toBe(42)
     expect(useUiState.getState().deployPreselect).toBeNull()
   })
 
-  it('xu ly loi tai app:get an toan va mo Deploy mac dinh, khong lam crash app', async () => {
-    useUiState.setState({
-      locale: 'vi',
-      activePage: 'apps',
-      selectedAppId: 99,
-      deployPreselect: { vpsId: 1 }
+  it('doi app roi quay lai cung app: vo hieu hoa yeu cau app:get dang cho, khong nhay sang deploy', async () => {
+    let resolveAppGet: (val: unknown) => void = () => {}
+    const pendingPromise = new Promise((resolve) => {
+      resolveAppGet = resolve
     })
 
-    const invokeMock = vi.fn(async (channel: string) => {
-      if (channel === 'app:get') {
-        throw new Error('IPC connection error')
+    const invokeMock = vi.fn(async (channel: string, ...args: unknown[]) => {
+      if (channel === 'app:get' && args[0] === 42) {
+        return pendingPromise
       }
-      return { ok: true, data: [] }
+      if (channel === 'app:list') return { ok: true, data: fixtureApps }
+      if (channel === 'vps:list') return { ok: true, data: fixtureVpsList }
+      if (channel === 'app:versions') return { ok: true, data: fixtureDeployments }
+      return { ok: true, data: undefined }
     })
     vi.stubGlobal('api', { invoke: invokeMock, on: vi.fn(() => () => {}) })
 
+    useUiState.setState({
+      locale: 'vi',
+      activePage: 'apps',
+      selectedAppId: 42,
+      deployPreselect: null
+    })
+
     render(<App />)
+    expect(await screen.findByRole('heading', { level: 3, name: 'web-prod' })).toBeTruthy()
+
+    // Bấm Triển khai cho app 42
+    fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
+    expect(invokeMock).toHaveBeenCalledWith('app:get', 42)
+
+    // Người dùng chuyển sang xem app 43
+    await act(async () => {
+      useUiState.getState().setSelectedAppId(43)
+    })
+    expect(await screen.findByRole('heading', { level: 3, name: 'api-service' })).toBeTruthy()
+
+    // Người dùng chuyển lại về xem app 42
+    await act(async () => {
+      useUiState.getState().setSelectedAppId(42)
+    })
+    expect(await screen.findByRole('heading', { level: 3, name: 'web-prod' })).toBeTruthy()
+
+    // Giờ yêu cầu app:get cũ mới hoàn tất
+    await act(async () => {
+      resolveAppGet({ ok: true, data: { ...fixtureApps[0] } })
+    })
+
+    // Yêu cầu cũ bị hủy: không nhảy sang Deploy
+    expect(useUiState.getState().activePage).toBe('apps')
+    expect(useUiState.getState().selectedAppId).toBe(42)
+    expect(useUiState.getState().deployPreselect).toBeNull()
+  })
+
+  it('bam Deploy lan hai: huy y dinh cu va chi thuc thi y dinh moi nhat', async () => {
+    let resolveFirst: (val: unknown) => void = () => {}
+    const firstPromise = new Promise((resolve) => {
+      resolveFirst = resolve
+    })
+    let resolveSecond: (val: unknown) => void = () => {}
+    const secondPromise = new Promise((resolve) => {
+      resolveSecond = resolve
+    })
+
+    let callCount = 0
+    const invokeMock = vi.fn(async (channel: string, ...args: unknown[]) => {
+      if (channel === 'app:get' && args[0] === 42) {
+        callCount++
+        return callCount === 1 ? firstPromise : secondPromise
+      }
+      if (channel === 'app:list') return { ok: true, data: fixtureApps }
+      if (channel === 'vps:list') return { ok: true, data: fixtureVpsList }
+      if (channel === 'app:versions') return { ok: true, data: fixtureDeployments }
+      return { ok: true, data: undefined }
+    })
+    vi.stubGlobal('api', { invoke: invokeMock, on: vi.fn(() => () => {}) })
+
+    useUiState.setState({
+      locale: 'vi',
+      activePage: 'apps',
+      selectedAppId: 42,
+      deployPreselect: null
+    })
+
+    const setDeployPreselectSpy = vi.spyOn(useUiState.getState(), 'setDeployPreselect')
+    setDeployPreselectSpy.mockClear()
+
+    render(<App />)
+    expect(await screen.findByRole('heading', { level: 3, name: 'web-prod' })).toBeTruthy()
+
+    // Bấm Deploy lần 1
+    fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
+    expect(callCount).toBe(1)
+
+    // Bấm Deploy lần 2 trong khi lần 1 còn đang chờ
+    fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
+    expect(callCount).toBe(2)
+
+    // Lần 1 trả về kết quả
+    await act(async () => {
+      resolveFirst({ ok: true, data: { ...fixtureApps[0] } })
+    })
+
+    // Lần 1 bị hủy, chưa chuyển trang
+    expect(useUiState.getState().activePage).toBe('apps')
+    expect(setDeployPreselectSpy).not.toHaveBeenCalled()
+
+    // Giờ lần 2 trả về kết quả
+    await act(async () => {
+      resolveSecond({ ok: true, data: { ...fixtureApps[0] } })
+    })
+
+    // Lần 2 hợp lệ: chuyển sang Deploy với preselect
+    expect(useUiState.getState().activePage).toBe('deploy')
+    expect(setDeployPreselectSpy).toHaveBeenCalledWith({ appId: 42, vpsId: 8 })
+  })
+
+  it('phan hoi sai ID tu app:get: giu o trang hien tai, bao loi ro rang, khong mo form tao app moi', async () => {
+    const invokeMock = vi.fn(async (channel: string, ...args: unknown[]) => {
+      if (channel === 'app:get' && args[0] === 42) {
+        return { ok: true, data: { id: 999, vps_id: 8, name: 'other-app' } }
+      }
+      if (channel === 'app:list') return { ok: true, data: fixtureApps }
+      if (channel === 'vps:list') return { ok: true, data: fixtureVpsList }
+      if (channel === 'app:versions') return { ok: true, data: fixtureDeployments }
+      return { ok: true, data: undefined }
+    })
+    vi.stubGlobal('api', { invoke: invokeMock, on: vi.fn(() => () => {}) })
+
+    useUiState.setState({
+      locale: 'vi',
+      activePage: 'apps',
+      selectedAppId: 42,
+      deployPreselect: null
+    })
+
+    render(<App />)
+    expect(await screen.findByRole('heading', { level: 3, name: 'web-prod' })).toBeTruthy()
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
     })
 
-    // Không crash, xóa preselect cũ và mở Deploy mặc định
+    // Người dùng được giữ nguyên ở trang chi tiết app 42
+    expect(useUiState.getState().activePage).toBe('apps')
+    expect(useUiState.getState().selectedAppId).toBe(42)
     expect(useUiState.getState().deployPreselect).toBeNull()
-    expect(useUiState.getState().activePage).toBe('deploy')
+
+    // Báo lỗi rõ ràng trên UI
+    expect(
+      await screen.findByText('Dữ liệu ứng dụng trả về không khớp với ứng dụng đang chọn.')
+    ).toBeTruthy()
+  })
+
+  it('loi IPC khi tai app:get: giu o trang hien tai, bao loi ro rang, khong mo form tao app moi', async () => {
+    const invokeMock = vi.fn(async (channel: string) => {
+      if (channel === 'app:get') {
+        throw new Error('IPC network error')
+      }
+      if (channel === 'app:list') return { ok: true, data: fixtureApps }
+      if (channel === 'vps:list') return { ok: true, data: fixtureVpsList }
+      if (channel === 'app:versions') return { ok: true, data: fixtureDeployments }
+      return { ok: true, data: undefined }
+    })
+    vi.stubGlobal('api', { invoke: invokeMock, on: vi.fn(() => () => {}) })
+
+    useUiState.setState({
+      locale: 'vi',
+      activePage: 'apps',
+      selectedAppId: 42,
+      deployPreselect: null
+    })
+
+    render(<App />)
+    expect(await screen.findByRole('heading', { level: 3, name: 'web-prod' })).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
+    })
+
+    // Giữ nguyên ở trang chi tiết hiện tại, không mở form tạo mới
+    expect(useUiState.getState().activePage).toBe('apps')
+    expect(useUiState.getState().selectedAppId).toBe(42)
+    expect(useUiState.getState().deployPreselect).toBeNull()
+
+    // Báo lỗi rõ ràng
+    expect(
+      await screen.findByText('Lỗi kết nối khi tải thông tin ứng dụng: IPC network error')
+    ).toBeTruthy()
+  })
+
+  it('khong co vps_id hop le trong app:get: giu o trang hien tai, bao loi ro rang, khong mo form tao app moi', async () => {
+    const invokeMock = vi.fn(async (channel: string, ...args: unknown[]) => {
+      if (channel === 'app:get' && args[0] === 42) {
+        return { ok: true, data: { ...fixtureApps[0], vps_id: null } }
+      }
+      if (channel === 'app:list') return { ok: true, data: fixtureApps }
+      if (channel === 'vps:list') return { ok: true, data: fixtureVpsList }
+      if (channel === 'app:versions') return { ok: true, data: fixtureDeployments }
+      return { ok: true, data: undefined }
+    })
+    vi.stubGlobal('api', { invoke: invokeMock, on: vi.fn(() => () => {}) })
+
+    useUiState.setState({
+      locale: 'vi',
+      activePage: 'apps',
+      selectedAppId: 42,
+      deployPreselect: null
+    })
+
+    render(<App />)
+    expect(await screen.findByRole('heading', { level: 3, name: 'web-prod' })).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
+    })
+
+    // Giữ nguyên ở trang chi tiết hiện tại, không mở form tạo mới
+    expect(useUiState.getState().activePage).toBe('apps')
+    expect(useUiState.getState().selectedAppId).toBe(42)
+    expect(useUiState.getState().deployPreselect).toBeNull()
+
+    // Báo lỗi rõ ràng
+    expect(
+      await screen.findByText('Ứng dụng chưa được liên kết với máy chủ (VPS) hợp lệ.')
+    ).toBeTruthy()
   })
 
   it('strings.vps.backToList duoc dinh nghia va dung cho ca 4 ngon ngu', async () => {
