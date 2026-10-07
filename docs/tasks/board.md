@@ -80,11 +80,11 @@ manual-only, không push/PR/merge.
 | UI-1g | Deploy Wizard: Kiểm tra & Biến môi trường | Worker | 07/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `36e75fa`, `64d308d` | Cấu hình env vars, che secret trên review screen, chống trùng chu kỳ |
 | UI-1h | Deploy Wizard: Tiến độ 7 bước, kết quả & Deploy Guard | Worker | 07/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `3d6c23d`, `9c054f7`, `8edddff` | 7 bước trực quan không cắt chữ, buffer event chờ ID, khóa nút khi đang chạy |
 | UI-1i | Trang Cài đặt tinh gọn & Lưu trữ Theme | Worker | 07/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `b7e7431`, `433fe02` | Thiết kế gọn, lưu theme dark/light qua các phiên mở app |
-| UI-1j-a | Quản lý trạng thái & Context Job Migrate đa nhiệm | Worker | 07/10 | CHỜ REVIEW | `feat/d61aafb`, `65a7169`, `7237ace`, `e5ce439` | Cố định context job, theo dõi nhiều job, 2 lựa chọn xác nhận an toàn |
-| UI-1j-b | MigratePage toàn chiều rộng, 7 bước, VERIFY, 4 ngôn ngữ | Worker | 08/10 | CHỜ REVIEW | `feat/2c5ca58`, `33d4a28` | Thiết kế nhất quán Deploy, bảng VERIFY, ring buffer 100k ký tự, bản địa hóa 4 locales |
-| UI-1k-a | Audit nghiệm thu AC-1..AC-5 trên Electron thật | Worker | 08/10 | CHỜ REVIEW | `feat/61e8854`, `3e1ed56` | Biên bản nghiệm thu ui-1k-acceptance.md: 14 PASS / 1 GAP (AC-3.2) |
-| UI-1k-b | Hoàn thiện nút + Triển khai toàn cục & Anti-race | Worker | 08/10 | CHỜ REVIEW | `feat/771a029`, `37d0544`, `8dfc8cb` | Context động theo trang/app, xóa preselect cũ ngay khi click, hủy im lặng an toàn, backToList 4 locales |
-| UI-1k-c | Nghiệm thu tổng thể, Quality Gates & Tài liệu | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit hiện tại | Đồng bộ README checklist 14 PASS / 1 GAP, 12 ảnh Electron thật 1280×800 & 1366×768 (Dark/Light), VPS thật NOT_RUN |
+| UI-1j-a | Quản lý trạng thái & Context Job Migrate đa nhiệm | Worker | 07/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `d61aafb`, `65a7169`, `7237ace`, `e5ce439` | Cố định context job, theo dõi nhiều job, 2 lựa chọn xác nhận an toàn |
+| UI-1j-b | MigratePage toàn chiều rộng, 7 bước, VERIFY, 4 ngôn ngữ | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `2c5ca58`, `33d4a28` | Thiết kế nhất quán Deploy, bảng VERIFY, ring buffer 100k ký tự, bản địa hóa 4 locales |
+| UI-1k-a | Audit nghiệm thu AC-1..AC-5 trên Electron thật | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `61e8854`, `3e1ed56` | Biên bản nghiệm thu ui-1k-acceptance.md: 14 PASS / 1 GAP (AC-3.2) |
+| UI-1k-b | Hoàn thiện nút + Triển khai toàn cục & Anti-race | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `771a029`, `37d0544`, `8dfc8cb` | Context động theo trang/app, xóa preselect cũ ngay khi click, hủy im lặng an toàn, backToList 4 locales |
+| UI-1k-c | Nghiệm thu tổng thể, Quality Gates & Tài liệu | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `335d1ea` (và commit hiện tại) | Đồng bộ README checklist 14 PASS / 1 GAP, 12 ảnh Electron thật 1280×800 & 1366×768 (Dark/Light), VPS thật NOT_RUN |
 
 
 
@@ -432,13 +432,13 @@ app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express
 
 Đã hoàn thành toàn bộ chuỗi nhiệm vụ thiết kế lại giao diện App-Centric (UI-0 đến UI-1k) và nghiệm thu giao diện theo AC-1 đến AC-5:
 - **Biên bản nghiệm thu**: Lập và đồng bộ hồ sơ chi tiết tại [`docs/ui-redesign/ui-1k-acceptance.md`](../ui-redesign/ui-1k-acceptance.md) và checklist tại [`docs/ui-redesign/README.md`](../ui-redesign/README.md). Đạt **14 / 15** tiêu chí nghiệm thu (tỷ lệ 93.3%). 1 tiêu chí GAP duy nhất được giữ nguyên là AC-3.2 (Tab Cơ sở dữ liệu VPS hiển thị thông báo chưa hỗ trợ và backend chưa đăng ký handler IPC `db:*`).
-- **Nghiệm thu Runtime Electron thật**: Đã kiểm tra trực tiếp trên tiến trình Electron thật ở cả hai độ phân giải 1280×800 và 1366×768 (Dark và Light theme), tập trung kiểm chứng chi tiết Ứng dụng (3 tabs), chi tiết VPS (4 tabs), và hành vi mở wizard Deploy với preselect từ nút `+ Triển khai` trên sidebar. Đạt tiêu chí không tràn viền, không cuộn ngang ngoài ý muốn (`hasHorizontalScroll: false`). Bằng chứng 12 ảnh chụp và tệp kiểm chứng được lưu trữ tại [`docs/ui-redesign/screenshots/ui-1k/`](../ui-redesign/screenshots/ui-1k/).
-- **Hạ tầng VPS thật**: Đánh dấu nghiêm ngặt **`NOT_RUN`** (toàn bộ kiểm thử giao diện thực hiện cục bộ với IPC mock và SQLite test fixture, không kết nối SSH hay thay đổi hạ tầng VPS ngoài).
+- **Nghiệm thu Runtime Electron thật**: Đã kiểm tra trực tiếp trên tiến trình Electron thật ở cả hai độ phân giải 1280×800 và 1366×768 (Dark và Light theme). Trước mỗi ảnh đều xác nhận `document.documentElement.dataset.theme` (`dark`/`light`) cùng `--content-bg` (`#0A0D14`/`#F8F9FA`), đợi giao diện ổn định và kiểm tra trực quan ảnh light sáng rõ rệt; ghi rõ CSS viewport (1280×800, 1366×768), kích thước ảnh vật lý (1280×800, 1366×768) với scale factor = 1.0; 12 ảnh hoàn toàn phân biệt không trùng lặp; đạt tiêu chí không tràn viền, không cuộn ngang ngoài ý muốn (`hasHorizontalScroll: false`). Bằng chứng 12 ảnh chụp và tệp kiểm chứng được lưu trữ tại [`docs/ui-redesign/screenshots/ui-1k/`](../ui-redesign/screenshots/ui-1k/).
+- **Hạ tầng VPS thật**: Đánh dấu nghiêm ngặt **`NOT_RUN`** (toàn bộ kiểm thử giao diện thực hiện cục bộ với IPC mock và SQLite test fixture, không kết nối SSH hay thay đổi hạ tầng VPS ngoài; lỗi giải mã credential trên ảnh chi tiết VPS xuất phát từ việc cô lập an toàn cơ sở dữ liệu `opspilot.db` trong thư mục tạm mà không sao chép khóa master gốc, ngăn chặn triệt để mọi kết nối mạng SSH ra ngoài).
 - **Trạng thái Quality Gates**:
   - Full app vitest: 68/68 files, 626/626 tests pass 100%.
   - Pytest ML service: 19/19 tests pass 100%.
   - Typecheck: Pass 0 lỗi trên Node, Web và Electron.
   - Production build: Pass (`out/main`, `out/preload`, `out/renderer` đóng gói hoàn tất).
   - Renderer ESLint: Sạch 100% (0 lỗi, 0 cảnh báo).
-  - Root ESLint: Ghi nhận trung thực GAP-3 (9 lỗi `no-empty` tại 2 file CLI backend kế thừa `deploy-cli.ts` và `headless-poller.ts`; tuân thủ nguyên tắc không sửa backend trong scope UI).
+  - Root ESLint: **GATE FAIL / GAP-3** (Đúng 9 errors `no-empty` và 11 warnings prettier tại các file backend CLI kế thừa `deploy-cli.ts` và `headless-poller.ts`; giữ nguyên gate FAIL, ghi nhận trung thực, không tự ý sửa backend trong scope UI).
 - **Cam kết Phiên làm việc**: Không sửa backend/schema, không push/PR/merge; duy trì trạng thái `CHỜ REVIEW` cho toàn bộ nhánh `feat/deploy-reachability`.

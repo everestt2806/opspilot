@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-07T17:50:58.432Z",
+  "timestamp": "2026-10-07T18:19:22.053Z",
   "viewports": [
     "1280x800",
     "1366x768"
@@ -27,121 +27,253 @@
       "screen": "apps-detail",
       "viewport": "1280x800",
       "theme": "dark",
+      "cssViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "physicalSize": {
+        "width": 1280,
+        "height": 800
+      },
+      "scaleFactor": 1,
+      "datasetTheme": "dark",
+      "contentBg": "#0A0D14",
       "scrollWidth": 1280,
       "clientWidth": 1280,
       "hasHorizontalScroll": false,
-      "hasDetailBar": true,
-      "tabsCount": 3
+      "tabsCount": 3,
+      "fileSize": 60231
     },
     {
       "screen": "deploy-preselect",
       "viewport": "1280x800",
       "theme": "dark",
-      "pageKey": "deploy",
+      "cssViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "physicalSize": {
+        "width": 1280,
+        "height": 800
+      },
+      "scaleFactor": 1,
+      "datasetTheme": "dark",
+      "contentBg": "#0A0D14",
       "scrollWidth": 1280,
       "clientWidth": 1280,
       "hasHorizontalScroll": false,
-      "hasWizard": true
+      "hasWizard": true,
+      "fileSize": 38914
     },
     {
       "screen": "vps-detail",
       "viewport": "1280x800",
       "theme": "dark",
+      "cssViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "physicalSize": {
+        "width": 1280,
+        "height": 800
+      },
+      "scaleFactor": 1,
+      "datasetTheme": "dark",
+      "contentBg": "#0A0D14",
       "scrollWidth": 1280,
       "clientWidth": 1280,
       "hasHorizontalScroll": false,
-      "hasDetailBar": true,
-      "tabsCount": 4
+      "tabsCount": 4,
+      "fileSize": 63395
     },
     {
       "screen": "apps-detail",
       "viewport": "1280x800",
       "theme": "light",
+      "cssViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "physicalSize": {
+        "width": 1280,
+        "height": 800
+      },
+      "scaleFactor": 1,
+      "datasetTheme": "light",
+      "contentBg": "#F8F9FA",
       "scrollWidth": 1280,
       "clientWidth": 1280,
       "hasHorizontalScroll": false,
-      "hasDetailBar": true,
-      "tabsCount": 3
+      "tabsCount": 3,
+      "fileSize": 56559
     },
     {
       "screen": "deploy-preselect",
       "viewport": "1280x800",
       "theme": "light",
-      "pageKey": "deploy",
+      "cssViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "physicalSize": {
+        "width": 1280,
+        "height": 800
+      },
+      "scaleFactor": 1,
+      "datasetTheme": "light",
+      "contentBg": "#F8F9FA",
       "scrollWidth": 1280,
       "clientWidth": 1280,
       "hasHorizontalScroll": false,
-      "hasWizard": true
+      "hasWizard": true,
+      "fileSize": 39016
     },
     {
       "screen": "vps-detail",
       "viewport": "1280x800",
       "theme": "light",
+      "cssViewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "physicalSize": {
+        "width": 1280,
+        "height": 800
+      },
+      "scaleFactor": 1,
+      "datasetTheme": "light",
+      "contentBg": "#F8F9FA",
       "scrollWidth": 1280,
       "clientWidth": 1280,
       "hasHorizontalScroll": false,
-      "hasDetailBar": true,
-      "tabsCount": 4
+      "tabsCount": 4,
+      "fileSize": 62441
     },
     {
       "screen": "apps-detail",
       "viewport": "1366x768",
       "theme": "dark",
+      "cssViewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "physicalSize": {
+        "width": 1366,
+        "height": 768
+      },
+      "scaleFactor": 1,
+      "datasetTheme": "dark",
+      "contentBg": "#0A0D14",
       "scrollWidth": 1366,
       "clientWidth": 1366,
       "hasHorizontalScroll": false,
-      "hasDetailBar": true,
-      "tabsCount": 3
+      "tabsCount": 3,
+      "fileSize": 57455
     },
     {
       "screen": "deploy-preselect",
       "viewport": "1366x768",
       "theme": "dark",
-      "pageKey": "deploy",
+      "cssViewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "physicalSize": {
+        "width": 1366,
+        "height": 768
+      },
+      "scaleFactor": 1,
+      "datasetTheme": "dark",
+      "contentBg": "#0A0D14",
       "scrollWidth": 1366,
       "clientWidth": 1366,
       "hasHorizontalScroll": false,
-      "hasWizard": true
+      "hasWizard": true,
+      "fileSize": 39348
     },
     {
       "screen": "vps-detail",
       "viewport": "1366x768",
       "theme": "dark",
+      "cssViewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "physicalSize": {
+        "width": 1366,
+        "height": 768
+      },
+      "scaleFactor": 1,
+      "datasetTheme": "dark",
+      "contentBg": "#0A0D14",
       "scrollWidth": 1366,
       "clientWidth": 1366,
       "hasHorizontalScroll": false,
-      "hasDetailBar": true,
-      "tabsCount": 4
+      "tabsCount": 4,
+      "fileSize": 63063
     },
     {
       "screen": "apps-detail",
       "viewport": "1366x768",
       "theme": "light",
+      "cssViewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "physicalSize": {
+        "width": 1366,
+        "height": 768
+      },
+      "scaleFactor": 1,
+      "datasetTheme": "light",
+      "contentBg": "#F8F9FA",
       "scrollWidth": 1366,
       "clientWidth": 1366,
       "hasHorizontalScroll": false,
-      "hasDetailBar": true,
-      "tabsCount": 3
+      "tabsCount": 3,
+      "fileSize": 56825
     },
     {
       "screen": "deploy-preselect",
       "viewport": "1366x768",
       "theme": "light",
-      "pageKey": "deploy",
+      "cssViewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "physicalSize": {
+        "width": 1366,
+        "height": 768
+      },
+      "scaleFactor": 1,
+      "datasetTheme": "light",
+      "contentBg": "#F8F9FA",
       "scrollWidth": 1366,
       "clientWidth": 1366,
       "hasHorizontalScroll": false,
-      "hasWizard": true
+      "hasWizard": true,
+      "fileSize": 39469
     },
     {
       "screen": "vps-detail",
       "viewport": "1366x768",
       "theme": "light",
+      "cssViewport": {
+        "width": 1366,
+        "height": 768
+      },
+      "physicalSize": {
+        "width": 1366,
+        "height": 768
+      },
+      "scaleFactor": 1,
+      "datasetTheme": "light",
+      "contentBg": "#F8F9FA",
       "scrollWidth": 1366,
       "clientWidth": 1366,
       "hasHorizontalScroll": false,
-      "hasDetailBar": true,
-      "tabsCount": 4
+      "tabsCount": 4,
+      "fileSize": 62268
     }
   ],
   "verdict": "PASS"
