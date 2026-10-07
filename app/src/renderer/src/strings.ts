@@ -809,7 +809,13 @@ const BASE_EN_STRINGS = {
   migrate: {
     title: 'Migrate between two VPS',
     description: 'PREPARE → FREEZE → BACKUP → TRANSFER → RESTORE → VERIFY',
+    stepsAriaLabel: '7 migration progress steps',
     loadError: 'Failed to load list',
+    loadErrors: {
+      apps: (err: string) => `Could not load applications: ${err}`,
+      vps: (err: string) => `Could not load VPS list: ${err}`,
+      migrate: (err: string) => `Could not load migration processes: ${err}`
+    },
     noApps: 'No applications yet',
     noAppsDesc: 'There are no applications on the servers to perform migration.',
     activeJobsCount: (count: number) =>
@@ -829,6 +835,8 @@ const BASE_EN_STRINGS = {
       sourceApp: 'Source app',
       sourceVps: 'Source VPS',
       targetVps: 'Target VPS',
+      statusLabel: 'Status:',
+      recordedDowntime: 'Recorded downtime',
       downtime: (ms: number) => `Downtime: ${ms} ms`,
       noApp: (id: number) => `App #${id}`,
       noVps: (id: number) => `VPS #${id}`
@@ -848,7 +856,8 @@ const BASE_EN_STRINGS = {
       TRANSFER: 'TRANSFER',
       RESTORE: 'RESTORE',
       VERIFY: 'VERIFY',
-      AWAITING_CONFIRM: 'CONFIRM'
+      AWAITING_CONFIRM: 'CONFIRM',
+      stepDone: (step: string) => `${step} completed`
     },
     stepLabels: {
       PREPARE: 'Prepare',
@@ -875,10 +884,18 @@ const BASE_EN_STRINGS = {
       failedTitle: 'Migration Failed',
       failedConsequence:
         'Source application could not be restored automatically. Please check the logs below.',
+      failedMessage:
+        'Migration failed and source application could not be restored — see reason and troubleshooting hints in the log below.',
       rolledBackTitle: 'Rolled Back',
       rolledBackDesc:
         'Migration was aborted or failed and has been safely rolled back to the source application.',
-      notPassedVerify: 'Verification (VERIFY) not passed yet'
+      rolledBackMessage:
+        'Migration failed and has rolled back to the source application — see reason and troubleshooting hints in the log below.',
+      notPassedVerify: 'Verification (VERIFY) not passed yet',
+      notPassedVerifyDesc:
+        'Confirmation is only allowed when all integrity checks (VERIFY) meet criteria.',
+      stepErrorNoDetail: (step?: string) =>
+        `Error at step ${step ?? 'unknown'} (no details provided).`
     },
     verify: {
       title: 'Verification Results (VERIFY)',
@@ -888,6 +905,15 @@ const BASE_EN_STRINGS = {
         target: 'Target',
         status: 'Status'
       },
+      items: {
+        container: 'Container',
+        http_response: 'HTTP response',
+        database: 'Database',
+        db_data: 'Database data',
+        environment: 'Environment',
+        volumes: 'Volumes',
+        files: 'Files'
+      } as Record<string, string>,
       ok: 'Passed',
       fail: 'Failed',
       empty: 'No verification data available yet'
@@ -902,6 +928,7 @@ const BASE_EN_STRINGS = {
     modal: {
       title: 'Confirm Application Migration Completion',
       desc: 'Verification checks passed. Please choose how to handle the source application:',
+      recordedDowntime: 'Recorded downtime',
       keepSourceBtn: 'Keep source app',
       keepSourceDesc:
         'Keep source app: The source container remains running. You can manually inspect the target VPS and decommission the source later.',
@@ -1463,7 +1490,13 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   migrate: {
     title: 'Migrate giữa hai VPS',
     description: 'PREPARE → FREEZE → BACKUP → TRANSFER → RESTORE → VERIFY',
+    stepsAriaLabel: '7 bước tiến độ di chuyển',
     loadError: 'Lỗi tải danh sách',
+    loadErrors: {
+      apps: (err: string) => `Không thể tải danh sách ứng dụng: ${err}`,
+      vps: (err: string) => `Không thể tải danh sách VPS: ${err}`,
+      migrate: (err: string) => `Không thể tải danh sách tiến trình di chuyển: ${err}`
+    },
     noApps: 'Chưa có ứng dụng nào',
     noAppsDesc: 'Chưa có ứng dụng nào trên các máy chủ để thực hiện di chuyển.',
     activeJobsCount: (count: number) => `Có ${count} tiến trình đang hoạt động:`,
@@ -1482,6 +1515,8 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       sourceApp: 'App nguồn',
       sourceVps: 'VPS nguồn',
       targetVps: 'VPS đích',
+      statusLabel: 'Trạng thái:',
+      recordedDowntime: 'Downtime ghi nhận',
       downtime: (ms: number) => `Downtime: ${ms} ms`,
       noApp: (id: number) => `App #${id}`,
       noVps: (id: number) => `VPS #${id}`
@@ -1501,7 +1536,8 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       TRANSFER: 'TRANSFER',
       RESTORE: 'RESTORE',
       VERIFY: 'VERIFY',
-      AWAITING_CONFIRM: 'CONFIRM'
+      AWAITING_CONFIRM: 'CONFIRM',
+      stepDone: (step: string) => `${step} hoàn tất`
     },
     stepLabels: {
       PREPARE: 'Chuẩn bị',
@@ -1527,9 +1563,17 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       completedDesc: 'Ứng dụng đã được di chuyển thành công sang VPS đích.',
       failedTitle: 'Quá trình di chuyển thất bại',
       failedConsequence: 'nguồn chưa khôi phục được',
+      failedMessage:
+        'Migrate thất bại và nguồn chưa khôi phục được — xem lý do và gợi ý xử lý trong log bên dưới.',
       rolledBackTitle: 'Đã rollback',
       rolledBackDesc: 'Quá trình di chuyển đã được huỷ và hoàn trả trạng thái về app nguồn.',
-      notPassedVerify: 'Chưa đạt kết quả kiểm tra (VERIFY)'
+      rolledBackMessage:
+        'Migrate thất bại và đã rollback về app nguồn — xem lý do và gợi ý xử lý trong log bên dưới.',
+      notPassedVerify: 'Chưa đạt kết quả kiểm tra (VERIFY)',
+      notPassedVerifyDesc:
+        'Chỉ cho phép xác nhận khi kết quả kiểm tra tính toàn vẹn (VERIFY) đạt tất cả tiêu chí.',
+      stepErrorNoDetail: (step?: string) =>
+        `Lỗi ở bước ${step ?? 'không xác định'} (không có chi tiết).`
     },
     verify: {
       title: 'Kết quả kiểm tra (VERIFY)',
@@ -1539,6 +1583,15 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
         target: 'Đích',
         status: 'Trạng thái'
       },
+      items: {
+        container: 'Container',
+        http_response: 'Phản hồi HTTP',
+        database: 'Cơ sở dữ liệu',
+        db_data: 'Dữ liệu cơ sở dữ liệu',
+        environment: 'Biến môi trường',
+        volumes: 'Volume lưu trữ',
+        files: 'Tệp tin'
+      } as Record<string, string>,
       ok: 'Đạt',
       fail: 'Không đạt',
       empty: 'Chưa có dữ liệu kiểm tra'
@@ -1554,6 +1607,7 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     modal: {
       title: 'Xác nhận hoàn tất di chuyển ứng dụng',
       desc: 'Đã kiểm tra đạt. Vui lòng chọn cách xử lý app nguồn:',
+      recordedDowntime: 'Downtime ghi nhận',
       keepSourceBtn: 'Giữ app nguồn',
       keepSourceDesc:
         'Giữ app nguồn: Tiếp tục duy trì container app nguồn chạy song song, có thể tắt thủ công sau khi kiểm tra xong.',
@@ -2101,7 +2155,13 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   migrate: {
     title: 'VPS 之间迁移',
     description: 'PREPARE → FREEZE → BACKUP → TRANSFER → RESTORE → VERIFY',
+    stepsAriaLabel: '7 个迁移进度步骤',
     loadError: '加载列表失败',
+    loadErrors: {
+      apps: (err: string) => `无法加载应用列表：${err}`,
+      vps: (err: string) => `无法加载 VPS 列表：${err}`,
+      migrate: (err: string) => `无法加载迁移任务列表：${err}`
+    },
     noApps: '暂无应用',
     noAppsDesc: '服务器上暂无可执行迁移的应用。',
     activeJobsCount: (count: number) => `有 ${count} 个迁移进程正在运行：`,
@@ -2120,6 +2180,8 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       sourceApp: '源应用',
       sourceVps: '源 VPS',
       targetVps: '目标 VPS',
+      statusLabel: '状态：',
+      recordedDowntime: '记录的停机时间',
       downtime: (ms: number) => `Downtime: ${ms} ms`,
       noApp: (id: number) => `应用 #${id}`,
       noVps: (id: number) => `VPS #${id}`
@@ -2139,7 +2201,8 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       TRANSFER: 'TRANSFER',
       RESTORE: 'RESTORE',
       VERIFY: 'VERIFY',
-      AWAITING_CONFIRM: 'CONFIRM'
+      AWAITING_CONFIRM: 'CONFIRM',
+      stepDone: (step: string) => `${step} 已完成`
     },
     stepLabels: {
       PREPARE: '准备',
@@ -2164,9 +2227,13 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       completedDesc: '应用已成功迁移至目标 VPS。',
       failedTitle: '迁移失败',
       failedConsequence: '源应用未能自动恢复。详情请查看下方日志。',
+      failedMessage: '迁移失败且源应用未能恢复 — 请查看下方日志中的错误原因及处理建议。',
       rolledBackTitle: '已回滚',
       rolledBackDesc: '迁移任务已中止并安全回滚至源应用。',
-      notPassedVerify: '尚未通过验证检查 (VERIFY)'
+      rolledBackMessage: '迁移失败并已回滚至源应用 — 请查看下方日志中的错误原因及处理建议。',
+      notPassedVerify: '尚未通过验证检查 (VERIFY)',
+      notPassedVerifyDesc: '只有当所有数据完整性检查（VERIFY）全部通过后，才允许确认迁移。',
+      stepErrorNoDetail: (step?: string) => `在步骤 ${step ?? '未知'} 发生错误（无详细信息）。`
     },
     verify: {
       title: '验证检查结果 (VERIFY)',
@@ -2176,6 +2243,15 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
         target: '目标端',
         status: '状态'
       },
+      items: {
+        container: '容器',
+        http_response: 'HTTP 响应',
+        database: '数据库',
+        db_data: '数据库数据',
+        environment: '环境变量',
+        volumes: '数据卷',
+        files: '文件'
+      } as Record<string, string>,
       ok: '通过',
       fail: '未通过',
       empty: '暂无验证检查数据'
@@ -2190,6 +2266,7 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     modal: {
       title: '确认完成应用迁移',
       desc: '验证检查已通过。请选择如何处理源应用：',
+      recordedDowntime: '记录的停机时间',
       keepSourceBtn: '保留源应用',
       keepSourceDesc: '保留源应用：源容器继续保持运行，可在人工核对目标服务器无误后再手动清理。',
       stopSourceBtn: '使用 docker compose down 停止源应用',
@@ -2747,7 +2824,13 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   migrate: {
     title: 'VPS間マイグレーション',
     description: 'PREPARE → FREEZE → BACKUP → TRANSFER → RESTORE → VERIFY',
+    stepsAriaLabel: '7つの移行進捗ステップ',
     loadError: 'リストの取得に失敗しました',
+    loadErrors: {
+      apps: (err: string) => `アプリ一覧を読み込めませんでした：${err}`,
+      vps: (err: string) => `VPS一覧を読み込めませんでした：${err}`,
+      migrate: (err: string) => `移行プロセス一覧を読み込めませんでした：${err}`
+    },
     noApps: 'アプリがありません',
     noAppsDesc: '移行可能なアプリケーションがサーバー上に存在しません。',
     activeJobsCount: (count: number) => `${count} 件の移行プロセスが進行中です:`,
@@ -2766,6 +2849,8 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       sourceApp: '移行元アプリ',
       sourceVps: '移行元VPS',
       targetVps: '移行先VPS',
+      statusLabel: 'ステータス：',
+      recordedDowntime: '記録されたダウンタイム',
       downtime: (ms: number) => `Downtime: ${ms} ms`,
       noApp: (id: number) => `アプリ #${id}`,
       noVps: (id: number) => `VPS #${id}`
@@ -2785,7 +2870,8 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       TRANSFER: 'TRANSFER',
       RESTORE: 'RESTORE',
       VERIFY: 'VERIFY',
-      AWAITING_CONFIRM: 'CONFIRM'
+      AWAITING_CONFIRM: 'CONFIRM',
+      stepDone: (step: string) => `${step} 完了`
     },
     stepLabels: {
       PREPARE: '準備',
@@ -2811,9 +2897,17 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       completedDesc: 'アプリケーションが移行先VPSに正常に移行されました。',
       failedTitle: '移行に失敗しました',
       failedConsequence: '移行元アプリの自動復旧が完了していません。ログを確認してください。',
+      failedMessage:
+        '移行に失敗し、移行元アプリを復旧できませんでした — 以下のログで原因と対処方法を確認してください。',
       rolledBackTitle: 'ロールバック完了',
       rolledBackDesc: '移行処理が中止され、移行元アプリの状態へ安全にロールバックされました。',
-      notPassedVerify: '検証チェック（VERIFY）が未完了です'
+      rolledBackMessage:
+        '移行に失敗し、移行元アプリへロールバックしました — 以下のログで原因と対処方法を確認してください。',
+      notPassedVerify: '検証チェック（VERIFY）が未完了です',
+      notPassedVerifyDesc:
+        '整合性チェック（VERIFY）のすべての基準を満たした場合のみ、確認を許可します。',
+      stepErrorNoDetail: (step?: string) =>
+        `ステップ ${step ?? '不明'} でエラーが発生しました（詳細なし）。`
     },
     verify: {
       title: '検証結果（VERIFY）',
@@ -2823,6 +2917,15 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
         target: '移行先',
         status: 'ステータス'
       },
+      items: {
+        container: 'コンテナ',
+        http_response: 'HTTP レスポンス',
+        database: 'データベース',
+        db_data: 'データベースデータ',
+        environment: '環境変数',
+        volumes: 'ボリューム',
+        files: 'ファイル'
+      } as Record<string, string>,
       ok: '合格',
       fail: '不合格',
       empty: '検証データがまだありません'
@@ -2838,6 +2941,7 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     modal: {
       title: 'アプリ移行の完了確認',
       desc: '検証に合格しました。移行元アプリの処理方法を選択してください:',
+      recordedDowntime: '記録されたダウンタイム',
       keepSourceBtn: '移行元アプリを保持',
       keepSourceDesc:
         '移行元アプリを保持: 移行元コンテナを実行したまま維持します。移行先を確認した後に手動で削除できます。',
@@ -2951,6 +3055,7 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     migrate: {
       ...BASE_EN_STRINGS.migrate,
       ...VI_OVERRIDES.migrate,
+      loadErrors: { ...BASE_EN_STRINGS.migrate.loadErrors, ...VI_OVERRIDES.migrate?.loadErrors },
       draft: { ...BASE_EN_STRINGS.migrate.draft, ...VI_OVERRIDES.migrate?.draft },
       overview: { ...BASE_EN_STRINGS.migrate.overview, ...VI_OVERRIDES.migrate?.overview },
       statuses: { ...BASE_EN_STRINGS.migrate.statuses, ...VI_OVERRIDES.migrate?.statuses },
@@ -2964,6 +3069,10 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
         columns: {
           ...BASE_EN_STRINGS.migrate.verify.columns,
           ...VI_OVERRIDES.migrate?.verify?.columns
+        },
+        items: {
+          ...BASE_EN_STRINGS.migrate.verify.items,
+          ...VI_OVERRIDES.migrate?.verify?.items
         }
       },
       terminal: { ...BASE_EN_STRINGS.migrate.terminal, ...VI_OVERRIDES.migrate?.terminal },
@@ -3070,6 +3179,7 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     migrate: {
       ...BASE_EN_STRINGS.migrate,
       ...CN_OVERRIDES.migrate,
+      loadErrors: { ...BASE_EN_STRINGS.migrate.loadErrors, ...CN_OVERRIDES.migrate?.loadErrors },
       draft: { ...BASE_EN_STRINGS.migrate.draft, ...CN_OVERRIDES.migrate?.draft },
       overview: { ...BASE_EN_STRINGS.migrate.overview, ...CN_OVERRIDES.migrate?.overview },
       statuses: { ...BASE_EN_STRINGS.migrate.statuses, ...CN_OVERRIDES.migrate?.statuses },
@@ -3083,6 +3193,10 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
         columns: {
           ...BASE_EN_STRINGS.migrate.verify.columns,
           ...CN_OVERRIDES.migrate?.verify?.columns
+        },
+        items: {
+          ...BASE_EN_STRINGS.migrate.verify.items,
+          ...CN_OVERRIDES.migrate?.verify?.items
         }
       },
       terminal: { ...BASE_EN_STRINGS.migrate.terminal, ...CN_OVERRIDES.migrate?.terminal },
@@ -3189,6 +3303,7 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     migrate: {
       ...BASE_EN_STRINGS.migrate,
       ...JP_OVERRIDES.migrate,
+      loadErrors: { ...BASE_EN_STRINGS.migrate.loadErrors, ...JP_OVERRIDES.migrate?.loadErrors },
       draft: { ...BASE_EN_STRINGS.migrate.draft, ...JP_OVERRIDES.migrate?.draft },
       overview: { ...BASE_EN_STRINGS.migrate.overview, ...JP_OVERRIDES.migrate?.overview },
       statuses: { ...BASE_EN_STRINGS.migrate.statuses, ...JP_OVERRIDES.migrate?.statuses },
@@ -3202,6 +3317,10 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
         columns: {
           ...BASE_EN_STRINGS.migrate.verify.columns,
           ...JP_OVERRIDES.migrate?.verify?.columns
+        },
+        items: {
+          ...BASE_EN_STRINGS.migrate.verify.items,
+          ...JP_OVERRIDES.migrate?.verify?.items
         }
       },
       terminal: { ...BASE_EN_STRINGS.migrate.terminal, ...JP_OVERRIDES.migrate?.terminal },

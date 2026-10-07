@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { App, MigrateEvent, MigrateJobView, Vps } from '@shared/ipc'
+import { useUiState } from '../store/uiState'
 import { MigratePage } from './MigratePage'
 
 const app: App = {
@@ -64,7 +65,10 @@ const baseJob: MigrateJobView = {
   finished_at: null
 }
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  useUiState.setState({ locale: 'vi' })
+})
 
 describe('MigratePage UI-1j-a', () => {
   it('chon app nguon va VPS dich bang control native de bat dau migration', async () => {
@@ -907,5 +911,80 @@ describe('MigratePage UI-1j-a', () => {
       expect(screen.getByText('Hoàn tất')).toBeTruthy()
       expect(screen.getByText(/280 ms/)).toBeTruthy()
     })
+  })
+
+  it('chuyen doi du 4 ngon ngu (vi, en, cn, jp) cap nhat dung tieu de, trang thai, buoc, terminal va verify; giu nguyen loi tho', async () => {
+    const runningJob: MigrateJobView = {
+      id: 55,
+      app_id: 1,
+      source_vps_id: 1,
+      target_vps_id: 2,
+      status: 'transferring',
+      failed_step: null,
+      error_message: null,
+      downtime_ms: 120,
+      bytes_transferred: 2048,
+      verify_json: JSON.stringify({
+        ok: true,
+        rows: [
+          { label: 'container', source: 'running', target: 'running', ok: true },
+          { label: 'http_response', source: '200 OK', target: '200 OK', ok: true }
+        ]
+      }),
+      source_kept: null,
+      started_at: '2026-01-01T00:00:00Z',
+      finished_at: null
+    }
+
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'app:list') return { ok: true, data: [app] }
+      if (channel === 'vps:list') return { ok: true, data: [sourceVps, targetVps] }
+      if (channel === 'migrate:list') return { ok: true, data: [runningJob] }
+      throw new Error(`unexpected ${channel}`)
+    })
+    vi.stubGlobal('api', { invoke, on: () => () => {} })
+
+    // 1. VI (default)
+    useUiState.setState({ locale: 'vi' })
+    const { rerender } = render(<MigratePage />)
+
+    expect(await screen.findByText('Migrate giữa hai VPS')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Bắt đầu migrate' })).toBeTruthy()
+    expect(screen.getByText('Truyền dữ liệu')).toBeTruthy()
+    expect(screen.getByText(/Truyền dữ liệu · 3\/7/)).toBeTruthy()
+    expect(screen.getByText('Kết quả kiểm tra (VERIFY)')).toBeTruthy()
+
+    // 2. EN
+    useUiState.setState({ locale: 'en' })
+    rerender(<MigratePage />)
+
+    expect(screen.getByText('Migrate between two VPS')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Start migration' })).toBeTruthy()
+    expect(screen.getByText('Transfer')).toBeTruthy()
+    expect(screen.getByText(/Transfer · 3\/7/)).toBeTruthy()
+    expect(screen.getByText('Verification Results (VERIFY)')).toBeTruthy()
+
+    // 3. CN
+    useUiState.setState({ locale: 'cn' })
+    rerender(<MigratePage />)
+
+    expect(screen.getByText('VPS 之间迁移')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '开始迁移' })).toBeTruthy()
+    expect(screen.getByText('传输')).toBeTruthy()
+    expect(screen.getByText(/传输 · 3\/7/)).toBeTruthy()
+    expect(screen.getByText('验证检查结果 (VERIFY)')).toBeTruthy()
+
+    // 4. JP
+    useUiState.setState({ locale: 'jp' })
+    rerender(<MigratePage />)
+
+    expect(screen.getByText('VPS間マイグレーション')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '移行開始' })).toBeTruthy()
+    expect(screen.getByText('データ転送')).toBeTruthy()
+    expect(screen.getByText(/データ転送 · 3\/7/)).toBeTruthy()
+    expect(screen.getByText('検証結果（VERIFY）')).toBeTruthy()
+
+    // Reset back to VI
+    useUiState.setState({ locale: 'vi' })
   })
 })

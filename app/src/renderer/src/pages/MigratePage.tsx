@@ -29,6 +29,11 @@ interface ActiveJobContext {
   targetVpsId: number
 }
 
+interface JobCurrentStep {
+  step: MigrateStep
+  phase: 'running' | 'done'
+}
+
 interface JobRuntimeState {
   jobId: number
   appId: number
@@ -36,7 +41,7 @@ interface JobRuntimeState {
   targetVpsId: number
   status: MigrateLifecycleStatus
   step: number
-  currentStep?: string
+  currentStep?: JobCurrentStep
   doneCount: number
   downtime?: number
   rows: Array<{ label: string; source: string; target: string; ok: boolean }>
@@ -105,13 +110,33 @@ function mapJobStatus(jobStatus: MigrateJobStatus): MigrateLifecycleStatus {
 function initJobStateFromView(job: MigrateJobView): JobRuntimeState {
   const mapped = mapJobStatus(job.status)
   let step = 0
-  if (job.status === 'awaiting_confirm') {
+  let doneCount = 0
+  let currentStep: JobCurrentStep | undefined
+
+  const statusToStep: Partial<Record<MigrateJobStatus, MigrateStep>> = {
+    preparing: 'PREPARE',
+    backing_up: 'BACKUP',
+    transferring: 'TRANSFER',
+    restoring: 'RESTORE',
+    verifying: 'VERIFY'
+  }
+
+  if (job.status in statusToStep) {
+    const s = statusToStep[job.status]!
+    step = MIGRATE_STEPS.indexOf(s)
+    doneCount = step
+    currentStep = { step: s, phase: 'running' }
+  } else if (job.status === 'awaiting_confirm') {
     step = MIGRATE_STEPS.indexOf('AWAITING_CONFIRM')
+    doneCount = step
+    currentStep = { step: 'AWAITING_CONFIRM', phase: 'running' }
   } else if (job.status === 'completed') {
     step = MIGRATE_STEPS.length - 1
+    doneCount = MIGRATE_STEPS.length
   } else if (job.failed_step) {
     const idx = MIGRATE_STEPS.indexOf(job.failed_step.toUpperCase() as MigrateStep)
     step = idx >= 0 ? idx : 0
+    doneCount = step
   }
 
   let verifyOk = false
@@ -135,7 +160,7 @@ function initJobStateFromView(job: MigrateJobView): JobRuntimeState {
   let failReason: string | undefined
   if (mapped === 'failed' || mapped === 'rolled_back') {
     failReason =
-      job.error_message ?? `Lỗi ở bước ${job.failed_step ?? 'không xác định'} (không có chi tiết).`
+      job.error_message ?? (job.failed_step ? `FAILED_STEP:${job.failed_step}` : 'FAILED_UNKNOWN')
   }
 
   return {
@@ -145,8 +170,8 @@ function initJobStateFromView(job: MigrateJobView): JobRuntimeState {
     targetVpsId: job.target_vps_id,
     status: mapped,
     step,
-    currentStep: undefined,
-    doneCount: mapped === 'completed' ? MIGRATE_STEPS.length : 0,
+    currentStep,
+    doneCount,
     downtime: job.downtime_ms ?? undefined,
     rows,
     verifyOk,
@@ -157,6 +182,10 @@ function initJobStateFromView(job: MigrateJobView): JobRuntimeState {
 
 export function MigratePage(): React.JSX.Element {
   const strings = useStrings()
+  const stringsRef = useRef(strings)
+  useEffect(() => {
+    stringsRef.current = strings
+  })
 
   const [apps, setApps] = useState<App[]>([])
   const [vps, setVps] = useState<Vps[]>([])
@@ -172,7 +201,7 @@ export function MigratePage(): React.JSX.Element {
 
   // Progress, terminal & validation states for the currently viewed job
   const [step, setStep] = useState(-1)
-  const [currentStep, setCurrentStep] = useState<string>()
+  const [currentStep, setCurrentStep] = useState<JobCurrentStep>()
   const [status, setStatus] = useState<MigrateLifecycleStatus>('idle')
   const [downtime, setDowntime] = useState<number>()
   const [rows, setRows] = useState<
@@ -253,6 +282,50 @@ export function MigratePage(): React.JSX.Element {
   const jobTargetVps = jobContext
     ? vps.find((item) => item.id === jobContext.targetVpsId)
     : undefined
+
+  const currentStepText = useMemo(() => {
+    if (!currentStep) return undefined
+    const stepName = strings.migrate.stepLabels[currentStep.step] ?? currentStep.step
+    if (currentStep.phase === 'done') {
+      return strings.migrate.steps.stepDone(stepName)
+    }
+    return stepName
+  }, [currentStep, strings.migrate])
+
+  const terminalStepLabel = useMemo(() => {
+    if (status === 'completed') {
+      return strings.migrate.statuses.completed
+    }
+    if (status === 'failed') {
+      return strings.migrate.statuses.failed
+    }
+    if (status === 'rolled_back') {
+      return strings.migrate.statuses.rolled_back
+    }
+    if (status === 'awaiting_confirmation') {
+      return strings.migrate.stepLabels.AWAITING_CONFIRM
+    }
+    if (isRunning) {
+      if (step >= 0 && step < MIGRATE_STEPS.length) {
+        return strings.migrate.stepLabels[MIGRATE_STEPS[step]] ?? strings.migrate.statuses.running
+      }
+      return strings.migrate.statuses.running
+    }
+    return strings.migrate.statuses.idle
+  }, [isRunning, status, step, strings.migrate])
+
+  const failReasonText = useMemo(() => {
+    if (!failReason) return undefined
+    if (failReason.startsWith('FAILED_STEP:')) {
+      const stepKey = failReason.replace('FAILED_STEP:', '')
+      const stepName = strings.migrate.stepLabels[stepKey as MigrateStep] ?? stepKey
+      return strings.migrate.alerts.stepErrorNoDetail(stepName)
+    }
+    if (failReason === 'FAILED_UNKNOWN') {
+      return strings.migrate.alerts.stepErrorNoDetail()
+    }
+    return failReason
+  }, [failReason, strings.migrate])
 
   const switchToJob = useCallback((jobId: number) => {
     const targetState = jobsStateRef.current[jobId]
@@ -338,10 +411,10 @@ export function MigratePage(): React.JSX.Element {
 
     if (event.type === 'step-start') {
       nextStatus = 'running'
-      nextCurrentStep = event.step
+      nextCurrentStep = { step: event.step, phase: 'running' }
     } else if (event.type === 'step-done') {
       nextDoneCount += 1
-      nextCurrentStep = `${event.step} hoàn tất`
+      nextCurrentStep = { step: event.step, phase: 'done' }
       nextStepDurations = { ...nextStepDurations, [event.step]: event.duration_ms }
     } else if (event.type === 'verify-result') {
       nextRows = event.rows
@@ -534,15 +607,14 @@ export function MigratePage(): React.JSX.Element {
         ])
 
         const errors: string[] = []
-        if (!appResult.ok)
-          errors.push(`Không thể tải danh sách ứng dụng: ${appResult.error.message}`)
+        if (!appResult.ok) errors.push(strings.migrate.loadErrors.apps(appResult.error.message))
         else setApps(appResult.data)
 
-        if (!vpsResult.ok) errors.push(`Không thể tải danh sách VPS: ${vpsResult.error.message}`)
+        if (!vpsResult.ok) errors.push(strings.migrate.loadErrors.vps(vpsResult.error.message))
         else setVps(vpsResult.data)
 
         if (!migrationResult.ok) {
-          errors.push(`Không thể tải danh sách migrate: ${migrationResult.error.message}`)
+          errors.push(strings.migrate.loadErrors.migrate(migrationResult.error.message))
         } else {
           processMigrationList(migrationResult.data ?? [])
         }
@@ -558,7 +630,7 @@ export function MigratePage(): React.JSX.Element {
         }
       }
     },
-    [processMigrationList]
+    [processMigrationList, strings.migrate]
   )
 
   useEffect(() => {
@@ -572,14 +644,15 @@ export function MigratePage(): React.JSX.Element {
         if (cancelled) return
         const errors: string[] = []
         if (!appResult.ok)
-          errors.push(`Không thể tải danh sách ứng dụng: ${appResult.error.message}`)
+          errors.push(stringsRef.current.migrate.loadErrors.apps(appResult.error.message))
         else setApps(appResult.data)
 
-        if (!vpsResult.ok) errors.push(`Không thể tải danh sách VPS: ${vpsResult.error.message}`)
+        if (!vpsResult.ok)
+          errors.push(stringsRef.current.migrate.loadErrors.vps(vpsResult.error.message))
         else setVps(vpsResult.data)
 
         if (!migrationResult.ok) {
-          errors.push(`Không thể tải danh sách migrate: ${migrationResult.error.message}`)
+          errors.push(stringsRef.current.migrate.loadErrors.migrate(migrationResult.error.message))
         } else {
           processMigrationList(migrationResult.data ?? [])
         }
@@ -626,7 +699,7 @@ export function MigratePage(): React.JSX.Element {
     setDoneCount(0)
     setFailReason(undefined)
     setStatus('running')
-    setCurrentStep('PREPARE')
+    setCurrentStep({ step: 'PREPARE', phase: 'running' })
     setStep(0)
 
     try {
@@ -666,7 +739,7 @@ export function MigratePage(): React.JSX.Element {
           targetVpsId: draftTargetVpsId,
           status: terminal ? terminal.status : 'running',
           step: terminal?.status === 'completed' ? MIGRATE_STEPS.length - 1 : 0,
-          currentStep: 'PREPARE',
+          currentStep: { step: 'PREPARE', phase: 'running' },
           doneCount: terminal?.status === 'completed' ? MIGRATE_STEPS.length : 0,
           downtime: terminal?.downtime_ms ?? undefined,
           rows: [],
@@ -841,7 +914,7 @@ export function MigratePage(): React.JSX.Element {
                   <option key={item.id} value={item.id}>
                     {item.name} ·{' '}
                     {vps.find((candidate) => candidate.id === item.vps_id)?.name ??
-                      `VPS ${item.vps_id}`}
+                      strings.migrate.overview.noVps(item.vps_id)}
                   </option>
                 ))}
               </select>
@@ -919,16 +992,16 @@ export function MigratePage(): React.JSX.Element {
 
         {error && <Alert type="error" showIcon message={error} />}
 
-        {failReason && (
+        {failReasonText && (
           <Alert
             type="error"
             showIcon
             message={
               status === 'failed'
-                ? 'Migrate thất bại và nguồn chưa khôi phục được — xem lý do và gợi ý xử lý trong log bên dưới.'
-                : 'Migrate thất bại và đã rollback về app nguồn — xem lý do và gợi ý xử lý trong log bên dưới.'
+                ? strings.migrate.alerts.failedMessage
+                : strings.migrate.alerts.rolledBackMessage
             }
-            description={failReason}
+            description={failReasonText}
           />
         )}
 
@@ -942,7 +1015,11 @@ export function MigratePage(): React.JSX.Element {
         )}
 
         <Card size="small" className="migrate-steps-card">
-          <div className="deploy-steps-container" role="list" aria-label="7 bước tiến độ di chuyển">
+          <div
+            className="deploy-steps-container"
+            role="list"
+            aria-label={strings.migrate.stepsAriaLabel}
+          >
             {MIGRATE_STEPS.map((stepKey, idx) => {
               let stepStatus: 'done' | 'running' | 'failed' | 'pending' = 'pending'
               if (status === 'completed') {
@@ -1027,11 +1104,11 @@ export function MigratePage(): React.JSX.Element {
             }}
           >
             <Typography.Text style={{ fontSize: 13 }}>
-              Trạng thái:{' '}
+              {strings.migrate.overview.statusLabel}{' '}
               <Tag color={STATUS_META[status].color}>
                 {strings.migrate.statuses[status] ?? STATUS_META[status].label}
               </Tag>
-              {currentStep && isRunning && ` (${currentStep})`}
+              {currentStepText && isRunning && ` (${currentStepText})`}
               {downtime !== undefined && ` · ${strings.migrate.overview.downtime(downtime)}`}
             </Typography.Text>
           </div>
@@ -1054,7 +1131,11 @@ export function MigratePage(): React.JSX.Element {
               rowKey="label"
               dataSource={rows}
               columns={[
-                { title: strings.migrate.verify.columns.item, dataIndex: 'label' },
+                {
+                  title: strings.migrate.verify.columns.item,
+                  dataIndex: 'label',
+                  render: (label: string) => strings.migrate.verify.items?.[label] ?? label
+                },
                 { title: strings.migrate.verify.columns.source, dataIndex: 'source' },
                 { title: strings.migrate.verify.columns.target, dataIndex: 'target' },
                 {
@@ -1084,7 +1165,7 @@ export function MigratePage(): React.JSX.Element {
               description={
                 verifyOk
                   ? strings.migrate.alerts.awaitingDesc
-                  : 'Chỉ cho phép xác nhận khi kết quả kiểm tra tính toàn vẹn (VERIFY) đạt tất cả tiêu chí.'
+                  : strings.migrate.alerts.notPassedVerifyDesc
               }
               action={
                 <Button
@@ -1112,13 +1193,11 @@ export function MigratePage(): React.JSX.Element {
           )}
 
           <DeployTerminal
+            jobId={jobContext?.jobId}
             title={strings.migrate.terminal.title}
-            stepLabel={strings.migrate.terminal.stepLabel}
+            stepLabel={terminalStepLabel}
             emptyText={strings.migrate.terminal.emptyText}
             buffer={logs}
-            activeStep={
-              isRunning && step >= 0 ? strings.migrate.steps[MIGRATE_STEPS[step]] : undefined
-            }
             completedSteps={doneCount}
             totalSteps={MIGRATE_STEPS.length}
             status={
@@ -1165,7 +1244,7 @@ export function MigratePage(): React.JSX.Element {
                 {jobTargetVps?.host ? ` (${jobTargetVps.host})` : ''}
               </Descriptions.Item>
               {downtime !== undefined && (
-                <Descriptions.Item label="Downtime ghi nhận">
+                <Descriptions.Item label={strings.migrate.modal.recordedDowntime}>
                   {strings.migrate.overview.downtime(downtime)}
                 </Descriptions.Item>
               )}

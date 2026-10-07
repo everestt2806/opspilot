@@ -19,6 +19,7 @@ interface DeployTerminalProps {
   title?: string
   stepLabel?: string
   emptyText?: string
+  jobId?: string | number
 }
 
 export function DeployTerminal({
@@ -29,13 +30,15 @@ export function DeployTerminal({
   status,
   title,
   stepLabel,
-  emptyText
+  emptyText,
+  jobId
 }: DeployTerminalProps): React.JSX.Element {
   const strings = useStrings()
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const searchRef = useRef<SearchAddon | null>(null)
-  const writtenRef = useRef(0)
+  const prevBufferRef = useRef('')
+  const prevJobIdRef = useRef<string | number | undefined>(undefined)
   const scrolledUpRef = useRef(false)
   const [scrolledUp, setScrolledUp] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -93,12 +96,32 @@ export function DeployTerminal({
   useEffect(() => {
     const term = termRef.current
     if (!term) return
-    if (buffer.length > writtenRef.current) {
-      term.write(buffer.slice(writtenRef.current))
-      writtenRef.current = buffer.length
+
+    const prevJobId = prevJobIdRef.current
+    const jobChanged = jobId !== undefined && prevJobId !== undefined && jobId !== prevJobId
+    const prevBuffer = prevBufferRef.current
+
+    // Check if buffer is an incremental append of previous buffer
+    const isIncrementalAppend = !jobChanged && buffer.startsWith(prevBuffer)
+
+    if (isIncrementalAppend) {
+      if (buffer.length > prevBuffer.length) {
+        term.write(buffer.slice(prevBuffer.length))
+      }
+    } else {
+      // Buffer was truncated, job changed, or buffer was cleared/reset
+      term.reset()
+      term.clearSelection()
+      if (buffer.length > 0) {
+        term.write(buffer)
+      }
     }
+
+    prevBufferRef.current = buffer
+    prevJobIdRef.current = jobId
+
     if (!scrolledUpRef.current) term.scrollToBottom()
-  }, [buffer])
+  }, [buffer, jobId])
 
   function handleCopy(): void {
     const selection = termRef.current?.getSelection()
