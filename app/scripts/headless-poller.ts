@@ -52,7 +52,9 @@ function createMockSsh(filePath: string): SshManagerLike {
         size = st.size
         dev = st.dev
         ino = st.ino
-      } catch {}
+      } catch {
+        // Bỏ qua lỗi stat file metric nếu file chưa tồn tại hoặc không thể đọc
+      }
       return { generation: `${dev}:${ino}`, device: dev, inode: ino, size }
     },
     fileIdentity: async () => {
@@ -62,7 +64,9 @@ function createMockSsh(filePath: string): SshManagerLike {
         const st = statSync(filePath)
         dev = st.dev
         ino = st.ino
-      } catch {}
+      } catch {
+        // Bỏ qua lỗi stat file identity nếu file chưa tồn tại hoặc không thể đọc
+      }
       return { generation: `${dev}:${ino}`, device: dev, inode: ino }
     },
     fileSize: async () => {

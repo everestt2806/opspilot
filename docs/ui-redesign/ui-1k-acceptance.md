@@ -124,16 +124,26 @@
 
 ---
 
-### [P2] GAP-3: Root Lint Gate thất bại do các script backend CLI kế thừa (`app/scripts/`) — [TỒN ĐỌNG BACKLOG BACKEND]
-- **Vị trí**: `app/scripts/deploy-cli.ts` (7 lỗi `no-empty`), `app/scripts/headless-poller.ts` (2 lỗi `no-empty`).
-- **Tình trạng**: **GIỮ NGUYÊN GAP (Tồn đọng Backend)** — **GATE FAIL**.
-- **Mô tả hiện tượng**:
+### [P2] GAP-3: Root Lint Gate thất bại do các script backend CLI kế thừa (`app/scripts/`) — [ĐÃ KHẮC PHỤC TRONG GATE-1]
+- **Vị trí**: `app/scripts/deploy-cli.ts` (7 lỗi `no-empty`), `app/scripts/headless-poller.ts` (2 lỗi `no-empty`), `app/src/main/deploy/eventSerializer.test.ts`, `app/src/main/monitor/headlessPoller.test.ts`.
+- **Tình trạng lịch sử tại UI-1k-c**: **GATE FAIL** (Đúng 9 errors `no-empty` và 11 warnings `prettier`). Ghi nhận trung thực tại UI-1k-c do nguyên tắc không sửa backend trong scope UI-1.
+- **Tình trạng hiện tại sau checkpoint GATE-1**: **ĐÃ KHẮC PHỤC TRIỆT ĐỂ (PASS)** — **0 errors, 0 warnings**.
+- **Mô tả hiện tượng lịch sử**:
   Lệnh `npm run lint` ở root (`pnpm --filter @opspilot/app lint`) gặp đúng **9 errors và 11 warnings** (tổng cộng 20 problems):
   - 9 errors `no-empty`: Khối catch/cleanup rỗng trong `app/scripts/deploy-cli.ts` (7 lỗi) và `app/scripts/headless-poller.ts` (2 lỗi).
   - 11 warnings `prettier/prettier`: Cảnh báo định dạng dòng tại `deploy-cli.ts`, `headlessPoller.test.ts`, `eventSerializer.test.ts`.
   - Toàn bộ mã nguồn giao diện người dùng (`app/src/renderer/`) đạt **100% sạch lint (0 errors, 0 warnings)**.
-- **Nguyên tắc xử lý**:
-  Theo quy định phạm vi UI-1 và UI-1k-c ("Không sửa backend hay schema", "không tự đánh PASS khi gate lỗi"), Worker giữ nguyên mã backend, giữ nguyên trạng thái **Gate FAIL**, và ghi nhận trung thực đúng 9 errors cùng 11 warnings này vào biên bản nghiệm thu; tuyệt đối không tự ý sửa backend để ép gate xanh. Chuyển phần việc dọn dẹp lint của 2 script trên sang backlog bảo trì backend.
+- **Giải pháp thực hiện trong checkpoint GATE-1**:
+  1. Thêm chú thích giải thích rõ ràng lý do bỏ qua lỗi khi dọn dẹp tài nguyên bên trong các khối `catch`:
+     - `app/scripts/deploy-cli.ts`: 7 khối `catch` đóng kết nối SQLite (`database.close()`) và hủy pipeline (`pipeline.cancel()`) khi gặp lỗi hoặc nhận tín hiệu SIGINT.
+     - `app/scripts/headless-poller.ts`: 2 khối `catch` stat file metric (`metricSnapshot`, `fileIdentity`) khi file metric chưa tồn tại hoặc chưa thể đọc.
+     - Giữ nguyên 100% hành vi runtime, không nuốt thêm bất kỳ loại lỗi mới nào và không làm thay đổi luồng deploy hay poller.
+  2. Chuẩn hóa định dạng Prettier cho các khai báo import và ngắt dòng trong `deploy-cli.ts`, `eventSerializer.test.ts` và `headlessPoller.test.ts`.
+  3. Kiểm chứng chất lượng:
+     - `npm run lint`: **0 errors, 0 warnings** (PASS 100%).
+     - `typecheck` (Node, Web, Scripts): **PASS 100%**.
+     - Focused tests (`eventSerializer.test.ts`, `headlessPoller.test.ts`): **11/11 tests PASS 100%**.
+     - `git diff --check`: Sạch hoàn toàn, không có lỗi khoảng trắng thừa hay kết thúc dòng.
 
 ---
 
@@ -143,11 +153,13 @@
 2. **Khung vỏ & Bố cục**: Thiết kế shell 230px, Titlebar Overlay native và hệ thống tab ngang không sub-sidebars hoạt động ổn định trên cả 2 độ phân giải 1280×800 và 1366×768.
 3. **Điều hướng Deploy**: Nút `+ Triển khai` toàn cục đã được hoàn thiện logic ngữ cảnh động theo trang đang mở, có cơ chế bảo vệ race condition và xử lý lỗi an toàn (hủy im lặng khi chuyển trang/app hoặc click lại, chỉ thông báo lỗi khi có lỗi IPC hoặc dữ liệu).
 4. **Bản địa hóa**: Toàn bộ nhãn hệ thống và nút quay lại đã được bản địa hóa chuẩn xác trên cả 4 ngôn ngữ (VI, EN, CN, JP).
-5. **Tổng hợp Quality Gates (UI-1k-c)**:
+5. **Tổng hợp Quality Gates**:
    - **Full App Tests (`npm test`)**: **PASS** (68/68 test files, 626/626 tests pass 100%).
-   - **Typecheck (`npm run typecheck`)**: **PASS** (0 lỗi typecheck trên Node/Web/Electron).
+   - **Typecheck (`npm run typecheck`)**: **PASS** (0 lỗi typecheck trên Node/Web/Electron/Scripts).
    - **Build (`npm run build`)**: **PASS** (Đóng gói thành công `out/main`, `out/preload`, `out/renderer`).
    - **Renderer Lint (`eslint app/src/renderer`)**: **PASS** (0 lỗi, 0 cảnh báo).
-   - **Root Lint (`npm run lint`)**: **GATE FAIL / GAP-3** (Đúng 9 errors `no-empty` và 11 warnings prettier tại các file backend CLI kế thừa; giữ nguyên gate FAIL, ghi nhận trung thực, không tự ý sửa backend).
+   - **Root Lint (`npm run lint`)**:
+     - *Lịch sử UI-1k-c*: **GATE FAIL / GAP-3** (Đúng 9 errors `no-empty` và 11 warnings prettier tại backend CLI kế thừa; giữ nguyên gate FAIL để không vi phạm quy tắc không sửa backend trong scope UI-1).
+     - *Hiện tại sau GATE-1*: **PASS** (**0 errors, 0 warnings**; đã xử lý dứt điểm 9 lỗi `no-empty` bằng chú thích giải thích lý do cleanup và sửa 11 cảnh báo Prettier).
    - **Kiểm tra Electron thật (Local Runtime)**: **PASS** (Đã chạy kiểm tra và chụp lại trực tiếp trên tiến trình Electron thật ở cả 1280×800 và 1366×768 cho cả 2 theme Dark và Light; trước mỗi ảnh đều ghi và xác nhận `document.documentElement.dataset.theme` ['dark'/'light'] cùng `--content-bg` ['#0A0D14'/'#F8F9FA'], đợi giao diện ổn định và kiểm tra trực quan ảnh light sáng rõ rệt; ghi rõ CSS viewport 1280×800 & 1366×768, kích thước ảnh vật lý 1280×800 & 1366×768 với scale factor = 1.0; 12 tệp ảnh hoàn toàn khác biệt không trùng lặp byte; lưu trữ tại [screenshots/ui-1k/](screenshots/ui-1k/) kèm [evidence-summary.json](screenshots/ui-1k/evidence-summary.json)).
    - **Môi trường VPS thật**: **NOT_RUN** (Tuân thủ giới hạn cục bộ; không kết nối hoặc can thiệp VPS thật; làm rõ lỗi giải mã credential trên ảnh chi tiết VPS xuất phát từ việc cô lập an toàn cơ sở dữ liệu `opspilot.db` trong thư mục tạm mà không sao chép khóa master gốc, chặn đứng hoàn toàn mọi kết nối SSH ra ngoài).

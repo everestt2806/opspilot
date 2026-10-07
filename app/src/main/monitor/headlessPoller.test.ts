@@ -101,10 +101,12 @@ describe('HeadlessPoller (TypeScript / SQLite RAM)', () => {
     seedDb(db)
 
     // Tạo experiment_run đang chạy
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO experiment_run (id, scenario, repeat_index, attempt_index, deployment_id, baseline_start_ts, status)
       VALUES (42, 'cpu_spike', 1, 1, 1, '2026-08-30T00:00:00Z', 'running')
-    `).run()
+    `
+    ).run()
 
     // Metric 1 & 2: vượt ngưỡng CPU 80% (consecutive = 2) -> sẽ kích hoạt Alert
     const lines = `${makeMetric(1, 90)}\n${makeMetric(2, 95)}\n`
@@ -144,7 +146,9 @@ describe('HeadlessPoller (TypeScript / SQLite RAM)', () => {
 
     // 1. Kiểm tra metric_sample đã được chèn
     const samples = db
-      .prepare('SELECT id, deployment_id, seq, cpu_pct FROM metric_sample WHERE deployment_id=1 ORDER BY seq')
+      .prepare(
+        'SELECT id, deployment_id, seq, cpu_pct FROM metric_sample WHERE deployment_id=1 ORDER BY seq'
+      )
       .all() as Array<{ id: number; deployment_id: number; seq: number; cpu_pct: number }>
     expect(samples.length).toBe(2)
     expect(samples[0].seq).toBe(1)
@@ -153,7 +157,11 @@ describe('HeadlessPoller (TypeScript / SQLite RAM)', () => {
     // 2. Kiểm tra score_sample được tính toán (cả rule và ML)
     const scores = db
       .prepare('SELECT method, score, above_threshold FROM score_sample WHERE metric_sample_id=?')
-      .all(samples[1].id) as Array<{ method: string; score: number | null; above_threshold: number }>
+      .all(samples[1].id) as Array<{
+      method: string
+      score: number | null
+      above_threshold: number
+    }>
     expect(scores.length).toBe(5) // rule, zscore_ewma, iforest, ocsvm, ensemble
     const ruleScore = scores.find((s) => s.method === 'rule')
     expect(ruleScore?.score).toBe(1)
@@ -161,8 +169,15 @@ describe('HeadlessPoller (TypeScript / SQLite RAM)', () => {
 
     // 3. Kiểm tra alert được kích hoạt và gán đúng experiment_run_id = 42
     const alerts = db
-      .prepare('SELECT id, deployment_id, experiment_run_id, method FROM alert WHERE deployment_id=1')
-      .all() as Array<{ id: number; deployment_id: number; experiment_run_id: number | null; method: string }>
+      .prepare(
+        'SELECT id, deployment_id, experiment_run_id, method FROM alert WHERE deployment_id=1'
+      )
+      .all() as Array<{
+      id: number
+      deployment_id: number
+      experiment_run_id: number | null
+      method: string
+    }>
     expect(alerts.length).toBeGreaterThan(0)
     expect(alerts[0].experiment_run_id).toBe(42)
 
@@ -192,7 +207,9 @@ describe('HeadlessPoller (TypeScript / SQLite RAM)', () => {
 
     // Kiểm tra đã nạp metric 1
     const count1 = (
-      db.prepare('SELECT COUNT(*) n FROM metric_sample WHERE deployment_id=1').get() as { n: number }
+      db.prepare('SELECT COUNT(*) n FROM metric_sample WHERE deployment_id=1').get() as {
+        n: number
+      }
     ).n
     expect(count1).toBe(1)
 
@@ -207,7 +224,9 @@ describe('HeadlessPoller (TypeScript / SQLite RAM)', () => {
 
     // Kiểm tra lượt poll vét cuối cùng đã nạp thành công metric 2
     const count2 = (
-      db.prepare('SELECT COUNT(*) n FROM metric_sample WHERE deployment_id=1').get() as { n: number }
+      db.prepare('SELECT COUNT(*) n FROM metric_sample WHERE deployment_id=1').get() as {
+        n: number
+      }
     ).n
     expect(count2).toBe(2)
 

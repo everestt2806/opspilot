@@ -8,11 +8,7 @@ import { loadSecret } from '../src/main/crypto/credentials'
 import { VpsRepository } from '../src/main/db/vpsRepository'
 import { DeployPipeline } from '../src/main/deploy/pipeline'
 import { SshManager } from '../src/main/ssh/manager'
-import {
-  sanitizeObject,
-  sanitizeText,
-  serializeCliEvent
-} from '../src/main/deploy/eventSerializer'
+import { sanitizeObject, sanitizeText, serializeCliEvent } from '../src/main/deploy/eventSerializer'
 import type { DeployEvent, DeployInput } from '../src/shared/ipc'
 
 export { sanitizeObject, sanitizeText, serializeCliEvent }
@@ -121,7 +117,9 @@ async function main(): Promise<void> {
     const msg = err instanceof Error ? err.message : String(err)
     try {
       database.close()
-    } catch {}
+    } catch {
+      // Bỏ qua lỗi đóng kết nối SQLite khi đang dọn dẹp trước khi emitError
+    }
     emitError(`Không tìm thấy VPS id=${cliArgs.vpsId} trong DB: ${msg}`)
   }
 
@@ -136,7 +134,9 @@ async function main(): Promise<void> {
       const msg = cause instanceof Error ? cause.message : String(cause)
       try {
         database.close()
-      } catch {}
+      } catch {
+        // Bỏ qua lỗi đóng kết nối SQLite khi dọn dẹp sau khi thất bại lấy SSH secret
+      }
       emitError(
         `Không lấy được SSH credential cho VPS id=${cliArgs.vpsId}: ${msg}. ` +
           'Hãy cung cấp biến môi trường OPSPILOT_SSH_SECRET hoặc cấu hình credential hợp lệ.'
@@ -147,7 +147,9 @@ async function main(): Promise<void> {
   if (!resolvedSecret || !resolvedSecret.trim()) {
     try {
       database.close()
-    } catch {}
+    } catch {
+      // Bỏ qua lỗi đóng kết nối SQLite khi dọn dẹp sau khi phát hiện SSH secret rỗng
+    }
     emitError(
       `SSH credential cho VPS id=${cliArgs.vpsId} bị rỗng. ` +
         'Hãy cung cấp biến môi trường OPSPILOT_SSH_SECRET hoặc cấu hình credential hợp lệ.'
@@ -255,11 +257,15 @@ async function main(): Promise<void> {
     if (activeDeploymentId !== null) {
       try {
         pipeline.cancel(activeDeploymentId)
-      } catch {}
+      } catch {
+        // Bỏ qua lỗi hủy pipeline khi nhận tín hiệu SIGINT
+      }
     }
     try {
       database.close()
-    } catch {}
+    } catch {
+      // Bỏ qua lỗi đóng kết nối SQLite khi thoát do SIGINT
+    }
     process.exit(130)
   })
 
@@ -298,14 +304,18 @@ async function main(): Promise<void> {
     )
     try {
       database.close()
-    } catch {}
+    } catch {
+      // Bỏ qua lỗi đóng kết nối SQLite khi dọn dẹp sau lỗi khởi chạy pipeline
+    }
     process.exit(1)
   }
 
   const finished = await finishedPromise
   try {
     database.close()
-  } catch {}
+  } catch {
+    // Bỏ qua lỗi đóng kết nối SQLite khi kết thúc tiến trình deploy
+  }
 
   if (finished.status !== 'running') {
     process.exit(1)

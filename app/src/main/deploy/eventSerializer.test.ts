@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  sanitizeObject,
-  sanitizeText,
-  serializeCliEvent
-} from './eventSerializer'
+import { sanitizeObject, sanitizeText, serializeCliEvent } from './eventSerializer'
 
 describe('eventSerializer (TK-S6 P2d-1b)', () => {
   const secrets = ['super_ssh_password_123', 'secret_db_token_456', 'api_key_789']
@@ -58,7 +54,8 @@ describe('eventSerializer (TK-S6 P2d-1b)', () => {
         step: 'BUILD',
         deployment_id: 10,
         error: 'Build failed while passing secret_db_token_456 to Docker',
-        technical: 'Error: SSH handshake failed for user root with secret super_ssh_password_123 (code 403)'
+        technical:
+          'Error: SSH handshake failed for user root with secret super_ssh_password_123 (code 403)'
       }
 
       const jsonStr = serializeCliEvent(failedEvent, secrets)

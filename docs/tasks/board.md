@@ -83,8 +83,8 @@ manual-only, không push/PR/merge.
 | UI-1j-a | Quản lý trạng thái & Context Job Migrate đa nhiệm | Worker | 07/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `d61aafb`, `65a7169`, `7237ace`, `e5ce439` | Cố định context job, theo dõi nhiều job, 2 lựa chọn xác nhận an toàn |
 | UI-1j-b | MigratePage toàn chiều rộng, 7 bước, VERIFY, 4 ngôn ngữ | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `2c5ca58`, `33d4a28` | Thiết kế nhất quán Deploy, bảng VERIFY, ring buffer 100k ký tự, bản địa hóa 4 locales |
 | UI-1k-a | Audit nghiệm thu AC-1..AC-5 trên Electron thật | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `61e8854`, `3e1ed56` | Biên bản nghiệm thu ui-1k-acceptance.md: 14 PASS / 1 GAP (AC-3.2) |
-| UI-1k-b | Hoàn thiện nút + Triển khai toàn cục & Anti-race | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `771a029`, `37d0544`, `8dfc8cb` | Context động theo trang/app, xóa preselect cũ ngay khi click, hủy im lặng an toàn, backToList 4 locales |
-| UI-1k-c | Nghiệm thu tổng thể, Quality Gates & Tài liệu | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `335d1ea` (và commit hiện tại) | Đồng bộ README checklist 14 PASS / 1 GAP, 12 ảnh Electron thật 1280×800 & 1366×768 (Dark/Light), VPS thật NOT_RUN |
+| UI-1k-c | Nghiệm thu tổng thể, Quality Gates & Tài liệu | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `335d1ea`, `86a5d5a` | Đồng bộ README checklist 14 PASS / 1 GAP, 12 ảnh Electron thật 1280×800 & 1366×768 (Dark/Light), VPS thật NOT_RUN |
+| GATE-1 | Xử lý lint no-empty & Prettier backend scripts | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit (hiện tại) | Sửa đúng 9 lỗi no-empty (thêm chú thích cleanup) & 11 cảnh báo Prettier trong deploy-cli, headless-poller và test; root lint 0 errors/0 warnings, typecheck pass, test pass |
 
 
 
@@ -442,3 +442,18 @@ app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express
   - Renderer ESLint: Sạch 100% (0 lỗi, 0 cảnh báo).
   - Root ESLint: **GATE FAIL / GAP-3** (Đúng 9 errors `no-empty` và 11 warnings prettier tại các file backend CLI kế thừa `deploy-cli.ts` và `headless-poller.ts`; giữ nguyên gate FAIL, ghi nhận trung thực, không tự ý sửa backend trong scope UI).
 - **Cam kết Phiên làm việc**: Không sửa backend/schema, không push/PR/merge; duy trì trạng thái `CHỜ REVIEW` cho toàn bộ nhánh `feat/deploy-reachability`.
+
+### Checkpoint GATE-1 update - 08/10 Xử lý dứt điểm Root Lint (GAP-3)
+
+Đã hoàn thành checkpoint GATE-1 riêng biệt, xử lý dứt điểm các lỗi lint tồn đọng kế thừa từ backend scripts đã ghi nhận tại UI-1k-c:
+- **Xử lý 9 lỗi `no-empty`**:
+  - `app/scripts/deploy-cli.ts` (7 vị trí): Thêm chú thích giải thích rõ lý do bỏ qua lỗi khi dọn dẹp đóng kết nối SQLite hoặc hủy pipeline (`database.close()`, `pipeline.cancel()`) trước khi ném ngoại lệ hoặc thoát tiến trình qua SIGINT/lỗi.
+  - `app/scripts/headless-poller.ts` (2 vị trí): Thêm chú thích giải thích rõ lý do bỏ qua lỗi trong `metricSnapshot` và `fileIdentity` khi stat file metric chưa tồn tại hoặc không thể đọc.
+  - Bảo tồn nguyên vẹn 100% logic nghiệp vụ, luồng deploy và poller; không nuốt thêm bất kỳ loại lỗi mới nào.
+- **Xử lý 11 cảnh báo Prettier**: Chuẩn hóa format import và ngắt dòng trong `deploy-cli.ts` (1), `eventSerializer.test.ts` (2) và `headlessPoller.test.ts` (8).
+- **Trạng thái Quality Gates sau GATE-1**:
+  - Root ESLint (`npm run lint`): **0 errors, 0 warnings** (PASS 100%).
+  - Typecheck (`typecheck:node`, `typecheck:web`, `tsconfig.scripts.json`): **PASS 100%** (0 lỗi).
+  - Tests (`eventSerializer.test.ts`, `headlessPoller.test.ts`): **11/11 tests PASS 100%**.
+  - `git diff --check`: Sạch 100% (không có lỗi khoảng trắng thừa hay kết thúc dòng).
+- **Cam kết Phiên làm việc**: Không sửa đổi schema hay logic nghiệp vụ, không push/PR/merge, không cần VPS thật.
