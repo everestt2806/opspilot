@@ -83,8 +83,9 @@ manual-only, không push/PR/merge.
 | UI-1j-a | Quản lý trạng thái & Context Job Migrate đa nhiệm | Worker | 07/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `d61aafb`, `65a7169`, `7237ace`, `e5ce439` | Cố định context job, theo dõi nhiều job, 2 lựa chọn xác nhận an toàn |
 | UI-1j-b | MigratePage toàn chiều rộng, 7 bước, VERIFY, 4 ngôn ngữ | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `2c5ca58`, `33d4a28` | Thiết kế nhất quán Deploy, bảng VERIFY, ring buffer 100k ký tự, bản địa hóa 4 locales |
 | UI-1k-a | Audit nghiệm thu AC-1..AC-5 trên Electron thật | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `61e8854`, `3e1ed56` | Biên bản nghiệm thu ui-1k-acceptance.md: 14 PASS / 1 GAP (AC-3.2) |
+| UI-1k-b | Hoàn thiện nút + Triển khai toàn cục & Anti-race | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `771a029`, `37d0544`, `8dfc8cb` | Context động theo trang/app, xóa preselect cũ ngay khi click, hủy im lặng an toàn, backToList 4 locales |
 | UI-1k-c | Nghiệm thu tổng thể, Quality Gates & Tài liệu | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `335d1ea`, `86a5d5a` | Đồng bộ README checklist 14 PASS / 1 GAP, 12 ảnh Electron thật 1280×800 & 1366×768 (Dark/Light), VPS thật NOT_RUN |
-| GATE-1 | Xử lý lint no-empty & Prettier backend scripts | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit (hiện tại) | Sửa đúng 9 lỗi no-empty (thêm chú thích cleanup) & 11 cảnh báo Prettier trong deploy-cli, headless-poller và test; root lint 0 errors/0 warnings, typecheck pass, test pass |
+| GATE-1 | Xử lý lint no-empty & Prettier backend scripts | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `4d14794` | Sửa đúng 9 lỗi no-empty (thêm chú thích cleanup) & 11 cảnh báo Prettier trong deploy-cli, headless-poller và test; root lint 0 errors/0 warnings, typecheck pass, test pass |
 
 
 
