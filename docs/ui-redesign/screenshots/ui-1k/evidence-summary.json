@@ -1,0 +1,148 @@
+{
+  "timestamp": "2026-10-07T17:50:58.432Z",
+  "viewports": [
+    "1280x800",
+    "1366x768"
+  ],
+  "themes": [
+    "dark",
+    "light"
+  ],
+  "screenshots": [
+    "apps-detail-1280x800-dark.png",
+    "deploy-preselect-1280x800-dark.png",
+    "vps-detail-1280x800-dark.png",
+    "apps-detail-1280x800-light.png",
+    "deploy-preselect-1280x800-light.png",
+    "vps-detail-1280x800-light.png",
+    "apps-detail-1366x768-dark.png",
+    "deploy-preselect-1366x768-dark.png",
+    "vps-detail-1366x768-dark.png",
+    "apps-detail-1366x768-light.png",
+    "deploy-preselect-1366x768-light.png",
+    "vps-detail-1366x768-light.png"
+  ],
+  "checks": [
+    {
+      "screen": "apps-detail",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "scrollWidth": 1280,
+      "clientWidth": 1280,
+      "hasHorizontalScroll": false,
+      "hasDetailBar": true,
+      "tabsCount": 3
+    },
+    {
+      "screen": "deploy-preselect",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "pageKey": "deploy",
+      "scrollWidth": 1280,
+      "clientWidth": 1280,
+      "hasHorizontalScroll": false,
+      "hasWizard": true
+    },
+    {
+      "screen": "vps-detail",
+      "viewport": "1280x800",
+      "theme": "dark",
+      "scrollWidth": 1280,
+      "clientWidth": 1280,
+      "hasHorizontalScroll": false,
+      "hasDetailBar": true,
+      "tabsCount": 4
+    },
+    {
+      "screen": "apps-detail",
+      "viewport": "1280x800",
+      "theme": "light",
+      "scrollWidth": 1280,
+      "clientWidth": 1280,
+      "hasHorizontalScroll": false,
+      "hasDetailBar": true,
+      "tabsCount": 3
+    },
+    {
+      "screen": "deploy-preselect",
+      "viewport": "1280x800",
+      "theme": "light",
+      "pageKey": "deploy",
+      "scrollWidth": 1280,
+      "clientWidth": 1280,
+      "hasHorizontalScroll": false,
+      "hasWizard": true
+    },
+    {
+      "screen": "vps-detail",
+      "viewport": "1280x800",
+      "theme": "light",
+      "scrollWidth": 1280,
+      "clientWidth": 1280,
+      "hasHorizontalScroll": false,
+      "hasDetailBar": true,
+      "tabsCount": 4
+    },
+    {
+      "screen": "apps-detail",
+      "viewport": "1366x768",
+      "theme": "dark",
+      "scrollWidth": 1366,
+      "clientWidth": 1366,
+      "hasHorizontalScroll": false,
+      "hasDetailBar": true,
+      "tabsCount": 3
+    },
+    {
+      "screen": "deploy-preselect",
+      "viewport": "1366x768",
+      "theme": "dark",
+      "pageKey": "deploy",
+      "scrollWidth": 1366,
+      "clientWidth": 1366,
+      "hasHorizontalScroll": false,
+      "hasWizard": true
+    },
+    {
+      "screen": "vps-detail",
+      "viewport": "1366x768",
+      "theme": "dark",
+      "scrollWidth": 1366,
+      "clientWidth": 1366,
+      "hasHorizontalScroll": false,
+      "hasDetailBar": true,
+      "tabsCount": 4
+    },
+    {
+      "screen": "apps-detail",
+      "viewport": "1366x768",
+      "theme": "light",
+      "scrollWidth": 1366,
+      "clientWidth": 1366,
+      "hasHorizontalScroll": false,
+      "hasDetailBar": true,
+      "tabsCount": 3
+    },
+    {
+      "screen": "deploy-preselect",
+      "viewport": "1366x768",
+      "theme": "light",
+      "pageKey": "deploy",
+      "scrollWidth": 1366,
+      "clientWidth": 1366,
+      "hasHorizontalScroll": false,
+      "hasWizard": true
+    },
+    {
+      "screen": "vps-detail",
+      "viewport": "1366x768",
+      "theme": "light",
+      "scrollWidth": 1366,
+      "clientWidth": 1366,
+      "hasHorizontalScroll": false,
+      "hasDetailBar": true,
+      "tabsCount": 4
+    }
+  ],
+  "verdict": "PASS"
+}

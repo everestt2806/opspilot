@@ -64,6 +64,30 @@ manual-only, không push/PR/merge.
 | P2d-6b | Khắc phục Runtime Gap 2: Cấp phát credential từ `--ssh-key-file` cho adapter (TK-S6) | Worker | 03/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `d0a6748` | Khi có `--ssh-key-file` (hoặc `OPSPILOT_SSH_KEY_FILE`), đọc private key an toàn qua `read_ssh_key_file` (dùng `.strip()` chỉ để kiểm tra rỗng, bảo lưu newline cuối, tránh đọc lại 2 lần) và cấp đồng bộ qua kênh `ssh_secret` cho cả `DeployAdapter.deploy()` và `PollerAdapter.start()`; runner tiếp tục dùng file key cho `SystemSshClient`; `resolve_ssh_client` không nuốt `SshKeyFileError` để rơi về secret môi trường cũ; key file chỉ định tường minh luôn thắng (`override`) secret cũ kế thừa từ biến môi trường (`OPSPILOT_SSH_SECRET` / `OPSPILOT_DEPLOY_SECRET`); file thiếu, rỗng hoặc không đọc được lập tức abort trước deploy với lỗi `SshKeyFileError` (`ssh_key_file_error`), không ghi nội dung key vào argv, log, exception hay SQLite; bảo toàn luồng credential cũ khi không truyền key file; 37/37 test e2e pass, 283/283 pytest pass, Ruff lint & format pass, diff check pass; đóng Runtime Gap 2 trong preflight, VPS và pilot duy trì nghiêm ngặt NOT_RUN |
 | P2d-7 | Khảo sát chỉ đọc hạ tầng VPS mục tiêu & Đối chiếu Runbook (TK-S6) | Worker | 03/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `782731f` | Khảo sát chỉ đọc hạ tầng VPS mục tiêu (VM02 221.121.1.80 / VM01 221.121.1.79); quan sát cổng 22 TCP timeout từ máy điều khiển, chưa kết luận nguyên nhân do VPS tắt hay firewall; thiếu fingerprint xác minh qua kênh tin cậy ngoài luồng WiService console ($EXPECTED_FINGERPRINT chưa nạp); bản ghi DB vps id=2 hiện có auth_type='password', để chạy bằng key cần đồng thời cấu hình bản ghi VPS auth_type='key', đúng username và public key được cấp quyền trên VPS rồi mới cung cấp private key qua --ssh-key-file (key file đơn lẻ không vượt qua auth_type='password', không sửa DB trực tiếp trong checkpoint này); tuân thủ fail-closed dừng toàn bộ lệnh từ xa, không tự chấp nhận host key, giữ các mục hạ tầng BLOCKED/NOT_RUN; biên bản docs/tasks/tk-s6-pilot-p2d7-vps-audit.md; không deploy, không sửa VPS/DB, pilot giữ nguyên NOT_RUN |
 
+### Checkpoint UI-0 đến UI-1k (Thiết kế lại giao diện App-Centric & Nghiệm thu AC-1..AC-5) — feat/deploy-reachability
+
+> Toàn bộ các checkpoint UI-0 đến UI-1k đã hoàn tất triển khai và nghiệm thu trên nhánh `feat/deploy-reachability`. Đã kiểm tra trực tiếp trên môi trường Electron thật cục bộ ở cả hai độ phân giải mục tiêu 1280×800 và 1366×768 (Dark/Light). Hạ tầng VPS thật duy trì nghiêm ngặt `NOT_RUN` (không truy cập hay thay đổi hạ tầng ngoài). Giữ trạng thái `CHỜ REVIEW` (không tự ý push/PR/merge).
+
+| ID | Task | Chủ | Hạn | Trạng thái | Branch | Commit / Phụ thuộc | Ghi chú |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| UI-0 | Audit hiện trạng & prototype redesign app-centric | Worker | 04/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `ff9f274`, `eb739c9`, `82f7ed4` | Docs prototype và 15 tiêu chí AC-1..AC-5; loại bỏ sub-sidebars |
+| UI-1a | Shell ứng dụng 230px, Titlebar native & 5 mục điều hướng | Worker | 05/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `900acaf`, `88214cd` | Shell chuẩn WCO, sidebar 5 mục (Apps trước VPS), ảnh chụp native |
+| UI-1b | Nhãn trạng thái trung thực (Honest Status Model) | Worker | 05/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `afd6872` | Phân biệt vps:scan vs test-connection, last_seen_at 24h, không overclaim host key |
+| UI-1c | Trang Ứng dụng & Chi tiết 3 tab ngang | Worker | 05/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `68917b9`, `aab993f` | Bỏ nested sidebar, 3 tab ngang (Tổng quan, Rollback, Bác sĩ), lọc kết hợp AND |
+| UI-1d | Trang Máy chủ VPS & Chi tiết 4 tab ngang | Worker | 06/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `157bd4c`, `003bf3a`, `f7f5ab6` | Bỏ VpsNavSidebar/VpsInfoSidebar, 4 tab ngang; Tab DB ghi nhận GAP AC-3.2 |
+| UI-1e | Tái cấu trúc Dashboard & Phân trang Lịch sử | Worker | 06/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `c806728`, `7e46ad5`, `67bb425` | Dashboard app-first, KPI cards, HistoryPage phân trang độc lập |
+| UI-1f | Deploy Wizard: Nguồn ứng dụng & Chọn máy chủ đích | Worker | 06/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `e7b3bb8`, `d49eca2`, `b8ba44b` | Form nguồn, preselect context, validate tên app và đổi VPS đích |
+| UI-1g | Deploy Wizard: Kiểm tra & Biến môi trường | Worker | 07/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `36e75fa`, `64d308d` | Cấu hình env vars, che secret trên review screen, chống trùng chu kỳ |
+| UI-1h | Deploy Wizard: Tiến độ 7 bước, kết quả & Deploy Guard | Worker | 07/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `3d6c23d`, `9c054f7`, `8edddff` | 7 bước trực quan không cắt chữ, buffer event chờ ID, khóa nút khi đang chạy |
+| UI-1i | Trang Cài đặt tinh gọn & Lưu trữ Theme | Worker | 07/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `b7e7431`, `433fe02` | Thiết kế gọn, lưu theme dark/light qua các phiên mở app |
+| UI-1j-a | Quản lý trạng thái & Context Job Migrate đa nhiệm | Worker | 07/10 | CHỜ REVIEW | `feat/d61aafb`, `65a7169`, `7237ace`, `e5ce439` | Cố định context job, theo dõi nhiều job, 2 lựa chọn xác nhận an toàn |
+| UI-1j-b | MigratePage toàn chiều rộng, 7 bước, VERIFY, 4 ngôn ngữ | Worker | 08/10 | CHỜ REVIEW | `feat/2c5ca58`, `33d4a28` | Thiết kế nhất quán Deploy, bảng VERIFY, ring buffer 100k ký tự, bản địa hóa 4 locales |
+| UI-1k-a | Audit nghiệm thu AC-1..AC-5 trên Electron thật | Worker | 08/10 | CHỜ REVIEW | `feat/61e8854`, `3e1ed56` | Biên bản nghiệm thu ui-1k-acceptance.md: 14 PASS / 1 GAP (AC-3.2) |
+| UI-1k-b | Hoàn thiện nút + Triển khai toàn cục & Anti-race | Worker | 08/10 | CHỜ REVIEW | `feat/771a029`, `37d0544`, `8dfc8cb` | Context động theo trang/app, xóa preselect cũ ngay khi click, hủy im lặng an toàn, backToList 4 locales |
+| UI-1k-c | Nghiệm thu tổng thể, Quality Gates & Tài liệu | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit hiện tại | Đồng bộ README checklist 14 PASS / 1 GAP, 12 ảnh Electron thật 1280×800 & 1366×768 (Dark/Light), VPS thật NOT_RUN |
+
+
+
 
 ### Task theo dõi song song / sau demo
 
@@ -403,3 +427,18 @@ app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express
 - **Đối soát Credential & DB Schema**: Bản ghi `vps` id=2 hiện lưu `auth_type='password'`, trong khi runner chỉ hỗ trợ `auth_type='key'`; để chạy bằng key, cần đồng thời cấu hình bản ghi VPS `auth_type='key'`, đúng `username` và public key được cấp quyền trên VPS, rồi mới cung cấp private key qua `--ssh-key-file`; key file đơn lẻ không vượt qua `auth_type='password'`; tuân thủ nguyên tắc chỉ đọc: không sửa DB trực tiếp trong checkpoint này (đánh dấu `BLOCKED`).
 - **Trạng thái Hạng mục Hạ tầng**: Các mục kiểm tra nội bộ trên VPS (cấu hình 2 vCPU/4GB RAM, Docker Engine/Compose, dung lượng đĩa 40GB SSD, đồng bộ giờ NTP) bị chặn bởi kết nối mạng và host key, được ghi nhận chính xác trạng thái `NOT_RUN` (bảo lưu bằng chứng khảo sát lịch sử C00/C05). Trạng thái firewall probe bên ngoài ghi nhận `BLOCKED`.
 - **Cam kết Phiên khảo sát**: Không deploy container/app, không sửa đổi firewall, không chạy loadgen hay pilot 75 phút, không kết nối SSH, không sửa DB trực tiếp, không push/PR/merge; toàn bộ hạ tầng VPS và bài thử nghiệm pilot duy trì nghiêm ngặt **`NOT_RUN`**.
+
+### UI Redesign UI-0 đến UI-1k update - 08/10 Nghiệm thu hoàn tất (UI-1k-c)
+
+Đã hoàn thành toàn bộ chuỗi nhiệm vụ thiết kế lại giao diện App-Centric (UI-0 đến UI-1k) và nghiệm thu giao diện theo AC-1 đến AC-5:
+- **Biên bản nghiệm thu**: Lập và đồng bộ hồ sơ chi tiết tại [`docs/ui-redesign/ui-1k-acceptance.md`](../ui-redesign/ui-1k-acceptance.md) và checklist tại [`docs/ui-redesign/README.md`](../ui-redesign/README.md). Đạt **14 / 15** tiêu chí nghiệm thu (tỷ lệ 93.3%). 1 tiêu chí GAP duy nhất được giữ nguyên là AC-3.2 (Tab Cơ sở dữ liệu VPS hiển thị thông báo chưa hỗ trợ và backend chưa đăng ký handler IPC `db:*`).
+- **Nghiệm thu Runtime Electron thật**: Đã kiểm tra trực tiếp trên tiến trình Electron thật ở cả hai độ phân giải 1280×800 và 1366×768 (Dark và Light theme), tập trung kiểm chứng chi tiết Ứng dụng (3 tabs), chi tiết VPS (4 tabs), và hành vi mở wizard Deploy với preselect từ nút `+ Triển khai` trên sidebar. Đạt tiêu chí không tràn viền, không cuộn ngang ngoài ý muốn (`hasHorizontalScroll: false`). Bằng chứng 12 ảnh chụp và tệp kiểm chứng được lưu trữ tại [`docs/ui-redesign/screenshots/ui-1k/`](../ui-redesign/screenshots/ui-1k/).
+- **Hạ tầng VPS thật**: Đánh dấu nghiêm ngặt **`NOT_RUN`** (toàn bộ kiểm thử giao diện thực hiện cục bộ với IPC mock và SQLite test fixture, không kết nối SSH hay thay đổi hạ tầng VPS ngoài).
+- **Trạng thái Quality Gates**:
+  - Full app vitest: 68/68 files, 626/626 tests pass 100%.
+  - Pytest ML service: 19/19 tests pass 100%.
+  - Typecheck: Pass 0 lỗi trên Node, Web và Electron.
+  - Production build: Pass (`out/main`, `out/preload`, `out/renderer` đóng gói hoàn tất).
+  - Renderer ESLint: Sạch 100% (0 lỗi, 0 cảnh báo).
+  - Root ESLint: Ghi nhận trung thực GAP-3 (9 lỗi `no-empty` tại 2 file CLI backend kế thừa `deploy-cli.ts` và `headless-poller.ts`; tuân thủ nguyên tắc không sửa backend trong scope UI).
+- **Cam kết Phiên làm việc**: Không sửa backend/schema, không push/PR/merge; duy trì trạng thái `CHỜ REVIEW` cho toàn bộ nhánh `feat/deploy-reachability`.

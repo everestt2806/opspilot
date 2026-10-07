@@ -129,44 +129,44 @@ Các tính năng sau đây **không thuộc phạm vi UI-1**; app thật trong U
 
 ## 5. Tiêu chí Nghiệm thu UI-1 (UI-1 Acceptance Criteria)
 
-Bộ tiêu chí nghiệm thu UI-1 được định nghĩa tinh gọn, tập trung hoàn toàn vào shell, điều hướng, bố cục tab ngang và nhãn trạng thái trung thực dựa trên các kênh IPC hiện có:
+> **Kết quả nghiệm thu thực tế (UI-1k-c)**: Đạt **14 PASS / 1 GAP** (tỷ lệ 93.3%). Tiêu chí duy nhất chưa đạt là **AC-3.2** (GAP lỗi P2 do tab Cơ sở dữ liệu chưa có handler IPC backend). Toàn bộ chi tiết kiểm chứng và bằng chứng xem tại [ui-1k-acceptance.md](./ui-1k-acceptance.md).
 
 ### AC-1: Khung vỏ Desktop Shell & Titlebar
-* [ ] **AC-1.1 (Sidebar đơn nhất)**: Toàn bộ ứng dụng chỉ có **duy nhất một thanh Sidebar bên trái** (rộng cố định 230px). Tuyệt đối không xuất hiện bất kỳ sub-sidebar nào lồng bên trong trang Ứng dụng hay Máy chủ.
-* [ ] **AC-1.2 (Native Titlebar Overlay)**: Giữ nguyên cấu hình `titlebarOverlay: true` của Electron BrowserWindow. Không sao chép hay render nút cửa sổ bằng mã HTML/CSS. Thanh titlebar chỉ đóng vai trò drag-region, hiển thị brand logo và context breadcrumb ngắn gọn.
-* [ ] **AC-1.3 (Độ phân giải & Bố cục)**: Giao diện hiển thị sắc nét, không bị tràn viền hoặc xuất hiện thanh cuộn ngang ngoài ý muốn ở hai độ phân giải mục tiêu: `1280×800` và `1366×768`.
+* [x] **AC-1.1 (Sidebar đơn nhất)**: **[PASS]** Toàn bộ ứng dụng chỉ có **duy nhất một thanh Sidebar bên trái** (rộng cố định 230px). Tuyệt đối không xuất hiện bất kỳ sub-sidebar nào lồng bên trong trang Ứng dụng hay Máy chủ.
+* [x] **AC-1.2 (Native Titlebar Overlay)**: **[PASS]** Giữ nguyên cấu hình `titlebarOverlay: true` của Electron BrowserWindow. Không sao chép hay render nút cửa sổ bằng mã HTML/CSS. Thanh titlebar chỉ đóng vai trò drag-region, hiển thị brand logo và context breadcrumb ngắn gọn.
+* [x] **AC-1.3 (Độ phân giải & Bố cục)**: **[PASS]** Giao diện hiển thị sắc nét, không bị tràn viền hoặc xuất hiện thanh cuộn ngang ngoài ý muốn ở hai độ phân giải mục tiêu: `1280×800` và `1366×768`.
 
 ### AC-2: Hệ thống Điều hướng 5 mục & Nút Action Deploy
-* [ ] **AC-2.1 (5 mục điều hướng)**: Sidebar chứa đúng 5 mục: `Tổng quan`, `Ứng dụng`, `Máy chủ`, `Hoạt động`, `Cài đặt`. Thứ tự hiển thị đặt `Ứng dụng` lên vị trí ưu tiên cao hơn `Máy chủ`.
-* [ ] **AC-2.2 (Nút Action Deploy)**: Nút `Triển khai` (có icon `+` PlusOutlined, không lặp dấu cộng) là nút hành động nổi bật trên sidebar. Khi bấm, điều hướng sang màn `DeployPage` hiện có (gọi `setActivePage('deploy')`) và truyền preselect (`appId`, `vpsId`) nếu đang ở ngữ cảnh ứng dụng hoặc máy chủ; không tạo modal chạy deploy mới. Lối vào MigratePage nằm tại nút hành động trên trang Máy chủ.
-* [ ] **AC-2.3 (Loại bỏ dead menus)**: Không giữ lại bất kỳ menu nào chỉ hiển thị hộp thoại `alert()` hoặc trang trống (ví dụ: gộp chức năng Doctor vào trang chi tiết tương ứng thay vì để menu riêng lẻ).
+* [x] **AC-2.1 (5 mục điều hướng)**: **[PASS]** Sidebar chứa đúng 5 mục: `Tổng quan`, `Ứng dụng`, `Máy chủ`, `Hoạt động`, `Cài đặt`. Thứ tự hiển thị đặt `Ứng dụng` lên vị trí ưu tiên cao hơn `Máy chủ`.
+* [x] **AC-2.2 (Nút Action Deploy)**: **[PASS]** Nút `Triển khai` (có icon `+` PlusOutlined, không lặp dấu cộng) là nút hành động nổi bật trên sidebar. Khi bấm, điều hướng sang màn `DeployPage` hiện có (gọi `setActivePage('deploy')`) và truyền preselect (`appId`, `vpsId`) nếu đang ở ngữ cảnh ứng dụng hoặc máy chủ; không tạo modal chạy deploy mới. Lối vào MigratePage nằm tại nút hành động trên trang Máy chủ.
+* [x] **AC-2.3 (Loại bỏ dead menus)**: **[PASS]** Không giữ lại bất kỳ menu nào chỉ hiển thị hộp thoại `alert()` hoặc trang trống (ví dụ: gộp chức năng Doctor vào trang chi tiết tương ứng thay vì để menu riêng lẻ).
 
 ### AC-3: Bố cục Tab ngang tại các trang chi tiết (Chỉ làm tab dùng được bằng IPC hiện có)
-* [ ] **AC-3.1 (Chi tiết Ứng dụng - Đúng 3 tab)**: Trang Chi tiết Ứng dụng sử dụng hệ thống Tab ngang gồm đúng 3 tab được hỗ trợ bởi IPC hiện có:
+* [x] **AC-3.1 (Chi tiết Ứng dụng - Đúng 3 tab)**: **[PASS]** Trang Chi tiết Ứng dụng sử dụng hệ thống Tab ngang gồm đúng 3 tab được hỗ trợ bởi IPC hiện có:
   1. *Tổng quan*: Hiển thị thông tin cấu hình (`app:get`), trạng thái runtime (`app:runtime-inspect`), metrics (`monitor:samples`), cấu hình cổng và link VPS.
   2. *Lịch sử & Rollback*: Bảng deployment (`app:versions`) kèm nút Rollback gọi IPC `app:rollback` với hộp thoại xác nhận an toàn.
   3. *Bác sĩ & Exposure*: Chẩn đoán kết nối và kiểm tra domain (`doctor:diagnose`, `domain:check`).
-* [ ] **AC-3.2 (Chi tiết Máy chủ VPS - Đúng 4 tab)**: Trang Chi tiết VPS sử dụng hệ thống Tab ngang gồm đúng 4 tab được hỗ trợ bởi IPC hiện có:
+* [ ] **AC-3.2 (Chi tiết Máy chủ VPS - Đúng 4 tab)**: **[GAP - Lỗi P2]** Trang Chi tiết VPS sử dụng hệ thống Tab ngang gồm đúng 4 tab được hỗ trợ bởi IPC hiện có:
   1. *Tổng quan & Tài nguyên*: Thông số CPU, RAM, Disk từ IPC `vps:get-resources` và nút quét công cụ `vps:scan(vpsId)` (lưu ý: `vps:scan` không trả CPU/RAM).
   2. *Ứng dụng trên máy chủ*: Bảng các ứng dụng thuộc VPS này từ IPC `app:list(vpsId)` kèm liên kết điều hướng sang chi tiết app.
-  3. *Cơ sở dữ liệu*: Danh sách database từ `db:list-databases(vpsId)` (cần kiểm tra lại handler main trước khi gọi; không có `database:list` hay `database:types`).
+  3. *Cơ sở dữ liệu*: Danh sách database từ `db:list-databases(vpsId)` (cần kiểm tra lại handler main trước khi gọi; không có `database:list` hay `database:types`). *(Thực tế hiện tại: Tab 3 hiển thị thông báo chưa hỗ trợ và backend chưa đăng ký các handler IPC `db:*`)*.
   4. *Hoạt động*: Lịch sử deployment và sự kiện gần đây trên VPS từ DB SQLite.
-* [ ] **AC-3.3 (Loại bỏ triệt để Sub-sidebars)**: Xóa bỏ hoàn toàn `apps-sidebar` trong trang Ứng dụng, cũng như `VpsNavSidebar` và `VpsInfoSidebar` trong trang Chi tiết VPS.
-* [ ] **AC-3.4 (Backlog rõ ràng)**: Env editor, live logs, Docker storage, host-key verification và connection audit được giữ ở backlog backend; không yêu cầu tab hoạt động hoặc dữ liệu mẫu trong app thật của UI-1.
+* [x] **AC-3.3 (Loại bỏ triệt để Sub-sidebars)**: **[PASS]** Xóa bỏ hoàn toàn `apps-sidebar` trong trang Ứng dụng, cũng như `VpsNavSidebar` và `VpsInfoSidebar` trong trang Chi tiết VPS.
+* [x] **AC-3.4 (Backlog rõ ràng)**: **[PASS]** Env editor, live logs, Docker storage, host-key verification và connection audit được giữ ở backlog backend; không yêu cầu tab hoạt động hoặc dữ liệu mẫu trong app thật của UI-1.
 
 ### AC-4: Nhãn trạng thái trung thực (Honest Status Model)
-* [ ] **AC-4.1 (Minh bạch dữ liệu IPC & Phân biệt vps:scan vs vps:test-connection)**:
+* [x] **AC-4.1 (Minh bạch dữ liệu IPC & Phân biệt vps:scan vs vps:test-connection)**: **[PASS]**
   * Với VPS đã lưu, thao tác quét kiểm tra phải sử dụng đúng IPC `vps:scan(vpsId)`.
   * Kênh `vps:test-connection` chỉ dùng cho form thêm/sửa VPS có `VpsInput`.
-* [ ] **AC-4.2 (Nhãn thời gian last_seen_at)**:
+* [x] **AC-4.2 (Nhãn thời gian last_seen_at)**: **[PASS]**
   * Máy chủ có `last_seen_at` trong vòng 24 giờ hiển thị nhãn: **"Đã kiểm tra lúc..."**.
   * Máy chủ có `last_seen_at` quá 24 giờ hiển thị nhãn màu vàng: **"Chưa kiểm tra gần đây"** (kèm thời gian trôi qua).
   * Mốc 24 giờ chỉ là quy tắc hiển thị độ mới dữ liệu (freshness display rule), **không phải bằng chứng an toàn**.
-* [ ] **AC-4.3 (Không gọi "Đã xác minh" về host key)**:
+* [x] **AC-4.3 (Không gọi "Đã xác minh" về host key)**: **[PASS]**
   * Tuyệt đối không dùng cụm từ "Đã xác minh" (Verified) để mô tả tính bảo mật của host key khi hệ thống chưa có kênh tin cậy đối chiếu fingerprint.
   * Không coi kết quả từ `ssh-keyscan` là bằng chứng xác minh host.
   * Máy chủ lỗi SSH ping / timeout hiển thị nhãn màu đỏ **"Mất kết nối"**.
 
 ### AC-5: Tương tác Tìm kiếm & Bộ lọc kết hợp
-* [ ] **AC-5.1 (Combined Filter)**: Trên trang danh sách Ứng dụng, ô tìm kiếm văn bản và dropdown lọc theo VPS hoạt động kết hợp đồng thời (AND logic), cập nhật danh sách và bộ đếm kết quả tức thì.
-* [ ] **AC-5.2 (Nội dung chi tiết đồng bộ đối tượng)**: Khi click vào bất kỳ ứng dụng hoặc máy chủ nào, trang chi tiết phải hiển thị đúng toàn bộ thông số, cấu hình cổng và danh sách triển khai của đối tượng đó.
+* [x] **AC-5.1 (Combined Filter)**: **[PASS]** Trên trang danh sách Ứng dụng, ô tìm kiếm văn bản và dropdown lọc theo VPS hoạt động kết hợp đồng thời (AND logic), cập nhật danh sách và bộ đếm kết quả tức thì.
+* [x] **AC-5.2 (Nội dung chi tiết đồng bộ đối tượng)**: **[PASS]** Khi click vào bất kỳ ứng dụng hoặc máy chủ nào, trang chi tiết phải hiển thị đúng toàn bộ thông số, cấu hình cổng và danh sách triển khai của đối tượng đó.
