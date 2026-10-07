@@ -445,7 +445,7 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
       locale: 'vi',
       activePage: 'apps',
       selectedAppId: 42,
-      deployPreselect: null
+      deployPreselect: { appId: 77, vpsId: 3 }
     })
 
     render(<App />)
@@ -501,7 +501,7 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
       locale: 'vi',
       activePage: 'apps',
       selectedAppId: 42,
-      deployPreselect: null
+      deployPreselect: { appId: 77, vpsId: 3 }
     })
 
     render(<App />)
@@ -585,7 +585,8 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
 
     // Lần 1 bị hủy, chưa chuyển trang
     expect(useUiState.getState().activePage).toBe('apps')
-    expect(setDeployPreselectSpy).not.toHaveBeenCalled()
+    expect(setDeployPreselectSpy).not.toHaveBeenCalledWith({ appId: 42, vpsId: 8 })
+    expect(useUiState.getState().deployPreselect).toBeNull()
 
     // Giờ lần 2 trả về kết quả
     await act(async () => {
@@ -597,7 +598,7 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
     expect(setDeployPreselectSpy).toHaveBeenCalledWith({ appId: 42, vpsId: 8 })
   })
 
-  it('phan hoi sai ID tu app:get: giu o trang hien tai, bao loi ro rang, khong mo form tao app moi', async () => {
+  it('bat dau voi deployPreselect khac app dang xem va nhan phan hoi sai ID tu app:get: xoa preselect cu ngay lap tuc, nguoi dung van o trang hien tai, khong tu mo Deploy', async () => {
     const invokeMock = vi.fn(async (channel: string, ...args: unknown[]) => {
       if (channel === 'app:get' && args[0] === 42) {
         return { ok: true, data: { id: 999, vps_id: 8, name: 'other-app' } }
@@ -613,7 +614,7 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
       locale: 'vi',
       activePage: 'apps',
       selectedAppId: 42,
-      deployPreselect: null
+      deployPreselect: { appId: 99, vpsId: 7 }
     })
 
     render(<App />)
@@ -626,6 +627,7 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
     // Người dùng được giữ nguyên ở trang chi tiết app 42
     expect(useUiState.getState().activePage).toBe('apps')
     expect(useUiState.getState().selectedAppId).toBe(42)
+    // Giá trị deployPreselect cũ đã bị xóa hoàn toàn khỏi store và không tự mở Deploy
     expect(useUiState.getState().deployPreselect).toBeNull()
 
     // Báo lỗi rõ ràng trên UI
@@ -634,7 +636,7 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
     ).toBeTruthy()
   })
 
-  it('loi IPC khi tai app:get: giu o trang hien tai, bao loi ro rang, khong mo form tao app moi', async () => {
+  it('bat dau voi deployPreselect khac app dang xem va gap loi IPC khi tai app:get: xoa preselect cu ngay lap tuc, nguoi dung van o trang hien tai, khong tu mo Deploy', async () => {
     const invokeMock = vi.fn(async (channel: string) => {
       if (channel === 'app:get') {
         throw new Error('IPC network error')
@@ -650,7 +652,7 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
       locale: 'vi',
       activePage: 'apps',
       selectedAppId: 42,
-      deployPreselect: null
+      deployPreselect: { appId: 99, vpsId: 7 }
     })
 
     render(<App />)
@@ -663,12 +665,57 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
     // Giữ nguyên ở trang chi tiết hiện tại, không mở form tạo mới
     expect(useUiState.getState().activePage).toBe('apps')
     expect(useUiState.getState().selectedAppId).toBe(42)
+    // Giá trị deployPreselect cũ đã bị xóa hoàn toàn khỏi store
     expect(useUiState.getState().deployPreselect).toBeNull()
 
     // Báo lỗi rõ ràng
     expect(
       await screen.findByText('Lỗi kết nối khi tải thông tin ứng dụng: IPC network error')
     ).toBeTruthy()
+  })
+
+  it('xoa deployPreselect cu ngay khi bat dau y dinh truoc khi cho app:get hoan tat', async () => {
+    let resolvePending: (val: unknown) => void = () => {}
+    const pendingPromise = new Promise((resolve) => {
+      resolvePending = resolve
+    })
+
+    const invokeMock = vi.fn(async (channel: string, ...args: unknown[]) => {
+      if (channel === 'app:get' && args[0] === 42) {
+        return pendingPromise
+      }
+      if (channel === 'app:list') return { ok: true, data: fixtureApps }
+      if (channel === 'vps:list') return { ok: true, data: fixtureVpsList }
+      if (channel === 'app:versions') return { ok: true, data: fixtureDeployments }
+      return { ok: true, data: undefined }
+    })
+    vi.stubGlobal('api', { invoke: invokeMock, on: vi.fn(() => () => {}) })
+
+    useUiState.setState({
+      locale: 'vi',
+      activePage: 'apps',
+      selectedAppId: 42,
+      deployPreselect: { appId: 88, vpsId: 5 }
+    })
+
+    render(<App />)
+    expect(await screen.findByRole('heading', { level: 3, name: 'web-prod' })).toBeTruthy()
+
+    // Bấm nút Triển khai
+    fireEvent.click(screen.getByRole('button', { name: 'Triển khai' }))
+
+    // Ngay lập tức, trước khi app:get phản hồi, preselect cũ đã bị xóa
+    expect(useUiState.getState().deployPreselect).toBeNull()
+    expect(useUiState.getState().activePage).toBe('apps')
+
+    // Trả về lỗi IPC
+    await act(async () => {
+      resolvePending({ ok: false, error: 'Database timeout' })
+    })
+
+    // Người dùng vẫn ở trang Apps và store không có preselect cũ
+    expect(useUiState.getState().activePage).toBe('apps')
+    expect(useUiState.getState().deployPreselect).toBeNull()
   })
 
   it('khong co vps_id hop le trong app:get: giu o trang hien tai, bao loi ro rang, khong mo form tao app moi', async () => {

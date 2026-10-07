@@ -114,6 +114,8 @@ function App(): React.JSX.Element {
   const handleDeployClick = async (): Promise<void> => {
     // Invalidate any prior deploy attempt immediately upon every new click
     const requestId = ++deployRequestIdRef.current
+    // Xóa deployPreselect cũ ngay khi bắt đầu ý định mới, trước khi chờ app:get
+    useUiState.getState().setDeployPreselect(null)
 
     const rawPage = useUiState.getState().activePage
     const currentPage = resolveActivePage(rawPage)
