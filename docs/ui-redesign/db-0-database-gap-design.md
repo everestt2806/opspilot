@@ -1,28 +1,28 @@
-﻿# Thiáº¿t Káº¿ Kiáº¿n TrÃºc & Káº¿ Hoáº¡ch Xá»­ LÃ½ GAP AC-3.2: Quáº£n Trá»‹ PostgreSQL TrÃªn VPS (Checkpoint DB-0)
+# Thiết Kế Kiến Trúc & Kế Hoạch Xử Lý GAP AC-3.2: Quản Trị PostgreSQL Trên VPS (Checkpoint DB-0)
 
-> **Má»¥c tiÃªu tÃ i liá»‡u**: BÃ¡o cÃ¡o audit chuyÃªn sÃ¢u vÃ  Ä‘á» xuáº¥t giáº£i phÃ¡p thiáº¿t káº¿ kiáº¿n trÃºc toÃ n diá»‡n cho khiáº¿m khuyáº¿t duy nháº¥t cÃ²n láº¡i sau Ä‘á»£t tÃ¡i thiáº¿t káº¿ UI (**GAP AC-3.2**: Tab CÆ¡ sá»Ÿ dá»¯ liá»‡u trÃªn trang Chi tiáº¿t VPS chÆ°a há»— trá»£ káº¿t ná»‘i IPC backend).
-> **Pháº¡m vi Checkpoint DB-0**: Thuáº§n tÃºy audit mÃ£ nguá»“n vÃ  Ä‘á» xuáº¥t thiáº¿t káº¿ kiáº¿n trÃºc. **KhÃ´ng sá»­a Ä‘á»•i runtime, khÃ´ng thay Ä‘á»•i IPC contract vÃ  khÃ´ng tá»± Ã½ Ä‘Ã¡nh dáº¥u AC-3.2 PASS**.
+> **Mục tiêu tài liệu**: Báo cáo audit chuyên sâu và đề xuất giải pháp thiết kế kiến trúc toàn diện cho khiếm khuyết duy nhất còn lại sau đợt tái thiết kế UI (**GAP AC-3.2**: Tab Cơ sở dữ liệu trên trang Chi tiết VPS chưa hỗ trợ kết nối IPC backend).
+> **Phạm vi Checkpoint DB-0**: Thuần túy audit mã nguồn và đề xuất thiết kế kiến trúc. **Chưa viết mã runtime, chưa thay đổi IPC contract và không tự ý đánh dấu AC-3.2 PASS**.
 
 ---
 
-## 1. Hiá»‡n Tráº¡ng Audit & PhÃ¢n TÃ­ch NguyÃªn NhÃ¢n Gá»‘c Rá»…
+## 1. Hiện Trạng Audit & Phân Tích Nguyên Nhân Gốc Rễ
 
-### 1.1. Äá»‘i chiáº¿u cÃ¡c thÃ nh pháº§n mÃ£ nguá»“n hiá»‡n há»¯u
+### 1.1. Đối chiếu các thành phần mã nguồn hiện hữu
 
-Qua quÃ¡ trÃ¬nh Ä‘á»‘i chiáº¿u chÃ©o giá»¯a cÃ¡c táº§ng cá»§a á»©ng dá»¥ng:
+Qua quá trình đối chiếu chéo giữa các tầng của ứng dụng:
 
-1. **Giao diá»‡n ngÆ°á»i dÃ¹ng (`app/src/renderer/src/components/VpsDatabaseTab.tsx`)**:
-   - ÄÃ£ Ä‘Æ°á»£c xÃ¢y dá»±ng giao diá»‡n hoÃ n chá»‰nh vá»›i 2 báº£ng dá»¯ liá»‡u chÃ­nh (*Database Users* vÃ  *Databases*), modal táº¡o ngÆ°á»i dÃ¹ng, modal táº¡o database, trÃ¬nh thiáº¿t káº¿ schema Ä‘á»“ há»a (`DbSchemaDesigner`), tÃ­nh nÄƒng import/export file CSV/JSON vÃ  xem trÆ°á»›c cÃ¢u lá»‡nh SQL DDL.
-   - Nháº­n thuá»™c tÃ­nh `supported?: boolean` vá»›i giÃ¡ trá»‹ máº·c Ä‘á»‹nh lÃ  `false` (`supported = false`).
-   - Khi `!supported`, component hiá»ƒn thá»‹ mÃ n hÃ¬nh trá»‘ng (`Empty`) vá»›i thÃ´ng bÃ¡o: *"ChÆ°a há»— trá»£ cÆ¡ sá»Ÿ dá»¯ liá»‡u - TÃ­nh nÄƒng quáº£n lÃ½ cÆ¡ sá»Ÿ dá»¯ liá»‡u trÃªn mÃ¡y chá»§ hiá»‡n chÆ°a kháº£ dá»¥ng trong OpsPilot"*.
-   - Khá»‘i gá»i IPC ná»™i bá»™ `callDb()` Ä‘Ã£ Ä‘Æ°á»£c bá»c an toÃ n; náº¿u backend chÆ°a xá»­ lÃ½ kÃªnh, UI sáº½ nháº­n lá»—i `UNKNOWN` trung thá»±c thay vÃ¬ giáº£ láº­p thÃ nh cÃ´ng.
+1. **Giao diện người dùng (`app/src/renderer/src/components/VpsDatabaseTab.tsx`)**:
+   - Đã được xây dựng giao diện hoàn chỉnh với 2 bảng dữ liệu chính (*Database Users* và *Databases*), modal tạo người dùng, modal tạo database, trình thiết kế schema đồ họa (`DbSchemaDesigner`), tính năng import/export file CSV/JSON và xem trước câu lệnh SQL DDL.
+   - Nhận thuộc tính `supported?: boolean` với giá trị mặc định là `false` (`supported = false`).
+   - Khi `!supported`, component hiển thị màn hình trống (`Empty`) với thông báo: *"Chưa hỗ trợ cơ sở dữ liệu - Tính năng quản lý cơ sở dữ liệu trên máy chủ hiện chưa khả dụng trong OpsPilot"*.
+   - Khối gọi IPC nội bộ `callDb()` đã được bọc an toàn; nếu backend chưa xử lý kênh, UI sẽ nhận lỗi `UNKNOWN` trung thực thay vì giả lập thành công.
 
-2. **Khung vá» Chi tiáº¿t VPS (`app/src/renderer/src/components/VpsDetail.tsx`)**:
-   - Táº¡i Tab 3 (`key: 'database'`), component render `<VpsDatabaseTab vpsId={vps.id} />` nhÆ°ng **khÃ´ng truyá»n thuá»™c tÃ­nh `supported`**, khiáº¿n `supported` luÃ´n nháº­n giÃ¡ trá»‹ máº·c Ä‘á»‹nh lÃ  `false`.
+2. **Khung vỏ Chi tiết VPS (`app/src/renderer/src/components/VpsDetail.tsx`)**:
+   - Tại Tab 3 (`key: 'database'`), component render `<VpsDatabaseTab vpsId={vps.id} />` nhưng **không truyền thuộc tính `supported`**, khiến `supported` luôn nhận giá trị mặc định là `false`.
 
-3. **Há»£p Ä‘á»“ng IPC (`app/src/shared/ipc.ts`)**:
-   - ÄÃ£ khai bÃ¡o Ä‘áº§y Ä‘á»§ cÃ¡c kiá»ƒu dá»¯ liá»‡u DTO (`DbDatabase`, `DbUser`, `DbUserInput`, `DbSchemaTable`, `DbSchemaColumn`, `DbSchemaForeignKey`, `DbImportInput`, `DbExportFile`, `DbQueryResult`).
-   - ÄÃ£ Ä‘á»‹nh nghÄ©a 9 kÃªnh invoke trong `IpcInvokeMap`:
+3. **Hợp đồng IPC (`app/src/shared/ipc.ts`)**:
+   - Đã khai báo các kiểu dữ liệu DTO (`DbDatabase`, `DbUser`, `DbUserInput`, `DbSchemaTable`, `DbSchemaColumn`, `DbSchemaForeignKey`, `DbImportInput`, `DbExportFile`, `DbQueryResult`).
+   - Đã định nghĩa 9 kênh invoke trong `IpcInvokeMap`:
      - `db:list-databases`: `(vpsId: number) => IpcResult<DbDatabase[]>`
      - `db:create-database`: `(vpsId: number, name: string) => IpcResult<DbDatabase>`
      - `db:list-users`: `(vpsId: number) => IpcResult<DbUser[]>`
@@ -32,260 +32,327 @@ Qua quÃ¡ trÃ¬nh Ä‘á»‘i chiáº¿u chÃ©o giá»¯a cÃ¡c táº§ng 
      - `db:import-data`: `(vpsId: number, database: string, input: DbImportInput) => IpcResult<{ imported_tables: number; imported_rows: number }>`
      - `db:export-data`: `(vpsId: number, database: string, format: 'json' | 'csv' | 'sql') => IpcResult<DbExportFile>`
      - `db:query`: `(vpsId: number, database: string, sql: string) => IpcResult<DbQueryResult>`
-   - *Ghi chÃº trong mÃ£ nguá»“n*: KÃªnh Ä‘Æ°á»£c thiáº¿t káº¿ tá»« giai Ä‘oáº¡n TK-B9 vá»›i giáº£ Ä‘á»‹nh cháº¡y lá»‡nh dáº¡ng: `docker compose exec -T db psql -U opspilot -At -c "<sql>"`.
+   - *Ghi chú trong mã nguồn*: Kênh được phác thảo từ giai đoạn TK-B9 với giả định chạy lệnh dạng: `docker compose exec -T db psql -U opspilot -At -c "<sql>"`.
 
-4. **Tiáº¿n trÃ¬nh chÃ­nh Main (`app/src/main/ipc.ts`)**:
-   - Trong hÃ m `registerIpcHandlers()`, **chÆ°a Ä‘Äƒng kÃ½ báº¥t ká»³ handler nÃ o** cho cÃ¡c kÃªnh cÃ³ tiá»n tá»‘ `db:*`.
+4. **Đối chiếu mã lỗi `IpcError.code` hiện hành**:
+   - Tập hợp mã lỗi hiện hành trong `app/src/shared/ipc.ts` bao gồm:
+     `'SSH_AUTH_FAILED' | 'SSH_TIMEOUT' | 'SSH_HOST_UNREACHABLE' | 'DOCKER_MISSING' | 'DOCKER_BUILD_FAILED' | 'PRECHECK_FAILED' | 'HEALTHCHECK_FAILED' | 'DETECT_FAILED' | 'PORT_EXHAUSTED' | 'ML_SERVICE_DOWN' | 'DB_ERROR' | 'DB_ADMIN_FAILED' | 'VALIDATION' | 'UNKNOWN'`
+   - Bất kỳ mã lỗi mới nào nằm ngoài tập hợp này (ví dụ: `DB_NOT_READY`, `CONTAINER_STOPPED`, `SSH_CONNECTION_FAILED`) đều là **thay đổi IPC contract cần được phê duyệt** trước khi áp dụng.
+
+5. **Tiến trình chính Main (`app/src/main/ipc.ts`)**:
+   - Trong hàm `registerIpcHandlers()`, **chưa đăng ký bất kỳ handler nào** cho các kênh có tiền tố `db:*`.
 
 ---
 
-## 2. Kiáº¿n TrÃºc Thá»±c Táº¿: PostgreSQL TrÃªn VPS Trong OpsPilot
+## 2. Kiến Trúc Thực Tế: PostgreSQL Trên VPS Trong OpsPilot
 
-### 2.1. Cáº¥u trÃºc triá»ƒn khai: Isolated Per-App Container
+### 2.1. Cấu trúc triển khai: Isolated Per-App Container
 
-KhÃ¡c vá»›i giáº£ Ä‘á»‹nh ban Ä‘áº§u vá» má»™t container PostgreSQL dÃ¹ng chung toÃ n VPS (`docker compose exec -T db`), kiáº¿n trÃºc triá»ƒn khai thá»±c táº¿ cá»§a OpsPilot (Ä‘Æ°á»£c hiá»‡n thá»±c hÃ³a trong [`templates.ts`](../../app/src/main/deploy/templates.ts) vÃ  [`pipeline.ts`](../../app/src/main/deploy/pipeline.ts)) hoáº¡t Ä‘á»™ng theo nguyÃªn lÃ½ **cÃ´ láº­p hoÃ n toÃ n theo tá»«ng á»©ng dá»¥ng (Per-App Container)**:
+Khác với giả định ban đầu về một container PostgreSQL dùng chung toàn VPS (`docker compose exec -T db`), kiến trúc triển khai thực tế của OpsPilot (được hiện thực hóa trong [`templates.ts`](../../app/src/main/deploy/templates.ts) và [`pipeline.ts`](../../app/src/main/deploy/pipeline.ts)) hoạt động theo nguyên lý **cô lập hoàn toàn theo từng ứng dụng (Per-App Container)**:
 
-- Khi má»™t á»©ng dá»¥ng Ä‘Æ°á»£c triá»ƒn khai vá»›i `needs_db === 1`:
-  - MÃ£ nguá»“n vÃ  cáº¥u hÃ¬nh Ä‘Æ°á»£c Ä‘áº·t táº¡i thÆ° má»¥c riÃªng biá»‡t trÃªn VPS: `/opt/opspilot/${APP_NAME}/`.
-  - Tá»‡p `docker-compose.yml` Ä‘á»‹nh nghÄ©a má»™t service `postgres` riÃªng biá»‡t:
-    - **TÃªn container**: `${APP_NAME}-db` (vÃ­ dá»¥: `express-api-db`, `next-blog-db`).
+- Khi một ứng dụng được triển khai với `needs_db === 1`:
+  - Mã nguồn và cấu hình được đặt tại thư mục riêng biệt trên VPS: `/opt/opspilot/${APP_NAME}/`.
+  - Tệp `docker-compose.yml` định nghĩa một service `postgres` riêng biệt:
+    - **Tên container**: `${APP_NAME}-db` (ví dụ: `express-api-db`, `next-blog-db`).
     - **Image**: `postgres:16-alpine`.
-    - **LÆ°u trá»¯ dá»¯ liá»‡u**: Volume cá»¥c bá»™ `./data/pg:/var/lib/postgresql/data` (náº±m trong thÆ° má»¥c cá»§a chÃ­nh app Ä‘Ã³).
-    - **Giá»›i háº¡n tÃ i nguyÃªn**: `mem_limit: 256m`.
-    - **Máº¡ng ná»™i bá»™**: Port 5432 **khÃ´ng má»Ÿ ra ngoÃ i host** (khÃ´ng cÃ³ `ports:` host mapping), chá»‰ giao tiáº¿p ná»™i bá»™ trong máº¡ng Docker cá»§a á»©ng dá»¥ng.
-    - **ThÃ´ng tin Ä‘Äƒng nháº­p máº·c Ä‘á»‹nh**: User `opspilot`, Database `opspilot`, máº­t kháº©u sinh ngáº«u nhiÃªn lÆ°u trong `/opt/opspilot/${APP_NAME}/.env` (`POSTGRES_PASSWORD`).
+    - **Lưu trữ dữ liệu**: Volume cục bộ `./data/pg:/var/lib/postgresql/data` (nằm trong thư mục của chính app đó).
+    - **Giới hạn tài nguyên**: `mem_limit: 256m`.
+    - **Mạng nội bộ**: Port 5432 **không mở ra ngoài host** (không có `ports:` host mapping), chỉ giao tiếp nội bộ trong mạng Docker của ứng dụng.
+    - **Thông tin đăng nhập mặc định**: User `opspilot`, Database `opspilot`, mật khẩu sinh ngẫu nhiên lưu trong `/opt/opspilot/${APP_NAME}/.env` (`POSTGRES_PASSWORD`).
 
-### 2.2. Váº¥n Ä‘á» cá»‘t lÃµi khi má»™t VPS cÃ³ nhiá»u á»©ng dá»¥ng (Multi-app VPS)
+### 2.2. Vấn đề cốt lõi khi một VPS có nhiều ứng dụng (Multi-app VPS)
 
-Khi trÃªn cÃ¹ng má»™t mÃ¡y chá»§ VPS cÃ³ nhiá»u á»©ng dá»¥ng cÃ¹ng sá»­ dá»¥ng cÆ¡ sá»Ÿ dá»¯ liá»‡u (vÃ­ dá»¥: cáº£ `express-api` vÃ  `next-blog` Ä‘á»u cÃ³ `needs_db = 1`):
-1. **Xung Ä‘á»™t Ä‘á»‹nh danh (Name Collision)**: Cáº£ 2 container Ä‘á»™c láº­p Ä‘á»u máº·c Ä‘á»‹nh khá»Ÿi táº¡o má»™t database cÃ³ tÃªn lÃ  `opspilot`. Náº¿u chá»‰ tráº£ vá» danh sÃ¡ch database pháº³ng dáº¡ng `[{ name: 'opspilot' }, { name: 'opspilot' }]`, ngÆ°á»i dÃ¹ng khÃ´ng thá»ƒ phÃ¢n biá»‡t Ä‘Æ°á»£c database nÃ o thuá»™c vá» á»©ng dá»¥ng nÃ o.
-2. **Máº¥t Ä‘á»‹nh tuyáº¿n trong thao tÃ¡c chi tiáº¿t**: Khi ngÆ°á»i dÃ¹ng báº¥m vÃ o dÃ²ng database `opspilot` Ä‘á»ƒ xem danh sÃ¡ch báº£ng (`db:list-tables(vpsId, 'opspilot')`) hoáº·c lÆ°u schema (`db:save-schema(vpsId, 'opspilot', ddl)`), backend khÃ´ng thá»ƒ biáº¿t cáº§n thá»±c thi lá»‡nh `psql` vÃ o container nÃ o (`express-api-db` hay `next-blog-db`).
-3. **CÃ¡c á»©ng dá»¥ng khÃ´ng cáº§n DB**: CÃ¡c á»©ng dá»¥ng nhÆ° `static-spa` hoáº·c `nextjs` khÃ´ng báº­t `needs_db` sáº½ khÃ´ng cÃ³ container database nÃ o cháº¡y kÃ¨m.
+Khi trên cùng một máy chủ VPS có nhiều ứng dụng cùng sử dụng cơ sở dữ liệu (ví dụ: cả `express-api` và `next-blog` đều có `needs_db = 1`):
+1. **Xung đột định danh (Name Collision)**: Cả 2 container độc lập đều mặc định khởi tạo một database có tên là `opspilot`. Nếu chỉ trả về danh sách database phẳng dạng `[{ name: 'opspilot' }, { name: 'opspilot' }]`, người dùng không thể phân biệt được database nào thuộc về ứng dụng nào.
+2. **Nguy cơ sai mục tiêu khi tự suy đoán app**: Nếu hệ thống tự động chọn app đầu tiên hoặc đoán app khi thiếu thông tin, lệnh DDL hoặc truy vấn sẽ bị gửi nhầm sang container của ứng dụng khác, dẫn đến nguy cơ sai lệch dữ liệu nghiêm trọng.
+3. **Các ứng dụng không cần DB**: Các ứng dụng như `static-spa` hoặc `nextjs` không bật `needs_db` sẽ không có container database nào chạy kèm.
 
 ---
 
-## 3. Giáº£i PhÃ¡p Äá»‹nh Danh Database Gáº¯n Vá»›i App & Deployment
+## 3. Định Danh Database Gắn Với App & Tách Biệt Trạng Thái Instance
 
-Äá»ƒ giáº£i quyáº¿t triá»‡t Ä‘á»ƒ bÃ i toÃ¡n Ä‘a á»©ng dá»¥ng mÃ  váº«n giá»¯ nguyÃªn triáº¿t lÃ½ **App-Centric** cá»§a OpsPilot, thá»±c thá»ƒ cÆ¡ sá»Ÿ dá»¯ liá»‡u hiá»ƒn thá»‹ trÃªn VPS pháº£i Ä‘Æ°á»£c gáº¯n cháº·t vá»›i á»©ng dá»¥ng sá»Ÿ há»¯u:
+### 3.1. Bắt buộc định danh App tường minh (Không tự suy đoán, không fallback)
 
-### 3.1. MÃ´ hÃ¬nh Ä‘á»‹nh danh thá»±c thá»ƒ (Database Entity Identity)
+- **Quy tắc bất biến**: Mọi thao tác nhắm vào một database cụ thể (như `list-tables`, `save-schema`, `query`, `create-database`, `create-user`) **bắt buộc phải truyền định danh ứng dụng (`app_id`) rõ ràng**.
+- **Loại bỏ hoàn toàn cơ chế tự suy đoán**: Tuyệt đối không cho phép `app_id` tùy chọn rồi tự rơi về app đầu tiên trên VPS.
+- **Xác thực nghiêm ngặt (Fail-closed Validation)**:
+  - Khi nhận yêu cầu thao tác database, backend phải kiểm tra:
+    1. Tham số `app_id` có tồn tại và hợp lệ không.
+    2. Bản ghi `app` tương ứng có tồn tại trong SQLite không.
+    3. Ứng dụng đó có thuộc đúng máy chủ `vps_id` được chỉ định không (`app.vps_id === vpsId`).
+  - Nếu thiếu `app_id`, không tìm thấy app, hoặc app không thuộc VPS, backend lập tức trả về lỗi `IpcError` với mã hiện hành `'VALIDATION'`, tuyệt đối không thực thi lệnh SSH.
 
-Má»—i cÆ¡ sá»Ÿ dá»¯ liá»‡u trÃªn VPS Ä‘Æ°á»£c Ä‘á»‹nh danh duy nháº¥t bá»Ÿi bá»™ ba:
-$$\text{DatabaseIdentity} = (\text{vps\_id}, \text{app\_id}, \text{db\_name})$$
+### 3.2. Tách bạch trạng thái Instance khỏi Metadata Database
 
-Hoáº·c Ä‘á»‹nh danh tá»•ng há»£p (Composite Key):
-$$\text{composite\_id} = \text{"\{app\_name\}:\{db\_name\}"}$$
+Khi container database của một ứng dụng bị dừng (`stopped`) hoặc bị lỗi (`unhealthy`), tiến trình `psql` bên trong container không thể thực thi. Tại thời điểm này, các thông số kỹ thuật như `oid`, danh sách tên database thực tế và `size_bytes` là **hoàn toàn chưa biết (unknown)**.
 
-### 3.2. Má»Ÿ rá»™ng kiá»ƒu dá»¯ liá»‡u DTO `DbDatabase`
-
-Bá»• sung ngá»¯ cáº£nh á»©ng dá»¥ng sá»Ÿ há»¯u vÃ o `DbDatabase` mÃ  khÃ´ng phÃ¡ vá»¡ tÃ­nh tÆ°Æ¡ng thÃ­ch ngÆ°á»£c cá»§a cÃ¡c trÆ°á»ng hiá»‡n há»¯u:
+- **Nguyên tắc dữ liệu trung thực**:
+  - **Tuyệt đối không tạo bản ghi `DbDatabase` giả** với OID bằng 0 hay dung lượng 0 cho các container đã dừng. Việc tự bịa đặt bản ghi database khi chưa truy vấn được là không trung thực với trạng thái thực tế của VPS.
+  - Tách bạch cấu trúc dữ liệu thành 2 tầng rõ rệt:
 
 ```typescript
-export interface DbDatabase {
-  /** OID cá»§a database trong PostgreSQL */
-  oid: number;
-  /** TÃªn database trong PostgreSQL (vÃ­ dá»¥: 'opspilot', 'blog_prod') */
-  name: string;
-  /** Dung lÆ°á»£ng theo bytes */
-  size_bytes: number;
-  /** Sá»‘ lÆ°á»£ng báº£ng trong schema public */
-  table_count: number;
-
-  /* â”€â”€ CÃ¡c trÆ°á»ng bá»• sung phá»¥c vá»¥ phÃ¢n Ä‘á»‹nh á»©ng dá»¥ng (Checkpoint DB-1) â”€â”€ */
-  /** ID cá»§a app sá»Ÿ há»¯u container database nÃ y */
+/** Trạng thái instance/container cơ sở dữ liệu cấp ứng dụng */
+export interface AppDbInstance {
   app_id: number;
-  /** TÃªn app sá»Ÿ há»¯u (vÃ­ dá»¥: 'express-api') */
   app_name: string;
-  /** TÃªn container Docker Ä‘ang cháº¡y (vÃ­ dá»¥: 'express-api-db') */
   container_name: string;
-  /** Tráº¡ng thÃ¡i container: 'running' | 'stopped' | 'unhealthy' */
-  status: 'running' | 'stopped' | 'unhealthy';
+  /** Trạng thái thực tế kiểm tra qua Docker daemon */
+  container_status: 'running' | 'stopped' | 'missing' | 'unhealthy';
+  /** Lỗi đọc hoặc lỗi trạng thái riêng của instance này (nếu có) */
+  error_message?: string;
+}
+
+/** Metadata cơ sở dữ liệu thực tế — CHỈ tạo khi đã truy vấn thành công từ container running */
+export interface DbDatabase {
+  oid: number;
+  name: string;
+  size_bytes: number;
+  /** Số lượng bảng: có thể null (chưa xác định ở tầng tổng quan) */
+  table_count: number | null;
+  /** Gắn chặt với app sở hữu */
+  app_id: number;
+  app_name: string;
+  container_name: string;
 }
 ```
 
-### 3.3. Tráº£i nghiá»‡m ngÆ°á»i dÃ¹ng trÃªn `VpsDatabaseTab`
-
-1. **Báº£ng CÆ¡ sá»Ÿ dá»¯ liá»‡u (Databases Table)**:
-   - Bá»• sung cá»™t **á»¨ng dá»¥ng liÃªn káº¿t (`app_name`)**: Hiá»ƒn thá»‹ tháº» tag gáº¯n tÃªn á»©ng dá»¥ng (kÃ¨m liÃªn káº¿t nhanh sang chi tiáº¿t á»©ng dá»¥ng náº¿u cáº§n).
-   - Bá»• sung cá»™t **Tráº¡ng thÃ¡i container**: Tag mÃ u xanh (`running`) hoáº·c vÃ ng/Ä‘á» (`stopped`).
-   - Cung cáº¥p **Dropdown lá»c theo á»¨ng dá»¥ng (App Filter)** phÃ­a trÃªn báº£ng: Cho phÃ©p lá»c xem database cá»§a má»™t á»©ng dá»¥ng cá»¥ thá»ƒ hoáº·c hiá»ƒn thá»‹ toÃ n bá»™ mÃ¡y chá»§ (`Táº¥t cáº£ á»©ng dá»¥ng`).
-2. **KhÃ³a Ä‘á»‹nh danh báº£ng Ant Design**:
-   - Sá»­ dá»¥ng `rowKey={(row) => `${row.app_id}-${row.name}`}` thay vÃ¬ chá»‰ dÃ¹ng `rowKey="name"` hoáº·c `rowKey="oid"`, triá»‡t tiÃªu hoÃ n toÃ n lá»—i trÃ¹ng key trong React DOM.
-3. **Má»Ÿ chi tiáº¿t Database & Schema Designer**:
-   - State má»Ÿ database lÆ°u cáº£ `appId`: `openDbFor: { vpsId: number; appId: number; appName: string; name: string }`.
+- **Biểu diễn trên giao diện người dùng**:
+  - Bảng cơ sở dữ liệu chỉ liệt kê các database hợp lệ đã đọc được từ các container đang chạy.
+  - Các ứng dụng có container bị dừng hoặc lỗi sẽ được hiển thị qua danh sách trạng thái instance hoặc khối cảnh báo riêng (`Alert`: *"Ứng dụng `app-name` có container `app-name-db` đang dừng - Chưa thể đọc metadata cơ sở dữ liệu"*).
 
 ---
 
-## 4. Luá»“ng Dá»¯ Liá»‡u Äá» Xuáº¥t (Proposed Data Flow)
+## 4. Luồng Dữ Liệu Đề Xuất & Xử Lý SQL Table Count
 
-### 4.1. SÆ¡ Ä‘á»“ tuáº§n tá»±: Liá»‡t kÃª Database trÃªn VPS
+### 4.1. Khắc phục lỗi tính `table_count` trong PostgreSQL
+
+- **Bản chất kỹ thuật của PostgreSQL**:
+  - Bảng hệ thống `information_schema.tables` và `pg_tables` chỉ chứa metadata của **chính database mà phiên kết nối hiện tại đang kết nối tới** (ví dụ: kết nối vào `-d postgres` thì chỉ đếm bảng của database `postgres`).
+  - Câu lệnh truy vấn đơn lẻ:
+    ```sql
+    -- LỖI LOGIC: Subquery đếm bảng của postgres và gán cùng số đó cho mọi database
+    SELECT d.oid, d.datname, pg_database_size(d.datname),
+           (SELECT count(*) FROM information_schema.tables WHERE table_schema='public')
+    FROM pg_database d;
+    ```
+    là **hoàn toàn sai**, vì subquery được thực thi trong ngữ cảnh của database kết nối (`postgres`), dẫn đến việc mọi database trong danh sách đều nhận chung số lượng bảng của database `postgres`.
+
+- **Giải pháp xử lý đúng đắn**:
+  - **Phương án A (Khuyến nghị cho DB-1)**: Ở cấp độ liệt kê tổng quan `db:list-databases`, để `table_count` là **chưa xác định (`null`)**.
+    - Chỉ đọc thông tin tổng quan từ `pg_database` bằng một lệnh truy vấn duy nhất:
+      ```sql
+      SELECT d.oid, d.datname, pg_database_size(d.datname)
+      FROM pg_database d
+      WHERE d.datistemplate = false;
+      ```
+    - Khi người dùng bấm vào một database cụ thể để xem chi tiết ở các bước sau (`db:list-tables`), hệ thống mới kết nối trực tiếp vào database đó (`-d ${database}`) để lấy danh sách bảng và đếm chính xác số lượng bảng.
+    - *Ưu điểm*: Tránh mở N kết nối SSH/psql phụ, giảm tối đa độ trễ và tải CPU/RAM trên VPS.
+  - **Phương án B (Nếu UI bắt buộc số bảng ngay tại bảng tổng quan)**:
+    - Chạy script shell trong container để kết nối vào từng database cụ thể:
+      ```bash
+      for db in $(psql -U opspilot -d postgres -At -c "SELECT datname FROM pg_database WHERE datistemplate=false"); do
+        cnt=$(psql -U opspilot -d "$db" -At -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'" 2>/dev/null || echo "null")
+        echo "$db|$cnt"
+      done
+      ```
+    - Ghép kết quả số bảng theo từng tên database. Tuy nhiên cách này làm tăng số lần kết nối và thời gian chờ. Do đó, phương án A là phương án ưu tiên.
+
+### 4.2. Sơ đồ tuần tự: Liệt kê Database trên VPS (Thu hẹp cho DB-1)
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as NgÆ°á»i dÃ¹ng
+    actor User as Người dùng
     participant UI as VpsDatabaseTab (Renderer)
     participant IPC as Main IPC Handler
     participant DB as SQLite DB (opspilot.db)
     participant SSH as SshManager
     participant VPS as VPS / Docker Engine
 
-    User->>UI: Má»Ÿ Tab CÆ¡ sá»Ÿ dá»¯ liá»‡u (vpsId)
+    User->>UI: Mở Tab Cơ sở dữ liệu (vpsId)
     UI->>IPC: invoke('db:list-databases', vpsId)
 
-    IPC->>DB: Query cÃ¡c app trÃªn vpsId cÃ³ needs_db = 1
-    DB-->>IPC: Tráº£ vá» danh sÃ¡ch apps: [{ id, name, ... }]
+    Note over IPC,DB: BƯỚC 1: Kiểm tra vpsId tồn tại
+    IPC->>DB: vpsRepository.getById(vpsId)
+    alt vpsId không tồn tại trong DB
+        DB-->>IPC: null / not found
+        IPC-->>UI: ok: false, error: { code: 'VALIDATION', message: 'Không tìm thấy VPS' }
+        UI->>User: Hiển thị lỗi không tìm thấy VPS
+    else vpsId tồn tại hợp lệ
+        DB-->>IPC: vps record
+        Note over IPC,DB: BƯỚC 2: Kiểm tra các app cần DB
+        IPC->>DB: Query các app trên vpsId có needs_db = 1
+        DB-->>IPC: Danh sách apps: [{ id, name, ... }]
 
-    alt KhÃ´ng cÃ³ app nÃ o cÃ³ needs_db = 1
-        IPC-->>UI: ok: true, data: [] (KhÃ´ng cáº§n gá»i SSH)
-        UI->>User: Hiá»ƒn thá»‹ Empty State: "ChÆ°a cÃ³ á»©ng dá»¥ng nÃ o cáº¥u hÃ¬nh DB"
-    else CÃ³ N apps cáº¥u hÃ¬nh DB
-        IPC->>SSH: Káº¿t ná»‘i SSH tá»›i vpsId
-        alt Káº¿t ná»‘i SSH tháº¥t báº¡i (timeout / auth error)
-            SSH-->>IPC: SshConnectionError
-            IPC-->>UI: ok: false, error: SSH_CONNECTION_FAILED
-            UI->>User: Hiá»ƒn thá»‹ Alert lá»—i SSH + NÃºt "Thá»­ láº¡i"
-        else Káº¿t ná»‘i SSH thÃ nh cÃ´ng
-            IPC->>SSH: exec("docker ps -a --filter 'name=-db' --format '{{.Names}}\t{{.Status}}'")
-            SSH->>VPS: Kiá»ƒm tra tráº¡ng thÃ¡i cÃ¡c container DB
-            VPS-->>SSH: Káº¿t quáº£ danh sÃ¡ch container
+        alt Không có app nào có needs_db = 1
+            IPC-->>UI: ok: true, data: { instances: [], databases: [] }
+            UI->>User: Empty State: "Chưa có ứng dụng nào cấu hình cơ sở dữ liệu"
+        else Có các app cấu hình DB
+            Note over IPC,SSH: BƯỚC 3: Kết nối SSH tới VPS
+            IPC->>SSH: Kết nối SSH tới vpsId
+            alt Lỗi SSH (Host unreachable / Timeout / Auth failed)
+                SSH-->>IPC: SshError
+                IPC-->>UI: ok: false, error: { code: 'SSH_HOST_UNREACHABLE' | 'SSH_TIMEOUT' | 'SSH_AUTH_FAILED', ... }
+                UI->>User: Hiển thị Alert lỗi kết nối SSH + Nút Thử lại
+            else SSH thành công
+                IPC->>SSH: docker ps -a --filter "name=-db"
+                SSH->>VPS: Lấy danh sách và trạng thái container
+                VPS-->>SSH: Container status list
 
-            loop Vá»›i tá»«ng app cÃ³ container Ä‘ang cháº¡y
-                IPC->>SSH: exec("docker compose -f /opt/opspilot/{app}/docker-compose.yml exec -T postgres psql -U opspilot -d postgres -At -c '<query_db_stats>'")
-                SSH->>VPS: Thá»±c thi psql láº¥y OID, name, size, table_count
-                VPS-->>SSH: TSV output
+                loop Với từng app cấu hình DB
+                    alt Container của app đang stopped / missing
+                        IPC->>IPC: Ghi nhận instance status: 'stopped', error: 'Container chưa chạy'
+                    else Container đang running
+                        IPC->>SSH: docker compose exec -T postgres psql -U opspilot -d postgres -At -c "SELECT d.oid, d.datname, pg_database_size(d.datname) FROM pg_database d WHERE d.datistemplate=false;"
+                        VPS-->>SSH: TSV output (oid, name, size)
+                        IPC->>IPC: Parse TSV -> DbDatabase[] (gắn app_id, app_name, table_count = null)
+                    end
+                end
+
+                Note over IPC,UI: BƯỚC 4: Báo cáo kết quả kèm lỗi từng app nếu có
+                IPC-->>UI: ok: true, data: { instances, databases }
+                UI->>User: Hiển thị bảng Database và trạng thái các instance
             end
-
-            IPC->>IPC: Tá»•ng há»£p, gáº¯n app_id, app_name, container_name
-            IPC-->>UI: ok: true, data: DbDatabase[]
-            UI->>User: Hiá»ƒn thá»‹ báº£ng Databases Ä‘áº§y Ä‘á»§ thÃ´ng tin
         end
     end
 ```
 
-### 4.2. CÃ¢u lá»‡nh SQL metadata trÃ­ch xuáº¥t tá»« PostgreSQL
+---
 
-Khi gá»i vÃ o container PostgreSQL, lá»‡nh truy váº¥n thÃ´ng tin thá»‘ng kÃª khÃ´ng khÃ³a báº£ng vÃ  thá»±c thi cá»±c nhanh:
+## 5. Thay Đổi IPC Contract Cần Thiết & Đối Chiếu Mã Lỗi
 
-```sql
-SELECT
-  d.oid,
-  d.datname,
-  pg_database_size(d.datname) AS size_bytes,
-  (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public') AS table_count
-FROM pg_database d
-WHERE d.datistemplate = false;
+### 5.1. Thu hẹp hợp đồng cho Checkpoint DB-1
+
+Trong Checkpoint DB-1, hợp đồng IPC chỉ tập trung giải quyết thao tác **liệt kê danh sách database**:
+
+```typescript
+/** Dữ liệu trả về tổng quan cho Tab Database trên VPS */
+export interface VpsDatabaseOverviewDto {
+  /** Danh sách trạng thái instance PostgreSQL của các app có needs_db = 1 */
+  instances: AppDbInstance[];
+  /** Danh sách database thực tế đọc được từ các container đang chạy */
+  databases: DbDatabase[];
+}
 ```
 
----
+Kênh `db:list-databases` được điều chỉnh:
+- `db:list-databases: (vpsId: number) => IpcResult<VpsDatabaseOverviewDto>` (hoặc nếu giữ `DbDatabase[]` để tương thích UI hiện hành thì các trường `app_id`, `app_name`, `container_name` là bắt buộc, và `table_count: number | null`).
+- Các kênh `db:list-users`, `db:list-tables`, `db:create-database`, `db:create-user`, `db:save-schema`:
+  - **Tạm hoãn triển khai sang các checkpoint sau**.
+  - Khi triển khai, chữ ký bắt buộc phải nhận `appId: number` rõ ràng, không tùy chọn.
 
-## 5. Thay Äá»•i IPC Contract Cáº§n Thiáº¿t
+### 5.2. Đối chiếu mã lỗi với `IpcError.code` hiện hành
 
-Äá»ƒ há»— trá»£ Ä‘áº§y Ä‘á»§ ngá»¯ cáº£nh á»©ng dá»¥ng mÃ  váº«n Ä‘áº£m báº£o tÃ­nh tÆ°Æ¡ng thÃ­ch, há»£p Ä‘á»“ng IPC trong `app/src/shared/ipc.ts` Ä‘Æ°á»£c Ä‘á» xuáº¥t Ä‘iá»u chá»‰nh nhÆ° sau:
-
-| KÃªnh IPC | Chá»¯ kÃ½ hiá»‡n táº¡i | Chá»¯ kÃ½ Ä‘á» xuáº¥t | Má»¥c Ä‘Ã­ch & Kháº£ nÄƒng tÆ°Æ¡ng thÃ­ch ngÆ°á»£c |
-| :--- | :--- | :--- | :--- |
-| `db:list-databases` | `(vpsId: number) => IpcResult<DbDatabase[]>` | Giá»¯ nguyÃªn chá»¯ kÃ½, **má»Ÿ rá»™ng dá»¯ liá»‡u tráº£ vá» `DbDatabase`** (bá»• sung `app_id`, `app_name`, `container_name`, `status`). | TÆ°Æ¡ng thÃ­ch ngÆ°á»£c 100%. UI cÅ© chá»‰ Ä‘á»c cÃ¡c trÆ°á»ng cÅ© váº«n cháº¡y bÃ¬nh thÆ°á»ng. |
-| `db:list-users` | `(vpsId: number) => IpcResult<DbUser[]>` | `(vpsId: number, appId?: number) => IpcResult<DbUser[]>` | Náº¿u truyá»n `appId`, liá»‡t kÃª user cá»§a container app Ä‘Ã³. Náº¿u khÃ´ng truyá»n, máº·c Ä‘á»‹nh láº¥y app Ä‘áº§u tiÃªn hoáº·c tá»•ng há»£p. |
-| `db:list-tables` | `(vpsId: number, database: string) => IpcResult<DbSchemaTable[]>` | `(vpsId: number, database: string, appId?: number) => IpcResult<DbSchemaTable[]>` | Cho phÃ©p chá»‰ Ä‘á»‹nh chÃ­nh xÃ¡c container app chá»©a database cáº§n xem schema. Náº¿u khÃ´ng truyá»n `appId`, tá»± suy diá»…n náº¿u trÃªn VPS chá»‰ cÃ³ 1 app DB. |
-| `db:save-schema` | `(vpsId: number, database: string, ddl: string) => IpcResult<void>` | `(vpsId: number, database: string, ddl: string, appId?: number) => IpcResult<void>` | Äá»‹nh tuyáº¿n lá»‡nh DDL vÃ o Ä‘Ãºng container cá»§a app. |
-| `db:create-database` | `(vpsId: number, name: string) => IpcResult<DbDatabase>` | `(vpsId: number, name: string, appId?: number) => IpcResult<DbDatabase>` | XÃ¡c Ä‘á»‹nh container app tiáº¿p nháº­n database má»›i. |
-| `db:create-user` | `(vpsId: number, input: DbUserInput) => IpcResult<DbUser>` | `(vpsId: number, input: DbUserInput, appId?: number) => IpcResult<DbUser>` | Táº¡o user trong container app Ä‘Æ°á»£c chá»‰ Ä‘á»‹nh. |
-
----
-
-## 6. Xá»­ LÃ½ CÃ¡c TÃ¬nh Huá»‘ng Ngoáº¡i Lá»‡ & Sá»± Cá»‘ Háº¡ Táº§ng
-
-| TÃ¬nh huá»‘ng ngoáº¡i lá»‡ | Hiá»‡n tÆ°á»£ng ká»¹ thuáº­t | CÆ¡ cháº¿ xá»­ lÃ½ Ä‘á» xuáº¥t | Tráº£i nghiá»‡m ngÆ°á»i dÃ¹ng (UX) |
-| :--- | :--- | :--- | :--- |
-| **VPS khÃ´ng cÃ³ á»©ng dá»¥ng nÃ o dÃ¹ng PostgreSQL** | Báº£ng SQLite `app` khÃ´ng cÃ³ báº£n ghi nÃ o trÃªn `vps_id` cÃ³ `needs_db = 1`. | Handler phÃ¡t hiá»‡n ngay tá»« bÆ°á»›c kiá»ƒm tra DB ná»™i bá»™, láº­p tá»©c tráº£ vá» `ok: true, data: []` mÃ  khÃ´ng thá»±c hiá»‡n káº¿t ná»‘i SSH. | Hiá»ƒn thá»‹ mÃ n hÃ¬nh `Empty` trung thá»±c: *"MÃ¡y chá»§ chÆ°a cÃ³ á»©ng dá»¥ng nÃ o cáº¥u hÃ¬nh cÆ¡ sá»Ÿ dá»¯ liá»‡u. CÃ¡c á»©ng dá»¥ng cÃ³ tÃ¹y chá»n cÆ¡ sá»Ÿ dá»¯ liá»‡u sáº½ tá»± Ä‘á»™ng khá»Ÿi táº¡o PostgreSQL khi triá»ƒn khai."* (KhÃ´ng bÃ¡o lá»—i). |
-| **CÃ³ á»©ng dá»¥ng DB nhÆ°ng container chÆ°a cháº¡y / bá»‹ dá»«ng** | Container `${app.name}-db` cÃ³ tráº¡ng thÃ¡i `Exited` hoáº·c khÃ´ng tá»“n táº¡i trong `docker ps`. | Handler ghi nháº­n tráº¡ng thÃ¡i `status: 'stopped'`, khÃ´ng gá»i lá»‡nh `psql` vÃ o container Ä‘Ã³ Ä‘á»ƒ trÃ¡nh treo tiáº¿n trÃ¬nh. | DÃ²ng database váº«n xuáº¥t hiá»‡n trong báº£ng nhÆ°ng hiá»ƒn thá»‹ tráº¡ng thÃ¡i `ÄÃ£ dá»«ng` (tag mÃ u cam/xÃ¡m), vÃ´ hiá»‡u hÃ³a nÃºt báº¥m xem schema kÃ¨m tooltip hÆ°á»›ng dáº«n khá»Ÿi Ä‘á»™ng láº¡i app. |
-| **Máº¥t káº¿t ná»‘i SSH / Sai thÃ´ng tin xÃ¡c thá»±c** | `ssh.exec()` nÃ©m lá»—i `SshConnectionError` hoáº·c `SshAuthError`. | Báº¯t lá»—i táº¡i táº§ng handler, bá»c vÃ o `IpcError` chuáº©n vá»›i mÃ£ `SSH_CONNECTION_FAILED`. | UI hiá»ƒn thá»‹ khá»‘i `Alert` mÃ u Ä‘á» mÃ´ táº£ rÃµ lá»—i máº¡ng/SSH kÃ¨m nÃºt **"Thá»­ láº¡i"** (`Retry`), Ä‘á»“ng nháº¥t vá»›i cÃ¡ch xá»­ lÃ½ lá»—i táº¡i tab TÃ i nguyÃªn. |
-| **PostgreSQL tá»« chá»‘i káº¿t ná»‘i / ChÆ°a khá»Ÿi Ä‘á»™ng xong** | Container Ä‘ang cháº¡y nhÆ°ng `pg_isready` tráº£ vá» exit code khÃ¡c 0. | Handler Ä‘áº·t timeout ngáº¯n (3 giÃ¢y) cho lá»‡nh kiá»ƒm tra `pg_isready`; náº¿u chÆ°a sáºµn sÃ ng, tráº£ vá» mÃ£ lá»—i `DB_NOT_READY`. | UI hiá»ƒn thá»‹ thÃ´ng bÃ¡o: *"Dá»‹ch vá»¥ PostgreSQL Ä‘ang khá»Ÿi Ä‘á»™ng, vui lÃ²ng thá»­ láº¡i sau giÃ¢y lÃ¡t."* |
+| Tình huống phát sinh lỗi | Mã lỗi `IpcError.code` hiện hành | Ghi chú & Đề xuất nếu cần mã mới |
+| :--- | :--- | :--- |
+| `vpsId` không tồn tại trong SQLite DB | `'VALIDATION'` | Mã hiện hành. Thông báo: *"Không tìm thấy máy chủ VPS id=${vpsId} trong cơ sở dữ liệu."* |
+| Thiếu `appId` hoặc `app.vps_id !== vpsId` | `'VALIDATION'` | Mã hiện hành. Thông báo: *"Ứng dụng không tồn tại hoặc không thuộc máy chủ này."* |
+| SSH không kết nối được tới VPS (mạng đứt, sai host/port) | `'SSH_HOST_UNREACHABLE'` | Mã hiện hành. Không dùng mã tự tạo `SSH_CONNECTION_FAILED`. |
+| SSH hết thời gian chờ kết nối hoặc thực thi lệnh | `'SSH_TIMEOUT'` | Mã hiện hành. |
+| Sai thông tin xác thực SSH (khóa sai, mật khẩu sai) | `'SSH_AUTH_FAILED'` | Mã hiện hành. |
+| Docker daemon trên VPS bị tắt hoặc chưa cài đặt | `'DOCKER_MISSING'` | Mã hiện hành. |
+| Lệnh `psql` bị lỗi cú pháp, database hỏng hoặc lỗi quyền | `'DB_ADMIN_FAILED'` hoặc `'DB_ERROR'` | Mã hiện hành. Chi tiết kỹ thuật ghi vào `technical`. |
+| *Container DB bị dừng khi gọi thao tác cụ thể* | `'DB_ADMIN_FAILED'` | Mã hiện hành. Nếu muốn mã riêng `CONTAINER_STOPPED`: **Đề xuất mở rộng IpcError contract (Cần duyệt)**. |
+| *Dịch vụ Postgres đang khởi động lại (chưa sẵn sàng)* | `'DB_ERROR'` | Mã hiện hành. Nếu muốn mã riêng `DB_NOT_READY`: **Đề xuất mở rộng IpcError contract (Cần duyệt)**. |
 
 ---
 
-## 7. PhÃ¢n Ká»³ KÃ­ch Hoáº¡t Thao TÃ¡c Ghi (Write Operations Phasing)
+## 6. Xử Lý Ngoại Lệ & Cơ Chế Báo Lỗi Từng App
 
-### 7.1. ÄÃ¡nh giÃ¡ rá»§i ro an toÃ n dá»¯ liá»‡u
+### 6.1. Nguyên tắc chống biến lỗi thành danh sách rỗng (Anti-Silent Swallowing)
 
-- **Thao tÃ¡c chá»‰ Ä‘á»c (Read-only)**: `list-databases`, `list-users`, `list-tables`.
-  *Má»©c Ä‘á»™ rá»§i ro: 0 (An toÃ n tuyá»‡t Ä‘á»‘i)*. CÃ¡c lá»‡nh chá»‰ thá»±c thi `SELECT` trÃªn `pg_database` vÃ  `information_schema`, hoÃ n toÃ n idempotent, khÃ´ng thay Ä‘á»•i tráº¡ng thÃ¡i há»‡ thá»‘ng.
-- **Thao tÃ¡c ghi (Write operations)**: `create-database`, `create-user`, `save-schema`, `import-data`.
-  *Má»©c Ä‘á»™ rá»§i ro: Cao*.
-  1. Viá»‡c tá»± Ã½ táº¡o thÃªm database bÃªn ngoÃ i cÃ³ thá»ƒ khÃ´ng Ä‘Æ°á»£c á»©ng dá»¥ng (vá»‘n káº¿t ná»‘i cá»‘ Ä‘á»‹nh vÃ o database `opspilot`) nháº­n diá»‡n.
-  2. Lá»‡nh `save-schema` thá»±c thi DDL trá»±c tiáº¿p (`CREATE TABLE`, `DROP TABLE`, `ALTER TABLE`) cÃ³ nguy cÆ¡ gÃ¢y máº¥t dá»¯ liá»‡u nghiÃªm trá»ng hoáº·c xung Ä‘á»™t vá»›i cÆ¡ cháº¿ migration ná»™i bá»™ cá»§a á»©ng dá»¥ng (Prisma, Drizzle, TypeORM, Knex).
+- **Vấn đề cần tránh**: Nếu một VPS có 2 ứng dụng cần DB (`appA` và `appB`), trong đó `appA` chạy bình thường nhưng `appB` bị lỗi container hoặc lỗi SSH cục bộ:
+  - Nếu nuốt lỗi của `appB` và chỉ trả về `[]`, hoặc gặp lỗi ở `appB` rồi trả về danh sách rỗng cho toàn bộ VPS, người dùng sẽ hiểu nhầm là VPS không có database nào.
+  - Tương tự, nếu lệnh SSH lỗi toàn cục mà nuốt ngoại lệ để trả về `[]`, lỗi hạ tầng sẽ bị che giấu thành trạng thái "không có database".
+- **Cơ chế báo lỗi từng app (Per-app Error Isolation)**:
+  1. **Lỗi toàn cục cấp VPS** (không tìm thấy VPS, SSH timeout, SSH auth error): Trả về `ok: false, error: IpcError` ngay lập tức. UI bắt buộc hiển thị `Alert` lỗi cấp trang.
+  2. **Lỗi cục bộ cấp App** (container của app bị dừng, container crash, `psql` bên trong container lỗi):
+     - Không làm hỏng kết quả của các app khác trên cùng VPS.
+     - Dữ liệu trả về chứa đầy đủ database của các app chạy tốt.
+     - App bị lỗi được ghi nhận trạng thái trong mảng `instances`: `container_status: 'stopped' | 'unhealthy'`, kèm `error_message` chi tiết.
+     - UI hiển thị danh sách database của app thành công, đồng thời hiển thị cảnh báo riêng cho app gặp sự cố.
 
-### 7.2. Lá»™ trÃ¬nh phÃ¢n ká»³ kÃ­ch hoáº¡t
+### 6.2. Bảng tổng hợp hành vi xử lý sự cố
 
-Nháº±m Ä‘áº£m báº£o nghiá»‡m thu cháº¯c cháº¯n vÃ  fail-closed, cÃ¡c tÃ­nh nÄƒng Ä‘Æ°á»£c phÃ¢n ká»³ nhÆ° sau:
-
-```
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚ Giai Ä‘oáº¡n 1 (Checkpoint DB-1): Nghiá»‡m thu Read-Only & ÄÃ³ng GAP AC-3.2      â”‚
-â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
-â”‚ â€¢ Báº­t supported={true} trong VpsDetail.tsx.                                 â”‚
-â”‚ â€¢ Triá»ƒn khai backend handlers CHá»ˆ Äá»ŒC:                                      â”‚
-â”‚   - db:list-databases (há»— trá»£ phÃ¢n biá»‡t app)                                â”‚
-â”‚   - db:list-users                                                           â”‚
-â”‚   - db:list-tables                                                          â”‚
-â”‚ â€¢ VÃ´ hiá»‡u hÃ³a hoáº·c áº©n táº¡m thá»i cÃ¡c nÃºt ghi (+ Táº¡o user, + Táº¡o DB, LÆ°u DDL). â”‚
-â”‚ â€¢ Káº¿t quáº£: AC-3.2 chÃ­nh thá»©c chuyá»ƒn sang PASS vá»›i 0 rá»§i ro dá»¯ liá»‡u.         â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-                                      â”‚
-                                      â–¼
-â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
-â”‚ Giai Ä‘oáº¡n 2 (Checkpoint DB-2): KÃ­ch hoáº¡t Thao tÃ¡c Ghi cÃ³ báº£o vá»‡             â”‚
-â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
-â”‚ â€¢ Má»Ÿ láº¡i cÃ¡c nÃºt: + Táº¡o Database, + Táº¡o NgÆ°á»i dÃ¹ng, LÆ°u Schema DDL.         â”‚
-â”‚ â€¢ Bá»• sung cÆ¡ cháº¿ báº£o vá»‡ an toÃ n:                                            â”‚
-â”‚   - Modal cáº£nh bÃ¡o xÃ¡c nháº­n rá»§i ro trÆ°á»›c khi thá»±c thi DDL.                  â”‚
-â”‚   - Transaction bá»c ngoÃ i (BEGIN ... COMMIT) cho save-schema.               â”‚
-â”‚   - Kiá»ƒm tra trÃ¹ng tÃªn database / user trÆ°á»›c khi táº¡o.                       â”‚
-â”‚   - KhÃ´ng lÆ°u máº­t kháº©u báº£n rÃµ vÃ o log hoáº·c Ä‘Ä©a.                             â”‚
-â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
-```
+| Tình huống sự cố | Xử lý tại Backend Main | Hiển thị tại UI Renderer |
+| :--- | :--- | :--- |
+| `vpsId` không có trong DB | Trả về `ok: false, error: { code: 'VALIDATION' }`. | Hiển thị lỗi tham số không hợp lệ. |
+| VPS hợp lệ, 0 app có `needs_db = 1` | Trả về `ok: true, data: { instances: [], databases: [] }` (không gọi SSH). | Hiển thị Empty state trung thực: *"Máy chủ chưa có ứng dụng nào cấu hình cơ sở dữ liệu."* |
+| VPS có app DB, mất kết nối SSH | Trả về `ok: false, error: { code: 'SSH_HOST_UNREACHABLE' }`. | Hiển thị Alert đỏ báo lỗi kết nối SSH kèm nút Thử lại. |
+| 1 app running, 1 app container stopped | Trả về `ok: true`, chứa database của app running; app stopped có `container_status: 'stopped'`. | Hiển thị bảng DB của app running; hiển thị Alert vàng thông báo container của app kia đang dừng. |
 
 ---
 
-## 8. Káº¿ Hoáº¡ch Triá»ƒn Khai Tá»«ng BÆ°á»›c & Kiá»ƒm Thá»­ Offline
+## 7. Phân Kỳ Kích Hoạt & Đánh Giá Rủi Ro Thực Tế
 
-ToÃ n bá»™ quy trÃ¬nh triá»ƒn khai tuÃ¢n thá»§ tuyá»‡t Ä‘á»‘i quy táº¯c **khÃ´ng phá»¥ thuá»™c VPS tháº­t**, sá»­ dá»¥ng cÆ¡ cháº¿ giáº£ láº­p táº§ng SSH (Mock SSH Harness) tÆ°Æ¡ng tá»± nhÆ° cÃ¡c bá»™ test Ä‘Ã£ hoÃ n thiá»‡n á»Ÿ `headlessPoller.test.ts` vÃ  `service.test.ts`.
+### 7.1. Bác bỏ quan niệm "Rủi ro 0" đối với thao tác chỉ đọc trên Remote VPS
 
-### 8.1. CÃ¡c bÆ°á»›c thá»±c hiá»‡n chi tiáº¿t
+- **Không có thao tác nào trên máy chủ từ xa là "rủi ro 0"**:
+  - Dù chỉ chạy các câu lệnh đọc (`SELECT`, `docker ps`), việc thực thi qua SSH vẫn tiềm ẩn các rủi ro vận hành thực tế:
+    1. **Tải tài nguyên trên VPS yếu**: Việc gọi liên tục `docker compose exec` và khởi tạo tiến trình `psql` tiêu tốn bộ nhớ và CPU, có thể gây quá tải cho các VPS nhỏ (1 vCPU / 1GB RAM) đang chạy ứng dụng thật.
+    2. **Rủi ro treo tiến trình (Process Hang / Leak)**: Nếu tiến trình `psql` hoặc kênh SSH bị treo mà không có cơ chế timeout và AbortSignal chặt chẽ, các tiến trình con sẽ tích lũy và làm cạn kiệt tài nguyên hệ điều hành.
+    3. **Tải trên Connection Pool**: Mở kết nối vào PostgreSQL có thể gây cạnh tranh tài nguyên với chính ứng dụng đang chạy nếu `max_connections` bị giới hạn thấp.
+  - Do đó, thao tác chỉ đọc phải được thiết kế với timeout nghiêm ngặt (3–5 giây), giải phóng kênh SSH ngay sau khi thực thi và có cơ chế debounce trên UI để chống người dùng spam nút refresh.
 
-1. **BÆ°á»›c 1: XÃ¢y dá»±ng Module `DatabaseService` Backend (`app/src/main/db/databaseService.ts`)**
-   - Äá»c danh sÃ¡ch app tá»« `AppRepository`.
-   - Káº¿t ná»‘i `SshManager.exec()` Ä‘á»ƒ kiá»ƒm tra container vÃ  cháº¡y lá»‡nh `psql`.
-   - Xá»­ lÃ½ phÃ¢n tÃ­ch káº¿t quáº£ TSV thÃ nh Ä‘á»‘i tÆ°á»£ng `DbDatabase[]`, `DbUser[]`, `DbSchemaTable[]`.
-   - Xá»­ lÃ½ fail-closed khi SSH lá»—i hoáº·c container váº¯ng máº·t.
+### 7.2. Lộ trình phân kỳ tính năng (Thu hẹp Checkpoint DB-1)
 
-2. **BÆ°á»›c 2: Viáº¿t Bá»™ Kiá»ƒm Thá»­ Äá»™c Láº­p Offline (`databaseService.test.ts`)**
-   - Táº¡o bá»™ mock SSH tráº£ vá» stdout giáº£ láº­p cho cÃ¡c ká»‹ch báº£n:
-     - *Ca 1*: VPS khÃ´ng cÃ³ app nÃ o cÃ³ `needs_db = 1` -> Tráº£ vá» máº£ng rá»—ng ngay láº­p tá»©c, khÃ´ng gá»i SSH.
-     - *Ca 2*: VPS cÃ³ 1 app `express-api` vá»›i container `express-api-db` Ä‘ang cháº¡y -> Tráº£ vá» database `opspilot` gáº¯n Ä‘Ãºng `app_id` vÃ  `app_name`.
-     - *Ca 3*: VPS cÃ³ 2 app `express-api` vÃ  `next-blog` cÃ¹ng cháº¡y DB -> Tráº£ vá» 2 database riÃªng biá»‡t cÃ³ `app_name` khÃ¡c nhau, khÃ´ng xung Ä‘á»™t key.
-     - *Ca 4*: Container DB á»Ÿ tráº¡ng thÃ¡i `Exited` -> BÃ¡o `status: 'stopped'`, khÃ´ng nÃ©m lá»—i unhandled.
-     - *Ca 5*: Lá»‡nh SSH tháº¥t báº¡i do máº¥t káº¿t ná»‘i -> NÃ©m lá»—i `AppError` chuáº©n cÃ³ mÃ£ lá»—i rÃµ rÃ ng.
-     - *Ca 6*: Láº¥y danh sÃ¡ch báº£ng cho má»™t database cá»¥ thá»ƒ -> PhÃ¢n tÃ­ch chÃ­nh xÃ¡c cá»™t, kiá»ƒu dá»¯ liá»‡u, khÃ³a chÃ­nh vÃ  khÃ³a ngoáº¡i.
+Nhằm đảm bảo an toàn tuyệt đối và tập trung giải quyết dứt điểm từng phần việc:
 
-3. **BÆ°á»›c 3: ÄÄƒng KÃ½ Handler Trong `app/src/main/ipc.ts`**
-   - Ná»‘i cÃ¡c kÃªnh `db:list-databases`, `db:list-users`, `db:list-tables` vÃ o `DatabaseService`.
+- **Checkpoint DB-1 (Thu hẹp: Chỉ đọc danh sách Database)**:
+  - Chỉ triển khai duy nhất kênh `db:list-databases` có phân biệt ứng dụng và báo cáo trạng thái instance.
+  - Bật `supported={true}` cho danh sách database trong `VpsDetail.tsx`.
+  - Giữ nguyên trạng thái chưa hỗ trợ hoặc ẩn các nút: `+ Tạo người dùng`, `+ Tạo database`, `Lưu schema`, `Import/Export`.
+- **Checkpoint DB-2 (Đọc chi tiết Bảng & Người dùng)**:
+  - Triển khai `db:list-tables` và `db:list-users` có tham số `app_id` bắt buộc.
+  - Cho phép người dùng bấm vào từng database để xem danh sách bảng và cấu trúc schema.
+- **Checkpoint DB-3 (Thao tác Ghi có bảo vệ & Transaction Guard)**:
+  - Triển khai `db:create-database`, `db:create-user`, `db:save-schema`.
+  - Bổ sung transaction (`BEGIN ... COMMIT`), modal xác nhận rủi ro thay đổi schema và kiểm tra xung đột di chuyển dữ liệu.
 
-4. **BÆ°á»›c 4: Cáº­p Nháº­t UI `VpsDatabaseTab.tsx` & Báº­t `supported={true}` Trong `VpsDetail.tsx`**
-   - Truyá»n `supported={true}` tá»« `VpsDetail.tsx`.
-   - Bá»• sung hiá»ƒn thá»‹ `app_name` vÃ  bá»™ lá»c app trong `VpsDatabaseTab.tsx`.
-   - Viáº¿t test Vitest Renderer cho `VpsDatabaseTab.test.tsx` xÃ¡c nháº­n báº£ng hiá»ƒn thá»‹ Ä‘Ãºng khi cÃ³ dá»¯ liá»‡u mock tá»« IPC.
+### 7.3. Tiêu chuẩn nghiệm thu minh bạch: Phân biệt Gate Offline vs VPS thật
 
-5. **BÆ°á»›c 5: Nghiá»‡m Thu AC-3.2 & Cáº­p Nháº­t TÃ i Liá»‡u**
-   - Cháº¡y toÃ n bá»™ quality gates: lint sáº¡ch 100%, typecheck sáº¡ch 100%, full app test pass.
-   - Cáº­p nháº­t checklist trong `docs/ui-redesign/README.md` vÃ  `docs/ui-redesign/ui-1k-acceptance.md`: chuyá»ƒn AC-3.2 tá»« **GAP** sang **PASS**.
+- **Quy tắc nghiệm thu trung thực**:
+  - Việc hoàn thành bộ test giả lập (Mock SSH Test Harness) chỉ được ghi nhận là **`LOCAL_MOCK_PASS` / `GATE_OFFLINE_PASS`** (chứng minh logic mã nguồn, kiểm soát lỗi và hợp đồng dữ liệu đạt chuẩn).
+  - **Tuyệt đối không tự ý chuyển AC-3.2 thành `PASS` toàn diện** khi chưa có môi trường VPS thật để xác minh thực địa.
+  - Trong tài liệu nghiệm thu tổng thể (`ui-1k-acceptance.md`), AC-3.2 phải được ghi nhận rõ ràng:
+    - *Kiểm thử cục bộ / Mock Harness*: `PASS`.
+    - *Xác minh trên máy chủ VPS thật*: Duy trì trạng thái **`NOT_RUN` (Chưa kiểm chứng trên VPS thật)**.
 
 ---
 
-## 9. Káº¿t Luáº­n Checkpoint DB-0
+## 8. Kế Hoạch Triển Khai Từng Bước & Kiểm Thử Offline
 
-- Báº£n thiáº¿t káº¿ trÃªn Ä‘Ã£ xÃ¡c Ä‘á»‹nh chÃ­nh xÃ¡c nguyÃªn nhÃ¢n gá»‘c rá»… vÃ  Ä‘áº·c thÃ¹ kiáº¿n trÃºc per-app container cá»§a OpsPilot.
-- ÄÃ£ giáº£i quyáº¿t trá»n váº¹n bÃ i toÃ¡n Ä‘a á»©ng dá»¥ng trÃªn cÃ¹ng má»™t VPS thÃ´ng qua mÃ´ hÃ¬nh Ä‘á»‹nh danh database cÃ³ ngá»¯ cáº£nh app (`app_id`, `app_name`).
-- ÄÃ£ thiáº¿t láº­p káº¿ hoáº¡ch kiá»ƒm thá»­ offline hoÃ n chá»‰nh, tÃ¡ch biá»‡t rÃµ rÃ ng giá»¯a thao tÃ¡c Äá»c (an toÃ n) vÃ  thao tÃ¡c Ghi (báº£o vá»‡ dá»¯ liá»‡u).
-- Checkpoint DB-0 hoÃ n thÃ nh viá»‡c chuáº©n bá»‹ tÃ i liá»‡u thiáº¿t káº¿; sáºµn sÃ ng bÆ°á»›c vÃ o Checkpoint DB-1 khi cÃ³ chá»‰ thá»‹ triá»ƒn khai mÃ£ nguá»“n.
+### 8.1. Các bước triển khai kỹ thuật
+
+1. **Bước 1 (Checkpoint DB-0 - Hiện tại)**: Hoàn thiện hồ sơ thiết kế kiến trúc, làm rõ định danh database gắn với app, khắc phục lỗi tính `table_count`, chuẩn hóa mã lỗi và xác lập quy tắc fail-closed.
+2. **Bước 2 (Checkpoint DB-1 - Backend DatabaseService & List Databases)**:
+   - Xây dựng `app/src/main/db/databaseService.ts` với hàm `listDatabases(vpsId: number)`.
+   - Kiểm tra `vpsId` tồn tại trong SQLite trước tiên -> ném lỗi `VALIDATION` nếu không thấy.
+   - Truy vấn các app có `needs_db = 1`. Nếu 0 app -> trả về danh sách rỗng.
+   - Kết nối SSH và chạy lệnh Docker/psql lấy metadata từ `pg_database` với `table_count = null`.
+   - Cô lập lỗi từng app: app lỗi ghi vào `instance.error_message`, không làm hỏng app khác.
+   - Đăng ký handler `db:list-databases` trong `app/src/main/ipc.ts`.
+3. **Bước 3 (Kiểm thử Offline Backend Unit Tests)**:
+   - Viết `app/src/main/db/databaseService.test.ts` dùng mock SSH với các ca kiểm thử:
+     - *Ca 1*: `vpsId` không tồn tại trong SQLite -> Ném lỗi `VALIDATION`.
+     - *Ca 2*: VPS tồn tại nhưng không có app nào có `needs_db = 1` -> Trả về `{ instances: [], databases: [] }`, không gọi SSH.
+     - *Ca 3*: VPS có 1 app DB running -> Trả về database đúng `app_id`, `app_name`, `table_count: null`.
+     - *Ca 4*: VPS có 2 app DB (`appA` running, `appB` container stopped) -> Trả về database của `appA`, `appB` có trạng thái `stopped` và thông báo lỗi rõ ràng; không biến thành danh sách rỗng.
+     - *Ca 5*: Lỗi SSH timeout / host unreachable -> Trả về `IpcError` đúng mã `'SSH_TIMEOUT'` / `'SSH_HOST_UNREACHABLE'`.
+4. **Bước 4 (Cập nhật UI VpsDatabaseTab & VpsDetail)**:
+   - Cập nhật `VpsDatabaseTab.tsx` để render danh sách database có cột Ứng dụng, bộ lọc app, và hiển thị cảnh báo cho các instance bị dừng.
+   - Truyền `supported={true}` từ `VpsDetail.tsx`.
+   - Viết test Renderer Vitest kiểm chứng giao diện hiển thị đúng cả khi có DB lẫn khi instance bị lỗi.
+
+---
+
+## 9. Kết Luận Checkpoint DB-0
+
+- Bản sửa đổi tài liệu thiết kế đã khắc phục toàn diện các vấn đề kiến trúc:
+  1. Loại bỏ hoàn toàn cơ chế tự suy đoán app; bắt buộc định danh app tường minh và kiểm tra `app.vps_id === vpsId`.
+  2. Sửa lỗi logic SQL của `table_count`, đề xuất để `null` ở tầng danh sách tổng quan để tránh kết nối sai database.
+  3. Tách biệt hoàn toàn trạng thái instance khỏi metadata database; không tạo bản ghi database giả khi container bị dừng.
+  4. Bác bỏ luận điểm "rủi ro 0"; phân biệt minh bạch giữa kết quả đạt gate offline (`LOCAL_MOCK_PASS`) và trạng thái chưa xác minh trên VPS thật (`NOT_RUN`).
+  5. Thu hẹp phạm vi DB-1 về duy nhất bài toán liệt kê database; thiết lập cơ chế cô lập lỗi từng app để không biến lỗi thành danh sách rỗng.
+  6. Đối chiếu chuẩn xác với tập mã lỗi `IpcError.code` hiện hành; bổ sung kiểm tra `vpsId` tồn tại trong DB trước khi xử lý.
+- Tài liệu hoàn thiện sẵn sàng làm căn cứ cho việc triển khai mã nguồn tại Checkpoint DB-1 khi có yêu cầu.
