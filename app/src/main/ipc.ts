@@ -95,6 +95,9 @@ export function registerIpcHandlers(
   handle('deploy:cancel-git-prepare', (requestId) => {
     deployService.cancelGitPrepare(requestId)
   })
+  handle('deploy:release-git-prepare', (handle) => {
+    deployService.releaseGitPrepare(handle)
+  })
   handle('deploy:precheck', (input) => deployService.precheck(input))
   handle('deploy:start', (input) => deployService.start(input))
   handle('deploy:cancel', (deploymentId) => {

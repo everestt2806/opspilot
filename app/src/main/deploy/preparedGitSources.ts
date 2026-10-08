@@ -148,6 +148,12 @@ export class PreparedGitSources {
     this.prepareControllers.get(requestId)?.abort()
   }
 
+  /** Release an abandoned prepared snapshot. A reserved snapshot remains owned by its pipeline. */
+  release(handle: string): void {
+    if (!handle) return
+    this.expireHandle(handle)
+  }
+
   get(handle: string): PreparedGitLease {
     this.pruneUsedHandles()
     const entry = this.entries.get(handle)

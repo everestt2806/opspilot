@@ -19,7 +19,7 @@ import { DeploymentRepository } from '../db/deploymentRepository'
 import { VpsRepository } from '../db/vpsRepository'
 import type { SshManager } from '../ssh/manager'
 import { DeployPipeline } from './pipeline'
-import { SshExposureManager } from './exposure'
+import { SshExposureManager, type ExposureManager } from './exposure'
 import { allocatePort } from './portPolicy'
 import { listListeningPorts, runPrecheck, toPrecheckResult } from './precheck'
 import { detectSource } from './detectionDto'
@@ -43,11 +43,12 @@ export class DeployService {
     db: SqliteDatabase
     emit: (event: DeployEvent) => void
     gitSnapshotFactory?: ConstructorParameters<typeof PreparedGitSources>[0]
+    exposure?: ExposureManager
   }) {
     this.ssh = deps.ssh
     this.pipeline = new DeployPipeline({
       ...deps,
-      exposure: new SshExposureManager(deps.ssh)
+      exposure: deps.exposure ?? new SshExposureManager(deps.ssh)
     })
     this.vpsRepository = new VpsRepository(deps.db)
     this.appRepository = new AppRepository(deps.db)
@@ -66,6 +67,10 @@ export class DeployService {
 
   cancelGitPrepare(requestId: string): void {
     this.preparedGitSources.cancelPrepare(requestId)
+  }
+
+  releaseGitPrepare(handle: string): void {
+    this.preparedGitSources.release(handle)
   }
 
   /** UC-02 bước 3: precheck VPS kèm cổng dự kiến (app mới: cổng dự kiến, chưa ghi DB). */

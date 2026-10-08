@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -13,6 +14,8 @@ import { VpsRepository } from '../db/vpsRepository'
 import type { SshManager } from '../ssh/manager'
 import { DeployPipeline, resolveCollectorAppPath, resolveCollectorDir } from './pipeline'
 import { buildSourceTree } from '../detectors/sourceTree'
+import { createGitSnapshotFromLocalFixture } from '../git/snapshot'
+import { DeployService } from './service'
 
 const PRECHECK_OK = [
   'RAM_MB|2048',
@@ -56,6 +59,9 @@ let database: ReturnType<typeof initializeDatabase>
 let sshExec: Mock
 let writeFileMock: Mock
 let readFileMock: Mock
+let uploadDirMock: Mock
+let testSsh: SshManager
+let uploadedDirectorySnapshots: Array<{ localPath: string; marker: string | null }>
 let events: DeployEvent[]
 let pipeline: DeployPipeline
 
@@ -107,6 +113,9 @@ function createHarness(options: StubSshOptions = {}): void {
   let snapshotCall = 0
   const lastComposeUpCode = new Map<string, number>()
   sshExec = vi.fn(async (_vpsId: number, command: string) => {
+    if (command === 'ss -H -ltn') {
+      return { code: 0, stdout: '', stderr: '' }
+    }
     if (command.includes('free -m')) {
       return { code: 0, stdout: options.precheckOutput ?? PRECHECK_OK, stderr: '' }
     }
@@ -203,9 +212,18 @@ function createHarness(options: StubSshOptions = {}): void {
     const previous = [...writeFileMock.mock.calls].reverse().find(([, path]) => path === remotePath)
     return previous?.[2] ?? ''
   })
+  uploadedDirectorySnapshots = []
+  uploadDirMock = vi.fn(async (_vps: number, localPath: string) => {
+    const markerPath = join(localPath, 'snapshot-marker.txt')
+    uploadedDirectorySnapshots.push({
+      localPath,
+      marker: existsSync(markerPath) ? readFileSync(markerPath, 'utf8') : null
+    })
+    return { bytes: 1_024 }
+  })
   const stubSsh = {
     exec: sshExec,
-    uploadDir: vi.fn(async () => ({ bytes: 1_024 })),
+    uploadDir: uploadDirMock,
     readFile: readFileMock,
     writeFile: writeFileMock,
     fileSize: vi.fn(async () => 10),
@@ -217,6 +235,7 @@ function createHarness(options: StubSshOptions = {}): void {
         : { generation: '1:1', device: 1, inode: 1, size: 10 }
     })
   } as unknown as SshManager
+  testSsh = stubSsh
 
   events = []
   pipeline = new DeployPipeline({
@@ -224,6 +243,10 @@ function createHarness(options: StubSshOptions = {}): void {
     db: database,
     emit: (event) => events.push(event)
   })
+}
+
+function fixtureGit(repository: string, ...args: string[]): void {
+  execFileSync('git', args, { cwd: repository, stdio: 'ignore' })
 }
 
 function deployInput(overrides: Partial<DeployInput> = {}): DeployInput {
@@ -325,6 +348,152 @@ function appBuildCommand(): string {
 }
 
 describe('DeployPipeline', () => {
+  it('runs a real Git snapshot through prepare, precheck, start, upload, DB record, and cleanup', async () => {
+    createHarness()
+    const repository = join(testDirectory!, 'remote.git')
+    const working = join(testDirectory!, 'working')
+    const snapshots = join(testDirectory!, 'snapshots')
+    mkdirSync(working)
+    mkdirSync(snapshots)
+    fixtureGit(testDirectory!, 'init', '--quiet', '--bare', repository)
+    fixtureGit(working, 'init', '--quiet', '-b', 'main')
+    fixtureGit(working, 'config', 'user.name', 'Fixture Test')
+    fixtureGit(working, 'config', 'user.email', 'fixture@example.invalid')
+    const root = join(working, 'service')
+    mkdirSync(root)
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({
+        name: 'git-demo',
+        scripts: { start: 'node index.js' },
+        dependencies: { express: '4.0.0' }
+      })
+    )
+    writeFileSync(join(root, 'index.js'), "require('express')().listen(3000)\n")
+    writeFileSync(join(root, 'snapshot-marker.txt'), 'pinned-content\n')
+    fixtureGit(working, 'add', '.')
+    fixtureGit(working, 'commit', '--quiet', '-m', 'fixture one')
+    fixtureGit(working, 'remote', 'add', 'origin', repository)
+    fixtureGit(working, 'push', '--quiet', '-u', 'origin', 'main')
+    let failOneEvent = true
+    const service = new DeployService({
+      ssh: testSsh,
+      db: database,
+      emit: (event) => {
+        if (failOneEvent && event.type === 'step-start' && event.step === 'UPLOAD') {
+          failOneEvent = false
+          throw new Error('synthetic renderer event failure')
+        }
+        events.push(event)
+      },
+      exposure: {
+        reconcile: async ({ app }) => ({
+          status: 'not_checked',
+          url: app.url,
+          external_probe: 'not_run',
+          ufw_state: 'not_checked',
+          ufw_reconciled: false,
+          cloud_firewall: 'not_configured',
+          diagnosis: null,
+          checked_at: new Date().toISOString()
+        })
+      },
+      gitSnapshotFactory: (input) =>
+        createGitSnapshotFromLocalFixture({ ...input, tempDirectory: snapshots })
+    })
+
+    const prepared = await service.prepareGit('integration-request', {
+      source_type: 'git',
+      git_repo_url: repository,
+      git_ref: 'main',
+      git_root: 'service'
+    })
+    const gitSourceInput = {
+      source_type: 'git' as const,
+      prepared_source_handle: prepared.prepared_source_handle,
+      vps_id: vpsId,
+      app_name: 'git-integration-api',
+      env: {}
+    }
+    const precheck = await service.precheck(gitSourceInput)
+    expect(precheck.passed).toBe(true)
+    expect(precheck.precheck_token).toBeTruthy()
+
+    writeFileSync(join(root, 'snapshot-marker.txt'), 'moved-branch-content\n')
+    fixtureGit(working, 'add', '.')
+    fixtureGit(working, 'commit', '--quiet', '-m', 'fixture two')
+    fixtureGit(working, 'push', '--quiet', 'origin', 'main')
+    const started = service.start({ ...gitSourceInput, precheck_token: precheck.precheck_token! })
+    const finished = await waitForFinished(started.deployment_id)
+
+    expect(finished.status).toBe('running')
+    const uploadedSnapshot = uploadedDirectorySnapshots.find((entry) => entry.marker !== null)
+    expect(uploadedSnapshot?.marker).toBe('pinned-content\n')
+    expect(existsSync(uploadedSnapshot!.localPath)).toBe(false)
+    const app = database
+      .prepare(
+        'SELECT source_type, source_path, git_repo_url, git_ref, git_root FROM app WHERE name = ?'
+      )
+      .get('git-integration-api') as Record<string, unknown>
+    expect(app).toMatchObject({
+      source_type: 'git',
+      source_path: null,
+      git_repo_url: prepared.git_repo_url,
+      git_ref: 'main',
+      git_root: 'service'
+    })
+    const deployment = database
+      .prepare('SELECT status, git_repo_url, git_commit_sha FROM deployment WHERE id = ?')
+      .get(started.deployment_id) as Record<string, unknown>
+    expect(deployment).toMatchObject({
+      status: 'running',
+      git_repo_url: prepared.git_repo_url,
+      git_commit_sha: prepared.git_commit_sha
+    })
+    expect(prepared.git_commit_sha).toMatch(/^[a-f0-9]{40}$/)
+    expect(events.at(-1)).toMatchObject({ type: 'finished', deployment_id: started.deployment_id })
+  })
+
+  it('marks a deployment failed and releases app lock and Git snapshot when opening its log fails', async () => {
+    createHarness()
+    const cleanup = vi.fn()
+    const logStreamSpy = vi
+      .spyOn(pipeline as unknown as { openLogStream: () => unknown }, 'openLogStream')
+      .mockImplementation(() => {
+        throw new Error('synthetic log open failure')
+      })
+    const snapshot = {
+      repositoryUrl: 'https://github.com/example/repo.git',
+      commitSha: 'c'.repeat(40),
+      rootDirectory: sourceDirectory!,
+      snapshotDirectory: sourceDirectory!,
+      cleanup
+    }
+    const { deploymentId } = pipeline.run(deployInput({ app_name: 'failed-git-api' }), undefined, {
+      handle: 'fake-handle',
+      snapshot,
+      gitRepoUrl: snapshot.repositoryUrl,
+      gitRef: 'main',
+      gitRoot: '.',
+      commitSha: snapshot.commitSha,
+      sourcePath: snapshot.rootDirectory,
+      expiresAt: Date.now() + 60_000,
+      plan: {} as never
+    })
+    const finished = await waitForFinished(deploymentId)
+    expect(finished.status).toBe('failed')
+    expect(deploymentRow(deploymentId).status).toBe('failed')
+    expect(cleanup).toHaveBeenCalledOnce()
+    logStreamSpy.mockRestore()
+    expect(() => pipeline.run(deployInput({ app_name: 'failed-git-api' }))).not.toThrow()
+    const retryDeployment = database
+      .prepare(
+        'SELECT id FROM deployment WHERE app_id = (SELECT id FROM app WHERE name = ?) ORDER BY version DESC LIMIT 1'
+      )
+      .get('failed-git-api') as { id: number }
+    expect((await waitForFinished(retryDeployment.id)).status).toBe('running')
+  })
+
   it('packaged resource path contains the collector files', () => {
     const resourceRoot = mkdtempSync(join(tmpdir(), 'opspilot-resources-'))
     mkdirSync(join(resourceRoot, 'collector'))

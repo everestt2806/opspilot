@@ -140,6 +140,7 @@ export interface RunContext {
   exposureStatus: ExposureStatus
   exposureEvidence: ExposureEvidence | null
   gitSnapshotCleanup?: () => void
+  resourcesReleased?: boolean
 }
 
 /**
@@ -191,13 +192,17 @@ export class DeployPipeline {
   ): { deploymentId: number } {
     const ctx = this.setup(input, signal, gitSource)
     const run = this.execute(ctx)
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
         logger.error('deploy', 'Pipeline dừng bất thường ngoài vòng bắt lỗi', {
           deployment_id: ctx.deployment.id,
           error: error instanceof Error ? error.message : String(error)
         })
+        await this.failUnexpected(ctx, error)
       })
-      .finally(() => this.activeRuns.delete(run))
+      .finally(() => {
+        this.cleanupRunResources(ctx)
+        this.activeRuns.delete(run)
+      })
     this.activeRuns.add(run)
     return { deploymentId: ctx.deployment.id }
   }
@@ -366,7 +371,7 @@ export class DeployPipeline {
           error: recordError instanceof Error ? recordError.message : String(recordError)
         })
       }
-      this.emit({
+      this.emitSafely({
         type: 'finished',
         deployment_id: ctx.deployment.id,
         status: 'failed',
@@ -400,7 +405,7 @@ export class DeployPipeline {
       message: `Rollback thủ công app ${ctx.app.name} về ${targetImageTag} — app đã chạy lại và healthcheck đạt.`
     })
     await this.pruneImages(ctx, null, [targetImageTag])
-    this.emit({
+    this.emitSafely({
       type: 'finished',
       deployment_id: ctx.deployment.id,
       status: 'running',
@@ -680,10 +685,16 @@ export class DeployPipeline {
 
   private async executeLocked(ctx: RunContext): Promise<void> {
     let finalStatus: FinalStatus = 'failed'
-    const logStream = this.openLogStream(ctx.deployment.id)
+    let logStream: import('node:fs').WriteStream | null = null
     let preparedActivationId: number | null = null
 
     try {
+      logStream = this.openLogStream(ctx.deployment.id)
+      logStream.on('error', () => {
+        logger.warn('deploy', 'Không ghi tiếp được file log; pipeline vẫn tiếp tục', {
+          deployment_id: ctx.deployment.id
+        })
+      })
       await this.stepPrecheck(ctx)
       await this.stepUpload(ctx)
       await this.stepRender(ctx)
@@ -736,7 +747,15 @@ export class DeployPipeline {
       await this.recordFailure(ctx, error)
       finalStatus = 'failed'
     } finally {
-      this.emit({
+      try {
+        logStream?.end()
+      } catch {
+        logger.warn('deploy', 'Không thể đóng file log của pipeline', {
+          deployment_id: ctx.deployment.id
+        })
+      }
+      this.cleanupRunResources(ctx)
+      this.emitSafely({
         type: 'finished',
         deployment_id: ctx.deployment.id,
         status: finalStatus,
@@ -747,9 +766,64 @@ export class DeployPipeline {
         exposure_evidence:
           finalStatus === 'running' ? (ctx.exposureEvidence ?? undefined) : undefined
       })
-      this.release(ctx.app.id, ctx.deployment.id)
-      ctx.gitSnapshotCleanup?.()
-      logStream.end()
+    }
+  }
+
+  private async failUnexpected(ctx: RunContext, error: unknown): Promise<void> {
+    try {
+      const current = this.deploymentRepository.getById(ctx.deployment.id)
+      if (current.status === 'building' || current.status === 'deploying') {
+        this.deploymentRepository.update(ctx.deployment.id, {
+          status: 'failed',
+          failed_step: ctx.failedStep ?? ctx.currentStep,
+          finished_at: nowIso(),
+          build_duration_ms: ctx.durations.BUILD ?? null,
+          total_duration_ms: Date.now() - ctx.startedAt
+        })
+      }
+    } catch (databaseError) {
+      logger.error('deploy', 'Không ghi được trạng thái fail sau lỗi pipeline', {
+        deployment_id: ctx.deployment.id,
+        error: databaseError instanceof Error ? databaseError.message : String(databaseError)
+      })
+    }
+    this.emitSafely({
+      type: 'finished',
+      deployment_id: ctx.deployment.id,
+      status: 'failed',
+      total_duration_ms: Date.now() - ctx.startedAt
+    })
+    if (error instanceof Error) {
+      logger.warn('deploy', 'Pipeline kết thúc ngoài vòng xử lý thông thường', {
+        deployment_id: ctx.deployment.id,
+        step: ctx.failedStep ?? ctx.currentStep
+      })
+    }
+  }
+
+  private cleanupRunResources(ctx: RunContext): void {
+    if (ctx.resourcesReleased) return
+    ctx.resourcesReleased = true
+    this.release(ctx.app.id, ctx.deployment.id)
+    const cleanup = ctx.gitSnapshotCleanup
+    ctx.gitSnapshotCleanup = undefined
+    try {
+      cleanup?.()
+    } catch {
+      logger.warn('deploy', 'Không thể dọn snapshot Git sau pipeline', {
+        deployment_id: ctx.deployment.id
+      })
+    }
+  }
+
+  private emitSafely(event: DeployEvent): void {
+    try {
+      this.emit(event)
+    } catch {
+      logger.warn('deploy', 'Không gửi được event deploy tới renderer', {
+        deployment_id: event.deployment_id,
+        event_type: event.type
+      })
     }
   }
 
@@ -763,7 +837,7 @@ export class DeployPipeline {
   private async inStep<T>(ctx: RunContext, step: DeployStep, fn: () => Promise<T>): Promise<T> {
     ctx.currentStep = step
     ctx.stepLines = []
-    this.emit({
+    this.emitSafely({
       type: 'step-start',
       deployment_id: ctx.deployment.id,
       step,
@@ -776,7 +850,7 @@ export class DeployPipeline {
       const value = await fn()
       const durationMs = Date.now() - started
       ctx.durations[step] = durationMs
-      this.emit({
+      this.emitSafely({
         type: 'step-done',
         deployment_id: ctx.deployment.id,
         step,
@@ -796,7 +870,7 @@ export class DeployPipeline {
         ctx.cancelled = true
       }
       const ipcError = toStepIpcError(error)
-      this.emit({
+      this.emitSafely({
         type: 'step-failed',
         deployment_id: ctx.deployment.id,
         step,
@@ -839,7 +913,7 @@ export class DeployPipeline {
   }
 
   private log(ctx: RunContext, step: DeployStep, chunk: string, stream: 'stdout' | 'stderr'): void {
-    this.emit({
+    this.emitSafely({
       type: 'log',
       deployment_id: ctx.deployment.id,
       step,
@@ -1609,7 +1683,7 @@ export class DeployPipeline {
     const step: DeployStep = 'RECORD'
     ctx.currentStep = step
     ctx.stepLines = []
-    this.emit({ type: 'step-start', deployment_id: ctx.deployment.id, step, ts: nowIso() })
+    this.emitSafely({ type: 'step-start', deployment_id: ctx.deployment.id, step, ts: nowIso() })
     const started = Date.now()
 
     try {
@@ -1658,7 +1732,7 @@ export class DeployPipeline {
 
     const durationMs = Date.now() - started
     ctx.durations[step] = durationMs
-    this.emit({
+    this.emitSafely({
       type: 'step-done',
       deployment_id: ctx.deployment.id,
       step,

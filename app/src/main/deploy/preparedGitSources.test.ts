@@ -68,6 +68,7 @@ describe('PreparedGitSources', () => {
     expect(reservation.lease.commitSha).toBe(snapshot.commitSha)
     sources.commitStart(reservation)
     expect(() => sources.get(prepared.prepared_source_handle)).toThrow()
+    expect(() => sources.reserveStart({ ...request, precheck_token: token })).toThrow()
     expect(snapshot.cleanup).not.toHaveBeenCalled()
   })
 
@@ -92,5 +93,51 @@ describe('PreparedGitSources', () => {
     expect(sources.get(prepared.prepared_source_handle).snapshot).toBe(snapshot)
     sources.close()
     expect(snapshot.cleanup).toHaveBeenCalledOnce()
+  })
+
+  it('releases an abandoned handle but defers cleanup while a start reservation owns it', async () => {
+    const { snapshot } = createSource()
+    const sources = new PreparedGitSources(async () => snapshot)
+    const prepared = await sources.prepare('request-3', {
+      source_type: 'git',
+      git_repo_url: 'https://github.com/example/repo',
+      git_ref: 'main',
+      git_root: '.'
+    })
+    const request = {
+      source_type: 'git' as const,
+      prepared_source_handle: prepared.prepared_source_handle,
+      vps_id: 1,
+      app_name: 'fixture-app',
+      env: {}
+    }
+    const token = sources.issuePrecheckToken(prepared.prepared_source_handle, request, 30_000)
+    const reservation = sources.reserveStart({ ...request, precheck_token: token })
+
+    sources.release(prepared.prepared_source_handle)
+    expect(snapshot.cleanup).not.toHaveBeenCalled()
+    sources.releaseStart(reservation)
+    sources.release(prepared.prepared_source_handle)
+
+    expect(snapshot.cleanup).toHaveBeenCalledOnce()
+    expect(() => sources.get(prepared.prepared_source_handle)).toThrow()
+  })
+
+  it('expires an abandoned prepared handle and makes it unavailable', async () => {
+    vi.useFakeTimers()
+    const { snapshot } = createSource()
+    const sources = new PreparedGitSources(async () => snapshot)
+    const prepared = await sources.prepare('request-4', {
+      source_type: 'git',
+      git_repo_url: 'https://github.com/example/repo',
+      git_ref: 'main',
+      git_root: '.'
+    })
+
+    await vi.advanceTimersByTimeAsync(16 * 60 * 1000)
+
+    expect(snapshot.cleanup).toHaveBeenCalledOnce()
+    expect(() => sources.get(prepared.prepared_source_handle)).toThrow()
+    vi.useRealTimers()
   })
 })
