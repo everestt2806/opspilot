@@ -28,6 +28,7 @@ Chuẩn bị nguồn Git công khai một lần, trả full SHA và kết quả 
 ## Nhật ký
 
 - PLAN 08/10 — Leader review G0 local pass; tách G1 thành core G1a và UI/migrate G1b để kiểm chứng vòng đời snapshot trước khi mở giao diện.
+- START 08/10 — Đọc G0/audit/contracts; commit riêng contract IPC + DECISIONS, sau đó nối opaque snapshot handle xuyên detect/precheck/start, provenance DB, lifecycle cleanup và hồi quy local; chạy mọi gate trên Node 22.
 
 ## PR
 

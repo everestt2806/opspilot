@@ -177,9 +177,11 @@ export interface IpcInvokeMap {
 
   // ── Detect & Deploy (UC-02, UC-03) ─────────────────────────────────────────
   'deploy:detect':   (sourcePath: string) => IpcResult<DetectionResultDto>;
-  'deploy:precheck': (input: DeployInput) => IpcResult<PrecheckResult>;
+  'deploy:prepare-git': (requestId: string, input: GitSourceInput) => IpcResult<PreparedGitSource>;
+  'deploy:cancel-git-prepare': (requestId: string) => IpcResult<void>;
+  'deploy:precheck': (input: DeploySourceInput) => IpcResult<PrecheckResult>;
   /** Trả về ngay khi pipeline khởi động; tiến độ theo dõi qua kênh 'deploy:event' */
-  'deploy:start':    (input: DeployInput) => IpcResult<{ deployment_id: number }>;
+  'deploy:start':    (input: DeployStartInput) => IpcResult<{ deployment_id: number }>;
   'deploy:cancel':   (deploymentId: number) => IpcResult<void>;
   'doctor:diagnose': (input: { deployment_id: number | null; evidence: DoctorEvidenceInput }) =>
     IpcResult<{
@@ -367,6 +369,24 @@ export interface GitSourceInput {
   git_root: string;
 }
 
+export interface PreparedGitSource {
+  prepared_source_handle: string;
+  git_repo_url: string;
+  git_ref: string;
+  git_root: string;
+  git_commit_sha: string;
+  detection: DetectionResultDto;
+}
+
+export interface GitDeployInput extends Omit<DeployInput, 'source_path'> {
+  source_type: 'git';
+  prepared_source_handle: string;
+  precheck_token?: string;
+}
+
+export type DeploySourceInput = DeployInput | GitDeployInput;
+export type DeployStartInput = DeployInput | (GitDeployInput & { precheck_token: string });
+
 /** Evidence đã redacted gửi vào Doctor; không nhận secret value. */
 export interface DoctorEvidenceInput {
   step?: string;
@@ -402,6 +422,7 @@ export interface PrecheckResult {
   }>;
   assigned_host_port: number;
   app_url: string;
+  precheck_token?: string;
 }
 
 export type DetectionResultDto =
