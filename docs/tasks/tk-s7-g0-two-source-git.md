@@ -25,16 +25,19 @@ Người dùng có thể chọn deploy trực tiếp từ thư mục hoặc từ
 
 ## Definition of Done
 
-- [ ] Contract phân biệt `local | git`; dữ liệu local cũ còn đọc được. Bản Git có URL canonical không chứa credential, ref/root ở app và repo URL/full SHA của từng deployment. Không tạo Git SHA giả cho local. Ghi rõ quyết định nguồn sự thật khi chuyển snapshot sang G1 và cách migrate không phụ thuộc clone tạm.
-- [ ] Pha A contract/DECISIONS được commit riêng và review diff trước Pha B; mỗi commit độc lập vẫn qua gate liên quan, không để trạng thái code và contract lệch trong cùng checkpoint.
-- [ ] Snapshot Git công khai: kiểm URL HTTPS GitHub, ref/root; khóa full SHA; checkout vào thư mục riêng; root không thoát snapshot qua `..`/symlink. `spawn` với argv, `GIT_TERMINAL_PROMPT=0`, tắt credential helper; timeout, hủy, giới hạn dung lượng và cleanup. Không chạy submodule/LFS trong lát cắt này.
-- [ ] Test có fixture/repo local cho đường đúng và ca URL có credential, scheme sai, ref không tồn tại, branch đổi, root traversal, cancel/timeout, clone lỗi, cleanup; test SQLite migration từ schema cũ và case local. Có CLI thử với repo demo công khai đã nêu ở docs/30, không dùng working tree hiện hành làm bằng chứng Git.
-- [ ] Snapshot commit riêng compile được; lint/typecheck Node/Web/Scripts, test module Git + DB, full Vitest và build pass; `git diff --check` sạch. Nếu gate fail, ghi đúng lỗi và dừng, không tự bỏ gate.
-- [ ] Cập nhật nhật ký task/board theo quy trình. Commit cục bộ, giữ file công cụ local ngoài Git. Worker chỉ trả cho người dùng câu **“Worker đã xong”**; Leader sẽ tự review SHA/diff/gate trong repo.
+- [x] Contract phân biệt `local | git`; dữ liệu local cũ còn đọc được. Bản Git có URL canonical không chứa credential, ref/root ở app và repo URL/full SHA của từng deployment. Không tạo Git SHA giả cho local. Ghi rõ quyết định nguồn sự thật khi chuyển snapshot sang G1 và cách migrate không phụ thuộc clone tạm.
+- [x] Pha A contract/DECISIONS được commit riêng và review diff trước Pha B; mỗi commit độc lập vẫn qua gate liên quan, không để trạng thái code và contract lệch trong cùng checkpoint.
+- [x] Snapshot Git công khai: kiểm URL HTTPS GitHub, ref/root; khóa full SHA; checkout vào thư mục riêng; root không thoát snapshot qua `..`/symlink. `spawn` với argv, `GIT_TERMINAL_PROMPT=0`, tắt credential helper; timeout, hủy, giới hạn dung lượng và cleanup. Không chạy submodule/LFS trong lát cắt này.
+- [x] Test có fixture/repo local cho đường đúng và ca URL có credential, scheme sai, ref không tồn tại, branch đổi, root traversal, cancel/timeout, clone lỗi, cleanup; test SQLite migration từ schema cũ và case local. Có CLI thử với repo demo công khai đã nêu ở docs/30, không dùng working tree hiện hành làm bằng chứng Git.
+- [x] Snapshot commit riêng compile được; lint/typecheck Node/Web/Scripts, test module Git + DB, full Vitest và build pass; `git diff --check` sạch. Nếu gate fail, ghi đúng lỗi và dừng, không tự bỏ gate.
+- [x] Cập nhật nhật ký task/board theo quy trình. Commit cục bộ, giữ file công cụ local ngoài Git. Worker chỉ trả cho người dùng câu **“Worker đã xong”**; Leader sẽ tự review SHA/diff/gate trong repo.
 
 ## Nhật ký
 
 - PLAN 08/10 — Leader tạo brief sau khi người dùng chốt hai nguồn deploy ngang hàng, Product mode cho phép control plane và demo 14/10 theo bằng chứng thực tế. Worker ghi START khi nhận task.
+- START 08/10 — Khóa contract local/Git và DECISIONS trong commit Pha A; sau đó triển khai snapshot công khai, migration/IPC và CLI, chạy đủ gate G0.
+- UPDATE 08/10 — Pha A contract/DECISIONS commit `78ebb00`; Pha B thêm migration 007, provenance IPC, snapshot detached full SHA và CLI. CLI public demo trả SHA `8af16e1f9165a31557288adbc23acc420244938f`, root `demo-apps/express-api`. Fixture local xác nhận branch move không đổi snapshot; migration v6→v7 giữ local path và không sinh provenance Git. Gate Node/Web/Scripts typecheck, lint, focused + full Vitest (70 file/641 test), build và diff check PASS.
+- HANDOFF-LOCAL 08/10 — Code commit `c4e3823c3b386caeda0be274e611bc8ed28f5079`; chưa push. Node `v24.16.0`, pnpm `11.1.0`. Lệnh đã chạy: `pnpm exec tsc --noEmit --strict --target ES2022 --moduleResolution bundler --module preserve docs/contracts/ipc-contract.ts`; `pnpm exec vitest run src/main/git/snapshot.test.ts src/main/db/index.test.ts` (11 pass); `pnpm test` (70 files, 641 pass); `pnpm lint`; `pnpm typecheck:node`; `pnpm typecheck:web`; `pnpm exec tsc -p tsconfig.scripts.json --noEmit`; `pnpm build`; `pnpm try:git-snapshot https://github.com/everestt2806/opspilot.git main demo-apps/express-api`; `git diff --check`. Tất cả gate pass.
 
 ## Lệnh tái hiện
 
@@ -43,3 +46,5 @@ Worker ghi lệnh thực chạy, phiên bản Node/pnpm, SHA và kết quả và
 ## PR
 
 Chưa được phép push, mở PR hoặc merge.
+
+- HANDOFF-LOCAL — local `c4e3823` · chưa push; Leader review diff/gate theo quy trình.
