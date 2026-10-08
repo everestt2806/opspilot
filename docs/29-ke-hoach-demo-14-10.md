@@ -18,8 +18,10 @@ Git push-to-deploy, ingress HTTPS và backup theo lịch là roadmap sau demo.
 | LIVE_VPS | Trước 11/10 có VPS, host fingerprint xác minh độc lập, credential và Docker đạt preflight | Một deploy Express thật, URL kiểm tra từ ngoài, log/deployment/rollback thật | Không gọi HTTP IP:port là HTTPS; không gọi dữ liệu ML mock là pilot |
 | OFFLINE_DISCLOSED | Thiếu bất kỳ điều kiện LIVE_VPS nào | App chạy thật trên máy, detector và thao tác local; dữ liệu fixture có nhãn mô phỏng; ảnh/log VPS lịch sử ghi ngày và SHA | Không gọi fixture hoặc ảnh lịch sử là deploy/monitor đang chạy live |
 
-Hiện tại (08/10): không có VPS khả dụng; Docker Desktop daemon trên máy điều khiển không chạy.
-Mặc định làm **OFFLINE_DISCLOSED** và chuẩn bị nhánh LIVE_VPS như tùy chọn, không chờ VPS để hoàn thiện hồ sơ.
+Hiện tại (08/10): đã có [VPS phát triển](tasks/dev-vps-preflight-2026-10-08.md) kiểm chứng SSH,
+Docker và cổng 30000; máy này chưa phải VPS demo và chưa đạt mốc ổ 40 GB của pilot.
+Docker Desktop daemon trên máy điều khiển không chạy. Mặc định vẫn chuẩn bị **OFFLINE_DISCLOSED**;
+chỉ chuyển LIVE_VPS sau khi máy demo và luồng deploy thật đạt gate D14-3.
 
 ## 2. Checkpoint và lịch ngược
 
