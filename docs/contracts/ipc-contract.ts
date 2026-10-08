@@ -342,17 +342,21 @@ export interface DeployInput {
   /** Thiếu -> tạo app mới; có -> redeploy app đã tồn tại */
   app_id?: number;
   app_name: string;
-  source_type?: 'local' | 'git';
-  /** Required for the currently wired local-folder flow. */
+  /** Local folder on the desktop; DeployInput remains local-only until G1. */
   source_path: string;
-  /** Canonical public GitHub HTTPS URL, without credentials. */
-  git_repo_url?: string;
-  /** Branch, tag, or full commit requested for snapshot resolution. */
-  git_ref?: string;
-  /** Relative directory within the snapshot; '.' means repository root. */
-  git_root?: string;
   /** Env do người dùng điền ở bước 3 của wizard, gồm cả secret */
   env: Record<string, string>;
+}
+
+/** Git source metadata contract reserved for G1; it is not accepted by the current deploy IPC. */
+export interface GitSourceInput {
+  source_type: 'git';
+  /** Canonical public GitHub HTTPS URL without credentials. */
+  git_repo_url: string;
+  /** Branch, tag, or full commit to resolve for a snapshot. */
+  git_ref: string;
+  /** Relative directory inside the repository; '.' selects its root. */
+  git_root: string;
 }
 
 /** Evidence đã redacted gửi vào Doctor; không nhận secret value. */
