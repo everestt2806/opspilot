@@ -53,6 +53,12 @@ export interface App {
   vps_id: number;
   name: string;
   framework: FrameworkId;
+  source_type?: 'local' | 'git';
+  /** Local path is retained for existing local apps; null for Git apps. */
+  source_path?: string | null;
+  git_repo_url?: string | null;
+  git_ref?: string | null;
+  git_root?: string | null;
   host_port: number;
   container_port: number;
   healthcheck_path: string;
@@ -67,6 +73,9 @@ export interface Deployment {
   app_id: number;
   version: number;
   image_tag: string;
+  /** Git provenance is null for deployments created from a local folder. */
+  git_repo_url?: string | null;
+  git_commit_sha?: string | null;
   status: 'building' | 'deploying' | 'running' | 'failed' | 'rolled_back' | 'stopped';
   failed_step: DeployStep | null;
   build_duration_ms: number | null;
@@ -333,7 +342,15 @@ export interface DeployInput {
   /** Thiếu -> tạo app mới; có -> redeploy app đã tồn tại */
   app_id?: number;
   app_name: string;
+  source_type?: 'local' | 'git';
+  /** Required for the currently wired local-folder flow. */
   source_path: string;
+  /** Canonical public GitHub HTTPS URL, without credentials. */
+  git_repo_url?: string;
+  /** Branch, tag, or full commit requested for snapshot resolution. */
+  git_ref?: string;
+  /** Relative directory within the snapshot; '.' means repository root. */
+  git_root?: string;
   /** Env do người dùng điền ở bước 3 của wizard, gồm cả secret */
   env: Record<string, string>;
 }

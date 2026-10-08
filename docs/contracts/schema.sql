@@ -72,7 +72,12 @@ CREATE TABLE app (
   name              TEXT    NOT NULL,          -- slug: ^[a-z0-9][a-z0-9-]{1,30}$
   framework         TEXT    NOT NULL CHECK (framework IN ('nextjs','express','static-spa','flask')),
 
-  source_path       TEXT,                      -- đường dẫn local hoặc git URL
+  -- Source provenance: old rows migrate as local and retain their original path.
+  source_type       TEXT    NOT NULL DEFAULT 'local' CHECK (source_type IN ('local','git')),
+  source_path       TEXT,                      -- chỉ dùng cho nguồn local; không ghi đè bằng URL Git
+  git_repo_url      TEXT,                      -- URL GitHub HTTPS canonical, không credential
+  git_ref           TEXT,                      -- branch/tag/SHA được chọn; không xem là provenance immutable
+  git_root          TEXT,                      -- thư mục tương đối bên trong repository
   host_port         INTEGER NOT NULL,          -- cấp trong dải 30000-30999, ADR-006
   container_port    INTEGER NOT NULL,
   healthcheck_path  TEXT    NOT NULL DEFAULT '/',
@@ -96,6 +101,8 @@ CREATE TABLE deployment (
   app_id            INTEGER NOT NULL REFERENCES app(id) ON DELETE CASCADE,
   version           INTEGER NOT NULL,          -- tăng dần trong phạm vi app
   image_tag         TEXT    NOT NULL,          -- vd 'myapp:v3'
+  git_repo_url      TEXT,                      -- provenance của snapshot; NULL với deployment local
+  git_commit_sha    TEXT,                      -- full immutable commit SHA; NULL với deployment local
 
   status            TEXT    NOT NULL CHECK (status IN
                       ('building','deploying','running','failed','rolled_back','stopped')),
