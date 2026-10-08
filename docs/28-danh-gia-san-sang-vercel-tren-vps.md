@@ -3,6 +3,7 @@
 > Đánh giá gốc: 08/10/2026 tại HEAD `9dcd054`; cập nhật trạng thái 08/10 tại HEAD `fcc3051`.
 > Bản kiểm kê Git-first và thứ tự demo mới: [30-audit-git-first-deploy.md](30-audit-git-first-deploy.md).
 > VPS phát triển đã qua preflight SSH/Docker/port; deploy qua OpsPilot và pilot ML vẫn `NOT_RUN`.
+> Rà soát sản phẩm lần hai tại HEAD `d22873a` ngày 08/10/2026: mục 6–9 bên dưới. Các số test ở mục 1 là kết quả lịch sử của lần review trước, không phải gate chạy lại tại HEAD này.
 
 ## 1. Kết luận
 
@@ -95,3 +96,45 @@ trust SSH; (d) phạm vi vẫn là đồ án trước 20/11/2026 hay nhánh sả
 Khuyến nghị: giữ nhánh đồ án ưu tiên pilot và dữ liệu ML; triển khai lát cắt P1 theo các checkpoint
 độc lập sau khi các quyết định liên quan được duyệt. DB-1 chỉ giải quyết một tab còn thiếu, không
 phải đường găng để đạt lời hứa “Vercel trên VPS”.
+
+## 6. Định nghĩa sản phẩm cần đạt và khoảng cách còn lại
+
+Mục tiêu thực tế của OpsPilot là **đưa một repo lên VPS của người dùng và vận hành app đó qua một giao diện**. Vercel là chuẩn tham chiếu cho trải nghiệm Git → deployment bất biến → URL → quan sát → rollback; Dokploy và Coolify là chuẩn tham chiếu sát hơn về container, VPS, ingress và vận hành. Không cần sao chép toàn bộ dịch vụ của họ, nhưng cần một đường đi trọn vẹn và có thể kiểm chứng trên VPS thật.
+
+| Khâu trong vòng đời | Hiện trạng OpsPilot tại HEAD | Mức thiếu | Tiêu chí đạt tối thiểu |
+|---|---|---|---|
+| Kết nối VPS an toàn | Có SSH host fingerprint pin, lưu credential cục bộ, preflight VPS phát triển đã qua | Cần live deploy qua app | Kết nối bằng host key đã xác minh, test lỗi khóa sai/thiếu, không lộ credential |
+| Tạo project từ Git | `DeployPage.tsx` chỉ chọn folder; `deploy:detect` nhận path; pipeline dùng `existsSync(source_path)` | **P0, chặn lời hứa sản phẩm và UC-02 gốc** | URL repo, ref, root directory; snapshot khóa bằng full SHA từ Git từ xa; người dùng xem được trước Deploy |
+| Build và phát hành | Detector Next.js/Express/Vite, build Docker trên VPS, loopback health, external probe, rollback; chưa thấy bước chạy test source theo FR-B5 | **P0 cho lát cắt Git, P1 cho tính tổng quát** | Build đúng SHA; log build và lỗi rõ; policy chạy test tùy chọn được khai báo, có timeout; bản mới chỉ active sau health |
+| Danh tính bản triển khai | Lưu phiên bản/image và history, nhưng deployment chưa lưu repo/ref/SHA | **P0** | Mỗi deployment có source provenance bất biến; redeploy/migrate/rollback không dựa vào clone tạm hoặc working tree local |
+| URL và domain | IP:port có exposure probe; Domain Assistant/DNS Cloudflare hỗ trợ kế hoạch và record | **P1** | Một domain thực route đến đúng app qua 80/443, certificate hợp lệ, external HTTPS probe; DNS record một mình không đủ |
+| Vận hành app | Có runtime inspect, history và rollback; IPC `app:start`/`app:stop` chỉ khai báo, chưa có handler; runtime logs chưa có màn/handler | **P1** | Xem log runtime giới hạn/redact; start/stop/restart có trạng thái và quyền; lỗi trả về rõ |
+| Env và dữ liệu | Env nhập lúc deploy, `.env` trên VPS; chưa có vòng đời sửa/rotate; tab Database mặc định unsupported, `db:*` chưa có handler | **P1/P2** | Chỉnh env có kiểm soát và redeploy; DB tab chỉ bật khi backend thật; backup/restore có bằng chứng |
+| Push, preview, giám sát liên tục | MonitorScheduler sống cùng Electron; chưa có webhook receiver luôn chạy, queue hoặc preview PR | **P2, quyết định kiến trúc** | Nhận push có xác thực khi desktop tắt, chống lặp, queue, preview cô lập và cleanup; hoặc ghi rõ sản phẩm chỉ deploy thủ công |
+| An toàn khi build mã ngoài | Public Git sẽ chạy code trong Docker build trên VPS của người dùng | **P0 về guardrails** | Giới hạn thời gian/dung lượng/tài nguyên, URL/ref/path hợp lệ, không cấp secret không cần thiết, lỗi và log được khử nhạy cảm |
+
+`docs/00-de-tai-goc.md` UC-02 đã nêu **“thư mục source/Git URL”**; Git URL là yêu cầu gốc chưa hoàn thành, không phải ý tưởng mới. FR-B5 còn nêu “chạy test (nếu có)”; pipeline hiện chưa có bước cấu hình/chạy test của source app. Hai điểm này phải được đánh dấu riêng trong hồ sơ nghiệm thu thay vì cộng vào số test nội bộ của OpsPilot.
+
+## 7. Quyết định kiến trúc trước khi mở rộng Git
+
+1. **Project/source và nơi chạy là hai khái niệm khác nhau.** Hiện bảng `app` gắn một `vps_id`, `source_path` và deployment hiện tại. Với demo một repo → một VPS, có thể mở rộng bảng này để tiết kiệm thời gian, nhưng phải lưu rõ `source_kind`, URL/ref/root và provenance từng deployment. Không dùng đường clone tạm làm định danh lâu dài. Khi thêm staging, preview hoặc cùng repo trên nhiều VPS, tách `project/source` khỏi `environment/target` thay vì cố kéo dài `app` hiện tại.
+2. **Snapshot Git là đầu vào bất biến.** UI detect/precheck/start phải dùng cùng SHA đã khóa. Phân biệt “deploy latest của branch” (resolve SHA mới rồi tạo deployment mới) với “redeploy cùng SHA”. `MigrateService` phải xử lý Git app khi cache checkout cũ không còn.
+3. **HTTPS cần chọn một ingress thực.** `domain:plan` có thể gợi ý shared ingress/named tunnel; `domain:upsert` chưa tự dựng proxy hoặc tunnel. Trước khi hứa URL đẹp, chọn một phương án có lifecycle, chứng chỉ, port 80/443, rollback cấu hình và external probe. Điều này thay đổi giới hạn ADR-006 hiện có, nên cần quyết định kiến trúc tường minh.
+4. **Push-to-deploy cần một bộ phận luôn chạy.** Electron chỉ nhận sự kiện khi đang mở. Có thể đặt control plane riêng hoặc chọn kiến trúc agent/service có giới hạn rõ; cả hai cần xem lại NFR-1 của đề tài. Không dùng một script CI deploy thẳng lên VPS rồi gọi đó là luồng OpsPilot nếu nó bỏ qua SQLite/history/Doctor.
+5. **Giữ an toàn trên VPS.** Public Git không đồng nghĩa code đáng tin. Luồng fetch/build cần timeout, quota, cleanup và kiểm soát Docker build; private Git sau đó cần cơ chế quyền đọc tối thiểu, secret không nằm trong URL/DB/log.
+
+## 8. Thứ tự làm lại theo giá trị sản phẩm
+
+| Thời điểm | Lát cắt | Vì sao ưu tiên | Bằng chứng chấp nhận |
+|---|---|---|---|
+| Trước 14/10 | Git công khai → chọn branch/root → khóa SHA → deploy thủ công Express lên VPS phát triển → IP:port `/health` → history hiển thị SHA | Hoàn thành UC-02 còn thiếu và cho thấy đường Git-to-VPS thật | Ảnh/video Electron + HTTP ngoài VPS + repo/ref/full SHA/ID deployment khớp; lỗi được báo trung thực |
+| Sau khi Git live ổn | Redeploy từ branch, rollback bản cũ, runtime logs, test source tùy chọn, env update có kiểm soát | Làm app dùng được sau lần deploy đầu tiên | Hai SHA trong history, rollback đúng image, log sau deploy, ca lỗi test/build/health |
+| Lát cắt public URL | Ingress HTTPS cho một domain, certificate, DNS, external HTTPS probe | Đưa URL đáng dùng và không nhầm DNS với routing | URL HTTPS thật, certificate hợp lệ, app đích đúng, rollback ingress an toàn |
+| Sau quyết định kiến trúc | Private Git, webhook push, preview PR, queue, giám sát khi desktop đóng | Đạt trải nghiệm tự động như chuẩn tham chiếu | Push khi desktop tắt vẫn tạo deployment đúng SHA; preview cô lập và dọn được |
+| Sau nền vận hành | DB operations, backup offsite và restore drill, thêm build modes/framework, team access | Mở rộng phạm vi sau khi luồng lõi đã tin cậy | Restore thật và test phân quyền/tài nguyên; không chỉ có tab hoặc contract |
+
+**Phạm vi nói với giảng viên ngày 14/10:** “OpsPilot bản thử nghiệm triển khai Git lên VPS riêng qua ứng dụng desktop, phát hiện framework, build, kiểm tra sức khỏe, ghi nhận phiên bản và hỗ trợ rollback/Doctor.” Chỉ nói các bước nào đã qua live gate. Không giới thiệu push-to-deploy, HTTPS tự động, private Git, Database tab hay pilot ML là đã hoàn thành khi chưa có bằng chứng tương ứng.
+
+## 9. Checkpoint trước khi giao Worker
+
+Giữ prompt G0 cũ ở trạng thái **chờ sửa**. Nó đã đi đúng hướng public Git nhưng ấn định migration 007 và trường dữ liệu trước khi chốt mô hình project/source, tương thích `MigrateService` và nguồn dữ liệu cho redeploy. Checkpoint kế tiếp cần khóa hợp đồng dữ liệu/IPC và các bất biến trên bằng một review ngắn; sau đó mới giao acquisition + pipeline/UI theo [kiểm kê Git-first](30-audit-git-first-deploy.md) và [lịch demo](29-ke-hoach-demo-14-10.md). Chưa có bằng chứng live deploy qua OpsPilot; preflight VPS chỉ chứng minh hạ tầng sẵn sàng để thử.
