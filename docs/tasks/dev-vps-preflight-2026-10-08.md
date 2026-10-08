@@ -20,7 +20,7 @@ VPS này dùng để phát triển và kiểm chứng. Người dùng dự kiế
 
 - **DEV_READY_INFRA** cho một deploy thử nhỏ; Docker, SSH và cổng 30000 đã có bằng chứng thực tế.
 - **NOT_PILOT_READY**: ổ 25 GB thấp hơn yêu cầu 40 GB/VPS; mới có một VPS, chưa chạy thử tải/ML 75 phút, chưa đo độ lệch giờ theo giao thức.
-- **NOT_APP_E2E_VERIFIED**: chưa tạo bản ghi VPS trong OpsPilot và chưa deploy `express-api` qua app. `SshManager.openClient()` hiện gọi `ssh2.connect()` mà không có `hostVerifier`, tức app tự chấp nhận host key theo mặc định của thư viện. Cần pin host key và test trước khi dùng app để ghi lên VPS.
+- **NOT_APP_E2E_VERIFIED**: chưa tạo bản ghi VPS trong OpsPilot và chưa deploy `express-api` qua app. Sau commit `a2313e0` và `d958684`, `SshManager` đã pin SHA256 host key; ngày 08/10, bản biên dịch kết nối bằng fingerprint đúng, chạy `id -un` chỉ đọc và từ chối fingerprint sai. Đây là kiểm chứng lớp SSH, chưa phải kiểm chứng pipeline deploy trong app.
 - Đã thử đăng nhập root bằng khóa riêng từ máy điều khiển; mật khẩu SSH vẫn bật. Không đưa mật khẩu hoặc private key vào repo, log, tài liệu hoặc prompt Worker. Nên đổi mật khẩu đã chia sẻ trong console nhà cung cấp.
 
 Docker được cài từ apt repository chính thức cho Ubuntu 24.04; không cài `ufw`, không sửa cloud firewall, không deploy app thật và không chạy pilot.
