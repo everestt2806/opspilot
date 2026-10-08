@@ -23,7 +23,7 @@
     <h1>OpsPilot</h1>
     <p><strong>Triển khai và giám sát ứng dụng trên VPS riêng</strong> · Phiếu trình bày 14/10/2026</p>
     <p class="badge">BẢN NHÁP — cập nhật SHA và chế độ demo sau rehearsal 13/10</p>
-    <p><strong>SHA chạy demo:</strong> ................................ &nbsp; <strong>Chế độ:</strong> LIVE_VPS / OFFLINE_DISCLOSED</p>
+    <p><strong>SHA chạy demo:</strong> ................................ &nbsp; <strong>Chế độ:</strong> LIVE_VPS / RECORDED_FALLBACK</p>
 
     <h2>Ý tưởng trong một câu</h2>
     <p>OpsPilot nhận diện mã nguồn, triển khai qua SSH và Docker, lưu phiên bản, kiểm tra khả năng truy cập, theo dõi vận hành và hỗ trợ khôi phục.</p>
@@ -41,12 +41,12 @@
     <h2>Bằng chứng và giới hạn</h2>
     <table>
       <tr><th>Đã kiểm chứng cục bộ 08/10</th><th>Chỉ ghi sau rehearsal</th></tr>
-      <tr><td>Lint PASS; typecheck PASS; 68 file / 626 test PASS trên Node 22.</td><td>URL và deployment ID VPS thật: ................................</td></tr>
+      <tr><td>Baseline trước D14-1: lint, typecheck, 69 file / 631 test PASS trên Node 22. Chạy lại gate sau rehearsal.</td><td>URL và deployment ID VPS thật: ................................</td></tr>
       <tr><td>UI desktop và ba detector có test; các màn có ảnh Electron ở <code>docs/ui-redesign/screenshots/</code>.</td><td>Ảnh/video cùng SHA, 2 lượt rehearsal: ................................</td></tr>
     </table>
-    <p class="note"><strong>Nếu OFFLINE_DISCLOSED:</strong> không có deploy trực tiếp trong buổi; dữ liệu fixture và ảnh lịch sử được gắn nhãn, không được gọi là trạng thái VPS hiện tại. Pilot ML trên VPS vẫn NOT_RUN.</p>
+    <p class="note"><strong>Nếu RECORDED_FALLBACK:</strong> trình chiếu bản ghi của lần deploy VPS thật đã kiểm chứng, kèm ngày và SHA; không gọi đó là thao tác đang chạy live. Pilot ML trên VPS vẫn NOT_RUN.</p>
 
     <h2>Bước tiếp theo sau demo</h2>
-    <p>Ưu tiên xác minh SSH host, nguồn Git gắn commit SHA, URL HTTPS qua ingress và runtime logs. Git push-to-deploy/preview cần quyết định cách chạy khi desktop tắt.</p>
+    <p>Ưu tiên nguồn Git gắn commit SHA, URL HTTPS qua ingress và runtime logs. Git push-to-deploy/preview cần quyết định cách chạy khi desktop tắt.</p>
   </body>
 </html>

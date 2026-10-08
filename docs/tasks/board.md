@@ -92,9 +92,9 @@ manual-only, không push/PR/merge.
 | ID | Task | Chủ | Hạn nội bộ | Trạng thái | Phụ thuộc | DoD ngắn |
 | --- | --- | --- | --- | --- | --- | --- |
 | D14-0 | Khóa scope, lập runbook hai chế độ và phiếu in | Leader | 08/10 | HOÀN THÀNH | Không | Kế hoạch 29 và phiếu A4; baseline 68 file/626 test, lint/typecheck PASS |
-| D14-1 | Profile demo offline tách dữ liệu thật và chặn remote tại main | Worker | 09/10 | TUẦN NÀY | D14-0 | Banner rõ, fixture synthetic, test chứng minh không SSH/ghi remote |
+| D14-1 | Live smoke Express qua app trên VPS phát triển | Worker | 09/10 | TUẦN NÀY | VPS đã pin host key | Deployment/URL/HTTP/container có bằng chứng; không lộ secret |
 | D14-2 | Bằng chứng detector và ML local tái chạy được | Worker | 10/10 | BACKLOG | D14-1 | Ba detector và một luồng ML synthetic có lệnh/SHA/output hoặc loại khỏi demo |
-| D14-3 | Preflight VPS có điều kiện; chốt LIVE_VPS/OFFLINE_DISCLOSED | Worker | 11/10 | BACKLOG | VPS và fingerprint tin cậy | Thiếu một gate thì ghi BLOCKED/NOT_RUN và dùng offline |
+| D14-3 | Chốt VPS demo, lặp preflight nếu đổi máy và quay bản chạy live dự phòng | Worker | 11/10 | BACKLOG | D14-1 | Máy dùng tại demo qua gate; video/ảnh bản chạy thật có ngày/SHA |
 | D14-4 | Rehearsal lần 1, ảnh và sửa blocker | Worker | 12/10 | BACKLOG | D14-2, D14-3 | Demo 6–8 phút; ghi thời lượng, SHA, ảnh và lỗi |
 | D14-5 | Rehearsal lần 2, gate cuối, freeze và phiếu in | Worker | 13/10 | BACKLOG | D14-4 | Leader cấp verdict theo đúng chế độ; không thêm tính năng |
 
