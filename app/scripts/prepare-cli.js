@@ -8,38 +8,30 @@ const { join } = require('node:path')
 
 const migrationDir = join('.out-scripts', 'src', 'main', 'db', 'migrations')
 const compiledIndex = join('.out-scripts', 'src', 'main', 'db', 'index.js')
+const migrations = [
+  '001_init.sql',
+  '002_metric_activation.sql',
+  '003_migration_error_message.sql',
+  '004_publish_doctor_domain.sql',
+  '005_experiment_run_attempt.sql',
+  '006_vps_host_fingerprint.sql'
+]
 
 mkdirSync(migrationDir, { recursive: true })
-copyFileSync(
-  join('src', 'main', 'db', 'migrations', '001_init.sql'),
-  join(migrationDir, '001_init.sql')
-)
-copyFileSync(
-  join('src', 'main', 'db', 'migrations', '002_metric_activation.sql'),
-  join(migrationDir, '002_metric_activation.sql')
-)
-copyFileSync(
-  join('src', 'main', 'db', 'migrations', '003_migration_error_message.sql'),
-  join(migrationDir, '003_migration_error_message.sql')
-)
+for (const migration of migrations) {
+  copyFileSync(join('src', 'main', 'db', 'migrations', migration), join(migrationDir, migration))
+}
 
 let code = readFileSync(compiledIndex, 'utf8')
-const before = code
-code = code.replace(
-  'require("./migrations/001_init.sql?raw")',
-  "require('node:fs').readFileSync(require('node:path').join(__dirname, 'migrations', '001_init.sql'), 'utf8')"
-)
-code = code.replace(
-  'require("./migrations/002_metric_activation.sql?raw")',
-  "require('node:fs').readFileSync(require('node:path').join(__dirname, 'migrations', '002_metric_activation.sql'), 'utf8')"
-)
-code = code.replace(
-  'require("./migrations/003_migration_error_message.sql?raw")',
-  "require('node:fs').readFileSync(require('node:path').join(__dirname, 'migrations', '003_migration_error_message.sql'), 'utf8')"
-)
-if (code === before) {
+for (const migration of migrations) {
+  code = code.replace(
+    `require("./migrations/${migration}?raw")`,
+    `require('node:fs').readFileSync(require('node:path').join(__dirname, 'migrations', '${migration}'), 'utf8')`
+  )
+}
+if (code.includes('?raw')) {
   console.error('prepare-cli: khong tim thay dong require ?raw trong db/index.js da bien dich')
   process.exit(1)
 }
 writeFileSync(compiledIndex, code)
-console.log('prepare-cli: da chuan bi 001_init.sql cho bản build CLI')
+console.log('prepare-cli: migrations prepared for CLI build')

@@ -1,7 +1,6 @@
 // Seed 1 VPS vao DB app dung code path that (safeStorage). Dung mot lan cho demo.
 // Chay: pnpm exec tsc -p tsconfig.scripts.json && node scripts/prepare-cli.js
-//       OPSPILOT_SEED_SECRET=... OPSPILOT_SEED_HOST=221.121.1.80 OPSPILOT_SEED_NAME=VM02 npx electron .out-scripts/scripts/seed-vps.js
-// Mặc định (không set host/name): VM01 / 221.121.1.79 như cũ.
+//       Set OPSPILOT_SEED_HOST, OPSPILOT_SEED_HOST_FINGERPRINT, and OPSPILOT_SEED_SECRET before running.
 import { app } from 'electron'
 
 import { createCredentialCipher } from '../src/main/crypto/masterKey'
@@ -11,7 +10,7 @@ import { VpsService } from '../src/main/vps/service'
 
 const USER_DATA = process.env.OPSPILOT_SEED_USER_DATA ?? ''
 const SEED_NAME = process.env.OPSPILOT_SEED_NAME ?? 'VM01'
-const SEED_HOST = process.env.OPSPILOT_SEED_HOST ?? '221.121.1.79'
+const SEED_HOST = process.env.OPSPILOT_SEED_HOST ?? ''
 
 // Giu nguyen danh tinh app nhu index.ts — safeStorage Windows ma hoa theo danh tinh app.
 app.setAppUserModelId('vn.opspilot.desktop')
@@ -28,6 +27,7 @@ void app
         name: SEED_NAME,
         host: SEED_HOST,
         port: 22,
+        host_fingerprint: process.env.OPSPILOT_SEED_HOST_FINGERPRINT ?? '',
         username: 'root',
         auth_type: 'password',
         secret: process.env.OPSPILOT_SEED_SECRET ?? '',

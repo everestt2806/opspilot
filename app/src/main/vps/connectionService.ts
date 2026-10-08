@@ -24,6 +24,17 @@ function failedCheck(detail: string, diagnosis: VpsDiagnosis): VpsConnectionChec
 export async function testConnectionWithCredentials(
   config: SshConnectionInfo
 ): Promise<VpsConnectionCheck> {
+  if (!config.hostFingerprint || !/^SHA256:[A-Za-z0-9+/]{43}$/.test(config.hostFingerprint)) {
+    return failedCheck(
+      'Thiếu fingerprint SSH SHA256 hợp lệ. Hãy lấy fingerprint độc lập từ console của VPS.',
+      {
+        code: 'SSH_AUTH_FAILED',
+        title: 'Cần fingerprint SSH đã xác minh',
+        cause: 'Chưa nhập fingerprint host key.',
+        fixes: ['Nhập fingerprint SHA256 lấy độc lập từ console VPS rồi kiểm tra lại.']
+      }
+    )
+  }
   const pre = await preDiagnose(config)
   if (pre) {
     return failedCheck(pre.title, pre)

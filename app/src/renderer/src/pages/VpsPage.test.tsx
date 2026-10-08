@@ -14,6 +14,7 @@ const VPS_A: Vps = {
   name: 'VM01',
   host: '221.121.1.79',
   port: 22,
+  host_fingerprint: null,
   username: 'root',
   auth_type: 'password',
   provider: 'WiService',

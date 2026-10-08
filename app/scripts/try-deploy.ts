@@ -30,6 +30,7 @@ function deployConfig(): SshConnectionInfo {
   return {
     host: env('OPSPILOT_DEPLOY_HOST', '127.0.0.1'),
     port: Number.parseInt(env('OPSPILOT_DEPLOY_PORT', '22'), 10),
+    hostFingerprint: env('OPSPILOT_DEPLOY_HOST_FINGERPRINT', '') || null,
     username: env('OPSPILOT_DEPLOY_USER', 'root'),
     authType: 'password',
     secret: env('OPSPILOT_DEPLOY_SECRET', '')

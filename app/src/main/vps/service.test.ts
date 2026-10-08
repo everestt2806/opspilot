@@ -9,6 +9,8 @@ import { closeDatabase, initializeDatabase } from '../db'
 import { VpsRepository } from '../db/vpsRepository'
 import { VpsService } from './service'
 
+const TEST_HOST_FINGERPRINT = `SHA256:${Buffer.alloc(32, 2).toString('base64').replace(/=+$/, '')}`
+
 let testDirectory: string | null = null
 
 afterEach(() => {
@@ -26,6 +28,7 @@ describe('VpsService', () => {
       name: '  VPS A  ',
       host: '  203.0.113.20 ',
       port: 22,
+      host_fingerprint: TEST_HOST_FINGERPRINT,
       username: ' deploy ',
       auth_type: 'password',
       secret: 'plain-secret',
@@ -47,6 +50,7 @@ describe('VpsService', () => {
       name: 'VPS A',
       host: '203.0.113.20',
       port: 22,
+      host_fingerprint: TEST_HOST_FINGERPRINT,
       username: 'deploy',
       auth_type: 'password',
       secret: 'first-secret'
@@ -63,6 +67,7 @@ describe('VpsService', () => {
       name: 'VPS A',
       host: '203.0.113.20',
       port: 22,
+      host_fingerprint: TEST_HOST_FINGERPRINT,
       username: 'deploy',
       auth_type: 'password',
       secret: 'first-secret'
@@ -79,12 +84,33 @@ describe('VpsService', () => {
         name: '',
         host: '',
         port: 0,
+        host_fingerprint: TEST_HOST_FINGERPRINT,
         username: '',
         auth_type: 'password',
         secret: ''
       })
     ).toThrow('VALIDATION')
     expect(service.list()).toEqual([])
+  })
+
+  it('yêu cầu fingerprint mới khi đổi host hoặc port', () => {
+    const { service } = createService()
+    const created = service.create({
+      name: 'VPS A',
+      host: 'vps.example.invalid',
+      port: 22,
+      host_fingerprint: TEST_HOST_FINGERPRINT,
+      username: 'deploy',
+      auth_type: 'key',
+      secret: 'non-secret test fixture'
+    })
+
+    expect(() => service.update(created.id, { host: 'other.example.invalid' })).toThrowError(
+      expect.objectContaining({ userMessage: expect.stringContaining('Đổi host hoặc port') })
+    )
+    expect(() => service.update(created.id, { port: 2222 })).toThrowError(
+      expect.objectContaining({ userMessage: expect.stringContaining('Đổi host hoặc port') })
+    )
   })
 })
 

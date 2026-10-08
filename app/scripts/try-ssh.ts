@@ -20,6 +20,7 @@ function buildConfig(): SshConnectionInfo {
   return {
     host: env('OPSPILOT_SSH_HOST', '127.0.0.1'),
     port: Number.parseInt(env('OPSPILOT_SSH_PORT', '2222'), 10),
+    hostFingerprint: env('OPSPILOT_SSH_HOST_FINGERPRINT', '') || null,
     username: env('OPSPILOT_SSH_USER', 'deploy'),
     authType: env('OPSPILOT_SSH_AUTH_TYPE', 'password') === 'key' ? 'key' : 'password',
     secret: env('OPSPILOT_SSH_SECRET', '')

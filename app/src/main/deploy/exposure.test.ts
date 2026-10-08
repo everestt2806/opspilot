@@ -10,6 +10,7 @@ const vps: Vps = {
   name: 'lab',
   host: '203.0.113.10',
   port: 22,
+  host_fingerprint: null,
   username: 'root',
   auth_type: 'password',
   provider: 'lab',

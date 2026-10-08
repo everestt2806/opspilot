@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseResourcesOutput } from './connectionService'
+import { parseResourcesOutput, testConnectionWithCredentials } from './connectionService'
 
 describe('parseResourcesOutput', () => {
   it('phan tich du lieu thuc te tu free/df/nproc/loadavg', () => {
@@ -25,5 +25,22 @@ describe('parseResourcesOutput', () => {
 
   it('nem loi khi thieu truong bat ky', () => {
     expect(() => parseResourcesOutput('RAM|8388608000 2097152000')).toThrow()
+  })
+})
+
+describe('testConnectionWithCredentials', () => {
+  it('refuses a missing fingerprint before probing TCP or SSH', async () => {
+    const result = await testConnectionWithCredentials({
+      host: 'vps.example.invalid',
+      port: 22,
+      hostFingerprint: null,
+      username: 'test-user',
+      authType: 'password',
+      secret: ''
+    })
+
+    expect(result.ssh_ok).toBe(false)
+    expect(result.steps[0]?.detail).toContain('fingerprint SSH SHA256')
+    expect(result.diagnosis?.title).toContain('fingerprint SSH')
   })
 })

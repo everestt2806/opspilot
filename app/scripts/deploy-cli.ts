@@ -178,6 +178,7 @@ async function main(): Promise<void> {
     return {
       host: targetVps.host,
       port: targetVps.port,
+      hostFingerprint: targetVps.host_fingerprint ?? null,
       username: targetVps.username,
       authType: targetVps.auth_type,
       secret

@@ -39,7 +39,7 @@ describe('initializeDatabase', () => {
       .get() as { version: number }
 
     expect(tables).toHaveLength(15)
-    expect(schemaVersion.version).toBe(5)
+    expect(schemaVersion.version).toBe(6)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -70,7 +70,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 5
+      version: 6
     })
     expect(
       database
@@ -269,7 +269,7 @@ describe('initializeDatabase', () => {
     const successVer = v4Db.prepare('SELECT MAX(version) AS version FROM schema_version').get() as {
       version: number
     }
-    expect(successVer.version).toBe(5)
+    expect(successVer.version).toBe(6)
 
     // b. Bảng experiment_run đã có cột attempt_index và backfill = 1 cho tất cả bản ghi cũ
     const postRuns = v4Db

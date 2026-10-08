@@ -22,6 +22,7 @@ describe('DoctorFixService & DoctorRepository', () => {
     name: 'test-vps',
     host: '1.2.3.4',
     port: 22,
+    host_fingerprint: null,
     username: 'root',
     auth_type: 'password',
     provider: 'lab',

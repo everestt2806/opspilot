@@ -71,6 +71,7 @@ export function registerIpcHandlers(
     testConnectionWithCredentials({
       host: input.host,
       port: input.port,
+      hostFingerprint: input.host_fingerprint ?? null,
       username: input.username,
       authType: input.auth_type,
       secret: input.secret
