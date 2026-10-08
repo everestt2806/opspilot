@@ -12,6 +12,7 @@
 | ID | Task | Chủ | Hạn mục tiêu | Trạng thái | Branch | Phụ thuộc / ghi chú |
 |---|---|---|---|---|---|---|
 | TK-S7 G0 | [Hợp đồng local/Git và snapshot Git công khai](tk-s7-g0-two-source-git.md) | Worker | 09/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | local `ebbfc7e` · chưa push; contract `7e6cf25`; Node 22 gates pass |
+| TK-S7 G1a | [Nối snapshot Git vào deploy core](tk-s7-g1a-git-deploy-core.md) | Worker | 10/10/2026; không cắt gate | TUẦN NÀY | `feat/deploy-reachability` | Sau G0 review local; trước G1b UI/migrate |
 
 TK-A18 Titlebar fix 05: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `30747f1`; WCO drag region dùng
 đúng rectangle, native controls không còn chồng caption và màu overlay đã liền shell; Snap Layout ghi
@@ -99,8 +100,8 @@ manual-only, không push/PR/merge.
 
 | ID | Task | Chủ | Hạn nội bộ | Trạng thái | Phụ thuộc | DoD ngắn |
 | --- | --- | --- | --- | --- | --- | --- |
-| D14-G0 | Contract/migration 007 và Git acquisition có test | Worker | 09/10 | TIẾP THEO | Audit 30 | Repo public URL/ref/root, full SHA, snapshot an toàn; legacy DB đọc được |
-| D14-G1 | Git-first wizard, pipeline, provenance và tương thích migrate | Worker | 10/10 | BACKLOG | D14-G0 | Detect/precheck/deploy cùng SHA; history và redeploy; full gate pass |
+| D14-G0 | Contract/migration 007 và Git acquisition có test | Worker | 09/10 | CHỜ REVIEW | Audit 30 | Local review pass `ebbfc7e`; chưa push/merge |
+| D14-G1 | Git-first wizard, pipeline, provenance và tương thích migrate | Worker | 10/10 | TUẦN NÀY | D14-G0 | Tách G1a core → G1b UI/migrate; detect/precheck/deploy cùng SHA, history/redeploy, full gate |
 | D14-G2 | Live Git Express trên VPS phát triển | Worker | 11/10 | BACKLOG | D14-G1 | Repo/ref/SHA/URL/HTTP/container có bằng chứng; không dùng folder local làm bằng chứng Git |
 | D14-G3 | Rehearsal 1, ảnh/video fallback | Worker | 12/10 | BACKLOG | D14-G2 | Demo 6–8 phút, nguồn Git và SHA khớp bằng chứng |
 | D14-G4 | Rehearsal 2, gate cuối, freeze và phiếu in | Worker | 13/10 | BACKLOG | D14-G3 | Leader cấp verdict theo chế độ thật; không thêm tính năng |
