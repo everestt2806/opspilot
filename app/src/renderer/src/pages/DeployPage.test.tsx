@@ -324,6 +324,50 @@ describe('DeployPage — wizard va log', () => {
     expect(screen.queryByText('c'.repeat(40))).toBeNull()
   })
 
+  it('releases the previous snapshot before clearing it when re-prepare fails', async () => {
+    const prepared = {
+      prepared_source_handle: 'first-snapshot-handle',
+      git_repo_url: 'https://github.com/example/repo.git',
+      git_ref: 'main',
+      git_root: '.',
+      git_commit_sha: 'e'.repeat(40),
+      detection: MATCHED
+    }
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'deploy:prepare-git': vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, data: prepared })
+        .mockResolvedValueOnce({ ok: false, error: { message: 'Prepare failed' } })
+    })
+    render(<DeployPage />)
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 1))
+    fireEvent.click(screen.getByText(strings.deploy.git.modeGit))
+    fireEvent.change(screen.getByLabelText(strings.deploy.git.repository), {
+      target: { value: prepared.git_repo_url }
+    })
+
+    fireEvent.click(screen.getByText(strings.deploy.git.prepare))
+    expect(await screen.findByText(prepared.git_commit_sha)).toBeTruthy()
+    fireEvent.click(screen.getByText(strings.deploy.git.prepare))
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('deploy:release-git-prepare', 'first-snapshot-handle')
+    )
+    await waitFor(() =>
+      expect(
+        invoke.mock.calls.filter(([channel]) => channel === 'deploy:prepare-git')
+      ).toHaveLength(2)
+    )
+    expect(screen.queryByText(prepared.git_commit_sha)).toBeNull()
+    expect(
+      invoke.mock.calls.filter(
+        ([channel, handle]) =>
+          channel === 'deploy:release-git-prepare' && handle === 'first-snapshot-handle'
+      )
+    ).toHaveLength(1)
+  })
+
   it.each(['repository', 'ref', 'root', 'app'] as const)(
     'cancels a pending prepare and releases its late handle when %s changes',
     async (changedField) => {

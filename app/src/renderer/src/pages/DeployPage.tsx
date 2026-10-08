@@ -350,6 +350,12 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
 
   async function prepareGitSource(): Promise<void> {
     cancelPendingGitPrepare()
+    const previousHandle = preparedGitRef.current?.prepared_source_handle
+    if (previousHandle) {
+      void window.api.invoke('deploy:release-git-prepare', previousHandle)
+      preparedGitRef.current = null
+      setPreparedGit(null)
+    }
     const requestId = crypto.randomUUID()
     prepareRequestRef.current = requestId
     setPreparingGit(true)
@@ -375,8 +381,6 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
       setDetectError(result.error.message)
       return
     }
-    if (preparedGit)
-      void window.api.invoke('deploy:release-git-prepare', preparedGit.prepared_source_handle)
     setPreparedGit(result.data)
     preparedGitRef.current = result.data
     setDetection(result.data.detection)

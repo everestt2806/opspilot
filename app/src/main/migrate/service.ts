@@ -234,6 +234,20 @@ export class MigrateService {
           'Chưa thể migrate Git sau rollback: không xác minh được payload src khớp image đang chạy. App nguồn chưa bị đóng băng; hãy deploy lại đúng commit Git trước khi migrate.'
         )
       }
+      const newerGitAttempt = this.database
+        .prepare(
+          `SELECT id FROM deployment
+           WHERE app_id=? AND version>? AND git_commit_sha IS NOT NULL
+             AND status IN ('building','deploying','failed')
+           LIMIT 1`
+        )
+        .get(source.id, current.version)
+      if (newerGitAttempt) {
+        throw new AppError(
+          'VALIDATION',
+          'Chưa thể migrate Git: deployment Git mới hơn đã thay đổi payload src nhưng không chạy thành công. Không thể chứng minh payload khớp image đang chạy; app nguồn chưa bị đóng băng. Hãy deploy lại đúng commit Git trước khi migrate.'
+        )
+      }
       this.resolveGitRestore(current)
     }
     const active = this.migrations.activeForApp(source.id)
