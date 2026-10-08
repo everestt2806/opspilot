@@ -20,7 +20,7 @@ Chuẩn bị nguồn Git công khai một lần, trả full SHA và kết quả 
 
 - [x] Contract nói rõ Git source (`repo/ref/root`) và một **opaque prepared-source handle**; renderer không được nhận đường temp. Pha sửa contract/DECISIONS commit riêng, compile/typecheck được trước runtime. Luồng local cũ tương thích; Git không cần `source_path` giả.
 - [x] Prepare Git dùng module G0, pin full SHA rồi detect từ chính root đã checkout. Precheck/start dùng cùng handle/SHA, không fetch lại branch âm thầm. Nếu nguồn/target/env đổi làm precheck cũ vô hiệu; handle sai/hết hạn/đã dùng trả lỗi rõ. Có cleanup khi hủy, lỗi, đóng app và hết hạn; **không dọn khi pipeline còn dùng**.
-- [ ] `deploy:start` vẫn trả `deployment_id` theo contract hiện có hoặc contract được sửa rõ ràng trước code; event đến sớm không bị mất. Git acquisition bất đồng bộ không tạo app/deployment mồ côi khi fail. Chặn hai deploy đồng thời trên cùng app và không cho redeploy Git vô tình chuyển thành local.
+- [x] `deploy:start` vẫn trả `deployment_id` theo contract hiện có hoặc contract được sửa rõ ràng trước code; event đến sớm không bị mất. Git acquisition bất đồng bộ không tạo app/deployment mồ côi khi fail. Chặn hai deploy đồng thời trên cùng app và không cho redeploy Git vô tình chuyển thành local.
 - [x] AppRepository lưu `source_type=git`, URL/ref/root và `source_path=NULL`; DeploymentRepository lưu URL/full SHA cho từng attempt **trong cùng transaction tạo deployment**. Các hàm đọc trả provenance thật. Local cũ vẫn là local với Git metadata NULL. Rollback lineage chỉ gắn SHA của image gốc nếu hiển thị provenance.
 - [x] Test core cho branch đổi sau prepare, handle sai/hết hạn/replay, cancel/cleanup, fetch/detect thất bại, provenance ở DB, local regression, IPC early events. Không dùng working tree của OpsPilot để giả làm Git. CLI/backend integration test chứng minh prepare→precheck→start bằng snapshot fixture.
 - [x] Node 22: focused tests, full Vitest, lint, Node/Web/Scripts typecheck, build và `git diff --check` pass. Ghi lệnh/kết quả thật, commit cục bộ và cập nhật task/board. Khi bàn giao chỉ trả lời “Worker đã xong”.
@@ -38,6 +38,7 @@ Chuẩn bị nguồn Git công khai một lần, trả full SHA và kết quả 
 
 - START 09/10 — Sửa TK-S7 G1a: hoàn tất `finished` tối đa một lần trên các đường xử lý, fault injection `resumeCollector()` reject, xác nhận DB failed, app lock/snapshot cleanup và retry; giữ nguyên kiểm thử Git/local hiện có.
 - UPDATE 09/10 — Thêm `emitFinished()` idempotent dùng chung cho finished thường và `failUnexpected()`. Fault injection đi qua lỗi ngoài dự kiến sau khi collector dừng; xác nhận deployment trong SQLite là `failed`, snapshot cleanup đúng một lần, đúng một finished và retry cùng app chạy được. Git/local regression giữ nguyên.
+- REVIEW 09/10 — Leader duyệt local phần G1a tại `234cb57` (hồ sơ `662ecc9`): chạy lại Node 22.23.3, 55/55 test deploy/core, full Vitest 71 file/653 test, Node/Web typecheck pass. Đã đối chiếu `deploy:start` cấp ID đồng bộ, UI buffer event sớm, chuẩn bị Git trước khi tạo app/deployment, lock theo app và chặn đổi source type khi redeploy. Chưa có bằng chứng deploy Git trên VPS thật; chuyển sang G1b rồi G2 live smoke. Giữ trạng thái `CHỜ REVIEW` vì chưa push/merge.
 
 ## PR
 
