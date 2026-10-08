@@ -36,6 +36,9 @@ Chuẩn bị nguồn Git công khai một lần, trả full SHA và kết quả 
 - GATES 09/10 — Node `v22.23.3`, pnpm `11.1.0`: focused deploy/lifecycle 55 pass; full Vitest mặc định lượt cuối 71 file/652 pass; `pnpm typecheck`; Scripts `tsc -p tsconfig.scripts.json --noEmit`; `pnpm lint`; `pnpm build`; `pnpm test:ml` (19 pass); contract strict `tsc`; CLI `pnpm --filter @opspilot/app try:git-snapshot -- https://github.com/everestt2806/opspilot.git main demo-apps/express-api`; `git diff --check` all pass. Full mặc định ở lượt trước từng fail 1 UI test `VpsDatabaseTab` vì bảng còn loading lúc assertion đọc `blog_admin`; test riêng pass, lần full cuối mặc định pass toàn bộ.
 - REVIEW 09/10 — Leader chạy lại 54/54 test trọng tâm Node 22; tích hợp thật và cleanup đã có bằng chứng. Còn một nhánh vi phạm bất biến `finished` đúng một lần: nếu `resumeCollector()` ném lỗi trong `executeLocked()` catch, finally đã phát `finished`, rồi `run().catch → failUnexpected()` phát thêm lần nữa. Yêu cầu guard idempotent và test fault injection trước G1b.
 
+- START 09/10 — Sửa TK-S7 G1a: hoàn tất `finished` tối đa một lần trên các đường xử lý, fault injection `resumeCollector()` reject, xác nhận DB failed, app lock/snapshot cleanup và retry; giữ nguyên kiểm thử Git/local hiện có.
+- UPDATE 09/10 — Thêm `emitFinished()` idempotent dùng chung cho finished thường và `failUnexpected()`. Fault injection đi qua lỗi ngoài dự kiến sau khi collector dừng; xác nhận deployment trong SQLite là `failed`, snapshot cleanup đúng một lần, đúng một finished và retry cùng app chạy được. Git/local regression giữ nguyên.
+
 ## PR
 
 Chưa được phép push, mở PR hoặc merge.
