@@ -32,6 +32,8 @@ CREATE TABLE vps (
   name            TEXT    NOT NULL UNIQUE,
   host            TEXT    NOT NULL,
   port            INTEGER NOT NULL DEFAULT 22,
+  -- NULL only for legacy records; these VPS must be pinned before SSH can connect.
+  host_fingerprint TEXT,
   username        TEXT    NOT NULL,
 
   auth_type       TEXT    NOT NULL CHECK (auth_type IN ('key','password')),

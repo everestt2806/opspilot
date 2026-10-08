@@ -764,5 +764,13 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
     expect(getStrings('cn').vps.backToList).toBe('返回服务器列表')
     expect(getStrings('jp').vps.backToList).toBe('サーバー一覧に戻る')
     expect(getStrings('en').vps.backToList).toBe('Back to VPS list')
+
+    for (const locale of ['en', 'vi', 'cn', 'jp'] as const) {
+      const vps = getStrings(locale).vps
+      expect(vps.fields.hostFingerprint).toContain('SHA256')
+      expect(vps.form.hostFingerprintHint.length).toBeGreaterThan(20)
+      expect(vps.validation.hostFingerprintRequired.length).toBeGreaterThan(10)
+      expect(vps.validation.hostFingerprintFormat).toContain('SHA256:...')
+    }
   })
 })

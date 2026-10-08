@@ -14,6 +14,7 @@ import Database from 'better-sqlite3'
 import migration001 from './migrations/001_init.sql?raw'
 import migration003 from './migrations/003_migration_error_message.sql?raw'
 import migration004 from './migrations/004_publish_doctor_domain.sql?raw'
+import { SshManager } from '../ssh/manager'
 
 let testDirectory: string | null = null
 
@@ -27,6 +28,51 @@ afterEach(() => {
 })
 
 describe('initializeDatabase', () => {
+  it('migration v5 to v6 preserves VPS rows and blocks legacy records without a fingerprint', async () => {
+    testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v5-v6-'))
+    const database = initializeDatabase(testDirectory)
+    database.exec('ALTER TABLE vps DROP COLUMN host_fingerprint')
+    database.prepare('DELETE FROM schema_version WHERE version = 6').run()
+    database
+      .prepare(
+        "INSERT INTO vps (id, name, host, port, username, auth_type, encrypted_secret) VALUES (1, 'Legacy', 'legacy.example.invalid', 2222, 'test-user', 'key', X'00')"
+      )
+      .run()
+
+    runMigrations(database)
+
+    const legacy = database
+      .prepare('SELECT id, name, host, port, username, host_fingerprint FROM vps WHERE id = 1')
+      .get() as {
+      id: number
+      name: string
+      host: string
+      port: number
+      username: string
+      host_fingerprint: string | null
+    }
+    expect(legacy).toEqual({
+      id: 1,
+      name: 'Legacy',
+      host: 'legacy.example.invalid',
+      port: 2222,
+      username: 'test-user',
+      host_fingerprint: null
+    })
+
+    const ssh = new SshManager(async () => ({
+      host: legacy.host,
+      port: legacy.port,
+      hostFingerprint: legacy.host_fingerprint,
+      username: legacy.username,
+      authType: 'key',
+      secret: ''
+    }))
+    await expect(ssh.connect(legacy.id)).rejects.toMatchObject({
+      userMessage: expect.stringContaining('Thiếu fingerprint SSH')
+    })
+  })
+
   it('tao schema v1, bat WAL va foreign key', () => {
     testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-'))
     const database = initializeDatabase(testDirectory)

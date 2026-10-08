@@ -131,6 +131,7 @@ const BASE_EN_STRINGS = {
       name: 'VPS name',
       host: 'Host or IP',
       port: 'SSH port',
+      hostFingerprint: 'SSH host key fingerprint (OpenSSH SHA256)',
       username: 'Username',
       authType: 'Auth method',
       privateKey: 'Private key',
@@ -146,12 +147,16 @@ const BASE_EN_STRINGS = {
       createTitle: 'Add VPS',
       editTitle: 'Edit VPS',
       hostPlaceholder: '203.0.113.10',
+      hostFingerprintHint:
+        'Enter the SHA256 fingerprint copied independently from the VPS console. Changing host or port requires verifying it again.',
       keepCredentialHint: 'Leave blank to keep the current credential.'
     },
     validation: {
       name: 'Enter the VPS name.',
       host: 'Enter the host or IP address.',
       port: 'Enter an SSH port from 1 to 65535.',
+      hostFingerprintRequired: 'Enter the SSH fingerprint copied from the VPS console.',
+      hostFingerprintFormat: 'Use the OpenSSH format SHA256:... .',
       username: 'Enter the SSH username.',
       privateKey: 'Paste the SSH private key.',
       password: 'Enter the SSH password.',
@@ -979,6 +984,20 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   vps: {
     ...BASE_EN_STRINGS.vps,
     backToList: 'Quay lại danh sách máy chủ',
+    fields: {
+      ...BASE_EN_STRINGS.vps.fields,
+      hostFingerprint: 'Fingerprint host key SSH (OpenSSH SHA256)'
+    },
+    form: {
+      ...BASE_EN_STRINGS.vps.form,
+      hostFingerprintHint:
+        'Nhập fingerprint SHA256 đã lấy độc lập từ console VPS. Đổi host hoặc port sẽ cần xác minh lại.'
+    },
+    validation: {
+      ...BASE_EN_STRINGS.vps.validation,
+      hostFingerprintRequired: 'Cần fingerprint SSH đã lấy từ console VPS.',
+      hostFingerprintFormat: 'Dùng định dạng OpenSSH SHA256:... .'
+    },
     status: {
       online: 'Vừa kiểm tra',
       offline: 'Không thể kiểm tra',
@@ -1665,6 +1684,19 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   vps: {
     ...BASE_EN_STRINGS.vps,
     backToList: '返回服务器列表',
+    fields: {
+      ...BASE_EN_STRINGS.vps.fields,
+      hostFingerprint: 'SSH 主机密钥指纹 (OpenSSH SHA256)'
+    },
+    form: {
+      ...BASE_EN_STRINGS.vps.form,
+      hostFingerprintHint: '填写从 VPS 控制台独立获取的 SHA256 指纹。更改主机或端口后需要重新验证。'
+    },
+    validation: {
+      ...BASE_EN_STRINGS.vps.validation,
+      hostFingerprintRequired: '请输入从 VPS 控制台获取的 SSH 指纹。',
+      hostFingerprintFormat: '请使用 OpenSSH 格式 SHA256:...。'
+    },
     status: {
       online: '刚刚检查',
       offline: '无法检查',
@@ -2330,6 +2362,21 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   vps: {
     ...BASE_EN_STRINGS.vps,
     backToList: 'サーバー一覧に戻る',
+    fields: {
+      ...BASE_EN_STRINGS.vps.fields,
+      hostFingerprint: 'SSH ホスト鍵フィンガープリント (OpenSSH SHA256)'
+    },
+    form: {
+      ...BASE_EN_STRINGS.vps.form,
+      hostFingerprintHint:
+        'VPS コンソールから別途取得した SHA256 フィンガープリントを入力します。ホストまたはポートを変更した場合は再確認が必要です。'
+    },
+    validation: {
+      ...BASE_EN_STRINGS.vps.validation,
+      hostFingerprintRequired:
+        'VPS コンソールから取得した SSH フィンガープリントを入力してください。',
+      hostFingerprintFormat: 'OpenSSH 形式 SHA256:... を使用してください。'
+    },
     status: {
       online: '確認済み',
       offline: '確認できませんでした',

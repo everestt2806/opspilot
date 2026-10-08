@@ -26,6 +26,8 @@ export interface Vps {
   name: string;
   host: string;
   port: number;
+  /** Null on records created before fingerprint verification was introduced. */
+  host_fingerprint: string | null;
   username: string;
   auth_type: 'key' | 'password';
   provider: string | null;
@@ -272,6 +274,8 @@ export interface VpsInput {
   name: string;
   host: string;
   port: number;
+  /** Required OpenSSH SHA256 fingerprint copied from an independently trusted console. */
+  host_fingerprint: string;
   username: string;
   auth_type: 'key' | 'password';
   /** Private key hoặc password bản rõ — main mã hoá NGAY, không log, không ghi tạm ra đĩa */

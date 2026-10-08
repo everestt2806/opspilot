@@ -117,13 +117,13 @@ export function VpsFormModal({
         </Form.Item>
         <Form.Item
           name="host_fingerprint"
-          label="SSH host key fingerprint (OpenSSH SHA256)"
-          extra="Nhập SHA256 fingerprint lấy độc lập từ console của VPS. Đổi host hoặc port sẽ yêu cầu xác minh lại."
+          label={strings.vps.fields.hostFingerprint}
+          extra={strings.vps.form.hostFingerprintHint}
           rules={[
-            { required: true, message: 'Cần fingerprint SSH lấy từ console VPS.' },
+            { required: true, message: strings.vps.validation.hostFingerprintRequired },
             {
               pattern: /^SHA256:[A-Za-z0-9+/]{43}$/,
-              message: 'Định dạng cần là SHA256:... theo OpenSSH.'
+              message: strings.vps.validation.hostFingerprintFormat
             }
           ]}
         >
