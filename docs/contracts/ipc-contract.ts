@@ -177,6 +177,7 @@ export interface IpcInvokeMap {
   'deploy:detect':   (sourcePath: string) => IpcResult<DetectionResultDto>;
   'deploy:prepare-git': (requestId: string, input: GitSourceInput) => IpcResult<PreparedGitSource>;
   'deploy:cancel-git-prepare': (requestId: string) => IpcResult<void>;
+  'deploy:release-git-prepare': (preparedSourceHandle: string) => IpcResult<void>;
   'deploy:precheck': (input: DeploySourceInput) => IpcResult<PrecheckResult>;
   /** Trả về ngay khi pipeline khởi động; tiến độ theo dõi qua kênh 'deploy:event' */
   'deploy:start':    (input: DeployStartInput) => IpcResult<{ deployment_id: number }>;
