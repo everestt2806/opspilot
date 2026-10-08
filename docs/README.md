@@ -31,6 +31,7 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | [`28-danh-gia-san-sang-vercel-tren-vps.md`](28-danh-gia-san-sang-vercel-tren-vps.md) | Đánh giá năng lực sản phẩm so với Vercel/Dokploy/Coolify | Khi lập roadmap sản phẩm |
 | [`29-ke-hoach-demo-14-10.md`](29-ke-hoach-demo-14-10.md) | Lịch và gate demo 14/10, ưu tiên deploy từ Git trên VPS thật | Trước mỗi checkpoint demo |
 | [`30-audit-git-first-deploy.md`](30-audit-git-first-deploy.md) | Kiểm kê đường deploy hiện tại, hợp đồng Git-first và thứ tự G0–G3 | Trước khi sửa IPC/schema/deploy UI |
+| [`31-lo-trinh-hoan-thien-san-pham.md`](31-lo-trinh-hoan-thien-san-pham.md) | Chuẩn nghiệm thu toàn sản phẩm: tự động hóa, hai nguồn deploy, template, migrate, monitor/ML và kiến trúc auto deploy | Trước khi chia task sau demo và chốt trạng thái hoàn thành |
 
 ## Kỹ thuật
 

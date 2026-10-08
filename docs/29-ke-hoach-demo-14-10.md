@@ -3,6 +3,7 @@
 > Lập ngày 08/10/2026. Chủ trì review: Leader. Thực hiện code: Worker.
 > Mục tiêu là một buổi demo 6–8 phút có chứng cứ kiểm tra được, không tuyên bố tính năng chưa chạy thật.
 > Kế hoạch năng lực sản phẩm dài hạn: [28-danh-gia-san-sang-vercel-tren-vps.md](28-danh-gia-san-sang-vercel-tren-vps.md).
+> Chuẩn hoàn thiện UC-01…09 và các tính năng thiết yếu sau demo: [31-lo-trinh-hoan-thien-san-pham.md](31-lo-trinh-hoan-thien-san-pham.md). Demo 14/10 là cổng trung gian, không đóng các chức năng chưa qua live gate.
 > Kiểm kê và đường găng Git-first: [30-audit-git-first-deploy.md](30-audit-git-first-deploy.md). Bản sửa 08/10 đặt Git source trước live demo.
 
 ## 1. Phạm vi chốt cho buổi demo

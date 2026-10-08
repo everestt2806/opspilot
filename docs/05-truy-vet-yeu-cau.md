@@ -9,6 +9,8 @@ lục rất được đánh giá cao trong báo cáo.
 
 Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng được · ⏸ hoãn (ghi lý do)
 
+> Rà soát 08/10/2026: các dấu trạng thái bên dưới là bằng chứng theo checkpoint lịch sử, **chưa phải nghiệm thu toàn sản phẩm trên VPS mới**. Đặc biệt UC-02/FR-B5 chưa bao phủ nguồn Git và bước chạy test của source; UC-05/UC-07 cần live gate riêng. Trước khi chốt trạng thái hiện hành, đối soát theo [chuẩn hoàn thiện sản phẩm](31-lo-trinh-hoan-thien-san-pham.md), không tự đổi dấu ✅ chỉ vì có code hoặc test mock.
+
 > 10/09 — Checkpoint demo solo: [TK-A17](tasks/tk-a17-demo-checkpoint.md).
 > A15/B4/B5/B2 đã có code merge (#25/#26/#28); runtime B6 còn báo cáo trên nhánh
 > `dfc0ed7`, Monitor UI chưa có trong main. A17 ưu tiên FR-D1…D5, FR-B7/FR-E1

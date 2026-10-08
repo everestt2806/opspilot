@@ -2,6 +2,7 @@
 
 > Đánh giá gốc: 08/10/2026 tại HEAD `9dcd054`; cập nhật trạng thái 08/10 tại HEAD `fcc3051`.
 > Bản kiểm kê Git-first và thứ tự demo mới: [30-audit-git-first-deploy.md](30-audit-git-first-deploy.md).
+> Chuẩn hoàn thiện toàn bộ chức năng cũ và tự động hóa sản phẩm: [31-lo-trinh-hoan-thien-san-pham.md](31-lo-trinh-hoan-thien-san-pham.md).
 > VPS phát triển đã qua preflight SSH/Docker/port; deploy qua OpsPilot và pilot ML vẫn `NOT_RUN`.
 > Rà soát sản phẩm lần hai tại HEAD `d22873a` ngày 08/10/2026: mục 6–9 bên dưới. Các số test ở mục 1 là kết quả lịch sử của lần review trước, không phải gate chạy lại tại HEAD này.
 
