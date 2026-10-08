@@ -44,7 +44,7 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | [`09-moi-truong-dev.md`](09-moi-truong-dev.md) | Setup máy dev (Windows), dependency đã duyệt, bẫy đã biết |
 | [`10-quy-uoc-code.md`](10-quy-uoc-code.md) | Cấu trúc code, xử lý lỗi, logging, quy ước async/SSH |
 | [`11-chien-luoc-test.md`](11-chien-luoc-test.md) | Unit test (chỉ 3 chỗ), smoke test 10 phút, soak test 24h |
-| [`14-quyet-dinh-kien-truc.md`](14-quyet-dinh-kien-truc.md) | 10 ADR — trade-off đã cân nhắc, dùng để trả lời phản biện |
+| [`14-quyet-dinh-kien-truc.md`](14-quyet-dinh-kien-truc.md) | 11 ADR — gồm Product mode control plane, trade-off và phạm vi đồ án |
 
 ## Thí nghiệm & báo cáo
 

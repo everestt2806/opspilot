@@ -6,6 +6,8 @@
 > **File này KHÔNG chứa schema SQL, không chứa định nghĩa API.** Những thứ đó nằm trong
 > [`contracts/`](contracts/) để chỉ có đúng một nguồn sự thật. File này mô tả *hành vi*.
 
+> **Phạm vi:** các nguyên tắc SSH-only dưới đây mô tả bản đồ án/Desktop mode. Người dùng đã chốt Product mode có control plane luôn chạy để tự deploy khi desktop tắt; xem [ADR-011](14-quyet-dinh-kien-truc.md) và [lộ trình sản phẩm](31-lo-trinh-hoan-thien-san-pham.md). Ngoại lệ này không tự sửa contract hoặc thay đổi các luồng Desktop mode đang chạy.
+
 ---
 
 ## PHẦN 0 — NGUYÊN TẮC CHỐNG OVERENGINEERING

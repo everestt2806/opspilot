@@ -4,6 +4,8 @@
 > Cursor...): dán nguyên file này + file spec module đang làm vào đầu phiên chat.
 > Bản rút gọn để dán tay: `docs/prompts/00-context-chung.md`.
 
+> **Ngoại lệ sản phẩm được người dùng chốt ngày 08/10/2026:** OpsPilot sẽ phát triển theo hướng production; được phép có **một control plane luôn chạy trên VPS quản lý** để tự deploy khi desktop tắt. Ngoại lệ này chỉ áp dụng cho checkpoint được gắn `product-mode` và thay thế giới hạn “chỉ 2 tiến trình”, “không agent” và “không authentication” của quy tắc 1, 3, 5 khi xây control plane. Desktop mode và các gate đồ án cũ vẫn giữ. Đọc [ADR-011](docs/14-quyet-dinh-kien-truc.md) và [lộ trình hoàn thiện](docs/31-lo-trinh-hoan-thien-san-pham.md) trước khi thiết kế; chưa được tự mở API quản trị công khai, đổi nguồn sự thật SQLite hoặc sửa contract khi chưa có checkpoint tương ứng.
+
 ---
 
 ## 1. Dự án là gì

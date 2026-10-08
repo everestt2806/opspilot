@@ -42,10 +42,10 @@ Tier 2 Flask/Django là **mở rộng tùy điều kiện** theo FR-B2/NFR-7 g�
 
 [Vercel](https://vercel.com/docs/git) tạo deployment theo Git push; [Dokploy](https://docs.dokploy.com/docs/core/github) và [Coolify](https://coolify.io/docs/applications/deployments/automatic-deployments) cũng có kết nối Git/trigger tự động. OpsPilot dùng SQLite trên desktop và `MonitorScheduler` sống cùng Electron. Vì vậy thêm webhook handler vào Electron **không bảo đảm deploy khi desktop tắt**.
 
-Đề xuất hai chế độ có nhãn rõ:
+Người dùng đã cho phép control plane trên VPS. [ADR-011](14-quyet-dinh-kien-truc.md) chọn một control plane trên VPS quản lý, điều phối các VPS đích qua SSH thay vì agent trên từng VPS. Hai chế độ có nhãn rõ:
 
 1. **Desktop mode:** deploy thủ công từ local/Git; có thể kiểm tra Git định kỳ khi app mở, nhưng chỉ ghi “tự deploy khi OpsPilot đang chạy”. Giữ NFR-1/CLAUDE.md hiện tại.
-2. **Always-on mode:** một companion điều phối ở nơi luôn bật, có queue/trạng thái và đồng bộ history cho desktop. Phương án ưu tiên để nghiên cứu là companion trên VPS của người dùng, nhận sự kiện Git có xác thực hoặc poll outbound, dùng cùng deploy core, không mở Docker API công khai. Điều này **đổi NFR-1 và quy tắc không agent** của bản đồ án; phải chốt ADR/contract, mô hình quyền và nguồn sự thật dữ liệu trước khi code. Nếu giữ nguyên kiến trúc đồ án, không hứa tương đương Vercel khi desktop tắt.
+2. **Product mode:** một control plane tự host trên VPS quản lý, có queue/trạng thái bền và đồng bộ history cho desktop; nhận sự kiện Git có xác thực hoặc poll outbound, điều khiển VPS đích qua SSH. Không mở Docker API công khai. Người dùng đã chốt cho phép service này, thay giới hạn NFR-1/không agent của bản đồ án trong phạm vi Product mode; nguồn sự thật dữ liệu, credential, API quản trị và hợp đồng triển khai phải được khóa trong checkpoint thiết kế riêng trước khi viết controller. Không được để hai hệ thống cùng tuyên bố là nguồn lịch sử deployment chuẩn.
 
 Hợp đồng auto deploy: project chọn production branch; push nhận full SHA; chống giả mạo/replay nếu webhook; queue bền, một deploy/app, debounce và idempotency theo SHA, retry giới hạn; test/build/health/public probe xong mới active; thất bại giữ bản cũ và ghi log; rollback gắn đúng nguồn; chạy được khi desktop đóng. Preview PR cần môi trường/port/domain/env tách và cleanup khi PR đóng, sau production auto deploy.
 

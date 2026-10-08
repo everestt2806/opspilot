@@ -5,6 +5,14 @@
 >
 > Trạng thái hợp lệ: `BACKLOG · TUẦN NÀY · ĐANG LÀM · CHỜ REVIEW · HOÀN THÀNH · BLOCKED`.
 
+## Sprint sản phẩm 08/10 — hai nguồn deploy và nền auto deploy
+
+> Người dùng chốt phát triển theo hướng production, cho phép control plane trên VPS quản lý (ADR-011). Demo 14/10 trình bày phần đã qua live gate, không cắt các chức năng cũ để kịp demo. Chuẩn nghiệm thu: [docs/31](../31-lo-trinh-hoan-thien-san-pham.md). Chỉ một task Worker `ĐANG LÀM` tại một thời điểm.
+
+| ID | Task | Chủ | Hạn mục tiêu | Trạng thái | Branch | Phụ thuộc / ghi chú |
+|---|---|---|---|---|---|---|
+| TK-S7 G0 | [Hợp đồng local/Git và snapshot Git công khai](tk-s7-g0-two-source-git.md) | Worker | 09/10/2026; không cắt gate | TUẦN NÀY | `feat/deploy-reachability` | Sau G0 mới giao G1 UI/pipeline, rồi live gate; controller Product mode có ADR/checkpoint riêng |
+
 TK-A18 Titlebar fix 05: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `30747f1`; WCO drag region dùng
 đúng rectangle, native controls không còn chồng caption và màu overlay đã liền shell; Snap Layout ghi
 manual-only, không push/PR/merge.
