@@ -87,6 +87,17 @@ manual-only, không push/PR/merge.
 | UI-1k-c | Nghiệm thu tổng thể, Quality Gates & Tài liệu | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `335d1ea`, `86a5d5a` | Đồng bộ README checklist 14 PASS / 1 GAP, 12 ảnh Electron thật 1280×800 & 1366×768 (Dark/Light), VPS thật NOT_RUN |
 | GATE-1 | Xử lý lint no-empty & Prettier backend scripts | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `4d14794` | Sửa đúng 9 lỗi no-empty (thêm chú thích cleanup) & 11 cảnh báo Prettier trong deploy-cli, headless-poller và test; root lint 0 errors/0 warnings, typecheck pass, test pass |
 
+### Sprint demo trước 14/10/2026 — [kế hoạch và gate](../29-ke-hoach-demo-14-10.md)
+
+| ID | Task | Chủ | Hạn nội bộ | Trạng thái | Phụ thuộc | DoD ngắn |
+| --- | --- | --- | --- | --- | --- | --- |
+| D14-0 | Khóa scope, lập runbook hai chế độ và phiếu in | Leader | 08/10 | HOÀN THÀNH | Không | Kế hoạch 29 và phiếu A4; baseline 68 file/626 test, lint/typecheck PASS |
+| D14-1 | Profile demo offline tách dữ liệu thật và chặn remote tại main | Worker | 09/10 | TUẦN NÀY | D14-0 | Banner rõ, fixture synthetic, test chứng minh không SSH/ghi remote |
+| D14-2 | Bằng chứng detector và ML local tái chạy được | Worker | 10/10 | BACKLOG | D14-1 | Ba detector và một luồng ML synthetic có lệnh/SHA/output hoặc loại khỏi demo |
+| D14-3 | Preflight VPS có điều kiện; chốt LIVE_VPS/OFFLINE_DISCLOSED | Worker | 11/10 | BACKLOG | VPS và fingerprint tin cậy | Thiếu một gate thì ghi BLOCKED/NOT_RUN và dùng offline |
+| D14-4 | Rehearsal lần 1, ảnh và sửa blocker | Worker | 12/10 | BACKLOG | D14-2, D14-3 | Demo 6–8 phút; ghi thời lượng, SHA, ảnh và lỗi |
+| D14-5 | Rehearsal lần 2, gate cuối, freeze và phiếu in | Worker | 13/10 | BACKLOG | D14-4 | Leader cấp verdict theo đúng chế độ; không thêm tính năng |
+
 
 
 
