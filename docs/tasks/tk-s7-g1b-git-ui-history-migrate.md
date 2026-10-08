@@ -37,4 +37,4 @@
 Chưa được phép push, mở PR hoặc merge.
 
 - UPDATE 09/10 — Hoàn tất wizard hai nguồn, handle/token lifecycle, Git redeploy/provenance/rollback lineage và restore migrate Git bằng payload relay + saved plan; local path vẫn giữ nguyên. 3 focused files: 100/100; full Vitest: 71 files, 657/657; lint; Node/Web/Scripts typecheck; build; `git diff --check` đều pass trên Node 22.23.3. Electron thật dark/light đã lưu tại `docs/evidence/tk-s7-g1b/` (CSS 1280×800, physical 1920×1200, scale 1.5); chỉ dùng fixture, không kết nối VPS. Xem README evidence để biết trạng thái từng ảnh.
-- HANDOFF-LOCAL 09/10 — local commit sẽ được ghi sau khi chốt SHA; chưa push, chưa PR/merge.
+- HANDOFF-LOCAL 09/10 — `d1c875b` · focused 100/100, full 657/657, lint/typecheck/build/diff pass · bằng chứng tại `docs/evidence/tk-s7-g1b/`; chưa push, chưa PR/merge.
