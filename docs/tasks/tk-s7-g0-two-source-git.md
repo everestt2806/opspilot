@@ -1,6 +1,6 @@
 # TK-S7 G0 — Hợp đồng hai nguồn và lấy snapshot Git công khai
 
-> Quy trình/trạng thái: [README.md](README.md), [board.md](board.md). Task này là lát cắt đầu của [roadmap sản phẩm](../31-lo-trinh-hoan-thien-san-pham.md) và [kiểm kê Git](../30-audit-git-first-deploy.md). **G0 không triển khai agent/control plane; việc đó đã được cho phép nhưng có checkpoint Product mode riêng theo ADR-011.**
+> Quy trình/trạng thái: [README.md](README.md), [board.md](board.md). Task này là lát cắt đầu của [roadmap sản phẩm](../31-lo-trinh-hoan-thien-san-pham.md), [kiểm kê Git](../30-audit-git-first-deploy.md) và [rà soát OpenShip/các PaaS](../32-tham-khao-openship-va-paas-tu-host.md). **G0 không triển khai agent/control plane; việc đó đã được cho phép nhưng có checkpoint Product mode riêng theo ADR-011.**
 
 | Chủ | Hạn mục tiêu | Branch | Brief | Ưu tiên |
 |---|---|---|---|---|

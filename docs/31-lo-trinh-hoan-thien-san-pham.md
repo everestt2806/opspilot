@@ -1,7 +1,7 @@
 # Hoàn thiện OpsPilot thành nền tảng deploy trên VPS riêng
 
 > Rà soát ngày 08/10/2026 tại HEAD `1cd5959`. Đây là chuẩn nghiệm thu sản phẩm sau demo, không thay thế [đề tài gốc](00-de-tai-goc.md) hoặc [lịch demo 14/10](29-ke-hoach-demo-14-10.md). Trạng thái là đánh giá mã và hồ sơ hiện có; test cục bộ không được tính là live gate trên VPS mới.
-> Chuẩn tham chiếu: [Vercel Git](https://vercel.com/docs/git), [Dokploy GitHub](https://docs.dokploy.com/docs/core/github), [Dokploy Domains](https://docs.dokploy.com/docs/core/domains), [Coolify Automatic Deployments](https://coolify.io/docs/applications/deployments/automatic-deployments), [Coolify Domains](https://coolify.io/docs/core/networking/domains).
+> Chuẩn tham chiếu: [Vercel Git](https://vercel.com/docs/git), [Dokploy GitHub](https://docs.dokploy.com/docs/core/github), [Dokploy Domains](https://docs.dokploy.com/docs/core/domains), [Coolify Automatic Deployments](https://coolify.io/docs/applications/deployments/automatic-deployments), [Coolify Domains](https://coolify.io/docs/core/networking/domains). Đối chiếu cơ chế OpenShip/Coolify/Dokku/CapRover và quyết định áp dụng nằm ở [tài liệu 32](32-tham-khao-openship-va-paas-tu-host.md).
 
 ## 1. Lời hứa sản phẩm và định nghĩa hoàn thành
 

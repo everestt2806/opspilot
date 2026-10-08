@@ -32,6 +32,7 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | [`29-ke-hoach-demo-14-10.md`](29-ke-hoach-demo-14-10.md) | Lịch và gate demo 14/10, ưu tiên deploy từ Git trên VPS thật | Trước mỗi checkpoint demo |
 | [`30-audit-git-first-deploy.md`](30-audit-git-first-deploy.md) | Kiểm kê đường deploy hiện tại, hợp đồng Git-first và thứ tự G0–G3 | Trước khi sửa IPC/schema/deploy UI |
 | [`31-lo-trinh-hoan-thien-san-pham.md`](31-lo-trinh-hoan-thien-san-pham.md) | Chuẩn nghiệm thu toàn sản phẩm: tự động hóa, hai nguồn deploy, template, migrate, monitor/ML và kiến trúc auto deploy | Trước khi chia task sau demo và chốt trạng thái hoàn thành |
+| [`32-tham-khao-openship-va-paas-tu-host.md`](32-tham-khao-openship-va-paas-tu-host.md) | Cơ chế tham khảo từ OpenShip, Coolify, Dokku, CapRover; phần nên áp dụng và ranh giới G0 | Trước khi giao Git G0, ingress và auto deploy |
 
 ## Kỹ thuật
 
