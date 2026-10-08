@@ -734,6 +734,12 @@ export function AppsPage(): React.JSX.Element {
                 </>
               )}
             </Typography.Text>
+            {selectedApp.source_type === 'git' && selectedApp.git_repo_url && (
+              <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
+                <Tag color="blue">Git</Tag> {selectedApp.git_repo_url} · {selectedApp.git_ref} ·{' '}
+                {selectedApp.git_root}
+              </Typography.Text>
+            )}
           </div>
         </Space>
         <Space>
@@ -1180,6 +1186,39 @@ export function AppsPage(): React.JSX.Element {
                                 </span>
                               )}
                               {dep.image_tag && <span>{strings.apps.imageTag(dep.image_tag)}</span>}
+                              {dep.git_repo_url && (
+                                <span>
+                                  <Tag color="blue">Git</Tag> {dep.git_repo_url}
+                                </span>
+                              )}
+                              {dep.git_commit_sha && (
+                                <span>
+                                  SHA{' '}
+                                  <Typography.Text code copyable>
+                                    {dep.git_commit_sha}
+                                  </Typography.Text>
+                                </span>
+                              )}
+                              {dep.is_rollback_of !== null &&
+                                (() => {
+                                  const original = currentAppDeployments.find(
+                                    (item) => item.id === dep.is_rollback_of
+                                  )
+                                  return (
+                                    <span>
+                                      Rollback of v{original?.version ?? '—'}
+                                      {original?.git_commit_sha ? (
+                                        <>
+                                          {' '}
+                                          · SHA{' '}
+                                          <Typography.Text code>
+                                            {original.git_commit_sha}
+                                          </Typography.Text>
+                                        </>
+                                      ) : null}
+                                    </span>
+                                  )
+                                })()}
                             </div>
                           </div>
                         </li>

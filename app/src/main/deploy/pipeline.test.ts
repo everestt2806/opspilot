@@ -454,6 +454,80 @@ describe('DeployPipeline', () => {
     expect(events.at(-1)).toMatchObject({ type: 'finished', deployment_id: started.deployment_id })
   })
 
+  it('restores a Git deployment from the relayed VPS root and saved plan without a local source path', async () => {
+    createHarness()
+    const repositoryUrl = 'https://github.com/example/pinned-demo.git'
+    const commitSha = 'b'.repeat(40)
+    const plan = {
+      dockerfileTemplate: 'express.Dockerfile',
+      buildArgs: {},
+      buildCommand: 'npm run build',
+      startCommand: 'node app.js',
+      containerPort: 3000,
+      healthcheckPath: '/health',
+      requiredEnv: [],
+      optionalEnv: [],
+      needsDb: false,
+      manualSteps: []
+    }
+    const inserted = database
+      .prepare(
+        `INSERT INTO app (vps_id,name,framework,source_path,source_type,git_repo_url,git_ref,git_root,host_port,container_port,healthcheck_path,needs_db)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+      )
+      .run(
+        vpsId,
+        'migrated-git-app',
+        'express',
+        null,
+        'git',
+        repositoryUrl,
+        'main',
+        '.',
+        30000,
+        3000,
+        '/health',
+        0
+      )
+    const appId = Number(inserted.lastInsertRowid)
+
+    const started = pipeline.runRestoredGit(
+      {
+        vps_id: vpsId,
+        app_id: appId,
+        app_name: 'migrated-git-app',
+        remote_source_path: '/opt/opspilot/migrated-git-app',
+        env: {}
+      },
+      { plan, framework: 'express', repositoryUrl, commitSha }
+    )
+    const finished = await waitForFinished(started.deploymentId)
+
+    expect(finished.status).toBe('running')
+    expect(uploadDirMock).not.toHaveBeenCalled()
+    expect(testSsh.fileSize).toHaveBeenCalledWith(vpsId, '/opt/opspilot/migrated-git-app/src')
+    const app = database
+      .prepare('SELECT source_path,source_type,git_repo_url,git_ref,git_root FROM app WHERE id=?')
+      .get(appId)
+    expect(app).toMatchObject({
+      source_path: null,
+      source_type: 'git',
+      git_repo_url: repositoryUrl,
+      git_ref: 'main',
+      git_root: '.'
+    })
+    const deployment = database
+      .prepare('SELECT status,detector_json,git_repo_url,git_commit_sha FROM deployment WHERE id=?')
+      .get(started.deploymentId)
+    expect(deployment).toMatchObject({
+      status: 'running',
+      detector_json: JSON.stringify(plan),
+      git_repo_url: repositoryUrl,
+      git_commit_sha: commitSha
+    })
+    expect(events.at(-1)).toMatchObject({ type: 'finished', deployment_id: started.deploymentId })
+  })
+
   it('marks a deployment failed and releases app lock and Git snapshot when opening its log fails', async () => {
     createHarness()
     const cleanup = vi.fn()

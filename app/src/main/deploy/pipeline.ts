@@ -44,6 +44,13 @@ const RENDER_COLLECT_INTERVAL_S = '10'
 const COLLECTOR_IMAGE_SUFFIX = ':collector'
 
 type DeployInputWithRemoteSource = DeployInput & { remote_source_path?: string }
+type RestoredGitInput = Omit<DeployInput, 'source_path'> & { remote_source_path: string }
+interface RestoredGitSource {
+  plan: BuildPlan
+  framework: App['framework']
+  repositoryUrl: string
+  commitSha: string
+}
 
 export function resolveCollectorDir(): string {
   const candidates = [
@@ -195,6 +202,29 @@ export class DeployPipeline {
     const run = this.execute(ctx)
       .catch(async (error: unknown) => {
         logger.error('deploy', 'Pipeline dừng bất thường ngoài vòng bắt lỗi', {
+          deployment_id: ctx.deployment.id,
+          error: error instanceof Error ? error.message : String(error)
+        })
+        await this.failUnexpected(ctx, error)
+      })
+      .finally(() => {
+        this.cleanupRunResources(ctx)
+        this.activeRuns.delete(run)
+      })
+    this.activeRuns.add(run)
+    return { deploymentId: ctx.deployment.id }
+  }
+
+  /** Restore a Git deployment from the already-relayed VPS payload and saved plan. */
+  runRestoredGit(
+    input: RestoredGitInput,
+    source: RestoredGitSource,
+    signal?: AbortSignal
+  ): { deploymentId: number } {
+    const ctx = this.setup(input as unknown as DeployInput, signal, undefined, source)
+    const run = this.execute(ctx)
+      .catch(async (error: unknown) => {
+        logger.error('deploy', 'Git restore pipeline dừng bất thường', {
           deployment_id: ctx.deployment.id,
           error: error instanceof Error ? error.message : String(error)
         })
@@ -556,7 +586,8 @@ export class DeployPipeline {
   private setup(
     input: DeployInput,
     signal?: AbortSignal,
-    gitSource?: PreparedGitLease
+    gitSource?: PreparedGitLease,
+    restoredGit?: RestoredGitSource
   ): RunContext {
     if (!Number.isInteger(input.vps_id) || input.vps_id <= 0) {
       throw new AppError('VALIDATION', 'VPS không hợp lệ. Hãy chọn lại VPS rồi thử.')
@@ -568,15 +599,13 @@ export class DeployPipeline {
         'Tên app phải là chữ thường, số hoặc dấu gạch ngang, dài 2-31 ký tự (vd: express-api).'
       )
     }
-    if (!existsSync(input.source_path)) {
+    if (!restoredGit && !existsSync(input.source_path)) {
       throw new AppError('VALIDATION', 'Thư mục source không tồn tại. Hãy chọn lại thư mục.')
     }
 
-    const detection = detectFramework(buildSourceTree(input.source_path))
-    if (!detection.matched) {
-      throw new AppError('DETECT_FAILED', detection.hint)
-    }
-    const plan = detection.plan
+    const detection = restoredGit ? null : detectFramework(buildSourceTree(input.source_path))
+    if (detection && !detection.matched) throw new AppError('DETECT_FAILED', detection.hint)
+    const plan = restoredGit?.plan ?? detection!.plan
 
     const vps = this.vpsRepository.getById(input.vps_id)
     let app: App
@@ -621,10 +650,10 @@ export class DeployPipeline {
         app = this.appRepository.create({
           vps_id: vps.id,
           name,
-          framework: detection.detector,
-          source_path: gitSource ? null : input.source_path,
-          source_type: gitSource ? 'git' : 'local',
-          git_repo_url: gitSource?.gitRepoUrl ?? null,
+          framework: restoredGit?.framework ?? detection!.detector,
+          source_path: gitSource || restoredGit ? null : input.source_path,
+          source_type: gitSource || restoredGit ? 'git' : 'local',
+          git_repo_url: gitSource?.gitRepoUrl ?? restoredGit?.repositoryUrl ?? null,
           git_ref: gitSource?.gitRef ?? null,
           git_root: gitSource?.gitRoot ?? null,
           host_port: requestedPort ?? allocatePort(usedPorts),
@@ -647,8 +676,11 @@ export class DeployPipeline {
       app.name,
       JSON.stringify(plan),
       null,
-      gitSource
-        ? { repositoryUrl: gitSource.gitRepoUrl, commitSha: gitSource.commitSha }
+      gitSource || restoredGit
+        ? {
+            repositoryUrl: gitSource?.gitRepoUrl ?? restoredGit!.repositoryUrl,
+            commitSha: gitSource?.commitSha ?? restoredGit!.commitSha
+          }
         : undefined
     )
     const controller = new AbortController()
@@ -1051,11 +1083,13 @@ export class DeployPipeline {
         START_COMMAND: plan.startCommand,
         COLLECT_INTERVAL_S: RENDER_COLLECT_INTERVAL_S,
         COLLECTOR_IMAGE_TAG: `${ctx.app.name}${COLLECTOR_IMAGE_SUFFIX}`,
-        COLLECTOR_APP_PATH: resolveCollectorAppPath(
-          ctx.app.framework,
-          buildSourceTree(input.source_path),
-          ctx.app.healthcheck_path
-        ),
+        COLLECTOR_APP_PATH: (input as DeployInputWithRemoteSource).remote_source_path
+          ? ctx.app.healthcheck_path
+          : resolveCollectorAppPath(
+              ctx.app.framework,
+              buildSourceTree(input.source_path),
+              ctx.app.healthcheck_path
+            ),
         APP_DEPENDS_ON: plan.needsDb
           ? '    depends_on:\n      postgres:\n        condition: service_healthy'
           : ''

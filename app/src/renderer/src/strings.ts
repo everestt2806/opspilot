@@ -237,6 +237,19 @@ const BASE_EN_STRINGS = {
       appNameRule: 'Lowercase a-z, digits and dashes — must start with a letter.'
     },
     sourceLabel: 'Source folder',
+    git: {
+      modeLocal: 'Local folder',
+      modeGit: 'Git repository',
+      repository: 'Public HTTPS repository URL',
+      ref: 'Branch or ref',
+      root: 'Root directory',
+      prepare: 'Prepare source',
+      preparing: 'Cloning and detecting source…',
+      ready: 'Source ready',
+      sha: 'Pinned commit',
+      instructions: 'Public GitHub repositories over HTTPS are supported.',
+      invalid: 'Enter a public HTTPS repository URL, ref, and root directory.'
+    },
     pickFolder: 'Choose folder',
     pickAgain: 'Choose again',
     next: 'Next',
@@ -1243,6 +1256,19 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   },
   deploy: {
     ...BASE_EN_STRINGS.deploy,
+    git: {
+      modeLocal: 'Thư mục máy tính',
+      modeGit: 'Kho Git',
+      repository: 'URL HTTPS kho công khai',
+      ref: 'Nhánh hoặc ref',
+      root: 'Thư mục gốc',
+      prepare: 'Chuẩn bị nguồn',
+      preparing: 'Đang tải và nhận diện nguồn…',
+      ready: 'Nguồn đã sẵn sàng',
+      sha: 'Commit đã ghim',
+      instructions: 'Hỗ trợ repository GitHub công khai qua HTTPS.',
+      invalid: 'Nhập URL HTTPS công khai, ref và thư mục gốc hợp lệ.'
+    },
     title: 'Triển khai ứng dụng',
     description:
       'Chọn thư mục mã nguồn — ứng dụng tự nhận diện framework và triển khai lên VPS qua SSH.',
@@ -1941,6 +1967,19 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   },
   deploy: {
     ...BASE_EN_STRINGS.deploy,
+    git: {
+      modeLocal: '本地文件夹',
+      modeGit: 'Git 仓库',
+      repository: '公开 HTTPS 仓库 URL',
+      ref: '分支或 ref',
+      root: '根目录',
+      prepare: '准备源代码',
+      preparing: '正在克隆并检测…',
+      ready: '源代码已就绪',
+      sha: '固定提交',
+      instructions: '支持通过 HTTPS 访问的公开 GitHub 仓库。',
+      invalid: '请输入有效的公开 HTTPS 仓库 URL、ref 和根目录。'
+    },
     title: '部署应用程序',
     description: '选择源码文件夹 — 系统将自动识别框架并通过 SSH 部署到 VPS。',
     vpsLabel: '目标 VPS',
@@ -2622,6 +2661,19 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   },
   deploy: {
     ...BASE_EN_STRINGS.deploy,
+    git: {
+      modeLocal: 'ローカルフォルダー',
+      modeGit: 'Git リポジトリ',
+      repository: '公開 HTTPS リポジトリ URL',
+      ref: 'ブランチまたは ref',
+      root: 'ルートディレクトリ',
+      prepare: 'ソースを準備',
+      preparing: 'クローンして検出中…',
+      ready: 'ソースの準備完了',
+      sha: '固定コミット',
+      instructions: 'HTTPS 経由の公開 GitHub リポジトリに対応しています。',
+      invalid: '公開 HTTPS URL、ref、ルートディレクトリを入力してください。'
+    },
     title: 'アプリケーションデプロイ',
     description:
       'ソースフォルダを選択 — フレームワークを自動検出してSSH経由でVPSにデプロイします。',

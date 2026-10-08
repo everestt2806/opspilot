@@ -350,6 +350,75 @@ describe('MigrateService guards and confirmation', () => {
     }
   })
 
+  it('restores Git from the relayed target payload with the saved plan and original SHA, without source_path', async () => {
+    const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-git-restore-'))
+    const database = initializeDatabase(directory)
+    try {
+      database.exec(`
+        INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES
+          ('source','127.0.0.1','u','password','x'),('target','127.0.0.2','u','password','x');
+        INSERT INTO app (vps_id,name,framework,source_path,source_type,git_repo_url,git_ref,git_root,host_port,container_port)
+          VALUES (1,'demo','express',NULL,'git','https://github.com/demo/public.git','main','.',30000,3000),
+                 (2,'demo-m123','express',NULL,'git','https://github.com/demo/public.git','main','.',30001,3000);
+        INSERT INTO deployment (app_id,version,image_tag,status,detector_json,git_repo_url,git_commit_sha)
+          VALUES (1,1,'demo:v1','running','{"dockerfileTemplate":"express.Dockerfile","buildArgs":{},"buildCommand":"npm run build","startCommand":"node server.js","containerPort":3000,"healthcheckPath":"/health","requiredEnv":[],"optionalEnv":[],"needsDb":false,"manualSteps":[]}','https://github.com/demo/public.git','${'a'.repeat(40)}');
+        UPDATE app SET current_deployment_id=1 WHERE id=1;
+      `)
+      const readFile = vi.fn().mockResolvedValue('PORT=3000\n')
+      const run = vi.fn()
+      const runRestoredGit = vi.fn().mockReturnValue({ deploymentId: 42 })
+      const service = new MigrateService(
+        database,
+        { exec: vi.fn(), readFile } as never,
+        vi.fn(),
+        () => ({ run, runRestoredGit }) as never
+      )
+      const privateService = service as unknown as {
+        startRestoreDeployment(
+          job: { id: number; target_vps_id: number },
+          source: App,
+          target: App,
+          targetDir: string,
+          signal: AbortSignal
+        ): Promise<number>
+      }
+      const source = database
+        .prepare("SELECT a.*, 'http://127.0.0.1:' || a.host_port AS url FROM app a WHERE id=1")
+        .get() as App
+      const target = database
+        .prepare("SELECT a.*, 'http://127.0.0.2:' || a.host_port AS url FROM app a WHERE id=2")
+        .get() as App
+      const deploymentId = await privateService.startRestoreDeployment(
+        { id: 5, target_vps_id: 2 },
+        source,
+        target,
+        '/opt/opspilot/demo-m123',
+        new AbortController().signal
+      )
+
+      expect(deploymentId).toBe(42)
+      expect(source.source_path).toBeNull()
+      expect(run).not.toHaveBeenCalled()
+      expect(runRestoredGit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          remote_source_path: '/opt/opspilot/demo-m123',
+          env: { PORT: '3000' }
+        }),
+        expect.objectContaining({
+          framework: 'express',
+          repositoryUrl: 'https://github.com/demo/public.git',
+          commitSha: 'a'.repeat(40),
+          plan: expect.objectContaining({ startCommand: 'node server.js' })
+        }),
+        expect.any(AbortSignal)
+      )
+      expect(runRestoredGit.mock.calls[0]?.[0]).not.toHaveProperty('source_path')
+    } finally {
+      closeDatabase()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
   it('falls back to empty env when the migrated .env cannot be read', async () => {
     const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-env-miss-'))
     const database = initializeDatabase(directory)

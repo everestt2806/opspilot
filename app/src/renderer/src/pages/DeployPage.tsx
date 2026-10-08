@@ -32,8 +32,11 @@ import {
 import type {
   App,
   DeployEvent,
-  DeployInput,
   DetectionResultDto,
+  DeploySourceInput,
+  DeployStartInput,
+  GitSourceInput,
+  PreparedGitSource,
   PrecheckResult,
   Vps
 } from '@shared/ipc'
@@ -103,6 +106,25 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   const [appSelect, setAppSelect] = useState(-1)
   const [targetMode, setTargetMode] = useState<'new' | 'existing'>('new')
   const [sourcePath, setSourcePath] = useState<string | null>(null)
+  const [sourceMode, setSourceMode] = useState<'local' | 'git'>('local')
+  const [gitRepoUrl, setGitRepoUrl] = useState('')
+  const [gitRef, setGitRef] = useState('main')
+  const [gitRoot, setGitRoot] = useState('.')
+  const [preparedGit, setPreparedGit] = useState<PreparedGitSource | null>(null)
+  const [preparingGit, setPreparingGit] = useState(false)
+  const prepareRequestRef = useRef<string | null>(null)
+  const sourceRequestRef = useRef(0)
+  const preparedGitRef = useRef<PreparedGitSource | null>(null)
+
+  useEffect(
+    () => () => {
+      const requestId = prepareRequestRef.current
+      if (requestId && window.api) void window.api.invoke('deploy:cancel-git-prepare', requestId)
+      const handle = preparedGitRef.current?.prepared_source_handle
+      if (handle && window.api) void window.api.invoke('deploy:release-git-prepare', handle)
+    },
+    []
+  )
   const [detection, setDetection] = useState<DetectionResultDto | null>(null)
   const [detecting, setDetecting] = useState(false)
   const [detectError, setDetectError] = useState<string | null>(null)
@@ -184,6 +206,12 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
         if (found) {
           setAppSelect(found.id)
           setTargetMode('existing')
+          if (found.source_type === 'git') {
+            setSourceMode('git')
+            setGitRepoUrl(found.git_repo_url ?? '')
+            setGitRef(found.git_ref ?? 'main')
+            setGitRoot(found.git_root ?? '.')
+          }
           activePreselectRef.current = null
           clearDeployPreselect()
         } else {
@@ -282,9 +310,11 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   }, [run, runStartedAt])
 
   async function runDetect(path: string): Promise<boolean> {
+    const requestId = ++sourceRequestRef.current
     setDetecting(true)
     setDetectError(null)
     const result = await window.api.invoke('deploy:detect', path)
+    if (sourceRequestRef.current !== requestId) return false
     setDetecting(false)
     if (!result.ok) {
       setDetection(null)
@@ -299,6 +329,12 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     const result = await window.api.invoke('system:pick-folder')
     if (!result.ok || !result.data.path) return
     invalidatePrecheck()
+    sourceRequestRef.current++
+    if (preparedGit)
+      void window.api.invoke('deploy:release-git-prepare', preparedGit.prepared_source_handle)
+    setPreparedGit(null)
+    preparedGitRef.current = null
+    setSourceMode('local')
     setSourcePath(result.data.path)
     // Chỉ gợi ý tên ứng dụng mới từ thư mục khi người dùng chưa tự nhập tên
     if (targetMode === 'new' && !userEditedNewAppName) {
@@ -311,15 +347,84 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     void runDetect(result.data.path)
   }
 
+  async function prepareGitSource(): Promise<void> {
+    const requestId = crypto.randomUUID()
+    prepareRequestRef.current = requestId
+    setPreparingGit(true)
+    setDetectError(null)
+    invalidatePrecheck()
+    const input: GitSourceInput = {
+      source_type: 'git',
+      git_repo_url: gitRepoUrl.trim(),
+      git_ref: gitRef.trim(),
+      git_root: gitRoot.trim() || '.'
+    }
+    const result = await window.api.invoke('deploy:prepare-git', requestId, input)
+    if (prepareRequestRef.current !== requestId) {
+      if (result.ok)
+        void window.api.invoke('deploy:release-git-prepare', result.data.prepared_source_handle)
+      return
+    }
+    setPreparingGit(false)
+    if (!result.ok) {
+      setPreparedGit(null)
+      preparedGitRef.current = null
+      setDetection(null)
+      setDetectError(result.error.message)
+      return
+    }
+    if (preparedGit)
+      void window.api.invoke('deploy:release-git-prepare', preparedGit.prepared_source_handle)
+    setPreparedGit(result.data)
+    preparedGitRef.current = result.data
+    setDetection(result.data.detection)
+  }
+
+  function changeSourceMode(mode: 'local' | 'git'): void {
+    if (mode === sourceMode) return
+    sourceRequestRef.current++
+    const preparingRequest = prepareRequestRef.current
+    prepareRequestRef.current = null
+    if (preparingRequest && preparingGit)
+      void window.api.invoke('deploy:cancel-git-prepare', preparingRequest)
+    if (preparedGit)
+      void window.api.invoke('deploy:release-git-prepare', preparedGit.prepared_source_handle)
+    setPreparedGit(null)
+    preparedGitRef.current = null
+    setPreparingGit(false)
+    setSourceMode(mode)
+    setDetection(null)
+    setDetectError(null)
+    invalidatePrecheck()
+  }
+
+  function discardPreparedGit(): void {
+    if (preparedGit)
+      void window.api.invoke('deploy:release-git-prepare', preparedGit.prepared_source_handle)
+    setPreparedGit(null)
+    preparedGitRef.current = null
+    invalidatePrecheck()
+  }
+
   async function continueFromSource(): Promise<void> {
-    if (vpsLoading || appsLoading || !vpsId || !sourcePath || detecting) return
+    if (
+      vpsLoading ||
+      appsLoading ||
+      !vpsId ||
+      detecting ||
+      (sourceMode === 'local' ? !sourcePath : !preparedGit)
+    )
+      return
     if (targetMode === 'existing') {
       if (appSelect === -1 || !apps.some((app) => app.id === appSelect)) return
     } else if (targetMode === 'new') {
       if (!newAppName.trim() || !APP_NAME_RE.test(newAppName.trim())) return
     }
     if (!detection) {
-      const ok = await runDetect(sourcePath)
+      const ok =
+        sourceMode === 'git'
+          ? Boolean(preparedGit?.detection.matched)
+          : await runDetect(sourcePath!)
       if (!ok) return
     }
     setStep(1)
@@ -358,7 +463,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     })
   }
 
-  const buildInput = useCallback((): DeployInput => {
+  const buildInput = useCallback((): DeploySourceInput => {
     const validApp =
       targetMode === 'existing' && appSelect > 0 ? apps.find((app) => app.id === appSelect) : null
 
@@ -366,21 +471,42 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
       vps_id: vpsId as number,
       app_id: validApp ? validApp.id : undefined,
       app_name: validApp ? validApp.name : newAppName.trim(),
-      source_path: sourcePath as string,
+      ...(sourceMode === 'git'
+        ? {
+            source_type: 'git' as const,
+            prepared_source_handle: preparedGit?.prepared_source_handle ?? ''
+          }
+        : { source_path: sourcePath as string }),
       env: Object.fromEntries(Object.entries(envValues).filter(([, value]) => value.trim() !== ''))
     }
-  }, [appSelect, apps, envValues, newAppName, sourcePath, targetMode, vpsId])
+  }, [
+    appSelect,
+    apps,
+    envValues,
+    newAppName,
+    sourcePath,
+    sourceMode,
+    preparedGit,
+    targetMode,
+    vpsId
+  ])
 
   const currentConfigSignature = useMemo(() => {
-    if (!vpsId || !sourcePath) return ''
+    if (!vpsId || (sourceMode === 'local' ? !sourcePath : !preparedGit)) return ''
     return getConfigSignature(buildInput())
-  }, [buildInput, sourcePath, vpsId])
+  }, [buildInput, preparedGit, sourceMode, sourcePath, vpsId])
 
   const isPrecheckValid =
     Boolean(precheck) && Boolean(precheckSignature) && precheckSignature === currentConfigSignature
 
   const runPrecheck = useCallback(async (): Promise<void> => {
-    if (!vpsId || !sourcePath || vpsLoading || appsLoading) return
+    if (
+      !vpsId ||
+      (sourceMode === 'local' ? !sourcePath : !preparedGit) ||
+      vpsLoading ||
+      appsLoading
+    )
+      return
     if (targetMode === 'existing') {
       const validApp = apps.find((app) => app.id === appSelect)
       if (!validApp) return
@@ -415,7 +541,18 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
       setPrecheckSignature(null)
       setPrecheckError(err instanceof Error ? err.message : String(err))
     }
-  }, [apps, appsLoading, buildInput, sourcePath, targetMode, appSelect, vpsId, vpsLoading])
+  }, [
+    apps,
+    appsLoading,
+    buildInput,
+    preparedGit,
+    sourceMode,
+    sourcePath,
+    targetMode,
+    appSelect,
+    vpsId,
+    vpsLoading
+  ])
 
   async function continueFromConfig(): Promise<void> {
     if (!matches) return
@@ -446,7 +583,16 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     const input = { ...currentInput, host_port: precheck.assigned_host_port }
 
     try {
-      const result = await window.api.invoke('deploy:start', input)
+      const startInput: DeployStartInput =
+        sourceMode === 'git' && preparedGit && precheck.precheck_token
+          ? {
+              ...input,
+              source_type: 'git',
+              prepared_source_handle: preparedGit.prepared_source_handle,
+              precheck_token: precheck.precheck_token
+            }
+          : (input as DeployStartInput)
+      const result = await window.api.invoke('deploy:start', startInput)
       if (!result.ok) {
         startPendingRef.current = false
         setStarting(false)
@@ -485,6 +631,14 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   }
 
   function resetWizard(): void {
+    const requestId = prepareRequestRef.current
+    if (requestId) void window.api.invoke('deploy:cancel-git-prepare', requestId)
+    if (preparedGit)
+      void window.api.invoke('deploy:release-git-prepare', preparedGit.prepared_source_handle)
+    prepareRequestRef.current = null
+    setPreparedGit(null)
+    preparedGitRef.current = null
+    setPreparingGit(false)
     startPendingRef.current = false
     setStarting(false)
     pendingEventsRef.current = []
@@ -634,6 +788,87 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                 {vpsField}
 
                 <div>
+                  <Radio.Group
+                    value={sourceMode}
+                    onChange={(event) => changeSourceMode(event.target.value as 'local' | 'git')}
+                    optionType="button"
+                    buttonStyle="solid"
+                  >
+                    <Radio.Button value="local">{strings.deploy.git.modeLocal}</Radio.Button>
+                    <Radio.Button value="git">{strings.deploy.git.modeGit}</Radio.Button>
+                  </Radio.Group>
+                  {sourceMode === 'git' ? (
+                    <Space
+                      direction="vertical"
+                      size="small"
+                      style={{ width: '100%', marginTop: 12 }}
+                    >
+                      <Typography.Text type="secondary">
+                        {strings.deploy.git.instructions}
+                      </Typography.Text>
+                      <Input
+                        aria-label={strings.deploy.git.repository}
+                        placeholder="https://github.com/owner/repository.git"
+                        value={gitRepoUrl}
+                        onChange={(event) => {
+                          discardPreparedGit()
+                          setGitRepoUrl(event.target.value)
+                        }}
+                      />
+                      <Space.Compact style={{ width: '100%' }}>
+                        <Input
+                          aria-label={strings.deploy.git.ref}
+                          placeholder={strings.deploy.git.ref}
+                          value={gitRef}
+                          onChange={(event) => {
+                            discardPreparedGit()
+                            setGitRef(event.target.value)
+                          }}
+                        />
+                        <Input
+                          aria-label={strings.deploy.git.root}
+                          placeholder="."
+                          value={gitRoot}
+                          onChange={(event) => {
+                            discardPreparedGit()
+                            setGitRoot(event.target.value)
+                          }}
+                        />
+                        <Button
+                          type="primary"
+                          loading={preparingGit}
+                          onClick={() => void prepareGitSource()}
+                          disabled={!gitRepoUrl.trim() || !gitRef.trim()}
+                        >
+                          {preparingGit ? strings.deploy.git.preparing : strings.deploy.git.prepare}
+                        </Button>
+                      </Space.Compact>
+                      {preparedGit && (
+                        <Alert
+                          type="success"
+                          showIcon
+                          message={strings.deploy.git.ready}
+                          description={
+                            <Space direction="vertical">
+                              <span>
+                                {preparedGit.git_repo_url} · {preparedGit.git_ref} ·{' '}
+                                {preparedGit.git_root}
+                              </span>
+                              <span>
+                                {strings.deploy.git.sha}:{' '}
+                                <Typography.Text code copyable>
+                                  {preparedGit.git_commit_sha}
+                                </Typography.Text>
+                              </span>
+                            </Space>
+                          }
+                        />
+                      )}
+                    </Space>
+                  ) : null}
+                </div>
+
+                <div>
                   <Typography.Text strong>{strings.deploy.targetApp.title}</Typography.Text>
                   <div style={{ marginTop: 8 }}>
                     <Radio.Group
@@ -741,9 +976,17 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                           onChange={(e) => {
                             const selectedId = Number(e.currentTarget.value)
                             invalidatePrecheck()
+                            discardPreparedGit()
                             if (selectedId > 0) {
                               clearPreselectSession()
                               setAppSelect(selectedId)
+                              const app = apps.find((candidate) => candidate.id === selectedId)
+                              if (app?.source_type === 'git' && app.git_repo_url) {
+                                setGitRepoUrl(app.git_repo_url)
+                                setGitRef(app.git_ref ?? 'main')
+                                setGitRoot(app.git_root ?? '.')
+                                changeSourceMode('git')
+                              }
                             } else {
                               setAppSelect(-1)
                             }
@@ -787,38 +1030,42 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                   )}
                 </div>
 
-                <div>
-                  <Typography.Text strong>{strings.deploy.sourceLabel}</Typography.Text>
-                  <Space.Compact style={{ width: '100%', marginTop: 8 }}>
-                    <Input
-                      readOnly
-                      value={sourcePath ?? ''}
-                      placeholder={strings.deploy.sourceLabel}
-                    />
-                    <Button
-                      icon={<FolderOpenOutlined />}
-                      onClick={() => void pickFolder()}
-                      disabled={detecting}
-                    >
-                      {sourcePath ? strings.deploy.pickAgain : strings.deploy.pickFolder}
-                    </Button>
-                  </Space.Compact>
-                  {detecting && (
-                    <Space size="small" style={{ marginTop: 12 }}>
-                      <Spin size="small" />
-                      <Typography.Text type="secondary">{strings.deploy.detecting}</Typography.Text>
-                    </Space>
-                  )}
-                  {detectError && (
-                    <Alert
-                      style={{ marginTop: 12 }}
-                      type="error"
-                      showIcon
-                      message={strings.deploy.detectError}
-                      description={detectError}
-                    />
-                  )}
-                </div>
+                {sourceMode === 'local' && (
+                  <div>
+                    <Typography.Text strong>{strings.deploy.sourceLabel}</Typography.Text>
+                    <Space.Compact style={{ width: '100%', marginTop: 8 }}>
+                      <Input
+                        readOnly
+                        value={sourcePath ?? ''}
+                        placeholder={strings.deploy.sourceLabel}
+                      />
+                      <Button
+                        icon={<FolderOpenOutlined />}
+                        onClick={() => void pickFolder()}
+                        disabled={detecting}
+                      >
+                        {sourcePath ? strings.deploy.pickAgain : strings.deploy.pickFolder}
+                      </Button>
+                    </Space.Compact>
+                    {detecting && (
+                      <Space size="small" style={{ marginTop: 12 }}>
+                        <Spin size="small" />
+                        <Typography.Text type="secondary">
+                          {strings.deploy.detecting}
+                        </Typography.Text>
+                      </Space>
+                    )}
+                    {detectError && (
+                      <Alert
+                        style={{ marginTop: 12 }}
+                        type="error"
+                        showIcon
+                        message={strings.deploy.detectError}
+                        description={detectError}
+                      />
+                    )}
+                  </div>
+                )}
               </Space>
             </div>
           )}
@@ -1054,7 +1301,11 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                       </Space>
                     </Descriptions.Item>
                     <Descriptions.Item label={strings.deploy.review.sourcePath} span={2}>
-                      <Typography.Text code>{sourcePath || '—'}</Typography.Text>
+                      <Typography.Text code>
+                        {sourceMode === 'git'
+                          ? `${preparedGit?.git_repo_url ?? gitRepoUrl} · ${preparedGit?.git_ref ?? gitRef} · ${preparedGit?.git_root ?? gitRoot}`
+                          : sourcePath || '—'}
+                      </Typography.Text>
                     </Descriptions.Item>
                     <Descriptions.Item label={strings.deploy.review.envList} span={2}>
                       {Object.keys(envValues).filter((k) => envValues[k].trim() !== '').length ===
@@ -1193,7 +1444,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                   vpsLoading ||
                   appsLoading ||
                   !vpsId ||
-                  !sourcePath ||
+                  (sourceMode === 'local' ? !sourcePath : !preparedGit) ||
                   detecting ||
                   Boolean(vpsLoadError) ||
                   Boolean(preselectVpsError) ||

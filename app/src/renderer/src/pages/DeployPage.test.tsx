@@ -213,6 +213,117 @@ async function reachStep3(invoke: ReturnType<typeof vi.fn>): Promise<void> {
 }
 
 describe('DeployPage — wizard va log', () => {
+  it('Git wizard prepares a pinned handle and uses the same handle/token for precheck and start', async () => {
+    const prepared = {
+      prepared_source_handle: 'opaque-test-handle',
+      git_repo_url: 'https://github.com/example/public-demo.git',
+      git_ref: 'main',
+      git_root: 'apps/web',
+      git_commit_sha: 'a'.repeat(40),
+      detection: MATCHED
+    }
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'deploy:prepare-git': async () => ({ ok: true, data: prepared }),
+      'deploy:precheck': async () => ({
+        ok: true,
+        data: { ...PRECHECK_PASS, precheck_token: 'opaque-precheck-token' }
+      })
+    })
+    render(<DeployPage />)
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 1))
+    fireEvent.change(screen.getByPlaceholderText('my-app'), { target: { value: 'git-demo' } })
+    fireEvent.click(screen.getByText(strings.deploy.git.modeGit))
+    fireEvent.change(screen.getByLabelText(strings.deploy.git.repository), {
+      target: { value: prepared.git_repo_url }
+    })
+    fireEvent.change(screen.getByLabelText(strings.deploy.git.ref), { target: { value: 'main' } })
+    fireEvent.change(screen.getByLabelText(strings.deploy.git.root), {
+      target: { value: 'apps/web' }
+    })
+    fireEvent.click(screen.getByText(strings.deploy.git.prepare))
+    expect(await screen.findByText(prepared.git_commit_sha)).toBeTruthy()
+    expect(invoke).toHaveBeenCalledWith('deploy:prepare-git', expect.any(String), {
+      source_type: 'git',
+      git_repo_url: prepared.git_repo_url,
+      git_ref: 'main',
+      git_root: 'apps/web'
+    })
+    fireEvent.click(screen.getByText(strings.deploy.next))
+    await screen.findByText('Express.js')
+    fireEvent.click(screen.getByText(strings.deploy.next))
+    fireEvent.change(await screen.findByLabelText('PORT'), { target: { value: '3000' } })
+    fireEvent.change(screen.getByLabelText('SECRET_KEY'), { target: { value: 'fake-test-secret' } })
+    fireEvent.click(screen.getByText(strings.deploy.next))
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('deploy:precheck', expect.anything()))
+    expect(invoke).toHaveBeenCalledWith(
+      'deploy:precheck',
+      expect.objectContaining({
+        source_type: 'git',
+        prepared_source_handle: 'opaque-test-handle',
+        app_name: 'git-demo'
+      })
+    )
+    fireEvent.click(screen.getByText(strings.deploy.review.deploy))
+    await screen.findByText('Deploy log')
+    expect(invoke).toHaveBeenCalledWith(
+      'deploy:start',
+      expect.objectContaining({
+        source_type: 'git',
+        prepared_source_handle: 'opaque-test-handle',
+        precheck_token: 'opaque-precheck-token'
+      })
+    )
+    expect(
+      invoke.mock.calls.some(
+        ([channel, input]) => channel === 'deploy:start' && 'source_path' in (input as object)
+      )
+    ).toBe(false)
+  })
+
+  it('releases a Git snapshot that finishes preparing after the user switches back to local', async () => {
+    let resolvePrepare: ((value: unknown) => void) | undefined
+    const { invoke } = mockApi({
+      ...handersHappy,
+      'deploy:prepare-git': async () =>
+        new Promise((resolve) => {
+          resolvePrepare = resolve
+        })
+    })
+    render(<DeployPage />)
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 1))
+    fireEvent.click(screen.getByText(strings.deploy.git.modeGit))
+    fireEvent.change(screen.getByLabelText(strings.deploy.git.repository), {
+      target: { value: 'https://github.com/example/repo.git' }
+    })
+    fireEvent.click(screen.getByText(strings.deploy.git.prepare))
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(
+        'deploy:prepare-git',
+        expect.any(String),
+        expect.any(Object)
+      )
+    )
+    fireEvent.click(screen.getByText(strings.deploy.git.modeLocal))
+    await act(async () =>
+      resolvePrepare?.({
+        ok: true,
+        data: {
+          prepared_source_handle: 'late-handle',
+          git_repo_url: 'https://github.com/example/repo.git',
+          git_ref: 'main',
+          git_root: '.',
+          git_commit_sha: 'c'.repeat(40),
+          detection: MATCHED
+        }
+      })
+    )
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('deploy:release-git-prepare', 'late-handle')
+    )
+    expect(screen.queryByText('c'.repeat(40))).toBeNull()
+  })
+
   it('hien thi va cho chon tat ca VPS trong danh sach trien khai', async () => {
     const { invoke } = mockApi({
       ...handersHappy,

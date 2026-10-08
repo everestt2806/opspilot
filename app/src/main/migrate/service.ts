@@ -14,6 +14,7 @@ import { allocatePort } from '../deploy/portPolicy'
 import { listListeningPorts, runPrecheck } from '../deploy/precheck'
 import { parseEnvFile } from '../deploy/templates'
 import type { SshManager } from '../ssh/manager'
+import type { BuildPlan } from '../detectors/types'
 import { shellQuote } from '../ssh/shellQuote'
 import { MigrationRepository, type MigrationJob } from './repository'
 
@@ -459,17 +460,61 @@ export class MigrateService {
   ): Promise<number> {
     const env = await this.readRestoredEnv(job, targetDir)
     const pipeline = this.deployFactory(() => undefined as never)
-    const started = pipeline.run(
-      {
-        vps_id: job.target_vps_id,
-        app_name: target.name,
-        app_id: target.id,
-        source_path: this.sourcePath(source.id),
-        remote_source_path: targetDir,
-        env
-      } as Parameters<DeployPipeline['run']>[0],
-      signal
-    )
+    let started: { deploymentId: number }
+    if (source.source_type === 'git') {
+      const current = source.current_deployment_id
+        ? this.deployments.getById(source.current_deployment_id)
+        : null
+      if (!current?.git_commit_sha || !current.git_repo_url || !current.id) {
+        throw new AppError(
+          'VALIDATION',
+          'Deployment Git nguồn thiếu SHA/provenance để migrate đúng phiên bản.'
+        )
+      }
+      const row = this.database
+        .prepare('SELECT detector_json FROM deployment WHERE id=?')
+        .get(current.id) as { detector_json: string | null } | undefined
+      let plan: BuildPlan
+      try {
+        plan = JSON.parse(row?.detector_json ?? '') as BuildPlan
+      } catch {
+        throw new AppError('VALIDATION', 'Build plan đã lưu của deployment Git không hợp lệ.')
+      }
+      if (!plan?.dockerfileTemplate || !plan.startCommand) {
+        throw new AppError(
+          'VALIDATION',
+          'Deployment Git nguồn không có build plan hợp lệ để restore.'
+        )
+      }
+      started = pipeline.runRestoredGit(
+        {
+          vps_id: job.target_vps_id,
+          app_name: target.name,
+          app_id: target.id,
+          remote_source_path: targetDir,
+          env
+        },
+        {
+          plan,
+          framework: source.framework,
+          repositoryUrl: current.git_repo_url,
+          commitSha: current.git_commit_sha
+        },
+        signal
+      )
+    } else {
+      started = pipeline.run(
+        {
+          vps_id: job.target_vps_id,
+          app_name: target.name,
+          app_id: target.id,
+          source_path: this.sourcePath(source.id),
+          remote_source_path: targetDir,
+          env
+        } as Parameters<DeployPipeline['run']>[0],
+        signal
+      )
+    }
     this.log(
       job.id,
       'RESTORE',
@@ -504,7 +549,11 @@ export class MigrateService {
       vps_id: targetVpsId,
       name,
       framework: source.framework,
-      source_path: this.sourcePath(source.id),
+      source_path: source.source_type === 'git' ? null : this.sourcePath(source.id),
+      source_type: source.source_type,
+      git_repo_url: source.git_repo_url,
+      git_ref: source.git_ref,
+      git_root: source.git_root,
       host_port: allocatePort([...this.apps.usedPorts(targetVpsId), ...remotePorts]),
       container_port: source.container_port,
       healthcheck_path: source.healthcheck_path,
