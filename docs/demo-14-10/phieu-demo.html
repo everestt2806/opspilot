@@ -27,12 +27,12 @@
 
     <h2>Ý tưởng trong một câu</h2>
     <p>OpsPilot nhận diện mã nguồn, triển khai qua SSH và Docker, lưu phiên bản, kiểm tra khả năng truy cập, theo dõi vận hành và hỗ trợ khôi phục.</p>
-    <p class="muted">Luồng chính: Mã nguồn → Detect → Build → Deploy → Health/Exposure → Monitor/Doctor → Rollback.</p>
+    <p class="muted">Luồng chính: Git repo/branch → commit SHA → Detect → Build → Deploy → Health/Exposure → Monitor/Doctor → Rollback.</p>
 
     <h2>Demo 6–8 phút</h2>
     <ol>
       <li>Ứng dụng và máy chủ: xem trạng thái cùng thời điểm kiểm tra.</li>
-      <li>Chọn <strong>demo-apps/express-api</strong>: chạy detector và xem BuildPlan thật trên máy.</li>
+      <li>Nhập repo Git công khai <strong>everestt2806/opspilot</strong>, nhánh <strong>main</strong>, thư mục <strong>demo-apps/express-api</strong>; xác nhận SHA và xem detector/BuildPlan của snapshot.</li>
       <li>Trình bày wizard deploy, lịch sử phiên bản và bằng chứng deploy theo chế độ đã chọn.</li>
       <li>Chỉ ra runtime/exposure, Doctor hoặc rollback khi có bằng chứng phù hợp.</li>
       <li>Giải thích pipeline ML; dữ liệu tổng hợp phải được gọi rõ là <strong>synthetic</strong>.</li>
@@ -41,12 +41,12 @@
     <h2>Bằng chứng và giới hạn</h2>
     <table>
       <tr><th>Đã kiểm chứng cục bộ 08/10</th><th>Chỉ ghi sau rehearsal</th></tr>
-      <tr><td>Baseline trước D14-1: lint, typecheck, 69 file / 631 test PASS trên Node 22. Chạy lại gate sau rehearsal.</td><td>URL và deployment ID VPS thật: ................................</td></tr>
+      <tr><td>Baseline trước Git-first: lint, typecheck, 69 file / 631 test PASS trên Node 22. Chạy lại gate sau rehearsal.</td><td>Repo/ref/full SHA, URL và deployment ID VPS thật: ................................</td></tr>
       <tr><td>UI desktop và ba detector có test; các màn có ảnh Electron ở <code>docs/ui-redesign/screenshots/</code>.</td><td>Ảnh/video cùng SHA, 2 lượt rehearsal: ................................</td></tr>
     </table>
     <p class="note"><strong>Nếu RECORDED_FALLBACK:</strong> trình chiếu bản ghi của lần deploy VPS thật đã kiểm chứng, kèm ngày và SHA; không gọi đó là thao tác đang chạy live. Pilot ML trên VPS vẫn NOT_RUN.</p>
 
     <h2>Bước tiếp theo sau demo</h2>
-    <p>Ưu tiên nguồn Git gắn commit SHA, URL HTTPS qua ingress và runtime logs. Git push-to-deploy/preview cần quyết định cách chạy khi desktop tắt.</p>
+    <p>Tiếp theo: Git push-to-deploy/preview khi desktop tắt, URL HTTPS qua ingress và runtime logs; repo riêng cần credential giới hạn quyền đọc.</p>
   </body>
 </html>

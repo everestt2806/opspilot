@@ -87,16 +87,15 @@ manual-only, không push/PR/merge.
 | UI-1k-c | Nghiệm thu tổng thể, Quality Gates & Tài liệu | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `335d1ea`, `86a5d5a` | Đồng bộ README checklist 14 PASS / 1 GAP, 12 ảnh Electron thật 1280×800 & 1366×768 (Dark/Light), VPS thật NOT_RUN |
 | GATE-1 | Xử lý lint no-empty & Prettier backend scripts | Worker | 08/10 | CHỜ REVIEW | `feat/deploy-reachability` | Commit `4d14794` | Sửa đúng 9 lỗi no-empty (thêm chú thích cleanup) & 11 cảnh báo Prettier trong deploy-cli, headless-poller và test; root lint 0 errors/0 warnings, typecheck pass, test pass |
 
-### Sprint demo trước 14/10/2026 — [kế hoạch và gate](../29-ke-hoach-demo-14-10.md)
+### Sprint demo trước 14/10/2026 — [kế hoạch và gate](../29-ke-hoach-demo-14-10.md), [kiểm kê Git-first](../30-audit-git-first-deploy.md)
 
 | ID | Task | Chủ | Hạn nội bộ | Trạng thái | Phụ thuộc | DoD ngắn |
 | --- | --- | --- | --- | --- | --- | --- |
-| D14-0 | Khóa scope, lập runbook hai chế độ và phiếu in | Leader | 08/10 | HOÀN THÀNH | Không | Kế hoạch 29 và phiếu A4; baseline 68 file/626 test, lint/typecheck PASS |
-| D14-1 | Live smoke Express qua app trên VPS phát triển | Worker | 09/10 | TUẦN NÀY | VPS đã pin host key | Deployment/URL/HTTP/container có bằng chứng; không lộ secret |
-| D14-2 | Bằng chứng detector và ML local tái chạy được | Worker | 10/10 | BACKLOG | D14-1 | Ba detector và một luồng ML synthetic có lệnh/SHA/output hoặc loại khỏi demo |
-| D14-3 | Chốt VPS demo, lặp preflight nếu đổi máy và quay bản chạy live dự phòng | Worker | 11/10 | BACKLOG | D14-1 | Máy dùng tại demo qua gate; video/ảnh bản chạy thật có ngày/SHA |
-| D14-4 | Rehearsal lần 1, ảnh và sửa blocker | Worker | 12/10 | BACKLOG | D14-2, D14-3 | Demo 6–8 phút; ghi thời lượng, SHA, ảnh và lỗi |
-| D14-5 | Rehearsal lần 2, gate cuối, freeze và phiếu in | Worker | 13/10 | BACKLOG | D14-4 | Leader cấp verdict theo đúng chế độ; không thêm tính năng |
+| D14-G0 | Contract/migration 007 và Git acquisition có test | Worker | 09/10 | TIẾP THEO | Audit 30 | Repo public URL/ref/root, full SHA, snapshot an toàn; legacy DB đọc được |
+| D14-G1 | Git-first wizard, pipeline, provenance và tương thích migrate | Worker | 10/10 | BACKLOG | D14-G0 | Detect/precheck/deploy cùng SHA; history và redeploy; full gate pass |
+| D14-G2 | Live Git Express trên VPS phát triển | Worker | 11/10 | BACKLOG | D14-G1 | Repo/ref/SHA/URL/HTTP/container có bằng chứng; không dùng folder local làm bằng chứng Git |
+| D14-G3 | Rehearsal 1, ảnh/video fallback | Worker | 12/10 | BACKLOG | D14-G2 | Demo 6–8 phút, nguồn Git và SHA khớp bằng chứng |
+| D14-G4 | Rehearsal 2, gate cuối, freeze và phiếu in | Worker | 13/10 | BACKLOG | D14-G3 | Leader cấp verdict theo chế độ thật; không thêm tính năng |
 
 
 

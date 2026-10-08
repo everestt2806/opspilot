@@ -28,6 +28,9 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | [`24-ke-hoach-demo-theo-chang.md`](24-ke-hoach-demo-theo-chang.md) | Kế hoạch giao Worker: yêu cầu R01–R25, C00–C09, C08A/B/C, evidence và review | Điểm vào hiện tại, cập nhật 11/09 |
 | [`25-nguyen-ly-deploy-migrate-demo-14-09.md`](25-nguyen-ly-deploy-migrate-demo-14-09.md) | Nguyên lý từng loại deploy/migrate, phạm vi và bằng chứng demo 14/09 | Đọc trước khi giao C03/C04 hoặc trình bày demo |
 | [`27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-detector.md`](27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-detector.md) | Kế hoạch hợp nhất phần chưa tự động: publish/firewall, DNS/domain, Doctor, dữ liệu ML, detector và backlog tối ưu | Khi lập task sau demo hoặc chốt phạm vi P0–P3 |
+| [`28-danh-gia-san-sang-vercel-tren-vps.md`](28-danh-gia-san-sang-vercel-tren-vps.md) | Đánh giá năng lực sản phẩm so với Vercel/Dokploy/Coolify | Khi lập roadmap sản phẩm |
+| [`29-ke-hoach-demo-14-10.md`](29-ke-hoach-demo-14-10.md) | Lịch và gate demo 14/10, ưu tiên deploy từ Git trên VPS thật | Trước mỗi checkpoint demo |
+| [`30-audit-git-first-deploy.md`](30-audit-git-first-deploy.md) | Kiểm kê đường deploy hiện tại, hợp đồng Git-first và thứ tự G0–G3 | Trước khi sửa IPC/schema/deploy UI |
 
 ## Kỹ thuật
 
