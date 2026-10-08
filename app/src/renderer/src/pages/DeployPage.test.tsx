@@ -324,6 +324,79 @@ describe('DeployPage — wizard va log', () => {
     expect(screen.queryByText('c'.repeat(40))).toBeNull()
   })
 
+  it.each(['repository', 'ref', 'root', 'app'] as const)(
+    'cancels a pending prepare and releases its late handle when %s changes',
+    async (changedField) => {
+      let resolvePrepare: ((value: unknown) => void) | undefined
+      const { invoke } = mockApi({
+        ...handersHappy,
+        'app:list': async () => ({ ok: true, data: [APP_1] }),
+        'deploy:prepare-git': async () =>
+          new Promise((resolve) => {
+            resolvePrepare = resolve
+          })
+      })
+      render(<DeployPage />)
+      await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:list', 1))
+      fireEvent.click(screen.getByText(strings.deploy.git.modeGit))
+      fireEvent.change(screen.getByLabelText(strings.deploy.git.repository), {
+        target: { value: 'https://github.com/example/repo.git' }
+      })
+      fireEvent.click(screen.getByText(strings.deploy.git.prepare))
+      await waitFor(() =>
+        expect(invoke).toHaveBeenCalledWith(
+          'deploy:prepare-git',
+          expect.any(String),
+          expect.any(Object)
+        )
+      )
+      const requestId = invoke.mock.calls.find(([channel]) => channel === 'deploy:prepare-git')?.[1]
+
+      if (changedField === 'repository') {
+        fireEvent.change(screen.getByLabelText(strings.deploy.git.repository), {
+          target: { value: 'https://github.com/example/other.git' }
+        })
+      } else if (changedField === 'ref') {
+        fireEvent.change(screen.getByLabelText(strings.deploy.git.ref), {
+          target: { value: 'next' }
+        })
+      } else if (changedField === 'root') {
+        fireEvent.change(screen.getByLabelText(strings.deploy.git.root), {
+          target: { value: 'packages/app' }
+        })
+      } else {
+        fireEvent.click(screen.getByText(strings.deploy.targetApp.existing))
+        fireEvent.change(screen.getByLabelText(strings.deploy.targetApp.selectApp), {
+          target: { value: String(APP_1.id) }
+        })
+      }
+
+      await waitFor(() =>
+        expect(invoke).toHaveBeenCalledWith('deploy:cancel-git-prepare', requestId)
+      )
+      await act(async () =>
+        resolvePrepare?.({
+          ok: true,
+          data: {
+            prepared_source_handle: `late-handle-${changedField}`,
+            git_repo_url: 'https://github.com/example/repo.git',
+            git_ref: 'main',
+            git_root: '.',
+            git_commit_sha: 'd'.repeat(40),
+            detection: MATCHED
+          }
+        })
+      )
+      await waitFor(() =>
+        expect(invoke).toHaveBeenCalledWith(
+          'deploy:release-git-prepare',
+          `late-handle-${changedField}`
+        )
+      )
+      expect(screen.queryByText('d'.repeat(40))).toBeNull()
+    }
+  )
+
   it('hien thi va cho chon tat ca VPS trong danh sach trien khai', async () => {
     const { invoke } = mockApi({
       ...handersHappy,

@@ -328,6 +328,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   async function pickFolder(): Promise<void> {
     const result = await window.api.invoke('system:pick-folder')
     if (!result.ok || !result.data.path) return
+    cancelPendingGitPrepare()
     invalidatePrecheck()
     sourceRequestRef.current++
     if (preparedGit)
@@ -348,6 +349,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   }
 
   async function prepareGitSource(): Promise<void> {
+    cancelPendingGitPrepare()
     const requestId = crypto.randomUUID()
     prepareRequestRef.current = requestId
     setPreparingGit(true)
@@ -383,10 +385,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   function changeSourceMode(mode: 'local' | 'git'): void {
     if (mode === sourceMode) return
     sourceRequestRef.current++
-    const preparingRequest = prepareRequestRef.current
-    prepareRequestRef.current = null
-    if (preparingRequest && preparingGit)
-      void window.api.invoke('deploy:cancel-git-prepare', preparingRequest)
+    cancelPendingGitPrepare()
     if (preparedGit)
       void window.api.invoke('deploy:release-git-prepare', preparedGit.prepared_source_handle)
     setPreparedGit(null)
@@ -399,11 +398,19 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   }
 
   function discardPreparedGit(): void {
+    cancelPendingGitPrepare()
     if (preparedGit)
       void window.api.invoke('deploy:release-git-prepare', preparedGit.prepared_source_handle)
     setPreparedGit(null)
     preparedGitRef.current = null
     invalidatePrecheck()
+  }
+
+  function cancelPendingGitPrepare(): void {
+    const requestId = prepareRequestRef.current
+    prepareRequestRef.current = null
+    if (requestId) void window.api.invoke('deploy:cancel-git-prepare', requestId)
+    setPreparingGit(false)
   }
 
   async function continueFromSource(): Promise<void> {
@@ -631,11 +638,9 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   }
 
   function resetWizard(): void {
-    const requestId = prepareRequestRef.current
-    if (requestId) void window.api.invoke('deploy:cancel-git-prepare', requestId)
+    cancelPendingGitPrepare()
     if (preparedGit)
       void window.api.invoke('deploy:release-git-prepare', preparedGit.prepared_source_handle)
-    prepareRequestRef.current = null
     setPreparedGit(null)
     preparedGitRef.current = null
     setPreparingGit(false)

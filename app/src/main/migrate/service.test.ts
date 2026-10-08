@@ -361,7 +361,7 @@ describe('MigrateService guards and confirmation', () => {
           VALUES (1,'demo','express',NULL,'git','https://github.com/demo/public.git','main','.',30000,3000),
                  (2,'demo-m123','express',NULL,'git','https://github.com/demo/public.git','main','.',30001,3000);
         INSERT INTO deployment (app_id,version,image_tag,status,detector_json,git_repo_url,git_commit_sha)
-          VALUES (1,1,'demo:v1','running','{"dockerfileTemplate":"express.Dockerfile","buildArgs":{},"buildCommand":"npm run build","startCommand":"node server.js","containerPort":3000,"healthcheckPath":"/health","requiredEnv":[],"optionalEnv":[],"needsDb":false,"manualSteps":[]}','https://github.com/demo/public.git','${'a'.repeat(40)}');
+          VALUES (1,1,'demo:v1','running','{"dockerfileTemplate":"express.Dockerfile","buildArgs":{},"buildCommand":"npm run build","startCommand":"node server.js","containerPort":3000,"healthcheckPath":"/health","requiredEnv":[],"optionalEnv":[],"needsDb":false,"manualSteps":[],"collectorAppPath":"/items?limit=1"}','https://github.com/demo/public.git','${'a'.repeat(40)}');
         UPDATE app SET current_deployment_id=1 WHERE id=1;
       `)
       const readFile = vi.fn().mockResolvedValue('PORT=3000\n')
@@ -408,11 +408,61 @@ describe('MigrateService guards and confirmation', () => {
           framework: 'express',
           repositoryUrl: 'https://github.com/demo/public.git',
           commitSha: 'a'.repeat(40),
-          plan: expect.objectContaining({ startCommand: 'node server.js' })
+          plan: expect.objectContaining({ startCommand: 'node server.js' }),
+          collectorAppPath: '/items?limit=1'
         }),
         expect.any(AbortSignal)
       )
       expect(runRestoredGit.mock.calls[0]?.[0]).not.toHaveProperty('source_path')
+    } finally {
+      closeDatabase()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects Git migration after rollback before creating a job or sending remote commands', () => {
+    const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-git-rollback-'))
+    const database = initializeDatabase(directory)
+    try {
+      database.exec(`
+        INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES
+          ('source','127.0.0.1','u','password','x'),('target','127.0.0.2','u','password','x');
+      `)
+      database
+        .prepare(
+          `INSERT INTO app (vps_id,name,framework,source_path,source_type,git_repo_url,git_ref,git_root,host_port,container_port)
+         VALUES (1,'git-demo','express',NULL,'git','https://github.com/demo/public.git','main','.',30000,3000)`
+        )
+        .run()
+      database
+        .prepare(
+          `INSERT INTO deployment (app_id,version,image_tag,status,detector_json,git_repo_url,git_commit_sha,is_rollback_of)
+         VALUES (1,1,'git-demo:v1','running','{}','https://github.com/demo/public.git','${'a'.repeat(40)}',NULL)`
+        )
+        .run()
+      database
+        .prepare(
+          `INSERT INTO deployment (app_id,version,image_tag,status,is_rollback_of)
+         VALUES (1,2,'git-demo:v2','running',1)`
+        )
+        .run()
+      database.prepare('UPDATE app SET current_deployment_id=2 WHERE id=1').run()
+      const exec = vi.fn()
+      const service = new MigrateService(database, { exec } as never, vi.fn())
+
+      let error: unknown
+      try {
+        service.start({ app_id: 1, target_vps_id: 2 })
+      } catch (caught) {
+        error = caught
+      }
+      expect(error).toMatchObject({
+        userMessage: expect.stringMatching(/Chưa thể migrate Git sau rollback.*chưa bị đóng băng/)
+      })
+      expect(exec).not.toHaveBeenCalled()
+      expect(database.prepare('SELECT COUNT(*) AS count FROM migration_job').get()).toEqual({
+        count: 0
+      })
     } finally {
       closeDatabase()
       rmSync(directory, { recursive: true, force: true })

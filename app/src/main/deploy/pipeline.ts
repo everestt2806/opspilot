@@ -45,8 +45,10 @@ const COLLECTOR_IMAGE_SUFFIX = ':collector'
 
 type DeployInputWithRemoteSource = DeployInput & { remote_source_path?: string }
 type RestoredGitInput = Omit<DeployInput, 'source_path'> & { remote_source_path: string }
+type PersistedBuildPlan = BuildPlan & { collectorAppPath?: string }
 interface RestoredGitSource {
-  plan: BuildPlan
+  plan: PersistedBuildPlan
+  collectorAppPath: string
   framework: App['framework']
   repositoryUrl: string
   commitSha: string
@@ -603,9 +605,16 @@ export class DeployPipeline {
       throw new AppError('VALIDATION', 'Thư mục source không tồn tại. Hãy chọn lại thư mục.')
     }
 
-    const detection = restoredGit ? null : detectFramework(buildSourceTree(input.source_path))
+    const sourceTree = restoredGit ? null : buildSourceTree(input.source_path)
+    const detection = sourceTree ? detectFramework(sourceTree) : null
     if (detection && !detection.matched) throw new AppError('DETECT_FAILED', detection.hint)
-    const plan = restoredGit?.plan ?? detection!.plan
+    const basePlan = restoredGit?.plan ?? detection!.plan
+    const plan: PersistedBuildPlan = {
+      ...basePlan,
+      collectorAppPath:
+        restoredGit?.collectorAppPath ??
+        resolveCollectorAppPath(detection!.detector, sourceTree!, basePlan.healthcheckPath)
+    }
 
     const vps = this.vpsRepository.getById(input.vps_id)
     let app: App
@@ -944,7 +953,7 @@ export class DeployPipeline {
     return ctx.input
   }
 
-  private requirePlan(ctx: RunContext): BuildPlan {
+  private requirePlan(ctx: RunContext): PersistedBuildPlan {
     if (!ctx.plan) {
       throw new AppError('UNKNOWN', 'Pipeline đang chạy thiếu build plan.')
     }
@@ -1083,13 +1092,7 @@ export class DeployPipeline {
         START_COMMAND: plan.startCommand,
         COLLECT_INTERVAL_S: RENDER_COLLECT_INTERVAL_S,
         COLLECTOR_IMAGE_TAG: `${ctx.app.name}${COLLECTOR_IMAGE_SUFFIX}`,
-        COLLECTOR_APP_PATH: (input as DeployInputWithRemoteSource).remote_source_path
-          ? ctx.app.healthcheck_path
-          : resolveCollectorAppPath(
-              ctx.app.framework,
-              buildSourceTree(input.source_path),
-              ctx.app.healthcheck_path
-            ),
+        COLLECTOR_APP_PATH: plan.collectorAppPath ?? ctx.app.healthcheck_path,
         APP_DEPENDS_ON: plan.needsDb
           ? '    depends_on:\n      postgres:\n        condition: service_healthy'
           : ''

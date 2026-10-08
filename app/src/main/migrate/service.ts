@@ -1,7 +1,14 @@
 import { join as posixJoin } from 'node:path/posix'
 
 import type Database from 'better-sqlite3'
-import type { App, MigrateEvent, MigrateInput, MigrateJobView, MigrateStep } from '@shared/ipc'
+import type {
+  App,
+  Deployment,
+  MigrateEvent,
+  MigrateInput,
+  MigrateJobView,
+  MigrateStep
+} from '@shared/ipc'
 
 import { AppRepository } from '../db/appRepository'
 import { ActionLogRepository } from '../db/actionLogRepository'
@@ -31,6 +38,7 @@ const STATUS_TO_STEP: Record<string, MigrateStep> = {
 }
 
 type Artifact = { name: string; size: number; sha256: string; target_sha256?: string }
+type PersistedBuildPlan = BuildPlan & { collectorAppPath?: string }
 type Verify = {
   checksums: Artifact[]
   source_files: { count: number; bytes: number }
@@ -219,9 +227,55 @@ export class MigrateService {
     if (!current || current.status !== 'running') {
       throw new AppError('VALIDATION', 'App nguồn phải có deployment running để migrate.')
     }
+    if (source.source_type === 'git') {
+      if (current.is_rollback_of !== null) {
+        throw new AppError(
+          'VALIDATION',
+          'Chưa thể migrate Git sau rollback: không xác minh được payload src khớp image đang chạy. App nguồn chưa bị đóng băng; hãy deploy lại đúng commit Git trước khi migrate.'
+        )
+      }
+      this.resolveGitRestore(current)
+    }
     const active = this.migrations.activeForApp(source.id)
     if (active) throw new AppError('VALIDATION', 'App đang có lượt migrate khác.')
     return source
+  }
+
+  private resolveGitRestore(current: Deployment): {
+    current: Deployment
+    plan: PersistedBuildPlan
+  } {
+    if (!current.git_commit_sha || !current.git_repo_url) {
+      throw new AppError(
+        'VALIDATION',
+        'Không thể migrate Git: deployment đang chạy thiếu SHA/repository đã ghim. App nguồn chưa bị đóng băng.'
+      )
+    }
+    const row = this.database
+      .prepare('SELECT detector_json FROM deployment WHERE id=?')
+      .get(current.id) as { detector_json: string | null } | undefined
+    let plan: PersistedBuildPlan
+    try {
+      plan = JSON.parse(row?.detector_json ?? '') as PersistedBuildPlan
+    } catch {
+      throw new AppError(
+        'VALIDATION',
+        'Không thể migrate Git: saved build plan không hợp lệ. App nguồn chưa bị đóng băng.'
+      )
+    }
+    if (!plan?.dockerfileTemplate || !plan.startCommand) {
+      throw new AppError(
+        'VALIDATION',
+        'Không thể migrate Git: saved build plan không đầy đủ. App nguồn chưa bị đóng băng.'
+      )
+    }
+    if (!plan.collectorAppPath?.startsWith('/')) {
+      throw new AppError(
+        'VALIDATION',
+        'Không thể migrate Git: deployment chưa lưu collector endpoint đã xác minh. App nguồn chưa bị đóng băng; hãy deploy lại source trước.'
+      )
+    }
+    return { current, plan }
   }
 
   private async run(job: MigrationJob, source: App, signal: AbortSignal): Promise<void> {
@@ -465,27 +519,8 @@ export class MigrateService {
       const current = source.current_deployment_id
         ? this.deployments.getById(source.current_deployment_id)
         : null
-      if (!current?.git_commit_sha || !current.git_repo_url || !current.id) {
-        throw new AppError(
-          'VALIDATION',
-          'Deployment Git nguồn thiếu SHA/provenance để migrate đúng phiên bản.'
-        )
-      }
-      const row = this.database
-        .prepare('SELECT detector_json FROM deployment WHERE id=?')
-        .get(current.id) as { detector_json: string | null } | undefined
-      let plan: BuildPlan
-      try {
-        plan = JSON.parse(row?.detector_json ?? '') as BuildPlan
-      } catch {
-        throw new AppError('VALIDATION', 'Build plan đã lưu của deployment Git không hợp lệ.')
-      }
-      if (!plan?.dockerfileTemplate || !plan.startCommand) {
-        throw new AppError(
-          'VALIDATION',
-          'Deployment Git nguồn không có build plan hợp lệ để restore.'
-        )
-      }
+      if (!current) throw new AppError('VALIDATION', 'Deployment Git nguồn không còn tồn tại.')
+      const restored = this.resolveGitRestore(current)
       started = pipeline.runRestoredGit(
         {
           vps_id: job.target_vps_id,
@@ -495,10 +530,11 @@ export class MigrateService {
           env
         },
         {
-          plan,
+          plan: restored.plan,
+          collectorAppPath: restored.plan.collectorAppPath!,
           framework: source.framework,
-          repositoryUrl: current.git_repo_url,
-          commitSha: current.git_commit_sha
+          repositoryUrl: restored.current.git_repo_url!,
+          commitSha: restored.current.git_commit_sha!
         },
         signal
       )

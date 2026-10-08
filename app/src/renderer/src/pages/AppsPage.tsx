@@ -57,6 +57,23 @@ function formatTime(isoString: string): string {
   }
 }
 
+function getRollbackLineage(
+  deployment: Deployment,
+  deployments: Deployment[]
+): { direct: Deployment | null; origin: Deployment | null } {
+  if (deployment.is_rollback_of === null) return { direct: null, origin: null }
+  const byId = new Map(deployments.map((item) => [item.id, item]))
+  const direct = byId.get(deployment.is_rollback_of) ?? null
+  const seen = new Set<number>([deployment.id])
+  let current = direct
+  while (current?.is_rollback_of !== null && current !== null) {
+    if (seen.has(current.id)) return { direct, origin: null }
+    seen.add(current.id)
+    current = byId.get(current.is_rollback_of) ?? null
+  }
+  return { direct, origin: current }
+}
+
 function getRuntimeTagColor(state?: string): 'success' | 'error' | 'warning' | 'default' {
   if (!state) return 'default'
   const norm = state.toLowerCase().trim()
@@ -1201,18 +1218,22 @@ export function AppsPage(): React.JSX.Element {
                               )}
                               {dep.is_rollback_of !== null &&
                                 (() => {
-                                  const original = currentAppDeployments.find(
-                                    (item) => item.id === dep.is_rollback_of
+                                  const { direct, origin } = getRollbackLineage(
+                                    dep,
+                                    currentAppDeployments
                                   )
                                   return (
                                     <span>
-                                      Rollback of v{original?.version ?? '—'}
-                                      {original?.git_commit_sha ? (
+                                      Rollback of v{direct?.version ?? '—'}
+                                      {origin && origin.id !== direct?.id && (
+                                        <> · image from v{origin.version}</>
+                                      )}
+                                      {origin?.git_commit_sha ? (
                                         <>
                                           {' '}
                                           · SHA{' '}
                                           <Typography.Text code>
-                                            {original.git_commit_sha}
+                                            {origin.git_commit_sha}
                                           </Typography.Text>
                                         </>
                                       ) : null}

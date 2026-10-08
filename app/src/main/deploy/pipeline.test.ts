@@ -369,7 +369,10 @@ describe('DeployPipeline', () => {
         dependencies: { express: '4.0.0' }
       })
     )
-    writeFileSync(join(root, 'index.js'), "require('express')().listen(3000)\n")
+    writeFileSync(
+      join(root, 'index.js'),
+      "const app = require('express')(); app.get('/items', (_req, res) => res.json([])); app.listen(3000)\n"
+    )
     writeFileSync(join(root, 'snapshot-marker.txt'), 'pinned-content\n')
     fixtureGit(working, 'add', '.')
     fixtureGit(working, 'commit', '--quiet', '-m', 'fixture one')
@@ -443,13 +446,21 @@ describe('DeployPipeline', () => {
       git_root: 'service'
     })
     const deployment = database
-      .prepare('SELECT status, git_repo_url, git_commit_sha FROM deployment WHERE id = ?')
+      .prepare(
+        'SELECT status, detector_json, git_repo_url, git_commit_sha FROM deployment WHERE id = ?'
+      )
       .get(started.deployment_id) as Record<string, unknown>
     expect(deployment).toMatchObject({
       status: 'running',
       git_repo_url: prepared.git_repo_url,
       git_commit_sha: prepared.git_commit_sha
     })
+    expect(JSON.parse(String(deployment.detector_json))).toMatchObject({
+      collectorAppPath: '/items?limit=1'
+    })
+    expect(
+      writeFileCalls().find((call) => call.remotePath.endsWith('docker-compose.yml'))?.content
+    ).toContain('APP_URL: "http://app:3000/items?limit=1"')
     expect(prepared.git_commit_sha).toMatch(/^[a-f0-9]{40}$/)
     expect(events.at(-1)).toMatchObject({ type: 'finished', deployment_id: started.deployment_id })
   })
@@ -465,6 +476,7 @@ describe('DeployPipeline', () => {
       startCommand: 'node app.js',
       containerPort: 3000,
       healthcheckPath: '/health',
+      collectorAppPath: '/items?limit=1',
       requiredEnv: [],
       optionalEnv: [],
       needsDb: false,
@@ -499,13 +511,21 @@ describe('DeployPipeline', () => {
         remote_source_path: '/opt/opspilot/migrated-git-app',
         env: {}
       },
-      { plan, framework: 'express', repositoryUrl, commitSha }
+      {
+        plan,
+        collectorAppPath: '/items?limit=1',
+        framework: 'express',
+        repositoryUrl,
+        commitSha
+      }
     )
     const finished = await waitForFinished(started.deploymentId)
 
     expect(finished.status).toBe('running')
     expect(uploadDirMock).not.toHaveBeenCalled()
     expect(testSsh.fileSize).toHaveBeenCalledWith(vpsId, '/opt/opspilot/migrated-git-app/src')
+    const compose = writeFileCalls().find((call) => call.remotePath.endsWith('docker-compose.yml'))
+    expect(compose?.content).toContain('APP_URL: "http://app:3000/items?limit=1"')
     const app = database
       .prepare('SELECT source_path,source_type,git_repo_url,git_ref,git_root FROM app WHERE id=?')
       .get(appId)

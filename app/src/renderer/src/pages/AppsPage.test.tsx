@@ -336,6 +336,54 @@ describe(
       await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:rollback', 10, 100))
     })
 
+    it('shows the root Git SHA for a nested rollback lineage', async () => {
+      const rootSha = 'a'.repeat(40)
+      const root = {
+        ...DEPLOYMENT_PAST,
+        id: 101,
+        version: 1,
+        git_repo_url: 'https://github.com/example/app.git',
+        git_commit_sha: rootSha
+      }
+      const rollback = {
+        ...DEPLOYMENT_ACTIVE,
+        id: 102,
+        version: 2,
+        image_tag: 'my-express-app:v2',
+        is_rollback_of: 101,
+        git_commit_sha: null
+      }
+      const nestedRollback = {
+        ...DEPLOYMENT_ACTIVE,
+        id: 103,
+        version: 3,
+        image_tag: 'my-express-app:v3',
+        is_rollback_of: 102,
+        git_commit_sha: null
+      }
+      mockApi({
+        'app:list': async () => ({
+          ok: true,
+          data: [{ ...APP_1, current_deployment_id: nestedRollback.id }]
+        }),
+        'app:versions': async () => ({
+          ok: true,
+          data: [nestedRollback, rollback, root]
+        })
+      })
+      useUiState.setState({ locale: 'en', selectedAppId: APP_1.id })
+
+      render(
+        <AntApp>
+          <AppsPage />
+        </AntApp>
+      )
+      fireEvent.click(await screen.findByRole('tab', { name: /History & Rollback/ }))
+
+      expect((await screen.findAllByText(rootSha)).length).toBeGreaterThan(1)
+      expect(screen.getByText(/image from v1/)).toBeTruthy()
+    })
+
     it('đổi ngôn ngữ theo bốn ngôn ngữ và cập nhật nội dung AppsPage cả danh sách lẫn chi tiết', async () => {
       mockApi()
       useUiState.setState({ selectedAppId: 10 })
