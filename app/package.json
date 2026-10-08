@@ -22,6 +22,7 @@
     "build:win": "pnpm build && electron-builder --win nsis",
     "try:ssh": "tsc -p tsconfig.scripts.json && node .out-scripts/scripts/try-ssh.js",
     "try:detect": "tsc -p tsconfig.scripts.json && node .out-scripts/scripts/try-detect.js",
+    "try:git-snapshot": "tsc -p tsconfig.scripts.json && node .out-scripts/scripts/try-git-snapshot.js",
     "try:deploy": "tsc -p tsconfig.scripts.json && node scripts/prepare-cli.js && node scripts/run-as-node.js .out-scripts/scripts/try-deploy.js",
     "try:monitor": "tsc -p tsconfig.scripts.json && node .out-scripts/scripts/try-monitor.js",
     "demo:reset": "tsc -p tsconfig.scripts.json && node scripts/prepare-cli.js && electron .out-scripts/scripts/reset-demo.js"

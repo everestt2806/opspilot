@@ -28,6 +28,48 @@ afterEach(() => {
 })
 
 describe('initializeDatabase', () => {
+  it('migration v6 to v7 preserves local app/deployment provenance without inventing Git data', () => {
+    testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v6-v7-'))
+    const database = initializeDatabase(testDirectory)
+    database.exec(`
+      INSERT INTO vps (id, name, host, username, auth_type, encrypted_secret)
+        VALUES (1, 'Local VPS', 'localhost', 'test-user', 'key', X'00');
+      INSERT INTO app (id, vps_id, name, framework, source_path, host_port, container_port)
+        VALUES (1, 1, 'legacy-app', 'express', 'D:/legacy/source', 30000, 3000);
+      INSERT INTO deployment (id, app_id, version, image_tag, status)
+        VALUES (1, 1, 1, 'legacy:v1', 'running');
+      ALTER TABLE deployment DROP COLUMN git_commit_sha;
+      ALTER TABLE deployment DROP COLUMN git_repo_url;
+      ALTER TABLE app DROP COLUMN git_root;
+      ALTER TABLE app DROP COLUMN git_ref;
+      ALTER TABLE app DROP COLUMN git_repo_url;
+      ALTER TABLE app DROP COLUMN source_type;
+      DELETE FROM schema_version WHERE version = 7;
+    `)
+
+    runMigrations(database)
+
+    expect(
+      database
+        .prepare(
+          'SELECT source_type, source_path, git_repo_url, git_ref, git_root FROM app WHERE id=1'
+        )
+        .get()
+    ).toEqual({
+      source_type: 'local',
+      source_path: 'D:/legacy/source',
+      git_repo_url: null,
+      git_ref: null,
+      git_root: null
+    })
+    expect(
+      database.prepare('SELECT git_repo_url, git_commit_sha FROM deployment WHERE id=1').get()
+    ).toEqual({
+      git_repo_url: null,
+      git_commit_sha: null
+    })
+  })
+
   it('migration v5 to v6 preserves VPS rows and blocks legacy records without a fingerprint', async () => {
     testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v5-v6-'))
     const database = initializeDatabase(testDirectory)
@@ -85,7 +127,7 @@ describe('initializeDatabase', () => {
       .get() as { version: number }
 
     expect(tables).toHaveLength(15)
-    expect(schemaVersion.version).toBe(6)
+    expect(schemaVersion.version).toBe(7)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -116,7 +158,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 6
+      version: 7
     })
     expect(
       database
@@ -315,7 +357,7 @@ describe('initializeDatabase', () => {
     const successVer = v4Db.prepare('SELECT MAX(version) AS version FROM schema_version').get() as {
       version: number
     }
-    expect(successVer.version).toBe(6)
+    expect(successVer.version).toBe(7)
 
     // b. Bảng experiment_run đã có cột attempt_index và backfill = 1 cho tất cả bản ghi cũ
     const postRuns = v4Db

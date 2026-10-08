@@ -9,6 +9,7 @@ import migration003 from './migrations/003_migration_error_message.sql?raw'
 import migration004 from './migrations/004_publish_doctor_domain.sql?raw'
 import migration005 from './migrations/005_experiment_run_attempt.sql?raw'
 import migration006 from './migrations/006_vps_host_fingerprint.sql?raw'
+import migration007 from './migrations/007_git_source_provenance.sql?raw'
 
 interface Migration {
   name: string
@@ -46,6 +47,11 @@ const migrations: Migration[] = [
     name: '006_vps_host_fingerprint.sql',
     version: 6,
     sql: migration006
+  },
+  {
+    name: '007_git_source_provenance.sql',
+    version: 7,
+    sql: migration007
   }
 ]
 

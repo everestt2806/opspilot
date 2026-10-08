@@ -52,6 +52,11 @@ export interface App {
   vps_id: number;
   name: string;
   framework: FrameworkId;
+  source_type?: 'local' | 'git';
+  source_path?: string | null;
+  git_repo_url?: string | null;
+  git_ref?: string | null;
+  git_root?: string | null;
   host_port: number;
   container_port: number;
   healthcheck_path: string;
@@ -66,6 +71,8 @@ export interface Deployment {
   app_id: number;
   version: number;
   image_tag: string;
+  git_repo_url?: string | null;
+  git_commit_sha?: string | null;
   status: 'building' | 'deploying' | 'running' | 'failed' | 'rolled_back' | 'stopped';
   failed_step: DeployStep | null;
   build_duration_ms: number | null;
@@ -347,7 +354,11 @@ export interface DeployInput {
   /** Cổng public đã được precheck chọn cho app mới; pipeline vẫn kiểm tra lại trước deploy. */
   host_port?: number;
   app_name: string;
+  source_type?: 'local' | 'git';
   source_path: string;
+  git_repo_url?: string;
+  git_ref?: string;
+  git_root?: string;
   /** Env do người dùng điền ở bước 3 của wizard, gồm cả secret */
   env: Record<string, string>;
 }
