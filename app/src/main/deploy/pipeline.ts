@@ -35,6 +35,7 @@ import { ActivationRepository, type ActivationReason } from '../monitor/activati
 import { DoctorRepository } from '../doctor/repository'
 import { diagnose, redactEvidence, redactText, type DoctorEvidence } from '../doctor/engine'
 import { type ExposureEvidence, type ExposureManager, type ExposureStatus } from './exposure'
+import type { PreparedGitLease } from './preparedGitSources'
 
 const WORK_ROOT = '/opt/opspilot'
 const HEALTHCHECK_ATTEMPTS = 10
@@ -138,6 +139,7 @@ export interface RunContext {
   durations: Partial<Record<DeployStep, number>>
   exposureStatus: ExposureStatus
   exposureEvidence: ExposureEvidence | null
+  gitSnapshotCleanup?: () => void
 }
 
 /**
@@ -159,6 +161,7 @@ export class DeployPipeline {
   /** Khoá chống 2 pipeline chạy đồng thời trên cùng một app (deploy-events mục 3). */
   private activeByApp = new Map<number, number>()
   private controllers = new Map<number, AbortController>()
+  private activeRuns = new Set<Promise<void>>()
 
   constructor(deps: {
     ssh: SshManager
@@ -181,15 +184,27 @@ export class DeployPipeline {
   /** Khởi động pipeline. Phần setup (detect + tạo bản ghi + khoá) chạy đồng bộ để
    * `deploy:start` trả được deployment_id ngay; các bước sau chạy nền, tiến độ qua
    * kênh `deploy:event`. Luôn kết thúc bằng đúng một event `finished`. */
-  run(input: DeployInput, signal?: AbortSignal): { deploymentId: number } {
-    const ctx = this.setup(input, signal)
-    void this.execute(ctx).catch((error: unknown) => {
-      logger.error('deploy', 'Pipeline dừng bất thường ngoài vòng bắt lỗi', {
-        deployment_id: ctx.deployment.id,
-        error: error instanceof Error ? error.message : String(error)
+  run(
+    input: DeployInput,
+    signal?: AbortSignal,
+    gitSource?: PreparedGitLease
+  ): { deploymentId: number } {
+    const ctx = this.setup(input, signal, gitSource)
+    const run = this.execute(ctx)
+      .catch((error: unknown) => {
+        logger.error('deploy', 'Pipeline dừng bất thường ngoài vòng bắt lỗi', {
+          deployment_id: ctx.deployment.id,
+          error: error instanceof Error ? error.message : String(error)
+        })
       })
-    })
+      .finally(() => this.activeRuns.delete(run))
+    this.activeRuns.add(run)
     return { deploymentId: ctx.deployment.id }
+  }
+
+  async shutdown(): Promise<void> {
+    for (const controller of this.controllers.values()) controller.abort()
+    await Promise.allSettled([...this.activeRuns])
   }
 
   /** Rollback thủ công (UC-04): compose up image cũ (không build lại), healthcheck, ghi bản ghi mới. */
@@ -532,7 +547,11 @@ export class DeployPipeline {
 
   // ── Setup (đồng bộ, chạy trước mọi event) ─────────────────────────────────────
 
-  private setup(input: DeployInput, signal?: AbortSignal): RunContext {
+  private setup(
+    input: DeployInput,
+    signal?: AbortSignal,
+    gitSource?: PreparedGitLease
+  ): RunContext {
     if (!Number.isInteger(input.vps_id) || input.vps_id <= 0) {
       throw new AppError('VALIDATION', 'VPS không hợp lệ. Hãy chọn lại VPS rồi thử.')
     }
@@ -597,7 +616,11 @@ export class DeployPipeline {
           vps_id: vps.id,
           name,
           framework: detection.detector,
-          source_path: input.source_path,
+          source_path: gitSource ? null : input.source_path,
+          source_type: gitSource ? 'git' : 'local',
+          git_repo_url: gitSource?.gitRepoUrl ?? null,
+          git_ref: gitSource?.gitRef ?? null,
+          git_root: gitSource?.gitRoot ?? null,
           host_port: requestedPort ?? allocatePort(usedPorts),
           container_port: plan.containerPort,
           healthcheck_path: plan.healthcheckPath,
@@ -617,7 +640,10 @@ export class DeployPipeline {
       app.id,
       app.name,
       JSON.stringify(plan),
-      null
+      null,
+      gitSource
+        ? { repositoryUrl: gitSource.gitRepoUrl, commitSha: gitSource.commitSha }
+        : undefined
     )
     const controller = new AbortController()
     signal?.addEventListener('abort', () => controller.abort(), { once: true })
@@ -641,7 +667,8 @@ export class DeployPipeline {
       restoreStatus: null,
       durations: {},
       exposureStatus: 'not_checked',
-      exposureEvidence: null
+      exposureEvidence: null,
+      gitSnapshotCleanup: gitSource?.snapshot.cleanup
     }
   }
 
@@ -721,6 +748,7 @@ export class DeployPipeline {
           finalStatus === 'running' ? (ctx.exposureEvidence ?? undefined) : undefined
       })
       this.release(ctx.app.id, ctx.deployment.id)
+      ctx.gitSnapshotCleanup?.()
       logStream.end()
     }
   }

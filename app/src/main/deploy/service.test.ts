@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -10,6 +10,7 @@ import { AppRepository } from '../db/appRepository'
 import { VpsRepository } from '../db/vpsRepository'
 import type { SshManager } from '../ssh/manager'
 import { DeployService } from './service'
+import type { GitSnapshot, GitSnapshotInput } from '../git/snapshot'
 
 let testDirectory: string | null = null
 
@@ -59,7 +60,68 @@ describe('DeployService.precheck', () => {
   })
 })
 
-function createHarness(): {
+describe('DeployService Git snapshot handoff', () => {
+  it('passes the prepared root and pinned snapshot unchanged through precheck to start', async () => {
+    const snapshotHolder: { value?: GitSnapshot } = {}
+    const { service, vpsId } = createHarness(async () => {
+      if (!snapshotHolder.value) throw new Error('Snapshot fixture is not initialized.')
+      return snapshotHolder.value
+    })
+    const fixtureDirectory = testDirectory!
+    const root = join(fixtureDirectory, 'root')
+    const snapshotDirectory = join(fixtureDirectory, 'snapshot')
+    mkdirSync(root)
+    mkdirSync(snapshotDirectory)
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({
+        name: 'fixture',
+        scripts: { start: 'node index.js' },
+        dependencies: { express: '4.0.0' }
+      })
+    )
+    writeFileSync(join(root, 'index.js'), "require('express')().listen(3000)\n")
+    const snapshot: GitSnapshot = {
+      repositoryUrl: 'https://github.com/example/repo.git',
+      commitSha: 'b'.repeat(40),
+      rootDirectory: root,
+      snapshotDirectory,
+      cleanup: vi.fn()
+    }
+    snapshotHolder.value = snapshot
+    const prepared = await service.prepareGit('git-request', {
+      source_type: 'git',
+      git_repo_url: 'https://github.com/example/repo',
+      git_ref: 'main',
+      git_root: '.'
+    })
+    const input = {
+      source_type: 'git' as const,
+      prepared_source_handle: prepared.prepared_source_handle,
+      vps_id: vpsId,
+      app_name: 'git-service-api',
+      env: {}
+    }
+    const precheck = await service.precheck(input)
+    expect(precheck.passed).toBe(true)
+    expect(precheck.precheck_token).toBeTruthy()
+
+    const run = vi.spyOn(service.pipeline, 'run').mockReturnValue({ deploymentId: 77 })
+    const started = service.start({ ...input, precheck_token: precheck.precheck_token! })
+
+    expect(started).toEqual({ deployment_id: 77 })
+    expect(run).toHaveBeenCalledOnce()
+    const [pipelineInput, signal, lease] = run.mock.calls[0]
+    expect(pipelineInput.source_path).toBe(root)
+    expect(signal).toBeUndefined()
+    expect(lease?.snapshot).toBe(snapshot)
+    expect(lease?.commitSha).toBe(prepared.git_commit_sha)
+    expect(snapshot.cleanup).not.toHaveBeenCalled()
+    snapshot.cleanup()
+  })
+})
+
+function createHarness(gitSnapshotFactory?: (input: GitSnapshotInput) => Promise<GitSnapshot>): {
   service: DeployService
   exec: ReturnType<typeof vi.fn>
   vpsId: number
@@ -102,7 +164,12 @@ function createHarness(): {
   const ssh = { exec } as unknown as SshManager
 
   return {
-    service: new DeployService({ ssh, db: database, emit: () => undefined }),
+    service: new DeployService({
+      ssh,
+      db: database,
+      emit: () => undefined,
+      gitSnapshotFactory
+    }),
     exec,
     vpsId: vps.id,
     appId: app.id

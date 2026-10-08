@@ -1,5 +1,6 @@
 export interface ShutdownRuntime {
   stopScheduler(): Promise<void>
+  stopDeploy(): Promise<void>
   stopMl(): void
   disconnectSsh(): Promise<void>
   quit(): void
@@ -12,13 +13,19 @@ export async function shutdownRuntime(runtime: ShutdownRuntime): Promise<void> {
   } catch (error) {
     runtime.report(error)
   } finally {
-    runtime.stopMl()
     try {
-      await runtime.disconnectSsh()
+      await runtime.stopDeploy()
     } catch (error) {
       runtime.report(error)
     } finally {
-      runtime.quit()
+      runtime.stopMl()
+      try {
+        await runtime.disconnectSsh()
+      } catch (error) {
+        runtime.report(error)
+      } finally {
+        runtime.quit()
+      }
     }
   }
 }

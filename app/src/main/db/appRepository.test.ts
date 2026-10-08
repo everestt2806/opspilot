@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { EncryptedCredential } from '../crypto/credentialCipher'
 import { closeDatabase, initializeDatabase } from './index'
 import { AppRepository, type CreateAppRecord } from './appRepository'
+import { DeploymentRepository } from './deploymentRepository'
 import { VpsRepository } from './vpsRepository'
 
 let testDirectory: string | null = null
@@ -35,9 +36,48 @@ describe('AppRepository constraint mapping', () => {
 
     expect(() => repository.create(appRecord(vpsId, 'demo-api', 30_001))).toThrow('VALIDATION')
   })
+
+  it('persists Git app provenance without storing the temporary checkout path', () => {
+    const { repository, vpsId } = createHarness()
+    const app = repository.create({
+      ...appRecord(vpsId, 'git-api', 30_000),
+      source_path: null,
+      source_type: 'git',
+      git_repo_url: 'https://github.com/example/repo.git',
+      git_ref: 'main',
+      git_root: 'services/api'
+    })
+
+    expect(app).toMatchObject({
+      source_type: 'git',
+      source_path: null,
+      git_repo_url: 'https://github.com/example/repo.git',
+      git_ref: 'main',
+      git_root: 'services/api'
+    })
+  })
+
+  it('records full Git SHA on the deployment attempt', () => {
+    const { repository, vpsId, database } = createHarness()
+    const app = repository.create(appRecord(vpsId, 'git-api', 30_000))
+    const deployment = new DeploymentRepository(database).createNextVersion(
+      app.id,
+      app.name,
+      null,
+      null,
+      { repositoryUrl: 'https://github.com/example/repo.git', commitSha: 'a'.repeat(40) }
+    )
+
+    expect(deployment.git_repo_url).toBe('https://github.com/example/repo.git')
+    expect(deployment.git_commit_sha).toBe('a'.repeat(40))
+  })
 })
 
-function createHarness(): { repository: AppRepository; vpsId: number } {
+function createHarness(): {
+  repository: AppRepository
+  vpsId: number
+  database: ReturnType<typeof initializeDatabase>
+} {
   testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-app-repository-'))
   const database = initializeDatabase(testDirectory)
   const vps = new VpsRepository(database).create({
@@ -48,7 +88,7 @@ function createHarness(): { repository: AppRepository; vpsId: number } {
     auth_type: 'password',
     credential: fakeCredential('cipher')
   })
-  return { repository: new AppRepository(database), vpsId: vps.id }
+  return { repository: new AppRepository(database), vpsId: vps.id, database }
 }
 
 function appRecord(vpsId: number, name: string, hostPort: number): CreateAppRecord {

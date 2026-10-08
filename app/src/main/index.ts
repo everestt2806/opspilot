@@ -27,6 +27,7 @@ let mainWindow: BrowserWindow | null = null
 let mlService: MlServiceManager | null = null
 let sshManager: SshManager | null = null
 let monitorScheduler: MonitorScheduler | null = null
+let deployRuntime: DeployService | null = null
 let quitting = false
 
 function emitMlStatus(status: { running: boolean; reason?: string }): void {
@@ -110,6 +111,7 @@ void app
         mainWindow?.webContents.send('deploy:event', event)
       }
     })
+    deployRuntime = deployService
 
     const historyService = new HistoryService(new ActionLogRepository(database))
     const monitorService = new MonitorService(database)
@@ -175,6 +177,7 @@ app.on('before-quit', (event) => {
   quitting = true
   void shutdownRuntime({
     stopScheduler: async () => monitorScheduler?.stop(),
+    stopDeploy: async () => deployRuntime?.shutdown(),
     stopMl: () => mlService?.stopSync(),
     disconnectSsh: async () => sshManager?.disconnectAll(),
     quit: () => app.quit(),
