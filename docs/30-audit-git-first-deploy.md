@@ -1,6 +1,6 @@
 # Kiểm kê Git-first cho OpsPilot — 08/10/2026
 
-**Kết luận:** đường deploy sản phẩm hiện tại chỉ nhận thư mục trên máy chạy Electron. Dòng chú thích `app.source_path` nói “local hoặc git URL” là ý định thiết kế, không phải tính năng đã triển khai. Git deploy phải là đường chính trước demo 14/10; kết quả deploy thư mục chỉ là smoke của pipeline cũ.
+**Kết luận:** đường deploy sản phẩm hiện tại chỉ nhận thư mục trên máy chạy Electron. Dòng chú thích `app.source_path` nói “local hoặc git URL” là ý định thiết kế, không phải tính năng đã triển khai. Sản phẩm phải cho người dùng chọn **Deploy trực tiếp từ thư mục** hoặc **Deploy từ Git** như hai nguồn ngang hàng. Git là khoảng trống cần ưu tiên bổ sung và kiểm chứng trước demo 14/10; deploy trực tiếp là tính năng hiện có cần được bảo toàn.
 
 ## 1. Chuẩn sản phẩm cần đạt
 
@@ -39,15 +39,15 @@ Các tài liệu trên mô tả tính năng của sản phẩm tham chiếu tạ
 | P2 tự động hóa | Push-to-deploy/preview khi desktop đóng | Chưa có control plane luôn chạy | Quyết định kiến trúc, xác minh webhook, queue/idempotency, trạng thái khi desktop tắt; không gắn nhãn auto deploy trước khi đạt |
 | P2 vận hành | Backup/restore và pilot ML | Chưa có bằng chứng live đầy đủ | Backup có restore drill; pilot trên VPS đủ 40 GB với dữ liệu thật |
 
-**Phân biệt nguồn và phương tiện chuyển file:** Git-first không bắt buộc VPS tự `git clone`. Có thể checkout commit trên desktop, rồi gửi snapshot qua SSH bằng pipeline hiện tại. Người dùng vẫn nhập repo/ref và nhìn thấy SHA; snapshot được khóa theo SHA, không dùng thư mục tùy ý làm nguồn sự thật. Cách này tái dùng detector và không đưa credential Git lên VPS.
+**Phân biệt nguồn và phương tiện chuyển file:** Với nguồn Git, VPS không bắt buộc tự `git clone`. Có thể checkout commit trên desktop, rồi gửi snapshot qua SSH bằng pipeline hiện tại. Người dùng vẫn nhập repo/ref và nhìn thấy SHA; snapshot Git được khóa theo SHA. Với nguồn trực tiếp, người dùng chọn thư mục trên máy và không hiển thị Git SHA giả. Hai nguồn cùng dùng pipeline build/health/record, nhưng giữ metadata nguồn riêng. Cách này tái dùng detector và không đưa credential Git lên VPS.
 
 ## 4. Hợp đồng Git-first đề xuất cho Worker
 
-1. Nguồn là union tường minh `local`/`git`; local cũ vẫn đọc được. Với Git, lưu URL canonical không chứa credential, branch, root directory ở app; lưu **repo URL + full commit SHA** của snapshot ở từng deployment. Không lưu đường clone tạm vào `app.source_path` như định danh lâu dài. Sửa migration/restore để payload đã relay không cần đường clone cũ.
+1. Nguồn là union tường minh `local`/`git`; người dùng chủ động chọn một trong hai và bản ghi local cũ vẫn đọc/deploy được. Với Git, lưu URL canonical không chứa credential, branch, root directory ở app; lưu **repo URL + full commit SHA** của snapshot ở từng deployment. Với local, lưu đường dẫn nguồn hiện có và hiển thị đúng nhãn “Thư mục trên máy”, không tạo Git metadata giả. Không lưu đường clone tạm vào `app.source_path` như định danh lâu dài. Sửa migration/restore để payload đã relay không cần đường clone cũ.
 2. Bước chuẩn bị Git chạy trong Electron main hoặc CLI: URL HTTPS GitHub công khai hợp lệ; branch/ref được kiểm tra, fetch/checkout vào thư mục riêng dưới `userData`/temp, `GIT_TERMINAL_PROMPT=0`, lệnh qua `spawn` với mảng tham số, timeout, giới hạn dung lượng/file; không chạy hook/submodule/LFS trong lát cắt đầu. Sau checkout lấy `git rev-parse HEAD`, kiểm tra root nằm trong snapshot và detect tại đó. Chặn URL có userinfo, `file://`, local path, option injection, symlink thoát root và đường dẫn `..`.
 3. `deploy:detect`/precheck/start phải dùng **cùng snapshot SHA**. Nếu branch thay đổi sau detect, buộc chuẩn bị lại hoặc dùng chính SHA đã pin và hiển thị rõ. Dọn snapshot có kiểm soát khi hủy/thất bại/hoàn tất; không dọn lúc pipeline còn dùng. Không ghi token, URL có credential, env secret hoặc stderr thô vào log/error/DB.
-4. UI mặc định “Git repository”; nhập URL, nhánh, root directory (mặc định `/`), hiện full/short SHA trước nút Deploy, trạng thái fetch/detect/fail. “Thư mục trên máy” vẫn là lựa chọn phụ. App detail và lịch sử hiển thị repo/ref/SHA và nút redeploy từ branch.
-5. Sửa `docs/contracts/ipc-contract.ts`, `schema.sql`, `deploy-events.md` và migration 007 cùng một quyết định trong `DECISIONS.md` trước khi nối runtime. Tránh dùng `source_path` vừa là URL vừa là path; giữ tương thích dữ liệu cũ.
+4. UI trình bày hai lựa chọn ngang hàng: “Thư mục trên máy” và “Git repository”; không ép người dùng đổi sang Git. Với Git, nhập URL, nhánh, root directory (mặc định `/`), hiện full/short SHA trước nút Deploy và trạng thái fetch/detect/fail. Với local, giữ thao tác chọn thư mục và các bước hiện có. App detail/lịch sử hiển thị đúng loại nguồn; chỉ bản Git có repo/ref/SHA và nút redeploy từ branch.
+5. Khóa mô hình dữ liệu và IPC cho cả hai nguồn trước khi chọn số migration, rồi đồng bộ `docs/contracts/ipc-contract.ts`, `schema.sql`, `deploy-events.md`, migration tương ứng và `DECISIONS.md` trước khi nối runtime. Tránh dùng `source_path` vừa là URL vừa là path; giữ tương thích dữ liệu cũ.
 
 **Giới hạn P0:** repo GitHub **công khai qua HTTPS**, deploy khi người dùng bấm; chưa nhận private credential, chưa tự deploy theo push, chưa preview PR, chưa HTTPS tự động. Nếu repo demo của người dùng là private, cần một repo công khai được người dùng chọn hoặc mở checkpoint credential riêng trước live gate. Không coi repo của chính OpsPilot là public khi chưa kiểm tra quyền truy cập ẩn danh.
 
@@ -57,12 +57,12 @@ Các tài liệu trên mô tả tính năng của sản phẩm tham chiếu tạ
 
 | Mốc | Hạn | Worker thực hiện | Leader chỉ duyệt khi |
 |---|---|---|---|
-| G0 — contract + source acquisition | 09/10 | Quyết định schema/IPC, migration 007, module clone/fetch/checkout Git công khai, CLI thử độc lập | Test URL/ref/root/size/timeout/cancel; full SHA; migration dữ liệu cũ; không có runtime UI giả |
-| G1 — nối pipeline + UI | 10/10 | Snapshot pin xuyên detect→precheck→start; Git mặc định trong wizard, app/history provenance; migration/redeploy tương thích | Tests cho branch đổi, lỗi fetch, clone cleanup, Git redeploy, migration; lint/typecheck/build/full Vitest |
+| G0 — contract hai nguồn + source acquisition | 09/10 | Chốt schema/IPC cho local và Git trước khi chọn số migration; module clone/fetch/checkout Git công khai, CLI thử độc lập | Test URL/ref/root/size/timeout/cancel; full SHA; bản ghi local cũ còn đọc/deploy được; không có runtime UI giả |
+| G1 — nối pipeline + UI | 10/10 | Hai lựa chọn nguồn ngang hàng trong wizard; snapshot Git pin xuyên detect→precheck→start; app/history hiển thị đúng nguồn; migration/redeploy tương thích | Tests cho branch đổi, lỗi fetch, clone cleanup, Git redeploy, đường local cũ và migration; lint/typecheck/build/full Vitest |
 | G2 — live Git smoke | 11/10 | Trên VPS phát triển, deploy repo công khai bằng UI; commit thứ hai và redeploy; thử rollback | Evidence URL, HTTP `/health`, repo/ref/full SHA cho mỗi deployment, image ID, thời gian; không lộ secret |
 | G3 — rehearsal/print | 12–13/10 | Hai lần rehearsal 6–8 phút, video fallback từ lần live, cập nhật phiếu in PDF | SHA chạy demo và bằng chứng khớp, phân biệt rõ HTTP IP:port với HTTPS; gate cuối pass |
 
-Nếu G0/G1 trễ, ưu tiên **một deploy Git thật** hơn ML/Doctor/rollback trên sân khấu. Local-folder smoke có thể dùng để chẩn đoán pipeline nhưng không được giới thiệu là Git deploy. Push-to-deploy cần control plane nhận webhook khi Electron tắt, nên là checkpoint riêng sau khi demo thủ công đã đạt; không gắn nhãn tự động cho nút Redeploy.
+Nếu G0/G1 trễ, ưu tiên **một deploy Git thật** hơn ML/Doctor/rollback trên sân khấu vì deploy trực tiếp đã có trong sản phẩm. Cần kiểm tra hồi quy deploy trực tiếp; lần chạy này là bằng chứng của chế độ “Thư mục trên máy”, không được giới thiệu là Git deploy. Push-to-deploy cần control plane nhận webhook khi Electron tắt, nên là checkpoint riêng sau khi demo thủ công đã đạt; không gắn nhãn tự động cho nút Redeploy.
 
 ## 6. Vấn đề cần đối chiếu khi review Worker
 

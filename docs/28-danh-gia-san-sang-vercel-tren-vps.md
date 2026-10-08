@@ -54,7 +54,7 @@ Lệnh kiểm chứng cục bộ trong phiên review: `pnpm --prefix app lint` P
 
 ### P0 — Giữ vững sản phẩm và đồ án hiện tại
 
-1. Hoàn thành Git source thủ công và một deploy thật qua app trước 14/10 theo [kế hoạch demo](29-ke-hoach-demo-14-10.md).
+1. Bảo toàn deploy trực tiếp từ thư mục, bổ sung Git source thủ công như lựa chọn thứ hai và chạy một Git deploy thật qua app trước 14/10 theo [kế hoạch demo](29-ke-hoach-demo-14-10.md).
 2. Chạy pilot ML khi có VPS đáp ứng ngưỡng 40 GB, với bằng chứng deploy, publish, rollback, monitor và migrate. VPS phát triển hiện có 25 GB, không dùng số test mock để tuyên bố đã chạy thực tế.
 3. Hoàn tất hồ sơ trạng thái sản phẩm: `LOCAL_PASS`, `VPS_PREFLIGHT_PASS`, `VPS_DEPLOY_NOT_RUN`, `VPS_PASS`, cùng đường xử lý lỗi.
 
@@ -117,7 +117,7 @@ Mục tiêu thực tế của OpsPilot là **đưa một repo lên VPS của ng�
 
 ## 7. Quyết định kiến trúc trước khi mở rộng Git
 
-1. **Project/source và nơi chạy là hai khái niệm khác nhau.** Hiện bảng `app` gắn một `vps_id`, `source_path` và deployment hiện tại. Với demo một repo → một VPS, có thể mở rộng bảng này để tiết kiệm thời gian, nhưng phải lưu rõ `source_kind`, URL/ref/root và provenance từng deployment. Không dùng đường clone tạm làm định danh lâu dài. Khi thêm staging, preview hoặc cùng repo trên nhiều VPS, tách `project/source` khỏi `environment/target` thay vì cố kéo dài `app` hiện tại.
+1. **Project/source và nơi chạy là hai khái niệm khác nhau.** Hiện bảng `app` gắn một `vps_id`, `source_path` và deployment hiện tại. Hai loại nguồn phải được mô hình hóa tường minh: local giữ đường dẫn thư mục hiện có; Git giữ URL/ref/root và provenance từng deployment. Với demo một source → một VPS, có thể mở rộng bảng `app` để tiết kiệm thời gian. Không dùng đường clone tạm làm định danh lâu dài hoặc tạo Git SHA giả cho local. Khi thêm staging, preview hoặc cùng repo trên nhiều VPS, tách `project/source` khỏi `environment/target` thay vì cố kéo dài `app` hiện tại.
 2. **Snapshot Git là đầu vào bất biến.** UI detect/precheck/start phải dùng cùng SHA đã khóa. Phân biệt “deploy latest của branch” (resolve SHA mới rồi tạo deployment mới) với “redeploy cùng SHA”. `MigrateService` phải xử lý Git app khi cache checkout cũ không còn.
 3. **HTTPS cần chọn một ingress thực.** `domain:plan` có thể gợi ý shared ingress/named tunnel; `domain:upsert` chưa tự dựng proxy hoặc tunnel. Trước khi hứa URL đẹp, chọn một phương án có lifecycle, chứng chỉ, port 80/443, rollback cấu hình và external probe. Điều này thay đổi giới hạn ADR-006 hiện có, nên cần quyết định kiến trúc tường minh.
 4. **Push-to-deploy cần một bộ phận luôn chạy.** Electron chỉ nhận sự kiện khi đang mở. Có thể đặt control plane riêng hoặc chọn kiến trúc agent/service có giới hạn rõ; cả hai cần xem lại NFR-1 của đề tài. Không dùng một script CI deploy thẳng lên VPS rồi gọi đó là luồng OpsPilot nếu nó bỏ qua SQLite/history/Doctor.
@@ -127,7 +127,7 @@ Mục tiêu thực tế của OpsPilot là **đưa một repo lên VPS của ng�
 
 | Thời điểm | Lát cắt | Vì sao ưu tiên | Bằng chứng chấp nhận |
 |---|---|---|---|
-| Trước 14/10 | Git công khai → chọn branch/root → khóa SHA → deploy thủ công Express lên VPS phát triển → IP:port `/health` → history hiển thị SHA | Hoàn thành UC-02 còn thiếu và cho thấy đường Git-to-VPS thật | Ảnh/video Electron + HTTP ngoài VPS + repo/ref/full SHA/ID deployment khớp; lỗi được báo trung thực |
+| Trước 14/10 | Hai lựa chọn deploy rõ ràng; kiểm tra hồi quy deploy trực tiếp; Git công khai → chọn branch/root → khóa SHA → deploy thủ công Express lên VPS phát triển → IP:port `/health` → history hiển thị SHA | Hoàn thành nhánh Git của UC-02 và bảo toàn nhánh thư mục hiện có | Ảnh/video Electron + HTTP ngoài VPS + repo/ref/full SHA/ID deployment khớp cho Git; local không hiện SHA giả; lỗi được báo trung thực |
 | Sau khi Git live ổn | Redeploy từ branch, rollback bản cũ, runtime logs, test source tùy chọn, env update có kiểm soát | Làm app dùng được sau lần deploy đầu tiên | Hai SHA trong history, rollback đúng image, log sau deploy, ca lỗi test/build/health |
 | Lát cắt public URL | Ingress HTTPS cho một domain, certificate, DNS, external HTTPS probe | Đưa URL đáng dùng và không nhầm DNS với routing | URL HTTPS thật, certificate hợp lệ, app đích đúng, rollback ingress an toàn |
 | Sau quyết định kiến trúc | Private Git, webhook push, preview PR, queue, giám sát khi desktop đóng | Đạt trải nghiệm tự động như chuẩn tham chiếu | Push khi desktop tắt vẫn tạo deployment đúng SHA; preview cô lập và dọn được |

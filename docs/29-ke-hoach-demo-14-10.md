@@ -7,7 +7,9 @@
 
 ## 1. Phạm vi chốt cho buổi demo
 
-**Luồng trình diễn:** VPS/app overview → nhập Git repository/branch → hiện commit SHA → detector và kế hoạch build →
+**Sản phẩm cho chọn hai cách deploy:** từ thư mục trên máy hoặc từ Git repository. Cả hai đi qua pipeline build/health/record; Git có thêm repo/ref/SHA, còn deploy trực tiếp không được gắn SHA giả. Buổi demo ưu tiên chứng minh đường Git đang thiếu.
+
+**Luồng trình diễn:** VPS/app overview → chọn Git repository/branch → hiện commit SHA → detector và kế hoạch build →
 pipeline deploy / lịch sử phiên bản → trạng thái truy cập → Doctor/giám sát → rollback hoặc migrate
 (chỉ chọn phần có bằng chứng cùng bản build). Nói rõ OpsPilot là desktop operator chạy qua SSH;
 Git **manual deploy từ repository** là năng lực chặn demo. Git **push-to-deploy** khi desktop đóng,
@@ -29,8 +31,8 @@ một app Express thử, nhưng chưa đạt mốc 40 GB của pilot ML. Chưa x
 
 | Mốc | Hạn nội bộ | Worker làm | Leader review / DoD |
 |---|---|---|---|
-| D14-G0 Hợp đồng và lấy nguồn Git | 09/10 | Migration/IPC contract, clone/fetch/checkout repo công khai với SHA bất biến, test/CLI độc lập | Source từ Git thật; không lưu clone tạm làm nguồn lâu dài; dữ liệu cũ còn đọc được |
-| D14-G1 Git-first UI và pipeline | 10/10 | Git mặc định trong wizard, detect/precheck/start cùng SHA; app/history hiển thị provenance, redeploy và migrate không phụ thuộc cache | Full gate pass; lỗi fetch/branch đổi/cleanup/migration có test; chưa cần VPS |
+| D14-G0 Hợp đồng hai nguồn và lấy nguồn Git | 09/10 | Chốt mô hình local/Git và IPC trước khi chọn migration; clone/fetch/checkout repo công khai với SHA bất biến, test/CLI độc lập | Source từ Git thật; không lưu clone tạm làm nguồn lâu dài; dữ liệu local cũ còn đọc/deploy được |
+| D14-G1 Hai nguồn deploy trong UI và pipeline | 10/10 | Hai lựa chọn ngang hàng trong wizard; Git detect/precheck/start cùng SHA; app/history hiển thị đúng loại nguồn, redeploy và migrate không phụ thuộc cache | Full gate pass; lỗi fetch/branch đổi/cleanup/migration và hồi quy deploy trực tiếp có test; chưa cần VPS |
 | D14-G2 Live Git smoke trên VPS phát triển | 11/10 | Dùng profile riêng và VPS đã pin host key; deploy repo Express công khai qua app, redeploy commit mới và kiểm tra URL từ ngoài | Có repo/ref/full SHA cho từng deployment, ID, URL, HTTP response, container/image và thời gian; rollback nếu đã qua gate |
 | D14-G3 Rehearsal 1 | 12/10 | Chạy đủ 6–8 phút, chụp Electron và website thật, ghi video dự phòng; ML synthetic chỉ khi không tranh thời gian Git | Bằng chứng live trùng SHA trong lịch sử; ghi lỗi và thời lượng thật |
 | D14-G4 Rehearsal 2 & freeze | 13/10 | Lặp lại trên VPS sẽ dùng, chạy lint/typecheck/full test/build, in phiếu A4 | Leader chốt SHA và verdict `DEMO_READY_LIVE` hoặc `DEMO_READY_RECORDED` |
@@ -38,10 +40,10 @@ một app Express thử, nhưng chưa đạt mốc 40 GB của pilot ML. Chưa x
 
 ## 3. Task brief để giao Worker
 
-### D14-G0/G1 — Làm Git source thành đường chính
+### D14-G0/G1 — Bổ sung Git bên cạnh deploy trực tiếp
 
-- Tuân thủ [contract và gate Git-first](30-audit-git-first-deploy.md), làm public Git + manual deploy
-  trước webhook. Giữ folder local là lựa chọn phụ; không gọi folder upload là Git deploy.
+- Tuân thủ [contract và gate hai nguồn](30-audit-git-first-deploy.md), làm public Git + manual deploy
+  trước webhook. Giữ deploy thư mục là lựa chọn ngang hàng, có thể dùng độc lập; không gọi folder upload là Git deploy.
 - Ghi repo/ref/full SHA trong deployment và hiện trong UI; nguồn snapshot đã pin xuyên detect,
   precheck, build. Migration của app Git không phụ thuộc clone tạm sau khi dọn.
 
