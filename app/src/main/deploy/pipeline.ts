@@ -141,6 +141,7 @@ export interface RunContext {
   exposureEvidence: ExposureEvidence | null
   gitSnapshotCleanup?: () => void
   resourcesReleased?: boolean
+  finishedEmitted?: boolean
 }
 
 /**
@@ -371,7 +372,7 @@ export class DeployPipeline {
           error: recordError instanceof Error ? recordError.message : String(recordError)
         })
       }
-      this.emitSafely({
+      this.emitFinished(ctx, {
         type: 'finished',
         deployment_id: ctx.deployment.id,
         status: 'failed',
@@ -405,7 +406,7 @@ export class DeployPipeline {
       message: `Rollback thủ công app ${ctx.app.name} về ${targetImageTag} — app đã chạy lại và healthcheck đạt.`
     })
     await this.pruneImages(ctx, null, [targetImageTag])
-    this.emitSafely({
+    this.emitFinished(ctx, {
       type: 'finished',
       deployment_id: ctx.deployment.id,
       status: 'running',
@@ -755,7 +756,7 @@ export class DeployPipeline {
         })
       }
       this.cleanupRunResources(ctx)
-      this.emitSafely({
+      this.emitFinished(ctx, {
         type: 'finished',
         deployment_id: ctx.deployment.id,
         status: finalStatus,
@@ -787,7 +788,7 @@ export class DeployPipeline {
         error: databaseError instanceof Error ? databaseError.message : String(databaseError)
       })
     }
-    this.emitSafely({
+    this.emitFinished(ctx, {
       type: 'finished',
       deployment_id: ctx.deployment.id,
       status: 'failed',
@@ -825,6 +826,12 @@ export class DeployPipeline {
         event_type: event.type
       })
     }
+  }
+
+  private emitFinished(ctx: RunContext, event: Extract<DeployEvent, { type: 'finished' }>): void {
+    if (ctx.finishedEmitted) return
+    ctx.finishedEmitted = true
+    this.emitSafely(event)
   }
 
   private openLogStream(deploymentId: number): import('node:fs').WriteStream {

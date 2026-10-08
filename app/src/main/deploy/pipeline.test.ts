@@ -494,6 +494,58 @@ describe('DeployPipeline', () => {
     expect((await waitForFinished(retryDeployment.id)).status).toBe('running')
   })
 
+  it('finalizes once and releases a Git snapshot when collector recovery throws, then permits retry', async () => {
+    createHarness({
+      metricSnapshot: (call) =>
+        call === 2
+          ? Promise.reject(new Error('synthetic metric snapshot failure'))
+          : { generation: '1:1', device: 1, inode: 1, size: 10 }
+    })
+    const makeLease = (cleanup: Mock): NonNullable<Parameters<DeployPipeline['run']>[2]> => ({
+      handle: 'fault-handle',
+      snapshot: {
+        repositoryUrl: 'https://github.com/example/repo.git',
+        commitSha: 'c'.repeat(40),
+        rootDirectory: sourceDirectory!,
+        snapshotDirectory: sourceDirectory!,
+        cleanup
+      },
+      gitRepoUrl: 'https://github.com/example/repo.git',
+      gitRef: 'main',
+      gitRoot: '.',
+      commitSha: 'c'.repeat(40),
+      sourcePath: sourceDirectory!,
+      expiresAt: Date.now() + 60_000,
+      plan: {} as never
+    })
+
+    const firstCleanup = vi.fn()
+    const first = pipeline.run(deployInput(), undefined, makeLease(firstCleanup))
+    expect((await waitForFinished(first.deploymentId)).status).toBe('running')
+    expect(firstCleanup).toHaveBeenCalledOnce()
+
+    const failedCleanup = vi.fn()
+    const resumeSpy = vi
+      .spyOn(pipeline as unknown as { resumeCollector: () => Promise<void> }, 'resumeCollector')
+      .mockRejectedValue(new Error('synthetic collector recovery failure'))
+    const failed = pipeline.run(deployInput(), undefined, makeLease(failedCleanup))
+    expect((await waitForFinished(failed.deploymentId)).status).toBe('failed')
+    await pipeline.shutdown()
+    expect(resumeSpy).toHaveBeenCalledOnce()
+    resumeSpy.mockRestore()
+
+    expect(deploymentRow(failed.deploymentId).status).toBe('failed')
+    expect(failedCleanup).toHaveBeenCalledOnce()
+    expect(
+      events.filter(
+        (event) => event.type === 'finished' && event.deployment_id === failed.deploymentId
+      )
+    ).toHaveLength(1)
+
+    const retry = pipeline.run(deployInput(), undefined, makeLease(vi.fn()))
+    expect((await waitForFinished(retry.deploymentId)).status).toBe('running')
+  })
+
   it('packaged resource path contains the collector files', () => {
     const resourceRoot = mkdtempSync(join(tmpdir(), 'opspilot-resources-'))
     mkdirSync(join(resourceRoot, 'collector'))
