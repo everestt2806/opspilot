@@ -354,13 +354,17 @@ export interface DeployInput {
   /** Cổng public đã được precheck chọn cho app mới; pipeline vẫn kiểm tra lại trước deploy. */
   host_port?: number;
   app_name: string;
-  source_type?: 'local' | 'git';
   source_path: string;
-  git_repo_url?: string;
-  git_ref?: string;
-  git_root?: string;
   /** Env do người dùng điền ở bước 3 của wizard, gồm cả secret */
   env: Record<string, string>;
+}
+
+/** Git source metadata contract reserved for G1; it is not accepted by the current deploy IPC. */
+export interface GitSourceInput {
+  source_type: 'git';
+  git_repo_url: string;
+  git_ref: string;
+  git_root: string;
 }
 
 /** Evidence đã redacted gửi vào Doctor; không nhận secret value. */

@@ -11,7 +11,7 @@
 
 | ID | Task | Chủ | Hạn mục tiêu | Trạng thái | Branch | Phụ thuộc / ghi chú |
 |---|---|---|---|---|---|---|
-| TK-S7 G0 | [Hợp đồng local/Git và snapshot Git công khai](tk-s7-g0-two-source-git.md) | Worker | 09/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | local `c4e3823` · chưa push; Pha A `78ebb00`; gate G0 pass |
+| TK-S7 G0 | [Hợp đồng local/Git và snapshot Git công khai](tk-s7-g0-two-source-git.md) | Worker | 09/10/2026; không cắt gate | ĐANG LÀM | `feat/deploy-reachability` | Hardening snapshot Git và sửa contract trước G1 |
 
 TK-A18 Titlebar fix 05: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `30747f1`; WCO drag region dùng
 đúng rectangle, native controls không còn chồng caption và màu overlay đã liền shell; Snap Layout ghi

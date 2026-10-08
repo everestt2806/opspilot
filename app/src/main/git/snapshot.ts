@@ -1,5 +1,13 @@
 import { spawn } from 'node:child_process'
-import { lstatSync, mkdtempSync, readdirSync, realpathSync, rmSync, statSync } from 'node:fs'
+import {
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  statSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -24,6 +32,41 @@ export interface GitSnapshot {
 
 const DEFAULT_TIMEOUT_MS = 120_000
 const DEFAULT_MAX_BYTES = 512 * 1024 * 1024
+
+function sanitizedGitEnvironment(): NodeJS.ProcessEnv {
+  const inherited = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))
+  )
+  const nullConfig = process.platform === 'win32' ? 'NUL' : '/dev/null'
+  return {
+    ...inherited,
+    GIT_CONFIG_GLOBAL: nullConfig,
+    GIT_CONFIG_SYSTEM: nullConfig,
+    GIT_CONFIG_NOSYSTEM: '1',
+    GIT_TERMINAL_PROMPT: '0',
+    GCM_INTERACTIVE: 'Never',
+    GIT_LFS_SKIP_SMUDGE: '1'
+  }
+}
+
+function gitFailureMessage(stderr: string, code: number | null): string {
+  if (
+    /could not read Username|authentication failed|repository not found|HTTP 40[13]/i.test(stderr)
+  ) {
+    return 'Repository GitHub không truy cập được qua HTTPS công khai; kiểm tra URL và trạng thái public.'
+  }
+  if (/couldn't find remote ref|not our ref|unknown revision|invalid ref/i.test(stderr)) {
+    return 'Git ref không tồn tại hoặc không thể lấy từ repository.'
+  }
+  if (
+    /could not resolve host|failed to connect|connection timed out|network is unreachable|SSL certificate/i.test(
+      stderr
+    )
+  ) {
+    return 'Không thể kết nối GitHub qua HTTPS để lấy snapshot.'
+  }
+  return `Lệnh Git thất bại khi lấy snapshot (mã ${code ?? 'không xác định'}).`
+}
 
 export function canonicalizeGitHubUrl(value: string): string {
   let url: URL
@@ -92,13 +135,7 @@ function runGit(
     const child = spawn('git', args, {
       cwd,
       windowsHide: true,
-      env: {
-        ...process.env,
-        GIT_TERMINAL_PROMPT: '0',
-        GCM_INTERACTIVE: 'Never',
-        GIT_LFS_SKIP_SMUDGE: '1',
-        GIT_CONFIG_NOSYSTEM: '1'
-      },
+      env: sanitizedGitEnvironment(),
       stdio: ['ignore', 'pipe', 'pipe']
     })
     let stdout = ''
@@ -150,10 +187,7 @@ function runGit(
     child.on('close', (code) => {
       if (terminationError) finish(terminationError)
       else if (code === 0) finish()
-      else
-        finish(
-          new Error(`Git không thể lấy snapshot (mã ${code ?? 'không xác định'}). ${stderr.trim()}`)
-        )
+      else finish(new Error(gitFailureMessage(stderr, code)))
     })
   })
 }
@@ -211,9 +245,16 @@ async function snapshotRemote(
     throw new Error('Giới hạn snapshot không hợp lệ.')
   }
   const snapshotDirectory = mkdtempSync(join(input.tempDirectory ?? tmpdir(), 'opspilot-git-'))
+  const templateDirectory = join(snapshotDirectory, '.empty-git-template')
   try {
     const runOptions = { timeoutMs, maxBytes, signal: input.signal }
-    await runGit(['init', '--quiet'], snapshotDirectory, runOptions)
+    mkdirSync(templateDirectory)
+    await runGit(
+      ['init', '--quiet', `--template=${templateDirectory}`],
+      snapshotDirectory,
+      runOptions
+    )
+    rmSync(templateDirectory, { recursive: true, force: true })
     await runGit(
       ['-c', 'credential.helper=', 'remote', 'add', 'origin', repositoryUrl],
       snapshotDirectory,
@@ -223,6 +264,10 @@ async function snapshotRemote(
       [
         '-c',
         'credential.helper=',
+        '-c',
+        'protocol.allow=never',
+        '-c',
+        'protocol.https.allow=always',
         '-c',
         `protocol.file.allow=${allowFileProtocol ? 'always' : 'never'}`,
         '-c',

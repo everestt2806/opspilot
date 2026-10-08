@@ -11,6 +11,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -90,6 +91,103 @@ describe('Git snapshot', () => {
     }
   })
 
+  it('isolates inherited Git config, templates, and worktree paths from the snapshot target', async () => {
+    const expectedRemote = createFixture()
+    const alternateRemote = join(fixtureDirectory!, 'alternate.git')
+    git(fixtureDirectory!, 'init', '--quiet', '--bare', 'alternate.git')
+    const alternateWorking = join(fixtureDirectory!, 'alternate-working')
+    mkdirSync(alternateWorking)
+    git(alternateWorking, 'init', '--quiet', '-b', 'main')
+    git(alternateWorking, 'config', 'user.name', 'Fixture Test')
+    git(alternateWorking, 'config', 'user.email', 'fixture@example.invalid')
+    mkdirSync(join(alternateWorking, 'demo'))
+    writeFileSync(join(alternateWorking, 'demo', 'marker.txt'), 'redirected repository\n')
+    git(alternateWorking, 'add', '.')
+    git(alternateWorking, 'commit', '--quiet', '-m', 'redirect target')
+    git(alternateWorking, 'remote', 'add', 'origin', alternateRemote)
+    git(alternateWorking, 'push', '--quiet', 'origin', 'main')
+
+    const outsideGit = join(fixtureDirectory!, 'outside.git')
+    git(fixtureDirectory!, 'init', '--quiet', '--bare', 'outside.git')
+    const outsideGitEntries = readdirSync(outsideGit, { recursive: true }).sort()
+    const outsideWorkTree = join(fixtureDirectory!, 'outside-worktree')
+    mkdirSync(outsideWorkTree)
+    const outsideIndex = join(fixtureDirectory!, 'outside.index')
+    const maliciousTemplate = join(fixtureDirectory!, 'malicious-template')
+    mkdirSync(maliciousTemplate)
+    writeFileSync(join(maliciousTemplate, 'template-marker'), 'must not be copied')
+    const globalConfig = join(fixtureDirectory!, 'malicious.gitconfig')
+    const expectedUrl = pathToFileURL(expectedRemote).toString()
+    const alternateUrl = pathToFileURL(alternateRemote).toString()
+    writeFileSync(
+      globalConfig,
+      `[url "${alternateUrl}"]\n\tinsteadOf = ${expectedUrl}\n[init]\n\ttemplateDir = ${maliciousTemplate}\n`
+    )
+    const inheritedKeys = [
+      'GIT_CONFIG_COUNT',
+      'GIT_CONFIG_KEY_0',
+      'GIT_CONFIG_VALUE_0',
+      'GIT_CONFIG_GLOBAL',
+      'GIT_CONFIG_SYSTEM',
+      'GIT_CONFIG_PARAMETERS',
+      'GIT_DIR',
+      'GIT_WORK_TREE',
+      'GIT_INDEX_FILE',
+      'GIT_TEMPLATE_DIR'
+    ]
+    const previous = new Map(inheritedKeys.map((key) => [key, process.env[key]]))
+    Object.assign(process.env, {
+      GIT_CONFIG_COUNT: '2',
+      GIT_CONFIG_KEY_0: `url.${alternateUrl}.insteadOf`,
+      GIT_CONFIG_VALUE_0: expectedUrl,
+      GIT_CONFIG_GLOBAL: globalConfig,
+      GIT_CONFIG_SYSTEM: globalConfig,
+      GIT_CONFIG_PARAMETERS: 'inherited-malicious-config',
+      GIT_DIR: outsideGit,
+      GIT_WORK_TREE: outsideWorkTree,
+      GIT_INDEX_FILE: outsideIndex,
+      GIT_TEMPLATE_DIR: maliciousTemplate
+    })
+    try {
+      const snapshot = await createGitSnapshotFromLocalFixture({
+        repositoryUrl: expectedRemote,
+        ref: 'main',
+        root: 'demo',
+        tempDirectory: fixtureDirectory!
+      })
+      try {
+        expect(readFileSync(join(snapshot.rootDirectory, 'marker.txt'), 'utf8')).toBe(
+          'first snapshot\n'
+        )
+        expect(readdirSync(outsideWorkTree)).toEqual([])
+        expect(readdirSync(outsideGit, { recursive: true }).sort()).toEqual(outsideGitEntries)
+        expect(existsSync(outsideIndex)).toBe(false)
+        expect(existsSync(join(snapshot.snapshotDirectory, '.git', 'template-marker'))).toBe(false)
+      } finally {
+        snapshot.cleanup()
+      }
+    } finally {
+      for (const [key, value] of previous) {
+        if (value === undefined) delete process.env[key]
+        else process.env[key] = value
+      }
+    }
+  })
+
+  it('never includes private-looking stderr text in Git failure messages', async () => {
+    fixtureDirectory = mkdtempSync(join(tmpdir(), 'fake-secret-stderr-'))
+    const fakeSecret = 'fake-secret-stderr-canary'
+    const error = createGitSnapshotFromLocalFixture({
+      repositoryUrl: join(fixtureDirectory, fakeSecret, 'missing.git'),
+      ref: 'main',
+      tempDirectory: fixtureDirectory
+    }).catch((caught: unknown) => caught)
+    const caught = await error
+    expect(caught).toBeInstanceOf(Error)
+    expect((caught as Error).message).not.toContain(fakeSecret)
+    expect((caught as Error).message).toMatch(/Git thất bại/i)
+  })
+
   it('rejects traversal, missing refs, cancellation and timeouts and cleans partial snapshots', async () => {
     const remote = createFixture()
     const tempDirectory = join(fixtureDirectory!, 'snapshots')
@@ -101,7 +199,7 @@ describe('Git snapshot', () => {
     ).rejects.toThrow(/thoát khỏi snapshot/i)
     await expect(
       createGitSnapshotFromLocalFixture({ ...input, ref: 'missing-branch' })
-    ).rejects.toThrow(/Git không thể lấy snapshot/i)
+    ).rejects.toThrow(/Git ref không tồn tại/i)
     const controller = new AbortController()
     controller.abort()
     await expect(
