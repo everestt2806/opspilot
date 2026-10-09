@@ -14,7 +14,7 @@
 | TK-S7 G0 | [Hợp đồng local/Git và snapshot Git công khai](tk-s7-g0-two-source-git.md) | Worker | 09/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | local `ebbfc7e` · chưa push; contract `7e6cf25`; Node 22 gates pass |
 | TK-S7 G1a | [Nối snapshot Git vào deploy core](tk-s7-g1a-git-deploy-core.md) | Worker | 10/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | Local review `234cb57` pass: Node 22 focused 55/55, full Vitest 653/653, typecheck; chưa push/merge, chưa live VPS |
 | TK-S7 G1b | [Hai nguồn deploy trong UI, lịch sử Git và migrate](tk-s7-g1b-git-ui-history-migrate.md) | Worker | 10/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | Leader review manual Git flow đủ cho G2, guard `49300ea` và migrate 19/19 pass; DoD migrate rollback chưa xong |
-| TK-S7 G2 | [Live smoke deploy Git trên VPS phát triển](tk-s7-g2-live-git-vps-smoke.md) | Worker | 11/10/2026; không cắt gate | TUẦN NÀY | `feat/deploy-reachability` | Wizard Git thật → VPS → external HTTP; bằng chứng repo/ref/SHA/deployment/container/exposure; chưa chạy |
+| TK-S7 G2 | [Live smoke deploy Git trên VPS phát triển](tk-s7-g2-live-git-vps-smoke.md) | Worker | 11/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | Local `3776cfd`; live wizard v1/v2 PASS, same SHA `8af16e1f9165a31557288adbc23acc420244938f`; external HTTP 200, container healthy/reachable; Node 22 gates pass 666/666; chưa push/PR/merge |
 
 TK-A18 Titlebar fix 05: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `30747f1`; WCO drag region dùng
 đúng rectangle, native controls không còn chồng caption và màu overlay đã liền shell; Snap Layout ghi
