@@ -14,16 +14,21 @@
 
 ## Definition of Done
 
-- [ ] Copy Deploy trung tính cho folder/Git ở vi/en/zh/ja; test xác nhận header đúng khi chọn từng nguồn. Kiểm tra bằng ảnh Electron thật. Trong lịch sử, giải thích v1/v2 `running` là kết quả **đã ghi nhận**; chỉ v hiện tại có nhãn “Đang kích hoạt”, không nói ba container cùng chạy.
-- [ ] Diễn tập lần hai đủ 6–8 phút bằng build sau sửa copy: mở hai app local, thực hiện một redeploy Git thủ công, xem SHA/lịch sử, kiểm tra HTTP ngoài cho Git/Vite/Next, kết luận với giới hạn. Ghi thời điểm, duration, app/deployment ID, full Git SHA, build source commit và tree `app` (`git rev-parse <commit>:app`), lỗi/khắc phục; không gọi redeploy cùng SHA là cập nhật commit mới.
-- [ ] Quay MP4 dự phòng của lần cuối; xác minh mở/phát được, duration, hình ảnh các mốc đầu/giữa/cuối, audio có/không và không có secret. Lưu ảnh chính, video và bảng bằng chứng dưới `docs/demo-14-10/`; nếu video thiếu thì ghi `NOT_RUN`, không gọi gói dự phòng sẵn sàng.
-- [ ] Cập nhật [kịch bản](../demo-14-10/rehearsal-script.md), [bằng chứng](../demo-14-10/evidence.md) và [phiếu HTML](../demo-14-10/phieu-demo.html) theo **rehearsal cuối**. Sửa chỗ phiếu nói “Nhập repo” nếu thực tế dùng app Git đã liên kết; sửa timeline 7:30 nếu thời lượng thật khác. Tạo PDF A4 **một trang** từ HTML mới, mở xem trực quan không cắt chữ, xác nhận ngày/SHA/chế độ/URL và giới hạn đúng; loại PDF draft ngày 08/10 khỏi gói demo cuối.
-- [ ] Chạy Node 22 lint, Node/Web/Scripts typecheck, full Vitest, build và `git diff --check` trên source cuối. Ghi rõ build source SHA và tree `app`; commit tài liệu sau đó không được ngụ ý làm thay đổi runtime đã diễn tập. Không sửa code sau khi chốt build mà không chạy lại gate/rehearsal.
-- [ ] Ghi đề xuất verdict `DEMO_READY_LIVE`, `DEMO_READY_RECORDED` hoặc `NOT_READY` kèm điều kiện và giới hạn để Leader review. Cập nhật board bằng trạng thái hợp lệ, commit cục bộ; không push/PR/merge. Khi xong chỉ báo “Worker đã xong”.
+- [x] Copy Deploy trung tính cho folder/Git ở vi/en/zh/ja; test xác nhận header đúng khi chọn từng nguồn. Kiểm tra bằng ảnh Electron thật. Trong lịch sử, giải thích v1/v2 `running` là kết quả **đã ghi nhận**; chỉ v hiện tại có nhãn “Đang kích hoạt”, không nói ba container cùng chạy.
+- [x] Preflight G4 ngày 09/10: build mới xác nhận UI/apps; external Git/Vite/Next HTTP 200; remote SHA khớp. VPS có 94% RAM đã dùng (<512 MB khả dụng), nên live redeploy G4 `NOT_RUN` để giữ ba app; chuyển sang fallback G3 dài 7:37 theo ngoại lệ của task. Không gán deployment ID mới hoặc gọi video G3 là build mới.
+- [x] Dùng video dự phòng G3 đã được Leader review: 457.4 giây, H.264, im lặng, không audio stream; nguồn video build HEAD `d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955` và Git SHA `8af16e1f9165a31557288adbc23acc420244938f` được nêu riêng. Ảnh build UI G4 lưu riêng; không ghép SHA/build để ngụ ý video trên source mới.
+- [x] Cập nhật [kịch bản](../demo-14-10/rehearsal-script.md), [bằng chứng](../demo-14-10/evidence.md) và [phiếu HTML](../demo-14-10/phieu-demo.html) theo **rehearsal cuối**. Sửa chỗ phiếu nói “Nhập repo” nếu thực tế dùng app Git đã liên kết; sửa timeline 7:30 nếu thời lượng thật khác. Tạo PDF A4 **một trang** từ HTML mới, mở xem trực quan không cắt chữ, xác nhận ngày/SHA/chế độ/URL và giới hạn đúng; loại PDF draft ngày 08/10 khỏi gói demo cuối.
+- [x] Node 22.23.3: lint, Node/Web/Scripts typecheck, 71/670 full Vitest, build và `git diff --check` PASS. UI build/source `4addec37b66a4d5145bb55fec21012fdc3acfb0c`, tree `4fa92683f89b77255ea3417131bb12e8914779e1`; không sửa code sau build. ESLint có cảnh báo CRLF nhưng 0 errors.
+- [x] Đề xuất `DEMO_READY_RECORDED` có điều kiện để Leader review: fallback G3 đã review, nhưng video dùng build cũ; nếu không chấp nhận thì `NOT_READY` cho đến khi đạt preflight và quay video trên build mới. Board/task/evidence/PDF đã cập nhật. Commit cục bộ; không push/PR/merge.
 
 ## Nhật ký
 
-- PLAN 09/10 — G3 đạt local gate 7:38; Leader kiểm tra độc lập remote SHA, SQLite v3, ba HTTP 200 và MP4 457.4 giây video-only. G4 sửa copy Git, tạo lại bản in A4 và diễn tập trên build cuối.
+- START 09/10/2026 — Bắt đầu G4 trên `feat/deploy-reachability`, HEAD `a71aec2`; G3 đã qua review local. Giữ profile/app/VPS hiện hành.
+- PLAN 09/10 — G3 đạt local gate 7:38; Leader kiểm tra độc lập remote SHA, SQLite v3, ba HTTP 200 và MP4 457.4 giây video-only. G4 sửa copy Git, tạo PDF A4 và nếu preflight đạt thì rehearsal live trên build cuối.
+- UI 09/10/2026 — Commit source `4addec37b66a4d5145bb55fec21012fdc3acfb0c`, app tree `4fa92683f89b77255ea3417131bb12e8914779e1`; mô tả Deploy cập nhật bốn locale, focused test 48/48. Electron build mới mở đúng profile.
+- PREFLIGHT 09/10/2026 — Remote main SHA khớp; ba URL external HTTP 200. VPS RAM 3.6/3.8 GB (94%, dưới 512 MB khả dụng), disk free 18 GB. Live redeploy G4 `NOT_RUN` để giữ ba app; dùng G3 fallback 7:37 trên build HEAD `d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955`, source SHA `8af16e1f9165a31557288adbc23acc420244938f`. Chỉ đề xuất `DEMO_READY_RECORDED`, chờ Leader review.
+- PDF 09/10/2026 — HTML/PDF một trang A4 đã render và xem trực quan; PDF nháp ngày 08/10 được bỏ khỏi gói demo.
+- GATES 09/10/2026 — Node 22.23.3 lint, Node/Web/Scripts typecheck, full Vitest 71/670, production build và diff check PASS; focused DeployPage 48/48. Lint báo CRLF warnings (0 lỗi), Vitest báo jsdom warnings nhưng exit 0.
 
 ## PR
 

@@ -4,50 +4,48 @@
     <meta charset="utf-8" />
     <title>OpsPilot — Phiếu demo 14/10/2026</title>
     <style>
-      @page { size: A4; margin: 16mm; }
-      body { font: 12px/1.42 Arial, sans-serif; color: #18212d; max-width: 780px; margin: auto; }
-      h1 { font-size: 24px; margin: 0 0 4px; }
-      h2 { font-size: 14px; margin: 18px 0 6px; border-bottom: 1px solid #aeb9c8; padding-bottom: 3px; }
-      p { margin: 5px 0; }
-      table { width: 100%; border-collapse: collapse; }
-      th, td { border: 1px solid #bbc5d0; padding: 5px 7px; vertical-align: top; }
+      @page { size: A4; margin: 14mm; }
+      * { box-sizing: border-box; }
+      body { font: 14px/1.4 Arial, sans-serif; color: #18212d; margin: 0; }
+      h1 { font-size: 30px; margin: 0 0 3px; }
+      h2 { font-size: 17px; margin: 14px 0 6px; border-bottom: 1px solid #aeb9c8; padding-bottom: 2px; }
+      p { margin: 3px 0; }
+      table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      th, td { border: 1px solid #bbc5d0; padding: 6px 8px; vertical-align: top; overflow-wrap: anywhere; }
       th { text-align: left; background: #eaf0f6; }
-      .badge { display: inline-block; padding: 3px 7px; border: 1px solid #b06b00; background: #fff1d7; font-weight: bold; }
-      .muted { color: #495668; }
-      .note { background: #f1f5f9; border-left: 3px solid #4d6d91; padding: 8px 10px; }
-      ol { margin: 4px 0; padding-left: 20px; }
+      .badge { display: inline-block; margin: 5px 0; padding: 3px 7px; border: 1px solid #b06b00; background: #fff1d7; font-weight: bold; }
+      .note { background: #f1f5f9; border-left: 3px solid #4d6d91; padding: 6px 8px; margin-top: 7px; }
+      .small { font-size: 11px; color: #495668; }
+      code { font: 11px Consolas, monospace; }
+      ol { margin: 3px 0; padding-left: 19px; }
       li { margin: 3px 0; }
     </style>
   </head>
   <body>
     <h1>OpsPilot</h1>
-    <p><strong>Triển khai và giám sát ứng dụng trên VPS riêng</strong> · Phiếu trình bày 14/10/2026</p>
-    <p class="badge">BẢN NHÁP — chờ G4 freeze</p>
-    <p><strong>Build OpsPilot:</strong> <code>d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955</code> &nbsp; <strong>Git source SHA:</strong> <code>8af16e1f9165a31557288adbc23acc420244938f</code></p>
-    <p><strong>Chế độ:</strong> <code>LIVE_VPS</code> đã diễn tập · <code>RECORDED_FALLBACK</code> có sẵn (video im lặng)</p>
+    <p><strong>Triển khai và giám sát ứng dụng trên VPS riêng</strong> · Phiếu demo 14/10/2026</p>
+    <p class="badge">BẢN NHÁP — đề xuất DEMO_READY_RECORDED, chờ Leader review</p>
+    <p><strong>Chế độ:</strong> RECORDED_FALLBACK · rehearsal G4 ngày 09/10/2026. UI build hiện tại: <code>4addec37b66a4d5145bb55fec21012fdc3acfb0c</code>, tree <code>4fa92683f89b77255ea3417131bb12e8914779e1</code>.</p>
+    <p><strong>Video fallback:</strong> G3, build cũ <code>d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955</code>; Git source SHA <code>8af16e1f9165a31557288adbc23acc420244938f</code>. Hai SHA này là nguồn bằng chứng khác nhau.</p>
 
-    <h2>Ý tưởng trong một câu</h2>
-    <p>OpsPilot nhận diện mã nguồn, triển khai qua SSH và Docker, lưu phiên bản, kiểm tra khả năng truy cập, theo dõi vận hành và hỗ trợ khôi phục.</p>
-    <p class="muted">Luồng chính: Git repo/branch → commit SHA → Detect → Build → Deploy → Health/Exposure → Monitor/Doctor → Rollback.</p>
-
-    <h2>Demo 6–8 phút</h2>
+    <h2>Luồng trình bày 6–8 phút</h2>
     <ol>
-      <li>Ứng dụng và máy chủ: xem trạng thái cùng thời điểm kiểm tra.</li>
-      <li>Nhập repo Git công khai <strong>everestt2806/opspilot</strong>, nhánh <strong>main</strong>, thư mục <strong>demo-apps/express-api</strong>; xác nhận SHA và xem detector/BuildPlan của snapshot.</li>
-      <li>Trình bày wizard deploy, lịch sử phiên bản và bằng chứng deploy theo chế độ đã chọn.</li>
-      <li>Chỉ ra runtime/exposure, Doctor hoặc rollback khi có bằng chứng phù hợp.</li>
-      <li>Giải thích pipeline ML; dữ liệu tổng hợp phải được gọi rõ là <strong>synthetic</strong>.</li>
+      <li>Mở Apps: chỉ Vite SPA và Next.js đang chạy từ folder local; external URL đã trả HTTP 200.</li>
+      <li>Mở Deploy trên build hiện tại: mô tả hỗ trợ kho Git hoặc thư mục máy tính; chỉ rõ hai lựa chọn nguồn.</li>
+      <li>Chuyển sang RECORDED_FALLBACK và phát video thao tác Git thật của G3: repo công khai, <code>main</code>, <code>demo-apps/express-api</code>, deployment 5/v3.</li>
+      <li>Trong history, giải thích v3 là deployment hiện hành; v1/v2 có nhãn <code>running</code> là trạng thái đã ghi nhận, không khẳng định ba container cùng hoạt động.</li>
+      <li>Kết thúc bằng URL/status và giới hạn của checkpoint.</li>
     </ol>
 
-    <h2>Bằng chứng và giới hạn</h2>
+    <h2>Bằng chứng đã kiểm tra</h2>
     <table>
-      <tr><th>Đã diễn tập LIVE_VPS</th><th>Giới hạn checkpoint</th></tr>
-      <tr><td>Git <code>everestt2806/opspilot</code>, ref <code>main</code>, root Express; deployment 5 / v3, cùng SHA với v2. URL health từ máy điều khiển trả HTTP 200.</td><td>Redeploy Git là thao tác thủ công; chưa có push-to-deploy/webhook.</td></tr>
-      <tr><td>Nguồn folder local: Vite SPA và Next.js vẫn chạy, external HTTP 200. Video rehearsal thật dài 7:37 và im lặng; ảnh Electron kèm hồ sơ G3.</td><td>HTTPS ingress, migrate sau rollback và pilot ML chưa được xác nhận ở checkpoint này.</td></tr>
+      <tr><th>Ứng dụng / nguồn</th><th>Kết quả từ máy điều khiển</th></tr>
+      <tr><td>Git Express · deployment 5/v3 · cùng SHA với v2</td><td><code>http://160.191.243.89:30000/health</code> → HTTP 200</td></tr>
+      <tr><td>Vite SPA · folder local</td><td><code>http://160.191.243.89:30001/</code> → HTTP 200</td></tr>
+      <tr><td>Next.js · folder local</td><td><code>http://160.191.243.89:30002/</code> và <code>/bai-viet/ops-pilot-la-gi</code> → HTTP 200</td></tr>
+      <tr><td>G4 live preflight</td><td>RAM dùng 94% (3.6/3.8 GB; dưới 512 MB khả dụng), disk trống 18 GB. Không redeploy; ba app được giữ nguyên.</td></tr>
     </table>
-    <p class="note"><strong>Nếu RECORDED_FALLBACK:</strong> trình chiếu bản ghi của lần deploy VPS thật đã kiểm chứng, kèm ngày và SHA; không gọi đó là thao tác đang chạy live. Video dự phòng là bản ghi im lặng, không phải phiên live. Pilot ML trên VPS vẫn NOT_RUN.</p>
-
-    <h2>Bước tiếp theo sau demo</h2>
-    <p>Tiếp theo: Git push-to-deploy/preview khi desktop tắt, URL HTTPS qua ingress và runtime logs; repo riêng cần credential giới hạn quyền đọc.</p>
+    <p class="note"><strong>Giới hạn:</strong> Git deploy thủ công; video fallback là build G3 cũ và redeploy cùng SHA. Push-to-deploy/webhook, HTTPS ingress, migrate sau rollback và ML pilot chưa được chứng minh. Không gọi video ghi sẵn là live.</p>
+    <p class="small">Phiếu vẫn là bản nháp đến khi Leader review và freeze. Chi tiết thời gian, gate và video: <code>docs/demo-14-10/evidence.md</code>.</p>
   </body>
 </html>

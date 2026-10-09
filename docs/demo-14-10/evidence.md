@@ -117,3 +117,40 @@ Build và rehearsal dùng cùng source HEAD `d4506554fcb4d8b6a89fe34cdac4ac7c81c
 - `pnpm --filter @opspilot/app test` — PASS, 71 file / 666 test; jsdom in cảnh báo canvas/getComputedStyle nhưng exit code 0.
 - `pnpm build` — PASS, Electron/Vite production build.
 - `git diff --check` — PASS.
+
+
+# G4 — rehearsal cuối và verdict đề xuất
+
+**Trạng thái:** `DEMO_READY_RECORDED` — đề xuất để Leader review, chưa freeze. Live redeploy G4 là `NOT_RUN` theo điều kiện preflight; VPS còn dưới ngưỡng RAM tối thiểu. Giữ nguyên cả ba app. G4 dùng đúng fallback G3 đã được Leader review, và ghi rõ video cũ không đại diện UI build hiện tại.
+
+## Build UI G4
+
+- Runtime source commit: `4addec37b66a4d5145bb55fec21012fdc3acfb0c`; `git rev-parse HEAD:app`: `4fa92683f89b77255ea3417131bb12e8914779e1`.
+- Node 22.23.3 production Electron build mở bằng profile biệt lập `%TEMP%\opspilot-g2-20261009`. Không có thay đổi source/runtime sau build.
+- Mô tả Deploy trung tính cho kho Git và folder local trong `en`, `vi`, `cn` (Chinese), `jp` (Japanese). DeployPage tests chuyển qua cả hai lựa chọn ở cả bốn locale. Ảnh Electron của build này: [Deploy local](evidence/g4-deploy-source-local.png), [Deploy Git](evidence/g4-deploy-source-git.png).
+- Lịch sử thật trên app Git: v3 có nhãn `Đang kích hoạt`; v1/v2 chỉ hiện trạng thái `running` đã ghi nhận và không được mô tả là ba container cùng chạy: [history G4](evidence/g4-git-history-recorded.png).
+
+## Preflight và quyết định không redeploy
+
+- Kiểm tra live ngày 2026-10-09 trước khi deploy: remote `main` full SHA `8af16e1f9165a31557288adbc23acc420244938f`; Git Express `/health`, Vite `/` và Next `/` cùng route bài viết đều trả external HTTP 200.
+- Electron VPS resource: RAM `3.6/3.8 GB` dùng (`94%`, dưới 512 MB còn trống); disk `7/25 GB` dùng (18 GB còn trống). Vì thiếu ngưỡng RAM precheck >512 MB, **không chạy prepare/precheck/start hoặc redeploy Git**, không thay đổi deployment nào.
+- Rehearsal vì thế chọn `RECORDED_FALLBACK`. Dùng [video G3 09/10/2026](evidence/g3-rehearsal-20261009.mp4) đã được review: 457.4 giây (7:37), source build cũ HEAD `d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955`; thao tác Git thật app 1/deployment 5/v3, source SHA `8af16e1f9165a31557288adbc23acc420244938f`. Video im lặng, H.264, không audio stream. Đây **không** phải bản ghi G4 hay video trên build mới; build/SHA mới chỉ được xác nhận bằng UI screenshot, test và build gate. Không gọi phần deploy đã ghi là live G4.
+- G4 session ghi nhận: UI current build đã mở và kiểm tra source local/Git + history; preflight xác nhận resource thiếu ngưỡng; ba URL external PASS; chuyển verdict sang recorded fallback. Không có lỗi deploy để khắc phục. Không có deployment G4 mới, vì vậy app/deployment/image/container IDs vẫn theo v3 G3, không gán ID mới.
+
+## Phiếu A4 và giới hạn
+
+- [Phiếu HTML](phieu-demo.html) là bản nháp chờ Leader; [PDF A4 một trang](phieu-demo.pdf) được render từ HTML ngày 09/10/2026, 1 trang, A4, đã render PNG và xem trực quan: [preview](evidence/g4-a4-preview.png).
+- Verdict chỉ đề xuất: `DEMO_READY_RECORDED`, với điều kiện Leader chấp nhận video G3 trên build cũ. Nếu cần video cùng build mới hoặc live demo, đợi VPS đạt >512 MB RAM khả dụng, kiểm tra lại URLs/SHA/resource rồi rehearsal/redeploy và quay video mới trên build đó.
+- Giới hạn vẫn nêu trên phiếu: Git deploy thủ công; G3 redeploy cùng SHA; chưa chứng minh push-to-deploy/webhook, HTTPS ingress, migrate sau rollback hoặc ML pilot.
+
+
+## G4 gates trên source cuối
+
+- Node `v22.23.3`, pnpm `11.1.0`.
+- `pnpm lint` — PASS, ESLint 0 errors và Ruff pass; ESLint/prettier phát 5,784 warnings về CRLF trên file Windows hiện có/được sửa.
+- `pnpm --filter @opspilot/app typecheck` — PASS (Node + Web).
+- `pnpm --dir app exec tsc --noEmit -p tsconfig.scripts.json --composite false` — PASS.
+- `pnpm --filter @opspilot/app test` — PASS, 71 file / 670 test; jsdom ghi cảnh báo canvas/getComputedStyle, exit code 0.
+- `pnpm build` — PASS, production Electron/Vite build; cùng UI source commit `4addec37b66a4d5145bb55fec21012fdc3acfb0c`, app tree `4fa92683f89b77255ea3417131bb12e8914779e1` đã rehearsal UI và không đổi sau build.
+- `git diff --check` — PASS.
+- Focused test: `pnpm --filter @opspilot/app exec vitest run src/pages/DeployPage.test.tsx` — PASS, 48 test.
