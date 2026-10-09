@@ -29,6 +29,7 @@
 - PREFLIGHT 09/10/2026 — Remote main SHA khớp; ba URL external HTTP 200. VPS RAM 3.6/3.8 GB (94%, dưới 512 MB khả dụng), disk free 18 GB. Live redeploy G4 `NOT_RUN` để giữ ba app; dùng G3 fallback 7:37 trên build HEAD `d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955`, source SHA `8af16e1f9165a31557288adbc23acc420244938f`. Chỉ đề xuất `DEMO_READY_RECORDED`, chờ Leader review.
 - PDF 09/10/2026 — HTML/PDF một trang A4 đã render và xem trực quan; PDF nháp ngày 08/10 được bỏ khỏi gói demo.
 - GATES 09/10/2026 — Node 22.23.3 lint, Node/Web/Scripts typecheck, full Vitest 71/670, production build và diff check PASS; focused DeployPage 48/48. Lint báo CRLF warnings (0 lỗi), Vitest báo jsdom warnings nhưng exit 0.
+- REVIEW 09/10/2026 — Leader xác minh PDF một trang A4, UI copy Git/local, ba URL HTTP 200 và remote SHA. **Chưa duyệt verdict/freeze:** `vps:get-resources` hiện lấy cột `$4` (`free`) từ `free -b`, còn deploy precheck lấy cột `$7` (`available`) từ `free -m`. G4 suy ra “dưới 512 MB khả dụng” từ số UI nên kết luận thiếu RAM chưa có bằng chứng đúng. Giao [G4a](tk-s7-g4a-memory-available-live-gate.md) đo lại và sửa semantics trước khi chốt bản in/video.
 
 ## PR
 

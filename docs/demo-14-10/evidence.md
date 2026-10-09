@@ -154,3 +154,7 @@ Build và rehearsal dùng cùng source HEAD `d4506554fcb4d8b6a89fe34cdac4ac7c81c
 - `pnpm build` — PASS, production Electron/Vite build; cùng UI source commit `4addec37b66a4d5145bb55fec21012fdc3acfb0c`, app tree `4fa92683f89b77255ea3417131bb12e8914779e1` đã rehearsal UI và không đổi sau build.
 - `git diff --check` — PASS.
 - Focused test: `pnpm --filter @opspilot/app exec vitest run src/pages/DeployPage.test.tsx` — PASS, 48 test.
+
+## Review G4 — chỉ số RAM cần xác minh lại
+
+Leader review 09/10/2026: câu “dưới 512 MB khả dụng” và verdict `DEMO_READY_RECORDED` ở G4 **chưa được phê duyệt**. `vps:get-resources` lấy cột `free` (`$4`) của lệnh `free`, trong khi deploy precheck lấy cột `available` (`$7`). Số 94% trên UI chưa chứng minh RAM có thể dùng cho deploy dưới ngưỡng. [TK-S7 G4a](../tasks/tk-s7-g4a-memory-available-live-gate.md) sẽ đo lại VPS, sửa phép tính UI và cập nhật cả PDF/verdict. Ba URL external HTTP 200 và video G3 là bằng chứng riêng vẫn có giá trị.

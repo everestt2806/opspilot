@@ -17,7 +17,8 @@
 | TK-S7 G2 | [Live smoke deploy Git trên VPS phát triển](tk-s7-g2-live-git-vps-smoke.md) | Worker | 11/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | Leader xác minh public HTTP 200, remote SHA và SQLite v1/v2 cùng SHA; local `ffb2278`, chưa push/merge |
 | TK-S7 G2b | [Live smoke nguồn thư mục và template trên VPS](tk-s7-g2b-local-template-vps-smoke.md) | Worker | 11/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | Leader xác minh lại Vite/Next/Git HTTP 200 và SQLite local source/Git fields NULL; local `27a06ac`, chưa push/merge |
 | TK-S7 G3 | [Diễn tập demo trên VPS thật](tk-s7-g3-demo-rehearsal.md) | Worker | 12/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | Leader xác minh remote SHA, SQLite v3, 3 URL HTTP 200 và MP4 457.4s video-only; local `764d2d6`, chưa push/merge |
-| TK-S7 G4 | [Sửa copy nguồn và freeze gói demo](tk-s7-g4-final-rehearsal-freeze.md) | Worker | 13/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | UI 4 locale, 48/48 focused; full 670 tests/build gates pass. VPS RAM 94%, live G4 NOT_RUN; đề xuất DEMO_READY_RECORDED với fallback G3 cũ; PDF A4 mới; commit local |
+| TK-S7 G4 | [Sửa copy nguồn và freeze gói demo](tk-s7-g4-final-rehearsal-freeze.md) | Worker | 13/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | UI 4 locale, 670 tests và PDF A4 đạt; verdict chưa duyệt vì RAM UI dùng `MemFree`, precheck dùng `MemAvailable` |
+| TK-S7 G4a | [Đo đúng RAM khả dụng và chốt live gate](tk-s7-g4a-memory-available-live-gate.md) | Worker | trước freeze 13/10/2026 | TUẦN NÀY | `feat/deploy-reachability` | Đo `MemAvailable` trên VPS, sửa chỉ số UI/IPC, cập nhật bằng chứng/verdict và PDF; live nếu đủ gate an toàn |
 
 TK-A18 Titlebar fix 05: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `30747f1`; WCO drag region dùng
 đúng rectangle, native controls không còn chồng caption và màu overlay đã liền shell; Snap Layout ghi
@@ -110,7 +111,8 @@ manual-only, không push/PR/merge.
 | D14-G2 | [Live Git Express trên VPS phát triển](tk-s7-g2-live-git-vps-smoke.md) | Worker | 11/10 | CHỜ REVIEW | D14-G1 | Live manual Git v1/v2 cùng SHA, HTTP 200 external, SQLite và ảnh Electron; local review pass, chưa push/merge |
 | D14-G2b | [Local Vite/Next live smoke](tk-s7-g2b-local-template-vps-smoke.md) | Worker | 11/10 | CHỜ REVIEW | D14-G2 | Live Vite/Next PASS qua Electron thật, HTTP external/loopback 200, ảnh/runtime/history và SQLite source đã ghi ở evidence; G2 Express vẫn reachable |
 | D14-G3 | [Rehearsal 1, ảnh/video fallback](tk-s7-g3-demo-rehearsal.md) | Worker | 12/10 | CHỜ REVIEW | D14-G2b | Local rehearsal G3 PASS; Git cùng SHA, ba app reachable; video 7:37 im lặng; phiếu A4 vẫn bản nháp |
-| D14-G4 | [Rehearsal 2, gate cuối, freeze và phiếu in](tk-s7-g4-final-rehearsal-freeze.md) | Worker | 13/10 | CHỜ REVIEW | D14-G3 | Đề xuất DEMO_READY_RECORDED; live redeploy NOT_RUN do RAM dưới ngưỡng; fallback G3 cũ nêu rõ; PDF A4 một trang; gates pass |
+| D14-G4 | [Rehearsal 2, gate cuối, freeze và phiếu in](tk-s7-g4-final-rehearsal-freeze.md) | Worker | 13/10 | CHỜ REVIEW | D14-G3 | Phiếu A4 một trang và gates pass; verdict chờ G4a vì phép đo RAM preflight dùng sai semantics |
+| D14-G4a | [Resource correction và live gate](tk-s7-g4a-memory-available-live-gate.md) | Worker | trước 14/10 | TUẦN NÀY | D14-G4 | Đo MemAvailable thật, sửa UI và bản in, thử live nếu đủ tài nguyên |
 
 
 
