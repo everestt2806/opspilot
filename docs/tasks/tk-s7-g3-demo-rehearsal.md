@@ -25,9 +25,10 @@
 - START 09/10/2026 — Bắt đầu G3 trên `feat/deploy-reachability`, HEAD `d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955`; dùng Electron/profile G2 biệt lập và giữ Git/Vite/Next hiện có.
 - PLAN 09/10 — Leader kiểm tra độc lập G2b: Vite, Next và Git external HTTP 200; SQLite local source đúng và Git fields NULL. Chuyển sang rehearsal và gói trình bày 14/10.
 
+- RESULT 09/10/2026 — Rehearsal Electron thật hoàn tất 14:52:05–14:59:43 UTC+07 (7:38), Git app 1 deployment 5/v3, redeploy cùng full SHA `8af16e1f9165a31557288adbc23acc420244938f`; ba app qua HTTP 200 external. Video dự phòng 7:37, H.264, im lặng; ảnh/video kiểm tra được, không có credential.
+- GATES 09/10/2026 — Node 22.23.3: lint, Node/Web/Scripts typecheck, 71/666 Vitest, build và diff check đều PASS trên source HEAD đã diễn tập. Không thay runtime.
+- REVIEW 09/10/2026 — Leader xác minh lại remote `main` cùng SHA, SQLite app Git current deployment 5/v3 `running/reachable`, ba URL public HTTP 200; MP4 hợp lệ có track video 457.4 giây và không có track audio. Ảnh Electron khớp Git Prepare và lịch sử v3. G3 đạt local gate; trước freeze cần sửa lời mô tả wizard chỉ nói nguồn folder khi đang chọn Git, và tạo lại PDF A4 cũ ngày 08/10. Board giữ `CHỜ REVIEW` vì chưa push/merge.
+
 ## PR
 
 Chưa được phép push, mở PR hoặc merge.
-
-- RESULT 09/10/2026 — Rehearsal Electron thật hoàn tất 14:52:05–14:59:43 UTC+07 (7:38), Git app 1 deployment 5/v3, redeploy cùng full SHA `8af16e1f9165a31557288adbc23acc420244938f`; ba app qua HTTP 200 external. Video dự phòng 7:37, H.264, im lặng; ảnh/video kiểm tra được, không có credential.
-- GATES 09/10/2026 — Node 22.23.3: lint, Node/Web/Scripts typecheck, 71/666 Vitest, build và diff check đều PASS trên source HEAD đã diễn tập. Không thay runtime.
