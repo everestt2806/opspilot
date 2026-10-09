@@ -31,6 +31,7 @@ Chứng minh một người dùng có thể nhập **repository Git công khai t
 - UPDATE 09/10/2026 — Wizard Git thật deploy và redeploy cùng app trên VPS; deployment 1/2 cùng SHA, external `/health` HTTP 200, scan sau deploy đạt. Bằng chứng: [evidence](../demo-14-10/evidence.md). Gates Node 22 đang chạy.
 - UPDATE 09/10/2026 — Node 22.23.3 gates pass: `pnpm lint`, app Node/Web typecheck, scripts `tsc --noEmit -p tsconfig.scripts.json --composite false`, full Vitest 71 files / 666 tests, `pnpm build`, `git diff --check`. Không có thay đổi runtime giữa live smoke và gates.
 - HANDOFF-LOCAL 09/10/2026 — Tài liệu/bằng chứng G2 commit `d0ad700` trên `feat/deploy-reachability`; chưa push/PR/merge. Migrate sau rollback vẫn chưa hoàn tất; không thử migrate hay pilot ML.
+- REVIEW 09/10/2026 — Leader xem ba ảnh Electron thật, đọc evidence, kiểm tra lại từ máy điều khiển: `GET /health` public HTTP 200 với body `ok=true`; `git ls-remote` nhánh `main` trả đúng full SHA trong evidence. Đọc SQLite profile biệt lập ở chế độ read-only: app `source_type=git`, `source_path=NULL`, current deployment 2; v1/v2 đều `running/reachable` và cùng SHA. `git diff --check` sạch. Duyệt local G2 manual Git smoke; không suy ra push-to-deploy, migrate sau rollback hay pilot ML đã đạt. Chưa push/merge nên trạng thái task vẫn `CHỜ REVIEW`.
 - PLAN 09/10 — Leader review guard `49300ea`: chặn mọi attempt Git mới hơn current trước migrate; focused migrate 19/19 Node 22. Cho phép G2 kiểm chứng deploy Git thường trên VPS phát triển; migrate sau rollback tiếp tục là gap được theo dõi riêng.
 
 ## PR

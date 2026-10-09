@@ -14,7 +14,8 @@
 | TK-S7 G0 | [Hợp đồng local/Git và snapshot Git công khai](tk-s7-g0-two-source-git.md) | Worker | 09/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | local `ebbfc7e` · chưa push; contract `7e6cf25`; Node 22 gates pass |
 | TK-S7 G1a | [Nối snapshot Git vào deploy core](tk-s7-g1a-git-deploy-core.md) | Worker | 10/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | Local review `234cb57` pass: Node 22 focused 55/55, full Vitest 653/653, typecheck; chưa push/merge, chưa live VPS |
 | TK-S7 G1b | [Hai nguồn deploy trong UI, lịch sử Git và migrate](tk-s7-g1b-git-ui-history-migrate.md) | Worker | 10/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | Leader review manual Git flow đủ cho G2, guard `49300ea` và migrate 19/19 pass; DoD migrate rollback chưa xong |
-| TK-S7 G2 | [Live smoke deploy Git trên VPS phát triển](tk-s7-g2-live-git-vps-smoke.md) | Worker | 11/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | Local `d0ad700`; live wizard v1/v2 PASS, same SHA `8af16e1f9165a31557288adbc23acc420244938f`; external HTTP 200, container healthy/reachable; Node 22 gates pass 666/666; chưa push/PR/merge |
+| TK-S7 G2 | [Live smoke deploy Git trên VPS phát triển](tk-s7-g2-live-git-vps-smoke.md) | Worker | 11/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | Leader xác minh public HTTP 200, remote SHA và SQLite v1/v2 cùng SHA; local `ffb2278`, chưa push/merge |
+| TK-S7 G2b | [Live smoke nguồn thư mục và template trên VPS](tk-s7-g2b-local-template-vps-smoke.md) | Worker | 11/10/2026; không cắt gate | TUẦN NÀY | `feat/deploy-reachability` | Vite SPA + Next.js qua folder picker; giữ app Git G2, kiểm chứng runtime/external HTTP và DB source_type local |
 
 TK-A18 Titlebar fix 05: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `30747f1`; WCO drag region dùng
 đúng rectangle, native controls không còn chồng caption và màu overlay đã liền shell; Snap Layout ghi
@@ -104,7 +105,8 @@ manual-only, không push/PR/merge.
 | --- | --- | --- | --- | --- | --- | --- |
 | D14-G0 | Contract/migration 007 và Git acquisition có test | Worker | 09/10 | CHỜ REVIEW | Audit 30 | Local review pass `ebbfc7e`; chưa push/merge |
 | D14-G1 | Git-first wizard, pipeline, provenance và tương thích migrate | Worker | 10/10 | CHỜ REVIEW | D14-G0 | Deploy Git thường qua gate; G1b source integrity chặn attempt mới hơn mọi status; migrate sau rollback vẫn chưa hoàn tất |
-| D14-G2 | [Live Git Express trên VPS phát triển](tk-s7-g2-live-git-vps-smoke.md) | Worker | 11/10 | TUẦN NÀY | D14-G1 | Manual Git live smoke; repo/ref/SHA/URL/HTTP/container cần bằng chứng, không dùng folder local |
+| D14-G2 | [Live Git Express trên VPS phát triển](tk-s7-g2-live-git-vps-smoke.md) | Worker | 11/10 | CHỜ REVIEW | D14-G1 | Live manual Git v1/v2 cùng SHA, HTTP 200 external, SQLite và ảnh Electron; local review pass, chưa push/merge |
+| D14-G2b | [Local Vite/Next live smoke](tk-s7-g2b-local-template-vps-smoke.md) | Worker | 11/10 | TUẦN NÀY | D14-G2 | Hai template và nguồn folder phải qua live gate; thiếu tài nguyên ghi NOT_RUN, không dùng fixture |
 | D14-G3 | Rehearsal 1, ảnh/video fallback | Worker | 12/10 | BACKLOG | D14-G2 | Demo 6–8 phút, nguồn Git và SHA khớp bằng chứng |
 | D14-G4 | Rehearsal 2, gate cuối, freeze và phiếu in | Worker | 13/10 | BACKLOG | D14-G3 | Leader cấp verdict theo chế độ thật; không thêm tính năng |
 
