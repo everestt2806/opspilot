@@ -27,6 +27,7 @@
 - Commit local `0f83d28` (`docs: ghi nhận G5 bị chặn và giữ recorded fallback`); chưa push/PR/merge.
 - G5a UPDATE 10/10 — Chốt phiếu bỏ nhãn bản nháp; nội dung tách G3 build cũ/v3 khỏi app Git v4 và HTTP G4b. Kịch bản ghi rõ tổng 10–12 phút khi chiếu nguyên video 7:37, hoặc 6–8 phút với trích đoạn có nhãn.
 - G5a gates — PDF Edge headless không header/footer, A4 một trang; render và text đã kiểm tra. Relative links 0 thiếu; MP4 G3 457.4s, handlers `vide`/`mdir`, không `soun`; `git diff --check` PASS.
+- G5a commit local `f0d55e2` (`docs: chốt phiếu demo recorded cho G5a`); không push/PR/merge.
 
 ## Kết quả G5
 

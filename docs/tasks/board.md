@@ -20,7 +20,7 @@
 | TK-S7 G4 | [Sửa copy nguồn và freeze gói demo](tk-s7-g4-final-rehearsal-freeze.md) | Worker | 13/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | G4a xác nhận MemAvailable 3,061 MiB, sửa kết luận RAM/PDF; live G4a NOT_RUN do chưa xác nhận wizard precheck, verdict recorded chờ Leader review |
 | TK-S7 G4a | [Đo đúng RAM khả dụng và chốt live gate](tk-s7-g4a-memory-available-live-gate.md) | Worker | trước freeze 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Local G4a: MemFree 314 MiB / MemAvailable 3,061 MiB; UI/precheck parity và PDF cập nhật; live NOT_RUN vì Electron wizard precheck chưa xác minh, fallback G3 SHA/deployment giữ nguyên |
 | TK-S7 G4b | [Live rehearsal qua nút triển khai phiên bản mới](tk-s7-g4b-live-rehearsal-navigation.md) | Worker | trước freeze 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Leader chấp nhận `DEMO_READY_RECORDED` fallback G3/build cũ; correction RAM ~0.3 GiB nên live mới NOT_RUN. Live v4 vẫn có bằng chứng riêng; container ID là giới hạn |
-| TK-S7 G5 | [Chẩn đoán RAM và chốt demo](tk-s7-g5-memory-stability-demo-freeze.md) | Worker | trước freeze 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | G5 đo VPS BLOCKED do safeStorage DB_ERROR; RAM chưa xác minh/live NOT_RUN. G5a chốt phiếu không còn nhãn nháp: full video 10–12 phút hoặc trích đoạn 6–8 phút có nhãn; tách G3/v3 khỏi app Git v4 và HTTP riêng |
+| TK-S7 G5 | [Chẩn đoán RAM và chốt demo](tk-s7-g5-memory-stability-demo-freeze.md) | Worker | trước freeze 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Local `f0d55e2`: G5 VPS BLOCKED/safeStorage DB_ERROR; RAM chưa xác minh/live NOT_RUN. G5a chốt phiếu: full video 10–12 phút hoặc trích đoạn 6–8 phút có nhãn; tách G3/v3 khỏi app Git v4 và HTTP riêng |
 
 TK-A18 Titlebar fix 05: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `30747f1`; WCO drag region dùng
 đúng rectangle, native controls không còn chồng caption và màu overlay đã liền shell; Snap Layout ghi
@@ -116,7 +116,7 @@ manual-only, không push/PR/merge.
 | D14-G4 | [Rehearsal 2, gate cuối, freeze và phiếu in](tk-s7-g4-final-rehearsal-freeze.md) | Worker | 13/10 | CHỜ REVIEW | D14-G3 | Phiếu A4 một trang và gates pass; verdict chờ G4a vì phép đo RAM preflight dùng sai semantics |
 | D14-G4a | [Resource correction và live gate](tk-s7-g4a-memory-available-live-gate.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4 | Resource fix local qua review; live chưa chạy vì wizard chưa xác minh app/precheck |
 | D14-G4b | [Live rehearsal qua preselect app](tk-s7-g4b-live-rehearsal-navigation.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4a | Live v4 đạt; correction không quay được vì RAM thấp; Leader chấp nhận G3 recorded fallback, chưa chốt live |
-| D14-G5 | [Memory stability và freeze](tk-s7-g5-memory-stability-demo-freeze.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4b | Không thu được mẫu VPS do safeStorage DB_ERROR; nguyên nhân RAM chưa xác định, live NOT_RUN. G5a chốt phiếu `DEMO_READY_RECORDED`, phân biệt G3/v3 và app Git v4 |
+| D14-G5 | [Memory stability và freeze](tk-s7-g5-memory-stability-demo-freeze.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4b | Local `f0d55e2`; không thu mẫu VPS do safeStorage DB_ERROR; RAM chưa xác minh, live NOT_RUN. G5a chốt phiếu `DEMO_READY_RECORDED`, phân biệt G3/v3 và app Git v4 |
 
 
 
