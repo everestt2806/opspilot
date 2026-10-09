@@ -247,3 +247,19 @@ Leader kiểm tra độc lập: MP4 G3 có track `vide` và không có `soun`; M
 
 - Kết quả hiện tại xác nhận `vps:get-resources` hoạt động trên app thật và giá trị RAM UI mới khớp collector cùng phút. Giả thuyết stale Electron process được hỗ trợ mạnh: PID cũ chạy từ trước bản sửa; sau khi đóng bình thường và mở build mới với nguyên profile, UI chuyển từ 91% xuống khoảng 20%, đồng thời collector cũng khoảng 20%. Không suy luận rằng VPS đã giải phóng RAM do restart app; chỉ app cục bộ được đóng/mở. Điều tra nguyên nhân của khác biệt lịch sử G4a/G4b vẫn chưa đủ chuỗi process/container/pressure để quy nguyên nhân VPS.
 - G5c chỉ đọc dữ liệu resource qua app và SQLite cục bộ; không deploy, không chạy lệnh thay đổi VPS, không thay credential/fingerprint. Live rehearsal vẫn `NOT_RUN`; giữ `DEMO_READY_RECORDED` và video G3 build cũ/deployment v3. Container ID vẫn chưa xác minh.
+
+## G5-live — kiểm tra vận hành và điểm dừng trước Start (2026-10-09 UTC)
+
+**Kết quả:** `BLOCKED / NOT_RUN`. Lượt này dùng Electron production build `app/out` trên branch `feat/deploy-reachability`, HEAD lúc bắt đầu `b3b784e`, cùng profile G2 hiện có. `vps:get-resources` thành công qua SSH host key đã pin. Không chạy SSH ngoài app, không thay credential, không thay đổi dịch vụ VPS.
+
+| Mẫu UTC | RAM UI | Disk UI | SQLite collector deployment 6 | Container |
+|---|---:|---:|---:|---|
+| 20:38 | 807 MB / 3.8 GB (~21%) | 7 / 25 GB | host_mem_pct 20.50–20.85% | `container_up=1` |
+| 20:39 | 816 MB / 3.8 GB (~21%) | 7 / 25 GB | host_mem_pct 20.43–20.85% | `container_up=1` |
+| 20:41 | 796 MB / 3.8 GB (~20%) | 7 / 25 GB | 20:41:01Z 20.72%; 20:41:11Z 20.71% | `container_up=1` |
+
+Docker version hiển thị 29.8.2. Ba URL từ máy điều khiển lúc `2026-10-09T20:41:53Z` đều trả HTTP 200: Git Express `/health` trên cổng 30000, Vite `/` trên cổng 30001, Next.js `/` trên cổng 30002.
+
+**Gate chưa đạt:** app hiện tại không cung cấp process RSS hoặc memory pressure/OOM counters qua đường chẩn đoán đã dùng; các mục này là `NOT_VERIFIED`. Wizard mở từ App detail → **Triển khai phiên bản mới**, chuẩn bị nguồn Git public và nhận diện Express, nhưng bước cấu hình chặn với thông báo thiếu `PORT` và `ENABLE_FAULT_ENDPOINTS`; vì vậy precheck là `NOT_RUN`. Thoát wizard trước Start. Không tạo job/deployment, không redeploy, không ghi video.
+
+Giữ `DEMO_READY_RECORDED`: video G3 là build cũ/deployment v3; app Git hiện tại vẫn deployment v4 với bằng chứng HTTP riêng đã ghi. Không có video liên tục cùng build mới từ trước Start tới history/HTTP; không tuyên bố live readiness. PDF A4 không đổi vì verdict vẫn là recorded fallback.

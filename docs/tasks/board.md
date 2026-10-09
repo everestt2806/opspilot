@@ -117,7 +117,7 @@ manual-only, không push/PR/merge.
 | D14-G4a | [Resource correction và live gate](tk-s7-g4a-memory-available-live-gate.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4 | Resource fix local qua review; live chưa chạy vì wizard chưa xác minh app/precheck |
 | D14-G4b | [Live rehearsal qua preselect app](tk-s7-g4b-live-rehearsal-navigation.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4a | Live v4 đạt; ảnh correction 91% thuộc Electron cũ, không chứng minh VPS thiếu RAM; không có redeploy/video correction. Leader chấp nhận G3 recorded fallback; live mới chuyển checkpoint G5-live |
 | D14-G5 | [Memory stability và freeze](tk-s7-g5-memory-stability-demo-freeze.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4b | G5c giải thích UI cũ 91%; 3 mẫu UI/collector build mới khớp khoảng 20–21%. Chẩn đoán sai lệch UI hoàn tất; live vẫn NOT_RUN do kiểm tra vận hành/video liên tục build mới, chuyển checkpoint riêng; giữ recorded |
-| D14-G5-live | [Kiểm tra vận hành và video deploy build mới](tk-s7-g5-live-checkpoint.md) | Worker | trước freeze 13/10/2026 | NOT_RUN | D14-G5 | Chưa hoàn tất chuỗi kiểm tra vận hành và chưa có video liên tục từ trước Start qua result/history/HTTP ngoài; chưa chạy live deploy |
+| D14-G5-live | [Kiểm tra vận hành và video deploy build mới](tk-s7-g5-live-checkpoint.md) | Worker | trước freeze 13/10/2026 | BLOCKED / NOT_RUN | D14-G5 | 09/10 UTC: ba mẫu RAM UI/collector ~20–21%, disk 7/25 GB, collector container_up=1; 3 URL HTTP 200 lúc 20:41:53Z. RSS và pressure/OOM không thể xác minh bằng đường app hiện tại; wizard báo thiếu PORT/ENABLE_FAULT_ENDPOINTS nên precheck NOT_RUN. Dừng trước Start; giữ DEMO_READY_RECORDED/video G3 build cũ deployment v3. |
 
 
 
