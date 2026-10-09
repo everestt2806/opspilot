@@ -28,3 +28,12 @@
 ## Giới hạn
 
 Không đổi credential/fingerprint, không chạy pilot ML, không thực hiện deploy hay thay đổi dịch vụ VPS khi các gate chưa đạt. Deployment hiện tại Git v4 cùng các app folder giữ nguyên bằng chứng đã ghi ở evidence G5.
+
+## G5-live C1 — UX env defaults an toàn
+
+- START 2026-10-10: bắt đầu sửa UX cấu hình env local/Git theo task G5-live C1; runtime/backend/DB/IPC/contracts/VPS ngoài phạm vi.
+- Nguyên nhân: detector trả `required_env` và `container_port`; renderer trước đó để trống mọi env nên `requiredMissing()` dừng trước precheck. UI mới chỉ gợi ý `PORT` từ `container_port` khi khóa này required và đặt `ENABLE_FAULT_ENDPOINTS=false` khi required. Không đọc giá trị `.env.example`, không tự điền secret, `DATABASE_URL` hay biến khác; giá trị bắt buộc khác vẫn được kiểm tra như cũ.
+- Local/Git source, repo/ref/root, VPS và app đổi đều xóa env/detection cũ, hủy/nhả prepared Git handle khi cần và vô hiệu precheck. Chỉnh tay env vẫn giữ nguyên đến khi người dùng sửa nguồn/đích; mọi chỉnh sửa tiếp tục invalidates precheck. Redeploy app hiện có hiển thị cảnh báo rằng env cũ không được tải từ VPS, yêu cầu xác nhận rõ trước precheck và để trống secret/giá trị không lưu.
+- Test UI bổ sung cho local/Git × app mới/app hiện có; xác nhận detector port, fault endpoint mặc định false, nhập tay override, secret/DATABASE_URL/biến tùy ý không được tự điền, required env chưa nhập chặn, và precheck nhận đúng env. Test DeployPage đầy đủ: `pnpm --filter @opspilot/app exec vitest run src/renderer/src/pages/DeployPage.test.tsx --reporter=dot` — PASS, 52/52.
+- Gate trên source C1 `41c3c2c` (Node `v24.16.0`; package khai báo `>=22 <23`, pnpm in cảnh báo engine): `pnpm --filter @opspilot/app typecheck` PASS; `pnpm --filter @opspilot/app lint` PASS; `pnpm --filter @opspilot/app build` PASS; `git diff --check` PASS. Không có thay đổi runtime/backend/DB/IPC/contracts và không kết nối VPS.
+- `HANDOFF-LOCAL`: code commit `41c3c2c`; live deploy/rehearsal vẫn `NOT_RUN` do blocker operational đã ghi phía trên, giữ `DEMO_READY_RECORDED` và video G3 cũ/v3. Board tiếp tục ghi live là `BLOCKED / NOT_RUN`; C1 chỉ xử lý UX configuration/precheck, không nâng trạng thái live readiness.
