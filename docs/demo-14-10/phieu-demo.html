@@ -4,17 +4,17 @@
     <meta charset="utf-8" />
     <title>OpsPilot — Phiếu demo 14/10/2026</title>
     <style>
-      @page { size: A4; margin: 14mm; }
+      @page { size: A4; margin: 12mm; }
       * { box-sizing: border-box; }
-      body { font: 14px/1.4 Arial, sans-serif; color: #18212d; margin: 0; }
-      h1 { font-size: 30px; margin: 0 0 3px; }
-      h2 { font-size: 17px; margin: 14px 0 6px; border-bottom: 1px solid #aeb9c8; padding-bottom: 2px; }
+      body { font: 14px/1.36 Arial, sans-serif; color: #18212d; margin: 0; }
+      h1 { font-size: 28px; margin: 0 0 3px; }
+      h2 { font-size: 17px; margin: 11px 0 5px; border-bottom: 1px solid #aeb9c8; padding-bottom: 2px; }
       p { margin: 3px 0; }
       table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-      th, td { border: 1px solid #bbc5d0; padding: 6px 8px; vertical-align: top; overflow-wrap: anywhere; }
+      th, td { border: 1px solid #bbc5d0; padding: 5px 7px; vertical-align: top; overflow-wrap: anywhere; }
       th { text-align: left; background: #eaf0f6; }
-      .badge { display: inline-block; margin: 5px 0; padding: 3px 7px; border: 1px solid #b06b00; background: #fff1d7; font-weight: bold; }
-      .note { background: #f1f5f9; border-left: 3px solid #4d6d91; padding: 6px 8px; margin-top: 7px; }
+      .badge { display: inline-block; margin: 4px 0; padding: 3px 7px; border: 1px solid #26734d; background: #e5f6ec; font-weight: bold; }
+      .note { background: #f1f5f9; border-left: 3px solid #4d6d91; padding: 6px 8px; margin-top: 6px; }
       .small { font-size: 11px; color: #495668; }
       code { font: 11px Consolas, monospace; }
       ol { margin: 3px 0; padding-left: 19px; }
@@ -24,29 +24,29 @@
   <body>
     <h1>OpsPilot</h1>
     <p><strong>Triển khai và giám sát ứng dụng trên VPS riêng</strong> · Phiếu demo 14/10/2026</p>
-    <p class="badge">BẢN NHÁP — đề xuất DEMO_READY_RECORDED, chờ Leader review</p>
-    <p><strong>Chế độ:</strong> RECORDED_FALLBACK · live G4a NOT_RUN vì chưa xác minh được precheck trong wizard Electron. UI source commit <code>b69d19e34541f9c04e89875f8620044fad29c453</code>; app tree <code>d2aa94a8c56dc6cdebf8d2def7740ea45dcfc810</code>.</p>
-    <p><strong>Video fallback:</strong> G3, build cũ <code>d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955</code>; Git source SHA <code>8af16e1f9165a31557288adbc23acc420244938f</code>. Hai SHA này là nguồn bằng chứng khác nhau.</p>
+    <p class="badge">BẢN NHÁP — đề xuất DEMO_READY_LIVE, chờ Leader review</p>
+    <p><strong>Chế độ:</strong> LIVE_VPS · G4b redeploy và rehearsal đạt trên Electron production build, source <code>b69d19e34541f9c04e89875f8620044fad29c453</code>; app tree <code>d2aa94a8c56dc6cdebf8d2def7740ea45dcfc810</code>.</p>
+    <p><strong>Video:</strong> <code>g4b-live-rehearsal-20261009.mp4</code>, 7:48, cùng build; microphone/system audio tắt, không lời dẫn.</p>
 
     <h2>Luồng trình bày 6–8 phút</h2>
     <ol>
-      <li>Mở Apps: chỉ Vite SPA và Next.js đang chạy từ folder local; external URL đã trả HTTP 200.</li>
-      <li>Mở Deploy trên build hiện tại: mô tả hỗ trợ kho Git hoặc thư mục máy tính; chỉ rõ hai lựa chọn nguồn.</li>
-      <li>Chuyển sang RECORDED_FALLBACK và phát video thao tác Git thật của G3: repo công khai, <code>main</code>, <code>demo-apps/express-api</code>, deployment 5/v3.</li>
-      <li>Trong history, giải thích v3 là deployment hiện hành; v1/v2 có nhãn <code>running</code> là trạng thái đã ghi nhận, không khẳng định ba container cùng hoạt động.</li>
-      <li>Kết thúc bằng URL/status và giới hạn của checkpoint.</li>
+      <li>Chỉ hai kiểu nguồn: folder local qua Vite/Next và Git qua app Express đã liên kết.</li>
+      <li>Từ app detail bấm <strong>Triển khai phiên bản mới</strong>; xác nhận app/VPS/source tự chọn, Prepare ghim SHA.</li>
+      <li>Precheck pass trước Start; redeploy v4 hoàn tất sau 32 giây, status <code>running/reachable</code>.</li>
+      <li>History v4 có cùng SHA với v3 và remote <code>main</code>; gọi rõ redeploy cùng SHA.</li>
+      <li>Kết thúc với URL ngoài và giới hạn: migrate sau rollback, webhook và ML pilot chưa được kiểm chứng.</li>
     </ol>
 
     <h2>Bằng chứng đã kiểm tra</h2>
     <table>
       <tr><th>Ứng dụng / nguồn</th><th>Kết quả từ máy điều khiển</th></tr>
-      <tr><td>Git Express · deployment 5/v3 · cùng SHA với v2</td><td><code>http://160.191.243.89:30000/health</code> → HTTP 200</td></tr>
+      <tr><td>Git Express · deployment 6/v4 · repo <code>main</code> cùng SHA</td><td>Full SHA <code>8af16e1f9165a31557288adbc23acc420244938f</code>; <code>/health</code> → HTTP 200</td></tr>
       <tr><td>Vite SPA · folder local</td><td><code>http://160.191.243.89:30001/</code> → HTTP 200</td></tr>
       <tr><td>Next.js · folder local</td><td><code>http://160.191.243.89:30002/</code> và <code>/bai-viet/ops-pilot-la-gi</code> → HTTP 200</td></tr>
-      <tr><td>VPS read-only, 09/10/2026</td><td><code>MemFree 314 MiB</code>; <code>MemAvailable 3,061 MiB</code>; disk trống 17,926 MB. UI G4 cũ dùng MemFree nên số 94% không chứng minh thiếu RAM khả dụng.</td></tr>
-      <tr><td>G4a live gate</td><td>Tài nguyên vượt ngưỡng; wizard Electron chưa xác minh được app đích/precheck nên không deploy. Giữ nguyên ba app và fallback G3 đúng SHA.</td></tr>
+      <tr><td>Precheck Electron</td><td>RAM available 3104 MB; disk 18 GB; Docker 29.8.2; tất cả PASS trước Start.</td></tr>
+      <tr><td>G4b rehearsal</td><td>09/10/2026, 16:23:40–16:31:29 UTC; 7:49. App Git, Vite và Next đều còn HTTP 200 sau redeploy.</td></tr>
     </table>
-    <p class="note"><strong>Giới hạn:</strong> Git deploy thủ công; video fallback là build G3 cũ và redeploy cùng SHA. Push-to-deploy/webhook, HTTPS ingress, migrate sau rollback và ML pilot chưa được chứng minh. Không gọi video ghi sẵn là live.</p>
+    <p class="note"><strong>Giới hạn:</strong> Chưa thu được container ID (app/SQLite không lưu ID; truy vấn SSH chỉ đọc kết thúc exit 255, stderr không lưu). Không tuyên bố webhook/push-to-deploy, HTTPS ingress, migrate sau rollback hay ML pilot. G3 vẫn giữ làm fallback cũ, không đại diện G4b.</p>
     <p class="small">Phiếu vẫn là bản nháp đến khi Leader review và freeze. Chi tiết thời gian, gate và video: <code>docs/demo-14-10/evidence.md</code>.</p>
   </body>
 </html>

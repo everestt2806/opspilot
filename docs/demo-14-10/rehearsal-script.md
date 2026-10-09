@@ -1,4 +1,4 @@
-# Kịch bản rehearsal 14/10 — G3
+# Kịch bản rehearsal 14/10 — G3 và G4b
 
 **Bản nháp:** 09/10/2026. Rehearsal thật dùng Electron, profile G2 biệt lập và VPS phát triển, kéo dài 7:38 (14:52:05–14:59:43 UTC+07). Build OpsPilot tại source HEAD `d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955`; không có thay đổi runtime source trong buổi diễn tập. Video dự phòng dài 7:37, không có audio stream.
 
@@ -42,3 +42,22 @@ Bản build hiện tại: UI source HEAD `4addec37b66a4d5145bb55fec21012fdc3acfb
 | 7:00–7:37 | **RECORDED_FALLBACK** — kết luận và giới hạn. | “Video này dùng build cũ và chạy lại cùng SHA. Đo G4a cho thấy MemAvailable khoảng 3,061 MiB; số 94% ở UI G4 trước đây chỉ phản ánh MemFree. Phiên mới không chạy deploy vì chưa xác nhận được precheck trong wizard Electron, nên giữ video G3 làm fallback. Push-to-deploy, HTTPS ingress, migrate sau rollback và pilot ML chưa được chứng minh.” |
 
 G4a đo read-only lúc `2026-10-09T15:36:45.322Z`: MemFree `321,872 kB` (~314 MiB), MemAvailable `3,134,372 kB` (~3,061 MiB), disk trống `17,926 MB`. Bảy container ở trạng thái healthy/Up và OOM matches từ 01/10 là 0. Resource UI của build source commit `b69d19e34541f9c04e89875f8620044fad29c453` (app tree `d2aa94a8c56dc6cdebf8d2def7740ea45dcfc810`) hiển thị khoảng `817 MB / 3.8 GB` dùng. Dù resource gate đạt, wizard native dropdown ngăn xác minh app đích và precheck trong Electron; vì vậy live G4a là `NOT_RUN`. Không gắn video G3 với build UI mới và không nói VPS thiếu RAM.
+
+## G4b — kịch bản live qua app detail (7:30)
+
+**Kết quả rehearsal:** `PASS`, thực hiện 09/10/2026 trên Electron production build source `b69d19e34541f9c04e89875f8620044fad29c453`, app tree `d2aa94a8c56dc6cdebf8d2def7740ea45dcfc810`. Bắt đầu 16:23:40Z, dừng 16:31:29Z (7:49); video im lặng 7:48. Chỉ dùng live UI và HTTP công khai; không mở secret.
+
+| Mốc | Thao tác | Lời dẫn |
+|---|---|---|
+| 0:00–0:35 | Trang tổng quan sau khi deploy; mở Apps. | “Tôi vừa redeploy app Git thành công trên build này; bây giờ tôi đối chiếu trạng thái và hai kiểu nguồn.” |
+| 0:35–1:10 | Git app detail/history v4, tag, source SHA. | “Bản mới là v4. SHA vẫn giống v3 và nhánh main, nên đây là redeploy cùng SHA.” |
+| 1:10–2:20 | Apps list; mở Vite, rồi Next detail/history. | “Hai app này đến từ folder local. Cả hai URL ngoài và route Next đã được kiểm tra HTTP 200.” |
+| 2:20–3:05 | Mở Git app detail, bấm **Triển khai phiên bản mới**. | “Điểm bắt đầu là nút trên app đã liên kết; wizard tự chọn đúng app, VPS và nguồn Git.” |
+| 3:05–4:00 | Hiển thị repo/ref/root, Prepare ghim SHA. | “Repo, ref và root trùng app hiện tại; Prepare ghim full SHA để precheck và deploy dùng cùng snapshot.” |
+| 4:00–4:45 | Detector Express, port 3000, `/health`; qua bước cấu hình. | “Detector nhận diện Express. Tôi không mở hay đọc giá trị secret trong form.” |
+| 4:45–5:30 | Hiển thị precheck xác nhận: RAM available 3118 MB, disk 18 GB, Docker 29.8.2. | “Precheck lần xác nhận này đạt. Lượt redeploy v4 trước đó cũng chỉ bắt đầu sau khi precheck pass.” |
+| 5:30–6:15 | Thoát wizard phụ, trở lại Git detail/history v4. | “Wizard xác nhận lại đường điều hướng và gate. Không Start lần nữa; v4 đã được triển khai và ghi trong history.” |
+| 6:15–7:00 | Chỉ danh sách 3 app và trạng thái; kiểm tra các URL ngoài. | “Git, Vite và Next đều trả HTTP 200 từ máy điều khiển sau redeploy.” |
+| 7:00–7:48 | Giữ app Git detail/history, kết luận. | “Đã kiểm chứng live flow và redeploy cùng SHA. Migrate sau rollback, webhook và pilot ML vẫn ngoài bằng chứng phiên này.” |
+
+Video MP4 dự phòng trên chính build này: [G4b live rehearsal](evidence/g4b-live-rehearsal-20261009.mp4). Thời lượng theo Snipping Tool là 7:48; microphone/system audio tắt; không có lời dẫn. Ảnh preselect, precheck và deploy success được liên kết trong `evidence.md`.

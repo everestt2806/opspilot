@@ -155,6 +155,19 @@ Build và rehearsal dùng cùng source HEAD `d4506554fcb4d8b6a89fe34cdac4ac7c81c
 - `git diff --check` — PASS.
 - Focused test: `pnpm --filter @opspilot/app exec vitest run src/pages/DeployPage.test.tsx` — PASS, 48 test.
 
+## G4b — live rehearsal qua điều hướng từ app Git
+
+**Kết quả:** `PASS` — trên Electron production build G4a và profile G2 biệt lập, mở chi tiết app Git rồi bấm **Triển khai phiên bản mới**. Wizard tự chọn VPS/app/nguồn Git; precheck đạt trước khi Start; redeploy thành công và rehearsal được quay trên cùng build. Không dùng video G3 làm bằng chứng cho phiên này.
+
+- Build Electron đang chạy: UI source commit `b69d19e34541f9c04e89875f8620044fad29c453`; `HEAD:app` = `d2aa94a8c56dc6cdebf8d2def7740ea45dcfc810`. HEAD tài liệu tại lúc làm G4b là `54a7fd9a6dc1e87eb5db57b1eef248ce574578f5`; không có thay đổi runtime sau build.
+- Điều hướng từ app `g2-express-20261009` (app ID 1) qua nút **Triển khai phiên bản mới** tự chọn `G2 Development VPS` (VPS ID 1, port 22), đúng app và Git source `https://github.com/everestt2806/opspilot.git`, ref `main`, root `demo-apps/express-api`. Prepare ghim full SHA `8af16e1f9165a31557288adbc23acc420244938f`; kiểm tra `git ls-remote` sau rehearsal vẫn trả cùng SHA.
+- Ảnh chụp Electron thật, không chỉnh state/DOM/DB: [preselect](evidence/g4b-preselected-app.png), [precheck đạt trước Start](evidence/g4b-precheck-pass.png), [precheck lần xác nhận trong rehearsal](evidence/g4b-precheck-confirmation.png), [deploy thành công](evidence/g4b-deploy-success.png).
+- Wizard precheck đạt trước Start: RAM available `3104 MB` (yêu cầu UI >512 MB; gate rehearsal ≥1 GiB), disk `18 GB` (yêu cầu >2 GB), Docker `29.8.2`; URL đích `http://160.191.243.89:30000`. Lượt precheck xác nhận lại sau đó: RAM available `3118 MB`, disk `18 GB`, Docker `29.8.2`. Không đọc hoặc ghi giá trị secret trong wizard.
+- Redeploy cùng app qua UI thành công trong `32s`: DB profile biệt lập ghi app 1/current deployment 6; deployment 6/version 4, `running`, `reachable`, tag `g2-express-20261009:v4`, bắt đầu `2026-10-09T16:21:28Z`, hoàn tất `2026-10-09T16:21:59.781Z`, source Git SHA `8af16e1f9165a31557288adbc23acc420244938f`. `main`, v3 và v4 cùng SHA; đây là **redeploy cùng SHA**, không phải commit mới. Ứng dụng báo runtime đang chạy và truy cập ngoài đạt. SQLite không lưu container ID; truy vấn SSH CLI chỉ đọc với `BatchMode`/`StrictHostKeyChecking` kết thúc exit 255 (stderr không lưu), nên container ID chưa được xác minh và không được suy đoán. Không làm gián đoạn ba ứng dụng khác.
+- Từ máy điều khiển sau redeploy: Git `/health` → HTTP 200; Vite `/` → HTTP 200; Next `/` → HTTP 200; Next route `/bai-viet/ops-pilot-la-gi` → HTTP 200. SHA remote `main` xác minh lại vẫn là `8af16e1f9165a31557288adbc23acc420244938f`.
+- Rehearsal trên Electron cùng build: `2026-10-09 16:23:40–16:31:29 UTC` (7:49 thực tế; MP4 dài 7:48). Nội dung: app Git/detail và history SHA, hai app folder Vite/Next, đường điều hướng mới, Prepare/pinned SHA, detector Express và precheck. Bản ghi tạo qua Snipping Tool, microphone/system audio muted; Clipchamp export 720p/1280×720/30fps để giảm dung lượng. Đã mở file MP4 bằng Media Player, xác nhận dài 7:48 và xem hình ở đầu, 3:54, 7:30; file không có audio metadata/track, không có lời dẫn. File 24,640,419 bytes: [G4b live rehearsal](evidence/g4b-live-rehearsal-20261009.mp4).
+- Verdict đề xuất: `DEMO_READY_LIVE`, chờ Leader review. Giới hạn: chưa thu được container ID do SSH CLI không xác thực được; không tuyên bố migrate sau rollback, webhook/push-to-deploy, HTTPS ingress hoặc ML pilot.
+
 ## Review G4 — chỉ số RAM cần xác minh lại
 
 Leader review 09/10/2026: số 94% trên UI G4 đến từ `MemFree`, không thể dùng để kết luận `MemAvailable` dưới ngưỡng. G4a đã đo lại, đồng bộ semantics UI và precheck, và cập nhật phiếu/evidence ở dưới. Ba URL external HTTP 200 và video G3 là bằng chứng riêng vẫn có giá trị.

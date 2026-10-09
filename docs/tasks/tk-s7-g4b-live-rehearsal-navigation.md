@@ -8,15 +8,19 @@
 
 ## Definition of Done
 
-- [ ] Trên Electron production build hiện tại và profile G2 biệt lập, mở chi tiết `g2-express-20261009` → bấm **Triển khai phiên bản mới**. Xác nhận wizard đã tự chọn đúng VPS, app ID 1, nguồn Git, repo/ref/root và full SHA. Chụp ảnh trạng thái này; nếu preselect hỏng thật, ghi lỗi và sửa bug nhỏ bằng commit/test riêng rồi build lại. Chỉ dùng thao tác UI người dùng có thể làm; không set DOM/store hay DB thủ công.
-- [ ] Kiểm tra read-only `MemAvailable` vẫn ≥1 GiB, disk đủ, ba URL và container healthy. Trong wizard bấm **Kiểm tra trước** và lưu bằng chứng precheck pass trên đúng app/port; không suy luận từ panel VPS. Nếu không đạt hoặc app đích không xác minh được, dừng trước Start và ghi `NOT_RUN` với lý do thực.
-- [ ] Khi precheck pass, redeploy Git từ app đã liên kết trên VPS phát triển. Ghi build source commit/tree, repo/ref/full SHA, app/deployment/version, timestamps, image/container IDs, exposure, loopback/external HTTP; kiểm tra Vite/Next vẫn reachable. Nếu remote SHA không đổi, gọi đây là redeploy cùng SHA, không phải tự động deploy hay commit mới.
-- [ ] Diễn tập bài 6–8 phút và quay MP4 dự phòng trên **chính build vừa chạy**. Kiểm tra video mở được, thời lượng và hình ở đầu/giữa/cuối, âm thanh có/không, không lộ secret. Cập nhật `evidence.md`, script, phiếu HTML/PDF A4 một trang theo kết quả thật; không dùng video G3 để đại diện build mới.
-- [ ] Node 22 lint, Node/Web/Scripts typecheck, full Vitest, build và `git diff --check` trên source cuối; ghi warnings thật. Đề xuất `DEMO_READY_LIVE`, `DEMO_READY_RECORDED` hoặc `NOT_READY` theo bằng chứng để Leader review. Cập nhật board/task trạng thái hợp lệ, commit cục bộ; không push/PR/merge. Khi xong chỉ báo “Worker đã xong”.
+- [x] Trên Electron production build hiện tại và profile G2 biệt lập, mở chi tiết `g2-express-20261009` → bấm **Triển khai phiên bản mới**. Wizard tự chọn đúng VPS (ID 1), app (ID 1), nguồn Git, repo/ref/root và full SHA; ảnh chụp thật nằm tại `evidence/g4b-preselected-app.png`. Không sửa state/DOM/DB thủ công.
+- [x] Read-only resource gate và wizard **Kiểm tra trước** đạt: MemAvailable 3104 MB (xác nhận lại 3118 MB), disk 18 GB, Docker 29.8.2; ba URL được kiểm tra HTTP 200 sau redeploy. Bằng chứng precheck đúng app/port ở `evidence/g4b-precheck-pass.png` và `evidence/g4b-precheck-confirmation.png`.
+- [ ] Redeploy Git từ app đã liên kết thành công sau precheck. Đã ghi source build commit/tree, repo/ref/full SHA, app/deployment/version, timestamps, image tag, exposure và HTTP loopback/external trong `../demo-14-10/evidence.md`; remote/main/v3/v4 đều cùng SHA nên là redeploy cùng SHA. **Container ID chưa được xác minh**: SQLite không lưu ID, truy vấn SSH CLI chỉ đọc thoát 255; không suy đoán ID. Phần này còn thiếu so với DoD.
+- [x] Diễn tập 7:49 và quay MP4 7:48 trên cùng build. File mở được, hình đã kiểm tra đầu/giữa/cuối, không có audio track; cập nhật `evidence.md`, script và phiếu HTML/PDF A4 một trang. Không dùng video G3 làm bằng chứng cho G4b.
+- [x] Node 22 lint, Node/Web/Scripts typecheck, full Vitest, build và `git diff --check` đều đạt trên source cuối; ghi cảnh báo thật bên dưới. Đề xuất `DEMO_READY_LIVE` chờ Leader review, với giới hạn container ID nêu trên. Cập nhật board/task và commit cục bộ; không push/PR/merge.
 
 ## Nhật ký
 
+- START 09/10/2026 — Tiếp tục trên `feat/deploy-reachability`; mở build Electron production source G4a trong profile G2 và thử đúng nút app detail **Triển khai phiên bản mới**. Xác minh nguồn/app/VPS, tài nguyên read-only và precheck trên wizard trước khi quyết định Start.
 - PLAN 09/10 — Leader review G4a resource fix và thấy đường preselect app từ nút **Triển khai phiên bản mới** đã có sẵn. G4b kiểm chứng live gate trên đúng UX đó trước khi freeze.
+- UPDATE 09/10/2026 — G4b live PASS: điều hướng từ Git app detail preselect đúng app/VPS/Git; Electron precheck pass trước Start; redeploy cùng SHA hoàn tất; rehearsal 7:49 được quay trên cùng build. Evidence, script và PDF A4 cập nhật. Container ID không thu được (SSH CLI read-only exit 255), nên DoD mục container ID còn mở; không bịa giá trị. Đề xuất `DEMO_READY_LIVE` để Leader review với giới hạn này.
+- GATES 09/10/2026 — Node `v22.23.3`, pnpm `11.1.0`: `pnpm lint` PASS (0 ESLint errors, 5,784 Prettier CRLF warnings, Ruff PASS); `pnpm --filter @opspilot/app typecheck` PASS (Node/Web); `pnpm --dir app exec tsc --noEmit -p tsconfig.scripts.json --composite false` PASS; `pnpm --filter @opspilot/app test` PASS (71 files, 674 tests; jsdom canvas/getComputedStyle pseudo-element warnings, exit 0); `pnpm build` PASS; `git diff --check` PASS (Git CRLF→LF notices only).
+- HANDOFF-LOCAL 09/10/2026 — Đã chuẩn bị commit cục bộ các file G4b và evidence; không push, PR hoặc merge.
 
 ## PR
 
