@@ -16,7 +16,7 @@
 
 - [ ] Bảng mẫu RAM/process/container có timestamp đủ giải thích hoặc khoanh vùng được mức giảm ~2,8 GiB từ G4a sang G4b. Phân biệt MemFree và MemAvailable; ghi rõ phần nào chưa thể quy nguyên nhân. Nếu có lỗi product rõ ràng, sửa scoped code/test và chạy lại gate.
 - [ ] Nếu live đạt: ghi deployment mới, full SHA, version, exposure, loopback/external HTTP, ảnh/video trên cùng build; cập nhật verdict `DEMO_READY_LIVE` và bản in. Nếu không đạt: giữ `DEMO_READY_RECORDED`, video G3/build cũ và ghi chính xác lý do; không lặp deploy khi gate thấp.
-- [ ] Trước 13/10 chốt [phiếu A4](../demo-14-10/phieu-demo.pdf) và kịch bản đúng chế độ đã chứng minh; bỏ nhãn **BẢN NHÁP** chỉ sau khi Leader review. PDF một trang, không cắt chữ; video/ảnh mở lại được. Ghi URL/port, source build và Git SHA tách biệt.
+- [x] Chốt [phiếu A4](../demo-14-10/phieu-demo.pdf) theo recorded fallback Leader đã chấp nhận; bỏ nhãn **BẢN NHÁP**. PDF một trang, không cắt chữ; kịch bản phân biệt chiếu toàn bộ 10–12 phút với trích đoạn 6–8 phút có nhãn; video đầy đủ giữ làm đối chứng.
 - [ ] Với bất kỳ runtime change: Node 22 lint, Node/Web/Scripts typecheck, full Vitest, build, `git diff --check`; nếu chỉ tài liệu thì kiểm tra diff/PDF/links. Cập nhật evidence/board/task, commit cục bộ, không push/PR/merge. Khi xong chỉ báo “Worker đã xong”.
 
 ## Nhật ký
@@ -25,6 +25,8 @@
 - UPDATE 10/10 — Profile G2 biệt lập mở được SQLite read-only nhưng `createCredentialCipher()` trả `DB_ERROR` khi giải mã khóa profile; diagnostic Electron riêng cũng không tạo report để xác nhận safeStorage. Chưa có SSH sample mới, không dùng đường kết nối bỏ qua host pinning. Vì vậy chưa thể phân tích nguyên nhân MemAvailable giảm hay so sánh đồng thời với `/proc/meminfo`; live rehearsal/precheck `NOT_RUN`. Giữ recorded fallback G3/build cũ, không thay đổi ba app.
 - HANDOFF-LOCAL — Kết quả và giới hạn được ghi vào evidence, kịch bản, phiếu A4, task và board. Docs-only gates: `git diff --check` PASS; `pdfinfo` PASS (A4, 1 trang), render preview đã xem; relative links 0 thiếu; fallback MP4 tồn tại, 8,999,624 bytes. Không sửa runtime vì chưa có bằng chứng lỗi thuộc OpsPilot.
 - Commit local `0f83d28` (`docs: ghi nhận G5 bị chặn và giữ recorded fallback`); chưa push/PR/merge.
+- G5a UPDATE 10/10 — Chốt phiếu bỏ nhãn bản nháp; nội dung tách G3 build cũ/v3 khỏi app Git v4 và HTTP G4b. Kịch bản ghi rõ tổng 10–12 phút khi chiếu nguyên video 7:37, hoặc 6–8 phút với trích đoạn có nhãn.
+- G5a gates — PDF Edge headless không header/footer, A4 một trang; render và text đã kiểm tra. Relative links 0 thiếu; MP4 G3 457.4s, handlers `vide`/`mdir`, không `soun`; `git diff --check` PASS.
 
 ## Kết quả G5
 

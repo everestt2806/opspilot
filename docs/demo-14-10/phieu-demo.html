@@ -6,12 +6,12 @@
     <style>
       @page { size: A4; margin: 12mm; }
       * { box-sizing: border-box; }
-      body { font: 14px/1.36 Arial, sans-serif; color: #18212d; margin: 0; }
-      h1 { font-size: 28px; margin: 0 0 3px; }
-      h2 { font-size: 17px; margin: 11px 0 5px; border-bottom: 1px solid #aeb9c8; padding-bottom: 2px; }
+      body { font: 15px/1.35 Arial, sans-serif; color: #18212d; margin: 0; }
+      h1 { font-size: 30px; margin: 0 0 3px; }
+      h2 { font-size: 18px; margin: 10px 0 5px; border-bottom: 1px solid #aeb9c8; padding-bottom: 2px; }
       p { margin: 3px 0; }
       table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-      th, td { border: 1px solid #bbc5d0; padding: 5px 7px; vertical-align: top; overflow-wrap: anywhere; }
+      th, td { border: 1px solid #bbc5d0; padding: 6px 7px; vertical-align: top; overflow-wrap: anywhere; }
       th { text-align: left; background: #eaf0f6; }
       .badge { display: inline-block; margin: 4px 0; padding: 3px 7px; border: 1px solid #26734d; background: #e5f6ec; font-weight: bold; }
       .note { background: #f1f5f9; border-left: 3px solid #4d6d91; padding: 6px 8px; margin-top: 6px; }
@@ -24,30 +24,27 @@
   <body>
     <h1>OpsPilot</h1>
     <p><strong>Triển khai và giám sát ứng dụng trên VPS riêng</strong> · Phiếu demo 14/10/2026</p>
-    <p class="badge">BẢN NHÁP — đề xuất DEMO_READY_RECORDED, chờ Leader review</p>
-    <p><strong>Chế độ:</strong> RECORDED_FALLBACK · dùng video G3 full deploy trên build UI cũ, source <code>d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955</code>. Live deploy v4 trước đó đã thành công trên build G4b, nhưng clip G4b không ghi lượt deploy liên tục và có audio handler.</p>
-    <p><strong>Video:</strong> <code>g3-rehearsal-20261009.mp4</code>, 7:37 (457.4s), build cũ; có video và metadata track, không có audio track. Không đại diện build hiện tại hoặc deployment v4.</p>
+    <p class="badge">DEMO_READY_RECORDED · phương án dự phòng đã được Leader chấp nhận</p>
+    <p><strong>Chế độ:</strong> Chiếu bản ghi deploy Git G3 trên build UI cũ (<code>d4506554</code>), deployment v3. Video đầy đủ dài <strong>7:37</strong>, không có audio track; không đại diện build hiện tại hay deployment v4.</p>
+    <p><strong>Thời lượng:</strong> Chiếu toàn bộ cần lịch trình khoảng <strong>10–12 phút</strong>. Nếu chỉ có 6–8 phút, chiếu các đoạn trích có nhãn rõ theo kịch bản; giữ video đầy đủ để đối chứng.</p>
 
-    <h2>Luồng trình bày 6–8 phút</h2>
+    <h2>Trạng thái đã xác nhận</h2>
     <ol>
-      <li>Chỉ hai kiểu nguồn: folder local qua Vite/Next và Git qua app Express đã liên kết.</li>
-      <li>Phát nguyên bản ghi G3 để xem một lượt deploy Git đã diễn ra trên build UI cũ.</li>
-      <li>Trong bản ghi G3, history là v3 và SHA khớp remote tại thời điểm quay; không gọi đó là trạng thái deploy hiện tại.</li>
-      <li>Hai kiểu nguồn local folder và Git được trình bày bằng bằng chứng G3 đã ghi.</li>
-      <li>Nêu giới hạn rõ: G5 không thu được mẫu mới do safeStorage profile lỗi DB_ERROR; RAM hiện tại và nguyên nhân giảm chưa xác định. Không precheck/Start; giữ deployment v4.</li>
+      <li><strong>Video G3:</strong> full deploy Git, build cũ, deployment v3.</li>
+      <li><strong>App Git hiện tại:</strong> deployment 6/v4, trạng thái running/reachable; bằng chứng HTTP riêng từ G4b ngày 09/10, <code>/health</code> trả 200.</li>
+      <li><strong>Ứng dụng folder:</strong> Vite và Next trả HTTP 200 từ máy điều khiển trong lần kiểm tra G4b ngày 09/10.</li>
+      <li><strong>RAM:</strong> hiện chưa xác minh được; không diễn tập deploy live.</li>
     </ol>
 
     <h2>Bằng chứng đã kiểm tra</h2>
     <table>
-      <tr><th>Ứng dụng / nguồn</th><th>Kết quả từ máy điều khiển</th></tr>
-      <tr><td>Git Express · deployment 6/v4 · repo <code>main</code> cùng SHA</td><td>G4b probe 09/10: full SHA <code>8af16e1f9165a31557288adbc23acc420244938f</code>; <code>/health</code> → HTTP 200</td></tr>
-      <tr><td>Vite SPA · folder local</td><td>G4b probe 09/10: <code>http://160.191.243.89:30001/</code> → HTTP 200</td></tr>
-      <tr><td>Next.js · folder local</td><td>G4b probe 09/10: <code>http://160.191.243.89:30002/</code> và <code>/bai-viet/ops-pilot-la-gi</code> → HTTP 200</td></tr>
-      <tr><td>G4b + G5 resource gate</td><td>G4b correction 10/10: khoảng 0.3 GB khả dụng. G5 không thu được mẫu mới (safeStorage DB_ERROR), nên mức RAM hiện tại chưa xác minh; live/precheck NOT_RUN, không Start. Giữ deployment v4.</td></tr>
-      <tr><td>Video fallback G3</td><td>09/10/2026; 457.4s. Source UI cũ <code>d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955</code>; ghi deployment v3. Không phải video G4b hoặc trạng thái hiện tại.</td></tr>
-      <tr><td>Live G4b đã có</td><td>Deployment 6/v4, cùng SHA với v3/main, status running/reachable; HTTP ngoài đã đạt trong lượt 09/10. Container ID chưa xác minh.</td></tr>
+      <tr><th>Nguồn</th><th>Bằng chứng riêng (09/10/2026)</th></tr>
+      <tr><td>Git Express · v4 hiện tại đã xác nhận</td><td><code>/health</code> → HTTP 200. SHA nguồn <code>8af16e1f9165a31557288adbc23acc420244938f</code>.</td></tr>
+      <tr><td>Vite SPA · folder local</td><td><code>http://160.191.243.89:30001/</code> → HTTP 200.</td></tr>
+      <tr><td>Next.js · folder local</td><td><code>http://160.191.243.89:30002/</code> và route bài viết → HTTP 200.</td></tr>
+      <tr><td>Video đầy đủ G3</td><td>7:37 · build UI cũ <code>d4506554</code> · deployment v3 · không có audio track.</td></tr>
     </table>
-    <p class="note"><strong>Giới hạn:</strong> Video phát là full deploy G3 trên build cũ; HTTP trong video là kết quả tại thời điểm đó. Clip G4b bị loại vì bắt đầu sau deploy và có audio handler. Container ID chưa xác minh; G5 chưa quy được nguyên nhân RAM do không thu được mẫu. Không tuyên bố webhook/push-to-deploy, HTTPS ingress, migrate sau rollback hay ML pilot.</p>
-    <p class="small">Phiếu vẫn là bản nháp đến khi Leader review và freeze. Chi tiết thời gian, gate và video: <code>docs/demo-14-10/evidence.md</code>.</p>
+    <p class="note"><strong>Giới hạn:</strong> Video G3 là build cũ/v3; HTTP của v4 là bằng chứng G4b riêng. RAM hiện chưa xác minh nên không có deploy live mới. Chi tiết chẩn đoán và giới hạn: <code>docs/demo-14-10/evidence.md</code>.</p>
+    <p class="small">Kịch bản chiếu đầy đủ 10–12 phút hoặc trích đoạn 6–8 phút có nhãn: <code>docs/demo-14-10/rehearsal-script.md</code>.</p>
   </body>
 </html>
