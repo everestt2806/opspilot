@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Descriptions,
   Drawer,
   Empty,
@@ -75,6 +76,16 @@ function toAppName(path: string): string {
   return cleaned.slice(0, 40) || 'app'
 }
 
+function safeRequiredEnvDefaults(detection: DetectionResultDto | null): Record<string, string> {
+  if (!detection?.matched) return {}
+  const defaults: Record<string, string> = {}
+  if (detection.required_env.includes('PORT')) defaults.PORT = String(detection.container_port)
+  if (detection.required_env.includes('ENABLE_FAULT_ENDPOINTS')) {
+    defaults.ENABLE_FAULT_ENDPOINTS = 'false'
+  }
+  return defaults
+}
+
 const APP_NAME_RE = /^[a-z0-9][a-z0-9-]*$/
 
 interface DeployPageProps {
@@ -134,6 +145,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   const [optionalKeys, setOptionalKeys] = useState<string[]>([])
   const [pendingOptional, setPendingOptional] = useState<string | undefined>(undefined)
   const [configError, setConfigError] = useState<string | null>(null)
+  const [existingEnvConfirmed, setExistingEnvConfirmed] = useState(false)
   const [step, setStep] = useState(0)
   const [precheck, setPrecheck] = useState<PrecheckResult | null>(null)
   const [precheckSignature, setPrecheckSignature] = useState<string | null>(null)
@@ -178,6 +190,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   const selectVps = useCallback(
     async (id: number, preselectedAppId?: number, isPreselect = false): Promise<void> => {
       const reqId = ++appListReqIdRef.current
+      sourceRequestRef.current++
       setVpsId(id)
       setAppsLoading(true)
       setAppLoadError(null)
@@ -187,6 +200,17 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
 
       // Bỏ app_id cũ ngay lập tức khi đổi VPS
       setAppSelect(-1)
+      setEnvValues({})
+      setExistingEnvConfirmed(false)
+      setDetection(null)
+      setOptionalKeys([])
+      cancelPendingGitPrepare()
+      const previousHandle = preparedGitRef.current?.prepared_source_handle
+      if (previousHandle) {
+        void window.api.invoke('deploy:release-git-prepare', previousHandle)
+        preparedGitRef.current = null
+        setPreparedGit(null)
+      }
 
       const result = await window.api.invoke('app:list', id)
       if (appListReqIdRef.current !== reqId) return
@@ -318,10 +342,13 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     setDetecting(false)
     if (!result.ok) {
       setDetection(null)
+      setEnvValues({})
       setDetectError(result.error.message)
       return false
     }
     setDetection(result.data)
+    setEnvValues(safeRequiredEnvDefaults(result.data))
+    setOptionalKeys([])
     return true
   }
 
@@ -342,9 +369,9 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
       setNewAppName(toAppName(result.data.path))
     }
     setDetection(null)
+    setEnvValues({})
     setDetectError(null)
     setOptionalKeys([])
-    setEnvValues({})
     void runDetect(result.data.path)
   }
 
@@ -378,12 +405,15 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
       setPreparedGit(null)
       preparedGitRef.current = null
       setDetection(null)
+      setEnvValues({})
       setDetectError(result.error.message)
       return
     }
     setPreparedGit(result.data)
     preparedGitRef.current = result.data
     setDetection(result.data.detection)
+    setEnvValues(safeRequiredEnvDefaults(result.data.detection))
+    setOptionalKeys([])
   }
 
   function changeSourceMode(mode: 'local' | 'git'): void {
@@ -397,6 +427,8 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     setPreparingGit(false)
     setSourceMode(mode)
     setDetection(null)
+    setEnvValues({})
+    setOptionalKeys([])
     setDetectError(null)
     invalidatePrecheck()
   }
@@ -567,6 +599,10 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
 
   async function continueFromConfig(): Promise<void> {
     if (!matches) return
+    if (targetMode === 'existing' && !existingEnvConfirmed) {
+      setConfigError(strings.deploy.config.existingEnvConfirmRequired)
+      return
+    }
     if (!APP_NAME_RE.test(appName)) {
       setConfigError(strings.deploy.config.appNameRule)
       return
@@ -821,6 +857,9 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                         value={gitRepoUrl}
                         onChange={(event) => {
                           discardPreparedGit()
+                          setDetection(null)
+                          setEnvValues({})
+                          setOptionalKeys([])
                           setGitRepoUrl(event.target.value)
                         }}
                       />
@@ -831,6 +870,9 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                           value={gitRef}
                           onChange={(event) => {
                             discardPreparedGit()
+                            setDetection(null)
+                            setEnvValues({})
+                            setOptionalKeys([])
                             setGitRef(event.target.value)
                           }}
                         />
@@ -840,6 +882,9 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                           value={gitRoot}
                           onChange={(event) => {
                             discardPreparedGit()
+                            setDetection(null)
+                            setEnvValues({})
+                            setOptionalKeys([])
                             setGitRoot(event.target.value)
                           }}
                         />
@@ -985,7 +1030,12 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                           onChange={(e) => {
                             const selectedId = Number(e.currentTarget.value)
                             invalidatePrecheck()
+                            sourceRequestRef.current++
                             discardPreparedGit()
+                            setEnvValues({})
+                            setDetection(null)
+                            setOptionalKeys([])
+                            setExistingEnvConfirmed(false)
                             if (selectedId > 0) {
                               clearPreselectSession()
                               setAppSelect(selectedId)
@@ -1170,6 +1220,8 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                       if (value === -1) {
                         setTargetMode('new')
                         setAppSelect(-1)
+                        setExistingEnvConfirmed(false)
+                        setEnvValues(safeRequiredEnvDefaults(matches))
                         if (!userEditedNewAppName && !newAppName.trim() && sourcePath) {
                           setNewAppName(toAppName(sourcePath))
                         }
@@ -1177,6 +1229,8 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                       }
                       setTargetMode('existing')
                       setAppSelect(value)
+                      setExistingEnvConfirmed(false)
+                      setEnvValues(safeRequiredEnvDefaults(matches))
                     }}
                     options={[
                       { value: -1, label: strings.deploy.config.newApp },
@@ -1212,6 +1266,24 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                       {strings.deploy.config.envHint}
                     </Typography.Text>
                   </div>
+                  {targetMode === 'existing' && selectedExistingApp && (
+                    <Space direction="vertical" style={{ marginTop: 8 }}>
+                      <Alert
+                        type="warning"
+                        showIcon
+                        message={strings.deploy.config.existingEnvNotice}
+                      />
+                      <Checkbox
+                        checked={existingEnvConfirmed}
+                        onChange={(event) => {
+                          invalidatePrecheck()
+                          setExistingEnvConfirmed(event.target.checked)
+                        }}
+                      >
+                        {strings.deploy.config.existingEnvConfirm}
+                      </Checkbox>
+                    </Space>
+                  )}
                   <Space direction="vertical" size={8} style={{ marginTop: 8, width: '100%' }}>
                     {matches?.required_env.map((key) => (
                       <EnvRow

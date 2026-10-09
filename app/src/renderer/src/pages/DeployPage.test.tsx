@@ -231,6 +231,183 @@ describe('DeployPage source description locales', () => {
   )
 })
 
+describe('DeployPage safe environment defaults', () => {
+  const detection: DetectionResultDto = {
+    ...MATCHED,
+    container_port: 3210,
+    required_env: ['PORT', 'ENABLE_FAULT_ENDPOINTS', 'SECRET_KEY', 'DATABASE_URL', 'CUSTOM_VALUE']
+  }
+
+  const prepared = {
+    prepared_source_handle: 'safe-env-git-handle',
+    git_repo_url: 'https://github.com/example/safe-env.git',
+    git_ref: 'main',
+    git_root: '.',
+    git_commit_sha: 'f'.repeat(40),
+    detection
+  }
+
+  async function reachConfig(
+    source: 'local' | 'git',
+    existing: boolean
+  ): Promise<ReturnType<typeof mockApi>> {
+    const existingGitApp: App = {
+      ...APP_1,
+      source_type: 'git',
+      git_repo_url: prepared.git_repo_url,
+      git_ref: prepared.git_ref,
+      git_root: prepared.git_root
+    }
+    if (existing) useUiState.setState({ deployPreselect: { vpsId: 1, appId: 10 } })
+    const api = mockApi({
+      ...handersHappy,
+      'vps:list': async () => ({ ok: true, data: [VPS_A] }),
+      'app:list': async () => ({
+        ok: true,
+        data: existing ? [source === 'git' ? existingGitApp : APP_1] : []
+      }),
+      'deploy:detect': async () => ({ ok: true, data: detection }),
+      'deploy:prepare-git': async () => ({ ok: true, data: prepared })
+    })
+    render(<DeployPage />)
+    await waitFor(() => expect(api.invoke).toHaveBeenCalledWith('app:list', 1))
+    if (source === 'git' && !existing) {
+      fireEvent.change(screen.getByPlaceholderText('my-app'), { target: { value: 'git-demo' } })
+    }
+    if (source === 'local') {
+      fireEvent.click(await screen.findByText('Choose folder'))
+      await waitFor(() => expect(screen.getByDisplayValue(SOURCE_PATH)).toBeTruthy())
+      await waitFor(() => expect(api.invoke).toHaveBeenCalledWith('deploy:detect', SOURCE_PATH))
+    } else {
+      if (!existing) {
+        fireEvent.click(screen.getByText(strings.deploy.git.modeGit))
+        fireEvent.change(screen.getByLabelText(strings.deploy.git.repository), {
+          target: { value: prepared.git_repo_url }
+        })
+        fireEvent.change(screen.getByLabelText(strings.deploy.git.ref), {
+          target: { value: prepared.git_ref }
+        })
+        fireEvent.change(screen.getByLabelText(strings.deploy.git.root), {
+          target: { value: prepared.git_root }
+        })
+      }
+      fireEvent.click(screen.getByText(strings.deploy.git.prepare))
+      await screen.findByText(prepared.git_commit_sha)
+    }
+    fireEvent.click(screen.getByText(strings.deploy.next))
+    await screen.findByText('Express.js')
+    fireEvent.click(screen.getByText(strings.deploy.next))
+    await screen.findByLabelText('PORT')
+    return api
+  }
+
+  it('local new uses detected port, defaults fault endpoints off, and keeps all other values empty until entered', async () => {
+    const { invoke } = await reachConfig('local', false)
+    expect((screen.getByLabelText('PORT') as HTMLInputElement).value).toBe('3210')
+    expect((screen.getByLabelText('ENABLE_FAULT_ENDPOINTS') as HTMLInputElement).value).toBe(
+      'false'
+    )
+    expect((screen.getByLabelText('SECRET_KEY') as HTMLInputElement).value).toBe('')
+    expect((screen.getByLabelText('CUSTOM_VALUE') as HTMLInputElement).value).toBe('')
+    expect(screen.queryByLabelText('DATABASE_URL')?.getAttribute('value') ?? '').toBe('')
+
+    fireEvent.change(screen.getByLabelText('PORT'), { target: { value: '8081' } })
+    fireEvent.change(screen.getByLabelText('SECRET_KEY'), {
+      target: { value: 'fake-secret-for-test' }
+    })
+    fireEvent.change(screen.getByLabelText('CUSTOM_VALUE'), {
+      target: { value: 'explicit-test-value' }
+    })
+    fireEvent.click(screen.getByText(strings.deploy.next))
+    await screen.findByText('RAM trống')
+    expect(invoke).toHaveBeenCalledWith(
+      'deploy:precheck',
+      expect.objectContaining({
+        source_path: SOURCE_PATH,
+        env: {
+          PORT: '8081',
+          ENABLE_FAULT_ENDPOINTS: 'false',
+          SECRET_KEY: 'fake-secret-for-test',
+          CUSTOM_VALUE: 'explicit-test-value'
+        }
+      })
+    )
+    const sentInput = invoke.mock.calls.find(([channel]) => channel === 'deploy:precheck')?.[1] as {
+      env: Record<string, string>
+    }
+    expect(sentInput.env.DATABASE_URL).toBeUndefined()
+  })
+
+  it('Git new sends safe defaults and manual overrides to precheck without filling secrets or database URL', async () => {
+    const { invoke } = await reachConfig('git', false)
+    expect((screen.getByLabelText('PORT') as HTMLInputElement).value).toBe('3210')
+    expect((screen.getByLabelText('ENABLE_FAULT_ENDPOINTS') as HTMLInputElement).value).toBe(
+      'false'
+    )
+    expect((screen.getByLabelText('SECRET_KEY') as HTMLInputElement).value).toBe('')
+    fireEvent.change(screen.getByLabelText('SECRET_KEY'), { target: { value: 'fake-git-secret' } })
+    fireEvent.change(screen.getByLabelText('PORT'), { target: { value: '3211' } })
+    fireEvent.change(screen.getByLabelText('CUSTOM_VALUE'), {
+      target: { value: 'manual-git-test-value' }
+    })
+    fireEvent.click(screen.getByText(strings.deploy.next))
+    await screen.findByText('RAM trống')
+    expect(invoke).toHaveBeenCalledWith(
+      'deploy:precheck',
+      expect.objectContaining({
+        source_type: 'git',
+        prepared_source_handle: prepared.prepared_source_handle,
+        env: {
+          PORT: '3211',
+          ENABLE_FAULT_ENDPOINTS: 'false',
+          SECRET_KEY: 'fake-git-secret',
+          CUSTOM_VALUE: 'manual-git-test-value'
+        }
+      })
+    )
+  })
+
+  it.each(['local', 'git'] as const)(
+    '%s existing requires explicit env review and keeps secret values blank until entered',
+    async (source) => {
+      const { invoke } = await reachConfig(source, true)
+      expect(await screen.findByText(strings.deploy.config.existingEnvNotice)).toBeTruthy()
+      expect((screen.getByLabelText('PORT') as HTMLInputElement).value).toBe('3210')
+      expect((screen.getByLabelText('ENABLE_FAULT_ENDPOINTS') as HTMLInputElement).value).toBe(
+        'false'
+      )
+      expect((screen.getByLabelText('SECRET_KEY') as HTMLInputElement).value).toBe('')
+
+      fireEvent.click(screen.getByText(strings.deploy.next))
+      expect(await screen.findByText(strings.deploy.config.existingEnvConfirmRequired)).toBeTruthy()
+      expect(invoke).not.toHaveBeenCalledWith('deploy:precheck', expect.anything())
+
+      fireEvent.click(screen.getByLabelText(strings.deploy.config.existingEnvConfirm))
+      fireEvent.change(screen.getByLabelText('SECRET_KEY'), {
+        target: { value: 'fake-existing-secret' }
+      })
+      fireEvent.change(screen.getByLabelText('CUSTOM_VALUE'), {
+        target: { value: 'manually-entered' }
+      })
+      fireEvent.click(screen.getByText(strings.deploy.next))
+      await screen.findByText('RAM trống')
+      expect(invoke).toHaveBeenCalledWith(
+        'deploy:precheck',
+        expect.objectContaining({
+          app_id: 10,
+          app_name: APP_1.name,
+          env: {
+            PORT: '3210',
+            ENABLE_FAULT_ENDPOINTS: 'false',
+            SECRET_KEY: 'fake-existing-secret',
+            CUSTOM_VALUE: 'manually-entered'
+          }
+        })
+      )
+    }
+  )
+})
+
 describe('DeployPage — wizard va log', () => {
   it('Git wizard prepares a pinned handle and uses the same handle/token for precheck and start', async () => {
     const prepared = {
@@ -846,6 +1023,7 @@ describe('DeployPage — wizard va log', () => {
     await screen.findByLabelText('PORT')
     fireEvent.change(screen.getByLabelText('PORT'), { target: { value: '3000' } })
     fireEvent.change(screen.getByLabelText('SECRET_KEY'), { target: { value: 'sekret' } })
+    fireEvent.click(screen.getByLabelText(strings.deploy.config.existingEnvConfirm))
     fireEvent.click(screen.getByText('Next'))
     await screen.findByText('RAM trống')
 
@@ -1130,6 +1308,7 @@ describe('DeployPage — wizard va log', () => {
     await screen.findByLabelText('PORT')
     fireEvent.change(screen.getByLabelText('PORT'), { target: { value: '3000' } })
     fireEvent.change(screen.getByLabelText('SECRET_KEY'), { target: { value: 'sekret' } })
+    fireEvent.click(screen.getByLabelText(strings.deploy.config.existingEnvConfirm))
     fireEvent.click(screen.getByText('Next'))
 
     // Step 3 (Review & Precheck)

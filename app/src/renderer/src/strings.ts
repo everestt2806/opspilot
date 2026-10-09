@@ -285,6 +285,11 @@ const BASE_EN_STRINGS = {
       envRemove: (key: string) => `Remove ${key}`,
       envHint:
         'Secrets are encrypted locally, written only to the .env file on the VPS, and never shown in logs.',
+      existingEnvNotice:
+        'Existing environment values are not loaded from the VPS. Re-enter values required for this redeploy; secret values are never prefilled.',
+      existingEnvConfirm: 'I will review and re-enter the required values for this redeploy.',
+      existingEnvConfirmRequired:
+        'Confirm that you reviewed the environment values before continuing.',
       dbUrlHint:
         'DATABASE_URL: leave empty to let the tool create Postgres with a random password.',
       manualTitle: 'Manual steps after deploy',
@@ -1295,6 +1300,12 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     config: {
       ...BASE_EN_STRINGS.deploy.config,
       appNameRule: 'Chữ thường a-z, chữ số và dấu gạch ngang — phải bắt đầu bằng chữ cái.',
+      existingEnvNotice:
+        'Không tải giá trị môi trường hiện có từ VPS. Hãy nhập lại các giá trị cần cho lần triển khai này; secret không được tự điền.',
+      existingEnvConfirm:
+        'Tôi sẽ kiểm tra và nhập lại các giá trị cần thiết cho lần triển khai này.',
+      existingEnvConfirmRequired:
+        'Hãy xác nhận đã kiểm tra các giá trị môi trường trước khi tiếp tục.',
       missingRequired: (keys: string[]) => `Thiếu các biến môi trường bắt buộc: ${keys.join(', ')}.`
     },
     sourceLabel: 'Thư mục mã nguồn',
@@ -2005,6 +2016,10 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     config: {
       ...BASE_EN_STRINGS.deploy.config,
       appNameRule: '仅限小写字母 a-z、数字和连字符，且必须以字母开头。',
+      existingEnvNotice:
+        '不会从 VPS 加载现有环境变量。请为本次重新部署重新输入所需值；不会自动填入密钥。',
+      existingEnvConfirm: '我会检查并重新输入本次重新部署所需的值。',
+      existingEnvConfirmRequired: '继续前请确认已检查环境变量。',
       missingRequired: (keys: string[]) => `缺少必需的环境变量: ${keys.join(', ')}。`
     },
     sourceLabel: '源码文件夹',
@@ -2700,6 +2715,10 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     config: {
       ...BASE_EN_STRINGS.deploy.config,
       appNameRule: '英小文字 a-z、数字、ハイフン（先頭は英文字である必要があります）。',
+      existingEnvNotice:
+        'VPS 上の既存環境変数は読み込みません。今回の再デプロイに必要な値を再入力してください。シークレットは自動入力しません。',
+      existingEnvConfirm: '今回の再デプロイに必要な値を確認して再入力します。',
+      existingEnvConfirmRequired: '続行する前に環境変数を確認したことを承認してください。',
       missingRequired: (keys: string[]) => `必須の環境変数が不足しています: ${keys.join(', ')}。`
     },
     sourceLabel: 'ソースフォルダ',
