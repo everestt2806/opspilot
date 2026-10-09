@@ -24,29 +24,30 @@
   <body>
     <h1>OpsPilot</h1>
     <p><strong>Triển khai và giám sát ứng dụng trên VPS riêng</strong> · Phiếu demo 14/10/2026</p>
-    <p class="badge">BẢN NHÁP — đề xuất DEMO_READY_LIVE, chờ Leader review</p>
-    <p><strong>Chế độ:</strong> LIVE_VPS · G4b redeploy và rehearsal đạt trên Electron production build, source <code>b69d19e34541f9c04e89875f8620044fad29c453</code>; app tree <code>d2aa94a8c56dc6cdebf8d2def7740ea45dcfc810</code>.</p>
-    <p><strong>Video:</strong> <code>g4b-live-rehearsal-20261009.mp4</code>, 7:48, cùng build; microphone/system audio tắt, không lời dẫn.</p>
+    <p class="badge">BẢN NHÁP — đề xuất DEMO_READY_RECORDED, chờ Leader review</p>
+    <p><strong>Chế độ:</strong> RECORDED_FALLBACK · dùng video G3 full deploy trên build UI cũ, source <code>d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955</code>. Live deploy v4 trước đó đã thành công trên build G4b, nhưng clip G4b không ghi lượt deploy liên tục và có audio handler.</p>
+    <p><strong>Video:</strong> <code>g3-rehearsal-20261009.mp4</code>, 7:37 (457.4s), build cũ; có video và metadata track, không có audio track. Không đại diện build hiện tại hoặc deployment v4.</p>
 
     <h2>Luồng trình bày 6–8 phút</h2>
     <ol>
       <li>Chỉ hai kiểu nguồn: folder local qua Vite/Next và Git qua app Express đã liên kết.</li>
-      <li>Từ app detail bấm <strong>Triển khai phiên bản mới</strong>; xác nhận app/VPS/source tự chọn, Prepare ghim SHA.</li>
-      <li>Precheck pass trước Start; redeploy v4 hoàn tất sau 32 giây, status <code>running/reachable</code>.</li>
-      <li>History v4 có cùng SHA với v3 và remote <code>main</code>; gọi rõ redeploy cùng SHA.</li>
-      <li>Kết thúc với URL ngoài và giới hạn: migrate sau rollback, webhook và ML pilot chưa được kiểm chứng.</li>
+      <li>Phát nguyên bản ghi G3 để xem một lượt deploy Git đã diễn ra trên build UI cũ.</li>
+      <li>Trong bản ghi G3, history là v3 và SHA khớp remote tại thời điểm quay; không gọi đó là trạng thái deploy hiện tại.</li>
+      <li>Hai kiểu nguồn local folder và Git được trình bày bằng bằng chứng G3 đã ghi.</li>
+      <li>Nêu giới hạn rõ: live correction G4b ngày 10/10 dừng trước precheck/Start do RAM khả dụng dưới 1 GiB; deployment hiện hành v4 được giữ nguyên.</li>
     </ol>
 
     <h2>Bằng chứng đã kiểm tra</h2>
     <table>
       <tr><th>Ứng dụng / nguồn</th><th>Kết quả từ máy điều khiển</th></tr>
-      <tr><td>Git Express · deployment 6/v4 · repo <code>main</code> cùng SHA</td><td>Full SHA <code>8af16e1f9165a31557288adbc23acc420244938f</code>; <code>/health</code> → HTTP 200</td></tr>
-      <tr><td>Vite SPA · folder local</td><td><code>http://160.191.243.89:30001/</code> → HTTP 200</td></tr>
-      <tr><td>Next.js · folder local</td><td><code>http://160.191.243.89:30002/</code> và <code>/bai-viet/ops-pilot-la-gi</code> → HTTP 200</td></tr>
-      <tr><td>Precheck Electron</td><td>RAM available 3104 MB; disk 18 GB; Docker 29.8.2; tất cả PASS trước Start.</td></tr>
-      <tr><td>G4b rehearsal</td><td>09/10/2026, 16:23:40–16:31:29 UTC; 7:49. App Git, Vite và Next đều còn HTTP 200 sau redeploy.</td></tr>
+      <tr><td>Git Express · deployment 6/v4 · repo <code>main</code> cùng SHA</td><td>G4b probe 09/10: full SHA <code>8af16e1f9165a31557288adbc23acc420244938f</code>; <code>/health</code> → HTTP 200</td></tr>
+      <tr><td>Vite SPA · folder local</td><td>G4b probe 09/10: <code>http://160.191.243.89:30001/</code> → HTTP 200</td></tr>
+      <tr><td>Next.js · folder local</td><td>G4b probe 09/10: <code>http://160.191.243.89:30002/</code> và <code>/bai-viet/ops-pilot-la-gi</code> → HTTP 200</td></tr>
+      <tr><td>G4b correction resource gate</td><td>10/10/2026, 00:05 UTC+07: RAM 3.5/3.8 GB dùng (91%, khoảng 0.3 GB khả dụng) — dưới gate 1 GiB; disk 7/25 GB, Docker 29.8.2. Precheck và redeploy mới NOT_RUN; không Start.</td></tr>
+      <tr><td>Video fallback G3</td><td>09/10/2026; 457.4s. Source UI cũ <code>d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955</code>; ghi deployment v3. Không phải video G4b hoặc trạng thái hiện tại.</td></tr>
+      <tr><td>Live G4b đã có</td><td>Deployment 6/v4, cùng SHA với v3/main, status running/reachable; HTTP ngoài đã đạt trong lượt 09/10. Container ID chưa xác minh.</td></tr>
     </table>
-    <p class="note"><strong>Giới hạn:</strong> Chưa thu được container ID (app/SQLite không lưu ID; truy vấn SSH chỉ đọc kết thúc exit 255, stderr không lưu). Không tuyên bố webhook/push-to-deploy, HTTPS ingress, migrate sau rollback hay ML pilot. G3 vẫn giữ làm fallback cũ, không đại diện G4b.</p>
+    <p class="note"><strong>Giới hạn:</strong> Video phát là full deploy G3 trên build cũ; HTTP trong video là kết quả tại thời điểm đó. Clip G4b bị loại vì bắt đầu sau deploy và có audio handler. Container ID chưa xác minh (app/SQLite không lưu ID; truy vấn SSH read-only trước đó exit 255). Không tuyên bố webhook/push-to-deploy, HTTPS ingress, migrate sau rollback hay ML pilot.</p>
     <p class="small">Phiếu vẫn là bản nháp đến khi Leader review và freeze. Chi tiết thời gian, gate và video: <code>docs/demo-14-10/evidence.md</code>.</p>
   </body>
 </html>

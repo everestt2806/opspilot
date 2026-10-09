@@ -9,10 +9,10 @@
 ## Definition of Done
 
 - [x] Trên Electron production build hiện tại và profile G2 biệt lập, mở chi tiết `g2-express-20261009` → bấm **Triển khai phiên bản mới**. Wizard tự chọn đúng VPS (ID 1), app (ID 1), nguồn Git, repo/ref/root và full SHA; ảnh chụp thật nằm tại `evidence/g4b-preselected-app.png`. Không sửa state/DOM/DB thủ công.
-- [x] Read-only resource gate và wizard **Kiểm tra trước** đạt: MemAvailable 3104 MB (xác nhận lại 3118 MB), disk 18 GB, Docker 29.8.2; ba URL được kiểm tra HTTP 200 sau redeploy. Bằng chứng precheck đúng app/port ở `evidence/g4b-precheck-pass.png` và `evidence/g4b-precheck-confirmation.png`.
-- [ ] Redeploy Git từ app đã liên kết thành công sau precheck. Đã ghi source build commit/tree, repo/ref/full SHA, app/deployment/version, timestamps, image tag, exposure và HTTP loopback/external trong `../demo-14-10/evidence.md`; remote/main/v3/v4 đều cùng SHA nên là redeploy cùng SHA. **Container ID chưa được xác minh**: SQLite không lưu ID, truy vấn SSH CLI chỉ đọc thoát 255; không suy đoán ID. Phần này còn thiếu so với DoD.
-- [ ] Diễn tập 7:49 và quay MP4 7:48 trên cùng build. File mở được và UI flow đã kiểm tra, nhưng review độc lập thấy MP4 có track `soun`; buổi quay bắt đầu 16:23:40Z, sau khi deployment v4 hoàn tất 16:21:59Z, nên video chưa ghi chính lượt deploy v4. Cần bản ghi đầy đủ, không audio track, trước khi gọi video fallback G4b đạt.
-- [x] Node 22 lint, Node/Web/Scripts typecheck, full Vitest, build và `git diff --check` đều đạt trên source cuối; ghi cảnh báo thật bên dưới. Đề xuất `DEMO_READY_LIVE` chờ Leader review, với giới hạn container ID nêu trên. Cập nhật board/task và commit cục bộ; không push/PR/merge.
+- [x] Ở lượt live ngày 09/10, read-only resource gate và wizard **Kiểm tra trước** đạt: MemAvailable 3104 MB (xác nhận lại 3118 MB), disk 18 GB, Docker 29.8.2; ba URL được kiểm tra HTTP 200 sau redeploy. Bằng chứng precheck đúng app/port ở `evidence/g4b-precheck-pass.png` và `evidence/g4b-precheck-confirmation.png`. Correction 10/10 có gate riêng không đạt, xem phần dưới.
+- [x] Redeploy Git từ app đã liên kết thành công trong lượt G4b ngày 09/10 sau precheck. Đã ghi source build commit/tree, repo/ref/full SHA, app/deployment/version, timestamps, image tag, exposure và HTTP loopback/external trong `../demo-14-10/evidence.md`; remote/main/v3/v4 đều cùng SHA nên là redeploy cùng SHA. **Container ID chưa được xác minh**: SQLite không lưu ID, truy vấn SSH CLI chỉ đọc thoát 255; giữ là giới hạn, không suy đoán.
+- [x] G4b clip cũ bị loại khỏi vai trò fallback: metadata có handler `soun` và clip bắt đầu sau khi v4 hoàn tất, nên không chứng minh lượt redeploy liên tục. Correction ngày 10/10 dừng an toàn vì resource gate không đạt; dùng video G3 làm fallback có nhãn build cũ, không gọi đó là video của build G4b.
+- [x] Node 22 lint, Node/Web/Scripts typecheck, full Vitest, build và `git diff --check` đạt trên source runtime cuối; correction không đổi runtime. Đề xuất `DEMO_READY_RECORDED` chờ Leader review, dùng G3 với nhãn build cũ do resource gate correction không đạt; giữ giới hạn container ID. Cập nhật board/task và commit cục bộ; không push/PR/merge.
 
 ## Nhật ký
 
@@ -25,9 +25,15 @@
 
 ## Correction trước freeze
 
-- [ ] Trên đúng production build và profile biệt lập, quay liên tục từ trước precheck/Start qua pipeline, kết quả `running/reachable`, history và probe HTTP ngoài. Nếu redeploy thêm v5, ghi ID/version/full SHA/timestamps thật; không ghép ảnh để giả làm video của lượt deploy. Dừng nếu resource/precheck không đạt.
-- [ ] Xuất MP4 **không có track audio**, xác minh cấu trúc file chỉ có track video và xem lại đầu/giữa/cuối. Ghi chính xác phần nào diễn ra trong video; nếu không quay được, dùng G3 video full deploy với nhãn build cũ và không gọi G4b clip là full fallback.
-- [ ] Đồng bộ script, evidence, phiếu HTML/PDF A4 và board với video/VERDICT đúng; giữ container ID là giới hạn đã nêu, không dùng SSH ngoài luồng hoặc đoán ID. Chạy gate liên quan trên source cuối, commit cục bộ; không push/PR/merge.
+- [x] Correction 10/10/2026 kiểm tra resource trên Electron production build/profile G2. Sau refresh, UI hiển thị RAM dùng 3.5/3.8 GB (91%, khả dụng xấp xỉ 0.3 GB, dưới gate 1 GiB), disk 7/25 GB và Docker 29.8.2. Dừng trước wizard precheck/Start; precheck và redeploy mới `NOT_RUN`, không có deployment v5.
+- [x] Không xuất video G4b mới do gate RAM không đạt. Chọn G3 full deploy MP4 `g3-rehearsal-20261009.mp4` làm fallback với nhãn build UI cũ `d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955`; không dùng clip G4b lỗi làm fallback. Duration 457.4 giây; MP4 handlers `vide` + `mdir` (metadata), không có `soun` audio handler; evidence ghi phần đã kiểm chứng.
+- [x] Đồng bộ script, evidence, phiếu HTML/PDF A4 và board theo `DEMO_READY_RECORDED` chờ Leader review; giữ container ID là giới hạn, không dùng SSH ngoài luồng hoặc đoán ID. Gate docs/PDF và `git diff --check` đạt; commit cục bộ, không push/PR/merge.
+
+### Nhật ký correction
+
+- CORRECTION 10/10/2026 — Làm mới tài nguyên trên Electron trước khi redeploy. UI báo RAM 3.5/3.8 GB dùng (91%; MemAvailable xấp xỉ 0.3 GB), disk 7/25 GB, Docker 29.8.2. RAM dưới gate rehearsal ≥1 GiB nên dừng trước Prepare/precheck/Start; lượt redeploy và video G4b liên tục mới là `NOT_RUN`, app giữ deployment 6/v4. Dùng G3 MP4 457.4 giây làm fallback, ghi rõ build UI cũ `d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955`; video G4b cũ không được phát thay. MP4 G3 handlers `vide` + `mdir` (metadata), không có `soun`; `pdfinfo` xác nhận PDF A4 một trang. Ảnh resource mới: `../demo-14-10/evidence/g4b-correction-resource-gate-failed.png`. Container ID tiếp tục là giới hạn đã công bố.
+- GATES CORRECTION 10/10/2026 — Không đổi runtime source. Chạy `git diff --check`, kiểm tra PDF A4 một trang và MP4 G3 có handlers `vide` + metadata `mdir`, không có audio handler `soun`; không chạy lại lint/typecheck/Vitest/build vì diff correction chỉ gồm task/evidence/script/PDF, không có source hoặc test thay đổi.
+- HANDOFF-LOCAL CORRECTION 10/10/2026 — Verdict điều chỉnh thành `DEMO_READY_RECORDED` chờ Leader review, với video G3/build cũ và resource gate G4b `NOT_RUN`; commit cục bộ, không push/PR/merge.
 
 ## PR
 
