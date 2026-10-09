@@ -231,3 +231,19 @@ Leader kiểm tra độc lập: MP4 G3 có track `vide` và không có `soun`; M
 - Sau thao tác, ảnh được chụp bởi computer-use provider hiển thị một cửa sổ toàn màn hình khác thay vì Electron. Vì trạng thái giao diện không đổi và ảnh không xác nhận đúng cửa sổ, không thể khẳng định `vps:get-resources` đã chạy hoặc đọc được SSH; cũng không kết luận rằng SSH host-pinned thất bại. Đây là **điểm chặn xác minh UI**, không phải bằng chứng về lỗi safeStorage trong app thật.
 - Không thu mẫu VPS ở G5b và không thử kết nối khác. Không sửa credential/fingerprint, không tạo lệnh SSH ngoài app, không redeploy và không tác động VPS.
 - **Điều kiện gỡ:** đưa cửa sổ OpsPilot lên foreground nhìn thấy được thay vì cửa sổ fullscreen phủ lên, bấm Refresh trong app, rồi xác nhận tại cùng cửa sổ một trạng thái mới (`checked_now`/giá trị RAM-disk mới hoặc `check_failed` cùng thông báo). Nếu refresh trả thành công qua SSH đã pin, tiếp tục ba mẫu chỉ đọc cách nhau vài phút và đối chiếu với resource result. Giữ demo recorded cho tới khi xác minh được.
+
+
+## G5c — xác minh app mới và đối chiếu RAM với collector
+
+- Leader cung cấp bằng chứng lịch sử: OpsPilot PID `26684` khởi động ngày 09/10 lúc 15:35 giờ địa phương, trước commit `b69d19e` sửa `MemAvailable` lúc 22:51; bundle hiện tại được ghi lúc 23:52. Ở lần Refresh cũ, UI báo `3.5/3.8 GB` (91%). Tuy nhiên collector của deployment 6 ghi `host_mem_pct=20.58` tại `2026-10-09T19:31:41Z`, được SQLite nhận lúc `19:31:45Z`. Các mốc này phù hợp giả thuyết cửa sổ UI đang chạy process cũ chưa có bản sửa.
+- Trước khi thay process, xác nhận profile biệt lập G2 `%LOCALAPPDATA%\Temp\opspilot-g2-20261009`, DB và protected key còn tồn tại, chỉ có một Electron main instance dùng profile, process chạy dưới Windows user hiện tại. Đóng PID `26684` bình thường; xác nhận mọi process dùng profile đã thoát. Mở production build hiện tại từ `app/out` dưới cùng Windows user và cùng profile; PID mới là `32832`, không tạo lại key hay profile. Sau khi mở, xác nhận chỉ PID main `32832` cùng các process con dùng profile này.
+- Resource panel tự refresh khi mở. Sau đó các lần Refresh bằng nút **Làm mới** trong cửa sổ Electron mới thành công qua SSH host pinning. Ba cặp mẫu cùng phút UTC, với SQLite truy vấn `mode=ro` chỉ các cột timestamp/deployment/RAM (không đọc `raw_json`):
+
+| Phút UTC | UI Electron hiện tại | Collector deployment 6 trong cùng phút |
+|---|---:|---:|
+| 19:40 | 801 MB / 3.8 GB (~21%) | `host_mem_pct` 20.29–20.56%; mẫu `19:40:31Z` được nhận `19:40:35.307Z`: 20.5511% |
+| 19:43 | 800 MB / 3.8 GB (~20%) | `host_mem_pct` 20.18–20.70% |
+| 19:45 | 792 MB / 3.8 GB (~20%) | `host_mem_pct` 20.34–20.53% |
+
+- Kết quả hiện tại xác nhận `vps:get-resources` hoạt động trên app thật và giá trị RAM UI mới khớp collector cùng phút. Giả thuyết stale Electron process được hỗ trợ mạnh: PID cũ chạy từ trước bản sửa; sau khi đóng bình thường và mở build mới với nguyên profile, UI chuyển từ 91% xuống khoảng 20%, đồng thời collector cũng khoảng 20%. Không suy luận rằng VPS đã giải phóng RAM do restart app; chỉ app cục bộ được đóng/mở. Điều tra nguyên nhân của khác biệt lịch sử G4a/G4b vẫn chưa đủ chuỗi process/container/pressure để quy nguyên nhân VPS.
+- G5c chỉ đọc dữ liệu resource qua app và SQLite cục bộ; không deploy, không chạy lệnh thay đổi VPS, không thay credential/fingerprint. Live rehearsal vẫn `NOT_RUN`; giữ `DEMO_READY_RECORDED` và video G3 build cũ/deployment v3. Container ID vẫn chưa xác minh.

@@ -20,7 +20,7 @@
 | TK-S7 G4 | [Sửa copy nguồn và freeze gói demo](tk-s7-g4-final-rehearsal-freeze.md) | Worker | 13/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | G4a xác nhận MemAvailable 3,061 MiB, sửa kết luận RAM/PDF; live G4a NOT_RUN do chưa xác nhận wizard precheck, verdict recorded chờ Leader review |
 | TK-S7 G4a | [Đo đúng RAM khả dụng và chốt live gate](tk-s7-g4a-memory-available-live-gate.md) | Worker | trước freeze 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Local G4a: MemFree 314 MiB / MemAvailable 3,061 MiB; UI/precheck parity và PDF cập nhật; live NOT_RUN vì Electron wizard precheck chưa xác minh, fallback G3 SHA/deployment giữ nguyên |
 | TK-S7 G4b | [Live rehearsal qua nút triển khai phiên bản mới](tk-s7-g4b-live-rehearsal-navigation.md) | Worker | trước freeze 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Leader chấp nhận `DEMO_READY_RECORDED` fallback G3/build cũ; correction RAM ~0.3 GiB nên live mới NOT_RUN. Live v4 vẫn có bằng chứng riêng; container ID là giới hạn |
-| TK-S7 G5 | [Chẩn đoán RAM và chốt demo](tk-s7-g5-memory-stability-demo-freeze.md) | Worker | trước freeze 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Local `48ee04c`: G5a chốt recorded; G5b chưa xác minh `vps:get-resources` trên Electron thật, chưa biết SSH đã pin hoạt động hay chưa, chưa có mẫu. Gỡ khi refresh trong foreground Electron cho kết quả xác nhận; giữ recorded, không chạm VPS |
+| TK-S7 G5 | [Chẩn đoán RAM và chốt demo](tk-s7-g5-memory-stability-demo-freeze.md) | Worker | trước freeze 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | G5c: đã xác minh app cũ PID 26684 chạy trước fix; build hiện tại trong cùng profile G2 cho 3 lần Refresh ~20%, khớp collector deployment 6 cùng phút. Không deploy/tác động VPS; live rehearsal NOT_RUN, giữ DEMO_READY_RECORDED. Nguyên nhân vật lý của biến động lịch sử chưa xác định |
 
 TK-A18 Titlebar fix 05: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `30747f1`; WCO drag region dùng
 đúng rectangle, native controls không còn chồng caption và màu overlay đã liền shell; Snap Layout ghi
@@ -116,7 +116,7 @@ manual-only, không push/PR/merge.
 | D14-G4 | [Rehearsal 2, gate cuối, freeze và phiếu in](tk-s7-g4-final-rehearsal-freeze.md) | Worker | 13/10 | CHỜ REVIEW | D14-G3 | Phiếu A4 một trang và gates pass; verdict chờ G4a vì phép đo RAM preflight dùng sai semantics |
 | D14-G4a | [Resource correction và live gate](tk-s7-g4a-memory-available-live-gate.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4 | Resource fix local qua review; live chưa chạy vì wizard chưa xác minh app/precheck |
 | D14-G4b | [Live rehearsal qua preselect app](tk-s7-g4b-live-rehearsal-navigation.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4a | Live v4 đạt; correction không quay được vì RAM thấp; Leader chấp nhận G3 recorded fallback, chưa chốt live |
-| D14-G5 | [Memory stability và freeze](tk-s7-g5-memory-stability-demo-freeze.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4b | Local `48ee04c`; G5a chốt recorded. G5b: UI Refresh không cho xác nhận `vps:get-resources`/SSH; cần foreground Electron và kết quả mới trước khi lấy ba mẫu; không thay đổi VPS |
+| D14-G5 | [Memory stability và freeze](tk-s7-g5-memory-stability-demo-freeze.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4b | G5c: process Electron cũ được thay bằng build hiện tại trong cùng profile; 3 mẫu RAM UI/collector đồng phút khớp ~20%. Không deploy/tác động VPS; live rehearsal NOT_RUN; giữ recorded fallback. Nguyên nhân biến động RAM lịch sử chưa xác định |
 
 
 

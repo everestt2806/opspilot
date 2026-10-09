@@ -41,3 +41,9 @@
 ## PR
 
 Chưa được phép push, mở PR hoặc merge.
+
+
+- G5c UPDATE 10/10 — Leader cung cấp mốc PID cũ `26684` (09/10 15:35 local), commit MemAvailable `b69d19e` (22:51), bundle hiện tại (23:52), UI cũ 91% và collector deployment 6 ở 20.58% lúc 19:31:41Z. Đã xác nhận profile G2 còn nguyên và chỉ một Electron main dùng profile; đóng app cũ bình thường, xác nhận process thoát hết, mở build `app/out` hiện tại bằng cùng Windows user/profile (PID `32832`). Không tạo lại key.
+- G5c đối chiếu thành công ba lần Refresh qua SSH host pinning với collector SQLite cùng phút: 19:40 UI 801 MB/~21%, collector 20.29–20.56%; 19:43 UI 800 MB/~20%, collector 20.18–20.70%; 19:45 UI 792 MB/~20%, collector 20.34–20.53%. Collector chỉ được truy vấn read-only theo cột, không đọc raw payload. UI cũ 91% được giải thích phù hợp nhất bởi process Electron cũ chạy trước fix; không kết luận VPS đã giải phóng RAM khi restart app.
+- G5c kết luận: lỗi hiển thị hiện tại trong app cũ, không tái hiện trên build hiện tại; nguyên nhân vật lý của thay đổi MemAvailable lịch sử giữa G4a/G4b vẫn chưa được khoanh vùng vì không có mẫu process/container/pressure đồng thời. Không tác động VPS/credential, không deploy. Live rehearsal giữ `NOT_RUN`, verdict `DEMO_READY_RECORDED`; video G3 vẫn là build cũ/deployment v3.
+- G5c gate docs-only: chạy `git diff --check` và relative-link check; không cần lint/typecheck/Vitest/build do không đổi runtime. Commit cục bộ, không push/PR/merge.
