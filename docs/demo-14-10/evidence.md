@@ -223,3 +223,11 @@ Leader kiểm tra độc lập: MP4 G3 có track `vide` và không có `soun`; M
 - Lịch chiếu toàn bộ video 7:37 được đổi thành tổng chương trình 10–12 phút. Kịch bản 6–8 phút chỉ dùng các đoạn tua chọn, gắn nhãn trích đoạn G3 không liên tục và giữ file đầy đủ làm đối chứng.
 - Phiếu chỉ ghi “RAM hiện chưa xác minh được; không diễn tập deploy live”. Chi tiết `DB_ERROR` và chẩn đoán nằm trong phần evidence G5, không nằm trên phiếu.
 - PDF được in từ HTML bằng Edge headless với tùy chọn bỏ header/footer của trình duyệt; `pdfinfo` xác nhận 1 trang/A4, render đã xem, text trích xuất không có timestamp/header/footer hoặc URI `file:///`. Relative links không thiếu; MP4 G3 đọc được, 457.4s, handlers `vide`/`mdir`, không có `soun`; `git diff --check` pass.
+
+## G5b — kiểm tra refresh tài nguyên trong Electron đang chạy
+
+- Thời điểm: `2026-10-09T19:22Z` UTC. Mở cửa sổ OpsPilot đang chạy (Electron PID 26684) ở trang Servers. UI liệt kê VPS G2 Development VPS và ba app; cột lần kết nối vẫn hiện `2 hours ago`.
+- Gọi nút **Refresh** của trang bằng UI Automation; `InvokePattern.Invoke()` trả về. Sau đó accessibility snapshot vẫn hiện `2 hours ago`, với bộ đếm `Vừa kiểm tra 0` và `Không thể kiểm tra 0`. Không thấy trạng thái `checking`, lỗi hay giá trị tài nguyên mới.
+- Sau thao tác, ảnh được chụp bởi computer-use provider hiển thị một cửa sổ toàn màn hình khác thay vì Electron. Vì trạng thái giao diện không đổi và ảnh không xác nhận đúng cửa sổ, không thể khẳng định `vps:get-resources` đã chạy hoặc đọc được SSH; cũng không kết luận rằng SSH host-pinned thất bại. Đây là **điểm chặn xác minh UI**, không phải bằng chứng về lỗi safeStorage trong app thật.
+- Không thu mẫu VPS ở G5b và không thử kết nối khác. Không sửa credential/fingerprint, không tạo lệnh SSH ngoài app, không redeploy và không tác động VPS.
+- **Điều kiện gỡ:** đưa cửa sổ OpsPilot lên foreground nhìn thấy được thay vì cửa sổ fullscreen phủ lên, bấm Refresh trong app, rồi xác nhận tại cùng cửa sổ một trạng thái mới (`checked_now`/giá trị RAM-disk mới hoặc `check_failed` cùng thông báo). Nếu refresh trả thành công qua SSH đã pin, tiếp tục ba mẫu chỉ đọc cách nhau vài phút và đối chiếu với resource result. Giữ demo recorded cho tới khi xác minh được.

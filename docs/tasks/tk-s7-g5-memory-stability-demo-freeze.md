@@ -28,6 +28,7 @@
 - G5a UPDATE 10/10 — Chốt phiếu bỏ nhãn bản nháp; nội dung tách G3 build cũ/v3 khỏi app Git v4 và HTTP G4b. Kịch bản ghi rõ tổng 10–12 phút khi chiếu nguyên video 7:37, hoặc 6–8 phút với trích đoạn có nhãn.
 - G5a gates — PDF Edge headless không header/footer, A4 một trang; render và text đã kiểm tra. Relative links 0 thiếu; MP4 G3 457.4s, handlers `vide`/`mdir`, không `soun`; `git diff --check` PASS.
 - G5a commit local `f0d55e2` (`docs: chốt phiếu demo recorded cho G5a`); không push/PR/merge.
+- G5b UPDATE 10/10 — Kiểm tra trang Servers trên Electron PID 26684. Gọi UI Automation cho nút Refresh nhưng status vẫn `2 hours ago`, counters checked/failed đều 0; screenshot provider trả cửa sổ fullscreen khác nên chưa xác minh `vps:get-resources` hay SSH. Không thu mẫu, không thử đường SSH khác, không sửa credential/fingerprint hoặc tác động VPS. Điều kiện gỡ: hiện đúng cửa sổ Electron, refresh và xác nhận status/error/resource mới; chỉ khi SSH đã pin thành công mới lấy ba mẫu chỉ đọc.
 
 ## Kết quả G5
 
