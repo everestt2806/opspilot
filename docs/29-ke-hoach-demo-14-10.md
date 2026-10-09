@@ -56,8 +56,9 @@ một app Express thử, nhưng chưa đạt mốc 40 GB của pilot ML. Chưa x
 - Kiểm tra kết nối trong UI, Docker/Compose, quyền thư mục làm việc rồi deploy Express từ
   **`https://github.com/everestt2806/opspilot.git`**, branch `main`, root `demo-apps/express-api`
   qua wizard; xác nhận full commit SHA từ remote tại lúc chạy. Kiểm tra `/health` qua URL public
-  từ máy điều khiển. Sau đó chọn một commit lịch sử hợp lệ của cùng subdir để thử redeploy bằng
-  SHA cụ thể, không cần push; nếu kịch bản này không đạt gate thì chỉ trình bày một Git deploy thật.
+  từ máy điều khiển. Sau đó redeploy cùng app từ repo/ref đã liên kết: nếu nhánh đã có commit mới
+  thì ghi rõ hai SHA; nếu chưa đổi thì ghi rõ hai phiên bản cùng SHA. Không push repo để tạo SHA
+  thứ hai và không trình bày redeploy cùng SHA là cập nhật mã nguồn.
 - Ghi bằng chứng repository, branch, commit SHA, deployment ID, port, URL, HTTP status,
   container/image ID, thời gian và
   trạng thái exposure vào `docs/demo-14-10/evidence.md`; ghi lỗi thật nếu bước nào thất bại.
