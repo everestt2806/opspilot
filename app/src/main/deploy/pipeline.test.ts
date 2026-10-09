@@ -13,9 +13,12 @@ import { closeDatabase, initializeDatabase } from '../db'
 import { VpsRepository } from '../db/vpsRepository'
 import type { SshManager } from '../ssh/manager'
 import { DeployPipeline, resolveCollectorAppPath, resolveCollectorDir } from './pipeline'
+import { detectSource } from './detectionDto'
 import { buildSourceTree } from '../detectors/sourceTree'
 import { createGitSnapshotFromLocalFixture } from '../git/snapshot'
+import type { GitSnapshot } from '../git/snapshot'
 import { DeployService } from './service'
+import type { PreparedGitLease } from './preparedGitSources'
 
 const PRECHECK_OK = [
   'RAM_MB|2048',
@@ -50,6 +53,8 @@ interface StubSshOptions {
     | null
     | Promise<{ generation: string; device?: number; inode?: number; size: number } | null>
   runtimeImage?: (appName: string, composeCall: number) => string
+  remoteEnvContent?: string
+  remoteEnvReadFails?: boolean
 }
 
 let testDirectory: string | null = null
@@ -118,6 +123,18 @@ function createHarness(options: StubSshOptions = {}): void {
     }
     if (command.includes('free -m')) {
       return { code: 0, stdout: options.precheckOutput ?? PRECHECK_OK, stderr: '' }
+    }
+    if (command.includes('head -c 65537') && command.includes('/.env')) {
+      if (options.remoteEnvReadFails) {
+        return { code: 1, stdout: '', stderr: 'fake-secret-not-for-logs' }
+      }
+      const priorWrite = [...(writeFileMock?.mock.calls ?? [])]
+        .reverse()
+        .find(([, remotePath]) => String(remotePath).endsWith('/.env'))
+      const content = options.remoteEnvContent ?? (priorWrite?.[2] as string | undefined)
+      return content === undefined
+        ? { code: 66, stdout: '', stderr: 'fake-secret-not-for-logs' }
+        : { code: 0, stdout: content, stderr: '' }
     }
     if (command.includes('docker build')) {
       if (options.buildResult) return options.buildResult(command)
@@ -256,6 +273,27 @@ function deployInput(overrides: Partial<DeployInput> = {}): DeployInput {
     source_path: sourceDirectory ?? '',
     env: {},
     ...overrides
+  }
+}
+
+function fakeGitLease(sourcePath: string): PreparedGitLease {
+  const snapshot: GitSnapshot = {
+    repositoryUrl: 'https://github.com/example/fake.git',
+    commitSha: 'c'.repeat(40),
+    rootDirectory: sourcePath,
+    snapshotDirectory: sourcePath,
+    cleanup: vi.fn()
+  }
+  return {
+    handle: 'fake-existing-git-handle',
+    snapshot,
+    gitRepoUrl: snapshot.repositoryUrl,
+    gitRef: 'main',
+    gitRoot: '.',
+    commitSha: snapshot.commitSha,
+    sourcePath,
+    expiresAt: Date.now() + 60_000,
+    plan: detectSource(sourcePath).plan!
   }
 }
 
@@ -861,8 +899,78 @@ describe('DeployPipeline', () => {
     expect(envWrites[1].content).toContain(
       `DATABASE_URL=postgresql://opspilot:${firstPassword}@postgres:5432/opspilot`
     )
-    expect(readFileMock).toHaveBeenCalledWith(vpsId, '/opt/opspilot/demo-api/.env')
+    expect(sshExec.mock.calls.some(([, command]) => String(command).includes('head -c 65537'))).toBe(
+      true
+    )
     expect(JSON.stringify(events)).not.toContain(firstPassword)
+  })
+
+  it.each(['local', 'git'] as const)(
+    'preserves all existing env and applies explicit non-DB overrides on %s redeploy',
+    async (sourceType) => {
+      createHarness()
+      writeFileSync(join(sourceDirectory!, '.env.example'), 'SESSION_SECRET=fake-example\n')
+      const initial = deployInput({
+        env: {
+          SESSION_SECRET: 'fake-existing-session-secret',
+          API_TOKEN: 'fake-existing-api-token'
+        }
+      })
+      const lease = sourceType === 'git' ? fakeGitLease(sourceDirectory!) : undefined
+      const first = pipeline.run(initial, undefined, lease)
+      expect((await waitForFinished(first.deploymentId)).status).toBe('running')
+      const initialEnv = writeFileCalls().find((call) => call.remotePath.endsWith('.env'))?.content
+      expect(initialEnv).toContain('SESSION_SECRET=fake-existing-session-secret')
+      expect(initialEnv).toContain('API_TOKEN=fake-existing-api-token')
+
+      const secondInput = deployInput({
+        app_id: currentAppId(),
+        env: { SESSION_SECRET: 'fake-explicit-session-override', PORT: '3210' }
+      })
+      const second = pipeline.run(secondInput, undefined, lease)
+      expect((await waitForFinished(second.deploymentId)).status).toBe('running')
+
+      const envWrites = writeFileCalls().filter((call) => call.remotePath.endsWith('.env'))
+      expect(envWrites).toHaveLength(2)
+      expect(envWrites[1]?.content).toContain('SESSION_SECRET=fake-explicit-session-override')
+      expect(envWrites[1]?.content).toContain('API_TOKEN=fake-existing-api-token')
+      expect(envWrites[1]?.content).toContain('PORT=3210')
+      expect(envWrites[1]?.content).toContain('DATABASE_URL=postgresql://opspilot:')
+      expect(envWrites[1]?.content).toContain('POSTGRES_PASSWORD=')
+      expect(envWrites[1]?.content).not.toContain('fake-existing-session-secret')
+      expect(JSON.stringify(events)).not.toContain('fake-existing-session-secret')
+      expect(JSON.stringify(events)).not.toContain('fake-explicit-session-override')
+      const actionLogs = database.prepare('SELECT message FROM action_log').all()
+      expect(JSON.stringify(actionLogs)).not.toContain('fake-existing-session-secret')
+      expect(JSON.stringify(actionLogs)).not.toContain('fake-explicit-session-override')
+    }
+  )
+
+  it('fails before upload or env write when existing required env is missing or unreadable', async () => {
+    createHarness({
+      remoteEnvContent:
+        'PORT=3000\nDATABASE_URL=fake-existing-db\nPOSTGRES_PASSWORD=fake-existing-password\n',
+      remoteEnvReadFails: true
+    })
+    writeFileSync(join(sourceDirectory!, '.env.example'), 'SESSION_SECRET=fake-example\n')
+    const initial = pipeline.run(deployInput({ env: { SESSION_SECRET: 'fake-existing-secret' } }))
+    expect((await waitForFinished(initial.deploymentId)).status).toBe('running')
+
+    const missing = pipeline.run(deployInput({ app_id: currentAppId() }))
+    const failed = await waitForFinished(missing.deploymentId)
+    expect(failed.status).toBe('failed')
+    const precheckFailure = events.find(
+      (event) => event.type === 'step-failed' && event.deployment_id === missing.deploymentId
+    )
+    expect(precheckFailure?.type).toBe('step-failed')
+    if (precheckFailure?.type === 'step-failed') {
+      expect(precheckFailure.step).toBe('PRECHECK')
+      expect(precheckFailure.error.message).not.toContain('fake-secret-not-for-logs')
+      expect(precheckFailure.error.message).toContain('SESSION_SECRET')
+    }
+    expect(uploadDirMock).toHaveBeenCalledTimes(2)
+    expect(writeFileCalls().filter((call) => call.remotePath.endsWith('.env'))).toHaveLength(1)
+    expect(JSON.stringify(events)).not.toContain('fake-existing-secret')
   })
 
   it('app build fail khong xoa collector tag dang ton tai', async () => {

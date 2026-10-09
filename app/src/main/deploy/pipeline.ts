@@ -20,11 +20,11 @@ import { logger, maskSecrets } from '../logger'
 import { SshAbortedError, SshManager } from '../ssh/manager'
 import { shellQuote } from '../ssh/shellQuote'
 import { allocatePort, PORT_RANGE } from './portPolicy'
-import { runPrecheck } from './precheck'
+import { readExistingEnvFile, runPrecheck } from './precheck'
 import {
   buildEnvFile,
   parseEnvFile,
-  readEnvValue,
+  resolveExistingEnv,
   renderBuildArgs,
   renderCompose,
   renderDockerfile,
@@ -52,6 +52,35 @@ interface RestoredGitSource {
   framework: App['framework']
   repositoryUrl: string
   commitSha: string
+}
+
+function assertExistingEnvResolution(
+  resolution: ReturnType<typeof resolveExistingEnv>,
+  step: 'PRECHECK' | 'RENDER'
+): void {
+  const issues: string[] = []
+  if (resolution.missingKeys.length > 0) {
+    issues.push(`Missing required key names: ${resolution.missingKeys.join(', ')}`)
+  }
+  if (resolution.protectedOverrides.length > 0) {
+    issues.push(
+      `PostgreSQL credential keys cannot be changed during redeploy: ${resolution.protectedOverrides.join(', ')}`
+    )
+  }
+  if (issues.length > 0) {
+    throw new AppError('PRECHECK_FAILED', issues.join('. '), { step })
+  }
+}
+
+function existingEnvUnavailableError(
+  requiredKeys: string[],
+  step: 'PRECHECK' | 'RENDER'
+): AppError {
+  return new AppError(
+    'PRECHECK_FAILED',
+    `Could not verify the existing .env; required key names unverified: ${requiredKeys.join(', ') || 'none'}.`,
+    { step }
+  )
 }
 
 export function resolveCollectorDir(): string {
@@ -994,10 +1023,45 @@ export class DeployPipeline {
 
   private async stepPrecheck(ctx: RunContext): Promise<void> {
     await this.inStep(ctx, 'PRECHECK', async () => {
-      const detail = await runPrecheck(this.ssh, ctx.app.vps_id, {
+      let detail = await runPrecheck(this.ssh, ctx.app.vps_id, {
         port: ctx.newApp ? ctx.app.host_port : null,
         signal: ctx.signal
       })
+
+      const input = this.requireInput(ctx) as DeployInputWithRemoteSource
+      if (!ctx.newApp && !input.remote_source_path) {
+        const plan = this.requirePlan(ctx)
+        let existingEnv: string
+        try {
+          existingEnv = await readExistingEnvFile(
+            this.ssh,
+            ctx.app.vps_id,
+            posixJoin(WORK_ROOT, ctx.app.name, '.env')
+          )
+        } catch {
+          throw existingEnvUnavailableError(plan.requiredEnv, 'PRECHECK')
+        }
+        const resolution = resolveExistingEnv(
+          input.env,
+          existingEnv,
+          plan.requiredEnv,
+          plan.needsDb || ctx.app.needs_db === 1
+        )
+        assertExistingEnvResolution(resolution, 'PRECHECK')
+        detail = {
+          ...detail,
+          checks: [
+            ...detail.checks,
+            {
+              label: 'Required environment',
+              required: 'detector-required keys are available',
+              actual: 'Required keys are available',
+              ok: true
+            }
+          ],
+          passed: detail.passed
+        }
+      }
       this.log(ctx, 'PRECHECK', `${detail.command}\n`, 'stdout')
       for (const check of detail.checks) {
         this.log(
@@ -1102,30 +1166,25 @@ export class DeployPipeline {
       if (remoteSource) {
         const existingEnv = await this.ssh.readFile(ctx.app.vps_id, posixJoin(appDir, '.env'))
         renderEnv = { ...input.env, ...parseEnvFile(existingEnv) }
-      } else if (plan.needsDb && !ctx.newApp) {
-        const existingEnv = await this.ssh.readFile(ctx.app.vps_id, posixJoin(appDir, '.env'))
-        const existingPassword = readEnvValue(existingEnv, 'POSTGRES_PASSWORD')
-        const existingDatabaseUrl = readEnvValue(existingEnv, 'DATABASE_URL')
-
-        if (existingPassword) {
-          renderEnv = {
-            ...input.env,
-            POSTGRES_PASSWORD: existingPassword,
-            ...(existingDatabaseUrl ? { DATABASE_URL: existingDatabaseUrl } : {})
-          }
-          this.log(
-            ctx,
-            'RENDER',
-            'Giữ nguyên credential PostgreSQL hiện có để volume tiếp tục truy cập được.\n',
-            'stdout'
+      } else if (!ctx.newApp) {
+        let existingEnv: string
+        try {
+          existingEnv = await readExistingEnvFile(
+            this.ssh,
+            ctx.app.vps_id,
+            posixJoin(appDir, '.env')
           )
-        } else if (ctx.app.current_deployment_id !== null) {
-          throw new AppError(
-            'UNKNOWN',
-            'Không đọc được credential PostgreSQL hiện có. Đã dừng trước khi ghi .env để tránh làm mất kết nối database.',
-            { step: 'RENDER' }
-          )
+        } catch {
+          throw existingEnvUnavailableError(plan.requiredEnv, 'RENDER')
         }
+        const resolution = resolveExistingEnv(
+          input.env,
+          existingEnv,
+          plan.requiredEnv,
+          plan.needsDb || ctx.app.needs_db === 1
+        )
+        assertExistingEnvResolution(resolution, 'RENDER')
+        renderEnv = resolution.env
       }
       const env = buildEnvFile(renderEnv, plan.needsDb)
       const files: Array<{ name: string; content: string; mode?: number }> = [

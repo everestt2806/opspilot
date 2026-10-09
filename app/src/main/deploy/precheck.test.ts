@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
+import type { SshManager } from '../ssh/manager'
 import {
   baselineCommand,
   evaluateBaseline,
   parseBaselineOutput,
   parseListeningPorts,
+  readExistingEnvFile,
   RAM_MIN_MB
 } from './precheck'
 
@@ -128,5 +130,48 @@ describe('evaluateBaseline', () => {
     )
     expect(detail.passed).toBe(false)
     expect(detail.checks.find((check) => check.label === 'Cổng 30001')?.ok).toBe(false)
+  })
+})
+
+describe('readExistingEnvFile', () => {
+  it('uses a bounded read-only SshManager command and accepts only its captured content', async () => {
+    const ssh = {
+      exec: vi.fn<SshManager['exec']>(async () => ({
+        code: 0,
+        stdout: 'API_TOKEN=fake-secret-value\n',
+        stderr: ''
+      }))
+    }
+    const result = await readExistingEnvFile(ssh as never, 7, '/opt/opspilot/demo/.env')
+
+    expect(result).toBe('API_TOKEN=fake-secret-value\n')
+    expect(ssh.exec).toHaveBeenCalledWith(
+      7,
+      expect.stringContaining('head -c'),
+      expect.objectContaining({ timeoutMs: 10_000, logCommand: false })
+    )
+    expect(ssh.exec.mock.calls[0][1]).toContain("'/opt/opspilot/demo/.env'")
+  })
+
+  it.each([
+    { name: 'missing or unreadable file', result: { code: 66, stdout: '', stderr: 'private fake detail' } },
+    {
+      name: 'oversized file',
+      result: { code: 0, stdout: 'x'.repeat(64 * 1024 + 1), stderr: '' }
+    }
+  ])('fails closed for $name without returning raw source output', async ({ result }) => {
+    const ssh = { exec: vi.fn(async () => result) }
+    await expect(readExistingEnvFile(ssh as never, 7, '/opt/opspilot/demo/.env')).rejects.toMatchObject({
+      userMessage: 'Không thể xác minh cấu hình environment hiện có trên VPS.'
+    })
+  })
+
+  it('sanitizes SSH exceptions', async () => {
+    const ssh = {
+      exec: vi.fn(async () => Promise.reject(new Error('fake-secret-value in stderr')))
+    }
+    await expect(readExistingEnvFile(ssh as never, 7, '/opt/opspilot/demo/.env')).rejects.toMatchObject({
+      userMessage: 'Không thể xác minh cấu hình environment hiện có trên VPS.'
+    })
   })
 })

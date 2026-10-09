@@ -21,10 +21,17 @@ import type { SshManager } from '../ssh/manager'
 import { DeployPipeline } from './pipeline'
 import { SshExposureManager, type ExposureManager } from './exposure'
 import { allocatePort } from './portPolicy'
-import { listListeningPorts, runPrecheck, toPrecheckResult } from './precheck'
+import {
+  listListeningPorts,
+  readExistingEnvFile,
+  runPrecheck,
+  toPrecheckResult
+} from './precheck'
 import { detectSource } from './detectionDto'
 import { PreparedGitSources, type PreparedGitLease } from './preparedGitSources'
 import { AppError } from '../errors'
+import { resolveExistingEnv } from './templates'
+import { join as posixJoin } from 'node:path/posix'
 
 /**
  * Lớp dịch vụ cho các kênh detect/deploy/app — mọi handler IPC đi qua đây,
@@ -97,9 +104,63 @@ export class DeployService {
 
     // Khi redeploy, chính phiên bản hiện tại đang giữ cổng này. Pipeline sẽ thay container
     // bằng compose up nên chỉ kiểm tra cổng trống đối với app mới.
-    const detail = await runPrecheck(this.ssh, vps.id, {
+    let detail = await runPrecheck(this.ssh, vps.id, {
       port: existingApp === undefined ? assignedPort : null
     })
+
+    const deployedExistingApp = existingApp?.current_deployment_id ? existingApp : null
+    if (deployedExistingApp) {
+      const sourcePlan = prepared?.plan ??
+        (this.isGitInput(input)
+          ? null
+          : detectSource((input as DeployInput).source_path).plan)
+      const checks: PrecheckResult['checks'] = [...detail.checks]
+      if (!sourcePlan) {
+        throw new AppError('VALIDATION', 'Không thể xác minh source đã chuẩn bị. Hãy chuẩn bị lại.')
+      }
+      try {
+        const envContent = await readExistingEnvFile(
+          this.ssh,
+          vps.id,
+          posixJoin('/opt/opspilot', deployedExistingApp.name, '.env')
+        )
+        const resolution = resolveExistingEnv(
+          input.env,
+          envContent,
+          sourcePlan.requiredEnv,
+          sourcePlan.needsDb || deployedExistingApp.needs_db === 1
+        )
+        checks.push({
+          label: 'Required environment',
+          required: 'detector-required keys are available',
+          actual:
+            resolution.missingKeys.length > 0
+              ? `Missing key names: ${resolution.missingKeys.join(', ')}`
+              : 'Required keys are available',
+          ok: resolution.missingKeys.length === 0
+        })
+        if (resolution.protectedOverrides.length > 0) {
+          checks.push({
+            label: 'PostgreSQL credentials',
+            required: 'keep the existing credential pair',
+            actual: `Cannot override keys: ${resolution.protectedOverrides.join(', ')}`,
+            ok: false
+          })
+        }
+      } catch {
+        checks.push({
+          label: 'Required environment',
+          required: 'existing .env is readable and required keys are available',
+          actual: `Could not verify existing .env; required key names unverified: ${sourcePlan.requiredEnv.join(', ') || 'none'}`,
+          ok: false
+        })
+      }
+      detail = {
+        ...detail,
+        checks,
+        passed: detail.passed && checks.every((check) => check.ok)
+      }
+    }
     const result = toPrecheckResult(detail, assignedPort, vps.host)
     if (this.isGitInput(input) && detail.passed) {
       const gitInput = input as GitDeployInput

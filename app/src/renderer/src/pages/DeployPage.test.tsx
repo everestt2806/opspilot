@@ -372,10 +372,8 @@ describe('DeployPage safe environment defaults', () => {
     async (source) => {
       const { invoke } = await reachConfig(source, true)
       expect(await screen.findByText(strings.deploy.config.existingEnvNotice)).toBeTruthy()
-      expect((screen.getByLabelText('PORT') as HTMLInputElement).value).toBe('3210')
-      expect((screen.getByLabelText('ENABLE_FAULT_ENDPOINTS') as HTMLInputElement).value).toBe(
-        'false'
-      )
+      expect((screen.getByLabelText('PORT') as HTMLInputElement).value).toBe('')
+      expect((screen.getByLabelText('ENABLE_FAULT_ENDPOINTS') as HTMLInputElement).value).toBe('')
       expect((screen.getByLabelText('SECRET_KEY') as HTMLInputElement).value).toBe('')
 
       fireEvent.click(screen.getByText(strings.deploy.next))
@@ -385,6 +383,10 @@ describe('DeployPage safe environment defaults', () => {
       fireEvent.click(screen.getByLabelText(strings.deploy.config.existingEnvConfirm))
       fireEvent.change(screen.getByLabelText('SECRET_KEY'), {
         target: { value: 'fake-existing-secret' }
+      })
+      fireEvent.change(screen.getByLabelText('PORT'), { target: { value: '3211' } })
+      fireEvent.change(screen.getByLabelText('ENABLE_FAULT_ENDPOINTS'), {
+        target: { value: 'false' }
       })
       fireEvent.change(screen.getByLabelText('CUSTOM_VALUE'), {
         target: { value: 'manually-entered' }
@@ -397,13 +399,33 @@ describe('DeployPage safe environment defaults', () => {
           app_id: 10,
           app_name: APP_1.name,
           env: {
-            PORT: '3210',
+            PORT: '3211',
             ENABLE_FAULT_ENDPOINTS: 'false',
             SECRET_KEY: 'fake-existing-secret',
             CUSTOM_VALUE: 'manually-entered'
           }
         })
       )
+    }
+  )
+
+  it.each(['local', 'git'] as const)(
+    '%s deployed existing app may leave required secrets blank for the backend retention check',
+    async (source) => {
+      const { invoke } = await reachConfig(source, true)
+      expect(await screen.findByText(strings.deploy.config.existingEnvNotice)).toBeTruthy()
+      expect((screen.getByLabelText('PORT') as HTMLInputElement).value).toBe('')
+      expect((screen.getByLabelText('ENABLE_FAULT_ENDPOINTS') as HTMLInputElement).value).toBe('')
+      expect((screen.getByLabelText('SECRET_KEY') as HTMLInputElement).value).toBe('')
+      fireEvent.click(screen.getByLabelText(strings.deploy.config.existingEnvConfirm))
+      fireEvent.click(screen.getByText(strings.deploy.next))
+
+      await screen.findByText('RAM trống')
+      const precheckInput = invoke.mock.calls.find(([channel]) => channel === 'deploy:precheck')?.[1] as {
+        env: Record<string, string>
+      }
+      expect(precheckInput.env).toEqual({})
+      expect(JSON.stringify(precheckInput)).not.toContain('fake-existing-secret')
     }
   )
 })

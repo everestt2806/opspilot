@@ -286,12 +286,14 @@ const BASE_EN_STRINGS = {
       envHint:
         'Secrets are encrypted locally, written only to the .env file on the VPS, and never shown in logs.',
       existingEnvNotice:
-        'Existing environment values are not loaded from the VPS. Re-enter values required for this redeploy; secret values are never prefilled.',
-      existingEnvConfirm: 'I will review and re-enter the required values for this redeploy.',
+        'Blank values reuse the current VPS .env only when precheck verifies the required keys. Nonblank values override matching entries. Existing values are never sent back to this screen; PostgreSQL credentials remain unchanged.',
+      existingEnvConfirm: 'I reviewed this redeploy. Blank values may reuse verified VPS values, and PostgreSQL credentials will stay unchanged.',
       existingEnvConfirmRequired:
         'Confirm that you reviewed the environment values before continuing.',
       dbUrlHint:
         'DATABASE_URL: leave empty to let the tool create Postgres with a random password.',
+      dbUrlExistingHint:
+        'DATABASE_URL and POSTGRES_PASSWORD are retained from the current VPS .env and cannot be rotated in a routine redeploy.',
       manualTitle: 'Manual steps after deploy',
       missingRequired: (keys: string[]) => `Missing required variables: ${keys.join(', ')}.`
     },
@@ -1345,11 +1347,13 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       ...BASE_EN_STRINGS.deploy.config,
       appNameRule: 'Chữ thường a-z, chữ số và dấu gạch ngang — phải bắt đầu bằng chữ cái.',
       existingEnvNotice:
-        'Không tải giá trị môi trường hiện có từ VPS. Hãy nhập lại các giá trị cần cho lần triển khai này; secret không được tự điền.',
+        'Giá trị để trống chỉ dùng lại từ .env trên VPS khi precheck xác minh đủ khóa bắt buộc. Giá trị đã nhập sẽ ghi đè khóa tương ứng. Giá trị hiện có không gửi về màn hình; credential PostgreSQL được giữ nguyên.',
       existingEnvConfirm:
-        'Tôi sẽ kiểm tra và nhập lại các giá trị cần thiết cho lần triển khai này.',
+        'Tôi đã rà soát lần triển khai này. Giá trị để trống có thể dùng lại khi VPS xác minh được; credential PostgreSQL sẽ giữ nguyên.',
       existingEnvConfirmRequired:
         'Hãy xác nhận đã kiểm tra các giá trị môi trường trước khi tiếp tục.',
+      dbUrlExistingHint:
+        'DATABASE_URL và POSTGRES_PASSWORD được giữ từ .env hiện tại trên VPS; không thể xoay credential trong lần redeploy thông thường.',
       missingRequired: (keys: string[]) => `Thiếu các biến môi trường bắt buộc: ${keys.join(', ')}.`
     },
     sourceLabel: 'Thư mục mã nguồn',
@@ -2082,9 +2086,11 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       ...BASE_EN_STRINGS.deploy.config,
       appNameRule: '仅限小写字母 a-z、数字和连字符，且必须以字母开头。',
       existingEnvNotice:
-        '不会从 VPS 加载现有环境变量。请为本次重新部署重新输入所需值；不会自动填入密钥。',
-      existingEnvConfirm: '我会检查并重新输入本次重新部署所需的值。',
+        '留空值仅在预检查确认必需键存在后才会复用 VPS 当前 .env。非空值会覆盖对应项。现有值不会返回此页面；PostgreSQL 凭据保持不变。',
+      existingEnvConfirm: '我已检查本次重新部署；留空项可能复用已验证的 VPS 值，PostgreSQL 凭据保持不变。',
       existingEnvConfirmRequired: '继续前请确认已检查环境变量。',
+      dbUrlExistingHint:
+        'DATABASE_URL 和 POSTGRES_PASSWORD 将沿用 VPS 当前 .env；常规重新部署不会轮换 PostgreSQL 凭据。',
       missingRequired: (keys: string[]) => `缺少必需的环境变量: ${keys.join(', ')}。`
     },
     sourceLabel: '源码文件夹',
@@ -2803,9 +2809,11 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       ...BASE_EN_STRINGS.deploy.config,
       appNameRule: '英小文字 a-z、数字、ハイフン（先頭は英文字である必要があります）。',
       existingEnvNotice:
-        'VPS 上の既存環境変数は読み込みません。今回の再デプロイに必要な値を再入力してください。シークレットは自動入力しません。',
-      existingEnvConfirm: '今回の再デプロイに必要な値を確認して再入力します。',
+        '空欄は、事前チェックで必須キーを確認できた場合に限り VPS の現在の .env を再利用します。入力値は対応する項目を上書きします。既存値は画面へ返さず、PostgreSQL の認証情報は維持します。',
+      existingEnvConfirm: '今回の再デプロイ内容を確認しました。空欄は検証済みの VPS 値を再利用し、PostgreSQL 認証情報は維持します。',
       existingEnvConfirmRequired: '続行する前に環境変数を確認したことを承認してください。',
+      dbUrlExistingHint:
+        'DATABASE_URL と POSTGRES_PASSWORD は VPS の現在の .env を維持します。通常の再デプロイでは PostgreSQL 認証情報を変更しません。',
       missingRequired: (keys: string[]) => `必須の環境変数が不足しています: ${keys.join(', ')}。`
     },
     sourceLabel: 'ソースフォルダ',

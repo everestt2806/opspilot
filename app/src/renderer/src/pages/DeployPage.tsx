@@ -145,7 +145,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
   const [optionalKeys, setOptionalKeys] = useState<string[]>([])
   const [pendingOptional, setPendingOptional] = useState<string | undefined>(undefined)
   const [configError, setConfigError] = useState<string | null>(null)
-  const [existingEnvConfirmed, setExistingEnvConfirmed] = useState(false)
+  const [existingEnvConfirmedForAppId, setExistingEnvConfirmedForAppId] = useState<number | null>(null)
   const [step, setStep] = useState(0)
   const [precheck, setPrecheck] = useState<PrecheckResult | null>(null)
   const [precheckSignature, setPrecheckSignature] = useState<string | null>(null)
@@ -180,6 +180,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
 
   const selectedExistingApp =
     targetMode === 'existing' && appSelect > 0 ? apps.find((app) => app.id === appSelect) : null
+  const isDeployedExistingTarget = selectedExistingApp?.current_deployment_id != null
   const appName = targetMode === 'existing' ? (selectedExistingApp?.name ?? '') : newAppName
 
   const clearPreselectSession = useCallback((): void => {
@@ -201,7 +202,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
       // Bỏ app_id cũ ngay lập tức khi đổi VPS
       setAppSelect(-1)
       setEnvValues({})
-      setExistingEnvConfirmed(false)
+      setExistingEnvConfirmedForAppId(null)
       setDetection(null)
       setOptionalKeys([])
       cancelPendingGitPrepare()
@@ -347,7 +348,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
       return false
     }
     setDetection(result.data)
-    setEnvValues(safeRequiredEnvDefaults(result.data))
+    setEnvValues(isDeployedExistingTarget ? {} : safeRequiredEnvDefaults(result.data))
     setOptionalKeys([])
     return true
   }
@@ -412,7 +413,9 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
     setPreparedGit(result.data)
     preparedGitRef.current = result.data
     setDetection(result.data.detection)
-    setEnvValues(safeRequiredEnvDefaults(result.data.detection))
+    setEnvValues(
+      isDeployedExistingTarget ? {} : safeRequiredEnvDefaults(result.data.detection)
+    )
     setOptionalKeys([])
   }
 
@@ -477,6 +480,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
 
   function requiredMissing(): string[] {
     if (!matches) return []
+    if (isDeployedExistingTarget) return []
     return matches.required_env.filter((key) => {
       if (matches.needs_db && key === 'DATABASE_URL') return false
       return String(envValues[key] ?? '').trim() === ''
@@ -599,7 +603,11 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
 
   async function continueFromConfig(): Promise<void> {
     if (!matches) return
-    if (targetMode === 'existing' && !existingEnvConfirmed) {
+    if (
+      isDeployedExistingTarget &&
+      selectedExistingApp &&
+      existingEnvConfirmedForAppId !== selectedExistingApp.id
+    ) {
       setConfigError(strings.deploy.config.existingEnvConfirmRequired)
       return
     }
@@ -1035,7 +1043,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                             setEnvValues({})
                             setDetection(null)
                             setOptionalKeys([])
-                            setExistingEnvConfirmed(false)
+                            setExistingEnvConfirmedForAppId(null)
                             if (selectedId > 0) {
                               clearPreselectSession()
                               setAppSelect(selectedId)
@@ -1220,7 +1228,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                       if (value === -1) {
                         setTargetMode('new')
                         setAppSelect(-1)
-                        setExistingEnvConfirmed(false)
+                        setExistingEnvConfirmedForAppId(null)
                         setEnvValues(safeRequiredEnvDefaults(matches))
                         if (!userEditedNewAppName && !newAppName.trim() && sourcePath) {
                           setNewAppName(toAppName(sourcePath))
@@ -1229,8 +1237,13 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                       }
                       setTargetMode('existing')
                       setAppSelect(value)
-                      setExistingEnvConfirmed(false)
-                      setEnvValues(safeRequiredEnvDefaults(matches))
+                      setExistingEnvConfirmedForAppId(null)
+                      const selectedApp = apps.find((app) => app.id === value)
+                      setEnvValues(
+                        selectedApp?.current_deployment_id
+                          ? {}
+                          : safeRequiredEnvDefaults(matches)
+                      )
                     }}
                     options={[
                       { value: -1, label: strings.deploy.config.newApp },
@@ -1266,7 +1279,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                       {strings.deploy.config.envHint}
                     </Typography.Text>
                   </div>
-                  {targetMode === 'existing' && selectedExistingApp && (
+                  {isDeployedExistingTarget && selectedExistingApp && (
                     <Space direction="vertical" style={{ marginTop: 8 }}>
                       <Alert
                         type="warning"
@@ -1274,10 +1287,12 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                         message={strings.deploy.config.existingEnvNotice}
                       />
                       <Checkbox
-                        checked={existingEnvConfirmed}
+                        checked={existingEnvConfirmedForAppId === selectedExistingApp.id}
                         onChange={(event) => {
                           invalidatePrecheck()
-                          setExistingEnvConfirmed(event.target.checked)
+                          setExistingEnvConfirmedForAppId(
+                            event.target.checked ? selectedExistingApp.id : null
+                          )
                         }}
                       >
                         {strings.deploy.config.existingEnvConfirm}
@@ -1294,7 +1309,9 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                         value={envValues[key] ?? ''}
                         hint={
                           matches.needs_db && key === 'DATABASE_URL'
-                            ? strings.deploy.config.dbUrlHint
+                            ? isDeployedExistingTarget
+                              ? strings.deploy.config.dbUrlExistingHint
+                              : strings.deploy.config.dbUrlHint
                             : undefined
                         }
                         onChange={(value) => setEnv(key, value)}
