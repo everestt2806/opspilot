@@ -190,3 +190,7 @@ Leader review 09/10/2026: số 94% trên UI G4 đến từ `MemFree`, không th�
 - `pnpm --filter @opspilot/app test` — PASS, 71 files / 674 tests. Vitest ghi jsdom warnings `getComputedStyle` pseudo-elements/canvas, exit code 0.
 - `pnpm build` — PASS, production Electron/Vite build.
 - `git diff --check` — PASS; Git có cảnh báo CRLF→LF khi chạm các tài liệu Windows.
+
+## Review G4b — video và verdict chưa chốt
+
+Leader kiểm tra lại 10/10/2026: SQLite app 1/current deployment 6/v4 là `running/reachable`, full SHA khớp remote; ảnh Electron preselect, precheck và deploy thành công có thật, bốn URL external HTTP 200. Phần live deploy core đạt. Tuy nhiên MP4 `g4b-live-rehearsal-20261009.mp4` có track `soun` trong cấu trúc file (chưa kết luận có âm thanh nghe được), trái với câu “không có audio track”; timestamp video 16:23:40Z bắt đầu sau khi deploy v4 hoàn tất 16:21:59Z, nên clip chỉ quay rehearsal/kiểm tra lại, **không ghi chính lượt deploy v4**. Verdict `DEMO_READY_LIVE` và phiếu PDF vẫn chờ correction G4b; container ID chưa xác minh được giữ là giới hạn minh bạch, không bịa giá trị.

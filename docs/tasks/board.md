@@ -19,7 +19,7 @@
 | TK-S7 G3 | [Diễn tập demo trên VPS thật](tk-s7-g3-demo-rehearsal.md) | Worker | 12/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | Leader xác minh remote SHA, SQLite v3, 3 URL HTTP 200 và MP4 457.4s video-only; local `764d2d6`, chưa push/merge |
 | TK-S7 G4 | [Sửa copy nguồn và freeze gói demo](tk-s7-g4-final-rehearsal-freeze.md) | Worker | 13/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | G4a xác nhận MemAvailable 3,061 MiB, sửa kết luận RAM/PDF; live G4a NOT_RUN do chưa xác nhận wizard precheck, verdict recorded chờ Leader review |
 | TK-S7 G4a | [Đo đúng RAM khả dụng và chốt live gate](tk-s7-g4a-memory-available-live-gate.md) | Worker | trước freeze 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Local G4a: MemFree 314 MiB / MemAvailable 3,061 MiB; UI/precheck parity và PDF cập nhật; live NOT_RUN vì Electron wizard precheck chưa xác minh, fallback G3 SHA/deployment giữ nguyên |
-| TK-S7 G4b | [Live rehearsal qua nút triển khai phiên bản mới](tk-s7-g4b-live-rehearsal-navigation.md) | Worker | trước freeze 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Live preselect, Electron precheck, redeploy cùng SHA và video 7:48 trên cùng build đạt; local commit G4b. Chưa xác minh container ID (SSH CLI read-only exit 255); đề xuất `DEMO_READY_LIVE` có giới hạn, xem task/evidence |
+| TK-S7 G4b | [Live rehearsal qua nút triển khai phiên bản mới](tk-s7-g4b-live-rehearsal-navigation.md) | Worker | trước freeze 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Core live v4/precheck/HTTP PASS; video G4b có `soun` track và bắt đầu sau deploy, nên freeze/verdict chưa duyệt; container ID ghi giới hạn |
 
 TK-A18 Titlebar fix 05: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `30747f1`; WCO drag region dùng
 đúng rectangle, native controls không còn chồng caption và màu overlay đã liền shell; Snap Layout ghi
@@ -114,7 +114,7 @@ manual-only, không push/PR/merge.
 | D14-G3 | [Rehearsal 1, ảnh/video fallback](tk-s7-g3-demo-rehearsal.md) | Worker | 12/10 | CHỜ REVIEW | D14-G2b | Local rehearsal G3 PASS; Git cùng SHA, ba app reachable; video 7:37 im lặng; phiếu A4 vẫn bản nháp |
 | D14-G4 | [Rehearsal 2, gate cuối, freeze và phiếu in](tk-s7-g4-final-rehearsal-freeze.md) | Worker | 13/10 | CHỜ REVIEW | D14-G3 | Phiếu A4 một trang và gates pass; verdict chờ G4a vì phép đo RAM preflight dùng sai semantics |
 | D14-G4a | [Resource correction và live gate](tk-s7-g4a-memory-available-live-gate.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4 | Resource fix local qua review; live chưa chạy vì wizard chưa xác minh app/precheck |
-| D14-G4b | [Live rehearsal qua preselect app](tk-s7-g4b-live-rehearsal-navigation.md) | Worker | trước 14/10 | TUẦN NÀY | D14-G4a | Dùng nút app detail để vào wizard; precheck, redeploy và video cùng build nếu đủ gate |
+| D14-G4b | [Live rehearsal qua preselect app](tk-s7-g4b-live-rehearsal-navigation.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4a | Live v4 đạt; sửa video full deploy/no-audio-track và phiếu trước verdict |
 
 
 
