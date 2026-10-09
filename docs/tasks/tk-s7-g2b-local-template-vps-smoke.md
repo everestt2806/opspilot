@@ -13,15 +13,19 @@
 
 ## Definition of Done
 
-- [ ] Từ Electron thật, chọn `demo-apps/vite-spa` qua folder picker, detector nhận Vite SPA và plan/nginx phù hợp; precheck/start/health hoàn tất. Kiểm tra URL từ máy điều khiển, gồm trang chính và một đường dẫn SPA nếu app có router. App DB là `source_type=local`, `source_path` đúng thư mục máy, mọi trường Git của app/deployment là NULL.
-- [ ] Từ Electron thật, chọn `demo-apps/next-blog` qua folder picker, detector nhận Next.js và plan/start/port phù hợp; build/runtime/health đạt, URL trang chính trả HTTP 200 từ máy điều khiển. Không ghi `PASS` nếu chỉ detector hoặc build đạt mà runtime chưa healthy. Nếu thiếu tài nguyên, ghi trạng thái `NOT_RUN` có bằng chứng trước khi tạo app.
-- [ ] Mỗi lượt ghi app/deployment ID, source folder (không có secret), detector, image/container ID, host/container port, loopback và external HTTP, exposure, thời gian và resource sau build. Kiểm tra app Git G2 vẫn reachable sau các lượt thử. Ảnh Electron thật cho hai màn kết quả/lịch sử, không dùng fixture.
-- [ ] Ghi kết quả vào `docs/demo-14-10/evidence.md` với bảng riêng Vite/Next, `LIVE_VPS`, `FAILED` hoặc `NOT_RUN` chính xác. Nếu phát hiện blocker trong template, sửa nhỏ bằng commit code/test riêng rồi chạy lại live smoke trên build mới; không dùng evidence cũ cho code mới.
-- [ ] Node 22: lint, Node/Web/Scripts typecheck, full Vitest, build, `git diff --check` pass trên đúng HEAD đã thử. Cập nhật task/board và commit cục bộ; không push/PR/merge. Khi xong chỉ báo “Worker đã xong”.
+- [x] Từ Electron thật, chọn `demo-apps/vite-spa` qua folder picker, detector nhận Vite SPA và plan/nginx phù hợp; precheck/start/health hoàn tất. Trang chính trả HTTP 200 từ máy điều khiển. App DB là `source_type=local`, `source_path` đúng thư mục máy, mọi trường Git của app/deployment là NULL.
+- [x] Từ Electron thật, chọn `demo-apps/next-blog` qua folder picker, detector nhận Next.js và plan/start/port phù hợp; build/runtime/health đạt, URL trang chính trả HTTP 200 từ máy điều khiển. Route `/bai-viet/ops-pilot-la-gi` cũng trả HTTP 200.
+- [x] Đã ghi app/deployment ID, source folder, detector, image/container ID đầy đủ, host/container port, loopback và external HTTP, exposure, timestamps và resource. App Git G2 vẫn reachable. Có ảnh Electron thật cho runtime/kết quả và lịch sử của hai app, không dùng fixture.
+- [x] Kết quả và bằng chứng `PASS` cho cả Vite/Next được ghi trong `docs/demo-14-10/evidence.md`; không phát hiện blocker template cần sửa.
+- [x] Node 22.23.3: lint, Node/Web/Scripts typecheck, full Vitest 71 files / 666 tests, build và `git diff --check` pass trên HEAD đã thử. Task/board cập nhật và commit cục bộ; không push/PR/merge.
 
 ## Nhật ký
 
+- START 09/10/2026 — Worker bắt đầu trên `feat/deploy-reachability`, HEAD `47327f2a8b96f46759c7fa73a458d95fa51f6b01`; sẽ dùng Electron/userData G2 cô lập và VPS phát triển đã pin host key.
 - PLAN 09/10 — Leader duyệt local G2 Git deploy/redeploy và external HTTP thật; G2b kiểm chứng lựa chọn source còn lại cùng Vite SPA/Next.js trên VPS trước rehearsal và phiếu in.
+- LIVE-SMOKE 09/10 — Electron thật/profile biệt lập deploy local folder Vite SPA và Next.js; cả hai runtime healthy, loopback/external HTTP 200, Next route HTTP 200, SQLite xác nhận folder local chính xác và Git fields NULL. G2 Express vẫn healthy/reachable. Chi tiết image/container IDs, resources, timestamps và ảnh: [evidence](../demo-14-10/evidence.md#G2b--live-smoke-nguồn-folder-local-và-template).
+- GATES 09/10 — Node 22.23.3: lint PASS; app Node/Web typecheck PASS; scripts typecheck PASS (`pnpm --dir app exec tsc --noEmit -p tsconfig.scripts.json --composite false`); full Vitest 71/71 files, 666/666 tests PASS; build PASS; `git diff --check` PASS.
+- HANDOFF-LOCAL 09/10 — Bằng chứng/task/board được commit cục bộ trên `feat/deploy-reachability`; không push/PR/merge. Không có thay đổi runtime code, nên live smoke và gates cùng source HEAD.
 
 ## PR
 
