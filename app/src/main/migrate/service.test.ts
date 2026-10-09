@@ -469,46 +469,51 @@ describe('MigrateService guards and confirmation', () => {
     }
   })
 
-  it('rejects Git migration when a newer failed deployment may have replaced the source payload', () => {
-    const directory = mkdtempSync(
-      join(process.env.TEMP ?? '.', 'opspilot-migrate-git-failed-redeploy-')
-    )
-    const database = initializeDatabase(directory)
-    try {
-      database.exec(`
+  it.each(['failed', 'rolled_back'] as const)(
+    'rejects Git migration when a newer %s deployment may have replaced the source payload',
+    (newerStatus) => {
+      const directory = mkdtempSync(
+        join(process.env.TEMP ?? '.', 'opspilot-migrate-git-failed-redeploy-')
+      )
+      const database = initializeDatabase(directory)
+      try {
+        database.exec(`
         INSERT INTO vps (name,host,username,auth_type,encrypted_secret) VALUES
           ('source','127.0.0.1','u','password','x'),('target','127.0.0.2','u','password','x');
         INSERT INTO app (vps_id,name,framework,source_path,source_type,git_repo_url,git_ref,git_root,host_port,container_port)
           VALUES (1,'git-demo','express',NULL,'git','https://github.com/demo/public.git','main','.',30000,3000);
         INSERT INTO deployment (id,app_id,version,image_tag,status,detector_json,git_repo_url,git_commit_sha)
           VALUES (1,1,1,'git-demo:v1','running','{"dockerfileTemplate":"express.Dockerfile","startCommand":"node server.js"}','https://github.com/demo/public.git','${'a'.repeat(40)}'),
-                 (2,1,2,'git-demo:v2','failed','{}','https://github.com/demo/public.git','${'b'.repeat(40)}');
+                 (2,1,2,'git-demo:v2','${newerStatus}','{}','https://github.com/demo/public.git','${'b'.repeat(40)}');
         UPDATE app SET current_deployment_id=1 WHERE id=1;
       `)
-      const exec = vi.fn()
-      const service = new MigrateService(database, { exec } as never, vi.fn())
+        const exec = vi.fn()
+        const service = new MigrateService(database, { exec } as never, vi.fn())
 
-      let error: unknown
-      try {
-        service.start({ app_id: 1, target_vps_id: 2 })
-      } catch (caught) {
-        error = caught
+        let error: unknown
+        try {
+          service.start({ app_id: 1, target_vps_id: 2 })
+        } catch (caught) {
+          error = caught
+        }
+        expect(error).toMatchObject({
+          userMessage: expect.stringMatching(
+            /deployment Git mới hơn.*payload src.*chưa bị đóng băng/
+          )
+        })
+        expect(exec).not.toHaveBeenCalled()
+        expect(database.prepare('SELECT COUNT(*) AS count FROM migration_job').get()).toEqual({
+          count: 0
+        })
+        expect(database.prepare('SELECT current_deployment_id FROM app WHERE id=1').get()).toEqual({
+          current_deployment_id: 1
+        })
+      } finally {
+        closeDatabase()
+        rmSync(directory, { recursive: true, force: true })
       }
-      expect(error).toMatchObject({
-        userMessage: expect.stringMatching(/deployment Git mới hơn.*payload src.*chưa bị đóng băng/)
-      })
-      expect(exec).not.toHaveBeenCalled()
-      expect(database.prepare('SELECT COUNT(*) AS count FROM migration_job').get()).toEqual({
-        count: 0
-      })
-      expect(database.prepare('SELECT current_deployment_id FROM app WHERE id=1').get()).toEqual({
-        current_deployment_id: 1
-      })
-    } finally {
-      closeDatabase()
-      rmSync(directory, { recursive: true, force: true })
     }
-  })
+  )
 
   it('falls back to empty env when the migrated .env cannot be read', async () => {
     const directory = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-migrate-env-miss-'))

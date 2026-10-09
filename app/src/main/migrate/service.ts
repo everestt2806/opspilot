@@ -238,7 +238,6 @@ export class MigrateService {
         .prepare(
           `SELECT id FROM deployment
            WHERE app_id=? AND version>? AND git_commit_sha IS NOT NULL
-             AND status IN ('building','deploying','failed')
            LIMIT 1`
         )
         .get(source.id, current.version)
