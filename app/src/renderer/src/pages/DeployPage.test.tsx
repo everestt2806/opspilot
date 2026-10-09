@@ -6,7 +6,7 @@ import type { App, DeployEvent, DeployInput, DetectionResultDto, Vps } from '@sh
 
 import { DeployPage } from './DeployPage'
 import { getConfigSignature, isSecretKey } from './deployRun'
-import { strings } from '../strings'
+import { getStrings, strings } from '../strings'
 import { useUiState } from '../store/uiState'
 
 const { termInstances, terminalOptions } = vi.hoisted(() => {
@@ -211,6 +211,25 @@ async function reachStep3(invoke: ReturnType<typeof vi.fn>): Promise<void> {
   fireEvent.click(screen.getByText('Next'))
   await screen.findByText('RAM trống')
 }
+
+describe('DeployPage source description locales', () => {
+  it.each(['en', 'vi', 'cn', 'jp'] as const)(
+    '%s keeps the Deploy description accurate for local and Git sources',
+    async (locale) => {
+      useUiState.setState({ locale })
+      mockApi(handersHappy)
+      const localized = getStrings(locale)
+      render(<DeployPage />)
+
+      await screen.findByText(localized.deploy.description)
+      expect(screen.getByText(localized.deploy.description)).toBeTruthy()
+      fireEvent.click(screen.getByText(localized.deploy.git.modeGit))
+      expect(screen.getByText(localized.deploy.description)).toBeTruthy()
+      fireEvent.click(screen.getByText(localized.deploy.git.modeLocal))
+      expect(screen.getByText(localized.deploy.description)).toBeTruthy()
+    }
+  )
+})
 
 describe('DeployPage — wizard va log', () => {
   it('Git wizard prepares a pinned handle and uses the same handle/token for precheck and start', async () => {

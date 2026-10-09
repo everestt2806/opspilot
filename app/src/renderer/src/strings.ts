@@ -208,7 +208,7 @@ const BASE_EN_STRINGS = {
   deploy: {
     title: 'Deploy an application',
     description:
-      'Pick a source folder — the app detects the framework and deploys it to a VPS over SSH.',
+      'Choose a Git repository or a local source folder to detect the framework and deploy it to a VPS over SSH.',
     noVps: 'No VPS yet. Add a VPS on the VPS screen before deploying.',
     steps: {
       source: 'Source',
@@ -1271,7 +1271,7 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     title: 'Triển khai ứng dụng',
     description:
-      'Chọn thư mục mã nguồn — ứng dụng tự nhận diện framework và triển khai lên VPS qua SSH.',
+      'Chọn kho Git hoặc thư mục mã nguồn trên máy; ứng dụng tự nhận diện framework và triển khai lên VPS qua SSH.',
     vpsLabel: 'Máy chủ VPS triển khai',
     vpsLoading: 'Đang tải danh sách máy chủ…',
     vpsLoadError: 'Không thể tải danh sách máy chủ',
@@ -1981,7 +1981,7 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       invalid: '请输入有效的公开 HTTPS 仓库 URL、ref 和根目录。'
     },
     title: '部署应用程序',
-    description: '选择源码文件夹 — 系统将自动识别框架并通过 SSH 部署到 VPS。',
+    description: '选择 Git 仓库或本地源码文件夹 — 系统将自动识别框架并通过 SSH 部署到 VPS。',
     vpsLabel: '目标 VPS',
     vpsLoading: '正在加载 VPS 列表…',
     vpsLoadError: '无法加载 VPS 列表',
@@ -2676,7 +2676,7 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     title: 'アプリケーションデプロイ',
     description:
-      'ソースフォルダを選択 — フレームワークを自動検出してSSH経由でVPSにデプロイします。',
+      'Git リポジトリまたはローカルのソースフォルダーを選択 — フレームワークを自動検出してSSH経由でVPSにデプロイします。',
     vpsLabel: '対象 VPS',
     vpsLoading: 'VPS 一覧を読み込み中…',
     vpsLoadError: 'VPS 一覧を読み込めませんでした',
