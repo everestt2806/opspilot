@@ -121,7 +121,7 @@ Build và rehearsal dùng cùng source HEAD `d4506554fcb4d8b6a89fe34cdac4ac7c81c
 
 # G4 — rehearsal cuối và verdict đề xuất
 
-**Trạng thái:** `DEMO_READY_RECORDED` — đề xuất để Leader review, chưa freeze. Live redeploy G4 là `NOT_RUN` theo điều kiện preflight; VPS còn dưới ngưỡng RAM tối thiểu. Giữ nguyên cả ba app. G4 dùng đúng fallback G3 đã được Leader review, và ghi rõ video cũ không đại diện UI build hiện tại.
+**Trạng thái:** `DEMO_READY_RECORDED` — đề xuất để Leader review, chưa freeze. G4 dùng fallback G3; video cũ không đại diện UI build hiện tại. Phần kết luận RAM ở G4 đã được sửa theo đo đạc G4a bên dưới.
 
 ## Build UI G4
 
@@ -133,14 +133,14 @@ Build và rehearsal dùng cùng source HEAD `d4506554fcb4d8b6a89fe34cdac4ac7c81c
 ## Preflight và quyết định không redeploy
 
 - Kiểm tra live ngày 2026-10-09 trước khi deploy: remote `main` full SHA `8af16e1f9165a31557288adbc23acc420244938f`; Git Express `/health`, Vite `/` và Next `/` cùng route bài viết đều trả external HTTP 200.
-- Electron VPS resource: RAM `3.6/3.8 GB` dùng (`94%`, dưới 512 MB còn trống); disk `7/25 GB` dùng (18 GB còn trống). Vì thiếu ngưỡng RAM precheck >512 MB, **không chạy prepare/precheck/start hoặc redeploy Git**, không thay đổi deployment nào.
-- Rehearsal vì thế chọn `RECORDED_FALLBACK`. Dùng [video G3 09/10/2026](evidence/g3-rehearsal-20261009.mp4) đã được review: 457.4 giây (7:37), source build cũ HEAD `d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955`; thao tác Git thật app 1/deployment 5/v3, source SHA `8af16e1f9165a31557288adbc23acc420244938f`. Video im lặng, H.264, không audio stream. Đây **không** phải bản ghi G4 hay video trên build mới; build/SHA mới chỉ được xác nhận bằng UI screenshot, test và build gate. Không gọi phần deploy đã ghi là live G4.
-- G4 session ghi nhận: UI current build đã mở và kiểm tra source local/Git + history; preflight xác nhận resource thiếu ngưỡng; ba URL external PASS; chuyển verdict sang recorded fallback. Không có lỗi deploy để khắc phục. Không có deployment G4 mới, vì vậy app/deployment/image/container IDs vẫn theo v3 G3, không gán ID mới.
+- G4 UI cũ hiện `3.6/3.8 GB` dùng (`94%`) vì lấy `MemFree`; số này **không chứng minh** dưới 512 MB RAM khả dụng. `MemAvailable` được đo lại tại G4a bên dưới và không xác nhận kết luận thiếu RAM. Disk ở lần ghi G4 là `7/25 GB` dùng (18 GB còn trống).
+- Rehearsal G4 dùng [video G3 09/10/2026](evidence/g3-rehearsal-20261009.mp4) đã được review: 457.4 giây (7:37), source build cũ HEAD `d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955`; thao tác Git thật app 1/deployment 5/v3, source SHA `8af16e1f9165a31557288adbc23acc420244938f`. Video im lặng, H.264, không audio stream. Đây **không** phải bản ghi G4 hay video trên build mới; không gọi phần deploy đã ghi là live G4.
+- Không có deployment G4 mới, vì vậy app/deployment/image/container IDs vẫn theo v3 G3, không gán ID mới.
 
 ## Phiếu A4 và giới hạn
 
-- [Phiếu HTML](phieu-demo.html) là bản nháp chờ Leader; [PDF A4 một trang](phieu-demo.pdf) được render từ HTML ngày 09/10/2026, 1 trang, A4, đã render PNG và xem trực quan: [preview](evidence/g4-a4-preview.png).
-- Verdict chỉ đề xuất: `DEMO_READY_RECORDED`, với điều kiện Leader chấp nhận video G3 trên build cũ. Nếu cần video cùng build mới hoặc live demo, đợi VPS đạt >512 MB RAM khả dụng, kiểm tra lại URLs/SHA/resource rồi rehearsal/redeploy và quay video mới trên build đó.
+- [Phiếu HTML](phieu-demo.html) là bản nháp chờ Leader; [PDF A4 một trang](phieu-demo.pdf) được cập nhật sau phép đo G4a bên dưới.
+- Verdict chỉ đề xuất: `DEMO_READY_RECORDED`, với điều kiện Leader chấp nhận video G3 trên build cũ. Live rehearsal G4a là `NOT_RUN`: tài nguyên đã vượt ngưỡng, nhưng không xác minh được bước precheck trong wizard Electron trước khi cho phép deploy. Không thay đổi deployment; fallback giữ nguyên app 1/deployment 5/v3 và source SHA `8af16e1f9165a31557288adbc23acc420244938f`.
 - Giới hạn vẫn nêu trên phiếu: Git deploy thủ công; G3 redeploy cùng SHA; chưa chứng minh push-to-deploy/webhook, HTTPS ingress, migrate sau rollback hoặc ML pilot.
 
 
@@ -157,4 +157,23 @@ Build và rehearsal dùng cùng source HEAD `d4506554fcb4d8b6a89fe34cdac4ac7c81c
 
 ## Review G4 — chỉ số RAM cần xác minh lại
 
-Leader review 09/10/2026: câu “dưới 512 MB khả dụng” và verdict `DEMO_READY_RECORDED` ở G4 **chưa được phê duyệt**. `vps:get-resources` lấy cột `free` (`$4`) của lệnh `free`, trong khi deploy precheck lấy cột `available` (`$7`). Số 94% trên UI chưa chứng minh RAM có thể dùng cho deploy dưới ngưỡng. [TK-S7 G4a](../tasks/tk-s7-g4a-memory-available-live-gate.md) sẽ đo lại VPS, sửa phép tính UI và cập nhật cả PDF/verdict. Ba URL external HTTP 200 và video G3 là bằng chứng riêng vẫn có giá trị.
+Leader review 09/10/2026: số 94% trên UI G4 đến từ `MemFree`, không thể dùng để kết luận `MemAvailable` dưới ngưỡng. G4a đã đo lại, đồng bộ semantics UI và precheck, và cập nhật phiếu/evidence ở dưới. Ba URL external HTTP 200 và video G3 là bằng chứng riêng vẫn có giá trị.
+
+## G4a — MemAvailable và quyết định live gate
+
+- Đo VPS chỉ đọc lúc `2026-10-09T15:36:45.322Z` UTC: `MemTotal=4,010,040 kB`, `MemFree=321,872 kB`, `MemAvailable=3,134,372 kB`. `MemFree` ≈314 MiB; `MemAvailable` ≈3,061 MiB; chênh lệch ≈2,747 MiB. Vì vậy UI G4 cũ báo 94% dùng không có nghĩa dưới 512 MiB khả dụng. `free -m` cũng báo 314 MB free; `MemAvailable` vượt gate 1 GiB.
+- Cùng lượt probe read-only: disk trống 17,926 MB; bảy container kiểm tra ở trạng thái `healthy` hoặc `Up`; Docker stats cho thấy từng container dùng ít RAM; OOM matches từ 01/10 là 0. Trước đó Git Express `/health`, Vite `/` và Next `/` cùng route bài viết đều external HTTP 200. Không dừng app, prune Docker hay đổi firewall.
+- Sửa `vps:get-resources` đọc riêng `MemTotal`, `MemFree`, `MemAvailable` từ `/proc/meminfo`; giữ IPC field `ram_free_mb` để tương thích nhưng giá trị giờ là `MemAvailable`, cùng nguồn với deploy precheck. Test bảo vệ parser, lệnh SSH, gate precheck và phần trăm RAM UI.
+- Production Electron build source commit `b69d19e34541f9c04e89875f8620044fad29c453`; app tree `d2aa94a8c56dc6cdebf8d2def7740ea45dcfc810`, chạy trong profile G2 biệt lập. `vps:get-resources` fetch lúc khoảng `2026-10-09T15:44:16Z`; ảnh UI lúc khoảng `2026-10-09T15:46Z` hiện `817 MB / 3.8 GB` dùng (21%), disk `7/25 GB`, SSH/Docker/Compose/Git/workspace scan đạt: [Electron VPS resources](evidence/g4a-resources-memavailable.png). Public Git source prepare pin cùng full SHA `8af16e1f9165a31557288adbc23acc420244938f`.
+- **Live redeploy/rehearsal G4a: `NOT_RUN`.** Dù phép đo tài nguyên vượt gate, không thể xác nhận app đích trong native dropdown wizard để chạy và ghi nhận precheck ngay trên build này. Vì precheck trong Electron là điều kiện bắt buộc trước deploy, dừng trước bước chạy; không có SSH deploy command/deployment mới nào. Không diễn giải điều này là VPS thiếu RAM. Fallback G3 giữ nguyên SHA/source và deployment v3 như trên.
+- Đề xuất verdict `DEMO_READY_RECORDED` vẫn chờ Leader review; điều kiện chấp nhận video G3 trên build cũ vẫn cần nêu. PDF A4 đã cập nhật; không có video mới vì live gate chưa được xác minh hoàn chỉnh.
+
+## G4a gates trên build UI đã kiểm tra
+
+- Source commit `b69d19e34541f9c04e89875f8620044fad29c453`, app tree `d2aa94a8c56dc6cdebf8d2def7740ea45dcfc810`; Node `v22.23.3`, pnpm `11.1.0`.
+- Focused: `pnpm --filter @opspilot/app exec vitest run src/main/vps/connectionService.test.ts src/main/deploy/precheck.test.ts src/renderer/src/components/VpsResourcesCell.test.tsx` — PASS, 3 files / 19 tests.
+- `pnpm lint` — PASS, ESLint 0 errors; 5,784 Prettier warnings về CRLF trên các tệp Windows; Ruff pass.
+- `pnpm --filter @opspilot/app typecheck` và `pnpm --dir app exec tsc --noEmit -p tsconfig.scripts.json --composite false` — PASS.
+- `pnpm --filter @opspilot/app test` — PASS, 71 files / 674 tests. Vitest ghi jsdom warnings `getComputedStyle` pseudo-elements/canvas, exit code 0.
+- `pnpm build` — PASS, production Electron/Vite build.
+- `git diff --check` — PASS; Git có cảnh báo CRLF→LF khi chạm các tài liệu Windows.

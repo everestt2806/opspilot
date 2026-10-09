@@ -14,14 +14,17 @@
 
 ## Definition of Done
 
-- [ ] Bằng chứng read-only VPS chứng minh cột `free` và `available` khác nhau bao nhiêu; xác nhận nguyên nhân RAM 94% ở G4. Nếu `available` thật sự thấp, ghi container/process chiếm RAM và dấu hiệu OOM; không suy đoán.
-- [ ] Sửa `readVpsResources` và test để phân biệt rõ `free`/`available` trong output lệnh; cập nhật comments/IPC contract và UI wording cần thiết. Thêm test bảo vệ chỉ số hiển thị và precheck cùng dùng available. Không đổi schema hay migration.
-- [ ] Chạy lại resource fetch trong Electron build mới, chụp ảnh/timestamp. Nếu đủ gate an toàn, diễn tập live Git trên build này, kiểm tra URL/status của Git/Vite/Next, quay video dự phòng mới cùng build và ghi deployment/SHA thực tế. Nếu không đủ, ghi `NOT_RUN` chính xác; fallback G3 vẫn chỉ đại diện build cũ.
-- [ ] Sửa `evidence.md`, kịch bản và phiếu HTML/PDF A4: bỏ mọi câu khẳng định “dưới 512 MB **khả dụng**” nếu đo available không xác nhận; ghi verdict đề xuất dựa trên số mới, build/video đúng nhau. PDF vẫn một trang A4, mở xem không cắt chữ.
-- [ ] Node 22 lint, Node/Web/Scripts typecheck, focused tests, full Vitest, build, `git diff --check` trên source cuối. Ghi warning thật, không gọi `0 warnings` nếu còn CRLF warnings. Board/task trạng thái hợp lệ và commit cục bộ; không push/PR/merge. Khi xong chỉ báo “Worker đã xong”.
+- [x] Bằng chứng read-only VPS: MemFree `321,872 kB`, MemAvailable `3,134,372 kB` (chênh `2,812,500 kB` ≈2,747 MiB); xác nhận 94% UI G4 là phép tính từ MemFree, không chứng minh thiếu MemAvailable. Disk 17,926 MB; bảy container `healthy` hoặc `Up`; OOM matches = 0.
+- [x] Sửa `readVpsResources` đọc MemTotal/MemFree/MemAvailable và giữ `ram_free_mb` = MemAvailable; cập nhật comments IPC, renderer, precheck và tests. Không đổi schema/migration. Focused 3 files / 19 tests pass.
+- [x] Electron production build mới fetch resource và ảnh/timestamp; RAM hiển thị khoảng `817 MB / 3.8 GB` dùng, disk `7/25 GB`, scan SSH/Docker/Compose/Git/workspace pass. Git prepare pin đúng SHA `8af16e1f9165a31557288adbc23acc420244938f`. Live redeploy/rehearsal/video mới `NOT_RUN`: không xác minh được app đích/precheck trong wizard do native dropdown không nhận thao tác GUI; dừng trước deployment, không thay đổi app. Fallback G3 giữ nguyên SHA/deployment v3, vẫn ghi rõ là build cũ.
+- [x] Cập nhật `evidence.md`, kịch bản, phiếu HTML/PDF A4; loại kết luận RAM sai và giải thích verdict/fallback. PDF một trang A4, render/preview kiểm tra.
+- [x] Node 22 gates: lint pass (5,784 warnings Prettier do CRLF hiện có, 0 errors), Node/Web/Scripts typecheck pass, focused tests pass, full Vitest 71 files / 674 tests pass (jsdom warnings), build pass, `git diff --check` pass. Cập nhật board/task và commit cục bộ; không push/PR/merge.
 
 ## Nhật ký
 
+- START 09/10/2026 — Bắt đầu trên `feat/deploy-reachability`; focused tests 3 files / 19 tests pass. VPS read-only đo `MemFree=321,872 kB`, `MemAvailable=3,134,372 kB` lúc `2026-10-09T15:36:45.322Z`; UI cũ đã nhầm free với available. Đang chạy Node 22 gate và chuẩn bị xác nhận Electron build mới.
+- UPDATE 09/10/2026 — Node 22 full gate pass; Electron build mới hiển thị RAM dùng khoảng 21%, VPS resource gate vượt ngưỡng. Git source prepare pin cùng SHA G3; native app selector không thể thao tác/đọc xác nhận qua GUI nên precheck chưa được chứng minh. Dừng trước deploy; live/rehearsal mới `NOT_RUN`, fallback G3 giữ nguyên. Evidence, script, phiếu và PDF đã cập nhật; chờ kiểm tra cuối và commit local.
+- HANDOFF-LOCAL 09/10/2026 — source/build commit `b69d19e34541f9c04e89875f8620044fad29c453`; Node 22 focused 19/19, full Vitest 674/674, lint/typecheck/build pass; live `NOT_RUN`, evidence/PDF updated; chưa push.
 - PLAN 09/10 — Leader dừng duyệt G4 `DEMO_READY_RECORDED`: số RAM UI là `MemFree`, trong khi deploy precheck dùng `MemAvailable`. Cần đo VPS và chốt lại bằng chỉ số đúng trước demo.
 
 ## PR

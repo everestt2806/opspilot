@@ -25,7 +25,7 @@
     <h1>OpsPilot</h1>
     <p><strong>Triển khai và giám sát ứng dụng trên VPS riêng</strong> · Phiếu demo 14/10/2026</p>
     <p class="badge">BẢN NHÁP — đề xuất DEMO_READY_RECORDED, chờ Leader review</p>
-    <p><strong>Chế độ:</strong> RECORDED_FALLBACK · rehearsal G4 ngày 09/10/2026. UI build hiện tại: <code>4addec37b66a4d5145bb55fec21012fdc3acfb0c</code>, tree <code>4fa92683f89b77255ea3417131bb12e8914779e1</code>.</p>
+    <p><strong>Chế độ:</strong> RECORDED_FALLBACK · live G4a NOT_RUN vì chưa xác minh được precheck trong wizard Electron. UI source commit <code>b69d19e34541f9c04e89875f8620044fad29c453</code>; app tree <code>d2aa94a8c56dc6cdebf8d2def7740ea45dcfc810</code>.</p>
     <p><strong>Video fallback:</strong> G3, build cũ <code>d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955</code>; Git source SHA <code>8af16e1f9165a31557288adbc23acc420244938f</code>. Hai SHA này là nguồn bằng chứng khác nhau.</p>
 
     <h2>Luồng trình bày 6–8 phút</h2>
@@ -43,7 +43,8 @@
       <tr><td>Git Express · deployment 5/v3 · cùng SHA với v2</td><td><code>http://160.191.243.89:30000/health</code> → HTTP 200</td></tr>
       <tr><td>Vite SPA · folder local</td><td><code>http://160.191.243.89:30001/</code> → HTTP 200</td></tr>
       <tr><td>Next.js · folder local</td><td><code>http://160.191.243.89:30002/</code> và <code>/bai-viet/ops-pilot-la-gi</code> → HTTP 200</td></tr>
-      <tr><td>G4 live preflight</td><td>RAM dùng 94% (3.6/3.8 GB; dưới 512 MB khả dụng), disk trống 18 GB. Không redeploy; ba app được giữ nguyên.</td></tr>
+      <tr><td>VPS read-only, 09/10/2026</td><td><code>MemFree 314 MiB</code>; <code>MemAvailable 3,061 MiB</code>; disk trống 17,926 MB. UI G4 cũ dùng MemFree nên số 94% không chứng minh thiếu RAM khả dụng.</td></tr>
+      <tr><td>G4a live gate</td><td>Tài nguyên vượt ngưỡng; wizard Electron chưa xác minh được app đích/precheck nên không deploy. Giữ nguyên ba app và fallback G3 đúng SHA.</td></tr>
     </table>
     <p class="note"><strong>Giới hạn:</strong> Git deploy thủ công; video fallback là build G3 cũ và redeploy cùng SHA. Push-to-deploy/webhook, HTTPS ingress, migrate sau rollback và ML pilot chưa được chứng minh. Không gọi video ghi sẵn là live.</p>
     <p class="small">Phiếu vẫn là bản nháp đến khi Leader review và freeze. Chi tiết thời gian, gate và video: <code>docs/demo-14-10/evidence.md</code>.</p>
