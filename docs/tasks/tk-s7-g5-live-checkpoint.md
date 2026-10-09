@@ -1,11 +1,10 @@
 # TK-S7 G5-live — kiểm tra vận hành và rehearsal trên build hiện tại
 
-**Trạng thái:** `BLOCKED / NOT_RUN` (2026-10-09 UTC). G5c đã giải thích sai lệch RAM UI: ảnh G4b 91% đến từ Electron cũ và không chứng minh VPS dưới ngưỡng; ba cặp refresh trên build mới khớp collector khoảng 20–21%. Không dùng lại con số 91% làm gate RAM. Đợt kiểm tra vận hành này xác minh được RAM, disk, trạng thái container qua collector và HTTP ngoài; chưa xác minh được process RSS hoặc memory pressure/OOM, vì app hiện tại không cung cấp các số liệu đó qua đường SSH đã pin. Wizard Git dừng trước precheck do thiếu `PORT` và `ENABLE_FAULT_ENDPOINTS`; không bấm Start.
+**Trạng thái mới nhất:** `BLOCKED / NOT_RUN` (C2d, 2026-10-09 UTC). G5c đã giải thích sai lệch RAM UI: ảnh G4b 91% đến từ Electron cũ và không chứng minh VPS dưới ngưỡng; các mẫu build mới khớp collector khoảng 20–21%. C2d đã xác minh qua Electron hiện tại ba mẫu RAM/disk/process RSS/pressure/OOM/container và ba URL ngoài HTTP 200. Wizard hiện nhận `PORT=3000` và `ENABLE_FAULT_ENDPOINTS=false`; precheck vẫn `NOT_RUN` vì `DATABASE_URL` bắt buộc còn trống, không được đoán hoặc lấy từ secret chưa xác minh. Không bấm Start; giữ fallback `DEMO_READY_RECORDED`.
 
 ## Điều kiện còn thiếu
 
-- Trước khi thử lại, bổ sung một đường chẩn đoán chỉ đọc qua SSH đã pin hoặc provider console đã xác minh để thu process RSS và memory pressure/OOM; giữ các kết quả này cùng mẫu RAM/disk/container. Không dùng SSH không pin hoặc thay đổi dịch vụ VPS.
-- Chuẩn bị wizard app Git hiện tại với các biến bắt buộc `PORT` và `ENABLE_FAULT_ENDPOINTS` hợp lệ từ cấu hình nguồn đã kiểm tra; chạy precheck trong Electron và lưu kết quả. Precheck ở lượt này là `NOT_RUN` vì wizard chặn tại bước cấu hình với thông báo thiếu hai biến trên.
+- Khi có `DATABASE_URL` từ nguồn được phép và đã xác minh, nhập qua UI trong wizard hiện tại và chạy precheck Electron; không đoán hoặc ghi giá trị vào evidence. `PORT=3000` và `ENABLE_FAULT_ENDPOINTS=false` đã được xác nhận an toàn trong C2d.
 - Chỉ khi mọi kiểm tra vận hành và precheck đạt mới thực hiện một deploy/redeploy theo UI trên đúng build hiện tại.
 - Quay liên tục từ trước Start qua pipeline, result, history và HTTP ngoài trên cùng build. Không ghép các lượt; kiểm tra MP4 không có audio track và review nội dung.
 - Nếu điều kiện không đạt, dừng trước Start, ghi chính xác điểm chặn và giữ `DEMO_READY_RECORDED` với video G3 được gắn nhãn build cũ/deployment v3.
@@ -64,3 +63,13 @@ Không đổi credential/fingerprint, không chạy pilot ML, không thực hi�
 - Node `v22.23.3`, `pnpm exec node -p process.execPath` xác nhận `C:\Users\everestt28\AppData\Local\pnpm\bin\node.exe`. `pnpm --dir app exec vitest run src/renderer/src/components/VpsOverviewTab.test.tsx --reporter=dot`: PASS 1 file/12 tests. `pnpm --dir app run typecheck:node`, `typecheck:web`, `pnpm --dir app exec tsc --noEmit -p tsconfig.scripts.json`, `pnpm --dir app run lint`, `pnpm --dir app run build`, `git diff --check`: PASS; lint/build không warning.
 - Visual review dark/light 1280×800: `NOT_RUN`; Electron đang chạy dùng renderer bundle cũ tại thời điểm build, không reload/chuyển profile hoặc gọi diagnostics trên VPS trong checkpoint này.
 - Live diagnostics/deploy và same-build continuous video: `NOT_RUN`; giữ `BLOCKED / NOT_RUN` và fallback `DEMO_READY_RECORDED`/video G3 deployment v3.
+
+## G5-live C2d — kết quả operational gate trên Electron thật (2026-10-09 UTC)
+
+Kết quả cập nhật: phần đo vận hành read-only đạt, nhưng checkpoint tổng thể vẫn `BLOCKED / NOT_RUN` vì precheck không thể chạy an toàn khi `DATABASE_URL` bắt buộc chưa có giá trị đã xác minh. Không bấm Start và không redeploy.
+
+- Production build `app/out`, branch `feat/deploy-reachability`, HEAD `4bba7c232d64443ee383dade607ca9d9c57fea5f`, Electron PID `35168`; dùng lại profile G2 hiện có sau khi đóng instance cũ bình thường. Diagnostics gọi thủ công từ VPS Overview qua SSH pin, `vps:get-resources` và collector deployment 6 đối chiếu cùng phút.
+- Ba mẫu UTC: `21:52:53Z`, `21:54:39Z`, `21:56:33Z` (cách nhau trên 60 giây). Lần lượt RAM `828/795/797 MB` trên `3.8 GB` (~20–21%), disk đều `7/25 GB`; PSI some/full avg10 đều `0.00%`; OOM kill counter `0` ở cả ba mẫu, không tăng. Process RSS có dữ liệu ở cả ba mẫu; top RSS khoảng `dockerd` 139.63 MB, `next-server` 103.43–103.68 MB, `node` 79.59–79.75 MB, `npm start` 75.52 MB và `containerd` 57.58 MB. Collector cùng phút báo `container_up=1` và host RAM lần lượt `20.6776%`, `20.7258%`, `20.5352%`. Chi tiết danh sách process từng mẫu nằm trong `docs/demo-14-10/evidence.md`, mục G5-live C2d.
+- Ba external HTTP GET tại `2026-10-09T22:01:28Z` đều `200`: Git Express `:30000/health`, Vite `:30001/`, Next `:30002/`.
+- App Git hiện có: `g2-express-20261009`, v4, `main`, root `demo-apps/express-api`, full SHA `8af16e1f9165a31557288adbc23acc420244938f`, exposure reachable. Wizard xác nhận `PORT=3000`, `ENABLE_FAULT_ENDPOINTS=false` và cảnh báo cấu hình môi trường hiện hữu không được tải từ VPS/secret không tự điền. `DATABASE_URL` Required nhưng blank; precheck `NOT_RUN` vì không đoán hoặc nhập lại secret chưa được xác minh. Wizard thoát trước Start, không có job/deployment/VPS thay đổi.
+- Redeploy, same-build continuous video qua pipeline/result/history/HTTP và kiểm tra MP4 silent: `NOT_RUN`. Giữ verdict `BLOCKED / NOT_RUN`, `DEMO_READY_RECORDED`, video G3 build cũ/deployment v3; không nâng thành live-ready. Lượt này không đổi credential/fingerprint, không dùng SSH ngoài app và không tác động VPS.
