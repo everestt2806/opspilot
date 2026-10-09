@@ -13,7 +13,7 @@
 |---|---|---|---|---|---|---|
 | TK-S7 G0 | [Hợp đồng local/Git và snapshot Git công khai](tk-s7-g0-two-source-git.md) | Worker | 09/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | local `ebbfc7e` · chưa push; contract `7e6cf25`; Node 22 gates pass |
 | TK-S7 G1a | [Nối snapshot Git vào deploy core](tk-s7-g1a-git-deploy-core.md) | Worker | 10/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | Local review `234cb57` pass: Node 22 focused 55/55, full Vitest 653/653, typecheck; chưa push/merge, chưa live VPS |
-| TK-S7 G1b | [Hai nguồn deploy trong UI, lịch sử Git và migrate](tk-s7-g1b-git-ui-history-migrate.md) | Worker | 10/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | code local `ffd4d34`; reprepare release handle cũ; migrate chặn deployment Git mới hơn bị failed trước job/SSH; rollback migrate vẫn fail-closed/DoD chưa hoàn tất; chưa G2 VPS |
+| TK-S7 G1b | [Hai nguồn deploy trong UI, lịch sử Git và migrate](tk-s7-g1b-git-ui-history-migrate.md) | Worker | 10/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | code `ffd4d34`; Leader migrate 18/18, DeployPage 44/44; còn lọt auto rollback `status=rolled_back` trong guard source integrity; DoD migrate rollback chưa xong; chưa G2 VPS |
 
 TK-A18 Titlebar fix 05: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `30747f1`; WCO drag region dùng
 đúng rectangle, native controls không còn chồng caption và màu overlay đã liền shell; Snap Layout ghi
