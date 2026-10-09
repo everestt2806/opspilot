@@ -33,7 +33,7 @@
       <li><strong>Video G3:</strong> full deploy Git, build cũ, deployment v3.</li>
       <li><strong>App Git hiện tại:</strong> deployment 6/v4, trạng thái running/reachable; bằng chứng HTTP riêng từ G4b ngày 09/10, <code>/health</code> trả 200.</li>
       <li><strong>Ứng dụng folder:</strong> Vite và Next trả HTTP 200 từ máy điều khiển trong lần kiểm tra G4b ngày 09/10.</li>
-      <li><strong>RAM:</strong> hiện chưa xác minh được; không diễn tập deploy live.</li>
+      <li><strong>RAM:</strong> ba mẫu trên build mới khớp collector khoảng 20–21%; <code>vps:get-resources</code> hoạt động. Ảnh 91% là từ Electron cũ, không chứng minh VPS dưới ngưỡng.</li>
     </ol>
 
     <h2>Bằng chứng đã kiểm tra</h2>
@@ -44,7 +44,7 @@
       <tr><td>Next.js · folder local</td><td><code>http://160.191.243.89:30002/</code> và route bài viết → HTTP 200.</td></tr>
       <tr><td>Video đầy đủ G3</td><td>7:37 · build UI cũ <code>d4506554</code> · deployment v3 · không có audio track.</td></tr>
     </table>
-    <p class="note"><strong>Giới hạn:</strong> Video G3 là build cũ/v3; HTTP của v4 là bằng chứng G4b riêng. RAM hiện chưa xác minh nên không có deploy live mới. Chi tiết chẩn đoán và giới hạn: <code>docs/demo-14-10/evidence.md</code>.</p>
+    <p class="note"><strong>Giới hạn:</strong> Video G3 là build cũ/v3; HTTP của v4 là bằng chứng G4b riêng. Live rehearsal vẫn NOT_RUN vì chưa hoàn tất kiểm tra vận hành và chưa có video deploy liên tục trên build mới. Ảnh RAM 91% là UI Electron cũ; không phải bằng chứng VPS dưới ngưỡng. Chi tiết: <code>docs/demo-14-10/evidence.md</code>.</p>
     <p class="small">Kịch bản chiếu đầy đủ 10–12 phút hoặc trích đoạn 6–8 phút có nhãn: <code>docs/demo-14-10/rehearsal-script.md</code>.</p>
   </body>
 </html>

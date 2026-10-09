@@ -1,6 +1,6 @@
 # TK-S7 G5 — Chẩn đoán RAM VPS và chốt chế độ demo 14/10
 
-> Baseline an toàn đã có: [G3 full deploy video](../demo-14-10/evidence/g3-rehearsal-20261009.mp4) trên build cũ, không audio track; Leader chấp nhận `DEMO_READY_RECORDED` làm fallback. G4b live deploy v4 đã đạt nhưng correction 10/10 dừng vì `MemAvailable` giảm từ khoảng 3 GiB xuống 0,3 GiB. G5 tìm nguyên nhân để quyết định có thể diễn tập live trên build hiện tại hay giữ fallback.
+> Baseline an toàn đã có: [G3 full deploy video](../demo-14-10/evidence/g3-rehearsal-20261009.mp4) trên build cũ, không audio track; Leader chấp nhận `DEMO_READY_RECORDED` làm fallback. G4b có ảnh UI 91% từ Electron cũ, nhưng ảnh này không chứng minh VPS có `MemAvailable` dưới ngưỡng. G5c đã giải thích sai lệch UI bằng ba cặp refresh trên build mới khớp collector; điều kiện live còn thiếu được theo dõi riêng tại [checkpoint live](tk-s7-g5-live-checkpoint.md).
 
 | Chủ | Hạn mục tiêu | Branch | Ưu tiên |
 |---|---|---|---|
@@ -14,8 +14,8 @@
 
 ## Definition of Done
 
-- [ ] Bảng mẫu RAM/process/container có timestamp đủ giải thích hoặc khoanh vùng được mức giảm ~2,8 GiB từ G4a sang G4b. Phân biệt MemFree và MemAvailable; ghi rõ phần nào chưa thể quy nguyên nhân. Nếu có lỗi product rõ ràng, sửa scoped code/test và chạy lại gate.
-- [ ] Nếu live đạt: ghi deployment mới, full SHA, version, exposure, loopback/external HTTP, ảnh/video trên cùng build; cập nhật verdict `DEMO_READY_LIVE` và bản in. Nếu không đạt: giữ `DEMO_READY_RECORDED`, video G3/build cũ và ghi chính xác lý do; không lặp deploy khi gate thấp.
+- [x] Giải thích sai lệch UI: ảnh G4b 91% đến từ Electron cũ chạy trước fix; ba lần refresh trên build hiện tại khớp collector khoảng 20–21%, `vps:get-resources` hoạt động. Không xem ảnh cũ là bằng chứng VPS dưới ngưỡng; nguyên nhân vật lý của biến động lịch sử chưa được kết luận.
+- [ ] Live rehearsal/deploy trên build mới: chuyển sang [checkpoint riêng](tk-s7-g5-live-checkpoint.md). Điều kiện còn thiếu là hoàn tất kiểm tra vận hành và quay liên tục một lượt deploy mới từ trước Start đến result/history/HTTP ngoài. Giữ `DEMO_READY_RECORDED` tới khi checkpoint đó đạt.
 - [x] Chốt [phiếu A4](../demo-14-10/phieu-demo.pdf) theo recorded fallback Leader đã chấp nhận; bỏ nhãn **BẢN NHÁP**. PDF một trang, không cắt chữ; kịch bản phân biệt chiếu toàn bộ 10–12 phút với trích đoạn 6–8 phút có nhãn; video đầy đủ giữ làm đối chứng.
 - [ ] Với bất kỳ runtime change: Node 22 lint, Node/Web/Scripts typecheck, full Vitest, build, `git diff --check`; nếu chỉ tài liệu thì kiểm tra diff/PDF/links. Cập nhật evidence/board/task, commit cục bộ, không push/PR/merge. Khi xong chỉ báo “Worker đã xong”.
 
@@ -33,9 +33,9 @@
 
 ## Kết quả G5
 
-- Đo mới qua VPS: `BLOCKED` — không thu được mẫu nào. Electron profile đọc DB nhưng Windows safeStorage không giải mã được khóa profile ở diagnostic; mã lỗi sanitized là `DB_ERROR`. Các lần chạy diagnostic trước đó dừng cùng giai đoạn. Không thử auth/SSH không pin hoặc thay đổi VPS.
-- Phân tích mức giảm từ G4a/G4b: `BLOCKED` — dữ liệu G4a (`MemAvailable` 3,134,372 kB) và G4b correction (~0.3 GB khả dụng) không đồng thời với process/container/pressure/OOM; không đủ bằng chứng gán nguyên nhân. MemFree và MemAvailable không được đánh đồng.
-- Live gate G5: `NOT_RUN` — không có chuỗi mẫu ổn định ≥1 GiB và không xác nhận được wizard precheck. Không Prepare/Start/deploy; app và ba dịch vụ giữ nguyên.
+- Diagnostic riêng ban đầu: `BLOCKED` — `createCredentialCipher()` trả `DB_ERROR` khi diagnostic mở profile; đây không phải trạng thái của app đang chạy. G5c sau đó xác nhận `vps:get-resources` refresh thành công qua SSH host pinning và thu ba cặp UI/collector read-only. Không thử auth/SSH ngoài app hoặc thay đổi VPS.
+- Sai lệch UI 91%: `EXPLAINED` — PID Electron cũ chạy trước fix; G5c xác nhận ba cặp UI/collector trên build mới khoảng 20–21% và `vps:get-resources` hoạt động. Ảnh cũ không chứng minh VPS dưới ngưỡng. Nguyên nhân vật lý biến động RAM lịch sử vẫn chưa được xác nhận.
+- Live rehearsal: `NOT_RUN` — chưa hoàn tất các kiểm tra vận hành và chưa có video deploy liên tục trên build mới. Không Prepare/Start/deploy trong G5c; các điều kiện còn thiếu chuyển sang checkpoint riêng. App và ba dịch vụ giữ nguyên.
 - Chế độ demo: giữ `DEMO_READY_RECORDED` đã được chấp nhận; dùng nguyên G3 457.4s video trên build UI cũ `d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955`, ghi deployment v3. Không gắn clip đó với build hiện tại hoặc deployment v4.
 
 ## PR
@@ -45,5 +45,8 @@ Chưa được phép push, mở PR hoặc merge.
 
 - G5c UPDATE 10/10 — Leader cung cấp mốc PID cũ `26684` (09/10 15:35 local), commit MemAvailable `b69d19e` (22:51), bundle hiện tại (23:52), UI cũ 91% và collector deployment 6 ở 20.58% lúc 19:31:41Z. Đã xác nhận profile G2 còn nguyên và chỉ một Electron main dùng profile; đóng app cũ bình thường, xác nhận process thoát hết, mở build `app/out` hiện tại bằng cùng Windows user/profile (PID `32832`). Không tạo lại key.
 - G5c đối chiếu thành công ba lần Refresh qua SSH host pinning với collector SQLite cùng phút: 19:40 UI 801 MB/~21%, collector 20.29–20.56%; 19:43 UI 800 MB/~20%, collector 20.18–20.70%; 19:45 UI 792 MB/~20%, collector 20.34–20.53%. Collector chỉ được truy vấn read-only theo cột, không đọc raw payload. UI cũ 91% được giải thích phù hợp nhất bởi process Electron cũ chạy trước fix; không kết luận VPS đã giải phóng RAM khi restart app.
-- G5c kết luận: lỗi hiển thị hiện tại trong app cũ, không tái hiện trên build hiện tại; nguyên nhân vật lý của thay đổi MemAvailable lịch sử giữa G4a/G4b vẫn chưa được khoanh vùng vì không có mẫu process/container/pressure đồng thời. Không tác động VPS/credential, không deploy. Live rehearsal giữ `NOT_RUN`, verdict `DEMO_READY_RECORDED`; video G3 vẫn là build cũ/deployment v3.
-- G5c gate docs-only: chạy `git diff --check` và relative-link check; không cần lint/typecheck/Vitest/build do không đổi runtime. Commit cục bộ, không push/PR/merge.
+- G5c kết luận: sai lệch hiển thị 91% được giải thích phù hợp với Electron cũ, không tái hiện trên build hiện tại; ba cặp UI/collector cùng phút khớp khoảng 20–21% và `vps:get-resources` hoạt động. Không kết luận nguyên nhân vật lý của biến động lịch sử MemAvailable. Live rehearsal giữ `NOT_RUN` vì chưa hoàn tất kiểm tra vận hành và chưa có video deploy liên tục trên build mới; hai điều kiện này chuyển sang checkpoint riêng. Verdict vẫn `DEMO_READY_RECORDED`; video G3 là build cũ/deployment v3.
+- G5c gate docs-only: `git diff --check` và relative-link check pass; không cần lint/typecheck/Vitest/build do không đổi runtime. Commit cục bộ, không push/PR/merge.
+
+- G5d UPDATE 10/10 — Đồng bộ lại kết luận RAM toàn bộ hồ sơ: ảnh 91% giữ làm chứng cứ lịch sử của Electron cũ, không là bằng chứng VPS dưới ngưỡng; ghi ba cặp refresh G5c khớp collector và hoạt động của `vps:get-resources`. Kết luận G5 là sai lệch UI đã giải thích; live `NOT_RUN` do thiếu kiểm tra vận hành và video deploy liên tục trên build mới. Chuyển phần live sang checkpoint riêng.
+- G5d gate — `pdfinfo`: 1 trang A4; `pdftotext`: xác nhận ba mẫu 20–21%, Electron cũ 91%, lý do live `NOT_RUN`, không còn câu “RAM hiện chưa xác minh”; render A4 đã xem. Relative links: 0 thiếu; `git diff --check`: PASS. Commit cục bộ, không push/PR/merge.
