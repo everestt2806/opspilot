@@ -23,7 +23,8 @@
 
 - START 10/10 — Đọc CLAUDE.md, board và hồ sơ G5; giữ nguyên phạm vi chỉ đọc trên VPS, không redeploy khi chưa có ba mẫu và precheck.
 - UPDATE 10/10 — Profile G2 biệt lập mở được SQLite read-only nhưng `createCredentialCipher()` trả `DB_ERROR` khi giải mã khóa profile; diagnostic Electron riêng cũng không tạo report để xác nhận safeStorage. Chưa có SSH sample mới, không dùng đường kết nối bỏ qua host pinning. Vì vậy chưa thể phân tích nguyên nhân MemAvailable giảm hay so sánh đồng thời với `/proc/meminfo`; live rehearsal/precheck `NOT_RUN`. Giữ recorded fallback G3/build cũ, không thay đổi ba app.
-- HANDOFF-LOCAL — Kết quả và giới hạn được ghi vào evidence, kịch bản, phiếu A4, task và board. Không sửa runtime vì chưa có bằng chứng lỗi thuộc OpsPilot.
+- HANDOFF-LOCAL — Kết quả và giới hạn được ghi vào evidence, kịch bản, phiếu A4, task và board. Docs-only gates: `git diff --check` PASS; `pdfinfo` PASS (A4, 1 trang), render preview đã xem; relative links 0 thiếu; fallback MP4 tồn tại, 8,999,624 bytes. Không sửa runtime vì chưa có bằng chứng lỗi thuộc OpsPilot.
+- Commit local `0f83d28` (`docs: ghi nhận G5 bị chặn và giữ recorded fallback`); chưa push/PR/merge.
 
 ## Kết quả G5
 
