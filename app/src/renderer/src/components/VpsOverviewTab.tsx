@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   Alert,
   Button,
@@ -19,7 +19,14 @@ import {
   WarningOutlined
 } from '@ant-design/icons'
 
-import type { IpcResult, Vps, VpsResources, VpsScanItem, VpsScanResult } from '@shared/ipc'
+import type {
+  IpcResult,
+  Vps,
+  VpsOperationalDiagnostics,
+  VpsResources,
+  VpsScanItem,
+  VpsScanResult
+} from '@shared/ipc'
 
 import { useUiState } from '../store/uiState'
 import { useStrings } from '../strings'
@@ -39,6 +46,10 @@ interface VpsOverviewTabProps {
 }
 
 type ScanPhase = 'scanning' | 'done' | 'error'
+type DiagnosticsState =
+  | { vpsId: number; phase: 'loading' }
+  | { vpsId: number; phase: 'error'; message: string }
+  | { vpsId: number; phase: 'success'; data: VpsOperationalDiagnostics }
 
 async function invokeScan(vpsId: number): Promise<IpcResult<VpsScanResult>> {
   try {
@@ -48,6 +59,17 @@ async function invokeScan(vpsId: number): Promise<IpcResult<VpsScanResult>> {
     return {
       ok: false,
       error: { code: 'UNKNOWN', message: err instanceof Error ? err.message : String(err) }
+    }
+  }
+}
+
+async function invokeDiagnostics(vpsId: number): Promise<IpcResult<VpsOperationalDiagnostics>> {
+  try {
+    return await window.api.invoke('vps:get-operational-diagnostics', vpsId)
+  } catch {
+    return {
+      ok: false,
+      error: { code: 'UNKNOWN', message: '' }
     }
   }
 }
@@ -79,11 +101,37 @@ export function VpsOverviewTab({
   const [scanPhase, setScanPhase] = useState<ScanPhase>('scanning')
   const [scanResult, setScanResult] = useState<VpsScanResult | null>(null)
   const [scanError, setScanError] = useState<string | null>(null)
+  const [diagnosticsState, setDiagnosticsState] = useState<DiagnosticsState | null>(null)
+  const diagnosticsRequestId = useRef(0)
+  const currentVpsId = useRef(vps.id)
+  const currentDiagnostics = diagnosticsState?.vpsId === vps.id ? diagnosticsState : null
 
   const onDockerInstalledRef = useRef(onDockerInstalled)
   useEffect(() => {
     onDockerInstalledRef.current = onDockerInstalled
   }, [onDockerInstalled])
+
+  useLayoutEffect(() => {
+    currentVpsId.current = vps.id
+    return () => {
+      diagnosticsRequestId.current += 1
+    }
+  }, [vps.id])
+
+  const runDiagnostics = useCallback(async (): Promise<void> => {
+    const requestId = ++diagnosticsRequestId.current
+    const requestVpsId = vps.id
+    setDiagnosticsState({ vpsId: requestVpsId, phase: 'loading' })
+    const result = await invokeDiagnostics(requestVpsId)
+    if (requestId !== diagnosticsRequestId.current || requestVpsId !== currentVpsId.current) {
+      return
+    }
+    setDiagnosticsState(
+      result.ok
+        ? { vpsId: requestVpsId, phase: 'success', data: result.data }
+        : { vpsId: requestVpsId, phase: 'error', message: result.error.message }
+    )
+  }, [vps.id])
 
   const applyScan = useCallback(
     (result: IpcResult<VpsScanResult>): void => {
@@ -277,6 +325,113 @@ export function VpsOverviewTab({
               {strings.vpsControl.overview.resourcesRefresh}
             </Button>
           </div>
+        )}
+      </Card>
+
+      <Card
+        title={strings.vpsControl.overview.diagnosticsTitle}
+        size="small"
+        style={{ marginTop: 12 }}
+        extra={
+          <Button size="small" icon={<ReloadOutlined />} onClick={() => void runDiagnostics()}>
+            {currentDiagnostics?.phase === 'success'
+              ? strings.vpsControl.overview.diagnosticsRefresh
+              : currentDiagnostics?.phase === 'error'
+                ? strings.vpsControl.overview.diagnosticsRetry
+                : strings.vpsControl.overview.diagnosticsCheck}
+          </Button>
+        }
+      >
+        {!currentDiagnostics && (
+          <Typography.Text type="secondary">
+            {strings.vpsControl.overview.diagnosticsHint}
+          </Typography.Text>
+        )}
+        {currentDiagnostics?.phase === 'loading' && (
+          <Space>
+            <Spin size="small" />
+            <Typography.Text type="secondary">
+              {strings.vpsControl.overview.diagnosticsLoading}
+            </Typography.Text>
+          </Space>
+        )}
+        {currentDiagnostics?.phase === 'error' && (
+          <Alert
+            type="error"
+            showIcon
+            message={strings.vpsControl.overview.diagnosticsFailed}
+            description={currentDiagnostics.message || undefined}
+            action={
+              <Button size="small" onClick={() => void runDiagnostics()}>
+                {strings.common.retry}
+              </Button>
+            }
+          />
+        )}
+        {currentDiagnostics?.phase === 'success' && (
+          <>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
+              {strings.vpsControl.overview.diagnosticsPressureSemantics}
+            </Typography.Paragraph>
+            <Descriptions size="small" column={{ xs: 1, sm: 2 }} bordered>
+              <Descriptions.Item label={strings.vpsControl.overview.diagnosticsSampledAt}>
+                {localDateTime(currentDiagnostics.data.sampled_at)}
+              </Descriptions.Item>
+              <Descriptions.Item label={strings.vpsControl.overview.diagnosticsPressureSome}>
+                {currentDiagnostics.data.memory_pressure === null
+                  ? strings.vpsControl.overview.diagnosticsUnavailable
+                  : `${currentDiagnostics.data.memory_pressure.some_avg10.toFixed(2)}%`}
+              </Descriptions.Item>
+              <Descriptions.Item label={strings.vpsControl.overview.diagnosticsPressureFull}>
+                {currentDiagnostics.data.memory_pressure === null
+                  ? strings.vpsControl.overview.diagnosticsUnavailable
+                  : `${currentDiagnostics.data.memory_pressure.full_avg10.toFixed(2)}%`}
+              </Descriptions.Item>
+              <Descriptions.Item label={strings.vpsControl.overview.diagnosticsOomKills}>
+                {currentDiagnostics.data.oom_kill_count === null
+                  ? strings.vpsControl.overview.diagnosticsUnavailable
+                  : currentDiagnostics.data.oom_kill_count}
+              </Descriptions.Item>
+            </Descriptions>
+            <Typography.Paragraph type="secondary" style={{ margin: '8px 0' }}>
+              {strings.vpsControl.overview.diagnosticsOomHint}
+            </Typography.Paragraph>
+            <Typography.Text strong>
+              {strings.vpsControl.overview.diagnosticsProcesses}
+            </Typography.Text>
+            {!currentDiagnostics.data.top_processes_available ? (
+              <div style={{ marginTop: 6 }}>
+                <Typography.Text type="secondary">
+                  {strings.vpsControl.overview.diagnosticsUnavailable}
+                </Typography.Text>
+              </div>
+            ) : currentDiagnostics.data.top_processes.length === 0 ? (
+              <div style={{ marginTop: 6 }}>
+                <Typography.Text type="secondary">
+                  {strings.vpsControl.overview.diagnosticsNoProcesses}
+                </Typography.Text>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: 6, marginTop: 6 }}>
+                {currentDiagnostics.data.top_processes.slice(0, 10).map((process) => (
+                  <div
+                    key={process.pid}
+                    style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}
+                  >
+                    <span>
+                      <Typography.Text>{process.name}</Typography.Text>{' '}
+                      <Typography.Text type="secondary">
+                        {strings.vpsControl.overview.diagnosticsPid} {process.pid}
+                      </Typography.Text>
+                    </span>
+                    <Typography.Text className="mono-text">
+                      {process.rss_mb.toFixed(2)} MB
+                    </Typography.Text>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </Card>
 
