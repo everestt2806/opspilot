@@ -26,6 +26,7 @@
 - LIVE-SMOKE 09/10 — Electron thật/profile biệt lập deploy local folder Vite SPA và Next.js; cả hai runtime healthy, loopback/external HTTP 200, Next route HTTP 200, SQLite xác nhận folder local chính xác và Git fields NULL. G2 Express vẫn healthy/reachable. Chi tiết image/container IDs, resources, timestamps và ảnh: [evidence](../demo-14-10/evidence.md#G2b--live-smoke-nguồn-folder-local-và-template).
 - GATES 09/10 — Node 22.23.3: lint PASS; app Node/Web typecheck PASS; scripts typecheck PASS (`pnpm --dir app exec tsc --noEmit -p tsconfig.scripts.json --composite false`); full Vitest 71/71 files, 666/666 tests PASS; build PASS; `git diff --check` PASS.
 - HANDOFF-LOCAL 09/10 — Bằng chứng/task/board được commit cục bộ trên `feat/deploy-reachability`; không push/PR/merge. Không có thay đổi runtime code, nên live smoke và gates cùng source HEAD.
+- REVIEW 09/10 — Leader xem ảnh Electron, đọc bằng chứng và kiểm tra lại từ máy điều khiển: Vite `/`, Next `/` và `/bai-viet/ops-pilot-la-gi`, Git Express `/health` đều HTTP 200. SQLite profile biệt lập đọc read-only cho thấy Vite app/deploy 2/3, Next 3/4 là `source_type=local`, đúng đường dẫn folder, `running/reachable`, mọi trường Git đều NULL. Duyệt local G2b; chưa push/merge nên task vẫn `CHỜ REVIEW`.
 
 ## PR
 
