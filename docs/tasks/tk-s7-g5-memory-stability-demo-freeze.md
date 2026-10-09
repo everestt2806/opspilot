@@ -21,7 +21,16 @@
 
 ## Nhật ký
 
-- PLAN 10/10 — Leader chấp nhận recorded fallback G3 sau khi kiểm tra video không audio, PDF A4 và ba URL HTTP 200. Live v4 từng thành công nhưng resource correction rơi dưới 1 GiB; G5 chẩn đoán ổn định trước khi quyết định live cuối.
+- START 10/10 — Đọc CLAUDE.md, board và hồ sơ G5; giữ nguyên phạm vi chỉ đọc trên VPS, không redeploy khi chưa có ba mẫu và precheck.
+- UPDATE 10/10 — Profile G2 biệt lập mở được SQLite read-only nhưng `createCredentialCipher()` trả `DB_ERROR` khi giải mã khóa profile; diagnostic Electron riêng cũng không tạo report để xác nhận safeStorage. Chưa có SSH sample mới, không dùng đường kết nối bỏ qua host pinning. Vì vậy chưa thể phân tích nguyên nhân MemAvailable giảm hay so sánh đồng thời với `/proc/meminfo`; live rehearsal/precheck `NOT_RUN`. Giữ recorded fallback G3/build cũ, không thay đổi ba app.
+- HANDOFF-LOCAL — Kết quả và giới hạn được ghi vào evidence, kịch bản, phiếu A4, task và board. Không sửa runtime vì chưa có bằng chứng lỗi thuộc OpsPilot.
+
+## Kết quả G5
+
+- Đo mới qua VPS: `BLOCKED` — không thu được mẫu nào. Electron profile đọc DB nhưng Windows safeStorage không giải mã được khóa profile ở diagnostic; mã lỗi sanitized là `DB_ERROR`. Các lần chạy diagnostic trước đó dừng cùng giai đoạn. Không thử auth/SSH không pin hoặc thay đổi VPS.
+- Phân tích mức giảm từ G4a/G4b: `BLOCKED` — dữ liệu G4a (`MemAvailable` 3,134,372 kB) và G4b correction (~0.3 GB khả dụng) không đồng thời với process/container/pressure/OOM; không đủ bằng chứng gán nguyên nhân. MemFree và MemAvailable không được đánh đồng.
+- Live gate G5: `NOT_RUN` — không có chuỗi mẫu ổn định ≥1 GiB và không xác nhận được wizard precheck. Không Prepare/Start/deploy; app và ba dịch vụ giữ nguyên.
+- Chế độ demo: giữ `DEMO_READY_RECORDED` đã được chấp nhận; dùng nguyên G3 457.4s video trên build UI cũ `d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955`, ghi deployment v3. Không gắn clip đó với build hiện tại hoặc deployment v4.
 
 ## PR
 

@@ -56,3 +56,7 @@ Electron production build/profile G2 sau refresh hiển thị RAM dùng `3.5/3.8
 Dùng nguyên video [G3 rehearsal](evidence/g3-rehearsal-20261009.mp4), MP4 457.4 giây, source build UI cũ `d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955`. Đây là bản ghi full deploy G3/v3, không phải build hiện tại hoặc deploy v4. MP4 có video handler, metadata handler `mdir`, không có audio handler; không gắn ảnh hay thông tin G4b vào video này. Các HTTP 200 trong bản ghi là kết quả ở thời điểm G3, không được mô tả như probe hiện tại.
 
 Lời dẫn kết: “Đây là bản ghi toàn bộ một lượt deploy Git trên build OpsPilot cũ ngày 09/10; nó dài 7 phút 37 giây và không có track âm thanh. Phiên live G4b hôm nay dừng trước precheck/Start vì MemAvailable thấp hơn ngưỡng 1 GiB; app đang giữ deployment v4 đã có. Bản ghi chỉ chứng minh luồng ở build cũ. Container ID chưa xác minh; webhook, HTTPS ingress, migrate sau rollback và ML pilot chưa được chứng minh.”
+
+## G5 — lời dẫn khi không thể xác minh tài nguyên
+
+“Ở G5 tôi không thu được mẫu VPS mới: profile biệt lập không giải mã được khóa safeStorage, nên không tạo SSH connection đã pin. Tôi không thể kết luận nguyên nhân MemAvailable giảm hay trạng thái RAM hiện tại. Vì không chứng minh được RAM ổn định từ 1 GiB và precheck không chạy, tôi dừng trước Prepare/Start; không có redeploy mới. Clip đang phát là full deploy G3 trên build UI cũ, ghi deployment v3; app Git hiện ở v4. Ba app được giữ nguyên.”

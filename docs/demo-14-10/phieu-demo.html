@@ -34,7 +34,7 @@
       <li>Phát nguyên bản ghi G3 để xem một lượt deploy Git đã diễn ra trên build UI cũ.</li>
       <li>Trong bản ghi G3, history là v3 và SHA khớp remote tại thời điểm quay; không gọi đó là trạng thái deploy hiện tại.</li>
       <li>Hai kiểu nguồn local folder và Git được trình bày bằng bằng chứng G3 đã ghi.</li>
-      <li>Nêu giới hạn rõ: live correction G4b ngày 10/10 dừng trước precheck/Start do RAM khả dụng dưới 1 GiB; deployment hiện hành v4 được giữ nguyên.</li>
+      <li>Nêu giới hạn rõ: G5 không thu được mẫu mới do safeStorage profile lỗi DB_ERROR; RAM hiện tại và nguyên nhân giảm chưa xác định. Không precheck/Start; giữ deployment v4.</li>
     </ol>
 
     <h2>Bằng chứng đã kiểm tra</h2>
@@ -43,11 +43,11 @@
       <tr><td>Git Express · deployment 6/v4 · repo <code>main</code> cùng SHA</td><td>G4b probe 09/10: full SHA <code>8af16e1f9165a31557288adbc23acc420244938f</code>; <code>/health</code> → HTTP 200</td></tr>
       <tr><td>Vite SPA · folder local</td><td>G4b probe 09/10: <code>http://160.191.243.89:30001/</code> → HTTP 200</td></tr>
       <tr><td>Next.js · folder local</td><td>G4b probe 09/10: <code>http://160.191.243.89:30002/</code> và <code>/bai-viet/ops-pilot-la-gi</code> → HTTP 200</td></tr>
-      <tr><td>G4b correction resource gate</td><td>10/10/2026, 00:05 UTC+07: RAM 3.5/3.8 GB dùng (91%, khoảng 0.3 GB khả dụng) — dưới gate 1 GiB; disk 7/25 GB, Docker 29.8.2. Precheck và redeploy mới NOT_RUN; không Start.</td></tr>
+      <tr><td>G4b + G5 resource gate</td><td>G4b correction 10/10: khoảng 0.3 GB khả dụng. G5 không thu được mẫu mới (safeStorage DB_ERROR), nên mức RAM hiện tại chưa xác minh; live/precheck NOT_RUN, không Start. Giữ deployment v4.</td></tr>
       <tr><td>Video fallback G3</td><td>09/10/2026; 457.4s. Source UI cũ <code>d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955</code>; ghi deployment v3. Không phải video G4b hoặc trạng thái hiện tại.</td></tr>
       <tr><td>Live G4b đã có</td><td>Deployment 6/v4, cùng SHA với v3/main, status running/reachable; HTTP ngoài đã đạt trong lượt 09/10. Container ID chưa xác minh.</td></tr>
     </table>
-    <p class="note"><strong>Giới hạn:</strong> Video phát là full deploy G3 trên build cũ; HTTP trong video là kết quả tại thời điểm đó. Clip G4b bị loại vì bắt đầu sau deploy và có audio handler. Container ID chưa xác minh (app/SQLite không lưu ID; truy vấn SSH read-only trước đó exit 255). Không tuyên bố webhook/push-to-deploy, HTTPS ingress, migrate sau rollback hay ML pilot.</p>
+    <p class="note"><strong>Giới hạn:</strong> Video phát là full deploy G3 trên build cũ; HTTP trong video là kết quả tại thời điểm đó. Clip G4b bị loại vì bắt đầu sau deploy và có audio handler. Container ID chưa xác minh; G5 chưa quy được nguyên nhân RAM do không thu được mẫu. Không tuyên bố webhook/push-to-deploy, HTTPS ingress, migrate sau rollback hay ML pilot.</p>
     <p class="small">Phiếu vẫn là bản nháp đến khi Leader review và freeze. Chi tiết thời gian, gate và video: <code>docs/demo-14-10/evidence.md</code>.</p>
   </body>
 </html>
