@@ -26,7 +26,7 @@ Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng đượ
 | ----- | ---------------------------------------------- | --------------------------------- | --------------------------------------------------------------- | -------- | ----- | --- |
 | FR-A1 | CRUD VPS, credential mã hoá                    | M2 + `db`                         | unit test crypto + `loadSecret` roundtrip DB + smoke VM01 30/08 | 3.1      | W1    | ✅  |
 | FR-A2 | Test SSH, kiểm tra & tự cài Docker             | M1 + `vps:install-docker`         | `try-ssh` 6 bước + connection/scan handler + smoke VM01 30/08   | 3.1      | W1    | ✅  |
-| FR-A3 | Danh sách VPS + trạng thái + tài nguyên        | M1 + `vps:get-resources`          | test parser/renderer + VPS Control Panel #21 + smoke VM01 30/08 | 3.1      | W1    | ✅  |
+| FR-A3 | Danh sách VPS + trạng thái + tài nguyên        | M1 + `vps:get-resources` + `vps:get-operational-diagnostics` | test parser/renderer + VPS Control Panel #21 + smoke VM01 30/08; C2b parser/IPC/fixture tests local (không phải live diagnostics gate) | 3.1      | W1    | ✅  |
 | FR-B1 | Detector plugin nhận diện framework            | M3                                | unit test ≥4 case/detector                                      | 3.2 b2   | W2    | ⬜  |
 | FR-B2 | Hỗ trợ 3 stack Tier 1 (+Flask Tier 2)          | M3                                | deploy thật cả 3 demo app                                       | 3.2      | W3    | ⬜  |
 | FR-B3 | Wizard hỏi env thiếu + cảnh báo thủ công       | M3 `requiredEnv` + UI             | smoke test                                                      | 3.2 b3   | W3    | ⬜  |

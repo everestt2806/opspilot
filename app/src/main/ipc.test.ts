@@ -44,6 +44,54 @@ describe('handle', () => {
     })
   })
 
+  it('invokes read-only VPS diagnostics with vpsId only and wraps validation errors', async () => {
+    const ssh = {
+      exec: vi.fn(async (_vpsId: number, command: string) => ({
+        code: 0,
+        stdout: command.includes('/proc/pressure/memory')
+          ? 'some avg10=0.1 avg60=0.1 avg300=0.1 total=1\nfull avg10=0.0 avg60=0.0 avg300=0.0 total=0'
+          : command.includes('/proc/vmstat')
+            ? 'oom_kill 0\n'
+            : 'PID RSS COMMAND\n22 512 electron'
+      }))
+    }
+    registerIpcHandlers(
+      {} as never,
+      {} as never,
+      ssh as never,
+      {} as never,
+      {} as never,
+      () => null
+    )
+    const callback = handleMock.mock.calls.find(
+      ([registered]) => registered === 'vps:get-operational-diagnostics'
+    )?.[1] as (event: unknown, vpsId: number) => Promise<unknown>
+
+    await expect(callback({}, 2)).resolves.toMatchObject({
+      ok: true,
+      data: {
+        top_processes_available: true,
+        top_processes: [{ pid: 22, name: 'electron', rss_mb: 0.5 }],
+        memory_pressure: { some_avg10: 0.1, full_avg10: 0 },
+        oom_kill_count: 0
+      }
+    })
+    expect(ssh.exec).toHaveBeenCalledTimes(3)
+    expect(ssh.exec.mock.calls.every(([id]) => id === 2)).toBe(true)
+
+    await expect(callback({}, 0)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION' }
+    })
+    expect(ssh.exec).toHaveBeenCalledTimes(3)
+
+    ssh.exec.mockRejectedValueOnce(new AppError('VALIDATION', 'Unknown VPS'))
+    await expect(callback({}, 999)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION' }
+    })
+  })
+
   it('dieu khien custom title bar tren dung BrowserWindow', async () => {
     let maximized = false
     const window = {

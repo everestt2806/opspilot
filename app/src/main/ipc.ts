@@ -8,6 +8,7 @@ import type { HistoryService } from './history/service'
 import type { MlServiceManager } from './mlClient'
 import type { SshManager } from './ssh/manager'
 import { readVpsResources, testConnectionWithCredentials } from './vps/connectionService'
+import { readVpsOperationalDiagnostics } from './vps/operationalDiagnostics'
 import { installDockerOnVps } from './vps/dockerInstall'
 import { scanVpsEnvironment } from './vps/scanService'
 import type { VpsService } from './vps/service'
@@ -78,6 +79,7 @@ export function registerIpcHandlers(
     })
   )
   handle('vps:get-resources', (vpsId) => readVpsResources(ssh, vpsId))
+  handle('vps:get-operational-diagnostics', (vpsId) => readVpsOperationalDiagnostics(ssh, vpsId))
   handle('vps:install-docker', async (vpsId) => {
     const dockerVersion = await installDockerOnVps(ssh, vpsId)
     vpsService.recordDockerInstalled(vpsId, dockerVersion)

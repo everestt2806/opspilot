@@ -48,6 +48,20 @@ export interface VpsResources {
   load_avg_1m: number;
 }
 
+/** Read-only, best-effort operational sample collected from a Linux VPS via pinned SSH. */
+export interface VpsOperationalDiagnostics {
+  /** ISO-8601 UTC timestamp assigned by the desktop after collecting the sample. */
+  sampled_at: string;
+  /** False means ps was unsupported or failed; true with [] is a valid empty sample. */
+  top_processes_available: boolean;
+  /** At most 10 highest-RSS processes; names come from ps comm, never command lines. */
+  top_processes: Array<{ pid: number; name: string; rss_mb: number }>;
+  /** Null when /proc/pressure/memory is unavailable or could not be parsed. */
+  memory_pressure: { some_avg10: number; full_avg10: number } | null;
+  /** Null when /proc/vmstat does not expose a parseable oom_kill counter. */
+  oom_kill_count: number | null;
+}
+
 export interface App {
   id: number;
   vps_id: number;
@@ -169,6 +183,7 @@ export interface IpcInvokeMap {
   // ── VPS (UC-01) ────────────────────────────────────────────────────────────
   'vps:list':           () => IpcResult<Vps[]>;
   'vps:get-resources':  (vpsId: number) => IpcResult<VpsResources>;
+  'vps:get-operational-diagnostics': (vpsId: number) => IpcResult<VpsOperationalDiagnostics>;
   'vps:test-connection': (input: VpsInput) => IpcResult<VpsConnectionCheck>;
   'vps:create':         (input: VpsInput) => IpcResult<Vps>;
   'vps:update':         (id: number, input: Partial<VpsInput>) => IpcResult<Vps>;
