@@ -26,4 +26,6 @@ Cho phép redeploy app đã chạy mà không tải secret về renderer hoặc 
 
 - START 2026-10-10: đọc CLAUDE, DECISIONS, IPC/deploy event contract, roadmap, M04 prompt và task-discipline. Không thấy cần đổi contract; Leader xác nhận giữ task tập trung vào hiện diện key và preservation đầy đủ, DB pair không override. Worktree có sẵn untracked `.agents/`, `SKILL.md`, `run.ps1`, `start-opspilot.bat`; giữ nguyên.
 
-- GATE 2026-10-10 (Node v22.23.3; pnpm script Node v22.23.3): focused deploy + DeployPage Vitest PASS, 11 files / 185 tests; Node/Web typecheck PASS (also run by build); scripts TypeScript PASS; lint PASS with 0 errors and 18 existing/style warnings from Prettier; Electron Vite build PASS; `git diff --check` PASS. An initial typecheck found C3a fixture/narrowing issues; fixed and all final gates above rerun successfully. No VPS access/deploy; all secrets are mock fixtures.
+- GATE 2026-10-10 (Node v22.23.3; pnpm script Node v22.23.3): focused deploy + DeployPage Vitest PASS, 11 files / 185 tests; Node/Web typecheck PASS (also run by build); scripts TypeScript PASS; lint PASS with 0 errors and 18 Prettier warnings; Electron Vite build PASS; `git diff --check` PASS. An initial typecheck found C3a fixture/narrowing issues; fixed and all final gates above rerun successfully. No VPS access/deploy; all secrets are mock fixtures.
+
+- IMPLEMENTATION COMMIT: `b035bae` (local only).
