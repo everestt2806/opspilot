@@ -60,6 +60,21 @@ describe('parseBaselineOutput', () => {
     })
   })
 
+  it('maps free -m available column to the RAM value used for the deployment gate', () => {
+    const raw = parseBaselineOutput('RAM_MB|2989\nDISK_GB|17\nDOCKER|Docker version 29.8.2', null)
+    expect(raw.ramFreeMb).toBe(2989)
+    expect(
+      evaluateBaseline(
+        {
+          ...raw,
+          portUsed: false,
+          portInfo: 'chưa dùng'
+        },
+        null
+      ).passed
+    ).toBe(true)
+  })
+
   it('thieu marker DOCKER -> dockerVersion null; khong co ket qua PORT -> bao loi doc', () => {
     const raw = parseBaselineOutput('RAM_MB|128\nDISK_GB|3', 30001)
     expect(raw.dockerVersion).toBeNull()

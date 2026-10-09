@@ -41,6 +41,7 @@ export interface Vps {
 /** Tài nguyên khả dụng, đọc bằng SSH khi mở màn VPS (FR-A3) */
 export interface VpsResources {
   ram_total_mb: number;
+  /** MemAvailable on Linux; legacy IPC field name retained for compatibility and precheck parity. */
   ram_free_mb: number;
   disk_total_gb: number;
   disk_free_gb: number;

@@ -115,7 +115,7 @@ async function probeVps(ssh: SshManager, vpsId: number): Promise<VpsConnectionCh
 /** FR-A3: đọc tài nguyên khả dụng của VPS bằng SSH. */
 export async function readVpsResources(ssh: SshManager, vpsId: number): Promise<VpsResources> {
   const command = [
-    "printf 'RAM|'; free -b | awk 'NR==2{print $2,$4}'",
+    "printf 'RAM|'; awk '/^MemTotal:/{total=$2} /^MemFree:/{free=$2} /^MemAvailable:/{available=$2} END{printf \"%d %d %d\\n\", total*1024, free*1024, available*1024}' /proc/meminfo",
     "printf 'DISK|'; df -P -m / | tail -1",
     "printf 'CPU|'; nproc",
     "printf 'LOAD|'; cut -d' ' -f1 /proc/loadavg"
@@ -138,9 +138,12 @@ export function parseResourcesOutput(output: string): VpsResources {
       continue
     }
     if (key === 'RAM') {
-      const [totalBytes, freeBytes] = value.trim().split(/\s+/).map(Number)
-      parsed.ram_total_mb = Math.round(totalBytes / (1024 * 1024))
-      parsed.ram_free_mb = Math.round(freeBytes / (1024 * 1024))
+      const [totalBytes, freeBytes, availableBytes] = value.trim().split(/\s+/).map(Number)
+      if ([totalBytes, freeBytes, availableBytes].every(Number.isFinite)) {
+        parsed.ram_total_mb = Math.round(totalBytes / (1024 * 1024))
+        // Legacy IPC field name: this is Linux MemAvailable, matching the deploy precheck.
+        parsed.ram_free_mb = Math.round(availableBytes / (1024 * 1024))
+      }
     } else if (key === 'DISK') {
       const fields = value.trim().split(/\s+/)
       parsed.disk_total_gb = Math.round(Number(fields[1]) / 1024)

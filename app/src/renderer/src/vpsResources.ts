@@ -35,7 +35,7 @@ export function useTicker(intervalMs = 5000): number {
   return now
 }
 
-/** Phần trăm dùng: RAM, Disk, tải CPU (load/cpu_count) — mỗi giá trị trong [0, 100]. */
+/** RAM used percent derives from MemAvailable (same value used by deploy precheck). */
 export function resourcePercents(res: VpsResources): { ram: number; disk: number; cpu: number } {
   return {
     ram: clampPercent(((res.ram_total_mb - res.ram_free_mb) / res.ram_total_mb) * 100),
