@@ -16,7 +16,7 @@
 | TK-S7 G1b | [Hai nguồn deploy trong UI, lịch sử Git và migrate](tk-s7-g1b-git-ui-history-migrate.md) | Worker | 10/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | Leader review manual Git flow đủ cho G2, guard `49300ea` và migrate 19/19 pass; DoD migrate rollback chưa xong |
 | TK-S7 G2 | [Live smoke deploy Git trên VPS phát triển](tk-s7-g2-live-git-vps-smoke.md) | Worker | 11/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | Leader xác minh public HTTP 200, remote SHA và SQLite v1/v2 cùng SHA; local `ffb2278`, chưa push/merge |
 | TK-S7 G2b | [Live smoke nguồn thư mục và template trên VPS](tk-s7-g2b-local-template-vps-smoke.md) | Worker | 11/10/2026; không cắt gate | CHỜ REVIEW | `feat/deploy-reachability` | Leader xác minh lại Vite/Next/Git HTTP 200 và SQLite local source/Git fields NULL; local `27a06ac`, chưa push/merge |
-| TK-S7 G3 | [Diễn tập demo trên VPS thật](tk-s7-g3-demo-rehearsal.md) | Worker | 12/10/2026; không cắt gate | TUẦN NÀY | `feat/deploy-reachability` | Kịch bản 6–8 phút, live Git, ảnh/video fallback, phiếu A4 bản nháp và gate rehearsal |
+| TK-S7 G3 | [Diễn tập demo trên VPS thật](tk-s7-g3-demo-rehearsal.md) | Worker | 12/10/2026; không cắt gate | HOÀN TẤT | `feat/deploy-reachability` | PASS: rehearsal live Git trên HEAD `d450655`; video fallback im lặng, evidence/phiếu A4 cập nhật; gate Node 22 PASS, commit cục bộ |
 
 TK-A18 Titlebar fix 05: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `30747f1`; WCO drag region dùng
 đúng rectangle, native controls không còn chồng caption và màu overlay đã liền shell; Snap Layout ghi
@@ -108,7 +108,7 @@ manual-only, không push/PR/merge.
 | D14-G1 | Git-first wizard, pipeline, provenance và tương thích migrate | Worker | 10/10 | CHỜ REVIEW | D14-G0 | Deploy Git thường qua gate; G1b source integrity chặn attempt mới hơn mọi status; migrate sau rollback vẫn chưa hoàn tất |
 | D14-G2 | [Live Git Express trên VPS phát triển](tk-s7-g2-live-git-vps-smoke.md) | Worker | 11/10 | CHỜ REVIEW | D14-G1 | Live manual Git v1/v2 cùng SHA, HTTP 200 external, SQLite và ảnh Electron; local review pass, chưa push/merge |
 | D14-G2b | [Local Vite/Next live smoke](tk-s7-g2b-local-template-vps-smoke.md) | Worker | 11/10 | CHỜ REVIEW | D14-G2 | Live Vite/Next PASS qua Electron thật, HTTP external/loopback 200, ảnh/runtime/history và SQLite source đã ghi ở evidence; G2 Express vẫn reachable |
-| D14-G3 | [Rehearsal 1, ảnh/video fallback](tk-s7-g3-demo-rehearsal.md) | Worker | 12/10 | TUẦN NÀY | D14-G2b | Demo 6–8 phút, nguồn Git và SHA khớp bằng chứng, phiếu A4 bản nháp |
+| D14-G3 | [Rehearsal 1, ảnh/video fallback](tk-s7-g3-demo-rehearsal.md) | Worker | 12/10 | HOÀN TẤT | D14-G2b | Rehearsal G3 PASS; Git cùng SHA, ba app reachable; video dự phòng 7:37 im lặng; phiếu A4 vẫn bản nháp |
 | D14-G4 | Rehearsal 2, gate cuối, freeze và phiếu in | Worker | 13/10 | BACKLOG | D14-G3 | Leader cấp verdict theo chế độ thật; không thêm tính năng |
 
 

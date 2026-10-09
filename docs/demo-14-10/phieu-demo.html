@@ -22,8 +22,9 @@
   <body>
     <h1>OpsPilot</h1>
     <p><strong>Triển khai và giám sát ứng dụng trên VPS riêng</strong> · Phiếu trình bày 14/10/2026</p>
-    <p class="badge">BẢN NHÁP — cập nhật SHA và chế độ demo sau rehearsal 13/10</p>
-    <p><strong>SHA chạy demo:</strong> ................................ &nbsp; <strong>Chế độ:</strong> LIVE_VPS / RECORDED_FALLBACK</p>
+    <p class="badge">BẢN NHÁP — chờ G4 freeze</p>
+    <p><strong>Build OpsPilot:</strong> <code>d4506554fcb4d8b6a89fe34cdac4ac7c81cd0955</code> &nbsp; <strong>Git source SHA:</strong> <code>8af16e1f9165a31557288adbc23acc420244938f</code></p>
+    <p><strong>Chế độ:</strong> <code>LIVE_VPS</code> đã diễn tập · <code>RECORDED_FALLBACK</code> có sẵn (video im lặng)</p>
 
     <h2>Ý tưởng trong một câu</h2>
     <p>OpsPilot nhận diện mã nguồn, triển khai qua SSH và Docker, lưu phiên bản, kiểm tra khả năng truy cập, theo dõi vận hành và hỗ trợ khôi phục.</p>
@@ -40,11 +41,11 @@
 
     <h2>Bằng chứng và giới hạn</h2>
     <table>
-      <tr><th>Đã kiểm chứng cục bộ 08/10</th><th>Chỉ ghi sau rehearsal</th></tr>
-      <tr><td>Baseline trước Git-first: lint, typecheck, 69 file / 631 test PASS trên Node 22. Chạy lại gate sau rehearsal.</td><td>Repo/ref/full SHA, URL và deployment ID VPS thật: ................................</td></tr>
-      <tr><td>UI desktop và ba detector có test; các màn có ảnh Electron ở <code>docs/ui-redesign/screenshots/</code>.</td><td>Ảnh/video cùng SHA, 2 lượt rehearsal: ................................</td></tr>
+      <tr><th>Đã diễn tập LIVE_VPS</th><th>Giới hạn checkpoint</th></tr>
+      <tr><td>Git <code>everestt2806/opspilot</code>, ref <code>main</code>, root Express; deployment 5 / v3, cùng SHA với v2. URL health từ máy điều khiển trả HTTP 200.</td><td>Redeploy Git là thao tác thủ công; chưa có push-to-deploy/webhook.</td></tr>
+      <tr><td>Nguồn folder local: Vite SPA và Next.js vẫn chạy, external HTTP 200. Video rehearsal thật dài 7:37 và im lặng; ảnh Electron kèm hồ sơ G3.</td><td>HTTPS ingress, migrate sau rollback và pilot ML chưa được xác nhận ở checkpoint này.</td></tr>
     </table>
-    <p class="note"><strong>Nếu RECORDED_FALLBACK:</strong> trình chiếu bản ghi của lần deploy VPS thật đã kiểm chứng, kèm ngày và SHA; không gọi đó là thao tác đang chạy live. Pilot ML trên VPS vẫn NOT_RUN.</p>
+    <p class="note"><strong>Nếu RECORDED_FALLBACK:</strong> trình chiếu bản ghi của lần deploy VPS thật đã kiểm chứng, kèm ngày và SHA; không gọi đó là thao tác đang chạy live. Video dự phòng là bản ghi im lặng, không phải phiên live. Pilot ML trên VPS vẫn NOT_RUN.</p>
 
     <h2>Bước tiếp theo sau demo</h2>
     <p>Tiếp theo: Git push-to-deploy/preview khi desktop tắt, URL HTTPS qua ingress và runtime logs; repo riêng cần credential giới hạn quyền đọc.</p>
