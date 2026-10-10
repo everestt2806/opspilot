@@ -122,6 +122,7 @@ manual-only, không push/PR/merge.
 | D14-G5 | [Memory stability và freeze](tk-s7-g5-memory-stability-demo-freeze.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4b | G5c giải thích UI cũ 91%; 3 mẫu UI/collector build mới khớp khoảng 20–21%. Chẩn đoán sai lệch UI hoàn tất; live vẫn NOT_RUN do kiểm tra vận hành/video liên tục build mới, chuyển checkpoint riêng; giữ recorded |
 | D14-G5-live | [Kiểm tra vận hành và video deploy build mới](tk-s7-g5-live-checkpoint.md) | Worker | trước freeze 13/10/2026 | BLOCKED / PARTIAL | D14-G5 | C3d: one same-SHA redeploy completed as v5 (`running/reachable`), and pre/post HTTP checks passed; recording ended before precheck/Start and AAC was present. Continuous evidence FAIL; same-minute collector/OOM trend NOT_VERIFIED. Keep DEMO_READY_RECORDED/G3 v3; no second deploy. |
 | D11-script | [Kịch bản 7 phút và phiếu in 11/10](tk-s7-demo-11-10.md) | Leader | tối 10/10 | CHỜ REVIEW | G2/G2b/G3/G4b | Script + PDF A4 cập nhật Git Express v5; ba URL HTTP 200 sau C3d; CSV và JSONL raw cùng 180 mẫu ML đo thực để minh họa, chưa là pilot. Kiểm tra lại sáng 11/10. C3d deploy thật nhưng video bị cắt; fallback G3 gắn nhãn build cũ/v3. |
+| D11-sources | [Ba source để thử deploy trước buổi demo](tk-s7-demo-extra-sources.md) | Leader | tối 10/10 | HOÀN THÀNH LOCAL / CHỜ USER DEPLOY | D11-script | Express Sân Nhà thử tối nay; Vite Tiệm Đọc và Next.js Nhật Ký Phố để dành. `npm ci`, build/start/HTTP và ba detector pass; VPS thật chưa chạy ba source mới. [Hướng dẫn](../demo-11-10/ba-web-demo.md). |
 
 
 
