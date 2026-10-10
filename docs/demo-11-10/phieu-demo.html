@@ -38,7 +38,7 @@
     <tr><th class="time">Mốc</th><th class="step">Màn hình</th><th>Thông điệp nói</th></tr>
     <tr><td>0:00–0:40</td><td>Tổng quan</td><td>Đưa source từ Git hoặc máy tính lên VPS của mình; quản lý phiên bản và trạng thái.</td></tr>
     <tr><td>0:40–1:30</td><td>Máy chủ G2 → Tài nguyên</td><td>SSH pin host key; số đo có thời điểm kiểm tra, không coi dữ liệu cũ là hiện tại.</td></tr>
-    <tr><td>1:30–2:35</td><td>App Git Express → Lịch sử</td><td>Repo/ref/root và full SHA; v4 hiện hành. v3/v4 cùng SHA là redeploy, không phải push-to-deploy.</td></tr>
+    <tr><td>1:30–2:35</td><td>App Git Express → Lịch sử</td><td>Repo/ref/root và full SHA; v5 hiện hành. v3/v4/v5 cùng SHA là redeploy, không phải push-to-deploy.</td></tr>
     <tr><td>2:35–3:25</td><td>App Vite, Next</td><td>Hai app nguồn thư mục local; ba stack Express, Vite SPA, Next.js đã được triển khai trên VPS.</td></tr>
     <tr><td>3:25–4:35</td><td>Wizard triển khai</td><td>Hai nguồn ngang hàng; Git ghim SHA, detector lập build plan, precheck trước Start. Dừng nếu gate không đạt.</td></tr>
     <tr><td>4:35–5:35</td><td>Trình duyệt: 3 URL</td><td>Reload và chỉ gọi “đang chạy” nếu HTTP 200 ngay lúc này. IP:port là HTTP, chưa phải HTTPS/domain.</td></tr>
@@ -47,13 +47,13 @@
   </table>
 
   <h2>Nhánh xử lý khi có sự cố</h2>
-  <p class="box warning"><strong>Precheck chưa đạt:</strong> dừng trước Start, trình bày lịch sử + URL. <strong>Mạng/VPS lỗi:</strong> nói rõ video G3 ghi ngày 09/10 trên <strong>build cũ, deployment v3</strong>; phát video 7:37 hoặc trích đoạn có nhãn. Không gọi video là live hoặc gộp với bằng chứng v4.</p>
+  <p class="box warning"><strong>Precheck chưa đạt:</strong> dừng trước Start, trình bày lịch sử + URL. <strong>Mạng/VPS lỗi:</strong> nói rõ video G3 ghi ngày 09/10 trên <strong>build cũ, deployment v3</strong>; phát video 7:37 hoặc trích đoạn có nhãn. Không gọi video là live hoặc gộp với bằng chứng v5.</p>
 
   <h2>Bằng chứng và giới hạn</h2>
   <ul>
-    <li>10/10 khoảng 14:00 UTC+07: Express, Vite, Next đều HTTP 200 từ máy điều khiển. <strong>Kiểm tra lại sáng 11/10.</strong></li>
-    <li>Hồ sơ G2/G4b: Git Express v4 chạy/reachable, cùng SHA <code>8af16e1…</code>; Vite/Next qua folder. Video G3 là v3 trên build cũ.</li>
-    <li>Gate local trên build hiện tại: 72 files / 712 tests pass, typecheck và build pass. Deploy mới trên build này chỉ được tuyên bố nếu chính lượt demo/precheck đạt.</li>
+    <li>10/10 khoảng 15:09 UTC+07: Express, Vite, Next đều HTTP 200 từ máy điều khiển. <strong>Kiểm tra lại sáng 11/10.</strong></li>
+    <li>Git Express v5 chạy/reachable sau precheck và redeploy cùng SHA <code>8af16e1…</code> trên build hiện tại; Vite/Next qua folder. Video G3 là v3 trên build cũ; video v5 bị cắt trước Start.</li>
+    <li>Gate local trên build hiện tại: 72 files / 712 tests pass, typecheck và build pass. Không tuyên bố có video deploy v5 liên tục hoặc pilot ML live.</li>
   </ul>
   <p class="small">Kịch bản chi tiết: <code>docs/demo-11-10/kich-ban-11h.md</code> · Bằng chứng: <code>docs/demo-14-10/evidence.md</code> · Video G3: <code>docs/demo-14-10/evidence/g3-rehearsal-20261009.mp4</code></p>
 </body>

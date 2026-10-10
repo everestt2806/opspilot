@@ -6,7 +6,7 @@
 
 1. Mở OpsPilot bản production trên profile G2 và kiểm tra thấy ba app `g2-express-20261009`, `g2b-vite-20261009`, `g2b-next-20261009`. Nếu dùng profile khác, **dừng ở phần URL/video**, không thêm VPS hay nhập credential trước lớp.
 2. Mở trước ba URL trong trình duyệt, giữ các tab sẵn: [Express /health](http://160.191.243.89:30000/health), [Vite SPA](http://160.191.243.89:30001/), [Next.js](http://160.191.243.89:30002/). Bấm tải lại và ghi giờ kiểm tra. Chỉ tuyên bố chúng đang chạy nếu lúc đó trả HTTP 200.
-3. Mở sẵn [video G3](../demo-14-10/evidence/g3-rehearsal-20261009.mp4), kiểm tra phát được. Video dài 7:37, không có tiếng, ghi deploy Git thật trên **build cũ**, kết thúc ở **v3**. App Git trong hồ sơ hiện là **v4**; hai mốc không phải cùng một lượt quay.
+3. Mở sẵn [video G3](../demo-14-10/evidence/g3-rehearsal-20261009.mp4), kiểm tra phát được. Video dài 7:37, không có tiếng, ghi deploy Git thật trên **build cũ**, kết thúc ở **v3**. App Git trong hồ sơ hiện là **v5** sau lượt redeploy ngày 10/10 trên build hiện tại; video G3 không ghi lượt v5.
 4. Nếu định bấm **Bắt đầu triển khai** trực tiếp: chỉ thực hiện sau khi chuẩn bị nguồn Git, xác minh SHA, cấu hình môi trường đã rà soát, precheck trên chính app **PASS**, và có đủ thời gian để chờ kết quả. Nếu một bước chưa đạt, dừng trước Start và dùng lịch sử + URL + video. Không nhập hoặc trình chiếu mật khẩu, private key, token, `DATABASE_URL`.
 5. Không chạy migrate/rollback hoặc tiêm lỗi ML để “cho đẹp” khi chưa có lần rehearsal được xác minh trên đúng build/profile. Không thay đổi firewall/port thủ công trong buổi demo.
 
@@ -16,7 +16,7 @@
 |---|---|---|
 | 0:00–0:40 | Mở OpsPilot, vào **Tổng quan**. | “OpsPilot giúp đưa ứng dụng từ máy tính hoặc kho Git lên VPS riêng, rồi theo dõi phiên bản, trạng thái và khả năng truy cập.” |
 | 0:40–1:30 | Vào **Máy chủ → G2 Development VPS → Tổng quan**. Bấm làm mới tài nguyên/diagnostics nếu kết nối ổn. | “Ứng dụng kết nối VPS qua SSH với host key đã pin. Đây là số đo có thời điểm kiểm tra; nếu phần chẩn đoán chưa tải thì tôi không coi nó là số đo hiện tại.” |
-| 1:30–2:35 | Vào **Ứng dụng**, mở `g2-express-20261009`, xem thông tin nguồn và tab lịch sử. Chỉ vào repo `everestt2806/opspilot`, ref `main`, root `demo-apps/express-api`, SHA và v4. | “Đây là deploy từ Git công khai. OpsPilot ghim commit SHA để biết chính xác source của phiên bản. v3 và v4 dùng cùng SHA: đây là redeploy, không phải commit mới hay tự động deploy khi push.” |
+| 1:30–2:35 | Vào **Ứng dụng**, mở `g2-express-20261009`, xem thông tin nguồn và tab lịch sử. Chỉ vào repo `everestt2806/opspilot`, ref `main`, root `demo-apps/express-api`, SHA và v5. | “Đây là deploy từ Git công khai. OpsPilot ghim commit SHA để biết chính xác source của phiên bản. v3, v4 và v5 dùng cùng SHA: đây là các lần redeploy, không phải commit mới hay tự động deploy khi push.” |
 | 2:35–3:25 | Quay lại danh sách; mở nhanh Vite và Next, chỉ vào nguồn **thư mục máy tính** và runtime. | “Người dùng chọn được hai cách đưa source vào: Git và thư mục local. Ba template đã chạy trên VPS này là Express, Vite SPA và Next.js.” |
 | 3:25–4:35 | Vào **Triển khai**; chỉ hai lựa chọn nguồn. Nếu Git Prepare hoàn tất, chỉ repo/ref/root, SHA, detector/plan; có thể đi đến precheck nếu đạt. **Không bấm Start theo mặc định.** | “Wizard nhận diện framework, tạo kế hoạch build, kiểm tra VPS và môi trường trước khi chạy pipeline. Tôi chỉ chạy deploy mới nếu các gate trên màn hình đều đạt.” |
 | 4:35–5:35 | Chuyển sang ba tab trình duyệt đã mở; reload từng URL. | “Đây là kết quả bên ngoài VPS: Express health, Vite và Next. HTTP 200 tại thời điểm kiểm tra chứng minh dịch vụ truy cập được qua IP:port; đây chưa phải HTTPS hay domain tự động.” |
@@ -41,7 +41,7 @@
 
 ## Bằng chứng và giới hạn tại thời điểm soạn
 
-- 10/10/2026 khoảng 14:00 UTC+07: ba URL Express/Vite/Next đều trả HTTP 200 từ máy điều khiển; cần kiểm tra lại trước 11:00 ngày 11/10.
-- G2/G2b và G4b chứng minh deploy Git manual, redeploy cùng SHA, local Vite/Next và v4 `running/reachable`; chi tiết ở [evidence](../demo-14-10/evidence.md). G5 C2d chứng minh RAM, PSI, OOM và collector ổn tại thời điểm đã ghi. Những lần đo này không bảo đảm tình trạng ngày mai.
+- 10/10/2026 khoảng 15:09 UTC+07: ba URL Express/Vite/Next đều trả HTTP 200 từ máy điều khiển; cần kiểm tra lại trước 11:00 ngày 11/10.
+- G2/G2b, G4b và G5-live C3d chứng minh deploy Git manual, redeploy cùng SHA, local Vite/Next và Git Express v5 `running/reachable`; chi tiết ở [evidence](../demo-14-10/evidence.md). C3d có precheck PASS, deploy v5 hoàn tất và ba URL HTTP 200 sau deploy, nhưng video mới dừng trước Start nên **không có bản quay liên tục cho v5**. G5 C2d chứng minh RAM, PSI, OOM và collector ổn tại thời điểm đã ghi; lượt C3d chỉ có một mẫu chẩn đoán, chưa xác minh xu hướng OOM/collector cùng phút. Những lần đo này không bảo đảm tình trạng ngày mai.
 - Build hiện tại sau C3a (`b035bae`, hồ sơ `f68018c`) có 72 file/712 Vitest tests PASS, typecheck Node/Web/Scripts và build PASS. Gate này chứng minh kiểm thử local, không thay thế precheck hoặc redeploy trên VPS.
 - Mốc demo 11/10 thay thế mọi mốc “14/10” trong tài liệu demo cũ. Không dùng phiếu A4 cũ đề ngày 14/10 khi trình bày.
