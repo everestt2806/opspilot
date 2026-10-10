@@ -1,6 +1,6 @@
 # TK-S7 G5-live — kiểm tra vận hành và rehearsal trên build hiện tại
 
-**Trạng thái mới nhất:** `BLOCKED / NOT_RUN` (C2d, 2026-10-09 UTC). G5c đã giải thích sai lệch RAM UI: ảnh G4b 91% đến từ Electron cũ và không chứng minh VPS dưới ngưỡng; các mẫu build mới khớp collector khoảng 20–21%. C2d đã xác minh qua Electron hiện tại ba mẫu RAM/disk/process RSS/pressure/OOM/container và ba URL ngoài HTTP 200. Wizard hiện nhận `PORT=3000` và `ENABLE_FAULT_ENDPOINTS=false`; precheck vẫn `NOT_RUN` vì `DATABASE_URL` bắt buộc còn trống, không được đoán hoặc lấy từ secret chưa xác minh. Không bấm Start; giữ fallback `DEMO_READY_RECORDED`.
+**Trạng thái mới nhất:** `BLOCKED / NOT_RUN` (C3b, 2026-10-10 UTC). C3b verified the production Electron/G2 profile, Git source pin, one read-only diagnostics sample, three external HTTP 200 results, and Electron precheck PASS without entering secrets. No Start or deployment occurred; C3c may proceed with its single planned redeploy subject to repeating its final checks. Overall G5-live stays blocked pending continuous silent-video and post-deploy evidence.
 
 ## Điều kiện còn thiếu
 
@@ -73,3 +73,13 @@ Kết quả cập nhật: phần đo vận hành read-only đạt, nhưng checkp
 - Ba external HTTP GET tại `2026-10-09T22:01:28Z` đều `200`: Git Express `:30000/health`, Vite `:30001/`, Next `:30002/`.
 - App Git hiện có: `g2-express-20261009`, v4, `main`, root `demo-apps/express-api`, full SHA `8af16e1f9165a31557288adbc23acc420244938f`, exposure reachable. Wizard xác nhận `PORT=3000`, `ENABLE_FAULT_ENDPOINTS=false` và cảnh báo cấu hình môi trường hiện hữu không được tải từ VPS/secret không tự điền. `DATABASE_URL` Required nhưng blank; precheck `NOT_RUN` vì không đoán hoặc nhập lại secret chưa được xác minh. Wizard thoát trước Start, không có job/deployment/VPS thay đổi.
 - Redeploy, same-build continuous video qua pipeline/result/history/HTTP và kiểm tra MP4 silent: `NOT_RUN`. Giữ verdict `BLOCKED / NOT_RUN`, `DEMO_READY_RECORDED`, video G3 build cũ/deployment v3; không nâng thành live-ready. Lượt này không đổi credential/fingerprint, không dùng SSH ngoài app và không tác động VPS.
+
+## G5-live C3b - verify C3a and run safe precheck only (2026-10-10 UTC)
+
+- Node 22.23.3 full gates on application-source commit `f68018c035ceaf29b02942cc9c9ad64833d3e5d2`, verified by Leader before C3b: Vitest 72 files / 712 tests PASS; Node/Web/Scripts typecheck PASS; lint 0 errors / 18 Prettier warnings; production build PASS. Current branch HEAD `83c88c445a636e3c556ec5481da0ba5a7c6d0ebe` adds only demo-planning documentation and does not change app source.
+- Production Electron opened `app/out/renderer/index.html` under the existing G2 profile; app PID `37064`, one main window remained. The existing SQLite DB and protected key were present before launch and UI showed G2 Development VPS plus its three apps.
+- Existing Git Express v4 remains pinned to repo `https://github.com/everestt2806/opspilot.git`, `main`, root `demo-apps/express-api`, full SHA `8af16e1f9165a31557288adbc23acc420244938f`.
+- Diagnostics sample `2026-10-10T06:58:28Z`: RAM `801 MB / 3.8 GB`, disk `8 / 25 GB`, PSI some/full `0.00% / 0.00%`, OOM count `0`, top-process data available. Full process list and RSS are in `docs/demo-14-10/evidence.md`.
+- Wizard env review was explicitly acknowledged; only `PORT=3000` and `ENABLE_FAULT_ENDPOINTS=false` were entered. `DATABASE_URL` stayed blank; no credential value was guessed or supplied. Electron precheck PASS at `2026-10-10T07:02:56Z`: RAM free 3115 MB, disk free 18 GB, Docker 29.8.2, required remote env keys available (values were not returned).
+- Three public HTTP GETs via `curl.exe` at `2026-10-10T06:59:23Z`: Git Express health, Vite root and Next.js root all HTTP 200. One initial PowerShell attempt did not return statuses; final curl results are authoritative.
+- No Start/job/deployment or VPS change occurred. C3c may proceed with its one planned redeploy, while repeating final gates; overall G5-live verdict stays `BLOCKED / NOT_RUN` and `DEMO_READY_RECORDED` until continuous silent-video/post-deploy evidence exists.
