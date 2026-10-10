@@ -1,6 +1,6 @@
 # TK-S7 G5-live — kiểm tra vận hành và rehearsal trên build hiện tại
 
-**Trạng thái mới nhất:** `BLOCKED / NOT_RUN` (C3b, 2026-10-10 UTC). C3b verified the production Electron/G2 profile, Git source pin, one read-only diagnostics sample, three external HTTP 200 results, and Electron precheck PASS without entering secrets. No Start or deployment occurred; C3c may proceed with its single planned redeploy subject to repeating its final checks. Overall G5-live stays blocked pending continuous silent-video and post-deploy evidence.
+**Trạng thái mới nhất:** `BLOCKED / NOT_RUN` (C3c, 2026-10-10 UTC). C3c stopped before Start because continuous silent video capture and audio-track validation were unavailable. The C3b precheck had expired its 5-minute token; fresh diagnostics/resource/HTTP/precheck gates were not run. No deployment or VPS change occurred; retain `DEMO_READY_RECORDED`.
 
 ## Điều kiện còn thiếu
 
@@ -83,3 +83,11 @@ Kết quả cập nhật: phần đo vận hành read-only đạt, nhưng checkp
 - Wizard env review was explicitly acknowledged; only `PORT=3000` and `ENABLE_FAULT_ENDPOINTS=false` were entered. `DATABASE_URL` stayed blank; no credential value was guessed or supplied. Electron precheck PASS at `2026-10-10T07:02:56Z`: RAM free 3115 MB, disk free 18 GB, Docker 29.8.2, required remote env keys available (values were not returned).
 - Three public HTTP GETs via `curl.exe` at `2026-10-10T06:59:23Z`: Git Express health, Vite root and Next.js root all HTTP 200. One initial PowerShell attempt did not return statuses; final curl results are authoritative.
 - No Start/job/deployment or VPS change occurred. C3c may proceed with its one planned redeploy, while repeating final gates; overall G5-live verdict stays `BLOCKED / NOT_RUN` and `DEMO_READY_RECORDED` until continuous silent-video/post-deploy evidence exists.
+
+## G5-live C3c - stop before Start (2026-10-10 UTC)
+
+- `START 2026-10-10`: reviewed task and rehearsal script; checked screen-capture readiness before attempting any redeploy.
+- `orca computer capabilities --json` supports screenshots but no video recording. No local `ffmpeg`, `obs64` or `obs` command/process was available to create and validate a continuous silent MP4. Recording gate: `BLOCKED`.
+- Existing Electron PID `37064` shows production renderer `app/out/renderer/index.html` and the saved G2 profile. Wizard was at Check & Run for Git Express v4; repo/ref/root matched C3b source SHA `8af16e1f9165a31557288adbc23acc420244938f`, which was not re-prepared in this attempt. The previous precheck at `2026-10-10T07:02:56Z` exceeded its 5-minute token lifetime, so it was not accepted or reused.
+- Fresh diagnostics, resources/PSI/OOM, external URLs and precheck: `NOT_RUN` because the recording gate was unavailable. Start untouched; no job/deployment, SSH outside OpsPilot, service/firewall mutation, or VPS change.
+- Resume when continuous screen recording can begin before Start and MP4 audio can be verified; repeat all fresh gates and source checks. Until the continuous same-build video plus post-deploy proof pass, retain `DEMO_READY_RECORDED` and the G3 old-build/deployment-v3 label.
