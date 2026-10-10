@@ -12,11 +12,16 @@ const portSchema = z.number().int().min(1).max(65535)
 const usernameSchema = z.string().trim().min(1).max(128)
 const secretSchema = z.string().min(1).max(100_000)
 const optionalTextSchema = z.string().trim().max(100).optional()
+const hostFingerprintSchema = z
+  .string()
+  .trim()
+  .regex(/^SHA256:[A-Za-z0-9+/]{43}$/)
 
 const createVpsSchema = z.object({
   name: nameSchema,
   host: hostSchema,
   port: portSchema,
+  host_fingerprint: hostFingerprintSchema,
   username: usernameSchema,
   auth_type: z.enum(['key', 'password']),
   secret: secretSchema,
@@ -46,6 +51,7 @@ export class VpsService {
       name: input.name,
       host: input.host,
       port: input.port,
+      host_fingerprint: input.host_fingerprint,
       username: input.username,
       auth_type: input.auth_type,
       provider: input.provider,
@@ -61,6 +67,15 @@ export class VpsService {
 
     if (patch.auth_type !== undefined && patch.auth_type !== current.auth_type && !patch.secret) {
       throw new AppError('VALIDATION', 'Đổi cách xác thực cần nhập lại credential rồi lưu.')
+    }
+    const endpointChanged =
+      (patch.host !== undefined && patch.host !== current.host) ||
+      (patch.port !== undefined && patch.port !== current.port)
+    if (endpointChanged && patch.host_fingerprint === undefined) {
+      throw new AppError(
+        'VALIDATION',
+        'Đổi host hoặc port cần nhập lại fingerprint SHA256 đã xác minh từ console.'
+      )
     }
 
     const { secret, ...publicPatch } = patch

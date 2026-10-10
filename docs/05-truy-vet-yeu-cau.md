@@ -9,6 +9,8 @@ lục rất được đánh giá cao trong báo cáo.
 
 Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng được · ⏸ hoãn (ghi lý do)
 
+> Rà soát 08/10/2026: các dấu trạng thái bên dưới là bằng chứng theo checkpoint lịch sử, **chưa phải nghiệm thu toàn sản phẩm trên VPS mới**. Đặc biệt UC-02/FR-B5 chưa bao phủ nguồn Git và bước chạy test của source; UC-05/UC-07 cần live gate riêng. Trước khi chốt trạng thái hiện hành, đối soát theo [chuẩn hoàn thiện sản phẩm](31-lo-trinh-hoan-thien-san-pham.md), không tự đổi dấu ✅ chỉ vì có code hoặc test mock.
+
 > 10/09 — Checkpoint demo solo: [TK-A17](tasks/tk-a17-demo-checkpoint.md).
 > A15/B4/B5/B2 đã có code merge (#25/#26/#28); runtime B6 còn báo cáo trên nhánh
 > `dfc0ed7`, Monitor UI chưa có trong main. A17 ưu tiên FR-D1…D5, FR-B7/FR-E1
@@ -24,7 +26,7 @@ Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng đượ
 | ----- | ---------------------------------------------- | --------------------------------- | --------------------------------------------------------------- | -------- | ----- | --- |
 | FR-A1 | CRUD VPS, credential mã hoá                    | M2 + `db`                         | unit test crypto + `loadSecret` roundtrip DB + smoke VM01 30/08 | 3.1      | W1    | ✅  |
 | FR-A2 | Test SSH, kiểm tra & tự cài Docker             | M1 + `vps:install-docker`         | `try-ssh` 6 bước + connection/scan handler + smoke VM01 30/08   | 3.1      | W1    | ✅  |
-| FR-A3 | Danh sách VPS + trạng thái + tài nguyên        | M1 + `vps:get-resources`          | test parser/renderer + VPS Control Panel #21 + smoke VM01 30/08 | 3.1      | W1    | ✅  |
+| FR-A3 | Danh sách VPS + trạng thái + tài nguyên        | M1 + `vps:get-resources` + `vps:get-operational-diagnostics` | test parser/renderer + VPS Control Panel #21 + smoke VM01 30/08; C2b parser/IPC/fixture tests local (không phải live diagnostics gate) | 3.1      | W1    | ✅  |
 | FR-B1 | Detector plugin nhận diện framework            | M3                                | unit test ≥4 case/detector                                      | 3.2 b2   | W2    | ⬜  |
 | FR-B2 | Hỗ trợ 3 stack Tier 1 (+Flask Tier 2)          | M3                                | deploy thật cả 3 demo app                                       | 3.2      | W3    | ⬜  |
 | FR-B3 | Wizard hỏi env thiếu + cảnh báo thủ công       | M3 `requiredEnv` + UI             | smoke test                                                      | 3.2 b3   | W3    | ⬜  |

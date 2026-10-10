@@ -11,6 +11,8 @@ export interface UpdateDeploymentRecord {
   total_duration_ms?: number | null
   is_rollback_of?: number | null
   finished_at?: string
+  exposure_status?: Deployment['exposure_status']
+  exposure_evidence_json?: string | null
 }
 
 export class DeploymentRepository {
@@ -25,10 +27,17 @@ export class DeploymentRepository {
     appId: number,
     appName: string,
     detectorJson: string | null,
-    envJson: string | null
+    envJson: string | null,
+    gitProvenance?: { repositoryUrl: string; commitSha: string }
   ): Deployment {
     const insert = this.database.transaction(
-      (app: number, name: string, detector: string | null, env: string | null) => {
+      (
+        app: number,
+        name: string,
+        detector: string | null,
+        env: string | null,
+        git: typeof gitProvenance
+      ) => {
         const row = this.database
           .prepare('SELECT MAX(version) AS max FROM deployment WHERE app_id = ?')
           .get(app) as { max: number | null }
@@ -37,14 +46,22 @@ export class DeploymentRepository {
 
         const result = this.database
           .prepare(
-            `INSERT INTO deployment (app_id, version, image_tag, status, detector_json, env_json)
-             VALUES (?, ?, ?, 'building', ?, ?)`
+            `INSERT INTO deployment (app_id, version, image_tag, status, detector_json, env_json, git_repo_url, git_commit_sha)
+             VALUES (?, ?, ?, 'building', ?, ?, ?, ?)`
           )
-          .run(app, version, imageTag, detector, env)
+          .run(
+            app,
+            version,
+            imageTag,
+            detector,
+            env,
+            git?.repositoryUrl ?? null,
+            git?.commitSha ?? null
+          )
         return { id: Number(result.lastInsertRowid) }
       }
     )
-    const record = insert(appId, appName, detectorJson, envJson)
+    const record = insert(appId, appName, detectorJson, envJson, gitProvenance)
     return this.getById(record.id)
   }
 
@@ -52,7 +69,8 @@ export class DeploymentRepository {
     const deployment = this.database
       .prepare(
         `SELECT id, app_id, version, image_tag, status, failed_step,
-                build_duration_ms, total_duration_ms, is_rollback_of, started_at, finished_at
+                build_duration_ms, total_duration_ms, is_rollback_of, started_at, finished_at,
+                exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha
          FROM deployment WHERE id = ?`
       )
       .get(id) as Deployment | undefined
@@ -70,7 +88,8 @@ export class DeploymentRepository {
     return this.database
       .prepare(
         `SELECT id, app_id, version, image_tag, status, failed_step,
-                build_duration_ms, total_duration_ms, is_rollback_of, started_at, finished_at
+                build_duration_ms, total_duration_ms, is_rollback_of, started_at, finished_at,
+                exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha
          FROM deployment WHERE app_id = ? ORDER BY version DESC`
       )
       .all(appId) as Deployment[]
@@ -81,7 +100,8 @@ export class DeploymentRepository {
     return this.database
       .prepare(
         `SELECT id, app_id, version, image_tag, status, failed_step,
-                build_duration_ms, total_duration_ms, is_rollback_of, started_at, finished_at
+                build_duration_ms, total_duration_ms, is_rollback_of, started_at, finished_at,
+                exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha
          FROM deployment
          WHERE app_id = ? AND version < ? AND status = 'running'
          ORDER BY version DESC LIMIT 1`
@@ -143,6 +163,8 @@ export class DeploymentRepository {
     add('total_duration_ms', patch.total_duration_ms)
     add('is_rollback_of', patch.is_rollback_of)
     add('finished_at', patch.finished_at)
+    add('exposure_status', patch.exposure_status)
+    add('exposure_evidence_json', patch.exposure_evidence_json)
 
     if (assignments.length === 0) {
       return

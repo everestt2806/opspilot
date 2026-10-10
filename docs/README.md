@@ -27,6 +27,12 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | [`23-ke-hoach-sau-demo-30-08.md`](23-ke-hoach-sau-demo-30-08.md) | Lịch sử kế hoạch sau demo 30/08; ưu tiên mới ở docs/24 và board | Khi cần lịch sử phân công |
 | [`24-ke-hoach-demo-theo-chang.md`](24-ke-hoach-demo-theo-chang.md) | Kế hoạch giao Worker: yêu cầu R01–R25, C00–C09, C08A/B/C, evidence và review | Điểm vào hiện tại, cập nhật 11/09 |
 | [`25-nguyen-ly-deploy-migrate-demo-14-09.md`](25-nguyen-ly-deploy-migrate-demo-14-09.md) | Nguyên lý từng loại deploy/migrate, phạm vi và bằng chứng demo 14/09 | Đọc trước khi giao C03/C04 hoặc trình bày demo |
+| [`27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-detector.md`](27-ke-hoach-tu-dong-hoa-pipeline-domain-doctor-ml-detector.md) | Kế hoạch hợp nhất phần chưa tự động: publish/firewall, DNS/domain, Doctor, dữ liệu ML, detector và backlog tối ưu | Khi lập task sau demo hoặc chốt phạm vi P0–P3 |
+| [`28-danh-gia-san-sang-vercel-tren-vps.md`](28-danh-gia-san-sang-vercel-tren-vps.md) | Đánh giá năng lực sản phẩm so với Vercel/Dokploy/Coolify | Khi lập roadmap sản phẩm |
+| [`29-ke-hoach-demo-14-10.md`](29-ke-hoach-demo-14-10.md) | Lịch và gate demo 14/10, ưu tiên deploy từ Git trên VPS thật | Trước mỗi checkpoint demo |
+| [`30-audit-git-first-deploy.md`](30-audit-git-first-deploy.md) | Kiểm kê đường deploy hiện tại, hợp đồng Git-first và thứ tự G0–G3 | Trước khi sửa IPC/schema/deploy UI |
+| [`31-lo-trinh-hoan-thien-san-pham.md`](31-lo-trinh-hoan-thien-san-pham.md) | Chuẩn nghiệm thu toàn sản phẩm: tự động hóa, hai nguồn deploy, template, migrate, monitor/ML và kiến trúc auto deploy | Trước khi chia task sau demo và chốt trạng thái hoàn thành |
+| [`32-tham-khao-openship-va-paas-tu-host.md`](32-tham-khao-openship-va-paas-tu-host.md) | Cơ chế tham khảo từ OpenShip, Coolify, Dokku, CapRover; phần nên áp dụng và ranh giới G0 | Trước khi giao Git G0, ingress và auto deploy |
 
 ## Kỹ thuật
 
@@ -39,7 +45,7 @@ Phát hiện mâu thuẫn → dừng, báo người dùng, ghi vào `DECISIONS.m
 | [`09-moi-truong-dev.md`](09-moi-truong-dev.md) | Setup máy dev (Windows), dependency đã duyệt, bẫy đã biết |
 | [`10-quy-uoc-code.md`](10-quy-uoc-code.md) | Cấu trúc code, xử lý lỗi, logging, quy ước async/SSH |
 | [`11-chien-luoc-test.md`](11-chien-luoc-test.md) | Unit test (chỉ 3 chỗ), smoke test 10 phút, soak test 24h |
-| [`14-quyet-dinh-kien-truc.md`](14-quyet-dinh-kien-truc.md) | 10 ADR — trade-off đã cân nhắc, dùng để trả lời phản biện |
+| [`14-quyet-dinh-kien-truc.md`](14-quyet-dinh-kien-truc.md) | 11 ADR — gồm Product mode control plane, trade-off và phạm vi đồ án |
 
 ## Thí nghiệm & báo cáo
 

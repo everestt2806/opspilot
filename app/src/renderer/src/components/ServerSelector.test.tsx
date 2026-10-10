@@ -14,6 +14,7 @@ const VPS_A: Vps = {
   name: 'VM01',
   host: '221.121.1.79',
   port: 22,
+  host_fingerprint: null,
   username: 'root',
   auth_type: 'password',
   provider: 'WiService',
@@ -192,7 +193,7 @@ describe('ServerSelector — bang danh sach VPS', () => {
       onRetryResources
     })
 
-    fireEvent.click(screen.getByLabelText('Re-read resources of VM02'))
+    fireEvent.click(screen.getByLabelText(strings.vps.resources.retry('VM02')))
     expect(onRetryResources).toHaveBeenCalledWith(2)
     expect(onSelect).not.toHaveBeenCalled()
   })
@@ -230,7 +231,7 @@ describe('ServerSelector — bang danh sach VPS', () => {
       }
     })
 
-    fireEvent.click(screen.getByLabelText('Filter by status'))
+    fireEvent.click(screen.getByLabelText(strings.vpsControl.selector.filterButton))
     const menu = await screen.findByRole('menu')
     fireEvent.click(within(menu).getByText(strings.vps.status.offline))
     expect(screen.queryByText('VM01')).toBeNull()

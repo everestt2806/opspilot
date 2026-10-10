@@ -36,6 +36,7 @@ export function VpsFormModal({
         name: initialVps.name,
         host: initialVps.host,
         port: initialVps.port,
+        host_fingerprint: initialVps.host_fingerprint ?? '',
         username: initialVps.username,
         auth_type: initialVps.auth_type,
         secret: '',
@@ -44,7 +45,7 @@ export function VpsFormModal({
       })
     } else {
       form.resetFields()
-      form.setFieldsValue({ port: 22, auth_type: 'key' })
+      form.setFieldsValue({ port: 22, auth_type: 'key', host_fingerprint: '' })
     }
     // Không cần bump formVersion ở đây: destroyOnHidden đã hủy ConnectionCheck khi đóng modal.
   }, [form, initialVps, open])
@@ -83,7 +84,10 @@ export function VpsFormModal({
         form={form}
         layout="vertical"
         requiredMark="optional"
-        onValuesChange={() => setFormVersion((version) => version + 1)}
+        onValuesChange={(changed) => {
+          if ('host' in changed || 'port' in changed) form.setFieldValue('host_fingerprint', '')
+          setFormVersion((version) => version + 1)
+        }}
         onFinish={onSubmit}
       >
         <Form.Item
@@ -110,6 +114,20 @@ export function VpsFormModal({
           rules={[{ required: true, message: strings.vps.validation.port }]}
         >
           <InputNumber min={1} max={65535} precision={0} style={{ width: '100%' }} />
+        </Form.Item>
+        <Form.Item
+          name="host_fingerprint"
+          label={strings.vps.fields.hostFingerprint}
+          extra={strings.vps.form.hostFingerprintHint}
+          rules={[
+            { required: true, message: strings.vps.validation.hostFingerprintRequired },
+            {
+              pattern: /^SHA256:[A-Za-z0-9+/]{43}$/,
+              message: strings.vps.validation.hostFingerprintFormat
+            }
+          ]}
+        >
+          <Input className="mono-input" placeholder="SHA256:..." autoComplete="off" />
         </Form.Item>
         <Form.Item
           name="username"

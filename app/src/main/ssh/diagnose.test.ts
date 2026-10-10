@@ -13,8 +13,9 @@ import {
 import type { SshConnectionInfo } from './manager'
 
 const CONFIG: SshConnectionInfo = {
-  host: '221.121.1.79',
+  host: 'vps.example.invalid',
   port: 22,
+  hostFingerprint: `SHA256:${Buffer.alloc(32, 1).toString('base64').replace(/=+$/, '')}`,
   username: 'deploy',
   authType: 'key',
   secret: 'dummy'

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <title>OpsPilot — Phiếu demo 14/10/2026</title>
+    <style>
+      @page { size: A4; margin: 12mm; }
+      * { box-sizing: border-box; }
+      body { font: 15px/1.35 Arial, sans-serif; color: #18212d; margin: 0; }
+      h1 { font-size: 30px; margin: 0 0 3px; }
+      h2 { font-size: 18px; margin: 10px 0 5px; border-bottom: 1px solid #aeb9c8; padding-bottom: 2px; }
+      p { margin: 3px 0; }
+      table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      th, td { border: 1px solid #bbc5d0; padding: 6px 7px; vertical-align: top; overflow-wrap: anywhere; }
+      th { text-align: left; background: #eaf0f6; }
+      .badge { display: inline-block; margin: 4px 0; padding: 3px 7px; border: 1px solid #26734d; background: #e5f6ec; font-weight: bold; }
+      .note { background: #f1f5f9; border-left: 3px solid #4d6d91; padding: 6px 8px; margin-top: 6px; }
+      .small { font-size: 11px; color: #495668; }
+      code { font: 11px Consolas, monospace; }
+      ol { margin: 3px 0; padding-left: 19px; }
+      li { margin: 3px 0; }
+    </style>
+  </head>
+  <body>
+    <h1>OpsPilot</h1>
+    <p><strong>Triển khai và giám sát ứng dụng trên VPS riêng</strong> · Phiếu demo 14/10/2026</p>
+    <p class="badge">DEMO_READY_RECORDED · phương án dự phòng đã được Leader chấp nhận</p>
+    <p><strong>Chế độ:</strong> Chiếu bản ghi deploy Git G3 trên build UI cũ (<code>d4506554</code>), deployment v3. Video đầy đủ dài <strong>7:37</strong>, không có audio track; không đại diện build hiện tại hay deployment v4.</p>
+    <p><strong>Thời lượng:</strong> Chiếu toàn bộ cần lịch trình khoảng <strong>10–12 phút</strong>. Nếu chỉ có 6–8 phút, chiếu các đoạn trích có nhãn rõ theo kịch bản; giữ video đầy đủ để đối chứng.</p>
+
+    <h2>Trạng thái đã xác nhận</h2>
+    <ol>
+      <li><strong>Video G3:</strong> full deploy Git, build cũ, deployment v3.</li>
+      <li><strong>App Git hiện tại:</strong> deployment 6/v4, trạng thái running/reachable; bằng chứng HTTP riêng từ G4b ngày 09/10, <code>/health</code> trả 200.</li>
+      <li><strong>Ứng dụng folder:</strong> Vite và Next trả HTTP 200 từ máy điều khiển trong lần kiểm tra G4b ngày 09/10.</li>
+      <li><strong>RAM:</strong> ba mẫu trên build mới khớp collector khoảng 20–21%; <code>vps:get-resources</code> hoạt động. Ảnh 91% là từ Electron cũ, không chứng minh VPS dưới ngưỡng.</li>
+    </ol>
+
+    <h2>Bằng chứng đã kiểm tra</h2>
+    <table>
+      <tr><th>Nguồn</th><th>Bằng chứng riêng (09/10/2026)</th></tr>
+      <tr><td>Git Express · v4 hiện tại đã xác nhận</td><td><code>/health</code> → HTTP 200. SHA nguồn <code>8af16e1f9165a31557288adbc23acc420244938f</code>.</td></tr>
+      <tr><td>Vite SPA · folder local</td><td><code>http://160.191.243.89:30001/</code> → HTTP 200.</td></tr>
+      <tr><td>Next.js · folder local</td><td><code>http://160.191.243.89:30002/</code> và route bài viết → HTTP 200.</td></tr>
+      <tr><td>Video đầy đủ G3</td><td>7:37 · build UI cũ <code>d4506554</code> · deployment v3 · không có audio track.</td></tr>
+    </table>
+    <p class="note"><strong>Giới hạn:</strong> Video G3 là build cũ/v3; HTTP của v4 là bằng chứng G4b riêng. Live rehearsal vẫn NOT_RUN vì chưa hoàn tất kiểm tra vận hành và chưa có video deploy liên tục trên build mới. Ảnh RAM 91% là UI Electron cũ; không phải bằng chứng VPS dưới ngưỡng. Chi tiết: <code>docs/demo-14-10/evidence.md</code>.</p>
+    <p class="small">Kịch bản chiếu đầy đủ 10–12 phút hoặc trích đoạn 6–8 phút có nhãn: <code>docs/demo-14-10/rehearsal-script.md</code>.</p>
+  </body>
+</html>

@@ -40,13 +40,19 @@ Cả 3 câu đều trả lời được bằng dữ liệu của cùng 50 run �
 nghĩa. Load generator chạy **trên chính VPS** (không phải từ laptop) để jitter internet không
 lẫn vào số đo.
 
-> **Ghi chú rà soát 28/07/2026 — đề xuất, chưa đổi contract:** collector hiện chỉ nhìn thấy
-> status code của health probe 10 giây/lần; status code của 5 request/giây do load generator
-> tạo ra chưa đi vào `http_error_rate`. Vì vậy lập luận “có load generator thì error rate bớt
-> nhiễu” chưa đúng với đường dữ liệu hiện tại. Đề xuất ưu tiên: load generator công bố bộ đếm
-> request/5xx theo cửa sổ 60 giây (file JSON ghi nguyên tử hoặc endpoint nội bộ), collector đọc
-> bộ đếm đó khi chạy thí nghiệm; khi không có load generator mới fallback về health probe.
-> Cần ghi nguồn của error rate vào `raw_json`/`meta.json` để không trộn hai cách đo mà không biết.
+> **Đã áp dụng 19/09/2026 (rà soát 28/07):** trước đây collector chỉ thấy status code của health
+> probe 10 giây/lần; status code của 5 request/giây do load generator tạo ra không đi vào
+> `http_error_rate`, nên lập luận “có load generator thì error rate bớt nhiễu” chưa đúng đường dữ
+> liệu. **Cách vá (phương án A):** load generator ghi bộ đếm request/5xx theo cửa sổ 60 giây ra
+> `loadgen_counter.json` (ghi nguyên tử tmp+replace); collector đọc file đó mỗi cycle khi còn mới
+> (tuổi ≤ `LOADGEN_MAX_AGE_S`) để tính `http_error_rate = errors_5xx/requests` trên 5 req/s; khi
+> file thiếu/cũ/hỏng thì **fallback** về cửa sổ health probe cũ. Nguồn được ghi vào `raw_json`
+> qua cột phụ `http_error_rate_source` (`loadgen`|`probe`|null) + `loadgen_requests` để phân tích
+> không trộn hai cách đo. Không mở thêm port (chỉ đọc file), không đổi giao thức mạng, không đổi
+> `FEATURE_VERSION`. Chi tiết: `experiments/load_gen/loadgen.py`, `collector/collect.py`,
+> `DECISIONS.md` dòng `[exp] 2026-09-19`. Test: `read_loadgen_error_rate` + `build_metric` chọn
+> nguồn (10 test trong `collector/tests/test_loadgen_error_rate.py`).
+> **Mức độ tích hợp hiện tại:** collector mới có logic đọc counter (`read_loadgen_error_rate` và fallback probe), chưa được nối vào runtime (pipeline/deploy chưa mount volume `/var/metrics/loadgen_counter.json` cho collector chạy thật trong production).
 
 **Vì sao `mem_limit: 512m`:** memory leak cần một trần xác định thì đường cong mới tái lập
 được giữa 10 lần lặp; không giới hạn thì kết quả phụ thuộc RAM còn trống của VPS lúc đó.
@@ -68,15 +74,15 @@ lẫn vào số đo.
 
 ---
 
-## 4. Cấu trúc một run (78–83 phút)
+## 4. Cấu trúc một run (75 phút chuẩn đo: Pha A–D = 450 mẫu lý thuyết; tiền trạm deploy/offset ~3–5')
 
 ```
-   0'  ┌─ DEPLOY SẠCH ────────── docker compose down -v, deploy lại từ đầu, POST /reset
-   5'  ├─ A. BASELINE_TRAIN ──── 30 phút = 180 mẫu  ──▶ POST /train
+   0'  ┌─ TIỀN TRẠM & DEPLOY ── start_run(), đo clock skew, deploy thật app demo, POST /reset
+   5'  ├─ A. BASELINE_TRAIN ──── 30 phút = 180 mẫu (tối thiểu 162) ──▶ POST /train
   35'  ├─ B. NORMAL_HOLDOUT ──── 15 phút = 90 mẫu   ──▶ vùng đo FALSE POSITIVE
-  50'  ├─ C. FAULT ───────────── 20 phút = 120 mẫu  ──▶ vùng đo TRUE POSITIVE
-  70'  ├─ D. RECOVERY ────────── 10 phút = 60 mẫu   ──▶ LOẠI khỏi đánh giá
-  80'  └─ TEARDOWN ──────────── export CSV, đóng run
+  50'  ├─ C. FAULT ───────────── 20 phút = 120 mẫu  ──▶ vùng đo TRUE POSITIVE (apply_plan)
+  70'  ├─ D. RECOVERY ────────── 10 phút = 60 mẫu   ──▶ LOẠI khỏi đánh giá (reset_fault)
+  80'  └─ TEARDOWN & GATE ────── drain metrics, check_integrity, complete_run, export CSV
 ```
 
 **Vì sao có pha B (holdout):** mẫu dùng để train thì model đã "nhìn thấy", chấm điểm trên đó
@@ -139,7 +145,7 @@ phải lỗ hổng của tool.
 | 2 | `cpu_spike` | `GET /debug/cpu?ms=x` busy-loop, x tăng bậc thang | x: 20→400ms, +20ms mỗi phút | tăng dần | ML bắt sớm nhờ slope của cpu + latency |
 | 3 | `error_burst` | `GET /debug/error-rate?p=x` trả 500 với xác suất p | p = 0.3 **đột ngột**, bật ở phút 0 của pha C | **đột ngột** | rule bắt nhanh ngang ML — kỳ vọng ML **không** thắng ở đây, và đó là kết quả trung thực đáng báo cáo |
 | 4 | `slow_db` | `SELECT pg_sleep(x)` chèn trước mỗi query | x: 0.05→1.5s, tăng mỗi phút | tăng dần | `db_response_ms` + `latency_ms` cùng trôi |
-| 5 | `latency_creep` | Middleware delay tăng dần | +50ms mỗi phút, tối đa 2500ms | tăng dần | kịch bản khó nhất cho rule (chỉ vượt 2000ms ở cuối) |
+| 5 | `latency_creep` | Middleware delay tăng dần | +50ms mỗi phút, tối đa 2500ms | tăng dần | +50ms/phút tạo tối đa khoảng 1.000 ms delay bổ sung ở cuối pha; việc latency quan sát vượt 2.000 ms và ML có phát hiện sớm hay không là kết quả cần đo, không khẳng định trước |
 
 **Kịch bản 3 tồn tại có chủ đích:** một đồ án nói "ML thắng ở mọi kịch bản" là đáng ngờ.
 Có một kịch bản mà rule ngang hoặc thắng làm cho toàn bộ kết quả đáng tin hơn, và cho phép
@@ -156,29 +162,29 @@ python experiments/run_experiment.py --scenario memory_leak --repeat 1..10 --vps
 Các bước (mỗi bước ghi `action_log`; lỗi ở bất kỳ đâu → `status='aborted'` + lý do, và
 **tự động chạy lại run đó ở cuối hàng đợi**, tối đa 2 lần):
 
-> **Ghi chú rà soát 28/07/2026 — đề xuất, chưa đổi schema:** contract hiện có
-> `UNIQUE(scenario, repeat_index)`, nên không thể lưu riêng run bị huỷ và lần retry cùng chỉ số.
-> Đề xuất thêm `attempt_index` (1..3), đổi unique thành
-> `(scenario, repeat_index, attempt_index)`, và export theo thư mục có attempt. `analyze.py`
-> chỉ lấy attempt `completed` vào bảng chính nhưng vẫn báo cáo đầy đủ số attempt bị huỷ và lý do.
+> **Ghi chú rà soát (Đã hoàn tất ở Migration 005, P2b):** Schema đã bổ sung cột
+> `attempt_index` (1..3, mặc định 1 cho dữ liệu legacy) và cập nhật ràng buộc
+> `UNIQUE(scenario, repeat_index, attempt_index)`. Export dữ liệu theo thư mục có attempt
+> (`run_<scenario>_<repeat>_att<N>`). `analyze.py` chỉ lấy attempt `completed` vào bảng chính
+> đồng thời báo cáo đầy đủ số attempt bị huỷ và lý do trong bảng vận hành (`operational_table()`).
 
-1. Đo lệch đồng hồ → huỷ nếu `|offset| > 2000ms`.
-2. `docker compose down -v` trên VPS, deploy lại app demo từ đầu → `deployment_id` mới.
-3. `POST /reset` cho ML service.
-4. Khởi động load generator container.
-5. Tạo `experiment_run` (`status='running'`, ghi `baseline_start_ts`).
-6. Chờ pha A (30'), kiểm tra đã có ≥180 `metric_sample` → `POST /train`, ghi `train_at_ts`.
-   Số mẫu thiếu >10% → huỷ run (`abort_reason='insufficient_samples'`).
-7. Chờ pha B (15').
-8. Ghi `fault_start_ts` → **kích hoạt fault** → chờ 20'.
-9. Tắt fault, ghi `fault_end_ts` → chờ pha D (10') → ghi `run_end_ts`, `status='completed'`.
-10. Dừng load generator, export CSV, push GitHub.
-
-**Kiểm tra tính toàn vẹn ngay sau mỗi run** (fail → đánh dấu run cần chạy lại):
-- Số mẫu thực tế ≥ 90% số mẫu lý thuyết (462 mẫu cho 77 phút).
-- Không có khoảng trống >2 phút giữa 2 mẫu liên tiếp.
-- Mỗi `metric_sample` có đúng **5** dòng `score_sample`.
-- `score` khác `null` cho toàn bộ pha B, C, D (nếu còn `null` nghĩa là train thất bại).
+1. Tạo bản ghi `experiment_run` (`start_run(conn, scenario, repeat_index, vps_id=vps_id)`) **trước các bước SSH/deploy có thể lỗi**; `status='running'`, cấp `attempt_index` (1..3), `deployment_id` tạm thời là `NULL`.
+2. Đo lệch đồng hồ qua SSH (`measure_clock_offset_ms`) → nếu `|offset| > 2000ms` hoặc mất kết nối SSH: huỷ run (`abort_run(conn, run_id, "clock_skew_too_large: ...")`), sửa NTP rồi chạy lại.
+3. Deploy thật app demo lên VPS: chạy quy trình deploy thật, **gắn `deployment_id` ngay khi pipeline trả ID** (`attach_deployment_id(conn, run_id, deployment_id)`) rồi chờ kết quả deploy. Nếu deploy lỗi (SSH timeout, docker compose error, container crash, healthcheck timeout) → **giữ nguyên bản ghi deployment ở trạng thái `'failed'`** trong DB (audit trail) và huỷ run (`abort_run(conn, run_id, "deploy_failed: ...")`); nếu deploy thành công (`status='running'`) → tiếp tục các bước kế tiếp.
+4. `POST /reset` cho ML service, khởi động headless poller (sử dụng toolchain TypeScript hiện có của repo, điều khiển tiến trình con Electron để drain/dừng an toàn).
+5. Khởi động load generator container (giữ trần an toàn mặc định 1800 giây; chỉ cho phép 4500 giây khi có cấu hình pilot tường minh).
+6. Pha A (30'): cập nhật `baseline_start_ts`, chờ 30'. Đếm mẫu bằng `count_phase_a_samples()` và kiểm tra qua `enough_train_samples()`: **mục tiêu 180 mẫu, tối thiểu 162 mẫu** (ngưỡng 90%). Số mẫu thiếu >10% (< 162 mẫu) → huỷ run (`abort_reason='insufficient_phase_a_samples'`). Khi đủ điều kiện → kích hoạt `POST /train` và cập nhật `train_at_ts`.
+7. Pha B (15'): holdout 90 mẫu, cập nhật mốc pha.
+8. Pha C (20'): cập nhật `fault_start_ts` → kích hoạt lịch fault bằng `plan_fault(scenario)` và thực thi qua `apply_plan(app_base_url, plan)`. Vì `apply_plan()` đã tự chờ và thực thi theo lịch thời gian thực đến action cuối cùng, runner chỉ chờ phần thời gian còn lại: `remaining_s = max(0.0, (fault_start_epoch + 1200) - now_epoch)`, đặt mốc `fault_end_ts = fault_start_ts + 1200s` (`FAULT_DURATION_S = 1200`), **tuyệt đối không chờ thêm 1200s** sau khi `apply_plan()` kết thúc.
+9. Pha D (10'): tắt fault bằng `reset_fault(app_base_url)`, cập nhật `fault_end_ts` → chờ 10' → dừng load generator, cập nhật `run_end_ts`.
+10. Draining & Kiểm tra tính toàn vẹn ngay sau mỗi run (`check_integrity`):
+    - Ra lệnh drain tới headless poller qua stdin (chờ tối đa 30s) để kéo nốt metric còn đọng trên VPS rồi dừng poller.
+    - Số mẫu thực tế ≥ 90% số mẫu lý thuyết (tối thiểu **≥ 405 mẫu** trên tổng 450 mẫu lý thuyết của toàn run 75 phút đo ở chu kỳ 10s: 180 Pha A + 90 Pha B + 120 Pha C + 60 Pha D; thay thế mốc cũ 462 mẫu/77 phút).
+    - Không có khoảng trống >2 phút giữa 2 mẫu liên tiếp (`max_gap_s <= 120s`).
+    - Mỗi `metric_sample` có đúng **5** dòng `score_sample`.
+    - `score` khác `null` cho toàn bộ pha B, C, D (nếu còn `null` nghĩa là train thất bại).
+    - Tất cả gate PASS → `complete_run(conn, run_id, run_end_ts)`; vi phạm bất kỳ gate nào → `abort_run(conn, run_id, reason)`. Dọn dẹp tài nguyên trong khối `finally`.
+11. Dừng load generator (nếu chưa dừng), export CSV bằng `export_run()`.
 
 ---
 
@@ -186,15 +192,19 @@ Các bước (mỗi bước ghi `action_log`; lỗi ở bất kỳ đâu → `st
 
 1. SQLite bật **WAL**.
 2. Sau **mỗi** run, `export_results.py` xuất CSV vào
-   `experiments/results/run_<scenario>_<n>/`:
+   `experiments/results/run_<scenario>_<n>_att<attempt>/`:
    `metric_sample.csv` · `score_sample.csv` · `alert.csv` · `experiment_run.csv` ·
-   `meta.json` (git commit hash, collector_version, feature_version, ngưỡng đang dùng).
+   `meta.json` (git commit hash, collector_version, protocol_version, feature_version, ngưỡng đang dùng).
 3. **Commit + push ngay** (CSV nhỏ, không cần LFS). **Không commit file `.db`** — nó chứa
    bảng `vps` với credential SSH đã mã hoá.
 4. `analyze.py` **chỉ đọc từ CSV đã export**, không đọc DB sống → phân tích chạy lại được bất
    cứ lúc nào, trên máy nào, kể cả sau khi VPS đã trả.
 5. `meta.json` có `git_commit` để biết chính xác dữ liệu này sinh ra bởi phiên bản code nào.
    Đổi code giữa chừng mà quên ghi là mất khả năng giải thích outlier.
+6. `protocol_version` được tách riêng khỏi `feature_version` trong `meta.json` (mặc định `"1.0"`,
+   tự động ghi nhận qua `export_run()`). Khi đọc dữ liệu cũ trước pilot chưa có trường này, parser
+   (cả `experiments/manifest.py` và `load_run()` trong `experiments/analyze.py`) tự động fallback
+   về `"legacy-pre-pilot"` để bảo đảm tương thích ngược.
 
 ---
 

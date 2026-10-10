@@ -9,6 +9,9 @@ describe('shutdownRuntime', () => {
         order.push('scheduler')
         throw new Error('poll failed')
       },
+      stopDeploy: async () => {
+        order.push('deploy')
+      },
       stopMl: () => order.push('ml'),
       disconnectSsh: async () => {
         order.push('ssh')
@@ -17,6 +20,14 @@ describe('shutdownRuntime', () => {
       quit: () => order.push('quit'),
       report: vi.fn((error) => order.push(error instanceof Error ? error.message : String(error)))
     })
-    expect(order).toEqual(['scheduler', 'poll failed', 'ml', 'ssh', 'disconnect failed', 'quit'])
+    expect(order).toEqual([
+      'scheduler',
+      'poll failed',
+      'deploy',
+      'ml',
+      'ssh',
+      'disconnect failed',
+      'quit'
+    ])
   })
 })

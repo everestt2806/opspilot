@@ -20,11 +20,11 @@ import { logger, maskSecrets } from '../logger'
 import { SshAbortedError, SshManager } from '../ssh/manager'
 import { shellQuote } from '../ssh/shellQuote'
 import { allocatePort, PORT_RANGE } from './portPolicy'
-import { runPrecheck } from './precheck'
+import { readExistingEnvFile, runPrecheck } from './precheck'
 import {
   buildEnvFile,
   parseEnvFile,
-  readEnvValue,
+  resolveExistingEnv,
   renderBuildArgs,
   renderCompose,
   renderDockerfile,
@@ -32,6 +32,10 @@ import {
 } from './templates'
 import { withAppLock } from '../monitor/appLock'
 import { ActivationRepository, type ActivationReason } from '../monitor/activation'
+import { DoctorRepository } from '../doctor/repository'
+import { diagnose, redactEvidence, redactText, type DoctorEvidence } from '../doctor/engine'
+import { type ExposureEvidence, type ExposureManager, type ExposureStatus } from './exposure'
+import type { PreparedGitLease } from './preparedGitSources'
 
 const WORK_ROOT = '/opt/opspilot'
 const HEALTHCHECK_ATTEMPTS = 10
@@ -40,6 +44,44 @@ const RENDER_COLLECT_INTERVAL_S = '10'
 const COLLECTOR_IMAGE_SUFFIX = ':collector'
 
 type DeployInputWithRemoteSource = DeployInput & { remote_source_path?: string }
+type RestoredGitInput = Omit<DeployInput, 'source_path'> & { remote_source_path: string }
+type PersistedBuildPlan = BuildPlan & { collectorAppPath?: string }
+interface RestoredGitSource {
+  plan: PersistedBuildPlan
+  collectorAppPath: string
+  framework: App['framework']
+  repositoryUrl: string
+  commitSha: string
+}
+
+function assertExistingEnvResolution(
+  resolution: ReturnType<typeof resolveExistingEnv>,
+  step: 'PRECHECK' | 'RENDER'
+): void {
+  const issues: string[] = []
+  if (resolution.missingKeys.length > 0) {
+    issues.push(`Missing required key names: ${resolution.missingKeys.join(', ')}`)
+  }
+  if (resolution.protectedOverrides.length > 0) {
+    issues.push(
+      `PostgreSQL credential keys cannot be changed during redeploy: ${resolution.protectedOverrides.join(', ')}`
+    )
+  }
+  if (issues.length > 0) {
+    throw new AppError('PRECHECK_FAILED', issues.join('. '), { step })
+  }
+}
+
+function existingEnvUnavailableError(
+  requiredKeys: string[],
+  step: 'PRECHECK' | 'RENDER'
+): AppError {
+  return new AppError(
+    'PRECHECK_FAILED',
+    `Could not verify the existing .env; required key names unverified: ${requiredKeys.join(', ') || 'none'}.`,
+    { step }
+  )
+}
 
 export function resolveCollectorDir(): string {
   const candidates = [
@@ -133,6 +175,11 @@ export interface RunContext {
   collectorState: CollectorState
   restoreStatus: RestoreStatus
   durations: Partial<Record<DeployStep, number>>
+  exposureStatus: ExposureStatus
+  exposureEvidence: ExposureEvidence | null
+  gitSnapshotCleanup?: () => void
+  resourcesReleased?: boolean
+  finishedEmitted?: boolean
 }
 
 /**
@@ -148,12 +195,20 @@ export class DeployPipeline {
   private readonly actionLog: ActionLogRepository
   private readonly activation: ActivationRepository
   private readonly database: SqliteDatabase
+  private readonly exposure: ExposureManager | null
+  private readonly doctor: DoctorRepository
 
   /** Khoá chống 2 pipeline chạy đồng thời trên cùng một app (deploy-events mục 3). */
   private activeByApp = new Map<number, number>()
   private controllers = new Map<number, AbortController>()
+  private activeRuns = new Set<Promise<void>>()
 
-  constructor(deps: { ssh: SshManager; db: SqliteDatabase; emit: (event: DeployEvent) => void }) {
+  constructor(deps: {
+    ssh: SshManager
+    db: SqliteDatabase
+    emit: (event: DeployEvent) => void
+    exposure?: ExposureManager
+  }) {
     this.ssh = deps.ssh
     this.database = deps.db
     this.emit = deps.emit
@@ -162,20 +217,61 @@ export class DeployPipeline {
     this.deploymentRepository = new DeploymentRepository(deps.db)
     this.actionLog = new ActionLogRepository(deps.db)
     this.activation = new ActivationRepository(deps.db)
+    this.exposure = deps.exposure ?? null
+    this.doctor = new DoctorRepository(deps.db)
   }
 
   /** Khởi động pipeline. Phần setup (detect + tạo bản ghi + khoá) chạy đồng bộ để
    * `deploy:start` trả được deployment_id ngay; các bước sau chạy nền, tiến độ qua
    * kênh `deploy:event`. Luôn kết thúc bằng đúng một event `finished`. */
-  run(input: DeployInput, signal?: AbortSignal): { deploymentId: number } {
-    const ctx = this.setup(input, signal)
-    void this.execute(ctx).catch((error: unknown) => {
-      logger.error('deploy', 'Pipeline dừng bất thường ngoài vòng bắt lỗi', {
-        deployment_id: ctx.deployment.id,
-        error: error instanceof Error ? error.message : String(error)
+  run(
+    input: DeployInput,
+    signal?: AbortSignal,
+    gitSource?: PreparedGitLease
+  ): { deploymentId: number } {
+    const ctx = this.setup(input, signal, gitSource)
+    const run = this.execute(ctx)
+      .catch(async (error: unknown) => {
+        logger.error('deploy', 'Pipeline dừng bất thường ngoài vòng bắt lỗi', {
+          deployment_id: ctx.deployment.id,
+          error: error instanceof Error ? error.message : String(error)
+        })
+        await this.failUnexpected(ctx, error)
       })
-    })
+      .finally(() => {
+        this.cleanupRunResources(ctx)
+        this.activeRuns.delete(run)
+      })
+    this.activeRuns.add(run)
     return { deploymentId: ctx.deployment.id }
+  }
+
+  /** Restore a Git deployment from the already-relayed VPS payload and saved plan. */
+  runRestoredGit(
+    input: RestoredGitInput,
+    source: RestoredGitSource,
+    signal?: AbortSignal
+  ): { deploymentId: number } {
+    const ctx = this.setup(input as unknown as DeployInput, signal, undefined, source)
+    const run = this.execute(ctx)
+      .catch(async (error: unknown) => {
+        logger.error('deploy', 'Git restore pipeline dừng bất thường', {
+          deployment_id: ctx.deployment.id,
+          error: error instanceof Error ? error.message : String(error)
+        })
+        await this.failUnexpected(ctx, error)
+      })
+      .finally(() => {
+        this.cleanupRunResources(ctx)
+        this.activeRuns.delete(run)
+      })
+    this.activeRuns.add(run)
+    return { deploymentId: ctx.deployment.id }
+  }
+
+  async shutdown(): Promise<void> {
+    for (const controller of this.controllers.values()) controller.abort()
+    await Promise.allSettled([...this.activeRuns])
   }
 
   /** Rollback thủ công (UC-04): compose up image cũ (không build lại), healthcheck, ghi bản ghi mới. */
@@ -219,7 +315,9 @@ export class DeployPipeline {
       runtimeOwner: 'unknown',
       collectorState: 'running',
       restoreStatus: null,
-      durations: {}
+      durations: {},
+      exposureStatus: 'not_checked',
+      exposureEvidence: null
     }
     void this.executeRollback(ctx, targetImageTag, target.version, target.id).catch(
       (error: unknown) => {
@@ -300,6 +398,7 @@ export class DeployPipeline {
         }
       })
 
+      await this.publishExposure(ctx)
       await this.recordManualRollbackSuccess(ctx, targetImageTag, targetDeploymentId)
     } catch (error) {
       if (ctx.signal.aborted) ctx.cancelled = true
@@ -334,7 +433,7 @@ export class DeployPipeline {
           error: recordError instanceof Error ? recordError.message : String(recordError)
         })
       }
-      this.emit({
+      this.emitFinished(ctx, {
         type: 'finished',
         deployment_id: ctx.deployment.id,
         status: 'failed',
@@ -353,6 +452,8 @@ export class DeployPipeline {
     this.deploymentRepository.update(ctx.deployment.id, {
       status: 'running',
       is_rollback_of: targetDeploymentId,
+      exposure_status: ctx.exposureStatus,
+      exposure_evidence_json: ctx.exposureEvidence ? JSON.stringify(ctx.exposureEvidence) : null,
       finished_at: nowIso(),
       total_duration_ms: Date.now() - ctx.startedAt
     })
@@ -366,12 +467,14 @@ export class DeployPipeline {
       message: `Rollback thủ công app ${ctx.app.name} về ${targetImageTag} — app đã chạy lại và healthcheck đạt.`
     })
     await this.pruneImages(ctx, null, [targetImageTag])
-    this.emit({
+    this.emitFinished(ctx, {
       type: 'finished',
       deployment_id: ctx.deployment.id,
       status: 'running',
       total_duration_ms: Date.now() - ctx.startedAt,
-      app_url: ctx.app.url
+      app_url: ctx.exposureStatus === 'reachable' ? ctx.app.url : undefined,
+      exposure_status: ctx.exposureStatus,
+      exposure_evidence: ctx.exposureEvidence ?? undefined
     })
   }
 
@@ -511,7 +614,12 @@ export class DeployPipeline {
 
   // ── Setup (đồng bộ, chạy trước mọi event) ─────────────────────────────────────
 
-  private setup(input: DeployInput, signal?: AbortSignal): RunContext {
+  private setup(
+    input: DeployInput,
+    signal?: AbortSignal,
+    gitSource?: PreparedGitLease,
+    restoredGit?: RestoredGitSource
+  ): RunContext {
     if (!Number.isInteger(input.vps_id) || input.vps_id <= 0) {
       throw new AppError('VALIDATION', 'VPS không hợp lệ. Hãy chọn lại VPS rồi thử.')
     }
@@ -522,15 +630,20 @@ export class DeployPipeline {
         'Tên app phải là chữ thường, số hoặc dấu gạch ngang, dài 2-31 ký tự (vd: express-api).'
       )
     }
-    if (!existsSync(input.source_path)) {
+    if (!restoredGit && !existsSync(input.source_path)) {
       throw new AppError('VALIDATION', 'Thư mục source không tồn tại. Hãy chọn lại thư mục.')
     }
 
-    const detection = detectFramework(buildSourceTree(input.source_path))
-    if (!detection.matched) {
-      throw new AppError('DETECT_FAILED', detection.hint)
+    const sourceTree = restoredGit ? null : buildSourceTree(input.source_path)
+    const detection = sourceTree ? detectFramework(sourceTree) : null
+    if (detection && !detection.matched) throw new AppError('DETECT_FAILED', detection.hint)
+    const basePlan = restoredGit?.plan ?? detection!.plan
+    const plan: PersistedBuildPlan = {
+      ...basePlan,
+      collectorAppPath:
+        restoredGit?.collectorAppPath ??
+        resolveCollectorAppPath(detection!.detector, sourceTree!, basePlan.healthcheckPath)
     }
-    const plan = detection.plan
 
     const vps = this.vpsRepository.getById(input.vps_id)
     let app: App
@@ -547,6 +660,10 @@ export class DeployPipeline {
       const existing = this.appRepository.getByVpsAndName(vps.id, name)
       if (existing) {
         app = existing
+        // App chưa từng deploy thành công (current_deployment_id === null — ví dụ lượt
+        // deploy đầu fail từ PRECHECK) vẫn là first deployment: chưa có collector hay
+        // metrics file để cutover, đi nhánh đó sẽ fail "no container to start".
+        newApp = app.current_deployment_id === null
       } else {
         const requestedPort = input.host_port
         if (
@@ -571,8 +688,12 @@ export class DeployPipeline {
         app = this.appRepository.create({
           vps_id: vps.id,
           name,
-          framework: detection.detector,
-          source_path: input.source_path,
+          framework: restoredGit?.framework ?? detection!.detector,
+          source_path: gitSource || restoredGit ? null : input.source_path,
+          source_type: gitSource || restoredGit ? 'git' : 'local',
+          git_repo_url: gitSource?.gitRepoUrl ?? restoredGit?.repositoryUrl ?? null,
+          git_ref: gitSource?.gitRef ?? null,
+          git_root: gitSource?.gitRoot ?? null,
           host_port: requestedPort ?? allocatePort(usedPorts),
           container_port: plan.containerPort,
           healthcheck_path: plan.healthcheckPath,
@@ -592,7 +713,13 @@ export class DeployPipeline {
       app.id,
       app.name,
       JSON.stringify(plan),
-      null
+      null,
+      gitSource || restoredGit
+        ? {
+            repositoryUrl: gitSource?.gitRepoUrl ?? restoredGit!.repositoryUrl,
+            commitSha: gitSource?.commitSha ?? restoredGit!.commitSha
+          }
+        : undefined
     )
     const controller = new AbortController()
     signal?.addEventListener('abort', () => controller.abort(), { once: true })
@@ -614,7 +741,10 @@ export class DeployPipeline {
       runtimeOwner: newApp ? 'down' : 'unknown',
       collectorState: 'running',
       restoreStatus: null,
-      durations: {}
+      durations: {},
+      exposureStatus: 'not_checked',
+      exposureEvidence: null,
+      gitSnapshotCleanup: gitSource?.snapshot.cleanup
     }
   }
 
@@ -626,10 +756,16 @@ export class DeployPipeline {
 
   private async executeLocked(ctx: RunContext): Promise<void> {
     let finalStatus: FinalStatus = 'failed'
-    const logStream = this.openLogStream(ctx.deployment.id)
+    let logStream: import('node:fs').WriteStream | null = null
     let preparedActivationId: number | null = null
 
     try {
+      logStream = this.openLogStream(ctx.deployment.id)
+      logStream.on('error', () => {
+        logger.warn('deploy', 'Không ghi tiếp được file log; pipeline vẫn tiếp tục', {
+          deployment_id: ctx.deployment.id
+        })
+      })
       await this.stepPrecheck(ctx)
       await this.stepUpload(ctx)
       await this.stepRender(ctx)
@@ -641,6 +777,7 @@ export class DeployPipeline {
       const healthOk = await this.stepHealthcheck(ctx)
 
       if (healthOk) {
+        await this.publishExposure(ctx)
         await this.recordSuccess(ctx)
         finalStatus = 'running'
       } else {
@@ -681,16 +818,90 @@ export class DeployPipeline {
       await this.recordFailure(ctx, error)
       finalStatus = 'failed'
     } finally {
-      this.emit({
+      try {
+        logStream?.end()
+      } catch {
+        logger.warn('deploy', 'Không thể đóng file log của pipeline', {
+          deployment_id: ctx.deployment.id
+        })
+      }
+      this.cleanupRunResources(ctx)
+      this.emitFinished(ctx, {
         type: 'finished',
         deployment_id: ctx.deployment.id,
         status: finalStatus,
         total_duration_ms: Date.now() - ctx.startedAt,
-        app_url: finalStatus === 'running' ? ctx.app.url : undefined
+        app_url:
+          finalStatus === 'running' && ctx.exposureStatus === 'reachable' ? ctx.app.url : undefined,
+        exposure_status: finalStatus === 'running' ? ctx.exposureStatus : undefined,
+        exposure_evidence:
+          finalStatus === 'running' ? (ctx.exposureEvidence ?? undefined) : undefined
       })
-      this.release(ctx.app.id, ctx.deployment.id)
-      logStream.end()
     }
+  }
+
+  private async failUnexpected(ctx: RunContext, error: unknown): Promise<void> {
+    try {
+      const current = this.deploymentRepository.getById(ctx.deployment.id)
+      if (current.status === 'building' || current.status === 'deploying') {
+        this.deploymentRepository.update(ctx.deployment.id, {
+          status: 'failed',
+          failed_step: ctx.failedStep ?? ctx.currentStep,
+          finished_at: nowIso(),
+          build_duration_ms: ctx.durations.BUILD ?? null,
+          total_duration_ms: Date.now() - ctx.startedAt
+        })
+      }
+    } catch (databaseError) {
+      logger.error('deploy', 'Không ghi được trạng thái fail sau lỗi pipeline', {
+        deployment_id: ctx.deployment.id,
+        error: databaseError instanceof Error ? databaseError.message : String(databaseError)
+      })
+    }
+    this.emitFinished(ctx, {
+      type: 'finished',
+      deployment_id: ctx.deployment.id,
+      status: 'failed',
+      total_duration_ms: Date.now() - ctx.startedAt
+    })
+    if (error instanceof Error) {
+      logger.warn('deploy', 'Pipeline kết thúc ngoài vòng xử lý thông thường', {
+        deployment_id: ctx.deployment.id,
+        step: ctx.failedStep ?? ctx.currentStep
+      })
+    }
+  }
+
+  private cleanupRunResources(ctx: RunContext): void {
+    if (ctx.resourcesReleased) return
+    ctx.resourcesReleased = true
+    this.release(ctx.app.id, ctx.deployment.id)
+    const cleanup = ctx.gitSnapshotCleanup
+    ctx.gitSnapshotCleanup = undefined
+    try {
+      cleanup?.()
+    } catch {
+      logger.warn('deploy', 'Không thể dọn snapshot Git sau pipeline', {
+        deployment_id: ctx.deployment.id
+      })
+    }
+  }
+
+  private emitSafely(event: DeployEvent): void {
+    try {
+      this.emit(event)
+    } catch {
+      logger.warn('deploy', 'Không gửi được event deploy tới renderer', {
+        deployment_id: event.deployment_id,
+        event_type: event.type
+      })
+    }
+  }
+
+  private emitFinished(ctx: RunContext, event: Extract<DeployEvent, { type: 'finished' }>): void {
+    if (ctx.finishedEmitted) return
+    ctx.finishedEmitted = true
+    this.emitSafely(event)
   }
 
   private openLogStream(deploymentId: number): import('node:fs').WriteStream {
@@ -703,7 +914,7 @@ export class DeployPipeline {
   private async inStep<T>(ctx: RunContext, step: DeployStep, fn: () => Promise<T>): Promise<T> {
     ctx.currentStep = step
     ctx.stepLines = []
-    this.emit({
+    this.emitSafely({
       type: 'step-start',
       deployment_id: ctx.deployment.id,
       step,
@@ -716,7 +927,7 @@ export class DeployPipeline {
       const value = await fn()
       const durationMs = Date.now() - started
       ctx.durations[step] = durationMs
-      this.emit({
+      this.emitSafely({
         type: 'step-done',
         deployment_id: ctx.deployment.id,
         step,
@@ -736,7 +947,7 @@ export class DeployPipeline {
         ctx.cancelled = true
       }
       const ipcError = toStepIpcError(error)
-      this.emit({
+      this.emitSafely({
         type: 'step-failed',
         deployment_id: ctx.deployment.id,
         step,
@@ -771,7 +982,7 @@ export class DeployPipeline {
     return ctx.input
   }
 
-  private requirePlan(ctx: RunContext): BuildPlan {
+  private requirePlan(ctx: RunContext): PersistedBuildPlan {
     if (!ctx.plan) {
       throw new AppError('UNKNOWN', 'Pipeline đang chạy thiếu build plan.')
     }
@@ -779,7 +990,7 @@ export class DeployPipeline {
   }
 
   private log(ctx: RunContext, step: DeployStep, chunk: string, stream: 'stdout' | 'stderr'): void {
-    this.emit({
+    this.emitSafely({
       type: 'log',
       deployment_id: ctx.deployment.id,
       step,
@@ -812,10 +1023,45 @@ export class DeployPipeline {
 
   private async stepPrecheck(ctx: RunContext): Promise<void> {
     await this.inStep(ctx, 'PRECHECK', async () => {
-      const detail = await runPrecheck(this.ssh, ctx.app.vps_id, {
+      let detail = await runPrecheck(this.ssh, ctx.app.vps_id, {
         port: ctx.newApp ? ctx.app.host_port : null,
         signal: ctx.signal
       })
+
+      const input = this.requireInput(ctx) as DeployInputWithRemoteSource
+      if (!ctx.newApp && !input.remote_source_path) {
+        const plan = this.requirePlan(ctx)
+        let existingEnv: string
+        try {
+          existingEnv = await readExistingEnvFile(
+            this.ssh,
+            ctx.app.vps_id,
+            posixJoin(WORK_ROOT, ctx.app.name, '.env')
+          )
+        } catch {
+          throw existingEnvUnavailableError(plan.requiredEnv, 'PRECHECK')
+        }
+        const resolution = resolveExistingEnv(
+          input.env,
+          existingEnv,
+          plan.requiredEnv,
+          plan.needsDb || ctx.app.needs_db === 1
+        )
+        assertExistingEnvResolution(resolution, 'PRECHECK')
+        detail = {
+          ...detail,
+          checks: [
+            ...detail.checks,
+            {
+              label: 'Required environment',
+              required: 'detector-required keys are available',
+              actual: 'Required keys are available',
+              ok: true
+            }
+          ],
+          passed: detail.passed
+        }
+      }
       this.log(ctx, 'PRECHECK', `${detail.command}\n`, 'stdout')
       for (const check of detail.checks) {
         this.log(
@@ -910,11 +1156,7 @@ export class DeployPipeline {
         START_COMMAND: plan.startCommand,
         COLLECT_INTERVAL_S: RENDER_COLLECT_INTERVAL_S,
         COLLECTOR_IMAGE_TAG: `${ctx.app.name}${COLLECTOR_IMAGE_SUFFIX}`,
-        COLLECTOR_APP_PATH: resolveCollectorAppPath(
-          ctx.app.framework,
-          buildSourceTree(input.source_path),
-          ctx.app.healthcheck_path
-        ),
+        COLLECTOR_APP_PATH: plan.collectorAppPath ?? ctx.app.healthcheck_path,
         APP_DEPENDS_ON: plan.needsDb
           ? '    depends_on:\n      postgres:\n        condition: service_healthy'
           : ''
@@ -924,30 +1166,25 @@ export class DeployPipeline {
       if (remoteSource) {
         const existingEnv = await this.ssh.readFile(ctx.app.vps_id, posixJoin(appDir, '.env'))
         renderEnv = { ...input.env, ...parseEnvFile(existingEnv) }
-      } else if (plan.needsDb && !ctx.newApp) {
-        const existingEnv = await this.ssh.readFile(ctx.app.vps_id, posixJoin(appDir, '.env'))
-        const existingPassword = readEnvValue(existingEnv, 'POSTGRES_PASSWORD')
-        const existingDatabaseUrl = readEnvValue(existingEnv, 'DATABASE_URL')
-
-        if (existingPassword) {
-          renderEnv = {
-            ...input.env,
-            POSTGRES_PASSWORD: existingPassword,
-            ...(existingDatabaseUrl ? { DATABASE_URL: existingDatabaseUrl } : {})
-          }
-          this.log(
-            ctx,
-            'RENDER',
-            'Giữ nguyên credential PostgreSQL hiện có để volume tiếp tục truy cập được.\n',
-            'stdout'
+      } else if (!ctx.newApp) {
+        let existingEnv: string
+        try {
+          existingEnv = await readExistingEnvFile(
+            this.ssh,
+            ctx.app.vps_id,
+            posixJoin(appDir, '.env')
           )
-        } else if (ctx.app.current_deployment_id !== null) {
-          throw new AppError(
-            'UNKNOWN',
-            'Không đọc được credential PostgreSQL hiện có. Đã dừng trước khi ghi .env để tránh làm mất kết nối database.',
-            { step: 'RENDER' }
-          )
+        } catch {
+          throw existingEnvUnavailableError(plan.requiredEnv, 'RENDER')
         }
+        const resolution = resolveExistingEnv(
+          input.env,
+          existingEnv,
+          plan.requiredEnv,
+          plan.needsDb || ctx.app.needs_db === 1
+        )
+        assertExistingEnvResolution(resolution, 'RENDER')
+        renderEnv = resolution.env
       }
       const env = buildEnvFile(renderEnv, plan.needsDb)
       const files: Array<{ name: string; content: string; mode?: number }> = [
@@ -1119,6 +1356,58 @@ export class DeployPipeline {
       this.log(ctx, 'HEALTHCHECK', 'Healthcheck thất bại cả 10 lần thử.\n', 'stderr')
       return false
     })
+  }
+
+  /**
+   * Kiểm tra publish sau loopback healthcheck. Exposure failure không rollback app healthy;
+   * deployment được ghi running/degraded để Doctor có thể tiếp tục sửa firewall/DNS.
+   */
+  private async publishExposure(ctx: RunContext): Promise<void> {
+    if (!this.exposure) {
+      ctx.exposureStatus = 'not_checked'
+      ctx.exposureEvidence = null
+      return
+    }
+
+    try {
+      const evidence = await this.exposure.reconcile({
+        vps: this.vpsRepository.getById(ctx.app.vps_id),
+        app: ctx.app,
+        signal: ctx.signal
+      })
+      ctx.exposureEvidence = evidence
+      ctx.exposureStatus = evidence.status
+      this.log(
+        ctx,
+        'HEALTHCHECK',
+        `Publish: ${evidence.status}; external probe=${evidence.external_probe}; ufw=${evidence.ufw_state}\n`,
+        evidence.status === 'reachable' ? 'stdout' : 'stderr'
+      )
+      if (evidence.diagnosis) {
+        this.log(ctx, 'HEALTHCHECK', `Doctor: ${evidence.diagnosis.title}\n`, 'stderr')
+        const doctorEvidence: DoctorEvidence = redactEvidence({
+          step: 'HEALTHCHECK',
+          externalProbe:
+            evidence.external_probe === 'not_run' ? undefined : evidence.external_probe,
+          listenerPort: ctx.app.host_port,
+          expectedPort: ctx.app.host_port,
+          containerState: { status: 'running' },
+          logs: evidence.diagnosis.cause
+        })
+        this.doctor.create({
+          deploymentId: ctx.deployment.id,
+          trigger: 'deploy',
+          evidence: doctorEvidence,
+          diagnosis: diagnose(doctorEvidence)
+        })
+      }
+    } catch (error) {
+      const rawMessage = error instanceof Error ? error.message : String(error)
+      const safeMessage = redactText(maskSecrets(rawMessage))
+      ctx.exposureStatus = 'degraded'
+      ctx.exposureEvidence = null
+      this.log(ctx, 'HEALTHCHECK', `Publish chưa hoàn tất: ${safeMessage}\n`, 'stderr')
+    }
   }
 
   // ── Nhánh lỗi & hồi phục ─────────────────────────────────────────────────────
@@ -1319,6 +1608,7 @@ export class DeployPipeline {
           )
         }
       })
+      await this.publishExposure(ctx)
       await this.pruneImages(ctx, null, [previousImageTag])
     } catch (error) {
       if (ctx.signal.aborted) ctx.cancelled = true
@@ -1496,12 +1786,14 @@ export class DeployPipeline {
     const step: DeployStep = 'RECORD'
     ctx.currentStep = step
     ctx.stepLines = []
-    this.emit({ type: 'step-start', deployment_id: ctx.deployment.id, step, ts: nowIso() })
+    this.emitSafely({ type: 'step-start', deployment_id: ctx.deployment.id, step, ts: nowIso() })
     const started = Date.now()
 
     try {
       this.deploymentRepository.update(ctx.deployment.id, {
         status: 'running',
+        exposure_status: ctx.exposureStatus,
+        exposure_evidence_json: ctx.exposureEvidence ? JSON.stringify(ctx.exposureEvidence) : null,
         finished_at: nowIso(),
         build_duration_ms: ctx.durations.BUILD ?? null,
         total_duration_ms: Date.now() - ctx.startedAt
@@ -1521,8 +1813,16 @@ export class DeployPipeline {
         vps_id: ctx.app.vps_id,
         app_id: ctx.app.id,
         deployment_id: ctx.deployment.id,
-        message: `Deploy v${ctx.deployment.version} app ${ctx.app.name}: thành công — ${ctx.app.url}`,
-        detail_json: JSON.stringify({ url: ctx.app.url, version: ctx.deployment.version })
+        message:
+          ctx.exposureStatus === 'reachable'
+            ? `Deploy v${ctx.deployment.version} app ${ctx.app.name}: thành công — ${ctx.app.url}`
+            : `Deploy v${ctx.deployment.version} app ${ctx.app.name}: app healthy nhưng publish ở trạng thái ${ctx.exposureStatus}.`,
+        detail_json: JSON.stringify({
+          url: ctx.app.url,
+          version: ctx.deployment.version,
+          exposure_status: ctx.exposureStatus,
+          exposure_evidence: ctx.exposureEvidence
+        })
       })
     } catch (error) {
       logger.warn('deploy', 'Bước RECORD không ghi được action_log', {
@@ -1535,7 +1835,7 @@ export class DeployPipeline {
 
     const durationMs = Date.now() - started
     ctx.durations[step] = durationMs
-    this.emit({
+    this.emitSafely({
       type: 'step-done',
       deployment_id: ctx.deployment.id,
       step,
@@ -1545,6 +1845,27 @@ export class DeployPipeline {
 
   private async recordFailure(ctx: RunContext, error: unknown): Promise<void> {
     const ipcError = toStepIpcError(error)
+    // Mỗi deploy failure tạo một Doctor run với evidence đã redacted. Điều này cho phép
+    // UI/support mở chẩn đoán ngay cả khi failure xảy ra trước HEALTHCHECK (BUILD/DEPLOY).
+    try {
+      const evidence = redactEvidence({
+        step: ctx.failedStep ?? ctx.currentStep ?? undefined,
+        errorCode: ipcError.code,
+        logs: ctx.stepLines.join('\n'),
+        sshTransient: ['SSH_TIMEOUT', 'SSH_HOST_UNREACHABLE'].includes(ipcError.code)
+      })
+      this.doctor.create({
+        deploymentId: ctx.deployment.id,
+        trigger: 'deploy',
+        evidence,
+        diagnosis: diagnose(evidence)
+      })
+    } catch (doctorError) {
+      logger.warn('deploy', 'Không ghi được Doctor run cho deploy failure', {
+        deployment_id: ctx.deployment.id,
+        error: doctorError instanceof Error ? doctorError.message : String(doctorError)
+      })
+    }
     try {
       this.deploymentRepository.update(ctx.deployment.id, {
         status: 'failed',

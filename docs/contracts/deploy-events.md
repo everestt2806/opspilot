@@ -10,8 +10,25 @@ File này định nghĩa **thứ tự, bất biến và nhánh lỗi** — thứ
 ### Thứ tự bước — tuyến tính, không nhảy cóc, không song song
 
 ```
-PRECHECK → UPLOAD → RENDER → BUILD → DEPLOY → HEALTHCHECK → RECORD
+PRECHECK → UPLOAD → RENDER → BUILD → DEPLOY → HEALTHCHECK → [PUBLISH] → RECORD
 ```
+
+> **Lưu ý về pha `PUBLISH` (migration 004 / TK-A19):**
+> `PUBLISH` là một pha con (sub-phase) nội bộ chạy ngay sau khi `HEALTHCHECK` loopback (`http://127.0.0.1:<port><path>`) trên VPS đã pass và trước bước `RECORD`. Để bảo toàn contract enum `DeployStep` cho UI stepper, `PUBLISH` không tạo thêm step enum mới.
+>
+> **Hành vi thực tế đang chạy:**
+> 1. **Firewall OS (UFW có điều kiện)**: Parse trạng thái ufw qua SSH; nếu ufw active thì chạy `ufw allow <port>/tcp` (không kiểm tra rule trước).
+> 2. **External Reachability Probe**: Probe `app.url` là `http://<host>:<port>` từ máy trạm (với timeout và số lần thử, không nối healthcheck path).
+> 3. **Cloud Firewall Adapter**: Chỉ hoạt động nếu được inject adapter qua dependency injection; hiện môi trường production chưa cấu hình (`cloud_firewall: 'not_configured'`).
+> 4. **Domain Ingress & Named Tunnel**: Hiện CHƯA nằm trong pha `PUBLISH` của pipeline (đây là desired-state/assistant riêng ở module Domain, chưa tự động reconcile trong deploy pipeline).
+>
+> **Quy tắc xử lý trạng thái & rollback đối với Publish:**
+> - Nếu loopback `HEALTHCHECK` pass, container runtime được xác nhận là healthy nội bộ (`status: 'running'`).
+> - Nếu external probe fail (do firewall VPS hoặc cloud provider chặn):
+>   - **TUYỆT ĐỐI KHÔNG rollback app** (vì container ứng dụng đang chạy ổn định).
+>   - Deployment kết thúc ở `status: 'running'`, nhưng `exposure_status` được đặt là `'degraded'` (và `app_url` không trả về nếu chưa reachable).
+>   - `PORT_BLOCKED_EXTERNAL` là mã chẩn đoán nằm trong cấu trúc `exposure_evidence.diagnosis` của event `finished` khi external probe `unreachable`, **KHÔNG PHẢI là một event IPC riêng**.
+>   - Các lỗi khác phát sinh trong pha `PUBLISH` (ví dụ exception mạng, lỗi SSH đột xuất) cũng sẽ đặt `exposure_status: 'degraded'` mà có thể không có `diagnosis` hoặc `exposure_evidence`.
 
 Mỗi bước phát đúng chuỗi event sau:
 
@@ -33,6 +50,7 @@ UI dựa vào `finished` để tắt spinner — thiếu nó là màn hình treo
 | `BUILD` | `docker build -t <app>:v<N> .` | exit 0 | `docker image rm <app>:v<N>` (bỏ qua lỗi) |
 | `DEPLOY` | `docker compose up -d` | exit 0, container app `running` | Nếu có v(N-1): `docker compose` với tag cũ. Nếu không: `compose down` (giữ volume) |
 | `HEALTHCHECK` | `curl -fsS http://127.0.0.1:<host_port><path>` ×10, cách 3s | ≥1 lần trả 2xx | **Tự rollback về v(N-1)** (UC-03); không có v(N-1) → status `failed`, container giữ nguyên để người dùng xem log |
+| *(PUBLISH)* | `ufw status`, `ufw allow <port>/tcp`, external HTTP probe | sub-phase nội bộ sau healthcheck | External probe fail: ghi `exposure_status:'degraded'`, diagnosis `PORT_BLOCKED_EXTERNAL` nằm trong `exposure_evidence` khi probe `unreachable`; lỗi PUBLISH khác có thể không có diagnosis. **KHÔNG rollback** app healthy |
 | `RECORD` | `docker image ls` + xoá image cũ (giữ 3 bản) | luôn qua | Chỉ log warning, **không** làm fail cả deploy |
 
 ### Bất biến (vi phạm là bug nghiêm trọng)
@@ -46,6 +64,7 @@ UI dựa vào `finished` để tắt spinner — thiếu nó là màn hình treo
 6. Rollback tự động ở `HEALTHCHECK` phát thêm event `step-start`/`step-done` với step
    `DEPLOY` (để stepper trên UI thể hiện đúng), rồi `finished` với
    `status:'rolled_back'`.
+7. **Lỗi ở pha `PUBLISH` không bao giờ gây rollback app healthy**: Khi loopback healthcheck đã pass, container runtime đã chạy ổn định. Nếu external probe fail (do firewall VPS/cloud provider) hoặc gặp lỗi publish khác, deployment vẫn kết thúc với `status:'running'`, nhưng mang `exposure_status:'degraded'`. Chẩn đoán `PORT_BLOCKED_EXTERNAL` (nếu có) được đặt bên trong `exposure_evidence.diagnosis` khi external probe `unreachable`, chứ không phát qua event riêng; các lỗi publish khác có thể trả `degraded` mà chưa có diagnosis/evidence. UI dựa vào trạng thái này để kích hoạt Doctor hỗ trợ người dùng mà không gián đoạn app.
 
 ### Log
 

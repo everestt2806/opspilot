@@ -7,10 +7,13 @@ import type { VpsConnectionCheck, VpsDiagnosis, VpsInput } from '@shared/ipc'
 import { CheckFailedError, ConnectionCheck } from './ConnectionCheck'
 import { strings } from '../strings'
 
+const TEST_FINGERPRINT = `SHA256:${btoa(String.fromCharCode(...new Uint8Array(32))).replace(/=+$/, '')}`
+
 const VALUES: VpsInput = {
   name: 'VM01',
-  host: '221.121.1.79',
+  host: 'test-vps.example.invalid',
   port: 22,
+  host_fingerprint: TEST_FINGERPRINT,
   username: 'root',
   auth_type: 'password',
   secret: 'dummy',

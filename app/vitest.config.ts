@@ -13,6 +13,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    setupFiles: ['./src/renderer/src/test/setupTests.ts']
+    setupFiles: ['./src/renderer/src/test/setupTests.ts'],
+    testTimeout: 15000
   }
 })

@@ -48,6 +48,16 @@ describe('VpsResourcesCell — 4 state', () => {
     expect(bars.map((bar) => bar.getAttribute('aria-valuenow'))).toEqual(['75', '30', '25'])
   })
 
+  it('calculates displayed RAM from the same available value consumed by deploy precheck', () => {
+    const data = { ...RES, ram_total_mb: 8000, ram_free_mb: 2989 }
+    render(
+      <VpsResourcesCell vpsName="VM01" state={{ status: 'success', data }} onRetry={() => {}} />
+    )
+
+    expect(screen.getByLabelText('4.9 GB / 7.8 GB used')).toBeTruthy()
+    expect(screen.getAllByRole('progressbar')[0]?.getAttribute('aria-valuenow')).toBe('63')
+  })
+
   it('error: hien canh bao + nut thu lai goi onRetry', () => {
     const onRetry = vi.fn()
     render(

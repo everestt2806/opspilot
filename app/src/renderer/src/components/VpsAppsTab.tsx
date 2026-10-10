@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Button, Empty, Space, Spin, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Empty, Space, Spin, Table, Tag, Tooltip, Typography } from 'antd'
 import { ExportOutlined, PlusOutlined, ReloadOutlined, RocketOutlined } from '@ant-design/icons'
 
 import type { App, Deployment, IpcError } from '@shared/ipc'
 
-import { strings } from '../strings'
+import { useStrings } from '../strings'
 import { useUiState } from '../store/uiState'
 
 interface AppRow extends App {
   currentVersion: number | null
   deployStatus: Deployment['status'] | null
+  versionsError?: string | null
+  isMismatch?: boolean
 }
 
 interface VpsAppsTabProps {
@@ -28,17 +30,41 @@ async function fetchAppRows(vpsId: number): Promise<AppRowsResult> {
 
   const enriched = await Promise.all(
     listResult.data.map(async (app) => {
-      const versionsResult = await window.api.invoke('app:versions', app.id)
-      if (!versionsResult.ok || versionsResult.data.length === 0) {
-        return { ...app, currentVersion: null, deployStatus: null }
+      if (app.current_deployment_id === null) {
+        return {
+          ...app,
+          currentVersion: null,
+          deployStatus: null,
+          versionsError: null,
+          isMismatch: false
+        }
       }
-      const current =
-        versionsResult.data.find((d) => d.id === app.current_deployment_id) ??
-        versionsResult.data[0]
+      const versionsResult = await window.api.invoke('app:versions', app.id)
+      if (!versionsResult.ok) {
+        return {
+          ...app,
+          currentVersion: null,
+          deployStatus: null,
+          versionsError: versionsResult.error.message || 'Error',
+          isMismatch: false
+        }
+      }
+      const current = versionsResult.data.find((d) => d.id === app.current_deployment_id)
+      if (!current) {
+        return {
+          ...app,
+          currentVersion: null,
+          deployStatus: null,
+          versionsError: null,
+          isMismatch: true
+        }
+      }
       return {
         ...app,
         currentVersion: current.version,
-        deployStatus: current.status
+        deployStatus: current.status,
+        versionsError: null,
+        isMismatch: false
       }
     })
   )
@@ -48,11 +74,13 @@ async function fetchAppRows(vpsId: number): Promise<AppRowsResult> {
 
 /** Tab ứng dụng & deploy — danh sách app trên VPS + điều hướng Deploy Wizard. */
 export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
+  const strings = useStrings()
   const [rows, setRows] = useState<AppRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<IpcError | null>(null)
   const setActivePage = useUiState((state) => state.setActivePage)
   const setDeployPreselect = useUiState((state) => state.setDeployPreselect)
+  const setSelectedAppId = useUiState((state) => state.setSelectedAppId)
 
   const load = useCallback(async () => {
     const result = await fetchAppRows(vpsId)
@@ -94,17 +122,33 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
     await window.api.invoke('system:open-external', url)
   }
 
-  const statusLabel = (status: Deployment['status'] | null): string => {
-    if (!status) return strings.vpsControl.apps.status.none
-    const map = strings.vpsControl.apps.status as Record<string, string>
-    return map[status] ?? status
+  const statusLabel = (app: AppRow): string => {
+    if (app.current_deployment_id === null) {
+      return strings.apps.statusNotDeployed
+    }
+    if (app.versionsError) {
+      return strings.apps.versionsLoadError
+    }
+    if (app.isMismatch) {
+      return strings.apps.recordMismatch(app.current_deployment_id)
+    }
+    if (app.deployStatus) {
+      if (app.currentVersion !== null) {
+        return strings.apps.recordedStatus(app.deployStatus, app.currentVersion)
+      }
+      return `${strings.apps.statusRecordedDeployed}: ${app.deployStatus}`
+    }
+    return strings.apps.recordMismatch(app.current_deployment_id)
   }
 
-  const statusColor = (status: Deployment['status'] | null): string => {
-    if (!status) return 'default'
-    if (status === 'running') return 'success'
-    if (status === 'failed') return 'error'
-    if (status === 'building' || status === 'deploying') return 'processing'
+  const statusColor = (app: AppRow): string => {
+    if (app.current_deployment_id === null) return 'default'
+    if (app.versionsError) return 'error'
+    if (app.isMismatch) return 'warning'
+    if (!app.deployStatus) return 'default'
+    if (app.deployStatus === 'running') return 'default'
+    if (app.deployStatus === 'failed') return 'error'
+    if (app.deployStatus === 'building' || app.deployStatus === 'deploying') return 'processing'
     return 'default'
   }
 
@@ -113,23 +157,34 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
       title: strings.vpsControl.apps.columns.name,
       dataIndex: 'name',
       key: 'name',
-      render: (name: string) => <Typography.Text strong>{name}</Typography.Text>
+      render: (name: string, app: AppRow) => (
+        <Typography.Link
+          strong
+          onClick={() => {
+            setSelectedAppId(app.id)
+            setActivePage('apps')
+          }}
+        >
+          {name}
+        </Typography.Link>
+      )
     },
     {
       title: strings.vpsControl.apps.columns.framework,
       dataIndex: 'framework',
       key: 'framework',
-      width: 110
+      width: 95
     },
     {
       title: strings.vpsControl.apps.columns.port,
       key: 'port',
-      width: 80,
+      width: 65,
       render: (_: unknown, app: AppRow) => <span className="mono-text">{app.host_port}</span>
     },
     {
       title: strings.vpsControl.apps.columns.url,
       key: 'url',
+      width: 170,
       ellipsis: true,
       render: (_: unknown, app: AppRow) => (
         <Typography.Link className="mono-text" onClick={() => void openApp(app.url)}>
@@ -140,27 +195,41 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
     {
       title: strings.vpsControl.apps.columns.version,
       key: 'version',
-      width: 80,
+      width: 85,
       align: 'center' as const,
-      render: (_: unknown, app: AppRow) =>
-        app.currentVersion !== null ? `v${app.currentVersion}` : '—'
+      render: (_: unknown, app: AppRow) => {
+        if (app.currentVersion !== null) return `v${app.currentVersion}`
+        if (app.current_deployment_id !== null) {
+          if (app.isMismatch || app.versionsError) {
+            return <Typography.Text type="secondary">—</Typography.Text>
+          }
+          return (
+            <Tooltip title={`${strings.apps.deploymentIdTitle}: #${app.current_deployment_id}`}>
+              <span className="mono-text" style={{ fontSize: 12 }}>
+                ID: #{app.current_deployment_id}
+              </span>
+            </Tooltip>
+          )
+        }
+        return <Typography.Text type="secondary">—</Typography.Text>
+      }
     },
     {
       title: strings.vpsControl.apps.columns.status,
       key: 'status',
-      width: 110,
+      width: 165,
       render: (_: unknown, app: AppRow) => (
-        <Tag className="status-badge" color={statusColor(app.deployStatus)}>
-          {statusLabel(app.deployStatus)}
+        <Tag className="status-badge" color={statusColor(app)}>
+          {statusLabel(app)}
         </Tag>
       )
     },
     {
       title: strings.vpsControl.apps.columns.actions,
       key: 'actions',
-      width: 180,
+      width: 235,
       render: (_: unknown, app: AppRow) => (
-        <Space size="small">
+        <Space size={4} wrap={false}>
           <Button
             className="action-pill"
             size="small"
@@ -244,6 +313,7 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
           dataSource={rows}
           columns={columns}
           pagination={false}
+          className="vps-apps-table"
         />
       )}
     </div>

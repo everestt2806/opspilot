@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import Database from 'better-sqlite3'
-import { AlertTracker } from './alertTracker'
+import { AlertTracker, isSampleInRunWindow, parseTimestampUs } from './alertTracker'
 
 describe('AlertTracker', () => {
   it('mở một alert, cập nhật peak và resolve sau ba mẫu thấp', () => {
     const db = new Database(':memory:')
     db.exec(
-      'CREATE TABLE score_sample (id INTEGER PRIMARY KEY, deployment_id INTEGER, method TEXT, above_threshold INTEGER, metric_sample_id INTEGER, score REAL, ts_vps TEXT); CREATE TABLE alert (id INTEGER PRIMARY KEY, deployment_id INTEGER, metric_sample_id INTEGER, method TEXT, ts_vps TEXT, ts_resolved TEXT, peak_score REAL, detail_json TEXT); CREATE TABLE action_log (id INTEGER PRIMARY KEY, action TEXT, status TEXT, message TEXT, deployment_id INTEGER)'
+      'CREATE TABLE score_sample (id INTEGER PRIMARY KEY, deployment_id INTEGER, method TEXT, above_threshold INTEGER, metric_sample_id INTEGER, score REAL, ts_vps TEXT); CREATE TABLE alert (id INTEGER PRIMARY KEY, deployment_id INTEGER, metric_sample_id INTEGER, method TEXT, ts_vps TEXT, ts_resolved TEXT, peak_score REAL, detail_json TEXT, experiment_run_id INTEGER); CREATE TABLE action_log (id INTEGER PRIMARY KEY, action TEXT, status TEXT, message TEXT, deployment_id INTEGER)'
     )
     const tracker = new AlertTracker(db)
     for (let i = 1; i <= 3; i += 1) {
@@ -61,7 +61,7 @@ describe('AlertTracker', () => {
   it('khôi phục chuỗi high/low sau restart và theo dõi độc lập năm method', () => {
     const db = new Database(':memory:')
     db.exec(
-      'CREATE TABLE score_sample (id INTEGER PRIMARY KEY, deployment_id INTEGER, method TEXT, above_threshold INTEGER, metric_sample_id INTEGER, score REAL, ts_vps TEXT); CREATE TABLE alert (id INTEGER PRIMARY KEY, deployment_id INTEGER, metric_sample_id INTEGER, method TEXT, ts_vps TEXT, ts_resolved TEXT, peak_score REAL, detail_json TEXT); CREATE TABLE action_log (id INTEGER PRIMARY KEY, action TEXT, status TEXT, message TEXT, deployment_id INTEGER)'
+      'CREATE TABLE score_sample (id INTEGER PRIMARY KEY, deployment_id INTEGER, method TEXT, above_threshold INTEGER, metric_sample_id INTEGER, score REAL, ts_vps TEXT); CREATE TABLE alert (id INTEGER PRIMARY KEY, deployment_id INTEGER, metric_sample_id INTEGER, method TEXT, ts_vps TEXT, ts_resolved TEXT, peak_score REAL, detail_json TEXT, experiment_run_id INTEGER); CREATE TABLE action_log (id INTEGER PRIMARY KEY, action TEXT, status TEXT, message TEXT, deployment_id INTEGER)'
     )
     const methods = ['rule', 'zscore_ewma', 'iforest', 'ocsvm', 'ensemble'] as const
     let id = 1
@@ -116,5 +116,187 @@ describe('AlertTracker', () => {
         }
       ).ts_resolved
     ).not.toBeNull()
+  })
+
+  it('ghi trực tiếp experiment_run_id khi tạo alert và mặc định null khi không truyền', () => {
+    const db = new Database(':memory:')
+    db.exec(
+      'CREATE TABLE score_sample (id INTEGER PRIMARY KEY, deployment_id INTEGER, method TEXT, above_threshold INTEGER, metric_sample_id INTEGER, score REAL, ts_vps TEXT); CREATE TABLE alert (id INTEGER PRIMARY KEY, deployment_id INTEGER, metric_sample_id INTEGER, method TEXT, ts_vps TEXT, ts_resolved TEXT, peak_score REAL, detail_json TEXT, experiment_run_id INTEGER); CREATE TABLE action_log (id INTEGER PRIMARY KEY, action TEXT, status TEXT, message TEXT, deployment_id INTEGER); CREATE TABLE experiment_run (id INTEGER PRIMARY KEY, status TEXT, baseline_start_ts TEXT, run_end_ts TEXT, deployment_id INTEGER);'
+    )
+    db.prepare(
+      "INSERT INTO experiment_run (id, status, baseline_start_ts, run_end_ts, deployment_id) VALUES (42, 'running', '2026-01-01T00:00:00Z', NULL, 1)"
+    ).run()
+    const tracker = new AlertTracker(db)
+    // 1. Alert với experimentRunId = 42 khi first.ts_vps nằm sau baseline_start_ts
+    for (let i = 1; i <= 3; i += 1) {
+      db.prepare('INSERT INTO score_sample VALUES (?,?,?,?,?,?,?)').run(
+        i,
+        1,
+        'rule',
+        1,
+        i,
+        1,
+        `2026-01-01T00:00:0${i}Z`
+      )
+      tracker.update({
+        deploymentId: 1,
+        metricSampleId: i,
+        ts: `2026-01-01T00:00:0${i}Z`,
+        method: 'rule',
+        score: 1,
+        above: true,
+        threshold: 0,
+        consecutive: 3,
+        experimentRunId: 42
+      })
+    }
+    const alertWithRun = db.prepare('SELECT experiment_run_id FROM alert WHERE id=1').get() as {
+      experiment_run_id: number | null
+    }
+    expect(alertWithRun.experiment_run_id).toBe(42)
+
+    // 2. Alert khác không có experimentRunId -> null
+    for (let i = 4; i <= 6; i += 1) {
+      db.prepare('INSERT INTO score_sample VALUES (?,?,?,?,?,?,?)').run(
+        i,
+        2,
+        'rule',
+        1,
+        i,
+        1,
+        `2026-01-01T00:00:0${i}Z`
+      )
+      tracker.update({
+        deploymentId: 2,
+        metricSampleId: i,
+        ts: `2026-01-01T00:00:0${i}Z`,
+        method: 'rule',
+        score: 1,
+        above: true,
+        threshold: 0,
+        consecutive: 3
+      })
+    }
+    const alertWithoutRun = db.prepare('SELECT experiment_run_id FROM alert WHERE id=2').get() as {
+      experiment_run_id: number | null
+    }
+    expect(alertWithoutRun.experiment_run_id).toBeNull()
+
+    // 3. Chuỗi bắt đầu trước baseline_start_ts (first.ts_vps < baseline_start_ts) -> null
+    db.prepare(
+      "INSERT INTO experiment_run (id, status, baseline_start_ts, run_end_ts, deployment_id) VALUES (43, 'running', '2026-01-01T00:00:08Z', NULL, 3)"
+    ).run()
+    for (let i = 7; i <= 9; i += 1) {
+      db.prepare('INSERT INTO score_sample VALUES (?,?,?,?,?,?,?)').run(
+        i,
+        3,
+        'rule',
+        1,
+        i,
+        1,
+        `2026-01-01T00:00:0${i}Z`
+      )
+      tracker.update({
+        deploymentId: 3,
+        metricSampleId: i,
+        ts: `2026-01-01T00:00:0${i}Z`,
+        method: 'rule',
+        score: 1,
+        above: true,
+        threshold: 0,
+        consecutive: 3,
+        experimentRunId: 43
+      })
+    }
+    const alertPreBaseline = db.prepare('SELECT experiment_run_id FROM alert WHERE id=3').get() as {
+      experiment_run_id: number | null
+    }
+    expect(alertPreBaseline.experiment_run_id).toBeNull()
+
+    // 4. Chuỗi với mẫu giây nguyên trước baseline microsecond 500µs -> null
+    db.prepare(
+      "INSERT INTO experiment_run (id, status, baseline_start_ts, run_end_ts, deployment_id) VALUES (44, 'running', '2026-01-01T00:00:10.000500Z', NULL, 4)"
+    ).run()
+    for (let i = 10; i <= 12; i += 1) {
+      db.prepare('INSERT INTO score_sample VALUES (?,?,?,?,?,?,?)').run(
+        i,
+        4,
+        'rule',
+        1,
+        i,
+        1,
+        `2026-01-01T00:00:${i}Z`
+      )
+      tracker.update({
+        deploymentId: 4,
+        metricSampleId: i,
+        ts: `2026-01-01T00:00:${i}Z`,
+        method: 'rule',
+        score: 1,
+        above: true,
+        threshold: 0,
+        consecutive: 3,
+        experimentRunId: 44
+      })
+    }
+    const alertSubMs = db.prepare('SELECT experiment_run_id FROM alert WHERE id=4').get() as {
+      experiment_run_id: number | null
+    }
+    expect(alertSubMs.experiment_run_id).toBeNull()
+  })
+
+  describe('parseTimestampUs & isSampleInRunWindow', () => {
+    it('phân tích chính xác timestamp microsecond cho ISO UTC và epoch seconds', () => {
+      expect(parseTimestampUs('2026-08-30T00:00:01Z')).toBe(1788048001000000n)
+      expect(parseTimestampUs('2026-08-30T00:00:01.000500Z')).toBe(1788048001000500n)
+      expect(parseTimestampUs('2026-08-30T00:00:01.000501Z')).toBe(1788048001000501n)
+      expect(parseTimestampUs('2026-08-30T00:00:01.5Z')).toBe(1788048001500000n)
+
+      // Epoch seconds (number & string)
+      expect(parseTimestampUs(1788048001)).toBe(1788048001000000n)
+      expect(parseTimestampUs(1788048001.0005)).toBe(1788048001000500n)
+      expect(parseTimestampUs('1788048001.000500')).toBe(1788048001000500n)
+      expect(parseTimestampUs('1788048001')).toBe(1788048001000000n)
+
+      // Số âm
+      expect(parseTimestampUs(-0.5)).toBe(-500000n)
+      expect(parseTimestampUs('-1.5')).toBe(-1500000n)
+
+      // Giá trị không hợp lệ
+      expect(parseTimestampUs(null)).toBeNull()
+      expect(parseTimestampUs(undefined)).toBeNull()
+      expect(parseTimestampUs('')).toBeNull()
+      expect(parseTimestampUs('invalid-ts')).toBeNull()
+      expect(parseTimestampUs('2026-02-30T00:00:00Z')).toBeNull()
+      expect(parseTimestampUs(NaN)).toBeNull()
+      expect(parseTimestampUs(Infinity)).toBeNull()
+    })
+
+    it('so sánh cửa sổ chạy chính xác đến microsecond cho cả mốc có phần lẻ và giây nguyên', () => {
+      const baseline = '2026-08-30T00:00:01.000500Z'
+      const runEnd = '2026-08-30T00:00:10.000000Z'
+
+      // Trước baseline 500µs -> false
+      expect(isSampleInRunWindow('2026-08-30T00:00:01Z', baseline, runEnd)).toBe(false)
+      // Mẫu có phần lẻ đúng bằng baseline -> true
+      expect(isSampleInRunWindow('2026-08-30T00:00:01.000500Z', baseline, runEnd)).toBe(true)
+      // Mẫu có phần lẻ sau baseline 1µs -> true
+      expect(isSampleInRunWindow('2026-08-30T00:00:01.000501Z', baseline, runEnd)).toBe(true)
+      // Mẫu giây nguyên sau baseline (lúc 00:00:02Z > baseline) -> true
+      expect(isSampleInRunWindow('2026-08-30T00:00:02Z', baseline, runEnd)).toBe(true)
+      // Mẫu giây nguyên sau baseline microsecond ở giây trước đó (00:00:00.500000Z) -> true
+      expect(
+        isSampleInRunWindow('2026-08-30T00:00:01Z', '2026-08-30T00:00:00.500000Z', runEnd)
+      ).toBe(true)
+      // Sau runEnd 1µs -> false
+      expect(isSampleInRunWindow('2026-08-30T00:00:10.000001Z', baseline, runEnd)).toBe(false)
+      expect(isSampleInRunWindow('2026-08-30T00:00:11Z', baseline, runEnd)).toBe(false)
+
+      // Timestamp sai định dạng
+      expect(isSampleInRunWindow('bad-sample', baseline, runEnd)).toBe(false)
+      expect(isSampleInRunWindow('2026-08-30T00:00:02Z', 'bad-baseline', runEnd)).toBe(false)
+      expect(isSampleInRunWindow('2026-08-30T00:00:02Z', null, runEnd)).toBe(false)
+      expect(isSampleInRunWindow('2026-08-30T00:00:02Z', baseline, 'bad-run-end')).toBe(false)
+    })
   })
 })

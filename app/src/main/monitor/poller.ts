@@ -4,7 +4,7 @@ import { logger } from '../logger'
 import { completeByteLength, parseMetricContent } from './metricParser'
 import type { MetricSource } from './metricSource'
 import { MonitorRepository } from './repository'
-import { AlertTracker } from './alertTracker'
+import { AlertTracker, isSampleInRunWindow } from './alertTracker'
 import { evaluateRule } from './rules'
 import { ActivationRepository } from './activation'
 import { withAppLock } from './appLock'
@@ -28,6 +28,7 @@ function ensembleAbove(result: MlIngestResponse | undefined, threshold: number):
     ).length >= 2
   )
 }
+
 export interface MlStatusReporter {
   report(status: { running: boolean; reason?: string }): void
 }
@@ -237,6 +238,7 @@ export class MonitorPoller {
         if (id !== 0) {
           inserted += 1
           const sample = this.repository.getMetric(id)
+          const experimentRunId = this.getMatchingExperimentRunId(routeDeploymentId, sample.ts_vps)
           const rule = evaluateRule(sample, target.setting)
           this.repository.insertScore({
             metricSampleId: id,
@@ -256,7 +258,8 @@ export class MonitorPoller {
             above: rule.violated,
             threshold: 0,
             consecutive: target.setting.rule_consecutive,
-            detail: JSON.stringify({ reasons: rule.reasons })
+            detail: JSON.stringify({ reasons: rule.reasons }),
+            experimentRunId
           })
           if (ruleAlertId) alertIds.push(ruleAlertId)
           for (const method of ['zscore_ewma', 'iforest', 'ocsvm', 'ensemble'] as const)
@@ -288,7 +291,8 @@ export class MonitorPoller {
                   ? ensembleAbove(result, target.setting.ml_score_threshold)
                   : score !== null && score > target.setting.ml_score_threshold,
               threshold: target.setting.ml_score_threshold,
-              consecutive: target.setting.ml_consecutive
+              consecutive: target.setting.ml_consecutive,
+              experimentRunId
             })
             if (mlAlertId) alertIds.push(mlAlertId)
           }
@@ -307,5 +311,25 @@ export class MonitorPoller {
       hadWarnings,
       warningRanges
     }
+  }
+
+  private getMatchingExperimentRunId(deploymentId: number, tsVps: string): number | null {
+    const run = this.database
+      .prepare(
+        `SELECT id, baseline_start_ts, run_end_ts
+         FROM experiment_run
+         WHERE status = 'running'
+           AND deployment_id = ?
+         ORDER BY id DESC
+         LIMIT 1`
+      )
+      .get(deploymentId) as
+      { id: number; baseline_start_ts: string | null; run_end_ts: string | null } | undefined
+    if (!run) return null
+
+    if (!isSampleInRunWindow(tsVps, run.baseline_start_ts, run.run_end_ts)) {
+      return null
+    }
+    return run.id
   }
 }

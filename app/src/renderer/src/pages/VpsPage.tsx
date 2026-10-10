@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Alert, Button, Modal, Space, Tooltip, Typography } from 'antd'
-import { ArrowLeftOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons'
+import {
+  ArrowLeftOutlined,
+  DeploymentUnitOutlined,
+  PlusOutlined,
+  ReloadOutlined
+} from '@ant-design/icons'
 
 import type { Vps, VpsInput } from '@shared/ipc'
 
@@ -9,18 +14,20 @@ import { PageHeader } from '../components/PageHeader'
 import { ServerSelector } from '../components/ServerSelector'
 import { VpsDetail } from '../components/VpsDetail'
 import { VpsFormModal, type VpsFormValues } from '../components/VpsFormModal'
-import { strings } from '../strings'
+import { useStrings } from '../strings'
 import { useUiState } from '../store/uiState'
 import { useVpsStore } from '../store/vpsStore'
-import { rowDisplayStatus } from '../vpsResources'
+import { rowDisplayStatus, useTicker } from '../vpsResources'
 
 /** VPS Control Panel — luồng 2 màn: danh sách fleet → trang chi tiết từng máy (FlashPanel). */
 export function VpsPage(): React.JSX.Element {
+  const strings = useStrings()
   const items = useVpsStore((state) => state.items)
   const loading = useVpsStore((state) => state.loading)
   const loadError = useVpsStore((state) => state.loadError)
   const resources = useVpsStore((state) => state.resources)
   const load = useVpsStore((state) => state.load)
+  const refreshVps = useVpsStore((state) => state.refreshVps)
   const refreshResources = useVpsStore((state) => state.refreshResources)
 
   const selectedVpsId = useUiState((state) => state.selectedVpsId)
@@ -41,6 +48,12 @@ export function VpsPage(): React.JSX.Element {
   const [modal, contextHolder] = Modal.useModal()
 
   const isListView = selectedVpsId === null
+
+  const handleVpsUpdated = useCallback(() => {
+    if (selectedVpsId !== null) {
+      void refreshVps(selectedVpsId)
+    }
+  }, [selectedVpsId, refreshVps])
 
   useEffect(() => {
     void load()
@@ -127,7 +140,7 @@ export function VpsPage(): React.JSX.Element {
         }
       })
     },
-    [load, modal]
+    [load, modal, strings]
   )
 
   const submitForm = async (values: VpsFormValues): Promise<void> => {
@@ -149,12 +162,14 @@ export function VpsPage(): React.JSX.Element {
     await load()
   }
 
-  let online = 0
-  let offline = 0
+  const now = useTicker(5000)
+
+  let checkedNow = 0
+  let checkFailed = 0
   for (const vps of items) {
-    const status = rowDisplayStatus(vps, resources[vps.id])
-    if (status === 'online') online += 1
-    else if (status === 'offline') offline += 1
+    const status = rowDisplayStatus(vps, resources[vps.id], now)
+    if (status === 'checked_now') checkedNow += 1
+    else if (status === 'check_failed') checkFailed += 1
   }
   const totalApps = Object.values(appCounts).reduce((sum, count) => sum + count, 0)
 
@@ -175,6 +190,12 @@ export function VpsPage(): React.JSX.Element {
             description={strings.vps.description}
             actions={
               <>
+                <Button
+                  icon={<DeploymentUnitOutlined />}
+                  onClick={() => useUiState.getState().setActivePage('migrate')}
+                >
+                  {strings.navigation.migrate}
+                </Button>
                 <Button
                   icon={<ReloadOutlined />}
                   disabled={items.length === 0}
@@ -212,8 +233,10 @@ export function VpsPage(): React.JSX.Element {
 
           <FleetSummary
             total={items.length}
-            online={online}
-            offline={offline}
+            checkedNow={checkedNow}
+            checkFailed={checkFailed}
+            online={checkedNow}
+            offline={checkFailed}
             appCount={totalApps}
             loading={loading}
           />
@@ -224,6 +247,7 @@ export function VpsPage(): React.JSX.Element {
             appCounts={appCounts}
             loading={loading}
             search={vpsSearch}
+            now={now}
             selectedIds={selectedVpsIds}
             onSelect={(vps) => {
               setSelectedVpsId(vps.id)
@@ -289,7 +313,7 @@ export function VpsPage(): React.JSX.Element {
               onCheckConnection={() => openEdit(selectedVps)}
               onEdit={() => openEdit(selectedVps)}
               onDelete={() => deleteVps(selectedVps)}
-              onDockerInstalled={() => void load()}
+              onDockerInstalled={handleVpsUpdated}
             />
           </>
         )

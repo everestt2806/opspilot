@@ -1,58 +1,45 @@
 import type { BuildPlan, DetectionSignal, Detector, SourceTree } from './types'
-
-type PackageJson = {
-  main?: string
-  scripts?: Record<string, string>
-  dependencies?: Record<string, string>
-  devDependencies?: Record<string, string>
-}
+import {
+  dependencyVersion,
+  detectPort,
+  envExampleKeys,
+  readPackage,
+  resolveExpressEntry,
+  type PackageJson
+} from './helpers'
 
 const DB_DRIVERS = ['pg', 'prisma', 'typeorm', 'sequelize']
 
-function readPackageJson(tree: SourceTree): PackageJson | undefined {
-  return tree.readJson<PackageJson>('package.json')
-}
-
 function nodeDeps(tree: SourceTree): Record<string, string> {
-  const pkg = readPackageJson(tree)
-  return pkg?.dependencies ?? {}
+  return readPackage(tree)?.dependencies ?? {}
 }
 
 function hasVite(tree: SourceTree): boolean {
-  return readPackageJson(tree)?.devDependencies?.vite !== undefined
+  const pkg = readPackage(tree)
+  return pkg?.devDependencies?.vite !== undefined || pkg?.dependencies?.vite !== undefined
 }
 
 function stripVersion(value: string | undefined): string | undefined {
-  return value?.replace(/^[\^~>=<]/, '')
-}
-
-/** Node chạy app + cổng lắng nghe + lệnh start — detector đọc từ package.json, không đoán. */
-function entryModule(tree: SourceTree): string {
-  const pkg = readPackageJson(tree)
-  const start = pkg?.scripts?.start
-  const match = start?.match(/node\s+(\S+)/)
-  if (match?.[1]) {
-    return match[1]
-  }
-  return pkg?.main ?? 'server.js'
+  return dependencyVersion(value)
 }
 
 /** Healthcheck: nếu entry khai báo route /health thì dùng nó, không thì fallback '/'. */
 function detectHealthcheckPath(tree: SourceTree, entry: string): string {
-  const content = tree.readText(entry) ?? ''
+  const norm = entry.replace(/^\.\//, '')
+  const resolved = tree.has(norm)
+    ? norm
+    : tree.has(`${norm}.js`)
+      ? `${norm}.js`
+      : tree.has(`${norm}.ts`)
+        ? `${norm}.ts`
+        : undefined
+  if (!resolved) return '/'
+  const content = tree.readText(resolved) ?? ''
   return content.search(/\.(get|post|use)\s*\(\s*['"`]\/health['"`]/) >= 0 ? '/health' : '/'
 }
 
 function parseEnvExampleKeys(tree: SourceTree): string[] {
-  const content = tree.readText('.env.example') ?? ''
-  const keys: string[] = []
-  for (const line of content.split('\n')) {
-    const match = line.match(/^([A-Z][A-Z0-9_]*)=/)
-    if (match?.[1]) {
-      keys.push(match[1])
-    }
-  }
-  return keys
+  return envExampleKeys(tree)
 }
 
 export const expressDetector: Detector = {
@@ -62,12 +49,41 @@ export const expressDetector: Detector = {
 
   detect(tree: SourceTree): boolean {
     const deps = nodeDeps(tree)
-    return deps.express !== undefined && deps.next === undefined && !hasVite(tree)
+    if (deps.express === undefined || deps.next !== undefined || hasVite(tree)) {
+      return false
+    }
+    const resolution = resolveExpressEntry(tree)
+    const portInfo = detectPort(tree, resolution.entry, 3000)
+    if (!portInfo.valid) {
+      return false
+    }
+
+    if (
+      resolution.reason?.includes('không phải lệnh chạy') ||
+      resolution.reason?.includes('không chỉ định file entry') ||
+      resolution.reason?.includes('không tồn tại')
+    ) {
+      return false
+    }
+
+    const hasCodeFiles = tree.files.some(
+      (f) =>
+        /\.(?:js|ts|jsx|tsx|mjs|cjs)$/.test(f) &&
+        !f.startsWith('node_modules/') &&
+        !f.startsWith('.git/')
+    )
+    if (hasCodeFiles && !resolution.certain) {
+      return false
+    }
+
+    return true
   },
 
   explain(tree: SourceTree): DetectionSignal[] {
     const deps = nodeDeps(tree)
-    const pkg = readPackageJson(tree)
+    const pkg = readPackage(tree)
+    const resolution = resolveExpressEntry(tree)
+    const portInfo = detectPort(tree, resolution.entry, 3000)
     return [
       {
         description: 'package.json tồn tại',
@@ -77,25 +93,36 @@ export const expressDetector: Detector = {
       {
         description: "dependencies có 'express'",
         passed: deps.express !== undefined,
-        found: stripVersion(deps.express)
+        found: stripVersion(deps.express ?? pkg?.devDependencies?.express)
       },
       {
         description: "không có 'next'",
         passed: deps.next === undefined,
-        found: stripVersion(deps.next)
+        found: stripVersion(deps.next ?? pkg?.devDependencies?.next)
       },
       {
         description: "không có 'vite'",
         passed: !hasVite(tree),
-        found: stripVersion(readPackageJson(tree)?.devDependencies?.vite)
+        found: stripVersion(pkg?.devDependencies?.vite ?? pkg?.dependencies?.vite)
+      },
+      {
+        description: 'lệnh start / entry xác định từ cấu hình',
+        passed: resolution.certain,
+        found: resolution.certain ? resolution.startCommand : resolution.reason
+      },
+      {
+        description: 'cổng lắng nghe hợp lệ',
+        passed: portInfo.valid,
+        found: portInfo.valid ? `${portInfo.port} (${portInfo.source})` : portInfo.error
       }
     ]
   },
 
   buildPlan(tree: SourceTree): BuildPlan {
     const deps = nodeDeps(tree)
-    const pkg = readPackageJson(tree)
-    const entry = entryModule(tree)
+    const resolution = resolveExpressEntry(tree)
+    const portInfo = detectPort(tree, resolution.entry, 3000)
+    const entry = resolution.entry || 'server.js'
     const needsDb = DB_DRIVERS.some((driver) => deps[driver] !== undefined)
     const requiredEnv = parseEnvExampleKeys(tree)
     if (needsDb && !requiredEnv.includes('DATABASE_URL')) {
@@ -113,8 +140,8 @@ export const expressDetector: Detector = {
       dockerfileTemplate: 'express.Dockerfile',
       buildArgs: {},
       buildCommand: 'npm ci --omit=dev',
-      startCommand: pkg?.scripts?.start ?? `node ${entry}`,
-      containerPort: 3000,
+      startCommand: resolution.startCommand || 'node server.js',
+      containerPort: portInfo.port,
       healthcheckPath: detectHealthcheckPath(tree, entry),
       requiredEnv,
       optionalEnv: [],

@@ -1,0 +1,1 @@
+"""Bounded load generator package."""

@@ -8,6 +8,7 @@ import {
   buildEnvFile,
   parseEnvFile,
   readEnvValue,
+  resolveExistingEnv,
   renderCompose,
   renderBuildArgs,
   renderDockerfile,
@@ -56,6 +57,7 @@ describe('renderCompose', () => {
     expect(yaml).not.toContain('postgres')
     expect(yaml).toContain('image: demo-api:collector')
     expect(yaml).toContain('http://app:3000/items?limit=1')
+    expect(yaml).toContain('LOADGEN_COUNTER_PATH: /var/metrics/loadgen_counter.json')
     expect(yaml).toContain('/var/run/docker.sock:/var/run/docker.sock:ro')
   })
 
@@ -253,5 +255,51 @@ describe('parseEnvFile', () => {
   it('file rong hoac chi co comment tra bang rong', () => {
     expect(parseEnvFile('')).toEqual({})
     expect(parseEnvFile('# Khong can bien moi truong nao\n')).toEqual({})
+  })
+})
+
+describe('resolveExistingEnv', () => {
+  it('retains every VPS entry, applies nonblank explicit overrides, and keeps the PostgreSQL pair', () => {
+    const resolved = resolveExistingEnv(
+      {
+        PORT: '3210',
+        SESSION_SECRET: 'fake-new-session-secret',
+        OPTIONAL_VALUE: '   ',
+        DATABASE_URL: 'fake-rotated-database-url',
+        POSTGRES_PASSWORD: 'fake-rotated-password'
+      },
+      [
+        'PORT=3000',
+        'SESSION_SECRET=fake-existing-session-secret',
+        'API_TOKEN=fake-existing-api-token',
+        'DATABASE_URL=fake-existing-database-url',
+        'POSTGRES_PASSWORD=fake-existing-postgres-password'
+      ].join('\n'),
+      ['PORT', 'SESSION_SECRET'],
+      true
+    )
+
+    expect(resolved).toEqual({
+      env: {
+        PORT: '3210',
+        SESSION_SECRET: 'fake-new-session-secret',
+        API_TOKEN: 'fake-existing-api-token',
+        DATABASE_URL: 'fake-existing-database-url',
+        POSTGRES_PASSWORD: 'fake-existing-postgres-password'
+      },
+      missingKeys: [],
+      protectedOverrides: ['DATABASE_URL', 'POSTGRES_PASSWORD']
+    })
+  })
+
+  it('reports only missing key names and treats missing PostgreSQL pair as incomplete', () => {
+    const resolved = resolveExistingEnv(
+      {},
+      'PORT=3000\nDATABASE_URL=fake-db-url\n',
+      ['PORT', 'SECRET_KEY'],
+      true
+    )
+    expect(resolved.missingKeys).toEqual(['SECRET_KEY', 'POSTGRES_PASSWORD'])
+    expect(resolved.protectedOverrides).toEqual([])
   })
 })

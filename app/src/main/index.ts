@@ -27,6 +27,7 @@ let mainWindow: BrowserWindow | null = null
 let mlService: MlServiceManager | null = null
 let sshManager: SshManager | null = null
 let monitorScheduler: MonitorScheduler | null = null
+let deployRuntime: DeployService | null = null
 let quitting = false
 
 function emitMlStatus(status: { running: boolean; reason?: string }): void {
@@ -36,7 +37,10 @@ function emitMlStatus(status: { running: boolean; reason?: string }): void {
 function createWindow(): void {
   mainWindow = new BrowserWindow(getMainWindowOptions(join(__dirname, '../preload/index.js'), icon))
 
-  mainWindow.on('ready-to-show', () => mainWindow?.show())
+  mainWindow.on('ready-to-show', () => {
+    mainWindow?.show()
+    mainWindow?.focus()
+  })
   mainWindow.on('maximize', () => {
     mainWindow?.webContents.send('window:maximized-changed', { maximized: true })
   })
@@ -52,12 +56,21 @@ function createWindow(): void {
     }
     return { action: 'deny' }
   })
+  mainWindow.webContents.on(
+    'did-fail-load',
+    (_event, errorCode, errorDescription, validatedURL) => {
+      logger.error('renderer', `Failed to load ${validatedURL}: ${errorDescription} (${errorCode})`)
+    }
+  )
 
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
     void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+
+  mainWindow.show()
+  mainWindow.focus()
 }
 
 void app
@@ -80,6 +93,7 @@ void app
       return {
         host: vps.host,
         port: vps.port,
+        hostFingerprint: vps.host_fingerprint ?? null,
         username: vps.username,
         authType: vps.auth_type,
         secret: loadSecret(database, credentialCipher, vpsId)
@@ -97,6 +111,7 @@ void app
         mainWindow?.webContents.send('deploy:event', event)
       }
     })
+    deployRuntime = deployService
 
     const historyService = new HistoryService(new ActionLogRepository(database))
     const monitorService = new MonitorService(database)
@@ -162,6 +177,7 @@ app.on('before-quit', (event) => {
   quitting = true
   void shutdownRuntime({
     stopScheduler: async () => monitorScheduler?.stop(),
+    stopDeploy: async () => deployRuntime?.shutdown(),
     stopMl: () => mlService?.stopSync(),
     disconnectSsh: async () => sshManager?.disconnectAll(),
     quit: () => app.quit(),

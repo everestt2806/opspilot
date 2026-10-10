@@ -207,3 +207,17 @@ A kiểm thử ML độc lập với UI/collector bằng dữ liệu giả do B 
 Đã chốt với GVHD ở tuần 0; PyInstaller chỉ thử ở tuần 12 nếu dư thời gian. Cũng phải xử lý
 vòng đời tiến trình con (mồ côi, tranh port) — đã ghi trong
 [`09-moi-truong-dev.md`](09-moi-truong-dev.md) mục 4.4.
+
+---
+
+## ADR-011 — Control plane luôn chạy cho Product mode
+
+**Bối cảnh (08/10/2026).** Người dùng chốt OpsPilot theo hướng sản phẩm production: Git push phải có thể tự deploy khi ứng dụng desktop đã đóng. Kiến trúc ADR-001 và SQLite chỉ trên desktop không thể nhận/sắp hàng sự kiện khi máy người dùng tắt. Lời hứa này là phần mở rộng so với NFR-1 của đề tài gốc; demo 14/10 vẫn chỉ trình bày phần đã qua live gate.
+
+**Phương án.** (a) Chỉ poll Git khi Electron mở: đơn giản nhưng không đáp ứng khi desktop tắt. (b) Một agent trên từng VPS: chạy được, nhưng phải quản lý nhiều bản agent và đồng bộ trạng thái khi migrate. (c) **Một control plane tự host trên VPS quản lý**, điều phối các VPS đích qua SSH; VPS quản lý có thể đồng thời là đích deploy đầu tiên. [Coolify mô tả](https://coolify.io/docs/core/how-coolify-works) mô hình tách control plane và server chạy workload, không cần agent thường trú trên từng server đích.
+
+**Quyết định: (c) cho Product mode.** Được phép chạy một service/control plane luôn bật trên VPS quản lý, có queue bền, lịch sử deployment và trigger Git. Desktop là client quản trị; các VPS đích vẫn có thể được quản lý qua SSH. Không cài agent riêng trên từng VPS đích nếu không có nhu cầu đã được chứng minh. Desktop mode hiện hành tiếp tục hoạt động trong giai đoạn chuyển tiếp.
+
+**Ràng buộc an toàn.** API quản trị không được mở công khai khi chưa có xác thực và mô hình quyền; ưu tiên kết nối qua SSH tunnel hoặc HTTPS có xác thực. Webhook công khai, nếu dùng, chỉ nhận sự kiện có chữ ký và chống replay; hoặc dùng poll outbound khi chưa dựng endpoint. Không công khai Docker socket. Cần chốt riêng nguồn sự thật SQLite, đồng bộ dữ liệu/credential từ desktop và cách rollback controller trước khi triển khai service; không tạo hai lịch sử deployment mâu thuẫn.
+
+**Đánh đổi và phạm vi.** Product mode thay thế giới hạn “chỉ hai tiến trình”, “không agent” và “không authentication” của ADR-001/CLAUDE.md ở phần control plane; NFR-1 của hồ sơ đề tài gốc không bị sửa âm thầm. Phải trình bày rõ đây là mở rộng sản phẩm trong báo cáo. Control plane tăng chi phí vận hành và bề mặt an ninh nhưng cho phép auto deploy, job bền và monitor khi desktop tắt. Chỉ triển khai sau checkpoint thiết kế state/IPC/deployment contract; G0 Git thủ công trước demo không cần chờ controller.

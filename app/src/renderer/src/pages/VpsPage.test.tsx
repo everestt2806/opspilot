@@ -14,6 +14,7 @@ const VPS_A: Vps = {
   name: 'VM01',
   host: '221.121.1.79',
   port: 22,
+  host_fingerprint: null,
   username: 'root',
   auth_type: 'password',
   provider: 'WiService',
@@ -113,7 +114,7 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
 
     expect(await screen.findByText(strings.vps.empty)).toBeTruthy()
     expect(screen.getByText(strings.vps.createFirst)).toBeTruthy()
-    expect(screen.getByLabelText('Total VPS').textContent).toContain('0')
+    expect(screen.getByLabelText(strings.vpsControl.fleet.totalVps).textContent).toContain('0')
     expect(screen.queryByText(strings.vps.backToList)).toBeNull()
   })
 
@@ -169,13 +170,17 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
 
     render(<VpsPage />)
 
-    await waitFor(() => expect(screen.getByLabelText('Total VPS').textContent).toContain('2'))
+    await waitFor(() =>
+      expect(screen.getByLabelText(strings.vpsControl.fleet.totalVps).textContent).toContain('2')
+    )
     const fleet = document.querySelector('.panel-fleet') as HTMLElement
     expect(within(fleet).getByLabelText(strings.vpsControl.fleet.online).textContent).toContain('1')
     expect(within(fleet).getByLabelText(strings.vpsControl.fleet.offline).textContent).toContain(
       '1'
     )
-    expect(within(fleet).getByLabelText('Total apps').textContent).toContain('1')
+    expect(within(fleet).getByLabelText(strings.vpsControl.fleet.totalApps).textContent).toContain(
+      '1'
+    )
   })
 
   it('list truoc: bam dong VM02 chuyen sang trang chi tiết, Back quay ve danh sach', async () => {
@@ -234,16 +239,17 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
     render(<VpsPage />)
     fireEvent.click(await screen.findByText('VM01'))
 
-    // Overview: card thông tin nhanh (IP/port/SSH) + sidebar Server info hiển thị
-    expect(await screen.findByText('Main IP')).toBeTruthy()
-    await waitFor(() => expect(document.querySelector('.panel-info-sidebar')).toBeTruthy())
+    // Overview: card thông tin nhanh (IP/port/SSH) + card Tài nguyên hệ thống hiển thị toàn chiều rộng
+    expect(await screen.findByText(strings.vpsControl.header.mainIp)).toBeTruthy()
+    expect(screen.getByText(strings.vpsControl.overview.resourcesTitle)).toBeTruthy()
+    expect(document.querySelector('.panel-info-sidebar')).toBeNull()
 
     fireEvent.click(await screen.findByText(strings.vpsControl.tabs.apps))
     expect(await screen.findByText('express-api')).toBeTruthy()
     expect(screen.getByText('v3')).toBeTruthy()
 
-    // Tab khác: card thông tin nhanh + sidebar ẩn, nội dung chiếm full
-    await waitFor(() => expect(screen.queryByText('Main IP')).toBeNull())
+    // Tab khác: nội dung tab Overview ẩn, bảng app chiếm toàn chiều rộng
+    await waitFor(() => expect(screen.queryByText(strings.vpsControl.header.mainIp)).toBeNull())
     expect(document.querySelector('.panel-info-sidebar')).toBeNull()
   })
 
@@ -357,5 +363,97 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
 
     fireEvent.click(screen.getAllByText(strings.vps.checkResources)[0])
     await waitFor(() => expect(getResources).toHaveBeenCalledTimes(4))
+  })
+
+  it('nut Migrate tren PageHeader chuyen activePage ve migrate', async () => {
+    mockApi({
+      'vps:list': async () => ({ ok: true, data: [VPS_A] }),
+      'vps:get-resources': async () => ({ ok: true, data: RES }),
+      'app:list': async () => ({ ok: true, data: [] })
+    })
+
+    render(<VpsPage />)
+    const migrateBtn = screen.getByRole('button', {
+      name: new RegExp(strings.navigation.migrate, 'i')
+    })
+    expect(migrateBtn).toBeTruthy()
+    fireEvent.click(migrateBtn)
+    expect(useUiState.getState().activePage).toBe('migrate')
+  })
+
+  it('sau vps:scan thanh cong: lam moi rieng ban ghi VPS (docker_version, last_seen_at) khong goi lai vps:get-resources cho fleet va khong bi quet lap', async () => {
+    const vpsInitial: Vps = {
+      ...VPS_A,
+      docker_version: null,
+      last_seen_at: null
+    }
+    const vpsUpdated: Vps = {
+      ...VPS_A,
+      docker_version: '27.1.1',
+      last_seen_at: '2026-08-23T10:00:00Z'
+    }
+
+    let listCallCount = 0
+    const listHandler = vi.fn().mockImplementation(() => {
+      listCallCount++
+      return Promise.resolve({
+        ok: true,
+        data: [listCallCount === 1 ? vpsInitial : vpsUpdated, VPS_B]
+      })
+    })
+
+    const getResources = vi.fn().mockResolvedValue({ ok: true, data: RES })
+    const scanHandler = vi.fn().mockResolvedValue({
+      ok: true,
+      data: {
+        scanned_at: '2026-08-23T10:00:00Z',
+        ssh_ok: true,
+        items: [
+          { key: 'ssh', ok: true, version: null },
+          { key: 'docker', ok: true, version: '27.1.1' },
+          { key: 'compose', ok: true, version: 'v2.29.1' },
+          { key: 'node', ok: true, version: 'v20.11.1' },
+          { key: 'git', ok: true, version: '2.43.0' },
+          { key: 'workdir', ok: true, version: null }
+        ]
+      }
+    })
+
+    mockApi({
+      'vps:list': listHandler,
+      'vps:get-resources': getResources,
+      'vps:scan': scanHandler,
+      'app:list': async () => ({ ok: true, data: [] })
+    })
+
+    render(<VpsPage />)
+
+    // Lúc load ban đầu: get-resources được gọi cho 2 máy (fleet)
+    await waitFor(() => expect(screen.getByText(vpsInitial.name)).toBeTruthy())
+    expect(getResources).toHaveBeenCalledTimes(2)
+
+    // Bấm vào VM01 để mở trang chi tiết (mặc định tab Overview)
+    fireEvent.click(screen.getByText(vpsInitial.name))
+
+    // Khi tab Overview mở, vps:scan tự động chạy
+    await waitFor(() => expect(scanHandler).toHaveBeenCalledTimes(1))
+
+    await waitFor(() => expect(listHandler).toHaveBeenCalledTimes(2))
+
+    // Scan thành công kích hoạt làm mới riêng VPS qua refreshVps (gọi vps:list)
+    // Sau khi cập nhật, Docker version '27.1.1' được hiển thị ở bảng Machine info
+    await waitFor(() => {
+      const machineCard = screen
+        .getByText(strings.vpsControl.overview.machineTitle)
+        .closest('.ant-card')
+      expect(machineCard).toBeTruthy()
+      expect(within(machineCard as HTMLElement).getByText('27.1.1')).toBeTruthy()
+    })
+
+    // Quan trọng: get-resources KHÔNG bị gọi thêm lần nào nữa (vẫn là 2 lần ban đầu của fleet)
+    expect(getResources).toHaveBeenCalledTimes(2)
+
+    // Giữ callback ổn định: vps:scan KHÔNG bị quét lặp vô hạn (chỉ đúng 1 lần khi mở tab)
+    expect(scanHandler).toHaveBeenCalledTimes(1)
   })
 })

@@ -9,6 +9,7 @@ export interface CreateVpsRecord {
   name: string
   host: string
   port: number
+  host_fingerprint?: string
   username: string
   auth_type: 'key' | 'password'
   provider?: string
@@ -20,6 +21,7 @@ export interface UpdateVpsRecord {
   name?: string
   host?: string
   port?: number
+  host_fingerprint?: string | null
   username?: string
   auth_type?: 'key' | 'password'
   provider?: string
@@ -31,7 +33,7 @@ export interface UpdateVpsRecord {
 }
 
 const PUBLIC_VPS_COLUMNS = `
-  id, name, host, port, username, auth_type, provider, region,
+  id, name, host, port, host_fingerprint, username, auth_type, provider, region,
   docker_version, last_status, last_seen_at, created_at
 `
 
@@ -61,15 +63,16 @@ export class VpsRepository {
       const result = this.database
         .prepare(
           `INSERT INTO vps (
-            name, host, port, username, auth_type,
+            name, host, port, host_fingerprint, username, auth_type,
             crypto_scheme, encrypted_secret, iv, auth_tag,
             provider, region
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           input.name,
           input.host,
           input.port,
+          input.host_fingerprint ?? null,
           input.username,
           input.auth_type,
           input.credential.crypto_scheme,
@@ -99,6 +102,7 @@ export class VpsRepository {
     if (patch.name !== undefined) add('name', patch.name)
     if (patch.host !== undefined) add('host', patch.host)
     if (patch.port !== undefined) add('port', patch.port)
+    if (patch.host_fingerprint !== undefined) add('host_fingerprint', patch.host_fingerprint)
     if (patch.username !== undefined) add('username', patch.username)
     if (patch.auth_type !== undefined) add('auth_type', patch.auth_type)
     if (patch.provider !== undefined) add('provider', normalizeOptionalText(patch.provider))

@@ -39,7 +39,7 @@ export class MonitorService {
   private readonly lastMlLog = new Map<number, number>()
   constructor(
     private readonly db: Database.Database,
-    private readonly options: { autoTrain?: boolean } = {}
+    private readonly options: { autoTrain?: boolean; strict?: boolean } = {}
   ) {
     this.repository = new MonitorRepository(db)
   }
@@ -125,7 +125,6 @@ export class MonitorService {
           )
         )
       } catch (error) {
-        if (!(error instanceof MetricSourceError)) throw error
         this.repository.logAction(
           'ssh_error',
           'failed',
@@ -133,6 +132,8 @@ export class MonitorService {
           target.app_id,
           target.deployment_id
         )
+        if (this.options.strict) throw error
+        if (!(error instanceof MetricSourceError)) throw error
         continue
       }
       if (scorer && this.options.autoTrain !== false)

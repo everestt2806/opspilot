@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -12,7 +13,12 @@ import { closeDatabase, initializeDatabase } from '../db'
 import { VpsRepository } from '../db/vpsRepository'
 import type { SshManager } from '../ssh/manager'
 import { DeployPipeline, resolveCollectorAppPath, resolveCollectorDir } from './pipeline'
+import { detectSource } from './detectionDto'
 import { buildSourceTree } from '../detectors/sourceTree'
+import { createGitSnapshotFromLocalFixture } from '../git/snapshot'
+import type { GitSnapshot } from '../git/snapshot'
+import { DeployService } from './service'
+import type { PreparedGitLease } from './preparedGitSources'
 
 const PRECHECK_OK = [
   'RAM_MB|2048',
@@ -47,6 +53,8 @@ interface StubSshOptions {
     | null
     | Promise<{ generation: string; device?: number; inode?: number; size: number } | null>
   runtimeImage?: (appName: string, composeCall: number) => string
+  remoteEnvContent?: string
+  remoteEnvReadFails?: boolean
 }
 
 let testDirectory: string | null = null
@@ -56,6 +64,9 @@ let database: ReturnType<typeof initializeDatabase>
 let sshExec: Mock
 let writeFileMock: Mock
 let readFileMock: Mock
+let uploadDirMock: Mock
+let testSsh: SshManager
+let uploadedDirectorySnapshots: Array<{ localPath: string; marker: string | null }>
 let events: DeployEvent[]
 let pipeline: DeployPipeline
 
@@ -107,8 +118,23 @@ function createHarness(options: StubSshOptions = {}): void {
   let snapshotCall = 0
   const lastComposeUpCode = new Map<string, number>()
   sshExec = vi.fn(async (_vpsId: number, command: string) => {
+    if (command === 'ss -H -ltn') {
+      return { code: 0, stdout: '', stderr: '' }
+    }
     if (command.includes('free -m')) {
       return { code: 0, stdout: options.precheckOutput ?? PRECHECK_OK, stderr: '' }
+    }
+    if (command.includes('head -c 65537') && command.includes('/.env')) {
+      if (options.remoteEnvReadFails) {
+        return { code: 1, stdout: '', stderr: 'fake-secret-not-for-logs' }
+      }
+      const priorWrite = [...(writeFileMock?.mock.calls ?? [])]
+        .reverse()
+        .find(([, remotePath]) => String(remotePath).endsWith('/.env'))
+      const content = options.remoteEnvContent ?? (priorWrite?.[2] as string | undefined)
+      return content === undefined
+        ? { code: 66, stdout: '', stderr: 'fake-secret-not-for-logs' }
+        : { code: 0, stdout: content, stderr: '' }
     }
     if (command.includes('docker build')) {
       if (options.buildResult) return options.buildResult(command)
@@ -203,9 +229,18 @@ function createHarness(options: StubSshOptions = {}): void {
     const previous = [...writeFileMock.mock.calls].reverse().find(([, path]) => path === remotePath)
     return previous?.[2] ?? ''
   })
+  uploadedDirectorySnapshots = []
+  uploadDirMock = vi.fn(async (_vps: number, localPath: string) => {
+    const markerPath = join(localPath, 'snapshot-marker.txt')
+    uploadedDirectorySnapshots.push({
+      localPath,
+      marker: existsSync(markerPath) ? readFileSync(markerPath, 'utf8') : null
+    })
+    return { bytes: 1_024 }
+  })
   const stubSsh = {
     exec: sshExec,
-    uploadDir: vi.fn(async () => ({ bytes: 1_024 })),
+    uploadDir: uploadDirMock,
     readFile: readFileMock,
     writeFile: writeFileMock,
     fileSize: vi.fn(async () => 10),
@@ -217,6 +252,7 @@ function createHarness(options: StubSshOptions = {}): void {
         : { generation: '1:1', device: 1, inode: 1, size: 10 }
     })
   } as unknown as SshManager
+  testSsh = stubSsh
 
   events = []
   pipeline = new DeployPipeline({
@@ -226,6 +262,10 @@ function createHarness(options: StubSshOptions = {}): void {
   })
 }
 
+function fixtureGit(repository: string, ...args: string[]): void {
+  execFileSync('git', args, { cwd: repository, stdio: 'ignore' })
+}
+
 function deployInput(overrides: Partial<DeployInput> = {}): DeployInput {
   return {
     vps_id: vpsId,
@@ -233,6 +273,27 @@ function deployInput(overrides: Partial<DeployInput> = {}): DeployInput {
     source_path: sourceDirectory ?? '',
     env: {},
     ...overrides
+  }
+}
+
+function fakeGitLease(sourcePath: string): PreparedGitLease {
+  const snapshot: GitSnapshot = {
+    repositoryUrl: 'https://github.com/example/fake.git',
+    commitSha: 'c'.repeat(40),
+    rootDirectory: sourcePath,
+    snapshotDirectory: sourcePath,
+    cleanup: vi.fn()
+  }
+  return {
+    handle: 'fake-existing-git-handle',
+    snapshot,
+    gitRepoUrl: snapshot.repositoryUrl,
+    gitRef: 'main',
+    gitRoot: '.',
+    commitSha: snapshot.commitSha,
+    sourcePath,
+    expiresAt: Date.now() + 60_000,
+    plan: detectSource(sourcePath).plan!
   }
 }
 
@@ -325,6 +386,298 @@ function appBuildCommand(): string {
 }
 
 describe('DeployPipeline', () => {
+  it('runs a real Git snapshot through prepare, precheck, start, upload, DB record, and cleanup', async () => {
+    createHarness()
+    const repository = join(testDirectory!, 'remote.git')
+    const working = join(testDirectory!, 'working')
+    const snapshots = join(testDirectory!, 'snapshots')
+    mkdirSync(working)
+    mkdirSync(snapshots)
+    fixtureGit(testDirectory!, 'init', '--quiet', '--bare', repository)
+    fixtureGit(working, 'init', '--quiet', '-b', 'main')
+    fixtureGit(working, 'config', 'user.name', 'Fixture Test')
+    fixtureGit(working, 'config', 'user.email', 'fixture@example.invalid')
+    const root = join(working, 'service')
+    mkdirSync(root)
+    writeFileSync(
+      join(root, 'package.json'),
+      JSON.stringify({
+        name: 'git-demo',
+        scripts: { start: 'node index.js' },
+        dependencies: { express: '4.0.0' }
+      })
+    )
+    writeFileSync(
+      join(root, 'index.js'),
+      "const app = require('express')(); app.get('/items', (_req, res) => res.json([])); app.listen(3000)\n"
+    )
+    writeFileSync(join(root, 'snapshot-marker.txt'), 'pinned-content\n')
+    fixtureGit(working, 'add', '.')
+    fixtureGit(working, 'commit', '--quiet', '-m', 'fixture one')
+    fixtureGit(working, 'remote', 'add', 'origin', repository)
+    fixtureGit(working, 'push', '--quiet', '-u', 'origin', 'main')
+    let failOneEvent = true
+    const service = new DeployService({
+      ssh: testSsh,
+      db: database,
+      emit: (event) => {
+        if (failOneEvent && event.type === 'step-start' && event.step === 'UPLOAD') {
+          failOneEvent = false
+          throw new Error('synthetic renderer event failure')
+        }
+        events.push(event)
+      },
+      exposure: {
+        reconcile: async ({ app }) => ({
+          status: 'not_checked',
+          url: app.url,
+          external_probe: 'not_run',
+          ufw_state: 'not_checked',
+          ufw_reconciled: false,
+          cloud_firewall: 'not_configured',
+          diagnosis: null,
+          checked_at: new Date().toISOString()
+        })
+      },
+      gitSnapshotFactory: (input) =>
+        createGitSnapshotFromLocalFixture({ ...input, tempDirectory: snapshots })
+    })
+
+    const prepared = await service.prepareGit('integration-request', {
+      source_type: 'git',
+      git_repo_url: repository,
+      git_ref: 'main',
+      git_root: 'service'
+    })
+    const gitSourceInput = {
+      source_type: 'git' as const,
+      prepared_source_handle: prepared.prepared_source_handle,
+      vps_id: vpsId,
+      app_name: 'git-integration-api',
+      env: {}
+    }
+    const precheck = await service.precheck(gitSourceInput)
+    expect(precheck.passed).toBe(true)
+    expect(precheck.precheck_token).toBeTruthy()
+
+    writeFileSync(join(root, 'snapshot-marker.txt'), 'moved-branch-content\n')
+    fixtureGit(working, 'add', '.')
+    fixtureGit(working, 'commit', '--quiet', '-m', 'fixture two')
+    fixtureGit(working, 'push', '--quiet', 'origin', 'main')
+    const started = service.start({ ...gitSourceInput, precheck_token: precheck.precheck_token! })
+    const finished = await waitForFinished(started.deployment_id)
+
+    expect(finished.status).toBe('running')
+    const uploadedSnapshot = uploadedDirectorySnapshots.find((entry) => entry.marker !== null)
+    expect(uploadedSnapshot?.marker).toBe('pinned-content\n')
+    expect(existsSync(uploadedSnapshot!.localPath)).toBe(false)
+    const app = database
+      .prepare(
+        'SELECT source_type, source_path, git_repo_url, git_ref, git_root FROM app WHERE name = ?'
+      )
+      .get('git-integration-api') as Record<string, unknown>
+    expect(app).toMatchObject({
+      source_type: 'git',
+      source_path: null,
+      git_repo_url: prepared.git_repo_url,
+      git_ref: 'main',
+      git_root: 'service'
+    })
+    const deployment = database
+      .prepare(
+        'SELECT status, detector_json, git_repo_url, git_commit_sha FROM deployment WHERE id = ?'
+      )
+      .get(started.deployment_id) as Record<string, unknown>
+    expect(deployment).toMatchObject({
+      status: 'running',
+      git_repo_url: prepared.git_repo_url,
+      git_commit_sha: prepared.git_commit_sha
+    })
+    expect(JSON.parse(String(deployment.detector_json))).toMatchObject({
+      collectorAppPath: '/items?limit=1'
+    })
+    expect(
+      writeFileCalls().find((call) => call.remotePath.endsWith('docker-compose.yml'))?.content
+    ).toContain('APP_URL: "http://app:3000/items?limit=1"')
+    expect(prepared.git_commit_sha).toMatch(/^[a-f0-9]{40}$/)
+    expect(events.at(-1)).toMatchObject({ type: 'finished', deployment_id: started.deployment_id })
+  })
+
+  it('restores a Git deployment from the relayed VPS root and saved plan without a local source path', async () => {
+    createHarness()
+    const repositoryUrl = 'https://github.com/example/pinned-demo.git'
+    const commitSha = 'b'.repeat(40)
+    const plan = {
+      dockerfileTemplate: 'express.Dockerfile',
+      buildArgs: {},
+      buildCommand: 'npm run build',
+      startCommand: 'node app.js',
+      containerPort: 3000,
+      healthcheckPath: '/health',
+      collectorAppPath: '/items?limit=1',
+      requiredEnv: [],
+      optionalEnv: [],
+      needsDb: false,
+      manualSteps: []
+    }
+    const inserted = database
+      .prepare(
+        `INSERT INTO app (vps_id,name,framework,source_path,source_type,git_repo_url,git_ref,git_root,host_port,container_port,healthcheck_path,needs_db)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+      )
+      .run(
+        vpsId,
+        'migrated-git-app',
+        'express',
+        null,
+        'git',
+        repositoryUrl,
+        'main',
+        '.',
+        30000,
+        3000,
+        '/health',
+        0
+      )
+    const appId = Number(inserted.lastInsertRowid)
+
+    const started = pipeline.runRestoredGit(
+      {
+        vps_id: vpsId,
+        app_id: appId,
+        app_name: 'migrated-git-app',
+        remote_source_path: '/opt/opspilot/migrated-git-app',
+        env: {}
+      },
+      {
+        plan,
+        collectorAppPath: '/items?limit=1',
+        framework: 'express',
+        repositoryUrl,
+        commitSha
+      }
+    )
+    const finished = await waitForFinished(started.deploymentId)
+
+    expect(finished.status).toBe('running')
+    expect(uploadDirMock).not.toHaveBeenCalled()
+    expect(testSsh.fileSize).toHaveBeenCalledWith(vpsId, '/opt/opspilot/migrated-git-app/src')
+    const compose = writeFileCalls().find((call) => call.remotePath.endsWith('docker-compose.yml'))
+    expect(compose?.content).toContain('APP_URL: "http://app:3000/items?limit=1"')
+    const app = database
+      .prepare('SELECT source_path,source_type,git_repo_url,git_ref,git_root FROM app WHERE id=?')
+      .get(appId)
+    expect(app).toMatchObject({
+      source_path: null,
+      source_type: 'git',
+      git_repo_url: repositoryUrl,
+      git_ref: 'main',
+      git_root: '.'
+    })
+    const deployment = database
+      .prepare('SELECT status,detector_json,git_repo_url,git_commit_sha FROM deployment WHERE id=?')
+      .get(started.deploymentId)
+    expect(deployment).toMatchObject({
+      status: 'running',
+      detector_json: JSON.stringify(plan),
+      git_repo_url: repositoryUrl,
+      git_commit_sha: commitSha
+    })
+    expect(events.at(-1)).toMatchObject({ type: 'finished', deployment_id: started.deploymentId })
+  })
+
+  it('marks a deployment failed and releases app lock and Git snapshot when opening its log fails', async () => {
+    createHarness()
+    const cleanup = vi.fn()
+    const logStreamSpy = vi
+      .spyOn(pipeline as unknown as { openLogStream: () => unknown }, 'openLogStream')
+      .mockImplementation(() => {
+        throw new Error('synthetic log open failure')
+      })
+    const snapshot = {
+      repositoryUrl: 'https://github.com/example/repo.git',
+      commitSha: 'c'.repeat(40),
+      rootDirectory: sourceDirectory!,
+      snapshotDirectory: sourceDirectory!,
+      cleanup
+    }
+    const { deploymentId } = pipeline.run(deployInput({ app_name: 'failed-git-api' }), undefined, {
+      handle: 'fake-handle',
+      snapshot,
+      gitRepoUrl: snapshot.repositoryUrl,
+      gitRef: 'main',
+      gitRoot: '.',
+      commitSha: snapshot.commitSha,
+      sourcePath: snapshot.rootDirectory,
+      expiresAt: Date.now() + 60_000,
+      plan: {} as never
+    })
+    const finished = await waitForFinished(deploymentId)
+    expect(finished.status).toBe('failed')
+    expect(deploymentRow(deploymentId).status).toBe('failed')
+    expect(cleanup).toHaveBeenCalledOnce()
+    logStreamSpy.mockRestore()
+    expect(() => pipeline.run(deployInput({ app_name: 'failed-git-api' }))).not.toThrow()
+    const retryDeployment = database
+      .prepare(
+        'SELECT id FROM deployment WHERE app_id = (SELECT id FROM app WHERE name = ?) ORDER BY version DESC LIMIT 1'
+      )
+      .get('failed-git-api') as { id: number }
+    expect((await waitForFinished(retryDeployment.id)).status).toBe('running')
+  })
+
+  it('finalizes once and releases a Git snapshot when collector recovery throws, then permits retry', async () => {
+    createHarness({
+      metricSnapshot: (call) =>
+        call === 2
+          ? Promise.reject(new Error('synthetic metric snapshot failure'))
+          : { generation: '1:1', device: 1, inode: 1, size: 10 }
+    })
+    const makeLease = (cleanup: Mock): NonNullable<Parameters<DeployPipeline['run']>[2]> => ({
+      handle: 'fault-handle',
+      snapshot: {
+        repositoryUrl: 'https://github.com/example/repo.git',
+        commitSha: 'c'.repeat(40),
+        rootDirectory: sourceDirectory!,
+        snapshotDirectory: sourceDirectory!,
+        cleanup
+      },
+      gitRepoUrl: 'https://github.com/example/repo.git',
+      gitRef: 'main',
+      gitRoot: '.',
+      commitSha: 'c'.repeat(40),
+      sourcePath: sourceDirectory!,
+      expiresAt: Date.now() + 60_000,
+      plan: {} as never
+    })
+
+    const firstCleanup = vi.fn()
+    const first = pipeline.run(deployInput(), undefined, makeLease(firstCleanup))
+    expect((await waitForFinished(first.deploymentId)).status).toBe('running')
+    expect(firstCleanup).toHaveBeenCalledOnce()
+
+    const failedCleanup = vi.fn()
+    const resumeSpy = vi
+      .spyOn(pipeline as unknown as { resumeCollector: () => Promise<void> }, 'resumeCollector')
+      .mockRejectedValue(new Error('synthetic collector recovery failure'))
+    const failed = pipeline.run(deployInput(), undefined, makeLease(failedCleanup))
+    expect((await waitForFinished(failed.deploymentId)).status).toBe('failed')
+    await pipeline.shutdown()
+    expect(resumeSpy).toHaveBeenCalledOnce()
+    resumeSpy.mockRestore()
+
+    expect(deploymentRow(failed.deploymentId).status).toBe('failed')
+    expect(failedCleanup).toHaveBeenCalledOnce()
+    expect(
+      events.filter(
+        (event) => event.type === 'finished' && event.deployment_id === failed.deploymentId
+      )
+    ).toHaveLength(1)
+
+    const retry = pipeline.run(deployInput(), undefined, makeLease(vi.fn()))
+    expect((await waitForFinished(retry.deploymentId)).status).toBe('running')
+  })
+
   it('packaged resource path contains the collector files', () => {
     const resourceRoot = mkdtempSync(join(tmpdir(), 'opspilot-resources-'))
     mkdirSync(join(resourceRoot, 'collector'))
@@ -395,7 +748,8 @@ describe('DeployPipeline', () => {
     const finished = await waitForFinished()
 
     expect(finished.status).toBe('running')
-    expect(finished.app_url).toBe('http://203.0.113.55:30000')
+    expect(finished.exposure_status).toBe('not_checked')
+    expect(finished.app_url).toBeUndefined()
 
     const steps = events
       .filter((event) => event.type === 'step-done')
@@ -457,7 +811,8 @@ describe('DeployPipeline', () => {
     const finished = await waitForFinished(deploymentId)
 
     expect(finished.status).toBe('running')
-    expect(finished.app_url).toBe('http://203.0.113.55:30024')
+    expect(finished.exposure_status).toBe('not_checked')
+    expect(finished.app_url).toBeUndefined()
     expect(database.prepare('SELECT host_port FROM app WHERE name = ?').get('demo-api')).toEqual({
       host_port: 30024
     })
@@ -544,8 +899,78 @@ describe('DeployPipeline', () => {
     expect(envWrites[1].content).toContain(
       `DATABASE_URL=postgresql://opspilot:${firstPassword}@postgres:5432/opspilot`
     )
-    expect(readFileMock).toHaveBeenCalledWith(vpsId, '/opt/opspilot/demo-api/.env')
+    expect(sshExec.mock.calls.some(([, command]) => String(command).includes('head -c 65537'))).toBe(
+      true
+    )
     expect(JSON.stringify(events)).not.toContain(firstPassword)
+  })
+
+  it.each(['local', 'git'] as const)(
+    'preserves all existing env and applies explicit non-DB overrides on %s redeploy',
+    async (sourceType) => {
+      createHarness()
+      writeFileSync(join(sourceDirectory!, '.env.example'), 'SESSION_SECRET=fake-example\n')
+      const initial = deployInput({
+        env: {
+          SESSION_SECRET: 'fake-existing-session-secret',
+          API_TOKEN: 'fake-existing-api-token'
+        }
+      })
+      const lease = sourceType === 'git' ? fakeGitLease(sourceDirectory!) : undefined
+      const first = pipeline.run(initial, undefined, lease)
+      expect((await waitForFinished(first.deploymentId)).status).toBe('running')
+      const initialEnv = writeFileCalls().find((call) => call.remotePath.endsWith('.env'))?.content
+      expect(initialEnv).toContain('SESSION_SECRET=fake-existing-session-secret')
+      expect(initialEnv).toContain('API_TOKEN=fake-existing-api-token')
+
+      const secondInput = deployInput({
+        app_id: currentAppId(),
+        env: { SESSION_SECRET: 'fake-explicit-session-override', PORT: '3210' }
+      })
+      const second = pipeline.run(secondInput, undefined, lease)
+      expect((await waitForFinished(second.deploymentId)).status).toBe('running')
+
+      const envWrites = writeFileCalls().filter((call) => call.remotePath.endsWith('.env'))
+      expect(envWrites).toHaveLength(2)
+      expect(envWrites[1]?.content).toContain('SESSION_SECRET=fake-explicit-session-override')
+      expect(envWrites[1]?.content).toContain('API_TOKEN=fake-existing-api-token')
+      expect(envWrites[1]?.content).toContain('PORT=3210')
+      expect(envWrites[1]?.content).toContain('DATABASE_URL=postgresql://opspilot:')
+      expect(envWrites[1]?.content).toContain('POSTGRES_PASSWORD=')
+      expect(envWrites[1]?.content).not.toContain('fake-existing-session-secret')
+      expect(JSON.stringify(events)).not.toContain('fake-existing-session-secret')
+      expect(JSON.stringify(events)).not.toContain('fake-explicit-session-override')
+      const actionLogs = database.prepare('SELECT message FROM action_log').all()
+      expect(JSON.stringify(actionLogs)).not.toContain('fake-existing-session-secret')
+      expect(JSON.stringify(actionLogs)).not.toContain('fake-explicit-session-override')
+    }
+  )
+
+  it('fails before upload or env write when existing required env is missing or unreadable', async () => {
+    createHarness({
+      remoteEnvContent:
+        'PORT=3000\nDATABASE_URL=fake-existing-db\nPOSTGRES_PASSWORD=fake-existing-password\n',
+      remoteEnvReadFails: true
+    })
+    writeFileSync(join(sourceDirectory!, '.env.example'), 'SESSION_SECRET=fake-example\n')
+    const initial = pipeline.run(deployInput({ env: { SESSION_SECRET: 'fake-existing-secret' } }))
+    expect((await waitForFinished(initial.deploymentId)).status).toBe('running')
+
+    const missing = pipeline.run(deployInput({ app_id: currentAppId() }))
+    const failed = await waitForFinished(missing.deploymentId)
+    expect(failed.status).toBe('failed')
+    const precheckFailure = events.find(
+      (event) => event.type === 'step-failed' && event.deployment_id === missing.deploymentId
+    )
+    expect(precheckFailure?.type).toBe('step-failed')
+    if (precheckFailure?.type === 'step-failed') {
+      expect(precheckFailure.step).toBe('PRECHECK')
+      expect(precheckFailure.error.message).not.toContain('fake-secret-not-for-logs')
+      expect(precheckFailure.error.message).toContain('SESSION_SECRET')
+    }
+    expect(uploadDirMock).toHaveBeenCalledTimes(2)
+    expect(writeFileCalls().filter((call) => call.remotePath.endsWith('.env'))).toHaveLength(1)
+    expect(JSON.stringify(events)).not.toContain('fake-existing-secret')
   })
 
   it('app build fail khong xoa collector tag dang ton tai', async () => {
@@ -1102,6 +1527,290 @@ describe('DeployPipeline', () => {
         )
         .get()
     ).toEqual({ count: 1 })
+  })
+
+  describe('Publish, Reachability & Exposure', () => {
+    it('khi loopback healthcheck pass và external probe fail: không rollback app healthy, ghi status running và exposure degraded', async () => {
+      createHarness()
+      const mockReconcile = vi.fn().mockResolvedValue({
+        status: 'degraded',
+        url: 'http://203.0.113.55:30000',
+        external_probe: 'unreachable',
+        ufw_state: 'active',
+        ufw_reconciled: true,
+        cloud_firewall: 'not_configured',
+        diagnosis: {
+          code: 'PORT_BLOCKED_EXTERNAL',
+          title: 'Cổng 30000 bị chặn từ bên ngoài',
+          cause: 'Firewall',
+          fixes: ['Mở cổng 30000']
+        },
+        checked_at: new Date().toISOString()
+      })
+
+      const pipelineWithExposure = new DeployPipeline({
+        ssh: (pipeline as unknown as { ssh: SshManager }).ssh,
+        db: database,
+        emit: (event) => events.push(event),
+        exposure: { reconcile: mockReconcile }
+      })
+
+      const handle = pipelineWithExposure.run(deployInput())
+      const finished = await waitForFinished(handle.deploymentId)
+
+      expect(finished.status).toBe('running')
+      expect(finished.exposure_status).toBe('degraded')
+      expect(finished.app_url).toBeUndefined()
+
+      const row = database
+        .prepare(
+          'SELECT status, exposure_status, exposure_evidence_json FROM deployment WHERE id = ?'
+        )
+        .get(handle.deploymentId) as {
+        status: string
+        exposure_status: string
+        exposure_evidence_json: string
+      }
+      expect(row.status).toBe('running')
+      expect(row.exposure_status).toBe('degraded')
+      expect(row.exposure_evidence_json).toContain('PORT_BLOCKED_EXTERNAL')
+      expect(mockReconcile).toHaveBeenCalledTimes(1)
+    })
+
+    it('khi loopback healthcheck pass và external probe ok: ghi status running và exposure reachable', async () => {
+      createHarness()
+      const mockReconcile = vi.fn().mockResolvedValue({
+        status: 'reachable',
+        url: 'http://203.0.113.55:30000',
+        external_probe: 'reachable',
+        ufw_state: 'active',
+        ufw_reconciled: true,
+        cloud_firewall: 'not_configured',
+        diagnosis: null,
+        checked_at: new Date().toISOString()
+      })
+
+      const pipelineWithExposure = new DeployPipeline({
+        ssh: (pipeline as unknown as { ssh: SshManager }).ssh,
+        db: database,
+        emit: (event) => events.push(event),
+        exposure: { reconcile: mockReconcile }
+      })
+
+      const handle = pipelineWithExposure.run(deployInput())
+      const finished = await waitForFinished(handle.deploymentId)
+
+      expect(finished.status).toBe('running')
+      expect(finished.exposure_status).toBe('reachable')
+      expect(finished.app_url).toBe('http://203.0.113.55:30000')
+
+      const row = database
+        .prepare('SELECT status, exposure_status FROM deployment WHERE id = ?')
+        .get(handle.deploymentId) as { status: string; exposure_status: string }
+      expect(row.status).toBe('running')
+      expect(row.exposure_status).toBe('reachable')
+    })
+
+    it('khi loopback healthcheck fail: không gọi publishExposure và rollback', async () => {
+      createHarness({
+        curlOk: () => false,
+        inspectState: () => ({ Status: 'running', ExitCode: 0, Error: '' })
+      })
+      const mockReconcile = vi.fn()
+
+      const pipelineWithExposure = new DeployPipeline({
+        ssh: (pipeline as unknown as { ssh: SshManager }).ssh,
+        db: database,
+        emit: (event) => events.push(event),
+        exposure: { reconcile: mockReconcile }
+      })
+
+      vi.useFakeTimers()
+      const handle = pipelineWithExposure.run(deployInput())
+      await advanceFailedHealthcheck()
+      vi.useRealTimers()
+
+      const finished = await waitForFinished(handle.deploymentId)
+
+      expect(finished.status).toBe('failed')
+      expect(mockReconcile).not.toHaveBeenCalled()
+    })
+
+    it('khi thiếu ExposureManager: ghi status running, exposure not_checked và không trả app_url', async () => {
+      createHarness()
+      const pipelineWithoutExposure = new DeployPipeline({
+        ssh: (pipeline as unknown as { ssh: SshManager }).ssh,
+        db: database,
+        emit: (event) => events.push(event)
+      })
+
+      const handle = pipelineWithoutExposure.run(deployInput())
+      const finished = await waitForFinished(handle.deploymentId)
+
+      expect(finished.status).toBe('running')
+      expect(finished.exposure_status).toBe('not_checked')
+      expect(finished.app_url).toBeUndefined()
+
+      const row = database
+        .prepare(
+          'SELECT status, exposure_status, exposure_evidence_json FROM deployment WHERE id = ?'
+        )
+        .get(handle.deploymentId) as {
+        status: string
+        exposure_status: string
+        exposure_evidence_json: string | null
+      }
+      expect(row.status).toBe('running')
+      expect(row.exposure_status).toBe('not_checked')
+      expect(row.exposure_evidence_json).toBeNull()
+    })
+
+    it('khi publish ném ngoại lệ: giữ status running, exposure degraded, log đã che secret và không gán nhầm mã', async () => {
+      createHarness()
+      const mockReconcile = vi
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            'Failed connecting to cloud provider with token=secret_token_123&password=super_secret_pw'
+          )
+        )
+
+      const pipelineWithExposure = new DeployPipeline({
+        ssh: (pipeline as unknown as { ssh: SshManager }).ssh,
+        db: database,
+        emit: (event) => events.push(event),
+        exposure: { reconcile: mockReconcile }
+      })
+
+      const handle = pipelineWithExposure.run(deployInput())
+      const finished = await waitForFinished(handle.deploymentId)
+
+      expect(finished.status).toBe('running')
+      expect(finished.exposure_status).toBe('degraded')
+      expect(finished.app_url).toBeUndefined()
+      // Bắt lỗi gán nhầm mã: không gán PORT_BLOCKED_EXTERNAL hoặc kết luận cloud firewall failed khi chưa có bằng chứng
+      expect(finished.exposure_evidence?.diagnosis).toBeFalsy()
+      expect(finished.exposure_evidence?.cloud_firewall).not.toBe('failed')
+
+      const healthcheckLogs = events
+        .filter((e) => e.type === 'log' && e.step === 'HEALTHCHECK')
+        .map((e) => (e.type === 'log' ? e.chunk : ''))
+        .join('')
+      expect(healthcheckLogs).toContain('Publish chưa hoàn tất')
+      expect(healthcheckLogs).not.toContain('secret_token_123')
+      expect(healthcheckLogs).not.toContain('super_secret_pw')
+      expect(healthcheckLogs).toContain('token=***')
+
+      const row = database
+        .prepare(
+          'SELECT status, exposure_status, exposure_evidence_json FROM deployment WHERE id = ?'
+        )
+        .get(handle.deploymentId) as {
+        status: string
+        exposure_status: string
+        exposure_evidence_json: string | null
+      }
+      expect(row.status).toBe('running')
+      expect(row.exposure_status).toBe('degraded')
+      expect(row.exposure_evidence_json).toBeNull()
+    })
+
+    it('rollback thủ công khi thiếu ExposureManager: ghi running, exposure not_checked và không trả app_url', async () => {
+      createHarness()
+      const pipelineWithoutExposure = new DeployPipeline({
+        ssh: (pipeline as unknown as { ssh: SshManager }).ssh,
+        db: database,
+        emit: (event) => events.push(event)
+      })
+
+      const first = pipelineWithoutExposure.run(deployInput())
+      await waitForFinished(first.deploymentId)
+      const second = pipelineWithoutExposure.run(deployInput())
+      await waitForFinished(second.deploymentId)
+
+      const rollback = pipelineWithoutExposure.rollback(currentAppId(), first.deploymentId)
+      const finished = await waitForFinished(rollback.deploymentId)
+
+      expect(finished.status).toBe('running')
+      expect(finished.exposure_status).toBe('not_checked')
+      expect(finished.app_url).toBeUndefined()
+
+      const row = database
+        .prepare(
+          'SELECT status, exposure_status, exposure_evidence_json FROM deployment WHERE id = ?'
+        )
+        .get(rollback.deploymentId) as {
+        status: string
+        exposure_status: string
+        exposure_evidence_json: string | null
+      }
+      expect(row.status).toBe('running')
+      expect(row.exposure_status).toBe('not_checked')
+      expect(row.exposure_evidence_json).toBeNull()
+    })
+
+    it('rollback thủ công khi publish ném ngoại lệ: giữ running, exposure degraded, log đã che secret và không gán nhầm mã', async () => {
+      createHarness()
+      const mockReconcile = vi
+        .fn()
+        .mockResolvedValueOnce({
+          status: 'reachable',
+          url: 'http://203.0.113.55:30000',
+          external_probe: 'reachable',
+          ufw_state: 'active',
+          ufw_reconciled: true,
+          cloud_firewall: 'not_configured',
+          diagnosis: null,
+          checked_at: new Date().toISOString()
+        })
+        .mockRejectedValue(
+          new Error(
+            'Cloud API error with Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.token123 and secret: my_secret_key'
+          )
+        )
+
+      const pipelineWithExposure = new DeployPipeline({
+        ssh: (pipeline as unknown as { ssh: SshManager }).ssh,
+        db: database,
+        emit: (event) => events.push(event),
+        exposure: { reconcile: mockReconcile }
+      })
+
+      const first = pipelineWithExposure.run(deployInput())
+      await waitForFinished(first.deploymentId)
+
+      const rollback = pipelineWithExposure.rollback(currentAppId(), first.deploymentId)
+      const finished = await waitForFinished(rollback.deploymentId)
+
+      expect(finished.status).toBe('running')
+      expect(finished.exposure_status).toBe('degraded')
+      expect(finished.app_url).toBeUndefined()
+      // Bắt lỗi gán nhầm mã: không gán PORT_BLOCKED_EXTERNAL hoặc kết luận cloud firewall failed khi chưa có bằng chứng
+      expect(finished.exposure_evidence?.diagnosis).toBeFalsy()
+      expect(finished.exposure_evidence?.cloud_firewall).not.toBe('failed')
+
+      const rollbackLogs = events
+        .filter((e) => e.type === 'log' && e.step === 'HEALTHCHECK')
+        .map((e) => (e.type === 'log' ? e.chunk : ''))
+        .join('')
+      expect(rollbackLogs).toContain('Publish chưa hoàn tất')
+      expect(rollbackLogs).not.toContain('my_secret_key')
+      expect(rollbackLogs).not.toContain('eyJhbGciOi')
+      expect(rollbackLogs).toContain('Bearer ***')
+
+      const row = database
+        .prepare(
+          'SELECT status, exposure_status, exposure_evidence_json FROM deployment WHERE id = ?'
+        )
+        .get(rollback.deploymentId) as {
+        status: string
+        exposure_status: string
+        exposure_evidence_json: string | null
+      }
+      expect(row.status).toBe('running')
+      expect(row.exposure_status).toBe('degraded')
+      expect(row.exposure_evidence_json).toBeNull()
+    })
   })
 })
 

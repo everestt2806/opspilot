@@ -26,6 +26,7 @@ export interface Vps {
   name: string;
   host: string;
   port: number;
+  host_fingerprint: string | null;
   username: string;
   auth_type: 'key' | 'password';
   provider: string | null;
@@ -39,6 +40,7 @@ export interface Vps {
 /** Tài nguyên khả dụng, đọc bằng SSH khi mở màn VPS (FR-A3) */
 export interface VpsResources {
   ram_total_mb: number;
+  /** MemAvailable on Linux; legacy IPC field name retained for compatibility and precheck parity. */
   ram_free_mb: number;
   disk_total_gb: number;
   disk_free_gb: number;
@@ -46,11 +48,30 @@ export interface VpsResources {
   load_avg_1m: number;
 }
 
+/** Read-only, best-effort operational sample collected from a Linux VPS via pinned SSH. */
+export interface VpsOperationalDiagnostics {
+  /** ISO-8601 UTC timestamp assigned by the desktop after collecting the sample. */
+  sampled_at: string;
+  /** False means ps was unsupported or failed; true with [] is a valid empty sample. */
+  top_processes_available: boolean;
+  /** At most 10 highest-RSS processes; names come from ps comm, never command lines. */
+  top_processes: Array<{ pid: number; name: string; rss_mb: number }>;
+  /** Null when /proc/pressure/memory is unavailable or could not be parsed. */
+  memory_pressure: { some_avg10: number; full_avg10: number } | null;
+  /** Null when /proc/vmstat does not expose a parseable oom_kill counter. */
+  oom_kill_count: number | null;
+}
+
 export interface App {
   id: number;
   vps_id: number;
   name: string;
   framework: FrameworkId;
+  source_type?: 'local' | 'git';
+  source_path?: string | null;
+  git_repo_url?: string | null;
+  git_ref?: string | null;
+  git_root?: string | null;
   host_port: number;
   container_port: number;
   healthcheck_path: string;
@@ -65,6 +86,8 @@ export interface Deployment {
   app_id: number;
   version: number;
   image_tag: string;
+  git_repo_url?: string | null;
+  git_commit_sha?: string | null;
   status: 'building' | 'deploying' | 'running' | 'failed' | 'rolled_back' | 'stopped';
   failed_step: DeployStep | null;
   build_duration_ms: number | null;
@@ -72,6 +95,8 @@ export interface Deployment {
   is_rollback_of: number | null;
   started_at: string;
   finished_at: string | null;
+  exposure_status: 'reachable' | 'degraded' | 'tunnel_only' | 'not_checked';
+  exposure_evidence_json: string | null;
 }
 
 export interface RuntimeState {
@@ -158,6 +183,7 @@ export interface IpcInvokeMap {
   // ── VPS (UC-01) ────────────────────────────────────────────────────────────
   'vps:list':           () => IpcResult<Vps[]>;
   'vps:get-resources':  (vpsId: number) => IpcResult<VpsResources>;
+  'vps:get-operational-diagnostics': (vpsId: number) => IpcResult<VpsOperationalDiagnostics>;
   'vps:test-connection': (input: VpsInput) => IpcResult<VpsConnectionCheck>;
   'vps:create':         (input: VpsInput) => IpcResult<Vps>;
   'vps:update':         (id: number, input: Partial<VpsInput>) => IpcResult<Vps>;
@@ -167,10 +193,63 @@ export interface IpcInvokeMap {
 
   // ── Detect & Deploy (UC-02, UC-03) ─────────────────────────────────────────
   'deploy:detect':   (sourcePath: string) => IpcResult<DetectionResultDto>;
-  'deploy:precheck': (input: DeployInput) => IpcResult<PrecheckResult>;
+  'deploy:prepare-git': (requestId: string, input: GitSourceInput) => IpcResult<PreparedGitSource>;
+  'deploy:cancel-git-prepare': (requestId: string) => IpcResult<void>;
+  'deploy:release-git-prepare': (preparedSourceHandle: string) => IpcResult<void>;
+  'deploy:precheck': (input: DeploySourceInput) => IpcResult<PrecheckResult>;
   /** Trả về ngay khi pipeline khởi động; tiến độ theo dõi qua kênh 'deploy:event' */
-  'deploy:start':    (input: DeployInput) => IpcResult<{ deployment_id: number }>;
+  'deploy:start':    (input: DeployStartInput) => IpcResult<{ deployment_id: number }>;
   'deploy:cancel':   (deploymentId: number) => IpcResult<void>;
+  'doctor:diagnose': (input: { deployment_id: number | null; evidence: DoctorEvidenceInput }) =>
+    IpcResult<{
+      code: string;
+      title: string;
+      confidence: 'high' | 'medium' | 'low';
+      evidence: string[];
+      fix_id: string | null;
+      verify_probe: string | null;
+      safe_to_auto_fix: boolean;
+      abstained: boolean;
+    }>;
+  'doctor:fix': (input: { fix_id: string; deployment_id: number }) =>
+    IpcResult<{
+      status: 'fixed' | 'verified' | 'failed' | 'manual';
+      message: string;
+      exposure_status?: 'reachable' | 'degraded' | 'tunnel_only' | 'not_checked';
+    }>;
+  'domain:plan': (input: {
+    hostname: string;
+    target: string;
+    app_port: number;
+    mode: 'direct_port' | 'shared_ingress' | 'named_tunnel';
+  }) => IpcResult<{
+    hostname: string;
+    mode: 'direct_port' | 'shared_ingress' | 'named_tunnel';
+    record_type: 'A' | 'AAAA' | 'CNAME';
+    record_name: string;
+    target: string;
+    direct_url: string;
+    public_url: string;
+    instructions: string[];
+  }>;
+  'domain:check': (hostname: string, target: string, record_type?: 'A' | 'AAAA' | 'CNAME') =>
+    IpcResult<{ status: 'propagated' | 'wrong_target' | 'nxdomain' | 'error'; observed: string[] }>;
+  'domain:upsert': (input: {
+    deployment_id: number;
+    hostname: string;
+    mode: 'direct_port' | 'shared_ingress' | 'named_tunnel';
+    provider: 'cloudflare';
+    api_token: string;
+    zone_id: string;
+  }) => IpcResult<{
+    hostname: string;
+    record_type: 'A' | 'AAAA' | 'CNAME';
+    record_name: string;
+    target: string;
+    public_url: string;
+    status: 'pending' | 'propagated' | 'active' | 'conflict' | 'failed' | 'disabled';
+    message: string;
+  }>;
 
   // ── App & version (UC-03, UC-04) ───────────────────────────────────────────
   'app:list':        (vpsId?: number) => IpcResult<App[]>;
@@ -233,6 +312,8 @@ export interface VpsInput {
   name: string;
   host: string;
   port: number;
+  /** OpenSSH SHA256 fingerprint copied from an independently trusted console. */
+  host_fingerprint: string;
   username: string;
   auth_type: 'key' | 'password';
   /** Private key hoặc password bản rõ — main mã hoá NGAY, không log, không ghi tạm ra đĩa */
@@ -256,7 +337,8 @@ export interface VpsConnectionCheck {
  *  bằng tiếng Việt để người mới tự xử lý được — case mẫu: firewall nhà cung cấp chặn toàn bộ
  *  inbound (máy vẫn "Running" nhưng mọi cổng timeout, không từ chối). */
 export interface VpsDiagnosis {
-  code: 'HOST_NOT_FOUND' | 'PORT_TIMEOUT' | 'PORT_CLOSED' | 'SSH_AUTH_FAILED' | 'SSH_HANDSHAKE_TIMEOUT';
+  code: 'HOST_NOT_FOUND' | 'PORT_TIMEOUT' | 'PORT_CLOSED' | 'SSH_AUTH_FAILED' | 'SSH_HANDSHAKE_TIMEOUT'
+      | 'PORT_BLOCKED_EXTERNAL';
   /** Chuyện gì xảy ra — một câu ngắn */
   title: string;
   /** Vì sao app kết luận vậy — 1-2 câu */
@@ -296,6 +378,57 @@ export interface DeployInput {
   env: Record<string, string>;
 }
 
+/** Git source metadata contract reserved for G1; it is not accepted by the current deploy IPC. */
+export interface GitSourceInput {
+  source_type: 'git';
+  git_repo_url: string;
+  git_ref: string;
+  git_root: string;
+}
+
+export interface PreparedGitSource {
+  prepared_source_handle: string;
+  git_repo_url: string;
+  git_ref: string;
+  git_root: string;
+  git_commit_sha: string;
+  detection: DetectionResultDto;
+}
+
+export interface GitDeployInput extends Omit<DeployInput, 'source_path'> {
+  source_type: 'git';
+  prepared_source_handle: string;
+  precheck_token?: string;
+}
+
+export type DeploySourceInput = DeployInput | GitDeployInput;
+export type DeployStartInput = DeployInput | (GitDeployInput & { precheck_token: string });
+
+/** Evidence đã redacted gửi vào Doctor; không nhận secret value. */
+export interface DoctorEvidenceInput {
+  step?: string;
+  error_code?: string;
+  logs?: string;
+  container_state?: {
+    status?: string;
+    exit_code?: number;
+    health?: string;
+    oom_killed?: boolean;
+  };
+  disk_free_mb?: number;
+  inode_free_pct?: number;
+  listener_port?: number;
+  expected_port?: number;
+  http_status_by_path?: Record<string, number>;
+  db_error?: string;
+  required_env?: string[];
+  present_env?: string[];
+  dns_status?: 'propagated' | 'pending' | 'wrong_target' | 'nxdomain' | 'error';
+  external_probe?: 'reachable' | 'unreachable';
+  docker_available?: boolean;
+  ssh_transient?: boolean;
+}
+
 export interface PrecheckResult {
   passed: boolean;
   checks: Array<{
@@ -306,6 +439,7 @@ export interface PrecheckResult {
   }>;
   assigned_host_port: number;
   app_url: string;
+  precheck_token?: string;
 }
 
 export type DetectionResultDto =
@@ -464,7 +598,20 @@ export type DeployEvent =
   | { type: 'step-done'; deployment_id: number; step: DeployStep; duration_ms: number }
   | { type: 'step-failed'; deployment_id: number; step: DeployStep; error: IpcError; last_log_lines: string[] }
   | { type: 'finished'; deployment_id: number; status: 'running' | 'failed' | 'rolled_back';
-      total_duration_ms: number; app_url?: string };
+      total_duration_ms: number; app_url?: string;
+      /** Trạng thái truy cập ngoài sau khi runtime đã healthy nội bộ. */
+      exposure_status?: 'reachable' | 'degraded' | 'tunnel_only' | 'not_checked';
+      /** Evidence đã redacted để UI/Doctor hiển thị, không chứa credential. */
+      exposure_evidence?: {
+        status: 'reachable' | 'degraded' | 'tunnel_only' | 'not_checked';
+        url: string;
+        external_probe: 'reachable' | 'unreachable' | 'not_run';
+        ufw_state: 'active' | 'inactive' | 'unknown' | 'not_checked';
+        ufw_reconciled: boolean;
+        cloud_firewall: 'not_configured' | 'reconciled' | 'failed';
+        diagnosis: VpsDiagnosis | null;
+        checked_at: string;
+      } };
 
 export type MigrateEvent =
   | { type: 'step-start'; job_id: number; step: MigrateStep; ts: string }

@@ -2,13 +2,16 @@ import type { PrecheckResult } from '@shared/ipc'
 
 import { AppError } from '../errors'
 import type { SshManager } from '../ssh/manager'
+import { shellQuote } from '../ssh/shellQuote'
 
 /** Ngưỡng precheck đã chốt (m04): RAM >512MB · disk >2GB · port chưa dùng · Docker có. */
 export const RAM_MIN_MB = 512
 export const DISK_MIN_GB = 2
 export const LISTENING_PORTS_COMMAND = 'ss -H -ltn'
+export const EXISTING_ENV_MAX_BYTES = 64 * 1024
 
 export interface BaselineRaw {
+  /** Linux MemAvailable; sourced from free(1)'s available column. */
   ramFreeMb: number
   diskFreeGb: number
   portUsed: boolean
@@ -21,6 +24,35 @@ export type PrecheckDetail = {
   passed: boolean
   dockerVersion: string | null
   portUsed: boolean
+}
+
+/** Read the existing VPS .env only in the main process; never log its contents. */
+export async function readExistingEnvFile(
+  ssh: SshManager,
+  vpsId: number,
+  remotePath: string
+): Promise<string> {
+  const path = shellQuote(remotePath)
+  const command = `if [ -f ${path} ] && [ -r ${path} ]; then head -c ${EXISTING_ENV_MAX_BYTES + 1} ${path}; else exit 66; fi`
+  let result: Awaited<ReturnType<SshManager['exec']>>
+  try {
+    result = await ssh.exec(vpsId, command, {
+      timeoutMs: 10_000,
+      logCommand: false
+    })
+  } catch {
+    throw new AppError(
+      'PRECHECK_FAILED',
+      'Không thể xác minh cấu hình environment hiện có trên VPS.'
+    )
+  }
+  if (result.code !== 0 || Buffer.byteLength(result.stdout, 'utf8') > EXISTING_ENV_MAX_BYTES) {
+    throw new AppError(
+      'PRECHECK_FAILED',
+      'Không thể xác minh cấu hình environment hiện có trên VPS.'
+    )
+  }
+  return result.stdout
 }
 
 /** Đọc các cổng TCP đang listen thật trên VPS để không phụ thuộc riêng vào SQLite local. */
@@ -59,6 +91,7 @@ export function baselineCommand(port: number | null): string {
       ? ''
       : `printf 'PORT|'; ss -tlnp | grep ':${port} ' >/dev/null 2>&1 && echo 'USED' || echo 'FREE'\n`
   return [
+    // free(1) column 7 is MemAvailable; keep this aligned with vps:get-resources.
     "printf 'RAM_MB|'; free -m | awk 'NR==2{print $7}'",
     "printf 'DISK_GB|'; df -BG --output=avail / | tail -1 | tr -d ' '",
     portCheck,

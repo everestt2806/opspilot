@@ -148,3 +148,42 @@ export function parseEnvFile(content: string): Record<string, string> {
   }
   return values
 }
+
+const POSTGRES_ENV_KEYS = ['DATABASE_URL', 'POSTGRES_PASSWORD'] as const
+
+export interface ExistingEnvResolution {
+  env: Record<string, string>
+  missingKeys: string[]
+  protectedOverrides: string[]
+}
+
+/** Resolve redeploy values without exposing any retained value to the caller's result. */
+export function resolveExistingEnv(
+  explicitEnv: Record<string, string>,
+  existingContent: string,
+  requiredKeys: string[],
+  needsDb: boolean
+): ExistingEnvResolution {
+  const existing = parseEnvFile(existingContent)
+  const explicit = Object.fromEntries(
+    Object.entries(explicitEnv).filter(([, value]) => value.trim().length > 0)
+  )
+  const protectedOverrides = needsDb
+    ? POSTGRES_ENV_KEYS.filter(
+        (key) => explicit[key] !== undefined && explicit[key] !== existing[key]
+      )
+    : []
+  const env = { ...existing, ...explicit }
+  if (needsDb) {
+    for (const key of POSTGRES_ENV_KEYS) {
+      if (existing[key] !== undefined) env[key] = existing[key]
+    }
+  }
+
+  const required = new Set(requiredKeys)
+  if (needsDb) {
+    for (const key of POSTGRES_ENV_KEYS) required.add(key)
+  }
+  const missingKeys = [...required].filter((key) => !String(env[key] ?? '').trim())
+  return { env, missingKeys, protectedOverrides }
+}

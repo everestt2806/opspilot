@@ -1,0 +1,543 @@
+from __future__ import annotations
+
+import sqlite3
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from analyze import (
+    METHODS,
+    Aggregate,
+    aggregate,
+    analyze_run,
+    cli_main,
+    collect_operational_telemetry,
+    load_run,
+    main_table,
+    operational_table,
+    read_run_meta,
+    read_score_csv,
+)
+from export_results import export_run, run_dir_for
+
+
+def _score_rows(method: str, series: list[tuple[float, bool]]) -> list[dict]:
+    return [
+        {"method": method, "ts_vps": str(ts), "above_threshold": "1" if hi else "0"}
+        for ts, hi in series
+    ]
+
+
+# Mốc: holdout 1000, fault 2000..3200, grace 60 -> ANOMALY từ 2060.
+HOLDOUT, FAULT_START, FAULT_END = 1000.0, 2000.0, 3200.0
+
+
+def test_analyze_run_perfect_detection_for_one_method():
+    # ensemble (consecutive=2): 2 mẫu liên tiếp above trong vùng ANOMALY -> triggered.
+    rows = _score_rows(
+        "ensemble",
+        [
+            (1500.0, False),  # NORMAL, yên -> TN
+            (2100.0, True),  # ANOMALY
+            (2110.0, True),  # ANOMALY, đủ 2 liên tiếp -> triggered (TP)
+            (2120.0, True),  # TP
+        ],
+    )
+    results = {
+        r.method: r for r in analyze_run(rows, FAULT_START, FAULT_END, HOLDOUT, 60.0)
+    }
+    ens = results["ensemble"]
+    # 3 mẫu ANOMALY: 2100 streak=1 (chưa đủ 2 -> FN), 2110 & 2120 triggered (TP) -> recall 2/3.
+    # Đây là cơ chế consecutive đúng: mẫu ANOMALY đầu tiên luôn là FN nếu consecutive>=2.
+    assert abs(ens.recall - 2 / 3) < 1e-9
+    assert ens.precision == 1.0  # không FP ở NORMAL
+    # detection delay = mẫu triggered đầu tiên (2110) - fault_start (2000) = 110
+    assert ens.detection_delay_s == 110.0
+
+
+def test_analyze_run_censored_when_never_triggered():
+    rows = _score_rows("iforest", [(2100.0, False), (2200.0, True), (3000.0, False)])
+    # iforest consecutive=2 nhưng không có 2 True liên tiếp -> không bao giờ triggered
+    results = {
+        r.method: r for r in analyze_run(rows, FAULT_START, FAULT_END, HOLDOUT, 60.0)
+    }
+    assert results["iforest"].detection_delay_s is None  # censored
+    assert results["iforest"].recall == 0.0
+
+
+def test_analyze_run_missing_method_returns_none():
+    rows = _score_rows("rule", [(2100.0, True), (2110.0, True), (2120.0, True)])
+    results = {
+        r.method: r for r in analyze_run(rows, FAULT_START, FAULT_END, HOLDOUT, 60.0)
+    }
+    # các method khác không có dòng -> toàn None
+    assert results["ocsvm"].precision is None
+    assert results["ocsvm"].detection_delay_s is None
+    # rule có dữ liệu
+    assert results["rule"].recall is not None
+
+
+def test_analyze_run_covers_all_five_methods():
+    results = analyze_run([], FAULT_START, FAULT_END, HOLDOUT, 60.0)
+    assert {r.method for r in results} == set(METHODS)
+    assert len(results) == 5
+
+
+def test_grace_changes_labels():
+    # 1 mẫu tại 2030 (trong grace 60 -> EXCLUDED; nhưng grace 0 -> ANOMALY).
+    rows = _score_rows("rule", [(2030.0, True), (2040.0, True), (2050.0, True)])
+    res60 = {
+        r.method: r for r in analyze_run(rows, FAULT_START, FAULT_END, HOLDOUT, 60.0)
+    }["rule"]
+    res0 = {
+        r.method: r for r in analyze_run(rows, FAULT_START, FAULT_END, HOLDOUT, 0.0)
+    }["rule"]
+    # grace 60: cả 3 mẫu EXCLUDED -> không TP/FN -> recall None
+    assert res60.recall is None
+    # grace 0: 3 mẫu ANOMALY, rule consecutive=3 -> mẫu thứ 3 triggered -> có TP
+    assert res0.recall is not None and res0.recall > 0
+
+
+def test_aggregate_mean_std_ci():
+    agg = aggregate([0.8, 0.9, 0.7, 0.85, 0.75])
+    assert agg.n == 5
+    assert abs(agg.mean - 0.8) < 1e-9
+    assert agg.std is not None and agg.std > 0
+    assert agg.ci95_low < agg.mean < agg.ci95_high
+    assert agg.censored == 0
+
+
+def test_aggregate_counts_censored_none():
+    agg = aggregate([100.0, None, 200.0, None])
+    assert agg.n == 2
+    assert agg.censored == 2
+    assert agg.mean == 150.0
+
+
+def test_aggregate_all_none():
+    agg = aggregate([None, None])
+    assert agg == Aggregate(
+        n=0, mean=None, std=None, ci95_low=None, ci95_high=None, censored=2
+    )
+
+
+def test_aggregate_single_value_no_ci():
+    agg = aggregate([0.5])
+    assert agg.n == 1
+    assert agg.mean == 0.5
+    assert agg.std is None
+    assert agg.ci95_low is None
+
+
+def test_read_csv_roundtrip(tmp_path):
+    score = tmp_path / "score_sample.csv"
+    score.write_text(
+        "method,ts_vps,above_threshold,extra\n"
+        "ensemble,2100.0,1,ignored\n"
+        "rule,2100.0,0,ignored\n",
+        encoding="utf-8",
+    )
+    rows = read_score_csv(score)
+    assert len(rows) == 2
+    assert rows[0]["method"] == "ensemble"
+    assert set(rows[0].keys()) == {"method", "ts_vps", "above_threshold"}
+
+    meta = tmp_path / "experiment_run.csv"
+    meta.write_text(
+        "scenario,fault_start_ts,fault_end_ts,train_at_ts\n"
+        "memory_leak,2000.0,3200.0,1000.0\n",
+        encoding="utf-8",
+    )
+    m = read_run_meta(meta)
+    assert m["scenario"] == "memory_leak"
+    assert float(m["fault_start_ts"]) == 2000.0
+
+
+def test_export_results_to_analyze_roundtrip_iso_utc(tmp_path):
+    conn = sqlite3.connect(":memory:")
+    conn.executescript("""
+    CREATE TABLE experiment_run (
+      id INTEGER PRIMARY KEY, scenario TEXT, repeat_index INTEGER, deployment_id INTEGER,
+      vps_id INTEGER, baseline_start_ts TEXT, train_at_ts TEXT, fault_start_ts TEXT,
+      fault_end_ts TEXT, run_end_ts TEXT, clock_offset_ms INTEGER, detection_grace_s INTEGER,
+      train_sample_count INTEGER, fault_params_json TEXT, status TEXT, abort_reason TEXT
+    );
+    CREATE TABLE metric_sample (
+      id INTEGER PRIMARY KEY, deployment_id INTEGER, seq INTEGER, ts_vps TEXT, ts_local TEXT,
+      cpu_pct REAL, mem_mb REAL, mem_pct REAL, mem_limit_mb REAL, latency_ms REAL,
+      http_error_rate REAL, db_response_ms REAL, container_up INTEGER, host_cpu_pct REAL,
+      host_mem_pct REAL
+    );
+    CREATE TABLE score_sample (
+      id INTEGER PRIMARY KEY, metric_sample_id INTEGER, deployment_id INTEGER, ts_vps TEXT,
+      method TEXT, score REAL, above_threshold INTEGER, detail_json TEXT
+    );
+    CREATE TABLE alert (
+      id INTEGER PRIMARY KEY, deployment_id INTEGER, metric_sample_id INTEGER, method TEXT,
+      ts_vps TEXT, ts_resolved TEXT, peak_score REAL, label TEXT, acted TEXT,
+      experiment_run_id INTEGER
+    );
+    """)
+
+    conn.execute(
+        "INSERT INTO experiment_run (id, scenario, repeat_index, deployment_id, vps_id, "
+        "baseline_start_ts, train_at_ts, fault_start_ts, fault_end_ts, run_end_ts, "
+        "clock_offset_ms, detection_grace_s, status) "
+        "VALUES (1, 'cpu_spike', 1, 10, 1, '2026-09-19T10:00:00Z', '2026-09-19T10:30:00Z', "
+        "'2026-09-19T10:45:00Z', '2026-09-19T11:05:00Z', '2026-09-19T11:15:00Z', 50, 60, "
+        "'completed')"
+    )
+
+    timestamps = [
+        "2026-09-19T10:35:00Z",  # NORMAL (holdout)
+        "2026-09-19T10:45:30Z",  # EXCLUDED (in grace 60s)
+        "2026-09-19T10:47:00Z",  # ANOMALY
+        "2026-09-19T10:47:10Z",  # ANOMALY
+    ]
+    for seq, ts in enumerate(timestamps, start=1):
+        conn.execute(
+            "INSERT INTO metric_sample (id, deployment_id, seq, ts_vps, ts_local, cpu_pct, "
+            "container_up) VALUES (?, 10, ?, ?, ?, 80.0, 1)",
+            (seq, seq, ts, ts),
+        )
+        for method in METHODS:
+            above = 1 if seq >= 3 else 0
+            conn.execute(
+                "INSERT INTO score_sample (metric_sample_id, deployment_id, ts_vps, method, "
+                "score, above_threshold) VALUES (?, 10, ?, ?, 0.85, ?)",
+                (seq, ts, method, above),
+            )
+    conn.commit()
+
+    out_dir = run_dir_for(tmp_path, "cpu_spike", 1)
+    counts = export_run(conn, run_id=1, out_dir=out_dir)
+    assert counts["metric_sample"] == 4
+    assert counts["score_sample"] == 20
+
+    table = main_table([out_dir], grace_s=60.0)
+    assert "| Method | Precision | Recall | F1 | Delay (s) | #censored |" in table
+    for method in METHODS:
+        assert f"| {method} |" in table
+
+
+def test_load_run_missing_protocol_version_defaults_to_legacy(tmp_path):
+    run_dir = tmp_path / "legacy_run"
+    run_dir.mkdir()
+    (run_dir / "meta.json").write_text(
+        '{"scenario": "latency_creep", "repeat_index": 1}', encoding="utf-8"
+    )
+    (run_dir / "metric_sample.csv").write_text("seq,ts_vps\n", encoding="utf-8")
+    (run_dir / "score_sample.csv").write_text("method,ts_vps\n", encoding="utf-8")
+
+    manifest, _metrics, _scores = load_run(run_dir)
+    assert manifest["protocol_version"] == "legacy-pre-pilot"
+    assert manifest["scenario"] == "latency_creep"
+
+
+def test_load_run_preserves_existing_protocol_version(tmp_path):
+    run_dir = tmp_path / "modern_run"
+    run_dir.mkdir()
+    (run_dir / "meta.json").write_text(
+        '{"scenario": "latency_creep", "repeat_index": 1, "protocol_version": "1.0"}',
+        encoding="utf-8",
+    )
+    (run_dir / "metric_sample.csv").write_text("seq,ts_vps\n", encoding="utf-8")
+    (run_dir / "score_sample.csv").write_text("method,ts_vps\n", encoding="utf-8")
+
+    manifest, _metrics, _scores = load_run(run_dir)
+    assert manifest["protocol_version"] == "1.0"
+
+
+def test_main_table_skips_aborted_runs_even_with_missing_timestamps(tmp_path):
+    """Xác nhận main_table bỏ qua run aborted thiếu mốc thời gian mà không làm vỡ phân tích."""
+    # 1. Thư mục run aborted: không có mốc thời gian hoàn chỉnh (trống chuỗi)
+    aborted_dir = tmp_path / "run_cpu_spike_1_att1"
+    aborted_dir.mkdir()
+    (aborted_dir / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,abort_reason,fault_start_ts,fault_end_ts,train_at_ts\n"
+        "cpu_spike,1,1,aborted,vps_reboot_timeout,,,\n",
+        encoding="utf-8",
+    )
+    (aborted_dir / "score_sample.csv").write_text(
+        "method,ts_vps,above_threshold\n", encoding="utf-8"
+    )
+
+    # 2. Thư mục run completed: có đầy đủ dữ liệu
+    completed_dir = tmp_path / "run_cpu_spike_1_att2"
+    completed_dir.mkdir()
+    (completed_dir / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,fault_start_ts,fault_end_ts,train_at_ts\n"
+        "cpu_spike,1,2,completed,2000.0,3200.0,1000.0\n",
+        encoding="utf-8",
+    )
+    (completed_dir / "score_sample.csv").write_text(
+        "method,ts_vps,above_threshold\n"
+        "ensemble,2100.0,1\n"
+        "ensemble,2110.0,1\n"
+        "rule,2100.0,1\n"
+        "rule,2110.0,1\n"
+        "rule,2120.0,1\n",
+        encoding="utf-8",
+    )
+
+    # Khi phân tích cả 2 run, main_table phải lọc bỏ aborted_dir trước khi đọc float(fault_start_ts),
+    # không vấp ValueError và chỉ tổng hợp run completed.
+    table = main_table([aborted_dir, completed_dir], grace_s=60.0)
+    assert "| Method | Precision | Recall | F1 | Delay (s) | #censored |" in table
+    for method in METHODS:
+        assert f"| {method} |" in table
+
+
+def test_operational_telemetry_and_table(tmp_path):
+    """Xác nhận thu thập dữ liệu vận hành và bảng operational telemetry từ các run (gồm cả aborted)."""
+    # Run 1: attempt 1 aborted do ssh_timeout
+    r1 = tmp_path / "run_error_burst_1_att1"
+    r1.mkdir()
+    (r1 / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,abort_reason\n"
+        "error_burst,1,1,aborted,ssh_timeout\n",
+        encoding="utf-8",
+    )
+
+    # Run 2: retry attempt 2 completed
+    r2 = tmp_path / "run_error_burst_1_att2"
+    r2.mkdir()
+    (r2 / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,abort_reason\n"
+        "error_burst,1,2,completed,\n",
+        encoding="utf-8",
+    )
+
+    # Run 3: attempt 1 completed ngay lần đầu
+    r3 = tmp_path / "run_error_burst_2_att1"
+    r3.mkdir()
+    (r3 / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,abort_reason\n"
+        "error_burst,2,1,completed,\n",
+        encoding="utf-8",
+    )
+
+    # Run 4: attempt 1 aborted do oom_kill
+    r4 = tmp_path / "run_slow_db_1_att1"
+    r4.mkdir()
+    (r4 / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,abort_reason\n"
+        "slow_db,1,1,aborted,oom_kill\n",
+        encoding="utf-8",
+    )
+
+    dirs = [r1, r2, r3, r4]
+    telemetry = collect_operational_telemetry(dirs)
+
+    assert telemetry.total_runs == 4
+    assert telemetry.completed_runs == 2
+    assert telemetry.aborted_runs == 2
+    assert telemetry.first_attempt_success_count == 1
+    assert telemetry.retry_success_count == 1
+    assert telemetry.abort_reasons == {"ssh_timeout": 1, "oom_kill": 1}
+    assert telemetry.attempts_distribution == {1: 3, 2: 1}
+
+    table = operational_table(dirs)
+    assert "| Total Runs Exported | 4 |" in table
+    assert "| Completed Runs | 2 |" in table
+    assert "| Aborted Runs | 2 |" in table
+    assert "| First-Attempt Success | 1 |" in table
+    assert "| Retry Success (Att 2-3) | 1 |" in table
+    assert "ssh_timeout: 1" in table
+    assert "oom_kill: 1" in table
+
+
+def test_cli_analyze_with_completed_and_aborted_runs_missing_scores_and_timestamps(
+    tmp_path,
+):
+    """Xác nhận CLI analyze.py đếm riêng run completed ở tiêu đề, in operational_table()
+
+    khi có đầu vào gồm một run completed và một run aborted thiếu cả score và mốc thời gian.
+    """
+    import io
+
+    # 1. Thư mục run aborted: thiếu score_sample.csv HOÀN TOÀN, mốc thời gian trống rỗng
+    aborted_dir = tmp_path / "run_cpu_spike_1_att1"
+    aborted_dir.mkdir()
+    (aborted_dir / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,abort_reason,fault_start_ts,fault_end_ts,train_at_ts\n"
+        "cpu_spike,1,1,aborted,vps_reboot_timeout,,,\n",
+        encoding="utf-8",
+    )
+    # Cố tình KHÔNG tạo score_sample.csv cho aborted_dir!
+
+    # 2. Thư mục run completed: có đầy đủ score và mốc thời gian
+    completed_dir = tmp_path / "run_cpu_spike_1_att2"
+    completed_dir.mkdir()
+    (completed_dir / "experiment_run.csv").write_text(
+        "scenario,repeat_index,attempt_index,status,fault_start_ts,fault_end_ts,train_at_ts\n"
+        "cpu_spike,1,2,completed,2000.0,3200.0,1000.0\n",
+        encoding="utf-8",
+    )
+    (completed_dir / "score_sample.csv").write_text(
+        "method,ts_vps,above_threshold\n"
+        "ensemble,2100.0,1\n"
+        "ensemble,2110.0,1\n"
+        "rule,2100.0,1\n"
+        "rule,2110.0,1\n"
+        "rule,2120.0,1\n",
+        encoding="utf-8",
+    )
+
+    buf = io.StringIO()
+    ret = cli_main([str(tmp_path)], stdout=buf)
+    assert ret == 0
+    output = buf.getvalue()
+
+    # Tiêu đề bảng chính đếm riêng run completed
+    assert (
+        "# Bảng chính — 1 run completed (tổng 2 run), grace=60s (docs/07 mục 9.1)"
+        in output
+    )
+    assert "| Method | Precision | Recall | F1 | Delay (s) | #censored |" in output
+
+    # In operational_table() để thấy rõ run aborted và lý do huỷ
+    assert "## Báo cáo vận hành (Operational Telemetry)" in output
+    assert "| Total Runs Exported | 2 |" in output
+    assert "| Completed Runs | 1 |" in output
+    assert "| Aborted Runs | 1 |" in output
+    assert "vps_reboot_timeout: 1" in output
+    assert "## Grace-sweep" in output
+
+
+def test_main_table_completed_missing_data_raises_clear_errors(tmp_path):
+    """Xác nhận main_table ném lỗi rõ ràng chỉ tên thư mục và trường/file thiếu với run completed."""
+    # 1. Completed run thiếu file score_sample.csv
+    no_score_dir = tmp_path / "run_completed_no_score"
+    no_score_dir.mkdir()
+    (no_score_dir / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "cpu_spike,completed,1000.0,2000.0,3200.0\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        ValueError, match="thiếu file bắt buộc 'score_sample.csv'"
+    ) as exc_info:
+        main_table([no_score_dir])
+    assert str(no_score_dir) in str(exc_info.value)
+
+    score_content = "method,ts_vps,above_threshold\nensemble,2100.0,1\n"
+
+    # 2. Completed run thiếu train_at_ts
+    no_train_dir = tmp_path / "run_completed_no_train"
+    no_train_dir.mkdir()
+    (no_train_dir / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "cpu_spike,completed,,2000.0,3200.0\n",
+        encoding="utf-8",
+    )
+    (no_train_dir / "score_sample.csv").write_text(score_content, encoding="utf-8")
+    with pytest.raises(
+        ValueError, match="thiếu mốc thời gian bắt buộc 'train_at_ts'"
+    ) as exc_info:
+        main_table([no_train_dir])
+    assert str(no_train_dir) in str(exc_info.value)
+
+    # 3. Completed run thiếu fault_start_ts
+    no_fstart_dir = tmp_path / "run_completed_no_fstart"
+    no_fstart_dir.mkdir()
+    (no_fstart_dir / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "cpu_spike,completed,1000.0,,3200.0\n",
+        encoding="utf-8",
+    )
+    (no_fstart_dir / "score_sample.csv").write_text(score_content, encoding="utf-8")
+    with pytest.raises(
+        ValueError, match="thiếu mốc thời gian bắt buộc 'fault_start_ts'"
+    ) as exc_info:
+        main_table([no_fstart_dir])
+    assert str(no_fstart_dir) in str(exc_info.value)
+
+    # 4. Completed run thiếu fault_end_ts
+    no_fend_dir = tmp_path / "run_completed_no_fend"
+    no_fend_dir.mkdir()
+    (no_fend_dir / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "cpu_spike,completed,1000.0,2000.0,\n",
+        encoding="utf-8",
+    )
+    (no_fend_dir / "score_sample.csv").write_text(score_content, encoding="utf-8")
+    with pytest.raises(
+        ValueError, match="thiếu mốc thời gian bắt buộc 'fault_end_ts'"
+    ) as exc_info:
+        main_table([no_fend_dir])
+    assert str(no_fend_dir) in str(exc_info.value)
+
+    # 5. Completed run có mốc không hợp lệ (sai định dạng)
+    invalid_ts_dir = tmp_path / "run_completed_invalid_ts"
+    invalid_ts_dir.mkdir()
+    (invalid_ts_dir / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "cpu_spike,completed,1000.0,invalid_timestamp,3200.0\n",
+        encoding="utf-8",
+    )
+    (invalid_ts_dir / "score_sample.csv").write_text(score_content, encoding="utf-8")
+    with pytest.raises(
+        ValueError, match="có mốc 'fault_start_ts'='invalid_timestamp' không hợp lệ"
+    ) as exc_info:
+        main_table([invalid_ts_dir])
+    assert str(invalid_ts_dir) in str(exc_info.value)
+
+
+def test_main_table_aborted_and_running_missing_data_are_safely_skipped(tmp_path):
+    """Xác nhận các run aborted hoặc running dù thiếu bất kỳ file/mốc nào vẫn được bỏ qua an toàn."""
+    # 1. Aborted run thiếu toàn bộ (không score, không mốc)
+    aborted_empty = tmp_path / "run_aborted_empty"
+    aborted_empty.mkdir()
+    (aborted_empty / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "cpu_spike,aborted,,,\n",
+        encoding="utf-8",
+    )
+
+    # 2. Aborted run có mốc sai định dạng
+    aborted_invalid_ts = tmp_path / "run_aborted_invalid_ts"
+    aborted_invalid_ts.mkdir()
+    (aborted_invalid_ts / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "slow_db,aborted,corrupt,corrupt,corrupt\n",
+        encoding="utf-8",
+    )
+
+    # 3. Running run thiếu score và thiếu mốc
+    running_dir = tmp_path / "run_still_running"
+    running_dir.mkdir()
+    (running_dir / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "error_burst,running,,,\n",
+        encoding="utf-8",
+    )
+
+    # 4. Completed run hợp lệ
+    completed_valid = tmp_path / "run_completed_valid"
+    completed_valid.mkdir()
+    (completed_valid / "experiment_run.csv").write_text(
+        "scenario,status,train_at_ts,fault_start_ts,fault_end_ts\n"
+        "cpu_spike,completed,1000.0,2000.0,3200.0\n",
+        encoding="utf-8",
+    )
+    (completed_valid / "score_sample.csv").write_text(
+        "method,ts_vps,above_threshold\n"
+        "ensemble,2100.0,1\n"
+        "ensemble,2110.0,1\n"
+        "rule,2100.0,1\n"
+        "rule,2110.0,1\n"
+        "rule,2120.0,1\n",
+        encoding="utf-8",
+    )
+
+    table = main_table(
+        [aborted_empty, aborted_invalid_ts, running_dir, completed_valid],
+        grace_s=60.0,
+    )
+    assert "| Method | Precision | Recall | F1 | Delay (s) | #censored |" in table
+    for method in METHODS:
+        assert f"| {method} |" in table

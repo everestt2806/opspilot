@@ -52,7 +52,7 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
   it('bảng Database users + Databases hiện đủ cột: id, name, dung lượng, số bảng', async () => {
     mockApi(successfulApi())
 
-    render(<VpsDatabaseTab vpsId={7} />)
+    render(<VpsDatabaseTab vpsId={7} supported={true} />)
 
     expect(await screen.findByText('Database users')).toBeTruthy()
     expect(screen.getByText('Databases')).toBeTruthy()
@@ -81,7 +81,7 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
       'db:create-database': create
     })
 
-    render(<VpsDatabaseTab vpsId={7} />)
+    render(<VpsDatabaseTab vpsId={7} supported={true} />)
 
     fireEvent.click(await screen.findByRole('button', { name: /Create database/ }))
     const input = await screen.findByLabelText('Database name')
@@ -123,7 +123,7 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
       'db:create-user': create
     })
 
-    render(<VpsDatabaseTab vpsId={7} />)
+    render(<VpsDatabaseTab vpsId={7} supported={true} />)
 
     fireEvent.click(await screen.findByRole('button', { name: /Create user/ }))
     const dialog = await screen.findByRole('dialog')
@@ -150,7 +150,7 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
       'db:list-tables': listTables
     })
 
-    render(<VpsDatabaseTab vpsId={7} />)
+    render(<VpsDatabaseTab vpsId={7} supported={true} />)
 
     fireEvent.click(await screen.findByText('blog'))
 
@@ -167,7 +167,7 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
       'db:list-tables': async () => ({ ok: true, data: USERS_SCHEMA })
     })
 
-    render(<VpsDatabaseTab vpsId={7} />)
+    render(<VpsDatabaseTab vpsId={7} supported={true} />)
     fireEvent.click(await screen.findByText('blog'))
     await screen.findByText('SQL preview')
 
@@ -201,7 +201,7 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
       'db:list-tables': async () => ({ ok: true, data: [] })
     })
 
-    render(<VpsDatabaseTab vpsId={7} />)
+    render(<VpsDatabaseTab vpsId={7} supported={true} />)
     fireEvent.click(await screen.findByText('blog'))
     await screen.findByText('SQL preview')
 
@@ -226,7 +226,7 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
       'db:list-databases': listDatabases
     })
 
-    render(<VpsDatabaseTab vpsId={7} />)
+    render(<VpsDatabaseTab vpsId={7} supported={true} />)
 
     expect(await screen.findByText('Could not load databases.')).toBeTruthy()
     fireEvent.click(screen.getByText(strings.common.retry))
@@ -241,7 +241,7 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
       }
     })
 
-    render(<VpsDatabaseTab vpsId={7} />)
+    render(<VpsDatabaseTab vpsId={7} supported={true} />)
     fireEvent.click(await screen.findByText('blog'))
 
     expect(await screen.findByText(/you are editing locally/)).toBeTruthy()
@@ -261,12 +261,34 @@ describe('VpsDatabaseTab — trang quản lý database trên VPS', () => {
       'db:list-tables': listTables
     })
 
-    render(<VpsDatabaseTab vpsId={7} />)
+    render(<VpsDatabaseTab vpsId={7} supported={true} />)
     fireEvent.click(await screen.findByText('blog'))
     await screen.findByText('SQL preview')
 
     expect(screen.queryByText('blog_admin')).toBeNull()
     fireEvent.click(screen.getByLabelText('Back to databases'))
     expect(await screen.findByText('blog_admin')).toBeTruthy()
+  })
+
+  it('khi backend chưa hỗ trợ database: hiển thị rõ "Chưa hỗ trợ" thân thiện, không gọi IPC db:* và không nhắc handler', async () => {
+    const invoke = vi.fn()
+    vi.stubGlobal('api', {
+      invoke,
+      on: () => () => {}
+    })
+
+    render(<VpsDatabaseTab vpsId={7} />)
+
+    expect(await screen.findByText(strings.vpsControl.database.notSupportedTitle)).toBeTruthy()
+    expect(screen.getByText(strings.vpsControl.database.notSupportedDesc)).toBeTruthy()
+    // Không gọi bất kỳ kênh db:* nào
+    const dbCalls = invoke.mock.calls.filter(
+      ([ch]) => typeof ch === 'string' && (ch as string).startsWith('db:')
+    )
+    expect(dbCalls).toHaveLength(0)
+    expect(invoke).not.toHaveBeenCalled()
+    // Không nhắc technical terms "handler" hay "db:*" trong UI
+    expect(screen.queryByText(/handler/i)).toBeNull()
+    expect(screen.queryByText(/db:\*/)).toBeNull()
   })
 })

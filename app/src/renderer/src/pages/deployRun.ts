@@ -1,4 +1,39 @@
-import type { DeployEvent, DeployStep, IpcError } from '@shared/ipc'
+import type { DeployEvent, DeploySourceInput, DeployStep, IpcError } from '@shared/ipc'
+
+export function isSecretKey(key: string): boolean {
+  return /(secret|password|token|api[-_]?key|private[-_]?key|auth|credential|(database|redis|db|postgres|mysql|mongo|amqp)[-_]?url|.*[-_]?(uri|dsn|connection[-_]?string)$)/i.test(
+    key
+  )
+}
+
+export function isValidHttpUrl(url: string | undefined | null): boolean {
+  if (!url || typeof url !== 'string') return false
+  const trimmed = url.trim()
+  if (!trimmed) return false
+  try {
+    const parsed = new URL(trimmed)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+export function getConfigSignature(input: DeploySourceInput): string {
+  const sortedEnvEntries = Object.keys(input.env ?? {})
+    .sort()
+    .map((k) => [k, input.env[k]])
+  return JSON.stringify({
+    vps_id: input.vps_id,
+    app_id: input.app_id ?? null,
+    app_name: input.app_name,
+    source_path: 'source_path' in input ? input.source_path : null,
+    git_handle: 'prepared_source_handle' in input ? input.prepared_source_handle : null,
+    git_repo_url: 'git_repo_url' in input ? input.git_repo_url : null,
+    git_ref: 'git_ref' in input ? input.git_ref : null,
+    git_root: 'git_root' in input ? input.git_root : null,
+    env: sortedEnvEntries
+  })
+}
 
 export const SEVEN_STEPS: DeployStep[] = [
   'PRECHECK',
@@ -22,7 +57,12 @@ export interface RunView {
   steps: Record<DeployStep, StepUi>
   buffer: string
   error?: IpcError
-  finished?: { status: FinalStatus; totalDurationMs: number; appUrl?: string }
+  finished?: {
+    status: FinalStatus
+    totalDurationMs: number
+    appUrl?: string
+    exposureStatus?: 'reachable' | 'degraded' | 'tunnel_only' | 'not_checked'
+  }
 }
 
 export function initialSteps(): Record<DeployStep, StepUi> {
@@ -59,7 +99,8 @@ export function applyEvent(prev: RunView, event: DeployEvent): RunView {
         finished: {
           status: event.status,
           totalDurationMs: event.total_duration_ms,
-          appUrl: event.app_url
+          appUrl: event.app_url,
+          exposureStatus: event.exposure_status
         }
       }
   }

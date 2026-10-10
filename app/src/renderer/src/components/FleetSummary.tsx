@@ -1,24 +1,32 @@
 import { Skeleton } from 'antd'
 
-import { strings } from '../strings'
+import { useStrings } from '../strings'
 
 interface FleetSummaryProps {
   total: number
-  online: number
-  offline: number
+  online?: number
+  offline?: number
+  checkedNow?: number
+  checkFailed?: number
   appCount: number
   loading: boolean
 }
 
-/** Hàng 4 ô số liệu toàn đội VPS — chỉ online/offline *xác định được*;
- *  trạng thái checking/unknown không bị tính nhầm vào ô nào. */
+/** Hàng 4 ô số liệu toàn đội VPS — chỉ checked_now/check_failed xác định được;
+ *  trạng thái checking/unknown/stale không bị tính nhầm vào ô nào. */
 export function FleetSummary({
   total,
   online,
   offline,
+  checkedNow,
+  checkFailed,
   appCount,
   loading
 }: FleetSummaryProps): React.JSX.Element {
+  const strings = useStrings()
+  const checkedNowCount = checkedNow ?? online ?? 0
+  const checkFailedCount = checkFailed ?? offline ?? 0
+
   return (
     <div className="panel-fleet summary-strip" aria-busy={loading}>
       <div className="summary-cell" aria-label={strings.vpsControl.fleet.totalVps}>
@@ -27,17 +35,17 @@ export function FleetSummary({
       </div>
       <div
         className="summary-cell summary-cell-success"
-        aria-label={strings.vpsControl.fleet.online}
+        aria-label={strings.vpsControl.fleet.checkedNow}
       >
-        <span>{strings.vpsControl.fleet.online}</span>
-        {loading ? <Skeleton active paragraph={false} /> : <strong>{online}</strong>}
+        <span>{strings.vpsControl.fleet.checkedNow}</span>
+        {loading ? <Skeleton active paragraph={false} /> : <strong>{checkedNowCount}</strong>}
       </div>
       <div
         className="summary-cell summary-cell-danger"
-        aria-label={strings.vpsControl.fleet.offline}
+        aria-label={strings.vpsControl.fleet.checkFailed}
       >
-        <span>{strings.vpsControl.fleet.offline}</span>
-        {loading ? <Skeleton active paragraph={false} /> : <strong>{offline}</strong>}
+        <span>{strings.vpsControl.fleet.checkFailed}</span>
+        {loading ? <Skeleton active paragraph={false} /> : <strong>{checkFailedCount}</strong>}
       </div>
       <div className="summary-cell" aria-label={strings.vpsControl.fleet.totalApps}>
         <span>{strings.vpsControl.fleet.totalApps}</span>

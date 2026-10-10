@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { createHash } from 'node:crypto'
 import type { Readable, Writable } from 'node:stream'
 import * as tar from 'tar'
 
@@ -18,6 +19,7 @@ import { shellQuote } from './shellQuote'
 export interface SshConnectionInfo {
   host: string
   port: number
+  hostFingerprint: string | null
   username: string
   authType: 'key' | 'password'
   secret: string
@@ -109,6 +111,15 @@ export class SshAbortedError extends Error {
 const DEFAULT_EXCLUDE = ['node_modules', '.git', 'dist', '.next', '__pycache__', '.venv']
 const EXEC_DEFAULT_TIMEOUT_MS = 30_000
 const CONNECT_RETRY_DELAYS_MS = [1_000, 2_000, 4_000]
+
+/** Compute the OpenSSH display fingerprint from the host key bytes received in the handshake. */
+export function matchesSshHostFingerprint(receivedHostKey: Buffer, expected: string): boolean {
+  const fingerprint = createHash('sha256')
+    .update(receivedHostKey)
+    .digest('base64')
+    .replace(/=+$/, '')
+  return `SHA256:${fingerprint}` === expected
+}
 
 interface PoolEntry {
   vpsId: number
@@ -349,7 +360,14 @@ export class SshManager extends EventEmitter {
     }
     const entry: PoolEntry = {
       vpsId,
-      info: { host: '', port: 22, username: '', authType: 'password', secret: '' },
+      info: {
+        host: '',
+        port: 22,
+        hostFingerprint: null,
+        username: '',
+        authType: 'password',
+        secret: ''
+      },
       client: null,
       ready: false
     }
@@ -359,11 +377,25 @@ export class SshManager extends EventEmitter {
 
   private async ensureConnected(vpsId: number, force = false): Promise<PoolEntry> {
     const entry = this.getEntry(vpsId)
+    const resolved = await this.resolver(vpsId)
+    if (!resolved.hostFingerprint || !/^SHA256:[A-Za-z0-9+/]{43}$/.test(resolved.hostFingerprint)) {
+      await this.disconnect(vpsId)
+      throw new AppError(
+        'VALIDATION',
+        'Thiếu fingerprint SSH SHA256 hợp lệ. Hãy lấy fingerprint độc lập từ console của VPS rồi lưu trước khi kết nối.'
+      )
+    }
+    const endpointChanged =
+      entry.info.host !== '' &&
+      (entry.info.host !== resolved.host ||
+        entry.info.port !== resolved.port ||
+        entry.info.hostFingerprint !== resolved.hostFingerprint)
+    if (endpointChanged) force = true
     if (entry.ready && entry.client && !force) {
       return entry
     }
 
-    entry.info = await this.resolver(vpsId)
+    entry.info = resolved
     await this.openWithRetry(entry)
     return entry
   }
@@ -389,6 +421,7 @@ export class SshManager extends EventEmitter {
   private openClient(entry: PoolEntry): Promise<void> {
     const info = entry.info
     const client = new Client()
+    let hostKeyMismatch = false
 
     return new Promise<void>((resolve, reject) => {
       const authOptions =
@@ -408,7 +441,15 @@ export class SshManager extends EventEmitter {
 
       client.on('error', (error) => {
         if (!entry.ready) {
-          reject(toSshAppError(error))
+          reject(
+            hostKeyMismatch
+              ? new AppError(
+                  'VALIDATION',
+                  'Fingerprint SSH không khớp với fingerprint đã lưu. Kết nối bị từ chối trước xác thực.',
+                  { cause: new Error('SSH host fingerprint mismatch') }
+                )
+              : toSshAppError(error)
+          )
         }
       })
 
@@ -418,6 +459,10 @@ export class SshManager extends EventEmitter {
         username: info.username,
         readyTimeout: 15_000,
         keepaliveInterval: 30_000,
+        hostVerifier: (receivedHostKey: Buffer) => {
+          hostKeyMismatch = !matchesSshHostFingerprint(receivedHostKey, info.hostFingerprint!)
+          return !hostKeyMismatch
+        },
         ...authOptions
       })
     })

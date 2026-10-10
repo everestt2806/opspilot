@@ -1,5 +1,7 @@
 # KHỐI NGỮ CẢNH CHUNG — dán vào đầu MỌI phiên làm việc với AI
 
+> Cập nhật 08/10/2026: đoạn kiến trúc SSH-only bên dưới là **Desktop mode** của đồ án. Với task được gắn `product-mode`, người dùng đã cho phép một control plane luôn chạy trên VPS quản lý để tự deploy khi desktop tắt. Đọc [ADR-011](../14-quyet-dinh-kien-truc.md), [lộ trình sản phẩm](../31-lo-trinh-hoan-thien-san-pham.md) và `CLAUDE.md` trước khi code; không coi hai kiến trúc là một.
+
 ---
 
 Tôi đang làm đồ án tốt nghiệp: **ứng dụng desktop (Electron) deploy & migrate web app lên VPS

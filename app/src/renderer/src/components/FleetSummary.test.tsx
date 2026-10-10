@@ -21,16 +21,20 @@ describe('FleetSummary — 4 o so lieu', () => {
   it('hien dung 4 con so truyen vao', () => {
     renderSummary({ total: 3, online: 2, offline: 1, appCount: 5, loading: false })
 
-    expect(screen.getByLabelText('Total VPS').textContent).toContain('3')
-    expect(screen.getByLabelText(strings.vpsControl.fleet.online).textContent).toContain('2')
-    expect(screen.getByLabelText(strings.vpsControl.fleet.offline).textContent).toContain('1')
-    expect(screen.getByLabelText('Total apps').textContent).toContain('5')
+    expect(screen.getByLabelText(strings.vpsControl.fleet.totalVps).textContent).toContain('3')
+    expect(screen.getByLabelText(strings.vpsControl.fleet.checkedNow).textContent).toContain('2')
+    expect(screen.getByLabelText(strings.vpsControl.fleet.checkFailed).textContent).toContain('1')
+    expect(screen.getByLabelText(strings.vpsControl.fleet.totalApps).textContent).toContain('5')
   })
 
   it('loading: hien skeleton, khong hien con so', () => {
     renderSummary({ total: 3, online: 2, offline: 1, appCount: 5, loading: true })
 
-    expect(screen.getByLabelText('Total VPS').textContent).toBe('Total VPS')
-    expect(screen.getByLabelText('Total VPS').querySelector('.ant-skeleton')).toBeTruthy()
+    expect(screen.getByLabelText(strings.vpsControl.fleet.totalVps).textContent).toBe(
+      strings.vpsControl.fleet.totalVps
+    )
+    expect(
+      screen.getByLabelText(strings.vpsControl.fleet.totalVps).querySelector('.ant-skeleton')
+    ).toBeTruthy()
   })
 })

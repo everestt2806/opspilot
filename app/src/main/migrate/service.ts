@@ -1,7 +1,14 @@
 import { join as posixJoin } from 'node:path/posix'
 
 import type Database from 'better-sqlite3'
-import type { App, MigrateEvent, MigrateInput, MigrateJobView, MigrateStep } from '@shared/ipc'
+import type {
+  App,
+  Deployment,
+  MigrateEvent,
+  MigrateInput,
+  MigrateJobView,
+  MigrateStep
+} from '@shared/ipc'
 
 import { AppRepository } from '../db/appRepository'
 import { ActionLogRepository } from '../db/actionLogRepository'
@@ -14,6 +21,7 @@ import { allocatePort } from '../deploy/portPolicy'
 import { listListeningPorts, runPrecheck } from '../deploy/precheck'
 import { parseEnvFile } from '../deploy/templates'
 import type { SshManager } from '../ssh/manager'
+import type { BuildPlan } from '../detectors/types'
 import { shellQuote } from '../ssh/shellQuote'
 import { MigrationRepository, type MigrationJob } from './repository'
 
@@ -30,6 +38,7 @@ const STATUS_TO_STEP: Record<string, MigrateStep> = {
 }
 
 type Artifact = { name: string; size: number; sha256: string; target_sha256?: string }
+type PersistedBuildPlan = BuildPlan & { collectorAppPath?: string }
 type Verify = {
   checksums: Artifact[]
   source_files: { count: number; bytes: number }
@@ -218,9 +227,68 @@ export class MigrateService {
     if (!current || current.status !== 'running') {
       throw new AppError('VALIDATION', 'App nguồn phải có deployment running để migrate.')
     }
+    if (source.source_type === 'git') {
+      if (current.is_rollback_of !== null) {
+        throw new AppError(
+          'VALIDATION',
+          'Chưa thể migrate Git sau rollback: không xác minh được payload src khớp image đang chạy. App nguồn chưa bị đóng băng; hãy deploy lại đúng commit Git trước khi migrate.'
+        )
+      }
+      const newerGitAttempt = this.database
+        .prepare(
+          `SELECT id FROM deployment
+           WHERE app_id=? AND version>? AND git_commit_sha IS NOT NULL
+           LIMIT 1`
+        )
+        .get(source.id, current.version)
+      if (newerGitAttempt) {
+        throw new AppError(
+          'VALIDATION',
+          'Chưa thể migrate Git: deployment Git mới hơn đã thay đổi payload src nhưng không chạy thành công. Không thể chứng minh payload khớp image đang chạy; app nguồn chưa bị đóng băng. Hãy deploy lại đúng commit Git trước khi migrate.'
+        )
+      }
+      this.resolveGitRestore(current)
+    }
     const active = this.migrations.activeForApp(source.id)
     if (active) throw new AppError('VALIDATION', 'App đang có lượt migrate khác.')
     return source
+  }
+
+  private resolveGitRestore(current: Deployment): {
+    current: Deployment
+    plan: PersistedBuildPlan
+  } {
+    if (!current.git_commit_sha || !current.git_repo_url) {
+      throw new AppError(
+        'VALIDATION',
+        'Không thể migrate Git: deployment đang chạy thiếu SHA/repository đã ghim. App nguồn chưa bị đóng băng.'
+      )
+    }
+    const row = this.database
+      .prepare('SELECT detector_json FROM deployment WHERE id=?')
+      .get(current.id) as { detector_json: string | null } | undefined
+    let plan: PersistedBuildPlan
+    try {
+      plan = JSON.parse(row?.detector_json ?? '') as PersistedBuildPlan
+    } catch {
+      throw new AppError(
+        'VALIDATION',
+        'Không thể migrate Git: saved build plan không hợp lệ. App nguồn chưa bị đóng băng.'
+      )
+    }
+    if (!plan?.dockerfileTemplate || !plan.startCommand) {
+      throw new AppError(
+        'VALIDATION',
+        'Không thể migrate Git: saved build plan không đầy đủ. App nguồn chưa bị đóng băng.'
+      )
+    }
+    if (!plan.collectorAppPath?.startsWith('/')) {
+      throw new AppError(
+        'VALIDATION',
+        'Không thể migrate Git: deployment chưa lưu collector endpoint đã xác minh. App nguồn chưa bị đóng băng; hãy deploy lại source trước.'
+      )
+    }
+    return { current, plan }
   }
 
   private async run(job: MigrationJob, source: App, signal: AbortSignal): Promise<void> {
@@ -301,7 +369,13 @@ export class MigrateService {
         return undefined
       })
       await this.step(job, 'RESTORE', signal, async () => {
-        const deploymentId = await this.startRestoreDeployment(job, source, target, targetDir, signal)
+        const deploymentId = await this.startRestoreDeployment(
+          job,
+          source,
+          target,
+          targetDir,
+          signal
+        )
         await this.waitDeployment(deploymentId, signal)
         this.log(job.id, 'RESTORE', 'App đích đã running.')
         if (source.needs_db === 1) {
@@ -453,17 +527,43 @@ export class MigrateService {
   ): Promise<number> {
     const env = await this.readRestoredEnv(job, targetDir)
     const pipeline = this.deployFactory(() => undefined as never)
-    const started = pipeline.run(
-      {
-        vps_id: job.target_vps_id,
-        app_name: target.name,
-        app_id: target.id,
-        source_path: this.sourcePath(source.id),
-        remote_source_path: targetDir,
-        env
-      } as Parameters<DeployPipeline['run']>[0],
-      signal
-    )
+    let started: { deploymentId: number }
+    if (source.source_type === 'git') {
+      const current = source.current_deployment_id
+        ? this.deployments.getById(source.current_deployment_id)
+        : null
+      if (!current) throw new AppError('VALIDATION', 'Deployment Git nguồn không còn tồn tại.')
+      const restored = this.resolveGitRestore(current)
+      started = pipeline.runRestoredGit(
+        {
+          vps_id: job.target_vps_id,
+          app_name: target.name,
+          app_id: target.id,
+          remote_source_path: targetDir,
+          env
+        },
+        {
+          plan: restored.plan,
+          collectorAppPath: restored.plan.collectorAppPath!,
+          framework: source.framework,
+          repositoryUrl: restored.current.git_repo_url!,
+          commitSha: restored.current.git_commit_sha!
+        },
+        signal
+      )
+    } else {
+      started = pipeline.run(
+        {
+          vps_id: job.target_vps_id,
+          app_name: target.name,
+          app_id: target.id,
+          source_path: this.sourcePath(source.id),
+          remote_source_path: targetDir,
+          env
+        } as Parameters<DeployPipeline['run']>[0],
+        signal
+      )
+    }
     this.log(
       job.id,
       'RESTORE',
@@ -498,7 +598,11 @@ export class MigrateService {
       vps_id: targetVpsId,
       name,
       framework: source.framework,
-      source_path: this.sourcePath(source.id),
+      source_path: source.source_type === 'git' ? null : this.sourcePath(source.id),
+      source_type: source.source_type,
+      git_repo_url: source.git_repo_url,
+      git_ref: source.git_ref,
+      git_root: source.git_root,
       host_port: allocatePort([...this.apps.usedPorts(targetVpsId), ...remotePorts]),
       container_port: source.container_port,
       healthcheck_path: source.healthcheck_path,
@@ -710,8 +814,7 @@ export class MigrateService {
     const checksumOk =
       targetArchive.code === 0 &&
       targetArchive.stdout.trim().split(/\s+/)[0] === artifacts.artifacts[0]?.sha256
-    const health =
-      targetHealthy && targetRuntime.stdout.includes('|running|')
+    const health = targetHealthy && targetRuntime.stdout.includes('|running|')
     const tableCounts =
       source.needs_db === 1 ? await this.tableCounts(job, source, target, signal) : []
     const marker =

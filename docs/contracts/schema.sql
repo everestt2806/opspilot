@@ -1,6 +1,12 @@
 -- =============================================================================
 -- SCHEMA SQLITE — NGUỒN SỰ THẬT DUY NHẤT
--- File đích khi code: app/src/main/db/migrations/001_init.sql (copy y nguyên)
+-- Phản ánh trạng thái schema tích lũy qua các file migration:
+--   - 001_init.sql (khung ban đầu)
+--   - 002_metric_activation.sql (byte-boundary activation)
+--   - 003_migration_error_message.sql (thông điệp lỗi migrate)
+--   - 004_publish_doctor_domain.sql (exposure, doctor, domain)
+--   - 005_experiment_run_attempt.sql (attempt_index, unique 3 trường cho experiment_run)
+--   - 006_vps_host_fingerprint.sql (pin fingerprint SSH của VPS)
 --
 -- QUY ƯỚC BẮT BUỘC:
 --   * Mọi cột thời gian: TEXT, ISO-8601 UTC, dạng '2026-07-27T10:00:00Z'
@@ -27,6 +33,8 @@ CREATE TABLE vps (
   name            TEXT    NOT NULL UNIQUE,
   host            TEXT    NOT NULL,
   port            INTEGER NOT NULL DEFAULT 22,
+  -- NULL only for legacy records; these VPS must be pinned before SSH can connect.
+  host_fingerprint TEXT,
   username        TEXT    NOT NULL,
 
   auth_type       TEXT    NOT NULL CHECK (auth_type IN ('key','password')),
@@ -64,7 +72,12 @@ CREATE TABLE app (
   name              TEXT    NOT NULL,          -- slug: ^[a-z0-9][a-z0-9-]{1,30}$
   framework         TEXT    NOT NULL CHECK (framework IN ('nextjs','express','static-spa','flask')),
 
-  source_path       TEXT,                      -- đường dẫn local hoặc git URL
+  -- Source provenance: old rows migrate as local and retain their original path.
+  source_type       TEXT    NOT NULL DEFAULT 'local' CHECK (source_type IN ('local','git')),
+  source_path       TEXT,                      -- chỉ dùng cho nguồn local; không ghi đè bằng URL Git
+  git_repo_url      TEXT,                      -- URL GitHub HTTPS canonical, không credential
+  git_ref           TEXT,                      -- branch/tag/SHA được chọn; không xem là provenance immutable
+  git_root          TEXT,                      -- thư mục tương đối bên trong repository
   host_port         INTEGER NOT NULL,          -- cấp trong dải 30000-30999, ADR-006
   container_port    INTEGER NOT NULL,
   healthcheck_path  TEXT    NOT NULL DEFAULT '/',
@@ -88,6 +101,8 @@ CREATE TABLE deployment (
   app_id            INTEGER NOT NULL REFERENCES app(id) ON DELETE CASCADE,
   version           INTEGER NOT NULL,          -- tăng dần trong phạm vi app
   image_tag         TEXT    NOT NULL,          -- vd 'myapp:v3'
+  git_repo_url      TEXT,                      -- provenance của snapshot; NULL với deployment local
+  git_commit_sha    TEXT,                      -- full immutable commit SHA; NULL với deployment local
 
   status            TEXT    NOT NULL CHECK (status IN
                       ('building','deploying','running','failed','rolled_back','stopped')),
@@ -100,6 +115,11 @@ CREATE TABLE deployment (
   build_duration_ms INTEGER,
   total_duration_ms INTEGER,                   -- bằng chứng cho NFR-4 (<3 phút)
   is_rollback_of    INTEGER REFERENCES deployment(id),  -- nếu đây là rollback về bản cũ
+
+  -- Publish / reachability (migration 004)
+  exposure_status   TEXT    NOT NULL DEFAULT 'not_checked'
+                            CHECK (exposure_status IN ('reachable','degraded','tunnel_only','not_checked')),
+  exposure_evidence_json TEXT,
 
   started_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
   finished_at       TEXT,
@@ -254,6 +274,9 @@ CREATE TABLE migration_job (
   verify_json    TEXT,                  -- {"checksums":[...],"table_counts":[...],"health":true}
   source_kept    INTEGER CHECK (source_kept IN (0,1)),
 
+  -- migration 003: lưu lý do lỗi để hiển thị lại sau khi mở lại app
+  error_message  TEXT,
+
   started_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
   finished_at    TEXT
 );
@@ -287,6 +310,7 @@ CREATE TABLE experiment_run (
   scenario         TEXT    NOT NULL CHECK (scenario IN
                      ('memory_leak','cpu_spike','error_burst','slow_db','latency_creep')),
   repeat_index     INTEGER NOT NULL,          -- 1..10
+  attempt_index    INTEGER NOT NULL DEFAULT 1 CHECK (attempt_index BETWEEN 1 AND 3), -- 1..3
   deployment_id    INTEGER REFERENCES deployment(id) ON DELETE SET NULL,
   vps_id           INTEGER REFERENCES vps(id),
 
@@ -307,12 +331,65 @@ CREATE TABLE experiment_run (
   abort_reason      TEXT,
   notes             TEXT,
 
-  -- GHI CHÚ RÀ SOÁT 2026-07-28 — đề xuất, chưa áp dụng:
-  -- Protocol cho phép retry tối đa 2 lần nhưng unique hiện tại không lưu được từng attempt.
-  -- Phương án đề xuất: thêm attempt_index INTEGER NOT NULL DEFAULT 1 và đổi unique thành
-  -- UNIQUE (scenario, repeat_index, attempt_index). Giữ nguyên schema v1 cho tới khi chốt.
-  UNIQUE (scenario, repeat_index)
+  -- GHI CHÚ RÀ SOÁT 2026-10-01 (P2b-1, migration 005):
+  -- Bổ sung attempt_index (1..3) và đổi UNIQUE thành (scenario, repeat_index, attempt_index).
+  UNIQUE (scenario, repeat_index, attempt_index)
 );
+
+-- =============================================================================
+-- J. DOCTOR RUN & ACTION  (migration 004)
+-- =============================================================================
+CREATE TABLE doctor_run (
+  id              INTEGER PRIMARY KEY,
+  deployment_id   INTEGER REFERENCES deployment(id) ON DELETE CASCADE,
+  trigger         TEXT    NOT NULL CHECK (trigger IN ('deploy','manual','monitor','domain')),
+  evidence_json   TEXT    NOT NULL,
+  diagnosis_code  TEXT    NOT NULL,
+  confidence      TEXT    NOT NULL CHECK (confidence IN ('high','medium','low')),
+  selected_fix    TEXT,
+  outcome         TEXT    NOT NULL DEFAULT 'pending'
+                          CHECK (outcome IN ('pending','fixed','verified','failed','abstained')),
+  started_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  finished_at     TEXT
+);
+CREATE INDEX idx_doctor_run_deployment ON doctor_run(deployment_id, started_at DESC);
+
+CREATE TABLE doctor_action (
+  id              INTEGER PRIMARY KEY,
+  doctor_run_id   INTEGER NOT NULL REFERENCES doctor_run(id) ON DELETE CASCADE,
+  action_type     TEXT    NOT NULL,
+  precondition_json TEXT,
+  result_json     TEXT,
+  verify_json     TEXT,
+  rollback_json   TEXT,
+  status          TEXT    NOT NULL CHECK (status IN ('planned','running','success','failed','skipped')),
+  started_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  finished_at     TEXT
+);
+CREATE INDEX idx_doctor_action_run ON doctor_action(doctor_run_id, id);
+
+-- =============================================================================
+-- K. DOMAIN BINDING  (migration 004)
+-- =============================================================================
+CREATE TABLE domain_binding (
+  id              INTEGER PRIMARY KEY,
+  app_id          INTEGER NOT NULL REFERENCES app(id) ON DELETE CASCADE,
+  hostname        TEXT    NOT NULL UNIQUE,
+  mode            TEXT    NOT NULL CHECK (mode IN ('direct_port','shared_ingress','named_tunnel')),
+  provider        TEXT,
+  zone_id         TEXT,
+  record_type     TEXT    CHECK (record_type IN ('A','AAAA','CNAME')),
+  record_name     TEXT,
+  target          TEXT,
+  ownership_key   TEXT    NOT NULL,
+  status          TEXT    NOT NULL DEFAULT 'pending'
+                          CHECK (status IN ('pending','propagated','active','conflict','failed','disabled')),
+  last_check_at   TEXT,
+  evidence_json   TEXT,
+  created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  updated_at      TEXT
+);
+CREATE INDEX idx_domain_binding_app ON domain_binding(app_id, status);
 
 -- =============================================================================
 -- SEED

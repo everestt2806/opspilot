@@ -8,7 +8,11 @@ export interface CreateAppRecord {
   vps_id: number
   name: string
   framework: App['framework']
-  source_path: string
+  source_path: string | null
+  source_type?: 'local' | 'git'
+  git_repo_url?: string | null
+  git_ref?: string | null
+  git_root?: string | null
   host_port: number
   container_port: number
   healthcheck_path: string
@@ -16,7 +20,8 @@ export interface CreateAppRecord {
 }
 
 const APP_COLUMNS = `
-  a.id, a.vps_id, a.name, a.framework, a.host_port, a.container_port,
+  a.id, a.vps_id, a.name, a.framework, a.source_path, a.source_type,
+  a.git_repo_url, a.git_ref, a.git_root, a.host_port, a.container_port,
   a.healthcheck_path, a.needs_db, a.current_deployment_id,
   'http://' || v.host || ':' || a.host_port AS url
 `
@@ -30,8 +35,8 @@ export class AppRepository {
         .prepare(
           `INSERT INTO app (
             vps_id, name, framework, source_path, host_port, container_port,
-            healthcheck_path, needs_db
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+            healthcheck_path, needs_db, source_type, git_repo_url, git_ref, git_root
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           record.vps_id,
@@ -41,7 +46,11 @@ export class AppRepository {
           record.host_port,
           record.container_port,
           record.healthcheck_path,
-          record.needs_db
+          record.needs_db,
+          record.source_type ?? 'local',
+          record.git_repo_url ?? null,
+          record.git_ref ?? null,
+          record.git_root ?? null
         )
       return this.getById(Number(result.lastInsertRowid))
     } catch (error) {

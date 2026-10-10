@@ -22,10 +22,16 @@
     "scripts/seed-vps.ts",
     "scripts/reset-demo.ts",
     "scripts/clean-demo-vms.ts",
+    "scripts/e2e-demo-test.ts",
     "scripts/try-monitor.ts",
+    "scripts/try-detect.ts",
+    "scripts/try-git-snapshot.ts",
+    "scripts/try-vps-diagnostics.ts",
     "scripts/a17-c02-live.ts",
     "scripts/a17-c04-live.ts",
     "scripts/c03-live.ts",
+    "scripts/deploy-cli.ts",
+    "scripts/headless-poller.ts",
     "src/main/raw.d.ts"
   ]
 }

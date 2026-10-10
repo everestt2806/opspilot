@@ -15,7 +15,8 @@ import {
 
 import type { ActionLogEntry, IpcError } from '@shared/ipc'
 
-import { strings } from '../strings'
+import { useUiState } from '../store/uiState'
+import { useStrings } from '../strings'
 import { localDateTime, relativeTime } from '../utils/format'
 import { parseDetailJson } from '../utils/parseDetail'
 
@@ -24,7 +25,15 @@ const PAGE_SIZE = 20
 const ACTION_COLORS: Record<string, string> = {
   deploy: 'blue',
   rollback_auto: 'purple',
-  rollback_manual: 'orange'
+  rollback_manual: 'orange',
+  scan: 'cyan',
+  install_docker: 'geekblue',
+  restart: 'green',
+  stop: 'default',
+  migrate_start: 'blue',
+  migrate_confirm: 'green',
+  migrate_abort: 'red',
+  ssh_error: 'red'
 }
 
 const STATUS_BADGE: Record<
@@ -36,23 +45,27 @@ const STATUS_BADGE: Record<
   cancelled: 'default'
 }
 
-function actionLabel(action: string): string {
-  const map = strings.dashboard.actions as Record<string, string>
-  return map[action] ?? action
-}
-
-function statusLabel(status: ActionLogEntry['status']): string {
-  if (!status) return strings.dashboard.statuses.cancelled
-  return strings.dashboard.statuses[status] ?? status
-}
-
 interface VpsActivityTabProps {
   vpsId: number
 }
 
 /** Tab hoạt động — 20 bản ghi mới nhất của VPS đang chọn. */
 export function VpsActivityTab({ vpsId }: VpsActivityTabProps): React.JSX.Element {
+  const strings = useStrings()
+  const locale = useUiState((state) => state.locale)
   const [rows, setRows] = useState<ActionLogEntry[]>([])
+
+  function actionLabel(action: string): string {
+    const historyActions = strings.history.actions as Record<string, string> | undefined
+    if (historyActions && historyActions[action]) return historyActions[action]
+    const map = strings.dashboard.actions as Record<string, string>
+    return map[action] ?? action
+  }
+
+  function statusLabel(status: ActionLogEntry['status']): string {
+    if (!status) return strings.history.statuses?.cancelled ?? strings.dashboard.statuses.cancelled
+    return strings.history.statuses?.[status] ?? strings.dashboard.statuses[status] ?? status
+  }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<IpcError | null>(null)
   const [selected, setSelected] = useState<ActionLogEntry | null>(null)
@@ -97,7 +110,7 @@ export function VpsActivityTab({ vpsId }: VpsActivityTabProps): React.JSX.Elemen
       width: 140,
       render: (ts: string) => (
         <Tooltip title={localDateTime(ts)}>
-          <span className="mono-text">{relativeTime(ts)}</span>
+          <span className="mono-text">{relativeTime(ts, undefined, locale)}</span>
         </Tooltip>
       )
     },

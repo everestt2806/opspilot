@@ -6,12 +6,15 @@ import type { ActionLogEntry, App, Vps } from '@shared/ipc'
 
 import { DashboardPage } from './DashboardPage'
 import { strings } from '../strings'
+import { useUiState } from '../store/uiState'
+import { useVpsStore } from '../store/vpsStore'
 
 const VPS_A: Vps = {
   id: 1,
   name: 'VM01',
   host: '203.0.113.55',
   port: 22,
+  host_fingerprint: null,
   username: 'root',
   auth_type: 'password',
   provider: 'WiService',
@@ -100,6 +103,7 @@ function statCell(label: string): HTMLElement {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  useVpsStore.setState({ resources: {} })
 })
 
 afterEach(() => {
@@ -107,16 +111,19 @@ afterEach(() => {
 })
 
 describe('DashboardPage', () => {
-  it('hien thi thong ke tong quan va bang hoat dong gan day', async () => {
+  it('hien thi thong ke tong quan va bang hoat dong gan day (0/2 khi chua probe trong phien)', async () => {
     const invoke = mockApi(happyHandlers)
     render(<DashboardPage onOpenVps={() => {}} onOpenDeploy={() => {}} />)
 
     await screen.findByText(strings.dashboard.title)
 
-    expect(statCell(strings.dashboard.stats.vpsOnline).textContent).toContain('1 / 2')
+    // Khong dem last_status='online' tu DB: chua probe trong phien nen la 0 / 2
+    expect(statCell(strings.dashboard.stats.vpsOnline).textContent).toContain('0 / 2')
     expect(statCell(strings.dashboard.stats.appsRunning).textContent).toContain('1 / 2')
     expect(statCell(strings.dashboard.stats.deploy24h).textContent).toContain('2')
-    expect(statCell(strings.dashboard.stats.lastDeploy).textContent).toMatch(/ago|just now/)
+    expect(statCell(strings.dashboard.stats.lastDeploy).textContent).toMatch(
+      /ago|just now|trước|vừa xong/
+    )
 
     expect(screen.getAllByText('Deployed v7 successfully.').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Rollback failed.').length).toBeGreaterThan(0)
@@ -131,6 +138,29 @@ describe('DashboardPage', () => {
       'history:list',
       expect.objectContaining({ actions: ['deploy'], limit: 200, offset: 0 })
     )
+  })
+
+  it('tinh dung so VPS online khi co ket qua probe trong phien', async () => {
+    useVpsStore.setState({
+      resources: {
+        1: {
+          status: 'success',
+          data: {
+            ram_total_mb: 4096,
+            ram_free_mb: 1024,
+            disk_total_gb: 40,
+            disk_free_gb: 20,
+            cpu_count: 2,
+            load_avg_1m: 0.2
+          }
+        }
+      }
+    })
+    mockApi(happyHandlers)
+    render(<DashboardPage />)
+
+    await screen.findByText(strings.dashboard.title)
+    expect(statCell(strings.dashboard.stats.vpsOnline).textContent).toContain('1 / 2')
   })
 
   it('khong co VPS thi hien empty state va nap sang man VPS', async () => {
@@ -166,5 +196,159 @@ describe('DashboardPage', () => {
     expect(await screen.findByText('Khong doc duoc DB.')).toBeTruthy()
     fireEvent.click(screen.getByText(strings.dashboard.retry))
     expect(await screen.findByText(strings.dashboard.title)).toBeTruthy()
+  })
+
+  it('hien thi bang ung dung uu tien dau tien voi trang thai ghi nhan, ho tro dieu huong apps va vps', async () => {
+    const onOpenApps = vi.fn()
+    const onOpenVps = vi.fn()
+    const onOpenDeploy = vi.fn()
+    mockApi(happyHandlers)
+
+    render(
+      <DashboardPage onOpenApps={onOpenApps} onOpenVps={onOpenVps} onOpenDeploy={onOpenDeploy} />
+    )
+
+    await screen.findByText(strings.dashboard.title)
+
+    // Bảng ứng dụng đang quản lý hiển thị ưu tiên
+    expect(screen.getByText(strings.dashboard.apps.title)).toBeTruthy()
+    expect(screen.getByText('blog-demo')).toBeTruthy()
+    expect(screen.getByText('api-demo')).toBeTruthy()
+
+    // Phân biệt trạng thái đã ghi nhận (không tự khẳng định running/healthy)
+    expect(screen.getByText(`${strings.dashboard.apps.statusDeployed} (#7)`)).toBeTruthy()
+    expect(screen.getByText(strings.dashboard.apps.statusNotDeployed)).toBeTruthy()
+
+    // Bấm xem tất cả ứng dụng
+    fireEvent.click(screen.getByText(strings.dashboard.apps.viewAll))
+    expect(onOpenApps).toHaveBeenCalled()
+
+    // Bấm vào ứng dụng lưu selectedAppId và gọi onOpenApps
+    fireEvent.click(screen.getByText('blog-demo'))
+    expect(useUiState.getState().selectedAppId).toBe(1)
+
+    // Bấm vào máy chủ trên bảng lưu selectedVpsId và gọi onOpenVps
+    const vpsLinks = screen.getAllByText('VM01')
+    expect(vpsLinks.length).toBeGreaterThan(0)
+    fireEvent.click(vpsLinks[0])
+    expect(onOpenVps).toHaveBeenCalled()
+    expect(useUiState.getState().selectedVpsId).toBe(1)
+
+    // Bấm nút Triển khai trên header
+    fireEvent.click(screen.getByText(strings.dashboard.deployAction))
+    expect(onOpenDeploy).toHaveBeenCalled()
+  })
+
+  it('cap nhat dung toan bo nhan va thoi gian tuong doi khi doi 4 ngon ngu', async () => {
+    mockApi(happyHandlers)
+
+    // Test English
+    useUiState.setState({ locale: 'en' })
+    const { rerender } = render(<DashboardPage />)
+    await screen.findByText('Dashboard')
+    expect(
+      screen.getByText('System overview, managed applications, and recent activities.')
+    ).toBeTruthy()
+    expect(screen.getByText('Managed applications')).toBeTruthy()
+    expect(screen.getByText('Recent activity')).toBeTruthy()
+    expect(statCell('Last deployment').textContent).toMatch(/ago|just now/)
+
+    // Test Vietnamese
+    useUiState.setState({ locale: 'vi' })
+    rerender(<DashboardPage />)
+    await screen.findByText('Tổng quan hệ thống')
+    expect(screen.getByText('Ứng dụng đang quản lý')).toBeTruthy()
+    expect(screen.getByText('Hoạt động gần đây')).toBeTruthy()
+    expect(statCell('Lần triển khai gần nhất').textContent).toMatch(/trước|vừa xong/)
+
+    // Test Chinese
+    useUiState.setState({ locale: 'cn' })
+    rerender(<DashboardPage />)
+    await screen.findByText('系统总览')
+    expect(screen.getByText('管理的应用')).toBeTruthy()
+    expect(screen.getByText('近期活动')).toBeTruthy()
+    expect(statCell('最近部署').textContent).toMatch(/前|刚刚/)
+
+    // Test Japanese
+    useUiState.setState({ locale: 'jp' })
+    rerender(<DashboardPage />)
+    await screen.findByText('システム概要')
+    expect(screen.getByText('管理中のアプリ')).toBeTruthy()
+    expect(screen.getByText('最近のアクティビティ')).toBeTruthy()
+    expect(statCell('最終デプロイ').textContent).toMatch(/前|たった今/)
+
+    // Reset về Vietnamese cho các test tiếp theo
+    useUiState.setState({ locale: 'vi' })
+  })
+
+  it('lay lan trien khai gan nhat bang truy van history:list rieng biet ma khong suy ra tu 10 hoat dong gan nhat', async () => {
+    // 10 hoạt động gần nhất toàn là scan và restart (không có deploy nào)
+    const recentWithoutDeploy: ActionLogEntry[] = [
+      logEntry({ id: 10, action: 'scan', message: 'Scanned VM01' }),
+      logEntry({ id: 11, action: 'restart', message: 'Restarted VM01' })
+    ]
+    const dedicatedDeployLog = logEntry({
+      id: 99,
+      action: 'deploy',
+      ts: '2026-08-10T12:00:00Z',
+      message: 'Dedicated deploy log v5'
+    })
+
+    const invoke = mockApi({
+      'vps:list': async () => ({ ok: true, data: [VPS_A] }),
+      'app:list': async () => ({ ok: true, data: [APP_A] }),
+      'history:list': async (filter) => {
+        const f = filter as { actions?: string[]; limit?: number }
+        if (f.actions && f.actions.includes('deploy') && f.limit === 1) {
+          return { ok: true, data: [dedicatedDeployLog] }
+        }
+        if (f.actions && f.actions.includes('deploy') && f.limit === 200) {
+          return { ok: true, data: [dedicatedDeployLog] }
+        }
+        return { ok: true, data: recentWithoutDeploy }
+      }
+    })
+
+    render(<DashboardPage />)
+    await screen.findByText(strings.dashboard.title)
+
+    // Xác nhận history:list được gọi đúng để lấy lần deploy gần nhất
+    expect(invoke).toHaveBeenCalledWith('history:list', {
+      actions: ['deploy'],
+      limit: 1,
+      offset: 0
+    })
+
+    // Dù trong 10 hoạt động gần nhất không có deploy, ô Lần triển khai gần nhất vẫn hiển thị đúng
+    const lastDeployCell = statCell(strings.dashboard.stats.lastDeploy)
+    expect(lastDeployCell.textContent).not.toBe('—')
+    expect(lastDeployCell.textContent).toMatch(/ago|just now|trước|vừa xong/)
+  })
+
+  it('thong ke 24 gio neu cham moc 200 thi hien thi ro >=200 chu khong ghi 200 chinh xac', async () => {
+    const cappedArray = Array.from({ length: 200 }, (_, i) =>
+      logEntry({ id: 1000 + i, action: 'deploy' })
+    )
+
+    mockApi({
+      'vps:list': async () => ({ ok: true, data: [VPS_A] }),
+      'app:list': async () => ({ ok: true, data: [APP_A] }),
+      'history:list': async (filter) => {
+        const f = filter as { actions?: string[]; limit?: number }
+        if (f.actions && f.actions.includes('deploy') && f.limit === 200) {
+          return { ok: true, data: cappedArray }
+        }
+        if (f.actions && f.actions.includes('deploy') && f.limit === 1) {
+          return { ok: true, data: [cappedArray[0]] }
+        }
+        return { ok: true, data: RECENT }
+      }
+    })
+
+    render(<DashboardPage />)
+    await screen.findByText(strings.dashboard.title)
+
+    // Thống kê 24h hiển thị rõ ràng "≥200"
+    expect(statCell(strings.dashboard.stats.deploy24h).textContent).toContain('≥200')
   })
 })

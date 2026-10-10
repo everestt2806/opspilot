@@ -3,7 +3,7 @@ import { CopyOutlined } from '@ant-design/icons'
 
 import type { Vps } from '@shared/ipc'
 
-import { strings } from '../strings'
+import { useStrings } from '../strings'
 
 interface VpsServerHeaderProps {
   vps: Vps
@@ -16,6 +16,7 @@ function sshCommand(vps: Vps): string {
 
 /** Thanh thông tin nhanh: IP, cổng SSH, lệnh SSH — tham chiếu quick info bar FlashPanel. */
 export function VpsServerHeader({ vps }: VpsServerHeaderProps): React.JSX.Element {
+  const strings = useStrings()
   const [messageApi, contextHolder] = message.useMessage()
   const command = sshCommand(vps)
 

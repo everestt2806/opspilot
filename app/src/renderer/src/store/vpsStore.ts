@@ -10,6 +10,7 @@ interface VpsStore {
   loadError: string | null
   resources: Record<number, RowResourceState | undefined>
   load: () => Promise<void>
+  refreshVps: (id: number) => Promise<void>
   refreshResources: (ids?: number[]) => Promise<void>
 }
 
@@ -31,6 +32,18 @@ export const useVpsStore = create<VpsStore>((set, get) => ({
     await get().refreshResources(result.data.map((vps) => vps.id))
   },
 
+  async refreshVps(id: number): Promise<void> {
+    const result = await window.api.invoke('vps:list')
+    if (result.ok) {
+      const updated = result.data.find((vps) => vps.id === id)
+      if (updated) {
+        set((state) => ({
+          items: state.items.map((vps) => (vps.id === id ? updated : vps))
+        }))
+      }
+    }
+  },
+
   async refreshResources(ids?: number[]): Promise<void> {
     const target = ids ?? get().items.map((vps) => vps.id)
     const patch: Record<number, RowResourceState> = {}
@@ -42,9 +55,10 @@ export const useVpsStore = create<VpsStore>((set, get) => ({
     await Promise.all(
       target.map(async (id) => {
         const result = await window.api.invoke('vps:get-resources', id)
+        const fetchedAt = Date.now()
         const entry: RowResourceState = result.ok
-          ? { status: 'success', data: result.data }
-          : { status: 'error', message: result.error.message }
+          ? { status: 'success', data: result.data, fetchedAt }
+          : { status: 'error', message: result.error.message, fetchedAt }
         set((state) => ({ resources: { ...state.resources, [id]: entry } }))
       })
     )

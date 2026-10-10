@@ -6,7 +6,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
 
-import { strings } from '../strings'
+import { useStrings } from '../strings'
 import { TERM_COLORS } from '../utils/themeTokens'
 
 interface DeployTerminalProps {
@@ -16,6 +16,10 @@ interface DeployTerminalProps {
   /** Tổng số bước hiển thị ở thanh tiến trình; mặc định 7 bước của deploy. */
   totalSteps?: number
   status: 'streaming' | 'success' | 'failed'
+  title?: string
+  stepLabel?: string
+  emptyText?: string
+  jobId?: string | number
 }
 
 export function DeployTerminal({
@@ -23,12 +27,18 @@ export function DeployTerminal({
   activeStep,
   completedSteps,
   totalSteps = 7,
-  status
+  status,
+  title,
+  stepLabel,
+  emptyText,
+  jobId
 }: DeployTerminalProps): React.JSX.Element {
+  const strings = useStrings()
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const searchRef = useRef<SearchAddon | null>(null)
-  const writtenRef = useRef(0)
+  const prevBufferRef = useRef('')
+  const prevJobIdRef = useRef<string | number | undefined>(undefined)
   const scrolledUpRef = useRef(false)
   const [scrolledUp, setScrolledUp] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
@@ -86,12 +96,32 @@ export function DeployTerminal({
   useEffect(() => {
     const term = termRef.current
     if (!term) return
-    if (buffer.length > writtenRef.current) {
-      term.write(buffer.slice(writtenRef.current))
-      writtenRef.current = buffer.length
+
+    const prevJobId = prevJobIdRef.current
+    const jobChanged = jobId !== undefined && prevJobId !== undefined && jobId !== prevJobId
+    const prevBuffer = prevBufferRef.current
+
+    // Check if buffer is an incremental append of previous buffer
+    const isIncrementalAppend = !jobChanged && buffer.startsWith(prevBuffer)
+
+    if (isIncrementalAppend) {
+      if (buffer.length > prevBuffer.length) {
+        term.write(buffer.slice(prevBuffer.length))
+      }
+    } else {
+      // Buffer was truncated, job changed, or buffer was cleared/reset
+      term.reset()
+      term.clearSelection()
+      if (buffer.length > 0) {
+        term.write(buffer)
+      }
     }
+
+    prevBufferRef.current = buffer
+    prevJobIdRef.current = jobId
+
     if (!scrolledUpRef.current) term.scrollToBottom()
-  }, [buffer])
+  }, [buffer, jobId])
 
   function handleCopy(): void {
     const selection = termRef.current?.getSelection()
@@ -116,9 +146,15 @@ export function DeployTerminal({
             className={`deploy-terminal-live-dot deploy-terminal-live-dot-${status}`}
             aria-hidden="true"
           />
-          <span className="deploy-terminal-title">{strings.deploy.log.liveOutput}</span>
+          <span className="deploy-terminal-title">{title ?? strings.deploy.log.liveOutput}</span>
           <span className="deploy-terminal-progress">
-            {activeStep ?? strings.deploy.log.finished} · {completedSteps}/{totalSteps}
+            {stepLabel ??
+              (activeStep
+                ? (strings.deploy.log.steps?.[
+                    activeStep as keyof typeof strings.deploy.log.steps
+                  ] ?? activeStep)
+                : strings.deploy.log.finished)}{' '}
+            · {completedSteps}/{totalSteps}
           </span>
         </div>
         <Space size={4} className="deploy-terminal-actions">
@@ -149,7 +185,7 @@ export function DeployTerminal({
       <div className="deploy-terminal-xterm" ref={containerRef} />
       {buffer.length === 0 && (
         <Typography.Text type="secondary" className="deploy-terminal-empty">
-          {strings.deploy.log.empty}
+          {emptyText ?? strings.deploy.log.empty}
         </Typography.Text>
       )}
       {scrolledUp && (

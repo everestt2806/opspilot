@@ -49,6 +49,7 @@ async function main(): Promise<void> {
     return {
       host: profile.host,
       port: profile.port,
+      hostFingerprint: profile.host_fingerprint ?? null,
       username: profile.username,
       authType: profile.auth_type,
       secret: loadSecret(database, cipher, vpsId)

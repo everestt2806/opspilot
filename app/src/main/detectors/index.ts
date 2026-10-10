@@ -5,8 +5,8 @@ import { nextjsDetector } from './nextjs'
 import { staticSpaDetector } from './static-spa'
 
 /**
- * Lát cắt TK-A13 chỉ có detector express (đủ cho demo express-api).
- * nextjs/static-spa/flask bổ sung ở TK-A7 (M3 đầy đủ) — thêm 1 file + 1 dòng vào mảng.
+ * Registry tĩnh giúp thêm template bằng một detector + fixture contract test. Flask vẫn giữ trong
+ * contract để tương thích dữ liệu cũ nhưng chưa được công bố cho tới khi gate ML chính thức đạt.
  */
 export const DETECTORS: Detector[] = [nextjsDetector, staticSpaDetector, expressDetector]
 
@@ -51,7 +51,7 @@ export function detectFramework(tree: SourceTree): DetectionResult {
     matched: false,
     signals,
     hint:
-      'Không nhận diện được framework. Thư mục cần package.json có dependency next/vite/express ' +
-      '(hoặc requirements.txt có flask). Xem dấu hiệu đã kiểm tra ở từng detector.'
+      'Không nhận diện được framework. Thư mục cần package.json có dependency next/vite/express. ' +
+      'Xem dấu hiệu đã kiểm tra ở từng detector.'
   }
 }

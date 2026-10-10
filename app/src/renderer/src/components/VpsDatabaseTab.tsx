@@ -27,7 +27,7 @@ import {
 import type { DbDatabase, DbSchemaTable, DbUser, IpcError, IpcResult } from '@shared/ipc'
 
 import { DbSchemaDesigner } from './DbSchemaDesigner'
-import { strings } from '../strings'
+import { useStrings } from '../strings'
 import {
   downloadTextFile,
   exportTableCsv,
@@ -40,6 +40,7 @@ import { tablesToDdl } from '../utils/sqlDdl'
 
 interface VpsDatabaseTabProps {
   vpsId: number
+  supported?: boolean
 }
 
 interface CreateUserValues {
@@ -88,7 +89,14 @@ async function callDb<T>(
 /** Tab Database — quản lý user + database trên Postgres của VPS: 2 bảng kèm nút
  *  Create mở popup, bấm dòng database xuống trang thiết kế schema (kéo-thả,
  *  PK/FK, import file, SQL preview, lưu schema lên server). */
-export function VpsDatabaseTab({ vpsId }: VpsDatabaseTabProps): React.JSX.Element {
+export function VpsDatabaseTab({
+  vpsId,
+  supported = false
+}: VpsDatabaseTabProps): React.JSX.Element {
+  const strings = useStrings()
+  const db = strings.vpsControl.database
+  const isSupported = supported
+
   const [users, setUsers] = useState<DbUser[] | null>(null)
   const [usersError, setUsersError] = useState<IpcError | null>(null)
 
@@ -131,9 +139,6 @@ export function VpsDatabaseTab({ vpsId }: VpsDatabaseTabProps): React.JSX.Elemen
   const [dbModalError, setDbModalError] = useState<string | null>(null)
   const [userForm] = Form.useForm<CreateUserValues>()
   const [dbForm] = Form.useForm<CreateDatabaseValues>()
-
-  const db = strings.vpsControl.database
-
   const loadUsers = useCallback(async (): Promise<void> => {
     const res = await callDb<DbUser[]>('db:list-users', vpsId)
     setUsersError(res.error)
@@ -162,6 +167,7 @@ export function VpsDatabaseTab({ vpsId }: VpsDatabaseTabProps): React.JSX.Elemen
   )
 
   useEffect(() => {
+    if (!isSupported) return
     let cancelled = false
     void (async () => {
       const usersRes = await callDb<DbUser[]>('db:list-users', vpsId)
@@ -175,7 +181,7 @@ export function VpsDatabaseTab({ vpsId }: VpsDatabaseTabProps): React.JSX.Elemen
     return () => {
       cancelled = true
     }
-  }, [vpsId])
+  }, [vpsId, isSupported])
 
   const onCreateUser = async (values: CreateUserValues): Promise<void> => {
     setUserSubmitting(true)
@@ -294,6 +300,26 @@ export function VpsDatabaseTab({ vpsId }: VpsDatabaseTabProps): React.JSX.Elemen
       align: 'center'
     }
   ]
+
+  if (!isSupported) {
+    return (
+      <div className="panel-tab-empty" style={{ padding: '48px 16px', textAlign: 'center' }}>
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={
+            <Space direction="vertical" size={8} style={{ textAlign: 'center' }}>
+              <Typography.Title level={5} style={{ margin: 0 }}>
+                {db.notSupportedTitle}
+              </Typography.Title>
+              <Typography.Text type="secondary" style={{ maxWidth: 480, display: 'inline-block' }}>
+                {db.notSupportedDesc}
+              </Typography.Text>
+            </Space>
+          }
+        />
+      </div>
+    )
+  }
 
   /* ── Trang thiết kế schema cho một database ─────────────────────────────── */
   if (openDbName) {

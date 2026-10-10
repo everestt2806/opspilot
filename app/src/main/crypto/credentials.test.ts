@@ -11,13 +11,9 @@ import { closeDatabase, initializeDatabase } from '../db'
 import { VpsRepository } from '../db/vpsRepository'
 import { VpsService } from '../vps/service'
 
-const SAMPLE_KEY = [
-  '-----BEGIN OPENSSH PRIVATE KEY-----',
-  'b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZWQy',
-  'NTUxOQAAACB2FcQhYbQewyV3lYPd6o2Xf9QwvQcN4wRCuO2v3m3mHwAAAKjRwCk9Mx1N',
-  'v0EZ1WfGs8QpE2g0T0B5WHXm1mZvLq4vHWwiuAqSGykAAAAFWJuYW1lQGJueW5hbWUBNg',
-  '-----END OPENSSH PRIVATE KEY-----'
-].join('\n')
+const TEST_HOST_FINGERPRINT = `SHA256:${Buffer.alloc(32, 3).toString('base64').replace(/=+$/, '')}`
+
+const TEST_CREDENTIAL_TEXT = 'non-secret test fixture'
 
 let testDirectory: string | null = null
 
@@ -37,9 +33,10 @@ describe('credential trong DB', () => {
       name: 'Sandbox',
       host: '127.0.0.1',
       port: 2222,
+      host_fingerprint: TEST_HOST_FINGERPRINT,
       username: 'deploy',
       auth_type: 'key',
-      secret: SAMPLE_KEY
+      secret: TEST_CREDENTIAL_TEXT
     })
 
     const row = database
@@ -47,12 +44,11 @@ describe('credential trong DB', () => {
       .get(created.id) as { encrypted_secret: Buffer; iv: Buffer; auth_tag: Buffer }
 
     const stored = row.encrypted_secret.toString('utf8')
-    expect(stored).not.toContain('OPENSSH PRIVATE KEY')
-    expect(stored).not.toContain('b3BlbnNzaC1rZXktdjE')
+    expect(stored).not.toContain(TEST_CREDENTIAL_TEXT)
     expect(row.iv).toHaveLength(12)
     expect(row.auth_tag).toHaveLength(16)
 
-    expect(loadSecret(database, cipher, created.id)).toBe(SAMPLE_KEY)
+    expect(loadSecret(database, cipher, created.id)).toBe(TEST_CREDENTIAL_TEXT)
   })
 
   it('loadSecret bao loi khi VPS khong ton tai', () => {
@@ -66,9 +62,10 @@ describe('credential trong DB', () => {
       name: 'Sandbox',
       host: '127.0.0.1',
       port: 2222,
+      host_fingerprint: TEST_HOST_FINGERPRINT,
       username: 'deploy',
-      auth_type: 'password',
-      secret: 'mat-khau'
+      auth_type: 'key',
+      secret: TEST_CREDENTIAL_TEXT
     })
 
     database
