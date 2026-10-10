@@ -1,5 +1,7 @@
 # Sprint demo OpsPilot trước 14/10/2026
 
+> **Lịch mới ngày 10/10:** Giảng viên dời buổi demo sang **11:00 ngày 11/10/2026**. Dùng [kịch bản 7 phút](demo-11-10/kich-ban-11h.md) và [phiếu PDF A4](demo-11-10/phieu-demo.pdf) cho buổi trình bày. Các mốc 12–14/10 bên dưới là kế hoạch lịch sử, không còn là lịch chuẩn bị trước demo.
+
 > Lập ngày 08/10/2026. Chủ trì review: Leader. Thực hiện code: Worker.
 > Mục tiêu là một buổi demo 6–8 phút có chứng cứ kiểm tra được, không tuyên bố tính năng chưa chạy thật.
 > Kế hoạch năng lực sản phẩm dài hạn: [28-danh-gia-san-sang-vercel-tren-vps.md](28-danh-gia-san-sang-vercel-tren-vps.md).

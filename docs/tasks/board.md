@@ -107,6 +107,8 @@ manual-only, không push/PR/merge.
 
 ### Sprint demo trước 14/10/2026 — [kế hoạch và gate](../29-ke-hoach-demo-14-10.md), [kiểm kê Git-first](../30-audit-git-first-deploy.md)
 
+> Lịch giảng viên mới: **11:00 ngày 11/10/2026**. Dùng [kịch bản và phiếu A4](../demo-11-10/kich-ban-11h.md); các hạn 12–14/10 bên dưới là lịch sử.
+
 | ID | Task | Chủ | Hạn nội bộ | Trạng thái | Phụ thuộc | DoD ngắn |
 | --- | --- | --- | --- | --- | --- | --- |
 | D14-G0 | Contract/migration 007 và Git acquisition có test | Worker | 09/10 | CHỜ REVIEW | Audit 30 | Local review pass `ebbfc7e`; chưa push/merge |
@@ -119,6 +121,7 @@ manual-only, không push/PR/merge.
 | D14-G4b | [Live rehearsal qua preselect app](tk-s7-g4b-live-rehearsal-navigation.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4a | Live v4 đạt; ảnh correction 91% thuộc Electron cũ, không chứng minh VPS thiếu RAM; không có redeploy/video correction. Leader chấp nhận G3 recorded fallback; live mới chuyển checkpoint G5-live |
 | D14-G5 | [Memory stability và freeze](tk-s7-g5-memory-stability-demo-freeze.md) | Worker | trước 14/10 | CHỜ REVIEW | D14-G4b | G5c giải thích UI cũ 91%; 3 mẫu UI/collector build mới khớp khoảng 20–21%. Chẩn đoán sai lệch UI hoàn tất; live vẫn NOT_RUN do kiểm tra vận hành/video liên tục build mới, chuyển checkpoint riêng; giữ recorded |
 | D14-G5-live | [Kiểm tra vận hành và video deploy build mới](tk-s7-g5-live-checkpoint.md) | Worker | trước freeze 13/10/2026 | BLOCKED / NOT_RUN | D14-G5 | C2d operational diagnostics trên Electron thật PASS: 3 mẫu >=60s, PSI 0%, OOM=0 không tăng, RAM/disk/process + collector container_up=1; 3 URL HTTP 200 (2026-10-09T22:01:28Z). Precheck NOT_RUN vì DATABASE_URL Required còn trống/không được đoán; không Start/redeploy/video mới. Giữ DEMO_READY_RECORDED/G3 deployment v3; full SHA và blocker trong evidence/task. |
+| D11-script | [Kịch bản 7 phút và phiếu in 11/10](tk-s7-demo-11-10.md) | Leader | tối 10/10 | CHỜ REVIEW | G2/G2b/G3/G4b | Script + PDF A4 một trang; ba URL HTTP 200 lúc soạn; kiểm tra lại sáng 11/10. Live redeploy chỉ sau precheck PASS, fallback G3 gắn nhãn build cũ/v3. |
 
 
 
