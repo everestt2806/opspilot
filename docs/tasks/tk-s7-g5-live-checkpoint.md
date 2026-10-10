@@ -1,6 +1,6 @@
 # TK-S7 G5-live — kiểm tra vận hành và rehearsal trên build hiện tại
 
-**Trạng thái mới nhất:** `BLOCKED / NOT_RUN` (C3c, 2026-10-10 UTC). C3c stopped before Start because continuous silent video capture and audio-track validation were unavailable. The C3b precheck had expired its 5-minute token; fresh diagnostics/resource/HTTP/precheck gates were not run. No deployment or VPS change occurred; retain `DEMO_READY_RECORDED`.
+**Trạng thái mới nhất:** `BLOCKED / PARTIAL` (C3d, 2026-10-10 UTC). One same-SHA Git redeploy completed successfully as v5 and post-deploy runtime/HTTP checks passed, but the Snipping Tool MP4 ended before precheck/Start and contained an AAC track; the continuous-video gate failed. Retain `DEMO_READY_RECORDED`; do not claim live readiness or use the incomplete clip as proof.
 
 ## Điều kiện còn thiếu
 
@@ -91,3 +91,12 @@ Kết quả cập nhật: phần đo vận hành read-only đạt, nhưng checkp
 - Existing Electron PID `37064` shows production renderer `app/out/renderer/index.html` and the saved G2 profile. Wizard was at Check & Run for Git Express v4; repo/ref/root matched C3b source SHA `8af16e1f9165a31557288adbc23acc420244938f`, which was not re-prepared in this attempt. The previous precheck at `2026-10-10T07:02:56Z` exceeded its 5-minute token lifetime, so it was not accepted or reused.
 - Fresh diagnostics, resources/PSI/OOM, external URLs and precheck: `NOT_RUN` because the recording gate was unavailable. Start untouched; no job/deployment, SSH outside OpsPilot, service/firewall mutation, or VPS change.
 - Resume when continuous screen recording can begin before Start and MP4 audio can be verified; repeat all fresh gates and source checks. Until the continuous same-build video plus post-deploy proof pass, retain `DEMO_READY_RECORDED` and the G3 old-build/deployment-v3 label.
+
+## G5-live C3d - one same-SHA redeploy; video gate failed (2026-10-10 UTC)
+
+- `START 2026-10-10`: confirmed existing production Electron PID `37064`, `app/out/renderer/index.html`, G2 profile and single OpsPilot window. Branch HEAD was `359f1af2ea02f62574abdd6825bf61e2cc1ee049`; no user profile/key/SQLite reset. Existing app v4 and newly prepared Git source matched repo/ref/root and full SHA `8af16e1f9165a31557288adbc23acc420244938f`.
+- At `2026-10-10T07:37:51Z`, explicit VPS Overview diagnostics returned RSS data, PSI some/full `0.00% / 0.00%`, cumulative OOM `0`, RAM `799 MB / 3.8 GB`, and disk `8 / 25 GB`. Collector `container_up` for the same minute was not checked; OOM was not re-sampled. Full process list is in `docs/demo-14-10/evidence.md`.
+- Explicit env review was checked. `PORT=3000` and `ENABLE_FAULT_ENDPOINTS=false` were entered; `DATABASE_URL` remained blank and no secret was read/displayed. Precheck around `07:40Z` passed: free RAM `3104 MB`, free disk `18 GB`, Docker `29.8.2`, required remote keys available. Three pre-deploy HTTP GETs at `07:40:52Z` returned 200.
+- Snipping Tool recording was visibly active before Start, both microphone and system audio indicators were muted. One Start at `07:41:01Z`; pipeline completed in 35s, all 7 stages passed. App history/overview showed v5 `running/reachable`, build 33s and the same full SHA. UI did not expose a separate deployment ID. Three post-deploy HTTP GETs at `07:41:49Z` returned 200.
+- Video review: raw MP4 duration `148.433s` and had H.264 video plus AAC audio. A temporary FFmpeg remux removed audio and `ffprobe` confirmed one H.264 video stream, but beginning/middle/end review showed the clip ended on environment configuration before precheck/Start. The remux is incomplete and not committed; continuous same-build video gate is `FAIL`, not PASS. No duplicate redeploy was attempted.
+- Overall `BLOCKED / PARTIAL`: runtime deploy and HTTP checks passed, but required continuous silent video failed and collector same-minute/OOM trend are not verified. Keep `DEMO_READY_RECORDED` and G3 build-old/deployment-v3 fallback; no firewall/other service change, push, PR or merge.
