@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Alert, Button, Empty, Space, Spin, Table, Tag, Tooltip, Typography } from 'antd'
 import { ExportOutlined, PlusOutlined, ReloadOutlined, RocketOutlined } from '@ant-design/icons'
 
-import type { App, Deployment, IpcError } from '@shared/ipc'
+import type { App, Deployment, DiscoveredVpsApp, IpcError } from '@shared/ipc'
 
 import { useStrings } from '../strings'
 import { useUiState } from '../store/uiState'
@@ -78,6 +78,10 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
   const [rows, setRows] = useState<AppRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<IpcError | null>(null)
+  const [discovered, setDiscovered] = useState<DiscoveredVpsApp[]>([])
+  const [scanError, setScanError] = useState<IpcError | null>(null)
+  const [scanLoading, setScanLoading] = useState(false)
+  const scanVersion = useRef(0)
   const setActivePage = useUiState((state) => state.setActivePage)
   const setDeployPreselect = useUiState((state) => state.setDeployPreselect)
   const setSelectedAppId = useUiState((state) => state.setSelectedAppId)
@@ -93,6 +97,42 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
     }
     setLoading(false)
   }, [vpsId])
+
+  const scan = useCallback(async () => {
+    const version = ++scanVersion.current
+    await Promise.resolve()
+    if (version !== scanVersion.current) return
+    setScanLoading(true)
+    try {
+      const result = await window.api.invoke('vps:discover-apps', vpsId)
+      if (version !== scanVersion.current) return
+      if (result.ok) {
+        setDiscovered(result.data)
+        setScanError(null)
+      } else {
+        setDiscovered([])
+        setScanError(result.error)
+      }
+    } catch {
+      if (version !== scanVersion.current) return
+      setDiscovered([])
+      setScanError({ code: 'UNKNOWN', message: '' })
+    } finally {
+      if (version === scanVersion.current) setScanLoading(false)
+    }
+  }, [vpsId])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      await Promise.resolve()
+      if (!cancelled) await scan()
+    })()
+    return () => {
+      cancelled = true
+      scanVersion.current += 1
+    }
+  }, [scan])
 
   useEffect(() => {
     let cancelled = false
@@ -251,6 +291,10 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
     }
   ]
 
+  const remoteOnly = discovered.filter(
+    (candidate) => !rows.some((app) => app.name === candidate.name)
+  )
+
   return (
     <div>
       <div
@@ -265,6 +309,9 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
           {strings.vpsControl.apps.title}
         </Typography.Title>
         <Space>
+          <Button icon={<ReloadOutlined />} onClick={() => void scan()} loading={scanLoading}>
+            {strings.vpsControl.apps.discoveredScan}
+          </Button>
           <Button icon={<ReloadOutlined />} onClick={() => void load()} disabled={loading}>
             {strings.common.refresh}
           </Button>
@@ -289,13 +336,28 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
         />
       )}
 
+      {scanError && (
+        <Alert
+          type="warning"
+          showIcon
+          message={strings.vpsControl.apps.discoveredError}
+          description={scanError.message || strings.vpsControl.apps.discoveredError}
+          action={
+            <Button size="small" onClick={() => void scan()}>
+              {strings.common.retry}
+            </Button>
+          }
+          style={{ marginBottom: 12 }}
+        />
+      )}
+
       {loading && (
         <div style={{ textAlign: 'center', padding: 32 }}>
           <Spin />
         </div>
       )}
 
-      {!loading && !error && rows.length === 0 && (
+      {!loading && !error && rows.length === 0 && remoteOnly.length === 0 && !scanLoading && (
         <Empty description={strings.vpsControl.apps.empty}>
           <Typography.Paragraph type="secondary" style={{ maxWidth: 360, margin: '0 auto' }}>
             {strings.vpsControl.apps.emptyHint}
@@ -315,6 +377,44 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
           pagination={false}
           className="vps-apps-table"
         />
+      )}
+
+      {!loading && !error && remoteOnly.length > 0 && (
+        <section style={{ marginTop: 24 }} aria-label={strings.vpsControl.apps.discoveredTitle}>
+          <Typography.Title level={5}>{strings.vpsControl.apps.discoveredTitle}</Typography.Title>
+          <Alert
+            type="info"
+            showIcon
+            message={strings.vpsControl.apps.discoveredHint}
+            style={{ marginBottom: 12 }}
+          />
+          <Table<DiscoveredVpsApp>
+            rowKey="name"
+            size="small"
+            dataSource={remoteOnly}
+            pagination={false}
+            columns={[
+              { title: strings.vpsControl.apps.columns.name, dataIndex: 'name', key: 'name' },
+              {
+                title: strings.vpsControl.apps.discoveredImage,
+                dataIndex: 'image_tag',
+                key: 'image'
+              },
+              {
+                title: strings.vpsControl.apps.columns.port,
+                dataIndex: 'host_port',
+                key: 'port',
+                render: (port: number | null) => port ?? '—'
+              },
+              {
+                title: strings.vpsControl.apps.discoveredState,
+                dataIndex: 'state',
+                key: 'state',
+                render: (state: string) => <Tag>{state}</Tag>
+              }
+            ]}
+          />
+        </section>
       )}
     </div>
   )

@@ -727,6 +727,13 @@ const BASE_EN_STRINGS = {
     },
     apps: {
       title: 'Apps on this server',
+      discoveredTitle: 'Found on VPS',
+      discoveredHint:
+        'These containers look like OpsPilot deployments but are absent from this computer. Deployment history and source are unavailable; management is disabled until verified import is supported.',
+      discoveredScan: 'Scan VPS',
+      discoveredError: 'Could not scan Docker containers on the VPS.',
+      discoveredImage: 'Docker image',
+      discoveredState: 'Container state',
       deployNew: 'Deploy new application',
       redeploy: 'Redeploy',
       openApp: 'Open app',
@@ -1154,6 +1161,13 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     apps: {
       title: 'Ứng dụng trên máy chủ',
+      discoveredTitle: 'Phát hiện trên VPS',
+      discoveredHint:
+        'Các container này có dấu hiệu do OpsPilot triển khai nhưng không có hồ sơ trên máy này. Chưa có lịch sử hay nguồn app; chưa thể quản lý cho đến khi có chức năng import đã xác minh.',
+      discoveredScan: 'Quét VPS',
+      discoveredError: 'Không thể quét container Docker trên VPS.',
+      discoveredImage: 'Docker image',
+      discoveredState: 'Trạng thái container',
       deployNew: 'Triển khai ứng dụng mới',
       redeploy: 'Triển khai lại',
       openApp: 'Mở app',
@@ -1902,6 +1916,13 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     apps: {
       title: '服务器上的应用',
+      discoveredTitle: '在 VPS 上发现',
+      discoveredHint:
+        '这些容器看起来由 OpsPilot 部署，但此电脑没有相应记录。部署历史和源码未知；完成验证导入前无法管理。',
+      discoveredScan: '扫描 VPS',
+      discoveredError: '无法扫描 VPS 上的 Docker 容器。',
+      discoveredImage: 'Docker 镜像',
+      discoveredState: '容器状态',
       deployNew: '部署新应用',
       redeploy: '重新部署',
       openApp: '打开应用',
@@ -2630,6 +2651,13 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     apps: {
       title: 'サーバー上のアプリ',
+      discoveredTitle: 'VPS で検出',
+      discoveredHint:
+        'これらは OpsPilot が配置した可能性のあるコンテナですが、この端末に記録がありません。履歴とソースは不明で、検証済みの取り込み機能ができるまで管理できません。',
+      discoveredScan: 'VPS をスキャン',
+      discoveredError: 'VPS の Docker コンテナをスキャンできませんでした。',
+      discoveredImage: 'Docker イメージ',
+      discoveredState: 'コンテナの状態',
       deployNew: '新規アプリをデプロイ',
       redeploy: '再デプロイ',
       openApp: 'アプリを開く',

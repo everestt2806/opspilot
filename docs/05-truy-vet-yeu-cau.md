@@ -69,7 +69,7 @@ thật và CLI fixture; smoke VPS thật và UI nghiệm thu vẫn chờ TK-S4/B
 
 | UC    | Tên                                         | Màn hình   | Smoke test bước                                                                                              | TT  |
 | ----- | ------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------ | --- |
-| UC-01 | Kết nối VPS mới                             | 3.1        | 1                                                                                                            | ✅  |
+| UC-01 | Kết nối VPS mới                             | 3.1        | 1; R1 giữ hồ sơ khi gỡ/kết nối lại, R2 hiển thị read-only app còn trên VPS nhưng thiếu SQLite (live NOT_RUN) | ✅  |
 | UC-02 | Deploy lần đầu                              | 3.2 + 3.3  | 2                                                                                                            | ✅  |
 | UC-03 | Redeploy + tự rollback khi healthcheck fail | 3.3 + 3.5  | TK-A15 `6fd3efd`: smoke VM02 v3 health 503 → `rolled_back` về v2, giữ dữ liệu/3 image; còn public smoke VM01 | 🔨  |
 | UC-04 | Rollback thủ công                           | 3.5        | 6                                                                                                            | ⬜  |

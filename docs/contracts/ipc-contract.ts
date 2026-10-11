@@ -63,6 +63,15 @@ export interface VpsOperationalDiagnostics {
   oom_kill_count: number | null;
 }
 
+/** Container phát hiện từ Docker trên VPS; chưa phải hồ sơ app trong SQLite. */
+export interface DiscoveredVpsApp {
+  name: string;
+  image_tag: string;
+  version: number;
+  host_port: number | null;
+  state: string;
+}
+
 export interface App {
   id: number;
   vps_id: number;
@@ -182,6 +191,7 @@ export interface IpcInvokeMap {
   'vps:list':           () => IpcResult<Vps[]>;
   'vps:get-resources':  (vpsId: number) => IpcResult<VpsResources>;
   'vps:get-operational-diagnostics': (vpsId: number) => IpcResult<VpsOperationalDiagnostics>;
+  'vps:discover-apps': (vpsId: number) => IpcResult<DiscoveredVpsApp[]>;
   'vps:test-connection': (input: VpsInput) => IpcResult<VpsConnectionCheck>;
   'vps:create':         (input: VpsInput) => IpcResult<Vps>;
   'vps:update':         (id: number, input: Partial<VpsInput>) => IpcResult<Vps>;

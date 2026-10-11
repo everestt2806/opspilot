@@ -8,6 +8,9 @@ import { VpsAppsTab } from './VpsAppsTab'
 function mockApi(handlers: Record<string, (...args: unknown[]) => Promise<unknown>>): void {
   window.api = {
     invoke: vi.fn(async (channel: string, ...args: unknown[]) => {
+      if (channel === 'vps:discover-apps' && !handlers[channel]) {
+        return { ok: true, data: [] }
+      }
       const handler = handlers[channel]
       if (!handler) {
         throw new Error(`Unhandled mock channel: ${channel}`)
@@ -171,5 +174,30 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
 
     // App 3 không có deployment (current_deployment_id = null) -> ghi "Chưa triển khai"
     expect(screen.getByText('Chưa triển khai')).toBeTruthy()
+  })
+
+  it('hiển thị container phát hiện trên VPS nhưng không cho thao tác quản lý khi thiếu hồ sơ', async () => {
+    mockApi({
+      'app:list': async () => ({ ok: true, data: [] }),
+      'vps:discover-apps': async () => ({
+        ok: true,
+        data: [
+          {
+            name: 'legacy-app',
+            image_tag: 'legacy-app:v4',
+            version: 4,
+            host_port: 32001,
+            state: 'running'
+          }
+        ]
+      })
+    })
+
+    render(<VpsAppsTab vpsId={10} />)
+
+    expect(await screen.findByText('legacy-app')).toBeTruthy()
+    expect(screen.getByText('Phát hiện trên VPS')).toBeTruthy()
+    expect(screen.getByText('legacy-app:v4')).toBeTruthy()
+    expect(screen.queryByText('Triển khai lại')).toBeNull()
   })
 })
