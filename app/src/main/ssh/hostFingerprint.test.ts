@@ -45,6 +45,11 @@ function fingerprintFor(key: Buffer): string {
 }
 
 const verifiedFingerprint = fingerprintFor(receivedHostKey)
+type RunCommand = (
+  entry: object,
+  command: string,
+  options?: { logCommand?: boolean }
+) => Promise<{ code: number; stdout: string; stderr: string }>
 
 describe('SSH host fingerprint verification', () => {
   it('accepts only the expected OpenSSH SHA256 fingerprint from the received key digest', () => {
@@ -67,6 +72,58 @@ describe('SSH host fingerprint verification', () => {
     await expect(manager.connect(1)).resolves.toBeUndefined()
     expect(ssh2Harness.authenticationAttempts).toBe(1)
     expect(ssh2Harness.commandAttempts).toBe(0)
+    await manager.disconnect(1)
+  })
+
+  it('rejects a remote file write with a nonzero exit before attempting chmod', async () => {
+    const manager = new SshManager(async () => ({
+      host: 'vps.example.invalid',
+      port: 22,
+      hostFingerprint: verifiedFingerprint,
+      username: 'test-user',
+      authType: 'key',
+      secret: 'test-only-key-placeholder'
+    }))
+    await manager.connect(1)
+    const runCommand = vi
+      .spyOn(manager as unknown as { runCommand: RunCommand }, 'runCommand')
+      .mockResolvedValue({
+        code: 1,
+        stdout: '',
+        stderr: 'sensitive remote detail'
+      })
+
+    await expect(
+      manager.writeFile(1, '/tmp/manifest.tmp', '{"ok":true}', { mode: 0o600 })
+    ).rejects.toMatchObject({ userMessage: 'Không thể ghi file từ xa qua SSH.' })
+    expect(runCommand).toHaveBeenCalledOnce()
+    expect(runCommand.mock.calls[0]?.[2]).toMatchObject({ logCommand: true })
+    await manager.disconnect(1)
+  })
+
+  it('rejects a nonzero chmod result without exposing remote stderr', async () => {
+    const manager = new SshManager(async () => ({
+      host: 'vps.example.invalid',
+      port: 22,
+      hostFingerprint: verifiedFingerprint,
+      username: 'test-user',
+      authType: 'key',
+      secret: 'test-only-key-placeholder'
+    }))
+    await manager.connect(1)
+    const runCommand = vi
+      .spyOn(manager as unknown as { runCommand: RunCommand }, 'runCommand')
+      .mockResolvedValueOnce({ code: 0, stdout: '', stderr: '' })
+      .mockResolvedValueOnce({
+        code: 1,
+        stdout: '',
+        stderr: 'sensitive remote detail'
+      })
+
+    await expect(
+      manager.writeFile(1, '/tmp/manifest.tmp', '{"ok":true}', { mode: 0o600 })
+    ).rejects.toMatchObject({ userMessage: 'Không thể áp dụng quyền riêng tư cho file từ xa.' })
+    expect(runCommand).toHaveBeenCalledTimes(2)
     await manager.disconnect(1)
   })
 

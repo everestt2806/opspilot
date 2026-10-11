@@ -232,11 +232,24 @@ export class SshManager extends EventEmitter {
     const entry = await this.ensureConnected(vpsId)
     const base64 = Buffer.from(content, 'utf8').toString('base64')
     const pathQuoted = shellQuote(remotePath)
-    await this.runCommand(entry, `printf %s '${base64}' | base64 -d > ${pathQuoted}`, {
-      logCommand: options.silent === true ? false : true
-    })
+    const writeResult = await this.runCommand(
+      entry,
+      `printf %s '${base64}' | base64 -d > ${pathQuoted}`,
+      {
+        logCommand: options.silent === true ? false : true
+      }
+    )
+    if (writeResult.code !== 0) {
+      throw new AppError('UNKNOWN', 'Không thể ghi file từ xa qua SSH.')
+    }
     if (options.mode !== undefined) {
-      await this.runCommand(entry, `chmod ${options.mode.toString(8)} ${pathQuoted}`)
+      const chmodResult = await this.runCommand(
+        entry,
+        `chmod ${options.mode.toString(8)} ${pathQuoted}`
+      )
+      if (chmodResult.code !== 0) {
+        throw new AppError('UNKNOWN', 'Không thể áp dụng quyền riêng tư cho file từ xa.')
+      }
     }
   }
 

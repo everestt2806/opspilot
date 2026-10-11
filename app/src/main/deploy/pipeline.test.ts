@@ -55,6 +55,7 @@ interface StubSshOptions {
   runtimeImage?: (appName: string, composeCall: number) => string
   remoteEnvContent?: string
   remoteEnvReadFails?: boolean
+  manifestRenameFails?: boolean
 }
 
 let testDirectory: string | null = null
@@ -69,6 +70,7 @@ let testSsh: SshManager
 let uploadedDirectorySnapshots: Array<{ localPath: string; marker: string | null }>
 let events: DeployEvent[]
 let pipeline: DeployPipeline
+let remoteManifestFiles: Map<string, string>
 
 afterEach(() => {
   vi.useRealTimers()
@@ -117,7 +119,26 @@ function createHarness(options: StubSshOptions = {}): void {
   let stopCollectorCall = 0
   let snapshotCall = 0
   const lastComposeUpCode = new Map<string, number>()
+  remoteManifestFiles = new Map()
   sshExec = vi.fn(async (_vpsId: number, command: string) => {
+    if (command.startsWith('mv -f --') && command.includes('.opspilot-app.json')) {
+      if (options.manifestRenameFails) {
+        return { code: 1, stdout: '', stderr: 'private-marker must not reach logs' }
+      }
+      const paths = [...command.matchAll(/'([^']+)'/g)].map((match) => match[1])
+      const [tempPath, manifestPath] = paths
+      if (tempPath && manifestPath) {
+        const content = remoteManifestFiles.get(tempPath)
+        if (content !== undefined) remoteManifestFiles.set(manifestPath, content)
+        remoteManifestFiles.delete(tempPath)
+      }
+      return { code: 0, stdout: '', stderr: '' }
+    }
+    if (command.startsWith('rm -f --') && command.includes('.opspilot-app.json')) {
+      const tempPath = command.match(/'([^']+)'/)?.[1]
+      if (tempPath) remoteManifestFiles.delete(tempPath)
+      return { code: 0, stdout: '', stderr: '' }
+    }
     if (command === 'ss -H -ltn') {
       return { code: 0, stdout: '', stderr: '' }
     }
@@ -224,7 +245,9 @@ function createHarness(options: StubSshOptions = {}): void {
     throw new Error(`Lệnh ngoài script: ${command}`)
   })
 
-  writeFileMock = vi.fn(async () => undefined)
+  writeFileMock = vi.fn(async (_id: number, remotePath: string, content: string) => {
+    if (remotePath.includes('.opspilot-app.json')) remoteManifestFiles.set(remotePath, content)
+  })
   readFileMock = vi.fn(async (_vpsId: number, remotePath: string) => {
     const previous = [...writeFileMock.mock.calls].reverse().find(([, path]) => path === remotePath)
     return previous?.[2] ?? ''
@@ -386,6 +409,26 @@ function appBuildCommand(): string {
 }
 
 describe('DeployPipeline', () => {
+  it('keeps a healthy deployment running when manifest publication fails', async () => {
+    createHarness({ manifestRenameFails: true })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const deployment = pipeline.run(deployInput({ env: { API_KEY: 'secret-marker' } }))
+    expect((await waitForFinished(deployment.deploymentId)).status).toBe('running')
+    expect(deploymentRow(deployment.deploymentId).status).toBe('running')
+    const manifestWrites = writeFileCalls().filter((call) =>
+      call.remotePath.includes('.opspilot-app.json')
+    )
+    expect(manifestWrites).toHaveLength(1)
+    expect(manifestWrites[0]?.options).toMatchObject({ mode: 0o600, silent: true })
+    expect(manifestWrites[0]?.content).not.toContain('secret-marker')
+    expect(sshExec.mock.calls.map(([, command]) => command).join('\n')).not.toContain(
+      'secret-marker'
+    )
+    expect(logSpy.mock.calls.flat().join('\n')).not.toContain('secret-marker')
+    expect(remoteManifestFiles.size).toBe(0)
+    logSpy.mockRestore()
+  })
+
   it('runs a real Git snapshot through prepare, precheck, start, upload, DB record, and cleanup', async () => {
     createHarness()
     const repository = join(testDirectory!, 'remote.git')
@@ -869,6 +912,9 @@ describe('DeployPipeline', () => {
     expect((await waitForFinished(second.deploymentId)).status).toBe('failed')
     expect(currentDeploymentId()).toBe(first.deploymentId)
     expect(
+      writeFileCalls().filter((call) => call.remotePath.includes('.opspilot-app.json'))
+    ).toHaveLength(1)
+    expect(
       database
         .prepare("SELECT COUNT(*) AS count FROM deployment_activation WHERE state='prepared'")
         .get()
@@ -899,9 +945,9 @@ describe('DeployPipeline', () => {
     expect(envWrites[1].content).toContain(
       `DATABASE_URL=postgresql://opspilot:${firstPassword}@postgres:5432/opspilot`
     )
-    expect(sshExec.mock.calls.some(([, command]) => String(command).includes('head -c 65537'))).toBe(
-      true
-    )
+    expect(
+      sshExec.mock.calls.some(([, command]) => String(command).includes('head -c 65537'))
+    ).toBe(true)
     expect(JSON.stringify(events)).not.toContain(firstPassword)
   })
 
@@ -1011,6 +1057,7 @@ describe('DeployPipeline', () => {
     createHarness({ curlOk: (call) => call === 1 || call === 13 })
     const first = pipeline.run(deployInput())
     expect((await waitForFinished()).status).toBe('running')
+    const previousManifest = remoteManifestFiles.get('/opt/opspilot/demo-api/.opspilot-app.json')
 
     vi.useFakeTimers()
     const eventCountBefore = events.length
@@ -1029,6 +1076,9 @@ describe('DeployPipeline', () => {
       failed_step: 'HEALTHCHECK'
     })
     expect(currentDeploymentId()).toBe(first.deploymentId)
+    expect(remoteManifestFiles.get('/opt/opspilot/demo-api/.opspilot-app.json')).toBe(
+      previousManifest
+    )
 
     // Extra DEPLOY step events cua nhanh tu rollback (bat bien 6)
     const secondRunEvents = events
