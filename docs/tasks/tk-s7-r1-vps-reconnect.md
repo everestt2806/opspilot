@@ -21,3 +21,4 @@ Migration 008 chỉ bảo vệ dữ liệu từ thời điểm cài bản mới.
 - START 11/10/2026: tái hiện đường xóa cứng và `ON DELETE CASCADE`; chọn soft archive trong SQLite migration 008 để giữ nguyên FK và ID của app/deployment.
 - UPDATE 11/10/2026: hoàn tất repository, migration, IPC disconnect, monitor filter, UI copy và test tái kết nối.
 - HANDOFF-LOCAL 11/10/2026: 72/72 Vitest files, 719/719 tests PASS; typecheck Node/Web PASS; production build PASS; ESLint toàn app 0 error, 15 warning định dạng đã có sẵn trong các file deploy không sửa; ESLint các file thay đổi 0 error/0 warning; `git diff --check` sạch. Chưa chạy luồng gỡ/thêm lại trên VPS thật; giữ trạng thái CHỜ REVIEW và không push/PR/merge.
+- REVIEW 11/10/2026: commit cục bộ `de8aa09`; Worker review độc lập không chạy được do giới hạn của môi trường agent, Leader tự đối chiếu diff và gate.
