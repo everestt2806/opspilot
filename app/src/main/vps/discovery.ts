@@ -1,14 +1,14 @@
 import type { DiscoveredVpsApp } from '@shared/ipc'
 
 import { AppError } from '../errors'
+import { parseAppManifest, type AppManifest } from '../deploy/appManifest'
 import type { SshManager } from '../ssh/manager'
 
 const MAX_BYTES = 65_536
 const MAX_CONTAINERS = 100
-// Chỉ chọn ba nhãn Compose cần xác minh. `.Labels` có thể chứa dữ liệu tùy ý.
+const MAX_MANIFEST_BYTES = 16_384
 const TEMPLATE =
   '{"Names":{{json .Names}},"Image":{{json .Image}},"State":{{json .State}},"Ports":{{json .Ports}},"Directory":{{json (.Label "com.docker.compose.project.working_dir")}},"Service":{{json (.Label "com.docker.compose.service")}},"Config":{{json (.Label "com.docker.compose.project.config_files")}}}'
-// Không dùng docker inspect vì dữ liệu inspect chứa Env.
 const COMMAND = `out=$(docker ps -a --last 101 --filter label=com.docker.compose.service=app --format '${TEMPLATE}' 2>/dev/null) || exit 4; printf '%s\n' "$out" | head -c ${MAX_BYTES + 1}`
 
 type DockerRow = {
@@ -21,26 +21,37 @@ type DockerRow = {
   Config?: unknown
 }
 
-function parsePort(value: string): number | null {
-  const matches = [...value.matchAll(/(?:0\.0\.0\.0:|\[::\]:|:::)(\d+)->\d+\/tcp/g)]
-  if (matches.length === 0) return null
-  const ports = new Set(matches.map((match) => Number(match[1])))
-  if (ports.size !== 1) return null
-  const port = [...ports][0]
-  return Number.isSafeInteger(port) && port > 0 && port <= 65_535 ? port : null
+type DockerCandidate = {
+  name: string
+  image_tag: string
+  version: number
+  host_port: number | null
+  container_port: number | null
+  state: string
+  ambiguous: boolean
 }
 
-/** Đọc chỉ các thuộc tính không nhạy cảm, rồi xác thực bộ ba tên/image/Compose path. */
-export function parseDiscoveredApps(output: string): DiscoveredVpsApp[] {
-  if (Buffer.byteLength(output, 'utf8') > MAX_BYTES) {
+function parsePorts(value: string): { host: number | null; container: number | null } {
+  const matches = [...value.matchAll(/(?:0\.0\.0\.0:|\[::\]:|:::)(\d+)->(\d+)\/tcp/g)]
+  const pairs = new Set(matches.map((match) => `${match[1]}:${match[2]}`))
+  if (pairs.size !== 1) return { host: null, container: null }
+  const [host, container] = [...pairs][0].split(':').map(Number)
+  if (
+    ![host, container].every((port) => Number.isSafeInteger(port) && port > 0 && port <= 65_535)
+  ) {
+    return { host: null, container: null }
+  }
+  return { host, container }
+}
+
+function parseDockerCandidates(output: string): DockerCandidate[] {
+  if (Buffer.byteLength(output, 'utf8') > MAX_BYTES)
     throw new AppError('VALIDATION', 'Danh sách container quá lớn để xác minh an toàn.')
-  }
   const lines = output.trim().split(/\r?\n/).filter(Boolean)
-  if (lines.length > MAX_CONTAINERS) {
+  if (lines.length > MAX_CONTAINERS)
     throw new AppError('VALIDATION', 'VPS có quá nhiều container; không thể quét đầy đủ.')
-  }
-  const discovered = new Map<string, DiscoveredVpsApp>()
-  const ambiguous = new Set<string>()
+  const candidates = new Map<string, DockerCandidate>()
+  const duplicates = new Set<string>()
   for (const line of lines) {
     let row: DockerRow
     try {
@@ -56,56 +67,182 @@ export function parseDiscoveredApps(output: string): DiscoveredVpsApp[] {
       typeof row.Directory !== 'string' ||
       typeof row.Service !== 'string' ||
       typeof row.Config !== 'string'
-    ) {
+    )
       continue
-    }
     const match = /^([a-z0-9][a-z0-9-]{0,30})-app$/.exec(row.Names)
     if (!match) continue
     const name = match[1]
     const image = new RegExp(`^${name}:v([1-9][0-9]*)$`).exec(row.Image)
-    if (!image) continue
-    const version = Number(image[1])
-    if (!Number.isSafeInteger(version)) continue
+    if (!image || !Number.isSafeInteger(Number(image[1]))) continue
     const dir = `/opt/opspilot/${name}`
     if (
       row.Service !== 'app' ||
       row.Directory !== dir ||
       row.Config !== `${dir}/docker-compose.yml`
-    ) {
+    )
       continue
-    }
     if (!/^(running|exited|created|restarting|paused|dead)$/.test(row.State)) continue
-    if (discovered.has(name) || ambiguous.has(name)) {
-      // Hai container cùng tên app không đủ bằng chứng để chọn bản hiện hành.
-      discovered.delete(name)
-      ambiguous.add(name)
+    if (candidates.has(name) || duplicates.has(name)) {
+      candidates.delete(name)
+      duplicates.add(name)
       continue
     }
-    discovered.set(name, {
+    const ports = parsePorts(row.Ports)
+    candidates.set(name, {
       name,
       image_tag: row.Image,
-      version,
-      host_port: parsePort(row.Ports),
-      state: row.State
+      version: Number(image[1]),
+      ...{ host_port: ports.host, container_port: ports.container },
+      state: row.State,
+      ambiguous: false
     })
   }
-  return [...discovered.values()].sort((a, b) => a.name.localeCompare(b.name))
+  for (const name of duplicates) {
+    const source = lines
+      .map((line) => {
+        try {
+          return JSON.parse(line) as DockerRow
+        } catch {
+          return {}
+        }
+      })
+      .find((row) => row.Names === `${name}-app`)
+    const image =
+      typeof source?.Image === 'string'
+        ? new RegExp(`^${name}:v([1-9][0-9]*)$`).exec(source.Image)
+        : null
+    if (image && Number.isSafeInteger(Number(image[1]))) {
+      const ports = parsePorts(typeof source?.Ports === 'string' ? source.Ports : '')
+      candidates.set(name, {
+        name,
+        image_tag: source!.Image as string,
+        version: Number(image[1]),
+        host_port: ports.host,
+        container_port: ports.container,
+        state: typeof source?.State === 'string' ? source.State : 'unknown',
+        ambiguous: true
+      })
+    }
+  }
+  return [...candidates.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function metadata(
+  manifest: AppManifest | null
+): Pick<
+  DiscoveredVpsApp,
+  'framework' | 'source_type' | 'git_remote' | 'git_ref' | 'git_root' | 'healthcheck' | 'needs_db'
+> {
+  const git = manifest?.source.type === 'git' ? manifest.source : null
+  return {
+    framework: manifest?.framework ?? null,
+    source_type: manifest?.source.type ?? null,
+    git_remote: git?.remote ?? null,
+    git_ref: git?.ref ?? null,
+    git_root: git?.root ?? null,
+    healthcheck: manifest?.healthcheck ?? null,
+    needs_db: manifest?.needs_db ?? null
+  }
+}
+
+function candidateStatus(
+  candidate: DockerCandidate,
+  manifest: AppManifest | null,
+  missing: boolean
+): DiscoveredVpsApp {
+  let status: DiscoveredVpsApp['recovery_status']
+  let reason: DiscoveredVpsApp['recovery_reason']
+  if (candidate.ambiguous) {
+    status = 'ambiguous'
+    reason = 'duplicate_runtime'
+  } else if (missing) {
+    status = 'legacy'
+    reason = 'manifest_missing'
+  } else if (!manifest) {
+    status = 'invalid'
+    reason = 'manifest_invalid'
+  } else if (candidate.state !== 'running') {
+    status = 'stopped'
+    reason = 'container_not_running'
+  } else if (candidate.host_port === null || candidate.container_port === null) {
+    status = 'unverifiable'
+    reason = 'runtime_port_unverifiable'
+  } else if (
+    manifest.app.name !== candidate.name ||
+    candidate.image_tag !== `${manifest.app.name}:v${candidate.version}` ||
+    manifest.ports.host !== candidate.host_port ||
+    manifest.ports.container !== candidate.container_port
+  ) {
+    status = 'mismatch'
+    reason = 'runtime_mismatch'
+  } else {
+    status = 'verified'
+    reason = null
+  }
+  return {
+    name: candidate.name,
+    image_tag: candidate.image_tag,
+    version: candidate.version,
+    host_port: candidate.host_port,
+    container_port: candidate.container_port,
+    state: candidate.state,
+    recovery_status: status,
+    recovery_reason: reason,
+    ...metadata(manifest)
+  }
+}
+
+async function readManifest(
+  ssh: Pick<SshManager, 'exec'>,
+  vpsId: number,
+  name: string
+): Promise<{ manifest: AppManifest | null; missing: boolean }> {
+  // name came from the strict Docker slug expression; renderer never supplies this path.
+  const path = `/opt/opspilot/${name}/.opspilot-app.json`
+  const command = `if [ -r '${path}' ]; then head -c ${MAX_MANIFEST_BYTES + 1} '${path}'; else exit 5; fi 2>/dev/null`
+  let result
+  try {
+    result = await ssh.exec(vpsId, command, {
+      timeoutMs: 5_000,
+      logCommand: false,
+      retryOnReconnect: false
+    })
+  } catch {
+    throw new AppError('UNKNOWN', 'Không thể đọc manifest khôi phục trên VPS.')
+  }
+  if (result.code === 5) return { manifest: null, missing: true }
+  if (result.code !== 0) return { manifest: null, missing: false }
+  return { manifest: parseAppManifest(result.stdout), missing: false }
+}
+
+export function parseDiscoveredApps(output: string): DiscoveredVpsApp[] {
+  return parseDockerCandidates(output).map((candidate) => candidateStatus(candidate, null, true))
 }
 
 export async function discoverVpsApps(
   ssh: Pick<SshManager, 'exec'>,
   vpsId: number
 ): Promise<DiscoveredVpsApp[]> {
-  if (!Number.isSafeInteger(vpsId) || vpsId <= 0) {
+  if (!Number.isSafeInteger(vpsId) || vpsId <= 0)
     throw new AppError('VALIDATION', 'VPS không hợp lệ. Hãy tải lại danh sách.')
-  }
-  const result = await ssh.exec(vpsId, COMMAND, {
-    timeoutMs: 10_000,
-    logCommand: false,
-    retryOnReconnect: false
-  })
-  if (result.code !== 0) {
+  let result
+  try {
+    result = await ssh.exec(vpsId, COMMAND, {
+      timeoutMs: 10_000,
+      logCommand: false,
+      retryOnReconnect: false
+    })
+  } catch {
     throw new AppError('UNKNOWN', 'Không thể đọc danh sách container Docker trên VPS.')
   }
-  return parseDiscoveredApps(result.stdout)
+  if (result.code !== 0)
+    throw new AppError('UNKNOWN', 'Không thể đọc danh sách container Docker trên VPS.')
+  const candidates = parseDockerCandidates(result.stdout)
+  return Promise.all(
+    candidates.map(async (candidate) => {
+      if (candidate.ambiguous) return candidateStatus(candidate, null, false)
+      const { manifest, missing } = await readManifest(ssh, vpsId, candidate.name)
+      return candidateStatus(candidate, manifest, missing)
+    })
+  )
 }

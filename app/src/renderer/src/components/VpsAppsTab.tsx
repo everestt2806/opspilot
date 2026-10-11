@@ -386,6 +386,7 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
             type="info"
             showIcon
             message={strings.vpsControl.apps.discoveredHint}
+            description={strings.vpsControl.apps.recoveryHint}
             style={{ marginBottom: 12 }}
           />
           <Table<DiscoveredVpsApp>
@@ -395,6 +396,32 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
             pagination={false}
             columns={[
               { title: strings.vpsControl.apps.columns.name, dataIndex: 'name', key: 'name' },
+              {
+                title: strings.vpsControl.apps.discoveredEligibility,
+                key: 'eligibility',
+                render: (_: unknown, app: DiscoveredVpsApp) => (
+                  <Tag color={app.recovery_status === 'verified' ? 'green' : 'default'}>
+                    {strings.vpsControl.apps.recoveryStatus[app.recovery_status]}
+                  </Tag>
+                )
+              },
+              {
+                title: strings.vpsControl.apps.discoveredMetadata,
+                key: 'metadata',
+                render: (_: unknown, app: DiscoveredVpsApp) =>
+                  [
+                    app.framework,
+                    app.source_type,
+                    app.git_remote,
+                    app.git_ref,
+                    app.git_root ? `root: ${app.git_root}` : null,
+                    app.container_port ? `container:${app.container_port}` : null,
+                    app.healthcheck,
+                    app.needs_db === null ? null : `needs_db:${app.needs_db}`
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || '—'
+              },
               {
                 title: strings.vpsControl.apps.discoveredImage,
                 dataIndex: 'image_tag',

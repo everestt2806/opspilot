@@ -187,7 +187,17 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
             image_tag: 'legacy-app:v4',
             version: 4,
             host_port: 32001,
-            state: 'running'
+            container_port: null,
+            state: 'running',
+            recovery_status: 'legacy',
+            recovery_reason: 'manifest_missing',
+            framework: null,
+            source_type: null,
+            git_remote: null,
+            git_ref: null,
+            git_root: null,
+            healthcheck: null,
+            needs_db: null
           }
         ]
       })
@@ -198,6 +208,53 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
     expect(await screen.findByText('legacy-app')).toBeTruthy()
     expect(screen.getByText('Phát hiện trên VPS')).toBeTruthy()
     expect(screen.getByText('legacy-app:v4')).toBeTruthy()
+    expect(screen.getByText('Ứng dụng cũ: thiếu manifest')).toBeTruthy()
+    expect(screen.getByText('Metadata đã xác minh')).toBeTruthy()
     expect(screen.queryByText('Triển khai lại')).toBeNull()
+  })
+
+  it('shows verified recovery status and sanitized metadata in all four locales', async () => {
+    mockApi({
+      'app:list': async () => ({ ok: true, data: [] }),
+      'vps:discover-apps': async () => ({
+        ok: true,
+        data: [
+          {
+            name: 'verified-app',
+            image_tag: 'verified-app:v3',
+            version: 3,
+            host_port: 32001,
+            container_port: 3000,
+            state: 'running',
+            recovery_status: 'verified',
+            recovery_reason: null,
+            framework: 'express',
+            source_type: 'git',
+            git_remote: 'https://github.com/example/app.git',
+            git_ref: 'main',
+            git_root: '.',
+            healthcheck: '/health',
+            needs_db: false
+          }
+        ]
+      })
+    })
+
+    const { rerender } = render(<VpsAppsTab vpsId={10} />)
+    expect(await screen.findByText('verified-app')).toBeTruthy()
+    expect(
+      screen.getByText(
+        (content) =>
+          content.includes('https://github.com/example/app.git') &&
+          content.includes('needs_db:false')
+      )
+    ).toBeTruthy()
+    for (const locale of ['en', 'vi', 'cn', 'jp'] as const) {
+      useUiState.setState({ locale })
+      rerender(<VpsAppsTab vpsId={10} />)
+      expect(
+        await screen.findByText(getStrings(locale).vpsControl.apps.recoveryStatus.verified)
+      ).toBeTruthy()
+    }
   })
 })

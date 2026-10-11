@@ -106,3 +106,92 @@ export async function writeAppManifest(ssh: SshManager, vpsId: number, app: App)
     }
   }
 }
+
+const FRAMEWORKS = new Set(['nextjs', 'express', 'static-spa', 'flask'])
+const MAX_MANIFEST_BYTES = 16_384
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function hasExactKeys(value: Record<string, unknown>, keys: string[]): boolean {
+  return Object.keys(value).length === keys.length && keys.every((key) => key in value)
+}
+
+function validPort(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) > 0 && Number(value) <= 65_535
+}
+
+/** Parse only the documented v1 allowlist; callers must discard the input string. */
+export function parseAppManifest(input: string): AppManifest | null {
+  if (Buffer.byteLength(input, 'utf8') > MAX_MANIFEST_BYTES) return null
+  let value: unknown
+  try {
+    value = JSON.parse(input)
+  } catch {
+    return null
+  }
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      'schema_version',
+      'app',
+      'framework',
+      'source',
+      'ports',
+      'healthcheck',
+      'needs_db'
+    ]) ||
+    value.schema_version !== 1 ||
+    !isRecord(value.app) ||
+    !hasExactKeys(value.app, ['name']) ||
+    typeof value.app.name !== 'string' ||
+    !/^[a-z0-9][a-z0-9-]{0,30}$/.test(value.app.name) ||
+    typeof value.framework !== 'string' ||
+    !FRAMEWORKS.has(value.framework) ||
+    !isRecord(value.ports) ||
+    !hasExactKeys(value.ports, ['host', 'container']) ||
+    !validPort(value.ports.host) ||
+    !validPort(value.ports.container) ||
+    typeof value.healthcheck !== 'string' ||
+    value.healthcheck.length > 256 ||
+    !/^\/[A-Za-z0-9/._~-]*$/.test(value.healthcheck) ||
+    typeof value.needs_db !== 'boolean' ||
+    !isRecord(value.source)
+  )
+    return null
+
+  let source: AppManifest['source']
+  if (
+    hasExactKeys(value.source, ['type', 'locator_available']) &&
+    value.source.type === 'local' &&
+    value.source.locator_available === false
+  ) {
+    source = { type: 'local', locator_available: false }
+  } else if (
+    hasExactKeys(value.source, ['type', 'locator_available', 'remote', 'ref', 'root']) &&
+    value.source.type === 'git' &&
+    value.source.locator_available === true &&
+    typeof value.source.remote === 'string' &&
+    typeof value.source.ref === 'string' &&
+    typeof value.source.root === 'string'
+  ) {
+    const remote = safeGitRemote(value.source.remote)
+    const ref = safeGitRef(value.source.ref)
+    const root = safeGitRoot(value.source.root)
+    if (!remote || !ref || !root || remote !== value.source.remote) return null
+    source = { type: 'git', locator_available: true, remote, ref, root }
+  } else {
+    return null
+  }
+
+  return {
+    schema_version: 1,
+    app: { name: value.app.name },
+    framework: value.framework as AppManifest['framework'],
+    source,
+    ports: { host: value.ports.host, container: value.ports.container },
+    healthcheck: value.healthcheck,
+    needs_db: value.needs_db
+  }
+}
