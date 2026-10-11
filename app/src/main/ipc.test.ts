@@ -44,6 +44,35 @@ describe('handle', () => {
     })
   })
 
+  it('disconnects a removed VPS after archiving its local profile', async () => {
+    const events: string[] = []
+    const vpsService = {
+      delete: vi.fn(() => events.push('archive'))
+    }
+    const ssh = {
+      disconnect: vi.fn(async () => {
+        events.push('disconnect')
+      })
+    }
+    registerIpcHandlers(
+      {} as never,
+      vpsService as never,
+      ssh as never,
+      {} as never,
+      {} as never,
+      () => null
+    )
+    const callback = handleMock.mock.calls.find(([channel]) => channel === 'vps:delete')?.[1] as (
+      event: unknown,
+      id: number
+    ) => Promise<unknown>
+
+    await expect(callback({}, 7)).resolves.toEqual({ ok: true, data: undefined })
+    expect(vpsService.delete).toHaveBeenCalledWith(7)
+    expect(ssh.disconnect).toHaveBeenCalledWith(7)
+    expect(events).toEqual(['archive', 'disconnect'])
+  })
+
   it('invokes read-only VPS diagnostics with vpsId only and wraps validation errors', async () => {
     const ssh = {
       exec: vi.fn(async (_vpsId: number, command: string) => ({

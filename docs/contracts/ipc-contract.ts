@@ -185,6 +185,7 @@ export interface IpcInvokeMap {
   'vps:test-connection': (input: VpsInput) => IpcResult<VpsConnectionCheck>;
   'vps:create':         (input: VpsInput) => IpcResult<Vps>;
   'vps:update':         (id: number, input: Partial<VpsInput>) => IpcResult<Vps>;
+  /** Gỡ VPS khỏi danh sách; giữ app/lịch sử và có thể nối lại khi xác minh đúng SSH host. */
   'vps:delete':         (id: number) => IpcResult<void>;
   'vps:install-docker': (vpsId: number) => IpcResult<{ docker_version: string }>;
   'vps:scan':           (vpsId: number) => IpcResult<VpsScanResult>;

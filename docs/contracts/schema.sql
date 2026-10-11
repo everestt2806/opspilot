@@ -7,6 +7,8 @@
 --   - 004_publish_doctor_domain.sql (exposure, doctor, domain)
 --   - 005_experiment_run_attempt.sql (attempt_index, unique 3 trường cho experiment_run)
 --   - 006_vps_host_fingerprint.sql (pin fingerprint SSH của VPS)
+--   - 007_git_source_provenance.sql (nguồn Git và commit deploy)
+--   - 008_vps_archive.sql (gỡ VPS an toàn và nối lại app/lịch sử)
 --
 -- QUY ƯỚC BẮT BUỘC:
 --   * Mọi cột thời gian: TEXT, ISO-8601 UTC, dạng '2026-07-27T10:00:00Z'
@@ -57,9 +59,14 @@ CREATE TABLE vps (
   -- Lệch đồng hồ VPS so với máy user, ms (dương = VPS nhanh hơn). Đo bởi run_experiment.py
   clock_offset_ms INTEGER NOT NULL DEFAULT 0,
 
+  -- Migration 008: gỡ VPS khỏi danh sách nhưng giữ app/deployment và dữ liệu vận hành.
+  archived_at     TEXT,
+  archived_name   TEXT,
+
   created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
   updated_at      TEXT
 );
+CREATE INDEX idx_vps_archived_identity ON vps(host, port, host_fingerprint, archived_at);
 
 -- =============================================================================
 -- B. APP & DEPLOYMENT  (FR-B5, FR-B7)

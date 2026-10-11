@@ -6,6 +6,8 @@ import migration002 from '../db/migrations/002_metric_activation.sql?raw'
 import migration003 from '../db/migrations/003_migration_error_message.sql?raw'
 import migration004 from '../db/migrations/004_publish_doctor_domain.sql?raw'
 import migration005 from '../db/migrations/005_experiment_run_attempt.sql?raw'
+import migration006 from '../db/migrations/006_vps_host_fingerprint.sql?raw'
+import migration008 from '../db/migrations/008_vps_archive.sql?raw'
 import { HeadlessPoller, type SshManagerLike } from './headlessPoller'
 import type { MonitorRuntime } from './poller'
 
@@ -16,6 +18,8 @@ function createMemoryDb(): Database.Database {
   db.exec(migration003)
   db.exec(migration004)
   db.exec(migration005)
+  db.exec(migration006)
+  db.exec(migration008)
   return db
 }
 

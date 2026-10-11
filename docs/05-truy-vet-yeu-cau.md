@@ -24,7 +24,7 @@ Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng đượ
 
 | ID    | Yêu cầu                                        | Module                            | Kiểm chứng                                                      | Màn hình | Tuần  | TT  |
 | ----- | ---------------------------------------------- | --------------------------------- | --------------------------------------------------------------- | -------- | ----- | --- |
-| FR-A1 | CRUD VPS, credential mã hoá                    | M2 + `db`                         | unit test crypto + `loadSecret` roundtrip DB + smoke VM01 30/08 | 3.1      | W1    | ✅  |
+| FR-A1 | CRUD VPS, credential mã hoá                    | M2 + `db`                         | unit test crypto + `loadSecret` roundtrip DB + smoke VM01 30/08; R1 migration 008 giữ app/lịch sử khi gỡ và nối lại đúng SSH identity (local gate, live reconnect chưa chạy) | 3.1      | W1    | ✅  |
 | FR-A2 | Test SSH, kiểm tra & tự cài Docker             | M1 + `vps:install-docker`         | `try-ssh` 6 bước + connection/scan handler + smoke VM01 30/08   | 3.1      | W1    | ✅  |
 | FR-A3 | Danh sách VPS + trạng thái + tài nguyên        | M1 + `vps:get-resources` + `vps:get-operational-diagnostics` | test parser/renderer + VPS Control Panel #21 + smoke VM01 30/08; C2b parser/IPC/fixture tests local (không phải live diagnostics gate) | 3.1      | W1    | ✅  |
 | FR-B1 | Detector plugin nhận diện framework            | M3                                | unit test ≥4 case/detector                                      | 3.2 b2   | W2    | ⬜  |

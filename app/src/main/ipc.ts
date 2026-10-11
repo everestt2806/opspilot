@@ -67,7 +67,10 @@ export function registerIpcHandlers(
   handle('vps:list', () => vpsService.list())
   handle('vps:create', (input) => vpsService.create(input))
   handle('vps:update', (id, patch) => vpsService.update(id, patch))
-  handle('vps:delete', (id) => vpsService.delete(id))
+  handle('vps:delete', async (id) => {
+    vpsService.delete(id)
+    await ssh.disconnect(id)
+  })
   handle('vps:test-connection', (input) =>
     testConnectionWithCredentials({
       host: input.host,
@@ -190,7 +193,7 @@ export function registerIpcHandlers(
          FROM deployment d
          JOIN app a ON a.id = d.app_id
          JOIN vps v ON v.id = a.vps_id
-         WHERE d.id = ?`
+         WHERE d.id = ? AND v.archived_at IS NULL`
       )
       .get(input.deployment_id) as { app_id: number; host_port: number; host: string } | undefined
     if (!deployment) throw new AppError('VALIDATION', 'Không tìm thấy deployment để gắn domain.')

@@ -28,6 +28,39 @@ afterEach(() => {
 })
 
 describe('initializeDatabase', () => {
+  it('migration v7 to v8 keeps existing VPS and app records intact', () => {
+    testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v7-v8-'))
+    const database = initializeDatabase(testDirectory)
+    database.exec(`
+      INSERT INTO vps (id, name, host, username, auth_type, encrypted_secret)
+        VALUES (42, 'Existing VPS', '203.0.113.42', 'deploy', 'key', X'00');
+      INSERT INTO app (id, vps_id, name, framework, host_port, container_port)
+        VALUES (72, 42, 'existing-app', 'express', 30042, 3000);
+      INSERT INTO deployment (id, app_id, version, image_tag, status)
+        VALUES (82, 72, 1, 'existing-app:v1', 'running');
+      DROP INDEX idx_vps_archived_identity;
+      ALTER TABLE vps DROP COLUMN archived_name;
+      ALTER TABLE vps DROP COLUMN archived_at;
+      DELETE FROM schema_version WHERE version = 8;
+    `)
+
+    runMigrations(database)
+    expect(database.prepare('SELECT id, name, archived_at FROM vps WHERE id=42').get()).toEqual({
+      id: 42,
+      name: 'Existing VPS',
+      archived_at: null
+    })
+    expect(database.prepare('SELECT id, vps_id FROM app WHERE id=72').get()).toEqual({
+      id: 72,
+      vps_id: 42
+    })
+    expect(database.prepare('SELECT id, app_id FROM deployment WHERE id=82').get()).toEqual({
+      id: 82,
+      app_id: 72
+    })
+    expect(database.pragma('foreign_key_check')).toEqual([])
+  })
+
   it('migration v6 to v7 preserves local app/deployment provenance without inventing Git data', () => {
     testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v6-v7-'))
     const database = initializeDatabase(testDirectory)
@@ -73,8 +106,12 @@ describe('initializeDatabase', () => {
   it('migration v5 to v6 preserves VPS rows and blocks legacy records without a fingerprint', async () => {
     testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v5-v6-'))
     const database = initializeDatabase(testDirectory)
+    database.exec('DROP INDEX idx_vps_archived_identity')
+    database.exec('ALTER TABLE vps DROP COLUMN archived_name')
+    database.exec('ALTER TABLE vps DROP COLUMN archived_at')
     database.exec('ALTER TABLE vps DROP COLUMN host_fingerprint')
     database.prepare('DELETE FROM schema_version WHERE version = 6').run()
+    database.prepare('DELETE FROM schema_version WHERE version = 8').run()
     database
       .prepare(
         "INSERT INTO vps (id, name, host, port, username, auth_type, encrypted_secret) VALUES (1, 'Legacy', 'legacy.example.invalid', 2222, 'test-user', 'key', X'00')"
@@ -127,7 +164,7 @@ describe('initializeDatabase', () => {
       .get() as { version: number }
 
     expect(tables).toHaveLength(15)
-    expect(schemaVersion.version).toBe(7)
+    expect(schemaVersion.version).toBe(8)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -158,7 +195,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 7
+      version: 8
     })
     expect(
       database
@@ -357,7 +394,7 @@ describe('initializeDatabase', () => {
     const successVer = v4Db.prepare('SELECT MAX(version) AS version FROM schema_version').get() as {
       version: number
     }
-    expect(successVer.version).toBe(7)
+    expect(successVer.version).toBe(8)
 
     // b. Bảng experiment_run đã có cột attempt_index và backfill = 1 cho tất cả bản ghi cũ
     const postRuns = v4Db

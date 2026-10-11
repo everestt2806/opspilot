@@ -36,6 +36,7 @@ export class MonitorRepository {
         ms.rule_consecutive, ms.ml_score_threshold, ms.ml_consecutive, ms.auto_rollback,
         ms.trusted_method, ms.rollback_consecutive, ms.cooldown_minutes
       FROM deployment d JOIN app a ON a.id=d.app_id
+      JOIN vps v ON v.id=a.vps_id AND v.archived_at IS NULL
       LEFT JOIN monitor_setting ms ON ms.app_id=a.id
       WHERE d.id=? AND d.status='running' AND a.current_deployment_id=d.id`
       )
@@ -71,7 +72,7 @@ export class MonitorRepository {
   listTargets(): MonitorTarget[] {
     const ids = this.database
       .prepare(
-        "SELECT d.id FROM deployment d JOIN app a ON a.id=d.app_id WHERE d.status='running' AND a.current_deployment_id=d.id ORDER BY a.id"
+        "SELECT d.id FROM deployment d JOIN app a ON a.id=d.app_id JOIN vps v ON v.id=a.vps_id AND v.archived_at IS NULL WHERE d.status='running' AND a.current_deployment_id=d.id ORDER BY a.id"
       )
       .all() as Array<{ id: number }>
     return ids

@@ -122,10 +122,10 @@ const BASE_EN_STRINGS = {
       delete: (name: string) => `Delete VPS ${name}`
     },
     delete: {
-      title: 'Delete VPS?',
+      title: 'Remove VPS from OpsPilot?',
       description: (name: string) =>
-        `VPS "${name}" will be removed from OpsPilot. Apps running on the server are not deleted.`,
-      confirm: 'Delete VPS'
+        `VPS "${name}" will be hidden from OpsPilot. Apps on the server and their local deployment history are kept. Add the same host, SSH port and verified fingerprint again to restore them.`,
+      confirm: 'Remove VPS'
     },
     fields: {
       name: 'VPS name',
@@ -148,7 +148,7 @@ const BASE_EN_STRINGS = {
       editTitle: 'Edit VPS',
       hostPlaceholder: '203.0.113.10',
       hostFingerprintHint:
-        'Enter the SHA256 fingerprint copied independently from the VPS console. Changing host or port requires verifying it again.',
+        'Enter the SHA256 fingerprint copied independently from the VPS console. The same host, SSH port and fingerprint restore a previously removed VPS and its apps.',
       keepCredentialHint: 'Leave blank to keep the current credential.'
     },
     validation: {
@@ -287,7 +287,8 @@ const BASE_EN_STRINGS = {
         'Secrets are encrypted locally, written only to the .env file on the VPS, and never shown in logs.',
       existingEnvNotice:
         'Blank values reuse the current VPS .env only when precheck verifies the required keys. Nonblank values override matching entries. Existing values are never sent back to this screen; PostgreSQL credentials remain unchanged.',
-      existingEnvConfirm: 'I reviewed this redeploy. Blank values may reuse verified VPS values, and PostgreSQL credentials will stay unchanged.',
+      existingEnvConfirm:
+        'I reviewed this redeploy. Blank values may reuse verified VPS values, and PostgreSQL credentials will stay unchanged.',
       existingEnvConfirmRequired:
         'Confirm that you reviewed the environment values before continuing.',
       dbUrlHint:
@@ -1026,6 +1027,12 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   vps: {
     ...BASE_EN_STRINGS.vps,
     backToList: 'Quay lại danh sách máy chủ',
+    delete: {
+      title: 'Gỡ VPS khỏi OpsPilot?',
+      description: (name: string) =>
+        `VPS "${name}" sẽ ẩn khỏi OpsPilot. App trên máy chủ và lịch sử triển khai trong máy này vẫn được giữ. Thêm lại đúng host, cổng SSH và fingerprint đã xác minh để khôi phục.`,
+      confirm: 'Gỡ VPS'
+    },
     fields: {
       ...BASE_EN_STRINGS.vps.fields,
       hostFingerprint: 'Fingerprint host key SSH (OpenSSH SHA256)'
@@ -1033,7 +1040,7 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     form: {
       ...BASE_EN_STRINGS.vps.form,
       hostFingerprintHint:
-        'Nhập fingerprint SHA256 đã lấy độc lập từ console VPS. Đổi host hoặc port sẽ cần xác minh lại.'
+        'Nhập fingerprint SHA256 đã lấy độc lập từ console VPS. Cùng host, cổng SSH và fingerprint sẽ khôi phục VPS đã gỡ cùng các app.'
     },
     validation: {
       ...BASE_EN_STRINGS.vps.validation,
@@ -1769,13 +1776,20 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   vps: {
     ...BASE_EN_STRINGS.vps,
     backToList: '返回服务器列表',
+    delete: {
+      title: '从 OpsPilot 移除 VPS？',
+      description: (name: string) =>
+        `VPS “${name}” 将从 OpsPilot 隐藏。服务器上的应用和本机部署历史会保留。使用相同主机、SSH 端口和已验证的指纹重新添加即可恢复。`,
+      confirm: '移除 VPS'
+    },
     fields: {
       ...BASE_EN_STRINGS.vps.fields,
       hostFingerprint: 'SSH 主机密钥指纹 (OpenSSH SHA256)'
     },
     form: {
       ...BASE_EN_STRINGS.vps.form,
-      hostFingerprintHint: '填写从 VPS 控制台独立获取的 SHA256 指纹。更改主机或端口后需要重新验证。'
+      hostFingerprintHint:
+        '填写从 VPS 控制台独立获取的 SHA256 指纹。使用相同主机、SSH 端口和指纹可恢复已移除的 VPS 及应用。'
     },
     validation: {
       ...BASE_EN_STRINGS.vps.validation,
@@ -2087,7 +2101,8 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       appNameRule: '仅限小写字母 a-z、数字和连字符，且必须以字母开头。',
       existingEnvNotice:
         '留空值仅在预检查确认必需键存在后才会复用 VPS 当前 .env。非空值会覆盖对应项。现有值不会返回此页面；PostgreSQL 凭据保持不变。',
-      existingEnvConfirm: '我已检查本次重新部署；留空项可能复用已验证的 VPS 值，PostgreSQL 凭据保持不变。',
+      existingEnvConfirm:
+        '我已检查本次重新部署；留空项可能复用已验证的 VPS 值，PostgreSQL 凭据保持不变。',
       existingEnvConfirmRequired: '继续前请确认已检查环境变量。',
       dbUrlExistingHint:
         'DATABASE_URL 和 POSTGRES_PASSWORD 将沿用 VPS 当前 .env；常规重新部署不会轮换 PostgreSQL 凭据。',
@@ -2487,6 +2502,12 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   vps: {
     ...BASE_EN_STRINGS.vps,
     backToList: 'サーバー一覧に戻る',
+    delete: {
+      title: 'VPS を OpsPilot から削除しますか？',
+      description: (name: string) =>
+        `VPS「${name}」は OpsPilot から非表示になります。サーバー上のアプリとこの端末のデプロイ履歴は保持されます。同じホスト、SSH ポート、確認済みフィンガープリントで再登録すると復元できます。`,
+      confirm: 'VPS を解除'
+    },
     fields: {
       ...BASE_EN_STRINGS.vps.fields,
       hostFingerprint: 'SSH ホスト鍵フィンガープリント (OpenSSH SHA256)'
@@ -2494,7 +2515,7 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     form: {
       ...BASE_EN_STRINGS.vps.form,
       hostFingerprintHint:
-        'VPS コンソールから別途取得した SHA256 フィンガープリントを入力します。ホストまたはポートを変更した場合は再確認が必要です。'
+        'VPS コンソールから別途取得した SHA256 フィンガープリントを入力します。同じホスト、SSH ポート、フィンガープリントで再登録すると VPS とアプリを復元できます。'
     },
     validation: {
       ...BASE_EN_STRINGS.vps.validation,
@@ -2810,7 +2831,8 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       appNameRule: '英小文字 a-z、数字、ハイフン（先頭は英文字である必要があります）。',
       existingEnvNotice:
         '空欄は、事前チェックで必須キーを確認できた場合に限り VPS の現在の .env を再利用します。入力値は対応する項目を上書きします。既存値は画面へ返さず、PostgreSQL の認証情報は維持します。',
-      existingEnvConfirm: '今回の再デプロイ内容を確認しました。空欄は検証済みの VPS 値を再利用し、PostgreSQL 認証情報は維持します。',
+      existingEnvConfirm:
+        '今回の再デプロイ内容を確認しました。空欄は検証済みの VPS 値を再利用し、PostgreSQL 認証情報は維持します。',
       existingEnvConfirmRequired: '続行する前に環境変数を確認したことを承認してください。',
       dbUrlExistingHint:
         'DATABASE_URL と POSTGRES_PASSWORD は VPS の現在の .env を維持します。通常の再デプロイでは PostgreSQL 認証情報を変更しません。',

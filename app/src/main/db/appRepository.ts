@@ -60,7 +60,9 @@ export class AppRepository {
 
   getById(id: number): App {
     const app = this.database
-      .prepare(`SELECT ${APP_COLUMNS} FROM app a JOIN vps v ON v.id = a.vps_id WHERE a.id = ?`)
+      .prepare(
+        `SELECT ${APP_COLUMNS} FROM app a JOIN vps v ON v.id = a.vps_id WHERE a.id = ? AND v.archived_at IS NULL`
+      )
       .get(id) as App | undefined
 
     if (!app) {
@@ -73,7 +75,7 @@ export class AppRepository {
     return this.database
       .prepare(
         `SELECT ${APP_COLUMNS} FROM app a JOIN vps v ON v.id = a.vps_id
-         WHERE a.vps_id = ? AND a.name = ?`
+         WHERE a.vps_id = ? AND a.name = ? AND v.archived_at IS NULL`
       )
       .get(vpsId, name) as App | undefined
   }
@@ -82,14 +84,16 @@ export class AppRepository {
     return this.database
       .prepare(
         `SELECT ${APP_COLUMNS} FROM app a JOIN vps v ON v.id = a.vps_id
-         WHERE a.vps_id = ? ORDER BY a.id DESC`
+         WHERE a.vps_id = ? AND v.archived_at IS NULL ORDER BY a.id DESC`
       )
       .all(vpsId) as App[]
   }
 
   listAll(): App[] {
     return this.database
-      .prepare(`SELECT ${APP_COLUMNS} FROM app a JOIN vps v ON v.id = a.vps_id ORDER BY a.id DESC`)
+      .prepare(
+        `SELECT ${APP_COLUMNS} FROM app a JOIN vps v ON v.id = a.vps_id WHERE v.archived_at IS NULL ORDER BY a.id DESC`
+      )
       .all() as App[]
   }
 
