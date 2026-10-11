@@ -18,6 +18,7 @@ Khi SQLite cục bộ không còn hồ sơ app, người dùng vẫn phải th�
 - UPDATE 11/10/2026: thêm `vps:discover-apps`, scanner Docker chỉ chọn các trường/nhãn cần thiết, kiểm tra tên/image/Compose path và giới hạn đầu ra; tab VPS hiển thị ứng viên chưa có trong SQLite theo bốn ngôn ngữ, không cấp hành động quản lý. Docker thực tế chưa được quét trong checkpoint này.
 - ORCHESTRATION 11/10/2026: đã thử giao scanner cho Orca Worker trên cùng worktree ba lần; cả ba lần thất bại trước khi prompt đến Worker (`agent_prompt_blocked`, rồi hai lần `agent_readiness timeout`). Các terminal tạo ra đã được release; Leader triển khai trực tiếp, không ghi nhận công lao Worker vào mã nguồn.
 - HANDOFF-LOCAL 11/10/2026: Node 22.23.3, Vitest 73/73 files và 727/727 tests PASS (gồm scanner/UI); Node/Web typecheck và production build PASS; ESLint 0 error, 15 warning định dạng ở các file deploy khác đã tồn tại từ R1; `git diff --check` sạch. Docker CLI có trên máy phát triển nhưng daemon không chạy, nên lệnh format Docker thực và VPS live giữ `NOT_RUN`. Trạng thái checkpoint `CHỜ REVIEW`, không push/PR/merge.
+- REVIEW 11/10/2026: commit mã và hồ sơ cục bộ `21736bf`; chỉ stage 12 file thuộc R2, quét diff không thấy secret và giữ nguyên các file công cụ/báo cáo không thuộc task.
 
 ## Bước tiếp theo
 
