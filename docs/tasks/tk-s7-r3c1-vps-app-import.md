@@ -31,6 +31,7 @@ Không sửa VPS thật; không push, mở PR hoặc merge. Không thêm dữ li
 - UPDATE 12/10 — Focused import/DB/deploy/discovery/UI tests 59/59; monitor 22/22, MigratePage 20/20, DashboardPage 8/8. Full Vitest 747/747 với `--maxWorkers=2`; typecheck, lint, build và `git diff --check` PASS trên Node 22.23.3. Lint có 0 errors và 6480 warnings về format/CRLF. Không kết nối hoặc sửa VPS thật.
 - HANDOFF-LOCAL 12/10 — Code commit `e901b0c` · gate Node 22 pass như trên · live VPS NOT_RUN; app nhập bị giới hạn thao tác quản lý chưa chứng minh an toàn.
 - FOLLOW-UP 12/10 — `docs/contracts/schema.sql` đồng bộ migration 009. Bổ sung kiểm chứng v8→v9 giữ ID/dữ liệu cho activation, metric, score, alert, doctor run/action và experiment, `foreign_key_check` sạch; lỗi giữa migration rollback đủ. Import UI yêu cầu xác nhận và hiển thị app/image/version/port cùng nhãn “Chỉ đọc sau khi nhập”; test hủy/xác nhận và copy 4 locale pass. Đã xử lý 459 cảnh báo lint trong ba file checkpoint (15 `index.test.ts`, 427 test UI, 17 `strings.ts`); cảnh báo còn lại toàn repo 6.086, 0 trong file checkpoint đã sửa. Node 22.23.3: focused 17/17; full Vitest 751/751; typecheck/build/diff check pass; lint 0 errors, 6.086 warnings. Live VPS NOT_RUN.
+- HANDOFF-LOCAL 12/10 — Follow-up commit `84ff9c8` · focused 17/17, full Vitest 751/751, typecheck/build/diff check PASS, lint 0 errors / 6.086 warnings ngoài file checkpoint · live VPS NOT_RUN; chưa push.
 
 ## Lệnh tái hiện
 
