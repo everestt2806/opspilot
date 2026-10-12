@@ -26,6 +26,7 @@
 | TK-S7 R2 | [Nhận diện app còn chạy trên VPS](tk-s7-r2-vps-discovery.md) | Leader | 11/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Local `21736bf`: quét Docker read-only qua SSH pin, hiển thị riêng app chưa có SQLite; 727/727 Vitest, typecheck/build PASS, lint 0 error/15 warning cũ; chưa import hay dựng lại lịch sử; live NOT_RUN. |
 | TK-S7 R3a | [Manifest an toàn cho app VPS](tk-s7-r3a-app-manifest.md) | Worker | 11/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Manifest v1, stable identity portable, SSH write/chmod errors checked; 734/734 Vitest, typecheck/build PASS, lint 0 errors/14 warnings; VPS NOT_RUN. |
 | TK-S7 R3b | [Xác minh ứng viên khôi phục từ VPS](tk-s7-r3b-vps-recovery-candidates.md) | Worker | 11/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Code `4815d92`: manifest bounded/strict parse, Docker runtime cross-check, safe recovery UI; 734/734 Vitest, typecheck/build pass, lint 0 errors/14 existing warnings; live NOT_RUN. |
+| TK-S7 R3c-1 | [Nhập app từ VPS](tk-s7-r3c1-vps-app-import.md) | Worker | 12/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Import app verified thành app + VPS baseline atomic; Node 22 gates pass; local commit, chưa push; live VPS NOT_RUN. |
 
 TK-A18 Titlebar fix 05: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `30747f1`; WCO drag region dùng
 đúng rectangle, native controls không còn chồng caption và màu overlay đã liền shell; Snap Layout ghi

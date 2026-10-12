@@ -10,6 +10,7 @@ import type { SshManager } from './ssh/manager'
 import { readVpsResources, testConnectionWithCredentials } from './vps/connectionService'
 import { readVpsOperationalDiagnostics } from './vps/operationalDiagnostics'
 import { discoverVpsApps } from './vps/discovery'
+import { VpsAppImportService } from './vps/importService'
 import { installDockerOnVps } from './vps/dockerInstall'
 import { scanVpsEnvironment } from './vps/scanService'
 import type { VpsService } from './vps/service'
@@ -85,6 +86,9 @@ export function registerIpcHandlers(
   handle('vps:get-resources', (vpsId) => readVpsResources(ssh, vpsId))
   handle('vps:get-operational-diagnostics', (vpsId) => readVpsOperationalDiagnostics(ssh, vpsId))
   handle('vps:discover-apps', (vpsId) => discoverVpsApps(ssh, vpsId))
+  handle('vps:import-app', (vpsId, name, snapshot) =>
+    new VpsAppImportService(database, ssh).importApp(vpsId, name, snapshot)
+  )
   handle('vps:install-docker', async (vpsId) => {
     const dockerVersion = await installDockerOnVps(ssh, vpsId)
     vpsService.recordDockerInstalled(vpsId, dockerVersion)
@@ -159,9 +163,16 @@ export function registerIpcHandlers(
   })
   handle('doctor:fix', async (input) => {
     const row = database
-      .prepare('SELECT app_id FROM deployment WHERE id = ?')
-      .get(input.deployment_id) as { app_id: number } | undefined
+      .prepare(
+        'SELECT d.app_id, d.origin, a.imported_from_vps FROM deployment d JOIN app a ON a.id=d.app_id WHERE d.id = ?'
+      )
+      .get(input.deployment_id) as
+      | { app_id: number; origin: 'opspilot' | 'vps_import'; imported_from_vps: 0 | 1 }
+      | undefined
     if (!row) throw new AppError('VALIDATION', 'Không tìm thấy deployment để tự sửa.')
+    if (row.origin === 'vps_import' || row.imported_from_vps === 1) {
+      throw new AppError('VALIDATION', 'Chưa thể chạy Doctor fix cho app vừa nhập từ VPS.')
+    }
     const app = deployService.getApp(row.app_id)
     const vps = new VpsRepository(database).getById(app.vps_id)
     return new DoctorFixService(ssh, database).execute({
@@ -191,14 +202,20 @@ export function registerIpcHandlers(
     }
     const deployment = database
       .prepare(
-        `SELECT d.app_id, a.host_port, v.host
+        `SELECT d.app_id, a.host_port, v.host, d.origin
          FROM deployment d
          JOIN app a ON a.id = d.app_id
          JOIN vps v ON v.id = a.vps_id
          WHERE d.id = ? AND v.archived_at IS NULL`
       )
-      .get(input.deployment_id) as { app_id: number; host_port: number; host: string } | undefined
+      .get(input.deployment_id) as
+      | { app_id: number; host_port: number; host: string; origin: 'opspilot' | 'vps_import' }
+      | undefined
     if (!deployment) throw new AppError('VALIDATION', 'Không tìm thấy deployment để gắn domain.')
+
+    if (deployment.origin === 'vps_import') {
+      throw new AppError('VALIDATION', 'Chưa thể quản lý domain cho app vừa nhập từ VPS.')
+    }
 
     const existingBinding = database
       .prepare('SELECT app_id FROM domain_binding WHERE hostname = ?')

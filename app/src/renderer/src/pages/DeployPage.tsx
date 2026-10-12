@@ -1062,7 +1062,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                           <option value="-1" disabled>
                             {strings.deploy.targetApp.selectAppPlaceholder}
                           </option>
-                          {apps.map((app) => (
+                          {apps.filter((app) => app.imported_from_vps !== 1).map((app) => (
                             <option key={app.id} value={app.id}>
                               {app.name} — port {app.host_port}
                             </option>
@@ -1247,7 +1247,7 @@ export function DeployPage({ onOpenDashboard, onBack }: DeployPageProps): React.
                     }}
                     options={[
                       { value: -1, label: strings.deploy.config.newApp },
-                      ...apps.map((app) => ({
+                      ...apps.filter((app) => app.imported_from_vps !== 1).map((app) => ({
                         value: app.id,
                         label: `${app.name} — port ${app.host_port}`
                       }))

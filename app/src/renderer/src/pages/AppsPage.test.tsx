@@ -50,6 +50,7 @@ const APP_1: App = {
   healthcheck_path: '/health',
   needs_db: 0,
   current_deployment_id: 101,
+  imported_from_vps: 0,
   url: 'http://203.0.113.55:30000'
 }
 
@@ -63,6 +64,7 @@ const APP_2: App = {
   healthcheck_path: '/api/health',
   needs_db: 0,
   current_deployment_id: 201,
+  imported_from_vps: 0,
   url: 'http://203.0.113.56:30001'
 }
 
@@ -77,6 +79,7 @@ const DEPLOYMENT_ACTIVE: Deployment = {
   total_duration_ms: 25000,
   is_rollback_of: null,
   started_at: '2026-08-19T10:00:00Z',
+  origin: 'opspilot',
   finished_at: '2026-08-19T10:00:25Z',
   exposure_status: 'degraded',
   exposure_evidence_json: 'Cổng 30000 bị UFW chặn'
@@ -93,6 +96,7 @@ const DEPLOYMENT_PAST: Deployment = {
   total_duration_ms: 20000,
   is_rollback_of: null,
   started_at: '2026-08-18T10:00:00Z',
+  origin: 'opspilot',
   finished_at: '2026-08-18T10:00:20Z',
   exposure_status: 'reachable',
   exposure_evidence_json: null
@@ -500,6 +504,7 @@ describe(
         total_duration_ms: 18000,
         is_rollback_of: null,
         started_at: '2026-08-20T10:00:00Z',
+        origin: 'opspilot',
         finished_at: '2026-08-20T10:00:18Z',
         exposure_status: 'reachable',
         exposure_evidence_json: null
@@ -583,6 +588,7 @@ describe(
         total_duration_ms: 18000,
         is_rollback_of: null,
         started_at: '2026-08-20T10:00:00Z',
+        origin: 'opspilot',
         finished_at: '2026-08-20T10:00:18Z',
         exposure_status: 'reachable',
         exposure_evidence_json: null
@@ -702,6 +708,40 @@ describe(
       )
 
       expect(await screen.findByText('Máy chủ chưa kiểm tra gần đây (>24h)')).toBeTruthy()
+    })
+
+    it('keeps VPS-imported apps read-only in the Apps page', async () => {
+      const importedApp: App = {
+        ...APP_1,
+        id: 30,
+        name: 'imported-app',
+        imported_from_vps: 1,
+        current_deployment_id: 301
+      }
+      const importedBaseline: Deployment = {
+        ...DEPLOYMENT_ACTIVE,
+        id: 301,
+        app_id: importedApp.id,
+        origin: 'vps_import',
+        started_at: null,
+        build_duration_ms: null,
+        total_duration_ms: null
+      }
+      mockApi({
+        'app:list': async () => ({ ok: true, data: [importedApp] }),
+        'app:versions': async () => ({
+          ok: true,
+          data: [importedBaseline, { ...DEPLOYMENT_PAST, id: 300, app_id: importedApp.id }]
+        })
+      })
+      render(<AppsPage />)
+
+      fireEvent.click(await screen.findByText('imported-app'))
+      expect(await screen.findByText(strings.apps.importedReadOnly)).toBeTruthy()
+      expect(screen.queryByRole('button', { name: strings.apps.deployNewVersion })).toBeNull()
+      expect(screen.queryByText(strings.apps.rollback)).toBeNull()
+
+      expect(screen.queryByRole('button', { name: strings.apps.doctorAutoFix })).toBeNull()
     })
 
     it('current deployment ID không tìm thấy trong lịch sử phiên bản -> không fallback vào deployments[0], hiện cảnh báo mismatch', async () => {

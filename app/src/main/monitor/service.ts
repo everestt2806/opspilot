@@ -56,6 +56,12 @@ export class MonitorService {
     return this.repository.getOrCreateSetting(appId)
   }
   setSetting(appId: number, patch: Partial<MonitorSetting>): MonitorSetting {
+    const imported = this.db
+      .prepare('SELECT imported_from_vps FROM app WHERE id=?')
+      .get(appId) as { imported_from_vps: 0 | 1 } | undefined
+    if (imported?.imported_from_vps === 1) {
+      throw new AppError('VALIDATION', 'Chưa thể bật monitor cho app vừa nhập từ VPS.')
+    }
     const parsed = settingPatchSchema.safeParse(patch)
     if (!parsed.success) throw new AppError('VALIDATION', 'Setting không hợp lệ.')
     const entries = Object.entries(parsed.data)

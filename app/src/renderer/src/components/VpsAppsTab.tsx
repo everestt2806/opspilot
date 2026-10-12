@@ -81,6 +81,8 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
   const [discovered, setDiscovered] = useState<DiscoveredVpsApp[]>([])
   const [scanError, setScanError] = useState<IpcError | null>(null)
   const [scanLoading, setScanLoading] = useState(false)
+  const [importingName, setImportingName] = useState<string | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
   const scanVersion = useRef(0)
   const setActivePage = useUiState((state) => state.setActivePage)
   const setDeployPreselect = useUiState((state) => state.setDeployPreselect)
@@ -259,9 +261,14 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
       key: 'status',
       width: 165,
       render: (_: unknown, app: AppRow) => (
-        <Tag className="status-badge" color={statusColor(app)}>
-          {statusLabel(app)}
-        </Tag>
+        <Space size={4}>
+          <Tag className="status-badge" color={statusColor(app)}>
+            {statusLabel(app)}
+          </Tag>
+          {app.imported_from_vps === 1 && (
+            <Tag>{strings.vpsControl.apps.recoveryStatus.importedFromVps}</Tag>
+          )}
+        </Space>
       )
     },
     {
@@ -278,14 +285,16 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
           >
             {strings.vpsControl.apps.openApp}
           </Button>
-          <Button
-            className="action-pill"
-            size="small"
-            icon={<RocketOutlined />}
-            onClick={() => goDeploy(app.id)}
-          >
-            {strings.vpsControl.apps.redeploy}
-          </Button>
+          {app.imported_from_vps !== 1 && (
+            <Button
+              className="action-pill"
+              size="small"
+              icon={<RocketOutlined />}
+              onClick={() => goDeploy(app.id)}
+            >
+              {strings.vpsControl.apps.redeploy}
+            </Button>
+          )}
         </Space>
       )
     }
@@ -389,6 +398,16 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
             description={strings.vpsControl.apps.recoveryHint}
             style={{ marginBottom: 12 }}
           />
+          {importError && (
+            <Alert
+              type="error"
+              showIcon
+              closable
+              message={importError}
+              onClose={() => setImportError(null)}
+              style={{ marginBottom: 12 }}
+            />
+          )}
           <Table<DiscoveredVpsApp>
             rowKey="name"
             size="small"
@@ -440,6 +459,56 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
                 dataIndex: 'state',
                 key: 'state',
                 render: (state: string) => <Tag>{state}</Tag>
+              },
+              {
+                title: strings.vpsControl.apps.columns.actions,
+                key: 'actions',
+                render: (_: unknown, candidate: DiscoveredVpsApp) =>
+                  candidate.recovery_status === 'verified' ? (
+                    <Button
+                      size="small"
+                      loading={importingName === candidate.name}
+                      disabled={importingName !== null}
+                      onClick={async () => {
+                        setImportingName(candidate.name)
+                        setImportError(null)
+                        try {
+                          const result = await window.api.invoke(
+                            'vps:import-app',
+                            vpsId,
+                            candidate.name,
+                            {
+                              recovery_status: candidate.recovery_status,
+                              image_tag: candidate.image_tag,
+                              version: candidate.version,
+                              host_port: candidate.host_port,
+                              container_port: candidate.container_port,
+                              state: candidate.state,
+                              framework: candidate.framework,
+                              source_type: candidate.source_type,
+                              git_remote: candidate.git_remote,
+                              git_ref: candidate.git_ref,
+                              git_root: candidate.git_root,
+                              healthcheck: candidate.healthcheck,
+                              needs_db: candidate.needs_db
+                            }
+                          )
+                          if (result.ok) {
+                            await load()
+                            await scan()
+                          } else {
+                            setImportError(result.error.message)
+                          }
+                        } catch {
+                          setImportError(strings.vpsControl.apps.discoveredError)
+                        } finally {
+                          setImportingName(null)
+                        }
+                      }}
+                    >
+                      {strings.vpsControl.apps.importVerified}
+                    </Button>
+                  ) : null
               }
             ]}
           />

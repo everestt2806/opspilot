@@ -88,6 +88,7 @@ const APP_1: App = {
   healthcheck_path: '/health',
   needs_db: 0,
   current_deployment_id: 1,
+  imported_from_vps: 0,
   url: 'http://203.0.113.55:30000'
 }
 
@@ -101,6 +102,7 @@ const APP_2: App = {
   healthcheck_path: '/health',
   needs_db: 0,
   current_deployment_id: 2,
+  imported_from_vps: 0,
   url: 'http://203.0.113.56:30001'
 }
 

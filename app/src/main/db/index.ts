@@ -11,6 +11,7 @@ import migration005 from './migrations/005_experiment_run_attempt.sql?raw'
 import migration006 from './migrations/006_vps_host_fingerprint.sql?raw'
 import migration007 from './migrations/007_git_source_provenance.sql?raw'
 import migration008 from './migrations/008_vps_archive.sql?raw'
+import migration009 from './migrations/009_vps_app_import.sql?raw'
 
 interface Migration {
   name: string
@@ -58,6 +59,11 @@ const migrations: Migration[] = [
     name: '008_vps_archive.sql',
     version: 8,
     sql: migration008
+  },
+  {
+    name: '009_vps_app_import.sql',
+    version: 9,
+    sql: migration009
   }
 ]
 
@@ -108,6 +114,11 @@ export function runMigrations(database: Database.Database): void {
       continue
     }
 
+    if (migration.version === 9) {
+      runMigration009(database, migration)
+      continue
+    }
+
     database.transaction(() => {
       applyMigration(database, migration)
       const alreadyRecorded = database
@@ -117,6 +128,23 @@ export function runMigrations(database: Database.Database): void {
         database.prepare('INSERT INTO schema_version (version) VALUES (?)').run(migration.version)
       }
     })()
+  }
+}
+
+function runMigration009(database: Database.Database, migration: Migration): void {
+  const wasFkEnabled = database.pragma('foreign_keys', { simple: true }) === 1
+  if (wasFkEnabled) database.pragma('foreign_keys = OFF')
+  try {
+    database.transaction(() => {
+      database.exec(migration.sql)
+      const fkErrors = database.pragma('foreign_key_check') as Array<unknown>
+      if (fkErrors.length > 0) {
+        throw new Error(`Migration 009 vi phạm foreign_key_check: ${JSON.stringify(fkErrors)}`)
+      }
+      database.prepare('INSERT INTO schema_version (version) VALUES (?)').run(migration.version)
+    })()
+  } finally {
+    if (wasFkEnabled) database.pragma('foreign_keys = ON')
   }
 }
 

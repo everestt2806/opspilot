@@ -17,12 +17,18 @@ export interface CreateAppRecord {
   container_port: number
   healthcheck_path: string
   needs_db: 0 | 1
+  imported_from_vps?: 0 | 1
+}
+
+export interface ImportedBaselineRecord {
+  version: number
+  image_tag: string
 }
 
 const APP_COLUMNS = `
   a.id, a.vps_id, a.name, a.framework, a.source_path, a.source_type,
   a.git_repo_url, a.git_ref, a.git_root, a.host_port, a.container_port,
-  a.healthcheck_path, a.needs_db, a.current_deployment_id,
+  a.healthcheck_path, a.needs_db, a.current_deployment_id, a.imported_from_vps,
   'http://' || v.host || ':' || a.host_port AS url
 `
 
@@ -35,8 +41,8 @@ export class AppRepository {
         .prepare(
           `INSERT INTO app (
             vps_id, name, framework, source_path, host_port, container_port,
-            healthcheck_path, needs_db, source_type, git_repo_url, git_ref, git_root
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            healthcheck_path, needs_db, source_type, git_repo_url, git_ref, git_root, imported_from_vps
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           record.vps_id,
@@ -50,9 +56,34 @@ export class AppRepository {
           record.source_type ?? 'local',
           record.git_repo_url ?? null,
           record.git_ref ?? null,
-          record.git_root ?? null
+          record.git_root ?? null,
+          record.imported_from_vps ?? 0
         )
       return this.getById(Number(result.lastInsertRowid))
+    } catch (error) {
+      throw mapAppDatabaseError(error)
+    }
+  }
+
+  createVpsImportedBaseline(
+    record: CreateAppRecord,
+    baseline: ImportedBaselineRecord
+  ): { app: App; deploymentId: number } {
+    const insert = this.database.transaction(() => {
+      const app = this.create({ ...record, source_path: null, imported_from_vps: 1 })
+      const result = this.database
+        .prepare(
+          `INSERT INTO deployment (
+            app_id, version, image_tag, status, started_at, git_repo_url, origin
+          ) VALUES (?, ?, ?, 'running', NULL, ?, 'vps_import')`
+        )
+        .run(app.id, baseline.version, baseline.image_tag, record.git_repo_url ?? null)
+      const deploymentId = Number(result.lastInsertRowid)
+      this.setCurrentDeployment(app.id, deploymentId)
+      return { app: this.getById(app.id), deploymentId }
+    })
+    try {
+      return insert()
     } catch (error) {
       throw mapAppDatabaseError(error)
     }

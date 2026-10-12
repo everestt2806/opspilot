@@ -452,6 +452,7 @@ const BASE_EN_STRINGS = {
     deployAction: 'Deploy',
     viewVps: 'View target VPS',
     deployNewVersion: 'Deploy new version',
+    importedReadOnly: 'Imported from VPS. Management actions stay disabled until their safety is verified.',
     activeVersion: 'Active',
     countDisplay: (filtered: number, total: number) =>
       `Showing ${filtered} / ${total} applications`,
@@ -729,13 +730,14 @@ const BASE_EN_STRINGS = {
       title: 'Apps on this server',
       discoveredTitle: 'Found on VPS',
       discoveredHint:
-        'These containers appear to be OpsPilot deployments with no local records. Deployment history remains unavailable; metadata is shown only for verified manifests, and management stays disabled until import is supported.',
+        'Verified candidates can be imported with their current VPS state as a baseline. Imported apps remain read-only.',
       discoveredScan: 'Scan VPS',
       discoveredError: 'Could not scan Docker containers on the VPS.',
       discoveredImage: 'Docker image',
       discoveredState: 'Container state',
       discoveredEligibility: 'Recovery eligibility',
       discoveredMetadata: 'Verified metadata',
+      importVerified: 'Import app',
       recoveryStatus: {
         verified: 'Verified candidate',
         legacy: 'Legacy: manifest missing',
@@ -744,6 +746,7 @@ const BASE_EN_STRINGS = {
         mismatch: 'Runtime mismatch',
         ambiguous: 'Ambiguous containers',
         unverifiable: 'Runtime unverifiable',
+        importedFromVps: 'Imported from VPS',
         stopped: 'Container stopped'
       },
       recoveryHint:
@@ -1177,13 +1180,14 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       title: 'Ứng dụng trên máy chủ',
       discoveredTitle: 'Phát hiện trên VPS',
       discoveredHint:
-        'Các container này có thể do OpsPilot triển khai nhưng chưa có hồ sơ cục bộ. Lịch sử triển khai chưa có; metadata chỉ hiện với manifest đã xác minh và chưa thể quản lý khi chưa hỗ trợ import.',
+        'Có thể nhập ứng viên đã xác minh cùng trạng thái VPS hiện tại làm baseline. App đã nhập tạm thời chỉ xem.',
       discoveredScan: 'Quét VPS',
       discoveredError: 'Không thể quét container Docker trên VPS.',
       discoveredImage: 'Docker image',
       discoveredState: 'Trạng thái container',
       discoveredEligibility: 'Khả năng khôi phục',
       discoveredMetadata: 'Metadata đã xác minh',
+      importVerified: 'Nhập ứng dụng',
       recoveryStatus: {
         verified: 'Ứng viên đã xác minh',
         legacy: 'Ứng dụng cũ: thiếu manifest',
@@ -1192,6 +1196,7 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
         mismatch: 'Runtime không khớp',
         ambiguous: 'Container không rõ ràng',
         unverifiable: 'Không thể xác minh runtime',
+        importedFromVps: 'Đã nhập từ VPS',
         stopped: 'Container đã dừng'
       },
       recoveryHint:
@@ -1575,6 +1580,7 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     deployAction: 'Triển khai',
     viewVps: 'Xem máy chủ VPS',
     deployNewVersion: 'Triển khai phiên bản mới',
+    importedReadOnly: 'Đã nhập từ VPS. Tạm khóa thao tác quản lý cho đến khi xác minh an toàn.',
     activeVersion: 'Đang kích hoạt',
     countDisplay: (filtered: number, total: number) => `Hiển thị ${filtered} / ${total} ứng dụng`,
     doctorExposureTitle: 'Bác sĩ & Exposure',
@@ -1946,13 +1952,14 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       title: '服务器上的应用',
       discoveredTitle: '在 VPS 上发现',
       discoveredHint:
-        '这些容器可能由 OpsPilot 部署，但本机没有记录。部署历史尚不可用；仅显示已验证清单中的元数据，导入功能可用前无法管理。',
+        '可导入已验证候选项并以当前 VPS 状态作为基线。导入的应用暂时为只读。',
       discoveredScan: '扫描 VPS',
       discoveredError: '无法扫描 VPS 上的 Docker 容器。',
       discoveredImage: 'Docker 镜像',
       discoveredState: '容器状态',
       discoveredEligibility: '恢复资格',
       discoveredMetadata: '已验证元数据',
+      importVerified: '导入应用',
       recoveryStatus: {
         verified: '已验证候选项',
         legacy: '旧应用：缺少清单',
@@ -1961,6 +1968,7 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
         mismatch: '运行状态不匹配',
         ambiguous: '容器不明确',
         unverifiable: '无法验证运行状态',
+        importedFromVps: '已从 VPS 导入',
         stopped: '容器已停止'
       },
       recoveryHint: '已验证表示清单与当前 Docker 证据匹配。尚未导入应用或部署记录。',
@@ -2333,6 +2341,7 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     deployAction: '部署',
     viewVps: '查看目标 VPS',
     deployNewVersion: '部署新版本',
+    importedReadOnly: '已从 VPS 导入。验证操作安全性前，管理功能保持禁用。',
     activeVersion: '当前激活',
     countDisplay: (filtered: number, total: number) => `显示 ${filtered} / ${total} 个应用`,
     doctorExposureTitle: 'Doctor 与公开检测',
@@ -2694,13 +2703,14 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       title: 'サーバー上のアプリ',
       discoveredTitle: 'VPS で検出',
       discoveredHint:
-        'これらは OpsPilot が配置した可能性のあるコンテナですが、この端末に記録がありません。履歴はまだ利用できません。検証済みマニフェストのメタデータのみを表示し、取り込み機能ができるまで管理できません。',
+        '検証済み候補は現在の VPS 状態をベースラインとしてインポートできます。インポートしたアプリは一時的に読み取り専用です。',
       discoveredScan: 'VPS をスキャン',
       discoveredError: 'VPS の Docker コンテナをスキャンできませんでした。',
       discoveredImage: 'Docker イメージ',
       discoveredState: 'コンテナの状態',
       discoveredEligibility: '復元の適格性',
       discoveredMetadata: '検証済みメタデータ',
+      importVerified: 'アプリをインポート',
       recoveryStatus: {
         verified: '検証済み候補',
         legacy: '旧アプリ：マニフェストなし',
@@ -2709,6 +2719,7 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
         mismatch: '実行状態が不一致',
         ambiguous: 'コンテナが重複',
         unverifiable: '実行状態を検証できません',
+        importedFromVps: 'VPS からインポート済み',
         stopped: 'コンテナ停止中'
       },
       recoveryHint:
@@ -3089,6 +3100,7 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     deployAction: 'デプロイ',
     viewVps: '対象 VPS を表示',
     deployNewVersion: '新しいバージョンをデプロイ',
+    importedReadOnly: 'VPS からインポートしました。安全性を確認するまで管理操作を無効にします。',
     activeVersion: '有効',
     countDisplay: (filtered: number, total: number) => `${total} 件中 ${filtered} 件のアプリを表示`,
     doctorExposureTitle: 'ドクター & 公開診断',

@@ -24,6 +24,22 @@ afterEach(() => {
 })
 
 describe('DeployService.precheck', () => {
+  it('blocks precheck and deploy-start for apps imported from VPS', async () => {
+    const { service, database, exec, vpsId, appId } = createHarness()
+    database.prepare('UPDATE app SET imported_from_vps=1 WHERE id=?').run(appId)
+    const input = {
+      vps_id: vpsId,
+      app_id: appId,
+      app_name: 'demo-api',
+      source_path: 'C:\\demo-api',
+      env: {}
+    }
+
+    await expect(service.precheck(input)).rejects.toMatchObject({ code: 'VALIDATION' })
+    expect(() => service.start(input)).toThrowError(/VALIDATION/)
+    expect(exec).not.toHaveBeenCalled()
+  })
+
   it('khong xem cong cua app dang chay la xung dot khi redeploy', async () => {
     const { service, exec, vpsId, appId } = createHarness()
 

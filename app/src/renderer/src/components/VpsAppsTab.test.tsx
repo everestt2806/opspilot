@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { App, Deployment } from '@shared/ipc'
@@ -31,6 +31,7 @@ const APP_MATCHING: App = {
   healthcheck_path: '/health',
   needs_db: 0,
   current_deployment_id: 101,
+  imported_from_vps: 0,
   url: 'http://10.0.0.1:3001'
 }
 
@@ -44,6 +45,7 @@ const APP_MISMATCHED: App = {
   healthcheck_path: '/',
   needs_db: 0,
   current_deployment_id: 999, // Không tồn tại trong danh sách versions
+  imported_from_vps: 0,
   url: 'http://10.0.0.1:3002'
 }
 
@@ -57,6 +59,7 @@ const APP_NO_DEPLOYMENT: App = {
   healthcheck_path: '/',
   needs_db: 0,
   current_deployment_id: null,
+  imported_from_vps: 0,
   url: 'http://10.0.0.1:3003'
 }
 
@@ -72,6 +75,7 @@ const VERSIONS: Deployment[] = [
     total_duration_ms: 2000,
     is_rollback_of: null,
     started_at: '2026-10-01T00:00:00Z',
+    origin: 'opspilot',
     finished_at: '2026-10-01T00:01:00Z',
     exposure_status: 'reachable',
     exposure_evidence_json: null
@@ -87,6 +91,7 @@ const VERSIONS: Deployment[] = [
     total_duration_ms: 2000,
     is_rollback_of: null,
     started_at: '2026-10-01T00:00:00Z',
+    origin: 'opspilot',
     finished_at: '2026-10-01T00:01:00Z',
     exposure_status: 'reachable',
     exposure_evidence_json: null
@@ -294,5 +299,78 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
         )
       ).toBeTruthy()
     }
+  })
+  it('imports only a verified candidate and hides redeploy after it becomes an imported app', async () => {
+    const importedApp: App = {
+      ...APP_MATCHING,
+      id: 55,
+      name: 'verified-app',
+      imported_from_vps: 1,
+      current_deployment_id: 77
+    }
+    const importedDeployment: Deployment = {
+      ...VERSIONS[1],
+      id: 77,
+      app_id: 55,
+      version: 3,
+      image_tag: 'verified-app:v3',
+      origin: 'vps_import',
+      started_at: null,
+      total_duration_ms: null,
+      build_duration_ms: null
+    }
+    let appLoads = 0
+    const candidate = {
+      name: 'verified-app',
+      image_tag: 'verified-app:v3',
+      version: 3,
+      host_port: 32001,
+      container_port: 3000,
+      state: 'running',
+      recovery_status: 'verified' as const,
+      recovery_reason: null,
+      framework: 'express' as const,
+      source_type: 'git' as const,
+      git_remote: 'https://github.com/example/app.git',
+      git_ref: 'main',
+      git_root: '.',
+      healthcheck: '/health',
+      needs_db: false
+    }
+    mockApi({
+      'app:list': async () => ({
+        ok: true,
+        data: appLoads++ === 0 ? [] : [importedApp]
+      }),
+      'app:versions': async () => ({ ok: true, data: [importedDeployment] }),
+      'vps:discover-apps': async () => ({
+        ok: true,
+        data: appLoads > 1 ? [] : [candidate]
+      }),
+      'vps:import-app': async () => ({ ok: true, data: { app_id: 55, deployment_id: 77 } })
+    })
+
+    render(<VpsAppsTab vpsId={10} />)
+    const importButton = await screen.findByRole('button', {
+      name: getStrings('vi').vpsControl.apps.importVerified
+    })
+    fireEvent.click(importButton)
+    expect(await screen.findByText(getStrings('vi').vpsControl.apps.recoveryStatus.importedFromVps)).toBeTruthy()
+    expect(screen.queryByText(getStrings('vi').vpsControl.apps.redeploy)).toBeNull()
+    expect(window.api.invoke).toHaveBeenCalledWith('vps:import-app', 10, 'verified-app', {
+      recovery_status: 'verified',
+      image_tag: candidate.image_tag,
+      version: candidate.version,
+      host_port: candidate.host_port,
+      container_port: candidate.container_port,
+      state: candidate.state,
+      framework: candidate.framework,
+      source_type: candidate.source_type,
+      git_remote: candidate.git_remote,
+      git_ref: candidate.git_ref,
+      git_root: candidate.git_root,
+      healthcheck: candidate.healthcheck,
+      needs_db: candidate.needs_db
+    })
   })
 })

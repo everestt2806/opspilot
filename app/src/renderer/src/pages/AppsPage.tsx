@@ -341,6 +341,7 @@ export function AppsPage(): React.JSX.Element {
   const isRunning = isVersionsReady && activeDeployment?.status === 'running'
   const isRollbackAllowed =
     selectedApp !== null &&
+    selectedApp.imported_from_vps !== 1 &&
     isVersionsReady &&
     !rollbackBusy &&
     rollbackTarget !== null &&
@@ -770,18 +771,24 @@ export function AppsPage(): React.JSX.Element {
               {strings.apps.viewVps}
             </Button>
           )}
-          <Button
-            type="primary"
-            icon={<RocketOutlined />}
-            onClick={() => {
-              setDeployPreselect({ vpsId: selectedApp.vps_id, appId: selectedApp.id })
-              setActivePage('deploy')
-            }}
-          >
-            {strings.apps.deployNewVersion}
-          </Button>
+          {selectedApp.imported_from_vps !== 1 && (
+            <Button
+              type="primary"
+              icon={<RocketOutlined />}
+              onClick={() => {
+                setDeployPreselect({ vpsId: selectedApp.vps_id, appId: selectedApp.id })
+                setActivePage('deploy')
+              }}
+            >
+              {strings.apps.deployNewVersion}
+            </Button>
+          )}
         </Space>
       </div>
+
+      {selectedApp.imported_from_vps === 1 && (
+        <Alert type="info" showIcon message={strings.apps.importedReadOnly} />
+      )}
 
       <div className="apps-kpi-grid">
         <div className="apps-kpi">
@@ -911,7 +918,7 @@ export function AppsPage(): React.JSX.Element {
               >
                 {strings.apps.doctorDiagnose}
               </Button>
-              {doctorSafeToFix && doctorFixId && (
+              {selectedApp.imported_from_vps !== 1 && doctorSafeToFix && doctorFixId && (
                 <Button
                   type="primary"
                   loading={doctorBusy}
@@ -1164,6 +1171,9 @@ export function AppsPage(): React.JSX.Element {
                                 >
                                   {dep.status}
                                 </Tag>
+                                {dep.origin === 'vps_import' && (
+                                  <Tag>{strings.vpsControl.apps.recoveryStatus.importedFromVps}</Tag>
+                                )}
                                 <Tag
                                   color={
                                     dep.exposure_status === 'reachable'
@@ -1176,7 +1186,8 @@ export function AppsPage(): React.JSX.Element {
                                   {strings.apps.exposureStatus[dep.exposure_status]}
                                 </Tag>
                               </div>
-                              {!isCurrent &&
+                              {selectedApp.imported_from_vps !== 1 &&
+                                !isCurrent &&
                                 dep.status !== 'building' &&
                                 dep.status !== 'deploying' && (
                                   <Button
@@ -1193,7 +1204,13 @@ export function AppsPage(): React.JSX.Element {
                             </div>
                             <div className="apps-version-meta">
                               <span>
-                                <ClockCircleOutlined /> {formatTime(dep.started_at)}
+                                {dep.started_at ? (
+                                  <>
+                                    <ClockCircleOutlined /> {formatTime(dep.started_at)}
+                                  </>
+                                ) : (
+                                  strings.vpsControl.apps.recoveryStatus.importedFromVps
+                                )}
                               </span>
                               {dep.total_duration_ms !== null && (
                                 <span>
@@ -1347,7 +1364,7 @@ export function AppsPage(): React.JSX.Element {
                       >
                         {strings.apps.doctorDiagnose}
                       </Button>
-                      {doctorSafeToFix && doctorFixId && (
+                      {selectedApp.imported_from_vps !== 1 && doctorSafeToFix && doctorFixId && (
                         <Button
                           type="primary"
                           loading={doctorBusy}

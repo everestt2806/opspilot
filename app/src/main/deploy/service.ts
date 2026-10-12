@@ -87,6 +87,7 @@ export class DeployService {
     if (existingApp && existingApp.vps_id !== vps.id) {
       throw new AppError('VALIDATION', 'App không thuộc VPS đã chọn. Hãy chọn lại.')
     }
+    this.assertNotVpsImported(existingApp)
 
     const prepared = this.isGitInput(input)
       ? this.preparedGitSources.get((input as GitDeployInput).prepared_source_handle)
@@ -176,6 +177,7 @@ export class DeployService {
   start(input: DeployStartInput): { deployment_id: number } {
     if (!this.isGitInput(input)) {
       const existingApp = this.findExistingApp(input, input.vps_id)
+      this.assertNotVpsImported(existingApp)
       if (existingApp?.source_type === 'git') this.assertLocalSourceAllowed(existingApp)
       const { deploymentId } = this.pipeline.run(input)
       return { deployment_id: deploymentId }
@@ -184,6 +186,7 @@ export class DeployService {
     const reservation = this.preparedGitSources.reserveStart(input)
     try {
       const existingApp = this.findExistingApp(input, input.vps_id)
+      this.assertNotVpsImported(existingApp)
       this.assertSourceCompatibility(input, existingApp, reservation.lease)
       const localPipelineInput: DeployInput = {
         vps_id: input.vps_id,
@@ -261,6 +264,7 @@ export class DeployService {
   }
 
   rollback(appId: number, targetDeploymentId: number): { deployment_id: number } {
+    this.assertNotVpsImported(this.appRepository.getById(appId))
     const { deploymentId } = this.pipeline.rollback(appId, targetDeploymentId)
     return { deployment_id: deploymentId }
   }
@@ -275,5 +279,11 @@ export class DeployService {
 
   versions(appId: number): Deployment[] {
     return this.deploymentRepository.listByApp(appId)
+  }
+
+  private assertNotVpsImported(app: App | undefined): void {
+    if (app?.imported_from_vps === 1) {
+      throw new AppError('VALIDATION', 'Chưa thể deploy hoặc rollback app vừa nhập từ VPS.')
+    }
   }
 }

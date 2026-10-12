@@ -70,7 +70,7 @@ export class DeploymentRepository {
       .prepare(
         `SELECT id, app_id, version, image_tag, status, failed_step,
                 build_duration_ms, total_duration_ms, is_rollback_of, started_at, finished_at,
-                exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha
+                exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha, origin
          FROM deployment WHERE id = ?`
       )
       .get(id) as Deployment | undefined
@@ -89,7 +89,7 @@ export class DeploymentRepository {
       .prepare(
         `SELECT id, app_id, version, image_tag, status, failed_step,
                 build_duration_ms, total_duration_ms, is_rollback_of, started_at, finished_at,
-                exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha
+                exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha, origin
          FROM deployment WHERE app_id = ? ORDER BY version DESC`
       )
       .all(appId) as Deployment[]
@@ -101,7 +101,7 @@ export class DeploymentRepository {
       .prepare(
         `SELECT id, app_id, version, image_tag, status, failed_step,
                 build_duration_ms, total_duration_ms, is_rollback_of, started_at, finished_at,
-                exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha
+                exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha, origin
          FROM deployment
          WHERE app_id = ? AND version < ? AND status = 'running'
          ORDER BY version DESC LIMIT 1`

@@ -82,6 +82,23 @@ export interface DiscoveredVpsApp {
   needs_db: boolean | null;
 }
 
+export type VpsAppImportSnapshot = Pick<
+  DiscoveredVpsApp,
+  | 'recovery_status'
+  | 'image_tag'
+  | 'version'
+  | 'host_port'
+  | 'container_port'
+  | 'state'
+  | 'framework'
+  | 'source_type'
+  | 'git_remote'
+  | 'git_ref'
+  | 'git_root'
+  | 'healthcheck'
+  | 'needs_db'
+>;
+
 export interface App {
   id: number;
   vps_id: number;
@@ -98,6 +115,7 @@ export interface App {
   healthcheck_path: string;
   needs_db: 0 | 1;
   current_deployment_id: number | null;
+  imported_from_vps: 0 | 1;
   /** Suy ra: `http://${vps.host}:${host_port}` — main tính sẵn để UI không phải ghép */
   url: string;
 }
@@ -110,12 +128,13 @@ export interface Deployment {
   /** Git provenance is null for deployments created from a local folder. */
   git_repo_url?: string | null;
   git_commit_sha?: string | null;
+  origin: 'opspilot' | 'vps_import';
   status: 'building' | 'deploying' | 'running' | 'failed' | 'rolled_back' | 'stopped';
   failed_step: DeployStep | null;
   build_duration_ms: number | null;
   total_duration_ms: number | null;
   is_rollback_of: number | null;
-  started_at: string;
+  started_at: string | null;
   finished_at: string | null;
   exposure_status: 'reachable' | 'degraded' | 'tunnel_only' | 'not_checked';
   exposure_evidence_json: string | null;
@@ -202,6 +221,8 @@ export interface IpcInvokeMap {
   'vps:get-resources':  (vpsId: number) => IpcResult<VpsResources>;
   'vps:get-operational-diagnostics': (vpsId: number) => IpcResult<VpsOperationalDiagnostics>;
   'vps:discover-apps': (vpsId: number) => IpcResult<DiscoveredVpsApp[]>;
+  'vps:import-app': (vpsId: number, name: string, snapshot: VpsAppImportSnapshot) =>
+    IpcResult<{ app_id: number; deployment_id: number }>;
   'vps:test-connection': (input: VpsInput) => IpcResult<VpsConnectionCheck>;
   'vps:create':         (input: VpsInput) => IpcResult<Vps>;
   'vps:update':         (id: number, input: Partial<VpsInput>) => IpcResult<Vps>;

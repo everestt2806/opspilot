@@ -58,6 +58,15 @@ describe('initializeDatabase', () => {
       id: 82,
       app_id: 72
     })
+    expect(
+      database.prepare('SELECT imported_from_vps FROM app WHERE id=72').get()
+    ).toEqual({ imported_from_vps: 0 })
+    expect(
+      database.prepare('SELECT origin, started_at FROM deployment WHERE id=82').get()
+    ).toMatchObject({ origin: 'opspilot' })
+    expect(database.pragma('table_info(deployment)')).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'origin' })])
+    )
     expect(database.pragma('foreign_key_check')).toEqual([])
   })
 
@@ -164,7 +173,7 @@ describe('initializeDatabase', () => {
       .get() as { version: number }
 
     expect(tables).toHaveLength(15)
-    expect(schemaVersion.version).toBe(8)
+    expect(schemaVersion.version).toBe(9)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -195,7 +204,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 8
+      version: 9
     })
     expect(
       database
@@ -394,7 +403,7 @@ describe('initializeDatabase', () => {
     const successVer = v4Db.prepare('SELECT MAX(version) AS version FROM schema_version').get() as {
       version: number
     }
-    expect(successVer.version).toBe(8)
+    expect(successVer.version).toBe(9)
 
     // b. Bảng experiment_run đã có cột attempt_index và backfill = 1 cho tất cả bản ghi cũ
     const postRuns = v4Db
