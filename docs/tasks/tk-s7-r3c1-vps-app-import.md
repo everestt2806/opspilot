@@ -40,3 +40,6 @@ Node 22.23.3 trong PATH; `pnpm --filter @opspilot/app exec vitest run src/main/d
 ## PR
 
 Chưa mở theo yêu cầu.
+
+- MONITOR-GUARD 12/10/2026 - Repository listTargets/getTarget exclude imported_from_vps=1 and vps_import baselines; pollAll reconciliation, getSetting/setSetting, alert labeling and manual train paths are guarded. Migration-009-backed test proves pollAll reads metrics only for a normal OpsPilot app, imported baseline rows/offset/activations remain unchanged, direct poll does not read source, and manual training is rejected. Focused monitor/import tests 49/49; Node 22.23.3 typecheck PASS; scoped ESLint 0 warnings; full lint 0 errors / 6,081 warnings (remaining outside changed files); full Vitest/build pending at note time; git diff --check PASS. No live VPS operations.
+- FINAL-GATES 12/10/2026 - Node 22.23.3: focused 54/54, full Vitest 752/752 (75 files), typecheck PASS, full lint 0 errors / exactly 6,081 warnings, build PASS, git diff --check PASS. Scoped ESLint for changed source/test files: 0 warnings. Committed locally; no push/PR/merge and no live VPS access.

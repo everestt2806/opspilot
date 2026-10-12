@@ -14,16 +14,104 @@ import { VpsRepository } from '../db/vpsRepository'
 import type { SshManager } from '../ssh/manager'
 import { discoverVpsApps } from './discovery'
 import { VpsAppImportService } from './importService'
+import { MonitorService } from '../monitor/service'
+import { MonitorPoller } from '../monitor/poller'
+import type { MetricSource } from '../monitor/metricSource'
 
 const testDirectories: string[] = []
 const testDatabases: Array<ReturnType<typeof initializeDatabase>> = []
 
 afterEach(() => {
   for (const database of testDatabases.splice(0)) if (database.open) database.close()
-  for (const directory of testDirectories.splice(0)) rmSync(directory, { recursive: true, force: true })
+  for (const directory of testDirectories.splice(0))
+    rmSync(directory, { recursive: true, force: true })
 })
 
 describe('VPS app import', () => {
+  it('excludes a migration-009 imported app from polling and manual training while polling local apps', async () => {
+    const harness = createHarness()
+    const snapshot = await currentSnapshot(harness.ssh, harness.vpsId)
+    const imported = await new VpsAppImportService(harness.db, harness.ssh).importApp(
+      harness.vpsId,
+      'blog',
+      snapshot
+    )
+    const local = new AppRepository(harness.db).create({
+      vps_id: harness.vpsId,
+      name: 'local-app',
+      framework: 'express',
+      source_path: 'D:/local-app',
+      host_port: 32003,
+      container_port: 3000,
+      healthcheck_path: '/health',
+      needs_db: 0
+    })
+    const deployment = new DeploymentRepository(harness.db).createNextVersion(
+      local.id,
+      local.name,
+      null,
+      null
+    )
+    harness.db.prepare("UPDATE deployment SET status='running' WHERE id=?").run(deployment.id)
+    harness.db
+      .prepare('UPDATE app SET current_deployment_id=? WHERE id=?')
+      .run(deployment.id, local.id)
+
+    const importedBaseline = imported.deployment_id
+    const before = {
+      metrics: harness.db.prepare('SELECT COUNT(*) n FROM metric_sample').get(),
+      scores: harness.db.prepare('SELECT COUNT(*) n FROM score_sample').get(),
+      alerts: harness.db.prepare('SELECT COUNT(*) n FROM alert').get(),
+      activations: harness.db
+        .prepare('SELECT COUNT(*) n FROM deployment_activation WHERE app_id=?')
+        .get(imported.app_id),
+      offset: harness.db.prepare('SELECT metrics_offset FROM app WHERE id=?').get(imported.app_id)
+    }
+    const sshCalls = {
+      exec: vi.fn(async () => ({ code: 0, stdout: '', stderr: '' })),
+      metricSnapshot: vi.fn(),
+      fileIdentity: vi.fn(async () => ({ generation: 'g1', device: 1, inode: 1 })),
+      fileSize: vi.fn(async () => 0),
+      readFileTail: vi.fn(async () => ({ content: '', nextOffset: 1 }))
+    }
+    const ssh = sshCalls as never
+    await new MonitorService(harness.db).pollAll(ssh)
+
+    expect(sshCalls.fileSize).toHaveBeenCalledTimes(1)
+    expect(sshCalls.readFileTail).toHaveBeenCalledTimes(1)
+    expect(harness.db.prepare('SELECT COUNT(*) n FROM metric_sample').get()).toEqual(before.metrics)
+    expect(harness.db.prepare('SELECT COUNT(*) n FROM score_sample').get()).toEqual(before.scores)
+    expect(harness.db.prepare('SELECT COUNT(*) n FROM alert').get()).toEqual(before.alerts)
+    expect(
+      harness.db
+        .prepare('SELECT COUNT(*) n FROM deployment_activation WHERE app_id=?')
+        .get(imported.app_id)
+    ).toEqual(before.activations)
+    expect(
+      harness.db.prepare('SELECT metrics_offset FROM app WHERE id=?').get(imported.app_id)
+    ).toEqual(before.offset)
+
+    const source = {
+      size: vi.fn(async () => 1),
+      tail: vi.fn(async () => ''),
+      identity: vi.fn(async () => ({ generation: 'g1' }))
+    } satisfies MetricSource
+    const directResult = await new MonitorPoller(harness.db).poll(
+      imported.app_id,
+      importedBaseline,
+      source
+    )
+    expect(directResult.inserted).toBe(0)
+    expect(source.size).not.toHaveBeenCalled()
+    const client = { train: vi.fn() }
+    await expect(
+      new MonitorService(harness.db).trainNow(importedBaseline, client as never)
+    ).rejects.toMatchObject({
+      code: 'VALIDATION'
+    })
+    expect(client.train).not.toHaveBeenCalled()
+  })
+
   it('imports a verified live snapshot atomically and the next deployment uses N+1', async () => {
     const harness = createHarness()
     const service = new VpsAppImportService(harness.db, harness.ssh)
@@ -68,7 +156,9 @@ describe('VPS app import', () => {
       null
     )
     expect(next).toMatchObject({ version: 4, image_tag: 'blog:v4', origin: 'opspilot' })
-    expect(JSON.stringify(harness.db.prepare('SELECT * FROM app').all())).not.toContain('SECRET_CANARY')
+    expect(JSON.stringify(harness.db.prepare('SELECT * FROM app').all())).not.toContain(
+      'SECRET_CANARY'
+    )
     expect(JSON.stringify(harness.db.prepare('SELECT * FROM deployment').all())).not.toContain(
       'SECRET_CANARY'
     )
@@ -195,9 +285,9 @@ describe('VPS app import', () => {
     expect(rollbackHarness.db.prepare('SELECT COUNT(*) AS count FROM app').get()).toEqual({
       count: 0
     })
-    expect(
-      rollbackHarness.db.prepare('SELECT COUNT(*) AS count FROM deployment').get()
-    ).toEqual({ count: 0 })
+    expect(rollbackHarness.db.prepare('SELECT COUNT(*) AS count FROM deployment').get()).toEqual({
+      count: 0
+    })
   })
 })
 
@@ -262,10 +352,7 @@ function createHarness(): Harness {
   }
 }
 
-async function currentSnapshot(
-  ssh: Harness['ssh'],
-  vpsId: number
-): Promise<VpsAppImportSnapshot> {
+async function currentSnapshot(ssh: Harness['ssh'], vpsId: number): Promise<VpsAppImportSnapshot> {
   const [candidate] = await discoverVpsApps(ssh as never, vpsId)
   return candidate as VpsAppImportSnapshot
 }
