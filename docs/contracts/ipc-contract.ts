@@ -72,7 +72,7 @@ export interface DiscoveredVpsApp {
   container_port: number | null;
   state: string;
   recovery_status: 'verified' | 'legacy' | 'invalid' | 'mismatch' | 'ambiguous' | 'unverifiable' | 'stopped';
-  recovery_reason: 'manifest_missing' | 'manifest_invalid' | 'runtime_mismatch' | 'duplicate_runtime' | 'container_not_running' | 'runtime_port_unverifiable' | null;
+  recovery_reason: 'manifest_missing' | 'manifest_invalid' | 'manifest_unreadable' | 'runtime_mismatch' | 'duplicate_runtime' | 'container_not_running' | 'runtime_port_unverifiable' | null;
   framework: FrameworkId | null;
   source_type: 'local' | 'git' | null;
   git_remote: string | null;

@@ -16,6 +16,7 @@
 - START 11/10/2026 — Đọc CLAUDE.md, DECISIONS.md, task-discipline, R2 và R3a; xác nhận Node 22.23.3 sẵn có. Ledger: scanner/strict parser, IPC decision, UI/locales, tests/gates đều OPEN.
 - UPDATE 11/10/2026 — Scanner đọc manifest chỉ từ `/opt/opspilot/<validated-slug>/.opspilot-app.json` với `head -c 16385`; parser v1 từ chối field thừa, credential-bearing Git URL, field/type sai và payload quá 16 KiB. Đối chiếu Docker image/tag, running state và host/container port; status/reason rõ cho verified, legacy, invalid, mismatch, duplicate, stopped, và runtime không xác minh được. IPC contract mirror, DECISIONS, UI 4 locale hoàn tất; không có import/SQLite mutation.
 - HANDOFF-LOCAL 11/10/2026 — Commit code `4815d92`. Node 22.23.3: focused 14/14; full Vitest 734/734 (74 files); `pnpm typecheck` PASS; `pnpm lint` 0 errors/14 formatting warnings có sẵn ở các file deploy không thuộc task; `pnpm build` PASS; `git diff --check` PASS. VPS/live `NOT_RUN`; không import app/deployment records.
+- FOLLOW-UP 12/10/2026 — Đồng bộ `docs/contracts/ipc-contract.ts` với `app/src/shared/ipc.ts`: thêm `manifest_unreadable` vào `DiscoveredVpsApp.recovery_reason`; chỉ sửa mismatch này, không xử lý contract drift lịch sử khác. Node 22.23.3: typecheck, discovery/VpsAppsTab focused tests và `git diff --check` PASS; local commit, không push hay thao tác VPS.
 
 ## Requirement ledger
 
