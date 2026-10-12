@@ -18,6 +18,50 @@ import { SshManager } from '../ssh/manager'
 
 let testDirectory: string | null = null
 
+function downgradeMigration009ToV8(database: Database.Database): void {
+  database.pragma('foreign_keys = OFF')
+  database.exec(`
+    CREATE TABLE deployment_v8 (
+      id INTEGER PRIMARY KEY,
+      app_id INTEGER NOT NULL REFERENCES app(id) ON DELETE CASCADE,
+      version INTEGER NOT NULL,
+      image_tag TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN
+        ('building','deploying','running','failed','rolled_back','stopped')),
+      failed_step TEXT CHECK (failed_step IN
+        ('PRECHECK','UPLOAD','RENDER','BUILD','DEPLOY','HEALTHCHECK','RECORD')),
+      env_json TEXT,
+      detector_json TEXT,
+      build_duration_ms INTEGER,
+      total_duration_ms INTEGER,
+      is_rollback_of INTEGER REFERENCES deployment_v8(id),
+      started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+      finished_at TEXT,
+      exposure_status TEXT NOT NULL DEFAULT 'not_checked' CHECK (exposure_status IN
+        ('reachable','degraded','tunnel_only','not_checked')),
+      exposure_evidence_json TEXT,
+      git_repo_url TEXT,
+      git_commit_sha TEXT,
+      UNIQUE (app_id, version)
+    );
+    INSERT INTO deployment_v8 (
+      id, app_id, version, image_tag, status, failed_step, env_json, detector_json,
+      build_duration_ms, total_duration_ms, is_rollback_of, started_at, finished_at,
+      exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha
+    )
+    SELECT id, app_id, version, image_tag, status, failed_step, env_json, detector_json,
+      build_duration_ms, total_duration_ms, is_rollback_of, started_at, finished_at,
+      exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha
+    FROM deployment;
+    DROP TABLE deployment;
+    ALTER TABLE deployment_v8 RENAME TO deployment;
+    CREATE INDEX idx_deployment_app_started ON deployment(app_id, started_at DESC);
+    ALTER TABLE app DROP COLUMN imported_from_vps;
+    DELETE FROM schema_version WHERE version = 9;
+  `)
+  database.pragma('foreign_keys = ON')
+}
+
 afterEach(() => {
   setMigration005TestInterceptor(null)
   closeDatabase()
@@ -28,6 +72,130 @@ afterEach(() => {
 })
 
 describe('initializeDatabase', () => {
+  it('migration v8 to v9 preserves deployment-linked records and foreign keys', () => {
+    testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v8-v9-linked-'))
+    const database = initializeDatabase(testDirectory)
+    database.exec(`
+      INSERT INTO vps (id, name, host, username, auth_type, encrypted_secret)
+        VALUES (42, 'Existing VPS', '203.0.113.42', 'deploy', 'key', X'00');
+      INSERT INTO app (id, vps_id, name, framework, host_port, container_port)
+        VALUES (72, 42, 'existing-app', 'express', 30042, 3000);
+      INSERT INTO deployment (id, app_id, version, image_tag, status, started_at)
+        VALUES (82, 72, 3, 'existing-app:v3', 'running', '2026-10-11T12:13:14Z');
+      INSERT INTO deployment_activation
+        (id, app_id, deployment_id, stream_generation, start_offset, reason, state)
+        VALUES (92, 72, 82, 'stream-1', 1, 'deploy', 'active');
+      INSERT INTO metric_sample (id, deployment_id, seq, ts_vps, ts_local, raw_json)
+        VALUES (102, 82, 1, '2026-10-11T12:13:14Z', '2026-10-11T12:13:15Z', '{"seq":1}');
+      INSERT INTO score_sample (id, metric_sample_id, deployment_id, ts_vps, method, score)
+        VALUES (112, 102, 82, '2026-10-11T12:13:14Z', 'rule', 0.25);
+      INSERT INTO alert (id, deployment_id, metric_sample_id, method, ts_vps, peak_score)
+        VALUES (122, 82, 102, 'rule', '2026-10-11T12:13:14Z', 0.25);
+      INSERT INTO doctor_run
+        (id, deployment_id, trigger, evidence_json, diagnosis_code, confidence)
+        VALUES (132, 82, 'manual', '{"source":"test"}', 'test-diagnosis', 'low');
+      INSERT INTO doctor_action (id, doctor_run_id, action_type, status)
+        VALUES (142, 132, 'inspect', 'success');
+      INSERT INTO experiment_run
+        (id, scenario, repeat_index, deployment_id, vps_id, status)
+        VALUES (152, 'memory_leak', 1, 82, 42, 'completed');
+    `)
+
+    downgradeMigration009ToV8(database)
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
+      version: 8
+    })
+    runMigrations(database)
+
+    expect(
+      database.prepare('SELECT id, started_at, origin FROM deployment WHERE id=82').get()
+    ).toEqual({
+      id: 82,
+      started_at: '2026-10-11T12:13:14Z',
+      origin: 'opspilot'
+    })
+    expect(database.prepare('SELECT imported_from_vps FROM app WHERE id=72').get()).toEqual({
+      imported_from_vps: 0
+    })
+    expect(
+      database.prepare('SELECT id, deployment_id, state FROM deployment_activation').get()
+    ).toEqual({
+      id: 92,
+      deployment_id: 82,
+      state: 'active'
+    })
+    expect(database.prepare('SELECT id, deployment_id, raw_json FROM metric_sample').get()).toEqual(
+      {
+        id: 102,
+        deployment_id: 82,
+        raw_json: '{"seq":1}'
+      }
+    )
+    expect(
+      database.prepare('SELECT id, metric_sample_id, deployment_id, score FROM score_sample').get()
+    ).toEqual({
+      id: 112,
+      metric_sample_id: 102,
+      deployment_id: 82,
+      score: 0.25
+    })
+    expect(database.prepare('SELECT id, deployment_id, metric_sample_id FROM alert').get()).toEqual(
+      {
+        id: 122,
+        deployment_id: 82,
+        metric_sample_id: 102
+      }
+    )
+    expect(database.prepare('SELECT id, deployment_id FROM doctor_run').get()).toEqual({
+      id: 132,
+      deployment_id: 82
+    })
+    expect(database.prepare('SELECT id, doctor_run_id, status FROM doctor_action').get()).toEqual({
+      id: 142,
+      doctor_run_id: 132,
+      status: 'success'
+    })
+    expect(database.prepare('SELECT id, deployment_id, status FROM experiment_run').get()).toEqual({
+      id: 152,
+      deployment_id: 82,
+      status: 'completed'
+    })
+    expect(database.pragma('foreign_key_check')).toEqual([])
+  })
+
+  it('migration v8 to v9 rolls back all changes after an intermediate SQL error', () => {
+    testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v8-v9-rollback-'))
+    const database = initializeDatabase(testDirectory)
+    database.exec(`
+      INSERT INTO vps (id, name, host, username, auth_type, encrypted_secret)
+        VALUES (42, 'Existing VPS', '203.0.113.42', 'deploy', 'key', X'00');
+      INSERT INTO app (id, vps_id, name, framework, host_port, container_port)
+        VALUES (72, 42, 'existing-app', 'express', 30042, 3000);
+      INSERT INTO deployment (id, app_id, version, image_tag, status, started_at)
+        VALUES (82, 72, 3, 'existing-app:v3', 'running', '2026-10-11T12:13:14Z');
+    `)
+    downgradeMigration009ToV8(database)
+    database.exec('DROP INDEX idx_deployment_app_started')
+
+    expect(() => runMigrations(database)).toThrow(/no such index: idx_deployment_app_started/)
+    expect(
+      database.prepare('SELECT id, image_tag, started_at FROM deployment WHERE id=82').get()
+    ).toMatchObject({
+      id: 82,
+      image_tag: 'existing-app:v3'
+    })
+    expect(database.pragma('table_info(app)')).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'imported_from_vps' })])
+    )
+    expect(database.pragma('table_info(deployment)')).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'origin' })])
+    )
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
+      version: 8
+    })
+    expect(database.pragma('foreign_key_check')).toEqual([])
+  })
+
   it('migration v7 to v8 keeps existing VPS and app records intact', () => {
     testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v7-v8-'))
     const database = initializeDatabase(testDirectory)
@@ -58,9 +226,9 @@ describe('initializeDatabase', () => {
       id: 82,
       app_id: 72
     })
-    expect(
-      database.prepare('SELECT imported_from_vps FROM app WHERE id=72').get()
-    ).toEqual({ imported_from_vps: 0 })
+    expect(database.prepare('SELECT imported_from_vps FROM app WHERE id=72').get()).toEqual({
+      imported_from_vps: 0
+    })
     expect(
       database.prepare('SELECT origin, started_at FROM deployment WHERE id=82').get()
     ).toMatchObject({ origin: 'opspilot' })

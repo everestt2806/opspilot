@@ -89,6 +89,7 @@ CREATE TABLE app (
   container_port    INTEGER NOT NULL,
   healthcheck_path  TEXT    NOT NULL DEFAULT '/',
   needs_db          INTEGER NOT NULL DEFAULT 0 CHECK (needs_db IN (0,1)),
+  imported_from_vps INTEGER NOT NULL DEFAULT 0 CHECK (imported_from_vps IN (0,1)),
 
   -- Vị trí đọc tiếp trong metrics.jsonl (byte offset, 1-based cho `tail -c +N`)
   metrics_offset    INTEGER NOT NULL DEFAULT 1,
@@ -128,8 +129,10 @@ CREATE TABLE deployment (
                             CHECK (exposure_status IN ('reachable','degraded','tunnel_only','not_checked')),
   exposure_evidence_json TEXT,
 
-  started_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  -- Nullable for a VPS-import baseline, whose original deploy time is unknown.
+  started_at        TEXT,
   finished_at       TEXT,
+  origin            TEXT    NOT NULL DEFAULT 'opspilot' CHECK (origin IN ('opspilot','vps_import')),
 
   UNIQUE (app_id, version)
 );

@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { App, Deployment } from '@shared/ipc'
+import type { App, Deployment, DiscoveredVpsApp } from '@shared/ipc'
 import { VpsAppsTab } from './VpsAppsTab'
 
 function mockApi(handlers: Record<string, (...args: unknown[]) => Promise<unknown>>): void {
@@ -97,6 +97,24 @@ const VERSIONS: Deployment[] = [
     exposure_evidence_json: null
   }
 ]
+
+const VERIFIED_CANDIDATE: DiscoveredVpsApp = {
+  name: 'verified-app',
+  image_tag: 'verified-app:v3',
+  version: 3,
+  host_port: 32001,
+  container_port: 3000,
+  state: 'running',
+  recovery_status: 'verified',
+  recovery_reason: null,
+  framework: 'express',
+  source_type: 'git',
+  git_remote: 'https://github.com/example/app.git',
+  git_ref: 'main',
+  git_root: '.',
+  healthcheck: '/health',
+  needs_db: false
+}
 
 import { useUiState } from '../store/uiState'
 import { getStrings } from '../strings'
@@ -300,7 +318,44 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
       ).toBeTruthy()
     }
   })
-  it('imports only a verified candidate and hides redeploy after it becomes an imported app', async () => {
+  it('provides confirmation copy in all four locales', () => {
+    for (const locale of ['en', 'vi', 'cn', 'jp'] as const) {
+      const confirmation = getStrings(locale).vpsControl.apps.importConfirmation
+      expect(confirmation.title).toBeTruthy()
+      expect(confirmation.name).toBeTruthy()
+      expect(confirmation.imageVersion).toBeTruthy()
+      expect(confirmation.port).toBeTruthy()
+      expect(confirmation.readOnly).toBeTruthy()
+      expect(confirmation.confirm).toBeTruthy()
+      expect(confirmation.cancel).toBeTruthy()
+    }
+  })
+
+  it('shows import details and cancellation never calls the import IPC', async () => {
+    useUiState.setState({ locale: 'vi' })
+    mockApi({
+      'app:list': async () => ({ ok: true, data: [] }),
+      'vps:discover-apps': async () => ({ ok: true, data: [VERIFIED_CANDIDATE] })
+    })
+    render(<VpsAppsTab vpsId={10} />)
+
+    const strings = getStrings('vi').vpsControl.apps
+    fireEvent.click(await screen.findByRole('button', { name: strings.importVerified }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog.textContent).toContain(VERIFIED_CANDIDATE.name)
+    expect(dialog.textContent).toContain('verified-app:v3 (v3)')
+    expect(dialog.textContent).toContain('32001 → 3000')
+    expect(dialog.textContent).toContain(strings.importConfirmation.readOnly)
+    fireEvent.click(screen.getByRole('button', { name: strings.importConfirmation.cancel }))
+    expect(window.api.invoke).not.toHaveBeenCalledWith(
+      'vps:import-app',
+      expect.anything(),
+      expect.anything(),
+      expect.anything()
+    )
+  })
+
+  it('imports only after confirmation and hides redeploy after it becomes an imported app', async () => {
     const importedApp: App = {
       ...APP_MATCHING,
       id: 55,
@@ -320,23 +375,7 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
       build_duration_ms: null
     }
     let appLoads = 0
-    const candidate = {
-      name: 'verified-app',
-      image_tag: 'verified-app:v3',
-      version: 3,
-      host_port: 32001,
-      container_port: 3000,
-      state: 'running',
-      recovery_status: 'verified' as const,
-      recovery_reason: null,
-      framework: 'express' as const,
-      source_type: 'git' as const,
-      git_remote: 'https://github.com/example/app.git',
-      git_ref: 'main',
-      git_root: '.',
-      healthcheck: '/health',
-      needs_db: false
-    }
+    const candidate = VERIFIED_CANDIDATE
     mockApi({
       'app:list': async () => ({
         ok: true,
@@ -355,7 +394,21 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
       name: getStrings('vi').vpsControl.apps.importVerified
     })
     fireEvent.click(importButton)
-    expect(await screen.findByText(getStrings('vi').vpsControl.apps.recoveryStatus.importedFromVps)).toBeTruthy()
+    const confirmation = getStrings('vi').vpsControl.apps.importConfirmation
+    expect(await screen.findByRole('dialog')).toBeTruthy()
+    expect(screen.getByRole('dialog').textContent).toContain('verified-app:v3 (v3)')
+    expect(screen.getByRole('dialog').textContent).toContain('32001 → 3000')
+    expect(screen.getByRole('dialog').textContent).toContain(confirmation.readOnly)
+    expect(window.api.invoke).not.toHaveBeenCalledWith(
+      'vps:import-app',
+      expect.anything(),
+      expect.anything(),
+      expect.anything()
+    )
+    fireEvent.click(screen.getByRole('button', { name: confirmation.confirm }))
+    expect(
+      await screen.findByText(getStrings('vi').vpsControl.apps.recoveryStatus.importedFromVps)
+    ).toBeTruthy()
     expect(screen.queryByText(getStrings('vi').vpsControl.apps.redeploy)).toBeNull()
     expect(window.api.invoke).toHaveBeenCalledWith('vps:import-app', 10, 'verified-app', {
       recovery_status: 'verified',

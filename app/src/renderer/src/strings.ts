@@ -452,7 +452,8 @@ const BASE_EN_STRINGS = {
     deployAction: 'Deploy',
     viewVps: 'View target VPS',
     deployNewVersion: 'Deploy new version',
-    importedReadOnly: 'Imported from VPS. Management actions stay disabled until their safety is verified.',
+    importedReadOnly:
+      'Imported from VPS. Management actions stay disabled until their safety is verified.',
     activeVersion: 'Active',
     countDisplay: (filtered: number, total: number) =>
       `Showing ${filtered} / ${total} applications`,
@@ -738,6 +739,15 @@ const BASE_EN_STRINGS = {
       discoveredEligibility: 'Recovery eligibility',
       discoveredMetadata: 'Verified metadata',
       importVerified: 'Import app',
+      importConfirmation: {
+        title: 'Confirm app import',
+        name: 'App name',
+        imageVersion: 'Image / version',
+        port: 'Host → container port',
+        readOnly: 'The imported app will be read-only after import.',
+        confirm: 'Confirm import',
+        cancel: 'Cancel'
+      },
       recoveryStatus: {
         verified: 'Verified candidate',
         legacy: 'Legacy: manifest missing',
@@ -1188,6 +1198,15 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       discoveredEligibility: 'Khả năng khôi phục',
       discoveredMetadata: 'Metadata đã xác minh',
       importVerified: 'Nhập ứng dụng',
+      importConfirmation: {
+        title: 'Xác nhận nhập ứng dụng',
+        name: 'Tên app',
+        imageVersion: 'Image / phiên bản',
+        port: 'Cổng host → container',
+        readOnly: 'Chỉ đọc sau khi nhập.',
+        confirm: 'Xác nhận nhập',
+        cancel: 'Hủy'
+      },
       recoveryStatus: {
         verified: 'Ứng viên đã xác minh',
         legacy: 'Ứng dụng cũ: thiếu manifest',
@@ -1951,8 +1970,7 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     apps: {
       title: '服务器上的应用',
       discoveredTitle: '在 VPS 上发现',
-      discoveredHint:
-        '可导入已验证候选项并以当前 VPS 状态作为基线。导入的应用暂时为只读。',
+      discoveredHint: '可导入已验证候选项并以当前 VPS 状态作为基线。导入的应用暂时为只读。',
       discoveredScan: '扫描 VPS',
       discoveredError: '无法扫描 VPS 上的 Docker 容器。',
       discoveredImage: 'Docker 镜像',
@@ -1960,6 +1978,15 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       discoveredEligibility: '恢复资格',
       discoveredMetadata: '已验证元数据',
       importVerified: '导入应用',
+      importConfirmation: {
+        title: '确认导入应用',
+        name: '应用名称',
+        imageVersion: '镜像 / 版本',
+        port: '主机端口 → 容器端口',
+        readOnly: '导入后只读。',
+        confirm: '确认导入',
+        cancel: '取消'
+      },
       recoveryStatus: {
         verified: '已验证候选项',
         legacy: '旧应用：缺少清单',
@@ -2711,6 +2738,15 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       discoveredEligibility: '復元の適格性',
       discoveredMetadata: '検証済みメタデータ',
       importVerified: 'アプリをインポート',
+      importConfirmation: {
+        title: 'アプリのインポートを確認',
+        name: 'アプリ名',
+        imageVersion: 'イメージ / バージョン',
+        port: 'ホストポート → コンテナポート',
+        readOnly: 'インポート後は読み取り専用です。',
+        confirm: 'インポートを確認',
+        cancel: 'キャンセル'
+      },
       recoveryStatus: {
         verified: '検証済み候補',
         legacy: '旧アプリ：マニフェストなし',

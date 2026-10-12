@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Alert, Button, Empty, Space, Spin, Table, Tag, Tooltip, Typography } from 'antd'
+import { Alert, Button, Empty, Modal, Space, Spin, Table, Tag, Tooltip, Typography } from 'antd'
 import { ExportOutlined, PlusOutlined, ReloadOutlined, RocketOutlined } from '@ant-design/icons'
 
 import type { App, Deployment, DiscoveredVpsApp, IpcError } from '@shared/ipc'
@@ -82,11 +82,45 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
   const [scanError, setScanError] = useState<IpcError | null>(null)
   const [scanLoading, setScanLoading] = useState(false)
   const [importingName, setImportingName] = useState<string | null>(null)
+  const [confirmImport, setConfirmImport] = useState<DiscoveredVpsApp | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
   const scanVersion = useRef(0)
   const setActivePage = useUiState((state) => state.setActivePage)
   const setDeployPreselect = useUiState((state) => state.setDeployPreselect)
   const setSelectedAppId = useUiState((state) => state.setSelectedAppId)
+
+  const importCandidate = async (candidate: DiscoveredVpsApp): Promise<void> => {
+    setImportingName(candidate.name)
+    setImportError(null)
+    try {
+      const result = await window.api.invoke('vps:import-app', vpsId, candidate.name, {
+        recovery_status: candidate.recovery_status,
+        image_tag: candidate.image_tag,
+        version: candidate.version,
+        host_port: candidate.host_port,
+        container_port: candidate.container_port,
+        state: candidate.state,
+        framework: candidate.framework,
+        source_type: candidate.source_type,
+        git_remote: candidate.git_remote,
+        git_ref: candidate.git_ref,
+        git_root: candidate.git_root,
+        healthcheck: candidate.healthcheck,
+        needs_db: candidate.needs_db
+      })
+      if (result.ok) {
+        await load()
+        await scan()
+      } else {
+        setImportError(result.error.message)
+      }
+    } catch {
+      setImportError(strings.vpsControl.apps.discoveredError)
+    } finally {
+      setImportingName(null)
+      setConfirmImport(null)
+    }
+  }
 
   const load = useCallback(async () => {
     const result = await fetchAppRows(vpsId)
@@ -306,6 +340,37 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
 
   return (
     <div>
+      <Modal
+        open={confirmImport !== null}
+        transitionName=""
+        maskTransitionName=""
+        title={strings.vpsControl.apps.importConfirmation.title}
+        okText={strings.vpsControl.apps.importConfirmation.confirm}
+        cancelText={strings.vpsControl.apps.importConfirmation.cancel}
+        confirmLoading={importingName !== null}
+        onCancel={() => setConfirmImport(null)}
+        onOk={() => {
+          if (confirmImport) void importCandidate(confirmImport)
+        }}
+      >
+        {confirmImport && (
+          <Space direction="vertical" size="small">
+            <Typography.Text>
+              <strong>{strings.vpsControl.apps.importConfirmation.name}:</strong>{' '}
+              {confirmImport.name}
+            </Typography.Text>
+            <Typography.Text>
+              <strong>{strings.vpsControl.apps.importConfirmation.imageVersion}:</strong>{' '}
+              {confirmImport.image_tag} (v{confirmImport.version})
+            </Typography.Text>
+            <Typography.Text>
+              <strong>{strings.vpsControl.apps.importConfirmation.port}:</strong>{' '}
+              {confirmImport.host_port ?? '—'} → {confirmImport.container_port ?? '—'}
+            </Typography.Text>
+            <Typography.Text>{strings.vpsControl.apps.importConfirmation.readOnly}</Typography.Text>
+          </Space>
+        )}
+      </Modal>
       <div
         style={{
           display: 'flex',
@@ -469,41 +534,9 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
                       size="small"
                       loading={importingName === candidate.name}
                       disabled={importingName !== null}
-                      onClick={async () => {
-                        setImportingName(candidate.name)
+                      onClick={() => {
+                        setConfirmImport(candidate)
                         setImportError(null)
-                        try {
-                          const result = await window.api.invoke(
-                            'vps:import-app',
-                            vpsId,
-                            candidate.name,
-                            {
-                              recovery_status: candidate.recovery_status,
-                              image_tag: candidate.image_tag,
-                              version: candidate.version,
-                              host_port: candidate.host_port,
-                              container_port: candidate.container_port,
-                              state: candidate.state,
-                              framework: candidate.framework,
-                              source_type: candidate.source_type,
-                              git_remote: candidate.git_remote,
-                              git_ref: candidate.git_ref,
-                              git_root: candidate.git_root,
-                              healthcheck: candidate.healthcheck,
-                              needs_db: candidate.needs_db
-                            }
-                          )
-                          if (result.ok) {
-                            await load()
-                            await scan()
-                          } else {
-                            setImportError(result.error.message)
-                          }
-                        } catch {
-                          setImportError(strings.vpsControl.apps.discoveredError)
-                        } finally {
-                          setImportingName(null)
-                        }
                       }}
                     >
                       {strings.vpsControl.apps.importVerified}
