@@ -86,8 +86,60 @@ describe('VPS Docker discovery and recovery verification', () => {
       )
       const [app] = await discoverVpsApps({ exec } as never, 7)
       expect(app?.recovery_status).toBe(status)
+      expect(app).toMatchObject({
+        framework: null,
+        source_type: null,
+        git_remote: null,
+        git_ref: null,
+        git_root: null,
+        healthcheck: null,
+        needs_db: null
+      })
       expect(JSON.stringify(app)).not.toContain('RAW_REMOTE_ERROR')
     }
+  })
+  it('distinguishes an unreadable manifest and hides its metadata', async () => {
+    const exec = vi.fn(async (_id: number, command: string) =>
+      command.includes('docker ps')
+        ? { code: 0, stdout: row('blog'), stderr: '' }
+        : { code: 6, stdout: '', stderr: 'permission denied' }
+    )
+    const [app] = await discoverVpsApps({ exec } as never, 7)
+    expect(app).toMatchObject({
+      recovery_status: 'unverifiable',
+      recovery_reason: 'manifest_unreadable',
+      framework: null,
+      source_type: null,
+      git_remote: null,
+      git_ref: null,
+      git_root: null,
+      healthcheck: null,
+      needs_db: null
+    })
+    const throws = vi.fn(async (_id: number, command: string) => {
+      if (command.includes('docker ps')) return { code: 0, stdout: row('blog'), stderr: '' }
+      throw new Error('permission denied')
+    })
+    expect((await discoverVpsApps({ exec: throws } as never, 7))[0]).toMatchObject({
+      recovery_status: 'unverifiable',
+      recovery_reason: 'manifest_unreadable'
+    })
+  })
+  it('limits concurrent SSH manifest reads to four', async () => {
+    const rows = Array.from({ length: 10 }, (_, index) => row(`app-${index}`)).join('\n')
+    let active = 0
+    let maximum = 0
+    const exec = vi.fn(async (_id: number, command: string) => {
+      if (command.includes('docker ps')) return { code: 0, stdout: rows, stderr: '' }
+      active += 1
+      maximum = Math.max(maximum, active)
+      await new Promise((resolve) => setTimeout(resolve, 5))
+      active -= 1
+      return { code: 5, stdout: '', stderr: '' }
+    })
+    expect(await discoverVpsApps({ exec } as never, 7)).toHaveLength(10)
+    expect(maximum).toBeLessThanOrEqual(4)
+    expect(maximum).toBe(4)
   })
   it('rejects stopped, ambiguous and unverifiable runtime and keeps legacy parser read-only', async () => {
     const stopped = vi.fn(async (_id: number, command: string) => ({
@@ -116,14 +168,19 @@ describe('VPS Docker discovery and recovery verification', () => {
     )
     expect(parseDiscoveredApps(row('blog'))[0]?.recovery_status).toBe('legacy')
   })
-  it('sanitizes transient SSH failure and never uses inspect or arbitrary renderer paths', async () => {
+  it('classifies transient SSH failure and never uses inspect or arbitrary renderer paths', async () => {
     const exec = vi.fn(async (_id: number, command: string) => {
       if (command.includes('docker ps')) return { code: 0, stdout: row('blog'), stderr: '' }
       throw new Error('SECRET_CANARY')
     })
-    await expect(discoverVpsApps({ exec } as never, 7)).rejects.toMatchObject({
-      userMessage: 'Không thể đọc manifest khôi phục trên VPS.'
-    })
+    await expect(discoverVpsApps({ exec } as never, 7)).resolves.toMatchObject([
+      {
+        recovery_status: 'unverifiable',
+        recovery_reason: 'manifest_unreadable',
+        framework: null,
+        git_remote: null
+      }
+    ])
     expect(exec.mock.calls[0]?.[1]).not.toContain('inspect')
     expect(exec.mock.calls[0]?.[1]).not.toContain('.env')
   })

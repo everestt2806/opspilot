@@ -401,7 +401,9 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
                 key: 'eligibility',
                 render: (_: unknown, app: DiscoveredVpsApp) => (
                   <Tag color={app.recovery_status === 'verified' ? 'green' : 'default'}>
-                    {strings.vpsControl.apps.recoveryStatus[app.recovery_status]}
+                    {app.recovery_reason === 'manifest_unreadable'
+                      ? strings.vpsControl.apps.recoveryStatus.manifestUnreadable
+                      : strings.vpsControl.apps.recoveryStatus[app.recovery_status]}
                   </Tag>
                 )
               },

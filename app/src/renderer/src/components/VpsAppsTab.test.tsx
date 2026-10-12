@@ -257,4 +257,42 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
       ).toBeTruthy()
     }
   })
+  it('shows the unreadable manifest reason in all four locales', async () => {
+    mockApi({
+      'app:list': async () => ({ ok: true, data: [] }),
+      'vps:discover-apps': async () => ({
+        ok: true,
+        data: [
+          {
+            name: 'unreadable-app',
+            image_tag: 'unreadable-app:v3',
+            version: 3,
+            host_port: 32001,
+            container_port: 3000,
+            state: 'running',
+            recovery_status: 'unverifiable',
+            recovery_reason: 'manifest_unreadable',
+            framework: null,
+            source_type: null,
+            git_remote: null,
+            git_ref: null,
+            git_root: null,
+            healthcheck: null,
+            needs_db: null
+          }
+        ]
+      })
+    })
+
+    const { rerender } = render(<VpsAppsTab vpsId={10} />)
+    for (const locale of ['en', 'vi', 'cn', 'jp'] as const) {
+      useUiState.setState({ locale })
+      rerender(<VpsAppsTab vpsId={10} />)
+      expect(
+        await screen.findByText(
+          getStrings(locale).vpsControl.apps.recoveryStatus.manifestUnreadable
+        )
+      ).toBeTruthy()
+    }
+  })
 })

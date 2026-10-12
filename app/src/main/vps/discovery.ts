@@ -7,6 +7,7 @@ import type { SshManager } from '../ssh/manager'
 const MAX_BYTES = 65_536
 const MAX_CONTAINERS = 100
 const MAX_MANIFEST_BYTES = 16_384
+const MAX_CONCURRENT_MANIFEST_READS = 4
 const TEMPLATE =
   '{"Names":{{json .Names}},"Image":{{json .Image}},"State":{{json .State}},"Ports":{{json .Ports}},"Directory":{{json (.Label "com.docker.compose.project.working_dir")}},"Service":{{json (.Label "com.docker.compose.service")}},"Config":{{json (.Label "com.docker.compose.project.config_files")}}}'
 const COMMAND = `out=$(docker ps -a --last 101 --filter label=com.docker.compose.service=app --format '${TEMPLATE}' 2>/dev/null) || exit 4; printf '%s\n' "$out" | head -c ${MAX_BYTES + 1}`
@@ -148,17 +149,20 @@ function metadata(
 function candidateStatus(
   candidate: DockerCandidate,
   manifest: AppManifest | null,
-  missing: boolean
+  manifestState: 'verified' | 'missing' | 'invalid' | 'unreadable'
 ): DiscoveredVpsApp {
   let status: DiscoveredVpsApp['recovery_status']
   let reason: DiscoveredVpsApp['recovery_reason']
   if (candidate.ambiguous) {
     status = 'ambiguous'
     reason = 'duplicate_runtime'
-  } else if (missing) {
+  } else if (manifestState === 'missing') {
     status = 'legacy'
     reason = 'manifest_missing'
-  } else if (!manifest) {
+  } else if (manifestState === 'unreadable') {
+    status = 'unverifiable'
+    reason = 'manifest_unreadable'
+  } else if (manifestState === 'invalid' || !manifest) {
     status = 'invalid'
     reason = 'manifest_invalid'
   } else if (candidate.state !== 'running') {
@@ -188,7 +192,7 @@ function candidateStatus(
     state: candidate.state,
     recovery_status: status,
     recovery_reason: reason,
-    ...metadata(manifest)
+    ...metadata(status === 'verified' ? manifest : null)
   }
 }
 
@@ -196,10 +200,13 @@ async function readManifest(
   ssh: Pick<SshManager, 'exec'>,
   vpsId: number,
   name: string
-): Promise<{ manifest: AppManifest | null; missing: boolean }> {
+): Promise<{
+  manifest: AppManifest | null
+  state: 'verified' | 'missing' | 'invalid' | 'unreadable'
+}> {
   // name came from the strict Docker slug expression; renderer never supplies this path.
   const path = `/opt/opspilot/${name}/.opspilot-app.json`
-  const command = `if [ -r '${path}' ]; then head -c ${MAX_MANIFEST_BYTES + 1} '${path}'; else exit 5; fi 2>/dev/null`
+  const command = `if [ ! -e '${path}' ]; then exit 5; elif [ ! -r '${path}' ]; then exit 6; else head -c ${MAX_MANIFEST_BYTES + 1} '${path}'; fi 2>/dev/null`
   let result
   try {
     result = await ssh.exec(vpsId, command, {
@@ -208,15 +215,18 @@ async function readManifest(
       retryOnReconnect: false
     })
   } catch {
-    throw new AppError('UNKNOWN', 'Không thể đọc manifest khôi phục trên VPS.')
+    return { manifest: null, state: 'unreadable' }
   }
-  if (result.code === 5) return { manifest: null, missing: true }
-  if (result.code !== 0) return { manifest: null, missing: false }
-  return { manifest: parseAppManifest(result.stdout), missing: false }
+  if (result.code === 5) return { manifest: null, state: 'missing' }
+  if (result.code !== 0) return { manifest: null, state: 'unreadable' }
+  const parsed = parseAppManifest(result.stdout)
+  return parsed ? { manifest: parsed, state: 'verified' } : { manifest: null, state: 'invalid' }
 }
 
 export function parseDiscoveredApps(output: string): DiscoveredVpsApp[] {
-  return parseDockerCandidates(output).map((candidate) => candidateStatus(candidate, null, true))
+  return parseDockerCandidates(output).map((candidate) =>
+    candidateStatus(candidate, null, 'missing')
+  )
 }
 
 export async function discoverVpsApps(
@@ -238,11 +248,23 @@ export async function discoverVpsApps(
   if (result.code !== 0)
     throw new AppError('UNKNOWN', 'Không thể đọc danh sách container Docker trên VPS.')
   const candidates = parseDockerCandidates(result.stdout)
-  return Promise.all(
-    candidates.map(async (candidate) => {
-      if (candidate.ambiguous) return candidateStatus(candidate, null, false)
-      const { manifest, missing } = await readManifest(ssh, vpsId, candidate.name)
-      return candidateStatus(candidate, manifest, missing)
-    })
+  const apps: DiscoveredVpsApp[] = new Array(candidates.length)
+  let next = 0
+  const workers = Array.from(
+    { length: Math.min(MAX_CONCURRENT_MANIFEST_READS, candidates.length) },
+    async () => {
+      while (next < candidates.length) {
+        const index = next++
+        const candidate = candidates[index]
+        if (candidate.ambiguous) {
+          apps[index] = candidateStatus(candidate, null, 'unreadable')
+          continue
+        }
+        const { manifest, state } = await readManifest(ssh, vpsId, candidate.name)
+        apps[index] = candidateStatus(candidate, manifest, state)
+      }
+    }
   )
+  await Promise.all(workers)
+  return apps
 }
