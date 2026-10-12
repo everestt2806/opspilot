@@ -29,6 +29,7 @@ Không sửa VPS thật; không push, mở PR hoặc merge. Không thêm dữ li
 
 - START 12/10 — Tiếp tục triển khai R3c-1 đã có trong working tree; chạy lại toàn bộ gate bằng Node 22, hoàn thiện hồ sơ và commit cục bộ.
 - UPDATE 12/10 — Focused import/DB/deploy/discovery/UI tests 59/59; monitor 22/22, MigratePage 20/20, DashboardPage 8/8. Full Vitest 747/747 với `--maxWorkers=2`; typecheck, lint, build và `git diff --check` PASS trên Node 22.23.3. Lint có 0 errors và 6480 warnings về format/CRLF. Không kết nối hoặc sửa VPS thật.
+- HANDOFF-LOCAL 12/10 — Code commit `e901b0c` · gate Node 22 pass như trên · live VPS NOT_RUN; app nhập bị giới hạn thao tác quản lý chưa chứng minh an toàn.
 
 ## Lệnh tái hiện
 
