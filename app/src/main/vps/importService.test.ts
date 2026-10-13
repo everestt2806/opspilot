@@ -15,6 +15,7 @@ import type { SshManager } from '../ssh/manager'
 import { discoverVpsApps } from './discovery'
 import { VpsAppImportService } from './importService'
 import { RecoveryManifestService } from './recoveryManifestService'
+import { runRecoveryManifestCli } from './recoveryManifestCli'
 import { MonitorService } from '../monitor/service'
 import { MonitorPoller } from '../monitor/poller'
 import type { MetricSource } from '../monitor/metricSource'
@@ -293,6 +294,46 @@ describe('VPS app import', () => {
 })
 
 describe('R3d recovery manifest creation', () => {
+  it('rejects source and target VPS ID mismatch before discovery or any SSH write', async () => {
+    const source = createRecoveryHarness()
+    const targetDirectory = mkdtempSync(join(tmpdir(), 'opspilot-r3d-cli-target-'))
+    testDirectories.push(targetDirectory)
+    const targetDb = initializeDatabase(targetDirectory)
+    testDatabases.push(targetDb)
+    new VpsRepository(targetDb).create({
+      name: 'Unrelated VPS',
+      host: '203.0.113.79',
+      port: 22,
+      host_fingerprint: 'SHA256:other-test-fingerprint',
+      username: 'deploy',
+      auth_type: 'password',
+      credential: fakeCredential()
+    })
+    new VpsRepository(targetDb).create({
+      name: 'Matching VPS',
+      host: '203.0.113.78',
+      port: 22,
+      host_fingerprint: 'SHA256:verified-test-fingerprint',
+      username: 'deploy',
+      auth_type: 'password',
+      credential: fakeCredential()
+    })
+
+    await expect(
+      runRecoveryManifestCli(source.db, source.ssh, {
+        vpsId: source.vpsId,
+        name: 'blog',
+        targetProfile: targetDirectory
+      })
+    ).rejects.toMatchObject({ code: 'VALIDATION' })
+    expect(source.exec).not.toHaveBeenCalled()
+    expect(source.writeFile).not.toHaveBeenCalled()
+    expect(targetDb.prepare('SELECT COUNT(*) AS count FROM app').get()).toEqual({ count: 0 })
+    expect(targetDb.prepare('SELECT COUNT(*) AS count FROM deployment').get()).toEqual({
+      count: 0
+    })
+  })
+
   it('writes a private manifest only after DB and pinned SSH runtime match', async () => {
     const h = createRecoveryHarness()
     const result = await new RecoveryManifestService(h.db, h.ssh).write(h.vpsId, 'blog')
@@ -380,6 +421,7 @@ describe('R3d recovery manifest creation', () => {
     ).resolves.toEqual({ created: true })
     expect(cleanupFailure.commands.some((command) => command.includes('ln --'))).toBe(true)
     expect(cleanupFailure.commands.some((command) => command.startsWith('rm --'))).toBe(true)
+    expect(cleanupFailure.commands.some((command) => command.startsWith('rm -f --'))).toBe(true)
   })
 })
 

@@ -53,6 +53,12 @@ export async function runRecoveryManifestCli(
     if (!targetVpsId) {
       throw new AppError('VALIDATION', 'DB đích thiếu VPS cùng endpoint và fingerprint đã ghim.')
     }
+    if (targetVpsId !== input.vpsId) {
+      throw new AppError(
+        'VALIDATION',
+        'ID VPS trong DB nguồn và DB đích khác nhau; từ chối trước khi kết nối SSH.'
+      )
+    }
     const occupied = targetReadOnly
       .prepare('SELECT 1 FROM app WHERE vps_id=? AND (name=? OR host_port=?)')
       .get(targetVpsId, input.name, firstCandidateHostPort(sourceDb, input.vpsId, input.name))

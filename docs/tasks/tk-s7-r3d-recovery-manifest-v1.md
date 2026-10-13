@@ -11,16 +11,17 @@
 - Tách `ln` nguyên tử và `rm` temp; lỗi `ln` báo thất bại, lỗi dọn temp sau khi `ln` thành công không báo sai là tạo manifest thất bại.
 - Đồng bộ IPC contract trong `docs/contracts/ipc-contract.ts`. Có CLI nội bộ `OPSPILOT_R3D_*` chỉ chạy profile dưới temp, từ chối cùng source/target DB và app/cổng đích đã dùng trước mọi ghi, không mở GUI/monitor, không nhận credential qua args và chỉ xuất kết quả đã lọc.
 - Test: thành công, runtime lệch, hồ sơ thiếu, nội dung hiện có khớp (idempotent), manifest xung đột, lỗi write, lỗi `ln`, lỗi cleanup sau `ln`, và không ngắt phiên SSH dùng chung.
+- Follow-up tại `34f369f`: CLI từ chối trước scan SSH nếu VPS khớp theo endpoint/fingerprint nhưng ID nguồn/đích khác. Sau khi `ln` thành công, cleanup kiểm tra exit code và thử lại `rm -f -- <validated-temp>`; kết quả vẫn `{ created: true }` vì manifest đích đã được tạo.
 
 ## Gate cục bộ (Node 22.23.3)
 
 | Gate | Kết quả | Bằng chứng |
 |---|---|---|
-| Focused recovery/import tests | PASS | Node 22.23.3, `vitest run src/main/vps/importService.test.ts`: 13/13 |
-| Typecheck | PASS | Node 22.23.3, `pnpm typecheck` |
+| Focused recovery/import tests | PASS | Node 22.23.3, `vitest run src/main/vps/importService.test.ts`: 14/14 ở follow-up |
+| Typecheck | PASS | Node 22.23.3, `pnpm typecheck` ở follow-up |
 | Lint toàn repo | PASS có cảnh báo | `pnpm lint`: exit 0, 0 errors, còn 6.080 warnings hiện hữu. Các file source/test thuộc R3d lint scoped: 0 warning/error. |
 | Build | PASS | Node 22.23.3, `pnpm build` |
-| `git diff --check` | PASS | sau thay đổi |
+| `git diff --check` | PASS | sau follow-up |
 
 ## Kiểm chứng live
 
@@ -33,5 +34,7 @@
 | Import thử và baseline | PASS | Import vào target SQLite cô lập: `imported_from_vps=1`, current deployment v5 / `g2-express-20261009:v5`, `origin=vps_import`; `started_at`, env, commit null. Không tạo lịch sử giả. |
 | Monitor và DB integrity | PASS | `monitor_target_excluded=true`; DB target `foreign_key_check` rỗng, `integrity_check=ok`. |
 | DB chính/tài nguyên VPS | PASS | DB chính không mở; chỉ target clone được ghi. Không sửa container, Compose, firewall hoặc file VPS ngoài một manifest recovery. |
+
+Follow-up an toàn không chạy lại scan hoặc ghi live theo yêu cầu; kết quả live PASS ở trên là bằng chứng lần đầu tại `34f369f` và được giữ nguyên.
 
 Không push/PR/merge. Code và live gate R3d đã hoàn tất; còn 6.080 lint warnings định dạng hiện hữu trong repo, nhưng không có warning mới trong các file source/test thuộc R3d.

@@ -129,12 +129,16 @@ export class RecoveryManifestService {
       }
       linked = true
       try {
-        await this.ssh.exec(vpsId, `rm -- ${shellQuote(temp)}`, {
+        const cleanup = await this.ssh.exec(vpsId, `rm -- ${shellQuote(temp)}`, {
           timeoutMs: 5_000,
           logCommand: false,
           retryOnReconnect: false
         })
+        if (cleanup.code !== 0) {
+          await retryTempCleanup(this.ssh, vpsId, temp)
+        }
       } catch {
+        await retryTempCleanup(this.ssh, vpsId, temp)
         // The destination was created; temporary-file cleanup must not misreport creation failure.
       }
       return { created: true }
@@ -150,6 +154,22 @@ export class RecoveryManifestService {
         }
       }
     }
+  }
+}
+
+async function retryTempCleanup(
+  ssh: Pick<SshManager, 'exec'>,
+  vpsId: number,
+  tempPath: string
+): Promise<void> {
+  try {
+    await ssh.exec(vpsId, `rm -f -- ${shellQuote(tempPath)}`, {
+      timeoutMs: 5_000,
+      logCommand: false,
+      retryOnReconnect: false
+    })
+  } catch {
+    // Manifest creation already succeeded; the retry is best effort and never reverses that result.
   }
 }
 
