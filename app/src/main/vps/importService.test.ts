@@ -14,6 +14,7 @@ import { VpsRepository } from '../db/vpsRepository'
 import type { SshManager } from '../ssh/manager'
 import { discoverVpsApps } from './discovery'
 import { VpsAppImportService } from './importService'
+import { RecoveryManifestService } from './recoveryManifestService'
 import { MonitorService } from '../monitor/service'
 import { MonitorPoller } from '../monitor/poller'
 import type { MetricSource } from '../monitor/metricSource'
@@ -291,6 +292,55 @@ describe('VPS app import', () => {
   })
 })
 
+describe('R3d recovery manifest creation', () => {
+  it('writes a private manifest only after DB and pinned SSH runtime match', async () => {
+    const h = createRecoveryHarness()
+    const result = await new RecoveryManifestService(h.db, h.ssh).write(h.vpsId, 'blog')
+    expect(result).toEqual({ created: true })
+    expect(h.writeFile).toHaveBeenCalledOnce()
+    const [, path, content, options] = h.writeFile.mock.calls[0] as unknown as [
+      number,
+      string,
+      string,
+      { mode: number; silent: boolean }
+    ]
+    expect(path).toMatch(/\.opspilot-app\.json\.[0-9a-f-]+\.tmp$/)
+    expect(options).toEqual({ mode: 0o600, silent: true })
+    expect(content).not.toContain('id')
+    expect(content).not.toContain('source_path')
+    expect(content).not.toContain('SECRET_CANARY')
+    expect(h.commands.some((command) => command.includes('ln --') && !command.includes('mv'))).toBe(
+      true
+    )
+  })
+
+  it('refuses runtime mismatch and missing source records', async () => {
+    const mismatch = createRecoveryHarness({ image: 'blog:v4' })
+    await expect(
+      new RecoveryManifestService(mismatch.db, mismatch.ssh).write(mismatch.vpsId, 'blog')
+    ).rejects.toMatchObject({ code: 'VALIDATION' })
+    expect(mismatch.writeFile).not.toHaveBeenCalled()
+    const missing = createRecoveryHarness({ omitApp: true })
+    await expect(
+      new RecoveryManifestService(missing.db, missing.ssh).write(missing.vpsId, 'blog')
+    ).rejects.toMatchObject({ code: 'VALIDATION' })
+    expect(missing.exec).not.toHaveBeenCalled()
+  })
+
+  it('refuses conflicting existing manifests and reports write failures without replacing files', async () => {
+    const exists = createRecoveryHarness({ existing: '{"different":true}' })
+    await expect(
+      new RecoveryManifestService(exists.db, exists.ssh).write(exists.vpsId, 'blog')
+    ).rejects.toMatchObject({ code: 'VALIDATION' })
+    expect(exists.writeFile).not.toHaveBeenCalled()
+    const failure = createRecoveryHarness({ writeFailure: true })
+    await expect(
+      new RecoveryManifestService(failure.db, failure.ssh).write(failure.vpsId, 'blog')
+    ).rejects.toThrow('injected write failure')
+    expect(failure.commands.some((command) => command.includes('ln --'))).toBe(false)
+  })
+})
+
 interface Harness {
   db: ReturnType<typeof initializeDatabase>
   ssh: Pick<SshManager, 'exec'>
@@ -373,6 +423,96 @@ function makeManifest(ref = 'main', hostPort = 32001): string {
     healthcheck: '/health',
     needs_db: false
   })
+}
+
+interface RecoveryHarness {
+  db: ReturnType<typeof initializeDatabase>
+  vpsId: number
+  exec: ReturnType<typeof vi.fn<SshManager['exec']>>
+  writeFile: ReturnType<typeof vi.fn<SshManager['writeFile']>>
+  disconnect: ReturnType<typeof vi.fn<SshManager['disconnect']>>
+  commands: string[]
+  ssh: Pick<SshManager, 'exec' | 'writeFile' | 'disconnect'>
+}
+
+function createRecoveryHarness(
+  options: { image?: string; omitApp?: boolean; existing?: string; writeFailure?: boolean } = {}
+): RecoveryHarness {
+  const directory = mkdtempSync(join(tmpdir(), 'opspilot-r3d-'))
+  testDirectories.push(directory)
+  const db = initializeDatabase(directory)
+  testDatabases.push(db)
+  const vps = new VpsRepository(db).create({
+    name: 'Recovery VPS',
+    host: '203.0.113.78',
+    port: 22,
+    host_fingerprint: 'SHA256:verified-test-fingerprint',
+    username: 'deploy',
+    auth_type: 'password',
+    credential: fakeCredential()
+  })
+  if (!options.omitApp) {
+    const app = new AppRepository(db).create({
+      vps_id: vps.id,
+      name: 'blog',
+      framework: 'express',
+      source_type: 'git',
+      source_path: null,
+      git_repo_url: 'https://github.com/example/blog.git',
+      git_ref: 'main',
+      git_root: '.',
+      host_port: 32001,
+      container_port: 3000,
+      healthcheck_path: '/health',
+      needs_db: 0
+    })
+    const deployment = new DeploymentRepository(db).createNextVersion(
+      app.id,
+      app.name,
+      null,
+      null,
+      { repositoryUrl: 'https://github.com/example/blog.git', commitSha: 'abc123' }
+    )
+    db.prepare("UPDATE deployment SET status='running' WHERE id=?").run(deployment.id)
+    new AppRepository(db).setCurrentDeployment(app.id, deployment.id)
+  }
+  const commands: string[] = []
+  const exec = vi.fn<SshManager['exec']>(async (_id, command) => {
+    commands.push(command)
+    if (command.includes('docker ps'))
+      return {
+        code: 0,
+        stdout: JSON.stringify({
+          Names: 'blog-app',
+          Image: options.image ?? 'blog:v1',
+          State: 'running',
+          Ports: '0.0.0.0:32001->3000/tcp',
+          Directory: '/opt/opspilot/blog',
+          Service: 'app',
+          Config: '/opt/opspilot/blog/docker-compose.yml'
+        }),
+        stderr: ''
+      }
+    if (command.includes('head -c'))
+      return options.existing !== undefined
+        ? { code: 0, stdout: options.existing, stderr: '' }
+        : { code: 5, stdout: '', stderr: '' }
+    if (command.includes('ln --')) return { code: 0, stdout: '', stderr: '' }
+    return { code: 0, stdout: '', stderr: '' }
+  })
+  const writeFile = vi.fn(async () => {
+    if (options.writeFailure) throw new Error('injected write failure')
+  })
+  const disconnect = vi.fn<SshManager['disconnect']>(async () => undefined)
+  return {
+    db,
+    vpsId: vps.id,
+    exec,
+    writeFile,
+    disconnect,
+    commands,
+    ssh: { exec, writeFile, disconnect } as unknown as SshManager
+  }
 }
 
 function fakeCredential(): EncryptedCredential {

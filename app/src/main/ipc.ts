@@ -11,6 +11,7 @@ import { readVpsResources, testConnectionWithCredentials } from './vps/connectio
 import { readVpsOperationalDiagnostics } from './vps/operationalDiagnostics'
 import { discoverVpsApps } from './vps/discovery'
 import { VpsAppImportService } from './vps/importService'
+import { RecoveryManifestService } from './vps/recoveryManifestService'
 import { installDockerOnVps } from './vps/dockerInstall'
 import { scanVpsEnvironment } from './vps/scanService'
 import type { VpsService } from './vps/service'
@@ -88,6 +89,9 @@ export function registerIpcHandlers(
   handle('vps:discover-apps', (vpsId) => discoverVpsApps(ssh, vpsId))
   handle('vps:import-app', (vpsId, name, snapshot) =>
     new VpsAppImportService(database, ssh).importApp(vpsId, name, snapshot)
+  )
+  handle('vps:write-recovery-manifest', (vpsId, name) =>
+    new RecoveryManifestService(database, ssh).write(vpsId, name)
   )
   handle('vps:install-docker', async (vpsId) => {
     const dockerVersion = await installDockerOnVps(ssh, vpsId)
