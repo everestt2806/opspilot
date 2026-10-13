@@ -221,6 +221,7 @@ export interface IpcInvokeMap {
   'vps:get-resources':  (vpsId: number) => IpcResult<VpsResources>;
   'vps:get-operational-diagnostics': (vpsId: number) => IpcResult<VpsOperationalDiagnostics>;
   'vps:discover-apps': (vpsId: number) => IpcResult<DiscoveredVpsApp[]>;
+  'vps:write-recovery-manifest': (vpsId: number, name: string) => IpcResult<{ created: boolean }>;
   'vps:import-app': (vpsId: number, name: string, snapshot: VpsAppImportSnapshot) =>
     IpcResult<{ app_id: number; deployment_id: number }>;
   'vps:test-connection': (input: VpsInput) => IpcResult<VpsConnectionCheck>;

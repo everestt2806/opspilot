@@ -339,6 +339,48 @@ describe('R3d recovery manifest creation', () => {
     ).rejects.toThrow('injected write failure')
     expect(failure.commands.some((command) => command.includes('ln --'))).toBe(false)
   })
+
+  it('returns created false for an exact existing manifest and never overwrites it', async () => {
+    const expected = JSON.stringify({
+      schema_version: 1,
+      app: { name: 'blog' },
+      framework: 'express',
+      source: {
+        type: 'git',
+        locator_available: true,
+        remote: 'https://github.com/example/blog.git',
+        ref: 'main',
+        root: '.'
+      },
+      ports: { host: 32001, container: 3000 },
+      healthcheck: '/health',
+      needs_db: false
+    })
+    const h = createRecoveryHarness({ existing: expected })
+    const result = await new RecoveryManifestService(h.db, h.ssh).write(h.vpsId, 'blog')
+    expect(result).toEqual({ created: false })
+    expect(h.writeFile).not.toHaveBeenCalled()
+    expect(h.commands.some((command) => command.includes('ln --'))).toBe(false)
+    expect(h.disconnect).not.toHaveBeenCalled()
+  })
+
+  it('distinguishes hard-link failure from cleanup failure after successful creation', async () => {
+    const linkFailure = createRecoveryHarness({ lnFailure: true })
+    await expect(
+      new RecoveryManifestService(linkFailure.db, linkFailure.ssh).write(linkFailure.vpsId, 'blog')
+    ).rejects.toMatchObject({ code: 'UNKNOWN' })
+    expect(linkFailure.commands.some((command) => command.startsWith('rm --'))).toBe(false)
+
+    const cleanupFailure = createRecoveryHarness({ cleanupFailure: true })
+    await expect(
+      new RecoveryManifestService(cleanupFailure.db, cleanupFailure.ssh).write(
+        cleanupFailure.vpsId,
+        'blog'
+      )
+    ).resolves.toEqual({ created: true })
+    expect(cleanupFailure.commands.some((command) => command.includes('ln --'))).toBe(true)
+    expect(cleanupFailure.commands.some((command) => command.startsWith('rm --'))).toBe(true)
+  })
 })
 
 interface Harness {
@@ -436,7 +478,14 @@ interface RecoveryHarness {
 }
 
 function createRecoveryHarness(
-  options: { image?: string; omitApp?: boolean; existing?: string; writeFailure?: boolean } = {}
+  options: {
+    image?: string
+    omitApp?: boolean
+    existing?: string
+    writeFailure?: boolean
+    lnFailure?: boolean
+    cleanupFailure?: boolean
+  } = {}
 ): RecoveryHarness {
   const directory = mkdtempSync(join(tmpdir(), 'opspilot-r3d-'))
   testDirectories.push(directory)
@@ -497,7 +546,10 @@ function createRecoveryHarness(
       return options.existing !== undefined
         ? { code: 0, stdout: options.existing, stderr: '' }
         : { code: 5, stdout: '', stderr: '' }
-    if (command.includes('ln --')) return { code: 0, stdout: '', stderr: '' }
+    if (command.includes('ln --'))
+      return { code: options.lnFailure ? 1 : 0, stdout: '', stderr: 'private detail' }
+    if (command.startsWith('rm --'))
+      return { code: options.cleanupFailure ? 1 : 0, stdout: '', stderr: 'private detail' }
     return { code: 0, stdout: '', stderr: '' }
   })
   const writeFile = vi.fn(async () => {

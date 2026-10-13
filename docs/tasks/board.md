@@ -27,7 +27,7 @@
 | TK-S7 R3a | [Manifest an toàn cho app VPS](tk-s7-r3a-app-manifest.md) | Worker | 11/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Manifest v1, stable identity portable, SSH write/chmod errors checked; 734/734 Vitest, typecheck/build PASS, lint 0 errors/14 warnings; VPS NOT_RUN. |
 | TK-S7 R3b | [Xác minh ứng viên khôi phục từ VPS](tk-s7-r3b-vps-recovery-candidates.md) | Worker | 11/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Code `4815d92`: manifest bounded/strict parse, Docker runtime cross-check, safe recovery UI; 734/734 Vitest, typecheck/build pass, lint 0 errors/14 existing warnings; live NOT_RUN. |
 | TK-S7 R3c-1 | [Nhập app từ VPS](tk-s7-r3c1-vps-app-import.md) | Worker | 12/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Follow-up `84ff9c8`: Node 22 gates pass; 6.086 lint warnings remain outside checkpoint files; local-only, live VPS NOT_RUN. |
-| TK-S7 R3d | [Recovery manifest v1 cho app cũ](tk-s7-r3d-recovery-manifest-v1.md) | Worker | 13/10/2026 | BLOCKED | `feat/deploy-reachability` | Local guarded writer/IPC + tests; full Vitest 755/755, typecheck/build pass; lint exit 0, 6.080 cảnh báo; live BLOCKED do không có UI/IPC control khả dụng, không ghi VPS. |
+| TK-S7 R3d | [Recovery manifest v1 cho app cũ](tk-s7-r3d-recovery-manifest-v1.md) | Worker | 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Review follow-up: idempotent/no-clobber + CLI cô lập; 13 focused tests, typecheck/build pass; lint exit 0, 6.080 warnings, R3d scoped clean; live manifest verified + baseline import/monitor exclusion PASS. |
 
 TK-A18 Titlebar fix 05: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `30747f1`; WCO drag region dùng
 đúng rectangle, native controls không còn chồng caption và màu overlay đã liền shell; Snap Layout ghi

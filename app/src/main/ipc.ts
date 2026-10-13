@@ -171,8 +171,7 @@ export function registerIpcHandlers(
         'SELECT d.app_id, d.origin, a.imported_from_vps FROM deployment d JOIN app a ON a.id=d.app_id WHERE d.id = ?'
       )
       .get(input.deployment_id) as
-      | { app_id: number; origin: 'opspilot' | 'vps_import'; imported_from_vps: 0 | 1 }
-      | undefined
+      { app_id: number; origin: 'opspilot' | 'vps_import'; imported_from_vps: 0 | 1 } | undefined
     if (!row) throw new AppError('VALIDATION', 'Không tìm thấy deployment để tự sửa.')
     if (row.origin === 'vps_import' || row.imported_from_vps === 1) {
       throw new AppError('VALIDATION', 'Chưa thể chạy Doctor fix cho app vừa nhập từ VPS.')
