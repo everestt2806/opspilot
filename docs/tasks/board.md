@@ -27,7 +27,7 @@
 | TK-S7 R3a | [Manifest an toàn cho app VPS](tk-s7-r3a-app-manifest.md) | Worker | 11/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Manifest v1, stable identity portable, SSH write/chmod errors checked; 734/734 Vitest, typecheck/build PASS, lint 0 errors/14 warnings; VPS NOT_RUN. |
 | TK-S7 R3b | [Xác minh ứng viên khôi phục từ VPS](tk-s7-r3b-vps-recovery-candidates.md) | Worker | 11/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Code `4815d92`: manifest bounded/strict parse, Docker runtime cross-check, safe recovery UI; 734/734 Vitest, typecheck/build pass, lint 0 errors/14 existing warnings; live NOT_RUN. |
 | TK-S7 R3c-1 | [Nhập app từ VPS](tk-s7-r3c1-vps-app-import.md) | Worker | 12/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Follow-up `84ff9c8`: Node 22 gates pass; 6.086 lint warnings remain outside checkpoint files; local-only, live VPS NOT_RUN. |
-| TK-S7 R3d | [Recovery manifest v1 cho app cũ](tk-s7-r3d-recovery-manifest-v1.md) | Worker | 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Follow-up ID nguồn/đích fail-closed + cleanup retry: 14 focused tests, typecheck/diff check pass; live evidence from `34f369f` retained, no repeat write. |
+| TK-S7 R3d | [Recovery manifest v1 cho app cũ](tk-s7-r3d-recovery-manifest-v1.md) | Worker | 13/10/2026 | HOÀN THÀNH | `feat/deploy-reachability` | Complete at SHA `bf7d980`; retained existing live evidence, no additional VPS write. |
 
 TK-A18 Titlebar fix 05: `READY_FOR_LOCAL_REVIEW` tại code checkpoint `30747f1`; WCO drag region dùng
 đúng rectangle, native controls không còn chồng caption và màu overlay đã liền shell; Snap Layout ghi
@@ -501,3 +501,5 @@ app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express
   - Tests (`eventSerializer.test.ts`, `headlessPoller.test.ts`): **11/11 tests PASS 100%**.
   - `git diff --check`: Sạch 100% (không có lỗi khoảng trắng thừa hay kết thúc dòng).
 - **Cam kết Phiên làm việc**: Không sửa đổi schema hay logic nghiệp vụ, không push/PR/merge, không cần VPS thật.
+
+| TK-S7 R3e | [Legacy app recovery preparation UI](tk-s7-r3e-recovery-preparation-ui.md) | Worker | 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Local `bf7d980` + R3e UI/tests; no VPS write. |

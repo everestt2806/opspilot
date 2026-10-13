@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Alert, Button, Empty, Modal, Space, Spin, Table, Tag, Tooltip, Typography } from 'antd'
 import { ExportOutlined, PlusOutlined, ReloadOutlined, RocketOutlined } from '@ant-design/icons'
 
@@ -9,6 +9,7 @@ import { useUiState } from '../store/uiState'
 
 interface AppRow extends App {
   currentVersion: number | null
+  currentImageTag: string | null
   deployStatus: Deployment['status'] | null
   versionsError?: string | null
   isMismatch?: boolean
@@ -34,6 +35,7 @@ async function fetchAppRows(vpsId: number): Promise<AppRowsResult> {
         return {
           ...app,
           currentVersion: null,
+          currentImageTag: null,
           deployStatus: null,
           versionsError: null,
           isMismatch: false
@@ -44,6 +46,7 @@ async function fetchAppRows(vpsId: number): Promise<AppRowsResult> {
         return {
           ...app,
           currentVersion: null,
+          currentImageTag: null,
           deployStatus: null,
           versionsError: versionsResult.error.message || 'Error',
           isMismatch: false
@@ -54,6 +57,7 @@ async function fetchAppRows(vpsId: number): Promise<AppRowsResult> {
         return {
           ...app,
           currentVersion: null,
+          currentImageTag: null,
           deployStatus: null,
           versionsError: null,
           isMismatch: true
@@ -62,6 +66,7 @@ async function fetchAppRows(vpsId: number): Promise<AppRowsResult> {
       return {
         ...app,
         currentVersion: current.version,
+        currentImageTag: current.image_tag,
         deployStatus: current.status,
         versionsError: null,
         isMismatch: false
@@ -84,6 +89,22 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
   const [importingName, setImportingName] = useState<string | null>(null)
   const [confirmImport, setConfirmImport] = useState<DiscoveredVpsApp | null>(null)
   const [importError, setImportError] = useState<string | null>(null)
+  const [confirmRecovery, setConfirmRecovery] = useState<DiscoveredVpsApp | null>(null)
+  const [confirmRecoveryVpsId, setConfirmRecoveryVpsId] = useState<number | null>(null)
+  const [recoveryBusyName, setRecoveryBusyName] = useState<string | null>(null)
+  const [recoveryResult, setRecoveryResult] = useState<{
+    vpsId: number
+    created: boolean
+  } | null>(null)
+  const [recoveryError, setRecoveryError] = useState<{
+    vpsId: number
+    name: string
+    message: string
+  } | null>(null)
+  const activeVpsId = useRef(vpsId)
+  useLayoutEffect(() => {
+    activeVpsId.current = vpsId
+  }, [vpsId])
   const scanVersion = useRef(0)
   const setActivePage = useUiState((state) => state.setActivePage)
   const setDeployPreselect = useUiState((state) => state.setDeployPreselect)
@@ -119,6 +140,44 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
     } finally {
       setImportingName(null)
       setConfirmImport(null)
+    }
+  }
+
+  const prepareRecovery = async (candidate: DiscoveredVpsApp): Promise<void> => {
+    const requestedVpsId = vpsId
+    setRecoveryBusyName(candidate.name)
+    setRecoveryError(null)
+    setRecoveryResult(null)
+    try {
+      const result = await window.api.invoke(
+        'vps:write-recovery-manifest',
+        requestedVpsId,
+        candidate.name
+      )
+      if (activeVpsId.current !== requestedVpsId) return
+      if (!result.ok) {
+        setRecoveryError({
+          vpsId: requestedVpsId,
+          name: candidate.name,
+          message: result.error.message
+        })
+        return
+      }
+      setRecoveryResult({ vpsId: requestedVpsId, created: result.data.created })
+      await scan()
+    } catch {
+      if (activeVpsId.current === requestedVpsId) {
+        setRecoveryError({
+          vpsId: requestedVpsId,
+          name: candidate.name,
+          message: strings.vpsControl.apps.recoveryPreparation.failed
+        })
+      }
+    } finally {
+      if (activeVpsId.current === requestedVpsId) {
+        setRecoveryBusyName(null)
+        setConfirmRecovery(null)
+      }
     }
   }
 
@@ -302,6 +361,9 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
           {app.imported_from_vps === 1 && (
             <Tag>{strings.vpsControl.apps.recoveryStatus.importedFromVps}</Tag>
           )}
+          {managedRecoveryStatus[app.name]?.recovery_status === 'verified' && (
+            <Tag color="green">{strings.vpsControl.apps.recoveryStatus.verified}</Tag>
+          )}
         </Space>
       )
     },
@@ -337,6 +399,13 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
   const remoteOnly = discovered.filter(
     (candidate) => !rows.some((app) => app.name === candidate.name)
   )
+  const managedRecoveryStatus = discovered.reduce<Record<string, DiscoveredVpsApp>>(
+    (byName, candidate) => {
+      if (rows.some((app) => app.name === candidate.name)) byName[candidate.name] = candidate
+      return byName
+    },
+    {}
+  )
 
   return (
     <div>
@@ -368,6 +437,39 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
               {confirmImport.host_port ?? '—'} → {confirmImport.container_port ?? '—'}
             </Typography.Text>
             <Typography.Text>{strings.vpsControl.apps.importConfirmation.readOnly}</Typography.Text>
+          </Space>
+        )}
+      </Modal>
+      <Modal
+        open={confirmRecovery !== null && confirmRecoveryVpsId === vpsId}
+        transitionName=""
+        maskTransitionName=""
+        title={strings.vpsControl.apps.recoveryPreparation.title}
+        okText={strings.vpsControl.apps.recoveryPreparation.confirm}
+        cancelText={strings.vpsControl.apps.recoveryPreparation.cancel}
+        confirmLoading={recoveryBusyName !== null}
+        onCancel={() => setConfirmRecovery(null)}
+        onOk={() => {
+          if (confirmRecovery) void prepareRecovery(confirmRecovery)
+        }}
+      >
+        {confirmRecovery && (
+          <Space direction="vertical" size="small">
+            <Typography.Text>
+              <strong>{strings.vpsControl.apps.recoveryPreparation.name}:</strong>{' '}
+              {confirmRecovery.name}
+            </Typography.Text>
+            <Typography.Text>
+              <strong>{strings.vpsControl.apps.recoveryPreparation.imageVersion}:</strong>{' '}
+              {confirmRecovery.image_tag} (v{confirmRecovery.version})
+            </Typography.Text>
+            <Typography.Text>
+              <strong>{strings.vpsControl.apps.recoveryPreparation.port}:</strong>{' '}
+              {confirmRecovery.host_port ?? '—'} → {confirmRecovery.container_port ?? '—'}
+            </Typography.Text>
+            <Typography.Text>
+              {strings.vpsControl.apps.recoveryPreparation.explanation}
+            </Typography.Text>
           </Space>
         )}
       </Modal>
@@ -425,6 +527,39 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
         />
       )}
 
+      {recoveryResult?.vpsId === vpsId && (
+        <Alert
+          type="success"
+          showIcon
+          message={
+            recoveryResult.created
+              ? strings.vpsControl.apps.recoveryPreparation.created
+              : strings.vpsControl.apps.recoveryPreparation.alreadyExists
+          }
+          description={strings.vpsControl.apps.recoveryPreparation.rescanning}
+          style={{ marginBottom: 12 }}
+        />
+      )}
+      {recoveryError?.vpsId === vpsId && (
+        <Alert
+          type="error"
+          showIcon
+          message={recoveryError.message || strings.vpsControl.apps.recoveryPreparation.failed}
+          action={
+            <Button
+              size="small"
+              onClick={() => {
+                const candidate = managedRecoveryStatus[recoveryError.name]
+                if (candidate) void prepareRecovery(candidate)
+              }}
+            >
+              {strings.vpsControl.apps.recoveryPreparation.retry}
+            </Button>
+          }
+          style={{ marginBottom: 12 }}
+        />
+      )}
+
       {loading && (
         <div style={{ textAlign: 'center', padding: 32 }}>
           <Spin />
@@ -443,14 +578,66 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
       )}
 
       {!loading && rows.length > 0 && (
-        <Table<AppRow>
-          rowKey="id"
-          size="small"
-          dataSource={rows}
-          columns={columns}
-          pagination={false}
-          className="vps-apps-table"
-        />
+        <>
+          <Table<AppRow>
+            rowKey="id"
+            size="small"
+            dataSource={rows}
+            columns={columns}
+            pagination={false}
+            className="vps-apps-table"
+          />
+          {rows.some((app) => {
+            const candidate = managedRecoveryStatus[app.name]
+            return (
+              app.imported_from_vps !== 1 &&
+              candidate?.recovery_status === 'legacy' &&
+              candidate.recovery_reason === 'manifest_missing' &&
+              candidate.state === 'running' &&
+              app.deployStatus === 'running' &&
+              candidate.image_tag === app.currentImageTag &&
+              candidate.version === app.currentVersion &&
+              candidate.host_port === app.host_port &&
+              candidate.container_port === app.container_port
+            )
+          }) && (
+            <div style={{ marginTop: 16 }}>
+              {rows
+                .filter((app) => {
+                  const candidate = managedRecoveryStatus[app.name]
+                  return (
+                    app.imported_from_vps !== 1 &&
+                    candidate?.recovery_status === 'legacy' &&
+                    candidate.recovery_reason === 'manifest_missing' &&
+                    candidate.state === 'running' &&
+                    app.deployStatus === 'running' &&
+                    candidate.image_tag === app.currentImageTag &&
+                    candidate.version === app.currentVersion &&
+                    candidate.host_port === app.host_port &&
+                    candidate.container_port === app.container_port
+                  )
+                })
+                .map((app) => (
+                  <Space key={app.id} style={{ marginBottom: 8 }}>
+                    <Typography.Text>{app.name}</Typography.Text>
+                    <Button
+                      size="small"
+                      loading={recoveryBusyName === app.name}
+                      disabled={recoveryBusyName !== null}
+                      onClick={() => {
+                        setRecoveryResult(null)
+                        setRecoveryError(null)
+                        setConfirmRecovery(managedRecoveryStatus[app.name])
+                        setConfirmRecoveryVpsId(vpsId)
+                      }}
+                    >
+                      {strings.vpsControl.apps.recoveryPreparation.action}
+                    </Button>
+                  </Space>
+                ))}
+            </div>
+          )}
+        </>
       )}
 
       {!loading && !error && remoteOnly.length > 0 && (
@@ -463,6 +650,18 @@ export function VpsAppsTab({ vpsId }: VpsAppsTabProps): React.JSX.Element {
             description={strings.vpsControl.apps.recoveryHint}
             style={{ marginBottom: 12 }}
           />
+          {remoteOnly.some(
+            (candidate) =>
+              candidate.recovery_status === 'legacy' &&
+              candidate.recovery_reason === 'manifest_missing'
+          ) && (
+            <Alert
+              type="info"
+              showIcon
+              message={strings.vpsControl.apps.recoveryPreparation.noLocalRecord}
+              style={{ marginBottom: 12 }}
+            />
+          )}
           {importError && (
             <Alert
               type="error"

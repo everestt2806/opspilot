@@ -116,6 +116,23 @@ const VERIFIED_CANDIDATE: DiscoveredVpsApp = {
   needs_db: false
 }
 
+const LEGACY_MANAGED: DiscoveredVpsApp = {
+  ...VERIFIED_CANDIDATE,
+  name: APP_MATCHING.name,
+  image_tag: 'v3',
+  host_port: APP_MATCHING.host_port,
+  container_port: APP_MATCHING.container_port,
+  recovery_status: 'legacy',
+  recovery_reason: 'manifest_missing',
+  framework: null,
+  source_type: null,
+  git_remote: null,
+  git_ref: null,
+  git_root: null,
+  healthcheck: null,
+  needs_db: null
+}
+
 import { useUiState } from '../store/uiState'
 import { getStrings } from '../strings'
 
@@ -331,6 +348,191 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
     }
   })
 
+  it('shows preparation copy in all four locales', () => {
+    for (const locale of ['en', 'vi', 'cn', 'jp'] as const) {
+      const copy = getStrings(locale).vpsControl.apps.recoveryPreparation
+      expect(copy.action).toBeTruthy()
+      expect(copy.explanation).toBeTruthy()
+      expect(copy.created).toBeTruthy()
+      expect(copy.alreadyExists).toBeTruthy()
+      expect(copy.noLocalRecord).toBeTruthy()
+    }
+  })
+
+  it('requires confirmation before creating a manifest and explains the action', async () => {
+    mockApi({
+      'app:list': async () => ({ ok: true, data: [APP_MATCHING] }),
+      'app:versions': async () => ({ ok: true, data: [VERSIONS[1]] }),
+      'vps:discover-apps': async () => ({ ok: true, data: [LEGACY_MANAGED] }),
+      'vps:write-recovery-manifest': async () => ({ ok: true, data: { created: true } })
+    })
+    render(<VpsAppsTab vpsId={10} />)
+    const copy = getStrings('vi').vpsControl.apps.recoveryPreparation
+    fireEvent.click(await screen.findByRole('button', { name: copy.action }))
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog.textContent).toContain(APP_MATCHING.name)
+    expect(dialog.textContent).toContain(LEGACY_MANAGED.image_tag)
+    expect(dialog.textContent).toContain(copy.explanation)
+    expect(window.api.invoke).not.toHaveBeenCalledWith(
+      'vps:write-recovery-manifest',
+      10,
+      APP_MATCHING.name
+    )
+    fireEvent.click(screen.getByRole('button', { name: copy.cancel }))
+    expect(window.api.invoke).not.toHaveBeenCalledWith(
+      'vps:write-recovery-manifest',
+      10,
+      APP_MATCHING.name
+    )
+    fireEvent.click(await screen.findByRole('button', { name: copy.action }))
+    fireEvent.click(screen.getByRole('button', { name: copy.confirm }))
+    await screen.findByText(copy.created)
+    expect(window.api.invoke).toHaveBeenCalledWith(
+      'vps:write-recovery-manifest',
+      10,
+      APP_MATCHING.name
+    )
+  })
+
+  it('shows the newly verified result after successful write and rescan, including already-present result', async () => {
+    let scanCount = 0
+    mockApi({
+      'app:list': async () => ({ ok: true, data: [APP_MATCHING] }),
+      'app:versions': async () => ({ ok: true, data: [VERSIONS[1]] }),
+      'vps:discover-apps': async () => ({
+        ok: true,
+        data: [
+          ++scanCount === 1
+            ? LEGACY_MANAGED
+            : { ...LEGACY_MANAGED, recovery_status: 'verified', recovery_reason: null }
+        ]
+      }),
+      'vps:write-recovery-manifest': async () => ({ ok: true, data: { created: false } })
+    })
+    render(<VpsAppsTab vpsId={10} />)
+    const copy = getStrings('vi').vpsControl.apps.recoveryPreparation
+    fireEvent.click(await screen.findByRole('button', { name: copy.action }))
+    fireEvent.click(await screen.findByRole('button', { name: copy.confirm }))
+    expect(await screen.findByText(copy.alreadyExists)).toBeTruthy()
+    expect(
+      await screen.findByText(getStrings('vi').vpsControl.apps.recoveryStatus.verified)
+    ).toBeTruthy()
+    expect(scanCount).toBeGreaterThanOrEqual(2)
+  })
+
+  it('hides preparation unless the local running deployment and legacy runtime snapshot match', async () => {
+    for (const candidate of [
+      { ...LEGACY_MANAGED, state: 'exited' },
+      { ...LEGACY_MANAGED, recovery_status: 'mismatch', recovery_reason: 'runtime_mismatch' },
+      { ...LEGACY_MANAGED, recovery_status: 'invalid', recovery_reason: 'manifest_invalid' },
+      { ...LEGACY_MANAGED, image_tag: 'other:v9' }
+    ]) {
+      mockApi({
+        'app:list': async () => ({ ok: true, data: [APP_MATCHING] }),
+        'app:versions': async () => ({ ok: true, data: [VERSIONS[1]] }),
+        'vps:discover-apps': async () => ({ ok: true, data: [candidate] })
+      })
+      const { unmount } = render(<VpsAppsTab vpsId={10} />)
+      expect(await screen.findByText(APP_MATCHING.name)).toBeTruthy()
+      expect(
+        screen.queryByRole('button', {
+          name: getStrings('vi').vpsControl.apps.recoveryPreparation.action
+        })
+      ).toBeNull()
+      unmount()
+      cleanup()
+    }
+    mockApi({
+      'app:list': async () => ({ ok: true, data: [] }),
+      'vps:discover-apps': async () => ({ ok: true, data: [LEGACY_MANAGED] })
+    })
+    render(<VpsAppsTab vpsId={10} />)
+    expect(
+      await screen.findByText(getStrings('vi').vpsControl.apps.recoveryPreparation.noLocalRecord)
+    ).toBeTruthy()
+    expect(
+      screen.queryByRole('button', {
+        name: getStrings('vi').vpsControl.apps.recoveryPreparation.action
+      })
+    ).toBeNull()
+  })
+
+  it('shows preparation errors and permits retry', async () => {
+    let writes = 0
+    mockApi({
+      'app:list': async () => ({ ok: true, data: [APP_MATCHING] }),
+      'app:versions': async () => ({ ok: true, data: [VERSIONS[1]] }),
+      'vps:discover-apps': async () => ({ ok: true, data: [LEGACY_MANAGED] }),
+      'vps:write-recovery-manifest': async () =>
+        ++writes === 1
+          ? { ok: false, error: { code: 'FAIL', message: 'Write failed' } }
+          : { ok: true, data: { created: true } }
+    })
+    render(<VpsAppsTab vpsId={10} />)
+    const copy = getStrings('vi').vpsControl.apps.recoveryPreparation
+    fireEvent.click(await screen.findByRole('button', { name: copy.action }))
+    fireEvent.click(screen.getByRole('button', { name: copy.confirm }))
+    expect(await screen.findByText('Write failed')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: copy.retry }))
+    expect(await screen.findByText(copy.created)).toBeTruthy()
+    expect(writes).toBe(2)
+  })
+
+  it('hides preparation for imported apps and when discovery fails', async () => {
+    const importedApp = { ...APP_MATCHING, imported_from_vps: 1 }
+    mockApi({
+      'app:list': async () => ({ ok: true, data: [importedApp] }),
+      'app:versions': async () => ({ ok: true, data: [VERSIONS[1]] }),
+      'vps:discover-apps': async () => ({ ok: true, data: [LEGACY_MANAGED] })
+    })
+    const importedView = render(<VpsAppsTab vpsId={10} />)
+    const action = getStrings('vi').vpsControl.apps.recoveryPreparation.action
+    expect(await screen.findByText(APP_MATCHING.name)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: action })).toBeNull()
+    importedView.unmount()
+    cleanup()
+
+    mockApi({
+      'app:list': async () => ({ ok: true, data: [APP_MATCHING] }),
+      'app:versions': async () => ({ ok: true, data: [VERSIONS[1]] }),
+      'vps:discover-apps': async () => ({
+        ok: false,
+        error: { code: 'SSH', message: 'Scan unavailable' }
+      })
+    })
+    render(<VpsAppsTab vpsId={10} />)
+    expect(await screen.findByText('Scan unavailable')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: action })).toBeNull()
+    expect(window.api.invoke).not.toHaveBeenCalledWith(
+      'vps:write-recovery-manifest',
+      expect.anything(),
+      expect.anything()
+    )
+  })
+
+  it('ignores a late manifest response after switching VPS', async () => {
+    let finishWrite: ((value: unknown) => void) | undefined
+    mockApi({
+      'app:list': async () => ({ ok: true, data: [APP_MATCHING] }),
+      'app:versions': async () => ({ ok: true, data: [VERSIONS[1]] }),
+      'vps:discover-apps': async () => ({ ok: true, data: [LEGACY_MANAGED] }),
+      'vps:write-recovery-manifest': () =>
+        new Promise((resolve) => {
+          finishWrite = resolve
+        })
+    })
+    const { rerender } = render(<VpsAppsTab vpsId={10} />)
+    const copy = getStrings('vi').vpsControl.apps.recoveryPreparation
+    fireEvent.click(await screen.findByRole('button', { name: copy.action }))
+    fireEvent.click(screen.getByRole('button', { name: copy.confirm }))
+    await vi.waitFor(() => expect(finishWrite).toBeDefined())
+    rerender(<VpsAppsTab vpsId={11} />)
+    finishWrite?.({ ok: true, data: { created: true } })
+    await vi.waitFor(() => expect(window.api.invoke).toHaveBeenCalledWith('vps:discover-apps', 11))
+    expect(screen.queryByText(copy.created)).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
   it('shows import details and cancellation never calls the import IPC', async () => {
     useUiState.setState({ locale: 'vi' })
     mockApi({
@@ -344,7 +546,8 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
     const dialog = await screen.findByRole('dialog')
     expect(dialog.textContent).toContain(VERIFIED_CANDIDATE.name)
     expect(dialog.textContent).toContain('verified-app:v3 (v3)')
-    expect(dialog.textContent).toContain('32001 → 3000')
+    expect(dialog.textContent).toContain(String(VERIFIED_CANDIDATE.host_port))
+    expect(dialog.textContent).toContain(String(VERIFIED_CANDIDATE.container_port))
     expect(dialog.textContent).toContain(strings.importConfirmation.readOnly)
     fireEvent.click(screen.getByRole('button', { name: strings.importConfirmation.cancel }))
     expect(window.api.invoke).not.toHaveBeenCalledWith(
@@ -397,7 +600,8 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
     const confirmation = getStrings('vi').vpsControl.apps.importConfirmation
     expect(await screen.findByRole('dialog')).toBeTruthy()
     expect(screen.getByRole('dialog').textContent).toContain('verified-app:v3 (v3)')
-    expect(screen.getByRole('dialog').textContent).toContain('32001 → 3000')
+    expect(screen.getByRole('dialog').textContent).toContain(String(candidate.host_port))
+    expect(screen.getByRole('dialog').textContent).toContain(String(candidate.container_port))
     expect(screen.getByRole('dialog').textContent).toContain(confirmation.readOnly)
     expect(window.api.invoke).not.toHaveBeenCalledWith(
       'vps:import-app',

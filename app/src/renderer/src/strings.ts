@@ -748,6 +748,23 @@ const BASE_EN_STRINGS = {
         confirm: 'Confirm import',
         cancel: 'Cancel'
       },
+      recoveryPreparation: {
+        action: 'Prepare recovery',
+        title: 'Prepare app recovery',
+        name: 'App name',
+        imageVersion: 'Image / version',
+        port: 'Host â†’ container port',
+        explanation: 'This saves recovery information on the VPS and does not restart the app.',
+        confirm: 'Save recovery information',
+        cancel: 'Cancel',
+        created: 'Recovery information created.',
+        alreadyExists: 'Matching recovery information already exists.',
+        rescanning: 'Scanning the VPS again to verify it.',
+        failed: 'Could not prepare recovery information.',
+        retry: 'Try again',
+        noLocalRecord:
+          'This app has no local OpsPilot record, so recovery information cannot be safely created from guessed details.'
+      },
       recoveryStatus: {
         verified: 'Verified candidate',
         legacy: 'Legacy: manifest missing',
@@ -1206,6 +1223,23 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
         readOnly: 'Chỉ đọc sau khi nhập.',
         confirm: 'Xác nhận nhập',
         cancel: 'Hủy'
+      },
+      recoveryPreparation: {
+        action: 'Chuẩn bị khôi phục',
+        title: 'Chuẩn bị khôi phục ứng dụng',
+        name: 'Tên ứng dụng',
+        imageVersion: 'Image / phiên bản',
+        port: 'Cổng host → container',
+        explanation: 'Thao tác lưu thông tin khôi phục trên VPS và không khởi động lại ứng dụng.',
+        confirm: 'Lưu thông tin khôi phục',
+        cancel: 'Hủy',
+        created: 'Đã tạo thông tin khôi phục.',
+        alreadyExists: 'Thông tin khôi phục khớp đã có sẵn.',
+        rescanning: 'Đang quét lại VPS để xác minh.',
+        failed: 'Không thể chuẩn bị thông tin khôi phục.',
+        retry: 'Thử lại',
+        noLocalRecord:
+          'Ứng dụng này không có hồ sơ OpsPilot cục bộ, nên không thể tạo thông tin khôi phục an toàn từ dữ liệu suy đoán.'
       },
       recoveryStatus: {
         verified: 'Ứng viên đã xác minh',
@@ -1987,6 +2021,22 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
         confirm: '确认导入',
         cancel: '取消'
       },
+      recoveryPreparation: {
+        action: '准备恢复',
+        title: '准备应用恢复',
+        name: '应用名称',
+        imageVersion: '镜像 / 版本',
+        port: '主机端口 → 容器端口',
+        explanation: '此操作会在 VPS 上保存恢复信息，不会重启应用。',
+        confirm: '保存恢复信息',
+        cancel: '取消',
+        created: '已创建恢复信息。',
+        alreadyExists: '匹配的恢复信息已存在。',
+        rescanning: '正在重新扫描 VPS 以验证。',
+        failed: '无法准备恢复信息。',
+        retry: '重试',
+        noLocalRecord: '此应用没有 OpsPilot 本地记录，因此无法根据猜测的信息安全创建恢复信息。'
+      },
       recoveryStatus: {
         verified: '已验证候选项',
         legacy: '旧应用：缺少清单',
@@ -2746,6 +2796,23 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
         readOnly: 'インポート後は読み取り専用です。',
         confirm: 'インポートを確認',
         cancel: 'キャンセル'
+      },
+      recoveryPreparation: {
+        action: '復元を準備',
+        title: 'アプリの復元を準備',
+        name: 'アプリ名',
+        imageVersion: 'イメージ / バージョン',
+        port: 'ホスト → コンテナポート',
+        explanation: 'VPS に復元情報を保存します。アプリは再起動しません。',
+        confirm: '復元情報を保存',
+        cancel: 'キャンセル',
+        created: '復元情報を作成しました。',
+        alreadyExists: '一致する復元情報が既にあります。',
+        rescanning: '確認のため VPS を再スキャンしています。',
+        failed: '復元情報を準備できませんでした。',
+        retry: '再試行',
+        noLocalRecord:
+          'OpsPilot のローカル記録がないため、推測した情報から安全に復元情報を作成できません。'
       },
       recoveryStatus: {
         verified: '検証済み候補',
