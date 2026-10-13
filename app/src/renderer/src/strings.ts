@@ -759,7 +759,9 @@ const BASE_EN_STRINGS = {
         cancel: 'Cancel',
         created: 'Recovery information created.',
         alreadyExists: 'Matching recovery information already exists.',
-        rescanning: 'Scanning the VPS again to verify it.',
+        savedUnverified:
+          'Saved, but could not verify the manifest. Scan again to retry verification.',
+        retryScan: 'Scan again',
         failed: 'Could not prepare recovery information.',
         retry: 'Try again',
         noLocalRecord:
@@ -1235,7 +1237,8 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
         cancel: 'Hủy',
         created: 'Đã tạo thông tin khôi phục.',
         alreadyExists: 'Thông tin khôi phục khớp đã có sẵn.',
-        rescanning: 'Đang quét lại VPS để xác minh.',
+        savedUnverified: 'Đã lưu nhưng chưa xác minh được manifest. Hãy quét lại để thử xác minh.',
+        retryScan: 'Quét lại',
         failed: 'Không thể chuẩn bị thông tin khôi phục.',
         retry: 'Thử lại',
         noLocalRecord:
@@ -2032,7 +2035,8 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
         cancel: '取消',
         created: '已创建恢复信息。',
         alreadyExists: '匹配的恢复信息已存在。',
-        rescanning: '正在重新扫描 VPS 以验证。',
+        savedUnverified: '已保存，但未能验证清单。请重新扫描以重试验证。',
+        retryScan: '重新扫描',
         failed: '无法准备恢复信息。',
         retry: '重试',
         noLocalRecord: '此应用没有 OpsPilot 本地记录，因此无法根据猜测的信息安全创建恢复信息。'
@@ -2808,7 +2812,9 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
         cancel: 'キャンセル',
         created: '復元情報を作成しました。',
         alreadyExists: '一致する復元情報が既にあります。',
-        rescanning: '確認のため VPS を再スキャンしています。',
+        savedUnverified:
+          '保存しましたがマニフェストを確認できませんでした。再スキャンして確認してください。',
+        retryScan: '再スキャン',
         failed: '復元情報を準備できませんでした。',
         retry: '再試行',
         noLocalRecord:

@@ -368,7 +368,9 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
     })
     render(<VpsAppsTab vpsId={10} />)
     const copy = getStrings('vi').vpsControl.apps.recoveryPreparation
-    fireEvent.click(await screen.findByRole('button', { name: copy.action }))
+    const actionButton = await screen.findByRole('button', { name: copy.action })
+    expect(actionButton.closest('tr')?.textContent).toContain(APP_MATCHING.name)
+    fireEvent.click(actionButton)
     const dialog = await screen.findByRole('dialog')
     expect(dialog.textContent).toContain(APP_MATCHING.name)
     expect(dialog.textContent).toContain(LEGACY_MANAGED.image_tag)
@@ -386,7 +388,7 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
     )
     fireEvent.click(await screen.findByRole('button', { name: copy.action }))
     fireEvent.click(screen.getByRole('button', { name: copy.confirm }))
-    await screen.findByText(copy.created)
+    await screen.findByText(copy.savedUnverified)
     expect(window.api.invoke).toHaveBeenCalledWith(
       'vps:write-recovery-manifest',
       10,
@@ -459,10 +461,21 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
 
   it('shows preparation errors and permits retry', async () => {
     let writes = 0
+    let scans = 0
     mockApi({
       'app:list': async () => ({ ok: true, data: [APP_MATCHING] }),
       'app:versions': async () => ({ ok: true, data: [VERSIONS[1]] }),
-      'vps:discover-apps': async () => ({ ok: true, data: [LEGACY_MANAGED] }),
+      'vps:discover-apps': async () => {
+        scans += 1
+        return {
+          ok: true,
+          data: [
+            scans === 1
+              ? LEGACY_MANAGED
+              : { ...LEGACY_MANAGED, recovery_status: 'verified', recovery_reason: null }
+          ]
+        }
+      },
       'vps:write-recovery-manifest': async () =>
         ++writes === 1
           ? { ok: false, error: { code: 'FAIL', message: 'Write failed' } }
@@ -531,6 +544,115 @@ describe('VpsAppsTab — quy tắc hiển thị deployment trung thực', () => 
     await vi.waitFor(() => expect(window.api.invoke).toHaveBeenCalledWith('vps:discover-apps', 11))
     expect(screen.queryByText(copy.created)).toBeNull()
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('ignores a late response from VPS A after switching A to B and back to A', async () => {
+    let finishWrite: ((value: unknown) => void) | undefined
+    mockApi({
+      'app:list': async (vpsId: unknown) => ({
+        ok: true,
+        data: [{ ...APP_MATCHING, vps_id: vpsId as number }]
+      }),
+      'app:versions': async () => ({ ok: true, data: [VERSIONS[1]] }),
+      'vps:discover-apps': async () => ({ ok: true, data: [LEGACY_MANAGED] }),
+      'vps:write-recovery-manifest': () =>
+        new Promise((resolve) => {
+          finishWrite = resolve
+        })
+    })
+    const { rerender } = render(<VpsAppsTab vpsId={10} />)
+    const copy = getStrings('vi').vpsControl.apps.recoveryPreparation
+    fireEvent.click(await screen.findByRole('button', { name: copy.action }))
+    fireEvent.click(screen.getByRole('button', { name: copy.confirm }))
+    await vi.waitFor(() => expect(finishWrite).toBeDefined())
+
+    rerender(<VpsAppsTab vpsId={11} />)
+    rerender(<VpsAppsTab vpsId={10} />)
+    expect(await screen.findByRole('button', { name: copy.action })).toBeTruthy()
+    finishWrite?.({ ok: true, data: { created: true } })
+    await vi.waitFor(() =>
+      expect(
+        vi
+          .mocked(window.api.invoke)
+          .mock.calls.filter((call) => call[0] === 'vps:discover-apps' && call[1] === 10)
+      ).toHaveLength(2)
+    )
+    expect(screen.queryByText(copy.created)).toBeNull()
+    expect(screen.queryByText(copy.savedUnverified)).toBeNull()
+  })
+
+  it('does not show stale app or scan data while changing VPS', async () => {
+    let finishAppsA: ((value: unknown) => void) | undefined
+    let finishScanA: ((value: unknown) => void) | undefined
+    mockApi({
+      'app:list': (vpsId: unknown) =>
+        vpsId === 10
+          ? new Promise((resolve) => {
+              finishAppsA = resolve
+            })
+          : Promise.resolve({
+              ok: true,
+              data: [{ ...APP_MATCHING, name: 'app-on-b', vps_id: 11 }]
+            }),
+      'app:versions': async () => ({ ok: true, data: [VERSIONS[1]] }),
+      'vps:discover-apps': (vpsId: unknown) =>
+        vpsId === 10
+          ? new Promise((resolve) => {
+              finishScanA = resolve
+            })
+          : Promise.resolve({ ok: true, data: [] })
+    })
+    const { rerender } = render(<VpsAppsTab vpsId={10} />)
+    await vi.waitFor(() => {
+      expect(finishAppsA).toBeDefined()
+      expect(finishScanA).toBeDefined()
+    })
+    rerender(<VpsAppsTab vpsId={11} />)
+    expect(await screen.findByText('app-on-b')).toBeTruthy()
+    finishAppsA?.({ ok: true, data: [{ ...APP_MATCHING, name: 'stale-app-from-a' }] })
+    finishScanA?.({ ok: true, data: [LEGACY_MANAGED] })
+    await Promise.resolve()
+    expect(screen.queryByText('stale-app-from-a')).toBeNull()
+    expect(screen.queryByText('legacy-app')).toBeNull()
+    expect(
+      screen.queryByRole('button', {
+        name: getStrings('vi').vpsControl.apps.recoveryPreparation.action
+      })
+    ).toBeNull()
+  })
+
+  it('reports a saved but unverified manifest after scan failure and retry only scans', async () => {
+    let scanCount = 0
+    let writeCount = 0
+    mockApi({
+      'app:list': async () => ({ ok: true, data: [APP_MATCHING] }),
+      'app:versions': async () => ({ ok: true, data: [VERSIONS[1]] }),
+      'vps:discover-apps': async () => {
+        scanCount += 1
+        if (scanCount === 1) return { ok: true, data: [LEGACY_MANAGED] }
+        if (scanCount === 2) return { ok: false, error: { code: 'SSH', message: 'Scan failed' } }
+        return {
+          ok: true,
+          data: [{ ...LEGACY_MANAGED, recovery_status: 'verified', recovery_reason: null }]
+        }
+      },
+      'vps:write-recovery-manifest': async () => {
+        writeCount += 1
+        return { ok: true, data: { created: true } }
+      }
+    })
+    render(<VpsAppsTab vpsId={10} />)
+    const copy = getStrings('vi').vpsControl.apps.recoveryPreparation
+    fireEvent.click(await screen.findByRole('button', { name: copy.action }))
+    fireEvent.click(screen.getByRole('button', { name: copy.confirm }))
+    expect(await screen.findByText(copy.savedUnverified)).toBeTruthy()
+    expect(screen.queryByText(copy.created)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: copy.retryScan }))
+    expect(
+      await screen.findByText(getStrings('vi').vpsControl.apps.recoveryStatus.verified)
+    ).toBeTruthy()
+    expect(writeCount).toBe(1)
+    expect(scanCount).toBe(3)
   })
 
   it('shows import details and cancellation never calls the import IPC', async () => {

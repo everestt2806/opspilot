@@ -13,7 +13,7 @@ Offer recovery-manifest preparation for a running legacy app only when its local
 - `app/src/renderer/src/components/VpsAppsTab.tsx`
 - `app/src/renderer/src/components/VpsAppsTab.test.tsx`
 - `app/src/renderer/src/strings.ts`
-- This note and `docs/tasks/board.md`
+- This note
 
 ## Out of scope
 
@@ -25,7 +25,7 @@ Offer recovery-manifest preparation for a running legacy app only when its local
 - [x] Only a locally managed, non-imported running app with a matching running/legacy/manifest_missing discovery snapshot gets the action.
 - [x] Confirmation gates the IPC call; success rescans and distinguishes created/already exists; failure has retry.
 - [x] Imported apps, runtime mismatch, invalid/unreadable manifest, or scan failure hide the action. VPS-only apps explain that guessed data is unsafe.
-- [x] Interaction tests cover confirm/cancel, eligibility, success/error/retry, and stale IPC response after VPS switch; strings cover all four locales.
+- [x] Interaction tests cover confirm/cancel, eligibility, success/error/retry, stale response after A-B-A, stale app/scan data during VPS switch, and scan-only retry after write success; strings cover all four locales.
 - [x] Focused tests, typecheck, lint, build, and `git diff --check`; inspect Electron layout if available.
 - [x] Commit locally only; no push, PR, or merge.
 
@@ -36,6 +36,8 @@ START 13/10 - Implement R3e UI; preserve unrelated changes and do not write to V
 UPDATE 13/10 - UI and interaction tests implemented. Focused Vitest 15/15 PASS; typecheck PASS; scoped ESLint 0 warnings; full lint 0 errors / 6,080 existing warnings; build PASS; git diff --check PASS. Electron layout NOT_RUN: no app/browser window available. No live VPS write.
 
 HANDOFF-LOCAL 13/10 - `4707e7b`; 15/15 focused tests, typecheck, lint, build, and diff check recorded above; UI visual check unavailable because no Electron/browser window was open.
+
+REVIEW FIX 13/10 - Moved recovery preparation into each app row and unified eligibility checks for display/click/confirmation. Each VPS view is keyed and scoped by a unique generation; app/discovery loads and writes ignore stale completions, including A-B-A. A successful write is reported as verified only after a completed scan returns `verified`; otherwise the UI says it was saved but remains unverified, and retry performs scan only. Focused Vitest 18/18 PASS; Node 22 typecheck PASS; scoped ESLint 0 warnings; full lint 0 errors / 6,080 warnings; build and diff check PASS. Electron layout NOT_RUN because no Electron/browser window was available. No VPS writes.
 
 ## Reproduction
 
