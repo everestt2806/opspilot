@@ -502,4 +502,4 @@ app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express
   - `git diff --check`: Sạch 100% (không có lỗi khoảng trắng thừa hay kết thúc dòng).
 - **Cam kết Phiên làm việc**: Không sửa đổi schema hay logic nghiệp vụ, không push/PR/merge, không cần VPS thật.
 
-| TK-S7 R3e | [Legacy app recovery preparation UI](tk-s7-r3e-recovery-preparation-ui.md) | Worker | 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Local `bf7d980` + R3e UI/tests; no VPS write. |
+| TK-S7 R3e | [Legacy app recovery preparation UI](tk-s7-r3e-recovery-preparation-ui.md) | Worker | 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Local `4707e7b`; 15/15 focused tests, typecheck/build pass; lint 0 errors / 6,080 warnings; no VPS write. |
