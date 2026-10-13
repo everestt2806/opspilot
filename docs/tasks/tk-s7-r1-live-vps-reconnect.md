@@ -33,3 +33,23 @@ Cần profile được migrate trên **bản sao tạm** với danh tính VPS đ
 - Node 22.23.3: `pnpm --filter @opspilot/app typecheck` **PASS** (Node/Web).
 - `git diff --check` **PASS**.
 - Live reconnect và SSH discovery còn **BLOCKED/NOT_RUN** riêng do `safeStorage.decryptString` không giải mã được khóa profile R3d v9 trong Electron runner cùng Windows user. Kết quả này thay thế nguyên nhân profile cũ thiếu schema ở ghi nhận trước, nhưng không xóa lịch sử BLOCKED ban đầu.
+
+## UPDATE sau commit `e272186` — ba gate R1-live
+
+| Gate | Trạng thái | Bằng chứng |
+|---|---|---|
+| DB cùng identity | **LOCAL_INTEGRATION_PASS** | Trên profile A v9, chạy `VpsService.delete/create` với host/port/fingerprint giống nhau, cipher fixture và credential giả. VPS ID `1 → 1`; app IDs `1–4`, current deployment IDs `7, 3, 4, 8`, versions `5, 1, 1, 1`, image/status và deployment history giữ nguyên. Deployment counts theo app trước/sau là `5, 1, 1, 1`. Hash tất cả bảng ngoài `vps` trước/sau khớp. DB nguồn được mở readonly; hash, size, mtime và nội dung SQLite trước/sau khớp. Kết quả này **không phải** SSH/live pass. |
+| DB khác identity | **PASS** (ghi nhận tại `e272186`) | Profile B; endpoint cũ nhưng fingerprint khác tạo VPS ID mới `2`, giữ app/deployment trên VPS archived ID `1`, không app nào gắn vào ID `2`; không khởi tạo SSH. |
+| SSH live | **BLOCKED** | Mở khóa credential thất bại trên cả profile nguồn và A, nên không có credential thật trong RAM và không thử SSH. |
+
+### Chẩn đoán mở khóa
+
+- Đối chiếu `app/src/main/index.ts` và R3d: source đặt `userData` trước `whenReady`; sau `whenReady` gọi `electronApp.setAppUserModelId('vn.opspilot.desktop')`, `app.setName('OpsPilot')`, rồi `createCredentialCipher`. Runner lần trước thiếu hai thiết lập app identity. Runner chẩn đoán lần này đã đặt cùng AppUserModelID và tên app đúng thứ tự sau `whenReady`, với Windows process chạy cùng token như phiên gọi; owner SID của file khóa nguồn và A trùng token hiện tại.
+- Để không ghi vào profile nguồn, runner đặt Electron `userData` riêng trong thư mục tạm và truyền riêng đường dẫn nguồn/bản sao cho service giải mã chỉ đọc. `safeStorage.isEncryptionAvailable()` là true; file khóa của nguồn và A giống byte-for-byte; `createCredentialCipher` trả **FAIL** cho cả hai với mã `MASTER_KEY_DECRYPT_FAILED`. Thiết lập AppUserModelID/tên app và token Windows không khắc phục lỗi. Không tạo khóa, không ghi đè khóa, không bypass mã hóa.
+- DB cùng identity trên A chạy bằng cipher fixture và credential giả sau khi đã thử giải mã; record credential của A giờ là fixture trong bản sao tạm. DB nguồn không thay đổi. Vì không giải mã được credential thật, không khởi tạo SshManager; SSH live giữ **BLOCKED/NOT_RUN**.
+
+### Gate cục bộ
+
+- Node 22.23.3: focused `vpsRepository.test.ts`, `service.test.ts`, `ipc.test.ts` **PASS 27/27**.
+- Node 22.23.3: typecheck Node/Web **PASS**.
+- `git diff --check` **PASS**.
