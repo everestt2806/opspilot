@@ -1,24 +1,31 @@
 # TK-S7 P1b — Persisted ingress/TLS contract
 
-> Trạng thái: CHỜ REVIEW. Phụ thuộc quyết định thiết kế P1a. Không có thao tác VPS/live trong checkpoint này.
+> Trạng thái: CHỜ REVIEW. P1b chỉ cập nhật hợp đồng lưu trữ và invariant SQLite; không reconcile Caddy, đổi URL ứng dụng hay ghi VPS.
 
 ## Mục tiêu
 
-Migration 010 giữ nguyên `domain_binding` cũ và tạo state riêng cho DNS, route ingress, certificate và external HTTPS probe. `route_status='active'` chỉ hợp lệ khi DNS propagated, route/certificate/probe đều đã kiểm tra cho cùng hostname và `observed_generation` khớp `desired_generation`. `domain:upsert` chỉ ghi DNS state; không cấu hình Caddy, không đổi URL app.
+Giữ nguyên `domain_binding` và dữ liệu legacy, đồng thời tách trạng thái DNS khỏi route ingress, certificate và external HTTPS probe. `route_status='active'` chỉ hợp lệ cho `shared_ingress` sau khi DNS, route, certificate và external probe có bằng chứng hiện hành cùng hostname/generation. `domain:upsert` chỉ chứng minh DNS.
 
-## Thay đổi
+## Thiết kế và thay đổi
 
-- Migration `010_domain_ingress_state.sql`: backfill DNS status từ cột `status` legacy (`active` legacy thành DNS `propagated`), giữ nguyên giá trị cột cũ và mọi metadata cũ; state route/certificate/probe khởi đầu chưa cấu hình.
-- `DomainRepository.upsertDns()` chỉ đổi DNS desired state. Thay đổi mode/record/target tăng desired generation và invalidates trạng thái probe. `recordIngressObservation()` kiểm ownership/generation, reason code và bằng chứng cùng-hostname; trigger SQLite chặn direct SQL đặt active thiếu các điều kiện.
-- IPC contract trả trạng thái DNS riêng; type `DomainIngressState` tách route, certificate, probe, owner keys, generations và thời điểm kiểm tra. Schema/reason code không có credential, token, private key hay certificate secret.
-- Roadmap ghi rõ Git manual deploy/redeploy đã có live evidence G2/G2b; push-to-deploy và HTTPS còn thiếu. P1e dùng ACME staging trước khi cân nhắc production ACME.
+- Migration 010 bổ sung các trạng thái DNS/route/certificate/probe, desired/observed generation, ownership, reason code và thời điểm kiểm tra; không lưu token, private key hoặc certificate secret.
+- Migration 011 tiến hành từ v10, nên profile đã áp dụng migration 010 không phải hạ cấp. Trigger SQLite tự hạ route khỏi `active`, tăng generation và xóa route/certificate/probe evidence khi `app_id`, `hostname`, `mode`, `target`, loại/tên record hoặc ownership thay đổi. Route ở mode khác `shared_ingress` không thể active.
+- `DomainRepository.upsertDns()` vẫn cập nhật DNS hợp lệ. Thay đổi identity được trigger invalidation cùng transaction; trạng thái HTTPS không được kế thừa proof cũ.
+- `docs/contracts/schema.sql` đồng bộ trigger của migration mới nhất và thực thi được trên SQLite rỗng; index DNS khai báo duy nhất một lần.
+- Roadmap ghi Git manual deploy/redeploy có live evidence G2/G2b; push-to-deploy và HTTPS vẫn chưa có. P1e dùng ACME staging trước khi cân nhắc certificate production.
 
-## Gate hiện tại
+## Cập nhật P1b — 14/10/2026
 
-- Focused Vitest trên Node 22.23.3: `src/main/domain/repository.test.ts`, `src/main/db/index.test.ts`, `src/main/ipc.test.ts` — 28/28 PASS.
+- Thêm migration 011 và kiểm thử nâng cấp v9→latest cùng v10→latest; dữ liệu domain binding giữ nguyên, migration lặp an toàn và `foreign_key_check` sạch.
+- Bổ sung kiểm thử SQL cho từng trường identity/ownership, invalidation bằng chứng cũ, chặn mode không phải `shared_ingress`, cùng cập nhật DNS qua repository.
+- Thêm gate Vitest thực thi toàn bộ schema contract trên SQLite rỗng và kiểm tra `foreign_key_check`.
+
+## Gate
+
+- Node 22.23.3, focused Vitest `src/main/db/index.test.ts` và `src/main/domain/repository.test.ts`: 18/18 PASS, trong đó schema contract SQLite rỗng và `foreign_key_check` đều PASS.
 - Node 22.23.3: `pnpm --dir app typecheck` PASS; `pnpm --dir app build` PASS; `git diff --check` PASS.
-- VPS/Caddy/external HTTPS: NOT_RUN, ngoài phạm vi P1b.
+- VPS, Caddy, certificate issuance và external HTTPS: NOT_RUN; ngoài phạm vi P1b.
 
 ## Giới hạn còn lại
 
-P1b chỉ lưu hợp đồng/trạng thái và bảo vệ invariant trong repository/SQLite. Chưa cài hoặc reconcile Caddy, chưa cấp certificate, chưa chạy HTTPS probe, chưa thêm IPC reconcile, chưa thay URL hiện tại. Các trạng thái ingress được ghi khi checkpoint reconcile tương ứng được triển khai ở P1c–P1e.
+P1b chỉ lưu hợp đồng/trạng thái và bảo vệ invariant SQLite. Chưa cài/reconcile Caddy, cấp certificate, chạy HTTPS probe, thêm IPC reconcile hoặc thay URL hiện hành. Các thao tác đó thuộc P1c–P1e.

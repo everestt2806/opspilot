@@ -13,6 +13,7 @@ import migration007 from './migrations/007_git_source_provenance.sql?raw'
 import migration008 from './migrations/008_vps_archive.sql?raw'
 import migration009 from './migrations/009_vps_app_import.sql?raw'
 import migration010 from './migrations/010_domain_ingress_state.sql?raw'
+import migration011 from './migrations/011_domain_ingress_identity_guards.sql?raw'
 
 interface Migration {
   name: string
@@ -70,6 +71,11 @@ const migrations: Migration[] = [
     name: '010_domain_ingress_state.sql',
     version: 10,
     sql: migration010
+  },
+  {
+    name: '011_domain_ingress_identity_guards.sql',
+    version: 11,
+    sql: migration011
   }
 ]
 

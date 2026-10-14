@@ -55,6 +55,27 @@ function createDatabase(): Database.Database {
       NEW.https_probe_checked_at IS NULL
     )
     BEGIN SELECT RAISE(ABORT, 'domain_https_active_requires_verified_evidence'); END;
+    CREATE TRIGGER domain_binding_active_requires_shared_ingress_update
+    BEFORE UPDATE OF route_status, mode ON domain_binding
+    WHEN NEW.route_status='active' AND NEW.mode <> 'shared_ingress'
+    BEGIN SELECT RAISE(ABORT, 'domain_https_active_requires_shared_ingress'); END;
+    CREATE TRIGGER domain_binding_invalidate_changed_route_identity
+    AFTER UPDATE OF app_id, hostname, mode, target, record_type, record_name,
+      ownership_key, route_ownership_key ON domain_binding
+    WHEN OLD.app_id IS NOT NEW.app_id OR OLD.hostname IS NOT NEW.hostname OR
+      OLD.mode IS NOT NEW.mode OR OLD.target IS NOT NEW.target OR
+      OLD.record_type IS NOT NEW.record_type OR OLD.record_name IS NOT NEW.record_name OR
+      OLD.ownership_key IS NOT NEW.ownership_key OR
+      OLD.route_ownership_key IS NOT NEW.route_ownership_key
+    BEGIN
+      UPDATE domain_binding
+      SET route_status=CASE WHEN OLD.route_status='not_configured' THEN 'not_configured' ELSE 'pending' END,
+          desired_generation=desired_generation+1, observed_generation=0,
+          certificate_status='not_requested', https_probe_status='not_run',
+          ingress_reason_code=NULL, route_checked_at=NULL, certificate_checked_at=NULL,
+          certificate_hostname=NULL, https_probe_checked_at=NULL, https_probe_hostname=NULL
+      WHERE id=NEW.id;
+    END;
   `)
   return database
 }
@@ -163,7 +184,7 @@ describe('DomainRepository ingress/TLS state', () => {
       route_status: 'pending',
       https_probe_status: 'not_run',
       desired_generation: 2,
-      observed_generation: 1
+      observed_generation: 0
     })
     expect(() => repository.recordIngressObservation(observation({ generation: 1 }))).toThrow(
       /VALIDATION/
@@ -200,5 +221,55 @@ describe('DomainRepository ingress/TLS state', () => {
     ).toThrow(/domain_https_active_requires_verified_evidence/)
     expect(repository.getByHostname('app.example.com')?.route_status).toBe('not_configured')
     database.close()
+  })
+
+  it('invalidates active evidence for every route identity or ownership field change', () => {
+    const mutations: Array<{ column: string; value: string | number; reject?: boolean }> = [
+      { column: 'app_id', value: 4 },
+      { column: 'hostname', value: 'renamed.example.com' },
+      { column: 'mode', value: 'direct_port', reject: true },
+      { column: 'target', value: '203.0.113.9' },
+      { column: 'record_type', value: 'AAAA' },
+      { column: 'record_name', value: 'other.example.com' },
+      { column: 'ownership_key', value: 'dns-owner:changed' },
+      { column: 'route_ownership_key', value: 'route-owner:changed' }
+    ]
+
+    for (const mutation of mutations) {
+      const database = createDatabase()
+      const repository = new DomainRepository(database)
+      repository.upsertDns(binding({ dns_status: 'propagated' }))
+      repository.recordIngressObservation(observation())
+
+      const update = database.prepare(`UPDATE domain_binding SET ${mutation.column}=? WHERE id=1`)
+      if (mutation.reject) {
+        expect(() => update.run(mutation.value)).toThrow(/domain_https_active_requires_shared_ingress/)
+        expect(database.prepare('SELECT route_status FROM domain_binding WHERE id=1').get()).toEqual({
+          route_status: 'active'
+        })
+      } else {
+        update.run(mutation.value)
+        expect(
+          database
+            .prepare(`SELECT route_status, desired_generation, observed_generation,
+              certificate_status, https_probe_status, route_checked_at,
+              certificate_checked_at, certificate_hostname, https_probe_checked_at,
+              https_probe_hostname FROM domain_binding WHERE id=1`)
+            .get()
+        ).toEqual({
+          route_status: 'pending',
+          desired_generation: 2,
+          observed_generation: 0,
+          certificate_status: 'not_requested',
+          https_probe_status: 'not_run',
+          route_checked_at: null,
+          certificate_checked_at: null,
+          certificate_hostname: null,
+          https_probe_checked_at: null,
+          https_probe_hostname: null
+        })
+      }
+      database.close()
+    }
   })
 })

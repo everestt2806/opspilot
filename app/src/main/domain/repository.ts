@@ -68,11 +68,6 @@ export class DomainRepository {
            dns_status=excluded.dns_status,
            dns_evidence_json=excluded.dns_evidence_json,
            last_check_at=strftime('%Y-%m-%dT%H:%M:%SZ','now'),
-           desired_generation=domain_binding.desired_generation + CASE WHEN
-             domain_binding.mode IS NOT excluded.mode OR
-             domain_binding.record_type IS NOT excluded.record_type OR
-             domain_binding.record_name IS NOT excluded.record_name OR
-             domain_binding.target IS NOT excluded.target THEN 1 ELSE 0 END,
            route_status=CASE WHEN
              domain_binding.mode IS NOT excluded.mode OR
              domain_binding.record_type IS NOT excluded.record_type OR
@@ -170,6 +165,7 @@ export class DomainRepository {
     }
     if (input.route_status === 'active') {
       if (
+        current.mode !== 'shared_ingress' ||
         current.dns_status !== 'propagated' ||
         input.certificate_status !== 'valid' ||
         input.https_probe_status !== 'passed' ||

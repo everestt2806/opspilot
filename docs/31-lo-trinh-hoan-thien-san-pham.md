@@ -57,7 +57,7 @@ Hợp đồng auto deploy: project chọn production branch; push nhận full SH
 |---|---|---|
 | P0, trước demo 14/10 | Khóa hợp đồng hai nguồn; public Git manual; giữ local; live Express Git trên VPS hiện có | Repo/ref/full SHA trong history, URL ngoài truy cập được, local regression; demo nói đúng giới hạn |
 | P1a | Thiết kế shared ingress/HTTPS | Caddy, port ownership, DNS/firewall preflight, atomic rollback và active invariant được review; chưa ghi VPS |
-| P1b | Persisted ingress/TLS contract | Migration 010 tách DNS khỏi route/certificate/probe, generation và typed reasons; migration/idempotency/state tests pass |
+| P1b | Persisted ingress/TLS contract | Migrations 010–011 tách DNS khỏi route/certificate/probe, bảo vệ identity/generation/ownership và chỉ cho shared_ingress active; schema contract thực thi trên SQLite rỗng; migration/idempotency/state tests pass |
 | P1c–P1d | Read-only preflight, DNS và certificate readiness | Xác minh owner/listeners/DNS/firewall; fail closed, chưa active nếu thiếu evidence |
 | P1e | Atomic reconcile, rollback và HTTPS live validation | Lab VPS/hostname; dùng ACME staging để kiểm thử issuance/renewal và external HTTPS probe trước khi cân nhắc production ACME |
 | P1f | UI/diagnosis/operations | Người dùng thấy đúng trạng thái, lý do, URL hiện tại và retry/rollback; Electron interaction/layout gate |
