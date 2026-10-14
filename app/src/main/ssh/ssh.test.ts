@@ -1,5 +1,21 @@
 import { PassThrough } from 'node:stream'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+
+const { clients } = vi.hoisted(() => ({ clients: [] as Array<{ emit: (event: string) => void; end: ReturnType<typeof vi.fn> }> }))
+
+vi.mock('ssh2', async () => {
+  const { EventEmitter } = await import('node:events')
+  class MockClient extends EventEmitter {
+    end = vi.fn()
+    connect = vi.fn()
+
+    constructor() {
+      super()
+      clients.push(this)
+    }
+  }
+  return { Client: MockClient }
+})
 
 import {
   isRetryableConnectionError,
@@ -7,7 +23,35 @@ import {
   shouldRetryCommandAfterDisconnect
 } from './errorMapping'
 import { shellQuote } from './shellQuote'
-import { relayStreams, SshAbortedError } from './manager'
+import { relayStreams, SshAbortedError, SshManager } from './manager'
+
+describe('SshManager disconnect race', () => {
+  it('does not pool or report online when ready arrives after disconnect', async () => {
+    clients.length = 0
+    const manager = new SshManager(() => ({
+      host: 'example.invalid',
+      port: 22,
+      hostFingerprint: `SHA256:${'A'.repeat(43)}`,
+      username: 'test',
+      authType: 'password',
+      secret: 'fixture'
+    }))
+    const statuses: string[] = []
+    manager.on('status', ({ status }) => statuses.push(status))
+
+    const connecting = manager.connect(42)
+    await vi.waitFor(() => expect(clients).toHaveLength(1))
+    const staleClient = clients[0]!
+
+    await manager.disconnect(42)
+    staleClient.emit('ready')
+    staleClient.emit('close')
+
+    await expect(connecting).rejects.toMatchObject({ code: 'SSH_TIMEOUT' })
+    expect(statuses).not.toContain('online')
+    expect(staleClient.end).toHaveBeenCalled()
+  })
+})
 
 describe('relayStreams', () => {
   it('preserves multi-chunk bytes and reports progress', async () => {

@@ -82,3 +82,20 @@ Cần profile được migrate trên **bản sao tạm** với danh tính VPS đ
 - Node 22.23.3: typecheck Node/Web **PASS**.
 - `git diff --check`: chạy sau cập nhật note.
 - SSH live: **PASS, read-only** theo các pha và thời lượng nêu trên; không cần trạng thái `BLOCKED_EXTERNAL` vì endpoint phản hồi.
+
+## UPDATE R1 closeout trên `feat/deploy-reachability` sau `6f742e3`
+
+- **Race SSH:** khi `disconnect()` đã đánh dấu entry bị hủy/gỡ khỏi pool, callback `ready` đến muộn bị từ chối; entry cũ không được pool và không phát `online`. `close` của entry cũ không phát trạng thái cho phiên mới. Test mô phỏng `ready` sau disconnect, xác nhận connect reject, không có `online` và client được dọn.
+- **Bản sao kiểm chứng:** profile mới `%TEMP%\opspilot-r1live-closeout-20261014d` được tạo bằng SQLite backup API từ profile nguồn chỉ đọc; schema v9, 1 VPS, 4 app, 8 deployment. Sao chép nguyên trạng master-key protected cùng Electron `Local State`/`Preferences`; ACL chỉ cho Windows user hiện tại. Profile nguồn không được dùng làm đích ghi.
+- **Ghi nhận thí nghiệm:** bản copy đầu không khớp active/credential snapshot nên bị bỏ, không dùng để kết luận. Bản copy `...14b` và `...14c` dùng để làm rõ lỗi test adapter; lần đầu đã gửi `null` cho field tùy chọn, bị schema từ chối sau khi VPS đã archive. Các bản copy này bị bỏ; profile nguồn không bị ảnh hưởng. Bài kiểm chứng chính chạy trên bản copy mới `...14d` với field không có giá trị thì được bỏ khỏi input.
+- **IPC và Electron renderer:** trong Electron app thật trên bản copy d (monitor scheduler tắt), `window.api.invoke` gọi `vps:delete`, xác nhận VPS biến khỏi danh sách, rồi `vps:create` cùng identity. **PASS:** VPS ID `1` được khôi phục; 4 app giữ nguyên ID `1–4`, current deployment IDs `7, 3, 4, 8`; 8 deployment giữ nguyên ID/version/image/status. So sánh SQLite readonly giữa nguồn và bản copy sau thao tác cho thấy 9/9 bảng ngoài `vps` (gồm `app`, `deployment`, `action_log`, activation, metric, score, alert, doctor, experiment) khớp toàn bộ qua hash từng hàng; `action_log` giữ 554 bản ghi. Renderer thực tế hiển thị cả 4 hàng app; trang Hoạt động hiển thị 20 hàng lịch sử. Thao tác được gọi bằng IPC từ renderer harness, không mô phỏng click nút xóa/thêm; vì vậy không ghi nhận GUI-action PASS.
+- **Docker read-only:** sau khi kết nối lại, IPC `vps:discover-apps` dùng `SshManager` thật và fingerprint đã ghim: **PASS**, tên 4/4 app trùng DB, cả 4 container `running`; recovery status 1 verified, 3 legacy, 0 mismatch/unverifiable/stopped. Scan chỉ chạy lệnh đọc Docker/manifest; không ghi VPS, deploy, đổi firewall hay thao tác container.
+- Credential/fingerprint đầy đủ/raw SSH output không được in hoặc ghi vào note. Kết quả Electron trong profile d chỉ chứa mã PASS, count và ID công khai.
+
+### Gates R1 closeout
+
+- Node 22.23.3 focused SSH/VPS/IPC/UI: **PASS 105/105 tests / 8 files** (manager late-ready race, discovery, VPS service/repository, IPC, VpsPage, AppsPage, HistoryPage; SSH/VPS focused expansion). Chưa chạy full Vitest.
+- Node 22.23.3 `@opspilot/app build` (typecheck Node/Web + Electron/Vite build): **PASS**.
+- Electron thật: IPC và trang Apps/Hoạt động được chạy và kiểm tra từ profile d; đây là renderer integration, không phải manual GUI-click test.
+- `git diff --check`: chạy sau khi ghi note/board.
+- Branch/board: R1, R3d và R3e giữ `CHỜ REVIEW`; không push/PR/merge.

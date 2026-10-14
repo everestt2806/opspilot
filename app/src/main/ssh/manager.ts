@@ -467,6 +467,10 @@ export class SshManager extends EventEmitter {
       }
       const onReady = (): void => {
         if (settled) return
+        if (entry.cancelled || this.entries.get(entry.vpsId) !== entry) {
+          fail(new AppError('SSH_TIMEOUT', 'SSH connection was cancelled.'))
+          return
+        }
         settled = true
         clearTimeout(timer)
         entry.client = client
@@ -476,7 +480,9 @@ export class SshManager extends EventEmitter {
       }
       const onClose = (): void => {
         entry.ready = false
-        this.emitStatus(entry.vpsId, 'offline')
+        if (!entry.cancelled && this.entries.get(entry.vpsId) === entry) {
+          this.emitStatus(entry.vpsId, 'offline')
+        }
         if (!settled) {
           fail(new AppError('SSH_HOST_UNREACHABLE', 'Kết nối SSH đã đóng trước khi sẵn sàng.'))
         }
