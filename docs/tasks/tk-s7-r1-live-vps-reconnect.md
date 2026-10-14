@@ -68,3 +68,17 @@ Cần profile được migrate trên **bản sao tạm** với danh tính VPS đ
 - Node 22.23.3: Vitest **PASS, 768 tests / 75 files**. Lệnh pnpm chuyển tiếp phạm vi file không đúng dự kiến nên lần chạy bao phủ toàn suite; không ghi nhận là focused run.
 - `git diff --check`: chạy sau cập nhật note.
 - DB cùng identity: **LOCAL_INTEGRATION_PASS**; DB khác identity: **PASS** theo bằng chứng ở update `e272186`; SSH live: **BLOCKED** do runner không hoàn tất bắt tay/đọc qua SSH trước khi bị dừng.
+
+## UPDATE sau commit bf9bec1 — chẩn đoán SSH theo pha
+
+- Dùng profile C cô lập, DB mở readonly; credential chỉ nằm trong bộ nhớ. Không gọi lại `VpsService.delete/create`, không kết nối app UI, không ghi VPS. Runner gọi `SshManager` thật với fingerprint ghim, in ra duy nhất mã pha/thời lượng/kết quả tổng hợp.
+- Kết quả live: TCP **PASS 166 ms**; SSH handshake + host key fingerprint ghim + xác thực **PASS 1.183 ms**; mở command channel **PASS 619 ms**; lệnh đọc ngắn **PASS 729 ms** (exit 0 và marker khớp, không lưu stdout); `discoverVpsApps` **PASS 982 ms**, tìm thấy 4 ứng viên và cả 4 có state `running`. Không ghi tên app, image, credential, fingerprint, stdout/stderr thô.
+- Lần chẩn đoán trước bị treo do runner đặt bundle ngoài app module tree khiến thiếu module `better-sqlite3`; runner được dừng và thử lại sau khi đặt bundle tạm trong app để resolve dependency. Lần live mới hoàn tất trong giới hạn và là lần duy nhất chạy SSH sau cập nhật này.
+- Rà soát `SshManager` xác nhận callback `client.exec` trước đây không có deadline; `connect` không reject nếu socket `close` trước `ready`; và command timeout đợi sự kiện `close` dù `destroy()` có thể không phát sự kiện đó. Đã thêm deadline handshake, timeout trước callback mở channel, tổng deadline mở channel + command, reject ngay khi channel timeout rồi destroy, và hủy retry khi disconnect. Host verifier vẫn xác minh fingerprint trước sự kiện `ready`/xác thực.
+
+### Gates sau cập nhật
+
+- Node 22.23.3: SSH/discovery focused tests **PASS, 31 tests / 3 files** (host fingerprint/manager, ssh helpers, VPS discovery).
+- Node 22.23.3: typecheck Node/Web **PASS**.
+- `git diff --check`: chạy sau cập nhật note.
+- SSH live: **PASS, read-only** theo các pha và thời lượng nêu trên; không cần trạng thái `BLOCKED_EXTERNAL` vì endpoint phản hồi.
