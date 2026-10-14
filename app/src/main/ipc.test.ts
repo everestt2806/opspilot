@@ -448,15 +448,25 @@ describe('handle', () => {
           provider: string
           ownership_key: string
           status: string
-          evidence_json: string
+          dns_status: string
+          dns_evidence_json: string
+          route_status: string
+          certificate_status: string
+          https_probe_status: string
         }
         expect(binding).toBeDefined()
         expect(binding.app_id).toBe(1)
         expect(binding.ownership_key).toBe('opspilot:1:app.example.com')
+        expect(binding.dns_status).toBe(result.data?.status)
+        expect(binding.dns_status).not.toBe('active')
+        expect(binding.status).toBe(binding.dns_status)
+        expect(binding.route_status).toBe('not_configured')
+        expect(binding.certificate_status).toBe('not_requested')
+        expect(binding.https_probe_status).toBe('not_run')
 
         // Tuyệt đối không lưu token vào bất kỳ trường nào trong SQLite
         expect(JSON.stringify(binding)).not.toContain(scopedToken)
-        expect(binding.evidence_json).not.toContain(scopedToken)
+        expect(binding.dns_evidence_json).not.toContain(scopedToken)
       } finally {
         fetchSpy.mockRestore()
         closeDatabase()
@@ -575,11 +585,12 @@ describe('handle', () => {
         // DB ghi nhận trạng thái 'conflict' và không chứa token
         const binding = db
           .prepare('SELECT * FROM domain_binding WHERE hostname = ?')
-          .get('app.example.com') as { status: string; evidence_json: string }
+          .get('app.example.com') as { status: string; dns_status: string; dns_evidence_json: string }
         expect(binding).toBeDefined()
         expect(binding.status).toBe('conflict')
-        expect(binding.evidence_json).toContain('Xung đột quyền sở hữu')
-        expect(binding.evidence_json).not.toContain(secretToken)
+        expect(binding.dns_status).toBe('conflict')
+        expect(binding.dns_evidence_json).toContain('Xung đột quyền sở hữu')
+        expect(binding.dns_evidence_json).not.toContain(secretToken)
       } finally {
         fetchSpy.mockRestore()
         closeDatabase()
@@ -640,10 +651,11 @@ describe('handle', () => {
         // DB ghi nhận trạng thái 'failed' và không chứa token
         const binding = db
           .prepare('SELECT * FROM domain_binding WHERE hostname = ?')
-          .get('app.example.com') as { status: string; evidence_json: string }
+          .get('app.example.com') as { status: string; dns_status: string; dns_evidence_json: string }
         expect(binding).toBeDefined()
         expect(binding.status).toBe('failed')
-        expect(binding.evidence_json).not.toContain(secretToken)
+        expect(binding.dns_status).toBe('failed')
+        expect(binding.dns_evidence_json).not.toContain(secretToken)
       } finally {
         fetchSpy.mockRestore()
         closeDatabase()
@@ -756,10 +768,10 @@ describe('handle', () => {
 
         // Kiểm tra trong DB evidence_json
         const binding = db
-          .prepare('SELECT evidence_json FROM domain_binding WHERE hostname = ?')
-          .get('app.example.com') as { evidence_json: string }
-        expect(binding.evidence_json).not.toContain('superSecretPass123')
-        expect(binding.evidence_json).not.toContain('leakToken')
+          .prepare('SELECT dns_evidence_json FROM domain_binding WHERE hostname = ?')
+          .get('app.example.com') as { dns_evidence_json: string }
+        expect(binding.dns_evidence_json).not.toContain('superSecretPass123')
+        expect(binding.dns_evidence_json).not.toContain('leakToken')
       } finally {
         fetchSpy.mockRestore()
         closeDatabase()

@@ -267,7 +267,7 @@ export function registerIpcHandlers(
     const safeMessage = redactText(maskSecrets(result.message))
     const safeTechnical = result.technical ? redactText(maskSecrets(result.technical)) : undefined
 
-    new DomainRepository(database).upsert({
+    new DomainRepository(database).upsertDns({
       app_id: deployment.app_id,
       hostname: plan.hostname,
       mode: plan.mode,
@@ -277,8 +277,9 @@ export function registerIpcHandlers(
       record_name: plan.record_name,
       target: plan.target,
       ownership_key: ownershipKey,
-      status,
-      evidence_json: JSON.stringify({
+      route_ownership_key: `opspilot-ingress:${deployment.app_id}:${plan.hostname}`,
+      dns_status: status,
+      dns_evidence_json: JSON.stringify({
         message: safeMessage,
         id: result.id ?? null,
         conflict: result.conflict ?? false,

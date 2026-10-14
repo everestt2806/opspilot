@@ -397,9 +397,71 @@ CREATE TABLE domain_binding (
   last_check_at   TEXT,
   evidence_json   TEXT,
   created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-  updated_at      TEXT
+  updated_at      TEXT,
+  -- Migration 010: status is retained as a legacy mirror; new code reads/writes dns_status.
+  -- Legacy status='active' is backfilled as DNS propagated, never as HTTPS route activation.
+  dns_status      TEXT    NOT NULL DEFAULT 'pending'
+                          CHECK (dns_status IN ('pending','propagated','conflict','failed','disabled')),
+  dns_evidence_json TEXT,             -- sanitized DNS result only; never provider token
+  route_status    TEXT    NOT NULL DEFAULT 'not_configured'
+                          CHECK (route_status IN ('not_configured','pending','active','degraded','conflict','failed','disabled')),
+  certificate_status TEXT NOT NULL DEFAULT 'not_requested'
+                          CHECK (certificate_status IN ('not_requested','pending','valid','failed','expired')),
+  https_probe_status TEXT NOT NULL DEFAULT 'not_run'
+                          CHECK (https_probe_status IN ('not_run','passed','failed')),
+  desired_generation INTEGER NOT NULL DEFAULT 1 CHECK (desired_generation >= 1),
+  observed_generation INTEGER NOT NULL DEFAULT 0 CHECK (observed_generation >= 0),
+  route_ownership_key TEXT NOT NULL DEFAULT '', -- OpsPilot route identity, separate from DNS ownership
+  ingress_reason_code TEXT CHECK (ingress_reason_code IS NULL OR ingress_reason_code IN (
+    'DNS_NOT_PROPAGATED','DNS_TARGET_MISMATCH','DNS_IPV6_UNREACHABLE',
+    'INGRESS_PORT_CONFLICT','INGRESS_OWNER_UNKNOWN','FIREWALL_80_BLOCKED',
+    'FIREWALL_443_BLOCKED','INGRESS_INSTALL_FAILED','INGRESS_CONFIG_INVALID',
+    'INGRESS_RELOAD_FAILED','INGRESS_ROLLBACK_FAILED','CERTIFICATE_PENDING',
+    'CERTIFICATE_ISSUE_FAILED','HTTPS_PROBE_FAILED','UPSTREAM_UNHEALTHY',
+    'DOMAIN_OWNERSHIP_CONFLICT','SSH_UNAVAILABLE','CANCELLED'
+  )),
+  route_checked_at TEXT,
+  certificate_checked_at TEXT,
+  certificate_hostname TEXT,
+  https_probe_checked_at TEXT,
+  https_probe_hostname TEXT
 );
 CREATE INDEX idx_domain_binding_app ON domain_binding(app_id, status);
+CREATE INDEX idx_domain_binding_app_dns_status ON domain_binding(app_id, dns_status);
+CREATE INDEX idx_domain_binding_app_dns_status ON domain_binding(app_id, dns_status);
+CREATE UNIQUE INDEX idx_domain_binding_route_ownership ON domain_binding(route_ownership_key)
+  WHERE route_ownership_key <> '';
+
+-- Migration 010 requires route, certificate and current-generation external probe evidence
+-- before route_status can be active. These guards also protect against direct SQL writes.
+CREATE TRIGGER domain_binding_active_requires_https_insert
+BEFORE INSERT ON domain_binding
+WHEN NEW.route_status = 'active' AND (
+  NEW.dns_status <> 'propagated' OR NEW.certificate_status <> 'valid' OR
+  NEW.certificate_hostname IS NOT NEW.hostname OR NEW.https_probe_status <> 'passed' OR
+  NEW.https_probe_hostname IS NOT NEW.hostname OR
+  NEW.desired_generation <> NEW.observed_generation OR
+  NEW.route_checked_at IS NULL OR NEW.certificate_checked_at IS NULL OR
+  NEW.https_probe_checked_at IS NULL
+)
+BEGIN
+  SELECT RAISE(ABORT, 'domain_https_active_requires_verified_evidence');
+END;
+CREATE TRIGGER domain_binding_active_requires_https_update
+BEFORE UPDATE OF route_status, dns_status, certificate_status, https_probe_status,
+  desired_generation, observed_generation, route_checked_at, certificate_checked_at,
+  certificate_hostname, https_probe_checked_at, https_probe_hostname ON domain_binding
+WHEN NEW.route_status = 'active' AND (
+  NEW.dns_status <> 'propagated' OR NEW.certificate_status <> 'valid' OR
+  NEW.certificate_hostname IS NOT NEW.hostname OR NEW.https_probe_status <> 'passed' OR
+  NEW.https_probe_hostname IS NOT NEW.hostname OR
+  NEW.desired_generation <> NEW.observed_generation OR
+  NEW.route_checked_at IS NULL OR NEW.certificate_checked_at IS NULL OR
+  NEW.https_probe_checked_at IS NULL
+)
+BEGIN
+  SELECT RAISE(ABORT, 'domain_https_active_requires_verified_evidence');
+END;
 
 -- =============================================================================
 -- SEED

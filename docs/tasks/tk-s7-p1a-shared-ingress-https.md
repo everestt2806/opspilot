@@ -43,7 +43,7 @@ Chọn Caddy vì Automatic HTTPS và reverse proxy là khả năng tích hợp s
 
 ### Active, degraded và lỗi cho người dùng
 
-- `domain_binding.status='active'` chỉ khi DNS đã đúng, Caddy route đã reload thành công, cert hợp lệ cho hostname và **probe HTTPS từ ngoài VPS** hoàn tất với TLS hostname validation + response theo policy. API DNS 200, Caddy reload 200, hoặc probe localhost không đủ.
+- `domain_binding.route_status='active'` chỉ khi `dns_status='propagated'`, Caddy route đã reload thành công, cert hợp lệ cho cùng hostname và **probe HTTPS từ ngoài VPS cho cùng hostname** hoàn tất với TLS hostname validation + response theo policy. API DNS 200, Caddy reload 200, hoặc probe localhost không đủ. Cột `status` cũ được giữ làm DNS mirror tương thích.
 - Sau loopback healthcheck, lỗi publish không rollback/stop app healthy. Giữ `app.url` hiện tại, deployment `running`; ghi exposure `degraded`/domain status lỗi và chỉ dẫn khắc phục. Không hiển thị URL HTTPS như đã dùng được trước external probe.
 - Mã lỗi có cấu trúc, không parse log: `DNS_NOT_PROPAGATED`, `DNS_TARGET_MISMATCH`, `DNS_IPV6_UNREACHABLE`, `INGRESS_PORT_CONFLICT`, `INGRESS_OWNER_UNKNOWN`, `FIREWALL_80_BLOCKED`, `FIREWALL_443_BLOCKED`, `INGRESS_INSTALL_FAILED`, `INGRESS_CONFIG_INVALID`, `INGRESS_RELOAD_FAILED`, `INGRESS_ROLLBACK_FAILED`, `CERTIFICATE_PENDING`, `CERTIFICATE_ISSUE_FAILED`, `HTTPS_PROBE_FAILED`, `UPSTREAM_UNHEALTHY`, `DOMAIN_OWNERSHIP_CONFLICT`, `SSH_UNAVAILABLE`, `CANCELLED`.
 - Trạng thái hiển thị ít nhất: preflight/pending, propagated, configuring, certificate pending, active, degraded/failed, conflict, disabled. UI nói rõ nguyên nhân quan sát được, bước tiếp theo và URL HTTP cũ còn phục vụ; không lộ stdout/stderr/credential.

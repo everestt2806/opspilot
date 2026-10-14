@@ -19,6 +19,7 @@ import { SshManager } from '../ssh/manager'
 let testDirectory: string | null = null
 
 function downgradeMigration009ToV8(database: Database.Database): void {
+  downgradeMigration010ToV9(database)
   database.pragma('foreign_keys = OFF')
   database.exec(`
     CREATE TABLE deployment_v8 (
@@ -62,6 +63,30 @@ function downgradeMigration009ToV8(database: Database.Database): void {
   database.pragma('foreign_keys = ON')
 }
 
+function downgradeMigration010ToV9(database: Database.Database): void {
+  database.exec(`
+    DROP TRIGGER domain_binding_active_requires_https_insert;
+    DROP TRIGGER domain_binding_active_requires_https_update;
+    DROP INDEX idx_domain_binding_route_ownership;
+    DROP INDEX idx_domain_binding_app_dns_status;
+    ALTER TABLE domain_binding DROP COLUMN https_probe_hostname;
+    ALTER TABLE domain_binding DROP COLUMN certificate_hostname;
+    ALTER TABLE domain_binding DROP COLUMN https_probe_checked_at;
+    ALTER TABLE domain_binding DROP COLUMN certificate_checked_at;
+    ALTER TABLE domain_binding DROP COLUMN route_checked_at;
+    ALTER TABLE domain_binding DROP COLUMN ingress_reason_code;
+    ALTER TABLE domain_binding DROP COLUMN route_ownership_key;
+    ALTER TABLE domain_binding DROP COLUMN observed_generation;
+    ALTER TABLE domain_binding DROP COLUMN desired_generation;
+    ALTER TABLE domain_binding DROP COLUMN https_probe_status;
+    ALTER TABLE domain_binding DROP COLUMN certificate_status;
+    ALTER TABLE domain_binding DROP COLUMN route_status;
+    ALTER TABLE domain_binding DROP COLUMN dns_evidence_json;
+    ALTER TABLE domain_binding DROP COLUMN dns_status;
+    DELETE FROM schema_version WHERE version = 10;
+  `)
+}
+
 afterEach(() => {
   setMigration005TestInterceptor(null)
   closeDatabase()
@@ -72,6 +97,85 @@ afterEach(() => {
 })
 
 describe('initializeDatabase', () => {
+  it('migration v9 to v10 preserves legacy domain binding and adds separate HTTPS state idempotently', () => {
+    testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v9-v10-domain-'))
+    const database = initializeDatabase(testDirectory)
+    downgradeMigration010ToV9(database)
+    database.exec(`
+      INSERT INTO vps (id, name, host, username, auth_type, encrypted_secret)
+        VALUES (42, 'Existing VPS', '203.0.113.42', 'deploy', 'key', X'00');
+      INSERT INTO app (id, vps_id, name, framework, host_port, container_port)
+        VALUES (72, 42, 'existing-app', 'express', 30042, 3000);
+      INSERT INTO domain_binding
+        (id, app_id, hostname, mode, provider, zone_id, record_type, record_name,
+         target, ownership_key, status, last_check_at, evidence_json, created_at, updated_at)
+      VALUES
+        (82, 72, 'legacy.example.com', 'shared_ingress', 'cloudflare', 'zone-1', 'A',
+         'legacy.example.com', '203.0.113.42', 'dns-owner:82', 'active',
+         '2026-10-12T10:11:12Z', '{"legacy":true}', '2026-10-01T00:00:00Z',
+         '2026-10-12T10:11:12Z');
+    `)
+    const legacyBefore = database
+      .prepare(
+        `SELECT id, app_id, hostname, mode, provider, zone_id, record_type, record_name,
+                target, ownership_key, status, last_check_at, evidence_json, created_at, updated_at
+         FROM domain_binding WHERE id=82`
+      )
+      .get()
+
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
+      version: 9
+    })
+    runMigrations(database)
+
+    expect(
+      database
+        .prepare(
+          `SELECT id, app_id, hostname, mode, provider, zone_id, record_type, record_name,
+                  target, ownership_key, status, last_check_at, evidence_json, created_at, updated_at
+           FROM domain_binding WHERE id=82`
+        )
+        .get()
+    ).toEqual(legacyBefore)
+    expect(
+      database
+        .prepare(
+          `SELECT dns_status, route_status, certificate_status, https_probe_status,
+                  desired_generation, observed_generation, route_ownership_key
+           FROM domain_binding WHERE id=82`
+        )
+        .get()
+    ).toEqual({
+      dns_status: 'propagated',
+      route_status: 'not_configured',
+      certificate_status: 'not_requested',
+      https_probe_status: 'not_run',
+      desired_generation: 1,
+      observed_generation: 0,
+      route_ownership_key: 'opspilot-ingress:72:legacy.example.com'
+    })
+    expect(database.pragma('foreign_key_check')).toEqual([])
+    expect(() =>
+      database
+        .prepare("UPDATE domain_binding SET route_status='active' WHERE id=82")
+        .run()
+    ).toThrow(/domain_https_active_requires_verified_evidence/)
+    expect(() =>
+      database
+        .prepare("UPDATE domain_binding SET ingress_reason_code='UNRECOGNIZED' WHERE id=82")
+        .run()
+    ).toThrow(/CHECK constraint failed/)
+
+    runMigrations(database)
+    expect(database.prepare('SELECT COUNT(*) AS count FROM domain_binding').get()).toEqual({
+      count: 1
+    })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
+      version: 10
+    })
+    expect(database.pragma('foreign_key_check')).toEqual([])
+  })
+
   it('migration v8 to v9 preserves deployment-linked records and foreign keys', () => {
     testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v8-v9-linked-'))
     const database = initializeDatabase(testDirectory)
@@ -341,7 +445,7 @@ describe('initializeDatabase', () => {
       .get() as { version: number }
 
     expect(tables).toHaveLength(15)
-    expect(schemaVersion.version).toBe(9)
+    expect(schemaVersion.version).toBe(10)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -372,7 +476,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 9
+      version: 10
     })
     expect(
       database
@@ -571,7 +675,7 @@ describe('initializeDatabase', () => {
     const successVer = v4Db.prepare('SELECT MAX(version) AS version FROM schema_version').get() as {
       version: number
     }
-    expect(successVer.version).toBe(9)
+    expect(successVer.version).toBe(10)
 
     // b. Bảng experiment_run đã có cột attempt_index và backfill = 1 cho tất cả bản ghi cũ
     const postRuns = v4Db

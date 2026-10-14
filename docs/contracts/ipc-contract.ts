@@ -21,6 +21,42 @@ export type DeployStep =
 export type MigrateStep =
   | 'PREPARE' | 'FREEZE' | 'BACKUP' | 'TRANSFER' | 'RESTORE' | 'VERIFY' | 'AWAITING_CONFIRM';
 
+export type DomainDnsStatus = 'pending' | 'propagated' | 'conflict' | 'failed' | 'disabled';
+export type DomainRouteStatus =
+  | 'not_configured' | 'pending' | 'active' | 'degraded' | 'conflict' | 'failed' | 'disabled';
+export type DomainCertificateStatus = 'not_requested' | 'pending' | 'valid' | 'failed' | 'expired';
+export type DomainHttpsProbeStatus = 'not_run' | 'passed' | 'failed';
+export type DomainReasonCode =
+  | 'DNS_NOT_PROPAGATED' | 'DNS_TARGET_MISMATCH' | 'DNS_IPV6_UNREACHABLE'
+  | 'INGRESS_PORT_CONFLICT' | 'INGRESS_OWNER_UNKNOWN' | 'FIREWALL_80_BLOCKED'
+  | 'FIREWALL_443_BLOCKED' | 'INGRESS_INSTALL_FAILED' | 'INGRESS_CONFIG_INVALID'
+  | 'INGRESS_RELOAD_FAILED' | 'INGRESS_ROLLBACK_FAILED' | 'CERTIFICATE_PENDING'
+  | 'CERTIFICATE_ISSUE_FAILED' | 'HTTPS_PROBE_FAILED' | 'UPSTREAM_UNHEALTHY'
+  | 'DOMAIN_OWNERSHIP_CONFLICT' | 'SSH_UNAVAILABLE' | 'CANCELLED';
+
+/** Persisted desired/observed ingress state. DNS ownership and route ownership are separate. */
+export interface DomainIngressState {
+  id: number;
+  app_id: number;
+  hostname: string;
+  mode: 'direct_port' | 'shared_ingress' | 'named_tunnel';
+  dns_status: DomainDnsStatus;
+  route_status: DomainRouteStatus;
+  certificate_status: DomainCertificateStatus;
+  https_probe_status: DomainHttpsProbeStatus;
+  desired_generation: number;
+  observed_generation: number;
+  ownership_key: string;
+  route_ownership_key: string;
+  ingress_reason_code: DomainReasonCode | null;
+  last_check_at: string | null;
+  route_checked_at: string | null;
+  certificate_checked_at: string | null;
+  certificate_hostname: string | null;
+  https_probe_checked_at: string | null;
+  https_probe_hostname: string | null;
+}
+
 export interface Vps {
   id: number;
   name: string;
@@ -288,7 +324,7 @@ export interface IpcInvokeMap {
     record_name: string;
     target: string;
     public_url: string;
-    status: 'pending' | 'propagated' | 'active' | 'conflict' | 'failed' | 'disabled';
+    status: DomainDnsStatus;
     message: string;
   }>;
 

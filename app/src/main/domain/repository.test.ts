@@ -1,132 +1,204 @@
 import Database from 'better-sqlite3'
 import { describe, expect, it } from 'vitest'
 
-import { DomainRepository } from './repository'
+import type { DomainIngressState } from '@shared/ipc'
 
-describe('DomainRepository', () => {
-  it('upsert desired-state theo hostname và không lưu credential', () => {
-    const database = new Database(':memory:')
-    database.exec(`
-      CREATE TABLE domain_binding (
-        id INTEGER PRIMARY KEY,
-        app_id INTEGER NOT NULL,
-        hostname TEXT NOT NULL UNIQUE,
-        mode TEXT NOT NULL,
-        provider TEXT,
-        zone_id TEXT,
-        record_type TEXT,
-        record_name TEXT,
-        target TEXT,
-        ownership_key TEXT NOT NULL,
-        status TEXT NOT NULL,
-        evidence_json TEXT,
-        updated_at TEXT
-      )
-    `)
+import { DomainRepository, type DomainDnsBindingInput } from './repository'
+
+function createDatabase(): Database.Database {
+  const database = new Database(':memory:')
+  database.exec(`
+    CREATE TABLE domain_binding (
+      id INTEGER PRIMARY KEY,
+      app_id INTEGER NOT NULL,
+      hostname TEXT NOT NULL UNIQUE,
+      mode TEXT NOT NULL,
+      provider TEXT,
+      zone_id TEXT,
+      record_type TEXT,
+      record_name TEXT,
+      target TEXT,
+      ownership_key TEXT NOT NULL,
+      status TEXT NOT NULL,
+      dns_status TEXT NOT NULL DEFAULT 'pending' CHECK
+        (dns_status IN ('pending','propagated','conflict','failed','disabled')),
+      dns_evidence_json TEXT,
+      route_status TEXT NOT NULL DEFAULT 'not_configured' CHECK
+        (route_status IN ('not_configured','pending','active','degraded','conflict','failed','disabled')),
+      certificate_status TEXT NOT NULL DEFAULT 'not_requested' CHECK
+        (certificate_status IN ('not_requested','pending','valid','failed','expired')),
+      https_probe_status TEXT NOT NULL DEFAULT 'not_run' CHECK
+        (https_probe_status IN ('not_run','passed','failed')),
+      desired_generation INTEGER NOT NULL DEFAULT 1,
+      observed_generation INTEGER NOT NULL DEFAULT 0,
+      route_ownership_key TEXT NOT NULL DEFAULT '',
+      ingress_reason_code TEXT,
+      last_check_at TEXT,
+      route_checked_at TEXT,
+      certificate_checked_at TEXT,
+      certificate_hostname TEXT,
+      https_probe_checked_at TEXT,
+      https_probe_hostname TEXT,
+      updated_at TEXT
+    );
+    CREATE UNIQUE INDEX idx_domain_binding_route_ownership
+      ON domain_binding(route_ownership_key);
+    CREATE TRIGGER domain_binding_active_requires_https_update
+    BEFORE UPDATE OF route_status, dns_status, certificate_status, https_probe_status,
+      desired_generation, observed_generation, route_checked_at, certificate_checked_at,
+      certificate_hostname, https_probe_checked_at, https_probe_hostname ON domain_binding
+    WHEN NEW.route_status = 'active' AND (
+      NEW.dns_status <> 'propagated' OR NEW.certificate_status <> 'valid' OR
+      NEW.https_probe_status <> 'passed' OR NEW.desired_generation <> NEW.observed_generation OR
+      NEW.certificate_hostname IS NOT NEW.hostname OR NEW.https_probe_hostname IS NOT NEW.hostname OR
+      NEW.route_checked_at IS NULL OR NEW.certificate_checked_at IS NULL OR
+      NEW.https_probe_checked_at IS NULL
+    )
+    BEGIN SELECT RAISE(ABORT, 'domain_https_active_requires_verified_evidence'); END;
+  `)
+  return database
+}
+
+function binding(overrides: Partial<DomainDnsBindingInput> = {}): DomainDnsBindingInput {
+  return {
+    app_id: 3,
+    hostname: 'app.example.com',
+    mode: 'shared_ingress',
+    provider: 'cloudflare',
+    zone_id: 'zone-1',
+    record_type: 'A',
+    record_name: 'app.example.com',
+    target: '203.0.113.5',
+    ownership_key: 'dns-owner:app.example.com',
+    route_ownership_key: 'opspilot-ingress:3:app.example.com',
+    dns_status: 'pending',
+    ...overrides
+  }
+}
+
+function observation(
+  overrides: Partial<Parameters<DomainRepository['recordIngressObservation']>[0]> = {}
+): Parameters<DomainRepository['recordIngressObservation']>[0] {
+  return {
+    hostname: 'app.example.com',
+    ownership_key: 'dns-owner:app.example.com',
+    route_ownership_key: 'opspilot-ingress:3:app.example.com',
+    generation: 1,
+    route_status: 'active',
+    certificate_status: 'valid',
+    https_probe_status: 'passed',
+    reason_code: null,
+    route_checked_at: '2026-10-14T10:00:00Z',
+    certificate_checked_at: '2026-10-14T10:00:01Z',
+    certificate_hostname: 'app.example.com',
+    https_probe_checked_at: '2026-10-14T10:00:02Z',
+    https_probe_hostname: 'app.example.com',
+    ...overrides
+  }
+}
+
+describe('DomainRepository ingress/TLS state', () => {
+  it('keeps DNS upsert separate and never promotes it to HTTPS active', () => {
+    const database = createDatabase()
     const repository = new DomainRepository(database)
-    repository.upsert({
-      app_id: 3,
-      hostname: 'app.example.com',
-      mode: 'direct_port',
-      provider: 'cloudflare',
-      zone_id: 'zone-1',
-      record_type: 'A',
-      record_name: 'app.example.com',
-      target: '203.0.113.5',
-      ownership_key: 'opspilot:3:app.example.com',
-      status: 'pending',
-      evidence_json: JSON.stringify({ message: 'created' })
-    })
-    repository.upsert({
-      app_id: 3,
-      hostname: 'app.example.com',
-      mode: 'direct_port',
-      provider: 'cloudflare',
-      zone_id: 'zone-1',
-      record_type: 'A',
-      record_name: 'app.example.com',
-      target: '203.0.113.6',
-      ownership_key: 'opspilot:3:app.example.com',
-      status: 'propagated'
-    })
 
-    expect(database.prepare('SELECT COUNT(*) AS count FROM domain_binding').get()).toEqual({
-      count: 1
+    repository.upsertDns(binding({ dns_status: 'propagated' }))
+    expect(repository.getByHostname('app.example.com')).toMatchObject({
+      dns_status: 'propagated',
+      route_status: 'not_configured',
+      certificate_status: 'not_requested',
+      https_probe_status: 'not_run',
+      desired_generation: 1,
+      observed_generation: 0
     })
-    expect(
-      database.prepare('SELECT target,status,evidence_json FROM domain_binding').get()
-    ).toEqual({ target: '203.0.113.6', status: 'propagated', evidence_json: null })
-    expect(database.prepare("SELECT name FROM sqlite_master WHERE name LIKE '%token%'").get()).toBe(
-      undefined
+    const columns = database.pragma('table_info(domain_binding)') as Array<{ name: string }>
+    expect(columns.map((column) => column.name)).not.toEqual(
+      expect.arrayContaining(['api_token', 'private_key', 'certificate_secret'])
     )
     database.close()
   })
 
-  it('guard SQL: từ chối chuyển binding sang app hoặc ownership_key khác khi bị race condition', () => {
-    const database = new Database(':memory:')
-    database.exec(`
-      CREATE TABLE domain_binding (
-        id INTEGER PRIMARY KEY,
-        app_id INTEGER NOT NULL,
-        hostname TEXT NOT NULL UNIQUE,
-        mode TEXT NOT NULL,
-        provider TEXT,
-        zone_id TEXT,
-        record_type TEXT,
-        record_name TEXT,
-        target TEXT,
-        ownership_key TEXT NOT NULL,
-        status TEXT NOT NULL,
-        evidence_json TEXT,
-        updated_at TEXT
-      )
-    `)
+  it('rejects DNS and route ownership conflicts without overwriting the existing binding', () => {
+    const database = createDatabase()
     const repository = new DomainRepository(database)
-    // App 1 tạo binding
-    repository.upsert({
-      app_id: 1,
-      hostname: 'app.example.com',
-      mode: 'direct_port',
-      provider: 'cloudflare',
-      zone_id: 'zone-1',
-      record_type: 'A',
-      record_name: 'app.example.com',
-      target: '203.0.113.1',
-      ownership_key: 'opspilot:1:app.example.com',
-      status: 'propagated'
+    repository.upsertDns(binding({ dns_status: 'propagated' }))
+
+    expect(() =>
+      repository.upsertDns(
+        binding({ target: '203.0.113.8', ownership_key: 'other-dns-owner' })
+      )
+    ).toThrow(/VALIDATION/)
+    expect(() =>
+      repository.recordIngressObservation(observation({ route_ownership_key: 'other-route-owner' }))
+    ).toThrow(/VALIDATION/)
+    expect(
+      database
+        .prepare('SELECT app_id, target, ownership_key FROM domain_binding WHERE hostname=?')
+        .get('app.example.com')
+    ).toEqual({
+      app_id: 3,
+      target: '203.0.113.5',
+      ownership_key: 'dns-owner:app.example.com',
+    })
+    database.close()
+  })
+
+  it('accepts active only with DNS, matching generation, valid certificate and passed HTTPS probe', () => {
+    const database = createDatabase()
+    const repository = new DomainRepository(database)
+    repository.upsertDns(binding({ dns_status: 'propagated' }))
+
+    const active = repository.recordIngressObservation(observation())
+    expect(active).toMatchObject<Partial<DomainIngressState>>({
+      dns_status: 'propagated',
+      route_status: 'active',
+      certificate_status: 'valid',
+      https_probe_status: 'passed',
+      desired_generation: 1,
+      observed_generation: 1
     })
 
-    // App 2 cố overwrite binding của App 1 (mô phỏng race condition vượt qua IPC precheck)
-    try {
-      repository.upsert({
-        app_id: 2,
-        hostname: 'app.example.com',
-        mode: 'direct_port',
-        provider: 'cloudflare',
-        zone_id: 'zone-1',
-        record_type: 'A',
-        record_name: 'app.example.com',
-        target: '203.0.113.2',
-        ownership_key: 'opspilot:2:app.example.com',
-        status: 'pending'
-      })
-      expect.unreachable('Cần ném lỗi khi race condition xảy ra')
-    } catch (err) {
-      expect((err as Error).message).toBe('VALIDATION')
-      expect((err as { userMessage?: string }).userMessage).toContain('Xung đột quyền sở hữu')
-    }
+    repository.upsertDns(binding({ target: '203.0.113.6', dns_status: 'propagated' }))
+    expect(repository.getByHostname('app.example.com')).toMatchObject({
+      route_status: 'pending',
+      https_probe_status: 'not_run',
+      desired_generation: 2,
+      observed_generation: 1
+    })
+    expect(() => repository.recordIngressObservation(observation({ generation: 1 }))).toThrow(
+      /VALIDATION/
+    )
+    expect(
+      repository.recordIngressObservation(observation({ generation: 2 }))
+    ).toMatchObject({ route_status: 'active', desired_generation: 2, observed_generation: 2 })
+    database.close()
+  })
 
-    // Kiểm tra dữ liệu trong DB vẫn giữ nguyên của App 1
-    const row = database
-      .prepare('SELECT app_id, ownership_key, target FROM domain_binding')
-      .get() as {
-      app_id: number
-      ownership_key: string
-      target: string
-    }
-    expect(row.app_id).toBe(1)
-    expect(row.ownership_key).toBe('opspilot:1:app.example.com')
-    expect(row.target).toBe('203.0.113.1')
+  it('rejects active without propagated DNS, certificate proof, external probe, or checked time', () => {
+    const database = createDatabase()
+    const repository = new DomainRepository(database)
+    repository.upsertDns(binding({ dns_status: 'pending' }))
+
+    expect(() => repository.recordIngressObservation(observation())).toThrow(/VALIDATION/)
+    repository.upsertDns(binding({ dns_status: 'propagated' }))
+    expect(() =>
+      repository.recordIngressObservation(observation({ certificate_status: 'pending' }))
+    ).toThrow(/VALIDATION/)
+    expect(() =>
+      repository.recordIngressObservation(observation({ https_probe_status: 'failed' }))
+    ).toThrow(/VALIDATION/)
+    expect(() =>
+      repository.recordIngressObservation(observation({ https_probe_checked_at: null }))
+    ).toThrow(/VALIDATION/)
+    expect(() =>
+      repository.recordIngressObservation(observation({ https_probe_hostname: 'other.example.com' }))
+    ).toThrow(/VALIDATION/)
+    expect(() =>
+      database
+        .prepare("UPDATE domain_binding SET route_status='active' WHERE hostname=?")
+        .run('app.example.com')
+    ).toThrow(/domain_https_active_requires_verified_evidence/)
+    expect(repository.getByHostname('app.example.com')?.route_status).toBe('not_configured')
     database.close()
   })
 })
