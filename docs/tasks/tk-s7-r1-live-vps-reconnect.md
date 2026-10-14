@@ -53,3 +53,18 @@ Cần profile được migrate trên **bản sao tạm** với danh tính VPS đ
 - Node 22.23.3: focused `vpsRepository.test.ts`, `service.test.ts`, `ipc.test.ts` **PASS 27/27**.
 - Node 22.23.3: typecheck Node/Web **PASS**.
 - `git diff --check` **PASS**.
+
+## UPDATE sau commit 1dfbf61 — profile C credential parity
+
+- Tạo profile C tạm dưới `%TEMP%` từ `%TEMP%\opspilot-g2-20261009`: `opspilot.db` được sao lưu bằng SQLite backup API từ kết nối readonly; `credential-master-key.protected`, `Local State` và `Preferences` được sao chép nguyên trạng. ACL profile chỉ cấp quyền cho Windows user hiện tại. Nguồn chỉ được mở readonly; không thay đổi profile nguồn. Không dùng profile A.
+- Electron runner đặt `app.setPath('userData', profileC)` trước `whenReady`, rồi đặt AppUserModelID `vn.opspilot.desktop` và tên `OpsPilot` như main app; `createCredentialCipher(profileC)` trả **UNLOCK_PASS**. Không in hoặc lưu khóa/credential.
+- Trên C, giải mã credential chỉ trong bộ nhớ và gọi `VpsService.delete/create` với identity đã lưu. **LOCAL_INTEGRATION_PASS**: VPS ID ổn định; so sánh readonly toàn bộ bảng ngoài `vps` giữa C và nguồn cho thấy app, deployment và các bản ghi liên kết/lịch sử giữ nguyên. Bước service chỉ đổi bản ghi VPS trong profile C; nguồn không bị sửa.
+- Sau đó runner dùng `SshManager` resolver từ DB C, với fingerprint đã ghim, và gọi discovery Docker chỉ đọc. Kết nối không hoàn tất trong thời gian chờ dài; tiến trình runner bị dừng an toàn sau khoảng ba phút. Không có kết quả xác nhận runtime. SSH live giữ **BLOCKED**; không coi là SSH pass và không ghi VPS.
+- Kết quả kiểm tra chỉ hiển thị mã trạng thái đã khử nhạy cảm; không đưa credential, khóa, fingerprint đầy đủ hay raw SSH output vào note. File runner/log tạm đã được dọn sau kiểm tra; profile C tạm được giữ trong `%TEMP%` với ACL giới hạn cho user hiện tại.
+
+### Gates sau cập nhật
+
+- Node 22.23.3: `@opspilot/app build` (bao gồm typecheck Node/Web) **PASS**.
+- Node 22.23.3: Vitest **PASS, 768 tests / 75 files**. Lệnh pnpm chuyển tiếp phạm vi file không đúng dự kiến nên lần chạy bao phủ toàn suite; không ghi nhận là focused run.
+- `git diff --check`: chạy sau cập nhật note.
+- DB cùng identity: **LOCAL_INTEGRATION_PASS**; DB khác identity: **PASS** theo bằng chứng ở update `e272186`; SSH live: **BLOCKED** do runner không hoàn tất bắt tay/đọc qua SSH trước khi bị dừng.
