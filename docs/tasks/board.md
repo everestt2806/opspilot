@@ -503,3 +503,4 @@ app đều PASS. Mở duy nhất C04 với Vite app 18/deployment 41 và Express
 - **Cam kết Phiên làm việc**: Không sửa đổi schema hay logic nghiệp vụ, không push/PR/merge, không cần VPS thật.
 
 | TK-S7 R3e | [Legacy app recovery preparation UI](tk-s7-r3e-recovery-preparation-ui.md) | Worker | 13/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Local `4707e7b`; 15/15 focused tests, typecheck/build pass; lint 0 errors / 6,080 warnings; no VPS write. |
+| TK-S7 P1a | [Thiết kế shared ingress/HTTPS](tk-s7-p1a-shared-ingress-https.md) | Worker | 14/10/2026 | CHỜ REVIEW | `feat/deploy-reachability` | Chọn Caddy host-native; contract/kế hoạch và checkpoint gates; docs-only, runtime/VPS chưa đổi. Git manual đã có live evidence G2/G2b. |
