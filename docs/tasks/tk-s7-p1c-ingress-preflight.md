@@ -5,18 +5,26 @@
 ## Phạm vi đã triển khai
 
 - `preflightSharedIngress()` nhận `SshManager` và VPS ID, chỉ gọi sáu lệnh cố định qua SSH đã ghim fingerprint: đọc TCP listener 80/443, unit `opspilot-caddy.service`, marker, khả năng đọc config, phiên bản binary Caddy và trạng thái UFW. Không ghép dữ liệu người dùng vào lệnh; không trả stdout/stderr thô.
-- Marker ownership được quy ước là `/etc/opspilot/caddy/OWNER` với nội dung `opspilot-shared-ingress-v1`; config phải đọc được tại `/etc/opspilot/caddy/Caddyfile`; unit phải active, có fragment `/etc/systemd/system/opspilot-caddy.service` và `ExecStart` trỏ `/usr/bin/caddy` cùng config path đó. Listener PID phải khớp `MainPID`. Tên process `caddy` riêng lẻ không đủ.
-- Kết quả ownership phân biệt `ports_free`, `opspilot_owned`, `conflict`, `unknown`; `local_assessment` tổng hợp `clear`, `blocked`, `unknown` cho listener/UFW trên host. Thiếu quyền đọc/thiếu bằng chứng fail closed. Reason code dùng `INGRESS_PORT_CONFLICT`, `INGRESS_OWNER_UNKNOWN`, `FIREWALL_80_BLOCKED`, `FIREWALL_443_BLOCKED`, `SSH_UNAVAILABLE` theo bằng chứng; UFW không đọc được trả `unknown`. `route_activation` luôn `not_evaluated`; `clear` không xác nhận cloud firewall, DNS, route hay HTTPS.
+- Marker ownership được quy ước là `/etc/opspilot/caddy/OWNER` với nội dung `opspilot-shared-ingress-v1`; config phải đọc được tại `/etc/opspilot/caddy/Caddyfile`; unit phải active, có fragment `/etc/systemd/system/opspilot-caddy.service` và `ExecStart` có executable `/usr/bin/caddy` cùng `argv[]` chỉ tới đúng config path đó. Listener PID phải khớp `MainPID`. Tên process `caddy` riêng lẻ hoặc đường dẫn chỉ chứa chuỗi mong đợi không đủ.
+- Listener chỉ được kết luận `ports_free` khi `ss` thành công và stdout rỗng chính xác; mọi dòng không parse trọn vẹn đều thành `unknown`/`INGRESS_OWNER_UNKNOWN`. Kết quả ownership phân biệt `ports_free`, `opspilot_owned`, `conflict`, `unknown`; `local_assessment` tổng hợp `clear`, `blocked`, `unknown` cho listener/UFW trên host. UFW giữ trạng thái riêng IPv4/IPv6; rule `(v6)` không chứng minh IPv4, rule chồng hành động hoặc output lạ trả `unknown`. `route_activation` luôn `not_evaluated`; `clear` không xác nhận cloud firewall, DNS, route hay HTTPS.
 - `buildSharedIngressConfig()` là builder thuần cho tập route OpsPilot được truyền vào; chuẩn hóa/validate hostname, validate port, từ chối hostname trùng hoặc dữ liệu chèn, sort ổn định và render upstream loopback. Caller phải cung cấp toàn bộ route OpsPilot muốn giữ; builder không đọc hay sửa config của proxy khác.
 
 ## Gate
 
-- Node 22.23.3 focused Vitest `src/main/domain/ingress/preflight.test.ts` và `routeBuilder.test.ts`: 23/23 PASS.
+- Node 22.23.3 focused Vitest `src/main/domain/ingress/preflight.test.ts` và `routeBuilder.test.ts`: 31/31 PASS.
 - Node 22.23.3 `pnpm --dir app typecheck`: PASS.
 - Node 22.23.3 `pnpm --dir app build`: PASS.
 - `git diff --check`: PASS.
-- VPS development survey: NOT_RUN. Checkpoint này không dùng profile/SSH live; không có bằng chứng runtime nào được suy ra từ unit test.
+- VPS development survey: đã chạy một lần chỉ đọc qua `SshManager` với fingerprint ghim, trên profile cô lập tạo bằng SQLite backup API. Kết quả đã khử nhạy cảm: 0 listener; service OpsPilot `absent`; ownership `ports_free`; UFW `unknown`. Kết quả public không phân biệt lệnh UFW không đọc được với format chưa nhận diện; không lưu output SSH để phân loại sâu hơn. Không lưu credential hay fingerprint; không sửa profile nguồn hoặc VPS.
 
 ## Giới hạn còn lại
 
 Preflight hiện chỉ là module main-process, chưa có IPC/UI. UFW là trạng thái firewall trên host; cloud firewall, DNS, route thực tế và external HTTPS probe chưa được kiểm tra. Chưa cài/reconcile Caddy và chưa có hostname route nào được áp dụng.
+
+## UPDATE P1c — fail-closed review
+
+- `ss` chỉ suy ra `ports_free` từ lệnh thành công với output rỗng; mọi dòng listener không parse chắc chắn cho `unknown`.
+- `ExecStart` được kiểm tra theo executable tuyệt đối, argv executable và đúng một `--config` với config path tuyệt đối; active service không có listener là `unknown`.
+- UFW IPv4/IPv6 được báo tách biệt. Rule Anywhere (v6) không suy ra IPv4; allow/deny chồng nhau và định dạng không nhận diện được giữ `unknown`.
+- Live survey chỉ đọc trên bản profile cô lập với SSH fingerprint ghim: 0 listener, service absent, ownership `ports_free`, UFW `unknown` (không phân biệt được lỗi đọc với format lạ từ kết quả công khai). Đây là quan sát host hiện tại, không phải bằng chứng DNS/cloud firewall/HTTPS.
+- Gates Node 22.23.3: focused tests 31/31 PASS; typecheck PASS; build PASS; `git diff --check` PASS.

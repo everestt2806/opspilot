@@ -114,6 +114,15 @@ describe('preflightSharedIngress', () => {
     })
   })
 
+  it('fails closed on any nonempty listener output that is not fully parseable', async () => {
+    const { ssh } = fakeSsh({
+      listeners: { code: 0, stdout: 'unexpected ss output for port 80', stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ownership: 'unknown', reason_code: 'INGRESS_OWNER_UNKNOWN', local_assessment: 'unknown'
+    })
+  })
+
   it('reports free ports independently from a missing unit and parses inactive UFW', async () => {
     const { ssh } = fakeSsh({
       listeners: { code: 0, stdout: '', stderr: '' },
@@ -128,6 +137,26 @@ describe('preflightSharedIngress', () => {
     })
   })
 
+  it('does not call ports free when an active service has no listener', async () => {
+    const { ssh } = fakeSsh({ listeners: { code: 0, stdout: '', stderr: '' } })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ownership: 'unknown', reason_code: 'INGRESS_OWNER_UNKNOWN'
+    })
+  })
+
+  it.each([
+    '{ path=/opt/usr/bin/caddy ; argv[]=/opt/usr/bin/caddy run --config /etc/opspilot/caddy/Caddyfile ; }',
+    '{ path=/usr/bin/caddy ; argv[]=/usr/bin/caddy run --config /etc/OtherCaddyfile ; }',
+    '{ path=/usr/bin/caddy-wrapper ; argv[]=/usr/bin/caddy-wrapper run --config /etc/opspilot/caddy/Caddyfile ; }'
+  ])('does not verify a similar but different ExecStart: %s', async (execStart) => {
+    const { ssh } = fakeSsh({
+      service: { code: 0, stdout: verifiedService.replace(verifiedService.split('\n')[3], `ExecStart=${execStart}`), stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ownership: 'unknown', service: 'unknown', reason_code: 'INGRESS_OWNER_UNKNOWN'
+    })
+  })
+
   it('reports active UFW rules that omit a port without changing firewall state', async () => {
     const { ssh } = fakeSsh({
       ufw: {
@@ -137,9 +166,12 @@ describe('preflightSharedIngress', () => {
       }
     })
     expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
-      ufw: { state: 'active', inbound_80: 'allowed', inbound_443: 'blocked' },
+      ufw: {
+        state: 'active', inbound_80: 'blocked', inbound_80_ipv4: 'allowed', inbound_80_ipv6: 'blocked',
+        inbound_443: 'blocked'
+      },
       local_assessment: 'blocked',
-      reason_code: 'FIREWALL_443_BLOCKED'
+      reason_code: 'FIREWALL_80_BLOCKED'
     })
   })
 
@@ -152,9 +184,37 @@ describe('preflightSharedIngress', () => {
       }
     })
     expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
-      ufw: { inbound_80: 'blocked', inbound_443: 'allowed' },
+      ufw: { inbound_80: 'unknown', inbound_80_ipv4: 'unknown', inbound_80_ipv6: 'blocked', inbound_443: 'blocked' },
       local_assessment: 'blocked',
-      reason_code: 'FIREWALL_80_BLOCKED'
+      reason_code: 'FIREWALL_443_BLOCKED'
+    })
+  })
+
+  it('keeps an IPv6-only Anywhere rule separate from IPv4', async () => {
+    const { ssh } = fakeSsh({
+      ufw: { code: 0, stdout: 'Status: active\nDefault: deny (incoming), allow (outgoing), disabled (routed)\n80/tcp ALLOW IN Anywhere (v6)', stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ufw: { inbound_80_ipv4: 'blocked', inbound_80_ipv6: 'allowed', inbound_80: 'blocked' }
+    })
+  })
+
+  it('does not treat a source-limited allow as an Anywhere allow', async () => {
+    const { ssh } = fakeSsh({
+      ufw: { code: 0, stdout: 'Status: active\nDefault: deny (incoming), allow (outgoing), disabled (routed)\n80/tcp ALLOW IN 10.0.0.0/8', stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ufw: { inbound_80_ipv4: 'blocked', inbound_80_ipv6: 'blocked' }
+    })
+  })
+
+  it('marks unfamiliar UFW rule output unknown', async () => {
+    const { ssh } = fakeSsh({
+      ufw: { code: 0, stdout: 'Status: active\nDefault: deny (incoming), allow (outgoing), disabled (routed)\n80/tcp MAYBE IN Anywhere', stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ufw: { inbound_80: 'unknown', inbound_80_ipv4: 'unknown', inbound_80_ipv6: 'unknown' },
+      local_assessment: 'unknown'
     })
   })
 

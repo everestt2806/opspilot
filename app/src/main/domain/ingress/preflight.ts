@@ -3,7 +3,7 @@ import type { DomainReasonCode } from '@shared/ipc'
 import type { SshManager } from '../../ssh/manager'
 
 export const INGRESS_READ_COMMANDS = {
-  listeners: "sudo -n ss -H -ltnp 'sport = :80 or sport = :443'",
+  listeners: "sudo -n ss -H -ltnpn 'sport = :80 or sport = :443'",
   service:
     'systemctl show opspilot-caddy.service --property=LoadState,ActiveState,FragmentPath,ExecStart,MainPID --no-pager',
   marker: 'sudo -n cat /etc/opspilot/caddy/OWNER',
@@ -38,6 +38,10 @@ export interface IngressPreflightResult {
     state: IngressFirewallState
     inbound_80: IngressPortFirewallState
     inbound_443: IngressPortFirewallState
+    inbound_80_ipv4: IngressPortFirewallState
+    inbound_80_ipv6: IngressPortFirewallState
+    inbound_443_ipv4: IngressPortFirewallState
+    inbound_443_ipv6: IngressPortFirewallState
   }
   route_activation: 'not_evaluated'
 }
@@ -89,14 +93,22 @@ export async function preflightSharedIngress(
     serviceFacts?.loaded &&
       serviceFacts.active &&
       serviceFacts.fragmentPath === '/etc/systemd/system/opspilot-caddy.service' &&
-      serviceFacts.execStart.includes('/usr/bin/caddy') &&
-      serviceFacts.execStart.includes('/etc/opspilot/caddy/Caddyfile') &&
+      serviceFacts.execPath === '/usr/bin/caddy' &&
+      serviceFacts.argv[0] === '/usr/bin/caddy' &&
+      serviceFacts.argv.filter((argument) => argument === '--config').length === 1 &&
+      serviceFacts.argv.includes('--config') &&
+      serviceFacts.argv[serviceFacts.argv.indexOf('--config') + 1] === '/etc/opspilot/caddy/Caddyfile' &&
       serviceFacts.mainPid !== null &&
       markerStatus === 'valid' &&
       configReadable === true &&
       version !== null
   )
-  const ownerStatus = classifyIngressOwnership(listeners, serviceFacts?.mainPid ?? null, serviceVerified)
+  const ownerStatus = classifyIngressOwnership(
+    listeners,
+    serviceFacts?.mainPid ?? null,
+    serviceFacts?.active ?? false,
+    serviceVerified
+  )
   const firewall = parseUfw(successfulOutput(outputs.get('ufw')))
   const firewallBlocked = firewall.inbound_80 === 'blocked' || firewall.inbound_443 === 'blocked'
   const firewallKnown = firewall.state === 'inactive' ||
@@ -129,25 +141,30 @@ export async function preflightSharedIngress(
   }
 }
 
-export function parseIngressListeners(output: string): IngressListener[] {
+export function parseIngressListeners(output: string): IngressListener[] | null {
+  if (output === '') return []
   const listeners: IngressListener[] = []
-  for (const line of output.split(/\r?\n/)) {
-    const fields = line.trim().split(/\s+/)
-    if (fields[0] !== 'LISTEN') continue
-    const localAddress = fields[3]
-    const portMatch = localAddress?.match(/:(80|443)$/)
-    const port = Number(portMatch?.[1])
-    if (port !== 80 && port !== 443) continue
-    const processMatch = line.match(/users:\(\("([^"(),]+)"(?:,pid=(\d+))?/)
+  const lines = output.split(/\r?\n/)
+  if (lines.at(-1) === '') lines.pop()
+  for (const line of lines) {
+    const match = line.match(/^LISTEN\s+\d+\s+\d+\s+(\S+)\s+(\S+)(?:\s+users:\(\("([^"(),]+)",pid=(\d+),fd=\d+\)\))?$/)
+    if (!match) return null
+    const localAddress = match[1]
+    const portMatch = localAddress.match(/:(\d+)$/)
+    if (!portMatch) return null
+    const port = Number(portMatch[1])
+    if (port !== 80 && port !== 443) return null
+    const processName = match[3]
     listeners.push({
-      port,
-      family: localAddress?.startsWith('[') || localAddress?.startsWith('::')
+      port: port as 80 | 443,
+      family: localAddress.startsWith('[') || localAddress.startsWith('::')
         ? 'ipv6'
-        : localAddress?.includes('.') ? 'ipv4' : 'unknown',
-      process: processMatch ? processMatch[1] === 'caddy' ? 'caddy' : 'other' : 'unknown',
-      pid: processMatch?.[2] ? Number(processMatch[2]) : null
+        : localAddress.includes('.') || localAddress.startsWith('*:') ? 'ipv4' : 'unknown',
+      process: processName ? processName === 'caddy' ? 'caddy' : 'other' : 'unknown',
+      pid: match[4] ? Number(match[4]) : null
     })
   }
+  if (listeners.some((listener) => listener.family === 'unknown')) return null
   return listeners
 }
 
@@ -160,7 +177,8 @@ function parseServiceFacts(output: string): {
   loaded: boolean
   active: boolean
   fragmentPath: string | null
-  execStart: string
+  execPath: string | null
+  argv: string[]
   mainPid: number | null
 } {
   const properties = new Map<string, string>()
@@ -177,18 +195,26 @@ function parseServiceFacts(output: string): {
     loaded: properties.get('LoadState') === 'loaded',
     active: properties.get('ActiveState') === 'active',
     fragmentPath: properties.get('FragmentPath') ?? null,
-    execStart: properties.get('ExecStart') ?? '',
+    execPath: properties.get('ExecStart')?.match(/(?:^|\{\s*)path=([^\s;]+)(?:\s*;|\s*\})/)?.[1] ?? null,
+    argv: parseExecArgv(properties.get('ExecStart') ?? ''),
     mainPid
   }
+}
+
+function parseExecArgv(execStart: string): string[] {
+  const value = execStart.match(/(?:^|;\s*)argv\[\]=(.+?)(?:\s*;\s*(?:ignore_errors|start_time|stop_time|pid)|\s*\}\s*$)/)?.[1]
+  if (!value || /["'\\]/.test(value)) return []
+  return value.trim().split(/\s+/)
 }
 
 function classifyIngressOwnership(
   listeners: IngressListener[] | null,
   serviceMainPid: number | null,
+  serviceActive: boolean,
   serviceVerified: boolean
 ): IngressOwnership {
   if (listeners === null) return 'unknown'
-  if (listeners.length === 0) return 'ports_free'
+  if (listeners.length === 0) return serviceActive ? 'unknown' : 'ports_free'
   if (listeners.some((listener) => listener.process === 'other')) return 'conflict'
   if (
     serviceVerified &&
@@ -202,31 +228,80 @@ function classifyIngressOwnership(
 }
 
 function parseUfw(output: string | null): IngressPreflightResult['ufw'] {
+  const unknown = {
+    state: 'unknown' as const,
+    inbound_80: 'unknown' as const,
+    inbound_443: 'unknown' as const,
+    inbound_80_ipv4: 'unknown' as const,
+    inbound_80_ipv6: 'unknown' as const,
+    inbound_443_ipv4: 'unknown' as const,
+    inbound_443_ipv6: 'unknown' as const
+  }
   if (output === null) {
-    return { state: 'unknown', inbound_80: 'unknown', inbound_443: 'unknown' }
+    return unknown
   }
-  const status = output.match(/^Status:\s*(active|inactive)\s*$/im)?.[1]?.toLowerCase()
+  let status: 'active' | 'inactive' | null = null
+  let defaultInbound: 'allow' | 'deny' | 'reject' | null = null
+  const rules: Array<{ port: string; action: string; family: 'ipv4' | 'ipv6'; broad: boolean }> = []
+  let afterDefault = false
+  for (const raw of output.split(/\r?\n/)) {
+    const line = raw.trim()
+    if (!line) continue
+    const statusMatch = line.match(/^Status:\s*(active|inactive)$/i)
+    if (statusMatch) {
+      if (status !== null) return unknown
+      status = statusMatch[1].toLowerCase() as 'active' | 'inactive'
+      continue
+    }
+    if (/^Logging:\s+(?:on(?:\s+\([^)]+\))?|off)$/i.test(line)) continue
+    const defaultMatch = line.match(/^Default:\s*(allow|deny|reject)\s+\(incoming\),\s*(allow|deny|reject)\s+\(outgoing\),\s*(allow|deny|reject|disabled)\s+\(routed\)$/i)
+    if (defaultMatch) {
+      if (defaultInbound !== null) return unknown
+      defaultInbound = defaultMatch[1].toLowerCase() as 'allow' | 'deny' | 'reject'
+      afterDefault = true
+      continue
+    }
+    if (/^New profiles:\s*.*$/i.test(line) || /^To\s+Action\s+From$/i.test(line)) continue
+    if (!/^[^\s]+\s+(ALLOW|DENY|REJECT)\s+IN\s+[^\s]+(?:\s+\(v6\))?$/i.test(line)) return unknown
+    if (!afterDefault) return unknown
+    const [, port, action, from] = line.match(/^([^\s]+)\s+(ALLOW|DENY|REJECT)\s+IN\s+([^\s]+)(?:\s+\(v6\))?$/i) ?? []
+    const family: 'ipv4' | 'ipv6' = /\(v6\)$/i.test(line) ? 'ipv6' : 'ipv4'
+    rules.push({ port, action: action.toUpperCase(), family, broad: from === 'Anywhere' })
+  }
   if (status === 'inactive') {
-    return { state: 'inactive', inbound_80: 'not_applicable', inbound_443: 'not_applicable' }
+    return {
+      state: 'inactive', inbound_80: 'not_applicable', inbound_443: 'not_applicable',
+      inbound_80_ipv4: 'not_applicable', inbound_80_ipv6: 'not_applicable',
+      inbound_443_ipv4: 'not_applicable', inbound_443_ipv6: 'not_applicable'
+    }
   }
-  if (status !== 'active') {
-    return { state: 'unknown', inbound_80: 'unknown', inbound_443: 'unknown' }
-  }
-  const defaultInbound = output.match(/^Default:\s*(allow|deny|reject)\s+\(incoming\)/im)?.[1]?.toLowerCase()
-  const ruleState = (port: 80 | 443): IngressPortFirewallState => {
-    const lines = output.split(/\r?\n/)
-    const broadRule = (action: 'ALLOW' | 'DENY'): boolean => lines.some((line) => {
-      const rule = line.trim()
-      return new RegExp(`^${port}(?:/tcp)?\\s+${action}\\s+IN\\s+Anywhere(?:\\s|$)`, 'i').test(rule)
-    })
-    if (broadRule('DENY')) return 'blocked'
-    if (broadRule('ALLOW') || defaultInbound === 'allow') return 'allowed'
+  if (status !== 'active' || !defaultInbound) return unknown
+  const familyState = (port: 80 | 443, family: 'ipv4' | 'ipv6'): IngressPortFirewallState => {
+    const matchingRules = rules.filter((rule) =>
+      rule.family === family && (rule.port === `${port}/tcp` || rule.port === `${port}`)
+    )
+    const actions = new Set(matchingRules.map((entry) => entry.action))
+    if (actions.size > 1 || actions.has('REJECT')) return 'unknown'
+    const broadActions = new Set(matchingRules.filter((rule) => rule.broad).map((rule) => rule.action))
+    if (broadActions.size > 1) return 'unknown'
+    if (broadActions.has('ALLOW')) return 'allowed'
+    if (broadActions.has('DENY')) return 'blocked'
+    if (defaultInbound === 'allow') return 'allowed'
     if (defaultInbound === 'deny' || defaultInbound === 'reject') return 'blocked'
     return 'unknown'
   }
+  const combine = (a: IngressPortFirewallState, b: IngressPortFirewallState): IngressPortFirewallState =>
+    a === 'unknown' || b === 'unknown'
+      ? 'unknown'
+      : a === b ? a : a === 'blocked' || b === 'blocked' ? 'blocked' : 'unknown'
+  const p80v4 = familyState(80, 'ipv4')
+  const p80v6 = familyState(80, 'ipv6')
+  const p443v4 = familyState(443, 'ipv4')
+  const p443v6 = familyState(443, 'ipv6')
   return {
     state: 'active',
-    inbound_80: ruleState(80),
-    inbound_443: ruleState(443)
+    inbound_80: combine(p80v4, p80v6), inbound_443: combine(p443v4, p443v6),
+    inbound_80_ipv4: p80v4, inbound_80_ipv6: p80v6,
+    inbound_443_ipv4: p443v4, inbound_443_ipv6: p443v6
   }
 }
