@@ -34,3 +34,4 @@
 
 - Board giữ trạng thái **CHỜ REVIEW**.
 - Không push, PR, merge hoặc thao tác VPS. Giữ nguyên các file untracked có sẵn ngoài file checkpoint.
+- Mã commit cục bộ cho phần triển khai: `1a9e60d`.
