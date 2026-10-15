@@ -122,4 +122,4 @@ WantedBy=multi-user.target
 - Đối chiếu P1a–P1d, `CLAUDE.md`, `DECISIONS.md` và tài liệu Caddy/Let's Encrypt được liệt kê ở trên; các invariant ownership fail-closed, hai-resolver DNS, external probe và `route_status='active'` chỉ sau bằng chứng production được giữ nhất quán.
 - Gate tài liệu/diff: `git diff --check` PASS. Không chạy test/build vì checkpoint chỉ thay đổi tài liệu.
 - Caddy install/service, ACME staging, external HTTPS probe và thao tác VPS: NOT_RUN theo phạm vi checkpoint; không có VPS nào được sửa.
-- Commit local: sẽ được ghi vào board/task note sau khi commit.
+- Commit local của thiết kế: `e1c0d437643eb3c1d82c9253887c053f3ed9d7bc`.
