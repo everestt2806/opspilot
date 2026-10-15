@@ -69,6 +69,6 @@ Không chạy live gate bằng production domain/VPS; mỗi gate phải dùng ho
 - `DeployPipeline.publishExposure()` giữ deployment healthy khi publish lỗi. Đây là invariant cần bảo toàn.
 - Git manual deploy/redeploy đã qua live gate, xem [G2](tk-s7-g2-live-git-vps-smoke.md), [G2b](tk-s7-g2b-local-template-vps-smoke.md) và [bằng chứng demo](../demo-14-10/evidence.md). Push-to-deploy và HTTPS vẫn chưa được chứng minh.
 
-## Quyết định còn khóa trước P1b
+## Các câu hỏi mở sau P1a
 
-P1a chọn Caddy và định nghĩa fail-closed ownership. Trước runtime, review phải duyệt: systemd host-native package/install path theo distro hỗ trợ; policy cập nhật Caddy binary; cách đưa firewall 80/443 vào cloud provider adapter; external probe vantage/timeout; retention/backup Caddy certificate storage; và semantics schema cho domain status/reason. Không có quyết định nào ở đây cho phép thao tác VPS trong P1a.
+Install/service ownership, binary version, systemd unit, storage/admin permissions, atomic apply/rollback, lock, ACME staging, external probe và active invariant được chốt trong [TK-S7 P1e](tk-s7-p1e-caddy-operations-design.md). Cloud firewall vẫn chưa có adapter; P1e không bắt đầu ACME khi chưa có bằng chứng inbound từ provider/operational check. P1a/P1e ở trạng thái thiết kế không cho phép thao tác VPS.
