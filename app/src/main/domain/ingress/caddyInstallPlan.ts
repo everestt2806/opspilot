@@ -2,8 +2,11 @@ import { EXPECTED_OPSPILOT_UNIT, type IngressPreflightResult } from './preflight
 import { buildSharedIngressConfig } from './routeBuilder'
 import {
   CADDY_STABLE_REPOSITORY,
+  CADDY_APT_EVIDENCE_MAX_AGE_MS,
   isVerifiedCaddyAptEvidence,
-  type CaddyAptEvidence
+  type CaddyAptTargetBinding,
+  type CaddyAptEvidence,
+  type CaddyAptEvidenceErrorCode
 } from './caddyAptEvidence'
 
 export { CADDY_STABLE_REPOSITORY } from './caddyAptEvidence'
@@ -14,6 +17,7 @@ export interface CaddyInstallHost {
   distroId: string
   distroVersion: string
   architecture: string
+  target: CaddyAptTargetBinding
 }
 
 export type CaddyInstallPlanErrorCode =
@@ -21,6 +25,9 @@ export type CaddyInstallPlanErrorCode =
   | 'INSTALL_PLATFORM_UNSUPPORTED'
   | 'APT_SOURCE_UNTRUSTED'
   | 'APT_METADATA_INVALID'
+  | 'APT_SSH_HOST_CHANGED'
+  | 'APT_EVIDENCE_STALE'
+  | CaddyAptEvidenceErrorCode
 
 export type CaddyInstallPlanResult =
   | { status: 'ready'; plan: CaddyInstallPlan }
@@ -32,6 +39,7 @@ export interface CaddyInstallPlan {
   architecture: 'amd64' | 'arm64'
   version: string
   packageSha256: string
+  target: CaddyAptTargetBinding
   packageFilename: string
   repository: typeof CADDY_STABLE_REPOSITORY
   verificationSteps: string[]
@@ -83,6 +91,25 @@ export function prepareCaddyInstallPlan(
     return blocked(
       'APT_SOURCE_UNTRUSTED',
       'APT evidence must come from the Caddy repository collector, not caller-provided status flags.'
+    )
+  }
+
+  if (apt.evidenceSource !== 'pinned-ssh' || apt.target === null) {
+    return blocked(
+      'APT_SOURCE_UNTRUSTED',
+      'Only APT evidence collected and verified over the pinned SSH adapter can be used for a VPS install plan.'
+    )
+  }
+  if (!sameTarget(host.target, apt.target)) {
+    return blocked(
+      'APT_SSH_HOST_CHANGED',
+      'APT evidence belongs to a different VPS or pinned SSH host.'
+    )
+  }
+  if (Date.now() - apt.issuedAt < 0 || Date.now() - apt.issuedAt > CADDY_APT_EVIDENCE_MAX_AGE_MS) {
+    return blocked(
+      'APT_EVIDENCE_STALE',
+      'APT evidence is stale; refresh SSH evidence and preflight before preparing an install plan.'
     )
   }
 
@@ -180,6 +207,7 @@ export function prepareCaddyInstallPlan(
       architecture: supportedArchitecture,
       version: apt.version,
       packageSha256: apt.sha256.toLowerCase(),
+      target: apt.target,
       packageFilename,
       repository: CADDY_STABLE_REPOSITORY,
       verificationSteps: [
@@ -301,6 +329,15 @@ export function prepareCaddyInstallPlan(
       }
     }
   }
+}
+
+function sameTarget(left: CaddyAptTargetBinding, right: CaddyAptTargetBinding): boolean {
+  return (
+    left.vpsId === right.vpsId &&
+    left.host === right.host &&
+    left.port === right.port &&
+    left.hostFingerprint === right.hostFingerprint
+  )
 }
 
 export function buildCaddyInstallationManifest(

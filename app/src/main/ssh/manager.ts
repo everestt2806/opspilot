@@ -37,12 +37,40 @@ export interface ExecOptions {
   logCommand?: boolean
   /** false cho lệnh có side effect: không chạy lại lệnh sau khi connection rơi. */
   retryOnReconnect?: boolean
+  /** Hard byte limit for captured stdout. Exceeding it destroys the command channel. */
+  maxStdoutBytes?: number
+  /** Hard byte limit for captured stderr. Exceeding it destroys the command channel. */
+  maxStderrBytes?: number
 }
 
 export interface ExecResult {
   code: number
   stdout: string
   stderr: string
+}
+
+export interface SshHostIdentity {
+  vpsId: number
+  host: string
+  port: number
+  hostFingerprint: string
+}
+
+export class SshOutputLimitError extends Error {
+  constructor(
+    readonly stream: 'stdout' | 'stderr',
+    readonly maxBytes: number
+  ) {
+    super(`SSH ${stream} exceeded the ${maxBytes}-byte limit.`)
+    this.name = 'SshOutputLimitError'
+  }
+}
+
+export class SshHostIdentityChangedError extends Error {
+  constructor() {
+    super('Resolved SSH host identity changed during command execution.')
+    this.name = 'SshHostIdentityChangedError'
+  }
 }
 
 export interface UploadOptions {
@@ -148,7 +176,10 @@ export class SshManager extends EventEmitter {
     let entry = await this.ensureConnected(vpsId)
     try {
       const remainingMs = Math.max(1, deadline - Date.now())
-      const channel = await this.openExecChannel(entry, command, { ...options, timeoutMs: remainingMs })
+      const channel = await this.openExecChannel(entry, command, {
+        ...options,
+        timeoutMs: remainingMs
+      })
       return await this.awaitChannelResult(channel, {
         ...options,
         timeoutMs: Math.max(1, deadline - Date.now())
@@ -158,13 +189,60 @@ export class SshManager extends EventEmitter {
       if (shouldRetryCommandAfterDisconnect(code, entry.ready, options.retryOnReconnect)) {
         entry = await this.ensureConnected(vpsId, true)
         const remainingMs = Math.max(1, deadline - Date.now())
-        const channel = await this.openExecChannel(entry, command, { ...options, timeoutMs: remainingMs })
+        const channel = await this.openExecChannel(entry, command, {
+          ...options,
+          timeoutMs: remainingMs
+        })
         return await this.awaitChannelResult(channel, {
           ...options,
           timeoutMs: Math.max(1, deadline - Date.now())
         })
       }
       throw error
+    }
+  }
+
+  /** Execute once on the fingerprint-verified connection and return its resolved endpoint. */
+  async execWithHostIdentity(
+    vpsId: number,
+    command: string,
+    options: ExecOptions = {}
+  ): Promise<{ identity: SshHostIdentity; result: ExecResult }> {
+    const deadline = Date.now() + (options.timeoutMs ?? EXEC_DEFAULT_TIMEOUT_MS)
+    const entry = await this.ensureConnected(vpsId)
+    const identity: SshHostIdentity = {
+      vpsId,
+      host: entry.info.host,
+      port: entry.info.port,
+      hostFingerprint: entry.info.hostFingerprint!
+    }
+    const remainingMs = Math.max(1, deadline - Date.now())
+    const channel = await this.openExecChannel(entry, command, {
+      ...options,
+      timeoutMs: remainingMs
+    })
+    const result = await this.awaitChannelResult(channel, {
+      ...options,
+      timeoutMs: Math.max(1, deadline - Date.now())
+    })
+    const current = await this.resolver(vpsId)
+    if (
+      current.host !== identity.host ||
+      current.port !== identity.port ||
+      current.hostFingerprint !== identity.hostFingerprint
+    ) {
+      throw new SshHostIdentityChangedError()
+    }
+    return { identity, result }
+  }
+
+  async getHostIdentity(vpsId: number): Promise<SshHostIdentity> {
+    const entry = await this.ensureConnected(vpsId)
+    return {
+      vpsId,
+      host: entry.info.host,
+      port: entry.info.port,
+      hostFingerprint: entry.info.hostFingerprint!
     }
   }
 
@@ -489,18 +567,23 @@ export class SshManager extends EventEmitter {
       }
       const onError = (error: Error): void => {
         if (!settled) {
-          fail(hostKeyMismatch
-            ? new AppError('VALIDATION', 'Fingerprint SSH không khớp với fingerprint đã lưu. Kết nối bị từ chối trước xác thực.', { cause: new Error('SSH host fingerprint mismatch') })
-            : toSshAppError(error))
+          fail(
+            hostKeyMismatch
+              ? new AppError(
+                  'VALIDATION',
+                  'Fingerprint SSH không khớp với fingerprint đã lưu. Kết nối bị từ chối trước xác thực.',
+                  { cause: new Error('SSH host fingerprint mismatch') }
+                )
+              : toSshAppError(error)
+          )
         }
       }
       const timer = setTimeout(
         () => fail(new AppError('SSH_TIMEOUT', 'Bắt tay SSH quá thời gian cho phép.')),
         CONNECT_TIMEOUT_MS
       )
-      const authOptions = info.authType === 'key'
-        ? { privateKey: info.secret }
-        : { password: info.secret }
+      const authOptions =
+        info.authType === 'key' ? { privateKey: info.secret } : { password: info.secret }
 
       entry.client = client
       client.on('ready', onReady)
@@ -578,13 +661,23 @@ export class SshManager extends EventEmitter {
         client.removeListener('error', onError)
         callback()
       }
-      const onClose = (): void => finish(() => reject(
-        new AppError('SSH_HOST_UNREACHABLE', 'Kết nối SSH đã đóng trước khi mở command channel.')
-      ))
+      const onClose = (): void =>
+        finish(() =>
+          reject(
+            new AppError(
+              'SSH_HOST_UNREACHABLE',
+              'Kết nối SSH đã đóng trước khi mở command channel.'
+            )
+          )
+        )
       const onError = (error: Error): void => finish(() => reject(toSshAppError(error)))
-      const timer = setTimeout(() => finish(() => reject(
-        new AppError('SSH_TIMEOUT', 'Mở command channel SSH quá thời gian cho phép.')
-      )), options.timeoutMs ?? EXEC_DEFAULT_TIMEOUT_MS)
+      const timer = setTimeout(
+        () =>
+          finish(() =>
+            reject(new AppError('SSH_TIMEOUT', 'Mở command channel SSH quá thời gian cho phép.'))
+          ),
+        options.timeoutMs ?? EXEC_DEFAULT_TIMEOUT_MS
+      )
       client.once('close', onClose)
       client.once('error', onError)
 
@@ -621,8 +714,9 @@ export class SshManager extends EventEmitter {
       let exitCode = -1
       let stdout = ''
       let stderr = ''
+      let stdoutBytes = 0
+      let stderrBytes = 0
       let settled = false
-      let timer: NodeJS.Timeout
       const abort = options.signal
       const cleanup = (): void => {
         clearTimeout(timer)
@@ -638,16 +732,33 @@ export class SshManager extends EventEmitter {
         cleanup()
         callback()
       }
-      const abortListener = (): void => settle(() => {
-        channel.destroy()
-        reject(new SshAbortedError())
-      })
+      const abortListener = (): void =>
+        settle(() => {
+          channel.destroy()
+          reject(new SshAbortedError())
+        })
       const onData = (chunk: Buffer): void => {
+        stdoutBytes += chunk.length
+        if (options.maxStdoutBytes !== undefined && stdoutBytes > options.maxStdoutBytes) {
+          settle(() => {
+            channel.destroy()
+            reject(new SshOutputLimitError('stdout', options.maxStdoutBytes!))
+          })
+          return
+        }
         const text = chunk.toString('utf8')
         if (captureOutput) stdout += text
         options.onStdout?.(text)
       }
       const onStderr = (chunk: Buffer): void => {
+        stderrBytes += chunk.length
+        if (options.maxStderrBytes !== undefined && stderrBytes > options.maxStderrBytes) {
+          settle(() => {
+            channel.destroy()
+            reject(new SshOutputLimitError('stderr', options.maxStderrBytes!))
+          })
+          return
+        }
         const text = chunk.toString('utf8')
         if (captureOutput) stderr += text
         options.onStderr?.(text)
@@ -656,7 +767,9 @@ export class SshManager extends EventEmitter {
       const onClose = (code: number | null): void => {
         if (code !== null) exitCode = code
         if (channel.destroyed && exitCode === -1) {
-          settle(() => reject(new AppError('SSH_HOST_UNREACHABLE', 'Kênh lệnh SSH đã đóng bất ngờ.')))
+          settle(() =>
+            reject(new AppError('SSH_HOST_UNREACHABLE', 'Kênh lệnh SSH đã đóng bất ngờ.'))
+          )
         } else {
           settle(() => resolve({ code: exitCode, stdout, stderr }))
         }
@@ -672,13 +785,16 @@ export class SshManager extends EventEmitter {
       channel.stderr.on('data', onStderr)
       channel.on('error', onError)
       channel.on('close', onClose)
-      timer = setTimeout(() => settle(() => {
-        channel.destroy()
-        reject(new AppError('SSH_TIMEOUT', 'Lệnh SSH chạy quá thời gian cho phép.'))
-      }), options.timeoutMs ?? EXEC_DEFAULT_TIMEOUT_MS)
+      const timer = setTimeout(
+        () =>
+          settle(() => {
+            channel.destroy()
+            reject(new AppError('SSH_TIMEOUT', 'Lệnh SSH chạy quá thời gian cho phép.'))
+          }),
+        options.timeoutMs ?? EXEC_DEFAULT_TIMEOUT_MS
+      )
     })
   }
-
 }
 
 function toSshAppError(error: unknown): AppError {

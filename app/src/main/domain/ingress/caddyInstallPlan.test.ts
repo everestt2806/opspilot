@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -8,23 +8,27 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { IngressPreflightResult } from './preflight'
 import { EXPECTED_OPSPILOT_UNIT } from './preflight'
 import {
-  collectCaddyAptEvidence,
+  collectCaddyAptEvidenceOverSsh,
   CADDY_STABLE_REPOSITORY,
   CADDY_STABLE_SIGNER_FINGERPRINT,
   type CaddyAptEvidence
 } from './caddyAptEvidence'
+import type { SshManager } from '../../ssh/manager'
 import {
   buildCaddyInstallationManifest,
   prepareCaddyInstallPlan,
   type CaddyInstallHost
 } from './caddyInstallPlan'
 
-const gpgvOutput = vi.hoisted(() => ({ output: '' }))
-vi.mock('node:child_process', () => ({ execFileSync: vi.fn(() => gpgvOutput.output) }))
-
 const packageHash = 'a22b914ffd1958da42bc7ab13b7b62c6100634e0798ab594891d2d61d53ba749'
 const snapshotRoots: string[] = []
 let aptEvidence: CaddyAptEvidence
+const TARGET = {
+  vpsId: 17,
+  host: 'vps.example.test',
+  port: 2222,
+  hostFingerprint: `SHA256:${'A'.repeat(43)}`
+}
 
 function cleanIngress(overrides: Partial<IngressPreflightResult> = {}): IngressPreflightResult {
   return {
@@ -59,11 +63,12 @@ function cleanHost(overrides: Partial<CaddyInstallHost> = {}): CaddyInstallHost 
     distroId: 'debian',
     distroVersion: '12',
     architecture: 'x86_64',
+    target: TARGET,
     ...overrides
   }
 }
 
-function verifiedEvidence(architecture: 'amd64' | 'arm64'): CaddyAptEvidence {
+async function verifiedEvidence(architecture: 'amd64' | 'arm64'): Promise<CaddyAptEvidence> {
   const root = mkdtempSync(path.join(tmpdir(), 'opspilot-caddy-plan-'))
   snapshotRoots.push(root)
   const keyringPath = path.join(root, 'caddy-keyring.gpg')
@@ -105,22 +110,41 @@ function verifiedEvidence(architecture: 'amd64' | 'arm64'): CaddyAptEvidence {
     `-----BEGIN PGP SIGNED MESSAGE-----\nHash: SHA256\n\n${signedBody}-----BEGIN PGP SIGNATURE-----\nmock\n`
   )
   writeFileSync(packagesGzipPath, packagesGzip)
-  gpgvOutput.output = `[GNUPG:] VALIDSIG ${CADDY_STABLE_SIGNER_FINGERPRINT} 20261015 0 0 0 0 0 0 0 0 0\n`
-
-  const result = collectCaddyAptEvidence({
-    sourceListPath,
-    keyringPath,
-    inReleasePath,
-    packagesGzipPath,
-    architecture
-  })
+  const sourceLine = `deb [signed-by=${CADDY_STABLE_REPOSITORY.signedBy}] ${CADDY_STABLE_REPOSITORY.uri} any-version main`
+  const ssh = {
+    execWithHostIdentity: vi.fn(async (_vpsId: number, command: string) => {
+      const requestId = command.match(/-- ([a-f0-9]{32})$/)?.[1]
+      if (!requestId) throw new Error('missing request id')
+      return {
+        identity: TARGET,
+        result: {
+          code: 0,
+          stderr: '',
+          stdout: JSON.stringify({
+            schema: 'opspilot-caddy-apt-v1',
+            requestId,
+            status: 'snapshot',
+            architecture,
+            sourceListB64: Buffer.from(sourceLine).toString('base64'),
+            keyringPath: CADDY_STABLE_REPOSITORY.signedBy,
+            inReleaseB64: readFileSync(inReleasePath).toString('base64'),
+            packagesGzipB64: readFileSync(packagesGzipPath).toString('base64'),
+            signatureStatusB64: Buffer.from(
+              `[GNUPG:] VALIDSIG ${CADDY_STABLE_SIGNER_FINGERPRINT} 20261015 0 0 0 0 0 0 0 0 0\n`
+            ).toString('base64')
+          })
+        }
+      }
+    })
+  }
+  const result = await collectCaddyAptEvidenceOverSsh(ssh as unknown as SshManager, TARGET)
   if (result.status !== 'verified') throw new Error(result.reason)
   return result.evidence
 }
 
 describe('prepareCaddyInstallPlan', () => {
-  beforeAll(() => {
-    aptEvidence = verifiedEvidence('amd64')
+  beforeAll(async () => {
+    aptEvidence = await verifiedEvidence('amd64')
   })
 
   afterAll(() => {
@@ -199,10 +223,38 @@ describe('prepareCaddyInstallPlan', () => {
     ).toMatchObject({ status: 'blocked', code: 'APT_SOURCE_UNTRUSTED' })
   })
 
-  it('maps Ubuntu arm64 evidence selected by the collector', () => {
+  it('rejects pinned SSH evidence when the target VPS or fingerprint differs', () => {
+    expect(
+      prepareCaddyInstallPlan(
+        cleanHost({ target: { ...TARGET, vpsId: TARGET.vpsId + 1 } }),
+        aptEvidence
+      )
+    ).toMatchObject({ status: 'blocked', code: 'APT_SSH_HOST_CHANGED' })
+    expect(
+      prepareCaddyInstallPlan(
+        cleanHost({ target: { ...TARGET, hostFingerprint: `SHA256:${'B'.repeat(43)}` } }),
+        aptEvidence
+      )
+    ).toMatchObject({ status: 'blocked', code: 'APT_SSH_HOST_CHANGED' })
+  })
+
+  it('rejects pinned SSH evidence after the five minute freshness window', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(aptEvidence.issuedAt + 5 * 60_000 + 1))
+    try {
+      expect(prepareCaddyInstallPlan(cleanHost(), aptEvidence)).toMatchObject({
+        status: 'blocked',
+        code: 'APT_EVIDENCE_STALE'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('maps Ubuntu arm64 evidence selected by the pinned SSH adapter', async () => {
     const result = prepareCaddyInstallPlan(
       cleanHost({ distroId: 'ubuntu', distroVersion: '24.04', architecture: 'aarch64' }),
-      verifiedEvidence('arm64')
+      await verifiedEvidence('arm64')
     )
     expect(result.status).toBe('ready')
     if (result.status === 'ready') expect(result.plan.architecture).toBe('arm64')

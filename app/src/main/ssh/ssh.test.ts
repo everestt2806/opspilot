@@ -1,13 +1,21 @@
+import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 
-const { clients } = vi.hoisted(() => ({ clients: [] as Array<{ emit: (event: string) => void; end: ReturnType<typeof vi.fn> }> }))
+const { clients } = vi.hoisted(() => ({
+  clients: [] as Array<{
+    emit: (event: string, ...args: unknown[]) => void
+    end: ReturnType<typeof vi.fn>
+    exec: ReturnType<typeof vi.fn>
+  }>
+}))
 
 vi.mock('ssh2', async () => {
   const { EventEmitter } = await import('node:events')
   class MockClient extends EventEmitter {
     end = vi.fn()
     connect = vi.fn()
+    exec = vi.fn()
 
     constructor() {
       super()
@@ -23,7 +31,13 @@ import {
   shouldRetryCommandAfterDisconnect
 } from './errorMapping'
 import { shellQuote } from './shellQuote'
-import { relayStreams, SshAbortedError, SshManager } from './manager'
+import {
+  relayStreams,
+  SshAbortedError,
+  SshHostIdentityChangedError,
+  SshManager,
+  SshOutputLimitError
+} from './manager'
 
 describe('SshManager disconnect race', () => {
   it('does not pool or report online when ready arrives after disconnect', async () => {
@@ -50,6 +64,71 @@ describe('SshManager disconnect race', () => {
     await expect(connecting).rejects.toMatchObject({ code: 'SSH_TIMEOUT' })
     expect(statuses).not.toContain('online')
     expect(staleClient.end).toHaveBeenCalled()
+  })
+})
+
+describe('SshManager bounded command output', () => {
+  it('destroys a command channel and rejects when stdout exceeds its byte budget', async () => {
+    clients.length = 0
+    const manager = new SshManager(() => ({
+      host: 'example.invalid',
+      port: 22,
+      hostFingerprint: `SHA256:${'A'.repeat(43)}`,
+      username: 'test',
+      authType: 'password',
+      secret: 'fixture'
+    }))
+    const channel = Object.assign(new EventEmitter(), {
+      stderr: new PassThrough(),
+      destroyed: false,
+      destroy: vi.fn(function (this: EventEmitter & { destroyed: boolean }) {
+        this.destroyed = true
+      })
+    })
+
+    const execution = manager.execWithHostIdentity(8, 'fixed-read-command', {
+      maxStdoutBytes: 4,
+      retryOnReconnect: false
+    })
+    await vi.waitFor(() => expect(clients).toHaveLength(1))
+    const client = clients[0]!
+    client.exec.mockImplementation((_command, callback) => callback(null, channel))
+    client.emit('ready')
+    await vi.waitFor(() => expect(client.exec).toHaveBeenCalledOnce())
+    channel.emit('data', Buffer.from('12345'))
+
+    await expect(execution).rejects.toBeInstanceOf(SshOutputLimitError)
+    expect(channel.destroy).toHaveBeenCalledOnce()
+  })
+
+  it('rejects results if the resolved VPS endpoint changes while a command is running', async () => {
+    clients.length = 0
+    let resolverCalls = 0
+    const manager = new SshManager(() => {
+      resolverCalls += 1
+      return {
+        host: resolverCalls === 1 ? 'first.example.invalid' : 'changed.example.invalid',
+        port: 22,
+        hostFingerprint: `SHA256:${'A'.repeat(43)}`,
+        username: 'test',
+        authType: 'password',
+        secret: 'fixture'
+      }
+    })
+    const channel = Object.assign(new EventEmitter(), {
+      stderr: new PassThrough(),
+      destroyed: false,
+      destroy: vi.fn()
+    })
+    const execution = manager.execWithHostIdentity(9, 'fixed-read-command')
+    await vi.waitFor(() => expect(clients).toHaveLength(1))
+    const client = clients[0]!
+    client.exec.mockImplementation((_command, callback) => callback(null, channel))
+    client.emit('ready')
+    await vi.waitFor(() => expect(client.exec).toHaveBeenCalledOnce())
+    channel.emit('close', 0)
+
+    await expect(execution).rejects.toBeInstanceOf(SshHostIdentityChangedError)
   })
 })
 
