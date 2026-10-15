@@ -39,6 +39,8 @@ export interface CaddyInstallPlan {
   architecture: 'amd64' | 'arm64'
   version: string
   packageSha256: string
+  downloadUri: string
+  issuedAt: number
   target: CaddyAptTargetBinding
   packageFilename: string
   repository: typeof CADDY_STABLE_REPOSITORY
@@ -68,6 +70,8 @@ export interface CaddyInstallPlan {
     template: string
   }
 }
+
+const verifiedInstallPlans = new WeakSet<object>()
 
 const SUPPORTED_PLATFORMS = new Map<string, 'debian' | 'ubuntu'>([
   ['debian:12', 'debian'],
@@ -199,7 +203,7 @@ export function prepareCaddyInstallPlan(
       'binary_sha256=<sha256-from-staged-binary>'
     ].join('\n') + '\n'
 
-  return {
+  const result: CaddyInstallPlanResult = {
     status: 'ready',
     plan: Object.freeze<CaddyInstallPlan>({
       distro,
@@ -207,6 +211,8 @@ export function prepareCaddyInstallPlan(
       architecture: supportedArchitecture,
       version: apt.version,
       packageSha256: apt.sha256.toLowerCase(),
+      downloadUri: apt.downloadUri,
+      issuedAt: apt.issuedAt,
       target: Object.freeze({ ...apt.target }),
       packageFilename,
       repository: CADDY_STABLE_REPOSITORY,
@@ -329,6 +335,12 @@ export function prepareCaddyInstallPlan(
       }
     })
   }
+  if (result.status === 'ready') verifiedInstallPlans.add(result.plan)
+  return result
+}
+
+export function isVerifiedCaddyInstallPlan(plan: CaddyInstallPlan): boolean {
+  return verifiedInstallPlans.has(plan)
 }
 
 function sameTarget(left: CaddyAptTargetBinding, right: CaddyAptTargetBinding): boolean {

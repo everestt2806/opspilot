@@ -68,6 +68,34 @@ describe('SshManager disconnect race', () => {
 })
 
 describe('SshManager bounded command output', () => {
+  it('rejects an expected identity change before dispatch on the pinned connection', async () => {
+    clients.length = 0
+    const manager = new SshManager(() => ({
+      host: 'actual.example.invalid',
+      port: 22,
+      hostFingerprint: `SHA256:${'A'.repeat(43)}`,
+      username: 'test',
+      authType: 'password',
+      secret: 'fixture'
+    }))
+    const expected = {
+      vpsId: 55,
+      host: 'expected.example.invalid',
+      port: 22,
+      hostFingerprint: `SHA256:${'A'.repeat(43)}`
+    }
+    const execution = manager.execWithHostIdentity(55, 'write-command', {}, expected)
+    await vi.waitFor(() => expect(clients).toHaveLength(1))
+    const client = clients[0]!
+    client.emit('ready')
+
+    await expect(execution).rejects.toMatchObject({
+      name: 'SshHostIdentityChangedError',
+      commandDispatched: false
+    })
+    expect(client.exec).not.toHaveBeenCalled()
+  })
+
   it('destroys a command channel and rejects when stdout exceeds its byte budget', async () => {
     clients.length = 0
     const manager = new SshManager(() => ({

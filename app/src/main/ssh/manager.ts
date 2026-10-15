@@ -67,7 +67,7 @@ export class SshOutputLimitError extends Error {
 }
 
 export class SshHostIdentityChangedError extends Error {
-  constructor() {
+  constructor(readonly commandDispatched = false) {
     super('Resolved SSH host identity changed during command execution.')
     this.name = 'SshHostIdentityChangedError'
   }
@@ -206,7 +206,8 @@ export class SshManager extends EventEmitter {
   async execWithHostIdentity(
     vpsId: number,
     command: string,
-    options: ExecOptions = {}
+    options: ExecOptions = {},
+    expectedIdentity?: SshHostIdentity
   ): Promise<{ identity: SshHostIdentity; result: ExecResult }> {
     const deadline = Date.now() + (options.timeoutMs ?? EXEC_DEFAULT_TIMEOUT_MS)
     const entry = await this.ensureConnected(vpsId)
@@ -215,6 +216,15 @@ export class SshManager extends EventEmitter {
       host: entry.info.host,
       port: entry.info.port,
       hostFingerprint: entry.info.hostFingerprint!
+    }
+    if (
+      expectedIdentity &&
+      (expectedIdentity.vpsId !== identity.vpsId ||
+        expectedIdentity.host !== identity.host ||
+        expectedIdentity.port !== identity.port ||
+        expectedIdentity.hostFingerprint !== identity.hostFingerprint)
+    ) {
+      throw new SshHostIdentityChangedError()
     }
     const remainingMs = Math.max(1, deadline - Date.now())
     const channel = await this.openExecChannel(entry, command, {
@@ -231,7 +241,7 @@ export class SshManager extends EventEmitter {
       current.port !== identity.port ||
       current.hostFingerprint !== identity.hostFingerprint
     ) {
-      throw new SshHostIdentityChangedError()
+      throw new SshHostIdentityChangedError(true)
     }
     return { identity, result }
   }
