@@ -34,6 +34,52 @@ export type DomainReasonCode =
   | 'CERTIFICATE_ISSUE_FAILED' | 'HTTPS_PROBE_FAILED' | 'UPSTREAM_UNHEALTHY'
   | 'DOMAIN_OWNERSHIP_CONFLICT' | 'SSH_UNAVAILABLE' | 'CANCELLED';
 
+export type DomainDnsReadinessStatus =
+  | 'propagated' | 'nxdomain' | 'no_records' | 'resolver_error' | 'target_mismatch'
+  | 'mixed_target' | 'cname_loop' | 'cname_depth_exceeded' | 'ipv6_unreachable'
+  | 'cloudflare_proxied' | 'expected_target_unresolved';
+export type DomainDnsReadinessReason =
+  | 'DNS_NXDOMAIN' | 'DNS_NO_RECORDS' | 'DNS_RESOLVER_ERROR' | 'DNS_TARGET_MISMATCH'
+  | 'DNS_MIXED_TARGETS' | 'DNS_CNAME_LOOP' | 'DNS_CNAME_DEPTH_EXCEEDED'
+  | 'DNS_IPV6_UNREACHABLE' | 'DNS_CLOUDFLARE_PROXY_ENABLED' | 'DNS_EXPECTED_TARGET_UNRESOLVED';
+export type DomainAcmeAttemptStatus = 'blocked' | 'unknown' | 'ready_to_try';
+export interface SharedIngressReadinessResult {
+  hostname: string;
+  dns_status: DomainDnsReadinessStatus;
+  dns_reason_code: DomainDnsReadinessReason | null;
+  resolver: 'public-resolvers';
+  expected_ipv4: string[];
+  expected_ipv6: string[];
+  observed_a: string[];
+  observed_aaaa: string[];
+  cname_chain: string[];
+  ipv6_status: 'not_advertised' | 'target_matches' | 'unreachable' | 'unknown';
+  cloudflare_proxy_status: 'enabled' | 'disabled' | 'unknown';
+  ingress: {
+    ports_status: 'free' | 'occupied' | 'unknown';
+    install_assessment: 'safe' | 'blocked' | 'unknown';
+    local_assessment: 'clear' | 'blocked' | 'unknown';
+    reason_code: DomainReasonCode | null;
+    ufw: {
+      state: 'active' | 'inactive' | 'unknown';
+      inbound_80: 'allowed' | 'blocked' | 'not_applicable' | 'unknown';
+      inbound_443: 'allowed' | 'blocked' | 'not_applicable' | 'unknown';
+      inbound_80_ipv4: 'allowed' | 'blocked' | 'not_applicable' | 'unknown';
+      inbound_80_ipv6: 'allowed' | 'blocked' | 'not_applicable' | 'unknown';
+      inbound_443_ipv4: 'allowed' | 'blocked' | 'not_applicable' | 'unknown';
+      inbound_443_ipv6: 'allowed' | 'blocked' | 'not_applicable' | 'unknown';
+    };
+  };
+  cloud_firewall_status: 'unknown';
+  acme_http_01: DomainAcmeAttemptStatus;
+  acme_tls_alpn: DomainAcmeAttemptStatus;
+  certificate_status: 'not_requested';
+  route_status: 'not_configured';
+  https_probe_status: 'not_run';
+  overall_status: 'unknown';
+  instructions: string[];
+}
+
 /** Persisted desired/observed ingress state. DNS ownership and route ownership are separate. */
 export interface DomainIngressState {
   id: number;
@@ -312,6 +358,11 @@ export interface IpcInvokeMap {
   }>;
   'domain:check': (hostname: string, target: string, record_type?: 'A' | 'AAAA' | 'CNAME') =>
     IpcResult<{ status: 'propagated' | 'wrong_target' | 'nxdomain' | 'error'; observed: string[] }>;
+  'domain:ingress-readiness': (input: {
+    vps_id: number;
+    hostname: string;
+    cloudflare_proxy_status?: 'enabled' | 'disabled' | 'unknown';
+  }) => IpcResult<SharedIngressReadinessResult>;
   'domain:upsert': (input: {
     deployment_id: number;
     hostname: string;

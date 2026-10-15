@@ -22,6 +22,8 @@ import { diagnose, redactEvidence, redactText } from './doctor/engine'
 import { maskSecrets } from './logger'
 import { checkDomainTarget, planDomain } from './domain/assistant'
 import { CloudflareDnsProvider } from './domain/dns'
+import { checkSharedIngressReadiness } from './domain/ingress/dnsReadiness'
+import { preflightSharedIngress } from './domain/ingress/preflight'
 import { DomainRepository } from './domain/repository'
 import { DoctorFixService } from './doctor/fix'
 import { DoctorRepository } from './doctor/repository'
@@ -196,6 +198,33 @@ export function registerIpcHandlers(
   handle('domain:check', (hostname, target, recordType) =>
     checkDomainTarget(hostname, target, recordType)
   )
+  handle('domain:ingress-readiness', async (input) => {
+    const hostname = input.hostname.trim().toLowerCase().replace(/\.$/, '')
+    if (!Number.isInteger(input.vps_id) || input.vps_id < 1 || !hostname) {
+      throw new AppError('VALIDATION', 'Cần chọn VPS và hostname hợp lệ.')
+    }
+    const proxyStatus = input.cloudflare_proxy_status ?? 'unknown'
+    if (!['enabled', 'disabled', 'unknown'].includes(proxyStatus)) {
+      throw new AppError('VALIDATION', 'Trạng thái Cloudflare Proxy không hợp lệ.')
+    }
+    const binding = database.prepare(
+      `SELECT b.hostname, b.mode, v.host
+       FROM domain_binding b
+       JOIN app a ON a.id = b.app_id
+       JOIN vps v ON v.id = a.vps_id
+       WHERE b.hostname = ? AND v.id = ? AND v.archived_at IS NULL`
+    ).get(hostname, input.vps_id) as { hostname: string; mode: string; host: string } | undefined
+    if (!binding || binding.mode !== 'shared_ingress') {
+      throw new AppError('VALIDATION', 'Không tìm thấy shared_ingress binding cho hostname và VPS đã chọn.')
+    }
+    const ingress = await preflightSharedIngress(ssh, input.vps_id)
+    return checkSharedIngressReadiness({
+      hostname: binding.hostname,
+      vpsHost: binding.host,
+      cloudflareProxyStatus: proxyStatus,
+      ingress
+    })
+  })
   handle('domain:upsert', async (input) => {
     if (input.provider !== 'cloudflare') {
       throw new AppError('VALIDATION', 'Provider DNS chưa được hỗ trợ.')

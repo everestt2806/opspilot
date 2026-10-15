@@ -2,13 +2,20 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock } = vi.hoisted(() => ({ handleMock: vi.fn() }))
+const { handleMock, ingressPreflightMock, readinessCheckMock } = vi.hoisted(() => ({
+  handleMock: vi.fn(),
+  ingressPreflightMock: vi.fn(),
+  readinessCheckMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
   ipcMain: { handle: handleMock },
   shell: { openExternal: vi.fn() }
 }))
+
+vi.mock('./domain/ingress/preflight', () => ({ preflightSharedIngress: ingressPreflightMock }))
+vi.mock('./domain/ingress/dnsReadiness', () => ({ checkSharedIngressReadiness: readinessCheckMock }))
 
 import { AppError } from './errors'
 import { handle, registerIpcHandlers } from './ipc'
@@ -18,6 +25,8 @@ import { MonitorService } from './monitor/service'
 describe('handle', () => {
   beforeEach(() => {
     handleMock.mockReset()
+    ingressPreflightMock.mockReset()
+    readinessCheckMock.mockReset()
   })
 
   it('boc du lieu thanh IpcResult ok', async () => {
@@ -370,6 +379,52 @@ describe('handle', () => {
         public_url: 'https://app.example.com',
         instructions: expect.arrayContaining([expect.stringContaining('tunnel')])
       })
+    })
+  })
+
+  describe('domain:ingress-readiness IPC', () => {
+    it('combines only the selected shared_ingress binding with pinned-SSH preflight and does not persist observations', async () => {
+      const dir = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-ipc-ingress-readiness-'))
+      const db = initializeDatabase(dir)
+      const ssh = { exec: vi.fn() }
+      const readiness = { overall_status: 'unknown', certificate_status: 'not_requested' }
+      ingressPreflightMock.mockResolvedValue({ ports_status: 'free', local_assessment: 'clear' })
+      readinessCheckMock.mockResolvedValue(readiness)
+      try {
+        db.exec(
+          "INSERT INTO vps (id,name,host,username,auth_type,encrypted_secret) VALUES (1,'v','93.184.216.34','root','password','x'); " +
+            "INSERT INTO app (id,vps_id,name,framework,host_port,container_port) VALUES (1,1,'app','express',30000,3000); " +
+            "INSERT INTO deployment (id,app_id,version,image_tag,status) VALUES (1,1,1,'app:v1','running'); " +
+            "INSERT INTO domain_binding (id,app_id,hostname,mode,ownership_key,status) VALUES (1,1,'app.example.com','shared_ingress','opspilot:1:app.example.com','pending');"
+        )
+        registerIpcHandlers(
+          {} as never,
+          {} as never,
+          ssh as never,
+          {} as never,
+          {} as never,
+          () => null
+        )
+        const callback = handleMock.mock.calls.find(([channel]) => channel === 'domain:ingress-readiness')?.[1] as (
+          event: unknown,
+          input: { vps_id: number; hostname: string; cloudflare_proxy_status: 'enabled' | 'disabled' | 'unknown' }
+        ) => Promise<unknown>
+        const before = db.prepare('SELECT dns_status, route_status, certificate_status, https_probe_status FROM domain_binding WHERE id = 1').get()
+
+        await expect(callback({}, {
+          vps_id: 1, hostname: 'App.Example.com.', cloudflare_proxy_status: 'enabled'
+        })).resolves.toEqual({ ok: true, data: readiness })
+
+        expect(ingressPreflightMock).toHaveBeenCalledWith(ssh, 1)
+        expect(readinessCheckMock).toHaveBeenCalledWith(expect.objectContaining({
+          hostname: 'app.example.com', vpsHost: '93.184.216.34',
+          cloudflareProxyStatus: 'enabled', ingress: { ports_status: 'free', local_assessment: 'clear' }
+        }))
+        expect(db.prepare('SELECT dns_status, route_status, certificate_status, https_probe_status FROM domain_binding WHERE id = 1').get()).toEqual(before)
+      } finally {
+        closeDatabase()
+        rmSync(dir, { recursive: true, force: true })
+      }
     })
   })
 
