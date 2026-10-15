@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import { buildSharedIngressConfig } from './routeBuilder'
 
+const globalOptions = [
+  '{',
+  '    admin 127.0.0.1:2019',
+  '    persist_config off',
+  '    storage file_system /var/lib/opspilot/caddy/production',
+  '}'
+].join('\n')
+
 describe('buildSharedIngressConfig', () => {
   it('normalizes and sorts routes deterministically while preserving every route', () => {
     expect(
@@ -10,13 +18,14 @@ describe('buildSharedIngressConfig', () => {
         { hostname: 'a.example.com', host_port: 30001 }
       ])
     ).toBe(
-      'a.example.com {\n  reverse_proxy 127.0.0.1:30001\n}\n\n' +
+      `${globalOptions}\n\n` +
+        'a.example.com {\n  reverse_proxy 127.0.0.1:30001\n}\n\n' +
         'b.example.com {\n  reverse_proxy 127.0.0.1:30002\n}\n'
     )
   })
 
-  it('returns an empty config for an empty owned route set', () => {
-    expect(buildSharedIngressConfig([])).toBe('')
+  it('returns the fixed global options with no routes for an empty owned route set', () => {
+    expect(buildSharedIngressConfig([])).toBe(`${globalOptions}\n`)
   })
 
   it('rejects duplicate hostnames after normalization', () => {

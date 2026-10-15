@@ -3,6 +3,14 @@ export interface SharedIngressRoute {
   host_port: number
 }
 
+export const SHARED_INGRESS_GLOBAL_OPTIONS = [
+  '{',
+  '    admin 127.0.0.1:2019',
+  '    persist_config off',
+  '    storage file_system /var/lib/opspilot/caddy/production',
+  '}'
+].join('\n')
+
 /** Builds only OpsPilot-owned Caddyfile routes; it never reads another proxy's config. */
 export function buildSharedIngressConfig(routes: readonly SharedIngressRoute[]): string {
   if (!Array.isArray(routes)) throw new Error('Danh sách route không hợp lệ.')
@@ -22,10 +30,10 @@ export function buildSharedIngressConfig(routes: readonly SharedIngressRoute[]):
   normalized.sort((left, right) =>
     left.hostname < right.hostname ? -1 : left.hostname > right.hostname ? 1 : 0
   )
-  if (normalized.length === 0) return ''
-  return normalized
+  const routeBlocks = normalized
     .map(({ hostname, host_port }) => `${hostname} {\n  reverse_proxy 127.0.0.1:${host_port}\n}`)
-    .join('\n\n') + '\n'
+    .join('\n\n')
+  return `${SHARED_INGRESS_GLOBAL_OPTIONS}\n${routeBlocks ? `\n${routeBlocks}\n` : ''}`
 }
 
 function normalizeRouteHostname(input: string): string {

@@ -14,12 +14,13 @@ const verifiedService = [
   'ExecStart={ path=/usr/bin/caddy ; argv[]=/usr/bin/caddy run --config /etc/opspilot/caddy/Caddyfile ; }',
   'MainPID=41'
 ].join('\n')
+const missingBinary = { code: 0, stdout: 'KIND=missing\nPACKAGE=none\nTARGET_PACKAGE=none\n', stderr: '' }
 
 function fakeSsh(overrides: Partial<Record<keyof typeof INGRESS_READ_COMMANDS, {
   code: number
   stdout: string
   stderr: string
-}>> = {}) {
+}>> = {}): { ssh: SshManager; exec: ReturnType<typeof vi.fn> } {
   const defaults = {
     listeners: {
       code: 0,
@@ -29,9 +30,18 @@ function fakeSsh(overrides: Partial<Record<keyof typeof INGRESS_READ_COMMANDS, {
       ].join('\n'),
       stderr: ''
     },
+    platform: { code: 0, stdout: 'ID=debian\nVERSION_ID="12"\nx86_64\n', stderr: '' },
+    binary: {
+      code: 0,
+      stdout: 'KIND=symlink\nLINK=/usr/local/lib/opspilot-caddy/versions/2.9.1/caddy\nRESOLVED=/usr/local/lib/opspilot-caddy/versions/2.9.1/caddy\nPACKAGE=none\nTARGET_PACKAGE=none\nVERSION=v2.9.1 h1:example\n',
+      stderr: ''
+    },
     service: { code: 0, stdout: verifiedService, stderr: '' },
+    distroCaddyService: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive', stderr: '' },
+    distroCaddyApiService: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive', stderr: '' },
     marker: { code: 0, stdout: `${OPERATOR_INGRESS_MARKER}\n`, stderr: '' },
-    configExists: { code: 0, stdout: 'EXISTS\n', stderr: '' },
+    markerPath: { code: 0, stdout: 'REGULAR\n', stderr: '' },
+    configPath: { code: 0, stdout: 'REGULAR\n', stderr: '' },
     config: { code: 0, stdout: 'READABLE\n', stderr: '' },
     version: { code: 0, stdout: 'v2.9.1 h1:example\n', stderr: '' },
     ufw: {
@@ -71,6 +81,108 @@ describe('preflightSharedIngress', () => {
       { port: 443, family: 'ipv6' }
     ])
     expect(exec.mock.calls.map(([, command]) => command)).toEqual(Object.values(INGRESS_READ_COMMANDS))
+  })
+
+  it('keeps the empty supported host installable only when every fixed read proves clean state', async () => {
+    const { ssh, exec } = fakeSsh({
+      listeners: { code: 0, stdout: '', stderr: '' },
+      binary: missingBinary,
+      service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nMainPID=0', stderr: '' },
+      markerPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
+      marker: { code: 1, stdout: '', stderr: 'No such file' },
+      configPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
+      config: { code: 1, stdout: '', stderr: 'No such file' },
+      ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ownership: 'ports_free', install_assessment: 'safe', local_assessment: 'clear'
+    })
+    expect(exec.mock.calls.map(([, command]) => command)).toEqual(Object.values(INGRESS_READ_COMMANDS))
+    expect(Object.values(INGRESS_READ_COMMANDS).join('\n')).not.toMatch(/apt(-get)?\s+(install|update)|systemctl\s+(start|enable|reload)|\btee\b|\bmv\b|\brm\b/i)
+  })
+
+  it.each([
+    ['unsupported distro', 'ID=alpine\nVERSION_ID="3.20"\nx86_64\n'],
+    ['unsupported architecture', 'ID=debian\nVERSION_ID="12"\nriscv64\n'],
+    ['unknown platform format', 'not-os-release\n']
+  ])('fails closed for %s', async (_label, platform) => {
+    const { ssh } = fakeSsh({
+      listeners: { code: 0, stdout: '', stderr: '' },
+      platform: { code: 0, stdout: platform, stderr: '' },
+      service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nMainPID=0', stderr: '' },
+      binary: missingBinary,
+      markerPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
+      marker: { code: 1, stdout: '', stderr: 'No such file' },
+      configPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
+      config: { code: 1, stdout: '', stderr: 'No such file' },
+      ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ownership: 'ports_free', install_assessment: 'unknown', local_assessment: 'unknown',
+      reason_code: 'INGRESS_OWNER_UNKNOWN'
+    })
+  })
+
+  it('blocks a binary owned by a distro package even when ports are free', async () => {
+    const { ssh } = fakeSsh({
+      listeners: { code: 0, stdout: '', stderr: '' },
+      service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nMainPID=0', stderr: '' },
+      binary: { code: 0, stdout: 'KIND=regular\nPACKAGE=caddy: /usr/bin/caddy\nTARGET_PACKAGE=none\nVERSION=v2.9.1\n', stderr: '' },
+      markerPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
+      marker: { code: 1, stdout: '', stderr: 'No such file' },
+      configPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
+      config: { code: 1, stdout: '', stderr: 'No such file' },
+      ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ports_status: 'free', install_assessment: 'unknown', local_assessment: 'unknown',
+      reason_code: 'INGRESS_OWNER_UNKNOWN'
+    })
+  })
+
+  it.each(['caddy.service', 'caddy-api.service'])(
+    'blocks a foreign %s unit even when it is inactive and the listener is absent', async (unit) => {
+      const { ssh } = fakeSsh({
+        listeners: { code: 0, stdout: '', stderr: '' },
+        service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nMainPID=0', stderr: '' },
+        binary: missingBinary,
+        ...(unit === 'caddy.service'
+          ? { distroCaddyService: { code: 0, stdout: 'LoadState=loaded\nActiveState=inactive\nFragmentPath=/lib/systemd/system/caddy.service', stderr: '' } }
+          : { distroCaddyApiService: { code: 0, stdout: 'LoadState=loaded\nActiveState=inactive\nFragmentPath=/lib/systemd/system/caddy-api.service', stderr: '' } }),
+        markerPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
+        marker: { code: 1, stdout: '', stderr: 'No such file' },
+        configPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
+        config: { code: 1, stdout: '', stderr: 'No such file' },
+        ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
+      })
+      expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+        ports_status: 'free', install_assessment: 'unknown', local_assessment: 'unknown',
+        reason_code: 'INGRESS_OWNER_UNKNOWN'
+      })
+    }
+  )
+
+  it.each([
+    ['dangling symlink', 'KIND=symlink\nLINK=/usr/local/lib/opspilot-caddy/versions/2.9.1/missing\nRESOLVE=failed\nPACKAGE=none\nTARGET_PACKAGE=unknown\n'],
+    ['wrong symlink target', 'KIND=symlink\nLINK=/usr/bin/caddy-real\nRESOLVED=/usr/bin/caddy-real\nPACKAGE=none\nTARGET_PACKAGE=none\nVERSION=v2.9.1\n'],
+    ['unreadable ownership data', 'KIND=symlink\nLINK=/usr/local/lib/opspilot-caddy/versions/2.9.1/caddy\nRESOLVED=/usr/local/lib/opspilot-caddy/versions/2.9.1/caddy\nPACKAGE=unknown\nTARGET_PACKAGE=unknown\nVERSION=v2.9.1\n']
+  ])('does not trust %s', async (_label, binary) => {
+    const { ssh } = fakeSsh({ binary: { code: 0, stdout: binary, stderr: '' } })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ownership: 'unknown', service: 'unknown', local_assessment: 'unknown',
+      reason_code: 'INGRESS_OWNER_UNKNOWN'
+    })
+  })
+
+  it.each([
+    ['marker', { markerPath: { code: 0, stdout: 'SYMLINK\n', stderr: '' } }],
+    ['Caddyfile', { configPath: { code: 0, stdout: 'SYMLINK\n', stderr: '' } }]
+  ])('fails closed on a dangling or unexpected %s path', async (_label, override) => {
+    const { ssh } = fakeSsh(override)
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ownership: 'unknown', install_assessment: 'unknown', local_assessment: 'unknown',
+      reason_code: 'INGRESS_OWNER_UNKNOWN'
+    })
   })
 
   it('reports a known non-Caddy listener as a port conflict', async () => {
@@ -129,9 +241,11 @@ describe('preflightSharedIngress', () => {
   it('reports free ports independently from a missing unit and parses inactive UFW', async () => {
     const { ssh } = fakeSsh({
       listeners: { code: 0, stdout: '', stderr: '' },
+      binary: missingBinary,
       service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nMainPID=0', stderr: '' },
+      markerPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
       marker: { code: 1, stdout: '', stderr: 'cat: /etc/opspilot/caddy/OWNER: No such file or directory' },
-      configExists: { code: 1, stdout: '', stderr: '' },
+      configPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
       config: { code: 1, stdout: '', stderr: '' },
       ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
     })
@@ -173,7 +287,7 @@ describe('preflightSharedIngress', () => {
       listeners: { code: 0, stdout: '', stderr: '' },
       service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nMainPID=0', stderr: '' },
       marker: { code: 0, stdout: 'another-owner\n', stderr: '' },
-      configExists: { code: 1, stdout: '', stderr: '' },
+      configPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
       config: { code: 1, stdout: '', stderr: '' },
       ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
     })
@@ -188,7 +302,7 @@ describe('preflightSharedIngress', () => {
       listeners: { code: 0, stdout: '', stderr: '' },
       service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nMainPID=0', stderr: '' },
       marker: { code: 1, stdout: '', stderr: 'sudo: a password is required' },
-      configExists: { code: 1, stdout: '', stderr: '' },
+      configPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
       config: { code: 1, stdout: '', stderr: '' },
       ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
     })
@@ -202,8 +316,9 @@ describe('preflightSharedIngress', () => {
     const { ssh } = fakeSsh({
       listeners: { code: 0, stdout: '', stderr: '' },
       service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nMainPID=0', stderr: '' },
+      markerPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
       marker: { code: 1, stdout: '', stderr: 'cat: /etc/opspilot/caddy/OWNER: No such file or directory' },
-      configExists: { code: 0, stdout: 'EXISTS\n', stderr: '' },
+      configPath: { code: 0, stdout: 'REGULAR\n', stderr: '' },
       config: { code: 0, stdout: 'READABLE\n', stderr: '' },
       ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
     })
