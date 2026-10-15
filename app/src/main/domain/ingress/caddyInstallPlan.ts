@@ -1,32 +1,19 @@
 import { EXPECTED_OPSPILOT_UNIT, type IngressPreflightResult } from './preflight'
 import { buildSharedIngressConfig } from './routeBuilder'
+import {
+  CADDY_STABLE_REPOSITORY,
+  isVerifiedCaddyAptEvidence,
+  type CaddyAptEvidence
+} from './caddyAptEvidence'
 
-export const CADDY_STABLE_REPOSITORY = {
-  uri: 'https://dl.cloudsmith.io/public/caddy/stable/deb/debian',
-  suite: 'any-version',
-  component: 'main',
-  signedBy: '/usr/share/keyrings/caddy-stable-archive-keyring.gpg'
-} as const
+export { CADDY_STABLE_REPOSITORY } from './caddyAptEvidence'
+export type { CaddyAptEvidence } from './caddyAptEvidence'
 
 export interface CaddyInstallHost {
   ingress: IngressPreflightResult
   distroId: string
   distroVersion: string
   architecture: string
-}
-
-export interface CaddyAptEvidence {
-  sourceLine: string
-  releaseSignature: 'valid' | 'invalid' | 'unknown'
-  packageIndex: 'authenticated' | 'unauthenticated' | 'unknown'
-  originUri: string
-  suite: string
-  component: string
-  package: string
-  version: string
-  architecture: string
-  filename: string
-  sha256: string
 }
 
 export type CaddyInstallPlanErrorCode =
@@ -92,6 +79,13 @@ export function prepareCaddyInstallPlan(
     )
   }
 
+  if (!isVerifiedCaddyAptEvidence(apt)) {
+    return blocked(
+      'APT_SOURCE_UNTRUSTED',
+      'APT evidence must come from the Caddy repository collector, not caller-provided status flags.'
+    )
+  }
+
   const distro = SUPPORTED_PLATFORMS.get(`${host.distroId}:${host.distroVersion}`)
   const architecture =
     host.architecture === 'x86_64'
@@ -109,8 +103,6 @@ export function prepareCaddyInstallPlan(
 
   if (
     !isOfficialAptSource(apt.sourceLine) ||
-    apt.releaseSignature !== 'valid' ||
-    apt.packageIndex !== 'authenticated' ||
     apt.originUri !== CADDY_STABLE_REPOSITORY.uri ||
     apt.suite !== CADDY_STABLE_REPOSITORY.suite ||
     apt.component !== CADDY_STABLE_REPOSITORY.component
@@ -132,21 +124,42 @@ export function prepareCaddyInstallPlan(
   const extractedBinary = `${stageDir}/root/usr/bin/caddy`
   const versionDir = `/usr/local/lib/opspilot-caddy/versions/${apt.version}`
   const binaryPath = `${versionDir}/caddy`
-  const packageFilename = apt.filename.split('/').at(-1)!
+  const packageFilename = apt.outputFilename
+  const expectedUri = apt.downloadUri
   const stagingScript = [
     '#!/bin/sh',
     'set -eu',
     `stage_dir='${stageDir}'`,
+    'apt_root="$stage_dir/apt"',
+    'source_list="$apt_root/caddy.list"',
     `package_file='${packageFilename}'`,
+    `expected_uri='${expectedUri}'`,
     `expected_package_sha256='${apt.sha256.toLowerCase()}'`,
     'mkdir -m 0700 -- "$stage_dir"',
+    'mkdir -m 0700 -p -- "$apt_root/lists/partial" "$apt_root/archives/partial"',
+    'touch "$apt_root/status"',
+    `printf '%s\\n' 'deb [signed-by=${apt.keyringPath}] ${CADDY_STABLE_REPOSITORY.uri} ${CADDY_STABLE_REPOSITORY.suite} ${CADDY_STABLE_REPOSITORY.component}' > "$source_list"`,
+    'apt_get() { apt-get -o "Dir::Etc::sourcelist=$source_list" -o Dir::Etc::sourceparts=- -o "Dir::State::lists=$apt_root/lists" -o "Dir::State::status=$apt_root/status" -o "Dir::Cache::archives=$apt_root/archives" -o "Dir::Cache::pkgcache=$apt_root/pkgcache" -o "Dir::Cache::srcpkgcache=$apt_root/srcpkgcache" -o Acquire::AllowInsecureRepositories=false -o APT::Get::List-Cleanup=0 "$@"; }',
     'cd -- "$stage_dir"',
-    `apt-get download 'caddy=${apt.version}'`,
+    'apt_get update',
+    `apt_get download --print-uris --yes 'caddy=${apt.version}' > "$stage_dir/uris.txt"`,
+    '[ "$(wc -l < "$stage_dir/uris.txt")" -eq 1 ]',
+    'printed_uri=$(awk \'{print $1}\' "$stage_dir/uris.txt" | tr -d "\\047")',
+    'printed_filename=$(awk \'{print $2}\' "$stage_dir/uris.txt")',
+    '[ "$printed_uri" = "$expected_uri" ] && [ "$printed_filename" = "$package_file" ]',
+    `apt_get download 'caddy=${apt.version}'`,
+    '[ -s "$package_file" ]',
     `printf '%s  %s\\n' "$expected_package_sha256" "$package_file" | sha256sum --check -`,
+    'dpkg-deb --fsys-tarfile "$package_file" > "$stage_dir/package-data.tar"',
+    'tar -xOf "$stage_dir/package-data.tar" ./usr/bin/caddy > "$stage_dir/authenticated-caddy"',
+    'expected_binary_sha256=$(sha256sum -- "$stage_dir/authenticated-caddy" | awk \'{print $1}\')',
+    'rm -- "$stage_dir/package-data.tar" "$stage_dir/authenticated-caddy"',
     'mkdir -m 0700 -- root',
     'dpkg-deb --extract "$package_file" root',
     `test -f '${extractedBinary}' && test ! -L '${extractedBinary}'`,
-    `sha256sum -- '${extractedBinary}'`
+    `actual_binary_sha256=$(sha256sum -- '${extractedBinary}' | awk '{print $1}')`,
+    '[ "$actual_binary_sha256" = "$expected_binary_sha256" ]',
+    'printf "%s  %s\\n" "$actual_binary_sha256" "usr/bin/caddy"'
   ].join('\n')
 
   const manifestTemplate =
@@ -171,12 +184,12 @@ export function prepareCaddyInstallPlan(
       repository: CADDY_STABLE_REPOSITORY,
       verificationSteps: [
         'Re-run the complete read-only ingress preflight immediately before staging.',
-        'Require the exact official Caddy stable APT source and signed-by keyring shown in the plan.',
-        'Run apt-get update with insecure repositories and unauthenticated packages disabled; stop unless the InRelease signature verifies.',
-        'Read apt-cache policy/show output and confirm this exact origin, suite, version, architecture, filename, and authenticated SHA-256 before downloading.'
+        'Use collectCaddyAptEvidence; it checks the single stable source, pinned signer fingerprint, InRelease signature, Packages index checksum, and selected package fields.',
+        'The staging script creates a private APT source-list/cache and runs apt-get update with insecure repositories disabled.',
+        'Require apt-get download --print-uris to match the exact authenticated package URI and output filename before downloading.'
       ],
       stagingSteps: [
-        'Download the exact caddy=<version> package with apt-get download only.',
+        'Download the exact caddy=<version> package from an isolated APT source-list/cache only.',
         'Compare the downloaded package SHA-256 with the authenticated Packages index.',
         'Extract with dpkg-deb --extract into a private staging directory; do not invoke package maintainer scripts.',
         'Hash the extracted regular usr/bin/caddy file and retain that hash for INSTALLATION.'
@@ -326,16 +339,9 @@ function isCleanHostEligible(ingress: IngressPreflightResult): boolean {
 }
 
 function isOfficialAptSource(sourceLine: string): boolean {
-  const match = sourceLine.trim().match(/^deb \[([^\]]+)\] (\S+) (\S+) (\S+)$/)
-  if (!match) return false
-  const options = match[1].split(/\s+/)
-  return (
-    options.length === 1 &&
-    options[0] === `signed-by=${CADDY_STABLE_REPOSITORY.signedBy}` &&
-    match[2] === CADDY_STABLE_REPOSITORY.uri &&
-    match[3] === CADDY_STABLE_REPOSITORY.suite &&
-    match[4] === CADDY_STABLE_REPOSITORY.component
-  )
+  return new RegExp(
+    `^deb \\[signed-by=[^\\s\\]]+\\] ${escapeRegExp(CADDY_STABLE_REPOSITORY.uri)} ${CADDY_STABLE_REPOSITORY.suite} ${CADDY_STABLE_REPOSITORY.component}$`
+  ).test(sourceLine.trim())
 }
 
 function isValidPackageMetadata(apt: CaddyAptEvidence, architecture: string): boolean {
@@ -347,12 +353,18 @@ function isValidPackageMetadata(apt: CaddyAptEvidence, architecture: string): bo
     /^2\.\d+\.\d+$/.test(apt.version) &&
     apt.architecture === architecture &&
     /^[a-f0-9]{64}$/i.test(apt.sha256) &&
+    apt.outputFilename === `caddy_${apt.version}_${architecture}.deb` &&
     /^pool\/(?:[a-z0-9+._-]+\/)*caddy_[0-9][a-zA-Z0-9.+:~_-]*\/caddy_[0-9][a-zA-Z0-9.+:~_-]*_linux_(?:amd64|arm64)\.deb$/.test(
       apt.filename
     ) &&
     apt.filename.split('/').every((segment) => segment !== '.' && segment !== '..') &&
-    apt.filename.endsWith(`/caddy_${apt.version}/caddy_${apt.version}_linux_${architecture}.deb`)
+    apt.filename.endsWith(`/caddy_${apt.version}/caddy_${apt.version}_linux_${architecture}.deb`) &&
+    apt.downloadUri === `${CADDY_STABLE_REPOSITORY.uri}/${apt.filename}`
   )
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function blocked(code: CaddyInstallPlanErrorCode, reason: string): CaddyInstallPlanResult {
