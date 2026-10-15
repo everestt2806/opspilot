@@ -39,14 +39,17 @@ for path in /usr /usr/bin /usr/bin/caddy /usr/local /usr/local/lib /usr/local/li
 target=$(readlink -- /usr/bin/caddy 2>/dev/null || true); \
 if printf "%s\\n" "$target" | grep -Eq '^/usr/local/lib/opspilot-caddy/versions/[0-9]+\\.[0-9]+\\.[0-9]+/caddy$'; then \
   version_dir=\${target%/caddy}; inspect "$version_dir"; inspect "$target"; \
-else printf "DYNAMIC_BINARY_PATH=INVALID\\n"; fi'`,
+fi'`,
   installation: `sudo -n sh -c 'if [ -L /etc/opspilot/caddy/INSTALLATION ]; then printf "KIND=symlink\\n"; elif [ -f /etc/opspilot/caddy/INSTALLATION ]; then printf "KIND=regular\\n"; cat /etc/opspilot/caddy/INSTALLATION; elif [ -e /etc/opspilot/caddy/INSTALLATION ]; then printf "KIND=other\\n"; else printf "KIND=missing\\n"; fi'`,
   service:
-    'systemctl show opspilot-caddy.service --property=LoadState,ActiveState,FragmentPath,ExecStart,MainPID --no-pager',
+    'systemctl show opspilot-caddy.service --property=LoadState,ActiveState,FragmentPath,DropInPaths,ExecStartPre,ExecStart,ExecReload,MainPID,User,Group,Type,WorkingDirectory,Environment,UMask,Restart,RestartUSec,TimeoutStopUSec,LimitNOFILE,NoNewPrivileges,PrivateTmp,ProtectSystem,ProtectHome,ProtectKernelTunables,ProtectKernelModules,ProtectControlGroups,RestrictSUIDSGID,LockPersonality,CapabilityBoundingSet,AmbientCapabilities,ReadWritePaths --no-pager',
+  serviceUnit: 'sudo -n cat /etc/systemd/system/opspilot-caddy.service',
   distroCaddyService:
     'systemctl show caddy.service --property=LoadState,ActiveState,FragmentPath --no-pager',
   distroCaddyApiService:
     'systemctl show caddy-api.service --property=LoadState,ActiveState,FragmentPath --no-pager',
+  competingProxyServices: `for unit in nginx.service apache2.service httpd.service traefik.service haproxy.service; do \
+state=$(systemctl show "$unit" --property=LoadState --value --no-pager) || exit 1; printf '%s=%s\\n' "$unit" "$state"; done`,
   marker: 'sudo -n cat /etc/opspilot/caddy/OWNER',
   markerPath: `sudo -n sh -c 'if [ -L /etc/opspilot/caddy/OWNER ]; then printf "SYMLINK\\n"; elif [ -f /etc/opspilot/caddy/OWNER ]; then printf "REGULAR\\n"; elif [ -e /etc/opspilot/caddy/OWNER ]; then printf "OTHER\\n"; else printf "MISSING\\n"; fi'`,
   configPath: `sudo -n sh -c 'if [ -L /etc/opspilot/caddy/Caddyfile ]; then printf "SYMLINK\\n"; elif [ -f /etc/opspilot/caddy/Caddyfile ]; then printf "REGULAR\\n"; elif [ -e /etc/opspilot/caddy/Caddyfile ]; then printf "OTHER\\n"; else printf "MISSING\\n"; fi'`,
@@ -55,6 +58,45 @@ else printf "DYNAMIC_BINARY_PATH=INVALID\\n"; fi'`,
 } as const
 
 export const OPERATOR_INGRESS_MARKER = 'opspilot-shared-ingress-v1'
+
+export const EXPECTED_OPSPILOT_UNIT = `[Unit]
+Description=OpsPilot shared ingress (Caddy)
+Documentation=https://caddyserver.com/docs/
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=notify
+User=opspilot-caddy
+Group=opspilot-caddy
+WorkingDirectory=/etc/opspilot/caddy
+Environment=HOME=/var/lib/opspilot/caddy
+UMask=0077
+ExecStartPre=/usr/bin/caddy validate --config /etc/opspilot/caddy/Caddyfile --adapter caddyfile
+ExecStart=/usr/bin/caddy run --config /etc/opspilot/caddy/Caddyfile --adapter caddyfile
+ExecReload=/usr/bin/caddy reload --config /etc/opspilot/caddy/Caddyfile --adapter caddyfile --force
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=5s
+LimitNOFILE=1048576
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+ReadWritePaths=/var/lib/opspilot/caddy
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+`
 
 export type IngressOwnership = 'ports_free' | 'opspilot_owned' | 'conflict' | 'unknown'
 export type IngressFirewallState = 'active' | 'inactive' | 'unknown'
@@ -130,8 +172,10 @@ export async function preflightSharedIngress(
   const installationOutput = successfulOutput(outputs.get('installation'))
   const installation = installationOutput === null ? null : parseInstallationManifest(installationOutput)
   const serviceOutput = successfulOutput(outputs.get('service'))
+  const serviceUnitOutput = successfulOutput(outputs.get('serviceUnit'))
   const distroServiceOutput = successfulOutput(outputs.get('distroCaddyService'))
   const distroApiServiceOutput = successfulOutput(outputs.get('distroCaddyApiService'))
+  const competingProxyOutput = successfulOutput(outputs.get('competingProxyServices'))
   const markerOutput = successfulOutput(outputs.get('marker'))
   const markerPathOutput = successfulOutput(outputs.get('markerPath'))
   const configPathOutput = successfulOutput(outputs.get('configPath'))
@@ -176,6 +220,9 @@ export async function preflightSharedIngress(
       distroUnitState === 'absent' &&
     serviceFacts?.loaded &&
       serviceFacts.active &&
+      serviceUnitOutput === EXPECTED_OPSPILOT_UNIT &&
+      serviceFacts.dropInPaths === '' &&
+      hasExpectedServiceProperties(serviceFacts) &&
       serviceFacts.fragmentPath === '/etc/systemd/system/opspilot-caddy.service' &&
       serviceFacts.execPath === '/usr/bin/caddy' &&
       serviceFacts.argv[0] === '/usr/bin/caddy' &&
@@ -200,22 +247,37 @@ export async function preflightSharedIngress(
   const firewallBlocked = firewall.inbound_80 === 'blocked' || firewall.inbound_443 === 'blocked'
   const firewallKnown = firewall.state === 'inactive' ||
     (firewall.inbound_80 === 'allowed' && firewall.inbound_443 === 'allowed')
-  const ingressWriteSafe = serviceVerified
+  const cleanHostEligible = Boolean(
+    hostSupport === true &&
+    binaryFacts?.kind === 'missing' && binaryFacts.packageOwner === 'none' &&
+    distroUnitState === 'absent' && serviceFacts?.loadState === 'not-found' && serviceFacts.dropInPaths === '' &&
+    competingProxyOutput !== null && parseCompetingProxyServices(competingProxyOutput) &&
+    pathFacts !== null && isCleanInstallPathSet(pathFacts) &&
+    markerPath === 'MISSING' && configPathOutput?.trim() === 'MISSING' &&
+    listeners !== null && listeners.length === 0 &&
+    (firewall.state === 'inactive' || (
+      firewall.inbound_80_ipv4 === 'allowed' && firewall.inbound_80_ipv6 === 'allowed' &&
+      firewall.inbound_443_ipv4 === 'allowed' && firewall.inbound_443_ipv6 === 'allowed'
+    ))
+  )
+  const ingressWriteSafe = serviceVerified || cleanHostEligible
   const localAssessment = ownerStatus === 'conflict' || firewallBlocked
     ? 'blocked'
     : ingressWriteSafe && (ownerStatus === 'ports_free' || ownerStatus === 'opspilot_owned') && firewallKnown
       ? 'clear'
       : 'unknown'
-  const installAssessment = localAssessment === 'clear'
-    ? 'safe'
-    : localAssessment === 'blocked' ? 'blocked' : 'unknown'
+  const installAssessment = ownerStatus === 'conflict' || firewallBlocked
+    ? 'blocked'
+    : cleanHostEligible || serviceVerified ? 'safe' : 'unknown'
   let reasonCode: DomainReasonCode | null = null
   if ([...outputs.values()].some((output) => output === null)) reasonCode = 'SSH_UNAVAILABLE'
   else if (ownerStatus === 'conflict') reasonCode = 'INGRESS_PORT_CONFLICT'
   else if (ownerStatus === 'unknown') reasonCode = 'INGRESS_OWNER_UNKNOWN'
   else if (
-    hostSupport !== true || binaryFacts?.packageOwner !== 'none' || distroUnitState !== 'absent' ||
-    !pathAncestorsSafe || !managedPathsValid || !installationVerified
+    hostSupport !== true || binaryFacts?.packageOwner === 'owned' || distroUnitState === 'present' ||
+    (serviceFacts?.loadState !== 'not-found' && !serviceVerified) ||
+    (serviceFacts?.loadState === 'not-found' && !cleanHostEligible) ||
+    (serviceVerified && (!pathAncestorsSafe || !managedPathsValid || !installationVerified))
   ) reasonCode = 'INGRESS_OWNER_UNKNOWN'
   else if (!ingressWriteSafe) reasonCode = 'INGRESS_OWNER_UNKNOWN'
   else if (firewall.inbound_80 === 'blocked') reasonCode = 'FIREWALL_80_BLOCKED'
@@ -393,6 +455,47 @@ function validateManagedPaths(facts: PathFact[], binary: ReturnType<typeof parse
     hasPathMetadata(byPath.get('/etc/opspilot/caddy/Caddyfile'), 'regular file', 'root', 'opspilot-caddy', '640', 1)
 }
 
+function isCleanInstallPathSet(facts: PathFact[]): boolean {
+  const byPath = new Map(facts.map((fact) => [fact.path, fact]))
+  const safeParents: Record<string, [string, string, string]> = {
+    '/usr': ['root', 'root', '755'], '/usr/bin': ['root', 'root', '755'],
+    '/usr/local': ['root', 'root', '755'], '/usr/local/lib': ['root', 'root', '755'],
+    '/etc': ['root', 'root', '755'], '/etc/systemd': ['root', 'root', '755'],
+    '/etc/systemd/system': ['root', 'root', '755'],
+    '/var': ['root', 'root', '755'], '/var/lib': ['root', 'root', '755']
+  }
+  if (Object.entries(safeParents).some(([path, [owner, group, mode]]) =>
+    !hasPathMetadata(byPath.get(path), 'directory', owner, group, mode)
+  )) return false
+  const absentTargets = [
+    '/usr/bin/caddy', '/usr/local/lib/opspilot-caddy', '/etc/opspilot',
+    '/etc/systemd/system/opspilot-caddy.service', '/var/lib/opspilot'
+  ]
+  return absentTargets.every((path) => byPath.get(path)?.kind === 'MISSING')
+}
+
+function hasExpectedServiceProperties(facts: ReturnType<typeof parseServiceFacts>): boolean {
+  const expected: Record<string, string> = {
+    User: 'opspilot-caddy', Group: 'opspilot-caddy', Type: 'notify',
+    WorkingDirectory: '/etc/opspilot/caddy', Environment: 'HOME=/var/lib/opspilot/caddy',
+    UMask: '0077', Restart: 'on-failure', RestartUSec: '2s', TimeoutStopUSec: '5s',
+    LimitNOFILE: '1048576', NoNewPrivileges: 'yes', PrivateTmp: 'yes',
+    ProtectSystem: 'strict', ProtectHome: 'yes', ProtectKernelTunables: 'yes',
+    ProtectKernelModules: 'yes', ProtectControlGroups: 'yes', RestrictSUIDSGID: 'yes',
+    LockPersonality: 'yes', CapabilityBoundingSet: 'cap_net_bind_service',
+    AmbientCapabilities: 'cap_net_bind_service', ReadWritePaths: '/var/lib/opspilot/caddy'
+  }
+  if (Object.entries(expected).some(([key, value]) => facts.properties.get(key) !== value)) return false
+  const expectedExecs: Record<string, string[]> = {
+    ExecStartPre: ['/usr/bin/caddy', 'validate', '--config', '/etc/opspilot/caddy/Caddyfile', '--adapter', 'caddyfile'],
+    ExecStart: ['/usr/bin/caddy', 'run', '--config', '/etc/opspilot/caddy/Caddyfile', '--adapter', 'caddyfile'],
+    ExecReload: ['/usr/bin/caddy', 'reload', '--config', '/etc/opspilot/caddy/Caddyfile', '--adapter', 'caddyfile', '--force']
+  }
+  return Object.entries(expectedExecs).every(([key, argv]) =>
+    JSON.stringify(parseExecArgv(facts.properties.get(key) ?? '')) === JSON.stringify(argv)
+  )
+}
+
 function hasPathMetadata(
   fact: PathFact | undefined,
   kind: string,
@@ -444,6 +547,17 @@ function parseServiceLoadState(output: string | null): string | null {
   return match?.[1] ?? null
 }
 
+function parseCompetingProxyServices(output: string): boolean {
+  const expected = ['nginx.service', 'apache2.service', 'httpd.service', 'traefik.service', 'haproxy.service']
+  const states = new Map<string, string>()
+  for (const line of output.trim().split(/\r?\n/)) {
+    const match = line.match(/^([a-z0-9.-]+\.service)=(not-found|loaded)$/)
+    if (!match || states.has(match[1])) return false
+    states.set(match[1], match[2])
+  }
+  return states.size === expected.length && expected.every((unit) => states.get(unit) === 'not-found')
+}
+
 function parseServiceFacts(output: string): {
   loadState: string | null
   loaded: boolean
@@ -452,6 +566,8 @@ function parseServiceFacts(output: string): {
   execPath: string | null
   argv: string[]
   mainPid: number | null
+  dropInPaths: string
+  properties: Map<string, string>
 } {
   const properties = new Map<string, string>()
   for (const line of output.split(/\r?\n/)) {
@@ -469,14 +585,16 @@ function parseServiceFacts(output: string): {
     fragmentPath: properties.get('FragmentPath') ?? null,
     execPath: properties.get('ExecStart')?.match(/(?:^|\{\s*)path=([^\s;]+)(?:\s*;|\s*\})/)?.[1] ?? null,
     argv: parseExecArgv(properties.get('ExecStart') ?? ''),
-    mainPid
+    mainPid,
+    dropInPaths: properties.get('DropInPaths') ?? '<missing>',
+    properties
   }
 }
 
 function parseExecArgv(execStart: string): string[] {
   const value = execStart.match(/(?:^|;\s*)argv\[\]=(.+?)(?:\s*;\s*(?:ignore_errors|start_time|stop_time|pid)|\s*\}\s*$)/)?.[1]
   if (!value || /["'\\]/.test(value)) return []
-  return value.trim().split(/\s+/)
+  return value.trim().replace(/;\s*$/, '').split(/\s+/).filter((argument) => argument && argument !== ';')
 }
 
 function classifyIngressOwnership(

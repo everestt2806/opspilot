@@ -4,6 +4,7 @@ import type { SshManager } from '../../ssh/manager'
 import {
   INGRESS_READ_COMMANDS,
   OPERATOR_INGRESS_MARKER,
+  EXPECTED_OPSPILOT_UNIT,
   preflightSharedIngress
 } from './preflight'
 
@@ -11,7 +12,18 @@ const verifiedService = [
   'LoadState=loaded',
   'ActiveState=active',
   'FragmentPath=/etc/systemd/system/opspilot-caddy.service',
-  'ExecStart={ path=/usr/bin/caddy ; argv[]=/usr/bin/caddy run --config /etc/opspilot/caddy/Caddyfile ; }',
+  'DropInPaths=',
+  'ExecStartPre={ path=/usr/bin/caddy ; argv[]=/usr/bin/caddy validate --config /etc/opspilot/caddy/Caddyfile --adapter caddyfile ; }',
+  'ExecStart={ path=/usr/bin/caddy ; argv[]=/usr/bin/caddy run --config /etc/opspilot/caddy/Caddyfile --adapter caddyfile ; }',
+  'ExecReload={ path=/usr/bin/caddy ; argv[]=/usr/bin/caddy reload --config /etc/opspilot/caddy/Caddyfile --adapter caddyfile --force ; }',
+  'User=opspilot-caddy', 'Group=opspilot-caddy', 'Type=notify',
+  'WorkingDirectory=/etc/opspilot/caddy', 'Environment=HOME=/var/lib/opspilot/caddy',
+  'UMask=0077', 'Restart=on-failure', 'RestartUSec=2s', 'TimeoutStopUSec=5s',
+  'LimitNOFILE=1048576', 'NoNewPrivileges=yes', 'PrivateTmp=yes', 'ProtectSystem=strict',
+  'ProtectHome=yes', 'ProtectKernelTunables=yes', 'ProtectKernelModules=yes',
+  'ProtectControlGroups=yes', 'RestrictSUIDSGID=yes', 'LockPersonality=yes',
+  'CapabilityBoundingSet=cap_net_bind_service', 'AmbientCapabilities=cap_net_bind_service',
+  'ReadWritePaths=/var/lib/opspilot/caddy',
   'MainPID=41'
 ].join('\n')
 const missingBinary = { code: 0, stdout: 'KIND=missing\nPACKAGE=none\nTARGET_PACKAGE=none\n', stderr: '' }
@@ -43,6 +55,21 @@ function managedPathFacts(): string {
   ].join('\n')
 }
 
+function cleanPathFacts(): string {
+  const parents = [
+    '/usr', '/usr/bin', '/usr/local', '/usr/local/lib', '/etc', '/etc/systemd',
+    '/etc/systemd/system', '/var', '/var/lib'
+  ].map((path) => `${path}|directory|root|root|755|1|`)
+  const missing = [
+    '/usr/bin/caddy', '/usr/local/lib/opspilot-caddy', '/etc/opspilot',
+    '/etc/systemd/system/opspilot-caddy.service', '/var/lib/opspilot',
+    '/etc/opspilot/caddy/OWNER', '/etc/opspilot/caddy/INSTALLATION',
+    '/etc/opspilot/caddy/Caddyfile', '/var/lib/opspilot/caddy',
+    '/var/lib/opspilot/caddy/production'
+  ].map((path) => `${path}|MISSING|||||`)
+  return [...parents, ...missing].join('\n')
+}
+
 const validInstallation = {
   code: 0,
   stdout: `KIND=regular\nformat=opspilot-caddy-installation-v1\nversion=2.9.1\narchitecture=amd64\nrepository_channel=stable\npackage_sha256=${packageHash}\nbinary_sha256=${binaryHash}\n`,
@@ -72,8 +99,14 @@ function fakeSsh(overrides: Partial<Record<keyof typeof INGRESS_READ_COMMANDS, {
     pathFacts: { code: 0, stdout: managedPathFacts(), stderr: '' },
     installation: validInstallation,
     service: { code: 0, stdout: verifiedService, stderr: '' },
+    serviceUnit: { code: 0, stdout: EXPECTED_OPSPILOT_UNIT, stderr: '' },
     distroCaddyService: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive', stderr: '' },
     distroCaddyApiService: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive', stderr: '' },
+    competingProxyServices: {
+      code: 0,
+      stdout: 'nginx.service=not-found\napache2.service=not-found\nhttpd.service=not-found\ntraefik.service=not-found\nhaproxy.service=not-found\n',
+      stderr: ''
+    },
     marker: { code: 0, stdout: `${OPERATOR_INGRESS_MARKER}\n`, stderr: '' },
     markerPath: { code: 0, stdout: 'REGULAR\n', stderr: '' },
     configPath: { code: 0, stdout: 'REGULAR\n', stderr: '' },
@@ -123,8 +156,10 @@ describe('preflightSharedIngress', () => {
   it('keeps the empty supported host installable only when every fixed read proves clean state', async () => {
     const { ssh, exec } = fakeSsh({
       listeners: { code: 0, stdout: '', stderr: '' },
+      pathFacts: { code: 0, stdout: cleanPathFacts(), stderr: '' },
       binary: missingBinary,
-      service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nMainPID=0', stderr: '' },
+      installation: { code: 0, stdout: 'KIND=missing\n', stderr: '' },
+      service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nDropInPaths=\nMainPID=0', stderr: '' },
       markerPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
       marker: { code: 1, stdout: '', stderr: 'No such file' },
       configPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
@@ -132,11 +167,92 @@ describe('preflightSharedIngress', () => {
       ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
     })
     expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
-      ownership: 'ports_free', ports_status: 'free', install_assessment: 'unknown',
-      local_assessment: 'unknown', service: 'absent'
+      ownership: 'ports_free', ports_status: 'free', install_assessment: 'safe',
+      local_assessment: 'clear', service: 'absent'
     })
     expect(exec.mock.calls.map(([, command]) => command)).toEqual(Object.values(INGRESS_READ_COMMANDS))
     expect(Object.values(INGRESS_READ_COMMANDS).join('\n')).not.toMatch(/apt(-get)?\s+(install|update)|systemctl\s+(start|enable|reload)|\btee\b|\bmv\b|\brm\b/i)
+  })
+
+  it('does not treat a partially created OpsPilot path tree as a clean install target', async () => {
+    const { ssh } = fakeSsh({
+      listeners: { code: 0, stdout: '', stderr: '' },
+      pathFacts: { code: 0, stdout: cleanPathFacts().replace('/etc/opspilot|MISSING|||||', '/etc/opspilot|directory|root|root|755|1|'), stderr: '' },
+      binary: missingBinary,
+      service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nMainPID=0', stderr: '' },
+      serviceUnit: { code: 1, stdout: '', stderr: 'missing' },
+      markerPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
+      marker: { code: 1, stdout: '', stderr: 'missing' },
+      configPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
+      config: { code: 1, stdout: '', stderr: 'missing' },
+      ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      service: 'absent', install_assessment: 'unknown', local_assessment: 'unknown'
+    })
+  })
+
+  it.each([
+    ['inactive nginx unit', 'nginx.service=loaded\napache2.service=not-found\nhttpd.service=not-found\ntraefik.service=not-found\nhaproxy.service=not-found\n'],
+    ['unparseable proxy inventory', 'nginx.service=not-found\nunknown-format\n']
+  ])('does not allow clean install with %s', async (_label, proxyInventory) => {
+    const { ssh } = fakeSsh({
+      listeners: { code: 0, stdout: '', stderr: '' },
+      pathFacts: { code: 0, stdout: cleanPathFacts(), stderr: '' },
+      binary: missingBinary,
+      service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nMainPID=0', stderr: '' },
+      serviceUnit: { code: 1, stdout: '', stderr: 'missing' },
+      markerPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
+      marker: { code: 1, stdout: '', stderr: 'missing' },
+      configPath: { code: 0, stdout: 'MISSING\n', stderr: '' },
+      config: { code: 1, stdout: '', stderr: 'missing' },
+      competingProxyServices: { code: 0, stdout: proxyInventory, stderr: '' },
+      ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      service: 'absent', install_assessment: 'unknown', local_assessment: 'unknown'
+    })
+  })
+
+  it.each([
+    ['ExecStartPre', (value: string) => value.replace('ExecStartPre={ path=/usr/bin/caddy ; argv[]=/usr/bin/caddy validate', 'ExecStartPre={ path=/usr/bin/caddy ; argv[]=/usr/bin/caddy run')],
+    ['ExecReload', (value: string) => value.replace('ExecReload={ path=/usr/bin/caddy ; argv[]=/usr/bin/caddy reload', 'ExecReload={ path=/usr/bin/caddy ; argv[]=/usr/bin/caddy restart')],
+    ['service user', (value: string) => value.replace('User=opspilot-caddy', 'User=root')],
+    ['service group', (value: string) => value.replace('Group=opspilot-caddy', 'Group=root')],
+    ['capability limit', (value: string) => value.replace('CapabilityBoundingSet=cap_net_bind_service', 'CapabilityBoundingSet=CAP_NET_ADMIN')]
+  ])('rejects a service with unexpected effective %s', async (_label, mutate) => {
+    const { ssh } = fakeSsh({ service: { code: 0, stdout: mutate(verifiedService), stderr: '' } })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      service: 'unknown', install_assessment: 'unknown', local_assessment: 'unknown'
+    })
+  })
+
+  it('rejects any systemd drop-in even when the base unit is exact', async () => {
+    const { ssh } = fakeSsh({
+      service: { code: 0, stdout: verifiedService.replace('DropInPaths=', 'DropInPaths=/etc/systemd/system/opspilot-caddy.service.d/override.conf'), stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      service: 'unknown', install_assessment: 'unknown', local_assessment: 'unknown'
+    })
+  })
+
+  it.each([
+    ['ExecStartPre', EXPECTED_OPSPILOT_UNIT.replace('ExecStartPre=/usr/bin/caddy validate', 'ExecStartPre=/usr/bin/caddy run')],
+    ['ExecReload', EXPECTED_OPSPILOT_UNIT.replace('ExecReload=/usr/bin/caddy reload', 'ExecReload=/usr/bin/caddy restart')],
+    ['user', EXPECTED_OPSPILOT_UNIT.replace('User=opspilot-caddy', 'User=root')],
+    ['extra directive', EXPECTED_OPSPILOT_UNIT.replace('Restart=on-failure', 'Restart=on-failure\nExecStartPost=/bin/true')]
+  ])('rejects unexpected unit-file %s', async (_label, unit) => {
+    const { ssh } = fakeSsh({ serviceUnit: { code: 0, stdout: unit, stderr: '' } })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      service: 'unknown', install_assessment: 'unknown', local_assessment: 'unknown'
+    })
+  })
+
+  it('accepts an installed service only when its complete fixed unit matches', async () => {
+    const { ssh } = fakeSsh()
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      service: 'verified', install_assessment: 'safe', local_assessment: 'clear', ownership: 'opspilot_owned'
+    })
   })
 
   it.each([
