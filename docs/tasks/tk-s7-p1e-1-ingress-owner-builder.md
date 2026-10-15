@@ -20,4 +20,4 @@ Triển khai theo [thiết kế P1e](tk-s7-p1e-caddy-operations-design.md), P1a�
 - `git diff --check`: **PASS**.
 - `pnpm lint`: **FAIL** — 3 lỗi ngoài file checkpoint (`dnsReadiness.test.ts`, `dnsReadiness.ts`, `ssh/manager.ts`) và 6.470 warnings toàn repo. ESLint riêng bốn file checkpoint: 0 lỗi, 152 warnings. Không format file ngoài phạm vi.
 - VPS/Caddy install, service start/reload, config write, DNS/firewall và ACME: **NOT_RUN**; preflight test xác nhận chỉ gọi các lệnh đọc cố định.
-- Commit cục bộ: ghi nhận SHA trong board/task log sau commit.
+- Commit cục bộ của checkpoint: `73345426fd309897dc2dcf91ddd5e5ae69ea7e00`.
