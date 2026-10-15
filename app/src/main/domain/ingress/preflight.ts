@@ -19,7 +19,28 @@ if command -v dpkg-query >/dev/null 2>&1; then \
   elif [ ! -e /usr/bin/caddy ] && [ ! -L /usr/bin/caddy ]; then printf "TARGET_PACKAGE=none\\n"; \
   else printf "TARGET_PACKAGE=unknown\\n"; fi; \
 else printf "PACKAGE=unknown\\nTARGET_PACKAGE=unknown\\n"; fi; \
-if [ -x /usr/bin/caddy ]; then /usr/bin/caddy version | sed "s/^/VERSION=/"; fi'`,
+if [ -L /usr/bin/caddy ]; then \
+  target=$(readlink -- /usr/bin/caddy 2>/dev/null || true); \
+  if printf "%s\\n" "$target" | grep -Eq '^/usr/local/lib/opspilot-caddy/versions/[0-9]+\\.[0-9]+\\.[0-9]+/caddy$' && \
+     [ "$(readlink -e -- /usr/bin/caddy 2>/dev/null || true)" = "$target" ] && [ -f "$target" ] && [ ! -L "$target" ]; then \
+    size=$(stat -c %s -- "$target" 2>/dev/null || printf 0); links=$(stat -c %h -- "$target" 2>/dev/null || printf 0); \
+    if [ "$size" -le 104857600 ] && [ "$links" -eq 1 ]; then sha256sum -- "$target" | awk '{print "BINARY_SHA256=" $1}'; \
+    else printf "BINARY_SHA256=unknown\\n"; fi; \
+  else printf "BINARY_SHA256=unknown\\n"; fi; \
+else printf "BINARY_SHA256=unknown\\n"; fi'`,
+  pathFacts: `sudo -n sh -c '\
+inspect() { path="$1"; if [ -L "$path" ]; then metadata=$(stat -c "%U|%G|%a|%h" -- "$path" 2>/dev/null) || metadata="unknown|unknown|unknown|unknown"; printf "%s|SYMLINK|%s|%s\\n" "$path" "$metadata" "$(readlink -- "$path" 2>/dev/null || printf unknown)"; \
+elif [ -e "$path" ]; then stat -c "%n|%F|%U|%G|%a|%h|" -- "$path"; \
+else printf "%s|MISSING|||||\\n" "$path"; fi; }; \
+for path in /usr /usr/bin /usr/bin/caddy /usr/local /usr/local/lib /usr/local/lib/opspilot-caddy /usr/local/lib/opspilot-caddy/versions \
+/etc /etc/systemd /etc/systemd/system /etc/systemd/system/opspilot-caddy.service /etc/opspilot /etc/opspilot/caddy \
+/etc/opspilot/caddy/OWNER /etc/opspilot/caddy/INSTALLATION /etc/opspilot/caddy/Caddyfile \
+/var /var/lib /var/lib/opspilot /var/lib/opspilot/caddy /var/lib/opspilot/caddy/production; do inspect "$path"; done; \
+target=$(readlink -- /usr/bin/caddy 2>/dev/null || true); \
+if printf "%s\\n" "$target" | grep -Eq '^/usr/local/lib/opspilot-caddy/versions/[0-9]+\\.[0-9]+\\.[0-9]+/caddy$'; then \
+  version_dir=\${target%/caddy}; inspect "$version_dir"; inspect "$target"; \
+else printf "DYNAMIC_BINARY_PATH=INVALID\\n"; fi'`,
+  installation: `sudo -n sh -c 'if [ -L /etc/opspilot/caddy/INSTALLATION ]; then printf "KIND=symlink\\n"; elif [ -f /etc/opspilot/caddy/INSTALLATION ]; then printf "KIND=regular\\n"; cat /etc/opspilot/caddy/INSTALLATION; elif [ -e /etc/opspilot/caddy/INSTALLATION ]; then printf "KIND=other\\n"; else printf "KIND=missing\\n"; fi'`,
   service:
     'systemctl show opspilot-caddy.service --property=LoadState,ActiveState,FragmentPath,ExecStart,MainPID --no-pager',
   distroCaddyService:
@@ -96,9 +117,18 @@ export async function preflightSharedIngress(
   const listenerOutput = successfulOutput(outputs.get('listeners'))
   const listeners = listenerOutput === null ? null : parseIngressListeners(listenerOutput)
   const platformOutput = successfulOutput(outputs.get('platform'))
-  const hostSupport = platformOutput === null ? null : parseSupportedHost(platformOutput)
+  const hostFacts = platformOutput === null ? null : parseSupportedHost(platformOutput)
+  const hostSupport = hostFacts?.supported ?? null
   const binaryOutput = successfulOutput(outputs.get('binary'))
   const binaryFacts = binaryOutput === null ? null : parseBinaryFacts(binaryOutput)
+  const pathFactsOutput = successfulOutput(outputs.get('pathFacts'))
+  const pathFacts = pathFactsOutput === null ? null : parsePathFacts(pathFactsOutput)
+  const pathAncestorsSafe = pathFacts !== null && pathFacts.every(
+    (fact) => fact.kind !== 'SYMLINK' || fact.path === '/usr/bin/caddy'
+  )
+  const managedPathsValid = pathFacts !== null && validateManagedPaths(pathFacts, binaryFacts)
+  const installationOutput = successfulOutput(outputs.get('installation'))
+  const installation = installationOutput === null ? null : parseInstallationManifest(installationOutput)
   const serviceOutput = successfulOutput(outputs.get('service'))
   const distroServiceOutput = successfulOutput(outputs.get('distroCaddyService'))
   const distroApiServiceOutput = successfulOutput(outputs.get('distroCaddyApiService'))
@@ -119,7 +149,16 @@ export async function preflightSharedIngress(
   const configExists = configPathOutput === null
     ? null
     : configPathOutput.trim() === 'MISSING' ? false : true
-  const version = binaryFacts?.version ?? null
+  const version = installation?.version ?? null
+  const installationVerified = Boolean(
+    installation &&
+    installation.architecture === hostFacts?.architecture &&
+    installation.repositoryChannel === 'stable' &&
+    installation.packageSha256 !== null &&
+    installation.binarySha256 !== null &&
+    binaryFacts?.binarySha256 === installation.binarySha256 &&
+    binaryFacts?.versionFromTarget === installation.version
+  )
   const distroUnits = [distroServiceOutput, distroApiServiceOutput]
   const distroUnitState = distroUnits.some((output) => output === null)
     ? 'unknown'
@@ -131,6 +170,9 @@ export async function preflightSharedIngress(
   const serviceVerified = Boolean(
       hostSupport === true &&
       binaryFacts?.safeManagedBinary &&
+      pathAncestorsSafe &&
+      managedPathsValid &&
+      installationVerified &&
       distroUnitState === 'absent' &&
     serviceFacts?.loaded &&
       serviceFacts.active &&
@@ -158,11 +200,7 @@ export async function preflightSharedIngress(
   const firewallBlocked = firewall.inbound_80 === 'blocked' || firewall.inbound_443 === 'blocked'
   const firewallKnown = firewall.state === 'inactive' ||
     (firewall.inbound_80 === 'allowed' && firewall.inbound_443 === 'allowed')
-  const cleanInstall = hostSupport === true &&
-    binaryFacts?.kind === 'missing' && binaryFacts.packageOwner === 'none' &&
-    distroUnitState === 'absent' && serviceFacts?.loadState === 'not-found' &&
-    markerStatus === 'missing' && configExists === false
-  const ingressWriteSafe = serviceVerified || cleanInstall
+  const ingressWriteSafe = serviceVerified
   const localAssessment = ownerStatus === 'conflict' || firewallBlocked
     ? 'blocked'
     : ingressWriteSafe && (ownerStatus === 'ports_free' || ownerStatus === 'opspilot_owned') && firewallKnown
@@ -175,7 +213,10 @@ export async function preflightSharedIngress(
   if ([...outputs.values()].some((output) => output === null)) reasonCode = 'SSH_UNAVAILABLE'
   else if (ownerStatus === 'conflict') reasonCode = 'INGRESS_PORT_CONFLICT'
   else if (ownerStatus === 'unknown') reasonCode = 'INGRESS_OWNER_UNKNOWN'
-  else if (hostSupport !== true || binaryFacts?.packageOwner !== 'none' || distroUnitState !== 'absent') reasonCode = 'INGRESS_OWNER_UNKNOWN'
+  else if (
+    hostSupport !== true || binaryFacts?.packageOwner !== 'none' || distroUnitState !== 'absent' ||
+    !pathAncestorsSafe || !managedPathsValid || !installationVerified
+  ) reasonCode = 'INGRESS_OWNER_UNKNOWN'
   else if (!ingressWriteSafe) reasonCode = 'INGRESS_OWNER_UNKNOWN'
   else if (firewall.inbound_80 === 'blocked') reasonCode = 'FIREWALL_80_BLOCKED'
   else if (firewall.inbound_443 === 'blocked') reasonCode = 'FIREWALL_443_BLOCKED'
@@ -230,7 +271,7 @@ function successfulOutput(output: CommandOutput | null | undefined): string | nu
   return output?.code === 0 ? output.stdout : null
 }
 
-function parseSupportedHost(output: string): boolean | null {
+function parseSupportedHost(output: string): { supported: boolean; architecture: string } | null {
   const lines = output.trim().split(/\r?\n/)
   const properties = new Map<string, string>()
   for (const line of lines) {
@@ -242,13 +283,15 @@ function parseSupportedHost(output: string): boolean | null {
   const supportedDistro =
     (properties.get('ID') === 'debian' && properties.get('VERSION_ID') === '12') ||
     (properties.get('ID') === 'ubuntu' && ['22.04', '24.04'].includes(properties.get('VERSION_ID') ?? ''))
-  return supportedDistro && ['x86_64', 'aarch64'].includes(arch)
+  const architecture = arch === 'x86_64' ? 'amd64' : arch === 'aarch64' ? 'arm64' : arch
+  return { supported: supportedDistro && ['amd64', 'arm64'].includes(architecture), architecture }
 }
 
 function parseBinaryFacts(output: string): {
   kind: 'missing' | 'symlink' | 'other' | 'unknown',
   packageOwner: 'none' | 'owned' | 'unknown',
-  version: string | null
+  binarySha256: string | null
+  versionFromTarget: string | null
   safeManagedBinary: boolean
 } {
   const values = new Map<string, string[]>()
@@ -269,18 +312,129 @@ function parseBinaryFacts(output: string): {
       ? 'none'
       : packageValues[0] === 'unknown' || targetPackageValues[0] === 'unknown' ? 'unknown' : 'owned'
     : 'unknown'
-  const versionText = values.get('VERSION')?.[0] ?? ''
-  const version = versionText.match(/\bv?(\d+\.\d+\.\d+)\b/)?.[1] ?? null
   const link = values.get('LINK')?.[0]
   const resolved = values.get('RESOLVED')?.[0]
-  const pathMatchesVersion = link !== undefined &&
-    /^\/usr\/local\/lib\/opspilot-caddy\/versions\/\d+\.\d+\.\d+\/caddy$/.test(link) &&
-    link === resolved && link.includes(`/versions/${version}/`)
+  const versionFromTarget = link?.match(/^\/usr\/local\/lib\/opspilot-caddy\/versions\/(\d+\.\d+\.\d+)\/caddy$/)?.[1] ?? null
+  const binarySha256Value = values.get('BINARY_SHA256')
+  const binarySha256 = binarySha256Value?.length === 1 && /^[a-f0-9]{64}$/.test(binarySha256Value[0])
+    ? binarySha256Value[0]
+    : null
+  const pathMatchesVersion = versionFromTarget !== null && link === resolved
   return {
     kind,
     packageOwner,
+    binarySha256,
+    versionFromTarget,
+    safeManagedBinary: kind === 'symlink' && packageOwner === 'none' && binarySha256 !== null && pathMatchesVersion
+  }
+}
+
+interface PathFact {
+  path: string
+  kind: string
+  owner: string | null
+  group: string | null
+  mode: string | null
+  links: number | null
+  target: string | null
+}
+
+function parsePathFacts(output: string): PathFact[] | null {
+  const facts: PathFact[] = []
+  for (const line of output.split(/\r?\n/).filter(Boolean)) {
+    const [path, kind, owner, group, mode, links, target] = line.split('|')
+    if (!path?.startsWith('/') || !kind || line.split('|').length !== 7) return null
+    if (kind === 'MISSING') {
+      facts.push({ path, kind, owner: null, group: null, mode: null, links: null, target: null })
+      continue
+    }
+    if (kind === 'SYMLINK') {
+      facts.push({ path, kind, owner, group, mode, links: Number(links), target })
+      continue
+    }
+    if (!owner || !group || !/^\d{3,4}$/.test(mode ?? '') || !/^\d+$/.test(links ?? '')) return null
+    facts.push({ path, kind, owner, group, mode, links: Number(links), target: null })
+  }
+  return facts.length > 0 ? facts : null
+}
+
+function validateManagedPaths(facts: PathFact[], binary: ReturnType<typeof parseBinaryFacts> | null): boolean {
+  const byPath = new Map(facts.map((fact) => [fact.path, fact]))
+  const expectedDirectories: Record<string, [string, string, string]> = {
+    '/usr': ['root', 'root', '755'],
+    '/usr/bin': ['root', 'root', '755'],
+    '/usr/local': ['root', 'root', '755'],
+    '/usr/local/lib': ['root', 'root', '755'],
+    '/usr/local/lib/opspilot-caddy': ['root', 'root', '755'],
+    '/usr/local/lib/opspilot-caddy/versions': ['root', 'root', '755'],
+    '/etc': ['root', 'root', '755'],
+    '/etc/systemd': ['root', 'root', '755'],
+    '/etc/systemd/system': ['root', 'root', '755'],
+    '/etc/opspilot': ['root', 'root', '755'],
+    '/etc/opspilot/caddy': ['root', 'opspilot-caddy', '750'],
+    '/var': ['root', 'root', '755'],
+    '/var/lib': ['root', 'root', '755'],
+    '/var/lib/opspilot': ['root', 'root', '755'],
+    '/var/lib/opspilot/caddy': ['opspilot-caddy', 'opspilot-caddy', '700'],
+    '/var/lib/opspilot/caddy/production': ['opspilot-caddy', 'opspilot-caddy', '700']
+  }
+  for (const [path, [owner, group, mode]] of Object.entries(expectedDirectories)) {
+    if (!hasPathMetadata(byPath.get(path), 'directory', owner, group, mode)) return false
+  }
+  if (!binary?.versionFromTarget) return false
+  const binaryTarget = `/usr/local/lib/opspilot-caddy/versions/${binary.versionFromTarget}/caddy`
+  if (!hasPathMetadata(byPath.get(`/usr/local/lib/opspilot-caddy/versions/${binary.versionFromTarget}`), 'directory', 'root', 'root', '755')) return false
+  return hasPathMetadata(byPath.get('/usr/bin/caddy'), 'SYMLINK', 'root', 'root', '777') &&
+    byPath.get('/usr/bin/caddy')?.target === binaryTarget &&
+    hasPathMetadata(byPath.get(binaryTarget), 'regular file', 'root', 'root', '755', 1) &&
+    hasPathMetadata(byPath.get('/etc/systemd/system/opspilot-caddy.service'), 'regular file', 'root', 'root', '644', 1) &&
+    hasPathMetadata(byPath.get('/etc/opspilot/caddy/OWNER'), 'regular file', 'root', 'root', '644', 1) &&
+    hasPathMetadata(byPath.get('/etc/opspilot/caddy/INSTALLATION'), 'regular file', 'root', 'root', '644', 1) &&
+    hasPathMetadata(byPath.get('/etc/opspilot/caddy/Caddyfile'), 'regular file', 'root', 'opspilot-caddy', '640', 1)
+}
+
+function hasPathMetadata(
+  fact: PathFact | undefined,
+  kind: string,
+  owner: string,
+  group: string,
+  mode: string,
+  links?: number
+): boolean {
+  return Boolean(
+    fact && fact.kind === kind && fact.owner === owner && fact.group === group && fact.mode === mode &&
+    (links === undefined || fact.links === links)
+  )
+}
+
+function parseInstallationManifest(output: string): {
+  version: string
+  architecture: string
+  repositoryChannel: string
+  packageSha256: string | null
+  binarySha256: string | null
+} | null {
+  const [kindLine, ...manifestLines] = output.trimEnd().split(/\r?\n/)
+  if (kindLine !== 'KIND=regular') return null
+  const values = new Map<string, string>()
+  for (const line of manifestLines) {
+    const match = line.match(/^([a-z0-9_]+)=([^\r\n]+)$/)
+    if (!match || values.has(match[1])) return null
+    values.set(match[1], match[2])
+  }
+  if (values.size !== 6 || values.get('format') !== 'opspilot-caddy-installation-v1') return null
+  const version = values.get('version')
+  const architecture = values.get('architecture')
+  const repositoryChannel = values.get('repository_channel')
+  const packageSha256 = values.get('package_sha256')
+  const binarySha256 = values.get('binary_sha256')
+  if (!version || !/^\d+\.\d+\.\d+$/.test(version) || !architecture || !repositoryChannel) return null
+  return {
     version,
-    safeManagedBinary: kind === 'symlink' && packageOwner === 'none' && version !== null && pathMatchesVersion
+    architecture,
+    repositoryChannel,
+    packageSha256: packageSha256 && /^[a-f0-9]{64}$/.test(packageSha256) ? packageSha256 : null,
+    binarySha256: binarySha256 && /^[a-f0-9]{64}$/.test(binarySha256) ? binarySha256 : null
   }
 }
 

@@ -15,6 +15,39 @@ const verifiedService = [
   'MainPID=41'
 ].join('\n')
 const missingBinary = { code: 0, stdout: 'KIND=missing\nPACKAGE=none\nTARGET_PACKAGE=none\n', stderr: '' }
+const binaryHash = 'a'.repeat(64)
+const packageHash = 'b'.repeat(64)
+const versionedBinaryPath = '/usr/local/lib/opspilot-caddy/versions/2.9.1/caddy'
+
+function managedPathFacts(): string {
+  const directories = [
+    '/usr', '/usr/bin', '/usr/local', '/usr/local/lib', '/usr/local/lib/opspilot-caddy',
+    '/usr/local/lib/opspilot-caddy/versions', '/usr/local/lib/opspilot-caddy/versions/2.9.1',
+    '/etc', '/etc/systemd', '/etc/systemd/system', '/etc/opspilot',
+    '/var', '/var/lib', '/var/lib/opspilot'
+  ].map((path) => `${path}|directory|root|root|755|1|`)
+  const files = [
+    `${versionedBinaryPath}|regular file|root|root|755|1|`,
+    '/etc/systemd/system/opspilot-caddy.service|regular file|root|root|644|1|',
+    '/etc/opspilot/caddy/OWNER|regular file|root|root|644|1|',
+    '/etc/opspilot/caddy/INSTALLATION|regular file|root|root|644|1|',
+    '/etc/opspilot/caddy/Caddyfile|regular file|root|opspilot-caddy|640|1|'
+  ]
+  return [
+    ...directories,
+    `/usr/bin/caddy|SYMLINK|root|root|777|1|${versionedBinaryPath}`,
+    '/etc/opspilot/caddy|directory|root|opspilot-caddy|750|1|',
+    '/var/lib/opspilot/caddy|directory|opspilot-caddy|opspilot-caddy|700|1|',
+    '/var/lib/opspilot/caddy/production|directory|opspilot-caddy|opspilot-caddy|700|1|',
+    ...files
+  ].join('\n')
+}
+
+const validInstallation = {
+  code: 0,
+  stdout: `KIND=regular\nformat=opspilot-caddy-installation-v1\nversion=2.9.1\narchitecture=amd64\nrepository_channel=stable\npackage_sha256=${packageHash}\nbinary_sha256=${binaryHash}\n`,
+  stderr: ''
+}
 
 function fakeSsh(overrides: Partial<Record<keyof typeof INGRESS_READ_COMMANDS, {
   code: number
@@ -33,9 +66,11 @@ function fakeSsh(overrides: Partial<Record<keyof typeof INGRESS_READ_COMMANDS, {
     platform: { code: 0, stdout: 'ID=debian\nVERSION_ID="12"\nx86_64\n', stderr: '' },
     binary: {
       code: 0,
-      stdout: 'KIND=symlink\nLINK=/usr/local/lib/opspilot-caddy/versions/2.9.1/caddy\nRESOLVED=/usr/local/lib/opspilot-caddy/versions/2.9.1/caddy\nPACKAGE=none\nTARGET_PACKAGE=none\nVERSION=v2.9.1 h1:example\n',
+      stdout: `KIND=symlink\nLINK=${versionedBinaryPath}\nRESOLVED=${versionedBinaryPath}\nPACKAGE=none\nTARGET_PACKAGE=none\nBINARY_SHA256=${binaryHash}\n`,
       stderr: ''
     },
+    pathFacts: { code: 0, stdout: managedPathFacts(), stderr: '' },
+    installation: validInstallation,
     service: { code: 0, stdout: verifiedService, stderr: '' },
     distroCaddyService: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive', stderr: '' },
     distroCaddyApiService: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive', stderr: '' },
@@ -43,7 +78,6 @@ function fakeSsh(overrides: Partial<Record<keyof typeof INGRESS_READ_COMMANDS, {
     markerPath: { code: 0, stdout: 'REGULAR\n', stderr: '' },
     configPath: { code: 0, stdout: 'REGULAR\n', stderr: '' },
     config: { code: 0, stdout: 'READABLE\n', stderr: '' },
-    version: { code: 0, stdout: 'v2.9.1 h1:example\n', stderr: '' },
     ufw: {
       code: 0,
       stdout: 'Status: active\nDefault: deny (incoming), allow (outgoing), disabled (routed)\n80/tcp ALLOW IN Anywhere\n80/tcp ALLOW IN Anywhere (v6)\n443/tcp ALLOW IN Anywhere\n443/tcp ALLOW IN Anywhere (v6)',
@@ -80,7 +114,10 @@ describe('preflightSharedIngress', () => {
       { port: 80, family: 'ipv4' },
       { port: 443, family: 'ipv6' }
     ])
-    expect(exec.mock.calls.map(([, command]) => command)).toEqual(Object.values(INGRESS_READ_COMMANDS))
+    const commands = exec.mock.calls.map(([, command]) => command)
+    expect(commands).toEqual(Object.values(INGRESS_READ_COMMANDS))
+    expect(commands.join('\n')).not.toContain('/usr/bin/caddy version')
+    expect(result.caddy_version).toBe('2.9.1')
   })
 
   it('keeps the empty supported host installable only when every fixed read proves clean state', async () => {
@@ -95,7 +132,8 @@ describe('preflightSharedIngress', () => {
       ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
     })
     expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
-      ownership: 'ports_free', install_assessment: 'safe', local_assessment: 'clear'
+      ownership: 'ports_free', ports_status: 'free', install_assessment: 'unknown',
+      local_assessment: 'unknown', service: 'absent'
     })
     expect(exec.mock.calls.map(([, command]) => command)).toEqual(Object.values(INGRESS_READ_COMMANDS))
     expect(Object.values(INGRESS_READ_COMMANDS).join('\n')).not.toMatch(/apt(-get)?\s+(install|update)|systemctl\s+(start|enable|reload)|\btee\b|\bmv\b|\brm\b/i)
@@ -175,6 +213,69 @@ describe('preflightSharedIngress', () => {
   })
 
   it.each([
+    ['missing manifest', { code: 0, stdout: 'KIND=missing\n', stderr: '' }, ''],
+    [
+      'binary hash mismatch',
+      { ...validInstallation, stdout: validInstallation.stdout.replace(`binary_sha256=${binaryHash}`, `binary_sha256=${'c'.repeat(64)}`) },
+      managedPathFacts()
+    ],
+    [
+      'malformed package hash',
+      { ...validInstallation, stdout: validInstallation.stdout.replace(`package_sha256=${packageHash}`, 'package_sha256=bad') },
+      managedPathFacts()
+    ]
+  ])('fails closed for %s', async (_label, installation, pathFacts) => {
+    const paths = pathFacts || managedPathFacts().replace(
+      '/etc/opspilot/caddy/INSTALLATION|regular file|root|root|644|1|',
+      '/etc/opspilot/caddy/INSTALLATION|MISSING|||||'
+    )
+    const { ssh } = fakeSsh({
+      installation,
+      pathFacts: { code: 0, stdout: paths, stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ownership: 'unknown', service: 'unknown', install_assessment: 'unknown',
+      local_assessment: 'unknown', reason_code: 'INGRESS_OWNER_UNKNOWN'
+    })
+  })
+
+  it.each([
+    ['version differs from the immutable binary path', validInstallation.stdout.replace('version=2.9.1', 'version=2.9.2')],
+    ['architecture differs from the supported host', validInstallation.stdout.replace('architecture=amd64', 'architecture=arm64')]
+  ])('rejects an INSTALLATION manifest when %s', async (_label, manifest) => {
+    const { ssh } = fakeSsh({
+      installation: { ...validInstallation, stdout: manifest }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      service: 'unknown', install_assessment: 'unknown', local_assessment: 'unknown',
+      reason_code: 'INGRESS_OWNER_UNKNOWN'
+    })
+  })
+
+  it.each([
+    ['/usr/local/lib', '/usr/local/lib|SYMLINK|root|root|777|1|/tmp/lib'],
+    ['/etc/systemd/system', '/etc/systemd/system|SYMLINK|root|root|777|1|/tmp/systemd']
+  ])('rejects a symlink in the %s path chain', async (path, symlinkFact) => {
+    const facts = managedPathFacts().replace(new RegExp(`^${path}\\|[^\\n]+$`, 'm'), symlinkFact)
+    const { ssh } = fakeSsh({ pathFacts: { code: 0, stdout: facts, stderr: '' } })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ownership: 'unknown', service: 'unknown', install_assessment: 'unknown',
+      reason_code: 'INGRESS_OWNER_UNKNOWN'
+    })
+  })
+
+  it.each([
+    ['/etc/systemd/system/opspilot-caddy.service', '|regular file|root|root|664|1|'],
+    ['/etc/opspilot/caddy/Caddyfile', '|regular file|root|root|640|1|']
+  ])('rejects unsafe ownership or mode for %s', async (path, wrongMetadata) => {
+    const facts = managedPathFacts().replace(new RegExp(`^${path}\\|[^\\n]+$`, 'm'), `${path}${wrongMetadata}`)
+    const { ssh } = fakeSsh({ pathFacts: { code: 0, stdout: facts, stderr: '' } })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ownership: 'unknown', service: 'unknown', install_assessment: 'unknown'
+    })
+  })
+
+  it.each([
     ['marker', { markerPath: { code: 0, stdout: 'SYMLINK\n', stderr: '' } }],
     ['Caddyfile', { configPath: { code: 0, stdout: 'SYMLINK\n', stderr: '' } }]
   ])('fails closed on a dangling or unexpected %s path', async (_label, override) => {
@@ -238,7 +339,7 @@ describe('preflightSharedIngress', () => {
     })
   })
 
-  it('reports free ports independently from a missing unit and parses inactive UFW', async () => {
+  it('reports free ports but keeps installation unknown without the ownership manifest', async () => {
     const { ssh } = fakeSsh({
       listeners: { code: 0, stdout: '', stderr: '' },
       binary: missingBinary,
@@ -252,8 +353,8 @@ describe('preflightSharedIngress', () => {
     expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
       ownership: 'ports_free',
       ports_status: 'free',
-      install_assessment: 'safe',
-      local_assessment: 'clear',
+      install_assessment: 'unknown',
+      local_assessment: 'unknown',
       service: 'absent',
       ufw: { state: 'inactive', inbound_80: 'not_applicable', inbound_443: 'not_applicable' }
     })
