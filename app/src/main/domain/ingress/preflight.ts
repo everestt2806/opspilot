@@ -7,6 +7,7 @@ export const INGRESS_READ_COMMANDS = {
   service:
     'systemctl show opspilot-caddy.service --property=LoadState,ActiveState,FragmentPath,ExecStart,MainPID --no-pager',
   marker: 'sudo -n cat /etc/opspilot/caddy/OWNER',
+  configExists: 'sudo -n test -e /etc/opspilot/caddy/Caddyfile && printf "EXISTS\\n"',
   config: 'sudo -n test -r /etc/opspilot/caddy/Caddyfile && printf "READABLE\\n"',
   version: 'sudo -n /usr/bin/caddy version',
   ufw: 'sudo -n ufw status verbose'
@@ -27,12 +28,15 @@ export interface IngressListener {
 
 export interface IngressPreflightResult {
   ownership: IngressOwnership
+  ports_status: 'free' | 'occupied' | 'unknown'
+  install_assessment: 'safe' | 'blocked' | 'unknown'
   local_assessment: 'clear' | 'blocked' | 'unknown'
   reason_code: DomainReasonCode | null
   listeners: IngressListener[]
   service: 'verified' | 'absent' | 'unknown'
   caddy_version: string | null
   ownership_marker: 'valid' | 'missing' | 'mismatch' | 'unknown'
+  config_exists: boolean | null
   config_readable: boolean | null
   ufw: {
     state: IngressFirewallState
@@ -73,6 +77,7 @@ export async function preflightSharedIngress(
   const listeners = listenerOutput === null ? null : parseIngressListeners(listenerOutput)
   const serviceOutput = successfulOutput(outputs.get('service'))
   const markerOutput = successfulOutput(outputs.get('marker'))
+  const configExistsOutput = successfulOutput(outputs.get('configExists'))
   const configOutput = successfulOutput(outputs.get('config'))
   const versionOutput = successfulOutput(outputs.get('version'))
   const serviceFacts = serviceOutput === null ? null : parseServiceFacts(serviceOutput)
@@ -88,6 +93,12 @@ export async function preflightSharedIngress(
       ? false
       : null
     : configOutput.trim() === 'READABLE'
+  const configExistsResult = outputs.get('configExists')
+  const configExists = configExistsOutput === null
+    ? configExistsResult?.code === 1 && configExistsResult.stderr.trim() === ''
+      ? false
+      : null
+    : configExistsOutput.trim() === 'EXISTS' ? true : null
   const version = versionOutput === null ? null : versionOutput.match(/\bv?(\d+\.\d+\.\d+)\b/)?.[1] ?? null
   const serviceVerified = Boolean(
     serviceFacts?.loaded &&
@@ -110,23 +121,35 @@ export async function preflightSharedIngress(
     serviceVerified
   )
   const firewall = parseUfw(successfulOutput(outputs.get('ufw')))
+  const portsStatus = listeners === null
+    ? 'unknown'
+    : listeners.length === 0 ? 'free' : 'occupied'
   const firewallBlocked = firewall.inbound_80 === 'blocked' || firewall.inbound_443 === 'blocked'
   const firewallKnown = firewall.state === 'inactive' ||
     (firewall.inbound_80 === 'allowed' && firewall.inbound_443 === 'allowed')
+  const cleanInstall = serviceFacts?.loadState === 'not-found' &&
+    markerStatus === 'missing' && configExists === false
+  const ingressWriteSafe = serviceVerified || cleanInstall
   const localAssessment = ownerStatus === 'conflict' || firewallBlocked
     ? 'blocked'
-    : (ownerStatus === 'ports_free' || ownerStatus === 'opspilot_owned') && firewallKnown
+    : ingressWriteSafe && (ownerStatus === 'ports_free' || ownerStatus === 'opspilot_owned') && firewallKnown
       ? 'clear'
       : 'unknown'
+  const installAssessment = localAssessment === 'clear'
+    ? 'safe'
+    : localAssessment === 'blocked' ? 'blocked' : 'unknown'
   let reasonCode: DomainReasonCode | null = null
   if ([...outputs.values()].some((output) => output === null)) reasonCode = 'SSH_UNAVAILABLE'
   else if (ownerStatus === 'conflict') reasonCode = 'INGRESS_PORT_CONFLICT'
   else if (ownerStatus === 'unknown') reasonCode = 'INGRESS_OWNER_UNKNOWN'
+  else if (!ingressWriteSafe) reasonCode = 'INGRESS_OWNER_UNKNOWN'
   else if (firewall.inbound_80 === 'blocked') reasonCode = 'FIREWALL_80_BLOCKED'
   else if (firewall.inbound_443 === 'blocked') reasonCode = 'FIREWALL_443_BLOCKED'
 
   return {
     ownership: ownerStatus,
+    ports_status: portsStatus,
+    install_assessment: installAssessment,
     local_assessment: localAssessment,
     reason_code: reasonCode,
     listeners: listeners ?? [],
@@ -135,6 +158,7 @@ export async function preflightSharedIngress(
       : serviceOutput !== null && serviceFacts?.loadState === 'not-found' ? 'absent' : 'unknown',
     caddy_version: version,
     ownership_marker: markerStatus,
+    config_exists: configExists,
     config_readable: configReadable,
     ufw: firewall,
     route_activation: 'not_evaluated'
@@ -281,12 +305,13 @@ function parseUfw(output: string | null): IngressPreflightResult['ufw'] {
       rule.family === family && (rule.port === `${port}/tcp` || rule.port === `${port}`)
     )
     const actions = new Set(matchingRules.map((entry) => entry.action))
-    if (actions.size > 1 || actions.has('REJECT')) return 'unknown'
+    if (actions.size > 1) return 'unknown'
     const broadActions = new Set(matchingRules.filter((rule) => rule.broad).map((rule) => rule.action))
     if (broadActions.size > 1) return 'unknown'
+    if (actions.has('REJECT')) return broadActions.has('REJECT') ? 'blocked' : 'unknown'
     if (broadActions.has('ALLOW')) return 'allowed'
     if (broadActions.has('DENY')) return 'blocked'
-    if (defaultInbound === 'allow') return 'allowed'
+    if (defaultInbound === 'allow') return actions.has('DENY') ? 'unknown' : 'allowed'
     if (defaultInbound === 'deny' || defaultInbound === 'reject') return 'blocked'
     return 'unknown'
   }

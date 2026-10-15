@@ -31,6 +31,7 @@ function fakeSsh(overrides: Partial<Record<keyof typeof INGRESS_READ_COMMANDS, {
     },
     service: { code: 0, stdout: verifiedService, stderr: '' },
     marker: { code: 0, stdout: `${OPERATOR_INGRESS_MARKER}\n`, stderr: '' },
+    configExists: { code: 0, stdout: 'EXISTS\n', stderr: '' },
     config: { code: 0, stdout: 'READABLE\n', stderr: '' },
     version: { code: 0, stdout: 'v2.9.1 h1:example\n', stderr: '' },
     ufw: {
@@ -54,6 +55,8 @@ describe('preflightSharedIngress', () => {
     const result = await preflightSharedIngress(ssh, 7)
     expect(result).toMatchObject({
       ownership: 'opspilot_owned',
+      ports_status: 'occupied',
+      install_assessment: 'safe',
       local_assessment: 'clear',
       service: 'verified',
       caddy_version: '2.9.1',
@@ -127,10 +130,15 @@ describe('preflightSharedIngress', () => {
     const { ssh } = fakeSsh({
       listeners: { code: 0, stdout: '', stderr: '' },
       service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nMainPID=0', stderr: '' },
+      marker: { code: 1, stdout: '', stderr: 'cat: /etc/opspilot/caddy/OWNER: No such file or directory' },
+      configExists: { code: 1, stdout: '', stderr: '' },
+      config: { code: 1, stdout: '', stderr: '' },
       ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
     })
     expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
       ownership: 'ports_free',
+      ports_status: 'free',
+      install_assessment: 'safe',
       local_assessment: 'clear',
       service: 'absent',
       ufw: { state: 'inactive', inbound_80: 'not_applicable', inbound_443: 'not_applicable' }
@@ -141,6 +149,67 @@ describe('preflightSharedIngress', () => {
     const { ssh } = fakeSsh({ listeners: { code: 0, stdout: '', stderr: '' } })
     expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
       ownership: 'unknown', reason_code: 'INGRESS_OWNER_UNKNOWN'
+    })
+  })
+
+  it('keeps an inactive but installed unit distinct from safe ingress installation', async () => {
+    const { ssh } = fakeSsh({
+      listeners: { code: 0, stdout: '', stderr: '' },
+      service: {
+        code: 0,
+        stdout: 'LoadState=loaded\nActiveState=inactive\nFragmentPath=/etc/systemd/system/opspilot-caddy.service\nMainPID=0',
+        stderr: ''
+      },
+      ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ports_status: 'free', install_assessment: 'unknown', local_assessment: 'unknown',
+      ownership: 'ports_free', service: 'unknown'
+    })
+  })
+
+  it('does not allow ingress writes when the owner marker is wrong despite free ports', async () => {
+    const { ssh } = fakeSsh({
+      listeners: { code: 0, stdout: '', stderr: '' },
+      service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nMainPID=0', stderr: '' },
+      marker: { code: 0, stdout: 'another-owner\n', stderr: '' },
+      configExists: { code: 1, stdout: '', stderr: '' },
+      config: { code: 1, stdout: '', stderr: '' },
+      ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ports_status: 'free', install_assessment: 'unknown', local_assessment: 'unknown',
+      ownership_marker: 'mismatch', reason_code: 'INGRESS_OWNER_UNKNOWN'
+    })
+  })
+
+  it('does not allow ingress writes when the owner marker cannot be read', async () => {
+    const { ssh } = fakeSsh({
+      listeners: { code: 0, stdout: '', stderr: '' },
+      service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nMainPID=0', stderr: '' },
+      marker: { code: 1, stdout: '', stderr: 'sudo: a password is required' },
+      configExists: { code: 1, stdout: '', stderr: '' },
+      config: { code: 1, stdout: '', stderr: '' },
+      ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ports_status: 'free', install_assessment: 'unknown', local_assessment: 'unknown',
+      ownership_marker: 'unknown', reason_code: 'INGRESS_OWNER_UNKNOWN'
+    })
+  })
+
+  it('does not allow writes over an existing config when no owner is verified', async () => {
+    const { ssh } = fakeSsh({
+      listeners: { code: 0, stdout: '', stderr: '' },
+      service: { code: 0, stdout: 'LoadState=not-found\nActiveState=inactive\nMainPID=0', stderr: '' },
+      marker: { code: 1, stdout: '', stderr: 'cat: /etc/opspilot/caddy/OWNER: No such file or directory' },
+      configExists: { code: 0, stdout: 'EXISTS\n', stderr: '' },
+      config: { code: 0, stdout: 'READABLE\n', stderr: '' },
+      ufw: { code: 0, stdout: 'Status: inactive\n', stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ports_status: 'free', install_assessment: 'unknown', local_assessment: 'unknown',
+      config_exists: true, ownership_marker: 'missing', reason_code: 'INGRESS_OWNER_UNKNOWN'
     })
   })
 
@@ -214,6 +283,20 @@ describe('preflightSharedIngress', () => {
     })
     expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
       ufw: { inbound_80: 'unknown', inbound_80_ipv4: 'unknown', inbound_80_ipv6: 'unknown' },
+      local_assessment: 'unknown'
+    })
+  })
+
+  it.each(['DENY', 'REJECT'])('does not infer global access from default allow plus source-limited %s', async (action) => {
+    const { ssh } = fakeSsh({
+      ufw: {
+        code: 0,
+        stdout: `Status: active\nDefault: allow (incoming), allow (outgoing), disabled (routed)\n80/tcp ${action} IN 198.51.100.7`,
+        stderr: ''
+      }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      ufw: { inbound_80_ipv4: 'unknown', inbound_80: 'unknown' },
       local_assessment: 'unknown'
     })
   })
