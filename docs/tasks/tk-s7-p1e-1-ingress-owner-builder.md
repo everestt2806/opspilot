@@ -24,4 +24,4 @@ Triển khai theo [thiết kế P1e](tk-s7-p1e-caddy-operations-design.md), P1a�
 - ESLint trên hai file code đã sửa: **0 lỗi, 177 warnings**. Không format hàng loạt.
 - Ba lỗi lint toàn repo đã được đối chiếu với `7334542`: current targeted ESLint xác nhận `dnsReadiness.test.ts:37` (`@typescript-eslint/explicit-function-return-type`), `dnsReadiness.ts:403` (cùng rule), `ssh/manager.ts:625` (`prefer-const`). Ba file nguồn và package lint không đổi từ commit nền (`git diff 7334542 HEAD` rỗng cho các path này), nên đây là lỗi có sẵn; không có lỗi lint mới trong file P1e-1. Full baseline lint không hoàn tất trong worktree tạm; lint toàn repo cho revision review này không chạy lại.
 - VPS/Caddy install, service start/reload, config write, DNS/firewall và ACME: **NOT_RUN**. Test preflight xác nhận chỉ gọi lệnh đọc cố định, dùng hash metadata/file, không thực thi `/usr/bin/caddy`.
-- Commit code gốc `7334542` được sửa bởi review này; SHA review sẽ được ghi sau commit.
+- Commit code gốc `7334542` được sửa bởi review tại `f1d98a287f88b32a991e4a180d15ae824ac104aa`.
