@@ -12,14 +12,17 @@ import type { IngressPreflightResult } from './preflight'
 
 export const PUBLIC_DNS_SERVERS = ['1.1.1.1', '8.8.8.8'] as const
 export const MAX_CNAME_DEPTH = 8
+export const DNS_QUERY_TIMEOUT_MS = 2500
 
-export type DnsReadinessResolver = Pick<Resolver, 'resolve4' | 'resolve6' | 'resolveCname'>
+export type DnsReadinessResolver = Pick<Resolver, 'resolve4' | 'resolve6' | 'resolveCname'> & {
+  cancel?: () => void
+}
 
 type AddressResolution =
   | { ok: true; ipv4: string[]; ipv6: string[]; cname_chain: string[] }
   | {
       ok: false
-      status: Extract<DomainDnsReadinessStatus, 'nxdomain' | 'no_records' | 'resolver_error' | 'cname_loop' | 'cname_depth_exceeded'>
+      status: Extract<DomainDnsReadinessStatus, 'nxdomain' | 'no_records' | 'resolver_error' | 'cname_loop' | 'cname_depth_exceeded' | 'resolver_disagreement' | 'resolver_timeout'>
       cname_chain: string[]
     }
 
@@ -32,7 +35,9 @@ const statusReason: Partial<Record<DomainDnsReadinessStatus, DomainDnsReadinessR
   cname_loop: 'DNS_CNAME_LOOP',
   cname_depth_exceeded: 'DNS_CNAME_DEPTH_EXCEEDED',
   ipv6_unreachable: 'DNS_IPV6_UNREACHABLE',
-  cloudflare_proxied: 'DNS_CLOUDFLARE_PROXY_ENABLED',
+  resolver_disagreement: 'DNS_RESOLVERS_DISAGREE',
+  resolver_timeout: 'DNS_RESOLVER_TIMEOUT',
+  proxy_hint_unverified: 'DNS_PROXY_HINT_UNVERIFIED',
   expected_target_unresolved: 'DNS_EXPECTED_TARGET_UNRESOLVED'
 }
 
@@ -40,53 +45,54 @@ const statusReason: Partial<Record<DomainDnsReadinessStatus, DomainDnsReadinessR
 export async function checkSharedIngressReadiness(input: {
   hostname: string
   vpsHost: string
-  cloudflareProxyStatus?: 'enabled' | 'disabled' | 'unknown'
+  cloudflareProxyHint?: 'enabled' | 'disabled' | 'unknown'
   ingress: IngressPreflightResult
-  resolver?: DnsReadinessResolver
+  resolvers?: readonly [DnsReadinessResolver, DnsReadinessResolver]
 }): Promise<SharedIngressReadinessResult> {
   const hostname = normalizeHostname(input.hostname)
   if (!isHostname(hostname)) throw new Error('Hostname không hợp lệ.')
-  const resolver = input.resolver ?? createPublicResolver()
-  const proxyStatus = input.cloudflareProxyStatus ?? 'unknown'
+  const resolvers = input.resolvers ?? createPublicResolvers()
+  const proxyHint = input.cloudflareProxyHint ?? 'unknown'
 
-  const observed = await resolveAddressChain(hostname, resolver)
-  if (proxyStatus === 'enabled') {
-    const proxyInstructions = [
-      'Cloudflare Proxy đang bật; A/AAAA có thể là IP Anycast của Cloudflare nên không dùng để đối chiếu với VPS.',
-      'Xác minh origin bằng thông tin DNS provider hoặc chuyển tạm sang DNS only trước khi kiểm tra DNS-to-VPS.',
-      'Preflight không cấp certificate, không bật route và chưa chạy external HTTPS probe.'
-    ]
-    if (observed.ok) {
-      return buildResult(hostname, 'cloudflare_proxied', {
-        ipv4: observed.ipv4, ipv6: observed.ipv6, cname_chain: observed.cname_chain
-      }, input.ingress, proxyStatus, proxyInstructions)
-    }
+  const observed = await resolveConsistentAddressChain(hostname, resolvers)
+  if (!observed.ok && (observed.status === 'resolver_timeout' || observed.status === 'resolver_disagreement' || observed.status === 'resolver_error')) {
     return buildResult(hostname, observed.status, {
       ipv4: [], ipv6: [], cname_chain: observed.cname_chain
-    }, input.ingress, proxyStatus, [...dnsInstructions(observed.status), ...proxyInstructions])
+    }, input.ingress, proxyHint, dnsInstructions(observed.status))
   }
-
   if (!observed.ok) {
     return buildResult(hostname, observed.status, {
       ipv4: [], ipv6: [], cname_chain: observed.cname_chain
-    }, input.ingress, proxyStatus, dnsInstructions(observed.status))
+    }, input.ingress, proxyHint, dnsInstructions(observed.status))
+  }
+  if (proxyHint === 'enabled') {
+    const proxyInstructions = [
+      'Bạn đã chọn gợi ý Cloudflare Proxy đang bật; đây chưa phải trạng thái được xác minh từ Cloudflare.',
+      'A/AAAA có thể là IP Anycast; không dùng gợi ý này làm bằng chứng origin hoặc để kích hoạt HTTPS. Xác minh cấu hình tại DNS provider.',
+      'Preflight không cấp certificate, không bật route và chưa chạy external HTTPS probe.'
+    ]
+    return buildResult(hostname, 'proxy_hint_unverified', {
+      ipv4: observed.ipv4, ipv6: observed.ipv6, cname_chain: observed.cname_chain
+    }, input.ingress, proxyHint, proxyInstructions)
   }
 
-  const expected = await resolveExpectedAddresses(input.vpsHost, resolver)
+  const expected = await resolveExpectedAddresses(input.vpsHost, resolvers)
   if (!expected.ok) {
-    return buildResult(hostname, 'expected_target_unresolved', {
+    const status = expected.status ?? 'expected_target_unresolved'
+    return buildResult(hostname, status, {
       ipv4: observed.ipv4, ipv6: observed.ipv6, cname_chain: observed.cname_chain
-    }, input.ingress, proxyStatus, [
+    }, input.ingress, proxyHint, status === 'expected_target_unresolved' ? [
       'Không xác định được public IP từ host đã lưu của VPS; cần cập nhật endpoint VPS thành IP công khai hoặc hostname phân giải được.',
       'Không thể xác nhận DNS trỏ tới VPS.'
-    ])
+    ] : dnsInstructions(status))
   }
 
   const hasWrongV4 = observed.ipv4.some((address) => !expected.ipv4.includes(address))
-  const hasWrongV6 = observed.ipv6.some((address) => !expected.ipv6.includes(address))
+  const expectedIpv6 = new Set(expected.ipv6.map(canonicalIpv6))
+  const hasWrongV6 = observed.ipv6.some((address) => !expectedIpv6.has(canonicalIpv6(address)))
   const hasIpv6WithoutVpsSupport = observed.ipv6.length > 0 && expected.ipv6.length === 0
   const hasCorrect = observed.ipv4.some((address) => expected.ipv4.includes(address)) ||
-    observed.ipv6.some((address) => expected.ipv6.includes(address))
+    observed.ipv6.some((address) => expectedIpv6.has(canonicalIpv6(address)))
   const hasWrong = hasWrongV4 || hasWrongV6
   let dnsStatus: DomainDnsReadinessStatus
   if (hasIpv6WithoutVpsSupport || (hasWrongV6 && expected.ipv6.length === 0)) {
@@ -132,7 +138,7 @@ export async function checkSharedIngressReadiness(input: {
     target_ipv4: expected.ipv4,
     target_ipv6: expected.ipv6,
     ipv6_status: ipv6Status
-  }, input.ingress, proxyStatus, instructions)
+  }, input.ingress, proxyHint, instructions)
 }
 
 function buildResult(
@@ -147,14 +153,14 @@ function buildResult(
     ipv6_status?: 'not_advertised' | 'target_matches' | 'unreachable' | 'unknown'
   },
   ingress: IngressPreflightResult,
-  proxyStatus: 'enabled' | 'disabled' | 'unknown',
+  proxyHint: 'enabled' | 'disabled' | 'unknown',
   instructions: string[]
 ): SharedIngressReadinessResult {
   const dnsReason = statusReason[dnsStatus] ?? null
   const dnsBlocked = ['nxdomain', 'no_records', 'mixed_target', 'target_mismatch', 'ipv6_unreachable', 'expected_target_unresolved'].includes(dnsStatus)
   const acmeStatus = (port: 80 | 443): DomainAcmeAttemptStatus => {
     if (dnsBlocked || ingress.local_assessment === 'blocked') return 'blocked'
-    if (dnsStatus !== 'propagated' || proxyStatus !== 'disabled') return 'unknown'
+    if (dnsStatus !== 'propagated' || proxyHint !== 'disabled') return 'unknown'
     if (ingress.install_assessment !== 'safe' || ingress.ufw.state === 'unknown') return 'unknown'
     const portStatus = ingress.ufw[`inbound_${port}`]
     if (portStatus === 'blocked') return 'blocked'
@@ -168,14 +174,14 @@ function buildResult(
     hostname,
     dns_status: dnsStatus,
     dns_reason_code: dnsReason,
-    resolver: 'public-resolvers',
+    resolvers: [...PUBLIC_DNS_SERVERS],
     expected_ipv4: addresses.target_ipv4 ?? [],
     expected_ipv6: addresses.target_ipv6 ?? [],
     observed_a: addresses.ipv4,
     observed_aaaa: addresses.ipv6,
     cname_chain: addresses.cname_chain,
     ipv6_status: addresses.ipv6_status ?? 'unknown',
-    cloudflare_proxy_status: proxyStatus,
+    cloudflare_proxy_hint: proxyHint,
     ingress: {
       ports_status: ingress.ports_status,
       install_assessment: ingress.install_assessment,
@@ -190,29 +196,97 @@ function buildResult(
     route_status: 'not_configured',
     https_probe_status: 'not_run',
     overall_status: 'unknown',
-    instructions
+    instructions: [
+      ...instructions,
+      'cloudflare_proxy_hint chỉ là gợi ý do người dùng cung cấp, chưa xác minh từ Cloudflare; P1e không được dùng gợi ý này để kích hoạt HTTPS.'
+    ]
   }
 }
 
-function createPublicResolver(): DnsReadinessResolver {
-  const resolver = new Resolver()
-  resolver.setServers([...PUBLIC_DNS_SERVERS])
-  return resolver
+function createPublicResolvers(): readonly [DnsReadinessResolver, DnsReadinessResolver] {
+  const makeResolver = (server: string): DnsReadinessResolver => {
+    const resolver = new Resolver({ timeout: DNS_QUERY_TIMEOUT_MS, tries: 1 })
+    resolver.setServers([server])
+    return resolver
+  }
+  return [makeResolver(PUBLIC_DNS_SERVERS[0]), makeResolver(PUBLIC_DNS_SERVERS[1])]
 }
 
 async function resolveExpectedAddresses(
   vpsHost: string,
-  resolver: DnsReadinessResolver
-): Promise<{ ok: true; ipv4: string[]; ipv6: string[] } | { ok: false }> {
+  resolvers: readonly [DnsReadinessResolver, DnsReadinessResolver]
+): Promise<{
+  ok: true; ipv4: string[]; ipv6: string[]
+} | {
+  ok: false; status?: DomainDnsReadinessStatus
+}> {
   const host = stripIpv6Brackets(vpsHost.trim())
   const family = isIP(host)
   if (family === 4) return isPublicIpv4(host) ? { ok: true, ipv4: [host], ipv6: [] } : { ok: false }
   if (family === 6) return isPublicIpv6(host) ? { ok: true, ipv4: [], ipv6: [host.toLowerCase()] } : { ok: false }
   if (!isHostname(host)) return { ok: false }
-  const resolved = await resolveAddressChain(host, resolver)
-  if (!resolved.ok || (resolved.ipv4.length === 0 && resolved.ipv6.length === 0)) return { ok: false }
+  const resolved = await resolveConsistentAddressChain(host, resolvers)
+  if (!resolved.ok) return { ok: false, status: resolved.status }
+  if (resolved.ipv4.length === 0 && resolved.ipv6.length === 0) return { ok: false }
   if (!resolved.ipv4.every(isPublicIpv4) || !resolved.ipv6.every(isPublicIpv6)) return { ok: false }
   return { ok: true, ipv4: resolved.ipv4, ipv6: resolved.ipv6 }
+}
+
+async function resolveConsistentAddressChain(
+  hostname: string,
+  resolvers: readonly [DnsReadinessResolver, DnsReadinessResolver]
+): Promise<AddressResolution> {
+  const results = await Promise.all(resolvers.map((resolver) =>
+    withDnsTimeout(resolveAddressChain(hostname, resolver), resolver)
+  ))
+  if (results.some((result) => !result.ok && result.status === 'resolver_timeout')) {
+    return { ok: false, status: 'resolver_timeout', cname_chain: [] }
+  }
+  if (sameAddressResolution(results[0], results[1])) return results[0]
+  if (results.some((result) => !result.ok && result.status === 'resolver_error')) {
+    return { ok: false, status: 'resolver_error', cname_chain: [] }
+  }
+  return { ok: false, status: 'resolver_disagreement', cname_chain: [] }
+}
+
+function sameAddressResolution(left: AddressResolution, right: AddressResolution): boolean {
+  if (left.ok !== right.ok) return false
+  if (!left.ok && !right.ok) {
+    return left.status === right.status && sameSequence(left.cname_chain, right.cname_chain)
+  }
+  if (left.ok && right.ok) {
+    return sameSequence(left.cname_chain, right.cname_chain) &&
+      sameStrings(left.ipv4, right.ipv4) &&
+      sameStrings(left.ipv6.map(canonicalIpv6), right.ipv6.map(canonicalIpv6))
+  }
+  return false
+}
+
+function sameStrings(left: string[], right: string[]): boolean {
+  const sortedLeft = [...new Set(left)].sort()
+  const sortedRight = [...new Set(right)].sort()
+  return sortedLeft.length === sortedRight.length && sortedLeft.every((value, index) => value === sortedRight[index])
+}
+
+function sameSequence(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+async function withDnsTimeout<T>(promise: Promise<T>, resolver: DnsReadinessResolver): Promise<T | AddressResolution> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<AddressResolution>((resolve) => {
+        timer = setTimeout(() => {
+          resolver.cancel?.()
+          resolve({ ok: false, status: 'resolver_timeout', cname_chain: [] })
+        }, DNS_QUERY_TIMEOUT_MS)
+      })
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 async function resolveAddressChain(
@@ -294,12 +368,15 @@ function dnsInstructions(status: string): string[] {
     case 'nxdomain': return ['Hostname trả NXDOMAIN; kiểm tra tên và record tại DNS provider.']
     case 'no_records': return ['Hostname tồn tại nhưng không có A/AAAA cuối chuỗi CNAME.']
     case 'resolver_error': return ['Public resolver không trả kết quả xác định; thử lại sau và kiểm tra DNS delegation.']
+    case 'resolver_disagreement': return ['Hai public resolver trả chuỗi CNAME hoặc tập IP khác nhau; DNS chưa được xác minh, hãy chờ đồng bộ rồi kiểm tra lại.']
+    case 'resolver_timeout': return [`Public resolver không phản hồi trong ${DNS_QUERY_TIMEOUT_MS} ms; truy vấn đã bị hủy và DNS chưa được xác minh.`]
     case 'cname_loop': return ['Chuỗi CNAME bị vòng lặp; sửa record để tạo chuỗi hữu hạn.']
     case 'cname_depth_exceeded': return [`Chuỗi CNAME vượt quá giới hạn ${MAX_CNAME_DEPTH}; rút ngắn chuỗi record.`]
     case 'mixed_target': return ['Một phần A/AAAA trỏ đúng nhưng còn IP khác; chỉ thử ACME khi mọi IP đều trỏ về VPS.']
     case 'target_mismatch': return ['A/AAAA cuối chuỗi CNAME không khớp public IP đã phân giải từ host VPS.']
     case 'ipv6_unreachable': return ['AAAA tồn tại nhưng VPS không có IPv6 công khai tương ứng hoặc firewall IPv6 đang chặn. Sửa/xóa AAAA trước khi thử ACME.']
     case 'expected_target_unresolved': return ['Không thể xác định public IP tương ứng với host VPS đã lưu.']
+    case 'proxy_hint_unverified': return ['Gợi ý Cloudflare Proxy do người dùng cung cấp chưa được xác minh; không thể kết luận DNS trỏ trực tiếp tới VPS.']
     default: return ['DNS chưa được xác minh; không cấp certificate hoặc bật route.']
   }
 }
@@ -321,16 +398,20 @@ function isPublicIpv4(value: string): boolean {
   if (isIP(value) !== 4) return false
   const [a, b] = value.split('.').map(Number)
   if (a === undefined || b === undefined) return false
+  const [c, d] = value.split('.').slice(2).map(Number)
+  if (c === undefined || d === undefined) return false
+  const in192 = (second: number, third: number) => a === 192 && b === second && c === third
   return !(
     a === 0 || a === 10 || a === 127 || a >= 224 ||
     (a === 100 && b >= 64 && b <= 127) ||
     (a === 169 && b === 254) ||
     (a === 172 && b >= 16 && b <= 31) ||
     (a === 192 && b === 168) ||
-    (a === 192 && b === 0) ||
-    (a === 192 && b === 2) ||
-    (a === 198 && (b === 18 || b === 19 || b === 51)) ||
-    (a === 203 && b === 0)
+    (a === 192 && b === 0 && c === 0 && d !== 9 && d !== 10) ||
+    in192(0, 2) || in192(88, 99) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113)
   )
 }
 
@@ -339,9 +420,16 @@ function isPublicIpv6(value: string): boolean {
   const words = expandIpv6(value)
   if (!words) return false
   const globalUnicast = words[0] >= 0x2000 && words[0] <= 0x3fff
-  const documentation = words[0] === 0x3fff && (words[1] & 0xf000) === 0
-  const special2001 = words[0] === 0x2001 && words[1] <= 0x01ff
-  return globalUnicast && !documentation && !special2001 && words[0] !== 0x2002
+  const documentation = (words[0] === 0x2001 && words[1] === 0x0db8) ||
+    (words[0] === 0x3fff && (words[1] & 0xfff0) === 0)
+  const benchmark = words[0] === 0x2001 && words[1] === 0x0002
+  const orchid = words[0] === 0x2001 && words[1] === 0x0010
+  return globalUnicast && !documentation && !benchmark && !orchid && words[0] !== 0x2002
+}
+
+function canonicalIpv6(value: string): string {
+  const words = expandIpv6(value)
+  return words ? words.map((word) => word.toString(16).padStart(4, '0')).join(':') : value.toLowerCase()
 }
 
 function expandIpv6(value: string): number[] | null {

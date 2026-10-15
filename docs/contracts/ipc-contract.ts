@@ -37,24 +37,26 @@ export type DomainReasonCode =
 export type DomainDnsReadinessStatus =
   | 'propagated' | 'nxdomain' | 'no_records' | 'resolver_error' | 'target_mismatch'
   | 'mixed_target' | 'cname_loop' | 'cname_depth_exceeded' | 'ipv6_unreachable'
-  | 'cloudflare_proxied' | 'expected_target_unresolved';
+  | 'resolver_disagreement' | 'resolver_timeout' | 'proxy_hint_unverified' | 'expected_target_unresolved';
 export type DomainDnsReadinessReason =
   | 'DNS_NXDOMAIN' | 'DNS_NO_RECORDS' | 'DNS_RESOLVER_ERROR' | 'DNS_TARGET_MISMATCH'
   | 'DNS_MIXED_TARGETS' | 'DNS_CNAME_LOOP' | 'DNS_CNAME_DEPTH_EXCEEDED'
-  | 'DNS_IPV6_UNREACHABLE' | 'DNS_CLOUDFLARE_PROXY_ENABLED' | 'DNS_EXPECTED_TARGET_UNRESOLVED';
+  | 'DNS_IPV6_UNREACHABLE' | 'DNS_RESOLVERS_DISAGREE' | 'DNS_RESOLVER_TIMEOUT'
+  | 'DNS_PROXY_HINT_UNVERIFIED' | 'DNS_EXPECTED_TARGET_UNRESOLVED';
 export type DomainAcmeAttemptStatus = 'blocked' | 'unknown' | 'ready_to_try';
 export interface SharedIngressReadinessResult {
   hostname: string;
   dns_status: DomainDnsReadinessStatus;
   dns_reason_code: DomainDnsReadinessReason | null;
-  resolver: 'public-resolvers';
+  resolvers: readonly ['1.1.1.1', '8.8.8.8'];
   expected_ipv4: string[];
   expected_ipv6: string[];
   observed_a: string[];
   observed_aaaa: string[];
   cname_chain: string[];
   ipv6_status: 'not_advertised' | 'target_matches' | 'unreachable' | 'unknown';
-  cloudflare_proxy_status: 'enabled' | 'disabled' | 'unknown';
+  /** User hint only; never evidence for P1e activation or provider state. */
+  cloudflare_proxy_hint: 'enabled' | 'disabled' | 'unknown';
   ingress: {
     ports_status: 'free' | 'occupied' | 'unknown';
     install_assessment: 'safe' | 'blocked' | 'unknown';
@@ -360,7 +362,7 @@ export interface IpcInvokeMap {
   'domain:ingress-readiness': (input: {
     vps_id: number;
     hostname: string;
-    cloudflare_proxy_status?: 'enabled' | 'disabled' | 'unknown';
+    cloudflare_proxy_hint?: 'enabled' | 'disabled' | 'unknown';
   }) => IpcResult<SharedIngressReadinessResult>;
   'domain:upsert': (input: {
     deployment_id: number;

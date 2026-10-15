@@ -203,9 +203,9 @@ export function registerIpcHandlers(
     if (!Number.isInteger(input.vps_id) || input.vps_id < 1 || !hostname) {
       throw new AppError('VALIDATION', 'Cần chọn VPS và hostname hợp lệ.')
     }
-    const proxyStatus = input.cloudflare_proxy_status ?? 'unknown'
-    if (!['enabled', 'disabled', 'unknown'].includes(proxyStatus)) {
-      throw new AppError('VALIDATION', 'Trạng thái Cloudflare Proxy không hợp lệ.')
+    const proxyHint = input.cloudflare_proxy_hint ?? 'unknown'
+    if (!['enabled', 'disabled', 'unknown'].includes(proxyHint)) {
+      throw new AppError('VALIDATION', 'Gợi ý Cloudflare Proxy không hợp lệ.')
     }
     const binding = database.prepare(
       `SELECT b.hostname, b.mode, v.host
@@ -221,7 +221,7 @@ export function registerIpcHandlers(
     return checkSharedIngressReadiness({
       hostname: binding.hostname,
       vpsHost: binding.host,
-      cloudflareProxyStatus: proxyStatus,
+      cloudflareProxyHint: proxyHint,
       ingress
     })
   })

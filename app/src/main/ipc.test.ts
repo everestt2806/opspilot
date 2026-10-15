@@ -407,18 +407,18 @@ describe('handle', () => {
         )
         const callback = handleMock.mock.calls.find(([channel]) => channel === 'domain:ingress-readiness')?.[1] as (
           event: unknown,
-          input: { vps_id: number; hostname: string; cloudflare_proxy_status: 'enabled' | 'disabled' | 'unknown' }
+          input: { vps_id: number; hostname: string; cloudflare_proxy_hint: 'enabled' | 'disabled' | 'unknown' }
         ) => Promise<unknown>
         const before = db.prepare('SELECT dns_status, route_status, certificate_status, https_probe_status FROM domain_binding WHERE id = 1').get()
 
         await expect(callback({}, {
-          vps_id: 1, hostname: 'App.Example.com.', cloudflare_proxy_status: 'enabled'
+          vps_id: 1, hostname: 'App.Example.com.', cloudflare_proxy_hint: 'enabled'
         })).resolves.toEqual({ ok: true, data: readiness })
 
         expect(ingressPreflightMock).toHaveBeenCalledWith(ssh, 1)
         expect(readinessCheckMock).toHaveBeenCalledWith(expect.objectContaining({
           hostname: 'app.example.com', vpsHost: '93.184.216.34',
-          cloudflareProxyStatus: 'enabled', ingress: { ports_status: 'free', local_assessment: 'clear' }
+          cloudflareProxyHint: 'enabled', ingress: { ports_status: 'free', local_assessment: 'clear' }
         }))
         expect(db.prepare('SELECT dns_status, route_status, certificate_status, https_probe_status FROM domain_binding WHERE id = 1').get()).toEqual(before)
       } finally {
