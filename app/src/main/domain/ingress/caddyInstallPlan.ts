@@ -201,13 +201,13 @@ export function prepareCaddyInstallPlan(
 
   return {
     status: 'ready',
-    plan: {
+    plan: Object.freeze<CaddyInstallPlan>({
       distro,
       distroVersion: host.distroVersion,
       architecture: supportedArchitecture,
       version: apt.version,
       packageSha256: apt.sha256.toLowerCase(),
-      target: apt.target,
+      target: Object.freeze({ ...apt.target }),
       packageFilename,
       repository: CADDY_STABLE_REPOSITORY,
       verificationSteps: [
@@ -327,7 +327,7 @@ export function prepareCaddyInstallPlan(
         format: 'opspilot-caddy-installation-v1',
         template: manifestTemplate
       }
-    }
+    })
   }
 }
 

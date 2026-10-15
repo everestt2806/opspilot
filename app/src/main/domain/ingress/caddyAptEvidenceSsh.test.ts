@@ -238,6 +238,79 @@ describe('collectCaddyAptEvidenceOverSsh', () => {
     })
   })
 
+  it.each([
+    ['null', 'null'],
+    ['an array', '[]'],
+    ['a primitive', '"snapshot"'],
+    ['an invalid schema', '{"schema":"wrong","requestId":"x","status":"snapshot"}'],
+    ['a missing schema', '{"requestId":"x","status":"snapshot"}']
+  ])('blocks %s JSON before reading snapshot properties', async (_label, stdout) => {
+    await expect(
+      collectCaddyAptEvidenceOverSsh(fakeSsh({ stdout }), TARGET)
+    ).resolves.toMatchObject({
+      status: 'blocked',
+      code: 'APT_METADATA_INVALID',
+      reason: expect.stringContaining('invalid APT evidence object or schema')
+    })
+  })
+
+  it('copies and freezes the verified target independently of caller and SSH identity objects', async () => {
+    const callerTarget: SshHostIdentity = { ...TARGET }
+    const returnedIdentity: SshHostIdentity = { ...TARGET }
+    const ssh = fakeSsh({ identity: returnedIdentity })
+    const pending = collectCaddyAptEvidenceOverSsh(ssh, callerTarget)
+    callerTarget.vpsId = 999
+    callerTarget.host = 'changed.example.invalid'
+    const result = await pending
+    expect(result.status).toBe('verified')
+    if (result.status !== 'verified') return
+    returnedIdentity.hostFingerprint = `SHA256:${'B'.repeat(43)}`
+    expect(result.evidence.target).toEqual(TARGET)
+    expect(Object.isFrozen(result.evidence.target)).toBe(true)
+  })
+
+  it('accepts large canonical base64 by scanning iteratively, with strict decoded-size boundaries', async () => {
+    const maxBytes = 8 * 1024 * 1024
+    const maxData = Buffer.alloc(maxBytes, 0x61).toString('base64')
+    await expect(
+      collectCaddyAptEvidenceOverSsh(
+        fakeSsh({ mutate: (response) => ({ ...response, packagesGzipB64: maxData }) }),
+        TARGET,
+        { maxPackagesGzipBytes: maxBytes }
+      )
+    ).resolves.toMatchObject({ status: 'blocked', code: 'APT_INDEX_CHECKSUM_MISMATCH' })
+
+    const nearLimitData = Buffer.alloc(maxBytes - 1, 0x61).toString('base64')
+    await expect(
+      collectCaddyAptEvidenceOverSsh(
+        fakeSsh({ mutate: (response) => ({ ...response, packagesGzipB64: nearLimitData }) }),
+        TARGET,
+        { maxPackagesGzipBytes: maxBytes }
+      )
+    ).resolves.toMatchObject({ status: 'blocked', code: 'APT_INDEX_CHECKSUM_MISMATCH' })
+
+    const overLimitData = Buffer.alloc(maxBytes + 1, 0x61).toString('base64')
+    await expect(
+      collectCaddyAptEvidenceOverSsh(
+        fakeSsh({ mutate: (response) => ({ ...response, packagesGzipB64: overLimitData }) }),
+        TARGET,
+        { maxPackagesGzipBytes: maxBytes }
+      )
+    ).resolves.toMatchObject({ status: 'blocked', code: 'APT_METADATA_TOO_LARGE' })
+  })
+
+  it.each(['AAAA$AAA', 'AAAA====', 'AB=='])(
+    'rejects malformed or noncanonical base64 %s',
+    async (encoded) => {
+      await expect(
+        collectCaddyAptEvidenceOverSsh(
+          fakeSsh({ mutate: (response) => ({ ...response, packagesGzipB64: encoded }) }),
+          TARGET
+        )
+      ).resolves.toMatchObject({ status: 'blocked', code: 'APT_METADATA_INVALID' })
+    }
+  )
+
   it('rejects stale response nonces rather than using cached SSH JSON', async () => {
     await expect(
       collectCaddyAptEvidenceOverSsh(

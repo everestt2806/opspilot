@@ -213,6 +213,21 @@ describe('prepareCaddyInstallPlan', () => {
     )
   })
 
+  it('copies and freezes the plan identity independently from its host input', () => {
+    const callerTarget = { ...TARGET }
+    const result = prepareCaddyInstallPlan(cleanHost({ target: callerTarget }), aptEvidence)
+    expect(result.status).toBe('ready')
+    if (result.status !== 'ready') return
+    callerTarget.host = 'mutated.example.test'
+    callerTarget.vpsId = 999
+    expect(result.plan.target).toEqual(TARGET)
+    expect(Object.isFrozen(result.plan)).toBe(true)
+    expect(Object.isFrozen(result.plan.target)).toBe(true)
+    expect(Reflect.set(result.plan.target, 'host', 'nested-mutation.example.test')).toBe(false)
+    expect(Reflect.set(result.plan, 'target', { ...TARGET, vpsId: 999 })).toBe(false)
+    expect(result.plan.target).toEqual(TARGET)
+  })
+
   it('rejects caller-created valid/authenticated flags without collector evidence', () => {
     expect(
       prepareCaddyInstallPlan(cleanHost(), {

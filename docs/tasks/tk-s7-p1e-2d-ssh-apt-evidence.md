@@ -30,3 +30,12 @@
 
 - Board giữ trạng thái CHỜ REVIEW.
 - Commit cục bộ; không push/PR/merge. Giữ nguyên các file untracked đã có trước checkpoint.
+
+## Review a98ada3 — cập nhật 15/10/2026
+
+- JSON SSH được parse thành `unknown` và phải là object không phải array, đúng schema, request nonce dạng chuỗi và status hợp lệ trước khi đọc metadata. `null`, array, primitive và schema thiếu/sai trả `APT_METADATA_INVALID` với reason rõ ràng.
+- Adapter chụp và freeze bản sao SSH target trước lần `await` đầu; identity trả từ SSH được kiểm tra bằng snapshot riêng. Evidence giữ target đóng băng. Planner sao chép/freeze target và freeze plan, ngăn sửa cả identity lồng bên trong lẫn thay target trên plan.
+- Thay regex base64 bằng kiểm tra kích thước trước xử lý và vòng quét tuyến tính cho alphabet/padding; round-trip vẫn bắt buộc để giữ canonical encoding.
+- Node **v22.23.3**: SSH + ingress Vitest **9 files, 178/178 PASS**; typecheck **PASS**; production build **PASS** (3.113 renderer modules); ESLint phạm vi 4 file sửa **PASS, 0 lỗi / 0 cảnh báo**; `git diff --check` **PASS**.
+- Kiểm thử bổ sung gồm JSON sai hình dạng/schema, mutation target caller/SSH/planner, base64 canonical decoded 8 MiB, sát ngưỡng, vượt ngưỡng và encoding lỗi. Adapter live **NOT_RUN** như giới hạn checkpoint.
+- Full ESLint không chạy lại trong lượt review; kết quả gần nhất được giữ như lịch sử: **FAIL, 2 lỗi / 6.547 cảnh báo**, hai lỗi ngoài scope tại `dnsReadiness.test.ts:37` và `dnsReadiness.ts:403`. Không tuyên bố lint toàn repo sạch.

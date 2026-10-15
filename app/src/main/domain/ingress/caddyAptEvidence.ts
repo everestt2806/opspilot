@@ -181,6 +181,8 @@ export async function collectCaddyAptEvidenceOverSsh(
       'The expected VPS SSH identity is incomplete or invalid.'
     )
   }
+  // Capture the caller's mutable identity before the first asynchronous boundary.
+  const expectedTarget = freezeTarget(target)
   const limits = createLimits(requestedLimits)
   if (!limits) {
     return blocked('APT_METADATA_INVALID', 'APT evidence limits must be positive finite integers.')
@@ -189,7 +191,7 @@ export async function collectCaddyAptEvidenceOverSsh(
   let execution: Awaited<ReturnType<SshManager['execWithHostIdentity']>>
   try {
     execution = await ssh.execWithHostIdentity(
-      target.vpsId,
+      expectedTarget.vpsId,
       buildRemoteAptSnapshotCommand(requestId),
       {
         timeoutMs: CADDY_APT_SSH_TIMEOUT_MS,
@@ -214,7 +216,8 @@ export async function collectCaddyAptEvidenceOverSsh(
     )
   }
 
-  if (!sameTarget(target, execution.identity)) {
+  const returnedTarget = isValidTarget(execution.identity) ? freezeTarget(execution.identity) : null
+  if (!returnedTarget || !sameTarget(expectedTarget, returnedTarget)) {
     return blocked(
       'APT_SSH_HOST_CHANGED',
       'The resolved VPS SSH host changed; reconnect and verify the saved fingerprint.'
@@ -239,13 +242,19 @@ export async function collectCaddyAptEvidenceOverSsh(
     )
   }
 
-  let response: CaddyAptRemoteSnapshot
+  let response: unknown
   try {
-    response = JSON.parse(execution.result.stdout) as CaddyAptRemoteSnapshot
+    response = JSON.parse(execution.result.stdout) as unknown
   } catch {
     return blocked(
       'APT_METADATA_INVALID',
       'The VPS returned malformed APT evidence; retry after checking the VPS packages.'
+    )
+  }
+  if (!isRemoteSnapshot(response)) {
+    return blocked(
+      'APT_METADATA_INVALID',
+      'The VPS returned an invalid APT evidence object or schema; discard it and retry.'
     )
   }
   if (
@@ -262,9 +271,9 @@ export async function collectCaddyAptEvidenceOverSsh(
 
   if (
     (typeof response.inReleaseB64 === 'string' &&
-      response.inReleaseB64.length > Math.ceil(limits.inReleaseBytes / 3) * 4) ||
+      base64EncodedSizeExceedsLimit(response.inReleaseB64, limits.inReleaseBytes)) ||
     (typeof response.packagesGzipB64 === 'string' &&
-      response.packagesGzipB64.length > Math.ceil(limits.packagesGzipBytes / 3) * 4)
+      base64EncodedSizeExceedsLimit(response.packagesGzipB64, limits.packagesGzipBytes))
   ) {
     return blocked(
       'APT_METADATA_TOO_LARGE',
@@ -318,7 +327,7 @@ export async function collectCaddyAptEvidenceOverSsh(
     packagesGzip: decoded.packagesGzip,
     architecture: decoded.architecture,
     signature,
-    target: execution.identity,
+    target: expectedTarget,
     evidenceSource: 'pinned-ssh',
     maxUncompressedBytes: limits.packagesUncompressedBytes
   })
@@ -566,11 +575,59 @@ function decodeRemoteSnapshot(
 }
 
 function decodeBase64(value: string, maxBytes: number): Buffer | null {
-  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) return null
-  if (value.length > Math.ceil(maxBytes / 3) * 4) return null
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) return null
+  const maxEncodedLength = Math.ceil(maxBytes / 3) * 4
+  if (value.length > maxEncodedLength || value.length % 4 !== 0) return null
+  let paddingStart = value.length
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    const isAlphabet =
+      (code >= 65 && code <= 90) ||
+      (code >= 97 && code <= 122) ||
+      (code >= 48 && code <= 57) ||
+      code === 43 ||
+      code === 47
+    if (isAlphabet) {
+      if (paddingStart !== value.length) return null
+      continue
+    }
+    if (code === 61) {
+      if (paddingStart === value.length) paddingStart = index
+      continue
+    }
+    return null
+  }
+  const paddingLength = value.length - paddingStart
+  if (paddingLength > 2 || (paddingLength > 0 && paddingStart < value.length - 2)) return null
   const decoded = Buffer.from(value, 'base64')
   if (decoded.length > maxBytes || decoded.toString('base64') !== value) return null
   return decoded
+}
+
+function base64EncodedSizeExceedsLimit(value: string, maxBytes: number): boolean {
+  if (value.length > Math.ceil(maxBytes / 3) * 4) return true
+  if (value.length % 4 !== 0) return false
+  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
+  return (value.length / 4) * 3 - padding > maxBytes
+}
+
+function isRemoteSnapshot(value: unknown): value is CaddyAptRemoteSnapshot {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false
+  const snapshot = value as Record<string, unknown>
+  return (
+    snapshot.schema === 'opspilot-caddy-apt-v1' &&
+    typeof snapshot.requestId === 'string' &&
+    (snapshot.status === 'snapshot' || snapshot.status === 'blocked')
+  )
+}
+
+function freezeTarget(target: CaddyAptTargetBinding): CaddyAptTargetBinding {
+  return Object.freeze({
+    vpsId: target.vpsId,
+    host: target.host,
+    port: target.port,
+    hostFingerprint: target.hostFingerprint
+  })
 }
 
 function clampLimit(requested: number | undefined, hardLimit: number): number | null {
