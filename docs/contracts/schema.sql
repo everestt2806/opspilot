@@ -424,7 +424,16 @@ CREATE TABLE domain_binding (
   certificate_checked_at TEXT,
   certificate_hostname TEXT,
   https_probe_checked_at TEXT,
-  https_probe_hostname TEXT
+  https_probe_hostname TEXT,
+  -- Migration 013 binds route and external proof to the same managed Caddy generation.
+  route_config_generation TEXT,
+  route_inventory_revision TEXT,
+  route_environment TEXT CHECK (route_environment IS NULL OR route_environment IN ('production','acme_staging')),
+  https_probe_peer_ip TEXT,
+  https_probe_http_status INTEGER CHECK (https_probe_http_status IS NULL OR https_probe_http_status BETWEEN 100 AND 599),
+  https_probe_generation TEXT,
+  https_probe_inventory_revision TEXT,
+  https_probe_environment TEXT CHECK (https_probe_environment IS NULL OR https_probe_environment IN ('production','acme_staging'))
 );
 CREATE INDEX idx_domain_binding_app ON domain_binding(app_id, status);
 CREATE INDEX idx_domain_binding_app_dns_status ON domain_binding(app_id, dns_status);
@@ -441,25 +450,38 @@ WHEN NEW.route_status = 'active' AND (
   NEW.https_probe_hostname IS NOT NEW.hostname OR
   NEW.desired_generation <> NEW.observed_generation OR
   NEW.route_checked_at IS NULL OR NEW.certificate_checked_at IS NULL OR
-  NEW.https_probe_checked_at IS NULL
+  NEW.https_probe_checked_at IS NULL OR NEW.route_environment IS NOT 'production' OR
+  NEW.https_probe_environment IS NOT 'production' OR NEW.route_config_generation IS NULL OR
+  NEW.route_inventory_revision IS NULL OR
+  NEW.https_probe_generation IS NOT NEW.route_config_generation OR
+  NEW.https_probe_inventory_revision IS NOT NEW.route_inventory_revision OR
+  NEW.https_probe_peer_ip IS NULL OR NEW.https_probe_http_status IS NOT 200
 )
 BEGIN
-  SELECT RAISE(ABORT, 'domain_https_active_requires_verified_evidence');
+  SELECT RAISE(ABORT, 'domain_https_active_requires_production_probe_evidence');
 END;
 CREATE TRIGGER domain_binding_active_requires_https_update
 BEFORE UPDATE OF route_status, dns_status, certificate_status, https_probe_status,
   desired_generation, observed_generation, route_checked_at, certificate_checked_at,
-  certificate_hostname, https_probe_checked_at, https_probe_hostname ON domain_binding
+  certificate_hostname, https_probe_checked_at, https_probe_hostname,
+  route_environment, https_probe_environment, route_config_generation,
+  route_inventory_revision, https_probe_generation, https_probe_inventory_revision,
+  https_probe_peer_ip, https_probe_http_status ON domain_binding
 WHEN NEW.route_status = 'active' AND (
   NEW.dns_status <> 'propagated' OR NEW.certificate_status <> 'valid' OR
   NEW.certificate_hostname IS NOT NEW.hostname OR NEW.https_probe_status <> 'passed' OR
   NEW.https_probe_hostname IS NOT NEW.hostname OR
   NEW.desired_generation <> NEW.observed_generation OR
   NEW.route_checked_at IS NULL OR NEW.certificate_checked_at IS NULL OR
-  NEW.https_probe_checked_at IS NULL
+  NEW.https_probe_checked_at IS NULL OR NEW.route_environment IS NOT 'production' OR
+  NEW.https_probe_environment IS NOT 'production' OR NEW.route_config_generation IS NULL OR
+  NEW.route_inventory_revision IS NULL OR
+  NEW.https_probe_generation IS NOT NEW.route_config_generation OR
+  NEW.https_probe_inventory_revision IS NOT NEW.route_inventory_revision OR
+  NEW.https_probe_peer_ip IS NULL OR NEW.https_probe_http_status IS NOT 200
 )
 BEGIN
-  SELECT RAISE(ABORT, 'domain_https_active_requires_verified_evidence');
+  SELECT RAISE(ABORT, 'domain_https_active_requires_production_probe_evidence');
 END;
 
 CREATE TRIGGER domain_binding_active_requires_shared_ingress_insert
@@ -498,7 +520,15 @@ BEGIN
       certificate_checked_at=NULL,
       certificate_hostname=NULL,
       https_probe_checked_at=NULL,
-      https_probe_hostname=NULL
+      https_probe_hostname=NULL,
+      route_config_generation=NULL,
+      route_inventory_revision=NULL,
+      route_environment=NULL,
+      https_probe_peer_ip=NULL,
+      https_probe_http_status=NULL,
+      https_probe_generation=NULL,
+      https_probe_inventory_revision=NULL,
+      https_probe_environment=NULL
   WHERE id=NEW.id;
 END;
 

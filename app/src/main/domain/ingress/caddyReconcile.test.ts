@@ -28,6 +28,7 @@ function inventory(revision = 'inventory-r1'): SharedIngressInventorySnapshot {
       id: 17, app_id: 19, hostname: 'app.example.test', ownership_key: 'dns-owner:19',
       route_ownership_key: 'opspilot-ingress:19:app.example.test', desired_generation: 3,
       dns_status: 'propagated', enabled: true, host_port: 3019, current_deployment_id: 91,
+      healthcheck_path: '/health',
       deployment_version: 4, image_tag: 'sha256:verified-image'
     }]
   }

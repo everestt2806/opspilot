@@ -39,6 +39,14 @@ function createDatabase(): Database.Database {
       certificate_hostname TEXT,
       https_probe_checked_at TEXT,
       https_probe_hostname TEXT,
+      route_config_generation TEXT,
+      route_inventory_revision TEXT,
+      route_environment TEXT,
+      https_probe_peer_ip TEXT,
+      https_probe_http_status INTEGER,
+      https_probe_generation TEXT,
+      https_probe_inventory_revision TEXT,
+      https_probe_environment TEXT,
       updated_at TEXT
     );
     CREATE UNIQUE INDEX idx_domain_binding_route_ownership
@@ -46,13 +54,20 @@ function createDatabase(): Database.Database {
     CREATE TRIGGER domain_binding_active_requires_https_update
     BEFORE UPDATE OF route_status, dns_status, certificate_status, https_probe_status,
       desired_generation, observed_generation, route_checked_at, certificate_checked_at,
-      certificate_hostname, https_probe_checked_at, https_probe_hostname ON domain_binding
+      certificate_hostname, https_probe_checked_at, https_probe_hostname, route_environment,
+      https_probe_environment, route_config_generation, route_inventory_revision,
+      https_probe_generation, https_probe_inventory_revision, https_probe_peer_ip,
+      https_probe_http_status ON domain_binding
     WHEN NEW.route_status = 'active' AND (
       NEW.dns_status <> 'propagated' OR NEW.certificate_status <> 'valid' OR
       NEW.https_probe_status <> 'passed' OR NEW.desired_generation <> NEW.observed_generation OR
       NEW.certificate_hostname IS NOT NEW.hostname OR NEW.https_probe_hostname IS NOT NEW.hostname OR
       NEW.route_checked_at IS NULL OR NEW.certificate_checked_at IS NULL OR
-      NEW.https_probe_checked_at IS NULL
+      NEW.https_probe_checked_at IS NULL OR NEW.route_environment <> 'production' OR
+      NEW.https_probe_environment <> 'production' OR NEW.route_config_generation IS NULL OR
+      NEW.route_inventory_revision IS NULL OR NEW.https_probe_generation IS NOT NEW.route_config_generation OR
+      NEW.https_probe_inventory_revision IS NOT NEW.route_inventory_revision OR
+      NEW.https_probe_peer_ip IS NULL OR NEW.https_probe_http_status <> 200
     )
     BEGIN SELECT RAISE(ABORT, 'domain_https_active_requires_verified_evidence'); END;
     CREATE TRIGGER domain_binding_active_requires_shared_ingress_update
@@ -73,7 +88,10 @@ function createDatabase(): Database.Database {
           desired_generation=desired_generation+1, observed_generation=0,
           certificate_status='not_requested', https_probe_status='not_run',
           ingress_reason_code=NULL, route_checked_at=NULL, certificate_checked_at=NULL,
-          certificate_hostname=NULL, https_probe_checked_at=NULL, https_probe_hostname=NULL
+          certificate_hostname=NULL, https_probe_checked_at=NULL, https_probe_hostname=NULL,
+          route_config_generation=NULL, route_inventory_revision=NULL, route_environment=NULL,
+          https_probe_peer_ip=NULL, https_probe_http_status=NULL, https_probe_generation=NULL,
+          https_probe_inventory_revision=NULL, https_probe_environment=NULL
       WHERE id=NEW.id;
     END;
   `)
@@ -116,6 +134,17 @@ function observation(
     https_probe_hostname: 'app.example.com',
     ...overrides
   }
+}
+
+function setActiveEvidence(database: Database.Database): void {
+  database.prepare(`UPDATE domain_binding SET route_status='active', certificate_status='valid',
+    https_probe_status='passed', observed_generation=desired_generation,
+    route_environment='production', https_probe_environment='production',
+    route_config_generation=?, route_inventory_revision=?, https_probe_generation=?,
+    https_probe_inventory_revision=?, https_probe_peer_ip='203.0.113.5', https_probe_http_status=200,
+    route_checked_at='2026-10-14T10:00:00Z', certificate_checked_at='2026-10-14T10:00:01Z',
+    certificate_hostname=hostname, https_probe_checked_at='2026-10-14T10:00:02Z',
+    https_probe_hostname=hostname WHERE id=1`).run('a'.repeat(64), 'b'.repeat(64), 'a'.repeat(64), 'b'.repeat(64))
 }
 
 describe('DomainRepository ingress/TLS state', () => {
@@ -169,14 +198,11 @@ describe('DomainRepository ingress/TLS state', () => {
     const repository = new DomainRepository(database)
     repository.upsertDns(binding({ dns_status: 'propagated' }))
 
-    const active = repository.recordIngressObservation(observation())
-    expect(active).toMatchObject<Partial<DomainIngressState>>({
-      dns_status: 'propagated',
-      route_status: 'active',
-      certificate_status: 'valid',
-      https_probe_status: 'passed',
-      desired_generation: 1,
-      observed_generation: 1
+    expect(() => repository.recordIngressObservation(observation())).toThrow(/VALIDATION/)
+    setActiveEvidence(database)
+    expect(repository.getByHostname('app.example.com')).toMatchObject<Partial<DomainIngressState>>({
+      route_status: 'active', certificate_status: 'valid', https_probe_status: 'passed',
+      route_environment: 'production', https_probe_peer_ip: '203.0.113.5'
     })
 
     repository.upsertDns(binding({ target: '203.0.113.6', dns_status: 'propagated' }))
@@ -189,9 +215,7 @@ describe('DomainRepository ingress/TLS state', () => {
     expect(() => repository.recordIngressObservation(observation({ generation: 1 }))).toThrow(
       /VALIDATION/
     )
-    expect(
-      repository.recordIngressObservation(observation({ generation: 2 }))
-    ).toMatchObject({ route_status: 'active', desired_generation: 2, observed_generation: 2 })
+    expect(() => repository.recordIngressObservation(observation({ generation: 2 }))).toThrow(/VALIDATION/)
     database.close()
   })
 
@@ -239,7 +263,7 @@ describe('DomainRepository ingress/TLS state', () => {
       const database = createDatabase()
       const repository = new DomainRepository(database)
       repository.upsertDns(binding({ dns_status: 'propagated' }))
-      repository.recordIngressObservation(observation())
+      setActiveEvidence(database)
 
       const update = database.prepare(`UPDATE domain_binding SET ${mutation.column}=? WHERE id=1`)
       if (mutation.reject) {
@@ -254,7 +278,10 @@ describe('DomainRepository ingress/TLS state', () => {
             .prepare(`SELECT route_status, desired_generation, observed_generation,
               certificate_status, https_probe_status, route_checked_at,
               certificate_checked_at, certificate_hostname, https_probe_checked_at,
-              https_probe_hostname FROM domain_binding WHERE id=1`)
+              https_probe_hostname, route_config_generation, route_inventory_revision,
+              route_environment, https_probe_peer_ip, https_probe_http_status,
+              https_probe_generation, https_probe_inventory_revision, https_probe_environment
+              FROM domain_binding WHERE id=1`)
             .get()
         ).toEqual({
           route_status: 'pending',
@@ -266,7 +293,15 @@ describe('DomainRepository ingress/TLS state', () => {
           certificate_checked_at: null,
           certificate_hostname: null,
           https_probe_checked_at: null,
-          https_probe_hostname: null
+          https_probe_hostname: null,
+          route_config_generation: null,
+          route_inventory_revision: null,
+          route_environment: null,
+          https_probe_peer_ip: null,
+          https_probe_http_status: null,
+          https_probe_generation: null,
+          https_probe_inventory_revision: null,
+          https_probe_environment: null
         })
       }
       database.close()

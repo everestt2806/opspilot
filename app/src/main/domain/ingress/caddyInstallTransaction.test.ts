@@ -211,7 +211,7 @@ describe('P1e-3 first-run Caddy transaction', () => {
         id: 11, app_id: 12, hostname: 'app.example.test', ownership_key: 'dns-owner:12',
         route_ownership_key: 'opspilot-ingress:12:app.example.test', desired_generation: 1,
         dns_status: 'propagated', enabled: true, host_port: 3012, current_deployment_id: 21,
-        deployment_version: 1, image_tag: 'sha256:verified-first-image'
+        deployment_version: 1, image_tag: 'sha256:verified-first-image', healthcheck_path: '/health'
       }]
     }
     const repository = {

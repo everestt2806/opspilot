@@ -103,6 +103,14 @@ export interface DomainIngressState {
   certificate_hostname: string | null;
   https_probe_checked_at: string | null;
   https_probe_hostname: string | null;
+  route_config_generation: string | null;
+  route_inventory_revision: string | null;
+  route_environment: 'production' | 'acme_staging' | null;
+  https_probe_peer_ip: string | null;
+  https_probe_http_status: number | null;
+  https_probe_generation: string | null;
+  https_probe_inventory_revision: string | null;
+  https_probe_environment: 'production' | 'acme_staging' | null;
 }
 
 export interface Vps {
