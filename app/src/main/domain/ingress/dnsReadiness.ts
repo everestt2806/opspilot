@@ -400,7 +400,7 @@ function isPublicIpv4(value: string): boolean {
   if (a === undefined || b === undefined) return false
   const [c, d] = value.split('.').slice(2).map(Number)
   if (c === undefined || d === undefined) return false
-  const in192 = (second: number, third: number) => a === 192 && b === second && c === third
+  const in192 = (second: number, third: number): boolean => a === 192 && b === second && c === third
   return !(
     a === 0 || a === 10 || a === 127 || a >= 224 ||
     (a === 100 && b >= 64 && b <= 127) ||
