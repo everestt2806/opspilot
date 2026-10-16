@@ -88,6 +88,8 @@ CREATE TABLE app (
   host_port         INTEGER NOT NULL,          -- cấp trong dải 30000-30999, ADR-006
   container_port    INTEGER NOT NULL,
   healthcheck_path  TEXT    NOT NULL DEFAULT '/',
+  healthcheck_response_type TEXT NOT NULL DEFAULT 'status_2xx'
+                      CHECK (healthcheck_response_type IN ('status_2xx','json')),
   needs_db          INTEGER NOT NULL DEFAULT 0 CHECK (needs_db IN (0,1)),
   imported_from_vps INTEGER NOT NULL DEFAULT 0 CHECK (imported_from_vps IN (0,1)),
 
@@ -430,6 +432,7 @@ CREATE TABLE domain_binding (
   route_inventory_revision TEXT,
   route_environment TEXT CHECK (route_environment IS NULL OR route_environment IN ('production','acme_staging')),
   https_probe_peer_ip TEXT,
+  https_probe_peer_ips_json TEXT CHECK (https_probe_peer_ips_json IS NULL OR json_valid(https_probe_peer_ips_json)),
   https_probe_http_status INTEGER CHECK (https_probe_http_status IS NULL OR https_probe_http_status BETWEEN 100 AND 599),
   https_probe_generation TEXT,
   https_probe_inventory_revision TEXT,
@@ -439,6 +442,21 @@ CREATE INDEX idx_domain_binding_app ON domain_binding(app_id, status);
 CREATE INDEX idx_domain_binding_app_dns_status ON domain_binding(app_id, dns_status);
 CREATE UNIQUE INDEX idx_domain_binding_route_ownership ON domain_binding(route_ownership_key)
   WHERE route_ownership_key <> '';
+
+CREATE TRIGGER app_healthcheck_policy_invalidates_https
+AFTER UPDATE OF healthcheck_path, healthcheck_response_type ON app
+WHEN OLD.healthcheck_path IS NOT NEW.healthcheck_path OR
+  OLD.healthcheck_response_type IS NOT NEW.healthcheck_response_type
+BEGIN
+  UPDATE domain_binding
+  SET route_status=CASE WHEN route_status='not_configured' THEN 'not_configured' ELSE 'pending' END,
+      observed_generation=0, https_probe_status='not_run', ingress_reason_code=NULL,
+      https_probe_checked_at=NULL, https_probe_hostname=NULL,
+      https_probe_peer_ip=NULL, https_probe_peer_ips_json=NULL, https_probe_http_status=NULL,
+      https_probe_generation=NULL, https_probe_inventory_revision=NULL,
+      https_probe_environment=NULL
+  WHERE app_id=NEW.id;
+END;
 
 -- Migration 010 requires route, certificate and current-generation external probe evidence
 -- before route_status can be active. These guards also protect against direct SQL writes.
@@ -455,7 +473,9 @@ WHEN NEW.route_status = 'active' AND (
   NEW.route_inventory_revision IS NULL OR
   NEW.https_probe_generation IS NOT NEW.route_config_generation OR
   NEW.https_probe_inventory_revision IS NOT NEW.route_inventory_revision OR
-  NEW.https_probe_peer_ip IS NULL OR NEW.https_probe_http_status IS NOT 200
+  NEW.https_probe_peer_ip IS NULL OR NEW.https_probe_peer_ips_json IS NULL OR
+  json_type(NEW.https_probe_peer_ips_json) <> 'array' OR json_array_length(NEW.https_probe_peer_ips_json) < 1 OR
+  NEW.https_probe_http_status IS NULL OR NEW.https_probe_http_status NOT BETWEEN 200 AND 299
 )
 BEGIN
   SELECT RAISE(ABORT, 'domain_https_active_requires_production_probe_evidence');
@@ -466,7 +486,7 @@ BEFORE UPDATE OF route_status, dns_status, certificate_status, https_probe_statu
   certificate_hostname, https_probe_checked_at, https_probe_hostname,
   route_environment, https_probe_environment, route_config_generation,
   route_inventory_revision, https_probe_generation, https_probe_inventory_revision,
-  https_probe_peer_ip, https_probe_http_status ON domain_binding
+  https_probe_peer_ip, https_probe_peer_ips_json, https_probe_http_status ON domain_binding
 WHEN NEW.route_status = 'active' AND (
   NEW.dns_status <> 'propagated' OR NEW.certificate_status <> 'valid' OR
   NEW.certificate_hostname IS NOT NEW.hostname OR NEW.https_probe_status <> 'passed' OR
@@ -478,7 +498,9 @@ WHEN NEW.route_status = 'active' AND (
   NEW.route_inventory_revision IS NULL OR
   NEW.https_probe_generation IS NOT NEW.route_config_generation OR
   NEW.https_probe_inventory_revision IS NOT NEW.route_inventory_revision OR
-  NEW.https_probe_peer_ip IS NULL OR NEW.https_probe_http_status IS NOT 200
+  NEW.https_probe_peer_ip IS NULL OR NEW.https_probe_peer_ips_json IS NULL OR
+  json_type(NEW.https_probe_peer_ips_json) <> 'array' OR json_array_length(NEW.https_probe_peer_ips_json) < 1 OR
+  NEW.https_probe_http_status IS NULL OR NEW.https_probe_http_status NOT BETWEEN 200 AND 299
 )
 BEGIN
   SELECT RAISE(ABORT, 'domain_https_active_requires_production_probe_evidence');
@@ -525,6 +547,7 @@ BEGIN
       route_inventory_revision=NULL,
       route_environment=NULL,
       https_probe_peer_ip=NULL,
+      https_probe_peer_ips_json=NULL,
       https_probe_http_status=NULL,
       https_probe_generation=NULL,
       https_probe_inventory_revision=NULL,

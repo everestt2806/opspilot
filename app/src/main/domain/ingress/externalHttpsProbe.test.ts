@@ -113,8 +113,9 @@ afterAll(async () => {
 })
 
 async function listen(
-  response: 'healthy' | 'redirect' | 'unhealthy' | 'large' | 'timeout' | 'empty' | 'text',
-  certPath = cert
+  response: 'healthy' | 'redirect' | 'unhealthy' | 'large' | 'timeout' | 'empty' | 'text' | 'spa_html' | 'express_json' | 'redirect_slow' | 'abort_body',
+  certPath = cert,
+  host = '127.0.0.1'
 ): Promise<void> {
   await closeServer()
   server = https.createServer(
@@ -124,6 +125,15 @@ async function listen(
       if (response === 'redirect') {
         responseStream.writeHead(302, { location: 'https://elsewhere.example/' })
         responseStream.end()
+      } else if (response === 'redirect_slow') {
+        responseStream.writeHead(302, { location: 'https://elsewhere.example/' })
+        responseStream.flushHeaders()
+        const timer = setInterval(() => responseStream.write('slow'), 100)
+        responseStream.on('close', () => clearInterval(timer))
+      } else if (response === 'abort_body') {
+        responseStream.writeHead(200, { 'content-type': 'text/html' })
+        responseStream.write('<!doctype html><html>')
+        setTimeout(() => responseStream.destroy(), 50)
       } else if (response === 'unhealthy') {
         responseStream.writeHead(503, { 'content-type': 'application/json' })
         responseStream.end('{"ok":false}')
@@ -136,6 +146,12 @@ async function listen(
       } else if (response === 'text') {
         responseStream.writeHead(200, { 'content-type': 'text/plain' })
         responseStream.end('OK')
+      } else if (response === 'spa_html') {
+        responseStream.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+        responseStream.end('<!doctype html><html><div id="__next">healthy</div></html>')
+      } else if (response === 'express_json') {
+        responseStream.writeHead(201, { 'content-type': 'application/json' })
+        responseStream.end('{"ok":true}')
       } else {
         responseStream.writeHead(200, { 'content-type': 'application/json' })
         responseStream.end('{"ok":true}')
@@ -145,7 +161,7 @@ async function listen(
   await new Promise<void>((resolve, reject) => {
     const currentServer = server!
     currentServer.once('error', reject)
-    currentServer.listen(0, '127.0.0.1', () => {
+    currentServer.listen(0, host, () => {
       port = (currentServer.address() as { port: number }).port
       resolve()
     })
@@ -175,6 +191,7 @@ describe('external HTTPS probe', () => {
       status: 'passed',
       hostname,
       peer_ip: '127.0.0.1',
+      peer_ips: ['127.0.0.1'],
       http_status: 200,
       trust: 'lab'
     })
@@ -184,6 +201,21 @@ describe('external HTTPS probe', () => {
     expect(await probeExternalHttpsWithSystemTrustForTest(input(), port)).toEqual({
       status: 'failed',
       reason: 'certificate_untrusted'
+    })
+  })
+
+  it('accepts Next.js/SPA HTML with default 2xx policy and Express JSON with declared JSON policy', async () => {
+    await listen('spa_html')
+    expect(await probeExternalHttpsWithLabTrust(input(), readFileSync(join(directory, 'ca.crt')), port)).toMatchObject({
+      status: 'passed',
+      http_status: 200,
+      peer_ips: ['127.0.0.1']
+    })
+    await listen('express_json')
+    expect(await probeExternalHttpsWithLabTrust(input({ healthcheckResponseType: 'json' }), readFileSync(join(directory, 'ca.crt')), port)).toMatchObject({
+      status: 'passed',
+      http_status: 201,
+      peer_ips: ['127.0.0.1']
     })
   })
 
@@ -310,10 +342,16 @@ describe('external HTTPS probe', () => {
     await listen('empty')
     expect(
       await probeExternalHttpsWithLabTrust(input(), readFileSync(join(directory, 'ca.crt')), port)
+    ).toMatchObject({ status: 'passed', http_status: 200 })
+    expect(
+      await probeExternalHttpsWithLabTrust(input({ healthcheckResponseType: 'json' }), readFileSync(join(directory, 'ca.crt')), port)
     ).toMatchObject({ status: 'failed', reason: 'health_response_invalid' })
     await listen('text')
     expect(
       await probeExternalHttpsWithLabTrust(input(), readFileSync(join(directory, 'ca.crt')), port)
+    ).toMatchObject({ status: 'passed', http_status: 200 })
+    expect(
+      await probeExternalHttpsWithLabTrust(input({ healthcheckResponseType: 'json' }), readFileSync(join(directory, 'ca.crt')), port)
     ).toMatchObject({ status: 'failed', reason: 'health_response_invalid' })
   }, 30_000)
 
@@ -331,4 +369,63 @@ describe('external HTTPS probe', () => {
       reason: 'invalid_input'
     })
   }, 20_000)
+
+  it('destroys redirect and aborted-body responses instead of leaving peer sockets open', async () => {
+    await listen('redirect_slow')
+    const redirectStartedAt = Date.now()
+    expect(await probeExternalHttpsWithLabTrust(input(), readFileSync(join(directory, 'ca.crt')), port)).toMatchObject({
+      status: 'failed',
+      reason: 'redirect_rejected'
+    })
+    expect(Date.now() - redirectStartedAt).toBeLessThan(1_000)
+    await expectServerConnections(0)
+
+    await listen('abort_body')
+    expect(await probeExternalHttpsWithLabTrust(input(), readFileSync(join(directory, 'ca.crt')), port)).toMatchObject({
+      status: 'failed',
+      reason: 'connection_failed'
+    })
+    await expectServerConnections(0)
+  }, 10_000)
+
+  it('requires every DNS address to pass, including both IPv4 and IPv6 families', async () => {
+    await listen('healthy', cert, '127.0.0.1')
+    expect(await probeExternalHttpsWithLabTrust(
+      input({ expectedPeerIps: ['127.0.0.1'] }),
+      readFileSync(join(directory, 'ca.crt')),
+      port
+    )).toMatchObject({ status: 'passed', peer_ips: ['127.0.0.1'] })
+    expect(await probeExternalHttpsWithLabTrust(
+      input({ expectedPeerIps: ['127.0.0.1', '::1'] }),
+      readFileSync(join(directory, 'ca.crt')),
+      port
+    )).toMatchObject({ status: 'failed', reason: 'connection_failed' })
+
+    await listen('healthy', cert, '::1')
+    expect(await probeExternalHttpsWithLabTrust(
+      input({ expectedPeerIps: ['::1'] }),
+      readFileSync(join(directory, 'ca.crt')),
+      port
+    )).toMatchObject({ status: 'passed', peer_ips: ['0000:0000:0000:0000:0000:0000:0000:0001'] })
+    expect(await probeExternalHttpsWithLabTrust(
+      input({ expectedPeerIps: ['::1', '127.0.0.1'] }),
+      readFileSync(join(directory, 'ca.crt')),
+      port
+    )).toMatchObject({ status: 'failed', reason: 'connection_failed' })
+  }, 15_000)
 })
+
+async function expectServerConnections(expected: number): Promise<void> {
+  const deadline = Date.now() + 1_000
+  while (Date.now() < deadline) {
+    const count = await new Promise<number>((resolve, reject) => {
+      server.getConnections((error, value) => (error ? reject(error) : resolve(value)))
+    })
+    if (count === expected) return
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+  const count = await new Promise<number>((resolve, reject) => {
+    server.getConnections((error, value) => (error ? reject(error) : resolve(value)))
+  })
+  expect(count).toBe(expected)
+}

@@ -16,6 +16,7 @@ import migration010 from './migrations/010_domain_ingress_state.sql?raw'
 import migration011 from './migrations/011_domain_ingress_identity_guards.sql?raw'
 import migration012 from './migrations/012_ingress_reconcile_observation.sql?raw'
 import migration013 from './migrations/013_ingress_production_probe_evidence.sql?raw'
+import migration014 from './migrations/014_https_probe_policy_and_peer_set.sql?raw'
 
 interface Migration {
   name: string
@@ -88,6 +89,11 @@ const migrations: Migration[] = [
     name: '013_ingress_production_probe_evidence.sql',
     version: 13,
     sql: migration013
+  },
+  {
+    name: '014_https_probe_policy_and_peer_set.sql',
+    version: 14,
+    sql: migration014
   }
 ]
 

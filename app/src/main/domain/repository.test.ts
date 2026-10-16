@@ -1,9 +1,13 @@
 import Database from 'better-sqlite3'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { DomainIngressState } from '@shared/ipc'
 
-import { DomainRepository, type DomainDnsBindingInput } from './repository'
+import {
+  DomainRepository,
+  type DomainDnsBindingInput,
+  type SharedIngressInventorySnapshot
+} from './repository'
 
 function createDatabase(): Database.Database {
   const database = new Database(':memory:')
@@ -43,6 +47,7 @@ function createDatabase(): Database.Database {
       route_inventory_revision TEXT,
       route_environment TEXT,
       https_probe_peer_ip TEXT,
+      https_probe_peer_ips_json TEXT,
       https_probe_http_status INTEGER,
       https_probe_generation TEXT,
       https_probe_inventory_revision TEXT,
@@ -57,7 +62,7 @@ function createDatabase(): Database.Database {
       certificate_hostname, https_probe_checked_at, https_probe_hostname, route_environment,
       https_probe_environment, route_config_generation, route_inventory_revision,
       https_probe_generation, https_probe_inventory_revision, https_probe_peer_ip,
-      https_probe_http_status ON domain_binding
+      https_probe_peer_ips_json, https_probe_http_status ON domain_binding
     WHEN NEW.route_status = 'active' AND (
       NEW.dns_status <> 'propagated' OR NEW.certificate_status <> 'valid' OR
       NEW.https_probe_status <> 'passed' OR NEW.desired_generation <> NEW.observed_generation OR
@@ -67,7 +72,8 @@ function createDatabase(): Database.Database {
       NEW.https_probe_environment <> 'production' OR NEW.route_config_generation IS NULL OR
       NEW.route_inventory_revision IS NULL OR NEW.https_probe_generation IS NOT NEW.route_config_generation OR
       NEW.https_probe_inventory_revision IS NOT NEW.route_inventory_revision OR
-      NEW.https_probe_peer_ip IS NULL OR NEW.https_probe_http_status <> 200
+      NEW.https_probe_peer_ip IS NULL OR NEW.https_probe_peer_ips_json IS NULL OR
+      NEW.https_probe_http_status NOT BETWEEN 200 AND 299
     )
     BEGIN SELECT RAISE(ABORT, 'domain_https_active_requires_verified_evidence'); END;
     CREATE TRIGGER domain_binding_active_requires_shared_ingress_update
@@ -90,7 +96,8 @@ function createDatabase(): Database.Database {
           ingress_reason_code=NULL, route_checked_at=NULL, certificate_checked_at=NULL,
           certificate_hostname=NULL, https_probe_checked_at=NULL, https_probe_hostname=NULL,
           route_config_generation=NULL, route_inventory_revision=NULL, route_environment=NULL,
-          https_probe_peer_ip=NULL, https_probe_http_status=NULL, https_probe_generation=NULL,
+          https_probe_peer_ip=NULL, https_probe_peer_ips_json=NULL,
+          https_probe_http_status=NULL, https_probe_generation=NULL,
           https_probe_inventory_revision=NULL, https_probe_environment=NULL
       WHERE id=NEW.id;
     END;
@@ -141,7 +148,8 @@ function setActiveEvidence(database: Database.Database): void {
     https_probe_status='passed', observed_generation=desired_generation,
     route_environment='production', https_probe_environment='production',
     route_config_generation=?, route_inventory_revision=?, https_probe_generation=?,
-    https_probe_inventory_revision=?, https_probe_peer_ip='203.0.113.5', https_probe_http_status=200,
+    https_probe_inventory_revision=?, https_probe_peer_ip='203.0.113.5',
+    https_probe_peer_ips_json='["203.0.113.5"]', https_probe_http_status=200,
     route_checked_at='2026-10-14T10:00:00Z', certificate_checked_at='2026-10-14T10:00:01Z',
     certificate_hostname=hostname, https_probe_checked_at='2026-10-14T10:00:02Z',
     https_probe_hostname=hostname WHERE id=1`).run('a'.repeat(64), 'b'.repeat(64), 'a'.repeat(64), 'b'.repeat(64))
@@ -202,13 +210,15 @@ describe('DomainRepository ingress/TLS state', () => {
     setActiveEvidence(database)
     expect(repository.getByHostname('app.example.com')).toMatchObject<Partial<DomainIngressState>>({
       route_status: 'active', certificate_status: 'valid', https_probe_status: 'passed',
-      route_environment: 'production', https_probe_peer_ip: '203.0.113.5'
+      route_environment: 'production', https_probe_peer_ip: '203.0.113.5',
+      https_probe_peer_ips_json: '["203.0.113.5"]'
     })
 
     repository.upsertDns(binding({ target: '203.0.113.6', dns_status: 'propagated' }))
     expect(repository.getByHostname('app.example.com')).toMatchObject({
       route_status: 'pending',
       https_probe_status: 'not_run',
+      https_probe_peer_ips_json: null,
       desired_generation: 2,
       observed_generation: 0
     })
@@ -216,6 +226,67 @@ describe('DomainRepository ingress/TLS state', () => {
       /VALIDATION/
     )
     expect(() => repository.recordIngressObservation(observation({ generation: 2 }))).toThrow(/VALIDATION/)
+    database.close()
+  })
+
+  it('CAS-demotes a real active binding on DNS/runtime precheck failure and leaves newer generations intact', () => {
+    const snapshot = {
+      vps_id: 1,
+      host: '198.51.100.5',
+      port: 22,
+      host_fingerprint: 'SHA256:PINNED',
+      revision: 'b'.repeat(64),
+      bindings: [{
+        id: 1, app_id: 3, hostname: 'app.example.com',
+        ownership_key: 'dns-owner:app.example.com',
+        route_ownership_key: 'opspilot-ingress:3:app.example.com',
+        desired_generation: 1, dns_status: 'propagated' as const, enabled: true,
+        host_port: 30003, healthcheck_path: '/', healthcheck_response_type: 'status_2xx' as const,
+        current_deployment_id: 9, deployment_version: 1, image_tag: 'app:v1'
+      }]
+    } satisfies SharedIngressInventorySnapshot
+    const observation = {
+      vps_id: 1, inventory_revision: snapshot.revision, environment: 'production' as const,
+      generation: 'a'.repeat(64), config_sha256: 'c'.repeat(64)
+    }
+
+    for (const reasonCode of ['DNS_NOT_PROPAGATED', 'INGRESS_CONFIG_INVALID'] as const) {
+      const database = createDatabase()
+      const repository = new DomainRepository(database)
+      repository.upsertDns(binding({ dns_status: 'propagated' }))
+      setActiveEvidence(database)
+      expect(repository.getByHostname('app.example.com')?.route_status).toBe('active')
+      vi.spyOn(repository, 'getSharedIngressInventory').mockReturnValue(snapshot)
+      vi.spyOn(repository, 'getSharedIngressReconcileObservation').mockReturnValue(observation)
+
+      expect(repository.recordProductionHttpsPrecheckFailure({
+        snapshot, binding: snapshot.bindings[0], generation: observation.generation,
+        configSha256: observation.config_sha256, checkedAt: '2026-10-17T00:00:00Z', reasonCode
+      })).toBe(true)
+      expect(repository.getByHostname('app.example.com')).toMatchObject({
+        route_status: 'degraded', ingress_reason_code: reasonCode,
+        https_probe_status: 'not_run', https_probe_peer_ip: null,
+        https_probe_peer_ips_json: null
+      })
+      database.close()
+    }
+
+    const database = createDatabase()
+    const repository = new DomainRepository(database)
+    repository.upsertDns(binding({ dns_status: 'propagated' }))
+    setActiveEvidence(database)
+    vi.spyOn(repository, 'getSharedIngressInventory').mockReturnValue(snapshot)
+    vi.spyOn(repository, 'getSharedIngressReconcileObservation').mockReturnValue(observation)
+    database.prepare(`UPDATE domain_binding SET route_status='pending', desired_generation=2,
+      observed_generation=0, route_config_generation=? WHERE id=1`).run('d'.repeat(64))
+    expect(repository.recordProductionHttpsPrecheckFailure({
+      snapshot, binding: snapshot.bindings[0], generation: observation.generation,
+      configSha256: observation.config_sha256, checkedAt: '2026-10-17T00:00:00Z',
+      reasonCode: 'DNS_NOT_PROPAGATED'
+    })).toBe(false)
+    expect(repository.getByHostname('app.example.com')).toMatchObject({
+      route_status: 'pending', desired_generation: 2
+    })
     database.close()
   })
 

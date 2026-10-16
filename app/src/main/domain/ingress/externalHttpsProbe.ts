@@ -3,7 +3,7 @@ import { isIP } from 'node:net'
 import type { TLSSocket } from 'node:tls'
 
 export const HTTPS_PROBE_TIMEOUT_MS = 6_000
-export const HTTPS_PROBE_MAX_ATTEMPTS = 2
+export const HTTPS_PROBE_MAX_ADDRESSES = 8
 export const HTTPS_PROBE_MAX_RESPONSE_BYTES = 16 * 1024
 
 export type ExternalHttpsProbeFailure =
@@ -17,6 +17,7 @@ export type ExternalHttpsProbeFailure =
   | 'redirect_rejected'
   | 'health_response_invalid'
   | 'response_too_large'
+  | 'peer_set_too_large'
   | 'connection_failed'
 
 export type ExternalHttpsProbeResult =
@@ -24,7 +25,8 @@ export type ExternalHttpsProbeResult =
       status: 'passed'
       hostname: string
       peer_ip: string
-      http_status: 200
+      peer_ips: readonly string[]
+      http_status: number
       trust: 'system' | 'lab'
     }
   | { status: 'failed'; reason: ExternalHttpsProbeFailure }
@@ -32,6 +34,7 @@ export type ExternalHttpsProbeResult =
 export interface ExternalHttpsProbeInput {
   hostname: string
   healthcheckPath: string
+  healthcheckResponseType?: 'status_2xx' | 'json'
   dnsStatus: 'propagated' | 'pending' | 'conflict' | 'failed' | 'disabled'
   expectedPeerIps: readonly string[]
 }
@@ -83,39 +86,64 @@ function runProbe(
       reason: input.dnsStatus === 'propagated' ? 'invalid_input' : 'dns_not_propagated'
     })
 
-  const peers = [...new Set(input.expectedPeerIps)]
-  const attempts = Math.min(HTTPS_PROBE_MAX_ATTEMPTS, peers.length)
-  return tryAttempt(0)
-
-  async function tryAttempt(index: number): Promise<ExternalHttpsProbeResult> {
-    let last: ExternalHttpsProbeFailure = 'connection_failed'
-    for (let attempt = 0; attempt < attempts; attempt += 1) {
-      const peerIp = peers[(index + attempt) % peers.length]
-      const result = await requestOnce(hostname, input.healthcheckPath, peerIp, options)
-      if (result.status === 'passed') return result
-      last = result.reason
-      if (isTerminal(last)) return result
-    }
-    return { status: 'failed', reason: last }
+  const peers = [...new Set(input.expectedPeerIps.map(normalizeIp))]
+  if (peers.length > HTTPS_PROBE_MAX_ADDRESSES) {
+    return Promise.resolve({ status: 'failed', reason: 'peer_set_too_large' })
   }
+  return Promise.all(
+    peers.map((peerIp) => requestOnce(hostname, input.healthcheckPath, peerIp, input.healthcheckResponseType ?? 'status_2xx', options))
+  ).then((results) => {
+    const failure = results.find((result) => result.status === 'failed')
+    if (failure?.status === 'failed') return failure
+    const verified = results as PeerProbeSuccess[]
+    return {
+      status: 'passed',
+      hostname,
+      peer_ip: verified[0].peer_ip,
+      peer_ips: verified.map((result) => result.peer_ip),
+      http_status: verified[0].http_status,
+      trust: options.ca ? 'lab' : 'system'
+    }
+  })
+}
+
+interface PeerProbeSuccess {
+  status: 'passed'
+  peer_ip: string
+  http_status: number
 }
 
 function requestOnce(
   hostname: string,
   path: string,
   expectedPeerIp: string,
+  healthcheckResponseType: 'status_2xx' | 'json',
   options: ProbeOptions
-): Promise<ExternalHttpsProbeResult> {
+): Promise<PeerProbeSuccess | { status: 'failed'; reason: ExternalHttpsProbeFailure }> {
   return new Promise((resolve) => {
     let settled = false
     let responseBytes = 0
     let body = ''
-    const finish = (result: ExternalHttpsProbeResult): void => {
+    let response: import('node:http').IncomingMessage | null = null
+    let request: import('node:http').ClientRequest | null = null
+    const finish = (result: PeerProbeSuccess | { status: 'failed'; reason: ExternalHttpsProbeFailure }): void => {
       if (settled) return
       settled = true
       clearTimeout(timer)
       resolve(result)
     }
+    const failAndDestroy = (reason: ExternalHttpsProbeFailure): void => {
+      if (settled) return
+      settled = true
+      if (timer) clearTimeout(timer)
+      resolve({ status: 'failed', reason })
+      response?.destroy()
+      request?.destroy()
+    }
+    const timer = setTimeout(() => {
+      request?.destroy(new Error('HTTPS_PROBE_TIMEOUT'))
+      finish({ status: 'failed', reason: 'timeout' })
+    }, HTTPS_PROBE_TIMEOUT_MS)
     const family = isIP(expectedPeerIp) as 4 | 6
     const requestOptions: RequestOptions = {
       protocol: 'https:',
@@ -137,41 +165,43 @@ function requestOnce(
         else callback(null, expectedPeerIp, family)
       }
     }
-    const request = https.request(requestOptions, (response) => {
-      const status = response.statusCode ?? 0
-      const socket = response.socket as TLSSocket
+    request = https.request(requestOptions, (incomingResponse) => {
+      response = incomingResponse
+      const status = incomingResponse.statusCode ?? 0
+      const socket = incomingResponse.socket as TLSSocket
       const peerIp = normalizeIp(socket.remoteAddress ?? '')
       if (!peerIp || !peersMatch(peerIp, expectedPeerIp)) {
-        response.resume()
-        finish({ status: 'failed', reason: 'peer_ip_mismatch' })
+        failAndDestroy('peer_ip_mismatch')
         return
       }
       if (status >= 300 && status < 400) {
-        response.resume()
-        finish({ status: 'failed', reason: 'redirect_rejected' })
+        failAndDestroy('redirect_rejected')
         return
       }
-      response.on('data', (chunk: Buffer | string) => {
+      if (status < 200 || status >= 300) {
+        failAndDestroy('health_response_invalid')
+        return
+      }
+      incomingResponse.on('data', (chunk: Buffer | string) => {
         const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
         responseBytes += bytes.length
         if (responseBytes > HTTPS_PROBE_MAX_RESPONSE_BYTES) {
-          request.destroy()
-          finish({ status: 'failed', reason: 'response_too_large' })
+          failAndDestroy('response_too_large')
           return
         }
         body += bytes.toString('utf8')
       })
-      response.on('end', () => {
-        if (status !== 200 || !isHealthyBody(body, response.headers['content-type'])) {
+      incomingResponse.on('aborted', () => failAndDestroy('connection_failed'))
+      incomingResponse.on('error', () => failAndDestroy('connection_failed'))
+      incomingResponse.on('end', () => {
+        if (!isHealthyBody(body, incomingResponse.headers['content-type'], healthcheckResponseType)) {
           finish({ status: 'failed', reason: 'health_response_invalid' })
           return
         }
         finish({
           status: 'passed',
-          hostname,
           peer_ip: peerIp,
-          http_status: 200,
-          trust: options.ca ? 'lab' : 'system'
+          http_status: status
         })
       })
     })
@@ -182,16 +212,18 @@ function requestOnce(
       request.destroy(new Error('HTTPS_PROBE_TIMEOUT'))
       finish({ status: 'failed', reason: 'timeout' })
     })
-    const timer = setTimeout(() => {
-      request.destroy(new Error('HTTPS_PROBE_TIMEOUT'))
-      finish({ status: 'failed', reason: 'timeout' })
-    }, HTTPS_PROBE_TIMEOUT_MS)
     request.end()
   })
 }
 
-function isHealthyBody(body: string, contentType: string | string[] | undefined): boolean {
-  if (Buffer.byteLength(body) > HTTPS_PROBE_MAX_RESPONSE_BYTES || body.trim() === '') return false
+function isHealthyBody(
+  body: string,
+  contentType: string | string[] | undefined,
+  healthcheckResponseType: 'status_2xx' | 'json'
+): boolean {
+  if (Buffer.byteLength(body) > HTTPS_PROBE_MAX_RESPONSE_BYTES) return false
+  if (healthcheckResponseType === 'status_2xx') return true
+  if (body.trim() === '') return false
   const type = Array.isArray(contentType) ? contentType.join(';') : (contentType ?? '')
   if (!type.toLowerCase().includes('application/json')) return false
   try {
@@ -212,20 +244,6 @@ function classifyTlsError(error: NodeJS.ErrnoException): ExternalHttpsProbeFailu
   if (/SELF_SIGNED|UNABLE_TO_VERIFY|CERT_SIGNATURE|CERT_UNTRUSTED|DEPTH_ZERO/.test(code))
     return 'certificate_untrusted'
   return 'connection_failed'
-}
-
-function isTerminal(reason: ExternalHttpsProbeFailure): boolean {
-  return (
-    reason === 'certificate_hostname_invalid' ||
-    reason === 'certificate_expired' ||
-    reason === 'certificate_untrusted' ||
-    reason === 'peer_ip_mismatch' ||
-    reason === 'redirect_rejected' ||
-    reason === 'health_response_invalid' ||
-    reason === 'response_too_large' ||
-    reason === 'invalid_input' ||
-    reason === 'dns_not_propagated'
-  )
 }
 
 function normalizeIp(address: string): string {

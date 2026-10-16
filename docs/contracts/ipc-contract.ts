@@ -107,6 +107,7 @@ export interface DomainIngressState {
   route_inventory_revision: string | null;
   route_environment: 'production' | 'acme_staging' | null;
   https_probe_peer_ip: string | null;
+  https_probe_peer_ips_json: string | null;
   https_probe_http_status: number | null;
   https_probe_generation: string | null;
   https_probe_inventory_revision: string | null;
@@ -205,6 +206,7 @@ export interface App {
   host_port: number;
   container_port: number;
   healthcheck_path: string;
+  healthcheck_response_type?: 'status_2xx' | 'json';
   needs_db: 0 | 1;
   current_deployment_id: number | null;
   imported_from_vps: 0 | 1;
@@ -581,6 +583,7 @@ export interface PrecheckResult {
 export type DetectionResultDto =
   | { matched: true; framework: FrameworkId; display_name: string;
       build_command: string; container_port: number; healthcheck_path: string;
+      healthcheck_response_type?: 'status_2xx' | 'json';
       dockerfile_template: string; required_env: string[]; optional_env: string[];
       needs_db: boolean; manual_steps: string[]; detected_version?: string;
       file_tree_preview: string[] }

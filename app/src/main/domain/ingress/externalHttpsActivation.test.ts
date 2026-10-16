@@ -33,6 +33,7 @@ const snapshot: SharedIngressInventorySnapshot = {
       enabled: true,
       host_port: 3003,
       healthcheck_path: '/health',
+      healthcheck_response_type: 'json',
       current_deployment_id: 10,
       deployment_version: 2,
       image_tag: 'sha256:image'
@@ -98,9 +99,11 @@ function setup(
   adapters: HttpsActivationAdapters
   record: ReturnType<typeof vi.fn>
   recordFailure: ReturnType<typeof vi.fn>
+  recordPrecheckFailure: ReturnType<typeof vi.fn>
 } {
   const record = vi.fn(overrides.cas ?? (() => undefined))
   const recordFailure = vi.fn(() => undefined)
+  const recordPrecheckFailure = vi.fn(() => true)
   const repository = {
     getSharedIngressInventory: vi.fn(() => snapshot),
     getSharedIngressReconcileObservation: vi.fn(() => ({
@@ -108,7 +111,8 @@ function setup(
       environment: overrides.env ?? 'production'
     })),
     recordProductionHttpsActivation: record,
-    recordProductionHttpsProbeFailure: recordFailure
+      recordProductionHttpsProbeFailure: recordFailure,
+      recordProductionHttpsPrecheckFailure: recordPrecheckFailure
   } as unknown as DomainRepository
   const ssh = {} as never
   const runtime =
@@ -131,13 +135,14 @@ function setup(
             status: 'passed',
             hostname: 'app.example.test',
             peer_ip: '203.0.113.8',
+            peer_ips: ['203.0.113.8'],
             http_status: 200,
             trust: 'system'
           }) as const
       ),
     now: () => '2026-10-16T00:00:00.000Z'
   }
-  return { repository, ssh, adapters, record, recordFailure }
+  return { repository, ssh, adapters, record, recordFailure, recordPrecheckFailure }
 }
 
 describe('probeAndActivateSharedIngress', () => {
@@ -164,6 +169,7 @@ describe('probeAndActivateSharedIngress', () => {
         generation: observation.generation,
         configSha256: observation.config_sha256,
         peerIp: '203.0.113.8',
+        peerIps: ['203.0.113.8'],
         httpStatus: 200
       })
     )
@@ -216,6 +222,7 @@ describe('probeAndActivateSharedIngress', () => {
         status: 'passed',
         hostname: 'app.example.test',
         peer_ip: '203.0.113.99',
+        peer_ips: ['203.0.113.99'],
         http_status: 200,
         trust: 'system'
       }))
@@ -228,7 +235,7 @@ describe('probeAndActivateSharedIngress', () => {
         'app.example.test',
         state.adapters
       )
-    ).toEqual({ status: 'pending', reason: 'dns_not_propagated' })
+    ).toEqual({ status: 'degraded', reason: 'dns_not_propagated' })
     expect(state.record).not.toHaveBeenCalled()
   })
 
@@ -249,8 +256,11 @@ describe('probeAndActivateSharedIngress', () => {
         'app.example.test',
         remoteChange.adapters
       )
-    ).toEqual({ status: 'pending', reason: 'remote_generation_changed' })
+    ).toEqual({ status: 'degraded', reason: 'remote_generation_changed' })
     expect(remoteChange.record).not.toHaveBeenCalled()
+    expect(remoteChange.recordPrecheckFailure).toHaveBeenCalledWith(expect.objectContaining({
+      reasonCode: 'INGRESS_CONFIG_INVALID'
+    }))
 
     const dbChange = setup({
       cas: () => {
@@ -285,5 +295,27 @@ describe('probeAndActivateSharedIngress', () => {
       )
     ).toEqual({ status: 'pending', reason: 'host_identity_changed' })
     expect(state.record).not.toHaveBeenCalled()
+  })
+
+  it('records a precheck CAS invalidation when DNS or runtime no longer match', async () => {
+    const dnsMismatch = setup({
+      dns: vi.fn(async () => ({ ...dns, dns_status: 'target_mismatch' as const }))
+    })
+    expect(await probeAndActivateSharedIngress(
+      dnsMismatch.ssh, dnsMismatch.repository, identity, 'app.example.test', dnsMismatch.adapters
+    )).toEqual({ status: 'degraded', reason: 'dns_not_propagated' })
+    expect(dnsMismatch.recordPrecheckFailure).toHaveBeenCalledWith(expect.objectContaining({
+      reasonCode: 'DNS_NOT_PROPAGATED', generation: observation.generation
+    }))
+    expect(dnsMismatch.adapters.probe).not.toHaveBeenCalled()
+
+    const runtimeMismatch = setup({ runtime: vi.fn(async () => null) })
+    expect(await probeAndActivateSharedIngress(
+      runtimeMismatch.ssh, runtimeMismatch.repository, identity, 'app.example.test', runtimeMismatch.adapters
+    )).toEqual({ status: 'degraded', reason: 'remote_generation_changed' })
+    expect(runtimeMismatch.recordPrecheckFailure).toHaveBeenCalledWith(expect.objectContaining({
+      reasonCode: 'INGRESS_CONFIG_INVALID', generation: observation.generation
+    }))
+    expect(runtimeMismatch.adapters.probe).not.toHaveBeenCalled()
   })
 })

@@ -116,17 +116,19 @@ async function activateUnderMutex(
     return pending('host_identity_changed')
   const runtimeBefore = await safeRuntime(runtimeCheck, ssh, target)
   if (!runtimeMatches(runtimeBefore, observed.generation, observed.config_sha256))
-    return pending('remote_generation_changed')
+    return recordPrecheckFailure(repository, snapshot, binding, observed, 'INGRESS_CONFIG_INVALID', 'remote_generation_changed', adapters)
   const ownershipBefore = await ownershipCheck(ssh, target)
   if (ownershipBefore.status !== 'verified' || ownershipBefore.active !== true)
-    return degraded('runtime_not_verified')
+    return recordPrecheckFailure(repository, snapshot, binding, observed, 'INGRESS_CONFIG_INVALID', 'runtime_not_verified', adapters)
   const dnsBefore = await safeDns(dnsCheck, binding.hostname, snapshot.host)
-  if (!dnsMatches(dnsBefore, binding.hostname)) return pending('dns_not_propagated')
+  if (!dnsMatches(dnsBefore, binding.hostname))
+    return recordPrecheckFailure(repository, snapshot, binding, observed, 'DNS_NOT_PROPAGATED', 'dns_not_propagated', adapters)
 
   const expectedPeerIps = [...new Set([...dnsBefore.expected_ipv4, ...dnsBefore.expected_ipv6])]
   const probeResult = await probe({
     hostname: binding.hostname,
     healthcheckPath: binding.healthcheck_path,
+    healthcheckResponseType: binding.healthcheck_response_type ?? 'status_2xx',
     dnsStatus: 'propagated',
     expectedPeerIps
   })
@@ -137,22 +139,21 @@ async function activateUnderMutex(
   const dnsAfter = await safeDns(dnsCheck, binding.hostname, snapshot.host)
   if (
     !dnsMatches(dnsAfter, binding.hostname) ||
+    !sameIpSet(expectedPeerIps, [...dnsAfter.expected_ipv4, ...dnsAfter.expected_ipv6]) ||
     (probeResult.status === 'passed' &&
-      ![...dnsAfter.expected_ipv4, ...dnsAfter.expected_ipv6].some((ip) =>
-        sameIpAddress(ip, probeResult.peer_ip)
-      ))
+      !sameIpSet([...dnsAfter.expected_ipv4, ...dnsAfter.expected_ipv6], probeResult.peer_ips))
   ) {
-    return pending('dns_not_propagated')
+    return recordPrecheckFailure(repository, snapshot, binding, observed, 'DNS_NOT_PROPAGATED', 'dns_not_propagated', adapters)
   }
   const identityAfter = await safeIdentity(readIdentity, ssh, target.vpsId)
   if (!identityAfter || !sameIdentity(target, identityAfter))
     return pending('host_identity_changed')
   const ownershipAfter = await ownershipCheck(ssh, target)
   if (ownershipAfter.status !== 'verified' || ownershipAfter.active !== true)
-    return pending('remote_generation_changed')
+    return recordPrecheckFailure(repository, snapshot, binding, observed, 'INGRESS_CONFIG_INVALID', 'remote_generation_changed', adapters)
   const runtimeAfter = await safeRuntime(runtimeCheck, ssh, target)
   if (!runtimeMatches(runtimeAfter, observed.generation, observed.config_sha256))
-    return pending('remote_generation_changed')
+    return recordPrecheckFailure(repository, snapshot, binding, observed, 'INGRESS_CONFIG_INVALID', 'remote_generation_changed', adapters)
 
   if (probeResult.status === 'failed') {
     try {
@@ -187,7 +188,8 @@ async function activateUnderMutex(
       generation: observed.generation,
       configSha256: observed.config_sha256,
       peerIp: probeResult.peer_ip,
-      httpStatus: 200,
+      peerIps: [...probeResult.peer_ips],
+      httpStatus: probeResult.http_status,
       checkedAt: (adapters.now ?? (() => new Date().toISOString()))()
     })
     return {
@@ -322,6 +324,36 @@ function sameIdentity(left: SshHostIdentity, right: SshHostIdentity): boolean {
 
 function requireIp(value: string): boolean {
   return isIP(value) !== 0
+}
+
+function sameIpSet(left: readonly string[], right: readonly string[]): boolean {
+  const uniqueLeft = left.filter((ip, index) => !left.slice(0, index).some((prior) => sameIpAddress(prior, ip)))
+  const uniqueRight = right.filter((ip, index) => !right.slice(0, index).some((prior) => sameIpAddress(prior, ip)))
+  return uniqueLeft.length === uniqueRight.length && uniqueLeft.every((ip) => uniqueRight.some((other) => sameIpAddress(ip, other)))
+}
+
+function recordPrecheckFailure(
+  repository: DomainRepository,
+  snapshot: SharedIngressInventorySnapshot,
+  binding: SharedIngressInventorySnapshot['bindings'][number],
+  observed: NonNullable<ReturnType<DomainRepository['getSharedIngressReconcileObservation']>>,
+  reasonCode: 'DNS_NOT_PROPAGATED' | 'INGRESS_CONFIG_INVALID',
+  resultReason: 'dns_not_propagated' | 'runtime_not_verified' | 'remote_generation_changed',
+  adapters: HttpsActivationAdapters
+): HttpsActivationResult {
+  try {
+    const invalidated = repository.recordProductionHttpsPrecheckFailure({
+      snapshot,
+      binding,
+      generation: observed.generation,
+      configSha256: observed.config_sha256,
+      checkedAt: (adapters.now ?? (() => new Date().toISOString()))(),
+      reasonCode
+    })
+    return invalidated ? degraded(resultReason) : pending(resultReason)
+  } catch {
+    return pending('stale_result')
+  }
 }
 function pending(reason: HttpsActivationFailure): HttpsActivationResult {
   return { status: 'pending', reason }

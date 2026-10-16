@@ -16,6 +16,7 @@ export interface CreateAppRecord {
   host_port: number
   container_port: number
   healthcheck_path: string
+  healthcheck_response_type?: 'status_2xx' | 'json'
   needs_db: 0 | 1
   imported_from_vps?: 0 | 1
 }
@@ -28,7 +29,7 @@ export interface ImportedBaselineRecord {
 const APP_COLUMNS = `
   a.id, a.vps_id, a.name, a.framework, a.source_path, a.source_type,
   a.git_repo_url, a.git_ref, a.git_root, a.host_port, a.container_port,
-  a.healthcheck_path, a.needs_db, a.current_deployment_id, a.imported_from_vps,
+  a.healthcheck_path, a.healthcheck_response_type, a.needs_db, a.current_deployment_id, a.imported_from_vps,
   'http://' || v.host || ':' || a.host_port AS url
 `
 
@@ -41,8 +42,9 @@ export class AppRepository {
         .prepare(
           `INSERT INTO app (
             vps_id, name, framework, source_path, host_port, container_port,
-            healthcheck_path, needs_db, source_type, git_repo_url, git_ref, git_root, imported_from_vps
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            healthcheck_path, healthcheck_response_type, needs_db, source_type,
+            git_repo_url, git_ref, git_root, imported_from_vps
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           record.vps_id,
@@ -52,6 +54,7 @@ export class AppRepository {
           record.host_port,
           record.container_port,
           record.healthcheck_path,
+          record.healthcheck_response_type ?? 'status_2xx',
           record.needs_db,
           record.source_type ?? 'local',
           record.git_repo_url ?? null,

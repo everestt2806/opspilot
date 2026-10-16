@@ -109,7 +109,9 @@ function downgradeMigration012ToV11(database: Database.Database): void {
 }
 
 function downgradeMigration013ToV12(database: Database.Database): void {
+  downgradeMigration014ToV13(database)
   database.exec(`
+    DROP TRIGGER IF EXISTS app_healthcheck_policy_invalidates_https;
     DROP TRIGGER IF EXISTS domain_binding_active_requires_https_insert;
     DROP TRIGGER IF EXISTS domain_binding_active_requires_https_update;
     DROP TRIGGER IF EXISTS domain_binding_invalidate_changed_route_identity;
@@ -138,12 +140,25 @@ function downgradeMigration013ToV12(database: Database.Database): void {
   `)
 }
 
+function downgradeMigration014ToV13(database: Database.Database): void {
+  database.exec(`
+    DROP TRIGGER IF EXISTS app_healthcheck_policy_invalidates_https;
+    DROP TRIGGER IF EXISTS domain_binding_active_requires_https_insert;
+    DROP TRIGGER IF EXISTS domain_binding_active_requires_https_update;
+    DROP TRIGGER IF EXISTS domain_binding_invalidate_changed_route_identity;
+    ALTER TABLE domain_binding DROP COLUMN https_probe_peer_ips_json;
+    ALTER TABLE app DROP COLUMN healthcheck_response_type;
+    DELETE FROM schema_version WHERE version=14;
+  `)
+}
+
 function seedActiveDomainProof(database: Database.Database, id: number): void {
   database.prepare(`UPDATE domain_binding SET route_status='active', certificate_status='valid',
     https_probe_status='passed', observed_generation=desired_generation,
     route_environment='production', https_probe_environment='production',
     route_config_generation=?, route_inventory_revision=?, https_probe_generation=?,
-    https_probe_inventory_revision=?, https_probe_peer_ip='203.0.113.42', https_probe_http_status=200,
+    https_probe_inventory_revision=?, https_probe_peer_ip='203.0.113.42',
+    https_probe_peer_ips_json='["203.0.113.42"]', https_probe_http_status=200,
     route_checked_at='2026-10-16T00:00:00Z', certificate_checked_at='2026-10-16T00:00:00Z',
     certificate_hostname=hostname, https_probe_checked_at='2026-10-16T00:00:00Z',
     https_probe_hostname=hostname WHERE id=?`).run('a'.repeat(64), 'b'.repeat(64), 'a'.repeat(64), 'b'.repeat(64), id)
@@ -233,7 +248,7 @@ describe('initializeDatabase', () => {
       count: 1
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 13
+      version: 14
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
   })
@@ -257,12 +272,12 @@ describe('initializeDatabase', () => {
     runMigrations(database)
     expect(database.prepare('SELECT * FROM domain_binding WHERE id=82').get()).toMatchObject(before as object)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 13
+      version: 14
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 13
+      version: 14
     })
   })
 
@@ -290,6 +305,48 @@ describe('initializeDatabase', () => {
       observed_generation: 0, route_environment: null, https_probe_environment: null
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
+  })
+
+  it('migration 014 adds per-app health policy and permits any successful 2xx probe status', () => {
+    testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v13-v14-https-policy-'))
+    const database = initializeDatabase(testDirectory)
+    downgradeMigration014ToV13(database)
+    database.exec(`
+      INSERT INTO vps (id, name, host, username, auth_type, encrypted_secret, host_fingerprint)
+        VALUES (150, 'VPS', '198.51.100.150', 'deploy', 'key', X'00', 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
+      INSERT INTO app (id, vps_id, name, framework, host_port, container_port)
+        VALUES (151, 150, 'spa-app', 'nextjs', 30151, 3000);
+      INSERT INTO domain_binding
+        (id, app_id, hostname, mode, target, ownership_key, route_ownership_key, status, dns_status)
+        VALUES (152, 151, 'spa.example.com', 'shared_ingress', '198.51.100.150', 'dns:151',
+          'opspilot-ingress:151:spa.example.com', 'propagated', 'propagated');
+    `)
+    runMigrations(database)
+    expect(database.prepare('SELECT healthcheck_response_type FROM app WHERE id=151').get()).toEqual({
+      healthcheck_response_type: 'status_2xx'
+    })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 14 })
+    database.prepare(`UPDATE domain_binding SET route_status='active', certificate_status='valid',
+      https_probe_status='passed', observed_generation=desired_generation,
+      route_checked_at='now', certificate_checked_at='now', certificate_hostname=hostname,
+      https_probe_checked_at='now', https_probe_hostname=hostname,
+      route_environment='production', https_probe_environment='production',
+      route_config_generation=?, route_inventory_revision=?, https_probe_generation=?,
+      https_probe_inventory_revision=?, https_probe_peer_ip='198.51.100.150',
+      https_probe_peer_ips_json='["198.51.100.150"]', https_probe_http_status=201 WHERE id=152`
+    ).run('a'.repeat(64), 'b'.repeat(64), 'a'.repeat(64), 'b'.repeat(64))
+    expect(database.prepare('SELECT route_status, https_probe_http_status FROM domain_binding WHERE id=152').get()).toEqual({
+      route_status: 'active', https_probe_http_status: 201
+    })
+    expect(() => database.prepare('UPDATE domain_binding SET https_probe_http_status=199 WHERE id=152').run())
+      .toThrow(/domain_https_active_requires_production_probe_evidence/)
+    database.prepare("UPDATE app SET healthcheck_response_type='json' WHERE id=151").run()
+    expect(database.prepare('SELECT route_status, https_probe_status, https_probe_peer_ips_json FROM domain_binding WHERE id=152').get()).toEqual({
+      route_status: 'pending', https_probe_status: 'not_run', https_probe_peer_ips_json: null
+    })
+    expect(database.pragma('foreign_key_check')).toEqual([])
+    runMigrations(database)
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 14 })
   })
 
   it('executes the complete schema contract on an empty SQLite database', () => {
@@ -340,7 +397,8 @@ describe('initializeDatabase', () => {
     })
     repository.recordProductionHttpsActivation({
       snapshot, binding: snapshot.bindings[0], generation: 'a'.repeat(64), configSha256: 'b'.repeat(64),
-      peerIp: '198.51.100.81', httpStatus: 200, checkedAt: '2026-10-16T00:01:00Z'
+      peerIp: '198.51.100.81', peerIps: ['198.51.100.81'],
+      httpStatus: 200, checkedAt: '2026-10-16T00:01:00Z'
     })
     expect(repository.getByHostname('app.ingress.example')).toMatchObject({
       route_status: 'active', certificate_status: 'valid', https_probe_status: 'passed',
@@ -349,15 +407,19 @@ describe('initializeDatabase', () => {
       https_probe_peer_ip: '198.51.100.81', https_probe_http_status: 200
     })
     repository.recordSharedIngressReconcile(snapshot, 'production', 'a'.repeat(64), 'b'.repeat(64))
-    expect(repository.getByHostname('app.ingress.example')?.route_status).toBe('active')
+    expect(repository.getByHostname('app.ingress.example')).toMatchObject({
+      route_status: 'active', https_probe_peer_ips_json: '["198.51.100.81"]'
+    })
     repository.recordSharedIngressReconcile(snapshot, 'acme_staging', 'c'.repeat(64), 'd'.repeat(64))
     expect(repository.getByHostname('app.ingress.example')).toMatchObject({
       route_status: 'pending', certificate_status: 'not_requested', https_probe_status: 'not_run',
-      route_environment: 'acme_staging', https_probe_environment: null
+      route_environment: 'acme_staging', https_probe_environment: null,
+      https_probe_peer_ips_json: null
     })
     expect(() => repository.recordProductionHttpsActivation({
       snapshot, binding: snapshot.bindings[0], generation: 'c'.repeat(64), configSha256: 'd'.repeat(64),
-      peerIp: '198.51.100.81', httpStatus: 200, checkedAt: '2026-10-16T00:02:00Z'
+      peerIp: '198.51.100.81', peerIps: ['198.51.100.81'],
+      httpStatus: 200, checkedAt: '2026-10-16T00:02:00Z'
     })).toThrow(/VALIDATION/)
     database.prepare('UPDATE app SET imported_from_vps=1 WHERE id=82').run()
     expect(() => repository.getSharedIngressInventory(81)).toThrow('VALIDATION')
@@ -667,7 +729,7 @@ describe('initializeDatabase', () => {
       .get() as { version: number }
 
     expect(tables).toHaveLength(16)
-    expect(schemaVersion.version).toBe(13)
+    expect(schemaVersion.version).toBe(14)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -698,7 +760,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 13
+      version: 14
     })
     expect(
       database
@@ -897,7 +959,7 @@ describe('initializeDatabase', () => {
     const successVer = v4Db.prepare('SELECT MAX(version) AS version FROM schema_version').get() as {
       version: number
     }
-    expect(successVer.version).toBe(13)
+    expect(successVer.version).toBe(14)
 
     // b. Bảng experiment_run đã có cột attempt_index và backfill = 1 cho tất cả bản ghi cũ
     const postRuns = v4Db
