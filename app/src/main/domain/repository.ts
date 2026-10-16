@@ -67,6 +67,14 @@ export interface SharedIngressInventorySnapshot {
   bindings: SharedIngressInventoryBinding[]
 }
 
+export interface SharedIngressReconcileObservation {
+  vps_id: number
+  inventory_revision: string
+  environment: 'production' | 'acme_staging'
+  generation: string
+  config_sha256: string
+}
+
 /** DNS state is independent of route/certificate/probe observations. No credential or secret is persisted. */
 export class DomainRepository {
   constructor(private readonly database: Database.Database) {}
@@ -135,8 +143,20 @@ export class DomainRepository {
     return { ...identity, revision, bindings }
   }
 
+  getSharedIngressReconcileObservation(vpsId: number): SharedIngressReconcileObservation | null {
+    return (this.database.prepare(
+      `SELECT vps_id, inventory_revision, environment, generation, config_sha256
+       FROM ingress_reconcile_observation WHERE vps_id=?`
+    ).get(vpsId) as SharedIngressReconcileObservation | undefined) ?? null
+  }
+
   /** Commits only pending/disabled observations. HTTPS evidence remains unrequested/unrun. */
-  recordSharedIngressReconcile(snapshot: SharedIngressInventorySnapshot): void {
+  recordSharedIngressReconcile(
+    snapshot: SharedIngressInventorySnapshot,
+    environment: 'production' | 'acme_staging',
+    generation: string,
+    configSha256: string
+  ): void {
     this.database.transaction(() => {
       const current = this.getSharedIngressInventory(snapshot.vps_id)
       if (current.revision !== snapshot.revision) {
@@ -167,6 +187,15 @@ export class DomainRepository {
         })
         if (result.changes !== 1) throw new AppError('VALIDATION', 'Binding generation changed during reconcile.')
       }
+      this.database.prepare(
+        `INSERT INTO ingress_reconcile_observation
+          (vps_id, inventory_revision, environment, generation, config_sha256, updated_at)
+         VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+         ON CONFLICT(vps_id) DO UPDATE SET
+           inventory_revision=excluded.inventory_revision, environment=excluded.environment,
+           generation=excluded.generation, config_sha256=excluded.config_sha256,
+           updated_at=excluded.updated_at`
+      ).run(snapshot.vps_id, snapshot.revision, environment, generation, configSha256)
     })()
   }
 

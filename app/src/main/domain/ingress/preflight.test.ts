@@ -255,6 +255,17 @@ describe('preflightSharedIngress', () => {
     })
   })
 
+  it('verifies installed artifacts separately when the OpsPilot service is inactive', async () => {
+    const { ssh } = fakeSsh({
+      listeners: { code: 0, stdout: '', stderr: '' },
+      service: { code: 0, stdout: verifiedService.replace('ActiveState=active', 'ActiveState=inactive').replace('MainPID=41', 'MainPID=0'), stderr: '' }
+    })
+    expect(await preflightSharedIngress(ssh, 7)).toMatchObject({
+      service: 'verified', service_state: 'inactive', ownership: 'ports_free',
+      install_assessment: 'safe', local_assessment: 'clear'
+    })
+  })
+
   it.each([
     ['unsupported distro', 'ID=alpine\nVERSION_ID="3.20"\nx86_64\n'],
     ['unsupported architecture', 'ID=debian\nVERSION_ID="12"\nriscv64\n'],

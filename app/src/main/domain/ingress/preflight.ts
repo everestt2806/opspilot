@@ -117,6 +117,7 @@ export interface IngressPreflightResult {
   reason_code: DomainReasonCode | null
   listeners: IngressListener[]
   service: 'verified' | 'absent' | 'unknown'
+  service_state: 'active' | 'inactive' | 'unknown'
   caddy_version: string | null
   ownership_marker: 'valid' | 'missing' | 'mismatch' | 'unknown'
   config_exists: boolean | null
@@ -219,7 +220,7 @@ export async function preflightSharedIngress(
       installationVerified &&
       distroUnitState === 'absent' &&
     serviceFacts?.loaded &&
-      serviceFacts.active &&
+      (serviceFacts.active || serviceFacts.properties.get('ActiveState') === 'inactive') &&
       serviceUnitOutput === EXPECTED_OPSPILOT_UNIT &&
       serviceFacts.dropInPaths === '' &&
       hasExpectedServiceProperties(serviceFacts) &&
@@ -229,7 +230,7 @@ export async function preflightSharedIngress(
       serviceFacts.argv.filter((argument) => argument === '--config').length === 1 &&
       serviceFacts.argv.includes('--config') &&
       serviceFacts.argv[serviceFacts.argv.indexOf('--config') + 1] === '/etc/opspilot/caddy/Caddyfile' &&
-      serviceFacts.mainPid !== null &&
+      (serviceFacts.active ? serviceFacts.mainPid !== null : serviceFacts.mainPid === null) &&
       markerStatus === 'valid' &&
       configReadable === true &&
       version !== null
@@ -293,6 +294,7 @@ export async function preflightSharedIngress(
     service: serviceVerified
       ? 'verified'
       : serviceOutput !== null && serviceFacts?.loadState === 'not-found' ? 'absent' : 'unknown',
+    service_state: serviceVerified ? (serviceFacts?.active ? 'active' : 'inactive') : 'unknown',
     caddy_version: version,
     ownership_marker: markerStatus,
     config_exists: configExists,

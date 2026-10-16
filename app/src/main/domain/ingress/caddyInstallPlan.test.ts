@@ -39,6 +39,7 @@ function cleanIngress(overrides: Partial<IngressPreflightResult> = {}): IngressP
     reason_code: null,
     listeners: [],
     service: 'absent',
+    service_state: 'unknown',
     caddy_version: null,
     ownership_marker: 'missing',
     config_exists: false,

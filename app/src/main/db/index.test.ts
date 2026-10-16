@@ -94,12 +94,17 @@ function downgradeMigration010ToV9(database: Database.Database): void {
 }
 
 function downgradeMigration011ToV10(database: Database.Database): void {
+  downgradeMigration012ToV11(database)
   database.exec(`
     DROP TRIGGER domain_binding_invalidate_changed_route_identity;
     DROP TRIGGER domain_binding_active_requires_shared_ingress_update;
     DROP TRIGGER domain_binding_active_requires_shared_ingress_insert;
     DELETE FROM schema_version WHERE version = 11;
   `)
+}
+
+function downgradeMigration012ToV11(database: Database.Database): void {
+  database.exec(`DROP TABLE IF EXISTS ingress_reconcile_observation; DELETE FROM schema_version WHERE version=12;`)
 }
 
 afterEach(() => {
@@ -186,7 +191,7 @@ describe('initializeDatabase', () => {
       count: 1
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 11
+      version: 12
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
   })
@@ -210,12 +215,12 @@ describe('initializeDatabase', () => {
     runMigrations(database)
     expect(database.prepare('SELECT * FROM domain_binding WHERE id=82').get()).toMatchObject(before as object)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 11
+      version: 12
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 11
+      version: 12
     })
   })
 
@@ -256,7 +261,11 @@ describe('initializeDatabase', () => {
       hostname: 'app.ingress.example', host_port: 30082, enabled: true,
       image_tag: 'registry.example/ingress-app:v5'
     })])
-    repository.recordSharedIngressReconcile(snapshot)
+    repository.recordSharedIngressReconcile(snapshot, 'production', 'a'.repeat(64), 'b'.repeat(64))
+    expect(repository.getSharedIngressReconcileObservation(81)).toEqual({
+      vps_id: 81, inventory_revision: snapshot.revision, environment: 'production',
+      generation: 'a'.repeat(64), config_sha256: 'b'.repeat(64)
+    })
     expect(repository.getByHostname('app.ingress.example')).toMatchObject({
       route_status: 'pending', certificate_status: 'not_requested', https_probe_status: 'not_run',
       observed_generation: 1
@@ -574,8 +583,8 @@ describe('initializeDatabase', () => {
       .prepare('SELECT MAX(version) AS version FROM schema_version')
       .get() as { version: number }
 
-    expect(tables).toHaveLength(15)
-    expect(schemaVersion.version).toBe(11)
+    expect(tables).toHaveLength(16)
+    expect(schemaVersion.version).toBe(12)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -606,7 +615,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 11
+      version: 12
     })
     expect(
       database
@@ -805,7 +814,7 @@ describe('initializeDatabase', () => {
     const successVer = v4Db.prepare('SELECT MAX(version) AS version FROM schema_version').get() as {
       version: number
     }
-    expect(successVer.version).toBe(11)
+    expect(successVer.version).toBe(12)
 
     // b. Bảng experiment_run đã có cột attempt_index và backfill = 1 cho tất cả bản ghi cũ
     const postRuns = v4Db

@@ -15,6 +15,7 @@ function makeIngress(overrides: Partial<IngressPreflightResult> = {}): IngressPr
     reason_code: null,
     listeners: [],
     service: 'absent',
+    service_state: 'unknown',
     caddy_version: null,
     ownership_marker: 'missing',
     config_exists: false,
@@ -34,7 +35,7 @@ function makeIngress(overrides: Partial<IngressPreflightResult> = {}): IngressPr
 }
 
 function makeResolver(records: Record<string, string[] | Error>): DnsReadinessResolver {
-  const query = (type: 'A' | 'AAAA' | 'CNAME') => vi.fn(async (name: string) => {
+  const query = (type: 'A' | 'AAAA' | 'CNAME'): ReturnType<typeof vi.fn> => vi.fn(async (name: string) => {
     const value = records[`${type}:${name}`]
     if (value instanceof Error) throw value
     if (value) return value

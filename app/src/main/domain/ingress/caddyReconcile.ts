@@ -107,7 +107,7 @@ async function reconcileUnderMutex(
     return blocked('RECONCILE_PREFLIGHT_BLOCKED', 'Read-only ingress preflight failed.')
   }
   if (
-    ingress.ownership !== 'opspilot_owned' || ingress.service !== 'verified' ||
+    ingress.service !== 'verified' || !['active', 'inactive'].includes(ingress.service_state) ||
     ingress.local_assessment !== 'clear' || ingress.install_assessment === 'blocked' ||
     ingress.ports_status === 'unknown' || ingress.config_exists !== true || ingress.config_readable !== true ||
     ingress.ufw.state === 'unknown' ||
@@ -117,7 +117,12 @@ async function reconcileUnderMutex(
     return blocked('RECONCILE_PREFLIGHT_BLOCKED', 'Caddy ownership, service, or local firewall is not verified safe.')
   }
   const ownership = await (adapters.ownership ?? verifyCaddyInstallationOwnershipOverSsh)(ssh, target)
-  if (ownership.status !== 'verified' || typeof ownership.active !== 'boolean') {
+  const serviceActive = ingress.service_state === 'active'
+  if (
+    ownership.status !== 'verified' || typeof ownership.active !== 'boolean' || ownership.active !== serviceActive ||
+    (serviceActive && ingress.ownership !== 'opspilot_owned') ||
+    (!serviceActive && (ingress.ownership !== 'ports_free' || ingress.ports_status !== 'free'))
+  ) {
     return blocked('RECONCILE_PREFLIGHT_BLOCKED', 'Installed Caddy service ownership could not be verified.')
   }
 
@@ -154,10 +159,24 @@ async function reconcileUnderMutex(
   }
   const transactionId = randomBytes(16).toString('hex')
   const initialConfigSha256 = sha256(INITIAL_CONFIG)
+  let previousObservation: ReturnType<DomainRepository['getSharedIngressReconcileObservation']>
+  try {
+    previousObservation = repository.getSharedIngressReconcileObservation(target.vpsId)
+  } catch {
+    return blocked('RECONCILE_INVENTORY_INVALID', 'Stored managed Caddy observation could not be read.')
+  }
+  if (previousObservation && previousObservation.environment !== environment) {
+    return blocked('RECONCILE_STAGING_SCOPE_INVALID', 'Certificate environment differs from the last managed generation; an explicit migration is required.')
+  }
+  const expectedPreviousGeneration = previousObservation?.generation ?? 'none'
+  const expectedPreviousConfigSha256 = previousObservation?.config_sha256 ?? initialConfigSha256
   try {
     const execution = await ssh.execWithHostIdentity(
       target.vpsId,
-      buildCaddyReconcileCommand(transactionId, generation, environment, config, initialConfigSha256, routes.length, dnsTargets),
+      buildCaddyReconcileCommand(
+        transactionId, generation, environment, config, initialConfigSha256, routes.length,
+        dnsTargets, expectedPreviousGeneration, expectedPreviousConfigSha256
+      ),
       { timeoutMs: RECONCILE_TIMEOUT_MS, maxStdoutBytes: 4096, maxStderrBytes: 2048, logCommand: false, retryOnReconnect: false },
       target
     )
@@ -167,7 +186,7 @@ async function reconcileUnderMutex(
     const applied = parseApplyResult(execution.result.code, execution.result.stdout, generation)
     if (applied.status === 'blocked') return applied
     try {
-      repository.recordSharedIngressReconcile(snapshot)
+      repository.recordSharedIngressReconcile(snapshot, environment, generation, applied.configSha256)
     } catch {
       if (applied.alreadyCurrent) {
         return blocked('RECONCILE_DB_FAILED_NO_CHANGE', 'DB observation failed; the already-current Caddy config and service were left unchanged.')
@@ -197,7 +216,9 @@ function buildCaddyReconcileCommand(
   config: string,
   initialConfigSha256: string,
   routeCount: number,
-  dnsTargets: readonly { hostname: string; ipv4: string[]; ipv6: string[] }[]
+  dnsTargets: readonly { hostname: string; ipv4: string[]; ipv6: string[] }[],
+  expectedPreviousGeneration: string,
+  expectedPreviousConfigSha256: string
 ): string {
   if (!/^[a-f0-9]{32}$/.test(transactionId) || !/^[a-f0-9]{64}$/.test(generation) || !/^[a-f0-9]{64}$/.test(initialConfigSha256)) {
     throw new Error('Invalid reconcile transaction identity.')
@@ -205,8 +226,12 @@ function buildCaddyReconcileCommand(
   if (Buffer.byteLength(config) > MAX_CONFIG_BYTES || !config.startsWith(`${OWNER_PREFIX}${generation}\n`)) {
     throw new Error('Invalid generated Caddyfile.')
   }
+  if ((expectedPreviousGeneration !== 'none' && !/^[a-f0-9]{64}$/.test(expectedPreviousGeneration)) ||
+      !/^[a-f0-9]{64}$/.test(expectedPreviousConfigSha256)) throw new Error('Invalid previous reconcile identity.')
   return `sudo -n sh -c ${shellQuote(CADDY_RECONCILE_SCRIPT)} -- ${[
-    transactionId, generation, environment, Buffer.from(config).toString('base64'), initialConfigSha256, String(routeCount), Buffer.from(JSON.stringify(dnsTargets)).toString('base64')
+    transactionId, generation, environment, Buffer.from(config).toString('base64'), initialConfigSha256,
+    String(routeCount), Buffer.from(JSON.stringify(dnsTargets)).toString('base64'),
+    expectedPreviousGeneration, expectedPreviousConfigSha256
   ].map(shellQuote).join(' ')}`
 }
 
@@ -315,7 +340,7 @@ function isCaddyReconcileCode(code: string | undefined): code is CaddyReconcileC
 
 export const CADDY_RECONCILE_SCRIPT = `set -u
 umask 077
-txn=$1; generation=$2; environment=$3; config_b64=$4; initial_config_sha=$5; route_count=$6; dns_b64=$7
+txn=$1; generation=$2; environment=$3; config_b64=$4; initial_config_sha=$5; route_count=$6; dns_b64=$7; expected_previous_generation=$8; expected_previous_config_sha=$9
 config=/etc/opspilot/caddy/Caddyfile; state=/etc/opspilot/caddy/RECONCILE_STATE
 lock_path=${OPSPILOT_INGRESS_LOCK_PATH}
 candidate="/etc/opspilot/caddy/.Caddyfile.$txn.candidate"; state_candidate="/etc/opspilot/caddy/.RECONCILE_STATE.$txn.candidate"
@@ -327,7 +352,7 @@ identity(){ stat -c '%d:%i:%u:%g:%a' -- "$1" 2>/dev/null; }
 remove_owned(){ path=$1; id=$2; digest=$3; [ -n "$id" ] || return 0; [ -e "$path" ] || [ -L "$path" ] || return 0; [ -f "$path" ] && [ ! -L "$path" ] && [ "$(identity "$path")" = "$id" ] && [ -n "$digest" ] && [ "$(hash_file "$path")" = "$digest" ] || return 1; rm -- "$path"; }
 restore_service(){
   if [ "$was_enabled" = enabled ]; then systemctl enable opspilot-caddy.service >/dev/null 2>&1 || return 1; else systemctl disable opspilot-caddy.service >/dev/null 2>&1 || return 1; fi
-  if [ "$was_active" -eq 1 ]; then systemctl start opspilot-caddy.service >/dev/null 2>&1 || return 1; verify_runtime "$config" || return 1
+  if [ "$was_active" -eq 1 ]; then systemctl reload opspilot-caddy.service >/dev/null 2>&1 || return 1; [ "$(systemctl is-active opspilot-caddy.service 2>/dev/null || true)" = active ] && verify_runtime "$config" || return 1
   else systemctl stop opspilot-caddy.service >/dev/null 2>&1 || return 1; [ "$(systemctl is-active opspilot-caddy.service 2>/dev/null || true)" != active ] || return 1; fi
 }
 verify_runtime(){
@@ -392,6 +417,9 @@ case "$txn" in *[!a-f0-9]*|'') block RECONCILE_CONFLICT ;; esac
 [ "$(printf '%s' "$txn" | wc -c)" -eq 32 ] || block RECONCILE_CONFLICT
 case "$generation$initial_config_sha" in *[!a-f0-9]*|'') block RECONCILE_CONFLICT ;; esac
 [ "$(printf '%s' "$generation" | wc -c)" -eq 64 ] && [ "$(printf '%s' "$initial_config_sha" | wc -c)" -eq 64 ] || block RECONCILE_CONFLICT
+if [ "$expected_previous_generation" != none ]; then case "$expected_previous_generation" in *[!a-f0-9]*|'') block RECONCILE_CONFLICT ;; esac; [ "$(printf '%s' "$expected_previous_generation" | wc -c)" -eq 64 ] || block RECONCILE_CONFLICT; fi
+case "$expected_previous_config_sha" in *[!a-f0-9]*|'') block RECONCILE_CONFLICT ;; esac
+[ "$(printf '%s' "$expected_previous_config_sha" | wc -c)" -eq 64 ] || block RECONCILE_CONFLICT
 case "$environment" in production|acme_staging) ;; *) block RECONCILE_CONFLICT ;; esac
 case "$route_count" in *[!0-9]*|'') block RECONCILE_CONFLICT ;; esac
 [ "$(printf '%s' "$config_b64" | wc -c)" -le 90000 ] || block RECONCILE_CONFLICT
@@ -459,9 +487,27 @@ sys.exit(0)
 PY
 }
 check_dns || block RECONCILE_DNS_NOT_READY
-check_ufw(){ out=$(ufw status numbered 2>/dev/null) || return 1; first=$(printf '%s\\n' "$out" | sed -n '1p'); [ "$first" = 'Status: inactive' ] && return 0; [ "$first" = 'Status: active' ] || return 1; printf '%s\\n' "$out" | awk '
-  /^Status:/ {next} /^(To[[:space:]]+Action|--+)/ {next}
-  {line=$0; sub(/^\\[[[:space:]]*[0-9]+\\][[:space:]]*/,"",line); if(line ~ /(^|[[:space:]])(80|443)(\\/tcp)?([[:space:]]|$)/){if(line=="80/tcp ALLOW IN Anywhere")a++;else if(line=="80/tcp (v6) ALLOW IN Anywhere (v6)")b++;else if(line=="443/tcp ALLOW IN Anywhere")c++;else if(line=="443/tcp (v6) ALLOW IN Anywhere (v6)")d++;else bad=1}} END{exit !(a==1&&b==1&&c==1&&d==1&&!bad)}' ; }
+check_ufw(){ out=$(ufw status numbered 2>/dev/null) || return 1; first=$(printf '%s\\n' "$out" | sed -n '1p'); [ "$first" = 'Status: inactive' ] && return 0; [ "$first" = 'Status: active' ] || return 1; python3 - "$out" <<'PY_UFW'
+import re, sys
+counts={'80v4':0,'80v6':0,'443v4':0,'443v6':0}
+try:
+  for raw in sys.argv[1].splitlines():
+    line=raw.strip()
+    if not line or line.startswith(('Status:','Default:')) or re.fullmatch(r'To\\s+Action\\s+From',line) or re.fullmatch(r'[ -]+',line): continue
+    match=re.fullmatch(r'\\[[ \\t]*([0-9]+)\\][ \\t]+([0-9]+)/(tcp|udp)(?:[ \\t]+\\(v6\\))?[ \\t]+(ALLOW|DENY|REJECT)(?:[ \\t]+\\(v6\\))?[ \\t]+IN[ \\t]+(.+)',line)
+    if not match: raise ValueError()
+    rule_number,port,protocol,action,source=match.groups()
+    if port not in ('80','443') or protocol!='tcp': continue
+    ipv6='(v6)' in line
+    key=port+('v6' if ipv6 else 'v4')
+    expected_source='Anywhere (v6)' if ipv6 else 'Anywhere'
+    if action!='ALLOW' or source!=expected_source: raise ValueError()
+    counts[key]+=1
+  if any(value != 1 for value in counts.values()): raise ValueError()
+except Exception:
+  sys.exit(1)
+PY_UFW
+}
 check_ufw || block RECONCILE_FIREWALL_UNKNOWN
 [ -d /etc/opspilot/caddy ] && [ ! -L /etc/opspilot/caddy ] && [ "$(stat -c '%U:%G:%a' /etc/opspilot/caddy 2>/dev/null)" = root:opspilot-caddy:750 ] || block RECONCILE_OWNER_UNKNOWN
 [ -f "$config" ] && [ ! -L "$config" ] && [ "$(stat -c '%U:%G:%a' "$config" 2>/dev/null)" = root:opspilot-caddy:640 ] || block RECONCILE_CONFIG_CONFLICT
@@ -474,9 +520,10 @@ if [ -e "$state" ] || [ -L "$state" ]; then
  [ "$(printf '%s' "$old_generation" | wc -c)" -eq 64 ] && [ "$(printf '%s' "$state_config_sha" | wc -c)" -eq 64 ] && [ "$(printf '%s' "$old_transaction" | wc -c)" -eq 32 ] || block RECONCILE_CONFIG_CONFLICT
  [ "$old_environment" = production ] || [ "$old_environment" = acme_staging ] || block RECONCILE_CONFIG_CONFLICT
  [ "$state_config_sha" = "$old_config_sha" ] && grep -Fxq "# opspilot-generation=$old_generation" "$config" || block RECONCILE_CONFIG_CONFLICT
+ [ "$old_generation" = "$expected_previous_generation" ] && [ "$old_config_sha" = "$expected_previous_config_sha" ] || block RECONCILE_CONFIG_CONFLICT
  old_state_exists=1; old_state_sha=$(hash_file "$state")
 else
- old_generation=; [ "$old_config_sha" = "$initial_config_sha" ] || block RECONCILE_CONFIG_CONFLICT
+ old_generation=; [ "$expected_previous_generation" = none ] && [ "$expected_previous_config_sha" = "$initial_config_sha" ] && [ "$old_config_sha" = "$initial_config_sha" ] || block RECONCILE_CONFIG_CONFLICT
 fi
 candidate_sha=$(printf '%s' "$config_b64" | base64 -d 2>/dev/null | sha256sum | awk '{print $1}') || block RECONCILE_CONFIG_INVALID
 case "$candidate_sha" in *[!a-f0-9]*|'') block RECONCILE_CONFIG_INVALID ;; esac
@@ -531,6 +578,19 @@ txn=$1; generation=$2; expected_config_sha=$3
 config=/etc/opspilot/caddy/Caddyfile; state=/etc/opspilot/caddy/RECONCILE_STATE
 backup="/etc/opspilot/caddy/.Caddyfile.$txn.backup"; state_backup="/etc/opspilot/caddy/.RECONCILE_STATE.$txn.backup"
 fail(){ printf 'RESULT=rollback_failed\\n'; exit 0; }; conflict(){ printf 'RESULT=rollback_conflict\\n'; exit 0; }
+identity(){ stat -c '%d:%i:%u:%g:%a' -- "$1" 2>/dev/null; }; hash_file(){ sha256sum -- "$1" 2>/dev/null | awk '{print $1}'; }
+verify_runtime(){
+ expected=$1; adapted="/etc/opspilot/caddy/.rollback-adapt.$txn"; live="/etc/opspilot/caddy/.rollback-live.$txn"
+ [ ! -e "$adapted" ] && [ ! -L "$adapted" ] && [ ! -e "$live" ] && [ ! -L "$live" ] || return 1
+ (umask 077; set -C; : > "$adapted") 2>/dev/null || return 1; adapted_id=$(identity "$adapted") || return 1
+ (umask 077; set -C; : > "$live") 2>/dev/null || { rm -f -- "$adapted"; return 1; }; live_id=$(identity "$live") || { rm -f -- "$adapted"; return 1; }
+ rc=0; /usr/bin/caddy adapt --config "$expected" --adapter caddyfile --pretty=false > "$adapted" 2>/dev/null || rc=1
+ if [ "$rc" -eq 0 ]; then curl --fail --silent --show-error --max-time 3 http://127.0.0.1:2019/config/ > "$live" 2>/dev/null || rc=1; fi
+ if [ "$rc" -eq 0 ]; then python3 -c 'import json,sys; a=json.load(open(sys.argv[1])); b=json.load(open(sys.argv[2])); sys.exit(0 if a==b else 1)' "$adapted" "$live" || rc=1; fi
+ [ ! -e "$adapted" ] || { [ "$(identity "$adapted")" = "$adapted_id" ] && rm -- "$adapted" || rc=1; }
+ [ ! -e "$live" ] || { [ "$(identity "$live")" = "$live_id" ] && rm -- "$live" || rc=1; }
+ return "$rc"
+}
 case "$txn$generation$expected_config_sha" in *[!a-f0-9]*|'') conflict ;; esac
 lock_path=${OPSPILOT_INGRESS_LOCK_PATH}; [ -d /run/lock ] && [ ! -L /run/lock ] && [ "$(stat -c '%U:%G' /run/lock 2>/dev/null)" = root:root ] || fail
 [ ! -L "$lock_path" ] || fail; [ -f "$lock_path" ] || fail; [ "$(stat -c '%U:%G:%a:%h' "$lock_path" 2>/dev/null)" = root:root:600:1 ] || fail
@@ -560,6 +620,6 @@ if [ "$prior_state_exists" = 1 ]; then
 elif [ "$prior_state_exists" = 0 ] && [ "$prior_state_sha" = none ] && [ "$prior_state_backup_id" = none ]; then rm -- "$state" || fail
 else fail; fi
 if [ "$previous_enabled" = enabled ]; then systemctl enable opspilot-caddy.service >/dev/null 2>&1 || fail; else systemctl disable opspilot-caddy.service >/dev/null 2>&1 || fail; fi
-if [ "$previous_active" = 1 ]; then systemctl start opspilot-caddy.service >/dev/null 2>&1 || fail; else systemctl stop opspilot-caddy.service >/dev/null 2>&1 || fail; fi
+if [ "$previous_active" = 1 ]; then systemctl reload opspilot-caddy.service >/dev/null 2>&1 || fail; [ "$(systemctl is-active opspilot-caddy.service 2>/dev/null || true)" = active ] && verify_runtime "$config" || fail; else systemctl stop opspilot-caddy.service >/dev/null 2>&1 || fail; [ "$(systemctl is-active opspilot-caddy.service 2>/dev/null || true)" != active ] || fail; fi
 printf 'RESULT=rolled_back\\n'
 `

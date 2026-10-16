@@ -35,7 +35,8 @@ function inventory(revision = 'inventory-r1'): SharedIngressInventorySnapshot {
 
 const ingress: IngressPreflightResult = {
   ownership: 'opspilot_owned', ports_status: 'occupied', install_assessment: 'unknown',
-  local_assessment: 'clear', reason_code: null, listeners: [], service: 'verified',
+  local_assessment: 'clear', reason_code: null,
+  listeners: [{ port: 80, family: 'ipv4', process: 'caddy', pid: 41 }], service: 'verified', service_state: 'active',
   caddy_version: 'verified-by-installation-manifest', ownership_marker: 'valid',
   config_exists: true, config_readable: true,
   ufw: {
@@ -48,7 +49,7 @@ const ingress: IngressPreflightResult = {
 
 const adapters: CaddyReconcileAdapters = {
   preflight: async () => ingress,
-  ownership: async () => ({ status: 'verified', active: false }),
+  ownership: async () => ({ status: 'verified', active: true }),
   dns: async (hostname) => ({
     hostname, dns_status: 'propagated', dns_reason_code: null, resolvers: ['1.1.1.1', '8.8.8.8'],
     expected_ipv4: ['203.0.113.8'], expected_ipv6: [], observed_a: ['203.0.113.8'],
@@ -81,11 +82,13 @@ function setup(options: {
   record?: () => void
   remote?: (command: string) => string
   waitRemote?: () => Promise<void>
+  observation?: { vps_id: number; inventory_revision: string; environment: 'production' | 'acme_staging'; generation: string; config_sha256: string } | null
 } = {}): {
   repository: DomainRepository
   ssh: SshManager
   record: ReturnType<typeof vi.fn>
   getInventory: ReturnType<typeof vi.fn>
+  getObservation: ReturnType<typeof vi.fn>
   commands: string[]
   expectedIdentities: Array<SshHostIdentity | undefined>
   maxConcurrent: () => number
@@ -93,7 +96,12 @@ function setup(options: {
   const snapshot = inventory()
   const getInventory = vi.fn(() => options.inventory?.() ?? snapshot)
   const record = vi.fn(options.record ?? (() => undefined))
-  const repository = { getSharedIngressInventory: getInventory, recordSharedIngressReconcile: record } as unknown as DomainRepository
+  const getObservation = vi.fn(() => options.observation ?? null)
+  const repository = {
+    getSharedIngressInventory: getInventory,
+    getSharedIngressReconcileObservation: getObservation,
+    recordSharedIngressReconcile: record
+  } as unknown as DomainRepository
   let current = 0
   let maxConcurrent = 0
   const commands: string[] = []
@@ -111,7 +119,7 @@ function setup(options: {
       return { identity, result: { code: 0, stdout, stderr: '' } }
     })
   } as unknown as SshManager
-  return { repository, ssh, record, getInventory, commands, expectedIdentities, maxConcurrent: () => maxConcurrent }
+  return { repository, ssh, record, getInventory, getObservation, commands, expectedIdentities, maxConcurrent: () => maxConcurrent }
 }
 
 describe('reconcileCaddyConfigOverSsh', () => {
@@ -126,10 +134,41 @@ describe('reconcileCaddyConfigOverSsh', () => {
     expect(encodedConfig && Buffer.from(encodedConfig, 'base64').toString('utf8')).toContain('app.example.test')
     expect(command).toContain('RECONCILE_STATE')
     expect(state.record).toHaveBeenCalledOnce()
+    expect(state.record).toHaveBeenCalledWith(expect.anything(), 'production', expect.any(String), expect.any(String))
+  })
+
+  it('reconciles the first time after the verified installer leaves Caddy installed but inactive', async () => {
+    const state = setup()
+    const installerResult = { status: 'installed_not_running' as const, version: '2.9.1', binarySha256: 'b'.repeat(64) }
+    expect(installerResult.status).toBe('installed_not_running')
+    const inactivePreflight: IngressPreflightResult = {
+      ...ingress,
+      ownership: 'ports_free', ports_status: 'free', listeners: [], service_state: 'inactive'
+    }
+    const inactiveAdapters: CaddyReconcileAdapters = {
+      ...adapters,
+      preflight: async () => inactivePreflight,
+      ownership: async () => ({ status: 'verified', active: false })
+    }
+
+    expect(await reconcileCaddyConfigOverSsh(state.ssh, state.repository, identity, 'production', inactiveAdapters))
+      .toMatchObject({ status: 'reconciled_pending' })
+    expect(state.commands[0]).toContain("'none'")
+    expect(state.expectedIdentities[0]).toEqual(identity)
   })
 
   it('returns idempotent status when the remote reports the same generation', async () => {
-    const state = setup({ remote: (command) => successfulRemote(command, true) })
+    const current = inventory()
+    const generation = createHash('sha256').update(`${current.revision}\nproduction`).digest('hex')
+    const config = `# opspilot-generation=${generation}\n${buildSharedIngressConfig([{ hostname: 'app.example.test', host_port: 3019 }])}`
+    const configSha256 = createHash('sha256').update(config).digest('hex')
+    const state = setup({
+      observation: {
+        vps_id: identity.vpsId, inventory_revision: current.revision, environment: 'production',
+        generation, config_sha256: configSha256
+      },
+      remote: (command) => successfulRemote(command, true)
+    })
     expect(await reconcileCaddyConfigOverSsh(state.ssh, state.repository, identity, 'production', adapters))
       .toMatchObject({ status: 'already_current' })
   })
@@ -149,6 +188,23 @@ describe('reconcileCaddyConfigOverSsh', () => {
     const result = await reconcileCaddyConfigOverSsh(state.ssh, state.repository, identity, 'production', adapters)
     expect(result).toMatchObject({ status: 'blocked', code: 'RECONCILE_INVENTORY_INVALID' })
     expect(state.ssh.execWithHostIdentity).not.toHaveBeenCalled()
+  })
+
+  it('conflicts when the DB observation is older than the currently managed remote generation', async () => {
+    const oldGeneration = '1'.repeat(64)
+    const oldConfigSha = '2'.repeat(64)
+    const state = setup({
+      observation: {
+        vps_id: identity.vpsId, inventory_revision: 'prior-revision', environment: 'production',
+        generation: oldGeneration, config_sha256: oldConfigSha
+      },
+      remote: () => 'RESULT=blocked\nCODE=RECONCILE_CONFIG_CONFLICT'
+    })
+
+    expect(await reconcileCaddyConfigOverSsh(state.ssh, state.repository, identity, 'production', adapters))
+      .toMatchObject({ status: 'blocked', code: 'RECONCILE_REMOTE_CONFLICT' })
+    expect(state.commands[0]).toContain(`'${oldGeneration}' '${oldConfigSha}'`)
+    expect(state.record).not.toHaveBeenCalled()
   })
 
   it('rolls back the remote snapshot when the DB observation transaction fails', async () => {
