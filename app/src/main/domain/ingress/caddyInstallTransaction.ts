@@ -35,7 +35,9 @@ const INSTALL_TIMEOUT_MS = 180_000
 const MAX_STDOUT_BYTES = 4096
 const MAX_STDERR_BYTES = 2048
 const OWNER_MARKER = 'opspilot-shared-ingress-v1\n'
-const installMutexes = new Map<number, Promise<void>>()
+export const OPSPILOT_INGRESS_LOCK_PATH = '/run/lock/opspilot-ingress.lock'
+// This mutex and the remote lock identity are shared by install and later reconcile work.
+const ingressMutexes = new Map<number, Promise<void>>()
 
 /** First-run transaction. It sends one no-retry command to the exact verified SSH endpoint. */
 export async function installCaddyFirstRunOverSsh(
@@ -45,7 +47,7 @@ export async function installCaddyFirstRunOverSsh(
   if (!Number.isSafeInteger(plan.target.vpsId) || plan.target.vpsId < 1) {
     return blocked('INSTALL_PLAN_UNVERIFIED', 'Install target identity is invalid.')
   }
-  return withVpsMutex(plan.target.vpsId, () => installCaddyFirstRunWithLock(ssh, plan))
+  return withVpsIngressMutex(plan.target.vpsId, () => installCaddyFirstRunWithLock(ssh, plan))
 }
 
 async function installCaddyFirstRunWithLock(
@@ -130,20 +132,20 @@ async function installCaddyFirstRunWithLock(
   }
 }
 
-async function withVpsMutex<T>(vpsId: number, work: () => Promise<T>): Promise<T> {
-  const previous = installMutexes.get(vpsId) ?? Promise.resolve()
+export async function withVpsIngressMutex<T>(vpsId: number, work: () => Promise<T>): Promise<T> {
+  const previous = ingressMutexes.get(vpsId) ?? Promise.resolve()
   let release = (): void => undefined
   const gate = new Promise<void>((resolve) => {
     release = resolve
   })
   const tail = previous.then(() => gate)
-  installMutexes.set(vpsId, tail)
+  ingressMutexes.set(vpsId, tail)
   await previous
   try {
     return await work()
   } finally {
     release()
-    if (installMutexes.get(vpsId) === tail) installMutexes.delete(vpsId)
+    if (ingressMutexes.get(vpsId) === tail) ingressMutexes.delete(vpsId)
   }
 }
 
@@ -346,8 +348,26 @@ for parent in /usr /usr/bin /usr/local /usr/local/lib /usr/local/lib/opspilot-ca
 [ "$(stat -c '%U:%G:%a' /etc/opspilot/caddy)" = root:opspilot-caddy:750 ] || { printf 'OWNERSHIP=unknown\\n'; exit 0; }
 [ "$(stat -c '%U:%G:%a' /var/lib/opspilot/caddy)" = opspilot-caddy:opspilot-caddy:700 ] || { printf 'OWNERSHIP=unknown\\n'; exit 0; }
 [ "$(stat -c '%U:%G:%a' /var/lib/opspilot/caddy/production)" = opspilot-caddy:opspilot-caddy:700 ] || { printf 'OWNERSHIP=unknown\\n'; exit 0; }
-unit=$(systemctl show opspilot-caddy.service --property=LoadState,ActiveState,FragmentPath,DropInPaths --no-pager 2>/dev/null) || { printf 'OWNERSHIP=unknown\\n'; exit 0; }
+unit=$(systemctl show opspilot-caddy.service --property=LoadState,ActiveState,FragmentPath,DropInPaths,ExecStartPre,ExecStart,ExecReload,User,Group,Type,WorkingDirectory,Environment,UMask,Restart,RestartUSec,TimeoutStopUSec,LimitNOFILE,NoNewPrivileges,PrivateTmp,ProtectSystem,ProtectHome,ProtectKernelTunables,ProtectKernelModules,ProtectControlGroups,RestrictSUIDSGID,LockPersonality,CapabilityBoundingSet,AmbientCapabilities,ReadWritePaths --no-pager 2>/dev/null) || { printf 'OWNERSHIP=unknown\\n'; exit 0; }
 printf '%s\\n' "$unit" | grep -Fxq LoadState=loaded && printf '%s\\n' "$unit" | grep -Fxq FragmentPath=/etc/systemd/system/opspilot-caddy.service && printf '%s\\n' "$unit" | grep -Fxq 'DropInPaths=' || { printf 'OWNERSHIP=unknown\\n'; exit 0; }
+for property in \\
+  'User=opspilot-caddy' 'Group=opspilot-caddy' 'Type=notify' \\
+  'WorkingDirectory=/etc/opspilot/caddy' 'Environment=HOME=/var/lib/opspilot/caddy' \\
+  'UMask=0077' 'Restart=on-failure' 'RestartUSec=2s' 'TimeoutStopUSec=5s' \\
+  'LimitNOFILE=1048576' 'NoNewPrivileges=yes' 'PrivateTmp=yes' \\
+  'ProtectSystem=strict' 'ProtectHome=yes' 'ProtectKernelTunables=yes' \\
+  'ProtectKernelModules=yes' 'ProtectControlGroups=yes' 'RestrictSUIDSGID=yes' \\
+  'LockPersonality=yes' 'CapabilityBoundingSet=cap_net_bind_service' \\
+  'AmbientCapabilities=cap_net_bind_service' 'ReadWritePaths=/var/lib/opspilot/caddy'; do
+  printf '%s\\n' "$unit" | grep -Fxq "$property" || { printf 'OWNERSHIP=unknown\\n'; exit 0; }
+done
+for property in \\
+  'ExecStartPre=/usr/bin/caddy validate --config /etc/opspilot/caddy/Caddyfile --adapter caddyfile' \\
+  'ExecStart=/usr/bin/caddy run --config /etc/opspilot/caddy/Caddyfile --adapter caddyfile' \\
+  'ExecReload=/usr/bin/caddy reload --config /etc/opspilot/caddy/Caddyfile --adapter caddyfile --force'; do
+  key=\${property%%=*}; expected=\${property#*=}; actual=$(printf '%s\\n' "$unit" | sed -n "s/^$key={ path=[^;]* ; argv\\[\\]=\\(.*\\) ; ignore_errors=.*$/\\1/p; s/^$key=//p")
+  [ "$actual" = "$expected" ] || { printf 'OWNERSHIP=unknown\\n'; exit 0; }
+done
 active=$(printf '%s\\n' "$unit" | sed -n 's/^ActiveState=//p')
 case "$active" in active) printf 'OWNERSHIP=verified_active\\n' ;; inactive) printf 'OWNERSHIP=verified_inactive\\n' ;; *) printf 'OWNERSHIP=unknown\\n' ;; esac
 `
@@ -359,20 +379,35 @@ step=lock; write_started=0; committed=0; response_sent=0; stage_created=0; failu
 created_group=0; created_user=0; created_binary=0; created_link=0; created_unit=0; created_config=0; created_owner=0; created_manifest=0
 made_lib=0; made_versions=0; made_version=0; made_etc=0; made_etc_caddy=0; made_var=0; made_var_caddy=0; made_storage=0
 lib_id=''; versions_id=''; version_id=''; etc_id=''; etc_caddy_id=''; var_id=''; var_caddy_id=''; storage_id=''
+atomic_temp_path=''; atomic_temp_id=''; atomic_temp_inode=''; binary_id=''; link_id=''; config_id=''; unit_id=''; owner_id=''; manifest_id=''
 group_id=''; user_id=''; binary_sha=''; binary_path="/usr/local/lib/opspilot-caddy/versions/$version/caddy"
 stage_dir="/var/tmp/opspilot-caddy-install-$txn"; stage_id=''
 emit() { printf '%s\\n' "$1"; }
-cleanup_stage() { if [ "$stage_created" -eq 1 ]; then [ -d "$stage_dir" ] && [ ! -L "$stage_dir" ] && [ "$(stat -c '%d:%i:%U:%G:%a' "$stage_dir" 2>/dev/null)" = "$stage_id" ] || return 1; rm -rf -- "$stage_dir" >/dev/null 2>&1 || return 1; stage_created=0; fi; for temp in /etc/opspilot/caddy/Caddyfile.opspilot-$txn.tmp /etc/systemd/system/opspilot-caddy.service.opspilot-$txn.tmp /etc/opspilot/caddy/OWNER.opspilot-$txn.tmp /etc/opspilot/caddy/INSTALLATION.opspilot-$txn.tmp; do if [ -e "$temp" ] || [ -L "$temp" ]; then [ -f "$temp" ] && [ ! -L "$temp" ] && rm -f -- "$temp" >/dev/null 2>&1 || return 1; fi; done; return 0; }
-remove_hash() { file=$1 expected=$2 owner_mode=$3; if [ ! -e "$file" ] && [ ! -L "$file" ]; then return 0; fi; [ -f "$file" ] && [ ! -L "$file" ] && [ "$(stat -c '%U:%G:%a' -- "$file" 2>/dev/null)" = "$owner_mode" ] || return 1; actual=$(sha256sum -- "$file" 2>/dev/null | awk '{print $1}') || return 1; [ "$actual" = "$expected" ] || return 1; rm -- "$file"; }
+cleanup_atomic_temp() {
+  [ -n "$atomic_temp_path" ] || return 0
+  if [ ! -e "$atomic_temp_path" ] && [ ! -L "$atomic_temp_path" ]; then return 0; fi
+  [ -n "$atomic_temp_id" ] && [ -f "$atomic_temp_path" ] && [ ! -L "$atomic_temp_path" ] && [ "$(stat -c '%d:%i:%U:%G:%a' -- "$atomic_temp_path" 2>/dev/null)" = "$atomic_temp_id" ] || return 1
+  rm -- "$atomic_temp_path" >/dev/null 2>&1
+}
+cleanup_stage() {
+  [ "$stage_created" -eq 1 ] || return 0
+  [ -d "$stage_dir" ] && [ ! -L "$stage_dir" ] && [ "$(stat -c '%d:%i:%U:%G:%a' "$stage_dir" 2>/dev/null)" = "$stage_id" ] || return 1
+  find "$stage_dir" -xdev -mindepth 1 ! -uid 0 -print -quit | grep -q . && return 1
+  find "$stage_dir" -xdev -depth -mindepth 1 -delete >/dev/null 2>&1 || return 1
+  rmdir -- "$stage_dir" >/dev/null 2>&1 || return 1
+  stage_created=0
+}
+remove_hash() { file=$1 expected=$2 owner_mode=$3 expected_id=$4; if [ ! -e "$file" ] && [ ! -L "$file" ]; then return 0; fi; [ -f "$file" ] && [ ! -L "$file" ] && [ "$(stat -c '%U:%G:%a' -- "$file" 2>/dev/null)" = "$owner_mode" ] && [ -n "$expected_id" ] && [ "$(stat -c '%d:%i:%U:%G:%a' -- "$file" 2>/dev/null)" = "$expected_id" ] || return 1; actual=$(sha256sum -- "$file" 2>/dev/null | awk '{print $1}') || return 1; [ "$actual" = "$expected" ] || return 1; rm -- "$file"; }
 remove_dir() { dir=$1 expected=$2; if [ ! -e "$dir" ] && [ ! -L "$dir" ]; then return 0; fi; [ -d "$dir" ] && [ ! -L "$dir" ] && [ "$(stat -c '%d:%i:%U:%G:%a' -- "$dir" 2>/dev/null)" = "$expected" ] || return 1; rmdir -- "$dir"; }
 rollback() {
   ok=1
-  if [ "$created_manifest" -eq 1 ]; then expected=$(printf 'format=opspilot-caddy-installation-v1\\nversion=%s\\narchitecture=%s\\nrepository_channel=stable\\npackage_sha256=%s\\nbinary_sha256=%s\\n' "$version" "$architecture" "$package_sha" "$binary_sha" | sha256sum | awk '{print $1}'); remove_hash /etc/opspilot/caddy/INSTALLATION "$expected" root:root:644 || ok=0; fi
-  [ "$created_owner" -eq 0 ] || remove_hash /etc/opspilot/caddy/OWNER '${sha256(OWNER_MARKER)}' root:root:644 || ok=0
-  [ "$created_config" -eq 0 ] || remove_hash /etc/opspilot/caddy/Caddyfile '${sha256(buildSharedIngressConfig([]))}' root:opspilot-caddy:640 || ok=0
-  [ "$created_unit" -eq 0 ] || remove_hash /etc/systemd/system/opspilot-caddy.service '${sha256(EXPECTED_OPSPILOT_UNIT)}' root:root:644 || ok=0
-  if [ "$created_link" -eq 1 ]; then if [ -L /usr/bin/caddy ]; then [ "$(readlink -- /usr/bin/caddy 2>/dev/null || true)" = "$binary_path" ] && [ "$(stat -c '%U:%G:%a' /usr/bin/caddy)" = root:root:777 ] && rm -- /usr/bin/caddy || ok=0; elif [ -e /usr/bin/caddy ]; then ok=0; fi; fi
-  [ "$created_binary" -eq 0 ] || remove_hash "$binary_path" "$binary_sha" root:root:755 || ok=0
+  cleanup_atomic_temp || ok=0
+  if [ "$created_manifest" -eq 1 ]; then expected=$(printf 'format=opspilot-caddy-installation-v1\\nversion=%s\\narchitecture=%s\\nrepository_channel=stable\\npackage_sha256=%s\\nbinary_sha256=%s\\n' "$version" "$architecture" "$package_sha" "$binary_sha" | sha256sum | awk '{print $1}'); remove_hash /etc/opspilot/caddy/INSTALLATION "$expected" root:root:644 "$manifest_id" || ok=0; fi
+  [ "$created_owner" -eq 0 ] || remove_hash /etc/opspilot/caddy/OWNER '${sha256(OWNER_MARKER)}' root:root:644 "$owner_id" || ok=0
+  [ "$created_config" -eq 0 ] || remove_hash /etc/opspilot/caddy/Caddyfile '${sha256(buildSharedIngressConfig([]))}' root:opspilot-caddy:640 "$config_id" || ok=0
+  [ "$created_unit" -eq 0 ] || remove_hash /etc/systemd/system/opspilot-caddy.service '${sha256(EXPECTED_OPSPILOT_UNIT)}' root:root:644 "$unit_id" || ok=0
+  if [ "$created_link" -eq 1 ]; then if [ -L /usr/bin/caddy ]; then [ "$(readlink -- /usr/bin/caddy 2>/dev/null || true)" = "$binary_path" ] && [ "$(stat -c '%d:%i:%U:%G:%a' /usr/bin/caddy 2>/dev/null)" = "$link_id" ] && [ "$(stat -c '%U:%G:%a' /usr/bin/caddy)" = root:root:777 ] && rm -- /usr/bin/caddy || ok=0; elif [ -e /usr/bin/caddy ]; then ok=0; fi; fi
+  [ "$created_binary" -eq 0 ] || remove_hash "$binary_path" "$binary_sha" root:root:755 "$binary_id" || ok=0
   [ "$made_storage" -eq 0 ] || remove_dir /var/lib/opspilot/caddy/production "$storage_id" || ok=0
   [ "$made_var_caddy" -eq 0 ] || remove_dir /var/lib/opspilot/caddy "$var_caddy_id" || ok=0
   [ "$made_var" -eq 0 ] || remove_dir /var/lib/opspilot "$var_id" || ok=0
@@ -381,12 +416,23 @@ rollback() {
   [ "$made_version" -eq 0 ] || remove_dir "/usr/local/lib/opspilot-caddy/versions/$version" "$version_id" || ok=0
   [ "$made_versions" -eq 0 ] || remove_dir /usr/local/lib/opspilot-caddy/versions "$versions_id" || ok=0
   [ "$made_lib" -eq 0 ] || remove_dir /usr/local/lib/opspilot-caddy "$lib_id" || ok=0
-  if [ "$created_user" -eq 1 ]; then [ "$(getent passwd opspilot-caddy | cut -d: -f3,4,6,7)" = "$user_id:$group_id:/var/lib/opspilot/caddy:/usr/sbin/nologin" ] && userdel -- opspilot-caddy >/dev/null 2>&1 || ok=0; fi
-  if [ "$created_group" -eq 1 ]; then [ "$(getent group opspilot-caddy | cut -d: -f3,4)" = "$group_id:" ] && groupdel -- opspilot-caddy >/dev/null 2>&1 || ok=0; fi
   if [ "$created_unit" -eq 1 ]; then systemctl daemon-reload >/dev/null 2>&1 || ok=0; fi
+  if [ "$ok" -eq 1 ]; then
+    if [ "$created_user" -eq 1 ]; then [ "$(getent passwd opspilot-caddy | cut -d: -f3,4,6,7)" = "$user_id:$group_id:/var/lib/opspilot/caddy:/usr/sbin/nologin" ] && userdel -- opspilot-caddy >/dev/null 2>&1 || ok=0; fi
+    if [ "$ok" -eq 1 ] && [ "$created_group" -eq 1 ]; then [ "$(getent group opspilot-caddy | cut -d: -f3,4)" = "$group_id:" ] && groupdel -- opspilot-caddy >/dev/null 2>&1 || ok=0; fi
+  fi
   return "$((1-ok))"
 }
-on_exit() { rc=$?; trap - EXIT HUP INT TERM; if [ "$committed" -eq 1 ]; then exit 0; fi; if [ "$response_sent" -eq 1 ]; then cleanup_stage || true; exit 0; fi; if [ "$write_started" -eq 1 ]; then if rollback && cleanup_stage; then emit RESULT=failed_rolled_back; else emit RESULT=rollback_failed; fi; else if cleanup_stage; then emit RESULT=failed_rolled_back; else emit RESULT=rollback_failed; fi; fi; emit "CODE=$failure_code"; emit "STEP=$step"; exit 0; }
+on_exit() {
+  rc=$?; trap - EXIT HUP INT TERM
+  if [ "$committed" -eq 1 ]; then exit 0; fi
+  if [ "$response_sent" -eq 1 ]; then cleanup_atomic_temp >/dev/null 2>&1 || true; cleanup_stage >/dev/null 2>&1 || true; exit 0; fi
+  cleanup_ok=1
+  if [ "$write_started" -eq 1 ]; then rollback || cleanup_ok=0; else cleanup_atomic_temp || cleanup_ok=0; fi
+  cleanup_stage || cleanup_ok=0
+  if [ "$cleanup_ok" -eq 1 ]; then emit RESULT=failed_rolled_back; else emit RESULT=rollback_failed; fi
+  emit "CODE=$failure_code"; emit "STEP=$step"; exit 0
+}
 trap on_exit EXIT HUP INT TERM
 fail() { failure_code=$1; exit 70; }
 block() { emit RESULT=blocked; emit "CODE=$1"; response_sent=1; exit 0; }
@@ -397,8 +443,12 @@ case "$package_sha" in *[!a-f0-9]*|'') block INSTALL_CONFLICT ;; esac
 case "$download_uri" in https://dl.cloudsmith.io/public/caddy/stable/deb/debian/*) ;; *) block INSTALL_CONFLICT ;; esac
 case "$txn" in *[!a-f0-9]*|'') block INSTALL_CONFLICT ;; esac
 [ "$(printf '%s' "$txn" | wc -c)" -eq 32 ] || block INSTALL_CONFLICT
-lock_path=/run/lock/opspilot-caddy-install.lock
-[ -d /run/lock ] && [ ! -L /run/lock ] && [ "$(stat -c '%U:%G:%a' /run/lock 2>/dev/null)" = root:root:755 ] || block INSTALL_CONFLICT
+lock_path=${OPSPILOT_INGRESS_LOCK_PATH}
+[ -d /run ] && [ ! -L /run ] && [ "$(stat -c '%U:%G' /run 2>/dev/null)" = root:root ] || block INSTALL_CONFLICT
+[ "$(stat -c '%a' /run 2>/dev/null)" = 755 ] || block INSTALL_CONFLICT
+[ -d /run/lock ] && [ ! -L /run/lock ] && [ "$(stat -c '%U:%G' /run/lock 2>/dev/null)" = root:root ] || block INSTALL_CONFLICT
+lock_mode=$(stat -c '%a' /run/lock 2>/dev/null) || block INSTALL_CONFLICT
+case "$lock_mode" in 755|1777) ;; *) block INSTALL_CONFLICT ;; esac
 [ ! -L "$lock_path" ] || block INSTALL_CONFLICT
 if [ ! -e "$lock_path" ]; then (umask 077; set -C; : > "$lock_path") 2>/dev/null || block INSTALL_CONFLICT; fi
 [ -f "$lock_path" ] && [ ! -L "$lock_path" ] && [ "$(stat -c '%U:%G:%a:%h' "$lock_path" 2>/dev/null)" = root:root:600:1 ] || block INSTALL_CONFLICT
@@ -414,7 +464,7 @@ if dpkg-query -W caddy >/dev/null 2>&1; then block INSTALL_CONFLICT; else query_
 if getent passwd opspilot-caddy >/dev/null 2>&1 || getent group opspilot-caddy >/dev/null 2>&1; then block INSTALL_CONFLICT; fi
 listeners=$(ss -H -ltnp 'sport = :80 or sport = :443' 2>/dev/null) || block INSTALL_CONFLICT
 [ -z "$listeners" ] || block INSTALL_CONFLICT
-mkdir -m 0700 -- "$stage_dir" || block INSTALL_CONFLICT; stage_created=1; stage_id=$(stat -c '%d:%i:%U:%G:%a' "$stage_dir")
+mkdir -m 0700 -- "$stage_dir"; mkdir_rc=$?; if [ -d "$stage_dir" ] && [ ! -L "$stage_dir" ]; then stage_created=1; stage_id=$(stat -c '%d:%i:%U:%G:%a' "$stage_dir" 2>/dev/null || true); fi; [ "$mkdir_rc" -eq 0 ] || fail INSTALL_FAILED
 step=download
 curl --fail --silent --show-error --location --max-filesize 104857600 --output "$stage_dir/caddy.deb" "$download_uri" >/dev/null 2>&1 || fail INSTALL_FAILED
 [ -s "$stage_dir/caddy.deb" ] || fail INSTALL_FAILED
@@ -426,32 +476,64 @@ binary_sha=$(sha256sum -- "$stage_dir/signed-binary" | awk '{print $1}') || fail
 dpkg-deb --extract "$stage_dir/caddy.deb" "$stage_dir/root" >/dev/null 2>&1 || fail INSTALL_FAILED
 [ -f "$stage_dir/root/usr/bin/caddy" ] && [ ! -L "$stage_dir/root/usr/bin/caddy" ] && [ "$(sha256sum -- "$stage_dir/root/usr/bin/caddy" | awk '{print $1}')" = "$binary_sha" ] || fail INSTALL_FAILED
 step=create_account; write_started=1
-groupadd --system opspilot-caddy >/dev/null 2>&1 || fail INSTALL_FAILED
-created_group=1; group_id=$(getent group opspilot-caddy | cut -d: -f3)
-useradd --system --gid opspilot-caddy --home-dir /var/lib/opspilot/caddy --no-create-home --shell /usr/sbin/nologin opspilot-caddy >/dev/null 2>&1 || fail INSTALL_FAILED
-created_user=1; user_id=$(id -u opspilot-caddy 2>/dev/null)
+groupadd --system opspilot-caddy >/dev/null 2>&1; group_rc=$?
+if getent group opspilot-caddy >/dev/null 2>&1; then created_group=1; group_id=$(getent group opspilot-caddy | cut -d: -f3); fi
+[ "$group_rc" -eq 0 ] && [ "$created_group" -eq 1 ] || fail INSTALL_FAILED
+useradd --system --gid opspilot-caddy --home-dir /var/lib/opspilot/caddy --no-create-home --shell /usr/sbin/nologin opspilot-caddy >/dev/null 2>&1; user_rc=$?
+if getent passwd opspilot-caddy >/dev/null 2>&1; then created_user=1; user_id=$(id -u opspilot-caddy 2>/dev/null); fi
+[ "$user_rc" -eq 0 ] && [ "$created_user" -eq 1 ] || fail INSTALL_FAILED
 step=create_paths
-mkdir -m 0755 /usr/local/lib/opspilot-caddy || fail INSTALL_FAILED; made_lib=1; lib_id=$(stat -c '%d:%i:%U:%G:%a' /usr/local/lib/opspilot-caddy)
-mkdir -m 0755 /usr/local/lib/opspilot-caddy/versions || fail INSTALL_FAILED; made_versions=1; versions_id=$(stat -c '%d:%i:%U:%G:%a' /usr/local/lib/opspilot-caddy/versions)
-mkdir -m 0755 "/usr/local/lib/opspilot-caddy/versions/$version" || fail INSTALL_FAILED; made_version=1; version_id=$(stat -c '%d:%i:%U:%G:%a' "/usr/local/lib/opspilot-caddy/versions/$version")
-install -o root -g root -m 0755 -- "$stage_dir/root/usr/bin/caddy" "$binary_path" || fail INSTALL_FAILED; created_binary=1
+mkdir -m 0755 /usr/local/lib/opspilot-caddy; mkdir_rc=$?; if [ -d /usr/local/lib/opspilot-caddy ] && [ ! -L /usr/local/lib/opspilot-caddy ]; then made_lib=1; lib_id=$(stat -c '%d:%i:%U:%G:%a' /usr/local/lib/opspilot-caddy 2>/dev/null || true); fi; [ "$mkdir_rc" -eq 0 ] || fail INSTALL_FAILED
+mkdir -m 0755 /usr/local/lib/opspilot-caddy/versions; mkdir_rc=$?; if [ -d /usr/local/lib/opspilot-caddy/versions ] && [ ! -L /usr/local/lib/opspilot-caddy/versions ]; then made_versions=1; versions_id=$(stat -c '%d:%i:%U:%G:%a' /usr/local/lib/opspilot-caddy/versions 2>/dev/null || true); fi; [ "$mkdir_rc" -eq 0 ] || fail INSTALL_FAILED
+mkdir -m 0755 "/usr/local/lib/opspilot-caddy/versions/$version"; mkdir_rc=$?; if [ -d "/usr/local/lib/opspilot-caddy/versions/$version" ] && [ ! -L "/usr/local/lib/opspilot-caddy/versions/$version" ]; then made_version=1; version_id=$(stat -c '%d:%i:%U:%G:%a' "/usr/local/lib/opspilot-caddy/versions/$version" 2>/dev/null || true); fi; [ "$mkdir_rc" -eq 0 ] || fail INSTALL_FAILED
+install -o root -g root -m 0755 -- "$stage_dir/root/usr/bin/caddy" "$binary_path"; install_rc=$?
+if [ -f "$binary_path" ] && [ ! -L "$binary_path" ]; then created_binary=1; binary_id=$(stat -c '%d:%i:%U:%G:%a' -- "$binary_path" 2>/dev/null || true); fi
+[ "$install_rc" -eq 0 ] || fail INSTALL_FAILED
 [ "$(sha256sum -- "$binary_path" | awk '{print $1}')" = "$binary_sha" ] || fail INSTALL_FAILED
-ln -s -- "$binary_path" /usr/bin/caddy || fail INSTALL_FAILED; created_link=1
-mkdir -m 0755 /etc/opspilot || fail INSTALL_FAILED; made_etc=1; etc_id=$(stat -c '%d:%i:%U:%G:%a' /etc/opspilot)
-mkdir -m 0750 /etc/opspilot/caddy || fail INSTALL_FAILED; made_etc_caddy=1
+ln -s -- "$binary_path" /usr/bin/caddy; link_rc=$?
+if [ -L /usr/bin/caddy ]; then created_link=1; link_id=$(stat -c '%d:%i:%U:%G:%a' -- /usr/bin/caddy 2>/dev/null || true); fi
+[ "$link_rc" -eq 0 ] || fail INSTALL_FAILED
+mkdir -m 0755 /etc/opspilot; mkdir_rc=$?; if [ -d /etc/opspilot ] && [ ! -L /etc/opspilot ]; then made_etc=1; etc_id=$(stat -c '%d:%i:%U:%G:%a' /etc/opspilot 2>/dev/null || true); fi; [ "$mkdir_rc" -eq 0 ] || fail INSTALL_FAILED
+mkdir -m 0750 /etc/opspilot/caddy; mkdir_rc=$?; if [ -d /etc/opspilot/caddy ] && [ ! -L /etc/opspilot/caddy ]; then made_etc_caddy=1; etc_caddy_id=$(stat -c '%d:%i:%U:%G:%a' /etc/opspilot/caddy 2>/dev/null || true); fi; [ "$mkdir_rc" -eq 0 ] || fail INSTALL_FAILED
 chown root:opspilot-caddy /etc/opspilot/caddy || fail INSTALL_FAILED; etc_caddy_id=$(stat -c '%d:%i:%U:%G:%a' /etc/opspilot/caddy)
-mkdir -m 0755 /var/lib/opspilot || fail INSTALL_FAILED; made_var=1; var_id=$(stat -c '%d:%i:%U:%G:%a' /var/lib/opspilot)
-mkdir -m 0700 /var/lib/opspilot/caddy || fail INSTALL_FAILED; made_var_caddy=1
+mkdir -m 0755 /var/lib/opspilot; mkdir_rc=$?; if [ -d /var/lib/opspilot ] && [ ! -L /var/lib/opspilot ]; then made_var=1; var_id=$(stat -c '%d:%i:%U:%G:%a' /var/lib/opspilot 2>/dev/null || true); fi; [ "$mkdir_rc" -eq 0 ] || fail INSTALL_FAILED
+mkdir -m 0700 /var/lib/opspilot/caddy; mkdir_rc=$?; if [ -d /var/lib/opspilot/caddy ] && [ ! -L /var/lib/opspilot/caddy ]; then made_var_caddy=1; var_caddy_id=$(stat -c '%d:%i:%U:%G:%a' /var/lib/opspilot/caddy 2>/dev/null || true); fi; [ "$mkdir_rc" -eq 0 ] || fail INSTALL_FAILED
 chown opspilot-caddy:opspilot-caddy /var/lib/opspilot/caddy || fail INSTALL_FAILED; var_caddy_id=$(stat -c '%d:%i:%U:%G:%a' /var/lib/opspilot/caddy)
-mkdir -m 0700 /var/lib/opspilot/caddy/production || fail INSTALL_FAILED; made_storage=1
+mkdir -m 0700 /var/lib/opspilot/caddy/production; mkdir_rc=$?; if [ -d /var/lib/opspilot/caddy/production ] && [ ! -L /var/lib/opspilot/caddy/production ]; then made_storage=1; storage_id=$(stat -c '%d:%i:%U:%G:%a' /var/lib/opspilot/caddy/production 2>/dev/null || true); fi; [ "$mkdir_rc" -eq 0 ] || fail INSTALL_FAILED
 chown opspilot-caddy:opspilot-caddy /var/lib/opspilot/caddy/production || fail INSTALL_FAILED; storage_id=$(stat -c '%d:%i:%U:%G:%a' /var/lib/opspilot/caddy/production)
 step=write_artifacts
-write_atomic() { data=$1; path=$2; owner=$3; group=$4; mode=$5; temp="$path.opspilot-$txn.tmp"; [ ! -e "$temp" ] && [ ! -L "$temp" ] || return 1; printf '%s' "$data" | base64 -d > "$temp" || return 1; chown "$owner:$group" "$temp" && chmod "$mode" "$temp" && mv -nT -- "$temp" "$path" && [ ! -e "$temp" ]; }
-write_atomic '${Buffer.from(buildSharedIngressConfig([])).toString('base64')}' /etc/opspilot/caddy/Caddyfile root opspilot-caddy 0640 || fail INSTALL_FAILED; created_config=1
-write_atomic '${Buffer.from(EXPECTED_OPSPILOT_UNIT).toString('base64')}' /etc/systemd/system/opspilot-caddy.service root root 0644 || fail INSTALL_FAILED; created_unit=1
-write_atomic '${Buffer.from(OWNER_MARKER).toString('base64')}' /etc/opspilot/caddy/OWNER root root 0644 || fail INSTALL_FAILED; created_owner=1
+write_atomic() {
+  data=$1; path=$2; owner=$3; group=$4; mode=$5; temp="$path.opspilot-$txn.tmp"
+  moved_owned=0
+  atomic_temp_path=$temp
+  [ ! -e "$temp" ] && [ ! -L "$temp" ] || return 1
+  : > "$temp"; create_rc=$?
+  if [ -f "$temp" ] && [ ! -L "$temp" ]; then atomic_temp_id=$(stat -c '%d:%i:%U:%G:%a' -- "$temp" 2>/dev/null || true); atomic_temp_inode=$(stat -c '%d:%i' -- "$temp" 2>/dev/null || true); fi
+  [ "$create_rc" -eq 0 ] || return 1
+  [ -n "$atomic_temp_id" ] && [ -n "$atomic_temp_inode" ] || return 1
+  printf '%s' "$data" | base64 -d > "$temp" || return 1
+  chown "$owner:$group" "$temp" || return 1
+  atomic_temp_id=$(stat -c '%d:%i:%U:%G:%a' -- "$temp" 2>/dev/null) || return 1
+  chmod "$mode" "$temp" || return 1
+  atomic_temp_id=$(stat -c '%d:%i:%U:%G:%a' -- "$temp" 2>/dev/null) || return 1
+  mv -nT -- "$temp" "$path"; move_rc=$?
+  if [ ! -e "$temp" ] && [ ! -L "$temp" ] && [ -f "$path" ] && [ ! -L "$path" ] && [ "$(stat -c '%d:%i' -- "$path" 2>/dev/null || true)" = "$atomic_temp_inode" ]; then
+    case "$path" in
+      /etc/opspilot/caddy/Caddyfile) created_config=1; config_id=$(stat -c '%d:%i:%U:%G:%a' -- "$path" 2>/dev/null || true) ;;
+      /etc/systemd/system/opspilot-caddy.service) created_unit=1; unit_id=$(stat -c '%d:%i:%U:%G:%a' -- "$path" 2>/dev/null || true) ;;
+      /etc/opspilot/caddy/OWNER) created_owner=1; owner_id=$(stat -c '%d:%i:%U:%G:%a' -- "$path" 2>/dev/null || true) ;;
+      /etc/opspilot/caddy/INSTALLATION) created_manifest=1; manifest_id=$(stat -c '%d:%i:%U:%G:%a' -- "$path" 2>/dev/null || true) ;;
+      *) return 1 ;;
+    esac
+    moved_owned=1
+  fi
+  [ "$move_rc" -eq 0 ] && [ "$moved_owned" -eq 1 ]
+}
+write_atomic '${Buffer.from(buildSharedIngressConfig([])).toString('base64')}' /etc/opspilot/caddy/Caddyfile root opspilot-caddy 0640 || fail INSTALL_FAILED
+write_atomic '${Buffer.from(EXPECTED_OPSPILOT_UNIT).toString('base64')}' /etc/systemd/system/opspilot-caddy.service root root 0644 || fail INSTALL_FAILED
+write_atomic '${Buffer.from(OWNER_MARKER).toString('base64')}' /etc/opspilot/caddy/OWNER root root 0644 || fail INSTALL_FAILED
 manifest=$(printf 'format=opspilot-caddy-installation-v1\\nversion=%s\\narchitecture=%s\\nrepository_channel=stable\\npackage_sha256=%s\\nbinary_sha256=%s\\n' "$version" "$architecture" "$package_sha" "$binary_sha" | base64 | tr -d '\\n')
-write_atomic "$manifest" /etc/opspilot/caddy/INSTALLATION root root 0644 || fail INSTALL_FAILED; created_manifest=1
+write_atomic "$manifest" /etc/opspilot/caddy/INSTALLATION root root 0644 || fail INSTALL_FAILED
 step=verify
 systemctl daemon-reload >/dev/null 2>&1 || fail INSTALL_VERIFY_FAILED
 listeners=$(ss -H -ltnp 'sport = :80 or sport = :443' 2>/dev/null) || fail INSTALL_VERIFY_FAILED; [ -z "$listeners" ] || fail INSTALL_VERIFY_FAILED

@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { gzipSync } from 'node:zlib'
 import { describe, expect, it, vi } from 'vitest'
 import type { SshManager, SshHostIdentity } from '../../ssh/manager'
@@ -12,6 +14,7 @@ import { prepareCaddyInstallPlan, type CaddyInstallPlan } from './caddyInstallPl
 import {
   CADDY_FIRST_RUN_INSTALL_SCRIPT,
   CADDY_OWNERSHIP_CHECK_SCRIPT,
+  withVpsIngressMutex,
   buildCaddyFirstRunInstallCommand,
   installCaddyFirstRunOverSsh,
   verifyCaddyInstallationOwnershipOverSsh
@@ -176,6 +179,8 @@ describe('P1e-3 first-run Caddy transaction', () => {
       timeoutMs: 180_000
     })
     expect(command).toContain('flock -n 9')
+    expect(command).toContain('/run/lock/opspilot-ingress.lock')
+    expect(command).toContain('1777')
     expect(command).toContain('RESULT=installed_not_running')
     expect(command).toMatch(/dpkg-deb --extract/)
     expect(command).toMatch(/systemctl daemon-reload/)
@@ -254,6 +259,30 @@ describe('P1e-3 first-run Caddy transaction', () => {
     expect(vi.mocked(ssh.execWithHostIdentity)).toHaveBeenCalledTimes(3)
   })
 
+  it('shares the per-VPS ingress mutex with future reconcile work', async () => {
+    const ssh = fakeSsh()
+    const plan = await makePlan(ssh)
+    let releaseReconcile!: () => void
+    let enterReconcile!: () => void
+    const reconcileGate = new Promise<void>((resolve) => {
+      releaseReconcile = resolve
+    })
+    const reconcileEntered = new Promise<void>((resolve) => {
+      enterReconcile = resolve
+    })
+    const reconcile = withVpsIngressMutex(target.vpsId, async () => {
+      enterReconcile()
+      await reconcileGate
+    })
+    await reconcileEntered
+    const install = installCaddyFirstRunOverSsh(ssh, plan)
+    await Promise.resolve()
+    expect(vi.mocked(ssh.execWithHostIdentity)).toHaveBeenCalledTimes(1)
+    releaseReconcile()
+    await reconcile
+    await expect(install).resolves.toMatchObject({ status: 'installed_not_running' })
+  })
+
   it.each([
     'download',
     'extract_binary',
@@ -302,6 +331,10 @@ describe('P1e-3 first-run Caddy transaction', () => {
   })
 
   it('runs the shared ownership verifier on a pinned identity and blocks incomplete proof', async () => {
+    expect(CADDY_OWNERSHIP_CHECK_SCRIPT).toContain("'DropInPaths='")
+    expect(CADDY_OWNERSHIP_CHECK_SCRIPT).toContain("'ExecStartPre=/usr/bin/caddy validate")
+    expect(CADDY_OWNERSHIP_CHECK_SCRIPT).toContain("'ExecReload=/usr/bin/caddy reload")
+    expect(CADDY_OWNERSHIP_CHECK_SCRIPT).toContain("'NoNewPrivileges=yes'")
     const success = fakeSsh({ installStdout: 'OWNERSHIP=verified_inactive' })
     await expect(verifyCaddyInstallationOwnershipOverSsh(success, target)).resolves.toEqual({
       status: 'verified',
@@ -338,4 +371,45 @@ describe('P1e-3 first-run Caddy transaction', () => {
       expect(result.status, result.stderr).toBe(0)
     }
   })
+
+  it.skipIf(process.env.OPSPILOT_RUN_LINUX_INGRESS_INTEGRATION !== '1')(
+    'executes install and rollback against a disposable Linux filesystem root',
+    { timeout: 120_000 },
+    () => {
+      const rootedScript = CADDY_FIRST_RUN_INSTALL_SCRIPT.replace(
+        /(?<![A-Za-z0-9./])\/(?:usr|etc|var|run)(?:\/[A-Za-z0-9._-]+)*/g,
+        '@@ROOT@@$&'
+      ).replaceAll('@@ROOT@@/usr/sbin/nologin', '/usr/sbin/nologin')
+      const harnessPath = fileURLToPath(
+        new URL('./caddyInstallTransaction.linux-harness.sh', import.meta.url)
+      )
+      const harness = readFileSync(harnessPath, 'utf8').replace(
+        '@@SCRIPT_B64@@',
+        Buffer.from(rootedScript).toString('base64')
+      )
+      const result = spawnSync(
+        'wsl.exe',
+        ['-u', 'root', '--', 'unshare', '-m', '--propagation', 'private', 'bash', '-s'],
+        {
+          input: harness,
+          encoding: 'utf8',
+          timeout: 110_000,
+          maxBuffer: 2 * 1024 * 1024
+        }
+      )
+      expect(result.error).toBeUndefined()
+      expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
+      expect(result.stdout).toContain('success|RESULT=installed_not_running')
+      expect(result.stdout).toContain('create-failure|RESULT=failed_rolled_back')
+      expect(result.stdout).toContain('chown-failure|RESULT=failed_rolled_back')
+      expect(result.stdout).toContain('write-failure|RESULT=failed_rolled_back')
+      expect(result.stdout).toContain('rename-failure|RESULT=failed_rolled_back')
+      expect(result.stdout).toContain('verify-failure|RESULT=failed_rolled_back')
+      expect(result.stdout).toContain('rollback-failure|RESULT=rollback_failed')
+      expect(result.stdout).toContain('lock-dir-symlink|RESULT=blocked,CODE=INSTALL_CONFLICT,')
+      expect(result.stdout).toContain('lock-file-symlink|RESULT=blocked,CODE=INSTALL_CONFLICT,')
+      expect(result.stdout).toContain('lock-bad-owner|RESULT=blocked,CODE=INSTALL_CONFLICT,')
+      expect(result.stdout).toContain('LINUX_TMPFS_TRANSACTION_TESTS=PASS')
+    }
+  )
 })

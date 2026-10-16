@@ -24,3 +24,13 @@
 
 - Chưa có IPC/UI caller và chưa có lần cài Caddy trên VPS thật. Không có bằng chứng về quyền sudo, repository/package hoặc firewall trên bất kỳ VPS nào trong checkpoint này.
 - Full repo lint **NOT_RUN** trong checkpoint này; chỉ scoped lint đã chạy. GUI/Electron install flow **NOT_RUN** vì installer chưa nối UI/IPC.
+
+
+## UPDATE 16/10/2026 — sửa review rollback/lock/verifier
+
+- Installer và reconcile dùng chung local helper `withVpsIngressMutex()` cùng lock remote `/run/lock/opspilot-ingress.lock`. Preflight lock xác nhận `/run` và `/run/lock` là thư mục root:root không symlink; chấp nhận `/run/lock` mode `1777` (chuẩn) hoặc `755`; file lock phải regular, root:root, mode `600`, một hard link và không symlink. Tạo lock bằng noclobber.
+- Ghi lại inode/owner/mode của mỗi thư mục, binary, symlink, file tạm và artifact ngay khi tạo; cập nhật metadata sau khi đổi owner/mode. Rollback xác minh inode/owner/mode/hash trước khi xóa. File tạm atomic được xác minh và dọn trước thư mục cha; mỗi cleanup vẫn được thử và lỗi được tổng hợp. Chỉ xóa service account/group khi artifact đã dọn hết; nếu còn residue thì giữ account/group và trả `INSTALL_ROLLBACK_FAILED`.
+- Ownership verifier so khớp `DropInPaths` rỗng, ExecStartPre/ExecStart/ExecReload và các thuộc tính systemd hiệu lực theo mẫu P1e-2a, ngoài hash unit và metadata artifact.
+- Linux integration test chạy shell installer sinh từ module trong mount namespace WSL với root filesystem tmpfs dùng một lần. Test tạo package `.deb` fixture, thực thi thao tác file thật và dọn tmpfs khi kết thúc; không chạy installer vào `/` của WSL, không cài service hoặc sửa account host. 10 ca: cài thành công; lỗi create sau mkdir, chown, write, rename sau khi rename đã xảy ra, verify; lỗi rollback; symlink ở `/run/lock` và lock file; owner lock sai. **PASS**.
+- Node `v22.23.3`: SSH + ingress Vitest **10 files, 195/195 PASS** (bật `OPSPILOT_RUN_LINUX_INGRESS_INTEGRATION=1` để chạy ca tmpfs); typecheck Node/Web **PASS**; production build **PASS** (3.113 renderer modules); scoped ESLint trên 2 file TypeScript **PASS**; `git diff --check` **PASS**.
+- VPS installer, IPC/UI/pipeline và reconcile runtime: **NOT_RUN** theo phạm vi. Docker daemon không khả dụng; kiểm thử cô lập dùng WSL mount namespace + tmpfs, không dùng Docker.
