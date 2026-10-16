@@ -34,3 +34,15 @@
 - Linux integration test chạy shell installer sinh từ module trong mount namespace WSL với root filesystem tmpfs dùng một lần. Test tạo package `.deb` fixture, thực thi thao tác file thật và dọn tmpfs khi kết thúc; không chạy installer vào `/` của WSL, không cài service hoặc sửa account host. 10 ca: cài thành công; lỗi create sau mkdir, chown, write, rename sau khi rename đã xảy ra, verify; lỗi rollback; symlink ở `/run/lock` và lock file; owner lock sai. **PASS**.
 - Node `v22.23.3`: SSH + ingress Vitest **10 files, 195/195 PASS** (bật `OPSPILOT_RUN_LINUX_INGRESS_INTEGRATION=1` để chạy ca tmpfs); typecheck Node/Web **PASS**; production build **PASS** (3.113 renderer modules); scoped ESLint trên 2 file TypeScript **PASS**; `git diff --check` **PASS**.
 - VPS installer, IPC/UI/pipeline và reconcile runtime: **NOT_RUN** theo phạm vi. Docker daemon không khả dụng; kiểm thử cô lập dùng WSL mount namespace + tmpfs, không dùng Docker.
+## START 16/10/2026 — review ownership
+- Yêu cầu: không nhận resource sau lỗi chỉ dựa vào việc path/account xuất hiện; staging sẵn có phải được giữ nguyên; bổ sung Linux tmpfs race fixtures và fault injection pre/post-create phân biệt.
+- Gate đã chạy trong lượt này; kết quả chi tiết ở UPDATE ownership bên dưới.
+
+
+## UPDATE 16/10/2026 — ownership sau lỗi tạo
+
+- Không đặt `stage_created`, `made_*`, `created_user/group/binary/link` khi chỉ thấy tài nguyên sau lệnh lỗi. Chỉ ghi cờ sau exit code thành công và identity cần thiết (device/inode/owner/group/mode hoặc UID/GID) đã đọc được. Nếu lệnh lỗi nhưng tài nguyên xuất hiện, trả `INSTALL_RECONCILIATION_REQUIRED`; rollback chỉ xử lý tài nguyên khác đã xác minh, giữ account khi trạng thái còn mơ hồ.
+- Staging có sẵn bị chặn trước `mkdir`, không đụng nội dung. Tạo directory và file tạm dùng kiểm tra độc quyền; binary được publish bằng rename không ghi đè. Collision/race không được nhận làm tài nguyên transaction.
+- WSL tmpfs filesystem integration chạy thật: 17 tình huống gồm staging sentinel có sẵn; lỗi mkdir trước tạo/sau tạo; directory xuất hiện sau preflight; symlink/group/user bên ngoài xuất hiện trước lệnh tương ứng; file đích xuất hiện trước rename; cùng success, chown/write/rename/verify/rollback failure và lock conflict. Kiểm tra sentinel và identity device/inode/UID/GID/mode được giữ; ca không chắc chắn yêu cầu reconciliation. PASS.
+- Node v22.23.3: SSH + ingress Vitest 10 files, 195/195 PASS (Linux tmpfs integration bật); typecheck Node/Web PASS; production build PASS; scoped ESLint hai file TypeScript PASS; git diff --check PASS.
+- VPS thật, IPC/UI/pipeline và reconcile runtime: NOT_RUN, ngoài phạm vi. Giữ trạng thái CHỜ REVIEW.
