@@ -28,6 +28,16 @@ describe('buildSharedIngressConfig', () => {
     expect(buildSharedIngressConfig([])).toBe(`${globalOptions}\n`)
   })
 
+  it('isolates ACME staging storage and directory from production while retaining the route', () => {
+    const route = [{ hostname: 'lab.example.com', host_port: 30009 }]
+    const staging = buildSharedIngressConfig(route, 'acme_staging')
+
+    expect(staging).toContain('storage file_system /var/lib/opspilot/caddy/staging')
+    expect(staging).toContain('acme_ca https://acme-staging-v02.api.letsencrypt.org/directory')
+    expect(staging).toContain('lab.example.com {\n  reverse_proxy 127.0.0.1:30009\n}')
+    expect(staging).not.toContain('/production')
+  })
+
   it('rejects duplicate hostnames after normalization', () => {
     expect(() =>
       buildSharedIngressConfig([

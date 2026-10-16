@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type Database from 'better-sqlite3'
 
 import type {
@@ -42,9 +43,132 @@ export interface DomainIngressObservation {
   https_probe_hostname: string | null
 }
 
+export interface SharedIngressInventoryBinding {
+  id: number
+  app_id: number
+  hostname: string
+  ownership_key: string
+  route_ownership_key: string
+  desired_generation: number
+  dns_status: DomainDnsStatus
+  enabled: boolean
+  host_port: number | null
+  current_deployment_id: number | null
+  deployment_version: number | null
+  image_tag: string | null
+}
+
+export interface SharedIngressInventorySnapshot {
+  vps_id: number
+  host: string
+  port: number
+  host_fingerprint: string | null
+  revision: string
+  bindings: SharedIngressInventoryBinding[]
+}
+
 /** DNS state is independent of route/certificate/probe observations. No credential or secret is persisted. */
 export class DomainRepository {
   constructor(private readonly database: Database.Database) {}
+
+  /** Reads every shared-ingress binding; enabled routes fail closed unless their current runtime is valid. */
+  getSharedIngressInventory(vpsId: number): SharedIngressInventorySnapshot {
+    const rows = this.database.prepare(
+      `SELECT v.id AS vps_id, v.host, v.port AS ssh_port, v.host_fingerprint, v.archived_at,
+              b.id, b.app_id, b.hostname, b.ownership_key, b.route_ownership_key,
+              b.desired_generation, b.dns_status, b.route_status,
+              a.host_port, a.imported_from_vps, a.current_deployment_id,
+              d.id AS joined_deployment_id, d.version AS deployment_version,
+              d.image_tag, d.status AS deployment_status, d.origin AS deployment_origin
+       FROM vps v
+       LEFT JOIN app a ON a.vps_id = v.id
+       LEFT JOIN domain_binding b ON b.app_id = a.id AND b.mode = 'shared_ingress'
+       LEFT JOIN deployment d ON d.id = a.current_deployment_id AND d.app_id = a.id
+       WHERE v.id = ? AND (b.id IS NULL OR b.mode = 'shared_ingress')
+       ORDER BY b.hostname, b.id`
+    ).all(vpsId) as Array<{
+      vps_id: number; host: string; ssh_port: number; host_fingerprint: string | null; archived_at: string | null
+      id: number | null; app_id: number | null; hostname: string | null; ownership_key: string | null
+      route_ownership_key: string | null; desired_generation: number | null; dns_status: DomainDnsStatus | null
+      route_status: string | null; host_port: number | null; imported_from_vps: number | null
+      current_deployment_id: number | null; joined_deployment_id: number | null; deployment_version: number | null
+      image_tag: string | null; deployment_status: string | null; deployment_origin: string | null
+    }>
+    const host = rows[0]
+    if (!host || host.archived_at !== null) throw new AppError('VALIDATION', 'VPS ingress inventory không tồn tại hoặc đã lưu trữ.')
+    const bindings: SharedIngressInventoryBinding[] = []
+    for (const row of rows) {
+      if (row.id === null) continue
+      const isDisabled = row.dns_status === 'disabled' || row.route_status === 'disabled'
+      if (!row.hostname || !row.ownership_key || !row.route_ownership_key || !row.desired_generation || !row.dns_status) {
+        throw new AppError('VALIDATION', 'Shared-ingress inventory thiếu định danh hoặc generation.')
+      }
+      const enabled = !isDisabled
+      if (enabled && (
+        row.dns_status !== 'propagated' ||
+        row.route_ownership_key !== `opspilot-ingress:${row.app_id}:${row.hostname}` ||
+        row.imported_from_vps !== 0 ||
+        !Number.isInteger(row.host_port) || row.host_port! < 1 || row.host_port! > 65_535 ||
+        row.current_deployment_id === null || row.joined_deployment_id !== row.current_deployment_id ||
+        row.deployment_status !== 'running' || row.deployment_origin !== 'opspilot' ||
+        !Number.isInteger(row.deployment_version) || !row.image_tag
+      )) {
+        throw new AppError('VALIDATION', `Shared-ingress binding ${row.hostname} không khớp app/deployment hiện hành hoặc chưa sẵn sàng.`)
+      }
+      bindings.push({
+        id: row.id,
+        app_id: row.app_id!,
+        hostname: row.hostname,
+        ownership_key: row.ownership_key,
+        route_ownership_key: row.route_ownership_key,
+        desired_generation: row.desired_generation,
+        dns_status: row.dns_status,
+        enabled,
+        host_port: enabled ? row.host_port : null,
+        current_deployment_id: enabled ? row.current_deployment_id : null,
+        deployment_version: enabled ? row.deployment_version : null,
+        image_tag: enabled ? row.image_tag : null
+      })
+    }
+    const identity = { vps_id: host.vps_id, host: host.host, port: host.ssh_port, host_fingerprint: host.host_fingerprint }
+    const revision = createHash('sha256').update(JSON.stringify({ identity, bindings })).digest('hex')
+    return { ...identity, revision, bindings }
+  }
+
+  /** Commits only pending/disabled observations. HTTPS evidence remains unrequested/unrun. */
+  recordSharedIngressReconcile(snapshot: SharedIngressInventorySnapshot): void {
+    this.database.transaction(() => {
+      const current = this.getSharedIngressInventory(snapshot.vps_id)
+      if (current.revision !== snapshot.revision) {
+        throw new AppError('VALIDATION', 'Shared-ingress inventory changed during reconcile.')
+      }
+      const update = this.database.prepare(
+        `UPDATE domain_binding
+         SET route_status=@route_status, certificate_status='not_requested',
+             https_probe_status='not_run', observed_generation=@generation,
+             ingress_reason_code=NULL,
+             route_checked_at=strftime('%Y-%m-%dT%H:%M:%SZ','now'),
+             certificate_checked_at=NULL, certificate_hostname=NULL,
+             https_probe_checked_at=NULL, https_probe_hostname=NULL,
+             updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+         WHERE id=@id AND app_id=@app_id AND hostname=@hostname
+           AND ownership_key=@ownership_key AND route_ownership_key=@route_ownership_key
+           AND desired_generation=@generation`
+      )
+      for (const binding of snapshot.bindings) {
+        const result = update.run({
+          id: binding.id,
+          app_id: binding.app_id,
+          hostname: binding.hostname,
+          ownership_key: binding.ownership_key,
+          route_ownership_key: binding.route_ownership_key,
+          generation: binding.desired_generation,
+          route_status: binding.enabled ? 'pending' : 'disabled'
+        })
+        if (result.changes !== 1) throw new AppError('VALIDATION', 'Binding generation changed during reconcile.')
+      }
+    })()
+  }
 
   upsertDns(input: DomainDnsBindingInput): void {
     const result = this.database

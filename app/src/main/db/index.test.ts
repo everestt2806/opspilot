@@ -231,6 +231,40 @@ describe('initializeDatabase', () => {
     database.close()
   })
 
+  it('builds shared-ingress inventory only from the current verified app deployment and records pending state', () => {
+    testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-ingress-inventory-'))
+    const database = initializeDatabase(testDirectory)
+    database.exec(`
+      INSERT INTO vps (id, name, host, port, username, auth_type, encrypted_secret, host_fingerprint)
+        VALUES (81, 'Ingress VPS', '198.51.100.81', 22, 'deploy', 'key', X'00', 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
+      INSERT INTO app (id, vps_id, name, framework, host_port, container_port)
+        VALUES (82, 81, 'ingress-app', 'express', 30082, 3000);
+      INSERT INTO deployment (id, app_id, version, image_tag, status, origin, started_at)
+        VALUES (83, 82, 5, 'registry.example/ingress-app:v5', 'running', 'opspilot', '2026-10-16T00:00:00Z');
+      UPDATE app SET current_deployment_id=83 WHERE id=82;
+    `)
+    const repository = new DomainRepository(database)
+    repository.upsertDns({
+      app_id: 82, hostname: 'app.ingress.example', mode: 'shared_ingress', provider: 'fixture',
+      zone_id: 'zone-fixture', record_type: 'A', record_name: 'app.ingress.example', target: '198.51.100.81',
+      ownership_key: 'dns-owner:82', route_ownership_key: 'opspilot-ingress:82:app.ingress.example',
+      dns_status: 'propagated'
+    })
+    const snapshot = repository.getSharedIngressInventory(81)
+    expect(snapshot.bindings).toEqual([expect.objectContaining({
+      app_id: 82, current_deployment_id: 83, deployment_version: 5,
+      hostname: 'app.ingress.example', host_port: 30082, enabled: true,
+      image_tag: 'registry.example/ingress-app:v5'
+    })])
+    repository.recordSharedIngressReconcile(snapshot)
+    expect(repository.getByHostname('app.ingress.example')).toMatchObject({
+      route_status: 'pending', certificate_status: 'not_requested', https_probe_status: 'not_run',
+      observed_generation: 1
+    })
+    database.prepare('UPDATE app SET imported_from_vps=1 WHERE id=82').run()
+    expect(() => repository.getSharedIngressInventory(81)).toThrow('VALIDATION')
+  })
+
   it('invalidates active route evidence after a direct identity change and rejects non-shared active routes', () => {
     testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v11-identity-'))
     const database = initializeDatabase(testDirectory)

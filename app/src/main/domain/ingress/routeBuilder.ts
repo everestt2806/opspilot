@@ -11,9 +11,17 @@ export const SHARED_INGRESS_GLOBAL_OPTIONS = [
   '}'
 ].join('\n')
 
+export type CaddyCertificateEnvironment = 'production' | 'acme_staging'
+
 /** Builds only OpsPilot-owned Caddyfile routes; it never reads another proxy's config. */
-export function buildSharedIngressConfig(routes: readonly SharedIngressRoute[]): string {
+export function buildSharedIngressConfig(
+  routes: readonly SharedIngressRoute[],
+  environment: CaddyCertificateEnvironment = 'production'
+): string {
   if (!Array.isArray(routes)) throw new Error('Danh sách route không hợp lệ.')
+  if (environment !== 'production' && environment !== 'acme_staging') {
+    throw new Error('Môi trường certificate không hợp lệ.')
+  }
   const normalized = routes.map((route) => {
     if (!route || typeof route !== 'object') throw new Error('Route không hợp lệ.')
     const hostname = normalizeRouteHostname(route.hostname)
@@ -33,7 +41,17 @@ export function buildSharedIngressConfig(routes: readonly SharedIngressRoute[]):
   const routeBlocks = normalized
     .map(({ hostname, host_port }) => `${hostname} {\n  reverse_proxy 127.0.0.1:${host_port}\n}`)
     .join('\n\n')
-  return `${SHARED_INGRESS_GLOBAL_OPTIONS}\n${routeBlocks ? `\n${routeBlocks}\n` : ''}`
+  const globalOptions = environment === 'production'
+    ? SHARED_INGRESS_GLOBAL_OPTIONS
+    : [
+        '{',
+        '    admin 127.0.0.1:2019',
+        '    persist_config off',
+        '    storage file_system /var/lib/opspilot/caddy/staging',
+        '    acme_ca https://acme-staging-v02.api.letsencrypt.org/directory',
+        '}'
+      ].join('\n')
+  return `${globalOptions}\n${routeBlocks ? `\n${routeBlocks}\n` : ''}`
 }
 
 function normalizeRouteHostname(input: string): string {
