@@ -309,6 +309,54 @@ export interface IpcError {
 
 export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: IpcError };
 
+export type SharedIngressAction = 'install' | 'reconcile' | 'https_check';
+export type SharedIngressOperation = 'read' | 'install' | 'reconcile' | 'https_check';
+export type SharedIngressStatus =
+  | 'ready' | 'installed' | 'reconciled_pending' | 'active' | 'pending'
+  | 'degraded' | 'blocked' | 'uncertain';
+export type SharedIngressStep = 'read' | 'preflight' | 'prepare' | 'install' | 'reconcile' | 'https_probe';
+export type SharedIngressServiceReasonCode =
+  | 'INVALID_IDENTIFIER' | 'VPS_NOT_AVAILABLE' | 'BINDING_NOT_FOUND'
+  | 'APP_OR_DEPLOYMENT_INVALID' | 'INVENTORY_NOT_READY' | 'BINDING_DISABLED'
+  | 'SSH_IDENTITY_UNVERIFIED' | 'IDENTITY_CHANGED' | 'INVENTORY_CHANGED'
+  | 'HOST_CONFLICT' | 'INSTALL_PLAN_BLOCKED' | 'INSTALL_UNCERTAIN'
+  | 'RECONCILE_BLOCKED' | 'RECONCILE_UNCERTAIN' | 'STAGING_SCOPE_BLOCKED'
+  | 'HTTPS_PENDING' | 'HTTPS_DNS_NOT_PROPAGATED' | 'HTTPS_RUNTIME_NOT_VERIFIED'
+  | 'HTTPS_REMOTE_GENERATION_CHANGED' | 'HTTPS_STAGING_NOT_ELIGIBLE'
+  | 'HTTPS_PROBE_FAILED' | 'HTTPS_ACTIVATION_WRITE_FAILED' | 'STALE_RESULT'
+  | 'INTERNAL_ERROR';
+export type SharedIngressReasonCode = SharedIngressServiceReasonCode | DomainReasonCode;
+
+export interface SharedIngressBindingDto {
+  vps_id: number;
+  binding_id: number;
+  app_id: number;
+  hostname: string;
+  operation: SharedIngressOperation;
+  status: SharedIngressStatus;
+  failed_step: SharedIngressStep | null;
+  reason: { code: SharedIngressReasonCode; message: string } | null;
+  retryable: boolean;
+  http_url: string | null;
+  dns_status: DomainDnsStatus;
+  route_status: DomainRouteStatus;
+  certificate_status: DomainCertificateStatus;
+  https_probe_status: DomainHttpsProbeStatus;
+  route_count?: number;
+}
+
+export interface DomainIngressListInput {
+  vps_id: number;
+  app_id: number;
+}
+export interface DomainIngressStatusInput {
+  vps_id: number;
+  binding_id: number;
+}
+export interface DomainIngressActionInput extends DomainIngressStatusInput {
+  action: SharedIngressAction;
+}
+
 export interface IpcInvokeMap {
   // ── VPS (UC-01) ────────────────────────────────────────────────────────────
   'vps:list':           () => IpcResult<Vps[]>;
@@ -374,6 +422,9 @@ export interface IpcInvokeMap {
     hostname: string;
     cloudflare_proxy_hint?: 'enabled' | 'disabled' | 'unknown';
   }) => IpcResult<SharedIngressReadinessResult>;
+  'domain:ingress-list': (input: DomainIngressListInput) => IpcResult<SharedIngressBindingDto[]>;
+  'domain:ingress-status': (input: DomainIngressStatusInput) => IpcResult<SharedIngressBindingDto>;
+  'domain:ingress-action': (input: DomainIngressActionInput) => IpcResult<SharedIngressBindingDto>;
   'domain:upsert': (input: {
     deployment_id: number;
     hostname: string;

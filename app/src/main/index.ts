@@ -9,7 +9,11 @@ import icon from '../../resources/icon.png?asset'
 import { createCredentialCipher } from './crypto/masterKey'
 import { loadSecret } from './crypto/credentials'
 import { closeDatabase, initializeDatabase } from './db'
+import { AppRepository } from './db/appRepository'
 import { ActionLogRepository } from './db/actionLogRepository'
+import { DeploymentRepository } from './db/deploymentRepository'
+import { DomainRepository } from './domain/repository'
+import { SharedIngressService } from './domain/ingress/sharedIngressService'
 import { VpsRepository } from './db/vpsRepository'
 import { DeployService } from './deploy/service'
 import { HistoryService } from './history/service'
@@ -134,6 +138,14 @@ void app
     const migrateService = new MigrateService(database, sshManager, (event) => {
       mainWindow?.webContents.send('migrate:event', event)
     })
+    const sharedIngressService = new SharedIngressService({
+      vpsRepository,
+      appRepository: new AppRepository(database),
+      deploymentRepository: new DeploymentRepository(database),
+      domainRepository: new DomainRepository(database),
+      ssh: sshManager,
+      policy: { certificateEnvironment: 'production', stagingLabHostnames: [] }
+    })
 
     registerIpcHandlers(
       mlService,
@@ -143,7 +155,8 @@ void app
       historyService,
       () => mainWindow,
       monitorService,
-      migrateService
+      migrateService,
+      sharedIngressService
     )
     if (process.env.OPSPILOT_R3D_SOURCE_PROFILE) {
       try {

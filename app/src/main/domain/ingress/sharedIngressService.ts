@@ -1,4 +1,12 @@
-import type { DomainIngressState, Vps } from '@shared/ipc'
+import type {
+  DomainIngressState,
+  SharedIngressBindingDto,
+  SharedIngressOperation,
+  SharedIngressServiceReasonCode,
+  SharedIngressStatus,
+  SharedIngressStep,
+  Vps
+} from '@shared/ipc'
 
 import type { AppRepository } from '../../db/appRepository'
 import type { DeploymentRepository } from '../../db/deploymentRepository'
@@ -6,9 +14,11 @@ import type { VpsRepository } from '../../db/vpsRepository'
 import type { SshHostIdentity, SshManager } from '../../ssh/manager'
 import type {
   DomainRepository,
+  SharedIngressBindingRow,
   SharedIngressInventoryBinding,
   SharedIngressInventorySnapshot
 } from '../repository'
+import { AppError } from '../../errors'
 import {
   installCaddyFirstRunOverSsh,
   verifyCaddyInstallationOwnershipOverSsh,
@@ -30,44 +40,10 @@ import {
 import { preflightSharedIngress, type IngressPreflightResult } from './preflight'
 import type { CaddyCertificateEnvironment } from './routeBuilder'
 
-export type SharedIngressServiceOperation = 'read' | 'install' | 'reconcile' | 'https_check'
-export type SharedIngressServiceStep =
-  'read' | 'preflight' | 'prepare' | 'install' | 'reconcile' | 'https_probe'
-export type SharedIngressServiceStatus =
-  | 'ready'
-  | 'installed'
-  | 'reconciled_pending'
-  | 'active'
-  | 'pending'
-  | 'degraded'
-  | 'blocked'
-  | 'uncertain'
-
-export type SharedIngressServiceReason =
-  | 'INVALID_IDENTIFIER'
-  | 'VPS_NOT_AVAILABLE'
-  | 'BINDING_NOT_FOUND'
-  | 'APP_OR_DEPLOYMENT_INVALID'
-  | 'INVENTORY_NOT_READY'
-  | 'BINDING_DISABLED'
-  | 'SSH_IDENTITY_UNVERIFIED'
-  | 'IDENTITY_CHANGED'
-  | 'INVENTORY_CHANGED'
-  | 'HOST_CONFLICT'
-  | 'INSTALL_PLAN_BLOCKED'
-  | 'INSTALL_UNCERTAIN'
-  | 'RECONCILE_BLOCKED'
-  | 'RECONCILE_UNCERTAIN'
-  | 'STAGING_SCOPE_BLOCKED'
-  | 'HTTPS_PENDING'
-  | 'HTTPS_DNS_NOT_PROPAGATED'
-  | 'HTTPS_RUNTIME_NOT_VERIFIED'
-  | 'HTTPS_REMOTE_GENERATION_CHANGED'
-  | 'HTTPS_STAGING_NOT_ELIGIBLE'
-  | 'HTTPS_PROBE_FAILED'
-  | 'HTTPS_ACTIVATION_WRITE_FAILED'
-  | 'STALE_RESULT'
-  | 'INTERNAL_ERROR'
+export type SharedIngressServiceOperation = SharedIngressOperation
+export type SharedIngressServiceStep = SharedIngressStep
+export type SharedIngressServiceStatus = SharedIngressStatus
+export type SharedIngressServiceReason = SharedIngressServiceReasonCode
 
 export interface SharedIngressServiceResult {
   operation: SharedIngressServiceOperation
@@ -147,6 +123,21 @@ export class SharedIngressService {
       certificateEnvironment: dependencies.policy.certificateEnvironment,
       stagingLabHostnames: Object.freeze([...dependencies.policy.stagingLabHostnames])
     })
+  }
+
+  /** Lists persisted state without requiring DNS, SSH identity, or runtime readiness. */
+  listBindings(vpsId: number, appId: number): SharedIngressBindingDto[] {
+    if (!validId(vpsId) || !validId(appId)) {
+      throw new AppError('VALIDATION', 'Cần chọn VPS và app hợp lệ.')
+    }
+    const vps = this.dependencies.vpsRepository.getById(vpsId)
+    const app = this.dependencies.appRepository.getById(appId)
+    if (app.vps_id !== vps.id) {
+      throw new AppError('VALIDATION', 'App không thuộc VPS đã chọn.')
+    }
+    return this.dependencies.domainRepository
+      .listSharedIngressBindingsForApp(vpsId, appId)
+      .map((row) => toBindingDto(vpsId, row))
   }
 
   async readStatus(vpsId: number, bindingId: number): Promise<SharedIngressServiceResult> {
@@ -811,4 +802,42 @@ function sameIdentity(left: SshHostIdentity, right: SshHostIdentity): boolean {
 
 function normalizeHostname(hostname: string): string {
   return hostname.trim().replace(/\.$/, '').toLowerCase()
+}
+
+function toBindingDto(vpsId: number, row: SharedIngressBindingRow): SharedIngressBindingDto {
+  const status: SharedIngressServiceStatus =
+    row.route_status === 'active'
+      ? 'active'
+      : row.route_status === 'degraded' ||
+          row.route_status === 'conflict' ||
+          row.route_status === 'failed' ||
+          row.dns_status === 'conflict' ||
+          row.dns_status === 'failed'
+        ? 'degraded'
+        : row.route_status === 'pending' ||
+            row.dns_status === 'pending' ||
+            row.certificate_status === 'pending'
+          ? 'pending'
+          : 'ready'
+  return {
+    vps_id: vpsId,
+    binding_id: row.id,
+    app_id: row.app_id,
+    hostname: row.hostname,
+    operation: 'read',
+    status,
+    failed_step: row.ingress_reason_code ? 'read' : null,
+    reason: row.ingress_reason_code
+      ? {
+          code: row.ingress_reason_code,
+          message: `Ingress state requires attention (${row.ingress_reason_code}).`
+        }
+      : null,
+    retryable: status === 'pending' || status === 'degraded',
+    http_url: row.http_url,
+    dns_status: row.dns_status,
+    route_status: row.route_status,
+    certificate_status: row.certificate_status,
+    https_probe_status: row.https_probe_status
+  }
 }
