@@ -24,3 +24,21 @@
 - Implementation commit: `f49292d15c06a0cd7594ac015c5b0a94f2bc82d7` on `feat/deploy-reachability`; task note, board, and contract decision are recorded in this documentation commit.
 - Tests: `pnpm --filter @opspilot/app exec vitest run src/main/ipc.test.ts src/main/domain/ingress/sharedIngressService.test.ts src/main/domain/repository.test.ts` ? 3 files, 60 passed.
 - Node `v22.23.3`: typecheck PASS; build PASS; scoped ESLint 0 errors / 103 warnings (same as baseline; new code adds 0 warnings); `git diff --check` PASS. Full Vitest NOT_RUN; VPS, renderer, and pipeline NOT_RUN by scope.
+
+## START 2026-10-19 — persisted status consistency review
+
+- Scope: unify persisted binding projection for list/status, preserve typed stored reason codes with safe IPC messages, test failure/disabled states against real SQLite through IPC, retain DB-only behavior and action uncertainty handling.
+- Baseline: HEAD `4cd799b`; implementation under review `f49292d`; existing untracked files preserved.
+- Gates required: Node 22 IPC/service/repository focused tests, typecheck, build, scoped lint, `git diff --check`; no VPS activity or renderer/pipeline changes.
+
+## UPDATE 2026-10-19 — persisted status mapping review
+
+- Replaced separate list/status state mappings with one persisted projection. `active` now requires propagated DNS, active route, valid certificate, and passed HTTPS probe; route/DNS failures or conflicts, degraded route, failed/expired certificate, and failed probe map to degraded. Disabled maps to blocked and is not retryable. Initial DNS-ready/not-configured state remains ready.
+- Stored reason codes are retained; IPC messages use a fixed generic safe message. Read status still verifies app/current deployment and keeps action eligibility separate from persisted display state. No network or action replay was added.
+- Added real-SQLite IPC regression coverage using a valid running app/deployment for route failed/conflict/degraded, certificate failed/expired, probe failed, and disabled. List/status must match on status, reason, retryability and HTTP URL; DNS refresh preserves the reason. Existing pending/no-fingerprint/no-network coverage remains.
+
+## HANDOFF-LOCAL 2026-10-19 — review fix
+
+- Code commit: `497e8b0be2e47dc03efe1b785e7c0b3423f1ee2f` on `feat/deploy-reachability`.
+- Node `v22.23.3`: IPC/service/repository focused tests **3 files / 68 passed**; typecheck PASS; build PASS; scoped ESLint **0 errors / 18 warnings**, with all remaining warnings at pre-existing lines outside this change; new/changed lines add **0 warnings**; `git diff --check` PASS.
+- Full Vitest NOT_RUN (not required by this review). VPS, renderer and pipeline NOT_RUN by scope. Existing untracked files preserved.
