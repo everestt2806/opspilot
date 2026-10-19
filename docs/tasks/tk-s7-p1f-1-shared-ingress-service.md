@@ -24,5 +24,5 @@
 - Node `v22.23.3`: `pnpm --filter @opspilot/app typecheck` PASS (Node + Web); `pnpm --filter @opspilot/app build` PASS (main/preload/renderer).
 - Scoped ESLint trên bốn file đã sửa: exit 0, **0 errors / 121 warnings**. Tất cả là `prettier/prettier` trong các phần có sẵn trước đó của `repository.ts` và `repository.test.ts`; service source/test và các dòng thêm trong repository không có warning. Không format hàng loạt code cũ. Full-repo lint: NOT_RUN.
 - `git diff --cached --check`: PASS. Caddy Linux real-process gate: N/A (P1e đã có local-lab evidence; P1f chỉ ghép module).
-- Code commit SHA: sẽ ghi sau commit cục bộ.
+- Code commit SHA: `92b03d3b0b43f482eb0d9c1880969c61fae8b591`.
 - VPS thật, IPC/UI/pipeline: NOT_RUN theo yêu cầu checkpoint.
