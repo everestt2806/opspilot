@@ -18,4 +18,4 @@
 - IPC contract had sufficient DTO data; no contract gap and no backend/DB/IPC contract changes.
 - Node `v22.23.3`: focused UI + IPC/service/repository `vitest` — **5 files, 96 passed**; typecheck PASS; build PASS; scoped ESLint **0 errors / 1 warning**. The remaining warning is an unchanged Prettier warning at `AppsPage.tsx:1177`, outside the new tab. `git diff --check` PASS.
 - Electron layout captures at 1280x800 and 1366x768, dark/light: **NOT_RUN**. Attempted an isolated `%TEMP%` APPDATA dev launch, but CUA reported no app/window inventory (`apps: []`, `browsers: []`) and the runtime did not expose `listWindows`; no fixture was seeded and no screenshots/overflow claim are recorded. No live VPS/HTTPS actions were performed.
-- Implementation and documentation commit SHA: recorded in the board row after commit. Screenshot paths: none (NOT_RUN).
+- Implementation commit: `8b34903e1cfffdbbff6460cbdf04373c5af47693`. Board row records this local code SHA; the following documentation-only closeout commit contains the final gate notes. Screenshot paths: none (NOT_RUN).
