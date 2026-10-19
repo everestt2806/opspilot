@@ -6,8 +6,7 @@ import type {
   DomainIngressStatusInput,
   IpcInvokeMap,
   IpcResult,
-  SharedIngressBindingDto,
-  SharedIngressServiceReasonCode
+  SharedIngressBindingDto
 } from '@shared/ipc'
 
 import type { DeployService } from './deploy/service'
@@ -120,7 +119,7 @@ function ingressResultDto(
   const state = new DomainRepository(database).getSharedIngressBindingById(vpsId, bindingId)
   if (!state)
     throw new AppError('VALIDATION', 'Shared ingress binding does not belong to this VPS.')
-  const reasonCode = result.reason?.code as SharedIngressServiceReasonCode | undefined
+  const reasonCode = result.reason?.code
   return {
     vps_id: vpsId,
     binding_id: bindingId,
@@ -130,7 +129,7 @@ function ingressResultDto(
     status: result.status,
     failed_step: result.failed_step,
     reason: reasonCode
-      ? { code: reasonCode, message: `Shared ingress operation stopped: ${reasonCode}.` }
+      ? { code: reasonCode, message: 'Saved ingress state requires attention.' }
       : null,
     retryable: result.retryable,
     http_url: result.http_url,

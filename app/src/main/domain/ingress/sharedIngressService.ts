@@ -2,6 +2,7 @@ import type {
   DomainIngressState,
   SharedIngressBindingDto,
   SharedIngressOperation,
+  SharedIngressReasonCode,
   SharedIngressServiceReasonCode,
   SharedIngressStatus,
   SharedIngressStep,
@@ -49,7 +50,7 @@ export interface SharedIngressServiceResult {
   operation: SharedIngressServiceOperation
   status: SharedIngressServiceStatus
   failed_step: SharedIngressServiceStep | null
-  reason: { code: SharedIngressServiceReason; message: string } | null
+  reason: { code: SharedIngressReasonCode; message: string } | null
   retryable: boolean
   /** The app's existing HTTP URL from SQLite; HTTPS operations never rewrite it. */
   http_url: string | null
@@ -137,7 +138,7 @@ export class SharedIngressService {
     }
     return this.dependencies.domainRepository
       .listSharedIngressBindingsForApp(vpsId, appId)
-      .map((row) => toBindingDto(vpsId, row))
+      .map((row) => persistedBindingResult(vpsId, row))
   }
 
   async readStatus(vpsId: number, bindingId: number): Promise<SharedIngressServiceResult> {
@@ -180,19 +181,18 @@ export class SharedIngressService {
     } catch {
       return bareResult('read', 'VPS_NOT_AVAILABLE', 'read', false)
     }
-    const status: SharedIngressServiceStatus =
-      state.route_status === 'active'
-        ? 'active'
-        : state.route_status === 'degraded' ||
-            state.dns_status === 'conflict' ||
-            state.dns_status === 'failed'
-          ? 'degraded'
-          : state.route_status === 'pending' ||
-              state.dns_status === 'pending' ||
-              state.certificate_status === 'pending'
-            ? 'pending'
-            : 'ready'
-    return result({ httpUrl, state }, 'read', status, null, null, false)
+    const persisted = persistedBindingResult(vpsId, { ...state, http_url: httpUrl })
+    return {
+      operation: persisted.operation,
+      status: persisted.status,
+      failed_step: persisted.failed_step,
+      reason: persisted.reason,
+      retryable: persisted.retryable,
+      http_url: httpUrl,
+      route_status: persisted.route_status,
+      certificate_status: persisted.certificate_status,
+      https_probe_status: persisted.https_probe_status
+    }
   }
 
   /** Prepare verified APT evidence and install once, only after a fresh host inspection. */
@@ -804,21 +804,40 @@ function normalizeHostname(hostname: string): string {
   return hostname.trim().replace(/\.$/, '').toLowerCase()
 }
 
-function toBindingDto(vpsId: number, row: SharedIngressBindingRow): SharedIngressBindingDto {
-  const status: SharedIngressServiceStatus =
-    row.route_status === 'active'
-      ? 'active'
-      : row.route_status === 'degraded' ||
-          row.route_status === 'conflict' ||
-          row.route_status === 'failed' ||
-          row.dns_status === 'conflict' ||
-          row.dns_status === 'failed'
-        ? 'degraded'
-        : row.route_status === 'pending' ||
-            row.dns_status === 'pending' ||
-            row.certificate_status === 'pending'
+function persistedBindingResult(
+  vpsId: number,
+  row: Pick<SharedIngressBindingRow, keyof DomainIngressState | 'http_url'>
+): SharedIngressBindingDto {
+  const disabled = row.dns_status === 'disabled' || row.route_status === 'disabled'
+  const failed =
+    row.dns_status === 'conflict' ||
+    row.dns_status === 'failed' ||
+    row.route_status === 'degraded' ||
+    row.route_status === 'conflict' ||
+    row.route_status === 'failed' ||
+    row.certificate_status === 'failed' ||
+    row.certificate_status === 'expired' ||
+    row.https_probe_status === 'failed'
+  const active =
+    row.dns_status === 'propagated' &&
+    row.route_status === 'active' &&
+    row.certificate_status === 'valid' &&
+    row.https_probe_status === 'passed'
+  const pending =
+    row.dns_status === 'pending' ||
+    row.route_status === 'pending' ||
+    row.certificate_status === 'pending' ||
+    (row.route_status === 'active' && row.https_probe_status === 'not_run')
+  const status: SharedIngressServiceStatus = disabled
+    ? 'blocked'
+    : failed
+      ? 'degraded'
+      : active
+        ? 'active'
+        : pending
           ? 'pending'
           : 'ready'
+  const reasonCode = row.ingress_reason_code ?? (disabled ? 'BINDING_DISABLED' : null)
   return {
     vps_id: vpsId,
     binding_id: row.id,
@@ -826,14 +845,14 @@ function toBindingDto(vpsId: number, row: SharedIngressBindingRow): SharedIngres
     hostname: row.hostname,
     operation: 'read',
     status,
-    failed_step: row.ingress_reason_code ? 'read' : null,
-    reason: row.ingress_reason_code
+    failed_step: reasonCode ? 'read' : null,
+    reason: reasonCode
       ? {
-          code: row.ingress_reason_code,
-          message: `Ingress state requires attention (${row.ingress_reason_code}).`
+          code: reasonCode,
+          message: 'Saved ingress state requires attention.'
         }
       : null,
-    retryable: status === 'pending' || status === 'degraded',
+    retryable: !disabled && (status === 'pending' || status === 'degraded'),
     http_url: row.http_url,
     dns_status: row.dns_status,
     route_status: row.route_status,

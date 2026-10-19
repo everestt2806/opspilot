@@ -50,7 +50,7 @@ function makeIngressIpcDb(): { dir: string; db: ReturnType<typeof initializeData
       VALUES (1,1,'app1','express',30001,3000,'/');
     INSERT INTO app (id,vps_id,name,framework,host_port,container_port,healthcheck_path)
       VALUES (2,2,'app2','express',30002,3000,'/');
-    INSERT INTO deployment (id,app_id,version,image_tag,status) VALUES (1,1,1,'app1:v1','failed');
+    INSERT INTO deployment (id,app_id,version,image_tag,status) VALUES (1,1,1,'app1:v1','running');
     INSERT INTO deployment (id,app_id,version,image_tag,status) VALUES (2,2,1,'app2:v1','running');
     UPDATE app SET current_deployment_id=1 WHERE id=1;
     UPDATE app SET current_deployment_id=2 WHERE id=2;
@@ -153,8 +153,208 @@ describe('shared ingress IPC contract and handlers', () => {
         data: {
           binding_id: 1,
           hostname: 'app1.example.test',
-          status: 'blocked',
-          reason: { code: 'APP_OR_DEPLOYMENT_INVALID' },
+          status: 'pending',
+          reason: null,
+          http_url: 'http://192.0.2.10:30001'
+        }
+      })
+      expect(ssh.exec).not.toHaveBeenCalled()
+    } finally {
+      closeDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    [
+      'route failed',
+      'failed',
+      'not_requested',
+      'not_run',
+      'INGRESS_RELOAD_FAILED',
+      'degraded',
+      true
+    ],
+    [
+      'route conflict',
+      'conflict',
+      'not_requested',
+      'not_run',
+      'INGRESS_PORT_CONFLICT',
+      'degraded',
+      true
+    ],
+    [
+      'route degraded',
+      'degraded',
+      'not_requested',
+      'not_run',
+      'UPSTREAM_UNHEALTHY',
+      'degraded',
+      true
+    ],
+    [
+      'certificate failed',
+      'not_configured',
+      'failed',
+      'not_run',
+      'CERTIFICATE_ISSUE_FAILED',
+      'degraded',
+      true
+    ],
+    [
+      'certificate expired',
+      'not_configured',
+      'expired',
+      'not_run',
+      'CERTIFICATE_ISSUE_FAILED',
+      'degraded',
+      true
+    ],
+    [
+      'probe failed',
+      'not_configured',
+      'not_requested',
+      'failed',
+      'HTTPS_PROBE_FAILED',
+      'degraded',
+      true
+    ],
+    ['disabled', 'disabled', 'not_requested', 'not_run', null, 'blocked', false]
+  ] as const)(
+    '%s has one persisted projection across list/status and survives refresh',
+    async (
+      _label,
+      routeStatus,
+      certificateStatus,
+      probeStatus,
+      reasonCode,
+      expectedStatus,
+      retryable
+    ) => {
+      const { dir, db } = makeIngressIpcDb()
+      const ssh = { exec: vi.fn() }
+      const repository = new DomainRepository(db)
+      try {
+        db.prepare(
+          `
+        UPDATE domain_binding SET provider='manual', zone_id='', record_type='A',
+          record_name='app1.example.test', target='192.0.2.10',
+          route_ownership_key='opspilot-ingress:1:app1.example.test'
+        WHERE id=1
+      `
+        ).run()
+        db.prepare(
+          `
+        UPDATE domain_binding
+        SET dns_status='propagated', route_status=?, certificate_status=?,
+            https_probe_status=?, ingress_reason_code=?
+        WHERE id=1
+      `
+        ).run(routeStatus, certificateStatus, probeStatus, reasonCode)
+        registerIngressService(createRealIngressService(db, ssh))
+        const list = await ingressCallback('domain:ingress-list')({}, { vps_id: 1, app_id: 1 })
+        const status = await ingressCallback('domain:ingress-status')(
+          {},
+          { vps_id: 1, binding_id: 1 }
+        )
+        expect(list).toMatchObject({
+          ok: true,
+          data: [
+            {
+              status: expectedStatus,
+              retryable,
+              route_status: routeStatus,
+              certificate_status: certificateStatus,
+              https_probe_status: probeStatus,
+              http_url: 'http://192.0.2.10:30001'
+            }
+          ]
+        })
+        expect(status).toMatchObject({
+          ok: true,
+          data: { status: expectedStatus, retryable, http_url: 'http://192.0.2.10:30001' }
+        })
+
+        const listData = (list as { ok: true; data: Array<Record<string, unknown>> }).data[0]
+        const statusData = (status as { ok: true; data: Record<string, unknown> }).data
+        for (const key of ['status', 'reason', 'retryable', 'http_url']) {
+          expect(statusData[key]).toEqual(listData[key])
+        }
+        if (reasonCode) {
+          expect(statusData.reason).toEqual({
+            code: reasonCode,
+            message: 'Saved ingress state requires attention.'
+          })
+          expect((statusData.reason as { message: string }).message).not.toContain(reasonCode)
+        } else {
+          expect(statusData.reason).toEqual({
+            code: 'BINDING_DISABLED',
+            message: 'Saved ingress state requires attention.'
+          })
+        }
+
+        repository.upsertDns({
+          app_id: 1,
+          hostname: 'app1.example.test',
+          mode: 'shared_ingress',
+          provider: 'manual',
+          zone_id: '',
+          record_type: 'A',
+          record_name: 'app1.example.test',
+          target: '192.0.2.10',
+          ownership_key: db
+            .prepare('SELECT ownership_key FROM domain_binding WHERE id=1')
+            .pluck()
+            .get() as string,
+          route_ownership_key: db
+            .prepare('SELECT route_ownership_key FROM domain_binding WHERE id=1')
+            .pluck()
+            .get() as string,
+          dns_status: 'propagated'
+        })
+        const refreshed = await ingressCallback('domain:ingress-status')(
+          {},
+          { vps_id: 1, binding_id: 1 }
+        )
+        expect(refreshed).toMatchObject({
+          ok: true,
+          data: { status: expectedStatus, retryable, http_url: 'http://192.0.2.10:30001' }
+        })
+        expect((refreshed as { ok: true; data: Record<string, unknown> }).data.reason).toEqual(
+          statusData.reason
+        )
+        expect(ssh.exec).not.toHaveBeenCalled()
+      } finally {
+        closeDatabase()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it('keeps a DNS-ready unconfigured route as ready in both read channels', async () => {
+    const { dir, db } = makeIngressIpcDb()
+    const ssh = { exec: vi.fn() }
+    try {
+      db.prepare("UPDATE domain_binding SET dns_status='propagated' WHERE id=1").run()
+      registerIngressService(createRealIngressService(db, ssh))
+      const list = await ingressCallback('domain:ingress-list')({}, { vps_id: 1, app_id: 1 })
+      const status = await ingressCallback('domain:ingress-status')(
+        {},
+        { vps_id: 1, binding_id: 1 }
+      )
+      expect(list).toMatchObject({
+        ok: true,
+        data: [
+          { status: 'ready', reason: null, retryable: false, http_url: 'http://192.0.2.10:30001' }
+        ]
+      })
+      expect(status).toMatchObject({
+        ok: true,
+        data: {
+          status: 'ready',
+          reason: null,
+          retryable: false,
           http_url: 'http://192.0.2.10:30001'
         }
       })
