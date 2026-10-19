@@ -444,6 +444,7 @@ const BASE_EN_STRINGS = {
       overview: 'Overview',
       history: 'History & Rollback',
       doctor: 'Doctor & Exposure',
+      domainHttps: 'Domain & HTTPS',
       versions: 'History & Rollback'
     },
     backToList: 'Back to applications',
@@ -1628,6 +1629,7 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       overview: 'Tổng quan',
       history: 'Lịch sử & Rollback',
       doctor: 'Bác sĩ & Exposure',
+      domainHttps: 'Tên miền & HTTPS',
       versions: 'Lịch sử & Rollback'
     },
     backToList: 'Quay lại danh sách ứng dụng',
@@ -2414,6 +2416,7 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       overview: '运行总览',
       history: '历史与回滚',
       doctor: 'Doctor 与公开检测',
+      domainHttps: '域名与 HTTPS',
       versions: '历史与回滚'
     },
     backToList: '返回应用列表',
@@ -3201,6 +3204,7 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       overview: '概要',
       history: '履歴 & ロールバック',
       doctor: 'ドクター & 公開診断',
+      domainHttps: 'ドメインと HTTPS',
       versions: '履歴 & ロールバック'
     },
     backToList: 'アプリ一覧に戻る',
@@ -3467,7 +3471,11 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     apps: {
       ...BASE_EN_STRINGS.apps,
       ...VI_OVERRIDES.apps,
-      tabs: { ...BASE_EN_STRINGS.apps.tabs, ...VI_OVERRIDES.apps?.tabs },
+      tabs: {
+        ...BASE_EN_STRINGS.apps.tabs,
+        ...VI_OVERRIDES.apps?.tabs,
+        domainHttps: 'Tên miền & HTTPS'
+      },
       exposureStatus: {
         ...BASE_EN_STRINGS.apps.exposureStatus,
         ...VI_OVERRIDES.apps?.exposureStatus
@@ -3592,7 +3600,11 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     apps: {
       ...BASE_EN_STRINGS.apps,
       ...CN_OVERRIDES.apps,
-      tabs: { ...BASE_EN_STRINGS.apps.tabs, ...CN_OVERRIDES.apps?.tabs },
+      tabs: {
+        ...BASE_EN_STRINGS.apps.tabs,
+        ...CN_OVERRIDES.apps?.tabs,
+        domainHttps: '域名与 HTTPS'
+      },
       exposureStatus: {
         ...BASE_EN_STRINGS.apps.exposureStatus,
         ...CN_OVERRIDES.apps?.exposureStatus
@@ -3717,7 +3729,11 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     apps: {
       ...BASE_EN_STRINGS.apps,
       ...JP_OVERRIDES.apps,
-      tabs: { ...BASE_EN_STRINGS.apps.tabs, ...JP_OVERRIDES.apps?.tabs },
+      tabs: {
+        ...BASE_EN_STRINGS.apps.tabs,
+        ...JP_OVERRIDES.apps?.tabs,
+        domainHttps: 'ドメインと HTTPS'
+      },
       exposureStatus: {
         ...BASE_EN_STRINGS.apps.exposureStatus,
         ...JP_OVERRIDES.apps?.exposureStatus

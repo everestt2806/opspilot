@@ -12,7 +12,8 @@ import {
   ReloadOutlined,
   RocketOutlined,
   RollbackOutlined,
-  SearchOutlined
+  SearchOutlined,
+  SafetyCertificateOutlined
 } from '@ant-design/icons'
 import {
   App as AntApp,
@@ -39,6 +40,7 @@ import { useVpsStore } from '../store/vpsStore'
 import { useStrings } from '../strings'
 import { localDateTime, relativeTime } from '../utils/format'
 import { evaluateVpsStatus } from '../vpsResources'
+import { SharedIngressTab } from './SharedIngressTab'
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
@@ -1406,6 +1408,26 @@ export function AppsPage(): React.JSX.Element {
                   </div>
                 </div>
               </div>
+            )
+          },
+          {
+            key: 'domainHttps',
+            label: (
+              <Space size={6}>
+                <SafetyCertificateOutlined />
+                <span>{strings.apps.tabs.domainHttps}</span>
+              </Space>
+            ),
+            children: selectedVps ? (
+              <SharedIngressTab
+                key={`${selectedVps.id}:${selectedApp.id}:${activeTab}`}
+                vpsId={selectedVps.id}
+                appId={selectedApp.id}
+                httpUrl={selectedApp.url}
+                active={activeTab === 'domainHttps'}
+              />
+            ) : (
+              <div className="apps-tab-content" />
             )
           }
         ]}

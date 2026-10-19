@@ -152,7 +152,7 @@ function mockApi(customHandlers: Record<string, (...args: unknown[]) => Promise<
 }
 
 describe(
-  'AppsPage — UI-1c full-width list, 3 horizontal tabs, honest status and real IPC',
+  'AppsPage — UI-1c full-width list, app detail tabs, honest status and real IPC',
   { timeout: 30000 },
   () => {
     beforeEach(() => {
@@ -207,8 +207,8 @@ describe(
       expect(screen.queryByText('my-next-blog')).toBeNull()
     })
 
-    it('chọn app để mở trang chi tiết toàn chiều rộng có nút quay lại và đúng 3 tab ngang', async () => {
-      mockApi()
+    it('chọn app để mở trang chi tiết toàn chiều rộng có tab Domain & HTTPS', async () => {
+      const { invoke } = mockApi()
 
       render(
         <AntApp>
@@ -228,14 +228,21 @@ describe(
       // Tiêu đề h3 hiển thị tên app
       expect(screen.getByRole('heading', { level: 3, name: 'my-express-app' })).toBeTruthy()
 
-      // Đúng 3 tab ngang: Tổng quan, Lịch sử & Rollback, Bác sĩ & Exposure
+      // Các tab chi tiết hiện có và Domain & HTTPS
       expect(screen.getByRole('tab', { name: /Tổng quan/ })).toBeTruthy()
       expect(screen.getByRole('tab', { name: /Lịch sử & Rollback/ })).toBeTruthy()
       expect(screen.getByRole('tab', { name: /Bác sĩ & Exposure/ })).toBeTruthy()
+      expect(screen.getByRole('tab', { name: /Tên miền & HTTPS/ })).toBeTruthy()
 
       // Chuyển sang tab Bác sĩ & Exposure
       fireEvent.click(screen.getByRole('tab', { name: /Bác sĩ & Exposure/ }))
       expect(await screen.findByText('Bằng chứng chẩn đoán')).toBeTruthy()
+
+      fireEvent.click(screen.getByRole('tab', { name: /Tên miền & HTTPS/ }))
+      await waitFor(() =>
+        expect(invoke).toHaveBeenCalledWith('domain:ingress-list', { vps_id: 1, app_id: 10 })
+      )
+      expect(invoke.mock.calls.some(([channel]) => channel === 'domain:ingress-action')).toBe(false)
 
       // Bấm nút quay lại -> quay về danh sách ứng dụng
       fireEvent.click(backBtn)
