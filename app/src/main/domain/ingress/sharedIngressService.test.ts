@@ -29,7 +29,12 @@ interface ServiceFixture {
   }
   ssh: SshManager
   preflight: IngressPreflightResult
+  identityCheck: ReturnType<typeof vi.fn>
+  ownershipCheck: ReturnType<typeof vi.fn>
+  preparePlan: ReturnType<typeof vi.fn>
+  reconcile: ReturnType<typeof vi.fn>
   setPreflight(value: IngressPreflightResult): void
+  setVpsUnavailable(value: boolean): void
   install: ReturnType<typeof vi.fn>
   setRevision(value: number): void
 }
@@ -206,10 +211,24 @@ function makeFixture(): ServiceFixture {
     certificateEnvironment: 'production' as const,
     stagingLabHostnames: [] as string[]
   }
+  let vpsUnavailable = false
+  const identityCheck = vi.fn(async () => identity)
+  const ownershipCheck = vi.fn(async (): Promise<CaddyInstallTransactionResult> => ({
+    status: 'verified',
+    active: true
+  }))
+  const preparePlan = vi.fn(async () => ({ status: 'ready' as const, plan }))
+  const reconcile = vi.fn(async () =>
+    withVpsIngressMutex(
+      7,
+      async () =>
+        ({ status: 'reconciled_pending', generation: 'g1', route_count: 2 }) as CaddyReconcileResult
+    )
+  )
   const service = new SharedIngressService({
     vpsRepository: {
       getById: vi.fn((id: number) => {
-        if (id !== vps.id) throw new Error('not found')
+        if (id !== vps.id || vpsUnavailable) throw new Error('not found or archived')
         return vps
       })
     } as unknown as VpsRepository,
@@ -221,22 +240,12 @@ function makeFixture(): ServiceFixture {
     ssh,
     policy,
     testAdapters: {
-      identity: vi.fn(async () => identity),
+      identity: identityCheck,
       preflight: vi.fn(async () => preflightResult),
-      verifyOwnership: vi.fn(async () => ({ status: 'verified' as const, active: true })),
-      preparePlan: vi.fn(async () => ({ status: 'ready' as const, plan })),
+      verifyOwnership: ownershipCheck,
+      preparePlan,
       install,
-      reconcile: vi.fn(async () =>
-        withVpsIngressMutex(
-          7,
-          async () =>
-            ({
-              status: 'reconciled_pending',
-              generation: 'g1',
-              route_count: 2
-            }) as CaddyReconcileResult
-        )
-      ),
+      reconcile,
       activate: vi.fn(async (_ssh, _repository, _target, hostname) => {
         const state = states.get(hostname)!
         state.route_status = 'active'
@@ -262,14 +271,46 @@ function makeFixture(): ServiceFixture {
     domainRepository,
     ssh,
     preflight,
+    identityCheck,
+    ownershipCheck,
+    preparePlan,
+    reconcile,
     setPreflight(value: IngressPreflightResult) {
       preflightResult = value
+    },
+    setVpsUnavailable(value: boolean) {
+      vpsUnavailable = value
     },
     install,
     setRevision(value: number) {
       revision = value
     }
   }
+}
+
+function managedPreflight(base: IngressPreflightResult, active: boolean): IngressPreflightResult {
+  return {
+    ...base,
+    ownership: active ? 'opspilot_owned' : 'ports_free',
+    ports_status: active ? 'occupied' : 'free',
+    install_assessment: 'safe',
+    local_assessment: 'clear',
+    listeners: active ? [{ port: 443, family: 'ipv4', process: 'caddy', pid: 41 }] : [],
+    service: 'verified',
+    service_state: active ? 'active' : 'inactive',
+    caddy_version: '2.11.7',
+    ownership_marker: 'valid',
+    config_exists: true,
+    config_readable: true
+  }
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((complete) => {
+    resolve = complete
+  })
+  return { promise, resolve }
 }
 
 describe('SharedIngressService', () => {
@@ -324,21 +365,144 @@ describe('SharedIngressService', () => {
     expect(JSON.stringify(result)).not.toContain('verificationSteps')
   })
 
-  it('treats a completely verified managed host as already installed without reinstalling', async () => {
+  it('accepts a verified managed active service without preparing or reinstalling', async () => {
     const f = makeFixture()
-    f.setPreflight({
-      ...f.preflight,
-      ownership: 'opspilot_owned',
-      ports_status: 'occupied',
-      install_assessment: 'blocked',
-      service: 'verified',
-      service_state: 'active',
-      ownership_marker: 'valid',
-      config_exists: true,
-      config_readable: true
-    })
+    f.setPreflight(managedPreflight(f.preflight, true))
     expect(await f.service.prepareOrInstall(7, 1)).toMatchObject({ status: 'installed' })
     expect(f.install).not.toHaveBeenCalled()
+    expect(f.preparePlan).not.toHaveBeenCalled()
+  })
+
+  it('accepts verified managed inactive Caddy when both ports are free without starting or reinstalling', async () => {
+    const f = makeFixture()
+    f.setPreflight(managedPreflight(f.preflight, false))
+    f.ownershipCheck.mockResolvedValue({ status: 'verified', active: false })
+
+    expect(await f.service.prepareOrInstall(7, 1)).toMatchObject({ status: 'installed' })
+    expect(f.install).not.toHaveBeenCalled()
+    expect(f.preparePlan).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [
+      'a port conflict',
+      {
+        ownership: 'conflict' as const,
+        ports_status: 'occupied' as const,
+        local_assessment: 'blocked' as const
+      }
+    ],
+    [
+      'unknown ownership',
+      {
+        ownership: 'unknown' as const,
+        ports_status: 'unknown' as const,
+        local_assessment: 'unknown' as const
+      }
+    ]
+  ])('blocks verified inactive service with %s', async (_label, override) => {
+    const f = makeFixture()
+    f.setPreflight({ ...managedPreflight(f.preflight, false), ...override })
+    f.ownershipCheck.mockResolvedValue({ status: 'verified', active: false })
+
+    expect(await f.service.prepareOrInstall(7, 1)).toMatchObject({
+      status: 'blocked',
+      reason: { code: 'HOST_CONFLICT' }
+    })
+    expect(f.install).not.toHaveBeenCalled()
+    expect(f.preparePlan).not.toHaveBeenCalled()
+  })
+
+  it('blocks managed inactive preflight when ownership verification fails', async () => {
+    const f = makeFixture()
+    f.setPreflight(managedPreflight(f.preflight, false))
+    f.ownershipCheck.mockResolvedValue({
+      status: 'blocked',
+      code: 'INSTALL_CONFLICT',
+      reason: 'unverified'
+    })
+
+    expect(await f.service.prepareOrInstall(7, 1)).toMatchObject({
+      status: 'blocked',
+      reason: { code: 'HOST_CONFLICT' }
+    })
+    expect(f.install).not.toHaveBeenCalled()
+  })
+
+  it('rechecks identity after managed ownership verification before returning success', async () => {
+    const f = makeFixture()
+    f.setPreflight(managedPreflight(f.preflight, false))
+    f.ownershipCheck.mockResolvedValue({ status: 'verified', active: false })
+    f.identityCheck
+      .mockResolvedValueOnce(identity)
+      .mockResolvedValueOnce(identity)
+      .mockResolvedValueOnce({ ...identity, hostFingerprint: 'SHA256:changed' })
+
+    expect(await f.service.prepareOrInstall(7, 1)).toMatchObject({
+      status: 'blocked',
+      reason: { code: 'IDENTITY_CHANGED' }
+    })
+    expect(f.install).not.toHaveBeenCalled()
+  })
+
+  it('rechecks inventory after managed ownership verification before returning success', async () => {
+    const f = makeFixture()
+    f.setPreflight(managedPreflight(f.preflight, false))
+    const ownershipStarted = deferred<void>()
+    const ownershipRelease = deferred<{ status: 'verified'; active: boolean }>()
+    f.ownershipCheck.mockImplementation(async () => {
+      ownershipStarted.resolve(undefined)
+      return ownershipRelease.promise
+    })
+
+    const pending = f.service.prepareOrInstall(7, 1)
+    await ownershipStarted.promise
+    f.setRevision(2)
+    ownershipRelease.resolve({ status: 'verified', active: false })
+
+    expect(await pending).toMatchObject({
+      status: 'pending',
+      reason: { code: 'INVENTORY_CHANGED' }
+    })
+    expect(f.install).not.toHaveBeenCalled()
+  })
+
+  it('does not report managed service success if the VPS is archived during ownership verification', async () => {
+    const f = makeFixture()
+    f.setPreflight(managedPreflight(f.preflight, false))
+    const ownershipStarted = deferred<void>()
+    const ownershipRelease = deferred<{ status: 'verified'; active: boolean }>()
+    f.ownershipCheck.mockImplementation(async () => {
+      ownershipStarted.resolve(undefined)
+      return ownershipRelease.promise
+    })
+
+    const pending = f.service.prepareOrInstall(7, 1)
+    await ownershipStarted.promise
+    f.setVpsUnavailable(true)
+    ownershipRelease.resolve({ status: 'verified', active: false })
+
+    expect(await pending).toMatchObject({
+      status: 'blocked',
+      reason: { code: 'VPS_NOT_AVAILABLE' }
+    })
+    expect(f.install).not.toHaveBeenCalled()
+  })
+
+  it('does not reinstall after clean install and managed inactive retry, then can reconcile', async () => {
+    const f = makeFixture()
+    f.install.mockImplementation(async () => {
+      f.setPreflight(managedPreflight(f.preflight, false))
+      return { status: 'installed_not_running', version: '2.11.7', binarySha256: 'a'.repeat(64) }
+    })
+
+    expect(await f.service.prepareOrInstall(7, 1)).toMatchObject({ status: 'installed' })
+    f.ownershipCheck.mockResolvedValue({ status: 'verified', active: false })
+    expect(await f.service.prepareOrInstall(7, 1)).toMatchObject({ status: 'installed' })
+    expect(f.install).toHaveBeenCalledOnce()
+    expect(f.preparePlan).toHaveBeenCalledOnce()
+    expect(await f.service.reconcile(7, 1)).toMatchObject({ status: 'reconciled_pending' })
+    expect(f.reconcile).toHaveBeenCalledOnce()
   })
 
   it('fails closed on host conflict and does not prepare or install', async () => {

@@ -230,19 +230,39 @@ export class SharedIngressService {
       const ownership = await (
         this.dependencies.testAdapters?.verifyOwnership ?? verifyCaddyInstallationOwnershipOverSsh
       )(this.dependencies.ssh, initial.target)
-      if (
-        ownership.status === 'verified' &&
-        ownership.active === (ingress.service_state === 'active') &&
-        (ingress.service_state === 'active' || ingress.service_state === 'inactive') &&
-        ingress.local_assessment === 'clear' &&
+      if (ownership.status !== 'verified') {
+        return result(initial, 'install', 'blocked', 'preflight', 'HOST_CONFLICT', true)
+      }
+      const afterOwnership = this.reloadIfCurrent(initial, 'install', 'preflight')
+      if (!afterOwnership.ok) return afterOwnership.result
+      const identityAfterOwnership = await this.verifyIdentity(afterOwnership.context, 'install')
+      if (!identityAfterOwnership.ok) return identityAfterOwnership.result
+      const current = this.reloadIfCurrent(afterOwnership.context, 'install', 'preflight')
+      if (!current.ok) return current.result
+
+      const managedActive =
+        ingress.service_state === 'active' &&
         ingress.ownership === 'opspilot_owned' &&
+        ingress.ports_status === 'occupied'
+      const managedInactive =
+        ingress.service_state === 'inactive' &&
+        ingress.ownership === 'ports_free' &&
+        ingress.ports_status === 'free' &&
+        ingress.listeners.length === 0
+      const managedEvidence =
+        ingress.install_assessment === 'safe' &&
+        ingress.local_assessment === 'clear' &&
         ingress.ownership_marker === 'valid' &&
         ingress.config_exists === true &&
         ingress.config_readable === true
+      if (
+        ownership.active === (ingress.service_state === 'active') &&
+        managedEvidence &&
+        (managedActive || managedInactive)
       ) {
-        return result(afterPreflight.context, 'install', 'installed', null, null, false)
+        return result(current.context, 'install', 'installed', null, null, false)
       }
-      return result(initial, 'install', 'blocked', 'preflight', 'HOST_CONFLICT', true)
+      return result(current.context, 'install', 'blocked', 'preflight', 'HOST_CONFLICT', true)
     }
 
     if (!isCleanHost(ingress)) {
