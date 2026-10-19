@@ -47,6 +47,7 @@ const input = (overrides: Partial<ExternalHttpsProbeInput> = {}): ExternalHttpsP
 beforeAll(async () => {
   directory = mkdtempSync(join(tmpdir(), 'opspilot-https-probe-'))
   const caKey = linuxPath(join(directory, 'ca.key'))
+  const caRequest = linuxPath(join(directory, 'ca.csr'))
   const caCert = linuxPath(join(directory, 'ca.crt'))
   const serverKey = linuxPath(join(directory, 'server.key'))
   const request = linuxPath(join(directory, 'server.csr'))
@@ -56,22 +57,21 @@ beforeAll(async () => {
     join(directory, 'extensions.cnf'),
     'subjectAltName=DNS:app.example.test\nbasicConstraints=CA:FALSE\nextendedKeyUsage=serverAuth\n'
   )
+  const caDb = linuxPath(join(directory, 'fixture-ca.db'))
+  const caNew = linuxPath(join(directory, 'fixture-ca.newcerts'))
+  const caSerial = linuxPath(join(directory, 'fixture-ca.serial'))
+  const caConfig = linuxPath(join(directory, 'fixture-ca.cnf'))
+  writeFileSync(join(directory, 'fixture-ca.db'), '')
+  mkdirSync(join(directory, 'fixture-ca.newcerts'))
+  writeFileSync(join(directory, 'fixture-ca.serial'), '1000\n')
+  writeFileSync(
+    join(directory, 'fixture-ca.cnf'),
+    `[ca]\ndefault_ca=local\n[local]\ndatabase=${caDb}\nnew_certs_dir=${caNew}\nserial=${caSerial}\nprivate_key=${caKey}\ncertificate=${caCert}\ndefault_md=sha256\npolicy=policy\n[policy]\ncommonName=supplied\n[ca_ext]\nbasicConstraints=critical,CA:TRUE\nkeyUsage=keyCertSign,cRLSign\n`
+  )
+  runOpenSsl(['req', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=OpsPilot test CA', '-keyout', caKey, '-out', caRequest])
   runOpenSsl([
-    'req',
-    '-x509',
-    '-newkey',
-    'rsa:2048',
-    '-nodes',
-    '-days',
-    '2',
-    '-subj',
-    '/CN=OpsPilot test CA',
-    '-addext',
-    'basicConstraints=critical,CA:TRUE',
-    '-keyout',
-    caKey,
-    '-out',
-    caCert
+    'ca', '-batch', '-selfsign', '-config', caConfig, '-keyfile', caKey, '-in', caRequest,
+    '-out', caCert, '-startdate', '20261018000000Z', '-enddate', '20271018000000Z', '-extensions', 'ca_ext'
   ])
   runOpenSsl([
     'req',
@@ -86,21 +86,8 @@ beforeAll(async () => {
     request
   ])
   runOpenSsl([
-    'x509',
-    '-req',
-    '-in',
-    request,
-    '-CA',
-    caCert,
-    '-CAkey',
-    caKey,
-    '-CAcreateserial',
-    '-days',
-    '1',
-    '-extfile',
-    extensionFile,
-    '-out',
-    serverCert
+    'ca', '-batch', '-config', caConfig, '-in', request, '-out', serverCert,
+    '-startdate', '20261018000000Z', '-enddate', '20271018000000Z', '-extfile', extensionFile
   ])
   key = join(directory, 'server.key')
   cert = join(directory, 'server.crt')
@@ -224,8 +211,6 @@ describe('external HTTPS probe', () => {
     const csr = linuxPath(join(directory, 'wrong-host.csr'))
     const mismatchKey = linuxPath(join(directory, 'wrong-host.key'))
     const mismatchCert = linuxPath(mismatch)
-    const caKey = linuxPath(join(directory, 'ca.key'))
-    const caCert = linuxPath(join(directory, 'ca.crt'))
     const ext = linuxPath(join(directory, 'wrong-host-ext.cnf'))
     writeFileSync(
       join(directory, 'wrong-host-ext.cnf'),
@@ -244,21 +229,8 @@ describe('external HTTPS probe', () => {
       csr
     ])
     runOpenSsl([
-      'x509',
-      '-req',
-      '-in',
-      csr,
-      '-CA',
-      caCert,
-      '-CAkey',
-      caKey,
-      '-CAcreateserial',
-      '-days',
-      '1',
-      '-extfile',
-      ext,
-      '-out',
-      mismatchCert
+      'ca', '-batch', '-config', linuxPath(join(directory, 'fixture-ca.cnf')), '-in', csr,
+      '-out', mismatchCert, '-startdate', '20261018000000Z', '-enddate', '20271018000000Z', '-extfile', ext
     ])
     const oldKey = key
     key = join(directory, 'wrong-host.key')

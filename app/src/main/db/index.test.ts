@@ -142,6 +142,7 @@ function downgradeMigration013ToV12(database: Database.Database): void {
 
 function downgradeMigration014ToV13(database: Database.Database): void {
   database.exec(`
+    DELETE FROM schema_version WHERE version=15;
     DROP TRIGGER IF EXISTS app_healthcheck_policy_invalidates_https;
     DROP TRIGGER IF EXISTS domain_binding_active_requires_https_insert;
     DROP TRIGGER IF EXISTS domain_binding_active_requires_https_update;
@@ -248,7 +249,7 @@ describe('initializeDatabase', () => {
       count: 1
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 14
+      version: 15
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
   })
@@ -272,12 +273,12 @@ describe('initializeDatabase', () => {
     runMigrations(database)
     expect(database.prepare('SELECT * FROM domain_binding WHERE id=82').get()).toMatchObject(before as object)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 14
+      version: 15
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 14
+      version: 15
     })
   })
 
@@ -325,7 +326,7 @@ describe('initializeDatabase', () => {
     expect(database.prepare('SELECT healthcheck_response_type FROM app WHERE id=151').get()).toEqual({
       healthcheck_response_type: 'status_2xx'
     })
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 14 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 15 })
     database.prepare(`UPDATE domain_binding SET route_status='active', certificate_status='valid',
       https_probe_status='passed', observed_generation=desired_generation,
       route_checked_at='now', certificate_checked_at='now', certificate_hostname=hostname,
@@ -346,7 +347,76 @@ describe('initializeDatabase', () => {
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 14 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 15 })
+  })
+
+  it('migration 015 repairs v13 active proof after 014 without changing newly verified active domains', () => {
+    testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-db-v13-v15-probe-repair-'))
+    const database = initializeDatabase(testDirectory)
+    downgradeMigration014ToV13(database)
+    database.exec(`
+      INSERT INTO vps (id, name, host, username, auth_type, encrypted_secret, host_fingerprint)
+        VALUES (160, 'VPS', '198.51.100.160', 'deploy', 'key', X'00', 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
+      INSERT INTO app (id, vps_id, name, framework, host_port, container_port)
+        VALUES (161, 160, 'legacy-domain', 'express', 30161, 3000);
+      INSERT INTO domain_binding
+        (id, app_id, hostname, mode, target, ownership_key, route_ownership_key, status, dns_status)
+        VALUES (162, 161, 'legacy.example.com', 'shared_ingress', '198.51.100.160', 'dns:161',
+          'opspilot-ingress:161:legacy.example.com', 'propagated', 'propagated');
+    `)
+    database.prepare(`UPDATE domain_binding SET route_status='active', certificate_status='valid',
+      https_probe_status='passed', observed_generation=desired_generation,
+      route_environment='production', https_probe_environment='production',
+      route_config_generation=?, route_inventory_revision=?, https_probe_generation=?,
+      https_probe_inventory_revision=?, https_probe_peer_ip='198.51.100.160',
+      https_probe_http_status=200, route_checked_at='now', certificate_checked_at='now',
+      certificate_hostname=hostname, https_probe_checked_at='now', https_probe_hostname=hostname
+      WHERE id=162`).run('a'.repeat(64), 'b'.repeat(64), 'a'.repeat(64), 'b'.repeat(64))
+
+    runMigrations(database, 14)
+    expect(database.prepare(`SELECT route_status, https_probe_status, https_probe_peer_ips_json
+      FROM domain_binding WHERE id=162`).get()).toEqual({
+      route_status: 'active', https_probe_status: 'passed', https_probe_peer_ips_json: null
+    })
+    expect(() => database.prepare('UPDATE domain_binding SET route_status=route_status WHERE id=162').run())
+      .toThrow(/domain_https_active_requires_production_probe_evidence/)
+
+    database.exec(`
+      INSERT INTO app (id, vps_id, name, framework, host_port, container_port)
+        VALUES (163, 160, 'verified-domain', 'express', 30163, 3000);
+      INSERT INTO domain_binding
+        (id, app_id, hostname, mode, target, ownership_key, route_ownership_key, status, dns_status)
+        VALUES (164, 163, 'verified.example.com', 'shared_ingress', '198.51.100.160', 'dns:163',
+          'opspilot-ingress:163:verified.example.com', 'propagated', 'propagated');
+    `)
+    seedActiveDomainProof(database, 164)
+    runMigrations(database)
+
+    expect(database.prepare(`SELECT route_status, https_probe_status, https_probe_peer_ips_json
+      FROM domain_binding WHERE id=162`).get()).toEqual({
+      route_status: 'pending', https_probe_status: 'not_run', https_probe_peer_ips_json: null
+    })
+    expect(() => database.prepare('UPDATE domain_binding SET route_status=route_status WHERE id=162').run())
+      .not.toThrow()
+    expect(database.prepare(`SELECT route_status, https_probe_status, https_probe_peer_ips_json
+      FROM domain_binding WHERE id=164`).get()).toEqual({
+      route_status: 'active', https_probe_status: 'passed', https_probe_peer_ips_json: '["203.0.113.42"]'
+    })
+    expect(() => database.prepare("UPDATE domain_binding SET route_status='active' WHERE id=162").run())
+      .toThrow(/domain_https_active_requires_production_probe_evidence/)
+    database.prepare(`UPDATE domain_binding SET route_status='active', https_probe_status='passed',
+      https_probe_checked_at='new-probe', https_probe_hostname=hostname,
+      https_probe_peer_ip='198.51.100.160', https_probe_peer_ips_json='["198.51.100.160"]',
+      https_probe_http_status=204, https_probe_generation=route_config_generation,
+      https_probe_inventory_revision=route_inventory_revision, https_probe_environment='production'
+      WHERE id=162`).run()
+    expect(database.prepare('SELECT route_status, https_probe_peer_ips_json FROM domain_binding WHERE id=162').get()).toEqual({
+      route_status: 'active', https_probe_peer_ips_json: '["198.51.100.160"]'
+    })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 15 })
+    expect(database.pragma('foreign_key_check')).toEqual([])
+    runMigrations(database)
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 15 })
   })
 
   it('executes the complete schema contract on an empty SQLite database', () => {
@@ -729,7 +799,7 @@ describe('initializeDatabase', () => {
       .get() as { version: number }
 
     expect(tables).toHaveLength(16)
-    expect(schemaVersion.version).toBe(14)
+    expect(schemaVersion.version).toBe(15)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -760,7 +830,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 14
+      version: 15
     })
     expect(
       database
@@ -959,7 +1029,7 @@ describe('initializeDatabase', () => {
     const successVer = v4Db.prepare('SELECT MAX(version) AS version FROM schema_version').get() as {
       version: number
     }
-    expect(successVer.version).toBe(14)
+    expect(successVer.version).toBe(15)
 
     // b. Bảng experiment_run đã có cột attempt_index và backfill = 1 cho tất cả bản ghi cũ
     const postRuns = v4Db

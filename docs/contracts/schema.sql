@@ -460,6 +460,8 @@ END;
 
 -- Migration 010 requires route, certificate and current-generation external probe evidence
 -- before route_status can be active. These guards also protect against direct SQL writes.
+-- Migration 015 demotes active bindings lacking the verified peer set; it never
+-- synthesizes checked peers from the older single-peer field.
 CREATE TRIGGER domain_binding_active_requires_https_insert
 BEFORE INSERT ON domain_binding
 WHEN NEW.route_status = 'active' AND (
