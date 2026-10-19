@@ -570,4 +570,25 @@ export class DomainRepository {
       )
       .get(hostname) as DomainIngressState | undefined
   }
+
+  /** Looks up a binding scoped to a live VPS without requiring DNS/runtime readiness. */
+  getSharedIngressBindingById(vpsId: number, bindingId: number): DomainIngressState | undefined {
+    return this.database
+      .prepare(
+        `SELECT b.id, b.app_id, b.hostname, b.mode, b.dns_status, b.route_status,
+                b.certificate_status, b.https_probe_status, b.desired_generation,
+                b.observed_generation, b.ownership_key, b.route_ownership_key,
+                b.ingress_reason_code, b.last_check_at, b.route_checked_at,
+                b.certificate_checked_at, b.certificate_hostname, b.https_probe_checked_at,
+                b.https_probe_hostname, b.route_config_generation, b.route_inventory_revision,
+                b.route_environment, b.https_probe_peer_ip, b.https_probe_http_status,
+                b.https_probe_peer_ips_json, b.https_probe_generation,
+                b.https_probe_inventory_revision, b.https_probe_environment
+         FROM domain_binding b
+         JOIN app a ON a.id=b.app_id
+         JOIN vps v ON v.id=a.vps_id
+         WHERE b.id=? AND v.id=? AND v.archived_at IS NULL AND b.mode='shared_ingress'`
+      )
+      .get(bindingId, vpsId) as DomainIngressState | undefined
+  }
 }

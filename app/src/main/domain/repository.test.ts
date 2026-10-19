@@ -12,6 +12,8 @@ import {
 function createDatabase(): Database.Database {
   const database = new Database(':memory:')
   database.exec(`
+    CREATE TABLE vps (id INTEGER PRIMARY KEY, archived_at TEXT);
+    CREATE TABLE app (id INTEGER PRIMARY KEY, vps_id INTEGER NOT NULL);
     CREATE TABLE domain_binding (
       id INTEGER PRIMARY KEY,
       app_id INTEGER NOT NULL,
@@ -156,6 +158,32 @@ function setActiveEvidence(database: Database.Database): void {
 }
 
 describe('DomainRepository ingress/TLS state', () => {
+  it('reads a VPS-scoped binding status before DNS/runtime readiness and hides archived VPS bindings', () => {
+    const database = createDatabase()
+    database.prepare("INSERT INTO vps(id, archived_at) VALUES (7, NULL), (8, '2026-10-19')").run()
+    database.prepare('INSERT INTO app(id, vps_id) VALUES (3, 7), (4, 8)').run()
+    const repository = new DomainRepository(database)
+    repository.upsertDns(binding({ dns_status: 'pending' }))
+    repository.upsertDns(
+      binding({
+        app_id: 4,
+        hostname: 'archived.example.com',
+        ownership_key: 'dns-owner:archived.example.com',
+        route_ownership_key: 'opspilot-ingress:4:archived.example.com'
+      })
+    )
+
+    expect(repository.getSharedIngressBindingById(7, 1)).toMatchObject({
+      id: 1,
+      app_id: 3,
+      hostname: 'app.example.com',
+      dns_status: 'pending'
+    })
+    expect(repository.getSharedIngressBindingById(8, 2)).toBeUndefined()
+    expect(repository.getSharedIngressBindingById(7, 2)).toBeUndefined()
+    database.close()
+  })
+
   it('keeps DNS upsert separate and never promotes it to HTTPS active', () => {
     const database = createDatabase()
     const repository = new DomainRepository(database)
