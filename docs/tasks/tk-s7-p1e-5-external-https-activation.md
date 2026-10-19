@@ -51,4 +51,4 @@
 - The SQLite upgrade test seeds a valid active row at v13, runs the real migration runner through 014 to reproduce `active`/`passed` with a null peer array and rejected no-op update, then runs 015. The row becomes pending, remains non-activatable until a new complete proof is written, and then activates. A second row with fresh valid v14 evidence remains active. Empty database initialization reaches v15 and FK checks remain clean.
 - Node 22.23.3 gates: migration/repository/HTTPS probe/activation focused tests PASS (44/44, 5 files); typecheck PASS; build PASS; `git diff --check` PASS. Migration 013 is unchanged.
 - TLS test rerun initially exposed `CERT_NOT_YET_VALID`: WSL OpenSSL created the lab cert with a start time slightly ahead of the Windows/Node clock. The test-only CA and leaf fixtures now use an explicit past `notBefore`; TLS probe tests pass without weakening runtime TLS verification.
-- VPS, public HTTPS, IPC/UI/pipeline: NOT_RUN by scope. Local commit: pending.
+- VPS, public HTTPS, IPC/UI/pipeline: NOT_RUN by scope. Local implementation commit: `60ef40c`.
