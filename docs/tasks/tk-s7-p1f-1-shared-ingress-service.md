@@ -25,4 +25,8 @@
 - Scoped ESLint trên bốn file đã sửa: exit 0, **0 errors / 121 warnings**. Tất cả là `prettier/prettier` trong các phần có sẵn trước đó của `repository.ts` và `repository.test.ts`; service source/test và các dòng thêm trong repository không có warning. Không format hàng loạt code cũ. Full-repo lint: NOT_RUN.
 - `git diff --cached --check`: PASS. Caddy Linux real-process gate: N/A (P1e đã có local-lab evidence; P1f chỉ ghép module).
 - Code commit SHA: `92b03d3b0b43f482eb0d9c1880969c61fae8b591`.
+- Review-fix code commit SHA: `264571ca4f8b5d0b025535e13a630f149f698f5a`.
+- Review correction: phân biệt managed active (`opspilot_owned` + listener/port occupied) với managed inactive (`ports_free`, port 80/443 trống, không listener). Cả hai cần ownership verified và trạng thái active khớp; preflight phải safe/clear, marker valid và config tồn tại/đọc được. Inactive trả `installed` mà không prepare, download, cài lại hoặc start; reconcile tiếp tục sở hữu việc start.
+- Sau `verifyOwnership`, reload binding/VPS/inventory, xác minh lại SSH identity đã pin, rồi reload inventory lần nữa trước khi trả kết quả. Regression tests bao phủ active/inactive, xung đột port/ownership, identity/inventory/archive đổi trong lúc verify, clean install → installed_not_running → retry không cài lần hai → reconcile.
+- Gates trên Node `v22.23.3`: focused service + preflight/install/reconcile/repository: **9 files, 176 passed, 1 skipped**; typecheck PASS; build PASS; scoped ESLint hai file sửa PASS (0 warning); `git diff --check` PASS. VPS, IPC/UI/pipeline NOT_RUN.
 - VPS thật, IPC/UI/pipeline: NOT_RUN theo yêu cầu checkpoint.
