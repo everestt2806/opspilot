@@ -9,8 +9,9 @@ import { electronApp } from '@electron-toolkit/utils'
 import { loadExistingCredentialCipher } from '../src/main/crypto/masterKey'
 import { loadSecret } from '../src/main/crypto/credentials'
 import {
+  cleanupPreflightScratch,
   prepareIsolatedMlService,
-  removeIsolatedMlService,
+  resolveProfileClone,
   runSecretHandoff
 } from '../src/main/crypto/credentialHandoff'
 
@@ -66,9 +67,10 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2))
   phase = 'profile'
   const tempRoot = realpathSync(tmpdir())
-  const profileReal = realpathSync(args.profile)
-  const relative = profileReal.slice(tempRoot.length)
-  if (!relative.startsWith('\\') || relative.includes('..')) {
+  let profileReal: string
+  try {
+    profileReal = resolveProfileClone(args.profile, tempRoot)
+  } catch {
     throw new Error('Selected profile must be an isolated clone beneath the system temp directory')
   }
   const dbPath = join(profileReal, 'opspilot.db')
@@ -153,8 +155,7 @@ async function main(): Promise<void> {
       timeoutMs: PROCESS_TIMEOUT_MS,
       maxOutputBytes: MAX_OUTPUT_BYTES
     })
-    if (result.exitCode !== 0 && result.exitCode !== 2)
-      throw new Error(result.stderr.trim() || 'Preflight handoff failed')
+    if (result.exitCode !== 0 && result.exitCode !== 2) throw new Error('PREFLIGHT_CHILD_FAILED')
     phase = 'report_complete'
     process.stdout.write(result.stdout)
     exitCode = result.exitCode
@@ -163,17 +164,9 @@ async function main(): Promise<void> {
     try {
       database.close()
     } finally {
-      if (scratchDirectory) {
-        try {
-          removeIsolatedMlService(scratchDirectory)
-          const fs = await import('node:fs/promises')
-          await fs.rm(scratchDirectory, { recursive: false, force: true })
-        } catch {
-          process.stderr.write('ML_PREFLIGHT_SCRATCH_CLEANUP_FAILED\n')
-          exitCode = 3
-        }
-      }
-      app.exit(exitCode)
+      const cleanup = cleanupPreflightScratch(scratchDirectory, tempRoot, exitCode)
+      if (cleanup.cleanupFailed) process.stderr.write('ML_PREFLIGHT_SCRATCH_CLEANUP_FAILED\n')
+      app.exit(cleanup.exitCode)
     }
   }
 }
