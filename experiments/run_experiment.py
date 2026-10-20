@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import inspect
+import json
 import logging
 import os
 import sqlite3
@@ -275,10 +276,16 @@ class SystemSshClient:
             ]
         )
         try:
+            child_env = os.environ.copy()
+            # The private-key contents are consumed in this process and materialized
+            # only in the protected temporary key file; do not inherit them into ssh.
+            child_env.pop("OPSPILOT_SSH_SECRET", None)
+            child_env.pop("OPSPILOT_DEPLOY_SECRET", None)
             res = subprocess.run(
                 ssh_args,
                 capture_output=True,
                 text=True,
+                env=child_env,
                 timeout=effective_timeout,
                 check=False,
             )
@@ -1332,7 +1339,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--scenario",
-        required=True,
+        default=None,
         choices=[
             "memory_leak",
             "cpu_spike",
@@ -1343,7 +1350,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Kịch bản lỗi cần kiểm thử",
     )
     parser.add_argument("--repeat", type=int, default=1, help="Chỉ số lặp (1..N)")
-    parser.add_argument("--vps-id", type=int, default=1, help="ID của VPS")
+    parser.add_argument("--vps-id", type=int, default=None, help="ID của VPS")
+    parser.add_argument("--app-id", type=int, default=None, help="ID app trong profile OpsPilot (chỉ preflight)")
     parser.add_argument("--db-path", required=True, help="Đường dẫn file SQLite DB")
     parser.add_argument("--app-name", default="express-api", help="Tên ứng dụng demo")
     parser.add_argument(
@@ -1352,10 +1360,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Đường dẫn mã nguồn demo app",
     )
     parser.add_argument(
-        "--app-url", required=True, help="URL truy cập app demo trên VPS"
+        "--app-url", default=None, help="URL truy cập app demo trên VPS (chỉ run)"
     )
     parser.add_argument(
-        "--ml-url", default="http://127.0.0.1:8000", help="URL của ML Service"
+        "--ml-url", default=None, help="URL loopback ML Service; bắt buộc và tường minh ở preflight"
+    )
+    parser.add_argument(
+        "--preflight-only",
+        action="store_true",
+        help="Chỉ kiểm tra điều kiện; không tạo run/deploy/reset/train/loadgen/fault/cleanup",
+    )
+    parser.add_argument(
+        "--report-path",
+        default=str(Path(__file__).resolve().parents[1] / "docs/evidence/tk-s7-ml-ready-2/preflight-report.json"),
+        help="Đường dẫn report preflight đã khử nhạy cảm",
     )
     parser.add_argument(
         "--max-attempts",
@@ -1378,18 +1396,36 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-if __name__ == "__main__":  # pragma: no cover
-    args = build_parser().parse_args()
+def main(argv: Sequence[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    if args.preflight_only:
+        from experiments.preflight import run_preflight, write_report
+
+        report = run_preflight(
+            db_path=args.db_path,
+            vps_id=args.vps_id,
+            app_id=args.app_id,
+            ml_url=args.ml_url,
+            ssh_key_file=args.ssh_key_file,
+        )
+        write_report(report, args.report_path)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report["overall"] == "PASS" else 2
+
+    if not args.scenario:
+        build_parser().error("--scenario là bắt buộc khi không dùng --preflight-only")
+    if not args.app_url:
+        build_parser().error("--app-url là bắt buộc khi chạy thí nghiệm")
     logging.basicConfig(level=logging.INFO)
     result = run_experiment(
         scenario=args.scenario,
         repeat_index=args.repeat,
-        vps_id=args.vps_id,
+        vps_id=args.vps_id or 1,
         db_path=args.db_path,
         app_name=args.app_name,
         source_path=args.source_path,
         app_url=args.app_url,
-        ml_url=args.ml_url,
+        ml_url=args.ml_url or "http://127.0.0.1:8000",
         max_attempts=args.max_attempts,
         allow_pilot_4500=args.allow_pilot_4500,
         ssh_key_file=args.ssh_key_file,
@@ -1397,5 +1433,8 @@ if __name__ == "__main__":  # pragma: no cover
     print(
         f"KẾT QUẢ RUN: status={result.status}, attempt={result.attempt_index}, run_id={result.run_id}"
     )
-    if result.status != "completed":
-        sys.exit(1)
+    return 0 if result.status == "completed" else 1
+
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())
