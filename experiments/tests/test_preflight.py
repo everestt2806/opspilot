@@ -6,6 +6,7 @@ import json
 import sqlite3
 import subprocess
 import tempfile
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -116,14 +117,19 @@ def _valid_container_records(app_name: str = "app-1") -> list[str]:
 
 
 class FakeSshClient:
-    def __init__(self, resource_output: str, *, command_code: int = 0) -> None:
+    def __init__(self, resource_output: str, *, command_code: int = 0, verify_error: Exception | None = None) -> None:
         self.resource_output = resource_output
         self.command_code = command_code
         self.commands: list[str] = []
         self.closed = False
+        self.verify_error = verify_error
+        self.verify_calls = 0
 
     def verify_connection(self, timeout: float) -> None:
         assert timeout == preflight.NETWORK_TIMEOUT_S
+        self.verify_calls += 1
+        if self.verify_error:
+            raise self.verify_error
 
     def exec(self, command: str, timeout: float) -> tuple[int, str, str]:
         self.commands.append(command)
@@ -166,6 +172,31 @@ def _configure_readonly_io(
     monkeypatch.setattr(preflight, "resolve_ssh_client", resolve)
     captured["client"] = client
     return captured
+
+
+def _configure_resolver_capture(kwargs: dict[str, object], setup: dict[str, object]) -> FakeSshClient:
+    connection = kwargs["conn"]
+    assert isinstance(connection, sqlite3.Connection)
+    setup["runner_resolver_called"] = True
+    setup["query_only"] = connection.execute("PRAGMA query_only").fetchone()[0]
+    setup["known_hosts_content"] = Path(kwargs["known_hosts_file"]).read_text(encoding="ascii")
+    setup["ssh_key_file"] = kwargs["ssh_key_file"]
+    return setup["client"]  # type: ignore[return-value]
+
+
+def _manager_snapshot(**overrides: object) -> dict[str, object]:
+    value: dict[str, object] = {
+        "source": "SshManager",
+        "collected_at_utc": datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "target_vps_id": 1,
+        "endpoint": "198.51.100.11:2222",
+        "observed_key_type": "ssh-ed25519",
+        "clock_offset_ms": 2401,
+        "resource_exit_code": 0,
+        "resource_output": _resource_output(),
+    }
+    value.update(overrides)
+    return value
 
 
 def _gate(report: dict[str, object], name: str) -> dict[str, object]:
@@ -213,6 +244,9 @@ def test_matching_key_uses_isolated_known_hosts_and_readonly_profile(tmp_path: P
     report = preflight.run_preflight(db_path, 1, 1, "http://127.0.0.1:8765")
     assert _gate(report, "SSH_HOST_KEY")["status"] == "PASS"
     assert _gate(report, "SSH_TRANSPORT")["status"] == "PASS"
+    assert _gate(report, "SSH_TRANSPORT")["reason"] == "RUNNER_AUTHENTICATED_AND_READONLY_COMMAND_SUCCEEDED"
+    assert setup["client"].verify_calls == 1  # type: ignore[union-attr]
+    assert setup["client"].commands == [preflight.RESOURCE_COMMAND]  # type: ignore[union-attr]
     assert setup["query_only"] == 1
     assert "[198.51.100.11]:2222 ssh-ed25519" in str(setup["known_hosts_content"])
     assert setup["known_hosts_path"] != "global-known-hosts-must-not-be-used"
@@ -221,7 +255,7 @@ def test_matching_key_uses_isolated_known_hosts_and_readonly_profile(tmp_path: P
     assert hashlib.sha256(db_path.read_bytes()).hexdigest() == before
 
 
-def test_manager_verified_key_uses_exact_endpoint_pin_and_skips_failed_keyscan(
+def test_manager_verified_key_uses_exact_endpoint_pin_then_runner_strictly_verifies(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     db_path = _profile(tmp_path)
@@ -243,7 +277,7 @@ def test_manager_verified_key_uses_exact_endpoint_pin_and_skips_failed_keyscan(
         verified_known_hosts_file=verified_file,
     )
 
-    assert _gate(report, "SSH_HOST_KEY")["reason"] == "SCANNED_PUBLIC_KEY_MATCHES_SAVED_SHA256_PIN"
+    assert _gate(report, "SSH_HOST_KEY")["reason"] == "RUNNER_STRICT_HOST_KEY_CHECK_PASSED"
     assert _gate(report, "SSH_TRANSPORT")["status"] == "PASS"
     assert "[198.51.100.11]:2222 ssh-ed25519" in str(setup["known_hosts_content"])
     assert setup["client"].closed is True  # type: ignore[union-attr]
@@ -271,7 +305,7 @@ def test_manager_verified_key_rejects_wrong_endpoint_even_when_fingerprint_match
     assert setup["client"].commands == []  # type: ignore[union-attr]
 
 
-def test_pinned_manager_snapshot_supplies_only_bounded_readonly_observations(
+def test_manager_snapshot_is_recorded_but_runner_reauthenticates_and_collects_fresh_data(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     db_path = _profile(tmp_path)
@@ -280,16 +314,7 @@ def test_pinned_manager_snapshot_supplies_only_bounded_readonly_observations(
     verified_file.write_text(f"[198.51.100.11]:2222 ssh-ed25519 {PUBLIC_KEY}\n", encoding="ascii")
     snapshot_file = tmp_path / "snapshot.json"
     snapshot_file.write_text(
-        json.dumps(
-            {
-                "endpoint": "198.51.100.11:2222",
-                "verified_key_type": "ssh-ed25519",
-                "host_pin_verified": True,
-                "clock_offset_ms": 2401,
-                "resource_exit_code": 0,
-                "resource_output": _resource_output(),
-            }
-        ),
+        json.dumps(_manager_snapshot()),
         encoding="utf-8",
     )
     monkeypatch.setattr(
@@ -300,7 +325,7 @@ def test_pinned_manager_snapshot_supplies_only_bounded_readonly_observations(
     monkeypatch.setattr(
         preflight,
         "resolve_ssh_client",
-        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("do not start a second SSH stack")),
+        lambda **kwargs: _configure_resolver_capture(kwargs, setup),
     )
 
     report = preflight.run_preflight(
@@ -312,12 +337,94 @@ def test_pinned_manager_snapshot_supplies_only_bounded_readonly_observations(
         verified_ssh_snapshot_file=snapshot_file,
     )
 
-    assert _gate(report, "SSH_HOST_KEY")["reason"] == "SSH_MANAGER_KEY_MATCHES_SAVED_SHA256_PIN"
+    assert _gate(report, "SSH_HOST_KEY")["reason"] == "RUNNER_STRICT_HOST_KEY_CHECK_PASSED"
     assert _gate(report, "SSH_TRANSPORT")["status"] == "PASS"
     assert _gate(report, "VPS_RESOURCES")["status"] == "PASS"
-    assert _gate(report, "PROTOCOL_CLOCK_OFFSET")["reason"] == "CLOCK_SKEW_EXCEEDS_LIMIT"
-    assert setup["client"].commands == []  # type: ignore[union-attr]
+    assert _gate(report, "PROTOCOL_CLOCK_OFFSET")["reason"] == "CLOCK_OFFSET_WITHIN_LIMIT"
+    assert report["ssh_manager_snapshot"]["status"] == "RECORDED_NOT_LIVE_PROOF"  # type: ignore[index]
+    assert report["ssh_manager_snapshot"]["source"] == "SshManager"  # type: ignore[index]
+    assert report["ssh_manager_snapshot"]["target_vps_id"] == 1  # type: ignore[index]
+    assert report["ssh_manager_snapshot"]["collected_at_utc"]  # type: ignore[index]
+    assert _gate(report, "VPS_RESOURCES")["details"]["source"] == "experiment_runner.SystemSshClient"  # type: ignore[index]
+    assert setup["client"].commands == [preflight.RESOURCE_COMMAND]  # type: ignore[union-attr]
     assert "CONTAINER_INVENTORY_BEGIN" not in json.dumps(report)
+
+
+def test_manager_ssh_success_does_not_pass_runner_when_runner_command_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _profile(tmp_path)
+    setup = _configure_readonly_io(monkeypatch, command_code=255)
+    verified_file = tmp_path / "known_hosts.verified"
+    verified_file.write_text(f"[198.51.100.11]:2222 ssh-ed25519 {PUBLIC_KEY}\n", encoding="ascii")
+    snapshot_file = tmp_path / "snapshot.json"
+    snapshot_file.write_text(json.dumps(_manager_snapshot()), encoding="utf-8")
+    monkeypatch.setattr(preflight, "scan_public_host_keys", lambda *_: pytest.fail("manager key file should be used"))
+
+    def resolve(**kwargs):
+        _configure_resolver_capture(kwargs, setup)
+        return setup["client"]
+
+    monkeypatch.setattr(preflight, "resolve_ssh_client", resolve)
+    report = preflight.run_preflight(
+        db_path, 1, 1, "http://127.0.0.1:8765",
+        verified_known_hosts_file=verified_file,
+        verified_ssh_snapshot_file=snapshot_file,
+    )
+
+    assert report["ssh_manager_snapshot"]["status"] == "RECORDED_NOT_LIVE_PROOF"  # type: ignore[index]
+    assert _gate(report, "SSH_TRANSPORT")["status"] == "BLOCKED"
+    assert _gate(report, "SSH_TRANSPORT")["reason"] == "SSH_READONLY_COMMAND_FAILED"
+    assert _gate(report, "VPS_RESOURCES")["status"] == "BLOCKED"
+    assert setup["client"].verify_calls == 1  # type: ignore[union-attr]
+
+
+def test_runner_transport_does_not_pass_when_runner_authentication_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _profile(tmp_path)
+    setup = _configure_readonly_io(monkeypatch)
+    client = FakeSshClient(_resource_output(), verify_error=runner.SshAuthenticationError("sanitized"))
+    setup["client"] = client
+    monkeypatch.setattr(preflight, "resolve_ssh_client", lambda **_kwargs: client)
+
+    report = preflight.run_preflight(db_path, 1, 1, "http://127.0.0.1:8765")
+
+    assert _gate(report, "SSH_TRANSPORT")["status"] == "BLOCKED"
+    assert _gate(report, "SSH_TRANSPORT")["reason"] == "SSH_AUTHENTICATION_FAILED"
+    assert _gate(report, "VPS_RESOURCES")["status"] == "NOT_RUN"
+    assert client.commands == []
+    assert client.closed
+
+
+def test_stale_manager_snapshot_is_not_used_and_runner_collects_live_target_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _profile(tmp_path)
+    setup = _configure_readonly_io(monkeypatch)
+    verified_file = tmp_path / "known_hosts.verified"
+    verified_file.write_text(f"[198.51.100.11]:2222 ssh-ed25519 {PUBLIC_KEY}\n", encoding="ascii")
+    snapshot_file = tmp_path / "snapshot.json"
+    old_time = (datetime.now(UTC) - timedelta(minutes=preflight.SSH_SNAPSHOT_MAX_AGE.total_seconds() / 60 + 1)).isoformat().replace("+00:00", "Z")
+    snapshot_file.write_text(json.dumps(_manager_snapshot(collected_at_utc=old_time, resource_output="stale")), encoding="utf-8")
+
+    def resolve(**kwargs):
+        _configure_resolver_capture(kwargs, setup)
+        return setup["client"]
+
+    monkeypatch.setattr(preflight, "resolve_ssh_client", resolve)
+    report = preflight.run_preflight(
+        db_path, 1, 1, "http://127.0.0.1:8765",
+        verified_known_hosts_file=verified_file,
+        verified_ssh_snapshot_file=snapshot_file,
+    )
+
+    assert report["ssh_manager_snapshot"]["status"] == "NOT_USABLE"  # type: ignore[index]
+    assert report["ssh_manager_snapshot"]["reason"] == "SSH_MANAGER_SNAPSHOT_STALE"  # type: ignore[index]
+    assert _gate(report, "SSH_TRANSPORT")["status"] == "PASS"
+    assert _gate(report, "VPS_RESOURCES")["details"]["target_vps_id"] == 1  # type: ignore[index]
+    assert _gate(report, "VPS_RESOURCES")["details"]["source"] == "experiment_runner.SystemSshClient"  # type: ignore[index]
+    assert setup["client"].resource_output != "stale"  # type: ignore[union-attr]
 
 
 def test_pinned_manager_snapshot_rejects_stale_endpoint_and_oversized_inventory(
@@ -329,16 +436,7 @@ def test_pinned_manager_snapshot_rejects_stale_endpoint_and_oversized_inventory(
     verified_file.write_text(f"[198.51.100.11]:2222 ssh-ed25519 {PUBLIC_KEY}\n", encoding="ascii")
     snapshot_file = tmp_path / "snapshot.json"
     snapshot_file.write_text(
-        json.dumps(
-            {
-                "endpoint": "198.51.100.12:2222",
-                "verified_key_type": "ssh-ed25519",
-                "host_pin_verified": True,
-                "clock_offset_ms": 0,
-                "resource_exit_code": 0,
-                "resource_output": "",
-            }
-        ),
+        json.dumps(_manager_snapshot(endpoint="198.51.100.12:2222")),
         encoding="utf-8",
     )
     report = preflight.run_preflight(
@@ -349,8 +447,9 @@ def test_pinned_manager_snapshot_rejects_stale_endpoint_and_oversized_inventory(
         verified_known_hosts_file=verified_file,
         verified_ssh_snapshot_file=snapshot_file,
     )
-    assert _gate(report, "SSH_HOST_KEY")["reason"] == "SSH_VERIFIED_EVIDENCE_INVALID"
-    assert _gate(report, "SSH_TRANSPORT")["status"] == "NOT_RUN"
+    assert report["ssh_manager_snapshot"]["status"] == "NOT_USABLE"  # type: ignore[index]
+    assert report["ssh_manager_snapshot"]["reason"] == "SSH_MANAGER_SNAPSHOT_IDENTITY_OR_SCHEMA_INVALID"  # type: ignore[index]
+    assert _gate(report, "SSH_TRANSPORT")["status"] == "PASS"
 
 
 def test_pinned_manager_snapshot_still_requires_public_key_matching_saved_pin(
@@ -365,16 +464,7 @@ def test_pinned_manager_snapshot_still_requires_public_key_matching_saved_pin(
     )
     snapshot_file = tmp_path / "snapshot.json"
     snapshot_file.write_text(
-        json.dumps(
-            {
-                "endpoint": "198.51.100.11:2222",
-                "verified_key_type": "ssh-ed25519",
-                "host_pin_verified": True,
-                "clock_offset_ms": 0,
-                "resource_exit_code": 0,
-                "resource_output": _resource_output(),
-            }
-        ),
+        json.dumps(_manager_snapshot()),
         encoding="utf-8",
     )
     report = preflight.run_preflight(
@@ -389,16 +479,7 @@ def test_pinned_manager_snapshot_still_requires_public_key_matching_saved_pin(
     assert _gate(report, "SSH_TRANSPORT")["status"] == "NOT_RUN"
 
     snapshot_file.write_text(
-        json.dumps(
-            {
-                "endpoint": "198.51.100.11:2222",
-                "verified_key_type": "ssh-ed25519",
-                "host_pin_verified": True,
-                "clock_offset_ms": 0,
-                "resource_exit_code": 0,
-                "resource_output": "x" * (preflight.MAX_SSH_OUTPUT_BYTES + 1),
-            }
-        ),
+        json.dumps(_manager_snapshot(resource_output="x" * (preflight.MAX_SSH_OUTPUT_BYTES + 1))),
         encoding="utf-8",
     )
     report = preflight.run_preflight(
@@ -409,7 +490,7 @@ def test_pinned_manager_snapshot_still_requires_public_key_matching_saved_pin(
         verified_known_hosts_file=verified_file,
         verified_ssh_snapshot_file=snapshot_file,
     )
-    assert _gate(report, "SSH_HOST_KEY")["reason"] == "SSH_VERIFIED_EVIDENCE_INVALID"
+    assert report["ssh_manager_snapshot"]["status"] == "NOT_USABLE"  # type: ignore[index]
     assert _gate(report, "SSH_TRANSPORT")["status"] == "NOT_RUN"
 
 

@@ -263,9 +263,11 @@ async function diagnosePinnedSsh(input: {
         output_bytes: resourceBytes
       })
       verifiedRemoteSnapshot = {
+        source: 'SshManager',
+        collected_at_utc: new Date().toISOString(),
+        target_vps_id: input.vpsId,
         endpoint: `${input.host}:${input.port}`,
-        verified_key_type: verifiedKeyType,
-        host_pin_verified: true,
+        observed_key_type: verifiedKeyType,
         clock_offset_ms: clockOffsetMs,
         resource_exit_code: resource.code,
         resource_output: resourceOk ? resource.stdout : ''
