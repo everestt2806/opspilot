@@ -35,3 +35,17 @@ Không chạy thí nghiệm, start/deploy/reset/train/ingest/loadgen/fault hoặ
 ## BLOCKED — live SSH
 
 Cần một credential handoff hiện có mà runner có thể nhận an toàn trong bộ nhớ (hoặc key file được chỉ định, ngoài argv/log và không commit), cùng endpoint ML loopback được cấu hình rõ ràng. Khi có, chạy lại preflight-only qua profile clone read-only; không đổi pin DB. Host hiện có các app khác và cấu hình disk cũ dưới target 40 GB nên vẫn không thể thành `ready` kể cả SSH thành công.
+
+## START — review fix, 20/10/2026
+
+- Branch `feat/deploy-reachability`, code base `62069be`, hồ sơ trước `f89aca8`.
+- Chỉ sửa `experiments/preflight.py`, `experiments/tests/test_preflight.py` và task/evidence docs. Không bridge credential, không chạy CLI/live SSH, không chạy pilot, không thay profile/pin/VPS.
+
+## UPDATE — review fix, 20/10/2026
+
+- Dedicated-host giờ cần Compose labels khớp project, service, working directory và config file; tập service phải là `app` + `collector` và thêm `postgres` khi DB bật. Container ngoài stack, service thiếu, label/path không khớp, ID trùng, output sai hoặc command lỗi đều fail closed. Lệnh chỉ đọc `docker ps --format` labels, không inspect environment.
+- Health policy `status_2xx` chỉ kiểm status; policy `json` cần JSON object, từ chối JSON hỏng/null/array và explicit `ok=false`, `healthy=false`, `status=error|unhealthy`.
+- Snapshot đọc `MemAvailable`; giữ riêng gate capacity 4 GB và gate available-memory >512 MiB. `NTPSynchronized` và clock offset tách riêng; offset dùng `measure_clock_offset_ms` hiện có, giới hạn `|offset| <= 2000 ms`, không đo được thì `NOT_RUN`.
+- Gate: `pytest experiments/tests/test_preflight.py` — 38 passed; `pytest experiments/tests/test_runner_e2e.py` — 37 passed; scoped Ruff — PASS; `git diff --check` — PASS. Full `ruff check .` FAIL với 4 lỗi không sửa trong `tools/a17-c00-inventory.py` (I001, PLW1510, 2×C408); file ngoài phạm vi không đổi. Node22 không áp dụng vì không sửa TypeScript.
+- Giữ nguyên `docs/evidence/tk-s7-ml-ready-2/preflight-report.json` và timestamp/hash khảo sát thật; không tạo report mock. Test fixture chỉ là offline regression evidence, không phải live VPS/resource evidence.
+- Code/test commit: `7da5dfb32387f7db8ccf2f223f0ef2b4c115d155`. Gate RAM capacity được đặt tên riêng `PROTOCOL_RAM_CAPACITY` để không diễn đạt tổng RAM như RAM khả dụng. Live vẫn BLOCKED như hồ sơ trước: thiếu credential handoff và ML endpoint URL tường minh; SSH/resource/pilot không chạy. VPS dedicated/40 GB vẫn không đạt theo LIVE-0 snapshot.
