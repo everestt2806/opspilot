@@ -1,0 +1,124 @@
+{
+  "run_kind": "historical_normal_data_training_smoke",
+  "timestamp_utc": "2026-10-20T10:24:29Z",
+  "sources": [
+    {
+      "path": "docs/demo-11-10/ml-samples-v5-180.csv",
+      "sha256": "9d2af5f64e64c3371fb988b54fef0770460368ddf935b456a605a1abd7bc425a",
+      "rows": 180
+    },
+    {
+      "path": "docs/demo-11-10/ml-collector-raw-v5-180.jsonl",
+      "sha256": "4d0a9e29bc395ce34508ef6be100f58e43fbc2ac65b01ca81991cf10a46956ab",
+      "rows": 180
+    }
+  ],
+  "split": {
+    "training_rows": 150,
+    "training_feature_windows": 131,
+    "training_seq": [
+      9118,
+      9267
+    ],
+    "inference_rows": 30,
+    "inference_seq": [
+      9268,
+      9297
+    ],
+    "chronological": true,
+    "holdout_used_for_fit_or_scaling": false
+  },
+  "pipeline": {
+    "entrypoint": "ml-service.main.replay",
+    "feature_version": "v1-5metrics-4feats-w20",
+    "feature_dim": 20,
+    "window": 20,
+    "metrics": [
+      "cpu_pct",
+      "mem_mb",
+      "latency_ms",
+      "http_error_rate",
+      "db_response_ms"
+    ],
+    "methods": [
+      "zscore_ewma",
+      "iforest",
+      "ocsvm",
+      "ensemble"
+    ],
+    "normalization": "model implementations fit scaler/score percentiles from training feature matrix only",
+    "iforest": {
+      "n_estimators": 100,
+      "contamination": "auto",
+      "random_state": 42
+    },
+    "ocsvm": {
+      "kernel": "rbf",
+      "nu": 0.05,
+      "gamma": 0.001,
+      "scaler": "StandardScaler fit on training matrix"
+    },
+    "zscore_ewma": {
+      "alpha": 0.3
+    },
+    "ensemble": "median of three method scores; no additional fit"
+  },
+  "data_validation": {
+    "row_count": 180,
+    "sequence_range": [
+      9118,
+      9297
+    ],
+    "timestamp_range_utc": [
+      "2026-10-10T07:42:34Z",
+      "2026-10-10T08:12:24Z"
+    ],
+    "sampling_interval_seconds": 10,
+    "csv_raw_timestamp_sequence_metric_parity": "PASS",
+    "http_error_rate_source_values": [
+      "probe"
+    ],
+    "metrics": {
+      "cpu_pct": {
+        "min": 0.0,
+        "max": 5.34,
+        "missing_or_null_csv": 0,
+        "missing_or_null_raw": 0
+      },
+      "mem_mb": {
+        "min": 16.13,
+        "max": 21.32,
+        "missing_or_null_csv": 0,
+        "missing_or_null_raw": 0
+      },
+      "latency_ms": {
+        "min": 4.4616879895329475,
+        "max": 30.648654996184632,
+        "missing_or_null_csv": 0,
+        "missing_or_null_raw": 0
+      },
+      "http_error_rate": {
+        "min": 0.0,
+        "max": 0.0,
+        "missing_or_null_csv": 0,
+        "missing_or_null_raw": 0
+      },
+      "db_response_ms": {
+        "min": 14.24024801235646,
+        "max": 28.466426010709256,
+        "missing_or_null_csv": 0,
+        "missing_or_null_raw": 0
+      }
+    }
+  },
+  "isolation": {
+    "state_directory": "temporary directory; removed after run",
+    "isolated_state_written": false,
+    "existing_ml_service_state_unchanged": true
+  },
+  "limitations": [
+    "Historical normal-data training smoke only; not a 75-minute pilot.",
+    "No fault/anomaly labels were present or created.",
+    "Scores do not establish precision, recall, accuracy, or fault detection quality."
+  ]
+}
