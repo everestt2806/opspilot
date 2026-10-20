@@ -18,6 +18,7 @@
 ## START — ML-READY-1, 2026-10-20
 
 - Branch `feat/deploy-reachability`, parent HEAD `1a8fb24`; giữ nguyên các file untracked đã có.
+- Commit cục bộ chứa artifact và kiểm chứng ML-READY-1: `4291a0ae7294122c10754f65194a988f8bb3d2bb`.
 - Chỉ dùng virtualenv `ml-service/.venv`; không SSH, deploy, fault/loadgen, đổi DNS/firewall hoặc tác động VPS.
 
 ## Provenance dữ liệu mẫu vận hành
