@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import sqlite3
+import subprocess
 import tempfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -192,6 +193,19 @@ def test_unmatched_or_missing_key_blocks_before_ssh(tmp_path: Path, monkeypatch:
     assert setup["client"].commands == []  # type: ignore[union-attr]
 
 
+def test_keyscan_timeout_is_reported_separately(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _profile(tmp_path)
+    _configure_readonly_io(monkeypatch)
+    monkeypatch.setattr(
+        preflight,
+        "scan_public_host_keys",
+        lambda *_args: (_ for _ in ()).throw(subprocess.TimeoutExpired("ssh-keyscan", 5)),
+    )
+    report = preflight.run_preflight(tmp_path / "profile.db", 1, 1, "http://127.0.0.1:8765")
+    assert _gate(report, "SSH_HOST_KEY")["reason"] == "HOST_KEY_SCAN_TIMEOUT"
+    assert _gate(report, "SSH_TRANSPORT")["status"] == "NOT_RUN"
+
+
 def test_matching_key_uses_isolated_known_hosts_and_readonly_profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     db_path = _profile(tmp_path)
     before = hashlib.sha256(db_path.read_bytes()).hexdigest()
@@ -205,6 +219,81 @@ def test_matching_key_uses_isolated_known_hosts_and_readonly_profile(tmp_path: P
     assert not Path(str(setup["known_hosts_path"])).exists()
     assert setup["client"].closed is True  # type: ignore[union-attr]
     assert hashlib.sha256(db_path.read_bytes()).hexdigest() == before
+
+
+def test_public_key_scan_filters_all_secret_environment_and_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+    for name in ("OPSPILOT_SSH_SECRET", "OPSPILOT_DEPLOY_SECRET", "OPSPILOT_SSH_KEY_FILE", "EXTERNAL_API_TOKEN", "OPSPILOT_APP_ENV_JSON"):
+        monkeypatch.setenv(name, SECRET_SENTINEL)
+
+    def run(*_args, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(stdout=b"", returncode=0)
+
+    monkeypatch.setattr(preflight.subprocess, "run", run)
+    preflight.scan_public_host_keys("198.51.100.11", 2222)
+    child_env = captured["env"]
+    assert all(name not in child_env for name in ("OPSPILOT_SSH_SECRET", "OPSPILOT_DEPLOY_SECRET", "OPSPILOT_SSH_KEY_FILE", "EXTERNAL_API_TOKEN", "OPSPILOT_APP_ENV_JSON"))
+    assert captured["stdin"] is preflight.subprocess.DEVNULL
+
+
+def test_explicit_handoff_secret_is_used_without_environment_or_report_leak(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _profile(tmp_path)
+    setup = _configure_readonly_io(monkeypatch)
+    monkeypatch.delenv("OPSPILOT_SSH_SECRET", raising=False)
+    handoff_secret = "private-key-from-controlled-stdin"
+    captured: dict[str, object] = {}
+
+    def resolve(**kwargs):
+        captured["ssh_secret"] = kwargs["ssh_secret"]
+        captured["query_only"] = kwargs["conn"].execute("PRAGMA query_only").fetchone()[0]
+        return setup["client"]
+
+    monkeypatch.setattr(preflight, "resolve_ssh_client", resolve)
+    report = preflight.run_preflight(db_path, 1, 1, "http://127.0.0.1:8765", ssh_secret=handoff_secret)
+    rendered = json.dumps(report)
+    assert captured["ssh_secret"] == handoff_secret
+    assert captured["query_only"] == 1
+    assert handoff_secret not in rendered
+    assert report["mode"] == "preflight_only"
+    assert all(value is False for value in report["side_effects"].values())
+
+
+def test_ml_endpoint_imports_only_explicit_isolated_source_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    service = tmp_path / "ml-service"
+    service.mkdir()
+    (service / "main.py").write_text("# source fixture", encoding="utf-8")
+    monkeypatch.setenv("OPSPILOT_ML_SERVICE_ROOT", str(service))
+    captured: list[str] = []
+
+    def get(url: str, **_kwargs):
+        captured.append(url)
+        if url.endswith("/health"):
+            return 200, {"status": "ok", "version": "test"}
+        return 200, {
+            "deployment_id": 101,
+            "trained": False,
+            "sample_count": 0,
+            "min_samples_required": 150,
+        }
+
+    monkeypatch.setattr(preflight, "_get_bounded_json", get)
+    gates, _ = preflight.check_ml_endpoint("http://127.0.0.1:8765", 101)
+    assert [gate.status for gate in gates] == ["PASS", "PASS"]
+    assert __import__("sys").path[0] == str(service.resolve())
+    assert all(url.startswith("http://127.0.0.1:8765/") for url in captured)
+
+
+def test_ml_endpoint_rejects_stateful_ml_service_copy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    service = tmp_path / "ml-service"
+    (service / "state").mkdir(parents=True)
+    (service / "main.py").write_text("# source fixture", encoding="utf-8")
+    monkeypatch.setenv("OPSPILOT_ML_SERVICE_ROOT", str(service))
+    monkeypatch.setattr(preflight, "_get_bounded_json", lambda *_args, **_kwargs: pytest.fail("HTTP must not run"))
+    gates, _ = preflight.check_ml_endpoint("http://127.0.0.1:8765", 101)
+    assert gates[0].status == "BLOCKED"
 
 
 def test_profile_connection_is_readonly_and_no_other_app_keeps_host_blocked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -534,6 +623,9 @@ def test_ssh_subprocess_does_not_inherit_secret_and_temp_key_is_removed(tmp_path
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setenv("OPSPILOT_SSH_SECRET", SECRET_SENTINEL)
     monkeypatch.setenv("OPSPILOT_DEPLOY_SECRET", SECRET_SENTINEL)
+    monkeypatch.setenv("OPSPILOT_APP_ENV_JSON", SECRET_SENTINEL)
+    monkeypatch.setenv("EXTERNAL_API_TOKEN", SECRET_SENTINEL)
+    monkeypatch.setattr(runner, "_restrict_windows_key_acl", lambda *_args, **_kwargs: None)
     captured: dict[str, object] = {}
 
     def fake_run(args, **kwargs):
@@ -557,5 +649,44 @@ def test_ssh_subprocess_does_not_inherit_secret_and_temp_key_is_removed(tmp_path
     child_env = captured["env"]
     assert "OPSPILOT_SSH_SECRET" not in child_env  # type: ignore[operator]
     assert "OPSPILOT_DEPLOY_SECRET" not in child_env  # type: ignore[operator]
+    assert "OPSPILOT_APP_ENV_JSON" not in child_env  # type: ignore[operator]
+    assert "EXTERNAL_API_TOKEN" not in child_env  # type: ignore[operator]
     client.close()
     assert not key_path.exists()
+
+
+def test_ssh_timeout_closes_temporary_key_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(runner, "_restrict_windows_key_acl", lambda *_args, **_kwargs: None)
+    client = runner.SystemSshClient(
+        host="127.0.0.1", auth_type="key", secret="timeout-key-fixture"
+    )
+    key_path = Path(client._effective_key_file)
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(subprocess.TimeoutExpired("ssh", 5)),
+    )
+    code, stdout, stderr = client.exec("true", timeout=5)
+    assert code == 124 and stdout == "" and "timed out" in stderr
+    client.close()
+    assert not key_path.exists()
+
+
+@pytest.mark.skipif(__import__("os").name != "nt", reason="Windows DACL validation")
+def test_windows_temporary_ssh_key_uses_restricted_acl(tmp_path: Path) -> None:
+    from experiments.run_experiment import _restrict_windows_key_acl
+
+    directory = tmp_path / "private-key-dir"
+    directory.mkdir()
+    _restrict_windows_key_acl(directory, directory=True)
+    key_path = directory / "key"
+    key_path.write_text("fixture-key", encoding="utf-8")
+    _restrict_windows_key_acl(key_path, directory=False)
+    acl = __import__("subprocess").run(
+        ["icacls.exe", str(key_path)], capture_output=True, text=True, timeout=5, check=True
+    ).stdout
+    assert "SYSTEM" in acl
+    assert "(F)" in acl
+    assert "(I)" not in acl
+    assert "fixture-key" not in acl

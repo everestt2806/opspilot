@@ -29,6 +29,7 @@
     "scripts/try-vps-diagnostics.ts",
     "scripts/a17-c02-live.ts",
     "scripts/a17-c04-live.ts",
+    "scripts/ml-preflight-live.ts",
     "scripts/c03-live.ts",
     "scripts/deploy-cli.ts",
     "scripts/headless-poller.ts",

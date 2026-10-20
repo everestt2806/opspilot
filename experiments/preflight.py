@@ -46,6 +46,16 @@ MIN_DISK_FREE_BYTES = 2_000_000_000
 MAX_CLOCK_SKEW_MS = 2_000
 EXPECTED_FEATURES = 5
 
+
+def _safe_child_environment() -> dict[str, str]:
+    sensitive_markers = ("SECRET", "TOKEN", "PASSWORD", "CREDENTIAL", "PRIVATE_KEY", "APP_ENV_JSON")
+    return {
+        name: value
+        for name, value in os.environ.items()
+        if not any(marker in name.upper() for marker in sensitive_markers)
+        and name.upper() != "OPSPILOT_SSH_KEY_FILE"
+    }
+
 RESOURCE_COMMAND = """set -eu
 export LC_ALL=C
 printf 'PREFLIGHT_VERSION=1\\n'
@@ -157,11 +167,14 @@ def parse_matching_host_keys(
 def scan_public_host_keys(host: str, port: int) -> bytes:
     token = _host_token(host, port)
     del token  # validation before placing the host in argv
+    child_env = _safe_child_environment()
     completed = subprocess.run(
         ["ssh-keyscan", "-T", "5", "-p", str(port), host],
         capture_output=True,
         timeout=NETWORK_TIMEOUT_S,
         check=False,
+        env=child_env,
+        stdin=subprocess.DEVNULL,
     )
     output = completed.stdout
     if len(output) > MAX_KEYSCAN_BYTES:
@@ -352,6 +365,7 @@ def check_ml_endpoint(base_url: str | None, deployment_id: int) -> tuple[list[Ga
 
     base = f"http://{parsed.netloc}"
     try:
+        _prepare_ml_service_runtime()
         health_status, health = _get_bounded_json(f"{base}/health")
         if health_status != 200 or health.get("status") != "ok" or not isinstance(health.get("version"), str):
             raise ValueError("health schema/status invalid")
@@ -380,6 +394,19 @@ def check_ml_endpoint(base_url: str | None, deployment_id: int) -> tuple[list[Ga
         ], model_status
     except (OSError, TimeoutError, ValueError):
         return [_gate("ML_ENDPOINT", "BLOCKED", "ML_HEALTH_OR_STATUS_UNAVAILABLE_OR_INVALID")], {}
+
+
+def _prepare_ml_service_runtime() -> None:
+    """Set import paths only to an explicitly isolated copied service tree."""
+    root = os.environ.get("OPSPILOT_ML_SERVICE_ROOT")
+    if not root:
+        return
+    path = Path(root).resolve(strict=True)
+    if not path.is_dir() or not (path / "main.py").is_file() or (path / "state").exists():
+        raise ValueError("isolated ML service tree is invalid")
+    import sys
+
+    sys.path.insert(0, str(path))
 
 
 def _check_app_health_policy(vps: dict[str, Any], app: dict[str, Any]) -> Gate:
@@ -417,7 +444,9 @@ def _check_app_health_policy(vps: dict[str, Any], app: dict[str, Any]) -> Gate:
         return _gate("APP_HEALTH", "BLOCKED", "APP_HEALTH_NOT_CONFIRMED")
 
 
-def _credential_state(auth_type: str, ssh_key_file: str | Path | None) -> tuple[bool, str]:
+def _credential_state(
+    auth_type: str, ssh_key_file: str | Path | None, ssh_secret: str | None = None
+) -> tuple[bool, str]:
     if auth_type != "key":
         return False, "SSH_AUTH_TYPE_UNSUPPORTED"
     explicit_file = ssh_key_file or os.environ.get("OPSPILOT_SSH_KEY_FILE")
@@ -429,7 +458,7 @@ def _credential_state(auth_type: str, ssh_key_file: str | Path | None) -> tuple[
         except OSError:
             pass
         return False, "SSH_KEY_FILE_UNAVAILABLE"
-    secret = os.environ.get("OPSPILOT_SSH_SECRET") or os.environ.get("OPSPILOT_DEPLOY_SECRET")
+    secret = ssh_secret or os.environ.get("OPSPILOT_SSH_SECRET") or os.environ.get("OPSPILOT_DEPLOY_SECRET")
     if secret and secret.strip():
         return True, "SSH_SECRET_AVAILABLE_IN_MEMORY"
     return False, "SSH_CREDENTIAL_MISSING"
@@ -702,6 +731,7 @@ def run_preflight(
     ml_url: str | None,
     *,
     ssh_key_file: str | Path | None = None,
+    ssh_secret: str | None = None,
 ) -> dict[str, Any]:
     """Check readiness without creating an experiment or invoking run adapters."""
     gates: list[Gate] = []
@@ -786,7 +816,7 @@ def run_preflight(
                 r"SHA256:[A-Za-z0-9+/]{43}", expected_fingerprint.strip()
             ) is not None
             gates.append(_gate("SSH_PIN_CONFIG", "PASS" if pin_valid else "BLOCKED", "PIN_PRESENT" if pin_valid else "PIN_MISSING_OR_INVALID"))
-            has_credential, credential_reason = _credential_state(str(vps.get("auth_type")), ssh_key_file)
+            has_credential, credential_reason = _credential_state(str(vps.get("auth_type")), ssh_key_file, ssh_secret)
             gates.append(_gate("SSH_CREDENTIAL", "PASS" if has_credential else "BLOCKED", credential_reason))
             host_token = ""
             try:
@@ -803,6 +833,7 @@ def run_preflight(
                     ]
                 )
             else:
+                ssh_phase = "HOST_KEY_SCAN"
                 try:
                     keyscan_output = scan_public_host_keys(str(vps["host"]), int(vps["port"]))
                     matching_lines, observed_key_types = parse_matching_host_keys(
@@ -820,6 +851,7 @@ def run_preflight(
                         gates.append(_gate("SSH_TRANSPORT", "NOT_RUN", "HOST_KEY_PIN_NOT_MATCHED"))
                         gates.append(_gate("VPS_RESOURCES", "NOT_RUN", "HOST_KEY_PIN_NOT_MATCHED"))
                     else:
+                        ssh_phase = "SSH_PREFLIGHT"
                         gates.append(
                             _gate(
                                 "SSH_HOST_KEY",
@@ -845,8 +877,10 @@ def run_preflight(
                                     conn=resolver_connection,
                                     vps_id=vps_id,
                                     ssh_key_file=ssh_key_file,
+                                    ssh_secret=ssh_secret,
                                     known_hosts_file=known_hosts_path,
                                 )
+                                ssh_secret = None
                             finally:
                                 if resolver_connection is not None:
                                     resolver_connection.close()
@@ -874,13 +908,24 @@ def run_preflight(
                     gates.append(_gate("SSH_CREDENTIAL_VALIDATION", "BLOCKED", "SSH_AUTH_TYPE_UNSUPPORTED"))
                     gates.append(_gate("SSH_TRANSPORT", "NOT_RUN", "SSH_CREDENTIAL_INVALID"))
                     gates.append(_gate("VPS_RESOURCES", "NOT_RUN", "SSH_CREDENTIAL_INVALID"))
-                except (OSError, subprocess.SubprocessError, ValueError, UnicodeError):
-                    gates.append(_gate("SSH_HOST_KEY", "BLOCKED", "HOST_KEY_SCAN_FAILED_OR_PIN_MISMATCH"))
-                    gates.append(_gate("SSH_TRANSPORT", "NOT_RUN", "HOST_KEY_PIN_NOT_MATCHED"))
-                    gates.append(_gate("VPS_RESOURCES", "NOT_RUN", "HOST_KEY_PIN_NOT_MATCHED"))
-                    gates.append(_gate("DEDICATED_HOST", "NOT_RUN", "HOST_KEY_PIN_NOT_MATCHED"))
-                    gates.append(_gate("PROTOCOL_NTP_SYNC", "NOT_RUN", "HOST_KEY_PIN_NOT_MATCHED"))
-                    gates.append(_gate("PROTOCOL_CLOCK_OFFSET", "NOT_RUN", "HOST_KEY_PIN_NOT_MATCHED"))
+                except (OSError, subprocess.SubprocessError, ValueError, UnicodeError) as exc:
+                    if ssh_phase == "HOST_KEY_SCAN":
+                        if isinstance(exc, subprocess.TimeoutExpired):
+                            reason = "HOST_KEY_SCAN_TIMEOUT"
+                        elif isinstance(exc, OSError):
+                            reason = "HOST_KEY_SCAN_FAILED"
+                        else:
+                            reason = "HOST_KEY_SCAN_OUTPUT_INVALID"
+                        transport_reason = "HOST_KEY_PIN_NOT_MATCHED"
+                    else:
+                        reason = "SSH_PREFLIGHT_FAILED"
+                        transport_reason = "SSH_HOST_KEY_MATCHED_BUT_PREFLIGHT_FAILED"
+                    gates.append(_gate("SSH_HOST_KEY", "BLOCKED", reason))
+                    gates.append(_gate("SSH_TRANSPORT", "NOT_RUN", transport_reason))
+                    gates.append(_gate("VPS_RESOURCES", "NOT_RUN", transport_reason))
+                    gates.append(_gate("DEDICATED_HOST", "NOT_RUN", transport_reason))
+                    gates.append(_gate("PROTOCOL_NTP_SYNC", "NOT_RUN", transport_reason))
+                    gates.append(_gate("PROTOCOL_CLOCK_OFFSET", "NOT_RUN", transport_reason))
 
     if not any(g.name == "PROTOCOL_PROVIDER_PAIR" for g in gates):
         gates.append(_gate("PROTOCOL_PROVIDER_PAIR", "NOT_RUN", "SECOND_VPS_NOT_SELECTED_OR_VERIFIED"))

@@ -17,10 +17,12 @@ Thực hiện quy trình 10 bước chuẩn hoá của TK-S6:
 from __future__ import annotations
 
 import argparse
+import csv
 import inspect
 import json
 import logging
 import os
+import re
 import sqlite3
 import stat
 import subprocess
@@ -37,6 +39,42 @@ from typing import Any, Self
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+
+def _restrict_windows_key_acl(path: Path, *, directory: bool) -> None:
+    """Apply an explicit current-user + SYSTEM DACL before key bytes are written."""
+    if os.name != "nt":
+        return
+    safe_env = {
+        name: value
+        for name, value in os.environ.items()
+        if not any(marker in name.upper() for marker in ("SECRET", "TOKEN", "PASSWORD", "CREDENTIAL", "PRIVATE_KEY"))
+    }
+    who = subprocess.run(
+        ["whoami.exe", "/user", "/fo", "csv", "/nh"],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=True,
+        env=safe_env,
+        stdin=subprocess.DEVNULL,
+    )
+    rows = list(csv.reader(who.stdout.splitlines()))
+    sid = rows[0][-1] if rows and rows[0] else ""
+    if re.fullmatch(r"S-1-5-(?:\d+-)*\d+", sid) is None:
+        raise SshKeyFileError("Could not determine current Windows user SID")
+    rights = "(OI)(CI)F" if directory else "F"
+    secured = subprocess.run(
+        ["icacls.exe", str(path), "/inheritance:r", "/grant:r", f"*{sid}:{rights}", "*S-1-5-18:(F)"],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+        env=safe_env,
+        stdin=subprocess.DEVNULL,
+    )
+    if secured.returncode != 0:
+        raise SshKeyFileError("Could not restrict Windows ACL for temporary SSH key")
 
 from experiments.adapters.deploy_adapter import (
     DeployAdapter,
@@ -203,7 +241,15 @@ class SystemSshClient:
     def _create_temp_key_file(self, content: str) -> None:
         self._temp_dir = tempfile.TemporaryDirectory(prefix="opspilot_ssh_")
         key_path = Path(self._temp_dir.name) / "id_rsa"
-        key_path.write_text(content, encoding="utf-8")
+        try:
+            if os.name == "nt":
+                _restrict_windows_key_acl(Path(self._temp_dir.name), directory=True)
+            key_path.write_text(content, encoding="utf-8")
+            if os.name == "nt":
+                _restrict_windows_key_acl(key_path, directory=False)
+        except Exception:  # noqa: BLE001 - fail closed without exposing key contents
+            self.close()
+            raise SshKeyFileError("Could not secure temporary SSH key file") from None
         try:
             os.chmod(key_path, stat.S_IRUSR | stat.S_IWUSR)
         except OSError:
@@ -218,6 +264,7 @@ class SystemSshClient:
             except OSError:
                 pass
             self._temp_dir = None
+        self._secret = None
 
     def __del__(self) -> None:
         self.close()
@@ -276,11 +323,17 @@ class SystemSshClient:
             ]
         )
         try:
-            child_env = os.environ.copy()
+            child_env = {
+                name: value
+                for name, value in os.environ.items()
+                if not any(
+                    marker in name.upper()
+                    for marker in ("SECRET", "TOKEN", "PASSWORD", "CREDENTIAL", "PRIVATE_KEY", "APP_ENV_JSON")
+                )
+                and name.upper() != "OPSPILOT_SSH_KEY_FILE"
+            }
             # The private-key contents are consumed in this process and materialized
             # only in the protected temporary key file; do not inherit them into ssh.
-            child_env.pop("OPSPILOT_SSH_SECRET", None)
-            child_env.pop("OPSPILOT_DEPLOY_SECRET", None)
             res = subprocess.run(
                 ssh_args,
                 capture_output=True,
