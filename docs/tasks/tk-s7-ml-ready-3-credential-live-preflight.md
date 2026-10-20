@@ -39,3 +39,14 @@
 | Offline verification | PASS | 84 Python tests; 6 Electron tests; Node22 typechecks, scoped Ruff/ESLint, diff check PASS |
 | Live VPS read-only preflight | BLOCKED | `HOST_KEY_SCAN_TIMEOUT` after 5 seconds; SSH transport and resources NOT_RUN |
 | Dedicated host / 40 GB requirements | BLOCKED | Historical LIVE-0 snapshot records other apps and 26.3 GB total disk; not re-probed because pin could not be verified |
+
+## UPDATE: review fixes on 7b28ccb (2026-10-20)
+
+- Code review fix commit: `92f7cf4213722f017cace1c9c5ef59138ddf53c4` (local only).
+- Launcher cleanup is now recursive only after `realpath` confirms the scratch root is strictly beneath the resolved OS temp root. The isolated ML tree is removed only after that containment check. Successful cleanup preserves preflight exit codes `0` and `2`; cleanup failure emits the separate `ML_PREFLIGHT_SCRATCH_CLEANUP_FAILED` marker and returns `3`.
+- Profile clone containment now uses resolved path relationships (`relative`), rejecting the temp root itself, outside siblings, and symlink/junction destinations outside the root. No profile source or master key was changed or created.
+- Secret stdin handoff now observes spawn errors, stdin errors/early close and delivery completion; it settles once with sanitized error codes and waits for child close after timeout/output-limit termination. It does not count an early child exit as successful credential delivery.
+- Launcher/handoff tests: 12/12 PASS, covering exit-code preservation for preflight `0` and `2`, cleanup failure distinction, pre-decrypt/no-scratch failure, 1 MiB early pipe close, spawn failure, timeout, output limit, path containment, and cleanup. Scratch fixtures are verified absent after success; child-spawn tests await process close.
+- Node 22.23.3 gates: focused Vitest 12/12 PASS; Python preflight/handoff/runner E2E 84/84 PASS; Ruff scoped PASS; main and scripts TypeScript checks PASS; production build PASS; scoped ESLint PASS (0 errors, 0 warnings); `git diff --check` PASS.
+- **Saved live preflight evidence (unchanged):** `docs/evidence/tk-s7-ml-ready-3/preflight-report.json`, SHA-256 `70fe45aebf6d8e6619195aba344cf8747dd39daf52a21e072bea31f3489d7af8`; still overall BLOCKED because `ssh-keyscan` timed out at 5 seconds. This is not evidence of a bad pin. No live retry was performed.
+- **Launcher result (separate from saved preflight report):** local fixture tests establish exit/cleanup behavior only; no new live preflight was run. Existing report was not replaced. No VPS write, deploy, or pilot.
