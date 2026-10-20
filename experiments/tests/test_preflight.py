@@ -174,7 +174,7 @@ def _gate(report: dict[str, object], name: str) -> dict[str, object]:
 
 def test_host_key_parser_accepts_only_saved_sha256_pin_and_preserves_algorithm() -> None:
     entry, observed = preflight.parse_matching_host_keys(
-        f"ignored ssh-ed25519 {PUBLIC_KEY}\nwrong ssh-rsa {base64.b64encode(b'other').decode()}\n".encode(),
+        f"[198.51.100.11]:2222 ssh-ed25519 {PUBLIC_KEY}\n[198.51.100.11]:2222 ssh-rsa {base64.b64encode(b'other').decode()}\nwrong ssh-ed25519 {PUBLIC_KEY}\n".encode(),
         PIN,
         "[198.51.100.11]:2222",
     )
@@ -221,17 +221,212 @@ def test_matching_key_uses_isolated_known_hosts_and_readonly_profile(tmp_path: P
     assert hashlib.sha256(db_path.read_bytes()).hexdigest() == before
 
 
+def test_manager_verified_key_uses_exact_endpoint_pin_and_skips_failed_keyscan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _profile(tmp_path)
+    setup = _configure_readonly_io(monkeypatch)
+    verified_file = tmp_path / "scratch" / "known_hosts.verified"
+    verified_file.parent.mkdir()
+    verified_file.write_text(f"[198.51.100.11]:2222 ssh-ed25519 {PUBLIC_KEY}\n", encoding="ascii")
+    monkeypatch.setattr(
+        preflight,
+        "scan_public_host_keys",
+        lambda *_: (_ for _ in ()).throw(AssertionError("must reuse SshManager proof")),
+    )
+
+    report = preflight.run_preflight(
+        db_path,
+        1,
+        1,
+        "http://127.0.0.1:8765",
+        verified_known_hosts_file=verified_file,
+    )
+
+    assert _gate(report, "SSH_HOST_KEY")["reason"] == "SCANNED_PUBLIC_KEY_MATCHES_SAVED_SHA256_PIN"
+    assert _gate(report, "SSH_TRANSPORT")["status"] == "PASS"
+    assert "[198.51.100.11]:2222 ssh-ed25519" in str(setup["known_hosts_content"])
+    assert setup["client"].closed is True  # type: ignore[union-attr]
+
+
+def test_manager_verified_key_rejects_wrong_endpoint_even_when_fingerprint_matches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _profile(tmp_path)
+    setup = _configure_readonly_io(monkeypatch)
+    verified_file = tmp_path / "scratch" / "known_hosts.verified"
+    verified_file.parent.mkdir()
+    verified_file.write_text(f"wrong-endpoint ssh-ed25519 {PUBLIC_KEY}\n", encoding="ascii")
+
+    report = preflight.run_preflight(
+        db_path,
+        1,
+        1,
+        "http://127.0.0.1:8765",
+        verified_known_hosts_file=verified_file,
+    )
+
+    assert _gate(report, "SSH_HOST_KEY")["status"] == "BLOCKED"
+    assert _gate(report, "SSH_TRANSPORT")["status"] == "NOT_RUN"
+    assert setup["client"].commands == []  # type: ignore[union-attr]
+
+
+def test_pinned_manager_snapshot_supplies_only_bounded_readonly_observations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _profile(tmp_path)
+    setup = _configure_readonly_io(monkeypatch)
+    verified_file = tmp_path / "known_hosts.verified"
+    verified_file.write_text(f"[198.51.100.11]:2222 ssh-ed25519 {PUBLIC_KEY}\n", encoding="ascii")
+    snapshot_file = tmp_path / "snapshot.json"
+    snapshot_file.write_text(
+        json.dumps(
+            {
+                "endpoint": "198.51.100.11:2222",
+                "verified_key_type": "ssh-ed25519",
+                "host_pin_verified": True,
+                "clock_offset_ms": 2401,
+                "resource_exit_code": 0,
+                "resource_output": _resource_output(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        preflight,
+        "scan_public_host_keys",
+        lambda *_: (_ for _ in ()).throw(AssertionError("trusted manager snapshot is authoritative")),
+    )
+    monkeypatch.setattr(
+        preflight,
+        "resolve_ssh_client",
+        lambda **_kwargs: (_ for _ in ()).throw(AssertionError("do not start a second SSH stack")),
+    )
+
+    report = preflight.run_preflight(
+        db_path,
+        1,
+        1,
+        "http://127.0.0.1:8765",
+        verified_known_hosts_file=verified_file,
+        verified_ssh_snapshot_file=snapshot_file,
+    )
+
+    assert _gate(report, "SSH_HOST_KEY")["reason"] == "SSH_MANAGER_KEY_MATCHES_SAVED_SHA256_PIN"
+    assert _gate(report, "SSH_TRANSPORT")["status"] == "PASS"
+    assert _gate(report, "VPS_RESOURCES")["status"] == "PASS"
+    assert _gate(report, "PROTOCOL_CLOCK_OFFSET")["reason"] == "CLOCK_SKEW_EXCEEDS_LIMIT"
+    assert setup["client"].commands == []  # type: ignore[union-attr]
+    assert "CONTAINER_INVENTORY_BEGIN" not in json.dumps(report)
+
+
+def test_pinned_manager_snapshot_rejects_stale_endpoint_and_oversized_inventory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _profile(tmp_path)
+    _configure_readonly_io(monkeypatch)
+    verified_file = tmp_path / "known_hosts.verified"
+    verified_file.write_text(f"[198.51.100.11]:2222 ssh-ed25519 {PUBLIC_KEY}\n", encoding="ascii")
+    snapshot_file = tmp_path / "snapshot.json"
+    snapshot_file.write_text(
+        json.dumps(
+            {
+                "endpoint": "198.51.100.12:2222",
+                "verified_key_type": "ssh-ed25519",
+                "host_pin_verified": True,
+                "clock_offset_ms": 0,
+                "resource_exit_code": 0,
+                "resource_output": "",
+            }
+        ),
+        encoding="utf-8",
+    )
+    report = preflight.run_preflight(
+        db_path,
+        1,
+        1,
+        "http://127.0.0.1:8765",
+        verified_known_hosts_file=verified_file,
+        verified_ssh_snapshot_file=snapshot_file,
+    )
+    assert _gate(report, "SSH_HOST_KEY")["reason"] == "SSH_VERIFIED_EVIDENCE_INVALID"
+    assert _gate(report, "SSH_TRANSPORT")["status"] == "NOT_RUN"
+
+
+def test_pinned_manager_snapshot_still_requires_public_key_matching_saved_pin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _profile(tmp_path)
+    _configure_readonly_io(monkeypatch)
+    verified_file = tmp_path / "known_hosts.verified"
+    verified_file.write_text(
+        f"[198.51.100.11]:2222 ssh-ed25519 {base64.b64encode(b'not-the-pinned-key').decode()}\n",
+        encoding="ascii",
+    )
+    snapshot_file = tmp_path / "snapshot.json"
+    snapshot_file.write_text(
+        json.dumps(
+            {
+                "endpoint": "198.51.100.11:2222",
+                "verified_key_type": "ssh-ed25519",
+                "host_pin_verified": True,
+                "clock_offset_ms": 0,
+                "resource_exit_code": 0,
+                "resource_output": _resource_output(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    report = preflight.run_preflight(
+        db_path,
+        1,
+        1,
+        "http://127.0.0.1:8765",
+        verified_known_hosts_file=verified_file,
+        verified_ssh_snapshot_file=snapshot_file,
+    )
+    assert _gate(report, "SSH_HOST_KEY")["status"] == "BLOCKED"
+    assert _gate(report, "SSH_TRANSPORT")["status"] == "NOT_RUN"
+
+    snapshot_file.write_text(
+        json.dumps(
+            {
+                "endpoint": "198.51.100.11:2222",
+                "verified_key_type": "ssh-ed25519",
+                "host_pin_verified": True,
+                "clock_offset_ms": 0,
+                "resource_exit_code": 0,
+                "resource_output": "x" * (preflight.MAX_SSH_OUTPUT_BYTES + 1),
+            }
+        ),
+        encoding="utf-8",
+    )
+    report = preflight.run_preflight(
+        db_path,
+        1,
+        1,
+        "http://127.0.0.1:8765",
+        verified_known_hosts_file=verified_file,
+        verified_ssh_snapshot_file=snapshot_file,
+    )
+    assert _gate(report, "SSH_HOST_KEY")["reason"] == "SSH_VERIFIED_EVIDENCE_INVALID"
+    assert _gate(report, "SSH_TRANSPORT")["status"] == "NOT_RUN"
+
+
 def test_public_key_scan_filters_all_secret_environment_and_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
     for name in ("OPSPILOT_SSH_SECRET", "OPSPILOT_DEPLOY_SECRET", "OPSPILOT_SSH_KEY_FILE", "EXTERNAL_API_TOKEN", "OPSPILOT_APP_ENV_JSON"):
         monkeypatch.setenv(name, SECRET_SENTINEL)
 
     def run(*_args, **kwargs):
+        captured["command"] = _args[0]
         captured.update(kwargs)
         return SimpleNamespace(stdout=b"", returncode=0)
 
     monkeypatch.setattr(preflight.subprocess, "run", run)
     preflight.scan_public_host_keys("198.51.100.11", 2222)
+    assert captured["timeout"] == preflight.KEYSCAN_PROCESS_TIMEOUT_S == 8.0
+    assert captured["command"][1:3] == ["-T", "5"]  # type: ignore[index]
     child_env = captured["env"]
     assert all(name not in child_env for name in ("OPSPILOT_SSH_SECRET", "OPSPILOT_DEPLOY_SECRET", "OPSPILOT_SSH_KEY_FILE", "EXTERNAL_API_TOKEN", "OPSPILOT_APP_ENV_JSON"))
     assert captured["stdin"] is preflight.subprocess.DEVNULL

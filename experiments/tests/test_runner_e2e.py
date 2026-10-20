@@ -1670,6 +1670,11 @@ def test_system_ssh_client_transport_uses_credentials_and_strict_host_key(
             existing_key
         )
         assert f"UserKnownHostsFile={known_hosts}" in cmd2_args
+        assert (
+            "GlobalKnownHostsFile=NUL"
+            if runner.os.name == "nt"
+            else "GlobalKnownHostsFile=/dev/null"
+        ) in cmd2_args
         assert "StrictHostKeyChecking=yes" in cmd2_args
 
     # File key ngoài không bị xoá sau khi đóng client

@@ -38,6 +38,11 @@ MAX_KEYSCAN_BYTES = 64 * 1024
 MAX_SSH_OUTPUT_BYTES = 16 * 1024
 MAX_HTTP_BYTES = 32 * 1024
 NETWORK_TIMEOUT_S = 5.0
+KEYSCAN_CONNECTION_TIMEOUT_S = 5
+# Observed Windows OpenSSH keyscan returned after 5.42s with its own -T 5
+# deadline; leave a small process-start/exit margin so the outer guard does not
+# mislabel the inner per-connection timeout as a subprocess timeout.
+KEYSCAN_PROCESS_TIMEOUT_S = 8.0
 MIN_VCPU = 2
 MIN_RAM_BYTES = 4_000_000_000
 MIN_RAM_AVAILABLE_BYTES = 512 * 1024 * 1024
@@ -86,6 +91,27 @@ class Gate:
     status: str
     reason: str
     details: dict[str, Any] | None = None
+
+
+class VerifiedSshSnapshotClient:
+    """Read-only command results received from the main-process pinned SshManager."""
+
+    def __init__(self, resource_code: int, resource_output: str) -> None:
+        self.resource_code = resource_code
+        self.resource_output = resource_output
+        self.closed = False
+
+    def verify_connection(self, timeout: float) -> None:
+        del timeout
+
+    def exec(self, command: str, timeout: float) -> tuple[int, str, str]:
+        del timeout
+        if command != RESOURCE_COMMAND:
+            return 1, "", ""
+        return self.resource_code, self.resource_output, ""
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class ProfileError(Exception):
@@ -148,7 +174,7 @@ def parse_matching_host_keys(
         if not line or line.startswith("#"):
             continue
         fields = line.split()
-        if len(fields) < 3:
+        if len(fields) < 3 or fields[0] != host_token:
             continue
         key_type, encoded_key = fields[-2], fields[-1]
         try:
@@ -164,14 +190,41 @@ def parse_matching_host_keys(
     return matches, observed_types
 
 
+def _load_verified_ssh_snapshot(
+    path: str | Path, *, host: str, port: int
+) -> dict[str, Any]:
+    raw = Path(path).read_bytes()
+    if len(raw) > MAX_SSH_OUTPUT_BYTES:
+        raise ValueError("verified SSH snapshot exceeds output limit")
+    value = json.loads(raw.decode("utf-8"))
+    if not isinstance(value, dict):
+        raise TypeError("verified SSH snapshot must be an object")
+    expected_endpoint = f"{host}:{port}"
+    if value.get("endpoint") != expected_endpoint or value.get("host_pin_verified") is not True:
+        raise ValueError("verified SSH snapshot identity mismatch")
+    key_type = value.get("verified_key_type")
+    if not isinstance(key_type, str) or re.fullmatch(r"(?:ssh-[A-Za-z0-9-]+|ecdsa-[A-Za-z0-9-]+|sk-[A-Za-z0-9-]+)", key_type) is None:
+        raise ValueError("verified SSH snapshot key type invalid")
+    resource_code = value.get("resource_exit_code")
+    resource_output = value.get("resource_output")
+    clock_offset = value.get("clock_offset_ms")
+    if type(resource_code) is not int or not isinstance(resource_output, str):
+        raise ValueError("verified SSH snapshot resource fields invalid")
+    if len(resource_output.encode("utf-8", errors="strict")) > MAX_SSH_OUTPUT_BYTES:
+        raise ValueError("verified SSH snapshot resource output exceeds limit")
+    if clock_offset is not None and type(clock_offset) is not int:
+        raise ValueError("verified SSH snapshot clock field invalid")
+    return value
+
+
 def scan_public_host_keys(host: str, port: int) -> bytes:
     token = _host_token(host, port)
     del token  # validation before placing the host in argv
     child_env = _safe_child_environment()
     completed = subprocess.run(
-        ["ssh-keyscan", "-T", "5", "-p", str(port), host],
+        ["ssh-keyscan", "-T", str(KEYSCAN_CONNECTION_TIMEOUT_S), "-p", str(port), host],
         capture_output=True,
-        timeout=NETWORK_TIMEOUT_S,
+        timeout=KEYSCAN_PROCESS_TIMEOUT_S,
         check=False,
         env=child_env,
         stdin=subprocess.DEVNULL,
@@ -638,6 +691,7 @@ def _remote_observation_gates(
     app: dict[str, Any],
     deployment: dict[str, Any],
     app_count: int,
+    measured_clock_offset_ms: int | None = None,
 ) -> list[Gate]:
     gates: list[Gate] = []
     try:
@@ -668,10 +722,13 @@ def _remote_observation_gates(
         ]
 
     gates.append(_gate("SSH_TRANSPORT", "PASS", "PINNED_SSH_AUTHENTICATED"))
-    try:
-        clock_offset = measure_clock_offset_ms(client)
-    except Exception:  # noqa: BLE001
-        clock_offset = None
+    if measured_clock_offset_ms is not None:
+        clock_offset = measured_clock_offset_ms
+    else:
+        try:
+            clock_offset = measure_clock_offset_ms(client)
+        except Exception:  # noqa: BLE001
+            clock_offset = None
 
     try:
         code, stdout, _stderr = client.exec(RESOURCE_COMMAND, timeout=NETWORK_TIMEOUT_S)
@@ -732,6 +789,8 @@ def run_preflight(
     *,
     ssh_key_file: str | Path | None = None,
     ssh_secret: str | None = None,
+    verified_known_hosts_file: str | Path | None = None,
+    verified_ssh_snapshot_file: str | Path | None = None,
 ) -> dict[str, Any]:
     """Check readiness without creating an experiment or invoking run adapters."""
     gates: list[Gate] = []
@@ -835,7 +894,22 @@ def run_preflight(
             else:
                 ssh_phase = "HOST_KEY_SCAN"
                 try:
-                    keyscan_output = scan_public_host_keys(str(vps["host"]), int(vps["port"]))
+                    ssh_snapshot: dict[str, Any] | None = None
+                    if verified_ssh_snapshot_file is not None:
+                        ssh_snapshot = _load_verified_ssh_snapshot(
+                            verified_ssh_snapshot_file,
+                            host=str(vps["host"]),
+                            port=int(vps["port"]),
+                        )
+                    if verified_known_hosts_file is not None:
+                        verified_hosts_path = Path(verified_known_hosts_file).resolve(strict=True)
+                        if not verified_hosts_path.is_file():
+                            raise ValueError("verified known-hosts evidence is not a file")
+                        keyscan_output = verified_hosts_path.read_bytes()
+                        if len(keyscan_output) > MAX_KEYSCAN_BYTES:
+                            raise ValueError("verified known-hosts evidence exceeds limit")
+                    else:
+                        keyscan_output = scan_public_host_keys(str(vps["host"]), int(vps["port"]))
                     matching_lines, observed_key_types = parse_matching_host_keys(
                         keyscan_output, expected_fingerprint, host_token
                     )
@@ -851,55 +925,78 @@ def run_preflight(
                         gates.append(_gate("SSH_TRANSPORT", "NOT_RUN", "HOST_KEY_PIN_NOT_MATCHED"))
                         gates.append(_gate("VPS_RESOURCES", "NOT_RUN", "HOST_KEY_PIN_NOT_MATCHED"))
                     else:
+                        if ssh_snapshot is not None and ssh_snapshot["verified_key_type"] not in {
+                            line.split()[1] for line in matching_lines
+                        }:
+                            raise ValueError("SSH snapshot key algorithm does not match pinned host key")
                         ssh_phase = "SSH_PREFLIGHT"
                         gates.append(
                             _gate(
                                 "SSH_HOST_KEY",
                                 "PASS",
-                                "SCANNED_PUBLIC_KEY_MATCHES_SAVED_SHA256_PIN",
+                                "SSH_MANAGER_KEY_MATCHES_SAVED_SHA256_PIN"
+                                if ssh_snapshot is not None
+                                else "SCANNED_PUBLIC_KEY_MATCHES_SAVED_SHA256_PIN",
                                 matched_key_types=sorted({line.split()[1] for line in matching_lines}),
                             )
                         )
-                        with tempfile.TemporaryDirectory(prefix="opspilot-preflight-") as isolated_dir:
-                            known_hosts_path = Path(isolated_dir) / "known_hosts"
-                            known_hosts_path.write_text("\n".join(matching_lines) + "\n", encoding="ascii")
-                            try:
-                                os.chmod(known_hosts_path, 0o600)
-                            except OSError:
-                                pass
-                            previous_tempdir = tempfile.tempdir
-                            tempfile.tempdir = isolated_dir
-                            client = None
-                            resolver_connection: sqlite3.Connection | None = None
-                            try:
-                                resolver_connection = open_profile_readonly(db_path)
-                                client = resolve_ssh_client(
-                                    conn=resolver_connection,
-                                    vps_id=vps_id,
-                                    ssh_key_file=ssh_key_file,
-                                    ssh_secret=ssh_secret,
-                                    known_hosts_file=known_hosts_path,
+                        if ssh_snapshot is not None:
+                            client = VerifiedSshSnapshotClient(
+                                ssh_snapshot["resource_exit_code"],
+                                ssh_snapshot["resource_output"],
+                            )
+                            gates.extend(
+                                _remote_observation_gates(
+                                    client,
+                                    vps,
+                                    app,
+                                    deployment,
+                                    app_count,
+                                    measured_clock_offset_ms=ssh_snapshot["clock_offset_ms"],
                                 )
-                                ssh_secret = None
-                            finally:
-                                if resolver_connection is not None:
-                                    resolver_connection.close()
-                                tempfile.tempdir = previous_tempdir
-                            if client is None:
-                                gates.append(_gate("SSH_TRANSPORT", "BLOCKED", "SSH_CLIENT_UNAVAILABLE"))
-                                gates.append(_gate("VPS_RESOURCES", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"))
-                                gates.append(_gate("DEDICATED_HOST", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"))
-                                gates.append(_gate("PROTOCOL_NTP_SYNC", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"))
-                                gates.append(_gate("PROTOCOL_CLOCK_OFFSET", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"))
-                            else:
+                            )
+                            client.close()
+                        else:
+                            with tempfile.TemporaryDirectory(prefix="opspilot-preflight-") as isolated_dir:
+                                known_hosts_path = Path(isolated_dir) / "known_hosts"
+                                known_hosts_path.write_text("\n".join(matching_lines) + "\n", encoding="ascii")
                                 try:
-                                    gates.extend(
-                                        _remote_observation_gates(
-                                            client, vps, app, deployment, app_count
-                                        )
+                                    os.chmod(known_hosts_path, 0o600)
+                                except OSError:
+                                    pass
+                                previous_tempdir = tempfile.tempdir
+                                tempfile.tempdir = isolated_dir
+                                client = None
+                                resolver_connection: sqlite3.Connection | None = None
+                                try:
+                                    resolver_connection = open_profile_readonly(db_path)
+                                    client = resolve_ssh_client(
+                                        conn=resolver_connection,
+                                        vps_id=vps_id,
+                                        ssh_key_file=ssh_key_file,
+                                        ssh_secret=ssh_secret,
+                                        known_hosts_file=known_hosts_path,
                                     )
+                                    ssh_secret = None
                                 finally:
-                                    client.close()
+                                    if resolver_connection is not None:
+                                        resolver_connection.close()
+                                    tempfile.tempdir = previous_tempdir
+                                if client is None:
+                                    gates.append(_gate("SSH_TRANSPORT", "BLOCKED", "SSH_CLIENT_UNAVAILABLE"))
+                                    gates.append(_gate("VPS_RESOURCES", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"))
+                                    gates.append(_gate("DEDICATED_HOST", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"))
+                                    gates.append(_gate("PROTOCOL_NTP_SYNC", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"))
+                                    gates.append(_gate("PROTOCOL_CLOCK_OFFSET", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"))
+                                else:
+                                    try:
+                                        gates.extend(
+                                            _remote_observation_gates(
+                                                client, vps, app, deployment, app_count
+                                            )
+                                        )
+                                    finally:
+                                        client.close()
                 except SshKeyFileError:
                     gates.append(_gate("SSH_CREDENTIAL_VALIDATION", "BLOCKED", "SSH_KEY_FILE_INVALID"))
                     gates.append(_gate("SSH_TRANSPORT", "NOT_RUN", "SSH_CREDENTIAL_INVALID"))
@@ -908,8 +1005,11 @@ def run_preflight(
                     gates.append(_gate("SSH_CREDENTIAL_VALIDATION", "BLOCKED", "SSH_AUTH_TYPE_UNSUPPORTED"))
                     gates.append(_gate("SSH_TRANSPORT", "NOT_RUN", "SSH_CREDENTIAL_INVALID"))
                     gates.append(_gate("VPS_RESOURCES", "NOT_RUN", "SSH_CREDENTIAL_INVALID"))
-                except (OSError, subprocess.SubprocessError, ValueError, UnicodeError) as exc:
-                    if ssh_phase == "HOST_KEY_SCAN":
+                except (OSError, subprocess.SubprocessError, TypeError, ValueError, UnicodeError) as exc:
+                    if verified_ssh_snapshot_file is not None and isinstance(exc, (TypeError, ValueError)):
+                        reason = "SSH_VERIFIED_EVIDENCE_INVALID"
+                        transport_reason = "SSH_HOST_KEY_EVIDENCE_REJECTED"
+                    elif ssh_phase == "HOST_KEY_SCAN":
                         if isinstance(exc, subprocess.TimeoutExpired):
                             reason = "HOST_KEY_SCAN_TIMEOUT"
                         elif isinstance(exc, OSError):

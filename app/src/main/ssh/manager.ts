@@ -157,6 +157,7 @@ interface PoolEntry {
   client: Client | null
   ready: boolean
   cancelled: boolean
+  verifiedHostKey: Buffer | null
 }
 
 export class SshManager extends EventEmitter {
@@ -169,6 +170,13 @@ export class SshManager extends EventEmitter {
   /** Lấy connection từ pool (1 connection / VPS), tự mở kèm retry nếu chưa có. */
   async connect(vpsId: number): Promise<void> {
     await this.ensureConnected(vpsId)
+  }
+
+  /** Return a copy of the public host-key blob only after pin verification and SSH ready. */
+  getVerifiedHostKey(vpsId: number): Buffer | null {
+    const entry = this.entries.get(vpsId)
+    if (!entry?.ready || !entry.verifiedHostKey) return null
+    return Buffer.from(entry.verifiedHostKey)
   }
 
   async exec(vpsId: number, command: string, options: ExecOptions = {}): Promise<ExecResult> {
@@ -483,7 +491,8 @@ export class SshManager extends EventEmitter {
       },
       client: null,
       ready: false,
-      cancelled: false
+      cancelled: false,
+      verifiedHostKey: null
     }
     this.entries.set(vpsId, entry)
     return entry
@@ -608,6 +617,7 @@ export class SshManager extends EventEmitter {
           keepaliveInterval: 30_000,
           hostVerifier: (receivedHostKey: Buffer) => {
             hostKeyMismatch = !matchesSshHostFingerprint(receivedHostKey, info.hostFingerprint!)
+            entry.verifiedHostKey = hostKeyMismatch ? null : Buffer.from(receivedHostKey)
             return !hostKeyMismatch
           },
           ...authOptions

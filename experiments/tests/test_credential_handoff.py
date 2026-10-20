@@ -73,3 +73,32 @@ def test_handoff_rejects_missing_and_oversized_secret(monkeypatch, tmp_path) -> 
     monkeypatch.setattr(credential_handoff.sys, "stdin", io.TextIOWrapper(io.BytesIO(b"x" * (credential_handoff.MAX_SECRET_BYTES + 1))))
     assert credential_handoff.main(args) == 3
     assert SECRET not in stderr.getvalue()
+
+
+def test_handoff_requires_manager_verified_known_hosts_file_inside_scratch(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setattr(credential_handoff.sys, "stdout", io.StringIO())
+    stderr = io.StringIO()
+    monkeypatch.setattr(credential_handoff.sys, "stderr", stderr)
+    monkeypatch.setattr(credential_handoff.sys, "stdin", io.TextIOWrapper(io.BytesIO(SECRET.encode())))
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    ml_service_root = scratch / "ml-service"
+    ml_service_root.mkdir()
+    outside = tmp_path / "known_hosts"
+    outside.write_text("[host]:22 ssh-ed25519 AAAA\n", encoding="ascii")
+    args = [
+        "--db-path", str(tmp_path / "profile.db"),
+        "--vps-id", "1",
+        "--app-id", "1",
+        "--ml-url", "http://127.0.0.1:8765",
+        "--report-path", str(tmp_path / "report.json"),
+        "--scratch-dir", str(scratch),
+        "--ml-service-root", str(ml_service_root),
+        "--verified-known-hosts-file", str(outside),
+    ]
+
+    assert credential_handoff.main(args) == 3
+    assert "PREFLIGHT_HANDOFF_FAILED:ValueError" in stderr.getvalue()
+    assert SECRET not in stderr.getvalue()

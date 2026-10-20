@@ -114,7 +114,27 @@ describe('SSH host fingerprint verification', () => {
     await expect(manager.connect(1)).resolves.toBeUndefined()
     expect(ssh2Harness.authenticationAttempts).toBe(1)
     expect(ssh2Harness.commandAttempts).toBe(0)
+    const verifiedKey = manager.getVerifiedHostKey(1)
+    expect(verifiedKey).toEqual(receivedHostKey)
+    verifiedKey?.fill(0)
+    expect(manager.getVerifiedHostKey(1)).toEqual(receivedHostKey)
     await manager.disconnect(1)
+    expect(manager.getVerifiedHostKey(1)).toBeNull()
+  })
+
+  it('does not expose host-key bytes when the saved fingerprint rejects the peer', async () => {
+    resetHarness()
+    const manager = new SshManager(async () => ({
+      host: 'vps.example.invalid',
+      port: 22,
+      hostFingerprint: fingerprintFor(otherReceivedHostKey),
+      username: 'test-user',
+      authType: 'key',
+      secret: 'test-only-key-placeholder'
+    }))
+    await expect(manager.connect(1)).rejects.toMatchObject({ code: 'VALIDATION' })
+    expect(manager.getVerifiedHostKey(1)).toBeNull()
+    expect(ssh2Harness.authenticationAttempts).toBe(0)
   })
 
   it('settles and closes the client if the connection closes before ready', async () => {
@@ -179,7 +199,12 @@ describe('SSH host fingerprint verification', () => {
     const rejection = expect(pending).rejects.toMatchObject({ code: 'SSH_TIMEOUT' })
     await vi.advanceTimersByTimeAsync(100)
     await rejection
-    const lateChannel = { destroyed: false, destroy() { this.destroyed = true } }
+    const lateChannel = {
+      destroyed: false,
+      destroy() {
+        this.destroyed = true
+      }
+    }
     ssh2Harness.lateExecCallback?.(null, lateChannel as never)
     expect(lateChannel.destroyed).toBe(true)
     expect(ssh2Harness.clients[0]?.listenerCount('close')).toBe(1)

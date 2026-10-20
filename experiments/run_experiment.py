@@ -312,6 +312,8 @@ class SystemSshClient:
                 [
                     "-o",
                     f"UserKnownHostsFile={self.known_hosts_file}",
+                    "-o",
+                    "GlobalKnownHostsFile=NUL" if os.name == "nt" else "GlobalKnownHostsFile=/dev/null",
                 ]
             )
         ssh_args.extend(
