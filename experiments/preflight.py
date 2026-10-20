@@ -30,6 +30,7 @@ from experiments.run_experiment import (
     SshHostKeyError,
     SshKeyFileError,
     UnsupportedAuthTypeError,
+    measure_clock_offset_ms,
     resolve_ssh_client,
 )
 
@@ -39,22 +40,33 @@ MAX_HTTP_BYTES = 32 * 1024
 NETWORK_TIMEOUT_S = 5.0
 MIN_VCPU = 2
 MIN_RAM_BYTES = 4_000_000_000
+MIN_RAM_AVAILABLE_BYTES = 512 * 1024 * 1024
 MIN_DISK_BYTES = 40_000_000_000
 MIN_DISK_FREE_BYTES = 2_000_000_000
+MAX_CLOCK_SKEW_MS = 2_000
 EXPECTED_FEATURES = 5
 
-RESOURCE_COMMAND = """LC_ALL=C
+RESOURCE_COMMAND = """set -eu
+export LC_ALL=C
 printf 'PREFLIGHT_VERSION=1\\n'
-printf 'OS_ID='; (. /etc/os-release && printf '%s\\n' \"${ID:-unknown}\")
+printf 'OS_ID='; (. /etc/os-release && printf '%s\\n' "${ID:-unknown}")
 printf 'ARCH='; uname -m
 printf 'VCPU='; (getconf _NPROCESSORS_ONLN 2>/dev/null || nproc 2>/dev/null || printf '0'); printf '\\n'
-printf 'MEMTOTAL_BYTES='; awk '/^MemTotal:/ {printf \"%.0f\\n\", $2 * 1024}' /proc/meminfo
+printf 'MEMTOTAL_BYTES='; awk '/^MemTotal:/ {printf "%.0f\\n", $2 * 1024}' /proc/meminfo
+printf 'MEMAVAILABLE_BYTES='; awk '/^MemAvailable:/ {printf "%.0f\\n", $2 * 1024}' /proc/meminfo
 printf 'DISK_TOTAL_BYTES='; df -B1 --output=size / 2>/dev/null | tail -n 1 | tr -d ' '
 printf 'DISK_FREE_BYTES='; df -B1 --output=avail / 2>/dev/null | tail -n 1 | tr -d ' '
 printf 'NTP_SYNC='; (timedatectl show -p NTPSynchronized --value 2>/dev/null || printf 'unknown'); printf '\\n'
 printf 'DOCKER='; if command -v docker >/dev/null 2>&1; then printf 'yes\\n'; else printf 'no\\n'; fi
 printf 'COMPOSE='; if docker compose version >/dev/null 2>&1; then printf 'yes\\n'; else printf 'no\\n'; fi
-printf 'RUNNING_CONTAINERS='; (docker ps -q 2>/dev/null | wc -l | tr -d ' ' || printf '0'); printf '\\n'
+container_rows=$(docker ps --no-trunc --format '{{.ID}}|{{.Label "com.docker.compose.project"}}|{{.Label "com.docker.compose.service"}}|{{.Label "com.docker.compose.project.working_dir"}}|{{.Label "com.docker.compose.project.config_files"}}')
+printf 'CONTAINER_INVENTORY_BEGIN=1\\n'
+if [ -n "$container_rows" ]; then
+  while IFS= read -r row; do printf 'CONTAINER=%s\\n' "$row"; done <<EOF
+$container_rows
+EOF
+fi
+printf 'CONTAINER_INVENTORY_END=1\\n'
 """
 
 
@@ -225,36 +237,66 @@ def _parse_resource_output(output: str) -> dict[str, str] | None:
     if len(output.encode("utf-8", errors="replace")) > MAX_SSH_OUTPUT_BYTES:
         return None
     values: dict[str, str] = {}
+    container_records: list[str] = []
+    inventory_started = False
+    inventory_ended = False
     for line in output.splitlines():
         key, separator, value = line.partition("=")
+        if key == "CONTAINER":
+            if not separator or not inventory_started or inventory_ended or not value:
+                return None
+            container_records.append(value)
+            continue
+        if key == "CONTAINER_INVENTORY_BEGIN":
+            if not separator or value != "1" or inventory_started:
+                return None
+            inventory_started = True
+            continue
+        if key == "CONTAINER_INVENTORY_END":
+            if not separator or value != "1" or not inventory_started or inventory_ended:
+                return None
+            inventory_ended = True
+            continue
         if separator and key in {
             "PREFLIGHT_VERSION",
             "OS_ID",
             "ARCH",
             "VCPU",
             "MEMTOTAL_BYTES",
+            "MEMAVAILABLE_BYTES",
             "DISK_TOTAL_BYTES",
             "DISK_FREE_BYTES",
             "NTP_SYNC",
             "DOCKER",
             "COMPOSE",
-            "RUNNING_CONTAINERS",
         }:
+            if key in values:
+                return None
             values[key] = value[:100]
+        elif line.strip():
+            return None
     required = {
         "PREFLIGHT_VERSION",
         "OS_ID",
         "ARCH",
         "VCPU",
         "MEMTOTAL_BYTES",
+        "MEMAVAILABLE_BYTES",
         "DISK_TOTAL_BYTES",
         "DISK_FREE_BYTES",
         "NTP_SYNC",
         "DOCKER",
         "COMPOSE",
-        "RUNNING_CONTAINERS",
     }
-    return values if required.issubset(values) and values["PREFLIGHT_VERSION"] == "1" else None
+    if (
+        not required.issubset(values)
+        or values["PREFLIGHT_VERSION"] != "1"
+        or not inventory_started
+        or not inventory_ended
+    ):
+        return None
+    values["CONTAINER_RECORDS"] = "\n".join(container_records)
+    return values
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -357,7 +399,17 @@ def _check_app_health_policy(vps: dict[str, Any], app: dict[str, Any]) -> Gate:
             if len(body) > MAX_HTTP_BYTES or not 200 <= response.status < 300:
                 raise ValueError("health response rejected")
             if app["healthcheck_response_type"] == "json":
-                json.loads(body.decode("utf-8"))
+                payload = json.loads(body.decode("utf-8"))
+                if not isinstance(payload, dict):
+                    raise ValueError("health JSON must be an object")
+                if payload.get("ok") is False or payload.get("healthy") is False:
+                    raise ValueError("health JSON explicitly unhealthy")
+                status_value = payload.get("status")
+                if isinstance(status_value, str) and status_value.strip().lower() in {
+                    "error",
+                    "unhealthy",
+                }:
+                    raise ValueError("health JSON explicitly unhealthy")
             elif app["healthcheck_response_type"] != "status_2xx":
                 raise ValueError("unknown health policy")
             return _gate("APP_HEALTH", "PASS", "APP_HEALTH_POLICY_OK", status_code=response.status)
@@ -383,21 +435,91 @@ def _credential_state(auth_type: str, ssh_key_file: str | Path | None) -> tuple[
     return False, "SSH_CREDENTIAL_MISSING"
 
 
+def _dedicated_host_gate(
+    resources: dict[str, str], app: dict[str, Any], app_count: int
+) -> Gate:
+    raw_records = resources.get("CONTAINER_RECORDS")
+    if raw_records is None:
+        return _gate("DEDICATED_HOST", "BLOCKED", "CONTAINER_INVENTORY_UNAVAILABLE")
+
+    app_name = app.get("name")
+    if not isinstance(app_name, str) or re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,62}", app_name) is None:
+        return _gate("DEDICATED_HOST", "BLOCKED", "APP_STACK_IDENTITY_INVALID")
+
+    expected_services = {"app", "collector"}
+    if app.get("needs_db") == 1:
+        expected_services.add("postgres")
+    expected_working_dir = f"/opt/opspilot/{app_name}"
+    expected_config_file = f"{expected_working_dir}/docker-compose.yml"
+    seen_ids: set[str] = set()
+    seen_services: set[str] = set()
+    outside_stack = False
+    malformed = False
+    records = [line for line in raw_records.splitlines() if line]
+    for record in records:
+        fields = record.split("|")
+        if len(fields) != 5:
+            malformed = True
+            continue
+        container_id, project, service, working_dir, config_files = fields
+        if re.fullmatch(r"[0-9a-f]{12,64}", container_id) is None or container_id in seen_ids:
+            malformed = True
+            continue
+        seen_ids.add(container_id)
+        if (
+            project != app_name
+            or working_dir != expected_working_dir
+            or config_files != expected_config_file
+            or service not in expected_services
+        ):
+            outside_stack = True
+            continue
+        if service in seen_services:
+            malformed = True
+        seen_services.add(service)
+
+    details = {
+        "db_running_app_count": app_count,
+        "running_container_count": len(records),
+        "required_service_count": len(expected_services),
+    }
+    if malformed:
+        return _gate("DEDICATED_HOST", "BLOCKED", "CONTAINER_INVENTORY_INVALID", **details)
+    if outside_stack:
+        return _gate("DEDICATED_HOST", "BLOCKED", "CONTAINER_OUTSIDE_SELECTED_STACK", **details)
+    missing = expected_services - seen_services
+    if missing:
+        return _gate(
+            "DEDICATED_HOST",
+            "BLOCKED",
+            "REQUIRED_STACK_SERVICE_MISSING",
+            missing_service_count=len(missing),
+            **details,
+        )
+    if app_count != 1:
+        return _gate("DEDICATED_HOST", "BLOCKED", "OTHER_OPSPILOT_APPS_RUNNING", **details)
+    return _gate("DEDICATED_HOST", "PASS", "ONLY_SELECTED_APP_STACK_RUNNING", **details)
+
+
 def _protocol_gates(
     resources: dict[str, str],
     vps: dict[str, Any],
     app: dict[str, Any],
     deployment: dict[str, Any],
     app_count: int,
+    clock_offset: int | None,
 ) -> list[Gate]:
     try:
         vcpu = int(resources["VCPU"])
-        memory = int(resources["MEMTOTAL_BYTES"])
+        memory_total = int(resources["MEMTOTAL_BYTES"])
         disk = int(resources["DISK_TOTAL_BYTES"])
         disk_free = int(resources["DISK_FREE_BYTES"])
-        container_count = int(resources["RUNNING_CONTAINERS"])
     except (KeyError, ValueError):
         return [_gate("PROTOCOL_RESOURCES", "BLOCKED", "RESOURCE_SNAPSHOT_INVALID")]
+    try:
+        memory_available = int(resources["MEMAVAILABLE_BYTES"])
+    except (KeyError, ValueError):
+        memory_available = None
 
     gates = [
         _gate(
@@ -411,12 +533,31 @@ def _protocol_gates(
             architecture=resources.get("ARCH"),
         ),
         _gate("PROTOCOL_VCPU", "PASS" if vcpu >= MIN_VCPU else "BLOCKED", "VCPU_TARGET", actual=vcpu, required=MIN_VCPU),
-        _gate("PROTOCOL_RAM", "PASS" if memory >= MIN_RAM_BYTES else "BLOCKED", "RAM_TARGET_BYTES", actual=memory, required=MIN_RAM_BYTES),
+        _gate("PROTOCOL_RAM_CAPACITY", "PASS" if memory_total >= MIN_RAM_BYTES else "BLOCKED", "RAM_CAPACITY_REFERENCE", actual=memory_total, required=MIN_RAM_BYTES),
+        _gate(
+            "PROTOCOL_RAM_AVAILABLE",
+            "PASS" if memory_available is not None and memory_available > MIN_RAM_AVAILABLE_BYTES else "BLOCKED" if memory_available is not None else "NOT_RUN",
+            "RAM_AVAILABLE_GUARD" if memory_available is not None else "MEMAVAILABLE_NOT_REPORTED",
+            actual=memory_available,
+            required_strictly_greater_than=MIN_RAM_AVAILABLE_BYTES,
+        ),
         _gate("PROTOCOL_DISK_CAPACITY", "PASS" if disk >= MIN_DISK_BYTES else "BLOCKED", "DISK_40GB_TARGET", actual=disk, required=MIN_DISK_BYTES),
         _gate("PROTOCOL_DISK_FREE", "PASS" if disk_free > MIN_DISK_FREE_BYTES else "BLOCKED", "DEPLOY_FREE_DISK_GUARD", actual=disk_free, required_strictly_greater_than=MIN_DISK_FREE_BYTES),
-        _gate("PROTOCOL_CLOCK", "PASS" if resources.get("NTP_SYNC") == "yes" else "BLOCKED", "NTP_SYNC_REQUIRED", ntp_sync=resources.get("NTP_SYNC")),
-        _gate("PROTOCOL_DOCKER", "PASS" if resources.get("DOCKER") == "yes" and resources.get("COMPOSE") == "yes" else "BLOCKED", "DOCKER_COMPOSE_REQUIRED"),
+        _gate("PROTOCOL_NTP_SYNC", "PASS" if resources.get("NTP_SYNC") == "yes" else "BLOCKED", "NTP_SYNC_REQUIRED", ntp_sync=resources.get("NTP_SYNC")),
     ]
+    if clock_offset is None:
+        gates.append(_gate("PROTOCOL_CLOCK_OFFSET", "NOT_RUN", "CLOCK_OFFSET_NOT_MEASURED"))
+    else:
+        gates.append(
+            _gate(
+                "PROTOCOL_CLOCK_OFFSET",
+                "PASS" if abs(clock_offset) <= MAX_CLOCK_SKEW_MS else "BLOCKED",
+                "CLOCK_OFFSET_WITHIN_LIMIT" if abs(clock_offset) <= MAX_CLOCK_SKEW_MS else "CLOCK_SKEW_EXCEEDS_LIMIT",
+                offset_ms=clock_offset,
+                max_abs_offset_ms=MAX_CLOCK_SKEW_MS,
+            )
+        )
+    gates.append(_gate("PROTOCOL_DOCKER", "PASS" if resources.get("DOCKER") == "yes" and resources.get("COMPOSE") == "yes" else "BLOCKED", "DOCKER_COMPOSE_REQUIRED"))
     is_running = deployment.get("status") == "running"
     gates.append(_gate("SELECTED_DEPLOYMENT", "PASS" if is_running else "BLOCKED", "CURRENT_DEPLOYMENT_MUST_BE_RUNNING", deployment_status=deployment.get("status")))
     imported = app.get("imported_from_vps") == 1
@@ -429,18 +570,8 @@ def _protocol_gates(
             "EXPRESS_POSTGRESQL_APP_REQUIRED" if not expected_stack else "EXPECTED_EXPERIMENT_APP_STACK",
         )
     )
-    expected_containers = 1 + int(app.get("needs_db") == 1)
-    isolated = app_count == 1 and container_count == expected_containers
-    gates.append(
-        _gate(
-            "DEDICATED_HOST",
-            "PASS" if isolated else "BLOCKED",
-            "OTHER_APPS_OR_CONTAINERS_RUNNING" if not isolated else "ONLY_SELECTED_APP_CONTAINERS_RUNNING",
-            db_app_count=app_count,
-            running_container_count=container_count,
-            expected_selected_app_containers=expected_containers,
-        )
-    )
+    gates.append(_dedicated_host_gate(resources, app, app_count))
+
     declared_specs: dict[str, Any] = {}
     try:
         if vps.get("specs_json"):
@@ -471,6 +602,98 @@ def _protocol_gates(
     )
     return gates
 
+
+def _remote_observation_gates(
+    client: Any,
+    vps: dict[str, Any],
+    app: dict[str, Any],
+    deployment: dict[str, Any],
+    app_count: int,
+) -> list[Gate]:
+    gates: list[Gate] = []
+    try:
+        client.verify_connection(timeout=NETWORK_TIMEOUT_S)
+    except SshHostKeyError:
+        return [
+            _gate("SSH_TRANSPORT", "BLOCKED", "SSH_HOST_KEY_REJECTED"),
+            _gate("VPS_RESOURCES", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
+            _gate("DEDICATED_HOST", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
+            _gate("PROTOCOL_NTP_SYNC", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
+            _gate("PROTOCOL_CLOCK_OFFSET", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
+        ]
+    except SshAuthenticationError:
+        return [
+            _gate("SSH_TRANSPORT", "BLOCKED", "SSH_AUTHENTICATION_FAILED"),
+            _gate("VPS_RESOURCES", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
+            _gate("DEDICATED_HOST", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
+            _gate("PROTOCOL_NTP_SYNC", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
+            _gate("PROTOCOL_CLOCK_OFFSET", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
+        ]
+    except Exception:  # noqa: BLE001
+        return [
+            _gate("SSH_TRANSPORT", "BLOCKED", "SSH_CONNECTION_FAILED"),
+            _gate("VPS_RESOURCES", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
+            _gate("DEDICATED_HOST", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
+            _gate("PROTOCOL_NTP_SYNC", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
+            _gate("PROTOCOL_CLOCK_OFFSET", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
+        ]
+
+    gates.append(_gate("SSH_TRANSPORT", "PASS", "PINNED_SSH_AUTHENTICATED"))
+    try:
+        clock_offset = measure_clock_offset_ms(client)
+    except Exception:  # noqa: BLE001
+        clock_offset = None
+
+    try:
+        code, stdout, _stderr = client.exec(RESOURCE_COMMAND, timeout=NETWORK_TIMEOUT_S)
+    except Exception:  # noqa: BLE001
+        code, stdout = 1, ""
+    if code != 0 or len(stdout.encode("utf-8", errors="replace")) > MAX_SSH_OUTPUT_BYTES:
+        gates.extend(
+            [
+                _gate("VPS_RESOURCES", "BLOCKED", "READ_ONLY_INVENTORY_COMMAND_FAILED"),
+                _gate("DEDICATED_HOST", "BLOCKED", "CONTAINER_INVENTORY_UNAVAILABLE"),
+                _gate("PROTOCOL_NTP_SYNC", "NOT_RUN", "RESOURCE_SNAPSHOT_UNAVAILABLE"),
+            ]
+        )
+        gates.append(
+            _gate("PROTOCOL_CLOCK_OFFSET", "NOT_RUN", "CLOCK_OFFSET_NOT_MEASURED")
+            if clock_offset is None
+            else _gate(
+                "PROTOCOL_CLOCK_OFFSET",
+                "PASS" if abs(clock_offset) <= MAX_CLOCK_SKEW_MS else "BLOCKED",
+                "CLOCK_OFFSET_WITHIN_LIMIT" if abs(clock_offset) <= MAX_CLOCK_SKEW_MS else "CLOCK_SKEW_EXCEEDS_LIMIT",
+                offset_ms=clock_offset,
+                max_abs_offset_ms=MAX_CLOCK_SKEW_MS,
+            )
+        )
+        return gates
+
+    resources = _parse_resource_output(stdout)
+    if resources is None:
+        gates.extend(
+            [
+                _gate("VPS_RESOURCES", "BLOCKED", "RESOURCE_SNAPSHOT_INVALID"),
+                _gate("DEDICATED_HOST", "BLOCKED", "CONTAINER_INVENTORY_INVALID"),
+                _gate("PROTOCOL_NTP_SYNC", "NOT_RUN", "RESOURCE_SNAPSHOT_INVALID"),
+            ]
+        )
+        gates.append(
+            _gate("PROTOCOL_CLOCK_OFFSET", "NOT_RUN", "CLOCK_OFFSET_NOT_MEASURED")
+            if clock_offset is None
+            else _gate(
+                "PROTOCOL_CLOCK_OFFSET",
+                "PASS" if abs(clock_offset) <= MAX_CLOCK_SKEW_MS else "BLOCKED",
+                "CLOCK_OFFSET_WITHIN_LIMIT" if abs(clock_offset) <= MAX_CLOCK_SKEW_MS else "CLOCK_SKEW_EXCEEDS_LIMIT",
+                offset_ms=clock_offset,
+                max_abs_offset_ms=MAX_CLOCK_SKEW_MS,
+            )
+        )
+        return gates
+
+    gates.append(_gate("VPS_RESOURCES", "PASS", "READ_ONLY_RESOURCE_AND_CONTAINER_INVENTORY"))
+    gates.extend(_protocol_gates(resources, vps, app, deployment, app_count, clock_offset))
+    return gates
 
 def run_preflight(
     db_path: str | Path,
@@ -631,27 +854,16 @@ def run_preflight(
                             if client is None:
                                 gates.append(_gate("SSH_TRANSPORT", "BLOCKED", "SSH_CLIENT_UNAVAILABLE"))
                                 gates.append(_gate("VPS_RESOURCES", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"))
+                                gates.append(_gate("DEDICATED_HOST", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"))
+                                gates.append(_gate("PROTOCOL_NTP_SYNC", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"))
+                                gates.append(_gate("PROTOCOL_CLOCK_OFFSET", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"))
                             else:
                                 try:
-                                    client.verify_connection(timeout=NETWORK_TIMEOUT_S)
-                                    code, stdout, _stderr = client.exec(RESOURCE_COMMAND, timeout=NETWORK_TIMEOUT_S)
-                                    if code != 0 or len(stdout.encode("utf-8", errors="replace")) > MAX_SSH_OUTPUT_BYTES:
-                                        raise OSError("SSH resource command failed")
-                                    resources = _parse_resource_output(stdout)
-                                    if resources is None:
-                                        raise ValueError("SSH resource response invalid")
-                                    gates.append(_gate("SSH_TRANSPORT", "PASS", "PINNED_SSH_AUTHENTICATED"))
-                                    gates.append(_gate("VPS_RESOURCES", "PASS", "READ_ONLY_RESOURCE_SNAPSHOT"))
-                                    gates.extend(_protocol_gates(resources, vps, app, deployment, app_count))
-                                except Exception as exc:  # noqa: BLE001
-                                    if isinstance(exc, SshHostKeyError):
-                                        reason = "SSH_HOST_KEY_REJECTED"
-                                    elif isinstance(exc, SshAuthenticationError):
-                                        reason = "SSH_AUTHENTICATION_FAILED"
-                                    else:
-                                        reason = "SSH_READ_ONLY_CHECK_FAILED"
-                                    gates.append(_gate("SSH_TRANSPORT", "BLOCKED", reason))
-                                    gates.append(_gate("VPS_RESOURCES", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"))
+                                    gates.extend(
+                                        _remote_observation_gates(
+                                            client, vps, app, deployment, app_count
+                                        )
+                                    )
                                 finally:
                                     client.close()
                 except SshKeyFileError:
@@ -666,9 +878,20 @@ def run_preflight(
                     gates.append(_gate("SSH_HOST_KEY", "BLOCKED", "HOST_KEY_SCAN_FAILED_OR_PIN_MISMATCH"))
                     gates.append(_gate("SSH_TRANSPORT", "NOT_RUN", "HOST_KEY_PIN_NOT_MATCHED"))
                     gates.append(_gate("VPS_RESOURCES", "NOT_RUN", "HOST_KEY_PIN_NOT_MATCHED"))
+                    gates.append(_gate("DEDICATED_HOST", "NOT_RUN", "HOST_KEY_PIN_NOT_MATCHED"))
+                    gates.append(_gate("PROTOCOL_NTP_SYNC", "NOT_RUN", "HOST_KEY_PIN_NOT_MATCHED"))
+                    gates.append(_gate("PROTOCOL_CLOCK_OFFSET", "NOT_RUN", "HOST_KEY_PIN_NOT_MATCHED"))
 
     if not any(g.name == "PROTOCOL_PROVIDER_PAIR" for g in gates):
         gates.append(_gate("PROTOCOL_PROVIDER_PAIR", "NOT_RUN", "SECOND_VPS_NOT_SELECTED_OR_VERIFIED"))
+    for gate_name in (
+        "DEDICATED_HOST",
+        "PROTOCOL_RAM_AVAILABLE",
+        "PROTOCOL_NTP_SYNC",
+        "PROTOCOL_CLOCK_OFFSET",
+    ):
+        if not any(g.name == gate_name for g in gates):
+            gates.append(_gate(gate_name, "NOT_RUN", "REMOTE_EVIDENCE_UNAVAILABLE"))
     blocked = any(g.status == "BLOCKED" for g in gates)
     not_run = any(g.status == "NOT_RUN" for g in gates)
     report = {

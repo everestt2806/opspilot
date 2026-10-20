@@ -74,28 +74,50 @@ def _profile(
 
 def _resource_output(
     *, vcpu: int = 2, ram: int = 4_100_000_000, disk: int = 50_000_000_000,
-    free: int = 45_000_000_000, containers: int = 2, ntp: str = "yes"
+    available: int = 1_000_000_000, free: int = 45_000_000_000,
+    containers: int = 3, ntp: str = "yes",
+    container_records: list[str] | None = None,
 ) -> str:
-    return "\n".join(
-        [
+    if container_records is None:
+        base = _valid_container_records()
+        container_records = base[:containers]
+        container_records.extend(
+            f"{'f' * (64 - len(str(index)))}{index}|outside-project|service{index}|/opt/other|/opt/other/docker-compose.yml"
+            for index in range(max(0, containers - len(base)))
+        )
+    lines = [
             "PREFLIGHT_VERSION=1",
             "OS_ID=ubuntu",
             "ARCH=x86_64",
             f"VCPU={vcpu}",
             f"MEMTOTAL_BYTES={ram}",
+            f"MEMAVAILABLE_BYTES={available}",
             f"DISK_TOTAL_BYTES={disk}",
             f"DISK_FREE_BYTES={free}",
             f"NTP_SYNC={ntp}",
             "DOCKER=yes",
             "COMPOSE=yes",
-            f"RUNNING_CONTAINERS={containers}",
         ]
-    )
+    lines.append("CONTAINER_INVENTORY_BEGIN=1")
+    lines.extend(f"CONTAINER={record}" for record in container_records)
+    lines.append("CONTAINER_INVENTORY_END=1")
+    return "\n".join(lines)
+
+
+def _valid_container_records(app_name: str = "app-1") -> list[str]:
+    working_dir = f"/opt/opspilot/{app_name}"
+    compose_file = f"{working_dir}/docker-compose.yml"
+    return [
+        f"{'a' * 64}|{app_name}|app|{working_dir}|{compose_file}",
+        f"{'b' * 64}|{app_name}|postgres|{working_dir}|{compose_file}",
+        f"{'c' * 64}|{app_name}|collector|{working_dir}|{compose_file}",
+    ]
 
 
 class FakeSshClient:
-    def __init__(self, resource_output: str) -> None:
+    def __init__(self, resource_output: str, *, command_code: int = 0) -> None:
         self.resource_output = resource_output
+        self.command_code = command_code
         self.commands: list[str] = []
         self.closed = False
 
@@ -104,13 +126,15 @@ class FakeSshClient:
 
     def exec(self, command: str, timeout: float) -> tuple[int, str, str]:
         self.commands.append(command)
-        return 0, self.resource_output, "secret-like stderr must not be reported"
+        return self.command_code, self.resource_output, "secret-like stderr must not be reported"
 
     def close(self) -> None:
         self.closed = True
 
 
-def _configure_readonly_io(monkeypatch: pytest.MonkeyPatch, output: str | None = None) -> dict[str, object]:
+def _configure_readonly_io(
+    monkeypatch: pytest.MonkeyPatch, output: str | None = None, *, command_code: int = 0
+) -> dict[str, object]:
     captured: dict[str, object] = {}
     monkeypatch.setenv("OPSPILOT_SSH_SECRET", SECRET_SENTINEL)
     monkeypatch.delenv("OPSPILOT_SSH_KEY_FILE", raising=False)
@@ -127,8 +151,9 @@ def _configure_readonly_io(monkeypatch: pytest.MonkeyPatch, output: str | None =
         "check_ml_endpoint",
         lambda _url, _deployment_id: ([preflight._gate("ML_ENDPOINT", "PASS", "ML_HEALTH_AND_STATUS_OK")], {"trained": False}),
     )
+    monkeypatch.setattr(preflight, "measure_clock_offset_ms", lambda _client: 0)
 
-    client = FakeSshClient(output or _resource_output())
+    client = FakeSshClient(output or _resource_output(), command_code=command_code)
 
     def resolve(**kwargs):
         captured["query_only"] = kwargs["conn"].execute("PRAGMA query_only").fetchone()[0]
@@ -192,11 +217,9 @@ def test_profile_connection_is_readonly_and_no_other_app_keeps_host_blocked(tmp_
     report = preflight.run_preflight(db_path, 1, 1, "http://127.0.0.1:8765")
     dedicated = _gate(report, "DEDICATED_HOST")
     assert dedicated["status"] == "BLOCKED"
-    assert dedicated["details"] == {
-        "db_app_count": 4,
-        "running_container_count": 9,
-        "expected_selected_app_containers": 2,
-    }
+    assert dedicated["reason"] == "CONTAINER_OUTSIDE_SELECTED_STACK"
+    assert dedicated["details"]["db_running_app_count"] == 4  # type: ignore[index]
+    assert dedicated["details"]["running_container_count"] == 9  # type: ignore[index]
     assert report["overall"] == "BLOCKED"
 
 
@@ -217,9 +240,165 @@ def test_under_spec_host_is_blocked_without_lowering_thresholds(tmp_path: Path, 
     )
     report = preflight.run_preflight(db_path, 1, 1, "http://127.0.0.1:8765")
     assert _gate(report, "PROTOCOL_VCPU")["status"] == "BLOCKED"
-    assert _gate(report, "PROTOCOL_RAM")["status"] == "BLOCKED"
+    assert _gate(report, "PROTOCOL_RAM_CAPACITY")["status"] == "BLOCKED"
     assert _gate(report, "PROTOCOL_DISK_CAPACITY")["status"] == "BLOCKED"
     assert _gate(report, "PROTOCOL_DISK_FREE")["status"] == "PASS"
+
+
+def test_selected_compose_stack_requires_app_database_and_collector(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _profile(tmp_path)
+    _configure_readonly_io(monkeypatch, _resource_output())
+    report = preflight.run_preflight(db_path, 1, 1, "http://127.0.0.1:8765")
+    assert _gate(report, "DEDICATED_HOST")["status"] == "PASS"
+    assert _gate(report, "DEDICATED_HOST")["details"]["required_service_count"] == 3  # type: ignore[index]
+
+
+@pytest.mark.parametrize("missing_service", ["app", "postgres", "collector"])
+def test_missing_required_service_blocks_even_when_other_stack_labels_match(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing_service: str
+) -> None:
+    db_path = _profile(tmp_path)
+    records = [
+        record
+        for record in _valid_container_records()
+        if record.split("|")[2] != missing_service
+    ]
+    _configure_readonly_io(monkeypatch, _resource_output(container_records=records))
+    report = preflight.run_preflight(db_path, 1, 1, "http://127.0.0.1:8765")
+    assert _gate(report, "DEDICATED_HOST")["reason"] == "REQUIRED_STACK_SERVICE_MISSING"
+
+
+@pytest.mark.parametrize("bad_inventory", ["", "broken", "no end marker"])
+def test_inventory_error_blocks_dedicated_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bad_inventory: str
+) -> None:
+    db_path = _profile(tmp_path)
+    _configure_readonly_io(monkeypatch, bad_inventory, command_code=1 if bad_inventory == "" else 0)
+    report = preflight.run_preflight(db_path, 1, 1, "http://127.0.0.1:8765")
+    assert _gate(report, "DEDICATED_HOST")["status"] == "BLOCKED"
+    if bad_inventory == "":
+        assert _gate(report, "DEDICATED_HOST")["reason"] == "CONTAINER_INVENTORY_UNAVAILABLE"
+    else:
+        assert _gate(report, "DEDICATED_HOST")["reason"] == "CONTAINER_INVENTORY_INVALID"
+
+
+def test_low_available_memory_blocks_even_when_total_ram_meets_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _profile(tmp_path)
+    _configure_readonly_io(monkeypatch, _resource_output(ram=8_000_000_000, available=300_000_000))
+    report = preflight.run_preflight(db_path, 1, 1, "http://127.0.0.1:8765")
+    assert _gate(report, "PROTOCOL_RAM_CAPACITY")["status"] == "PASS"
+    assert _gate(report, "PROTOCOL_RAM_AVAILABLE")["status"] == "BLOCKED"
+
+
+def test_missing_memavailable_is_not_run_and_never_inferred_from_total_ram(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _profile(tmp_path)
+    output = _resource_output(ram=8_000_000_000).replace(
+        "MEMAVAILABLE_BYTES=1000000000", "MEMAVAILABLE_BYTES="
+    )
+    _configure_readonly_io(monkeypatch, output)
+    report = preflight.run_preflight(db_path, 1, 1, "http://127.0.0.1:8765")
+    assert _gate(report, "PROTOCOL_RAM_CAPACITY")["status"] == "PASS"
+    assert _gate(report, "PROTOCOL_RAM_AVAILABLE")["status"] == "NOT_RUN"
+
+
+def test_ntp_sync_does_not_substitute_for_clock_offset_measurement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _profile(tmp_path)
+    _configure_readonly_io(monkeypatch, _resource_output(ntp="yes"))
+    monkeypatch.setattr(preflight, "measure_clock_offset_ms", lambda _client: 2_501)
+    report = preflight.run_preflight(db_path, 1, 1, "http://127.0.0.1:8765")
+    assert _gate(report, "PROTOCOL_NTP_SYNC")["status"] == "PASS"
+    assert _gate(report, "PROTOCOL_CLOCK_OFFSET")["status"] == "BLOCKED"
+
+
+def test_unavailable_clock_measurement_is_not_run_despite_ntp_yes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _profile(tmp_path)
+    _configure_readonly_io(monkeypatch, _resource_output(ntp="yes"))
+
+    def measurement_unavailable(_client):
+        raise TimeoutError("sensitive/raw detail must not escape")
+
+    monkeypatch.setattr(preflight, "measure_clock_offset_ms", measurement_unavailable)
+    report = preflight.run_preflight(db_path, 1, 1, "http://127.0.0.1:8765")
+    assert _gate(report, "PROTOCOL_NTP_SYNC")["status"] == "PASS"
+    assert _gate(report, "PROTOCOL_CLOCK_OFFSET")["status"] == "NOT_RUN"
+    assert "sensitive/raw" not in json.dumps(report)
+
+
+def test_clock_offset_is_not_run_when_transport_is_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = _profile(tmp_path)
+    monkeypatch.delenv("OPSPILOT_SSH_SECRET", raising=False)
+    monkeypatch.delenv("OPSPILOT_DEPLOY_SECRET", raising=False)
+    monkeypatch.delenv("OPSPILOT_SSH_KEY_FILE", raising=False)
+    report = preflight.run_preflight(db_path, 1, 1, None)
+    assert _gate(report, "PROTOCOL_NTP_SYNC")["status"] == "NOT_RUN"
+    assert _gate(report, "PROTOCOL_CLOCK_OFFSET")["status"] == "NOT_RUN"
+
+
+class _FakeHttpResponse:
+    status = 200
+
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return None
+
+    def read(self, _limit: int) -> bytes:
+        return self.body
+
+
+class _FakeHttpOpener:
+    def __init__(self, body: bytes) -> None:
+        self.response = _FakeHttpResponse(body)
+
+    def open(self, *_args, **_kwargs):
+        return self.response
+
+
+@pytest.mark.parametrize(
+    ("policy", "body", "status"),
+    [
+        ("json", b'{"ok":false}', "BLOCKED"),
+        ("json", b'{"status":"unhealthy"}', "BLOCKED"),
+        ("json", b"null", "BLOCKED"),
+        ("json", b"[]", "BLOCKED"),
+        ("json", b"not json", "BLOCKED"),
+        ("json", b'{"ok":true,"status":"healthy"}', "PASS"),
+        ("status_2xx", b"<!doctype html><h1>Healthy</h1>", "PASS"),
+    ],
+)
+def test_health_policy_respects_json_health_and_status_only_html(
+    monkeypatch: pytest.MonkeyPatch, policy: str, body: bytes, status: str
+) -> None:
+    monkeypatch.setattr(
+        preflight.urllib.request,
+        "build_opener",
+        lambda *_args, **_kwargs: _FakeHttpOpener(body),
+    )
+    gate = preflight._check_app_health_policy(
+        {"host": "127.0.0.1", "port": 22},
+        {
+            "host_port": 30000,
+            "healthcheck_path": "/health",
+            "healthcheck_response_type": policy,
+        },
+    )
+    assert gate.status == status
 
 
 @pytest.mark.parametrize(
