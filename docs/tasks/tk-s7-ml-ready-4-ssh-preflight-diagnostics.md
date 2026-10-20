@@ -39,3 +39,46 @@
 - `git diff --check`: PASS.
 - Implementation/evidence commit: `961979da8f87bb2e7fe8aa8610f4cb7cbda35d6e`; local only, no push/PR/merge.
 - No SSH raw output, credential, complete fingerprint or key material is stored in reports. No deployment, pilot, fault, load generation, VPS writes or service changes.
+
+## Correction — runner transport is separate from SshManager
+
+### START 20/10
+
+- Reviewed task-discipline, `CLAUDE.md`, `DECISIONS.md`, this checkpoint and board.
+- Scope: make `SSH_TRANSPORT` describe the experiment runner's own `resolve_ssh_client` / `SystemSshClient`; retain SshManager results as separate read-only diagnostic evidence. Add snapshot identity/time/freshness and ensure replayed data never counts as live. No deployment or VPS changes.
+
+### Findings and implementation
+
+- The earlier Python path created `VerifiedSshSnapshotClient`; its `verify_connection()` did nothing and it replayed SshManager's resource output. That made the runner's `SSH_TRANSPORT=PASS` claim unsupported. The earlier live SshManager measurements remain historical evidence for the app connection only; the old runner-PASS claim is superseded by this correction.
+- Python now always resolves the runner client with an isolated known_hosts file and saved key material. The runner must pass strict host-key/authentication verification and execute the fixed read-only resource command successfully before `SSH_TRANSPORT=PASS`. Resource PASS details identify `experiment_runner.SystemSshClient`, collection time, VPS ID, endpoint and 5-minute freshness limit.
+- SshManager snapshot now carries source `SshManager`, UTC collection time, target VPS ID and endpoint. Python validates schema, target, endpoint, timestamp and a five-minute freshness bound, but labels a valid snapshot `RECORDED_NOT_LIVE_PROOF`; it never uses snapshot resource output or clock data for readiness. Stale/invalid snapshots are reported as not usable. The separate runner connection must generate any live PASS.
+- Strict host-key verification remains enabled with an isolated known_hosts file containing only key material whose SHA-256 matches the saved profile pin. No new pin is trusted and no global known_hosts is changed.
+
+### Fresh read-only live result
+
+- Used the existing clone `%TEMP%\opspilot-live0-20261020`, VPS/app 1/1, endpoint `160.191.243.89:22`; profile DB query-only, existing credential handoff. No source profile, model state, app, container, DNS, firewall or service was changed.
+- TCP/banner: PASS, 120 ms.
+- SshManager pinned handshake/auth: PASS, 2,620 ms; verified key type `ssh-rsa` (fingerprint omitted). Its fixed read-only clock command: PASS, 1,159 ms, offset +686 ms. Its resource inventory: PASS, 672 ms, 1,900 bytes. These are SshManager observations only.
+- Runner strict host-key verification: PASS. Runner authentication: BLOCKED with sanitized `SSH_AUTHENTICATION_FAILED`; its inventory was NOT_RUN. The report does not contain raw OpenSSH stderr, so the precise underlying authentication rejection detail is unavailable. This does not indicate a bad pin: runner strict host-key verification passed and SshManager authenticated with the saved pin. The OpenSSH authentication issue remains unresolved; no claim that its cause was fixed.
+- Launcher and preflight exit code: 2 (BLOCKED). Cleanup: PASS; no cleanup failure marker, no `opspilot-ml-preflight-*` scratch directory remained, and no Electron process remained.
+- Pilot remains BLOCKED: explicit local ML endpoint unavailable; protocol dedicated-host gate cannot pass with the current multi-app VPS; disk total is below 40 GB; provider/spec metadata and provider-pair evidence are absent/NOT_RUN. The new run stopped before fresh VPS resource inventory through the runner, so historical resource values are not substituted as current evidence.
+
+### Evidence
+
+- New evidence only; historical ML-READY-4 and ML-READY-3 evidence were preserved: `docs/evidence/tk-s7-ml-ready-4-correction/`.
+- Fresh `preflight-report.json` SHA-256: `7cc0396ac6b603de6a09424ed26bc6ddb92bbdd117366a76b1c7598428162fd3`.
+- Fresh `ssh-diagnostic.json` SHA-256: `7fc1c3d40baab5f80b0c5fdbf501a36ca5531cafafb3523b76bee371263b23e0`.
+- `launcher-result.json` SHA-256: `25afc112e59fd47598ec6a229fc12225f5457ed9161f795d1050c14c53cde475`; records launcher/preflight exit 2 and cleanup result without raw output or secret.
+
+### Gates and handoff
+
+- `ml-service/.venv/Scripts/python.exe -m pytest experiments/tests/test_preflight.py -q`: 53 passed.
+- `ml-service/.venv/Scripts/python.exe -m pytest experiments/tests/test_runner_e2e.py -q`: 37 passed.
+- `ml-service/.venv/Scripts/python.exe -m ruff check experiments/preflight.py experiments/tests/test_preflight.py`: pass.
+- Node 22.23.3: `pnpm --filter @opspilot/app typecheck:node`, `pnpm --filter @opspilot/app exec tsc -p tsconfig.scripts.json --noEmit`, and scoped ESLint on `scripts/ml-preflight-live.ts`: pass, no diagnostics.
+- Node 22.23.3 Vitest `src/main/crypto/credentialHandoff.test.ts`: 12 passed.
+- `git diff --check`: pass (after final documentation/evidence update).
+- Fresh VPS run was strictly read-only. No deploy, service/firewall/DNS change, stop, fault, loadgen or experiment/pilot.
+- UPDATE 20/10: runner readiness no longer inferred from SshManager; new live outcome is runner authentication BLOCKED after strict host-key PASS. No evidence supports replacing the saved pin.
+- Code/evidence commit: `e8b9ad14bd95b8241c6ef7cd413917eed6aeb8b2`; local only.
+- HANDOFF-LOCAL 20/10 — `e8b9ad14bd95b8241c6ef7cd413917eed6aeb8b2` · 90 Python tests + 12 Vitest pass; Node 22 typecheck/scoped lint, Ruff and diff check pass · evidence `docs/evidence/tk-s7-ml-ready-4-correction/`. No push/PR/merge.
