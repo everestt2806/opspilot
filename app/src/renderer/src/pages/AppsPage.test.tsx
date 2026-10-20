@@ -158,6 +158,29 @@ describe(
     beforeEach(() => {
       vi.clearAllMocks()
       useUiState.setState({ locale: 'vi', selectedAppId: null })
+      Object.defineProperty(window, 'matchMedia', {
+        configurable: true,
+        value: (media: string) => ({
+          matches: false,
+          media,
+          onchange: null,
+          addListener: () => {},
+          removeListener: () => {},
+          addEventListener: () => {},
+          removeEventListener: () => {},
+          dispatchEvent: () => false
+        })
+      })
+      if (!window.ResizeObserver) {
+        Object.defineProperty(window, 'ResizeObserver', {
+          configurable: true,
+          value: class {
+            observe = (): void => undefined
+            unobserve = (): void => undefined
+            disconnect = (): void => undefined
+          }
+        })
+      }
     })
 
     afterEach(() => {
