@@ -30,7 +30,7 @@ Không chạy thí nghiệm, start/deploy/reset/train/ingest/loadgen/fault hoặ
 - Sửa truy vấn tương thích profile cũ chưa có `healthcheck_response_type`, dùng mặc định `status_2xx` đúng hợp đồng/migration; sửa lỗi `status` bị truyền trùng vào `_gate` làm protocol checker ném exception.
 - Offline gates: `pytest experiments/tests/test_preflight.py` — 19 passed; `pytest experiments/tests/test_runner_e2e.py` — 37 passed; scoped Ruff — All checks passed; `git diff --check` — PASS. TypeScript không thay đổi, Node22 gate N/A.
 - Live read-only CLI lúc `2026-10-20T11:36:46Z`: profile selection PASS (VPS 1/app 1/deployment 7), app health HTTP 200, DB read-only PASS, pin hiện diện; tổng BLOCKED vì ML endpoint chưa được cấu hình tường minh và credential handoff thiếu. SSH host-key scan, SSH resource snapshot, live resource/protocol và second-provider-pair đều NOT_RUN. Không tuyên bố SSH/VPS inventory live PASS.
-- Evidence report không chứa host, credential, fingerprint hay SSH output. Hash ghi ở board sau commit artifact.
+- Evidence report không chứa host, credential, fingerprint hay SSH output. Implementation/evidence commit: `62069be274501295ba088f002f52ad3f435990cd`. Report SHA-256: `38a9e3086e9df07bcfa1f56dd328ff9ea61a420ac9f7249f4b44b56eced23d77`.
 
 ## BLOCKED — live SSH
 
