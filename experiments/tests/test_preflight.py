@@ -944,9 +944,41 @@ def test_ssh_timeout_closes_temporary_key_file(tmp_path: Path, monkeypatch: pyte
         lambda *_args, **_kwargs: (_ for _ in ()).throw(subprocess.TimeoutExpired("ssh", 5)),
     )
     code, stdout, stderr = client.exec("true", timeout=5)
-    assert code == 124 and stdout == "" and "timed out" in stderr
+    assert code == 124 and stdout == "" and stderr == "SSH_TIMEOUT"
+    assert client.last_error_code == "SSH_TIMEOUT"
     client.close()
     assert not key_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("diagnostic", "expected"),
+    [
+        ("Load key: invalid format SECRET_SENTINEL", "SSH_KEY_FORMAT_ERROR"),
+        ("WARNING: UNPROTECTED PRIVATE KEY FILE! bad permissions SECRET_SENTINEL", "SSH_KEY_PERMISSION_ERROR"),
+        ("no mutual signature algorithm SECRET_SENTINEL", "SSH_UNSUPPORTED_ALGORITHM"),
+        ("Permission denied (publickey) SECRET_SENTINEL", "SSH_AUTHENTICATION_FAILED"),
+        ("Host key verification failed SECRET_SENTINEL", "SSH_HOST_KEY_FAILURE"),
+    ],
+)
+def test_ssh_failure_classification_is_allowlisted_and_redacted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, diagnostic: str, expected: str
+) -> None:
+    monkeypatch.setattr(runner, "_restrict_windows_key_acl", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=255, stdout="", stderr=diagnostic),
+    )
+    client = runner.SystemSshClient(host="fixture.invalid", secret=SECRET_SENTINEL)
+    code, _stdout, safe_stderr = client.exec("true")
+    assert code == 255
+    assert safe_stderr == expected == client.last_error_code
+    assert SECRET_SENTINEL not in safe_stderr
+    with pytest.raises(runner.SshError) as caught:
+        client.verify_connection()
+    assert caught.value.reason_code == expected
+    assert SECRET_SENTINEL not in str(caught.value)
+    client.close()
 
 
 @pytest.mark.skipif(__import__("os").name != "nt", reason="Windows DACL validation")

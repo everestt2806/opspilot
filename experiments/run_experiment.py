@@ -125,6 +125,30 @@ class ExperimentError(Exception):
 class SshError(ExperimentError):
     """Ngoại lệ chung cho lỗi kết nối hoặc thực thi SSH."""
 
+    def __init__(self, message: str, *, reason_code: str = "SSH_FAILURE") -> None:
+        super().__init__(message)
+        self.reason_code = reason_code
+
+
+_SSH_ERROR_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("SSH_KEY_FORMAT_ERROR", ("invalid format", "error in libcrypto", "not a valid key file")),
+    ("SSH_KEY_PERMISSION_ERROR", ("bad permissions", "permissions are too open", "private key file is too accessible")),
+    ("SSH_UNSUPPORTED_ALGORITHM", ("no mutual signature algorithm", "no matching host key type", "no matching key exchange method", "unsupported key type")),
+    ("SSH_HOST_KEY_FAILURE", ("host key verification failed", "host identification has changed", "remote host identification has changed")),
+    ("SSH_AUTHENTICATION_FAILED", ("permission denied", "authentication failed", "too many authentication failures")),
+)
+
+
+def _classify_ssh_error(stderr: str) -> str:
+    """Map OpenSSH diagnostics to stable allowlist codes without retaining text."""
+    lowered = stderr.lower()
+    for reason_code, needles in _SSH_ERROR_PATTERNS:
+        if any(needle in lowered for needle in needles):
+            return reason_code
+    if "could not resolve hostname" in lowered or "connection refused" in lowered or "connection reset" in lowered:
+        return "SSH_CONNECTION_FAILED"
+    return "SSH_COMMAND_FAILED"
+
 
 class UnsupportedAppError(ExperimentError):
     """Ném ra khi ứng dụng không được hỗ trợ trong orchestrator thí nghiệm pilot."""
@@ -137,9 +161,15 @@ class UnsupportedAuthTypeError(SshError):
 class SshAuthenticationError(SshError):
     """Ném ra khi xác thực SSH thất bại (sai key, permission denied)."""
 
+    def __init__(self, message: str, *, reason_code: str = "SSH_AUTHENTICATION_FAILED") -> None:
+        super().__init__(message, reason_code=reason_code)
+
 
 class SshHostKeyError(SshError):
     """Ném ra khi kiểm tra host key thất bại (Host key verification failed)."""
+
+    def __init__(self, message: str, *, reason_code: str = "SSH_HOST_KEY_FAILURE") -> None:
+        super().__init__(message, reason_code=reason_code)
 
 
 class SshKeyFileError(ExperimentError):
@@ -225,6 +255,7 @@ class SystemSshClient:
 
         self._temp_dir: tempfile.TemporaryDirectory[str] | None = None
         self._effective_key_file: Path | None = None
+        self.last_error_code: str | None = None
 
         if key_file is not None:
             self._effective_key_file = Path(key_file)
@@ -288,6 +319,7 @@ class SystemSshClient:
 
     def exec(self, cmd: str, timeout: float | None = None) -> tuple[int, str, str]:
         """Thực thi lệnh shell trên VPS qua ssh binary."""
+        self.last_error_code = None
         effective_timeout = timeout if timeout is not None else self.timeout
         ssh_args = [
             "ssh",
@@ -345,25 +377,28 @@ class SystemSshClient:
                 check=False,
             )
             stdout = res.stdout
-            stderr = res.stderr
             if self._secret:
                 stdout = stdout.replace(self._secret, "******")
-                stderr = stderr.replace(self._secret, "******")
-                stripped_sec = self._secret.strip()
-                if stripped_sec:
-                    stdout = stdout.replace(stripped_sec, "******")
-                    stderr = stderr.replace(stripped_sec, "******")
+                stderr = res.stderr.replace(self._secret, "******")
+                stripped_secret = self._secret.strip()
+                if stripped_secret:
+                    stdout = stdout.replace(stripped_secret, "******")
+                    stderr = stderr.replace(stripped_secret, "******")
+            else:
+                stderr = res.stderr
+            if res.returncode != 0:
+                self.last_error_code = _classify_ssh_error(stderr)
+                return res.returncode, stdout, self.last_error_code
             return res.returncode, stdout, stderr
         except subprocess.TimeoutExpired:
-            return 124, "", f"SSH command timed out after {effective_timeout}s"
-        except Exception as e:  # noqa: BLE001
-            err_msg = str(e)
-            if self._secret:
-                err_msg = err_msg.replace(self._secret, "******")
-                stripped_sec = self._secret.strip()
-                if stripped_sec:
-                    err_msg = err_msg.replace(stripped_sec, "******")
-            return 1, "", f"SSH execution error: {err_msg}"
+            self.last_error_code = "SSH_TIMEOUT"
+            return 124, "", self.last_error_code
+        except FileNotFoundError:
+            self.last_error_code = "SSH_EXECUTABLE_UNAVAILABLE"
+            return 127, "", self.last_error_code
+        except Exception:  # noqa: BLE001 - details may contain paths or sensitive process data
+            self.last_error_code = "SSH_PROCESS_FAILED"
+            return 1, "", self.last_error_code
 
     def exec_command(self, cmd: str, timeout: float = 15.0) -> tuple[int, str, str]:
         """Hỗ trợ giao diện tương thích Paramiko / _exec_ssh."""
@@ -375,28 +410,15 @@ class SystemSshClient:
         Chạy một lệnh no-op ('true') để kiểm tra tính hợp lệ của credential và host key.
         Ném ra ngoại lệ tương ứng nếu xác thực hoặc kiểm tra host key thất bại.
         """
-        code, _stdout, stderr = self.exec("true", timeout=timeout)
+        code, _stdout, _stderr = self.exec("true", timeout=timeout)
         if code == 0:
             return
-
-        lower_err = stderr.lower()
-        if (
-            "host key verification failed" in lower_err
-            or "host identification has changed" in lower_err
-            or "no hostkey alg" in lower_err
-        ):
-            raise SshHostKeyError(
-                f"SSH Host Key verification failed for {self.username}@{self.host}:{self.port}: {stderr.strip()}"
-            )
-
-        if "permission denied" in lower_err or "authentication failed" in lower_err:
-            raise SshAuthenticationError(
-                f"SSH authentication failed for {self.username}@{self.host}:{self.port}: {stderr.strip()}"
-            )
-
-        raise SshError(
-            f"SSH connection failed (code {code}) for {self.username}@{self.host}:{self.port}: {stderr.strip()}"
-        )
+        reason_code = self.last_error_code or "SSH_CONNECTION_FAILED"
+        if reason_code == "SSH_HOST_KEY_FAILURE":
+            raise SshHostKeyError("SSH host key verification failed", reason_code=reason_code)
+        if reason_code == "SSH_AUTHENTICATION_FAILED":
+            raise SshAuthenticationError("SSH authentication rejected", reason_code=reason_code)
+        raise SshError("SSH connection failed", reason_code=reason_code)
 
 
 def read_ssh_key_file(key_file: str | Path) -> str:

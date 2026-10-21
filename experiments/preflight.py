@@ -27,6 +27,7 @@ from typing import Any
 
 from experiments.run_experiment import (
     SshAuthenticationError,
+    SshError,
     SshHostKeyError,
     SshKeyFileError,
     UnsupportedAuthTypeError,
@@ -729,19 +730,20 @@ def _remote_observation_gates(
             _gate("PROTOCOL_NTP_SYNC", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
             _gate("PROTOCOL_CLOCK_OFFSET", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
         ]
-    except SshAuthenticationError:
+    except SshAuthenticationError as exc:
         return [
             _gate("SSH_HOST_KEY", "PASS", "RUNNER_STRICT_HOST_KEY_CHECK_PASSED"),
-            _gate("SSH_TRANSPORT", "BLOCKED", "SSH_AUTHENTICATION_FAILED"),
+            _gate("SSH_TRANSPORT", "BLOCKED", exc.reason_code),
             _gate("VPS_RESOURCES", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
             _gate("DEDICATED_HOST", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
             _gate("PROTOCOL_NTP_SYNC", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
             _gate("PROTOCOL_CLOCK_OFFSET", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
         ]
-    except Exception:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001
+        reason = exc.reason_code if isinstance(exc, SshError) else "SSH_CONNECTION_FAILED"
         return [
             _gate("SSH_HOST_KEY", "NOT_RUN", "RUNNER_HOST_KEY_CHECK_NOT_CONFIRMED"),
-            _gate("SSH_TRANSPORT", "BLOCKED", "SSH_CONNECTION_FAILED"),
+            _gate("SSH_TRANSPORT", "BLOCKED", reason),
             _gate("VPS_RESOURCES", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
             _gate("DEDICATED_HOST", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
             _gate("PROTOCOL_NTP_SYNC", "NOT_RUN", "SSH_TRANSPORT_NOT_VERIFIED"),
