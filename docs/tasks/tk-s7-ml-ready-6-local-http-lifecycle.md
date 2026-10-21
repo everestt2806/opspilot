@@ -49,6 +49,6 @@ node app/.out-scripts/scripts/ml-ready-6-http.js
 - Node 22.23.3: scripts TypeScript compile + main/scripts no-emit typecheck PASS; focused Vitest 3/3 PASS (busy port, score validation, owned child cleanup); scoped ESLint PASS. `ml-service/.venv/Scripts/python.exe -m pytest ml-service/tests -q` — 19 passed; scoped Ruff — PASS; `git diff --check` — PASS. No contract/schema change, VPS/pilot/loadgen/fault, or production-state write.
 - Historical normal-data HTTP lifecycle smoke only. No fault labels or accuracy/precision/recall claims. Pilot blockers remain: dedicated host, hardware/storage requirement, clock skew, and ML endpoint/provider gates.
 
-### HANDOFF-LOCAL 21/10 — pending commit SHA
+### HANDOFF-LOCAL 21/10 — `b66c6b1f390a5bcd3e5129b048881b51878dad68`
 
-Local only; no push/PR/merge.
+Node 22.23.3 focused lifecycle 3/3, service pytest 19/19, main/scripts typecheck, scoped ESLint, Ruff and diff check PASS. Real isolated HTTP lifecycle PASS; artifacts under `docs/evidence/tk-s7-ml-ready-6/`. Local only; no push/PR/merge. The board/task SHA is the implementation/evidence commit; this handoff record follows in a documentation-only local commit.
