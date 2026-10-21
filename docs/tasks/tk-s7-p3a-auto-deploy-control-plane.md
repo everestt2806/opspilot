@@ -15,7 +15,7 @@
 | Lỗi build/health, push burst/force-push/branch delete/mất Git/SSH/restart/disconnect | Mục “Failure policy” | PASS |
 | Pin SSH, Linux credentials, no secret logs/public admin/Docker socket, enrollment/permissions/lifecycle | Mục “Security và enrollment” | PASS |
 | Checkpoint code phân nhỏ theo phụ thuộc, files/contracts/gates, Linux lab/crash/live desktop-off gate | Mục “Kế hoạch checkpoint” | PASS |
-| Chỉ tài liệu; đối chiếu source và diff check; commit local, không push/PR/merge, giữ untracked | `git diff --check` đã chạy; commit sẽ chỉ gồm task note và board. Untracked ngoài scope được giữ nguyên. | IMPLEMENTED |
+| Chỉ tài liệu; đối chiếu source và diff check; commit local, không push/PR/merge, giữ untracked | `git diff --check` PASS; commit nội dung `15fae0457e91b757257d78e4c3c4ec4cab946fbf` chỉ gồm task note và board. Untracked ngoài scope được giữ nguyên. | PASS |
 
 ## Mục tiêu và trạng thái hiện tại
 
@@ -110,7 +110,7 @@ Các checkpoint sau bắt đầu sau review P3a. Mỗi thay đổi IPC/schema th
 - [x] Design is source-checked, names reuse/gaps and strict Product/desktop authority boundary.
 - [x] State machine includes idempotency, finite retry, leases/fences, restart recovery, uncertain state and manual deploy collision.
 - [x] Security/enrollment, host limits, staged Linux lab/crash/live gate are actionable.
-- [ ] This task note and board updated; only docs changed; `git diff --check` pass; local commit, no push/PR/merge.
+- [x] This task note and board updated; only docs changed; `git diff --check` pass; local commit, no push/PR/merge.
 
 ## Nhật ký
 
@@ -120,4 +120,4 @@ Các checkpoint sau bắt đầu sau review P3a. Mỗi thay đổi IPC/schema th
 
 ## Bàn giao local
 
-SHA nội dung và board sẽ được ghi sau commit đầu tiên. Branch `feat/deploy-reachability`; không push/PR/merge. Không cài hoặc kết nối VPS.
+Nội dung thiết kế và board: `15fae0457e91b757257d78e4c3c4ec4cab946fbf`. Bản cập nhật SHA/checklist được commit tiếp theo. Branch `feat/deploy-reachability`; không push/PR/merge. Không cài hoặc kết nối VPS.
