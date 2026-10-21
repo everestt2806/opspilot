@@ -34,4 +34,4 @@ Run on Node `22.23.3` (Windows). No VPS/production database access was used.
 - `git diff --check`: PASS.
 - Full app build, full-repo lint, and remote/production gates: NOT_RUN (not requested/explicitly out of scope).
 
-Implementation commit SHA: pending local commit.
+Implementation commit SHA: `82a342fe737d992fca6fd24afb47bb66df1e920e`.
