@@ -275,7 +275,12 @@ class SystemSshClient:
         try:
             if os.name == "nt":
                 _restrict_windows_key_acl(Path(self._temp_dir.name), directory=True)
-            key_path.write_text(content, encoding="utf-8")
+            # Windows OpenSSH treats a leading UTF-8 BOM as key data and rejects
+            # otherwise valid PEM/OpenSSH containers. Strip only that signature;
+            # write bytes to avoid Windows newline translation (including CRCRLF
+            # when a caller already supplied CRLF).
+            key_bytes = content.removeprefix("\ufeff").encode("utf-8")
+            key_path.write_bytes(key_bytes)
             if os.name == "nt":
                 _restrict_windows_key_acl(key_path, directory=False)
         except Exception:  # noqa: BLE001 - fail closed without exposing key contents

@@ -981,6 +981,83 @@ def test_ssh_failure_classification_is_allowlisted_and_redacted(
     client.close()
 
 
+@pytest.mark.parametrize("line_ending", ["\n", "\r\n"])
+def test_windows_openssh_key_materialization_strips_only_utf8_bom_and_preserves_key(
+    tmp_path: Path, line_ending: str
+) -> None:
+    """A BOM-prefixed credential must parse to the same public key after materialization."""
+    import shutil
+
+    ssh_keygen = shutil.which("ssh-keygen")
+    if ssh_keygen is None:
+        pytest.skip("OpenSSH ssh-keygen is not installed")
+
+    fixture_path = tmp_path / "fixture_ed25519"
+    generated = subprocess.run(
+        [ssh_keygen, "-q", "-t", "ed25519", "-N", "", "-f", str(fixture_path)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert generated.returncode == 0
+    original = fixture_path.read_text(encoding="utf-8")
+    normalized_original = original.replace("\r\n", "\n")
+    fixture_with_bom = "\ufeff" + normalized_original.replace("\n", line_ending)
+    bom_dir = tmp_path / "bom-fixture"
+    bom_dir.mkdir()
+    if __import__("os").name == "nt":
+        runner._restrict_windows_key_acl(bom_dir, directory=True)
+    else:
+        bom_dir.chmod(0o700)
+    bom_path = bom_dir / "fixture_ed25519_bom"
+    bom_path.write_bytes(fixture_with_bom.encode("utf-8"))
+    if __import__("os").name == "nt":
+        runner._restrict_windows_key_acl(bom_path, directory=False)
+    else:
+        bom_path.chmod(0o600)
+
+    original_public_key = subprocess.run(
+        [ssh_keygen, "-y", "-P", "", "-f", str(fixture_path)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    bom_parse = subprocess.run(
+        [ssh_keygen, "-y", "-P", "", "-f", str(bom_path)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert original_public_key.returncode == 0
+    assert bom_parse.returncode != 0
+    assert runner._classify_ssh_error(bom_parse.stderr) == "SSH_KEY_FORMAT_ERROR"
+
+    client = runner.SystemSshClient(host="fixture.invalid", secret=fixture_with_bom)
+    materialized_path = Path(client._effective_key_file)
+    materialized_bytes = materialized_path.read_bytes()
+    materialized_public_key = subprocess.run(
+        [ssh_keygen, "-y", "-P", "", "-f", str(materialized_path)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert materialized_public_key.returncode == 0
+    assert materialized_public_key.stdout == original_public_key.stdout
+    assert not materialized_bytes.startswith(b"\xef\xbb\xbf")
+    expected_newline = line_ending.encode("ascii")
+    assert expected_newline in materialized_bytes
+    assert materialized_bytes.endswith(expected_newline)
+    assert (b"\r\n" in materialized_bytes) == (line_ending == "\r\n")
+    assert "******" in repr(client)
+
+    client.close()
+    assert not materialized_path.exists()
+
+
 @pytest.mark.skipif(__import__("os").name != "nt", reason="Windows DACL validation")
 def test_windows_temporary_ssh_key_uses_restricted_acl(tmp_path: Path) -> None:
     from experiments.run_experiment import _restrict_windows_key_acl
