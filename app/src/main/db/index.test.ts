@@ -141,6 +141,7 @@ function downgradeMigration013ToV12(database: Database.Database): void {
 }
 
 function downgradeMigration014ToV13(database: Database.Database): void {
+  downgradeMigration016ToV15(database)
   database.exec(`
     DELETE FROM schema_version WHERE version=15;
     DROP TRIGGER IF EXISTS app_healthcheck_policy_invalidates_https;
@@ -150,6 +151,23 @@ function downgradeMigration014ToV13(database: Database.Database): void {
     ALTER TABLE domain_binding DROP COLUMN https_probe_peer_ips_json;
     ALTER TABLE app DROP COLUMN healthcheck_response_type;
     DELETE FROM schema_version WHERE version=14;
+  `)
+}
+
+function downgradeMigration016ToV15(database: Database.Database): void {
+  database.exec(`
+    DROP TABLE IF EXISTS product_history_event;
+    DROP TABLE IF EXISTS product_deploy_attempt;
+    DROP TABLE IF EXISTS product_worker_lease;
+    DROP TABLE IF EXISTS product_app_lease;
+    DROP TABLE IF EXISTS product_app_fence;
+    DROP TABLE IF EXISTS product_desired_branch;
+    DROP TABLE IF EXISTS product_deploy_job;
+    DROP TABLE IF EXISTS product_branch_observation;
+    DROP TABLE IF EXISTS product_app_control;
+    DROP TABLE IF EXISTS product_source_config;
+    DROP TABLE IF EXISTS product_controller;
+    DELETE FROM schema_version WHERE version=16;
   `)
 }
 
@@ -249,7 +267,7 @@ describe('initializeDatabase', () => {
       count: 1
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 15
+      version: 16
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
   })
@@ -273,12 +291,12 @@ describe('initializeDatabase', () => {
     runMigrations(database)
     expect(database.prepare('SELECT * FROM domain_binding WHERE id=82').get()).toMatchObject(before as object)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 15
+      version: 16
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 15
+      version: 16
     })
   })
 
@@ -326,7 +344,7 @@ describe('initializeDatabase', () => {
     expect(database.prepare('SELECT healthcheck_response_type FROM app WHERE id=151').get()).toEqual({
       healthcheck_response_type: 'status_2xx'
     })
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 15 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 16 })
     database.prepare(`UPDATE domain_binding SET route_status='active', certificate_status='valid',
       https_probe_status='passed', observed_generation=desired_generation,
       route_checked_at='now', certificate_checked_at='now', certificate_hostname=hostname,
@@ -347,7 +365,7 @@ describe('initializeDatabase', () => {
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 15 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 16 })
   })
 
   it('migration 015 repairs v13 active proof after 014 without changing newly verified active domains', () => {
@@ -413,10 +431,10 @@ describe('initializeDatabase', () => {
     expect(database.prepare('SELECT route_status, https_probe_peer_ips_json FROM domain_binding WHERE id=162').get()).toEqual({
       route_status: 'active', https_probe_peer_ips_json: '["198.51.100.160"]'
     })
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 15 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 16 })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 15 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 16 })
   })
 
   it('executes the complete schema contract on an empty SQLite database', () => {
@@ -798,8 +816,8 @@ describe('initializeDatabase', () => {
       .prepare('SELECT MAX(version) AS version FROM schema_version')
       .get() as { version: number }
 
-    expect(tables).toHaveLength(16)
-    expect(schemaVersion.version).toBe(15)
+    expect(tables).toHaveLength(27)
+    expect(schemaVersion.version).toBe(16)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -830,7 +848,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 15
+      version: 16
     })
     expect(
       database
@@ -1029,7 +1047,7 @@ describe('initializeDatabase', () => {
     const successVer = v4Db.prepare('SELECT MAX(version) AS version FROM schema_version').get() as {
       version: number
     }
-    expect(successVer.version).toBe(15)
+    expect(successVer.version).toBe(16)
 
     // b. Bảng experiment_run đã có cột attempt_index và backfill = 1 cho tất cả bản ghi cũ
     const postRuns = v4Db

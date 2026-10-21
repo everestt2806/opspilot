@@ -18,6 +18,7 @@ import migration012 from './migrations/012_ingress_reconcile_observation.sql?raw
 import migration013 from './migrations/013_ingress_production_probe_evidence.sql?raw'
 import migration014 from './migrations/014_https_probe_policy_and_peer_set.sql?raw'
 import migration015 from './migrations/015_repair_legacy_https_probe_evidence.sql?raw'
+import migration016 from './migrations/016_product_auto_deploy_persistence.sql?raw'
 
 interface Migration {
   name: string
@@ -100,6 +101,11 @@ const migrations: Migration[] = [
     name: '015_repair_legacy_https_probe_evidence.sql',
     version: 15,
     sql: migration015
+  },
+  {
+    name: '016_product_auto_deploy_persistence.sql',
+    version: 16,
+    sql: migration016
   }
 ]
 

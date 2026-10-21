@@ -1,7 +1,6 @@
-/**
- * P3b-1 design contract for Product-mode Git auto deploy.
- * Documentation-only: this file defines shapes and state names; it is not
- * imported by runtime code and does not imply a database migration exists.
+﻿/**
+ * Shared data contract for Product-mode Git auto deploy.
+ * Persistence migration 016 creates empty tables only; it does not enroll apps.
  */
 
 export type ProductControllerId = string;
