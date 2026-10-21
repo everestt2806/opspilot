@@ -61,9 +61,9 @@ node app/.out-scripts/scripts/ml-ready-6-http.js
 - Focused tests 11/11: busy port, scores, taskkill failed with successful fallback still reported as error, taskkill/fallback failure while child remains alive at deadline, startup/train/restart errors each run cleanup, cleanup errors retain the primary phase failure, scratch deletion failure prevents PASS, and actual Windows parent + listener-child tree is stopped with listener release.
 - Gates: Node 22.23.3 script compile and main/scripts typecheck PASS; focused Vitest 11/11 PASS; scoped ESLint PASS; ML service pytest 19/19 PASS; scoped Ruff PASS (Python sources unchanged); `git diff --check` PASS. No contract/schema changes, VPS/pilot/loadgen/fault, or production state writes.
 
-### HANDOFF-LOCAL correction 21/10 — pending correction commit SHA
+### HANDOFF-LOCAL correction 21/10 — `8278ebbfe2faf4621f8d6b0595db5bbc3b7764a2`
 
-Local only; no push/PR/merge.
+Final corrected harness/evidence commit. Node 22.23.3 compile and main/scripts typecheck PASS; focused Vitest 11/11 including Windows process-tree integration; scoped ESLint PASS; ML service pytest 19/19 and Ruff PASS; `git diff --check` PASS. Final real HTTP run `2026-10-21T16:23:50Z` PASS after process-tree/listener/scratch/state checks. Branch `feat/deploy-reachability`; local only, no push/PR/merge. This SHA is recorded in the board; this handoff record follows in a documentation-only local commit.
 
 ### HANDOFF-LOCAL 21/10 — `b66c6b1f390a5bcd3e5129b048881b51878dad68`
 
