@@ -14,7 +14,7 @@
 | Product ownership/cutover/import collision/enforcement giới hạn | Phần ownership và cutover; nêu rõ giới hạn binary cũ | PASS |
 | DDL dự kiến, constraints/indexes/transactions; không tuyên bố migration đã áp dụng | SQL proposal parse trong SQLite in-memory với stub `app`/`deployment`; không migration | PASS |
 | Enrollment/API tách riêng; Desktop/Git manual giữ nguyên | P3b-3 tách riêng; phạm vi unchanged được nêu | PASS |
-| Type/cú pháp, đối chiếu tình huống, diff check, commit local | TypeScript strict check và `git diff --check` PASS; commit sẽ ghi SHA sau đây | IMPLEMENTED |
+| Type/cú pháp, đối chiếu tình huống, diff check, commit local | TypeScript strict check, DDL proposal syntax, scenario cross-check và `git diff --check` PASS; content commit `5248e204f4d8326270f692d8d24b6368139c7d33` | PASS |
 
 ## Phạm vi và nguồn
 
@@ -356,4 +356,4 @@ Until those gates complete, local deploy, Git manual, existing IPC/schema and De
 - START 22/10 — Đọc task-discipline, ADR-011, docs/31, P3a, board, schema/IPC/deploy-event contracts và source Git/deploy/lock liên quan.
 - DESIGN 22/10 — Bỏ unique vĩnh viễn `(app_id, SHA)`; job idempotency theo request key, poll key gồm source generation + observation sequence; manual UUID, retry attempt thuộc job. Chốt DDL proposal, queue transition, lease/fence/uncertain, cutover/import collision và tách enrollment/API.
 - GATES 22/10 — Strict TypeScript check PASS (Node 24.16.0, engine warning), SQLite syntax parse của DDL proposal PASS bằng stub in-memory DB, scenario cross-check PASS, `git diff --check` PASS. ESLint scoped file bị ignore do ngoài base path, không tính PASS. Migration/runtime/API/VPS NOT_RUN theo scope.
-- Ghi SHA commit sau khi contract, task note, board và decision được commit. Không push/PR/merge; không thao tác VPS.
+- Content commit: `5248e204f4d8326270f692d8d24b6368139c7d33`. SHA được ghi trong task note/board bằng commit metadata tiếp theo. Không push/PR/merge; không thao tác VPS.
