@@ -45,6 +45,32 @@ export interface ProductBranchObservation {
   observed_at: ProductIsoUtc;
 }
 
+export type ProductReconciliationState =
+  | 'pending'
+  | 'queued'
+  | 'in_progress'
+  | 'satisfied'
+  | 'paused'
+  | 'failed'
+  | 'uncertain';
+
+/** Durable desired tip is separate from jobs so restart cannot lose intent. */
+export interface ProductDesiredBranchState {
+  app_id: ProductAppId;
+  source_generation: number;
+  ref: string;
+  desired_observation_sequence: number;
+  desired_sha: ProductFullCommitSha;
+  reconcile_epoch: number;
+  reconciled_observation_sequence: number | null;
+  reconciled_epoch: number | null;
+  reconciliation_state: ProductReconciliationState;
+  reconciliation_job_id: ProductJobId | null;
+  auto_paused: boolean;
+  pause_reason: 'manual_action' | 'operator' | null;
+  updated_at: ProductIsoUtc;
+}
+
 export type ProductJobState =
   | 'queued'
   | 'claimed'
@@ -66,7 +92,7 @@ export interface ProductDeployJob {
   source_config_sha256: string;
   trigger: ProductJobTrigger;
   /**
-   * Poll key: `poll:<source_generation>:<observation_sequence>`.
+   * Auto key: `auto:<source_generation>:<observation_sequence>:<reconcile_epoch>`.
    * Manual key: caller-generated UUID, stable across transport retries.
    * This key is unique per app/controller; commit SHA is deliberately not unique.
    */
@@ -75,6 +101,7 @@ export interface ProductDeployJob {
   target_sha: ProductFullCommitSha | null;
   target_deployment_id: ProductDeploymentId | null;
   observation_sequence: number | null;
+  reconcile_epoch: number | null;
   state: ProductJobState;
   attempt_count: number;
   max_attempts: number;
@@ -159,4 +186,3 @@ export interface ProductHistoryEvent {
   kind: string;
   created_at: ProductIsoUtc;
 }
-
