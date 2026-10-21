@@ -14,7 +14,7 @@
 | Product ownership/cutover/import collision/enforcement giới hạn | Phần ownership và cutover; nêu rõ giới hạn binary cũ | PASS |
 | DDL dự kiến, constraints/indexes/transactions; không tuyên bố migration đã áp dụng | SQL proposal parse trong SQLite in-memory với stub `app`/`deployment`; không migration | PASS |
 | Enrollment/API tách riêng; Desktop/Git manual giữ nguyên | P3b-3 tách riêng; phạm vi unchanged được nêu | PASS |
-| Type/cú pháp, đối chiếu tình huống, diff check, commit local | Node 22 strict typecheck, DDL proposal syntax, scenario/timeline cross-check, final newline và `git diff --check` PASS; correction commit SHA sẽ ghi sau content commit | IMPLEMENTED |
+| Type/cú pháp, đối chiếu tình huống, diff check, commit local | Node 22 strict typecheck, DDL proposal syntax, scenario/timeline cross-check, final newline và `git diff --check` PASS; correction content commit `b67c9551ce2cb1a763abc3a52f4754931e63772e` | PASS |
 
 ## Phạm vi và nguồn
 
@@ -457,4 +457,4 @@ Until those gates complete, local deploy, Git manual, existing IPC/schema and De
 - DESIGN 22/10 — Bỏ unique vĩnh viễn `(app_id, SHA)`; job idempotency theo request key, poll key gồm source generation + observation sequence; manual UUID, retry attempt thuộc job. Chốt DDL proposal, queue transition, lease/fence/uncertain, cutover/import collision và tách enrollment/API.
 - CORRECTION 22/10 — Thêm durable desired branch/reconciliation state và epoch; unchanged-tip poll/startup scan tiếp tục reconcile pending intent; obsolete auto queued/retry_wait bị supersede, manual intent pause auto tới explicit resume; claim/pre-write/finalize kiểm tra desired revision. Timeline ghi state trước/sau transaction và crash points cho A→B→A, B-in-flight→A và manual pause/resume.
 - GATES 22/10 — Node 22.23.3 strict TypeScript PASS; SQLite syntax parse DDL proposal PASS bằng stub in-memory DB; timeline/scenario cross-check PASS; final newline và `git diff --check` PASS. No migration/runtime/API/VPS action by scope.
-- Baseline contract commit: `5248e204f4d8326270f692d8d24b6368139c7d33`; correction content SHA sẽ ghi vào board/task note sau commit. Không push/PR/merge; không thao tác VPS.
+- Baseline contract commit: `5248e204f4d8326270f692d8d24b6368139c7d33`; correction content commit: `b67c9551ce2cb1a763abc3a52f4754931e63772e`. Ghi nhận metadata commit tiếp theo. Không push/PR/merge; không thao tác VPS.
