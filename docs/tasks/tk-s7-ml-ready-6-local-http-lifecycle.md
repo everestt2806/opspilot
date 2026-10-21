@@ -12,12 +12,13 @@ Run the real ML service from an isolated source copy and empty state directory, 
 
 | Requirement | Current check/evidence | State |
 |---|---|---|
-| Start real service only on explicit loopback port from isolated source/state; refuse occupied port | Harness uses `prepareIsolatedMlService`, empty copied state, fixed `127.0.0.1:18765`; busy-port regression 1/1; Node 22 real HTTP lifecycle PASS | PASS |
-| Use HTTP health/status, train 150 chronological samples, then ingest 30 holdout samples and validate four finite scores | Real HTTP health/status PASS; train 150 seq 9118–9267 with 131 feature vectors; ingest seq 9268–9297, all methods finite/in [0,1]; CSV artifact | PASS |
-| Restart owned service with same state; confirm loaded model and continue inference | Restart status trained=true, train_sample_count=150, sample_count=180; repeated final holdout seq 9297 scored after restart; child-stop test PASS | PASS |
-| Hash production state before/after; clean only owned process/scratch on all outcomes | SHA-256 map of 22 files in `production-state-integrity.json` identical; service stopped, port released, scratch absent. Initial trial exposed Windows parent-only termination; harness now uses bounded `taskkill /T /F` for its own child tree and cleanup was re-run successfully | PASS |
-| Run relevant tests, Ruff and diff check | Node 22.23.3: TS main/scripts typecheck PASS, focused Vitest 3/3, scoped ESLint PASS; ML service pytest 19/19; scoped Ruff PASS; `git diff --check` PASS | PASS |
-| Preserve pilot blockers and state that this is not pilot/accuracy evidence | README and summary explicitly say historical normal-data smoke only; no labels or accuracy metrics; dedicated-host, hardware/storage, clock-skew, ML endpoint/provider gates remain blocked | PASS |
+| Start real service only on explicit loopback port from isolated source/state; refuse occupied port | Existing isolation helper; occupied-port test; listener PID must match owned child or verified Windows process-tree descendant; final Node 22 HTTP run PASS | PASS |
+| Use HTTP health/status, train 150 chronological samples, then ingest 30 holdout samples and validate four finite scores | Final run health/status PASS; train seq 9118–9267 (131 vectors); ingest seq 9268–9297, all methods finite/in [0,1]; current CSV artifact | PASS |
+| Restart owned service with same state; confirm loaded model and continue inference | Final restart trained=true, train_sample_count=150, sample_count=180; repeated last holdout seq 9297 scored after restart | PASS |
+| Confirm process tree/listener stop; hash production state and clean scratch in finally; PASS only after final checks | Final `run-summary.json` records child tree stopped, listener released, scratch removed, and 22 state-file SHA maps unchanged. Windows tree integration test PASS. Failure runs are separate records, with no stale PASS presented for those attempts | PASS |
+| Exercise taskkill failure, deadline, startup/train/restart error cleanup and scratch-delete failure | Focused Vitest 11/11, including injected taskkill/fallback failure with non-exiting child, deadline, phase cleanup, scratch-delete failure and real Windows process-tree listener release | PASS |
+| Run Node 22 typecheck/scoped lint, service tests, Ruff and diff check | Node 22.23.3 main/scripts typecheck PASS; focused Vitest 11/11; scoped ESLint PASS; service pytest 19/19; scoped Ruff PASS; `git diff --check` PASS | PASS |
+| Preserve pilot blockers and normal-data interpretation limits | README/current summary state historical normal-data smoke only, no quality claims; dedicated-host, hardware/storage, clock-skew, ML endpoint/provider gates remain blocked | PASS |
 
 ## Constraints
 
@@ -48,6 +49,21 @@ node app/.out-scripts/scripts/ml-ready-6-http.js
 - Artifacts: `docs/evidence/tk-s7-ml-ready-6/run-summary.json`, `inference-scores.csv` (30 rows), `production-state-integrity.json` (per-file hashes for all 22 existing state files; before/after maps identical), and README. Final listener check found no process on port 18765; no `opspilot-ml-ready-6-*` scratch remained.
 - Node 22.23.3: scripts TypeScript compile + main/scripts no-emit typecheck PASS; focused Vitest 3/3 PASS (busy port, score validation, owned child cleanup); scoped ESLint PASS. `ml-service/.venv/Scripts/python.exe -m pytest ml-service/tests -q` — 19 passed; scoped Ruff — PASS; `git diff --check` — PASS. No contract/schema change, VPS/pilot/loadgen/fault, or production-state write.
 - Historical normal-data HTTP lifecycle smoke only. No fault labels or accuracy/precision/recall claims. Pilot blockers remain: dedicated host, hardware/storage requirement, clock skew, and ML endpoint/provider gates.
+
+## Correction per review of b66c6b1
+
+### UPDATE 21/10 — cleanup confirmation, failure reports and live rerun
+
+- Base correction `cf7e10566ca5133e4290a4f98183031c242c8fb7`. Reworked `stopOwnedChild`: Windows `taskkill /T /F` uses a command timeout and nonzero/error is preserved; fallback kill results are checked; completion requires parent exit and no listener on the fixed port before deadline. Deadline/failure returns `SERVICE_CLEANUP_FAILED` with reason codes. Windows listener owner is confirmed by PID or read-only Win32 parent ancestry; no other PID is killed.
+- `executeWithCleanup` carries the primary phase error and cleanup errors separately. State hashing now runs in finalization for startup/train/restart failures. Scratch removal is path-verified and confirmed absent. An attempt first archives prior summary/CSV/hash evidence and removes the current summary; a failure produces `run-failure.json`, never a PASS summary. The PASS summary and score CSV are atomically written only after final process-tree, listener, scratch and production-state checks all pass.
+- Final real HTTP rerun `2026-10-21T16:23:50Z` PASS: empty state, health/status, train 150 seq 9118–9267, 131 feature vectors, 30 chronological ingests seq 9268–9297 with all four finite scores in range, stop/restart against same scratch state, reload confirms 180 stored samples, post-restart inference on repeated seq 9297. Final 22-file production state hash maps are equal; listener and scratch are absent. Current artifacts are `run-summary.json`, `inference-scores.csv`, `production-state-integrity.json`; prior b66c6b1 outputs and subsequent attempts are preserved separately.
+- Three diagnostic attempts before the final run are retained as `run-failure-2026-10-21T16-13-27-309Z.json` (startup timeout), `...16-14-41-029Z.json` (listener PID ownership not yet recognized), and `...16-15-17-090Z.json` (venv launcher PID 21136 vs listener PID 25920). Each records primary error, successful cleanup checks, unchanged production hashes; no old PASS was left as the result of those failures. PID ancestry verification resolved the legitimate launcher/listener PID distinction; final run then passed.
+- Focused tests 11/11: busy port, scores, taskkill failed with successful fallback still reported as error, taskkill/fallback failure while child remains alive at deadline, startup/train/restart errors each run cleanup, cleanup errors retain the primary phase failure, scratch deletion failure prevents PASS, and actual Windows parent + listener-child tree is stopped with listener release.
+- Gates: Node 22.23.3 script compile and main/scripts typecheck PASS; focused Vitest 11/11 PASS; scoped ESLint PASS; ML service pytest 19/19 PASS; scoped Ruff PASS (Python sources unchanged); `git diff --check` PASS. No contract/schema changes, VPS/pilot/loadgen/fault, or production state writes.
+
+### HANDOFF-LOCAL correction 21/10 — pending correction commit SHA
+
+Local only; no push/PR/merge.
 
 ### HANDOFF-LOCAL 21/10 — `b66c6b1f390a5bcd3e5129b048881b51878dad68`
 

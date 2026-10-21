@@ -44,6 +44,30 @@ historical row.
 The service state under `ml-service/state/` was only read for hashing. No app
 model or production state was reset, copied, trained, or overwritten.
 
+## Lifecycle review correction
+
+The current harness confirms the owned child has exited **and** the exact
+loopback listener is gone. On Windows, `taskkill /T /F` has a deadline and its
+exit status is checked; the listener PID must be the harness child or a
+verified descendant in its Win32 process ancestry. A fallback kill or stop
+deadline error makes the run fail even if cleanup later succeeds. Scratch
+removal and production-state hashing run in `finally`; the `PASS` summary and
+CSV are written only after those checks pass. The previous summary and data
+are preserved as `*-b66c6b1` history. Failed attempts have separate
+`run-failure-*.json` records, each with cleanup and state-integrity checks;
+they do not leave a current `run-summary.json` marked PASS.
+
+The final rerun at `2026-10-21T16:23:50Z` passed the full HTTP sequence again:
+150 training samples, 30 chronological ingests, same-state restart and a
+post-restart score. `run-summary.json` records all final cleanup checks true.
+The earlier bounded startup/owner-detection attempts are retained in the
+failure records with unchanged production state and completed cleanup.
+
+Focused regression coverage includes taskkill failure, a still-running child
+past deadline, startup/train/restart exceptions, scratch-delete failure,
+occupied port handling, and a real Windows parent-plus-listener-child tree
+that is terminated with its listener released.
+
 ## Interpretation limits and remaining blockers
 
 This proves the local HTTP API lifecycle and persistence behavior for a
