@@ -88,6 +88,9 @@ export interface ProductObserveTipResult {
 export type ProductRepositoryClock = () => number
 export type ProductRetryJitter = () => number
 
+export type ProductClaimExecutionState =
+  'prewrite' | 'dispatch_unknown' | 'stale_claim' | 'reconciliation_required'
+
 type ProductDesiredBranchRow = Omit<ProductDesiredBranchState, 'auto_paused'> & {
   auto_paused: 0 | 1
 }
@@ -1046,6 +1049,80 @@ export class ProductDeployRepository {
       }
       throw error
     }
+  }
+
+  /** Read-only guard used by the internal worker; it never grants dispatch authority. */
+  readClaimExecutionState(claim: ProductClaimToken): ProductClaimExecutionState {
+    if (!isValidClaimToken(claim)) return 'stale_claim'
+    const row = this.database
+      .prepare(
+        `SELECT j.state AS job_state, j.controller_id, j.app_id,
+                j.ownership_generation, j.source_generation, j.source_config_sha256,
+                pa.attempt_number, pa.state AS attempt_state, pa.remote_outcome, pa.deployment_id,
+                pa.lease_id, pa.fencing_token, pa.build_slot_lease_id, pa.build_slot_fence,
+                app_lease.released_at AS app_released_at,
+                build_lease.released_at AS build_released_at
+         FROM product_deploy_job AS j
+         JOIN product_deploy_attempt AS pa ON pa.job_id=j.job_id
+         JOIN product_app_lease AS app_lease ON app_lease.lease_id=pa.lease_id
+           AND app_lease.fence=pa.fencing_token AND app_lease.job_id=j.job_id
+         JOIN product_worker_lease AS build_lease ON build_lease.lease_id=pa.build_slot_lease_id
+           AND build_lease.fence=pa.build_slot_fence AND build_lease.job_id=j.job_id
+         WHERE j.job_id=? AND pa.attempt_id=? AND pa.attempt_number=?`
+      )
+      .get(claim.job_id, claim.attempt_id, claim.attempt_number) as
+      | {
+          job_state: string
+          controller_id: string
+          app_id: number
+          ownership_generation: number
+          source_generation: number
+          source_config_sha256: string
+          attempt_number: number
+          attempt_state: string
+          remote_outcome: string
+          deployment_id: number | null
+          lease_id: string
+          fencing_token: number
+          build_slot_lease_id: string
+          build_slot_fence: number
+          app_released_at: string | null
+          build_released_at: string | null
+        }
+      | undefined
+    if (
+      !row ||
+      row.controller_id !== claim.controller_id ||
+      row.app_id !== claim.app_id ||
+      row.ownership_generation !== claim.ownership_generation ||
+      row.source_generation !== claim.source_generation ||
+      row.source_config_sha256 !== claim.source_config_sha256 ||
+      row.attempt_number !== claim.attempt_number ||
+      row.lease_id !== claim.app_lease_id ||
+      row.fencing_token !== claim.app_fence ||
+      row.build_slot_lease_id !== claim.build_slot_lease_id ||
+      row.build_slot_fence !== claim.build_slot_fence
+    ) {
+      return 'stale_claim'
+    }
+    if (
+      row.job_state === 'deploying' &&
+      row.attempt_state === 'deploying' &&
+      row.remote_outcome === 'unknown' &&
+      row.deployment_id !== null
+    ) {
+      return 'dispatch_unknown'
+    }
+    if (
+      row.job_state === 'claimed' &&
+      (row.attempt_state === 'claimed' || row.attempt_state === 'snapshot_verified') &&
+      row.remote_outcome === 'not_started' &&
+      row.app_released_at === null &&
+      row.build_released_at === null
+    ) {
+      return 'prewrite'
+    }
+    return 'reconciliation_required'
   }
 
   private readClock(): number {

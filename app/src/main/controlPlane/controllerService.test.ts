@@ -26,6 +26,11 @@ describe('independent Product controller service', () => {
     initializeController(directory)
     service = new ControllerService({ dataDirectory: directory })
     await service.start()
+    expect(service.workerStatus).toMatchObject({
+      state: 'polling_only',
+      reason: 'executor_not_configured',
+      executorConfigured: false
+    })
 
     const health = await fetch('http://127.0.0.1:8768/healthz')
     expect(health.status).toBe(200)
