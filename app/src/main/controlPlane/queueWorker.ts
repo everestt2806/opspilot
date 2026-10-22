@@ -86,6 +86,7 @@ export class ControlPlaneJobWorker {
   private readonly stopGraceMs: number
   private status: ControlPlaneWorkerStatus
   private unsafeToClose = false
+  private taskMayUseDatabase = false
   private halted = false
 
   constructor(private readonly options: ControlPlaneJobWorkerOptions) {
@@ -116,7 +117,7 @@ export class ControlPlaneJobWorker {
   }
 
   canCloseDatabase(): boolean {
-    return !this.unsafeToClose
+    return !this.unsafeToClose && !this.taskMayUseDatabase
   }
 
   async run(signal: AbortSignal): Promise<void> {
@@ -186,6 +187,7 @@ export class ControlPlaneJobWorker {
     shutdownSignal.addEventListener('abort', onShutdown, { once: true })
     if (shutdownSignal.aborted) taskController.abort()
     this.setStatus('executing', null, claim)
+    this.taskMayUseDatabase = true
 
     const execution = Promise.resolve()
       .then(() => executor.execute(claim, taskController.signal))
@@ -218,11 +220,16 @@ export class ControlPlaneJobWorker {
       const heartbeatResult = await heartbeat
       shutdownSignal.removeEventListener('abort', onShutdown)
       if (heartbeatResult.state === 'lost') {
+        this.taskMayUseDatabase = false
         this.halted = true
         this.setStatus('reconciliation_required', heartbeatResult.reason, claim)
         return
       }
-      await this.handleExecutorResult(claim, first.result)
+      try {
+        await this.handleExecutorResult(claim, first.result)
+      } finally {
+        this.taskMayUseDatabase = false
+      }
       return
     }
 
@@ -237,24 +244,27 @@ export class ControlPlaneJobWorker {
       return
     }
     await heartbeat
-
-    if (first?.kind === 'heartbeat_lost') {
+    try {
+      if (first?.kind === 'heartbeat_lost') {
+        this.halted = true
+        this.setStatus('reconciliation_required', first.reason, claim)
+        return
+      }
+      const outcome = await execution
+      if (outcome.kind === 'result' && outcome.result.state === 'prewrite_failure') {
+        await this.finishPrewrite(claim, outcome.result)
+        return
+      }
       this.halted = true
-      this.setStatus('reconciliation_required', first.reason, claim)
-      return
+      const state = this.options.repository.readClaimExecutionState(claim)
+      this.setStatus(
+        'reconciliation_required',
+        state === 'dispatch_unknown' ? 'remote_outcome_unknown' : 'worker_stopped_with_claim',
+        claim
+      )
+    } finally {
+      this.taskMayUseDatabase = false
     }
-    const outcome = await execution
-    if (outcome.kind === 'result' && outcome.result.state === 'prewrite_failure') {
-      await this.finishPrewrite(claim, outcome.result)
-      return
-    }
-    this.halted = true
-    const state = this.options.repository.readClaimExecutionState(claim)
-    this.setStatus(
-      'reconciliation_required',
-      state === 'dispatch_unknown' ? 'remote_outcome_unknown' : 'worker_stopped_with_claim',
-      claim
-    )
   }
 
   private async handleExecutorResult(

@@ -12,6 +12,11 @@ export interface ControllerServiceOptions {
   dataDirectory: string
   poller?: ControlPlaneGitPoller
   worker?: ControlPlaneJobWorker
+  /** Internal composition seam used by lifecycle tests; receives this service's repository. */
+  workerFactory?: (
+    repository: ProductDeployRepository,
+    controllerId: string
+  ) => ControlPlaneJobWorker
 }
 
 export class ControllerService {
@@ -22,8 +27,8 @@ export class ControllerService {
   private server: Server | null = null
   private listening = false
   private runtimeTask: Promise<void> | null = null
+  private closeTask: Promise<void> | null = null
   private fatal = false
-  private closed = false
 
   constructor(options: ControllerServiceOptions) {
     this.opened = openControllerDatabase(options.dataDirectory)
@@ -32,6 +37,7 @@ export class ControllerService {
       options.poller ??
       new ControlPlaneGitPoller({ repository, controllerId: this.opened.controllerId })
     this.worker =
+      options.workerFactory?.(repository, this.opened.controllerId) ??
       options.worker ??
       new ControlPlaneJobWorker({ repository, controllerId: this.opened.controllerId })
   }
@@ -94,16 +100,10 @@ export class ControllerService {
       throw error
     }
 
-    this.runtimeTask = Promise.all([
-      this.poller.run(this.stopController.signal),
-      this.worker.run(this.stopController.signal)
-    ]).then(
-      () => undefined,
-      () => {
-        this.fatal = true
-        this.stopController.abort()
-      }
-    )
+    this.runtimeTask = Promise.allSettled([
+      this.trackRuntimeTask(() => this.poller.run(this.stopController.signal)),
+      this.trackRuntimeTask(() => this.worker.run(this.stopController.signal))
+    ]).then(() => undefined)
   }
 
   async waitForStop(): Promise<void> {
@@ -112,18 +112,41 @@ export class ControllerService {
     if (this.fatal) throw new Error('CONTROL_PLANE_RUNTIME_FAILED')
   }
 
-  async close(): Promise<void> {
-    if (this.closed) return
-    this.closed = true
+  close(): Promise<void> {
+    if (this.closeTask) return this.closeTask
+    this.closeTask = this.closeAndWait()
+    return this.closeTask
+  }
+
+  private async closeAndWait(): Promise<void> {
     this.stopController.abort()
     if (this.server && this.listening) {
-      await new Promise<void>((resolve) => this.server?.close(() => resolve()))
+      await new Promise<void>((resolve, reject) =>
+        this.server?.close((error) =>
+          error ? reject(new Error('CONTROL_PLANE_LISTENER_CLOSE_FAILED')) : resolve()
+        )
+      )
       this.listening = false
     }
     await this.runtimeTask
     if (!this.worker.canCloseDatabase()) {
-      throw new Error('WORKER_TASK_STOP_UNCONFIRMED')
+      throw new Error(
+        this.fatal
+          ? 'CONTROL_PLANE_RUNTIME_FAILED_WORKER_TASK_STOP_UNCONFIRMED'
+          : 'WORKER_TASK_STOP_UNCONFIRMED'
+      )
     }
     this.opened.database.close()
+    if (this.fatal) throw new Error('CONTROL_PLANE_RUNTIME_FAILED')
+  }
+
+  private trackRuntimeTask(task: () => Promise<void>): Promise<void> {
+    return Promise.resolve()
+      .then(task)
+      .catch(() => {
+        this.fatal = true
+        this.stopController.abort()
+        throw new Error('CONTROL_PLANE_RUNTIME_FAILED')
+      })
   }
 }

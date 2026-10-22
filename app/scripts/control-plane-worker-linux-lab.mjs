@@ -25,6 +25,10 @@ import { join } from 'node:path';
 import { initializeDatabase } from ${JSON.stringify(join(appRoot, 'src/main/db/index.ts'))};
 import { ProductDeployRepository } from ${JSON.stringify(join(appRoot, 'src/main/db/productDeployRepository.ts'))};
 import { ControlPlaneJobWorker } from ${JSON.stringify(join(appRoot, 'src/main/controlPlane/queueWorker.ts'))};
+import { initializeController } from ${JSON.stringify(join(appRoot, 'src/main/controlPlane/controllerDatabase.ts'))};
+import { ControllerService } from ${JSON.stringify(join(appRoot, 'src/main/controlPlane/controllerService.ts'))};
+import type { ControlPlaneGitPoller } from ${JSON.stringify(join(appRoot, 'src/main/controlPlane/gitPoller.ts'))};
+import type { ProductClaimToken } from ${JSON.stringify(join(appRoot, '../docs/contracts/product-auto-deploy.ts'))};
 
 async function waitFor(predicate: () => boolean): Promise<void> {
   const deadline = Date.now() + 5000;
@@ -114,6 +118,7 @@ async function main(): Promise<void> {
     assert.equal(primary.prepare("SELECT state FROM product_deploy_job WHERE job_id='lab-job'").get()?.state, 'claimed');
     assert.equal(primary.prepare('SELECT COUNT(*) AS count FROM product_app_lease WHERE released_at IS NULL').get()?.count, 1);
     assert.equal(primary.prepare("SELECT COUNT(*) AS count FROM product_worker_lease WHERE released_at IS NULL").get()?.count, 1);
+    const lifecycle = await runCompositionFailureScenario(directory);
     console.log(JSON.stringify({
       sqlite: 'isolated-file-backed',
       workers: 2,
@@ -121,6 +126,10 @@ async function main(): Promise<void> {
       heartbeat_renewed: true,
       shutdown_outcome: one.getStatus().state,
       claim_and_leases_preserved_for_reconciliation: true,
+      controller_composition_waited_for_sibling: lifecycle.waited_for_executor,
+      controller_close_idempotent: lifecycle.close_idempotent,
+      controller_close_error: lifecycle.close_error,
+      controller_claim_preserved: lifecycle.claim_preserved,
       remote_deploy: false
     }));
   } finally {
@@ -138,6 +147,129 @@ async function main(): Promise<void> {
     if (secondary?.open) secondary.close();
     if (primary.open) primary.close();
   }
+}
+
+async function runCompositionFailureScenario(parentDirectory: string): Promise<{
+  waited_for_executor: boolean;
+  close_idempotent: boolean;
+  close_error: string;
+  claim_preserved: boolean;
+}> {
+  const directory = join(parentDirectory, 'controller-service');
+  const initialized = initializeController(directory);
+  const seed = initializeDatabase(directory);
+  const now = new Date().toISOString();
+  const configHash = '${'e'.repeat(64)}';
+  const targetSha = '${'f'.repeat(40)}';
+  seed.exec(\`\
+    INSERT INTO vps(id,name,host,username,auth_type,encrypted_secret)
+      VALUES(1,'service-vps','fixture.invalid','lab','key',X'00');
+    INSERT INTO app(id,vps_id,name,framework,host_port,container_port,source_type,git_repo_url,git_ref,git_root)
+      VALUES(1,1,'service-app','express',30112,3000,'git','https://example.test/service.git','main','.');
+    INSERT INTO product_source_config
+      (app_id,source_generation,repository_url,production_ref,repository_root,deploy_config_json,config_sha256,created_at)
+      VALUES(1,1,'https://example.test/service.git','main','.','{}','\${configHash}','\${now}');
+    INSERT INTO product_app_control
+      (app_id,mode,controller_id,ownership_generation,source_generation,source_config_sha256,changed_at,
+       auto_deploy_paused,pause_policy_provenance)
+      VALUES(1,'product','\${initialized.controllerId}',1,1,'\${configHash}','\${now}',0,'legacy_clean');
+    INSERT INTO product_deploy_job
+      (job_id,controller_id,app_id,ownership_generation,source_generation,source_config_sha256,
+       trigger,idempotency_key,ref,target_sha,state,attempt_count,max_attempts,available_at,created_at,updated_at)
+      VALUES('service-lab-job','\${initialized.controllerId}',1,1,1,'\${configHash}',
+       'manual_redeploy','manual:service-lab-job','main','\${targetSha}','queued',0,3,
+       '\${now}','\${now}','\${now}');
+  \`);
+  seed.close();
+
+  let repository: ProductDeployRepository | null = null;
+  let claim: ProductClaimToken | null = null;
+  let databaseReadableAfterAbort = false;
+  let resolveEntered: (() => void) | undefined;
+  let resolvePollerFailure: (() => void) | undefined;
+  const entered = new Promise<void>(resolve => { resolveEntered = resolve; });
+  const pollerFailure = new Promise<void>(resolve => { resolvePollerFailure = resolve; });
+  const poller = {
+    getLastSummary: () => null,
+    async run() {
+      await entered;
+      resolvePollerFailure?.();
+      throw new Error('LAB_POLL_FAILURE');
+    }
+  } as unknown as ControlPlaneGitPoller;
+  const service = new ControllerService({
+    dataDirectory: directory,
+    poller,
+    workerFactory: (serviceRepository, controllerId) => {
+      repository = serviceRepository;
+      return new ControlPlaneJobWorker({
+        repository: serviceRepository,
+        controllerId,
+        pollIntervalMs: 10,
+        heartbeatIntervalMs: 10_000,
+        stopGraceMs: 1000,
+        admission: { check: () => ({ state: 'ready' }) },
+        executor: {
+          async execute(activeClaim, signal) {
+            claim = activeClaim;
+            resolveEntered?.();
+            await new Promise<void>(resolve => {
+              if (signal.aborted) resolve();
+              else signal.addEventListener('abort', () => resolve(), { once: true });
+            });
+            await new Promise(resolve => setTimeout(resolve, 150));
+            try {
+              databaseReadableAfterAbort =
+                serviceRepository.readClaimExecutionState(activeClaim) === 'prewrite';
+            } catch {
+              databaseReadableAfterAbort = false;
+            }
+            return { state: 'stopped_before_write' as const };
+          }
+        }
+      });
+    }
+  });
+  await service.start();
+  await pollerFailure;
+  const stopResult = service.waitForStop().then(
+    () => null,
+    (error: unknown) => error instanceof Error ? error : new Error('UNKNOWN_STOP_ERROR')
+  );
+  const close = service.close();
+  const secondClose = service.close();
+  assert.strictEqual(close, secondClose);
+  const closeResult = close.then(
+    () => null,
+    (error: unknown) => error instanceof Error ? error : new Error('UNKNOWN_CLOSE_ERROR')
+  );
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.equal(service.workerStatus.state, 'executing');
+  assert.equal(databaseReadableAfterAbort, false);
+  const closeError = await closeResult;
+  const stopError = await stopResult;
+  assert.equal(closeError?.message, 'CONTROL_PLANE_RUNTIME_FAILED');
+  assert.equal(stopError?.message, 'CONTROL_PLANE_RUNTIME_FAILED');
+  assert.equal(databaseReadableAfterAbort, true);
+  assert.ok(repository);
+  assert.ok(claim);
+  assert.throws(() => repository.readClaimExecutionState(claim));
+  const reopened = initializeDatabase(directory);
+  const row = reopened.prepare(\`\
+    SELECT j.state,
+      (SELECT COUNT(*) FROM product_app_lease WHERE job_id=j.job_id AND released_at IS NULL) AS app_leases,
+      (SELECT COUNT(*) FROM product_worker_lease WHERE job_id=j.job_id AND released_at IS NULL) AS build_leases,
+      (SELECT COUNT(*) FROM deployment WHERE app_id=j.app_id) AS deployments
+    FROM product_deploy_job j WHERE j.job_id='service-lab-job'
+  \`).get() as { state: string; app_leases: number; build_leases: number; deployments: number };
+  assert.deepEqual(row, { state: 'claimed', app_leases: 1, build_leases: 1, deployments: 0 });
+  reopened.close();
+  return {
+    waited_for_executor: databaseReadableAfterAbort,
+    close_idempotent: close === secondClose,
+    close_error: closeError instanceof Error ? closeError.message : 'NO_ERROR',
+    claim_preserved: row.state === 'claimed' && row.app_leases === 1 && row.build_leases === 1
+  };
 }
 
 void main().catch((error: unknown) => {
