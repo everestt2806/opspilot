@@ -39,4 +39,4 @@
 - `git diff --check` — PASS.
 - No SSH/Docker, dispatch marker, deployment row, promotion, VPS, production DB, DNS/firewall, API/UI, or remote deployment was used. Metadata history still records metadata equality; the actual fetch/checkout evidence is the internal preparer path plus real Git fixture/public snapshot gates. Resource/build host capacity and remote deployment remain unproven.
 
-Final local commit SHA: to be recorded after commit.
+Implementation commit SHA: `ad93b393803517d613f55651f077f98860b1d108` (local, no push/PR/merge).
