@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+﻿import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +8,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import {
   PRODUCT_HEARTBEAT_INTERVAL_MS,
-  PRODUCT_LEASE_TTL_MS
+  PRODUCT_LEASE_TTL_MS,
+  PRODUCT_MAX_ATTEMPTS,
+  PRODUCT_RETRY_BACKOFF_MS,
+  PRODUCT_RETRY_JITTER_MAX_MS
 } from '../../../../docs/contracts/product-auto-deploy'
 import { closeDatabase, initializeDatabase } from './index'
 import { ProductDeployRepository } from './productDeployRepository'
@@ -321,6 +324,267 @@ describe('Product atomic claim and lease repository', () => {
     })
   })
 
+  it('releases a valid pre-write claim into retry_wait and claims the same job with a higher fence', () => {
+    const harness = createHarness(() => 0.5)
+    seedManualJob(harness.database, 'prewrite-retry', 1)
+    const first = harness.repository.claimNextJob(CONTROLLER)
+    if (first.state !== 'claimed') throw new Error('expected first claim')
+
+    const finished = harness.repository.finishPrewriteAttempt({
+      claim: first.claim,
+      disposition: 'transient_failure',
+      safeErrorCode: 'GIT_UNAVAILABLE'
+    })
+    const jitter = Math.floor(PRODUCT_RETRY_JITTER_MAX_MS * 0.5)
+    const firstAvailableAt = new Date(NOW + PRODUCT_RETRY_BACKOFF_MS[0] + jitter).toISOString()
+    expect(finished).toEqual({ state: 'retry_scheduled', available_at: firstAvailableAt })
+    expect(
+      harness.database
+        .prepare('SELECT state,attempt_count,available_at FROM product_deploy_job')
+        .get()
+    ).toEqual({ state: 'retry_wait', attempt_count: 1, available_at: firstAvailableAt })
+    expect(
+      harness.database
+        .prepare('SELECT state,remote_outcome,finished_at FROM product_deploy_attempt')
+        .get()
+    ).toEqual({ state: 'failed', remote_outcome: 'not_started', finished_at: harness.clock.iso() })
+    expect(
+      harness.database
+        .prepare('SELECT COUNT(*) AS count FROM product_app_lease WHERE released_at IS NULL')
+        .get()
+    ).toEqual({ count: 0 })
+    expect(
+      harness.database
+        .prepare('SELECT COUNT(*) AS count FROM product_worker_lease WHERE released_at IS NULL')
+        .get()
+    ).toEqual({ count: 0 })
+    expect(
+      harness.database.prepare('SELECT last_fence FROM product_app_fence WHERE app_id=1').get()
+    ).toEqual({ last_fence: 1 })
+    expect(harness.repository.claimNextJob(CONTROLLER)).toEqual({
+      state: 'none',
+      reason: 'no_eligible_job'
+    })
+
+    harness.clock.value = Date.parse(firstAvailableAt)
+    const second = harness.repository.claimNextJob(CONTROLLER)
+    expect(second).toMatchObject({ state: 'claimed', claim: { attempt_number: 2, app_fence: 2 } })
+  })
+
+  it('uses bounded backoff and stops after three total attempts', () => {
+    const harness = createHarness(() => 1)
+    seedManualJob(harness.database, 'prewrite-budget', 1, { maxAttempts: 3 })
+    expect(PRODUCT_MAX_ATTEMPTS).toBe(3)
+    for (let attemptNumber = 1; attemptNumber <= PRODUCT_MAX_ATTEMPTS; attemptNumber += 1) {
+      const claim = harness.repository.claimNextJob(CONTROLLER)
+      expect(claim).toMatchObject({ state: 'claimed', claim: { attempt_number: attemptNumber } })
+      if (claim.state !== 'claimed') throw new Error('expected claim')
+      const result = harness.repository.finishPrewriteAttempt({
+        claim: claim.claim,
+        disposition: 'transient_failure',
+        safeErrorCode: 'SSH_PREFLIGHT_TIMEOUT'
+      })
+      if (attemptNumber < PRODUCT_MAX_ATTEMPTS) {
+        const base = PRODUCT_RETRY_BACKOFF_MS[attemptNumber - 1]
+        const availableAt = new Date(
+          harness.clock.value + base + PRODUCT_RETRY_JITTER_MAX_MS
+        ).toISOString()
+        expect(result).toEqual({ state: 'retry_scheduled', available_at: availableAt })
+        harness.clock.value = Date.parse(availableAt)
+      } else {
+        expect(result).toEqual({ state: 'failed' })
+      }
+    }
+    expect(harness.repository.claimNextJob(CONTROLLER)).toEqual({
+      state: 'none',
+      reason: 'no_eligible_job'
+    })
+    expect(
+      harness.database.prepare('SELECT attempt_count,state FROM product_deploy_job').get()
+    ).toEqual({ attempt_count: 3, state: 'failed' })
+    expect(
+      harness.database.prepare('SELECT COUNT(*) AS count FROM product_deploy_attempt').get()
+    ).toEqual({ count: 3 })
+  })
+
+  it('marks a non-retryable pre-write failure terminal without creating another attempt', () => {
+    const harness = createHarness()
+    seedManualJob(harness.database, 'prewrite-permanent', 1)
+    const claim = harness.repository.claimNextJob(CONTROLLER)
+    if (claim.state !== 'claimed') throw new Error('expected claim')
+    expect(
+      harness.repository.finishPrewriteAttempt({
+        claim: claim.claim,
+        disposition: 'permanent_failure',
+        safeErrorCode: 'INVALID_SOURCE_CONFIG'
+      })
+    ).toEqual({ state: 'failed' })
+    expect(
+      harness.database.prepare('SELECT state,attempt_count FROM product_deploy_job').get()
+    ).toEqual({ state: 'failed', attempt_count: 1 })
+    expect(harness.repository.claimNextJob(CONTROLLER)).toEqual({
+      state: 'none',
+      reason: 'no_eligible_job'
+    })
+    expect(count(harness.database, 'product_deploy_attempt')).toBe(1)
+  })
+
+  it('rejects stale, expired and post-dispatch pre-write completion without changing rows', () => {
+    const harness = createHarness()
+    seedManualJob(harness.database, 'prewrite-stale', 1)
+    const initial = harness.repository.claimNextJob(CONTROLLER)
+    if (initial.state !== 'claimed') throw new Error('expected claim')
+    const staleSnapshot = readPrewriteRows(harness.database)
+    expect(
+      harness.repository.finishPrewriteAttempt({
+        claim: { ...initial.claim, app_fence: initial.claim.app_fence + 1 },
+        disposition: 'transient_failure',
+        safeErrorCode: 'NETWORK_ERROR'
+      })
+    ).toEqual({ state: 'rejected', reason: 'stale_claim' })
+    expect(readPrewriteRows(harness.database)).toEqual(staleSnapshot)
+
+    harness.clock.advance(PRODUCT_LEASE_TTL_MS)
+    const expiredSnapshot = readPrewriteRows(harness.database)
+    expect(
+      harness.repository.finishPrewriteAttempt({
+        claim: initial.claim,
+        disposition: 'transient_failure',
+        safeErrorCode: 'NETWORK_ERROR'
+      })
+    ).toEqual({ state: 'rejected', reason: 'expired_lease' })
+    expect(readPrewriteRows(harness.database)).toEqual(expiredSnapshot)
+
+    closeDatabase()
+    const dispatched = createHarness()
+    seedManualJob(dispatched.database, 'prewrite-dispatched', 1)
+    const claim = dispatched.repository.claimNextJob(CONTROLLER)
+    if (claim.state !== 'claimed') throw new Error('expected claim')
+    dispatched.database
+      .prepare("UPDATE product_deploy_job SET state='deploying' WHERE job_id=?")
+      .run(claim.claim.job_id)
+    dispatched.database
+      .prepare(
+        "UPDATE product_deploy_attempt SET state='deploying',remote_outcome='unknown' WHERE attempt_id=?"
+      )
+      .run(claim.claim.attempt_id)
+    const dispatchSnapshot = readPrewriteRows(dispatched.database)
+    expect(
+      dispatched.repository.finishPrewriteAttempt({
+        claim: claim.claim,
+        disposition: 'transient_failure',
+        safeErrorCode: 'BUILD_FAILED'
+      })
+    ).toEqual({ state: 'rejected', reason: 'reconciliation_required' })
+    expect(readPrewriteRows(dispatched.database)).toEqual(dispatchSnapshot)
+  })
+
+  it('preserves a newer auto desired revision and the owner manual pause when superseding pre-write work', () => {
+    const harness = createHarness()
+    seedAutoJob(harness.database, 'obsolete-prewrite', 1)
+    const claim = harness.repository.claimNextJob(CONTROLLER)
+    if (claim.state !== 'claimed') throw new Error('expected claim')
+    const currentSnapshot = readPrewriteRows(harness.database)
+    expect(
+      harness.repository.finishPrewriteAttempt({
+        claim: claim.claim,
+        disposition: 'check_obsolete'
+      })
+    ).toEqual({ state: 'rejected', reason: 'not_obsolete' })
+    expect(readPrewriteRows(harness.database)).toEqual(currentSnapshot)
+    harness.database
+      .prepare(
+        `UPDATE product_desired_branch SET desired_sha=?,desired_observation_sequence=2,
+      reconciliation_job_id=NULL,reconciliation_state='pending' WHERE app_id=1`
+      )
+      .run('2'.repeat(40))
+    harness.database
+      .prepare(
+        `UPDATE product_app_control SET auto_deploy_paused=1,
+      pause_reason='manual_action',pause_policy_provenance='explicit' WHERE app_id=1`
+      )
+      .run()
+    const desiredBefore = harness.database
+      .prepare('SELECT * FROM product_desired_branch WHERE app_id=1')
+      .get()
+    const result = harness.repository.finishPrewriteAttempt({
+      claim: claim.claim,
+      disposition: 'check_obsolete'
+    })
+    expect(result).toEqual({ state: 'superseded' })
+    expect(
+      harness.database
+        .prepare('SELECT state FROM product_deploy_job WHERE job_id=?')
+        .get(claim.claim.job_id)
+    ).toEqual({ state: 'superseded' })
+    expect(
+      harness.database.prepare('SELECT * FROM product_desired_branch WHERE app_id=1').get()
+    ).toEqual(desiredBefore)
+    expect(
+      harness.database
+        .prepare('SELECT auto_deploy_paused,pause_reason FROM product_app_control WHERE app_id=1')
+        .get()
+    ).toEqual({ auto_deploy_paused: 1, pause_reason: 'manual_action' })
+  })
+
+  it('does not let double completion release a newer attempt lease', () => {
+    const harness = createHarness()
+    seedManualJob(harness.database, 'prewrite-double', 1)
+    const first = harness.repository.claimNextJob(CONTROLLER)
+    if (first.state !== 'claimed') throw new Error('expected first claim')
+    const finish = (): ReturnType<ProductDeployRepository['finishPrewriteAttempt']> =>
+      harness.repository.finishPrewriteAttempt({
+        claim: first.claim,
+        disposition: 'transient_failure',
+        safeErrorCode: 'NETWORK_ERROR'
+      })
+    expect(finish()).toMatchObject({ state: 'retry_scheduled' })
+    harness.clock.value = Date.parse(
+      (
+        harness.database.prepare('SELECT available_at FROM product_deploy_job').get() as {
+          available_at: string
+        }
+      ).available_at
+    )
+    const second = harness.repository.claimNextJob(CONTROLLER)
+    if (second.state !== 'claimed') throw new Error('expected second claim')
+    const secondLease = harness.database
+      .prepare('SELECT * FROM product_app_lease WHERE lease_id=?')
+      .get(second.claim.app_lease_id)
+    expect(finish()).toEqual({ state: 'rejected', reason: 'stale_claim' })
+    expect(
+      harness.database
+        .prepare('SELECT * FROM product_app_lease WHERE lease_id=?')
+        .get(second.claim.app_lease_id)
+    ).toEqual(secondLease)
+    expect(
+      (
+        harness.database
+          .prepare('SELECT released_at FROM product_worker_lease WHERE lease_id=?')
+          .get(second.claim.build_slot_lease_id) as { released_at: string | null }
+      ).released_at
+    ).toBeNull()
+  })
+
+  it('rolls back attempt, job, both lease releases and history if a pre-write release fails', () => {
+    const harness = createHarness()
+    seedManualJob(harness.database, 'prewrite-rollback', 1)
+    const claim = harness.repository.claimNextJob(CONTROLLER)
+    if (claim.state !== 'claimed') throw new Error('expected claim')
+    harness.database
+      .exec(`CREATE TRIGGER fail_prewrite_build_release BEFORE UPDATE OF released_at ON product_worker_lease
+      WHEN NEW.released_at IS NOT NULL BEGIN SELECT RAISE(ABORT,'injected prewrite release failure'); END`)
+    const before = readPrewriteRows(harness.database)
+    expect(() =>
+      harness.repository.finishPrewriteAttempt({
+        claim: claim.claim,
+        disposition: 'transient_failure',
+        safeErrorCode: 'NETWORK_ERROR'
+      })
+    ).toThrow(/injected prewrite release failure/)
+    expect(readPrewriteRows(harness.database)).toEqual(before)
+  })
+
   it('does not renew an attempt whose durable job outcome changed to uncertain', () => {
     const harness = createHarness()
     seedManualJob(harness.database, 'uncertain-heartbeat', 1)
@@ -477,7 +741,7 @@ describe('Product atomic claim and lease repository', () => {
   })
 })
 
-function createHarness(): {
+function createHarness(jitter: () => number = () => 0): {
   database: ReturnType<typeof initializeDatabase>
   repository: ProductDeployRepository
   clock: { value: number; advance: (milliseconds: number) => void; iso: () => string }
@@ -515,7 +779,7 @@ function createHarness(): {
   }
   return {
     database,
-    repository: ProductDeployRepository.withClockForTest(database, () => clock.value),
+    repository: ProductDeployRepository.withClockForTest(database, () => clock.value, jitter),
     clock
   }
 }
@@ -590,6 +854,22 @@ function count(database: ReturnType<typeof initializeDatabase>, table: string): 
     .count
 }
 
+function readPrewriteRows(database: ReturnType<typeof initializeDatabase>): unknown {
+  return {
+    job: database.prepare('SELECT * FROM product_deploy_job ORDER BY job_id').all(),
+    attempts: database
+      .prepare('SELECT * FROM product_deploy_attempt ORDER BY attempt_number')
+      .all(),
+    appLeases: database.prepare('SELECT * FROM product_app_lease ORDER BY fence').all(),
+    buildLeases: database.prepare('SELECT * FROM product_worker_lease ORDER BY fence').all(),
+    desired: database
+      .prepare('SELECT * FROM product_desired_branch ORDER BY app_id,source_generation,ref')
+      .all(),
+    history: database.prepare('SELECT * FROM product_history_event ORDER BY event_id').all(),
+    fences: database.prepare('SELECT * FROM product_app_fence ORDER BY app_id').all()
+  }
+}
+
 async function waitFor(condition: () => boolean): Promise<void> {
   const deadline = Date.now() + 10_000
   while (!condition()) {
@@ -639,11 +919,11 @@ async function runOperationBehindWriteLock(
       compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}
     }).outputText,f);
     const [dbPath,started,clockPath,resultPath]=process.argv.slice(1);
-    fs.writeFileSync(started,'calling');
     const Database=require('better-sqlite3'); const db=new Database(dbPath);
     db.pragma('foreign_keys=ON'); db.pragma('busy_timeout=8000');
     const {ProductDeployRepository}=require('./src/main/db/productDeployRepository.ts');
     const repo=ProductDeployRepository.withClockForTest(db,()=>Number(fs.readFileSync(clockPath,'utf8')));
+    fs.writeFileSync(started,'calling');
     const outcome=${
       operation === 'claim'
         ? `repo.claimNextJob('${CONTROLLER}')`

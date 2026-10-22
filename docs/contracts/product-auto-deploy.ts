@@ -15,6 +15,11 @@ export type ProductIsoUtc = string;
 /** Lease timing policy for the first Product claim repository. */
 export const PRODUCT_LEASE_TTL_MS = 60_000;
 export const PRODUCT_HEARTBEAT_INTERVAL_MS = 15_000;
+/** A job may be claimed at most three times total (two retries). */
+export const PRODUCT_MAX_ATTEMPTS = 3;
+export const PRODUCT_RETRY_BACKOFF_MS = [30_000, 120_000] as const;
+/** Additive jitter is capped so retries remain within a bounded delay. */
+export const PRODUCT_RETRY_JITTER_MAX_MS = 15_000;
 
 export type ProductAppMode = 'desktop' | 'product';
 export type ProductJobTrigger = 'branch_poll' | 'manual_redeploy' | 'manual_rollback';
@@ -99,6 +104,13 @@ export type ProductJobState =
   | 'uncertain'
   | 'superseded'
   | 'cancelled';
+
+/**
+ * Safe pre-write transient failures retry the same job, with a new attempt only
+ * after available_at. The total claim budget is three attempts; retry delays
+ * are 30s then 120s plus bounded additive jitter. Build/health failures are
+ * post-dispatch and never enter this retry path.
+ */
 
 export interface ProductDeployJob {
   job_id: ProductJobId;
@@ -218,6 +230,39 @@ export type ProductHeartbeatResult =
         | 'ownership_changed'
         | 'expired_lease';
     };
+
+export type ProductPrewriteFinishInput =
+  | {
+      claim: ProductClaimToken;
+      disposition: 'transient_failure' | 'permanent_failure';
+      /** A safe allowlisted code only; raw output and caller-supplied step names are not accepted. */
+      safeErrorCode: string;
+    }
+  | { claim: ProductClaimToken; disposition: 'check_obsolete' };
+
+export type ProductPrewriteFinishResult =
+  | { state: 'retry_scheduled'; available_at: ProductIsoUtc }
+  | { state: 'failed' }
+  | { state: 'superseded' }
+  | {
+      state: 'rejected';
+      reason:
+        | 'invalid_claim'
+        | 'stale_claim'
+        | 'controller_inactive'
+        | 'ownership_changed'
+        | 'expired_lease'
+        | 'not_prewrite'
+        | 'not_obsolete'
+        | 'reconciliation_required';
+    };
+
+/**
+ * This persistence operation can only finish an attempt while no remote write
+ * has begun. Before any executor dispatches a remote mutation, it must durably
+ * transition the attempt to `deploying` and remote_outcome to `unknown` in a
+ * separate transaction. That marker is intentionally outside this checkpoint.
+ */
 
 /** Opaque existing deployment-history link; deployment rows remain canonical. */
 export interface ProductDeploymentLink {

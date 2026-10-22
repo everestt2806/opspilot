@@ -2,7 +2,12 @@ import { randomUUID } from 'node:crypto'
 
 import type Database from 'better-sqlite3'
 
-import { PRODUCT_LEASE_TTL_MS } from '../../../../docs/contracts/product-auto-deploy'
+import {
+  PRODUCT_LEASE_TTL_MS,
+  PRODUCT_MAX_ATTEMPTS,
+  PRODUCT_RETRY_BACKOFF_MS,
+  PRODUCT_RETRY_JITTER_MAX_MS
+} from '../../../../docs/contracts/product-auto-deploy'
 import type {
   ProductAppOwnership,
   ProductBranchObservation,
@@ -12,6 +17,8 @@ import type {
   ProductDesiredBranchState,
   ProductHeartbeatResult,
   ProductJobState,
+  ProductPrewriteFinishInput,
+  ProductPrewriteFinishResult,
   ProductSourceConfigIdentity
 } from '../../../../docs/contracts/product-auto-deploy'
 
@@ -68,6 +75,7 @@ export interface ProductObserveTipResult {
 }
 
 export type ProductRepositoryClock = () => number
+export type ProductRetryJitter = () => number
 
 type ProductDesiredBranchRow = Omit<ProductDesiredBranchState, 'auto_paused'> & {
   auto_paused: 0 | 1
@@ -76,16 +84,19 @@ type ProductDesiredBranchRow = Omit<ProductDesiredBranchState, 'auto_paused'> & 
 /** Product persistence access; mutations are transactional and never enroll apps implicitly. */
 export class ProductDeployRepository {
   private now: ProductRepositoryClock = Date.now
+  private jitter: ProductRetryJitter = Math.random
 
   constructor(private readonly database: Database.Database) {}
 
   /** @internal Construct a repository with a deterministic clock in tests only. */
   static withClockForTest(
     database: Database.Database,
-    clock: ProductRepositoryClock
+    clock: ProductRepositoryClock,
+    jitter: ProductRetryJitter = () => 0
   ): ProductDeployRepository {
     const repository = new ProductDeployRepository(database)
     repository.now = clock
+    repository.jitter = jitter
     return repository
   }
 
@@ -145,7 +156,7 @@ export class ProductDeployRepository {
                AND a.git_ref=source.production_ref AND a.git_root=source.repository_root
              JOIN vps AS v ON v.id=a.vps_id AND v.archived_at IS NULL
              WHERE j.controller_id=? AND j.state IN ('queued','retry_wait')
-               AND j.available_at<=? AND j.attempt_count<j.max_attempts
+               AND j.available_at<=? AND j.attempt_count<MIN(j.max_attempts, ?)
                AND NOT EXISTS (
                  SELECT 1 FROM product_deploy_job AS active
                  WHERE active.app_id=j.app_id AND active.state IN ('claimed','deploying')
@@ -179,7 +190,7 @@ export class ProductDeployRepository {
              ORDER BY CASE WHEN j.trigger='branch_poll' THEN 1 ELSE 0 END,
                       j.created_at, j.job_id`
           )
-          .all(controllerId, now) as ClaimableJobRow[]
+          .all(controllerId, now, PRODUCT_MAX_ATTEMPTS) as ClaimableJobRow[]
 
         const candidate = jobs[0]
         if (!candidate) return { state: 'none' as const, reason: 'no_eligible_job' as const }
@@ -274,9 +285,17 @@ export class ProductDeployRepository {
             `UPDATE product_deploy_job
                     SET state='claimed', attempt_count=?, updated_at=?
                     WHERE job_id=? AND controller_id=? AND state IN ('queued','retry_wait')
-                      AND available_at<=? AND attempt_count=? AND attempt_count<max_attempts`
+                      AND available_at<=? AND attempt_count=? AND attempt_count<MIN(max_attempts, ?)`
           )
-          .run(attemptNumber, now, candidate.job_id, controllerId, now, candidate.attempt_count)
+          .run(
+            attemptNumber,
+            now,
+            candidate.job_id,
+            controllerId,
+            now,
+            candidate.attempt_count,
+            PRODUCT_MAX_ATTEMPTS
+          )
         if (update.changes !== 1) throw new ProductDeployRepositoryError('CLAIM_CAS_FAILED')
 
         if (candidate.trigger === 'branch_poll') {
@@ -321,6 +340,334 @@ export class ProductDeployRepository {
             expires_at: expiresAt
           }
         }
+      })
+      .immediate()
+  }
+
+  /**
+   * Finishes an eligible pre-write attempt and releases its exact leases atomically.
+   * Remote-write/deploy/health failures are excluded by durable attempt state.
+   */
+  finishPrewriteAttempt(input: ProductPrewriteFinishInput): ProductPrewriteFinishResult {
+    if (
+      !input ||
+      typeof input !== 'object' ||
+      !isValidClaimToken(input.claim) ||
+      (input.disposition !== 'transient_failure' &&
+        input.disposition !== 'permanent_failure' &&
+        input.disposition !== 'check_obsolete') ||
+      (input.disposition !== 'check_obsolete' &&
+        (typeof input.safeErrorCode !== 'string' ||
+          !/^[A-Z][A-Z0-9_]{0,63}$/.test(input.safeErrorCode)))
+    ) {
+      return { state: 'rejected', reason: 'invalid_claim' }
+    }
+    const { claim } = input
+    const safeErrorCode =
+      input.disposition === 'check_obsolete' ? 'AUTO_OBSOLETE' : input.safeErrorCode
+
+    return this.database
+      .transaction(() => {
+        const nowMs = this.readClock()
+        const now = new Date(nowMs).toISOString()
+        const authority = this.database
+          .prepare(
+            `SELECT j.state AS job_state, j.controller_id, j.app_id,
+                    j.ownership_generation, j.source_generation, j.source_config_sha256,
+                    j.trigger, j.ref AS job_ref, j.observation_sequence, j.reconcile_epoch,
+                    j.target_sha, j.attempt_count, j.max_attempts,
+                    a.source_type, a.git_repo_url, a.git_ref, a.git_root, v.archived_at,
+                    owner.mode, owner.controller_id AS owner_controller_id,
+                    owner.ownership_generation AS owner_generation,
+                    owner.source_generation AS owner_source_generation,
+                    owner.source_config_sha256 AS owner_config_sha256, owner.auto_deploy_paused,
+                    owner.pause_reason AS owner_pause_reason,
+                    source.repository_url, source.production_ref, source.repository_root,
+                    c.status AS controller_status,
+                    pa.attempt_number, pa.state AS attempt_state, pa.remote_outcome,
+                    pa.lease_id AS app_lease_id, pa.fencing_token AS app_fence,
+                    pa.build_slot_lease_id, pa.build_slot_fence,
+                    app_lease.app_id AS lease_app_id,
+                    app_lease.controller_id AS app_lease_controller_id,
+                    app_lease.ownership_generation AS lease_ownership_generation,
+                    build_lease.controller_id AS build_lease_controller_id,
+                    build_lease.slot_name,
+                    app_lease.expires_at AS app_expires_at, app_lease.released_at AS app_released_at,
+                    build_lease.expires_at AS build_expires_at, build_lease.released_at AS build_released_at
+             FROM product_deploy_attempt AS pa
+             JOIN product_deploy_job AS j ON j.job_id=pa.job_id
+             JOIN product_controller AS c ON c.controller_id=j.controller_id
+             JOIN app AS a ON a.id=j.app_id
+             JOIN vps AS v ON v.id=a.vps_id
+             JOIN product_app_control AS owner ON owner.app_id=j.app_id
+             JOIN product_source_config AS source ON source.app_id=j.app_id
+               AND source.source_generation=j.source_generation
+               AND source.config_sha256=j.source_config_sha256
+             JOIN product_app_lease AS app_lease ON app_lease.lease_id=pa.lease_id
+               AND app_lease.fence=pa.fencing_token AND app_lease.job_id=j.job_id
+             JOIN product_worker_lease AS build_lease ON build_lease.lease_id=pa.build_slot_lease_id
+               AND build_lease.fence=pa.build_slot_fence AND build_lease.job_id=j.job_id
+             WHERE pa.attempt_id=? AND j.job_id=?`
+          )
+          .get(claim.attempt_id, claim.job_id) as PrewriteAuthorityRow | undefined
+        if (!authority) return { state: 'rejected' as const, reason: 'stale_claim' as const }
+        if (authority.controller_status !== 'active') {
+          return { state: 'rejected' as const, reason: 'controller_inactive' as const }
+        }
+        if (
+          authority.controller_id !== claim.controller_id ||
+          authority.app_id !== claim.app_id ||
+          authority.ownership_generation !== claim.ownership_generation ||
+          authority.source_generation !== claim.source_generation ||
+          authority.source_config_sha256 !== claim.source_config_sha256 ||
+          authority.attempt_number !== claim.attempt_number ||
+          authority.attempt_count !== claim.attempt_number ||
+          authority.lease_app_id !== claim.app_id ||
+          authority.app_lease_controller_id !== claim.controller_id ||
+          authority.lease_ownership_generation !== claim.ownership_generation ||
+          authority.build_lease_controller_id !== claim.controller_id ||
+          authority.slot_name !== 'build' ||
+          authority.app_lease_id !== claim.app_lease_id ||
+          authority.app_fence !== claim.app_fence ||
+          authority.build_slot_lease_id !== claim.build_slot_lease_id ||
+          authority.build_slot_fence !== claim.build_slot_fence
+        )
+          return { state: 'rejected' as const, reason: 'stale_claim' as const }
+        if (
+          authority.mode !== 'product' ||
+          authority.owner_controller_id !== claim.controller_id ||
+          authority.owner_generation !== claim.ownership_generation ||
+          authority.owner_source_generation !== claim.source_generation ||
+          authority.owner_config_sha256 !== claim.source_config_sha256 ||
+          authority.archived_at !== null ||
+          authority.source_type !== 'git' ||
+          authority.repository_url !== authority.git_repo_url ||
+          authority.production_ref !== authority.git_ref ||
+          authority.repository_root !== authority.git_root ||
+          authority.production_ref !== authority.job_ref
+        )
+          return { state: 'rejected' as const, reason: 'ownership_changed' as const }
+        if (
+          authority.attempt_state === 'deploying' ||
+          authority.remote_outcome === 'applied' ||
+          authority.remote_outcome === 'unknown'
+        )
+          return { state: 'rejected' as const, reason: 'reconciliation_required' as const }
+        if (authority.job_state !== 'claimed') {
+          return { state: 'rejected' as const, reason: 'not_prewrite' as const }
+        }
+        if (
+          (authority.attempt_state !== 'claimed' &&
+            authority.attempt_state !== 'snapshot_verified') ||
+          authority.remote_outcome !== 'not_started'
+        )
+          return { state: 'rejected' as const, reason: 'not_prewrite' as const }
+        if (authority.app_released_at !== null || authority.build_released_at !== null) {
+          return { state: 'rejected' as const, reason: 'stale_claim' as const }
+        }
+        if (authority.app_expires_at <= now || authority.build_expires_at <= now) {
+          return { state: 'rejected' as const, reason: 'expired_lease' as const }
+        }
+
+        const desired =
+          authority.trigger === 'branch_poll'
+            ? (this.database
+                .prepare(
+                  `SELECT desired_observation_sequence, desired_sha, reconcile_epoch,
+                      reconciliation_job_id, auto_paused
+               FROM product_desired_branch WHERE app_id=? AND source_generation=? AND ref=?`
+                )
+                .get(claim.app_id, authority.source_generation, authority.job_ref) as
+                PrewriteDesiredRow | undefined)
+            : undefined
+        const obsolete =
+          authority.trigger === 'branch_poll' &&
+          (authority.auto_deploy_paused === 1 ||
+            !desired ||
+            desired.desired_observation_sequence !== authority.observation_sequence ||
+            desired.desired_sha !== authority.target_sha ||
+            desired.reconcile_epoch !== authority.reconcile_epoch ||
+            desired.reconciliation_job_id !== claim.job_id ||
+            desired.auto_paused !== 0)
+        if (input.disposition === 'check_obsolete' && !obsolete) {
+          return { state: 'rejected' as const, reason: 'not_obsolete' as const }
+        }
+
+        let finalState: 'retry_wait' | 'failed' | 'superseded'
+        let availableAt: string | null = null
+        if (obsolete) {
+          finalState = 'superseded'
+        } else if (
+          input.disposition === 'transient_failure' &&
+          authority.attempt_count < Math.min(authority.max_attempts, PRODUCT_MAX_ATTEMPTS)
+        ) {
+          finalState = 'retry_wait'
+          const backoff = PRODUCT_RETRY_BACKOFF_MS[claim.attempt_number - 1]
+          const random = this.jitter()
+          if (!Number.isFinite(random)) throw new ProductDeployRepositoryError('INVALID_JITTER')
+          const jitterMs = Math.floor(
+            Math.max(0, Math.min(1, random)) * PRODUCT_RETRY_JITTER_MAX_MS
+          )
+          availableAt = new Date(nowMs + backoff + jitterMs).toISOString()
+        } else {
+          finalState = 'failed'
+        }
+
+        const attemptState = finalState === 'superseded' ? 'abandoned_before_write' : 'failed'
+        const attemptUpdate = this.database
+          .prepare(
+            `UPDATE product_deploy_attempt SET state=?, finished_at=?, failed_step='pre_write', safe_error_code=?
+           WHERE attempt_id=? AND job_id=? AND attempt_number=?
+             AND state IN ('claimed','snapshot_verified') AND remote_outcome='not_started'`
+          )
+          .run(
+            attemptState,
+            now,
+            safeErrorCode,
+            claim.attempt_id,
+            claim.job_id,
+            claim.attempt_number
+          )
+        if (attemptUpdate.changes !== 1)
+          throw new ProductDeployRepositoryError('PREWRITE_ATTEMPT_CAS_FAILED')
+
+        const jobUpdate = this.database
+          .prepare(
+            `UPDATE product_deploy_job SET state=?, available_at=COALESCE(?,available_at),
+             updated_at=?, finished_at=?, safe_error_code=?
+           WHERE job_id=? AND controller_id=? AND app_id=? AND state='claimed' AND attempt_count=?`
+          )
+          .run(
+            finalState,
+            availableAt,
+            now,
+            finalState === 'retry_wait' ? null : now,
+            safeErrorCode,
+            claim.job_id,
+            claim.controller_id,
+            claim.app_id,
+            authority.attempt_count
+          )
+        if (jobUpdate.changes !== 1)
+          throw new ProductDeployRepositoryError('PREWRITE_JOB_CAS_FAILED')
+
+        const appRelease = this.database
+          .prepare(
+            `UPDATE product_app_lease SET released_at=?
+           WHERE lease_id=? AND app_id=? AND controller_id=? AND ownership_generation=?
+             AND fence=? AND job_id=? AND released_at IS NULL AND expires_at>?`
+          )
+          .run(
+            now,
+            claim.app_lease_id,
+            claim.app_id,
+            claim.controller_id,
+            claim.ownership_generation,
+            claim.app_fence,
+            claim.job_id,
+            now
+          )
+        if (appRelease.changes !== 1)
+          throw new ProductDeployRepositoryError('PREWRITE_APP_LEASE_CAS_FAILED')
+        const buildRelease = this.database
+          .prepare(
+            `UPDATE product_worker_lease SET released_at=?
+           WHERE lease_id=? AND slot_name='build' AND controller_id=? AND fence=?
+             AND job_id=? AND released_at IS NULL AND expires_at>?`
+          )
+          .run(
+            now,
+            claim.build_slot_lease_id,
+            claim.controller_id,
+            claim.build_slot_fence,
+            claim.job_id,
+            now
+          )
+        if (buildRelease.changes !== 1)
+          throw new ProductDeployRepositoryError('PREWRITE_BUILD_LEASE_CAS_FAILED')
+
+        if (authority.trigger === 'branch_poll' && !obsolete && desired) {
+          const desiredState = finalState === 'retry_wait' ? 'queued' : 'failed'
+          const desiredUpdate = this.database
+            .prepare(
+              `UPDATE product_desired_branch SET reconciliation_state=?, updated_at=?
+             WHERE app_id=? AND source_generation=? AND ref=?
+               AND desired_observation_sequence=? AND desired_sha=? AND reconcile_epoch=?
+               AND reconciliation_job_id=? AND auto_paused=0`
+            )
+            .run(
+              desiredState,
+              now,
+              claim.app_id,
+              authority.source_generation,
+              authority.job_ref,
+              authority.observation_sequence,
+              authority.target_sha,
+              authority.reconcile_epoch,
+              claim.job_id
+            )
+          if (desiredUpdate.changes !== 1)
+            throw new ProductDeployRepositoryError('PREWRITE_DESIRED_CAS_FAILED')
+        } else if (
+          authority.trigger === 'branch_poll' &&
+          obsolete &&
+          desired &&
+          authority.auto_deploy_paused === 1 &&
+          desired.desired_observation_sequence === authority.observation_sequence &&
+          desired.desired_sha === authority.target_sha &&
+          desired.reconcile_epoch === authority.reconcile_epoch &&
+          desired.reconciliation_job_id === claim.job_id
+        ) {
+          // Reflect the current owner policy only for this exact desired revision.
+          const pausedUpdate = this.database
+            .prepare(
+              `UPDATE product_desired_branch SET reconciliation_state='paused',auto_paused=1,
+               pause_reason=?,updated_at=?
+             WHERE app_id=? AND source_generation=? AND ref=?
+               AND desired_observation_sequence=? AND desired_sha=? AND reconcile_epoch=?
+               AND reconciliation_job_id=?`
+            )
+            .run(
+              authority.owner_pause_reason,
+              now,
+              claim.app_id,
+              authority.source_generation,
+              authority.job_ref,
+              authority.observation_sequence,
+              authority.target_sha,
+              authority.reconcile_epoch,
+              claim.job_id
+            )
+          if (pausedUpdate.changes !== 1)
+            throw new ProductDeployRepositoryError('PREWRITE_PAUSE_CAS_FAILED')
+        }
+
+        const kind =
+          finalState === 'retry_wait'
+            ? 'prewrite_retry_scheduled'
+            : finalState === 'superseded'
+              ? 'prewrite_auto_superseded'
+              : 'prewrite_failed'
+        this.database
+          .prepare(
+            `INSERT INTO product_history_event
+           (controller_id,app_id,job_id,attempt_id,kind,created_at,safe_summary_json)
+           VALUES (?,?,?,?,?,?,?)`
+          )
+          .run(
+            claim.controller_id,
+            claim.app_id,
+            claim.job_id,
+            claim.attempt_id,
+            kind,
+            now,
+            JSON.stringify({ safe_error_code: safeErrorCode, available_at: availableAt })
+          )
+
+        if (finalState === 'retry_wait') {
+          return { state: 'retry_scheduled' as const, available_at: availableAt! }
+        }
+        return { state: finalState as 'failed' | 'superseded' }
       })
       .immediate()
   }
@@ -1034,6 +1381,33 @@ interface ClaimAuthorityRow {
   app_released_at: string | null
   build_expires_at: string
   build_released_at: string | null
+}
+
+interface PrewriteAuthorityRow extends ClaimAuthorityRow {
+  trigger: string
+  job_ref: string
+  observation_sequence: number | null
+  reconcile_epoch: number | null
+  target_sha: string | null
+  attempt_count: number
+  max_attempts: number
+  controller_status: string
+  auto_deploy_paused: number
+  owner_pause_reason: 'manual_action' | 'operator' | null
+  lease_app_id: number
+  app_lease_controller_id: string
+  lease_ownership_generation: number
+  build_lease_controller_id: string
+  slot_name: string
+  remote_outcome: string
+}
+
+interface PrewriteDesiredRow {
+  desired_observation_sequence: number
+  desired_sha: string
+  reconcile_epoch: number
+  reconciliation_job_id: string | null
+  auto_paused: 0 | 1
 }
 
 export class ProductDeployRepositoryError extends Error {
