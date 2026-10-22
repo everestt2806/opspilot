@@ -5,6 +5,7 @@ import type Database from 'better-sqlite3'
 import {
   PRODUCT_LEASE_TTL_MS,
   PRODUCT_MAX_ATTEMPTS,
+  PRODUCT_PREWRITE_ERROR_CODES,
   PRODUCT_RETRY_BACKOFF_MS,
   PRODUCT_RETRY_JITTER_MAX_MS
 } from '../../../../docs/contracts/product-auto-deploy'
@@ -355,12 +356,40 @@ export class ProductDeployRepository {
       !isValidClaimToken(input.claim) ||
       (input.disposition !== 'transient_failure' &&
         input.disposition !== 'permanent_failure' &&
-        input.disposition !== 'check_obsolete') ||
-      (input.disposition !== 'check_obsolete' &&
-        (typeof input.safeErrorCode !== 'string' ||
-          !/^[A-Z][A-Z0-9_]{0,63}$/.test(input.safeErrorCode)))
+        input.disposition !== 'check_obsolete')
     ) {
       return { state: 'rejected', reason: 'invalid_claim' }
+    }
+    if (input.disposition === 'transient_failure') {
+      if (typeof input.safeErrorCode !== 'string') {
+        return { state: 'rejected', reason: 'unrecognized_error_code' }
+      }
+      if (
+        !(PRODUCT_PREWRITE_ERROR_CODES.transient as readonly string[]).includes(input.safeErrorCode)
+      ) {
+        const mismatched = (PRODUCT_PREWRITE_ERROR_CODES.permanent as readonly string[]).includes(
+          input.safeErrorCode
+        )
+        return {
+          state: 'rejected',
+          reason: mismatched ? 'error_code_disposition_mismatch' : 'unrecognized_error_code'
+        }
+      }
+    } else if (input.disposition === 'permanent_failure') {
+      if (typeof input.safeErrorCode !== 'string') {
+        return { state: 'rejected', reason: 'unrecognized_error_code' }
+      }
+      if (
+        !(PRODUCT_PREWRITE_ERROR_CODES.permanent as readonly string[]).includes(input.safeErrorCode)
+      ) {
+        const mismatched = (PRODUCT_PREWRITE_ERROR_CODES.transient as readonly string[]).includes(
+          input.safeErrorCode
+        )
+        return {
+          state: 'rejected',
+          reason: mismatched ? 'error_code_disposition_mismatch' : 'unrecognized_error_code'
+        }
+      }
     }
     const { claim } = input
     const safeErrorCode =

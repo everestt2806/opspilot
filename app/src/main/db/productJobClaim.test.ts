@@ -429,6 +429,31 @@ describe('Product atomic claim and lease repository', () => {
     expect(count(harness.database, 'product_deploy_attempt')).toBe(1)
   })
 
+  it('rejects unknown and disposition-mismatched error codes before any database mutation', () => {
+    const harness = createHarness()
+    seedManualJob(harness.database, 'prewrite-error-allowlist', 1)
+    const claim = harness.repository.claimNextJob(CONTROLLER)
+    if (claim.state !== 'claimed') throw new Error('expected claim')
+    const before = readPrewriteRows(harness.database)
+    const sentinel = 'UNRECOGNIZED_SECRET_SENTINEL'
+    const unknown = harness.repository.finishPrewriteAttempt({
+      claim: claim.claim,
+      disposition: 'transient_failure',
+      safeErrorCode: sentinel
+    } as never)
+    expect(unknown).toEqual({ state: 'rejected', reason: 'unrecognized_error_code' })
+    expect(JSON.stringify(unknown)).not.toContain(sentinel)
+    expect(readPrewriteRows(harness.database)).toEqual(before)
+
+    const mismatch = harness.repository.finishPrewriteAttempt({
+      claim: claim.claim,
+      disposition: 'transient_failure',
+      safeErrorCode: 'INVALID_SOURCE_CONFIG'
+    } as never)
+    expect(mismatch).toEqual({ state: 'rejected', reason: 'error_code_disposition_mismatch' })
+    expect(readPrewriteRows(harness.database)).toEqual(before)
+  })
+
   it('rejects stale, expired and post-dispatch pre-write completion without changing rows', () => {
     const harness = createHarness()
     seedManualJob(harness.database, 'prewrite-stale', 1)
@@ -473,7 +498,7 @@ describe('Product atomic claim and lease repository', () => {
       dispatched.repository.finishPrewriteAttempt({
         claim: claim.claim,
         disposition: 'transient_failure',
-        safeErrorCode: 'BUILD_FAILED'
+        safeErrorCode: 'GIT_UNAVAILABLE'
       })
     ).toEqual({ state: 'rejected', reason: 'reconciliation_required' })
     expect(readPrewriteRows(dispatched.database)).toEqual(dispatchSnapshot)

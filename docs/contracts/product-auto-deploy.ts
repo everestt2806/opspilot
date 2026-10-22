@@ -21,6 +21,16 @@ export const PRODUCT_RETRY_BACKOFF_MS = [30_000, 120_000] as const;
 /** Additive jitter is capped so retries remain within a bounded delay. */
 export const PRODUCT_RETRY_JITTER_MAX_MS = 15_000;
 
+/** Only these stable codes may be persisted by pre-write completion. */
+export const PRODUCT_PREWRITE_ERROR_CODES = {
+  transient: ['GIT_UNAVAILABLE', 'SSH_PREFLIGHT_TIMEOUT', 'NETWORK_ERROR'] as const,
+  permanent: ['INVALID_SOURCE_CONFIG', 'UNSUPPORTED_SOURCE_CONFIG', 'INVALID_REPOSITORY_URL'] as const
+};
+export type ProductPrewriteTransientErrorCode =
+  (typeof PRODUCT_PREWRITE_ERROR_CODES.transient)[number];
+export type ProductPrewritePermanentErrorCode =
+  (typeof PRODUCT_PREWRITE_ERROR_CODES.permanent)[number];
+
 export type ProductAppMode = 'desktop' | 'product';
 export type ProductJobTrigger = 'branch_poll' | 'manual_redeploy' | 'manual_rollback';
 
@@ -234,9 +244,13 @@ export type ProductHeartbeatResult =
 export type ProductPrewriteFinishInput =
   | {
       claim: ProductClaimToken;
-      disposition: 'transient_failure' | 'permanent_failure';
-      /** A safe allowlisted code only; raw output and caller-supplied step names are not accepted. */
-      safeErrorCode: string;
+      disposition: 'transient_failure';
+      safeErrorCode: ProductPrewriteTransientErrorCode;
+    }
+  | {
+      claim: ProductClaimToken;
+      disposition: 'permanent_failure';
+      safeErrorCode: ProductPrewritePermanentErrorCode;
     }
   | { claim: ProductClaimToken; disposition: 'check_obsolete' };
 
@@ -248,6 +262,8 @@ export type ProductPrewriteFinishResult =
       state: 'rejected';
       reason:
         | 'invalid_claim'
+        | 'unrecognized_error_code'
+        | 'error_code_disposition_mismatch'
         | 'stale_claim'
         | 'controller_inactive'
         | 'ownership_changed'
