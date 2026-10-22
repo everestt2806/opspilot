@@ -24,6 +24,7 @@ export const PRODUCT_CONTROLLER_API_PORT = 8768
 export const PRODUCT_CONTROLLER_API_MAX_REQUEST_BYTES = 16 * 1024
 export const PRODUCT_CONTROLLER_API_MAX_RESPONSE_BYTES = 1024 * 1024
 export const PRODUCT_CONTROLLER_API_MAX_PAGE_SIZE = 100
+export const PRODUCT_CONTROLLER_API_DEFAULT_PAGE_SIZE = 50
 export const PRODUCT_CONTROLLER_API_MAX_LOG_PAGE_BYTES = 64 * 1024
 export const PRODUCT_CONTROLLER_API_MAX_LOG_LINES = 200
 export const PRODUCT_CONTROLLER_API_CLIENT_STALE_AFTER_MS = 30_000
@@ -320,12 +321,23 @@ export interface ProductControllerHistoryItem {
   reason_code: string | null
 }
 
-/** Payload encoded inside the opaque base64url page cursor; it is not an auth token. */
-export interface ProductControllerCursorPayload extends ProductHistoryCursor {
-  app_id: ProductAppId
-  collection: 'jobs' | 'deployments' | 'history' | 'logs'
-  offset: number
-}
+/**
+ * Payload encoded inside the opaque base64url page cursor; it is not an auth
+ * token or authorization grant. App collection uses keyset continuation by
+ * ascending app_id; app-scoped collections retain their app-bound position.
+ */
+export type ProductControllerCursorPayload =
+  | {
+      controller_id: ProductControllerId
+      collection: 'apps'
+      after_app_id: ProductAppId
+      upper_bound_app_id: ProductAppId
+    }
+  | (ProductHistoryCursor & {
+      app_id: ProductAppId
+      collection: 'jobs' | 'deployments' | 'history' | 'logs'
+      offset: number
+    })
 
 export interface ProductControllerPage<T> {
   items: readonly T[]
@@ -360,6 +372,7 @@ export type ProductControllerRequestLookup =
   | { found: false }
 
 export interface ProductControllerPageQuery {
+  /** Defaults to 50; values above PRODUCT_CONTROLLER_API_MAX_PAGE_SIZE are rejected. */
   limit?: number
   cursor?: ProductControllerCursorToken
 }
@@ -414,7 +427,7 @@ export interface ProductControllerApiRoutes {
   'GET /v1/controllers/{controller_id}/status': { response: ProductControllerApiMeta & ProductControllerStatus }
   'GET /v1/controllers/{controller_id}/requests/{request_key}': { response: ProductControllerApiMeta & ProductControllerRequestLookup }
   'GET /v1/controllers/{controller_id}/capabilities': { response: ProductControllerApiMeta & ProductControllerCapabilities }
-  'GET /v1/controllers/{controller_id}/apps': { response: ProductControllerApiMeta & { items: readonly ProductControllerAppSummary[] } }
+  'GET /v1/controllers/{controller_id}/apps': { query: ProductControllerPageQuery; response: ProductControllerApiMeta & ProductControllerPage<ProductControllerAppSummary> }
   'GET /v1/controllers/{controller_id}/apps/{app_id}': { response: ProductControllerApiMeta & ProductControllerAppDetail }
   'GET /v1/controllers/{controller_id}/apps/{app_id}/jobs': { query: ProductControllerPageQuery; response: ProductControllerApiMeta & ProductControllerPage<ProductControllerJobSummary> }
   'GET /v1/controllers/{controller_id}/apps/{app_id}/deployments': { query: ProductControllerPageQuery; response: ProductControllerApiMeta & ProductControllerPage<ProductControllerDeploymentSummary> }
@@ -452,15 +465,42 @@ type ProductControllerRoutesHaveSecurity = ProductControllerAssert<
 export type ProductControllerApiRouteSecurityParity = ProductControllerRoutesHaveSecurity
 
 /**
- * Idempotency-Key is a UUID created by the main process and scoped server-side
- * to controller/client/app/action plus RFC 8785 canonical-body SHA-256 digest. Keep a
- * compact mapping/tombstone for the controller lifetime. Same key+body
- * returns the original outcome; same key with different scope/body is 409.
+ * Idempotency-Key is a UUID created by the main process. Its unique lookup
+ * namespace is (controller_id, authenticated_client_id, request_key). Resource/
+ * app, action and RFC 8785 canonical-body SHA-256 are immutable values on that
+ * record, not namespace components. Keep a compact mapping/tombstone for the
+ * controller lifetime. Same key and content returns the stored outcome; a
+ * changed app/action/body conflicts with 409 IDEMPOTENCY_CONFLICT. Every retry
+ * reauthenticates and checks current authorization before lookup or disclosure.
  */
 export interface ProductControllerIdempotencyContract {
   header: 'Idempotency-Key'
   format: 'UUID'
+  unique_namespace: readonly ['controller_id', 'authenticated_client_id', 'request_key']
+  immutable_request_fields: readonly ['resource_or_app', 'action', 'canonical_body_sha256']
   duplicate_status: 'original_result'
   changed_request_status: 'IDEMPOTENCY_CONFLICT'
   timeout_status: 'outcome_unknown_query_existing_request'
+}
+
+/** SSH-admin operation keys use the authenticated SSH principal, never body actor data. */
+export interface ProductControllerSshIdempotencyContract {
+  unique_namespace: readonly ['controller_id', 'authenticated_administrator_identity', 'request_key']
+  immutable_request_fields: readonly ['resource_or_client', 'operation', 'canonical_body_sha256']
+  duplicate_status: 'original_result'
+  changed_request_status: 'IDEMPOTENCY_CONFLICT'
+  retry_authorization: 'reauthenticate_and_reauthorize_current_admin'
+}
+
+/** App listing is keyset-paged by app_id ASC; each page rechecks current ownership. */
+export interface ProductControllerAppsPageContract {
+  route: 'GET /v1/controllers/{controller_id}/apps'
+  query: ProductControllerPageQuery
+  response: ProductControllerPage<ProductControllerAppSummary>
+  default_limit: typeof PRODUCT_CONTROLLER_API_DEFAULT_PAGE_SIZE
+  max_limit: typeof PRODUCT_CONTROLLER_API_MAX_PAGE_SIZE
+  order: 'app_id_ascending'
+  continuation: 'keyset_after_app_id_bounded_by_first_page_max_app_id'
+  cursor_scope: readonly ['controller_id', 'apps_collection']
+  authorization: 'current_product_ownership_filtered_on_every_page'
 }
