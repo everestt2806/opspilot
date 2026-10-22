@@ -94,12 +94,13 @@ export class ProductDeployRepository {
     if (typeof controllerId !== 'string' || controllerId.length === 0) {
       throw new ProductDeployRepositoryError('INVALID_CONTROLLER_ID')
     }
-    const nowMs = this.readClock()
-    const now = new Date(nowMs).toISOString()
-    const expiresAt = new Date(nowMs + PRODUCT_LEASE_TTL_MS).toISOString()
-
     return this.database
       .transaction(() => {
+        // Read the clock only after BEGIN IMMEDIATE has acquired SQLite's
+        // writer lock; a request may have waited long enough for leases to expire.
+        const nowMs = this.readClock()
+        const now = new Date(nowMs).toISOString()
+        const expiresAt = new Date(nowMs + PRODUCT_LEASE_TTL_MS).toISOString()
         const controller = this.database
           .prepare('SELECT status FROM product_controller WHERE controller_id=?')
           .get(controllerId) as { status: string } | undefined
@@ -327,13 +328,15 @@ export class ProductDeployRepository {
   /** Renews both leases only while this exact, unexpired claim still owns the DB authority. */
   heartbeatClaim(claim: ProductClaimToken): ProductHeartbeatResult {
     if (!isValidClaimToken(claim)) return { state: 'rejected', reason: 'invalid_claim' }
-    const nowMs = this.readClock()
-    const now = new Date(nowMs).toISOString()
-    const expiresAt = new Date(nowMs + PRODUCT_LEASE_TTL_MS).toISOString()
 
     try {
       return this.database
         .transaction(() => {
+          // Expiry and renewal are evaluated against the time at which this
+          // transaction actually owns the writer lock, never request start.
+          const nowMs = this.readClock()
+          const now = new Date(nowMs).toISOString()
+          const expiresAt = new Date(nowMs + PRODUCT_LEASE_TTL_MS).toISOString()
           const controller = this.database
             .prepare('SELECT status FROM product_controller WHERE controller_id=?')
             .get(claim.controller_id) as { status: string } | undefined

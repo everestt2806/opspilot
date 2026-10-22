@@ -249,6 +249,78 @@ describe('Product atomic claim and lease repository', () => {
     })
   })
 
+  it('rejects a heartbeat that waits past expiry without changing either lease', async () => {
+    const harness = createHarness()
+    seedManualJob(harness.database, 'lock-expired-heartbeat', 1)
+    const claim = harness.repository.claimNextJob(CONTROLLER)
+    if (claim.state !== 'claimed') throw new Error('expected claim')
+    const appBefore = harness.database
+      .prepare('SELECT heartbeat_at,expires_at FROM product_app_lease WHERE lease_id=?')
+      .get(claim.claim.app_lease_id)
+    const buildBefore = harness.database
+      .prepare('SELECT heartbeat_at,expires_at FROM product_worker_lease WHERE lease_id=?')
+      .get(claim.claim.build_slot_lease_id)
+    await runOperationBehindWriteLock('heartbeat', claim.claim, NOW + PRODUCT_LEASE_TTL_MS + 1)
+
+    const verify = new Database(join(testDirectory!, 'opspilot.db'))
+    expect(
+      verify
+        .prepare('SELECT heartbeat_at,expires_at FROM product_app_lease WHERE lease_id=?')
+        .get(claim.claim.app_lease_id)
+    ).toEqual(appBefore)
+    expect(
+      verify
+        .prepare('SELECT heartbeat_at,expires_at FROM product_worker_lease WHERE lease_id=?')
+        .get(claim.claim.build_slot_lease_id)
+    ).toEqual(buildBefore)
+    verify.close()
+    // The child result is persisted by the helper for assertions and the claim remains expired.
+    expect(JSON.parse(readFileSync(join(testDirectory!, 'operation.result'), 'utf8'))).toEqual({
+      state: 'rejected',
+      reason: 'expired_lease'
+    })
+  })
+
+  it('renews both leases when a waiting heartbeat gets the lock before expiry', async () => {
+    const harness = createHarness()
+    seedManualJob(harness.database, 'lock-valid-heartbeat', 1)
+    const claim = harness.repository.claimNextJob(CONTROLLER)
+    if (claim.state !== 'claimed') throw new Error('expected claim')
+    await runOperationBehindWriteLock('heartbeat', claim.claim, NOW + 15_000)
+    expect(JSON.parse(readFileSync(join(testDirectory!, 'operation.result'), 'utf8'))).toEqual({
+      state: 'renewed',
+      expires_at: new Date(NOW + 15_000 + PRODUCT_LEASE_TTL_MS).toISOString()
+    })
+    const verify = new Database(join(testDirectory!, 'opspilot.db'))
+    const expected = {
+      heartbeat_at: new Date(NOW + 15_000).toISOString(),
+      expires_at: new Date(NOW + 15_000 + PRODUCT_LEASE_TTL_MS).toISOString()
+    }
+    expect(
+      verify
+        .prepare('SELECT heartbeat_at,expires_at FROM product_app_lease WHERE lease_id=?')
+        .get(claim.claim.app_lease_id)
+    ).toEqual(expected)
+    expect(
+      verify
+        .prepare('SELECT heartbeat_at,expires_at FROM product_worker_lease WHERE lease_id=?')
+        .get(claim.claim.build_slot_lease_id)
+    ).toEqual(expected)
+    verify.close()
+  })
+
+  it('starts a queued job lease from the time the waiting claim obtains the lock', async () => {
+    const harness = createHarness()
+    seedManualJob(harness.database, 'lock-waiting-claim', 1)
+    await runOperationBehindWriteLock('claim', null, NOW + 5_000)
+    expect(
+      JSON.parse(readFileSync(join(testDirectory!, 'operation.result'), 'utf8'))
+    ).toMatchObject({
+      state: 'claimed',
+      claim: { expires_at: new Date(NOW + 5_000 + PRODUCT_LEASE_TTL_MS).toISOString() }
+    })
+  })
+
   it('does not renew an attempt whose durable job outcome changed to uncertain', () => {
     const harness = createHarness()
     seedManualJob(harness.database, 'uncertain-heartbeat', 1)
@@ -534,4 +606,79 @@ function waitForChild(child: ReturnType<typeof spawn>): Promise<void> {
       else reject(new Error(`claim worker exited with code ${String(code)}`))
     })
   })
+}
+
+async function runOperationBehindWriteLock(
+  operation: 'claim' | 'heartbeat',
+  claim: import('../../../../docs/contracts/product-auto-deploy').ProductClaimToken | null,
+  operationTime: number
+): Promise<void> {
+  const databasePath = join(testDirectory!, 'opspilot.db')
+  const lockReady = join(testDirectory!, 'lock.ready')
+  const operationStarted = join(testDirectory!, 'operation.started')
+  const releaseLock = join(testDirectory!, 'release.lock')
+  const clockPath = join(testDirectory!, 'clock.txt')
+  const resultPath = join(testDirectory!, 'operation.result')
+  writeFileSync(clockPath, String(NOW))
+  closeDatabase()
+
+  const lockSource = `
+    const fs=require('node:fs'); const Database=require('better-sqlite3');
+    const [dbPath,ready,release]=process.argv.slice(1);
+    const db=new Database(dbPath); db.pragma('busy_timeout=8000'); db.exec('BEGIN IMMEDIATE');
+    fs.writeFileSync(ready,'locked');
+    const wait=new Int32Array(new SharedArrayBuffer(4)); const deadline=Date.now()+8000;
+    while(!fs.existsSync(release) && Date.now()<deadline) Atomics.wait(wait,0,0,5);
+    if(!fs.existsSync(release)) { db.exec('ROLLBACK'); db.close(); process.exit(3); }
+    db.exec('COMMIT'); db.close();
+  `
+  const claimLiteral = JSON.stringify(claim)
+  const operationSource = `
+    const fs=require('node:fs'); const ts=require('typescript');
+    require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{
+      compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}
+    }).outputText,f);
+    const [dbPath,started,clockPath,resultPath]=process.argv.slice(1);
+    fs.writeFileSync(started,'calling');
+    const Database=require('better-sqlite3'); const db=new Database(dbPath);
+    db.pragma('foreign_keys=ON'); db.pragma('busy_timeout=8000');
+    const {ProductDeployRepository}=require('./src/main/db/productDeployRepository.ts');
+    const repo=ProductDeployRepository.withClockForTest(db,()=>Number(fs.readFileSync(clockPath,'utf8')));
+    const outcome=${
+      operation === 'claim'
+        ? `repo.claimNextJob('${CONTROLLER}')`
+        : `repo.heartbeatClaim(${claimLiteral})`
+    };
+    fs.writeFileSync(resultPath,JSON.stringify(outcome)); db.close();
+  `
+  const lockChild = spawn(
+    process.execPath,
+    ['-e', lockSource, databasePath, lockReady, releaseLock],
+    {
+      cwd: process.cwd(),
+      stdio: 'ignore'
+    }
+  )
+  let operationChild: ReturnType<typeof spawn> | null = null
+  try {
+    await waitFor(() => existsSync(lockReady))
+    operationChild = spawn(
+      process.execPath,
+      ['-e', operationSource, databasePath, operationStarted, clockPath, resultPath],
+      { cwd: process.cwd(), stdio: 'ignore' }
+    )
+    await waitFor(() => existsSync(operationStarted))
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(existsSync(resultPath)).toBe(false)
+    writeFileSync(clockPath, String(operationTime))
+    writeFileSync(releaseLock, 'release')
+    await Promise.all([waitForChild(lockChild), waitForChild(operationChild)])
+  } finally {
+    writeFileSync(releaseLock, 'release')
+    for (const child of [lockChild, operationChild]) {
+      if (child && child.exitCode === null) child.kill()
+    }
+    if (lockChild.exitCode === null) await waitForChild(lockChild)
+    if (operationChild && operationChild.exitCode === null) await waitForChild(operationChild)
+  }
 }
