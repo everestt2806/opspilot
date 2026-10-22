@@ -12,6 +12,10 @@ export type ProductDeploymentId = number;
 export type ProductFullCommitSha = string;
 export type ProductIsoUtc = string;
 
+/** Lease timing policy for the first Product claim repository. */
+export const PRODUCT_LEASE_TTL_MS = 60_000;
+export const PRODUCT_HEARTBEAT_INTERVAL_MS = 15_000;
+
 export type ProductAppMode = 'desktop' | 'product';
 export type ProductJobTrigger = 'branch_poll' | 'manual_redeploy' | 'manual_rollback';
 
@@ -174,6 +178,46 @@ export interface ProductBuildSlotLease {
   expires_at: ProductIsoUtc;
   heartbeat_at: ProductIsoUtc;
 }
+
+/** Capability returned only after one atomic DB claim transaction succeeds. */
+export interface ProductClaimToken {
+  controller_id: ProductControllerId;
+  app_id: ProductAppId;
+  job_id: ProductJobId;
+  attempt_id: ProductAttemptId;
+  attempt_number: number;
+  ownership_generation: number;
+  source_generation: number;
+  source_config_sha256: string;
+  app_lease_id: ProductLeaseId;
+  app_fence: number;
+  build_slot_lease_id: ProductLeaseId;
+  build_slot_fence: number;
+  expires_at: ProductIsoUtc;
+}
+
+export type ProductClaimResult =
+  | { state: 'claimed'; claim: ProductClaimToken }
+  | { state: 'none'; reason: 'no_eligible_job' }
+  | {
+      state: 'blocked';
+      reason:
+        | 'build_slot_busy'
+        | 'app_lease_busy'
+        | 'reconciliation_required';
+    };
+
+export type ProductHeartbeatResult =
+  | { state: 'renewed'; expires_at: ProductIsoUtc }
+  | {
+      state: 'rejected';
+      reason:
+        | 'invalid_claim'
+        | 'stale_claim'
+        | 'controller_inactive'
+        | 'ownership_changed'
+        | 'expired_lease';
+    };
 
 /** Opaque existing deployment-history link; deployment rows remain canonical. */
 export interface ProductDeploymentLink {

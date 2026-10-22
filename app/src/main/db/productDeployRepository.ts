@@ -2,11 +2,15 @@ import { randomUUID } from 'node:crypto'
 
 import type Database from 'better-sqlite3'
 
+import { PRODUCT_LEASE_TTL_MS } from '../../../../docs/contracts/product-auto-deploy'
 import type {
   ProductAppOwnership,
   ProductBranchObservation,
+  ProductClaimResult,
+  ProductClaimToken,
   ProductControllerId,
   ProductDesiredBranchState,
+  ProductHeartbeatResult,
   ProductJobState,
   ProductSourceConfigIdentity
 } from '../../../../docs/contracts/product-auto-deploy'
@@ -63,13 +67,406 @@ export interface ProductObserveTipResult {
   reconciliation: ProductReconcileResult
 }
 
+export type ProductRepositoryClock = () => number
+
 type ProductDesiredBranchRow = Omit<ProductDesiredBranchState, 'auto_paused'> & {
   auto_paused: 0 | 1
 }
 
 /** Product persistence access; mutations are transactional and never enroll apps implicitly. */
 export class ProductDeployRepository {
+  private now: ProductRepositoryClock = Date.now
+
   constructor(private readonly database: Database.Database) {}
+
+  /** @internal Construct a repository with a deterministic clock in tests only. */
+  static withClockForTest(
+    database: Database.Database,
+    clock: ProductRepositoryClock
+  ): ProductDeployRepository {
+    const repository = new ProductDeployRepository(database)
+    repository.now = clock
+    return repository
+  }
+
+  /** Claims one eligible Product job and both controller/app leases atomically. */
+  claimNextJob(controllerId: ProductControllerId): ProductClaimResult {
+    if (typeof controllerId !== 'string' || controllerId.length === 0) {
+      throw new ProductDeployRepositoryError('INVALID_CONTROLLER_ID')
+    }
+    const nowMs = this.readClock()
+    const now = new Date(nowMs).toISOString()
+    const expiresAt = new Date(nowMs + PRODUCT_LEASE_TTL_MS).toISOString()
+
+    return this.database
+      .transaction(() => {
+        const controller = this.database
+          .prepare('SELECT status FROM product_controller WHERE controller_id=?')
+          .get(controllerId) as { status: string } | undefined
+        if (!controller || controller.status !== 'active') {
+          throw new ProductDeployRepositoryError('CONTROLLER_NOT_ACTIVE')
+        }
+
+        const activeBuildLease = this.database
+          .prepare(
+            `SELECT expires_at FROM product_worker_lease
+                    WHERE slot_name='build' AND released_at IS NULL LIMIT 1`
+          )
+          .get() as { expires_at: string } | undefined
+        if (activeBuildLease) {
+          return {
+            state: 'blocked' as const,
+            reason:
+              activeBuildLease.expires_at <= now
+                ? ('reconciliation_required' as const)
+                : ('build_slot_busy' as const)
+          }
+        }
+
+        const jobs = this.database
+          .prepare(
+            `SELECT j.job_id, j.app_id, j.ownership_generation, j.source_generation,
+                      j.source_config_sha256, j.trigger, j.ref, j.target_sha,
+                    j.observation_sequence, j.reconcile_epoch,
+                    j.target_deployment_id, j.attempt_count, j.max_attempts
+             FROM product_deploy_job AS j
+             JOIN product_controller AS c ON c.controller_id=j.controller_id AND c.status='active'
+             JOIN product_app_control AS owner ON owner.app_id=j.app_id
+               AND owner.mode='product' AND owner.controller_id=j.controller_id
+               AND owner.ownership_generation=j.ownership_generation
+               AND owner.source_generation=j.source_generation
+               AND owner.source_config_sha256=j.source_config_sha256
+             JOIN product_source_config AS source ON source.app_id=j.app_id
+               AND source.source_generation=j.source_generation
+               AND source.config_sha256=j.source_config_sha256 AND source.production_ref=j.ref
+             JOIN app AS a ON a.id=j.app_id AND a.source_type='git'
+               AND a.git_repo_url=source.repository_url
+               AND a.git_ref=source.production_ref AND a.git_root=source.repository_root
+             JOIN vps AS v ON v.id=a.vps_id AND v.archived_at IS NULL
+             WHERE j.controller_id=? AND j.state IN ('queued','retry_wait')
+               AND j.available_at<=? AND j.attempt_count<j.max_attempts
+               AND NOT EXISTS (
+                 SELECT 1 FROM product_deploy_job AS active
+                 WHERE active.app_id=j.app_id AND active.state IN ('claimed','deploying')
+               )
+               AND NOT EXISTS (
+                 SELECT 1 FROM product_deploy_job AS uncertain
+                 WHERE uncertain.app_id=j.app_id AND uncertain.state='uncertain'
+               )
+               AND NOT EXISTS (
+                 SELECT 1 FROM product_deploy_attempt AS uncertain_attempt
+                 JOIN product_deploy_job AS uncertain_job ON uncertain_job.job_id=uncertain_attempt.job_id
+                 WHERE uncertain_job.app_id=j.app_id AND uncertain_attempt.state='uncertain'
+               )
+               AND (j.trigger<>'branch_poll' OR (
+                 owner.auto_deploy_paused=0
+                 AND j.idempotency_key=('auto:' || j.source_generation || ':' ||
+                   j.observation_sequence || ':' || j.reconcile_epoch)
+                 AND EXISTS (
+                   SELECT 1 FROM product_desired_branch AS desired
+                   WHERE desired.app_id=j.app_id AND desired.source_generation=j.source_generation
+                     AND desired.ref=j.ref AND desired.desired_observation_sequence=j.observation_sequence
+                     AND desired.reconcile_epoch=j.reconcile_epoch AND desired.desired_sha=j.target_sha
+                     AND desired.auto_paused=0 AND desired.reconciliation_state='queued'
+                     AND desired.reconciliation_job_id=j.job_id
+                 )
+               ))
+               AND (j.trigger<>'manual_rollback' OR EXISTS (
+                 SELECT 1 FROM deployment AS target
+                 WHERE target.id=j.target_deployment_id AND target.app_id=j.app_id
+               ))
+             ORDER BY CASE WHEN j.trigger='branch_poll' THEN 1 ELSE 0 END,
+                      j.created_at, j.job_id`
+          )
+          .all(controllerId, now) as ClaimableJobRow[]
+
+        const candidate = jobs[0]
+        if (!candidate) return { state: 'none' as const, reason: 'no_eligible_job' as const }
+
+        const activeAppLease = this.database
+          .prepare(
+            `SELECT expires_at FROM product_app_lease
+                    WHERE app_id=? AND released_at IS NULL LIMIT 1`
+          )
+          .get(candidate.app_id) as { expires_at: string } | undefined
+        if (activeAppLease) {
+          return {
+            state: 'blocked' as const,
+            reason:
+              activeAppLease.expires_at <= now
+                ? ('reconciliation_required' as const)
+                : ('app_lease_busy' as const)
+          }
+        }
+
+        this.database
+          .prepare(
+            `INSERT INTO product_app_fence(app_id,last_fence) VALUES(?,1)
+                    ON CONFLICT(app_id) DO UPDATE SET last_fence=last_fence+1`
+          )
+          .run(candidate.app_id)
+        const appFence = (
+          this.database
+            .prepare('SELECT last_fence FROM product_app_fence WHERE app_id=?')
+            .get(candidate.app_id) as { last_fence: number }
+        ).last_fence
+        const buildFence = (
+          this.database
+            .prepare(
+              `SELECT COALESCE(MAX(fence),0)+1 AS next_fence
+                                 FROM product_worker_lease WHERE slot_name='build'`
+            )
+            .get() as {
+            next_fence: number
+          }
+        ).next_fence
+        const appLeaseId = `app_lease_${randomUUID()}`
+        const buildLeaseId = `build_lease_${randomUUID()}`
+        const attemptId = `attempt_${randomUUID()}`
+        const attemptNumber = candidate.attempt_count + 1
+
+        this.database
+          .prepare(
+            `INSERT INTO product_app_lease
+            (app_id, lease_id, controller_id, ownership_generation, fence, job_id,
+             acquired_at, expires_at, heartbeat_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .run(
+            candidate.app_id,
+            appLeaseId,
+            controllerId,
+            candidate.ownership_generation,
+            appFence,
+            candidate.job_id,
+            now,
+            expiresAt,
+            now
+          )
+        this.database
+          .prepare(
+            `INSERT INTO product_worker_lease
+            (slot_name, lease_id, controller_id, fence, job_id,
+             acquired_at, expires_at, heartbeat_at)
+            VALUES ('build', ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .run(buildLeaseId, controllerId, buildFence, candidate.job_id, now, expiresAt, now)
+        this.database
+          .prepare(
+            `INSERT INTO product_deploy_attempt
+            (attempt_id, job_id, attempt_number, lease_id, fencing_token,
+             build_slot_lease_id, build_slot_fence, state, remote_outcome, started_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'claimed', 'not_started', ?)`
+          )
+          .run(
+            attemptId,
+            candidate.job_id,
+            attemptNumber,
+            appLeaseId,
+            appFence,
+            buildLeaseId,
+            buildFence,
+            now
+          )
+        const update = this.database
+          .prepare(
+            `UPDATE product_deploy_job
+                    SET state='claimed', attempt_count=?, updated_at=?
+                    WHERE job_id=? AND controller_id=? AND state IN ('queued','retry_wait')
+                      AND available_at<=? AND attempt_count=? AND attempt_count<max_attempts`
+          )
+          .run(attemptNumber, now, candidate.job_id, controllerId, now, candidate.attempt_count)
+        if (update.changes !== 1) throw new ProductDeployRepositoryError('CLAIM_CAS_FAILED')
+
+        if (candidate.trigger === 'branch_poll') {
+          const desiredUpdate = this.database
+            .prepare(
+              `UPDATE product_desired_branch
+               SET reconciliation_state='in_progress', updated_at=?
+               WHERE app_id=? AND source_generation=? AND ref=?
+                 AND desired_observation_sequence=? AND reconcile_epoch=? AND desired_sha=?
+                 AND auto_paused=0 AND reconciliation_state='queued' AND reconciliation_job_id=?`
+            )
+            .run(
+              now,
+              candidate.app_id,
+              candidate.source_generation,
+              candidate.ref,
+              candidate.observation_sequence,
+              candidate.reconcile_epoch,
+              candidate.target_sha,
+              candidate.job_id
+            )
+          if (desiredUpdate.changes !== 1) {
+            throw new ProductDeployRepositoryError('CLAIM_DESIRED_CAS_FAILED')
+          }
+        }
+
+        return {
+          state: 'claimed' as const,
+          claim: {
+            controller_id: controllerId,
+            app_id: candidate.app_id,
+            job_id: candidate.job_id,
+            attempt_id: attemptId,
+            attempt_number: attemptNumber,
+            ownership_generation: candidate.ownership_generation,
+            source_generation: candidate.source_generation,
+            source_config_sha256: candidate.source_config_sha256,
+            app_lease_id: appLeaseId,
+            app_fence: appFence,
+            build_slot_lease_id: buildLeaseId,
+            build_slot_fence: buildFence,
+            expires_at: expiresAt
+          }
+        }
+      })
+      .immediate()
+  }
+
+  /** Renews both leases only while this exact, unexpired claim still owns the DB authority. */
+  heartbeatClaim(claim: ProductClaimToken): ProductHeartbeatResult {
+    if (!isValidClaimToken(claim)) return { state: 'rejected', reason: 'invalid_claim' }
+    const nowMs = this.readClock()
+    const now = new Date(nowMs).toISOString()
+    const expiresAt = new Date(nowMs + PRODUCT_LEASE_TTL_MS).toISOString()
+
+    try {
+      return this.database
+        .transaction(() => {
+          const controller = this.database
+            .prepare('SELECT status FROM product_controller WHERE controller_id=?')
+            .get(claim.controller_id) as { status: string } | undefined
+          if (!controller || controller.status !== 'active') {
+            return { state: 'rejected' as const, reason: 'controller_inactive' as const }
+          }
+
+          const authority = this.database
+            .prepare(
+              `SELECT j.state AS job_state, j.controller_id, j.app_id,
+                      j.ownership_generation, j.source_generation, j.source_config_sha256,
+                      a.source_type, a.git_repo_url, a.git_ref, a.git_root, v.archived_at,
+                      owner.mode, owner.controller_id AS owner_controller_id,
+                      owner.ownership_generation AS owner_generation,
+                      owner.source_generation AS owner_source_generation,
+                      owner.source_config_sha256 AS owner_config_sha256,
+                      source.repository_url, source.production_ref, source.repository_root,
+                      j.ref AS job_ref,
+                      pa.attempt_number, pa.state AS attempt_state,
+                      pa.lease_id AS app_lease_id, pa.fencing_token AS app_fence,
+                      pa.build_slot_lease_id, pa.build_slot_fence,
+                      app_lease.expires_at AS app_expires_at, app_lease.released_at AS app_released_at,
+                      build_lease.expires_at AS build_expires_at, build_lease.released_at AS build_released_at
+               FROM product_deploy_attempt AS pa
+               JOIN product_deploy_job AS j ON j.job_id=pa.job_id
+               JOIN app AS a ON a.id=j.app_id
+               JOIN vps AS v ON v.id=a.vps_id
+               JOIN product_app_control AS owner ON owner.app_id=j.app_id
+               JOIN product_source_config AS source ON source.app_id=j.app_id
+                 AND source.source_generation=j.source_generation
+                 AND source.config_sha256=j.source_config_sha256
+               JOIN product_app_lease AS app_lease ON app_lease.lease_id=pa.lease_id
+                 AND app_lease.fence=pa.fencing_token AND app_lease.job_id=j.job_id
+               JOIN product_worker_lease AS build_lease ON build_lease.lease_id=pa.build_slot_lease_id
+                 AND build_lease.fence=pa.build_slot_fence AND build_lease.job_id=j.job_id
+               WHERE pa.attempt_id=? AND j.job_id=?`
+            )
+            .get(claim.attempt_id, claim.job_id) as ClaimAuthorityRow | undefined
+          if (!authority) return { state: 'rejected' as const, reason: 'stale_claim' as const }
+          if (
+            authority.controller_id !== claim.controller_id ||
+            authority.app_id !== claim.app_id ||
+            authority.ownership_generation !== claim.ownership_generation ||
+            authority.source_generation !== claim.source_generation ||
+            authority.source_config_sha256 !== claim.source_config_sha256 ||
+            authority.attempt_number !== claim.attempt_number ||
+            authority.app_lease_id !== claim.app_lease_id ||
+            authority.app_fence !== claim.app_fence ||
+            authority.build_slot_lease_id !== claim.build_slot_lease_id ||
+            authority.build_slot_fence !== claim.build_slot_fence ||
+            (authority.job_state !== 'claimed' && authority.job_state !== 'deploying') ||
+            (authority.attempt_state !== 'claimed' &&
+              authority.attempt_state !== 'snapshot_verified' &&
+              authority.attempt_state !== 'deploying')
+          ) {
+            return { state: 'rejected' as const, reason: 'stale_claim' as const }
+          }
+          if (
+            authority.mode !== 'product' ||
+            authority.owner_controller_id !== claim.controller_id ||
+            authority.owner_generation !== claim.ownership_generation ||
+            authority.owner_source_generation !== claim.source_generation ||
+            authority.owner_config_sha256 !== claim.source_config_sha256 ||
+            authority.archived_at !== null ||
+            authority.source_type !== 'git' ||
+            authority.repository_url !== authority.git_repo_url ||
+            authority.production_ref !== authority.git_ref ||
+            authority.repository_root !== authority.git_root ||
+            authority.production_ref !== authority.job_ref
+          ) {
+            return { state: 'rejected' as const, reason: 'ownership_changed' as const }
+          }
+          if (authority.app_released_at !== null || authority.build_released_at !== null) {
+            return { state: 'rejected' as const, reason: 'stale_claim' as const }
+          }
+          if (authority.app_expires_at <= now || authority.build_expires_at <= now) {
+            return { state: 'rejected' as const, reason: 'expired_lease' as const }
+          }
+
+          const appUpdate = this.database
+            .prepare(
+              `UPDATE product_app_lease SET heartbeat_at=?, expires_at=?
+                      WHERE lease_id=? AND app_id=? AND controller_id=?
+                        AND ownership_generation=? AND fence=? AND job_id=?
+                        AND released_at IS NULL AND expires_at>?`
+            )
+            .run(
+              now,
+              expiresAt,
+              claim.app_lease_id,
+              claim.app_id,
+              claim.controller_id,
+              claim.ownership_generation,
+              claim.app_fence,
+              claim.job_id,
+              now
+            )
+          if (appUpdate.changes !== 1) {
+            return { state: 'rejected' as const, reason: 'expired_lease' as const }
+          }
+          const buildUpdate = this.database
+            .prepare(
+              `UPDATE product_worker_lease SET heartbeat_at=?, expires_at=?
+                      WHERE lease_id=? AND slot_name='build' AND controller_id=?
+                        AND fence=? AND job_id=? AND released_at IS NULL AND expires_at>?`
+            )
+            .run(
+              now,
+              expiresAt,
+              claim.build_slot_lease_id,
+              claim.controller_id,
+              claim.build_slot_fence,
+              claim.job_id,
+              now
+            )
+          if (buildUpdate.changes !== 1)
+            throw new ProductDeployRepositoryError('HEARTBEAT_CAS_LOST')
+          return { state: 'renewed' as const, expires_at: expiresAt }
+        })
+        .immediate()
+    } catch (error) {
+      if (error instanceof ProductDeployRepositoryError && error.code === 'HEARTBEAT_CAS_LOST') {
+        return { state: 'rejected', reason: 'expired_lease' }
+      }
+      throw error
+    }
+  }
+
+  private readClock(): number {
+    const value = this.now()
+    if (!Number.isSafeInteger(value)) throw new ProductDeployRepositoryError('INVALID_CLOCK')
+    return value
+  }
 
   observeTip(input: ProductObserveTipInput): ProductObserveTipResult {
     validateTipSha(input.tipSha)
@@ -587,11 +984,92 @@ interface ProductJobRow {
   state: ProductJobState
 }
 
+interface ClaimableJobRow {
+  job_id: string
+  app_id: number
+  ownership_generation: number
+  source_generation: number
+  source_config_sha256: string
+  trigger: string
+  ref: string
+  target_sha: string | null
+  target_deployment_id: number | null
+  observation_sequence: number | null
+  reconcile_epoch: number | null
+  attempt_count: number
+  max_attempts: number
+}
+
+interface ClaimAuthorityRow {
+  job_state: string
+  controller_id: string
+  app_id: number
+  ownership_generation: number
+  source_generation: number
+  source_config_sha256: string
+  source_type: string
+  git_repo_url: string | null
+  git_ref: string | null
+  git_root: string | null
+  archived_at: string | null
+  mode: string
+  owner_controller_id: string | null
+  owner_generation: number
+  owner_source_generation: number
+  owner_config_sha256: string
+  repository_url: string
+  production_ref: string
+  repository_root: string
+  job_ref: string
+  attempt_number: number
+  attempt_state: string
+  app_lease_id: string
+  app_fence: number
+  build_slot_lease_id: string
+  build_slot_fence: number
+  app_expires_at: string
+  app_released_at: string | null
+  build_expires_at: string
+  build_released_at: string | null
+}
+
 export class ProductDeployRepositoryError extends Error {
   constructor(readonly code: string) {
     super(code)
     this.name = 'ProductDeployRepositoryError'
   }
+}
+
+function isValidClaimToken(value: ProductClaimToken): boolean {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    typeof value.controller_id === 'string' &&
+    value.controller_id.length > 0 &&
+    Number.isSafeInteger(value.app_id) &&
+    value.app_id > 0 &&
+    typeof value.job_id === 'string' &&
+    value.job_id.length > 0 &&
+    typeof value.attempt_id === 'string' &&
+    value.attempt_id.length > 0 &&
+    Number.isSafeInteger(value.attempt_number) &&
+    value.attempt_number > 0 &&
+    Number.isSafeInteger(value.ownership_generation) &&
+    value.ownership_generation > 0 &&
+    Number.isSafeInteger(value.source_generation) &&
+    value.source_generation > 0 &&
+    /^[0-9a-f]{64}$/.test(value.source_config_sha256) &&
+    typeof value.app_lease_id === 'string' &&
+    value.app_lease_id.length > 0 &&
+    Number.isSafeInteger(value.app_fence) &&
+    value.app_fence > 0 &&
+    typeof value.build_slot_lease_id === 'string' &&
+    value.build_slot_lease_id.length > 0 &&
+    Number.isSafeInteger(value.build_slot_fence) &&
+    value.build_slot_fence > 0 &&
+    typeof value.expires_at === 'string' &&
+    Number.isFinite(Date.parse(value.expires_at))
+  )
 }
 
 function loadReconcileContext(
