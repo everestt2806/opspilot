@@ -2,7 +2,7 @@
 
 | Owner | Date | Branch | Status | Base |
 |---|---|---|---|---|
-| Worker | 22/10/2026 | `feat/deploy-reachability` | ĐANG LÀM | P3b-2d `33e8e6dc3efed3f545671b6ba8f3df3f651a06ee`; Product migrations 016–018 |
+| Worker | 22/10/2026 | `feat/deploy-reachability` | CHỜ REVIEW | P3b-2d `33e8e6dc3efed3f545671b6ba8f3df3f651a06ee`; implementation `ef15e77196ca502eddf8889b0a6d11c4a6f766ef`; Product migrations 016–018 |
 
 ## Scope
 
@@ -28,3 +28,4 @@ Metadata equality tests prove only that executor-supplied repository/root/SHA/co
 
 - `START 2026-10-22`: inspected repo rules, Product contract/migrations 016–018, claim/prewrite repository and tests. No migration needed because the attempt already has a unique deployment link; shared deployment-version allocator can run inside dispatch transaction.
 - `UPDATE 2026-10-22`: Node 22.23.4 via direct `node.exe ...pnpm.mjs`; `vitest run src/main/db` = 7 files / 78 tests PASS; `pnpm typecheck:node` PASS; scoped ESLint on `productDeployRepository.ts`, `productJobClaim.test.ts`, `deploymentRepository.ts` = 0 errors / 0 warnings; `git diff --check` PASS. Tests cover exact/mismatched metadata, stale/expired token, desired change/pause, uncertain work, archived identity, one-shot/reopen/prewrite guard, two real worker processes, transaction rollback, and manual rollback block. No migration required. No Git/SSH/remote deploy was run.
+- `HANDOFF-LOCAL 2026-10-22`: implementation commit `ef15e77196ca502eddf8889b0a6d11c4a6f766ef`; docs/board finalization follows in local commit. No push/PR/merge.
