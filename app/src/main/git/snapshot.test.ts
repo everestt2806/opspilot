@@ -19,7 +19,8 @@ import {
   canonicalizeGitHubUrl,
   createGitSnapshot,
   createGitSnapshotFromLocalFixture,
-  resolveSnapshotRoot
+  resolveSnapshotRoot,
+  sanitizedGitEnvironment
 } from './snapshot'
 
 let fixtureDirectory: string | null = null
@@ -66,21 +67,36 @@ describe('Git snapshot', () => {
     expect(() => canonicalizeGitHubUrl('https://example.com/acme/demo')).toThrow(/GitHub/i)
   })
 
+  it('removes inherited credential-like variables from Git child environments', () => {
+    const key = 'OPSPILOT_SSH_SECRET'
+    const previous = process.env[key]
+    process.env[key] = 'fixture-secret-sentinel'
+    try {
+      const environment = sanitizedGitEnvironment()
+      expect(environment[key]).toBeUndefined()
+      expect(environment.GIT_TERMINAL_PROMPT).toBe('0')
+    } finally {
+      if (previous === undefined) delete process.env[key]
+      else process.env[key] = previous
+    }
+  })
+
   it('pins a detached full SHA; later branch movement cannot change its contents', async () => {
     const remote = createFixture()
     const working = join(fixtureDirectory!, 'working')
     const beforeMove = git(working, 'rev-parse', 'HEAD')
+    writeFileSync(join(working, 'demo', 'marker.txt'), 'second snapshot\n')
+    git(working, 'add', '.')
+    git(working, 'commit', '--quiet', '-m', 'fixture two')
+    git(working, 'push', '--quiet', 'origin', 'main')
     const snapshot = await createGitSnapshotFromLocalFixture({
       repositoryUrl: remote,
       ref: 'main',
+      targetSha: beforeMove,
       root: 'demo',
       tempDirectory: fixtureDirectory!
     })
     try {
-      writeFileSync(join(working, 'demo', 'marker.txt'), 'second snapshot\n')
-      git(working, 'add', '.')
-      git(working, 'commit', '--quiet', '-m', 'fixture two')
-      git(working, 'push', '--quiet', 'origin', 'main')
       expect(snapshot.commitSha).toBe(beforeMove)
       expect(snapshot.commitSha).toMatch(/^[a-f0-9]{40}$/)
       expect(readFileSync(join(snapshot.rootDirectory, 'marker.txt'), 'utf8')).toBe(
@@ -89,6 +105,21 @@ describe('Git snapshot', () => {
     } finally {
       snapshot.cleanup()
     }
+  })
+
+  it('refuses a requested SHA that is unavailable instead of falling back to the ref tip', async () => {
+    const remote = createFixture()
+    await expect(
+      createGitSnapshotFromLocalFixture({
+        repositoryUrl: remote,
+        ref: 'main',
+        targetSha: 'f'.repeat(40),
+        tempDirectory: fixtureDirectory!
+      })
+    ).rejects.toThrow(/Git ref không tồn tại/i)
+    expect(
+      readdirSync(fixtureDirectory!).filter((entry) => entry.startsWith('opspilot-git-'))
+    ).toEqual([])
   })
 
   it('isolates inherited Git config, templates, and worktree paths from the snapshot target', async () => {

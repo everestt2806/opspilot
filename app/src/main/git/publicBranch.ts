@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 
 import { canonicalizeGitHubUrl, sanitizedGitEnvironment, validateRef } from './snapshot'
+import { signalChildProcessTree } from './processTree'
 
 const DEFAULT_TIMEOUT_MS = 10_000
 const MAX_OUTPUT_BYTES = 16 * 1024
@@ -150,9 +151,9 @@ function runLsRemote(
     const terminate = (code: PublicBranchErrorCode): void => {
       if (settled || termination) return
       termination = code
-      signalGitProcessTree(child, 'SIGTERM')
+      signalChildProcessTree(child, 'SIGTERM')
       killTimer = setTimeout(() => {
-        signalGitProcessTree(child, 'SIGKILL')
+        signalChildProcessTree(child, 'SIGKILL')
         killEscalated = true
         if (closeResult) finish(termination ?? 'GIT_REMOTE_ERROR')
       }, KILL_GRACE_MS)
@@ -215,22 +216,6 @@ function runLsRemote(
       finish(undefined, { state: 'found', sha: match[1] })
     })
   })
-}
-
-function signalGitProcessTree(child: ReturnType<typeof spawn>, signal: NodeJS.Signals): void {
-  if (process.platform === 'linux' && child.pid !== undefined) {
-    try {
-      process.kill(-child.pid, signal)
-      return
-    } catch {
-      // Fall back to the direct child if its process group is already gone.
-    }
-  }
-  try {
-    child.kill(signal)
-  } catch {
-    // Keep waiting for close; no result is returned until the child and stdio close.
-  }
 }
 
 function publicGitEnvironment(workingDirectory: string): NodeJS.ProcessEnv {

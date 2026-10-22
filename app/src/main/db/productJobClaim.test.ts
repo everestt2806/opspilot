@@ -32,6 +32,122 @@ afterEach(() => {
 })
 
 describe('Product atomic claim and lease repository', () => {
+  it('prepares the exact job SHA after branch movement and verifies only fetched checkout metadata', async () => {
+    const harness = createHarness()
+    const { execFileSync } = await import('node:child_process')
+    const { mkdirSync } = await import('node:fs')
+    const { pathToFileURL } = await import('node:url')
+    const { prepareProductGitSnapshotFromLocalFixture } =
+      await import('../controlPlane/productSnapshotPreparation')
+    const working = join(testDirectory!, 'source')
+    const bare = join(testDirectory!, 'source.git')
+    execFileSync('git', ['init', '--quiet', '--bare', bare])
+    mkdirSync(working)
+    const git = (...args: string[]): string =>
+      execFileSync('git', args, { cwd: working, encoding: 'utf8' }).trim()
+    git('init', '--quiet', '-b', 'main')
+    git('config', 'user.name', 'Fixture')
+    git('config', 'user.email', 'fixture@example.invalid')
+    mkdirSync(join(working, 'app'))
+    writeFileSync(join(working, 'app', 'marker.txt'), 'snapshot A')
+    git('add', '.')
+    git('commit', '--quiet', '-m', 'A')
+    const shaA = git('rev-parse', 'HEAD')
+    git('remote', 'add', 'origin', bare)
+    git('push', '--quiet', 'origin', 'main')
+    const url = pathToFileURL(bare).toString()
+    harness.database.prepare('UPDATE app SET git_repo_url=?,git_root=? WHERE id=1').run(url, 'app')
+    harness.database
+      .prepare('UPDATE product_source_config SET repository_url=?,repository_root=? WHERE app_id=1')
+      .run(url, 'app')
+    seedManualJob(harness.database, 'snapshot-job', 1)
+    harness.database
+      .prepare('UPDATE product_deploy_job SET target_sha=? WHERE job_id=?')
+      .run(shaA, 'snapshot-job')
+    writeFileSync(join(working, 'app', 'marker.txt'), 'snapshot B')
+    git('add', '.')
+    git('commit', '--quiet', '-m', 'B')
+    git('push', '--quiet', 'origin', 'main')
+
+    const result = harness.repository.claimNextJob(CONTROLLER)
+    expect(result.state).toBe('claimed')
+    if (result.state !== 'claimed') return
+    const snapshot = await prepareProductGitSnapshotFromLocalFixture(
+      harness.repository,
+      result.claim,
+      {
+        tempDirectory: testDirectory!
+      }
+    )
+    const directory = snapshot.snapshotDirectory
+    try {
+      expect(snapshot.metadata.commitSha).toBe(shaA)
+      expect(readFileSync(join(snapshot.rootDirectory, 'marker.txt'), 'utf8')).toBe('snapshot A')
+      expect(harness.repository.readClaimExecutionState(result.claim)).toBe('prewrite')
+      const { readdirSync } = await import('node:fs')
+      const priorSnapshots = readdirSync(testDirectory!).filter((name) =>
+        name.startsWith('opspilot-git-')
+      )
+      const stalePreparation = prepareProductGitSnapshotFromLocalFixture(
+        harness.repository,
+        result.claim,
+        { tempDirectory: testDirectory! }
+      )
+      const deadline = Date.now() + 2_000
+      let newSnapshotStarted = false
+      while (Date.now() < deadline && !newSnapshotStarted) {
+        newSnapshotStarted = readdirSync(testDirectory!).some(
+          (name) => name.startsWith('opspilot-git-') && !priorSnapshots.includes(name)
+        )
+        if (!newSnapshotStarted) await new Promise((resolve) => setTimeout(resolve, 10))
+      }
+      expect(newSnapshotStarted).toBe(true)
+      harness.database
+        .prepare(
+          'UPDATE product_app_control SET ownership_generation=ownership_generation+1 WHERE app_id=1'
+        )
+        .run()
+      await expect(stalePreparation).rejects.toMatchObject({ code: 'snapshot_source_changed' })
+      expect(
+        readdirSync(testDirectory!).filter((name) => name.startsWith('opspilot-git-'))
+      ).toEqual(priorSnapshots)
+      harness.database
+        .prepare('UPDATE product_app_control SET ownership_generation=1 WHERE app_id=1')
+        .run()
+    } finally {
+      snapshot.cleanup()
+      snapshot.cleanup()
+      expect(existsSync(directory)).toBe(false)
+    }
+  })
+
+  it('rejects a snapshot authority read after either lease expires or ownership changes', () => {
+    const harness = createHarness()
+    seedManualJob(harness.database, 'authority-job', 1)
+    const claimResult = harness.repository.claimNextJob(CONTROLLER)
+    expect(claimResult.state).toBe('claimed')
+    if (claimResult.state !== 'claimed') return
+    expect(harness.repository.readGitSnapshotAuthority(claimResult.claim).state).toBe('ready')
+    harness.clock.advance(PRODUCT_LEASE_TTL_MS + 1)
+    expect(harness.repository.readGitSnapshotAuthority(claimResult.claim)).toEqual({
+      state: 'rejected',
+      reason: 'expired_lease'
+    })
+
+    const secondHarness = createHarness()
+    seedManualJob(secondHarness.database, 'changed-authority-job', 1)
+    const secondClaim = secondHarness.repository.claimNextJob(CONTROLLER)
+    if (secondClaim.state !== 'claimed') throw new Error('expected snapshot authority claim')
+    secondHarness.database
+      .prepare(
+        'UPDATE product_app_control SET ownership_generation=ownership_generation+1 WHERE app_id=1'
+      )
+      .run()
+    expect(secondHarness.repository.readGitSnapshotAuthority(secondClaim.claim)).toEqual({
+      state: 'rejected',
+      reason: 'ownership_changed'
+    })
+  })
   it('prefers manual jobs and atomically creates one attempt, app lease, build slot and fences', () => {
     expect(PRODUCT_LEASE_TTL_MS).toBe(60_000)
     expect(PRODUCT_HEARTBEAT_INTERVAL_MS).toBe(15_000)
@@ -885,6 +1001,29 @@ describe('Product atomic claim and lease repository', () => {
       reason: 'auto_paused'
     })
     expect(readDispatchRows(paused.database)).toEqual(pausedBefore)
+  })
+
+  it('rejects auto snapshot preparation when desired state is obsolete or paused', () => {
+    const obsolete = createDispatchReadyHarness('branch_poll')
+    obsolete.database
+      .prepare('UPDATE product_desired_branch SET desired_sha=? WHERE app_id=1')
+      .run('2'.repeat(40))
+    expect(obsolete.repository.readGitSnapshotAuthority(obsolete.claim)).toEqual({
+      state: 'rejected',
+      reason: 'snapshot_state_invalid'
+    })
+
+    closeDatabase()
+    const paused = createDispatchReadyHarness('branch_poll')
+    paused.database
+      .prepare(
+        "UPDATE product_app_control SET auto_deploy_paused=1,pause_reason='operator',pause_policy_provenance='explicit' WHERE app_id=1"
+      )
+      .run()
+    expect(paused.repository.readGitSnapshotAuthority(paused.claim)).toEqual({
+      state: 'rejected',
+      reason: 'snapshot_state_invalid'
+    })
   })
 
   it('blocks dispatch when uncertain work exists or ownership/config identity changes', () => {

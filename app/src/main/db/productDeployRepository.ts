@@ -47,6 +47,18 @@ export interface ProductGitPollTarget extends ProductReconcileIdentity {
   observationSequence: number | null
 }
 
+export interface ProductGitSnapshotAuthority {
+  repositoryUrl: string
+  repositoryRoot: string
+  ref: string
+  targetSha: string
+  sourceConfigSha256: string
+}
+
+export type ProductGitSnapshotAuthorityResult =
+  | { state: 'ready'; authority: ProductGitSnapshotAuthority }
+  | { state: 'rejected'; reason: DispatchAuthorityFailure | 'snapshot_state_invalid' }
+
 export interface ProductReconcileIdentity {
   controllerId: ProductControllerId
   appId: number
@@ -385,6 +397,12 @@ export class ProductDeployRepository {
         }
         const metadataFailure = validateSnapshotMatchesAuthority(authority, snapshot)
         if (metadataFailure) return { state: 'rejected' as const, reason: metadataFailure }
+        if (
+          authority.trigger === 'branch_poll' &&
+          !isCurrentAutoSnapshotAuthority(this.database, authority)
+        ) {
+          return { state: 'rejected' as const, reason: 'stale_claim' as const }
+        }
         if (hasUncertainProductWork(this.database, claim.app_id)) {
           return { state: 'rejected' as const, reason: 'reconciliation_required' as const }
         }
@@ -434,6 +452,46 @@ export class ProductDeployRepository {
         return { state: 'snapshot_verified' as const }
       })
       .immediate()
+  }
+
+  /** Reads current claim/source authority; this is a pre/post async-work guard, never dispatch proof. */
+  readGitSnapshotAuthority(claim: ProductClaimToken): ProductGitSnapshotAuthorityResult {
+    if (!isValidClaimToken(claim)) return { state: 'rejected', reason: 'stale_claim' }
+    const authority = loadDispatchAuthority(this.database, claim)
+    const failure = validateDispatchAuthority(
+      authority,
+      claim,
+      new Date(this.readClock()).toISOString()
+    )
+    if (failure) return { state: 'rejected', reason: failure }
+    if (
+      !authority ||
+      (authority.trigger !== 'branch_poll' && authority.trigger !== 'manual_redeploy') ||
+      (authority.attempt_state !== 'claimed' && authority.attempt_state !== 'snapshot_verified') ||
+      authority.job_state !== 'claimed' ||
+      authority.target_sha === null ||
+      authority.remote_outcome !== 'not_started' ||
+      authority.deployment_id !== null ||
+      hasUncertainProductWork(this.database, claim.app_id)
+    ) {
+      return { state: 'rejected', reason: 'snapshot_state_invalid' }
+    }
+    if (
+      authority.trigger === 'branch_poll' &&
+      !isCurrentAutoSnapshotAuthority(this.database, authority)
+    ) {
+      return { state: 'rejected', reason: 'snapshot_state_invalid' }
+    }
+    return {
+      state: 'ready',
+      authority: {
+        repositoryUrl: authority.repository_url,
+        repositoryRoot: authority.repository_root,
+        ref: authority.production_ref,
+        targetSha: authority.target_sha,
+        sourceConfigSha256: authority.source_config_sha256
+      }
+    }
   }
 
   /** Commits one one-shot dispatch marker and canonical deployment row before any remote write. */
@@ -1997,6 +2055,39 @@ export class ProductDeployRepositoryError extends Error {
     super(code)
     this.name = 'ProductDeployRepositoryError'
   }
+}
+
+function isCurrentAutoSnapshotAuthority(
+  database: Database.Database,
+  authority: ClaimDispatchAuthority
+): boolean {
+  if (
+    authority.auto_deploy_paused === 1 ||
+    authority.observation_sequence === null ||
+    authority.reconcile_epoch === null ||
+    authority.target_sha === null
+  )
+    return false
+  const desired = database
+    .prepare(
+      `SELECT desired_observation_sequence,desired_sha,reconcile_epoch,auto_paused
+       FROM product_desired_branch WHERE app_id=? AND source_generation=? AND ref=?`
+    )
+    .get(authority.app_id, authority.source_generation, authority.job_ref) as
+    | {
+        desired_observation_sequence: number
+        desired_sha: string
+        reconcile_epoch: number
+        auto_paused: 0 | 1
+      }
+    | undefined
+  return Boolean(
+    desired &&
+    desired.auto_paused === 0 &&
+    desired.desired_observation_sequence === authority.observation_sequence &&
+    desired.desired_sha === authority.target_sha &&
+    desired.reconcile_epoch === authority.reconcile_epoch
+  )
 }
 
 function isValidClaimToken(value: ProductClaimToken): boolean {
