@@ -1,4 +1,7 @@
 import { spawn } from 'node:child_process'
+import { existsSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 
 import { canonicalizeGitHubUrl, sanitizedGitEnvironment, validateRef } from './snapshot'
 
@@ -15,6 +18,8 @@ export type PublicBranchErrorCode =
   | 'GIT_CANCELLED'
   | 'GIT_OUTPUT_LIMIT'
   | 'GIT_UNAVAILABLE'
+  | 'GIT_TEMP_DIRECTORY_INVALID'
+  | 'GIT_TEMP_CLEANUP_FAILED'
   | 'GIT_REMOTE_ERROR'
   | 'GIT_INVALID_RESPONSE'
 
@@ -83,6 +88,17 @@ function runLsRemote(
   timeoutMs: number,
   signal?: AbortSignal
 ): Promise<PublicBranchTip> {
+  let workingDirectory: string
+  try {
+    workingDirectory = createGitWorkingDirectory()
+  } catch (error) {
+    return Promise.reject(
+      error instanceof PublicBranchQueryError
+        ? error
+        : new PublicBranchQueryError('GIT_TEMP_DIRECTORY_INVALID')
+    )
+  }
+
   return new Promise((resolve, reject) => {
     const args = [
       '-c',
@@ -96,13 +112,14 @@ function runLsRemote(
     let child: ReturnType<typeof spawn>
     try {
       child = spawn('git', args, {
+        cwd: workingDirectory,
         shell: false,
         windowsHide: true,
-        env: publicGitEnvironment(),
+        env: publicGitEnvironment(workingDirectory),
         stdio: ['ignore', 'pipe', 'pipe']
       })
     } catch {
-      reject(new PublicBranchQueryError('GIT_UNAVAILABLE'))
+      reject(cleanupFailure(workingDirectory) ?? new PublicBranchQueryError('GIT_UNAVAILABLE'))
       return
     }
 
@@ -120,7 +137,9 @@ function runLsRemote(
       clearTimeout(timeoutTimer)
       if (killTimer) clearTimeout(killTimer)
       signal?.removeEventListener('abort', abort)
-      if (error) reject(new PublicBranchQueryError(error))
+      const cleanupError = cleanupFailure(workingDirectory)
+      if (cleanupError) reject(cleanupError)
+      else if (error) reject(new PublicBranchQueryError(error))
       else if (result) resolve(result)
       else reject(new PublicBranchQueryError('GIT_INVALID_RESPONSE'))
     }
@@ -128,8 +147,18 @@ function runLsRemote(
     const terminate = (code: PublicBranchErrorCode): void => {
       if (settled || termination) return
       termination = code
-      child.kill('SIGTERM')
-      killTimer = setTimeout(() => child.kill('SIGKILL'), KILL_GRACE_MS)
+      try {
+        child.kill('SIGTERM')
+      } catch {
+        // Keep waiting for close; the escalation timer will try SIGKILL.
+      }
+      killTimer = setTimeout(() => {
+        try {
+          child.kill('SIGKILL')
+        } catch {
+          // Do not report completion or remove cwd until the child closes.
+        }
+      }, KILL_GRACE_MS)
       killTimer.unref()
     }
 
@@ -156,7 +185,10 @@ function runLsRemote(
       }
       stderr.push(bytes)
     })
-    child.once('error', () => finish(termination ?? 'GIT_UNAVAILABLE'))
+    child.on('error', () => {
+      if (child.pid === undefined) finish(termination ?? 'GIT_UNAVAILABLE')
+      else if (!termination) terminate('GIT_UNAVAILABLE')
+    })
     child.once('close', (code) => {
       if (termination) {
         finish(termination)
@@ -187,10 +219,66 @@ function runLsRemote(
   })
 }
 
-function publicGitEnvironment(): NodeJS.ProcessEnv {
-  return Object.fromEntries(
+function publicGitEnvironment(workingDirectory: string): NodeJS.ProcessEnv {
+  const safeEnvironment = Object.fromEntries(
     Object.entries(sanitizedGitEnvironment()).filter(
       ([key]) => !/(?:SECRET|TOKEN|PASSWORD|CREDENTIAL|PRIVATE_KEY)/i.test(key)
     )
   )
+  return {
+    ...safeEnvironment,
+    GIT_CEILING_DIRECTORIES: workingDirectory,
+    GIT_DISCOVERY_ACROSS_FILESYSTEM: '0',
+    GIT_ALLOW_PROTOCOL: 'https',
+    GIT_PROTOCOL_FROM_USER: '0'
+  }
+}
+
+function createGitWorkingDirectory(): string {
+  let createdDirectory: string | null = null
+  try {
+    createdDirectory = mkdtempSync(join(tmpdir(), 'opspilot-public-git-'))
+    const workingDirectory = realpathSync(createdDirectory)
+    const repositoryRoot = findGitRepositoryRoot(process.cwd())
+    if (repositoryRoot && isPathInside(repositoryRoot, workingDirectory)) {
+      throw new PublicBranchQueryError('GIT_TEMP_DIRECTORY_INVALID')
+    }
+    return workingDirectory
+  } catch (error) {
+    if (createdDirectory) {
+      const cleanupError = cleanupFailure(createdDirectory)
+      if (cleanupError) throw cleanupError
+    }
+    if (error instanceof PublicBranchQueryError) throw error
+    throw new PublicBranchQueryError('GIT_TEMP_DIRECTORY_INVALID')
+  }
+}
+
+function findGitRepositoryRoot(startDirectory: string): string | null {
+  let current = realpathSync(startDirectory)
+  while (true) {
+    if (existsSync(join(current, '.git'))) return current
+    const parent = dirname(current)
+    if (parent === current) return null
+    current = parent
+  }
+}
+
+function isPathInside(parent: string, candidate: string): boolean {
+  const pathFromParent = relative(parent, candidate)
+  return (
+    pathFromParent === '' ||
+    (pathFromParent !== '..' &&
+      !pathFromParent.startsWith(`..${sep}`) &&
+      !isAbsolute(pathFromParent))
+  )
+}
+
+function cleanupFailure(workingDirectory: string): PublicBranchQueryError | null {
+  try {
+    rmSync(workingDirectory, { recursive: true, force: false })
+    return null
+  } catch {
+    return new PublicBranchQueryError('GIT_TEMP_CLEANUP_FAILED')
+  }
 }
