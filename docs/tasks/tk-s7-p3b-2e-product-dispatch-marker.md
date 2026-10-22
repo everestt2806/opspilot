@@ -8,6 +8,10 @@
 
 Contract and SQLite repository/tests only. No Git fetch, SSH, remote command, deployment execution, executor, scheduler, API/IPC/UI, VPS or production DB.
 
+## Review record
+
+Leader approved P3b-2e code `ef15e77196ca502eddf8889b0a6d11c4a6f766ef` with dossier `a9df123d66868aeb7b9454076c61b7021c91de32`. Approval covers persistence, executor-supplied metadata equality and the one-shot durable marker only. It does not establish a real Git fetch, remote execution or successful Product auto deployment; these remain P3e/P3g gates.
+
 ## Requirement ledger
 
 | Requirement | Implementation / evidence | State |
