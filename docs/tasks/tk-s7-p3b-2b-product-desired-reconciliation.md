@@ -1,4 +1,4 @@
-# TK-S7 P3b-2b — durable branch observation and desired reconciliation
+﻿# TK-S7 P3b-2b — durable branch observation and desired reconciliation
 
 | Owner | Date | Branch | Status | Contract base |
 |---|---|---|---|---|
@@ -31,4 +31,5 @@ Observation calls include the sequence read before fetching a tip. The transacti
 - `git diff --check` and staged `git diff --cached --check` — PASS.
 - No scheduler/claim worker, real concurrent scheduler, Git poller, or remote deployment was run; local SQLite transaction tests do not claim those gates.
 
-Implementation commit SHA: `5967381f73a97645617070f636b94ba4bcae2096`.
+Implementation commit SHA: `5967381947ce663231b138c6018aaa2e5e1e372d`.
+
