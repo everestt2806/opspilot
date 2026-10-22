@@ -1,6 +1,6 @@
 ﻿/**
  * Shared data contract for Product-mode Git auto deploy.
- * Persistence migrations 016-017 create empty tables/policy fields only; they do not enroll apps.
+ * Persistence migrations 016-018 create empty tables/policy fields only; they do not enroll apps.
  */
 
 export type ProductControllerId = string;
@@ -29,6 +29,12 @@ export interface ProductAppOwnership {
   /** App-level Product policy; source/config generation changes do not clear it. */
   auto_deploy_paused: boolean;
   pause_reason: 'manual_action' | 'operator' | null;
+  /** Legacy ambiguous policy requires an explicit operator confirmation to resume. */
+  pause_policy_provenance:
+    | 'legacy_clean'
+    | 'legacy_inferred'
+    | 'operator_required'
+    | 'explicit';
 }
 
 /** Deploy-relevant source/build config is snapshotted and hashed at enqueue. */

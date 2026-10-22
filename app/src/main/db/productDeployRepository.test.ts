@@ -46,8 +46,29 @@ describe('ProductDeployRepository', () => {
     expect(repository.getDesiredState(2, 2, 'release')).toEqual({ kind: 'absent' })
     expect(repository.getOwnership(1)).toMatchObject({
       kind: 'present',
-      value: { app_id: 1, mode: 'product', controller_id: 'controller-1', ownership_generation: 4 }
+      value: {
+        app_id: 1,
+        mode: 'product',
+        controller_id: 'controller-1',
+        ownership_generation: 4,
+        auto_deploy_paused: false,
+        pause_policy_provenance: 'legacy_clean'
+      }
     })
+    const unpausedOwnership = repository.getOwnership(1)
+    expect(unpausedOwnership.kind).toBe('present')
+    if (unpausedOwnership.kind === 'present') {
+      expect(typeof unpausedOwnership.value.auto_deploy_paused).toBe('boolean')
+      expect(unpausedOwnership.value.auto_deploy_paused).toBe(false)
+    }
+    database.prepare(`UPDATE product_app_control SET auto_deploy_paused=1,
+      pause_reason='manual_action', pause_policy_provenance='explicit' WHERE app_id=1`).run()
+    const pausedOwnership = repository.getOwnership(1)
+    expect(pausedOwnership).toMatchObject({ kind: 'present', value: { auto_deploy_paused: true } })
+    if (pausedOwnership.kind === 'present') {
+      expect(typeof pausedOwnership.value.auto_deploy_paused).toBe('boolean')
+      expect(pausedOwnership.value.auto_deploy_paused).toBe(true)
+    }
     expect(repository.getSourceConfig(1, 2)).toMatchObject({
       kind: 'present',
       value: {

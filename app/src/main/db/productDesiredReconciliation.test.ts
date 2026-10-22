@@ -144,7 +144,8 @@ describe('Product desired reconciliation transactions', () => {
     const harness = createHarness()
     harness.database.exec(`
       UPDATE product_app_control
-      SET auto_deploy_paused=1, pause_reason='manual_action' WHERE app_id=1;
+      SET auto_deploy_paused=1, pause_reason='manual_action', pause_policy_provenance='explicit'
+      WHERE app_id=1;
       INSERT INTO product_branch_observation VALUES (1,1,'main',1,'${SHA_A}','now');
       INSERT INTO product_desired_branch
         (app_id,source_generation,ref,desired_observation_sequence,desired_sha,reconcile_epoch,
@@ -195,7 +196,8 @@ describe('Product desired reconciliation transactions', () => {
     const harness = createHarness()
     harness.database.exec(`
       UPDATE product_app_control
-      SET auto_deploy_paused=1, pause_reason='manual_action' WHERE app_id=1;
+      SET auto_deploy_paused=1, pause_reason='manual_action', pause_policy_provenance='explicit'
+      WHERE app_id=1;
       INSERT INTO product_branch_observation VALUES (1,1,'main',1,'${SHA_A}','now');
       INSERT INTO product_desired_branch
         (app_id,source_generation,ref,desired_observation_sequence,desired_sha,reconcile_epoch,
@@ -266,7 +268,8 @@ describe('Product desired reconciliation transactions', () => {
          reconciliation_state,auto_paused,pause_reason,updated_at)
         VALUES (1,1,'main',1,'${SHA_A}',0,'paused',1,'manual_action','old');
       UPDATE product_app_control SET auto_deploy_paused=0, pause_reason=NULL,
-        source_generation=2, source_config_sha256='${CONFIG_HASH_NEXT}', changed_at='resumed';
+        pause_policy_provenance='explicit', source_generation=2,
+        source_config_sha256='${CONFIG_HASH_NEXT}', changed_at='resumed';
     `)
 
     const nextIdentity = { ...harness.identity, sourceGeneration: 2, configSha256: CONFIG_HASH_NEXT, ref: 'release' }
@@ -281,6 +284,22 @@ describe('Product desired reconciliation transactions', () => {
       value: { auto_paused: false, pause_reason: null, reconciliation_state: 'queued' }
     })
     expect(count(harness.database, 'product_deploy_job')).toBe(1)
+
+    closeDatabase()
+    const reopened = initializeDatabase(testDirectory!)
+    const repository = new ProductDeployRepository(reopened)
+    expect(repository.reconcileDesired(nextIdentity)).toMatchObject({
+      state: 'queued',
+      reason: 'already_queued'
+    })
+    expect(repository.observeTip(observation(nextIdentity, 1, SHA_B))).toMatchObject({
+      observationCreated: false,
+      reconciliation: { state: 'queued' }
+    })
+    expect(
+      reopened.prepare('SELECT auto_deploy_paused, pause_policy_provenance FROM product_app_control').get()
+    ).toEqual({ auto_deploy_paused: 0, pause_policy_provenance: 'explicit' })
+    expect(count(reopened, 'product_deploy_job')).toBe(1)
   })
 
   it.each([

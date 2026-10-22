@@ -20,6 +20,7 @@ import migration014 from './migrations/014_https_probe_policy_and_peer_set.sql?r
 import migration015 from './migrations/015_repair_legacy_https_probe_evidence.sql?raw'
 import migration016 from './migrations/016_product_auto_deploy_persistence.sql?raw'
 import migration017 from './migrations/017_product_auto_deploy_pause_policy.sql?raw'
+import migration018 from './migrations/018_product_auto_deploy_pause_provenance.sql?raw'
 
 interface Migration {
   name: string
@@ -112,6 +113,11 @@ const migrations: Migration[] = [
     name: '017_product_auto_deploy_pause_policy.sql',
     version: 17,
     sql: migration017
+  },
+  {
+    name: '018_product_auto_deploy_pause_provenance.sql',
+    version: 18,
+    sql: migration018
   }
 ]
 

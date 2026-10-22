@@ -497,15 +497,20 @@ export class ProductDeployRepository {
   }
 
   getOwnership(appId: number): ProductRecord<ProductAppOwnershipRecord> {
-    return readOne(
-      this.database
-        .prepare(
-          `SELECT app_id, mode, controller_id, ownership_generation, changed_at,
-                         auto_deploy_paused, pause_reason
-                  FROM product_app_control WHERE app_id = ?`
-        )
-        .get(appId) as ProductAppOwnershipRecord | undefined
-    )
+    const row = this.database
+      .prepare(
+        `SELECT app_id, mode, controller_id, ownership_generation, changed_at,
+                auto_deploy_paused, pause_reason, pause_policy_provenance
+         FROM product_app_control WHERE app_id = ?`
+      )
+      .get(appId) as
+      | (Omit<ProductAppOwnershipRecord, 'auto_deploy_paused'> & { auto_deploy_paused: 0 | 1 })
+      | undefined
+    if (!row) return { kind: 'absent' }
+    return {
+      kind: 'present',
+      value: { ...row, auto_deploy_paused: row.auto_deploy_paused === 1 }
+    }
   }
 
   getSourceConfig(
