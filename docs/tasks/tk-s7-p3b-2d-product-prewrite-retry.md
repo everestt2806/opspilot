@@ -41,3 +41,14 @@ Final local command: `git diff --check` — PASS (documentation-inclusive change
 
 Implementation commit SHA: `c52dfa0fde4cda9d0f809f98f1724f9814705322`.
 No production/VPS operations. No migration, executor, scheduler or remote dispatch was run.
+
+## Review correction — pre-write error allowlist
+
+| Requirement | Implementation / evidence | State |
+|---|---|---|
+| Define explicit transient/permanent pre-write codes and verify runtime membership | Contract exports separate lists; repository accepts only transient `GIT_UNAVAILABLE`, `SSH_PREFLIGHT_TIMEOUT`, `NETWORK_ERROR` for transient disposition and permanent `INVALID_SOURCE_CONFIG`, `UNSUPPORTED_SOURCE_CONFIG`, `INVALID_REPOSITORY_URL` for permanent disposition | PASS |
+| Reject unrecognized or mismatched codes before DB mutation, without echo | Regex-valid `UNRECOGNIZED_SECRET_SENTINEL` and `INVALID_SOURCE_CONFIG` + transient disposition both return generic rejection; full job/attempt/desired/lease/history snapshots remain identical | PASS |
+| Valid transient/permanent codes retain intended results; dispatched state guard is exercised | Existing transient retry/backoff and permanent terminal-failure tests pass; post-dispatch regression uses allowlisted `GIT_UNAVAILABLE` and reaches durable `remote_outcome='unknown'` rejection | PASS |
+| Product/DB gates, typecheck, scoped lint and diff check | Node 22.23.4: 5 files / 56 tests PASS; main typecheck PASS; scoped ESLint 0 errors / 0 warnings; diff check PASS | PASS |
+
+Allowlist correction implementation SHA: `b1f8208061ea1c99bac877743fa99372f2b8b913`.
