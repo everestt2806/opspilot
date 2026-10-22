@@ -41,6 +41,12 @@ export interface ProductSourceConfigRecord extends ProductSourceConfigIdentity {
   created_at: string
 }
 
+export interface ProductGitPollTarget extends ProductReconcileIdentity {
+  repositoryUrl: string
+  repositoryRoot: string
+  observationSequence: number | null
+}
+
 export interface ProductReconcileIdentity {
   controllerId: ProductControllerId
   appId: number
@@ -1540,6 +1546,79 @@ export class ProductDeployRepository {
         .get(appId, sourceGeneration, ref) as ProductBranchObservation | undefined
     )
   }
+
+  /** Returns only current, active Product-owned Git sources with matching app/config identity. */
+  listGitPollTargets(controllerId: ProductControllerId): ProductGitPollTarget[] {
+    const controller = this.getController(controllerId)
+    if (controller.kind !== 'present' || controller.value.status !== 'active') return []
+    return this.database
+      .prepare(
+        `SELECT a.id AS app_id, owner.ownership_generation, owner.source_generation,
+                owner.source_config_sha256 AS config_sha256, source.production_ref AS ref,
+                source.repository_url, source.repository_root,
+                (SELECT MAX(o.observation_sequence)
+                 FROM product_branch_observation o
+                 WHERE o.app_id=a.id AND o.source_generation=source.source_generation
+                   AND o.ref=source.production_ref) AS observation_sequence
+         FROM product_app_control owner
+         JOIN product_source_config source ON source.app_id=owner.app_id
+           AND source.source_generation=owner.source_generation
+           AND source.config_sha256=owner.source_config_sha256
+         JOIN app a ON a.id=owner.app_id AND a.source_type='git'
+           AND a.git_repo_url IS source.repository_url
+           AND a.git_ref IS source.production_ref AND a.git_root IS source.repository_root
+         JOIN vps v ON v.id=a.vps_id AND v.archived_at IS NULL
+         JOIN product_controller c ON c.controller_id=owner.controller_id AND c.status='active'
+         WHERE owner.mode='product' AND owner.controller_id=?
+         ORDER BY a.id ASC`
+      )
+      .all(controllerId)
+      .map((row) => {
+        const target = row as {
+          app_id: number
+          ownership_generation: number
+          source_generation: number
+          config_sha256: string
+          ref: string
+          repository_url: string
+          repository_root: string
+          observation_sequence: number | null
+        }
+        return {
+          controllerId,
+          appId: target.app_id,
+          ownershipGeneration: target.ownership_generation,
+          sourceGeneration: target.source_generation,
+          configSha256: target.config_sha256,
+          ref: target.ref,
+          repositoryUrl: target.repository_url,
+          repositoryRoot: target.repository_root,
+          observationSequence: target.observation_sequence
+        }
+      })
+  }
+
+  countInvalidGitPollTargets(controllerId: ProductControllerId): number {
+    const row = this.database
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM product_app_control owner
+         JOIN product_controller c ON c.controller_id=owner.controller_id AND c.status='active'
+         LEFT JOIN product_source_config source ON source.app_id=owner.app_id
+           AND source.source_generation=owner.source_generation
+           AND source.config_sha256=owner.source_config_sha256
+         LEFT JOIN app a ON a.id=owner.app_id
+         LEFT JOIN vps v ON v.id=a.vps_id
+         WHERE owner.mode='product' AND owner.controller_id=?
+           AND (source.app_id IS NULL OR a.source_type IS NOT 'git'
+             OR a.git_repo_url IS NOT source.repository_url
+             OR a.git_ref IS NOT source.production_ref
+             OR a.git_root IS NOT source.repository_root
+             OR v.id IS NULL OR v.archived_at IS NOT NULL)`
+      )
+      .get(controllerId) as { count: number }
+    return row.count
+  }
 }
 
 function readOne<T>(row: T | undefined): ProductRecord<T> {
@@ -1902,11 +1981,18 @@ function loadReconcileContext(
 
   const app = database
     .prepare(
-      `SELECT a.id, a.source_type, a.git_repo_url, v.archived_at
+      `SELECT a.id, a.source_type, a.git_repo_url, a.git_ref, a.git_root, v.archived_at
        FROM app a JOIN vps v ON v.id=a.vps_id WHERE a.id=?`
     )
     .get(identity.appId) as
-    | { id: number; source_type: string; git_repo_url: string | null; archived_at: string | null }
+    | {
+        id: number
+        source_type: string
+        git_repo_url: string | null
+        git_ref: string | null
+        git_root: string | null
+        archived_at: string | null
+      }
     | undefined
   if (!app || app.archived_at !== null || app.source_type !== 'git' || !app.git_repo_url) {
     throw new ProductDeployRepositoryError('PRODUCT_APP_NOT_ELIGIBLE')
@@ -1942,16 +2028,24 @@ function loadReconcileContext(
 
   const source = database
     .prepare(
-      `SELECT repository_url, production_ref, config_sha256
+      `SELECT repository_url, production_ref, repository_root, config_sha256
        FROM product_source_config WHERE app_id=? AND source_generation=?`
     )
     .get(identity.appId, identity.sourceGeneration) as
-    { repository_url: string; production_ref: string; config_sha256: string } | undefined
+    | {
+        repository_url: string
+        production_ref: string
+        repository_root: string
+        config_sha256: string
+      }
+    | undefined
   if (
     !source ||
     source.config_sha256 !== identity.configSha256 ||
     source.production_ref !== identity.ref ||
-    source.repository_url !== app.git_repo_url
+    source.repository_url !== app.git_repo_url ||
+    source.production_ref !== app.git_ref ||
+    source.repository_root !== app.git_root
   ) {
     throw new ProductDeployRepositoryError('PRODUCT_STATE_CONFLICT')
   }

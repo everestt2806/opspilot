@@ -33,7 +33,7 @@ export interface GitSnapshot {
 const DEFAULT_TIMEOUT_MS = 120_000
 const DEFAULT_MAX_BYTES = 512 * 1024 * 1024
 
-function sanitizedGitEnvironment(): NodeJS.ProcessEnv {
+export function sanitizedGitEnvironment(): NodeJS.ProcessEnv {
   const inherited = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))
   )
@@ -98,7 +98,7 @@ export function canonicalizeGitHubUrl(value: string): string {
   return `https://github.com/${owner}/${repository}.git`
 }
 
-function validateRef(ref: string): void {
+export function validateRef(ref: string): void {
   if (
     !ref ||
     ref.startsWith('-') ||

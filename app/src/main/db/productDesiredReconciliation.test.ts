@@ -32,6 +32,43 @@ afterEach(() => {
 })
 
 describe('Product desired reconciliation transactions', () => {
+  it('lists only current Product-owned Git targets with captured source generations and tip sequence', () => {
+    const harness = createHarness()
+    expect(harness.repository.listGitPollTargets(CONTROLLER_ID)).toEqual([
+      {
+        controllerId: CONTROLLER_ID,
+        appId: 1,
+        ownershipGeneration: 1,
+        sourceGeneration: 1,
+        configSha256: CONFIG_HASH,
+        ref: 'main',
+        repositoryUrl: 'https://example.test/repo.git',
+        repositoryRoot: '.',
+        observationSequence: null
+      }
+    ])
+
+    harness.repository.observeTip(observation(harness.identity, null, SHA_B))
+    expect(harness.repository.listGitPollTargets(CONTROLLER_ID)[0].observationSequence).toBe(1)
+
+    harness.database
+      .prepare("UPDATE product_app_control SET mode='desktop', controller_id=NULL WHERE app_id=1")
+      .run()
+    expect(harness.repository.listGitPollTargets(CONTROLLER_ID)).toEqual([])
+  })
+
+  it('reports Product source rows that no longer match app config or an active VPS', () => {
+    const harness = createHarness()
+    harness.database.prepare("UPDATE app SET git_ref='release' WHERE id=1").run()
+    expect(harness.repository.listGitPollTargets(CONTROLLER_ID)).toEqual([])
+    expect(harness.repository.countInvalidGitPollTargets(CONTROLLER_ID)).toBe(1)
+
+    harness.database.prepare("UPDATE app SET git_ref='main' WHERE id=1").run()
+    harness.database.prepare("UPDATE vps SET archived_at='archived' WHERE id=1").run()
+    expect(harness.repository.listGitPollTargets(CONTROLLER_ID)).toEqual([])
+    expect(harness.repository.countInvalidGitPollTargets(CONTROLLER_ID)).toBe(1)
+  })
+
   it('does not duplicate repeated polls across connections or after reopen', () => {
     const harness = createHarness()
     const first = harness.repository.observeTip(observation(harness.identity, null, SHA_B))
@@ -222,25 +259,43 @@ describe('Product desired reconciliation transactions', () => {
     })
 
     harness.database
-      .prepare(`UPDATE product_app_control SET source_generation=2,
-        source_config_sha256=?, changed_at='changed' WHERE app_id=1`)
+      .prepare(
+        `UPDATE product_app_control SET source_generation=2,
+        source_config_sha256=?, changed_at='changed' WHERE app_id=1`
+      )
       .run(CONFIG_HASH_NEXT)
-    const nextIdentity = { ...harness.identity, sourceGeneration: 2, configSha256: CONFIG_HASH_NEXT, ref: 'release' }
+    harness.database.prepare("UPDATE app SET git_ref='release' WHERE id=1").run()
+    const nextIdentity = {
+      ...harness.identity,
+      sourceGeneration: 2,
+      configSha256: CONFIG_HASH_NEXT,
+      ref: 'release'
+    }
     const observed = harness.repository.observeTip(observation(nextIdentity, null, SHA_B))
 
-    expect(observed.reconciliation).toEqual({ state: 'paused', reason: 'manual_pause', jobId: null })
+    expect(observed.reconciliation).toEqual({
+      state: 'paused',
+      reason: 'manual_pause',
+      jobId: null
+    })
     expect(harness.repository.getDesiredState(1, 2, 'release')).toMatchObject({
       kind: 'present',
       value: { auto_paused: true, pause_reason: 'manual_action', reconciliation_state: 'paused' }
     })
     expect(
-      harness.database.prepare('SELECT state FROM product_deploy_job WHERE job_id=?').get('active-old-generation')
+      harness.database
+        .prepare('SELECT state FROM product_deploy_job WHERE job_id=?')
+        .get('active-old-generation')
     ).toEqual({ state: 'deploying' })
     expect(
-      harness.database.prepare('SELECT state FROM product_deploy_job WHERE job_id=?').get('manual-preserved')
+      harness.database
+        .prepare('SELECT state FROM product_deploy_job WHERE job_id=?')
+        .get('manual-preserved')
     ).toEqual({ state: 'queued' })
     expect(
-      harness.database.prepare("SELECT COUNT(*) AS count FROM product_deploy_job WHERE trigger='branch_poll'").get()
+      harness.database
+        .prepare("SELECT COUNT(*) AS count FROM product_deploy_job WHERE trigger='branch_poll'")
+        .get()
     ).toEqual({ count: 1 })
 
     closeDatabase()
@@ -270,9 +325,15 @@ describe('Product desired reconciliation transactions', () => {
       UPDATE product_app_control SET auto_deploy_paused=0, pause_reason=NULL,
         pause_policy_provenance='explicit', source_generation=2,
         source_config_sha256='${CONFIG_HASH_NEXT}', changed_at='resumed';
+      UPDATE app SET git_ref='release' WHERE id=1;
     `)
 
-    const nextIdentity = { ...harness.identity, sourceGeneration: 2, configSha256: CONFIG_HASH_NEXT, ref: 'release' }
+    const nextIdentity = {
+      ...harness.identity,
+      sourceGeneration: 2,
+      configSha256: CONFIG_HASH_NEXT,
+      ref: 'release'
+    }
     const result = harness.repository.observeTip(observation(nextIdentity, null, SHA_B))
     expect(result.reconciliation.state).toBe('queued')
     expect(harness.repository.getDesiredState(1, 1, 'main')).toMatchObject({
@@ -297,7 +358,9 @@ describe('Product desired reconciliation transactions', () => {
       reconciliation: { state: 'queued' }
     })
     expect(
-      reopened.prepare('SELECT auto_deploy_paused, pause_policy_provenance FROM product_app_control').get()
+      reopened
+        .prepare('SELECT auto_deploy_paused, pause_policy_provenance FROM product_app_control')
+        .get()
     ).toEqual({ auto_deploy_paused: 0, pause_policy_provenance: 'explicit' })
     expect(count(reopened, 'product_deploy_job')).toBe(1)
   })
