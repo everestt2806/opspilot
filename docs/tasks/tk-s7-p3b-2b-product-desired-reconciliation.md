@@ -32,4 +32,3 @@ Observation calls include the sequence read before fetching a tip. The transacti
 - No scheduler/claim worker, real concurrent scheduler, Git poller, or remote deployment was run; local SQLite transaction tests do not claim those gates.
 
 Implementation commit SHA: `5967381947ce663231b138c6018aaa2e5e1e372d`.
-
