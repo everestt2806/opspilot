@@ -47,3 +47,26 @@ Implementation commit SHA: `5967381947ce663231b138c6018aaa2e5e1e372d`.
 Correction gates: Node 22.23.4 focused reconciliation/repository/migration/index tests — PASS, 4 files / 35 tests; main typecheck — PASS; scoped ESLint on repository, reconciliation, migration and index tests — PASS, 0 errors / 96 Prettier warnings; `git diff --check` — PASS. Migration 017's backfill uses the newest persisted desired snapshot; existing v016 rows do not encode why an unpaused snapshot exists, so the migration follows the latest row and does not infer pause from any older row. Migration 016 creates no Product enrollment, so a normal v015 upgrade has no Product rows to interpret.
 
 Correction commit SHA: `4c8018f722a1431a78d51cab59a444509cb42919`.
+
+## Review correction — fail closed on ambiguous legacy pause provenance
+
+`START 22/10` — corrected the review findings on current source. Migration 017's newest `auto_paused=0` snapshot is not evidence of explicit resume: the old generation-change bug can create precisely that sequence. Migration 018 adds `pause_policy_provenance` to the authoritative owner row. For each Product app with an unpaused owner policy and any paused desired history, it sets the owner policy to paused with `operator_required`; it does not enqueue/claim work or modify desired rows, jobs, attempts, deployments, or legacy app data. Apps with no ambiguous history retain inferred current pause state. Only provenance `explicit` represents a confirmed current resume. Historical timestamps/generation ordering are not used as resume proof.
+
+| Requirement | Implementation / evidence | State |
+|---|---|---|
+| SQLite ownership read returns boolean true/false, and absence remains explicit | Repository maps persisted 0/1 to JS boolean; repository test checks `typeof`, both values and absent | PASS |
+| v016 generation 1 paused → generation 2 unpaused cannot auto enqueue after upgrade | Upgrade integration seeds the reproduced state, runs 017 and 018, verifies owner is `operator_required` paused and zero branch-poll jobs | PASS |
+| Already-v017 ambiguous state also fails closed | Integration starts at v017, applies only forward migration 018, checks per-app operator-required and no job enqueue | PASS |
+| Explicit resume evidence survives reopen and repeated reconciliation; history cannot override it | Provenance `explicit` survives DB reopen; reconciliation regression confirms unchanged poll/reopen keeps it unpaused and does not duplicate its job | PASS |
+| Preserve legacy rows, Product history/jobs/attempts and transaction rollback; never execute queued work | Migrations are additive and update only app policy; migration/index/reconciliation suite passes, queue remains untouched | PASS |
+
+Migration 018 is forward-only; migrations 016/017 are unchanged. Ambiguous v017 rows cannot be safely auto-resumed because the schema has no provenance field before 018; an operator must explicitly confirm policy before auto reconciliation can proceed. No API/UI for that confirmation, scheduler, claim or executor was added.
+
+Current-session gates (Node `22.23.4`):
+
+- `node node_modules/vitest/vitest.mjs run src/main/db/productDesiredReconciliation.test.ts src/main/db/productDeployRepository.test.ts src/main/db/productMigration.test.ts src/main/db/index.test.ts` — PASS, 4 files / 36 tests, Node 22.23.4.
+- `node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json --composite false` — PASS, Node 22.23.4.
+- Scoped ESLint for `index.ts`, `index.test.ts`, `productDeployRepository.ts`, `productDeployRepository.test.ts`, `productDesiredReconciliation.test.ts`, and `productMigration.test.ts` — PASS, 0 errors / 115 warnings (Prettier warnings; no bulk formatting performed).
+- `git diff --check` — PASS (Git reports the existing schema.sql CRLF-to-LF normalization warning).
+
+Implementation commit SHA: `e27444b424671523351be60c01d92b921919559d`. No Product scheduler/executor, production DB, VPS, IPC/UI, or remote operation was used.
