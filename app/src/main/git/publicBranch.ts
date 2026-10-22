@@ -113,6 +113,7 @@ function runLsRemote(
     try {
       child = spawn('git', args, {
         cwd: workingDirectory,
+        detached: process.platform === 'linux',
         shell: false,
         windowsHide: true,
         env: publicGitEnvironment(workingDirectory),
@@ -130,6 +131,8 @@ function runLsRemote(
     let termination: PublicBranchErrorCode | null = null
     let settled = false
     let killTimer: NodeJS.Timeout | undefined
+    let killEscalated = false
+    let closeResult: { code: number | null; signal: NodeJS.Signals | null } | null = null
 
     const finish = (error?: PublicBranchErrorCode, result?: PublicBranchTip): void => {
       if (settled) return
@@ -147,17 +150,11 @@ function runLsRemote(
     const terminate = (code: PublicBranchErrorCode): void => {
       if (settled || termination) return
       termination = code
-      try {
-        child.kill('SIGTERM')
-      } catch {
-        // Keep waiting for close; the escalation timer will try SIGKILL.
-      }
+      signalGitProcessTree(child, 'SIGTERM')
       killTimer = setTimeout(() => {
-        try {
-          child.kill('SIGKILL')
-        } catch {
-          // Do not report completion or remove cwd until the child closes.
-        }
+        signalGitProcessTree(child, 'SIGKILL')
+        killEscalated = true
+        if (closeResult) finish(termination ?? 'GIT_REMOTE_ERROR')
       }, KILL_GRACE_MS)
       killTimer.unref()
     }
@@ -189,9 +186,10 @@ function runLsRemote(
       if (child.pid === undefined) finish(termination ?? 'GIT_UNAVAILABLE')
       else if (!termination) terminate('GIT_UNAVAILABLE')
     })
-    child.once('close', (code) => {
+    child.once('close', (code, closeSignal) => {
       if (termination) {
-        finish(termination)
+        closeResult = { code, signal: closeSignal }
+        if (killEscalated) finish(termination)
         return
       }
       const out = Buffer.concat(stdout).toString('ascii').trim()
@@ -217,6 +215,22 @@ function runLsRemote(
       finish(undefined, { state: 'found', sha: match[1] })
     })
   })
+}
+
+function signalGitProcessTree(child: ReturnType<typeof spawn>, signal: NodeJS.Signals): void {
+  if (process.platform === 'linux' && child.pid !== undefined) {
+    try {
+      process.kill(-child.pid, signal)
+      return
+    } catch {
+      // Fall back to the direct child if its process group is already gone.
+    }
+  }
+  try {
+    child.kill(signal)
+  } catch {
+    // Keep waiting for close; no result is returned until the child and stdio close.
+  }
 }
 
 function publicGitEnvironment(workingDirectory: string): NodeJS.ProcessEnv {
