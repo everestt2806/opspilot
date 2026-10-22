@@ -1,6 +1,6 @@
 ﻿/**
  * Shared data contract for Product-mode Git auto deploy.
- * Persistence migration 016 creates empty tables only; it does not enroll apps.
+ * Persistence migrations 016-017 create empty tables/policy fields only; they do not enroll apps.
  */
 
 export type ProductControllerId = string;
@@ -15,6 +15,10 @@ export type ProductIsoUtc = string;
 export type ProductAppMode = 'desktop' | 'product';
 export type ProductJobTrigger = 'branch_poll' | 'manual_redeploy' | 'manual_rollback';
 
+/**
+ * `product_app_control.auto_deploy_paused` is the current policy source.
+ * Desired-branch pause fields are snapshots and never override this value.
+ */
 /** Incremented by CAS whenever Product ownership is switched or re-enrolled. */
 export interface ProductAppOwnership {
   app_id: ProductAppId;
@@ -22,6 +26,9 @@ export interface ProductAppOwnership {
   controller_id: ProductControllerId | null;
   ownership_generation: number;
   changed_at: ProductIsoUtc;
+  /** App-level Product policy; source/config generation changes do not clear it. */
+  auto_deploy_paused: boolean;
+  pause_reason: 'manual_action' | 'operator' | null;
 }
 
 /** Deploy-relevant source/build config is snapshotted and hashed at enqueue. */
@@ -65,6 +72,7 @@ export interface ProductDesiredBranchState {
   reconciled_epoch: number | null;
   reconciliation_state: ProductReconciliationState;
   reconciliation_job_id: ProductJobId | null;
+  /** Snapshot of ProductAppOwnership policy when this desired row was reconciled. */
   auto_paused: boolean;
   pause_reason: 'manual_action' | 'operator' | null;
   updated_at: ProductIsoUtc;

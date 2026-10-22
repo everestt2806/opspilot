@@ -143,6 +143,8 @@ describe('Product desired reconciliation transactions', () => {
   it('preserves manual jobs and manual pause while superseding only obsolete auto jobs', () => {
     const harness = createHarness()
     harness.database.exec(`
+      UPDATE product_app_control
+      SET auto_deploy_paused=1, pause_reason='manual_action' WHERE app_id=1;
       INSERT INTO product_branch_observation VALUES (1,1,'main',1,'${SHA_A}','now');
       INSERT INTO product_desired_branch
         (app_id,source_generation,ref,desired_observation_sequence,desired_sha,reconcile_epoch,
@@ -187,6 +189,98 @@ describe('Product desired reconciliation transactions', () => {
       pause_reason: 'manual_action'
     })
     expect(count(harness.database, 'product_deploy_job')).toBe(2)
+  })
+
+  it('keeps app pause policy across source generation/ref changes, polls, reopen, and active/manual work', () => {
+    const harness = createHarness()
+    harness.database.exec(`
+      UPDATE product_app_control
+      SET auto_deploy_paused=1, pause_reason='manual_action' WHERE app_id=1;
+      INSERT INTO product_branch_observation VALUES (1,1,'main',1,'${SHA_A}','now');
+      INSERT INTO product_desired_branch
+        (app_id,source_generation,ref,desired_observation_sequence,desired_sha,reconcile_epoch,
+         reconciliation_state,auto_paused,pause_reason,updated_at)
+        VALUES (1,1,'main',1,'${SHA_A}',0,'paused',1,'manual_action','now');
+    `)
+    seedJob(harness.database, {
+      jobId: 'active-old-generation',
+      trigger: 'branch_poll',
+      key: 'auto:1:1:0',
+      sha: SHA_A,
+      state: 'deploying',
+      observationSequence: 1,
+      reconcileEpoch: 0,
+      attemptCount: 1
+    })
+    seedJob(harness.database, {
+      jobId: 'manual-preserved',
+      trigger: 'manual_redeploy',
+      key: 'manual-request',
+      sha: SHA_B
+    })
+
+    harness.database
+      .prepare(`UPDATE product_app_control SET source_generation=2,
+        source_config_sha256=?, changed_at='changed' WHERE app_id=1`)
+      .run(CONFIG_HASH_NEXT)
+    const nextIdentity = { ...harness.identity, sourceGeneration: 2, configSha256: CONFIG_HASH_NEXT, ref: 'release' }
+    const observed = harness.repository.observeTip(observation(nextIdentity, null, SHA_B))
+
+    expect(observed.reconciliation).toEqual({ state: 'paused', reason: 'manual_pause', jobId: null })
+    expect(harness.repository.getDesiredState(1, 2, 'release')).toMatchObject({
+      kind: 'present',
+      value: { auto_paused: true, pause_reason: 'manual_action', reconciliation_state: 'paused' }
+    })
+    expect(
+      harness.database.prepare('SELECT state FROM product_deploy_job WHERE job_id=?').get('active-old-generation')
+    ).toEqual({ state: 'deploying' })
+    expect(
+      harness.database.prepare('SELECT state FROM product_deploy_job WHERE job_id=?').get('manual-preserved')
+    ).toEqual({ state: 'queued' })
+    expect(
+      harness.database.prepare("SELECT COUNT(*) AS count FROM product_deploy_job WHERE trigger='branch_poll'").get()
+    ).toEqual({ count: 1 })
+
+    closeDatabase()
+    const reopened = initializeDatabase(testDirectory!)
+    const repository = new ProductDeployRepository(reopened)
+    expect(repository.reconcileDesired(nextIdentity)).toEqual({
+      state: 'paused',
+      reason: 'manual_pause',
+      jobId: null
+    })
+    expect(repository.observeTip(observation(nextIdentity, 1, SHA_B))).toMatchObject({
+      observationSequence: 1,
+      observationCreated: false,
+      reconciliation: { state: 'paused', reason: 'manual_pause', jobId: null }
+    })
+    expect(count(reopened, 'product_deploy_job')).toBe(2)
+  })
+
+  it('uses explicit current resume policy instead of historical paused desired rows', () => {
+    const harness = createHarness()
+    harness.database.exec(`
+      INSERT INTO product_branch_observation VALUES (1,1,'main',1,'${SHA_A}','now');
+      INSERT INTO product_desired_branch
+        (app_id,source_generation,ref,desired_observation_sequence,desired_sha,reconcile_epoch,
+         reconciliation_state,auto_paused,pause_reason,updated_at)
+        VALUES (1,1,'main',1,'${SHA_A}',0,'paused',1,'manual_action','old');
+      UPDATE product_app_control SET auto_deploy_paused=0, pause_reason=NULL,
+        source_generation=2, source_config_sha256='${CONFIG_HASH_NEXT}', changed_at='resumed';
+    `)
+
+    const nextIdentity = { ...harness.identity, sourceGeneration: 2, configSha256: CONFIG_HASH_NEXT, ref: 'release' }
+    const result = harness.repository.observeTip(observation(nextIdentity, null, SHA_B))
+    expect(result.reconciliation.state).toBe('queued')
+    expect(harness.repository.getDesiredState(1, 1, 'main')).toMatchObject({
+      kind: 'present',
+      value: { auto_paused: true, pause_reason: 'manual_action' }
+    })
+    expect(harness.repository.getDesiredState(1, 2, 'release')).toMatchObject({
+      kind: 'present',
+      value: { auto_paused: false, pause_reason: null, reconciliation_state: 'queued' }
+    })
+    expect(count(harness.database, 'product_deploy_job')).toBe(1)
   })
 
   it.each([
@@ -358,8 +452,9 @@ function createHarness(): {
     INSERT INTO product_source_config VALUES
       (1, 1, 'https://example.test/repo.git', 'main', '.', '{}', '${CONFIG_HASH}', 'now'),
       (1, 2, 'https://example.test/repo.git', 'release', '.', '{}', '${CONFIG_HASH_NEXT}', 'now');
-    INSERT INTO product_app_control VALUES
-      (1, 'product', '${CONTROLLER_ID}', 1, 1, '${CONFIG_HASH}', 'now');
+    INSERT INTO product_app_control
+      (app_id, mode, controller_id, ownership_generation, source_generation, source_config_sha256, changed_at)
+      VALUES (1, 'product', '${CONTROLLER_ID}', 1, 1, '${CONFIG_HASH}', 'now');
   `)
   const identity: ProductReconcileIdentity = {
     controllerId: CONTROLLER_ID,

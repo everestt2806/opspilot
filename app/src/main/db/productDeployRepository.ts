@@ -109,19 +109,30 @@ export class ProductDeployRepository {
                (app_id, source_generation, ref, desired_observation_sequence, desired_sha,
                 reconcile_epoch, reconciled_observation_sequence, reconciled_epoch,
                 reconciliation_state, reconciliation_job_id, auto_paused, pause_reason, updated_at)
-               VALUES (?, ?, ?, ?, ?, 0, NULL, NULL, 'pending', NULL, 0, NULL,
-                       strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+               VALUES (?, ?, ?, ?, ?, 0, NULL, NULL,
+                       CASE WHEN ?=1 THEN 'paused' ELSE 'pending' END,
+                       NULL, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))
                ON CONFLICT(app_id, source_generation, ref) DO UPDATE SET
                  desired_observation_sequence=excluded.desired_observation_sequence,
                  desired_sha=excluded.desired_sha,
                  reconciled_observation_sequence=NULL,
                  reconciled_epoch=NULL,
-                 reconciliation_state=CASE WHEN product_desired_branch.auto_paused=1
-                                           THEN 'paused' ELSE 'pending' END,
+                 auto_paused=excluded.auto_paused,
+                 pause_reason=excluded.pause_reason,
+                 reconciliation_state=excluded.reconciliation_state,
                  reconciliation_job_id=NULL,
                  updated_at=excluded.updated_at`
             )
-            .run(input.appId, input.sourceGeneration, input.ref, sequence, input.tipSha)
+            .run(
+              input.appId,
+              input.sourceGeneration,
+              input.ref,
+              sequence,
+              input.tipSha,
+              context.autoDeployPaused ? 1 : 0,
+              context.autoDeployPaused ? 1 : 0,
+              context.pauseReason
+            )
         } else if (latest && sequence !== null) {
           const desired = this.database
             .prepare(
@@ -143,10 +154,19 @@ export class ProductDeployRepository {
               .prepare(
                 `INSERT INTO product_desired_branch
                  (app_id, source_generation, ref, desired_observation_sequence, desired_sha,
-                  reconcile_epoch, reconciliation_state, auto_paused, updated_at)
-                 VALUES (?, ?, ?, ?, ?, 0, 'pending', 0, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`
+                  reconcile_epoch, reconciliation_state, auto_paused, pause_reason, updated_at)
+                 VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'))`
               )
-              .run(input.appId, input.sourceGeneration, input.ref, sequence, latest.observed_sha)
+              .run(
+                input.appId,
+                input.sourceGeneration,
+                input.ref,
+                sequence,
+                latest.observed_sha,
+                context.autoDeployPaused ? 'paused' : 'pending',
+                context.autoDeployPaused ? 1 : 0,
+                context.pauseReason
+              )
           }
         }
 
@@ -154,8 +174,9 @@ export class ProductDeployRepository {
           throw new ProductDeployRepositoryError('OBSERVATION_NOT_CREATED')
         }
 
-        const desired = this.loadDesired(input.appId, input.sourceGeneration, input.ref)
+        let desired = this.loadDesired(input.appId, input.sourceGeneration, input.ref)
         if (!desired) throw new ProductDeployRepositoryError('DESIRED_STATE_NOT_CREATED')
+        desired = this.applyCurrentPausePolicy(context, desired)
         this.supersedeObsoleteAutoJobs(input, desired)
         const reconciliation = this.reconcileDesiredInTransaction(context, desired)
         return {
@@ -172,7 +193,7 @@ export class ProductDeployRepository {
     return this.database
       .transaction(() => {
         const context = loadReconcileContext(this.database, identity)
-        const desired = this.loadDesired(identity.appId, identity.sourceGeneration, identity.ref)
+        let desired = this.loadDesired(identity.appId, identity.sourceGeneration, identity.ref)
         if (!desired) {
           return { state: 'pending' as const, reason: 'desired_missing' as const, jobId: null }
         }
@@ -194,6 +215,7 @@ export class ProductDeployRepository {
           throw new ProductDeployRepositoryError('DESIRED_OBSERVATION_MISMATCH')
         }
 
+        desired = this.applyCurrentPausePolicy(context, desired)
         this.supersedeObsoleteAutoJobs(identity, desired)
         return this.reconcileDesiredInTransaction(context, desired)
       })
@@ -242,6 +264,48 @@ export class ProductDeployRepository {
         desired.reconcile_epoch,
         desired.desired_sha
       )
+  }
+
+  private applyCurrentPausePolicy(
+    context: ReconcileContext,
+    desired: ProductDesiredBranchState
+  ): ProductDesiredBranchState {
+    this.database
+      .prepare(
+        `UPDATE product_desired_branch
+         SET auto_paused=?, pause_reason=?,
+             reconciliation_state=CASE WHEN ?=1 THEN 'paused'
+                                        WHEN reconciliation_state='paused' THEN 'pending'
+                                        ELSE reconciliation_state END,
+             updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+         WHERE app_id=? AND source_generation=? AND ref=?
+           AND (auto_paused<>? OR pause_reason IS NOT ? OR
+             (?=1 AND reconciliation_state<>'paused') OR
+             (?=0 AND reconciliation_state='paused'))`
+      )
+      .run(
+        context.autoDeployPaused ? 1 : 0,
+        context.pauseReason,
+        context.autoDeployPaused ? 1 : 0,
+        desired.app_id,
+        desired.source_generation,
+        desired.ref,
+        context.autoDeployPaused ? 1 : 0,
+        context.pauseReason,
+        context.autoDeployPaused ? 1 : 0,
+        context.autoDeployPaused ? 1 : 0
+      )
+    const state = context.autoDeployPaused
+      ? 'paused'
+      : desired.reconciliation_state === 'paused'
+        ? 'pending'
+        : desired.reconciliation_state
+    return {
+      ...desired,
+      auto_paused: context.autoDeployPaused,
+      pause_reason: context.pauseReason,
+      reconciliation_state: state
+    }
   }
 
   private reconcileDesiredInTransaction(
@@ -436,7 +500,8 @@ export class ProductDeployRepository {
     return readOne(
       this.database
         .prepare(
-          `SELECT app_id, mode, controller_id, ownership_generation, changed_at
+          `SELECT app_id, mode, controller_id, ownership_generation, changed_at,
+                         auto_deploy_paused, pause_reason
                   FROM product_app_control WHERE app_id = ?`
         )
         .get(appId) as ProductAppOwnershipRecord | undefined
@@ -499,7 +564,10 @@ function readOne<T>(row: T | undefined): ProductRecord<T> {
   return row === undefined ? { kind: 'absent' } : { kind: 'present', value: row }
 }
 
-type ReconcileContext = ProductReconcileIdentity
+type ReconcileContext = ProductReconcileIdentity & {
+  autoDeployPaused: boolean
+  pauseReason: ProductAppOwnership['pause_reason']
+}
 
 interface ProductJobRow {
   job_id: string
@@ -561,7 +629,7 @@ function loadReconcileContext(
   const ownership = database
     .prepare(
       `SELECT mode, controller_id, ownership_generation, source_generation,
-              source_config_sha256
+              source_config_sha256, auto_deploy_paused, pause_reason
        FROM product_app_control WHERE app_id=?`
     )
     .get(identity.appId) as
@@ -571,6 +639,8 @@ function loadReconcileContext(
         ownership_generation: number
         source_generation: number
         source_config_sha256: string
+        auto_deploy_paused: 0 | 1
+        pause_reason: ProductAppOwnership['pause_reason']
       }
     | undefined
   if (
@@ -600,7 +670,11 @@ function loadReconcileContext(
     throw new ProductDeployRepositoryError('PRODUCT_STATE_CONFLICT')
   }
 
-  return { ...identity }
+  return {
+    ...identity,
+    autoDeployPaused: ownership.auto_deploy_paused === 1,
+    pauseReason: ownership.pause_reason
+  }
 }
 
 function isMatchingAutoJob(

@@ -29,7 +29,9 @@ describe('ProductDeployRepository', () => {
         (1, 1, 'https://example.test/one.git', 'main', '.', '{}', '${'a'.repeat(64)}', 'created-1'),
         (1, 2, 'https://example.test/one.git', 'release', 'sub', '{"build":"two"}', '${'b'.repeat(64)}', 'created-2'),
         (2, 1, 'https://example.test/two.git', 'main', '.', '{}', '${'c'.repeat(64)}', 'created-3');
-      INSERT INTO product_app_control VALUES (1, 'product', 'controller-1', 4, 2, '${'b'.repeat(64)}', 'changed');
+      INSERT INTO product_app_control
+        (app_id, mode, controller_id, ownership_generation, source_generation, source_config_sha256, changed_at)
+        VALUES (1, 'product', 'controller-1', 4, 2, '${'b'.repeat(64)}', 'changed');
       INSERT INTO product_branch_observation VALUES (1, 2, 'release', 1, '${'d'.repeat(40)}', 'observed');
       INSERT INTO product_desired_branch (
         app_id, source_generation, ref, desired_observation_sequence, desired_sha,

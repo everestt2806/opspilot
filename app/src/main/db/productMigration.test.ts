@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { closeDatabase, initializeDatabase, runMigrations } from './index'
 import migration016 from './migrations/016_product_auto_deploy_persistence.sql?raw'
+import migration017 from './migrations/017_product_auto_deploy_pause_policy.sql?raw'
 
 let testDirectory: string | null = null
 
@@ -18,13 +19,14 @@ afterEach(() => {
   }
 })
 
-describe('Product persistence migration 016', () => {
-  it('keeps the cumulative schema contract synchronized with migration 016', () => {
+describe('Product persistence migrations 016-017', () => {
+  it('keeps the cumulative schema contract synchronized with migrations 016 and 017', () => {
     const schema = readFileSync(
       new URL('../../../../docs/contracts/schema.sql', import.meta.url),
       'utf8'
     ).replaceAll('\r\n', '\n')
     expect(schema).toContain(migration016.replaceAll('\r\n', '\n').trim())
+    expect(schema).toContain(migration017.replaceAll('\r\n', '\n').trim())
   })
 
   it('upgrades a v015 database without changing legacy rows or enrolling Product data, then reopens idempotently', () => {
@@ -38,7 +40,7 @@ describe('Product persistence migration 016', () => {
     const after = snapshotLegacy(database)
     expect(after).toEqual(before)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 16
+      version: 17
     })
     expect(database.prepare('SELECT COUNT(*) AS count FROM product_controller').get()).toEqual({
       count: 0
@@ -61,7 +63,7 @@ describe('Product persistence migration 016', () => {
     ).count
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 16
+      version: 17
     })
     expect(
       (
@@ -71,6 +73,44 @@ describe('Product persistence migration 016', () => {
       ).count
     ).toBe(tableCount)
     expect(snapshotLegacy(database)).toEqual(before)
+  })
+
+  it('migrates only the latest desired pause snapshot into app ownership policy', () => {
+    testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-product-pause-migration-'))
+    const database = initializeDatabase(testDirectory)
+    seedLegacyRows(database)
+    downgradeMigration017ToV016(database)
+    database.exec(`
+      INSERT INTO app (id, vps_id, name, framework, host_port, container_port, source_type,
+        git_repo_url, git_ref, git_root)
+        VALUES (8, 7, 'second-app', 'express', 30008, 3000, 'git', 'https://example.test/second.git', 'main', '.');
+      INSERT INTO product_controller VALUES ('controller', 'now', 'active');
+      INSERT INTO product_source_config VALUES
+        (7, 1, 'https://example.test/legacy.git', 'main', '.', '{}', '${'a'.repeat(64)}', 'old'),
+        (7, 2, 'https://example.test/legacy.git', 'release', '.', '{}', '${'b'.repeat(64)}', 'new'),
+        (8, 1, 'https://example.test/second.git', 'main', '.', '{}', '${'c'.repeat(64)}', 'current');
+      INSERT INTO product_app_control
+        (app_id, mode, controller_id, ownership_generation, source_generation, source_config_sha256, changed_at)
+        VALUES (7, 'product', 'controller', 2, 2, '${'b'.repeat(64)}', 'new'),
+               (8, 'product', 'controller', 1, 1, '${'c'.repeat(64)}', 'current');
+      INSERT INTO product_desired_branch
+        (app_id, source_generation, ref, desired_observation_sequence, desired_sha,
+         reconcile_epoch, reconciliation_state, auto_paused, pause_reason, updated_at)
+        VALUES (7, 1, 'main', 1, '${'1'.repeat(40)}', 0, 'paused', 1, 'manual_action', '2026-01-01'),
+               (7, 2, 'release', 1, '${'2'.repeat(40)}', 0, 'queued', 0, NULL, '2026-01-02'),
+               (8, 1, 'main', 1, '${'3'.repeat(40)}', 0, 'paused', 1, 'operator', '2026-01-01');
+    `)
+
+    runMigrations(database)
+
+    expect(database.prepare('SELECT auto_deploy_paused, pause_reason FROM product_app_control WHERE app_id=7').get())
+      .toEqual({ auto_deploy_paused: 0, pause_reason: null })
+    expect(database.prepare('SELECT auto_deploy_paused, pause_reason FROM product_app_control WHERE app_id=8').get())
+      .toEqual({ auto_deploy_paused: 1, pause_reason: 'operator' })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 17 })
+    expect(database.pragma('foreign_key_check')).toEqual([])
+    expect(() => database.prepare(`UPDATE product_app_control SET auto_deploy_paused=0,
+      pause_reason='manual_action' WHERE app_id=7`).run()).toThrow(/invalid Product auto-deploy pause policy/)
   })
 
   it('rolls back the whole v016 DDL and version record when a later statement conflicts', () => {
@@ -105,7 +145,9 @@ describe('Product persistence migration 016', () => {
     database.exec(`
       INSERT INTO product_controller VALUES ('controller', 'now', 'active');
       INSERT INTO product_source_config VALUES (7, 1, 'https://example.test/repo.git', 'main', '.', '{}', '${'a'.repeat(64)}', 'now');
-      INSERT INTO product_app_control VALUES (7, 'product', 'controller', 1, 1, '${'a'.repeat(64)}', 'now');
+      INSERT INTO product_app_control
+        (app_id, mode, controller_id, ownership_generation, source_generation, source_config_sha256, changed_at)
+      VALUES (7, 'product', 'controller', 1, 1, '${'a'.repeat(64)}', 'now');
       INSERT INTO product_deploy_job (job_id, controller_id, app_id, ownership_generation,
         source_generation, source_config_sha256, trigger, idempotency_key, ref, target_sha,
         state, available_at, created_at, updated_at)
@@ -197,7 +239,18 @@ function downgradeToV015(database: Database.Database): void {
     DROP TABLE product_app_control;
     DROP TABLE product_source_config;
     DROP TABLE product_controller;
+    DELETE FROM schema_version WHERE version=17;
     DELETE FROM schema_version WHERE version=16;
+  `)
+}
+
+function downgradeMigration017ToV016(database: Database.Database): void {
+  database.exec(`
+    DROP TRIGGER product_app_control_pause_policy_insert;
+    DROP TRIGGER product_app_control_pause_policy_update;
+    ALTER TABLE product_app_control DROP COLUMN pause_reason;
+    ALTER TABLE product_app_control DROP COLUMN auto_deploy_paused;
+    DELETE FROM schema_version WHERE version=17;
   `)
 }
 
