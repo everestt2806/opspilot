@@ -36,3 +36,26 @@ Final gates (Node 22.23.4, cached Node executable, cwd `app/`):
 No scheduler, SSH, Git poller, deploy executor, IPC/UI, enrollment, VPS, or production DB operation is in scope.
 
 Implementation commit SHA: `1f729af1b89aec063446f6535d049a7344d5012c`.
+
+## Review correction — clock after SQLite lock (22/10/2026)
+
+**Requirement ledger update**
+
+| Requirement | Implementation / evidence | State |
+|---|---|---|
+| Claim and heartbeat evaluate expiry and derive lease TTL only after `BEGIN IMMEDIATE` has acquired the SQLite writer lock | `readClock()`, `now`, and `expiresAt` now live inside each immediate transaction callback; TTL and busy timeout unchanged | PASS |
+| Heartbeat blocked before expiry but acquiring lock after expiry is rejected without changing either lease | Real file-backed SQLite lock-holder/heartbeat child-process regression compares both lease rows before/after and expects `expired_lease` | PASS |
+| Heartbeat acquiring the lock while still valid renews both leases atomically | Real file-backed SQLite contention regression verifies exact heartbeat and expiry timestamps on both leases | PASS |
+| Claim blocked on writer lock derives expiry from transaction processing time | Real file-backed SQLite lock-holder/claim regression injects updated clock before releasing the lock and checks the resulting TTL | PASS |
+| Node 22 Product/DB suite, typecheck, scoped lint and diff check | Node 22.23.4: 5 files / 48 tests PASS; main typecheck PASS; scoped ESLint 0 errors / 0 warnings; `git diff --check` PASS | PASS |
+
+The contention tests use independent Node processes, a `BEGIN IMMEDIATE` lock holder, ready/release files, a test-clock file and finite 8-second SQLite/process deadlines. Each test releases the lock and waits for both children; normal test cleanup removes the isolated database directory. The tests do not reclaim expired leases.
+
+**Correction gates**
+
+- Node 22.23.4 `node node_modules/vitest/vitest.mjs run src/main/db/productJobClaim.test.ts src/main/db/productDesiredReconciliation.test.ts src/main/db/productDeployRepository.test.ts src/main/db/productMigration.test.ts src/main/db/index.test.ts` (cwd `app/`): PASS, 5 files / 48 tests.
+- Node 22.23.4 `node node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json --composite false` (cwd `app/`): PASS.
+- Node 22.23.4 scoped ESLint on `src/main/db/productDeployRepository.ts` and `src/main/db/productJobClaim.test.ts` (cwd `app/`): PASS, 0 errors / 0 warnings.
+- `git diff --check`: PASS.
+
+Correction implementation SHA: `98de6179f24f0facda670b794f21aa6151afee35`.
