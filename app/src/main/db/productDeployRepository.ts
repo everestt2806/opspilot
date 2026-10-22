@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import type Database from 'better-sqlite3'
+import { insertNextDeploymentVersion } from './deploymentRepository'
 
 import {
   PRODUCT_LEASE_TTL_MS,
@@ -16,10 +17,13 @@ import type {
   ProductClaimToken,
   ProductControllerId,
   ProductDesiredBranchState,
+  ProductBeginDispatchResult,
   ProductHeartbeatResult,
+  ProductGitSnapshotMetadata,
   ProductJobState,
   ProductPrewriteFinishInput,
   ProductPrewriteFinishResult,
+  ProductSnapshotVerificationResult,
   ProductSourceConfigIdentity
 } from '../../../../docs/contracts/product-auto-deploy'
 
@@ -195,6 +199,9 @@ export class ProductDeployRepository {
 
         const candidate = jobs[0]
         if (!candidate) return { state: 'none' as const, reason: 'no_eligible_job' as const }
+        if (candidate.trigger === 'manual_rollback') {
+          return { state: 'blocked' as const, reason: 'unsupported_trigger' as const }
+        }
 
         const activeAppLease = this.database
           .prepare(
@@ -340,6 +347,200 @@ export class ProductDeployRepository {
             build_slot_fence: buildFence,
             expires_at: expiresAt
           }
+        }
+      })
+      .immediate()
+  }
+
+  /** Stores only that supplied Git metadata matched the durable job identity; it does not prove a fetch. */
+  markGitSnapshotVerified(
+    claim: ProductClaimToken,
+    snapshot: ProductGitSnapshotMetadata
+  ): ProductSnapshotVerificationResult {
+    if (!isValidClaimToken(claim)) return { state: 'rejected', reason: 'invalid_claim' }
+    if (!isValidGitSnapshotMetadata(snapshot)) {
+      return { state: 'rejected', reason: 'snapshot_mismatch' }
+    }
+    return this.database
+      .transaction(() => {
+        const now = new Date(this.readClock()).toISOString()
+        const authority = loadDispatchAuthority(this.database, claim)
+        if (!authority) return { state: 'rejected' as const, reason: 'stale_claim' as const }
+        const failure = validateDispatchAuthority(authority, claim, now)
+        if (failure) return { state: 'rejected' as const, reason: failure }
+        if (authority.trigger === 'manual_rollback') {
+          return { state: 'rejected' as const, reason: 'unsupported_trigger' as const }
+        }
+        if (authority.trigger !== 'branch_poll' && authority.trigger !== 'manual_redeploy') {
+          return { state: 'rejected' as const, reason: 'unsupported_trigger' as const }
+        }
+        const metadataFailure = validateSnapshotMatchesAuthority(authority, snapshot)
+        if (metadataFailure) return { state: 'rejected' as const, reason: metadataFailure }
+        if (hasUncertainProductWork(this.database, claim.app_id)) {
+          return { state: 'rejected' as const, reason: 'reconciliation_required' as const }
+        }
+        if (authority.job_state !== 'claimed') {
+          if (authority.job_state === 'deploying' || authority.remote_outcome !== 'not_started') {
+            return { state: 'rejected' as const, reason: 'reconciliation_required' as const }
+          }
+          return { state: 'rejected' as const, reason: 'stale_claim' as const }
+        }
+        if (authority.attempt_state === 'deploying' || authority.remote_outcome !== 'not_started') {
+          return { state: 'rejected' as const, reason: 'reconciliation_required' as const }
+        }
+        if (authority.attempt_state === 'snapshot_verified') {
+          return { state: 'snapshot_verified' as const }
+        }
+        if (authority.attempt_state !== 'claimed' || authority.deployment_id !== null) {
+          return { state: 'rejected' as const, reason: 'stale_claim' as const }
+        }
+        const update = this.database
+          .prepare(
+            `UPDATE product_deploy_attempt SET state='snapshot_verified'
+           WHERE attempt_id=? AND job_id=? AND attempt_number=? AND state='claimed'
+             AND remote_outcome='not_started' AND deployment_id IS NULL`
+          )
+          .run(claim.attempt_id, claim.job_id, claim.attempt_number)
+        if (update.changes !== 1)
+          throw new ProductDeployRepositoryError('SNAPSHOT_VERIFY_CAS_FAILED')
+        this.database
+          .prepare(
+            `INSERT INTO product_history_event
+           (controller_id,app_id,job_id,attempt_id,kind,created_at,safe_summary_json)
+           VALUES (?,?,?,?,?,?,?)`
+          )
+          .run(
+            claim.controller_id,
+            claim.app_id,
+            claim.job_id,
+            claim.attempt_id,
+            'git_snapshot_metadata_matched',
+            now,
+            JSON.stringify({
+              source_config_sha256: snapshot.sourceConfigSha256,
+              repository_root: snapshot.repositoryRoot,
+              target_sha: snapshot.commitSha
+            })
+          )
+        return { state: 'snapshot_verified' as const }
+      })
+      .immediate()
+  }
+
+  /** Commits one one-shot dispatch marker and canonical deployment row before any remote write. */
+  beginGitDispatch(
+    claim: ProductClaimToken,
+    snapshot: ProductGitSnapshotMetadata
+  ): ProductBeginDispatchResult {
+    if (!isValidClaimToken(claim)) return { state: 'rejected', reason: 'invalid_claim' }
+    if (!isValidGitSnapshotMetadata(snapshot)) {
+      return { state: 'rejected', reason: 'snapshot_mismatch' }
+    }
+    return this.database
+      .transaction(() => {
+        const now = new Date(this.readClock()).toISOString()
+        const authority = loadDispatchAuthority(this.database, claim)
+        if (!authority) return { state: 'rejected' as const, reason: 'stale_claim' as const }
+        const failure = validateDispatchAuthority(authority, claim, now)
+        if (failure) return { state: 'rejected' as const, reason: failure }
+        if (authority.trigger === 'manual_rollback') {
+          return { state: 'rejected' as const, reason: 'unsupported_trigger' as const }
+        }
+        if (authority.trigger !== 'branch_poll' && authority.trigger !== 'manual_redeploy') {
+          return { state: 'rejected' as const, reason: 'unsupported_trigger' as const }
+        }
+        if (
+          authority.job_state === 'deploying' ||
+          authority.attempt_state === 'deploying' ||
+          authority.remote_outcome !== 'not_started' ||
+          authority.deployment_id !== null
+        ) {
+          return {
+            state: 'reconciliation_required' as const,
+            reason: 'dispatch_marker_exists' as const
+          }
+        }
+        if (hasUncertainProductWork(this.database, claim.app_id)) {
+          return { state: 'reconciliation_required' as const, reason: 'uncertain_work' as const }
+        }
+        const metadataFailure = validateSnapshotMatchesAuthority(authority, snapshot)
+        if (metadataFailure) return { state: 'rejected' as const, reason: metadataFailure }
+        if (authority.job_state !== 'claimed' || authority.attempt_state !== 'snapshot_verified') {
+          return { state: 'rejected' as const, reason: 'snapshot_not_verified' as const }
+        }
+        if (authority.trigger === 'branch_poll') {
+          if (authority.auto_deploy_paused === 1) {
+            return { state: 'rejected' as const, reason: 'auto_paused' as const }
+          }
+          const desired = this.database
+            .prepare(
+              `SELECT desired_observation_sequence,desired_sha,reconcile_epoch,
+                    reconciliation_state,reconciliation_job_id,auto_paused
+             FROM product_desired_branch WHERE app_id=? AND source_generation=? AND ref=?`
+            )
+            .get(claim.app_id, authority.source_generation, authority.job_ref) as
+            DispatchDesiredRow | undefined
+          if (
+            !desired ||
+            desired.auto_paused !== 0 ||
+            desired.reconciliation_state !== 'in_progress' ||
+            desired.reconciliation_job_id !== claim.job_id ||
+            desired.desired_observation_sequence !== authority.observation_sequence ||
+            desired.desired_sha !== authority.target_sha ||
+            desired.reconcile_epoch !== authority.reconcile_epoch
+          ) {
+            return { state: 'rejected' as const, reason: 'desired_changed' as const }
+          }
+        }
+
+        const deployment = insertNextDeploymentVersion(this.database, {
+          appId: claim.app_id,
+          appName: authority.app_name,
+          detectorJson: null,
+          envJson: null,
+          gitProvenance: { repositoryUrl: snapshot.repositoryUrl, commitSha: snapshot.commitSha }
+        })
+        const attemptUpdate = this.database
+          .prepare(
+            `UPDATE product_deploy_attempt SET state='deploying',remote_outcome='unknown',deployment_id=?
+           WHERE attempt_id=? AND job_id=? AND attempt_number=? AND state='snapshot_verified'
+             AND remote_outcome='not_started' AND deployment_id IS NULL`
+          )
+          .run(deployment.id, claim.attempt_id, claim.job_id, claim.attempt_number)
+        if (attemptUpdate.changes !== 1)
+          throw new ProductDeployRepositoryError('DISPATCH_ATTEMPT_CAS_FAILED')
+        const jobUpdate = this.database
+          .prepare(
+            `UPDATE product_deploy_job SET state='deploying',updated_at=?,finished_at=NULL
+           WHERE job_id=? AND controller_id=? AND app_id=? AND state='claimed' AND attempt_count=?`
+          )
+          .run(now, claim.job_id, claim.controller_id, claim.app_id, claim.attempt_number)
+        if (jobUpdate.changes !== 1)
+          throw new ProductDeployRepositoryError('DISPATCH_JOB_CAS_FAILED')
+        this.database
+          .prepare(
+            `INSERT INTO product_history_event
+           (controller_id,app_id,job_id,attempt_id,kind,created_at,safe_summary_json)
+           VALUES (?,?,?,?,?,?,?)`
+          )
+          .run(
+            claim.controller_id,
+            claim.app_id,
+            claim.job_id,
+            claim.attempt_id,
+            'remote_dispatch_marker_committed',
+            now,
+            JSON.stringify({
+              deployment_id: deployment.id,
+              version: deployment.version,
+              target_sha: snapshot.commitSha
+            })
+          )
+        return {
+          state: 'dispatch_authorized' as const,
+          deployment_id: deployment.id,
+          version: deployment.version,
+          image_tag: deployment.imageTag
         }
       })
       .immediate()
@@ -1437,6 +1638,202 @@ interface PrewriteDesiredRow {
   reconcile_epoch: number
   reconciliation_job_id: string | null
   auto_paused: 0 | 1
+}
+
+interface DispatchDesiredRow {
+  desired_observation_sequence: number
+  desired_sha: string
+  reconcile_epoch: number
+  reconciliation_state: string
+  reconciliation_job_id: string | null
+  auto_paused: 0 | 1
+}
+
+interface ClaimDispatchAuthority {
+  job_state: string
+  controller_id: string
+  controller_status: string
+  app_id: number
+  app_name: string
+  ownership_generation: number
+  source_generation: number
+  source_config_sha256: string
+  trigger: string
+  job_ref: string
+  target_sha: string | null
+  observation_sequence: number | null
+  reconcile_epoch: number | null
+  attempt_count: number
+  attempt_number: number
+  attempt_state: string
+  remote_outcome: string
+  deployment_id: number | null
+  source_type: string
+  app_repo_url: string | null
+  app_ref: string | null
+  app_root: string | null
+  archived_at: string | null
+  owner_mode: string
+  owner_controller_id: string | null
+  owner_generation: number
+  owner_source_generation: number
+  owner_config_sha256: string
+  auto_deploy_paused: number
+  repository_url: string
+  production_ref: string
+  repository_root: string
+  app_lease_id: string
+  app_fence: number
+  lease_app_id: number
+  app_lease_controller_id: string
+  lease_ownership_generation: number
+  app_expires_at: string
+  app_released_at: string | null
+  build_slot_lease_id: string
+  build_slot_fence: number
+  build_lease_controller_id: string
+  slot_name: string
+  build_expires_at: string
+  build_released_at: string | null
+}
+
+type DispatchAuthorityFailure =
+  | 'stale_claim'
+  | 'controller_inactive'
+  | 'ownership_changed'
+  | 'expired_lease'
+  | 'unsupported_trigger'
+
+function loadDispatchAuthority(
+  database: Database.Database,
+  claim: ProductClaimToken
+): ClaimDispatchAuthority | undefined {
+  return database
+    .prepare(
+      `SELECT j.state AS job_state,j.controller_id,c.status AS controller_status,j.app_id,a.name AS app_name,
+       j.ownership_generation,j.source_generation,j.source_config_sha256,j.trigger,j.ref AS job_ref,
+       j.target_sha,j.observation_sequence,j.reconcile_epoch,j.attempt_count,
+       pa.attempt_number,pa.state AS attempt_state,pa.remote_outcome,pa.deployment_id,
+       a.source_type,a.git_repo_url AS app_repo_url,a.git_ref AS app_ref,a.git_root AS app_root,v.archived_at,
+       owner.mode AS owner_mode,owner.controller_id AS owner_controller_id,
+       owner.ownership_generation AS owner_generation,owner.source_generation AS owner_source_generation,
+       owner.source_config_sha256 AS owner_config_sha256,owner.auto_deploy_paused,
+       source.repository_url,source.production_ref,source.repository_root,
+       pa.lease_id AS app_lease_id,pa.fencing_token AS app_fence,
+       app_lease.app_id AS lease_app_id,app_lease.controller_id AS app_lease_controller_id,
+       app_lease.ownership_generation AS lease_ownership_generation,
+       app_lease.expires_at AS app_expires_at,app_lease.released_at AS app_released_at,
+       pa.build_slot_lease_id,pa.build_slot_fence,build_lease.controller_id AS build_lease_controller_id,
+       build_lease.slot_name,build_lease.expires_at AS build_expires_at,
+       build_lease.released_at AS build_released_at
+     FROM product_deploy_attempt pa
+     JOIN product_deploy_job j ON j.job_id=pa.job_id
+     JOIN product_controller c ON c.controller_id=j.controller_id
+     JOIN app a ON a.id=j.app_id
+     JOIN vps v ON v.id=a.vps_id
+     JOIN product_app_control owner ON owner.app_id=j.app_id
+     JOIN product_source_config source ON source.app_id=j.app_id
+       AND source.source_generation=j.source_generation AND source.config_sha256=j.source_config_sha256
+     JOIN product_app_lease app_lease ON app_lease.lease_id=pa.lease_id
+       AND app_lease.fence=pa.fencing_token AND app_lease.job_id=j.job_id
+     JOIN product_worker_lease build_lease ON build_lease.lease_id=pa.build_slot_lease_id
+       AND build_lease.fence=pa.build_slot_fence AND build_lease.job_id=j.job_id
+     WHERE pa.attempt_id=? AND j.job_id=?`
+    )
+    .get(claim.attempt_id, claim.job_id) as ClaimDispatchAuthority | undefined
+}
+
+function validateDispatchAuthority(
+  authority: ClaimDispatchAuthority | undefined,
+  claim: ProductClaimToken,
+  now: string
+): DispatchAuthorityFailure | null {
+  if (!authority) return 'stale_claim'
+  if (authority.controller_status !== 'active') return 'controller_inactive'
+  if (
+    authority.controller_id !== claim.controller_id ||
+    authority.app_id !== claim.app_id ||
+    authority.ownership_generation !== claim.ownership_generation ||
+    authority.source_generation !== claim.source_generation ||
+    authority.source_config_sha256 !== claim.source_config_sha256 ||
+    authority.attempt_number !== claim.attempt_number ||
+    authority.attempt_count !== claim.attempt_number ||
+    authority.app_lease_id !== claim.app_lease_id ||
+    authority.app_fence !== claim.app_fence ||
+    authority.build_slot_lease_id !== claim.build_slot_lease_id ||
+    authority.build_slot_fence !== claim.build_slot_fence ||
+    authority.lease_app_id !== claim.app_id ||
+    authority.app_lease_controller_id !== claim.controller_id ||
+    authority.lease_ownership_generation !== claim.ownership_generation ||
+    authority.build_lease_controller_id !== claim.controller_id ||
+    authority.slot_name !== 'build'
+  )
+    return 'stale_claim'
+  if (
+    authority.owner_mode !== 'product' ||
+    authority.owner_controller_id !== claim.controller_id ||
+    authority.owner_generation !== claim.ownership_generation ||
+    authority.owner_source_generation !== claim.source_generation ||
+    authority.owner_config_sha256 !== claim.source_config_sha256 ||
+    authority.archived_at !== null ||
+    authority.source_type !== 'git' ||
+    authority.app_repo_url !== authority.repository_url ||
+    authority.app_ref !== authority.production_ref ||
+    authority.app_root !== authority.repository_root ||
+    authority.production_ref !== authority.job_ref ||
+    authority.repository_url.length === 0 ||
+    authority.repository_root.length === 0
+  )
+    return 'ownership_changed'
+  if (
+    authority.app_released_at !== null ||
+    authority.build_released_at !== null ||
+    authority.app_expires_at <= now ||
+    authority.build_expires_at <= now
+  )
+    return 'expired_lease'
+  if (authority.trigger === 'manual_rollback') return 'unsupported_trigger'
+  return null
+}
+
+function isValidGitSnapshotMetadata(value: ProductGitSnapshotMetadata): boolean {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    typeof value.repositoryUrl === 'string' &&
+    value.repositoryUrl.length > 0 &&
+    typeof value.repositoryRoot === 'string' &&
+    value.repositoryRoot.length > 0 &&
+    typeof value.commitSha === 'string' &&
+    /^[0-9a-f]{40}$/.test(value.commitSha) &&
+    typeof value.sourceConfigSha256 === 'string' &&
+    /^[0-9a-f]{64}$/.test(value.sourceConfigSha256)
+  )
+}
+
+function validateSnapshotMatchesAuthority(
+  authority: ClaimDispatchAuthority,
+  snapshot: ProductGitSnapshotMetadata
+): 'snapshot_mismatch' | null {
+  return authority.repository_url === snapshot.repositoryUrl &&
+    authority.repository_root === snapshot.repositoryRoot &&
+    authority.target_sha === snapshot.commitSha &&
+    authority.source_config_sha256 === snapshot.sourceConfigSha256
+    ? null
+    : 'snapshot_mismatch'
+}
+
+function hasUncertainProductWork(database: Database.Database, appId: number): boolean {
+  return Boolean(
+    database
+      .prepare(
+        `SELECT 1 FROM product_deploy_job j WHERE j.app_id=? AND j.state='uncertain'
+     UNION ALL
+     SELECT 1 FROM product_deploy_attempt pa JOIN product_deploy_job j ON j.job_id=pa.job_id
+       WHERE j.app_id=? AND pa.state='uncertain' LIMIT 1`
+      )
+      .get(appId, appId)
+  )
 }
 
 export class ProductDeployRepositoryError extends Error {

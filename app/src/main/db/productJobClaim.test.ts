@@ -764,6 +764,296 @@ describe('Product atomic claim and lease repository', () => {
       for (const child of children) if (child.exitCode === null) child.kill()
     }
   })
+
+  it('verifies Git snapshot identity and commits one durable dispatch marker without moving the live pointer', () => {
+    const harness = createDispatchReadyHarness()
+    const { claim, snapshot } = harness
+    expect(harness.repository.markGitSnapshotVerified(claim, snapshot)).toEqual({
+      state: 'snapshot_verified'
+    })
+    expect(harness.database.prepare('SELECT state FROM product_deploy_attempt').get()).toEqual({
+      state: 'snapshot_verified'
+    })
+
+    const result = harness.repository.beginGitDispatch(claim, snapshot)
+    expect(result).toMatchObject({
+      state: 'dispatch_authorized',
+      version: 1,
+      image_tag: 'claim-app-1:v1'
+    })
+    expect(
+      harness.database
+        .prepare('SELECT id,version,status,git_repo_url,git_commit_sha FROM deployment')
+        .get()
+    ).toMatchObject({
+      id: (result as { deployment_id: number }).deployment_id,
+      version: 1,
+      status: 'building',
+      git_repo_url: snapshot.repositoryUrl,
+      git_commit_sha: snapshot.commitSha
+    })
+    expect(
+      harness.database
+        .prepare('SELECT state,remote_outcome,deployment_id FROM product_deploy_attempt')
+        .get()
+    ).toMatchObject({
+      state: 'deploying',
+      remote_outcome: 'unknown',
+      deployment_id: (result as { deployment_id: number }).deployment_id
+    })
+    expect(harness.database.prepare('SELECT state FROM product_deploy_job').get()).toEqual({
+      state: 'deploying'
+    })
+    expect(harness.database.prepare('SELECT kind FROM product_history_event').all()).toEqual([
+      { kind: 'git_snapshot_metadata_matched' },
+      { kind: 'remote_dispatch_marker_committed' }
+    ])
+    expect(
+      harness.database.prepare('SELECT current_deployment_id FROM app WHERE id=1').get()
+    ).toEqual({
+      current_deployment_id: null
+    })
+    expect(harness.database.prepare('SELECT released_at FROM product_app_lease').get()).toEqual({
+      released_at: null
+    })
+  })
+
+  it('rejects repository/root/SHA/config mismatches without mutating durable rows', () => {
+    for (const [field, value] of [
+      ['repositoryUrl', 'https://attacker.test/wrong.git'],
+      ['repositoryRoot', 'subdir'],
+      ['commitSha', '2'.repeat(40)],
+      ['sourceConfigSha256', 'b'.repeat(64)]
+    ] as const) {
+      const harness = createDispatchReadyHarness()
+      const badSnapshot = { ...harness.snapshot, [field]: value }
+      const before = readDispatchRows(harness.database)
+      expect(harness.repository.markGitSnapshotVerified(harness.claim, badSnapshot)).toEqual({
+        state: 'rejected',
+        reason: 'snapshot_mismatch'
+      })
+      expect(readDispatchRows(harness.database)).toEqual(before)
+      closeDatabase()
+    }
+  })
+
+  it('rejects stale and expired dispatch tokens without changing rows', () => {
+    const stale = createDispatchReadyHarness()
+    const staleToken = { ...stale.claim, app_fence: stale.claim.app_fence + 1 }
+    const beforeStale = readDispatchRows(stale.database)
+    expect(stale.repository.markGitSnapshotVerified(staleToken, stale.snapshot)).toMatchObject({
+      state: 'rejected'
+    })
+    expect(readDispatchRows(stale.database)).toEqual(beforeStale)
+
+    closeDatabase()
+    const expired = createDispatchReadyHarness()
+    expired.repository.markGitSnapshotVerified(expired.claim, expired.snapshot)
+    expired.clock.advance(PRODUCT_LEASE_TTL_MS)
+    const beforeExpired = readDispatchRows(expired.database)
+    expect(expired.repository.beginGitDispatch(expired.claim, expired.snapshot)).toEqual({
+      state: 'rejected',
+      reason: 'expired_lease'
+    })
+    expect(readDispatchRows(expired.database)).toEqual(beforeExpired)
+  })
+
+  it('blocks auto dispatch when desired SHA changes or current owner pauses', () => {
+    const changed = createDispatchReadyHarness('branch_poll')
+    changed.repository.markGitSnapshotVerified(changed.claim, changed.snapshot)
+    changed.database
+      .prepare('UPDATE product_desired_branch SET desired_sha=? WHERE app_id=1')
+      .run('2'.repeat(40))
+    const changedBefore = readDispatchRows(changed.database)
+    expect(changed.repository.beginGitDispatch(changed.claim, changed.snapshot)).toEqual({
+      state: 'rejected',
+      reason: 'desired_changed'
+    })
+    expect(readDispatchRows(changed.database)).toEqual(changedBefore)
+
+    closeDatabase()
+    const paused = createDispatchReadyHarness('branch_poll')
+    paused.repository.markGitSnapshotVerified(paused.claim, paused.snapshot)
+    paused.database
+      .prepare(
+        "UPDATE product_app_control SET auto_deploy_paused=1,pause_reason='operator',pause_policy_provenance='explicit' WHERE app_id=1"
+      )
+      .run()
+    const pausedBefore = readDispatchRows(paused.database)
+    expect(paused.repository.beginGitDispatch(paused.claim, paused.snapshot)).toEqual({
+      state: 'rejected',
+      reason: 'auto_paused'
+    })
+    expect(readDispatchRows(paused.database)).toEqual(pausedBefore)
+  })
+
+  it('blocks dispatch when uncertain work exists or ownership/config identity changes', () => {
+    const uncertain = createDispatchReadyHarness()
+    uncertain.repository.markGitSnapshotVerified(uncertain.claim, uncertain.snapshot)
+    seedJob(uncertain.database, 'uncertain-peer', 1, 'manual_redeploy', { state: 'uncertain' })
+    const before = readDispatchRows(uncertain.database)
+    expect(uncertain.repository.beginGitDispatch(uncertain.claim, uncertain.snapshot)).toEqual({
+      state: 'reconciliation_required',
+      reason: 'uncertain_work'
+    })
+    expect(readDispatchRows(uncertain.database)).toEqual(before)
+
+    closeDatabase()
+    const staleIdentity = createDispatchReadyHarness()
+    staleIdentity.repository.markGitSnapshotVerified(staleIdentity.claim, staleIdentity.snapshot)
+    staleIdentity.database
+      .prepare('UPDATE vps SET archived_at=? WHERE id=1')
+      .run('2026-10-22T12:00:01.000Z')
+    const staleBefore = readDispatchRows(staleIdentity.database)
+    expect(
+      staleIdentity.repository.beginGitDispatch(staleIdentity.claim, staleIdentity.snapshot)
+    ).toMatchObject({
+      state: 'rejected',
+      reason: 'ownership_changed'
+    })
+    expect(readDispatchRows(staleIdentity.database)).toEqual(staleBefore)
+  })
+
+  it('returns reconciliation-required after marker, including reopen, and never retries prewrite or dispatch', () => {
+    const harness = createDispatchReadyHarness()
+    harness.repository.markGitSnapshotVerified(harness.claim, harness.snapshot)
+    const first = harness.repository.beginGitDispatch(harness.claim, harness.snapshot)
+    expect(first.state).toBe('dispatch_authorized')
+    const afterMarker = readDispatchRows(harness.database)
+    expect(harness.repository.beginGitDispatch(harness.claim, harness.snapshot)).toEqual({
+      state: 'reconciliation_required',
+      reason: 'dispatch_marker_exists'
+    })
+    expect(
+      harness.repository.finishPrewriteAttempt({
+        claim: harness.claim,
+        disposition: 'transient_failure',
+        safeErrorCode: 'NETWORK_ERROR'
+      })
+    ).toEqual({ state: 'rejected', reason: 'reconciliation_required' })
+    closeDatabase()
+    const reopened = initializeDatabase(testDirectory!)
+    const repository = ProductDeployRepository.withClockForTest(reopened, () => NOW)
+    expect(repository.beginGitDispatch(harness.claim, harness.snapshot)).toEqual({
+      state: 'reconciliation_required',
+      reason: 'dispatch_marker_exists'
+    })
+    expect(
+      repository.finishPrewriteAttempt({
+        claim: harness.claim,
+        disposition: 'transient_failure',
+        safeErrorCode: 'NETWORK_ERROR'
+      })
+    ).toEqual({ state: 'rejected', reason: 'reconciliation_required' })
+    expect(readDispatchRows(reopened)).toEqual(afterMarker)
+    expect(reopened.prepare('SELECT COUNT(*) AS count FROM deployment').get()).toEqual({ count: 1 })
+  })
+
+  it('serializes two real workers so only one can obtain the dispatch result', async () => {
+    const harness = createDispatchReadyHarness()
+    harness.repository.markGitSnapshotVerified(harness.claim, harness.snapshot)
+    const databasePath = join(testDirectory!, 'opspilot.db')
+    const readyOne = join(testDirectory!, 'dispatch-one.ready')
+    const readyTwo = join(testDirectory!, 'dispatch-two.ready')
+    const go = join(testDirectory!, 'dispatch.go')
+    const resultOne = join(testDirectory!, 'dispatch-one.result')
+    const resultTwo = join(testDirectory!, 'dispatch-two.result')
+    const claim = JSON.stringify(harness.claim)
+    const snapshot = JSON.stringify(harness.snapshot)
+    closeDatabase()
+    const source = `
+      const fs=require('node:fs'); const ts=require('typescript');
+      require.extensions['.ts']=(m,f)=>m._compile(ts.transpileModule(fs.readFileSync(f,'utf8'),{
+        compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}
+      }).outputText,f);
+      const [dbPath,ready,goPath,resultPath]=process.argv.slice(1);
+      fs.writeFileSync(ready,'ready'); const wait=new Int32Array(new SharedArrayBuffer(4));
+      const deadline=Date.now()+8000; while(!fs.existsSync(goPath) && Date.now()<deadline) Atomics.wait(wait,0,0,5);
+      if(!fs.existsSync(goPath)) process.exit(4);
+      const Database=require('better-sqlite3'); const db=new Database(dbPath); db.pragma('foreign_keys=ON'); db.pragma('busy_timeout=10000');
+      const {ProductDeployRepository}=require('./src/main/db/productDeployRepository.ts');
+      const repo=ProductDeployRepository.withClockForTest(db,()=>${NOW});
+      const result=repo.beginGitDispatch(${claim},${snapshot}); fs.writeFileSync(resultPath,JSON.stringify(result)); db.close();
+    `
+    const children = [
+      spawn(process.execPath, ['-e', source, databasePath, readyOne, go, resultOne], {
+        cwd: process.cwd(),
+        stdio: 'ignore'
+      }),
+      spawn(process.execPath, ['-e', source, databasePath, readyTwo, go, resultTwo], {
+        cwd: process.cwd(),
+        stdio: 'ignore'
+      })
+    ]
+    try {
+      await waitFor(() => existsSync(readyOne) && existsSync(readyTwo))
+      writeFileSync(go, 'dispatch')
+      await Promise.all(children.map(waitForChild))
+      const outcomes = [
+        JSON.parse(readFileSync(resultOne, 'utf8')),
+        JSON.parse(readFileSync(resultTwo, 'utf8'))
+      ]
+      expect(outcomes.filter((item) => item.state === 'dispatch_authorized')).toHaveLength(1)
+      expect(outcomes.filter((item) => item.state === 'reconciliation_required')).toHaveLength(1)
+      const verify = new Database(databasePath)
+      expect(verify.prepare('SELECT COUNT(*) AS count FROM deployment').get()).toEqual({ count: 1 })
+      expect(
+        verify
+          .prepare(
+            "SELECT COUNT(*) AS count FROM product_history_event WHERE kind='remote_dispatch_marker_committed'"
+          )
+          .get()
+      ).toEqual({ count: 1 })
+      verify.close()
+    } finally {
+      writeFileSync(go, 'stop')
+      for (const child of children) if (child.exitCode === null) child.kill()
+    }
+  })
+
+  it('rolls back deployment version, link, state and history if any dispatch write fails', () => {
+    const harness = createDispatchReadyHarness()
+    harness.repository.markGitSnapshotVerified(harness.claim, harness.snapshot)
+    harness.database
+      .exec(`CREATE TRIGGER fail_product_dispatch_history BEFORE INSERT ON product_history_event
+      WHEN NEW.kind='remote_dispatch_marker_committed' BEGIN SELECT RAISE(ABORT,'injected dispatch history failure'); END`)
+    const before = readDispatchRows(harness.database)
+    expect(() => harness.repository.beginGitDispatch(harness.claim, harness.snapshot)).toThrow(
+      /injected dispatch history failure/
+    )
+    expect(readDispatchRows(harness.database)).toEqual(before)
+    expect(harness.database.prepare('SELECT COUNT(*) AS count FROM deployment').get()).toEqual({
+      count: 0
+    })
+    expect(
+      harness.database.prepare('SELECT MAX(version) AS max FROM deployment WHERE app_id=1').get()
+    ).toEqual({ max: null })
+  })
+
+  it('blocks manual rollback from Git snapshot and dispatch operations', () => {
+    const harness = createHarness()
+    harness.database
+      .prepare(
+        `INSERT INTO deployment(app_id,version,image_tag,status) VALUES(1,1,'claim-app-1:v1','running')`
+      )
+      .run()
+    const targetId = Number(
+      (harness.database.prepare('SELECT id FROM deployment').get() as { id: number }).id
+    )
+    harness.database
+      .prepare(
+        `INSERT INTO product_deploy_job
+      (job_id,controller_id,app_id,ownership_generation,source_generation,source_config_sha256,
+       trigger,idempotency_key,ref,target_sha,target_deployment_id,state,attempt_count,max_attempts,available_at,created_at,updated_at)
+       VALUES('rollback-job','${CONTROLLER}',1,1,1,'${HASH}','manual_rollback','manual:rollback','main','${SHA_A}',?,'queued',0,3,'${new Date(NOW).toISOString()}','${new Date(NOW).toISOString()}','${new Date(NOW).toISOString()}')`
+      )
+      .run(targetId)
+    expect(harness.repository.claimNextJob(CONTROLLER)).toEqual({
+      state: 'blocked',
+      reason: 'unsupported_trigger'
+    })
+    expect(count(harness.database, 'product_deploy_attempt')).toBe(0)
+  })
 })
 
 function createHarness(jitter: () => number = () => 0): {
@@ -806,6 +1096,29 @@ function createHarness(jitter: () => number = () => 0): {
     database,
     repository: ProductDeployRepository.withClockForTest(database, () => clock.value, jitter),
     clock
+  }
+}
+
+function createDispatchReadyHarness(
+  trigger: 'manual_redeploy' | 'branch_poll' = 'manual_redeploy'
+): ReturnType<typeof createHarness> & {
+  claim: import('../../../../docs/contracts/product-auto-deploy').ProductClaimToken
+  snapshot: import('../../../../docs/contracts/product-auto-deploy').ProductGitSnapshotMetadata
+} {
+  const harness = createHarness()
+  if (trigger === 'branch_poll') seedAutoJob(harness.database, 'dispatch-job', 1)
+  else seedManualJob(harness.database, 'dispatch-job', 1)
+  const claimed = harness.repository.claimNextJob(CONTROLLER)
+  if (claimed.state !== 'claimed') throw new Error('expected dispatch claim')
+  return {
+    ...harness,
+    claim: claimed.claim,
+    snapshot: {
+      repositoryUrl: 'https://example.test/repo.git',
+      repositoryRoot: '.',
+      commitSha: SHA_A,
+      sourceConfigSha256: HASH
+    }
   }
 }
 
@@ -892,6 +1205,20 @@ function readPrewriteRows(database: ReturnType<typeof initializeDatabase>): unkn
       .all(),
     history: database.prepare('SELECT * FROM product_history_event ORDER BY event_id').all(),
     fences: database.prepare('SELECT * FROM product_app_fence ORDER BY app_id').all()
+  }
+}
+
+function readDispatchRows(database: ReturnType<typeof initializeDatabase>): unknown {
+  return {
+    jobs: database.prepare('SELECT * FROM product_deploy_job ORDER BY job_id').all(),
+    attempts: database
+      .prepare('SELECT * FROM product_deploy_attempt ORDER BY attempt_number')
+      .all(),
+    deployments: database.prepare('SELECT * FROM deployment ORDER BY id').all(),
+    app: database.prepare('SELECT current_deployment_id FROM app WHERE id=1').get(),
+    appLeases: database.prepare('SELECT * FROM product_app_lease ORDER BY fence').all(),
+    buildLeases: database.prepare('SELECT * FROM product_worker_lease ORDER BY fence').all(),
+    history: database.prepare('SELECT * FROM product_history_event ORDER BY event_id').all()
   }
 }
 

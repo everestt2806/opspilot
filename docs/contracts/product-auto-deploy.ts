@@ -226,7 +226,8 @@ export type ProductClaimResult =
       reason:
         | 'build_slot_busy'
         | 'app_lease_busy'
-        | 'reconciliation_required';
+        | 'reconciliation_required'
+        | 'unsupported_trigger';
     };
 
 export type ProductHeartbeatResult =
@@ -304,3 +305,57 @@ export interface ProductHistoryEvent {
   kind: string;
   created_at: ProductIsoUtc;
 }
+
+/** Executor-supplied metadata is matched against the durable Product job/config. */
+export interface ProductGitSnapshotMetadata {
+  repositoryUrl: string;
+  repositoryRoot: string;
+  commitSha: ProductFullCommitSha;
+  sourceConfigSha256: string;
+}
+
+/**
+ * Metadata equality is not proof of a real Git fetch or authenticated source.
+ * Dispatch is one-shot: a crash after the durable marker requires reconciliation
+ * and must never authorize sending the remote mutation again.
+ */
+export type ProductSnapshotVerificationResult =
+  | { state: 'snapshot_verified' }
+  | {
+      state: 'rejected';
+      reason:
+        | 'invalid_claim'
+        | 'stale_claim'
+        | 'controller_inactive'
+        | 'ownership_changed'
+        | 'expired_lease'
+        | 'unsupported_trigger'
+        | 'snapshot_mismatch'
+        | 'reconciliation_required';
+    };
+
+export type ProductBeginDispatchResult =
+  | {
+      state: 'dispatch_authorized';
+      deployment_id: ProductDeploymentId;
+      version: number;
+      image_tag: string;
+    }
+  | {
+      state: 'reconciliation_required';
+      reason: 'dispatch_marker_exists' | 'uncertain_work';
+    }
+  | {
+      state: 'rejected';
+      reason:
+        | 'invalid_claim'
+        | 'stale_claim'
+        | 'controller_inactive'
+        | 'ownership_changed'
+        | 'expired_lease'
+        | 'unsupported_trigger'
+        | 'snapshot_not_verified'
+        | 'snapshot_mismatch'
+        | 'desired_changed'
+        | 'auto_paused';
+    };
