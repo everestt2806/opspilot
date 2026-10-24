@@ -2,7 +2,7 @@
 
 | Checkpoint | Base / accepted input | Status |
 |---|---|---|
-| P3e-3a | P3e-2 correction `af9acb0`; accepted dossier `c65dc79` | ĐANG LÀM |
+| P3e-3a | P3e-2 correction `af9acb0`; accepted dossier `c65dc79` | CHỜ REVIEW |
 
 ## Requirement ledger
 
@@ -48,7 +48,13 @@
 - No terminal success/failure finalization or reconciliation proof exists here. Target and DB remain `unknown`; current deployment is not promoted. The localhost target uses only temporary enrollment markers, not Docker/deploy.
 - No production VPS, production DB, API/UI, network/firewall/DNS/ML state was used. The lab does not prove enforcement against root or old desktop credentials bypassing this helper, nor prove remote daemon task cancellation.
 
+## Handoff
+
+- Implementation commit SHA: `0f25766c` (local; no push/PR/merge).
+- Terminal Product deploy finalization/reconciliation and all pipeline integration gates remain for P3e-3b.
+
 ## Nhật ký
 
 - START 24/10 — đọc task-discipline, CLAUDE.md, ADR-011, Product target guard contract/implementation, snapshot preparation, SshManager, deploy pipeline và board; tạo requirement ledger. Tiếp theo chốt protocol typed, thêm seam channel nội bộ, helper framing và lab localhost SSH.
 - UPDATE 24/10 — thêm internal TypeScript protocol/session, durable dispatch authority read, fixed Python helper, SSH2 channel seam, runtime deps/build packaging và Windows/Linux lab. Node 22 focused 196/196; main/contract typecheck, scoped ESLint, Ruff và Linux real localhost SSH + guard lifecycle lab PASS. Handover records accepted P3e-2 limits; pipeline/deployment NOT_RUN.
+- HANDOFF-LOCAL 24/10 — implementation `0f25766c` · 15 focused files / 196 tests PASS, Node 22 typechecks/scoped lint/Ruff/diff PASS, Linux artifact + real localhost SSH/target guard lab PASS. Lab proved dispatch→target marker ordering, pin rejection, single-lock phases, unknown/no replay; no DeployPipeline, Docker, VPS or production DB execution.
