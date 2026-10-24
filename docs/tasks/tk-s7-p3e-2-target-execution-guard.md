@@ -69,4 +69,4 @@ The future controller must commit `beginGitDispatch` before requesting target fe
 - `git diff --check` — PASS.
 - No SSH, Docker, deployment pipeline execution, target VPS, production DB, DNS/firewall, or ML state was used. The Linux lab proves the fixture guard and kernel lock only. It does not prove `beginGitDispatch` ordering through SSH, enforcement against an old desktop/root bypass, credential cutover, or that Docker daemon work stops after a caller dies. Those remain mandatory P3e-3/live gates.
 
-P3e-2 base implementation commit SHA: `f1f33ea374563b1079494f625cd9ec8cd7bd6b93`. Lifecycle correction commit SHA: pending local commit; no push/PR/merge.
+P3e-2 base implementation commit SHA: `f1f33ea374563b1079494f625cd9ec8cd7bd6b93`. Lifecycle correction commit SHA: `af9acb09d70edd752731d6479cb49439d1533719`. Local only; no push/PR/merge.
