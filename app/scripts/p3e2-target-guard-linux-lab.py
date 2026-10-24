@@ -60,6 +60,15 @@ def expect_rejected(root: Path, value: guard.ExecutionIdentity, expected: str) -
         raise AssertionError(f"expected {expected}")
 
 
+def expect_lifecycle_rejected(execution: guard.GuardedExecution, phase: str, expected: str) -> None:
+    try:
+        execution.authorize_write_phase(phase)
+    except guard.TargetGuardError as error:
+        assert error.code == expected, (expected, error.code)
+    else:
+        raise AssertionError(f"expected {expected}")
+
+
 def assert_os_lock_state(root: Path, app: str, should_be_held: bool) -> None:
     key = guard._identity_key("controller-lab", app)
     with (root / "locks" / f"{key}.lock").open("r+b") as lock_file:
@@ -118,6 +127,92 @@ def main() -> None:
             finally:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
         print("lock_timeout=busy_without_steal")
+
+        lifecycle_root = scratch / "lifecycle"
+        lifecycle_counter = scratch / "lifecycle-counter.txt"
+        guard.initialize_enrollment(lifecycle_root, "controller-lab", "lifecycle", 1)
+        lifecycle_identity = identity("lifecycle")
+        old_handle = guard.acquire_execution(lifecycle_root, lifecycle_identity)
+        expect_lifecycle_rejected(old_handle, "prepare", "TARGET_EXECUTION_NOT_ACTIVE")
+        with old_handle as active:
+            active.authorize_write_phase("prepare")
+            try:
+                old_handle.__enter__()
+            except guard.TargetGuardError as error:
+                assert error.code == "TARGET_EXECUTION_ALREADY_ENTERED", error.code
+            else:
+                raise AssertionError("nested enter accepted")
+            assert_os_lock_state(lifecycle_root, "lifecycle", should_be_held=True)
+            lifecycle_counter.write_text("one\n", encoding="ascii")
+        lock_key = guard._identity_key("controller-lab", "lifecycle")
+        external_fd = os.open(lifecycle_root / "locks" / f"{lock_key}.lock", os.O_RDWR)
+        with os.fdopen(external_fd, "r+b") as external_lock:
+            fcntl.flock(external_lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            expect_lifecycle_rejected(old_handle, "build", "TARGET_EXECUTION_NOT_ACTIVE")
+            old_handle.__exit__(None, None, None)
+            old_handle.__exit__(None, None, None)
+            try:
+                old_handle.__enter__()
+            except guard.TargetGuardError as error:
+                assert error.code == "TARGET_EXECUTION_NOT_ACTIVE", error.code
+            else:
+                raise AssertionError("re-enter after exit accepted")
+            assert lifecycle_counter.read_text(encoding="ascii") == "one\n"
+            fcntl.flock(external_lock.fileno(), fcntl.LOCK_UN)
+
+        failed_enter = guard.acquire_execution(scratch / "no-enrollment", identity("no-enrollment"))
+        try:
+            failed_enter.__enter__()
+        except guard.TargetGuardError as error:
+            assert error.code == "TARGET_NOT_ENROLLED"
+        else:
+            raise AssertionError("enter without enrollment accepted")
+        expect_lifecycle_rejected(failed_enter, "prepare", "TARGET_EXECUTION_NOT_ACTIVE")
+        assert failed_enter._lock_file is None
+
+        failed_root = scratch / "failed-enter-marker"
+        guard.initialize_enrollment(failed_root, "controller-lab", "failed-enter-marker", 1)
+        next(failed_root.glob("*.json")).write_text("invalid", encoding="ascii")
+        failed_after_lock = guard.acquire_execution(failed_root, identity("failed-enter-marker"))
+        try:
+            failed_after_lock.__enter__()
+        except guard.TargetGuardError as error:
+            assert error.code == "TARGET_MARKER_INVALID"
+        else:
+            raise AssertionError("enter with invalid marker accepted")
+        assert failed_after_lock._lock_file is None
+        expect_lifecycle_rejected(failed_after_lock, "prepare", "TARGET_EXECUTION_NOT_ACTIVE")
+
+        invalid_identity = guard.acquire_execution(
+            lifecycle_root, identity("lifecycle", ownership_generation=0)
+        )
+        try:
+            invalid_identity.__enter__()
+        except guard.TargetGuardError as error:
+            assert error.code == "TARGET_IDENTITY_INVALID"
+        else:
+            raise AssertionError("invalid identity accepted")
+        expect_lifecycle_rejected(invalid_identity, "prepare", "TARGET_EXECUTION_NOT_ACTIVE")
+
+        invalid_timeout = guard.acquire_execution(lifecycle_root, identity("lifecycle"), timeout_seconds=61)
+        try:
+            invalid_timeout.__enter__()
+        except guard.TargetGuardError as error:
+            assert error.code == "TARGET_LOCK_TIMEOUT_INVALID"
+        else:
+            raise AssertionError("invalid lock timeout accepted")
+        expect_lifecycle_rejected(invalid_timeout, "prepare", "TARGET_EXECUTION_NOT_ACTIVE")
+
+        closed_root = scratch / "closed-handle"
+        guard.initialize_enrollment(closed_root, "controller-lab", "closed-handle", 1)
+        closed_handle = guard.acquire_execution(closed_root, identity("closed-handle"))
+        with closed_handle as active:
+            assert active._lock_file is not None
+            active._lock_file.close()
+            expect_lifecycle_rejected(closed_handle, "build", "TARGET_EXECUTION_NOT_ACTIVE")
+            closed_handle.__exit__(None, None, None)
+            closed_handle.__exit__(None, None, None)
+        print("lifecycle=pre_enter post_exit nested failed_enter invalid_identity timeout closed_handle all_rejected")
 
         root_c = scratch / "app-c"
         guard.initialize_enrollment(root_c, "controller-lab", "app-c", 1)
@@ -226,7 +321,7 @@ def main() -> None:
 
         try:
             guard.initialize_enrollment(partial_root, "controller-lab", "partial", 1)
-        except guard.TargetGuardError as error:
+        except guard.TargetEnrollmentFixtureError as error:
             assert error.code == "TARGET_ALREADY_ENROLLED_OR_PATH_EXISTS"
         else:
             raise AssertionError("initializer adopted existing path")

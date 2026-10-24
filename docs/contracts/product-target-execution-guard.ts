@@ -31,12 +31,27 @@ export type TargetGuardResult =
 export type TargetGuardRejectCode =
   | 'TARGET_NOT_ENROLLED'
   | 'TARGET_MARKER_INVALID'
+  | 'TARGET_IDENTITY_INVALID'
   | 'TARGET_IDENTITY_MISMATCH'
   | 'TARGET_OWNERSHIP_GENERATION_STALE'
   | 'TARGET_FENCE_STALE'
   | 'TARGET_ATTEMPT_REPLAY'
   | 'TARGET_EXECUTION_UNCERTAIN'
+  | 'TARGET_EXECUTION_NOT_ACTIVE'
+  | 'TARGET_EXECUTION_ALREADY_ENTERED'
+  | 'TARGET_LOCK_BUSY'
+  | 'TARGET_LOCK_TIMEOUT_INVALID'
+  | 'TARGET_LOCK_RELEASE_FAILED'
   | 'TARGET_PHASE_REJECTED'
+
+/**
+ * Execution handles are one-shot: new -> active -> closed. Authorization is
+ * valid only while active with the original open flock handle. It never
+ * reacquires; nested/repeated enter and authorization after close fail.
+ */
+
+/** Fixture initializer errors are outside acquire/authorize execution calls. */
+export type TargetEnrollmentFixtureErrorCode = 'TARGET_ALREADY_ENROLLED_OR_PATH_EXISTS'
 
 /**
  * Protocol invariants for future executor integration:

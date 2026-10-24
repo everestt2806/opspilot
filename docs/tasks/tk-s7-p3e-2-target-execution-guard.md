@@ -16,6 +16,26 @@
 | Multi-process Linux lab, watchdog and scoped cleanup; controller/DB/Git regression | Linux real-process lab PASS; watchdog kills only its process group; parent-owned scratch is removed after child close. Node 22 controller/DB/Git/deploy/SSH suite 13 files / 174 tests PASS. | PASS |
 | Typecheck, scoped lint, artifact build and diff check; local scoped commit | Node main and strict contract typecheck, ESLint, Ruff, Linux artifact build and `git diff --check` PASS; implementation commit `f1f33ea374563b1079494f625cd9ec8cd7bd6b93` | PASS |
 
+## P3e-2 lifecycle correction
+
+Review base `48055de` / implementation `f1f33ea` reproduced that a retained handle could call `authorize_write_phase('build')` after context exit, even while another handle held the same app flock. The correction makes a guard object one-shot (`new → active → closed`), requires the original handle to remain open for authorization, and rejects nested/repeated entry without replacing or closing the active handle. Failed acquisition closes only the object's own handle; repeated exit is idempotent.
+
+| Correction requirement | Current-session evidence | State |
+|---|---|---|
+| Before-enter, after-exit, failed-enter, closed-handle authorization rejected; no reacquisition | Linux process lab exercises each case and checks `TARGET_EXECUTION_NOT_ACTIVE` | PASS |
+| Nested/repeated entry cannot lose the held flock; repeated exit is safe | Linux process lab verifies nested `TARGET_EXECUTION_ALREADY_ENTERED`, same flock remains held, and external exclusive lock survives old-object exit | PASS |
+| Contract covers all acquire/authorize errors; fixture initializer error is distinct | `TargetGuardRejectCode` covers identity invalid/mismatch, busy/invalid timeout/release, marker, lifecycle and phase codes; fixture collision has separate type | PASS |
+| New regression rejects the pre-fix implementation | Baseline module from `f1f33ea` ran exact post-exit sequence and printed `PRE_FIX_REPRODUCED`: authorization succeeded while another exclusive flock was held. Regression is expected to fail on that module and passes current implementation. | PASS |
+
+### Correction gates
+
+- Linux lab: `PYTHONDONTWRITEBYTECODE=1 node scripts/p3e2-target-guard-linux-lab.mjs` — PASS (WSL Ubuntu, Python 3.12, Node 22). Includes direct post-exit authorization while another OS handle holds the exclusive lock; no mutation is recorded.
+- Baseline differential: loaded `target_execution_guard.py` from commit `f1f33ea`, performed `with acquire_execution`, exited the context, acquired the same app lock via a second file handle, then called `authorize_write_phase('build')`; it printed `PRE_FIX_REPRODUCED` because the stale object authorized. This is the exact review failure.
+- Focused Node 22 command: `vitest run src/main/controlPlane src/main/db/productJobClaim.test.ts src/main/db/productDesiredReconciliation.test.ts src/main/db/productDeployRepository.test.ts src/main/db/productMigration.test.ts src/main/db/index.test.ts src/main/git/snapshot.test.ts src/main/git/publicBranch.test.ts src/main/deploy/pipeline.test.ts src/main/ssh/hostFingerprint.test.ts` — 13 files / 174 tests PASS.
+- `tsc --noEmit -p tsconfig.node.json --composite false` and strict contract `tsc --noEmit --strict --target ES2022 --module NodeNext ../docs/contracts/product-target-execution-guard.ts` — PASS.
+- ESLint on `scripts/p3e2-target-guard-linux-lab.mjs` — PASS. Ruff 0.17.2 on the Python guard/lab — PASS. `git diff --check` — PASS.
+- Scope limit: Linux fixture/lifecycle proof only. No SSH transport or real pipeline deployment was performed.
+
 ## Accepted review and source facts
 
 - P3e-1 `ad93b39` / dossier `0835644` is accepted input: 126 focused tests, typecheck/diff and Linux public snapshot/process-tree lifecycle passed; it did not prove remote deployment.
@@ -49,4 +69,4 @@ The future controller must commit `beginGitDispatch` before requesting target fe
 - `git diff --check` — PASS.
 - No SSH, Docker, deployment pipeline execution, target VPS, production DB, DNS/firewall, or ML state was used. The Linux lab proves the fixture guard and kernel lock only. It does not prove `beginGitDispatch` ordering through SSH, enforcement against an old desktop/root bypass, credential cutover, or that Docker daemon work stops after a caller dies. Those remain mandatory P3e-3/live gates.
 
-Implementation commit SHA: `f1f33ea374563b1079494f625cd9ec8cd7bd6b93`. Local documentation closeout follows; no push/PR/merge.
+P3e-2 base implementation commit SHA: `f1f33ea374563b1079494f625cd9ec8cd7bd6b93`. Lifecycle correction commit SHA: pending local commit; no push/PR/merge.

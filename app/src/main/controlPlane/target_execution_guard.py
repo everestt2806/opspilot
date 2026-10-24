@@ -38,6 +38,10 @@ class TargetGuardError(Exception):
         self.code = code
 
 
+class TargetEnrollmentFixtureError(TargetGuardError):
+    """Fixture initializer error; enrollment is not part of execution API."""
+
+
 @dataclass(frozen=True)
 class ExecutionIdentity:
     controller_id: str
@@ -99,7 +103,7 @@ def initialize_enrollment(
     identity.validate()
     root = Path(state_root)
     if root.exists() or root.is_symlink():
-        raise TargetGuardError("TARGET_ALREADY_ENROLLED_OR_PATH_EXISTS")
+        raise TargetEnrollmentFixtureError("TARGET_ALREADY_ENROLLED_OR_PATH_EXISTS")
     root.mkdir(mode=0o700, parents=True, exist_ok=False)
     os.chmod(root, 0o700)
     locks = root / "locks"
@@ -161,14 +165,28 @@ def _read_marker(marker_path: Path) -> dict[str, object]:
 
 
 class GuardedExecution(AbstractContextManager["GuardedExecution"]):
+    _NEW = "new"
+    _ACTIVE = "active"
+    _CLOSED = "closed"
+
     def __init__(self, root: Path, identity: ExecutionIdentity, timeout_seconds: float):
         self.root = root
         self.identity = identity
         self.timeout_seconds = timeout_seconds
         self._lock_file = None
+        self._lifecycle = self._NEW
         self._marker_path = root / f"{_identity_key(identity.controller_id, identity.app_id)}.json"
 
     def __enter__(self) -> GuardedExecution:  # noqa: PYI034 -- Keep Python 3.10 target compatibility.
+        if self._lifecycle == self._ACTIVE:
+            raise TargetGuardError("TARGET_EXECUTION_ALREADY_ENTERED")
+        if self._lifecycle != self._NEW:
+            raise TargetGuardError("TARGET_EXECUTION_NOT_ACTIVE")
+
+        # This object is one-shot, including when acquisition fails. This is set
+        # before any validation or I/O so a concurrent/nested enter cannot
+        # replace the lock handle while acquisition is in progress.
+        self._lifecycle = self._CLOSED
         self.identity.validate()
         if self.timeout_seconds < 0 or self.timeout_seconds > 60:
             raise TargetGuardError("TARGET_LOCK_TIMEOUT_INVALID")
@@ -204,8 +222,10 @@ class GuardedExecution(AbstractContextManager["GuardedExecution"]):
             os.fchmod(fd, 0o600)
             self._lock_file = os.fdopen(fd, "r+b", buffering=0)
         except TargetGuardError:
+            self._close_lock()
             raise
         except OSError:
+            self._close_lock()
             raise TargetGuardError("TARGET_NOT_ENROLLED") from None
 
         deadline = time.monotonic() + self.timeout_seconds
@@ -217,7 +237,17 @@ class GuardedExecution(AbstractContextManager["GuardedExecution"]):
                 if time.monotonic() >= deadline:
                     self._close_lock()
                     raise TargetGuardError("TARGET_LOCK_BUSY") from None
-                time.sleep(min(0.025, max(0.0, deadline - time.monotonic())))
+                try:
+                    time.sleep(min(0.025, max(0.0, deadline - time.monotonic())))
+                except BaseException:
+                    self._close_lock()
+                    raise
+            except OSError:
+                self._close_lock()
+                raise TargetGuardError("TARGET_MARKER_INVALID") from None
+            except BaseException:
+                self._close_lock()
+                raise
 
         try:
             marker = _read_marker(self._marker_path)
@@ -238,12 +268,31 @@ class GuardedExecution(AbstractContextManager["GuardedExecution"]):
                 execution_state="unknown",
             )
             _write_marker_atomic(self._marker_path, marker)
+            self._lifecycle = self._ACTIVE
             return self
-        except Exception:
+        except TargetGuardError:
+            self._close_lock()
+            raise
+        except OSError:
+            self._close_lock()
+            raise TargetGuardError("TARGET_MARKER_INVALID") from None
+        except BaseException:
             self._close_lock()
             raise
 
     def authorize_write_phase(self, phase: str) -> None:
+        lock_file = self._lock_file
+        if self._lifecycle != self._ACTIVE:
+            raise TargetGuardError("TARGET_EXECUTION_NOT_ACTIVE")
+        if lock_file is None or lock_file.closed:
+            self._lifecycle = self._CLOSED
+            raise TargetGuardError("TARGET_EXECUTION_NOT_ACTIVE")
+        try:
+            os.fstat(lock_file.fileno())
+        except OSError:
+            self._lifecycle = self._CLOSED
+            self._close_lock()
+            raise TargetGuardError("TARGET_EXECUTION_NOT_ACTIVE") from None
         if phase not in _PHASES:
             raise TargetGuardError("TARGET_PHASE_REJECTED")
         marker = _read_marker(self._marker_path)
@@ -259,11 +308,17 @@ class GuardedExecution(AbstractContextManager["GuardedExecution"]):
             raise TargetGuardError("TARGET_EXECUTION_UNCERTAIN")
 
     def _close_lock(self) -> None:
-        if self._lock_file is not None:
-            self._lock_file.close()
-            self._lock_file = None
+        lock_file = self._lock_file
+        self._lock_file = None
+        if lock_file is None:
+            return
+        try:
+            lock_file.close()
+        except OSError:
+            raise TargetGuardError("TARGET_LOCK_RELEASE_FAILED") from None
 
     def __exit__(self, exc_type, exc, traceback) -> None:
+        self._lifecycle = self._CLOSED
         self._close_lock()
 
 
