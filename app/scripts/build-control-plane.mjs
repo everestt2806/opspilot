@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { copyFileSync, mkdirSync } from 'node:fs'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { createRequire } from 'node:module'
@@ -40,4 +40,14 @@ await esbuild.build({
     }
   ]
 })
+const helperDirectory = resolve(dirname(outputFile), 'target-helper')
+mkdirSync(helperDirectory, { recursive: true, mode: 0o700 })
+copyFileSync(
+  resolve(root, 'src/main/controlPlane/target_guarded_ssh_helper.py'),
+  resolve(helperDirectory, 'target_guarded_ssh_helper.py')
+)
+copyFileSync(
+  resolve(root, 'src/main/controlPlane/target_execution_guard.py'),
+  resolve(helperDirectory, 'target_execution_guard.py')
+)
 console.log(`CONTROL_PLANE_BUILD_OK ${outputFile}`)

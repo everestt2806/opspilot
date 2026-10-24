@@ -2,6 +2,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Duplex, PassThrough } from 'node:stream'
 
 import Database from 'better-sqlite3'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -15,6 +16,8 @@ import {
 } from '../../../../docs/contracts/product-auto-deploy'
 import { closeDatabase, initializeDatabase } from './index'
 import { ProductDeployRepository } from './productDeployRepository'
+import { openProductGuardedSshSession } from '../controlPlane/guardedSshSession'
+import { encodeGuardedSshFrame } from '../controlPlane/guardedSshProtocol'
 
 const CONTROLLER = 'claim-controller'
 const HASH = 'a'.repeat(64)
@@ -1058,6 +1061,10 @@ describe('Product atomic claim and lease repository', () => {
     harness.repository.markGitSnapshotVerified(harness.claim, harness.snapshot)
     const first = harness.repository.beginGitDispatch(harness.claim, harness.snapshot)
     expect(first.state).toBe('dispatch_authorized')
+    if (first.state !== 'dispatch_authorized') throw new Error('expected dispatch authorization')
+    expect(
+      harness.repository.readGitDispatchSessionAuthority(harness.claim, first.deployment_id)
+    ).toBe('ready')
     const afterMarker = readDispatchRows(harness.database)
     expect(harness.repository.beginGitDispatch(harness.claim, harness.snapshot)).toEqual({
       state: 'reconciliation_required',
@@ -1073,6 +1080,9 @@ describe('Product atomic claim and lease repository', () => {
     closeDatabase()
     const reopened = initializeDatabase(testDirectory!)
     const repository = ProductDeployRepository.withClockForTest(reopened, () => NOW)
+    expect(repository.readGitDispatchSessionAuthority(harness.claim, first.deployment_id)).toBe(
+      'ready'
+    )
     expect(repository.beginGitDispatch(harness.claim, harness.snapshot)).toEqual({
       state: 'reconciliation_required',
       reason: 'dispatch_marker_exists'
@@ -1086,6 +1096,110 @@ describe('Product atomic claim and lease repository', () => {
     ).toEqual({ state: 'rejected', reason: 'reconciliation_required' })
     expect(readDispatchRows(reopened)).toEqual(afterMarker)
     expect(reopened.prepare('SELECT COUNT(*) AS count FROM deployment').get()).toEqual({ count: 1 })
+  })
+
+  it('commits canonical dispatch before opening the channel and never opens again after marker', async () => {
+    const harness = createDispatchReadyHarness()
+    harness.repository.markGitSnapshotVerified(harness.claim, harness.snapshot)
+    let channelOpens = 0
+    const ssh = {
+      async openGuardedExecutionChannel() {
+        channelOpens += 1
+        expect(
+          harness.database
+            .prepare('SELECT state FROM product_deploy_job WHERE job_id=?')
+            .get(harness.claim.job_id)
+        ).toEqual({ state: 'deploying' })
+        expect(
+          (
+            harness.database.prepare('SELECT COUNT(*) AS count FROM deployment').get() as {
+              count: number
+            }
+          ).count
+        ).toBe(1)
+        return createFakeGuardedChannel()
+      }
+    }
+    const prepared = {
+      claim: harness.claim,
+      metadata: harness.snapshot,
+      rootDirectory: '/scratch/repo',
+      snapshotDirectory: '/scratch/snapshot',
+      cleanup() {
+        return undefined
+      }
+    }
+    const options = {
+      vps_id: 1,
+      target_helper_path: '/opt/opspilot/target_guarded_ssh_helper.py',
+      target_state_root: '/var/lib/opspilot/target-guard'
+    }
+    const session = await openProductGuardedSshSession(
+      harness.repository,
+      ssh as never,
+      prepared,
+      options
+    )
+    expect(session.deploymentId).toBe(1)
+    await session.authorizeWritePhase('prepare')
+    await session.authorizeWritePhase('build')
+    await session.close()
+    expect(session.state).toBe('closed')
+    expect(
+      harness.database.prepare('SELECT remote_outcome FROM product_deploy_attempt').get()
+    ).toEqual({
+      remote_outcome: 'unknown'
+    })
+    await expect(
+      openProductGuardedSshSession(harness.repository, ssh as never, prepared, options)
+    ).rejects.toMatchObject({ code: 'SSH_DISPATCH_RECONCILIATION_REQUIRED' })
+    expect(channelOpens).toBe(1)
+    expect(
+      (
+        harness.database.prepare('SELECT COUNT(*) AS count FROM deployment').get() as {
+          count: number
+        }
+      ).count
+    ).toBe(1)
+  })
+
+  it('stops a phase when Product lease authority expires during the guarded session', async () => {
+    const harness = createDispatchReadyHarness()
+    harness.repository.markGitSnapshotVerified(harness.claim, harness.snapshot)
+    const channel = createFakeGuardedChannel()
+    const session = await openProductGuardedSshSession(
+      harness.repository,
+      {
+        async openGuardedExecutionChannel() {
+          return channel
+        }
+      } as never,
+      {
+        claim: harness.claim,
+        metadata: harness.snapshot,
+        rootDirectory: '/scratch/repo',
+        snapshotDirectory: '/scratch/snapshot',
+        cleanup() {
+          return undefined
+        }
+      },
+      {
+        vps_id: 1,
+        target_helper_path: '/opt/opspilot/target_guarded_ssh_helper.py',
+        target_state_root: '/var/lib/opspilot/target-guard'
+      }
+    )
+    harness.clock.advance(61_000)
+    await expect(session.authorizeWritePhase('build')).rejects.toMatchObject({
+      code: 'SSH_AUTHORITY_STALE'
+    })
+    expect(session.state).toBe('reconciliation_required')
+    expect(
+      harness.database.prepare('SELECT remote_outcome FROM product_deploy_attempt').get()
+    ).toEqual({
+      remote_outcome: 'unknown'
+    })
+    expect(channel.destroyed).toBe(true)
   })
 
   it('serializes two real workers so only one can obtain the dispatch result', async () => {
@@ -1259,6 +1373,44 @@ function createDispatchReadyHarness(
       sourceConfigSha256: HASH
     }
   }
+}
+
+function createFakeGuardedChannel(): Duplex {
+  const channel = new Duplex({
+    read() {
+      this.push(Buffer.alloc(0))
+    },
+    write(chunk, _encoding, callback) {
+      const frame = Buffer.from(chunk)
+      const size = frame.readUInt32BE(0)
+      const request = JSON.parse(frame.subarray(4, 4 + size).toString('utf8')) as {
+        request_id: string
+        sequence: number
+        deployment_id: number
+      }
+      const response = encodeGuardedSshFrame({
+        version: 1,
+        request_id: request.request_id,
+        sequence: request.sequence,
+        state: 'accepted',
+        deployment_id: request.deployment_id
+      })
+      queueMicrotask(() => {
+        this.push(response)
+        if (JSON.parse(frame.subarray(4, 4 + size).toString('utf8')).operation === 'close') {
+          this.push(null)
+          this.emit('close')
+        }
+      })
+      callback()
+    },
+    final(callback) {
+      this.push(null)
+      callback()
+    }
+  })
+  Object.defineProperty(channel, 'stderr', { value: new PassThrough() })
+  return channel
 }
 
 function seedAutoJob(

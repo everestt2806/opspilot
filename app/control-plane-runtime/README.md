@@ -17,4 +17,6 @@ node dist/control-plane.cjs status --data-dir /var/lib/opspilot-controller
 
 `run --data-dir ...` serves only `GET /healthz` on `127.0.0.1:8768`, then polls configured Product-owned GitHub branches. It does not expose the `/v1` API. `poll-once` performs one poll without opening an HTTP listener. Both paths only observe Git and reconcile durable desired state/job records; neither claims nor executes a job.
 
+The Linux runtime dependency set also includes the already approved `ssh2` and `tar` packages for the internal guarded-session seam. The packaged `target-helper/` files are not installed on a VPS by build and are not activated by the poll-only runtime. P3e-3a does not connect DeployPipeline or perform deployment phases.
+
 The systemd example is `opspilot-controller.service.example`. It is a template only and is not installed by the build or CLI.

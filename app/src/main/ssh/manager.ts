@@ -210,6 +210,31 @@ export class SshManager extends EventEmitter {
     }
   }
 
+  /** Open the fixed target helper on one already pin-verified SSH connection. */
+  async openGuardedExecutionChannel(
+    vpsId: number,
+    helperPath: string,
+    options: Pick<ExecOptions, 'timeoutMs' | 'signal'> = {}
+  ): Promise<ClientChannel> {
+    if (!/^\/[A-Za-z0-9_./-]{1,511}$/.test(helperPath) || helperPath.includes('..')) {
+      throw new AppError('VALIDATION', 'Invalid guarded SSH helper path.')
+    }
+    if (options.signal?.aborted) throw new SshAbortedError()
+    const entry = await this.ensureConnected(vpsId)
+    // Only the configured absolute helper path is accepted; no request data is
+    // interpolated into the command and this channel is never reconnected.
+    return this.openExecChannel(
+      entry,
+      `python3 -u ${shellQuote(helperPath)}`,
+      {
+        timeoutMs: options.timeoutMs ?? 15_000,
+        logCommand: false,
+        retryOnReconnect: false
+      },
+      options.signal
+    )
+  }
+
   /** Execute once on the fingerprint-verified connection and return its resolved endpoint. */
   async execWithHostIdentity(
     vpsId: number,
@@ -662,9 +687,14 @@ export class SshManager extends EventEmitter {
   private openExecChannel(
     entry: PoolEntry,
     command: string,
-    options: ExecOptions = {}
+    options: ExecOptions = {},
+    channelOpenSignal?: AbortSignal
   ): Promise<ClientChannel> {
     return new Promise<ClientChannel>((resolve, reject) => {
+      if (channelOpenSignal?.aborted) {
+        reject(new SshAbortedError())
+        return
+      }
       const client = entry.client
       if (!client) {
         reject(new AppError('SSH_HOST_UNREACHABLE', 'Kết nối SSH chưa sẵn sàng.'))
@@ -677,6 +707,7 @@ export class SshManager extends EventEmitter {
         if (settled) return
         settled = true
         clearTimeout(timer)
+        channelOpenSignal?.removeEventListener('abort', onAbort)
         client.removeListener('close', onClose)
         client.removeListener('error', onError)
         callback()
@@ -691,6 +722,7 @@ export class SshManager extends EventEmitter {
           )
         )
       const onError = (error: Error): void => finish(() => reject(toSshAppError(error)))
+      const onAbort = (): void => finish(() => reject(new SshAbortedError()))
       const timer = setTimeout(
         () =>
           finish(() =>
@@ -700,6 +732,7 @@ export class SshManager extends EventEmitter {
       )
       client.once('close', onClose)
       client.once('error', onError)
+      channelOpenSignal?.addEventListener('abort', onAbort, { once: true })
 
       try {
         client.exec(command, (error, channel) => {

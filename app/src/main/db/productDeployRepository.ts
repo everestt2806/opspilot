@@ -494,6 +494,31 @@ export class ProductDeployRepository {
     }
   }
 
+  /** Rechecks authority after the one-shot dispatch commit while an SSH session is active. */
+  readGitDispatchSessionAuthority(
+    claim: ProductClaimToken,
+    deploymentId: number
+  ): 'ready' | 'reconciliation_required' | 'rejected' {
+    if (!isValidClaimToken(claim) || !Number.isSafeInteger(deploymentId) || deploymentId < 1) {
+      return 'rejected'
+    }
+    const authority = loadDispatchAuthority(this.database, claim)
+    if (
+      validateDispatchAuthority(authority, claim, new Date(this.readClock()).toISOString()) !== null
+    ) {
+      return 'rejected'
+    }
+    if (
+      authority?.job_state !== 'deploying' ||
+      authority.attempt_state !== 'deploying' ||
+      authority.remote_outcome !== 'unknown' ||
+      authority.deployment_id !== deploymentId
+    ) {
+      return 'reconciliation_required'
+    }
+    return 'ready'
+  }
+
   /** Commits one one-shot dispatch marker and canonical deployment row before any remote write. */
   beginGitDispatch(
     claim: ProductClaimToken,

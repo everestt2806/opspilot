@@ -66,6 +66,9 @@ export type TargetEnrollmentFixtureErrorCode = 'TARGET_ALREADY_ENROLLED_OR_PATH_
  *   death is not permission to replay; monotonic fence and attempt identity reject it.
  * The guard cannot revoke an already running command or stop work already handed
  * to Docker. SSH must remain strictly host-pinned and a lost response is unknown.
+ * P3e-3a's fixed helper protocol occupies one pinned SSH exec channel for this
+ * whole lifetime. beginGitDispatch and its canonical deployment link commit
+ * before opening that channel; retries after the marker only reconcile.
  */
 export type ProductTargetExecutionGuardContract = Readonly<{
   lock_scope: 'controller_app_ownership_generation'
