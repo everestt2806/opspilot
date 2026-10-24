@@ -14,7 +14,7 @@
 | Validate authority before each fixed write phase; no renderer shell interpolation | Only fixed phase names are accepted; lab mutates marker between phases and confirms next write authorization is rejected. API accepts no shell command/path payload. | PASS |
 | Dispatch marker precedes target marker/mutation; pinned SSH integration boundary documented | Contract/task note require committed `beginGitDispatch` before guard use. This checkpoint has no DB/SSH/pipeline invocation, so ordering is documented, not runtime evidence. | N/A — P3e-3 integration gate |
 | Multi-process Linux lab, watchdog and scoped cleanup; controller/DB/Git regression | Linux real-process lab PASS; watchdog kills only its process group; parent-owned scratch is removed after child close. Node 22 controller/DB/Git/deploy/SSH suite 13 files / 174 tests PASS. | PASS |
-| Typecheck, scoped lint, artifact build and diff check; local scoped commit | Node main and strict contract typecheck, ESLint, Ruff, Linux artifact build and `git diff --check` PASS; commits pending | IMPLEMENTED |
+| Typecheck, scoped lint, artifact build and diff check; local scoped commit | Node main and strict contract typecheck, ESLint, Ruff, Linux artifact build and `git diff --check` PASS; implementation commit `f1f33ea374563b1079494f625cd9ec8cd7bd6b93` | PASS |
 
 ## Accepted review and source facts
 
@@ -49,4 +49,4 @@ The future controller must commit `beginGitDispatch` before requesting target fe
 - `git diff --check` — PASS.
 - No SSH, Docker, deployment pipeline execution, target VPS, production DB, DNS/firewall, or ML state was used. The Linux lab proves the fixture guard and kernel lock only. It does not prove `beginGitDispatch` ordering through SSH, enforcement against an old desktop/root bypass, credential cutover, or that Docker daemon work stops after a caller dies. Those remain mandatory P3e-3/live gates.
 
-Implementation commit SHA: pending local commit; no push/PR/merge.
+Implementation commit SHA: `f1f33ea374563b1079494f625cd9ec8cd7bd6b93`. Local documentation closeout follows; no push/PR/merge.
