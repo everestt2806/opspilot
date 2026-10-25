@@ -7,12 +7,14 @@
 
 ## Bàn giao partner 25/10 — ưu tiên trong 3–4 ngày
 
-Đọc [hồ sơ/task bàn giao](tk-s7-partner-handoff-2026-10-25.md) trước khi tiếp tục. User yêu cầu setup task và push sau khi chốt checkpoint; P3e-3b chưa được duyệt. Chỉ một task implementation `ĐANG LÀM` mỗi thời điểm.
+Đọc [hồ sơ/task bàn giao](tk-s7-partner-handoff-2026-10-25.md) trước khi tiếp tục. H0/source-render đã qua gate giới hạn; P3e-3b tổng thể vẫn PARTIAL/BLOCKED. Ngoại lệ user chốt 25/10: H1 runtime và L0 Docker lab được làm song song với owner/file tách biệt; H2-D chỉ thiết kế, H2-I chờ H1 + L0 và review. Mỗi file chỉ một owner, Leader tích hợp và cập nhật hồ sơ chung. Chưa có Worker tự động đang chạy do Codex `agent-update-prompt`.
 
 | ID | Owner | Trạng thái | Đầu ra / phụ thuộc |
 |---|---|---|---|
-| H0 | Kim / Worker | TUẦN NÀY | Sửa request-ID path traversal và quota enforcement của source/render; regression helper/SSH thật trước khi duyệt slice. Base code `d8b9329`, dossier `e8b4d9d`. |
+| H0 | Leader | CHỜ REVIEW | Hai finding đã sửa; 8 Linux filesystem tests, 247 Vitest tests, typecheck/lint/artifact + localhost SSH lab pass; source/render slice accepted, chưa full Product deployment. |
 | H1 | Kim / Worker | BACKLOG | Build Express qua cùng guarded session, tag/version canonical, không duplicate deployment; phụ thuộc H0 và real Docker gate. |
+| L0 | Kim / Worker lab | BACKLOG | Docker daemon/Compose + fixture local trong file riêng; bắt đầu song song H1. Không phải Product pipeline proof. |
+| H2-D | Kim / reviewer | BACKLOG | Proposal activate/rollback/fenced finalization, failure matrix; chuẩn bị song song H1, chưa sửa runtime/contract. |
 | H2 | Kim / Worker | BACKLOG | Activate/health/rollback/publish và fenced finalization, không replay unknown; phụ thuộc H1. |
 
 ## Sprint sản phẩm 08/10 — hai nguồn deploy và nền auto deploy

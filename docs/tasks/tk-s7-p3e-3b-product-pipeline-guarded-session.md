@@ -1,6 +1,6 @@
 # TK-S7 P3e-3b — Product pipeline through guarded SSH session
 
-> **Leader review 25/10:** source/render chưa được duyệt. Supplemental Python filesystem repro thấy `request_id` có thể thoát staging qua temporary filename và scope khai báo zero bytes vẫn ghi được một byte. Windows Node 22: 247/247 tests + main typecheck/diff PASS; Linux localhost SSH happy path PASS sau khi chạy đúng cwd `app`. Những gate đó không phủ hai finding mới. Xem [H0 và kế hoạch partner](tk-s7-partner-handoff-2026-10-25.md). P3e-3b tổng thể tiếp tục PARTIAL/BLOCKED; không có Product deployment thật.
+> **Leader closeout H0 25/10:** hai finding request-ID traversal và quota đã sửa và kiểm chứng lại. Source/render đạt gate giới hạn của slice; xem mục H0 cuối hồ sơ và [kế hoạch partner/song song](tk-s7-partner-handoff-2026-10-25.md). P3e-3b tổng thể vẫn PARTIAL/BLOCKED: chưa build/activate/health/rollback/publish/finalization, chưa deployment Product thật. Những báo cáo trước H0 dưới đây là lịch sử, không phải kết luận cuối.
 
 | Checkpoint | Input | Status |
 |---|---|---|
@@ -100,3 +100,39 @@ The failed intermediate lab attempts were harness setup/fixture issues (wrong ar
 - Runtime polling-only default remains unchanged; no executor enablement was added.
 
 HANDOFF-LOCAL 25/10 — `d8b9329` · 174 focused tests, Node 22 typecheck, scoped ESLint/Ruff, controller/lab artifact build, Linux localhost SSH filesystem lab, `git diff --check` PASS · remaining deployment phases and Docker gate BLOCKED.
+
+## H0 — Đóng hai finding an toàn trước bàn giao, 25/10/2026
+
+START 25/10 — User yêu cầu Leader hoàn tất checkpoint rồi push cho partner, setup làm song song. Phạm vi giới hạn source/render; không triển khai các phase runtime tiếp theo.
+
+### Thay đổi và bằng chứng
+
+- H0-01: header chỉ nhận request ID `[A-Za-z0-9_-]{1,128}`, từ chối malformed trước guard/filesystem. `tempfile.mkstemp` tự sinh tên tại đúng directory đã kiểm tra; không dùng wire identifier làm đường dẫn.
+- H0-02: cộng file sizes đã commit và file mới trước tạo thư mục/file; kiểm tra scope/session actual bytes gồm file đang truyền trước ghi từng chunk. Giữ nguyên count/hash/manifest và quota gốc; không đổi DB/schema.
+- Regression `app/scripts/test_guarded_ssh_transfer.py`: 8 tests Linux thật, dữ liệu nhỏ; source + render dùng giới hạn 2 byte bằng patch hằng số trong test. 6/8 test fail trên helper cũ `d8b9329` được import từ scratch; cùng 8 tests pass trên helper sửa. Không checkout/reset working tree để lấy baseline.
+- Linux OpenSSH lab thêm raw frame malformed request ID với path hợp lệ, scope zero-byte/file 1-byte, và cộng dồn file vượt quota. Tất cả bị từ chối đúng mã, helper thoát và dọn incomplete staging; không tạo `escaped.part` ngoài staging.
+- Không có Worker chạy song song trong phiên sửa: Orca từ chối readiness vì `agent-update-prompt`, dispatch đã release. Leader thực hiện sửa và kiểm thử; kế hoạch parallel cho partner ghi riêng.
+
+| Tiêu chí | Gate trên source cuối | State |
+|---|---|---|
+| H0-01 và H0-02 bị chặn trước I/O vượt quyền/quota | 8 Linux filesystem tests, 6 failures có chủ ý trên baseline cũ; Linux SSH regressions pass | PASS |
+| Không hồi quy source/render, guard, canonical deployment | Node 22 Windows 19 files / 247 tests; Linux SSH source/render lab pass | PASS |
+| Contract, typecheck, lint, build artifact/helper | Node main typecheck; ESLint lab harness; Ruff helper/tests; controller/lab artifact builds pass | PASS |
+| Còn nguyên phạm vi partial và dữ liệu cá nhân | Không executor/VPS/production DB/Docker deploy; git diff check sạch | PASS |
+
+### Lệnh tái hiện
+
+```powershell
+. ./tools/enter-node22.ps1
+pnpm --prefix app exec vitest run src/main/db src/main/controlPlane src/main/git src/main/ssh src/main/deploy/pipeline.test.ts src/main/deploy/precheck.test.ts
+pnpm --prefix app exec tsc --noEmit -p tsconfig.node.json --composite false
+pnpm --prefix app exec eslint scripts/p3e3a-guarded-ssh-linux-lab.mjs
+ml-service/.venv/Scripts/python.exe -m ruff check app/src/main/controlPlane/target_guarded_ssh_helper.py app/scripts/test_guarded_ssh_transfer.py
+wsl python3 app/scripts/test_guarded_ssh_transfer.py -v
+git diff --check
+```
+
+- Linux artifact/helper/lab chạy đúng biến môi trường/cwd theo [handoff](tk-s7-partner-handoff-2026-10-25.md): `CONTROL_PLANE_BUILD_OK`, `P3E3A_LAB_BUILD_OK`, `P3E3B_SOURCE_RENDER_SSH_LAB_PASS`. Node 22.23.4, actual localhost OpenSSH, isolated SQLite; 5 source files / 71,909 bytes, 3 render files, lock và unknown/no-replay giữ nguyên.
+- Một lần gọi lab qua PowerShell pipe bị CR ở cuối filename (`.mjs\r`), không chạy test; đã bỏ CR và chạy lại đầy đủ pass. Không phải lỗi Product runtime.
+
+REVIEW 25/10 — H0/source-render được Leader chấp nhận trong phạm vi lab; CHỜ REVIEW/merge theo board. P3e-3b tổng thể PARTIAL/BLOCKED; H1 build rồi H2 deployment/finalization mới tiếp tục. Docker gate chưa chạy, không được dùng SSH lab để nhận deployment thành công.

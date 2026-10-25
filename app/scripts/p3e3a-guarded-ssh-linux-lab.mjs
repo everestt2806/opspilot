@@ -591,6 +591,88 @@ try {
     false
   )
 
+  labStage = 'request-id-and-declared-quota-regressions'
+  for (const scenario of ['request-id', 'zero-budget', 'cumulative-budget']) {
+    const regressionState = join(scratch, `target-state-h0-${scenario}`)
+    const regressionApp = `h0-${scenario}`
+    initializeTarget(regressionApp, 1, regressionState)
+    const regressionChannel = await manager.openGuardedExecutionChannel(
+      41,
+      join(targetHelper, 'target_guarded_ssh_helper.py')
+    )
+    assert.equal(
+      (
+        await sendOpenRequest(
+          regressionChannel,
+          { ...attackIdentity, app_id: regressionApp },
+          regressionState
+        )
+      ).state,
+      'accepted'
+    )
+    let sequence = 2
+    const send = (operation, fields = {}) =>
+      exchangeFrame(regressionChannel, {
+        version: 1,
+        request_id: randomUUID(),
+        sequence: sequence++,
+        operation,
+        deployment_id: 999,
+        ...fields
+      })
+    assert.equal(
+      (
+        await send('begin_scope', {
+          scope: 'source',
+          file_count: 2,
+          total_bytes: scenario === 'zero-budget' ? 0 : 1,
+          manifest_sha256: 'a'.repeat(64)
+        })
+      ).state,
+      'accepted'
+    )
+    const file = {
+      scope: 'source',
+      path: 'victim',
+      size: 1,
+      mode: 0o644,
+      sha256: createHash('sha256').update('A').digest('hex')
+    }
+    const sourceDirectory = join(
+      regressionState,
+      'product-staging',
+      `app-${regressionApp}`,
+      'deployment-999',
+      'source'
+    )
+    if (scenario === 'request-id') {
+      // Make the historical traversal path usable; only request_id is malicious.
+      mkdirSyncSafe(join(sourceDirectory, '.victim.X'))
+      const rejected = await send('begin_file', {
+        ...file,
+        request_id: 'X/../../../../../../escaped'
+      })
+      assert.equal(rejected.error_code, 'SSH_PROTOCOL_MALFORMED')
+      assert.equal(existsSync(join(scratch, 'escaped.part')), false)
+    } else {
+      if (scenario === 'cumulative-budget') {
+        assert.equal((await send('begin_file', file)).state, 'accepted')
+        assert.equal(
+          (await send('file_chunk', { chunk_index: 0, data_base64: 'QQ==' })).state,
+          'accepted'
+        )
+        assert.equal((await send('finish_file')).state, 'accepted')
+        file.path = 'nested/second.txt'
+      }
+      const rejected = await send('begin_file', file)
+      assert.equal(rejected.error_code, 'SSH_TRANSFER_REJECTED')
+      assert.equal(existsSync(join(sourceDirectory, 'nested')), false)
+    }
+    regressionChannel.destroy()
+    await waitForHelperExit(join(targetHelper, 'target_guarded_ssh_helper.py'))
+    assert.equal(existsSync(sourceDirectory), false)
+  }
+
   labStage = 'transfer-symlink-quota-and-deployment-binding'
   const symlinkState = join(scratch, 'target-state-symlink-transfer')
   initializeTarget('symlink-transfer', 1, symlinkState)

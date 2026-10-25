@@ -10,6 +10,7 @@ import shutil
 import stat
 import struct
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -142,6 +143,14 @@ class TransferState:
         self.reserved_bytes = 0
         self.reserved_files = 0
 
+    def _committed_bytes(self, scope: str | None = None) -> int:
+        return sum(
+            record["size"]
+            for name, info in self.scopes.items()
+            if scope is None or name == scope
+            for record in info["files"].values()
+        )
+
     def begin_scope(self, request: dict[str, Any]) -> None:
         if not _exact_keys(request, {
             "version", "request_id", "sequence", "operation", "deployment_id",
@@ -202,6 +211,12 @@ class TransferState:
             or (scope == "render" and mode != (0o600 if name == ".env" else 0o644))
         ):
             raise TransferRejected
+        if (
+            self._committed_bytes(scope) + size > info["expected_bytes"]
+            or self._committed_bytes() + size > self.reserved_bytes
+            or self._committed_bytes() + size > MAX_TOTAL_BYTES
+        ):
+            raise TransferRejected
         directory = info["directory"]
         for component in path[:-1]:
             directory = directory / component
@@ -218,9 +233,10 @@ class TransferState:
             ):
                 raise TransferRejected
         target = directory / path[-1]
-        temporary = directory / f".{path[-1]}.{request['request_id']}.part"
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
-        descriptor = os.open(temporary, flags, 0o600)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=".transfer-", suffix=".part", dir=directory
+        )
+        temporary = Path(temporary_name)
         self.current = {
             "scope": scope,
             "name": name,
@@ -255,6 +271,14 @@ class TransferState:
         except (ValueError, TypeError):
             raise TransferRejected from None
         if not data or len(data) > CHUNK_BYTES or current["bytes"] + len(data) > current["expected_size"]:
+            raise TransferRejected
+        next_bytes = current["bytes"] + len(data)
+        if (
+            self._committed_bytes(current["scope"]) + next_bytes
+            > self.scopes[current["scope"]]["expected_bytes"]
+            or self._committed_bytes() + next_bytes > self.reserved_bytes
+            or self._committed_bytes() + next_bytes > MAX_TOTAL_BYTES
+        ):
             raise TransferRejected
         current["handle"].write(data)
         current["hash"].update(data)
@@ -419,6 +443,11 @@ def main() -> int:
                 return 0
             request_id = request.get("request_id")
             sequence = request.get("sequence")
+            if not isinstance(request_id, str) or not re.fullmatch(
+                r"[A-Za-z0-9_-]{1,128}", request_id
+            ):
+                reject(request, "SSH_PROTOCOL_MALFORMED")
+                return 2
             if (
                 request.get("version") != VERSION
                 or not isinstance(request_id, str)
