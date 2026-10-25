@@ -6,6 +6,23 @@
 
 ## P3e-3a authority-binding correction — 25/10/2026
 
+## P3e-3a security-profile revision correction — 25/10/2026
+
+### Requirement ledger
+
+| Requirement | Implementation/evidence | State |
+|---|---|---|
+| Bind SSH username/auth method and a stable credential/profile revision without exposing credentials | Migration 019 adds monotonic `vps.ssh_security_revision`; `VpsRepository` advances it for endpoint, pin, username, auth method, credential rotation, archive/restore; binding contains no secret | PASS |
+| Security profile changes during open or between phases revoke the old session; telemetry updates do not | SQLite + real `VpsRepository.update()` same-second tests; controlled channel verifies old connection principal receives no `open`, stale phase is blocked, and last-seen/status changes preserve authority | PASS |
+| Retain target/lease/pin/canonical deployment/no-replay behavior and prove focused, static, lint, artifact, Linux SSH gates | 17 files/229 tests, main + strict contract typecheck, scoped ESLint (0 errors; 138 Prettier warnings), Ruff, Linux controller artifact and real localhost SSH lab, `git diff --check` | PASS |
+
+### Nhật ký correction
+
+- START 25/10 — Leader tái hiện credential principal đổi trong cùng giây qua `VpsRepository.update()`; `updated_at` giữ nguyên và session cũ vẫn gửi open/build. Thay timestamp heuristic bằng monotonic security revision trong forward migration.
+- UPDATE 25/10 — thay `updated_at` bằng `ssh_security_revision` monotonic, secret-free; verified connection identity có username/auth method. Revision tăng khi endpoint, pin, principal, auth method hoặc credential đổi; `last_seen_at`/`last_status` không tăng revision. Thêm regression cho cập nhật hai lần cùng giây, credential/profile đổi trong lúc open, principal thực tế cũ, đổi profile sau open và telemetry.
+- GATES 25/10 — Node 22 Windows focused suite 17 files/229 tests PASS; main TypeScript và strict Product contracts PASS; scoped ESLint exit 0 (0 errors, 138 Prettier warnings); WSL Ruff PASS; Node 22 Linux control-plane artifact build PASS; Linux localhost OpenSSH lab PASS; `git diff --check` PASS. Lab kiểm chứng SSH/guard localhost và controlled authority binding, không chạy DeployPipeline/deployment.
+- HANDOFF-LOCAL — implementation `2cf654193025815256d170ee7740f3becde23306`; no VPS, production DB, production executor, deployment, DNS/firewall hoặc ML state.
+
 ### Requirement ledger
 
 | Requirement | Implementation/evidence | State |
