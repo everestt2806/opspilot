@@ -4,6 +4,33 @@
 |---|---|---|
 | P3e-3a | P3e-2 correction `af9acb0`; accepted dossier `c65dc79` | CHỜ REVIEW |
 
+## P3e-3a authority-binding correction — 25/10/2026
+
+### Requirement ledger
+
+| Requirement | Implementation/evidence | State |
+|---|---|---|
+| Resolve target VPS/profile from current DB authority; expected VPS mismatch rejected before dispatch; bind endpoint and pin | `ProductDispatchTargetBinding` secret-free; mismatched expected VPS leaves marker/deployment untouched; SshManager reports the endpoint and pin verified on the opened connection | PASS |
+| Recheck authority, lease/fence, target, deployment link and abort after async channel open before `open` frame; retain unknown marker on rejection | SQLite-controlled delayed-channel tests cover expiry, app target, source generation, profile and actual endpoint/pin changes; rejected post-marker cases keep one deployment and `unknown` | PASS |
+| Session phases reject stale target/profile and preserve lock on unchanged target | Target mutation after open rejects next phase without sending a phase frame; valid target still authorizes multiple phases through the same session; Linux lock lab passes | PASS |
+| Focused tests, Node typecheck, lint/Ruff, artifact build, Linux localhost SSH; document evidence/limits and commit | Node 22 16 files/216 tests; main/strict-contract typechecks, scoped ESLint, Linux Ruff, Node22 Linux build and real localhost SSH lab, diff check; code commit `5b52979` | PASS |
+
+### Nhật ký correction
+
+- START 25/10 — review finding tái hiện được: target VPS lấy từ `options.vps_id`; authority read không kiểm tra expiry sau khi mở channel. Đang bổ sung binding secret-free từ SQLite và xác minh fingerprint/endpoint thực của connection.
+- UPDATE 25/10 — repository đọc `app.vps_id`, endpoint, pin và profile revision từ join authority của claim; mismatched `options.vps_id` bị từ chối trước `beginGitDispatch`. SshManager mở một channel strict-pinned và trả identity của đúng connection; sau `await`, trước frame `open`, và trước từng phase session đối chiếu lại claim/lease/ownership/source/deployment/target. Rejection sau dispatch giữ canonical row và durable `unknown`, không reconnect/replay.
+- UPDATE 25/10 — regression SQLite/controlled channel gồm hai VPS, lease hết hạn khi open chờ, đổi app target/profile/source khi open, sai endpoint/pin thực tế, và đổi target sau khi session đã mở. Mã cũ không thỏa các assertion này; baseline finding là reproduction do Leader cung cấp, không checkout/chạy lại bản cũ.
+
+### Gates correction và handoff
+
+- Node 22 Windows: `npm exec --yes --package=node@22 -- node ./node_modules/vitest/vitest.mjs run src/main/controlPlane src/main/db/productJobClaim.test.ts src/main/db/productDeployRepository.test.ts src/main/db/productDesiredReconciliation.test.ts src/main/db/productMigration.test.ts src/main/db/index.test.ts src/main/git/snapshot.test.ts src/main/git/publicBranch.test.ts src/main/deploy/pipeline.test.ts src/main/ssh/hostFingerprint.test.ts src/main/ssh` — 16 files / 216 tests PASS.
+- Main typecheck: `npm exec --yes --package=node@22 -- node ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.node.json --composite false` — PASS. Strict contract typecheck trên `product-auto-deploy.ts`, `product-guarded-ssh-session.ts`, `product-target-execution-guard.ts` — PASS.
+- Scoped ESLint trên guarded session, tests, repository và SshManager — PASS, không warning/error. Ruff trong WSL Linux: `uvx --from ruff ruff check src/main/controlPlane/target_guarded_ssh_helper.py src/main/controlPlane/target_execution_guard.py` — PASS. Python file không đổi; Windows Python không có Ruff cài sẵn.
+- Linux Node 22 artifact: `OPSPILOT_CONTROL_PLANE_OUTPUT=/var/tmp/opspilot-p3e3a-runtime/dist/control-plane.cjs OPSPILOT_CONTROL_PLANE_MODULES=/var/tmp/opspilot-p3e3a-runtime/node_modules npm exec --yes --package=node@22 -- node ./scripts/build-control-plane.mjs` — `CONTROL_PLANE_BUILD_OK`.
+- Linux real localhost OpenSSH lab, artifact/helper build và test: `OPSPILOT_P3E3A_LAB_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/node_modules/@opspilot/p3e3a-lab.cjs OPSPILOT_P3E3A_HELPER_DIR=/var/tmp/opspilot-p3e3a-runtime/dist/target-helper npm exec --yes --package=node@22 -- node ./scripts/build-p3e3a-ssh-lab.mjs && npm exec --yes --package=node@22 -- node ./scripts/p3e3a-guarded-ssh-linux-lab.mjs` — PASS. Correct host pin accepted; wrong pin rejected before public-key auth; DB dispatch precedes target marker; same-app lock contention rejected; multiple phases share one lock; disconnect-after-open leaves one canonical deployment and unknown/no replay. Lab did not run DeployPipeline or deployment.
+- `git diff --check` — PASS. Implementation/contract/decision/lab commit: `5b52979` (`fix: bind guarded SSH session to Product target authority`).
+- Limits retained: guarded session only; pipeline upload/render/build/activate/health rollback/publish/cleanup remains unintegrated. No production VPS, DB, deployment, DNS/firewall, ML state or production executor used.
+
 ## Requirement ledger
 
 | Requirement | Implementation/evidence | State |
