@@ -136,3 +136,5 @@ git diff --check
 - Một lần gọi lab qua PowerShell pipe bị CR ở cuối filename (`.mjs\r`), không chạy test; đã bỏ CR và chạy lại đầy đủ pass. Không phải lỗi Product runtime.
 
 REVIEW 25/10 — H0/source-render được Leader chấp nhận trong phạm vi lab; CHỜ REVIEW/merge theo board. P3e-3b tổng thể PARTIAL/BLOCKED; H1 build rồi H2 deployment/finalization mới tiếp tục. Docker gate chưa chạy, không được dùng SSH lab để nhận deployment thành công.
+
+HANDOFF 25/10 — H0 implementation/regression SHA `900ad77`, đã push `origin/feat/deploy-reachability` theo yêu cầu user. H1 runtime và L0 Docker lab có thể bắt đầu song song với owner/file riêng; H2-D chỉ proposal, H2-I chờ integration gate. File cá nhân/untracked không được đưa vào commit; không PR/merge hoặc thay đổi VPS/production DB.

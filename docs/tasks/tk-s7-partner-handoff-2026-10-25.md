@@ -5,6 +5,7 @@
 - Người nhận: Võ Thị Thiên Kim. Chủ dự án dự kiến vắng 3–4 ngày.
 - Nhánh làm việc: `feat/deploy-reachability`. Không làm trực tiếp trên `main`.
 - Code source/render: `d8b932935dcc5475d3c4021afa3a6bdf07b25c94`; hồ sơ Worker: `e8b4d9d`.
+- H0 fix + regression + kế hoạch song song: `900ad77`, đã push lên `origin/feat/deploy-reachability`. Nhận HEAD mới nhất của nhánh để có cả hồ sơ closeout.
 - P3e-3a đã được Leader duyệt tại `2cf6541` / `ee2a878`.
 - **H0/source-render đã qua review và lab sau sửa hai finding. P3e-3b tổng thể PARTIAL/BLOCKED; chưa có build/activate/health/rollback/publish/finalization hoặc deployment Product thật.**
 - Controller mặc định vẫn polling-only. Không bật executor production hoặc dùng VPS/DB thật trong đợt bàn giao này.
@@ -19,7 +20,7 @@ START 25/10 — User giao Leader sửa H0, kiểm chứng checkpoint source/rend
 | Chặn request-ID traversal và quota trước I/O | H0-01/H0-02 đã sửa, baseline cũ fail 6/8; bản sửa pass 8/8 filesystem tests | PASS |
 | Regression filesystem và Linux SSH thật cùng gates liên quan | Linux SSH pass gồm 3 raw-frame regressions mới; Windows 247 tests/typecheck, ESLint, Ruff, artifact/helper builds | PASS |
 | Chia task song song có owner/file/checkpoint, giữ thứ tự tích hợp | Bảng wave và prompt bên dưới; Worker tự động chưa chạy do update prompt | PASS |
-| Commit và push feature branch, giữ dữ liệu cá nhân | User đã cho phép sau khi source/render đạt gate; không PR/merge | OPEN |
+| Commit và push feature branch, giữ dữ liệu cá nhân | H0 commit `900ad77` push fast-forward thành công từ `d24d2e0`; không PR/merge; file cá nhân vẫn ngoài index | PASS |
 
 | Yêu cầu | Bằng chứng / trạng thái | Kết quả |
 |---|---|---|
@@ -27,7 +28,7 @@ START 25/10 — User giao Leader sửa H0, kiểm chứng checkpoint source/rend
 | Không nhầm source/render với deployment | H0-01/H0-02 đã sửa và phủ regression; chưa build/activate/health/rollback/publish/finalization | PASS |
 | Task có thứ tự, DoD và giới hạn cho partner | H0 → H1 → H2 theo integration; L0 Docker lab và H2 design được chuẩn bị song song | PASS |
 | Hướng dẫn máy mới và giữ dữ liệu riêng | Không dùng `/var/tmp` hay credential từ máy Leader; không stage file untracked | PASS |
-| Push sau khi chốt checkpoint theo yêu cầu chủ dự án | User đã yêu cầu Leader sửa, kiểm chứng và push feature branch; H0 đạt gate, đang chuẩn bị push | OPEN |
+| Push sau khi chốt checkpoint theo yêu cầu chủ dự án | `git push origin HEAD:refs/heads/feat/deploy-reachability` thành công tới `900ad77`; hồ sơ closeout cập nhật tiếp trên cùng branch | PASS |
 
 ## Finding H0 — đã sửa, giữ lại repro để đối chiếu
 
@@ -168,6 +169,8 @@ node scripts/p3e3a-guarded-ssh-linux-lab.mjs
 - Mục tiêu demo 7–10 phút; chốt kịch bản 10/11, khóa build demo 13/11, diễn tập ít nhất ba lần trong 14–19/11. Đây là mốc mục tiêu, chưa phải DEMO_READY.
 
 ## Git và báo cáo
+
+HANDOFF 25/10 — H0 `900ad77` đã push; source/render slice accepted trong Linux lab, P3e-3b overall PARTIAL/BLOCKED. Kim nhận H1 và L0 theo bảng song song; chưa Worker nào chạy tự động. Pull/fetch HEAD mới nhất của feature branch trước tạo checkout task. Không yêu cầu partner dùng DB/credential/runtime từ máy Leader.
 
 - Commit theo task/file cụ thể, không `git add .`; giữ nguyên file cá nhân/untracked. Không reset/clean/stash/rebase hoặc force push lịch sử chia sẻ.
 - Partner bắt đầu bằng `git status`, `git fetch origin`, checkout branch bàn giao; nếu local có thay đổi hoặc nhánh lệch, giữ dữ liệu và đối chiếu trước khi fast-forward. Không ghi đè checkout đang có việc.

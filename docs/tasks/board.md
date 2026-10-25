@@ -11,7 +11,7 @@
 
 | ID | Owner | Trạng thái | Đầu ra / phụ thuộc |
 |---|---|---|---|
-| H0 | Leader | CHỜ REVIEW | Hai finding đã sửa; 8 Linux filesystem tests, 247 Vitest tests, typecheck/lint/artifact + localhost SSH lab pass; source/render slice accepted, chưa full Product deployment. |
+| H0 | Leader | CHỜ REVIEW | `900ad77` đã push feature branch; 8 Linux filesystem tests, 247 Vitest tests, typecheck/lint/artifact + localhost SSH lab pass; source/render slice accepted, chưa full Product deployment/merge. |
 | H1 | Kim / Worker | BACKLOG | Build Express qua cùng guarded session, tag/version canonical, không duplicate deployment; phụ thuộc H0 và real Docker gate. |
 | L0 | Kim / Worker lab | BACKLOG | Docker daemon/Compose + fixture local trong file riêng; bắt đầu song song H1. Không phải Product pipeline proof. |
 | H2-D | Kim / reviewer | BACKLOG | Proposal activate/rollback/fenced finalization, failure matrix; chuẩn bị song song H1, chưa sửa runtime/contract. |
