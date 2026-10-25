@@ -56,6 +56,12 @@ export interface SshHostIdentity {
   hostFingerprint: string
 }
 
+/** Verified connection principal added for authority-bound Product sessions. */
+export interface SshVerifiedConnectionIdentity extends SshHostIdentity {
+  username: string
+  authType: 'key' | 'password'
+}
+
 export class SshOutputLimitError extends Error {
   constructor(
     readonly stream: 'stdout' | 'stderr',
@@ -224,7 +230,7 @@ export class SshManager extends EventEmitter {
     vpsId: number,
     helperPath: string,
     options: Pick<ExecOptions, 'timeoutMs' | 'signal'> = {}
-  ): Promise<{ channel: ClientChannel; identity: SshHostIdentity }> {
+  ): Promise<{ channel: ClientChannel; identity: SshVerifiedConnectionIdentity }> {
     if (!/^\/[A-Za-z0-9_./-]{1,511}$/.test(helperPath) || helperPath.includes('..')) {
       throw new AppError('VALIDATION', 'Invalid guarded SSH helper path.')
     }
@@ -256,7 +262,9 @@ export class SshManager extends EventEmitter {
         vpsId,
         host: connectionInfo.host,
         port: connectionInfo.port,
-        hostFingerprint
+        hostFingerprint,
+        username: connectionInfo.username,
+        authType: connectionInfo.authType
       }
     }
   }

@@ -100,6 +100,7 @@ export class VpsRepository {
                  crypto_scheme = ?, encrypted_secret = ?, iv = ?, auth_tag = ?,
                  provider = ?, region = ?, last_status = 'unknown', last_seen_at = NULL,
                  archived_at = NULL, archived_name = NULL,
+                 ssh_security_revision = ssh_security_revision + 1,
                  updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
                WHERE id = ? AND archived_at IS NOT NULL`
             )
@@ -179,6 +180,15 @@ export class VpsRepository {
       add('auth_tag', patch.credential.auth_tag)
     }
 
+    const securityProfileChanged =
+      patch.host !== undefined ||
+      patch.port !== undefined ||
+      patch.host_fingerprint !== undefined ||
+      patch.username !== undefined ||
+      patch.auth_type !== undefined ||
+      patch.credential !== undefined
+    if (securityProfileChanged) assignments.push('ssh_security_revision = ssh_security_revision + 1')
+
     if (assignments.length === 0) {
       return this.getById(id)
     }
@@ -235,6 +245,7 @@ export class VpsRepository {
         .prepare(
           `UPDATE vps SET name = ?, archived_name = ?,
              encrypted_secret = X'', iv = NULL, auth_tag = NULL,
+             ssh_security_revision = ssh_security_revision + 1,
              archived_at = strftime('%Y-%m-%dT%H:%M:%SZ','now'),
              updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
            WHERE id = ? AND archived_at IS NULL`

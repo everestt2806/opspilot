@@ -156,6 +156,8 @@ function downgradeMigration014ToV13(database: Database.Database): void {
 
 function downgradeProductMigrationsToV15(database: Database.Database): void {
   database.exec(`
+    ALTER TABLE vps DROP COLUMN ssh_security_revision;
+    DELETE FROM schema_version WHERE version=19;
     DROP TRIGGER IF EXISTS product_app_control_pause_provenance_insert;
     DROP TRIGGER IF EXISTS product_app_control_pause_provenance_update;
     ALTER TABLE product_app_control DROP COLUMN pause_policy_provenance;
@@ -272,7 +274,7 @@ describe('initializeDatabase', () => {
       count: 1
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 18
+      version: 19
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
   })
@@ -296,12 +298,12 @@ describe('initializeDatabase', () => {
     runMigrations(database)
     expect(database.prepare('SELECT * FROM domain_binding WHERE id=82').get()).toMatchObject(before as object)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 18
+      version: 19
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 18
+      version: 19
     })
   })
 
@@ -349,7 +351,7 @@ describe('initializeDatabase', () => {
     expect(database.prepare('SELECT healthcheck_response_type FROM app WHERE id=151').get()).toEqual({
       healthcheck_response_type: 'status_2xx'
     })
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 18 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 19 })
     database.prepare(`UPDATE domain_binding SET route_status='active', certificate_status='valid',
       https_probe_status='passed', observed_generation=desired_generation,
       route_checked_at='now', certificate_checked_at='now', certificate_hostname=hostname,
@@ -370,7 +372,7 @@ describe('initializeDatabase', () => {
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 18 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 19 })
   })
 
   it('migration 015 repairs v13 active proof after 014 without changing newly verified active domains', () => {
@@ -436,10 +438,10 @@ describe('initializeDatabase', () => {
     expect(database.prepare('SELECT route_status, https_probe_peer_ips_json FROM domain_binding WHERE id=162').get()).toEqual({
       route_status: 'active', https_probe_peer_ips_json: '["198.51.100.160"]'
     })
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 18 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 19 })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 18 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 19 })
   })
 
   it('executes the complete schema contract on an empty SQLite database', () => {
@@ -822,7 +824,7 @@ describe('initializeDatabase', () => {
       .get() as { version: number }
 
     expect(tables).toHaveLength(27)
-    expect(schemaVersion.version).toBe(18)
+    expect(schemaVersion.version).toBe(19)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -853,7 +855,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 18
+      version: 19
     })
     expect(
       database
@@ -1052,7 +1054,7 @@ describe('initializeDatabase', () => {
     const successVer = v4Db.prepare('SELECT MAX(version) AS version FROM schema_version').get() as {
       version: number
     }
-    expect(successVer.version).toBe(18)
+    expect(successVer.version).toBe(19)
 
     // b. Bảng experiment_run đã có cột attempt_index và backfill = 1 cho tất cả bản ghi cũ
     const postRuns = v4Db

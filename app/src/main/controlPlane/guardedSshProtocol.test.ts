@@ -79,7 +79,9 @@ describe('guarded SSH framed protocol', () => {
       host: 'target.test',
       port: 22,
       host_fingerprint: `SHA256:${'A'.repeat(43)}`,
-      profile_revision: 'profile-v1'
+      username: 'deploy',
+      auth_type: 'key' as const,
+      ssh_security_revision: 1
     }
     const repository = {
       readGitDispatchTargetBinding: () => ({ state: 'ready', binding })

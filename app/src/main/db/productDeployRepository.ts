@@ -568,7 +568,10 @@ export class ProductDeployRepository {
       !authority.target_host ||
       !Number.isSafeInteger(authority.target_port) ||
       !authority.target_fingerprint ||
-      !authority.target_profile_revision
+      !authority.target_username ||
+      (authority.target_auth_type !== 'key' && authority.target_auth_type !== 'password') ||
+      !Number.isSafeInteger(authority.target_ssh_security_revision) ||
+      authority.target_ssh_security_revision < 1
     ) {
       return { state: 'rejected' }
     }
@@ -579,7 +582,9 @@ export class ProductDeployRepository {
         host: authority.target_host,
         port: authority.target_port,
         host_fingerprint: authority.target_fingerprint,
-        profile_revision: authority.target_profile_revision
+        username: authority.target_username,
+        auth_type: authority.target_auth_type,
+        ssh_security_revision: authority.target_ssh_security_revision
       }
     }
   }
@@ -1963,7 +1968,9 @@ interface ClaimDispatchAuthority {
   target_host: string
   target_port: number
   target_fingerprint: string | null
-  target_profile_revision: string | null
+  target_username: string
+  target_auth_type: string
+  target_ssh_security_revision: number
   ownership_generation: number
   source_generation: number
   source_config_sha256: string
@@ -2021,7 +2028,8 @@ function loadDispatchAuthority(
     .prepare(
       `SELECT j.state AS job_state,j.controller_id,c.status AS controller_status,j.app_id,a.name AS app_name,
        a.vps_id AS target_vps_id,v.host AS target_host,v.port AS target_port,v.host_fingerprint AS target_fingerprint,
-       COALESCE(v.updated_at,v.created_at) AS target_profile_revision,
+       v.username AS target_username,v.auth_type AS target_auth_type,
+       v.ssh_security_revision AS target_ssh_security_revision,
        j.ownership_generation,j.source_generation,j.source_config_sha256,j.trigger,j.ref AS job_ref,
        j.target_sha,j.observation_sequence,j.reconcile_epoch,j.attempt_count,
        pa.attempt_number,pa.state AS attempt_state,pa.remote_outcome,pa.deployment_id,

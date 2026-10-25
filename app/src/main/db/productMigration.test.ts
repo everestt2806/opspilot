@@ -9,6 +9,7 @@ import { closeDatabase, initializeDatabase, runMigrations } from './index'
 import migration016 from './migrations/016_product_auto_deploy_persistence.sql?raw'
 import migration017 from './migrations/017_product_auto_deploy_pause_policy.sql?raw'
 import migration018 from './migrations/018_product_auto_deploy_pause_provenance.sql?raw'
+import migration019 from './migrations/019_vps_ssh_security_revision.sql?raw'
 
 let testDirectory: string | null = null
 
@@ -20,8 +21,8 @@ afterEach(() => {
   }
 })
 
-describe('Product persistence migrations 016-018', () => {
-  it('keeps the cumulative schema contract synchronized with migrations 016-018', () => {
+describe('Product persistence migrations 016-019', () => {
+  it('keeps the cumulative schema contract synchronized with migrations 016-019', () => {
     const schema = readFileSync(
       new URL('../../../../docs/contracts/schema.sql', import.meta.url),
       'utf8'
@@ -29,6 +30,26 @@ describe('Product persistence migrations 016-018', () => {
     expect(schema).toContain(migration016.replaceAll('\r\n', '\n').trim())
     expect(schema).toContain(migration017.replaceAll('\r\n', '\n').trim())
     expect(schema).toContain(migration018.replaceAll('\r\n', '\n').trim())
+    expect(schema).toContain(migration019.replaceAll('\r\n', '\n').trim())
+  })
+
+  it('adds a secret-free monotonic SSH security revision to an existing v018 VPS row', () => {
+    testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-vps-security-revision-'))
+    const database = initializeDatabase(testDirectory)
+    database.prepare(`INSERT INTO vps (id,name,host,username,auth_type,encrypted_secret)
+      VALUES (99,'revision-test','host.example.test','principal-old','key',X'0102')`).run()
+    database.exec('ALTER TABLE vps DROP COLUMN ssh_security_revision')
+    database.prepare('DELETE FROM schema_version WHERE version=19').run()
+
+    runMigrations(database)
+
+    expect(database.prepare('SELECT host,username,auth_type,ssh_security_revision FROM vps WHERE id=99').get()).toEqual({
+      host: 'host.example.test', username: 'principal-old', auth_type: 'key', ssh_security_revision: 1
+    })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 19 })
+    expect(database.pragma('foreign_key_check')).toEqual([])
+    runMigrations(database)
+    expect(database.prepare('SELECT ssh_security_revision FROM vps WHERE id=99').get()).toEqual({ ssh_security_revision: 1 })
   })
 
   it('upgrades a v015 database without changing legacy rows or enrolling Product data, then reopens idempotently', () => {
@@ -42,7 +63,7 @@ describe('Product persistence migrations 016-018', () => {
     const after = snapshotLegacy(database)
     expect(after).toEqual(before)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 18
+      version: 19
     })
     expect(database.prepare('SELECT COUNT(*) AS count FROM product_controller').get()).toEqual({
       count: 0
@@ -65,7 +86,7 @@ describe('Product persistence migrations 016-018', () => {
     ).count
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 18
+      version: 19
     })
     expect(
       (
@@ -98,7 +119,7 @@ describe('Product persistence migrations 016-018', () => {
       pause_reason: 'operator',
       pause_policy_provenance: 'legacy_inferred'
     })
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 18 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 19 })
     expect(database.prepare("SELECT COUNT(*) AS count FROM product_deploy_job WHERE trigger='branch_poll'").get())
       .toEqual({ count: 0 })
     expect(database.pragma('foreign_key_check')).toEqual([])
@@ -254,6 +275,8 @@ describe('Product persistence migrations 016-018', () => {
 
 function downgradeToV015(database: Database.Database): void {
   database.exec(`
+    ALTER TABLE vps DROP COLUMN ssh_security_revision;
+    DELETE FROM schema_version WHERE version=19;
     DROP TRIGGER product_app_control_pause_provenance_insert;
     DROP TRIGGER product_app_control_pause_provenance_update;
     ALTER TABLE product_app_control DROP COLUMN pause_policy_provenance;
@@ -278,6 +301,8 @@ function downgradeToV015(database: Database.Database): void {
 
 function downgradeToV016(database: Database.Database): void {
   database.exec(`
+    ALTER TABLE vps DROP COLUMN ssh_security_revision;
+    DELETE FROM schema_version WHERE version=19;
     DROP TRIGGER product_app_control_pause_provenance_insert;
     DROP TRIGGER product_app_control_pause_provenance_update;
     ALTER TABLE product_app_control DROP COLUMN pause_policy_provenance;
@@ -292,6 +317,8 @@ function downgradeToV016(database: Database.Database): void {
 
 function downgradeMigration018ToV017(database: Database.Database): void {
   database.exec(`
+    ALTER TABLE vps DROP COLUMN ssh_security_revision;
+    DELETE FROM schema_version WHERE version=19;
     DROP TRIGGER product_app_control_pause_provenance_insert;
     DROP TRIGGER product_app_control_pause_provenance_update;
     ALTER TABLE product_app_control DROP COLUMN pause_policy_provenance;

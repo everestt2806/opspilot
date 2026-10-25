@@ -24,6 +24,45 @@ afterEach(() => {
 })
 
 describe('VpsRepository', () => {
+  it('advances SSH security revision for principal/auth/credential changes but not telemetry updates', () => {
+    const { database, repository } = createRepository()
+    const vps = repository.create(vpsInput('Revision VPS', FINGERPRINT_A))
+    const readRevision = (): number => (
+      database.prepare('SELECT ssh_security_revision FROM vps WHERE id=?').get(vps.id) as {
+        ssh_security_revision: number
+      }
+    ).ssh_security_revision
+
+    expect(readRevision()).toBe(1)
+    repository.update(vps.id, { last_status: 'online', last_seen_at: 'same-second' })
+    expect(readRevision()).toBe(1)
+    repository.update(vps.id, { username: 'principal-new' })
+    expect(readRevision()).toBe(2)
+    repository.update(vps.id, { auth_type: 'password' })
+    expect(readRevision()).toBe(3)
+    repository.update(vps.id, { credential: fakeCredential('cipher-rotated') })
+    expect(readRevision()).toBe(4)
+    repository.update(vps.id, { host: '203.0.113.12', port: 2222, host_fingerprint: FINGERPRINT_B })
+    expect(readRevision()).toBe(5)
+  })
+
+  it('keeps distinct revisions for two security edits sharing the same timestamp second', () => {
+    const { database, repository } = createRepository()
+    const vps = repository.create(vpsInput('Same Second Revision VPS', FINGERPRINT_A))
+    database.exec(`CREATE TRIGGER freeze_security_revision_test_timestamp
+      AFTER UPDATE OF username,auth_type,encrypted_secret,crypto_scheme,iv,auth_tag ON vps
+      WHEN NEW.id=${vps.id}
+      BEGIN UPDATE vps SET updated_at='2026-10-25T12:00:00Z' WHERE id=NEW.id; END`)
+
+    repository.update(vps.id, { username: 'principal-new' })
+    repository.update(vps.id, { auth_type: 'password' })
+
+    expect(database.prepare('SELECT updated_at,ssh_security_revision FROM vps WHERE id=?').get(vps.id)).toEqual({
+      updated_at: '2026-10-25T12:00:00Z',
+      ssh_security_revision: 3
+    })
+  })
+
   it('create/list/update/delete VPS ma khong tra credential ra DTO', () => {
     const { database, repository } = createRepository()
     const created = repository.create({

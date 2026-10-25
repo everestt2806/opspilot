@@ -96,9 +96,10 @@ export type GuardedSshSessionState = 'active' | 'closed' | 'reconciliation_requi
  * A single fixed helper process owns one GuardedExecution for the entire SSH
  * channel. It accepts only open, allowlisted phase authorization, and close;
  * no arbitrary shell, Git metadata command, or second channel is exposed.
- * Resolve current app.vps_id, endpoint and host-key pin from Product authority
+ * Resolve current app.vps_id, endpoint, host-key pin, SSH principal/auth method
+ * and monotonic SSH security revision from Product authority
  * before dispatch. The input vps_id is only an expected precondition. A single
- * strict pinned SSH connection reports its verified endpoint/pin; after async
+ * strict pinned SSH connection reports its verified endpoint/pin/principal; after async
  * channel open, re-read leases, ownership/source, canonical deployment and
  * target identity before sending open. Recheck that binding before every phase.
  * beginGitDispatch must return the canonical deployment ID before open is sent.

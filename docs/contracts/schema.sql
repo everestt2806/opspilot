@@ -9,6 +9,7 @@
 --   - 006_vps_host_fingerprint.sql (pin fingerprint SSH của VPS)
 --   - 007_git_source_provenance.sql (nguồn Git và commit deploy)
 --   - 008_vps_archive.sql (gỡ VPS an toàn và nối lại app/lịch sử)
+--   - 019_vps_ssh_security_revision.sql (revision bảo mật SSH monotonic, tách khỏi telemetry)
 --
 -- QUY ƯỚC BẮT BUỘC:
 --   * Mọi cột thời gian: TEXT, ISO-8601 UTC, dạng '2026-07-27T10:00:00Z'
@@ -861,3 +862,9 @@ WHEN (NEW.pause_policy_provenance = 'operator_required'
 BEGIN
   SELECT RAISE(ABORT, 'explicit pause policy provenance required');
 END;
+
+-- 019_vps_ssh_security_revision.sql
+-- Monotonic revision for SSH security-sensitive VPS profile changes.
+-- Telemetry and operational status fields do not advance this counter.
+ALTER TABLE vps ADD COLUMN ssh_security_revision INTEGER NOT NULL DEFAULT 1
+  CHECK (ssh_security_revision >= 1);

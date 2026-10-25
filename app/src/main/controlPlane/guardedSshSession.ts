@@ -18,7 +18,11 @@ import type {
 } from '../../../../docs/contracts/product-auto-deploy'
 import { ProductDeployRepository } from '../db/productDeployRepository'
 import type { PreparedProductGitSnapshot } from './productSnapshotPreparation'
-import { SshAbortedError, SshManager, type SshHostIdentity } from '../ssh/manager'
+import {
+  SshAbortedError,
+  SshManager,
+  type SshVerifiedConnectionIdentity
+} from '../ssh/manager'
 import {
   encodeGuardedSshFrame,
   GuardedSshFrameDecoder,
@@ -75,7 +79,7 @@ export async function openProductGuardedSshSession(
     throw new GuardedSshSessionError('SSH_OUTCOME_UNKNOWN')
   }
 
-  let opened: { channel: ClientChannel; identity: SshHostIdentity }
+  let opened: { channel: ClientChannel; identity: SshVerifiedConnectionIdentity }
   try {
     opened = await ssh.openGuardedExecutionChannelWithIdentity(
       dispatchedBinding.binding.vps_id,
@@ -402,18 +406,22 @@ function sameTargetBinding(
     left.host === right.host &&
     left.port === right.port &&
     left.host_fingerprint === right.host_fingerprint &&
-    left.profile_revision === right.profile_revision
+    left.username === right.username &&
+    left.auth_type === right.auth_type &&
+    left.ssh_security_revision === right.ssh_security_revision
   )
 }
 
 function sameSshIdentity(
   binding: ProductDispatchTargetBinding,
-  identity: SshHostIdentity
+  identity: SshVerifiedConnectionIdentity
 ): boolean {
   return (
     binding.vps_id === identity.vpsId &&
     binding.host === identity.host &&
     binding.port === identity.port &&
-    binding.host_fingerprint === identity.hostFingerprint
+    binding.host_fingerprint === identity.hostFingerprint &&
+    binding.username === identity.username &&
+    binding.auth_type === identity.authType
   )
 }

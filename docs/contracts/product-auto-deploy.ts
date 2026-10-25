@@ -224,8 +224,10 @@ export interface ProductDispatchTargetBinding {
   host: string;
   port: number;
   host_fingerprint: string;
-  /** VPS profile revision; changes invalidate sessions even if endpoint fields later return. */
-  profile_revision: string;
+  username: string;
+  auth_type: 'key' | 'password';
+  /** Monotonic security-profile generation; contains no credential material. */
+  ssh_security_revision: number;
 }
 
 export type ProductClaimResult =

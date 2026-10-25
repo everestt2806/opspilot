@@ -21,6 +21,7 @@ import migration015 from './migrations/015_repair_legacy_https_probe_evidence.sq
 import migration016 from './migrations/016_product_auto_deploy_persistence.sql?raw'
 import migration017 from './migrations/017_product_auto_deploy_pause_policy.sql?raw'
 import migration018 from './migrations/018_product_auto_deploy_pause_provenance.sql?raw'
+import migration019 from './migrations/019_vps_ssh_security_revision.sql?raw'
 
 interface Migration {
   name: string
@@ -118,6 +119,11 @@ const migrations: Migration[] = [
     name: '018_product_auto_deploy_pause_provenance.sql',
     version: 18,
     sql: migration018
+  },
+  {
+    name: '019_vps_ssh_security_revision.sql',
+    version: 19,
+    sql: migration019
   }
 ]
 

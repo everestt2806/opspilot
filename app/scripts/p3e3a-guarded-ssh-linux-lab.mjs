@@ -110,7 +110,7 @@ try {
 
   database = initializeDatabase(databaseDirectory)
   database.pragma('foreign_keys = ON')
-  seedProductApp(database, 1, 'ssh-session-app-1', 'session-job-1', hostFingerprint, port, 41)
+  seedProductApp(database, 1, 'ssh-session-app-1', 'session-job-1', hostFingerprint, port, 41, user)
   const repository = ProductDeployRepository.withClockForTest(database, () => Date.now())
   const claimOne = claim(repository)
   const snapshotOne = snapshot()
@@ -119,7 +119,7 @@ try {
 
   secondDatabase = initializeDatabase(secondDatabaseDirectory)
   secondDatabase.pragma('foreign_keys = ON')
-  seedProductApp(secondDatabase, 1, 'ssh-session-app-lost-response', 'session-job-lost-response', hostFingerprint, port, 41)
+  seedProductApp(secondDatabase, 1, 'ssh-session-app-lost-response', 'session-job-lost-response', hostFingerprint, port, 41, user)
   const secondRepository = ProductDeployRepository.withClockForTest(secondDatabase, () =>
     Date.now()
   )
@@ -421,14 +421,14 @@ async function waitForPort(portNumber, processHandle) {
   throw new Error('SSHD_START_TIMEOUT')
 }
 
-function seedProductApp(db, appId, appName, jobId, hostFingerprint, port, vpsId) {
+function seedProductApp(db, appId, appName, jobId, hostFingerprint, port, vpsId, username) {
   const controllerId = 'controller-guarded-ssh-lab'
   const configHash = 'a'.repeat(64)
   const sha = '1'.repeat(40)
   db.prepare(
     `INSERT INTO vps (id,name,host,port,host_fingerprint,username,auth_type,encrypted_secret)
-    VALUES (?, ?, '127.0.0.1', ?, ?, 'lab', 'key', X'00')`
-  ).run(vpsId, `vps-${vpsId}`, port, hostFingerprint)
+    VALUES (?, ?, '127.0.0.1', ?, ?, ?, 'key', X'00')`
+  ).run(vpsId, `vps-${vpsId}`, port, hostFingerprint, username)
   db.prepare(
     `INSERT INTO app (id,vps_id,name,framework,host_port,container_port,source_type,git_repo_url,git_ref,git_root)
     VALUES (?, ?, ?, 'express', ?, 3000, 'git', ?, 'main', '.')`

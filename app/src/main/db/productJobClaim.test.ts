@@ -16,6 +16,7 @@ import {
 } from '../../../../docs/contracts/product-auto-deploy'
 import { closeDatabase, initializeDatabase } from './index'
 import { ProductDeployRepository } from './productDeployRepository'
+import { VpsRepository } from './vpsRepository'
 import { openProductGuardedSshSession } from '../controlPlane/guardedSshSession'
 import { encodeGuardedSshFrame } from '../controlPlane/guardedSshProtocol'
 import type { PreparedProductGitSnapshot } from '../controlPlane/productSnapshotPreparation'
@@ -25,7 +26,6 @@ const HASH = 'a'.repeat(64)
 const SHA_A = '1'.repeat(40)
 const NOW = Date.parse('2026-10-22T12:00:00.000Z')
 const TARGET_PIN = `SHA256:${'A'.repeat(43)}`
-const TARGET_PROFILE_REVISION = '2026-10-22T12:00:00Z'
 
 let testDirectory: string | null = null
 
@@ -1126,7 +1126,9 @@ describe('Product atomic claim and lease repository', () => {
             vpsId: 1,
             host: 'claim.example.test',
             port: 2222,
-            hostFingerprint: TARGET_PIN
+            hostFingerprint: TARGET_PIN,
+            username: 'deploy',
+            authType: 'key'
           }
         }
       }
@@ -1188,7 +1190,9 @@ describe('Product atomic claim and lease repository', () => {
               vpsId: 1,
               host: 'claim.example.test',
               port: 2222,
-              hostFingerprint: TARGET_PIN
+              hostFingerprint: TARGET_PIN,
+              username: 'deploy',
+              authType: 'key'
             }
           }
         }
@@ -1276,7 +1280,9 @@ describe('Product atomic claim and lease repository', () => {
             vpsId: 1,
             host: 'claim.example.test',
             port: 2222,
-            hostFingerprint: TARGET_PIN
+            hostFingerprint: TARGET_PIN,
+            username: 'deploy',
+            authType: 'key'
           }
         }
       }
@@ -1310,12 +1316,22 @@ describe('Product atomic claim and lease repository', () => {
 
   it('rejects an opened connection whose resolved endpoint or verified pin differs from SQLite', async () => {
     for (const identity of [
-      { vpsId: 1, host: 'other.example.test', port: 2222, hostFingerprint: TARGET_PIN },
+      { vpsId: 1, host: 'other.example.test', port: 2222, hostFingerprint: TARGET_PIN, username: 'deploy', authType: 'key' as const },
       {
         vpsId: 1,
         host: 'claim.example.test',
         port: 2222,
-        hostFingerprint: `SHA256:${'B'.repeat(43)}`
+        hostFingerprint: `SHA256:${'B'.repeat(43)}`,
+        username: 'deploy',
+        authType: 'key' as const
+      },
+      {
+        vpsId: 1,
+        host: 'claim.example.test',
+        port: 2222,
+        hostFingerprint: TARGET_PIN,
+        username: 'principal-old',
+        authType: 'password' as const
       }
     ]) {
       const harness = createDispatchReadyHarness()
@@ -1369,7 +1385,9 @@ describe('Product atomic claim and lease repository', () => {
               vpsId: 1,
               host: 'claim.example.test',
               port: 2222,
-              hostFingerprint: TARGET_PIN
+              hostFingerprint: TARGET_PIN,
+              username: 'deploy',
+              authType: 'key'
             }
           }
         }
@@ -1386,9 +1404,7 @@ describe('Product atomic claim and lease repository', () => {
       )
       await openEntered
       if (change === 'profile') {
-        harness.database
-          .prepare('UPDATE vps SET host=?,updated_at=? WHERE id=1')
-          .run('changed.example.test', '2026-10-22T12:01:00Z')
+        new VpsRepository(harness.database).update(1, { host: 'changed.example.test' })
       } else if (change === 'app_target') {
         harness.database.prepare('UPDATE app SET vps_id=2 WHERE id=1').run()
       } else {
@@ -1414,6 +1430,123 @@ describe('Product atomic claim and lease repository', () => {
     }
   })
 
+  it('invalidates same-second username, auth-method and credential changes during channel open', async () => {
+    const changes = [
+      { patch: { username: 'principal-new' }, actual: { username: 'deploy', authType: 'key' as const } },
+      { patch: { auth_type: 'password' as const }, actual: { username: 'deploy', authType: 'key' as const } },
+      {
+        patch: {
+          credential: {
+            crypto_scheme: 'aes_256_gcm' as const,
+            encrypted_secret: Buffer.from('rotated-ciphertext'),
+            iv: Buffer.alloc(12, 3),
+            auth_tag: Buffer.alloc(16, 4)
+          }
+        },
+        actual: { username: 'deploy', authType: 'key' as const }
+      }
+    ]
+    for (const { patch: securityPatch, actual } of changes) {
+      const harness = createDispatchReadyHarness()
+      harness.repository.markGitSnapshotVerified(harness.claim, harness.snapshot)
+      const channel = createFakeGuardedChannel()
+      let entered!: () => void
+      let release!: () => void
+      const openEntered = new Promise<void>((resolve) => { entered = resolve })
+      const gate = new Promise<void>((resolve) => { release = resolve })
+      const ssh = {
+        async openGuardedExecutionChannelWithIdentity() {
+          entered()
+          await gate
+          return {
+            channel,
+            identity: {
+              vpsId: 1,
+              host: 'claim.example.test',
+              port: 2222,
+              hostFingerprint: TARGET_PIN,
+              ...actual
+            }
+          }
+        }
+      }
+      const before = harness.database
+        .prepare('SELECT updated_at,ssh_security_revision FROM vps WHERE id=1')
+        .get() as { updated_at: string | null; ssh_security_revision: number }
+      harness.database.exec(`CREATE TRIGGER freeze_profile_updated_at AFTER UPDATE OF
+        username,auth_type,encrypted_secret,crypto_scheme,iv,auth_tag ON vps
+        WHEN NEW.id=1 BEGIN UPDATE vps SET updated_at='fixed-same-second' WHERE id=NEW.id; END`)
+      const opening = openProductGuardedSshSession(
+        harness.repository,
+        ssh as never,
+        preparedSnapshot(harness),
+        {
+          vps_id: 1,
+          target_helper_path: '/opt/opspilot/helper.py',
+          target_state_root: '/var/lib/opspilot/guard'
+        }
+      )
+      await openEntered
+      const vpsRepository = new VpsRepository(harness.database)
+      vpsRepository.update(1, securityPatch)
+      const after = harness.database
+        .prepare('SELECT updated_at,ssh_security_revision FROM vps WHERE id=1')
+        .get() as { updated_at: string | null; ssh_security_revision: number }
+      expect(after.updated_at).toBe('fixed-same-second')
+      expect(after.ssh_security_revision).toBe(before.ssh_security_revision + 1)
+      release()
+      await expect(opening).rejects.toMatchObject({ code: 'SSH_AUTHORITY_STALE' })
+      expect(channel.receivedOperations).toEqual([])
+      expect(channel.destroyed).toBe(true)
+      expect(harness.database.prepare('SELECT remote_outcome FROM product_deploy_attempt').get()).toEqual({
+        remote_outcome: 'unknown'
+      })
+      expect(harness.database.prepare('SELECT COUNT(*) AS count FROM deployment').get()).toEqual({ count: 1 })
+      closeDatabase()
+    }
+  })
+
+  it('revokes the next phase after SSH profile edits but ignores last_seen/status telemetry', async () => {
+    const changed = createDispatchReadyHarness()
+    changed.repository.markGitSnapshotVerified(changed.claim, changed.snapshot)
+    const changedChannel = createFakeGuardedChannel()
+    const changedSession = await openProductGuardedSshSession(
+      changed.repository,
+      { async openGuardedExecutionChannelWithIdentity() {
+        return { channel: changedChannel, identity: { vpsId: 1, host: 'claim.example.test', port: 2222,
+          hostFingerprint: TARGET_PIN, username: 'deploy', authType: 'key' } }
+      } } as never,
+      preparedSnapshot(changed),
+      { vps_id: 1, target_helper_path: '/opt/opspilot/helper.py', target_state_root: '/var/lib/opspilot/guard' }
+    )
+    new VpsRepository(changed.database).update(1, { username: 'principal-new' })
+    await expect(changedSession.authorizeWritePhase('build')).rejects.toMatchObject({ code: 'SSH_AUTHORITY_STALE' })
+    expect(changedChannel.receivedOperations).toEqual(['open'])
+    expect(changedChannel.destroyed).toBe(true)
+    expect(changed.database.prepare('SELECT remote_outcome FROM product_deploy_attempt').get()).toEqual({ remote_outcome: 'unknown' })
+
+    closeDatabase()
+    const telemetry = createDispatchReadyHarness()
+    telemetry.repository.markGitSnapshotVerified(telemetry.claim, telemetry.snapshot)
+    const telemetryChannel = createFakeGuardedChannel()
+    const telemetrySession = await openProductGuardedSshSession(
+      telemetry.repository,
+      { async openGuardedExecutionChannelWithIdentity() {
+        return { channel: telemetryChannel, identity: { vpsId: 1, host: 'claim.example.test', port: 2222,
+          hostFingerprint: TARGET_PIN, username: 'deploy', authType: 'key' } }
+      } } as never,
+      preparedSnapshot(telemetry),
+      { vps_id: 1, target_helper_path: '/opt/opspilot/helper.py', target_state_root: '/var/lib/opspilot/guard' }
+    )
+    new VpsRepository(telemetry.database).update(1, {
+      last_status: 'online', last_seen_at: new Date().toISOString()
+    })
+    await telemetrySession.authorizeWritePhase('build')
+    expect(telemetryChannel.receivedOperations).toEqual(['open', 'authorize_phase'])
+    expect(telemetrySession.state).toBe('active')
+    await telemetrySession.close()
+  })
+
   it('blocks later phases after the app target changes, preserving the one held session lock', async () => {
     const harness = createDispatchReadyHarness()
     harness.repository.markGitSnapshotVerified(harness.claim, harness.snapshot)
@@ -1428,7 +1561,9 @@ describe('Product atomic claim and lease repository', () => {
               vpsId: 1,
               host: 'claim.example.test',
               port: 2222,
-              hostFingerprint: TARGET_PIN
+              hostFingerprint: TARGET_PIN,
+              username: 'deploy',
+              authType: 'key'
             }
           }
         }
@@ -1572,9 +1707,9 @@ function createHarness(jitter: () => number = () => 0): {
   testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-product-claim-'))
   const database = initializeDatabase(testDirectory)
   database.exec(`
-    INSERT INTO vps (id,name,host,port,host_fingerprint,username,auth_type,encrypted_secret,updated_at)
-      VALUES (1,'claim-vps','claim.example.test',2222,'${TARGET_PIN}','deploy','key',X'00','${TARGET_PROFILE_REVISION}'),
-             (2,'other-vps','other.example.test',2222,'${TARGET_PIN}','deploy','key',X'00','${TARGET_PROFILE_REVISION}');
+    INSERT INTO vps (id,name,host,port,host_fingerprint,username,auth_type,encrypted_secret)
+      VALUES (1,'claim-vps','claim.example.test',2222,'${TARGET_PIN}','deploy','key',X'00'),
+             (2,'other-vps','other.example.test',2222,'${TARGET_PIN}','deploy','key',X'00');
     INSERT INTO app (id,vps_id,name,framework,host_port,container_port,source_type,git_repo_url,git_ref,git_root)
       VALUES (1,1,'claim-app-1','express',30001,3000,'git','https://example.test/repo.git','main','.'),
              (2,1,'claim-app-2','express',30002,3000,'git','https://example.test/other.git','main','.');
