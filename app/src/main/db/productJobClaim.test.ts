@@ -18,11 +18,14 @@ import { closeDatabase, initializeDatabase } from './index'
 import { ProductDeployRepository } from './productDeployRepository'
 import { openProductGuardedSshSession } from '../controlPlane/guardedSshSession'
 import { encodeGuardedSshFrame } from '../controlPlane/guardedSshProtocol'
+import type { PreparedProductGitSnapshot } from '../controlPlane/productSnapshotPreparation'
 
 const CONTROLLER = 'claim-controller'
 const HASH = 'a'.repeat(64)
 const SHA_A = '1'.repeat(40)
 const NOW = Date.parse('2026-10-22T12:00:00.000Z')
+const TARGET_PIN = `SHA256:${'A'.repeat(43)}`
+const TARGET_PROFILE_REVISION = '2026-10-22T12:00:00Z'
 
 let testDirectory: string | null = null
 
@@ -1103,7 +1106,7 @@ describe('Product atomic claim and lease repository', () => {
     harness.repository.markGitSnapshotVerified(harness.claim, harness.snapshot)
     let channelOpens = 0
     const ssh = {
-      async openGuardedExecutionChannel() {
+      async openGuardedExecutionChannelWithIdentity() {
         channelOpens += 1
         expect(
           harness.database
@@ -1117,7 +1120,15 @@ describe('Product atomic claim and lease repository', () => {
             }
           ).count
         ).toBe(1)
-        return createFakeGuardedChannel()
+        return {
+          channel: createFakeGuardedChannel(),
+          identity: {
+            vpsId: 1,
+            host: 'claim.example.test',
+            port: 2222,
+            hostFingerprint: TARGET_PIN
+          }
+        }
       }
     }
     const prepared = {
@@ -1170,8 +1181,16 @@ describe('Product atomic claim and lease repository', () => {
     const session = await openProductGuardedSshSession(
       harness.repository,
       {
-        async openGuardedExecutionChannel() {
-          return channel
+        async openGuardedExecutionChannelWithIdentity() {
+          return {
+            channel,
+            identity: {
+              vpsId: 1,
+              host: 'claim.example.test',
+              port: 2222,
+              hostFingerprint: TARGET_PIN
+            }
+          }
         }
       } as never,
       {
@@ -1200,6 +1219,237 @@ describe('Product atomic claim and lease repository', () => {
       remote_outcome: 'unknown'
     })
     expect(channel.destroyed).toBe(true)
+  })
+
+  it('rejects an expected VPS mismatch before the dispatch marker or channel open', async () => {
+    const harness = createDispatchReadyHarness()
+    harness.repository.markGitSnapshotVerified(harness.claim, harness.snapshot)
+    let opens = 0
+    await expect(
+      openProductGuardedSshSession(
+        harness.repository,
+        {
+          async openGuardedExecutionChannelWithIdentity() {
+            opens += 1
+            throw new Error('unexpected')
+          }
+        } as never,
+        preparedSnapshot(harness),
+        {
+          vps_id: 2,
+          target_helper_path: '/opt/opspilot/helper.py',
+          target_state_root: '/var/lib/opspilot/guard'
+        }
+      )
+    ).rejects.toMatchObject({ code: 'SSH_DISPATCH_REJECTED' })
+    expect(opens).toBe(0)
+    expect(harness.database.prepare('SELECT COUNT(*) AS count FROM deployment').get()).toEqual({
+      count: 0
+    })
+    expect(
+      harness.database.prepare('SELECT state,remote_outcome FROM product_deploy_attempt').get()
+    ).toMatchObject({
+      state: 'snapshot_verified',
+      remote_outcome: 'not_started'
+    })
+  })
+
+  it('does not send open when the lease expires during asynchronous SSH channel open', async () => {
+    const harness = createDispatchReadyHarness()
+    harness.repository.markGitSnapshotVerified(harness.claim, harness.snapshot)
+    const channel = createFakeGuardedChannel()
+    let entered!: () => void
+    let release!: () => void
+    const openEntered = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const ssh = {
+      async openGuardedExecutionChannelWithIdentity() {
+        entered()
+        await gate
+        return {
+          channel,
+          identity: {
+            vpsId: 1,
+            host: 'claim.example.test',
+            port: 2222,
+            hostFingerprint: TARGET_PIN
+          }
+        }
+      }
+    }
+    const opening = openProductGuardedSshSession(
+      harness.repository,
+      ssh as never,
+      preparedSnapshot(harness),
+      {
+        vps_id: 1,
+        target_helper_path: '/opt/opspilot/helper.py',
+        target_state_root: '/var/lib/opspilot/guard'
+      }
+    )
+    await openEntered
+    harness.clock.advance(PRODUCT_LEASE_TTL_MS)
+    release()
+    await expect(opening).rejects.toMatchObject({ code: 'SSH_AUTHORITY_STALE' })
+    expect(channel.receivedOperations).toEqual([])
+    expect(channel.destroyed).toBe(true)
+    expect(
+      harness.database.prepare('SELECT state,remote_outcome FROM product_deploy_attempt').get()
+    ).toMatchObject({
+      state: 'deploying',
+      remote_outcome: 'unknown'
+    })
+    expect(harness.database.prepare('SELECT COUNT(*) AS count FROM deployment').get()).toEqual({
+      count: 1
+    })
+  })
+
+  it('rejects an opened connection whose resolved endpoint or verified pin differs from SQLite', async () => {
+    for (const identity of [
+      { vpsId: 1, host: 'other.example.test', port: 2222, hostFingerprint: TARGET_PIN },
+      {
+        vpsId: 1,
+        host: 'claim.example.test',
+        port: 2222,
+        hostFingerprint: `SHA256:${'B'.repeat(43)}`
+      }
+    ]) {
+      const harness = createDispatchReadyHarness()
+      harness.repository.markGitSnapshotVerified(harness.claim, harness.snapshot)
+      const channel = createFakeGuardedChannel()
+      await expect(
+        openProductGuardedSshSession(
+          harness.repository,
+          {
+            async openGuardedExecutionChannelWithIdentity() {
+              return { channel, identity }
+            }
+          } as never,
+          preparedSnapshot(harness),
+          {
+            vps_id: 1,
+            target_helper_path: '/opt/opspilot/helper.py',
+            target_state_root: '/var/lib/opspilot/guard'
+          }
+        )
+      ).rejects.toMatchObject({ code: 'SSH_AUTHORITY_STALE' })
+      expect(channel.receivedOperations).toEqual([])
+      expect(channel.destroyed).toBe(true)
+      expect(harness.database.prepare('SELECT COUNT(*) AS count FROM deployment').get()).toEqual({
+        count: 1
+      })
+      closeDatabase()
+    }
+  })
+
+  it('rejects target profile or app target changes during channel open without sending open', async () => {
+    for (const change of ['profile', 'app_target', 'source'] as const) {
+      const harness = createDispatchReadyHarness()
+      harness.repository.markGitSnapshotVerified(harness.claim, harness.snapshot)
+      const channel = createFakeGuardedChannel()
+      let entered!: () => void
+      let release!: () => void
+      const openEntered = new Promise<void>((resolve) => {
+        entered = resolve
+      })
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      const ssh = {
+        async openGuardedExecutionChannelWithIdentity() {
+          entered()
+          await gate
+          return {
+            channel,
+            identity: {
+              vpsId: 1,
+              host: 'claim.example.test',
+              port: 2222,
+              hostFingerprint: TARGET_PIN
+            }
+          }
+        }
+      }
+      const opening = openProductGuardedSshSession(
+        harness.repository,
+        ssh as never,
+        preparedSnapshot(harness),
+        {
+          vps_id: 1,
+          target_helper_path: '/opt/opspilot/helper.py',
+          target_state_root: '/var/lib/opspilot/guard'
+        }
+      )
+      await openEntered
+      if (change === 'profile') {
+        harness.database
+          .prepare('UPDATE vps SET host=?,updated_at=? WHERE id=1')
+          .run('changed.example.test', '2026-10-22T12:01:00Z')
+      } else if (change === 'app_target') {
+        harness.database.prepare('UPDATE app SET vps_id=2 WHERE id=1').run()
+      } else {
+        harness.database
+          .prepare(
+            "INSERT INTO product_source_config (app_id,source_generation,repository_url,production_ref,repository_root,deploy_config_json,config_sha256,created_at) VALUES (1,2,'https://example.test/repo.git','main','.','{}',?,'created')"
+          )
+          .run('b'.repeat(64))
+        harness.database
+          .prepare(
+            'UPDATE product_app_control SET source_generation=2,source_config_sha256=? WHERE app_id=1'
+          )
+          .run('b'.repeat(64))
+      }
+      release()
+      await expect(opening).rejects.toMatchObject({ code: 'SSH_AUTHORITY_STALE' })
+      expect(channel.receivedOperations).toEqual([])
+      expect(channel.destroyed).toBe(true)
+      expect(harness.database.prepare('SELECT COUNT(*) AS count FROM deployment').get()).toEqual({
+        count: 1
+      })
+      closeDatabase()
+    }
+  })
+
+  it('blocks later phases after the app target changes, preserving the one held session lock', async () => {
+    const harness = createDispatchReadyHarness()
+    harness.repository.markGitSnapshotVerified(harness.claim, harness.snapshot)
+    const channel = createFakeGuardedChannel()
+    const session = await openProductGuardedSshSession(
+      harness.repository,
+      {
+        async openGuardedExecutionChannelWithIdentity() {
+          return {
+            channel,
+            identity: {
+              vpsId: 1,
+              host: 'claim.example.test',
+              port: 2222,
+              hostFingerprint: TARGET_PIN
+            }
+          }
+        }
+      } as never,
+      preparedSnapshot(harness),
+      {
+        vps_id: 1,
+        target_helper_path: '/opt/opspilot/helper.py',
+        target_state_root: '/var/lib/opspilot/guard'
+      }
+    )
+    expect(channel.receivedOperations).toEqual(['open'])
+    harness.database.prepare('UPDATE app SET vps_id=2 WHERE id=1').run()
+    await expect(session.authorizeWritePhase('build')).rejects.toMatchObject({
+      code: 'SSH_AUTHORITY_STALE'
+    })
+    expect(channel.receivedOperations).toEqual(['open'])
+    expect(channel.destroyed).toBe(true)
+    expect(harness.database.prepare('SELECT COUNT(*) AS count FROM deployment').get()).toEqual({
+      count: 1
+    })
   })
 
   it('serializes two real workers so only one can obtain the dispatch result', async () => {
@@ -1322,8 +1572,9 @@ function createHarness(jitter: () => number = () => 0): {
   testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-product-claim-'))
   const database = initializeDatabase(testDirectory)
   database.exec(`
-    INSERT INTO vps (id,name,host,username,auth_type,encrypted_secret)
-      VALUES (1,'claim-vps','claim.example.test','deploy','key',X'00');
+    INSERT INTO vps (id,name,host,port,host_fingerprint,username,auth_type,encrypted_secret,updated_at)
+      VALUES (1,'claim-vps','claim.example.test',2222,'${TARGET_PIN}','deploy','key',X'00','${TARGET_PROFILE_REVISION}'),
+             (2,'other-vps','other.example.test',2222,'${TARGET_PIN}','deploy','key',X'00','${TARGET_PROFILE_REVISION}');
     INSERT INTO app (id,vps_id,name,framework,host_port,container_port,source_type,git_repo_url,git_ref,git_root)
       VALUES (1,1,'claim-app-1','express',30001,3000,'git','https://example.test/repo.git','main','.'),
              (2,1,'claim-app-2','express',30002,3000,'git','https://example.test/other.git','main','.');
@@ -1352,6 +1603,20 @@ function createHarness(jitter: () => number = () => 0): {
   }
 }
 
+function preparedSnapshot(
+  harness: ReturnType<typeof createDispatchReadyHarness>
+): PreparedProductGitSnapshot {
+  return {
+    claim: harness.claim,
+    metadata: harness.snapshot,
+    rootDirectory: '/scratch/repo',
+    snapshotDirectory: '/scratch/snapshot',
+    cleanup() {
+      return undefined
+    }
+  }
+}
+
 function createDispatchReadyHarness(
   trigger: 'manual_redeploy' | 'branch_poll' = 'manual_redeploy'
 ): ReturnType<typeof createHarness> & {
@@ -1375,7 +1640,8 @@ function createDispatchReadyHarness(
   }
 }
 
-function createFakeGuardedChannel(): Duplex {
+function createFakeGuardedChannel(): Duplex & { receivedOperations: string[] } {
+  const receivedOperations: string[] = []
   const channel = new Duplex({
     read() {
       this.push(Buffer.alloc(0))
@@ -1387,7 +1653,9 @@ function createFakeGuardedChannel(): Duplex {
         request_id: string
         sequence: number
         deployment_id: number
+        operation: string
       }
+      receivedOperations.push(request.operation)
       const response = encodeGuardedSshFrame({
         version: 1,
         request_id: request.request_id,
@@ -1410,7 +1678,8 @@ function createFakeGuardedChannel(): Duplex {
     }
   })
   Object.defineProperty(channel, 'stderr', { value: new PassThrough() })
-  return channel
+  Object.defineProperty(channel, 'receivedOperations', { value: receivedOperations })
+  return channel as Duplex & { receivedOperations: string[] }
 }
 
 function seedAutoJob(

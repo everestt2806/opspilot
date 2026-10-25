@@ -79,6 +79,7 @@ export type GuardedSshErrorCode =
 export type GuardedSshSessionInput = Readonly<{
   claim: ProductClaimToken
   snapshot: ProductGitSnapshotMetadata
+  /** Expected precondition only; current target VPS is resolved from SQLite authority. */
   vps_id: number
   target_helper_path: string
   target_state_root: string
@@ -95,6 +96,11 @@ export type GuardedSshSessionState = 'active' | 'closed' | 'reconciliation_requi
  * A single fixed helper process owns one GuardedExecution for the entire SSH
  * channel. It accepts only open, allowlisted phase authorization, and close;
  * no arbitrary shell, Git metadata command, or second channel is exposed.
+ * Resolve current app.vps_id, endpoint and host-key pin from Product authority
+ * before dispatch. The input vps_id is only an expected precondition. A single
+ * strict pinned SSH connection reports its verified endpoint/pin; after async
+ * channel open, re-read leases, ownership/source, canonical deployment and
+ * target identity before sending open. Recheck that binding before every phase.
  * beginGitDispatch must return the canonical deployment ID before open is sent.
  * A repeated call/restart after its marker is reconciliation, never replay.
  */

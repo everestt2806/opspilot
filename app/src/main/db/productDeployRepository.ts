@@ -24,7 +24,8 @@ import type {
   ProductPrewriteFinishInput,
   ProductPrewriteFinishResult,
   ProductSnapshotVerificationResult,
-  ProductSourceConfigIdentity
+  ProductSourceConfigIdentity,
+  ProductDispatchTargetBinding
 } from '../../../../docs/contracts/product-auto-deploy'
 
 export type ProductRecord<T> = { kind: 'present'; value: T } | { kind: 'absent' }
@@ -54,6 +55,10 @@ export interface ProductGitSnapshotAuthority {
   targetSha: string
   sourceConfigSha256: string
 }
+
+export type ProductDispatchTargetBindingResult =
+  | { state: 'ready'; binding: ProductDispatchTargetBinding }
+  | { state: 'rejected' | 'reconciliation_required' }
 
 export type ProductGitSnapshotAuthorityResult =
   | { state: 'ready'; authority: ProductGitSnapshotAuthority }
@@ -517,6 +522,66 @@ export class ProductDeployRepository {
       return 'reconciliation_required'
     }
     return 'ready'
+  }
+
+  /** Resolve the current VPS endpoint/pin from SQLite and bind it to this claim. */
+  readGitDispatchTargetBinding(
+    claim: ProductClaimToken,
+    deploymentId?: number
+  ): ProductDispatchTargetBindingResult {
+    if (
+      !isValidClaimToken(claim) ||
+      (deploymentId !== undefined && (!Number.isSafeInteger(deploymentId) || deploymentId < 1))
+    ) {
+      return { state: 'rejected' }
+    }
+    const authority = loadDispatchAuthority(this.database, claim)
+    if (
+      validateDispatchAuthority(authority, claim, new Date(this.readClock()).toISOString()) !== null
+    ) {
+      return { state: 'rejected' }
+    }
+    if (!authority) return { state: 'rejected' }
+    if (deploymentId === undefined) {
+      const beforeDispatch =
+        authority.job_state === 'claimed' &&
+        authority.attempt_state === 'snapshot_verified' &&
+        authority.remote_outcome === 'not_started' &&
+        authority.deployment_id === null
+      const markerAlreadyExists =
+        authority.job_state === 'deploying' &&
+        authority.attempt_state === 'deploying' &&
+        authority.remote_outcome === 'unknown' &&
+        authority.deployment_id !== null
+      if (!beforeDispatch && !markerAlreadyExists) {
+        return { state: 'reconciliation_required' }
+      }
+    } else if (
+      authority.job_state !== 'deploying' ||
+      authority.attempt_state !== 'deploying' ||
+      authority.remote_outcome !== 'unknown' ||
+      authority.deployment_id !== deploymentId
+    ) {
+      return { state: 'reconciliation_required' }
+    }
+    if (
+      !authority.target_host ||
+      !Number.isSafeInteger(authority.target_port) ||
+      !authority.target_fingerprint ||
+      !authority.target_profile_revision
+    ) {
+      return { state: 'rejected' }
+    }
+    return {
+      state: 'ready',
+      binding: {
+        vps_id: authority.target_vps_id,
+        host: authority.target_host,
+        port: authority.target_port,
+        host_fingerprint: authority.target_fingerprint,
+        profile_revision: authority.target_profile_revision
+      }
+    }
   }
 
   /** Commits one one-shot dispatch marker and canonical deployment row before any remote write. */
@@ -1894,6 +1959,11 @@ interface ClaimDispatchAuthority {
   controller_status: string
   app_id: number
   app_name: string
+  target_vps_id: number
+  target_host: string
+  target_port: number
+  target_fingerprint: string | null
+  target_profile_revision: string | null
   ownership_generation: number
   source_generation: number
   source_config_sha256: string
@@ -1950,6 +2020,8 @@ function loadDispatchAuthority(
   return database
     .prepare(
       `SELECT j.state AS job_state,j.controller_id,c.status AS controller_status,j.app_id,a.name AS app_name,
+       a.vps_id AS target_vps_id,v.host AS target_host,v.port AS target_port,v.host_fingerprint AS target_fingerprint,
+       COALESCE(v.updated_at,v.created_at) AS target_profile_revision,
        j.ownership_generation,j.source_generation,j.source_config_sha256,j.trigger,j.ref AS job_ref,
        j.target_sha,j.observation_sequence,j.reconcile_epoch,j.attempt_count,
        pa.attempt_number,pa.state AS attempt_state,pa.remote_outcome,pa.deployment_id,

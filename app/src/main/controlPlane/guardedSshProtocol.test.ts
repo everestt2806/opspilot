@@ -74,12 +74,23 @@ describe('guarded SSH framed protocol', () => {
       build_slot_fence: 1,
       expires_at: new Date(Date.now() + 60_000).toISOString()
     } satisfies ProductClaimToken
+    const binding = {
+      vps_id: 1,
+      host: 'target.test',
+      port: 22,
+      host_fingerprint: `SHA256:${'A'.repeat(43)}`,
+      profile_revision: 'profile-v1'
+    }
+    const repository = {
+      readGitDispatchTargetBinding: () => ({ state: 'ready', binding })
+    }
     const timeoutChannel = createSilentChannel()
     const timedOut = new GuardedSshExecutionSession(
       timeoutChannel as ClientChannel,
-      {} as never,
+      repository as never,
       claim,
       1,
+      binding,
       undefined,
       20
     )
@@ -93,9 +104,10 @@ describe('guarded SSH framed protocol', () => {
     const abortChannel = createSilentChannel()
     const aborted = new GuardedSshExecutionSession(
       abortChannel as ClientChannel,
-      {} as never,
+      repository as never,
       claim,
       2,
+      binding,
       controller.signal,
       1_000
     )

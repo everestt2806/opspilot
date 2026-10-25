@@ -13,11 +13,12 @@ import {
 import type { TargetWritePhase } from '../../../../docs/contracts/product-target-execution-guard'
 import type {
   ProductBeginDispatchResult,
-  ProductClaimToken
+  ProductClaimToken,
+  ProductDispatchTargetBinding
 } from '../../../../docs/contracts/product-auto-deploy'
 import { ProductDeployRepository } from '../db/productDeployRepository'
 import type { PreparedProductGitSnapshot } from './productSnapshotPreparation'
-import { SshAbortedError, SshManager } from '../ssh/manager'
+import { SshAbortedError, SshManager, type SshHostIdentity } from '../ssh/manager'
 import {
   encodeGuardedSshFrame,
   GuardedSshFrameDecoder,
@@ -56,28 +57,57 @@ export async function openProductGuardedSshSession(
   ) {
     throw new GuardedSshSessionError('SSH_DISPATCH_REJECTED')
   }
+  const preDispatchBinding = repository.readGitDispatchTargetBinding(claim)
+  if (
+    preDispatchBinding.state !== 'ready' ||
+    preDispatchBinding.binding.vps_id !== options.vps_id
+  ) {
+    throw new GuardedSshSessionError('SSH_DISPATCH_REJECTED')
+  }
   const dispatch = repository.beginGitDispatch(claim, snapshot.metadata)
   if (dispatch.state !== 'dispatch_authorized') throw mapDispatchResult(dispatch)
 
-  if (repository.readGitDispatchSessionAuthority(claim, dispatch.deployment_id) !== 'ready') {
+  const dispatchedBinding = repository.readGitDispatchTargetBinding(claim, dispatch.deployment_id)
+  if (
+    dispatchedBinding.state !== 'ready' ||
+    !sameTargetBinding(preDispatchBinding.binding, dispatchedBinding.binding)
+  ) {
     throw new GuardedSshSessionError('SSH_OUTCOME_UNKNOWN')
   }
 
-  let channel: ClientChannel
+  let opened: { channel: ClientChannel; identity: SshHostIdentity }
   try {
-    channel = await ssh.openGuardedExecutionChannel(options.vps_id, options.target_helper_path, {
-      timeoutMs: GUARDED_SSH_REQUEST_TIMEOUT_MS,
-      signal: options.signal
-    })
+    opened = await ssh.openGuardedExecutionChannelWithIdentity(
+      dispatchedBinding.binding.vps_id,
+      options.target_helper_path,
+      {
+        timeoutMs: GUARDED_SSH_REQUEST_TIMEOUT_MS,
+        signal: options.signal
+      }
+    )
   } catch (error) {
     throw mapSshOpenError(error)
   }
 
+  const postOpenBinding = repository.readGitDispatchTargetBinding(claim, dispatch.deployment_id)
+  if (
+    options.signal?.aborted ||
+    postOpenBinding.state !== 'ready' ||
+    !sameTargetBinding(dispatchedBinding.binding, postOpenBinding.binding) ||
+    !sameSshIdentity(dispatchedBinding.binding, opened.identity)
+  ) {
+    opened.channel.destroy()
+    throw new GuardedSshSessionError(
+      options.signal?.aborted ? 'SSH_SESSION_ABORTED' : 'SSH_AUTHORITY_STALE'
+    )
+  }
+
   const session = new GuardedSshExecutionSession(
-    channel,
+    opened.channel,
     repository,
     claim,
     dispatch.deployment_id,
+    dispatchedBinding.binding,
     options.signal,
     GUARDED_SSH_REQUEST_TIMEOUT_MS
   )
@@ -111,6 +141,7 @@ export class GuardedSshExecutionSession {
     private readonly repository: ProductDeployRepository,
     private readonly claim: ProductClaimToken,
     deploymentId: number,
+    private readonly targetBinding: ProductDispatchTargetBinding,
     private readonly signal: AbortSignal | undefined,
     requestTimeoutMs: number
   ) {
@@ -130,6 +161,7 @@ export class GuardedSshExecutionSession {
   }
 
   async open(stateRoot: string): Promise<void> {
+    this.assertAuthority()
     const identity = {
       controller_id: this.claim.controller_id,
       app_id: String(this.claim.app_id),
@@ -156,12 +188,7 @@ export class GuardedSshExecutionSession {
       this.failClosed('SSH_PROTOCOL_LIMIT')
       throw new GuardedSshSessionError('SSH_PROTOCOL_LIMIT')
     }
-    if (
-      this.repository.readGitDispatchSessionAuthority(this.claim, this.deploymentId) !== 'ready'
-    ) {
-      this.failClosed('SSH_AUTHORITY_STALE')
-      throw new GuardedSshSessionError('SSH_AUTHORITY_STALE')
-    }
+    this.assertAuthority()
     await this.exchange({
       version: 1,
       request_id: randomUUID(),
@@ -305,6 +332,19 @@ export class GuardedSshExecutionSession {
     })
   }
 
+  private assertAuthority(): void {
+    const binding = this.repository.readGitDispatchTargetBinding(this.claim, this.deploymentId)
+    if (
+      this.signal?.aborted ||
+      binding.state !== 'ready' ||
+      !sameTargetBinding(this.targetBinding, binding.binding)
+    ) {
+      const code = this.signal?.aborted ? 'SSH_SESSION_ABORTED' : 'SSH_AUTHORITY_STALE'
+      this.failClosed(code)
+      throw new GuardedSshSessionError(code)
+    }
+  }
+
   private clearPending(): void {
     if (this.pendingTimer) clearTimeout(this.pendingTimer)
     this.pendingTimer = null
@@ -351,4 +391,29 @@ function containsControlCharacter(value: string): boolean {
     const code = character.charCodeAt(0)
     return code < 0x20 || code === 0x7f
   })
+}
+
+function sameTargetBinding(
+  left: ProductDispatchTargetBinding,
+  right: ProductDispatchTargetBinding
+): boolean {
+  return (
+    left.vps_id === right.vps_id &&
+    left.host === right.host &&
+    left.port === right.port &&
+    left.host_fingerprint === right.host_fingerprint &&
+    left.profile_revision === right.profile_revision
+  )
+}
+
+function sameSshIdentity(
+  binding: ProductDispatchTargetBinding,
+  identity: SshHostIdentity
+): boolean {
+  return (
+    binding.vps_id === identity.vpsId &&
+    binding.host === identity.host &&
+    binding.port === identity.port &&
+    binding.host_fingerprint === identity.hostFingerprint
+  )
 }

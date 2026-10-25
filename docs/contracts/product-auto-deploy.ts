@@ -218,6 +218,16 @@ export interface ProductClaimToken {
   expires_at: ProductIsoUtc;
 }
 
+/** Secret-free target identity resolved from current app/VPS authority in SQLite. */
+export interface ProductDispatchTargetBinding {
+  vps_id: number;
+  host: string;
+  port: number;
+  host_fingerprint: string;
+  /** VPS profile revision; changes invalidate sessions even if endpoint fields later return. */
+  profile_revision: string;
+}
+
 export type ProductClaimResult =
   | { state: 'claimed'; claim: ProductClaimToken }
   | { state: 'none'; reason: 'no_eligible_job' }

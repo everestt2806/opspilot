@@ -216,14 +216,31 @@ export class SshManager extends EventEmitter {
     helperPath: string,
     options: Pick<ExecOptions, 'timeoutMs' | 'signal'> = {}
   ): Promise<ClientChannel> {
+    return (await this.openGuardedExecutionChannelWithIdentity(vpsId, helperPath, options)).channel
+  }
+
+  /** Open one guarded channel and return the exact configured endpoint and verified pin. */
+  async openGuardedExecutionChannelWithIdentity(
+    vpsId: number,
+    helperPath: string,
+    options: Pick<ExecOptions, 'timeoutMs' | 'signal'> = {}
+  ): Promise<{ channel: ClientChannel; identity: SshHostIdentity }> {
     if (!/^\/[A-Za-z0-9_./-]{1,511}$/.test(helperPath) || helperPath.includes('..')) {
       throw new AppError('VALIDATION', 'Invalid guarded SSH helper path.')
     }
     if (options.signal?.aborted) throw new SshAbortedError()
     const entry = await this.ensureConnected(vpsId)
+    const connectionInfo = { ...entry.info }
+    const verifiedHostKey = entry.verifiedHostKey && Buffer.from(entry.verifiedHostKey)
+    const hostFingerprint = verifiedHostKey
+      ? `SHA256:${createHash('sha256').update(verifiedHostKey).digest('base64').replace(/=+$/, '')}`
+      : null
+    if (!hostFingerprint || !entry.ready || !entry.client) {
+      throw new AppError('VALIDATION', 'Guarded SSH connection has no verified host identity.')
+    }
     // Only the configured absolute helper path is accepted; no request data is
     // interpolated into the command and this channel is never reconnected.
-    return this.openExecChannel(
+    const channel = await this.openExecChannel(
       entry,
       `python3 -u ${shellQuote(helperPath)}`,
       {
@@ -233,6 +250,15 @@ export class SshManager extends EventEmitter {
       },
       options.signal
     )
+    return {
+      channel,
+      identity: {
+        vpsId,
+        host: connectionInfo.host,
+        port: connectionInfo.port,
+        hostFingerprint
+      }
+    }
   }
 
   /** Execute once on the fingerprint-verified connection and return its resolved endpoint. */

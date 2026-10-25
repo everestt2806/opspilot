@@ -110,7 +110,7 @@ try {
 
   database = initializeDatabase(databaseDirectory)
   database.pragma('foreign_keys = ON')
-  seedProductApp(database, 1, 'ssh-session-app-1', 'session-job-1')
+  seedProductApp(database, 1, 'ssh-session-app-1', 'session-job-1', hostFingerprint, port, 41)
   const repository = ProductDeployRepository.withClockForTest(database, () => Date.now())
   const claimOne = claim(repository)
   const snapshotOne = snapshot()
@@ -119,7 +119,7 @@ try {
 
   secondDatabase = initializeDatabase(secondDatabaseDirectory)
   secondDatabase.pragma('foreign_keys = ON')
-  seedProductApp(secondDatabase, 1, 'ssh-session-app-lost-response', 'session-job-lost-response')
+  seedProductApp(secondDatabase, 1, 'ssh-session-app-lost-response', 'session-job-lost-response', hostFingerprint, port, 41)
   const secondRepository = ProductDeployRepository.withClockForTest(secondDatabase, () =>
     Date.now()
   )
@@ -152,9 +152,9 @@ try {
   assert.equal(await countPublicKeyAuths(sshdLog), acceptedBeforeWrongPin)
 
   const firstMarkerPath = markerPath(String(claimOne.app_id))
-  const originalOpen = manager.openGuardedExecutionChannel.bind(manager)
+  const originalOpen = manager.openGuardedExecutionChannelWithIdentity.bind(manager)
   const order = []
-  manager.openGuardedExecutionChannel = async (...args) => {
+  manager.openGuardedExecutionChannelWithIdentity = async (...args) => {
     const job = database
       .prepare('SELECT state FROM product_deploy_job WHERE job_id=?')
       .get(claimOne.job_id)
@@ -179,7 +179,7 @@ try {
   })
   order.push('target_guard_entered')
   assert.deepEqual(order, ['sqlite_dispatch_committed', 'target_guard_entered'])
-  manager.openGuardedExecutionChannel = originalOpen
+  manager.openGuardedExecutionChannelWithIdentity = originalOpen
   assert.deepEqual(JSON.parse(readFileSync(firstMarkerPath, 'utf8')), {
     format: 1,
     controller_id: claimOne.controller_id,
@@ -223,8 +223,8 @@ try {
 
   const secondMarkerPath = markerPath(String(claimTwo.app_id), secondTargetState)
   secondManager = new SshManager(resolver)
-  const originalSecondOpen = secondManager.openGuardedExecutionChannel.bind(secondManager)
-  secondManager.openGuardedExecutionChannel = async (...args) => {
+  const originalSecondOpen = secondManager.openGuardedExecutionChannelWithIdentity.bind(secondManager)
+  secondManager.openGuardedExecutionChannelWithIdentity = async (...args) => {
     const attempt = secondDatabase
       .prepare('SELECT remote_outcome,deployment_id FROM product_deploy_attempt WHERE attempt_id=?')
       .get(claimTwo.attempt_id)
@@ -235,8 +235,11 @@ try {
   }
   const droppingManager = new Proxy(secondManager, {
     get(target, property, receiver) {
-      if (property !== 'openGuardedExecutionChannel') return Reflect.get(target, property, receiver)
-      return async (...args) => dropFirstResponse(await target.openGuardedExecutionChannel(...args))
+      if (property !== 'openGuardedExecutionChannelWithIdentity') return Reflect.get(target, property, receiver)
+      return async (...args) => {
+        const opened = await target.openGuardedExecutionChannelWithIdentity(...args)
+        return { ...opened, channel: dropFirstResponse(opened.channel) }
+      }
     }
   })
   await assert.rejects(
@@ -418,18 +421,18 @@ async function waitForPort(portNumber, processHandle) {
   throw new Error('SSHD_START_TIMEOUT')
 }
 
-function seedProductApp(db, appId, appName, jobId) {
+function seedProductApp(db, appId, appName, jobId, hostFingerprint, port, vpsId) {
   const controllerId = 'controller-guarded-ssh-lab'
   const configHash = 'a'.repeat(64)
   const sha = '1'.repeat(40)
   db.prepare(
-    `INSERT INTO vps (id,name,host,username,auth_type,encrypted_secret)
-    VALUES (?, ?, '127.0.0.1', 'lab', 'key', X'00')`
-  ).run(appId, `vps-${appId}`)
+    `INSERT INTO vps (id,name,host,port,host_fingerprint,username,auth_type,encrypted_secret)
+    VALUES (?, ?, '127.0.0.1', ?, ?, 'lab', 'key', X'00')`
+  ).run(vpsId, `vps-${vpsId}`, port, hostFingerprint)
   db.prepare(
     `INSERT INTO app (id,vps_id,name,framework,host_port,container_port,source_type,git_repo_url,git_ref,git_root)
     VALUES (?, ?, ?, 'express', ?, 3000, 'git', ?, 'main', '.')`
-  ).run(appId, appId, appName, 30000 + appId, `https://example.test/${appId}.git`)
+  ).run(appId, vpsId, appName, 30000 + appId, `https://example.test/${appId}.git`)
   db.prepare('INSERT OR IGNORE INTO product_controller VALUES (?, ?, ?)').run(
     controllerId,
     new Date().toISOString(),
