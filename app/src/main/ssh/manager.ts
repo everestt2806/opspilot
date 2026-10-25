@@ -143,7 +143,19 @@ export class SshAbortedError extends Error {
   }
 }
 
-const DEFAULT_EXCLUDE = ['node_modules', '.git', 'dist', '.next', '__pycache__', '.venv']
+export const DEFAULT_UPLOAD_EXCLUDE = Object.freeze([
+  'node_modules',
+  '.git',
+  'dist',
+  '.next',
+  '__pycache__',
+  '.venv'
+])
+
+export function shouldExcludeUploadPath(path: string, exclude = DEFAULT_UPLOAD_EXCLUDE): boolean {
+  const excluded = new Set(exclude)
+  return path.split('/').some((part) => excluded.has(part))
+}
 const EXEC_DEFAULT_TIMEOUT_MS = 30_000
 const CONNECT_TIMEOUT_MS = 15_000
 const CONNECT_RETRY_DELAYS_MS = [1_000, 2_000, 4_000]
@@ -330,7 +342,7 @@ export class SshManager extends EventEmitter {
     options: UploadOptions = {}
   ): Promise<{ bytes: number }> {
     const entry = await this.ensureConnected(vpsId)
-    const exclude = new Set(options.exclude ?? DEFAULT_EXCLUDE)
+    const exclude = options.exclude ?? DEFAULT_UPLOAD_EXCLUDE
     const remoteBase = shellQuote(remoteDir)
 
     await this.runCommand(entry, `mkdir -p ${remoteBase}`)
@@ -340,7 +352,7 @@ export class SshManager extends EventEmitter {
       {
         gzip: true,
         cwd: localDir,
-        filter: (path) => !path.split('/').some((part) => exclude.has(part))
+        filter: (path) => !shouldExcludeUploadPath(path, exclude)
       },
       ['.']
     )

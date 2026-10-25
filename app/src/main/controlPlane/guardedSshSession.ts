@@ -4,11 +4,17 @@ import type { ClientChannel } from 'ssh2'
 
 import {
   GUARDED_SSH_MAX_MESSAGES,
+  GUARDED_SSH_MAX_SESSION_OUTPUT_BYTES,
   GUARDED_SSH_REQUEST_TIMEOUT_MS,
+  GUARDED_SSH_TRANSFER_CHUNK_BYTES,
+  GUARDED_SSH_TRANSFER_MAX_FILE_BYTES,
+  GUARDED_SSH_TRANSFER_MAX_TOTAL_BYTES,
+  GUARDED_SSH_TRANSFER_MAX_FILES,
   type GuardedSshErrorCode,
   type GuardedSshRequest,
   type GuardedSshResponse,
-  type GuardedSshSessionInput
+  type GuardedSshSessionInput,
+  type GuardedSshTransferScope
 } from '../../../../docs/contracts/product-guarded-ssh-session'
 import type { TargetWritePhase } from '../../../../docs/contracts/product-target-execution-guard'
 import type {
@@ -18,11 +24,7 @@ import type {
 } from '../../../../docs/contracts/product-auto-deploy'
 import { ProductDeployRepository } from '../db/productDeployRepository'
 import type { PreparedProductGitSnapshot } from './productSnapshotPreparation'
-import {
-  SshAbortedError,
-  SshManager,
-  type SshVerifiedConnectionIdentity
-} from '../ssh/manager'
+import { SshAbortedError, SshManager, type SshVerifiedConnectionIdentity } from '../ssh/manager'
 import {
   encodeGuardedSshFrame,
   GuardedSshFrameDecoder,
@@ -137,6 +139,9 @@ export class GuardedSshExecutionSession {
   private stateValue: 'active' | 'closed' | 'reconciliation_required' = 'active'
   private closeRequested = false
   private channelClosed = false
+  private transferredBytes = 0
+  private transferredFiles = 0
+  private currentFileOpen = false
   private resolveCloseWaiter: (() => void) | null = null
   private readonly onAbort: () => void
 
@@ -204,6 +209,124 @@ export class GuardedSshExecutionSession {
     this.sequence += 1
   }
 
+  async beginTransferScope(
+    scope: GuardedSshTransferScope,
+    fileCount: number,
+    totalBytes: number,
+    manifestSha256: string
+  ): Promise<void> {
+    if (
+      !Number.isSafeInteger(fileCount) ||
+      fileCount < 0 ||
+      !Number.isSafeInteger(totalBytes) ||
+      totalBytes < 0 ||
+      !/^[a-f0-9]{64}$/.test(manifestSha256) ||
+      this.transferredFiles + fileCount > GUARDED_SSH_TRANSFER_MAX_FILES ||
+      this.transferredBytes + totalBytes > GUARDED_SSH_TRANSFER_MAX_TOTAL_BYTES
+    ) {
+      throw new GuardedSshSessionError('SSH_TRANSFER_REJECTED')
+    }
+    await this.transferExchange({
+      version: 1,
+      request_id: randomUUID(),
+      sequence: this.sequence,
+      operation: 'begin_scope',
+      deployment_id: this.deploymentId,
+      scope,
+      file_count: fileCount,
+      total_bytes: totalBytes,
+      manifest_sha256: manifestSha256
+    })
+    this.transferredFiles += fileCount
+    this.transferredBytes += totalBytes
+  }
+
+  async beginTransferFile(
+    scope: GuardedSshTransferScope,
+    path: string,
+    size: number,
+    mode: number,
+    sha256: string
+  ): Promise<void> {
+    if (
+      this.currentFileOpen ||
+      !Number.isSafeInteger(size) ||
+      size < 0 ||
+      size > GUARDED_SSH_TRANSFER_MAX_FILE_BYTES ||
+      !/^[a-f0-9]{64}$/.test(sha256)
+    ) {
+      throw new GuardedSshSessionError('SSH_TRANSFER_REJECTED')
+    }
+    await this.transferExchange({
+      version: 1,
+      request_id: randomUUID(),
+      sequence: this.sequence,
+      operation: 'begin_file',
+      deployment_id: this.deploymentId,
+      scope,
+      path,
+      size,
+      mode,
+      sha256
+    })
+    this.currentFileOpen = true
+  }
+
+  async writeTransferChunk(index: number, chunk: Buffer): Promise<void> {
+    if (
+      !this.currentFileOpen ||
+      !Number.isSafeInteger(index) ||
+      index < 0 ||
+      chunk.length === 0 ||
+      chunk.length > GUARDED_SSH_TRANSFER_CHUNK_BYTES
+    ) {
+      throw new GuardedSshSessionError('SSH_TRANSFER_REJECTED')
+    }
+    await this.transferExchange({
+      version: 1,
+      request_id: randomUUID(),
+      sequence: this.sequence,
+      operation: 'file_chunk',
+      deployment_id: this.deploymentId,
+      chunk_index: index,
+      data_base64: chunk.toString('base64')
+    })
+  }
+
+  async finishTransferFile(): Promise<void> {
+    if (!this.currentFileOpen) throw new GuardedSshSessionError('SSH_TRANSFER_REJECTED')
+    await this.transferExchange({
+      version: 1,
+      request_id: randomUUID(),
+      sequence: this.sequence,
+      operation: 'finish_file',
+      deployment_id: this.deploymentId
+    })
+    this.currentFileOpen = false
+  }
+
+  async completeTransferScope(
+    scope: GuardedSshTransferScope,
+    fileCount: number,
+    totalBytes: number,
+    manifestSha256: string
+  ): Promise<void> {
+    if (this.currentFileOpen || !/^[a-f0-9]{64}$/.test(manifestSha256)) {
+      throw new GuardedSshSessionError('SSH_TRANSFER_REJECTED')
+    }
+    await this.transferExchange({
+      version: 1,
+      request_id: randomUUID(),
+      sequence: this.sequence,
+      operation: 'complete_scope',
+      deployment_id: this.deploymentId,
+      scope,
+      file_count: fileCount,
+      total_bytes: totalBytes,
+      manifest_sha256: manifestSha256
+    })
+  }
+
   async close(): Promise<void> {
     if (this.stateValue !== 'active') return
     this.closeRequested = true
@@ -249,7 +372,7 @@ export class GuardedSshExecutionSession {
 
   private readonly onData = (chunk: Buffer): void => {
     this.outputBytes += chunk.length
-    if (this.outputBytes > 1024 * 1024) {
+    if (this.outputBytes > GUARDED_SSH_MAX_SESSION_OUTPUT_BYTES) {
       this.failClosed('SSH_PROTOCOL_LIMIT')
       return
     }
@@ -334,6 +457,22 @@ export class GuardedSshExecutionSession {
         this.failClosed('SSH_OUTCOME_UNKNOWN')
       }
     })
+  }
+
+  private async transferExchange(
+    request: Extract<
+      GuardedSshRequest,
+      { operation: 'begin_scope' | 'begin_file' | 'file_chunk' | 'finish_file' | 'complete_scope' }
+    >
+  ): Promise<void> {
+    if (this.sequence + 1 >= GUARDED_SSH_MAX_MESSAGES) {
+      this.failClosed('SSH_PROTOCOL_LIMIT')
+      throw new GuardedSshSessionError('SSH_PROTOCOL_LIMIT')
+    }
+    await this.authorizeWritePhase('prepare')
+    this.assertAuthority()
+    await this.exchange({ ...request, sequence: this.sequence })
+    this.sequence += 1
   }
 
   private assertAuthority(): void {

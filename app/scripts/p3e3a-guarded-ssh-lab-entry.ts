@@ -1,4 +1,5 @@
 export { openProductGuardedSshSession } from '../src/main/controlPlane/guardedSshSession'
+export { stageProductSourceAndRender } from '../src/main/controlPlane/productPipelineSourceRender'
 export {
   encodeGuardedSshFrame,
   GuardedSshFrameDecoder

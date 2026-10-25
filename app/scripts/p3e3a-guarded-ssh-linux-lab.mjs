@@ -31,15 +31,19 @@ const {
   closeDatabase,
   encodeGuardedSshFrame,
   initializeDatabase,
-  openProductGuardedSshSession
+  openProductGuardedSshSession,
+  stageProductSourceAndRender
 } = require(artifactPath)
 const sshdBinary = execFileSync('sh', ['-lc', 'command -v sshd'], { encoding: 'utf8' }).trim()
 const scratch = mkdtempSync(join(tmpdir(), 'opspilot-p3e3a-'))
 const targetHelper = join(scratch, 'target-helper')
 const databaseDirectory = join(scratch, 'database')
 const secondDatabaseDirectory = join(scratch, 'database-lost-response')
+const adapterDatabaseDirectory = join(scratch, 'database-source-render')
+const staleDatabaseDirectory = join(scratch, 'database-stale-authority')
 const targetState = join(scratch, 'target-state')
 const secondTargetState = join(scratch, 'target-state-lost-response')
+const adapterTargetState = join(scratch, 'target-state-source-render')
 const protocolTargetState = join(scratch, 'target-state-protocol')
 const sshDirectory = join(scratch, 'sshd')
 for (const directory of [targetHelper, databaseDirectory, secondDatabaseDirectory, sshDirectory]) {
@@ -61,6 +65,8 @@ let sshd = null
 let timedOut = false
 let database = null
 let secondDatabase = null
+let adapterDatabase = null
+let staleDatabase = null
 let manager = null
 let secondManager = null
 let rootManager = null
@@ -119,7 +125,16 @@ try {
 
   secondDatabase = initializeDatabase(secondDatabaseDirectory)
   secondDatabase.pragma('foreign_keys = ON')
-  seedProductApp(secondDatabase, 1, 'ssh-session-app-lost-response', 'session-job-lost-response', hostFingerprint, port, 41, user)
+  seedProductApp(
+    secondDatabase,
+    1,
+    'ssh-session-app-lost-response',
+    'session-job-lost-response',
+    hostFingerprint,
+    port,
+    41,
+    user
+  )
   const secondRepository = ProductDeployRepository.withClockForTest(secondDatabase, () =>
     Date.now()
   )
@@ -221,9 +236,227 @@ try {
   assert.equal(session.state, 'closed')
   assert.equal(JSON.parse(readFileSync(firstMarkerPath, 'utf8')).execution_state, 'unknown')
 
+  labStage = 'product-source-render-transfer'
+  const sourceRoot = join(scratch, 'adapter-source')
+  const collectorRoot = join(scratch, 'adapter-collector')
+  mkdirSyncSafe(sourceRoot)
+  mkdirSyncSafe(collectorRoot)
+  writeFileSync(
+    join(sourceRoot, 'package.json'),
+    JSON.stringify({
+      name: 'adapter-fixture',
+      version: '1.0.0',
+      main: 'server.js',
+      scripts: { start: 'node server.js' },
+      dependencies: { express: '^4.21.2' }
+    })
+  )
+  writeFileSync(
+    join(sourceRoot, 'server.js'),
+    "require('express')().listen(process.env.PORT || 3000)\n"
+  )
+  writeFileSync(join(sourceRoot, '.env'), 'LAB_SECRET_SENTINEL=must-not-transfer\n')
+  const chunkFixture = Buffer.alloc(70 * 1024, 0x61)
+  writeFileSync(join(sourceRoot, 'large-fixture.txt'), chunkFixture)
+  writeFileSync(join(collectorRoot, 'collect.py'), 'print("fixture")\n')
+  writeFileSync(join(collectorRoot, 'Dockerfile'), 'FROM python:3-alpine\n')
+  adapterDatabase = initializeDatabase(adapterDatabaseDirectory)
+  adapterDatabase.pragma('foreign_keys = ON')
+  seedProductApp(
+    adapterDatabase,
+    3,
+    'ssh-session-app-3',
+    'session-job-3',
+    hostFingerprint,
+    port,
+    43,
+    user
+  )
+  const adapterRepository = ProductDeployRepository.withClockForTest(adapterDatabase, () =>
+    Date.now()
+  )
+  const claimThree = claim(adapterRepository, 3)
+  const snapshotThree = { ...snapshot(), repositoryUrl: 'https://example.test/3.git' }
+  adapterRepository.markGitSnapshotVerified(claimThree, snapshotThree)
+  initializeTarget(String(claimThree.app_id), claimThree.ownership_generation, adapterTargetState)
+  const preparedThree = prepared(claimThree, snapshotThree)
+  Object.defineProperty(preparedThree, 'rootDirectory', { value: sourceRoot })
+  Object.defineProperty(preparedThree, 'snapshotDirectory', { value: sourceRoot })
+  const originalAdapterOpen = manager.openGuardedExecutionChannelWithIdentity.bind(manager)
+  let lockChecksDuringTransfer = 0
+  let transferResponseRejected = false
+  manager.openGuardedExecutionChannelWithIdentity = async (...args) => {
+    const opened = await originalAdapterOpen(...args)
+    let responseBytes = Buffer.alloc(0)
+    const sentOperations = new Map()
+    const originalChannelWrite = opened.channel.write.bind(opened.channel)
+    opened.channel.write = (chunk, ...writeArgs) => {
+      const frame = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+      if (frame.length >= 4) {
+        const length = frame.readUInt32BE(0)
+        if (frame.length === length + 4) {
+          const request = JSON.parse(frame.subarray(4).toString('utf8'))
+          sentOperations.set(request.sequence, request.operation)
+        }
+      }
+      return originalChannelWrite(chunk, ...writeArgs)
+    }
+    opened.channel.on('data', (chunk) => {
+      responseBytes = Buffer.concat([responseBytes, chunk])
+      while (responseBytes.length >= 4) {
+        const length = responseBytes.readUInt32BE(0)
+        if (responseBytes.length < length + 4) return
+        const response = JSON.parse(responseBytes.subarray(4, length + 4).toString('utf8'))
+        responseBytes = responseBytes.subarray(length + 4)
+        const operation = sentOperations.get(response.sequence)
+        if (operation !== 'close') {
+          try {
+            assertLockHeldSync(String(claimThree.app_id), adapterTargetState)
+          } catch {
+            transferResponseRejected = true
+          }
+          lockChecksDuringTransfer += 1
+        }
+        if (response.state !== 'accepted') transferResponseRejected = true
+      }
+    })
+    return opened
+  }
+  const staged = await stageProductSourceAndRender(
+    adapterDatabase,
+    adapterRepository,
+    manager,
+    preparedThree,
+    {
+      vps_id: 43,
+      target_helper_path: join(targetHelper, 'target_guarded_ssh_helper.py'),
+      target_state_root: adapterTargetState,
+      collector_directory: collectorRoot
+    }
+  )
+  assert.equal(staged.state, 'source_render_staged_dispatch_unknown')
+  assert.equal(
+    adapterDatabase.prepare('SELECT COUNT(*) AS count FROM deployment WHERE app_id=3').get().count,
+    1
+  )
+  const stageRoot = join(adapterTargetState, 'product-staging', 'app-3', 'deployment-1')
+  assert.equal(
+    readFileSync(join(stageRoot, 'source', 'large-fixture.txt')).length,
+    chunkFixture.length
+  )
+  assert.equal(
+    readFileSync(join(stageRoot, 'source', 'large-fixture.txt')).equals(chunkFixture),
+    true
+  )
+  assert.equal(existsSync(join(stageRoot, 'source', '.env')), false)
+  assert.equal(
+    readFileSync(join(stageRoot, 'render', '.env'), 'utf8').includes('LAB_SECRET_SENTINEL'),
+    false
+  )
+  assert.equal(
+    createHash('sha256')
+      .update(readFileSync(join(stageRoot, 'source', 'large-fixture.txt')))
+      .digest('hex'),
+    createHash('sha256').update(chunkFixture).digest('hex')
+  )
+  assert.equal(
+    readFileSync(join(stageRoot, 'render', 'Dockerfile'), 'utf8').includes('FROM node'),
+    true
+  )
+  assert.equal(
+    (await import('node:fs')).statSync(join(stageRoot, 'render', '.env')).mode & 0o777,
+    0o600
+  )
+  assert.equal(existsSync(join(stageRoot, 'source', '.scope-complete')), true)
+  assert.equal(existsSync(join(stageRoot, 'render', '.scope-complete')), true)
+  manager.openGuardedExecutionChannelWithIdentity = originalAdapterOpen
+  assert.ok(
+    lockChecksDuringTransfer >= 10,
+    'target lock must remain held for transfer/render acknowledgements'
+  )
+  assert.equal(transferResponseRejected, false)
+
+  labStage = 'transfer-stale-authority'
+  const staleSourceRoot = join(scratch, 'stale-authority-source')
+  mkdirSyncSafe(staleSourceRoot)
+  writeFileSync(
+    join(staleSourceRoot, 'package.json'),
+    JSON.stringify({
+      name: 'stale-fixture',
+      version: '1.0.0',
+      main: 'server.js',
+      scripts: { start: 'node server.js' },
+      dependencies: { express: '^4.21.2' }
+    })
+  )
+  writeFileSync(
+    join(staleSourceRoot, 'server.js'),
+    "require('express')().listen(process.env.PORT || 3000)\n"
+  )
+  staleDatabase = initializeDatabase(staleDatabaseDirectory)
+  staleDatabase.pragma('foreign_keys = ON')
+  seedProductApp(
+    staleDatabase,
+    4,
+    'ssh-session-app-4',
+    'session-job-4',
+    hostFingerprint,
+    port,
+    44,
+    user
+  )
+  const staleRepository = ProductDeployRepository.withClockForTest(staleDatabase, () => Date.now())
+  const staleClaim = claim(staleRepository, 4)
+  const staleSnapshot = { ...snapshot(), repositoryUrl: 'https://example.test/4.git' }
+  staleRepository.markGitSnapshotVerified(staleClaim, staleSnapshot)
+  const staleTargetState = join(scratch, 'target-state-stale-transfer')
+  initializeTarget(String(staleClaim.app_id), staleClaim.ownership_generation, staleTargetState)
+  const stalePrepared = prepared(staleClaim, staleSnapshot)
+  Object.defineProperty(stalePrepared, 'rootDirectory', { value: staleSourceRoot })
+  Object.defineProperty(stalePrepared, 'snapshotDirectory', { value: staleSourceRoot })
+  manager.openGuardedExecutionChannelWithIdentity = async (...args) => {
+    const opened = await originalAdapterOpen(...args)
+    let bytes = Buffer.alloc(0)
+    let ownershipChanged = false
+    opened.channel.on('data', (chunk) => {
+      bytes = Buffer.concat([bytes, chunk])
+      if (bytes.length < 4) return
+      const length = bytes.readUInt32BE(0)
+      if (bytes.length < length + 4) return
+      const response = JSON.parse(bytes.subarray(4, length + 4).toString('utf8'))
+      if (!ownershipChanged && response.state === 'accepted') {
+        ownershipChanged = true
+        staleDatabase
+          .prepare('UPDATE product_app_control SET ownership_generation=2 WHERE app_id=4')
+          .run()
+      }
+    })
+    return opened
+  }
+  await assert.rejects(
+    stageProductSourceAndRender(staleDatabase, staleRepository, manager, stalePrepared, {
+      vps_id: 44,
+      target_helper_path: join(targetHelper, 'target_guarded_ssh_helper.py'),
+      target_state_root: staleTargetState,
+      collector_directory: collectorRoot
+    }),
+    (error) => error?.code === 'SSH_AUTHORITY_STALE'
+  )
+  manager.openGuardedExecutionChannelWithIdentity = originalAdapterOpen
+  await waitForHelperExit(join(targetHelper, 'target_guarded_ssh_helper.py'))
+  assert.equal(
+    staleDatabase.prepare('SELECT COUNT(*) AS count FROM deployment WHERE app_id=4').get().count,
+    1
+  )
+  assert.equal(
+    existsSync(join(staleTargetState, 'product-staging', 'app-4', 'deployment-1')),
+    false
+  )
+
   const secondMarkerPath = markerPath(String(claimTwo.app_id), secondTargetState)
   secondManager = new SshManager(resolver)
-  const originalSecondOpen = secondManager.openGuardedExecutionChannelWithIdentity.bind(secondManager)
+  const originalSecondOpen =
+    secondManager.openGuardedExecutionChannelWithIdentity.bind(secondManager)
   secondManager.openGuardedExecutionChannelWithIdentity = async (...args) => {
     const attempt = secondDatabase
       .prepare('SELECT remote_outcome,deployment_id FROM product_deploy_attempt WHERE attempt_id=?')
@@ -235,7 +468,8 @@ try {
   }
   const droppingManager = new Proxy(secondManager, {
     get(target, property, receiver) {
-      if (property !== 'openGuardedExecutionChannelWithIdentity') return Reflect.get(target, property, receiver)
+      if (property !== 'openGuardedExecutionChannelWithIdentity')
+        return Reflect.get(target, property, receiver)
       return async (...args) => {
         const opened = await target.openGuardedExecutionChannelWithIdentity(...args)
         return { ...opened, channel: dropFirstResponse(opened.channel) }
@@ -298,6 +532,280 @@ try {
   duplicateChannel.end()
   await delay(100)
   duplicateChannel.destroy()
+  labStage = 'transfer-traversal-and-binding'
+  const transferState = join(scratch, 'target-state-transfer-attacks')
+  initializeTarget('transfer-attacks', 1, transferState)
+  const attackChannel = await manager.openGuardedExecutionChannel(
+    41,
+    join(targetHelper, 'target_guarded_ssh_helper.py')
+  )
+  const attackIdentity = {
+    controller_id: 'controller-guarded-ssh-lab',
+    app_id: 'transfer-attacks',
+    ownership_generation: 1,
+    claim_id: 'transfer-job',
+    attempt_id: 'transfer-attempt',
+    app_fence: 1
+  }
+  assert.equal(
+    (await sendOpenRequest(attackChannel, attackIdentity, transferState)).state,
+    'accepted'
+  )
+  assert.equal(
+    (
+      await exchangeFrame(attackChannel, {
+        version: 1,
+        request_id: randomUUID(),
+        sequence: 2,
+        operation: 'begin_scope',
+        deployment_id: 999,
+        scope: 'source',
+        file_count: 1,
+        total_bytes: 1,
+        manifest_sha256: 'a'.repeat(64)
+      })
+    ).state,
+    'accepted'
+  )
+  const traversal = await exchangeFrame(attackChannel, {
+    version: 1,
+    request_id: randomUUID(),
+    sequence: 3,
+    operation: 'begin_file',
+    deployment_id: 999,
+    scope: 'source',
+    path: 'src/../escaped.txt',
+    size: 1,
+    mode: 0o644,
+    sha256: 'a'.repeat(64)
+  })
+  assert.equal(traversal.error_code, 'SSH_TRANSFER_REJECTED')
+  attackChannel.destroy()
+  await waitForHelperExit(join(targetHelper, 'target_guarded_ssh_helper.py'))
+  assert.equal(
+    existsSync(join(transferState, 'product-staging', 'app-transfer-attacks', 'escaped.txt')),
+    false
+  )
+  assert.equal(
+    existsSync(join(transferState, 'product-staging', 'app-transfer-attacks', 'deployment-999')),
+    false
+  )
+
+  labStage = 'transfer-symlink-quota-and-deployment-binding'
+  const symlinkState = join(scratch, 'target-state-symlink-transfer')
+  initializeTarget('symlink-transfer', 1, symlinkState)
+  const symlinkChannel = await manager.openGuardedExecutionChannel(
+    41,
+    join(targetHelper, 'target_guarded_ssh_helper.py')
+  )
+  const symlinkIdentity = {
+    ...attackIdentity,
+    app_id: 'symlink-transfer',
+    claim_id: 'symlink-job',
+    attempt_id: 'symlink-attempt'
+  }
+  assert.equal(
+    (await sendOpenRequest(symlinkChannel, symlinkIdentity, symlinkState)).state,
+    'accepted'
+  )
+  assert.equal(
+    (
+      await exchangeFrame(symlinkChannel, {
+        version: 1,
+        request_id: randomUUID(),
+        sequence: 2,
+        operation: 'begin_scope',
+        deployment_id: 999,
+        scope: 'source',
+        file_count: 1,
+        total_bytes: 1,
+        manifest_sha256: 'c'.repeat(64)
+      })
+    ).state,
+    'accepted'
+  )
+  const symlinkParent = join(
+    symlinkState,
+    'product-staging',
+    'app-symlink-transfer',
+    'deployment-999',
+    'source'
+  )
+  const outsideTarget = join(scratch, 'escape.txt')
+  ;(await import('node:fs')).symlinkSync(scratch, join(symlinkParent, 'src'))
+  const symlinkRejected = await exchangeFrame(symlinkChannel, {
+    version: 1,
+    request_id: randomUUID(),
+    sequence: 3,
+    operation: 'begin_file',
+    deployment_id: 999,
+    scope: 'source',
+    path: 'src/escape.txt',
+    size: 1,
+    mode: 0o644,
+    sha256: 'c'.repeat(64)
+  })
+  assert.equal(symlinkRejected.error_code, 'SSH_TRANSFER_REJECTED')
+  symlinkChannel.destroy()
+  await waitForHelperExit(join(targetHelper, 'target_guarded_ssh_helper.py'))
+  assert.equal(existsSync(outsideTarget), false)
+
+  const quotaState = join(scratch, 'target-state-quota-transfer')
+  initializeTarget('quota-transfer', 1, quotaState)
+  const quotaChannel = await manager.openGuardedExecutionChannel(
+    41,
+    join(targetHelper, 'target_guarded_ssh_helper.py')
+  )
+  assert.equal(
+    (
+      await sendOpenRequest(
+        quotaChannel,
+        {
+          ...attackIdentity,
+          app_id: 'quota-transfer',
+          claim_id: 'quota-job',
+          attempt_id: 'quota-attempt'
+        },
+        quotaState
+      )
+    ).state,
+    'accepted'
+  )
+  const quotaRejected = await exchangeFrame(quotaChannel, {
+    version: 1,
+    request_id: randomUUID(),
+    sequence: 2,
+    operation: 'begin_scope',
+    deployment_id: 999,
+    scope: 'source',
+    file_count: 1,
+    total_bytes: 64 * 1024 * 1024 + 1,
+    manifest_sha256: 'd'.repeat(64)
+  })
+  assert.equal(quotaRejected.error_code, 'SSH_TRANSFER_REJECTED')
+  quotaChannel.destroy()
+  await waitForHelperExit(join(targetHelper, 'target_guarded_ssh_helper.py'))
+  assert.equal(
+    existsSync(join(quotaState, 'product-staging', 'app-quota-transfer', 'deployment-999')),
+    false
+  )
+
+  const bindingState = join(scratch, 'target-state-deployment-binding')
+  initializeTarget('deployment-binding', 1, bindingState)
+  const bindingChannel = await manager.openGuardedExecutionChannel(
+    41,
+    join(targetHelper, 'target_guarded_ssh_helper.py')
+  )
+  assert.equal(
+    (
+      await sendOpenRequest(
+        bindingChannel,
+        {
+          ...attackIdentity,
+          app_id: 'deployment-binding',
+          claim_id: 'binding-job',
+          attempt_id: 'binding-attempt'
+        },
+        bindingState
+      )
+    ).state,
+    'accepted'
+  )
+  const wrongDeployment = await exchangeFrame(bindingChannel, {
+    version: 1,
+    request_id: randomUUID(),
+    sequence: 2,
+    operation: 'begin_scope',
+    deployment_id: 1000,
+    scope: 'source',
+    file_count: 0,
+    total_bytes: 0,
+    manifest_sha256: 'e'.repeat(64)
+  })
+  assert.equal(wrongDeployment.error_code, 'SSH_TRANSFER_REJECTED')
+  bindingChannel.destroy()
+  await waitForHelperExit(join(targetHelper, 'target_guarded_ssh_helper.py'))
+  assert.equal(
+    existsSync(join(bindingState, 'product-staging', 'app-deployment-binding', 'deployment-999')),
+    false
+  )
+
+  const incompleteState = join(scratch, 'target-state-incomplete-transfer')
+  initializeTarget('incomplete-transfer', 1, incompleteState)
+  const incompleteChannel = await manager.openGuardedExecutionChannel(
+    41,
+    join(targetHelper, 'target_guarded_ssh_helper.py')
+  )
+  assert.equal(
+    (
+      await sendOpenRequest(
+        incompleteChannel,
+        {
+          ...attackIdentity,
+          app_id: 'incomplete-transfer',
+          claim_id: 'incomplete-job',
+          attempt_id: 'incomplete-attempt'
+        },
+        incompleteState
+      )
+    ).state,
+    'accepted'
+  )
+  assert.equal(
+    (
+      await exchangeFrame(incompleteChannel, {
+        version: 1,
+        request_id: randomUUID(),
+        sequence: 2,
+        operation: 'begin_scope',
+        deployment_id: 999,
+        scope: 'source',
+        file_count: 1,
+        total_bytes: 100,
+        manifest_sha256: 'b'.repeat(64)
+      })
+    ).state,
+    'accepted'
+  )
+  assert.equal(
+    (
+      await exchangeFrame(incompleteChannel, {
+        version: 1,
+        request_id: randomUUID(),
+        sequence: 3,
+        operation: 'begin_file',
+        deployment_id: 999,
+        scope: 'source',
+        path: 'src/incomplete.js',
+        size: 100,
+        mode: 0o644,
+        sha256: 'b'.repeat(64)
+      })
+    ).state,
+    'accepted'
+  )
+  assert.equal(
+    (
+      await exchangeFrame(incompleteChannel, {
+        version: 1,
+        request_id: randomUUID(),
+        sequence: 4,
+        operation: 'file_chunk',
+        deployment_id: 999,
+        chunk_index: 0,
+        data_base64: Buffer.alloc(20, 0x62).toString('base64')
+      })
+    ).state,
+    'accepted'
+  )
+  incompleteChannel.destroy()
+  await waitForHelperExit(join(targetHelper, 'target_guarded_ssh_helper.py'))
+  assert.equal(
+    existsSync(
+      join(incompleteState, 'product-staging', 'app-incomplete-transfer', 'deployment-999')
+    ),
+    false
+  )
   labStage = 'malformed-frame'
   const malformedChannel = await manager.openGuardedExecutionChannel(
     41,
@@ -320,7 +828,7 @@ try {
   await waitForHelperExit(join(targetHelper, 'target_guarded_ssh_helper.py'))
   console.log(
     JSON.stringify({
-      result: 'P3E3A_LINUX_GUARDED_SSH_LAB_PASS',
+      result: 'P3E3B_SOURCE_RENDER_SSH_LAB_PASS',
       ssh_host_pin: 'correct accepted; wrong pin rejected before public-key auth',
       ssh_channel: 'one channel across open and prepare/build phases',
       sqlite_before_target: order,
@@ -329,7 +837,11 @@ try {
       lost_open_response: 'canonical dispatch retained; retry requires reconciliation',
       deployment_rows_per_isolated_db: 1,
       production_vps: false,
-      pipeline_execution: false
+      source_transfer: `${staged.source_file_count} source files/${staged.source_bytes} bytes including multi-chunk file`,
+      render_files: staged.render_file_count,
+      source_render_under_guard:
+        'same pinned SSH channel and target lock; one canonical deployment; outcome remains unknown',
+      build_activate_health_rollback_publish_finalization: 'not implemented'
     })
   )
 } catch (error) {
@@ -361,6 +873,16 @@ try {
   }
   try {
     if (secondDatabase?.open) secondDatabase.close()
+  } catch {
+    process.exitCode = 1
+  }
+  try {
+    if (adapterDatabase?.open) adapterDatabase.close()
+  } catch {
+    process.exitCode = 1
+  }
+  try {
+    if (staleDatabase?.open) staleDatabase.close()
   } catch {
     process.exitCode = 1
   }
@@ -516,11 +1038,15 @@ function markerPath(appId, stateRoot = targetState) {
   return join(stateRoot, `${key}.json`)
 }
 
-async function assertLockHeld(appId) {
+async function assertLockHeld(appId, stateRoot = targetState) {
+  assertLockHeldSync(appId, stateRoot)
+}
+
+function assertLockHeldSync(appId, stateRoot = targetState) {
   const code =
     'import fcntl,os,sys; fd=os.open(sys.argv[1],os.O_RDWR);\ntry: fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB); sys.exit(10)\nexcept BlockingIOError: sys.exit(0)'
   const lockPath = join(
-    targetState,
+    stateRoot,
     'locks',
     `${createHash('sha256').update(appId).digest('hex')}.lock`
   )

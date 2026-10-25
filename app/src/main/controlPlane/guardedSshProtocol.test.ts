@@ -43,7 +43,7 @@ describe('guarded SSH framed protocol', () => {
     const truncated = new GuardedSshFrameDecoder()
     truncated.push(Buffer.from([0, 0, 0, 8, 0x7b]))
     expect(() => truncated.finish()).toThrow(new GuardedSshProtocolError('SSH_PROTOCOL_TRUNCATED'))
-    expect(() => encodeGuardedSshFrame('x'.repeat(20_000))).toThrow(
+    expect(() => encodeGuardedSshFrame('x'.repeat(40 * 1024 + 1))).toThrow(
       new GuardedSshProtocolError('SSH_PROTOCOL_LIMIT')
     )
   })
