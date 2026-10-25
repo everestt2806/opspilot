@@ -1,5 +1,8 @@
 # HANDOFF — Bàn giao phiên làm việc với AI
 
+> **Điểm vào mới nhất — 25/10/2026:** [Task và hồ sơ tiếp nhận cho partner](docs/tasks/tk-s7-partner-handoff-2026-10-25.md).
+> P3e-3b còn PARTIAL/BLOCKED; source/render có happy-path Linux SSH evidence nhưng review phát hiện H0-01/H0-02 cần sửa trước. Các mục bên dưới là hồ sơ lịch sử 30/09, không đại diện trạng thái hiện hành.
+
 > Người nhận: A (chủ dự án OpsPilot / Leader).
 > Người viết: Worker (phiên làm việc tự động hóa pipeline, domain, Doctor, ML và detector).
 > Thời điểm: 2026-09-30.

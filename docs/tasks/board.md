@@ -5,6 +5,16 @@
 >
 > Trạng thái hợp lệ: `BACKLOG · TUẦN NÀY · ĐANG LÀM · CHỜ REVIEW · HOÀN THÀNH · BLOCKED`.
 
+## Bàn giao partner 25/10 — ưu tiên trong 3–4 ngày
+
+Đọc [hồ sơ/task bàn giao](tk-s7-partner-handoff-2026-10-25.md) trước khi tiếp tục. User yêu cầu setup task và push sau khi chốt checkpoint; P3e-3b chưa được duyệt. Chỉ một task implementation `ĐANG LÀM` mỗi thời điểm.
+
+| ID | Owner | Trạng thái | Đầu ra / phụ thuộc |
+|---|---|---|---|
+| H0 | Kim / Worker | TUẦN NÀY | Sửa request-ID path traversal và quota enforcement của source/render; regression helper/SSH thật trước khi duyệt slice. Base code `d8b9329`, dossier `e8b4d9d`. |
+| H1 | Kim / Worker | BACKLOG | Build Express qua cùng guarded session, tag/version canonical, không duplicate deployment; phụ thuộc H0 và real Docker gate. |
+| H2 | Kim / Worker | BACKLOG | Activate/health/rollback/publish và fenced finalization, không replay unknown; phụ thuộc H1. |
+
 ## Sprint sản phẩm 08/10 — hai nguồn deploy và nền auto deploy
 
 > Người dùng chốt phát triển theo hướng production, cho phép control plane trên VPS quản lý (ADR-011). Demo 14/10 trình bày phần đã qua live gate, không cắt các chức năng cũ để kịp demo. Chuẩn nghiệm thu: [docs/31](../31-lo-trinh-hoan-thien-san-pham.md). Chỉ một task Worker `ĐANG LÀM` tại một thời điểm.

@@ -1,5 +1,7 @@
 # TK-S7 P3e-3b — Product pipeline through guarded SSH session
 
+> **Leader review 25/10:** source/render chưa được duyệt. Supplemental Python filesystem repro thấy `request_id` có thể thoát staging qua temporary filename và scope khai báo zero bytes vẫn ghi được một byte. Windows Node 22: 247/247 tests + main typecheck/diff PASS; Linux localhost SSH happy path PASS sau khi chạy đúng cwd `app`. Những gate đó không phủ hai finding mới. Xem [H0 và kế hoạch partner](tk-s7-partner-handoff-2026-10-25.md). P3e-3b tổng thể tiếp tục PARTIAL/BLOCKED; không có Product deployment thật.
+
 | Checkpoint | Input | Status |
 |---|---|---|
 | P3e-3b | P3e-3a approved code `2cf6541`, dossier `ee2a878`; Product contracts and existing DeployPipeline | BLOCKED |
