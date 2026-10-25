@@ -47,5 +47,5 @@ No source/runtime/contract changes were made in this checkpoint attempt because 
 
 ## Handoff
 
-- Checkpoint result: BLOCKED, documentation-only status record. No implementation SHA exists. Local record commit SHA is added to the board after commit; no co-author trailer is applied to a non-implementation commit.
+- Checkpoint result: BLOCKED, documentation-only status record. No implementation SHA exists. Status record commit `3559bb87587cad3eb8dc70ec5738134cbd5a8504` includes the requested co-author trailer; it is not an implementation commit.
 - Safe next step: establish the target operation/payload contract and Product-safe pipeline entry/finalization boundary, then implement and test before enabling any executor. Docker lab remains a separate required gate.
