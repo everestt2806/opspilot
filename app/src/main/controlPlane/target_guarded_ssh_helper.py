@@ -437,6 +437,72 @@ def reject(request: dict[str, Any], code: str) -> None:
     )
 
 
+class BoundedOutputBuffer:
+    def __init__(self, max_bytes: int = 64 * 1024) -> None:
+        self._max_bytes = max_bytes
+        self._chunks: deque[str] = deque()
+        self._current_bytes = 0
+        self._lock = threading.Lock()
+
+    def append(self, item: str | bytes) -> None:
+        if not item:
+            return
+        if isinstance(item, bytes):
+            text = item.decode("utf-8", errors="replace")
+            byte_len = len(item)
+        else:
+            text = item
+            byte_len = len(item.encode("utf-8", errors="replace"))
+
+        with self._lock:
+            if byte_len > self._max_bytes:
+                encoded = text.encode("utf-8", errors="replace")
+                text = encoded[-self._max_bytes:].decode("utf-8", errors="replace")
+                byte_len = len(text.encode("utf-8", errors="replace"))
+
+            self._chunks.append(text)
+            self._current_bytes += byte_len
+            while self._current_bytes > self._max_bytes and self._chunks:
+                popped = self._chunks.popleft()
+                self._current_bytes -= len(popped.encode("utf-8", errors="replace"))
+
+    def get_tail(self, max_len: int = 4096) -> str:
+        with self._lock:
+            combined = "".join(self._chunks)
+            return combined[-max_len:]
+
+    def clear(self) -> None:
+        with self._lock:
+            self._chunks.clear()
+            self._current_bytes = 0
+
+    def __iter__(self):
+        with self._lock:
+            return iter(list(self._chunks))
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._chunks)
+
+
+def redact_secrets(text: str) -> str:
+    if not text:
+        return ""
+    text = re.sub(r"://([^:\s/@]+):([^@\s/]+)@", r"://\1:[REDACTED]@", text)
+    text = re.sub(
+        r"-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+ PRIVATE KEY-----",
+        "[REDACTED PRIVATE KEY]",
+        text,
+    )
+    text = re.sub(r"\bBearer\s+[A-Za-z0-9\-._~+/]+", "Bearer [REDACTED]", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"(?i)\b(password|passwd|secret|token|api[_-]?key|auth|bearer|credentials?)\b\s*([:=])\s*([^\s;,'\"]+)",
+        r"\1\2[REDACTED]",
+        text,
+    )
+    return text
+
+
 def main() -> int:
     execution: GuardedExecution | None = None
     transfer: TransferState | None = None
@@ -445,7 +511,7 @@ def main() -> int:
     build_proc: subprocess.Popen[str] | None = None
     build_thread: threading.Thread | None = None
     build_image_tag: str | None = None
-    output_lines: deque[str] = deque(maxlen=200)
+    output_buffer = BoundedOutputBuffer(max_bytes=64 * 1024)
     expected_sequence = 1
     seen_request_ids: set[str] = set()
     try:
@@ -670,7 +736,7 @@ def main() -> int:
                     )
                     return 3
                 build_image_tag = image_tag
-                output_lines.clear()
+                output_buffer.clear()
                 try:
                     build_proc = subprocess.Popen(
                         [
@@ -692,10 +758,13 @@ def main() -> int:
                         bufsize=1,
                     )
 
-                    def _drain_output(pipe: Any, lines: deque[str]) -> None:
+                    def _drain_output(pipe: Any, buffer: BoundedOutputBuffer) -> None:
                         try:
-                            for line in iter(pipe.readline, ""):
-                                lines.append(line)
+                            while True:
+                                chunk = pipe.read(4096)
+                                if not chunk:
+                                    break
+                                buffer.append(chunk)
                         except Exception:
                             pass
                         finally:
@@ -706,7 +775,7 @@ def main() -> int:
 
                     build_thread = threading.Thread(
                         target=_drain_output,
-                        args=(build_proc.stdout, output_lines),
+                        args=(build_proc.stdout, output_buffer),
                         daemon=True,
                     )
                     build_thread.start()
@@ -766,6 +835,7 @@ def main() -> int:
                 elif returncode == 0:
                     image_id = ""
                     labels: dict[str, str] = {}
+                    inspect_success = False
                     try:
                         inspect_res = subprocess.run(
                             ["docker", "inspect", build_image_tag],
@@ -773,32 +843,54 @@ def main() -> int:
                             stderr=subprocess.PIPE,
                             text=True,
                             check=False,
+                            timeout=10.0,
                         )
                         if inspect_res.returncode == 0:
                             inspected = json.loads(inspect_res.stdout)
                             if isinstance(inspected, list) and len(inspected) > 0:
-                                image_id = inspected[0].get("Id", "")
+                                raw_id = inspected[0].get("Id", "")
+                                if isinstance(raw_id, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", raw_id):
+                                    image_id = raw_id
                                 raw_labels = inspected[0].get("Config", {}).get("Labels")
                                 if isinstance(raw_labels, dict):
                                     labels = {str(k): str(v) for k, v in raw_labels.items()}
+                                if image_id:
+                                    inspect_success = True
                     except Exception:
-                        pass
-                    write_frame(
-                        {
-                            "version": VERSION,
-                            "request_id": request_id,
-                            "sequence": sequence,
-                            "state": "accepted",
-                            "deployment_id": deployment_id,
-                            "build_state": "succeeded",
-                            "exit_code": 0,
-                            "image_id": image_id or f"sha256:{hashlib.sha256(build_image_tag.encode()).hexdigest()}",
-                            "image_tag": build_image_tag,
-                            "labels": labels,
-                        }
-                    )
+                        inspect_success = False
+
+                    if inspect_success:
+                        write_frame(
+                            {
+                                "version": VERSION,
+                                "request_id": request_id,
+                                "sequence": sequence,
+                                "state": "accepted",
+                                "deployment_id": deployment_id,
+                                "build_state": "succeeded",
+                                "exit_code": 0,
+                                "image_id": image_id,
+                                "image_tag": build_image_tag,
+                                "labels": labels,
+                            }
+                        )
+                    else:
+                        error_tail = redact_secrets(output_buffer.get_tail(4096))
+                        write_frame(
+                            {
+                                "version": VERSION,
+                                "request_id": request_id,
+                                "sequence": sequence,
+                                "state": "accepted",
+                                "deployment_id": deployment_id,
+                                "build_state": "failed",
+                                "exit_code": 1,
+                                "error_code": "SSH_BUILD_FAILED",
+                                "error_tail": error_tail,
+                            }
+                        )
                 else:
-                    error_tail = "".join(output_lines)[-4096:]
+                    error_tail = redact_secrets(output_buffer.get_tail(4096))
                     write_frame(
                         {
                             "version": VERSION,

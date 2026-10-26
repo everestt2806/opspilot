@@ -1,13 +1,21 @@
-import { describe, expect, it } from 'vitest'
+import { getEventListeners } from 'node:events'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it, vi } from 'vitest'
 import { Duplex, PassThrough } from 'node:stream'
 import type { ClientChannel } from 'ssh2'
 import type { ProductClaimToken } from '../../../../docs/contracts/product-auto-deploy'
 import {
+  GuardedSshFrameDecoder,
+  GuardedSshProtocolError,
   encodeGuardedSshFrame
 } from './guardedSshProtocol'
 import { GuardedSshExecutionSession, GuardedSshSessionError } from './guardedSshSession'
+import * as guardedSession from './guardedSshSession'
 import {
-  executeProductBuildWithSession
+  executeProductBuildWithSession,
+  stageProductSourceAndRender
 } from './productPipelineSourceRender'
 import type { PreparedProductGitSnapshot } from './productSnapshotPreparation'
 
@@ -123,7 +131,7 @@ describe('H1 Guarded SSH Build Protocol & Session Lifecycle', () => {
           deployment_id: req.deployment_id,
           build_state: 'succeeded',
           exit_code: 0,
-          image_id: 'sha256:fedcba9876543210',
+          image_id: 'sha256:' + 'a'.repeat(64),
           image_tag: req.image_tag || 'opspilot-app:v1',
           labels: { 'opspilot.app_id': '1' }
         }
@@ -164,7 +172,7 @@ describe('H1 Guarded SSH Build Protocol & Session Lifecycle', () => {
     })
     expect(settleRes.state).toBe('succeeded')
     if (settleRes.state === 'succeeded') {
-      expect(settleRes.imageId).toBe('sha256:fedcba9876543210')
+      expect(settleRes.imageId).toBe('sha256:' + 'a'.repeat(64))
     }
 
     await session.close()
@@ -371,9 +379,9 @@ describe('executeProductBuildWithSession', () => {
           deployment_id: req.deployment_id,
           build_state: 'succeeded',
           exit_code: 0,
-          image_id: 'sha256:1122334455667788',
+          image_id: 'sha256:' + 'b'.repeat(64),
           image_tag: recordedImageTag,
-          labels: { 'opspilot.deployment_id': '101' }
+          labels: { 'opspilot.app_id': '1', 'opspilot.deployment_id': '101' }
         }
       }
       if (op === 'close') {
@@ -437,7 +445,7 @@ describe('executeProductBuildWithSession', () => {
     expect(result.state).toBe('build_succeeded')
     if (result.state === 'build_succeeded') {
       expect(result.image_tag).toBe('opspilot-app-1:20261026-001')
-      expect(result.image_id).toBe('sha256:1122334455667788')
+      expect(result.image_id).toBe('sha256:' + 'b'.repeat(64))
       expect(recordedImageTag).toBe('opspilot-app-1:20261026-001')
     }
   })
@@ -589,5 +597,390 @@ describe('executeProductBuildWithSession', () => {
     await expect(
       executeProductBuildWithSession(session, mockDb as never, snapshot)
     ).rejects.toThrowError('PRODUCT_SOURCE_RENDER_INVALID_DEPLOYMENT')
+  })
+
+  it('H1-R01 & H1-R02: rejects invalid image ID, non-zero exit code, or wrong image tag on succeeded', async () => {
+    const runHarness = async (overrides: Record<string, unknown>) => {
+      let currentSequence = 0
+      const channel = createFakeChannel((req) => {
+        currentSequence = req.sequence as number
+        const op = req.operation as string
+        if (op === 'open' || op === 'authorize_phase') {
+          return {
+            version: 1,
+            request_id: req.request_id,
+            sequence: currentSequence,
+            state: 'accepted',
+            deployment_id: req.deployment_id
+          }
+        }
+        if (op === 'start_build') {
+          return {
+            version: 1,
+            request_id: req.request_id,
+            sequence: currentSequence,
+            state: 'accepted',
+            deployment_id: req.deployment_id,
+            build_state: 'started'
+          }
+        }
+        if (op === 'poll_build') {
+          return {
+            version: 1,
+            request_id: req.request_id,
+            sequence: currentSequence,
+            state: 'accepted',
+            deployment_id: req.deployment_id,
+            build_state: 'succeeded',
+            exit_code: 0,
+            image_id: 'sha256:' + 'c'.repeat(64),
+            image_tag: 'opspilot-app:v1',
+            labels: { 'opspilot.app_id': '1' },
+            ...overrides
+          }
+        }
+        return null
+      })
+      const claim = createClaim()
+      const repository = {
+        readGitDispatchTargetBinding: () => ({ state: 'ready', binding: mockBinding })
+      }
+      const session = new GuardedSshExecutionSession(
+        channel as unknown as ClientChannel,
+        repository as never,
+        claim,
+        201,
+        mockBinding
+      )
+      await session.open('/var/run/opspilot')
+      await session.startBuild('opspilot-app:v1')
+      return session.pollBuildUntilSettled({ pollIntervalMs: 5, timeoutMs: 1000 })
+    }
+
+    // Malformed image ID
+    await expect(runHarness({ image_id: 'invalid-image-id' })).rejects.toThrowError(
+      'SSH_BUILD_FAILED'
+    )
+    // Non-zero exit code on succeeded
+    await expect(runHarness({ exit_code: 99 })).rejects.toThrowError('SSH_BUILD_FAILED')
+    // Wrong image tag
+    await expect(runHarness({ image_tag: 'wrong-tag:v999' })).rejects.toThrowError(
+      'SSH_BUILD_FAILED'
+    )
+  })
+
+  it('H1-R02: decoder rejects labels array as SSH_PROTOCOL_MALFORMED', () => {
+    const decoder = new GuardedSshFrameDecoder()
+    const malformedPayload = Buffer.from(
+      JSON.stringify({
+        version: 1,
+        request_id: 'req-1',
+        sequence: 1,
+        state: 'accepted',
+        labels: ['array-is-not-allowed']
+      }),
+      'utf8'
+    )
+    const frame = Buffer.allocUnsafe(4 + malformedPayload.length)
+    frame.writeUInt32BE(malformedPayload.length, 0)
+    malformedPayload.copy(frame, 4)
+
+    expect(() => decoder.push(frame)).toThrowError(GuardedSshProtocolError)
+    expect(() => decoder.push(frame)).toThrowError('SSH_PROTOCOL_MALFORMED')
+  })
+
+  it('H1-R02: executeProductBuildWithSession fails closed when identity labels are missing or mismatch', async () => {
+    let currentSequence = 0
+    const channel = createFakeChannel((req) => {
+      currentSequence = req.sequence as number
+      const op = req.operation as string
+      if (op === 'open' || op === 'authorize_phase') {
+        return {
+          version: 1,
+          request_id: req.request_id,
+          sequence: currentSequence,
+          state: 'accepted',
+          deployment_id: req.deployment_id
+        }
+      }
+      if (op === 'start_build') {
+        return {
+          version: 1,
+          request_id: req.request_id,
+          sequence: currentSequence,
+          state: 'accepted',
+          deployment_id: req.deployment_id,
+          build_state: 'started'
+        }
+      }
+      if (op === 'poll_build') {
+        return {
+          version: 1,
+          request_id: req.request_id,
+          sequence: currentSequence,
+          state: 'accepted',
+          deployment_id: req.deployment_id,
+          build_state: 'succeeded',
+          exit_code: 0,
+          image_id: 'sha256:' + 'd'.repeat(64),
+          image_tag: 'opspilot-app-1:20261026-004',
+          labels: {} // Missing opspilot.app_id and deployment_id
+        }
+      }
+      return null
+    })
+
+    const claim = createClaim()
+    const repository = {
+      readGitDispatchTargetBinding: () => ({ state: 'ready', binding: mockBinding })
+    }
+    const session = new GuardedSshExecutionSession(
+      channel as unknown as ClientChannel,
+      repository as never,
+      claim,
+      202,
+      mockBinding
+    )
+    await session.open('/var/run/opspilot')
+
+    const mockDb = {
+      prepare: () => ({
+        get: () => ({
+          id: 202,
+          app_id: 1,
+          version: 8,
+          image_tag: 'opspilot-app-1:20261026-004',
+          status: 'building',
+          git_commit_sha: 'g'.repeat(40)
+        })
+      })
+    }
+    const snapshot = {
+      claim,
+      metadata: { commitSha: 'g'.repeat(40) }
+    } as unknown as PreparedProductGitSnapshot
+
+    await expect(
+      executeProductBuildWithSession(session, mockDb as never, snapshot, {
+        pollIntervalMs: 5,
+        timeoutMs: 1000
+      })
+    ).rejects.toThrowError('PRODUCT_SOURCE_RENDER_INVALID_DEPLOYMENT')
+
+    expect(session.state).toBe('reconciliation_required')
+  })
+
+  it('H1-R03: redacts credentials, private keys, bearer tokens and secrets from error_tail', async () => {
+    let currentSequence = 0
+    const rawSecretLog =
+      'DATABASE_URL=postgres://app_user:SUPER_SECRET_PASSWORD@db.internal:5432/prod\n' +
+      'TOKEN=ghp_SecretTokenValue123456\n' +
+      'Authorization: Bearer my-secret-jwt-token\n' +
+      '-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----\n'
+
+    const channel = createFakeChannel((req) => {
+      currentSequence = req.sequence as number
+      const op = req.operation as string
+      if (op === 'open' || op === 'authorize_phase') {
+        return {
+          version: 1,
+          request_id: req.request_id,
+          sequence: currentSequence,
+          state: 'accepted',
+          deployment_id: req.deployment_id
+        }
+      }
+      if (op === 'start_build') {
+        return {
+          version: 1,
+          request_id: req.request_id,
+          sequence: currentSequence,
+          state: 'accepted',
+          deployment_id: req.deployment_id,
+          build_state: 'started'
+        }
+      }
+      if (op === 'poll_build') {
+        return {
+          version: 1,
+          request_id: req.request_id,
+          sequence: currentSequence,
+          state: 'accepted',
+          deployment_id: req.deployment_id,
+          build_state: 'failed',
+          exit_code: 1,
+          error_tail: rawSecretLog
+        }
+      }
+      return null
+    })
+
+    const claim = createClaim()
+    const repository = {
+      readGitDispatchTargetBinding: () => ({ state: 'ready', binding: mockBinding })
+    }
+    const session = new GuardedSshExecutionSession(
+      channel as unknown as ClientChannel,
+      repository as never,
+      claim,
+      203,
+      mockBinding
+    )
+    await session.open('/var/run/opspilot')
+
+    const mockDb = {
+      prepare: () => ({
+        get: () => ({
+          id: 203,
+          app_id: 1,
+          version: 9,
+          image_tag: 'opspilot-app-1:20261026-005',
+          status: 'building',
+          git_commit_sha: 'h'.repeat(40)
+        })
+      })
+    }
+    const snapshot = {
+      claim,
+      metadata: { commitSha: 'h'.repeat(40) }
+    } as unknown as PreparedProductGitSnapshot
+
+    const result = await executeProductBuildWithSession(session, mockDb as never, snapshot, {
+      pollIntervalMs: 5,
+      timeoutMs: 1000
+    })
+
+    expect(result.state).toBe('build_failed_definite')
+    if (result.state === 'build_failed_definite') {
+      expect(result.error_tail).toBeDefined()
+      expect(result.error_tail).not.toContain('SUPER_SECRET_PASSWORD')
+      expect(result.error_tail).not.toContain('ghp_SecretTokenValue123456')
+      expect(result.error_tail).not.toContain('my-secret-jwt-token')
+      expect(result.error_tail).not.toContain('MIIEowIBAAKCAQEA...')
+      expect(result.error_tail).toContain('app_user:[REDACTED]@')
+      expect(result.error_tail).toContain('TOKEN=[REDACTED]')
+      expect(result.error_tail).toContain('Bearer [REDACTED]')
+      expect(result.error_tail).toContain('[REDACTED PRIVATE KEY]')
+    }
+  })
+
+  it('H1-R04: poll interval timer does not leak abort event listeners on signal', async () => {
+    let polls = 0
+    let currentSequence = 0
+    const abort = new AbortController()
+
+    const channel = createFakeChannel((req) => {
+      currentSequence = req.sequence as number
+      const op = req.operation as string
+      if (op === 'open' || op === 'authorize_phase') {
+        return {
+          version: 1,
+          request_id: req.request_id,
+          sequence: currentSequence,
+          state: 'accepted',
+          deployment_id: req.deployment_id
+        }
+      }
+      if (op === 'start_build') {
+        return {
+          version: 1,
+          request_id: req.request_id,
+          sequence: currentSequence,
+          state: 'accepted',
+          deployment_id: req.deployment_id,
+          build_state: 'started'
+        }
+      }
+      if (op === 'poll_build') {
+        polls++
+        if (polls < 6) {
+          return {
+            version: 1,
+            request_id: req.request_id,
+            sequence: currentSequence,
+            state: 'accepted',
+            deployment_id: req.deployment_id,
+            build_state: 'running'
+          }
+        }
+        return {
+          version: 1,
+          request_id: req.request_id,
+          sequence: currentSequence,
+          state: 'accepted',
+          deployment_id: req.deployment_id,
+          build_state: 'succeeded',
+          exit_code: 0,
+          image_id: 'sha256:' + 'e'.repeat(64),
+          image_tag: 'opspilot-app:v1',
+          labels: { 'opspilot.app_id': '1' }
+        }
+      }
+      return null
+    })
+
+    const claim = createClaim()
+    const repository = {
+      readGitDispatchTargetBinding: () => ({ state: 'ready', binding: mockBinding })
+    }
+    const session = new GuardedSshExecutionSession(
+      channel as unknown as ClientChannel,
+      repository as never,
+      claim,
+      204,
+      mockBinding,
+      abort.signal
+    )
+
+    const initialListeners = getEventListeners(abort.signal, 'abort').length
+    await session.open('/var/run/opspilot')
+    await session.startBuild('opspilot-app:v1')
+    await session.pollBuildUntilSettled({ timeoutMs: 2000, pollIntervalMs: 5 })
+
+    const finalListeners = getEventListeners(abort.signal, 'abort').length
+    // No abort listener leakage after 6 poll sleep cycles
+    expect(finalListeners).toBe(initialListeners)
+  })
+
+  it('H1-R05: preflight validation rejects unsupported app before opening SSH session or creating deployment', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'opspilot-h1-preflight-'))
+    const openSpy = vi.spyOn(guardedSession, 'openProductGuardedSshSession')
+
+    try {
+      writeFileSync(
+        join(root, 'package.json'),
+        JSON.stringify({
+          main: 'server.js',
+          scripts: { start: 'node server.js' },
+          dependencies: { express: '^4.21.2' }
+        })
+      )
+      writeFileSync(join(root, 'server.js'), "require('express')().listen(3000)\n")
+
+      const claim = createClaim()
+      const mockDb = {
+        prepare: () => ({
+          get: () => ({ id: 1, framework: 'vite', needs_db: 0 })
+        })
+      }
+      const snapshot = {
+        claim,
+        rootDirectory: root
+      } as unknown as PreparedProductGitSnapshot
+
+      await expect(
+        stageProductSourceAndRender(mockDb as never, {} as never, {} as never, snapshot, {
+          vps_id: 1,
+          target_helper_path: '/fixture/helper',
+          target_state_root: '/fixture/state'
+        })
+      ).rejects.toMatchObject({ code: 'PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN' })
+
+      // Crucial: SSH session opener was never called because preflight stopped it
+      expect(openSpy).toHaveBeenCalledTimes(0)
+    } finally {
+      openSpy.mockRestore()
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })

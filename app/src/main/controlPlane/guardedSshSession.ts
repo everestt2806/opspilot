@@ -143,6 +143,7 @@ export class GuardedSshExecutionSession {
   private transferredFiles = 0
   private currentFileOpen = false
   private resolveCloseWaiter: (() => void) | null = null
+  private activeImageTag: string | null = null
   private readonly onAbort: () => void
 
   constructor(
@@ -429,6 +430,7 @@ export class GuardedSshExecutionSession {
     if (!/^[a-zA-Z0-9_.-]+:[a-zA-Z0-9_.-]+$/.test(imageTag)) {
       throw new GuardedSshSessionError('SSH_BUILD_REJECTED')
     }
+    this.activeImageTag = imageTag
     await this.authorizeWritePhase('build')
     this.assertAuthority()
     await this.exchange({
@@ -481,14 +483,22 @@ export class GuardedSshExecutionSession {
       this.assertAuthority()
       const resp = await this.pollBuild()
       if (resp.build_state === 'succeeded') {
-        if (!resp.image_id) {
+        const isValidImageId =
+          typeof resp.image_id === 'string' && /^sha256:[0-9a-f]{64}$/.test(resp.image_id)
+        const isExitCodeZero = resp.exit_code === 0
+        const isTagValid =
+          typeof resp.image_tag === 'string' &&
+          resp.image_tag.length > 0 &&
+          (this.activeImageTag === null || resp.image_tag === this.activeImageTag)
+
+        if (!isValidImageId || !isExitCodeZero || !isTagValid) {
           this.failClosed('SSH_BUILD_FAILED')
           throw new GuardedSshSessionError('SSH_BUILD_FAILED')
         }
         return {
           state: 'succeeded',
           imageId: resp.image_id,
-          imageTag: resp.image_tag || '',
+          imageTag: resp.image_tag,
           labels: resp.labels
         }
       }
@@ -500,11 +510,19 @@ export class GuardedSshExecutionSession {
         }
       }
       await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(resolve, pollIntervalMs)
+        let cleanup = (): void => {}
+        const timer = setTimeout(() => {
+          cleanup()
+          resolve()
+        }, pollIntervalMs)
         if (this.signal) {
           const onAbort = (): void => {
             clearTimeout(timer)
+            cleanup()
             reject(new GuardedSshSessionError('SSH_SESSION_ABORTED'))
+          }
+          cleanup = (): void => {
+            this.signal?.removeEventListener('abort', onAbort)
           }
           this.signal.addEventListener('abort', onAbort, { once: true })
         }

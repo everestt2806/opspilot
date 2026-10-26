@@ -79,19 +79,30 @@ export class ProductSourceRenderError extends Error {
   }
 }
 
-/**
- * Caller-owned session variant for stageProductSourceAndRender.
- * Transfers source and render scopes without closing the session.
- */
-export async function stageProductSourceAndRenderWithSession(
-  session: GuardedSshExecutionSession,
+export function redactSecrets(text: string): string {
+  if (!text) return ''
+  let redacted = text
+  redacted = redacted.replace(/:\/\/([^:\s/@]+):([^@\s/]+)@/g, '://$1:[REDACTED]@')
+  redacted = redacted.replace(
+    /-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+ PRIVATE KEY-----/g,
+    '[REDACTED PRIVATE KEY]'
+  )
+  redacted = redacted.replace(/\bBearer\s+[A-Za-z0-9\-._~+/]+/gi, 'Bearer [REDACTED]')
+  redacted = redacted.replace(
+    /\b(password|passwd|secret|token|api[_-]?key|auth|bearer|credentials?)\b\s*([:=])\s*([^\s;,'"]+)/gi,
+    '$1$2[REDACTED]'
+  )
+  return redacted
+}
+
+export function validatePreflightSourceAndPlan(
   database: Database.Database,
-  snapshot: PreparedProductGitSnapshot,
-  options: {
-    collector_directory?: string
-    signal?: AbortSignal
-  } = {}
-): Promise<ProductSourceRenderResult> {
+  snapshot: PreparedProductGitSnapshot
+): {
+  app: App
+  plan: BuildPlan
+  sourceTree: ReturnType<typeof buildSourceTree>
+} {
   const app = new AppRepository(database).getById(snapshot.claim.app_id)
   const sourceTree = buildSourceTree(snapshot.rootDirectory)
   const detection = detectFramework(sourceTree)
@@ -105,6 +116,23 @@ export async function stageProductSourceAndRenderWithSession(
   ) {
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
   }
+  return { app, plan: detection.plan, sourceTree }
+}
+
+/**
+ * Caller-owned session variant for stageProductSourceAndRender.
+ * Transfers source and render scopes without closing the session.
+ */
+export async function stageProductSourceAndRenderWithSession(
+  session: GuardedSshExecutionSession,
+  database: Database.Database,
+  snapshot: PreparedProductGitSnapshot,
+  options: {
+    collector_directory?: string
+    signal?: AbortSignal
+  } = {}
+): Promise<ProductSourceRenderResult> {
+  const { app, plan, sourceTree } = validatePreflightSourceAndPlan(database, snapshot)
 
   const deployment = new DeploymentRepository(database).getById(session.deploymentId)
   if (
@@ -123,7 +151,7 @@ export async function stageProductSourceAndRenderWithSession(
     ...collectFiles(collectorDirectory, 'collector')
   ]
   const sourceManifest = prepareManifest(sourceFiles)
-  const renderFiles = renderPlanFiles(app, detection.plan, sourceTree, deployment.image_tag)
+  const renderFiles = renderPlanFiles(app, plan, sourceTree, deployment.image_tag)
   const renderManifest = prepareManifest(renderFiles)
   if (
     sourceFiles.length + renderFiles.length > GUARDED_SSH_TRANSFER_MAX_FILES ||
@@ -180,6 +208,21 @@ export async function executeProductBuildWithSession(
   })
 
   if (settled.state === 'succeeded') {
+    const labels = settled.labels ?? {}
+    const expectedAppId = String(snapshot.claim.app_id)
+    const expectedDeploymentId = String(session.deploymentId)
+    const hasValidTag = settled.imageTag === deployment.image_tag
+    const hasValidLabels =
+      labels['opspilot.app_id'] === expectedAppId &&
+      labels['opspilot.deployment_id'] === expectedDeploymentId
+    const hasValidImageId =
+      typeof settled.imageId === 'string' && /^sha256:[0-9a-f]{64}$/.test(settled.imageId)
+
+    if (!hasValidTag || !hasValidLabels || !hasValidImageId) {
+      session.failClosed('SSH_BUILD_FAILED')
+      throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_INVALID_DEPLOYMENT')
+    }
+
     return {
       state: 'build_succeeded',
       app_id: snapshot.claim.app_id,
@@ -198,7 +241,7 @@ export async function executeProductBuildWithSession(
     target_sha: snapshot.metadata.commitSha,
     image_tag: deployment.image_tag,
     exit_code: settled.exitCode,
-    error_tail: settled.errorTail
+    error_tail: settled.errorTail ? redactSecrets(settled.errorTail) : undefined
   }
 }
 
@@ -220,6 +263,7 @@ export async function stageAndBuildProduct(
     build_poll_interval_ms?: number
   }
 ): Promise<ProductBuildResult> {
+  validatePreflightSourceAndPlan(database, snapshot)
   const session = await openProductGuardedSshSession(repository, ssh, snapshot, {
     vps_id: options.vps_id,
     target_helper_path: options.target_helper_path,
@@ -264,6 +308,7 @@ export async function stageProductSourceAndRender(
     collector_directory?: string
   }
 ): Promise<ProductSourceRenderResult> {
+  validatePreflightSourceAndPlan(database, snapshot)
   const session = await openProductGuardedSshSession(repository, ssh, snapshot, {
     vps_id: options.vps_id,
     target_helper_path: options.target_helper_path,

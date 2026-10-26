@@ -69,13 +69,36 @@ Danh sách file thay đổi và tạo mới:
 - Toàn bộ các thao tác sau build: kích hoạt container, kiểm tra healthcheck HTTP, cutover routing, cập nhật deployment thành `current`, rollback hoặc cập nhật trạng thái terminal của job/deployment trong database đều thuộc phạm vi của task **H2**.
 - Worker Controller vẫn giữ nguyên cờ `polling_only`, không kích hoạt production executor.
 
+### Chi tiết các sửa đổi H1-R (theo Review Audit 26/10)
+1. **H1-R01 (Inspect/Provenance)**:
+   - Trong `target_guarded_ssh_helper.py`: loại bỏ hoàn toàn fallback tự chế `image_id or f"sha256:{hashlib.sha256(...)}"`.
+   - Thêm `timeout=10.0` cho `docker inspect`.
+   - Bắt buộc `image_id` khớp regex `^sha256:[0-9a-f]{64}$`. Nếu inspect fail, parse JSON fail hoặc ID không hợp lệ, helper chuyển ngay sang `build_state: "failed"`, `exit_code: 1`, `error_code: "SSH_BUILD_FAILED"`, tuyệt đối không giả mạo thành công.
+2. **H1-R02 (Response Validation & Canonical Identity)**:
+   - Trong `guardedSshProtocol.ts`: kiểm tra `labels` không được là Array (`!Array.isArray(response.labels)`), phải là object với tất cả keys và values là string.
+   - Trong `guardedSshSession.ts`: `startBuild(imageTag)` ghi nhớ `this.activeImageTag`. Trong `pollBuildUntilSettled`, khi `resp.build_state === 'succeeded'`, kiểm tra `resp.exit_code === 0`, `resp.image_id` khớp full 64-char sha256, và `resp.image_tag === this.activeImageTag`. Vi phạm thì `failClosed('SSH_BUILD_FAILED')` và throw.
+   - Trong `productPipelineSourceRender.ts`: `executeProductBuildWithSession` kiểm tra `settled.imageTag === deployment.image_tag` và labels phải chứa đúng `opspilot.app_id` và `opspilot.deployment_id`. Mismatch thì fail-closed và throw `PRODUCT_SOURCE_RENDER_INVALID_DEPLOYMENT`.
+3. **H1-R03 (Confidentiality / Secret Redaction)**:
+   - Cả Python helper (`redact_secrets`) và TypeScript adapter (`redactSecrets`):
+     - URLs có embedded credentials: `://user:pass@host` -> `://user:[REDACTED]@host`
+     - Private keys: `-----BEGIN ... PRIVATE KEY-----` -> `[REDACTED PRIVATE KEY]`
+     - Bearer tokens: `Bearer <token>` -> `Bearer [REDACTED]`
+     - Key/value nhạy cảm: `(password|secret|token|api_key|auth|bearer)=...` -> `[REDACTED]`
+   - Áp dụng vào `error_tail` trước khi ghi vào frame hoặc kết quả build.
+4. **H1-R04 (Resource Bounds & Listener Cleanup)**:
+   - Trong `target_guarded_ssh_helper.py`: thay `deque(maxlen=200)` bằng class `BoundedOutputBuffer(max_bytes=64*1024)`, đọc pipe theo chunks 4096 bytes, thread-safe qua Lock, đảm bảo bộ nhớ không bao giờ vượt 64 KiB kể cả với dòng log 2 MiB.
+   - Trong `guardedSshSession.ts`: trong vòng lặp sleep của `pollBuildUntilSettled`, dọn dẹp listener `abort` trên `signal` khi timer hoàn tất để tránh rò rỉ listener giữa các nhịp poll.
+5. **H1-R05 (Preflight Validation Before Dispatch)**:
+   - Tách hàm `validatePreflightSourceAndPlan(database, snapshot)` kiểm tra framework (`express`), `needs_db === 0`, detector match và plan files.
+   - `stageProductSourceAndRender` và `stageAndBuildProduct` gọi `validatePreflightSourceAndPlan` TRƯỚC KHI mở `openProductGuardedSshSession`, chặn đứng việc sinh candidate deployment hoặc chiếm lock target khi app không được hỗ trợ.
+
 ---
 
 ## 4. Kết quả Quality Gates
 
-### Gate 1: Controlled Tests cho H1
+### Gate 1: Controlled Tests cho H1 (kèm H1-R regression tests)
 - **Lệnh**: `pnpm --prefix app exec vitest run src/main/controlPlane/productPipelineBuild.test.ts`
-- **Kết quả**: **PASS 7/7 tests (100%)**
+- **Kết quả**: **PASS 13/13 tests (100%)**
   1. `startBuild and pollBuild settle cleanly when docker build succeeds` (PASS)
   2. `pollBuild settles with definite failure and bounded error_tail on build error` (PASS)
   3. `rejects startBuild when server returns SSH_BUILD_REJECTED` (PASS)
@@ -83,10 +106,16 @@ Danh sách file thay đổi và tạo mới:
   5. `executes build with canonical deployment image tag and returns build_succeeded` (PASS)
   6. `returns build_failed_definite when build returns non-zero returncode without promoting deployment` (PASS)
   7. `rejects execution when deployment status is not building or commit sha mismatches` (PASS)
+  8. `H1-R01 & H1-R02: rejects invalid image ID, non-zero exit code, or wrong image tag on succeeded` (PASS)
+  9. `H1-R02: decoder rejects labels array as SSH_PROTOCOL_MALFORMED` (PASS)
+  10. `H1-R02: executeProductBuildWithSession fails closed when identity labels are missing or mismatch` (PASS)
+  11. `H1-R03: redacts credentials, private keys, bearer tokens and secrets from error_tail` (PASS)
+  12. `H1-R04: poll interval timer does not leak abort event listeners on signal` (PASS)
+  13. `H1-R05: preflight validation rejects unsupported app before opening SSH session or creating deployment` (PASS)
 
 ### Gate 2: Full Regression Vitest Suite
 - **Lệnh**: `pnpm --prefix app exec vitest run src/main/db src/main/controlPlane src/main/git src/main/ssh src/main/deploy/pipeline.test.ts src/main/deploy/precheck.test.ts`
-- **Kết quả**: **PASS 254/254 tests (20 test files, 100%)**
+- **Kết quả**: **PASS 260/260 tests (20 test files, 100%)**
   - Không có hồi quy trên database, control plane, git poller, ssh manager, hay pipeline.
 
 ### Gate 3: TypeScript Typecheck
@@ -117,3 +146,19 @@ Danh sách file thay đổi và tạo mới:
    - Nếu `docker-compose.yml` tham chiếu đến image collector nội bộ, bước H1 build chỉ build service application; image collector được cấu hình từ trước hoặc pull từ local cache.
 3. **Chuyển giao sang H2**:
    - H2 sẽ nhận Image ID từ kết quả `build_succeeded` của H1 để tiến hành phase `activate` (khởi chạy compose up, health probe, switch traffic, và terminal finalize).
+
+---
+
+## 6. Nhật ký Tiến độ (Task Journal)
+
+- **START 26/10/2026**: Nhận task H1 trên branch `feat/product-h1-build` (worktree `../opspilot-h1-build`) từ baseline `02ba4b2`. Đọc kỹ ADR-011, H0 contract, và hồ sơ điều phối.
+- **UPDATE 26/10/2026**: Triển khai mở rộng guarded SSH session với typed operations `start_build` và `poll_build`. Tách adapter pipeline source render và controlled test suite.
+- **HANDOFF-LOCAL 26/10/2026**: Hoàn tất H1 ban đầu, commit `0faed1f`.
+- **UPDATE 26/10/2026 (Đêm - Fix H1-R01..R05 theo Review Audit)**:
+  - Sửa H1-R01: Loại bỏ hoàn toàn fallback image ID sha256(image_tag), inspect có timeout 10s, fail-closed khi inspect fail.
+  - Sửa H1-R02: Strict validation labels không phải array, mọi key/value là string; kiểm tra exit_code=0, full 64-char sha256 ID, canonical tag, và identity labels opspilot.app_id / deployment_id; mismatch fail-closed.
+  - Sửa H1-R03: Redact secrets (URLs có credential, private keys, bearer tokens, passwords/tokens) trên error_tail ở cả Python helper và TypeScript adapter.
+  - Sửa H1-R04: Thay thế readline bằng BoundedOutputBuffer giới hạn 64 KiB bộ nhớ; dọn dẹp listener abort trên signal giữa các nhịp poll tránh rò rỉ bộ nhớ.
+  - Sửa H1-R05: Đưa validation preflight plan/framework ra trước khi mở SSH session / dispatch, ngăn chặn việc tạo candidate deployment hoặc chiếm lock target khi app không được hỗ trợ.
+  - Viết 6 regression tests mới kiểm chứng 5 nhóm lỗi audit.
+- **HANDOFF-LOCAL 26/10/2026 (H1-R)**: Hoàn tất toàn bộ các sửa đổi H1-R01..R05. Controlled tests PASS 13/13 (100%), full regression vitest suite PASS 260/260 (100%), typecheck PASS, git diff clean. Gate Linux OpenSSH localhost thật ghi nhận BLOCKED do thiếu môi trường Linux dev distro. Sẵn sàng bàn giao cho Leader review độc lập.

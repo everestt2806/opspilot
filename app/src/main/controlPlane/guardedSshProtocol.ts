@@ -143,7 +143,13 @@ function isResponse(value: unknown): value is GuardedSshResponse {
     (response.exit_code === undefined || Number.isSafeInteger(response.exit_code)) &&
     (response.image_id === undefined || typeof response.image_id === 'string') &&
     (response.image_tag === undefined || typeof response.image_tag === 'string') &&
-    (response.labels === undefined || (typeof response.labels === 'object' && response.labels !== null)) &&
+    (response.labels === undefined ||
+      (typeof response.labels === 'object' &&
+        response.labels !== null &&
+        !Array.isArray(response.labels) &&
+        Object.entries(response.labels).every(
+          ([k, v]) => typeof k === 'string' && typeof v === 'string'
+        ))) &&
     (response.error_tail === undefined || typeof response.error_tail === 'string')
   )
 }
