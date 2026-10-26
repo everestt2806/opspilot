@@ -486,21 +486,8 @@ class BoundedOutputBuffer:
 
 
 def redact_secrets(text: str) -> str:
-    if not text:
-        return ""
-    text = re.sub(r"://([^:\s/@]+):([^@\s/]+)@", r"://\1:[REDACTED]@", text)
-    text = re.sub(
-        r"-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+ PRIVATE KEY-----",
-        "[REDACTED PRIVATE KEY]",
-        text,
-    )
-    text = re.sub(r"\bBearer\s+[A-Za-z0-9\-._~+/]+", "Bearer [REDACTED]", text, flags=re.IGNORECASE)
-    text = re.sub(
-        r"(?i)\b(password|passwd|secret|token|api[_-]?key|auth|bearer|credentials?)\b\s*([:=])\s*([^\s;,'\"]+)",
-        r"\1\2[REDACTED]",
-        text,
-    )
-    return text
+    # Log tùy ý có thể bị cắt giữa secret, không đưa raw tail qua wire.
+    return "[REDACTED BUILD OUTPUT]" if text else ""
 
 
 def main() -> int:
@@ -511,6 +498,7 @@ def main() -> int:
     build_proc: subprocess.Popen[str] | None = None
     build_thread: threading.Thread | None = None
     build_image_tag: str | None = None
+    build_source_sha: str | None = None
     output_buffer = BoundedOutputBuffer(max_bytes=64 * 1024)
     expected_sequence = 1
     seen_request_ids: set[str] = set()
@@ -702,6 +690,7 @@ def main() -> int:
                             "operation",
                             "deployment_id",
                             "image_tag",
+                            "source_sha",
                         },
                     )
                     or request.get("deployment_id") != deployment_id
@@ -712,8 +701,11 @@ def main() -> int:
                     reject(request, "SSH_BUILD_REJECTED")
                     return 3
                 image_tag = request.get("image_tag")
+                source_sha = request.get("source_sha")
                 if (
                     not isinstance(image_tag, str)
+                    or not isinstance(source_sha, str)
+                    or not re.fullmatch(r"[0-9a-f]{40}", source_sha)
                     or len(image_tag) > 256
                     or not re.fullmatch(
                         r"^[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_.-]+)*:[a-zA-Z0-9_.-]+$",
@@ -736,6 +728,7 @@ def main() -> int:
                     )
                     return 3
                 build_image_tag = image_tag
+                build_source_sha = source_sha
                 output_buffer.clear()
                 try:
                     build_proc = subprocess.Popen(
@@ -748,6 +741,8 @@ def main() -> int:
                             f"opspilot.app_id={identity.app_id}",
                             "--label",
                             f"opspilot.deployment_id={deployment_id}",
+                            "--label",
+                            f"org.opencontainers.image.revision={source_sha}",
                             "-f",
                             str(dockerfile),
                             str(context_dir),
@@ -853,8 +848,12 @@ def main() -> int:
                                     image_id = raw_id
                                 raw_labels = inspected[0].get("Config", {}).get("Labels")
                                 if isinstance(raw_labels, dict):
-                                    labels = {str(k): str(v) for k, v in raw_labels.items()}
-                                if image_id:
+                                    if all(isinstance(k, str) and isinstance(v, str) for k, v in raw_labels.items()):
+                                        labels = raw_labels
+                                if (image_id
+                                    and labels.get("opspilot.app_id") == str(identity.app_id)
+                                    and labels.get("opspilot.deployment_id") == str(deployment_id)
+                                    and labels.get("org.opencontainers.image.revision") == build_source_sha):
                                     inspect_success = True
                     except Exception:
                         inspect_success = False

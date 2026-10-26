@@ -421,13 +421,13 @@ export class GuardedSshExecutionSession {
 
   private readonly onChannelError = (): void => this.failClosed('SSH_SESSION_DISCONNECTED')
 
-  async startBuild(imageTag: string): Promise<void> {
+  async startBuild(imageTag: string, sourceSha: string): Promise<void> {
     if (this.stateValue !== 'active') throw new GuardedSshSessionError('SSH_OUTCOME_UNKNOWN')
     if (this.sequence >= GUARDED_SSH_MAX_MESSAGES) {
       this.failClosed('SSH_PROTOCOL_LIMIT')
       throw new GuardedSshSessionError('SSH_PROTOCOL_LIMIT')
     }
-    if (!/^[a-zA-Z0-9_.-]+:[a-zA-Z0-9_.-]+$/.test(imageTag)) {
+    if (!/^[a-zA-Z0-9_.-]+:[a-zA-Z0-9_.-]+$/.test(imageTag) || !/^[0-9a-f]{40}$/.test(sourceSha)) {
       throw new GuardedSshSessionError('SSH_BUILD_REJECTED')
     }
     this.activeImageTag = imageTag
@@ -439,7 +439,8 @@ export class GuardedSshExecutionSession {
       sequence: this.sequence,
       operation: 'start_build',
       deployment_id: this.deploymentId,
-      image_tag: imageTag
+      image_tag: imageTag,
+      source_sha: sourceSha
     })
     this.sequence += 1
   }
@@ -506,7 +507,7 @@ export class GuardedSshExecutionSession {
         return {
           state: 'failed',
           exitCode: resp.exit_code ?? 1,
-          errorTail: resp.error_tail
+          errorTail: resp.error_tail ? '[REDACTED BUILD OUTPUT]' : undefined
         }
       }
       await new Promise<void>((resolve, reject) => {

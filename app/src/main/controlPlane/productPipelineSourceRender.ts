@@ -80,28 +80,20 @@ export class ProductSourceRenderError extends Error {
 }
 
 export function redactSecrets(text: string): string {
-  if (!text) return ''
-  let redacted = text
-  redacted = redacted.replace(/:\/\/([^:\s/@]+):([^@\s/]+)@/g, '://$1:[REDACTED]@')
-  redacted = redacted.replace(
-    /-----BEGIN [A-Z ]+ PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+ PRIVATE KEY-----/g,
-    '[REDACTED PRIVATE KEY]'
-  )
-  redacted = redacted.replace(/\bBearer\s+[A-Za-z0-9\-._~+/]+/gi, 'Bearer [REDACTED]')
-  redacted = redacted.replace(
-    /\b(password|passwd|secret|token|api[_-]?key|auth|bearer|credentials?)\b\s*([:=])\s*([^\s;,'"]+)/gi,
-    '$1$2[REDACTED]'
-  )
-  return redacted
+  // Log build là dữ liệu tùy ý, có thể bị cắt giữa secret; regex không chứng minh an toàn.
+  return text ? '[REDACTED BUILD OUTPUT]' : ''
 }
 
 export function validatePreflightSourceAndPlan(
   database: Database.Database,
-  snapshot: PreparedProductGitSnapshot
+  snapshot: PreparedProductGitSnapshot,
+  collectorDirectory = resolveCollectorDir()
 ): {
   app: App
   plan: BuildPlan
   sourceTree: ReturnType<typeof buildSourceTree>
+  sourceFiles: TransferFile[]
+  sourceManifest: { totalBytes: number; sha256: string }
 } {
   const app = new AppRepository(database).getById(snapshot.claim.app_id)
   const sourceTree = buildSourceTree(snapshot.rootDirectory)
@@ -116,7 +108,19 @@ export function validatePreflightSourceAndPlan(
   ) {
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
   }
-  return { app, plan: detection.plan, sourceTree }
+  const sourceFiles = [
+    ...collectFiles(snapshot.rootDirectory, ''),
+    ...collectFiles(collectorDirectory, 'collector')
+  ]
+  const sourceManifest = prepareManifest(sourceFiles)
+  const renderFiles = renderPlanFiles(app, detection.plan, sourceTree)
+  const renderManifest = prepareManifest(renderFiles)
+  if (
+    sourceFiles.length + renderFiles.length > GUARDED_SSH_TRANSFER_MAX_FILES ||
+    sourceManifest.totalBytes + renderManifest.totalBytes > GUARDED_SSH_TRANSFER_MAX_TOTAL_BYTES
+  )
+    throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_LIMIT_EXCEEDED')
+  return { app, plan: detection.plan, sourceTree, sourceFiles, sourceManifest }
 }
 
 /**
@@ -132,7 +136,11 @@ export async function stageProductSourceAndRenderWithSession(
     signal?: AbortSignal
   } = {}
 ): Promise<ProductSourceRenderResult> {
-  const { app, plan, sourceTree } = validatePreflightSourceAndPlan(database, snapshot)
+  const { app, plan, sourceTree, sourceFiles, sourceManifest } = validatePreflightSourceAndPlan(
+    database,
+    snapshot,
+    options.collector_directory
+  )
 
   const deployment = new DeploymentRepository(database).getById(session.deploymentId)
   if (
@@ -145,12 +153,6 @@ export async function stageProductSourceAndRenderWithSession(
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_INVALID_DEPLOYMENT')
   }
 
-  const collectorDirectory = options.collector_directory ?? resolveCollectorDir()
-  const sourceFiles = [
-    ...collectFiles(snapshot.rootDirectory, ''),
-    ...collectFiles(collectorDirectory, 'collector')
-  ]
-  const sourceManifest = prepareManifest(sourceFiles)
   const renderFiles = renderPlanFiles(app, plan, sourceTree, deployment.image_tag)
   const renderManifest = prepareManifest(renderFiles)
   if (
@@ -201,7 +203,7 @@ export async function executeProductBuildWithSession(
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_INVALID_DEPLOYMENT')
   }
 
-  await session.startBuild(deployment.image_tag)
+  await session.startBuild(deployment.image_tag, snapshot.metadata.commitSha)
   const settled = await session.pollBuildUntilSettled({
     timeoutMs: options.timeoutMs,
     pollIntervalMs: options.pollIntervalMs
@@ -214,7 +216,8 @@ export async function executeProductBuildWithSession(
     const hasValidTag = settled.imageTag === deployment.image_tag
     const hasValidLabels =
       labels['opspilot.app_id'] === expectedAppId &&
-      labels['opspilot.deployment_id'] === expectedDeploymentId
+      labels['opspilot.deployment_id'] === expectedDeploymentId &&
+      labels['org.opencontainers.image.revision'] === snapshot.metadata.commitSha
     const hasValidImageId =
       typeof settled.imageId === 'string' && /^sha256:[0-9a-f]{64}$/.test(settled.imageId)
 
@@ -263,7 +266,8 @@ export async function stageAndBuildProduct(
     build_poll_interval_ms?: number
   }
 ): Promise<ProductBuildResult> {
-  validatePreflightSourceAndPlan(database, snapshot)
+  ensureNotAborted(options.signal)
+  validatePreflightSourceAndPlan(database, snapshot, options.collector_directory)
   const session = await openProductGuardedSshSession(repository, ssh, snapshot, {
     vps_id: options.vps_id,
     target_helper_path: options.target_helper_path,
@@ -308,7 +312,8 @@ export async function stageProductSourceAndRender(
     collector_directory?: string
   }
 ): Promise<ProductSourceRenderResult> {
-  validatePreflightSourceAndPlan(database, snapshot)
+  ensureNotAborted(options.signal)
+  validatePreflightSourceAndPlan(database, snapshot, options.collector_directory)
   const session = await openProductGuardedSshSession(repository, ssh, snapshot, {
     vps_id: options.vps_id,
     target_helper_path: options.target_helper_path,

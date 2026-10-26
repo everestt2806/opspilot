@@ -114,6 +114,8 @@ export type GuardedSshStartBuildRequest = Readonly<{
   operation: 'start_build'
   deployment_id: ProductDeploymentId
   image_tag: string
+  /** Full lowercase Git SHA bound to the canonical prepared snapshot. */
+  source_sha: string
 }>
 
 export type GuardedSshPollBuildRequest = Readonly<{

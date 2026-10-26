@@ -91,6 +91,8 @@
 
 ## Mẫu để ghi tiếp
 
+| 2026-10-26 | [deploy] | Leader nhận ownership sau handoff Gemini: start_build bắt buộc source_sha full 40 hex; helper gắn OCI revision, helper và Product adapter kiểm chứng revision/app/deployment; log build tùy ý không qua wire/result, chỉ stable marker; source/path/quota/collector/render preflight trước dispatch. | POST-004..006 tái hiện sau bản 1491514: regex lọt quoted/prefixed/PKCS8 secret, quota sau open, receipt thiếu source SHA. Một thay đổi contract đồng bộ caller/helper/tests, chưa push. | docs/contracts/product-guarded-ssh-session.ts; H1 helper/session/adapter/tests |
+
 ```
 | 2026-08-XX | [ssh] | Đổi từ sftp sang tar-over-ssh cho bước UPLOAD | sftp từng file chậm gấp ~6 lần với node_modules | M1, M4 bước UPLOAD |
 ```

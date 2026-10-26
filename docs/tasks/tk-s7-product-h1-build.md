@@ -151,6 +151,10 @@ Danh sách file thay đổi và tạo mới:
 
 ## 6. Nhật ký Tiến độ (Task Journal)
 
+- **START 26/10 — Leader nhận ownership sau handoff `1491514`** theo quyền user đã giao; lỗi POST-004..006 đã ghi trong master/review commit `9cecadd` trước sửa. Giữ claim/lỗi Gemini trong lịch sử dưới đây.
+- **UPDATE 26/10 — POST-004..006**: Không chuyển arbitrary raw build output qua wire/session/result, dùng stable marker và exit code; không tuyên bố regex có thể nhận biết mọi secret. Preflight source/path/collector/render/quota trước open/dispatch. `start_build.source_sha` full 40 hex, OCI revision label cùng app/deployment; kiểm tra ở helper và Product adapter. Contract/caller/helper/tests + DECISIONS đổi đồng bộ, không sửa DB/config.
+- **HANDOFF-LOCAL 26/10 — HEAD của commit `fix(control-plane): đóng lỗi còn lại sau retest (H1-R)`**, parent `1491514`, chưa push. Focused Vitest 25/25 PASS; Python Linux `test_product_build_helper.py` 7/7 PASS với 4 biến thể secret, 7 receipt label cases và 4 image ID cases. Scoped backend regression PASS, Node/Web typecheck PASS. Real Linux SSH + Docker integration chưa được xem là PASS; vẫn giữ blocker, collector build thuộc checkpoint runtime tiếp theo.
+
 - **START 26/10/2026**: Nhận task H1 trên branch `feat/product-h1-build` (worktree `../opspilot-h1-build`) từ baseline `02ba4b2`. Đọc kỹ ADR-011, H0 contract, và hồ sơ điều phối.
 - **UPDATE 26/10/2026**: Triển khai mở rộng guarded SSH session với typed operations `start_build` và `poll_build`. Tách adapter pipeline source render và controlled test suite.
 - **HANDOFF-LOCAL 26/10/2026**: Hoàn tất H1 ban đầu, commit `0faed1f`.
