@@ -341,7 +341,7 @@ try {
   )
   const stageRoot = join(adapterTargetState, 'product-staging', 'app-3', 'deployment-1')
   assert.equal(
-    readFileSync(join(stageRoot, 'source', 'large-fixture.txt')).length,
+    readFileSync(join(stageRoot, 'source', 'src', 'large-fixture.txt')).length,
     chunkFixture.length
   )
   assert.equal(

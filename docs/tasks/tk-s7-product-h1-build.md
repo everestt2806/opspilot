@@ -1,5 +1,7 @@
 # Hồ sơ Task H1 — Product Build Trong Cùng Guarded Session
 
+**Cập nhật Leader sau retest 26/10:** Các kết quả/nhận định Gemini trong mục 4–5 bên dưới là lịch sử handoff. Source `3e06f2d` + layout fix `2453604` đã qua lab thực tế: SQLite scratch trên Windows → pinned OpenSSH trong container Linux → helper Python → Docker Linux 29.0.1. Wrong pin bị reject; Express có lockfile build thành công với full image ID và OCI revision; postinstall lỗi có sentinel giả được xác nhận đã thực thi, response không chứa raw log; mỗi ca một canonical deployment/một channel; V1 còn khỏe; cleanup nonce PASS. Đây là **PASS cho slice H1 build**, chưa phải activate/health/rollback/publish/finalization H2 hoặc fetch GitHub production.
+
 ## Thông tin chung
 
 - **Task**: H1 — Product Build trong cùng guarded SSH session
@@ -150,6 +152,8 @@ Danh sách file thay đổi và tạo mới:
 ---
 
 ## 6. Nhật ký Tiến độ (Task Journal)
+
+- **HANDOFF-LOCAL 26/10 — HEAD của commit `test(control-plane): ghi nghiệm thu SSH Docker cho H1 (H1-R)`**, parent `2453604`; chưa push. Real lab trên review `41b302a`: nonce `7a0b3aa1a24ddea6` PASS wrong pin/success/definite failure/V1 preservation/scoped cleanup; lượt bổ sung còn kiểm tra sentinel đã thực sự chạy trong postinstall trước khi kết luận redaction PASS. App/DB/key/sshd/port riêng, không WSL/production mutation. H1 fix checkpoints `3e06f2d`, `2453604`; logs/negative evidence giữ trong master. H0 SSH lab chỉnh đủ đường dẫn `source/src/large-fixture.txt`; full H0 script chưa chạy lại, 8 Linux transfer regressions đã PASS. DoD claim chỉ build slice; H2 còn backlog.
 
 - **START/UPDATE 26/10 — POST-007**, sau fix `3e06f2d`: Leader dựng real localhost pinned SSH trong Docker container và phát hiện fixture Express build fail vì source flat không khớp `COPY src/...` trong template chung. Ghi lỗi trước sửa tại review commit `3c1790f`, evidence nonce `e085cf8871c4daba`; V1 vẫn khỏe và cleanup PASS. Sửa manifest source thành `src/`, collector giữ độc lập; cập nhật đường dẫn kiểm chứng H0 lab, không sửa template Desktop. Chưa coi gate live là PASS trước khi chạy lại.
 
