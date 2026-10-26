@@ -30,7 +30,7 @@ import {
 } from '../deploy/templates'
 import { resolveCollectorDir, resolveCollectorAppPath } from '../deploy/pipeline'
 import type { PreparedProductGitSnapshot } from './productSnapshotPreparation'
-import { openProductGuardedSshSession } from './guardedSshSession'
+import { GuardedSshExecutionSession, openProductGuardedSshSession } from './guardedSshSession'
 
 type TransferFile = {
   path: string
@@ -54,6 +54,18 @@ export type ProductSourceRenderResult = Readonly<{
   finalization: 'not_implemented_remote_outcome_unknown'
 }>
 
+export type ProductBuildResult = Readonly<{
+  state: 'build_succeeded' | 'build_failed_definite'
+  app_id: number
+  deployment_id: number
+  target_sha: string
+  image_tag: string
+  image_id?: string
+  labels?: Record<string, string>
+  exit_code?: number
+  error_tail?: string
+}>
+
 export class ProductSourceRenderError extends Error {
   constructor(
     readonly code:
@@ -68,22 +80,17 @@ export class ProductSourceRenderError extends Error {
 }
 
 /**
- * Source/render-only Product adapter. Reuses the existing detector, upload
- * exclusions and render templates, but never invokes DeployPipeline.setup(),
- * DeploymentRepository.createNextVersion(), activation or Desktop finalization.
+ * Caller-owned session variant for stageProductSourceAndRender.
+ * Transfers source and render scopes without closing the session.
  */
-export async function stageProductSourceAndRender(
+export async function stageProductSourceAndRenderWithSession(
+  session: GuardedSshExecutionSession,
   database: Database.Database,
-  repository: ProductDeployRepository,
-  ssh: SshManager,
   snapshot: PreparedProductGitSnapshot,
   options: {
-    vps_id: number
-    target_helper_path: string
-    target_state_root: string
-    signal?: AbortSignal
     collector_directory?: string
-  }
+    signal?: AbortSignal
+  } = {}
 ): Promise<ProductSourceRenderResult> {
   const app = new AppRepository(database).getById(snapshot.claim.app_id)
   const sourceTree = buildSourceTree(snapshot.rootDirectory)
@@ -99,13 +106,24 @@ export async function stageProductSourceAndRender(
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
   }
 
+  const deployment = new DeploymentRepository(database).getById(session.deploymentId)
+  if (
+    deployment.id !== session.deploymentId ||
+    deployment.app_id !== app.id ||
+    deployment.status !== 'building' ||
+    deployment.git_commit_sha !== snapshot.metadata.commitSha ||
+    deployment.git_repo_url !== snapshot.metadata.repositoryUrl
+  ) {
+    throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_INVALID_DEPLOYMENT')
+  }
+
   const collectorDirectory = options.collector_directory ?? resolveCollectorDir()
   const sourceFiles = [
     ...collectFiles(snapshot.rootDirectory, ''),
     ...collectFiles(collectorDirectory, 'collector')
   ]
   const sourceManifest = prepareManifest(sourceFiles)
-  const renderFiles = renderPlanFiles(app, detection.plan, sourceTree)
+  const renderFiles = renderPlanFiles(app, detection.plan, sourceTree, deployment.image_tag)
   const renderManifest = prepareManifest(renderFiles)
   if (
     sourceFiles.length + renderFiles.length > GUARDED_SSH_TRANSFER_MAX_FILES ||
@@ -114,6 +132,94 @@ export async function stageProductSourceAndRender(
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_LIMIT_EXCEEDED')
   }
 
+  await transferScope(session, 'source', sourceFiles, sourceManifest, options.signal)
+  await transferScope(session, 'render', renderFiles, renderManifest, options.signal)
+
+  return {
+    state: 'source_render_staged_dispatch_unknown',
+    app_id: app.id,
+    deployment_id: session.deploymentId,
+    target_sha: snapshot.metadata.commitSha,
+    source_file_count: sourceFiles.length,
+    source_bytes: sourceManifest.totalBytes,
+    source_manifest_sha256: sourceManifest.sha256,
+    render_file_count: renderFiles.length,
+    render_bytes: renderManifest.totalBytes,
+    render_manifest_sha256: renderManifest.sha256,
+    finalization: 'not_implemented_remote_outcome_unknown'
+  }
+}
+
+/**
+ * Execute Docker build target-side within the caller's active guarded SSH session.
+ */
+export async function executeProductBuildWithSession(
+  session: GuardedSshExecutionSession,
+  database: Database.Database,
+  snapshot: PreparedProductGitSnapshot,
+  options: {
+    timeoutMs?: number
+    pollIntervalMs?: number
+    signal?: AbortSignal
+  } = {}
+): Promise<ProductBuildResult> {
+  const deployment = new DeploymentRepository(database).getById(session.deploymentId)
+  if (
+    deployment.id !== session.deploymentId ||
+    deployment.app_id !== snapshot.claim.app_id ||
+    deployment.status !== 'building' ||
+    deployment.git_commit_sha !== snapshot.metadata.commitSha
+  ) {
+    throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_INVALID_DEPLOYMENT')
+  }
+
+  await session.startBuild(deployment.image_tag)
+  const settled = await session.pollBuildUntilSettled({
+    timeoutMs: options.timeoutMs,
+    pollIntervalMs: options.pollIntervalMs
+  })
+
+  if (settled.state === 'succeeded') {
+    return {
+      state: 'build_succeeded',
+      app_id: snapshot.claim.app_id,
+      deployment_id: session.deploymentId,
+      target_sha: snapshot.metadata.commitSha,
+      image_tag: deployment.image_tag,
+      image_id: settled.imageId,
+      labels: settled.labels
+    }
+  }
+
+  return {
+    state: 'build_failed_definite',
+    app_id: snapshot.claim.app_id,
+    deployment_id: session.deploymentId,
+    target_sha: snapshot.metadata.commitSha,
+    image_tag: deployment.image_tag,
+    exit_code: settled.exitCode,
+    error_tail: settled.errorTail
+  }
+}
+
+/**
+ * Combined source, render, and build within one guarded SSH session and target lock.
+ */
+export async function stageAndBuildProduct(
+  database: Database.Database,
+  repository: ProductDeployRepository,
+  ssh: SshManager,
+  snapshot: PreparedProductGitSnapshot,
+  options: {
+    vps_id: number
+    target_helper_path: string
+    target_state_root: string
+    signal?: AbortSignal
+    collector_directory?: string
+    build_timeout_ms?: number
+    build_poll_interval_ms?: number
+  }
+): Promise<ProductBuildResult> {
   const session = await openProductGuardedSshSession(repository, ssh, snapshot, {
     vps_id: options.vps_id,
     target_helper_path: options.target_helper_path,
@@ -122,37 +228,60 @@ export async function stageProductSourceAndRender(
   })
   let success = false
   try {
-    const deployment = new DeploymentRepository(database).getById(session.deploymentId)
-    if (
-      deployment.id !== session.deploymentId ||
-      deployment.app_id !== app.id ||
-      deployment.status !== 'building' ||
-      deployment.git_commit_sha !== snapshot.metadata.commitSha ||
-      deployment.git_repo_url !== snapshot.metadata.repositoryUrl
-    ) {
-      throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_INVALID_DEPLOYMENT')
-    }
-    await transferScope(session, 'source', sourceFiles, sourceManifest, options.signal)
-    await transferScope(session, 'render', renderFiles, renderManifest, options.signal)
-    success = true
-    return {
-      state: 'source_render_staged_dispatch_unknown',
-      app_id: app.id,
-      deployment_id: session.deploymentId,
-      target_sha: snapshot.metadata.commitSha,
-      source_file_count: sourceFiles.length,
-      source_bytes: sourceManifest.totalBytes,
-      source_manifest_sha256: sourceManifest.sha256,
-      render_file_count: renderFiles.length,
-      render_bytes: renderManifest.totalBytes,
-      render_manifest_sha256: renderManifest.sha256,
-      finalization: 'not_implemented_remote_outcome_unknown'
-    }
+    await stageProductSourceAndRenderWithSession(session, database, snapshot, {
+      collector_directory: options.collector_directory,
+      signal: options.signal
+    })
+    const buildResult = await executeProductBuildWithSession(session, database, snapshot, {
+      timeoutMs: options.build_timeout_ms,
+      pollIntervalMs: options.build_poll_interval_ms,
+      signal: options.signal
+    })
+    success = buildResult.state === 'build_succeeded'
+    return buildResult
   } finally {
     if (success && session.state === 'active') {
       await session.close()
     } else if (session.state === 'active') {
-      // A dispatch marker exists; close the channel and retain unknown. Do not replay or retry.
+      session.failClosed(options.signal?.aborted ? 'SSH_SESSION_ABORTED' : 'SSH_OUTCOME_UNKNOWN')
+    }
+  }
+}
+
+/**
+ * Source/render-only Product adapter (backward compatibility wrapper).
+ */
+export async function stageProductSourceAndRender(
+  database: Database.Database,
+  repository: ProductDeployRepository,
+  ssh: SshManager,
+  snapshot: PreparedProductGitSnapshot,
+  options: {
+    vps_id: number
+    target_helper_path: string
+    target_state_root: string
+    signal?: AbortSignal
+    collector_directory?: string
+  }
+): Promise<ProductSourceRenderResult> {
+  const session = await openProductGuardedSshSession(repository, ssh, snapshot, {
+    vps_id: options.vps_id,
+    target_helper_path: options.target_helper_path,
+    target_state_root: options.target_state_root,
+    signal: options.signal
+  })
+  let success = false
+  try {
+    const res = await stageProductSourceAndRenderWithSession(session, database, snapshot, {
+      collector_directory: options.collector_directory,
+      signal: options.signal
+    })
+    success = true
+    return res
+  } finally {
+    if (success && session.state === 'active') {
+      await session.close()
+    } else if (session.state === 'active') {
       session.failClosed(options.signal?.aborted ? 'SSH_SESSION_ABORTED' : 'SSH_OUTCOME_UNKNOWN')
     }
   }
@@ -209,14 +338,16 @@ function isEnvironmentFile(name: string): boolean {
 function renderPlanFiles(
   app: App,
   plan: BuildPlan,
-  sourceTree: ReturnType<typeof buildSourceTree>
+  sourceTree: ReturnType<typeof buildSourceTree>,
+  imageTag?: string
 ): TransferFile[] {
   if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/.test(app.name)) {
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
   }
+  const resolvedImageTag = imageTag || `${app.name}:product-source-render`
   const vars: ComposeVars = {
     APP_NAME: app.name,
-    IMAGE_TAG: `${app.name}:product-source-render`,
+    IMAGE_TAG: resolvedImageTag,
     HOST_PORT: String(app.host_port),
     CONTAINER_PORT: String(app.container_port),
     HEALTHCHECK_PATH: app.healthcheck_path,

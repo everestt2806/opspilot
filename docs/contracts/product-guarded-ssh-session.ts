@@ -107,6 +107,23 @@ export type GuardedSshCloseRequest = Readonly<{
   deployment_id: ProductDeploymentId
 }>
 
+export type GuardedSshStartBuildRequest = Readonly<{
+  version: typeof GUARDED_SSH_PROTOCOL_VERSION
+  request_id: string
+  sequence: number
+  operation: 'start_build'
+  deployment_id: ProductDeploymentId
+  image_tag: string
+}>
+
+export type GuardedSshPollBuildRequest = Readonly<{
+  version: typeof GUARDED_SSH_PROTOCOL_VERSION
+  request_id: string
+  sequence: number
+  operation: 'poll_build'
+  deployment_id: ProductDeploymentId
+}>
+
 export type GuardedSshRequest =
   | GuardedSshOpenRequest
   | GuardedSshPhaseRequest
@@ -115,7 +132,11 @@ export type GuardedSshRequest =
   | GuardedSshFileChunkRequest
   | GuardedSshFinishFileRequest
   | GuardedSshCompleteScopeRequest
+  | GuardedSshStartBuildRequest
+  | GuardedSshPollBuildRequest
   | GuardedSshCloseRequest
+
+export type GuardedSshBuildState = 'started' | 'running' | 'succeeded' | 'failed'
 
 export type GuardedSshResponse = Readonly<{
   version: typeof GUARDED_SSH_PROTOCOL_VERSION
@@ -124,6 +145,12 @@ export type GuardedSshResponse = Readonly<{
   state: 'accepted' | 'rejected'
   deployment_id?: ProductDeploymentId
   error_code?: GuardedSshErrorCode | TargetGuardRejectCode
+  build_state?: GuardedSshBuildState
+  exit_code?: number
+  image_id?: string
+  image_tag?: string
+  labels?: Record<string, string>
+  error_tail?: string
 }>
 
 export type GuardedSshErrorCode =
@@ -140,6 +167,10 @@ export type GuardedSshErrorCode =
   | 'SSH_TRANSFER_REJECTED'
   | 'SSH_TRANSFER_INCOMPLETE'
   | 'SSH_TRANSFER_CHECKSUM'
+  | 'SSH_BUILD_REJECTED'
+  | 'SSH_BUILD_FAILED'
+  | 'SSH_BUILD_TIMEOUT'
+  | 'SSH_BUILD_NOT_ACTIVE'
   | 'SSH_AUTHORITY_STALE'
   | 'SSH_DISPATCH_RECONCILIATION_REQUIRED'
   | 'SSH_DISPATCH_REJECTED'

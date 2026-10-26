@@ -151,8 +151,8 @@ export class GuardedSshExecutionSession {
     private readonly claim: ProductClaimToken,
     deploymentId: number,
     private readonly targetBinding: ProductDispatchTargetBinding,
-    private readonly signal: AbortSignal | undefined,
-    requestTimeoutMs: number
+    private readonly signal: AbortSignal | undefined = undefined,
+    requestTimeoutMs: number = GUARDED_SSH_REQUEST_TIMEOUT_MS
   ) {
     this.deploymentId = deploymentId
     this.requestTimeoutMs = requestTimeoutMs
@@ -420,13 +420,111 @@ export class GuardedSshExecutionSession {
 
   private readonly onChannelError = (): void => this.failClosed('SSH_SESSION_DISCONNECTED')
 
+  async startBuild(imageTag: string): Promise<void> {
+    if (this.stateValue !== 'active') throw new GuardedSshSessionError('SSH_OUTCOME_UNKNOWN')
+    if (this.sequence >= GUARDED_SSH_MAX_MESSAGES) {
+      this.failClosed('SSH_PROTOCOL_LIMIT')
+      throw new GuardedSshSessionError('SSH_PROTOCOL_LIMIT')
+    }
+    if (!/^[a-zA-Z0-9_.-]+:[a-zA-Z0-9_.-]+$/.test(imageTag)) {
+      throw new GuardedSshSessionError('SSH_BUILD_REJECTED')
+    }
+    await this.authorizeWritePhase('build')
+    this.assertAuthority()
+    await this.exchange({
+      version: 1,
+      request_id: randomUUID(),
+      sequence: this.sequence,
+      operation: 'start_build',
+      deployment_id: this.deploymentId,
+      image_tag: imageTag
+    })
+    this.sequence += 1
+  }
+
+  async pollBuild(): Promise<GuardedSshResponse> {
+    if (this.stateValue !== 'active') throw new GuardedSshSessionError('SSH_OUTCOME_UNKNOWN')
+    if (this.sequence >= GUARDED_SSH_MAX_MESSAGES) {
+      this.failClosed('SSH_PROTOCOL_LIMIT')
+      throw new GuardedSshSessionError('SSH_PROTOCOL_LIMIT')
+    }
+    this.assertAuthority()
+    const response = await this.exchangeWithResponse({
+      version: 1,
+      request_id: randomUUID(),
+      sequence: this.sequence,
+      operation: 'poll_build',
+      deployment_id: this.deploymentId
+    })
+    this.sequence += 1
+    return response
+  }
+
+  async pollBuildUntilSettled(
+    options: {
+      timeoutMs?: number
+      pollIntervalMs?: number
+    } = {}
+  ): Promise<
+    | { state: 'succeeded'; imageId: string; imageTag: string; labels?: Record<string, string> }
+    | { state: 'failed'; exitCode: number; errorTail?: string }
+  > {
+    const timeoutMs = options.timeoutMs ?? 300_000
+    const pollIntervalMs = options.pollIntervalMs ?? 1_000
+    const startTime = Date.now()
+
+    while (Date.now() - startTime < timeoutMs) {
+      if (this.signal?.aborted) {
+        this.failClosed('SSH_SESSION_ABORTED')
+        throw new GuardedSshSessionError('SSH_SESSION_ABORTED')
+      }
+      this.assertAuthority()
+      const resp = await this.pollBuild()
+      if (resp.build_state === 'succeeded') {
+        if (!resp.image_id) {
+          this.failClosed('SSH_BUILD_FAILED')
+          throw new GuardedSshSessionError('SSH_BUILD_FAILED')
+        }
+        return {
+          state: 'succeeded',
+          imageId: resp.image_id,
+          imageTag: resp.image_tag || '',
+          labels: resp.labels
+        }
+      }
+      if (resp.build_state === 'failed') {
+        return {
+          state: 'failed',
+          exitCode: resp.exit_code ?? 1,
+          errorTail: resp.error_tail
+        }
+      }
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, pollIntervalMs)
+        if (this.signal) {
+          const onAbort = (): void => {
+            clearTimeout(timer)
+            reject(new GuardedSshSessionError('SSH_SESSION_ABORTED'))
+          }
+          this.signal.addEventListener('abort', onAbort, { once: true })
+        }
+      })
+    }
+    this.failClosed('SSH_BUILD_TIMEOUT')
+    throw new GuardedSshSessionError('SSH_BUILD_TIMEOUT')
+  }
+
   private exchange(request: GuardedSshRequest): Promise<void> {
+    return this.exchangeWithResponse(request).then(() => undefined)
+  }
+
+  private exchangeWithResponse(request: GuardedSshRequest): Promise<GuardedSshResponse> {
     if (this.stateValue !== 'active' || this.signal?.aborted) {
       this.failClosed('SSH_SESSION_ABORTED')
       return Promise.reject(new GuardedSshSessionError('SSH_SESSION_ABORTED'))
     }
     if (this.pending) return Promise.reject(new GuardedSshSessionError('SSH_PROTOCOL_DUPLICATE'))
-    return new Promise<void>((resolve, reject) => {
+    return new Promise<GuardedSshResponse>((resolve, reject) => {
       this.pending = (response) => {
         if (response.request_id !== request.request_id || response.sequence !== request.sequence) {
           this.failClosed('SSH_PROTOCOL_SEQUENCE')
@@ -444,7 +542,7 @@ export class GuardedSshExecutionSession {
           reject(new GuardedSshSessionError('SSH_TARGET_REJECTED'))
           return
         }
-        resolve()
+        resolve(response)
       }
       this.pendingReject = reject
       this.pendingTimer = setTimeout(
