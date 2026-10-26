@@ -151,6 +151,8 @@ Danh sách file thay đổi và tạo mới:
 
 ## 6. Nhật ký Tiến độ (Task Journal)
 
+- **START/UPDATE 26/10 — POST-007**, sau fix `3e06f2d`: Leader dựng real localhost pinned SSH trong Docker container và phát hiện fixture Express build fail vì source flat không khớp `COPY src/...` trong template chung. Ghi lỗi trước sửa tại review commit `3c1790f`, evidence nonce `e085cf8871c4daba`; V1 vẫn khỏe và cleanup PASS. Sửa manifest source thành `src/`, collector giữ độc lập; cập nhật đường dẫn kiểm chứng H0 lab, không sửa template Desktop. Chưa coi gate live là PASS trước khi chạy lại.
+
 - **START 26/10 — Leader nhận ownership sau handoff `1491514`** theo quyền user đã giao; lỗi POST-004..006 đã ghi trong master/review commit `9cecadd` trước sửa. Giữ claim/lỗi Gemini trong lịch sử dưới đây.
 - **UPDATE 26/10 — POST-004..006**: Không chuyển arbitrary raw build output qua wire/session/result, dùng stable marker và exit code; không tuyên bố regex có thể nhận biết mọi secret. Preflight source/path/collector/render/quota trước open/dispatch. `start_build.source_sha` full 40 hex, OCI revision label cùng app/deployment; kiểm tra ở helper và Product adapter. Contract/caller/helper/tests + DECISIONS đổi đồng bộ, không sửa DB/config.
 - **HANDOFF-LOCAL 26/10 — HEAD của commit `fix(control-plane): đóng lỗi còn lại sau retest (H1-R)`**, parent `1491514`, chưa push. Focused Vitest 25/25 PASS; Python Linux `test_product_build_helper.py` 7/7 PASS với 4 biến thể secret, 7 receipt label cases và 4 image ID cases. Scoped backend regression PASS, Node/Web typecheck PASS. Real Linux SSH + Docker integration chưa được xem là PASS; vẫn giữ blocker, collector build thuộc checkpoint runtime tiếp theo.

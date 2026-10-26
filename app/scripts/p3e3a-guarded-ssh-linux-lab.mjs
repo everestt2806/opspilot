@@ -345,17 +345,17 @@ try {
     chunkFixture.length
   )
   assert.equal(
-    readFileSync(join(stageRoot, 'source', 'large-fixture.txt')).equals(chunkFixture),
+    readFileSync(join(stageRoot, 'source', 'src', 'large-fixture.txt')).equals(chunkFixture),
     true
   )
-  assert.equal(existsSync(join(stageRoot, 'source', '.env')), false)
+  assert.equal(existsSync(join(stageRoot, 'source', 'src', '.env')), false)
   assert.equal(
     readFileSync(join(stageRoot, 'render', '.env'), 'utf8').includes('LAB_SECRET_SENTINEL'),
     false
   )
   assert.equal(
     createHash('sha256')
-      .update(readFileSync(join(stageRoot, 'source', 'large-fixture.txt')))
+      .update(readFileSync(join(stageRoot, 'source', 'src', 'large-fixture.txt')))
       .digest('hex'),
     createHash('sha256').update(chunkFixture).digest('hex')
   )

@@ -109,7 +109,7 @@ export function validatePreflightSourceAndPlan(
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
   }
   const sourceFiles = [
-    ...collectFiles(snapshot.rootDirectory, ''),
+    ...collectFiles(snapshot.rootDirectory, 'src'),
     ...collectFiles(collectorDirectory, 'collector')
   ]
   const sourceManifest = prepareManifest(sourceFiles)
