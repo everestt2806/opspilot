@@ -131,3 +131,15 @@ git status
 - **UPDATE 26/10/2026**: Tạo fixture Express tối thiểu tại `app/scripts/product-docker-lab/fixture/` gồm `package.json`, `server.js`, `Dockerfile`, `Dockerfile.fail`, `docker-compose.yml`. Tạo `runner.mjs` hỗ trợ tự cấp port, build, run, poll `/health`, kiểm tra `run_id`, và cleanup nghiêm ngặt.
 - **UPDATE 26/10/2026**: Chạy kiểm thử tự động, phát hiện và tinh chỉnh tracking lỗi và cấp phát port liên tiếp độc lập. Lượt chạy kiểm chứng đạt 7/7 gates hoàn hảo (happy path, build fail, health fail, 2 runs liên tiếp, bảo toàn tài nguyên người dùng, daemon down handling).
 - **HANDOFF-LOCAL 26/10/2026**: Hoàn tất tài liệu và dossier L0. Sẵn sàng commit cục bộ đúng quy ước. Trạng thái đề xuất: CHỜ REVIEW (local).
+- **UPDATE 26/10/2026 (Đêm - Fix L0-R01 & L0-R02 theo Review Leader)**:
+  - **Sửa L0-R01 (Ownership & Fail-closed cleanup)**:
+    - Bổ sung preflight collision check: kiểm tra container/image cùng tên trước khi chạy; nếu đã có sẵn thì từ chối chạy để tránh ghi đè/xóa nhầm tài nguyên của lượt khác.
+    - Track ownership nghiêm ngặt: chỉ đánh dấu `containerCreated = true` / `imageCreated = true` khi lệnh tạo thực sự thành công. Khi build thất bại, block cleanup tuyệt đối không gọi `docker rm -f` vào container chưa từng được tạo.
+    - Sửa `getExistingInventory()`: ném lỗi rõ ràng (`fail-closed`) khi lệnh `docker ps` hoặc `docker images` exit khác 0, không biến stdout rỗng thành mảng rỗng / zero leaks.
+    - Hậu kiểm cleanup fail-closed: nếu lệnh `docker ps` / `docker images` kiểm tra tài nguyên rò rỉ bị lỗi (exit != 0) hoặc lệnh xóa thất bại, đánh dấu `unverified = true` và chuyển `success = false`, thông báo lỗi rõ ràng.
+  - **Sửa L0-R02 (Health deadline bao trùm fetch & body)**:
+    - Bổ sung `AbortSignal` cho từng lệnh `fetch` theo ngân sách còn lại (`remainingBudget = healthTimeoutMs - elapsed`), tối đa 3.000ms mỗi request.
+    - Kiểm tra lại deadline ngay sau khi nhận headers và sau khi đọc body; từ chối response đến sau khi hết budget 15s.
+    - Giới hạn kích thước body tối đa 64 KiB để tránh tràn bộ nhớ khi server trả payload rác/vô hạn.
+  - **Kiểm chứng regression**: Tạo `runner.test.mjs` kiểm tra các ca negative: fail-closed inventory, preflight collision, không xóa container khi build fail. Kết quả: 3/3 unit tests PASS. Live Docker suite: Docker Desktop daemon trên host hiện đang tắt, runner phát hiện chính xác daemon down và dừng an toàn tại precheck (Gate live Docker tạm thời BLOCKED chờ bật lại daemon trên host).
+- **HANDOFF-LOCAL 26/10/2026 (L0-R)**: Hoàn tất sửa L0-R01 và L0-R02. Controlled tests 3/3 PASS (negative paths: fail-closed inventory, collision rejection, không xóa uncreated container). Real Docker suite: BLOCKED do Docker Desktop daemon trên host hiện đang tắt. Sẵn sàng bàn giao cho Leader review độc lập.

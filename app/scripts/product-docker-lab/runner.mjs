@@ -118,10 +118,16 @@ export async function checkEnvironment(customEnv) {
   };
 }
 
-/** Get list of existing container and image IDs before running test */
-export async function getExistingInventory() {
-  const cRes = await runCmd('docker', ['ps', '-a', '--format', '{{.ID}} {{.Names}}']);
-  const iRes = await runCmd('docker', ['images', '--format', '{{.ID}} {{.Repository}}:{{.Tag}}']);
+/** Get list of existing container and image IDs before running test (Fail-Closed on error) */
+export async function getExistingInventory(customEnv) {
+  const cRes = await runCmd('docker', ['ps', '-a', '--format', '{{.ID}} {{.Names}}'], { env: customEnv });
+  if (cRes.exitCode !== 0) {
+    throw new Error(`getExistingInventory failed for containers (exit ${cRes.exitCode}): ${cRes.stderr || cRes.stdout}`);
+  }
+  const iRes = await runCmd('docker', ['images', '--format', '{{.ID}} {{.Repository}}:{{.Tag}}'], { env: customEnv });
+  if (iRes.exitCode !== 0) {
+    throw new Error(`getExistingInventory failed for images (exit ${iRes.exitCode}): ${iRes.stderr || iRes.stdout}`);
+  }
 
   return {
     containers: cRes.stdout.split('\n').map((s) => s.trim()).filter(Boolean),
@@ -154,14 +160,29 @@ export async function executeLabRun(options = {}) {
     cleanupReport: {
       containersRemoved: [],
       imagesRemoved: [],
-      leakedResources: []
+      leakedResources: [],
+      errors: [],
+      unverified: false
     }
   };
 
   let createdContainerId = '';
   let createdImageId = '';
+  let containerCreated = false;
+  let imageCreated = false;
 
   try {
+    // Step 0: Preflight Collision Check
+    const preCheckC = await runCmd('docker', ['ps', '-a', '--filter', `name=^/${containerName}$`, '--format', '{{.ID}}']);
+    if (preCheckC.exitCode === 0 && preCheckC.stdout.trim() && !options.allowPreexisting) {
+      throw new Error(`Preflight collision: container with name "${containerName}" already exists (${preCheckC.stdout.trim()})`);
+    }
+
+    const preCheckI = await runCmd('docker', ['images', '--filter', `reference=${imageName}`, '--format', '{{.ID}}']);
+    if (preCheckI.exitCode === 0 && preCheckI.stdout.trim() && !options.allowPreexisting) {
+      throw new Error(`Preflight collision: image with reference "${imageName}" already exists (${preCheckI.stdout.trim()})`);
+    }
+
     // Step 1: Build image
     result.step = 'BUILD';
     const buildRes = await runCmd(
@@ -184,6 +205,7 @@ export async function executeLabRun(options = {}) {
     if (buildRes.exitCode !== 0) {
       throw new Error(`Docker build failed (exit ${buildRes.exitCode}): ${buildRes.stderr || buildRes.stdout}`);
     }
+    imageCreated = true;
     result.timestamps.buildFinished = new Date().toISOString();
 
     // Inspect image ID
@@ -219,23 +241,54 @@ export async function executeLabRun(options = {}) {
     if (runRes.exitCode !== 0) {
       throw new Error(`Docker run failed (exit ${runRes.exitCode}): ${runRes.stderr || runRes.stdout}`);
     }
+    containerCreated = true;
     createdContainerId = runRes.stdout.trim();
     result.containerId = createdContainerId;
     result.timestamps.containerStarted = new Date().toISOString();
 
-    // Step 3: Health check (polling loopback)
+    // Step 3: Health check (polling loopback with deadline-bounded fetch & body)
     result.step = 'HEALTH_CHECK';
     const healthUrl = `http://127.0.0.1:${port}/health`;
-    const healthTimeoutMs = 15_000;
-    const pollIntervalMs = 500;
+    const healthTimeoutMs = options.healthTimeoutMs ?? 15_000;
+    const pollIntervalMs = options.pollIntervalMs ?? 250;
     const startHealthPoll = Date.now();
     let healthPass = false;
 
     while (Date.now() - startHealthPoll < healthTimeoutMs) {
+      const elapsed = Date.now() - startHealthPoll;
+      const remainingBudget = healthTimeoutMs - elapsed;
+      if (remainingBudget <= 0) break;
+
+      const reqTimeout = Math.min(remainingBudget, 3_000);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), reqTimeout);
+
       try {
-        const resp = await fetch(healthUrl, { method: 'GET' });
+        const resp = await fetch(healthUrl, { method: 'GET', signal: controller.signal });
+        clearTimeout(timer);
+
+        // Recheck deadline after receiving headers
+        if (Date.now() - startHealthPoll >= healthTimeoutMs) {
+          throw new Error(`Health response arrived after overall budget of ${healthTimeoutMs}ms exceeded`);
+        }
+
         result.httpStatus = resp.status;
-        const body = await resp.json();
+        const bodyText = await resp.text();
+
+        // Limit body size
+        if (bodyText.length > 64 * 1024) {
+          throw new Error(`Health response body exceeds 64 KiB limit (${bodyText.length} bytes)`);
+        }
+        if (Date.now() - startHealthPoll >= healthTimeoutMs) {
+          throw new Error(`Health response body reading exceeded overall budget of ${healthTimeoutMs}ms`);
+        }
+
+        let body;
+        try {
+          body = JSON.parse(bodyText);
+        } catch {
+          throw new Error(`Health response is not valid JSON: ${bodyText.slice(0, 200)}`);
+        }
         result.responseBody = body;
 
         if (resp.status === 200) {
@@ -252,10 +305,17 @@ export async function executeLabRun(options = {}) {
           }
         }
       } catch (fetchErr) {
+        clearTimeout(timer);
         if (simulateFailHealth && String(fetchErr).includes('Controlled health failure triggered')) {
           throw fetchErr;
         }
-        await new Promise((r) => setTimeout(r, pollIntervalMs));
+        if (String(fetchErr).includes('overall budget') || String(fetchErr).includes('exceeds 64 KiB')) {
+          throw fetchErr;
+        }
+        const sleepTime = Math.min(pollIntervalMs, Math.max(0, healthTimeoutMs - (Date.now() - startHealthPoll)));
+        if (sleepTime > 0) {
+          await new Promise((r) => setTimeout(r, sleepTime));
+        }
       }
     }
 
@@ -269,28 +329,54 @@ export async function executeLabRun(options = {}) {
     result.failedAtStep = result.step;
     result.error = err instanceof Error ? err.message : String(err);
   } finally {
-    // Step 4: Strict Cleanup of solely this run's resources
-    // 1. Remove container
-    const rmContainer = await runCmd('docker', ['rm', '-f', containerName], { timeoutMs: 20_000 });
-    if (rmContainer.exitCode === 0) {
-      result.cleanupReport.containersRemoved.push(containerName);
+    // Step 4: Strict Cleanup of solely this run's verified resources
+    // 1. Remove container ONLY if container was created by this run
+    if (containerCreated) {
+      const rmContainer = await runCmd('docker', ['rm', '-f', createdContainerId || containerName], { timeoutMs: 20_000 });
+      if (rmContainer.exitCode === 0) {
+        result.cleanupReport.containersRemoved.push(createdContainerId || containerName);
+      } else {
+        result.cleanupReport.unverified = true;
+        result.cleanupReport.errors.push(`Failed to remove container ${createdContainerId || containerName} (exit ${rmContainer.exitCode}): ${rmContainer.stderr}`);
+      }
     }
 
-    // 2. Remove image
-    const rmImage = await runCmd('docker', ['rmi', '-f', imageName], { timeoutMs: 20_000 });
-    if (rmImage.exitCode === 0) {
-      result.cleanupReport.imagesRemoved.push(imageName);
+    // 2. Remove image ONLY if image was created by this run
+    if (imageCreated) {
+      const rmImage = await runCmd('docker', ['rmi', '-f', createdImageId || imageName], { timeoutMs: 20_000 });
+      if (rmImage.exitCode === 0) {
+        result.cleanupReport.imagesRemoved.push(createdImageId || imageName);
+      } else {
+        result.cleanupReport.unverified = true;
+        result.cleanupReport.errors.push(`Failed to remove image ${createdImageId || imageName} (exit ${rmImage.exitCode}): ${rmImage.stderr}`);
+      }
     }
 
     // 3. Post-cleanup verification: confirm no residual container or image with this runId
-    const checkC = await runCmd('docker', ['ps', '-a', '--filter', `name=${containerName}`, '--format', '{{.ID}}']);
-    if (checkC.stdout.trim()) {
-      result.cleanupReport.leakedResources.push(`Container leaked: ${containerName} (${checkC.stdout.trim()})`);
+    const checkC = await runCmd('docker', ['ps', '-a', '--filter', `label=opspilot.lab.run_id=${runId}`, '--format', '{{.ID}}']);
+    if (checkC.exitCode !== 0) {
+      result.cleanupReport.unverified = true;
+      result.cleanupReport.errors.push(`Failed to verify container cleanup (exit ${checkC.exitCode}): ${checkC.stderr}`);
+      result.cleanupReport.leakedResources.push(`Unverified container for run ${runId}`);
+    } else if (checkC.stdout.trim()) {
+      result.cleanupReport.leakedResources.push(`Container leaked: ${checkC.stdout.trim()}`);
     }
 
-    const checkI = await runCmd('docker', ['images', '--filter', `reference=${imageName}`, '--format', '{{.ID}}']);
-    if (checkI.stdout.trim()) {
-      result.cleanupReport.leakedResources.push(`Image leaked: ${imageName} (${checkI.stdout.trim()})`);
+    const checkI = await runCmd('docker', ['images', '--filter', `label=opspilot.lab.run_id=${runId}`, '--format', '{{.ID}}']);
+    if (checkI.exitCode !== 0) {
+      result.cleanupReport.unverified = true;
+      result.cleanupReport.errors.push(`Failed to verify image cleanup (exit ${checkI.exitCode}): ${checkI.stderr}`);
+      result.cleanupReport.leakedResources.push(`Unverified image for run ${runId}`);
+    } else if (checkI.stdout.trim()) {
+      result.cleanupReport.leakedResources.push(`Image leaked: ${checkI.stdout.trim()}`);
+    }
+
+    // Fail-Closed: any cleanup error, unverified status, or leaked resource fails the run
+    if (result.cleanupReport.unverified || result.cleanupReport.leakedResources.length > 0 || result.cleanupReport.errors.length > 0) {
+      result.success = false;
+      if (!result.error) {
+        result.error = `Cleanup unverified or failed: ${result.cleanupReport.errors.join('; ') || result.cleanupReport.leakedResources.join(', ')}`;
+      }
     }
 
     result.step = result.success ? 'COMPLETED' : 'FAILED_CLEANED';
@@ -304,7 +390,7 @@ export async function executeLabRun(options = {}) {
 /** Run the full L0 verification suite */
 export async function runFullSuite() {
   console.log('===============================================================');
-  console.log('   OPSPILOT DOCKER LAB READINESS VERIFICATION SUITE (L0)       ');
+  console.log('   OPSPILOT DOCKER LAB READINESS VERIFICATION SUITE (L0-R)      ');
   console.log('===============================================================\n');
 
   let failedCases = 0;
@@ -317,7 +403,9 @@ export async function runFullSuite() {
   console.log(`  Compose Version: ${env.composeVersion}`);
   if (!env.ok) {
     console.error(`  FAIL: Environment check failed. ${env.error || 'Engine is not Linux'}`);
-    failedCases++;
+    console.error('  Docker daemon is not running or unreachable. Real Docker verification gates are BLOCKED.');
+    console.error('  Hướng gỡ chặn: Khởi động Docker Desktop trên máy host để mở pipe dockerDesktopLinuxEngine.\n');
+    return 1;
   } else {
     console.log('  PASS: Docker daemon is responsive with Linux engine, and Docker Compose is available.\n');
   }
@@ -338,7 +426,7 @@ export async function runFullSuite() {
   console.log(`  Duration:         ${happyResult.durationMs}ms`);
   console.log(`  Cleanup report:   containers=${happyResult.cleanupReport.containersRemoved.length}, images=${happyResult.cleanupReport.imagesRemoved.length}, leaked=${happyResult.cleanupReport.leakedResources.length}`);
 
-  if (happyResult.success && happyResult.cleanupReport.leakedResources.length === 0) {
+  if (happyResult.success && happyResult.cleanupReport.leakedResources.length === 0 && !happyResult.cleanupReport.unverified) {
     console.log('  PASS: Happy path passed with verified response and clean teardown.\n');
   } else {
     console.error(`  FAIL: Happy path failed at step ${happyResult.failedAtStep}: ${happyResult.error}`);
@@ -351,12 +439,13 @@ export async function runFullSuite() {
   console.log(`  Run ID:           ${failBuildResult.runId}`);
   console.log(`  Step failed:      ${failBuildResult.failedAtStep}`);
   console.log(`  Error reported:   ${failBuildResult.error ? failBuildResult.error.split('\n')[0] : 'none'}`);
-  console.log(`  Cleanup check:    leaked=${failBuildResult.cleanupReport.leakedResources.length}`);
+  console.log(`  Containers rm:    ${failBuildResult.cleanupReport.containersRemoved.length}`);
+  console.log(`  Cleanup check:    leaked=${failBuildResult.cleanupReport.leakedResources.length}, unverified=${failBuildResult.cleanupReport.unverified}`);
 
-  if (!failBuildResult.success && failBuildResult.failedAtStep === 'BUILD' && failBuildResult.cleanupReport.leakedResources.length === 0) {
-    console.log('  PASS: Controlled build failure reported non-zero exit code and left no leaked resources.\n');
+  if (!failBuildResult.success && failBuildResult.failedAtStep === 'BUILD' && failBuildResult.cleanupReport.leakedResources.length === 0 && failBuildResult.cleanupReport.containersRemoved.length === 0) {
+    console.log('  PASS: Controlled build failure reported non-zero exit code, avoided deleting unowned container, and left no leaks.\n');
   } else {
-    console.error('  FAIL: Expected build failure with clean state, but got unexpected outcome.');
+    console.error('  FAIL: Expected build failure with clean state without unowned deletions.');
     failedCases++;
   }
 
@@ -376,7 +465,7 @@ export async function runFullSuite() {
     failedCases++;
   }
 
-  // Case 5: Two Consecutive Runs (Independence, no port/identity collision)
+  // Case 5: Two Consecutive Runs (Port & Resource Isolation)
   console.log('--- [CASE 5: Two Consecutive Runs (Port & Resource Isolation)] ---');
   const port1 = await getAvailablePort(31001);
   const run1 = await executeLabRun({ port: port1 });
@@ -422,7 +511,7 @@ export async function runFullSuite() {
     failedCases++;
   }
 
-  // Case 7: Simulated Daemon Down / Unreachable
+  // Case 7: Daemon Down / Unreachable Error Handling
   console.log('--- [CASE 7: Daemon Down / Unreachable Error Handling] ---');
   const fakeEnv = { DOCKER_HOST: 'npipe:////./pipe/nonexistent_docker_engine_probe_test' };
   const daemonDownCheck = await checkEnvironment(fakeEnv);
@@ -435,9 +524,52 @@ export async function runFullSuite() {
     failedCases++;
   }
 
+  // Case 8: Ownership Safety — Build Failure Does Not Issue Forced Deletes on Uncreated Container
+  console.log('--- [CASE 8: L0-R01 Ownership: No Forced Delete on Failed Build] ---');
+  const failOwnershipCheck = await executeLabRun({
+    runId: `uncreated_${Date.now()}`,
+    dockerfile: 'Dockerfile.fail'
+  });
+  if (failOwnershipCheck.cleanupReport.containersRemoved.length === 0 && !failOwnershipCheck.cleanupReport.unverified) {
+    console.log('  PASS: Build failure did not trigger container removal for a container that was never created.\n');
+  } else {
+    console.error('  FAIL: Build failure issued container deletion for unowned/uncreated container.');
+    failedCases++;
+  }
+
+  // Case 9: L0-R01 Fail-Closed Inventory on Failure
+  console.log('--- [CASE 9: L0-R01 Fail-Closed: Inventory Error Throws Instead of Returning Empty] ---');
+  let inventoryThrew = false;
+  try {
+    await getExistingInventory(fakeEnv);
+  } catch (err) {
+    inventoryThrew = true;
+    console.log(`  Caught expected inventory error: ${err.message.split('\n')[0]}`);
+  }
+  if (inventoryThrew) {
+    console.log('  PASS: getExistingInventory fails closed with error when docker command fails.\n');
+  } else {
+    console.error('  FAIL: getExistingInventory returned empty array instead of failing closed.');
+    failedCases++;
+  }
+
+  // Case 10: L0-R02 Health Timeout Budget Enforcement
+  console.log('--- [CASE 10: L0-R02 Health Budget Deadline Rejection] ---');
+  const shortTimeoutRun = await executeLabRun({
+    healthTimeoutMs: 1000,
+    pollIntervalMs: 200,
+    simulateFailHealth: true
+  });
+  if (!shortTimeoutRun.success && shortTimeoutRun.failedAtStep === 'HEALTH_CHECK') {
+    console.log(`  PASS: Health check halted accurately when budget expired: ${shortTimeoutRun.error}\n`);
+  } else {
+    console.error('  FAIL: Health check did not enforce finite budget.');
+    failedCases++;
+  }
+
   console.log('===============================================================');
   if (failedCases === 0) {
-    console.log('   ALL L0 DOCKER LAB VERIFICATION GATES PASSED (7 / 7)        ');
+    console.log('   ALL L0 DOCKER LAB VERIFICATION GATES PASSED (10 / 10)       ');
     console.log('===============================================================');
     return 0;
   } else {
