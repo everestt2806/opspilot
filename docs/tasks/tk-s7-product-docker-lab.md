@@ -127,6 +127,10 @@ git status
 
 ## 6. Nhật ký Tiến độ (Task Journal)
 
+- **START 26/10 — Leader nhận ownership sau handoff `315fa47`**, theo lệnh user cho phép tự sửa sau test và ghi lỗi. Báo cáo tổng đã commit `9cecadd` trên review trước mọi thay đổi implementation; giữ toàn bộ lỗi/claim Gemini ở dưới.
+- **UPDATE 26/10 — POST-001..003**: Timer giữ tới khi đọc/cancel body, streaming cap 64KiB; preflight lỗi dừng trước mutation, bỏ bypass collision; iidfile/cidfile + label nonce riêng và inspect ownership trước cleanup; chỉ untag image theo tag không force, cleanup partial container có CID. Thay regression phụ thuộc daemon bằng 12 ca có Docker argv giả/HTTP loopback thật. Case Docker health deadline dùng fixture delay 2000ms và budget 1000ms, thực sự chạm timeout.
+- **HANDOFF-LOCAL 26/10 — HEAD của commit `fix(lab): đóng lỗi còn lại sau retest (L0-R)`**, parent `315fa47`, chưa push. `node --test app/scripts/product-docker-lab/runner.test.mjs`: 12/12 PASS. `node app/scripts/product-docker-lab/runner.mjs --suite`: 10/10 PASS trên Docker Linux 29.0.1/Compose 2.40.3; inventory baseline 13 containers/21 images giữ nguyên; không đổi Docker config/context/service. Không suy ra Product pipeline đã đủ gate.
+
 - **START 26/10/2026**: Nhận task L0 trên branch `feat/product-docker-lab` (worktree `../opspilot-docker-lab`) từ baseline `02ba4b2` (chứa H0 commit `900ad77`). Khảo sát môi trường: Docker Desktop Linux Engine đang chạy bình thường, Docker Compose v2.40.3 sẵn sàng. Ghi nhận thiếu skill `task-discipline`, áp dụng quy trình repo.
 - **UPDATE 26/10/2026**: Tạo fixture Express tối thiểu tại `app/scripts/product-docker-lab/fixture/` gồm `package.json`, `server.js`, `Dockerfile`, `Dockerfile.fail`, `docker-compose.yml`. Tạo `runner.mjs` hỗ trợ tự cấp port, build, run, poll `/health`, kiểm tra `run_id`, và cleanup nghiêm ngặt.
 - **UPDATE 26/10/2026**: Chạy kiểm thử tự động, phát hiện và tinh chỉnh tracking lỗi và cấp phát port liên tiếp độc lập. Lượt chạy kiểm chứng đạt 7/7 gates hoàn hảo (happy path, build fail, health fail, 2 runs liên tiếp, bảo toàn tài nguyên người dùng, daemon down handling).

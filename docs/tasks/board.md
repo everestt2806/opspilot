@@ -13,7 +13,7 @@
 |---|---|---|---|
 | H0 | Leader | CHỜ REVIEW | `900ad77` đã push feature branch; 8 Linux filesystem tests, 247 Vitest tests, typecheck/lint/artifact + localhost SSH lab pass; source/render slice accepted, chưa full Product deployment/merge. |
 | H1 | Kim / Worker | BACKLOG | Build Express qua cùng guarded session, tag/version canonical, không duplicate deployment; phụ thuộc H0 và real Docker gate. |
-| L0 | Kim / Worker lab | BACKLOG | Docker daemon/Compose + fixture local trong file riêng; bắt đầu song song H1. Không phải Product pipeline proof. |
+| L0 | Kim / Leader nhận sau Gemini | CHỜ REVIEW | Local HEAD của commit fix(L0-R), parent `315fa47`, chưa push. Leader đóng POST-001..003 sau ghi nhận report: 12/12 regression HTTP thật + 10/10 Docker gates PASS; giữ 13 containers/21 images baseline. Không phải Product SSH proof. |
 | H2-D | Kim / reviewer | BACKLOG | Proposal activate/rollback/fenced finalization, failure matrix; chuẩn bị song song H1, chưa sửa runtime/contract. |
 | H2 | Kim / Worker | BACKLOG | Activate/health/rollback/publish và fenced finalization, không replay unknown; phụ thuộc H1. |
 
