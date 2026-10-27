@@ -153,6 +153,7 @@ Danh sách file thay đổi và tạo mới:
 
 ## 6. Nhật ký Tiến độ (Task Journal)
 
+- **REVIEW 27/10/2026**: Đã gom L0 và H1 vào nhánh thống nhất `feat/product-l0-h1-build` trong workspace chính `opspilot`, push remote và mở [PR #33](https://github.com/everestt2806/opspilot/pull/33) để Leader review.
 - **HANDOFF-LOCAL 26/10 — HEAD của commit `test(control-plane): ghi nghiệm thu SSH Docker cho H1 (H1-R)`**, parent `2453604`; chưa push. Real lab trên review `41b302a`: nonce `7a0b3aa1a24ddea6` PASS wrong pin/success/definite failure/V1 preservation/scoped cleanup; lượt bổ sung còn kiểm tra sentinel đã thực sự chạy trong postinstall trước khi kết luận redaction PASS. App/DB/key/sshd/port riêng, không WSL/production mutation. H1 fix checkpoints `3e06f2d`, `2453604`; logs/negative evidence giữ trong master. H0 SSH lab chỉnh đủ đường dẫn `source/src/large-fixture.txt`; full H0 script chưa chạy lại, 8 Linux transfer regressions đã PASS. DoD claim chỉ build slice; H2 còn backlog.
 
 - **START/UPDATE 26/10 — POST-007**, sau fix `3e06f2d`: Leader dựng real localhost pinned SSH trong Docker container và phát hiện fixture Express build fail vì source flat không khớp `COPY src/...` trong template chung. Ghi lỗi trước sửa tại review commit `3c1790f`, evidence nonce `e085cf8871c4daba`; V1 vẫn khỏe và cleanup PASS. Sửa manifest source thành `src/`, collector giữ độc lập; cập nhật đường dẫn kiểm chứng H0 lab, không sửa template Desktop. Chưa coi gate live là PASS trước khi chạy lại.

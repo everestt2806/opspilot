@@ -127,6 +127,7 @@ git status
 
 ## 6. Nhật ký Tiến độ (Task Journal)
 
+- **REVIEW 27/10/2026**: Đã gom L0 và H1 vào nhánh thống nhất `feat/product-l0-h1-build` trong workspace chính `opspilot`, push remote và mở [PR #33](https://github.com/everestt2806/opspilot/pull/33) để Leader review.
 - **START 26/10 — Leader nhận ownership sau handoff `315fa47`**, theo lệnh user cho phép tự sửa sau test và ghi lỗi. Báo cáo tổng đã commit `9cecadd` trên review trước mọi thay đổi implementation; giữ toàn bộ lỗi/claim Gemini ở dưới.
 - **UPDATE 26/10 — POST-001..003**: Timer giữ tới khi đọc/cancel body, streaming cap 64KiB; preflight lỗi dừng trước mutation, bỏ bypass collision; iidfile/cidfile + label nonce riêng và inspect ownership trước cleanup; chỉ untag image theo tag không force, cleanup partial container có CID. Thay regression phụ thuộc daemon bằng 12 ca có Docker argv giả/HTTP loopback thật. Case Docker health deadline dùng fixture delay 2000ms và budget 1000ms, thực sự chạm timeout.
 - **HANDOFF-LOCAL 26/10 — HEAD của commit `fix(lab): đóng lỗi còn lại sau retest (L0-R)`**, parent `315fa47`, chưa push. `node --test app/scripts/product-docker-lab/runner.test.mjs`: 12/12 PASS. `node app/scripts/product-docker-lab/runner.mjs --suite`: 10/10 PASS trên Docker Linux 29.0.1/Compose 2.40.3; inventory baseline 13 containers/21 images giữ nguyên; không đổi Docker config/context/service. Không suy ra Product pipeline đã đủ gate.
