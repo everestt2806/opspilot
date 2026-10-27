@@ -9,8 +9,11 @@ import re
 import shutil
 import stat
 import struct
+import subprocess
 import sys
 import tempfile
+import threading
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +51,10 @@ TARGET_CODES = {
     "TARGET_LOCK_TIMEOUT_INVALID",
     "TARGET_LOCK_RELEASE_FAILED",
     "TARGET_PHASE_REJECTED",
+    "SSH_BUILD_REJECTED",
+    "SSH_BUILD_FAILED",
+    "SSH_BUILD_TIMEOUT",
+    "SSH_BUILD_NOT_ACTIVE",
 }
 
 
@@ -430,10 +437,69 @@ def reject(request: dict[str, Any], code: str) -> None:
     )
 
 
+class BoundedOutputBuffer:
+    def __init__(self, max_bytes: int = 64 * 1024) -> None:
+        self._max_bytes = max_bytes
+        self._chunks: deque[str] = deque()
+        self._current_bytes = 0
+        self._lock = threading.Lock()
+
+    def append(self, item: str | bytes) -> None:
+        if not item:
+            return
+        if isinstance(item, bytes):
+            text = item.decode("utf-8", errors="replace")
+            byte_len = len(item)
+        else:
+            text = item
+            byte_len = len(item.encode("utf-8", errors="replace"))
+
+        with self._lock:
+            if byte_len > self._max_bytes:
+                encoded = text.encode("utf-8", errors="replace")
+                text = encoded[-self._max_bytes:].decode("utf-8", errors="replace")
+                byte_len = len(text.encode("utf-8", errors="replace"))
+
+            self._chunks.append(text)
+            self._current_bytes += byte_len
+            while self._current_bytes > self._max_bytes and self._chunks:
+                popped = self._chunks.popleft()
+                self._current_bytes -= len(popped.encode("utf-8", errors="replace"))
+
+    def get_tail(self, max_len: int = 4096) -> str:
+        with self._lock:
+            combined = "".join(self._chunks)
+            return combined[-max_len:]
+
+    def clear(self) -> None:
+        with self._lock:
+            self._chunks.clear()
+            self._current_bytes = 0
+
+    def __iter__(self):
+        with self._lock:
+            return iter(list(self._chunks))
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._chunks)
+
+
+def redact_secrets(text: str) -> str:
+    # Log tùy ý có thể bị cắt giữa secret, không đưa raw tail qua wire.
+    return "[REDACTED BUILD OUTPUT]" if text else ""
+
+
 def main() -> int:
     execution: GuardedExecution | None = None
     transfer: TransferState | None = None
+    identity: ExecutionIdentity | None = None
     deployment_id: int | None = None
+    build_proc: subprocess.Popen[str] | None = None
+    build_thread: threading.Thread | None = None
+    build_image_tag: str | None = None
+    build_source_sha: str | None = None
+    output_buffer = BoundedOutputBuffer(max_bytes=64 * 1024)
     expected_sequence = 1
     seen_request_ids: set[str] = set()
     try:
@@ -547,6 +613,15 @@ def main() -> int:
                 ):
                     reject(request, "TARGET_EXECUTION_NOT_ACTIVE")
                     return 3
+                if build_proc is not None and build_proc.poll() is None:
+                    try:
+                        build_proc.terminate()
+                        build_proc.wait(timeout=1)
+                    except Exception:
+                        try:
+                            build_proc.kill()
+                        except Exception:
+                            pass
                 if transfer is not None:
                     transfer.cleanup_incomplete()
                 execution.__exit__(None, None, None)
@@ -601,6 +676,232 @@ def main() -> int:
                         "deployment_id": deployment_id,
                     }
                 )
+            elif operation == "start_build":
+                if (
+                    execution is None
+                    or transfer is None
+                    or identity is None
+                    or not _exact_keys(
+                        request,
+                        {
+                            "version",
+                            "request_id",
+                            "sequence",
+                            "operation",
+                            "deployment_id",
+                            "image_tag",
+                            "source_sha",
+                        },
+                    )
+                    or request.get("deployment_id") != deployment_id
+                    or not transfer.source_complete
+                    or not transfer.render_complete
+                    or build_proc is not None
+                ):
+                    reject(request, "SSH_BUILD_REJECTED")
+                    return 3
+                image_tag = request.get("image_tag")
+                source_sha = request.get("source_sha")
+                if (
+                    not isinstance(image_tag, str)
+                    or not isinstance(source_sha, str)
+                    or not re.fullmatch(r"[0-9a-f]{40}", source_sha)
+                    or len(image_tag) > 256
+                    or not re.fullmatch(
+                        r"^[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_.-]+)*:[a-zA-Z0-9_.-]+$",
+                        image_tag,
+                    )
+                ):
+                    reject(request, "SSH_BUILD_REJECTED")
+                    return 3
+                dockerfile = transfer.directory / "render" / "Dockerfile"
+                context_dir = transfer.directory / "source"
+                if not dockerfile.is_file() or not context_dir.is_dir():
+                    reject(request, "SSH_BUILD_REJECTED")
+                    return 3
+                try:
+                    execution.authorize_write_phase("build")
+                except TargetGuardError as error:
+                    reject(
+                        request,
+                        error.code if error.code in TARGET_CODES else "TARGET_MARKER_INVALID",
+                    )
+                    return 3
+                build_image_tag = image_tag
+                build_source_sha = source_sha
+                output_buffer.clear()
+                try:
+                    build_proc = subprocess.Popen(
+                        [
+                            "docker",
+                            "build",
+                            "-t",
+                            image_tag,
+                            "--label",
+                            f"opspilot.app_id={identity.app_id}",
+                            "--label",
+                            f"opspilot.deployment_id={deployment_id}",
+                            "--label",
+                            f"org.opencontainers.image.revision={source_sha}",
+                            "-f",
+                            str(dockerfile),
+                            str(context_dir),
+                        ],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1,
+                    )
+
+                    def _drain_output(pipe: Any, buffer: BoundedOutputBuffer) -> None:
+                        try:
+                            while True:
+                                chunk = pipe.read(4096)
+                                if not chunk:
+                                    break
+                                buffer.append(chunk)
+                        except Exception:
+                            pass
+                        finally:
+                            try:
+                                pipe.close()
+                            except Exception:
+                                pass
+
+                    build_thread = threading.Thread(
+                        target=_drain_output,
+                        args=(build_proc.stdout, output_buffer),
+                        daemon=True,
+                    )
+                    build_thread.start()
+                except OSError:
+                    reject(request, "SSH_BUILD_FAILED")
+                    return 3
+                write_frame(
+                    {
+                        "version": VERSION,
+                        "request_id": request_id,
+                        "sequence": sequence,
+                        "state": "accepted",
+                        "deployment_id": deployment_id,
+                        "build_state": "started",
+                    }
+                )
+            elif operation == "poll_build":
+                if (
+                    execution is None
+                    or not _exact_keys(
+                        request,
+                        {
+                            "version",
+                            "request_id",
+                            "sequence",
+                            "operation",
+                            "deployment_id",
+                        },
+                    )
+                    or request.get("deployment_id") != deployment_id
+                ):
+                    reject(request, "SSH_BUILD_REJECTED")
+                    return 3
+                if build_proc is None or build_image_tag is None:
+                    reject(request, "SSH_BUILD_NOT_ACTIVE")
+                    return 3
+                try:
+                    execution.authorize_write_phase("build")
+                except TargetGuardError as error:
+                    reject(
+                        request,
+                        error.code if error.code in TARGET_CODES else "TARGET_MARKER_INVALID",
+                    )
+                    return 3
+                returncode = build_proc.poll()
+                if returncode is None:
+                    write_frame(
+                        {
+                            "version": VERSION,
+                            "request_id": request_id,
+                            "sequence": sequence,
+                            "state": "accepted",
+                            "deployment_id": deployment_id,
+                            "build_state": "running",
+                        }
+                    )
+                elif returncode == 0:
+                    image_id = ""
+                    labels: dict[str, str] = {}
+                    inspect_success = False
+                    try:
+                        inspect_res = subprocess.run(
+                            ["docker", "inspect", build_image_tag],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                            check=False,
+                            timeout=10.0,
+                        )
+                        if inspect_res.returncode == 0:
+                            inspected = json.loads(inspect_res.stdout)
+                            if isinstance(inspected, list) and len(inspected) > 0:
+                                raw_id = inspected[0].get("Id", "")
+                                if isinstance(raw_id, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", raw_id):
+                                    image_id = raw_id
+                                raw_labels = inspected[0].get("Config", {}).get("Labels")
+                                if isinstance(raw_labels, dict):
+                                    if all(isinstance(k, str) and isinstance(v, str) for k, v in raw_labels.items()):
+                                        labels = raw_labels
+                                if (image_id
+                                    and labels.get("opspilot.app_id") == str(identity.app_id)
+                                    and labels.get("opspilot.deployment_id") == str(deployment_id)
+                                    and labels.get("org.opencontainers.image.revision") == build_source_sha):
+                                    inspect_success = True
+                    except Exception:
+                        inspect_success = False
+
+                    if inspect_success:
+                        write_frame(
+                            {
+                                "version": VERSION,
+                                "request_id": request_id,
+                                "sequence": sequence,
+                                "state": "accepted",
+                                "deployment_id": deployment_id,
+                                "build_state": "succeeded",
+                                "exit_code": 0,
+                                "image_id": image_id,
+                                "image_tag": build_image_tag,
+                                "labels": labels,
+                            }
+                        )
+                    else:
+                        error_tail = redact_secrets(output_buffer.get_tail(4096))
+                        write_frame(
+                            {
+                                "version": VERSION,
+                                "request_id": request_id,
+                                "sequence": sequence,
+                                "state": "accepted",
+                                "deployment_id": deployment_id,
+                                "build_state": "failed",
+                                "exit_code": 1,
+                                "error_code": "SSH_BUILD_FAILED",
+                                "error_tail": error_tail,
+                            }
+                        )
+                else:
+                    error_tail = redact_secrets(output_buffer.get_tail(4096))
+                    write_frame(
+                        {
+                            "version": VERSION,
+                            "request_id": request_id,
+                            "sequence": sequence,
+                            "state": "accepted",
+                            "deployment_id": deployment_id,
+                            "build_state": "failed",
+                            "exit_code": returncode,
+                            "error_tail": error_tail,
+                        }
+                    )
             else:
                 reject(request, "SSH_PROTOCOL_MALFORMED")
                 return 2
@@ -610,6 +911,15 @@ def main() -> int:
         # will classify EOF as an unknown outcome without persisting raw text.
         return 2
     finally:
+        if build_proc is not None and build_proc.poll() is None:
+            try:
+                build_proc.terminate()
+                build_proc.wait(timeout=1)
+            except Exception:
+                try:
+                    build_proc.kill()
+                except Exception:
+                    pass
         if transfer is not None:
             transfer.cleanup_incomplete()
         if execution is not None:

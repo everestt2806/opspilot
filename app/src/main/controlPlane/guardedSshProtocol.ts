@@ -19,6 +19,10 @@ const STABLE_ERROR_CODES = new Set([
   'SSH_TRANSFER_REJECTED',
   'SSH_TRANSFER_INCOMPLETE',
   'SSH_TRANSFER_CHECKSUM',
+  'SSH_BUILD_REJECTED',
+  'SSH_BUILD_FAILED',
+  'SSH_BUILD_TIMEOUT',
+  'SSH_BUILD_NOT_ACTIVE',
   'SSH_AUTHORITY_STALE',
   'SSH_DISPATCH_RECONCILIATION_REQUIRED',
   'SSH_DISPATCH_REJECTED',
@@ -108,13 +112,22 @@ export function requireSingleGuardedSshResponse(
 function isResponse(value: unknown): value is GuardedSshResponse {
   if (!value || typeof value !== 'object') return false
   const response = value as Record<string, unknown>
+  const ALLOWED_RESPONSE_KEYS = new Set([
+    'version',
+    'request_id',
+    'sequence',
+    'state',
+    'deployment_id',
+    'error_code',
+    'build_state',
+    'exit_code',
+    'image_id',
+    'image_tag',
+    'labels',
+    'error_tail'
+  ])
   const keys = Object.keys(response)
-  if (
-    keys.some(
-      (key) =>
-        !['version', 'request_id', 'sequence', 'state', 'deployment_id', 'error_code'].includes(key)
-    )
-  ) {
+  if (keys.some((key) => !ALLOWED_RESPONSE_KEYS.has(key))) {
     return false
   }
   return (
@@ -124,6 +137,19 @@ function isResponse(value: unknown): value is GuardedSshResponse {
     (response.state === 'accepted' || response.state === 'rejected') &&
     (response.error_code === undefined ||
       (typeof response.error_code === 'string' && STABLE_ERROR_CODES.has(response.error_code))) &&
-    (response.deployment_id === undefined || Number.isSafeInteger(response.deployment_id))
+    (response.deployment_id === undefined || Number.isSafeInteger(response.deployment_id)) &&
+    (response.build_state === undefined ||
+      ['started', 'running', 'succeeded', 'failed'].includes(response.build_state as string)) &&
+    (response.exit_code === undefined || Number.isSafeInteger(response.exit_code)) &&
+    (response.image_id === undefined || typeof response.image_id === 'string') &&
+    (response.image_tag === undefined || typeof response.image_tag === 'string') &&
+    (response.labels === undefined ||
+      (typeof response.labels === 'object' &&
+        response.labels !== null &&
+        !Array.isArray(response.labels) &&
+        Object.entries(response.labels).every(
+          ([k, v]) => typeof k === 'string' && typeof v === 'string'
+        ))) &&
+    (response.error_tail === undefined || typeof response.error_tail === 'string')
   )
 }
