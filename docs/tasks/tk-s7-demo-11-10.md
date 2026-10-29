@@ -11,6 +11,8 @@
 | Có phương án khi mạng/precheck lỗi | Video G3 build cũ/v3, nhãn rõ; dừng trước Start khi gate lỗi | File MP4 tồn tại và hồ sơ G3 đã kiểm tra; kịch bản ghi rõ hạn chế | PASS |
 | Không tuyên bố quá bằng chứng | Phân biệt Git manual, same SHA redeploy, HTTP với HTTPS, local test với VPS live | Đối chiếu `evidence.md` và PDF render | PASS |
 | Kiểm tra live gần demo | Checklist sáng 11/10 yêu cầu refresh 3 URL và profile G2 | 10/10 khoảng 15:09 UTC+07: 3 HTTP 200 sau C3d v5; sáng 11/10 chưa đến | IMPLEMENTED |
+| Có file mẫu ML cho giảng viên | CSV 180 dòng từ `metric_sample` Express v5, chỉ SELECT read-only 8 cột số đo | Đối chiếu seq 9118–9297, timestamp cách 10 giây, năm metric không NULL; kiểm tra ML feature matrix | PASS |
+| Có file raw để đối chiếu | JSONL 180 dòng `raw_json` nguyên văn từ cùng bản ghi; giới hạn khóa JSON đúng format collector | Đối chiếu seq/time/sáu metric với SQLite và CSV; 180/180 `http_error_rate_source=probe` | PASS |
 
 ## Nhật ký
 
@@ -19,6 +21,8 @@
 - UPDATE 2026-10-10 UTC+07 — Tạo kịch bản 7 phút, HTML/PDF A4. `pdfinfo` trả 1 trang A4 (594.96 × 841.92 pt); render PNG đã xem, không cắt chữ. `git diff --check` sạch trước khi thêm file task. Bản ghi dự phòng G3 là build cũ/deployment v3 và không được gọi là live.
 - UPDATE 2026-10-10 UTC+07 — Gắn thông báo lịch mới ở đầu `docs/29-ke-hoach-demo-14-10.md` để các mốc 12–14/10 cũ không bị hiểu là lịch hiện hành. Bổ sung câu trả lời về push-to-deploy, firewall, migrate và ML trong kịch bản.
 - UPDATE 2026-10-10 UTC+07 — Sau C3d, sửa kịch bản/phiếu A4 theo Git Express v5 đã redeploy thành công trên build hiện tại và ba URL còn HTTP 200. Video C3d bị cắt trước Start, nên không dùng làm bằng chứng liên tục; giữ video G3 build cũ/v3 làm fallback có nhãn.
+- UPDATE 2026-10-10 UTC+07 — Xuất `ml-samples-v5-180.csv` từ SQLite profile G2 bằng SELECT chỉ đọc bảng `metric_sample`, deployment 7, seq 9118–9297; không xuất bảng VPS/credential/raw JSON. File là dữ liệu đầu vào đo thực, không gắn nhãn run thí nghiệm chính thức. `experiments/results/` hiện chỉ có `.gitkeep`; bảng `experiment_run` trong profile này chưa có run.
+- UPDATE 2026-10-10 UTC+07 — Xuất thêm `ml-collector-raw-v5-180.jsonl` từ `metric_sample.raw_json` của chính 180 mẫu trên, giữ nguyên từng dòng collector. Kiểm tra whitelist 15 khóa JSON và đối chiếu giá trị với CSV; nguồn tỷ lệ lỗi là `probe` ở toàn bộ đoạn. Không xuất DB/secret hoặc gắn nhãn dữ liệu load generator.
 
 ## Handoff
 

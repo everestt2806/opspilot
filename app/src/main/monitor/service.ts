@@ -53,9 +53,15 @@ export class MonitorService {
     return this.repository.listAlerts(deploymentId, Math.min(Math.max(limit, 1), 500))
   }
   getSetting(appId: number): MonitorSetting {
+    this.assertNotImportedApp(appId)
     return this.repository.getOrCreateSetting(appId)
   }
   setSetting(appId: number, patch: Partial<MonitorSetting>): MonitorSetting {
+    const imported = this.db.prepare('SELECT imported_from_vps FROM app WHERE id=?').get(appId) as
+      { imported_from_vps: 0 | 1 } | undefined
+    if (imported?.imported_from_vps === 1) {
+      throw new AppError('VALIDATION', 'Chưa thể bật monitor cho app vừa nhập từ VPS.')
+    }
     const parsed = settingPatchSchema.safeParse(patch)
     if (!parsed.success) throw new AppError('VALIDATION', 'Setting không hợp lệ.')
     const entries = Object.entries(parsed.data)
@@ -77,8 +83,14 @@ export class MonitorService {
   labelAlert(alertId: number, label: 'true_positive' | 'false_positive' | null): void {
     if (label !== null && label !== 'true_positive' && label !== 'false_positive')
       throw new AppError('VALIDATION', 'Invalid alert label')
-    if (!this.db.prepare('SELECT id FROM alert WHERE id=?').get(alertId))
-      throw new AppError('VALIDATION', 'Alert not found')
+    const alert = this.db
+      .prepare(
+        'SELECT al.id, a.imported_from_vps FROM alert al LEFT JOIN deployment d ON d.id=al.deployment_id LEFT JOIN app a ON a.id=d.app_id WHERE al.id=?'
+      )
+      .get(alertId) as { id: number; imported_from_vps: number } | undefined
+    if (!alert) throw new AppError('VALIDATION', 'Alert not found')
+    if (alert.imported_from_vps === 1)
+      throw new AppError('VALIDATION', 'Cannot label alerts for a VPS imported app.')
     const update = this.db.transaction(() => {
       const result = this.db
         .prepare('UPDATE alert SET label=?, labeled_at=? WHERE id=?')
@@ -94,6 +106,13 @@ export class MonitorService {
     deploymentId: number,
     client: MlApiClient
   ): Promise<{ train_sample_count: number }> {
+    const deployment = this.db
+      .prepare(
+        'SELECT a.imported_from_vps, d.origin FROM deployment d JOIN app a ON a.id=d.app_id WHERE d.id=?'
+      )
+      .get(deploymentId) as { imported_from_vps: number; origin: string } | undefined
+    if (!deployment || deployment.imported_from_vps === 1 || deployment.origin === 'vps_import')
+      throw new AppError('VALIDATION', 'Cannot train monitor for a VPS imported deployment.')
     const rows = this.db
       .prepare('SELECT raw_json FROM metric_sample WHERE deployment_id=? ORDER BY seq')
       .all(deploymentId) as Array<{ raw_json: string }>
@@ -155,7 +174,9 @@ export class MonitorService {
   private async reconcilePrepared(ssh: SshManager): Promise<void> {
     const deployments = new DeploymentRepository(this.db)
     const appIds = this.db
-      .prepare("SELECT DISTINCT app_id FROM deployment_activation WHERE state='prepared'")
+      .prepare(
+        "SELECT DISTINCT da.app_id FROM deployment_activation da JOIN app a ON a.id=da.app_id WHERE da.state='prepared' AND a.imported_from_vps=0"
+      )
       .all() as Array<{ app_id: number }>
 
     for (const { app_id: appId } of appIds) {
@@ -244,6 +265,13 @@ export class MonitorService {
         }
       })
     }
+  }
+
+  private assertNotImportedApp(appId: number): void {
+    const app = this.db.prepare('SELECT imported_from_vps FROM app WHERE id=?').get(appId) as
+      { imported_from_vps: number } | undefined
+    if (app?.imported_from_vps === 1)
+      throw new AppError('VALIDATION', 'Monitor is unavailable for apps imported from a VPS.')
   }
 
   private async maybeAutoTrain(

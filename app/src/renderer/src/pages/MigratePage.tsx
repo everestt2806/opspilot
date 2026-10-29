@@ -910,7 +910,7 @@ export function MigratePage(): React.JSX.Element {
                 <option value="" disabled>
                   {strings.migrate.draft.sourceLabel}
                 </option>
-                {apps.map((item) => (
+                {apps.filter((item) => item.imported_from_vps !== 1).map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name} ·{' '}
                     {vps.find((candidate) => candidate.id === item.vps_id)?.name ??

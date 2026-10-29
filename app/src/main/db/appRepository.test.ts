@@ -57,6 +57,17 @@ describe('AppRepository constraint mapping', () => {
     })
   })
 
+  it('defaults app health probes to status-only and persists an explicitly declared JSON policy', () => {
+    const { repository, vpsId } = createHarness()
+    const defaultApp = repository.create(appRecord(vpsId, 'default-health', 30_000))
+    const jsonApp = repository.create({
+      ...appRecord(vpsId, 'json-health', 30_001),
+      healthcheck_response_type: 'json'
+    })
+    expect(defaultApp.healthcheck_response_type).toBe('status_2xx')
+    expect(jsonApp.healthcheck_response_type).toBe('json')
+  })
+
   it('records full Git SHA on the deployment attempt', () => {
     const { repository, vpsId, database } = createHarness()
     const app = repository.create(appRecord(vpsId, 'git-api', 30_000))

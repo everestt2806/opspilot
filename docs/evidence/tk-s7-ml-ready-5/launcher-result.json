@@ -1,0 +1,24 @@
+{
+  "generated_at_utc": "2026-10-21T02:47:05Z",
+  "mode": "readonly_preflight_only",
+  "target": {
+    "vps_id": 1,
+    "app_id": 1,
+    "endpoint": "160.191.243.89:22"
+  },
+  "ssh_manager_observation": "PINNED_AUTH_AND_READONLY_COMMANDS_PASSED",
+  "runner_system_ssh": "BLOCKED_SSH_KEY_FORMAT_ERROR_BEFORE_HOST_KEY_OR_AUTH",
+  "runner_clock_command": "NOT_RUN",
+  "runner_resource_command": "NOT_RUN",
+  "preflight_exit_code": 2,
+  "launcher_exit_code": 2,
+  "scratch_cleanup": "PASS",
+  "scratch_directories_remaining": 0,
+  "side_effects": {
+    "profile_opened_readonly": true,
+    "remote_commands_readonly_only": true,
+    "vps_configuration_changed": false,
+    "app_or_container_stopped": false,
+    "experiment_started": false
+  }
+}

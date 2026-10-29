@@ -1,6 +1,13 @@
 import { dialog, ipcMain, shell } from 'electron'
 
-import type { IpcInvokeMap, IpcResult } from '@shared/ipc'
+import type {
+  DomainIngressActionInput,
+  DomainIngressListInput,
+  DomainIngressStatusInput,
+  IpcInvokeMap,
+  IpcResult,
+  SharedIngressBindingDto
+} from '@shared/ipc'
 
 import type { DeployService } from './deploy/service'
 import { AppError, toIpcError } from './errors'
@@ -9,6 +16,9 @@ import type { MlServiceManager } from './mlClient'
 import type { SshManager } from './ssh/manager'
 import { readVpsResources, testConnectionWithCredentials } from './vps/connectionService'
 import { readVpsOperationalDiagnostics } from './vps/operationalDiagnostics'
+import { discoverVpsApps } from './vps/discovery'
+import { VpsAppImportService } from './vps/importService'
+import { RecoveryManifestService } from './vps/recoveryManifestService'
 import { installDockerOnVps } from './vps/dockerInstall'
 import { scanVpsEnvironment } from './vps/scanService'
 import type { VpsService } from './vps/service'
@@ -19,7 +29,15 @@ import { diagnose, redactEvidence, redactText } from './doctor/engine'
 import { maskSecrets } from './logger'
 import { checkDomainTarget, planDomain } from './domain/assistant'
 import { CloudflareDnsProvider } from './domain/dns'
+import { checkSharedIngressReadiness } from './domain/ingress/dnsReadiness'
+import { preflightSharedIngress } from './domain/ingress/preflight'
+import {
+  SharedIngressService,
+  type SharedIngressServiceResult
+} from './domain/ingress/sharedIngressService'
 import { DomainRepository } from './domain/repository'
+import { AppRepository } from './db/appRepository'
+import { DeploymentRepository } from './db/deploymentRepository'
 import { DoctorFixService } from './doctor/fix'
 import { DoctorRepository } from './doctor/repository'
 import { VpsRepository } from './db/vpsRepository'
@@ -33,6 +51,94 @@ export interface WindowController {
   close(): void
   /** Chỉ có trên Windows (titleBarOverlay); nền tảng khác bỏ qua. */
   setTitleBarOverlay?(overlay: { color: string; symbolColor: string }): void
+}
+
+async function safeIngressIpc<T>(work: () => T | Promise<T>): Promise<T> {
+  try {
+    return await work()
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw new AppError(error.code, error.userMessage)
+    }
+    throw new AppError(
+      'UNKNOWN',
+      'Không thể hoàn tất thao tác shared ingress. Hãy kiểm tra trạng thái và thử lại.'
+    )
+  }
+}
+
+function parseIngressListInput(value: unknown): DomainIngressListInput {
+  const input = exactInput(value, ['vps_id', 'app_id'])
+  return { vps_id: positiveSafeId(input.vps_id), app_id: positiveSafeId(input.app_id) }
+}
+
+function parseIngressStatusInput(value: unknown): DomainIngressStatusInput {
+  const input = exactInput(value, ['vps_id', 'binding_id'])
+  return { vps_id: positiveSafeId(input.vps_id), binding_id: positiveSafeId(input.binding_id) }
+}
+
+function parseIngressActionInput(value: unknown): DomainIngressActionInput {
+  const input = exactInput(value, ['vps_id', 'binding_id', 'action'])
+  const vps_id = positiveSafeId(input.vps_id)
+  const binding_id = positiveSafeId(input.binding_id)
+  if (
+    input.action !== 'install' &&
+    input.action !== 'reconcile' &&
+    input.action !== 'https_check'
+  ) {
+    throw new AppError('VALIDATION', 'Shared ingress action is invalid.')
+  }
+  return { vps_id, binding_id, action: input.action }
+}
+
+function exactInput(value: unknown, keys: readonly string[]): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new AppError('VALIDATION', 'Shared ingress input must be an object.')
+  }
+  const input = value as Record<string, unknown>
+  const actual = Object.keys(input).sort()
+  const expected = [...keys].sort()
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
+    throw new AppError('VALIDATION', 'Shared ingress input contains missing or unsupported fields.')
+  }
+  return input
+}
+
+function positiveSafeId(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
+    throw new AppError('VALIDATION', 'Shared ingress identifiers must be positive safe integers.')
+  }
+  return value
+}
+
+function ingressResultDto(
+  vpsId: number,
+  bindingId: number,
+  result: SharedIngressServiceResult
+): SharedIngressBindingDto {
+  const state = new DomainRepository(database).getSharedIngressBindingById(vpsId, bindingId)
+  if (!state)
+    throw new AppError('VALIDATION', 'Shared ingress binding does not belong to this VPS.')
+  const reasonCode = result.reason?.code
+  return {
+    vps_id: vpsId,
+    binding_id: bindingId,
+    app_id: state.app_id,
+    hostname: state.hostname,
+    operation: result.operation,
+    status: result.status,
+    failed_step: result.failed_step,
+    reason: reasonCode
+      ? { code: reasonCode, message: 'Saved ingress state requires attention.' }
+      : null,
+    retryable: result.retryable,
+    http_url: result.http_url,
+    dns_status: state.dns_status,
+    route_status: result.route_status ?? state.route_status,
+    certificate_status: result.certificate_status ?? state.certificate_status,
+    https_probe_status: result.https_probe_status ?? state.https_probe_status,
+    ...(result.route_count === undefined ? {} : { route_count: result.route_count })
+  }
 }
 
 type Channel = keyof IpcInvokeMap
@@ -62,12 +168,26 @@ export function registerIpcHandlers(
   historyService: HistoryService,
   getWindow: () => WindowController | null,
   monitorService?: MonitorService,
-  migrateService?: MigrateService
+  migrateService?: MigrateService,
+  sharedIngressService?: SharedIngressService
 ): void {
+  const ingressService =
+    sharedIngressService ??
+    new SharedIngressService({
+      vpsRepository: new VpsRepository(database),
+      appRepository: new AppRepository(database),
+      deploymentRepository: new DeploymentRepository(database),
+      domainRepository: new DomainRepository(database),
+      ssh,
+      policy: { certificateEnvironment: 'production', stagingLabHostnames: [] }
+    })
   handle('vps:list', () => vpsService.list())
   handle('vps:create', (input) => vpsService.create(input))
   handle('vps:update', (id, patch) => vpsService.update(id, patch))
-  handle('vps:delete', (id) => vpsService.delete(id))
+  handle('vps:delete', async (id) => {
+    vpsService.delete(id)
+    await ssh.disconnect(id)
+  })
   handle('vps:test-connection', (input) =>
     testConnectionWithCredentials({
       host: input.host,
@@ -80,6 +200,13 @@ export function registerIpcHandlers(
   )
   handle('vps:get-resources', (vpsId) => readVpsResources(ssh, vpsId))
   handle('vps:get-operational-diagnostics', (vpsId) => readVpsOperationalDiagnostics(ssh, vpsId))
+  handle('vps:discover-apps', (vpsId) => discoverVpsApps(ssh, vpsId))
+  handle('vps:import-app', (vpsId, name, snapshot) =>
+    new VpsAppImportService(database, ssh).importApp(vpsId, name, snapshot)
+  )
+  handle('vps:write-recovery-manifest', (vpsId, name) =>
+    new RecoveryManifestService(database, ssh).write(vpsId, name)
+  )
   handle('vps:install-docker', async (vpsId) => {
     const dockerVersion = await installDockerOnVps(ssh, vpsId)
     vpsService.recordDockerInstalled(vpsId, dockerVersion)
@@ -154,9 +281,15 @@ export function registerIpcHandlers(
   })
   handle('doctor:fix', async (input) => {
     const row = database
-      .prepare('SELECT app_id FROM deployment WHERE id = ?')
-      .get(input.deployment_id) as { app_id: number } | undefined
+      .prepare(
+        'SELECT d.app_id, d.origin, a.imported_from_vps FROM deployment d JOIN app a ON a.id=d.app_id WHERE d.id = ?'
+      )
+      .get(input.deployment_id) as
+      { app_id: number; origin: 'opspilot' | 'vps_import'; imported_from_vps: 0 | 1 } | undefined
     if (!row) throw new AppError('VALIDATION', 'Không tìm thấy deployment để tự sửa.')
+    if (row.origin === 'vps_import' || row.imported_from_vps === 1) {
+      throw new AppError('VALIDATION', 'Chưa thể chạy Doctor fix cho app vừa nhập từ VPS.')
+    }
     const app = deployService.getApp(row.app_id)
     const vps = new VpsRepository(database).getById(app.vps_id)
     return new DoctorFixService(ssh, database).execute({
@@ -177,6 +310,58 @@ export function registerIpcHandlers(
   handle('domain:check', (hostname, target, recordType) =>
     checkDomainTarget(hostname, target, recordType)
   )
+  handle('domain:ingress-readiness', async (input) => {
+    const hostname = input.hostname.trim().toLowerCase().replace(/\.$/, '')
+    if (!Number.isInteger(input.vps_id) || input.vps_id < 1 || !hostname) {
+      throw new AppError('VALIDATION', 'Cần chọn VPS và hostname hợp lệ.')
+    }
+    const proxyHint = input.cloudflare_proxy_hint ?? 'unknown'
+    if (!['enabled', 'disabled', 'unknown'].includes(proxyHint)) {
+      throw new AppError('VALIDATION', 'Gợi ý Cloudflare Proxy không hợp lệ.')
+    }
+    const binding = database.prepare(
+      `SELECT b.hostname, b.mode, v.host
+       FROM domain_binding b
+       JOIN app a ON a.id = b.app_id
+       JOIN vps v ON v.id = a.vps_id
+       WHERE b.hostname = ? AND v.id = ? AND v.archived_at IS NULL`
+    ).get(hostname, input.vps_id) as { hostname: string; mode: string; host: string } | undefined
+    if (!binding || binding.mode !== 'shared_ingress') {
+      throw new AppError('VALIDATION', 'Không tìm thấy shared_ingress binding cho hostname và VPS đã chọn.')
+    }
+    const ingress = await preflightSharedIngress(ssh, input.vps_id)
+    return checkSharedIngressReadiness({
+      hostname: binding.hostname,
+      vpsHost: binding.host,
+      cloudflareProxyHint: proxyHint,
+      ingress
+    })
+  })
+  handle('domain:ingress-list', (rawInput) =>
+    safeIngressIpc(() => {
+      const input = parseIngressListInput(rawInput)
+      return ingressService.listBindings(input.vps_id, input.app_id)
+    })
+  )
+  handle('domain:ingress-status', async (rawInput) =>
+    safeIngressIpc(async () => {
+      const input = parseIngressStatusInput(rawInput)
+      const result = await ingressService.readStatus(input.vps_id, input.binding_id)
+      return ingressResultDto(input.vps_id, input.binding_id, result)
+    })
+  )
+  handle('domain:ingress-action', async (rawInput) =>
+    safeIngressIpc(async () => {
+      const input = parseIngressActionInput(rawInput)
+      const result =
+        input.action === 'install'
+          ? await ingressService.prepareOrInstall(input.vps_id, input.binding_id)
+          : input.action === 'reconcile'
+            ? await ingressService.reconcile(input.vps_id, input.binding_id)
+            : await ingressService.checkHttps(input.vps_id, input.binding_id)
+      return ingressResultDto(input.vps_id, input.binding_id, result)
+    })
+  )
   handle('domain:upsert', async (input) => {
     if (input.provider !== 'cloudflare') {
       throw new AppError('VALIDATION', 'Provider DNS chưa được hỗ trợ.')
@@ -186,14 +371,20 @@ export function registerIpcHandlers(
     }
     const deployment = database
       .prepare(
-        `SELECT d.app_id, a.host_port, v.host
+        `SELECT d.app_id, a.host_port, v.host, d.origin
          FROM deployment d
          JOIN app a ON a.id = d.app_id
          JOIN vps v ON v.id = a.vps_id
-         WHERE d.id = ?`
+         WHERE d.id = ? AND v.archived_at IS NULL`
       )
-      .get(input.deployment_id) as { app_id: number; host_port: number; host: string } | undefined
+      .get(input.deployment_id) as
+      | { app_id: number; host_port: number; host: string; origin: 'opspilot' | 'vps_import' }
+      | undefined
     if (!deployment) throw new AppError('VALIDATION', 'Không tìm thấy deployment để gắn domain.')
+
+    if (deployment.origin === 'vps_import') {
+      throw new AppError('VALIDATION', 'Chưa thể quản lý domain cho app vừa nhập từ VPS.')
+    }
 
     const existingBinding = database
       .prepare('SELECT app_id FROM domain_binding WHERE hostname = ?')
@@ -242,7 +433,7 @@ export function registerIpcHandlers(
     const safeMessage = redactText(maskSecrets(result.message))
     const safeTechnical = result.technical ? redactText(maskSecrets(result.technical)) : undefined
 
-    new DomainRepository(database).upsert({
+    new DomainRepository(database).upsertDns({
       app_id: deployment.app_id,
       hostname: plan.hostname,
       mode: plan.mode,
@@ -252,8 +443,9 @@ export function registerIpcHandlers(
       record_name: plan.record_name,
       target: plan.target,
       ownership_key: ownershipKey,
-      status,
-      evidence_json: JSON.stringify({
+      route_ownership_key: `opspilot-ingress:${deployment.app_id}:${plan.hostname}`,
+      dns_status: status,
+      dns_evidence_json: JSON.stringify({
         message: safeMessage,
         id: result.id ?? null,
         conflict: result.conflict ?? false,

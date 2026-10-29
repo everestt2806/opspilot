@@ -7,6 +7,9 @@
 --   - 004_publish_doctor_domain.sql (exposure, doctor, domain)
 --   - 005_experiment_run_attempt.sql (attempt_index, unique 3 trường cho experiment_run)
 --   - 006_vps_host_fingerprint.sql (pin fingerprint SSH của VPS)
+--   - 007_git_source_provenance.sql (nguồn Git và commit deploy)
+--   - 008_vps_archive.sql (gỡ VPS an toàn và nối lại app/lịch sử)
+--   - 019_vps_ssh_security_revision.sql (revision bảo mật SSH monotonic, tách khỏi telemetry)
 --
 -- QUY ƯỚC BẮT BUỘC:
 --   * Mọi cột thời gian: TEXT, ISO-8601 UTC, dạng '2026-07-27T10:00:00Z'
@@ -57,9 +60,14 @@ CREATE TABLE vps (
   -- Lệch đồng hồ VPS so với máy user, ms (dương = VPS nhanh hơn). Đo bởi run_experiment.py
   clock_offset_ms INTEGER NOT NULL DEFAULT 0,
 
+  -- Migration 008: gỡ VPS khỏi danh sách nhưng giữ app/deployment và dữ liệu vận hành.
+  archived_at     TEXT,
+  archived_name   TEXT,
+
   created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
   updated_at      TEXT
 );
+CREATE INDEX idx_vps_archived_identity ON vps(host, port, host_fingerprint, archived_at);
 
 -- =============================================================================
 -- B. APP & DEPLOYMENT  (FR-B5, FR-B7)
@@ -81,7 +89,10 @@ CREATE TABLE app (
   host_port         INTEGER NOT NULL,          -- cấp trong dải 30000-30999, ADR-006
   container_port    INTEGER NOT NULL,
   healthcheck_path  TEXT    NOT NULL DEFAULT '/',
+  healthcheck_response_type TEXT NOT NULL DEFAULT 'status_2xx'
+                      CHECK (healthcheck_response_type IN ('status_2xx','json')),
   needs_db          INTEGER NOT NULL DEFAULT 0 CHECK (needs_db IN (0,1)),
+  imported_from_vps INTEGER NOT NULL DEFAULT 0 CHECK (imported_from_vps IN (0,1)),
 
   -- Vị trí đọc tiếp trong metrics.jsonl (byte offset, 1-based cho `tail -c +N`)
   metrics_offset    INTEGER NOT NULL DEFAULT 1,
@@ -121,8 +132,10 @@ CREATE TABLE deployment (
                             CHECK (exposure_status IN ('reachable','degraded','tunnel_only','not_checked')),
   exposure_evidence_json TEXT,
 
-  started_at        TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
+  -- Nullable for a VPS-import baseline, whose original deploy time is unknown.
+  started_at        TEXT,
   finished_at       TEXT,
+  origin            TEXT    NOT NULL DEFAULT 'opspilot' CHECK (origin IN ('opspilot','vps_import')),
 
   UNIQUE (app_id, version)
 );
@@ -387,11 +400,471 @@ CREATE TABLE domain_binding (
   last_check_at   TEXT,
   evidence_json   TEXT,
   created_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
-  updated_at      TEXT
+  updated_at      TEXT,
+  -- Migration 010: status is retained as a legacy mirror; new code reads/writes dns_status.
+  -- Legacy status='active' is backfilled as DNS propagated, never as HTTPS route activation.
+  dns_status      TEXT    NOT NULL DEFAULT 'pending'
+                          CHECK (dns_status IN ('pending','propagated','conflict','failed','disabled')),
+  dns_evidence_json TEXT,             -- sanitized DNS result only; never provider token
+  route_status    TEXT    NOT NULL DEFAULT 'not_configured'
+                          CHECK (route_status IN ('not_configured','pending','active','degraded','conflict','failed','disabled')),
+  certificate_status TEXT NOT NULL DEFAULT 'not_requested'
+                          CHECK (certificate_status IN ('not_requested','pending','valid','failed','expired')),
+  https_probe_status TEXT NOT NULL DEFAULT 'not_run'
+                          CHECK (https_probe_status IN ('not_run','passed','failed')),
+  desired_generation INTEGER NOT NULL DEFAULT 1 CHECK (desired_generation >= 1),
+  observed_generation INTEGER NOT NULL DEFAULT 0 CHECK (observed_generation >= 0),
+  route_ownership_key TEXT NOT NULL DEFAULT '', -- OpsPilot route identity, separate from DNS ownership
+  ingress_reason_code TEXT CHECK (ingress_reason_code IS NULL OR ingress_reason_code IN (
+    'DNS_NOT_PROPAGATED','DNS_TARGET_MISMATCH','DNS_IPV6_UNREACHABLE',
+    'INGRESS_PORT_CONFLICT','INGRESS_OWNER_UNKNOWN','FIREWALL_80_BLOCKED',
+    'FIREWALL_443_BLOCKED','INGRESS_INSTALL_FAILED','INGRESS_CONFIG_INVALID',
+    'INGRESS_RELOAD_FAILED','INGRESS_ROLLBACK_FAILED','CERTIFICATE_PENDING',
+    'CERTIFICATE_ISSUE_FAILED','HTTPS_PROBE_FAILED','UPSTREAM_UNHEALTHY',
+    'DOMAIN_OWNERSHIP_CONFLICT','SSH_UNAVAILABLE','CANCELLED'
+  )),
+  route_checked_at TEXT,
+  certificate_checked_at TEXT,
+  certificate_hostname TEXT,
+  https_probe_checked_at TEXT,
+  https_probe_hostname TEXT,
+  -- Migration 013 binds route and external proof to the same managed Caddy generation.
+  route_config_generation TEXT,
+  route_inventory_revision TEXT,
+  route_environment TEXT CHECK (route_environment IS NULL OR route_environment IN ('production','acme_staging')),
+  https_probe_peer_ip TEXT,
+  https_probe_peer_ips_json TEXT CHECK (https_probe_peer_ips_json IS NULL OR json_valid(https_probe_peer_ips_json)),
+  https_probe_http_status INTEGER CHECK (https_probe_http_status IS NULL OR https_probe_http_status BETWEEN 100 AND 599),
+  https_probe_generation TEXT,
+  https_probe_inventory_revision TEXT,
+  https_probe_environment TEXT CHECK (https_probe_environment IS NULL OR https_probe_environment IN ('production','acme_staging'))
 );
 CREATE INDEX idx_domain_binding_app ON domain_binding(app_id, status);
+CREATE INDEX idx_domain_binding_app_dns_status ON domain_binding(app_id, dns_status);
+CREATE UNIQUE INDEX idx_domain_binding_route_ownership ON domain_binding(route_ownership_key)
+  WHERE route_ownership_key <> '';
+
+CREATE TRIGGER app_healthcheck_policy_invalidates_https
+AFTER UPDATE OF healthcheck_path, healthcheck_response_type ON app
+WHEN OLD.healthcheck_path IS NOT NEW.healthcheck_path OR
+  OLD.healthcheck_response_type IS NOT NEW.healthcheck_response_type
+BEGIN
+  UPDATE domain_binding
+  SET route_status=CASE WHEN route_status='not_configured' THEN 'not_configured' ELSE 'pending' END,
+      observed_generation=0, https_probe_status='not_run', ingress_reason_code=NULL,
+      https_probe_checked_at=NULL, https_probe_hostname=NULL,
+      https_probe_peer_ip=NULL, https_probe_peer_ips_json=NULL, https_probe_http_status=NULL,
+      https_probe_generation=NULL, https_probe_inventory_revision=NULL,
+      https_probe_environment=NULL
+  WHERE app_id=NEW.id;
+END;
+
+-- Migration 010 requires route, certificate and current-generation external probe evidence
+-- before route_status can be active. These guards also protect against direct SQL writes.
+-- Migration 015 demotes active bindings lacking the verified peer set; it never
+-- synthesizes checked peers from the older single-peer field.
+CREATE TRIGGER domain_binding_active_requires_https_insert
+BEFORE INSERT ON domain_binding
+WHEN NEW.route_status = 'active' AND (
+  NEW.dns_status <> 'propagated' OR NEW.certificate_status <> 'valid' OR
+  NEW.certificate_hostname IS NOT NEW.hostname OR NEW.https_probe_status <> 'passed' OR
+  NEW.https_probe_hostname IS NOT NEW.hostname OR
+  NEW.desired_generation <> NEW.observed_generation OR
+  NEW.route_checked_at IS NULL OR NEW.certificate_checked_at IS NULL OR
+  NEW.https_probe_checked_at IS NULL OR NEW.route_environment IS NOT 'production' OR
+  NEW.https_probe_environment IS NOT 'production' OR NEW.route_config_generation IS NULL OR
+  NEW.route_inventory_revision IS NULL OR
+  NEW.https_probe_generation IS NOT NEW.route_config_generation OR
+  NEW.https_probe_inventory_revision IS NOT NEW.route_inventory_revision OR
+  NEW.https_probe_peer_ip IS NULL OR NEW.https_probe_peer_ips_json IS NULL OR
+  json_type(NEW.https_probe_peer_ips_json) <> 'array' OR json_array_length(NEW.https_probe_peer_ips_json) < 1 OR
+  NEW.https_probe_http_status IS NULL OR NEW.https_probe_http_status NOT BETWEEN 200 AND 299
+)
+BEGIN
+  SELECT RAISE(ABORT, 'domain_https_active_requires_production_probe_evidence');
+END;
+CREATE TRIGGER domain_binding_active_requires_https_update
+BEFORE UPDATE OF route_status, dns_status, certificate_status, https_probe_status,
+  desired_generation, observed_generation, route_checked_at, certificate_checked_at,
+  certificate_hostname, https_probe_checked_at, https_probe_hostname,
+  route_environment, https_probe_environment, route_config_generation,
+  route_inventory_revision, https_probe_generation, https_probe_inventory_revision,
+  https_probe_peer_ip, https_probe_peer_ips_json, https_probe_http_status ON domain_binding
+WHEN NEW.route_status = 'active' AND (
+  NEW.dns_status <> 'propagated' OR NEW.certificate_status <> 'valid' OR
+  NEW.certificate_hostname IS NOT NEW.hostname OR NEW.https_probe_status <> 'passed' OR
+  NEW.https_probe_hostname IS NOT NEW.hostname OR
+  NEW.desired_generation <> NEW.observed_generation OR
+  NEW.route_checked_at IS NULL OR NEW.certificate_checked_at IS NULL OR
+  NEW.https_probe_checked_at IS NULL OR NEW.route_environment IS NOT 'production' OR
+  NEW.https_probe_environment IS NOT 'production' OR NEW.route_config_generation IS NULL OR
+  NEW.route_inventory_revision IS NULL OR
+  NEW.https_probe_generation IS NOT NEW.route_config_generation OR
+  NEW.https_probe_inventory_revision IS NOT NEW.route_inventory_revision OR
+  NEW.https_probe_peer_ip IS NULL OR NEW.https_probe_peer_ips_json IS NULL OR
+  json_type(NEW.https_probe_peer_ips_json) <> 'array' OR json_array_length(NEW.https_probe_peer_ips_json) < 1 OR
+  NEW.https_probe_http_status IS NULL OR NEW.https_probe_http_status NOT BETWEEN 200 AND 299
+)
+BEGIN
+  SELECT RAISE(ABORT, 'domain_https_active_requires_production_probe_evidence');
+END;
+
+CREATE TRIGGER domain_binding_active_requires_shared_ingress_insert
+BEFORE INSERT ON domain_binding
+WHEN NEW.route_status = 'active' AND NEW.mode <> 'shared_ingress'
+BEGIN
+  SELECT RAISE(ABORT, 'domain_https_active_requires_shared_ingress');
+END;
+CREATE TRIGGER domain_binding_active_requires_shared_ingress_update
+BEFORE UPDATE OF route_status, mode ON domain_binding
+WHEN NEW.route_status = 'active' AND NEW.mode <> 'shared_ingress'
+BEGIN
+  SELECT RAISE(ABORT, 'domain_https_active_requires_shared_ingress');
+END;
+
+-- Any route identity/ownership change invalidates the previous route, certificate,
+-- and external probe evidence, including direct SQL writes.
+CREATE TRIGGER domain_binding_invalidate_changed_route_identity
+AFTER UPDATE OF app_id, hostname, mode, target, record_type, record_name,
+  ownership_key, route_ownership_key ON domain_binding
+WHEN OLD.app_id IS NOT NEW.app_id OR OLD.hostname IS NOT NEW.hostname OR
+  OLD.mode IS NOT NEW.mode OR OLD.target IS NOT NEW.target OR
+  OLD.record_type IS NOT NEW.record_type OR OLD.record_name IS NOT NEW.record_name OR
+  OLD.ownership_key IS NOT NEW.ownership_key OR
+  OLD.route_ownership_key IS NOT NEW.route_ownership_key
+BEGIN
+  UPDATE domain_binding
+  SET route_status=CASE WHEN OLD.route_status='not_configured'
+                        THEN 'not_configured' ELSE 'pending' END,
+      desired_generation=desired_generation+1,
+      observed_generation=0,
+      certificate_status='not_requested',
+      https_probe_status='not_run',
+      ingress_reason_code=NULL,
+      route_checked_at=NULL,
+      certificate_checked_at=NULL,
+      certificate_hostname=NULL,
+      https_probe_checked_at=NULL,
+      https_probe_hostname=NULL,
+      route_config_generation=NULL,
+      route_inventory_revision=NULL,
+      route_environment=NULL,
+      https_probe_peer_ip=NULL,
+      https_probe_peer_ips_json=NULL,
+      https_probe_http_status=NULL,
+      https_probe_generation=NULL,
+      https_probe_inventory_revision=NULL,
+      https_probe_environment=NULL
+  WHERE id=NEW.id;
+END;
+
+-- Last Caddy config generation/hash observed after a successful DB transaction.
+-- No private key, certificate, token, or other secret is persisted here.
+CREATE TABLE IF NOT EXISTS ingress_reconcile_observation (
+  vps_id INTEGER PRIMARY KEY REFERENCES vps(id) ON DELETE CASCADE,
+  inventory_revision TEXT NOT NULL CHECK (length(inventory_revision) = 64),
+  environment TEXT NOT NULL CHECK (environment IN ('production', 'acme_staging')),
+  generation TEXT NOT NULL CHECK (length(generation) = 64),
+  config_sha256 TEXT NOT NULL CHECK (length(config_sha256) = 64),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
 
 -- =============================================================================
 -- SEED
 -- =============================================================================
 INSERT INTO schema_version (version) VALUES (1);
+
+-- P3b Product-mode auto-deploy persistence (migration 016). Empty until explicit enrollment.
+CREATE TABLE product_controller (
+  controller_id TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('active','maintenance','revoked'))
+);
+
+CREATE TABLE product_source_config (
+  app_id INTEGER NOT NULL REFERENCES app(id) ON DELETE RESTRICT,
+  source_generation INTEGER NOT NULL CHECK (source_generation >= 1),
+  repository_url TEXT NOT NULL,
+  production_ref TEXT NOT NULL,
+  repository_root TEXT NOT NULL,
+  deploy_config_json TEXT NOT NULL, -- allowlisted non-secret build/deploy settings only
+  config_sha256 TEXT NOT NULL CHECK (length(config_sha256) = 64),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (app_id, source_generation),
+  UNIQUE (app_id, source_generation, config_sha256)
+);
+
+CREATE TABLE product_app_control (
+  app_id INTEGER PRIMARY KEY REFERENCES app(id) ON DELETE RESTRICT,
+  mode TEXT NOT NULL CHECK (mode IN ('desktop','product')),
+  controller_id TEXT REFERENCES product_controller(controller_id) ON DELETE RESTRICT,
+  ownership_generation INTEGER NOT NULL CHECK (ownership_generation >= 1),
+  source_generation INTEGER NOT NULL CHECK (source_generation >= 1),
+  source_config_sha256 TEXT NOT NULL CHECK (length(source_config_sha256) = 64),
+  changed_at TEXT NOT NULL,
+  CHECK ((mode = 'desktop' AND controller_id IS NULL) OR
+         (mode = 'product' AND controller_id IS NOT NULL)),
+  FOREIGN KEY (app_id, source_generation)
+    REFERENCES product_source_config(app_id, source_generation) ON DELETE RESTRICT,
+  FOREIGN KEY (app_id, source_generation, source_config_sha256)
+    REFERENCES product_source_config(app_id, source_generation, config_sha256) ON DELETE RESTRICT
+);
+
+CREATE TABLE product_branch_observation (
+  app_id INTEGER NOT NULL REFERENCES app(id) ON DELETE RESTRICT,
+  source_generation INTEGER NOT NULL CHECK (source_generation >= 1),
+  ref TEXT NOT NULL,
+  observation_sequence INTEGER NOT NULL CHECK (observation_sequence >= 1),
+  observed_sha TEXT NOT NULL CHECK (length(observed_sha) = 40 AND observed_sha NOT GLOB '*[^0-9a-f]*'),
+  observed_at TEXT NOT NULL,
+  PRIMARY KEY (app_id, source_generation, ref, observation_sequence),
+  FOREIGN KEY (app_id, source_generation)
+    REFERENCES product_source_config(app_id, source_generation) ON DELETE RESTRICT
+);
+CREATE INDEX idx_product_observation_tip
+  ON product_branch_observation(app_id, source_generation, ref, observation_sequence DESC);
+
+CREATE TABLE product_deploy_job (
+  job_id TEXT PRIMARY KEY,
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id) ON DELETE RESTRICT,
+  app_id INTEGER NOT NULL REFERENCES app(id) ON DELETE RESTRICT,
+  ownership_generation INTEGER NOT NULL CHECK (ownership_generation >= 1),
+  source_generation INTEGER NOT NULL CHECK (source_generation >= 1),
+  source_config_sha256 TEXT NOT NULL CHECK (length(source_config_sha256) = 64),
+  trigger TEXT NOT NULL CHECK (trigger IN ('branch_poll','manual_redeploy','manual_rollback')),
+  idempotency_key TEXT NOT NULL,
+  ref TEXT NOT NULL,
+  target_sha TEXT CHECK (target_sha IS NULL OR
+    (length(target_sha) = 40 AND target_sha NOT GLOB '*[^0-9a-f]*')),
+  target_deployment_id INTEGER REFERENCES deployment(id) ON DELETE RESTRICT,
+  observation_sequence INTEGER,
+  reconcile_epoch INTEGER,
+  state TEXT NOT NULL CHECK (state IN ('queued','claimed','deploying','retry_wait',
+    'succeeded','failed','rolled_back','uncertain','superseded','cancelled')),
+  attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+  max_attempts INTEGER NOT NULL DEFAULT 3 CHECK (max_attempts BETWEEN 1 AND 3),
+  available_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  finished_at TEXT,
+  supersedes_job_id TEXT REFERENCES product_deploy_job(job_id) ON DELETE RESTRICT,
+  safe_error_code TEXT,
+  CHECK (attempt_count <= max_attempts),
+  CHECK (length(idempotency_key) > 0),
+  UNIQUE (controller_id, app_id, idempotency_key),
+  CHECK ((trigger = 'branch_poll' AND observation_sequence IS NOT NULL) OR
+         (trigger <> 'branch_poll' AND observation_sequence IS NULL)),
+  CHECK ((trigger = 'branch_poll' AND reconcile_epoch IS NOT NULL AND reconcile_epoch >= 0) OR
+         (trigger <> 'branch_poll' AND reconcile_epoch IS NULL)),
+  FOREIGN KEY (app_id, source_generation)
+    REFERENCES product_source_config(app_id, source_generation) ON DELETE RESTRICT,
+  FOREIGN KEY (app_id, source_generation, source_config_sha256)
+    REFERENCES product_source_config(app_id, source_generation, config_sha256) ON DELETE RESTRICT,
+  CHECK ((trigger IN ('branch_poll','manual_redeploy') AND target_sha IS NOT NULL AND
+          target_deployment_id IS NULL) OR
+         (trigger = 'manual_rollback' AND target_deployment_id IS NOT NULL))
+);
+CREATE INDEX idx_product_job_claim
+  ON product_deploy_job(state, available_at, created_at);
+CREATE INDEX idx_product_job_app_history
+  ON product_deploy_job(controller_id, app_id, created_at DESC);
+CREATE INDEX idx_product_job_target
+  ON product_deploy_job(app_id, source_generation, target_sha);
+-- Deliberately no UNIQUE(app_id, target_sha).
+
+CREATE TABLE product_desired_branch (
+  app_id INTEGER NOT NULL REFERENCES app(id) ON DELETE RESTRICT,
+  source_generation INTEGER NOT NULL CHECK (source_generation >= 1),
+  ref TEXT NOT NULL,
+  desired_observation_sequence INTEGER NOT NULL CHECK (desired_observation_sequence >= 1),
+  desired_sha TEXT NOT NULL CHECK (length(desired_sha) = 40 AND desired_sha NOT GLOB '*[^0-9a-f]*'),
+  reconcile_epoch INTEGER NOT NULL DEFAULT 0 CHECK (reconcile_epoch >= 0),
+  reconciled_observation_sequence INTEGER,
+  reconciled_epoch INTEGER,
+  reconciliation_state TEXT NOT NULL CHECK (reconciliation_state IN
+    ('pending','queued','in_progress','satisfied','paused','failed','uncertain')),
+  reconciliation_job_id TEXT REFERENCES product_deploy_job(job_id) ON DELETE RESTRICT,
+  auto_paused INTEGER NOT NULL DEFAULT 0 CHECK (auto_paused IN (0,1)),
+  pause_reason TEXT CHECK (pause_reason IS NULL OR pause_reason IN ('manual_action','operator')),
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (app_id, source_generation, ref),
+  FOREIGN KEY (app_id, source_generation)
+    REFERENCES product_source_config(app_id, source_generation) ON DELETE RESTRICT,
+  CHECK ((auto_paused = 0 AND pause_reason IS NULL) OR
+         (auto_paused = 1 AND pause_reason IS NOT NULL)),
+  CHECK ((reconciled_observation_sequence IS NULL AND reconciled_epoch IS NULL) OR
+         (reconciled_observation_sequence IS NOT NULL AND reconciled_epoch IS NOT NULL))
+);
+CREATE INDEX idx_product_desired_pending
+  ON product_desired_branch(reconciliation_state, updated_at);
+
+CREATE TABLE product_app_fence (
+  app_id INTEGER PRIMARY KEY REFERENCES app(id) ON DELETE RESTRICT,
+  last_fence INTEGER NOT NULL DEFAULT 0 CHECK (last_fence >= 0)
+);
+CREATE TABLE product_app_lease (
+  app_id INTEGER NOT NULL REFERENCES app(id) ON DELETE RESTRICT,
+  lease_id TEXT NOT NULL UNIQUE,
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id) ON DELETE RESTRICT,
+  ownership_generation INTEGER NOT NULL CHECK (ownership_generation >= 1),
+  fence INTEGER NOT NULL CHECK (fence >= 1),
+  job_id TEXT NOT NULL REFERENCES product_deploy_job(job_id) ON DELETE RESTRICT,
+  acquired_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  heartbeat_at TEXT NOT NULL,
+  released_at TEXT,
+  UNIQUE (app_id, fence),
+  UNIQUE (lease_id, fence, job_id),
+  FOREIGN KEY (app_id) REFERENCES product_app_fence(app_id) ON DELETE RESTRICT
+);
+CREATE UNIQUE INDEX one_active_product_lease_per_app
+  ON product_app_lease(app_id) WHERE released_at IS NULL;
+
+CREATE TABLE product_worker_lease (
+  slot_name TEXT NOT NULL CHECK (slot_name = 'build'),
+  lease_id TEXT NOT NULL UNIQUE,
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id) ON DELETE RESTRICT,
+  fence INTEGER NOT NULL CHECK (fence >= 1),
+  job_id TEXT NOT NULL REFERENCES product_deploy_job(job_id) ON DELETE RESTRICT,
+  acquired_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  heartbeat_at TEXT NOT NULL,
+  released_at TEXT,
+  PRIMARY KEY (slot_name, fence),
+  UNIQUE (lease_id, fence, job_id)
+);
+CREATE UNIQUE INDEX one_active_product_build_slot
+  ON product_worker_lease(slot_name) WHERE released_at IS NULL;
+
+CREATE TABLE product_deploy_attempt (
+  attempt_id TEXT PRIMARY KEY,
+  job_id TEXT NOT NULL REFERENCES product_deploy_job(job_id) ON DELETE RESTRICT,
+  attempt_number INTEGER NOT NULL CHECK (attempt_number >= 1),
+  lease_id TEXT NOT NULL,
+  fencing_token INTEGER NOT NULL CHECK (fencing_token >= 1),
+  build_slot_lease_id TEXT NOT NULL,
+  build_slot_fence INTEGER NOT NULL CHECK (build_slot_fence >= 1),
+  state TEXT NOT NULL CHECK (state IN ('claimed','snapshot_verified','deploying','succeeded',
+    'failed','abandoned_before_write','rolled_back','uncertain')),
+  deployment_id INTEGER UNIQUE REFERENCES deployment(id) ON DELETE RESTRICT,
+  remote_outcome TEXT NOT NULL CHECK (remote_outcome IN ('not_started','applied','unknown')),
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  failed_step TEXT,
+  safe_error_code TEXT,
+  UNIQUE (job_id, attempt_number),
+  FOREIGN KEY (lease_id, fencing_token, job_id)
+    REFERENCES product_app_lease(lease_id, fence, job_id) ON DELETE RESTRICT,
+  FOREIGN KEY (build_slot_lease_id, build_slot_fence, job_id)
+    REFERENCES product_worker_lease(lease_id, fence, job_id) ON DELETE RESTRICT
+);
+CREATE INDEX idx_product_attempt_job ON product_deploy_attempt(job_id, attempt_number);
+CREATE INDEX idx_product_attempt_deployment ON product_deploy_attempt(deployment_id);
+
+CREATE TABLE product_history_event (
+  event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id) ON DELETE RESTRICT,
+  app_id INTEGER NOT NULL REFERENCES app(id) ON DELETE RESTRICT,
+  job_id TEXT REFERENCES product_deploy_job(job_id) ON DELETE RESTRICT,
+  attempt_id TEXT REFERENCES product_deploy_attempt(attempt_id) ON DELETE RESTRICT,
+  kind TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  safe_summary_json TEXT NOT NULL
+);
+CREATE INDEX idx_product_history_app_cursor
+  ON product_history_event(controller_id, app_id, event_id);
+
+ALTER TABLE product_app_control
+  ADD COLUMN auto_deploy_paused INTEGER NOT NULL DEFAULT 0 CHECK (auto_deploy_paused IN (0,1));
+ALTER TABLE product_app_control
+  ADD COLUMN pause_reason TEXT CHECK (pause_reason IS NULL OR pause_reason IN ('manual_action','operator'));
+
+CREATE TRIGGER product_app_control_pause_policy_insert
+BEFORE INSERT ON product_app_control
+WHEN (NEW.auto_deploy_paused = 0 AND NEW.pause_reason IS NOT NULL)
+  OR (NEW.auto_deploy_paused = 1 AND NEW.pause_reason IS NULL)
+BEGIN
+  SELECT RAISE(ABORT, 'invalid Product auto-deploy pause policy');
+END;
+
+CREATE TRIGGER product_app_control_pause_policy_update
+BEFORE UPDATE OF auto_deploy_paused, pause_reason ON product_app_control
+WHEN (NEW.auto_deploy_paused = 0 AND NEW.pause_reason IS NOT NULL)
+  OR (NEW.auto_deploy_paused = 1 AND NEW.pause_reason IS NULL)
+BEGIN
+  SELECT RAISE(ABORT, 'invalid Product auto-deploy pause policy');
+END;
+
+-- Migration 016 stored pause snapshots per desired branch. Seed the app policy from
+-- the latest durable snapshot; subsequent readers use only this app/ownership field.
+UPDATE product_app_control
+SET auto_deploy_paused = COALESCE((
+      SELECT desired.auto_paused
+      FROM product_desired_branch AS desired
+      WHERE desired.app_id = product_app_control.app_id
+      ORDER BY desired.updated_at DESC, desired.source_generation DESC, desired.ref DESC
+      LIMIT 1
+    ), 0),
+    pause_reason = CASE WHEN COALESCE((
+      SELECT desired.auto_paused
+      FROM product_desired_branch AS desired
+      WHERE desired.app_id = product_app_control.app_id
+      ORDER BY desired.updated_at DESC, desired.source_generation DESC, desired.ref DESC
+      LIMIT 1
+    ), 0) = 1 THEN (
+      SELECT desired.pause_reason
+      FROM product_desired_branch AS desired
+      WHERE desired.app_id = product_app_control.app_id
+      ORDER BY desired.updated_at DESC, desired.source_generation DESC, desired.ref DESC
+      LIMIT 1
+    ) ELSE NULL END
+WHERE mode = 'product';
+
+ALTER TABLE product_app_control
+  ADD COLUMN pause_policy_provenance TEXT NOT NULL DEFAULT 'legacy_clean'
+  CHECK (pause_policy_provenance IN ('legacy_clean','legacy_inferred','operator_required','explicit'));
+
+-- Migration 017 had no provenance to distinguish an explicit resume from the
+-- generation-change bug. If any pause history remains beside an unpaused policy,
+-- fail closed for that app until an operator writes an explicit policy decision.
+UPDATE product_app_control
+SET auto_deploy_paused = 1,
+    pause_reason = 'operator',
+    pause_policy_provenance = 'operator_required'
+WHERE auto_deploy_paused = 0
+  AND EXISTS (
+    SELECT 1 FROM product_desired_branch AS desired
+    WHERE desired.app_id = product_app_control.app_id
+      AND desired.auto_paused = 1
+  );
+
+UPDATE product_app_control
+SET pause_policy_provenance = CASE
+      WHEN auto_deploy_paused = 1 THEN 'legacy_inferred'
+      ELSE 'legacy_clean'
+    END
+WHERE pause_policy_provenance = 'legacy_clean';
+
+CREATE TRIGGER product_app_control_pause_provenance_insert
+BEFORE INSERT ON product_app_control
+WHEN (NEW.pause_policy_provenance = 'operator_required'
+      AND (NEW.auto_deploy_paused <> 1 OR NEW.pause_reason <> 'operator'))
+BEGIN
+  SELECT RAISE(ABORT, 'operator confirmation required for legacy pause policy');
+END;
+
+CREATE TRIGGER product_app_control_pause_provenance_update
+BEFORE UPDATE OF auto_deploy_paused, pause_reason, pause_policy_provenance ON product_app_control
+WHEN (NEW.pause_policy_provenance = 'operator_required'
+      AND (NEW.auto_deploy_paused <> 1 OR NEW.pause_reason <> 'operator'))
+  OR (OLD.auto_deploy_paused = 1 AND NEW.auto_deploy_paused = 0
+      AND NEW.pause_policy_provenance <> 'explicit')
+BEGIN
+  SELECT RAISE(ABORT, 'explicit pause policy provenance required');
+END;
+
+-- 019_vps_ssh_security_revision.sql
+-- Monotonic revision for SSH security-sensitive VPS profile changes.
+-- Telemetry and operational status fields do not advance this counter.
+ALTER TABLE vps ADD COLUMN ssh_security_revision INTEGER NOT NULL DEFAULT 1
+  CHECK (ssh_security_revision >= 1);

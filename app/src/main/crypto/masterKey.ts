@@ -31,6 +31,22 @@ export function createCredentialCipher(userDataPath: string): AesGcmCredentialCi
   return new AesGcmCredentialCipher(masterKey)
 }
 
+/** Open an existing profile key without ever creating or replacing one. */
+export function loadExistingCredentialCipher(userDataPath: string): AesGcmCredentialCipher {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new AppError('DB_ERROR', 'OS credential storage is unavailable.')
+  }
+  const keyPath = join(userDataPath, MASTER_KEY_FILE)
+  if (!existsSync(keyPath)) {
+    throw new AppError('DB_ERROR', 'Existing profile master key is missing.')
+  }
+  const masterKey = readMasterKey(keyPath)
+  if (masterKey.length !== MASTER_KEY_LENGTH) {
+    throw new AppError('DB_ERROR', 'Existing profile master key is invalid.')
+  }
+  return new AesGcmCredentialCipher(masterKey)
+}
+
 function readMasterKey(keyPath: string): Buffer {
   try {
     const protectedKey = Buffer.from(readFileSync(keyPath, 'utf8'), 'base64')

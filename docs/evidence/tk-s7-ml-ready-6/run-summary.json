@@ -1,0 +1,75 @@
+{
+  "result": "PASS",
+  "run_id": "2026-10-21T16-23-39-459Z",
+  "timestamp_utc": "2026-10-21T16:23:50.315Z",
+  "endpoint": "http://127.0.0.1:18765",
+  "source": "docs/demo-11-10/ml-samples-v5-180.csv",
+  "source_sha256": "9d2af5f64e64c3371fb988b54fef0770460368ddf935b456a605a1abd7bc425a",
+  "dataset_rows": 180,
+  "initial_health": {
+    "status": "ok",
+    "version": "0.1.0",
+    "uptime_s": 0.875
+  },
+  "initial_status": {
+    "trained": false,
+    "sample_count": 0,
+    "min_samples_required": 150
+  },
+  "training": {
+    "rows": 150,
+    "sequence": [
+      9118,
+      9267
+    ],
+    "trained": true,
+    "feature_vector_count": 131,
+    "feature_version": "v1-5metrics-4feats-w20",
+    "train_status": {
+      "trained": true,
+      "sample_count": 150,
+      "train_sample_count": 150,
+      "min_samples_required": 150
+    }
+  },
+  "inference": {
+    "rows": 30,
+    "sequence": [
+      9268,
+      9297
+    ],
+    "chronological": true,
+    "methods": [
+      "zscore_ewma",
+      "iforest",
+      "ocsvm",
+      "ensemble"
+    ],
+    "scores_finite_in_range": true,
+    "warm_up": "none; model trained before holdout ingestion"
+  },
+  "restart": {
+    "same_isolated_state": true,
+    "trained": true,
+    "train_sample_count": 150,
+    "persisted_sample_count": 180,
+    "repeated_last_holdout_inference": "PASS; seq 9297 repeated to verify loaded model, not treated as a new historical sample"
+  },
+  "cleanup": {
+    "service_process_tree_stopped": true,
+    "listener_released": true,
+    "scratch_removed": true,
+    "production_state_unchanged": true
+  },
+  "isolation": {
+    "source_copy": "prepareIsolatedMlService",
+    "state_started_absent": true,
+    "production_state_files": 22,
+    "production_state_hash_manifest": "production-state-integrity.json"
+  },
+  "limitations": [
+    "Historical normal-data HTTP lifecycle smoke only; not a pilot.",
+    "No fault labels or accuracy/precision/recall claims.",
+    "Pilot blockers from LIVE-0/ML-READY-5 remain: dedicated host, hardware/storage target, clock skew, ML endpoint/provider gates."
+  ]
+}

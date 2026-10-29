@@ -1,8 +1,13 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock } = vi.hoisted(() => ({ handleMock: vi.fn() }))
+const { handleMock, ingressPreflightMock, readinessCheckMock } = vi.hoisted(() => ({
+  handleMock: vi.fn(),
+  ingressPreflightMock: vi.fn(),
+  readinessCheckMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
@@ -10,14 +15,526 @@ vi.mock('electron', () => ({
   shell: { openExternal: vi.fn() }
 }))
 
+vi.mock('./domain/ingress/preflight', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./domain/ingress/preflight')>()),
+  preflightSharedIngress: ingressPreflightMock
+}))
+vi.mock('./domain/ingress/dnsReadiness', () => ({ checkSharedIngressReadiness: readinessCheckMock }))
+
 import { AppError } from './errors'
 import { handle, registerIpcHandlers } from './ipc'
 import { closeDatabase, initializeDatabase } from './db'
 import { MonitorService } from './monitor/service'
+import { SharedIngressService } from './domain/ingress/sharedIngressService'
+import { AppRepository } from './db/appRepository'
+import { DeploymentRepository } from './db/deploymentRepository'
+import { DomainRepository } from './domain/repository'
+import { VpsRepository } from './db/vpsRepository'
+import type { SharedIngressServiceResult } from './domain/ingress/sharedIngressService'
+
+function ingressCallback(channel: string): (event: unknown, input: unknown) => Promise<unknown> {
+  const callback = handleMock.mock.calls.find(([registered]) => registered === channel)?.[1]
+  if (typeof callback !== 'function') throw new Error(`IPC handler was not registered: ${channel}`)
+  return callback as (event: unknown, input: unknown) => Promise<unknown>
+}
+
+function makeIngressIpcDb(): { dir: string; db: ReturnType<typeof initializeDatabase> } {
+  const dir = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-ipc-shared-ingress-'))
+  const db = initializeDatabase(dir)
+  db.exec(`
+    INSERT INTO vps (id,name,host,port,username,auth_type,encrypted_secret)
+      VALUES (1,'v1','192.0.2.10',22,'ops','password','cipher');
+    INSERT INTO vps (id,name,host,port,username,auth_type,encrypted_secret)
+      VALUES (2,'v2','192.0.2.20',22,'ops','password','cipher');
+    INSERT INTO app (id,vps_id,name,framework,host_port,container_port,healthcheck_path)
+      VALUES (1,1,'app1','express',30001,3000,'/');
+    INSERT INTO app (id,vps_id,name,framework,host_port,container_port,healthcheck_path)
+      VALUES (2,2,'app2','express',30002,3000,'/');
+    INSERT INTO deployment (id,app_id,version,image_tag,status) VALUES (1,1,1,'app1:v1','running');
+    INSERT INTO deployment (id,app_id,version,image_tag,status) VALUES (2,2,1,'app2:v1','running');
+    UPDATE app SET current_deployment_id=1 WHERE id=1;
+    UPDATE app SET current_deployment_id=2 WHERE id=2;
+    INSERT INTO domain_binding (id,app_id,hostname,mode,ownership_key,status)
+      VALUES (1,1,'app1.example.test','shared_ingress','dns:1','pending');
+  `)
+  return { dir, db }
+}
+
+function createRealIngressService(
+  db: ReturnType<typeof initializeDatabase>,
+  ssh: { exec: ReturnType<typeof vi.fn> }
+): SharedIngressService {
+  return new SharedIngressService({
+    vpsRepository: new VpsRepository(db),
+    appRepository: new AppRepository(db),
+    deploymentRepository: new DeploymentRepository(db),
+    domainRepository: new DomainRepository(db),
+    ssh: ssh as never,
+    policy: { certificateEnvironment: 'production', stagingLabHostnames: [] }
+  })
+}
+
+function registerIngressService(service: SharedIngressService): void {
+  registerIpcHandlers(
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    () => null,
+    undefined,
+    undefined,
+    service
+  )
+}
+
+function serviceResult(
+  overrides: Partial<SharedIngressServiceResult> = {}
+): SharedIngressServiceResult {
+  return {
+    operation: 'read',
+    status: 'pending',
+    failed_step: null,
+    reason: null,
+    retryable: false,
+    http_url: 'http://192.0.2.10:30001',
+    route_status: 'not_configured',
+    certificate_status: 'not_requested',
+    https_probe_status: 'not_run',
+    ...overrides
+  }
+}
+
+describe('shared ingress IPC contract and handlers', () => {
+  beforeEach(() => handleMock.mockReset())
+
+  it('keeps shared and documented IPC contract declarations in parity', () => {
+    const shared = readFileSync(fileURLToPath(new URL('../shared/ipc.ts', import.meta.url)), 'utf8')
+    const contract = readFileSync(
+      fileURLToPath(new URL('../../../docs/contracts/ipc-contract.ts', import.meta.url)),
+      'utf8'
+    )
+    const extractTypes = (source: string): string =>
+      source.slice(
+        source.indexOf('export type SharedIngressAction'),
+        source.indexOf('export interface IpcInvokeMap')
+      )
+    expect(extractTypes(shared)).toBe(extractTypes(contract))
+    const channels = (source: string): string[] =>
+      source.match(/^\s*'domain:ingress-(?:list|status|action)':.*$/gm) ?? []
+    expect(channels(shared)).toEqual(channels(contract))
+  })
+
+  it('lists pending bindings and reads status from SQLite without network or fingerprint', async () => {
+    const { dir, db } = makeIngressIpcDb()
+    const ssh = { exec: vi.fn() }
+    try {
+      registerIngressService(createRealIngressService(db, ssh))
+      await expect(
+        ingressCallback('domain:ingress-list')({}, { vps_id: 1, app_id: 1 })
+      ).resolves.toMatchObject({
+        ok: true,
+        data: [
+          {
+            vps_id: 1,
+            binding_id: 1,
+            app_id: 1,
+            hostname: 'app1.example.test',
+            status: 'pending',
+            dns_status: 'pending',
+            http_url: 'http://192.0.2.10:30001'
+          }
+        ]
+      })
+      await expect(
+        ingressCallback('domain:ingress-status')({}, { vps_id: 1, binding_id: 1 })
+      ).resolves.toMatchObject({
+        ok: true,
+        data: {
+          binding_id: 1,
+          hostname: 'app1.example.test',
+          status: 'pending',
+          reason: null,
+          http_url: 'http://192.0.2.10:30001'
+        }
+      })
+      expect(ssh.exec).not.toHaveBeenCalled()
+    } finally {
+      closeDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    [
+      'route failed',
+      'failed',
+      'not_requested',
+      'not_run',
+      'INGRESS_RELOAD_FAILED',
+      'degraded',
+      true
+    ],
+    [
+      'route conflict',
+      'conflict',
+      'not_requested',
+      'not_run',
+      'INGRESS_PORT_CONFLICT',
+      'degraded',
+      true
+    ],
+    [
+      'route degraded',
+      'degraded',
+      'not_requested',
+      'not_run',
+      'UPSTREAM_UNHEALTHY',
+      'degraded',
+      true
+    ],
+    [
+      'certificate failed',
+      'not_configured',
+      'failed',
+      'not_run',
+      'CERTIFICATE_ISSUE_FAILED',
+      'degraded',
+      true
+    ],
+    [
+      'certificate expired',
+      'not_configured',
+      'expired',
+      'not_run',
+      'CERTIFICATE_ISSUE_FAILED',
+      'degraded',
+      true
+    ],
+    [
+      'probe failed',
+      'not_configured',
+      'not_requested',
+      'failed',
+      'HTTPS_PROBE_FAILED',
+      'degraded',
+      true
+    ],
+    ['disabled', 'disabled', 'not_requested', 'not_run', null, 'blocked', false]
+  ] as const)(
+    '%s has one persisted projection across list/status and survives refresh',
+    async (
+      _label,
+      routeStatus,
+      certificateStatus,
+      probeStatus,
+      reasonCode,
+      expectedStatus,
+      retryable
+    ) => {
+      const { dir, db } = makeIngressIpcDb()
+      const ssh = { exec: vi.fn() }
+      const repository = new DomainRepository(db)
+      try {
+        db.prepare(
+          `
+        UPDATE domain_binding SET provider='manual', zone_id='', record_type='A',
+          record_name='app1.example.test', target='192.0.2.10',
+          route_ownership_key='opspilot-ingress:1:app1.example.test'
+        WHERE id=1
+      `
+        ).run()
+        db.prepare(
+          `
+        UPDATE domain_binding
+        SET dns_status='propagated', route_status=?, certificate_status=?,
+            https_probe_status=?, ingress_reason_code=?
+        WHERE id=1
+      `
+        ).run(routeStatus, certificateStatus, probeStatus, reasonCode)
+        registerIngressService(createRealIngressService(db, ssh))
+        const list = await ingressCallback('domain:ingress-list')({}, { vps_id: 1, app_id: 1 })
+        const status = await ingressCallback('domain:ingress-status')(
+          {},
+          { vps_id: 1, binding_id: 1 }
+        )
+        expect(list).toMatchObject({
+          ok: true,
+          data: [
+            {
+              status: expectedStatus,
+              retryable,
+              route_status: routeStatus,
+              certificate_status: certificateStatus,
+              https_probe_status: probeStatus,
+              http_url: 'http://192.0.2.10:30001'
+            }
+          ]
+        })
+        expect(status).toMatchObject({
+          ok: true,
+          data: { status: expectedStatus, retryable, http_url: 'http://192.0.2.10:30001' }
+        })
+
+        const listData = (list as { ok: true; data: Array<Record<string, unknown>> }).data[0]
+        const statusData = (status as { ok: true; data: Record<string, unknown> }).data
+        for (const key of ['status', 'reason', 'retryable', 'http_url']) {
+          expect(statusData[key]).toEqual(listData[key])
+        }
+        if (reasonCode) {
+          expect(statusData.reason).toEqual({
+            code: reasonCode,
+            message: 'Saved ingress state requires attention.'
+          })
+          expect((statusData.reason as { message: string }).message).not.toContain(reasonCode)
+        } else {
+          expect(statusData.reason).toEqual({
+            code: 'BINDING_DISABLED',
+            message: 'Saved ingress state requires attention.'
+          })
+        }
+
+        repository.upsertDns({
+          app_id: 1,
+          hostname: 'app1.example.test',
+          mode: 'shared_ingress',
+          provider: 'manual',
+          zone_id: '',
+          record_type: 'A',
+          record_name: 'app1.example.test',
+          target: '192.0.2.10',
+          ownership_key: db
+            .prepare('SELECT ownership_key FROM domain_binding WHERE id=1')
+            .pluck()
+            .get() as string,
+          route_ownership_key: db
+            .prepare('SELECT route_ownership_key FROM domain_binding WHERE id=1')
+            .pluck()
+            .get() as string,
+          dns_status: 'propagated'
+        })
+        const refreshed = await ingressCallback('domain:ingress-status')(
+          {},
+          { vps_id: 1, binding_id: 1 }
+        )
+        expect(refreshed).toMatchObject({
+          ok: true,
+          data: { status: expectedStatus, retryable, http_url: 'http://192.0.2.10:30001' }
+        })
+        expect((refreshed as { ok: true; data: Record<string, unknown> }).data.reason).toEqual(
+          statusData.reason
+        )
+        expect(ssh.exec).not.toHaveBeenCalled()
+      } finally {
+        closeDatabase()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it('keeps a DNS-ready unconfigured route as ready in both read channels', async () => {
+    const { dir, db } = makeIngressIpcDb()
+    const ssh = { exec: vi.fn() }
+    try {
+      db.prepare("UPDATE domain_binding SET dns_status='propagated' WHERE id=1").run()
+      registerIngressService(createRealIngressService(db, ssh))
+      const list = await ingressCallback('domain:ingress-list')({}, { vps_id: 1, app_id: 1 })
+      const status = await ingressCallback('domain:ingress-status')(
+        {},
+        { vps_id: 1, binding_id: 1 }
+      )
+      expect(list).toMatchObject({
+        ok: true,
+        data: [
+          { status: 'ready', reason: null, retryable: false, http_url: 'http://192.0.2.10:30001' }
+        ]
+      })
+      expect(status).toMatchObject({
+        ok: true,
+        data: {
+          status: 'ready',
+          reason: null,
+          retryable: false,
+          http_url: 'http://192.0.2.10:30001'
+        }
+      })
+      expect(ssh.exec).not.toHaveBeenCalled()
+    } finally {
+      closeDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects an app from another VPS and a binding from another VPS', async () => {
+    const { dir, db } = makeIngressIpcDb()
+    const ssh = { exec: vi.fn() }
+    try {
+      registerIngressService(createRealIngressService(db, ssh))
+      await expect(
+        ingressCallback('domain:ingress-list')({}, { vps_id: 1, app_id: 2 })
+      ).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'VALIDATION' }
+      })
+      await expect(
+        ingressCallback('domain:ingress-status')({}, { vps_id: 2, binding_id: 1 })
+      ).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'VALIDATION' }
+      })
+      expect(ssh.exec).not.toHaveBeenCalled()
+    } finally {
+      closeDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    ['list null', 'domain:ingress-list', null],
+    ['list missing app', 'domain:ingress-list', { vps_id: 1 }],
+    ['list unsafe id', 'domain:ingress-list', { vps_id: Number.MAX_SAFE_INTEGER + 1, app_id: 1 }],
+    ['list injected config', 'domain:ingress-list', { vps_id: 1, app_id: 1, config: {} }],
+    ['status array', 'domain:ingress-status', []],
+    ['status null id', 'domain:ingress-status', { vps_id: 1, binding_id: null }],
+    ['action missing', 'domain:ingress-action', { vps_id: 1, binding_id: 1 }],
+    ['action unknown', 'domain:ingress-action', { vps_id: 1, binding_id: 1, action: 'start' }],
+    [
+      'action command injection field',
+      'domain:ingress-action',
+      { vps_id: 1, binding_id: 1, action: 'reconcile', shell: 'id' }
+    ]
+  ])('rejects malformed runtime payload: %s', async (_label, channel, input) => {
+    const service = {
+      listBindings: vi.fn(),
+      readStatus: vi.fn(),
+      prepareOrInstall: vi.fn(),
+      reconcile: vi.fn(),
+      checkHttps: vi.fn()
+    } as unknown as SharedIngressService
+    registerIngressService(service)
+    await expect(ingressCallback(channel)({}, input)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'VALIDATION' }
+    })
+    expect(service.listBindings).not.toHaveBeenCalled()
+    expect(service.readStatus).not.toHaveBeenCalled()
+    expect(service.prepareOrInstall).not.toHaveBeenCalled()
+    expect(service.reconcile).not.toHaveBeenCalled()
+    expect(service.checkHttps).not.toHaveBeenCalled()
+  })
+
+  it('dispatches the allowlisted action and preserves blocked/uncertain outcomes without sensitive details', async () => {
+    const { dir } = makeIngressIpcDb()
+    const install = vi.fn(async () =>
+      serviceResult({
+        operation: 'install',
+        status: 'blocked',
+        failed_step: 'preflight',
+        reason: { code: 'HOST_CONFLICT', message: 'do not expose token raw stdout plan' },
+        retryable: true
+      })
+    )
+    const reconcile = vi.fn(async () =>
+      serviceResult({
+        operation: 'reconcile',
+        status: 'uncertain',
+        failed_step: 'reconcile',
+        reason: { code: 'RECONCILE_UNCERTAIN', message: 'secret raw stderr install plan' },
+        retryable: false
+      })
+    )
+    const checkHttps = vi.fn(async () =>
+      serviceResult({
+        operation: 'https_check',
+        status: 'pending',
+        failed_step: 'https_probe',
+        reason: { code: 'HTTPS_PENDING', message: 'private output' },
+        retryable: true
+      })
+    )
+    const service = {
+      prepareOrInstall: install,
+      reconcile,
+      checkHttps
+    } as unknown as SharedIngressService
+    try {
+      registerIngressService(service)
+      const call = async (action: string): Promise<unknown> =>
+        ingressCallback('domain:ingress-action')({}, { vps_id: 1, binding_id: 1, action })
+      const blocked = await call('install')
+      const uncertain = await call('reconcile')
+      const pending = await call('https_check')
+      expect(install).toHaveBeenCalledWith(1, 1)
+      expect(reconcile).toHaveBeenCalledWith(1, 1)
+      expect(checkHttps).toHaveBeenCalledWith(1, 1)
+      expect(blocked).toMatchObject({
+        ok: true,
+        data: {
+          status: 'blocked',
+          failed_step: 'preflight',
+          retryable: true,
+          reason: { code: 'HOST_CONFLICT' }
+        }
+      })
+      expect(uncertain).toMatchObject({
+        ok: true,
+        data: {
+          status: 'uncertain',
+          failed_step: 'reconcile',
+          retryable: false,
+          reason: { code: 'RECONCILE_UNCERTAIN' }
+        }
+      })
+      expect(pending).toMatchObject({
+        ok: true,
+        data: { status: 'pending', failed_step: 'https_probe', retryable: true }
+      })
+      const serialized = JSON.stringify([blocked, uncertain, pending])
+      for (const sensitive of [
+        'token',
+        'secret',
+        'stdout',
+        'stderr',
+        'install plan',
+        'private output'
+      ]) {
+        expect(serialized).not.toContain(sensitive)
+      }
+    } finally {
+      closeDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('sanitizes an unexpected service exception', async () => {
+    const { dir } = makeIngressIpcDb()
+    const service = {
+      prepareOrInstall: vi.fn(async () => {
+        throw new Error('credential raw stdout private plan')
+      })
+    } as unknown as SharedIngressService
+    try {
+      registerIngressService(service)
+      const result = await ingressCallback('domain:ingress-action')(
+        {},
+        { vps_id: 1, binding_id: 1, action: 'install' }
+      )
+      const serialized = JSON.stringify(result)
+      expect(result).toMatchObject({ ok: false, error: { code: 'UNKNOWN' } })
+      for (const sensitive of ['credential', 'stdout', 'private plan'])
+        expect(serialized).not.toContain(sensitive)
+    } finally {
+      closeDatabase()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
 
 describe('handle', () => {
   beforeEach(() => {
     handleMock.mockReset()
+    ingressPreflightMock.mockReset()
+    readinessCheckMock.mockReset()
   })
 
   it('boc du lieu thanh IpcResult ok', async () => {
@@ -42,6 +559,35 @@ describe('handle', () => {
         step: undefined
       }
     })
+  })
+
+  it('disconnects a removed VPS after archiving its local profile', async () => {
+    const events: string[] = []
+    const vpsService = {
+      delete: vi.fn(() => events.push('archive'))
+    }
+    const ssh = {
+      disconnect: vi.fn(async () => {
+        events.push('disconnect')
+      })
+    }
+    registerIpcHandlers(
+      {} as never,
+      vpsService as never,
+      ssh as never,
+      {} as never,
+      {} as never,
+      () => null
+    )
+    const callback = handleMock.mock.calls.find(([channel]) => channel === 'vps:delete')?.[1] as (
+      event: unknown,
+      id: number
+    ) => Promise<unknown>
+
+    await expect(callback({}, 7)).resolves.toEqual({ ok: true, data: undefined })
+    expect(vpsService.delete).toHaveBeenCalledWith(7)
+    expect(ssh.disconnect).toHaveBeenCalledWith(7)
+    expect(events).toEqual(['archive', 'disconnect'])
   })
 
   it('invokes read-only VPS diagnostics with vpsId only and wraps validation errors', async () => {
@@ -344,6 +890,52 @@ describe('handle', () => {
     })
   })
 
+  describe('domain:ingress-readiness IPC', () => {
+    it('combines only the selected shared_ingress binding with pinned-SSH preflight and does not persist observations', async () => {
+      const dir = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-ipc-ingress-readiness-'))
+      const db = initializeDatabase(dir)
+      const ssh = { exec: vi.fn() }
+      const readiness = { overall_status: 'unknown', certificate_status: 'not_requested' }
+      ingressPreflightMock.mockResolvedValue({ ports_status: 'free', local_assessment: 'clear' })
+      readinessCheckMock.mockResolvedValue(readiness)
+      try {
+        db.exec(
+          "INSERT INTO vps (id,name,host,username,auth_type,encrypted_secret) VALUES (1,'v','93.184.216.34','root','password','x'); " +
+            "INSERT INTO app (id,vps_id,name,framework,host_port,container_port) VALUES (1,1,'app','express',30000,3000); " +
+            "INSERT INTO deployment (id,app_id,version,image_tag,status) VALUES (1,1,1,'app:v1','running'); " +
+            "INSERT INTO domain_binding (id,app_id,hostname,mode,ownership_key,status) VALUES (1,1,'app.example.com','shared_ingress','opspilot:1:app.example.com','pending');"
+        )
+        registerIpcHandlers(
+          {} as never,
+          {} as never,
+          ssh as never,
+          {} as never,
+          {} as never,
+          () => null
+        )
+        const callback = handleMock.mock.calls.find(([channel]) => channel === 'domain:ingress-readiness')?.[1] as (
+          event: unknown,
+          input: { vps_id: number; hostname: string; cloudflare_proxy_hint: 'enabled' | 'disabled' | 'unknown' }
+        ) => Promise<unknown>
+        const before = db.prepare('SELECT dns_status, route_status, certificate_status, https_probe_status FROM domain_binding WHERE id = 1').get()
+
+        await expect(callback({}, {
+          vps_id: 1, hostname: 'App.Example.com.', cloudflare_proxy_hint: 'enabled'
+        })).resolves.toEqual({ ok: true, data: readiness })
+
+        expect(ingressPreflightMock).toHaveBeenCalledWith(ssh, 1)
+        expect(readinessCheckMock).toHaveBeenCalledWith(expect.objectContaining({
+          hostname: 'app.example.com', vpsHost: '93.184.216.34',
+          cloudflareProxyHint: 'enabled', ingress: { ports_status: 'free', local_assessment: 'clear' }
+        }))
+        expect(db.prepare('SELECT dns_status, route_status, certificate_status, https_probe_status FROM domain_binding WHERE id = 1').get()).toEqual(before)
+      } finally {
+        closeDatabase()
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+  })
+
   describe('domain:upsert IPC', () => {
     it('upsert thành công: idempotent, không lưu scoped token vào SQLite', async () => {
       const dir = mkdtempSync(join(process.env.TEMP ?? '.', 'opspilot-ipc-domain-'))
@@ -419,15 +1011,25 @@ describe('handle', () => {
           provider: string
           ownership_key: string
           status: string
-          evidence_json: string
+          dns_status: string
+          dns_evidence_json: string
+          route_status: string
+          certificate_status: string
+          https_probe_status: string
         }
         expect(binding).toBeDefined()
         expect(binding.app_id).toBe(1)
         expect(binding.ownership_key).toBe('opspilot:1:app.example.com')
+        expect(binding.dns_status).toBe(result.data?.status)
+        expect(binding.dns_status).not.toBe('active')
+        expect(binding.status).toBe(binding.dns_status)
+        expect(binding.route_status).toBe('not_configured')
+        expect(binding.certificate_status).toBe('not_requested')
+        expect(binding.https_probe_status).toBe('not_run')
 
         // Tuyệt đối không lưu token vào bất kỳ trường nào trong SQLite
         expect(JSON.stringify(binding)).not.toContain(scopedToken)
-        expect(binding.evidence_json).not.toContain(scopedToken)
+        expect(binding.dns_evidence_json).not.toContain(scopedToken)
       } finally {
         fetchSpy.mockRestore()
         closeDatabase()
@@ -546,11 +1148,12 @@ describe('handle', () => {
         // DB ghi nhận trạng thái 'conflict' và không chứa token
         const binding = db
           .prepare('SELECT * FROM domain_binding WHERE hostname = ?')
-          .get('app.example.com') as { status: string; evidence_json: string }
+          .get('app.example.com') as { status: string; dns_status: string; dns_evidence_json: string }
         expect(binding).toBeDefined()
         expect(binding.status).toBe('conflict')
-        expect(binding.evidence_json).toContain('Xung đột quyền sở hữu')
-        expect(binding.evidence_json).not.toContain(secretToken)
+        expect(binding.dns_status).toBe('conflict')
+        expect(binding.dns_evidence_json).toContain('Xung đột quyền sở hữu')
+        expect(binding.dns_evidence_json).not.toContain(secretToken)
       } finally {
         fetchSpy.mockRestore()
         closeDatabase()
@@ -611,10 +1214,11 @@ describe('handle', () => {
         // DB ghi nhận trạng thái 'failed' và không chứa token
         const binding = db
           .prepare('SELECT * FROM domain_binding WHERE hostname = ?')
-          .get('app.example.com') as { status: string; evidence_json: string }
+          .get('app.example.com') as { status: string; dns_status: string; dns_evidence_json: string }
         expect(binding).toBeDefined()
         expect(binding.status).toBe('failed')
-        expect(binding.evidence_json).not.toContain(secretToken)
+        expect(binding.dns_status).toBe('failed')
+        expect(binding.dns_evidence_json).not.toContain(secretToken)
       } finally {
         fetchSpy.mockRestore()
         closeDatabase()
@@ -727,10 +1331,10 @@ describe('handle', () => {
 
         // Kiểm tra trong DB evidence_json
         const binding = db
-          .prepare('SELECT evidence_json FROM domain_binding WHERE hostname = ?')
-          .get('app.example.com') as { evidence_json: string }
-        expect(binding.evidence_json).not.toContain('superSecretPass123')
-        expect(binding.evidence_json).not.toContain('leakToken')
+          .prepare('SELECT dns_evidence_json FROM domain_binding WHERE hostname = ?')
+          .get('app.example.com') as { dns_evidence_json: string }
+        expect(binding.dns_evidence_json).not.toContain('superSecretPass123')
+        expect(binding.dns_evidence_json).not.toContain('leakToken')
       } finally {
         fetchSpy.mockRestore()
         closeDatabase()
