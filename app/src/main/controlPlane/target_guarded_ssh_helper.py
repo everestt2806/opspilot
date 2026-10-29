@@ -23,6 +23,12 @@ from target_execution_guard import (
     TargetGuardError,
     acquire_execution,
 )
+from target_product_runtime import (
+    ProductRuntime,
+    RecoveryRuntime,
+    RuntimeRejected,
+    RuntimeUnknown,
+)
 
 VERSION = 1
 MAX_FRAME = 40 * 1024
@@ -55,6 +61,10 @@ TARGET_CODES = {
     "SSH_BUILD_FAILED",
     "SSH_BUILD_TIMEOUT",
     "SSH_BUILD_NOT_ACTIVE",
+    "SSH_RUNTIME_REJECTED",
+    "SSH_RUNTIME_FAILED",
+    "SSH_RUNTIME_UNKNOWN",
+    "SSH_SETTLEMENT_REJECTED",
 }
 
 
@@ -499,6 +509,8 @@ def main() -> int:
     build_thread: threading.Thread | None = None
     build_image_tag: str | None = None
     build_source_sha: str | None = None
+    build_state: str | None = None
+    runtime: ProductRuntime | RecoveryRuntime | None = None
     output_buffer = BoundedOutputBuffer(max_bytes=64 * 1024)
     expected_sequence = 1
     seen_request_ids: set[str] = set()
@@ -532,6 +544,51 @@ def main() -> int:
             seen_request_ids.add(request_id)
             operation = request.get("operation")
             if expected_sequence == 1:
+                if operation == "open_recovery":
+                    if not _exact_keys(
+                        request,
+                        {
+                            "version",
+                            "request_id",
+                            "sequence",
+                            "operation",
+                            "deployment_id",
+                            "state_root",
+                            "context",
+                            "attestation",
+                        },
+                    ):
+                        reject(request, "SSH_SETTLEMENT_REJECTED")
+                        return 3
+                    recovery_dep_id = request.get("deployment_id")
+                    if not isinstance(recovery_dep_id, int) or recovery_dep_id < 1:
+                        reject(request, "SSH_SETTLEMENT_REJECTED")
+                        return 3
+                    try:
+                        runtime = RecoveryRuntime(
+                            state_root=request.get("state_root"),
+                            context=request.get("context"),
+                            attestation=request.get("attestation"),
+                        )
+                        deployment_id = recovery_dep_id
+                    except (RuntimeRejected, RuntimeUnknown, TargetGuardError) as error:
+                        code = getattr(error, "code", "SSH_SETTLEMENT_REJECTED")
+                        reject(request, code if code in TARGET_CODES else "SSH_SETTLEMENT_REJECTED")
+                        return 3
+                    except Exception:
+                        reject(request, "SSH_SETTLEMENT_REJECTED")
+                        return 3
+                    write_frame(
+                        {
+                            "version": VERSION,
+                            "request_id": request_id,
+                            "sequence": sequence,
+                            "state": "accepted",
+                            "deployment_id": deployment_id,
+                        }
+                    )
+                    expected_sequence += 1
+                    continue
                 if operation != "open" or set(request) != {
                     "version", "request_id", "sequence", "operation", "identity", "state_root", "deployment_id"
                 }:
@@ -607,12 +664,18 @@ def main() -> int:
                 )
             elif operation == "close":
                 if (
-                    execution is None
+                    (execution is None and runtime is None)
                     or set(request) != {"version", "request_id", "sequence", "operation", "deployment_id"}
                     or request.get("deployment_id") != deployment_id
                 ):
                     reject(request, "TARGET_EXECUTION_NOT_ACTIVE")
                     return 3
+                if runtime is not None:
+                    try:
+                        runtime.close()
+                    except Exception:
+                        pass
+                    runtime = None
                 if build_proc is not None and build_proc.poll() is None:
                     try:
                         build_proc.terminate()
@@ -624,8 +687,9 @@ def main() -> int:
                             pass
                 if transfer is not None:
                     transfer.cleanup_incomplete()
-                execution.__exit__(None, None, None)
-                execution = None
+                if execution is not None:
+                    execution.__exit__(None, None, None)
+                    execution = None
                 write_frame(
                     {
                         "version": VERSION,
@@ -859,6 +923,7 @@ def main() -> int:
                         inspect_success = False
 
                     if inspect_success:
+                        build_state = "succeeded"
                         write_frame(
                             {
                                 "version": VERSION,
@@ -874,6 +939,7 @@ def main() -> int:
                             }
                         )
                     else:
+                        build_state = "failed"
                         error_tail = redact_secrets(output_buffer.get_tail(4096))
                         write_frame(
                             {
@@ -889,6 +955,7 @@ def main() -> int:
                             }
                         )
                 else:
+                    build_state = "failed"
                     error_tail = redact_secrets(output_buffer.get_tail(4096))
                     write_frame(
                         {
@@ -902,6 +969,204 @@ def main() -> int:
                             "error_tail": error_tail,
                         }
                     )
+            elif operation == "runtime_configure":
+                if (
+                    execution is None
+                    or runtime is not None
+                    or transfer is None
+                    or build_state is None
+                    or not _exact_keys(
+                        request,
+                        {
+                            "version",
+                            "request_id",
+                            "sequence",
+                            "operation",
+                            "deployment_id",
+                            "context",
+                        },
+                    )
+                    or request.get("deployment_id") != deployment_id
+                ):
+                    reject(request, "SSH_RUNTIME_REJECTED")
+                    return 3
+                try:
+                    runtime = ProductRuntime(
+                        execution=execution,
+                        transfer_directory=transfer.directory,
+                        deployment_id=deployment_id,
+                        build_state=build_state,
+                        build_image_tag=build_image_tag,
+                        build_source_sha=build_source_sha,
+                    )
+                    runtime.configure(request["context"])
+                except (RuntimeRejected, RuntimeUnknown, TargetGuardError) as error:
+                    code = getattr(error, "code", "SSH_RUNTIME_REJECTED")
+                    reject(request, code if code in TARGET_CODES else "SSH_RUNTIME_REJECTED")
+                    return 3
+                except Exception:
+                    reject(request, "SSH_RUNTIME_REJECTED")
+                    return 3
+                write_frame(
+                    {
+                        "version": VERSION,
+                        "request_id": request_id,
+                        "sequence": sequence,
+                        "state": "accepted",
+                        "deployment_id": deployment_id,
+                    }
+                )
+            elif operation == "start_runtime_step":
+                if (
+                    runtime is None
+                    or not isinstance(runtime, ProductRuntime)
+                    or not _exact_keys(
+                        request,
+                        {
+                            "version",
+                            "request_id",
+                            "sequence",
+                            "operation",
+                            "deployment_id",
+                            "step",
+                        },
+                    )
+                    or request.get("deployment_id") != deployment_id
+                ):
+                    reject(request, "SSH_RUNTIME_REJECTED")
+                    return 3
+                step = request.get("step")
+                if not isinstance(step, str):
+                    reject(request, "SSH_RUNTIME_REJECTED")
+                    return 3
+                try:
+                    runtime.start_step(step)
+                except (RuntimeRejected, RuntimeUnknown, TargetGuardError) as error:
+                    code = getattr(error, "code", "SSH_RUNTIME_REJECTED")
+                    reject(request, code if code in TARGET_CODES else "SSH_RUNTIME_REJECTED")
+                    return 3
+                except Exception:
+                    reject(request, "SSH_RUNTIME_REJECTED")
+                    return 3
+                write_frame(
+                    {
+                        "version": VERSION,
+                        "request_id": request_id,
+                        "sequence": sequence,
+                        "state": "accepted",
+                        "deployment_id": deployment_id,
+                    }
+                )
+            elif operation == "poll_runtime":
+                if (
+                    runtime is None
+                    or not _exact_keys(
+                        request,
+                        {
+                            "version",
+                            "request_id",
+                            "sequence",
+                            "operation",
+                            "deployment_id",
+                        },
+                    )
+                    or request.get("deployment_id") != deployment_id
+                ):
+                    reject(request, "SSH_RUNTIME_REJECTED")
+                    return 3
+                try:
+                    progress = runtime.poll()
+                except (RuntimeRejected, RuntimeUnknown, TargetGuardError) as error:
+                    code = getattr(error, "code", "SSH_RUNTIME_REJECTED")
+                    reject(request, code if code in TARGET_CODES else "SSH_RUNTIME_REJECTED")
+                    return 3
+                except Exception:
+                    reject(request, "SSH_RUNTIME_REJECTED")
+                    return 3
+                write_frame(
+                    {
+                        "version": VERSION,
+                        "request_id": request_id,
+                        "sequence": sequence,
+                        "state": "accepted",
+                        "deployment_id": deployment_id,
+                        "runtime": progress,
+                    }
+                )
+            elif operation == "seal_runtime":
+                if (
+                    runtime is None
+                    or not isinstance(runtime, ProductRuntime)
+                    or not _exact_keys(
+                        request,
+                        {
+                            "version",
+                            "request_id",
+                            "sequence",
+                            "operation",
+                            "deployment_id",
+                        },
+                    )
+                    or request.get("deployment_id") != deployment_id
+                ):
+                    reject(request, "SSH_RUNTIME_REJECTED")
+                    return 3
+                try:
+                    terminal = runtime.seal()
+                except (RuntimeRejected, RuntimeUnknown, TargetGuardError) as error:
+                    code = getattr(error, "code", "SSH_RUNTIME_REJECTED")
+                    reject(request, code if code in TARGET_CODES else "SSH_RUNTIME_REJECTED")
+                    return 3
+                except Exception:
+                    reject(request, "SSH_RUNTIME_REJECTED")
+                    return 3
+                write_frame(
+                    {
+                        "version": VERSION,
+                        "request_id": request_id,
+                        "sequence": sequence,
+                        "state": "accepted",
+                        "deployment_id": deployment_id,
+                        "terminal": terminal,
+                    }
+                )
+            elif operation == "settle_runtime":
+                if (
+                    runtime is None
+                    or not _exact_keys(
+                        request,
+                        {
+                            "version",
+                            "request_id",
+                            "sequence",
+                            "operation",
+                            "deployment_id",
+                            "attestation",
+                        },
+                    )
+                    or request.get("deployment_id") != deployment_id
+                ):
+                    reject(request, "SSH_SETTLEMENT_REJECTED")
+                    return 3
+                try:
+                    ack = runtime.settle(request["attestation"])
+                except (RuntimeRejected, RuntimeUnknown, TargetGuardError) as error:
+                    code = getattr(error, "code", "SSH_SETTLEMENT_REJECTED")
+                    reject(request, code if code in TARGET_CODES else "SSH_SETTLEMENT_REJECTED")
+                    return 3
+                except Exception:
+                    reject(request, "SSH_SETTLEMENT_REJECTED")
+                    return 3
+                write_frame(
+                    {
+                        "version": VERSION,
+                        "request_id": request_id,
+                        "sequence": sequence,
+                        "state": "accepted",
+                        "deployment_id": deployment_id,
+                        "settlement": ack,
+                    }
+                )
             else:
                 reject(request, "SSH_PROTOCOL_MALFORMED")
                 return 2
@@ -911,6 +1176,11 @@ def main() -> int:
         # will classify EOF as an unknown outcome without persisting raw text.
         return 2
     finally:
+        if runtime is not None:
+            try:
+                runtime.close()
+            except Exception:
+                pass
         if build_proc is not None and build_proc.poll() is None:
             try:
                 build_proc.terminate()

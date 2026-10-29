@@ -327,3 +327,155 @@ def acquire_execution(
 ) -> GuardedExecution:
     """Return a context manager; keep it entered across the complete write region."""
     return GuardedExecution(Path(state_root), identity, timeout_seconds)
+
+
+class GuardedRecoveryExecution(AbstractContextManager["GuardedRecoveryExecution"]):
+    """Handle riêng giữ flock, chỉ đọc receipt/settle, không authorize write phase và không bypass marker."""
+    _NEW = "new"
+    _ACTIVE = "active"
+    _CLOSED = "closed"
+
+    def __init__(self, root: Path, identity: ExecutionIdentity, timeout_seconds: float):
+        self.root = root
+        self.identity = identity
+        self.timeout_seconds = timeout_seconds
+        self._lock_file = None
+        self._lifecycle = self._NEW
+        self._marker_path = root / f"{_identity_key(identity.controller_id, identity.app_id)}.json"
+
+    def __enter__(self) -> GuardedRecoveryExecution:
+        if self._lifecycle == self._ACTIVE:
+            raise TargetGuardError("TARGET_EXECUTION_ALREADY_ENTERED")
+        if self._lifecycle != self._NEW:
+            raise TargetGuardError("TARGET_EXECUTION_NOT_ACTIVE")
+        self._lifecycle = self._CLOSED
+        self.identity.validate()
+        if self.timeout_seconds < 0 or self.timeout_seconds > 60:
+            raise TargetGuardError("TARGET_LOCK_TIMEOUT_INVALID")
+        lock_path = self.root / "locks" / f"{_identity_key(self.identity.controller_id, self.identity.app_id)}.lock"
+        try:
+            root_stat = self.root.stat()
+            if (
+                self.root.is_symlink()
+                or not stat.S_ISDIR(root_stat.st_mode)
+                or root_stat.st_uid != os.geteuid()
+                or root_stat.st_mode & 0o077
+            ):
+                raise TargetGuardError("TARGET_MARKER_INVALID")
+            lock_dir = lock_path.parent
+            lock_dir_stat = lock_dir.stat()
+            if (
+                lock_dir.is_symlink()
+                or not stat.S_ISDIR(lock_dir_stat.st_mode)
+                or lock_dir_stat.st_uid != os.geteuid()
+                or lock_dir_stat.st_mode & 0o077
+            ):
+                raise TargetGuardError("TARGET_MARKER_INVALID")
+            flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+            fd = os.open(lock_path, flags, 0o600)
+            lock_stat = os.fstat(fd)
+            if (
+                not stat.S_ISREG(lock_stat.st_mode)
+                or lock_stat.st_uid != os.geteuid()
+                or stat.S_IMODE(lock_stat.st_mode) & 0o077
+            ):
+                os.close(fd)
+                raise TargetGuardError("TARGET_MARKER_INVALID")
+            os.fchmod(fd, 0o600)
+            self._lock_file = os.fdopen(fd, "r+b", buffering=0)
+        except TargetGuardError:
+            self._close_lock()
+            raise
+        except OSError:
+            self._close_lock()
+            raise TargetGuardError("TARGET_NOT_ENROLLED") from None
+
+        deadline = time.monotonic() + self.timeout_seconds
+        while True:
+            try:
+                fcntl.flock(self._lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    self._close_lock()
+                    raise TargetGuardError("TARGET_LOCK_BUSY") from None
+                try:
+                    time.sleep(min(0.025, max(0.0, deadline - time.monotonic())))
+                except BaseException:
+                    self._close_lock()
+                    raise
+            except OSError:
+                self._close_lock()
+                raise TargetGuardError("TARGET_MARKER_INVALID") from None
+            except BaseException:
+                self._close_lock()
+                raise
+
+        try:
+            marker = _read_marker(self._marker_path)
+            if marker["controller_id"] != self.identity.controller_id or marker["app_id"] != self.identity.app_id:
+                raise TargetGuardError("TARGET_IDENTITY_MISMATCH")
+            if marker["ownership_generation"] != self.identity.ownership_generation:
+                raise TargetGuardError("TARGET_OWNERSHIP_GENERATION_STALE")
+            if self.identity.app_fence != marker["highest_accepted_fence"]:
+                raise TargetGuardError("TARGET_FENCE_STALE")
+            if self.identity.claim_id != marker["last_claim_id"] or self.identity.attempt_id != marker["last_attempt_id"]:
+                raise TargetGuardError("TARGET_ATTEMPT_REPLAY")
+            self._lifecycle = self._ACTIVE
+            return self
+        except TargetGuardError:
+            self._close_lock()
+            raise
+        except OSError:
+            self._close_lock()
+            raise TargetGuardError("TARGET_MARKER_INVALID") from None
+        except BaseException:
+            self._close_lock()
+            raise
+
+    def authorize_settlement(self) -> None:
+        lock_file = self._lock_file
+        if self._lifecycle != self._ACTIVE or lock_file is None or lock_file.closed:
+            self._lifecycle = self._CLOSED
+            raise TargetGuardError("TARGET_EXECUTION_NOT_ACTIVE")
+        try:
+            os.fstat(lock_file.fileno())
+        except OSError:
+            self._lifecycle = self._CLOSED
+            self._close_lock()
+            raise TargetGuardError("TARGET_EXECUTION_NOT_ACTIVE") from None
+        marker = _read_marker(self._marker_path)
+        if (
+            marker["controller_id"] != self.identity.controller_id
+            or marker["app_id"] != self.identity.app_id
+            or marker["ownership_generation"] != self.identity.ownership_generation
+            or marker["highest_accepted_fence"] != self.identity.app_fence
+            or marker["last_claim_id"] != self.identity.claim_id
+            or marker["last_attempt_id"] != self.identity.attempt_id
+        ):
+            raise TargetGuardError("TARGET_IDENTITY_MISMATCH")
+
+    def authorize_write_phase(self, phase: str) -> None:
+        del phase
+        raise TargetGuardError("TARGET_PHASE_REJECTED")
+
+    def _close_lock(self) -> None:
+        lock_file = self._lock_file
+        self._lock_file = None
+        if lock_file is None:
+            return
+        try:
+            lock_file.close()
+        except OSError:
+            raise TargetGuardError("TARGET_LOCK_RELEASE_FAILED") from None
+
+    def __exit__(self, exc_type, exc, traceback) -> None:
+        self._lifecycle = self._CLOSED
+        self._close_lock()
+
+
+def acquire_recovery(
+    state_root: str | os.PathLike[str], identity: ExecutionIdentity, timeout_seconds: float = 5.0
+) -> GuardedRecoveryExecution:
+    """Return a read/settle recovery context manager; cannot authorize write phases."""
+    return GuardedRecoveryExecution(Path(state_root), identity, timeout_seconds)

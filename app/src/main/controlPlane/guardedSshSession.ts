@@ -1,6 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import { posix as posixPath } from 'node:path'
 import type { ClientChannel } from 'ssh2'
+import type {
+  H2Context,
+  H2CommitAttestation,
+  H2RuntimeProgress,
+  H2RuntimeStep,
+  H2SealedReceipt,
+  H2SettlementAck,
+  H2TerminalRecord
+} from '../../../../docs/contracts/product-h2-runtime'
 
 import {
   GUARDED_SSH_MAX_MESSAGES,
@@ -29,8 +38,29 @@ import {
   encodeGuardedSshFrame,
   GuardedSshFrameDecoder,
   GuardedSshProtocolError,
-  requireSingleGuardedSshResponse
+  requireSingleGuardedSshResponse,
+  STABLE_ERROR_CODES
 } from './guardedSshProtocol'
+import {
+  h2AckSchema,
+  h2AttestationSchema,
+  h2ContextSchema,
+  h2EnvelopeSchema,
+  h2ProgressSchema
+} from './productH2Proof'
+
+export interface ProductRuntimeSettlementRepository {
+  readSettlementAuthority(context: H2Context): 'ready' | 'rejected'
+  commitAttestation(attemptId: string): H2CommitAttestation
+  getTerminal(attemptId: string): H2TerminalRecord | null
+}
+
+type RuntimeRecoveryConfiguration = {
+  context: H2Context
+  envelope: H2SealedReceipt
+  attestation: H2CommitAttestation
+  authority: () => boolean
+}
 
 export class GuardedSshSessionError extends Error {
   constructor(readonly code: GuardedSshErrorCode) {
@@ -144,6 +174,14 @@ export class GuardedSshExecutionSession {
   private currentFileOpen = false
   private resolveCloseWaiter: (() => void) | null = null
   private activeImageTag: string | null = null
+  private activeSourceSha: string | null = null
+  private activeBuildResult: {
+    state: 'build_succeeded' | 'build_failed_definite'
+    imageId: string | null
+  } | null = null
+  private runtimeContext: H2Context | null = null
+  private runtimeStep: H2RuntimeStep | null = null
+  private runtimeSealed: H2SealedReceipt | null = null
   private readonly onAbort: () => void
 
   constructor(
@@ -153,7 +191,8 @@ export class GuardedSshExecutionSession {
     deploymentId: number,
     private readonly targetBinding: ProductDispatchTargetBinding,
     private readonly signal: AbortSignal | undefined = undefined,
-    requestTimeoutMs: number = GUARDED_SSH_REQUEST_TIMEOUT_MS
+    requestTimeoutMs: number = GUARDED_SSH_REQUEST_TIMEOUT_MS,
+    private readonly recoveryConfiguration?: RuntimeRecoveryConfiguration
   ) {
     this.deploymentId = deploymentId
     this.requestTimeoutMs = requestTimeoutMs
@@ -431,6 +470,8 @@ export class GuardedSshExecutionSession {
       throw new GuardedSshSessionError('SSH_BUILD_REJECTED')
     }
     this.activeImageTag = imageTag
+    this.activeSourceSha = sourceSha
+    this.activeBuildResult = null
     await this.authorizeWritePhase('build')
     this.assertAuthority()
     await this.exchange({
@@ -496,6 +537,7 @@ export class GuardedSshExecutionSession {
           this.failClosed('SSH_BUILD_FAILED')
           throw new GuardedSshSessionError('SSH_BUILD_FAILED')
         }
+        this.activeBuildResult = { state: 'build_succeeded', imageId: resp.image_id }
         return {
           state: 'succeeded',
           imageId: resp.image_id,
@@ -504,6 +546,7 @@ export class GuardedSshExecutionSession {
         }
       }
       if (resp.build_state === 'failed') {
+        this.activeBuildResult = { state: 'build_failed_definite', imageId: null }
         return {
           state: 'failed',
           exitCode: resp.exit_code ?? 1,
@@ -531,6 +574,233 @@ export class GuardedSshExecutionSession {
     }
     this.failClosed('SSH_BUILD_TIMEOUT')
     throw new GuardedSshSessionError('SSH_BUILD_TIMEOUT')
+  }
+
+  get activeBuild(): {
+    state: 'build_succeeded' | 'build_failed_definite'
+    imageId: string | null
+  } | null {
+    return this.activeBuildResult
+  }
+
+  get activeSource(): string | null {
+    return this.activeSourceSha
+  }
+
+  get currentRuntimeContext(): H2Context | null {
+    return this.runtimeContext
+  }
+
+  get currentRuntimeStep(): H2RuntimeStep | null {
+    return this.runtimeStep
+  }
+
+  get currentRuntimeSealed(): H2SealedReceipt | null {
+    return this.runtimeSealed
+  }
+
+  async runtimeConfigure(context: H2Context): Promise<void> {
+    if (this.stateValue !== 'active') throw new GuardedSshSessionError('SSH_OUTCOME_UNKNOWN')
+    if (this.sequence >= GUARDED_SSH_MAX_MESSAGES) {
+      this.failClosed('SSH_PROTOCOL_LIMIT')
+      throw new GuardedSshSessionError('SSH_PROTOCOL_LIMIT')
+    }
+    this.assertAuthority()
+    const parsedContext = h2ContextSchema.parse(context)
+    if (parsedContext.deployment_id !== this.deploymentId) {
+      throw new GuardedSshSessionError('SSH_RUNTIME_REJECTED')
+    }
+    this.runtimeContext = parsedContext
+    await this.exchange({
+      version: 1,
+      request_id: randomUUID(),
+      sequence: this.sequence,
+      operation: 'runtime_configure',
+      deployment_id: this.deploymentId,
+      context: parsedContext
+    })
+    this.sequence += 1
+  }
+
+  async startRuntimeStep(step: H2RuntimeStep): Promise<void> {
+    if (this.stateValue !== 'active') throw new GuardedSshSessionError('SSH_OUTCOME_UNKNOWN')
+    if (this.sequence >= GUARDED_SSH_MAX_MESSAGES) {
+      this.failClosed('SSH_PROTOCOL_LIMIT')
+      throw new GuardedSshSessionError('SSH_PROTOCOL_LIMIT')
+    }
+    this.assertAuthority()
+    this.runtimeStep = step
+    await this.exchange({
+      version: 1,
+      request_id: randomUUID(),
+      sequence: this.sequence,
+      operation: 'start_runtime_step',
+      deployment_id: this.deploymentId,
+      step
+    })
+    this.sequence += 1
+  }
+
+  async pollRuntime(): Promise<H2RuntimeProgress> {
+    if (this.stateValue !== 'active') throw new GuardedSshSessionError('SSH_OUTCOME_UNKNOWN')
+    if (this.sequence >= GUARDED_SSH_MAX_MESSAGES) {
+      this.failClosed('SSH_PROTOCOL_LIMIT')
+      throw new GuardedSshSessionError('SSH_PROTOCOL_LIMIT')
+    }
+    this.assertAuthority()
+    const response = await this.exchangeWithResponse({
+      version: 1,
+      request_id: randomUUID(),
+      sequence: this.sequence,
+      operation: 'poll_runtime',
+      deployment_id: this.deploymentId
+    })
+    this.sequence += 1
+    if (!response.runtime) {
+      this.failClosed('SSH_RUNTIME_FAILED')
+      throw new GuardedSshSessionError('SSH_RUNTIME_FAILED')
+    }
+    return h2ProgressSchema.parse(response.runtime)
+  }
+
+  async pollRuntimeUntilSettled(
+    step: H2RuntimeStep,
+    options: {
+      timeoutMs?: number
+      pollIntervalMs?: number
+    } = {}
+  ): Promise<H2RuntimeProgress> {
+    const timeoutMs = options.timeoutMs ?? 150_000
+    const pollIntervalMs = options.pollIntervalMs ?? 500
+    const startTime = Date.now()
+
+    while (Date.now() - startTime < timeoutMs) {
+      if (this.signal?.aborted) {
+        this.failClosed('SSH_SESSION_ABORTED')
+        throw new GuardedSshSessionError('SSH_SESSION_ABORTED')
+      }
+      this.assertAuthority()
+      const progress = await this.pollRuntime()
+      if (progress.step && progress.step !== step) {
+        this.failClosed('SSH_RUNTIME_REJECTED')
+        throw new GuardedSshSessionError('SSH_RUNTIME_REJECTED')
+      }
+      if (progress.state === 'step_succeeded' || progress.state === 'step_failed') {
+        if (progress.step !== step) {
+          this.failClosed('SSH_RUNTIME_REJECTED')
+          throw new GuardedSshSessionError('SSH_RUNTIME_REJECTED')
+        }
+        return progress
+      }
+      if (progress.state === 'unknown') {
+        const code = progress.safe_error_code
+        const errCode =
+          code && STABLE_ERROR_CODES.has(code)
+            ? (code as GuardedSshErrorCode)
+            : 'SSH_RUNTIME_UNKNOWN'
+        this.failClosed(errCode)
+        throw new GuardedSshSessionError(errCode)
+      }
+      await new Promise<void>((resolve, reject) => {
+        let cleanup = (): void => {}
+        const timer = setTimeout(() => {
+          cleanup()
+          resolve()
+        }, pollIntervalMs)
+        if (this.signal) {
+          const onAbort = (): void => {
+            clearTimeout(timer)
+            cleanup()
+            reject(new GuardedSshSessionError('SSH_SESSION_ABORTED'))
+          }
+          cleanup = (): void => {
+            this.signal?.removeEventListener('abort', onAbort)
+          }
+          this.signal.addEventListener('abort', onAbort, { once: true })
+        }
+      })
+    }
+    this.failClosed('SSH_SESSION_TIMEOUT')
+    throw new GuardedSshSessionError('SSH_SESSION_TIMEOUT')
+  }
+
+  async sealRuntime(): Promise<H2SealedReceipt> {
+    if (this.stateValue !== 'active') throw new GuardedSshSessionError('SSH_OUTCOME_UNKNOWN')
+    if (this.sequence >= GUARDED_SSH_MAX_MESSAGES) {
+      this.failClosed('SSH_PROTOCOL_LIMIT')
+      throw new GuardedSshSessionError('SSH_PROTOCOL_LIMIT')
+    }
+    this.assertAuthority()
+    const response = await this.exchangeWithResponse({
+      version: 1,
+      request_id: randomUUID(),
+      sequence: this.sequence,
+      operation: 'seal_runtime',
+      deployment_id: this.deploymentId
+    })
+    this.sequence += 1
+    if (!response.terminal) {
+      this.failClosed('SSH_RUNTIME_FAILED')
+      throw new GuardedSshSessionError('SSH_RUNTIME_FAILED')
+    }
+    const sealed = h2EnvelopeSchema.parse(response.terminal)
+    this.runtimeSealed = sealed
+    return sealed
+  }
+
+  async settleRuntime(attestation: H2CommitAttestation): Promise<H2SettlementAck> {
+    if (this.stateValue !== 'active') throw new GuardedSshSessionError('SSH_OUTCOME_UNKNOWN')
+    if (this.sequence >= GUARDED_SSH_MAX_MESSAGES) {
+      this.failClosed('SSH_PROTOCOL_LIMIT')
+      throw new GuardedSshSessionError('SSH_PROTOCOL_LIMIT')
+    }
+    const parsedAttestation = h2AttestationSchema.parse(attestation)
+    if (this.recoveryConfiguration) {
+      if (!this.recoveryConfiguration.authority()) {
+        this.failClosed('SSH_SETTLEMENT_REJECTED')
+        throw new GuardedSshSessionError('SSH_SETTLEMENT_REJECTED')
+      }
+    } else {
+      if (!this.runtimeSealed) {
+        this.failClosed('SSH_SETTLEMENT_REJECTED')
+        throw new GuardedSshSessionError('SSH_SETTLEMENT_REJECTED')
+      }
+    }
+    const response = await this.exchangeWithResponse({
+      version: 1,
+      request_id: randomUUID(),
+      sequence: this.sequence,
+      operation: 'settle_runtime',
+      deployment_id: this.deploymentId,
+      attestation: parsedAttestation
+    })
+    this.sequence += 1
+    if (!response.settlement) {
+      this.failClosed('SSH_SETTLEMENT_REJECTED')
+      throw new GuardedSshSessionError('SSH_SETTLEMENT_REJECTED')
+    }
+    return h2AckSchema.parse(response.settlement)
+  }
+
+  async openRecovery(
+    stateRoot: string,
+    context: H2Context,
+    attestation: H2CommitAttestation
+  ): Promise<void> {
+    if (!this.recoveryConfiguration || !this.recoveryConfiguration.authority()) {
+      throw new GuardedSshSessionError('SSH_SETTLEMENT_REJECTED')
+    }
+    await this.exchange({
+      version: 1,
+      request_id: randomUUID(),
+      sequence: 1,
+      operation: 'open_recovery',
+      state_root: stateRoot,
+      deployment_id: this.deploymentId,
+      context,
+      attestation
+    })
+    this.sequence += 1
   }
 
   private exchange(request: GuardedSshRequest): Promise<void> {
@@ -593,6 +863,19 @@ export class GuardedSshExecutionSession {
   }
 
   private assertAuthority(): void {
+    if (this.recoveryConfiguration) {
+      if (!this.recoveryConfiguration.authority()) {
+        const code = this.signal?.aborted ? 'SSH_SESSION_ABORTED' : 'SSH_AUTHORITY_STALE'
+        this.failClosed(code)
+        throw new GuardedSshSessionError(code)
+      }
+      return
+    }
+    if (this.runtimeSealed) {
+      // Receipt không cấp quyền mutation; settlement/close có đường xử lý riêng.
+      this.failClosed('SSH_RUNTIME_REJECTED')
+      throw new GuardedSshSessionError('SSH_RUNTIME_REJECTED')
+    }
     const binding = this.repository.readGitDispatchTargetBinding(this.claim, this.deploymentId)
     if (
       this.signal?.aborted ||
@@ -680,4 +963,71 @@ function sameSshIdentity(
     binding.username === identity.username &&
     binding.auth_type === identity.authType
   )
+}
+
+export async function openProductGuardedSshRecoverySession(
+  repository: ProductRuntimeSettlementRepository,
+  ssh: SshManager,
+  context: H2Context,
+  options: SessionOptions
+): Promise<GuardedSshExecutionSession> {
+  const claim = context.claim
+  const authorityCheck = (): boolean => repository.readSettlementAuthority(context) === 'ready'
+  if (!authorityCheck()) {
+    throw new GuardedSshSessionError('SSH_SETTLEMENT_REJECTED')
+  }
+  const terminal = repository.getTerminal(claim.attempt_id)
+  if (!terminal) {
+    throw new GuardedSshSessionError('SSH_SETTLEMENT_REJECTED')
+  }
+  const attestation = repository.commitAttestation(claim.attempt_id)
+
+  let opened: { channel: ClientChannel; identity: SshVerifiedConnectionIdentity }
+  try {
+    opened = await ssh.openGuardedExecutionChannelWithIdentity(
+      context.target.vps_id,
+      options.target_helper_path,
+      {
+        timeoutMs: GUARDED_SSH_REQUEST_TIMEOUT_MS,
+        signal: options.signal
+      }
+    )
+  } catch (error) {
+    throw mapSshOpenError(error)
+  }
+
+  if (
+    options.signal?.aborted ||
+    !authorityCheck() ||
+    !sameSshIdentity(context.target, opened.identity)
+  ) {
+    opened.channel.destroy()
+    throw new GuardedSshSessionError(
+      options.signal?.aborted ? 'SSH_SESSION_ABORTED' : 'SSH_AUTHORITY_STALE'
+    )
+  }
+
+  const session = new GuardedSshExecutionSession(
+    opened.channel,
+    repository as unknown as ProductDeployRepository,
+    claim,
+    context.deployment_id,
+    context.target,
+    options.signal,
+    GUARDED_SSH_REQUEST_TIMEOUT_MS,
+    {
+      context,
+      envelope: terminal.envelope,
+      attestation,
+      authority: authorityCheck
+    }
+  )
+
+  try {
+    await session.openRecovery(options.target_state_root, context, attestation)
+    return session
+  } catch (error) {
+    session.failClosed()
+    throw error
+  }
 }

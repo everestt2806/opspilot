@@ -14,8 +14,8 @@
 | H0 | Leader | CHỜ REVIEW | `900ad77` đã push feature branch; 8 Linux filesystem tests, 247 Vitest tests, typecheck/lint/artifact + localhost SSH lab pass; source/render slice accepted, chưa full Product deployment/merge. |
 | H1 | Kim / Leader nhận sau Gemini | CHỜ REVIEW | [PR #33](https://github.com/everestt2806/opspilot/pull/33) · code `3e06f2d` + `2453604` · POST-004..007 đã đóng qua controlled + real pinned SSH/Docker build: success/definite failure/secret/one deployment/V1 preservation/cleanup PASS. H2 activate/finalize chưa triển khai. |
 | L0 | Kim / Leader nhận sau Gemini | CHỜ REVIEW | [PR #33](https://github.com/everestt2806/opspilot/pull/33) · commit fix `f457cf9` · Leader đóng POST-001..003 sau ghi nhận report: 12/12 regression HTTP thật + 10/10 Docker gates PASS; giữ 13 containers/21 images baseline. Không phải Product SSH proof. |
-| H2-D | Kim / reviewer | BACKLOG | Proposal activate/rollback/fenced finalization, failure matrix; chuẩn bị song song H1, chưa sửa runtime/contract. |
-| H2 | Kim / Worker | BACKLOG | Activate/health/rollback/publish và fenced finalization, không replay unknown; phụ thuộc H1. |
+| H2-D | Kim / reviewer | CHỜ REVIEW | Seam runtime/finalization H2 v1 đã ghi trong contracts và DECISIONS; tiếp tục review cùng checkpoint H2, chưa nhận full runtime DoD. |
+| H2 | Kim / Codex review | CHỜ REVIEW | [Runtime checkpoint](tk-s7-product-h2-runtime.md) · `feat/product-h2-checkpoint`, base PR #33 · C0/runtime/seal/T1/T2/recovery và regressions đã có; PARTIAL do chưa full CLI/pinned SSH/Docker/collector/crash/installer proof. PR draft, không bật executor production. |
 
 ## Sprint sản phẩm 08/10 — hai nguồn deploy và nền auto deploy
 

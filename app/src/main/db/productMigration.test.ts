@@ -36,20 +36,35 @@ describe('Product persistence migrations 016-019', () => {
   it('adds a secret-free monotonic SSH security revision to an existing v018 VPS row', () => {
     testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-vps-security-revision-'))
     const database = initializeDatabase(testDirectory)
-    database.prepare(`INSERT INTO vps (id,name,host,username,auth_type,encrypted_secret)
-      VALUES (99,'revision-test','host.example.test','principal-old','key',X'0102')`).run()
+    database
+      .prepare(
+        `INSERT INTO vps (id,name,host,username,auth_type,encrypted_secret)
+      VALUES (99,'revision-test','host.example.test','principal-old','key',X'0102')`
+      )
+      .run()
     database.exec('ALTER TABLE vps DROP COLUMN ssh_security_revision')
     database.prepare('DELETE FROM schema_version WHERE version=19').run()
 
     runMigrations(database)
 
-    expect(database.prepare('SELECT host,username,auth_type,ssh_security_revision FROM vps WHERE id=99').get()).toEqual({
-      host: 'host.example.test', username: 'principal-old', auth_type: 'key', ssh_security_revision: 1
+    expect(
+      database
+        .prepare('SELECT host,username,auth_type,ssh_security_revision FROM vps WHERE id=99')
+        .get()
+    ).toEqual({
+      host: 'host.example.test',
+      username: 'principal-old',
+      auth_type: 'key',
+      ssh_security_revision: 1
     })
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 19 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
+      version: 20
+    })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
-    expect(database.prepare('SELECT ssh_security_revision FROM vps WHERE id=99').get()).toEqual({ ssh_security_revision: 1 })
+    expect(database.prepare('SELECT ssh_security_revision FROM vps WHERE id=99').get()).toEqual({
+      ssh_security_revision: 1
+    })
   })
 
   it('upgrades a v015 database without changing legacy rows or enrolling Product data, then reopens idempotently', () => {
@@ -63,7 +78,7 @@ describe('Product persistence migrations 016-019', () => {
     const after = snapshotLegacy(database)
     expect(after).toEqual(before)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 19
+      version: 20
     })
     expect(database.prepare('SELECT COUNT(*) AS count FROM product_controller').get()).toEqual({
       count: 0
@@ -86,7 +101,7 @@ describe('Product persistence migrations 016-019', () => {
     ).count
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 19
+      version: 20
     })
     expect(
       (
@@ -107,24 +122,47 @@ describe('Product persistence migrations 016-019', () => {
 
     runMigrations(database)
 
-    expect(database.prepare(`SELECT auto_deploy_paused, pause_reason, pause_policy_provenance
-      FROM product_app_control WHERE app_id=7`).get()).toEqual({
+    expect(
+      database
+        .prepare(
+          `SELECT auto_deploy_paused, pause_reason, pause_policy_provenance
+      FROM product_app_control WHERE app_id=7`
+        )
+        .get()
+    ).toEqual({
       auto_deploy_paused: 1,
       pause_reason: 'operator',
       pause_policy_provenance: 'operator_required'
     })
-    expect(database.prepare(`SELECT auto_deploy_paused, pause_reason, pause_policy_provenance
-      FROM product_app_control WHERE app_id=8`).get()).toEqual({
+    expect(
+      database
+        .prepare(
+          `SELECT auto_deploy_paused, pause_reason, pause_policy_provenance
+      FROM product_app_control WHERE app_id=8`
+        )
+        .get()
+    ).toEqual({
       auto_deploy_paused: 1,
       pause_reason: 'operator',
       pause_policy_provenance: 'legacy_inferred'
     })
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 19 })
-    expect(database.prepare("SELECT COUNT(*) AS count FROM product_deploy_job WHERE trigger='branch_poll'").get())
-      .toEqual({ count: 0 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
+      version: 20
+    })
+    expect(
+      database
+        .prepare("SELECT COUNT(*) AS count FROM product_deploy_job WHERE trigger='branch_poll'")
+        .get()
+    ).toEqual({ count: 0 })
     expect(database.pragma('foreign_key_check')).toEqual([])
-    expect(() => database.prepare(`UPDATE product_app_control SET auto_deploy_paused=0,
-      pause_reason=NULL WHERE app_id=7`).run()).toThrow(/explicit pause policy provenance required/)
+    expect(() =>
+      database
+        .prepare(
+          `UPDATE product_app_control SET auto_deploy_paused=0,
+      pause_reason=NULL WHERE app_id=7`
+        )
+        .run()
+    ).toThrow(/explicit pause policy provenance required/)
   })
 
   it('fails closed upgrading already-v017 ambiguous data and preserves explicit post-018 resume on reopen', () => {
@@ -133,31 +171,64 @@ describe('Product persistence migrations 016-019', () => {
     seedLegacyRows(database)
     downgradeMigration018ToV017(database)
     seedAmbiguousPauseHistory(database)
-    database.prepare(`UPDATE product_app_control SET auto_deploy_paused=0, pause_reason=NULL WHERE app_id=7`).run()
+    database
+      .prepare(
+        `UPDATE product_app_control SET auto_deploy_paused=0, pause_reason=NULL WHERE app_id=7`
+      )
+      .run()
 
     runMigrations(database)
-    expect(database.prepare(`SELECT auto_deploy_paused, pause_reason, pause_policy_provenance
-      FROM product_app_control WHERE app_id=7`).get()).toEqual({
+    expect(
+      database
+        .prepare(
+          `SELECT auto_deploy_paused, pause_reason, pause_policy_provenance
+      FROM product_app_control WHERE app_id=7`
+        )
+        .get()
+    ).toEqual({
       auto_deploy_paused: 1,
       pause_reason: 'operator',
       pause_policy_provenance: 'operator_required'
     })
 
-    database.prepare(`UPDATE product_app_control SET auto_deploy_paused=0, pause_reason=NULL,
-      pause_policy_provenance='explicit' WHERE app_id=7`).run()
-    const policyBefore = database.prepare(`SELECT auto_deploy_paused, pause_policy_provenance
-      FROM product_app_control WHERE app_id=7`).get()
+    database
+      .prepare(
+        `UPDATE product_app_control SET auto_deploy_paused=0, pause_reason=NULL,
+      pause_policy_provenance='explicit' WHERE app_id=7`
+      )
+      .run()
+    const policyBefore = database
+      .prepare(
+        `SELECT auto_deploy_paused, pause_policy_provenance
+      FROM product_app_control WHERE app_id=7`
+      )
+      .get()
     closeDatabase()
     const reopened = initializeDatabase(testDirectory!)
-    expect(reopened.prepare(`SELECT auto_deploy_paused, pause_policy_provenance
-      FROM product_app_control WHERE app_id=7`).get()).toEqual(policyBefore)
-    expect(reopened.prepare(`SELECT auto_deploy_paused, pause_policy_provenance
-      FROM product_app_control WHERE app_id=8`).get()).toEqual({
+    expect(
+      reopened
+        .prepare(
+          `SELECT auto_deploy_paused, pause_policy_provenance
+      FROM product_app_control WHERE app_id=7`
+        )
+        .get()
+    ).toEqual(policyBefore)
+    expect(
+      reopened
+        .prepare(
+          `SELECT auto_deploy_paused, pause_policy_provenance
+      FROM product_app_control WHERE app_id=8`
+        )
+        .get()
+    ).toEqual({
       auto_deploy_paused: 1,
       pause_policy_provenance: 'operator_required'
     })
-    expect(reopened.prepare("SELECT COUNT(*) AS count FROM product_deploy_job WHERE trigger='branch_poll'").get())
-      .toEqual({ count: 0 })
+    expect(
+      reopened
+        .prepare("SELECT COUNT(*) AS count FROM product_deploy_job WHERE trigger='branch_poll'")
+        .get()
+    ).toEqual({ count: 0 })
   })
 
   it('rolls back the whole v016 DDL and version record when a later statement conflicts', () => {
@@ -275,6 +346,9 @@ describe('Product persistence migrations 016-019', () => {
 
 function downgradeToV015(database: Database.Database): void {
   database.exec(`
+    DROP TABLE IF EXISTS product_runtime_terminal;
+    DROP TABLE IF EXISTS product_runtime_execution;
+    DELETE FROM schema_version WHERE version=20;
     ALTER TABLE vps DROP COLUMN ssh_security_revision;
     DELETE FROM schema_version WHERE version=19;
     DROP TRIGGER product_app_control_pause_provenance_insert;
@@ -301,6 +375,9 @@ function downgradeToV015(database: Database.Database): void {
 
 function downgradeToV016(database: Database.Database): void {
   database.exec(`
+    DROP TABLE IF EXISTS product_runtime_terminal;
+    DROP TABLE IF EXISTS product_runtime_execution;
+    DELETE FROM schema_version WHERE version=20;
     ALTER TABLE vps DROP COLUMN ssh_security_revision;
     DELETE FROM schema_version WHERE version=19;
     DROP TRIGGER product_app_control_pause_provenance_insert;
@@ -317,6 +394,9 @@ function downgradeToV016(database: Database.Database): void {
 
 function downgradeMigration018ToV017(database: Database.Database): void {
   database.exec(`
+    DROP TABLE IF EXISTS product_runtime_terminal;
+    DROP TABLE IF EXISTS product_runtime_execution;
+    DELETE FROM schema_version WHERE version=20;
     ALTER TABLE vps DROP COLUMN ssh_security_revision;
     DELETE FROM schema_version WHERE version=19;
     DROP TRIGGER product_app_control_pause_provenance_insert;

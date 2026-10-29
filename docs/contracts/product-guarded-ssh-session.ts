@@ -1,4 +1,10 @@
 import type {
+  H2Request,
+  H2RuntimeProgress,
+  H2SealedReceipt,
+  H2SettlementAck
+} from './product-h2-runtime'
+import type {
   ProductClaimToken,
   ProductDeploymentId,
   ProductGitSnapshotMetadata
@@ -127,6 +133,7 @@ export type GuardedSshPollBuildRequest = Readonly<{
 }>
 
 export type GuardedSshRequest =
+  | H2Request
   | GuardedSshOpenRequest
   | GuardedSshPhaseRequest
   | GuardedSshBeginScopeRequest
@@ -153,9 +160,16 @@ export type GuardedSshResponse = Readonly<{
   image_tag?: string
   labels?: Record<string, string>
   error_tail?: string
+  runtime?: H2RuntimeProgress
+  terminal?: H2SealedReceipt
+  settlement?: H2SettlementAck
 }>
 
 export type GuardedSshErrorCode =
+  | 'SSH_RUNTIME_REJECTED'
+  | 'SSH_RUNTIME_FAILED'
+  | 'SSH_RUNTIME_UNKNOWN'
+  | 'SSH_SETTLEMENT_REJECTED'
   | 'SSH_PIN_REJECTED'
   | 'SSH_CONNECT_FAILED'
   | 'SSH_SESSION_TIMEOUT'

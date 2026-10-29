@@ -57,6 +57,10 @@ copyFileSync(
   join(helperBundleDirectory, 'target_execution_guard.py'),
   join(targetHelper, 'target_execution_guard.py')
 )
+copyFileSync(
+  join(helperBundleDirectory, 'target_product_runtime.py'),
+  join(targetHelper, 'target_product_runtime.py')
+)
 const sshdLog = join(scratch, 'sshd.log')
 const sshdConfig = join(scratch, 'sshd_config')
 const user = execFileSync('id', ['-un'], { encoding: 'utf8' }).trim()
