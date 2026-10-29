@@ -1593,7 +1593,10 @@ def test_system_ssh_client_transport_uses_credentials_and_strict_host_key(
     """Kiểm thử mức transport: SystemSshClient truyền đúng credential (-i), IdentitiesOnly, StrictHostKeyChecking=yes, và không để lộ secret trong argv."""
     import subprocess
 
+    from experiments import run_experiment as runner
     from experiments.run_experiment import SystemSshClient
+
+    monkeypatch.setattr(runner, "_restrict_windows_key_acl", lambda *_args, **_kwargs: None)
 
     captured_cmds: list[list[str]] = []
 
@@ -1667,6 +1670,11 @@ def test_system_ssh_client_transport_uses_credentials_and_strict_host_key(
             existing_key
         )
         assert f"UserKnownHostsFile={known_hosts}" in cmd2_args
+        assert (
+            "GlobalKnownHostsFile=NUL"
+            if runner.os.name == "nt"
+            else "GlobalKnownHostsFile=/dev/null"
+        ) in cmd2_args
         assert "StrictHostKeyChecking=yes" in cmd2_args
 
     # File key ngoài không bị xoá sau khi đóng client
@@ -1827,7 +1835,10 @@ def test_ssh_secret_never_persisted_in_argv_log_or_db(
     import logging
     import subprocess
 
+    from experiments import run_experiment as runner
     from experiments.run_experiment import SystemSshClient
+
+    monkeypatch.setattr(runner, "_restrict_windows_key_acl", lambda *_args, **_kwargs: None)
 
     db_file = tmp_path / "opspilot.db"
     _init_test_db(db_file)

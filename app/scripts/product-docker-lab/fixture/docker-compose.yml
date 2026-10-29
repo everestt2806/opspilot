@@ -1,0 +1,17 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${LAB_IMAGE_NAME}
+    container_name: ${LAB_CONTAINER_NAME}
+    environment:
+      - LAB_RUN_ID=${LAB_RUN_ID}
+      - PORT=3000
+      - SIMULATE_FAIL_HEALTH=${SIMULATE_FAIL_HEALTH:-0}
+    ports:
+      - "127.0.0.1:${LAB_HOST_PORT}:3000"
+    labels:
+      opspilot.lab.run_id: "${LAB_RUN_ID}"
+      opspilot.lab.fixture: "express"
+      opspilot.lab.scope: "l0-docker-lab"

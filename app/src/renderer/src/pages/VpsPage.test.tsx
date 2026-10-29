@@ -46,6 +46,7 @@ const APP_X: App = {
   healthcheck_path: '/health',
   needs_db: 1,
   current_deployment_id: 101,
+  imported_from_vps: 0,
   url: 'http://221.121.1.79:30001'
 }
 
@@ -230,6 +231,7 @@ describe('VpsPage — list trước, trang chi tiết riêng', () => {
             total_duration_ms: 2000,
             is_rollback_of: null,
             started_at: '2026-08-20T00:00:00Z',
+            origin: 'opspilot',
             finished_at: '2026-08-20T00:01:00Z'
           }
         ]

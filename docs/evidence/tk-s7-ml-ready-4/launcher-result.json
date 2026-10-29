@@ -1,0 +1,12 @@
+{
+  "generated_at_utc": "2026-10-20T15:37:15Z",
+  "preflight_report": "preflight-report.json",
+  "ssh_diagnostic_report": "ssh-diagnostic.json",
+  "preflight_exit_code": 2,
+  "launcher_exit_code": 2,
+  "scratch_cleanup": "PASS",
+  "cleanup_basis": "launcher returns exit 3 and emits ML_PREFLIGHT_SCRATCH_CLEANUP_FAILED if cleanup fails; exit 2 returned without that marker",
+  "scratch_directory_remains": false,
+  "new_child_process_remains": false,
+  "live_preflight_overall": "BLOCKED"
+}

@@ -9,6 +9,12 @@ files:
 asarUnpack:
   - '**/node_modules/better-sqlite3/**'
 extraResources:
+  - from: src/main/controlPlane
+    to: product-target
+    filter:
+      - target_execution_guard.py
+      - target_guarded_ssh_helper.py
+      - target_product_runtime.py
   - from: ../ml-service
     to: ml-service
     filter:

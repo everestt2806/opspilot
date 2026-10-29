@@ -1,0 +1,131 @@
+{
+  "generated_at_utc": "2026-10-21T02:47:05Z",
+  "mode": "preflight_only",
+  "overall": "BLOCKED",
+  "selected": {
+    "vps_id": 1,
+    "app_id": 1,
+    "deployment_id": 7
+  },
+  "ssh_manager_snapshot": {
+    "status": "RECORDED_NOT_LIVE_PROOF",
+    "source": "SshManager",
+    "collected_at_utc": "2026-10-21T02:47:01.803Z",
+    "target_vps_id": 1,
+    "endpoint": "160.191.243.89:22",
+    "freshness": "WITHIN_LIMIT",
+    "freshness_limit_seconds": 300,
+    "selected_target_matches": true
+  },
+  "gates": [
+    {
+      "name": "PROFILE_READ_ONLY",
+      "status": "PASS",
+      "reason": "SQLITE_READONLY_QUERY_ONLY",
+      "details": null
+    },
+    {
+      "name": "SELECTION",
+      "status": "PASS",
+      "reason": "PROFILE_RECORDS_FOUND",
+      "details": {
+        "vps_id": 1,
+        "app_id": 1,
+        "deployment_id": 7
+      }
+    },
+    {
+      "name": "VPS_ACTIVE",
+      "status": "PASS",
+      "reason": "VPS_NOT_ARCHIVED",
+      "details": null
+    },
+    {
+      "name": "APP_DEPLOYMENT_OWNERSHIP",
+      "status": "PASS",
+      "reason": "APP_DEPLOYMENT_LINKS_MATCH",
+      "details": null
+    },
+    {
+      "name": "ML_ENDPOINT",
+      "status": "BLOCKED",
+      "reason": "ML_HEALTH_OR_STATUS_UNAVAILABLE_OR_INVALID",
+      "details": null
+    },
+    {
+      "name": "APP_HEALTH",
+      "status": "PASS",
+      "reason": "APP_HEALTH_POLICY_OK",
+      "details": {
+        "status_code": 200
+      }
+    },
+    {
+      "name": "SSH_PIN_CONFIG",
+      "status": "PASS",
+      "reason": "PIN_PRESENT",
+      "details": null
+    },
+    {
+      "name": "SSH_CREDENTIAL",
+      "status": "PASS",
+      "reason": "SSH_SECRET_AVAILABLE_IN_MEMORY",
+      "details": null
+    },
+    {
+      "name": "SSH_HOST_KEY",
+      "status": "NOT_RUN",
+      "reason": "RUNNER_HOST_KEY_CHECK_NOT_CONFIRMED",
+      "details": null
+    },
+    {
+      "name": "SSH_TRANSPORT",
+      "status": "BLOCKED",
+      "reason": "SSH_KEY_FORMAT_ERROR",
+      "details": null
+    },
+    {
+      "name": "VPS_RESOURCES",
+      "status": "NOT_RUN",
+      "reason": "SSH_TRANSPORT_NOT_VERIFIED",
+      "details": null
+    },
+    {
+      "name": "DEDICATED_HOST",
+      "status": "NOT_RUN",
+      "reason": "SSH_TRANSPORT_NOT_VERIFIED",
+      "details": null
+    },
+    {
+      "name": "PROTOCOL_NTP_SYNC",
+      "status": "NOT_RUN",
+      "reason": "SSH_TRANSPORT_NOT_VERIFIED",
+      "details": null
+    },
+    {
+      "name": "PROTOCOL_CLOCK_OFFSET",
+      "status": "NOT_RUN",
+      "reason": "SSH_TRANSPORT_NOT_VERIFIED",
+      "details": null
+    },
+    {
+      "name": "PROTOCOL_PROVIDER_PAIR",
+      "status": "NOT_RUN",
+      "reason": "SECOND_VPS_NOT_SELECTED_OR_VERIFIED",
+      "details": null
+    },
+    {
+      "name": "PROTOCOL_RAM_AVAILABLE",
+      "status": "NOT_RUN",
+      "reason": "REMOTE_EVIDENCE_UNAVAILABLE",
+      "details": null
+    }
+  ],
+  "side_effects": {
+    "experiment_run_written": false,
+    "deployment_started": false,
+    "ml_reset_train_ingest_called": false,
+    "loadgen_or_fault_called": false,
+    "remote_cleanup_called": false
+  }
+}

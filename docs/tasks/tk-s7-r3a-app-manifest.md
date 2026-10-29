@@ -1,0 +1,4 @@
+﻿## Nhật ký
+- START 11/10/2026 — Đọc CLAUDE.md, DECISIONS.md, task-discipline, R2 discovery; triển khai manifest sau healthcheck thành công, không thêm IPC/schema hay import.
+- UPDATE 11/10/2026 — Thêm manifest schema v1 và atomic temp+rename 0600; Git locator chỉ nhận GitHub HTTPS canonical/ref/root an toàn, local source không công bố locator. Coordinator review khiến bỏ app.id cục bộ khỏi portable identity và kiểm tra exit code cho SSH write/chmod; thêm regression test cho cả hai trường hợp.
+- HANDOFF-LOCAL 11/10/2026 — 734/734 Vitest (74 files), focused 60/60; typecheck PASS; lint 0 errors/14 formatting warnings; production build PASS; git diff --check PASS. Chạy bằng Node 24.16.0 (package yêu cầu Node 22, pnpm có cảnh báo engine). VPS/live NOT_RUN. Không import/management/IPC/schema change; chưa xác nhận hành vi trên VPS thật.

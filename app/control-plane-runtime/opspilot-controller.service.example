@@ -1,0 +1,24 @@
+[Unit]
+Description=OpsPilot Product Controller
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=opspilot-controller
+Group=opspilot-controller
+WorkingDirectory=/opt/opspilot-controller
+UMask=0077
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /opt/opspilot-controller/control-plane.cjs run --data-dir /var/lib/opspilot-controller
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/opspilot-controller
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,34 @@
+{
+  "generated_at_utc": "2026-10-21T02:47:01.811Z",
+  "endpoint": "160.191.243.89:22",
+  "saved_pin_configured": true,
+  "phases": [
+    {
+      "phase": "ssh_banner",
+      "status": "PASS",
+      "duration_ms": 443,
+      "tcp_connected": true,
+      "ssh_protocol_banner": true,
+      "banner_bytes": 40
+    },
+    {
+      "phase": "ssh_manager_pinned_handshake_auth",
+      "status": "PASS_PINNED_SSH_AUTHENTICATED",
+      "verified_public_key_type": "ssh-rsa",
+      "duration_ms": 3372,
+      "total_deadline_ms": 25000
+    },
+    {
+      "phase": "ssh_manager_readonly_clock",
+      "status": "PASS",
+      "duration_ms": 1191,
+      "clock_offset_ms": 2288
+    },
+    {
+      "phase": "ssh_manager_readonly_resource_inventory",
+      "status": "PASS",
+      "duration_ms": 941,
+      "output_bytes": 1900
+    }
+  ]
+}

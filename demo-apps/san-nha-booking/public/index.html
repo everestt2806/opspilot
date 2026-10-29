@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#173b35" />
+    <meta
+      name="description"
+      content="Chọn sân, chọn giờ và giữ lịch chơi trong vài bước."
+    />
+    <title>Sân Nhà — Hẹn nhau ra sân</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="wordmark" href="/" aria-label="Sân Nhà, về đầu trang"
+        ><span class="mark">S/N</span><span>Sân Nhà</span></a
+      >
+      <nav aria-label="Điều hướng chính">
+        <a href="#lich-san">Lịch sân</a><a href="#ve-san">Về sân</a>
+      </nav>
+      <span class="header-note">Mở cửa mỗi ngày · 17:00–23:00</span>
+    </header>
+
+    <main>
+      <section class="hero" id="ve-san">
+        <div class="hero-copy">
+          <p class="eyebrow">SÂN CỎ NHÂN TẠO · ĐẶT LỊCH TRỰC TUYẾN</p>
+          <h1>Hẹn nhau<br /><em>ra sân.</em></h1>
+          <p class="intro">
+            Chọn một khung giờ vừa ý, rủ đủ người rồi tới chơi. Lịch trống được
+            cập nhật ngay khi có người giữ sân.
+          </p>
+          <a class="hero-link" href="#lich-san"
+            >Xem lịch còn trống <span aria-hidden="true">↗</span></a
+          >
+        </div>
+        <div class="court-art" aria-hidden="true">
+          <div class="court-lines">
+            <span class="centre-circle"></span><span class="goal left"></span
+            ><span class="goal right"></span>
+          </div>
+          <span class="art-index">01 / 02</span
+          ><span class="art-label">MỘT BUỔI CHIỀU ĐÚNG HẸN</span>
+        </div>
+      </section>
+
+      <section class="booking" id="lich-san" aria-labelledby="booking-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">CHỌN NGÀY VÀ GIỜ</p>
+            <h2 id="booking-title">Lịch sân tuần này</h2>
+          </div>
+          <p>Hai sân · mỗi lượt 90 phút</p>
+        </div>
+        <div class="booking-layout">
+          <div class="schedule">
+            <div
+              id="days"
+              class="days"
+              role="group"
+              aria-label="Chọn ngày"
+            ></div>
+            <div id="slots" class="court-list" aria-live="polite">
+              <p class="loading">Đang tải lịch sân…</p>
+            </div>
+          </div>
+          <aside class="summary" aria-labelledby="summary-title">
+            <p class="eyebrow">THÔNG TIN ĐẶT SÂN</p>
+            <h3 id="summary-title">Lượt chơi của bạn</h3>
+            <div id="selection" class="selection-empty">
+              Chọn một giờ còn trống để xem chi tiết tại đây.
+            </div>
+            <form id="reservation-form" hidden>
+              <label for="guest-name">Tên người đặt</label>
+              <input
+                id="guest-name"
+                name="name"
+                autocomplete="name"
+                maxlength="40"
+                minlength="2"
+                placeholder="Ví dụ: Minh Anh"
+                required
+              />
+              <button class="primary-button" type="submit">
+                Giữ lịch sân <span aria-hidden="true">↗</span>
+              </button>
+              <p class="small-note">
+                Bản demo lưu lịch trong bộ nhớ; lịch sẽ đặt lại khi ứng dụng
+                khởi động lại.
+              </p>
+            </form>
+            <p
+              id="message"
+              class="message"
+              role="status"
+              aria-live="polite"
+            ></p>
+          </aside>
+        </div>
+      </section>
+
+      <section class="closing">
+        <p class="eyebrow">RA SÂN ĐỀU HƠN</p>
+        <p>
+          Chơi một trận cho đầu óc nhẹ đi.<br />Còn giờ giấc, để Sân Nhà lo.
+        </p>
+        <span>Hẹn gặp trên sân.</span>
+      </section>
+    </main>
+    <footer>
+      <span>© Sân Nhà · Ứng dụng mẫu</span
+      ><a href="/health">Kiểm tra hệ thống</a>
+    </footer>
+  </body>
+</html>

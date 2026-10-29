@@ -17,9 +17,12 @@ Thực hiện quy trình 10 bước chuẩn hoá của TK-S6:
 from __future__ import annotations
 
 import argparse
+import csv
 import inspect
+import json
 import logging
 import os
+import re
 import sqlite3
 import stat
 import subprocess
@@ -36,6 +39,42 @@ from typing import Any, Self
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+
+
+def _restrict_windows_key_acl(path: Path, *, directory: bool) -> None:
+    """Apply an explicit current-user + SYSTEM DACL before key bytes are written."""
+    if os.name != "nt":
+        return
+    safe_env = {
+        name: value
+        for name, value in os.environ.items()
+        if not any(marker in name.upper() for marker in ("SECRET", "TOKEN", "PASSWORD", "CREDENTIAL", "PRIVATE_KEY"))
+    }
+    who = subprocess.run(
+        ["whoami.exe", "/user", "/fo", "csv", "/nh"],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=True,
+        env=safe_env,
+        stdin=subprocess.DEVNULL,
+    )
+    rows = list(csv.reader(who.stdout.splitlines()))
+    sid = rows[0][-1] if rows and rows[0] else ""
+    if re.fullmatch(r"S-1-5-(?:\d+-)*\d+", sid) is None:
+        raise SshKeyFileError("Could not determine current Windows user SID")
+    rights = "(OI)(CI)F" if directory else "F"
+    secured = subprocess.run(
+        ["icacls.exe", str(path), "/inheritance:r", "/grant:r", f"*{sid}:{rights}", "*S-1-5-18:(F)"],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+        env=safe_env,
+        stdin=subprocess.DEVNULL,
+    )
+    if secured.returncode != 0:
+        raise SshKeyFileError("Could not restrict Windows ACL for temporary SSH key")
 
 from experiments.adapters.deploy_adapter import (
     DeployAdapter,
@@ -86,6 +125,30 @@ class ExperimentError(Exception):
 class SshError(ExperimentError):
     """Ngoại lệ chung cho lỗi kết nối hoặc thực thi SSH."""
 
+    def __init__(self, message: str, *, reason_code: str = "SSH_FAILURE") -> None:
+        super().__init__(message)
+        self.reason_code = reason_code
+
+
+_SSH_ERROR_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("SSH_KEY_FORMAT_ERROR", ("invalid format", "error in libcrypto", "not a valid key file")),
+    ("SSH_KEY_PERMISSION_ERROR", ("bad permissions", "permissions are too open", "private key file is too accessible")),
+    ("SSH_UNSUPPORTED_ALGORITHM", ("no mutual signature algorithm", "no matching host key type", "no matching key exchange method", "unsupported key type")),
+    ("SSH_HOST_KEY_FAILURE", ("host key verification failed", "host identification has changed", "remote host identification has changed")),
+    ("SSH_AUTHENTICATION_FAILED", ("permission denied", "authentication failed", "too many authentication failures")),
+)
+
+
+def _classify_ssh_error(stderr: str) -> str:
+    """Map OpenSSH diagnostics to stable allowlist codes without retaining text."""
+    lowered = stderr.lower()
+    for reason_code, needles in _SSH_ERROR_PATTERNS:
+        if any(needle in lowered for needle in needles):
+            return reason_code
+    if "could not resolve hostname" in lowered or "connection refused" in lowered or "connection reset" in lowered:
+        return "SSH_CONNECTION_FAILED"
+    return "SSH_COMMAND_FAILED"
+
 
 class UnsupportedAppError(ExperimentError):
     """Ném ra khi ứng dụng không được hỗ trợ trong orchestrator thí nghiệm pilot."""
@@ -98,9 +161,15 @@ class UnsupportedAuthTypeError(SshError):
 class SshAuthenticationError(SshError):
     """Ném ra khi xác thực SSH thất bại (sai key, permission denied)."""
 
+    def __init__(self, message: str, *, reason_code: str = "SSH_AUTHENTICATION_FAILED") -> None:
+        super().__init__(message, reason_code=reason_code)
+
 
 class SshHostKeyError(SshError):
     """Ném ra khi kiểm tra host key thất bại (Host key verification failed)."""
+
+    def __init__(self, message: str, *, reason_code: str = "SSH_HOST_KEY_FAILURE") -> None:
+        super().__init__(message, reason_code=reason_code)
 
 
 class SshKeyFileError(ExperimentError):
@@ -186,6 +255,7 @@ class SystemSshClient:
 
         self._temp_dir: tempfile.TemporaryDirectory[str] | None = None
         self._effective_key_file: Path | None = None
+        self.last_error_code: str | None = None
 
         if key_file is not None:
             self._effective_key_file = Path(key_file)
@@ -202,7 +272,20 @@ class SystemSshClient:
     def _create_temp_key_file(self, content: str) -> None:
         self._temp_dir = tempfile.TemporaryDirectory(prefix="opspilot_ssh_")
         key_path = Path(self._temp_dir.name) / "id_rsa"
-        key_path.write_text(content, encoding="utf-8")
+        try:
+            if os.name == "nt":
+                _restrict_windows_key_acl(Path(self._temp_dir.name), directory=True)
+            # Windows OpenSSH treats a leading UTF-8 BOM as key data and rejects
+            # otherwise valid PEM/OpenSSH containers. Strip only that signature;
+            # write bytes to avoid Windows newline translation (including CRCRLF
+            # when a caller already supplied CRLF).
+            key_bytes = content.removeprefix("\ufeff").encode("utf-8")
+            key_path.write_bytes(key_bytes)
+            if os.name == "nt":
+                _restrict_windows_key_acl(key_path, directory=False)
+        except Exception:  # noqa: BLE001 - fail closed without exposing key contents
+            self.close()
+            raise SshKeyFileError("Could not secure temporary SSH key file") from None
         try:
             os.chmod(key_path, stat.S_IRUSR | stat.S_IWUSR)
         except OSError:
@@ -217,6 +300,7 @@ class SystemSshClient:
             except OSError:
                 pass
             self._temp_dir = None
+        self._secret = None
 
     def __del__(self) -> None:
         self.close()
@@ -240,6 +324,7 @@ class SystemSshClient:
 
     def exec(self, cmd: str, timeout: float | None = None) -> tuple[int, str, str]:
         """Thực thi lệnh shell trên VPS qua ssh binary."""
+        self.last_error_code = None
         effective_timeout = timeout if timeout is not None else self.timeout
         ssh_args = [
             "ssh",
@@ -264,6 +349,8 @@ class SystemSshClient:
                 [
                     "-o",
                     f"UserKnownHostsFile={self.known_hosts_file}",
+                    "-o",
+                    "GlobalKnownHostsFile=NUL" if os.name == "nt" else "GlobalKnownHostsFile=/dev/null",
                 ]
             )
         ssh_args.extend(
@@ -275,33 +362,48 @@ class SystemSshClient:
             ]
         )
         try:
+            child_env = {
+                name: value
+                for name, value in os.environ.items()
+                if not any(
+                    marker in name.upper()
+                    for marker in ("SECRET", "TOKEN", "PASSWORD", "CREDENTIAL", "PRIVATE_KEY", "APP_ENV_JSON")
+                )
+                and name.upper() != "OPSPILOT_SSH_KEY_FILE"
+            }
+            # The private-key contents are consumed in this process and materialized
+            # only in the protected temporary key file; do not inherit them into ssh.
             res = subprocess.run(
                 ssh_args,
                 capture_output=True,
                 text=True,
+                env=child_env,
                 timeout=effective_timeout,
                 check=False,
             )
             stdout = res.stdout
-            stderr = res.stderr
             if self._secret:
                 stdout = stdout.replace(self._secret, "******")
-                stderr = stderr.replace(self._secret, "******")
-                stripped_sec = self._secret.strip()
-                if stripped_sec:
-                    stdout = stdout.replace(stripped_sec, "******")
-                    stderr = stderr.replace(stripped_sec, "******")
+                stderr = res.stderr.replace(self._secret, "******")
+                stripped_secret = self._secret.strip()
+                if stripped_secret:
+                    stdout = stdout.replace(stripped_secret, "******")
+                    stderr = stderr.replace(stripped_secret, "******")
+            else:
+                stderr = res.stderr
+            if res.returncode != 0:
+                self.last_error_code = _classify_ssh_error(stderr)
+                return res.returncode, stdout, self.last_error_code
             return res.returncode, stdout, stderr
         except subprocess.TimeoutExpired:
-            return 124, "", f"SSH command timed out after {effective_timeout}s"
-        except Exception as e:  # noqa: BLE001
-            err_msg = str(e)
-            if self._secret:
-                err_msg = err_msg.replace(self._secret, "******")
-                stripped_sec = self._secret.strip()
-                if stripped_sec:
-                    err_msg = err_msg.replace(stripped_sec, "******")
-            return 1, "", f"SSH execution error: {err_msg}"
+            self.last_error_code = "SSH_TIMEOUT"
+            return 124, "", self.last_error_code
+        except FileNotFoundError:
+            self.last_error_code = "SSH_EXECUTABLE_UNAVAILABLE"
+            return 127, "", self.last_error_code
+        except Exception:  # noqa: BLE001 - details may contain paths or sensitive process data
+            self.last_error_code = "SSH_PROCESS_FAILED"
+            return 1, "", self.last_error_code
 
     def exec_command(self, cmd: str, timeout: float = 15.0) -> tuple[int, str, str]:
         """Hỗ trợ giao diện tương thích Paramiko / _exec_ssh."""
@@ -313,28 +415,15 @@ class SystemSshClient:
         Chạy một lệnh no-op ('true') để kiểm tra tính hợp lệ của credential và host key.
         Ném ra ngoại lệ tương ứng nếu xác thực hoặc kiểm tra host key thất bại.
         """
-        code, _stdout, stderr = self.exec("true", timeout=timeout)
+        code, _stdout, _stderr = self.exec("true", timeout=timeout)
         if code == 0:
             return
-
-        lower_err = stderr.lower()
-        if (
-            "host key verification failed" in lower_err
-            or "host identification has changed" in lower_err
-            or "no hostkey alg" in lower_err
-        ):
-            raise SshHostKeyError(
-                f"SSH Host Key verification failed for {self.username}@{self.host}:{self.port}: {stderr.strip()}"
-            )
-
-        if "permission denied" in lower_err or "authentication failed" in lower_err:
-            raise SshAuthenticationError(
-                f"SSH authentication failed for {self.username}@{self.host}:{self.port}: {stderr.strip()}"
-            )
-
-        raise SshError(
-            f"SSH connection failed (code {code}) for {self.username}@{self.host}:{self.port}: {stderr.strip()}"
-        )
+        reason_code = self.last_error_code or "SSH_CONNECTION_FAILED"
+        if reason_code == "SSH_HOST_KEY_FAILURE":
+            raise SshHostKeyError("SSH host key verification failed", reason_code=reason_code)
+        if reason_code == "SSH_AUTHENTICATION_FAILED":
+            raise SshAuthenticationError("SSH authentication rejected", reason_code=reason_code)
+        raise SshError("SSH connection failed", reason_code=reason_code)
 
 
 def read_ssh_key_file(key_file: str | Path) -> str:
@@ -1332,7 +1421,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--scenario",
-        required=True,
+        default=None,
         choices=[
             "memory_leak",
             "cpu_spike",
@@ -1343,7 +1432,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Kịch bản lỗi cần kiểm thử",
     )
     parser.add_argument("--repeat", type=int, default=1, help="Chỉ số lặp (1..N)")
-    parser.add_argument("--vps-id", type=int, default=1, help="ID của VPS")
+    parser.add_argument("--vps-id", type=int, default=None, help="ID của VPS")
+    parser.add_argument("--app-id", type=int, default=None, help="ID app trong profile OpsPilot (chỉ preflight)")
     parser.add_argument("--db-path", required=True, help="Đường dẫn file SQLite DB")
     parser.add_argument("--app-name", default="express-api", help="Tên ứng dụng demo")
     parser.add_argument(
@@ -1352,10 +1442,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Đường dẫn mã nguồn demo app",
     )
     parser.add_argument(
-        "--app-url", required=True, help="URL truy cập app demo trên VPS"
+        "--app-url", default=None, help="URL truy cập app demo trên VPS (chỉ run)"
     )
     parser.add_argument(
-        "--ml-url", default="http://127.0.0.1:8000", help="URL của ML Service"
+        "--ml-url", default=None, help="URL loopback ML Service; bắt buộc và tường minh ở preflight"
+    )
+    parser.add_argument(
+        "--preflight-only",
+        action="store_true",
+        help="Chỉ kiểm tra điều kiện; không tạo run/deploy/reset/train/loadgen/fault/cleanup",
+    )
+    parser.add_argument(
+        "--report-path",
+        default=str(Path(__file__).resolve().parents[1] / "docs/evidence/tk-s7-ml-ready-2/preflight-report.json"),
+        help="Đường dẫn report preflight đã khử nhạy cảm",
     )
     parser.add_argument(
         "--max-attempts",
@@ -1378,18 +1478,36 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-if __name__ == "__main__":  # pragma: no cover
-    args = build_parser().parse_args()
+def main(argv: Sequence[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    if args.preflight_only:
+        from experiments.preflight import run_preflight, write_report
+
+        report = run_preflight(
+            db_path=args.db_path,
+            vps_id=args.vps_id,
+            app_id=args.app_id,
+            ml_url=args.ml_url,
+            ssh_key_file=args.ssh_key_file,
+        )
+        write_report(report, args.report_path)
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report["overall"] == "PASS" else 2
+
+    if not args.scenario:
+        build_parser().error("--scenario là bắt buộc khi không dùng --preflight-only")
+    if not args.app_url:
+        build_parser().error("--app-url là bắt buộc khi chạy thí nghiệm")
     logging.basicConfig(level=logging.INFO)
     result = run_experiment(
         scenario=args.scenario,
         repeat_index=args.repeat,
-        vps_id=args.vps_id,
+        vps_id=args.vps_id or 1,
         db_path=args.db_path,
         app_name=args.app_name,
         source_path=args.source_path,
         app_url=args.app_url,
-        ml_url=args.ml_url,
+        ml_url=args.ml_url or "http://127.0.0.1:8000",
         max_attempts=args.max_attempts,
         allow_pilot_4500=args.allow_pilot_4500,
         ssh_key_file=args.ssh_key_file,
@@ -1397,5 +1515,8 @@ if __name__ == "__main__":  # pragma: no cover
     print(
         f"KẾT QUẢ RUN: status={result.status}, attempt={result.attempt_index}, run_id={result.run_id}"
     )
-    if result.status != "completed":
-        sys.exit(1)
+    return 0 if result.status == "completed" else 1
+
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())

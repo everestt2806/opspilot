@@ -1,0 +1,85 @@
+{
+  "result": "PASS",
+  "run_id": "2026-10-21T17-02-57-466Z",
+  "timestamp_utc": "2026-10-21T17:03:09.656Z",
+  "primary_error": null,
+  "cleanup_errors": [],
+  "service_process_stopped": true,
+  "listener_released": true,
+  "scratch_removed": true,
+  "production_model_state_unchanged": true,
+  "production_db_unchanged": true,
+  "production_db_observation": {
+    "path_configured_or_default": true,
+    "files_before": {
+      "database": "4a65b0e1d34d4c3ac67a8fcc5f5f0308456766526712c5b5b6e580e74441503a",
+      "-wal": "1668b9862cd4165a2c21ff1ee948e2df21a6d00cc94e7c413b193079946f6136",
+      "-shm": "0dcf088aa94e718432ff94774296424ae9a73b15ff27344232e1020d22e57c23"
+    },
+    "files_after": {
+      "database": "4a65b0e1d34d4c3ac67a8fcc5f5f0308456766526712c5b5b6e580e74441503a",
+      "-wal": "1668b9862cd4165a2c21ff1ee948e2df21a6d00cc94e7c413b193079946f6136",
+      "-shm": "0dcf088aa94e718432ff94774296424ae9a73b15ff27344232e1020d22e57c23"
+    },
+    "hash_unchanged": true
+  },
+  "results": {
+    "source": {
+      "csv": "docs/demo-11-10/ml-samples-v5-180.csv",
+      "csv_sha256": "9d2af5f64e64c3371fb988b54fef0770460368ddf935b456a605a1abd7bc425a",
+      "raw": "docs/demo-11-10/ml-collector-raw-v5-180.jsonl",
+      "raw_sha256": "4d0a9e29bc395ce34508ef6be100f58e43fbc2ac65b01ca81991cf10a46956ab",
+      "rows": 180,
+      "sequences": [
+        9118,
+        9297
+      ],
+      "sample_interval_seconds": 10
+    },
+    "ssh_fixture": "fixed, read-only fixture metric stream; app-a receives published raw rows; app-b receives empty stream",
+    "training": {
+      "source_rows": 150,
+      "database_rows_before_training": 150,
+      "deployment_id": 11,
+      "result": {
+        "train_sample_count": 150
+      },
+      "status": {
+        "deployment_id": 11,
+        "trained": true,
+        "sample_count": 150,
+        "min_samples_required": 150,
+        "trained_at": "2026-10-21T17:03:05Z"
+      }
+    },
+    "poll": {
+      "holdout_rows_processed": 30,
+      "deployment_id": 11,
+      "total_rows_after_first": 180,
+      "total_after_repeat_poll": 180,
+      "method_score_counts": {
+        "ensemble": 30,
+        "iforest": 30,
+        "ocsvm": 30,
+        "zscore_ewma": 30
+      },
+      "all_scores_finite_in_range": true
+    },
+    "identity": {
+      "timestamp_and_seq_match_source_order": true,
+      "each_holdout_has_four_ml_methods_and_rule_score": true,
+      "score_deployment_matches_metric_deployment": true,
+      "other_deployment_score_rows": 0,
+      "duplicate_metric_rows_after_repeat": 0
+    },
+    "poller": {
+      "drain_completed": true,
+      "poller_instances_closed": true
+    }
+  },
+  "limitations": [
+    "Published historical normal data and fixed SSH metric fixture only; not a pilot or live VPS check.",
+    "No fault labels or accuracy, precision, recall, F1, or fault-detection claim.",
+    "No real auto-rollback execution."
+  ]
+}

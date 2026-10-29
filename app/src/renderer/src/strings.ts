@@ -122,10 +122,10 @@ const BASE_EN_STRINGS = {
       delete: (name: string) => `Delete VPS ${name}`
     },
     delete: {
-      title: 'Delete VPS?',
+      title: 'Remove VPS from OpsPilot?',
       description: (name: string) =>
-        `VPS "${name}" will be removed from OpsPilot. Apps running on the server are not deleted.`,
-      confirm: 'Delete VPS'
+        `VPS "${name}" will be hidden from OpsPilot. Apps on the server and their local deployment history are kept. Add the same host, SSH port and verified fingerprint again to restore them.`,
+      confirm: 'Remove VPS'
     },
     fields: {
       name: 'VPS name',
@@ -148,7 +148,7 @@ const BASE_EN_STRINGS = {
       editTitle: 'Edit VPS',
       hostPlaceholder: '203.0.113.10',
       hostFingerprintHint:
-        'Enter the SHA256 fingerprint copied independently from the VPS console. Changing host or port requires verifying it again.',
+        'Enter the SHA256 fingerprint copied independently from the VPS console. The same host, SSH port and fingerprint restore a previously removed VPS and its apps.',
       keepCredentialHint: 'Leave blank to keep the current credential.'
     },
     validation: {
@@ -287,7 +287,8 @@ const BASE_EN_STRINGS = {
         'Secrets are encrypted locally, written only to the .env file on the VPS, and never shown in logs.',
       existingEnvNotice:
         'Blank values reuse the current VPS .env only when precheck verifies the required keys. Nonblank values override matching entries. Existing values are never sent back to this screen; PostgreSQL credentials remain unchanged.',
-      existingEnvConfirm: 'I reviewed this redeploy. Blank values may reuse verified VPS values, and PostgreSQL credentials will stay unchanged.',
+      existingEnvConfirm:
+        'I reviewed this redeploy. Blank values may reuse verified VPS values, and PostgreSQL credentials will stay unchanged.',
       existingEnvConfirmRequired:
         'Confirm that you reviewed the environment values before continuing.',
       dbUrlHint:
@@ -443,6 +444,7 @@ const BASE_EN_STRINGS = {
       overview: 'Overview',
       history: 'History & Rollback',
       doctor: 'Doctor & Exposure',
+      domainHttps: 'Domain & HTTPS',
       versions: 'History & Rollback'
     },
     backToList: 'Back to applications',
@@ -451,6 +453,8 @@ const BASE_EN_STRINGS = {
     deployAction: 'Deploy',
     viewVps: 'View target VPS',
     deployNewVersion: 'Deploy new version',
+    importedReadOnly:
+      'Imported from VPS. Management actions stay disabled until their safety is verified.',
     activeVersion: 'Active',
     countDisplay: (filtered: number, total: number) =>
       `Showing ${filtered} / ${total} applications`,
@@ -726,6 +730,57 @@ const BASE_EN_STRINGS = {
     },
     apps: {
       title: 'Apps on this server',
+      discoveredTitle: 'Found on VPS',
+      discoveredHint:
+        'Verified candidates can be imported with their current VPS state as a baseline. Imported apps remain read-only.',
+      discoveredScan: 'Scan VPS',
+      discoveredError: 'Could not scan Docker containers on the VPS.',
+      discoveredImage: 'Docker image',
+      discoveredState: 'Container state',
+      discoveredEligibility: 'Recovery eligibility',
+      discoveredMetadata: 'Verified metadata',
+      importVerified: 'Import app',
+      importConfirmation: {
+        title: 'Confirm app import',
+        name: 'App name',
+        imageVersion: 'Image / version',
+        port: 'Host → container port',
+        readOnly: 'The imported app will be read-only after import.',
+        confirm: 'Confirm import',
+        cancel: 'Cancel'
+      },
+      recoveryPreparation: {
+        action: 'Prepare recovery',
+        title: 'Prepare app recovery',
+        name: 'App name',
+        imageVersion: 'Image / version',
+        port: 'Host â†’ container port',
+        explanation: 'This saves recovery information on the VPS and does not restart the app.',
+        confirm: 'Save recovery information',
+        cancel: 'Cancel',
+        created: 'Recovery information created.',
+        alreadyExists: 'Matching recovery information already exists.',
+        savedUnverified:
+          'Saved, but could not verify the manifest. Scan again to retry verification.',
+        retryScan: 'Scan again',
+        failed: 'Could not prepare recovery information.',
+        retry: 'Try again',
+        noLocalRecord:
+          'This app has no local OpsPilot record, so recovery information cannot be safely created from guessed details.'
+      },
+      recoveryStatus: {
+        verified: 'Verified candidate',
+        legacy: 'Legacy: manifest missing',
+        invalid: 'Manifest invalid',
+        manifestUnreadable: 'Manifest could not be read',
+        mismatch: 'Runtime mismatch',
+        ambiguous: 'Ambiguous containers',
+        unverifiable: 'Runtime unverifiable',
+        importedFromVps: 'Imported from VPS',
+        stopped: 'Container stopped'
+      },
+      recoveryHint:
+        'Verified means the manifest matches current Docker evidence. No app or deployment records have been imported.',
       deployNew: 'Deploy new application',
       redeploy: 'Redeploy',
       openApp: 'Open app',
@@ -1026,6 +1081,12 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   vps: {
     ...BASE_EN_STRINGS.vps,
     backToList: 'Quay lại danh sách máy chủ',
+    delete: {
+      title: 'Gỡ VPS khỏi OpsPilot?',
+      description: (name: string) =>
+        `VPS "${name}" sẽ ẩn khỏi OpsPilot. App trên máy chủ và lịch sử triển khai trong máy này vẫn được giữ. Thêm lại đúng host, cổng SSH và fingerprint đã xác minh để khôi phục.`,
+      confirm: 'Gỡ VPS'
+    },
     fields: {
       ...BASE_EN_STRINGS.vps.fields,
       hostFingerprint: 'Fingerprint host key SSH (OpenSSH SHA256)'
@@ -1033,7 +1094,7 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     form: {
       ...BASE_EN_STRINGS.vps.form,
       hostFingerprintHint:
-        'Nhập fingerprint SHA256 đã lấy độc lập từ console VPS. Đổi host hoặc port sẽ cần xác minh lại.'
+        'Nhập fingerprint SHA256 đã lấy độc lập từ console VPS. Cùng host, cổng SSH và fingerprint sẽ khôi phục VPS đã gỡ cùng các app.'
     },
     validation: {
       ...BASE_EN_STRINGS.vps.validation,
@@ -1147,6 +1208,56 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     apps: {
       title: 'Ứng dụng trên máy chủ',
+      discoveredTitle: 'Phát hiện trên VPS',
+      discoveredHint:
+        'Có thể nhập ứng viên đã xác minh cùng trạng thái VPS hiện tại làm baseline. App đã nhập tạm thời chỉ xem.',
+      discoveredScan: 'Quét VPS',
+      discoveredError: 'Không thể quét container Docker trên VPS.',
+      discoveredImage: 'Docker image',
+      discoveredState: 'Trạng thái container',
+      discoveredEligibility: 'Khả năng khôi phục',
+      discoveredMetadata: 'Metadata đã xác minh',
+      importVerified: 'Nhập ứng dụng',
+      importConfirmation: {
+        title: 'Xác nhận nhập ứng dụng',
+        name: 'Tên app',
+        imageVersion: 'Image / phiên bản',
+        port: 'Cổng host → container',
+        readOnly: 'Chỉ đọc sau khi nhập.',
+        confirm: 'Xác nhận nhập',
+        cancel: 'Hủy'
+      },
+      recoveryPreparation: {
+        action: 'Chuẩn bị khôi phục',
+        title: 'Chuẩn bị khôi phục ứng dụng',
+        name: 'Tên ứng dụng',
+        imageVersion: 'Image / phiên bản',
+        port: 'Cổng host → container',
+        explanation: 'Thao tác lưu thông tin khôi phục trên VPS và không khởi động lại ứng dụng.',
+        confirm: 'Lưu thông tin khôi phục',
+        cancel: 'Hủy',
+        created: 'Đã tạo thông tin khôi phục.',
+        alreadyExists: 'Thông tin khôi phục khớp đã có sẵn.',
+        savedUnverified: 'Đã lưu nhưng chưa xác minh được manifest. Hãy quét lại để thử xác minh.',
+        retryScan: 'Quét lại',
+        failed: 'Không thể chuẩn bị thông tin khôi phục.',
+        retry: 'Thử lại',
+        noLocalRecord:
+          'Ứng dụng này không có hồ sơ OpsPilot cục bộ, nên không thể tạo thông tin khôi phục an toàn từ dữ liệu suy đoán.'
+      },
+      recoveryStatus: {
+        verified: 'Ứng viên đã xác minh',
+        legacy: 'Ứng dụng cũ: thiếu manifest',
+        invalid: 'Manifest không hợp lệ',
+        manifestUnreadable: 'Không đọc được manifest',
+        mismatch: 'Runtime không khớp',
+        ambiguous: 'Container không rõ ràng',
+        unverifiable: 'Không thể xác minh runtime',
+        importedFromVps: 'Đã nhập từ VPS',
+        stopped: 'Container đã dừng'
+      },
+      recoveryHint:
+        'Đã xác minh nghĩa là manifest khớp bằng chứng Docker hiện tại. Chưa có app hay deployment nào được nhập.',
       deployNew: 'Triển khai ứng dụng mới',
       redeploy: 'Triển khai lại',
       openApp: 'Mở app',
@@ -1518,6 +1629,7 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       overview: 'Tổng quan',
       history: 'Lịch sử & Rollback',
       doctor: 'Bác sĩ & Exposure',
+      domainHttps: 'Tên miền & HTTPS',
       versions: 'Lịch sử & Rollback'
     },
     backToList: 'Quay lại danh sách ứng dụng',
@@ -1526,6 +1638,7 @@ const VI_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     deployAction: 'Triển khai',
     viewVps: 'Xem máy chủ VPS',
     deployNewVersion: 'Triển khai phiên bản mới',
+    importedReadOnly: 'Đã nhập từ VPS. Tạm khóa thao tác quản lý cho đến khi xác minh an toàn.',
     activeVersion: 'Đang kích hoạt',
     countDisplay: (filtered: number, total: number) => `Hiển thị ${filtered} / ${total} ứng dụng`,
     doctorExposureTitle: 'Bác sĩ & Exposure',
@@ -1769,13 +1882,20 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   vps: {
     ...BASE_EN_STRINGS.vps,
     backToList: '返回服务器列表',
+    delete: {
+      title: '从 OpsPilot 移除 VPS？',
+      description: (name: string) =>
+        `VPS “${name}” 将从 OpsPilot 隐藏。服务器上的应用和本机部署历史会保留。使用相同主机、SSH 端口和已验证的指纹重新添加即可恢复。`,
+      confirm: '移除 VPS'
+    },
     fields: {
       ...BASE_EN_STRINGS.vps.fields,
       hostFingerprint: 'SSH 主机密钥指纹 (OpenSSH SHA256)'
     },
     form: {
       ...BASE_EN_STRINGS.vps.form,
-      hostFingerprintHint: '填写从 VPS 控制台独立获取的 SHA256 指纹。更改主机或端口后需要重新验证。'
+      hostFingerprintHint:
+        '填写从 VPS 控制台独立获取的 SHA256 指纹。使用相同主机、SSH 端口和指纹可恢复已移除的 VPS 及应用。'
     },
     validation: {
       ...BASE_EN_STRINGS.vps.validation,
@@ -1888,6 +2008,53 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     apps: {
       title: '服务器上的应用',
+      discoveredTitle: '在 VPS 上发现',
+      discoveredHint: '可导入已验证候选项并以当前 VPS 状态作为基线。导入的应用暂时为只读。',
+      discoveredScan: '扫描 VPS',
+      discoveredError: '无法扫描 VPS 上的 Docker 容器。',
+      discoveredImage: 'Docker 镜像',
+      discoveredState: '容器状态',
+      discoveredEligibility: '恢复资格',
+      discoveredMetadata: '已验证元数据',
+      importVerified: '导入应用',
+      importConfirmation: {
+        title: '确认导入应用',
+        name: '应用名称',
+        imageVersion: '镜像 / 版本',
+        port: '主机端口 → 容器端口',
+        readOnly: '导入后只读。',
+        confirm: '确认导入',
+        cancel: '取消'
+      },
+      recoveryPreparation: {
+        action: '准备恢复',
+        title: '准备应用恢复',
+        name: '应用名称',
+        imageVersion: '镜像 / 版本',
+        port: '主机端口 → 容器端口',
+        explanation: '此操作会在 VPS 上保存恢复信息，不会重启应用。',
+        confirm: '保存恢复信息',
+        cancel: '取消',
+        created: '已创建恢复信息。',
+        alreadyExists: '匹配的恢复信息已存在。',
+        savedUnverified: '已保存，但未能验证清单。请重新扫描以重试验证。',
+        retryScan: '重新扫描',
+        failed: '无法准备恢复信息。',
+        retry: '重试',
+        noLocalRecord: '此应用没有 OpsPilot 本地记录，因此无法根据猜测的信息安全创建恢复信息。'
+      },
+      recoveryStatus: {
+        verified: '已验证候选项',
+        legacy: '旧应用：缺少清单',
+        invalid: '清单无效',
+        manifestUnreadable: '无法读取清单',
+        mismatch: '运行状态不匹配',
+        ambiguous: '容器不明确',
+        unverifiable: '无法验证运行状态',
+        importedFromVps: '已从 VPS 导入',
+        stopped: '容器已停止'
+      },
+      recoveryHint: '已验证表示清单与当前 Docker 证据匹配。尚未导入应用或部署记录。',
       deployNew: '部署新应用',
       redeploy: '重新部署',
       openApp: '打开应用',
@@ -2087,7 +2254,8 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       appNameRule: '仅限小写字母 a-z、数字和连字符，且必须以字母开头。',
       existingEnvNotice:
         '留空值仅在预检查确认必需键存在后才会复用 VPS 当前 .env。非空值会覆盖对应项。现有值不会返回此页面；PostgreSQL 凭据保持不变。',
-      existingEnvConfirm: '我已检查本次重新部署；留空项可能复用已验证的 VPS 值，PostgreSQL 凭据保持不变。',
+      existingEnvConfirm:
+        '我已检查本次重新部署；留空项可能复用已验证的 VPS 值，PostgreSQL 凭据保持不变。',
       existingEnvConfirmRequired: '继续前请确认已检查环境变量。',
       dbUrlExistingHint:
         'DATABASE_URL 和 POSTGRES_PASSWORD 将沿用 VPS 当前 .env；常规重新部署不会轮换 PostgreSQL 凭据。',
@@ -2248,6 +2416,7 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       overview: '运行总览',
       history: '历史与回滚',
       doctor: 'Doctor 与公开检测',
+      domainHttps: '域名与 HTTPS',
       versions: '历史与回滚'
     },
     backToList: '返回应用列表',
@@ -2256,6 +2425,7 @@ const CN_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     deployAction: '部署',
     viewVps: '查看目标 VPS',
     deployNewVersion: '部署新版本',
+    importedReadOnly: '已从 VPS 导入。验证操作安全性前，管理功能保持禁用。',
     activeVersion: '当前激活',
     countDisplay: (filtered: number, total: number) => `显示 ${filtered} / ${total} 个应用`,
     doctorExposureTitle: 'Doctor 与公开检测',
@@ -2487,6 +2657,12 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
   vps: {
     ...BASE_EN_STRINGS.vps,
     backToList: 'サーバー一覧に戻る',
+    delete: {
+      title: 'VPS を OpsPilot から削除しますか？',
+      description: (name: string) =>
+        `VPS「${name}」は OpsPilot から非表示になります。サーバー上のアプリとこの端末のデプロイ履歴は保持されます。同じホスト、SSH ポート、確認済みフィンガープリントで再登録すると復元できます。`,
+      confirm: 'VPS を解除'
+    },
     fields: {
       ...BASE_EN_STRINGS.vps.fields,
       hostFingerprint: 'SSH ホスト鍵フィンガープリント (OpenSSH SHA256)'
@@ -2494,7 +2670,7 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     form: {
       ...BASE_EN_STRINGS.vps.form,
       hostFingerprintHint:
-        'VPS コンソールから別途取得した SHA256 フィンガープリントを入力します。ホストまたはポートを変更した場合は再確認が必要です。'
+        'VPS コンソールから別途取得した SHA256 フィンガープリントを入力します。同じホスト、SSH ポート、フィンガープリントで再登録すると VPS とアプリを復元できます。'
     },
     validation: {
       ...BASE_EN_STRINGS.vps.validation,
@@ -2609,6 +2785,57 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     },
     apps: {
       title: 'サーバー上のアプリ',
+      discoveredTitle: 'VPS で検出',
+      discoveredHint:
+        '検証済み候補は現在の VPS 状態をベースラインとしてインポートできます。インポートしたアプリは一時的に読み取り専用です。',
+      discoveredScan: 'VPS をスキャン',
+      discoveredError: 'VPS の Docker コンテナをスキャンできませんでした。',
+      discoveredImage: 'Docker イメージ',
+      discoveredState: 'コンテナの状態',
+      discoveredEligibility: '復元の適格性',
+      discoveredMetadata: '検証済みメタデータ',
+      importVerified: 'アプリをインポート',
+      importConfirmation: {
+        title: 'アプリのインポートを確認',
+        name: 'アプリ名',
+        imageVersion: 'イメージ / バージョン',
+        port: 'ホストポート → コンテナポート',
+        readOnly: 'インポート後は読み取り専用です。',
+        confirm: 'インポートを確認',
+        cancel: 'キャンセル'
+      },
+      recoveryPreparation: {
+        action: '復元を準備',
+        title: 'アプリの復元を準備',
+        name: 'アプリ名',
+        imageVersion: 'イメージ / バージョン',
+        port: 'ホスト → コンテナポート',
+        explanation: 'VPS に復元情報を保存します。アプリは再起動しません。',
+        confirm: '復元情報を保存',
+        cancel: 'キャンセル',
+        created: '復元情報を作成しました。',
+        alreadyExists: '一致する復元情報が既にあります。',
+        savedUnverified:
+          '保存しましたがマニフェストを確認できませんでした。再スキャンして確認してください。',
+        retryScan: '再スキャン',
+        failed: '復元情報を準備できませんでした。',
+        retry: '再試行',
+        noLocalRecord:
+          'OpsPilot のローカル記録がないため、推測した情報から安全に復元情報を作成できません。'
+      },
+      recoveryStatus: {
+        verified: '検証済み候補',
+        legacy: '旧アプリ：マニフェストなし',
+        invalid: 'マニフェストが無効',
+        manifestUnreadable: 'マニフェストを読み取れません',
+        mismatch: '実行状態が不一致',
+        ambiguous: 'コンテナが重複',
+        unverifiable: '実行状態を検証できません',
+        importedFromVps: 'VPS からインポート済み',
+        stopped: 'コンテナ停止中'
+      },
+      recoveryHint:
+        '検証済みはマニフェストが現在の Docker 証拠と一致することを示します。アプリやデプロイ記録はまだ取り込まれていません。',
       deployNew: '新規アプリをデプロイ',
       redeploy: '再デプロイ',
       openApp: 'アプリを開く',
@@ -2810,7 +3037,8 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       appNameRule: '英小文字 a-z、数字、ハイフン（先頭は英文字である必要があります）。',
       existingEnvNotice:
         '空欄は、事前チェックで必須キーを確認できた場合に限り VPS の現在の .env を再利用します。入力値は対応する項目を上書きします。既存値は画面へ返さず、PostgreSQL の認証情報は維持します。',
-      existingEnvConfirm: '今回の再デプロイ内容を確認しました。空欄は検証済みの VPS 値を再利用し、PostgreSQL 認証情報は維持します。',
+      existingEnvConfirm:
+        '今回の再デプロイ内容を確認しました。空欄は検証済みの VPS 値を再利用し、PostgreSQL 認証情報は維持します。',
       existingEnvConfirmRequired: '続行する前に環境変数を確認したことを承認してください。',
       dbUrlExistingHint:
         'DATABASE_URL と POSTGRES_PASSWORD は VPS の現在の .env を維持します。通常の再デプロイでは PostgreSQL 認証情報を変更しません。',
@@ -2976,6 +3204,7 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
       overview: '概要',
       history: '履歴 & ロールバック',
       doctor: 'ドクター & 公開診断',
+      domainHttps: 'ドメインと HTTPS',
       versions: '履歴 & ロールバック'
     },
     backToList: 'アプリ一覧に戻る',
@@ -2984,6 +3213,7 @@ const JP_OVERRIDES: Partial<typeof BASE_EN_STRINGS> = {
     deployAction: 'デプロイ',
     viewVps: '対象 VPS を表示',
     deployNewVersion: '新しいバージョンをデプロイ',
+    importedReadOnly: 'VPS からインポートしました。安全性を確認するまで管理操作を無効にします。',
     activeVersion: '有効',
     countDisplay: (filtered: number, total: number) => `${total} 件中 ${filtered} 件のアプリを表示`,
     doctorExposureTitle: 'ドクター & 公開診断',
@@ -3241,7 +3471,11 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     apps: {
       ...BASE_EN_STRINGS.apps,
       ...VI_OVERRIDES.apps,
-      tabs: { ...BASE_EN_STRINGS.apps.tabs, ...VI_OVERRIDES.apps?.tabs },
+      tabs: {
+        ...BASE_EN_STRINGS.apps.tabs,
+        ...VI_OVERRIDES.apps?.tabs,
+        domainHttps: 'Tên miền & HTTPS'
+      },
       exposureStatus: {
         ...BASE_EN_STRINGS.apps.exposureStatus,
         ...VI_OVERRIDES.apps?.exposureStatus
@@ -3366,7 +3600,11 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     apps: {
       ...BASE_EN_STRINGS.apps,
       ...CN_OVERRIDES.apps,
-      tabs: { ...BASE_EN_STRINGS.apps.tabs, ...CN_OVERRIDES.apps?.tabs },
+      tabs: {
+        ...BASE_EN_STRINGS.apps.tabs,
+        ...CN_OVERRIDES.apps?.tabs,
+        domainHttps: '域名与 HTTPS'
+      },
       exposureStatus: {
         ...BASE_EN_STRINGS.apps.exposureStatus,
         ...CN_OVERRIDES.apps?.exposureStatus
@@ -3491,7 +3729,11 @@ const LOCALIZED_DICTIONARIES: Record<LocaleMode, typeof BASE_EN_STRINGS> = {
     apps: {
       ...BASE_EN_STRINGS.apps,
       ...JP_OVERRIDES.apps,
-      tabs: { ...BASE_EN_STRINGS.apps.tabs, ...JP_OVERRIDES.apps?.tabs },
+      tabs: {
+        ...BASE_EN_STRINGS.apps.tabs,
+        ...JP_OVERRIDES.apps?.tabs,
+        domainHttps: 'ドメインと HTTPS'
+      },
       exposureStatus: {
         ...BASE_EN_STRINGS.apps.exposureStatus,
         ...JP_OVERRIDES.apps?.exposureStatus

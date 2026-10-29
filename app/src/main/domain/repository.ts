@@ -1,8 +1,19 @@
+import { createHash } from 'node:crypto'
+import { isIP } from 'node:net'
 import type Database from 'better-sqlite3'
+
+import type {
+  DomainCertificateStatus,
+  DomainDnsStatus,
+  DomainIngressState,
+  DomainHttpsProbeStatus,
+  DomainReasonCode,
+  DomainRouteStatus
+} from '@shared/ipc'
 
 import { AppError } from '../errors'
 
-export interface DomainBindingRecord {
+export interface DomainDnsBindingInput {
   app_id: number
   hostname: string
   mode: 'direct_port' | 'shared_ingress' | 'named_tunnel'
@@ -12,22 +23,391 @@ export interface DomainBindingRecord {
   record_name: string
   target: string
   ownership_key: string
-  status: 'pending' | 'propagated' | 'active' | 'conflict' | 'failed' | 'disabled'
-  evidence_json?: string | null
+  route_ownership_key: string
+  dns_status: DomainDnsStatus
+  dns_evidence_json?: string | null
 }
 
-/** Lưu desired-state DNS, không lưu API token hoặc secret provider. */
+export interface DomainIngressObservation {
+  hostname: string
+  ownership_key: string
+  route_ownership_key: string
+  generation: number
+  route_status: DomainRouteStatus
+  certificate_status: DomainCertificateStatus
+  https_probe_status: DomainHttpsProbeStatus
+  reason_code: DomainReasonCode | null
+  route_checked_at: string
+  certificate_checked_at: string | null
+  certificate_hostname: string | null
+  https_probe_checked_at: string | null
+  https_probe_hostname: string | null
+}
+
+export interface SharedIngressInventoryBinding {
+  id: number
+  app_id: number
+  hostname: string
+  ownership_key: string
+  route_ownership_key: string
+  desired_generation: number
+  dns_status: DomainDnsStatus
+  enabled: boolean
+  host_port: number | null
+  healthcheck_path: string | null
+  healthcheck_response_type?: 'status_2xx' | 'json' | null
+  current_deployment_id: number | null
+  deployment_version: number | null
+  image_tag: string | null
+}
+
+export interface SharedIngressInventorySnapshot {
+  vps_id: number
+  host: string
+  port: number
+  host_fingerprint: string | null
+  revision: string
+  bindings: SharedIngressInventoryBinding[]
+}
+
+export type SharedIngressBindingRow = DomainIngressState & { http_url: string }
+
+export interface SharedIngressReconcileObservation {
+  vps_id: number
+  inventory_revision: string
+  environment: 'production' | 'acme_staging'
+  generation: string
+  config_sha256: string
+}
+
+export interface ProductionHttpsActivationInput {
+  snapshot: SharedIngressInventorySnapshot
+  binding: SharedIngressInventoryBinding
+  generation: string
+  configSha256: string
+  peerIp: string
+  peerIps: string[]
+  httpStatus: number
+  checkedAt: string
+}
+
+export interface ProductionHttpsProbeFailureInput extends Omit<ProductionHttpsActivationInput, 'peerIp' | 'peerIps' | 'httpStatus'> {
+  reasonCode: DomainReasonCode
+  certificateStatus?: 'failed' | 'expired' | 'pending'
+}
+
+export type ProductionHttpsPrecheckReason = 'DNS_NOT_PROPAGATED' | 'INGRESS_CONFIG_INVALID'
+
+export interface ProductionHttpsPrecheckFailureInput extends Omit<ProductionHttpsActivationInput, 'peerIp' | 'peerIps' | 'httpStatus'> {
+  reasonCode: ProductionHttpsPrecheckReason
+}
+
+/** DNS state is independent of route/certificate/probe observations. No credential or secret is persisted. */
 export class DomainRepository {
   constructor(private readonly database: Database.Database) {}
 
-  upsert(record: DomainBindingRecord): void {
+  /** Reads every shared-ingress binding; enabled routes fail closed unless their current runtime is valid. */
+  getSharedIngressInventory(vpsId: number): SharedIngressInventorySnapshot {
+    const rows = this.database.prepare(
+      `SELECT v.id AS vps_id, v.host, v.port AS ssh_port, v.host_fingerprint, v.archived_at,
+              b.id, b.app_id, b.hostname, b.ownership_key, b.route_ownership_key,
+              b.desired_generation, b.dns_status, b.route_status,
+              a.host_port, a.healthcheck_path, a.healthcheck_response_type,
+              a.imported_from_vps, a.current_deployment_id,
+              d.id AS joined_deployment_id, d.version AS deployment_version,
+              d.image_tag, d.status AS deployment_status, d.origin AS deployment_origin
+       FROM vps v
+       LEFT JOIN app a ON a.vps_id = v.id
+       LEFT JOIN domain_binding b ON b.app_id = a.id AND b.mode = 'shared_ingress'
+       LEFT JOIN deployment d ON d.id = a.current_deployment_id AND d.app_id = a.id
+       WHERE v.id = ? AND (b.id IS NULL OR b.mode = 'shared_ingress')
+       ORDER BY b.hostname, b.id`
+    ).all(vpsId) as Array<{
+      vps_id: number; host: string; ssh_port: number; host_fingerprint: string | null; archived_at: string | null
+      id: number | null; app_id: number | null; hostname: string | null; ownership_key: string | null
+      route_ownership_key: string | null; desired_generation: number | null; dns_status: DomainDnsStatus | null
+      route_status: string | null; host_port: number | null; healthcheck_path: string | null
+      healthcheck_response_type: 'status_2xx' | 'json' | null; imported_from_vps: number | null
+      current_deployment_id: number | null; joined_deployment_id: number | null; deployment_version: number | null
+      image_tag: string | null; deployment_status: string | null; deployment_origin: string | null
+    }>
+    const host = rows[0]
+    if (!host || host.archived_at !== null) throw new AppError('VALIDATION', 'VPS ingress inventory không tồn tại hoặc đã lưu trữ.')
+    const bindings: SharedIngressInventoryBinding[] = []
+    for (const row of rows) {
+      if (row.id === null) continue
+      const isDisabled = row.dns_status === 'disabled' || row.route_status === 'disabled'
+      if (!row.hostname || !row.ownership_key || !row.route_ownership_key || !row.desired_generation || !row.dns_status) {
+        throw new AppError('VALIDATION', 'Shared-ingress inventory thiếu định danh hoặc generation.')
+      }
+      const enabled = !isDisabled
+      if (enabled && (
+        row.dns_status !== 'propagated' ||
+        row.route_ownership_key !== `opspilot-ingress:${row.app_id}:${row.hostname}` ||
+        row.imported_from_vps !== 0 ||
+        !Number.isInteger(row.host_port) || row.host_port! < 1 || row.host_port! > 65_535 ||
+        row.current_deployment_id === null || row.joined_deployment_id !== row.current_deployment_id ||
+        row.deployment_status !== 'running' || row.deployment_origin !== 'opspilot' ||
+        !Number.isInteger(row.deployment_version) || !row.image_tag
+      )) {
+        throw new AppError('VALIDATION', `Shared-ingress binding ${row.hostname} không khớp app/deployment hiện hành hoặc chưa sẵn sàng.`)
+      }
+      bindings.push({
+        id: row.id,
+        app_id: row.app_id!,
+        hostname: row.hostname,
+        ownership_key: row.ownership_key,
+        route_ownership_key: row.route_ownership_key,
+        desired_generation: row.desired_generation,
+        dns_status: row.dns_status,
+        enabled,
+        host_port: enabled ? row.host_port : null,
+        healthcheck_path: enabled ? row.healthcheck_path : null,
+        healthcheck_response_type: enabled ? row.healthcheck_response_type : null,
+        current_deployment_id: enabled ? row.current_deployment_id : null,
+        deployment_version: enabled ? row.deployment_version : null,
+        image_tag: enabled ? row.image_tag : null
+      })
+    }
+    const identity = { vps_id: host.vps_id, host: host.host, port: host.ssh_port, host_fingerprint: host.host_fingerprint }
+    const revision = createHash('sha256').update(JSON.stringify({ identity, bindings })).digest('hex')
+    return { ...identity, revision, bindings }
+  }
+
+  getSharedIngressReconcileObservation(vpsId: number): SharedIngressReconcileObservation | null {
+    return (this.database.prepare(
+      `SELECT vps_id, inventory_revision, environment, generation, config_sha256
+       FROM ingress_reconcile_observation WHERE vps_id=?`
+    ).get(vpsId) as SharedIngressReconcileObservation | undefined) ?? null
+  }
+
+  /** Commits verified route generation. Repeating the same generation preserves its TLS/probe evidence. */
+  recordSharedIngressReconcile(
+    snapshot: SharedIngressInventorySnapshot,
+    environment: 'production' | 'acme_staging',
+    generation: string,
+    configSha256: string
+  ): void {
+    this.database.transaction(() => {
+      const current = this.getSharedIngressInventory(snapshot.vps_id)
+      if (current.revision !== snapshot.revision) {
+        throw new AppError('VALIDATION', 'Shared-ingress inventory changed during reconcile.')
+      }
+      const previous = this.getSharedIngressReconcileObservation(snapshot.vps_id)
+      const preserveEvidence = previous?.inventory_revision === snapshot.revision &&
+        previous.environment === environment && previous.generation === generation &&
+        previous.config_sha256 === configSha256
+      const update = this.database.prepare(
+        `UPDATE domain_binding
+         SET route_status=CASE
+               WHEN @enabled=0 THEN 'disabled'
+               WHEN @preserve=1 AND route_config_generation=@config_generation AND route_inventory_revision=@revision
+                 AND route_environment=@environment THEN route_status ELSE 'pending' END,
+             certificate_status=CASE
+               WHEN @preserve=1 AND route_config_generation=@config_generation AND route_inventory_revision=@revision
+                 AND route_environment=@environment THEN certificate_status ELSE 'not_requested' END,
+             https_probe_status=CASE
+               WHEN @preserve=1 AND route_config_generation=@config_generation AND route_inventory_revision=@revision
+                 AND route_environment=@environment THEN https_probe_status ELSE 'not_run' END,
+             observed_generation=@binding_generation,
+             ingress_reason_code=CASE
+               WHEN @preserve=1 AND route_config_generation=@config_generation AND route_inventory_revision=@revision
+                 AND route_environment=@environment THEN ingress_reason_code ELSE NULL END,
+             route_checked_at=CASE
+               WHEN @preserve=1 AND route_config_generation=@config_generation AND route_inventory_revision=@revision
+                 AND route_environment=@environment THEN route_checked_at ELSE strftime('%Y-%m-%dT%H:%M:%SZ','now') END,
+             certificate_checked_at=CASE
+               WHEN @preserve=1 AND route_config_generation=@config_generation AND route_inventory_revision=@revision
+                 AND route_environment=@environment THEN certificate_checked_at ELSE NULL END,
+             certificate_hostname=CASE
+               WHEN @preserve=1 AND route_config_generation=@config_generation AND route_inventory_revision=@revision
+                 AND route_environment=@environment THEN certificate_hostname ELSE NULL END,
+             https_probe_checked_at=CASE
+               WHEN @preserve=1 AND route_config_generation=@config_generation AND route_inventory_revision=@revision
+                 AND route_environment=@environment THEN https_probe_checked_at ELSE NULL END,
+             https_probe_hostname=CASE
+               WHEN @preserve=1 AND route_config_generation=@config_generation AND route_inventory_revision=@revision
+                 AND route_environment=@environment THEN https_probe_hostname ELSE NULL END,
+             https_probe_peer_ip=CASE
+               WHEN @preserve=1 AND route_config_generation=@config_generation AND route_inventory_revision=@revision
+                 AND route_environment=@environment THEN https_probe_peer_ip ELSE NULL END,
+             https_probe_peer_ips_json=CASE
+               WHEN @preserve=1 AND route_config_generation=@config_generation AND route_inventory_revision=@revision
+                 AND route_environment=@environment THEN https_probe_peer_ips_json ELSE NULL END,
+             https_probe_http_status=CASE
+               WHEN @preserve=1 AND route_config_generation=@config_generation AND route_inventory_revision=@revision
+                 AND route_environment=@environment THEN https_probe_http_status ELSE NULL END,
+             https_probe_generation=CASE
+               WHEN @preserve=1 AND route_config_generation=@config_generation AND route_inventory_revision=@revision
+                 AND route_environment=@environment THEN https_probe_generation ELSE NULL END,
+             https_probe_inventory_revision=CASE
+               WHEN @preserve=1 AND route_config_generation=@config_generation AND route_inventory_revision=@revision
+                 AND route_environment=@environment THEN https_probe_inventory_revision ELSE NULL END,
+             https_probe_environment=CASE
+               WHEN @preserve=1 AND route_config_generation=@config_generation AND route_inventory_revision=@revision
+                 AND route_environment=@environment THEN https_probe_environment ELSE NULL END,
+             route_config_generation=@config_generation, route_inventory_revision=@revision,
+             route_environment=@environment,
+             updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+         WHERE id=@id AND app_id=@app_id AND hostname=@hostname
+           AND ownership_key=@ownership_key AND route_ownership_key=@route_ownership_key
+           AND desired_generation=@generation`
+      )
+      for (const binding of snapshot.bindings) {
+        const result = update.run({
+          id: binding.id,
+          app_id: binding.app_id,
+          hostname: binding.hostname,
+          ownership_key: binding.ownership_key,
+          route_ownership_key: binding.route_ownership_key,
+          generation: binding.desired_generation,
+          binding_generation: binding.desired_generation,
+          config_generation: generation,
+          preserve: preserveEvidence ? 1 : 0,
+          enabled: binding.enabled ? 1 : 0,
+          revision: snapshot.revision,
+          environment
+        })
+        if (result.changes !== 1) throw new AppError('VALIDATION', 'Binding generation changed during reconcile.')
+      }
+      this.database.prepare(
+        `INSERT INTO ingress_reconcile_observation
+          (vps_id, inventory_revision, environment, generation, config_sha256, updated_at)
+         VALUES (?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+         ON CONFLICT(vps_id) DO UPDATE SET
+           inventory_revision=excluded.inventory_revision, environment=excluded.environment,
+           generation=excluded.generation, config_sha256=excluded.config_sha256,
+           updated_at=excluded.updated_at`
+      ).run(snapshot.vps_id, snapshot.revision, environment, generation, configSha256)
+    })()
+  }
+
+  recordProductionHttpsActivation(input: ProductionHttpsActivationInput): void {
+    if (
+      !Array.isArray(input.peerIps) || input.peerIps.length === 0 || input.peerIps.length > 8 ||
+      input.peerIps.some((ip) => isIP(ip) === 0) || input.peerIp !== input.peerIps[0] ||
+      !Number.isInteger(input.httpStatus) || input.httpStatus < 200 || input.httpStatus >= 300
+    ) {
+      throw new AppError('VALIDATION', 'External HTTPS probe evidence is incomplete or invalid.')
+    }
+    this.database.transaction(() => {
+      const current = this.getSharedIngressInventory(input.snapshot.vps_id)
+      const observation = this.getSharedIngressReconcileObservation(input.snapshot.vps_id)
+      if (current.revision !== input.snapshot.revision || observation?.environment !== 'production' ||
+          observation.inventory_revision !== input.snapshot.revision || observation.generation !== input.generation ||
+          observation.config_sha256 !== input.configSha256) {
+        throw new AppError('VALIDATION', 'HTTPS probe result is stale or production runtime is not confirmed.')
+      }
+      const result = this.database.prepare(
+        `UPDATE domain_binding
+         SET route_status='active', certificate_status='valid', https_probe_status='passed',
+             observed_generation=desired_generation, ingress_reason_code=NULL,
+             certificate_checked_at=@checkedAt, certificate_hostname=hostname,
+             https_probe_checked_at=@checkedAt, https_probe_hostname=hostname,
+             https_probe_peer_ip=@peerIp, https_probe_peer_ips_json=@peerIpsJson,
+             https_probe_http_status=@httpStatus,
+             https_probe_generation=@generation, https_probe_inventory_revision=@revision,
+             https_probe_environment='production',
+             updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+         WHERE id=@id AND app_id=@appId AND hostname=@hostname AND mode='shared_ingress'
+           AND ownership_key=@ownershipKey AND route_ownership_key=@routeOwnershipKey
+           AND desired_generation=@bindingGeneration AND dns_status='propagated'
+           AND route_status IN ('pending','degraded','active')
+           AND route_config_generation=@generation AND route_inventory_revision=@revision
+           AND route_environment='production' AND observed_generation=desired_generation`
+      ).run({
+        checkedAt: input.checkedAt, peerIp: input.peerIp,
+        peerIpsJson: JSON.stringify(input.peerIps), httpStatus: input.httpStatus,
+        generation: input.generation, revision: input.snapshot.revision, id: input.binding.id,
+        appId: input.binding.app_id, hostname: input.binding.hostname,
+        ownershipKey: input.binding.ownership_key, routeOwnershipKey: input.binding.route_ownership_key,
+        bindingGeneration: input.binding.desired_generation
+      })
+      if (result.changes !== 1) throw new AppError('VALIDATION', 'Binding generation or evidence changed during HTTPS probe.')
+    })()
+  }
+
+  recordProductionHttpsProbeFailure(input: ProductionHttpsProbeFailureInput): void {
+    this.database.transaction(() => {
+      const current = this.getSharedIngressInventory(input.snapshot.vps_id)
+      const observation = this.getSharedIngressReconcileObservation(input.snapshot.vps_id)
+      if (current.revision !== input.snapshot.revision || observation?.environment !== 'production' ||
+          observation.inventory_revision !== input.snapshot.revision || observation.generation !== input.generation ||
+          observation.config_sha256 !== input.configSha256) {
+        throw new AppError('VALIDATION', 'HTTPS failure result is stale; binding state was not changed.')
+      }
+      const result = this.database.prepare(
+        `UPDATE domain_binding
+         SET route_status='degraded', https_probe_status='failed', ingress_reason_code=@reasonCode,
+             certificate_status=COALESCE(@certificateStatus, certificate_status),
+             certificate_checked_at=CASE WHEN @certificateStatus IS NULL THEN certificate_checked_at ELSE @checkedAt END,
+             certificate_hostname=CASE WHEN @certificateStatus IS NULL THEN certificate_hostname ELSE hostname END,
+             https_probe_checked_at=@checkedAt, https_probe_hostname=hostname,
+             https_probe_peer_ip=NULL, https_probe_peer_ips_json=NULL, https_probe_http_status=NULL,
+             https_probe_generation=@generation, https_probe_inventory_revision=@revision,
+             https_probe_environment='production', updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+         WHERE id=@id AND app_id=@appId AND hostname=@hostname AND mode='shared_ingress'
+           AND ownership_key=@ownershipKey AND route_ownership_key=@routeOwnershipKey
+           AND desired_generation=@bindingGeneration AND dns_status='propagated'
+           AND route_config_generation=@generation AND route_inventory_revision=@revision
+           AND route_environment='production' AND observed_generation=desired_generation`
+      ).run({
+        reasonCode: input.reasonCode, certificateStatus: input.certificateStatus ?? null,
+        checkedAt: input.checkedAt, generation: input.generation, revision: input.snapshot.revision,
+        id: input.binding.id, appId: input.binding.app_id, hostname: input.binding.hostname,
+        ownershipKey: input.binding.ownership_key, routeOwnershipKey: input.binding.route_ownership_key,
+        bindingGeneration: input.binding.desired_generation
+      })
+      if (result.changes !== 1) throw new AppError('VALIDATION', 'Binding changed before HTTPS failure could be recorded.')
+    })()
+  }
+
+  /** Invalidates current active evidence only when the exact DB and Caddy generation still match. */
+  recordProductionHttpsPrecheckFailure(input: ProductionHttpsPrecheckFailureInput): boolean {
+    return this.database.transaction(() => {
+      const current = this.getSharedIngressInventory(input.snapshot.vps_id)
+      const observation = this.getSharedIngressReconcileObservation(input.snapshot.vps_id)
+      if (current.revision !== input.snapshot.revision || observation?.environment !== 'production' ||
+          observation.inventory_revision !== input.snapshot.revision || observation.generation !== input.generation ||
+          observation.config_sha256 !== input.configSha256) {
+        throw new AppError('VALIDATION', 'Precheck result is stale; ingress state was not changed.')
+      }
+      const result = this.database.prepare(
+        `UPDATE domain_binding
+         SET route_status='degraded', https_probe_status='not_run', ingress_reason_code=@reasonCode,
+             https_probe_checked_at=NULL, https_probe_hostname=NULL,
+             https_probe_peer_ip=NULL, https_probe_peer_ips_json=NULL, https_probe_http_status=NULL,
+             https_probe_generation=NULL, https_probe_inventory_revision=NULL,
+             https_probe_environment=NULL, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+         WHERE id=@id AND app_id=@appId AND hostname=@hostname AND mode='shared_ingress'
+           AND ownership_key=@ownershipKey AND route_ownership_key=@routeOwnershipKey
+           AND desired_generation=@bindingGeneration AND dns_status='propagated'
+           AND route_status='active' AND observed_generation=desired_generation
+           AND route_config_generation=@generation AND route_inventory_revision=@revision
+           AND route_environment='production' AND https_probe_generation=@generation
+           AND https_probe_inventory_revision=@revision AND https_probe_environment='production'`
+      ).run({
+        reasonCode: input.reasonCode, id: input.binding.id, appId: input.binding.app_id,
+        hostname: input.binding.hostname, ownershipKey: input.binding.ownership_key,
+        routeOwnershipKey: input.binding.route_ownership_key,
+        bindingGeneration: input.binding.desired_generation, generation: input.generation,
+        revision: input.snapshot.revision
+      })
+      return result.changes === 1
+    })()
+  }
+
+  upsertDns(input: DomainDnsBindingInput): void {
     const result = this.database
       .prepare(
         `INSERT INTO domain_binding
           (app_id, hostname, mode, provider, zone_id, record_type, record_name, target,
-           ownership_key, status, evidence_json, updated_at)
+           ownership_key, route_ownership_key, status, dns_status, dns_evidence_json,
+           last_check_at, updated_at)
          VALUES (@app_id, @hostname, @mode, @provider, @zone_id, @record_type, @record_name,
-           @target, @ownership_key, @status, @evidence_json, strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+           @target, @ownership_key, @route_ownership_key, @dns_status, @dns_status,
+           @dns_evidence_json,
+           strftime('%Y-%m-%dT%H:%M:%SZ','now'), strftime('%Y-%m-%dT%H:%M:%SZ','now'))
          ON CONFLICT(hostname) DO UPDATE SET
            mode=excluded.mode,
            provider=excluded.provider,
@@ -35,19 +415,205 @@ export class DomainRepository {
            record_type=excluded.record_type,
            record_name=excluded.record_name,
            target=excluded.target,
-           status=excluded.status,
-           evidence_json=excluded.evidence_json,
-           updated_at=excluded.updated_at
+           status=excluded.dns_status,
+           dns_status=excluded.dns_status,
+           dns_evidence_json=excluded.dns_evidence_json,
+           last_check_at=strftime('%Y-%m-%dT%H:%M:%SZ','now'),
+           route_status=CASE WHEN
+             domain_binding.mode IS NOT excluded.mode OR
+             domain_binding.record_type IS NOT excluded.record_type OR
+             domain_binding.record_name IS NOT excluded.record_name OR
+             domain_binding.target IS NOT excluded.target OR
+             excluded.dns_status <> 'propagated'
+             THEN CASE WHEN domain_binding.route_status = 'not_configured'
+               THEN 'not_configured' ELSE 'pending' END
+             ELSE domain_binding.route_status END,
+           https_probe_status=CASE WHEN
+             domain_binding.mode IS NOT excluded.mode OR
+             domain_binding.record_type IS NOT excluded.record_type OR
+             domain_binding.record_name IS NOT excluded.record_name OR
+             domain_binding.target IS NOT excluded.target OR
+             excluded.dns_status <> 'propagated'
+             THEN 'not_run' ELSE domain_binding.https_probe_status END,
+           route_checked_at=CASE WHEN
+             domain_binding.mode IS NOT excluded.mode OR
+             domain_binding.record_type IS NOT excluded.record_type OR
+             domain_binding.record_name IS NOT excluded.record_name OR
+             domain_binding.target IS NOT excluded.target OR
+             excluded.dns_status <> 'propagated'
+             THEN NULL ELSE domain_binding.route_checked_at END,
+           https_probe_checked_at=CASE WHEN
+             domain_binding.mode IS NOT excluded.mode OR
+             domain_binding.record_type IS NOT excluded.record_type OR
+             domain_binding.record_name IS NOT excluded.record_name OR
+             domain_binding.target IS NOT excluded.target OR
+             excluded.dns_status <> 'propagated'
+             THEN NULL ELSE domain_binding.https_probe_checked_at END,
+           https_probe_hostname=CASE WHEN
+             domain_binding.mode IS NOT excluded.mode OR
+             domain_binding.record_type IS NOT excluded.record_type OR
+             domain_binding.record_name IS NOT excluded.record_name OR
+             domain_binding.target IS NOT excluded.target OR
+             excluded.dns_status <> 'propagated'
+             THEN NULL ELSE domain_binding.https_probe_hostname END,
+           https_probe_peer_ip=CASE WHEN excluded.dns_status <> 'propagated'
+             THEN NULL ELSE domain_binding.https_probe_peer_ip END,
+           https_probe_peer_ips_json=CASE WHEN excluded.dns_status <> 'propagated'
+             THEN NULL ELSE domain_binding.https_probe_peer_ips_json END,
+           https_probe_http_status=CASE WHEN excluded.dns_status <> 'propagated'
+             THEN NULL ELSE domain_binding.https_probe_http_status END,
+           https_probe_generation=CASE WHEN excluded.dns_status <> 'propagated'
+             THEN NULL ELSE domain_binding.https_probe_generation END,
+           https_probe_inventory_revision=CASE WHEN excluded.dns_status <> 'propagated'
+             THEN NULL ELSE domain_binding.https_probe_inventory_revision END,
+           https_probe_environment=CASE WHEN excluded.dns_status <> 'propagated'
+             THEN NULL ELSE domain_binding.https_probe_environment END,
+           ingress_reason_code=CASE WHEN excluded.dns_status <> 'propagated'
+             THEN 'DNS_NOT_PROPAGATED'
+             WHEN domain_binding.target IS NOT excluded.target THEN NULL
+             ELSE domain_binding.ingress_reason_code END,
+           updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
          WHERE domain_binding.app_id = excluded.app_id
-           AND domain_binding.ownership_key = excluded.ownership_key`
+           AND domain_binding.ownership_key = excluded.ownership_key
+           AND domain_binding.route_ownership_key = excluded.route_ownership_key`
       )
-      .run({ ...record, evidence_json: record.evidence_json ?? null })
+      .run({ ...input, dns_evidence_json: input.dns_evidence_json ?? null })
 
     if (result.changes === 0) {
       throw new AppError(
         'VALIDATION',
-        'Xung đột quyền sở hữu: Hostname này đã được gắn cho app khác hoặc ownership key không khớp.'
+        'Xung đột quyền sở hữu: hostname đã thuộc app hoặc ingress owner khác.'
       )
     }
+  }
+
+  recordIngressObservation(input: DomainIngressObservation): DomainIngressState {
+    const current = this.getByHostname(input.hostname)
+    if (!current) throw new AppError('VALIDATION', 'Không tìm thấy domain binding.')
+    if (
+      current.ownership_key !== input.ownership_key ||
+      current.route_ownership_key !== input.route_ownership_key
+    ) {
+      throw new AppError('VALIDATION', 'Xung đột quyền sở hữu route ingress.')
+    }
+    if (current.desired_generation !== input.generation) {
+      throw new AppError('VALIDATION', 'Kết quả ingress đã cũ; cần reconcile lại generation hiện tại.')
+    }
+    if (
+      input.certificate_status === 'valid' &&
+      (input.certificate_checked_at === null || input.certificate_hostname !== input.hostname)
+    ) {
+      throw new AppError('VALIDATION', 'Certificate phải hợp lệ cho hostname và có thời điểm kiểm tra.')
+    }
+    if (
+      input.https_probe_status === 'passed' &&
+      (input.https_probe_checked_at === null || input.https_probe_hostname !== input.hostname)
+    ) {
+      throw new AppError('VALIDATION', 'HTTPS probe ngoài phải xác minh đúng hostname và có thời điểm kiểm tra.')
+    }
+    if (input.https_probe_status === 'passed' && input.certificate_status !== 'valid') {
+      throw new AppError('VALIDATION', 'HTTPS probe chỉ hợp lệ khi certificate đã được xác minh.')
+    }
+    if (
+      input.route_status === 'failed' ||
+      input.route_status === 'conflict' ||
+      input.route_status === 'degraded' ||
+      input.certificate_status === 'failed' ||
+      input.certificate_status === 'expired' ||
+      input.https_probe_status === 'failed'
+    ) {
+      if (!input.reason_code) {
+        throw new AppError('VALIDATION', 'Kết quả ingress lỗi phải có reason code.')
+      }
+    }
+    if (input.route_status === 'active') {
+      throw new AppError('VALIDATION', 'Only the production external HTTPS probe CAS may activate a route.')
+    }
+
+
+    const update = this.database
+      .prepare(
+        `UPDATE domain_binding
+         SET route_status=@route_status,
+             certificate_status=@certificate_status,
+             https_probe_status=@https_probe_status,
+             observed_generation=@generation,
+             ingress_reason_code=@reason_code,
+             route_checked_at=@route_checked_at,
+             certificate_checked_at=@certificate_checked_at,
+             certificate_hostname=@certificate_hostname,
+             https_probe_checked_at=@https_probe_checked_at,
+             https_probe_hostname=@https_probe_hostname,
+             updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
+         WHERE hostname=@hostname AND ownership_key=@ownership_key
+           AND route_ownership_key=@route_ownership_key
+           AND desired_generation=@generation`
+      )
+      .run(input)
+    if (update.changes !== 1) {
+      throw new AppError('VALIDATION', 'Ingress state hoặc generation đã đổi; kết quả bị từ chối.')
+    }
+    return this.getByHostname(input.hostname)!
+  }
+
+  getByHostname(hostname: string): DomainIngressState | undefined {
+    return this.database
+      .prepare(
+        `SELECT id, app_id, hostname, mode, dns_status, route_status,
+                certificate_status, https_probe_status, desired_generation,
+                observed_generation, ownership_key, route_ownership_key,
+                ingress_reason_code, last_check_at, route_checked_at,
+                certificate_checked_at, certificate_hostname, https_probe_checked_at,
+                https_probe_hostname, route_config_generation, route_inventory_revision,
+                route_environment, https_probe_peer_ip, https_probe_http_status,
+                https_probe_peer_ips_json,
+                https_probe_generation, https_probe_inventory_revision, https_probe_environment
+         FROM domain_binding WHERE hostname=?`
+      )
+      .get(hostname) as DomainIngressState | undefined
+  }
+
+  /** Looks up a binding scoped to a live VPS without requiring DNS/runtime readiness. */
+  getSharedIngressBindingById(vpsId: number, bindingId: number): DomainIngressState | undefined {
+    return this.database
+      .prepare(
+        `SELECT b.id, b.app_id, b.hostname, b.mode, b.dns_status, b.route_status,
+                b.certificate_status, b.https_probe_status, b.desired_generation,
+                b.observed_generation, b.ownership_key, b.route_ownership_key,
+                b.ingress_reason_code, b.last_check_at, b.route_checked_at,
+                b.certificate_checked_at, b.certificate_hostname, b.https_probe_checked_at,
+                b.https_probe_hostname, b.route_config_generation, b.route_inventory_revision,
+                b.route_environment, b.https_probe_peer_ip, b.https_probe_http_status,
+                b.https_probe_peer_ips_json, b.https_probe_generation,
+                b.https_probe_inventory_revision, b.https_probe_environment
+         FROM domain_binding b
+         JOIN app a ON a.id=b.app_id
+         JOIN vps v ON v.id=a.vps_id
+         WHERE b.id=? AND v.id=? AND v.archived_at IS NULL AND b.mode='shared_ingress'`
+      )
+      .get(bindingId, vpsId) as DomainIngressState | undefined
+  }
+
+  /** Lists persisted bindings without DNS/runtime readiness or SSH identity requirements. */
+  listSharedIngressBindingsForApp(vpsId: number, appId: number): SharedIngressBindingRow[] {
+    return this.database
+      .prepare(
+        `SELECT b.id, b.app_id, b.hostname, b.mode, b.dns_status, b.route_status,
+              b.certificate_status, b.https_probe_status, b.desired_generation,
+              b.observed_generation, b.ownership_key, b.route_ownership_key,
+              b.ingress_reason_code, b.last_check_at, b.route_checked_at,
+              b.certificate_checked_at, b.certificate_hostname, b.https_probe_checked_at,
+              b.https_probe_hostname, b.route_config_generation, b.route_inventory_revision,
+              b.route_environment, b.https_probe_peer_ip, b.https_probe_http_status,
+              b.https_probe_peer_ips_json, b.https_probe_generation,
+              b.https_probe_inventory_revision, b.https_probe_environment,
+              'http://' || v.host || ':' || a.host_port AS http_url
+       FROM domain_binding b
+       JOIN app a ON a.id=b.app_id
+       JOIN vps v ON v.id=a.vps_id
+       WHERE v.id=? AND a.id=? AND v.archived_at IS NULL AND b.mode='shared_ingress'
+       ORDER BY b.hostname, b.id`
+      )
+      .all(vpsId, appId) as SharedIngressBindingRow[]
   }
 }

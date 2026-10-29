@@ -1,8 +1,6 @@
 # 27 — Kế hoạch tự động hóa pipeline, domain, Doctor, dữ liệu ML và detector
 
-> Cập nhật: 22/09/2026. Đây là file kế hoạch hợp nhất cho 6 nhóm vấn đề còn mở. Mọi con số bên
-> dưới là **mục tiêu/Definition of Done đề xuất**, không phải kết quả đã đạt. Contract hiện hành
-> trong `docs/contracts/` vẫn là nguồn sự thật cao hơn file này.
+> Cập nhật: 14/10/2026. Đây là kế hoạch hợp nhất; phân biệt rõ trạng thái đã qua gate với đề xuất còn mở. Contract hiện hành trong `docs/contracts/` vẫn là nguồn sự thật cao hơn file này. Trạng thái checkpoint gần nhất xem `docs/tasks/board.md` và các task note liên kết.
 
 ## 0. Kết luận điều hành
 
@@ -15,13 +13,9 @@ Thứ tự nên làm:
 
 1. **P0 — hợp nhất và khóa bộ thí nghiệm ML** đang nằm trên nhánh `feat/experiment-harness`, chạy
    pilot thật, rồi mới chạy dữ liệu chính thức. Đây vẫn là đường găng của đồ án.
-2. **P1 — hoàn tất publish sau deploy**: nối module reachability hiện có vào pipeline, tự reconcile
-   firewall tầng OS, thêm adapter firewall cloud provider và verify từ ngoài.
-3. **P1 — Deploy Doctor**: Evidence → Diagnosis → Safe fix → Verify → Record outcome; rule xác định
-   trước, không “đoán bằng AI”.
-4. **P2 — domain**: trước mắt làm DNS assistant chính xác; muốn URL đẹp không có `:port` và HTTPS
-   phải chấp nhận một ingress 80/443 hoặc named tunnel. Đây là quyết định ADR, không phải chỉ thêm
-   form DNS.
+2. **P1 — reachability/publish**: pipeline đã có publish phase, UFW reconcile, external probe và exposure evidence. Mở rộng provider/cloud firewall theo adapter được cấp quyền; không nhầm phase này với HTTPS ingress.
+3. **P1 — Deploy Doctor**: Evidence → Diagnosis → Safe fix → Verify → Record outcome; rule xác định trước, không “đoán bằng AI”.
+4. **P1a — shared ingress/HTTPS**: quyết định thiết kế Caddy theo task note `TK-S7 P1a`; implementation vẫn chưa bắt đầu.
 5. **P3 — detector/template và polish**: chỉ mở rộng sau khi pilot/dữ liệu chính thức đã an toàn.
 
 Hai đề xuất ML cần chốt ngay:
@@ -44,17 +38,16 @@ Hai đề xuất ML cần chốt ngay:
   - quyết định `ufw allow <port>/tcp` có điều kiện;
   - probe URL từ máy chạy Electron;
   - dựng diagnosis `PORT_BLOCKED_EXTERNAL`.
-- Test tập trung đã được chạy lại ngày 22/09/2026: **15/15 pass**. Tuy nhiên module **chưa được nối
-  vào `DeployPipeline`**, chưa truyền diagnosis sang renderer, và chưa được thử end-to-end trên VPS.
-- `finished` vẫn trả `app_url` khi loopback pass dù URL có thể bị firewall cloud provider chặn.
+- Test tập trung cũ 15/15 ngày 22/09/2026 chỉ là mốc lịch sử. Trên nhánh hiện tại, `DeployPipeline`
+  đã nối publish/external probe và ghi exposure evidence; không suy ra HTTPS từ gate direct-port.
+- Sau loopback health, pipeline giữ deployment healthy nếu publish thất bại; `app_url` chỉ được trả theo exposure evidence. HTTPS shared ingress chưa có runtime.
 
 ### 1.2 DNS/domain
 
 - URL hiện tại có dạng `http://<vps-host>:<host_port>`, port app nằm trong `30000–30999`.
 - DNS A/AAAA/CNAME chỉ ánh xạ hostname, **không ánh xạ cổng HTTP**. Tạo `A app.example.com → VPS_IP`
   không làm `https://app.example.com` tự đi tới port 30000.
-- Kiến trúc v1 đã quyết định bỏ nginx/reverse proxy. Vì vậy “domain không có `:port` + HTTPS” là
-  thay đổi kiến trúc cần ADR, không thể coi là một chỉnh sửa UI nhỏ.
+- URL direct-port vẫn là đường hiện hành; DNS assistant/shared-ingress plan không tự tạo route. P1a đã chọn Caddy host-native do OpsPilot sở hữu, nhưng route, certificate, 80/443 preflight và HTTPS activation chưa triển khai. Đặc tả và gates nằm ở [TK-S7 P1a](tasks/tk-s7-p1a-shared-ingress-https.md).
 
 ### 1.3 Doctor
 
@@ -600,7 +593,8 @@ verification**, không bắt user nhớ runbook sau mỗi deploy.
 | WP4 | Doctor v1 10 diagnosis + 5 E2E faults | WP2 | 3–5 ngày | Accuracy/fix-success report |
 | WP5 | DNS assistant + propagation state | WP2 | 2–3 ngày | Generic provider flow trung thực |
 | WP6 | Cloudflare DNS/Domain Connect fast path | WP5 | 2–4 ngày | One-time consent, auto upsert/verify |
-| WP7 | ADR shared ingress/Caddy (nếu duyệt) | WP5 | 4–7 ngày | Domain HTTPS, migrate/rollback test |
+| P1a | Hợp đồng shared ingress Caddy, 80/443/DNS/TLS/rollback | Domain + exposure hiện có | docs checkpoint | ADR/task note được review; chưa ghi VPS |
+| P1b–P1f | Contract/state → preflight → DNS/ACME → atomic reconcile → UI/operations | P1a | chia nhỏ theo task note | Unit/fault-injection gates rồi mới VPS lab live gate |
 | WP8 | Detector hardening + Flask | WP1 final-data gate | 3–5 ngày | Fixture + VPS E2E |
 | WP9 | 50 final runs + analysis | WP1 | 60+ giờ máy | Dataset locked + report tables |
 | WP10 | Scenario phụ noisy-neighbor/traffic-surge | WP9 | 20+ giờ/scenario | 10 run/scenario hoặc cắt scope |
@@ -630,8 +624,7 @@ KPI Doctor/publish phải đo bằng fault injection và trial log; không tự 
 1. **Approve** thêm exposure state/diagnosis có cấu trúc vào contract; không parse log text ở UI.
 2. **Approve** provider adapter cho đúng nhà cung cấp VPS đang dùng trước, không viết 5 adapter giả.
 3. **Cloudflare-first** cho DNS automation; Domain Connect + generic assistant là đường mở rộng.
-4. **Defer shared Caddy ingress** tới sau pilot/final-data gate; nếu không approve ADR thì chấp nhận
-   domain direct có `:port` hoặc named/quick tunnel.
+4. **Chọn Caddy shared ingress** theo P1a; implementation vẫn phải qua contract, conflict, rollback và external-probe gates trước khi công bố HTTPS. Nếu chưa triển khai/đủ điều kiện thì direct URL `:port` tiếp tục phục vụ.
 5. **Giữ 5 scenario chính cô lập**; noisy neighbor và traffic surge là secondary dataset.
 6. **Cấm DDoS**, chỉ bounded load test trên allowlist.
 7. **Chốt `latency_creep` trước pilot**, version protocol và không chỉnh theo final result.
@@ -651,7 +644,7 @@ KPI Doctor/publish phải đo bằng fault injection và trial log; không tự 
   provider có API/scoped permission để thêm ingress rule.
 - [AWS EC2 ingress API](https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_AuthorizeSecurityGroupIngress.html): ví dụ thứ hai cho cloud firewall adapter.
 
-## 14. Trạng thái triển khai trên nhánh tích hợp — 28/09/2026
+## 14. Trạng thái triển khai trên nhánh tích hợp — cập nhật 14/10/2026
 
 Các hạng mục sau đã được hiện thực hóa và kiểm thử trong source hiện tại:
 
@@ -662,16 +655,16 @@ Các hạng mục sau đã được hiện thực hóa và kiểm thử trong so
 - Doctor rule engine có 12 nhóm nguyên nhân, confidence, abstention khi evidence mơ hồ, safe-fix
   allowlist và verify outcome. Failure ở BUILD/DEPLOY cũng tạo `doctor_run`; fix firewall là nhánh
   tự động đầu tiên, các fix đụng source/DB vẫn trả manual.
-- Domain assistant hỗ trợ direct-port/shared-ingress/named-tunnel plan và propagation check.
+- Domain assistant hỗ trợ direct-port/shared-ingress/named-tunnel plan và propagation check; phần shared ingress hiện vẫn là desired-state/hướng dẫn, chưa có Caddy runtime.
   Cloudflare adapter upsert/delete chỉ nhận record có ownership fingerprint; IPC `domain:upsert`
   nhận token scoped theo request, không lưu token, ghi `domain_binding` desired-state. Provider
-  khác dùng cùng interface hoặc Domain Connect URL; shared ingress/Caddy chưa bật vì cần ADR riêng.
+  khác dùng cùng interface hoặc Domain Connect URL; shared ingress đã được chọn thiết kế ở P1a nhưng chưa có runtime.
 - Detector helper xử lý package manager/env/build args ổn định hơn, `try:detect` đã chạy được trên
   fixture. Flask vẫn bị giữ ngoài capability công bố cho đến khi gate dữ liệu ML chính thức đạt.
 - `experiments/` có manifest/hash/integrity gate, bounded load generator (private/allowlist, tối đa
   50 RPS/30 phút, kill-switch) và phân tích CSV với grace sensitivity; không có DDoS hoặc fault
   injection phá hoại.
 
-Kết quả kiểm thử gần nhất: Electron 60 test files/341 tests, ML 19 tests, typecheck, lint và
-production build đều pass. Cảnh báo engine còn lại do máy chạy Node 24 trong khi repository khóa
-Node `>=22 <23`; nên chạy CI/pilot bằng Node 22 để có kết quả tái lập.
+Git manual: live deploy/redeploy đã được xác minh; xem [G2](tasks/tk-s7-g2-live-git-vps-smoke.md), [G2b](tasks/tk-s7-g2b-local-template-vps-smoke.md) và [evidence demo](demo-14-10/evidence.md). Điều này không bao gồm push-to-deploy.
+
+P1a chọn kiến trúc Caddy shared ingress trong tài liệu; chưa sửa runtime, chưa chiếm cổng, cấp certificate hay ghi VPS. Các gate code/live sẽ theo task note P1a trước khi gọi HTTPS là active. Kết quả kiểm thử và cảnh báo ở các task cũ là snapshot theo ngày ghi, không đại diện gate mới nhất.

@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3'
+import { randomBytes } from 'node:crypto'
 
 import type { Vps } from '@shared/ipc'
 
@@ -42,13 +43,15 @@ export class VpsRepository {
 
   list(): Vps[] {
     return this.database
-      .prepare(`SELECT ${PUBLIC_VPS_COLUMNS} FROM vps ORDER BY created_at DESC, id DESC`)
+      .prepare(
+        `SELECT ${PUBLIC_VPS_COLUMNS} FROM vps WHERE archived_at IS NULL ORDER BY created_at DESC, id DESC`
+      )
       .all() as Vps[]
   }
 
   getById(id: number): Vps {
     const vps = this.database
-      .prepare(`SELECT ${PUBLIC_VPS_COLUMNS} FROM vps WHERE id = ?`)
+      .prepare(`SELECT ${PUBLIC_VPS_COLUMNS} FROM vps WHERE id = ? AND archived_at IS NULL`)
       .get(id) as Vps | undefined
 
     if (!vps) {
@@ -60,30 +63,90 @@ export class VpsRepository {
 
   create(input: CreateVpsRecord): Vps {
     try {
-      const result = this.database
-        .prepare(
-          `INSERT INTO vps (
-            name, host, port, host_fingerprint, username, auth_type,
-            crypto_scheme, encrypted_secret, iv, auth_tag,
-            provider, region
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          input.name,
-          input.host,
-          input.port,
-          input.host_fingerprint ?? null,
-          input.username,
-          input.auth_type,
-          input.credential.crypto_scheme,
-          input.credential.encrypted_secret,
-          input.credential.iv,
-          input.credential.auth_tag,
-          normalizeOptionalText(input.provider),
-          normalizeOptionalText(input.region)
-        )
+      return this.database.transaction(() => {
+        const existing = input.host_fingerprint
+          ? this.database
+              .prepare(
+                `SELECT 1 FROM vps WHERE archived_at IS NULL
+                 AND lower(host) = lower(?) AND port = ? AND host_fingerprint = ? LIMIT 1`
+              )
+              .get(input.host, input.port, input.host_fingerprint)
+          : undefined
+        if (existing) {
+          throw new AppError('VALIDATION', 'VPS này đã có trong OpsPilot. Hãy mở hồ sơ hiện có.')
+        }
+        // Chỉ nối lại khi endpoint và fingerprint cùng khớp. Bản ghi cũ thiếu
+        // fingerprint không đủ bằng chứng để liên kết tự động.
+        const archived = input.host_fingerprint
+          ? (this.database
+              .prepare(
+                `SELECT id FROM vps WHERE archived_at IS NOT NULL
+                 AND lower(host) = lower(?) AND port = ? AND host_fingerprint = ? ORDER BY id`
+              )
+              .all(input.host, input.port, input.host_fingerprint) as Array<{ id: number }>)
+          : []
+        if (archived.length > 1) {
+          throw new AppError(
+            'VALIDATION',
+            'Có nhiều hồ sơ cũ cho cùng VPS. Cần đối chiếu thủ công trước khi khôi phục.'
+          )
+        }
+        if (archived.length === 1) {
+          const id = archived[0].id
+          this.database
+            .prepare(
+              `UPDATE vps SET name = ?, host = ?, port = ?, host_fingerprint = ?,
+                 username = ?, auth_type = ?,
+                 crypto_scheme = ?, encrypted_secret = ?, iv = ?, auth_tag = ?,
+                 provider = ?, region = ?, last_status = 'unknown', last_seen_at = NULL,
+                 archived_at = NULL, archived_name = NULL,
+                 ssh_security_revision = ssh_security_revision + 1,
+                 updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+               WHERE id = ? AND archived_at IS NOT NULL`
+            )
+            .run(
+              input.name,
+              input.host,
+              input.port,
+              input.host_fingerprint,
+              input.username,
+              input.auth_type,
+              input.credential.crypto_scheme,
+              input.credential.encrypted_secret,
+              input.credential.iv,
+              input.credential.auth_tag,
+              normalizeOptionalText(input.provider),
+              normalizeOptionalText(input.region),
+              id
+            )
+          return this.getById(id)
+        }
 
-      return this.getById(Number(result.lastInsertRowid))
+        const result = this.database
+          .prepare(
+            `INSERT INTO vps (
+              name, host, port, host_fingerprint, username, auth_type,
+              crypto_scheme, encrypted_secret, iv, auth_tag,
+              provider, region
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .run(
+            input.name,
+            input.host,
+            input.port,
+            input.host_fingerprint ?? null,
+            input.username,
+            input.auth_type,
+            input.credential.crypto_scheme,
+            input.credential.encrypted_secret,
+            input.credential.iv,
+            input.credential.auth_tag,
+            normalizeOptionalText(input.provider),
+            normalizeOptionalText(input.region)
+          )
+
+        return this.getById(Number(result.lastInsertRowid))
+      })()
     } catch (error) {
       throw mapDatabaseError(error)
     }
@@ -117,6 +180,15 @@ export class VpsRepository {
       add('auth_tag', patch.credential.auth_tag)
     }
 
+    const securityProfileChanged =
+      patch.host !== undefined ||
+      patch.port !== undefined ||
+      patch.host_fingerprint !== undefined ||
+      patch.username !== undefined ||
+      patch.auth_type !== undefined ||
+      patch.credential !== undefined
+    if (securityProfileChanged) assignments.push('ssh_security_revision = ssh_security_revision + 1')
+
     if (assignments.length === 0) {
       return this.getById(id)
     }
@@ -134,10 +206,52 @@ export class VpsRepository {
   }
 
   delete(id: number): void {
-    const result = this.database.prepare('DELETE FROM vps WHERE id = ?').run(id)
-    if (result.changes === 0) {
-      throw new AppError('VALIDATION', 'Không tìm thấy VPS. Hãy tải lại danh sách rồi thử lại.')
-    }
+    this.database.transaction(() => {
+      const vps = this.getById(id)
+      if (!vps.host_fingerprint) {
+        throw new AppError(
+          'VALIDATION',
+          'Cần xác minh và lưu fingerprint SSH của VPS trước khi gỡ để có thể nối lại an toàn.'
+        )
+      }
+      const busy = this.database
+        .prepare(
+          `SELECT 1 FROM deployment d JOIN app a ON a.id = d.app_id
+           WHERE a.vps_id = ? AND d.status IN ('building','deploying') LIMIT 1`
+        )
+        .get(id)
+      const migrating = this.database
+        .prepare(
+          `SELECT 1 FROM migration_job WHERE (source_vps_id = ? OR target_vps_id = ?)
+           AND status NOT IN ('completed','failed','rolled_back') LIMIT 1`
+        )
+        .get(id, id)
+      const experimenting = this.database
+        .prepare(
+          `SELECT 1 FROM experiment_run e
+           LEFT JOIN deployment d ON d.id = e.deployment_id
+           LEFT JOIN app a ON a.id = d.app_id
+           WHERE (a.vps_id = ? OR e.vps_id = ?) AND e.status = 'running' LIMIT 1`
+        )
+        .get(id, id)
+      if (busy || migrating || experimenting) {
+        throw new AppError(
+          'VALIDATION',
+          'VPS đang có tác vụ deploy, migrate hoặc thí nghiệm. Hãy hoàn tất tác vụ trước khi gỡ.'
+        )
+      }
+      const archivedName = `__opspilot_archived_${id}_${randomBytes(8).toString('hex')}`
+      this.database
+        .prepare(
+          `UPDATE vps SET name = ?, archived_name = ?,
+             encrypted_secret = X'', iv = NULL, auth_tag = NULL,
+             ssh_security_revision = ssh_security_revision + 1,
+             archived_at = strftime('%Y-%m-%dT%H:%M:%SZ','now'),
+             updated_at = strftime('%Y-%m-%dT%H:%M:%SZ','now')
+           WHERE id = ? AND archived_at IS NULL`
+        )
+        .run(archivedName, vps.name, id)
+    })()
   }
 }
 

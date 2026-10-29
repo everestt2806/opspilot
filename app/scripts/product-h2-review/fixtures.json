@@ -1,0 +1,217 @@
+{
+  "succeeded": {
+    "version": 1,
+    "context": {
+      "version": 1,
+      "execution_nonce": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "claim": {
+        "controller_id": "fixture-controller",
+        "app_id": 1,
+        "job_id": "fixture-job",
+        "attempt_id": "fixture-attempt",
+        "attempt_number": 1,
+        "ownership_generation": 1,
+        "source_generation": 1,
+        "source_config_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "app_lease_id": "fixture-app-lease",
+        "app_fence": 7,
+        "build_slot_lease_id": "fixture-build-lease",
+        "build_slot_fence": 9,
+        "expires_at": "2026-10-27T13:00:00.000Z"
+      },
+      "target": {
+        "vps_id": 1,
+        "host": "fixture.invalid",
+        "port": 22,
+        "host_fingerprint": "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "username": "fixture",
+        "auth_type": "key",
+        "ssh_security_revision": 1
+      },
+      "deployment_id": 2,
+      "source_sha": "2222222222222222222222222222222222222222",
+      "app_name": "fixture",
+      "host_port": 30001,
+      "container_port": 3000,
+      "healthcheck_path": "/health",
+      "candidate_image_tag": "fixture:v2",
+      "candidate_image_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "build_state": "build_succeeded",
+      "previous": {
+        "deployment_id": 1,
+        "image_tag": "fixture:v1",
+        "source_sha": "1111111111111111111111111111111111111111"
+      },
+      "activation_id": 8,
+      "health_timeout_ms": 15000,
+      "exposure_policy": "not_checked"
+    },
+    "outcome": "succeeded",
+    "failed_step": null,
+    "active_runtime": {
+      "deployment_id": 2,
+      "image_tag": "fixture:v2",
+      "image_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "source_sha": "2222222222222222222222222222222222222222",
+      "container_id": "2222222222222222222222222222222222222222222222222222222222222222",
+      "collector_container_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "collector_image_id": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "config_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "health": "healthy",
+      "http_status": 200
+    },
+    "candidate_runtime": {
+      "deployment_id": 2,
+      "image_tag": "fixture:v2",
+      "image_id": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "source_sha": "2222222222222222222222222222222222222222",
+      "container_id": "2222222222222222222222222222222222222222222222222222222222222222",
+      "collector_container_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "collector_image_id": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "config_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "health": "healthy",
+      "http_status": 200
+    },
+    "previous_runtime": {
+      "deployment_id": 1,
+      "image_tag": "fixture:v1",
+      "image_id": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "source_sha": "1111111111111111111111111111111111111111",
+      "container_id": "1111111111111111111111111111111111111111111111111111111111111111",
+      "collector_container_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "collector_image_id": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "config_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "health": "healthy",
+      "http_status": 200
+    },
+    "boundary": { "generation": "fixture-stream", "device": 1, "inode": 1234, "next_offset": 51 },
+    "exposure_status": "not_checked",
+    "remote_quiescent": true,
+    "sealed_at": "2026-10-27T12:00:00.000Z"
+  },
+  "failed": {
+    "version": 1,
+    "context": {
+      "version": 1,
+      "execution_nonce": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "claim": {
+        "controller_id": "fixture-controller",
+        "app_id": 1,
+        "job_id": "fixture-job",
+        "attempt_id": "fixture-attempt",
+        "attempt_number": 1,
+        "ownership_generation": 1,
+        "source_generation": 1,
+        "source_config_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "app_lease_id": "fixture-app-lease",
+        "app_fence": 7,
+        "build_slot_lease_id": "fixture-build-lease",
+        "build_slot_fence": 9,
+        "expires_at": "2026-10-27T13:00:00.000Z"
+      },
+      "target": {
+        "vps_id": 1,
+        "host": "fixture.invalid",
+        "port": 22,
+        "host_fingerprint": "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "username": "fixture",
+        "auth_type": "key",
+        "ssh_security_revision": 1
+      },
+      "deployment_id": 2,
+      "source_sha": "2222222222222222222222222222222222222222",
+      "app_name": "fixture",
+      "host_port": 30001,
+      "container_port": 3000,
+      "healthcheck_path": "/health",
+      "candidate_image_tag": "fixture:v2",
+      "candidate_image_id": null,
+      "build_state": "build_failed_definite",
+      "previous": {
+        "deployment_id": 1,
+        "image_tag": "fixture:v1",
+        "source_sha": "1111111111111111111111111111111111111111"
+      },
+      "activation_id": null,
+      "health_timeout_ms": 15000,
+      "exposure_policy": "not_checked"
+    },
+    "outcome": "failed",
+    "failed_step": "BUILD",
+    "active_runtime": {
+      "deployment_id": 1,
+      "image_tag": "fixture:v1",
+      "image_id": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "source_sha": "1111111111111111111111111111111111111111",
+      "container_id": "1111111111111111111111111111111111111111111111111111111111111111",
+      "collector_container_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "collector_image_id": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "config_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "health": "healthy",
+      "http_status": 200
+    },
+    "candidate_runtime": null,
+    "previous_runtime": {
+      "deployment_id": 1,
+      "image_tag": "fixture:v1",
+      "image_id": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "source_sha": "1111111111111111111111111111111111111111",
+      "container_id": "1111111111111111111111111111111111111111111111111111111111111111",
+      "collector_container_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "collector_image_id": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "config_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "health": "healthy",
+      "http_status": 200
+    },
+    "boundary": null,
+    "exposure_status": "not_checked",
+    "remote_quiescent": true,
+    "sealed_at": "2026-10-27T12:00:00.000Z"
+  },
+  "goldens": [
+    {
+      "id": "canonical-order",
+      "value": { "z": 1, "a": { "y": false, "a": null } },
+      "canonical": "{\"a\":{\"a\":null,\"y\":false},\"z\":1}",
+      "hash": "896f3ad2d090515da97d20d14f891b54e1b16473bed9bcd9e4f8050731d6c662",
+      "signatures": {
+        "receipt": "a148aa645d414eb87498bfa0a5c050ffb746555a07476a715331b1d50aab9171",
+        "commit": "4507d827192cfb23173bd548f2ea35e5fa92adf48039b2995feda9c733098fac",
+        "settlement": "23bfd2e2030dd6707a6ef8080c031b4dda05de06d38de8332f32cc30139e2c3e"
+      }
+    },
+    {
+      "id": "canonical-unicode",
+      "value": { "text": "Tiếng Việt", "line": "a\nb", "slash": "/x" },
+      "canonical": "{\"line\":\"a\\nb\",\"slash\":\"/x\",\"text\":\"Tiếng Việt\"}",
+      "hash": "2d9667e447e3f8acd5980428601a440c38fc3b7e2c10fabbf33d9a1aca906796",
+      "signatures": {
+        "receipt": "8b5d964838a20e7ca379f98b870f8430de4c2a1454ec609e9eaec5a31b6871e6",
+        "commit": "513606de4936afa1ea0fbe07c6221c52edb748fb3dd65416a183d9f3c134fe13",
+        "settlement": "67918dbc79405d8deb7ba5e16c6e42f13eb95c6496ff4d6dbfd6dcdc2083cdb3"
+      }
+    },
+    {
+      "id": "canonical-array",
+      "value": { "list": [2, 1, true, null] },
+      "canonical": "{\"list\":[2,1,true,null]}",
+      "hash": "d914acf3a342d752e14262616d197fc13735fefa6eb4fe18cc6e839bee132c40",
+      "signatures": {
+        "receipt": "1751d51fc3164222dcc22df8b7f5a5026070bdbf5be211a2be3e7e454a37a92c",
+        "commit": "d44fb53f5c14672c98da19afb0093f00f12e89595fce5ef77c7d416bb7561dfa",
+        "settlement": "0186e9844e557babd4ce3cc53784dc386fca0ab9654f7201cbc039c9ea34f4ee"
+      }
+    },
+    {
+      "id": "canonical-zero",
+      "value": { "zero": 0 },
+      "canonical": "{\"zero\":0}",
+      "hash": "33b50e61094f0d59aabcdd47c698ea5d9d120c188b8a49f6451ebc736e28ba45",
+      "signatures": {
+        "receipt": "1e29d00bed4ea3aecde0cf4e06d83f89c2c2f7ecdb15915b58049ba077525608",
+        "commit": "b24e1b5c5ea720949d3fba5ade4ca9a2407bfcc1fab0dafc2a5baeb8509b547f",
+        "settlement": "a600d4952c4ff195e0ab35d84da6bab6ccb424255045b51f589cf6f08e5175b6"
+      }
+    }
+  ]
+}
