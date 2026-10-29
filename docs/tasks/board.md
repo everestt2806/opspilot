@@ -15,7 +15,7 @@
 | H1 | Kim / Leader nhận sau Gemini | CHỜ REVIEW | [PR #33](https://github.com/everestt2806/opspilot/pull/33) · code `3e06f2d` + `2453604` · POST-004..007 đã đóng qua controlled + real pinned SSH/Docker build: success/definite failure/secret/one deployment/V1 preservation/cleanup PASS. H2 activate/finalize chưa triển khai. |
 | L0 | Kim / Leader nhận sau Gemini | CHỜ REVIEW | [PR #33](https://github.com/everestt2806/opspilot/pull/33) · commit fix `f457cf9` · Leader đóng POST-001..003 sau ghi nhận report: 12/12 regression HTTP thật + 10/10 Docker gates PASS; giữ 13 containers/21 images baseline. Không phải Product SSH proof. |
 | H2-D | Kim / reviewer | CHỜ REVIEW | Seam runtime/finalization H2 v1 đã ghi trong contracts và DECISIONS; tiếp tục review cùng checkpoint H2, chưa nhận full runtime DoD. |
-| H2 | Kim / Codex review | CHỜ REVIEW | [Draft PR #34](https://github.com/everestt2806/opspilot/pull/34) → `main` · `feat/product-h2-checkpoint`, code `d8e7e40`; partner merge #33 trước, #34 sau · [Hồ sơ bàn giao](tk-s7-product-h2-runtime.md) · PARTIAL: chưa full CLI/pinned SSH/Docker/collector/crash/installer proof; Ruff Python còn diagnostics. Không bật executor production. |
+| H2 | Kim / Codex review | CHỜ REVIEW | [PR #34](https://github.com/everestt2806/opspilot/pull/34) → `main`, ready for review · `feat/product-h2-checkpoint`, code `d8e7e40`; partner merge #33 trước, #34 sau · [Hồ sơ bàn giao](tk-s7-product-h2-runtime.md) · PARTIAL: chưa full CLI/pinned SSH/Docker/collector/crash/installer proof; Ruff Python còn diagnostics. Không bật executor production. |
 
 ## Sprint sản phẩm 08/10 — hai nguồn deploy và nền auto deploy
 

@@ -2,7 +2,7 @@
 
 - Owner triển khai: Kim; review, kiểm thử và hardening: Codex.
 - Nhánh: `feat/product-h2-checkpoint`; PR đích `main`. Code H2 phát triển từ nền L0/H1 của PR #33; partner merge #33 trước, #34 sau.
-- PR: [Draft #34](https://github.com/everestt2806/opspilot/pull/34); code checkpoint `d8e7e40d7a8af29da44360974c3a0e895c64eb76`.
+- PR: [#34](https://github.com/everestt2806/opspilot/pull/34), mở review bình thường; code checkpoint `d8e7e40d7a8af29da44360974c3a0e895c64eb76`.
 - Trạng thái: **CHỜ REVIEW, PARTIAL**. Đây là checkpoint để review code, chưa nghiệm thu toàn bộ H2 và chưa bật executor production.
 - Phạm vi: Express không DB, cùng guarded SSH session/target lock; không thay UI/IPC hoặc các framework khác.
 
@@ -85,3 +85,4 @@ Các gate xanh riêng lẻ không đủ nhận full Product deployment. Chỉ ch
 - HANDOFF-LOCAL 29/10 — Electron build PASS; 29 files TS/MJS được kiểm bằng ESLint, đã chỉnh một warning format trong chữ ký `applyMigrations` (không đổi logic), scoped Prettier PASS và diff check sạch. Tất cả gate nêu trên là checkpoint/component, không phải full-suite/installer/live deployment PASS. Giữ CHỜ REVIEW/PARTIAL và mở draft PR theo phạm vi này.
 - REVIEW 29/10 — Đã push checkpoint `d8e7e40` và mở [Draft PR #34](https://github.com/everestt2806/opspilot/pull/34), base PR #33. Hậu kiểm Docker health trên chính code SHA này 5/5 PASS, nonce a9fb9519c25d, cleanup true. Partner review contracts/module boundaries và các gate chưa đạt ở hồ sơ này; chưa merge hoặc chuyển task HOÀN THÀNH.
 - UPDATE 29/10 — Theo cách tích hợp của nhóm, cả PR #33 và #34 chuyển đích sang `main`; partner merge lần lượt #33 → #34. Dòng REVIEW phía trên giữ lịch sử lúc mở PR. Trước khi #33 merge, diff #34 có thể chứa cả L0/H1; kiểm lại diff/conflict và các gate trên SHA tích hợp trước merge H2. Chỉ cập nhật metadata/hồ sơ, không đổi code.
+- REVIEW 29/10 — PR #34 chuyển từ draft sang ready for review theo quy trình merge của nhóm; cả #33/#34 đang OPEN, base `main`. Giữ nguyên trạng thái task PARTIAL và các gate còn thiếu trong hồ sơ/PR; ready for review không phải xác nhận full H2 đã đạt.
