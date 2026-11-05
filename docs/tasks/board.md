@@ -1,5 +1,7 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
+> 05/11 — Leader review/sửa PR #33 theo yêu cầu merge của user: [hồ sơ](tk-s7-pr33-review-2026-11-05.md). Focused 272 tests, typecheck, Linux helper, L0 Docker và CLI migration packaging PASS; chờ ghi kết quả merge. H2 ở PR #34 vẫn PARTIAL.
+
 > Quy trình bắt buộc: [`README.md`](README.md). Kế hoạch sau demo và điểm vào cho AI mới:
 > [`../24-ke-hoach-demo-theo-chang.md`](../24-ke-hoach-demo-theo-chang.md).
 >
