@@ -17,7 +17,7 @@ START 05/11 — User yêu cầu merge các PR đang mở rồi kiểm kê phần
 | Sửa lỗi chặn tích hợp, giữ runtime executor mặc định tắt | Ruff sạch; Vitest/Node discovery, fixture poller, CLI migrations, H2 preflight và tmpfs lab đã sửa; CLI vẫn polling-only | PASS |
 | Merge #33 rồi #34, không force hoặc mất dữ liệu local | #33 MERGED tại `267915369cd48d62375cfcd5ef9a3497d9670154`; #34 đang cập nhật nền và gates | IMPLEMENTED |
 | Kiểm chứng nhánh tích hợp/main | Node 22 typecheck/build/full Vitest, Python 365/365, QA 25/25, controlled 23/23 và Docker health 5/5; xác minh tree sau merge | IMPLEMENTED |
-| Kiểm kê phần còn thiếu, task/ưu tiên/checkpoint rõ | Đối chiếu code và evidence, không coi checkpoint PARTIAL là PRODUCT_PASS | OPEN |
+| Kiểm kê phần còn thiếu, task/ưu tiên/checkpoint rõ | [Danh sách N1–N10](tk-s7-next-checkpoints-2026-11-05.md), hai luồng runtime/ML và gate demo/release | PASS |
 
 ## Nhật ký / kết quả
 
@@ -43,7 +43,7 @@ START 05/11 — User yêu cầu merge các PR đang mở rồi kiểm kê phần
 ### Kiểm chứng hiện tại
 
 - Node 22.23.3, pnpm 11.1.0; `pnpm --prefix app typecheck`, scripts typecheck và `electron-vite build` PASS.
-- Full Vitest trên nhánh tích hợp đã chạy lại sau discovery fix; JSON trong `app/.out-scripts/pr34-review-vitest.json` (ignored), kết quả cuối ghi khi chốt merge. JSDOM có warning getComputedStyle/canvas; không phải test GUI native.
+- Full Vitest sau discovery fix: **1397 passed, 2 skipped, 0 failed**, 109 test files; JSON `app/.out-scripts/pr34-review-vitest.json` (ignored). Không tính skipped là PASS. JSDOM có warning getComputedStyle/canvas; không phải test GUI native.
 - `ml-service/.venv/Scripts/python.exe -m pytest experiments collector/tests ml-service/tests -q -p no:cacheprovider` — **365 passed**, 112.66s. Ruff experiments/collector/ml-service PASS.
 - `node --test app/scripts/h2-independent/tool.check.mjs app/scripts/product-docker-lab/runner.test.mjs` — **25/25 PASS** (13 QA + 12 L0); không nhầm self-tests của QA là nghiệm thu runtime.
 - Linux build helper **7/7**, H0 transfer **8/8** PASS qua WSL Python 3.12.
@@ -51,6 +51,32 @@ START 05/11 — User yêu cầu merge các PR đang mở rồi kiểm kê phần
 - `node app/scripts/review-h2-live-health.mjs` — **5/5 PASS**, cleanup true, nonce `9ebbacbf54a9`; exact-CID health dùng Docker thật, chưa pinned SSH/collector/full deploy.
 - L0 happy Docker ở cả checkout #33 và integration: HTTP 200, no leaked resources. Chỉ xóa exact resource của run.
 - Đã khởi động Docker Desktop local, pull hai base image công khai và build image fixture theo README. Những lần đầu thiếu cached image được ghi là setup failures, chạy lại sau chuẩn bị đã pass; không dùng VPS/production DB.
+- Full ESLint: **0 errors / 5999 warnings**, không báo lint warning-free toàn repo; chủ yếu format lịch sử ngoài scope. Ruff Python scoped và experiments/collector/ml-service PASS. Không format lại toàn bộ repo để xóa warning trong task merge này.
+- #33 merge commit `2679153`. Cập nhật vào H2 tại `f7bbe1e`, xử lý đúng hai conflict helper cleanup bằng cách giữ runtime cleanup H2 cùng cleanup build đã sửa ở #33. `git diff --quiet d8a8406 f7bbe1e -- app experiments collector ml-service templates` exit 0: runtime source sau tích hợp **giống hệt** source vừa chạy full gates; chỉ bổ sung hồ sơ/board từ PR nền.
+- CLI artifact dưới Node 22.23.3 compile/prepare PASS với **20 migrations**, không còn `?raw`; không chạm DB thật. Một lần lệnh setup dùng cwd sai đã chạy dưới Node 24, bị loại khỏi bằng chứng; đã chạy lại đúng Node 22 thành công.
+
+### Lệnh gate chính để tái hiện
+
+Từ repo root sau `. ./tools/enter-node22.ps1`:
+
+```powershell
+pnpm --prefix app exec vitest run --maxWorkers=4 --reporter=json --outputFile=.out-scripts/pr34-review-vitest.json
+pnpm --prefix app typecheck
+pnpm --prefix app exec tsc --noEmit -p tsconfig.scripts.json
+pnpm --prefix app exec electron-vite build
+pnpm --prefix app exec eslint . --format json --output-file .out-scripts/pr34-review-eslint.json
+ml-service/.venv/Scripts/python.exe -m pytest experiments collector/tests ml-service/tests -q -p no:cacheprovider
+ml-service/.venv/Scripts/python.exe -m ruff check experiments collector ml-service
+ml-service/.venv/Scripts/python.exe -m ruff check app/src/main/controlPlane app/scripts/product-h2-review/test_runtime.py app/scripts/review-h2-live-health.py app/scripts/test_product_build_helper.py app/scripts/test_guarded_ssh_transfer.py
+wsl python3 app/scripts/test_product_build_helper.py
+wsl python3 app/scripts/test_guarded_ssh_transfer.py
+node --test app/scripts/h2-independent/tool.check.mjs app/scripts/product-docker-lab/runner.test.mjs
+node app/scripts/product-h2-review/run.mjs
+node app/scripts/review-h2-live-health.mjs
+git diff --check
+```
+
+Các Docker script cần cached images như README; `.out-scripts`/scratch chứa raw reports, không commit DB/key. `pnpm test` không tính hai Node suites vào Vitest sau sửa discovery; chúng vẫn được chạy riêng.
 
 ### Gate còn mở của sản phẩm (không chặn merge checkpoint mặc định tắt)
 

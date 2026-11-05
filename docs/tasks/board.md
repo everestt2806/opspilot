@@ -1,6 +1,6 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
-> 05/11 — Leader review/sửa PR #33 theo yêu cầu merge của user: [hồ sơ](tk-s7-pr33-review-2026-11-05.md). Focused 272 tests, typecheck, Linux helper, L0 Docker và CLI migration packaging PASS; chờ ghi kết quả merge. H2 ở PR #34 vẫn PARTIAL.
+> 05/11 — PR #33 đã merge tại `2679153`; #34 đang chốt tích hợp theo [review](tk-s7-pr33-pr34-integration-2026-11-05.md). Full Vitest 1397 PASS / 2 SKIP, Python 365 PASS; typecheck/build, controlled target 23/23 và Docker health 5/5 PASS. H2 vẫn PARTIAL. [Việc tiếp theo N1–N10, owner và checkpoint](tk-s7-next-checkpoints-2026-11-05.md).
 
 > Quy trình bắt buộc: [`README.md`](README.md). Kế hoạch sau demo và điểm vào cho AI mới:
 > [`../24-ke-hoach-demo-theo-chang.md`](../24-ke-hoach-demo-theo-chang.md).

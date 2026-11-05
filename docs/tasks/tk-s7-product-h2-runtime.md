@@ -4,6 +4,8 @@
 - Nhánh: `feat/product-h2-checkpoint`; PR đích `main`. Code H2 phát triển từ nền L0/H1 của PR #33; partner merge #33 trước, #34 sau.
 - PR: [#34](https://github.com/everestt2806/opspilot/pull/34), mở review bình thường; code checkpoint `d8e7e40d7a8af29da44360974c3a0e895c64eb76`.
 - Trạng thái: **CHỜ REVIEW, PARTIAL**. Đây là checkpoint để review code, chưa nghiệm thu toàn bộ H2 và chưa bật executor production.
+
+> Leader review 05/11: [dossier tích hợp](tk-s7-pr33-pr34-integration-2026-11-05.md). Đã sửa Python lint, preflight trước dispatch và quyền tmpfs của controlled lab; 1397 Vitest pass / 2 skip, Python 365 pass, target controlled 23/23, Docker exact-CID health 5/5. Các con số 38 diagnostics bên dưới là lịch sử trước sửa, không còn là blocker hiện hành. Full runtime pinned SSH/Docker/collector/crash matrix và installer vẫn chưa được nghiệm thu; giữ PARTIAL sau merge checkpoint.
 - Phạm vi: Express không DB, cùng guarded SSH session/target lock; không thay UI/IPC hoặc các framework khác.
 
 ## Output đã có
