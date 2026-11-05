@@ -1,5 +1,7 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
+> **06/11 — bước vào R3b:** R3a local `1e4df09`, R2 `950b7ae`, R1 `bc4289a`. [Bootstrap/credentials/cold recovery](tk-s7-release-r3b-controller-bootstrap.md) đã khóa gói việc tiếp theo: protected store → explicit enrollment → per-claim keys/admission/startup recovery → service OS restart; chưa code R3b. Profile hiện có chỉ là VM01/02 chưa fingerprint, không có domain; live gate BLOCKED chờ endpoint/pin độc lập, **local work vẫn OPEN**, chưa SSH auth/VPS write.
+
 > **06/11 — R3a CHỜ REVIEW, R3 tổng PARTIAL:** [Executor/worker integration](tk-s7-release-r3-executor.md) 7/7 real cases PASS, trusted persisted-proof verifier; full app **1414 PASS / 2 SKIP**, types/lint/build + fresh Linux CLI/helper bundle PASS. R2 local `950b7ae`, R1 `bc4289a`, R0 `ad37403`. Implementation R3a: `git log -1 -- app/src/main/controlPlane/productRuntimeExecutor.ts`. Còn R3b credential/enrollment/resource admission/cold recovery và R3c service/Git push/UI authority; default vẫn polling-only, chưa production rollout.
 
 > **06/11 — R2 CHỜ REVIEW:** R1 local `bc4289a`; [crash/settlement recovery lab](tk-s7-release-r2-recovery-lab.md) **9/9 real cases PASS**, cold SQLite + exact CID/image/StartedAt app và collector, cleanup=true. Implementation: `git log -1 -- app/scripts/product-runtime-lab/recovery.mjs`. Tiếp R3 adapter/bootstrap/service; chưa bật production executor, không nhận whole-product PASS.
