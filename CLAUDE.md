@@ -19,7 +19,7 @@ hay kiến trúc phức tạp. App chỉ cần chạy đúng và ổn định đ
 - Nhóm 2 người. Từ 15/08/2026: **Người A = Core/Algorithms, Người B = UI/Delivery**.
   Phân công hiện hành và ngoại lệ theo tuần nằm ở `docs/20-phan-cong-a-core-b-ui.md`; task cụ thể
   luôn lấy từ `docs/tasks/board.md`, không suy ra từ mô tả vai trò tổng quát.
-- Deadline nộp: **20/11/2026**. Lịch chi tiết: `docs/04-timeline.md`.
+- Hạn kết thúc hiện hành do user chốt 05/11: **04/12/2026** (thay mốc 20/11 cũ). Lịch: `docs/04-timeline.md`; audit/task release: `docs/tasks/tk-s7-release-2026-12-04.md`.
 
 ---
 

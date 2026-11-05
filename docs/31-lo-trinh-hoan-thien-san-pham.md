@@ -1,5 +1,7 @@
 # Hoàn thiện OpsPilot thành nền tảng deploy trên VPS riêng
 
+> **Điều phối hiện hành 05/11:** #33/#34 đã merge; H2 checkpoint vẫn PARTIAL. User đổi hạn kết thúc sang **04/12/2026**. [Audit toàn sản phẩm, scope và checkpoint release](tasks/tk-s7-release-2026-12-04.md) thay lịch 20/11 bên dưới; định nghĩa PRODUCT_PASS và các cam kết local/Git/template/migrate/ML vẫn giữ.
+
 > Rà soát ngày 14/10/2026 tại checkpoint TK-S7 P1b. Đây là chuẩn nghiệm thu sản phẩm sau demo, không thay thế [đề tài gốc](00-de-tai-goc.md) hoặc [lịch demo 14/10](29-ke-hoach-demo-14-10.md). Trạng thái là đánh giá mã và hồ sơ hiện có; test cục bộ không được tính là live gate trên VPS mới.
 > Chuẩn tham chiếu: [Vercel Git](https://vercel.com/docs/git), [Dokploy GitHub](https://docs.dokploy.com/docs/core/github), [Dokploy Domains](https://docs.dokploy.com/docs/core/domains), [Coolify Automatic Deployments](https://coolify.io/docs/applications/deployments/automatic-deployments), [Coolify Domains](https://coolify.io/docs/core/networking/domains). Đối chiếu cơ chế OpenShip/Coolify/Dokku/CapRover và quyết định áp dụng nằm ở [tài liệu 32](32-tham-khao-openship-va-paas-tu-host.md).
 

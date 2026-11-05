@@ -1,5 +1,7 @@
 # Việc tiếp theo sau PR #33/#34 — 05/11/2026
 
+> **Được thay thế về lịch/điều phối:** User đổi hạn kết thúc sang **04/12/2026**; dùng [audit release R0–R14](tk-s7-release-2026-12-04.md). N1–N10 và lịch 20/11 dưới đây lưu lịch sử; yêu cầu chức năng và gate chưa đạt vẫn còn.
+
 Nguồn đối chiếu: code checkpoint H2, [review tích hợp](tk-s7-pr33-pr34-integration-2026-11-05.md), [roadmap sản phẩm](../31-lo-trinh-hoan-thien-san-pham.md), board và evidence task cũ. Không đánh đồng merge code với nghiệm thu sản phẩm production. Deadline nộp theo repo: **20/11/2026**.
 
 ## Hiện đã có gì

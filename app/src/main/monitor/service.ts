@@ -184,6 +184,10 @@ export class MonitorService {
         const activation = new ActivationRepository(this.db)
         const prepared = activation.preparedEpisode(appId)
         if (!prepared) return
+        const desktopOwner = this.preparedDesktopOwner(appId, prepared.id, prepared.deploymentId)
+        if (desktopOwner === null) return
+        const stillDesktopOwned = (): boolean =>
+          this.preparedDesktopOwner(appId, prepared.id, prepared.deploymentId) === desktopOwner
         const app = this.db.prepare('SELECT vps_id,name FROM app WHERE id=?').get(appId) as
           { vps_id: number; name: string } | undefined
         if (!app) return
@@ -210,51 +214,61 @@ export class MonitorService {
             `docker inspect -f '{{.Config.Image}}|{{.State.Status}}' ${app.name}-app`,
             { timeoutMs: 15_000, retryOnReconnect: true }
           )
+          if (!stillDesktopOwned()) return
           const collector = await ssh.exec(
             app.vps_id,
             `docker inspect -f '{{.State.Status}}' ${app.name}-collector 2>/dev/null || printf 'missing'`,
             { timeoutMs: 15_000, retryOnReconnect: true }
           )
+          if (!stillDesktopOwned()) return
           const snapshot = await ssh.metricSnapshot(app.vps_id, metricsPath)
-          const [image, state] = runtime.stdout.trim().split('|')
-          const ownerVerified =
-            runtime.code === 0 &&
-            state === 'running' &&
-            collector.code === 0 &&
-            collector.stdout.trim() === 'running' &&
-            snapshot?.generation === prepared.generation &&
-            snapshot.size + 1 >= prepared.startOffset
-          if (ownerVerified && image === preparedImage) {
-            const active = activation.active(appId)
-            activation.activateAndPoint(prepared.id, prepared.deploymentId, active?.id ?? null)
-            this.repository.logAction(
-              'deploy',
-              'success',
-              `Reconciled prepared activation ${prepared.id} after process restart`,
-              appId,
-              prepared.deploymentId
-            )
-            return
-          }
-          if (ownerVerified && activeImage && image === activeImage) {
-            activation.abortIfCurrent(prepared.id, prepared.deploymentId)
-            this.repository.logAction(
-              'deploy',
-              'success',
-              `Aborted prepared activation ${prepared.id}; verified previous owner`,
-              appId,
-              prepared.deploymentId
-            )
-          } else {
-            this.repository.logAction(
-              'ssh_error',
-              'failed',
-              `Prepared activation ${prepared.id} requires reconciliation; runtime owner or source boundary unknown`,
-              appId,
-              prepared.deploymentId
-            )
-          }
+          // Acquire the SQLite write lock before the final ownership read. Another
+          // connection must not transfer authority between this read and activation.
+          this.db
+            .transaction(() => {
+              if (!stillDesktopOwned()) return
+              const [image, state] = runtime.stdout.trim().split('|')
+              const ownerVerified =
+                runtime.code === 0 &&
+                state === 'running' &&
+                collector.code === 0 &&
+                collector.stdout.trim() === 'running' &&
+                snapshot?.generation === prepared.generation &&
+                snapshot.size + 1 >= prepared.startOffset
+              if (ownerVerified && image === preparedImage) {
+                const active = activation.active(appId)
+                activation.activateAndPoint(prepared.id, prepared.deploymentId, active?.id ?? null)
+                this.repository.logAction(
+                  'deploy',
+                  'success',
+                  `Reconciled prepared activation ${prepared.id} after process restart`,
+                  appId,
+                  prepared.deploymentId
+                )
+                return
+              }
+              if (ownerVerified && activeImage && image === activeImage) {
+                activation.abortIfCurrent(prepared.id, prepared.deploymentId)
+                this.repository.logAction(
+                  'deploy',
+                  'success',
+                  `Aborted prepared activation ${prepared.id}; verified previous owner`,
+                  appId,
+                  prepared.deploymentId
+                )
+              } else {
+                this.repository.logAction(
+                  'ssh_error',
+                  'failed',
+                  `Prepared activation ${prepared.id} requires reconciliation; runtime owner or source boundary unknown`,
+                  appId,
+                  prepared.deploymentId
+                )
+              }
+            })
+            .immediate()
         } catch (error) {
+          if (!stillDesktopOwned()) return
           this.repository.logAction(
             'ssh_error',
             'failed',
@@ -265,6 +279,35 @@ export class MonitorService {
         }
       })
     }
+  }
+
+  /** Product C0 is finalized only by its fenced runtime receipt, never Desktop recovery. */
+  private preparedDesktopOwner(
+    appId: number,
+    activationId: number,
+    deploymentId: number
+  ): number | null {
+    const hasTable = (name: string): boolean =>
+      Boolean(
+        this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name)
+      )
+    // Older standalone monitor fixtures do not include Product migrations.
+    const control = hasTable('product_app_control')
+      ? (this.db
+          .prepare('SELECT mode,ownership_generation FROM product_app_control WHERE app_id=?')
+          .get(appId) as { mode: string; ownership_generation: number } | undefined)
+      : undefined
+    if (control?.mode === 'product') return null
+    if (
+      hasTable('product_runtime_execution') &&
+      this.db
+        .prepare(
+          'SELECT 1 FROM product_runtime_execution WHERE activation_id=? OR deployment_id=? LIMIT 1'
+        )
+        .get(activationId, deploymentId)
+    )
+      return null
+    return control?.ownership_generation ?? 0
   }
 
   private assertNotImportedApp(appId: number): void {

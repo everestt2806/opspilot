@@ -1,4 +1,8 @@
-# TIMELINE REBASELINE — 10/08/2026 → 20/11/2026
+# TIMELINE — hạn kết thúc hiện hành 04/12/2026
+
+> **User cập nhật 05/11/2026:** hạn kết thúc là **04/12/2026**. Kế hoạch triển khai/DoD/owner hiện hành: [release 04/12](tasks/tk-s7-release-2026-12-04.md). Lịch W1–W15/20/11 dưới đây giữ làm lịch sử; không dùng mốc cũ để giao deadline hoặc tự cắt tính năng.
+
+## Lịch gốc 10/08 → 20/11 (lịch sử)
 
 **Bắt đầu: Thứ Hai 10/08/2026. Hạn nộp: Thứ Sáu 20/11/2026.** Tổng thời gian còn lại:
 **14 tuần 5 ngày**. Kế hoạch này thay lịch khởi động cũ và là nguồn sự thật cho mọi nhãn W1–W15.
