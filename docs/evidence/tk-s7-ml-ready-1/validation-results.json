@@ -1,0 +1,15 @@
+{
+  "result": "PASS",
+  "checks": {
+    "source_hashes_recorded": true,
+    "180_rows_each": true,
+    "seq_9118_through_9297": true,
+    "10_second_cadence": true,
+    "five_metric_parity_and_non_null": true,
+    "probe_source": true,
+    "150_train_30_inference": true,
+    "holdout_not_used_to_fit_or_scale": true,
+    "all_four_method_scores_present": true,
+    "isolated_state_and_existing_state_unchanged": true
+  }
+}

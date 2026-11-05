@@ -35,6 +35,7 @@ import { ActivationRepository, type ActivationReason } from '../monitor/activati
 import { DoctorRepository } from '../doctor/repository'
 import { diagnose, redactEvidence, redactText, type DoctorEvidence } from '../doctor/engine'
 import { type ExposureEvidence, type ExposureManager, type ExposureStatus } from './exposure'
+import { writeAppManifest } from './appManifest'
 import type { PreparedGitLease } from './preparedGitSources'
 
 const WORK_ROOT = '/opt/opspilot'
@@ -779,6 +780,13 @@ export class DeployPipeline {
       if (healthOk) {
         await this.publishExposure(ctx)
         await this.recordSuccess(ctx)
+        try {
+          await writeAppManifest(this.ssh, ctx.app.vps_id, ctx.app)
+        } catch {
+          logger.warn('deploy', 'App khỏe mạnh nhưng chưa ghi được manifest phục hồi.', {
+            deployment_id: ctx.deployment.id
+          })
+        }
         finalStatus = 'running'
       } else {
         finalStatus = await this.handleHealthcheckFail(ctx)

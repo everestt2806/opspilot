@@ -1,0 +1,106 @@
+{
+  "fixture": true,
+  "liveVpsOrHttpsEvidence": false,
+  "screenshots": [
+    "1280x800-light.png",
+    "1280x800-dark.png",
+    "1366x768-light.png",
+    "1366x768-dark.png"
+  ],
+  "overflow": [
+    {
+      "file": "1280x800-light.png",
+      "viewport": [
+        1280,
+        800
+      ],
+      "document": [
+        1280,
+        1280
+      ],
+      "body": [
+        1280,
+        1280
+      ],
+      "cards": [
+        [
+          928,
+          928
+        ]
+      ],
+      "horizontalOverflow": false,
+      "theme": "light"
+    },
+    {
+      "file": "1280x800-dark.png",
+      "viewport": [
+        1280,
+        800
+      ],
+      "document": [
+        1280,
+        1280
+      ],
+      "body": [
+        1280,
+        1280
+      ],
+      "cards": [
+        [
+          928,
+          928
+        ]
+      ],
+      "horizontalOverflow": false,
+      "theme": "dark"
+    },
+    {
+      "file": "1366x768-light.png",
+      "viewport": [
+        1366,
+        768
+      ],
+      "document": [
+        1366,
+        1366
+      ],
+      "body": [
+        1366,
+        1366
+      ],
+      "cards": [
+        [
+          1014,
+          1014
+        ]
+      ],
+      "horizontalOverflow": false,
+      "theme": "light"
+    },
+    {
+      "file": "1366x768-dark.png",
+      "viewport": [
+        1366,
+        768
+      ],
+      "document": [
+        1366,
+        1366
+      ],
+      "body": [
+        1366,
+        1366
+      ],
+      "cards": [
+        [
+          1014,
+          1014
+        ]
+      ],
+      "horizontalOverflow": false,
+      "theme": "dark"
+    }
+  ],
+  "errors": [],
+  "exitCode": 0
+}

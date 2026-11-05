@@ -21,6 +21,99 @@ export type DeployStep =
 export type MigrateStep =
   | 'PREPARE' | 'FREEZE' | 'BACKUP' | 'TRANSFER' | 'RESTORE' | 'VERIFY' | 'AWAITING_CONFIRM';
 
+export type DomainDnsStatus = 'pending' | 'propagated' | 'conflict' | 'failed' | 'disabled';
+export type DomainRouteStatus =
+  | 'not_configured' | 'pending' | 'active' | 'degraded' | 'conflict' | 'failed' | 'disabled';
+export type DomainCertificateStatus = 'not_requested' | 'pending' | 'valid' | 'failed' | 'expired';
+export type DomainHttpsProbeStatus = 'not_run' | 'passed' | 'failed';
+export type DomainReasonCode =
+  | 'DNS_NOT_PROPAGATED' | 'DNS_TARGET_MISMATCH' | 'DNS_IPV6_UNREACHABLE'
+  | 'INGRESS_PORT_CONFLICT' | 'INGRESS_OWNER_UNKNOWN' | 'FIREWALL_80_BLOCKED'
+  | 'FIREWALL_443_BLOCKED' | 'INGRESS_INSTALL_FAILED' | 'INGRESS_CONFIG_INVALID'
+  | 'INGRESS_RELOAD_FAILED' | 'INGRESS_ROLLBACK_FAILED' | 'CERTIFICATE_PENDING'
+  | 'CERTIFICATE_ISSUE_FAILED' | 'HTTPS_PROBE_FAILED' | 'UPSTREAM_UNHEALTHY'
+  | 'DOMAIN_OWNERSHIP_CONFLICT' | 'SSH_UNAVAILABLE' | 'CANCELLED';
+
+export type DomainDnsReadinessStatus =
+  | 'propagated' | 'nxdomain' | 'no_records' | 'resolver_error' | 'target_mismatch'
+  | 'mixed_target' | 'cname_loop' | 'cname_depth_exceeded' | 'ipv6_unreachable'
+  | 'resolver_disagreement' | 'resolver_timeout' | 'proxy_hint_unverified' | 'expected_target_unresolved';
+export type DomainDnsReadinessReason =
+  | 'DNS_NXDOMAIN' | 'DNS_NO_RECORDS' | 'DNS_RESOLVER_ERROR' | 'DNS_TARGET_MISMATCH'
+  | 'DNS_MIXED_TARGETS' | 'DNS_CNAME_LOOP' | 'DNS_CNAME_DEPTH_EXCEEDED'
+  | 'DNS_IPV6_UNREACHABLE' | 'DNS_RESOLVERS_DISAGREE' | 'DNS_RESOLVER_TIMEOUT'
+  | 'DNS_PROXY_HINT_UNVERIFIED' | 'DNS_EXPECTED_TARGET_UNRESOLVED';
+export type DomainAcmeAttemptStatus = 'blocked' | 'unknown' | 'ready_to_try';
+export interface SharedIngressReadinessResult {
+  hostname: string;
+  dns_status: DomainDnsReadinessStatus;
+  dns_reason_code: DomainDnsReadinessReason | null;
+  resolvers: readonly ['1.1.1.1', '8.8.8.8'];
+  expected_ipv4: string[];
+  expected_ipv6: string[];
+  observed_a: string[];
+  observed_aaaa: string[];
+  cname_chain: string[];
+  ipv6_status: 'not_advertised' | 'target_matches' | 'unreachable' | 'unknown';
+  /** User hint only; never evidence for P1e activation or provider state. */
+  cloudflare_proxy_hint: 'enabled' | 'disabled' | 'unknown';
+  ingress: {
+    ports_status: 'free' | 'occupied' | 'unknown';
+    install_assessment: 'safe' | 'blocked' | 'unknown';
+    local_assessment: 'clear' | 'blocked' | 'unknown';
+    reason_code: DomainReasonCode | null;
+    ufw: {
+      state: 'active' | 'inactive' | 'unknown';
+      inbound_80: 'allowed' | 'blocked' | 'not_applicable' | 'unknown';
+      inbound_443: 'allowed' | 'blocked' | 'not_applicable' | 'unknown';
+      inbound_80_ipv4: 'allowed' | 'blocked' | 'not_applicable' | 'unknown';
+      inbound_80_ipv6: 'allowed' | 'blocked' | 'not_applicable' | 'unknown';
+      inbound_443_ipv4: 'allowed' | 'blocked' | 'not_applicable' | 'unknown';
+      inbound_443_ipv6: 'allowed' | 'blocked' | 'not_applicable' | 'unknown';
+    };
+  };
+  cloud_firewall_status: 'unknown';
+  acme_http_01: DomainAcmeAttemptStatus;
+  acme_tls_alpn: DomainAcmeAttemptStatus;
+  certificate_status: 'not_requested';
+  route_status: 'not_configured';
+  https_probe_status: 'not_run';
+  overall_status: 'unknown';
+  instructions: string[];
+}
+
+/** Persisted desired/observed ingress state. DNS ownership and route ownership are separate. */
+export interface DomainIngressState {
+  id: number;
+  app_id: number;
+  hostname: string;
+  mode: 'direct_port' | 'shared_ingress' | 'named_tunnel';
+  dns_status: DomainDnsStatus;
+  route_status: DomainRouteStatus;
+  certificate_status: DomainCertificateStatus;
+  https_probe_status: DomainHttpsProbeStatus;
+  desired_generation: number;
+  observed_generation: number;
+  ownership_key: string;
+  route_ownership_key: string;
+  ingress_reason_code: DomainReasonCode | null;
+  last_check_at: string | null;
+  route_checked_at: string | null;
+  certificate_checked_at: string | null;
+  certificate_hostname: string | null;
+  https_probe_checked_at: string | null;
+  https_probe_hostname: string | null;
+  route_config_generation: string | null;
+  route_inventory_revision: string | null;
+  route_environment: 'production' | 'acme_staging' | null;
+  https_probe_peer_ip: string | null;
+  https_probe_peer_ips_json: string | null;
+  https_probe_http_status: number | null;
+  https_probe_generation: string | null;
+  https_probe_inventory_revision: string | null;
+  https_probe_environment: 'production' | 'acme_staging' | null;
+}
+
 export interface Vps {
   id: number;
   name: string;
@@ -62,6 +155,42 @@ export interface VpsOperationalDiagnostics {
   oom_kill_count: number | null;
 }
 
+/** Container phát hiện từ Docker trên VPS; chưa phải hồ sơ app trong SQLite. */
+export interface DiscoveredVpsApp {
+  name: string;
+  image_tag: string;
+  version: number;
+  host_port: number | null;
+  container_port: number | null;
+  state: string;
+  recovery_status: 'verified' | 'legacy' | 'invalid' | 'mismatch' | 'ambiguous' | 'unverifiable' | 'stopped';
+  recovery_reason: 'manifest_missing' | 'manifest_invalid' | 'manifest_unreadable' | 'runtime_mismatch' | 'duplicate_runtime' | 'container_not_running' | 'runtime_port_unverifiable' | null;
+  framework: FrameworkId | null;
+  source_type: 'local' | 'git' | null;
+  git_remote: string | null;
+  git_ref: string | null;
+  git_root: string | null;
+  healthcheck: string | null;
+  needs_db: boolean | null;
+}
+
+export type VpsAppImportSnapshot = Pick<
+  DiscoveredVpsApp,
+  | 'recovery_status'
+  | 'image_tag'
+  | 'version'
+  | 'host_port'
+  | 'container_port'
+  | 'state'
+  | 'framework'
+  | 'source_type'
+  | 'git_remote'
+  | 'git_ref'
+  | 'git_root'
+  | 'healthcheck'
+  | 'needs_db'
+>;
+
 export interface App {
   id: number;
   vps_id: number;
@@ -75,8 +204,10 @@ export interface App {
   host_port: number;
   container_port: number;
   healthcheck_path: string;
+  healthcheck_response_type?: 'status_2xx' | 'json';
   needs_db: 0 | 1;
   current_deployment_id: number | null;
+  imported_from_vps: 0 | 1;
   /** Suy ra: `http://${vps.host}:${host_port}` — main tính sẵn để UI không phải ghép */
   url: string;
 }
@@ -88,12 +219,13 @@ export interface Deployment {
   image_tag: string;
   git_repo_url?: string | null;
   git_commit_sha?: string | null;
+  origin: 'opspilot' | 'vps_import';
   status: 'building' | 'deploying' | 'running' | 'failed' | 'rolled_back' | 'stopped';
   failed_step: DeployStep | null;
   build_duration_ms: number | null;
   total_duration_ms: number | null;
   is_rollback_of: number | null;
-  started_at: string;
+  started_at: string | null;
   finished_at: string | null;
   exposure_status: 'reachable' | 'degraded' | 'tunnel_only' | 'not_checked';
   exposure_evidence_json: string | null;
@@ -179,11 +311,63 @@ export interface IpcError {
 
 export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: IpcError };
 
+export type SharedIngressAction = 'install' | 'reconcile' | 'https_check';
+export type SharedIngressOperation = 'read' | 'install' | 'reconcile' | 'https_check';
+export type SharedIngressStatus =
+  | 'ready' | 'installed' | 'reconciled_pending' | 'active' | 'pending'
+  | 'degraded' | 'blocked' | 'uncertain';
+export type SharedIngressStep = 'read' | 'preflight' | 'prepare' | 'install' | 'reconcile' | 'https_probe';
+export type SharedIngressServiceReasonCode =
+  | 'INVALID_IDENTIFIER' | 'VPS_NOT_AVAILABLE' | 'BINDING_NOT_FOUND'
+  | 'APP_OR_DEPLOYMENT_INVALID' | 'INVENTORY_NOT_READY' | 'BINDING_DISABLED'
+  | 'SSH_IDENTITY_UNVERIFIED' | 'IDENTITY_CHANGED' | 'INVENTORY_CHANGED'
+  | 'HOST_CONFLICT' | 'INSTALL_PLAN_BLOCKED' | 'INSTALL_UNCERTAIN'
+  | 'RECONCILE_BLOCKED' | 'RECONCILE_UNCERTAIN' | 'STAGING_SCOPE_BLOCKED'
+  | 'HTTPS_PENDING' | 'HTTPS_DNS_NOT_PROPAGATED' | 'HTTPS_RUNTIME_NOT_VERIFIED'
+  | 'HTTPS_REMOTE_GENERATION_CHANGED' | 'HTTPS_STAGING_NOT_ELIGIBLE'
+  | 'HTTPS_PROBE_FAILED' | 'HTTPS_ACTIVATION_WRITE_FAILED' | 'STALE_RESULT'
+  | 'INTERNAL_ERROR';
+export type SharedIngressReasonCode = SharedIngressServiceReasonCode | DomainReasonCode;
+
+export interface SharedIngressBindingDto {
+  vps_id: number;
+  binding_id: number;
+  app_id: number;
+  hostname: string;
+  operation: SharedIngressOperation;
+  status: SharedIngressStatus;
+  failed_step: SharedIngressStep | null;
+  reason: { code: SharedIngressReasonCode; message: string } | null;
+  retryable: boolean;
+  http_url: string | null;
+  dns_status: DomainDnsStatus;
+  route_status: DomainRouteStatus;
+  certificate_status: DomainCertificateStatus;
+  https_probe_status: DomainHttpsProbeStatus;
+  route_count?: number;
+}
+
+export interface DomainIngressListInput {
+  vps_id: number;
+  app_id: number;
+}
+export interface DomainIngressStatusInput {
+  vps_id: number;
+  binding_id: number;
+}
+export interface DomainIngressActionInput extends DomainIngressStatusInput {
+  action: SharedIngressAction;
+}
+
 export interface IpcInvokeMap {
   // ── VPS (UC-01) ────────────────────────────────────────────────────────────
   'vps:list':           () => IpcResult<Vps[]>;
   'vps:get-resources':  (vpsId: number) => IpcResult<VpsResources>;
   'vps:get-operational-diagnostics': (vpsId: number) => IpcResult<VpsOperationalDiagnostics>;
+  'vps:discover-apps': (vpsId: number) => IpcResult<DiscoveredVpsApp[]>;
+  'vps:write-recovery-manifest': (vpsId: number, name: string) => IpcResult<{ created: boolean }>;
+  'vps:import-app': (vpsId: number, name: string, snapshot: VpsAppImportSnapshot) =>
+    IpcResult<{ app_id: number; deployment_id: number }>;
   'vps:test-connection': (input: VpsInput) => IpcResult<VpsConnectionCheck>;
   'vps:create':         (input: VpsInput) => IpcResult<Vps>;
   'vps:update':         (id: number, input: Partial<VpsInput>) => IpcResult<Vps>;
@@ -234,6 +418,14 @@ export interface IpcInvokeMap {
   }>;
   'domain:check': (hostname: string, target: string, record_type?: 'A' | 'AAAA' | 'CNAME') =>
     IpcResult<{ status: 'propagated' | 'wrong_target' | 'nxdomain' | 'error'; observed: string[] }>;
+  'domain:ingress-readiness': (input: {
+    vps_id: number;
+    hostname: string;
+    cloudflare_proxy_hint?: 'enabled' | 'disabled' | 'unknown';
+  }) => IpcResult<SharedIngressReadinessResult>;
+  'domain:ingress-list': (input: DomainIngressListInput) => IpcResult<SharedIngressBindingDto[]>;
+  'domain:ingress-status': (input: DomainIngressStatusInput) => IpcResult<SharedIngressBindingDto>;
+  'domain:ingress-action': (input: DomainIngressActionInput) => IpcResult<SharedIngressBindingDto>;
   'domain:upsert': (input: {
     deployment_id: number;
     hostname: string;
@@ -247,7 +439,7 @@ export interface IpcInvokeMap {
     record_name: string;
     target: string;
     public_url: string;
-    status: 'pending' | 'propagated' | 'active' | 'conflict' | 'failed' | 'disabled';
+    status: DomainDnsStatus;
     message: string;
   }>;
 
@@ -445,6 +637,7 @@ export interface PrecheckResult {
 export type DetectionResultDto =
   | { matched: true; framework: FrameworkId; display_name: string;
       build_command: string; container_port: number; healthcheck_path: string;
+      healthcheck_response_type?: 'status_2xx' | 'json';
       dockerfile_template: string; required_env: string[]; optional_env: string[];
       needs_db: boolean; manual_steps: string[]; detected_version?: string;
       file_tree_preview: string[] }

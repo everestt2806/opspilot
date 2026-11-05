@@ -31,6 +31,7 @@ const app: App = {
   healthcheck_path: '/',
   needs_db: 0,
   current_deployment_id: 1,
+  imported_from_vps: 0,
   url: 'http://203.0.113.10:30000'
 }
 

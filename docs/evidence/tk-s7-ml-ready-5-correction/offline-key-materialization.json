@@ -1,0 +1,22 @@
+{
+  "mode": "offline_profile_clone_key_inspection",
+  "target": {
+    "vps_id": 1,
+    "profile_clone": "%TEMP%\\opspilot-live0-20261020"
+  },
+  "database_opened_readonly": true,
+  "credential_decrypted_with_existing_safe_storage": true,
+  "stdin_handoff_roundtrip_matches": true,
+  "credential_container": "openssh_private_key",
+  "utf8_bom_in_handoff": true,
+  "source_line_endings": "LF",
+  "literal_backslash_newlines": false,
+  "terminal_newline": true,
+  "materialized_file_matches_handoff_after_leading_bom_removal": true,
+  "materialized_line_endings_preserved": true,
+  "materialized_file_contains_bom": false,
+  "temporary_file_acl": "restricted_current_user_and_SYSTEM; Windows ACL regression passed",
+  "windows_ssh_keygen_parse": "PASS_NONINTERACTIVE",
+  "public_key_or_private_key_hash_recorded": false,
+  "credential_or_raw_parser_output_recorded": false
+}

@@ -1,0 +1,13 @@
+{
+  "name": "opspilot-docker-lab-fixture",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimal Express fixture for OpsPilot Docker Lab readiness (L0)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

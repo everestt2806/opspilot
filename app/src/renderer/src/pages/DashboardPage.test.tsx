@@ -37,6 +37,7 @@ const APP_A: App = {
   healthcheck_path: '/health',
   needs_db: 1,
   current_deployment_id: 7,
+  imported_from_vps: 0,
   url: 'http://203.0.113.55:30000'
 }
 

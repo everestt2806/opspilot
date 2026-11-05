@@ -1,0 +1,89 @@
+{
+  "generated_at_utc": "2026-10-20T15:37:39Z",
+  "endpoint": "160.191.243.89:22",
+  "profile_alias": "opspilot-live0-20261020 clone (SQLite read-only)",
+  "saved_pin": "configured; value omitted",
+  "observations": [
+    {
+      "phase": "tcp_connect_and_ssh_banner",
+      "status": "PASS",
+      "duration_ms": 122,
+      "tcp_connected": true,
+      "ssh_protocol_banner": true,
+      "banner_bytes": 40
+    },
+    {
+      "phase": "openssh_keyscan_default_types",
+      "options": {
+        "per_connection_timeout_s": 5,
+        "subprocess_timeout_s": 12
+      },
+      "status": "NO_KEY_OUTPUT",
+      "duration_ms": 5422,
+      "exit_code": 1,
+      "stdout_bytes": 0,
+      "observed_key_types": [],
+      "pin_comparison": "NOT_POSSIBLE_WITHOUT_KEY_BYTES"
+    },
+    {
+      "phase": "openssh_keyscan_ed25519",
+      "per_connection_timeout_s": 5,
+      "subprocess_timeout_s": 6.5,
+      "status": "NO_KEY_OUTPUT",
+      "duration_ms": 5125,
+      "exit_code": 1,
+      "stdout_bytes": 0
+    },
+    {
+      "phase": "openssh_keyscan_ecdsa",
+      "per_connection_timeout_s": 5,
+      "subprocess_timeout_s": 6.5,
+      "status": "NO_KEY_OUTPUT",
+      "duration_ms": 5172,
+      "exit_code": 1,
+      "stdout_bytes": 0
+    },
+    {
+      "phase": "openssh_keyscan_rsa",
+      "per_connection_timeout_s": 5,
+      "subprocess_timeout_s": 6.5,
+      "status": "NO_KEY_OUTPUT",
+      "duration_ms": 5109,
+      "exit_code": 1,
+      "stdout_bytes": 0
+    },
+    {
+      "phase": "ssh_manager_saved_pin_and_auth",
+      "status": "PASS_PINNED_SSH_AUTHENTICATED",
+      "duration_ms": 2544,
+      "verified_public_key_type": "ssh-rsa",
+      "fingerprint_value": "omitted",
+      "host_verification_precedes_authentication": true
+    },
+    {
+      "phase": "ssh_manager_readonly_clock",
+      "status": "PASS",
+      "duration_ms": 1081,
+      "clock_offset_ms": 605
+    },
+    {
+      "phase": "ssh_manager_readonly_resource_inventory",
+      "status": "PASS",
+      "duration_ms": 677,
+      "output_bytes": 1900,
+      "raw_output": "not stored"
+    },
+    {
+      "phase": "legacy_python_openssh_auth",
+      "status": "SSH_AUTHENTICATION_FAILED",
+      "raw_stderr": "not stored",
+      "resolution": "final launcher uses the successful main-process SshManager snapshot instead"
+    }
+  ],
+  "interpretation": [
+    "The previous outer subprocess timeout of 5s expired before Windows ssh-keyscan returned at 5.42s; this produced a misleading HOST_KEY_SCAN_TIMEOUT.",
+    "With an outer limit of 12s, ssh-keyscan finished at its own -T 5 limit but returned no key. Separate bounded scans for ed25519, ecdsa, and rsa also returned no key.",
+    "The saved fingerprint is not wrong: the application SshManager verified the received ssh-rsa host-key blob against the saved SHA-256 pin before authenticating successfully.",
+    "The follow-on authentication failure belonged to the separate Python/OpenSSH client path. The updated launcher passes a bounded read-only snapshot from that pinned SshManager connection and Python rechecks endpoint, key type, and fingerprint before using it."
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "result": "FAIL",
+  "run_id": "2026-10-21T16-57-35-188Z",
+  "timestamp_utc": "2026-10-21T16:57:35.473Z",
+  "primary_error": "baseline_monitor_poller:BASELINE_SQLITE_ROWS_0",
+  "cleanup_errors": [],
+  "listener_released": true,
+  "scratch_removed": true,
+  "production_model_state_unchanged": true,
+  "production_db_unchanged": true,
+  "production_db_observation": {
+    "path_configured_or_default": true,
+    "present_before": true,
+    "hash_unchanged": true
+  },
+  "results": null,
+  "limitations": [
+    "Published historical normal data and fixed SSH metric fixture only; not a pilot or live VPS check.",
+    "No fault labels or accuracy, precision, recall, F1, or fault-detection claim.",
+    "No real auto-rollback execution."
+  ]
+}

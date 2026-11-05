@@ -218,6 +218,7 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
       healthcheck_path: '/health',
       needs_db: 0,
       current_deployment_id: 101,
+      imported_from_vps: 0,
       url: 'http://1.2.3.4:3000'
     },
     {
@@ -230,6 +231,7 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
       healthcheck_path: '/health',
       needs_db: 0,
       current_deployment_id: 102,
+      imported_from_vps: 0,
       url: 'http://1.2.3.4:8000'
     }
   ]
@@ -264,6 +266,7 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
       total_duration_ms: 15000,
       is_rollback_of: null,
       started_at: '2026-01-01T00:00:00Z',
+      origin: 'opspilot',
       finished_at: '2026-01-01T00:05:00Z',
       exposure_status: 'reachable',
       exposure_evidence_json: null
@@ -279,6 +282,7 @@ describe('App — UI-1a Desktop Shell & Navigation', () => {
       total_duration_ms: 11000,
       is_rollback_of: null,
       started_at: '2026-01-01T00:00:00Z',
+      origin: 'opspilot',
       finished_at: '2026-01-01T00:05:00Z',
       exposure_status: 'reachable',
       exposure_evidence_json: null

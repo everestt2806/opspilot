@@ -15,6 +15,48 @@ export interface UpdateDeploymentRecord {
   exposure_evidence_json?: string | null
 }
 
+export interface DeploymentVersionInsertInput {
+  appId: number
+  appName: string
+  detectorJson: string | null
+  envJson: string | null
+  gitProvenance?: { repositoryUrl: string; commitSha: string }
+}
+
+export interface DeploymentVersionInsertResult {
+  id: number
+  version: number
+  imageTag: string
+}
+
+/** Shared MAX(version)+1 and image-tag rule for callers already inside a transaction. */
+export function insertNextDeploymentVersion(
+  database: Database.Database,
+  input: DeploymentVersionInsertInput
+): DeploymentVersionInsertResult {
+  if (!database.inTransaction) throw new Error('DEPLOYMENT_VERSION_REQUIRES_TRANSACTION')
+  const row = database
+    .prepare('SELECT MAX(version) AS max FROM deployment WHERE app_id = ?')
+    .get(input.appId) as { max: number | null }
+  const version = (row.max ?? 0) + 1
+  const imageTag = `${input.appName}:v${version}`
+  const result = database
+    .prepare(
+      `INSERT INTO deployment (app_id, version, image_tag, status, detector_json, env_json, git_repo_url, git_commit_sha)
+       VALUES (?, ?, ?, 'building', ?, ?, ?, ?)`
+    )
+    .run(
+      input.appId,
+      version,
+      imageTag,
+      input.detectorJson,
+      input.envJson,
+      input.gitProvenance?.repositoryUrl ?? null,
+      input.gitProvenance?.commitSha ?? null
+    )
+  return { id: Number(result.lastInsertRowid), version, imageTag }
+}
+
 export class DeploymentRepository {
   constructor(private readonly database: Database.Database) {}
 
@@ -30,38 +72,10 @@ export class DeploymentRepository {
     envJson: string | null,
     gitProvenance?: { repositoryUrl: string; commitSha: string }
   ): Deployment {
-    const insert = this.database.transaction(
-      (
-        app: number,
-        name: string,
-        detector: string | null,
-        env: string | null,
-        git: typeof gitProvenance
-      ) => {
-        const row = this.database
-          .prepare('SELECT MAX(version) AS max FROM deployment WHERE app_id = ?')
-          .get(app) as { max: number | null }
-        const version = (row.max ?? 0) + 1
-        const imageTag = `${name}:v${version}`
-
-        const result = this.database
-          .prepare(
-            `INSERT INTO deployment (app_id, version, image_tag, status, detector_json, env_json, git_repo_url, git_commit_sha)
-             VALUES (?, ?, ?, 'building', ?, ?, ?, ?)`
-          )
-          .run(
-            app,
-            version,
-            imageTag,
-            detector,
-            env,
-            git?.repositoryUrl ?? null,
-            git?.commitSha ?? null
-          )
-        return { id: Number(result.lastInsertRowid) }
-      }
+    const insert = this.database.transaction((input: DeploymentVersionInsertInput) =>
+      insertNextDeploymentVersion(this.database, input)
     )
-    const record = insert(appId, appName, detectorJson, envJson, gitProvenance)
+    const record = insert({ appId, appName, detectorJson, envJson, gitProvenance })
     return this.getById(record.id)
   }
 
@@ -70,7 +84,7 @@ export class DeploymentRepository {
       .prepare(
         `SELECT id, app_id, version, image_tag, status, failed_step,
                 build_duration_ms, total_duration_ms, is_rollback_of, started_at, finished_at,
-                exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha
+                exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha, origin
          FROM deployment WHERE id = ?`
       )
       .get(id) as Deployment | undefined
@@ -89,7 +103,7 @@ export class DeploymentRepository {
       .prepare(
         `SELECT id, app_id, version, image_tag, status, failed_step,
                 build_duration_ms, total_duration_ms, is_rollback_of, started_at, finished_at,
-                exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha
+                exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha, origin
          FROM deployment WHERE app_id = ? ORDER BY version DESC`
       )
       .all(appId) as Deployment[]
@@ -101,7 +115,7 @@ export class DeploymentRepository {
       .prepare(
         `SELECT id, app_id, version, image_tag, status, failed_step,
                 build_duration_ms, total_duration_ms, is_rollback_of, started_at, finished_at,
-                exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha
+                exposure_status, exposure_evidence_json, git_repo_url, git_commit_sha, origin
          FROM deployment
          WHERE app_id = ? AND version < ? AND status = 'running'
          ORDER BY version DESC LIMIT 1`

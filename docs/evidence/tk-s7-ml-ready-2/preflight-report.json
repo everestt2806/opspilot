@@ -1,0 +1,97 @@
+{
+  "generated_at_utc": "2026-10-20T11:36:46Z",
+  "mode": "preflight_only",
+  "overall": "BLOCKED",
+  "selected": {
+    "vps_id": 1,
+    "app_id": 1,
+    "deployment_id": 7
+  },
+  "gates": [
+    {
+      "name": "PROFILE_READ_ONLY",
+      "status": "PASS",
+      "reason": "SQLITE_READONLY_QUERY_ONLY",
+      "details": null
+    },
+    {
+      "name": "SELECTION",
+      "status": "PASS",
+      "reason": "PROFILE_RECORDS_FOUND",
+      "details": {
+        "vps_id": 1,
+        "app_id": 1,
+        "deployment_id": 7
+      }
+    },
+    {
+      "name": "VPS_ACTIVE",
+      "status": "PASS",
+      "reason": "VPS_NOT_ARCHIVED",
+      "details": null
+    },
+    {
+      "name": "APP_DEPLOYMENT_OWNERSHIP",
+      "status": "PASS",
+      "reason": "APP_DEPLOYMENT_LINKS_MATCH",
+      "details": null
+    },
+    {
+      "name": "ML_ENDPOINT",
+      "status": "BLOCKED",
+      "reason": "ML_URL_EXPLICIT_REQUIRED",
+      "details": null
+    },
+    {
+      "name": "APP_HEALTH",
+      "status": "PASS",
+      "reason": "APP_HEALTH_POLICY_OK",
+      "details": {
+        "status_code": 200
+      }
+    },
+    {
+      "name": "SSH_PIN_CONFIG",
+      "status": "PASS",
+      "reason": "PIN_PRESENT",
+      "details": null
+    },
+    {
+      "name": "SSH_CREDENTIAL",
+      "status": "BLOCKED",
+      "reason": "SSH_CREDENTIAL_MISSING",
+      "details": null
+    },
+    {
+      "name": "SSH_HOST_KEY",
+      "status": "NOT_RUN",
+      "reason": "PIN_CREDENTIAL_OR_ENDPOINT_UNAVAILABLE",
+      "details": null
+    },
+    {
+      "name": "SSH_TRANSPORT",
+      "status": "NOT_RUN",
+      "reason": "PIN_CREDENTIAL_OR_ENDPOINT_UNAVAILABLE",
+      "details": null
+    },
+    {
+      "name": "VPS_RESOURCES",
+      "status": "NOT_RUN",
+      "reason": "SSH_TRANSPORT_NOT_VERIFIED",
+      "details": null
+    },
+    {
+      "name": "PROTOCOL_PROVIDER_PAIR",
+      "status": "NOT_RUN",
+      "reason": "SECOND_VPS_NOT_SELECTED_OR_VERIFIED",
+      "details": null
+    }
+  ],
+  "side_effects": {
+    "experiment_run_written": false,
+    "deployment_started": false,
+    "ml_reset_train_ingest_called": false,
+    "loadgen_or_fault_called": false,
+    "remote_cleanup_called": false
+  }
+}

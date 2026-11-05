@@ -217,6 +217,9 @@ export class MigrateService {
 
   private validateInput(input: MigrateInput): App {
     const source = this.apps.getById(input.app_id)
+    if (source.imported_from_vps === 1) {
+      throw new AppError('VALIDATION', 'Chưa thể migrate app vừa nhập từ VPS.')
+    }
     if (source.vps_id === input.target_vps_id) {
       throw new AppError('VALIDATION', 'VPS nguồn và đích phải khác nhau.')
     }

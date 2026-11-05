@@ -10,6 +10,18 @@ import migration004 from './migrations/004_publish_doctor_domain.sql?raw'
 import migration005 from './migrations/005_experiment_run_attempt.sql?raw'
 import migration006 from './migrations/006_vps_host_fingerprint.sql?raw'
 import migration007 from './migrations/007_git_source_provenance.sql?raw'
+import migration008 from './migrations/008_vps_archive.sql?raw'
+import migration009 from './migrations/009_vps_app_import.sql?raw'
+import migration010 from './migrations/010_domain_ingress_state.sql?raw'
+import migration011 from './migrations/011_domain_ingress_identity_guards.sql?raw'
+import migration012 from './migrations/012_ingress_reconcile_observation.sql?raw'
+import migration013 from './migrations/013_ingress_production_probe_evidence.sql?raw'
+import migration014 from './migrations/014_https_probe_policy_and_peer_set.sql?raw'
+import migration015 from './migrations/015_repair_legacy_https_probe_evidence.sql?raw'
+import migration016 from './migrations/016_product_auto_deploy_persistence.sql?raw'
+import migration017 from './migrations/017_product_auto_deploy_pause_policy.sql?raw'
+import migration018 from './migrations/018_product_auto_deploy_pause_provenance.sql?raw'
+import migration019 from './migrations/019_vps_ssh_security_revision.sql?raw'
 
 interface Migration {
   name: string
@@ -52,6 +64,66 @@ const migrations: Migration[] = [
     name: '007_git_source_provenance.sql',
     version: 7,
     sql: migration007
+  },
+  {
+    name: '008_vps_archive.sql',
+    version: 8,
+    sql: migration008
+  },
+  {
+    name: '009_vps_app_import.sql',
+    version: 9,
+    sql: migration009
+  },
+  {
+    name: '010_domain_ingress_state.sql',
+    version: 10,
+    sql: migration010
+  },
+  {
+    name: '011_domain_ingress_identity_guards.sql',
+    version: 11,
+    sql: migration011
+  },
+  {
+    name: '012_ingress_reconcile_observation.sql',
+    version: 12,
+    sql: migration012
+  },
+  {
+    name: '013_ingress_production_probe_evidence.sql',
+    version: 13,
+    sql: migration013
+  },
+  {
+    name: '014_https_probe_policy_and_peer_set.sql',
+    version: 14,
+    sql: migration014
+  },
+  {
+    name: '015_repair_legacy_https_probe_evidence.sql',
+    version: 15,
+    sql: migration015
+  },
+  {
+    name: '016_product_auto_deploy_persistence.sql',
+    version: 16,
+    sql: migration016
+  },
+  {
+    name: '017_product_auto_deploy_pause_policy.sql',
+    version: 17,
+    sql: migration017
+  },
+  {
+    name: '018_product_auto_deploy_pause_provenance.sql',
+    version: 18,
+    sql: migration018
+  },
+  {
+    name: '019_vps_ssh_security_revision.sql',
+    version: 19,
+    sql: migration019
   }
 ]
 
@@ -87,18 +159,24 @@ export function closeDatabase(): void {
   }
 }
 
-export function runMigrations(database: Database.Database): void {
+export function runMigrations(database: Database.Database, maxVersion = Number.POSITIVE_INFINITY): void {
   const applied = getAppliedVersions(database)
 
   for (const migration of migrations.toSorted((left, right) =>
     left.name.localeCompare(right.name)
   )) {
+    if (migration.version > maxVersion) break
     if (applied.has(migration.version)) {
       continue
     }
 
     if (migration.version === 5) {
       runMigration005(database, migration)
+      continue
+    }
+
+    if (migration.version === 9) {
+      runMigration009(database, migration)
       continue
     }
 
@@ -111,6 +189,23 @@ export function runMigrations(database: Database.Database): void {
         database.prepare('INSERT INTO schema_version (version) VALUES (?)').run(migration.version)
       }
     })()
+  }
+}
+
+function runMigration009(database: Database.Database, migration: Migration): void {
+  const wasFkEnabled = database.pragma('foreign_keys', { simple: true }) === 1
+  if (wasFkEnabled) database.pragma('foreign_keys = OFF')
+  try {
+    database.transaction(() => {
+      database.exec(migration.sql)
+      const fkErrors = database.pragma('foreign_key_check') as Array<unknown>
+      if (fkErrors.length > 0) {
+        throw new Error(`Migration 009 vi phạm foreign_key_check: ${JSON.stringify(fkErrors)}`)
+      }
+      database.prepare('INSERT INTO schema_version (version) VALUES (?)').run(migration.version)
+    })()
+  } finally {
+    if (wasFkEnabled) database.pragma('foreign_keys = ON')
   }
 }
 

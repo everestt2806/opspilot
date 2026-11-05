@@ -1,0 +1,133 @@
+{
+  "generated_at_utc": "2026-10-20T13:18:15Z",
+  "mode": "preflight_only",
+  "overall": "BLOCKED",
+  "selected": {
+    "vps_id": 1,
+    "app_id": 1,
+    "deployment_id": 7
+  },
+  "gates": [
+    {
+      "name": "PROFILE_READ_ONLY",
+      "status": "PASS",
+      "reason": "SQLITE_READONLY_QUERY_ONLY",
+      "details": null
+    },
+    {
+      "name": "SELECTION",
+      "status": "PASS",
+      "reason": "PROFILE_RECORDS_FOUND",
+      "details": {
+        "vps_id": 1,
+        "app_id": 1,
+        "deployment_id": 7
+      }
+    },
+    {
+      "name": "VPS_ACTIVE",
+      "status": "PASS",
+      "reason": "VPS_NOT_ARCHIVED",
+      "details": null
+    },
+    {
+      "name": "APP_DEPLOYMENT_OWNERSHIP",
+      "status": "PASS",
+      "reason": "APP_DEPLOYMENT_LINKS_MATCH",
+      "details": null
+    },
+    {
+      "name": "ML_ENDPOINT",
+      "status": "PASS",
+      "reason": "ML_HEALTH_AND_STATUS_OK",
+      "details": {
+        "version": "0.1.0"
+      }
+    },
+    {
+      "name": "ML_MODEL_STATUS",
+      "status": "PASS",
+      "reason": "ML_STATUS_READ_ONLY",
+      "details": {
+        "trained": false,
+        "sample_count": 0,
+        "min_samples_required": 150
+      }
+    },
+    {
+      "name": "APP_HEALTH",
+      "status": "PASS",
+      "reason": "APP_HEALTH_POLICY_OK",
+      "details": {
+        "status_code": 200
+      }
+    },
+    {
+      "name": "SSH_PIN_CONFIG",
+      "status": "PASS",
+      "reason": "PIN_PRESENT",
+      "details": null
+    },
+    {
+      "name": "SSH_CREDENTIAL",
+      "status": "PASS",
+      "reason": "SSH_SECRET_AVAILABLE_IN_MEMORY",
+      "details": null
+    },
+    {
+      "name": "SSH_HOST_KEY",
+      "status": "BLOCKED",
+      "reason": "HOST_KEY_SCAN_TIMEOUT",
+      "details": null
+    },
+    {
+      "name": "SSH_TRANSPORT",
+      "status": "NOT_RUN",
+      "reason": "HOST_KEY_PIN_NOT_MATCHED",
+      "details": null
+    },
+    {
+      "name": "VPS_RESOURCES",
+      "status": "NOT_RUN",
+      "reason": "HOST_KEY_PIN_NOT_MATCHED",
+      "details": null
+    },
+    {
+      "name": "DEDICATED_HOST",
+      "status": "NOT_RUN",
+      "reason": "HOST_KEY_PIN_NOT_MATCHED",
+      "details": null
+    },
+    {
+      "name": "PROTOCOL_NTP_SYNC",
+      "status": "NOT_RUN",
+      "reason": "HOST_KEY_PIN_NOT_MATCHED",
+      "details": null
+    },
+    {
+      "name": "PROTOCOL_CLOCK_OFFSET",
+      "status": "NOT_RUN",
+      "reason": "HOST_KEY_PIN_NOT_MATCHED",
+      "details": null
+    },
+    {
+      "name": "PROTOCOL_PROVIDER_PAIR",
+      "status": "NOT_RUN",
+      "reason": "SECOND_VPS_NOT_SELECTED_OR_VERIFIED",
+      "details": null
+    },
+    {
+      "name": "PROTOCOL_RAM_AVAILABLE",
+      "status": "NOT_RUN",
+      "reason": "REMOTE_EVIDENCE_UNAVAILABLE",
+      "details": null
+    }
+  ],
+  "side_effects": {
+    "experiment_run_written": false,
+    "deployment_started": false,
+    "ml_reset_train_ingest_called": false,
+    "loadgen_or_fault_called": false,
+    "remote_cleanup_called": false
+  }
+}

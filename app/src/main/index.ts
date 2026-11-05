@@ -1,4 +1,6 @@
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
+import { tmpdir } from 'node:os'
+import { realpathSync } from 'node:fs'
 
 import { app, BrowserWindow, shell } from 'electron'
 import { electronApp, is, optimizer } from '@electron-toolkit/utils'
@@ -7,7 +9,11 @@ import icon from '../../resources/icon.png?asset'
 import { createCredentialCipher } from './crypto/masterKey'
 import { loadSecret } from './crypto/credentials'
 import { closeDatabase, initializeDatabase } from './db'
+import { AppRepository } from './db/appRepository'
 import { ActionLogRepository } from './db/actionLogRepository'
+import { DeploymentRepository } from './db/deploymentRepository'
+import { DomainRepository } from './domain/repository'
+import { SharedIngressService } from './domain/ingress/sharedIngressService'
 import { VpsRepository } from './db/vpsRepository'
 import { DeployService } from './deploy/service'
 import { HistoryService } from './history/service'
@@ -22,6 +28,20 @@ import { MlApiClient } from './monitor/mlApi'
 import { shutdownRuntime } from './shutdown'
 import { MigrateService } from './migrate/service'
 import { getMainWindowOptions } from './windowOptions'
+import { runRecoveryManifestCli } from './vps/recoveryManifestCli'
+import { AppError } from './errors'
+
+const recoverySourceProfile = process.env.OPSPILOT_R3D_SOURCE_PROFILE
+if (recoverySourceProfile) {
+  const sourcePath = resolve(recoverySourceProfile)
+  const sourceRealPath = realpathSync(sourcePath)
+  if (!sourceRealPath.startsWith(`${realpathSync(tmpdir())}${sep}`)) {
+    throw new Error(
+      'R3d source profile must be an isolated directory under the system temp directory.'
+    )
+  }
+  app.setPath('userData', sourcePath)
+}
 
 let mainWindow: BrowserWindow | null = null
 let mlService: MlServiceManager | null = null
@@ -118,6 +138,14 @@ void app
     const migrateService = new MigrateService(database, sshManager, (event) => {
       mainWindow?.webContents.send('migrate:event', event)
     })
+    const sharedIngressService = new SharedIngressService({
+      vpsRepository,
+      appRepository: new AppRepository(database),
+      deploymentRepository: new DeploymentRepository(database),
+      domainRepository: new DomainRepository(database),
+      ssh: sshManager,
+      policy: { certificateEnvironment: 'production', stagingLabHostnames: [] }
+    })
 
     registerIpcHandlers(
       mlService,
@@ -127,8 +155,33 @@ void app
       historyService,
       () => mainWindow,
       monitorService,
-      migrateService
+      migrateService,
+      sharedIngressService
     )
+    if (process.env.OPSPILOT_R3D_SOURCE_PROFILE) {
+      try {
+        const vpsId = Number(process.env.OPSPILOT_R3D_VPS_ID)
+        const name = process.env.OPSPILOT_R3D_APP_NAME ?? ''
+        const targetProfile = process.env.OPSPILOT_R3D_TARGET_PROFILE ?? ''
+        const result = await runRecoveryManifestCli(database, sshManager, {
+          vpsId,
+          name,
+          targetProfile
+        })
+        console.log(JSON.stringify({ status: 'PASS', ...result }))
+      } catch (error) {
+        const reason =
+          error instanceof AppError ? error.message : 'Không hoàn tất được thao tác SSH recovery.'
+        console.log(JSON.stringify({ status: 'BLOCKED', reason }))
+        database.close()
+        app.exit(2)
+        return
+      }
+      await sshManager.disconnectAll()
+      database.close()
+      app.exit(0)
+      return
+    }
     if (process.env.OPSPILOT_C01_DEPLOY_ONLY !== '1') {
       monitorScheduler = new MonitorScheduler(async () => {
         const port = mlService?.getPort()

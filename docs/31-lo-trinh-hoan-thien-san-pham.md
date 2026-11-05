@@ -1,6 +1,6 @@
 # Hoàn thiện OpsPilot thành nền tảng deploy trên VPS riêng
 
-> Rà soát ngày 08/10/2026 tại HEAD `1cd5959`. Đây là chuẩn nghiệm thu sản phẩm sau demo, không thay thế [đề tài gốc](00-de-tai-goc.md) hoặc [lịch demo 14/10](29-ke-hoach-demo-14-10.md). Trạng thái là đánh giá mã và hồ sơ hiện có; test cục bộ không được tính là live gate trên VPS mới.
+> Rà soát ngày 14/10/2026 tại checkpoint TK-S7 P1b. Đây là chuẩn nghiệm thu sản phẩm sau demo, không thay thế [đề tài gốc](00-de-tai-goc.md) hoặc [lịch demo 14/10](29-ke-hoach-demo-14-10.md). Trạng thái là đánh giá mã và hồ sơ hiện có; test cục bộ không được tính là live gate trên VPS mới.
 > Chuẩn tham chiếu: [Vercel Git](https://vercel.com/docs/git), [Dokploy GitHub](https://docs.dokploy.com/docs/core/github), [Dokploy Domains](https://docs.dokploy.com/docs/core/domains), [Coolify Automatic Deployments](https://coolify.io/docs/applications/deployments/automatic-deployments), [Coolify Domains](https://coolify.io/docs/core/networking/domains). Đối chiếu cơ chế OpenShip/Coolify/Dokku/CapRover và quyết định áp dụng nằm ở [tài liệu 32](32-tham-khao-openship-va-paas-tu-host.md).
 
 ## 1. Lời hứa sản phẩm và định nghĩa hoàn thành
@@ -9,15 +9,17 @@ Người dùng chọn **Deploy trực tiếp từ thư mục trên máy** hoặc
 
 Một mục chỉ được đánh dấu `PRODUCT_PASS` khi có đủ UI → IPC → runtime/DB, kiểm thử nhánh lỗi, bằng chứng chạy thật trên VPS phù hợp và hướng dẫn sử dụng. Ghi riêng `CODE_PRESENT`, `LOCAL_PASS`, `LIVE_PASS`, `BLOCKED`, `NOT_RUN`. [Ma trận truy vết cũ](05-truy-vet-yeu-cau.md) có dấu ✅ của các phiên trước (như UC-02/FR-B5), nhưng chưa bao trùm nhánh Git, test của source và VPS mới; phải đối soát bằng chứng trước khi chốt trạng thái hiện hành.
 
+**Trạng thái 14/10/2026:** Git manual deploy/redeploy đã có live evidence ở [TK-S7 G2](tasks/tk-s7-g2-live-git-vps-smoke.md) và [G2b](tasks/tk-s7-g2b-local-template-vps-smoke.md). Push-to-deploy khi desktop tắt và HTTPS shared ingress vẫn chưa có bằng chứng triển khai.
+
 ## 2. Tự động hóa kết nối, deploy và cổng mạng
 
 | Công việc | Hiện có trong mã | Người dùng vẫn cần làm / giới hạn | Tiêu chí sản phẩm |
 |---|---|---|---|
 | Kết nối VPS | Profile, SSH test, pin host fingerprint, credential mã hóa cục bộ, scan và nút cài Docker | Cung cấp IP/credential/fingerprint lấy độc lập; bảo đảm SSH đến được VPS. App không thể sửa firewall nhà cung cấp qua SSH nếu SSH ban đầu bị chặn | Wizard nêu từng bước, xác minh host key trước auth, cài Docker khi người dùng chọn và kiểm lại; lỗi rõ ràng |
 | Cấp cổng app | Precheck cấp port; `SshExposureManager` dùng `sudo -n ufw allow <port>/tcp` khi UFW active; probe từ ngoài | Cần quyền sudo. Adapter DigitalOcean có file/test nhưng chưa nối vào `DeployService` production; provider VPS hiện dùng chưa có adapter. Cloud firewall có thể cần thao tác dashboard | Tự xử lý tầng app/UFW khi có quyền; provider có API thì dùng scoped token; provider khác hiển thị đúng rule cần thêm và nút kiểm tra lại; chỉ báo reachable khi probe pass |
-| Domain/HTTPS | Có Domain Assistant, DNS check và Cloudflare DNS upsert | Chưa tự dựng ingress/proxy hoặc certificate; DNS trỏ IP không làm `https://domain` route vào app | Một ingress 80/443 quản lý route/chứng chỉ/lifecycle, external HTTPS probe; không cần mở từng port 30000–30999 ra Internet khi dùng ingress |
+| Domain/HTTPS | Có Domain Assistant, DNS check, Cloudflare DNS upsert và P1b contract/state | Chưa tự dựng ingress/proxy hoặc certificate; DNS trỏ IP không làm `https://domain` route vào app | P1e live gate dùng ACME staging trước; chỉ chuyển production certificate sau khi route/rollback và external HTTPS probe staging đạt |
 | Deploy từ thư mục | Wizard, detector, upload/build/health/history/rollback có mã | Chưa có live gate trên VPS mới cho ba Tier 1 | Ba stack chạy thật từ thư mục, có URL/log/rollback và ca lỗi |
-| Deploy từ Git thủ công | Chưa có acquisition/UI/provenance | Hiện chỉ chọn folder | Chọn repo/ref/root, khóa SHA trước detect, deploy và lưu provenance; private repo sau với credential scoped |
+| Deploy từ Git thủ công | Đã có acquisition/UI/provenance và live deploy/redeploy | G2/G2b xác minh public HTTP, remote SHA, history và local regression; xem evidence trong task notes | Duy trì regression cho repo/ref/root/full SHA; private repo sau với credential scoped |
 | Tự deploy theo push | Chưa có webhook/poller Git và bộ điều phối luôn chạy | Electron đóng thì không nhận push; nút Redeploy thủ công không phải auto deploy | Push vào branch đã chọn tạo đúng một deployment theo SHA, queue/idempotency/log, lỗi giữ bản live, vẫn chạy khi desktop đóng |
 
 Không thể hứa “nhập IP là mọi thứ tự xong” với mọi provider. Lần đầu cần xác thực host key, credential, quyền SSH và có thể phải mở SSH ở panel provider. Sau onboarding, app tự làm tối đa những gì có quyền; phần không có API phải được chỉ dẫn chính xác, kiểm tra lại tự động và ghi rõ nguyên nhân chưa public.
@@ -54,7 +56,11 @@ Hợp đồng auto deploy: project chọn production branch; push nhận full SH
 | Thứ tự | Checkpoint | Hoàn thành khi |
 |---|---|---|
 | P0, trước demo 14/10 | Khóa hợp đồng hai nguồn; public Git manual; giữ local; live Express Git trên VPS hiện có | Repo/ref/full SHA trong history, URL ngoài truy cập được, local regression; demo nói đúng giới hạn |
-| P1 | Onboarding/publish: Docker, port/UFW, provider boundary, ingress HTTPS và domain | VPS mới đi từ profile → app có URL HTTPS; provider không có API có hướng dẫn chính xác và probe lại |
+| P1a | Thiết kế shared ingress/HTTPS | Caddy, port ownership, DNS/firewall preflight, atomic rollback và active invariant được review; chưa ghi VPS |
+| P1b | Persisted ingress/TLS contract | Migrations 010–011 tách DNS khỏi route/certificate/probe, bảo vệ identity/generation/ownership và chỉ cho shared_ingress active; schema contract thực thi trên SQLite rỗng; migration/idempotency/state tests pass |
+| P1c–P1d | Read-only preflight, DNS và certificate readiness | Xác minh owner/listeners/DNS/firewall; fail closed, chưa active nếu thiếu evidence |
+| P1e | Atomic reconcile, rollback và HTTPS live validation | Lab VPS/hostname; dùng ACME staging để kiểm thử issuance/renewal và external HTTPS probe trước khi cân nhắc production ACME |
+| P1f | UI/diagnosis/operations | Người dùng thấy đúng trạng thái, lý do, URL hiện tại và retry/rollback; Electron interaction/layout gate |
 | P2 | Template/build/lifecycle: ba Tier 1, source tests, custom Dockerfile, logs, env, redeploy/rollback | Ma trận local/Git × ba stack trên VPS; lỗi build/health giữ bản cũ; logs và env hoạt động sau deploy |
 | P3 | Tự deploy production theo push | ADR always-on mode, queue và đồng bộ state; push khi desktop tắt tạo đúng SHA, lỗi không thay bản live |
 | P4 | Migrate và dữ liệu | Hai VPS thật, PostgreSQL/volume/config, verify/rollback/cancel; backup/restore drill và Git-source migration |

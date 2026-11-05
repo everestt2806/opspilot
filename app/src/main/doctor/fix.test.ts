@@ -43,6 +43,7 @@ describe('DoctorFixService & DoctorRepository', () => {
     healthcheck_path: '/',
     needs_db: 0,
     current_deployment_id: 1,
+      imported_from_vps: 0,
     url: 'http://1.2.3.4:3000'
   }
 

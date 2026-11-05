@@ -12,9 +12,13 @@ import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
+import { signalChildProcessTree } from './processTree'
+
 export interface GitSnapshotInput {
   repositoryUrl: string
   ref: string
+  /** When supplied, fetch and checkout this exact full commit SHA; never follow the ref tip. */
+  targetSha?: string
   root?: string
   signal?: AbortSignal
   timeoutMs?: number
@@ -32,10 +36,15 @@ export interface GitSnapshot {
 
 const DEFAULT_TIMEOUT_MS = 120_000
 const DEFAULT_MAX_BYTES = 512 * 1024 * 1024
+const PROCESS_KILL_GRACE_MS = 1_000
+const MAX_GIT_OUTPUT_BYTES = 1024 * 1024
 
-function sanitizedGitEnvironment(): NodeJS.ProcessEnv {
+export function sanitizedGitEnvironment(): NodeJS.ProcessEnv {
   const inherited = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !/^GIT_/i.test(key))
+    Object.entries(process.env).filter(
+      ([key]) =>
+        !/^GIT_/i.test(key) && !/(?:SECRET|TOKEN|PASSWORD|CREDENTIAL|PRIVATE_KEY)/i.test(key)
+    )
   )
   const nullConfig = process.platform === 'win32' ? 'NUL' : '/dev/null'
   return {
@@ -98,7 +107,7 @@ export function canonicalizeGitHubUrl(value: string): string {
   return `https://github.com/${owner}/${repository}.git`
 }
 
-function validateRef(ref: string): void {
+export function validateRef(ref: string): void {
   if (
     !ref ||
     ref.startsWith('-') ||
@@ -134,19 +143,26 @@ function runGit(
     if (options.signal?.aborted) return reject(new Error('Đã hủy lấy snapshot Git.'))
     const child = spawn('git', args, {
       cwd,
+      detached: process.platform === 'linux',
+      shell: false,
       windowsHide: true,
       env: sanitizedGitEnvironment(),
       stdio: ['ignore', 'pipe', 'pipe']
     })
     let stdout = ''
     let stderr = ''
+    let outputBytes = 0
     let settled = false
     let terminationError: Error | null = null
+    let killTimer: NodeJS.Timeout | undefined
+    let killEscalated = false
+    let closed = false
     const finish = (error?: Error): void => {
       if (settled) return
       settled = true
       clearTimeout(timer)
       clearInterval(sizeTimer)
+      if (killTimer) clearTimeout(killTimer)
       options.signal?.removeEventListener('abort', abort)
       if (error) reject(error)
       else resolvePromise(stdout.trim())
@@ -157,9 +173,15 @@ function runGit(
     const terminate = (error: Error): void => {
       if (settled || terminationError) return
       terminationError = error
-      child.kill('SIGTERM')
       clearTimeout(timer)
       clearInterval(sizeTimer)
+      signalChildProcessTree(child, 'SIGTERM')
+      killTimer = setTimeout(() => {
+        signalChildProcessTree(child, 'SIGKILL')
+        killEscalated = true
+        if (closed) finish(terminationError ?? error)
+      }, PROCESS_KILL_GRACE_MS)
+      killTimer.unref()
     }
     const timer = setTimeout(
       () => terminate(new Error('Lấy snapshot Git quá thời gian cho phép.')),
@@ -178,15 +200,30 @@ function runGit(
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
     child.stdout.on('data', (chunk: string) => {
+      outputBytes += Buffer.byteLength(chunk)
+      if (outputBytes > MAX_GIT_OUTPUT_BYTES) {
+        terminate(new Error('Snapshot Git vượt quá giới hạn output.'))
+        return
+      }
       stdout = (stdout + chunk).slice(-16_384)
     })
     child.stderr.on('data', (chunk: string) => {
+      outputBytes += Buffer.byteLength(chunk)
+      if (outputBytes > MAX_GIT_OUTPUT_BYTES) {
+        terminate(new Error('Snapshot Git vượt quá giới hạn output.'))
+        return
+      }
       stderr = (stderr + chunk).slice(-16_384)
     })
-    child.on('error', () => finish(new Error('Không thể chạy Git để lấy snapshot.')))
+    child.on('error', () => {
+      if (child.pid === undefined) finish(new Error('Không thể chạy Git để lấy snapshot.'))
+      else if (!terminationError) terminate(new Error('Không thể chạy Git để lấy snapshot.'))
+    })
     child.on('close', (code) => {
-      if (terminationError) finish(terminationError)
-      else if (code === 0) finish()
+      closed = true
+      if (terminationError) {
+        if (killEscalated) finish(terminationError)
+      } else if (code === 0) finish()
       else finish(new Error(gitFailureMessage(stderr, code)))
     })
   })
@@ -234,6 +271,9 @@ async function snapshotRemote(
   allowFileProtocol: boolean
 ): Promise<GitSnapshot> {
   validateRef(input.ref)
+  if (input.targetSha !== undefined && !/^[a-f0-9]{40}$/.test(input.targetSha)) {
+    throw new Error('Git target sha phải là full commit SHA hợp lệ.')
+  }
   const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS
   const maxBytes = input.maxBytes ?? DEFAULT_MAX_BYTES
   if (
@@ -276,7 +316,7 @@ async function snapshotRemote(
         '--depth=1',
         '--no-recurse-submodules',
         'origin',
-        input.ref
+        input.targetSha ?? input.ref
       ],
       snapshotDirectory,
       runOptions
@@ -288,6 +328,9 @@ async function snapshotRemote(
     )
     if (!/^[a-f0-9]{40}$/.test(commitSha))
       throw new Error('Git không trả về full commit SHA hợp lệ.')
+    if (input.targetSha && commitSha !== input.targetSha) {
+      throw new Error('Git snapshot không khớp full SHA đã yêu cầu.')
+    }
     await runGit(
       [
         '-c',
@@ -301,15 +344,31 @@ async function snapshotRemote(
       snapshotDirectory,
       runOptions
     )
+    const checkedOutSha = await runGit(
+      ['rev-parse', '--verify', 'HEAD^{commit}'],
+      snapshotDirectory,
+      runOptions
+    )
+    if (checkedOutSha !== commitSha) throw new Error('Git checkout không khớp full SHA đã tải.')
     if (getDirectoryBytes(snapshotDirectory) > maxBytes)
       throw new Error('Snapshot Git vượt quá giới hạn dung lượng.')
     const rootDirectory = resolveSnapshotRoot(snapshotDirectory, input.root)
+    let cleaned = false
     return {
       repositoryUrl,
       commitSha,
       rootDirectory,
       snapshotDirectory,
-      cleanup: () => rmSync(snapshotDirectory, { recursive: true, force: true })
+      cleanup: () => {
+        if (cleaned) return
+        const realDirectory = realpathSync(snapshotDirectory)
+        const realParent = realpathSync(input.tempDirectory ?? tmpdir())
+        if (!realDirectory.startsWith(realParent + sep)) {
+          throw new Error('Git snapshot cleanup path không thuộc scratch đã tạo.')
+        }
+        rmSync(realDirectory, { recursive: true, force: true })
+        cleaned = true
+      }
     }
   } catch (error) {
     rmSync(snapshotDirectory, { recursive: true, force: true })

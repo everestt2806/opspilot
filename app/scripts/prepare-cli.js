@@ -3,19 +3,15 @@
 // Bản build CLI (tsc commonjs) không có plugin đó — bước này chép .sql kèm ra thư mục
 // biên dịch và trỏ require sang readFileSync. __importDefault của esModuleInterop tự
 // bọc chuỗi thành { default: sql } nên đường dùng .default phía sau vẫn đúng.
-const { mkdirSync, copyFileSync, readFileSync, writeFileSync } = require('node:fs')
+const { mkdirSync, copyFileSync, readFileSync, writeFileSync, readdirSync } = require('node:fs')
 const { join } = require('node:path')
 
 const migrationDir = join('.out-scripts', 'src', 'main', 'db', 'migrations')
 const compiledIndex = join('.out-scripts', 'src', 'main', 'db', 'index.js')
-const migrations = [
-  '001_init.sql',
-  '002_metric_activation.sql',
-  '003_migration_error_message.sql',
-  '004_publish_doctor_domain.sql',
-  '005_experiment_run_attempt.sql',
-  '006_vps_host_fingerprint.sql'
-]
+// Dùng toàn bộ forward migrations hiện hành, không đóng băng ở schema 006.
+const migrations = readdirSync(join('src', 'main', 'db', 'migrations'))
+  .filter((name) => /^\d{3}_[A-Za-z0-9_]+\.sql$/.test(name))
+  .sort()
 
 mkdirSync(migrationDir, { recursive: true })
 for (const migration of migrations) {
