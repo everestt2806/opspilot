@@ -36,6 +36,92 @@ afterEach(() => {
 })
 
 describe('Product durable queue worker', () => {
+  it.each(['normal', 'heartbeat-lost'])(
+    'uses its trusted completion verifier before continuing after T2: %s',
+    async (mode) => {
+      const fixture = createFixture()
+      seedManualJob(fixture.database, 'settled-runtime')
+      const stop = new AbortController()
+      if (mode === 'heartbeat-lost')
+        vi.spyOn(fixture.repository, 'heartbeatClaim').mockImplementation(() => {
+          throw new Error('INJECTED_HEARTBEAT_LOSS')
+        })
+      const verifier = vi.fn(() => {
+        stop.abort()
+        return true
+      })
+      const executor: ProductJobExecutor = {
+        execute: async (claim, signal) => {
+          if (mode === 'heartbeat-lost') await waitForAbort(signal)
+          return {
+            state: 'runtime_settled',
+            attempt_id: claim.attempt_id,
+            commit_id: 'verified-by-composition',
+            outcome: 'succeeded'
+          }
+        }
+      }
+      const worker = new ControlPlaneJobWorker({
+        repository: fixture.repository,
+        controllerId: CONTROLLER_ID,
+        executor,
+        verifyRuntimeCompletion: verifier,
+        admission: { check: () => ({ state: 'ready' }) },
+        heartbeatIntervalMs: 1,
+        pollIntervalMs: 10
+      })
+      await worker.run(stop.signal)
+      expect(verifier).toHaveBeenCalledTimes(1)
+      expect(verifier).toHaveBeenCalledWith(
+        expect.objectContaining({ job_id: 'settled-runtime' }),
+        expect.objectContaining({ state: 'runtime_settled' })
+      )
+      expect(worker.getStatus().state).toBe('stopped')
+      expect(worker.canCloseDatabase()).toBe(true)
+    }
+  )
+
+  it.each(['missing', 'false', 'throw'])(
+    'rejects an executor runtime_settled claim without persisted-proof verification: %s',
+    async (verification) => {
+      const fixture = createFixture()
+      seedManualJob(fixture.database, 'unverified-runtime')
+      const executor: ProductJobExecutor = {
+        execute: vi.fn(async (claim): Promise<ProductExecutorResult> => ({
+          state: 'runtime_settled',
+          attempt_id: claim.attempt_id,
+          commit_id: 'untrusted-commit',
+          outcome: 'succeeded'
+        }))
+      }
+      const worker = new ControlPlaneJobWorker({
+        repository: fixture.repository,
+        controllerId: CONTROLLER_ID,
+        executor,
+        admission: { check: () => ({ state: 'ready' }) },
+        pollIntervalMs: 10,
+        ...(verification === 'missing'
+          ? {}
+          : {
+              verifyRuntimeCompletion: () => {
+                if (verification === 'throw') throw new Error('PROOF_READER_UNAVAILABLE')
+                return false
+              }
+            })
+      })
+      const stop = new AbortController()
+      await worker.run(stop.signal)
+      expect(worker.getStatus()).toMatchObject({
+        state: 'reconciliation_required',
+        reason: 'runtime_completion_unverified'
+      })
+      expect(executor.execute).toHaveBeenCalledTimes(1)
+      expect(readJobState(fixture.database, 'unverified-runtime')).toBe('claimed')
+      expect(count(fixture.database, 'deployment')).toBe(0)
+      expect(worker.canCloseDatabase()).toBe(true)
+    }
+  )
+
   it('keeps runtime polling-only without an executor and defers admission before claim', async () => {
     const fixture = createFixture()
     seedManualJob(fixture.database, 'queued-job')

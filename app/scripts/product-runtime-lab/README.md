@@ -85,3 +85,25 @@ is **not** a standalone R1 regression result. Only the R2 aggregate may report t
 after checking its own assertions and the child's cleanup/source-unchanged flags.
 Reports: `app/.out-scripts/product-runtime-recovery/<nonce>/result.json`; per-case evidence and
 linked R1 scratch DB/collector artifacts remain separately identified.
+
+## Executor adapter (R3a)
+
+```sh
+# Use a separate artifact so an in-flight R2 matrix keeps its frozen bundle.
+export OPSPILOT_R1_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r3-lab.cjs
+node app/scripts/product-runtime-lab/build.mjs
+node app/scripts/product-runtime-lab/executor.mjs
+```
+
+The adapter prepares/verifies its snapshot, runs the real pipeline and returns an internal
+`runtime_settled` reference only when the persisted exact claim/commit/T1/T2 is verified. The
+queue requires a trusted verifier callback; a result string alone cannot let it continue.
+Post-dispatch unknown outcomes do not enter prewrite retry handling.
+
+This fixture supplies an already-verified immutable local Git snapshot to isolate the adapter;
+it does not claim a live repository fetch or service-driven Git polling. All runtime operations,
+receipts and DB records remain real. Six terminal cases reject forged attempt/commit references;
+the collector failure remains unknown without retry. Reports are in
+`app/.out-scripts/product-runtime-executor/<nonce>/` with the linked R1 DB/JSONL artifacts.
+Default `ControllerService` still has no executor: provisioning/admission/cold startup recovery
+and management/UI integration must pass R3b/R3c before enabling always-on deployment.

@@ -12,6 +12,17 @@ export type ProductDeploymentId = number;
 export type ProductFullCommitSha = string;
 export type ProductIsoUtc = string;
 
+/** Internal worker result; never IPC input or authority to mutate a deployment.
+ * The worker must verify exact persisted H2 commit + T2 settlement against claim
+ * before continuing. Unverified or missing completion remains reconciliation_required.
+ */
+export type ProductRuntimeSettledResult = Readonly<{
+  state: 'runtime_settled';
+  attempt_id: ProductAttemptId;
+  commit_id: string;
+  outcome: 'succeeded' | 'failed' | 'rolled_back';
+}>;
+
 /** Lease timing policy for the first Product claim repository. */
 export const PRODUCT_LEASE_TTL_MS = 60_000;
 export const PRODUCT_HEARTBEAT_INTERVAL_MS = 15_000;

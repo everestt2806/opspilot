@@ -50,4 +50,8 @@ copyFileSync(
   resolve(root, 'src/main/controlPlane/target_execution_guard.py'),
   resolve(helperDirectory, 'target_execution_guard.py')
 )
+copyFileSync(
+  resolve(root, 'src/main/controlPlane/target_product_runtime.py'),
+  resolve(helperDirectory, 'target_product_runtime.py')
+)
 console.log(`CONTROL_PLANE_BUILD_OK ${outputFile}`)

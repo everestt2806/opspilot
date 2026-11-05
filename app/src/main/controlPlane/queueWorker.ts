@@ -3,6 +3,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import {
   PRODUCT_HEARTBEAT_INTERVAL_MS,
   type ProductClaimToken,
+  type ProductRuntimeSettledResult,
   type ProductPrewritePermanentErrorCode,
   type ProductPrewriteFinishResult,
   type ProductPrewriteTransientErrorCode
@@ -13,6 +14,7 @@ export const CONTROL_PLANE_WORKER_POLL_INTERVAL_MS = 1_000
 export const CONTROL_PLANE_WORKER_STOP_GRACE_MS = 10_000
 
 export type ProductExecutorResult =
+  | ProductRuntimeSettledResult
   | {
       state: 'prewrite_failure'
       disposition: 'transient_failure'
@@ -44,6 +46,11 @@ export interface ControlPlaneJobWorkerOptions {
   repository: ProductDeployRepository
   controllerId: string
   executor?: ProductJobExecutor
+  /** Trusted composition only: verify persisted T1/T2, not the executor's assertion. */
+  verifyRuntimeCompletion?: (
+    claim: ProductClaimToken,
+    result: ProductRuntimeSettledResult
+  ) => boolean
   admission?: ProductWorkerAdmission
   /** @internal Short deterministic timing values are for tests only. */
   pollIntervalMs?: number
@@ -219,6 +226,10 @@ export class ControlPlaneJobWorker {
       heartbeatController.abort()
       const heartbeatResult = await heartbeat
       shutdownSignal.removeEventListener('abort', onShutdown)
+      if (this.handleRuntimeCompletion(claim, first.result)) {
+        this.taskMayUseDatabase = false
+        return
+      }
       if (heartbeatResult.state === 'lost') {
         this.taskMayUseDatabase = false
         this.halted = true
@@ -245,12 +256,13 @@ export class ControlPlaneJobWorker {
     }
     await heartbeat
     try {
+      const outcome = await execution
+      if (this.handleRuntimeCompletion(claim, outcome)) return
       if (first?.kind === 'heartbeat_lost') {
         this.halted = true
         this.setStatus('reconciliation_required', first.reason, claim)
         return
       }
-      const outcome = await execution
       if (outcome.kind === 'result' && outcome.result.state === 'prewrite_failure') {
         await this.finishPrewrite(claim, outcome.result)
         return
@@ -294,6 +306,25 @@ export class ControlPlaneJobWorker {
           ? 'executor_outcome_unknown'
           : 'executor_claim_not_finalized'
     this.setStatus('reconciliation_required', reason, claim)
+  }
+
+  private handleRuntimeCompletion(
+    claim: ProductClaimToken,
+    outcome: NormalizedExecutorResult
+  ): boolean {
+    if (outcome.kind !== 'result' || outcome.result.state !== 'runtime_settled') return false
+    let verified = false
+    try {
+      verified = this.options.verifyRuntimeCompletion?.(claim, outcome.result) === true
+    } catch {
+      verified = false
+    }
+    if (verified) this.setStatus('idle', null)
+    else {
+      this.halted = true
+      this.setStatus('reconciliation_required', 'runtime_completion_unverified', claim)
+    }
+    return true
   }
 
   private async finishPrewrite(

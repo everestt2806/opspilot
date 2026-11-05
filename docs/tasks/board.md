@@ -1,5 +1,7 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
+> **06/11 — R3a CHỜ REVIEW, R3 tổng PARTIAL:** [Executor/worker integration](tk-s7-release-r3-executor.md) 7/7 real cases PASS, trusted persisted-proof verifier; full app **1414 PASS / 2 SKIP**, types/lint/build + fresh Linux CLI/helper bundle PASS. R2 local `950b7ae`, R1 `bc4289a`, R0 `ad37403`. Implementation R3a: `git log -1 -- app/src/main/controlPlane/productRuntimeExecutor.ts`. Còn R3b credential/enrollment/resource admission/cold recovery và R3c service/Git push/UI authority; default vẫn polling-only, chưa production rollout.
+
 > **06/11 — R2 CHỜ REVIEW:** R1 local `bc4289a`; [crash/settlement recovery lab](tk-s7-release-r2-recovery-lab.md) **9/9 real cases PASS**, cold SQLite + exact CID/image/StartedAt app và collector, cleanup=true. Implementation: `git log -1 -- app/scripts/product-runtime-lab/recovery.mjs`. Tiếp R3 adapter/bootstrap/service; chưa bật production executor, không nhận whole-product PASS.
 
 > **06/11 — User yêu cầu triển khai toàn bộ:** R0 local `ad37403`; R1 [full runtime SSH/Docker lab](tk-s7-release-r1-runtime-lab.md) **CHỜ REVIEW**, 7-case normal + 4-case restore-failure PASS, 286 Vitest + typechecks/lint/build/fresh Linux install PASS. Fix mount-order digest và build collector trước khi dừng bản cũ. Implementation SHA: `git log -1 -- app/src/main/controlPlane/target_product_runtime.py`. Tiếp R2 crash/recovery rồi R3 theo [release 04/12](tk-s7-release-2026-12-04.md). Tự triển khai, không chờ user chuyển prompt; chưa bật production executor và chưa chạy fault trên VPS.
