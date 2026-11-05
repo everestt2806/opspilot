@@ -58,3 +58,30 @@ The shared Docker image/build cache can grow normally; this tool does not prune 
 R1 passing does not enable the executor. R2 still covers lost responses/crashes around seal, T1,
 ACK, idle, T2 and lease/fence expiry; production enrollment, controller service, public exposure,
 three-template/DB parity, installer and real VPS acceptance are separate release gates.
+
+## Recovery matrix (R2)
+
+```sh
+node app/scripts/product-runtime-lab/recovery.mjs
+# Optional focused cases:
+node app/scripts/product-runtime-lab/recovery.mjs after-t1 after-ack
+```
+
+Nine cases: before seal, durable seal before T1, after T1, durable ACK before idle, idle before ACK
+response, after T2, expired committed lease, changed SSH identity in DB, and advanced target fence.
+Target faults terminate the actual helper process after its real fsync/atomic write. Controller
+faults throw after actual repository commits and recovery reads through a **new SQLite connection**;
+this does not claim an OS-level restart of an installed controller service. Expiry is forced into
+the past only in the scratch DB; it is not a natural 60-second soak.
+
+Pre-T1 outcomes intentionally remain unknown and reject settlement; operator reconciliation is
+still required. Post-T1 recovery verifies persisted signed records, leaves the app and collector
+CID/image/start time unchanged and settles idempotently. Stale pin/fence must reject without lease
+release. No phase is replayed to make a run look successful.
+
+The R2 preloader injects faults into an R1 child. After its assertions pass it raises
+`R2_CHECKPOINT_FINISHED` so the R1 child's normal cleanup runs. That child's intentional exit 1
+is **not** a standalone R1 regression result. Only the R2 aggregate may report this profile PASS,
+after checking its own assertions and the child's cleanup/source-unchanged flags.
+Reports: `app/.out-scripts/product-runtime-recovery/<nonce>/result.json`; per-case evidence and
+linked R1 scratch DB/collector artifacts remain separately identified.
