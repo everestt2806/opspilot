@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import copy
 import json
-import os
 import sys
 import tempfile
 import unittest
@@ -14,8 +13,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, '/subject')
-import target_product_runtime as runtime
 import target_execution_guard as guard
+import target_product_runtime as runtime
 
 FIXTURE = json.loads(Path('/fixtures.json').read_text())
 SECRET = bytes(range(32))
@@ -294,9 +293,8 @@ class TargetReview(unittest.TestCase):
 
     def test_seal_write_failure_never_returns_undurable_receipt(self):
         subject = self.healthy()
-        with patch.object(runtime, '_write_private', side_effect=OSError('FIXTURE_DISK_FAILURE')):
-            with self.assertRaises(OSError):
-                subject.seal()
+        with patch.object(runtime, '_write_private', side_effect=OSError('FIXTURE_DISK_FAILURE')), self.assertRaises(OSError):
+            subject.seal()
         self.assertFalse(subject.receipt_path.exists())
         envelope = subject.seal()
         self.assertTrue(subject.receipt_path.exists(), 'receipt returned without durable file')
@@ -332,9 +330,8 @@ class TargetReview(unittest.TestCase):
         subject = self.healthy()
         envelope = subject.seal()
         attestation = self.attestation(subject, envelope)
-        with patch.object(runtime, '_write_marker_atomic', side_effect=OSError('FIXTURE_CRASH_AFTER_ACK')):
-            with self.assertRaises(OSError):
-                subject.settle(attestation)
+        with patch.object(runtime, '_write_marker_atomic', side_effect=OSError('FIXTURE_CRASH_AFTER_ACK')), self.assertRaises(OSError):
+            subject.settle(attestation)
         first_ack = json.loads(subject.ack_path.read_text())
         self.assertEqual(guard._read_marker(subject.execution._marker_path)['execution_state'], 'unknown')
         subject.execution.__exit__(None, None, None)
@@ -360,9 +357,8 @@ class TargetReview(unittest.TestCase):
     def test_unknown_attempt_cannot_reopen_for_normal_mutation(self):
         subject = self.create()
         subject.execution.__exit__(None, None, None)
-        with self.assertRaises(guard.TargetGuardError):
-            with guard.acquire_execution(subject.root, subject.execution.identity):
-                self.fail('normal unknown replay accepted')
+        with self.assertRaises(guard.TargetGuardError), guard.acquire_execution(subject.root, subject.execution.identity):
+            self.fail('normal unknown replay accepted')
 
 
 if __name__ == '__main__':

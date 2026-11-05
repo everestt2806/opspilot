@@ -13,7 +13,10 @@ import time
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from typing import Self
 
 Phase = Literal["prepare", "build", "activate", "rollback"]
 _PHASES = {"prepare", "build", "activate", "rollback"}
@@ -343,7 +346,7 @@ class GuardedRecoveryExecution(AbstractContextManager["GuardedRecoveryExecution"
         self._lifecycle = self._NEW
         self._marker_path = root / f"{_identity_key(identity.controller_id, identity.app_id)}.json"
 
-    def __enter__(self) -> GuardedRecoveryExecution:
+    def __enter__(self) -> Self:
         if self._lifecycle == self._ACTIVE:
             raise TargetGuardError("TARGET_EXECUTION_ALREADY_ENTERED")
         if self._lifecycle != self._NEW:

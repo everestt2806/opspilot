@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Duplex, PassThrough } from 'node:stream'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClientChannel } from 'ssh2'
 import type { ProductClaimToken } from '../../../../docs/contracts/product-auto-deploy'
 import type {
@@ -212,6 +212,31 @@ function setupTestEnvironment(
 }
 
 describe('Product Runtime Pipeline (H2-B)', () => {
+  it('rejects an unsupported plan before opening SSH or creating a deployment', async () => {
+    const env = setupTestEnvironment()
+    env.database.prepare("UPDATE app SET framework='nextjs' WHERE id=1").run()
+    const open = vi.fn()
+    await expect(
+      executeProductDeployPipeline(
+        env.database,
+        env.runtimeRepository,
+        env.deployRepository,
+        { openGuardedExecutionChannelWithIdentity: open } as unknown as SshManager,
+        env.snapshot,
+        {
+          vps_id: 1,
+          target_helper_path: '/usr/local/bin/helper',
+          target_state_root: '/var/lib/opspilot'
+        }
+      )
+    ).rejects.toMatchObject({ code: 'PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN' })
+    expect(open).not.toHaveBeenCalled()
+    expect(env.database.prepare('SELECT COUNT(*) AS n FROM deployment').get()).toEqual({ n: 0 })
+    expect(env.database.prepare('SELECT remote_outcome FROM product_deploy_attempt').get()).toEqual(
+      { remote_outcome: 'not_started' }
+    )
+  })
+
   it('happy path V1 -> V2 succeeds and settles in single session', async () => {
     const env = setupTestEnvironment({ withPrevious: true })
     const boundaryB0: H2MetricBoundary = {

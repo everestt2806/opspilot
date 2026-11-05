@@ -14,7 +14,8 @@ import {
 } from './guardedSshSession'
 import {
   executeProductBuildWithSession,
-  stageProductSourceAndRenderWithSession
+  stageProductSourceAndRenderWithSession,
+  validatePreflightSourceAndPlan
 } from './productPipelineSourceRender'
 import type { PreparedProductGitSnapshot } from './productSnapshotPreparation'
 
@@ -64,6 +65,7 @@ export async function executeProductDeployPipeline(
   snapshot: PreparedProductGitSnapshot,
   options: ProductDeployPipelineOptions
 ): Promise<ProductDeployPipelineResult> {
+  validatePreflightSourceAndPlan(database, snapshot, options.collector_directory)
   const session = await openProductGuardedSshSession(deployRepository, ssh, snapshot, {
     vps_id: options.vps_id,
     target_helper_path: options.target_helper_path,

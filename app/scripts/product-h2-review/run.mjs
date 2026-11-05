@@ -40,7 +40,7 @@ try {
       '--tmpfs',
       '/tmp:rw,nosuid,nodev,size=64m',
       '--tmpfs',
-      '/opt/opspilot:rw,nosuid,nodev,size=16m',
+      '/opt/opspilot:rw,nosuid,nodev,size=16m,mode=0755',
       '--mount',
       `type=bind,source=${subject},target=/subject,readonly`,
       '--mount',

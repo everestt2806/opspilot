@@ -14,6 +14,7 @@ import sys
 import tempfile
 import threading
 from collections import deque
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -500,6 +501,19 @@ def redact_secrets(text: str) -> str:
     return "[REDACTED BUILD OUTPUT]" if text else ""
 
 
+def _stop_build(process: Any) -> None:
+    """Dừng CLI do helper sở hữu; không suy ra daemon Docker đã dừng."""
+    if process is None or process.poll() is not None:
+        return
+    try:
+        process.terminate()
+        process.wait(timeout=1)
+    except (OSError, subprocess.TimeoutExpired):
+        with suppress(OSError, subprocess.TimeoutExpired):
+            process.kill()
+            process.wait(timeout=1)
+
+
 def main() -> int:
     execution: GuardedExecution | None = None
     transfer: TransferState | None = None
@@ -575,7 +589,7 @@ def main() -> int:
                         code = getattr(error, "code", "SSH_SETTLEMENT_REJECTED")
                         reject(request, code if code in TARGET_CODES else "SSH_SETTLEMENT_REJECTED")
                         return 3
-                    except Exception:
+                    except (OSError, ValueError, TypeError, KeyError, AttributeError):
                         reject(request, "SSH_SETTLEMENT_REJECTED")
                         return 3
                     write_frame(
@@ -671,20 +685,10 @@ def main() -> int:
                     reject(request, "TARGET_EXECUTION_NOT_ACTIVE")
                     return 3
                 if runtime is not None:
-                    try:
+                    with suppress(OSError, RuntimeRejected, RuntimeUnknown, TargetGuardError):
                         runtime.close()
-                    except Exception:
-                        pass
                     runtime = None
-                if build_proc is not None and build_proc.poll() is None:
-                    try:
-                        build_proc.terminate()
-                        build_proc.wait(timeout=1)
-                    except Exception:
-                        try:
-                            build_proc.kill()
-                        except Exception:
-                            pass
+                _stop_build(build_proc)
                 if transfer is not None:
                     transfer.cleanup_incomplete()
                 if execution is not None:
@@ -824,13 +828,11 @@ def main() -> int:
                                 if not chunk:
                                     break
                                 buffer.append(chunk)
-                        except Exception:
-                            pass
+                        except (OSError, ValueError):
+                            return
                         finally:
-                            try:
+                            with suppress(OSError, ValueError):
                                 pipe.close()
-                            except Exception:
-                                pass
 
                     build_thread = threading.Thread(
                         target=_drain_output,
@@ -898,8 +900,7 @@ def main() -> int:
                     try:
                         inspect_res = subprocess.run(
                             ["docker", "inspect", build_image_tag],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
+                            capture_output=True,
                             text=True,
                             check=False,
                             timeout=10.0,
@@ -911,15 +912,16 @@ def main() -> int:
                                 if isinstance(raw_id, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", raw_id):
                                     image_id = raw_id
                                 raw_labels = inspected[0].get("Config", {}).get("Labels")
-                                if isinstance(raw_labels, dict):
-                                    if all(isinstance(k, str) and isinstance(v, str) for k, v in raw_labels.items()):
-                                        labels = raw_labels
+                                if isinstance(raw_labels, dict) and all(
+                                    isinstance(k, str) and isinstance(v, str) for k, v in raw_labels.items()
+                                ):
+                                    labels = raw_labels
                                 if (image_id
                                     and labels.get("opspilot.app_id") == str(identity.app_id)
                                     and labels.get("opspilot.deployment_id") == str(deployment_id)
                                     and labels.get("org.opencontainers.image.revision") == build_source_sha):
                                     inspect_success = True
-                    except Exception:
+                    except (OSError, ValueError, TypeError, AttributeError, subprocess.SubprocessError):
                         inspect_success = False
 
                     if inspect_success:
@@ -1004,7 +1006,7 @@ def main() -> int:
                     code = getattr(error, "code", "SSH_RUNTIME_REJECTED")
                     reject(request, code if code in TARGET_CODES else "SSH_RUNTIME_REJECTED")
                     return 3
-                except Exception:
+                except (OSError, ValueError, TypeError, KeyError, AttributeError):
                     reject(request, "SSH_RUNTIME_REJECTED")
                     return 3
                 write_frame(
@@ -1045,7 +1047,7 @@ def main() -> int:
                     code = getattr(error, "code", "SSH_RUNTIME_REJECTED")
                     reject(request, code if code in TARGET_CODES else "SSH_RUNTIME_REJECTED")
                     return 3
-                except Exception:
+                except (OSError, ValueError, TypeError, KeyError, AttributeError):
                     reject(request, "SSH_RUNTIME_REJECTED")
                     return 3
                 write_frame(
@@ -1080,7 +1082,7 @@ def main() -> int:
                     code = getattr(error, "code", "SSH_RUNTIME_REJECTED")
                     reject(request, code if code in TARGET_CODES else "SSH_RUNTIME_REJECTED")
                     return 3
-                except Exception:
+                except (OSError, ValueError, TypeError, KeyError, AttributeError):
                     reject(request, "SSH_RUNTIME_REJECTED")
                     return 3
                 write_frame(
@@ -1117,7 +1119,7 @@ def main() -> int:
                     code = getattr(error, "code", "SSH_RUNTIME_REJECTED")
                     reject(request, code if code in TARGET_CODES else "SSH_RUNTIME_REJECTED")
                     return 3
-                except Exception:
+                except (OSError, ValueError, TypeError, KeyError, AttributeError):
                     reject(request, "SSH_RUNTIME_REJECTED")
                     return 3
                 write_frame(
@@ -1154,7 +1156,7 @@ def main() -> int:
                     code = getattr(error, "code", "SSH_SETTLEMENT_REJECTED")
                     reject(request, code if code in TARGET_CODES else "SSH_SETTLEMENT_REJECTED")
                     return 3
-                except Exception:
+                except (OSError, ValueError, TypeError, KeyError, AttributeError):
                     reject(request, "SSH_SETTLEMENT_REJECTED")
                     return 3
                 write_frame(
@@ -1177,19 +1179,9 @@ def main() -> int:
         return 2
     finally:
         if runtime is not None:
-            try:
+            with suppress(OSError, RuntimeRejected, RuntimeUnknown, TargetGuardError):
                 runtime.close()
-            except Exception:
-                pass
-        if build_proc is not None and build_proc.poll() is None:
-            try:
-                build_proc.terminate()
-                build_proc.wait(timeout=1)
-            except Exception:
-                try:
-                    build_proc.kill()
-                except Exception:
-                    pass
+        _stop_build(build_proc)
         if transfer is not None:
             transfer.cleanup_incomplete()
         if execution is not None:

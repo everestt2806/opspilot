@@ -7,6 +7,8 @@
 
 ## Bàn giao partner 25/10 — ưu tiên trong 3–4 ngày
 
+> 05/11 — Leader ĐANG LÀM [review/merge #33 → #34 và kiểm kê sau tích hợp](tk-s7-pr33-pr34-integration-2026-11-05.md) theo yêu cầu user. Trạng thái H2 vẫn PARTIAL cho tới đủ DoD; không bật executor production chỉ vì PR đã merge.
+
 Đọc [hồ sơ/task bàn giao](tk-s7-partner-handoff-2026-10-25.md) trước khi tiếp tục. H0/source-render đã qua gate giới hạn; P3e-3b tổng thể vẫn PARTIAL/BLOCKED. Ngoại lệ user chốt 25/10: H1 runtime và L0 Docker lab được làm song song với owner/file tách biệt; H2-D chỉ thiết kế, H2-I chờ H1 + L0 và review. Mỗi file chỉ một owner, Leader tích hợp và cập nhật hồ sơ chung. Chưa có Worker tự động đang chạy do Codex `agent-update-prompt`.
 
 | ID | Owner | Trạng thái | Đầu ra / phụ thuộc |

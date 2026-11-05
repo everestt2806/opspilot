@@ -19,8 +19,12 @@ from pathlib import Path
 from typing import Any
 
 from target_execution_guard import (
-    ExecutionIdentity, GuardedExecution, TargetGuardError, _identity_key,
-    _read_marker, _write_marker_atomic,
+    ExecutionIdentity,
+    GuardedExecution,
+    TargetGuardError,
+    _identity_key,
+    _read_marker,
+    _write_marker_atomic,
 )
 
 _CONTEXT_KEYS = {"version", "execution_nonce", "claim", "target", "deployment_id", "source_sha",
@@ -205,10 +209,10 @@ def validate_context(context: Any, identity: ExecutionIdentity, deployment_id: i
     claim, target = context.get("claim"), context.get("target")
     if not isinstance(claim, dict) or set(claim) != _CLAIM_KEYS or not isinstance(target, dict) or set(target) != _TARGET_KEYS:
         raise RuntimeRejected()
-    for field in {"controller_id", "job_id", "attempt_id", "app_lease_id", "build_slot_lease_id"}:
+    for field in ("controller_id", "job_id", "attempt_id", "app_lease_id", "build_slot_lease_id"):
         if not _match(_IDENT, claim[field]):
             raise RuntimeRejected()
-    for field in {"app_id", "attempt_number", "ownership_generation", "source_generation", "app_fence", "build_slot_fence"}:
+    for field in ("app_id", "attempt_number", "ownership_generation", "source_generation", "app_fence", "build_slot_fence"):
         if not _positive(claim[field]):
             raise RuntimeRejected()
     if (claim["controller_id"] != identity.controller_id or str(claim["app_id"]) != identity.app_id
@@ -226,7 +230,7 @@ def validate_context(context: Any, identity: ExecutionIdentity, deployment_id: i
         or not _positive(context["health_timeout_ms"]) or context["health_timeout_ms"] > 60_000
         or context["exposure_policy"] != "not_checked"):
         raise RuntimeRejected()
-    for field in {"vps_id", "port", "ssh_security_revision"}:
+    for field in ("vps_id", "port", "ssh_security_revision"):
         if not _positive(target[field]):
             raise RuntimeRejected()
     if (target["port"] > 65535 or target["auth_type"] not in {"key", "password"}
@@ -426,7 +430,7 @@ class ProductRuntime:
             self.ambiguous = True
             value = {"state": "unknown", "step": step, "remote_quiescent": False,
                      "safe_error_code": error.code}
-        except Exception:
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, RuntimeRejected, subprocess.SubprocessError):
             self.ambiguous = True
             value = {"state": "unknown", "step": step, "remote_quiescent": False,
                      "safe_error_code": "SSH_RUNTIME_UNKNOWN"}
@@ -559,7 +563,7 @@ class ProductRuntime:
             raise RuntimeUnknown("SSH_RUNTIME_IDENTITY_MISMATCH")
         self._authorize()
         self.commands.run(["build", "-t", self.collector_tag,
-                           *sum((["--label", f"{key}={value}"] for key, value in self._labels(self.deployment_id, self.context["source_sha"]).items()), []),
+                           *[part for key, value in self._labels(self.deployment_id, self.context["source_sha"]).items() for part in ("--label", f"{key}={value}")],
                            "-f", str(self.transfer_directory / "source/collector/Dockerfile"),
                            str(self.transfer_directory / "source/collector")], timeout=120, capture=False)
         collector_image = self.commands.inspect("image", self.collector_tag)
@@ -575,7 +579,7 @@ class ProductRuntime:
         labels.update({"opspilot.controller_id": self.context["claim"]["controller_id"],
                        "opspilot.ownership_generation": str(self.context["claim"]["ownership_generation"]),
                        "opspilot.execution_nonce": self.context["execution_nonce"]})
-        return sum((["--label", f"{key}={value}"] for key, value in labels.items()), [])
+        return [part for key, value in labels.items() for part in ("--label", f"{key}={value}")]
 
     def _ensure_network(self) -> None:
         assert self.context is not None
@@ -836,7 +840,7 @@ class RecoveryRuntime:
                 raise RuntimeRejected("SSH_SETTLEMENT_REJECTED")
             _validate_commit(self.context, self.envelope, self.secret, attestation)
             self.ack_path = directory / f"settled-{context['deployment_id']}.json"
-        except Exception:
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, RuntimeRejected, RuntimeUnknown, TargetGuardError, subprocess.SubprocessError):
             if hasattr(self, "execution"):
                 self.execution.__exit__(None, None, None)
             raise RuntimeRejected("SSH_SETTLEMENT_REJECTED") from None

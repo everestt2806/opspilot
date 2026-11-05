@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, '/subject')
-from target_product_runtime import ProductRuntime, DockerCommands, RuntimeRejected
+from target_product_runtime import DockerCommands, ProductRuntime, RuntimeRejected
 
 fixture = json.loads(Path('/live.json').read_text())
 subject = ProductRuntime.__new__(ProductRuntime)
