@@ -1,0 +1,4 @@
+FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-server docker-cli && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /run/sshd /lab/state /lab/ssh
+CMD ["/usr/sbin/sshd", "-D", "-e", "-f", "/lab/ssh/sshd_config"]

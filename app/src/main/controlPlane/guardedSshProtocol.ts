@@ -4,8 +4,9 @@ import {
   type GuardedSshErrorCode,
   type GuardedSshResponse
 } from '../../../../docs/contracts/product-guarded-ssh-session'
+import { h2AckSchema, h2EnvelopeSchema, h2ProgressSchema } from './productH2Proof'
 
-const STABLE_ERROR_CODES = new Set([
+export const STABLE_ERROR_CODES = new Set([
   'SSH_PIN_REJECTED',
   'SSH_CONNECT_FAILED',
   'SSH_SESSION_TIMEOUT',
@@ -23,6 +24,10 @@ const STABLE_ERROR_CODES = new Set([
   'SSH_BUILD_FAILED',
   'SSH_BUILD_TIMEOUT',
   'SSH_BUILD_NOT_ACTIVE',
+  'SSH_RUNTIME_REJECTED',
+  'SSH_RUNTIME_FAILED',
+  'SSH_RUNTIME_UNKNOWN',
+  'SSH_SETTLEMENT_REJECTED',
   'SSH_AUTHORITY_STALE',
   'SSH_DISPATCH_RECONCILIATION_REQUIRED',
   'SSH_DISPATCH_REJECTED',
@@ -124,7 +129,10 @@ function isResponse(value: unknown): value is GuardedSshResponse {
     'image_id',
     'image_tag',
     'labels',
-    'error_tail'
+    'error_tail',
+    'runtime',
+    'terminal',
+    'settlement'
   ])
   const keys = Object.keys(response)
   if (keys.some((key) => !ALLOWED_RESPONSE_KEYS.has(key))) {
@@ -150,6 +158,9 @@ function isResponse(value: unknown): value is GuardedSshResponse {
         Object.entries(response.labels).every(
           ([k, v]) => typeof k === 'string' && typeof v === 'string'
         ))) &&
-    (response.error_tail === undefined || typeof response.error_tail === 'string')
+    (response.error_tail === undefined || typeof response.error_tail === 'string') &&
+    (response.runtime === undefined || h2ProgressSchema.safeParse(response.runtime).success) &&
+    (response.terminal === undefined || h2EnvelopeSchema.safeParse(response.terminal).success) &&
+    (response.settlement === undefined || h2AckSchema.safeParse(response.settlement).success)
   )
 }

@@ -67,7 +67,9 @@ function downgradeMigration009ToV8(database: Database.Database): void {
 
 function downgradeMigration010ToV9(database: Database.Database): void {
   const identityTrigger = database
-    .prepare("SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='domain_binding_invalidate_changed_route_identity'")
+    .prepare(
+      "SELECT 1 FROM sqlite_master WHERE type='trigger' AND name='domain_binding_invalidate_changed_route_identity'"
+    )
     .get()
   if (identityTrigger) downgradeMigration011ToV10(database)
   database.exec(`
@@ -105,7 +107,9 @@ function downgradeMigration011ToV10(database: Database.Database): void {
 
 function downgradeMigration012ToV11(database: Database.Database): void {
   downgradeMigration013ToV12(database)
-  database.exec(`DROP TABLE IF EXISTS ingress_reconcile_observation; DELETE FROM schema_version WHERE version=12;`)
+  database.exec(
+    `DROP TABLE IF EXISTS ingress_reconcile_observation; DELETE FROM schema_version WHERE version=12;`
+  )
 }
 
 function downgradeMigration013ToV12(database: Database.Database): void {
@@ -156,6 +160,9 @@ function downgradeMigration014ToV13(database: Database.Database): void {
 
 function downgradeProductMigrationsToV15(database: Database.Database): void {
   database.exec(`
+    DROP TABLE IF EXISTS product_runtime_terminal;
+    DROP TABLE IF EXISTS product_runtime_execution;
+    DELETE FROM schema_version WHERE version=20;
     ALTER TABLE vps DROP COLUMN ssh_security_revision;
     DELETE FROM schema_version WHERE version=19;
     DROP TRIGGER IF EXISTS product_app_control_pause_provenance_insert;
@@ -179,7 +186,9 @@ function downgradeProductMigrationsToV15(database: Database.Database): void {
 }
 
 function seedActiveDomainProof(database: Database.Database, id: number): void {
-  database.prepare(`UPDATE domain_binding SET route_status='active', certificate_status='valid',
+  database
+    .prepare(
+      `UPDATE domain_binding SET route_status='active', certificate_status='valid',
     https_probe_status='passed', observed_generation=desired_generation,
     route_environment='production', https_probe_environment='production',
     route_config_generation=?, route_inventory_revision=?, https_probe_generation=?,
@@ -187,7 +196,9 @@ function seedActiveDomainProof(database: Database.Database, id: number): void {
     https_probe_peer_ips_json='["203.0.113.42"]', https_probe_http_status=200,
     route_checked_at='2026-10-16T00:00:00Z', certificate_checked_at='2026-10-16T00:00:00Z',
     certificate_hostname=hostname, https_probe_checked_at='2026-10-16T00:00:00Z',
-    https_probe_hostname=hostname WHERE id=?`).run('a'.repeat(64), 'b'.repeat(64), 'a'.repeat(64), 'b'.repeat(64), id)
+    https_probe_hostname=hostname WHERE id=?`
+    )
+    .run('a'.repeat(64), 'b'.repeat(64), 'a'.repeat(64), 'b'.repeat(64), id)
 }
 
 afterEach(() => {
@@ -259,9 +270,7 @@ describe('initializeDatabase', () => {
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     expect(() =>
-      database
-        .prepare("UPDATE domain_binding SET route_status='active' WHERE id=82")
-        .run()
+      database.prepare("UPDATE domain_binding SET route_status='active' WHERE id=82").run()
     ).toThrow(/domain_https_active_requires_production_probe_evidence/)
     expect(() =>
       database
@@ -274,7 +283,7 @@ describe('initializeDatabase', () => {
       count: 1
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 19
+      version: 20
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
   })
@@ -296,14 +305,16 @@ describe('initializeDatabase', () => {
     `)
     const before = database.prepare('SELECT * FROM domain_binding WHERE id=82').get()
     runMigrations(database)
-    expect(database.prepare('SELECT * FROM domain_binding WHERE id=82').get()).toMatchObject(before as object)
+    expect(database.prepare('SELECT * FROM domain_binding WHERE id=82').get()).toMatchObject(
+      before as object
+    )
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 19
+      version: 20
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 19
+      version: 20
     })
   })
 
@@ -325,10 +336,20 @@ describe('initializeDatabase', () => {
         'active.example.com', 'now', 'active.example.com');
     `)
     runMigrations(database)
-    expect(database.prepare(`SELECT route_status, certificate_status, https_probe_status, observed_generation,
-      route_environment, https_probe_environment FROM domain_binding WHERE id=72`).get()).toEqual({
-      route_status: 'pending', certificate_status: 'not_requested', https_probe_status: 'not_run',
-      observed_generation: 0, route_environment: null, https_probe_environment: null
+    expect(
+      database
+        .prepare(
+          `SELECT route_status, certificate_status, https_probe_status, observed_generation,
+      route_environment, https_probe_environment FROM domain_binding WHERE id=72`
+        )
+        .get()
+    ).toEqual({
+      route_status: 'pending',
+      certificate_status: 'not_requested',
+      https_probe_status: 'not_run',
+      observed_generation: 0,
+      route_environment: null,
+      https_probe_environment: null
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
   })
@@ -348,11 +369,17 @@ describe('initializeDatabase', () => {
           'opspilot-ingress:151:spa.example.com', 'propagated', 'propagated');
     `)
     runMigrations(database)
-    expect(database.prepare('SELECT healthcheck_response_type FROM app WHERE id=151').get()).toEqual({
+    expect(
+      database.prepare('SELECT healthcheck_response_type FROM app WHERE id=151').get()
+    ).toEqual({
       healthcheck_response_type: 'status_2xx'
     })
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 19 })
-    database.prepare(`UPDATE domain_binding SET route_status='active', certificate_status='valid',
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
+      version: 20
+    })
+    database
+      .prepare(
+        `UPDATE domain_binding SET route_status='active', certificate_status='valid',
       https_probe_status='passed', observed_generation=desired_generation,
       route_checked_at='now', certificate_checked_at='now', certificate_hostname=hostname,
       https_probe_checked_at='now', https_probe_hostname=hostname,
@@ -360,19 +387,36 @@ describe('initializeDatabase', () => {
       route_config_generation=?, route_inventory_revision=?, https_probe_generation=?,
       https_probe_inventory_revision=?, https_probe_peer_ip='198.51.100.150',
       https_probe_peer_ips_json='["198.51.100.150"]', https_probe_http_status=201 WHERE id=152`
-    ).run('a'.repeat(64), 'b'.repeat(64), 'a'.repeat(64), 'b'.repeat(64))
-    expect(database.prepare('SELECT route_status, https_probe_http_status FROM domain_binding WHERE id=152').get()).toEqual({
-      route_status: 'active', https_probe_http_status: 201
+      )
+      .run('a'.repeat(64), 'b'.repeat(64), 'a'.repeat(64), 'b'.repeat(64))
+    expect(
+      database
+        .prepare('SELECT route_status, https_probe_http_status FROM domain_binding WHERE id=152')
+        .get()
+    ).toEqual({
+      route_status: 'active',
+      https_probe_http_status: 201
     })
-    expect(() => database.prepare('UPDATE domain_binding SET https_probe_http_status=199 WHERE id=152').run())
-      .toThrow(/domain_https_active_requires_production_probe_evidence/)
+    expect(() =>
+      database.prepare('UPDATE domain_binding SET https_probe_http_status=199 WHERE id=152').run()
+    ).toThrow(/domain_https_active_requires_production_probe_evidence/)
     database.prepare("UPDATE app SET healthcheck_response_type='json' WHERE id=151").run()
-    expect(database.prepare('SELECT route_status, https_probe_status, https_probe_peer_ips_json FROM domain_binding WHERE id=152').get()).toEqual({
-      route_status: 'pending', https_probe_status: 'not_run', https_probe_peer_ips_json: null
+    expect(
+      database
+        .prepare(
+          'SELECT route_status, https_probe_status, https_probe_peer_ips_json FROM domain_binding WHERE id=152'
+        )
+        .get()
+    ).toEqual({
+      route_status: 'pending',
+      https_probe_status: 'not_run',
+      https_probe_peer_ips_json: null
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 19 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
+      version: 20
+    })
   })
 
   it('migration 015 repairs v13 active proof after 014 without changing newly verified active domains', () => {
@@ -389,22 +433,35 @@ describe('initializeDatabase', () => {
         VALUES (162, 161, 'legacy.example.com', 'shared_ingress', '198.51.100.160', 'dns:161',
           'opspilot-ingress:161:legacy.example.com', 'propagated', 'propagated');
     `)
-    database.prepare(`UPDATE domain_binding SET route_status='active', certificate_status='valid',
+    database
+      .prepare(
+        `UPDATE domain_binding SET route_status='active', certificate_status='valid',
       https_probe_status='passed', observed_generation=desired_generation,
       route_environment='production', https_probe_environment='production',
       route_config_generation=?, route_inventory_revision=?, https_probe_generation=?,
       https_probe_inventory_revision=?, https_probe_peer_ip='198.51.100.160',
       https_probe_http_status=200, route_checked_at='now', certificate_checked_at='now',
       certificate_hostname=hostname, https_probe_checked_at='now', https_probe_hostname=hostname
-      WHERE id=162`).run('a'.repeat(64), 'b'.repeat(64), 'a'.repeat(64), 'b'.repeat(64))
+      WHERE id=162`
+      )
+      .run('a'.repeat(64), 'b'.repeat(64), 'a'.repeat(64), 'b'.repeat(64))
 
     runMigrations(database, 14)
-    expect(database.prepare(`SELECT route_status, https_probe_status, https_probe_peer_ips_json
-      FROM domain_binding WHERE id=162`).get()).toEqual({
-      route_status: 'active', https_probe_status: 'passed', https_probe_peer_ips_json: null
+    expect(
+      database
+        .prepare(
+          `SELECT route_status, https_probe_status, https_probe_peer_ips_json
+      FROM domain_binding WHERE id=162`
+        )
+        .get()
+    ).toEqual({
+      route_status: 'active',
+      https_probe_status: 'passed',
+      https_probe_peer_ips_json: null
     })
-    expect(() => database.prepare('UPDATE domain_binding SET route_status=route_status WHERE id=162').run())
-      .toThrow(/domain_https_active_requires_production_probe_evidence/)
+    expect(() =>
+      database.prepare('UPDATE domain_binding SET route_status=route_status WHERE id=162').run()
+    ).toThrow(/domain_https_active_requires_production_probe_evidence/)
 
     database.exec(`
       INSERT INTO app (id, vps_id, name, framework, host_port, container_port)
@@ -417,31 +474,62 @@ describe('initializeDatabase', () => {
     seedActiveDomainProof(database, 164)
     runMigrations(database)
 
-    expect(database.prepare(`SELECT route_status, https_probe_status, https_probe_peer_ips_json
-      FROM domain_binding WHERE id=162`).get()).toEqual({
-      route_status: 'pending', https_probe_status: 'not_run', https_probe_peer_ips_json: null
+    expect(
+      database
+        .prepare(
+          `SELECT route_status, https_probe_status, https_probe_peer_ips_json
+      FROM domain_binding WHERE id=162`
+        )
+        .get()
+    ).toEqual({
+      route_status: 'pending',
+      https_probe_status: 'not_run',
+      https_probe_peer_ips_json: null
     })
-    expect(() => database.prepare('UPDATE domain_binding SET route_status=route_status WHERE id=162').run())
-      .not.toThrow()
-    expect(database.prepare(`SELECT route_status, https_probe_status, https_probe_peer_ips_json
-      FROM domain_binding WHERE id=164`).get()).toEqual({
-      route_status: 'active', https_probe_status: 'passed', https_probe_peer_ips_json: '["203.0.113.42"]'
+    expect(() =>
+      database.prepare('UPDATE domain_binding SET route_status=route_status WHERE id=162').run()
+    ).not.toThrow()
+    expect(
+      database
+        .prepare(
+          `SELECT route_status, https_probe_status, https_probe_peer_ips_json
+      FROM domain_binding WHERE id=164`
+        )
+        .get()
+    ).toEqual({
+      route_status: 'active',
+      https_probe_status: 'passed',
+      https_probe_peer_ips_json: '["203.0.113.42"]'
     })
-    expect(() => database.prepare("UPDATE domain_binding SET route_status='active' WHERE id=162").run())
-      .toThrow(/domain_https_active_requires_production_probe_evidence/)
-    database.prepare(`UPDATE domain_binding SET route_status='active', https_probe_status='passed',
+    expect(() =>
+      database.prepare("UPDATE domain_binding SET route_status='active' WHERE id=162").run()
+    ).toThrow(/domain_https_active_requires_production_probe_evidence/)
+    database
+      .prepare(
+        `UPDATE domain_binding SET route_status='active', https_probe_status='passed',
       https_probe_checked_at='new-probe', https_probe_hostname=hostname,
       https_probe_peer_ip='198.51.100.160', https_probe_peer_ips_json='["198.51.100.160"]',
       https_probe_http_status=204, https_probe_generation=route_config_generation,
       https_probe_inventory_revision=route_inventory_revision, https_probe_environment='production'
-      WHERE id=162`).run()
-    expect(database.prepare('SELECT route_status, https_probe_peer_ips_json FROM domain_binding WHERE id=162').get()).toEqual({
-      route_status: 'active', https_probe_peer_ips_json: '["198.51.100.160"]'
+      WHERE id=162`
+      )
+      .run()
+    expect(
+      database
+        .prepare('SELECT route_status, https_probe_peer_ips_json FROM domain_binding WHERE id=162')
+        .get()
+    ).toEqual({
+      route_status: 'active',
+      https_probe_peer_ips_json: '["198.51.100.160"]'
     })
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 19 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
+      version: 20
+    })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
-    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({ version: 19 })
+    expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
+      version: 20
+    })
   })
 
   it('executes the complete schema contract on an empty SQLite database', () => {
@@ -470,52 +558,96 @@ describe('initializeDatabase', () => {
     `)
     const repository = new DomainRepository(database)
     repository.upsertDns({
-      app_id: 82, hostname: 'app.ingress.example', mode: 'shared_ingress', provider: 'fixture',
-      zone_id: 'zone-fixture', record_type: 'A', record_name: 'app.ingress.example', target: '198.51.100.81',
-      ownership_key: 'dns-owner:82', route_ownership_key: 'opspilot-ingress:82:app.ingress.example',
+      app_id: 82,
+      hostname: 'app.ingress.example',
+      mode: 'shared_ingress',
+      provider: 'fixture',
+      zone_id: 'zone-fixture',
+      record_type: 'A',
+      record_name: 'app.ingress.example',
+      target: '198.51.100.81',
+      ownership_key: 'dns-owner:82',
+      route_ownership_key: 'opspilot-ingress:82:app.ingress.example',
       dns_status: 'propagated'
     })
     const snapshot = repository.getSharedIngressInventory(81)
-    expect(snapshot.bindings).toEqual([expect.objectContaining({
-      app_id: 82, current_deployment_id: 83, deployment_version: 5,
-      hostname: 'app.ingress.example', host_port: 30082, enabled: true,
-      image_tag: 'registry.example/ingress-app:v5'
-    })])
+    expect(snapshot.bindings).toEqual([
+      expect.objectContaining({
+        app_id: 82,
+        current_deployment_id: 83,
+        deployment_version: 5,
+        hostname: 'app.ingress.example',
+        host_port: 30082,
+        enabled: true,
+        image_tag: 'registry.example/ingress-app:v5'
+      })
+    ])
     repository.recordSharedIngressReconcile(snapshot, 'production', 'a'.repeat(64), 'b'.repeat(64))
     expect(repository.getSharedIngressReconcileObservation(81)).toEqual({
-      vps_id: 81, inventory_revision: snapshot.revision, environment: 'production',
-      generation: 'a'.repeat(64), config_sha256: 'b'.repeat(64)
+      vps_id: 81,
+      inventory_revision: snapshot.revision,
+      environment: 'production',
+      generation: 'a'.repeat(64),
+      config_sha256: 'b'.repeat(64)
     })
     expect(repository.getByHostname('app.ingress.example')).toMatchObject({
-      route_status: 'pending', certificate_status: 'not_requested', https_probe_status: 'not_run',
+      route_status: 'pending',
+      certificate_status: 'not_requested',
+      https_probe_status: 'not_run',
       observed_generation: 1
     })
     repository.recordProductionHttpsActivation({
-      snapshot, binding: snapshot.bindings[0], generation: 'a'.repeat(64), configSha256: 'b'.repeat(64),
-      peerIp: '198.51.100.81', peerIps: ['198.51.100.81'],
-      httpStatus: 200, checkedAt: '2026-10-16T00:01:00Z'
+      snapshot,
+      binding: snapshot.bindings[0],
+      generation: 'a'.repeat(64),
+      configSha256: 'b'.repeat(64),
+      peerIp: '198.51.100.81',
+      peerIps: ['198.51.100.81'],
+      httpStatus: 200,
+      checkedAt: '2026-10-16T00:01:00Z'
     })
     expect(repository.getByHostname('app.ingress.example')).toMatchObject({
-      route_status: 'active', certificate_status: 'valid', https_probe_status: 'passed',
-      route_environment: 'production', https_probe_environment: 'production',
-      https_probe_generation: 'a'.repeat(64), https_probe_inventory_revision: snapshot.revision,
-      https_probe_peer_ip: '198.51.100.81', https_probe_http_status: 200
+      route_status: 'active',
+      certificate_status: 'valid',
+      https_probe_status: 'passed',
+      route_environment: 'production',
+      https_probe_environment: 'production',
+      https_probe_generation: 'a'.repeat(64),
+      https_probe_inventory_revision: snapshot.revision,
+      https_probe_peer_ip: '198.51.100.81',
+      https_probe_http_status: 200
     })
     repository.recordSharedIngressReconcile(snapshot, 'production', 'a'.repeat(64), 'b'.repeat(64))
     expect(repository.getByHostname('app.ingress.example')).toMatchObject({
-      route_status: 'active', https_probe_peer_ips_json: '["198.51.100.81"]'
+      route_status: 'active',
+      https_probe_peer_ips_json: '["198.51.100.81"]'
     })
-    repository.recordSharedIngressReconcile(snapshot, 'acme_staging', 'c'.repeat(64), 'd'.repeat(64))
+    repository.recordSharedIngressReconcile(
+      snapshot,
+      'acme_staging',
+      'c'.repeat(64),
+      'd'.repeat(64)
+    )
     expect(repository.getByHostname('app.ingress.example')).toMatchObject({
-      route_status: 'pending', certificate_status: 'not_requested', https_probe_status: 'not_run',
-      route_environment: 'acme_staging', https_probe_environment: null,
+      route_status: 'pending',
+      certificate_status: 'not_requested',
+      https_probe_status: 'not_run',
+      route_environment: 'acme_staging',
+      https_probe_environment: null,
       https_probe_peer_ips_json: null
     })
-    expect(() => repository.recordProductionHttpsActivation({
-      snapshot, binding: snapshot.bindings[0], generation: 'c'.repeat(64), configSha256: 'd'.repeat(64),
-      peerIp: '198.51.100.81', peerIps: ['198.51.100.81'],
-      httpStatus: 200, checkedAt: '2026-10-16T00:02:00Z'
-    })).toThrow(/VALIDATION/)
+    expect(() =>
+      repository.recordProductionHttpsActivation({
+        snapshot,
+        binding: snapshot.bindings[0],
+        generation: 'c'.repeat(64),
+        configSha256: 'd'.repeat(64),
+        peerIp: '198.51.100.81',
+        peerIps: ['198.51.100.81'],
+        httpStatus: 200,
+        checkedAt: '2026-10-16T00:02:00Z'
+      })
+    ).toThrow(/VALIDATION/)
     database.prepare('UPDATE app SET imported_from_vps=1 WHERE id=82').run()
     expect(() => repository.getSharedIngressInventory(81)).toThrow('VALIDATION')
   })
@@ -531,18 +663,47 @@ describe('initializeDatabase', () => {
     `)
     const repository = new DomainRepository(database)
     repository.upsertDns({
-      app_id: 72, hostname: 'app.example.com', mode: 'shared_ingress', provider: 'test',
-      zone_id: 'zone', record_type: 'A', record_name: 'app.example.com', target: '203.0.113.42',
-      ownership_key: 'dns-owner:82', route_ownership_key: 'route-owner:82', dns_status: 'propagated'
+      app_id: 72,
+      hostname: 'app.example.com',
+      mode: 'shared_ingress',
+      provider: 'test',
+      zone_id: 'zone',
+      record_type: 'A',
+      record_name: 'app.example.com',
+      target: '203.0.113.42',
+      ownership_key: 'dns-owner:82',
+      route_ownership_key: 'route-owner:82',
+      dns_status: 'propagated'
     })
     seedActiveDomainProof(database, 1)
-    database.prepare('UPDATE domain_binding SET target=? WHERE hostname=?').run('203.0.113.43', 'app.example.com')
-    expect(database.prepare('SELECT route_status, desired_generation, observed_generation, certificate_status, https_probe_status, certificate_hostname FROM domain_binding').get()).toEqual({
-      route_status: 'pending', desired_generation: 2, observed_generation: 0,
-      certificate_status: 'not_requested', https_probe_status: 'not_run', certificate_hostname: null
+    database
+      .prepare('UPDATE domain_binding SET target=? WHERE hostname=?')
+      .run('203.0.113.43', 'app.example.com')
+    expect(
+      database
+        .prepare(
+          'SELECT route_status, desired_generation, observed_generation, certificate_status, https_probe_status, certificate_hostname FROM domain_binding'
+        )
+        .get()
+    ).toEqual({
+      route_status: 'pending',
+      desired_generation: 2,
+      observed_generation: 0,
+      certificate_status: 'not_requested',
+      https_probe_status: 'not_run',
+      certificate_hostname: null
     })
-    expect(() => database.prepare("UPDATE domain_binding SET mode='direct_port', route_status='active' WHERE hostname=?").run('app.example.com')).toThrow(/domain_https_active_requires_(production_probe_evidence|shared_ingress)/)
-    expect(() => database.prepare(`
+    expect(() =>
+      database
+        .prepare(
+          "UPDATE domain_binding SET mode='direct_port', route_status='active' WHERE hostname=?"
+        )
+        .run('app.example.com')
+    ).toThrow(/domain_https_active_requires_(production_probe_evidence|shared_ingress)/)
+    expect(() =>
+      database
+        .prepare(
+          `
       INSERT INTO domain_binding
         (app_id, hostname, mode, ownership_key, route_ownership_key, status, dns_status,
          route_status, certificate_status, https_probe_status, desired_generation,
@@ -551,7 +712,10 @@ describe('initializeDatabase', () => {
       VALUES (72, 'other.example.com', 'direct_port', 'dns-other', 'route-other', 'propagated',
         'propagated', 'active', 'valid', 'passed', 1, 1, 'now', 'now', 'other.example.com',
         'now', 'other.example.com')
-    `).run()).toThrow(/domain_https_active_requires_(production_probe_evidence|shared_ingress)/)
+    `
+        )
+        .run()
+    ).toThrow(/domain_https_active_requires_(production_probe_evidence|shared_ingress)/)
     database.close()
   })
 
@@ -823,8 +987,8 @@ describe('initializeDatabase', () => {
       .prepare('SELECT MAX(version) AS version FROM schema_version')
       .get() as { version: number }
 
-    expect(tables).toHaveLength(27)
-    expect(schemaVersion.version).toBe(19)
+    expect(tables).toHaveLength(29)
+    expect(schemaVersion.version).toBe(20)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -855,7 +1019,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 19
+      version: 20
     })
     expect(
       database
@@ -1054,7 +1218,7 @@ describe('initializeDatabase', () => {
     const successVer = v4Db.prepare('SELECT MAX(version) AS version FROM schema_version').get() as {
       version: number
     }
-    expect(successVer.version).toBe(19)
+    expect(successVer.version).toBe(20)
 
     // b. Bảng experiment_run đã có cột attempt_index và backfill = 1 cho tất cả bản ghi cũ
     const postRuns = v4Db

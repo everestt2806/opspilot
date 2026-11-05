@@ -84,11 +84,44 @@ export class MonitorPoller {
         warningRanges: []
       }
     const activationRepository = new ActivationRepository(this.database)
+    const activationEpoch = (): string =>
+      JSON.stringify(
+        this.database
+          .prepare(
+            `SELECT a.current_deployment_id,a.metrics_stream_generation,
+       (SELECT COALESCE(MAX(id),0) FROM deployment_activation WHERE app_id=a.id) AS latest_activation,
+       (SELECT id FROM deployment_activation WHERE app_id=a.id AND state='active') AS active_activation
+       FROM app a WHERE a.id=?`
+          )
+          .get(appId)
+      )
+    let expectedActivationEpoch = activationEpoch()
+    const assertActivationUnchanged = (): void => {
+      if (
+        activationRepository.prepared(appId) ||
+        activationEpoch() !== expectedActivationEpoch ||
+        !this.repository.getTarget(deploymentId)
+      ) {
+        throw new MetricSourceError(
+          'Activation metrics đã thay đổi trong khi đọc; monitor đã fail-closed.'
+        )
+      }
+    }
+    const mutateActivation = (change: () => void): void => {
+      this.database
+        .transaction(() => {
+          assertActivationUnchanged()
+          change()
+          expectedActivationEpoch = activationEpoch()
+        })
+        .immediate()
+    }
     if (activationRepository.prepared(target.app_id)) {
       activationRepository.logFailClosed(target.app_id)
-      throw new MetricSourceError('Activation metrics chÆ°a hoÃ n táº¥t; monitor Ä‘Ã£ fail-closed.')
+      throw new MetricSourceError('Activation metrics chưa hoàn tất; monitor đã fail-closed.')
     }
     const identity = (await source.identity?.()) ?? { generation: 'legacy' }
+    assertActivationUnchanged()
     let offset = target.metrics_offset
     const storedGeneration = (
       this.database
@@ -101,7 +134,7 @@ export class MonitorPoller {
       activeBeforeIdentity.startOffset === 1 &&
       offset === 1
     ) {
-      activationRepository.adoptFirstGeneration(target.app_id, identity)
+      mutateActivation(() => activationRepository.adoptFirstGeneration(target.app_id, identity))
     } else if (activeBeforeIdentity && storedGeneration !== identity.generation) {
       let recovered = false
       let oldEndOffset = offset
@@ -110,16 +143,20 @@ export class MonitorPoller {
       let drainFailure = false
       try {
         const rotated = await source.rotated?.()
+        assertActivationUnchanged()
         const rotatedIdentity = await rotated?.identity?.()
+        assertActivationUnchanged()
         if (rotated && rotatedIdentity?.generation === storedGeneration) {
           drainFailure = true
           const rotatedSize = await rotated.size()
+          assertActivationUnchanged()
           gapEndOffset = rotatedSize + 1
           if (offset >= rotatedSize + 1) {
             oldEndOffset = offset
             recovered = true
           } else {
             const drained = await this.pollUnlocked(appId, deploymentId, rotated, onSample)
+            assertActivationUnchanged()
             oldEndOffset = drained.nextOffset
             warningRanges = drained.warningRanges
             recovered = drained.nextOffset >= rotatedSize + 1 && !drained.hadWarnings
@@ -130,21 +167,26 @@ export class MonitorPoller {
         if (drainFailure) throw error
         recovered = false
       }
-      activationRepository.rotate(
-        target.app_id,
-        deploymentId,
-        identity,
-        oldEndOffset,
-        recovered,
-        gapEndOffset,
-        warningRanges
+      mutateActivation(() =>
+        activationRepository.rotate(
+          target.app_id,
+          deploymentId,
+          identity,
+          oldEndOffset,
+          recovered,
+          gapEndOffset,
+          warningRanges
+        )
       )
       offset = 1
     }
-    activationRepository.ensureLegacy(target.app_id, deploymentId, offset, identity)
+    mutateActivation(() =>
+      activationRepository.ensureLegacy(target.app_id, deploymentId, offset, identity)
+    )
     let size: number
     try {
       size = await source.size()
+      assertActivationUnchanged()
     } catch (error) {
       throw new MetricSourceError('Không đọc được kích thước metrics.jsonl', { cause: error })
     }
@@ -162,6 +204,7 @@ export class MonitorPoller {
     let content: string
     try {
       content = await source.tail(offset)
+      assertActivationUnchanged()
     } catch (error) {
       throw new MetricSourceError('Không đọc được metrics.jsonl', { cause: error })
     }
@@ -223,10 +266,13 @@ export class MonitorPoller {
       }
       if (newItems.length && !ingestFailed) this.mlStatus?.report({ running: true })
     }
+    assertActivationUnchanged()
     let inserted = 0
     const sampleIds: number[] = []
     const alertIds: number[] = []
     const commit = this.database.transaction(() => {
+      // C0 có thể xuất hiện trong lúc await nguồn/ML; kiểm lại trong cùng writer transaction.
+      assertActivationUnchanged()
       for (const { item, routeDeploymentId } of newItems) {
         if (!item.metric || routeDeploymentId === null) continue
         const id = this.repository.insertSample({
@@ -300,7 +346,7 @@ export class MonitorPoller {
         }
       }
       this.repository.updateOffset(appId, offset + committedBytes)
-    })
+    }).immediate
     commit()
     for (const sampleId of sampleIds) await onSample?.(sampleId)
     return {

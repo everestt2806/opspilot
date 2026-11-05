@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { closeDatabase, initializeDatabase } from '../db'
 import type { MetricSource } from './metricSource'
-import { MonitorPoller } from './poller'
+import { MonitorPoller, MetricSourceError } from './poller'
 
 const metric = (seq: number): string =>
   JSON.stringify({
@@ -486,5 +486,107 @@ describe('MonitorPoller ingest', () => {
       experiment_run_id: number | null
     }
     expect(alert.experiment_run_id).toBeNull()
+  })
+})
+
+describe('MonitorPoller C0 activation barrier race tests', () => {
+  it('fail-closed ngay từ đầu nếu app đang có activation ở trạng thái prepared', async () => {
+    const db = seed()
+    const poller = new MonitorPoller(db)
+    db.prepare(
+      "INSERT INTO deployment_activation (app_id, deployment_id, stream_generation, start_offset, reason, state) VALUES (1, 1, 'gen-1', 1, 'deploy', 'prepared')"
+    ).run()
+
+    await expect(poller.poll(1, 1, source(`${metric(1)}\n`))).rejects.toThrow(MetricSourceError)
+
+    const offset = (
+      db.prepare('SELECT metrics_offset FROM app WHERE id=1').get() as { metrics_offset: number }
+    ).metrics_offset
+    expect(offset).toBe(1)
+    expect((db.prepare('SELECT COUNT(*) n FROM metric_sample').get() as { n: number }).n).toBe(0)
+  })
+
+  it('fail-closed nếu activation chuyển sang prepared trong lúc async tail() đọc nguồn', async () => {
+    const db = seed()
+    db.prepare(
+      "INSERT INTO deployment (id, app_id, version, image_tag, status) VALUES (2, 1, 2, 'app:v2', 'deploying')"
+    ).run()
+    const poller = new MonitorPoller(db)
+    const content = `${metric(1)}\n`
+
+    const raceSource: MetricSource = {
+      size: async () => Buffer.byteLength(content),
+      tail: async (offset) => {
+        // C0 xuất hiện: deployment khác chuẩn bị activation
+        db.prepare(
+          "INSERT INTO deployment_activation (app_id, deployment_id, stream_generation, start_offset, reason, state) VALUES (1, 2, 'gen-2', 1, 'deploy', 'prepared')"
+        ).run()
+        return content.slice(Buffer.byteLength(content.slice(0, offset - 1), 'utf8'))
+      }
+    }
+
+    await expect(poller.poll(1, 1, raceSource)).rejects.toThrow(MetricSourceError)
+
+    expect(
+      (db.prepare('SELECT metrics_offset FROM app WHERE id=1').get() as { metrics_offset: number })
+        .metrics_offset
+    ).toBe(1)
+    expect((db.prepare('SELECT COUNT(*) n FROM metric_sample').get() as { n: number }).n).toBe(0)
+  })
+
+  it('fail-closed nếu activation chuyển sang prepared trong lúc await ML scoring', async () => {
+    const db = seed()
+    db.prepare(
+      "INSERT INTO deployment (id, app_id, version, image_tag, status) VALUES (2, 1, 2, 'app:v2', 'deploying')"
+    ).run()
+    let scored = false
+    const poller = new MonitorPoller(db, undefined, undefined, {
+      ingest: async () => {
+        // C0 xuất hiện trong lúc chấm điểm ML
+        db.prepare(
+          "INSERT INTO deployment_activation (app_id, deployment_id, stream_generation, start_offset, reason, state) VALUES (1, 2, 'gen-2', 1, 'deploy', 'prepared')"
+        ).run()
+        scored = true
+        return {
+          ready: true,
+          sample_count: 10,
+          scores: { zscore_ewma: 0.1, iforest: 0.1, ocsvm: 0.1, ensemble: 0.1 },
+          above_threshold: { zscore_ewma: false, iforest: false, ocsvm: false, ensemble: false },
+          detail: {}
+        }
+      }
+    })
+
+    const content = `${metric(1)}\n`
+    await expect(poller.poll(1, 1, source(content))).rejects.toThrow(MetricSourceError)
+    expect(scored).toBe(true)
+
+    // Offset và samples không được ghi vào DB
+    expect(
+      (db.prepare('SELECT metrics_offset FROM app WHERE id=1').get() as { metrics_offset: number })
+        .metrics_offset
+    ).toBe(1)
+    expect((db.prepare('SELECT COUNT(*) n FROM metric_sample').get() as { n: number }).n).toBe(0)
+  })
+
+  it('fail-closed nếu activation epoch thay đổi trong lúc đọc', async () => {
+    const db = seed()
+    const poller = new MonitorPoller(db)
+    const content = `${metric(1)}\n`
+
+    const raceSource: MetricSource = {
+      size: async () => Buffer.byteLength(content),
+      tail: async (offset) => {
+        // Thay đổi current_deployment_id trên app
+        db.prepare('UPDATE app SET current_deployment_id=NULL WHERE id=1').run()
+        return content.slice(Buffer.byteLength(content.slice(0, offset - 1), 'utf8'))
+      }
+    }
+
+    await expect(poller.poll(1, 1, raceSource)).rejects.toThrow(MetricSourceError)
+    expect(
+      (db.prepare('SELECT metrics_offset FROM app WHERE id=1').get() as { metrics_offset: number })
+        .metrics_offset
+    ).toBe(1)
   })
 })

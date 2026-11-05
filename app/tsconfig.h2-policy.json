@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.scripts.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "outDir": ".out-scripts/h2-policy"
+  },
+  "files": ["scripts/try-product-outcome-policy.ts"]
+}

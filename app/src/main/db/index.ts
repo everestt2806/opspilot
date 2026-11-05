@@ -22,6 +22,7 @@ import migration016 from './migrations/016_product_auto_deploy_persistence.sql?r
 import migration017 from './migrations/017_product_auto_deploy_pause_policy.sql?raw'
 import migration018 from './migrations/018_product_auto_deploy_pause_provenance.sql?raw'
 import migration019 from './migrations/019_vps_ssh_security_revision.sql?raw'
+import migration020 from './migrations/020_product_runtime_terminal.sql?raw'
 
 interface Migration {
   name: string
@@ -124,6 +125,11 @@ const migrations: Migration[] = [
     name: '019_vps_ssh_security_revision.sql',
     version: 19,
     sql: migration019
+  },
+  {
+    name: '020_product_runtime_terminal.sql',
+    version: 20,
+    sql: migration020
   }
 ]
 
@@ -159,7 +165,10 @@ export function closeDatabase(): void {
   }
 }
 
-export function runMigrations(database: Database.Database, maxVersion = Number.POSITIVE_INFINITY): void {
+export function runMigrations(
+  database: Database.Database,
+  maxVersion = Number.POSITIVE_INFINITY
+): void {
   const applied = getAppliedVersions(database)
 
   for (const migration of migrations.toSorted((left, right) =>

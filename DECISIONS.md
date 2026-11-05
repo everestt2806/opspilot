@@ -91,6 +91,8 @@
 
 ## Mẫu để ghi tiếp
 
+| 2026-10-27 | [deploy] | H2 contract v1: typed async runtime steps trên cùng helper/lock, C0 activation barrier trước stop collector/mutation, B0/R0 metric quarantine khi rollback; terminal receipt có HMAC/atomic fsync, DB T1 giữ leases rồi attested target settlement và fenced T2; recovery handle chỉ read/settle sealed+committed attempt, không nới normal unknown/replay guard. | Cần phân biệt build thành công với runtime healthy và kết quả đã commit; plain JSON/hash không phải authentication. Producer/consumer dùng chung contract; HMAC enrollment chỉ lab/new explicit enrollment, publish chưa hỗ trợ chỉ not_checked/degraded. B0/R0 dùng path monitor hiện hành và generation dev:ino. | docs/contracts/product-h2-runtime.ts; product-guarded-ssh-session.ts; migration 020; target/DB/session/proof/tests |
+
 | 2026-10-26 | [deploy] | Leader nhận ownership sau handoff Gemini: start_build bắt buộc source_sha full 40 hex; helper gắn OCI revision, helper và Product adapter kiểm chứng revision/app/deployment; log build tùy ý không qua wire/result, chỉ stable marker; source/path/quota/collector/render preflight trước dispatch. | POST-004..006 tái hiện sau bản 1491514: regex lọt quoted/prefixed/PKCS8 secret, quota sau open, receipt thiếu source SHA. Một thay đổi contract đồng bộ caller/helper/tests, chưa push. | docs/contracts/product-guarded-ssh-session.ts; H1 helper/session/adapter/tests |
 
 ```
