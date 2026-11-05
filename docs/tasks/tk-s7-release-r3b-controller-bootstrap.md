@@ -6,7 +6,8 @@ START 06/11/2026 — Tiếp user request “làm hết”, base R3a `1e4df09`, R
 
 | Yêu cầu | Gate | State |
 |---|---|---|
-| Protected controller credential/key store | Reuse pure AES-GCM cipher; Linux owner/mode/symlink/hardlink/tamper/binding tests, không implicit key regeneration | OPEN |
+| Master key và credential binding của controller | `controllerSecrets.ts`: pure AES-GCM reuse; Linux **10/10**, binding/tamper **3/3** PASS, không implicit key regeneration | PASS |
+| HMAC key riêng theo app/generation và protected router | Không tái sử dụng một secret cho mọi VPS; exact key retention cho attempt chưa settle | OPEN |
 | Explicit target enrollment theo app/generation | Pinned SSH; helpers immutable/checksum, HMAC key riêng, lost-response reconciliation, không dùng lab initializer như production proof | OPEN |
 | Startup recovery và resource admission | T1 pending settlement đọc bằng exact key/identity; pre-T1 unknown không replay; disk/RAM/Docker readiness trước mutation | OPEN |
 | Service composition opt-in + health/status đúng | Queue + per-claim executor/verifier, startup/shutdown/OS restart, polling-only không bị hiểu là auto deploy ready | OPEN |
@@ -37,3 +38,30 @@ START 06/11/2026 — Tiếp user request “làm hết”, base R3a `1e4df09`, R
 - Lưu commit theo slice có gate; default service không được bật vì “có adapter”. R4 ML, R7 parity/lifecycle, R9 HTTPS, R10 migrate, R11 installer, R12 CI và R14 acceptance vẫn OPEN theo release plan; không tự cắt phạm vi.
 
 No accepted exception. R3 tổng PARTIAL; local implementation và hạ tầng live có state riêng, không coi thiếu VPS là lý do ngừng mọi việc local.
+
+## Implementation R3b-1 — master key và credential binding
+
+- `controllerSecrets.ts` cung cấp explicit create-once và load-only cho `.controller-runtime-key` trong private data directory. Linux-only filesystem API; không nhét Electron safeStorage vào controller. Key 32 bytes, file creation O_EXCL/O_NOFOLLOW/0600/fsync, load xác minh regular file/owner/private mode/nlink/size; thiếu key không tự tạo lại. Buffer key tạm được zero sau khi cipher copy; không tuyên bố mọi JS string secret có thể zero được.
+- Reuse `AesGcmCredentialCipher`; authenticated encrypted payload chứa format/controller ID/toàn bộ SSH target binding (VPS ID, host, port, username, auth type, fingerprint, security revision) và credential. Swapping ciphertext giữa profile hoặc đổi metadata không được trả secret; legacy unbound plaintext payload không được nhận như controller credential. Không đổi schema/IPC/Desktop cipher hoặc tự chuyển ciphertext cũ.
+- Reject tampered IV/tag/ciphertext, different master key, oversized material/envelope; public errors là stable code, không chứa crypto details, key, decrypted text hoặc path.
+- Linux gate `node app/scripts/product-runtime-lab/secrets-check.mjs` dùng bundle `r3b-lab.cjs`: **10/10 PASS** gồm missing key, create/reopen, duplicate init/no rotation, unsafe mode, symlink, hardlink, foreign owner, truncated key, insecure directory và directory symlink. Root lab có chủ đích để thử đổi owner; scratch đã cleanup, không đọc credential của người dùng.
+- Vitest `src/main/controlPlane/controllerSecrets.test.ts`: **3/3 PASS**; kiểm binding của mọi field, metadata/controller swap, tamper/key mismatch và legacy/oversize. Các thử nghiệm dùng material tổng hợp, không SSH password/private key thật.
+- ESLint scoped, Node/Web/scripts/lab typecheck và electron-vite build PASS. Full regression cuối slice **1417 PASS / 2 SKIP / 0 FAIL** (`app/.out-scripts/release-r3b-key-vitest.json`); hai Linux Caddy tests skip trên Windows như baseline, không nhận HTTPS live/GUI PASS. Không nhận whole R3b hoàn thành; module chưa nối production service.
+
+### Gate commands
+
+Windows Node22.23.3 sau `tools/enter-node22.ps1`; Linux Node22.23.4. `secrets-check` dùng private scratch và cleanup, không dùng profile hiện hành.
+
+```text
+pnpm --prefix app exec vitest run src/main/controlPlane/controllerSecrets.test.ts --reporter=dot
+pnpm --prefix app exec vitest run --maxWorkers=4 --reporter=json --outputFile=.out-scripts/release-r3b-key-vitest.json
+pnpm --prefix app typecheck
+pnpm --prefix app exec tsc --noEmit -p tsconfig.scripts.json
+pnpm --prefix app exec tsc -p scripts/product-runtime-lab/tsconfig.json
+pnpm --prefix app exec electron-vite build
+pnpm --prefix app exec eslint src/main/controlPlane/controllerSecrets.ts src/main/controlPlane/controllerSecrets.test.ts scripts/product-runtime-lab/secrets-check.mjs --max-warnings=0
+Linux: OPSPILOT_R1_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r3b-lab.cjs node app/scripts/product-runtime-lab/secrets-check.mjs
+git diff --check
+```
+
+HANDOFF-LOCAL 06/11 — R3b-1 **CHỜ REVIEW**, implementation commit chứa `controllerSecrets.ts` và hồ sơ này (`git log -1 -- app/src/main/controlPlane/controllerSecrets.ts`). Chưa ship runtime configuration/enrollment/service, chưa nối vault vào DB credential path hoặc tạo per-app HMAC keys. Next code slice: protected HMAC store/router theo app/generation → explicit production enrollment contract/CLI → admission/startup recovery → service-driven Git deploy + OS restart. Live endpoint/pin/domain vẫn thiếu; local tasks tiếp tục theo ledger, không giả nhận whole release DONE. Không push/PR/merge, không credential dump hay VPS write.

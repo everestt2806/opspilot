@@ -107,3 +107,18 @@ the collector failure remains unknown without retry. Reports are in
 `app/.out-scripts/product-runtime-executor/<nonce>/` with the linked R1 DB/JSONL artifacts.
 Default `ControllerService` still has no executor: provisioning/admission/cold startup recovery
 and management/UI integration must pass R3b/R3c before enabling always-on deployment.
+
+## Controller key-store component (R3b-1)
+
+```sh
+export OPSPILOT_R1_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r3b-lab.cjs
+node app/scripts/product-runtime-lab/build.mjs
+node app/scripts/product-runtime-lab/secrets-check.mjs
+```
+
+This Linux-only filesystem gate uses a private scratch directory, generated key material and the
+real AES-GCM cipher. It checks missing-key rejection, create-once/reopen, no implicit rotation,
+owner/mode/symlink/hardlink/size/directory checks. Run as root only in the isolated lab to test
+foreign ownership. It never uses a production profile or prints key/credential bytes. Credential
+binding/tamper tests run separately in `controllerSecrets.test.ts`; per-app HMAC key storage,
+target enrollment and service composition remain pending.

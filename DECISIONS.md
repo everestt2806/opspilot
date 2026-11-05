@@ -16,6 +16,7 @@
 |---|---|---|---|---|
 | 2026-11-06 | [deploy] | Chuẩn hóa thứ tự mount khi hash runtime config; build/verify collector image trước khi dừng collector cũ. Không đổi field contract, schema hoặc bỏ kiểm cấu hình. | R1 Docker thật tái hiện update lỗi do Mounts đổi thứ tự sau inspect; build collector lỗi không được gây mất giám sát của bản đang chạy. | Target runtime + regression/Linux SSH/Docker lab; giữ Config/HostConfig và Type/Source/Destination/RW, unknown vẫn không được finalize. |
 | 2026-11-06 | [deploy] | R3a thêm internal runtime_settled result; queue chỉ tiếp tục nếu verifier đối chiếu persisted T1/T2 với exact claim/commit. Default executor vẫn tắt. | Pipeline tự chốt và release leases ở T2; worker cũ coi mọi post-dispatch result là unknown, và heartbeat có thể thấy lease vừa release. | Internal contract/worker/adapter; không IPC mới, không public API hoặc retry post-dispatch; production activation chờ đủ R2/R3. |
+| 2026-11-06 | [crypto] | R3b-1 reuse AES-GCM cho controller, key Linux private create-once/load-only; authenticated payload gắn exact controller/SSH profile/revision. | Linux không có Electron safeStorage; missing key không được tự rotate và ciphertext không được dùng nhầm profile. | Module riêng chưa nối service; giữ Desktop cipher/schema/IPC, per-app HMAC/enrollment/router và live gate vẫn chưa xong. |
 
 ## 2026-07 — Tuần 0: chốt trước khi code
 

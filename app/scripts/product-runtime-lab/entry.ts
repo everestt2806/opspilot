@@ -5,6 +5,10 @@ export { SshManager } from '../../src/main/ssh/manager'
 export { ProductRuntimeExecutor } from '../../src/main/controlPlane/productRuntimeExecutor'
 export { ControlPlaneJobWorker } from '../../src/main/controlPlane/queueWorker'
 export {
+  initializeControllerSecretKey,
+  loadControllerCredentialCipher
+} from '../../src/main/controlPlane/controllerSecrets'
+export {
   executeProductDeployPipeline,
   recoverProductRuntimeSession
 } from '../../src/main/controlPlane/productRuntimePipeline'
