@@ -34,12 +34,12 @@ class BuildReview(unittest.TestCase):
             (staging / "source").mkdir(parents=True)
             (staging / "render").mkdir()
             (staging / "render/Dockerfile").write_text("FROM scratch\n")
-            identity = dict(controller_id="controller", app_id="1", ownership_generation=1,
-                            claim_id="claim", attempt_id="attempt", app_fence=1)
+            identity = {"controller_id": "controller", "app_id": "1", "ownership_generation": 1,
+                            "claim_id": "claim", "attempt_id": "attempt", "app_fence": 1}
             frames = [
-                dict(operation="open", identity=identity, state_root=str(state_root)),
-                dict(operation="start_build", image_tag="example:v1", source_sha="a" * 40),
-                dict(operation="poll_build"), dict(operation="close"),
+                {"operation": "open", "identity": identity, "state_root": str(state_root)},
+                {"operation": "start_build", "image_tag": "example:v1", "source_sha": "a" * 40},
+                {"operation": "poll_build"}, {"operation": "close"},
             ]
             for index, frame in enumerate(frames, 1):
                 frame.update(version=1, request_id=f"review-{index}", sequence=index, deployment_id=1)

@@ -35,6 +35,7 @@ def file_db(tmp_path: Path) -> tuple[sqlite3.Connection, Path]:
       username TEXT NOT NULL,
       auth_type TEXT NOT NULL,
       encrypted_secret TEXT NOT NULL,
+      archived_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE app (
@@ -45,6 +46,7 @@ def file_db(tmp_path: Path) -> tuple[sqlite3.Connection, Path]:
       host_port INTEGER NOT NULL,
       container_port INTEGER NOT NULL,
       current_deployment_id INTEGER,
+      imported_from_vps INTEGER NOT NULL DEFAULT 0,
       metrics_offset INTEGER NOT NULL DEFAULT 1,
       metrics_stream_generation TEXT NOT NULL DEFAULT 'legacy',
       metrics_stream_device INTEGER,
@@ -58,6 +60,7 @@ def file_db(tmp_path: Path) -> tuple[sqlite3.Connection, Path]:
       image_tag TEXT NOT NULL,
       status TEXT NOT NULL,
       is_rollback_of INTEGER,
+      origin TEXT NOT NULL DEFAULT 'opspilot',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE deployment_activation (
