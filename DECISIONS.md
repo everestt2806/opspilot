@@ -12,6 +12,8 @@
 
 ## 2026-11 — Release 04/12
 
+- 2026-11-06 | [controller/bootstrap] R3b-4 thêm local-admin CLI secrets-init/enroll-vps, strict bounded stdin và xác minh pinned SSH trước atomic bound-credential enrollment/replay; exact replay giữ ID, mọi conflict/archive từ chối — Cần đường production bootstrap độc lập Electron, không mở public API/đổi schema hoặc tự restore/rotate — Core.
+
 - 2026-11-06 | [controller/ssh] R3b-3 resolver đọc profile SQLite mới mỗi lần, kiểm pin/profile trước khi load master key và chỉ giải mã credential có binding đúng controller/toàn bộ SSH identity/revision — Không fallback safeStorage/env hoặc tự chuyển credential Desktop, không bật default service — Core.
 
 | Ngày | Phạm vi | Quyết định | Lý do | Ảnh hưởng |

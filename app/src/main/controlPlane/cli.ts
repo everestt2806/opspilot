@@ -9,12 +9,16 @@ import {
 } from './controllerDatabase'
 import { ControllerService } from './controllerService'
 import { ControlPlaneGitPoller } from './gitPoller'
+import { enrollControllerVps, initializeControllerSecrets } from './controllerEnrollment'
+import { readControllerBootstrapInput } from './controllerBootstrapInput'
 
-type Command = 'init' | 'run' | 'poll-once' | 'status'
+type Command = 'init' | 'run' | 'poll-once' | 'status' | 'secrets-init' | 'enroll-vps'
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
-  if (!['init', 'run', 'poll-once', 'status'].includes(commandValue)) {
+  if (
+    !['init', 'run', 'poll-once', 'status', 'secrets-init', 'enroll-vps'].includes(commandValue)
+  ) {
     throw new Error('USAGE')
   }
   const command = commandValue as Command
@@ -23,6 +27,43 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
   if (command === 'init') {
     const initialized = initializeController(dataDirectory)
     console.log(JSON.stringify({ state: 'initialized', controller_id: initialized.controllerId }))
+    return
+  }
+
+  if (command === 'secrets-init' || command === 'enroll-vps') {
+    if (process.platform !== 'linux') throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
+    const controller = new AbortController()
+    const onSignal = (): void => controller.abort()
+    process.once('SIGINT', onSignal)
+    process.once('SIGTERM', onSignal)
+    let opened: ReturnType<typeof openControllerDatabase> | undefined
+    try {
+      const input =
+        command === 'enroll-vps'
+          ? await readControllerBootstrapInput(process.stdin, controller.signal)
+          : undefined
+      if (controller.signal.aborted) throw new Error('CONTROLLER_VPS_ENROLLMENT_ABORTED')
+      opened = openControllerDatabase(dataDirectory)
+      if (command === 'secrets-init') {
+        initializeControllerSecrets(opened.database, opened.controllerId, opened.dataDirectory)
+        console.log(
+          JSON.stringify({ state: 'secrets_initialized', controller_id: opened.controllerId })
+        )
+      } else {
+        const result = await enrollControllerVps(
+          opened.database,
+          opened.controllerId,
+          opened.dataDirectory,
+          input,
+          controller.signal
+        )
+        console.log(JSON.stringify(result))
+      }
+    } finally {
+      process.removeListener('SIGINT', onSignal)
+      process.removeListener('SIGTERM', onSignal)
+      opened?.database.close()
+    }
     return
   }
 

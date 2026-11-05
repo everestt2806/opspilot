@@ -9,6 +9,7 @@ START 06/11/2026 — Tiếp user request “làm hết”, base R3a `1e4df09`, R
 | Master key và credential binding của controller | `controllerSecrets.ts`: pure AES-GCM reuse; Linux **10/10**, binding/tamper **3/3** PASS, không implicit key regeneration | PASS |
 | HMAC key riêng theo app/generation và protected router | [R3b-2 local PASS](tk-s7-release-r3b2-runtime-keys.md): Linux13/13, real router7/7 + cold T1 key retention, full1427 PASS/2 SKIP | PASS |
 | Controller SQLite credential → pinned SSH, độc lập Electron | [R3b-3 local PASS](tk-s7-release-r3b3-controller-ssh.md): 25 safety tests, real SSH/Docker7/7, full1452 PASS/2 SKIP; default service chưa bật | PASS |
+| Explicit key/VPS credential enrollment CLI | [R3b-4 local PASS](tk-s7-release-r3b4-controller-enrollment.md): Linux CLI14/14 (hai process thật/replay), 29 unit tests, full1481 PASS/2 SKIP; chưa target app enrollment | PASS |
 | Explicit target enrollment theo app/generation | Pinned SSH; helpers immutable/checksum, HMAC key riêng, lost-response reconciliation, không dùng lab initializer như production proof | OPEN |
 | Startup recovery và resource admission | T1 pending settlement đọc bằng exact key/identity; pre-T1 unknown không replay; disk/RAM/Docker readiness trước mutation | OPEN |
 | Service composition opt-in + health/status đúng | Queue + per-claim executor/verifier, startup/shutdown/OS restart, polling-only không bị hiểu là auto deploy ready | OPEN |

@@ -169,3 +169,26 @@ of fresh bound-credential SSH connections. Missing/archived/invalid profiles, id
 changes, ciphertext/controller/VPS swaps, tampering, missing keys and legacy scheme rejection are
 covered separately by the SQLite/AES unit gate. Windows units substitute only the filesystem key
 loader; they do not establish SSH or prove production enrollment. The service remains polling-only.
+
+## CLI khởi tạo khóa / đăng ký VPS (R3b-4)
+
+```sh
+export OPSPILOT_CONTROL_PLANE_MODULES=/var/tmp/opspilot-p3e3a-runtime/node_modules
+export OPSPILOT_CONTROL_PLANE_OUTPUT=/var/tmp/opspilot-p3e3a-runtime/r3b4/control-plane.cjs
+node app/scripts/build-control-plane.mjs
+OPSPILOT_CONTROLLER_ARTIFACT="$OPSPILOT_CONTROL_PLANE_OUTPUT" node app/scripts/product-runtime-lab/controller-enrollment.mjs
+```
+
+Gate chạy bằng root **trong Linux lab**, tạo sshd loopback riêng với host/client keys ngẫu nhiên,
+controller data directory/SQLite riêng và gọi bundle CLI bằng các process thật. Không cần Docker
+cho checkpoint này: không chạy remote command, build app hoặc enroll target helper/HMAC. Credential
+chỉ truyền qua stdin; stderr/stdout được kiểm không có secret, không lưu raw output. Gate kiểm
+init không tự sinh key, explicit create-once/permissions, missing/wrong pin/auth, encrypted binding,
+cold CLI replay, hai process đồng thời, conflict, missing/unsafe master key, retained runtime key,
+archived record và input cap/invalid JSON/env fallback. Auth thật dùng key sinh trong lab; password
+path kiểm bằng unit transport, chưa nhận password trên VPS người dùng đã pass.
+
+Reports: `app/.out-scripts/controller-enrollment/<nonce>/result.json`, gồm bundle/driver/subject
+hashes, các ca PASS và cleanup. Scratch keys/SQLite/sshd xóa hoặc dừng cuối gate; không dùng profile
+Desktop hoặc VPS thật. R1/R2/R3a runtime lab có scope riêng, không chạy lại hoặc tính là gate của CLI
+này. Hướng dẫn vận hành: [controller README](../../control-plane-runtime/README.md).
