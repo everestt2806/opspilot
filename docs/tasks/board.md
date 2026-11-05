@@ -1,6 +1,6 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
-> 05/11 — PR #33 đã merge tại `2679153`; #34 đang chốt tích hợp theo [review](tk-s7-pr33-pr34-integration-2026-11-05.md). Full Vitest 1397 PASS / 2 SKIP, Python 365 PASS; typecheck/build, controlled target 23/23 và Docker health 5/5 PASS. H2 vẫn PARTIAL. [Việc tiếp theo N1–N10, owner và checkpoint](tk-s7-next-checkpoints-2026-11-05.md).
+> 05/11 — **#33 MERGED `2679153`, #34 MERGED `2a06a97`; không còn PR mở**. [Review/gates tích hợp](tk-s7-pr33-pr34-integration-2026-11-05.md): Full Vitest 1397 PASS / 2 SKIP, Python 365 PASS; typecheck/build, controlled target 23/23 và Docker health 5/5 PASS. H2 vẫn PARTIAL. [Việc tiếp theo N1–N10, owner và checkpoint](tk-s7-next-checkpoints-2026-11-05.md).
 
 > Quy trình bắt buộc: [`README.md`](README.md). Kế hoạch sau demo và điểm vào cho AI mới:
 > [`../24-ke-hoach-demo-theo-chang.md`](../24-ke-hoach-demo-theo-chang.md).
@@ -9,17 +9,17 @@
 
 ## Bàn giao partner 25/10 — ưu tiên trong 3–4 ngày
 
-> 05/11 — Leader ĐANG LÀM [review/merge #33 → #34 và kiểm kê sau tích hợp](tk-s7-pr33-pr34-integration-2026-11-05.md) theo yêu cầu user. Trạng thái H2 vẫn PARTIAL cho tới đủ DoD; không bật executor production chỉ vì PR đã merge.
+> 05/11 — Leader HOÀN THÀNH task review/merge/kiểm kê theo yêu cầu user; H2 vẫn PARTIAL cho tới đủ DoD. Các dòng “chưa push/merge” tháng 10 là lịch sử; đọc notice 05/11 và task kế tiếp để biết trạng thái hiện hành. Không bật executor production chỉ vì PR đã merge.
 
 Đọc [hồ sơ/task bàn giao](tk-s7-partner-handoff-2026-10-25.md) trước khi tiếp tục. H0/source-render đã qua gate giới hạn; P3e-3b tổng thể vẫn PARTIAL/BLOCKED. Ngoại lệ user chốt 25/10: H1 runtime và L0 Docker lab được làm song song với owner/file tách biệt; H2-D chỉ thiết kế, H2-I chờ H1 + L0 và review. Mỗi file chỉ một owner, Leader tích hợp và cập nhật hồ sơ chung. Chưa có Worker tự động đang chạy do Codex `agent-update-prompt`.
 
 | ID | Owner | Trạng thái | Đầu ra / phụ thuộc |
 |---|---|---|---|
-| H0 | Leader | CHỜ REVIEW | `900ad77` đã push feature branch; 8 Linux filesystem tests, 247 Vitest tests, typecheck/lint/artifact + localhost SSH lab pass; source/render slice accepted, chưa full Product deployment/merge. |
-| H1 | Kim / Leader nhận sau Gemini | CHỜ REVIEW | [PR #33](https://github.com/everestt2806/opspilot/pull/33) · code `3e06f2d` + `2453604` · POST-004..007 đã đóng qua controlled + real pinned SSH/Docker build: success/definite failure/secret/one deployment/V1 preservation/cleanup PASS. H2 activate/finalize chưa triển khai. |
-| L0 | Kim / Leader nhận sau Gemini | CHỜ REVIEW | [PR #33](https://github.com/everestt2806/opspilot/pull/33) · commit fix `f457cf9` · Leader đóng POST-001..003 sau ghi nhận report: 12/12 regression HTTP thật + 10/10 Docker gates PASS; giữ 13 containers/21 images baseline. Không phải Product SSH proof. |
+| H0 | Leader | HOÀN THÀNH | Source/render safety slice đã vào main qua #33; 8 Linux transfer regressions chạy lại PASS 05/11, framing/checksum/quota cùng helper build PASS. Không phải full Product deployment. |
+| H1 | Kim / Leader nhận sau Gemini | HOÀN THÀNH | Build-only checkpoint đã merge [#33](https://github.com/everestt2806/opspilot/pull/33) tại `2679153`, quality fixes `caf0873`; focused 272 tests + Node/Web typecheck, Linux helper 7/7 PASS 05/11. H2 runtime integration vẫn PARTIAL, không bật executor. |
+| L0 | Kim / Leader nhận sau Gemini | HOÀN THÀNH | [#33](https://github.com/everestt2806/opspilot/pull/33) merged `2679153`; 05/11 chạy lại 12 Node regressions và full Docker suite 10/10 PASS trên main, giữ baseline 0 containers/3 images, no leaks. Chỉ readiness, không phải full Product SSH proof. |
 | H2-D | Kim / reviewer | CHỜ REVIEW | Seam runtime/finalization H2 v1 đã ghi trong contracts và DECISIONS; tiếp tục review cùng checkpoint H2, chưa nhận full runtime DoD. |
-| H2 | Kim / Codex review | CHỜ REVIEW | [PR #34](https://github.com/everestt2806/opspilot/pull/34) → `main`, ready for review · `feat/product-h2-checkpoint`, code `d8e7e40`; partner merge #33 trước, #34 sau · [Hồ sơ bàn giao](tk-s7-product-h2-runtime.md) · PARTIAL: chưa full CLI/pinned SSH/Docker/collector/crash/installer proof; Ruff Python còn diagnostics. Không bật executor production. |
+| H2 | Kim / Sơn / Worker | CHỜ REVIEW | [PR #34](https://github.com/everestt2806/opspilot/pull/34) MERGED tại `2a06a97`; [dossier](tk-s7-product-h2-runtime.md). PARTIAL: N1 full pinned SSH/Docker/collector và N2 crash/ownership/recovery còn mở. Ruff đã sạch; không bật executor production. |
 
 ## Sprint sản phẩm 08/10 — hai nguồn deploy và nền auto deploy
 

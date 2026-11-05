@@ -1,5 +1,7 @@
 # HANDOFF — Bàn giao phiên làm việc với AI
 
+> **Điểm vào hiện hành 05/11/2026:** [Review/merge #33 và #34](docs/tasks/tk-s7-pr33-pr34-integration-2026-11-05.md) đã xong; main có #33 `2679153`, #34 `2a06a97`, không còn PR mở. [Task tiếp theo N1–N10](docs/tasks/tk-s7-next-checkpoints-2026-11-05.md). H2 vẫn PARTIAL, CLI polling-only, chưa auto deploy production. Runtime/ML pilot làm song song; không merge lại nhánh H1 local cũ. Notice 25/10 bên dưới giữ lịch sử, không phải trạng thái hiện hành.
+
 > **Điểm vào mới nhất — 25/10/2026:** [Task và hồ sơ tiếp nhận cho partner](docs/tasks/tk-s7-partner-handoff-2026-10-25.md).
 > H0/source-render đã sửa hai finding và qua regression filesystem/localhost SSH; P3e-3b tổng thể vẫn PARTIAL/BLOCKED. Handoff mới có task H1 build, L0 Docker lab chạy song song và checkpoint H2 deployment. Các mục bên dưới là hồ sơ lịch sử 30/09, không đại diện trạng thái hiện hành.
 

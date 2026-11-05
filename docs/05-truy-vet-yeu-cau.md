@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **Rà soát 05/11/2026:** code nền/L0/H1 và checkpoint H2 đã merge main qua #33/#34; [review/gates](tasks/tk-s7-pr33-pr34-integration-2026-11-05.md), [các checkpoint còn thiếu](tasks/tk-s7-next-checkpoints-2026-11-05.md). H2/full auto-deploy, pilot ML, migrate hai VPS và HTTPS live chưa được nâng PRODUCT_PASS chỉ vì merge hoặc test component xanh. Các dòng FR/NFR lịch sử bên dưới giữ evidence gốc.
+
 Mỗi yêu cầu trong [`00-de-tai-goc.md`](00-de-tai-goc.md) phải có: **module hiện thực · nơi
 kiểm chứng · trạng thái**. Bảng này trả lời câu hỏi "còn thiếu gì" trong 30 giây, và là phụ
 lục rất được đánh giá cao trong báo cáo.

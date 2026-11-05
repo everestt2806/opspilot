@@ -15,13 +15,15 @@ START 05/11 — User yêu cầu merge các PR đang mở rồi kiểm kê phần
 |---|---|---|
 | Review diff, phụ thuộc, caller/contract và gate hai PR | #34 kế thừa #33; local git diff do GitHub >300 file. Graph chỉ tham khảo, dùng source/rg xác minh caller/contract | PASS |
 | Sửa lỗi chặn tích hợp, giữ runtime executor mặc định tắt | Ruff sạch; Vitest/Node discovery, fixture poller, CLI migrations, H2 preflight và tmpfs lab đã sửa; CLI vẫn polling-only | PASS |
-| Merge #33 rồi #34, không force hoặc mất dữ liệu local | #33 MERGED tại `267915369cd48d62375cfcd5ef9a3497d9670154`; #34 đang cập nhật nền và gates | IMPLEMENTED |
-| Kiểm chứng nhánh tích hợp/main | Node 22 typecheck/build/full Vitest, Python 365/365, QA 25/25, controlled 23/23 và Docker health 5/5; xác minh tree sau merge | IMPLEMENTED |
+| Merge #33 rồi #34, không force hoặc mất dữ liệu local | #33 `267915369cd48d62375cfcd5ef9a3497d9670154`, #34 `2a06a972d2f24fdf598f31784525b3c11dd2bb4d`; GitHub state MERGED, không còn PR open | PASS |
+| Kiểm chứng nhánh tích hợp/main | Gates bên dưới pass; `git diff --quiet 1504ffb origin/main` exit 0, main trùng toàn bộ tree đã kiểm chứng | PASS |
 | Kiểm kê phần còn thiếu, task/ưu tiên/checkpoint rõ | [Danh sách N1–N10](tk-s7-next-checkpoints-2026-11-05.md), hai luồng runtime/ML và gate demo/release | PASS |
 
 ## Nhật ký / kết quả
 
 - Đang review trên branch riêng `review/pr33-pr34-20261105`; nhánh local `feat/product-h1-build` giữ nguyên tại `0f27648`.
+
+DONE 05/11 — Review/sửa/merge #33 → #34 xong; local `main` fast-forward tới `2a06a97`, giữ nguyên nhánh local cũ và file cá nhân/untracked. Không PR nào còn mở. Đây là DONE của task tích hợp, **không phải DONE của H2/full sản phẩm**. [Task tiếp theo N1–N10](tk-s7-next-checkpoints-2026-11-05.md).
 
 ### Findings và sửa trước merge
 
@@ -50,6 +52,7 @@ START 05/11 — User yêu cầu merge các PR đang mở rồi kiểm kê phần
 - `node app/scripts/product-h2-review/run.mjs` — **23/23 PASS**, cleanup/source unchanged true, nonce `6339b2cf3984`. Guard/files/HMAC/fsync thật, Docker trong controlled suite là fake stateful.
 - `node app/scripts/review-h2-live-health.mjs` — **5/5 PASS**, cleanup true, nonce `9ebbacbf54a9`; exact-CID health dùng Docker thật, chưa pinned SSH/collector/full deploy.
 - L0 happy Docker ở cả checkout #33 và integration: HTTP 200, no leaked resources. Chỉ xóa exact resource của run.
+- Post-merge main: full `node app/scripts/product-docker-lab/runner.mjs --suite` **10/10 PASS**; happy/build failure/health failure/2 runs/daemon down/ownership/inventory/deadline; baseline 0 containers/3 images giữ nguyên, cleanup không leak. Đóng L0 readiness theo phạm vi task.
 - Đã khởi động Docker Desktop local, pull hai base image công khai và build image fixture theo README. Những lần đầu thiếu cached image được ghi là setup failures, chạy lại sau chuẩn bị đã pass; không dùng VPS/production DB.
 - Full ESLint: **0 errors / 5999 warnings**, không báo lint warning-free toàn repo; chủ yếu format lịch sử ngoài scope. Ruff Python scoped và experiments/collector/ml-service PASS. Không format lại toàn bộ repo để xóa warning trong task merge này.
 - #33 merge commit `2679153`. Cập nhật vào H2 tại `f7bbe1e`, xử lý đúng hai conflict helper cleanup bằng cách giữ runtime cleanup H2 cùng cleanup build đã sửa ở #33. `git diff --quiet d8a8406 f7bbe1e -- app experiments collector ml-service templates` exit 0: runtime source sau tích hợp **giống hệt** source vừa chạy full gates; chỉ bổ sung hồ sơ/board từ PR nền.

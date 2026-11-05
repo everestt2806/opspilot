@@ -1,5 +1,7 @@
 # Hồ sơ Task H1 — Product Build Trong Cùng Guarded Session
 
+> **DONE 05/11/2026 — build-only checkpoint:** PR #33 merge tại `2679153` với quality fixes `caf0873`. Typecheck/focused 272 tests, Linux helper 7/7 + transfer 8/8, CLI migration packaging pass; full integration với #34 được kiểm trong [dossier 05/11](tk-s7-pr33-pr34-integration-2026-11-05.md). H2 runtime/auto-deploy vẫn PARTIAL, không nâng full sản phẩm thành hoàn tất.
+
 **Cập nhật Leader sau retest 26/10:** Các kết quả/nhận định Gemini trong mục 4–5 bên dưới là lịch sử handoff. Source `3e06f2d` + layout fix `2453604` đã qua lab thực tế: SQLite scratch trên Windows → pinned OpenSSH trong container Linux → helper Python → Docker Linux 29.0.1. Wrong pin bị reject; Express có lockfile build thành công với full image ID và OCI revision; postinstall lỗi có sentinel giả được xác nhận đã thực thi, response không chứa raw log; mỗi ca một canonical deployment/một channel; V1 còn khỏe; cleanup nonce PASS. Đây là **PASS cho slice H1 build**, chưa phải activate/health/rollback/publish/finalization H2 hoặc fetch GitHub production.
 
 ## Thông tin chung

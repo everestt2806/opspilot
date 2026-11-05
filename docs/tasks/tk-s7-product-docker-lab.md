@@ -1,5 +1,7 @@
 # TK-S7 L0 — Docker Lab Readiness
 
+> **DONE 05/11/2026:** PR #33 đã merge main tại `2679153`; Leader chạy lại Node regression 12/12 và full Docker suite **10/10 PASS** trên main sau #34, Docker 29.4.3/Compose v5.1.3, exact cleanup giữ baseline 0 containers/3 images. Đóng task L0 readiness; không nhận full Product deploy. [Review tổng](tk-s7-pr33-pr34-integration-2026-11-05.md).
+
 > **Ghi chú về skill:** Môi trường agent không có skill `task-discipline`; tuân thủ nghiêm ngặt quy trình và quy tắc đã định sẵn trong repository (`CLAUDE.md`, `docs/tasks/README.md`, `docs/tasks/board.md`, và handoff `docs/tasks/tk-s7-partner-handoff-2026-10-25.md`).
 >
 > **Lưu ý phạm vi:** Task L0 chỉ chứng minh **khả năng sẵn sàng (Readiness) của môi trường Docker Linux cục bộ** (build, run container, HTTP health check loopback, isolated cleanup). L0 **chưa chứng minh** Product deploy pipeline qua guarded SSH session (thuộc phạm vi H1/H2).
