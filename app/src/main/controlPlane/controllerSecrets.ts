@@ -23,7 +23,7 @@ export type ControllerCredentialBinding = Readonly<{
 
 /** Explicit initialization only. A missing key is never silently regenerated on load. */
 export function initializeControllerSecretKey(directory: string): void {
-  const root = privateRoot(directory)
+  const root = resolveControllerSecretDirectory(directory)
   const key = randomBytes(32)
   let fd: number | undefined
   try {
@@ -49,7 +49,7 @@ export function initializeControllerSecretKey(directory: string): void {
 }
 
 export function loadControllerCredentialCipher(directory: string): AesGcmCredentialCipher {
-  const root = privateRoot(directory)
+  const root = resolveControllerSecretDirectory(directory)
   let fd: number | undefined
   let key: Buffer | undefined
   try {
@@ -115,7 +115,8 @@ export function decryptControllerCredential(
   }
 }
 
-function privateRoot(input: string): string {
+/** Internal shared check for the Linux controller's protected material directory. */
+export function resolveControllerSecretDirectory(input: string): string {
   if (process.platform !== 'linux') throw new Error('CONTROLLER_SECRET_STORE_REQUIRES_LINUX')
   try {
     if (typeof input !== 'string' || !input.trim()) throw new Error('MISSING_DIRECTORY')

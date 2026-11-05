@@ -5,6 +5,14 @@ export { SshManager } from '../../src/main/ssh/manager'
 export { ProductRuntimeExecutor } from '../../src/main/controlPlane/productRuntimeExecutor'
 export { ControlPlaneJobWorker } from '../../src/main/controlPlane/queueWorker'
 export {
+  createControllerRuntimeKey,
+  loadControllerRuntimeKey
+} from '../../src/main/controlPlane/controllerRuntimeKeys'
+export {
+  ControllerRuntimeExecutorRouter,
+  openControllerRuntimeRepository
+} from '../../src/main/controlPlane/controllerRuntimeExecutor'
+export {
   initializeControllerSecretKey,
   loadControllerCredentialCipher
 } from '../../src/main/controlPlane/controllerSecrets'

@@ -1,5 +1,7 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
+> **06/11 — R3b-2 CHỜ REVIEW:** [Per-app/generation runtime keys + router](tk-s7-release-r3b2-runtime-keys.md), Linux13/13 + master regression10/10, real SSH/Docker7/7 và cold pending T1 dùng đúng key cũ PASS; full app **1427 PASS/2 SKIP**, types/lint/build PASS. SHA: `git log -1 -- app/src/main/controlPlane/controllerRuntimeKeys.ts`. Tiếp bound-credential SSH resolver độc lập Electron, rồi production enrollment/admission/cold startup và service. R3 tổng PARTIAL, default polling-only; không VPS write/push/PR/merge.
+
 > **06/11 — R3b-1 CHỜ REVIEW:** [Controller key/credential binding](tk-s7-release-r3b-controller-bootstrap.md) đã code, Linux filesystem 10/10 và binding/tamper3/3 PASS; full app **1417 PASS/2 Linux-Caddy SKIP**, types/scoped lint/build PASS. SHA: `git log -1 -- app/src/main/controlPlane/controllerSecrets.ts`. Còn per-app HMAC store/router, production enrollment, admission/cold startup recovery và service/UI integration; default polling-only. Live gate chờ endpoint/pin độc lập/domain, chưa auth hoặc ghi VPS.
 
 > **06/11 — bước vào R3b:** R3a local `1e4df09`, R2 `950b7ae`, R1 `bc4289a`. [Bootstrap/credentials/cold recovery](tk-s7-release-r3b-controller-bootstrap.md) đã khóa gói việc tiếp theo: protected store → explicit enrollment → per-claim keys/admission/startup recovery → service OS restart; chưa code R3b. Profile hiện có chỉ là VM01/02 chưa fingerprint, không có domain; live gate BLOCKED chờ endpoint/pin độc lập, **local work vẫn OPEN**, chưa SSH auth/VPS write.

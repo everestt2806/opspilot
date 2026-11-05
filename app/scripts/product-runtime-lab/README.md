@@ -122,3 +122,29 @@ owner/mode/symlink/hardlink/size/directory checks. Run as root only in the isola
 foreign ownership. It never uses a production profile or prints key/credential bytes. Credential
 binding/tamper tests run separately in `controllerSecrets.test.ts`; per-app HMAC key storage,
 target enrollment and service composition remain pending.
+
+## Per-app runtime keys and routing (R3b-2)
+
+```sh
+export OPSPILOT_R1_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r3b2-lab.cjs
+node app/scripts/product-runtime-lab/build.mjs
+node app/scripts/product-runtime-lab/runtime-keys-check.mjs
+node app/scripts/product-runtime-lab/key-router.mjs
+```
+
+The first gate checks encrypted material, exact controller/app/generation/purpose binding,
+create-once/load-only semantics, retained old generations, damaged records, unsafe permissions,
+symlinks/hardlinks/owner/size/encoding and two concurrent creator processes. It uses isolated
+root Linux scratch for the foreign-owner check; never a production profile.
+
+The router gate explicitly provisions two app keys from the real store into **lab-only** target
+enrollments before execution. It forwards real pipeline operations; the old R1 assertion reader's
+key is adapted to the app being read, while the subject router loads a fresh repository/key per
+claim. No response, receipt or Docker command is forged. Snapshot transport is the verified local
+Git fixture, not a public Git fetch claim.
+
+During a healthy update it creates future-generation material, verifies a pending T1 record using
+a fresh old-generation repository and injects an exception after the real commit. The production
+adapter performs recovery; the container ID and StartedAt must stay unchanged. Generation material
+is prepared without switching SQL ownership. This does not prove production enrollment or an OS
+restart of an installed service. Reports are in `app/.out-scripts/product-runtime-key-router/<nonce>`.
