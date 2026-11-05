@@ -148,3 +148,24 @@ a fresh old-generation repository and injects an exception after the real commit
 adapter performs recovery; the container ID and StartedAt must stay unchanged. Generation material
 is prepared without switching SQL ownership. This does not prove production enrollment or an OS
 restart of an installed service. Reports are in `app/.out-scripts/product-runtime-key-router/<nonce>`.
+
+## Controller SQLite credential to pinned SSH (R3b-3)
+
+```sh
+export OPSPILOT_R1_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r3b3-lab.cjs
+node app/scripts/product-runtime-lab/build.mjs
+OPSPILOT_KEY_ROUTER_BOUND_SSH=1 node app/scripts/product-runtime-lab/key-router.mjs
+```
+
+This variant explicitly encrypts the lab's generated client key into its scratch SQLite VPS row,
+bound to that controller and exact SSH target/revision. Each runtime attempt opens a fresh
+SshManager using `createControllerSshResolver` and the real protected key store. Host key
+verification, SSH, Docker, helpers, per-app HMAC routing and T1 recovery remain real. The fixture
+reads only its generated key already held by the lab manager; it does not import a Desktop DB,
+credential or environment fallback. All owned connections are disconnected on success/failure.
+
+Reports are in `app/.out-scripts/product-runtime-bound-ssh/<nonce>` and include the actual number
+of fresh bound-credential SSH connections. Missing/archived/invalid profiles, identity/revision
+changes, ciphertext/controller/VPS swaps, tampering, missing keys and legacy scheme rejection are
+covered separately by the SQLite/AES unit gate. Windows units substitute only the filesystem key
+loader; they do not establish SSH or prove production enrollment. The service remains polling-only.

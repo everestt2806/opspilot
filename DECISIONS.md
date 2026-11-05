@@ -12,6 +12,8 @@
 
 ## 2026-11 — Release 04/12
 
+- 2026-11-06 | [controller/ssh] R3b-3 resolver đọc profile SQLite mới mỗi lần, kiểm pin/profile trước khi load master key và chỉ giải mã credential có binding đúng controller/toàn bộ SSH identity/revision — Không fallback safeStorage/env hoặc tự chuyển credential Desktop, không bật default service — Core.
+
 | Ngày | Phạm vi | Quyết định | Lý do | Ảnh hưởng |
 |---|---|---|---|---|
 | 2026-11-06 | [deploy] | Chuẩn hóa thứ tự mount khi hash runtime config; build/verify collector image trước khi dừng collector cũ. Không đổi field contract, schema hoặc bỏ kiểm cấu hình. | R1 Docker thật tái hiện update lỗi do Mounts đổi thứ tự sau inspect; build collector lỗi không được gây mất giám sát của bản đang chạy. | Target runtime + regression/Linux SSH/Docker lab; giữ Config/HostConfig và Type/Source/Destination/RW, unknown vẫn không được finalize. |

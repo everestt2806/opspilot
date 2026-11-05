@@ -2,6 +2,7 @@ export { initializeDatabase, closeDatabase } from '../../src/main/db'
 export { ProductDeployRepository } from '../../src/main/db/productDeployRepository'
 export { ProductRuntimeRepository } from '../../src/main/db/productRuntimeRepository'
 export { SshManager } from '../../src/main/ssh/manager'
+export { createControllerSshResolver } from '../../src/main/controlPlane/controllerSshResolver'
 export { ProductRuntimeExecutor } from '../../src/main/controlPlane/productRuntimeExecutor'
 export { ControlPlaneJobWorker } from '../../src/main/controlPlane/queueWorker'
 export {
@@ -14,7 +15,8 @@ export {
 } from '../../src/main/controlPlane/controllerRuntimeExecutor'
 export {
   initializeControllerSecretKey,
-  loadControllerCredentialCipher
+  loadControllerCredentialCipher,
+  encryptControllerCredential
 } from '../../src/main/controlPlane/controllerSecrets'
 export {
   executeProductDeployPipeline,

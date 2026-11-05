@@ -6,9 +6,12 @@ import { join, resolve } from 'node:path'
 
 if (process.platform !== 'linux') throw new Error('LINUX_REQUIRED')
 const nonce = randomBytes(6).toString('hex')
+const boundSsh = process.env.OPSPILOT_KEY_ROUTER_BOUND_SSH === '1'
 const directory = resolve(
   import.meta.dirname,
-  '../../.out-scripts/product-runtime-key-router',
+  boundSsh
+    ? '../../.out-scripts/product-runtime-bound-ssh'
+    : '../../.out-scripts/product-runtime-key-router',
   nonce
 )
 mkdirSync(directory, { recursive: true })
@@ -55,6 +58,7 @@ try {
   assert.equal(router.cold_pending_t1_verified, true)
   assert.equal(router.historical_generation_retained, true)
   assert.equal(router.results.length, 7)
+  assert.equal(router.bound_ssh_connections, boundSsh ? 7 : 0)
   assert.equal(
     router.results.filter(
       (item) =>
@@ -65,10 +69,11 @@ try {
   assert.equal(router.results.at(-1).state, 'dispatch_marker_committed')
   result = {
     status: 'PASS',
-    scope: 'REAL_PER_APP_KEY_ROUTER',
+    scope: boundSsh ? 'REAL_CONTROLLER_BOUND_SSH_RUNTIME' : 'REAL_PER_APP_KEY_ROUTER',
     nonce,
     cases: 7,
     distinct_app_keys: 2,
+    bound_ssh_connections: router.bound_ssh_connections,
     verified_terminals: 6,
     unknown_without_retry: 1,
     cold_pending_t1_verified: true,

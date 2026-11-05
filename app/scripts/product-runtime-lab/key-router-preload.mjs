@@ -13,6 +13,9 @@ const api = { ...original }
 require.cache[require.resolve(artifact)].exports = api
 const enrolled = new Set()
 const results = []
+const useBoundSsh = process.env.OPSPILOT_KEY_ROUTER_BOUND_SSH === '1'
+const boundProfiles = new Set()
+let boundSshConnections = 0
 let secretDirectory
 let comparisonKey
 let coldPendingVerified = false
@@ -85,11 +88,51 @@ api.executeProductDeployPipeline = async (
     material?.fill(0)
   }
 
+  let ownedSsh
+  if (useBoundSsh) {
+    const target = db
+      .prepare(
+        `SELECT id AS vps_id, host, port, username, auth_type, host_fingerprint,
+                ssh_security_revision FROM vps WHERE id=?`
+      )
+      .get(options.vps_id)
+    if (!boundProfiles.has(target.vps_id)) {
+      // Lab-only enrollment of its generated client key; no Desktop or user profile is read.
+      const fixture = await ssh.resolver(target.vps_id)
+      const encrypted = original.encryptControllerCredential(
+        original.loadControllerCredentialCipher(secretDirectory),
+        { controller_id: claim.controller_id, target },
+        fixture.secret
+      )
+      db.prepare(
+        'UPDATE vps SET crypto_scheme=?, encrypted_secret=?, iv=?, auth_tag=? WHERE id=?'
+      ).run(
+        encrypted.crypto_scheme,
+        encrypted.encrypted_secret,
+        encrypted.iv,
+        encrypted.auth_tag,
+        target.vps_id
+      )
+      boundProfiles.add(target.vps_id)
+    }
+    ownedSsh = new original.SshManager(
+      original.createControllerSshResolver(db, claim.controller_id, secretDirectory)
+    )
+    try {
+      await ownedSsh.connect(target.vps_id)
+      assert.ok(ownedSsh.getVerifiedHostKey(target.vps_id))
+    } catch (error) {
+      await ownedSsh.disconnectAll()
+      throw error
+    }
+    boundSshConnections += 1
+  }
+
   let cleanupCalls = 0
   const router = new original.ControllerRuntimeExecutorRouter({
     database: db,
     repository,
-    ssh,
+    ssh: ownedSsh ?? ssh,
     secretDirectory,
     targetOptions: () => ({ ...options, target_state_root: stateRoot }),
     prepareSnapshot: async (_repository, token) => {
@@ -154,6 +197,7 @@ api.executeProductDeployPipeline = async (
     result = await router.execute(claim, new AbortController().signal)
   } finally {
     original.ProductRuntimeRepository.prototype.finalize = realFinalize
+    await ownedSsh?.disconnectAll()
   }
   if (runtimeAtCommit) {
     const app = db.prepare('SELECT name FROM app WHERE id=?').get(claim.app_id)
@@ -175,6 +219,7 @@ api.executeProductDeployPipeline = async (
         scope: 'REAL_PER_APP_KEY_ROUTER',
         results,
         enrolled_scopes: enrolled.size,
+        bound_ssh_connections: boundSshConnections,
         cold_pending_t1_verified: coldPendingVerified,
         historical_generation_retained: nextGenerationRetained
       })
@@ -212,6 +257,7 @@ api.executeProductDeployPipeline = async (
       scope: 'REAL_PER_APP_KEY_ROUTER',
       results,
       enrolled_scopes: enrolled.size,
+      bound_ssh_connections: boundSshConnections,
       cold_pending_t1_verified: coldPendingVerified,
       historical_generation_retained: nextGenerationRetained
     })
