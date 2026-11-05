@@ -69,7 +69,7 @@ P0 = chặn luồng sản phẩm hoặc nghiệm thu đồ án; P1 = bắt buộ
 | ID | Ưu tiên / trạng thái đầu | Owner đề xuất | Deliverable / gate nhận xong | Phụ thuộc |
 |---|---|---|---|---|
 | R0 | P0 / CHỜ REVIEW | Sơn core | Local gate PASS: Desktop không promote/abort Product prepared; regression ownership ban đầu, chuyển chủ trong await, đổi mode rồi đổi lại, legacy Desktop vẫn hoạt động. Chưa merge main | Không |
-| R1 | P0 / OPEN | Sơn core | Full H2 integration CLI thật; success/build fail/health rollback/first failure/collector failure; DB/image/SHA/offset/cleanup evidence | R0 |
+| R1 | P0 / CHỜ REVIEW | Sơn core | [Local integration gate PASS](tk-s7-release-r1-runtime-lab.md): 7 real cases + 4 restore-failure profile; SHA/SQLite/SSH/Docker/collector/B0/R0 và cleanup. Chưa thay R2/VPS/installer gate | R0 |
 | R2 | P0 / OPEN | Sơn core | Crash matrix seal/T1/ACK/idle/T2, lease expiry/reconnect; idempotent recovery không replay mutation, stale owner không đổi runtime | R1 |
 | R3 | P0 / OPEN | Sơn core | Controller executor/service bootstrap + credential provisioning + quản trị qua đường xác thực; Git push khi desktop tắt, restart vẫn đúng một deployment, status/history đúng authority | R1, R2 |
 | R4 | P0 / OPEN | Kim ML | Hạ tầng độc lập đúng protocol, preflight clock/disk/SSH/endpoint; counter loadgen thật đi vào collector (nguồn `loadgen`, không lẫn fallback probe); pilot đủ 75 phút, raw/labels/export; review chất lượng trước batch | VPS phù hợp; độc lập R1 |

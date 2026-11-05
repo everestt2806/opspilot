@@ -211,6 +211,8 @@ class TargetReview(unittest.TestCase):
         subject = self.create()
         subject.commands.fail = 'build'
         self.assertEqual(self.step(subject, 'prepare')['state'], 'unknown')
+        self.assertTrue(subject.commands.records['a' * 64]['State']['Running'])
+        self.assertFalse(any(call[0] == 'stop' for call in subject.commands.calls))
         with self.assertRaises(runtime.RuntimeRejected):
             subject.seal()
 

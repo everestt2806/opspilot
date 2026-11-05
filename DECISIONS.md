@@ -10,6 +10,12 @@
 
 ---
 
+## 2026-11 — Release 04/12
+
+| Ngày | Phạm vi | Quyết định | Lý do | Ảnh hưởng |
+|---|---|---|---|---|
+| 2026-11-06 | [deploy] | Chuẩn hóa thứ tự mount khi hash runtime config; build/verify collector image trước khi dừng collector cũ. Không đổi field contract, schema hoặc bỏ kiểm cấu hình. | R1 Docker thật tái hiện update lỗi do Mounts đổi thứ tự sau inspect; build collector lỗi không được gây mất giám sát của bản đang chạy. | Target runtime + regression/Linux SSH/Docker lab; giữ Config/HostConfig và Type/Source/Destination/RW, unknown vẫn không được finalize. |
+
 ## 2026-07 — Tuần 0: chốt trước khi code
 
 | Ngày | Phạm vi | Quyết định | Lý do | Ảnh hưởng |

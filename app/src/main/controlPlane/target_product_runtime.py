@@ -327,9 +327,12 @@ class DockerCommands:
 
 def _config_hash(container: dict[str, Any]) -> str:
     # Chỉ digest ra wire; env/config có thể chứa secret chỉ ở bộ nhớ target.
+    # Docker inspect does not promise Mounts order. Preserve every identity field,
+    # but canonicalize enumeration before hashing so stop/re-inspect cannot drift.
+    mounts = [{key: mount.get(key) for key in ("Type", "Source", "Destination", "RW")}
+              for mount in container.get("Mounts", [])]
     return hash_h2({"Config": container.get("Config"), "HostConfig": container.get("HostConfig"),
-                    "Mounts": [{key: mount.get(key) for key in ("Type", "Source", "Destination", "RW")}
-                               for mount in container.get("Mounts", [])]})
+                    "Mounts": sorted(mounts, key=canonical_json)})
 
 
 class ProductRuntime:
@@ -551,12 +554,6 @@ class ProductRuntime:
             self.prepared = True
             return
         self._authorize()
-        if self.previous_collector is not None:
-            self.commands.run(["stop", "--time", "10", self.previous_collector["Id"]], timeout=15)
-            stopped = self.commands.inspect("container", self.previous_collector["Id"])
-            if stopped.get("State", {}).get("Running") or _config_hash(stopped) != _config_hash(self.previous_collector):
-                raise RuntimeUnknown()
-        self.boundary = self._metric_boundary()
         image = self.commands.inspect("image", self.context["candidate_image_tag"])
         self._check_labels(image, self._labels(self.deployment_id, self.context["source_sha"]))
         if image.get("Id") != self.context["candidate_image_id"]:
@@ -571,6 +568,15 @@ class ProductRuntime:
         if not _match(_IMAGE, collector_image.get("Id")):
             raise RuntimeUnknown()
         self.collector_image_id = collector_image["Id"]
+        # A failed image preparation must not interrupt the current collector.
+        # Quiesce it and capture B0 only after both candidate images are verified.
+        self._authorize()
+        if self.previous_collector is not None:
+            self.commands.run(["stop", "--time", "10", self.previous_collector["Id"]], timeout=15)
+            stopped = self.commands.inspect("container", self.previous_collector["Id"])
+            if stopped.get("State", {}).get("Running") or _config_hash(stopped) != _config_hash(self.previous_collector):
+                raise RuntimeUnknown()
+        self.boundary = self._metric_boundary()
         self.prepared = True
 
     def _resource_labels(self) -> list[str]:
