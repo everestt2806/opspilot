@@ -34,7 +34,7 @@ export const PRODUCT_RETRY_JITTER_MAX_MS = 15_000;
 
 /** Only these stable codes may be persisted by pre-write completion. */
 export const PRODUCT_PREWRITE_ERROR_CODES = {
-  transient: ['GIT_UNAVAILABLE', 'SSH_PREFLIGHT_TIMEOUT', 'NETWORK_ERROR'] as const,
+  transient: ['GIT_UNAVAILABLE', 'SSH_PREFLIGHT_TIMEOUT', 'NETWORK_ERROR', 'RESOURCE_UNAVAILABLE', 'RESOURCE_UNKNOWN'] as const,
   permanent: ['INVALID_SOURCE_CONFIG', 'UNSUPPORTED_SOURCE_CONFIG', 'INVALID_REPOSITORY_URL'] as const
 };
 export type ProductPrewriteTransientErrorCode =

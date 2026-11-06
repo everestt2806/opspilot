@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type -- Standalone JavaScript integration lab. */
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -8,6 +9,7 @@ import { dirname, join } from 'node:path'
 const artifact = process.env.OPSPILOT_R1_ARTIFACT
 const cli = process.env.OPSPILOT_CONTROLLER_ARTIFACT
 const output = process.env.OPSPILOT_TARGET_ENROLL_RUNTIME_RESULT
+const readinessCli = process.env.OPSPILOT_CONTROLLER_READINESS_ARTIFACT
 if (!artifact || !cli || !output) throw new Error('TARGET_ENROLL_LAB_ENV_REQUIRED')
 const require = createRequire(artifact)
 const original = require(artifact)
@@ -22,6 +24,37 @@ let controllerId
 const enrollments = []
 const runtimes = []
 let lossRecovered = false
+let readinessCalls = 0
+let coldRecovered = false
+let unknownBlocked = false
+let resourceProbes = 0
+const readinessInput = readinessCli
+  ? {
+      format: 1,
+      artifact: readinessCli,
+      manifest_sha256: createHash('sha256')
+        .update(readFileSync(join(dirname(readinessCli), 'bundle-manifest.json')))
+        .digest('hex')
+    }
+  : null
+const recoverCold = () =>
+  JSON.parse(
+    execFileSync(process.execPath, [readinessCli, 'recover-runtime', '--data-dir', dataDirectory], {
+      input: JSON.stringify(readinessInput),
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 60000
+    })
+  )
+const containerIdentity = (name) => {
+  const value = JSON.parse(
+    execFileSync('docker', ['container', 'inspect', name], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+  )[0]
+  return [value.Id, value.Image, value.State.StartedAt, value.RestartCount]
+}
 
 api.ProductDeployRepository = class extends original.ProductDeployRepository {
   constructor(database) {
@@ -176,6 +209,22 @@ api.executeProductDeployPipeline = async (
   options
 ) => {
   const claim = snapshot.claim
+  if (readinessCli && ++readinessCalls === 1) {
+    assert.notEqual(
+      readinessInput.manifest_sha256,
+      manifestSha,
+      'historical target pin must differ from current management release'
+    )
+    const recovery = recoverCold()
+    assert.equal(recovery.state, 'ready')
+    assert.equal(recovery.inspected_enrollments, 2)
+    assert.equal(recovery.recovered_terminals, 0)
+    const admission = new original.ControllerResourceAdmission(
+      dataDirectory,
+      () => recovery.state === 'ready'
+    )
+    assert.equal(admission.check(new AbortController().signal).state, 'ready')
+  }
   const installed = original.readEnrolledProductTarget(
     database,
     dataDirectory,
@@ -193,11 +242,42 @@ api.executeProductDeployPipeline = async (
     original.createControllerSshResolver(database, controllerId, dataDirectory)
   )
   let cleanupCalls = 0
+  const admission = readinessCli
+    ? new original.ControllerTargetAdmission(database, dataDirectory, controllerId, ssh)
+    : null
+  let interrupted = false
+  const realFinalize = original.ProductRuntimeRepository.prototype.finalize
+  const realOpen = ssh.openGuardedExecutionChannelWithIdentity.bind(ssh)
+  if (readinessCli && readinessCalls === 2) {
+    original.ProductRuntimeRepository.prototype.finalize = function (...args) {
+      realFinalize.apply(this, args)
+      interrupted = true
+      throw Object.assign(new Error('SIMULATED_LOSS_AFTER_T1'), { code: 'SIMULATED_LOSS_AFTER_T1' })
+    }
+    ssh.openGuardedExecutionChannelWithIdentity = async (...args) => {
+      if (interrupted) throw new Error('SIMULATED_CONTROLLER_OFFLINE')
+      return realOpen(...args)
+    }
+  }
   const router = new original.ControllerRuntimeExecutorRouter({
     database,
     repository,
     ssh,
     secretDirectory: dataDirectory,
+    ...(admission
+      ? {
+          admitTarget: async (claim, signal) => {
+            const decision = await admission.check(claim, signal)
+            assert.equal(
+              decision.state,
+              'ready',
+              `resource admission for runtime ${readinessCalls}`
+            )
+            resourceProbes++
+            return decision
+          }
+        }
+      : {}),
     targetOptions: () => ({
       ...options,
       target_helper_path: installed.helper_path,
@@ -219,7 +299,55 @@ api.executeProductDeployPipeline = async (
   try {
     result = await router.execute(claim, new AbortController().signal)
   } finally {
+    original.ProductRuntimeRepository.prototype.finalize = realFinalize
+    ssh.openGuardedExecutionChannelWithIdentity = realOpen
     await ssh.disconnectAll()
+  }
+  if (interrupted) {
+    assert.equal(result.state, 'dispatch_marker_committed')
+    const name = database.prepare('SELECT name FROM app WHERE id=?').get(claim.app_id).name
+    const before = [containerIdentity(name + '-app'), containerIdentity(name + '-collector')]
+    const terminal = original
+      .openControllerRuntimeRepository(database, dataDirectory, claim)
+      .getTerminal(claim.attempt_id)
+    assert.equal(terminal.leases_released_at, null)
+    const response = recoverCold()
+    assert.equal(response.state, 'ready')
+    assert.equal(response.recovered_terminals, 1)
+    assert.deepEqual(
+      [containerIdentity(name + '-app'), containerIdentity(name + '-collector')],
+      before
+    )
+    assert.equal(recoverCold().recovered_terminals, 0)
+    const settled = original
+      .openControllerRuntimeRepository(database, dataDirectory, claim)
+      .getTerminal(claim.attempt_id)
+    assert.ok(settled.leases_released_at)
+    result = {
+      state: 'runtime_settled',
+      attempt_id: claim.attempt_id,
+      commit_id: settled.commit_id,
+      outcome: settled.envelope.receipt.outcome
+    }
+    coldRecovered = true
+  } else if (readinessCli && result.state === 'dispatch_marker_committed') {
+    const before = database
+      .prepare('SELECT released_at FROM product_app_lease WHERE lease_id=?')
+      .get(claim.app_lease_id)
+    const response = recoverCold()
+    assert.equal(response.state, 'reconciliation_required')
+    assert.ok(
+      response.blockers.some(
+        (b) => b.reason === 'preterminal_unknown' && b.attempt_id === claim.attempt_id
+      )
+    )
+    assert.deepEqual(
+      database
+        .prepare('SELECT released_at FROM product_app_lease WHERE lease_id=?')
+        .get(claim.app_lease_id),
+      before
+    )
+    unknownBlocked = true
   }
   runtimes.push({ state: result.state, outcome: result.outcome })
   assert.equal(cleanupCalls, 1)
@@ -231,6 +359,10 @@ api.executeProductDeployPipeline = async (
       runtimes,
       installed_helpers: true,
       controller_process_loss_recovered: lossRecovered,
+      cold_startup_terminal_recovered: coldRecovered,
+      historical_release_preserved: !!readinessCli,
+      preterminal_unknown_blocked: unknownBlocked,
+      resource_probes: resourceProbes,
       packaged_templates_collector: true,
       no_fixture_initializer_in_subject: true
     })

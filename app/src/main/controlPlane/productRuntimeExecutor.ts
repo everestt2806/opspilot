@@ -22,6 +22,13 @@ import {
   type PreparedProductGitSnapshot
 } from './productSnapshotPreparation'
 import type { ProductExecutorResult, ProductJobExecutor } from './queueWorker'
+import type { ProductAdmissionDecision } from '../../../../docs/contracts/product-controller-readiness'
+
+export class ProductTargetAdmissionError extends Error {
+  constructor(readonly reason: 'resource_unknown' | 'resource_unavailable') {
+    super(reason === 'resource_unknown' ? 'RESOURCE_UNKNOWN' : 'RESOURCE_UNAVAILABLE')
+  }
+}
 
 export interface ProductRuntimeExecutorOptions {
   database: Database.Database
@@ -34,6 +41,8 @@ export interface ProductRuntimeExecutorOptions {
   ) => ProductDeployPipelineOptions | Promise<ProductDeployPipelineOptions>
   /** @internal Immutable local fixture transport may be supplied by integration tests. */
   prepareSnapshot?: typeof prepareProductGitSnapshot
+  /** Read-only target probe before the persisted dispatch marker. */
+  admitTarget?: (claim: ProductClaimToken, signal: AbortSignal) => Promise<ProductAdmissionDecision>
 }
 
 /** Production adapter, deliberately not installed into the default service composition yet. */
@@ -52,6 +61,11 @@ export class ProductRuntimeExecutor implements ProductJobExecutor {
       )
       target = { ...(await this.options.targetOptions(claim)), signal }
       validatePreflightSourceAndPlan(this.options.database, snapshot, target.collector_directory)
+      if (this.options.admitTarget) {
+        const admission = await this.options.admitTarget(claim, signal)
+        if (admission.state !== 'ready')
+          throw new ProductTargetAdmissionError(admission.reason ?? 'resource_unknown')
+      }
       await executeProductDeployPipeline(
         this.options.database,
         this.options.runtimeRepository,
@@ -79,6 +93,13 @@ export class ProductRuntimeExecutor implements ProductJobExecutor {
       if (this.options.repository.readClaimExecutionState(claim) !== 'prewrite')
         return { state: 'dispatch_marker_committed' }
       if (signal.aborted) return { state: 'stopped_before_write' }
+      if (error instanceof ProductTargetAdmissionError)
+        return {
+          state: 'prewrite_failure',
+          disposition: 'transient_failure',
+          safeErrorCode:
+            error.reason === 'resource_unknown' ? 'RESOURCE_UNKNOWN' : 'RESOURCE_UNAVAILABLE'
+        }
       if (error instanceof ProductSourceRenderError)
         return {
           state: 'prewrite_failure',

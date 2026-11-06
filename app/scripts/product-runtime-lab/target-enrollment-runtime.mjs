@@ -54,6 +54,12 @@ try {
   assert.equal(installed.runtimes.length, 7)
   assert.equal(installed.runtimes.filter((value) => value.state === 'runtime_settled').length, 6)
   assert.equal(installed.runtimes.at(-1).state, 'dispatch_marker_committed')
+  if (process.env.OPSPILOT_CONTROLLER_READINESS_ARTIFACT) {
+    assert.equal(installed.cold_startup_terminal_recovered, true)
+    assert.equal(installed.historical_release_preserved, true)
+    assert.equal(installed.preterminal_unknown_blocked, true)
+    assert.equal(installed.resource_probes, 7)
+  }
   result = {
     status: 'PASS',
     nonce,
@@ -68,7 +74,17 @@ try {
     runtime_nonce: runtime.nonce,
     cleanup: true,
     bundle_sha256: runtime.bundle_sha256,
-    subject_sha256: runtime.subject_sha256
+    subject_sha256: runtime.subject_sha256,
+    ...(process.env.OPSPILOT_CONTROLLER_READINESS_ARTIFACT
+      ? {
+          scope: 'CONTROLLER_READINESS_COLD_RECOVERY',
+          resource_probes: 7,
+          historical_release_preserved: true,
+          cold_startup_terminal_recovered: true,
+          preterminal_unknown_blocked: true,
+          no_runtime_replay: true
+        }
+      : {})
   }
 } catch {
   result = { status: 'FAIL', nonce, code: 'TARGET_ENROLLMENT_RUNTIME_FAILED' }

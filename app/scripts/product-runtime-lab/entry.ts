@@ -7,6 +7,13 @@ export {
   readEnrolledProductTarget
 } from '../../src/main/controlPlane/targetEnrollment'
 export { TargetEnrollmentRepository } from '../../src/main/controlPlane/targetEnrollmentRepository'
+export { ControllerStartupRecovery } from '../../src/main/controlPlane/controllerStartupRecovery'
+export { ControllerTargetAdmission } from '../../src/main/controlPlane/controllerTargetAdmission'
+export {
+  ControllerResourceAdmission,
+  measureControllerResources
+} from '../../src/main/controlPlane/controllerResources'
+export { verifyControllerBundle } from '../../src/main/controlPlane/controllerBundle'
 export { createControllerSshResolver } from '../../src/main/controlPlane/controllerSshResolver'
 export { ProductRuntimeExecutor } from '../../src/main/controlPlane/productRuntimeExecutor'
 export { ControlPlaneJobWorker } from '../../src/main/controlPlane/queueWorker'

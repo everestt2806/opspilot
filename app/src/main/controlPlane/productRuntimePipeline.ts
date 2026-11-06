@@ -240,7 +240,22 @@ export async function recoverProductRuntimeSession(
   state: 'settled' | 'already_settled'
   terminal: H2TerminalRecord
 }> {
-  const terminal = runtimeRepository.getTerminal(snapshot.claim.attempt_id)
+  return recoverProductRuntimeTerminal(runtimeRepository, ssh, snapshot.claim.attempt_id, options)
+}
+
+/** Cold startup chỉ cần persisted identity; không dựng snapshot giả hoặc fetch lại source. */
+export async function recoverProductRuntimeTerminal(
+  runtimeRepository: ProductRuntimeRepository,
+  ssh: SshManager,
+  attemptId: string,
+  options: {
+    vps_id: number
+    target_helper_path: string
+    target_state_root: string
+    signal?: AbortSignal
+  }
+): Promise<{ state: 'settled' | 'already_settled'; terminal: H2TerminalRecord }> {
+  const terminal = runtimeRepository.getTerminal(attemptId)
   if (!terminal) {
     throw new GuardedSshSessionError('SSH_SETTLEMENT_REJECTED')
   }
@@ -261,13 +276,13 @@ export async function recoverProductRuntimeSession(
   })
 
   try {
-    const attestation = runtimeRepository.commitAttestation(snapshot.claim.attempt_id)
+    const attestation = runtimeRepository.commitAttestation(attemptId)
     const settlementAck = await session.settleRuntime(attestation)
     runtimeRepository.completeSettlement(context, settlementAck)
     await session.close()
     return {
       state: 'settled',
-      terminal: runtimeRepository.getTerminal(snapshot.claim.attempt_id)!
+      terminal: runtimeRepository.getTerminal(attemptId)!
     }
   } catch (error) {
     if (session.state === 'active') {

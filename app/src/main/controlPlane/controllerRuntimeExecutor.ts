@@ -22,7 +22,7 @@ export interface ControllerRuntimeExecutorOptions extends Omit<
 export function openControllerRuntimeRepository(
   database: Database.Database,
   directory: string,
-  claim: ProductClaimToken
+  claim: Pick<ProductClaimToken, 'controller_id' | 'app_id' | 'ownership_generation'>
 ): ProductRuntimeRepository {
   const key = loadControllerRuntimeKey(directory, claim)
   try {

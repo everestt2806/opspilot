@@ -68,6 +68,19 @@ afterEach(() => {
 })
 
 describe('Durable Product target enrollment', () => {
+  it('inspects retained material while unpaused without reopening first-install authority', () => {
+    const create = vi.fn()
+    repository.prepare(payload, create)
+    database.exec('UPDATE product_app_control SET auto_deploy_paused=0,pause_reason=NULL')
+    expect(() => repository.begin(payload)).toThrow('TARGET_ENROLLMENT_REQUIRES_QUIESCENCE')
+    expect(repository.begin(payload, true).operation).toBe('inspect')
+    repository.complete(payload, syntheticProof(), key, true)
+    expect(repository.get(payload)?.state).toBe('enrolled')
+    expect(create).toHaveBeenCalledOnce()
+    expect(() => repository.prepare(payload, create)).toThrow(
+      'TARGET_ENROLLMENT_REQUIRES_QUIESCENCE'
+    )
+  })
   it('creates material once, commits unknown before transport, and never rearms on replay', () => {
     const create = vi.fn()
     expect(repository.prepare(payload, create).state).toBe('prepared')

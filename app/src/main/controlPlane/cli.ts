@@ -13,9 +13,17 @@ import { enrollControllerVps, initializeControllerSecrets } from './controllerEn
 import { readControllerBootstrapInput } from './controllerBootstrapInput'
 import { verifyControllerBundle } from './controllerBundle'
 import { enrollProductTarget } from './targetEnrollment'
+import { ControllerStartupRecovery } from './controllerStartupRecovery'
 
 type Command =
-  'init' | 'run' | 'poll-once' | 'status' | 'secrets-init' | 'enroll-vps' | 'enroll-target'
+  | 'init'
+  | 'run'
+  | 'poll-once'
+  | 'status'
+  | 'secrets-init'
+  | 'enroll-vps'
+  | 'enroll-target'
+  | 'recover-runtime'
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
@@ -26,9 +34,16 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
     return
   }
   if (
-    !['init', 'run', 'poll-once', 'status', 'secrets-init', 'enroll-vps', 'enroll-target'].includes(
-      commandValue
-    )
+    ![
+      'init',
+      'run',
+      'poll-once',
+      'status',
+      'secrets-init',
+      'enroll-vps',
+      'enroll-target',
+      'recover-runtime'
+    ].includes(commandValue)
   ) {
     throw new Error('USAGE')
   }
@@ -41,7 +56,12 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
     return
   }
 
-  if (command === 'secrets-init' || command === 'enroll-vps' || command === 'enroll-target') {
+  if (
+    command === 'secrets-init' ||
+    command === 'enroll-vps' ||
+    command === 'enroll-target' ||
+    command === 'recover-runtime'
+  ) {
     if (process.platform !== 'linux') throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
     const controller = new AbortController()
     const onSignal = (): void => controller.abort()
@@ -54,8 +74,36 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
           ? await readControllerBootstrapInput(process.stdin, controller.signal)
           : undefined
       if (controller.signal.aborted) throw new Error('CONTROLLER_VPS_ENROLLMENT_ABORTED')
+      let recoveryBundle: ReturnType<typeof verifyControllerBundle> | undefined
+      if (command === 'recover-runtime') {
+        const request = input as {
+          format?: unknown
+          artifact?: unknown
+          manifest_sha256?: unknown
+        } | null
+        if (
+          !request ||
+          Object.keys(request).sort().join(',') !== 'artifact,format,manifest_sha256' ||
+          request.format !== 1 ||
+          typeof request.artifact !== 'string' ||
+          typeof request.manifest_sha256 !== 'string'
+        )
+          throw new Error('INVALID_RECOVERY_REQUEST')
+        recoveryBundle = verifyControllerBundle(request.artifact, request.manifest_sha256)
+      }
       opened = openControllerDatabase(dataDirectory)
-      if (command === 'secrets-init') {
+      if (command === 'recover-runtime') {
+        console.log(
+          JSON.stringify(
+            await new ControllerStartupRecovery(
+              opened.database,
+              opened.dataDirectory,
+              opened.controllerId,
+              recoveryBundle!
+            ).run(controller.signal)
+          )
+        )
+      } else if (command === 'secrets-init') {
         initializeControllerSecrets(opened.database, opened.controllerId, opened.dataDirectory)
         console.log(
           JSON.stringify({ state: 'secrets_initialized', controller_id: opened.controllerId })

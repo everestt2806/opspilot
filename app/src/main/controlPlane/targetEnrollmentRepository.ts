@@ -146,13 +146,16 @@ export class TargetEnrollmentRepository {
       .immediate()
   }
 
-  begin(payload: ProductTargetEnrollmentPayload): {
+  begin(
+    payload: ProductTargetEnrollmentPayload,
+    inspectionOnly = false
+  ): {
     row: TargetEnrollmentRow
     operation: 'enroll' | 'inspect'
   } {
     return this.database
       .transaction(() => {
-        this.assertCurrent(payload)
+        this.assertCurrent(payload, !inspectionOnly)
         const row = this.get(payload)
         if (!row) throw new Error('TARGET_ENROLLMENT_NOT_PREPARED')
         if (
@@ -161,7 +164,8 @@ export class TargetEnrollmentRepository {
           row.target_root !== payload.target_root
         )
           throw new Error('TARGET_ENROLLMENT_CONFLICT')
-        const operation: 'enroll' | 'inspect' = row.state === 'prepared' ? 'enroll' : 'inspect'
+        const operation: 'enroll' | 'inspect' =
+          !inspectionOnly && row.state === 'prepared' ? 'enroll' : 'inspect'
         this.database
           .prepare(
             `UPDATE product_target_enrollment
@@ -181,13 +185,14 @@ export class TargetEnrollmentRepository {
   complete(
     payload: ProductTargetEnrollmentPayload,
     proof: unknown,
-    key: Buffer
+    key: Buffer,
+    inspectionOnly = false
   ): ProductTargetEnrollmentProof {
     if (!verifyTargetEnrollmentProof(payload, proof, key))
       throw new Error('TARGET_ENROLLMENT_PROOF_REJECTED')
     return this.database
       .transaction(() => {
-        this.assertCurrent(payload)
+        this.assertCurrent(payload, !inspectionOnly)
         const row = this.get(payload)
         if (!row || row.state === 'prepared') throw new Error('TARGET_ENROLLMENT_NOT_PREPARED')
         if (

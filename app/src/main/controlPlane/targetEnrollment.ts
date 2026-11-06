@@ -7,7 +7,11 @@ import {
   PRODUCT_TARGET_ENROLLMENT_MAX_OUTPUT_BYTES,
   type ProductTargetEnrollmentPayload
 } from '../../../../docs/contracts/product-target-enrollment'
-import { verifyControllerBundle, readVerifiedControllerBundleFile } from './controllerBundle'
+import {
+  verifyControllerBundle,
+  readVerifiedControllerBundleFile,
+  type VerifiedControllerBundle
+} from './controllerBundle'
 import { createControllerRuntimeKey, loadControllerRuntimeKey } from './controllerRuntimeKeys'
 import { createControllerSshResolver } from './controllerSshResolver'
 import { SshManager } from '../ssh/manager'
@@ -54,11 +58,14 @@ export type TargetEnrollmentResult = Readonly<{
   state_root?: string
 }>
 
-async function exchange(
+export async function exchangeProductBootstrapJson(
   channel: ClientChannel,
   body: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  maxOutputBytes = PRODUCT_TARGET_ENROLLMENT_MAX_OUTPUT_BYTES
 ): Promise<unknown> {
+  if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes < 1 || maxOutputBytes > 128 * 1024)
+    throw new Error('TARGET_ENROLLMENT_INPUT_INVALID')
   return new Promise((resolve, reject) => {
     let output = Buffer.alloc(0)
     let finished = false
@@ -82,7 +89,7 @@ async function exchange(
     const abort = (): void => finish(new Error('TARGET_ENROLLMENT_UNKNOWN'))
     const timer = setTimeout(abort, 20_000)
     const data = (bytes: Buffer): void => {
-      if (output.length + bytes.length > PRODUCT_TARGET_ENROLLMENT_MAX_OUTPUT_BYTES) {
+      if (output.length + bytes.length > maxOutputBytes) {
         abort()
         return
       }
@@ -187,7 +194,7 @@ export async function enrollProductTarget(
       opened.channel.destroy()
       throw new Error('TARGET_ENROLLMENT_AUTHORITY_REJECTED')
     }
-    const response = (await exchange(
+    const response = (await exchangeProductBootstrapJson(
       opened.channel,
       JSON.stringify({
         ...packet,
@@ -277,5 +284,120 @@ export function readEnrolledProductTarget(
     return expected
   } finally {
     key.fill(0)
+  }
+}
+
+/** Chỉ inspect existing row/material, được dùng khi H2 pending; không first-install hoặc require pause. */
+export async function inspectStoredProductTarget(
+  database: Database.Database,
+  directory: string,
+  controllerId: string,
+  appId: number,
+  generation: number,
+  bundle: VerifiedControllerBundle,
+  historicalManifest: Buffer,
+  signal?: AbortSignal
+): Promise<TargetEnrollmentResult> {
+  const repository = new TargetEnrollmentRepository(database)
+  const identity = { controller_id: controllerId, app_id: appId, ownership_generation: generation }
+  const row = repository.get(identity)
+  if (
+    !row ||
+    historicalManifest.length > 32 * 1024 ||
+    createHash('sha256').update(historicalManifest).digest('hex') !== row.manifest_sha256
+  )
+    throw new Error('TARGET_ENROLLMENT_NOT_READY')
+  const manifest = JSON.parse(historicalManifest.toString('utf8')) as {
+    files: { path: string; sha256: string; size: number }[]
+  }
+  for (const name of [
+    'target_execution_guard.py',
+    'target_guarded_ssh_helper.py',
+    'target_product_runtime.py'
+  ]) {
+    const path = `target-helper/${name}`
+    const current = readVerifiedControllerBundleFile(bundle, path)
+    const previous = manifest.files.find((file) => file.path === path)
+    if (
+      !previous ||
+      previous.size !== current.length ||
+      previous.sha256 !== createHash('sha256').update(current).digest('hex')
+    )
+      throw new Error('TARGET_ENROLLMENT_HELPER_UPGRADE_REQUIRED')
+  }
+  const target = repository.target(controllerId, appId, generation, false)
+  const payload = makeTargetEnrollmentPayload(
+    controllerId,
+    appId,
+    generation,
+    target,
+    row.manifest_sha256,
+    row.target_root
+  )
+  const key = loadControllerRuntimeKey(directory, identity)
+  const ssh = new SshManager(createControllerSshResolver(database, controllerId, directory))
+  let started: ReturnType<TargetEnrollmentRepository['begin']> | undefined
+  try {
+    if (signal?.aborted) throw new Error('TARGET_ENROLLMENT_ABORTED')
+    const script = readVerifiedControllerBundleFile(
+      bundle,
+      'target-helper/target_enrollment.py'
+    ).toString('utf8')
+    started = repository.begin(payload, true)
+    const opened = await ssh.openProductBootstrapChannel(
+      target.vps_id,
+      { text: script, sha256: createHash('sha256').update(script).digest('hex') },
+      { signal, timeoutMs: 20_000 }
+    )
+    repository.assertCurrent(payload, false)
+    const actual = opened.identity
+    if (
+      actual.vpsId !== target.vps_id ||
+      actual.host !== target.host ||
+      actual.port !== target.port ||
+      actual.hostFingerprint !== target.host_fingerprint ||
+      actual.username !== target.username ||
+      actual.authType !== target.auth_type
+    ) {
+      opened.channel.destroy()
+      throw new Error('TARGET_ENROLLMENT_AUTHORITY_REJECTED')
+    }
+    const response = (await exchangeProductBootstrapJson(
+      opened.channel,
+      JSON.stringify({
+        format: 1,
+        operation: 'inspect',
+        payload,
+        key: key.toString('base64'),
+        manifest: historicalManifest.toString('utf8'),
+        helpers: {}
+      }),
+      signal
+    )) as { state?: string; proof?: unknown }
+    if (
+      !response ||
+      Object.keys(response).sort().join(',') !== 'proof,state' ||
+      response.state !== 'enrolled'
+    )
+      throw new Error('TARGET_ENROLLMENT_UNKNOWN')
+    repository.complete(payload, response.proof, key, true)
+    return {
+      state: 'enrolled',
+      app_id: appId,
+      ownership_generation: generation,
+      helper_path: payload.helper_path,
+      state_root: payload.state_root
+    }
+  } catch {
+    if (started) repository.failed(started.row)
+    return {
+      state: 'unknown',
+      app_id: appId,
+      ownership_generation: generation,
+      safe_error_code: 'TARGET_ENROLLMENT_UNKNOWN'
+    }
+  } finally {
+    key.fill(0)
+    await ssh.disconnectAll()
   }
 }
