@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6b06/11:** [Typed main HTTP client](tasks/tk-s7-release-r3c6b-desktop-http-client.md) pinned SSH/current binding/bounded DTO/freshness/ambiguous writes/same-key lookup, concurrent handshake fix; focused87/native client13/channel7/actual service Git-Docker-systemd2deploy/full1614PASS/2SKIP/types/lint/build/fresh023 PASS. Chưa durable vault/enrollment/IPC/UI authority/rotation/production rollout hoặc FR/UC tổng PASS; native client chỉ durable intent, không tự nhận runtime deployed.
+
 > **R3c-6a06/11:** [Pinned main-only API channel](tasks/tk-s7-release-r3c6a-pinned-api-channel.md) fixed127.0.0.1:8768/current SSH principal+actual pin/deadline/abort/late close có focused40/nativeSSHHTTP7/fresh023/full1597PASS/2SKIP/types/scopedlint/build PASS. Chưa authenticated HTTP DTO Desktop client/token vault/enrollment/UI authority/rotation; chưa nâng FR/UC tổng hoặc nhận production rollout.
 
 > **R3c-5b06/11:** [Command HTTP/runtime](tasks/tk-s7-release-r3c5b-command-http.md) actual publicGit/systemd **869ed020b29d PASS**: manual sameSHA2deploy/T1T2, duplicate1job/discarded response lookup/pause-resume/restart-no-duplicate/revoke401/cleanup. Sửa production completion verifier composition; nativeHTTP11/SQL12/auth13/fresh023/full1585PASS/2SKIP/types/lint/build. Chưa Desktop tunnel/UI authority/rotation/non-root installer/liveVPS/ML/HTTPS/soak hoặc FR/UC tổng PASS.

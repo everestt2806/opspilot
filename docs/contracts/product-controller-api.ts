@@ -3,7 +3,9 @@
  * Wire protocol: R3c-3 implements local admin client issue/revoke and credential
  * validation; R3c-4 adds loopback read routes in explicit execution service.
  * R3c-5b composes bounded manual/policy writes and request lookup. R3c-6a adds a
- * main-only pinned SSH channel; logs/rotation/full Desktop authority remain future work.
+ * main-only pinned SSH channel. R3c-6b adds bounded typed main HTTP calls with
+ * current binding/freshness checks and ambiguous-write lookup semantics.
+ * Vault/enrollment UI/logs/rotation/full Desktop authority remain future work.
  * The controller is the sole Product-mode writer. The desktop is an authenticated
  * client/cache and must never fall back to its local deploy pipeline.
  */
@@ -26,6 +28,10 @@ export const PRODUCT_CONTROLLER_API_LOOPBACK = '127.0.0.1' as const
 export const PRODUCT_CONTROLLER_API_PORT = 8768
 export const PRODUCT_CONTROLLER_API_MAX_REQUEST_BYTES = 16 * 1024
 export const PRODUCT_CONTROLLER_API_BODY_TIMEOUT_MS = 5_000
+/** Main-process client deadline includes binding resolution, SSH open and full HTTP response. */
+export const PRODUCT_CONTROLLER_CLIENT_TIMEOUT_MS = 20_000
+export const PRODUCT_CONTROLLER_CLIENT_MAX_TIMEOUT_MS = 30_000
+export const PRODUCT_CONTROLLER_CLIENT_MAX_HEADER_BYTES = 16 * 1024
 export const PRODUCT_CONTROLLER_API_MAX_RESPONSE_BYTES = 1024 * 1024
 export const PRODUCT_CONTROLLER_API_MAX_PAGE_SIZE = 100
 export const PRODUCT_CONTROLLER_API_DEFAULT_PAGE_SIZE = 50
@@ -234,7 +240,16 @@ export interface ProductControllerApiError {
   }
 }
 
-/** Main-process transport result; a timeout after send is deliberately ambiguous. */
+/** Main-process transport result; a timeout after send is deliberately ambiguous.
+ * R3c-6b: only fixed declared read/manual/policy operations through pinned SSH;
+ * no caller URL/headers/arbitrary forwarding, no automatic retry or Desktop fallback.
+ * Fresh controller/principal/credential binding is checked before send and return;
+ * response DTOs/media/UTF8/header/body/page sizes are validated. Read errors expose
+ * stable local/API codes only, never raw HTTP/SSH message or credential.
+ * A write with a lost/malformed/5xx response after send returns outcome_unknown.
+ * Query the existing key; do not create a new request key to guess acceptance.
+ * Credentials are injected by trusted main for this slice, not persisted in settings.
+ */
 export type ProductControllerCallResult<T> =
   | { state: 'response_received'; response: T }
   | {

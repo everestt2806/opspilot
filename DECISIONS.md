@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-06 | [product-mode/desktop] R3c-6b typed HTTP DTO client chỉ qua fixed pinned SSH channel, fresh credential binding trước send/return, bounded response/schema/freshness; write mất response sau send trả outcome_unknown cùng request key, không retry/fallback — Vault/enrollment/IPC/UI cần local binding contract riêng6c, không dùng generic settings để lưu token — Sơn/Codex
+
 2026-11-06 | [product-mode/ssh] R3c-6a main-only API channel dùng SSH direct-tcpip cố định127.0.0.1:8768, full principal/current resolver + actual handshake pin, deadline/abort và không reconnect/replay — Chuẩn bị Desktop controller transport mà không mở public management port/local listener/arbitrary forward qua IPC; chưa token vault/UI authority — Sơn/Codex
 
 2026-11-06 | [product-mode/http] R3c-5b nối manual redeploy/policy/lookup trên authenticated loopback API, POST≤16KiB/timeout/current reauth sau đọc body, Idempotency-Key và drain trước DB close — Accept202 là durable intent, chưa phải runtime success; pause dùng khi degraded, resume/manual theo readiness và barriers — Sơn/Codex

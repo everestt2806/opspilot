@@ -184,6 +184,7 @@ interface PoolEntry {
   ready: boolean
   cancelled: boolean
   verifiedHostKey: Buffer | null
+  connecting: Promise<void> | null
 }
 
 export class SshManager extends EventEmitter {
@@ -746,7 +747,8 @@ export class SshManager extends EventEmitter {
       client: null,
       ready: false,
       cancelled: false,
-      verifiedHostKey: null
+      verifiedHostKey: null,
+      connecting: null
     }
     this.entries.set(vpsId, entry)
     return entry
@@ -771,6 +773,11 @@ export class SshManager extends EventEmitter {
         'Thiếu fingerprint SSH SHA256 hợp lệ. Hãy lấy fingerprint độc lập từ console của VPS rồi lưu trước khi kết nối.'
       )
     }
+    // Các lần đọc ban đầu có thể chạy song song; không phá handshake mà caller khác đang chờ.
+    if (entry.connecting) {
+      await entry.connecting
+      return this.ensureConnected(vpsId, force, expected, signal)
+    }
     const endpointChanged =
       entry.info.host !== '' &&
       (entry.info.host !== resolved.host ||
@@ -783,7 +790,11 @@ export class SshManager extends EventEmitter {
     }
 
     entry.info = resolved
-    await this.openWithRetry(entry)
+    const connecting = this.openWithRetry(entry).finally(() => {
+      if (entry.connecting === connecting) entry.connecting = null
+    })
+    entry.connecting = connecting
+    await connecting
     return entry
   }
 

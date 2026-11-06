@@ -9,6 +9,10 @@ export {
 export { TargetEnrollmentRepository } from '../../src/main/controlPlane/targetEnrollmentRepository'
 export { ControllerClientAuth } from '../../src/main/controlPlane/controllerClientAuth'
 export { ControllerCommands } from '../../src/main/controlPlane/controllerCommands'
+export { ControllerHttpClient } from '../../src/main/controlPlane/controllerHttpClient'
+export { ControllerReadApi } from '../../src/main/controlPlane/controllerReadApi'
+export { ControllerReadCursor } from '../../src/main/controlPlane/controllerReadCursor'
+export { AesGcmCredentialCipher } from '../../src/main/crypto/credentialCipher'
 export { ControllerStartupRecovery } from '../../src/main/controlPlane/controllerStartupRecovery'
 export { ControllerTargetAdmission } from '../../src/main/controlPlane/controllerTargetAdmission'
 export {

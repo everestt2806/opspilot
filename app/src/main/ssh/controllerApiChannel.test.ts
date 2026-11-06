@@ -64,6 +64,26 @@ async function connect(): Promise<(typeof clients)[number]> {
   return client
 }
 describe('Pinned controller API SSH channel', () => {
+  it('shares the initial handshake across concurrent callers without replacing their SSH client', async () => {
+    vi.useFakeTimers()
+    try {
+      const results = Promise.allSettled([manager.connect(7), manager.connect(7)])
+      await vi.advanceTimersByTimeAsync(0)
+      const created = clients.length
+      for (const client of clients) {
+        expect((client.config.hostVerifier as (key: Buffer) => boolean)(hostBlob)).toBe(true)
+        client.emit('ready')
+      }
+      await vi.advanceTimersByTimeAsync(0)
+      await manager.disconnectAll()
+      await vi.advanceTimersByTimeAsync(15001)
+      const settled = await results
+      expect(created).toBe(1)
+      expect(settled.map((result) => result.status)).toEqual(['fulfilled', 'fulfilled'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
   it('only forwards the fixed loopback API and returns the actual pinned principal without exec', async () => {
     const client = await connect(),
       channel = stream()
