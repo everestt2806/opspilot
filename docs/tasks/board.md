@@ -1,5 +1,7 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
+> **06/11 — R3c-4 implementation CHỜ REVIEW:** [Authenticated read API](tk-s7-release-r3c4-controller-read-api.md), explicit loopback/auth/current ownership/bounded cursor/allowlist/capabilities;30focused/native10/full1563PASS/2SKIP/types/lint/build. Sửa1dòng SharedIngress test đợi đúng nút async, không đổi UI runtime; fresh publicsystemd extended `ed1dbc15d458` đang chạy sau full Windows (không tranh8768). SHA `git log -1 -- app/src/main/controlPlane/controllerReadApi.ts`; chưa final secondpush/cleanup hoặc Desktop tunnel/write/rotation/production rollout.
+
 > **06/11 — R3c-3 CHỜ REVIEW:** [Desktop-client auth](tk-s7-release-r3c3-controller-client-auth.md), migration022/digest-only token/scopes/TTL/one-time issue/revoke/admin replay namespace OSuid;41focused/LinuxCLI13concurrent/fresh022/VPSCLI14/full1554 PASS/2SKIP/types/lint/build. SHA `git log -1 -- app/src/main/controlPlane/controllerClientAuth.ts`. Tiếp authenticated read API/tunnel/Desktop authority; chưa HTTP/rotation/write capabilities. R3 tổng PARTIAL; checkpoint pushes được phép, chưa PR/merge/production write.
 
 > **06/11 — R3c-2 CHỜ REVIEW:** [Public Git/systemd](tk-s7-release-r3c2-public-git-systemd.md) final `da0b2dd098e8` PASS: actual GitHubHTTPS push `9dc3525`→`8f5b0c5`,2deployments/T1/T2,systemd restart/no-duplicate/graceful-stop/cleanup, không adapter/Desktop. Root isolated Linux lab, chưa non-root installer/liveVPS/domain/ML/soak. Tiếp R3c-3 auth → API/Desktop authority; R3 tổng PARTIAL. Harness `8f5b0c5` đã push, không PR/merge.

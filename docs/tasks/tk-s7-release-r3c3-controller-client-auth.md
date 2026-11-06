@@ -8,7 +8,7 @@ START 06/11/2026 — R3c-2 systemd/public Git gate tiếp tục trên frozen R3c
 | Admin idempotency không lộ lại secret | Namespace controller/OSuid/request, immutable canonical body/operation, actual2process cùng request chỉ1token, replay delivery_unknown | PASS |
 | Authenticate/revoke fail closed | 16auth cases + native CLI13, current controller/client/credential/scopes/expiry, transaction guard, revoke/replay không reactivate | PASS |
 | CLI admin bootstrap không argv secret | Actual Linux CLI stdin metadata/stdout cấp1lần; request body actor rejected; no token trong raw report/DB/history | PASS |
-| Gates và push | 41 focused/full1554 PASS/2 Linux-only SKIP/0FAIL, final Linux13/fresh022/VPS regression14/types/scoped lint/build PASS; explicit stage/push sau handoff | IMPLEMENTED |
+| Gates và push |41focused/full1554PASS/2SKIP/finalLinux13/fresh022/VPSCLI14/types/lint/build; explicit18files/secret/link/diff clean; `079cffe` normal push/local=remote | PASS |
 
 ## Ranh giới
 

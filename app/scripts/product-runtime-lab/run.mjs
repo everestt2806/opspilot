@@ -92,10 +92,15 @@ const record = (name, evidence) => {
   writeFileSync(join(output, 'progress.json'), JSON.stringify({ nonce, stage, cases }, null, 2))
   console.log(JSON.stringify({ case: name, status: 'PASS' }))
 }
-const deadline = setTimeout(() => {
-  failure = { stage, code: 'LAB_DEADLINE' }
-  manager?.disconnectAll().catch(() => {})
-}, 12 * 60000)
+let deadlineExpired = false
+const deadline = setTimeout(
+  () => {
+    deadlineExpired = true
+    failure = { stage, code: 'LAB_DEADLINE' }
+    manager?.disconnectAll().catch(() => {})
+  },
+  (process.argv.includes('--public-git-checkpoint-gate') ? 25 : 12) * 60000
+)
 const port = await reservePort()
 const hostPort = await reservePort()
 try {
@@ -631,6 +636,8 @@ try {
   secret.fill(0)
   assert.equal(dirname(realpathSync(scratch)), realpathSync(tmpdir()))
   rmSync(scratch, { recursive: true })
+  // Checkpoint completion must never overwrite an earlier global lab deadline.
+  if (deadlineExpired) failure = { ...failure, stage, code: 'LAB_DEADLINE' }
   const report = {
     status: failure ? 'FAIL' : cleanup ? 'PASS' : 'FAIL',
     scope: 'PINNED_SSH_SQLITE_DOCKER_RUNTIME',
@@ -639,6 +646,7 @@ try {
     subject_sha256: subjectHashes,
     bundle_sha256: bundleHash,
     driver_sha256: driverHash,
+    deadline_expired: deadlineExpired,
     subject_unchanged: subjectFiles.every(
       (file) =>
         createHash('sha256')

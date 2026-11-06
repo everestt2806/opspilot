@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **06/11 — controller read API:** [R3c-4](tasks/tk-s7-release-r3c4-controller-read-api.md) có authenticated loopback identity/status/apps/jobs/deployments/history, ownership recheck/bounded cursor/DTO allowlist;30focused/native10/full1563PASS/2SKIP/types/lint/build. Chưa manual writes/logs/rotation/Desktop tunnel/UI authority hoặc FR/UC tổng nghiệm thu; fresh systemd second-push regression còn đang chạy.
+
 > **06/11 — controller client auth:** [R3c-3](tasks/tk-s7-release-r3c3-controller-client-auth.md) có migration022/client token one-time/digest-only/scopes/TTL/revoke/replay/concurrency gates PASS; full1554 PASS/2SKIP. Chưa HTTP/API/rotation/Desktop tunnel nên chưa nâng FR/UC tổng.
 
 > **06/11 — actual push-to-deploy:** [R3c-2](tasks/tk-s7-release-r3c2-public-git-systemd.md) Linux installed systemd/publicGitHubHTTPS không adapter đã quan sát actualpush9dc3525→8f5b0c5,2deployments/T1/T2/restart-no-duplicate/cleanup PASS. Chưa productionVPS/non-rootinstaller/API/Desktop authority hoặc FR/UC tổng nghiệm thu.

@@ -1,5 +1,9 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-06 | [product-mode/api-contract] R3c-4 read job DTO target_sha cho phép null khớp canonical product_deploy_job và ProductDeployJob (manual rollback có thể chưa resolve SHA) — Không giấu job hoặc giả commit SHA để khớp read DTO cũ — Sơn/Codex
+
+2026-11-06 | [product-mode/api] R3c-4 mở read-only `/v1` trên loopback trong explicit run-product, bearer/current ownership + DTO allowlist, bounded paging với AES-GCM cursor purpose/controller/collection/app binding — Desktop phải đọc controller authority; write/log capabilities unsupported tới task riêng, default polling-only không mở API — Sơn/Codex
+
 2026-11-06 | [product-mode/auth] R3c-3 thêm migration022 cho desktop client/credential digest/admin idempotency; token random32bytes chỉ trả một lần qua trusted CLI stdin/stdout, SQLite giữ SHA256, TTL30ngày theo contract — Chuẩn bị authenticated API, replay không trả lại secret; admin lấy OS uid không từ payload — Sơn/Codex
 
 2026-11-06 | [product-mode/controller] R3c-1 thêm `run-product` opt-in bằng approved bundle pin qua stdin; service chạy recovery trước claim, dùng packaged template path tường minh và health maintenance khi polling-only/startup, degraded khi blocked — Không tự bật runtime từ environment hoặc giả ready khi chưa có executor — Sơn/Codex

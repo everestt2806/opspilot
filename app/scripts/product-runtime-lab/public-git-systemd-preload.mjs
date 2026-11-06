@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- Standalone Linux integration lab. */
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import {
   chmodSync,
   copyFileSync,
@@ -150,6 +150,65 @@ api.executeProductDeployPipeline = async (database, _runtime, repository, _ssh, 
       .update(readFileSync(join(install, 'payload/bundle-manifest.json')))
       .digest('hex')
     const input = join(install, 'execution.json')
+    let desktopClient
+    if (process.env.OPSPILOT_PUBLIC_READ_API === '1') {
+      desktopClient = JSON.parse(
+        execFileSync(
+          join(install, 'node'),
+          [artifact, 'enroll-desktop-client', '--data-dir', data],
+          {
+            input: JSON.stringify({
+              request_key: randomUUID(),
+              display_name: 'Systemd read API lab',
+              requested_scopes: ['read']
+            }),
+            encoding: 'utf8',
+            stdio: ['pipe', 'pipe', 'pipe'],
+            timeout: 30000
+          }
+        )
+      )
+      assert.equal(desktopClient.state, 'issued_once')
+    }
+    const apiBase = `http://127.0.0.1:8768/v1/controllers/${snapshot.claim.controller_id}`
+    const readApi = async (path) => {
+      const response = await fetch(apiBase + path, {
+        headers: { authorization: `Bearer ${desktopClient.credential.access_token}` }
+      })
+      assert.equal(response.status, 200)
+      const dto = await response.json()
+      assert.equal(JSON.stringify(dto).includes(desktopClient.credential.access_token), false)
+      return dto
+    }
+    const verifyReadApi = async (sha) => {
+      if (!desktopClient) return
+      const detail = await readApi('/apps/1')
+      assert.equal(detail.current_deployment_sha, sha)
+      assert.equal(detail.current_deployment_state, 'running')
+      const jobs = await readApi('/apps/1/jobs'),
+        deployments = await readApi('/apps/1/deployments'),
+        history = await readApi('/apps/1/history')
+      assert.ok(jobs.items.some((job) => job.target_sha === sha && job.state === 'succeeded'))
+      assert.ok(
+        deployments.items.some(
+          (deployment) => deployment.commit_sha === sha && deployment.status === 'running'
+        )
+      )
+      assert.ok(history.items.some((event) => event.kind === 'runtime_leases_released'))
+      assert.equal('env_json' in detail, false)
+      const first = await readApi('/apps?limit=1')
+      assert.equal(first.has_more, true)
+      assert.deepEqual(
+        first.items.map((app) => app.app_id),
+        [1]
+      )
+      const second = await readApi('/apps?limit=1&cursor=' + first.next_cursor)
+      assert.deepEqual(
+        second.items.map((app) => app.app_id),
+        [2]
+      )
+      assert.equal(second.has_more, false)
+    }
     writeFileSync(input, JSON.stringify({ format: 1, artifact, manifest_sha256: pin }), {
       mode: 0o600
     })
@@ -195,6 +254,7 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
       return row?.state === 'succeeded' && row.leases_released_at ? row : null
     }, 240000)
     assert.equal(container(app.name + '-app')[4], first.target_sha)
+    await verifyReadApi(first.target_sha)
     const firstHealth = await fetch(`http://127.0.0.1:${app.host_port}/health`)
     assert.equal(firstHealth.status, 200)
     assert.match(
@@ -222,7 +282,8 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
       restart_no_duplicate: true,
       service_restarted: true,
       health: await health(),
-      main_pids: [pid1, pid2]
+      main_pids: [pid1, pid2],
+      ...(desktopClient ? { authenticated_read_api_first_snapshot: true } : {})
     })
     // The leader publishes the next meaningful checkpoint; no Git mutation is performed by this lab.
     const second = await waitFor(() => {
@@ -235,6 +296,7 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
     }, 15 * 60000)
     phase = 'second_public_deploy'
     assert.equal(container(app.name + '-app')[4], second.target_sha)
+    await verifyReadApi(second.target_sha)
     assert.notEqual(second.job_id, first.job_id)
     assert.equal((await fetch(`http://127.0.0.1:${app.host_port}/health`)).status, 200)
     assert.equal(
@@ -246,6 +308,20 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
       0
     )
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), [])
+    if (desktopClient) {
+      execFileSync(join(install, 'node'), [artifact, 'revoke-desktop-client', '--data-dir', data], {
+        input: JSON.stringify({
+          request_key: randomUUID(),
+          client_id: desktopClient.client.client_id
+        }),
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 30000
+      })
+      const revoked = await fetch(apiBase + '/apps', {
+        headers: { authorization: `Bearer ${desktopClient.credential.access_token}` }
+      })
+      assert.equal(revoked.status, 401)
+    }
     phase = 'stop'
     control('stop')
     started = false
@@ -257,6 +333,9 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
       second_job: second.job_id,
       settled_deployments: 2,
       actual_github_push_observed: true,
+      ...(desktopClient
+        ? { authenticated_read_api_verified: true, live_revocation: true, read_snapshots: 2 }
+        : {}),
       graceful_stop: true
     })
   } catch (error) {

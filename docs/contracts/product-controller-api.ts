@@ -1,7 +1,8 @@
 /**
  * Product controller enrollment and desktop API contract (design checkpoint).
  * Wire protocol: R3c-3 implements local admin client issue/revoke and credential
- * validation; HTTP management routes/rotation/Desktop transport remain future work.
+ * validation; R3c-4 adds loopback read routes in explicit execution service.
+ * HTTP writes/logs/rotation/Desktop transport remain future work.
  * The controller is the sole Product-mode writer. The desktop is an authenticated
  * client/cache and must never fall back to its local deploy pipeline.
  */
@@ -289,7 +290,8 @@ export interface ProductControllerJobSummary {
   app_id: ProductAppId
   ownership_generation: number
   source_generation: number
-  target_sha: ProductFullCommitSha
+  /** Persisted manual rollback may not yet resolve a source SHA; never fabricate one. */
+  target_sha: ProductFullCommitSha | null
   state: ProductJobState
   trigger: 'branch_poll' | 'manual_redeploy' | 'manual_rollback'
   attempt_count: number
@@ -346,6 +348,13 @@ export type ProductControllerCursorPayload =
       collection: 'jobs' | 'deployments' | 'history' | 'logs'
       offset: number
     })
+
+/** R3c-4 cursor là opaque base64url AES-GCM envelope, purpose-bound với controller.
+ * App pages: keyset app_id ASC + first-page upper bound; app collections: stable
+ * rowid/event_id upper bound + offset. Mỗi page reauthenticate/current ownership,
+ * không nhận cursor như authorization. Request/response theo constants size limits.
+ * HTTP writes/logs/request lookup còn 501 UNSUPPORTED; capabilities trả unsupported.
+ */
 
 export interface ProductControllerPage<T> {
   items: readonly T[]

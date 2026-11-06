@@ -14,7 +14,8 @@ const child = spawn(
   [
     '--import',
     join(import.meta.dirname, 'public-git-systemd-preload.mjs'),
-    join(import.meta.dirname, 'run.mjs')
+    join(import.meta.dirname, 'run.mjs'),
+    '--public-git-checkpoint-gate'
   ],
   {
     env: {
@@ -48,10 +49,16 @@ try {
   assert.equal(runtime.failure?.code, 'PUBLIC_SYSTEMD_LAB_FINISHED')
   assert.equal(runtime.cleanup, true)
   assert.equal(runtime.subject_unchanged, true)
+  assert.notEqual(runtime.deadline_expired, true)
   const service = JSON.parse(readFileSync(output, 'utf8'))
   assert.equal(service.status, 'PASS')
   assert.equal(service.cleanup, true)
   assert.equal(service.actual_github_push_observed, true)
+  if (process.env.OPSPILOT_PUBLIC_READ_API === '1') {
+    assert.equal(service.authenticated_read_api_verified, true)
+    assert.equal(service.live_revocation, true)
+    assert.equal(service.read_snapshots, 2)
+  }
   result = {
     ...service,
     nonce,

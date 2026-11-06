@@ -46,6 +46,32 @@ Metadata identity có thể lưu/audit; credential chỉ có trong response cấ
 phải dùng strict pinned SSH administration. Hai CLI này chưa là HTTP endpoint hoặc Desktop connection flow;
 chưa rotation/tunnel/API management, không tự bật Product policy hoặc ghi VPS.
 
+## API đọc trên controller (R3c-4)
+
+Chỉ explicit `run-product` mở các route `/v1/controllers/{controller_id}/...` trên
+`127.0.0.1:8768`. Mỗi request cần header `Authorization: Bearer <issued credential>`;
+không nhận token trong URL hoặc origin từ browser. Default `run` vẫn health-only.
+
+Các route GET đã có: `identity`, `status`, `capabilities`, `apps`, `apps/{id}`,
+`apps/{id}/jobs`, `apps/{id}/deployments`, `apps/{id}/history`. DTO chỉ lấy current
+controller/Product ownership và trường được cho phép; không trả env/credential,
+stdout/stderr hay raw safe-summary JSON. Quyền bị thu hồi có hiệu lực ngay với
+process đang chạy. App đã đổi controller/archived không đọc được bằng cursor cũ.
+
+Collection nhận `limit`1–100 (mặc định50) và `cursor` opaque. App list đi theo
+app_id tăng dần, giữ upper bound của page đầu; các collection của app giữ ceiling
+và offset. Cursor AES-GCM bind purpose/controller/app/collection, không cấp quyền;
+mỗi page vẫn xác thực lại. Header/request time, URL, response≤1MiB và rate120request/phút
+được giới hạn; response `no-store`/connection close. Trang rỗng khác lỗi tải.
+
+Manual redeploy/policy writes, request lookup và logs còn `UNSUPPORTED`501;
+capabilities của các thao tác ghi là unsupported. Desktop tunnel/credential store/UI
+chưa nối ở checkpoint này, không tự fallback sang DB hoặc pipeline Desktop.
+
+Các lab systemd/native dùng cổng contract8768. Không chạy đồng thời với Windows
+`ControllerService.test.ts` trên máy có WSL localhost forwarding; chạy nối tiếp để
+không biến tranh cổng của fixture thành lỗi service.
+
 ## Bật execution có chủ đích (R3c-1)
 
 Chỉ dùng bundle đã kiểm bằng CLI tin cậy và independent manifest pin. Controller phải có protected

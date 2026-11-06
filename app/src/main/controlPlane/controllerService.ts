@@ -9,6 +9,9 @@ import {
   createControllerExecutionRuntime,
   type ControllerExecutionRuntime
 } from './controllerExecutionService'
+import { ControllerReadApi } from './controllerReadApi'
+import { ControllerReadCursor } from './controllerReadCursor'
+import { loadControllerCredentialCipher } from './controllerSecrets'
 
 export const CONTROL_PLANE_HEALTH_HOST = '127.0.0.1'
 export const CONTROL_PLANE_HEALTH_PORT = 8768
@@ -43,6 +46,7 @@ export class ControllerService {
   private fatal = false
   private readonly execution: ControllerExecutionRuntime | null
   private startupFinished = false
+  private readonly api: ControllerReadApi | null
 
   constructor(options: ControllerServiceOptions) {
     if (
@@ -63,6 +67,22 @@ export class ControllerService {
       this.execution =
         options.executionFactory?.(this.opened, repository) ??
         (bundle ? createControllerExecutionRuntime(this.opened, repository, bundle) : null)
+      this.api = bundle
+        ? new ControllerReadApi(
+            this.opened.database,
+            this.opened.controllerId,
+            this.opened.dataDirectory,
+            new ControllerReadCursor(
+              loadControllerCredentialCipher(this.opened.dataDirectory),
+              this.opened.controllerId
+            ),
+            () => ({
+              service_state: this.healthState(),
+              last_branch_poll_at: this.poller.getLastSummary()?.finishedAt ?? null,
+              reason_code: this.worker.getStatus().reason
+            })
+          )
+        : null
       this.poller =
         options.poller ??
         new ControlPlaneGitPoller({ repository, controllerId: this.opened.controllerId })
@@ -91,23 +111,32 @@ export class ControllerService {
 
   async start(): Promise<void> {
     if (this.server) throw new Error('CONTROLLER_ALREADY_STARTED')
-    const server = createServer((request, response) => {
-      if (request.method === 'GET' && request.url === '/healthz') {
-        const body = JSON.stringify({
-          api_version: 'v1',
-          service_state: this.healthState()
-        })
-        response.writeHead(200, {
-          'content-type': 'application/json; charset=utf-8',
-          'content-length': Buffer.byteLength(body),
-          connection: 'close'
-        })
-        response.end(body)
-        return
+    const server = createServer(
+      {
+        maxHeaderSize: 16 * 1024,
+        headersTimeout: 10_000,
+        requestTimeout: 15_000,
+        keepAliveTimeout: 1000
+      },
+      (request, response) => {
+        if (request.method === 'GET' && request.url === '/healthz') {
+          const body = JSON.stringify({
+            api_version: 'v1',
+            service_state: this.healthState()
+          })
+          response.writeHead(200, {
+            'content-type': 'application/json; charset=utf-8',
+            'content-length': Buffer.byteLength(body),
+            connection: 'close'
+          })
+          response.end(body)
+          return
+        }
+        if (this.api?.handle(request, response)) return
+        response.writeHead(404, { 'content-length': '0', connection: 'close' })
+        response.end()
       }
-      response.writeHead(404, { 'content-length': '0', connection: 'close' })
-      response.end()
-    })
+    )
     this.server = server
 
     try {
