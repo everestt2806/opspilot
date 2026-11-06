@@ -8,7 +8,7 @@ START 06/11/2026 — Base `8e8d65d` đã push, R3b-6 local gates PASS. User cho 
 | Service composition trọn vòng | Real production factory/router/admission/startup/provider, actual Git snapshot + queue → SSH/Docker/T1/T2; bad template env/cwd ignored | PASS |
 | Health và shutdown đúng khả năng | 3 lifecycle regressions mới + slow/unconfirmed stop cũ; startup maintenance, blocked degraded, drain SSH trước DB | PASS |
 | Linux service integration | 3 fresh CLI processes/2 Git commits/2 settled deployments, restart cùng SHA không duplicate, cleanup=true | PASS |
-| Gate và checkpoint push | 34 focused/full app1537 PASS/2 SKIP; types/scoped lint/build PASS; R1/R3b regression7/7 PASS; docs/stage/push sau handoff | IMPLEMENTED |
+| Gate và checkpoint push | 34 focused/full1537 PASS/2 SKIP/types/lint/build/R1-R3b7/7; staged22files/secret/link/diff clean; `9dc3525` normal push, local=remote | PASS |
 
 ## Phạm vi và tiếp nối
 
