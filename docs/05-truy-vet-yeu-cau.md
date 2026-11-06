@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **06/11 — bundle controller:** [R3b-5a](tasks/tk-s7-release-r3b5a-controller-bundle.md) đóng gói11payload files + pinned manifest verifier, Linux FS14/14/fresh native install/enrollment regression PASS; full app1502 PASS/2 SKIP. Chưa target app enrollment/installed service activation, không tự nâng FR/UC/PRODUCT_PASS từ component gate.
+
 > **06/11 — controller bootstrap:** [R3b-4 key/VPS credential enrollment CLI](tasks/tk-s7-release-r3b4-controller-enrollment.md) có Linux CLI14/14, 29 unit tests/full app1481 PASS/2 SKIP. Đây là local product-mode bootstrap, chưa target app enrollment/service-driven deploy và chưa nâng FR/UC/PRODUCT_PASS. Các gate live/ML/HTTPS/migrate/installer giữ trạng thái riêng.
 
 > **06/11 — hạn kết thúc 04/12:** dùng [ma trận release và task R0–R14](tasks/tk-s7-release-2026-12-04.md) để điều phối. Giữ dấu FR/UC lịch sử tới khi có evidence nghiệm thu hiện hành; không tự nâng trạng thái vì test component pass.

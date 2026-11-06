@@ -1,0 +1,12 @@
+{
+  "target-helper/target_execution_guard.py": "app/src/main/controlPlane/target_execution_guard.py",
+  "target-helper/target_guarded_ssh_helper.py": "app/src/main/controlPlane/target_guarded_ssh_helper.py",
+  "target-helper/target_product_runtime.py": "app/src/main/controlPlane/target_product_runtime.py",
+  "templates/express.Dockerfile": "templates/express.Dockerfile",
+  "templates/nextjs.Dockerfile": "templates/nextjs.Dockerfile",
+  "templates/static-spa.Dockerfile": "templates/static-spa.Dockerfile",
+  "templates/docker-compose.template.yml": "templates/docker-compose.template.yml",
+  "collector/Dockerfile": "collector/Dockerfile",
+  "collector/collect.py": "collector/collect.py",
+  "collector/requirements.txt": "collector/requirements.txt"
+}

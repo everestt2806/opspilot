@@ -11,11 +11,18 @@ import { ControllerService } from './controllerService'
 import { ControlPlaneGitPoller } from './gitPoller'
 import { enrollControllerVps, initializeControllerSecrets } from './controllerEnrollment'
 import { readControllerBootstrapInput } from './controllerBootstrapInput'
+import { verifyControllerBundle } from './controllerBundle'
 
 type Command = 'init' | 'run' | 'poll-once' | 'status' | 'secrets-init' | 'enroll-vps'
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
+  if (commandValue === 'verify-bundle') {
+    if (args.length !== 4 || args[0] !== '--artifact' || args[2] !== '--manifest-sha256')
+      throw new Error('USAGE')
+    console.log(JSON.stringify(verifyControllerBundle(args[1], args[3])))
+    return
+  }
   if (
     !['init', 'run', 'poll-once', 'status', 'secrets-init', 'enroll-vps'].includes(commandValue)
   ) {

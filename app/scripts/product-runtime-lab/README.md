@@ -192,3 +192,25 @@ Reports: `app/.out-scripts/controller-enrollment/<nonce>/result.json`, gồm bun
 hashes, các ca PASS và cleanup. Scratch keys/SQLite/sshd xóa hoặc dừng cuối gate; không dùng profile
 Desktop hoặc VPS thật. R1/R2/R3a runtime lab có scope riêng, không chạy lại hoặc tính là gate của CLI
 này. Hướng dẫn vận hành: [controller README](../../control-plane-runtime/README.md).
+
+## Gói controller độc lập / verifier (R3b-5a)
+
+```sh
+OPSPILOT_CONTROL_PLANE_MODULES=/var/tmp/opspilot-p3e3a-runtime/node_modules node app/scripts/product-runtime-lab/controller-bundle.mjs
+node app/scripts/product-runtime-lab/verify-deps.mjs
+```
+
+Gate thứ nhất dùng root Linux scratch để thử foreign owner/permissions, build một CLI tin cậy và
+copy candidate riêng. CLI tin cậy chỉ đọc candidate từ cwd khác repo. Kiểm 10 asset byte-identical,
+11 payload files, explicit manifest pin, không DB; negative cases gồm sửa/mất file, extra file/dir,
+traversal dù pin khớp, symlink file/manifest/directory, hardlink ngoài bundle, owner/mode và builder
+từ chối linked entrypoint. Candidate giả ghi sentinel nếu execute; verifier phải từ chối mà không
+tạo sentinel. Không gọi code trong candidate để tự chứng minh integrity.
+
+Fresh-dependency gate `verify-deps.mjs` cài lại approved lockfile vào scratch rồi build artifact,
+verify payload11files từ cwd khác và chạy CLI init/status/native SQLite/Zod. Không cần source repo
+ở runtime cwd; builder vẫn đọc source repo để build. Templates/collector đã đóng gói và kiểm byte,
+chưa chứng minh 3-framework Product pipeline hoặc installed-service activation.
+
+Reports: `app/.out-scripts/controller-bundle/<nonce>/result.json`; fresh-install summary stdout.
+Không dữ liệu/khóa người dùng, không target app enrollment/SSH command/VPS mutation trong bundle gate.

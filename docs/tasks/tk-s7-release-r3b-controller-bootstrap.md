@@ -13,7 +13,7 @@ START 06/11/2026 — Tiếp user request “làm hết”, base R3a `1e4df09`, R
 | Explicit target enrollment theo app/generation | Pinned SSH; helpers immutable/checksum, HMAC key riêng, lost-response reconciliation, không dùng lab initializer như production proof | OPEN |
 | Startup recovery và resource admission | T1 pending settlement đọc bằng exact key/identity; pre-T1 unknown không replay; disk/RAM/Docker readiness trước mutation | OPEN |
 | Service composition opt-in + health/status đúng | Queue + per-claim executor/verifier, startup/shutdown/OS restart, polling-only không bị hiểu là auto deploy ready | OPEN |
-| Complete standalone controller bundle | templates/collector/requirements + 3 Python helpers + manifest; init/status/run không phụ thuộc repo cwd | OPEN |
+| Complete standalone controller bundle | [R3b-5a](tk-s7-release-r3b5a-controller-bundle.md): payload11files, pinned read-only verifier, fresh Linux install/init/status/verify ngoài repo cwd PASS; installed-service run/restart còn ở service gate | IMPLEMENTED |
 | Live controller/VPS acceptance | Endpoint hiện hành + pin độc lập + resource allocation; không chạy fault trên VPS shared | BLOCKED |
 
 ## Kết quả kiểm kê chỉ đọc 06/11

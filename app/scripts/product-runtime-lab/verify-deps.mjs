@@ -48,6 +48,26 @@ try {
       readFileSync(join(scratch, 'controller/target-helper', helper)),
       readFileSync(join(repo, 'app/src/main/controlPlane', helper))
     )
+  const pin = (await import('node:crypto'))
+    .createHash('sha256')
+    .update(readFileSync(join(scratch, 'controller/bundle-manifest.json')))
+    .digest('hex')
+  const verifiedBundle = JSON.parse(
+    execFileSync(
+      process.execPath,
+      [
+        controllerArtifact,
+        'verify-bundle',
+        '--artifact',
+        controllerArtifact,
+        '--manifest-sha256',
+        pin
+      ],
+      { env: environment, cwd: tmpdir(), encoding: 'utf8', stdio: 'pipe', timeout: 30000 }
+    )
+  )
+  assert.equal(verifiedBundle.state, 'bundle_verified')
+  assert.equal(verifiedBundle.files, 11)
   const initialized = JSON.parse(
     execFileSync(
       process.execPath,
@@ -78,7 +98,9 @@ try {
         migration_020: true,
         fresh_install: true,
         controller_cli_init_status: true,
-        target_helper_files: 3
+        target_helper_files: 3,
+        verified_bundle_files: 11,
+        standalone_templates_collector: true
       })
     )
   } finally {

@@ -21,6 +21,33 @@ The Linux runtime dependency set also includes the already approved `ssh2` and `
 
 The systemd example is `opspilot-controller.service.example`. It is a template only and is not installed by the build or CLI.
 
+## Gói phát hành và kiểm checksum trước kích hoạt (R3b-5a)
+
+Build offline tạo entrypoint cùng `target-helper/` (3 files), `templates/` (4 files), `collector/`
+(3 files) và `bundle-manifest.json`. Catalog approved ở `bundle-files.json`, không glob repo hoặc
+copy tests/cache/venv/node_modules/.env. Build in digest SHA256 của manifest ra stdout. Native
+dependencies vẫn cài từ package-lock tại runtime directory **ngoài payload directory**.
+
+Admin lấy digest qua kênh build tin cậy và dùng **CLI đang tin cậy** để kiểm gói ứng viên trước khi
+chạy nó; không khởi động binary chưa xác minh chỉ để nó tự xác minh:
+
+```sh
+node /trusted/control-plane.cjs verify-bundle \
+  --artifact /releases/candidate/control-plane.cjs \
+  --manifest-sha256 <64-lowercase-hex-from-trusted-build>
+```
+
+Lệnh chỉ đọc file, không cần `--data-dir`, không tạo/migrate DB hoặc mở SSH/HTTP. Kiểm exact file
+set, size/hash, digest manifest tường minh, từ chối symlink/hardlink/traversal/duplicate/extra file.
+Linux còn kiểm owner (root hoặc user hiện hành) và từ chối group/world-writable files/directories.
+Windows diagnostic không chứng minh ACL Linux. Output có verified paths cho templates/collector/
+helper; không tự đặt global env hoặc bật deployment executor.
+
+Payload directory chỉ chứa 11 files và manifest; không đặt data/key/log/node_modules vào đó.
+Build/rebuild chỉ trong directory offline, **không đè release đang chạy**. Khi deploy dùng release
+directory mới, verify rồi mới activate trong checkpoint service. Hash xác nhận byte theo digest đã
+pin, không thay chữ ký hoặc xác thực kênh phân phối. [Hồ sơ/gate R3b-5a](../../docs/tasks/tk-s7-release-r3b5a-controller-bundle.md).
+
 ## Khởi tạo kho khóa và đăng ký VPS (R3b-4)
 
 Hai lệnh quản trị **Linux-only**, chạy cục bộ bằng cùng user của controller:
