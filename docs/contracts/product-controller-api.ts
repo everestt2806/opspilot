@@ -74,6 +74,39 @@ export type ProductControllerCursorToken = string
 export type ProductSshOperationKey = string
 export type ProductApiScope = 'read' | 'deploy:manual' | 'policy:write'
 export type ProductDesktopGrantableScope = ProductApiScope
+/** R3c-6c local Desktop state only; these DTOs never contain the API bearer. */
+export interface ProductDesktopControllerBindingMetadata {
+  binding_id: string
+  controller_id: ProductControllerId
+  vps_id: number
+  revision: number
+  state: 'pending' | 'active' | 'delivery_unknown' | 'disabled'
+  remote_client_id: ProductDesktopClientId | null
+  client: ProductDesktopClientIdentity | null
+  created_at: ProductIsoUtc
+  updated_at: ProductIsoUtc
+}
+/** Trusted main input. binding_id is also the durable enrollment request UUID. */
+export interface ProductDesktopControllerBindingIntent {
+  binding_id: string
+  controller_id: ProductControllerId
+  vps_id: number
+  ssh_security_revision: number
+  principal: {
+    vpsId: number
+    host: string
+    port: number
+    hostFingerprint: string
+    username: string
+    authType: 'key' | 'password'
+  }
+  artifact_path: string
+  data_directory: string
+  node_path: string
+  manifest_sha256: string
+  display_name: string
+  requested_scopes: readonly ['read', ...ProductDesktopGrantableScope[]]
+}
 export type ProductApiCapabilityState = 'available' | 'blocked' | 'unsupported'
 
 export interface ProductApiCapability {

@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6c06/11 backend gates PASS:** [Desktop vault/enrollment](tasks/tk-s7-release-r3c6c-desktop-enrollment.md) SQLite024/current principal+revision/encrypted credentials/verified SSH-admin CLI/lost delivery/cold process→authHTTP/revoke có native11/Windows safeStorage2process/full1633PASS/2SKIP/Python365/auth13/HTTP11/fresh024/types/lint/build/Ruff. Phần code còn lại cụ thể: IPC/UI đăng ký/chọn controller và list/actions từ controller; chưa yêu cầu user test backend. Chưa đồng nghĩa live rollout/installer/HTTPS/ML hoặc FR/UC tổng PASS.
+
 > **R3c-6b06/11:** [Typed main HTTP client](tasks/tk-s7-release-r3c6b-desktop-http-client.md) pinned SSH/current binding/bounded DTO/freshness/ambiguous writes/same-key lookup, concurrent handshake fix; focused87/native client13/channel7/actual service Git-Docker-systemd2deploy/full1614PASS/2SKIP/types/lint/build/fresh023 PASS. Chưa durable vault/enrollment/IPC/UI authority/rotation/production rollout hoặc FR/UC tổng PASS; native client chỉ durable intent, không tự nhận runtime deployed.
 
 > **R3c-6a06/11:** [Pinned main-only API channel](tasks/tk-s7-release-r3c6a-pinned-api-channel.md) fixed127.0.0.1:8768/current SSH principal+actual pin/deadline/abort/late close có focused40/nativeSSHHTTP7/fresh023/full1597PASS/2SKIP/types/scopedlint/build PASS. Chưa authenticated HTTP DTO Desktop client/token vault/enrollment/UI authority/rotation; chưa nâng FR/UC tổng hoặc nhận production rollout.

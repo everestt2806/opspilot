@@ -414,7 +414,9 @@ export class SshManager extends EventEmitter {
   async openProductBootstrapChannel(
     vpsId: number,
     script: { text: string; sha256: string },
-    options: Pick<ExecOptions, 'timeoutMs' | 'signal'> = {}
+    options: Pick<ExecOptions, 'timeoutMs' | 'signal'> & {
+      expectedIdentity?: SshVerifiedConnectionIdentity
+    } = {}
   ): Promise<{ channel: ClientChannel; identity: SshVerifiedConnectionIdentity }> {
     if (
       typeof script.text !== 'string' ||
@@ -429,10 +431,13 @@ export class SshManager extends EventEmitter {
   private async openIdentifiedChannel(
     vpsId: number,
     command: string,
-    options: Pick<ExecOptions, 'timeoutMs' | 'signal'>
+    options: Pick<ExecOptions, 'timeoutMs' | 'signal'> & {
+      expectedIdentity?: SshVerifiedConnectionIdentity
+    }
   ): Promise<{ channel: ClientChannel; identity: SshVerifiedConnectionIdentity }> {
     if (options.signal?.aborted) throw new SshAbortedError()
-    const entry = await this.ensureConnected(vpsId)
+    const expected = options.expectedIdentity && { ...options.expectedIdentity }
+    const entry = await this.ensureConnected(vpsId, false, expected, options.signal)
     const connectionInfo = { ...entry.info }
     const verifiedHostKey = entry.verifiedHostKey && Buffer.from(entry.verifiedHostKey)
     const hostFingerprint = verifiedHostKey
@@ -441,6 +446,12 @@ export class SshManager extends EventEmitter {
     if (!hostFingerprint || !entry.ready || !entry.client) {
       throw new AppError('VALIDATION', 'Guarded SSH connection has no verified host identity.')
     }
+    if (
+      expected &&
+      (!matchesVerifiedPrincipal(vpsId, entry.info, expected) ||
+        hostFingerprint !== expected.hostFingerprint)
+    )
+      throw new SshHostIdentityChangedError()
     // Chỉ code/path tin cậy; không nội suy request/secret và không tự reconnect channel.
     const channel = await this.openExecChannel(
       entry,

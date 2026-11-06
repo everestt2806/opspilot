@@ -13,6 +13,9 @@ export { ControllerHttpClient } from '../../src/main/controlPlane/controllerHttp
 export { ControllerReadApi } from '../../src/main/controlPlane/controllerReadApi'
 export { ControllerReadCursor } from '../../src/main/controlPlane/controllerReadCursor'
 export { AesGcmCredentialCipher } from '../../src/main/crypto/credentialCipher'
+export { DesktopControllerVault } from '../../src/main/controlPlane/desktopControllerVault'
+export { DesktopControllerEnrollment } from '../../src/main/controlPlane/desktopControllerEnrollment'
+export { initializeController } from '../../src/main/controlPlane/controllerDatabase'
 export { ControllerStartupRecovery } from '../../src/main/controlPlane/controllerStartupRecovery'
 export { ControllerTargetAdmission } from '../../src/main/controlPlane/controllerTargetAdmission'
 export {

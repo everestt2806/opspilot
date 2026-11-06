@@ -64,6 +64,17 @@ async function connect(): Promise<(typeof clients)[number]> {
   return client
 }
 describe('Pinned controller API SSH channel', () => {
+  it('checks an enrollment bootstrap expected principal before SSH authentication or exec', async () => {
+    const text = 'print(1)'
+    await expect(
+      manager.openProductBootstrapChannel(
+        7,
+        { text, sha256: createHash('sha256').update(text).digest('hex') },
+        { expectedIdentity: { ...expected, username: 'foreign' } }
+      )
+    ).rejects.toMatchObject({ name: 'SshHostIdentityChangedError' })
+    expect(clients).toHaveLength(0)
+  })
   it('shares the initial handshake across concurrent callers without replacing their SSH client', async () => {
     vi.useFakeTimers()
     try {

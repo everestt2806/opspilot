@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-06 | [product-mode/desktop-vault] R3c-6c thêm SQLite024 cho pending/active/delivery_unknown/disabled Desktop controller binding; public intent/client metadata và credential AES-GCM envelope gắn controller/principal/VPS security revision/binding revision, không generic settings/token renderer — Enrollment cùng UUID qua approved pinned SSH bootstrap phải kiểm bundle pin trước CLI; lost secret delivery không tự cấp token mới — Sơn/Codex
+
 2026-11-06 | [product-mode/desktop] R3c-6b typed HTTP DTO client chỉ qua fixed pinned SSH channel, fresh credential binding trước send/return, bounded response/schema/freshness; write mất response sau send trả outcome_unknown cùng request key, không retry/fallback — Vault/enrollment/IPC/UI cần local binding contract riêng6c, không dùng generic settings để lưu token — Sơn/Codex
 
 2026-11-06 | [product-mode/ssh] R3c-6a main-only API channel dùng SSH direct-tcpip cố định127.0.0.1:8768, full principal/current resolver + actual handshake pin, deadline/abort và không reconnect/replay — Chuẩn bị Desktop controller transport mà không mở public management port/local listener/arbitrary forward qua IPC; chưa token vault/UI authority — Sơn/Codex
