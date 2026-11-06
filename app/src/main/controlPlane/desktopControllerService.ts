@@ -1,0 +1,210 @@
+import type Database from 'better-sqlite3'
+import { z } from 'zod'
+import type {
+  DesktopControllerRegisterInput,
+  DesktopControllerConnection,
+  DesktopControllerSnapshot,
+  DesktopControllerPageInput
+} from '@shared/desktopController'
+import type { AesGcmCredentialCipher } from '../crypto/credentialCipher'
+import type { SshManager } from '../ssh/manager'
+import { AppError } from '../errors'
+import { DesktopControllerVault, DesktopControllerVaultError } from './desktopControllerVault'
+import {
+  DesktopControllerEnrollment,
+  DesktopControllerEnrollmentError
+} from './desktopControllerEnrollment'
+import { ControllerHttpClient, ControllerHttpClientError } from './controllerHttpClient'
+
+const registerSchema = z.strictObject({
+  binding_id: z.uuid(),
+  controller_id: z.string().min(1).max(128),
+  vps_id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  artifact_path: z.string().max(512),
+  data_directory: z.string().max(512),
+  node_path: z.string().max(512),
+  manifest_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  display_name: z.string().min(1).max(128)
+})
+const pageSchema = z.strictObject({
+  binding_id: z.uuid(),
+  cursor: z
+    .string()
+    .min(1)
+    .max(2048)
+    .regex(/^[A-Za-z0-9_-]+$/)
+    .optional()
+})
+export class DesktopControllerService {
+  private readonly vault: DesktopControllerVault
+  private readonly enrollment: DesktopControllerEnrollment
+  constructor(
+    private readonly db: Database.Database,
+    cipher: AesGcmCredentialCipher,
+    private readonly ssh: SshManager,
+    private readonly clientFactory?: (bindingId: string) => Pick<ControllerHttpClient, 'call'>
+  ) {
+    this.vault = new DesktopControllerVault(db, cipher)
+    this.enrollment = new DesktopControllerEnrollment(this.vault, ssh)
+  }
+  async list(): Promise<DesktopControllerConnection[]> {
+    return this.safe(() => this.vault.list().map((row) => this.connection(row.binding_id)))
+  }
+  async register(input: DesktopControllerRegisterInput): Promise<DesktopControllerConnection> {
+    return this.safe(async () => {
+      const parsed = registerSchema.safeParse(input)
+      if (!parsed.success) throw new DesktopControllerVaultError('REQUEST_INVALID')
+      const value = parsed.data
+      const vps = this.db
+        .prepare(
+          'SELECT host,port,host_fingerprint,username,auth_type,ssh_security_revision,archived_at FROM vps WHERE id=?'
+        )
+        .get(value.vps_id) as
+        | {
+            host: string
+            port: number
+            host_fingerprint: string | null
+            username: string
+            auth_type: 'key' | 'password'
+            ssh_security_revision: number
+            archived_at: string | null
+          }
+        | undefined
+      if (!vps || vps.archived_at !== null || !vps.host_fingerprint)
+        throw new DesktopControllerVaultError('BINDING_UNAVAILABLE')
+      this.vault.prepare({
+        ...value,
+        ssh_security_revision: vps.ssh_security_revision,
+        principal: {
+          vpsId: value.vps_id,
+          host: vps.host,
+          port: vps.port,
+          hostFingerprint: vps.host_fingerprint,
+          username: vps.username,
+          authType: vps.auth_type
+        },
+        requested_scopes: ['read']
+      })
+      await this.enrollment.enroll(value.binding_id)
+      return this.connection(value.binding_id)
+    })
+  }
+  async retry(bindingId: string): Promise<DesktopControllerConnection> {
+    return this.safe(async () => {
+      this.uuid(bindingId)
+      await this.enrollment.enroll(bindingId)
+      return this.connection(bindingId)
+    })
+  }
+  async revoke(bindingId: string): Promise<DesktopControllerConnection> {
+    return this.safe(async () => {
+      this.uuid(bindingId)
+      await this.enrollment.revoke(bindingId)
+      return this.connection(bindingId)
+    })
+  }
+  async disconnect(bindingId: string): Promise<DesktopControllerConnection> {
+    return this.safe(() => {
+      this.uuid(bindingId)
+      const current = this.vault.get(bindingId)
+      if (current.state !== 'disabled') this.vault.disable(bindingId, current.revision)
+      return this.connection(bindingId)
+    })
+  }
+  async apps(input: DesktopControllerPageInput): Promise<DesktopControllerSnapshot> {
+    return this.safe(async () => {
+      const parsed = pageSchema.safeParse(input)
+      if (!parsed.success) throw new DesktopControllerVaultError('REQUEST_INVALID')
+      const { binding_id, cursor } = parsed.data,
+        initial = this.vault.resolve(binding_id)
+      const client =
+        this.clientFactory?.(binding_id) ??
+        new ControllerHttpClient(this.ssh, () => this.vault.resolve(binding_id))
+      const [identity, apps] = await Promise.all([
+        client.call('identity', {}),
+        client.call('apps', { query: { limit: 50, ...(cursor ? { cursor } : {}) } })
+      ])
+      if (identity.state !== 'response_received' || apps.state !== 'response_received')
+        throw new ControllerHttpClientError('PROTOCOL_INVALID')
+      const final = this.vault.resolve(binding_id)
+      if (
+        initial.revision !== final.revision ||
+        initial.controllerId !== final.controllerId ||
+        initial.accessToken !== final.accessToken
+      )
+        throw new DesktopControllerVaultError('BINDING_CHANGED')
+      const response = apps.response,
+        id = identity.response
+      if (id.controller_id !== final.controllerId || response.controller_id !== final.controllerId)
+        throw new ControllerHttpClientError('PROTOCOL_INVALID')
+      const age = Math.max(
+        Date.now() - Date.parse(id.sampled_at),
+        Date.now() - Date.parse(response.sampled_at)
+      )
+      const freshness = [id.data_freshness, response.data_freshness].includes('unknown')
+        ? 'unknown'
+        : age > 30000 || [id.data_freshness, response.data_freshness].includes('stale')
+          ? 'stale'
+          : 'current'
+      return {
+        binding_id,
+        controller_id: final.controllerId,
+        binding_revision: final.revision,
+        service_state: id.service_state,
+        data_freshness: freshness,
+        checked_at: response.sampled_at,
+        items: response.items.map((app) => ({
+          app_id: app.app_id,
+          app_name: app.app_name,
+          production_ref: app.production_ref,
+          desired_sha: app.desired_sha,
+          auto_deploy_paused: app.auto_deploy_paused,
+          reconciliation_state: app.reconciliation_state,
+          observed_at: app.observed_at
+        })),
+        next_cursor: response.next_cursor,
+        has_more: response.has_more
+      }
+    })
+  }
+  private connection(bindingId: string): DesktopControllerConnection {
+    const row = this.vault.get(bindingId)
+    // Public intent only; avoid current-VPS check so an archived connection can still be disconnected.
+    const stored = this.db
+      .prepare('SELECT intent_json FROM desktop_controller_binding WHERE binding_id=?')
+      .get(bindingId) as { intent_json: string }
+    const name: unknown = JSON.parse(stored.intent_json).display_name
+    if (typeof name !== 'string') throw new DesktopControllerVaultError('BINDING_UNAVAILABLE')
+    return {
+      binding_id: row.binding_id,
+      controller_id: row.controller_id,
+      vps_id: row.vps_id,
+      revision: row.revision,
+      state: row.state,
+      display_name: name,
+      remote_client_id: row.remote_client_id,
+      credential_expires_at: row.client?.token_expires_at ?? null,
+      updated_at: row.updated_at
+    }
+  }
+  private uuid(value: string): void {
+    if (!z.uuid().safeParse(value).success) throw new DesktopControllerVaultError('REQUEST_INVALID')
+  }
+  private async safe<T>(work: () => T | Promise<T>): Promise<T> {
+    try {
+      return await work()
+    } catch (error) {
+      const code =
+        error instanceof DesktopControllerVaultError ||
+        error instanceof DesktopControllerEnrollmentError ||
+        error instanceof ControllerHttpClientError
+          ? error.code
+          : 'CONTROLLER_UNAVAILABLE'
+      throw new AppError(
+        'VALIDATION',
+        'Không hoàn tất được thao tác controller. Kiểm tra cấu hình và thử lại.',
+        { cause: new Error(code) }
+      )
+    }
+  }
+}

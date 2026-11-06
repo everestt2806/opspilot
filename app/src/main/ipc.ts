@@ -42,6 +42,7 @@ import { DoctorFixService } from './doctor/fix'
 import { DoctorRepository } from './doctor/repository'
 import { VpsRepository } from './db/vpsRepository'
 import { db as database } from './db'
+import type { DesktopControllerService } from './controlPlane/desktopControllerService'
 
 export interface WindowController {
   minimize(): void
@@ -169,8 +170,17 @@ export function registerIpcHandlers(
   getWindow: () => WindowController | null,
   monitorService?: MonitorService,
   migrateService?: MigrateService,
-  sharedIngressService?: SharedIngressService
+  sharedIngressService?: SharedIngressService,
+  desktopControllerService?: DesktopControllerService
 ): void {
+  if (desktopControllerService) {
+    handle('controller:list', () => desktopControllerService.list())
+    handle('controller:register', (input) => desktopControllerService.register(input))
+    handle('controller:retry-enrollment', (bindingId) => desktopControllerService.retry(bindingId))
+    handle('controller:revoke', (bindingId) => desktopControllerService.revoke(bindingId))
+    handle('controller:disconnect', (bindingId) => desktopControllerService.disconnect(bindingId))
+    handle('controller:apps', (input) => desktopControllerService.apps(input))
+  }
   const ingressService =
     sharedIngressService ??
     new SharedIngressService({
@@ -319,15 +329,20 @@ export function registerIpcHandlers(
     if (!['enabled', 'disabled', 'unknown'].includes(proxyHint)) {
       throw new AppError('VALIDATION', 'Gợi ý Cloudflare Proxy không hợp lệ.')
     }
-    const binding = database.prepare(
-      `SELECT b.hostname, b.mode, v.host
+    const binding = database
+      .prepare(
+        `SELECT b.hostname, b.mode, v.host
        FROM domain_binding b
        JOIN app a ON a.id = b.app_id
        JOIN vps v ON v.id = a.vps_id
        WHERE b.hostname = ? AND v.id = ? AND v.archived_at IS NULL`
-    ).get(hostname, input.vps_id) as { hostname: string; mode: string; host: string } | undefined
+      )
+      .get(hostname, input.vps_id) as { hostname: string; mode: string; host: string } | undefined
     if (!binding || binding.mode !== 'shared_ingress') {
-      throw new AppError('VALIDATION', 'Không tìm thấy shared_ingress binding cho hostname và VPS đã chọn.')
+      throw new AppError(
+        'VALIDATION',
+        'Không tìm thấy shared_ingress binding cho hostname và VPS đã chọn.'
+      )
     }
     const ingress = await preflightSharedIngress(ssh, input.vps_id)
     return checkSharedIngressReadiness({

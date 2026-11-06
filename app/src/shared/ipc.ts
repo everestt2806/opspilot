@@ -1,3 +1,5 @@
+import type { DesktopControllerRegisterInput, DesktopControllerConnection, DesktopControllerSnapshot, DesktopControllerPageInput } from './desktopController'
+
 /**
  * HỢP ĐỒNG: IPC giữa Electron main và renderer.
  *
@@ -360,6 +362,13 @@ export interface DomainIngressActionInput extends DomainIngressStatusInput {
 }
 
 export interface IpcInvokeMap {
+  'controller:list': () => IpcResult<DesktopControllerConnection[]>;
+  'controller:register': (input: DesktopControllerRegisterInput) => IpcResult<DesktopControllerConnection>;
+  'controller:retry-enrollment': (bindingId: string) => IpcResult<DesktopControllerConnection>;
+  'controller:revoke': (bindingId: string) => IpcResult<DesktopControllerConnection>;
+  'controller:disconnect': (bindingId: string) => IpcResult<DesktopControllerConnection>;
+  'controller:apps': (input: DesktopControllerPageInput) => IpcResult<DesktopControllerSnapshot>;
+
   // ── VPS (UC-01) ────────────────────────────────────────────────────────────
   'vps:list':           () => IpcResult<Vps[]>;
   'vps:get-resources':  (vpsId: number) => IpcResult<VpsResources>;

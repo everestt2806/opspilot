@@ -133,6 +133,13 @@ export class DesktopControllerVault {
   get(bindingId: string): ProductDesktopControllerBindingMetadata {
     return this.metadata(this.required(bindingId))
   }
+  list(): ProductDesktopControllerBindingMetadata[] {
+    return (
+      this.db
+        .prepare('SELECT * FROM desktop_controller_binding ORDER BY created_at DESC,binding_id')
+        .all() as Row[]
+    ).map((row) => this.metadata(row))
+  }
   intent(bindingId: string): ProductDesktopControllerBindingIntent {
     const row = this.required(bindingId),
       intent = this.parseIntent(row)

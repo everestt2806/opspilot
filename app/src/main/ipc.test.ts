@@ -19,7 +19,9 @@ vi.mock('./domain/ingress/preflight', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./domain/ingress/preflight')>()),
   preflightSharedIngress: ingressPreflightMock
 }))
-vi.mock('./domain/ingress/dnsReadiness', () => ({ checkSharedIngressReadiness: readinessCheckMock }))
+vi.mock('./domain/ingress/dnsReadiness', () => ({
+  checkSharedIngressReadiness: readinessCheckMock
+}))
 
 import { AppError } from './errors'
 import { handle, registerIpcHandlers } from './ipc'
@@ -31,6 +33,58 @@ import { DeploymentRepository } from './db/deploymentRepository'
 import { DomainRepository } from './domain/repository'
 import { VpsRepository } from './db/vpsRepository'
 import type { SharedIngressServiceResult } from './domain/ingress/sharedIngressService'
+import type { DesktopControllerService } from './controlPlane/desktopControllerService'
+
+describe('metadata-only controller IPC composition', () => {
+  it('registers six concrete channels and preserves safe metadata/error DTOs', async () => {
+    handleMock.mockReset()
+    const service = {
+      list: vi.fn(async () => []),
+      register: vi.fn(async (input) => ({ binding_id: input.binding_id, state: 'pending' })),
+      retry: vi.fn(async () => {
+        throw new AppError('VALIDATION', 'Controller request failed.', {
+          cause: new Error('BINDING_CHANGED')
+        })
+      }),
+      revoke: vi.fn(async () => ({ state: 'disabled' })),
+      disconnect: vi.fn(async () => ({ state: 'disabled' })),
+      apps: vi.fn(async () => ({ items: [] }))
+    }
+    registerIpcHandlers(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      () => null,
+      undefined,
+      undefined,
+      {} as never,
+      service as unknown as DesktopControllerService
+    )
+    const channels = handleMock.mock.calls
+      .map(([name]) => name)
+      .filter((name: string) => name.startsWith('controller:'))
+    expect(channels.sort()).toEqual([
+      'controller:apps',
+      'controller:disconnect',
+      'controller:list',
+      'controller:register',
+      'controller:retry-enrollment',
+      'controller:revoke'
+    ])
+    expect(await ingressCallback('controller:list')({}, undefined)).toEqual({ ok: true, data: [] })
+    expect(await ingressCallback('controller:register')({}, { binding_id: 'unit' })).toMatchObject({
+      ok: true,
+      data: { binding_id: 'unit', state: 'pending' }
+    })
+    expect(await ingressCallback('controller:retry-enrollment')({}, 'unit')).toMatchObject({
+      ok: false,
+      error: { technical: 'BINDING_CHANGED' }
+    })
+    expect(channels).not.toContain('controller:call')
+  })
+})
 
 function ingressCallback(channel: string): (event: unknown, input: unknown) => Promise<unknown> {
   const callback = handleMock.mock.calls.find(([registered]) => registered === channel)?.[1]
@@ -913,22 +967,49 @@ describe('handle', () => {
           {} as never,
           () => null
         )
-        const callback = handleMock.mock.calls.find(([channel]) => channel === 'domain:ingress-readiness')?.[1] as (
+        const callback = handleMock.mock.calls.find(
+          ([channel]) => channel === 'domain:ingress-readiness'
+        )?.[1] as (
           event: unknown,
-          input: { vps_id: number; hostname: string; cloudflare_proxy_hint: 'enabled' | 'disabled' | 'unknown' }
+          input: {
+            vps_id: number
+            hostname: string
+            cloudflare_proxy_hint: 'enabled' | 'disabled' | 'unknown'
+          }
         ) => Promise<unknown>
-        const before = db.prepare('SELECT dns_status, route_status, certificate_status, https_probe_status FROM domain_binding WHERE id = 1').get()
+        const before = db
+          .prepare(
+            'SELECT dns_status, route_status, certificate_status, https_probe_status FROM domain_binding WHERE id = 1'
+          )
+          .get()
 
-        await expect(callback({}, {
-          vps_id: 1, hostname: 'App.Example.com.', cloudflare_proxy_hint: 'enabled'
-        })).resolves.toEqual({ ok: true, data: readiness })
+        await expect(
+          callback(
+            {},
+            {
+              vps_id: 1,
+              hostname: 'App.Example.com.',
+              cloudflare_proxy_hint: 'enabled'
+            }
+          )
+        ).resolves.toEqual({ ok: true, data: readiness })
 
         expect(ingressPreflightMock).toHaveBeenCalledWith(ssh, 1)
-        expect(readinessCheckMock).toHaveBeenCalledWith(expect.objectContaining({
-          hostname: 'app.example.com', vpsHost: '93.184.216.34',
-          cloudflareProxyHint: 'enabled', ingress: { ports_status: 'free', local_assessment: 'clear' }
-        }))
-        expect(db.prepare('SELECT dns_status, route_status, certificate_status, https_probe_status FROM domain_binding WHERE id = 1').get()).toEqual(before)
+        expect(readinessCheckMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            hostname: 'app.example.com',
+            vpsHost: '93.184.216.34',
+            cloudflareProxyHint: 'enabled',
+            ingress: { ports_status: 'free', local_assessment: 'clear' }
+          })
+        )
+        expect(
+          db
+            .prepare(
+              'SELECT dns_status, route_status, certificate_status, https_probe_status FROM domain_binding WHERE id = 1'
+            )
+            .get()
+        ).toEqual(before)
       } finally {
         closeDatabase()
         rmSync(dir, { recursive: true, force: true })
@@ -1148,7 +1229,11 @@ describe('handle', () => {
         // DB ghi nhận trạng thái 'conflict' và không chứa token
         const binding = db
           .prepare('SELECT * FROM domain_binding WHERE hostname = ?')
-          .get('app.example.com') as { status: string; dns_status: string; dns_evidence_json: string }
+          .get('app.example.com') as {
+          status: string
+          dns_status: string
+          dns_evidence_json: string
+        }
         expect(binding).toBeDefined()
         expect(binding.status).toBe('conflict')
         expect(binding.dns_status).toBe('conflict')
@@ -1214,7 +1299,11 @@ describe('handle', () => {
         // DB ghi nhận trạng thái 'failed' và không chứa token
         const binding = db
           .prepare('SELECT * FROM domain_binding WHERE hostname = ?')
-          .get('app.example.com') as { status: string; dns_status: string; dns_evidence_json: string }
+          .get('app.example.com') as {
+          status: string
+          dns_status: string
+          dns_evidence_json: string
+        }
         expect(binding).toBeDefined()
         expect(binding.status).toBe('failed')
         expect(binding.dns_status).toBe('failed')

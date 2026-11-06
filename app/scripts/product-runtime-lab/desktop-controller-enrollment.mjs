@@ -336,6 +336,24 @@ try {
   assert.equal(remote.prepare('SELECT count(*) AS n FROM product_desktop_client').get().n, 2)
   assert.throws(() => vault.resolve(lost.binding_id), { code: 'BINDING_UNAVAILABLE' })
   cases.push('lost_secret_delivery_replay_keeps_uuid_and_single_remote_grant')
+  discardReply = true
+  await assert.rejects(enrollment.revoke(lost.binding_id), { code: 'CONTROLLER_ADMIN_FAILED' })
+  assert.ok(
+    remote
+      .prepare('SELECT revoked_at FROM product_desktop_client WHERE client_id=?')
+      .get(replay.remote_client_id).revoked_at
+  )
+  const revokedLost = await enrollment.revoke(lost.binding_id)
+  assert.equal(revokedLost.state, 'disabled')
+  assert.equal(
+    remote
+      .prepare(
+        "SELECT count(*) AS n FROM product_desktop_admin_request WHERE operation='revoke-desktop-client' AND client_id=?"
+      )
+      .get(replay.remote_client_id).n,
+    1
+  )
+  cases.push('lost_revoke_response_retries_stable_admin_key_and_disables_local_binding')
   execFileSync(join(install, 'node'), [cli, 'revoke-desktop-client', '--data-dir', data], {
     input: JSON.stringify({ request_key: randomUUID(), client_id: enrolled.remote_client_id }),
     stdio: ['pipe', 'pipe', 'pipe'],
@@ -346,6 +364,34 @@ try {
   db.exec('UPDATE vps SET ssh_security_revision=ssh_security_revision+1 WHERE id=1')
   assert.throws(() => vault.resolve(intent.binding_id), { code: 'BINDING_UNAVAILABLE' })
   cases.push('local_ssh_security_revision_change_blocks_old_binding')
+  const uiService = new api.DesktopControllerService(db, cipher, manager)
+  const uiInput = {
+    binding_id: randomUUID(),
+    controller_id: controller,
+    vps_id: 1,
+    artifact_path: cli,
+    data_directory: data,
+    node_path: join(install, 'node'),
+    manifest_sha256: pin,
+    display_name: 'UI read-only connection'
+  }
+  const uiBinding = await uiService.register(uiInput)
+  assert.equal(uiBinding.state, 'active')
+  assert.deepEqual(
+    JSON.parse(
+      remote
+        .prepare('SELECT scopes_json FROM product_desktop_client WHERE client_id=?')
+        .get(uiBinding.remote_client_id).scopes_json
+    ),
+    ['read']
+  )
+  const uiSnapshot = await uiService.apps({ binding_id: uiBinding.binding_id })
+  assert.deepEqual(uiSnapshot.items, [])
+  assert.equal(uiSnapshot.controller_id, controller)
+  assert.equal(uiSnapshot.service_state, 'ready')
+  assert.equal(JSON.stringify(uiSnapshot).includes(token), false)
+  assert.equal((await uiService.revoke(uiBinding.binding_id)).state, 'disabled')
+  cases.push('ui_service_actual_register_read_only_http_snapshot_and_revoke')
   assert.deepEqual(db.pragma('foreign_key_check'), [])
   assert.deepEqual(remote.pragma('foreign_key_check'), [])
   cases.push('native_migration024_and_foreign_key_integrity')

@@ -1564,6 +1564,15 @@
   width: 100%;
 }
 
+.controller-panel {
+  margin-top: 24px;
+  min-width: 0;
+}
+
+.controller-panel .ant-table-cell {
+  overflow-wrap: anywhere;
+}
+
 .settings-card {
   border: 1px solid var(--border);
   background: var(--bg-panel);

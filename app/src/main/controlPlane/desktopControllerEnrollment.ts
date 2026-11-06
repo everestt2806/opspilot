@@ -52,6 +52,33 @@ export class DesktopControllerEnrollment {
     private readonly vault: DesktopControllerVault,
     private readonly ssh: Pick<SshManager, 'openProductBootstrapChannel'>
   ) {}
+  async revoke(
+    bindingId: string,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {}
+  ): Promise<ProductDesktopControllerBindingMetadata> {
+    const before = this.vault.get(bindingId),
+      intent = this.vault.intent(bindingId)
+    if (!before.remote_client_id) throw new DesktopControllerVaultError('BINDING_UNAVAILABLE')
+    const digest = createHash('sha256')
+      .update(`desktop-revoke:${bindingId}:${before.remote_client_id}`)
+      .digest('hex')
+      .slice(0, 32)
+    const requestKey = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20)}`
+    const raw = await this.exchange(intent, options, {
+      request_key: requestKey,
+      client_id: before.remote_client_id
+    })
+    const reply = z
+      .strictObject({ client_id: z.uuid(), revoked_at: z.iso.datetime() })
+      .safeParse(raw)
+    if (!reply.success || reply.data.client_id !== before.remote_client_id)
+      throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+    const current = this.vault.get(bindingId)
+    if (current.remote_client_id !== before.remote_client_id)
+      throw new DesktopControllerVaultError('BINDING_CHANGED')
+    if (current.state === 'disabled') return current
+    return this.vault.disable(bindingId, current.revision)
+  }
   async enroll(
     bindingId: string,
     options: { signal?: AbortSignal; timeoutMs?: number } = {}
@@ -113,7 +140,8 @@ export class DesktopControllerEnrollment {
   }
   private async exchange(
     intent: ProductDesktopControllerBindingIntent,
-    options: { signal?: AbortSignal; timeoutMs?: number }
+    options: { signal?: AbortSignal; timeoutMs?: number },
+    revocation?: { request_key: string; client_id: string }
   ): Promise<unknown> {
     const timeout = options.timeoutMs ?? 45_000
     if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 60_000)
@@ -160,13 +188,13 @@ export class DesktopControllerEnrollment {
       )
         throw new DesktopControllerVaultError('BINDING_CHANGED')
       const body = JSON.stringify({
-        operation: 'enroll-desktop-client',
+        operation: revocation ? 'revoke-desktop-client' : 'enroll-desktop-client',
         artifact_path: intent.artifact_path,
         data_directory: intent.data_directory,
         node_path: intent.node_path,
         manifest_sha256: intent.manifest_sha256,
         controller_id: intent.controller_id,
-        payload: {
+        payload: revocation ?? {
           request_key: intent.binding_id,
           display_name: intent.display_name,
           requested_scopes: intent.requested_scopes

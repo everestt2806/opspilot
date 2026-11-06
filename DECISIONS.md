@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-06 | [product-mode/ui] R3c-6d Settings onboarding/list/retry/revoke/disconnect và read-only Product app snapshot qua metadata-only IPC; principal/security revision do main lấy current VPS, no bearer/raw errors/URL/generic call IPC — UI mutations deploy/policy chờ durable local request journal để unknown request không mất khi đóng app; không thêm nút giả hoặc fallback local deploy — Sơn/Codex
+
 2026-11-06 | [product-mode/desktop-vault] R3c-6c thêm SQLite024 cho pending/active/delivery_unknown/disabled Desktop controller binding; public intent/client metadata và credential AES-GCM envelope gắn controller/principal/VPS security revision/binding revision, không generic settings/token renderer — Enrollment cùng UUID qua approved pinned SSH bootstrap phải kiểm bundle pin trước CLI; lost secret delivery không tự cấp token mới — Sơn/Codex
 
 2026-11-06 | [product-mode/desktop] R3c-6b typed HTTP DTO client chỉ qua fixed pinned SSH channel, fresh credential binding trước send/return, bounded response/schema/freshness; write mất response sau send trả outcome_unknown cùng request key, không retry/fallback — Vault/enrollment/IPC/UI cần local binding contract riêng6c, không dùng generic settings để lưu token — Sơn/Codex

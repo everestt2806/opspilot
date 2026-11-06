@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6d06/11:** [Controller UI/IPC](tasks/tk-s7-release-r3c6d-controller-ui.md) đã nối Settings đăng ký/list/retry/revoke/disconnect và đọc Product apps qua pinned SSH. Focused55/native13/Electron12checks/full1651PASS/2Linux-onlySKIP/0FAIL/Python365/fresh024/types/lint/build đạt. Không đổi trạng thái tổng FR/UC: còn code durable request journal, thao tác deploy/policy từ Desktop; installer/live/HTTPS/migrate/ML cần nghiệm thu riêng. Chưa cần user test để thay chỗ code chưa viết.
+
 > **R3c-6c06/11 backend gates PASS:** [Desktop vault/enrollment](tasks/tk-s7-release-r3c6c-desktop-enrollment.md) SQLite024/current principal+revision/encrypted credentials/verified SSH-admin CLI/lost delivery/cold process→authHTTP/revoke có native11/Windows safeStorage2process/full1633PASS/2SKIP/Python365/auth13/HTTP11/fresh024/types/lint/build/Ruff. Phần code còn lại cụ thể: IPC/UI đăng ký/chọn controller và list/actions từ controller; chưa yêu cầu user test backend. Chưa đồng nghĩa live rollout/installer/HTTPS/ML hoặc FR/UC tổng PASS.
 
 > **R3c-6b06/11:** [Typed main HTTP client](tasks/tk-s7-release-r3c6b-desktop-http-client.md) pinned SSH/current binding/bounded DTO/freshness/ambiguous writes/same-key lookup, concurrent handshake fix; focused87/native client13/channel7/actual service Git-Docker-systemd2deploy/full1614PASS/2SKIP/types/lint/build/fresh023 PASS. Chưa durable vault/enrollment/IPC/UI authority/rotation/production rollout hoặc FR/UC tổng PASS; native client chỉ durable intent, không tự nhận runtime deployed.

@@ -8,6 +8,7 @@ import { electronApp, is, optimizer } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { createCredentialCipher } from './crypto/masterKey'
 import { loadSecret } from './crypto/credentials'
+import { DesktopControllerService } from './controlPlane/desktopControllerService'
 import { closeDatabase, initializeDatabase } from './db'
 import { AppRepository } from './db/appRepository'
 import { ActionLogRepository } from './db/actionLogRepository'
@@ -156,7 +157,8 @@ void app
       () => mainWindow,
       monitorService,
       migrateService,
-      sharedIngressService
+      sharedIngressService,
+      new DesktopControllerService(database, credentialCipher, sshManager)
     )
     if (process.env.OPSPILOT_R3D_SOURCE_PROFILE) {
       try {

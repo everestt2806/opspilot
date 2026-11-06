@@ -229,7 +229,11 @@ def main():
         "payload",
     }:
         raise ValueError()
-    if request["operation"] not in ("enroll-desktop-client", "status"):
+    if request["operation"] not in (
+        "enroll-desktop-client",
+        "revoke-desktop-client",
+        "status",
+    ):
         raise ValueError()
     try:
         verify(request)
