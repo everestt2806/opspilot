@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-06 | [product-mode/ssh] R3c-6a main-only API channel dùng SSH direct-tcpip cố định127.0.0.1:8768, full principal/current resolver + actual handshake pin, deadline/abort và không reconnect/replay — Chuẩn bị Desktop controller transport mà không mở public management port/local listener/arbitrary forward qua IPC; chưa token vault/UI authority — Sơn/Codex
+
 2026-11-06 | [product-mode/http] R3c-5b nối manual redeploy/policy/lookup trên authenticated loopback API, POST≤16KiB/timeout/current reauth sau đọc body, Idempotency-Key và drain trước DB close — Accept202 là durable intent, chưa phải runtime success; pause dùng khi degraded, resume/manual theo readiness và barriers — Sơn/Codex
 
 2026-11-06 | [product-mode/runtime] R3c-5b sửa composition service cấp verifier router cho queue; runtime_settled phải khớp persisted receipt/T1/T2/current authority trước idle — Real gate phát hiện deployment succeeded nhưng worker runtime_completion_unverified do callback chưa nối; không nới gate hoặc dùng restart che trạng thái degraded — Sơn/Codex

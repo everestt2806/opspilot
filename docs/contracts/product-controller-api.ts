@@ -2,8 +2,8 @@
  * Product controller enrollment and desktop API contract (design checkpoint).
  * Wire protocol: R3c-3 implements local admin client issue/revoke and credential
  * validation; R3c-4 adds loopback read routes in explicit execution service.
- * R3c-5b composes bounded manual/policy writes and request lookup. Logs/rotation/
- * Desktop transport remain future work.
+ * R3c-5b composes bounded manual/policy writes and request lookup. R3c-6a adds a
+ * main-only pinned SSH channel; logs/rotation/full Desktop authority remain future work.
  * The controller is the sole Product-mode writer. The desktop is an authenticated
  * client/cache and must never fall back to its local deploy pipeline.
  */
@@ -33,6 +33,18 @@ export const PRODUCT_CONTROLLER_API_MAX_LOG_PAGE_BYTES = 64 * 1024
 export const PRODUCT_CONTROLLER_API_MAX_LOG_LINES = 200
 export const PRODUCT_CONTROLLER_API_CLIENT_STALE_AFTER_MS = 30_000
 export const PRODUCT_CONTROLLER_API_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60
+
+/** R3c-6a main-only SSH channel; no local TCP listener or renderer destination input.
+ * Exact expected VPS/endpoint/host SHA256/user/auth type is checked before SSH auth,
+ * after handshake and after channel open against current resolver. No auto replay.
+ * Returned stream is owned by the caller, which must destroy it after HTTP completion.
+ */
+export const PRODUCT_CONTROLLER_SSH_CHANNEL = {
+  destination_host: PRODUCT_CONTROLLER_API_LOOPBACK,
+  destination_port: PRODUCT_CONTROLLER_API_PORT,
+  open_timeout_ms: 15_000,
+  max_open_timeout_ms: 30_000
+} as const
 
 export const PRODUCT_CONTROLLER_HTTP_STATUS = {
   ok: 200,

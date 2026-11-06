@@ -15,6 +15,14 @@ import {
 } from './errorMapping'
 import { shellQuote } from './shellQuote'
 
+// Đồng bộ docs/contracts/product-controller-api.ts; runtime không import docs ngoài rootDir scripts.
+const PRODUCT_CONTROLLER_SSH_CHANNEL = {
+  destination_host: '127.0.0.1',
+  destination_port: 8768,
+  open_timeout_ms: 15_000,
+  max_open_timeout_ms: 30_000
+} as const
+
 /** Thông tin kết nối do main cấp (từ DB + loadSecret). Không bao giờ ra renderer. */
 export interface SshConnectionInfo {
   host: string
@@ -195,6 +203,158 @@ export class SshManager extends EventEmitter {
     const entry = this.entries.get(vpsId)
     if (!entry?.ready || !entry.verifiedHostKey) return null
     return Buffer.from(entry.verifiedHostKey)
+  }
+
+  /** Main-only direct-tcpip, destination cố định; caller sở hữu stream sau khi mở. */
+  async openControllerApiChannel(
+    expected: SshVerifiedConnectionIdentity,
+    options: Pick<ExecOptions, 'timeoutMs' | 'signal'> = {}
+  ): Promise<{ channel: ClientChannel; identity: SshVerifiedConnectionIdentity }> {
+    const timeout = options.timeoutMs ?? PRODUCT_CONTROLLER_SSH_CHANNEL.open_timeout_ms
+    if (
+      !Number.isSafeInteger(timeout) ||
+      timeout < 1 ||
+      timeout > PRODUCT_CONTROLLER_SSH_CHANNEL.max_open_timeout_ms
+    )
+      throw new AppError('VALIDATION', 'Thời hạn mở kênh controller không hợp lệ.')
+    if (options.signal?.aborted) throw new SshAbortedError()
+    const stop = new AbortController()
+    let expired = false
+    const onAbort = (): void => stop.abort()
+    const timer = setTimeout(() => {
+      expired = true
+      stop.abort()
+    }, timeout)
+    options.signal?.addEventListener('abort', onAbort, { once: true })
+    let rejectStopped!: () => void
+    const stopped = new Promise<never>((_resolve, reject) => {
+      rejectStopped = () =>
+        reject(
+          expired
+            ? new AppError('SSH_TIMEOUT', 'Mở kênh controller quá thời gian cho phép.')
+            : new SshAbortedError()
+        )
+      stop.signal.addEventListener('abort', rejectStopped, { once: true })
+    })
+    try {
+      return await Promise.race([
+        this.openPinnedControllerApiChannel(
+          { ...expected },
+          { signal: stop.signal, timeoutMs: timeout }
+        ),
+        stopped
+      ])
+    } finally {
+      clearTimeout(timer)
+      options.signal?.removeEventListener('abort', onAbort)
+      stop.signal.removeEventListener('abort', rejectStopped)
+    }
+  }
+
+  private async openPinnedControllerApiChannel(
+    expected: SshVerifiedConnectionIdentity,
+    options: { signal: AbortSignal; timeoutMs: number }
+  ): Promise<{ channel: ClientChannel; identity: SshVerifiedConnectionIdentity }> {
+    // Snapshot trusted input before any await; caller mutation must not change authority.
+    const identity = { ...expected }
+    const entry = await this.ensureConnected(identity.vpsId, false, identity, options.signal)
+    if (options.signal?.aborted) throw new SshAbortedError()
+    const actualKey = entry.verifiedHostKey
+    if (
+      !actualKey ||
+      !matchesSshHostFingerprint(actualKey, identity.hostFingerprint) ||
+      !matchesVerifiedPrincipal(entry.vpsId, entry.info, identity)
+    )
+      throw new SshHostIdentityChangedError()
+    const client = entry.client
+    if (!client || !entry.ready)
+      throw new AppError('SSH_HOST_UNREACHABLE', 'Kết nối controller chưa sẵn sàng.')
+    const channel = await new Promise<ClientChannel>((resolve, reject) => {
+      let settled = false
+      const finish = (error?: Error, stream?: ClientChannel): void => {
+        if (settled) {
+          stream?.destroy()
+          return
+        }
+        settled = true
+        clearTimeout(timer)
+        options.signal?.removeEventListener('abort', onAbort)
+        client.removeListener('close', onClose)
+        client.removeListener('error', onError)
+        if (error) {
+          stream?.destroy()
+          reject(error)
+        } else resolve(stream!)
+      }
+      const onAbort = (): void => finish(new SshAbortedError())
+      const onClose = (): void =>
+        finish(new AppError('SSH_HOST_UNREACHABLE', 'SSH đóng trước khi mở kênh controller.'))
+      const onError = (): void =>
+        finish(new AppError('SSH_HOST_UNREACHABLE', 'Không mở được kênh controller.'))
+      const timer = setTimeout(
+        () => finish(new AppError('SSH_TIMEOUT', 'Mở kênh controller quá thời gian cho phép.')),
+        options.timeoutMs
+      )
+      options.signal?.addEventListener('abort', onAbort, { once: true })
+      client.once('close', onClose)
+      client.once('error', onError)
+      if (options.signal?.aborted) {
+        onAbort()
+        return
+      }
+      try {
+        client.forwardOut(
+          '127.0.0.1',
+          0,
+          PRODUCT_CONTROLLER_SSH_CHANNEL.destination_host,
+          PRODUCT_CONTROLLER_SSH_CHANNEL.destination_port,
+          (error, stream) =>
+            error
+              ? finish(new AppError('SSH_HOST_UNREACHABLE', 'Controller từ chối kênh API.'), stream)
+              : finish(undefined, stream)
+        )
+      } catch {
+        onError()
+      }
+    })
+    // Resolver có thể đổi/thu hồi profile trong khi channel đang mở; không đưa bearer vào stream đó.
+    const onVerificationAbort = (): void => {
+      channel.destroy()
+    }
+    options.signal.addEventListener('abort', onVerificationAbort, { once: true })
+    let channelFailed = false
+    const onVerificationError = (): void => {
+      channelFailed = true
+      channel.destroy()
+    }
+    channel.on('error', onVerificationError)
+    const onVerificationClose = (): void => {
+      channelFailed = true
+    }
+    channel.once('close', onVerificationClose)
+    try {
+      if (options.signal.aborted) throw new SshAbortedError()
+      const resolved = await this.resolver(identity.vpsId)
+      if (options.signal?.aborted) throw new SshAbortedError()
+      if (
+        !matchesVerifiedPrincipal(identity.vpsId, resolved, identity) ||
+        !entry.ready ||
+        entry.client !== client ||
+        channelFailed ||
+        !channel.readable ||
+        !channel.writable ||
+        channel.destroyed
+      )
+        throw new SshHostIdentityChangedError()
+      return { channel, identity }
+    } catch (error) {
+      channel.destroy()
+      throw error
+    } finally {
+      options.signal.removeEventListener('abort', onVerificationAbort)
+      channel.removeListener('error', onVerificationError)
+      channel.removeListener('close', onVerificationClose)
+    }
   }
 
   async exec(vpsId: number, command: string, options: ExecOptions = {}): Promise<ExecResult> {
@@ -592,9 +752,18 @@ export class SshManager extends EventEmitter {
     return entry
   }
 
-  private async ensureConnected(vpsId: number, force = false): Promise<PoolEntry> {
+  private async ensureConnected(
+    vpsId: number,
+    force = false,
+    expected?: SshVerifiedConnectionIdentity,
+    signal?: AbortSignal
+  ): Promise<PoolEntry> {
+    if (signal?.aborted) throw new SshAbortedError()
     const entry = this.getEntry(vpsId)
     const resolved = await this.resolver(vpsId)
+    if (signal?.aborted) throw new SshAbortedError()
+    if (expected && !matchesVerifiedPrincipal(vpsId, resolved, expected))
+      throw new SshHostIdentityChangedError()
     if (!resolved.hostFingerprint || !/^SHA256:[A-Za-z0-9+/]{43}$/.test(resolved.hostFingerprint)) {
       await this.disconnect(vpsId)
       throw new AppError(
@@ -608,6 +777,7 @@ export class SshManager extends EventEmitter {
         entry.info.port !== resolved.port ||
         entry.info.hostFingerprint !== resolved.hostFingerprint)
     if (endpointChanged) force = true
+    if (expected && !matchesVerifiedPrincipal(vpsId, entry.info, expected)) force = true
     if (entry.ready && entry.client && !force) {
       return entry
     }
@@ -931,4 +1101,19 @@ function toSshAppError(error: unknown): AppError {
 
 function sleep(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+function matchesVerifiedPrincipal(
+  vpsId: number,
+  info: SshConnectionInfo,
+  expected: SshVerifiedConnectionIdentity
+): boolean {
+  return (
+    vpsId === expected.vpsId &&
+    info.host === expected.host &&
+    info.port === expected.port &&
+    info.hostFingerprint === expected.hostFingerprint &&
+    info.username === expected.username &&
+    info.authType === expected.authType
+  )
 }

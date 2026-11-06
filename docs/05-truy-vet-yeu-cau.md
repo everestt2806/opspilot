@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6a06/11:** [Pinned main-only API channel](tasks/tk-s7-release-r3c6a-pinned-api-channel.md) fixed127.0.0.1:8768/current SSH principal+actual pin/deadline/abort/late close có focused40/nativeSSHHTTP7/fresh023/full1597PASS/2SKIP/types/scopedlint/build PASS. Chưa authenticated HTTP DTO Desktop client/token vault/enrollment/UI authority/rotation; chưa nâng FR/UC tổng hoặc nhận production rollout.
+
 > **R3c-5b06/11:** [Command HTTP/runtime](tasks/tk-s7-release-r3c5b-command-http.md) actual publicGit/systemd **869ed020b29d PASS**: manual sameSHA2deploy/T1T2, duplicate1job/discarded response lookup/pause-resume/restart-no-duplicate/revoke401/cleanup. Sửa production completion verifier composition; nativeHTTP11/SQL12/auth13/fresh023/full1585PASS/2SKIP/types/lint/build. Chưa Desktop tunnel/UI authority/rotation/non-root installer/liveVPS/ML/HTTPS/soak hoặc FR/UC tổng PASS.
 
 > **R3c-5a06/11:** [Command substrate](tasks/tk-s7-release-r3c5-controller-commands.md) schema023/auth/idempotency/manual queue+pause/policy/lookup có37focused/nativeSQL12/full1575PASS/2SKIP/gates PASS. Chưa compose HTTP writes hoặc actual manual runtime; capabilities giữ unsupported, chưa nâng FR/UC tổng.
