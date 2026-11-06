@@ -12,7 +12,7 @@ START 06/11/2026 — Tiếp user request “làm hết”, base R3a `1e4df09`, R
 | Explicit key/VPS credential enrollment CLI | [R3b-4 local PASS](tk-s7-release-r3b4-controller-enrollment.md): Linux CLI14/14 (hai process thật/replay), 29 unit tests, full1481 PASS/2 SKIP; chưa target app enrollment | PASS |
 | Explicit target enrollment theo app/generation | [R3b-5b](tk-s7-release-r3b5b-target-enrollment.md): SQLite021 + paused ownership, atomic first-install/exact proof, real2apps/7cases + process death/CLI inspect, Linux11/11 PASS; chưa promote/enable policy | PASS |
 | Startup recovery và resource admission | [R3b-6](tk-s7-release-r3b6-readiness-recovery.md): historical proof/readonly inspect + bounded scanner/new cold CLI T1 settle, real7/7, resource providers/unit27/full1534 PASS | PASS |
-| Service composition opt-in + health/status đúng | Queue + per-claim executor/verifier, startup/shutdown/OS restart, polling-only không bị hiểu là auto deploy ready | OPEN |
+| Service composition opt-in + health/status đúng | [R3c-1](tk-s7-release-r3c1-execution-service.md) nối thực CLI/queue/router/admission/recovery,3process/2deploy/restart PASS; chưa installed systemd/public Git | IMPLEMENTED |
 | Complete standalone controller bundle | [R3b-5a](tk-s7-release-r3b5a-controller-bundle.md): payload11files, pinned read-only verifier, fresh Linux install/init/status/verify ngoài repo cwd PASS; installed-service run/restart còn ở service gate | IMPLEMENTED |
 | Live controller/VPS acceptance | Endpoint hiện hành + pin độc lập + resource allocation; không chạy fault trên VPS shared | BLOCKED |
 

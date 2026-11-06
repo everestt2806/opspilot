@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-06 | [product-mode/controller] R3c-1 thêm `run-product` opt-in bằng approved bundle pin qua stdin; service chạy recovery trước claim, dùng packaged template path tường minh và health maintenance khi polling-only/startup, degraded khi blocked — Không tự bật runtime từ environment hoặc giả ready khi chưa có executor — Sơn/Codex
+
 > Mọi thay đổi so với kế hoạch gốc (`docs/00-de-tai-goc.md`, `docs/01-ke-hoach.md`) ghi
 > **1 dòng** ở đây, kèm lý do. Đây chính là tài liệu trả lời hội đồng khi bị hỏi
 > *"AI hỗ trợ nhiều thế em có nắm được kiến trúc không?"* — mỗi dòng dưới đây là một

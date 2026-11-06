@@ -34,6 +34,11 @@ export type ProductStartupRecoveryReport = Readonly<{
 
 /**
  * CLI `recover-runtime --data-dir <private controller directory>` nhận JSON stdin
+ * `run-product --data-dir ...` dùng cùng input, chỉ Linux; startup recovery hoàn tất
+ * trước khi worker claim. Không tự tạo credential/target enrollment/unpause.
+ * Default `run` vẫn polling-only; health service_state=maintenance khi polling-only
+ * hoặc đang khởi động/dừng, degraded khi recovery/admission/worker/poller blocked,
+ * ready chỉ khi execution configured và readiness cho phép. Loopback health tối thiểu.
  * {format:1,artifact:<absolute approved bundle entrypoint>,manifest_sha256:<independent pin>}.
  * Chỉ inspect/settle; JSON state phải là ready, exit 0 không tự chứng minh đã sẵn sàng.
  * Lệnh không bật worker hay unpause ứng dụng. Không credential trong argv/stdout.

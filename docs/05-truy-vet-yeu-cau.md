@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **06/11 — service execution:** [R3c-1](tasks/tk-s7-release-r3c1-execution-service.md) explicit `run-product` + startup/admission/SSH runtime và health truth, Linux3process/2deploy/restart-no-duplicate PASS với Git file adapter. Chưa public Git/systemd/API/Desktop authority hoặc FR/UC tổng PASS; không suy thành production acceptance.
+
 > **06/11 — resource/cold recovery:** [R3b-6](tasks/tk-s7-release-r3b6-readiness-recovery.md) thêm admission trước dispatch và bounded cold startup scanner/CLI, historical proof và T1→T2 không replay PASS trong Linux SSH/Docker7/7. Chưa service-driven Git/OS restart hoặc FR/UC/PRODUCT_PASS tổng; default polling-only, live/ML/HTTPS/migrate/installer còn gate riêng.
 
 > **06/11 — target enrollment:** [R3b-5b](tasks/tk-s7-release-r3b5b-target-enrollment.md) có production bootstrap/SQLite021, installed paths chạy2apps/7real cases và controller process-loss/CLI inspect; Linux11/11, full app1519 PASS/2 SKIP, Python365PASS. Chưa service-driven Git/API/UI/admission/startup recovery hoặc FR/UC/PRODUCT_PASS tổng; không dùng fixture initializer làm production proof.

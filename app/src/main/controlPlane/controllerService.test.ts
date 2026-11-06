@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 
 import Database from 'better-sqlite3'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { closeDatabase } from '../db'
 import { ProductDeployRepository } from '../db/productDeployRepository'
@@ -26,6 +26,132 @@ afterEach(async () => {
 })
 
 describe('independent Product controller service', () => {
+  it('does not start claiming during startup recovery and reports blocked recovery as degraded', async () => {
+    directory = createControllerFixture('startup-blocked-job')
+    const recovery = deferred<void>(),
+      execute = vi.fn(async () => ({ state: 'stopped_before_write' }) as const)
+    service = new ControllerService({
+      dataDirectory: directory,
+      executionFactory: (opened, repository) => ({
+        worker: new ControlPlaneJobWorker({
+          repository,
+          controllerId: opened.controllerId,
+          pollIntervalMs: 10,
+          admission: { check: () => ({ state: 'deferred', reason: 'resource_unknown' }) },
+          executor: { execute }
+        }),
+        initialize: async () => {
+          await recovery.promise
+          return {
+            state: 'reconciliation_required',
+            inspected_enrollments: 0,
+            recovered_terminals: 0,
+            blockers: []
+          }
+        },
+        isReady: () => false,
+        close: async () => undefined
+      })
+    })
+    await service.start()
+    expect(await (await fetch('http://127.0.0.1:8768/healthz')).json()).toMatchObject({
+      service_state: 'maintenance'
+    })
+    expect(execute).not.toHaveBeenCalled()
+    expect(readJobAndLeaseState(directory, 'startup-blocked-job')).toMatchObject({
+      state: 'queued',
+      app_leases: 0,
+      build_leases: 0
+    })
+    recovery.resolve()
+    await delay(30)
+    expect(await (await fetch('http://127.0.0.1:8768/healthz')).json()).toMatchObject({
+      service_state: 'degraded'
+    })
+    expect(execute).not.toHaveBeenCalled()
+  })
+
+  it('reports ready only after initialized execution and closes SSH while SQLite is still open', async () => {
+    directory = mkdtempSync(join(tmpdir(), 'opspilot-execution-ready-'))
+    initializeController(directory)
+    let ready = false
+    let db: Database.Database | undefined
+    const close = vi.fn(async () => {
+      expect(db?.open).toBe(true)
+    })
+    service = new ControllerService({
+      dataDirectory: directory,
+      executionFactory: (opened, repository) => {
+        db = opened.database
+        return {
+          worker: new ControlPlaneJobWorker({
+            repository,
+            controllerId: opened.controllerId,
+            pollIntervalMs: 10,
+            admission: { check: () => ({ state: 'ready' }) },
+            executor: { execute: async () => ({ state: 'stopped_before_write' }) }
+          }),
+          initialize: async () => {
+            ready = true
+            return {
+              state: 'ready',
+              inspected_enrollments: 0,
+              recovered_terminals: 0,
+              blockers: []
+            }
+          },
+          isReady: () => ready,
+          close
+        }
+      }
+    })
+    await service.start()
+    await delay(30)
+    expect(await (await fetch('http://127.0.0.1:8768/healthz')).json()).toMatchObject({
+      service_state: 'ready'
+    })
+    await service.close()
+    expect(close).toHaveBeenCalledOnce()
+    expect(db?.open).toBe(false)
+    service = null
+  })
+
+  it('drains cancelled startup recovery before closing runtime and database', async () => {
+    directory = mkdtempSync(join(tmpdir(), 'opspilot-execution-startup-stop-'))
+    initializeController(directory)
+    const started = deferred<void>(),
+      stopped = deferred<void>(),
+      close = vi.fn(async () => undefined)
+    service = new ControllerService({
+      dataDirectory: directory,
+      executionFactory: (opened, repository) => ({
+        worker: new ControlPlaneJobWorker({ repository, controllerId: opened.controllerId }),
+        initialize: async (signal) => {
+          started.resolve()
+          await waitForAbort(signal)
+          await delay(80)
+          stopped.resolve()
+          return {
+            state: 'aborted',
+            inspected_enrollments: 0,
+            recovered_terminals: 0,
+            blockers: []
+          }
+        },
+        isReady: () => false,
+        close
+      })
+    })
+    await service.start()
+    await started.promise
+    const closing = service.close()
+    await delay(10)
+    expect(close).not.toHaveBeenCalled()
+    await stopped.promise
+    await closing
+    expect(close).toHaveBeenCalledOnce()
+    service = null
+  })
   it('serves only minimal loopback health, then cancels polling and closes cleanly', async () => {
     directory = mkdtempSync(join(tmpdir(), 'opspilot-controller-service-'))
     initializeController(directory)
@@ -39,7 +165,7 @@ describe('independent Product controller service', () => {
 
     const health = await fetch('http://127.0.0.1:8768/healthz')
     expect(health.status).toBe(200)
-    expect(await health.json()).toMatchObject({ api_version: 'v1', service_state: 'ready' })
+    expect(await health.json()).toMatchObject({ api_version: 'v1', service_state: 'maintenance' })
     const hiddenApi = await fetch('http://127.0.0.1:8768/v1/controllers/controller/apps')
     expect(hiddenApi.status).toBe(404)
     expect(await hiddenApi.text()).toBe('')

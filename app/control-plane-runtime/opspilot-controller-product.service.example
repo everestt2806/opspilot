@@ -1,0 +1,29 @@
+[Unit]
+Description=OpsPilot Product Execution Controller (explicit opt-in)
+After=network-online.target
+Wants=network-online.target
+Conflicts=opspilot-controller.service
+
+[Service]
+Type=simple
+User=opspilot-controller
+Group=opspilot-controller
+WorkingDirectory=/opt/opspilot-controller
+UMask=0077
+Environment=NODE_ENV=production
+# Root/admin provides approved artifact path and independent manifest pin, without credentials.
+StandardInput=file:/etc/opspilot-controller/execution.json
+ExecStart=/usr/bin/node /opt/opspilot-controller/payload/control-plane.cjs run-product --data-dir /var/lib/opspilot-controller
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=45s
+KillMode=control-group
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/opspilot-controller
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

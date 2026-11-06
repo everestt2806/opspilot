@@ -422,6 +422,8 @@ export interface ProductAutoDeployPolicyResult {
  * SSH administration, not an unauthenticated HTTP endpoint.
  */
 export interface ProductControllerApiRoutes {
+  /** R3c: polling-only/startup/shutdown => maintenance; execution blocked => degraded.
+   * ready means execution capability, not application/domain health. No public runtime details. */
   'GET /healthz': { response: Pick<ProductControllerIdentity, 'api_version' | 'service_state'> }
   'GET /v1/controllers/{controller_id}/identity': { response: ProductControllerApiMeta & ProductControllerIdentity }
   'GET /v1/controllers/{controller_id}/status': { response: ProductControllerApiMeta & ProductControllerStatus }

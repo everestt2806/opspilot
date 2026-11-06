@@ -47,6 +47,7 @@ export type ProductDeployPipelineOptions = {
   target_state_root: string
   signal?: AbortSignal
   collector_directory?: string
+  templates_directory?: string
   build_timeout_ms?: number
   build_poll_interval_ms?: number
   runtime_poll_timeout_ms?: number
@@ -65,7 +66,12 @@ export async function executeProductDeployPipeline(
   snapshot: PreparedProductGitSnapshot,
   options: ProductDeployPipelineOptions
 ): Promise<ProductDeployPipelineResult> {
-  validatePreflightSourceAndPlan(database, snapshot, options.collector_directory)
+  validatePreflightSourceAndPlan(
+    database,
+    snapshot,
+    options.collector_directory,
+    options.templates_directory
+  )
   const session = await openProductGuardedSshSession(deployRepository, ssh, snapshot, {
     vps_id: options.vps_id,
     target_helper_path: options.target_helper_path,
@@ -77,6 +83,7 @@ export async function executeProductDeployPipeline(
     // 1. Stage source and render files within the same session
     await stageProductSourceAndRenderWithSession(session, database, snapshot, {
       collector_directory: options.collector_directory,
+      templates_directory: options.templates_directory,
       signal: options.signal
     })
 

@@ -1,6 +1,6 @@
 # Product controller runtime (Linux)
 
-This runtime is a separate Node 22 artifact. It imports the Product SQLite repository and the existing migrations, but does not bootstrap Electron, the renderer, safeStorage, monitor, ML, or a deployment executor.
+This runtime is a separate Node 22 artifact. It imports the Product SQLite repository and migrations without Electron, the renderer or safeStorage. Default `run` only polls Git; explicit Linux `run-product` composes the guarded deployment executor after startup recovery and resource admission. Monitor/ML are not started by either command.
 
 ## Build and initialize
 
@@ -20,6 +20,44 @@ node dist/control-plane.cjs status --data-dir /var/lib/opspilot-controller
 The Linux runtime dependency set also includes the already approved `ssh2` and `tar` packages for the internal guarded-session seam. The packaged `target-helper/` files are not installed on a VPS by build and are not activated by the poll-only runtime. P3e-3a does not connect DeployPipeline or perform deployment phases.
 
 The systemd example is `opspilot-controller.service.example`. It is a template only and is not installed by the build or CLI.
+
+## Bật execution có chủ đích (R3c-1)
+
+Chỉ dùng bundle đã kiểm bằng CLI tin cậy và independent manifest pin. Controller phải có protected
+master key/VPS credential, Product ownership/source config và enrolled target app/generation từ trước.
+Không copy Desktop DB, tự học host key, tạo lại key hoặc tự bỏ pause để vượt prerequisite.
+
+Input JSON không chứa secret, cùng format với `recover-runtime`:
+
+```json
+{
+  "format": 1,
+  "artifact": "/opt/opspilot-controller/payload/control-plane.cjs",
+  "manifest_sha256": "<64 lowercase hex from trusted build>"
+}
+```
+
+```sh
+node /opt/opspilot-controller/payload/control-plane.cjs recover-runtime --data-dir /var/lib/opspilot-controller < /etc/opspilot-controller/execution.json
+node /opt/opspilot-controller/payload/control-plane.cjs run-product --data-dir /var/lib/opspilot-controller < /etc/opspilot-controller/execution.json
+```
+
+`recover-runtime` trả report, không bật worker; phải đọc `state`, không suy từ exit0. `run-product`
+phục hồi enrollment/T1 bằng historical manifest/key trước claim, rồi mới chạy poller/worker. Unknown
+không tự reinstall/replay. Management RAM/disk phải đo được và đủ ngưỡng; trước dispatch còn kiểm
+target qua pinned SSH, Docker và port. Packaged template/collector path lấy từ verified bundle,
+không phụ thuộc cwd hay `OPSPILOT_TEMPLATES_DIR`. Product hiện chỉ hỗ trợ Express không DB/required-env;
+framework parity và Desktop/API integration chưa được nhận hoàn tất.
+
+Health chỉ có `GET /healthz` loopback: `maintenance` khi polling-only/đang khởi động hoặc dừng,
+`degraded` khi recovery/admission/poller/worker blocked, `ready` khi execution sẵn sàng nhận việc.
+Đây không phải chứng nhận mọi app/domain khỏe. SIGTERM/SIGINT hủy và chờ task dừng trước khi đóng
+SSH/SQLite; unconfirmed task không được clear lease hoặc đóng DB giả như đã hoàn tất.
+
+`opspilot-controller-product.service.example` là unit opt-in riêng, nhận metadata bằng systemd
+`StandardInput=file:`; admin cung cấp Node22/runtime dependencies/approved bundle, private data directory
+và file metadata chỉ admin sửa. Chưa tự install unit, mở `/v1`, hay chạy live VPS trong checkpoint này.
+[Gate và giới hạn R3c-1](../../docs/tasks/tk-s7-release-r3c1-execution-service.md).
 
 ## Gói phát hành và kiểm checksum trước kích hoạt (R3b-5a)
 

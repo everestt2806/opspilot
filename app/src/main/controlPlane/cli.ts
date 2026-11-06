@@ -18,6 +18,7 @@ import { ControllerStartupRecovery } from './controllerStartupRecovery'
 type Command =
   | 'init'
   | 'run'
+  | 'run-product'
   | 'poll-once'
   | 'status'
   | 'secrets-init'
@@ -37,6 +38,7 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
     ![
       'init',
       'run',
+      'run-product',
       'poll-once',
       'status',
       'secrets-init',
@@ -49,6 +51,32 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
   }
   const command = commandValue as Command
   const dataDirectory = parseDataDirectory(args)
+
+  if (command === 'run-product') {
+    if (process.platform !== 'linux') throw new Error('CONTROLLER_EXECUTION_REQUIRES_LINUX')
+    const controller = new AbortController()
+    let service: ControllerService | undefined
+    const onSignal = (): void => {
+      controller.abort()
+      service?.requestStop()
+    }
+    process.once('SIGINT', onSignal)
+    process.once('SIGTERM', onSignal)
+    try {
+      const bundle = parseExecutionBundleRequest(
+        await readControllerBootstrapInput(process.stdin, controller.signal)
+      )
+      if (controller.signal.aborted) throw new Error('CONTROLLER_EXECUTION_ABORTED')
+      service = new ControllerService({ dataDirectory, executionBundle: bundle })
+      await service.start()
+      await service.waitForStop()
+    } finally {
+      process.removeListener('SIGINT', onSignal)
+      process.removeListener('SIGTERM', onSignal)
+      await service?.close()
+    }
+    return
+  }
 
   if (command === 'init') {
     const initialized = initializeController(dataDirectory)
@@ -76,19 +104,7 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
       if (controller.signal.aborted) throw new Error('CONTROLLER_VPS_ENROLLMENT_ABORTED')
       let recoveryBundle: ReturnType<typeof verifyControllerBundle> | undefined
       if (command === 'recover-runtime') {
-        const request = input as {
-          format?: unknown
-          artifact?: unknown
-          manifest_sha256?: unknown
-        } | null
-        if (
-          !request ||
-          Object.keys(request).sort().join(',') !== 'artifact,format,manifest_sha256' ||
-          request.format !== 1 ||
-          typeof request.artifact !== 'string' ||
-          typeof request.manifest_sha256 !== 'string'
-        )
-          throw new Error('INVALID_RECOVERY_REQUEST')
+        const request = parseExecutionBundleRequest(input)
         recoveryBundle = verifyControllerBundle(request.artifact, request.manifest_sha256)
       }
       opened = openControllerDatabase(dataDirectory)
@@ -191,6 +207,26 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
 function parseDataDirectory(args: string[]): string {
   if (args.length !== 2 || args[0] !== '--data-dir' || !args[1]) throw new Error('USAGE')
   return args[1]
+}
+
+function parseExecutionBundleRequest(input: unknown): {
+  artifact: string
+  manifest_sha256: string
+} {
+  const request = input as {
+    format?: unknown
+    artifact?: unknown
+    manifest_sha256?: unknown
+  } | null
+  if (
+    !request ||
+    Object.keys(request).sort().join(',') !== 'artifact,format,manifest_sha256' ||
+    request.format !== 1 ||
+    typeof request.artifact !== 'string' ||
+    typeof request.manifest_sha256 !== 'string'
+  )
+    throw new Error('INVALID_RECOVERY_REQUEST')
+  return { artifact: request.artifact, manifest_sha256: request.manifest_sha256 }
 }
 
 function readLocalStatus(

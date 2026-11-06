@@ -87,7 +87,8 @@ export function redactSecrets(text: string): string {
 export function validatePreflightSourceAndPlan(
   database: Database.Database,
   snapshot: PreparedProductGitSnapshot,
-  collectorDirectory = resolveCollectorDir()
+  collectorDirectory = resolveCollectorDir(),
+  templatesDirectory?: string
 ): {
   app: App
   plan: BuildPlan
@@ -113,7 +114,13 @@ export function validatePreflightSourceAndPlan(
     ...collectFiles(collectorDirectory, 'collector')
   ]
   const sourceManifest = prepareManifest(sourceFiles)
-  const renderFiles = renderPlanFiles(app, detection.plan, sourceTree)
+  const renderFiles = renderPlanFiles(
+    app,
+    detection.plan,
+    sourceTree,
+    undefined,
+    templatesDirectory
+  )
   const renderManifest = prepareManifest(renderFiles)
   if (
     sourceFiles.length + renderFiles.length > GUARDED_SSH_TRANSFER_MAX_FILES ||
@@ -133,13 +140,15 @@ export async function stageProductSourceAndRenderWithSession(
   snapshot: PreparedProductGitSnapshot,
   options: {
     collector_directory?: string
+    templates_directory?: string
     signal?: AbortSignal
   } = {}
 ): Promise<ProductSourceRenderResult> {
   const { app, plan, sourceTree, sourceFiles, sourceManifest } = validatePreflightSourceAndPlan(
     database,
     snapshot,
-    options.collector_directory
+    options.collector_directory,
+    options.templates_directory
   )
 
   const deployment = new DeploymentRepository(database).getById(session.deploymentId)
@@ -153,7 +162,13 @@ export async function stageProductSourceAndRenderWithSession(
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_INVALID_DEPLOYMENT')
   }
 
-  const renderFiles = renderPlanFiles(app, plan, sourceTree, deployment.image_tag)
+  const renderFiles = renderPlanFiles(
+    app,
+    plan,
+    sourceTree,
+    deployment.image_tag,
+    options.templates_directory
+  )
   const renderManifest = prepareManifest(renderFiles)
   if (
     sourceFiles.length + renderFiles.length > GUARDED_SSH_TRANSFER_MAX_FILES ||
@@ -389,7 +404,8 @@ function renderPlanFiles(
   app: App,
   plan: BuildPlan,
   sourceTree: ReturnType<typeof buildSourceTree>,
-  imageTag?: string
+  imageTag?: string,
+  templatesDirectory?: string
 ): TransferFile[] {
   if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/.test(app.name)) {
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
@@ -410,14 +426,22 @@ function renderPlanFiles(
   const rendered = [
     {
       path: 'Dockerfile',
-      content: renderDockerfile(plan.dockerfileTemplate, {
-        ...vars,
-        BUILD_COMMAND: plan.buildCommand,
-        BUILD_ARGS: renderBuildArgs(plan.buildArgs)
-      }),
+      content: renderDockerfile(
+        plan.dockerfileTemplate,
+        {
+          ...vars,
+          BUILD_COMMAND: plan.buildCommand,
+          BUILD_ARGS: renderBuildArgs(plan.buildArgs)
+        },
+        templatesDirectory
+      ),
       mode: 0o644
     },
-    { path: 'docker-compose.yml', content: renderCompose(vars, false), mode: 0o644 },
+    {
+      path: 'docker-compose.yml',
+      content: renderCompose(vars, false, templatesDirectory),
+      mode: 0o644
+    },
     { path: '.env', content: buildEnvFile({}, false).content, mode: 0o600 }
   ]
   return rendered.map(({ path, content, mode }) => {

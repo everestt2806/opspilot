@@ -24,9 +24,9 @@ export function renderTemplate(template: string, vars: Record<string, string>): 
   })
 }
 
-function readTemplateFile(name: string): string {
+function readTemplateFile(name: string, directory = resolveTemplatesDir()): string {
   try {
-    return readFileSync(join(resolveTemplatesDir(), name), 'utf8')
+    return readFileSync(join(directory, name), 'utf8')
   } catch (error) {
     throw new AppError('UNKNOWN', `Không đọc được template ${name}. Hãy cài lại ứng dụng.`, {
       cause: error
@@ -66,8 +66,8 @@ const POSTGRES_SERVICE_YAML = `  postgres:
       start_period: 5s`
 
 /** Compose cho mọi framework: service app + postgres nếu needsDb (volume ./data/pg). */
-export function renderCompose(vars: ComposeVars, needsDb: boolean): string {
-  const template = readTemplateFile('docker-compose.template.yml')
+export function renderCompose(vars: ComposeVars, needsDb: boolean, directory?: string): string {
+  const template = readTemplateFile('docker-compose.template.yml', directory)
   const extra = needsDb ? renderTemplate(POSTGRES_SERVICE_YAML, vars) : ''
   const appDependsOn = needsDb
     ? '    depends_on:\n      postgres:\n        condition: service_healthy'
@@ -81,8 +81,12 @@ export function renderCompose(vars: ComposeVars, needsDb: boolean): string {
   )
 }
 
-export function renderDockerfile(dockerfileTemplate: string, vars: Record<string, string>): string {
-  return renderTemplate(readTemplateFile(dockerfileTemplate), vars).trimEnd() + '\n'
+export function renderDockerfile(
+  dockerfileTemplate: string,
+  vars: Record<string, string>,
+  directory?: string
+): string {
+  return renderTemplate(readTemplateFile(dockerfileTemplate, directory), vars).trimEnd() + '\n'
 }
 
 /** Keep Docker build inputs aligned with every public key emitted by a detector. */

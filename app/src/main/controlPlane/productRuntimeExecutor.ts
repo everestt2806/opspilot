@@ -60,7 +60,12 @@ export class ProductRuntimeExecutor implements ProductJobExecutor {
         { signal }
       )
       target = { ...(await this.options.targetOptions(claim)), signal }
-      validatePreflightSourceAndPlan(this.options.database, snapshot, target.collector_directory)
+      validatePreflightSourceAndPlan(
+        this.options.database,
+        snapshot,
+        target.collector_directory,
+        target.templates_directory
+      )
       if (this.options.admitTarget) {
         const admission = await this.options.admitTarget(claim, signal)
         if (admission.state !== 'ready')

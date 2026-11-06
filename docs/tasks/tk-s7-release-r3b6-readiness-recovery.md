@@ -8,7 +8,7 @@ START 06/11/2026 — User yêu cầu làm tiếp tới hoàn tất và chia chec
 | Target read-only admission trước dispatch | 7 real SSH resource probes, Docker/port/current SQLite principal; 2 executor deferral tests không vào pipeline | PASS |
 | Read-only enrollment reconciliation độc lập quiescence/install | Management manifest khác historical target manifest; actual helpers/exact key/proof, unpaused/pending T1 inspect không first-install | PASS |
 | Cold T1 settle không source fetch/replay, pre-T1 unknown giữ barrier | Independent CLI process + bounded SQL scanner; T1→T2 giữ app/collector CID/image/StartedAt/restarts; pre-T1 unknown giữ lease | PASS |
-| Gate, checkpoint và push | 27 focused, full app1534 PASS/2 SKIP, Python365, types/lint/build/diff PASS; push sau explicit stage/secret/link check | IMPLEMENTED |
+| Gate, checkpoint và push | 27 focused/full1534 PASS/2 SKIP/Python365/types/lint/build/diff; explicit25files/secret/link checks; commit `8e8d65d` normal push, local=remote | PASS |
 
 ## Phạm vi
 
