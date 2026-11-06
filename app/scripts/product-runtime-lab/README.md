@@ -214,3 +214,33 @@ chưa chứng minh 3-framework Product pipeline hoặc installed-service activat
 
 Reports: `app/.out-scripts/controller-bundle/<nonce>/result.json`; fresh-install summary stdout.
 Không dữ liệu/khóa người dùng, không target app enrollment/SSH command/VPS mutation trong bundle gate.
+
+## Production target enrollment + installed runtime (R3b-5b)
+
+```sh
+python3 -B -W error::ResourceWarning -m unittest discover -s app/scripts/product-runtime-lab -p test_target_enrollment.py
+export OPSPILOT_R1_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r3b5b-lab.cjs
+export OPSPILOT_CONTROLLER_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r3b5b/control-plane.cjs
+OPSPILOT_R1_MODULES=/var/tmp/opspilot-p3e3a-runtime/node_modules node app/scripts/product-runtime-lab/build.mjs
+OPSPILOT_CONTROL_PLANE_MODULES=/var/tmp/opspilot-p3e3a-runtime/node_modules OPSPILOT_CONTROL_PLANE_OUTPUT="$OPSPILOT_CONTROLLER_ARTIFACT" node app/scripts/build-control-plane.mjs
+node app/scripts/product-runtime-lab/target-enrollment-runtime.mjs
+```
+
+Chạy bằng root trong Linux/WSL lab có Docker/sshd như R1. Fixture tạo SQLite/controller marker/private
+master key/encrypted SSH credential từ chính client key mới sinh của lab, pause hai Product apps trước
+khi có job. CLI production `enroll-target` thực hiện remote atomic installation và ghi proof; helper
+fixtures ban đầu của R1 vẫn còn nhưng **không được dùng làm đường execution** trong gate mới.
+
+Một child controller process thật exit73 sau target response, trước SQLite proof commit. Parent xác
+nhận unknown rồi chạy CLI mới; inspect phải đưa về enrolled mà giữ inode/mtime/hash của marker/key/
+manifest/receipt/3runtime helpers. Fault checkpoint chỉ nằm trong lab prototype, không có wire flag
+hoặc runtime option để inject failure. Đây chưa là installed-service/systemd hoặc host power-loss gate.
+
+Sau enrollment, fixture unpause để chạy cùng7R1 cases, qua bound-credential resolver/per-app key router,
+installed helpers và packaged templates/collector. Ca cuối cố ý giữ **broken collector fixture** để
+chứng minh lỗi build không dừng collector cũ/finalize nhầm. Snapshot vẫn là verified local Git fixture,
+không claim public Git fetch hoặc Git push khi Desktop đóng.
+
+Reports tại `app/.out-scripts/target-enrollment-runtime/<nonce>/{result,enrollment}.json`, linked R1
+report/SQLite/metric evidence. Mọi resource mang nonce riêng; chỉ dọn đúng namespace của lab. Không
+VPS/DB người dùng, không dùng fixture initializers trong production installer hoặc fake receipt/outcome.

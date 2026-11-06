@@ -67,7 +67,7 @@ try {
     )
   )
   assert.equal(verifiedBundle.state, 'bundle_verified')
-  assert.equal(verifiedBundle.files, 11)
+  assert.equal(verifiedBundle.files, 12)
   const initialized = JSON.parse(
     execFileSync(
       process.execPath,
@@ -88,6 +88,9 @@ try {
     assert.ok(
       db.prepare("SELECT name FROM sqlite_master WHERE name='product_runtime_terminal'").get()
     )
+    assert.ok(
+      db.prepare("SELECT name FROM sqlite_master WHERE name='product_target_enrollment'").get()
+    )
     assert.equal(require('zod/package.json').version, '4.4.3')
     console.log(
       JSON.stringify({
@@ -96,10 +99,11 @@ try {
         sqlite: db.prepare('SELECT sqlite_version() AS version').get().version,
         zod: require('zod/package.json').version,
         migration_020: true,
+        migration_021: true,
         fresh_install: true,
         controller_cli_init_status: true,
         target_helper_files: 3,
-        verified_bundle_files: 11,
+        verified_bundle_files: 12,
         standalone_templates_collector: true
       })
     )

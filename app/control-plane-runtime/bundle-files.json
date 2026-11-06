@@ -2,6 +2,7 @@
   "target-helper/target_execution_guard.py": "app/src/main/controlPlane/target_execution_guard.py",
   "target-helper/target_guarded_ssh_helper.py": "app/src/main/controlPlane/target_guarded_ssh_helper.py",
   "target-helper/target_product_runtime.py": "app/src/main/controlPlane/target_product_runtime.py",
+  "target-helper/target_enrollment.py": "app/src/main/controlPlane/target_enrollment.py",
   "templates/express.Dockerfile": "templates/express.Dockerfile",
   "templates/nextjs.Dockerfile": "templates/nextjs.Dockerfile",
   "templates/static-spa.Dockerfile": "templates/static-spa.Dockerfile",

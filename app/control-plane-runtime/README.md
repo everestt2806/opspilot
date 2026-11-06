@@ -23,7 +23,7 @@ The systemd example is `opspilot-controller.service.example`. It is a template o
 
 ## Gói phát hành và kiểm checksum trước kích hoạt (R3b-5a)
 
-Build offline tạo entrypoint cùng `target-helper/` (3 files), `templates/` (4 files), `collector/`
+Build offline hiện tạo entrypoint cùng `target-helper/` (3 runtime files + 1 enrollment bootstrap), `templates/` (4 files), `collector/`
 (3 files) và `bundle-manifest.json`. Catalog approved ở `bundle-files.json`, không glob repo hoặc
 copy tests/cache/venv/node_modules/.env. Build in digest SHA256 của manifest ra stdout. Native
 dependencies vẫn cài từ package-lock tại runtime directory **ngoài payload directory**.
@@ -43,7 +43,7 @@ Linux còn kiểm owner (root hoặc user hiện hành) và từ chối group/wo
 Windows diagnostic không chứng minh ACL Linux. Output có verified paths cho templates/collector/
 helper; không tự đặt global env hoặc bật deployment executor.
 
-Payload directory chỉ chứa 11 files và manifest; không đặt data/key/log/node_modules vào đó.
+Payload directory hiện chứa 12 files và manifest; không đặt data/key/log/node_modules vào đó.
 Build/rebuild chỉ trong directory offline, **không đè release đang chạy**. Khi deploy dùng release
 directory mới, verify rồi mới activate trong checkpoint service. Hash xác nhận byte theo digest đã
 pin, không thay chữ ký hoặc xác thực kênh phân phối. [Hồ sơ/gate R3b-5a](../../docs/tasks/tk-s7-release-r3b5a-controller-bundle.md).
@@ -98,3 +98,47 @@ conflict, không tự update/restore/rotate. Hai tiến trình gửi cùng yêu 
 Không import Desktop SQLite/safeStorage, không tạo app/source/ownership/history, không mở thêm API.
 Service mặc định vẫn polling-only; phần target enrollment/admission/cold startup/service opt-in
 còn ở R3b/R3c. Kiểm chứng CLI/SSH thật và giới hạn hiện hành: [hồ sơ R3b-4](../../docs/tasks/tk-s7-release-r3b4-controller-enrollment.md).
+
+## Cài helper và đăng ký target app (R3b-5b)
+
+```sh
+node /trusted/control-plane.cjs enroll-target --data-dir /var/lib/opspilot-controller
+```
+
+Chỉ nhận JSON qua stdin pipe/EOF (không gõ secret vào argv/env/terminal); input không chứa key hoặc
+script. App/source phải được cấu hình **Product-owned đúng controller/generation, auto-deploy paused**,
+không queued/active/uncertain job, unreleased app lease hoặc pending terminal settlement. Lệnh không
+tạo source, chuyển Desktop ownership hoặc tự bật auto-deploy. Setup source/ownership/UI vẫn là bước riêng.
+
+```json
+{
+  "format": 1,
+  "controller_id": "<controller_id từ init/status>",
+  "app_id": 1,
+  "ownership_generation": 1,
+  "artifact": "/releases/verified/control-plane.cjs",
+  "manifest_sha256": "<64 hex từ build tin cậy>",
+  "target_root": "/var/lib/opspilot-product"
+}
+```
+
+`target_root` là trusted admin config, không lấy từ app/repo: absolute Linux path, không symlink,
+control character, `..` hoặc segment quá255bytes; helper path sau khi suy ra phải trong512characters.
+SSH user phải sở hữu private base (`0700`) hoặc có quyền tạo base trong parent an toàn. Không chạy sudo,
+không chmod/adopt path hiện hữu không an toàn. VPS SSH profile/credential đã enroll trước bằng R3b-4.
+
+Controller kiểm bundle pin, tạo/reuse encrypted HMAC material đúng app/generation một lần, lưu SQLite
+`prepared` rồi commit `unknown` **trước** mở bootstrap exec. Source bootstrap đã kiểm SHA256 đi trong
+argv; HMAC key chỉ qua bounded SSH stdin (không SSH credential trong payload). Target publish nguyên
+tử directory theo controller hash/app ID, gồm helpers/marker/key/manifest/receipt; rename-noreplace
+không thay cả directory rỗng đã tồn tại. Không gọi fixture initializer, không Docker/deploy/firewall.
+
+Receipt có HMAC domain riêng, bind exact controller/app/generation/target/release/paths. Controller
+đối chiếu current SQLite authority rồi mới lưu `enrolled`. Output chỉ nhận `state:'enrolled'` là ready;
+`state:'unknown'` không phải thành công dù CLI đã trả JSON. Sau mất response/process chết, chạy lại
+chỉ `inspect`, không cài lại, rotate hoặc ghi đè. Remote absent/partial/tamper vẫn giữ unknown để
+operator reconcile; không tự clear barrier. Release/generation/target khác conflict, chưa auto-upgrade.
+
+Helper/state paths trả về lúc này là **installed target paths**, khác local bundle source paths của
+`verify-bundle`. Admission/cold startup/service composition phải dùng persisted proof + exact key;
+chưa bật service hoặc nối Desktop API/UI từ CLI này. [Hồ sơ và giới hạn gate](../../docs/tasks/tk-s7-release-r3b5b-target-enrollment.md).

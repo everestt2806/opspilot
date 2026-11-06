@@ -12,6 +12,8 @@
 
 ## 2026-11 — Release 04/12
 
+- 2026-11-06 | [controller/enrollment] R3b-5b thêm SQLite target enrollment và production bootstrap riêng qua pinned SSH/stdin; paused Product ownership, atomic rename-noreplace, immutable manifest/key/receipt, pending chỉ inspect — Cần durable admission proof trước service activation; không dùng fixture initializer, không auto ownership transfer/reinstall/rotate hoặc public API — Core.
+
 - 2026-11-06 | [controller/bundle] R3b-5a dùng approved asset catalog chung builder/verifier và manifest SHA256 do admin pin từ build tin cậy; thêm verify-bundle không phụ thuộc cwd/DB/SSH — Cần đầy đủ helpers/templates/collector trước production target enrollment, không tự activate hoặc coi hash là chữ ký — Core.
 
 - 2026-11-06 | [controller/bootstrap] R3b-4 thêm local-admin CLI secrets-init/enroll-vps, strict bounded stdin và xác minh pinned SSH trước atomic bound-credential enrollment/replay; exact replay giữ ID, mọi conflict/archive từ chối — Cần đường production bootstrap độc lập Electron, không mở public API/đổi schema hoặc tự restore/rotate — Core.

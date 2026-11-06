@@ -23,6 +23,7 @@ import migration017 from './migrations/017_product_auto_deploy_pause_policy.sql?
 import migration018 from './migrations/018_product_auto_deploy_pause_provenance.sql?raw'
 import migration019 from './migrations/019_vps_ssh_security_revision.sql?raw'
 import migration020 from './migrations/020_product_runtime_terminal.sql?raw'
+import migration021 from './migrations/021_product_target_enrollment.sql?raw'
 
 interface Migration {
   name: string
@@ -130,6 +131,11 @@ const migrations: Migration[] = [
     name: '020_product_runtime_terminal.sql',
     version: 20,
     sql: migration020
+  },
+  {
+    name: '021_product_target_enrollment.sql',
+    version: 21,
+    sql: migration021
   }
 ]
 

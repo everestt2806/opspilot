@@ -12,8 +12,10 @@ import { ControlPlaneGitPoller } from './gitPoller'
 import { enrollControllerVps, initializeControllerSecrets } from './controllerEnrollment'
 import { readControllerBootstrapInput } from './controllerBootstrapInput'
 import { verifyControllerBundle } from './controllerBundle'
+import { enrollProductTarget } from './targetEnrollment'
 
-type Command = 'init' | 'run' | 'poll-once' | 'status' | 'secrets-init' | 'enroll-vps'
+type Command =
+  'init' | 'run' | 'poll-once' | 'status' | 'secrets-init' | 'enroll-vps' | 'enroll-target'
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
@@ -24,7 +26,9 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
     return
   }
   if (
-    !['init', 'run', 'poll-once', 'status', 'secrets-init', 'enroll-vps'].includes(commandValue)
+    !['init', 'run', 'poll-once', 'status', 'secrets-init', 'enroll-vps', 'enroll-target'].includes(
+      commandValue
+    )
   ) {
     throw new Error('USAGE')
   }
@@ -37,7 +41,7 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
     return
   }
 
-  if (command === 'secrets-init' || command === 'enroll-vps') {
+  if (command === 'secrets-init' || command === 'enroll-vps' || command === 'enroll-target') {
     if (process.platform !== 'linux') throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
     const controller = new AbortController()
     const onSignal = (): void => controller.abort()
@@ -46,7 +50,7 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
     let opened: ReturnType<typeof openControllerDatabase> | undefined
     try {
       const input =
-        command === 'enroll-vps'
+        command !== 'secrets-init'
           ? await readControllerBootstrapInput(process.stdin, controller.signal)
           : undefined
       if (controller.signal.aborted) throw new Error('CONTROLLER_VPS_ENROLLMENT_ABORTED')
@@ -55,6 +59,18 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
         initializeControllerSecrets(opened.database, opened.controllerId, opened.dataDirectory)
         console.log(
           JSON.stringify({ state: 'secrets_initialized', controller_id: opened.controllerId })
+        )
+      } else if (command === 'enroll-target') {
+        console.log(
+          JSON.stringify(
+            await enrollProductTarget(
+              opened.database,
+              opened.controllerId,
+              opened.dataDirectory,
+              input,
+              controller.signal
+            )
+          )
         )
       } else {
         const result = await enrollControllerVps(

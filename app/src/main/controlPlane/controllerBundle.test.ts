@@ -47,7 +47,7 @@ describe('Pinned controller release bundle', () => {
       templates_directory: join(root, 'templates'),
       collector_directory: join(root, 'collector'),
       target_helper_path: join(root, 'target-helper', 'target_guarded_ssh_helper.py'),
-      files: 11
+      files: 12
     })
     expect(process.env.OPSPILOT_TEMPLATES_DIR).toBe(before)
     expect(readFileSync(join(root, 'bundle-manifest.json'), 'utf8')).not.toContain('secret')

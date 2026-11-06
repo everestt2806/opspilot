@@ -246,6 +246,30 @@ export class SshManager extends EventEmitter {
     if (!/^\/[A-Za-z0-9_./-]{1,511}$/.test(helperPath) || helperPath.includes('..')) {
       throw new AppError('VALIDATION', 'Invalid guarded SSH helper path.')
     }
+    return this.openIdentifiedChannel(vpsId, `python3 -B -u ${shellQuote(helperPath)}`, options)
+  }
+
+  /** Product bootstrap nội bộ: code đã pin, secret chỉ được caller gửi qua channel stdin. */
+  async openProductBootstrapChannel(
+    vpsId: number,
+    script: { text: string; sha256: string },
+    options: Pick<ExecOptions, 'timeoutMs' | 'signal'> = {}
+  ): Promise<{ channel: ClientChannel; identity: SshVerifiedConnectionIdentity }> {
+    if (
+      typeof script.text !== 'string' ||
+      !script.text.length ||
+      Buffer.byteLength(script.text) > 64 * 1024 ||
+      createHash('sha256').update(script.text).digest('hex') !== script.sha256
+    )
+      throw new AppError('VALIDATION', 'Invalid pinned bootstrap script.')
+    return this.openIdentifiedChannel(vpsId, `python3 -B -u -c ${shellQuote(script.text)}`, options)
+  }
+
+  private async openIdentifiedChannel(
+    vpsId: number,
+    command: string,
+    options: Pick<ExecOptions, 'timeoutMs' | 'signal'>
+  ): Promise<{ channel: ClientChannel; identity: SshVerifiedConnectionIdentity }> {
     if (options.signal?.aborted) throw new SshAbortedError()
     const entry = await this.ensureConnected(vpsId)
     const connectionInfo = { ...entry.info }
@@ -256,11 +280,10 @@ export class SshManager extends EventEmitter {
     if (!hostFingerprint || !entry.ready || !entry.client) {
       throw new AppError('VALIDATION', 'Guarded SSH connection has no verified host identity.')
     }
-    // Only the configured absolute helper path is accepted; no request data is
-    // interpolated into the command and this channel is never reconnected.
+    // Chỉ code/path tin cậy; không nội suy request/secret và không tự reconnect channel.
     const channel = await this.openExecChannel(
       entry,
-      `python3 -u ${shellQuote(helperPath)}`,
+      command,
       {
         timeoutMs: options.timeoutMs ?? 15_000,
         logCommand: false,

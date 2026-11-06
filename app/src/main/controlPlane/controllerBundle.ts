@@ -112,6 +112,32 @@ export function verifyControllerBundle(
   }
 }
 
+/** Đọc snapshot byte đã đối chiếu pin; caller không chạy code/path mới đọc mà chưa kiểm hash. */
+export function readVerifiedControllerBundleFile(
+  bundle: VerifiedControllerBundle,
+  relative: string
+): Buffer {
+  const checked = verifyControllerBundle(bundle.entrypoint, bundle.manifest_sha256)
+  const manifest = readCheckedFile(
+    join(checked.root_directory, PRODUCT_CONTROLLER_BUNDLE_MANIFEST),
+    PRODUCT_CONTROLLER_BUNDLE_MAX_MANIFEST_BYTES
+  )
+  if (digest(manifest) !== checked.manifest_sha256)
+    throw new Error('CONTROLLER_BUNDLE_VERIFICATION_FAILED')
+  if (relative === PRODUCT_CONTROLLER_BUNDLE_MANIFEST) return manifest
+  const record = (JSON.parse(manifest.toString()) as ProductControllerBundleManifest).files.find(
+    (item) => item.path === relative
+  )
+  if (!record) throw new Error('CONTROLLER_BUNDLE_VERIFICATION_FAILED')
+  const value = readCheckedFile(
+    join(checked.root_directory, relative),
+    PRODUCT_CONTROLLER_BUNDLE_MAX_FILE_BYTES
+  )
+  if (value.length !== record.size || digest(value) !== record.sha256)
+    throw new Error('CONTROLLER_BUNDLE_VERIFICATION_FAILED')
+  return value
+}
+
 function digest(bytes: Buffer): string {
   return createHash('sha256').update(bytes).digest('hex')
 }

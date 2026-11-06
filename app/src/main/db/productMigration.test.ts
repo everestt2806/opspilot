@@ -10,6 +10,7 @@ import migration016 from './migrations/016_product_auto_deploy_persistence.sql?r
 import migration017 from './migrations/017_product_auto_deploy_pause_policy.sql?raw'
 import migration018 from './migrations/018_product_auto_deploy_pause_provenance.sql?raw'
 import migration019 from './migrations/019_vps_ssh_security_revision.sql?raw'
+import migration021 from './migrations/021_product_target_enrollment.sql?raw'
 
 let testDirectory: string | null = null
 
@@ -22,7 +23,7 @@ afterEach(() => {
 })
 
 describe('Product persistence migrations 016-019', () => {
-  it('keeps the cumulative schema contract synchronized with migrations 016-019', () => {
+  it('keeps the cumulative schema contract synchronized with migrations 016-021', () => {
     const schema = readFileSync(
       new URL('../../../../docs/contracts/schema.sql', import.meta.url),
       'utf8'
@@ -31,6 +32,7 @@ describe('Product persistence migrations 016-019', () => {
     expect(schema).toContain(migration017.replaceAll('\r\n', '\n').trim())
     expect(schema).toContain(migration018.replaceAll('\r\n', '\n').trim())
     expect(schema).toContain(migration019.replaceAll('\r\n', '\n').trim())
+    expect(schema).toContain(migration021.replaceAll('\r\n', '\n').trim())
   })
 
   it('adds a secret-free monotonic SSH security revision to an existing v018 VPS row', () => {
@@ -58,7 +60,7 @@ describe('Product persistence migrations 016-019', () => {
       ssh_security_revision: 1
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 21
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
@@ -77,8 +79,11 @@ describe('Product persistence migrations 016-019', () => {
     runMigrations(database)
     const after = snapshotLegacy(database)
     expect(after).toEqual(before)
+    expect(database.prepare('SELECT COUNT(*) AS n FROM product_target_enrollment').get()).toEqual({
+      n: 0
+    })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 21
     })
     expect(database.prepare('SELECT COUNT(*) AS count FROM product_controller').get()).toEqual({
       count: 0
@@ -101,7 +106,7 @@ describe('Product persistence migrations 016-019', () => {
     ).count
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 21
     })
     expect(
       (
@@ -147,7 +152,7 @@ describe('Product persistence migrations 016-019', () => {
       pause_policy_provenance: 'legacy_inferred'
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 21
     })
     expect(
       database
@@ -346,6 +351,8 @@ describe('Product persistence migrations 016-019', () => {
 
 function downgradeToV015(database: Database.Database): void {
   database.exec(`
+    DROP TABLE IF EXISTS product_target_enrollment;
+    DELETE FROM schema_version WHERE version=21;
     DROP TABLE IF EXISTS product_runtime_terminal;
     DROP TABLE IF EXISTS product_runtime_execution;
     DELETE FROM schema_version WHERE version=20;
@@ -375,6 +382,8 @@ function downgradeToV015(database: Database.Database): void {
 
 function downgradeToV016(database: Database.Database): void {
   database.exec(`
+    DROP TABLE IF EXISTS product_target_enrollment;
+    DELETE FROM schema_version WHERE version=21;
     DROP TABLE IF EXISTS product_runtime_terminal;
     DROP TABLE IF EXISTS product_runtime_execution;
     DELETE FROM schema_version WHERE version=20;
@@ -394,6 +403,8 @@ function downgradeToV016(database: Database.Database): void {
 
 function downgradeMigration018ToV017(database: Database.Database): void {
   database.exec(`
+    DROP TABLE IF EXISTS product_target_enrollment;
+    DELETE FROM schema_version WHERE version=21;
     DROP TABLE IF EXISTS product_runtime_terminal;
     DROP TABLE IF EXISTS product_runtime_execution;
     DELETE FROM schema_version WHERE version=20;

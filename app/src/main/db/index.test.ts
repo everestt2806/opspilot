@@ -160,6 +160,8 @@ function downgradeMigration014ToV13(database: Database.Database): void {
 
 function downgradeProductMigrationsToV15(database: Database.Database): void {
   database.exec(`
+    DROP TABLE IF EXISTS product_target_enrollment;
+    DELETE FROM schema_version WHERE version=21;
     DROP TABLE IF EXISTS product_runtime_terminal;
     DROP TABLE IF EXISTS product_runtime_execution;
     DELETE FROM schema_version WHERE version=20;
@@ -283,7 +285,7 @@ describe('initializeDatabase', () => {
       count: 1
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 21
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
   })
@@ -309,12 +311,12 @@ describe('initializeDatabase', () => {
       before as object
     )
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 21
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 21
     })
   })
 
@@ -375,7 +377,7 @@ describe('initializeDatabase', () => {
       healthcheck_response_type: 'status_2xx'
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 21
     })
     database
       .prepare(
@@ -415,7 +417,7 @@ describe('initializeDatabase', () => {
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 21
     })
   })
 
@@ -523,12 +525,12 @@ describe('initializeDatabase', () => {
       https_probe_peer_ips_json: '["198.51.100.160"]'
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 21
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 21
     })
   })
 
@@ -987,8 +989,8 @@ describe('initializeDatabase', () => {
       .prepare('SELECT MAX(version) AS version FROM schema_version')
       .get() as { version: number }
 
-    expect(tables).toHaveLength(29)
-    expect(schemaVersion.version).toBe(20)
+    expect(tables).toHaveLength(30)
+    expect(schemaVersion.version).toBe(21)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -1019,7 +1021,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 20
+      version: 21
     })
     expect(
       database
@@ -1218,7 +1220,7 @@ describe('initializeDatabase', () => {
     const successVer = v4Db.prepare('SELECT MAX(version) AS version FROM schema_version').get() as {
       version: number
     }
-    expect(successVer.version).toBe(20)
+    expect(successVer.version).toBe(21)
 
     // b. Bảng experiment_run đã có cột attempt_index và backfill = 1 cho tất cả bản ghi cũ
     const postRuns = v4Db
