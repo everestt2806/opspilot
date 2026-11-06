@@ -1,5 +1,9 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-06 | [product-mode/http] R3c-5b nối manual redeploy/policy/lookup trên authenticated loopback API, POST≤16KiB/timeout/current reauth sau đọc body, Idempotency-Key và drain trước DB close — Accept202 là durable intent, chưa phải runtime success; pause dùng khi degraded, resume/manual theo readiness và barriers — Sơn/Codex
+
+2026-11-06 | [product-mode/runtime] R3c-5b sửa composition service cấp verifier router cho queue; runtime_settled phải khớp persisted receipt/T1/T2/current authority trước idle — Real gate phát hiện deployment succeeded nhưng worker runtime_completion_unverified do callback chưa nối; không nới gate hoặc dùng restart che trạng thái degraded — Sơn/Codex
+
 2026-11-06 | [product-mode/commands] R3c-5a thêm request tombstone migration023 và manual command repository: cùng namespace controller/client/key, auth/generation recheck trong IMMEDIATE, redeploy+pause auto atomic, resume không vượt unknown/manual pending, lookup không replay mutation — Chuẩn bị HTTP writes an toàn; chưa bật write capability, không lưu bearer/note/body thô — Sơn/Codex
 
 2026-11-06 | [product-mode/api-contract] R3c-4 read job DTO target_sha cho phép null khớp canonical product_deploy_job và ProductDeployJob (manual rollback có thể chưa resolve SHA) — Không giấu job hoặc giả commit SHA để khớp read DTO cũ — Sơn/Codex

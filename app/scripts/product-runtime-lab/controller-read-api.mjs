@@ -5,6 +5,8 @@ import { createHash, randomUUID, randomBytes } from 'node:crypto'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
+import { createRequire } from 'node:module'
+import { request as httpRequest } from 'node:http'
 
 if (process.platform !== 'linux') throw new Error('LINUX_REQUIRED')
 const artifact = process.env.OPSPILOT_CONTROLLER_ARTIFACT
@@ -123,8 +125,9 @@ try {
   record('empty_collection_is_explicit_not_error')
   const capabilities = await (await get('/capabilities')).json()
   assert.equal(capabilities.read.state, 'available')
-  assert.equal(capabilities.manual_redeploy.state, 'unsupported')
-  record('unsupported_mutations_not_advertised')
+  assert.equal(capabilities.manual_redeploy.state, 'blocked')
+  assert.equal(capabilities.manual_redeploy.reason_code, 'FEATURE_DISABLED')
+  record('read_scope_cannot_advertise_mutations')
   assert.equal((await get('/apps?limit=101')).status, 400)
   assert.equal((await get('/apps?token=synthetic-unit')).status, 400)
   record('query_and_limit_guards')
@@ -136,6 +139,74 @@ try {
   assert.equal(revoked.status, 401)
   assert.equal((await revoked.json()).error.code, 'CLIENT_REVOKED')
   record('fresh_cli_revoke_immediate_in_running_http_service')
+  const writer = await run('enroll-desktop-client', {
+    request_key: randomUUID(),
+    display_name: 'Incomplete body shutdown lab',
+    requested_scopes: ['read', 'deploy:manual', 'policy:write']
+  })
+  const Database = createRequire(artifact)('better-sqlite3')
+  const db = new Database(join(directory, 'opspilot.db'))
+  try {
+    const now = new Date().toISOString(),
+      hash = createHash('sha256').update('{}').digest('hex')
+    db.pragma('foreign_keys=ON')
+    db.exec(`INSERT INTO vps(id,name,host,username,auth_type,encrypted_secret) VALUES(1,'shutdown-lab','127.0.0.1','unit','key',X'0102');
+      INSERT INTO app(id,vps_id,name,framework,host_port,container_port,source_type,git_repo_url,git_ref,git_root)
+      VALUES(1,1,'shutdown-lab','express',30000,3000,'git','https://github.com/demo/app.git','main','.')`)
+    db.prepare(
+      "INSERT INTO product_source_config VALUES(1,1,'https://github.com/demo/app.git','main','.','{}',?,?)"
+    ).run(hash, now)
+    db.prepare(
+      `INSERT INTO product_app_control(app_id,mode,controller_id,ownership_generation,source_generation,source_config_sha256,changed_at,auto_deploy_paused,pause_reason,pause_policy_provenance)
+      VALUES(1,'product',?,1,1,?,?,1,'operator','explicit')`
+    ).run(controller, hash, now)
+    let receivedHeaders, failedHeaders
+    const continued = new Promise((resolveContinue, rejectContinue) => {
+      receivedHeaders = resolveContinue
+      failedHeaders = rejectContinue
+    })
+    const result = new Promise((resolveResponse, rejectResponse) => {
+      const pending = httpRequest(
+        prefix + '/apps/1/redeploy',
+        {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${writer.credential.access_token}`,
+            'content-type': 'application/json',
+            'content-length': '1000',
+            'idempotency-key': randomUUID(),
+            expect: '100-continue'
+          }
+        },
+        (response) => {
+          response.resume()
+          response.once('end', () => {
+            resolveResponse(response.statusCode)
+            pending.destroy()
+          })
+        }
+      )
+      pending.once('continue', () => {
+        pending.write('{')
+        receivedHeaders()
+      })
+      pending.once('error', (error) => {
+        failedHeaders(error)
+        rejectResponse(error)
+      })
+      pending.setTimeout(5000, () => pending.destroy(new Error('LAB_REQUEST_TIMEOUT')))
+      pending.flushHeaders()
+    })
+    void result.catch(() => {})
+    await continued
+    await stop()
+    assert.equal(await result, 503)
+    assert.equal(db.prepare('SELECT count(*) AS n FROM product_api_request').get().n, 0)
+    assert.equal(db.prepare('SELECT count(*) AS n FROM product_deploy_job').get().n, 0)
+    record('sigterm_drains_incomplete_post_no_job_or_late_sqlite_write')
+  } finally {
+    db.close()
+  }
   await stop()
   assert.equal(await health(), null)
   record('graceful_shutdown_drains_before_db_close')

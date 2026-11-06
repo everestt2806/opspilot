@@ -12,6 +12,7 @@ import {
 import { ControllerReadApi } from './controllerReadApi'
 import { ControllerReadCursor } from './controllerReadCursor'
 import { loadControllerCredentialCipher } from './controllerSecrets'
+import { ControllerCommands } from './controllerCommands'
 
 export const CONTROL_PLANE_HEALTH_HOST = '127.0.0.1'
 export const CONTROL_PLANE_HEALTH_PORT = 8768
@@ -80,7 +81,15 @@ export class ControllerService {
               service_state: this.healthState(),
               last_branch_poll_at: this.poller.getLastSummary()?.finishedAt ?? null,
               reason_code: this.worker.getStatus().reason
-            })
+            }),
+            {
+              commands: new ControllerCommands(
+                this.opened.database,
+                this.opened.controllerId,
+                () => this.healthState() === 'ready'
+              ),
+              signal: this.stopController.signal
+            }
           )
         : null
       this.poller =
@@ -107,6 +116,7 @@ export class ControllerService {
 
   requestStop(): void {
     this.stopController.abort()
+    void this.api?.close()
   }
 
   async start(): Promise<void> {
@@ -183,6 +193,7 @@ export class ControllerService {
 
   private async closeAndWait(): Promise<void> {
     this.stopController.abort()
+    const apiDrain = this.api?.close()
     if (this.server && this.listening) {
       await new Promise<void>((resolve, reject) =>
         this.server?.close((error) =>
@@ -192,6 +203,7 @@ export class ControllerService {
       this.listening = false
     }
     await this.runtimeTask
+    await apiDrain
     if (!this.worker.canCloseDatabase()) {
       throw new Error(
         this.fatal
@@ -221,6 +233,14 @@ export class ControllerService {
       !this.worker.getStatus().executorConfigured
     )
       return 'maintenance'
+    try {
+      const controller = this.opened.database
+        .prepare('SELECT status FROM product_controller WHERE controller_id=?')
+        .get(this.opened.controllerId) as { status: string } | undefined
+      if (controller?.status !== 'active') return 'maintenance'
+    } catch {
+      return 'degraded'
+    }
     if (
       this.fatal ||
       (this.execution && !this.execution.isReady()) ||

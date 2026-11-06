@@ -53,7 +53,15 @@ try {
   const service = JSON.parse(readFileSync(output, 'utf8'))
   assert.equal(service.status, 'PASS')
   assert.equal(service.cleanup, true)
-  assert.equal(service.actual_github_push_observed, true)
+  if (process.env.OPSPILOT_MANUAL_HTTP === '1') {
+    assert.equal(service.manual_http, true)
+    assert.equal(service.manual_same_sha_runtime, true)
+    assert.equal(service.manual_duplicate_one_job, true)
+    assert.equal(service.discarded_response_lookup, true)
+    assert.equal(service.manual_terminal_lookup, true)
+    assert.equal(service.pause_resume_idempotent, true)
+    assert.equal(service.post_manual_restart_no_duplicate, true)
+  } else assert.equal(service.actual_github_push_observed, true)
   if (process.env.OPSPILOT_PUBLIC_READ_API === '1') {
     assert.equal(service.authenticated_read_api_verified, true)
     assert.equal(service.live_revocation, true)
@@ -62,7 +70,10 @@ try {
   result = {
     ...service,
     nonce,
-    scope: 'PUBLIC_GITHUB_SYSTEMD_EXECUTION',
+    scope:
+      process.env.OPSPILOT_MANUAL_HTTP === '1'
+        ? 'PUBLIC_GITHUB_SYSTEMD_MANUAL_HTTP'
+        : 'PUBLIC_GITHUB_SYSTEMD_EXECUTION',
     runtime_nonce: runtime.nonce,
     artifact_sha256: runtime.bundle_sha256
   }

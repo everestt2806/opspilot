@@ -26,6 +26,7 @@ if (!cli || !output) throw new Error('PUBLIC_SYSTEMD_LAB_ENV_REQUIRED')
 const url = 'https://github.com/everestt2806/opspilot.git'
 const ref = 'feat/release-audit-20261204'
 const gitRoot = 'demo-apps/san-nha-booking'
+const manualHttp = process.env.OPSPILOT_MANUAL_HTTP === '1'
 const nodeModules = resolve(dirname(cli), '../node_modules')
 const command = (program, args, timeout = 30000) =>
   execFileSync(program, args, {
@@ -151,7 +152,7 @@ api.executeProductDeployPipeline = async (database, _runtime, repository, _ssh, 
       .digest('hex')
     const input = join(install, 'execution.json')
     let desktopClient
-    if (process.env.OPSPILOT_PUBLIC_READ_API === '1') {
+    if (process.env.OPSPILOT_PUBLIC_READ_API === '1' || manualHttp) {
       desktopClient = JSON.parse(
         execFileSync(
           join(install, 'node'),
@@ -159,8 +160,8 @@ api.executeProductDeployPipeline = async (database, _runtime, repository, _ssh, 
           {
             input: JSON.stringify({
               request_key: randomUUID(),
-              display_name: 'Systemd read API lab',
-              requested_scopes: ['read']
+              display_name: manualHttp ? 'Systemd command API lab' : 'Systemd read API lab',
+              requested_scopes: manualHttp ? ['read', 'deploy:manual', 'policy:write'] : ['read']
             }),
             encoding: 'utf8',
             stdio: ['pipe', 'pipe', 'pipe'],
@@ -253,6 +254,7 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
       const row = terminal()
       return row?.state === 'succeeded' && row.leases_released_at ? row : null
     }, 240000)
+    await waitFor(async () => (await health()) === 'ready', 10000)
     assert.equal(container(app.name + '-app')[4], first.target_sha)
     await verifyReadApi(first.target_sha)
     const firstHealth = await fetch(`http://127.0.0.1:${app.host_port}/health`)
@@ -274,7 +276,7 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
       db.prepare('SELECT count(*) AS n FROM product_deploy_job WHERE source_generation=2').get().n,
       1
     )
-    phase = 'waiting_checkpoint_push'
+    phase = manualHttp ? 'manual_same_sha_request' : 'waiting_checkpoint_push'
     record({
       first_sha: first.target_sha,
       first_job: first.job_id,
@@ -285,18 +287,91 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
       main_pids: [pid1, pid2],
       ...(desktopClient ? { authenticated_read_api_first_snapshot: true } : {})
     })
-    // The leader publishes the next meaningful checkpoint; no Git mutation is performed by this lab.
-    const second = await waitFor(() => {
-      const row = terminal()
-      return row?.target_sha !== first.target_sha &&
-        row?.state === 'succeeded' &&
-        row.leases_released_at
-        ? row
-        : null
-    }, 15 * 60000)
-    phase = 'second_public_deploy'
+    let manualJob, manualKey
+    const postApi = async (path, key, value, discardResponse = false) => {
+      const response = await fetch(apiBase + path, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${desktopClient.credential.access_token}`,
+          'content-type': 'application/json',
+          'idempotency-key': key
+        },
+        body: JSON.stringify(value)
+      })
+      const expectedStatus = path.endsWith('/redeploy') ? 202 : 200
+      if (response.status !== expectedStatus) {
+        const rejected = await response.json()
+        record({
+          rejected_http_status: response.status,
+          rejected_error_code: /^[A-Z_]{1,80}$/.test(rejected.error?.code)
+            ? rejected.error.code
+            : 'INVALID_ERROR_DTO',
+          rejected_service_health: await health(),
+          rejected_worker_status: await readApi('/status'),
+          attempt_states: db
+            .prepare('SELECT state,remote_outcome FROM product_deploy_attempt')
+            .all()
+        })
+      }
+      assert.equal(response.status, expectedStatus)
+      if (discardResponse) {
+        await response.body.cancel()
+        return null
+      }
+      const dto = await response.json()
+      assert.equal(JSON.stringify(dto).includes(desktopClient.credential.access_token), false)
+      return dto
+    }
+    const precondition = { expected_ownership_generation: 1, expected_source_generation: 2 }
+    if (manualHttp) {
+      const capabilities = await readApi('/capabilities')
+      assert.equal(capabilities.manual_redeploy.state, 'available')
+      manualKey = randomUUID()
+      const request = { ...precondition, target: { kind: 'current_desired' } }
+      // Mô phỏng caller bỏ response sau headers; chỉ lookup/replay cùng key, không tạo intent khác.
+      await postApi('/apps/1/redeploy', manualKey, request, true)
+      const lookup = await readApi('/requests/' + manualKey)
+      assert.equal(lookup.found, true)
+      manualJob = lookup.status.job_id
+      const replay = await postApi('/apps/1/redeploy', manualKey, request)
+      assert.equal(replay.job_id, manualJob)
+      assert.equal(replay.target_sha, first.target_sha)
+      assert.equal(
+        db
+          .prepare(
+            "SELECT count(*) AS n FROM product_deploy_job WHERE app_id=1 AND source_generation=2 AND trigger='manual_redeploy'"
+          )
+          .get().n,
+        1
+      )
+      assert.equal(
+        db.prepare('SELECT auto_deploy_paused FROM product_app_control WHERE app_id=1').get()
+          .auto_deploy_paused,
+        1
+      )
+      record({
+        manual_request_accepted: true,
+        manual_duplicate_one_job: true,
+        discarded_response_lookup: true
+      })
+    }
+    // Public-push mode waits for the next published checkpoint; manual mode redeploys the same public SHA.
+    const second = await waitFor(
+      () => {
+        const row = terminal()
+        return (manualHttp ? row?.job_id === manualJob : row?.target_sha !== first.target_sha) &&
+          row?.state === 'succeeded' &&
+          row.leases_released_at
+          ? row
+          : null
+      },
+      manualHttp ? 240000 : 15 * 60000
+    )
+    phase = manualHttp ? 'manual_same_sha_settled' : 'second_public_deploy'
+    await waitFor(async () => (await health()) === 'ready', 10000)
     assert.equal(container(app.name + '-app')[4], second.target_sha)
     await verifyReadApi(second.target_sha)
+    if (manualHttp) record({ manual_authenticated_second_snapshot: true })
     assert.notEqual(second.job_id, first.job_id)
     assert.equal((await fetch(`http://127.0.0.1:${app.host_port}/health`)).status, 200)
     assert.equal(
@@ -308,6 +383,58 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
       0
     )
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), [])
+    if (manualHttp) {
+      assert.equal(second.target_sha, first.target_sha)
+      const lookup = await readApi('/requests/' + manualKey)
+      assert.equal(lookup.status.state, 'completed')
+      assert.equal(lookup.status.job_id, manualJob)
+      phase = 'manual_pause_policy'
+      record({ manual_terminal_lookup: true })
+      const pauseKey = randomUUID(),
+        pauseBody = { ...precondition, action: 'pause' }
+      const paused = await postApi('/apps/1/auto-deploy-policy', pauseKey, pauseBody)
+      const pauseReplay = await postApi('/apps/1/auto-deploy-policy', pauseKey, pauseBody)
+      for (const key of [
+        'app_id',
+        'result',
+        'auto_deploy_paused',
+        'pause_policy_provenance',
+        'reconciliation_state',
+        'updated_at'
+      ])
+        assert.deepEqual(pauseReplay[key], paused[key])
+      assert.equal(paused.auto_deploy_paused, true)
+      phase = 'manual_resume_policy'
+      record({ manual_pause_idempotent: true })
+      const resumed = await postApi('/apps/1/auto-deploy-policy', randomUUID(), {
+        ...precondition,
+        action: 'resume'
+      })
+      assert.equal(resumed.auto_deploy_paused, false)
+      assert.equal(resumed.reconciliation_state, 'satisfied')
+      phase = 'post_manual_restart'
+      record({ manual_resume_satisfied: true })
+      const afterManual = [container(app.name + '-app'), container(app.name + '-collector')]
+      control('restart')
+      await waitFor(async () => (await health()) === 'ready', 60000)
+      await delay(35000)
+      assert.deepEqual(
+        [container(app.name + '-app'), container(app.name + '-collector')],
+        afterManual
+      )
+      assert.equal(
+        db.prepare('SELECT count(*) AS n FROM product_deploy_job WHERE source_generation=2').get()
+          .n,
+        2
+      )
+      assert.equal((await readApi('/requests/' + manualKey)).status.state, 'completed')
+      record({
+        manual_same_sha_runtime: true,
+        manual_terminal_lookup: true,
+        pause_resume_idempotent: true,
+        post_manual_restart_no_duplicate: true
+      })
+    }
     if (desktopClient) {
       execFileSync(join(install, 'node'), [artifact, 'revoke-desktop-client', '--data-dir', data], {
         input: JSON.stringify({
@@ -332,7 +459,8 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
       second_sha: second.target_sha,
       second_job: second.job_id,
       settled_deployments: 2,
-      actual_github_push_observed: true,
+      actual_github_push_observed: !manualHttp,
+      manual_http: manualHttp,
       ...(desktopClient
         ? { authenticated_read_api_verified: true, live_revocation: true, read_snapshots: 2 }
         : {}),
@@ -350,6 +478,8 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
     record({
       status: 'FAIL',
       error_code: code,
+      assertion_location:
+        error.stack?.match(/public-git-systemd-preload\.mjs:\d+:\d+/)?.[0] ?? null,
       service_result: serviceState,
       job_states: db?.prepare('SELECT state,safe_error_code FROM product_deploy_job').all()
     })

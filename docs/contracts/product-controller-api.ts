@@ -2,7 +2,8 @@
  * Product controller enrollment and desktop API contract (design checkpoint).
  * Wire protocol: R3c-3 implements local admin client issue/revoke and credential
  * validation; R3c-4 adds loopback read routes in explicit execution service.
- * HTTP writes/logs/rotation/Desktop transport remain future work.
+ * R3c-5b composes bounded manual/policy writes and request lookup. Logs/rotation/
+ * Desktop transport remain future work.
  * The controller is the sole Product-mode writer. The desktop is an authenticated
  * client/cache and must never fall back to its local deploy pipeline.
  */
@@ -24,6 +25,7 @@ export const PRODUCT_CONTROLLER_API_VERSION = 'v1' as const
 export const PRODUCT_CONTROLLER_API_LOOPBACK = '127.0.0.1' as const
 export const PRODUCT_CONTROLLER_API_PORT = 8768
 export const PRODUCT_CONTROLLER_API_MAX_REQUEST_BYTES = 16 * 1024
+export const PRODUCT_CONTROLLER_API_BODY_TIMEOUT_MS = 5_000
 export const PRODUCT_CONTROLLER_API_MAX_RESPONSE_BYTES = 1024 * 1024
 export const PRODUCT_CONTROLLER_API_MAX_PAGE_SIZE = 100
 export const PRODUCT_CONTROLLER_API_DEFAULT_PAGE_SIZE = 50

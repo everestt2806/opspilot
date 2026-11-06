@@ -76,6 +76,7 @@ export function createControllerExecutionRuntime(
       repository,
       controllerId: opened.controllerId,
       executor,
+      verifyRuntimeCompletion: (claim, result) => executor.verifyCompletion(claim, result),
       admission: new ControllerResourceAdmission(opened.dataDirectory, () => recovery.isReady())
     }),
     initialize: (signal) => recovery.run(signal),

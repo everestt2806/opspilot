@@ -11,7 +11,7 @@ START06/11/2026 — Base read API `7bed110`, final evidence `b467e58` đã push.
 | Manual redeploy atomically pauses auto và queues đúng SHA | Server desired/provenance, SQL failure rollback policy/queue/audit/request; nativeSQLite PASS, không SSH dispatch | PASS |
 | Explicit pause/resume an toàn | Pause khi degraded, resume bị chặn manual pending/unknown/T1pending; dùng existing reconcileDesired/không clear lease | PASS |
 | Lookup sau lost response | Exact client namespace + current owner, original generation metadata kể cả source đã thay đổi; derived job status | PASS |
-| Gates và push |37focused/native12+auth13+readAPI10/fresh023/type/lint/build/full1575PASS/2SKIP/0FAIL; explicit stage/push sau handoff | IMPLEMENTED |
+| Gates và push |37focused/native12+auth13+readAPI10/fresh023/types/lint/build/full1575PASS/2SKIP; explicit18files/secret/link/diff; `0cbb75d` normal push/local=remote | PASS |
 
 ## Phạm vi và assumption
 
