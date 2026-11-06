@@ -8,7 +8,7 @@ START 06/11/2026 — Base `079cffe` đã push. Dùng task-discipline; user cho p
 | Identity/status/capabilities/app/detail/history read-model |9HTTP tests/SQLite canonical dispatch fixture; actual systemd deployed firstSHA read DTO/history/deployments PASS, write/log unsupported | PASS |
 | Bounded paging và current authorization mọi page | Keyset ceiling/offset/AES-GCM cursor; tamper/app/collection/ownership changes tested; actual installed API2app pages PASS | PASS |
 | Loopback service composition/lifecycle | Explicit run-product only; native default404/health-only and running revoke/stop PASS; headers16KiB/response1MiB/time/rate bounded | PASS |
-| Gates và push |30focused incl SharedIngress/9HTTP/7service; full1563 PASS/2SKIP/0FAIL/types/lint/build/native10PASS; fresh extended publicsystemd run chờ meaningful checkpoint push | IMPLEMENTED |
+| Gates và push |30focused/full1563PASS/2SKIP/types/lint/build/native10PASS; implementation `7bed110` đã push; fresh public/systemd2deploy/read snapshots/live revoke/restart/cleanup PASS | PASS |
 
 Không manual deploy/policy writes/rotation/SSH Desktop tunnel trong checkpoint này; capability ghi unsupported. Không public bind/admin enrollment route, không fallback SQLite Desktop. No accepted exception.
 
@@ -24,6 +24,13 @@ Không manual deploy/policy writes/rotation/SSH Desktop tunnel trong checkpoint 
 - Extended run `f6850726e6fb` không được nhận final gate vì phải dừng unit khi chạy full Windows tests, vượt budget12phút driver cũ. Giữ firstsnapshot như observation, chờ timeout/cleanup rồi rerun fresh. Public gate có wait publish15phút nên driver mới dùng explicit lab flag budget25phút, defaultR1/R2 vẫn12phút; thêm deadline_expired không cho checkpoint completion che timeout. Không thay runtime production timeouts, không bỏ lỗi của run cũ.
 - UPDATE06/11: final full **1563PASS/2Linux-onlySKIP/0FAIL** tại `.out-scripts/release-r3c4-vitest-final-clean.json`, focused30PASS, scoped lint10files/type/build PASS. Run cũ `f6850726e6fb` finalFAIL/cleanuptrue, không miễn gate. Fresh run **ed1dbc15d458** đã start sau Windows full, dùng flag25phút; chưa nhận final secondsnapshot/cleanup trước khi có report.
 - HANDOFF-LOCAL06/11: read API implementation CHỜ REVIEW, SHA `git log -1 -- app/src/main/controlPlane/controllerReadApi.ts`; native10/HTTP9/current ownership/cursor/type/full gates PASS. Có thể push implementation checkpoint để làm stimulus cho extended systemd/publicGit regression; kết quả final ghi checkpoint evidence sau. R3 tổng PARTIAL; manual writes/rotation/SSH Desktop tunnel/API UI còn task riêng.
+
+## Final gate06/11 — PASS / CHỜ REVIEW
+
+- Implementation **7bed110ae2f2d3aef436575d19a156dc93406410** đã normal push, local=remote. Fresh extended **ed1dbc15d458**, linkedR1 **5579c55cd36f**, PASS: actual publicHTTPS **079cffe→7bed110**,2settleddeployments,2authenticated read snapshots(detail/SHA/jobs/deployments/history/cursor2apps),live revoke401,systemd restart-no-duplicate/graceful-stop/cleanup. `deadline_expired=false` trong linkedR1, không dùng run cũ hết giờ làm proof.
+- Lab bundleSHA **07001524792d451b3b0621957b4e13c899f9a56172a0c2029972886c98765799**, frozen managementmanifest **ee8940a39b5cd661bc9ea956325425877ad2fea57bb8b7dbb73e85ebe89ec6c9**, runtime helpers source unchanged. Raw không stage `app/.out-scripts/public-git-systemd/ed1dbc15d458/{result,service}.json`, linkedR1 SQLite/result.
+- Final full app **1563PASS/2Linux-onlySKIP/0FAIL**, native10PASS, types(Node/Web/scripts/lab), scoped lint10files0/0/build/diff/link/secret/stage PASS. Python365/Ruff ở checkpoint trước cùng phiên, không đổi Python trong R3c-4. No accepted exception; sửa đúng await của test cũ, không skip hoặc bỏ assertion.
+- Tiếp **R3c-5 manual command persistence/idempotency rồi HTTP writes**, sau đó rotation/pinnedSSH Desktop transport/UI authority. Root isolated Linux lab, chưa productionVPS/non-root installer/liveHTTPS/ML/soak hoặc PRODUCT_PASS tổng; không PR/merge.
 
 ```text
 Node22: pnpm --prefix app exec vitest run src/main/controlPlane/controllerReadApi.test.ts src/main/controlPlane/controllerService.test.ts
