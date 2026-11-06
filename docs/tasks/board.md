@@ -1,6 +1,6 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
-> **06/11 — R3c-2a harness CHỜ REVIEW, gate đang chạy:** [Public Git/systemd](tk-s7-release-r3c2-public-git-systemd.md): first publicHTTPS deploy `9dc3525` T1/T2 + actual systemctl restart/no-duplicate PASS, Node22/native deps/bundle/data outside repo/private; không adapter. Harness syntax/lint/diff PASS; push checkpoint harness để controller nhận SHA thứ hai, chưa final cleanup/gate PASS. Không production VPS write/PR/merge.
+> **06/11 — R3c-2 CHỜ REVIEW:** [Public Git/systemd](tk-s7-release-r3c2-public-git-systemd.md) final `da0b2dd098e8` PASS: actual GitHubHTTPS push `9dc3525`→`8f5b0c5`,2deployments/T1/T2,systemd restart/no-duplicate/graceful-stop/cleanup, không adapter/Desktop. Root isolated Linux lab, chưa non-root installer/liveVPS/domain/ML/soak. Tiếp R3c-3 auth → API/Desktop authority; R3 tổng PARTIAL. Harness `8f5b0c5` đã push, không PR/merge.
 
 > **06/11 — R3c-1 CHỜ REVIEW:** [Execution service opt-in](tk-s7-release-r3c1-execution-service.md), actual3CLI processes/2Git commits/2settled deployments/restart-no-duplicate PASS; final R1/R3b7/7,full1537 PASS/2 SKIP/types/lint/build. SHA `git log -1 -- app/src/main/controlPlane/controllerExecutionService.ts`. Explicit `run-product`, default run polling-only/health maintenance; chưa public Git/systemd/API authority PASS, R3 tổng PARTIAL. R3b-6 `8e8d65d` đã push, tiếp checkpoint push rồi R3c-2; không tự unpause/enroll/production write.
 

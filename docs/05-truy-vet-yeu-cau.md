@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **06/11 — actual push-to-deploy:** [R3c-2](tasks/tk-s7-release-r3c2-public-git-systemd.md) Linux installed systemd/publicGitHubHTTPS không adapter đã quan sát actualpush9dc3525→8f5b0c5,2deployments/T1/T2/restart-no-duplicate/cleanup PASS. Chưa productionVPS/non-rootinstaller/API/Desktop authority hoặc FR/UC tổng nghiệm thu.
+
 > **06/11 — service execution:** [R3c-1](tasks/tk-s7-release-r3c1-execution-service.md) explicit `run-product` + startup/admission/SSH runtime và health truth, Linux3process/2deploy/restart-no-duplicate PASS với Git file adapter. Chưa public Git/systemd/API/Desktop authority hoặc FR/UC tổng PASS; không suy thành production acceptance.
 
 > **06/11 — resource/cold recovery:** [R3b-6](tasks/tk-s7-release-r3b6-readiness-recovery.md) thêm admission trước dispatch và bounded cold startup scanner/CLI, historical proof và T1→T2 không replay PASS trong Linux SSH/Docker7/7. Chưa service-driven Git/OS restart hoặc FR/UC/PRODUCT_PASS tổng; default polling-only, live/ML/HTTPS/migrate/installer còn gate riêng.
