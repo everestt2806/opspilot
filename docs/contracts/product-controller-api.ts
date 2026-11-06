@@ -1,6 +1,7 @@
 /**
  * Product controller enrollment and desktop API contract (design checkpoint).
- * This file describes the future wire protocol only; no runtime implements it yet.
+ * Wire protocol: R3c-3 implements local admin client issue/revoke and credential
+ * validation; HTTP management routes/rotation/Desktop transport remain future work.
  * The controller is the sole Product-mode writer. The desktop is an authenticated
  * client/cache and must never fall back to its local deploy pipeline.
  */
@@ -95,6 +96,13 @@ export interface ProductDesktopEnrollmentRequest {
   display_name: string
   requested_scopes: readonly ['read', ...ProductDesktopGrantableScope[]]
 }
+
+/** R3c-3 trusted Linux CLI `enroll-desktop-client`/`revoke-desktop-client --data-dir ...`
+ * nhận exact request DTO qua stdin; administrator identity lấy OS uid, không body/env actor.
+ * Token opaque random32bytes prefix opspilot_, SHA256-only trong migration022, TTL30ngày.
+ * Replay enrollment không trả lại token; reauth/current admin/controller trước tombstone lookup.
+ * Chưa rotation/HTTP/tunnel trong checkpoint credential substrate; không quảng cáo capability đó.
+ */
 
 export interface ProductDesktopEnrollmentResponse {
   state: 'issued_once'

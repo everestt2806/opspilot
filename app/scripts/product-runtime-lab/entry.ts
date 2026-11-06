@@ -7,6 +7,7 @@ export {
   readEnrolledProductTarget
 } from '../../src/main/controlPlane/targetEnrollment'
 export { TargetEnrollmentRepository } from '../../src/main/controlPlane/targetEnrollmentRepository'
+export { ControllerClientAuth } from '../../src/main/controlPlane/controllerClientAuth'
 export { ControllerStartupRecovery } from '../../src/main/controlPlane/controllerStartupRecovery'
 export { ControllerTargetAdmission } from '../../src/main/controlPlane/controllerTargetAdmission'
 export {

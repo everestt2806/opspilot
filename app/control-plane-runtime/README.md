@@ -21,6 +21,31 @@ The Linux runtime dependency set also includes the already approved `ssh2` and `
 
 The systemd example is `opspilot-controller.service.example`. It is a template only and is not installed by the build or CLI.
 
+## Cấp và thu hồi quyền cho Desktop (R3c-3)
+
+Trusted Linux admin có thể gọi `enroll-desktop-client --data-dir ...` bằng CLI đã kiểm gói.
+Exact metadata JSON qua stdin, không secret trong argv:
+
+```json
+{
+  "request_key": "<new UUID for this admin operation>",
+  "display_name": "Son desktop",
+  "requested_scopes": ["read", "deploy:manual", "policy:write"]
+}
+```
+
+Kết quả `issued_once` chứa bearer ngẫu nhiên32bytes, hạn30ngày; bên nhận phải cất trong protected
+main-process credential store, không renderer/log/report. SQLite chỉ giữ SHA256, client identity và scopes.
+Gửi lại cùng UUID/body trả `credential_delivery_unknown` và client ID, không cấp/lộ token lần nữa.
+Đổi nội dung hoặc operation cùng UUID bị `IDEMPOTENCY_CONFLICT`; muốn bỏ credential mất response thì
+thu hồi client, tạo yêu cầu enroll mới. Quyền admin lấy từ OS uid hiện hành của process, không body/env actor.
+
+`revoke-desktop-client --data-dir ...` nhận `{request_key:<new UUID>,client_id:<issued ID>}` qua stdin.
+Thu hồi ngay client và các credential, replay trả lại timestamp cũ; không tự kích hoạt lại khi enroll replay.
+Metadata identity có thể lưu/audit; credential chỉ có trong response cấp lần đầu. Network caller sau này
+phải dùng strict pinned SSH administration. Hai CLI này chưa là HTTP endpoint hoặc Desktop connection flow;
+chưa rotation/tunnel/API management, không tự bật Product policy hoặc ghi VPS.
+
 ## Bật execution có chủ đích (R3c-1)
 
 Chỉ dùng bundle đã kiểm bằng CLI tin cậy và independent manifest pin. Controller phải có protected
