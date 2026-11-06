@@ -25,6 +25,7 @@ import migration019 from './migrations/019_vps_ssh_security_revision.sql?raw'
 import migration020 from './migrations/020_product_runtime_terminal.sql?raw'
 import migration021 from './migrations/021_product_target_enrollment.sql?raw'
 import migration022 from './migrations/022_product_desktop_clients.sql?raw'
+import migration023 from './migrations/023_product_api_requests.sql?raw'
 
 interface Migration {
   name: string
@@ -142,6 +143,11 @@ const migrations: Migration[] = [
     name: '022_product_desktop_clients.sql',
     version: 22,
     sql: migration022
+  },
+  {
+    name: '023_product_api_requests.sql',
+    version: 23,
+    sql: migration023
   }
 ]
 

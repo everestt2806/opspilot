@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-06 | [product-mode/commands] R3c-5a thêm request tombstone migration023 và manual command repository: cùng namespace controller/client/key, auth/generation recheck trong IMMEDIATE, redeploy+pause auto atomic, resume không vượt unknown/manual pending, lookup không replay mutation — Chuẩn bị HTTP writes an toàn; chưa bật write capability, không lưu bearer/note/body thô — Sơn/Codex
+
 2026-11-06 | [product-mode/api-contract] R3c-4 read job DTO target_sha cho phép null khớp canonical product_deploy_job và ProductDeployJob (manual rollback có thể chưa resolve SHA) — Không giấu job hoặc giả commit SHA để khớp read DTO cũ — Sơn/Codex
 
 2026-11-06 | [product-mode/api] R3c-4 mở read-only `/v1` trên loopback trong explicit run-product, bearer/current ownership + DTO allowlist, bounded paging với AES-GCM cursor purpose/controller/collection/app binding — Desktop phải đọc controller authority; write/log capabilities unsupported tới task riêng, default polling-only không mở API — Sơn/Codex

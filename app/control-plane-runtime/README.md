@@ -48,6 +48,21 @@ chưa rotation/tunnel/API management, không tự bật Product policy hoặc gh
 
 ## API đọc trên controller (R3c-4)
 
+### Nền lệnh thủ công (R3c-5a, chưa bật HTTP writes)
+
+Migration023 và command repository đã có request tombstone theo controller/client/UUID,
+auth/generation check, atomic manual enqueue + pause auto, explicit pause/resume và lookup.
+Gửi lại cùng UUID/nội dung trả kết quả gốc; đổi app/action/nội dung bị conflict. Lookup chỉ
+client tạo yêu cầu đọc được và vẫn kiểm tra owner hiện hành. Source generation đã thay đổi
+không làm mất outcome cũ; retry mutation với generation cũ vẫn bị từ chối.
+
+Manual redeploy chỉ nhận desired SHA do server biết hoặc SHA đã có provenance cùng repo/root.
+Pause không đòi service ready, resume không clear unknown/lease hoặc vượt manual job đang chờ.
+Không lưu note/bearer/body thô vào request/audit. Đây là persistence gate; HTTP body limits/drain,
+runtime manual acceptance và Desktop flow còn checkpoint5b, write capabilities vẫn unsupported.
+
+### Các route đọc
+
 Chỉ explicit `run-product` mở các route `/v1/controllers/{controller_id}/...` trên
 `127.0.0.1:8768`. Mỗi request cần header `Authorization: Bearer <issued credential>`;
 không nhận token trong URL hoặc origin từ browser. Default `run` vẫn health-only.

@@ -502,6 +502,16 @@ export interface ProductControllerIdempotencyContract {
   timeout_status: 'outcome_unknown_query_existing_request'
 }
 
+/** R3c-5a command persistence uses migration023, auth/scopes/current generations
+ * inside the same IMMEDIATE transaction as pause/queue/policy/request tombstone.
+ * Lookup rechecks current Product owner and authenticated client namespace,
+ * while returning the original request generations as historical metadata.
+ * Specific SHA needs server-recorded repository/root provenance. Pause can be
+ * requested while degraded; resume cannot clear unknown/pending settlement or
+ * overtake pending manual work. Operator note plaintext is not persisted.
+ * HTTP write capability stays unsupported until the separate body/drain gate.
+ */
+
 /** SSH-admin operation keys use the authenticated SSH principal, never body actor data. */
 export interface ProductControllerSshIdempotencyContract {
   unique_namespace: readonly ['controller_id', 'authenticated_administrator_identity', 'request_key']

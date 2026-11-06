@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 import Database from 'better-sqlite3'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -12,6 +13,8 @@ import migration018 from './migrations/018_product_auto_deploy_pause_provenance.
 import migration019 from './migrations/019_vps_ssh_security_revision.sql?raw'
 import migration021 from './migrations/021_product_target_enrollment.sql?raw'
 import migration022 from './migrations/022_product_desktop_clients.sql?raw'
+import migration023 from './migrations/023_product_api_requests.sql?raw'
+import { ControllerClientAuth } from '../controlPlane/controllerClientAuth'
 
 let testDirectory: string | null = null
 
@@ -23,8 +26,8 @@ afterEach(() => {
   }
 })
 
-describe('Product persistence migrations 016-022', () => {
-  it('keeps the cumulative schema contract synchronized with migrations 016-022', () => {
+describe('Product persistence migrations 016-023', () => {
+  it('keeps the cumulative schema contract synchronized with migrations 016-023', () => {
     const schema = readFileSync(
       new URL('../../../../docs/contracts/schema.sql', import.meta.url),
       'utf8'
@@ -35,6 +38,36 @@ describe('Product persistence migrations 016-022', () => {
     expect(schema).toContain(migration019.replaceAll('\r\n', '\n').trim())
     expect(schema).toContain(migration021.replaceAll('\r\n', '\n').trim())
     expect(schema).toContain(migration022.replaceAll('\r\n', '\n').trim())
+    expect(schema).toContain(migration023.replaceAll('\r\n', '\n').trim())
+  })
+
+  it('upgrades v022 while retaining issued client digests and creates no implicit requests', () => {
+    testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-requests-v022-'))
+    const database = initializeDatabase(testDirectory)
+    database
+      .prepare('INSERT INTO product_controller VALUES(?,?,?)')
+      .run('upgrade-controller', new Date().toISOString(), 'active')
+    const auth = new ControllerClientAuth(database, 'upgrade-controller', 'unix:1000')
+    auth.enroll({
+      request_key: randomUUID(),
+      display_name: 'Upgrade unit',
+      requested_scopes: ['read']
+    })
+    const snapshot = database.prepare('SELECT * FROM product_desktop_credential').all()
+    database.exec(
+      'DROP TABLE product_api_request;DROP INDEX idx_product_desktop_client_identity;DELETE FROM schema_version WHERE version=23'
+    )
+    runMigrations(database)
+    expect(database.prepare('SELECT * FROM product_desktop_credential').all()).toEqual(snapshot)
+    expect(database.prepare('SELECT count(*) AS n FROM product_api_request').get()).toEqual({
+      n: 0
+    })
+    expect(database.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({
+      n: 23
+    })
+    runMigrations(database)
+    expect(database.prepare('SELECT * FROM product_desktop_credential').all()).toEqual(snapshot)
+    expect(database.pragma('foreign_key_check')).toEqual([])
   })
 
   it('upgrades a populated v021 database without granting clients or changing legacy records', () => {
@@ -42,7 +75,8 @@ describe('Product persistence migrations 016-022', () => {
     const database = initializeDatabase(testDirectory)
     seedLegacyRows(database)
     const before = snapshotLegacy(database)
-    database.exec(`DROP TABLE product_desktop_admin_request;DROP TABLE product_desktop_credential;
+    database.exec(`DROP TABLE product_api_request;DROP INDEX idx_product_desktop_client_identity;DELETE FROM schema_version WHERE version=23;
+      DROP TABLE product_desktop_admin_request;DROP TABLE product_desktop_credential;
       DROP TABLE product_desktop_client;DELETE FROM schema_version WHERE version=22`)
     runMigrations(database)
     expect(snapshotLegacy(database)).toEqual(before)
@@ -53,7 +87,7 @@ describe('Product persistence migrations 016-022', () => {
     ])
       expect(database.prepare(`SELECT count(*) AS n FROM ${table}`).get()).toEqual({ n: 0 })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 22
+      version: 23
     })
     runMigrations(database)
     expect(snapshotLegacy(database)).toEqual(before)
@@ -85,7 +119,7 @@ describe('Product persistence migrations 016-022', () => {
       ssh_security_revision: 1
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 22
+      version: 23
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
@@ -108,7 +142,7 @@ describe('Product persistence migrations 016-022', () => {
       n: 0
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 22
+      version: 23
     })
     expect(database.prepare('SELECT COUNT(*) AS count FROM product_controller').get()).toEqual({
       count: 0
@@ -131,7 +165,7 @@ describe('Product persistence migrations 016-022', () => {
     ).count
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 22
+      version: 23
     })
     expect(
       (
@@ -177,7 +211,7 @@ describe('Product persistence migrations 016-022', () => {
       pause_policy_provenance: 'legacy_inferred'
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 22
+      version: 23
     })
     expect(
       database
@@ -376,6 +410,9 @@ describe('Product persistence migrations 016-022', () => {
 
 function downgradeToV015(database: Database.Database): void {
   database.exec(`
+    DROP TABLE IF EXISTS product_api_request;
+    DROP INDEX IF EXISTS idx_product_desktop_client_identity;
+    DELETE FROM schema_version WHERE version=23;
     DROP TABLE IF EXISTS product_desktop_admin_request;
     DROP TABLE IF EXISTS product_desktop_credential;
     DROP TABLE IF EXISTS product_desktop_client;
@@ -411,6 +448,9 @@ function downgradeToV015(database: Database.Database): void {
 
 function downgradeToV016(database: Database.Database): void {
   database.exec(`
+    DROP TABLE IF EXISTS product_api_request;
+    DROP INDEX IF EXISTS idx_product_desktop_client_identity;
+    DELETE FROM schema_version WHERE version=23;
     DROP TABLE IF EXISTS product_desktop_admin_request;
     DROP TABLE IF EXISTS product_desktop_credential;
     DROP TABLE IF EXISTS product_desktop_client;
@@ -436,6 +476,9 @@ function downgradeToV016(database: Database.Database): void {
 
 function downgradeMigration018ToV017(database: Database.Database): void {
   database.exec(`
+    DROP TABLE IF EXISTS product_api_request;
+    DROP INDEX IF EXISTS idx_product_desktop_client_identity;
+    DELETE FROM schema_version WHERE version=23;
     DROP TABLE IF EXISTS product_desktop_admin_request;
     DROP TABLE IF EXISTS product_desktop_credential;
     DROP TABLE IF EXISTS product_desktop_client;
