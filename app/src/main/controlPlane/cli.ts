@@ -15,6 +15,8 @@ import { verifyControllerBundle } from './controllerBundle'
 import { enrollProductTarget } from './targetEnrollment'
 import { ControllerStartupRecovery } from './controllerStartupRecovery'
 import { ControllerClientAuth } from './controllerClientAuth'
+import { ProductProjectRegistration } from './projectRegistration'
+import { loadControllerCredentialCipher } from './controllerSecrets'
 
 type Command =
   | 'init'
@@ -28,6 +30,7 @@ type Command =
   | 'recover-runtime'
   | 'enroll-desktop-client'
   | 'revoke-desktop-client'
+  | 'register-project'
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
@@ -49,7 +52,8 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
       'enroll-target',
       'recover-runtime',
       'enroll-desktop-client',
-      'revoke-desktop-client'
+      'revoke-desktop-client',
+      'register-project'
     ].includes(commandValue)
   ) {
     throw new Error('USAGE')
@@ -95,7 +99,8 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
     command === 'enroll-target' ||
     command === 'recover-runtime' ||
     command === 'enroll-desktop-client' ||
-    command === 'revoke-desktop-client'
+    command === 'revoke-desktop-client' ||
+    command === 'register-project'
   ) {
     if (process.platform !== 'linux') throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
     const controller = new AbortController()
@@ -115,7 +120,20 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
         recoveryBundle = verifyControllerBundle(request.artifact, request.manifest_sha256)
       }
       opened = openControllerDatabase(dataDirectory)
-      if (command === 'enroll-desktop-client' || command === 'revoke-desktop-client') {
+      if (command === 'register-project') {
+        const uid = process.getuid?.()
+        if (uid === undefined) throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
+        console.log(
+          JSON.stringify(
+            new ProductProjectRegistration(
+              opened.database,
+              opened.controllerId,
+              `unix:${uid}`,
+              loadControllerCredentialCipher(opened.dataDirectory)
+            ).register(input)
+          )
+        )
+      } else if (command === 'enroll-desktop-client' || command === 'revoke-desktop-client') {
         const uid = process.getuid?.()
         if (uid === undefined) throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
         const credentials = new ControllerClientAuth(

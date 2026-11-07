@@ -45,3 +45,4 @@ export {
   recoverProductRuntimeSession
 } from '../../src/main/controlPlane/productRuntimePipeline'
 export { DesktopControllerCommands } from '../../src/main/controlPlane/desktopControllerCommands'
+export { ProductProjectRegistration } from '../../src/main/controlPlane/projectRegistration'

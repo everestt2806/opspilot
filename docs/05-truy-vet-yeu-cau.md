@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6g1 07/11:** [Đăng ký dự án Product](tasks/tk-s7-release-r3c6g1-project-registration.md) migration026 + Linux adminCLI atomic app/source/pausedowner/idempotent request; native2process→1app/0remotecommand/0job, focused66/native8+13+15/fresh026/types/lint/build/Python365 PASS, full cuối tại hồ sơ. Wizard tạo app mới chưa nối; source chưafetch, target chưaenroll ở operationnày. Không nâng FR/UC tổng thành live hoặc sản phẩm hoàn chỉnh.
+
 > **R3c-6f07/11:** [Product actions UI](tasks/tk-s7-release-r3c6f-command-ui.md) đã có write opt-in/controller app selection/confirmed exactSHA/Pause/Resume/durable journal lookup và app-job status riêng; focused68/full1680PASS/2Linux-onlySKIP/native15/Electron24checks/fresh025/types/lint/build PASS. App đã do controller quản lý mới thao tác được; wizard tạo app/target/source còn phải nối, installer/rotation/live/HTTPS/migrate/ML nghiệm thu riêng. Không nâng trạng thái tổng FR/UC từ số test.
 
 > **R3c-6e07/11:** [Desktop command journal](tasks/tk-s7-release-r3c6e-desktop-commands.md) có migration025 + main service/IPC, nativeSSH/HTTP/coldprocess9PASS (mất response sau commit vẫn1job, mởprocessmới chỉlookup); focused97/enrollment13/fresh025/Python365/types/lint/build PASS, full cuối tại hồ sơ. Đây là bằng chứng nhận intent, chưa phải deployment hoàn tất. UI Deploy/Pause/Resume/quyền ghi còn phải nối; không nâng FR/UC tổng hoặc gọi release production hoàn chỉnh.

@@ -51,7 +51,7 @@ try {
   const identity = ok(await run('init'))
   database = new Database(join(directory, 'opspilot.db'))
   database.pragma('foreign_keys=ON')
-  assert.equal(database.prepare('SELECT MAX(version) AS n FROM schema_version').get().n, 25)
+  assert.equal(database.prepare('SELECT MAX(version) AS n FROM schema_version').get().n, 26)
   assert.equal(database.prepare('SELECT count(*) AS n FROM product_desktop_client').get().n, 0)
   record('native_migration022_empty_grants')
   const request = {

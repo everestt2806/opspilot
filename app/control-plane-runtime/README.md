@@ -1,5 +1,50 @@
 # Product controller runtime (Linux)
 
+## Đăng ký dự án mới (R3c-6g1)
+
+`register-project --data-dir <private initialized dir>` nhận metadata JSON qua stdin.
+Chạy bằng CLI Linux đã kiểm bundle; không có HTTP endpoint đăng ký công khai.
+Target VPS phải được `enroll-vps` trước bằng fingerprint đã xác minh và credential
+controller mã hóa hợp lệ. ID VPS lấy từ controller, không dùng ID của Desktop.
+
+Ví dụ nội dung `registration.json` (thay controller ID, VPS ID, repo và tạo UUID mới):
+
+```json
+{
+  "format": 1,
+  "controller_id": "replace-with-controller-id",
+  "request_key": "11111111-1111-4111-8111-111111111111",
+  "target_vps_id": 1,
+  "app_name": "example-api",
+  "framework": "express",
+  "repository_url": "https://github.com/example/api",
+  "production_ref": "main",
+  "repository_root": ".",
+  "host_port": null,
+  "container_port": 3000,
+  "healthcheck_path": "/health"
+}
+```
+
+```sh
+node dist/control-plane.cjs register-project --data-dir /var/lib/opspilot-controller < registration.json
+```
+
+App/source/paused ownership/history/request được commit cùng transaction. Gửi lại
+cùng UUID và nội dung sau mất phản hồi trả cùng app; thay nội dung phải dùng yêu cầu
+mới, còn trùng tên/port sẽ bị từ chối. Replay vẫn kiểm current controller/target và
+app/source/ownership, không ghi đè cấu hình hoặc policy đã đổi. Không tái dùng UUID
+mẫu cho nhiều dự án. Metadata file không chứa credential/env hoặc lệnh build tùy ý.
+
+Chỉ Express không DB theo runtime hiện tại; source URL public GitHub chưa được fetch
+hoặc detect ở thao tác đăng ký. `host_port:null` cấp port trống trong DB ở dải
+30000–30999, chưa chứng minh listener trên target trống. Response `registered` kèm
+`source_verification`, `target_enrollment`, `runtime_preflight` đều `required`;
+đây là trạng thái lúc đăng ký, không phải readiness hiện hành sau replay. Cần source
+verification và `enroll-target` đúng gói/ownership, rồi kiểm readiness trước khi bật
+auto-deploy có chủ đích. Không tạo observation/job/deployment hoặc chạy remote
+command trong `register-project`. Wizard Desktop cho luồng mới là checkpoint kế tiếp.
+
 This runtime is a separate Node 22 artifact. It imports the Product SQLite repository and migrations without Electron, the renderer or safeStorage. Default `run` only polls Git; explicit Linux `run-product` composes the guarded deployment executor after startup recovery and resource admission. Monitor/ML are not started by either command.
 
 ## Build and initialize

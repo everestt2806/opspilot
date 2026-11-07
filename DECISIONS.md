@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-07 | [product-mode/onboarding] R3c-6g1 register-project là Linux SSH-admin CLI, SQLite026 key/controller/unix-admin namespace immutable; tạo app/source/paused ownership/history/request nguyên tử, không Desktop SQL hoặc import app ngầm — Public GitHub/Express-noDB theo runtime đang hỗ trợ, port DB allocation không thay target listener preflight; chưa auto-enable/enroll-target/dispatch — Sơn/Codex
+
 2026-11-07 | [product-mode/ui] R3c-6f đăng ký mới có allow_write opt-in, default read; main cấp read/deploy:manual/policy:write chỉ khi chọn rõ. UI đọc generations/capabilities từ controller và dùng durable journal cho deploy/pause/resume; accepted không tô thành runtime success, app/job status đọc riêng — Không tăng quyền binding cũ, không tự replay unknown hoặc fallback Desktop pipeline — Sơn/Codex
 
 2026-11-07 | [product-mode/desktop] R3c-6e thêm migration025 nhật ký yêu cầu Desktop: UUID main tạo, intent/body namespace bất biến, claim in_flight trước mạng, mất phản hồi hoặc cold process chỉ lookup cùng key, không replay POST khi chưa biết kết quả — Journal không chứa credential/env/log/note, giữ tombstone sau xóa binding/VPS; accepted chỉ là controller nhận yêu cầu, runtime do controller xác nhận riêng — Sơn/Codex
