@@ -86,30 +86,44 @@ beforeEach(() => {
   })
   call = vi.fn<ControllerHttpClient['call']>(
     async (operation) =>
-      (operation === 'identity'
-        ? identity()
-        : {
+      (operation === 'capabilities'
+        ? {
             state: 'response_received',
             response: {
               controller_id: input.controller_id,
               sampled_at: now,
               data_freshness: 'current',
-              items: [
-                {
-                  app_id: 7,
-                  app_name: 'remote-app',
-                  production_ref: 'main',
-                  desired_sha: 'b'.repeat(40),
-                  auto_deploy_paused: true,
-                  reconciliation_state: 'paused',
-                  observed_at: null,
-                  env_json: token
-                }
-              ],
-              next_cursor: null,
-              has_more: false
+              manual_redeploy: { state: 'available' },
+              pause_auto_deploy: { state: 'available' },
+              resume_auto_deploy: { state: 'available' }
             }
-          }) as never
+          }
+        : operation === 'identity'
+          ? identity()
+          : {
+              state: 'response_received',
+              response: {
+                controller_id: input.controller_id,
+                sampled_at: now,
+                data_freshness: 'current',
+                items: [
+                  {
+                    app_id: 7,
+                    ownership_generation: 1,
+                    source_generation: 1,
+                    app_name: 'remote-app',
+                    production_ref: 'main',
+                    desired_sha: 'b'.repeat(40),
+                    auto_deploy_paused: true,
+                    reconciliation_state: 'paused',
+                    observed_at: null,
+                    env_json: token
+                  }
+                ],
+                next_cursor: null,
+                has_more: false
+              }
+            }) as never
   )
   service = new DesktopControllerService(
     db,
@@ -123,6 +137,52 @@ afterEach(() => {
   rmSync(directory, { recursive: true })
 })
 describe('Metadata-only Desktop controller service', () => {
+  it('grants write scopes only on explicit opt-in and exposes public scope metadata', async () => {
+    const row = await service.register({ ...input, allow_write: true })
+    expect(payloads[0]).toMatchObject({
+      payload: { requested_scopes: ['read', 'deploy:manual', 'policy:write'] }
+    })
+    expect(row.scopes).toEqual(['read', 'deploy:manual', 'policy:write'])
+    expect(JSON.stringify(row)).not.toContain(token)
+    await expect(service.register({ ...input, allow_write: 'yes' } as never)).rejects.toMatchObject(
+      { context: { cause: { message: 'REQUEST_INVALID' } } }
+    )
+  })
+  it('projects current controller job/deployment status and rejects a mismatched application', async () => {
+    await service.register(input)
+    call.mockResolvedValueOnce({
+      state: 'response_received',
+      response: {
+        controller_id: input.controller_id,
+        app_id: 7,
+        ownership_generation: 2,
+        source_generation: 3,
+        current_deployment_id: null,
+        current_deployment_sha: null,
+        current_deployment_state: null,
+        latest_job_id: 'job7',
+        latest_job_state: 'queued',
+        sampled_at: now,
+        data_freshness: 'current',
+        env_json: token
+      }
+    } as never)
+    const status = await service.appStatus({ binding_id: input.binding_id, app_id: 7 })
+    expect(status).toMatchObject({
+      latest_job_state: 'queued',
+      current_deployment_state: null,
+      ownership_generation: 2,
+      source_generation: 3
+    })
+    expect(JSON.stringify(status)).not.toContain(token)
+    call.mockResolvedValueOnce({
+      state: 'response_received',
+      response: { controller_id: input.controller_id, app_id: 8 }
+    } as never)
+    await expect(
+      service.appStatus({ binding_id: input.binding_id, app_id: 7 })
+    ).rejects.toMatchObject({ context: { cause: { message: 'PROTOCOL_INVALID' } } })
+  })
   it('keeps IPC shared DTO exactly equal to the reviewed standalone contract', () => {
     const read = (path: string): string =>
       readFileSync(new URL(path, import.meta.url), 'utf8').replaceAll('\r\n', '\n')

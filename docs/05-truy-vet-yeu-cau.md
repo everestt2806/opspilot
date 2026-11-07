@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6f07/11:** [Product actions UI](tasks/tk-s7-release-r3c6f-command-ui.md) đã có write opt-in/controller app selection/confirmed exactSHA/Pause/Resume/durable journal lookup và app-job status riêng; focused68/full1680PASS/2Linux-onlySKIP/native15/Electron24checks/fresh025/types/lint/build PASS. App đã do controller quản lý mới thao tác được; wizard tạo app/target/source còn phải nối, installer/rotation/live/HTTPS/migrate/ML nghiệm thu riêng. Không nâng trạng thái tổng FR/UC từ số test.
+
 > **R3c-6e07/11:** [Desktop command journal](tasks/tk-s7-release-r3c6e-desktop-commands.md) có migration025 + main service/IPC, nativeSSH/HTTP/coldprocess9PASS (mất response sau commit vẫn1job, mởprocessmới chỉlookup); focused97/enrollment13/fresh025/Python365/types/lint/build PASS, full cuối tại hồ sơ. Đây là bằng chứng nhận intent, chưa phải deployment hoàn tất. UI Deploy/Pause/Resume/quyền ghi còn phải nối; không nâng FR/UC tổng hoặc gọi release production hoàn chỉnh.
 
 > **R3c-6d06/11:** [Controller UI/IPC](tasks/tk-s7-release-r3c6d-controller-ui.md) đã nối Settings đăng ký/list/retry/revoke/disconnect và đọc Product apps qua pinned SSH. Focused55/native13/Electron12checks/full1651PASS/2Linux-onlySKIP/0FAIL/Python365/fresh024/types/lint/build đạt. Không đổi trạng thái tổng FR/UC: còn code durable request journal, thao tác deploy/policy từ Desktop; installer/live/HTTPS/migrate/ML cần nghiệm thu riêng. Chưa cần user test để thay chỗ code chưa viết.

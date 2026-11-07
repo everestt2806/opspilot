@@ -4,7 +4,8 @@ import type {
   DesktopControllerRegisterInput,
   DesktopControllerConnection,
   DesktopControllerSnapshot,
-  DesktopControllerPageInput
+  DesktopControllerPageInput,
+  DesktopControllerAppStatus
 } from '@shared/desktopController'
 import type { AesGcmCredentialCipher } from '../crypto/credentialCipher'
 import type { SshManager } from '../ssh/manager'
@@ -32,7 +33,8 @@ const registerSchema = z.strictObject({
   data_directory: z.string().max(512),
   node_path: z.string().max(512),
   manifest_sha256: z.string().regex(/^[a-f0-9]{64}$/),
-  display_name: z.string().min(1).max(128)
+  display_name: z.string().min(1).max(128),
+  allow_write: z.boolean().optional()
 })
 const pageSchema = z.strictObject({
   binding_id: z.uuid(),
@@ -79,7 +81,7 @@ export class DesktopControllerService {
     return this.safe(async () => {
       const parsed = registerSchema.safeParse(input)
       if (!parsed.success) throw new DesktopControllerVaultError('REQUEST_INVALID')
-      const value = parsed.data
+      const { allow_write, ...value } = parsed.data
       const vps = this.db
         .prepare(
           'SELECT host,port,host_fingerprint,username,auth_type,ssh_security_revision,archived_at FROM vps WHERE id=?'
@@ -108,7 +110,7 @@ export class DesktopControllerService {
           username: vps.username,
           authType: vps.auth_type
         },
-        requested_scopes: ['read']
+        requested_scopes: allow_write ? ['read', 'deploy:manual', 'policy:write'] : ['read']
       })
       await this.enrollment.enroll(value.binding_id)
       return this.connection(value.binding_id)
@@ -145,11 +147,16 @@ export class DesktopControllerService {
       const client =
         this.clientFactory?.(binding_id) ??
         new ControllerHttpClient(this.ssh, () => this.vault.resolve(binding_id))
-      const [identity, apps] = await Promise.all([
+      const [identity, apps, capabilities] = await Promise.all([
         client.call('identity', {}),
-        client.call('apps', { query: { limit: 50, ...(cursor ? { cursor } : {}) } })
+        client.call('apps', { query: { limit: 50, ...(cursor ? { cursor } : {}) } }),
+        client.call('capabilities', {})
       ])
-      if (identity.state !== 'response_received' || apps.state !== 'response_received')
+      if (
+        identity.state !== 'response_received' ||
+        apps.state !== 'response_received' ||
+        capabilities.state !== 'response_received'
+      )
         throw new ControllerHttpClientError('PROTOCOL_INVALID')
       const final = this.vault.resolve(binding_id)
       if (
@@ -158,17 +165,24 @@ export class DesktopControllerService {
         initial.accessToken !== final.accessToken
       )
         throw new DesktopControllerVaultError('BINDING_CHANGED')
-      const response = apps.response,
+      const caps = capabilities.response,
+        response = apps.response,
         id = identity.response
-      if (id.controller_id !== final.controllerId || response.controller_id !== final.controllerId)
+      if (
+        id.controller_id !== final.controllerId ||
+        response.controller_id !== final.controllerId ||
+        caps.controller_id !== final.controllerId
+      )
         throw new ControllerHttpClientError('PROTOCOL_INVALID')
       const age = Math.max(
         Date.now() - Date.parse(id.sampled_at),
-        Date.now() - Date.parse(response.sampled_at)
+        Date.now() - Date.parse(response.sampled_at),
+        Date.now() - Date.parse(caps.sampled_at)
       )
-      const freshness = [id.data_freshness, response.data_freshness].includes('unknown')
+      const flags = [id.data_freshness, response.data_freshness, caps.data_freshness]
+      const freshness = flags.includes('unknown')
         ? 'unknown'
-        : age > 30000 || [id.data_freshness, response.data_freshness].includes('stale')
+        : age > 30000 || flags.includes('stale')
           ? 'stale'
           : 'current'
       return {
@@ -177,9 +191,18 @@ export class DesktopControllerService {
         binding_revision: final.revision,
         service_state: id.service_state,
         data_freshness: freshness,
-        checked_at: response.sampled_at,
+        checked_at: new Date(
+          Math.min(...[id.sampled_at, response.sampled_at, caps.sampled_at].map(Date.parse))
+        ).toISOString(),
+        capabilities: {
+          redeploy: caps.manual_redeploy.state,
+          pause: caps.pause_auto_deploy.state,
+          resume: caps.resume_auto_deploy.state
+        },
         items: response.items.map((app) => ({
           app_id: app.app_id,
+          ownership_generation: app.ownership_generation,
+          source_generation: app.source_generation,
           app_name: app.app_name,
           production_ref: app.production_ref,
           desired_sha: app.desired_sha,
@@ -189,6 +212,55 @@ export class DesktopControllerService {
         })),
         next_cursor: response.next_cursor,
         has_more: response.has_more
+      }
+    })
+  }
+  async appStatus(input: {
+    binding_id: string
+    app_id: number
+  }): Promise<DesktopControllerAppStatus> {
+    return this.safe(async () => {
+      const parsed = z
+        .strictObject({
+          binding_id: z.uuid(),
+          app_id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+        })
+        .safeParse(input)
+      if (!parsed.success) throw new DesktopControllerVaultError('REQUEST_INVALID')
+      const { binding_id, app_id } = parsed.data,
+        before = this.vault.resolve(binding_id)
+      const client =
+        this.clientFactory?.(binding_id) ??
+        new ControllerHttpClient(this.ssh, () => this.vault.resolve(binding_id))
+      const result = await client.call('app', { app_id })
+      const after = this.vault.resolve(binding_id)
+      if (
+        before.revision !== after.revision ||
+        before.accessToken !== after.accessToken ||
+        before.controllerId !== after.controllerId
+      )
+        throw new DesktopControllerVaultError('BINDING_CHANGED')
+      if (
+        result.state !== 'response_received' ||
+        result.response.controller_id !== after.controllerId ||
+        result.response.app_id !== app_id
+      )
+        throw new ControllerHttpClientError('PROTOCOL_INVALID')
+      const value = result.response
+      return {
+        binding_id,
+        binding_revision: after.revision,
+        controller_id: after.controllerId,
+        app_id,
+        ownership_generation: value.ownership_generation,
+        source_generation: value.source_generation,
+        current_deployment_id: value.current_deployment_id,
+        current_deployment_sha: value.current_deployment_sha,
+        current_deployment_state: value.current_deployment_state,
+        latest_job_id: value.latest_job_id,
+        latest_job_state: value.latest_job_state,
+        checked_at: value.sampled_at,
+        data_freshness: value.data_freshness
       }
     })
   }
@@ -209,7 +281,8 @@ export class DesktopControllerService {
       display_name: name,
       remote_client_id: row.remote_client_id,
       credential_expires_at: row.client?.token_expires_at ?? null,
-      updated_at: row.updated_at
+      updated_at: row.updated_at,
+      scopes: [...(row.client?.scopes ?? [])]
     }
   }
   private uuid(value: string): void {

@@ -1,5 +1,5 @@
 import type { DesktopControllerCommand, DesktopControllerCommandInput } from './desktopControllerCommands';
-import type { DesktopControllerRegisterInput, DesktopControllerConnection, DesktopControllerSnapshot, DesktopControllerPageInput } from './desktopController'
+import type { DesktopControllerRegisterInput, DesktopControllerConnection, DesktopControllerSnapshot, DesktopControllerPageInput, DesktopControllerAppStatus } from './desktopController'
 
 /**
  * HỢP ĐỒNG: IPC giữa Electron main và renderer.
@@ -369,6 +369,7 @@ export interface IpcInvokeMap {
   'controller:revoke': (bindingId: string) => IpcResult<DesktopControllerConnection>;
   'controller:disconnect': (bindingId: string) => IpcResult<DesktopControllerConnection>;
   'controller:apps': (input: DesktopControllerPageInput) => IpcResult<DesktopControllerSnapshot>;
+  'controller:app-status': (input: { binding_id: string; app_id: number }) => IpcResult<DesktopControllerAppStatus>;
   'controller:prepare-command': (input: DesktopControllerCommandInput) => IpcResult<DesktopControllerCommand>;
   'controller:send-command': (key: string) => IpcResult<DesktopControllerCommand>;
   'controller:check-command': (key: string) => IpcResult<DesktopControllerCommand>;

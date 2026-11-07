@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-07 | [product-mode/ui] R3c-6f đăng ký mới có allow_write opt-in, default read; main cấp read/deploy:manual/policy:write chỉ khi chọn rõ. UI đọc generations/capabilities từ controller và dùng durable journal cho deploy/pause/resume; accepted không tô thành runtime success, app/job status đọc riêng — Không tăng quyền binding cũ, không tự replay unknown hoặc fallback Desktop pipeline — Sơn/Codex
+
 2026-11-07 | [product-mode/desktop] R3c-6e thêm migration025 nhật ký yêu cầu Desktop: UUID main tạo, intent/body namespace bất biến, claim in_flight trước mạng, mất phản hồi hoặc cold process chỉ lookup cùng key, không replay POST khi chưa biết kết quả — Journal không chứa credential/env/log/note, giữ tombstone sau xóa binding/VPS; accepted chỉ là controller nhận yêu cầu, runtime do controller xác nhận riêng — Sơn/Codex
 
 2026-11-06 | [product-mode/ui] R3c-6d Settings onboarding/list/retry/revoke/disconnect và read-only Product app snapshot qua metadata-only IPC; principal/security revision do main lấy current VPS, no bearer/raw errors/URL/generic call IPC — UI mutations deploy/policy chờ durable local request journal để unknown request không mất khi đóng app; không thêm nút giả hoặc fallback local deploy — Sơn/Codex

@@ -10,6 +10,7 @@ export interface DesktopControllerRegisterInput {
   node_path: string
   manifest_sha256: string
   display_name: string
+  allow_write?: boolean
 }
 export interface DesktopControllerConnection {
   binding_id: string
@@ -21,9 +22,12 @@ export interface DesktopControllerConnection {
   remote_client_id: string | null
   credential_expires_at: string | null
   updated_at: string
+  scopes: Array<'read' | 'deploy:manual' | 'policy:write'>
 }
 export interface DesktopControllerApp {
   app_id: number
+  ownership_generation: number
+  source_generation: number
   app_name: string
   production_ref: string
   desired_sha: string | null
@@ -39,6 +43,11 @@ export interface DesktopControllerSnapshot {
   service_state: 'ready' | 'degraded' | 'maintenance'
   data_freshness: 'current' | 'stale' | 'unknown'
   checked_at: string
+  capabilities: {
+    redeploy: 'available' | 'blocked' | 'unsupported'
+    pause: 'available' | 'blocked' | 'unsupported'
+    resume: 'available' | 'blocked' | 'unsupported'
+  }
   items: DesktopControllerApp[]
   next_cursor: string | null
   has_more: boolean
@@ -46,5 +55,20 @@ export interface DesktopControllerSnapshot {
 export interface DesktopControllerPageInput {
   binding_id: string
   cursor?: string
+}
+export interface DesktopControllerAppStatus {
+  binding_id: string
+  binding_revision: number
+  controller_id: string
+  app_id: number
+  ownership_generation: number
+  source_generation: number
+  current_deployment_id: number | null
+  current_deployment_sha: string | null
+  current_deployment_state: string | null
+  latest_job_id: string | null
+  latest_job_state: string | null
+  checked_at: string
+  data_freshness: 'current' | 'stale' | 'unknown'
 }
 /** Invocation maps are added to the main ipc-contract.ts; no generic URL/SQL/call IPC. */

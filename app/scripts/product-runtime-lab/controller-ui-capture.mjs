@@ -7,11 +7,12 @@ import { join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '../../..')
 const directory = join(root, 'app/.out-scripts/controller-ui', randomBytes(6).toString('hex'))
-const screenshots = join(root, 'docs/ui-redesign/screenshots/r3c6d')
+const screenshots = join(root, 'docs/ui-redesign/screenshots/r3c6f')
 mkdirSync(directory, { recursive: true })
 mkdirSync(screenshots, { recursive: true })
 app.setPath('userData', directory)
 app.commandLine.appendSwitch('disable-renderer-backgrounding')
+app.commandLine.appendSwitch('force-device-scale-factor', '1')
 const bindingId = '11111111-1111-4111-8111-111111111111',
   clientId = '22222222-2222-4222-8222-222222222222'
 const connection = {
@@ -20,6 +21,7 @@ const connection = {
   vps_id: 1,
   revision: 2,
   state: 'active',
+  scopes: ['read', 'deploy:manual', 'policy:write'],
   display_name: 'Controller lab',
   remote_client_id: clientId,
   credential_expires_at: '2030-01-01T00:00:00Z',
@@ -28,18 +30,75 @@ const connection = {
 const calls = [],
   checks = [],
   errors = []
+let commandRows = []
 for (const channel of [
   'controller:list',
   'controller:apps',
+  'controller:commands',
+  'controller:app-status',
+  'controller:prepare-command',
+  'controller:send-command',
+  'controller:check-command',
+  'controller:cancel-command',
   'vps:list',
   'app:list',
   'window:set-titlebar-overlay',
   'window:is-maximized',
   'ml:get-status'
 ]) {
-  ipcMain.handle(channel, () => {
+  ipcMain.handle(channel, (_event, input) => {
     calls.push(channel)
     if (channel === 'controller:list') return { ok: true, data: [connection] }
+    if (channel === 'controller:commands') return { ok: true, data: commandRows }
+    if (channel === 'controller:prepare-command') {
+      commandRows = [
+        {
+          request_key: '33333333-3333-4333-8333-333333333333',
+          binding_id: bindingId,
+          controller_id: connection.controller_id,
+          client_id: clientId,
+          binding_revision: 2,
+          app_id: input.app_id,
+          operation: input.operation,
+          state: 'prepared',
+          remote_state: null,
+          reason_code: null,
+          job_id: null,
+          target_sha: null,
+          auto_deploy_paused: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ]
+      assert.equal(input.target.sha, 'a'.repeat(40))
+      assert.equal(input.expected_ownership_generation, 1)
+      return { ok: true, data: commandRows[0] }
+    }
+    if (channel === 'controller:send-command') {
+      commandRows = commandRows.map((row) => ({ ...row, state: 'outcome_unknown' }))
+      return { ok: true, data: commandRows[0] }
+    }
+    if (channel === 'controller:check-command' || channel === 'controller:cancel-command')
+      throw new Error('UNEXPECTED_GUI_REPLAY')
+    if (channel === 'controller:app-status')
+      return {
+        ok: true,
+        data: {
+          binding_id: bindingId,
+          binding_revision: 2,
+          controller_id: connection.controller_id,
+          app_id: input.app_id,
+          ownership_generation: 1,
+          source_generation: 1,
+          current_deployment_id: 12,
+          current_deployment_sha: 'a'.repeat(40),
+          current_deployment_state: 'running',
+          latest_job_id: 'job-12',
+          latest_job_state: commandRows.length ? 'queued' : 'succeeded',
+          checked_at: new Date().toISOString(),
+          data_freshness: 'current'
+        }
+      }
     if (channel === 'controller:apps')
       return {
         ok: true,
@@ -50,9 +109,12 @@ for (const channel of [
           service_state: 'ready',
           data_freshness: 'current',
           checked_at: new Date().toISOString(),
+          capabilities: { redeploy: 'available', pause: 'available', resume: 'available' },
           items: [
             {
               app_id: 1,
+              ownership_generation: 1,
+              source_generation: 1,
               app_name: 'Booking service',
               production_ref: 'main',
               desired_sha: 'a'.repeat(40),
@@ -187,6 +249,15 @@ void app.whenReady().then(async () => {
       window.setContentSize(width, height)
       for (const theme of ['dark', 'light']) {
         await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('button')).find(el=>el.textContent.trim()==='Close app list').click()`
+        )
+        await wait(window, `!document.querySelector('.controller-command-panel')`)
+        commandRows = []
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('button')).find(el=>el.textContent.trim()==='View Product apps').click()`
+        )
+        await wait(window, `!!document.querySelector('.controller-command-panel')`)
+        await window.webContents.executeJavaScript(
           `Array.from(document.querySelectorAll('.ant-segmented-item')).find(el=>el.textContent.trim()===${JSON.stringify(theme === 'dark' ? 'Dark' : 'Light')}).click()`
         )
         await delay(500)
@@ -208,6 +279,79 @@ void app.whenReady().then(async () => {
         const file = `controller-apps-${width}x${height}-${theme}.png`
         writeFileSync(join(screenshots, file), (await window.webContents.capturePage()).toPNG())
         checks.push({ view: 'apps', width, height, theme, ...layout, screenshot: file })
+        await window.webContents.executeJavaScript(`(()=>{
+          const panel=document.querySelector('.controller-command-panel');panel.scrollIntoView({block:'start'});
+          panel.querySelector('.ant-select-selector').dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));})()`)
+        await wait(
+          window,
+          `!!document.querySelector('.ant-select-item-option[title="Booking service"]')`
+        )
+        await window.webContents.executeJavaScript(
+          `document.querySelector('.ant-select-item-option[title="Booking service"]').click()`
+        )
+        await wait(
+          window,
+          `Array.from(document.querySelectorAll('.controller-command-panel button')).some(el=>el.textContent.trim()==='Deploy this commit'&&!el.disabled)`
+        )
+        await delay(350)
+        const actionFile = `controller-actions-${width}x${height}-${theme}.png`
+        writeFileSync(
+          join(screenshots, actionFile),
+          (await window.webContents.capturePage()).toPNG()
+        )
+        checks.push({
+          view: 'actions',
+          width,
+          height,
+          theme,
+          enabled_after_fresh_status: true,
+          screenshot: actionFile
+        })
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.controller-command-panel button')).find(el=>el.textContent.trim()==='Deploy this commit').click()`
+        )
+        await wait(window, `!!document.querySelector('.ant-modal-confirm-body')`)
+        await delay(350)
+        const confirmation = await window.webContents.executeJavaScript(
+          `document.querySelector('.ant-modal-confirm-body').textContent`
+        )
+        assert.ok(confirmation.includes('a'.repeat(40)))
+        const confirmationFile = `controller-confirm-${width}x${height}-${theme}.png`
+        writeFileSync(
+          join(screenshots, confirmationFile),
+          (await window.webContents.capturePage()).toPNG()
+        )
+        checks.push({
+          view: 'confirmation',
+          width,
+          height,
+          theme,
+          exact_sha_shown: true,
+          screenshot: confirmationFile
+        })
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.ant-modal-confirm button')).find(el=>el.textContent.trim()==='Confirm').click()`
+        )
+        await wait(
+          window,
+          `document.querySelector('.controller-command-panel')?.textContent.includes('Acceptance is unknown')`
+        )
+        await wait(window, `!document.querySelector('.ant-modal-confirm')`)
+        await delay(350)
+        const unknownFile = `controller-unknown-${width}x${height}-${theme}.png`
+        writeFileSync(
+          join(screenshots, unknownFile),
+          (await window.webContents.capturePage()).toPNG()
+        )
+        assert.equal(commandRows.length, 1)
+        checks.push({
+          view: 'unknown',
+          width,
+          height,
+          theme,
+          no_automatic_replay: true,
+          screenshot: unknownFile
+        })
         await window.webContents.executeJavaScript(
           `Array.from(document.querySelectorAll('button')).find(el=>el.textContent.trim()==='Register controller').click()`
         )

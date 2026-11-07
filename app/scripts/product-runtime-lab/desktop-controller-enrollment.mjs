@@ -392,6 +392,74 @@ try {
   assert.equal(JSON.stringify(uiSnapshot).includes(token), false)
   assert.equal((await uiService.revoke(uiBinding.binding_id)).state, 'disabled')
   cases.push('ui_service_actual_register_read_only_http_snapshot_and_revoke')
+  const writeInput = {
+    ...uiInput,
+    binding_id: randomUUID(),
+    display_name: 'UI explicit write connection',
+    allow_write: true
+  }
+  const writeBinding = await uiService.register(writeInput)
+  assert.deepEqual(writeBinding.scopes, ['read', 'deploy:manual', 'policy:write'])
+  assert.deepEqual(
+    JSON.parse(
+      remote
+        .prepare('SELECT scopes_json FROM product_desktop_client WHERE client_id=?')
+        .get(writeBinding.remote_client_id).scopes_json
+    ),
+    writeBinding.scopes
+  )
+  cases.push('ui_opt_in_actual_ssh_admin_grants_exact_write_scopes')
+  const configHash = createHash('sha256').update('{}').digest('hex'),
+    setupAt = new Date().toISOString()
+  remote
+    .prepare(
+      "INSERT INTO vps(id,name,host,username,auth_type,encrypted_secret) VALUES(1,'target','127.0.0.1','unit','key',X'0102')"
+    )
+    .run()
+  remote
+    .prepare(
+      "INSERT INTO app(id,vps_id,name,framework,host_port,container_port,source_type,git_repo_url,git_ref,git_root) VALUES(1,1,'ui-app','express',30001,3000,'git','https://github.com/demo/app.git','main','.')"
+    )
+    .run()
+  remote
+    .prepare(
+      "INSERT INTO product_source_config VALUES(1,1,'https://github.com/demo/app.git','main','.','{}',?,?)"
+    )
+    .run(configHash, setupAt)
+  remote
+    .prepare(
+      "INSERT INTO product_app_control(app_id,mode,controller_id,ownership_generation,source_generation,source_config_sha256,changed_at,auto_deploy_paused,pause_reason,pause_policy_provenance) VALUES(1,'product',?,1,1,?,?,1,'operator','explicit')"
+    )
+    .run(controller, configHash, setupAt)
+  new api.ProductDeployRepository(remote).observeTip({
+    controllerId: controller,
+    appId: 1,
+    ownershipGeneration: 1,
+    sourceGeneration: 1,
+    configSha256: configHash,
+    ref: 'main',
+    expectedObservationSequence: null,
+    tipSha: 'a'.repeat(40)
+  })
+  const writeSnapshot = await uiService.apps({ binding_id: writeBinding.binding_id })
+  assert.equal(writeSnapshot.items[0].ownership_generation, 1)
+  assert.equal(writeSnapshot.capabilities.redeploy, 'available')
+  const command = await uiService.prepareCommand({
+    binding_id: writeBinding.binding_id,
+    app_id: 1,
+    expected_ownership_generation: 1,
+    expected_source_generation: 1,
+    operation: 'redeploy',
+    target: { kind: 'specific_sha', sha: 'a'.repeat(40) }
+  })
+  const sent = await uiService.sendCommand(command.request_key)
+  assert.equal(sent.state, 'accepted')
+  const appStatus = await uiService.appStatus({ binding_id: writeBinding.binding_id, app_id: 1 })
+  assert.equal(appStatus.latest_job_state, 'queued')
+  assert.equal(appStatus.current_deployment_state, null)
+  assert.equal((await uiService.checkCommand(command.request_key)).job_id, sent.job_id)
+  assert.equal((await uiService.revoke(writeBinding.binding_id)).state, 'disabled')
+  cases.push('ui_service_generations_capabilities_exact_sha_journal_and_remote_queued_status')
   assert.deepEqual(db.pragma('foreign_key_check'), [])
   assert.deepEqual(remote.pragma('foreign_key_check'), [])
   cases.push('native_migration024_and_foreign_key_integrity')

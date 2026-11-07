@@ -4,6 +4,7 @@ import {
   App,
   Button,
   Card,
+  Checkbox,
   Descriptions,
   Empty,
   Form,
@@ -23,6 +24,8 @@ import type {
 import type { IpcError, Vps } from '@shared/ipc'
 import { useUiState } from '../store/uiState'
 import { CONTROLLER_COPY, CONTROLLER_FEEDBACK } from './controllerCopy'
+import { ControllerCommandPanel } from './ControllerCommandPanel'
+import { CONTROLLER_COMMAND_COPY } from './controllerCommandCopy'
 
 function errorCode(error: IpcError | undefined): string {
   return error?.technical && /^[A-Z_]{1,80}$/.test(error.technical)
@@ -314,6 +317,7 @@ export function ControllerPanel(): React.JSX.Element {
                     onClick={() =>
                       modal.confirm({
                         title: t.revokeConfirm,
+                        content: CONTROLLER_COMMAND_COPY[locale].disconnectWarning,
                         okText: t.ok,
                         cancelText: t.cancel,
                         onOk: () => action('revoke', row)
@@ -330,6 +334,7 @@ export function ControllerPanel(): React.JSX.Element {
                     onClick={() =>
                       modal.confirm({
                         title: t.disconnectConfirm,
+                        content: CONTROLLER_COMMAND_COPY[locale].disconnectWarning,
                         okText: t.ok,
                         cancelText: t.cancel,
                         onOk: () => action('disconnect', row)
@@ -440,9 +445,33 @@ export function ControllerPanel(): React.JSX.Element {
                   {t.more}
                 </Button>
               )}
-              <Typography.Paragraph type="secondary">{t.readOnly}</Typography.Paragraph>
             </>
           )}
+          {rows.find((row) => row.binding_id === selected)?.state === 'active' &&
+            (() => {
+              const binding = rows.find((row) => row.binding_id === selected)!
+              return (
+                <ControllerCommandPanel
+                  key={`${binding.binding_id}:${binding.revision}`}
+                  binding={binding}
+                  fresh={fresh === 'current'}
+                  snapshot={
+                    snapshot ?? {
+                      binding_id: binding.binding_id,
+                      binding_revision: binding.revision,
+                      controller_id: binding.controller_id,
+                      service_state: 'maintenance',
+                      data_freshness: 'unknown',
+                      checked_at: binding.updated_at,
+                      capabilities: { redeploy: 'blocked', pause: 'blocked', resume: 'blocked' },
+                      items: [],
+                      next_cursor: null,
+                      has_more: false
+                    }
+                  }
+                />
+              )
+            })()}
         </section>
       )}
       <Modal
@@ -513,6 +542,12 @@ export function ControllerPanel(): React.JSX.Element {
               <Input autoComplete="off" maxLength={field === 'manifest_sha256' ? 64 : 512} />
             </Form.Item>
           ))}
+          <Form.Item name="allow_write" valuePropName="checked">
+            <Checkbox>{CONTROLLER_COMMAND_COPY[locale].writeOptIn}</Checkbox>
+          </Form.Item>
+          <Typography.Paragraph type="secondary">
+            {CONTROLLER_COMMAND_COPY[locale].writeHint}
+          </Typography.Paragraph>
           <Space>
             <Button type="primary" htmlType="submit" loading={busy === 'register'}>
               {t.register}

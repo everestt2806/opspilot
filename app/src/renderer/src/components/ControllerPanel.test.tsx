@@ -18,6 +18,7 @@ const row = (id = a, name = 'Controller A'): DesktopControllerConnection => ({
   vps_id: 1,
   revision: 2,
   state: 'active',
+  scopes: ['read'],
   display_name: name,
   remote_client_id: '33333333-3333-4333-8333-333333333333',
   credential_expires_at: new Date(Date.now() + 86400000).toISOString(),
@@ -30,9 +31,12 @@ const snapshot = (id = a, name = 'Remote app'): DesktopControllerSnapshot => ({
   service_state: 'ready',
   data_freshness: 'current',
   checked_at: new Date().toISOString(),
+  capabilities: { redeploy: 'available', pause: 'available', resume: 'available' },
   items: [
     {
       app_id: 1,
+      ownership_generation: 1,
+      source_generation: 1,
       app_name: name,
       production_ref: 'main',
       desired_sha: 'a'.repeat(40),
@@ -63,6 +67,7 @@ beforeEach(() => {
   invoke.mockImplementation(async (channel: string) => {
     if (channel === 'controller:list') return { ok: true, data: rows }
     if (channel === 'controller:apps') return { ok: true, data: snapshot() }
+    if (channel === 'controller:commands') return { ok: true, data: [] }
     if (channel === 'vps:list')
       return {
         ok: true,
@@ -106,7 +111,7 @@ describe('Controller settings onboarding and authoritative app reads', () => {
         : { ok: false, error: { code: 'VALIDATION', technical: 'CLIENT_REVOKED' } }
     )
     const panel = screen.getByRole('region', { name: t.apps })
-    fireEvent.click(within(panel).getByRole('button', { name: t.refresh }))
+    fireEvent.click(within(panel).getAllByRole('button', { name: t.refresh })[0])
     await screen.findByText('CLIENT_REVOKED')
     expect(screen.queryByText('Remote app')).toBeNull()
     expect(screen.queryByText(t.noApps)).toBeNull()
@@ -163,6 +168,7 @@ describe('Controller settings onboarding and authoritative app reads', () => {
     let calls = 0
     invoke.mockImplementation(async (channel: string) => {
       if (channel === 'controller:list') return { ok: true, data: rows }
+      if (channel === 'controller:commands') return { ok: true, data: [] }
       calls++
       if (calls === 1)
         return {
@@ -224,6 +230,7 @@ describe('Controller settings onboarding and authoritative app reads', () => {
     await screen.findByText('Controller A')
     fireEvent.click(screen.getByRole('button', { name: t.add }))
     await screen.findByLabelText(t.controllerId)
+    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(false)
     expect(screen.getByLabelText(t.artifact)).toBeTruthy()
     expect(screen.getByLabelText(t.pin)).toBeTruthy()
     expect(document.querySelector('input[type="password"]')).toBeNull()
@@ -250,6 +257,7 @@ describe('Controller settings onboarding and authoritative app reads', () => {
     fireEvent.mouseDown(screen.getByRole('combobox'))
     const options = await screen.findAllByText('Lab VPS · 192.0.2.1')
     fireEvent.click(options.at(-1)!)
+    fireEvent.click(screen.getByRole('checkbox'))
     for (const [label, value] of [
       [t.name, 'Desktop test'],
       [t.controllerId, 'test-controller'],
@@ -267,7 +275,8 @@ describe('Controller settings onboarding and authoritative app reads', () => {
     expect(submitted).toMatchObject({
       vps_id: 1,
       controller_id: 'test-controller',
-      manifest_sha256: 'a'.repeat(64)
+      manifest_sha256: 'a'.repeat(64),
+      allow_write: true
     })
     expect(submitted.binding_id).toMatch(/^[a-f0-9-]{36}$/)
     expect(submitted).not.toHaveProperty('access_token')

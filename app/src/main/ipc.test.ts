@@ -36,7 +36,7 @@ import type { SharedIngressServiceResult } from './domain/ingress/sharedIngressS
 import type { DesktopControllerService } from './controlPlane/desktopControllerService'
 
 describe('metadata-only controller IPC composition', () => {
-  it('registers eleven concrete channels and preserves safe metadata/error DTOs', async () => {
+  it('registers twelve concrete channels and preserves safe metadata/error DTOs', async () => {
     handleMock.mockReset()
     const service = {
       list: vi.fn(async () => []),
@@ -49,6 +49,7 @@ describe('metadata-only controller IPC composition', () => {
       revoke: vi.fn(async () => ({ state: 'disabled' })),
       disconnect: vi.fn(async () => ({ state: 'disabled' })),
       apps: vi.fn(async () => ({ items: [] })),
+      appStatus: vi.fn(async () => ({ app_id: 1 })),
       prepareCommand: vi.fn(async () => ({ request_key: 'unit', state: 'prepared' })),
       sendCommand: vi.fn(async () => ({ request_key: 'unit', state: 'outcome_unknown' })),
       checkCommand: vi.fn(async () => ({ request_key: 'unit', state: 'accepted' })),
@@ -71,6 +72,7 @@ describe('metadata-only controller IPC composition', () => {
       .map(([name]) => name)
       .filter((name: string) => name.startsWith('controller:'))
     expect(channels.sort()).toEqual([
+      'controller:app-status',
       'controller:apps',
       'controller:cancel-command',
       'controller:check-command',
