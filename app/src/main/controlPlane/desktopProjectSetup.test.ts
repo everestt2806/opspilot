@@ -25,6 +25,8 @@ let directory: string,
   targets: ReturnType<typeof vi.fn<DesktopControllerEnrollment['projectTargets']>>,
   register: ReturnType<typeof vi.fn<DesktopControllerEnrollment['registerProject']>>,
   verify: ReturnType<typeof vi.fn<DesktopControllerEnrollment['verifyProjectSource']>>,
+  targetRead: ReturnType<typeof vi.fn<DesktopControllerEnrollment['projectTargetState']>>,
+  targetEnroll: ReturnType<typeof vi.fn<DesktopControllerEnrollment['enrollProjectTarget']>>,
   remote: Map<string, ProductProjectRegistrationResult>
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'opspilot-project-setup-'))
@@ -119,6 +121,34 @@ beforeEach(() => {
     }
   )
   setups = new DesktopProjectSetups(db, vault, {
+    projectTargetState: (targetRead = vi.fn<DesktopControllerEnrollment['projectTargetState']>(
+      async (_binding, request) => ({
+        controller_id: request.controller_id,
+        app_id: request.app_id,
+        ownership_generation: request.expected_ownership_generation,
+        source_generation: request.expected_source_generation,
+        source_config_sha256: request.expected_source_config_sha256,
+        target_vps_id: 77,
+        target_security_revision: 3,
+        target_host: 'target.test',
+        target_port: 22,
+        target_username: 'root',
+        target_fingerprint: 'SHA256:' + 'B'.repeat(43),
+        target_root: '/var/lib/opspilot-product',
+        state: 'not_prepared',
+        proof: 'not_available',
+        deployment_started: false,
+        runtime_preflight: 'required',
+        checked_at: new Date().toISOString()
+      })
+    )),
+    enrollProjectTarget: (targetEnroll = vi.fn<DesktopControllerEnrollment['enrollProjectTarget']>(
+      async (binding, request) => ({
+        ...(await targetRead(binding, request)),
+        state: 'unknown',
+        target_root: request.target_root
+      })
+    )),
     projectTargets: targets,
     registerProject: register,
     verifyProjectSource: (verify = vi.fn<DesktopControllerEnrollment['verifyProjectSource']>(
@@ -166,6 +196,71 @@ afterEach(() => {
   rmSync(directory, { recursive: true })
 })
 describe('Desktop durable Product project setup', () => {
+  it('derives target review and preparation from registered journal, preserving unknown without creating deployment intent', async () => {
+    const row = await setups.prepare(input)
+    await expect(setups.targetState(row.request_key)).rejects.toThrow('PROJECT_SETUP_CONFLICT')
+    expect(targetRead).not.toHaveBeenCalled()
+    await setups.send(row.request_key)
+    const state = await setups.targetState(row.request_key)
+    expect(state).toMatchObject({
+      state: 'not_prepared',
+      request_key: row.request_key,
+      binding_revision: 2,
+      target_vps_id: 77
+    })
+    expect(
+      await setups.enrollTarget({ request_key: row.request_key, target_root: '/private/approved' })
+    ).toMatchObject({ state: 'unknown', proof: 'not_available', target_root: '/private/approved' })
+    expect(targetEnroll).toHaveBeenCalledWith(
+      input.binding_id,
+      expect.objectContaining({
+        app_id: 42,
+        expected_source_config_sha256: 'b'.repeat(64),
+        target_root: '/private/approved'
+      })
+    )
+    expect(db.prepare('SELECT count(*) AS n FROM product_deploy_job').get()).toEqual({ n: 0 })
+  })
+  it('rejects invalid target input and forged proof or identity metadata', async () => {
+    const row = await setups.prepare(input)
+    await setups.send(row.request_key)
+    await expect(
+      setups.enrollTarget({ request_key: row.request_key, target_root: '/bad/../path' })
+    ).rejects.toThrow('PROJECT_REQUEST_INVALID')
+    await expect(
+      setups.enrollTarget({
+        request_key: row.request_key,
+        target_root: '/safe',
+        script: 'no'
+      } as never)
+    ).rejects.toThrow('PROJECT_REQUEST_INVALID')
+    expect(targetEnroll).not.toHaveBeenCalled()
+    const original = targetRead.getMockImplementation()!
+    targetRead.mockImplementationOnce(async (...args) => ({
+      ...(await original(...args)),
+      state: 'enrolled',
+      proof: 'not_available'
+    }))
+    await expect(setups.targetState(row.request_key)).rejects.toThrow('PROJECT_RESPONSE_INVALID')
+    targetRead.mockImplementationOnce(async (...args) => ({
+      ...(await original(...args)),
+      app_id: 999
+    }))
+    await expect(setups.targetState(row.request_key)).rejects.toThrow('PROJECT_RESPONSE_INVALID')
+  })
+  it('does not accept a target preparation reply after local connection disable', async () => {
+    const row = await setups.prepare(input)
+    await setups.send(row.request_key)
+    const original = targetEnroll.getMockImplementation()!
+    targetEnroll.mockImplementationOnce(async (...args) => {
+      const result = await original(...args)
+      vault.disable(input.binding_id, 2)
+      return result
+    })
+    await expect(
+      setups.enrollTarget({ request_key: row.request_key, target_root: '/private/approved' })
+    ).rejects.toThrow('BINDING_UNAVAILABLE')
+  })
   it('derives source authority from registered setup and returns only bound verification metadata without another registration', async () => {
     const prepared = await setups.prepare(input)
     await expect(setups.verifySource(prepared.request_key)).rejects.toThrow(

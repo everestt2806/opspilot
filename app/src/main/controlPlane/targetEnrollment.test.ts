@@ -68,6 +68,25 @@ afterEach(() => {
 })
 
 describe('Durable Product target enrollment', () => {
+  it('runs source authority fences inside prepare, begin and complete transactions without advancing on rejection', () => {
+    const blocked = vi.fn(() => {
+      expect(database.inTransaction).toBe(true)
+      throw new Error('SOURCE_CHANGED')
+    })
+    const create = vi.fn()
+    expect(() => repository.prepare(payload, create, blocked)).toThrow('SOURCE_CHANGED')
+    expect(create).not.toHaveBeenCalled()
+    expect(repository.get(payload)).toBeUndefined()
+    repository.prepare(payload, create)
+    expect(() => repository.begin(payload, false, blocked)).toThrow('SOURCE_CHANGED')
+    expect(repository.get(payload)?.state).toBe('prepared')
+    repository.begin(payload)
+    expect(() => repository.complete(payload, syntheticProof(), key, false, blocked)).toThrow(
+      'SOURCE_CHANGED'
+    )
+    expect(repository.get(payload)?.state).toBe('unknown')
+    expect(blocked).toHaveBeenCalledTimes(3)
+  })
   it('inspects retained material while unpaused without reopening first-install authority', () => {
     const create = vi.fn()
     repository.prepare(payload, create)

@@ -107,11 +107,13 @@ export class TargetEnrollmentRepository {
 
   prepare(
     payload: ProductTargetEnrollmentPayload,
-    createMaterial: () => void
+    createMaterial: () => void,
+    assertAuthority?: () => void
   ): TargetEnrollmentRow {
     if (this.database.inTransaction) throw new Error('TARGET_ENROLLMENT_TRANSACTION_ACTIVE')
     return this.database
       .transaction(() => {
+        assertAuthority?.()
         this.assertCurrent(payload)
         const previous = this.get(payload)
         if (previous) {
@@ -148,13 +150,15 @@ export class TargetEnrollmentRepository {
 
   begin(
     payload: ProductTargetEnrollmentPayload,
-    inspectionOnly = false
+    inspectionOnly = false,
+    assertAuthority?: () => void
   ): {
     row: TargetEnrollmentRow
     operation: 'enroll' | 'inspect'
   } {
     return this.database
       .transaction(() => {
+        assertAuthority?.()
         this.assertCurrent(payload, !inspectionOnly)
         const row = this.get(payload)
         if (!row) throw new Error('TARGET_ENROLLMENT_NOT_PREPARED')
@@ -186,12 +190,14 @@ export class TargetEnrollmentRepository {
     payload: ProductTargetEnrollmentPayload,
     proof: unknown,
     key: Buffer,
-    inspectionOnly = false
+    inspectionOnly = false,
+    assertAuthority?: () => void
   ): ProductTargetEnrollmentProof {
     if (!verifyTargetEnrollmentProof(payload, proof, key))
       throw new Error('TARGET_ENROLLMENT_PROOF_REJECTED')
     return this.database
       .transaction(() => {
+        assertAuthority?.()
         this.assertCurrent(payload, !inspectionOnly)
         const row = this.get(payload)
         if (!row || row.state === 'prepared') throw new Error('TARGET_ENROLLMENT_NOT_PREPARED')

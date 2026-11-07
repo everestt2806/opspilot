@@ -29,6 +29,20 @@ SOURCE_ERROR_CODES = frozenset(
         "PROJECT_SOURCE_STORAGE_UNAVAILABLE",
     }
 )
+TARGET_ERROR_CODES = frozenset(
+    {
+        "PROJECT_TARGET_REQUEST_INVALID",
+        "PROJECT_TARGET_AUTHORITY_CHANGED",
+        "PROJECT_TARGET_CONFLICT",
+        "PROJECT_TARGET_UNAVAILABLE",
+        "TARGET_ENROLLMENT_INPUT_INVALID",
+        "TARGET_ENROLLMENT_AUTHORITY_REJECTED",
+        "TARGET_ENROLLMENT_REQUIRES_QUIESCENCE",
+        "TARGET_ENROLLMENT_CONFLICT",
+        "TARGET_ENROLLMENT_NOT_READY",
+        "TARGET_ENROLLMENT_TRANSACTION_ACTIVE",
+    }
+)
 
 
 class AdminFailure(ValueError):
@@ -179,6 +193,8 @@ def verify(request):
 
 def run_cli(request, operation, payload):
     source_check = operation == "verify-project-source"
+    target_check = operation in ("project-target-state", "enroll-project-target")
+    structured_error = source_check or target_check
     args = (
         [request["node_path"], "--version"]
         if operation == "_version"
@@ -194,7 +210,7 @@ def run_cli(request, operation, payload):
         args,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE if source_check else subprocess.DEVNULL,
+        stderr=subprocess.PIPE if structured_error else subprocess.DEVNULL,
         cwd=os.path.dirname(request["artifact_path"]),
         env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "NODE_ENV": "production"},
         start_new_session=True,
@@ -205,10 +221,12 @@ def run_cli(request, operation, payload):
         process.stdin.close()
         content = bytearray()
         error_content = bytearray()
-        deadline = time.monotonic() + (105 if source_check else 15)
+        deadline = time.monotonic() + (
+            105 if source_check else 75 if operation == "enroll-project-target" else 15
+        )
         with selectors.DefaultSelector() as selector:
             selector.register(process.stdout, selectors.EVENT_READ)
-            if source_check:
+            if structured_error:
                 selector.register(process.stderr, selectors.EVENT_READ)
             while selector.get_map():
                 remaining = deadline - time.monotonic()
@@ -229,15 +247,17 @@ def run_cli(request, operation, payload):
                         if len(destination) > limit:
                             raise ValueError()
         if process.wait(timeout=max(0.1, deadline - time.monotonic())) != 0:
-            if source_check:
+            if structured_error:
                 # Chỉ chuyển tiếp đúng mã đã duyệt, không stdout/stderr tùy ý.
                 match = re.fullmatch(
-                    rb"CONTROL_PLANE_ERROR (PROJECT_SOURCE_[A-Z_]+)\r?\n?",
+                    rb"CONTROL_PLANE_ERROR ((?:PROJECT_SOURCE_|PROJECT_TARGET_|TARGET_ENROLLMENT_)[A-Z_]+)\r?\n?",
                     bytes(error_content),
                 )
                 if match:
                     safe_code = match.group(1).decode("ascii")
-                    if safe_code in SOURCE_ERROR_CODES:
+                    if safe_code in SOURCE_ERROR_CODES or (
+                        target_check and safe_code in TARGET_ERROR_CODES
+                    ):
                         raise AdminFailure(safe_code)
             raise ValueError()
         decoded = content.decode("utf-8", errors="strict")
@@ -247,7 +267,7 @@ def run_cli(request, operation, payload):
             os.killpg(process.pid, signal.SIGKILL)
             process.wait(timeout=5)
         process.stdout.close()
-        if source_check:
+        if structured_error:
             process.stderr.close()
 
 
@@ -273,6 +293,8 @@ def main():
         "project-targets",
         "register-project",
         "verify-project-source",
+        "project-target-state",
+        "enroll-project-target",
     ):
         raise ValueError()
     try:

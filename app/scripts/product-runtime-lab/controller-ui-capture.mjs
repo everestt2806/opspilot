@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '../../..')
 const directory = join(root, 'app/.out-scripts/controller-ui', randomBytes(6).toString('hex'))
-const screenshots = join(root, 'docs/ui-redesign/screenshots/r3c6g3b')
+const screenshots = join(root, 'docs/ui-redesign/screenshots/r3c6g3c')
 mkdirSync(directory, { recursive: true })
 mkdirSync(screenshots, { recursive: true })
 app.setPath('userData', directory)
@@ -47,6 +47,8 @@ for (const channel of [
   'controller:projects',
   'controller:cancel-project',
   'controller:verify-project-source',
+  'controller:project-target-state',
+  'controller:enroll-project-target',
   'vps:list',
   'app:list',
   'window:set-titlebar-overlay',
@@ -116,6 +118,40 @@ for (const channel of [
       return { ok: true, data: projectRows[0] }
     }
     if (channel === 'controller:cancel-project') throw new Error('UNEXPECTED_GUI_PROJECT_CANCEL')
+    if (
+      channel === 'controller:project-target-state' ||
+      channel === 'controller:enroll-project-target'
+    ) {
+      const project = projectRows[0],
+        prepared = channel === 'controller:enroll-project-target'
+      assert.equal(prepared ? input.request_key : input, project.request_key)
+      if (prepared) assert.equal(input.target_root, '/var/lib/opspilot-product')
+      return {
+        ok: true,
+        data: {
+          binding_id: bindingId,
+          binding_revision: connection.revision,
+          request_key: project.request_key,
+          controller_id: connection.controller_id,
+          app_id: project.app_id,
+          ownership_generation: 1,
+          source_generation: 1,
+          source_config_sha256: 'b'.repeat(64),
+          target_vps_id: 77,
+          target_security_revision: 3,
+          target_host: '192.0.2.2',
+          target_port: 22,
+          target_username: 'operator',
+          target_fingerprint: 'SHA256:' + 'B'.repeat(43),
+          target_root: '/var/lib/opspilot-product',
+          state: prepared ? 'enrolled' : 'not_prepared',
+          proof: prepared ? 'persisted_verified' : 'not_available',
+          deployment_started: false,
+          runtime_preflight: 'required',
+          checked_at: new Date().toISOString()
+        }
+      }
+    }
     if (channel === 'controller:verify-project-source') {
       assert.equal(input, projectRows[0].request_key)
       const project = projectRows[0]
@@ -614,6 +650,82 @@ void app.whenReady().then(async () => {
           `document.querySelector('.controller-source-modal .ant-modal-close').click()`
         )
         await wait(window, `!document.querySelector('.controller-source-modal')`)
+        const targetCalls = calls.filter(
+          (channel) => channel === 'controller:enroll-project-target'
+        ).length
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.controller-project-panel button')).find(el=>el.textContent.trim()==='Prepare target').click()`
+        )
+        await wait(
+          window,
+          `document.querySelector('.controller-target-modal input')?.value==='/var/lib/opspilot-product'`
+        )
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.controller-target-modal button')).find(el=>el.textContent.trim()==='Review').click()`
+        )
+        await wait(
+          window,
+          `document.querySelector('.controller-target-modal')?.textContent.includes('Confirm the VPS, fingerprint and directory.')`
+        )
+        assert.equal(
+          calls.filter((channel) => channel === 'controller:enroll-project-target').length,
+          targetCalls
+        )
+        const targetReviewFile = `project-target-review-${width}x${height}-${theme}.png`
+        await delay(250)
+        await window.webContents.executeJavaScript(
+          'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))'
+        )
+        const targetReviewLayout = await window.webContents.executeJavaScript(
+          `(()=>{const modal=document.querySelector('.controller-target-modal .ant-modal-content'),footer=document.querySelector('.controller-target-modal .ant-modal-footer');return {horizontal:modal.scrollWidth>modal.clientWidth,footer_inside:footer.getBoundingClientRect().bottom<=innerHeight,visible:modal.getBoundingClientRect().height>0}})()`
+        )
+        assert.equal(targetReviewLayout.horizontal, false)
+        assert.equal(targetReviewLayout.footer_inside, true)
+        assert.equal(targetReviewLayout.visible, true)
+        writeFileSync(
+          join(screenshots, targetReviewFile),
+          (await window.webContents.capturePage()).toPNG()
+        )
+        checks.push({
+          view: 'target_review',
+          width,
+          height,
+          theme,
+          no_install_before_confirmation: true,
+          ...targetReviewLayout,
+          screenshot: targetReviewFile
+        })
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.controller-target-modal button')).find(el=>el.textContent.trim()==='Confirm preparation').click()`
+        )
+        await wait(
+          window,
+          `document.querySelector('.controller-target-modal')?.textContent.includes('The controller stored a valid target proof.')`
+        )
+        await delay(200)
+        const targetLayout = await window.webContents.executeJavaScript(
+          `(()=>{const modal=document.querySelector('.controller-target-modal .ant-modal-content'),footer=document.querySelector('.controller-target-modal .ant-modal-footer');return {horizontal:modal.scrollWidth>modal.clientWidth,footer_inside:footer.getBoundingClientRect().bottom<=innerHeight,not_deployed:modal.textContent.includes('This is not a deployment or proof of a running application.')}})()`
+        )
+        assert.equal(targetLayout.horizontal, false)
+        assert.equal(targetLayout.footer_inside, true)
+        assert.equal(targetLayout.not_deployed, true)
+        const targetResultFile = `project-target-enrolled-${width}x${height}-${theme}.png`
+        writeFileSync(
+          join(screenshots, targetResultFile),
+          (await window.webContents.capturePage()).toPNG()
+        )
+        checks.push({
+          view: 'target_enrolled',
+          width,
+          height,
+          theme,
+          ...targetLayout,
+          screenshot: targetResultFile
+        })
+        await window.webContents.executeJavaScript(
+          `document.querySelector('.controller-target-modal .ant-modal-close').click()`
+        )
+        await wait(window, `!document.querySelector('.controller-target-modal')`)
         await window.webContents.executeJavaScript(
           `Array.from(document.querySelectorAll('button')).find(el=>el.textContent.trim()==='Register controller').click()`
         )

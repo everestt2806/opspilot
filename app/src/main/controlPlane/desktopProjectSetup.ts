@@ -5,7 +5,9 @@ import type {
   DesktopProjectSetup,
   DesktopProjectSetupInput,
   DesktopProjectTargets,
-  DesktopProjectSourceVerification
+  DesktopProjectSourceVerification,
+  DesktopProjectTargetInput,
+  DesktopProjectTargetState
 } from '@shared/desktopProjectRegistration'
 import { DesktopControllerVault } from './desktopControllerVault'
 import type { DesktopControllerEnrollment } from './desktopControllerEnrollment'
@@ -16,6 +18,8 @@ import {
 } from './projectRegistration'
 import { canonicalH2Json } from './productH2Proof'
 import { projectSourceVerificationResultSchema } from './projectSourceVerification'
+import { projectTargetStateSchema } from './projectTarget'
+import { productTargetRootSchema } from './targetEnrollment'
 
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   uuid = z.uuid().transform((value) => value.toLowerCase())
@@ -68,9 +72,81 @@ export class DesktopProjectSetups {
     private readonly vault: DesktopControllerVault,
     private readonly admin: Pick<
       DesktopControllerEnrollment,
-      'projectTargets' | 'registerProject' | 'verifyProjectSource'
+      | 'projectTargets'
+      | 'registerProject'
+      | 'verifyProjectSource'
+      | 'projectTargetState'
+      | 'enrollProjectTarget'
     >
   ) {}
+  async targetState(key: string): Promise<DesktopProjectTargetState> {
+    return this.targetOperation(key)
+  }
+  async enrollTarget(input: DesktopProjectTargetInput): Promise<DesktopProjectTargetState> {
+    const parsed = z
+      .strictObject({ request_key: uuid, target_root: productTargetRootSchema })
+      .safeParse(input)
+    if (!parsed.success) throw new DesktopProjectSetupError('PROJECT_REQUEST_INVALID')
+    return this.targetOperation(parsed.data.request_key, parsed.data.target_root)
+  }
+  private async targetOperation(key: string, root?: string): Promise<DesktopProjectTargetState> {
+    if (this.db.inTransaction) throw new DesktopProjectSetupError('PROJECT_REQUEST_INVALID')
+    const row = this.row(key)
+    if (row.state !== 'registered') throw new DesktopProjectSetupError('PROJECT_SETUP_CONFLICT')
+    const before = this.authorize(row.binding_id, row.binding_revision, row.controller_id)
+    if (this.busy.has(row.request_key)) throw new DesktopProjectSetupError('PROJECT_SETUP_BUSY')
+    this.busy.add(row.request_key)
+    try {
+      const registration = projectRegistrationResultSchema.parse(JSON.parse(row.result_json!))
+      const request = {
+        format: 1 as const,
+        controller_id: row.controller_id,
+        app_id: registration.app_id,
+        expected_ownership_generation: registration.ownership_generation,
+        expected_source_generation: registration.source_generation,
+        expected_source_config_sha256: registration.source_config_sha256,
+        expected_target_security_revision: row.target_security_revision
+      }
+      const result = projectTargetStateSchema.safeParse(
+        root === undefined
+          ? await this.admin.projectTargetState(row.binding_id, request)
+          : await this.admin.enrollProjectTarget(row.binding_id, { ...request, target_root: root })
+      )
+      this.authorize(row.binding_id, before.revision, before.controllerId)
+      if (this.db.inTransaction) throw new DesktopProjectSetupError('PROJECT_REQUEST_INVALID')
+      const current = this.row(key)
+      if (
+        current.state !== 'registered' ||
+        current.body_sha256 !== row.body_sha256 ||
+        current.app_id !== row.app_id
+      )
+        throw new DesktopProjectSetupError('PROJECT_SETUP_CONFLICT')
+      if (!result.success) throw new DesktopProjectSetupError('PROJECT_RESPONSE_INVALID')
+      const value = result.data
+      if (
+        value.controller_id !== row.controller_id ||
+        value.app_id !== row.app_id ||
+        value.ownership_generation !== registration.ownership_generation ||
+        value.source_generation !== registration.source_generation ||
+        value.source_config_sha256 !== registration.source_config_sha256 ||
+        value.target_vps_id !== row.target_vps_id ||
+        value.target_security_revision !== row.target_security_revision ||
+        (root !== undefined && value.target_root !== root) ||
+        (value.state === 'enrolled') !== (value.proof === 'persisted_verified') ||
+        Date.parse(value.checked_at) > Date.now() + 5000 ||
+        Date.now() - Date.parse(value.checked_at) > 90_000
+      )
+        throw new DesktopProjectSetupError('PROJECT_RESPONSE_INVALID')
+      return {
+        ...value,
+        binding_id: row.binding_id,
+        binding_revision: before.revision,
+        request_key: row.request_key
+      }
+    } finally {
+      this.busy.delete(row.request_key)
+    }
+  }
   async verifySource(key: string): Promise<DesktopProjectSourceVerification> {
     if (this.db.inTransaction) throw new DesktopProjectSetupError('PROJECT_REQUEST_INVALID')
     const row = this.row(key)

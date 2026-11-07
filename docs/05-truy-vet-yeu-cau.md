@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6g3c 07/11:** [Target preparation Desktop](tasks/tk-s7-release-r3c6g3c-target-ui.md) UI→typedIPC→verifiedSSH→reuseinstaller/proof đãnối; native25 cólostreply→coldinspect giữ nguyênfiles/keys,0deployment. Source/target fences vàmetadata state khôngreadyclaim. GUI readiness/resources/Docker/firstdeploy còn6g3d; liveVPS/HTTPS/migrate/ML/installer cầngatesriêng, không nângFR/PRODUCT_PASS từtestcount.
+
 > **R3c-6g3b 07/11:** [Source verification GUI](tasks/tk-s7-release-r3c6g3b-source-ui.md) đã nối UI→typedIPC→verifiedSSH→controller sourceCLI; fullSHA/time/metadata/safeerrors/4locale, không deployment hoặc ready flag. Focused99/nativeGit21/stderrprobe7/Electron44/type/lint/build đạt, full cuối theo hồ sơ. Targetenrollment/readiness/firstdeploy từGUI vẫn cần code6g3c; không nâng FR/UC/PRODUCT_PASS từ testcount hoặc ảnh fixture.
 
 > **R3c-6g3a 07/11:** [Xác minh source](tasks/tk-s7-release-r3c6g3a-source-verification.md) đã có backend/adminCLI/fullSHA/shared preflight/current authority và atomic paused observation. PublicGitHub + cold CLI kiểm chứng, chưa source verification GUI/enroll-target/firstdeploy readiness. Không nâng FR/UC hoặc PRODUCT_PASS từ số unit test; target runtime/live/ML/HTTPS/migrate/installer cần gates riêng.

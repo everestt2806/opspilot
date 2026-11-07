@@ -10,6 +10,12 @@ import type {
 import script from './desktop_controller_admin.py?raw'
 import catalog from '../../../control-plane-runtime/bundle-files.json'
 import { projectRegistrationResultSchema, projectTargetsResultSchema } from './projectRegistration'
+import { projectTargetStateSchema, type ProjectTargetError } from './projectTarget'
+import type {
+  ProductProjectTargetInput,
+  ProductProjectTargetEnrollmentInput,
+  ProductProjectTargetState
+} from '../../../../docs/contracts/product-project-target'
 import {
   projectSourceVerificationResultSchema,
   type ProjectSourceVerificationError
@@ -49,6 +55,13 @@ export class DesktopControllerEnrollmentError extends Error {
       | 'REQUEST_ABORTED'
       | 'REQUEST_TIMEOUT'
       | ProjectSourceVerificationError['code']
+      | ProjectTargetError['code']
+      | 'TARGET_ENROLLMENT_INPUT_INVALID'
+      | 'TARGET_ENROLLMENT_AUTHORITY_REJECTED'
+      | 'TARGET_ENROLLMENT_REQUIRES_QUIESCENCE'
+      | 'TARGET_ENROLLMENT_CONFLICT'
+      | 'TARGET_ENROLLMENT_NOT_READY'
+      | 'TARGET_ENROLLMENT_TRANSACTION_ACTIVE'
   ) {
     super(code)
   }
@@ -100,6 +113,30 @@ export class DesktopControllerEnrollment {
   ): Promise<ProductProjectTargetsResult> {
     return this.projectOperation(bindingId, 'project-targets', query, projectTargetsResultSchema)
   }
+  async projectTargetState(
+    bindingId: string,
+    input: Omit<ProductProjectTargetInput, 'artifact' | 'manifest_sha256'>
+  ): Promise<ProductProjectTargetState> {
+    const intent = this.vault.intent(bindingId)
+    return this.projectOperation(
+      bindingId,
+      'project-target-state',
+      { ...input, artifact: intent.artifact_path, manifest_sha256: intent.manifest_sha256 },
+      projectTargetStateSchema
+    )
+  }
+  async enrollProjectTarget(
+    bindingId: string,
+    input: Omit<ProductProjectTargetEnrollmentInput, 'artifact' | 'manifest_sha256'>
+  ): Promise<ProductProjectTargetState> {
+    const intent = this.vault.intent(bindingId)
+    return this.projectOperation(
+      bindingId,
+      'enroll-project-target',
+      { ...input, artifact: intent.artifact_path, manifest_sha256: intent.manifest_sha256 },
+      projectTargetStateSchema
+    )
+  }
   async registerProject(
     bindingId: string,
     input: ProductProjectRegistrationInput
@@ -129,7 +166,12 @@ export class DesktopControllerEnrollment {
   }
   private async projectOperation<T extends { controller_id: string }>(
     bindingId: string,
-    operation: 'project-targets' | 'register-project' | 'verify-project-source',
+    operation:
+      | 'project-targets'
+      | 'register-project'
+      | 'verify-project-source'
+      | 'project-target-state'
+      | 'enroll-project-target',
     payload: object,
     schema: z.ZodType<T>
   ): Promise<T> {
@@ -137,7 +179,11 @@ export class DesktopControllerEnrollment {
       intent = this.vault.intent(bindingId)
     const reply = await this.exchange(
       intent,
-      operation === 'verify-project-source' ? { timeoutMs: 120_000 } : {},
+      operation === 'verify-project-source'
+        ? { timeoutMs: 120_000 }
+        : operation === 'enroll-project-target'
+          ? { timeoutMs: 90_000 }
+          : {},
       {
         operation,
         payload: { ...payload, controller_id: intent.controller_id },
@@ -220,7 +266,12 @@ export class DesktopControllerEnrollment {
     options: { signal?: AbortSignal; timeoutMs?: number },
     command?: {
       operation:
-        'revoke-desktop-client' | 'project-targets' | 'register-project' | 'verify-project-source'
+        | 'revoke-desktop-client'
+        | 'project-targets'
+        | 'register-project'
+        | 'verify-project-source'
+        | 'project-target-state'
+        | 'enroll-project-target'
       payload: object
       expected_revision?: number
     }
@@ -229,7 +280,12 @@ export class DesktopControllerEnrollment {
     if (
       !Number.isSafeInteger(timeout) ||
       timeout < 1 ||
-      timeout > (command?.operation === 'verify-project-source' ? 120_000 : 60_000)
+      timeout >
+        (command?.operation === 'verify-project-source'
+          ? 120_000
+          : command?.operation === 'enroll-project-target'
+            ? 90_000
+            : 60_000)
     )
       throw new DesktopControllerVaultError('REQUEST_INVALID')
     if (options.signal?.aborted) throw new DesktopControllerEnrollmentError('REQUEST_ABORTED')
@@ -335,7 +391,17 @@ export class DesktopControllerEnrollment {
                   'PROJECT_SOURCE_FETCH_FAILED',
                   'PROJECT_SOURCE_ABORTED',
                   'PROJECT_SOURCE_DEADLINE',
-                  'PROJECT_SOURCE_STORAGE_UNAVAILABLE'
+                  'PROJECT_SOURCE_STORAGE_UNAVAILABLE',
+                  'PROJECT_TARGET_REQUEST_INVALID',
+                  'PROJECT_TARGET_AUTHORITY_CHANGED',
+                  'PROJECT_TARGET_CONFLICT',
+                  'PROJECT_TARGET_UNAVAILABLE',
+                  'TARGET_ENROLLMENT_INPUT_INVALID',
+                  'TARGET_ENROLLMENT_AUTHORITY_REJECTED',
+                  'TARGET_ENROLLMENT_REQUIRES_QUIESCENCE',
+                  'TARGET_ENROLLMENT_CONFLICT',
+                  'TARGET_ENROLLMENT_NOT_READY',
+                  'TARGET_ENROLLMENT_TRANSACTION_ACTIVE'
                 ])
               })
               .safeParse(decoded)

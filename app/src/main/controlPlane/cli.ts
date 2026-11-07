@@ -17,6 +17,7 @@ import { ControllerStartupRecovery } from './controllerStartupRecovery'
 import { ControllerClientAuth } from './controllerClientAuth'
 import { ProductProjectRegistration } from './projectRegistration'
 import { verifyProductProjectSource } from './projectSourceVerification'
+import { readProjectTargetState, enrollProjectTarget } from './projectTarget'
 import { loadControllerCredentialCipher } from './controllerSecrets'
 
 type Command =
@@ -34,6 +35,8 @@ type Command =
   | 'register-project'
   | 'project-targets'
   | 'verify-project-source'
+  | 'project-target-state'
+  | 'enroll-project-target'
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
@@ -58,7 +61,9 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
       'revoke-desktop-client',
       'register-project',
       'project-targets',
-      'verify-project-source'
+      'verify-project-source',
+      'project-target-state',
+      'enroll-project-target'
     ].includes(commandValue)
   ) {
     throw new Error('USAGE')
@@ -107,7 +112,9 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
     command === 'revoke-desktop-client' ||
     command === 'register-project' ||
     command === 'project-targets' ||
-    command === 'verify-project-source'
+    command === 'verify-project-source' ||
+    command === 'project-target-state' ||
+    command === 'enroll-project-target'
   ) {
     if (process.platform !== 'linux') throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
     const controller = new AbortController()
@@ -127,7 +134,26 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
         recoveryBundle = verifyControllerBundle(request.artifact, request.manifest_sha256)
       }
       opened = openControllerDatabase(dataDirectory)
-      if (command === 'verify-project-source') {
+      if (command === 'project-target-state' || command === 'enroll-project-target') {
+        console.log(
+          JSON.stringify(
+            command === 'project-target-state'
+              ? readProjectTargetState(
+                  opened.database,
+                  opened.controllerId,
+                  opened.dataDirectory,
+                  input
+                )
+              : await enrollProjectTarget(
+                  opened.database,
+                  opened.controllerId,
+                  opened.dataDirectory,
+                  input,
+                  controller.signal
+                )
+          )
+        )
+      } else if (command === 'verify-project-source') {
         console.log(
           JSON.stringify(
             await verifyProductProjectSource(opened.database, opened.controllerId, input, {

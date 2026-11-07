@@ -289,6 +289,48 @@ describe('Trusted Desktop controller enrollment', () => {
       vi.useRealTimers()
     }
   })
+  it('bounds target enrollment at90s without changing the source or legacy admin limits', async () => {
+    vault.activate(intent.binding_id, 1, issued)
+    reply = () => {}
+    vi.useFakeTimers()
+    try {
+      let settled = false
+      const running = service.enrollProjectTarget(intent.binding_id, {
+        format: 1,
+        controller_id: intent.controller_id,
+        app_id: 7,
+        expected_ownership_generation: 1,
+        expected_source_generation: 1,
+        expected_source_config_sha256: 'b'.repeat(64),
+        expected_target_security_revision: 3,
+        target_root: '/private/reviewed'
+      })
+      void running.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+      const rejected = expect(running).rejects.toThrow('REQUEST_TIMEOUT')
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(settled).toBe(false)
+      expect(requests[0]).toMatchObject({
+        operation: 'enroll-project-target',
+        payload: {
+          target_root: '/private/reviewed',
+          artifact: intent.artifact_path,
+          manifest_sha256: intent.manifest_sha256
+        }
+      })
+      await vi.advanceTimersByTimeAsync(30_000)
+      await rejected
+      expect(settled).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
   it('does not send for pre-aborted/invalid calls and closes a bootstrap delivered after the deadline', async () => {
     const stop = new AbortController()
     stop.abort()

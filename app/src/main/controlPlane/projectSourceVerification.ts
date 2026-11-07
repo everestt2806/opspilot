@@ -127,7 +127,7 @@ export async function verifyProductProjectSource(
   assertNotAborted()
   const bundle = verifyControllerBundle(request.artifact, request.manifest_sha256)
   const repository = new ProductDeployRepository(db)
-  const before = db.transaction(() => readAuthority(db, request)).immediate()
+  const before = db.transaction(() => readProjectSourceAuthority(db, request)).immediate()
   let snapshot: Awaited<ReturnType<typeof createGitSnapshot>>
   try {
     snapshot = await createGitSnapshot({
@@ -175,7 +175,7 @@ export async function verifyProductProjectSource(
       return db
         .transaction(() => {
           assertNotAborted()
-          const after = readAuthority(db, request)
+          const after = readProjectSourceAuthority(db, request)
           if (
             canonicalH2Json(after.source) !== canonicalH2Json(before.source) ||
             canonicalH2Json(after.target) !== canonicalH2Json(before.target)
@@ -258,7 +258,7 @@ export async function verifyProductProjectSource(
   return outcome.result
 }
 
-function readAuthority(
+export function readProjectSourceAuthority(
   db: Database.Database,
   request: ProductProjectSourceVerificationInput
 ): {

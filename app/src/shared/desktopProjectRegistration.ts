@@ -46,6 +46,33 @@ export interface DesktopProjectTargets {
   next_after_id: number | null
   has_more: boolean
 }
+export interface DesktopProjectTargetInput {
+  request_key: string
+  target_root: string
+}
+/** Current controller metadata; enrolled chỉ stored proof, không runtime readiness. */
+export interface DesktopProjectTargetState {
+  binding_id: string
+  binding_revision: number
+  request_key: string
+  controller_id: string
+  app_id: number
+  ownership_generation: number
+  source_generation: number
+  source_config_sha256: string
+  target_vps_id: number
+  target_security_revision: number
+  target_host: string
+  target_port: number
+  target_username: string
+  target_fingerprint: string
+  target_root: string
+  state: 'not_prepared' | 'prepared' | 'unknown' | 'enrolled' | 'conflict'
+  proof: 'not_available' | 'persisted_verified'
+  deployment_started: false
+  runtime_preflight: 'required'
+  checked_at: string
+}
 /** IPC controller:verify-project-source nhận request_key của registered setup.
  * Main derive app/generations/config/target từ journal, artifact/pin từ binding.
  * Chỉ explicit thao tác trên write-consent binding; không nhận remote command,

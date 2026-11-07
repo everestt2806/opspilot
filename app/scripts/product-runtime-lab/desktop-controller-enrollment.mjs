@@ -12,7 +12,9 @@ import {
   copyFileSync,
   chmodSync,
   chownSync,
-  lstatSync
+  lstatSync,
+  existsSync,
+  readdirSync
 } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
@@ -40,7 +42,18 @@ if (process.argv.includes('--cold')) {
       secret: request.ssh_secret
     }))
   try {
-    if (request.setup_key) {
+    if (request.target_root) {
+      const service = new api.DesktopControllerService(db, cipher, ssh)
+      process.stdout.write(
+        JSON.stringify({
+          status: 'PASS',
+          target: await service.enrollProjectTarget({
+            request_key: request.setup_key,
+            target_root: request.target_root
+          })
+        }) + '\n'
+      )
+    } else if (request.setup_key) {
       const service = new api.DesktopControllerService(db, cipher, ssh)
       process.stdout.write(
         JSON.stringify({ status: 'PASS', setup: await service.sendProject(request.setup_key) }) +
@@ -113,7 +126,8 @@ let observedCatalogSize,
   manager,
   result,
   discardReply = false,
-  discardProjectReply = false
+  discardProjectReply = false,
+  discardTargetReply = false
 const http = createServer((req, res) => {
   if (!serverApi.handle(req, res)) {
     res.writeHead(404)
@@ -151,9 +165,23 @@ const ssh = new Server({ hostKeys: [hostKey] }, (connection) => {
         channel.on('error', () => {})
         channel.pipe(child.stdin)
         channel.on('data', (chunk) => {
-          if (incoming.length + chunk.length <= 16384) incoming += chunk
+          if (incoming.length + chunk.length <= 2 * 1024 * 1024) incoming += chunk
         })
         child.stdout.on('data', (chunk) => {
+          if (discardTargetReply) {
+            try {
+              const packet = JSON.parse(incoming)
+              if (
+                packet.operation === 'enroll' &&
+                packet.payload?.purpose === 'product-target-enrollment'
+              ) {
+                drop = true
+                discardTargetReply = false
+              }
+            } catch {
+              /* Đợi packet đầy đủ trong giới hạn lab. */
+            }
+          }
           if (discardProjectReply) {
             try {
               if (JSON.parse(incoming).operation === 'register-project') {
@@ -198,7 +226,7 @@ const ssh = new Server({ hostKeys: [hostKey] }, (connection) => {
     })
   })
 })
-const cold = (bindingId, setupKey) =>
+const cold = (bindingId, setupKey, targetRoot) =>
   new Promise((resolveChild, rejectChild) => {
     const child = spawn(process.execPath, [import.meta.filename, '--cold'], {
       env: { ...process.env },
@@ -237,7 +265,8 @@ const cold = (bindingId, setupKey) =>
         key: masterKey.toString('base64'),
         binding_id: bindingId,
         ssh_secret: password,
-        setup_key: setupKey
+        setup_key: setupKey,
+        target_root: targetRoot
       })
     )
   })
@@ -592,6 +621,77 @@ try {
   assert.equal(verifiedAgain.commit_sha, verifiedSource.commit_sha)
   assert.equal(verifiedAgain.observation_sequence, verifiedSource.observation_sequence)
   cases.push('desktop_source_recheck_same_observation_and_no_implicit_deployment')
+  const targetRoot = join(install, 'runtime-target')
+  const targetInitial = await uiService.projectTargetState(setup.request_key)
+  assert.equal(targetInitial.state, 'not_prepared')
+  assert.equal(targetInitial.proof, 'not_available')
+  assert.equal(existsSync(targetRoot), false)
+  assert.equal(
+    remote
+      .prepare('SELECT COUNT(*) AS n FROM product_target_enrollment WHERE app_id=?')
+      .get(verifiedSource.app_id).n,
+    0
+  )
+  cases.push('desktop_read_target_state_is_metadata_only_without_key_or_target_creation')
+  discardTargetReply = true
+  const targetUnknown = await uiService.enrollProjectTarget({
+    request_key: setup.request_key,
+    target_root: targetRoot
+  })
+  assert.equal(discardTargetReply, false)
+  assert.equal(targetUnknown.state, 'unknown')
+  assert.equal(targetUnknown.proof, 'not_available')
+  assert.equal(existsSync(targetRoot), true)
+  const snapshotTarget = () => {
+    const entries = []
+    const walk = (directory) => {
+      for (const entry of readdirSync(directory)) {
+        const path = join(directory, entry),
+          stat = lstatSync(path)
+        assert.equal(stat.isSymbolicLink(), false)
+        if (stat.isDirectory()) walk(path)
+        else
+          entries.push([
+            path.slice(targetRoot.length),
+            stat.ino,
+            stat.mtimeMs,
+            createHash('sha256').update(readFileSync(path)).digest('hex')
+          ])
+      }
+    }
+    walk(targetRoot)
+    return entries
+  }
+  const installedBefore = snapshotTarget()
+  assert.ok(installedBefore.length >= 6)
+  cases.push('real_target_installed_before_lost_bootstrap_reply_keeps_controller_unknown')
+  const recoveredTarget = await cold(writeBinding.binding_id, setup.request_key, targetRoot)
+  assert.equal(recoveredTarget.status, 'PASS')
+  assert.equal(recoveredTarget.target.state, 'enrolled')
+  assert.equal(recoveredTarget.target.proof, 'persisted_verified')
+  assert.equal(recoveredTarget.target.deployment_started, false)
+  assert.equal(recoveredTarget.target.runtime_preflight, 'required')
+  assert.deepEqual(snapshotTarget(), installedBefore)
+  const targetRead = await uiService.projectTargetState(setup.request_key)
+  assert.equal(targetRead.state, 'enrolled')
+  assert.equal(targetRead.target_root, targetRoot)
+  assert.equal(
+    remote.prepare('SELECT COUNT(*) AS n FROM deployment WHERE app_id=?').get(verifiedSource.app_id)
+      .n,
+    0
+  )
+  cases.push(
+    'cold_desktop_unknown_target_uses_inspect_same_files_keys_and_hmac_proof_without_deployment'
+  )
+  await assert.rejects(
+    uiService.enrollProjectTarget({
+      request_key: setup.request_key,
+      target_root: join(install, 'other-root')
+    }),
+    (error) => error.context?.cause?.message === 'PROJECT_TARGET_CONFLICT'
+  )
+  assert.equal(existsSync(join(install, 'other-root')), false)
+  cases.push('reviewed_target_root_cannot_replace_existing_enrollment_or_create_another_install')
   const unsupported = await uiService.prepareProject({
     binding_id: writeBinding.binding_id,
     target_vps_id: 1,

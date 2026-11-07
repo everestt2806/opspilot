@@ -48,6 +48,7 @@ const requestSchema = z.strictObject({
           .every((part) => !!part && part !== '.' && part.length <= 255)
     )
 })
+export const productTargetRootSchema = requestSchema.shape.target_root
 
 export type TargetEnrollmentResult = Readonly<{
   state: 'enrolled' | 'unknown'
@@ -116,12 +117,14 @@ export async function enrollProductTarget(
   controllerId: string,
   directory: string,
   input: unknown,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  assertAuthority?: () => void
 ): Promise<TargetEnrollmentResult> {
   const parsed = requestSchema.safeParse(input)
   if (!parsed.success || parsed.data.controller_id !== controllerId)
     throw new Error('TARGET_ENROLLMENT_INPUT_INVALID')
   if (signal?.aborted) throw new Error('TARGET_ENROLLMENT_ABORTED')
+  assertAuthority?.()
   const request = parsed.data
   const bundle = verifyControllerBundle(request.artifact, request.manifest_sha256)
   const script = readVerifiedControllerBundleFile(
@@ -160,28 +163,45 @@ export async function enrollProductTarget(
     app_id: request.app_id,
     ownership_generation: request.ownership_generation
   }
-  repository.prepare(payload, () => {
-    // Explicit first prepare chỉ create-once; orphan record dùng lại, corrupt record không overwrite.
-    let material: Buffer
-    try {
-      material = createControllerRuntimeKey(directory, identity)
-    } catch {
-      material = loadControllerRuntimeKey(directory, identity)
-    }
-    material.fill(0)
-  })
+  repository.prepare(
+    payload,
+    () => {
+      // Explicit first prepare chỉ create-once; orphan record dùng lại, corrupt record không overwrite.
+      let material: Buffer
+      try {
+        material = createControllerRuntimeKey(directory, identity)
+      } catch {
+        material = loadControllerRuntimeKey(directory, identity)
+      }
+      material.fill(0)
+    },
+    assertAuthority
+  )
   const key = loadControllerRuntimeKey(directory, identity)
   const ssh = new SshManager(createControllerSshResolver(database, controllerId, directory))
   let started: ReturnType<TargetEnrollmentRepository['begin']> | undefined
   try {
     if (signal?.aborted) throw new Error('TARGET_ENROLLMENT_ABORTED')
-    started = repository.begin(payload)
+    started = repository.begin(payload, false, assertAuthority)
+    assertAuthority?.()
     const opened = await ssh.openProductBootstrapChannel(
       target.vps_id,
       { text: script, sha256: createHash('sha256').update(script).digest('hex') },
-      { signal, timeoutMs: 20_000 }
+      {
+        signal,
+        timeoutMs: 20_000,
+        expectedIdentity: {
+          vpsId: target.vps_id,
+          host: target.host,
+          port: target.port,
+          username: target.username,
+          authType: target.auth_type,
+          hostFingerprint: target.host_fingerprint
+        }
+      }
     )
     repository.assertCurrent(payload)
+    assertAuthority?.()
     const actual = opened.identity
     if (
       actual.vpsId !== target.vps_id ||
@@ -210,7 +230,7 @@ export async function enrollProductTarget(
       response.state !== 'enrolled'
     )
       throw new Error('TARGET_ENROLLMENT_UNKNOWN')
-    repository.complete(payload, response.proof, key)
+    repository.complete(payload, response.proof, key, false, assertAuthority)
     return {
       state: 'enrolled',
       app_id: request.app_id,

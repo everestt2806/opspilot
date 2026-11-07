@@ -187,6 +187,12 @@ export function registerIpcHandlers(
     handle('controller:cancel-command', (key) => desktopControllerService.cancelCommand(key))
     handle('controller:commands', (bindingId) => desktopControllerService.listCommands(bindingId))
     handle('controller:project-targets', (input) => desktopControllerService.projectTargets(input))
+    handle('controller:project-target-state', (key) =>
+      desktopControllerService.projectTargetState(key)
+    )
+    handle('controller:enroll-project-target', (input) =>
+      desktopControllerService.enrollProjectTarget(input)
+    )
     handle('controller:verify-project-source', (key) =>
       desktopControllerService.verifyProjectSource(key)
     )

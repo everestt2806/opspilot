@@ -60,7 +60,9 @@ describe('metadata-only controller IPC composition', () => {
       sendProject: vi.fn(async () => ({ state: 'registered' })),
       listProjects: vi.fn(async () => []),
       cancelProject: vi.fn(async () => ({ state: 'cancelled' })),
-      verifyProjectSource: vi.fn(async () => ({ state: 'source_verified' }))
+      verifyProjectSource: vi.fn(async () => ({ state: 'source_verified' })),
+      projectTargetState: vi.fn(async () => ({ state: 'not_prepared' })),
+      enrollProjectTarget: vi.fn(async () => ({ state: 'unknown' }))
     }
     registerIpcHandlers(
       {} as never,
@@ -85,9 +87,11 @@ describe('metadata-only controller IPC composition', () => {
       'controller:check-command',
       'controller:commands',
       'controller:disconnect',
+      'controller:enroll-project-target',
       'controller:list',
       'controller:prepare-command',
       'controller:prepare-project',
+      'controller:project-target-state',
       'controller:project-targets',
       'controller:projects',
       'controller:register',
@@ -118,7 +122,9 @@ describe('metadata-only controller IPC composition', () => {
       ['controller:send-project', 'sendProject'],
       ['controller:projects', 'listProjects'],
       ['controller:cancel-project', 'cancelProject'],
-      ['controller:verify-project-source', 'verifyProjectSource']
+      ['controller:verify-project-source', 'verifyProjectSource'],
+      ['controller:project-target-state', 'projectTargetState'],
+      ['controller:enroll-project-target', 'enrollProjectTarget']
     ] as const) {
       expect(await ingressCallback(channel)({}, 'unit')).toMatchObject({ ok: true })
       expect(service[method]).toHaveBeenCalledWith('unit')

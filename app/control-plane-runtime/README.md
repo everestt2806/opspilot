@@ -263,6 +263,37 @@ Không import Desktop SQLite/safeStorage, không tạo app/source/ownership/hist
 Service mặc định vẫn polling-only; phần target enrollment/admission/cold startup/service opt-in
 còn ở R3b/R3c. Kiểm chứng CLI/SSH thật và giới hạn hiện hành: [hồ sơ R3b-4](../../docs/tasks/tk-s7-release-r3b4-controller-enrollment.md).
 
+## Chuẩn bị target từ Desktop (R3c-6g3c)
+
+Dự án Product đã đăng ký có nút **Prepare target**. App đọc metadata hiện hành từ
+controller và hiển thị SSH host/user/port, fingerprint, thư mục private và trạng thái.
+Việc mở màn hình hoặc tải lại trạng thái không cài helper, tạo khóa hay tạo deployment.
+
+Với target chưa chuẩn bị, nhập thư mục private (gợi ý `/var/lib/opspilot-product`),
+chọn **Review**, xem lại đúng VPS/fingerprint/root rồi **Confirm preparation**. SSH user
+phải có quyền tạo base; parent phải tồn tại, an toàn. Không sudo, chmod hay ghi đè
+thư mục không an toàn. Root là cấu hình quản trị do người dùng xác nhận, không lấy từ repo.
+Controller dùng installer và proof hiện hữu, ghi trạng thái trước SSH, không build/run app.
+
+Nếu trạng thái **Outcome unknown**, thư mục cũ bị khóa và nút **Verify existing setup**
+chỉ inspect proof đúng cấu hình; không cài lại hoặc tạo khóa thay thế. Sau khi tắt/mở
+Desktop, **Load status** đọc lại record trên controller. Không đổi root để đoán kết quả.
+Nếu proof/binding/release xung đột, dừng và xem lại với quản trị viên; không tự clear barrier.
+
+**Target confirmation stored** chỉ xác nhận controller có stored HMAC proof hợp lệ.
+Không phải VPS online, Docker sẵn sàng, app đã chạy hoặc URL đã public. Trước deploy
+vẫn cần readiness tài nguyên/Docker/runtime và yêu cầu deploy có xác nhận (6g3d).
+Đóng modal trong lúc chuẩn bị không tuyên bố hủy tác vụ controller; tải trạng thái
+lại để kiểm chứng kết quả. Source verification là bước riêng và auto deploy vẫn paused.
+
+CLI quản trị tương ứng: `project-target-state` dùng cùng JSON authority/artifact/pin
+như `verify-project-source`; `enroll-project-target` thêm `target_root`. CLI wrapper
+giữ current source/config/target fences trong prepare/begin/complete transaction và
+ghim expected SSH identity trước auth. `enroll-target` cũ tiếp tục tương thích.
+
+[Contract](../../docs/contracts/product-project-target.ts) và
+[hồ sơ/gates](../../docs/tasks/tk-s7-release-r3c6g3c-target-ui.md).
+
 ## Xác minh source từ Desktop (R3c-6g3b)
 
 Trong Settings → View Product apps → Product projects, dự án đã đăng ký có nút

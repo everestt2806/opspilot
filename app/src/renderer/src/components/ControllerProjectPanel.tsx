@@ -25,6 +25,7 @@ import type {
 import { useUiState } from '../store/uiState'
 import { CONTROLLER_PROJECT_COPY } from './controllerProjectCopy'
 import { ControllerProjectSourceCheck } from './ControllerProjectSourceCheck'
+import { ControllerProjectTargetPreparation } from './ControllerProjectTargetPreparation'
 type Target = DesktopProjectTargets['items'][number]
 type Values = Omit<DesktopProjectSetupInput, 'binding_id' | 'framework'>
 const canonicalRepo = (value: string): string => {
@@ -353,7 +354,14 @@ export function ControllerProjectPanel({
               <Space wrap>
                 {row.state === 'registered' && (
                   <ControllerProjectSourceCheck
-                    key={sourceRevision}
+                    key={`source-${sourceRevision}`}
+                    binding={binding}
+                    project={row}
+                  />
+                )}
+                {row.state === 'registered' && (
+                  <ControllerProjectTargetPreparation
+                    key={`target-${sourceRevision}`}
                     binding={binding}
                     project={row}
                   />

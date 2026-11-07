@@ -1,5 +1,7 @@
 # Hoàn thiện OpsPilot tới 04/12/2026
 
+> **07/11 — R3c-6g3c:** [Target preparation GUI](tk-s7-release-r3c6g3c-target-ui.md) readstate/explicitreview/enroll qua existinginstaller/proof, atomic sourcefences +pinnedidentity; native25giữ unknown→coldinspect khôngreinstall. Per-app readiness/resources/Docker vàfirstdeploy GUI là6g3d, R3 tổng chưađóng. Khôngproductionwrite/PR/merge; checkpointpushđượcphép.
+
 > **07/11 — R3c-6g3b:** [Desktop source verification](tk-s7-release-r3c6g3b-source-ui.md) nối fixed verifiedSSH operation và UI4locale/fullSHA; native21/Electron44/99focused/type/lint/build đạt. R3 còn targetenrollment/readiness/firstdeploy GUI (6g3c), credential onboarding/installer/rotation/live/soak. Source verified chỉsnapshot, không đãdeploy; gate sản phẩm/ML/HTTPS/migrate vẫn nghiệmthu riêng.
 
 > **07/11 — R3c-6g3a:** [Source verification backend](tk-s7-release-r3c6g3a-source-verification.md) fixed Linux adminCLI/current SQLite/verified bundle/shared preflight/atomic paused observation, public GitHub + cold process đã chứng minh. R3 còn IPC/UI source verification, enroll-target/readiness/firstdeploy wizard, credential onboarding/installer/rotation/live/soak; không yêu cầu user test để thay code chưa viết. Local checkpoint không đóng R3 tổng hoặc PRODUCT_PASS.
