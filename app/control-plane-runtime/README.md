@@ -263,6 +263,23 @@ Không import Desktop SQLite/safeStorage, không tạo app/source/ownership/hist
 Service mặc định vẫn polling-only; phần target enrollment/admission/cold startup/service opt-in
 còn ở R3b/R3c. Kiểm chứng CLI/SSH thật và giới hạn hiện hành: [hồ sơ R3b-4](../../docs/tasks/tk-s7-release-r3b4-controller-enrollment.md).
 
+## Xác minh source từ Desktop (R3c-6g3b)
+
+Trong Settings → View Product apps → Product projects, dự án đã đăng ký có nút
+**Check source**. Mở nút để xem lại repo/nhánh/thư mục và target, rồi chọn **Verify source**.
+Controller tải source và trả full SHA, số file, dung lượng, cổng và thời điểm kiểm tra.
+Chỉ kết nối active đã opt-in quyền deploy/policy mới có thể thực hiện. Không cần nhập
+lại command, token, đường dẫn bundle hoặc SHA; main lấy metadata từ nhật ký đã đăng ký.
+
+Kiểm tra có thể mất tối đa hai phút. Source không hỗ trợ, repo không tải được, cấu hình
+đã đổi, app chưa paused hoặc quá hạn có thông báo riêng. Lỗi chưa rõ có thể kiểm tra lại
+đúng dự án; thao tác này không đăng ký lại app hoặc tạo job/deployment. Đóng modal chỉ
+đóng màn kết quả, không tuyên bố đã hủy tác vụ đọc trên controller. Refresh/đổi binding
+bỏ kết quả cũ; kết quả không được lưu thành cờ ready. Target enrollment/runtime preflight
+và deploy đầu tiên vẫn là bước tiếp, chưa được tự bật khi source kiểm tra thành công.
+
+[Hồ sơ và bằng chứng Desktop](../../docs/tasks/tk-s7-release-r3c6g3b-source-ui.md).
+
 ## Xác minh source trước lần deploy đầu tiên (R3c-6g3a)
 
 Sau `register-project`, kiểm tra source bằng CLI trên controller:

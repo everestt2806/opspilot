@@ -46,6 +46,40 @@ export interface DesktopProjectTargets {
   next_after_id: number | null
   has_more: boolean
 }
+/** IPC controller:verify-project-source nhận request_key của registered setup.
+ * Main derive app/generations/config/target từ journal, artifact/pin từ binding.
+ * Chỉ explicit thao tác trên write-consent binding; không nhận remote command,
+ * URL/ref/SHA/path/env/credential từ renderer. Result là snapshot, không ready flag.
+ * Refresh/đổi binding/unmount loại kết quả UI cũ; lỗi/lostreply được kiểm tra lại
+ * bằng cùng setup key, không tạo app/job/deployment hoặc tự bật auto-deploy.
+ */
+export interface DesktopProjectSourceVerification {
+  binding_id: string
+  binding_revision: number
+  request_key: string
+  controller_id: string
+  app_id: number
+  ownership_generation: number
+  source_generation: number
+  source_config_sha256: string
+  target_vps_id: number
+  target_security_revision: number
+  repository_url: string
+  production_ref: string
+  repository_root: string
+  commit_sha: string
+  observation_sequence: number
+  framework: 'express'
+  configured_container_port: number
+  detected_container_port: number
+  source_file_count: number
+  source_bytes: number
+  auto_deploy_paused: true
+  deployment_started: false
+  runtime_preflight: 'required'
+  verified_at: string
+  state: 'source_verified'
+}
 /** Retry setup through same SSH-admin principal/key can repeat register-project:
  * controller transaction is idempotent; never create new UUID after ambiguous
  * reply. Binding/target revision checks before+after await; no implicit rebind.

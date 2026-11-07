@@ -24,6 +24,7 @@ let directory: string,
   lost: boolean,
   targets: ReturnType<typeof vi.fn<DesktopControllerEnrollment['projectTargets']>>,
   register: ReturnType<typeof vi.fn<DesktopControllerEnrollment['registerProject']>>,
+  verify: ReturnType<typeof vi.fn<DesktopControllerEnrollment['verifyProjectSource']>>,
   remote: Map<string, ProductProjectRegistrationResult>
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'opspilot-project-setup-'))
@@ -119,7 +120,33 @@ beforeEach(() => {
   )
   setups = new DesktopProjectSetups(db, vault, {
     projectTargets: targets,
-    registerProject: register
+    registerProject: register,
+    verifyProjectSource: (verify = vi.fn<DesktopControllerEnrollment['verifyProjectSource']>(
+      async (_binding, request) => ({
+        state: 'source_verified',
+        controller_id: request.controller_id,
+        app_id: request.app_id,
+        ownership_generation: request.expected_ownership_generation,
+        source_generation: request.expected_source_generation,
+        source_config_sha256: request.expected_source_config_sha256,
+        target_vps_id: 77,
+        target_security_revision: 3,
+        repository_url: 'https://github.com/example/api.git',
+        production_ref: 'main',
+        repository_root: '.',
+        commit_sha: 'c'.repeat(40),
+        observation_sequence: 1,
+        framework: 'express',
+        configured_container_port: 3000,
+        detected_container_port: 3000,
+        source_file_count: 12,
+        source_bytes: 64000,
+        auto_deploy_paused: true,
+        deployment_started: false,
+        runtime_preflight: 'required',
+        verified_at: new Date().toISOString()
+      })
+    ))
   } as never)
   input = {
     binding_id: binding,
@@ -139,6 +166,80 @@ afterEach(() => {
   rmSync(directory, { recursive: true })
 })
 describe('Desktop durable Product project setup', () => {
+  it('derives source authority from registered setup and returns only bound verification metadata without another registration', async () => {
+    const prepared = await setups.prepare(input)
+    await expect(setups.verifySource(prepared.request_key)).rejects.toThrow(
+      'PROJECT_SETUP_CONFLICT'
+    )
+    expect(verify).not.toHaveBeenCalled()
+    await setups.send(prepared.request_key)
+    const result = await setups.verifySource(prepared.request_key)
+    expect(verify).toHaveBeenCalledWith(input.binding_id, {
+      format: 1,
+      controller_id: 'remote-controller',
+      app_id: 42,
+      expected_ownership_generation: 1,
+      expected_source_generation: 1,
+      expected_source_config_sha256: 'b'.repeat(64),
+      expected_target_security_revision: 3
+    })
+    expect(result).toMatchObject({
+      binding_id: input.binding_id,
+      binding_revision: 2,
+      request_key: prepared.request_key,
+      commit_sha: 'c'.repeat(40),
+      deployment_started: false
+    })
+    expect(register).toHaveBeenCalledOnce()
+    expect(JSON.stringify(result)).not.toContain(token)
+    expect(db.prepare('SELECT count(*) AS n FROM product_deploy_job').get()).toEqual({ n: 0 })
+  })
+  it.each([
+    { controller_id: 'foreign' },
+    { app_id: 999 },
+    { target_vps_id: 1 },
+    { target_security_revision: 4 },
+    { source_generation: 2 },
+    { ownership_generation: 2 },
+    { source_config_sha256: 'e'.repeat(64) },
+    { repository_url: 'https://github.com/other/api.git' },
+    { production_ref: 'other' },
+    { repository_root: 'other' },
+    { configured_container_port: 4444 },
+    { deployment_started: true },
+    { auto_deploy_paused: false },
+    { verified_at: '2020-01-01T00:00:00Z' },
+    { raw_secret: 'never-export' }
+  ])('rejects mismatched or untrusted source reply: %j', async (changed) => {
+    const prepared = await setups.prepare(input)
+    await setups.send(prepared.request_key)
+    const original = verify.getMockImplementation()!
+    verify.mockImplementationOnce(
+      async (...args) => ({ ...(await original(...args)), ...changed }) as never
+    )
+    await expect(setups.verifySource(prepared.request_key)).rejects.toThrow(
+      'PROJECT_RESPONSE_INVALID'
+    )
+  })
+  it('ignores late source result after local binding disable and prevents overlapping verification', async () => {
+    const prepared = await setups.prepare(input)
+    await setups.send(prepared.request_key)
+    const original = verify.getMockImplementation()!
+    let finish!: () => void
+    verify.mockImplementationOnce(async (...args) => {
+      await new Promise<void>((resolve) => {
+        finish = resolve
+      })
+      return original(...args)
+    })
+    const first = setups.verifySource(prepared.request_key)
+    await expect(setups.verifySource(prepared.request_key)).rejects.toThrow('PROJECT_SETUP_BUSY')
+    vault.disable(input.binding_id, 2)
+    const rejected = expect(first).rejects.toThrow()
+    finish()
+    await rejected
+    expect(verify).toHaveBeenCalledOnce()
+  })
   it('keeps exact shared metadata contract and upgrades v026 without creating remote apps', () => {
     const read = (p: string): string =>
       readFileSync(new URL(p, import.meta.url), 'utf8').replaceAll('\r\n', '\n')

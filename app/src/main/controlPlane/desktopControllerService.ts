@@ -27,7 +27,8 @@ import type {
 import type {
   DesktopProjectSetupInput,
   DesktopProjectSetup,
-  DesktopProjectTargets
+  DesktopProjectTargets,
+  DesktopProjectSourceVerification
 } from '@shared/desktopProjectRegistration'
 import { DesktopProjectSetups, DesktopProjectSetupError } from './desktopProjectSetup'
 import { ProjectRegistrationError } from './projectRegistration'
@@ -94,6 +95,9 @@ export class DesktopControllerService {
   }
   async cancelProject(key: string): Promise<DesktopProjectSetup> {
     return this.safe(() => this.projects.cancel(key))
+  }
+  async verifyProjectSource(key: string): Promise<DesktopProjectSourceVerification> {
+    return this.safe(() => this.projects.verifySource(key))
   }
   async prepareCommand(input: DesktopControllerCommandInput): Promise<DesktopControllerCommand> {
     return this.safe(() => this.commands.prepare(input))

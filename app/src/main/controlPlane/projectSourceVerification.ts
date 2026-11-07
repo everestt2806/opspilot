@@ -28,6 +28,31 @@ export const projectSourceVerificationInputSchema = z.strictObject({
   manifest_sha256: z.string().regex(/^[a-f0-9]{64}$/)
 }) satisfies z.ZodType<ProductProjectSourceVerificationInput>
 
+export const projectSourceVerificationResultSchema = z.strictObject({
+  state: z.literal('source_verified'),
+  controller_id: projectSourceVerificationInputSchema.shape.controller_id,
+  app_id: positive,
+  ownership_generation: positive,
+  source_generation: positive,
+  source_config_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  target_vps_id: positive,
+  target_security_revision: positive,
+  repository_url: z.string().min(1).max(2048),
+  production_ref: z.string().min(1).max(255),
+  repository_root: z.string().min(1).max(512),
+  commit_sha: z.string().regex(/^[a-f0-9]{40}$/),
+  observation_sequence: positive,
+  framework: z.literal('express'),
+  configured_container_port: positive.max(65535),
+  detected_container_port: positive.max(65535),
+  source_file_count: positive.max(1024),
+  source_bytes: positive.max(64 * 1024 * 1024),
+  auto_deploy_paused: z.literal(true),
+  deployment_started: z.literal(false),
+  runtime_preflight: z.literal('required'),
+  verified_at: z.iso.datetime()
+}) satisfies z.ZodType<ProductProjectSourceVerificationResult>
+
 type Authority = {
   app_id: number
   name: string

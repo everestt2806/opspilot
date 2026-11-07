@@ -59,7 +59,8 @@ describe('metadata-only controller IPC composition', () => {
       prepareProject: vi.fn(async () => ({ state: 'prepared' })),
       sendProject: vi.fn(async () => ({ state: 'registered' })),
       listProjects: vi.fn(async () => []),
-      cancelProject: vi.fn(async () => ({ state: 'cancelled' }))
+      cancelProject: vi.fn(async () => ({ state: 'cancelled' })),
+      verifyProjectSource: vi.fn(async () => ({ state: 'source_verified' }))
     }
     registerIpcHandlers(
       {} as never,
@@ -93,7 +94,8 @@ describe('metadata-only controller IPC composition', () => {
       'controller:retry-enrollment',
       'controller:revoke',
       'controller:send-command',
-      'controller:send-project'
+      'controller:send-project',
+      'controller:verify-project-source'
     ])
     expect(await ingressCallback('controller:list')({}, undefined)).toEqual({ ok: true, data: [] })
     expect(await ingressCallback('controller:register')({}, { binding_id: 'unit' })).toMatchObject({
@@ -115,7 +117,8 @@ describe('metadata-only controller IPC composition', () => {
       ['controller:prepare-project', 'prepareProject'],
       ['controller:send-project', 'sendProject'],
       ['controller:projects', 'listProjects'],
-      ['controller:cancel-project', 'cancelProject']
+      ['controller:cancel-project', 'cancelProject'],
+      ['controller:verify-project-source', 'verifyProjectSource']
     ] as const) {
       expect(await ingressCallback(channel)({}, 'unit')).toMatchObject({ ok: true })
       expect(service[method]).toHaveBeenCalledWith('unit')

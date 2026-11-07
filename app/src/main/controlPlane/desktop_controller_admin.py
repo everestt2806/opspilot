@@ -14,6 +14,21 @@ import time
 
 APPROVED_ASSETS = ()
 MAX_REPLY = 65536
+SOURCE_ERROR_CODES = frozenset(
+    {
+        "PROJECT_SOURCE_REQUEST_INVALID",
+        "PROJECT_SOURCE_AUTHORITY_REJECTED",
+        "PROJECT_SOURCE_CHANGED",
+        "PROJECT_SOURCE_OBSERVATION_STALE",
+        "PROJECT_SOURCE_REQUIRES_QUIESCENCE",
+        "PROJECT_SOURCE_UNSUPPORTED",
+        "PROJECT_SOURCE_LIMIT_EXCEEDED",
+        "PROJECT_SOURCE_FETCH_FAILED",
+        "PROJECT_SOURCE_ABORTED",
+        "PROJECT_SOURCE_DEADLINE",
+        "PROJECT_SOURCE_STORAGE_UNAVAILABLE",
+    }
+)
 
 
 class AdminFailure(ValueError):
@@ -163,6 +178,7 @@ def verify(request):
 
 
 def run_cli(request, operation, payload):
+    source_check = operation == "verify-project-source"
     args = (
         [request["node_path"], "--version"]
         if operation == "_version"
@@ -178,7 +194,7 @@ def run_cli(request, operation, payload):
         args,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.PIPE if source_check else subprocess.DEVNULL,
         cwd=os.path.dirname(request["artifact_path"]),
         env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "NODE_ENV": "production"},
         start_new_session=True,
@@ -188,22 +204,41 @@ def run_cli(request, operation, payload):
             process.stdin.write(json.dumps(payload).encode())
         process.stdin.close()
         content = bytearray()
-        deadline = time.monotonic() + 15
+        error_content = bytearray()
+        deadline = time.monotonic() + (105 if source_check else 15)
         with selectors.DefaultSelector() as selector:
             selector.register(process.stdout, selectors.EVENT_READ)
-            while True:
+            if source_check:
+                selector.register(process.stderr, selectors.EVENT_READ)
+            while selector.get_map():
                 remaining = deadline - time.monotonic()
-                if remaining <= 0 or not selector.select(remaining):
+                if remaining <= 0:
                     raise ValueError()
-                chunk = os.read(
-                    process.stdout.fileno(), min(65536, MAX_REPLY - len(content) + 1)
-                )
-                if not chunk:
-                    break
-                content.extend(chunk)
-                if len(content) > MAX_REPLY:
+                events = selector.select(remaining)
+                if not events:
                     raise ValueError()
+                for key, _ in events:
+                    is_error = key.fileobj is process.stderr
+                    destination = error_content if is_error else content
+                    limit = 1024 if is_error else MAX_REPLY
+                    chunk = os.read(key.fd, min(65536, limit - len(destination) + 1))
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                    else:
+                        destination.extend(chunk)
+                        if len(destination) > limit:
+                            raise ValueError()
         if process.wait(timeout=max(0.1, deadline - time.monotonic())) != 0:
+            if source_check:
+                # Chỉ chuyển tiếp đúng mã đã duyệt, không stdout/stderr tùy ý.
+                match = re.fullmatch(
+                    rb"CONTROL_PLANE_ERROR (PROJECT_SOURCE_[A-Z_]+)\r?\n?",
+                    bytes(error_content),
+                )
+                if match:
+                    safe_code = match.group(1).decode("ascii")
+                    if safe_code in SOURCE_ERROR_CODES:
+                        raise AdminFailure(safe_code)
             raise ValueError()
         decoded = content.decode("utf-8", errors="strict")
         return decoded.strip() if operation == "_version" else json.loads(decoded)
@@ -212,6 +247,8 @@ def run_cli(request, operation, payload):
             os.killpg(process.pid, signal.SIGKILL)
             process.wait(timeout=5)
         process.stdout.close()
+        if source_check:
+            process.stderr.close()
 
 
 def main():
@@ -235,6 +272,7 @@ def main():
         "status",
         "project-targets",
         "register-project",
+        "verify-project-source",
     ):
         raise ValueError()
     try:

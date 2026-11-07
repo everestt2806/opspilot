@@ -10,6 +10,14 @@ import type {
 import script from './desktop_controller_admin.py?raw'
 import catalog from '../../../control-plane-runtime/bundle-files.json'
 import { projectRegistrationResultSchema, projectTargetsResultSchema } from './projectRegistration'
+import {
+  projectSourceVerificationResultSchema,
+  type ProjectSourceVerificationError
+} from './projectSourceVerification'
+import type {
+  ProductProjectSourceVerificationInput,
+  ProductProjectSourceVerificationResult
+} from '../../../../docs/contracts/product-project-source-verification'
 import type {
   ProductProjectRegistrationInput,
   ProductProjectRegistrationResult,
@@ -40,6 +48,7 @@ export class DesktopControllerEnrollmentError extends Error {
       | 'CONTROLLER_NODE_UNSUPPORTED'
       | 'REQUEST_ABORTED'
       | 'REQUEST_TIMEOUT'
+      | ProjectSourceVerificationError['code']
   ) {
     super(code)
   }
@@ -102,9 +111,25 @@ export class DesktopControllerEnrollment {
       projectRegistrationResultSchema
     )
   }
+  async verifyProjectSource(
+    bindingId: string,
+    input: Omit<ProductProjectSourceVerificationInput, 'artifact' | 'manifest_sha256'>
+  ): Promise<ProductProjectSourceVerificationResult> {
+    const intent = this.vault.intent(bindingId)
+    return this.projectOperation(
+      bindingId,
+      'verify-project-source',
+      {
+        ...input,
+        artifact: intent.artifact_path,
+        manifest_sha256: intent.manifest_sha256
+      },
+      projectSourceVerificationResultSchema
+    )
+  }
   private async projectOperation<T extends { controller_id: string }>(
     bindingId: string,
-    operation: 'project-targets' | 'register-project',
+    operation: 'project-targets' | 'register-project' | 'verify-project-source',
     payload: object,
     schema: z.ZodType<T>
   ): Promise<T> {
@@ -112,7 +137,7 @@ export class DesktopControllerEnrollment {
       intent = this.vault.intent(bindingId)
     const reply = await this.exchange(
       intent,
-      {},
+      operation === 'verify-project-source' ? { timeoutMs: 120_000 } : {},
       {
         operation,
         payload: { ...payload, controller_id: intent.controller_id },
@@ -194,13 +219,18 @@ export class DesktopControllerEnrollment {
     intent: ProductDesktopControllerBindingIntent,
     options: { signal?: AbortSignal; timeoutMs?: number },
     command?: {
-      operation: 'revoke-desktop-client' | 'project-targets' | 'register-project'
+      operation:
+        'revoke-desktop-client' | 'project-targets' | 'register-project' | 'verify-project-source'
       payload: object
       expected_revision?: number
     }
   ): Promise<unknown> {
     const timeout = options.timeoutMs ?? 45_000
-    if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 60_000)
+    if (
+      !Number.isSafeInteger(timeout) ||
+      timeout < 1 ||
+      timeout > (command?.operation === 'verify-project-source' ? 120_000 : 60_000)
+    )
       throw new DesktopControllerVaultError('REQUEST_INVALID')
     if (options.signal?.aborted) throw new DesktopControllerEnrollmentError('REQUEST_ABORTED')
     const stop = new AbortController()
@@ -294,7 +324,18 @@ export class DesktopControllerEnrollment {
                   'CONTROLLER_ADMIN_FAILED',
                   'CONTROLLER_IDENTITY_MISMATCH',
                   'CONTROLLER_BUNDLE_VERIFICATION_FAILED',
-                  'CONTROLLER_NODE_UNSUPPORTED'
+                  'CONTROLLER_NODE_UNSUPPORTED',
+                  'PROJECT_SOURCE_REQUEST_INVALID',
+                  'PROJECT_SOURCE_AUTHORITY_REJECTED',
+                  'PROJECT_SOURCE_CHANGED',
+                  'PROJECT_SOURCE_OBSERVATION_STALE',
+                  'PROJECT_SOURCE_REQUIRES_QUIESCENCE',
+                  'PROJECT_SOURCE_UNSUPPORTED',
+                  'PROJECT_SOURCE_LIMIT_EXCEEDED',
+                  'PROJECT_SOURCE_FETCH_FAILED',
+                  'PROJECT_SOURCE_ABORTED',
+                  'PROJECT_SOURCE_DEADLINE',
+                  'PROJECT_SOURCE_STORAGE_UNAVAILABLE'
                 ])
               })
               .safeParse(decoded)

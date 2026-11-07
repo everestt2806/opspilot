@@ -24,6 +24,7 @@ import type {
 } from '@shared/desktopProjectRegistration'
 import { useUiState } from '../store/uiState'
 import { CONTROLLER_PROJECT_COPY } from './controllerProjectCopy'
+import { ControllerProjectSourceCheck } from './ControllerProjectSourceCheck'
 type Target = DesktopProjectTargets['items'][number]
 type Values = Omit<DesktopProjectSetupInput, 'binding_id' | 'framework'>
 const canonicalRepo = (value: string): string => {
@@ -51,6 +52,7 @@ export function ControllerProjectPanel({
     t = CONTROLLER_PROJECT_COPY[locale],
     { modal } = App.useApp()
   const [rows, setRows] = useState<DesktopProjectSetup[]>([]),
+    [sourceRevision, setSourceRevision] = useState(0),
     [listError, setListError] = useState(false),
     [listLoading, setListLoading] = useState(false),
     [open, setOpen] = useState(false),
@@ -78,6 +80,7 @@ export function ControllerProjectPanel({
     latest.current.scopes.includes('deploy:manual') &&
     latest.current.scopes.includes('policy:write')
   const load = useCallback(async (): Promise<void> => {
+    setSourceRevision((value) => value + 1)
     const epoch = ++listEpoch.current
     setListLoading(true)
     try {
@@ -348,6 +351,13 @@ export function ControllerProjectPanel({
             key: 'actions',
             render: (_value, row) => (
               <Space wrap>
+                {row.state === 'registered' && (
+                  <ControllerProjectSourceCheck
+                    key={sourceRevision}
+                    binding={binding}
+                    project={row}
+                  />
+                )}
                 {['prepared', 'in_flight', 'outcome_unknown'].includes(row.state) && (
                   <Button
                     size="small"

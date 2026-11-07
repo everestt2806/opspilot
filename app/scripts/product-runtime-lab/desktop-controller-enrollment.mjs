@@ -537,9 +537,9 @@ try {
     target_vps_id: 1,
     app_name: 'wizard-api',
     framework: 'express',
-    repository_url: 'https://github.com/demo/new-app',
-    production_ref: 'main',
-    repository_root: '.',
+    repository_url: 'https://github.com/everestt2806/opspilot.git',
+    production_ref: 'feat/release-audit-20261204',
+    repository_root: 'demo-apps/san-nha-booking',
     host_port: null,
     container_port: 3000,
     healthcheck_path: '/health'
@@ -564,6 +564,54 @@ try {
     0
   )
   cases.push('cold_desktop_setup_retry_same_admin_key_one_registered_app_no_deploy')
+  const verifiedSource = await uiService.verifyProjectSource(setup.request_key)
+  assert.equal(verifiedSource.state, 'source_verified')
+  assert.match(verifiedSource.commit_sha, /^[a-f0-9]{40}$/)
+  assert.equal(verifiedSource.app_id, coldSetup.setup.app_id)
+  assert.equal(verifiedSource.binding_revision, writeBinding.revision)
+  assert.equal(verifiedSource.repository_root, 'demo-apps/san-nha-booking')
+  assert.equal(verifiedSource.deployment_started, false)
+  assert.equal(verifiedSource.runtime_preflight, 'required')
+  assert.equal(verifiedSource.auto_deploy_paused, true)
+  assert.equal(JSON.stringify(verifiedSource).includes(password), false)
+  assert.equal(
+    remote
+      .prepare('SELECT count(*) AS n FROM product_deploy_job WHERE app_id=?')
+      .get(verifiedSource.app_id).n,
+    0
+  )
+  assert.equal(
+    remote.prepare('SELECT count(*) AS n FROM deployment WHERE app_id=?').get(verifiedSource.app_id)
+      .n,
+    0
+  )
+  cases.push(
+    'desktop_service_verified_ssh_admin_actual_public_git_source_full_sha_without_runtime_dispatch'
+  )
+  const verifiedAgain = await uiService.verifyProjectSource(setup.request_key)
+  assert.equal(verifiedAgain.commit_sha, verifiedSource.commit_sha)
+  assert.equal(verifiedAgain.observation_sequence, verifiedSource.observation_sequence)
+  cases.push('desktop_source_recheck_same_observation_and_no_implicit_deployment')
+  const unsupported = await uiService.prepareProject({
+    binding_id: writeBinding.binding_id,
+    target_vps_id: 1,
+    app_name: 'unsupported-api',
+    framework: 'express',
+    repository_url: 'https://github.com/everestt2806/opspilot.git',
+    production_ref: 'feat/release-audit-20261204',
+    repository_root: 'demo-apps/express-api',
+    host_port: null,
+    container_port: 3000,
+    healthcheck_path: '/health'
+  })
+  await uiService.sendProject(unsupported.request_key)
+  await assert.rejects(
+    uiService.verifyProjectSource(unsupported.request_key),
+    (error) =>
+      error.context?.cause?.message === 'PROJECT_SOURCE_UNSUPPORTED' &&
+      !String(error).includes(password)
+  )
+  cases.push('native_admin_helper_forwards_only_allowlisted_source_rejection_code')
   assert.equal((await uiService.revoke(writeBinding.binding_id)).state, 'disabled')
   assert.deepEqual(db.pragma('foreign_key_check'), [])
   assert.deepEqual(remote.pragma('foreign_key_check'), [])

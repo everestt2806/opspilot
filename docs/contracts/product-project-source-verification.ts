@@ -54,4 +54,9 @@ export interface ProductProjectSourceVerificationResult {
  * Cùng SHA xác minh lại không tạo observation mới. Cleanup mọi snapshot đã nhận.
  * Không persistent ready flag: runtime phải fetch đúng SHA và kiểm lại source,
  * target/resources/health trước deployment; source_verified không phải deployed.
+ * Desktop dùng fixed verified SSH-admin wrapper: CLI90s/helper process105s/whole
+ * exchange120s riêng operation này. Lệnh admin khác giữ process15s và exchange
+ * default45s/max60s. Stderr source tối đa1024bytes chỉ được match đúng một stable
+ * PROJECT_SOURCE_* code trong allowlist; mọi suffix/unknown/oversize bị từ chối,
+ * không chuyển tiếp raw stderr. Stdout64KiB và request16KiB vẫn giữ nguyên.
  */

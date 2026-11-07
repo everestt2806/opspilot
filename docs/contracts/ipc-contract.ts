@@ -1,4 +1,4 @@
-import type { DesktopProjectSetupInput, DesktopProjectSetup, DesktopProjectTargets } from './desktop-project-registration';
+import type { DesktopProjectSetupInput, DesktopProjectSetup, DesktopProjectTargets, DesktopProjectSourceVerification } from './desktop-project-registration';
 import type { DesktopControllerCommand, DesktopControllerCommandInput } from './desktop-controller-commands';
 import type { DesktopControllerRegisterInput, DesktopControllerConnection, DesktopControllerSnapshot, DesktopControllerPageInput, DesktopControllerAppStatus } from './desktop-controller-ipc'
 
@@ -375,6 +375,7 @@ export interface IpcInvokeMap {
   'controller:cancel-command': (key: string) => IpcResult<DesktopControllerCommand>;
   'controller:commands': (bindingId: string) => IpcResult<DesktopControllerCommand[]>;
   'controller:project-targets': (input: {binding_id:string;after_id?:number|null}) => IpcResult<DesktopProjectTargets>;
+  'controller:verify-project-source': (key:string) => IpcResult<DesktopProjectSourceVerification>;
   'controller:prepare-project': (input: DesktopProjectSetupInput) => IpcResult<DesktopProjectSetup>;
   'controller:send-project': (key: string) => IpcResult<DesktopProjectSetup>;
   'controller:projects': (bindingId: string) => IpcResult<DesktopProjectSetup[]>;

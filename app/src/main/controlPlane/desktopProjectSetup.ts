@@ -4,7 +4,8 @@ import { z } from 'zod'
 import type {
   DesktopProjectSetup,
   DesktopProjectSetupInput,
-  DesktopProjectTargets
+  DesktopProjectTargets,
+  DesktopProjectSourceVerification
 } from '@shared/desktopProjectRegistration'
 import { DesktopControllerVault } from './desktopControllerVault'
 import type { DesktopControllerEnrollment } from './desktopControllerEnrollment'
@@ -14,6 +15,7 @@ import {
   projectRegistrationResultSchema
 } from './projectRegistration'
 import { canonicalH2Json } from './productH2Proof'
+import { projectSourceVerificationResultSchema } from './projectSourceVerification'
 
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   uuid = z.uuid().transform((value) => value.toLowerCase())
@@ -64,8 +66,69 @@ export class DesktopProjectSetups {
   constructor(
     private readonly db: Database.Database,
     private readonly vault: DesktopControllerVault,
-    private readonly admin: Pick<DesktopControllerEnrollment, 'projectTargets' | 'registerProject'>
+    private readonly admin: Pick<
+      DesktopControllerEnrollment,
+      'projectTargets' | 'registerProject' | 'verifyProjectSource'
+    >
   ) {}
+  async verifySource(key: string): Promise<DesktopProjectSourceVerification> {
+    if (this.db.inTransaction) throw new DesktopProjectSetupError('PROJECT_REQUEST_INVALID')
+    const row = this.row(key)
+    if (row.state !== 'registered') throw new DesktopProjectSetupError('PROJECT_SETUP_CONFLICT')
+    const before = this.authorize(row.binding_id, row.binding_revision, row.controller_id)
+    if (this.busy.has(row.request_key)) throw new DesktopProjectSetupError('PROJECT_SETUP_BUSY')
+    this.busy.add(row.request_key)
+    try {
+      const registration = projectRegistrationResultSchema.parse(JSON.parse(row.result_json!))
+      const parsed = projectSourceVerificationResultSchema.safeParse(
+        await this.admin.verifyProjectSource(row.binding_id, {
+          format: 1,
+          controller_id: row.controller_id,
+          app_id: registration.app_id,
+          expected_ownership_generation: registration.ownership_generation,
+          expected_source_generation: registration.source_generation,
+          expected_source_config_sha256: registration.source_config_sha256,
+          expected_target_security_revision: row.target_security_revision
+        })
+      )
+      this.authorize(row.binding_id, before.revision, before.controllerId)
+      if (this.db.inTransaction) throw new DesktopProjectSetupError('PROJECT_REQUEST_INVALID')
+      const current = this.row(key)
+      if (
+        current.state !== 'registered' ||
+        current.body_sha256 !== row.body_sha256 ||
+        current.app_id !== row.app_id
+      )
+        throw new DesktopProjectSetupError('PROJECT_SETUP_CONFLICT')
+      if (!parsed.success) throw new DesktopProjectSetupError('PROJECT_RESPONSE_INVALID')
+      const result = parsed.data,
+        body = ProductProjectRegistration.normalize(JSON.parse(row.body_json))
+      if (
+        result.controller_id !== row.controller_id ||
+        result.app_id !== registration.app_id ||
+        result.ownership_generation !== registration.ownership_generation ||
+        result.source_generation !== registration.source_generation ||
+        result.source_config_sha256 !== registration.source_config_sha256 ||
+        result.target_vps_id !== row.target_vps_id ||
+        result.target_security_revision !== row.target_security_revision ||
+        result.repository_url !== body.repository_url ||
+        result.production_ref !== body.production_ref ||
+        result.repository_root !== body.repository_root ||
+        result.configured_container_port !== body.container_port ||
+        Date.parse(result.verified_at) > Date.now() + 5000 ||
+        Date.now() - Date.parse(result.verified_at) > 120_000
+      )
+        throw new DesktopProjectSetupError('PROJECT_RESPONSE_INVALID')
+      return {
+        ...result,
+        binding_id: row.binding_id,
+        binding_revision: before.revision,
+        request_key: row.request_key
+      }
+    } finally {
+      this.busy.delete(row.request_key)
+    }
+  }
   async targets(bindingId: string, afterId: number | null = null): Promise<DesktopProjectTargets> {
     const id = uuid.safeParse(bindingId)
     if (!id.success || !positive.nullable().safeParse(afterId).success)

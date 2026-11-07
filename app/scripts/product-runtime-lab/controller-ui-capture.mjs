@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '../../..')
 const directory = join(root, 'app/.out-scripts/controller-ui', randomBytes(6).toString('hex'))
-const screenshots = join(root, 'docs/ui-redesign/screenshots/r3c6g2')
+const screenshots = join(root, 'docs/ui-redesign/screenshots/r3c6g3b')
 mkdirSync(directory, { recursive: true })
 mkdirSync(screenshots, { recursive: true })
 app.setPath('userData', directory)
@@ -46,6 +46,7 @@ for (const channel of [
   'controller:send-project',
   'controller:projects',
   'controller:cancel-project',
+  'controller:verify-project-source',
   'vps:list',
   'app:list',
   'window:set-titlebar-overlay',
@@ -115,6 +116,40 @@ for (const channel of [
       return { ok: true, data: projectRows[0] }
     }
     if (channel === 'controller:cancel-project') throw new Error('UNEXPECTED_GUI_PROJECT_CANCEL')
+    if (channel === 'controller:verify-project-source') {
+      assert.equal(input, projectRows[0].request_key)
+      const project = projectRows[0]
+      return {
+        ok: true,
+        data: {
+          binding_id: bindingId,
+          binding_revision: connection.revision,
+          request_key: project.request_key,
+          state: 'source_verified',
+          controller_id: connection.controller_id,
+          app_id: project.app_id,
+          ownership_generation: 1,
+          source_generation: 1,
+          source_config_sha256: 'b'.repeat(64),
+          target_vps_id: 77,
+          target_security_revision: 3,
+          repository_url: project.repository_url,
+          production_ref: project.production_ref,
+          repository_root: project.repository_root,
+          commit_sha: 'c'.repeat(40),
+          observation_sequence: 1,
+          framework: 'express',
+          configured_container_port: 3000,
+          detected_container_port: 3000,
+          source_file_count: 12,
+          source_bytes: 64000,
+          auto_deploy_paused: true,
+          deployment_started: false,
+          runtime_preflight: 'required',
+          verified_at: new Date().toISOString()
+        }
+      }
+    }
     if (channel === 'controller:commands') return { ok: true, data: commandRows }
     if (channel === 'controller:prepare-command') {
       commandRows = [
@@ -536,6 +571,49 @@ void app.whenReady().then(async () => {
           registered_distinct_from_deployed: true,
           screenshot: projectResultFile
         })
+        const sourceCalls = calls.filter(
+          (channel) => channel === 'controller:verify-project-source'
+        ).length
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.controller-project-panel button')).find(el=>el.textContent.trim()==='Check source').click()`
+        )
+        await wait(window, `!!document.querySelector('.controller-source-modal')`)
+        assert.equal(
+          calls.filter((channel) => channel === 'controller:verify-project-source').length,
+          sourceCalls
+        )
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.controller-source-modal button')).find(el=>el.textContent.trim()==='Verify source').click()`
+        )
+        await wait(
+          window,
+          `document.querySelector('.controller-source-result')?.textContent.includes('${'c'.repeat(40)}')`
+        )
+        await delay(200)
+        const sourceLayout = await window.webContents.executeJavaScript(`(()=>{
+          const modal=document.querySelector('.controller-source-modal .ant-modal-content'),footer=document.querySelector('.controller-source-modal .ant-modal-footer');
+          return {horizontal:modal.scrollWidth>modal.clientWidth,footer_inside:footer.getBoundingClientRect().bottom<=innerHeight,remaining:modal.textContent.includes('Not deployed. Target preparation and runtime checks are still required')}
+        })()`)
+        assert.equal(sourceLayout.horizontal, false)
+        assert.equal(sourceLayout.footer_inside, true)
+        assert.equal(sourceLayout.remaining, true)
+        const sourceFile = `project-source-verified-${width}x${height}-${theme}.png`
+        writeFileSync(
+          join(screenshots, sourceFile),
+          (await window.webContents.capturePage()).toPNG()
+        )
+        checks.push({
+          view: 'source_verified',
+          width,
+          height,
+          theme,
+          ...sourceLayout,
+          screenshot: sourceFile
+        })
+        await window.webContents.executeJavaScript(
+          `document.querySelector('.controller-source-modal .ant-modal-close').click()`
+        )
+        await wait(window, `!document.querySelector('.controller-source-modal')`)
         await window.webContents.executeJavaScript(
           `Array.from(document.querySelectorAll('button')).find(el=>el.textContent.trim()==='Register controller').click()`
         )

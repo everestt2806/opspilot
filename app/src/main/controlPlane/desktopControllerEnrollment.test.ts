@@ -200,6 +200,95 @@ describe('Trusted Desktop controller enrollment', () => {
       expect(() => vault.resolve(intent.binding_id)).toThrow('BINDING_UNAVAILABLE')
     }
   })
+  it('runs only the fixed source command with binding-derived bundle pins and strictly checks its reply', async () => {
+    vault.activate(intent.binding_id, 1, issued)
+    const sourceRequest = {
+      format: 1 as const,
+      controller_id: intent.controller_id,
+      app_id: 7,
+      expected_ownership_generation: 1,
+      expected_source_generation: 1,
+      expected_source_config_sha256: 'b'.repeat(64),
+      expected_target_security_revision: 3
+    }
+    const sourceReply = {
+      state: 'source_verified',
+      controller_id: intent.controller_id,
+      app_id: 7,
+      ownership_generation: 1,
+      source_generation: 1,
+      source_config_sha256: 'b'.repeat(64),
+      target_vps_id: 77,
+      target_security_revision: 3,
+      repository_url: 'https://github.com/example/api.git',
+      production_ref: 'main',
+      repository_root: '.',
+      commit_sha: 'c'.repeat(40),
+      observation_sequence: 1,
+      framework: 'express',
+      configured_container_port: 3000,
+      detected_container_port: 3000,
+      source_file_count: 12,
+      source_bytes: 64000,
+      auto_deploy_paused: true,
+      deployment_started: false,
+      runtime_preflight: 'required',
+      verified_at: new Date().toISOString()
+    }
+    reply = (value) => respond(value, sourceReply)
+    const result = await service.verifyProjectSource(intent.binding_id, sourceRequest)
+    expect(result.commit_sha).toBe('c'.repeat(40))
+    expect(requests[0]).toMatchObject({
+      operation: 'verify-project-source',
+      payload: {
+        ...sourceRequest,
+        artifact: intent.artifact_path,
+        manifest_sha256: intent.manifest_sha256
+      }
+    })
+    expect(JSON.stringify(requests)).not.toContain(issued.credential.access_token)
+    reply = (value) => respond(value, { ...sourceReply, raw_secret: 'do-not-export' })
+    await expect(service.verifyProjectSource(intent.binding_id, sourceRequest)).rejects.toThrow(
+      'CONTROLLER_ADMIN_FAILED'
+    )
+    reply = (value) => {
+      value.emit(
+        'data',
+        Buffer.from(JSON.stringify({ ok: false, code: 'PROJECT_SOURCE_UNSUPPORTED' }))
+      )
+      value.emit('end')
+      value.emit('close', 0)
+    }
+    await expect(service.verifyProjectSource(intent.binding_id, sourceRequest)).rejects.toThrow(
+      'PROJECT_SOURCE_UNSUPPORTED'
+    )
+  })
+  it('gives source verification its own bounded deadline and preserves enrollment timeout limits', async () => {
+    await expect(service.enroll(intent.binding_id, { timeoutMs: 60_001 })).rejects.toThrow(
+      'REQUEST_INVALID'
+    )
+    vault.activate(intent.binding_id, 1, issued)
+    reply = () => {}
+    vi.useFakeTimers()
+    try {
+      const running = service.verifyProjectSource(intent.binding_id, {
+        format: 1,
+        controller_id: intent.controller_id,
+        app_id: 7,
+        expected_ownership_generation: 1,
+        expected_source_generation: 1,
+        expected_source_config_sha256: 'b'.repeat(64),
+        expected_target_security_revision: 3
+      })
+      const failed = expect(running).rejects.toThrow('REQUEST_TIMEOUT')
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(open.mock.results).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(60_000)
+      await failed
+    } finally {
+      vi.useRealTimers()
+    }
+  })
   it('does not send for pre-aborted/invalid calls and closes a bootstrap delivered after the deadline', async () => {
     const stop = new AbortController()
     stop.abort()

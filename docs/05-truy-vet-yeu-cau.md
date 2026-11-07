@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6g3b 07/11:** [Source verification GUI](tasks/tk-s7-release-r3c6g3b-source-ui.md) đã nối UI→typedIPC→verifiedSSH→controller sourceCLI; fullSHA/time/metadata/safeerrors/4locale, không deployment hoặc ready flag. Focused99/nativeGit21/stderrprobe7/Electron44/type/lint/build đạt, full cuối theo hồ sơ. Targetenrollment/readiness/firstdeploy từGUI vẫn cần code6g3c; không nâng FR/UC/PRODUCT_PASS từ testcount hoặc ảnh fixture.
+
 > **R3c-6g3a 07/11:** [Xác minh source](tasks/tk-s7-release-r3c6g3a-source-verification.md) đã có backend/adminCLI/fullSHA/shared preflight/current authority và atomic paused observation. PublicGitHub + cold CLI kiểm chứng, chưa source verification GUI/enroll-target/firstdeploy readiness. Không nâng FR/UC hoặc PRODUCT_PASS từ số unit test; target runtime/live/ML/HTTPS/migrate/installer cần gates riêng.
 
 > **R3c-6g2 07/11:** [Tạo dự án Desktop](tasks/tk-s7-release-r3c6g2-desktop-registration.md) remoteVPSselection/formreview/verifiedSSHregister/durable027setup/samekeyretry đã nối; focusedbackend116/UI82/native18+CLI8/Electron40checks/fresh027/types/lint/build/Ruff đạt, fullcuối tại hồsơ. Đăng kýapp/sourcepaused chưasourceverification/enrolltarget/deploy;6g3còncode, live/installer/HTTPS/migrate/ML nghiệmthu riêng. KhôngnângFR/UC từtestcount.
