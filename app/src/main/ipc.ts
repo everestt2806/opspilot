@@ -180,6 +180,11 @@ export function registerIpcHandlers(
     handle('controller:revoke', (bindingId) => desktopControllerService.revoke(bindingId))
     handle('controller:disconnect', (bindingId) => desktopControllerService.disconnect(bindingId))
     handle('controller:apps', (input) => desktopControllerService.apps(input))
+    handle('controller:prepare-command', (input) => desktopControllerService.prepareCommand(input))
+    handle('controller:send-command', (key) => desktopControllerService.sendCommand(key))
+    handle('controller:check-command', (key) => desktopControllerService.checkCommand(key))
+    handle('controller:cancel-command', (key) => desktopControllerService.cancelCommand(key))
+    handle('controller:commands', (bindingId) => desktopControllerService.listCommands(bindingId))
   }
   const ingressService =
     sharedIngressService ??

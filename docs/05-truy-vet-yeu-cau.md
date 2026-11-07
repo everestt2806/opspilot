@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6e07/11:** [Desktop command journal](tasks/tk-s7-release-r3c6e-desktop-commands.md) có migration025 + main service/IPC, nativeSSH/HTTP/coldprocess9PASS (mất response sau commit vẫn1job, mởprocessmới chỉlookup); focused97/enrollment13/fresh025/Python365/types/lint/build PASS, full cuối tại hồ sơ. Đây là bằng chứng nhận intent, chưa phải deployment hoàn tất. UI Deploy/Pause/Resume/quyền ghi còn phải nối; không nâng FR/UC tổng hoặc gọi release production hoàn chỉnh.
+
 > **R3c-6d06/11:** [Controller UI/IPC](tasks/tk-s7-release-r3c6d-controller-ui.md) đã nối Settings đăng ký/list/retry/revoke/disconnect và đọc Product apps qua pinned SSH. Focused55/native13/Electron12checks/full1651PASS/2Linux-onlySKIP/0FAIL/Python365/fresh024/types/lint/build đạt. Không đổi trạng thái tổng FR/UC: còn code durable request journal, thao tác deploy/policy từ Desktop; installer/live/HTTPS/migrate/ML cần nghiệm thu riêng. Chưa cần user test để thay chỗ code chưa viết.
 
 > **R3c-6c06/11 backend gates PASS:** [Desktop vault/enrollment](tasks/tk-s7-release-r3c6c-desktop-enrollment.md) SQLite024/current principal+revision/encrypted credentials/verified SSH-admin CLI/lost delivery/cold process→authHTTP/revoke có native11/Windows safeStorage2process/full1633PASS/2SKIP/Python365/auth13/HTTP11/fresh024/types/lint/build/Ruff. Phần code còn lại cụ thể: IPC/UI đăng ký/chọn controller và list/actions từ controller; chưa yêu cầu user test backend. Chưa đồng nghĩa live rollout/installer/HTTPS/ML hoặc FR/UC tổng PASS.

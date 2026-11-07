@@ -36,7 +36,7 @@ import type { SharedIngressServiceResult } from './domain/ingress/sharedIngressS
 import type { DesktopControllerService } from './controlPlane/desktopControllerService'
 
 describe('metadata-only controller IPC composition', () => {
-  it('registers six concrete channels and preserves safe metadata/error DTOs', async () => {
+  it('registers eleven concrete channels and preserves safe metadata/error DTOs', async () => {
     handleMock.mockReset()
     const service = {
       list: vi.fn(async () => []),
@@ -48,7 +48,12 @@ describe('metadata-only controller IPC composition', () => {
       }),
       revoke: vi.fn(async () => ({ state: 'disabled' })),
       disconnect: vi.fn(async () => ({ state: 'disabled' })),
-      apps: vi.fn(async () => ({ items: [] }))
+      apps: vi.fn(async () => ({ items: [] })),
+      prepareCommand: vi.fn(async () => ({ request_key: 'unit', state: 'prepared' })),
+      sendCommand: vi.fn(async () => ({ request_key: 'unit', state: 'outcome_unknown' })),
+      checkCommand: vi.fn(async () => ({ request_key: 'unit', state: 'accepted' })),
+      cancelCommand: vi.fn(async () => ({ request_key: 'unit', state: 'cancelled' })),
+      listCommands: vi.fn(async () => [])
     }
     registerIpcHandlers(
       {} as never,
@@ -67,11 +72,16 @@ describe('metadata-only controller IPC composition', () => {
       .filter((name: string) => name.startsWith('controller:'))
     expect(channels.sort()).toEqual([
       'controller:apps',
+      'controller:cancel-command',
+      'controller:check-command',
+      'controller:commands',
       'controller:disconnect',
       'controller:list',
+      'controller:prepare-command',
       'controller:register',
       'controller:retry-enrollment',
-      'controller:revoke'
+      'controller:revoke',
+      'controller:send-command'
     ])
     expect(await ingressCallback('controller:list')({}, undefined)).toEqual({ ok: true, data: [] })
     expect(await ingressCallback('controller:register')({}, { binding_id: 'unit' })).toMatchObject({
@@ -83,6 +93,16 @@ describe('metadata-only controller IPC composition', () => {
       error: { technical: 'BINDING_CHANGED' }
     })
     expect(channels).not.toContain('controller:call')
+    for (const [channel, method] of [
+      ['controller:prepare-command', 'prepareCommand'],
+      ['controller:send-command', 'sendCommand'],
+      ['controller:check-command', 'checkCommand'],
+      ['controller:cancel-command', 'cancelCommand'],
+      ['controller:commands', 'listCommands']
+    ] as const) {
+      expect(await ingressCallback(channel)({}, 'unit')).toMatchObject({ ok: true })
+      expect(service[method]).toHaveBeenCalledWith('unit')
+    }
   })
 })
 

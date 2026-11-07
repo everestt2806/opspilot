@@ -1,3 +1,4 @@
+import type { DesktopControllerCommand, DesktopControllerCommandInput } from './desktop-controller-commands';
 import type { DesktopControllerRegisterInput, DesktopControllerConnection, DesktopControllerSnapshot, DesktopControllerPageInput } from './desktop-controller-ipc'
 
 /**
@@ -366,6 +367,11 @@ export interface IpcInvokeMap {
   'controller:revoke': (bindingId: string) => IpcResult<DesktopControllerConnection>;
   'controller:disconnect': (bindingId: string) => IpcResult<DesktopControllerConnection>;
   'controller:apps': (input: DesktopControllerPageInput) => IpcResult<DesktopControllerSnapshot>;
+  'controller:prepare-command': (input: DesktopControllerCommandInput) => IpcResult<DesktopControllerCommand>;
+  'controller:send-command': (key: string) => IpcResult<DesktopControllerCommand>;
+  'controller:check-command': (key: string) => IpcResult<DesktopControllerCommand>;
+  'controller:cancel-command': (key: string) => IpcResult<DesktopControllerCommand>;
+  'controller:commands': (bindingId: string) => IpcResult<DesktopControllerCommand[]>;
 
   // ── VPS (UC-01) ────────────────────────────────────────────────────────────
   'vps:list':           () => IpcResult<Vps[]>;

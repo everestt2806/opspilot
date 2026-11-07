@@ -15,6 +15,14 @@ import {
   DesktopControllerEnrollmentError
 } from './desktopControllerEnrollment'
 import { ControllerHttpClient, ControllerHttpClientError } from './controllerHttpClient'
+import {
+  DesktopControllerCommands,
+  DesktopControllerCommandError
+} from './desktopControllerCommands'
+import type {
+  DesktopControllerCommand,
+  DesktopControllerCommandInput
+} from '@shared/desktopControllerCommands'
 
 const registerSchema = z.strictObject({
   binding_id: z.uuid(),
@@ -38,6 +46,7 @@ const pageSchema = z.strictObject({
 export class DesktopControllerService {
   private readonly vault: DesktopControllerVault
   private readonly enrollment: DesktopControllerEnrollment
+  private readonly commands: DesktopControllerCommands
   constructor(
     private readonly db: Database.Database,
     cipher: AesGcmCredentialCipher,
@@ -46,6 +55,22 @@ export class DesktopControllerService {
   ) {
     this.vault = new DesktopControllerVault(db, cipher)
     this.enrollment = new DesktopControllerEnrollment(this.vault, ssh)
+    this.commands = new DesktopControllerCommands(db, this.vault, ssh, clientFactory)
+  }
+  async prepareCommand(input: DesktopControllerCommandInput): Promise<DesktopControllerCommand> {
+    return this.safe(() => this.commands.prepare(input))
+  }
+  async sendCommand(key: string): Promise<DesktopControllerCommand> {
+    return this.safe(() => this.commands.send(key))
+  }
+  async checkCommand(key: string): Promise<DesktopControllerCommand> {
+    return this.safe(() => this.commands.check(key))
+  }
+  async cancelCommand(key: string): Promise<DesktopControllerCommand> {
+    return this.safe(() => this.commands.cancel(key))
+  }
+  async listCommands(bindingId: string): Promise<DesktopControllerCommand[]> {
+    return this.safe(() => this.commands.list(bindingId))
   }
   async list(): Promise<DesktopControllerConnection[]> {
     return this.safe(() => this.vault.list().map((row) => this.connection(row.binding_id)))
@@ -197,6 +222,7 @@ export class DesktopControllerService {
       const code =
         error instanceof DesktopControllerVaultError ||
         error instanceof DesktopControllerEnrollmentError ||
+        error instanceof DesktopControllerCommandError ||
         error instanceof ControllerHttpClientError
           ? error.code
           : 'CONTROLLER_UNAVAILABLE'
