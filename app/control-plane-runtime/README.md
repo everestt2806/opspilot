@@ -7,6 +7,20 @@ Chạy bằng CLI Linux đã kiểm bundle; không có HTTP endpoint đăng ký 
 Target VPS phải được `enroll-vps` trước bằng fingerprint đã xác minh và credential
 controller mã hóa hợp lệ. ID VPS lấy từ controller, không dùng ID của Desktop.
 
+`project-targets --data-dir ...` nhận `{controller_id,after_id:null,limit:20}` hoặc
+`{controller_id,target_id:1}` qua stdin. Response chỉ gồm profile không archived,
+có pin và controller credential giải mã hợp lệ; không trả secret/cipher. Duyệt
+tiếp bằng `next_after_id` khi `has_more=true`, kể cả trang không có target đủ điều kiện.
+Đọc `ssh_security_revision` của target để điền `expected_target_security_revision`
+khi đăng ký; controller kiểm lại revision trong transaction trước khi tạo app.
+
+Desktop hiện có form đăng ký trong Settings → View Product apps → Product projects.
+Kết nối phải được đăng ký với quyền ghi opt-in. Hai bước cấu hình/xác nhận dùng
+metadata target của controller, lưu mã yêu cầu trên Desktop trước khi tạo app qua
+SSH đã kiểm pin/gói. Mất phản hồi thì thử lại đúng mã cũ, hủy chỉ khi chưa gửi.
+Trạng thái registered chỉ xác nhận dự án ở chế độ paused; source verification,
+target enrollment và first deployment vẫn là bước kế tiếp, không tự bật deploy.
+
 Ví dụ nội dung `registration.json` (thay controller ID, VPS ID, repo và tạo UUID mới):
 
 ```json
@@ -15,6 +29,7 @@ Ví dụ nội dung `registration.json` (thay controller ID, VPS ID, repo và t�
   "controller_id": "replace-with-controller-id",
   "request_key": "11111111-1111-4111-8111-111111111111",
   "target_vps_id": 1,
+  "expected_target_security_revision": 1,
   "app_name": "example-api",
   "framework": "express",
   "repository_url": "https://github.com/example/api",

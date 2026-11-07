@@ -36,7 +36,7 @@ import type { SharedIngressServiceResult } from './domain/ingress/sharedIngressS
 import type { DesktopControllerService } from './controlPlane/desktopControllerService'
 
 describe('metadata-only controller IPC composition', () => {
-  it('registers twelve concrete channels and preserves safe metadata/error DTOs', async () => {
+  it('registers seventeen concrete channels and preserves safe metadata/error DTOs', async () => {
     handleMock.mockReset()
     const service = {
       list: vi.fn(async () => []),
@@ -54,7 +54,12 @@ describe('metadata-only controller IPC composition', () => {
       sendCommand: vi.fn(async () => ({ request_key: 'unit', state: 'outcome_unknown' })),
       checkCommand: vi.fn(async () => ({ request_key: 'unit', state: 'accepted' })),
       cancelCommand: vi.fn(async () => ({ request_key: 'unit', state: 'cancelled' })),
-      listCommands: vi.fn(async () => [])
+      listCommands: vi.fn(async () => []),
+      projectTargets: vi.fn(async () => ({ items: [] })),
+      prepareProject: vi.fn(async () => ({ state: 'prepared' })),
+      sendProject: vi.fn(async () => ({ state: 'registered' })),
+      listProjects: vi.fn(async () => []),
+      cancelProject: vi.fn(async () => ({ state: 'cancelled' }))
     }
     registerIpcHandlers(
       {} as never,
@@ -75,15 +80,20 @@ describe('metadata-only controller IPC composition', () => {
       'controller:app-status',
       'controller:apps',
       'controller:cancel-command',
+      'controller:cancel-project',
       'controller:check-command',
       'controller:commands',
       'controller:disconnect',
       'controller:list',
       'controller:prepare-command',
+      'controller:prepare-project',
+      'controller:project-targets',
+      'controller:projects',
       'controller:register',
       'controller:retry-enrollment',
       'controller:revoke',
-      'controller:send-command'
+      'controller:send-command',
+      'controller:send-project'
     ])
     expect(await ingressCallback('controller:list')({}, undefined)).toEqual({ ok: true, data: [] })
     expect(await ingressCallback('controller:register')({}, { binding_id: 'unit' })).toMatchObject({
@@ -100,7 +110,12 @@ describe('metadata-only controller IPC composition', () => {
       ['controller:send-command', 'sendCommand'],
       ['controller:check-command', 'checkCommand'],
       ['controller:cancel-command', 'cancelCommand'],
-      ['controller:commands', 'listCommands']
+      ['controller:commands', 'listCommands'],
+      ['controller:project-targets', 'projectTargets'],
+      ['controller:prepare-project', 'prepareProject'],
+      ['controller:send-project', 'sendProject'],
+      ['controller:projects', 'listProjects'],
+      ['controller:cancel-project', 'cancelProject']
     ] as const) {
       expect(await ingressCallback(channel)({}, 'unit')).toMatchObject({ ok: true })
       expect(service[method]).toHaveBeenCalledWith('unit')

@@ -64,6 +64,7 @@ beforeEach(() => {
     controller_id: 'controller-test',
     request_key: randomUUID(),
     target_vps_id: 1,
+    expected_target_security_revision: 1,
     app_name: 'example-api',
     framework: 'express',
     repository_url: 'https://github.com/example/api',
@@ -80,13 +81,41 @@ afterEach(() => {
   rmSync(directory, { recursive: true })
 })
 describe('Atomic Product project registration', () => {
+  it('lists only current usable controller targets with bounded pagination and never imports local profiles', () => {
+    db.prepare(
+      "INSERT INTO vps(id,name,host,username,auth_type,encrypted_secret) VALUES(2,'legacy','other.test','unit','key',X'0102')"
+    ).run()
+    const first = registration.targets({
+      controller_id: 'controller-test',
+      after_id: null,
+      limit: 1
+    })
+    expect(first.items.map((item) => item.id)).toEqual([1])
+    expect(first.has_more).toBe(true)
+    expect(first.next_after_id).toBe(1)
+    expect(JSON.stringify(first)).not.toContain(secret)
+    expect(
+      registration.targets({ controller_id: 'controller-test', after_id: 1, limit: 1 })
+    ).toMatchObject({ items: [], has_more: false, next_after_id: null })
+    expect(registration.targets({ controller_id: 'controller-test', target_id: 2 }).items).toEqual(
+      []
+    )
+    expect(() =>
+      registration.targets({ controller_id: 'controller-test', after_id: null, limit: 51 })
+    ).toThrow('PROJECT_REQUEST_INVALID')
+    expect(() => registration.register({ ...input, expected_target_security_revision: 2 })).toThrow(
+      'PROJECT_TARGET_UNAVAILABLE'
+    )
+  })
   it('upgrades populated v025, retaining bindings and source data without implicit registrations', () => {
     const before = snapshot()
-    db.exec('DROP TABLE product_project_registration;DELETE FROM schema_version WHERE version=26')
+    db.exec(
+      'DROP TABLE desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE product_project_registration;DELETE FROM schema_version WHERE version=26'
+    )
     runMigrations(db)
     runMigrations(db)
     expect(snapshot()).toEqual(before)
-    expect(db.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({ n: 26 })
+    expect(db.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({ n: 27 })
     expect(db.pragma('foreign_key_check')).toEqual([])
     const sql = readFileSync(
       new URL('../db/migrations/026_product_project_registration.sql', import.meta.url),

@@ -68,6 +68,7 @@ beforeEach(() => {
     if (channel === 'controller:list') return { ok: true, data: rows }
     if (channel === 'controller:apps') return { ok: true, data: snapshot() }
     if (channel === 'controller:commands') return { ok: true, data: [] }
+    if (channel === 'controller:projects') return { ok: true, data: [] }
     if (channel === 'vps:list')
       return {
         ok: true,
@@ -168,7 +169,8 @@ describe('Controller settings onboarding and authoritative app reads', () => {
     let calls = 0
     invoke.mockImplementation(async (channel: string) => {
       if (channel === 'controller:list') return { ok: true, data: rows }
-      if (channel === 'controller:commands') return { ok: true, data: [] }
+      if (channel === 'controller:commands' || channel === 'controller:projects')
+        return { ok: true, data: [] }
       calls++
       if (calls === 1)
         return {

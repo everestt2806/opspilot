@@ -25,6 +25,7 @@ import type { IpcError, Vps } from '@shared/ipc'
 import { useUiState } from '../store/uiState'
 import { CONTROLLER_COPY, CONTROLLER_FEEDBACK } from './controllerCopy'
 import { ControllerCommandPanel } from './ControllerCommandPanel'
+import { ControllerProjectPanel } from './ControllerProjectPanel'
 import { CONTROLLER_COMMAND_COPY } from './controllerCommandCopy'
 
 function errorCode(error: IpcError | undefined): string {
@@ -451,25 +452,31 @@ export function ControllerPanel(): React.JSX.Element {
             (() => {
               const binding = rows.find((row) => row.binding_id === selected)!
               return (
-                <ControllerCommandPanel
-                  key={`${binding.binding_id}:${binding.revision}`}
-                  binding={binding}
-                  fresh={fresh === 'current'}
-                  snapshot={
-                    snapshot ?? {
-                      binding_id: binding.binding_id,
-                      binding_revision: binding.revision,
-                      controller_id: binding.controller_id,
-                      service_state: 'maintenance',
-                      data_freshness: 'unknown',
-                      checked_at: binding.updated_at,
-                      capabilities: { redeploy: 'blocked', pause: 'blocked', resume: 'blocked' },
-                      items: [],
-                      next_cursor: null,
-                      has_more: false
+                <>
+                  <ControllerProjectPanel
+                    key={`project:${binding.binding_id}:${binding.revision}`}
+                    binding={binding}
+                  />
+                  <ControllerCommandPanel
+                    key={`${binding.binding_id}:${binding.revision}`}
+                    binding={binding}
+                    fresh={fresh === 'current'}
+                    snapshot={
+                      snapshot ?? {
+                        binding_id: binding.binding_id,
+                        binding_revision: binding.revision,
+                        controller_id: binding.controller_id,
+                        service_state: 'maintenance',
+                        data_freshness: 'unknown',
+                        checked_at: binding.updated_at,
+                        capabilities: { redeploy: 'blocked', pause: 'blocked', resume: 'blocked' },
+                        items: [],
+                        next_cursor: null,
+                        has_more: false
+                      }
                     }
-                  }
-                />
+                  />
+                </>
               )
             })()}
         </section>

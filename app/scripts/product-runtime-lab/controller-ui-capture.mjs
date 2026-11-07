@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '../../..')
 const directory = join(root, 'app/.out-scripts/controller-ui', randomBytes(6).toString('hex'))
-const screenshots = join(root, 'docs/ui-redesign/screenshots/r3c6f')
+const screenshots = join(root, 'docs/ui-redesign/screenshots/r3c6g2')
 mkdirSync(directory, { recursive: true })
 mkdirSync(screenshots, { recursive: true })
 app.setPath('userData', directory)
@@ -31,6 +31,7 @@ const calls = [],
   checks = [],
   errors = []
 let commandRows = []
+let projectRows = []
 for (const channel of [
   'controller:list',
   'controller:apps',
@@ -40,6 +41,11 @@ for (const channel of [
   'controller:send-command',
   'controller:check-command',
   'controller:cancel-command',
+  'controller:project-targets',
+  'controller:prepare-project',
+  'controller:send-project',
+  'controller:projects',
+  'controller:cancel-project',
   'vps:list',
   'app:list',
   'window:set-titlebar-overlay',
@@ -49,6 +55,66 @@ for (const channel of [
   ipcMain.handle(channel, (_event, input) => {
     calls.push(channel)
     if (channel === 'controller:list') return { ok: true, data: [connection] }
+    if (channel === 'controller:projects') return { ok: true, data: projectRows }
+    if (channel === 'controller:project-targets')
+      return {
+        ok: true,
+        data: {
+          binding_id: bindingId,
+          binding_revision: 2,
+          controller_id: connection.controller_id,
+          items: [
+            {
+              id: 77,
+              name: 'Target lab',
+              host: '192.0.2.2',
+              port: 22,
+              username: 'operator',
+              host_fingerprint: 'SHA256:' + 'B'.repeat(43),
+              ssh_security_revision: 3
+            }
+          ],
+          next_after_id: null,
+          has_more: false
+        }
+      }
+    if (channel === 'controller:prepare-project') {
+      assert.equal(input.target_vps_id, 77)
+      assert.equal(input.repository_url, 'https://github.com/example/demo.git')
+      projectRows = [
+        {
+          request_key: '44444444-4444-4444-8444-444444444444',
+          binding_id: bindingId,
+          binding_revision: 2,
+          controller_id: connection.controller_id,
+          target_vps_id: 77,
+          target_security_revision: 3,
+          app_name: input.app_name,
+          repository_url: input.repository_url,
+          production_ref: input.production_ref,
+          repository_root: input.repository_root,
+          host_port: input.host_port,
+          container_port: input.container_port,
+          healthcheck_path: input.healthcheck_path,
+          state: 'prepared',
+          app_id: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ]
+      return { ok: true, data: projectRows[0] }
+    }
+    if (channel === 'controller:send-project') {
+      assert.equal(input, projectRows[0].request_key)
+      projectRows = projectRows.map((row) => ({
+        ...row,
+        state: 'registered',
+        app_id: 43,
+        host_port: 30000
+      }))
+      return { ok: true, data: projectRows[0] }
+    }
+    if (channel === 'controller:cancel-project') throw new Error('UNEXPECTED_GUI_PROJECT_CANCEL')
     if (channel === 'controller:commands') return { ok: true, data: commandRows }
     if (channel === 'controller:prepare-command') {
       commandRows = [
@@ -253,6 +319,7 @@ void app.whenReady().then(async () => {
         )
         await wait(window, `!document.querySelector('.controller-command-panel')`)
         commandRows = []
+        projectRows = []
         await window.webContents.executeJavaScript(
           `Array.from(document.querySelectorAll('button')).find(el=>el.textContent.trim()==='View Product apps').click()`
         )
@@ -351,6 +418,123 @@ void app.whenReady().then(async () => {
           theme,
           no_automatic_replay: true,
           screenshot: unknownFile
+        })
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.controller-project-panel button')).find(el=>el.textContent.trim()==='Create project').click()`
+        )
+        await wait(window, `!!document.querySelector('.ant-modal input[id="app_name"]')`)
+        await window.webContents.executeJavaScript(
+          `document.querySelector('.ant-modal .ant-select-selector').dispatchEvent(new MouseEvent('mousedown',{bubbles:true}))`
+        )
+        await wait(
+          window,
+          `!!document.querySelector('.ant-select-item-option[title="Target lab · 192.0.2.2 (#77)"]')`
+        )
+        await window.webContents.executeJavaScript(
+          `document.querySelector('.ant-select-item-option[title="Target lab · 192.0.2.2 (#77)"]').click()`
+        )
+        await window.webContents.executeJavaScript(
+          `(()=>{const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;for(const [id,value] of [['app_name','demo-api'],['repository_url','https://github.com/example/demo']]){const el=document.getElementById(id);setter.call(el,value);el.dispatchEvent(new Event('input',{bubbles:true}));}})()`
+        )
+        await delay(300)
+        const projectForm = await window.webContents.executeJavaScript(
+          `(()=>{const el=document.querySelector('.ant-modal-content');return{horizontal:el.scrollWidth>el.clientWidth,height:el.getBoundingClientRect().height,viewport:innerHeight,password_fields:el.querySelectorAll('input[type=password]').length}})()`
+        )
+        assert.equal(projectForm.horizontal, false)
+        assert.ok(projectForm.height < projectForm.viewport)
+        assert.equal(projectForm.password_fields, 0)
+        const projectFormFile = `project-form-${width}x${height}-${theme}.png`
+        writeFileSync(
+          join(screenshots, projectFormFile),
+          (await window.webContents.capturePage()).toPNG()
+        )
+        checks.push({
+          view: 'project_form',
+          width,
+          height,
+          theme,
+          ...projectForm,
+          screenshot: projectFormFile
+        })
+        await window.webContents.executeJavaScript(
+          `document.querySelector('.ant-modal-body').scrollTop=document.querySelector('.ant-modal-body').scrollHeight`
+        )
+        await delay(150)
+        const projectFooter = await window.webContents.executeJavaScript(
+          `(()=>{const el=Array.from(document.querySelectorAll('.ant-modal button')).find(el=>el.textContent.trim()==='Review configuration').getBoundingClientRect();const body=document.querySelector('.ant-modal-body').getBoundingClientRect();return{visible:el.top>=body.top&&el.bottom<=body.bottom,within_viewport:el.bottom<=innerHeight}})()`
+        )
+        assert.equal(projectFooter.visible, true)
+        assert.equal(projectFooter.within_viewport, true)
+        const projectBottomFile = `project-form-bottom-${width}x${height}-${theme}.png`
+        writeFileSync(
+          join(screenshots, projectBottomFile),
+          (await window.webContents.capturePage()).toPNG()
+        )
+        checks.push({
+          view: 'project_form_footer',
+          width,
+          height,
+          theme,
+          ...projectFooter,
+          screenshot: projectBottomFile
+        })
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.ant-modal button')).find(el=>el.textContent.trim()==='Review configuration').click()`
+        )
+        await wait(
+          window,
+          `Array.from(document.querySelectorAll('.ant-modal button')).some(el=>el.textContent.trim()==='Register project')`
+        )
+        await window.webContents.executeJavaScript(
+          `document.querySelector('.ant-modal-body').scrollTop=0`
+        )
+        await delay(250)
+        const projectReview = await window.webContents.executeJavaScript(
+          `document.querySelector('.ant-modal').textContent`
+        )
+        assert.ok(projectReview.includes('#77'))
+        assert.ok(projectReview.includes('https://github.com/example/demo.git'))
+        assert.equal(projectRows.length, 0)
+        const projectReviewFile = `project-review-${width}x${height}-${theme}.png`
+        writeFileSync(
+          join(screenshots, projectReviewFile),
+          (await window.webContents.capturePage()).toPNG()
+        )
+        checks.push({
+          view: 'project_review',
+          width,
+          height,
+          theme,
+          remote_target_and_canonical_source: true,
+          no_create_before_confirmation: true,
+          screenshot: projectReviewFile
+        })
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.ant-modal button')).find(el=>el.textContent.trim()==='Register project').click()`
+        )
+        await wait(
+          window,
+          `document.querySelector('.controller-project-panel')?.textContent.includes('The project is registered; this is not a deployment.')`
+        )
+        await wait(window, `!document.querySelector('.ant-modal')`)
+        await window.webContents.executeJavaScript(
+          `document.querySelector('.controller-project-panel').scrollIntoView({block:'start'})`
+        )
+        await delay(250)
+        assert.equal(projectRows.length, 1)
+        assert.equal(projectRows[0].state, 'registered')
+        const projectResultFile = `project-registered-${width}x${height}-${theme}.png`
+        writeFileSync(
+          join(screenshots, projectResultFile),
+          (await window.webContents.capturePage()).toPNG()
+        )
+        checks.push({
+          view: 'project_registered',
+          width,
+          height,
+          theme,
+          registered_distinct_from_deployed: true,
+          screenshot: projectResultFile
         })
         await window.webContents.executeJavaScript(
           `Array.from(document.querySelectorAll('button')).find(el=>el.textContent.trim()==='Register controller').click()`

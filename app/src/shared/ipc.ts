@@ -1,3 +1,4 @@
+import type { DesktopProjectSetupInput, DesktopProjectSetup, DesktopProjectTargets } from './desktopProjectRegistration';
 import type { DesktopControllerCommand, DesktopControllerCommandInput } from './desktopControllerCommands';
 import type { DesktopControllerRegisterInput, DesktopControllerConnection, DesktopControllerSnapshot, DesktopControllerPageInput, DesktopControllerAppStatus } from './desktopController'
 
@@ -375,6 +376,11 @@ export interface IpcInvokeMap {
   'controller:check-command': (key: string) => IpcResult<DesktopControllerCommand>;
   'controller:cancel-command': (key: string) => IpcResult<DesktopControllerCommand>;
   'controller:commands': (bindingId: string) => IpcResult<DesktopControllerCommand[]>;
+  'controller:project-targets': (input: {binding_id:string;after_id?:number|null}) => IpcResult<DesktopProjectTargets>;
+  'controller:prepare-project': (input: DesktopProjectSetupInput) => IpcResult<DesktopProjectSetup>;
+  'controller:send-project': (key: string) => IpcResult<DesktopProjectSetup>;
+  'controller:projects': (bindingId: string) => IpcResult<DesktopProjectSetup[]>;
+  'controller:cancel-project': (key: string) => IpcResult<DesktopProjectSetup>;
 
   // ── VPS (UC-01) ────────────────────────────────────────────────────────────
   'vps:list':           () => IpcResult<Vps[]>;

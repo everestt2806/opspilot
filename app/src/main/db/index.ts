@@ -29,6 +29,7 @@ import migration023 from './migrations/023_product_api_requests.sql?raw'
 import migration024 from './migrations/024_desktop_controller_binding.sql?raw'
 import migration025 from './migrations/025_desktop_controller_commands.sql?raw'
 import migration026 from './migrations/026_product_project_registration.sql?raw'
+import migration027 from './migrations/027_desktop_project_setup.sql?raw'
 
 interface Migration {
   name: string
@@ -166,6 +167,11 @@ const migrations: Migration[] = [
     name: '026_product_project_registration.sql',
     version: 26,
     sql: migration026
+  },
+  {
+    name: '027_desktop_project_setup.sql',
+    version: 27,
+    sql: migration027
   }
 ]
 

@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import { z } from 'zod'
-import type { ProductProjectRegistrationResult } from '../../../../docs/contracts/product-project-registration'
+import type {
+  ProductProjectRegistrationResult,
+  ProductProjectTargetsResult
+} from '../../../../docs/contracts/product-project-registration'
 import type { ProductDispatchTargetBinding } from '../../../../docs/contracts/product-auto-deploy'
 import type { AesGcmCredentialCipher } from '../crypto/credentialCipher'
 import { AppRepository } from '../db/appRepository'
@@ -10,11 +13,12 @@ import { canonicalH2Json } from './productH2Proof'
 import { decryptControllerCredential } from './controllerSecrets'
 
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
-const inputSchema = z.strictObject({
+export const projectRegistrationInputSchema = z.strictObject({
   format: z.literal(1),
   controller_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/),
   request_key: z.uuid().transform((value) => value.toLowerCase()),
   target_vps_id: positive,
+  expected_target_security_revision: positive,
   app_name: z.string().regex(/^[a-z0-9][a-z0-9-]{1,30}$/),
   framework: z.literal('express'),
   repository_url: z.string().min(1).max(2048),
@@ -28,7 +32,8 @@ const inputSchema = z.strictObject({
     .max(512)
     .regex(/^\/[A-Za-z0-9._~/-]*$/)
 })
-const resultSchema = z.strictObject({
+const inputSchema = projectRegistrationInputSchema
+export const projectRegistrationResultSchema = z.strictObject({
   state: z.enum(['registered', 'already_registered']),
   controller_id: inputSchema.shape.controller_id,
   request_key: inputSchema.shape.request_key,
@@ -43,6 +48,26 @@ const resultSchema = z.strictObject({
   runtime_preflight: z.literal('required'),
   source_verification: z.literal('required')
 }) satisfies z.ZodType<ProductProjectRegistrationResult>
+const resultSchema = projectRegistrationResultSchema
+export const projectTargetSchema = z.strictObject({
+  id: positive,
+  name: z
+    .string()
+    .min(1)
+    .max(128)
+    .refine((value) => [...value].every((c) => c.charCodeAt(0) > 31 && c.charCodeAt(0) !== 127)),
+  host: z.string().min(1).max(253),
+  port: positive.max(65535),
+  username: z.string().min(1).max(128),
+  host_fingerprint: z.string().regex(/^SHA256:[A-Za-z0-9+/]{43}$/),
+  ssh_security_revision: positive
+})
+export const projectTargetsResultSchema = z.strictObject({
+  controller_id: inputSchema.shape.controller_id,
+  items: z.array(projectTargetSchema).max(50),
+  next_after_id: positive.nullable(),
+  has_more: z.boolean()
+}) satisfies z.ZodType<ProductProjectTargetsResult>
 type Input = z.output<typeof inputSchema>
 type Stored = {
   body_json: string
@@ -89,9 +114,7 @@ export class ProductProjectRegistration {
     try {
       if (this.db.inTransaction || !/^unix:(0|[1-9][0-9]{0,9})$/.test(this.administratorId))
         throw new ProjectRegistrationError('PROJECT_REQUEST_INVALID')
-      const parsed = inputSchema.safeParse(input)
-      if (!parsed.success) throw new ProjectRegistrationError('PROJECT_REQUEST_INVALID')
-      const value = this.normalize(parsed.data)
+      const value = ProductProjectRegistration.normalize(input)
       if (value.controller_id !== this.controllerId)
         throw new ProjectRegistrationError('PROJECT_CONTROLLER_UNAVAILABLE')
       const { request_key, ...body } = value,
@@ -109,6 +132,8 @@ export class ProductProjectRegistration {
           )
             throw new ProjectRegistrationError('PROJECT_CONTROLLER_UNAVAILABLE')
           const target = this.target(value.target_vps_id)
+          if (target.ssh_security_revision !== value.expected_target_security_revision)
+            throw new ProjectRegistrationError('PROJECT_TARGET_UNAVAILABLE')
           const previous = this.db
             .prepare(
               'SELECT * FROM product_project_registration WHERE controller_id=? AND administrator_id=? AND request_key=?'
@@ -242,8 +267,9 @@ export class ProductProjectRegistration {
       throw new ProjectRegistrationError('PROJECT_STORAGE_UNAVAILABLE')
     }
   }
-  private normalize(value: Input): Input {
+  static normalize(input: unknown): Input {
     try {
+      const value = inputSchema.parse(input)
       validateRef(value.production_ref)
       if (
         value.production_ref.startsWith('refs/') ||
@@ -264,6 +290,68 @@ export class ProductProjectRegistration {
     } catch {
       throw new ProjectRegistrationError('PROJECT_REQUEST_INVALID')
     }
+  }
+  targets(input: unknown): ProductProjectTargetsResult {
+    const common = { controller_id: inputSchema.shape.controller_id }
+    const parsed = z
+      .union([
+        z.strictObject({ ...common, target_id: positive }),
+        z.strictObject({ ...common, after_id: positive.nullable(), limit: positive.max(50) })
+      ])
+      .safeParse(input)
+    if (!parsed.success || this.db.inTransaction)
+      throw new ProjectRegistrationError('PROJECT_REQUEST_INVALID')
+    const value = parsed.data
+    return this.db.transaction(() => {
+      const controllers = this.db
+        .prepare('SELECT controller_id,status FROM product_controller')
+        .all() as Array<{ controller_id: string; status: string }>
+      if (
+        value.controller_id !== this.controllerId ||
+        controllers.length !== 1 ||
+        controllers[0].controller_id !== this.controllerId ||
+        controllers[0].status !== 'active'
+      )
+        throw new ProjectRegistrationError('PROJECT_CONTROLLER_UNAVAILABLE')
+      const rows = (
+        'target_id' in value
+          ? this.db
+              .prepare('SELECT id,name FROM vps WHERE id=? AND archived_at IS NULL')
+              .all(value.target_id)
+          : this.db
+              .prepare(
+                'SELECT id,name FROM vps WHERE id>? AND archived_at IS NULL ORDER BY id ASC LIMIT ?'
+              )
+              .all(value.after_id ?? 0, value.limit + 1)
+      ) as Array<{ id: number; name: string }>
+      const limit = 'target_id' in value ? 1 : value.limit,
+        scanned = rows.slice(0, limit),
+        items: ProductProjectTargetsResult['items'] = []
+      for (const row of scanned) {
+        try {
+          const target = this.target(row.id),
+            parsed = projectTargetSchema.safeParse({
+              id: row.id,
+              name: row.name,
+              host: target.host,
+              port: target.port,
+              username: target.username,
+              host_fingerprint: target.host_fingerprint,
+              ssh_security_revision: target.ssh_security_revision
+            })
+          if (parsed.success) items.push(parsed.data)
+        } catch {
+          /* Không xuất profile không đủ pin/controller credential. */
+        }
+      }
+      const has_more = rows.length > limit
+      return {
+        controller_id: this.controllerId,
+        items,
+        next_after_id: has_more ? scanned.at(-1)!.id : null,
+        has_more
+      }
+    })()
   }
   private target(id: number): Target {
     try {

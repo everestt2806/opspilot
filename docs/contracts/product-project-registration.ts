@@ -7,6 +7,7 @@ export interface ProductProjectRegistrationInput {
   controller_id: string
   request_key: string
   target_vps_id: number
+  expected_target_security_revision: number
   app_name: string
   framework: 'express'
   repository_url: string
@@ -31,6 +32,26 @@ export interface ProductProjectRegistrationResult {
   target_enrollment: 'required'
   runtime_preflight: 'required'
   source_verification: 'required'
+}
+export interface ProductProjectTarget {
+  id: number
+  name: string
+  host: string
+  port: number
+  username: string
+  host_fingerprint: string
+  ssh_security_revision: number
+}
+/** project-targets dùng stdin {controller_id,after_id:null|positive,limit:1..50}
+ * hoặc {controller_id,target_id:positive}. Active/unarchived/pinned/controller
+ * credential decrypt hợp lệ mới xuất hiện; thiếu target không fallback local.
+ * Page cursor là last scanned DB id, bounded50rows; page có thể rỗng/has_more.
+ */
+export interface ProductProjectTargetsResult {
+  controller_id: string
+  items: ProductProjectTarget[]
+  next_after_id: number | null
+  has_more: boolean
 }
 /** Các flag required và auto_deploy_paused phản ánh lúc đăng ký; đọc status riêng
  * để biết trạng thái hiện tại sau replay. Chưa fetch/detect repo ở thao tác này.

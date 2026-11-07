@@ -233,6 +233,8 @@ def main():
         "enroll-desktop-client",
         "revoke-desktop-client",
         "status",
+        "project-targets",
+        "register-project",
     ):
         raise ValueError()
     try:

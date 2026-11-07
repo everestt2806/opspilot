@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6g2 07/11:** [Tạo dự án Desktop](tasks/tk-s7-release-r3c6g2-desktop-registration.md) remoteVPSselection/formreview/verifiedSSHregister/durable027setup/samekeyretry đã nối; focusedbackend116/UI82/native18+CLI8/Electron40checks/fresh027/types/lint/build/Ruff đạt, fullcuối tại hồsơ. Đăng kýapp/sourcepaused chưasourceverification/enrolltarget/deploy;6g3còncode, live/installer/HTTPS/migrate/ML nghiệmthu riêng. KhôngnângFR/UC từtestcount.
+
 > **R3c-6g1 07/11:** [Đăng ký dự án Product](tasks/tk-s7-release-r3c6g1-project-registration.md) migration026 + Linux adminCLI atomic app/source/pausedowner/idempotent request; native2process→1app/0remotecommand/0job, focused66/native8+13+15/fresh026/types/lint/build/Python365 PASS, full cuối tại hồ sơ. Wizard tạo app mới chưa nối; source chưafetch, target chưaenroll ở operationnày. Không nâng FR/UC tổng thành live hoặc sản phẩm hoàn chỉnh.
 
 > **R3c-6f07/11:** [Product actions UI](tasks/tk-s7-release-r3c6f-command-ui.md) đã có write opt-in/controller app selection/confirmed exactSHA/Pause/Resume/durable journal lookup và app-job status riêng; focused68/full1680PASS/2Linux-onlySKIP/native15/Electron24checks/fresh025/types/lint/build PASS. App đã do controller quản lý mới thao tác được; wizard tạo app/target/source còn phải nối, installer/rotation/live/HTTPS/migrate/ML nghiệm thu riêng. Không nâng trạng thái tổng FR/UC từ số test.

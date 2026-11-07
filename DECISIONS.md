@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-07 | [product-mode/onboarding] R3c-6g2 dùng fixed verified SSH-admin project-targets/register-project và SQLite027 Desktop setup intent; main tạo UUID, bind controller/SSH-binding revision/remote target revision, replay cùng key sau mất phản hồi — Target list lấy controllerDB, không dùng Desktop VPS ID; registered là app/source paused, chưa source verification/enroll-target/auto-enable/deployed — Sơn/Codex
+
 2026-11-07 | [product-mode/onboarding] R3c-6g1 register-project là Linux SSH-admin CLI, SQLite026 key/controller/unix-admin namespace immutable; tạo app/source/paused ownership/history/request nguyên tử, không Desktop SQL hoặc import app ngầm — Public GitHub/Express-noDB theo runtime đang hỗ trợ, port DB allocation không thay target listener preflight; chưa auto-enable/enroll-target/dispatch — Sơn/Codex
 
 2026-11-07 | [product-mode/ui] R3c-6f đăng ký mới có allow_write opt-in, default read; main cấp read/deploy:manual/policy:write chỉ khi chọn rõ. UI đọc generations/capabilities từ controller và dùng durable journal cho deploy/pause/resume; accepted không tô thành runtime success, app/job status đọc riêng — Không tăng quyền binding cũ, không tự replay unknown hoặc fallback Desktop pipeline — Sơn/Codex

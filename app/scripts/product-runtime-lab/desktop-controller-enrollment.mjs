@@ -40,12 +40,20 @@ if (process.argv.includes('--cold')) {
       secret: request.ssh_secret
     }))
   try {
-    const client = new api.ControllerHttpClient(ssh, () => vault.resolve(request.binding_id))
-    const dto = await client.call('identity', {})
-    assert.equal(dto.state, 'response_received')
-    process.stdout.write(
-      JSON.stringify({ status: 'PASS', controller_id: dto.response.controller_id }) + '\n'
-    )
+    if (request.setup_key) {
+      const service = new api.DesktopControllerService(db, cipher, ssh)
+      process.stdout.write(
+        JSON.stringify({ status: 'PASS', setup: await service.sendProject(request.setup_key) }) +
+          '\n'
+      )
+    } else {
+      const client = new api.ControllerHttpClient(ssh, () => vault.resolve(request.binding_id))
+      const dto = await client.call('identity', {})
+      assert.equal(dto.state, 'response_received')
+      process.stdout.write(
+        JSON.stringify({ status: 'PASS', controller_id: dto.response.controller_id }) + '\n'
+      )
+    }
   } catch (error) {
     process.stdout.write(
       JSON.stringify({
@@ -104,7 +112,8 @@ let observedCatalogSize,
   remote,
   manager,
   result,
-  discardReply = false
+  discardReply = false,
+  discardProjectReply = false
 const http = createServer((req, res) => {
   if (!serverApi.handle(req, res)) {
     res.writeHead(404)
@@ -128,8 +137,9 @@ const ssh = new Server({ hostKeys: [hostKey] }, (connection) => {
           rejectExec()
           return
         }
-        const channel = acceptExec(),
-          drop = discardReply
+        const channel = acceptExec()
+        let drop = discardReply,
+          incoming = ''
         discardReply = false
         const child = spawn('/bin/sh', ['-c', info.command], {
           stdio: ['pipe', 'pipe', 'pipe'],
@@ -140,8 +150,22 @@ const ssh = new Server({ hostKeys: [hostKey] }, (connection) => {
         child.stdin.on('error', () => {})
         channel.on('error', () => {})
         channel.pipe(child.stdin)
-        if (drop) child.stdout.resume()
-        else child.stdout.pipe(channel, { end: false })
+        channel.on('data', (chunk) => {
+          if (incoming.length + chunk.length <= 16384) incoming += chunk
+        })
+        child.stdout.on('data', (chunk) => {
+          if (discardProjectReply) {
+            try {
+              if (JSON.parse(incoming).operation === 'register-project') {
+                drop = true
+                discardProjectReply = false
+              }
+            } catch {
+              /* Wait for complete request. */
+            }
+          }
+          if (!drop) channel.write(chunk)
+        })
         child.stderr.resume()
         child.once('close', (code) => {
           children.delete(child)
@@ -174,7 +198,7 @@ const ssh = new Server({ hostKeys: [hostKey] }, (connection) => {
     })
   })
 })
-const cold = (bindingId) =>
+const cold = (bindingId, setupKey) =>
   new Promise((resolveChild, rejectChild) => {
     const child = spawn(process.execPath, [import.meta.filename, '--cold'], {
       env: { ...process.env },
@@ -212,13 +236,18 @@ const cold = (bindingId) =>
         directory: local,
         key: masterKey.toString('base64'),
         binding_id: bindingId,
-        ssh_secret: password
+        ssh_secret: password,
+        setup_key: setupKey
       })
     )
   })
 try {
   const initialized = api.initializeController(data),
     controller = initialized.controllerId
+  execFileSync(join(install, 'node'), [cli, 'secrets-init', '--data-dir', data], {
+    stdio: 'pipe',
+    timeout: 10000
+  })
   remote = new Database(join(data, 'opspilot.db'))
   remote.pragma('foreign_keys=ON')
   serverApi = new api.ControllerReadApi(
@@ -390,6 +419,11 @@ try {
   assert.equal(uiSnapshot.controller_id, controller)
   assert.equal(uiSnapshot.service_state, 'ready')
   assert.equal(JSON.stringify(uiSnapshot).includes(token), false)
+  await assert.rejects(
+    uiService.projectTargets({ binding_id: uiBinding.binding_id }),
+    (error) =>
+      error.code === 'VALIDATION' && error.context?.cause?.message === 'PROJECT_SCOPE_REQUIRED'
+  )
   assert.equal((await uiService.revoke(uiBinding.binding_id)).state, 'disabled')
   cases.push('ui_service_actual_register_read_only_http_snapshot_and_revoke')
   const writeInput = {
@@ -411,11 +445,45 @@ try {
   cases.push('ui_opt_in_actual_ssh_admin_grants_exact_write_scopes')
   const configHash = createHash('sha256').update('{}').digest('hex'),
     setupAt = new Date().toISOString()
-  remote
-    .prepare(
-      "INSERT INTO vps(id,name,host,username,auth_type,encrypted_secret) VALUES(1,'target','127.0.0.1','unit','key',X'0102')"
+  await new Promise((done, fail) => {
+    const child = spawn(join(install, 'node'), [cli, 'enroll-vps', '--data-dir', data], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+    let output = ''
+    child.stdout.on('data', (chunk) => {
+      if (output.length < 16384) output += chunk
+    })
+    child.stderr.resume()
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      fail(new Error('NATIVE_TARGET_ENROLL_TIMEOUT'))
+    }, 30000)
+    child.once('close', (code) => {
+      clearTimeout(timer)
+      try {
+        assert.equal(code, 0)
+        assert.equal(JSON.parse(output).vps_id, 1)
+        done()
+      } catch {
+        fail(new Error('NATIVE_TARGET_ENROLL_FAILED'))
+      }
+    })
+    child.stdin.end(
+      JSON.stringify({
+        format: 1,
+        controller_id: controller,
+        profile: {
+          name: 'native-target',
+          host: principal.host,
+          port: principal.port,
+          username: principal.username,
+          auth_type: principal.authType,
+          host_fingerprint: principal.hostFingerprint
+        },
+        secret: password
+      })
     )
-    .run()
+  })
   remote
     .prepare(
       "INSERT INTO app(id,vps_id,name,framework,host_port,container_port,source_type,git_repo_url,git_ref,git_root) VALUES(1,1,'ui-app','express',30001,3000,'git','https://github.com/demo/app.git','main','.')"
@@ -458,8 +526,45 @@ try {
   assert.equal(appStatus.latest_job_state, 'queued')
   assert.equal(appStatus.current_deployment_state, null)
   assert.equal((await uiService.checkCommand(command.request_key)).job_id, sent.job_id)
-  assert.equal((await uiService.revoke(writeBinding.binding_id)).state, 'disabled')
   cases.push('ui_service_generations_capabilities_exact_sha_journal_and_remote_queued_status')
+  const targetPage = await uiService.projectTargets({ binding_id: writeBinding.binding_id })
+  assert.equal(targetPage.items[0].id, 1)
+  assert.equal(targetPage.items[0].ssh_security_revision, 1)
+  assert.equal(JSON.stringify(targetPage).includes(password), false)
+  cases.push('desktop_verified_admin_lists_only_remote_controller_target_metadata')
+  const setup = await uiService.prepareProject({
+    binding_id: writeBinding.binding_id,
+    target_vps_id: 1,
+    app_name: 'wizard-api',
+    framework: 'express',
+    repository_url: 'https://github.com/demo/new-app',
+    production_ref: 'main',
+    repository_root: '.',
+    host_port: null,
+    container_port: 3000,
+    healthcheck_path: '/health'
+  })
+  assert.equal(setup.state, 'prepared')
+  assert.equal(remote.prepare("SELECT count(*) AS n FROM app WHERE name='wizard-api'").get().n, 0)
+  discardProjectReply = true
+  await assert.rejects(uiService.sendProject(setup.request_key))
+  assert.equal((await uiService.listProjects(writeBinding.binding_id))[0].state, 'outcome_unknown')
+  assert.equal(remote.prepare("SELECT count(*) AS n FROM app WHERE name='wizard-api'").get().n, 1)
+  cases.push('desktop_setup_persists_uuid_before_verified_admin_create_and_lost_reply')
+  const coldSetup = await cold(writeBinding.binding_id, setup.request_key)
+  assert.equal(coldSetup.status, 'PASS')
+  assert.equal(coldSetup.setup.state, 'registered')
+  assert.equal(coldSetup.setup.request_key, setup.request_key)
+  assert.equal(remote.prepare("SELECT count(*) AS n FROM app WHERE name='wizard-api'").get().n, 1)
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM product_project_registration').get().n, 1)
+  assert.equal(
+    remote
+      .prepare('SELECT count(*) AS n FROM product_deploy_job WHERE app_id=?')
+      .get(coldSetup.setup.app_id).n,
+    0
+  )
+  cases.push('cold_desktop_setup_retry_same_admin_key_one_registered_app_no_deploy')
+  assert.equal((await uiService.revoke(writeBinding.binding_id)).state, 'disabled')
   assert.deepEqual(db.pragma('foreign_key_check'), [])
   assert.deepEqual(remote.pragma('foreign_key_check'), [])
   cases.push('native_migration024_and_foreign_key_integrity')

@@ -128,6 +128,7 @@ try {
     controller_id: controller,
     request_key: randomUUID(),
     target_vps_id: 1,
+    expected_target_security_revision: 1,
     app_name: 'registered-api',
     framework: 'express',
     repository_url: 'https://github.com/example/api',
@@ -208,7 +209,7 @@ try {
   cases.push('current_credential_revision_app_and_controller_authority_rechecked_on_replay')
   const contents = JSON.stringify(db.prepare('SELECT * FROM product_project_registration').all())
   assert.equal(contents.includes(password), false)
-  assert.equal(db.prepare('SELECT MAX(version) AS n FROM schema_version').get().n, 26)
+  assert.equal(db.prepare('SELECT MAX(version) AS n FROM schema_version').get().n, 27)
   assert.deepEqual(db.pragma('foreign_key_check'), [])
   cases.push('native_migration026_integrity_and_secret_free_registration_records')
   result = {

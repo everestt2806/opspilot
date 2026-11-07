@@ -9,6 +9,12 @@ import type {
 } from '../../../../docs/contracts/product-controller-api'
 import script from './desktop_controller_admin.py?raw'
 import catalog from '../../../control-plane-runtime/bundle-files.json'
+import { projectRegistrationResultSchema, projectTargetsResultSchema } from './projectRegistration'
+import type {
+  ProductProjectRegistrationInput,
+  ProductProjectRegistrationResult,
+  ProductProjectTargetsResult
+} from '../../../../docs/contracts/product-project-registration'
 import {
   DesktopControllerVault,
   DesktopControllerVaultError,
@@ -65,8 +71,8 @@ export class DesktopControllerEnrollment {
       .slice(0, 32)
     const requestKey = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20)}`
     const raw = await this.exchange(intent, options, {
-      request_key: requestKey,
-      client_id: before.remote_client_id
+      operation: 'revoke-desktop-client',
+      payload: { request_key: requestKey, client_id: before.remote_client_id }
     })
     const reply = z
       .strictObject({ client_id: z.uuid(), revoked_at: z.iso.datetime() })
@@ -78,6 +84,52 @@ export class DesktopControllerEnrollment {
       throw new DesktopControllerVaultError('BINDING_CHANGED')
     if (current.state === 'disabled') return current
     return this.vault.disable(bindingId, current.revision)
+  }
+  async projectTargets(
+    bindingId: string,
+    query: { after_id: number | null; limit: number } | { target_id: number }
+  ): Promise<ProductProjectTargetsResult> {
+    return this.projectOperation(bindingId, 'project-targets', query, projectTargetsResultSchema)
+  }
+  async registerProject(
+    bindingId: string,
+    input: ProductProjectRegistrationInput
+  ): Promise<ProductProjectRegistrationResult> {
+    return this.projectOperation(
+      bindingId,
+      'register-project',
+      input,
+      projectRegistrationResultSchema
+    )
+  }
+  private async projectOperation<T extends { controller_id: string }>(
+    bindingId: string,
+    operation: 'project-targets' | 'register-project',
+    payload: object,
+    schema: z.ZodType<T>
+  ): Promise<T> {
+    const before = this.vault.resolve(bindingId),
+      intent = this.vault.intent(bindingId)
+    const reply = await this.exchange(
+      intent,
+      {},
+      {
+        operation,
+        payload: { ...payload, controller_id: intent.controller_id },
+        expected_revision: before.revision
+      }
+    )
+    const after = this.vault.resolve(bindingId)
+    if (
+      before.revision !== after.revision ||
+      before.controllerId !== after.controllerId ||
+      before.accessToken !== after.accessToken
+    )
+      throw new DesktopControllerVaultError('BINDING_CHANGED')
+    const parsed = schema.safeParse(reply)
+    if (!parsed.success || parsed.data.controller_id !== intent.controller_id)
+      throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+    return parsed.data
   }
   async enroll(
     bindingId: string,
@@ -141,7 +193,11 @@ export class DesktopControllerEnrollment {
   private async exchange(
     intent: ProductDesktopControllerBindingIntent,
     options: { signal?: AbortSignal; timeoutMs?: number },
-    revocation?: { request_key: string; client_id: string }
+    command?: {
+      operation: 'revoke-desktop-client' | 'project-targets' | 'register-project'
+      payload: object
+      expected_revision?: number
+    }
   ): Promise<unknown> {
     const timeout = options.timeoutMs ?? 45_000
     if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 60_000)
@@ -184,17 +240,19 @@ export class DesktopControllerEnrollment {
       const current = this.vault.intent(intent.binding_id)
       if (
         !samePrincipal(current.principal, intent.principal) ||
-        this.vault.get(intent.binding_id).state === 'disabled'
+        this.vault.get(intent.binding_id).state === 'disabled' ||
+        (command?.expected_revision !== undefined &&
+          this.vault.get(intent.binding_id).revision !== command.expected_revision)
       )
         throw new DesktopControllerVaultError('BINDING_CHANGED')
       const body = JSON.stringify({
-        operation: revocation ? 'revoke-desktop-client' : 'enroll-desktop-client',
+        operation: command?.operation ?? 'enroll-desktop-client',
         artifact_path: intent.artifact_path,
         data_directory: intent.data_directory,
         node_path: intent.node_path,
         manifest_sha256: intent.manifest_sha256,
         controller_id: intent.controller_id,
-        payload: revocation ?? {
+        payload: command?.payload ?? {
           request_key: intent.binding_id,
           display_name: intent.display_name,
           requested_scopes: intent.requested_scopes

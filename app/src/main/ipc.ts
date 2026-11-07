@@ -186,6 +186,11 @@ export function registerIpcHandlers(
     handle('controller:check-command', (key) => desktopControllerService.checkCommand(key))
     handle('controller:cancel-command', (key) => desktopControllerService.cancelCommand(key))
     handle('controller:commands', (bindingId) => desktopControllerService.listCommands(bindingId))
+    handle('controller:project-targets', (input) => desktopControllerService.projectTargets(input))
+    handle('controller:prepare-project', (input) => desktopControllerService.prepareProject(input))
+    handle('controller:send-project', (key) => desktopControllerService.sendProject(key))
+    handle('controller:projects', (bindingId) => desktopControllerService.listProjects(bindingId))
+    handle('controller:cancel-project', (key) => desktopControllerService.cancelProject(key))
   }
   const ingressService =
     sharedIngressService ??

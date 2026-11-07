@@ -24,6 +24,13 @@ import type {
   DesktopControllerCommand,
   DesktopControllerCommandInput
 } from '@shared/desktopControllerCommands'
+import type {
+  DesktopProjectSetupInput,
+  DesktopProjectSetup,
+  DesktopProjectTargets
+} from '@shared/desktopProjectRegistration'
+import { DesktopProjectSetups, DesktopProjectSetupError } from './desktopProjectSetup'
+import { ProjectRegistrationError } from './projectRegistration'
 
 const registerSchema = z.strictObject({
   binding_id: z.uuid(),
@@ -49,6 +56,7 @@ export class DesktopControllerService {
   private readonly vault: DesktopControllerVault
   private readonly enrollment: DesktopControllerEnrollment
   private readonly commands: DesktopControllerCommands
+  private readonly projects: DesktopProjectSetups
   constructor(
     private readonly db: Database.Database,
     cipher: AesGcmCredentialCipher,
@@ -58,6 +66,34 @@ export class DesktopControllerService {
     this.vault = new DesktopControllerVault(db, cipher)
     this.enrollment = new DesktopControllerEnrollment(this.vault, ssh)
     this.commands = new DesktopControllerCommands(db, this.vault, ssh, clientFactory)
+    this.projects = new DesktopProjectSetups(db, this.vault, this.enrollment)
+  }
+  async projectTargets(input: {
+    binding_id: string
+    after_id?: number | null
+  }): Promise<DesktopProjectTargets> {
+    return this.safe(() => {
+      const parsed = z
+        .strictObject({
+          binding_id: z.uuid(),
+          after_id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).nullable().optional()
+        })
+        .safeParse(input)
+      if (!parsed.success) throw new DesktopProjectSetupError('PROJECT_REQUEST_INVALID')
+      return this.projects.targets(parsed.data.binding_id, parsed.data.after_id ?? null)
+    })
+  }
+  async prepareProject(input: DesktopProjectSetupInput): Promise<DesktopProjectSetup> {
+    return this.safe(() => this.projects.prepare(input))
+  }
+  async sendProject(key: string): Promise<DesktopProjectSetup> {
+    return this.safe(() => this.projects.send(key))
+  }
+  async listProjects(bindingId: string): Promise<DesktopProjectSetup[]> {
+    return this.safe(() => this.projects.list(bindingId))
+  }
+  async cancelProject(key: string): Promise<DesktopProjectSetup> {
+    return this.safe(() => this.projects.cancel(key))
   }
   async prepareCommand(input: DesktopControllerCommandInput): Promise<DesktopControllerCommand> {
     return this.safe(() => this.commands.prepare(input))
@@ -296,6 +332,8 @@ export class DesktopControllerService {
         error instanceof DesktopControllerVaultError ||
         error instanceof DesktopControllerEnrollmentError ||
         error instanceof DesktopControllerCommandError ||
+        error instanceof DesktopProjectSetupError ||
+        error instanceof ProjectRegistrationError ||
         error instanceof ControllerHttpClientError
           ? error.code
           : 'CONTROLLER_UNAVAILABLE'

@@ -31,6 +31,7 @@ type Command =
   | 'enroll-desktop-client'
   | 'revoke-desktop-client'
   | 'register-project'
+  | 'project-targets'
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
@@ -53,7 +54,8 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
       'recover-runtime',
       'enroll-desktop-client',
       'revoke-desktop-client',
-      'register-project'
+      'register-project',
+      'project-targets'
     ].includes(commandValue)
   ) {
     throw new Error('USAGE')
@@ -100,7 +102,8 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
     command === 'recover-runtime' ||
     command === 'enroll-desktop-client' ||
     command === 'revoke-desktop-client' ||
-    command === 'register-project'
+    command === 'register-project' ||
+    command === 'project-targets'
   ) {
     if (process.platform !== 'linux') throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
     const controller = new AbortController()
@@ -120,17 +123,20 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
         recoveryBundle = verifyControllerBundle(request.artifact, request.manifest_sha256)
       }
       opened = openControllerDatabase(dataDirectory)
-      if (command === 'register-project') {
+      if (command === 'register-project' || command === 'project-targets') {
         const uid = process.getuid?.()
         if (uid === undefined) throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
+        const registration = new ProductProjectRegistration(
+          opened.database,
+          opened.controllerId,
+          `unix:${uid}`,
+          loadControllerCredentialCipher(opened.dataDirectory)
+        )
         console.log(
           JSON.stringify(
-            new ProductProjectRegistration(
-              opened.database,
-              opened.controllerId,
-              `unix:${uid}`,
-              loadControllerCredentialCipher(opened.dataDirectory)
-            ).register(input)
+            command === 'register-project'
+              ? registration.register(input)
+              : registration.targets(input)
           )
         )
       } else if (command === 'enroll-desktop-client' || command === 'revoke-desktop-client') {
