@@ -16,6 +16,7 @@ import { enrollProductTarget } from './targetEnrollment'
 import { ControllerStartupRecovery } from './controllerStartupRecovery'
 import { ControllerClientAuth } from './controllerClientAuth'
 import { ProductProjectRegistration } from './projectRegistration'
+import { verifyProductProjectSource } from './projectSourceVerification'
 import { loadControllerCredentialCipher } from './controllerSecrets'
 
 type Command =
@@ -32,6 +33,7 @@ type Command =
   | 'revoke-desktop-client'
   | 'register-project'
   | 'project-targets'
+  | 'verify-project-source'
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
@@ -55,7 +57,8 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
       'enroll-desktop-client',
       'revoke-desktop-client',
       'register-project',
-      'project-targets'
+      'project-targets',
+      'verify-project-source'
     ].includes(commandValue)
   ) {
     throw new Error('USAGE')
@@ -103,7 +106,8 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
     command === 'enroll-desktop-client' ||
     command === 'revoke-desktop-client' ||
     command === 'register-project' ||
-    command === 'project-targets'
+    command === 'project-targets' ||
+    command === 'verify-project-source'
   ) {
     if (process.platform !== 'linux') throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
     const controller = new AbortController()
@@ -123,7 +127,15 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
         recoveryBundle = verifyControllerBundle(request.artifact, request.manifest_sha256)
       }
       opened = openControllerDatabase(dataDirectory)
-      if (command === 'register-project' || command === 'project-targets') {
+      if (command === 'verify-project-source') {
+        console.log(
+          JSON.stringify(
+            await verifyProductProjectSource(opened.database, opened.controllerId, input, {
+              signal: controller.signal
+            })
+          )
+        )
+      } else if (command === 'register-project' || command === 'project-targets') {
         const uid = process.getuid?.()
         if (uid === undefined) throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
         const registration = new ProductProjectRegistration(

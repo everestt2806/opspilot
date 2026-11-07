@@ -263,6 +263,53 @@ Không import Desktop SQLite/safeStorage, không tạo app/source/ownership/hist
 Service mặc định vẫn polling-only; phần target enrollment/admission/cold startup/service opt-in
 còn ở R3b/R3c. Kiểm chứng CLI/SSH thật và giới hạn hiện hành: [hồ sơ R3b-4](../../docs/tasks/tk-s7-release-r3b4-controller-enrollment.md).
 
+## Xác minh source trước lần deploy đầu tiên (R3c-6g3a)
+
+Sau `register-project`, kiểm tra source bằng CLI trên controller:
+
+```sh
+node /releases/verified/control-plane.cjs verify-project-source --data-dir /var/lib/opspilot-controller < source-check.json
+```
+
+Ví dụ `source-check.json` chỉ chứa metadata. Lấy các generation/hash từ kết quả đăng ký
+hoặc trạng thái hiện hành, revision từ `project-targets`, và manifest pin từ bản build tin cậy:
+
+```json
+{
+  "format": 1,
+  "controller_id": "replace-with-controller-id",
+  "app_id": 1,
+  "expected_ownership_generation": 1,
+  "expected_source_generation": 1,
+  "expected_source_config_sha256": "replace-with-current-64-hex-source-config-hash",
+  "expected_target_security_revision": 1,
+  "artifact": "/releases/verified/control-plane.cjs",
+  "manifest_sha256": "replace-with-independently-verified-64-hex-bundle-hash"
+}
+```
+
+Repo/ref/root lấy từ SQLite hiện hành, không nhập lại URL hoặc SHA ở lệnh này.
+Controller tải snapshot public GitHub của `refs/heads/<production_ref>` trong thư mục
+tạm, dùng chung detector/render/quota với pipeline. Giới hạn toàn thao tác Git90giây,
+snapshot512MiB; giới hạn transfer hiện hành vẫn áp dụng lên source/collector/render.
+Không cài dependency, chạy code trong repo, build Docker hoặc mở SSH tới target.
+
+App phải Product-owned đúng controller/generation/config, target chưa archive và có pin,
+auto-deploy paused, không queued/active/uncertain work/lease/terminal chưa settle.
+Sau tải, controller kiểm lại authority/profile/config và observation sequence trước khi
+ghi observation + history cùng transaction. Thay đổi giữa chừng bị từ chối; không tự
+retry hoặc bật auto-deploy. Rerun cùng SHA giữ nguyên observation sequence.
+
+`state:source_verified` trả full SHA và metadata/counts, không file content hoặc
+build/start command. Đây là snapshot source tại thời điểm kiểm tra, **chưa deploy**,
+chưa chứng minh Docker, tài nguyên, listener/health hoặc public URL trên target.
+Runtime luôn tải đúng SHA và kiểm lại điều kiện trước thực thi. Bước tiếp theo vẫn là
+`enroll-target`, readiness và yêu cầu deploy có xác nhận. Chưa có nút source verification
+trên Desktop ở6g3a; không coi CLI gate là luồng GUI hoàn tất.
+
+[Contract](../../docs/contracts/product-project-source-verification.ts) và
+[hồ sơ/gates](../../docs/tasks/tk-s7-release-r3c6g3a-source-verification.md).
+
 ## Cài helper và đăng ký target app (R3b-5b)
 
 ```sh

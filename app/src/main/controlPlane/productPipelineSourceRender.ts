@@ -96,8 +96,31 @@ export function validatePreflightSourceAndPlan(
   sourceFiles: TransferFile[]
   sourceManifest: { totalBytes: number; sha256: string }
 } {
-  const app = new AppRepository(database).getById(snapshot.claim.app_id)
-  const sourceTree = buildSourceTree(snapshot.rootDirectory)
+  return validateProductSourceAndPlan(
+    database,
+    snapshot.claim.app_id,
+    snapshot.rootDirectory,
+    collectorDirectory,
+    templatesDirectory
+  )
+}
+
+/** Cùng preflight cho source onboarding và snapshot của execution claim. */
+export function validateProductSourceAndPlan(
+  database: Database.Database,
+  appId: number,
+  rootDirectory: string,
+  collectorDirectory = resolveCollectorDir(),
+  templatesDirectory?: string
+): {
+  app: App
+  plan: BuildPlan
+  sourceTree: ReturnType<typeof buildSourceTree>
+  sourceFiles: TransferFile[]
+  sourceManifest: { totalBytes: number; sha256: string }
+} {
+  const app = new AppRepository(database).getById(appId)
+  const sourceTree = buildSourceTree(rootDirectory)
   const detection = detectFramework(sourceTree)
   if (
     app.framework !== 'express' ||
@@ -110,7 +133,7 @@ export function validatePreflightSourceAndPlan(
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
   }
   const sourceFiles = [
-    ...collectFiles(snapshot.rootDirectory, 'src'),
+    ...collectFiles(rootDirectory, 'src'),
     ...collectFiles(collectorDirectory, 'collector')
   ]
   const sourceManifest = prepareManifest(sourceFiles)

@@ -423,7 +423,9 @@ describe('DeployPage safe environment defaults', () => {
       fireEvent.click(screen.getByText(strings.deploy.next))
 
       await screen.findByText('RAM trống')
-      const precheckInput = invoke.mock.calls.find(([channel]) => channel === 'deploy:precheck')?.[1] as {
+      const precheckInput = invoke.mock.calls.find(
+        ([channel]) => channel === 'deploy:precheck'
+      )?.[1] as {
         env: Record<string, string>
       }
       expect(precheckInput.env).toEqual({})
@@ -701,7 +703,7 @@ describe('DeployPage — wizard va log', () => {
 
     expect(await screen.findByText('Deploy log')).toBeTruthy()
     expect(screen.getByText('Live output')).toBeTruthy()
-    expect(terminalOptions[0]?.convertEol).toBe(true)
+    await waitFor(() => expect(terminalOptions[0]?.convertEol).toBe(true))
     expect(invoke).toHaveBeenCalledWith('deploy:start', {
       vps_id: 1,
       app_id: undefined,

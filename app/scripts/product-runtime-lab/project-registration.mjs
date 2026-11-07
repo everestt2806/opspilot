@@ -19,6 +19,8 @@ const artifact = process.env.OPSPILOT_CONTROLLER_ARTIFACT,
   cases = [],
   connections = new Set(),
   password = randomBytes(32).toString('base64url')
+const verifySource = process.env.OPSPILOT_VERIFY_PROJECT_SOURCE === '1'
+let verifiedSource
 chmodSync(root, 0o700)
 mkdirSync(output, { recursive: true })
 const hostPath = join(root, 'host-key')
@@ -60,10 +62,13 @@ const run = (command, input) =>
     let stdout = '',
       stderr = '',
       overflow = false
-    const timer = setTimeout(() => {
-      child.kill('SIGKILL')
-      fail(new Error('CLI_TIMEOUT'))
-    }, 30000)
+    const timer = setTimeout(
+      () => {
+        child.kill('SIGKILL')
+        fail(new Error('CLI_TIMEOUT'))
+      },
+      command === 'verify-project-source' ? 105000 : 30000
+    )
     child.stdout.on('data', (chunk) => {
       if (stdout.length + chunk.length > 65536) overflow = true
       else stdout += chunk
@@ -187,6 +192,78 @@ try {
   )
   assert.equal(remoteCommands, 0)
   cases.push('port_allocation_paused_policy_no_deployment_job_or_remote_target_write')
+  if (verifySource) {
+    const publicProject = await ok('register-project', {
+      ...input,
+      request_key: randomUUID(),
+      app_name: 'public-source-api',
+      repository_url: 'https://github.com/everestt2806/opspilot.git',
+      production_ref: 'feat/release-audit-20261204',
+      repository_root: 'demo-apps/san-nha-booking'
+    })
+    const sourceInput = {
+      format: 1,
+      controller_id: controller,
+      app_id: publicProject.app_id,
+      expected_ownership_generation: publicProject.ownership_generation,
+      expected_source_generation: publicProject.source_generation,
+      expected_source_config_sha256: publicProject.source_config_sha256,
+      expected_target_security_revision: 1,
+      artifact,
+      manifest_sha256: createHash('sha256')
+        .update(readFileSync(join(resolve(artifact, '..'), 'bundle-manifest.json')))
+        .digest('hex')
+    }
+    verifiedSource = await ok('verify-project-source', sourceInput)
+    assert.equal(verifiedSource.state, 'source_verified')
+    assert.match(verifiedSource.commit_sha, /^[a-f0-9]{40}$/)
+    assert.equal(verifiedSource.repository_root, 'demo-apps/san-nha-booking')
+    assert.equal(verifiedSource.deployment_started, false)
+    assert.equal(verifiedSource.auto_deploy_paused, true)
+    assert.equal(verifiedSource.runtime_preflight, 'required')
+    assert.equal(verifiedSource.framework, 'express')
+    assert.ok(verifiedSource.source_file_count > 0)
+    assert.ok(verifiedSource.source_bytes > 0)
+    cases.push(
+      'real_public_github_branch_snapshot_full_sha_shared_detector_render_and_transfer_preflight'
+    )
+    const replay = await ok('verify-project-source', sourceInput)
+    assert.equal(replay.commit_sha, verifiedSource.commit_sha)
+    assert.equal(replay.observation_sequence, verifiedSource.observation_sequence)
+    assert.equal(db.prepare('SELECT count(*) AS n FROM product_branch_observation').get().n, 1)
+    assert.equal(db.prepare('SELECT count(*) AS n FROM product_deploy_job').get().n, 0)
+    assert.equal(db.prepare('SELECT count(*) AS n FROM deployment').get().n, 0)
+    assert.equal(db.prepare('SELECT count(*) AS n FROM product_target_enrollment').get().n, 0)
+    assert.equal(remoteCommands, 0)
+    cases.push(
+      'cold_real_cli_reverification_same_sha_one_observation_no_job_deployment_target_exec'
+    )
+    for (const changed of [
+      { expected_source_generation: 2 },
+      { expected_target_security_revision: 2 },
+      { target_sha: verifiedSource.commit_sha },
+      { secret: password },
+      { manifest_sha256: '0'.repeat(64) }
+    ]) {
+      const rejectedSource = await run('verify-project-source', { ...sourceInput, ...changed })
+      assert.equal(rejectedSource.code, 1)
+      assert.equal(rejectedSource.stdout, '')
+      assert.match(rejectedSource.stderr.trim(), /^CONTROL_PLANE_ERROR [A-Z_]+$/)
+    }
+    cases.push(
+      'real_cli_source_stale_generations_target_revision_untrusted_fields_and_bundle_pin_rejected'
+    )
+    db.prepare(
+      'UPDATE product_app_control SET auto_deploy_paused=0,pause_reason=NULL WHERE app_id=?'
+    ).run(publicProject.app_id)
+    const unpaused = await run('verify-project-source', sourceInput)
+    assert.equal(unpaused.code, 1)
+    assert.equal(unpaused.stderr.trim(), 'CONTROL_PLANE_ERROR PROJECT_SOURCE_REQUIRES_QUIESCENCE')
+    db.prepare(
+      "UPDATE product_app_control SET auto_deploy_paused=1,pause_reason='operator' WHERE app_id=?"
+    ).run(publicProject.app_id)
+    cases.push('real_cli_never_verifies_or_enables_an_unpaused_project')
+  }
   await rejected({ ...input, secret: password }, 'PROJECT_REQUEST_INVALID')
   await rejected({ ...input, administrator_id: 'unix:0' }, 'PROJECT_REQUEST_INVALID')
   await rejected(
@@ -217,7 +294,10 @@ try {
     nonce,
     passed: cases.length,
     cases,
-    scope: 'REAL_LINUX_CLI_PROJECT_REGISTRATION',
+    scope: verifySource
+      ? 'REAL_LINUX_CLI_PUBLIC_GIT_SOURCE_VERIFICATION'
+      : 'REAL_LINUX_CLI_PROJECT_REGISTRATION',
+    verified_source: verifiedSource,
     artifact_sha256: createHash('sha256').update(readFileSync(artifact)).digest('hex'),
     remote_commands: remoteCommands,
     production_vps_used: false,

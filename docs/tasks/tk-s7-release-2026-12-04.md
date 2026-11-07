@@ -1,5 +1,7 @@
 # Hoàn thiện OpsPilot tới 04/12/2026
 
+> **07/11 — R3c-6g3a:** [Source verification backend](tk-s7-release-r3c6g3a-source-verification.md) fixed Linux adminCLI/current SQLite/verified bundle/shared preflight/atomic paused observation, public GitHub + cold process đã chứng minh. R3 còn IPC/UI source verification, enroll-target/readiness/firstdeploy wizard, credential onboarding/installer/rotation/live/soak; không yêu cầu user test để thay code chưa viết. Local checkpoint không đóng R3 tổng hoặc PRODUCT_PASS.
+
 START 05/11/2026 — User chốt hạn kết thúc mới **04/12/2026**, yêu cầu rà soát toàn bộ và triển khai gấp theo hướng sản phẩm chỉn chu. Base `main b2cd50a`, branch `feat/release-audit-20261204`. Hạn 20/11 trong tài liệu trước đây là lịch sử; các yêu cầu tính năng và protocol ML không tự bị cắt vì đổi lịch.
 
 ## Requirement ledger của phiên
