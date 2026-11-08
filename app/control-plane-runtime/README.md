@@ -1,5 +1,67 @@
 # Product controller runtime (Linux)
 
+## Gói runtime offline và kiểm tra máy cài (R3c-6h1)
+
+Đã có builder Linux và passive verifier cho release directory gồm Node22,
+production dependencies đúng lock, CLI và assets đã kiểm. Chưa có transport,
+transaction cài service hoặc nút cài controller trong Desktop; form binding hiện
+hành vẫn cần controller được admin thiết lập trước. Không xem build thành công
+là service đang chạy hoặc app đã deploy.
+
+Build trên **Linux x64/glibc, Node22**, bằng môi trường phát triển tin cậy.
+`npm ci --prefix app/control-plane-runtime` dùng lock đã duyệt, gồm esbuild cho
+builder. Chỉ production packages được đưa vào release. Không copy node_modules
+từ Windows/Electron. Node đi kèm lấy từ chính `process.execPath` của builder;
+không download hoặc tự chọn phiên bản Node từ VPS. Digest bảo vệ toàn vẹn với
+pin độc lập, không thay xác thực nguồn phân phối.
+
+```sh
+export OPSPILOT_CONTROL_PLANE_MODULES=/absolute/runtime/node_modules
+export OPSPILOT_CONTROL_PLANE_OUTPUT=/private/build/payload/control-plane.cjs
+node app/scripts/build-control-plane.mjs
+# Lấy manifest_sha256 từ receipt build tin cậy bên trên.
+export OPSPILOT_CONTROLLER_RELEASE_ARTIFACT=/private/build/payload/control-plane.cjs
+export OPSPILOT_CONTROLLER_RELEASE_PAYLOAD_PIN='REPLACE_WITH_64_LOWERCASE_HEX_PAYLOAD_PIN'
+export OPSPILOT_CONTROLLER_RELEASE_OUTPUT=/private/build/release
+node app/scripts/build-controller-release.mjs
+```
+
+Thư mục cha output phải tồn tại và thuộc builder/root, không group/world-write;
+destination phải chưa tồn tại. Builder ghi staging riêng rồi rename sau verify.
+Lỗi giữ staging có nonce để điều tra; không thay destination cũ. Node-gyp có thể
+tạo hardlink trong trusted input; builder chép bytes sang inode mới, verifier
+release vẫn từ chối mọi hardlink/symlink/special file. Runtime files600, Node700,
+directories700. Build artifacts giữ ngoài Git, không commit Node/node_modules.
+
+Receipt gồm `manifest_sha256`, file count và byte count. Admin/installer phải
+nhận pin này từ nguồn tin cậy độc lập với candidate, rồi gọi
+`verifyControllerRelease(absoluteDirectory, trustedPin)` từ code đã tin. Verifier
+không chạy/import candidate: kiểm exact files/directories, SHA/size/limits,
+approved lock/package versions, payload catalog và ELF64 x86_64 của Node/native
+addons. `minimum_glibc` lấy từ builder, bảo thủ với host cũ; header ELF không
+chứng minh ABI, nên activation tiếp theo vẫn phải cold-smoke trên máy đích.
+
+`probeControllerHost` dùng fixed readonly Python qua SshManager với expected
+identity/pin bắt buộc, response4096bytes, deadline15s/channel, không thu stderr
+thô. Probe đọc OS/CPU/libc, RAM/disk còn trống, UID/systemd/bus/linger và default
+installation conflicts. Root cần system systemd; user cần user bus + linger
+đã có sẵn. RAM phải >512MiB, disk >2GiB. Không apt/npm/curl, tạo user, sửa
+firewall, init DB/key, cài hoặc start service. Snapshot không reserve tài nguyên.
+
+Lab độc lập trước UI:
+
+```sh
+export NODE_PATH="$OPSPILOT_CONTROL_PLANE_MODULES"
+export OPSPILOT_CONTROLLER_RELEASE_PIN='REPLACE_WITH_64_LOWERCASE_HEX_RELEASE_PIN'
+node app/scripts/controller-release-lab/run.mjs
+```
+
+Lab yêu cầu user Linux **không root**; chỉ private fixture DB và localhost SSH,
+ephemeral keys trong memory. Chứng minh cold Node/native SQLite/CLI, pin/tamper,
+source version drift, không overwrite, readonly SSH và pin sai không auth/exec.
+Receipt dưới `app/.out-scripts/controller-release/<nonce>/result.json`. Không
+phải test service start/reboot, production VPS hoặc PRODUCT_PASS.
+
 ## Đăng ký dự án mới (R3c-6g1)
 
 `register-project --data-dir <private initialized dir>` nhận metadata JSON qua stdin.

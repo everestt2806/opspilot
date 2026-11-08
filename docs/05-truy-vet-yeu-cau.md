@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6h1 08/11:** [Nền bộ cài controller](tasks/tk-s7-release-r3c6h1-controller-release.md) có Linux Node/native runtime release, independent pin/passive verifier và readonly pinned SSH host preflight. Cold non-root CLI/SQLite/schema028 và tamper/SSH17, focused52/gates cuối trong hồ sơ. Chưa transport/cài service/wizard, không đổi manual binding flow và không nâng FR/UC/PRODUCT_PASS; next6h2 cần code, không user test thay implementation.
+
 > **R3c-6g4 08/11:** [Đăng ký VPS đích từ Desktop](tasks/tk-s7-release-r3c6g4-target-credentials.md) nối selectlocalVPS→profile/pin/controller review→consent→main decrypt→verifiedSSH admin→encrypted controller record. Migration028 có local intent và atomic server receipt; unknown explicit samekey retry, conflict không rotate, fingerprint sai trướcauth. Native34/Electron80/probe18/fresh028 và fullgate theo hồsơ. Đây là kết nối đã lưu, chưa installed/Dockerready/deployed; controller installer/rotation/live/ML/HTTPS/migrate vẫn cần gate riêng, không nâng FR tổng từ số test.
 
 > **R3c-6g3d 08/11:** [Readiness/first deploy Desktop](tasks/tk-s7-release-r3c6g3d-first-deploy.md) đã nối UI→typedIPC→verifiedSSH readiness→authenticated command→runtime. Source fullSHA/target HMAC/resources snapshot, receipt60s và atomic first-deploy CAS; accepted khác running/health. Native29 có mất HTTP response→coldlookup và đúng1job chạy app/HTTP200; không VPS production. Scope Express/noDB/no required env; FR tổng/live/HTTPS/migrate/ML/installer chưa được nâng trạng thái từ checkpoint này.
