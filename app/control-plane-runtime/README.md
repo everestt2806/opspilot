@@ -1,5 +1,53 @@
 # Product controller runtime (Linux)
 
+## Chuyển gói và bootstrap qua SSH (R3c-6h2b1)
+
+Backend có `transferControllerRelease` và `callControllerBootstrap`, dùng đúng
+SshManager/expected identity và callback kiểm authority hiện hành của Main.
+Chưa có IPC/nút Install: phải nối Desktop durable installation journal và bridge
+root admin → runtime UID trước wizard. Caller hiện giữ UUID/pins tường minh;
+không tạo mã mới hoặc tự chạy lại install sau khi mất phản hồi.
+
+Artifact catalog phải cung cấp **hai pin độc lập từ build tin cậy**: release
+manifest và trusted installer CJS. Main kiểm local release/tool trước SSH, Python
+kiểm lại trên máy đích trước khi chạy packaged Node. Không cần Node trong SSH
+PATH, không npm/curl/apt hoặc download code qua URL tùy ý. Máy đích cần SSH đến
+được, Python3 stdlib, root/systemd/util-linux/shadow và libc phù hợp release.
+
+Protocol cố định: JSON frame uint32be tối đa4096bytes, raw manifest tối đa2MiB,
+installer tối đa1MiB, release theo limits6h1, aggregate260MiB và overall20phút.
+Server yêu cầu ACK1byte cho mỗi file, rồi nhận đúng size từ manifest bằng stream
+với SSH backpressure. Không tar extraction và không ACK mỗi64KiB. Namespace
+`/var/lib/opspilot-controller-transfer` root0700 giữ immutable UUID/pins/sizes;
+khác key, file lạ, symlink/hardlink, hash/mode/ELF/catalog/lock sai đều bị từ chối.
+
+`transfer` cần consent, chỉ staging; file đã commit được reuse khi hash đúng,
+partial riêng của request được bỏ để nhận lại file đó. Không đụng service/DB/key.
+`status` đọc progress/verified, không tạo namespace hoặc lock mới. `install` và
+`recover` cần consent, chỉ gọi trusted installer với stdin do helper tự dựng;
+`inspect` chỉ đọc installation. Gói verified chưa có nghĩa service đã cài.
+
+Root flock kế thừa qua child giữ serialization khi SSH mất. Main không auto
+reconnect/replay; lỗi sau dispatch có `remote_effects_possible`, timeout/lost
+response được ghi nhận unknown. Chỉ explicit status/inspect hoặc same-key
+transfer/recover. Receiver không chữa key/DB, không reset controller, không thay
+source of truth SQLite. Error là code allowlist, không đưa raw stderr về caller.
+
+CLI lab trước GUI (Linux Node22 root, có systemd):
+
+```sh
+export OPSPILOT_CONTROL_PLANE_MODULES=/absolute/approved/node_modules
+export OPSPILOT_CONTROLLER_RELEASE_OUTPUT=/private/verified/release
+export OPSPILOT_CONTROLLER_RELEASE_PIN='REPLACE_WITH_TRUSTED_RELEASE_MANIFEST_SHA256'
+node app/scripts/controller-bootstrap-lab/run.mjs
+```
+
+Lab copy release vào private local fixture, build trusted fixture installer từ
+source, dùng ephemeral SSH keys trong memory và Python-only SSH PATH. Có actual
+stream145MB/systemd, interrupted transfer/resume, namespace crash, pin/hash/quota
+checks và lost install reply→cold inspect; chỉ nonce fixture/account/group/unit
+được tạo rồi dọn. Không dùng production VPS/DB hoặc reboot host dùng chung.
+
 ## Cài system service bằng CLI (R3c-6h2a)
 
 Installer chạy trên Linux x64/glibc với **trusted host Node22**, quyền root và

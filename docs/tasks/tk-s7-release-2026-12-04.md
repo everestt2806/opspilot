@@ -1,5 +1,7 @@
 # Hoàn thiện OpsPilot tới 04/12/2026
 
+> **08/11 — R3c-6h2b1:** [SSH transfer/bootstrap](tk-s7-release-r3c6h2b1-ssh-bootstrap.md) nối verified local release/tool → pinned SSH → bounded root staging → Python verify → packaged Node/trusted installer; native25 có real systemd và lost reply→coldinspect không replay. Còn code6h2b2 durable Main install journal/root-admin UID bridge/binding rồi wizard; chưa Desktop one-click, live/reboot/soak/distribution và R3 tổng chưa đóng. Không productionwrite/PR/merge.
+
 > **08/11 — R3c-6h2a:** [System service installation](tk-s7-release-r3c6h2a-controller-service.md) nối verified release → private durable installer state → fresh service account → DB/key → enabled non-root systemd/owned loopback health. Native22 có4SIGKILL boundaries và cold same-key recovery; full/types/lint/build trong hồ sơ. Chưa Desktop install: cần6h2b transfer/Python bootstrap/explicit root-admin UID bridge, rồi consent wizard. Không productionwrite/PR/merge; reboot/live/soak và R3 tổng chưa đóng.
 
 > **08/11 — R3c-6h1:** [Linux release/host preflight](tk-s7-release-r3c6h1-controller-release.md) xử lý nền installer: runtime độc lập với Node22/native dependencies theo lock, verified payload/independent pin, passive hash/ELF/ownership checks; fixed readonly SSH probe. Native17/focused52/type/lint/build/Ruff đạt, full cuối trong hồ sơ; không sửa UI/IPC hoặc cài production service. Còn code6h2 transport/install transaction/admin-runtime UID/systemd/wizard; không gọi checkpoint này là đã có one-click installer hoặc PRODUCT_PASS.

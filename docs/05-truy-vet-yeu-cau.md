@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6h2b1 08/11:** [SSH controller bootstrap](tasks/tk-s7-release-r3c6h2b1-ssh-bootstrap.md) có Main-only API/CLI lab transfer + independent Python verification + packaged Node/fixed installer. Native25 chứng minh SSH thật,145MB/resume/lost reply/cold inspect và systemd;0production, không chứng minh app deployment. Còn Main install journal/root-admin bridge/IPC/UI/distribution/live/soak, không nâng FR/UC/PRODUCT_PASS từ test count.
+
 > **R3c-6h2a 08/11:** [Controller service installer](tasks/tk-s7-release-r3c6h2a-controller-service.md) đã có Linux CLI transaction với account riêng, private DB/key, immutable UUID/pin, kernel lock và explicit recovery. Native22 chứng minh systemd và cold recovery, không phải deployment mới; fresh DB0VPS/app/job. Còn code transport/bootstrap/admin UID bridge/wizard, không nâng FR/UC/PRODUCT_PASS từ test count; reboot/live/soak riêng.
 
 > **R3c-6h1 08/11:** [Nền bộ cài controller](tasks/tk-s7-release-r3c6h1-controller-release.md) có Linux Node/native runtime release, independent pin/passive verifier và readonly pinned SSH host preflight. Cold non-root CLI/SQLite/schema028 và tamper/SSH17, focused52/gates cuối trong hồ sơ. Chưa transport/cài service/wizard, không đổi manual binding flow và không nâng FR/UC/PRODUCT_PASS; next6h2 cần code, không user test thay implementation.
