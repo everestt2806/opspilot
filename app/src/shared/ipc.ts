@@ -1,3 +1,4 @@
+import type {DesktopTargetPrepareInput,DesktopTargetSendInput,DesktopTargetSetup} from './desktopTargetRegistration';
 import type { DesktopProjectReadiness, DesktopFirstDeploymentInput, DesktopFirstDeploymentPlan, DesktopFirstDeploymentSendInput } from './desktopFirstDeployment';
 import type { DesktopProjectSetupInput, DesktopProjectSetup, DesktopProjectTargets, DesktopProjectSourceVerification, DesktopProjectTargetInput, DesktopProjectTargetState } from './desktopProjectRegistration';
 import type { DesktopControllerCommand, DesktopControllerCommandInput } from './desktopControllerCommands';
@@ -377,6 +378,10 @@ export interface IpcInvokeMap {
   'controller:check-command': (key: string) => IpcResult<DesktopControllerCommand>;
   'controller:cancel-command': (key: string) => IpcResult<DesktopControllerCommand>;
   'controller:commands': (bindingId: string) => IpcResult<DesktopControllerCommand[]>;
+  'controller:prepare-target': (input:DesktopTargetPrepareInput) => IpcResult<DesktopTargetSetup>;
+  'controller:send-target': (input:DesktopTargetSendInput) => IpcResult<DesktopTargetSetup>;
+  'controller:target-setups': (bindingId:string) => IpcResult<DesktopTargetSetup[]>;
+  'controller:cancel-target': (key:string) => IpcResult<DesktopTargetSetup>;
   'controller:project-readiness': (key:string) => IpcResult<DesktopProjectReadiness>;
   'controller:prepare-first-deployment': (input:DesktopFirstDeploymentInput) => IpcResult<DesktopFirstDeploymentPlan>;
   'controller:send-first-deployment': (input:DesktopFirstDeploymentSendInput) => IpcResult<DesktopControllerCommand>;

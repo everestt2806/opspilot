@@ -78,7 +78,7 @@ describe('Desktop controller encrypted vault', () => {
   it('upgrades populated v023 without changing the VPS or implicitly enrolling a controller', () => {
     const before = db.prepare('SELECT * FROM vps').all()
     db.exec(
-      'DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE desktop_controller_command;DELETE FROM schema_version WHERE version=25;DROP TABLE desktop_controller_binding;DELETE FROM schema_version WHERE version=24'
+      'DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE desktop_controller_command;DELETE FROM schema_version WHERE version=25;DROP TABLE desktop_controller_binding;DELETE FROM schema_version WHERE version=24'
     )
     runMigrations(db)
     runMigrations(db)
@@ -86,7 +86,7 @@ describe('Desktop controller encrypted vault', () => {
     expect(db.prepare('SELECT count(*) AS n FROM desktop_controller_binding').get()).toEqual({
       n: 0
     })
-    expect(db.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({ n: 27 })
+    expect(db.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({ n: 28 })
     expect(db.pragma('foreign_key_check')).toEqual([])
   })
   it('persists a pending enrollment once and rejects altered content with the same UUID', () => {

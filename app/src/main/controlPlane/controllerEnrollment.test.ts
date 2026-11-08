@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import migration028 from '../db/migrations/028_desktop_target_registration.sql?raw'
+import { registerControllerVps } from './vpsRegistration'
 import Database from 'better-sqlite3'
 import { createHash, randomBytes } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -215,5 +218,70 @@ describe('Controller explicit VPS credential enrollment', () => {
     )
     expect(database.prepare('SELECT COUNT(*) AS n FROM vps').get()).toEqual({ n: 0 })
     expect(ssh.disconnectAll).toHaveBeenCalled()
+  })
+})
+
+describe('Atomic controller VPS registration receipt', () => {
+  beforeEach(() => database.exec(migration028))
+  const register = (input: unknown, key = randomUUID()): ReturnType<typeof registerControllerVps> =>
+    registerControllerVps(database, controllerId, '/unit-private', 'unix:1000', {
+      ...request,
+      request_key: key,
+      ...(input as object)
+    })
+  it('persists metadata receipt with encrypted target and retries the same UUID without changing ciphertext', async () => {
+    const key = randomUUID(),
+      first = await register({}, key),
+      before = database.prepare('SELECT * FROM vps').get()
+    expect(await register({}, key)).toEqual(first)
+    expect(database.prepare('SELECT * FROM vps').get()).toEqual(before)
+    expect(database.prepare('SELECT count(*) AS n FROM product_vps_registration').get()).toEqual({
+      n: 1
+    })
+    expect(
+      JSON.stringify(database.prepare('SELECT * FROM product_vps_registration').all())
+    ).not.toContain(request.secret)
+    expect(ssh.connect).toHaveBeenCalledTimes(2)
+    expect(ssh.exec).not.toHaveBeenCalled()
+  })
+  it('rolls back VPS and ciphertext when receipt insert fails', async () => {
+    database.exec(
+      "CREATE TRIGGER reject_receipt BEFORE INSERT ON product_vps_registration BEGIN SELECT RAISE(ABORT,'UNIT_RECEIPT_REJECTED'); END"
+    )
+    await expect(register({})).rejects.toThrow('CONTROLLER_VPS_ENROLLMENT_UNAVAILABLE')
+    expect(database.prepare('SELECT count(*) AS n FROM vps').get()).toEqual({ n: 0 })
+    expect(database.prepare('SELECT count(*) AS n FROM product_vps_registration').get()).toEqual({
+      n: 0
+    })
+  })
+  it('rejects same UUID with changed profile or credential and never rotates existing credentials', async () => {
+    const key = randomUUID()
+    await register({}, key)
+    const before = database.prepare('SELECT * FROM vps').get(),
+      calls = ssh.connect.mock.calls.length
+    await expect(
+      register({ profile: { ...request.profile, name: 'changed' } }, key)
+    ).rejects.toThrow('VPS_REGISTRATION_CONFLICT')
+    await expect(register({ secret: 'DIFFERENT_SYNTHETIC_UNIT_MATERIAL' }, key)).rejects.toThrow(
+      'CONTROLLER_VPS_ENROLLMENT_CONFLICT'
+    )
+    expect(ssh.connect).toHaveBeenCalledTimes(calls)
+    expect(database.prepare('SELECT * FROM vps').get()).toEqual(before)
+  })
+  it('refuses changed recorded security revision before connecting', async () => {
+    const key = randomUUID()
+    await register({}, key)
+    database.exec('UPDATE vps SET ssh_security_revision=2')
+    await expect(register({}, key)).rejects.toThrow('VPS_REGISTRATION_CHANGED')
+    expect(ssh.connect).toHaveBeenCalledOnce()
+  })
+  it('concurrent identical registration converges to one VPS and one immutable receipt', async () => {
+    const key = randomUUID(),
+      results = await Promise.all([register({}, key), register({}, key)])
+    expect(results[0]).toEqual(results[1])
+    expect(database.prepare('SELECT count(*) AS n FROM vps').get()).toEqual({ n: 1 })
+    expect(() => database.exec("UPDATE product_vps_registration SET profile_json='{}'")).toThrow(
+      'PRODUCT_VPS_REGISTRATION_IMMUTABLE'
+    )
   })
 })

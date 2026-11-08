@@ -1,4 +1,6 @@
-/** CLI quản trị Linux cục bộ; không public endpoint hoặc import credential Desktop. */
+/** CLI quản trị Linux cục bộ; không public endpoint hoặc import Desktop ciphertext/key.
+ * Product register-vps wrapper cho phép chuyển secret trong RAM qua verified SSH
+ * khi user xác nhận rõ tại Desktop; controller tự mã hóa bằng key riêng. */
 export const PRODUCT_CONTROLLER_ENROLLMENT_MAX_INPUT_BYTES = 512 * 1024;
 export const PRODUCT_CONTROLLER_ENROLLMENT_MAX_SECRET_BYTES = 256 * 1024;
 export const PRODUCT_CONTROLLER_ENROLLMENT_INPUT_TIMEOUT_MS = 30_000;

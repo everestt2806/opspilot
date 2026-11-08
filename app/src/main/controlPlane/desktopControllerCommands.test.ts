@@ -128,12 +128,12 @@ describe('Durable Desktop Product command journal', () => {
   it('upgrades a populated v024 without changing bindings or implicitly sending anything', () => {
     const before = db.prepare('SELECT * FROM desktop_controller_binding').all()
     db.exec(
-      'DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE desktop_controller_command;DELETE FROM schema_version WHERE version=25'
+      'DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE desktop_controller_command;DELETE FROM schema_version WHERE version=25'
     )
     runMigrations(db)
     runMigrations(db)
     expect(db.prepare('SELECT * FROM desktop_controller_binding').all()).toEqual(before)
-    expect(db.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({ n: 27 })
+    expect(db.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({ n: 28 })
     expect(commands.list(input.binding_id)).toEqual([])
     expect(db.pragma('foreign_key_check')).toEqual([])
     expect(call).not.toHaveBeenCalled()

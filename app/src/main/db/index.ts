@@ -30,6 +30,7 @@ import migration024 from './migrations/024_desktop_controller_binding.sql?raw'
 import migration025 from './migrations/025_desktop_controller_commands.sql?raw'
 import migration026 from './migrations/026_product_project_registration.sql?raw'
 import migration027 from './migrations/027_desktop_project_setup.sql?raw'
+import migration028 from './migrations/028_desktop_target_registration.sql?raw'
 
 interface Migration {
   name: string
@@ -172,7 +173,8 @@ const migrations: Migration[] = [
     name: '027_desktop_project_setup.sql',
     version: 27,
     sql: migration027
-  }
+  },
+  { name: '028_desktop_target_registration.sql', version: 28, sql: migration028 }
 ]
 
 export let db: Database.Database

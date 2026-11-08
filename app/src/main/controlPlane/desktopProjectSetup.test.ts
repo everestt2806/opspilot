@@ -342,7 +342,9 @@ describe('Desktop durable Product project setup', () => {
       read('../../../../docs/contracts/desktop-project-registration.ts')
     )
     const before = db.prepare('SELECT * FROM desktop_controller_binding').all()
-    db.exec('DROP TABLE desktop_project_setup;DELETE FROM schema_version WHERE version=27')
+    db.exec(
+      'DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE desktop_project_setup;DELETE FROM schema_version WHERE version=27'
+    )
     runMigrations(db)
     runMigrations(db)
     expect(db.prepare('SELECT * FROM desktop_controller_binding').all()).toEqual(before)

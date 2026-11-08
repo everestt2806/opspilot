@@ -91,7 +91,7 @@ try {
     assert.ok(
       db.prepare("SELECT name FROM sqlite_master WHERE name='product_target_enrollment'").get()
     )
-    assert.equal(db.prepare('SELECT MAX(version) AS version FROM schema_version').get().version, 27)
+    assert.equal(db.prepare('SELECT MAX(version) AS version FROM schema_version').get().version, 28)
     for (const table of [
       'product_desktop_client',
       'product_desktop_credential',
@@ -100,7 +100,9 @@ try {
       'desktop_controller_binding',
       'desktop_controller_command',
       'product_project_registration',
-      'desktop_project_setup'
+      'desktop_project_setup',
+      'product_vps_registration',
+      'desktop_target_setup'
     ])
       assert.equal(db.prepare(`SELECT count(*) AS n FROM ${table}`).get().n, 0)
     assert.equal(require('zod/package.json').version, '4.4.3')
@@ -118,6 +120,7 @@ try {
         migration_025: true,
         migration_026: true,
         migration_027: true,
+        migration_028: true,
         fresh_install: true,
         controller_cli_init_status: true,
         target_helper_files: 3,

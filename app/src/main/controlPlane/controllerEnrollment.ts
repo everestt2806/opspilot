@@ -22,7 +22,7 @@ const principal = z
   .min(1)
   .max(253)
   .refine((value) => noControl(value) && !/\s/.test(value))
-const enrollmentSchema = z.strictObject({
+export const controllerVpsEnrollmentSchema = z.strictObject({
   format: z.literal(1),
   controller_id: z
     .string()
@@ -50,7 +50,7 @@ const enrollmentSchema = z.strictObject({
     .refine((value) => Buffer.byteLength(value) <= PRODUCT_CONTROLLER_ENROLLMENT_MAX_SECRET_BYTES)
 })
 
-class EnrollmentError extends Error {}
+export class ControllerVpsEnrollmentError extends Error {}
 
 function assertController(database: Database.Database, controllerId: string): void {
   const rows = database.prepare('SELECT controller_id, status FROM product_controller').all() as {
@@ -58,7 +58,7 @@ function assertController(database: Database.Database, controllerId: string): vo
     status: string
   }[]
   if (rows.length !== 1 || rows[0].controller_id !== controllerId || rows[0].status !== 'active')
-    throw new EnrollmentError('CONTROLLER_VPS_CONTROLLER_MISMATCH')
+    throw new ControllerVpsEnrollmentError('CONTROLLER_VPS_CONTROLLER_MISMATCH')
 }
 
 /** Chỉ khởi tạo tường minh; không thay khóa còn cần để đọc dữ liệu đã lưu. */
@@ -68,7 +68,8 @@ export function initializeControllerSecrets(
   directory: string
 ): void {
   try {
-    if (database.inTransaction) throw new EnrollmentError('CONTROLLER_BOOTSTRAP_TRANSACTION_ACTIVE')
+    if (database.inTransaction)
+      throw new ControllerVpsEnrollmentError('CONTROLLER_BOOTSTRAP_TRANSACTION_ACTIVE')
     const root = resolveControllerSecretDirectory(directory)
     database
       .transaction(() => {
@@ -79,12 +80,12 @@ export function initializeControllerSecrets(
           )
           .get() as { n: number }
         if (retained.n || readdirSync(root).some((name) => name.startsWith('h2-')))
-          throw new EnrollmentError('CONTROLLER_SECRET_MATERIAL_REQUIRES_RECOVERY')
+          throw new ControllerVpsEnrollmentError('CONTROLLER_SECRET_MATERIAL_REQUIRES_RECOVERY')
         initializeControllerSecretKey(root)
       })
       .immediate()
   } catch (error) {
-    if (error instanceof EnrollmentError) throw error
+    if (error instanceof ControllerVpsEnrollmentError) throw error
     throw new Error('CONTROLLER_SECRET_INITIALIZATION_UNAVAILABLE')
   }
 }
@@ -95,17 +96,20 @@ export async function enrollControllerVps(
   controllerId: string,
   directory: string,
   input: unknown,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onPersist?: (result: ProductControllerVpsEnrollmentResult) => void
 ): Promise<ProductControllerVpsEnrollmentResult> {
   try {
-    const parsed = enrollmentSchema.safeParse(input)
-    if (!parsed.success) throw new EnrollmentError('CONTROLLER_VPS_INPUT_INVALID')
+    const parsed = controllerVpsEnrollmentSchema.safeParse(input)
+    if (!parsed.success) throw new ControllerVpsEnrollmentError('CONTROLLER_VPS_INPUT_INVALID')
     const request = parsed.data
     if (request.controller_id !== controllerId)
-      throw new EnrollmentError('CONTROLLER_VPS_CONTROLLER_MISMATCH')
-    if (database.inTransaction) throw new EnrollmentError('CONTROLLER_BOOTSTRAP_TRANSACTION_ACTIVE')
+      throw new ControllerVpsEnrollmentError('CONTROLLER_VPS_CONTROLLER_MISMATCH')
+    if (database.inTransaction)
+      throw new ControllerVpsEnrollmentError('CONTROLLER_BOOTSTRAP_TRANSACTION_ACTIVE')
     const assertNotAborted = (): void => {
-      if (signal?.aborted) throw new EnrollmentError('CONTROLLER_VPS_ENROLLMENT_ABORTED')
+      if (signal?.aborted)
+        throw new ControllerVpsEnrollmentError('CONTROLLER_VPS_ENROLLMENT_ABORTED')
     }
     const existing = (): number | undefined => {
       const rows = database
@@ -121,9 +125,11 @@ export async function enrollControllerVps(
       if (
         rows.length !== 1 ||
         row.archived_at !== null ||
-        !Object.entries(request.profile).every(([field, value]) => row[field] === value)
+        !Object.entries(request.profile).every(
+          ([field, value]) => row[field as keyof typeof request.profile] === value
+        )
       )
-        throw new EnrollmentError('CONTROLLER_VPS_ENROLLMENT_CONFLICT')
+        throw new ControllerVpsEnrollmentError('CONTROLLER_VPS_ENROLLMENT_CONFLICT')
       try {
         const resolved = createControllerSshResolver(database, controllerId, directory)(row.id)
         // Resolver đồng bộ; không có await/network bên trong transaction ghi.
@@ -137,7 +143,7 @@ export async function enrollControllerVps(
           right.fill(0)
         }
       } catch {
-        throw new EnrollmentError('CONTROLLER_VPS_ENROLLMENT_CONFLICT')
+        throw new ControllerVpsEnrollmentError('CONTROLLER_VPS_ENROLLMENT_CONFLICT')
       }
       return row.id
     }
@@ -146,7 +152,7 @@ export async function enrollControllerVps(
     try {
       loadControllerCredentialCipher(directory)
     } catch {
-      throw new EnrollmentError('CONTROLLER_VPS_CREDENTIAL_STORE_UNAVAILABLE')
+      throw new ControllerVpsEnrollmentError('CONTROLLER_VPS_CREDENTIAL_STORE_UNAVAILABLE')
     }
     existing()
     const profile = request.profile
@@ -170,7 +176,7 @@ export async function enrollControllerVps(
         throw new Error('SSH_UNVERIFIED')
     } catch {
       assertNotAborted()
-      throw new EnrollmentError('CONTROLLER_VPS_SSH_VERIFICATION_FAILED')
+      throw new ControllerVpsEnrollmentError('CONTROLLER_VPS_SSH_VERIFICATION_FAILED')
     } finally {
       signal?.removeEventListener('abort', abort)
       await ssh.disconnectAll()
@@ -181,13 +187,16 @@ export async function enrollControllerVps(
         assertNotAborted()
         assertController(database, controllerId)
         const previous = existing()
-        if (previous !== undefined)
-          return {
+        if (previous !== undefined) {
+          const result: ProductControllerVpsEnrollmentResult = {
             state: 'already_enrolled',
             controller_id: controllerId,
             vps_id: previous,
             host_fingerprint: profile.host_fingerprint
           }
+          onPersist?.(result)
+          return result
+        }
         const inserted = database
           .prepare(
             `INSERT INTO vps (name,host,port,username,auth_type,host_fingerprint,
@@ -224,16 +233,18 @@ export async function enrollControllerVps(
         database
           .prepare('UPDATE vps SET encrypted_secret=?, iv=?, auth_tag=? WHERE id=?')
           .run(encrypted.encrypted_secret, encrypted.iv, encrypted.auth_tag, id)
-        return {
+        const result: ProductControllerVpsEnrollmentResult = {
           state: 'enrolled',
           controller_id: controllerId,
           vps_id: id,
           host_fingerprint: profile.host_fingerprint
         }
+        onPersist?.(result)
+        return result
       })
       .immediate()
   } catch (error) {
-    if (error instanceof EnrollmentError) throw error
+    if (error instanceof ControllerVpsEnrollmentError) throw error
     throw new Error('CONTROLLER_VPS_ENROLLMENT_UNAVAILABLE')
   }
 }

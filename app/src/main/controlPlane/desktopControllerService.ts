@@ -1,3 +1,9 @@
+import { DesktopTargetSetups, DesktopTargetSetupError } from './desktopTargetSetup'
+import type {
+  DesktopTargetPrepareInput,
+  DesktopTargetSendInput,
+  DesktopTargetSetup
+} from '@shared/desktopTargetRegistration'
 import { DesktopFirstDeployments, DesktopFirstDeploymentError } from './desktopFirstDeployment'
 import type {
   DesktopFirstDeploymentInput,
@@ -67,6 +73,7 @@ export class DesktopControllerService {
   private readonly enrollment: DesktopControllerEnrollment
   private readonly commands: DesktopControllerCommands
   private readonly projects: DesktopProjectSetups
+  private readonly targets: DesktopTargetSetups
   private readonly firstDeployments: DesktopFirstDeployments
   constructor(
     private readonly db: Database.Database,
@@ -78,6 +85,7 @@ export class DesktopControllerService {
     this.enrollment = new DesktopControllerEnrollment(this.vault, ssh)
     this.commands = new DesktopControllerCommands(db, this.vault, ssh, clientFactory)
     this.projects = new DesktopProjectSetups(db, this.vault, this.enrollment)
+    this.targets = new DesktopTargetSetups(db, cipher, this.vault, this.enrollment)
     this.firstDeployments = new DesktopFirstDeployments(
       this.projects,
       this.enrollment,
@@ -91,6 +99,18 @@ export class DesktopControllerService {
         )
       }
     )
+  }
+  async prepareTarget(input: DesktopTargetPrepareInput): Promise<DesktopTargetSetup> {
+    return this.safe(() => this.targets.prepare(input))
+  }
+  async sendTarget(input: DesktopTargetSendInput): Promise<DesktopTargetSetup> {
+    return this.safe(() => this.targets.send(input))
+  }
+  async listTargetSetups(bindingId: string): Promise<DesktopTargetSetup[]> {
+    return this.safe(() => this.targets.list(bindingId))
+  }
+  async cancelTarget(key: string): Promise<DesktopTargetSetup> {
+    return this.safe(() => this.targets.cancel(key))
   }
   async projectReadiness(key: string): Promise<DesktopProjectReadiness> {
     return this.safe(() => this.firstDeployments.readiness(key))
@@ -389,6 +409,7 @@ export class DesktopControllerService {
         error instanceof DesktopControllerCommandError ||
         error instanceof DesktopProjectSetupError ||
         error instanceof DesktopFirstDeploymentError ||
+        error instanceof DesktopTargetSetupError ||
         error instanceof ProjectRegistrationError ||
         error instanceof ControllerHttpClientError
           ? error.code

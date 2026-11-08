@@ -43,7 +43,18 @@ if (process.argv.includes('--cold')) {
       secret: request.ssh_secret
     }))
   try {
-    if (request.command_key) {
+    if (request.target_key) {
+      const service = new api.DesktopControllerService(db, cipher, ssh)
+      process.stdout.write(
+        JSON.stringify({
+          status: 'PASS',
+          registration: await service.sendTarget({
+            request_key: request.target_key,
+            confirm_transfer: true
+          })
+        }) + '\n'
+      )
+    } else if (request.command_key) {
       const service = new api.DesktopControllerService(db, cipher, ssh)
       process.stdout.write(
         JSON.stringify({
@@ -131,7 +142,12 @@ const hostKey = readFileSync(join(install, 'host-key')),
   children = new Set(),
   firstDeploy = process.argv.includes('--first-deploy'),
   appName = `wizard-api-${nonce}`
-let controllerProcess, runtimeControllerId, runtimeAppId, runtimeProof, runtimeReadiness
+let controllerProcess,
+  runtimeControllerId,
+  runtimeAppId,
+  runtimeProof,
+  runtimeReadiness,
+  credentialProbe
 let observedCatalogSize,
   serverApi,
   remote,
@@ -140,7 +156,8 @@ let observedCatalogSize,
   discardReply = false,
   discardProjectReply = false,
   discardTargetReply = false,
-  discardDeployReply = false
+  discardDeployReply = false,
+  discardVpsReply = false
 const http = createServer((req, res) => {
   if (!serverApi.handle(req, res)) {
     res.writeHead(404)
@@ -200,6 +217,16 @@ const ssh = new Server({ hostKeys: [hostKey] }, (connection) => {
               }
             } catch {
               /* Đợi packet đầy đủ trong giới hạn lab. */
+            }
+          }
+          if (discardVpsReply) {
+            try {
+              if (JSON.parse(incoming).operation === 'register-vps') {
+                drop = true
+                discardVpsReply = false
+              }
+            } catch {
+              /* Wait for the complete fixture request. */
             }
           }
           if (discardProjectReply) {
@@ -262,7 +289,7 @@ const ssh = new Server({ hostKeys: [hostKey] }, (connection) => {
     })
   })
 })
-const cold = (bindingId, setupKey, targetRoot, commandKey) =>
+const cold = (bindingId, setupKey, targetRoot, commandKey, targetKey) =>
   new Promise((resolveChild, rejectChild) => {
     const child = spawn(process.execPath, [import.meta.filename, '--cold'], {
       env: { ...process.env },
@@ -303,7 +330,8 @@ const cold = (bindingId, setupKey, targetRoot, commandKey) =>
         ssh_secret: password,
         setup_key: setupKey,
         target_root: targetRoot,
-        command_key: commandKey
+        command_key: commandKey,
+        target_key: targetKey
       })
     )
   })
@@ -511,45 +539,139 @@ try {
   cases.push('ui_opt_in_actual_ssh_admin_grants_exact_write_scopes')
   const configHash = createHash('sha256').update('{}').digest('hex'),
     setupAt = new Date().toISOString()
-  await new Promise((done, fail) => {
-    const child = spawn(join(install, 'node'), [cli, 'enroll-vps', '--data-dir', data], {
-      stdio: ['pipe', 'pipe', 'pipe']
-    })
-    let output = ''
-    child.stdout.on('data', (chunk) => {
-      if (output.length < 16384) output += chunk
-    })
-    child.stderr.resume()
-    const timer = setTimeout(() => {
-      child.kill('SIGKILL')
-      fail(new Error('NATIVE_TARGET_ENROLL_TIMEOUT'))
-    }, 30000)
-    child.once('close', (code) => {
-      clearTimeout(timer)
-      try {
-        assert.equal(code, 0)
-        assert.equal(JSON.parse(output).vps_id, 1)
-        done()
-      } catch {
-        fail(new Error('NATIVE_TARGET_ENROLL_FAILED'))
-      }
-    })
-    child.stdin.end(
-      JSON.stringify({
-        format: 1,
-        controller_id: controller,
-        profile: {
-          name: 'native-target',
-          host: principal.host,
-          port: principal.port,
-          username: principal.username,
-          auth_type: principal.authType,
-          host_fingerprint: principal.hostFingerprint
-        },
-        secret: password
-      })
-    )
+  const localCredential = cipher.encrypt(password)
+  db.prepare(
+    "INSERT INTO vps(id,name,host,port,username,auth_type,host_fingerprint,crypto_scheme,encrypted_secret,iv,auth_tag) VALUES(5,'native-target',?,?,?,'password',?,'aes_256_gcm',?,?,?)"
+  ).run(
+    principal.host,
+    principal.port,
+    principal.username,
+    principal.hostFingerprint,
+    localCredential.encrypted_secret,
+    localCredential.iv,
+    localCredential.auth_tag
+  )
+  const targetReview = await uiService.prepareTarget({
+    binding_id: writeBinding.binding_id,
+    local_vps_id: 5
   })
+  assert.equal(targetReview.state, 'prepared')
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM vps').get().n, 0)
+  await assert.rejects(
+    uiService.sendTarget({ request_key: targetReview.request_key, confirm_transfer: false })
+  )
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM vps').get().n, 0)
+  cases.push('desktop_local_target_review_persists_uuid_without_transfer_and_requires_consent')
+  remote.exec(
+    "CREATE TRIGGER lab_receipt_failure BEFORE INSERT ON product_vps_registration BEGIN SELECT RAISE(ABORT,'LAB_RECEIPT_FAILURE'); END"
+  )
+  await assert.rejects(
+    uiService.sendTarget({ request_key: targetReview.request_key, confirm_transfer: true })
+  )
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM vps').get().n, 0)
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM product_vps_registration').get().n, 0)
+  remote.exec('DROP TRIGGER lab_receipt_failure')
+  cases.push('actual_registration_receipt_failure_rolls_back_vps_and_encrypted_credential')
+  discardVpsReply = true
+  await assert.rejects(
+    uiService.sendTarget({ request_key: targetReview.request_key, confirm_transfer: true })
+  )
+  assert.equal(discardVpsReply, false)
+  assert.equal(
+    (await uiService.listTargetSetups(writeBinding.binding_id))[0].state,
+    'outcome_unknown'
+  )
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM vps').get().n, 1)
+  const encryptedBefore = remote
+    .prepare('SELECT encrypted_secret,iv,auth_tag FROM vps WHERE id=1')
+    .get()
+  const coldRegistration = await cold(
+    writeBinding.binding_id,
+    undefined,
+    undefined,
+    undefined,
+    targetReview.request_key
+  )
+  assert.equal(coldRegistration.status, 'PASS')
+  assert.equal(coldRegistration.registration.state, 'registered')
+  assert.equal(coldRegistration.registration.remote_vps_id, 1)
+  assert.deepEqual(
+    remote.prepare('SELECT encrypted_secret,iv,auth_tag FROM vps WHERE id=1').get(),
+    encryptedBefore
+  )
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM product_vps_registration').get().n, 1)
+  assert.equal(
+    JSON.stringify(db.prepare('SELECT * FROM desktop_target_setup').all()).includes(password),
+    false
+  )
+  assert.equal(
+    JSON.stringify(remote.prepare('SELECT * FROM product_vps_registration').all()).includes(
+      password
+    ),
+    false
+  )
+  assert.equal(encryptedBefore.encrypted_secret.toString().includes(password), false)
+  const actualCredential = api.createControllerSshResolver(remote, controller, data)(1)
+  assert.equal(actualCredential.secret, password)
+  cases.push(
+    'actual_verified_ssh_registration_lost_reply_cold_retry_same_uuid_one_vps_unchanged_ciphertext'
+  )
+  const otherLocalCredential = cipher.encrypt(password + 'changed')
+  db.prepare(
+    'UPDATE vps SET encrypted_secret=?,iv=?,auth_tag=?,ssh_security_revision=ssh_security_revision+1 WHERE id=5'
+  ).run(
+    otherLocalCredential.encrypted_secret,
+    otherLocalCredential.iv,
+    otherLocalCredential.auth_tag
+  )
+  const conflictReview = await uiService.prepareTarget({
+    binding_id: writeBinding.binding_id,
+    local_vps_id: 5
+  })
+  await assert.rejects(
+    uiService.sendTarget({ request_key: conflictReview.request_key, confirm_transfer: true }),
+    (error) => error.context?.cause?.message === 'CONTROLLER_VPS_ENROLLMENT_CONFLICT'
+  )
+  assert.deepEqual(
+    remote.prepare('SELECT encrypted_secret,iv,auth_tag FROM vps WHERE id=1').get(),
+    encryptedBefore
+  )
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM vps').get().n, 1)
+  cases.push('actual_different_credential_conflict_never_overwrites_registered_target')
+  let untrustedTargetAuth = 0
+  credentialProbe = new Server({ hostKeys: [hostKey] }, (connection) => {
+    connections.add(connection)
+    connection.on('error', () => {})
+    connection.once('close', () => connections.delete(connection))
+    connection.on('authentication', (ctx) => {
+      untrustedTargetAuth++
+      ctx.reject()
+    })
+  })
+  await new Promise((done) => credentialProbe.listen(0, '127.0.0.1', done))
+  db.prepare(
+    "INSERT INTO vps(id,name,host,port,username,auth_type,host_fingerprint,crypto_scheme,encrypted_secret,iv,auth_tag) VALUES(7,'wrong-pin-target','127.0.0.1',?,'root','password',?,'aes_256_gcm',?,?,?)"
+  ).run(
+    credentialProbe.address().port,
+    'SHA256:' + 'C'.repeat(43),
+    localCredential.encrypted_secret,
+    localCredential.iv,
+    localCredential.auth_tag
+  )
+  const pinReview = await uiService.prepareTarget({
+    binding_id: writeBinding.binding_id,
+    local_vps_id: 7
+  })
+  await assert.rejects(
+    uiService.sendTarget({ request_key: pinReview.request_key, confirm_transfer: true }),
+    (error) => error.context?.cause?.message === 'CONTROLLER_VPS_SSH_VERIFICATION_FAILED'
+  )
+  assert.equal(untrustedTargetAuth, 0)
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM vps').get().n, 1)
+  cases.push(
+    'actual_wrong_target_fingerprint_rejected_before_authentication_and_without_vps_record'
+  )
+
   remote
     .prepare(
       "INSERT INTO app(id,vps_id,name,framework,host_port,container_port,source_type,git_repo_url,git_ref,git_root) VALUES(1,1,'ui-app','express',30001,3000,'git','https://github.com/demo/app.git','main','.')"
@@ -975,6 +1097,7 @@ try {
     }
   }
   await new Promise((resolveClose) => ssh.close(resolveClose))
+  if (credentialProbe) await new Promise((done) => credentialProbe.close(done))
   await serverApi?.close()
   http.closeAllConnections()
   if (http.listening) await new Promise((resolveClose) => http.close(resolveClose))

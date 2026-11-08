@@ -18,6 +18,7 @@ def main():
         artifact = pathlib.Path(scratch) / "fixture.cjs"
         artifact.write_text(
             """
+process.stdin.setEncoding('utf8');
 let input=''; process.stdin.on('data',chunk=>input+=chunk);
 process.stdin.on('end',()=>{
   const mode=JSON.parse(input).mode;
@@ -45,6 +46,15 @@ process.stdin.on('end',()=>{
     process.stderr.write('CONTROL_PLANE_ERROR PROJECT_READINESS_REQUEST_INVALID synthetic-private-stderr\\n');process.exitCode=1;
   } else if(mode==='readiness_unknown'){
     process.stderr.write('CONTROL_PLANE_ERROR PROJECT_READINESS_SECRET_VALUE\\n');process.exitCode=1;
+  } else if(mode==='vps_known'){
+    process.stderr.write('CONTROL_PLANE_ERROR CONTROLLER_VPS_ENROLLMENT_CONFLICT\\n');process.exitCode=1;
+  } else if(mode==='vps_suffix'){
+    process.stderr.write('CONTROL_PLANE_ERROR CONTROLLER_VPS_ENROLLMENT_CONFLICT synthetic-private-stderr\\n');process.exitCode=1;
+  } else if(mode==='vps_unknown'){
+    process.stderr.write('CONTROL_PLANE_ERROR CONTROLLER_VPS_SECRET_VALUE\\n');process.exitCode=1;
+  } else if(mode==='large'){
+    if(JSON.parse(input).secret.length!==65536)process.exitCode=1;
+    else process.stdout.write(JSON.stringify({state:'fixture_ok'}));
   }
 });
 """,
@@ -59,6 +69,34 @@ process.stdin.on('end',()=>{
             "state": "fixture_ok"
         }
         cases.append("success_ignores_arbitrary_stderr")
+        assert run_cli(
+            request, "register-vps", {"mode": "large", "secret": "é" * 65536}
+        ) == {"state": "fixture_ok"}
+        cases.append("registration_nonblocking_unicode_stdin_larger_than_pipe")
+        for mode, expected in (
+            ("vps_known", "CONTROLLER_VPS_ENROLLMENT_CONFLICT"),
+            ("vps_suffix", None),
+            ("vps_unknown", None),
+        ):
+            try:
+                run_cli(request, "register-vps", {"mode": mode})
+            except admin_failure as error:
+                assert error.code == expected
+            except ValueError as error:
+                assert expected is None
+                assert "synthetic-private-stderr" not in str(error)
+                assert "SECRET_VALUE" not in str(error)
+            else:
+                raise AssertionError("VPS_ERROR_REJECTION_REQUIRED")
+            cases.append(mode)
+        try:
+            run_cli(
+                request, "register-vps", {"mode": "large", "secret": "x" * (512 * 1024)}
+            )
+        except ValueError:
+            cases.append("registration_stdin_hard_limit")
+        else:
+            raise AssertionError("VPS_INPUT_LIMIT_REQUIRED")
         for mode, expected in (
             ("readiness_known", "PROJECT_READINESS_REQUEST_INVALID"),
             ("target_known", "TARGET_ENROLLMENT_NOT_READY"),

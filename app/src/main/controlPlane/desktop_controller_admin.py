@@ -44,6 +44,23 @@ TARGET_ERROR_CODES = frozenset(
     }
 )
 
+VPS_ERROR_CODES = frozenset(
+    [
+        "VPS_REGISTRATION_REQUEST_INVALID",
+        "VPS_REGISTRATION_CONFLICT",
+        "VPS_REGISTRATION_CHANGED",
+        "VPS_REGISTRATION_UNAVAILABLE",
+        "CONTROLLER_VPS_INPUT_INVALID",
+        "CONTROLLER_VPS_CONTROLLER_MISMATCH",
+        "CONTROLLER_VPS_ENROLLMENT_ABORTED",
+        "CONTROLLER_VPS_ENROLLMENT_CONFLICT",
+        "CONTROLLER_VPS_CREDENTIAL_STORE_UNAVAILABLE",
+        "CONTROLLER_VPS_SSH_VERIFICATION_FAILED",
+        "CONTROLLER_VPS_ENROLLMENT_UNAVAILABLE",
+        "CONTROLLER_BOOTSTRAP_TRANSACTION_ACTIVE",
+    ]
+)
+
 
 class AdminFailure(ValueError):
     def __init__(self, code):
@@ -195,7 +212,8 @@ def run_cli(request, operation, payload):
     source_check = operation == "verify-project-source"
     target_check = operation in ("project-target-state", "enroll-project-target")
     readiness_check = operation == "project-readiness"
-    structured_error = source_check or target_check or readiness_check
+    vps_check = operation == "register-vps"
+    structured_error = source_check or target_check or readiness_check or vps_check
     args = (
         [request["node_path"], "--version"]
         if operation == "_version"
@@ -207,6 +225,13 @@ def run_cli(request, operation, payload):
             request["data_directory"],
         ]
     )
+    payload_bytes = (
+        b""
+        if operation == "_version"
+        else json.dumps(payload, ensure_ascii=False).encode()
+    )
+    if vps_check and len(payload_bytes) > 512 * 1024:
+        raise ValueError()
     process = subprocess.Popen(
         args,
         stdin=subprocess.PIPE,
@@ -217,14 +242,19 @@ def run_cli(request, operation, payload):
         start_new_session=True,
     )
     try:
-        if operation != "_version":
-            process.stdin.write(json.dumps(payload).encode())
-        process.stdin.close()
+        if vps_check:
+            os.set_blocking(process.stdin.fileno(), False)
+        else:
+            if operation != "_version":
+                process.stdin.write(payload_bytes)
+            process.stdin.close()
         content = bytearray()
         error_content = bytearray()
         deadline = time.monotonic() + (
             180
             if readiness_check
+            else 60
+            if vps_check
             else 105
             if source_check
             else 75
@@ -233,6 +263,9 @@ def run_cli(request, operation, payload):
         )
         with selectors.DefaultSelector() as selector:
             selector.register(process.stdout, selectors.EVENT_READ)
+            sent = 0
+            if vps_check:
+                selector.register(process.stdin, selectors.EVENT_WRITE)
             if structured_error:
                 selector.register(process.stderr, selectors.EVENT_READ)
             while selector.get_map():
@@ -243,6 +276,15 @@ def run_cli(request, operation, payload):
                 if not events:
                     raise ValueError()
                 for key, _ in events:
+                    if key.fileobj is process.stdin:
+                        try:
+                            sent += os.write(key.fd, payload_bytes[sent : sent + 65536])
+                        except BlockingIOError:
+                            continue
+                        if sent == len(payload_bytes):
+                            selector.unregister(process.stdin)
+                            process.stdin.close()
+                        continue
                     is_error = key.fileobj is process.stderr
                     destination = error_content if is_error else content
                     limit = 1024 if is_error else MAX_REPLY
@@ -257,7 +299,7 @@ def run_cli(request, operation, payload):
             if structured_error:
                 # Chỉ chuyển tiếp đúng mã đã duyệt, không stdout/stderr tùy ý.
                 match = re.fullmatch(
-                    rb"CONTROL_PLANE_ERROR ((?:PROJECT_SOURCE_|PROJECT_TARGET_|TARGET_ENROLLMENT_|PROJECT_READINESS_)[A-Z_]+)\r?\n?",
+                    rb"CONTROL_PLANE_ERROR ((?:PROJECT_SOURCE_|PROJECT_TARGET_|TARGET_ENROLLMENT_|PROJECT_READINESS_|VPS_REGISTRATION_|CONTROLLER_VPS_|CONTROLLER_BOOTSTRAP_)[A-Z_]+)\r?\n?",
                     bytes(error_content),
                 )
                 if match:
@@ -271,6 +313,7 @@ def run_cli(request, operation, payload):
                                 "PROJECT_READINESS_UNAVAILABLE",
                             }
                         )
+                        or (vps_check and safe_code in VPS_ERROR_CODES)
                         or safe_code in SOURCE_ERROR_CODES
                         or (
                             (target_check or readiness_check)
@@ -285,16 +328,20 @@ def run_cli(request, operation, payload):
         if process.poll() is None:
             os.killpg(process.pid, signal.SIGKILL)
             process.wait(timeout=5)
+        if not process.stdin.closed:
+            process.stdin.close()
         process.stdout.close()
         if structured_error:
             process.stderr.close()
 
 
 def main():
-    raw = sys.stdin.buffer.read(16385)
-    if len(raw) > 16384:
+    raw = sys.stdin.buffer.read(512 * 1024 + 1)
+    if len(raw) > 512 * 1024:
         raise ValueError()
     request = json.loads(raw.decode("utf-8", errors="strict"))
+    if request.get("operation") != "register-vps" and len(raw) > 16384:
+        raise ValueError()
     if set(request) != {
         "operation",
         "artifact_path",
@@ -315,6 +362,7 @@ def main():
         "project-target-state",
         "enroll-project-target",
         "project-readiness",
+        "register-vps",
     ):
         raise ValueError()
     try:

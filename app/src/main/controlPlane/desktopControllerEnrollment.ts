@@ -1,3 +1,8 @@
+import { vpsRegistrationInputSchema, vpsRegistrationResultSchema } from './vpsRegistration'
+import type {
+  ProductVpsRegistrationInput,
+  ProductVpsRegistrationResult
+} from '../../../../docs/contracts/product-vps-registration'
 import { projectReadinessSchema, type ProjectReadinessError } from './projectReadiness'
 import type {
   ProductProjectReadiness,
@@ -57,6 +62,18 @@ export class DesktopControllerEnrollmentError extends Error {
       | 'CONTROLLER_IDENTITY_MISMATCH'
       | 'CONTROLLER_BUNDLE_VERIFICATION_FAILED'
       | 'CONTROLLER_NODE_UNSUPPORTED'
+      | 'VPS_REGISTRATION_REQUEST_INVALID'
+      | 'VPS_REGISTRATION_CONFLICT'
+      | 'VPS_REGISTRATION_CHANGED'
+      | 'VPS_REGISTRATION_UNAVAILABLE'
+      | 'CONTROLLER_VPS_INPUT_INVALID'
+      | 'CONTROLLER_VPS_CONTROLLER_MISMATCH'
+      | 'CONTROLLER_VPS_ENROLLMENT_ABORTED'
+      | 'CONTROLLER_VPS_ENROLLMENT_CONFLICT'
+      | 'CONTROLLER_VPS_CREDENTIAL_STORE_UNAVAILABLE'
+      | 'CONTROLLER_VPS_SSH_VERIFICATION_FAILED'
+      | 'CONTROLLER_VPS_ENROLLMENT_UNAVAILABLE'
+      | 'CONTROLLER_BOOTSTRAP_TRANSACTION_ACTIVE'
       | 'REQUEST_ABORTED'
       | 'REQUEST_TIMEOUT'
       | ProjectSourceVerificationError['code']
@@ -155,6 +172,21 @@ export class DesktopControllerEnrollment {
       projectReadinessSchema
     )
   }
+  async registerVps(
+    bindingId: string,
+    input: ProductVpsRegistrationInput,
+    beforeSend: () => void
+  ): Promise<ProductVpsRegistrationResult> {
+    const parsed = vpsRegistrationInputSchema.safeParse(input)
+    if (!parsed.success) throw new DesktopControllerEnrollmentError('CONTROLLER_VPS_INPUT_INVALID')
+    return this.projectOperation(
+      bindingId,
+      'register-vps',
+      parsed.data,
+      vpsRegistrationResultSchema,
+      beforeSend
+    )
+  }
   async registerProject(
     bindingId: string,
     input: ProductProjectRegistrationInput
@@ -190,9 +222,11 @@ export class DesktopControllerEnrollment {
       | 'verify-project-source'
       | 'project-target-state'
       | 'enroll-project-target'
-      | 'project-readiness',
+      | 'project-readiness'
+      | 'register-vps',
     payload: object,
-    schema: z.ZodType<T>
+    schema: z.ZodType<T>,
+    beforeSend?: () => void
   ): Promise<T> {
     const before = this.vault.resolve(bindingId),
       intent = this.vault.intent(bindingId)
@@ -202,13 +236,14 @@ export class DesktopControllerEnrollment {
         ? { timeoutMs: 210_000 }
         : operation === 'verify-project-source'
           ? { timeoutMs: 120_000 }
-          : operation === 'enroll-project-target'
+          : operation === 'enroll-project-target' || operation === 'register-vps'
             ? { timeoutMs: 90_000 }
             : {},
       {
         operation,
         payload: { ...payload, controller_id: intent.controller_id },
-        expected_revision: before.revision
+        expected_revision: before.revision,
+        beforeSend
       }
     )
     const after = this.vault.resolve(bindingId)
@@ -294,8 +329,10 @@ export class DesktopControllerEnrollment {
         | 'project-target-state'
         | 'enroll-project-target'
         | 'project-readiness'
+        | 'register-vps'
       payload: object
       expected_revision?: number
+      beforeSend?: () => void
     }
   ): Promise<unknown> {
     const timeout = options.timeoutMs ?? 45_000
@@ -307,7 +344,8 @@ export class DesktopControllerEnrollment {
           ? 210_000
           : command?.operation === 'verify-project-source'
             ? 120_000
-            : command?.operation === 'enroll-project-target'
+            : command?.operation === 'enroll-project-target' ||
+                command?.operation === 'register-vps'
               ? 90_000
               : 60_000)
     )
@@ -355,6 +393,7 @@ export class DesktopControllerEnrollment {
           this.vault.get(intent.binding_id).revision !== command.expected_revision)
       )
         throw new DesktopControllerVaultError('BINDING_CHANGED')
+      command?.beforeSend?.()
       const body = JSON.stringify({
         operation: command?.operation ?? 'enroll-desktop-client',
         artifact_path: intent.artifact_path,
@@ -368,7 +407,8 @@ export class DesktopControllerEnrollment {
           requested_scopes: intent.requested_scopes
         }
       })
-      if (Buffer.byteLength(body) > 16384) throw new DesktopControllerVaultError('REQUEST_INVALID')
+      if (Buffer.byteLength(body) > (command?.operation === 'register-vps' ? 512 * 1024 : 16384))
+        throw new DesktopControllerVaultError('REQUEST_INVALID')
       return new Promise((resolve, reject) => {
         const chunks: Buffer[] = []
         let size = 0,
@@ -416,6 +456,18 @@ export class DesktopControllerEnrollment {
                   'PROJECT_SOURCE_ABORTED',
                   'PROJECT_SOURCE_DEADLINE',
                   'PROJECT_SOURCE_STORAGE_UNAVAILABLE',
+                  'VPS_REGISTRATION_REQUEST_INVALID',
+                  'VPS_REGISTRATION_CONFLICT',
+                  'VPS_REGISTRATION_CHANGED',
+                  'VPS_REGISTRATION_UNAVAILABLE',
+                  'CONTROLLER_VPS_INPUT_INVALID',
+                  'CONTROLLER_VPS_CONTROLLER_MISMATCH',
+                  'CONTROLLER_VPS_ENROLLMENT_ABORTED',
+                  'CONTROLLER_VPS_ENROLLMENT_CONFLICT',
+                  'CONTROLLER_VPS_CREDENTIAL_STORE_UNAVAILABLE',
+                  'CONTROLLER_VPS_SSH_VERIFICATION_FAILED',
+                  'CONTROLLER_VPS_ENROLLMENT_UNAVAILABLE',
+                  'CONTROLLER_BOOTSTRAP_TRANSACTION_ACTIVE',
                   'PROJECT_READINESS_REQUEST_INVALID',
                   'PROJECT_READINESS_UNAVAILABLE',
                   'PROJECT_TARGET_REQUEST_INVALID',

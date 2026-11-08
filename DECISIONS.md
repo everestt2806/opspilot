@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-08 | [product-mode/credentials] R3c-6g4 cho user chọn local pinned VPS và xác nhận chuyển quyền SSH cho controller qua fixed verified-admin register-vps — Main-only decrypt, local durable UUID/profile/revision/cipher fence; controller receipt nguyên tử cùng encrypted VPS, same-key recovery; không copy Desktop ciphertext/key, không raw secret trong journal/renderer/argv/env/log. Ngoại lệ Product với giới hạn M02 chỉ giữ credential trên máy: transfer chỉ sau explicit consent, controller dùng key riêng; không init/rotate/install/deploy ngầm — Sơn/Codex
+
 2026-11-08 | [product-mode/onboarding] R3c-6g3d first-deploy dùng current source/target/resources readiness và main-only receipt60s; existing durable journal giữ UUID trước POST, unknown chỉlookup — Optional require_first_deployment=true +exactSHA được controller kiểm nguyên tử với currentdeployment/activejobs; legacy redeploy không đổi, không ready flag bền/auto-enable hoặc Desktop pipeline fallback — Sơn/Codex
 
 2026-11-07 | [product-mode/onboarding] R3c-6g3c thêm project-target-state/enroll-project-target admin wrappers và GUI review hostname/pin/private root; main derive source/target authority từ registered setup và binding — Reuse installer/proof cũ, transaction source fences và expected SSH identity trước auth; unknown chỉ inspect, không reinstall hoặc ready/deployed claim. Target_root là lựa chọn admin explicit, không source/repo; không schema mới — Sơn/Codex

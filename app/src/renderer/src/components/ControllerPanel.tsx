@@ -26,6 +26,7 @@ import { useUiState } from '../store/uiState'
 import { CONTROLLER_COPY, CONTROLLER_FEEDBACK } from './controllerCopy'
 import { ControllerCommandPanel } from './ControllerCommandPanel'
 import { ControllerProjectPanel } from './ControllerProjectPanel'
+import { ControllerTargetRegistrationPanel } from './ControllerTargetRegistrationPanel'
 import { CONTROLLER_COMMAND_COPY } from './controllerCommandCopy'
 
 function errorCode(error: IpcError | undefined): string {
@@ -453,6 +454,10 @@ export function ControllerPanel(): React.JSX.Element {
               const binding = rows.find((row) => row.binding_id === selected)!
               return (
                 <>
+                  <ControllerTargetRegistrationPanel
+                    key={`target:${binding.binding_id}:${binding.revision}`}
+                    binding={binding}
+                  />
                   <ControllerProjectPanel
                     key={`project:${binding.binding_id}:${binding.revision}`}
                     binding={binding}

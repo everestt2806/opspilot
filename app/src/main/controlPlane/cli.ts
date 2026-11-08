@@ -1,3 +1,4 @@
+import { registerControllerVps } from './vpsRegistration'
 import type Database from 'better-sqlite3'
 
 import { ProductDeployRepository } from '../db/productDeployRepository'
@@ -29,6 +30,7 @@ type Command =
   | 'status'
   | 'secrets-init'
   | 'enroll-vps'
+  | 'register-vps'
   | 'enroll-target'
   | 'recover-runtime'
   | 'enroll-desktop-client'
@@ -57,6 +59,7 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
       'status',
       'secrets-init',
       'enroll-vps',
+      'register-vps',
       'enroll-target',
       'recover-runtime',
       'enroll-desktop-client',
@@ -109,6 +112,7 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
   if (
     command === 'secrets-init' ||
     command === 'enroll-vps' ||
+    command === 'register-vps' ||
     command === 'enroll-target' ||
     command === 'recover-runtime' ||
     command === 'enroll-desktop-client' ||
@@ -221,6 +225,19 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
         initializeControllerSecrets(opened.database, opened.controllerId, opened.dataDirectory)
         console.log(
           JSON.stringify({ state: 'secrets_initialized', controller_id: opened.controllerId })
+        )
+      } else if (command === 'register-vps') {
+        console.log(
+          JSON.stringify(
+            await registerControllerVps(
+              opened.database,
+              opened.controllerId,
+              opened.dataDirectory,
+              `unix:${process.getuid!()}`,
+              input,
+              controller.signal
+            )
+          )
         )
       } else if (command === 'enroll-target') {
         console.log(

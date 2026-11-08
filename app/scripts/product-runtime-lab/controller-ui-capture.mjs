@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '../../..')
 const directory = join(root, 'app/.out-scripts/controller-ui', randomBytes(6).toString('hex'))
-const screenshots = join(root, 'docs/ui-redesign/screenshots/r3c6g3d')
+const screenshots = join(root, 'docs/ui-redesign/screenshots/r3c6g4')
 mkdirSync(directory, { recursive: true })
 mkdirSync(screenshots, { recursive: true })
 app.setPath('userData', directory)
@@ -32,6 +32,8 @@ const calls = [],
   errors = []
 let commandRows = []
 let projectRows = []
+let targetRows = [],
+  loseTargetRegistration = false
 let firstReadiness,
   firstCommand,
   firstHealthy = false
@@ -53,6 +55,10 @@ for (const channel of [
   'controller:project-target-state',
   'controller:enroll-project-target',
   'controller:project-readiness',
+  'controller:prepare-target',
+  'controller:send-target',
+  'controller:target-setups',
+  'controller:cancel-target',
   'controller:prepare-first-deployment',
   'controller:send-first-deployment',
   'vps:list',
@@ -64,6 +70,48 @@ for (const channel of [
   ipcMain.handle(channel, (_event, input) => {
     calls.push(channel)
     if (channel === 'controller:list') return { ok: true, data: [connection] }
+    if (channel === 'controller:target-setups') return { ok: true, data: targetRows }
+    if (channel === 'controller:prepare-target') {
+      assert.equal(input.binding_id, bindingId)
+      assert.equal(input.local_vps_id, 1)
+      targetRows = [
+        {
+          request_key: '88888888-8888-4888-8888-888888888888',
+          binding_id: bindingId,
+          binding_revision: 2,
+          controller_id: connection.controller_id,
+          local_vps_id: 1,
+          local_security_revision: 1,
+          profile: {
+            name: 'Lab VPS',
+            host: '192.0.2.1',
+            port: 22,
+            username: 'root',
+            auth_type: 'key',
+            host_fingerprint: 'SHA256:' + 'A'.repeat(43)
+          },
+          state: 'prepared',
+          remote_vps_id: null,
+          remote_security_revision: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ]
+      return { ok: true, data: targetRows[0] }
+    }
+    if (channel === 'controller:send-target') {
+      assert.deepEqual(input, { request_key: targetRows[0].request_key, confirm_transfer: true })
+      if (loseTargetRegistration) {
+        loseTargetRegistration = false
+        targetRows = [{ ...targetRows[0], state: 'outcome_unknown' }]
+        return { ok: false, error: { technical: 'CONTROLLER_ADMIN_FAILED' } }
+      }
+      targetRows = [
+        { ...targetRows[0], state: 'registered', remote_vps_id: 77, remote_security_revision: 3 }
+      ]
+      return { ok: true, data: targetRows[0] }
+    }
+    if (channel === 'controller:cancel-target') throw new Error('UNEXPECTED_TARGET_CANCELLATION')
     if (channel === 'controller:projects') return { ok: true, data: projectRows }
     if (channel === 'controller:project-targets')
       return {
@@ -512,6 +560,7 @@ void app.whenReady().then(async () => {
         await wait(window, `!document.querySelector('.controller-command-panel')`)
         commandRows = []
         projectRows = []
+        targetRows = []
         await window.webContents.executeJavaScript(
           `Array.from(document.querySelectorAll('button')).find(el=>el.textContent.trim()==='View Product apps').click()`
         )
@@ -922,6 +971,89 @@ void app.whenReady().then(async () => {
           `document.querySelector('.ant-modal-close').click()`
         )
         await wait(window, `!document.querySelector('.ant-modal')`)
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.controller-target-registration-panel button')).find(el=>el.textContent.trim()==='Register target server').click()`
+        )
+        await wait(
+          window,
+          `!!document.querySelector('.controller-target-registration-modal .ant-select')`
+        )
+        await delay(150)
+        await window.webContents.executeJavaScript(
+          `document.querySelector('.controller-target-registration-modal .ant-select').dispatchEvent(new MouseEvent('mousedown',{bubbles:true}));document.querySelector('.controller-target-registration-modal .ant-select input').dispatchEvent(new MouseEvent('mousedown',{bubbles:true}))`
+        )
+        await wait(window, `!!document.querySelector('.ant-select-item-option')`)
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.ant-select-item-option')).find(el=>el.textContent.includes('Lab VPS')).click()`
+        )
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.controller-target-registration-modal button')).find(el=>el.textContent.trim()==='Review connection').click()`
+        )
+        await wait(
+          window,
+          `document.querySelector('.controller-target-registration-modal')?.textContent.includes('Credentials have not been transferred.')`
+        )
+        const registrationCalls = calls.filter(
+          (channel) => channel === 'controller:send-target'
+        ).length
+        const captureRegistration = async (view) => {
+          await delay(250)
+          await window.webContents.executeJavaScript(
+            'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))'
+          )
+          const layout = await window.webContents.executeJavaScript(
+            `(()=>{const modal=document.querySelector('.controller-target-registration-modal .ant-modal-content'),footer=document.querySelector('.controller-target-registration-modal .ant-modal-footer');return {horizontal:modal.scrollWidth>modal.clientWidth,footer_inside:footer.getBoundingClientRect().bottom<=innerHeight,visible:modal.getBoundingClientRect().height>0,password_fields:modal.querySelectorAll('input[type=password]').length}})()`
+          )
+          assert.equal(layout.horizontal, false)
+          assert.equal(layout.footer_inside, true)
+          assert.equal(layout.visible, true)
+          assert.equal(layout.password_fields, 0)
+          const file = `target-registration-${view}-${width}x${height}-${theme}.png`
+          writeFileSync(join(screenshots, file), (await window.webContents.capturePage()).toPNG())
+          checks.push({
+            view: `target_registration_${view}`,
+            width,
+            height,
+            theme,
+            ...layout,
+            screenshot: file,
+            backend: 'IPC_FIXTURE'
+          })
+        }
+        assert.equal(
+          await window.webContents.executeJavaScript(
+            `Array.from(document.querySelectorAll('.controller-target-registration-modal button')).find(el=>el.textContent.trim()==='Confirm and register').disabled`
+          ),
+          true
+        )
+        assert.equal(
+          calls.filter((channel) => channel === 'controller:send-target').length,
+          registrationCalls
+        )
+        await captureRegistration('review')
+        loseTargetRegistration = true
+        await window.webContents.executeJavaScript(
+          `document.querySelector('.controller-target-registration-modal input[type=checkbox]').click();Array.from(document.querySelectorAll('.controller-target-registration-modal button')).find(el=>el.textContent.trim()==='Confirm and register').click()`
+        )
+        await wait(
+          window,
+          `document.querySelector('.controller-target-registration-modal')?.textContent.includes('The outcome is unknown.')`
+        )
+        await captureRegistration('unknown')
+        const oldRegistrationKey = targetRows[0].request_key
+        await window.webContents.executeJavaScript(
+          `document.querySelector('.controller-target-registration-modal input[type=checkbox]').click();Array.from(document.querySelectorAll('.controller-target-registration-modal button')).find(el=>el.textContent.trim()==='Retry saved request').click()`
+        )
+        await wait(
+          window,
+          `document.querySelector('.controller-target-registration-modal')?.textContent.includes('Docker installation and application deployment have not run.')`
+        )
+        assert.equal(targetRows[0].request_key, oldRegistrationKey)
+        await captureRegistration('registered')
+        await window.webContents.executeJavaScript(
+          `document.querySelector('.controller-target-registration-modal .ant-modal-close').click()`
+        )
+        await wait(window, `!document.querySelector('.controller-target-registration-modal')`)
         await window.webContents.executeJavaScript(
           `Array.from(document.querySelectorAll('button')).find(el=>el.textContent.trim()==='Register controller').click()`
         )

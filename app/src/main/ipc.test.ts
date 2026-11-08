@@ -62,6 +62,10 @@ describe('metadata-only controller IPC composition', () => {
       cancelProject: vi.fn(async () => ({ state: 'cancelled' })),
       verifyProjectSource: vi.fn(async () => ({ state: 'source_verified' })),
       projectTargetState: vi.fn(async () => ({ state: 'not_prepared' })),
+      prepareTarget: vi.fn(async () => ({ state: 'prepared' })),
+      sendTarget: vi.fn(async () => ({ state: 'registered' })),
+      listTargetSetups: vi.fn(async () => []),
+      cancelTarget: vi.fn(async () => ({ state: 'cancelled' })),
       projectReadiness: vi.fn(async () => ({ state: 'blocked' })),
       prepareFirstDeployment: vi.fn(async () => ({ command: { state: 'prepared' } })),
       sendFirstDeployment: vi.fn(async () => ({ state: 'accepted' })),
@@ -87,6 +91,7 @@ describe('metadata-only controller IPC composition', () => {
       'controller:apps',
       'controller:cancel-command',
       'controller:cancel-project',
+      'controller:cancel-target',
       'controller:check-command',
       'controller:commands',
       'controller:disconnect',
@@ -95,6 +100,7 @@ describe('metadata-only controller IPC composition', () => {
       'controller:prepare-command',
       'controller:prepare-first-deployment',
       'controller:prepare-project',
+      'controller:prepare-target',
       'controller:project-readiness',
       'controller:project-target-state',
       'controller:project-targets',
@@ -105,6 +111,8 @@ describe('metadata-only controller IPC composition', () => {
       'controller:send-command',
       'controller:send-first-deployment',
       'controller:send-project',
+      'controller:send-target',
+      'controller:target-setups',
       'controller:verify-project-source'
     ])
     expect(await ingressCallback('controller:list')({}, undefined)).toEqual({ ok: true, data: [] })
@@ -118,6 +126,10 @@ describe('metadata-only controller IPC composition', () => {
     })
     expect(channels).not.toContain('controller:call')
     for (const [channel, method] of [
+      ['controller:prepare-target', 'prepareTarget'],
+      ['controller:send-target', 'sendTarget'],
+      ['controller:target-setups', 'listTargetSetups'],
+      ['controller:cancel-target', 'cancelTarget'],
       ['controller:project-readiness', 'projectReadiness'],
       ['controller:prepare-first-deployment', 'prepareFirstDeployment'],
       ['controller:send-first-deployment', 'sendFirstDeployment'],
