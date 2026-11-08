@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6h2a 08/11:** [Controller service installer](tasks/tk-s7-release-r3c6h2a-controller-service.md) đã có Linux CLI transaction với account riêng, private DB/key, immutable UUID/pin, kernel lock và explicit recovery. Native22 chứng minh systemd và cold recovery, không phải deployment mới; fresh DB0VPS/app/job. Còn code transport/bootstrap/admin UID bridge/wizard, không nâng FR/UC/PRODUCT_PASS từ test count; reboot/live/soak riêng.
+
 > **R3c-6h1 08/11:** [Nền bộ cài controller](tasks/tk-s7-release-r3c6h1-controller-release.md) có Linux Node/native runtime release, independent pin/passive verifier và readonly pinned SSH host preflight. Cold non-root CLI/SQLite/schema028 và tamper/SSH17, focused52/gates cuối trong hồ sơ. Chưa transport/cài service/wizard, không đổi manual binding flow và không nâng FR/UC/PRODUCT_PASS; next6h2 cần code, không user test thay implementation.
 
 > **R3c-6g4 08/11:** [Đăng ký VPS đích từ Desktop](tasks/tk-s7-release-r3c6g4-target-credentials.md) nối selectlocalVPS→profile/pin/controller review→consent→main decrypt→verifiedSSH admin→encrypted controller record. Migration028 có local intent và atomic server receipt; unknown explicit samekey retry, conflict không rotate, fingerprint sai trướcauth. Native34/Electron80/probe18/fresh028 và fullgate theo hồsơ. Đây là kết nối đã lưu, chưa installed/Dockerready/deployed; controller installer/rotation/live/ML/HTTPS/migrate vẫn cần gate riêng, không nâng FR tổng từ số test.

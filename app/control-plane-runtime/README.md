@@ -1,5 +1,92 @@
 # Product controller runtime (Linux)
 
+## Cài system service bằng CLI (R3c-6h2a)
+
+Installer chạy trên Linux x64/glibc với **trusted host Node22**, quyền root và
+systemd. Release directory phải đã có trên máy, root-owned và private, pin lấy
+từ build tin cậy. Đây là CLI backend; Desktop chưa có transfer/bootstrap/wizard
+và bridge root admin → service UID. Không nhập đường dẫn của service mới vào form
+binding cũ rồi coi đó là luồng onboarding đã hoàn tất.
+
+Các binary cần có: `systemctl`, `flock`, `setpriv`, `getent`, `useradd`. Build đã
+kiểm trên Ubuntu/WSL/glibc2.39; chọn release có libc phù hợp host. Unit example
+cũ giữ layout manual; installer render unit riêng từ `controllerInstallation.ts`.
+
+Build trusted installer từ source trước (không chạy candidate để tự verify):
+
+```sh
+export OPSPILOT_CONTROL_PLANE_MODULES=/absolute/runtime/node_modules
+export OPSPILOT_CONTROLLER_INSTALLER_OUTPUT=/private/trusted/controller-installer.cjs
+node app/scripts/build-controller-installer.mjs
+```
+
+Receipt build trả hash của installer. Admin dùng bản từ build đã tin; không lấy
+installer hoặc pin từ một candidate không rõ nguồn. Trên fresh VPS chưa có Node,
+Python bootstrap kiểm bytes/pin trước packaged Node là phần tiếp theo; CLI này
+chưa tự cài Node/npm/apt/Docker.
+
+Chạy bằng Node22 tin cậy, quyền root:
+
+```sh
+node /private/trusted/controller-installer.cjs < installation.json
+```
+
+`installation.json` chỉ có metadata; thay UUID mới trước lần cài đầu, giữ nguyên
+UUID/pin sau khi gửi hoặc mất phản hồi. Consent phải do admin chấp thuận:
+
+```json
+{
+  "format": 1,
+  "operation": "install",
+  "request_key": "11111111-1111-4111-8111-111111111111",
+  "consent": true,
+  "release_directory": "/private/build/release",
+  "release_sha256": "REPLACE_WITH_TRUSTED_RELEASE_MANIFEST_SHA256"
+}
+```
+
+`inspect` chỉ nhận `{format:1,operation:"inspect",request_key:"<same UUID>"}`.
+`recover` nhận `{format:1,operation:"recover",request_key:"<same UUID>",consent:true,
+release_sha256:"<same pin>"}`. Gửi lại `install` đã có receipt chỉ inspect, không
+tiếp tục mutation. `recover` là bước riêng cần xác nhận, không đổi pin/UUID hoặc
+tạo DB/key khác. Service đã cài nhưng bị stop thì inspect/recover không tự bật lại.
+
+Các vị trí mặc định:
+
+| Nội dung | Vị trí / quyền |
+|---|---|
+| Journal + kernel lock | `/var/lib/opspilot-controller-install`, root0700 |
+| Runtime | `/opt/opspilot-controller/runtime`, service UID0700/0600, Node0700 |
+| DB/key | `/var/lib/opspilot-controller`, service UID0700/0600 |
+| Unit | `/etc/systemd/system/opspilot-controller-product.service`, root0644 |
+| Account | `opspilot-controller`, private group, nologin |
+
+JSON không cho sửa output paths, account/UID, command hoặc unit. Bộ cài từ chối
+installation/account/unit lạ, symlink/hardlink và gói sai pin. Root receipt/Unix
+account xác định service UID; passive verifier chỉ nhận owner override nội bộ.
+Default verifier vẫn từ chối foreign UID. File copy và journal fsync/rename;
+kernel flock giữ qua initialization child, không có stale-PID bypass. Lock path
+bị mất sau intent phải báo lỗi, không tạo inode mới để vượt khóa cũ.
+
+Init/secrets-init dùng `setpriv --clear-groups` với runtime UID; trước đó cold
+smoke kiểm Node/ABI/UID/groups/inherited descriptor. Không lấy Desktop DB hoặc
+khóa/credential sang. Account không được login; systemd có NoNewPrivileges,
+ProtectSystem=strict, ProtectHome và chỉ data directory được ghi. API vẫn chỉ
+`127.0.0.1:8768`; không mở firewall hoặc public admin endpoint.
+
+`service_state:running` cần đúng unit/UID/argv, socket loopback thuộc MainPID và
+health ready. `service_enabled` là trạng thái autostart riêng. Receipt installed
+là lịch sử cài, không có nghĩa service luôn đang chạy hoặc đã deploy dự án.
+Key thiếu, owner/identity sai hoặc DB init chưa đủ marker đều báo recovery cần
+thiết; không xóa/khởi tạo lại dữ liệu để che lỗi. Chưa có upgrade/uninstall UI.
+Reboot/soak/live VPS còn là gate riêng; lab mới xác minh enable/start/restart/stop.
+
+Lab disposable root/systemd: `app/scripts/controller-service-lab/run.mjs`, cùng
+biến modules/release output/pin ở phần dưới, chạy Node22 root. Chỉ tạo account,
+unit và `/opt/opspilot-controller-service-lab-<nonce>` của chính fixture; cleanup
+kiểm nonce/owner, stop/disable unit rồi xóa account/private group/fixture. Không
+đổi production paths hoặc reboot WSL/Docker host dùng chung.
+
 ## Gói runtime offline và kiểm tra máy cài (R3c-6h1)
 
 Đã có builder Linux và passive verifier cho release directory gồm Node22,

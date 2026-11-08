@@ -30,11 +30,20 @@ export function releasePath(value: string): boolean {
 }
 
 /** Không chạy binary/import candidate; pin do caller lấy từ build tin cậy. */
-export function verifyControllerRelease(directory: string, pin: string): ControllerReleaseManifest {
+export function verifyControllerRelease(
+  directory: string,
+  pin: string,
+  ownerUid = process.getuid?.()
+): ControllerReleaseManifest {
   try {
     if (!isAbsolute(directory) || !/^[a-f0-9]{64}$/.test(pin) || pin.length !== 64) throw Error()
     const root = resolve(directory)
-    const bytes = readReleaseFile(join(root, CONTROLLER_RELEASE_MANIFEST), limits.manifest)
+    const bytes = readReleaseFile(
+      join(root, CONTROLLER_RELEASE_MANIFEST),
+      limits.manifest,
+      false,
+      ownerUid
+    )
     if (releaseSha256(bytes) !== pin) throw Error()
     const manifest = JSON.parse(bytes.toString('utf8')) as ControllerReleaseManifest
     if (
@@ -104,7 +113,9 @@ export function verifyControllerRelease(directory: string, pin: string): Control
         throw Error()
       const content = readReleaseFile(
         join(root, item.path),
-        item.path === 'node' ? limits.node : limits.file
+        item.path === 'node' ? limits.node : limits.file,
+        false,
+        ownerUid
       )
       if (content.length !== item.size || releaseSha256(content) !== item.sha256) throw Error()
       if (item.path === 'node' || item.path.endsWith('.node')) assertLinuxX64Elf(content)
@@ -118,20 +129,30 @@ export function verifyControllerRelease(directory: string, pin: string): Control
     if (
       !paths.includes('node') ||
       !paths.includes('runtime-lock.json') ||
-      releaseSha256(readReleaseFile(join(root, 'runtime-lock.json'), limits.manifest)) !==
-        manifest.lock_sha256
+      releaseSha256(
+        readReleaseFile(join(root, 'runtime-lock.json'), limits.manifest, false, ownerUid)
+      ) !== manifest.lock_sha256
     )
       throw Error()
     for (const item of manifest.packages) {
       const metadata = JSON.parse(
-        readReleaseFile(join(root, item.path, 'package.json'), limits.file).toString()
+        readReleaseFile(
+          join(root, item.path, 'package.json'),
+          limits.file,
+          false,
+          ownerUid
+        ).toString()
       )
       if (metadata.name !== item.name || metadata.version !== item.version) throw Error()
     }
-    const actual = scanRelease(root)
+    const actual = scanRelease(root, ownerUid)
     const expected = [...paths, CONTROLLER_RELEASE_MANIFEST].sort()
     if (actual.join('\n') !== expected.join('\n')) throw Error()
-    verifyControllerBundle(join(root, 'payload/control-plane.cjs'), manifest.payload_sha256)
+    verifyControllerBundle(
+      join(root, 'payload/control-plane.cjs'),
+      manifest.payload_sha256,
+      ownerUid
+    )
     return manifest
   } catch {
     throw new Error('CONTROLLER_RELEASE_VERIFICATION_FAILED')
@@ -175,19 +196,24 @@ export function productionPackages(): Array<{
     .sort((a, b) => (a.path < b.path ? -1 : 1))
 }
 
-export function assertReleaseDirectory(path: string): void {
+export function assertReleaseDirectory(path: string, ownerUid = process.getuid?.()): void {
   const info = lstatSync(path)
   if (
     !info.isDirectory() ||
     info.isSymbolicLink() ||
     (process.platform !== 'win32' &&
-      ((info.mode & 0o022) !== 0 || (info.uid !== 0 && info.uid !== process.getuid?.())))
+      ((info.mode & 0o022) !== 0 || (info.uid !== 0 && info.uid !== ownerUid)))
   )
     throw Error('UNSAFE_RELEASE_DIRECTORY')
 }
 
 /** Stable bounded read, nlink=1; caller kiểm từng parent trước khi đọc. */
-export function readReleaseFile(path: string, cap: number, trustedBuildSource = false): Buffer {
+export function readReleaseFile(
+  path: string,
+  cap: number,
+  trustedBuildSource = false,
+  ownerUid = process.getuid?.()
+): Buffer {
   const before = lstatSync(path)
   if (
     !before.isFile() ||
@@ -195,13 +221,13 @@ export function readReleaseFile(path: string, cap: number, trustedBuildSource = 
     (!trustedBuildSource && before.nlink !== 1) ||
     before.size > cap ||
     (process.platform !== 'win32' &&
-      ((before.mode & 0o022) !== 0 || (before.uid !== 0 && before.uid !== process.getuid?.())))
+      ((before.mode & 0o022) !== 0 || (before.uid !== 0 && before.uid !== ownerUid)))
   )
     throw Error('UNSAFE_RELEASE_FILE')
   // Kiểm ancestor kể cả root; không đi xuyên directory symlink.
   let parent = dirname(path)
   for (;;) {
-    assertReleaseDirectory(parent)
+    assertReleaseDirectory(parent, ownerUid)
     const next = dirname(parent)
     if (next === parent) break
     // /tmp có sticky bit là ancestor hợp lệ; root release vẫn phải private/owned.
@@ -240,12 +266,12 @@ export function readReleaseFile(path: string, cap: number, trustedBuildSource = 
   }
 }
 
-export function scanRelease(root: string): string[] {
+export function scanRelease(root: string, ownerUid = process.getuid?.()): string[] {
   const files: string[] = []
   let entries = 0
   function visit(directory: string, prefix: string, depth: number): void {
     if (depth > 32) throw Error('RELEASE_TOO_DEEP')
-    assertReleaseDirectory(directory)
+    assertReleaseDirectory(directory, ownerUid)
     const names = readdirSync(directory)
     if (!names.length) throw Error('EMPTY_RELEASE_DIRECTORY')
     for (const name of names) {

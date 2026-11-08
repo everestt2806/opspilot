@@ -32,7 +32,8 @@ export type VerifiedControllerBundle = Readonly<{
 /** Chỉ đọc gói offline với digest đã pin độc lập; không tạo DB hoặc activate/enroll. */
 export function verifyControllerBundle(
   artifactPath: string,
-  expectedDigest: string
+  expectedDigest: string,
+  ownerUid = process.getuid?.()
 ): VerifiedControllerBundle {
   try {
     if (typeof artifactPath !== 'string' || !isAbsolute(artifactPath))
@@ -48,10 +49,11 @@ export function verifyControllerBundle(
     const entrypoint = basename(artifact)
     if (/[^A-Za-z0-9_.-]/.test(entrypoint)) throw new Error('INVALID_ENTRYPOINT')
     if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*\.cjs$/.test(entrypoint)) throw new Error('INVALID_ENTRYPOINT')
-    assertDirectory(root)
+    assertDirectory(root, ownerUid)
     const manifestBytes = readCheckedFile(
       join(root, PRODUCT_CONTROLLER_BUNDLE_MANIFEST),
-      PRODUCT_CONTROLLER_BUNDLE_MAX_MANIFEST_BYTES
+      PRODUCT_CONTROLLER_BUNDLE_MAX_MANIFEST_BYTES,
+      ownerUid
     )
     if (digest(manifestBytes) !== expectedDigest) throw new Error('MANIFEST_PIN_MISMATCH')
     const manifest = JSON.parse(manifestBytes.toString('utf8')) as ProductControllerBundleManifest
@@ -83,15 +85,16 @@ export function verifyControllerBundle(
         throw new Error('INVALID_FILE_RECORD')
       total += entry.size
       if (total > PRODUCT_CONTROLLER_BUNDLE_MAX_TOTAL_BYTES) throw new Error('BUNDLE_TOO_LARGE')
-      assertDirectory(dirname(join(root, entry.path)))
+      assertDirectory(dirname(join(root, entry.path)), ownerUid)
       const content = readCheckedFile(
         join(root, entry.path),
-        PRODUCT_CONTROLLER_BUNDLE_MAX_FILE_BYTES
+        PRODUCT_CONTROLLER_BUNDLE_MAX_FILE_BYTES,
+        ownerUid
       )
       if (content.length !== entry.size || digest(content) !== entry.sha256)
         throw new Error('FILE_MISMATCH')
     }
-    const present = scan(root)
+    const present = scan(root, '', ownerUid)
     if (
       present.sort().join('\n') !==
       [...expectedFiles, PRODUCT_CONTROLLER_BUNDLE_MANIFEST].sort().join('\n')
@@ -142,21 +145,21 @@ function digest(bytes: Buffer): string {
   return createHash('sha256').update(bytes).digest('hex')
 }
 
-function safeMetadata(info: { uid: number; mode: number }): void {
+function safeMetadata(info: { uid: number; mode: number }, ownerUid = process.getuid?.()): void {
   if (
     process.platform !== 'win32' &&
-    ((info.mode & 0o022) !== 0 || (info.uid !== 0 && info.uid !== process.getuid?.()))
+    ((info.mode & 0o022) !== 0 || (info.uid !== 0 && info.uid !== ownerUid))
   )
     throw new Error('UNSAFE_BUNDLE_METADATA')
 }
 
-function assertDirectory(directory: string): void {
+function assertDirectory(directory: string, ownerUid = process.getuid?.()): void {
   const info = lstatSync(directory)
   if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('INVALID_DIRECTORY')
-  safeMetadata(info)
+  safeMetadata(info, ownerUid)
 }
 
-function readCheckedFile(file: string, cap: number): Buffer {
+function readCheckedFile(file: string, cap: number, ownerUid = process.getuid?.()): Buffer {
   const before = lstatSync(file)
   if (!before.isFile() || before.isSymbolicLink()) throw new Error('INVALID_FILE')
   let fd: number | undefined
@@ -172,7 +175,7 @@ function readCheckedFile(file: string, cap: number): Buffer {
       info.dev !== before.dev
     )
       throw new Error('INVALID_FILE')
-    safeMetadata(info)
+    safeMetadata(info, ownerUid)
     const bounded = Buffer.alloc(info.size + 1)
     let length = 0
     while (length < bounded.length) {
@@ -195,7 +198,7 @@ function readCheckedFile(file: string, cap: number): Buffer {
   }
 }
 
-function scan(root: string, prefix = ''): string[] {
+function scan(root: string, prefix = '', ownerUid = process.getuid?.()): string[] {
   const files: string[] = []
   for (const name of readdirSync(join(root, prefix))) {
     const relative = prefix ? `${prefix}/${name}` : name
@@ -207,8 +210,8 @@ function scan(root: string, prefix = ''): string[] {
       !prefix &&
       ['target-helper', 'templates', 'collector'].includes(name)
     ) {
-      assertDirectory(file)
-      files.push(...scan(root, relative))
+      assertDirectory(file, ownerUid)
+      files.push(...scan(root, relative, ownerUid))
     } else if (info.isFile() && !info.isSymbolicLink()) files.push(relative)
     else throw new Error('UNEXPECTED_BUNDLE_CONTENT')
   }

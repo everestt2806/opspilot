@@ -14,6 +14,8 @@ export const PRODUCT_CONTROLLER_BUNDLE_MAX_FILE_BYTES = 8 * 1024 * 1024;
 export const PRODUCT_CONTROLLER_BUNDLE_MAX_TOTAL_BYTES = 16 * 1024 * 1024;
 
 /**
+ * Internal optional expected-owner UID chỉ từ trusted root installer receipt/account;
+ * mặc định vẫn root/current UID, không lấy owner UID từ renderer/request JSON.
  * CLI tin cậy `verify-bundle --artifact <absolute candidate.cjs> --manifest-sha256 <64 lowercase hex>`
  * không cần data-dir/DB/SSH. Candidate chỉ được đọc, không import/execute để tự chứng minh an toàn.
  * Digest phải được truyền tường minh từ build tin cậy; không lấy hash từ manifest để tự trust.

@@ -25,6 +25,8 @@ export type ControllerReleaseManifest = Readonly<{
 }>;
 
 /**
+ * Internal expected-owner UID cho installed runtime lấy từ root receipt + Unix account;
+ * default owner policy giữ nguyên. Không public owner override qua IPC/CLI JSON.
  * node + payload/{control-plane.cjs,bundle-manifest.json,approved assets} + node_modules
  * + runtime-lock.json. Builder chỉ chạy Linux x64 Node22; dependency versions lấy đúng
  * approved runtime lock, loại dev/test và native prebuild khác platform. Không download Node,
