@@ -1,3 +1,10 @@
+import { DesktopFirstDeployments, DesktopFirstDeploymentError } from './desktopFirstDeployment'
+import type {
+  DesktopFirstDeploymentInput,
+  DesktopFirstDeploymentPlan,
+  DesktopFirstDeploymentSendInput,
+  DesktopProjectReadiness
+} from '@shared/desktopFirstDeployment'
 import type Database from 'better-sqlite3'
 import { z } from 'zod'
 import type {
@@ -60,6 +67,7 @@ export class DesktopControllerService {
   private readonly enrollment: DesktopControllerEnrollment
   private readonly commands: DesktopControllerCommands
   private readonly projects: DesktopProjectSetups
+  private readonly firstDeployments: DesktopFirstDeployments
   constructor(
     private readonly db: Database.Database,
     cipher: AesGcmCredentialCipher,
@@ -70,6 +78,32 @@ export class DesktopControllerService {
     this.enrollment = new DesktopControllerEnrollment(this.vault, ssh)
     this.commands = new DesktopControllerCommands(db, this.vault, ssh, clientFactory)
     this.projects = new DesktopProjectSetups(db, this.vault, this.enrollment)
+    this.firstDeployments = new DesktopFirstDeployments(
+      this.projects,
+      this.enrollment,
+      this.commands,
+      async (bindingId) => {
+        const snapshot = await this.apps({ binding_id: bindingId })
+        return (
+          snapshot.service_state === 'ready' &&
+          snapshot.data_freshness === 'current' &&
+          snapshot.capabilities.redeploy === 'available'
+        )
+      }
+    )
+  }
+  async projectReadiness(key: string): Promise<DesktopProjectReadiness> {
+    return this.safe(() => this.firstDeployments.readiness(key))
+  }
+  async prepareFirstDeployment(
+    input: DesktopFirstDeploymentInput
+  ): Promise<DesktopFirstDeploymentPlan> {
+    return this.safe(() => this.firstDeployments.prepare(input))
+  }
+  async sendFirstDeployment(
+    input: DesktopFirstDeploymentSendInput
+  ): Promise<DesktopControllerCommand> {
+    return this.safe(() => this.firstDeployments.send(input))
   }
   async projectTargets(input: {
     binding_id: string
@@ -108,10 +142,19 @@ export class DesktopControllerService {
     return this.safe(() => this.projects.enrollTarget(input))
   }
   async prepareCommand(input: DesktopControllerCommandInput): Promise<DesktopControllerCommand> {
-    return this.safe(() => this.commands.prepare(input))
+    return this.safe(() => {
+      if (input?.operation === 'redeploy' && input.require_first_deployment)
+        throw new DesktopFirstDeploymentError('FIRST_DEPLOY_REVIEW_REQUIRED')
+      return this.commands.prepare(input)
+    })
   }
   async sendCommand(key: string): Promise<DesktopControllerCommand> {
-    return this.safe(() => this.commands.send(key))
+    return this.safe(() => {
+      const command = this.commands.get(key)
+      if (command.require_first_deployment && command.state === 'prepared')
+        throw new DesktopFirstDeploymentError('FIRST_DEPLOY_REVIEW_REQUIRED')
+      return this.commands.send(key)
+    })
   }
   async checkCommand(key: string): Promise<DesktopControllerCommand> {
     return this.safe(() => this.commands.check(key))
@@ -345,6 +388,7 @@ export class DesktopControllerService {
         error instanceof DesktopControllerEnrollmentError ||
         error instanceof DesktopControllerCommandError ||
         error instanceof DesktopProjectSetupError ||
+        error instanceof DesktopFirstDeploymentError ||
         error instanceof ProjectRegistrationError ||
         error instanceof ControllerHttpClientError
           ? error.code

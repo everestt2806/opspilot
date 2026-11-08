@@ -1,3 +1,4 @@
+import type { DesktopProjectReadiness, DesktopFirstDeploymentInput, DesktopFirstDeploymentPlan, DesktopFirstDeploymentSendInput } from './desktopFirstDeployment';
 import type { DesktopProjectSetupInput, DesktopProjectSetup, DesktopProjectTargets, DesktopProjectSourceVerification, DesktopProjectTargetInput, DesktopProjectTargetState } from './desktopProjectRegistration';
 import type { DesktopControllerCommand, DesktopControllerCommandInput } from './desktopControllerCommands';
 import type { DesktopControllerRegisterInput, DesktopControllerConnection, DesktopControllerSnapshot, DesktopControllerPageInput, DesktopControllerAppStatus } from './desktopController'
@@ -376,6 +377,9 @@ export interface IpcInvokeMap {
   'controller:check-command': (key: string) => IpcResult<DesktopControllerCommand>;
   'controller:cancel-command': (key: string) => IpcResult<DesktopControllerCommand>;
   'controller:commands': (bindingId: string) => IpcResult<DesktopControllerCommand[]>;
+  'controller:project-readiness': (key:string) => IpcResult<DesktopProjectReadiness>;
+  'controller:prepare-first-deployment': (input:DesktopFirstDeploymentInput) => IpcResult<DesktopFirstDeploymentPlan>;
+  'controller:send-first-deployment': (input:DesktopFirstDeploymentSendInput) => IpcResult<DesktopControllerCommand>;
   'controller:project-targets': (input: {binding_id:string;after_id?:number|null}) => IpcResult<DesktopProjectTargets>;
   'controller:verify-project-source': (key:string) => IpcResult<DesktopProjectSourceVerification>;
   'controller:project-target-state': (key:string) => IpcResult<DesktopProjectTargetState>;

@@ -26,6 +26,7 @@ const inputSchema = z.discriminatedUnion('operation', [
   z.strictObject({
     ...base,
     operation: z.literal('redeploy'),
+    require_first_deployment: z.literal(true).optional(),
     target: controllerRequestSchemas.redeploy.shape.target
   }),
   z.strictObject({ ...base, operation: z.literal('policy'), action: z.enum(['pause', 'resume']) })
@@ -90,7 +91,13 @@ export class DesktopControllerCommands {
 
   prepare(input: DesktopControllerCommandInput): DesktopControllerCommand {
     const parsed = inputSchema.safeParse(input)
-    if (!parsed.success) throw new DesktopControllerCommandError('REQUEST_INVALID')
+    if (
+      !parsed.success ||
+      (parsed.data.operation === 'redeploy' &&
+        parsed.data.require_first_deployment &&
+        parsed.data.target.kind !== 'specific_sha')
+    )
+      throw new DesktopControllerCommandError('REQUEST_INVALID')
     const value = parsed.data
     return this.mutate(() => {
       const binding = this.vault.resolve(value.binding_id),
@@ -101,7 +108,12 @@ export class DesktopControllerCommands {
       const body = {
         expected_ownership_generation: value.expected_ownership_generation,
         expected_source_generation: value.expected_source_generation,
-        ...(value.operation === 'redeploy' ? { target: value.target } : { action: value.action })
+        ...(value.operation === 'redeploy'
+          ? {
+              target: value.target,
+              ...(value.require_first_deployment ? { require_first_deployment: true as const } : {})
+            }
+          : { action: value.action })
       }
       const serialized = canonicalH2Json(body)
       const pending = this.db
@@ -373,7 +385,11 @@ export class DesktopControllerCommands {
     )
   }
   private metadata(row: Row): DesktopControllerCommand {
+    const first =
+      row.operation === 'redeploy' &&
+      bodySchemas.redeploy.parse(JSON.parse(row.body_json)).require_first_deployment
     return {
+      ...(first ? { require_first_deployment: true as const } : {}),
       request_key: row.request_key,
       binding_id: row.binding_id,
       controller_id: row.controller_id,
@@ -385,7 +401,18 @@ export class DesktopControllerCommands {
       reason_code: row.reason_code,
       remote_state: row.remote_state,
       job_id: row.job_id,
-      target_sha: row.target_sha,
+      target_sha:
+        row.target_sha ??
+        (first
+          ? bodySchemas.redeploy.parse(JSON.parse(row.body_json)).target.kind === 'specific_sha'
+            ? (
+                bodySchemas.redeploy.parse(JSON.parse(row.body_json)).target as {
+                  kind: 'specific_sha'
+                  sha: string
+                }
+              ).sha
+            : null
+          : null),
       created_at: row.created_at,
       updated_at: row.updated_at,
       auto_deploy_paused: row.auto_deploy_paused === null ? null : row.auto_deploy_paused === 1

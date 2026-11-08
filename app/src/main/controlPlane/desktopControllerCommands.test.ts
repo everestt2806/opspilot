@@ -376,3 +376,22 @@ describe('Durable Desktop Product command journal', () => {
     expect(commands.get(row.request_key).controller_id).toBe('remote-controller')
   })
 })
+
+it('persists first-deploy intent and exact SHA before sending, including cold unknown lookup', async () => {
+  const value = {
+    ...input,
+    operation: 'redeploy' as const,
+    require_first_deployment: true as const,
+    target: { kind: 'specific_sha' as const, sha: 'b'.repeat(40) }
+  }
+  const prepared = commands.prepare(value)
+  expect(prepared.require_first_deployment).toBe(true)
+  expect(prepared.target_sha).toBe('b'.repeat(40))
+  expect(call).not.toHaveBeenCalled()
+  expect(commands.prepare(value).request_key).toBe(prepared.request_key)
+  call.mockRejectedValueOnce(new ControllerHttpClientError('PROTOCOL_INVALID'))
+  expect((await commands.send(prepared.request_key)).state).toBe('outcome_unknown')
+  const cold = new DesktopControllerCommands(db, vault, {} as never, () => ({ call }))
+  expect((await cold.send(prepared.request_key)).target_sha).toBe('b'.repeat(40))
+  expect(call).toHaveBeenCalledOnce()
+})

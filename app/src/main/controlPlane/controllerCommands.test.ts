@@ -297,3 +297,37 @@ describe('Controller durable manual commands', () => {
     expect(count('product_deploy_job')).toBe(0)
   })
 })
+
+describe('First deployment atomic precondition', () => {
+  const first = (): Record<string, unknown> => ({
+    ...body,
+    require_first_deployment: true,
+    target: { kind: 'specific_sha', sha }
+  })
+  it('accepts once, replays same key and rejects a second active job across clients', () => {
+    const key = randomUUID(),
+      accepted = commands.redeploy(header, key, 1, first())
+    expect(commands.redeploy(header, key, 1, first()).job_id).toBe(accepted.job_id)
+    const second = new ControllerCommands(db, 'commands-controller', () => true)
+    expect(() => second.redeploy(issue().header, randomUUID(), 1, first())).toThrow(
+      'CAPABILITY_BLOCKED'
+    )
+    expect(count('product_deploy_job')).toBe(1)
+  })
+  it('rejects mutable targets or a false flag before creating a job', () => {
+    expect(() =>
+      commands.redeploy(header, randomUUID(), 1, { ...body, require_first_deployment: true })
+    ).toThrow('REQUEST_INVALID')
+    expect(() =>
+      commands.redeploy(header, randomUUID(), 1, { ...first(), require_first_deployment: false })
+    ).toThrow('REQUEST_INVALID')
+    expect(count('product_deploy_job')).toBe(0)
+  })
+  it('blocks an existing current deployment and preserves legacy manual redeploy', () => {
+    db.exec(
+      "INSERT INTO deployment(id,app_id,version,status,image_tag) VALUES(1,1,1,'running','unit:v1'); UPDATE app SET current_deployment_id=1 WHERE id=1"
+    )
+    expect(() => commands.redeploy(header, randomUUID(), 1, first())).toThrow('CAPABILITY_BLOCKED')
+    expect(commands.redeploy(header, randomUUID(), 1, body).state).toBe('queued')
+  })
+})

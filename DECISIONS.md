@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-08 | [product-mode/onboarding] R3c-6g3d first-deploy dùng current source/target/resources readiness và main-only receipt60s; existing durable journal giữ UUID trước POST, unknown chỉlookup — Optional require_first_deployment=true +exactSHA được controller kiểm nguyên tử với currentdeployment/activejobs; legacy redeploy không đổi, không ready flag bền/auto-enable hoặc Desktop pipeline fallback — Sơn/Codex
+
 2026-11-07 | [product-mode/onboarding] R3c-6g3c thêm project-target-state/enroll-project-target admin wrappers và GUI review hostname/pin/private root; main derive source/target authority từ registered setup và binding — Reuse installer/proof cũ, transaction source fences và expected SSH identity trước auth; unknown chỉ inspect, không reinstall hoặc ready/deployed claim. Target_root là lựa chọn admin explicit, không source/repo; không schema mới — Sơn/Codex
 
 2026-11-07 | [product-mode/onboarding] R3c-6g3b Desktop source verification chỉ nhận registered setup key; main derive authority từ journal và trusted artifact/pin từ binding, đối chiếu metadata/authority sau await — Fixed SSH operation có timeout riêng cho CLI90s/helper105s/whole120s, không tăng timeout mọi lệnh ghi; source result là snapshot UI, không ready/deployed hoặc auto deploy — Sơn/Codex

@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '../../..')
 const directory = join(root, 'app/.out-scripts/controller-ui', randomBytes(6).toString('hex'))
-const screenshots = join(root, 'docs/ui-redesign/screenshots/r3c6g3c')
+const screenshots = join(root, 'docs/ui-redesign/screenshots/r3c6g3d')
 mkdirSync(directory, { recursive: true })
 mkdirSync(screenshots, { recursive: true })
 app.setPath('userData', directory)
@@ -32,6 +32,9 @@ const calls = [],
   errors = []
 let commandRows = []
 let projectRows = []
+let firstReadiness,
+  firstCommand,
+  firstHealthy = false
 for (const channel of [
   'controller:list',
   'controller:apps',
@@ -49,6 +52,9 @@ for (const channel of [
   'controller:verify-project-source',
   'controller:project-target-state',
   'controller:enroll-project-target',
+  'controller:project-readiness',
+  'controller:prepare-first-deployment',
+  'controller:send-first-deployment',
   'vps:list',
   'app:list',
   'window:set-titlebar-overlay',
@@ -186,6 +192,121 @@ for (const channel of [
         }
       }
     }
+    if (channel === 'controller:project-readiness') {
+      const project = projectRows[0],
+        resources = {
+          cpu_count: 2,
+          available_ram_bytes: 1536 * 1048576,
+          workspace_available_bytes: 20 * 1073741824,
+          docker_ready: true,
+          port_ready: true
+        }
+      assert.equal(input, project.request_key)
+      firstReadiness = {
+        binding_id: bindingId,
+        binding_revision: connection.revision,
+        request_key: project.request_key,
+        controller_ready: true,
+        state: 'ready',
+        readiness_id: '66666666-6666-4666-8666-666666666666',
+        valid_until: new Date(Date.now() + 60000).toISOString(),
+        report: {
+          controller_id: connection.controller_id,
+          app_id: project.app_id,
+          ownership_generation: 1,
+          source_generation: 1,
+          source_config_sha256: 'b'.repeat(64),
+          target_vps_id: 77,
+          target_security_revision: 3,
+          repository_url: project.repository_url,
+          production_ref: project.production_ref,
+          repository_root: project.repository_root,
+          host_port: project.host_port,
+          commit_sha: 'c'.repeat(40),
+          state: 'ready',
+          checks: [
+            'first_deployment',
+            'controller_resources',
+            'target_enrollment',
+            'source',
+            'target_resources'
+          ].map((key) => ({ key, state: 'passed' })),
+          reasons: [],
+          controller_resources: resources,
+          target_resources: resources,
+          auto_deploy_paused: true,
+          deployment_started: false,
+          checked_at: new Date().toISOString()
+        }
+      }
+      return { ok: true, data: firstReadiness }
+    }
+    if (channel === 'controller:prepare-first-deployment') {
+      assert.equal(input.readiness_id, firstReadiness.readiness_id)
+      firstCommand = {
+        request_key: '77777777-7777-4777-8777-777777777777',
+        binding_id: bindingId,
+        binding_revision: 2,
+        controller_id: connection.controller_id,
+        app_id: projectRows[0].app_id,
+        client_id: clientId,
+        operation: 'redeploy',
+        require_first_deployment: true,
+        state: 'prepared',
+        reason_code: null,
+        remote_state: null,
+        job_id: null,
+        target_sha: 'c'.repeat(40),
+        auto_deploy_paused: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+      return {
+        ok: true,
+        data: {
+          ...input,
+          binding_id: bindingId,
+          binding_revision: 2,
+          app_id: projectRows[0].app_id,
+          source_sha: 'c'.repeat(40),
+          valid_until: firstReadiness.valid_until,
+          command: firstCommand
+        }
+      }
+    }
+    if (channel === 'controller:send-first-deployment') {
+      assert.equal(input.command_key, firstCommand.request_key)
+      firstCommand = {
+        ...firstCommand,
+        state: 'accepted',
+        remote_state: 'accepted',
+        job_id: 'first-job'
+      }
+      return { ok: true, data: firstCommand }
+    }
+    if (channel === 'controller:check-command' && input === firstCommand?.request_key) {
+      firstHealthy = true
+      return { ok: true, data: { ...firstCommand, remote_state: 'completed' } }
+    }
+    if (channel === 'controller:app-status' && input.app_id === projectRows[0]?.app_id)
+      return {
+        ok: true,
+        data: {
+          binding_id: bindingId,
+          binding_revision: 2,
+          controller_id: connection.controller_id,
+          app_id: input.app_id,
+          ownership_generation: 1,
+          source_generation: 1,
+          current_deployment_id: firstHealthy ? 13 : null,
+          current_deployment_sha: firstHealthy ? 'c'.repeat(40) : null,
+          current_deployment_state: firstHealthy ? 'running' : null,
+          latest_job_id: 'first-job',
+          latest_job_state: firstHealthy ? 'succeeded' : 'queued',
+          checked_at: new Date().toISOString(),
+          data_freshness: 'current'
+        }
+      }
     if (channel === 'controller:commands') return { ok: true, data: commandRows }
     if (channel === 'controller:prepare-command') {
       commandRows = [
@@ -726,6 +847,81 @@ void app.whenReady().then(async () => {
           `document.querySelector('.controller-target-modal .ant-modal-close').click()`
         )
         await wait(window, `!document.querySelector('.controller-target-modal')`)
+        firstCommand = undefined
+        firstHealthy = false
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.controller-project-panel button')).find(el=>el.textContent.trim()==='First deployment').click()`
+        )
+        await wait(
+          window,
+          `Array.from(document.querySelectorAll('.ant-modal button')).some(el=>el.textContent.trim()==='Check conditions')`
+        )
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.ant-modal button')).find(el=>el.textContent.trim()==='Check conditions').click()`
+        )
+        await wait(
+          window,
+          `document.querySelector('.ant-modal-body')?.textContent.includes('Ready for review')`
+        )
+        const captureFirst = async (view) => {
+          await delay(250)
+          await window.webContents.executeJavaScript(
+            'new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))'
+          )
+          const layout = await window.webContents.executeJavaScript(
+            `(()=>{const modal=document.querySelector('.ant-modal-content'),footer=document.querySelector('.ant-modal-footer');return {horizontal:modal.scrollWidth>modal.clientWidth,footer_inside:footer.getBoundingClientRect().bottom<=innerHeight,visible:modal.getBoundingClientRect().height>0}})()`
+          )
+          assert.equal(layout.horizontal, false)
+          assert.equal(layout.footer_inside, true)
+          assert.equal(layout.visible, true)
+          const file = `first-${view}-${width}x${height}-${theme}.png`
+          writeFileSync(join(screenshots, file), (await window.webContents.capturePage()).toPNG())
+          checks.push({
+            view: `first_${view}`,
+            width,
+            height,
+            theme,
+            ...layout,
+            screenshot: file,
+            backend: 'IPC_FIXTURE'
+          })
+        }
+        await captureFirst('readiness')
+        const sendCalls = calls.filter(
+          (channel) => channel === 'controller:send-first-deployment'
+        ).length
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.ant-modal button')).find(el=>el.textContent.trim()==='Review deployment').click()`
+        )
+        await wait(
+          window,
+          `document.querySelector('.ant-modal-body')?.textContent.includes('Deploy the exact commit below')`
+        )
+        assert.equal(
+          calls.filter((channel) => channel === 'controller:send-first-deployment').length,
+          sendCalls
+        )
+        await captureFirst('review')
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.ant-modal button')).find(el=>el.textContent.trim()==='Confirm deployment').click()`
+        )
+        await wait(
+          window,
+          `document.querySelector('.ant-modal-body')?.textContent.includes('application health is not confirmed yet')`
+        )
+        await captureFirst('accepted')
+        await window.webContents.executeJavaScript(
+          `Array.from(document.querySelectorAll('.ant-modal button')).find(el=>el.textContent.trim()==='Refresh status').click()`
+        )
+        await wait(
+          window,
+          `document.querySelector('.ant-modal-body')?.textContent.includes('The deployment is running and passed its health check.')`
+        )
+        await captureFirst('healthy')
+        await window.webContents.executeJavaScript(
+          `document.querySelector('.ant-modal-close').click()`
+        )
+        await wait(window, `!document.querySelector('.ant-modal')`)
         await window.webContents.executeJavaScript(
           `Array.from(document.querySelectorAll('button')).find(el=>el.textContent.trim()==='Register controller').click()`
         )

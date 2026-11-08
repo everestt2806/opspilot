@@ -10,6 +10,7 @@ export type DesktopControllerCommandInput = {
 } & (
   | {
       operation: 'redeploy'
+      require_first_deployment?: true
       target: { kind: 'current_desired' } | { kind: 'specific_sha'; sha: string }
     }
   | { operation: 'policy'; action: 'pause' | 'resume' }
@@ -22,6 +23,7 @@ export interface DesktopControllerCommand {
   binding_revision: number
   app_id: number
   operation: 'redeploy' | 'policy'
+  require_first_deployment?: true
   state: 'prepared' | 'in_flight' | 'outcome_unknown' | 'accepted' | 'rejected' | 'cancelled'
   reason_code: string | null
   remote_state: 'accepted' | 'completed' | 'blocked' | 'uncertain' | null

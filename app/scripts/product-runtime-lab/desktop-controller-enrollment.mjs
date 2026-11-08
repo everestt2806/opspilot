@@ -14,7 +14,8 @@ import {
   chownSync,
   lstatSync,
   existsSync,
-  readdirSync
+  readdirSync,
+  realpathSync
 } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
@@ -42,7 +43,15 @@ if (process.argv.includes('--cold')) {
       secret: request.ssh_secret
     }))
   try {
-    if (request.target_root) {
+    if (request.command_key) {
+      const service = new api.DesktopControllerService(db, cipher, ssh)
+      process.stdout.write(
+        JSON.stringify({
+          status: 'PASS',
+          command: await service.checkCommand(request.command_key)
+        }) + '\n'
+      )
+    } else if (request.target_root) {
       const service = new api.DesktopControllerService(db, cipher, ssh)
       process.stdout.write(
         JSON.stringify({
@@ -119,7 +128,10 @@ const hostKey = readFileSync(join(install, 'host-key')),
   masterKey = randomBytes(32),
   cases = [],
   connections = new Set(),
-  children = new Set()
+  children = new Set(),
+  firstDeploy = process.argv.includes('--first-deploy'),
+  appName = `wizard-api-${nonce}`
+let controllerProcess, runtimeControllerId, runtimeAppId, runtimeProof, runtimeReadiness
 let observedCatalogSize,
   serverApi,
   remote,
@@ -127,7 +139,8 @@ let observedCatalogSize,
   result,
   discardReply = false,
   discardProjectReply = false,
-  discardTargetReply = false
+  discardTargetReply = false,
+  discardDeployReply = false
 const http = createServer((req, res) => {
   if (!serverApi.handle(req, res)) {
     res.writeHead(404)
@@ -147,7 +160,14 @@ const ssh = new Server({ hostKeys: [hostKey] }, (connection) => {
     connection.on('session', (accept) => {
       const session = accept()
       session.on('exec', (acceptExec, rejectExec, info) => {
-        if (!info.command.startsWith('python3 -B -u -c ')) {
+        if (
+          !info.command.startsWith('python3 -B -u -c ') &&
+          !(
+            firstDeploy &&
+            info.command.startsWith(`python3 -B -u '${install}/runtime-target/`) &&
+            /^python3 -B -u '[A-Za-z0-9/_.-]+target_guarded_ssh_helper\.py'$/.test(info.command)
+          )
+        ) {
           rejectExec()
           return
         }
@@ -222,11 +242,27 @@ const ssh = new Server({ hostKeys: [hostKey] }, (connection) => {
       target.on('error', () => channel.destroy())
       channel.once('close', () => target.destroy())
       target.once('close', () => channel.destroy())
-      target.pipe(channel).pipe(target)
+      let drop = false
+      channel.on('data', (chunk) => {
+        if (
+          discardDeployReply &&
+          /^POST \/v1\/controllers\/[^ /]+\/apps\/[0-9]+\/redeploy /.test(chunk.toString('ascii'))
+        ) {
+          drop = true
+          discardDeployReply = false
+        }
+      })
+      target.on('data', (chunk) => {
+        if (drop) {
+          target.destroy()
+          channel.destroy()
+        } else channel.write(chunk)
+      })
+      channel.pipe(target)
     })
   })
 })
-const cold = (bindingId, setupKey, targetRoot) =>
+const cold = (bindingId, setupKey, targetRoot, commandKey) =>
   new Promise((resolveChild, rejectChild) => {
     const child = spawn(process.execPath, [import.meta.filename, '--cold'], {
       env: { ...process.env },
@@ -266,7 +302,8 @@ const cold = (bindingId, setupKey, targetRoot) =>
         binding_id: bindingId,
         ssh_secret: password,
         setup_key: setupKey,
-        target_root: targetRoot
+        target_root: targetRoot,
+        command_key: commandKey
       })
     )
   })
@@ -564,7 +601,7 @@ try {
   const setup = await uiService.prepareProject({
     binding_id: writeBinding.binding_id,
     target_vps_id: 1,
-    app_name: 'wizard-api',
+    app_name: appName,
     framework: 'express',
     repository_url: 'https://github.com/everestt2806/opspilot.git',
     production_ref: 'feat/release-audit-20261204',
@@ -574,17 +611,17 @@ try {
     healthcheck_path: '/health'
   })
   assert.equal(setup.state, 'prepared')
-  assert.equal(remote.prepare("SELECT count(*) AS n FROM app WHERE name='wizard-api'").get().n, 0)
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM app WHERE name=?').get(appName).n, 0)
   discardProjectReply = true
   await assert.rejects(uiService.sendProject(setup.request_key))
   assert.equal((await uiService.listProjects(writeBinding.binding_id))[0].state, 'outcome_unknown')
-  assert.equal(remote.prepare("SELECT count(*) AS n FROM app WHERE name='wizard-api'").get().n, 1)
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM app WHERE name=?').get(appName).n, 1)
   cases.push('desktop_setup_persists_uuid_before_verified_admin_create_and_lost_reply')
   const coldSetup = await cold(writeBinding.binding_id, setup.request_key)
   assert.equal(coldSetup.status, 'PASS')
   assert.equal(coldSetup.setup.state, 'registered')
   assert.equal(coldSetup.setup.request_key, setup.request_key)
-  assert.equal(remote.prepare("SELECT count(*) AS n FROM app WHERE name='wizard-api'").get().n, 1)
+  assert.equal(remote.prepare('SELECT count(*) AS n FROM app WHERE name=?').get(appName).n, 1)
   assert.equal(remote.prepare('SELECT count(*) AS n FROM product_project_registration').get().n, 1)
   assert.equal(
     remote
@@ -692,6 +729,151 @@ try {
   )
   assert.equal(existsSync(join(install, 'other-root')), false)
   cases.push('reviewed_target_root_cannot_replace_existing_enrollment_or_create_another_install')
+  if (firstDeploy) {
+    runtimeControllerId = controller
+    runtimeAppId = verifiedSource.app_id
+    assert.equal(existsSync(`/opt/opspilot/${appName}`), false)
+    execFileSync('docker', ['info', '--format', '{{.ServerVersion}}'], {
+      stdio: 'pipe',
+      timeout: 10000
+    })
+    remote
+      .prepare("UPDATE product_deploy_job SET state='cancelled' WHERE app_id=1 AND state='queued'")
+      .run()
+    remote
+      .prepare("UPDATE product_app_control SET mode='desktop',controller_id=NULL WHERE app_id=1")
+      .run()
+    await serverApi.close()
+    serverApi = undefined
+    http.closeAllConnections()
+    await new Promise((done) => http.close(done))
+    controllerProcess = spawn(join(install, 'node'), [cli, 'run-product', '--data-dir', data], {
+      stdio: ['pipe', 'ignore', 'ignore']
+    })
+    controllerProcess.stdin.end(JSON.stringify({ format: 1, artifact: cli, manifest_sha256: pin }))
+    const waitFor = async (check, ms = 120000) => {
+      const end = Date.now() + ms
+      while (Date.now() < end) {
+        if (controllerProcess.exitCode !== null) throw new Error('LAB_CONTROLLER_EXIT')
+        try {
+          if (await check()) return
+        } catch {
+          /* Wait for the isolated lab service. */
+        }
+        await new Promise((done) => setTimeout(done, 250))
+      }
+      throw new Error('LAB_RUNTIME_TIMEOUT')
+    }
+    await waitFor(async () => {
+      const snapshot = await uiService.apps({ binding_id: writeBinding.binding_id })
+      return snapshot.service_state === 'ready' && snapshot.capabilities.redeploy === 'available'
+    }, 30000)
+    const readiness = await uiService.projectReadiness(setup.request_key)
+    runtimeReadiness = readiness
+    assert.equal(
+      readiness.state,
+      'ready',
+      JSON.stringify({ state: readiness.state, report: readiness.report })
+    )
+    assert.equal(readiness.report.deployment_started, false)
+    assert.equal(
+      readiness.report.checks.every((row) => row.state === 'passed'),
+      true
+    )
+    assert.equal(
+      remote.prepare('SELECT count(*) AS n FROM deployment WHERE app_id=?').get(runtimeAppId).n,
+      0
+    )
+    assert.equal(
+      remote
+        .prepare('SELECT count(*) AS n FROM product_deploy_job WHERE app_id=?')
+        .get(runtimeAppId).n,
+      0
+    )
+    cases.push('desktop_readiness_actual_git_hmac_resources_docker_port_without_runtime_writes')
+    const firstInput = { request_key: setup.request_key, readiness_id: readiness.readiness_id }
+    const plan = await uiService.prepareFirstDeployment(firstInput)
+    assert.equal(plan.source_sha, readiness.report.commit_sha)
+    assert.equal(plan.command.state, 'prepared')
+    await assert.rejects(uiService.sendCommand(plan.command.request_key))
+    assert.equal(
+      remote
+        .prepare('SELECT count(*) AS n FROM product_deploy_job WHERE app_id=?')
+        .get(runtimeAppId).n,
+      0
+    )
+    cases.push('main_first_deploy_review_persisted_uuid_generic_send_cannot_bypass_receipt')
+    discardDeployReply = true
+    const unknown = await uiService.sendFirstDeployment({
+      ...firstInput,
+      command_key: plan.command.request_key
+    })
+    assert.equal(unknown.state, 'outcome_unknown')
+    assert.equal(discardDeployReply, false)
+    const recovered = await cold(
+      writeBinding.binding_id,
+      undefined,
+      undefined,
+      plan.command.request_key
+    )
+    assert.equal(recovered.status, 'PASS')
+    const queued = recovered.command
+    assert.equal(queued.state, 'accepted')
+    cases.push('lost_first_deploy_http_reply_cold_desktop_looks_up_same_key_without_post_replay')
+    assert.equal(queued.target_sha, plan.source_sha)
+    assert.equal(
+      (
+        await uiService.sendFirstDeployment({
+          ...firstInput,
+          command_key: plan.command.request_key
+        })
+      ).job_id,
+      queued.job_id
+    )
+    await waitFor(async () => {
+      const row = remote
+        .prepare('SELECT state FROM product_deploy_job WHERE job_id=?')
+        .get(queued.job_id)
+      if (['failed', 'uncertain', 'rolled_back', 'cancelled', 'superseded'].includes(row?.state))
+        throw new Error('LAB_RUNTIME_NOT_SUCCEEDED')
+      return row?.state === 'succeeded'
+    }, 240000)
+    const final = await uiService.appStatus({
+      binding_id: writeBinding.binding_id,
+      app_id: runtimeAppId
+    })
+    assert.equal(final.latest_job_id, queued.job_id)
+    assert.equal(final.latest_job_state, 'succeeded')
+    assert.equal(final.current_deployment_sha, plan.source_sha)
+    assert.equal(final.current_deployment_state, 'running')
+    assert.equal((await uiService.checkCommand(plan.command.request_key)).remote_state, 'completed')
+    const health = await fetch(`http://127.0.0.1:${coldSetup.setup.host_port}/health`)
+    assert.equal(health.ok, true)
+    assert.equal(
+      remote
+        .prepare('SELECT count(*) AS n FROM product_deploy_job WHERE app_id=?')
+        .get(runtimeAppId).n,
+      1
+    )
+    assert.equal(
+      remote
+        .prepare('SELECT auto_deploy_paused FROM product_app_control WHERE app_id=?')
+        .get(runtimeAppId).auto_deploy_paused,
+      1
+    )
+    cases.push('actual_first_deployment_exact_sha_build_activate_health_publish_finalize_one_job')
+    runtimeProof = {
+      job_id: queued.job_id,
+      deployment_id: final.current_deployment_id,
+      sha: plan.source_sha,
+      health_status: health.status,
+      host_port: coldSetup.setup.host_port,
+      auto_deploy_paused: true
+    }
+    controllerProcess.kill('SIGTERM')
+    await new Promise((done) => controllerProcess.once('close', done))
+    controllerProcess = undefined
+  }
   const unsupported = await uiService.prepareProject({
     binding_id: writeBinding.binding_id,
     target_vps_id: 1,
@@ -726,7 +908,8 @@ try {
     artifact_sha256: createHash('sha256').update(readFileSync(artifact)).digest('hex'),
     credential_fixture_key_in_stdin_only: true,
     electron_safe_storage_ui_exercised: false,
-    runtime_dispatch_executed: false,
+    runtime_dispatch_executed: firstDeploy,
+    runtime_proof: runtimeProof,
     production_vps_used: false
   }
 } catch (error) {
@@ -736,6 +919,13 @@ try {
     passed: cases.length,
     cases,
     code: /^[A-Z_]{1,80}$/.test(error.code) ? error.code : error.name,
+    readiness: runtimeReadiness,
+    runtime_jobs: firstDeploy
+      ? remote?.prepare('SELECT app_id,state FROM product_deploy_job').all()
+      : undefined,
+    runtime_attempts: firstDeploy
+      ? remote?.prepare('SELECT remote_outcome FROM product_deploy_attempt').all()
+      : undefined,
     approved_catalog_size: observedCatalogSize,
     public_install_metadata: [
       install,
@@ -765,6 +955,16 @@ try {
       error.stack?.match(/desktop-controller-enrollment\.mjs:\d+:\d+/)?.[0] ?? null
   }
 } finally {
+  if (controllerProcess) {
+    controllerProcess.kill('SIGTERM')
+    await new Promise((done) => {
+      controllerProcess.once('close', done)
+      setTimeout(() => {
+        controllerProcess.kill('SIGKILL')
+        done()
+      }, 5000).unref()
+    })
+  }
   await manager?.disconnectAll()
   for (const connection of connections) connection.end()
   for (const child of children) {
@@ -777,7 +977,41 @@ try {
   await new Promise((resolveClose) => ssh.close(resolveClose))
   await serverApi?.close()
   http.closeAllConnections()
-  await new Promise((resolveClose) => http.close(resolveClose))
+  if (http.listening) await new Promise((resolveClose) => http.close(resolveClose))
+  if (firstDeploy) {
+    const docker = (...args) =>
+      execFileSync('docker', args, { encoding: 'utf8', timeout: 30000 }).trim()
+    const inspect = (kind, id) => JSON.parse(docker(kind, 'inspect', id))[0]
+    for (const id of docker('ps', '-aq', '--filter', `name=^/${appName}-`)
+      .split('\n')
+      .filter(Boolean)) {
+      const item = inspect('container', id)
+      assert.ok(item.Name.startsWith(`/${appName}-`))
+      assert.equal(item.Config.Labels['opspilot.controller_id'], runtimeControllerId)
+      assert.equal(item.Config.Labels['opspilot.app_id'], String(runtimeAppId))
+      docker('rm', '-f', id)
+    }
+    for (const tag of docker('image', 'ls', '--format', '{{.Repository}}:{{.Tag}}')
+      .split('\n')
+      .filter((tag) => tag.startsWith(`${appName}:`) || tag.startsWith(`${appName}-collector:`))) {
+      assert.equal(inspect('image', tag).Config.Labels['opspilot.app_id'], String(runtimeAppId))
+      docker('image', 'rm', tag)
+    }
+    const network = `${appName}-network`
+    if (docker('network', 'ls', '--filter', `name=^${network}$`, '--format', '{{.Name}}')) {
+      assert.equal(
+        inspect('network', network).Labels['opspilot.controller_id'],
+        runtimeControllerId
+      )
+      docker('network', 'rm', network)
+    }
+    const runtime = `/opt/opspilot/${appName}`
+    if (existsSync(runtime)) {
+      assert.match(appName, /^wizard-api-[a-f0-9]{12}$/)
+      assert.equal(realpathSync(runtime), runtime)
+      rmSync(runtime, { recursive: true })
+    }
+  }
   remote?.close()
   api.closeDatabase()
   assert.equal(resolve(install), install)

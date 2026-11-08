@@ -253,6 +253,7 @@ const generations = {
 export const controllerRequestSchemas = {
   redeploy: z.strictObject({
     ...generations,
+    require_first_deployment: z.literal(true).optional(),
     target: z.discriminatedUnion('kind', [
       z.strictObject({ kind: z.literal('current_desired') }),
       z.strictObject({ kind: z.literal('specific_sha'), sha })

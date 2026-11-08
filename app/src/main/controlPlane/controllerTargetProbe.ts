@@ -95,7 +95,18 @@ export async function observeProductTarget(
       text: CONTROLLER_TARGET_PROBE,
       sha256: createHash('sha256').update(CONTROLLER_TARGET_PROBE).digest('hex')
     },
-    { signal, timeoutMs: 20_000 }
+    {
+      signal,
+      timeoutMs: 20_000,
+      expectedIdentity: {
+        vpsId: payload.target.vps_id,
+        host: payload.target.host,
+        port: payload.target.port,
+        username: payload.target.username,
+        authType: payload.target.auth_type,
+        hostFingerprint: payload.target.host_fingerprint
+      }
+    }
   )
   try {
     repository.assertCurrent(payload, false)

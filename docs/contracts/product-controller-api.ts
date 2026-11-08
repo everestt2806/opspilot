@@ -467,6 +467,9 @@ export interface ProductControllerWriteHeaders {
 }
 
 export interface ProductManualRedeployRequest extends ProductControllerWritePrecondition {
+  /** Optional first activation CAS: specific_sha only, current deployment must be
+   * null and no nonterminal app job in same write transaction. Legacy absent unchanged. */
+  require_first_deployment?: true
   target: { kind: 'current_desired' } | { kind: 'specific_sha'; sha: ProductFullCommitSha }
 }
 

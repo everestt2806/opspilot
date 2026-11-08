@@ -23,6 +23,7 @@ const generations = {
 }
 const redeploySchema = z.strictObject({
   ...generations,
+  require_first_deployment: z.literal(true).optional(),
   target: z.discriminatedUnion('kind', [
     z.strictObject({ kind: z.literal('current_desired') }),
     z.strictObject({ kind: z.literal('specific_sha'), sha: z.string().regex(/^[0-9a-f]{40}$/) })
@@ -91,7 +92,11 @@ export class ControllerCommands {
     input: unknown
   ): ProductManualRedeployAccepted {
     const parsed = redeploySchema.safeParse(input)
-    if (!parsed.success) throw new ControllerClientAuthError('REQUEST_INVALID')
+    if (
+      !parsed.success ||
+      (parsed.data.require_first_deployment && parsed.data.target.kind !== 'specific_sha')
+    )
+      throw new ControllerClientAuthError('REQUEST_INVALID')
     return this.write(
       authorization,
       key,
@@ -101,6 +106,18 @@ export class ControllerCommands {
       'deploy:manual',
       (source, now) => {
         this.assertUnblocked(appId)
+        if (
+          parsed.data.require_first_deployment &&
+          (this.db
+            .prepare('SELECT 1 FROM app WHERE id=? AND current_deployment_id IS NOT NULL')
+            .get(appId) ||
+            this.db
+              .prepare(
+                "SELECT 1 FROM product_deploy_job WHERE app_id=? AND state NOT IN ('succeeded','failed','rolled_back','superseded','cancelled') LIMIT 1"
+              )
+              .get(appId))
+        )
+          throw new ControllerClientAuthError('CAPABILITY_BLOCKED')
         const sha =
           parsed.data.target.kind === 'current_desired'
             ? this.desired(source)

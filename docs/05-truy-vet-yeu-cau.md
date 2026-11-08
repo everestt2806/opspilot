@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6g3d 08/11:** [Readiness/first deploy Desktop](tasks/tk-s7-release-r3c6g3d-first-deploy.md) đã nối UI→typedIPC→verifiedSSH readiness→authenticated command→runtime. Source fullSHA/target HMAC/resources snapshot, receipt60s và atomic first-deploy CAS; accepted khác running/health. Native29 có mất HTTP response→coldlookup và đúng1job chạy app/HTTP200; không VPS production. Scope Express/noDB/no required env; FR tổng/live/HTTPS/migrate/ML/installer chưa được nâng trạng thái từ checkpoint này.
+
 > **R3c-6g3c 07/11:** [Target preparation Desktop](tasks/tk-s7-release-r3c6g3c-target-ui.md) UI→typedIPC→verifiedSSH→reuseinstaller/proof đãnối; native25 cólostreply→coldinspect giữ nguyênfiles/keys,0deployment. Source/target fences vàmetadata state khôngreadyclaim. GUI readiness/resources/Docker/firstdeploy còn6g3d; liveVPS/HTTPS/migrate/ML/installer cầngatesriêng, không nângFR/PRODUCT_PASS từtestcount.
 
 > **R3c-6g3b 07/11:** [Source verification GUI](tasks/tk-s7-release-r3c6g3b-source-ui.md) đã nối UI→typedIPC→verifiedSSH→controller sourceCLI; fullSHA/time/metadata/safeerrors/4locale, không deployment hoặc ready flag. Focused99/nativeGit21/stderrprobe7/Electron44/type/lint/build đạt, full cuối theo hồ sơ. Targetenrollment/readiness/firstdeploy từGUI vẫn cần code6g3c; không nâng FR/UC/PRODUCT_PASS từ testcount hoặc ảnh fixture.

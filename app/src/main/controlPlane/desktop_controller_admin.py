@@ -194,7 +194,8 @@ def verify(request):
 def run_cli(request, operation, payload):
     source_check = operation == "verify-project-source"
     target_check = operation in ("project-target-state", "enroll-project-target")
-    structured_error = source_check or target_check
+    readiness_check = operation == "project-readiness"
+    structured_error = source_check or target_check or readiness_check
     args = (
         [request["node_path"], "--version"]
         if operation == "_version"
@@ -222,7 +223,13 @@ def run_cli(request, operation, payload):
         content = bytearray()
         error_content = bytearray()
         deadline = time.monotonic() + (
-            105 if source_check else 75 if operation == "enroll-project-target" else 15
+            180
+            if readiness_check
+            else 105
+            if source_check
+            else 75
+            if operation == "enroll-project-target"
+            else 15
         )
         with selectors.DefaultSelector() as selector:
             selector.register(process.stdout, selectors.EVENT_READ)
@@ -250,13 +257,25 @@ def run_cli(request, operation, payload):
             if structured_error:
                 # Chỉ chuyển tiếp đúng mã đã duyệt, không stdout/stderr tùy ý.
                 match = re.fullmatch(
-                    rb"CONTROL_PLANE_ERROR ((?:PROJECT_SOURCE_|PROJECT_TARGET_|TARGET_ENROLLMENT_)[A-Z_]+)\r?\n?",
+                    rb"CONTROL_PLANE_ERROR ((?:PROJECT_SOURCE_|PROJECT_TARGET_|TARGET_ENROLLMENT_|PROJECT_READINESS_)[A-Z_]+)\r?\n?",
                     bytes(error_content),
                 )
                 if match:
                     safe_code = match.group(1).decode("ascii")
-                    if safe_code in SOURCE_ERROR_CODES or (
-                        target_check and safe_code in TARGET_ERROR_CODES
+                    if (
+                        (
+                            readiness_check
+                            and safe_code
+                            in {
+                                "PROJECT_READINESS_REQUEST_INVALID",
+                                "PROJECT_READINESS_UNAVAILABLE",
+                            }
+                        )
+                        or safe_code in SOURCE_ERROR_CODES
+                        or (
+                            (target_check or readiness_check)
+                            and safe_code in TARGET_ERROR_CODES
+                        )
                     ):
                         raise AdminFailure(safe_code)
             raise ValueError()
@@ -295,6 +314,7 @@ def main():
         "verify-project-source",
         "project-target-state",
         "enroll-project-target",
+        "project-readiness",
     ):
         raise ValueError()
     try:

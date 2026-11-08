@@ -37,6 +37,14 @@ process.stdin.on('end',()=>{
     process.stderr.write('x'.repeat(1025));process.exitCode=1;
   } else if(mode==='stdout_limit'){
     process.stdout.write('x'.repeat(65537));
+  } else if(mode==='readiness_known'){
+    process.stderr.write('CONTROL_PLANE_ERROR PROJECT_READINESS_REQUEST_INVALID\\n');process.exitCode=1;
+  } else if(mode==='target_known'){
+    process.stderr.write('CONTROL_PLANE_ERROR TARGET_ENROLLMENT_NOT_READY\\n');process.exitCode=1;
+  } else if(mode==='readiness_suffix'){
+    process.stderr.write('CONTROL_PLANE_ERROR PROJECT_READINESS_REQUEST_INVALID synthetic-private-stderr\\n');process.exitCode=1;
+  } else if(mode==='readiness_unknown'){
+    process.stderr.write('CONTROL_PLANE_ERROR PROJECT_READINESS_SECRET_VALUE\\n');process.exitCode=1;
   }
 });
 """,
@@ -51,6 +59,25 @@ process.stdin.on('end',()=>{
             "state": "fixture_ok"
         }
         cases.append("success_ignores_arbitrary_stderr")
+        for mode, expected in (
+            ("readiness_known", "PROJECT_READINESS_REQUEST_INVALID"),
+            ("target_known", "TARGET_ENROLLMENT_NOT_READY"),
+            ("known", "PROJECT_SOURCE_UNSUPPORTED"),
+            ("readiness_suffix", None),
+            ("readiness_unknown", None),
+            ("stderr_limit", None),
+        ):
+            try:
+                run_cli(request, "project-readiness", {"mode": mode})
+            except admin_failure as error:
+                assert expected == error.code
+            except ValueError as error:
+                assert expected is None
+                assert "synthetic-private-stderr" not in str(error)
+                assert "SECRET_VALUE" not in str(error)
+            else:
+                raise AssertionError("READINESS_ERROR_REJECTION_REQUIRED")
+            cases.append("readiness_" + mode)
         for mode in ("known", "suffix", "unknown", "stderr_limit", "stdout_limit"):
             try:
                 run_cli(request, "verify-project-source", {"mode": mode})

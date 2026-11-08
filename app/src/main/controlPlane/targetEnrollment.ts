@@ -367,7 +367,18 @@ export async function inspectStoredProductTarget(
     const opened = await ssh.openProductBootstrapChannel(
       target.vps_id,
       { text: script, sha256: createHash('sha256').update(script).digest('hex') },
-      { signal, timeoutMs: 20_000 }
+      {
+        signal,
+        timeoutMs: 20_000,
+        expectedIdentity: {
+          vpsId: target.vps_id,
+          host: target.host,
+          port: target.port,
+          username: target.username,
+          authType: target.auth_type,
+          hostFingerprint: target.host_fingerprint
+        }
+      }
     )
     repository.assertCurrent(payload, false)
     const actual = opened.identity

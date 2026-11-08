@@ -79,6 +79,21 @@ export class DesktopProjectSetups {
       | 'enrollProjectTarget'
     >
   ) {}
+  registeredContext(key: string): {
+    setup: DesktopProjectSetup
+    registration: z.output<typeof projectRegistrationResultSchema>
+    body_sha256: string
+  } {
+    if (this.db.inTransaction) throw new DesktopProjectSetupError('PROJECT_REQUEST_INVALID')
+    const row = this.row(key)
+    if (row.state !== 'registered') throw new DesktopProjectSetupError('PROJECT_SETUP_CONFLICT')
+    this.authorize(row.binding_id, row.binding_revision, row.controller_id)
+    return {
+      setup: this.metadata(row),
+      registration: projectRegistrationResultSchema.parse(JSON.parse(row.result_json!)),
+      body_sha256: row.body_sha256
+    }
+  }
   async targetState(key: string): Promise<DesktopProjectTargetState> {
     return this.targetOperation(key)
   }

@@ -62,6 +62,9 @@ describe('metadata-only controller IPC composition', () => {
       cancelProject: vi.fn(async () => ({ state: 'cancelled' })),
       verifyProjectSource: vi.fn(async () => ({ state: 'source_verified' })),
       projectTargetState: vi.fn(async () => ({ state: 'not_prepared' })),
+      projectReadiness: vi.fn(async () => ({ state: 'blocked' })),
+      prepareFirstDeployment: vi.fn(async () => ({ command: { state: 'prepared' } })),
+      sendFirstDeployment: vi.fn(async () => ({ state: 'accepted' })),
       enrollProjectTarget: vi.fn(async () => ({ state: 'unknown' }))
     }
     registerIpcHandlers(
@@ -90,7 +93,9 @@ describe('metadata-only controller IPC composition', () => {
       'controller:enroll-project-target',
       'controller:list',
       'controller:prepare-command',
+      'controller:prepare-first-deployment',
       'controller:prepare-project',
+      'controller:project-readiness',
       'controller:project-target-state',
       'controller:project-targets',
       'controller:projects',
@@ -98,6 +103,7 @@ describe('metadata-only controller IPC composition', () => {
       'controller:retry-enrollment',
       'controller:revoke',
       'controller:send-command',
+      'controller:send-first-deployment',
       'controller:send-project',
       'controller:verify-project-source'
     ])
@@ -112,6 +118,9 @@ describe('metadata-only controller IPC composition', () => {
     })
     expect(channels).not.toContain('controller:call')
     for (const [channel, method] of [
+      ['controller:project-readiness', 'projectReadiness'],
+      ['controller:prepare-first-deployment', 'prepareFirstDeployment'],
+      ['controller:send-first-deployment', 'sendFirstDeployment'],
       ['controller:prepare-command', 'prepareCommand'],
       ['controller:send-command', 'sendCommand'],
       ['controller:check-command', 'checkCommand'],

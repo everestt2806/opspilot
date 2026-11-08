@@ -186,6 +186,13 @@ export function registerIpcHandlers(
     handle('controller:check-command', (key) => desktopControllerService.checkCommand(key))
     handle('controller:cancel-command', (key) => desktopControllerService.cancelCommand(key))
     handle('controller:commands', (bindingId) => desktopControllerService.listCommands(bindingId))
+    handle('controller:project-readiness', (key) => desktopControllerService.projectReadiness(key))
+    handle('controller:prepare-first-deployment', (input) =>
+      desktopControllerService.prepareFirstDeployment(input)
+    )
+    handle('controller:send-first-deployment', (input) =>
+      desktopControllerService.sendFirstDeployment(input)
+    )
     handle('controller:project-targets', (input) => desktopControllerService.projectTargets(input))
     handle('controller:project-target-state', (key) =>
       desktopControllerService.projectTargetState(key)
