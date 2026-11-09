@@ -16,6 +16,12 @@ import subprocess
 import time
 
 TRANSFER_ROOT = "/var/lib/opspilot-controller-transfer"
+INSTALLATION_PATHS = (
+    "/var/lib/opspilot-controller-install",
+    "/opt/opspilot-controller",
+    "/var/lib/opspilot-controller",
+    "/etc/systemd/system/opspilot-controller-product.service",
+)
 APPROVED_LOCK_SHA = ""
 APPROVED_PACKAGES = {}
 APPROVED_PAYLOAD = []
@@ -189,6 +195,10 @@ def request():
         or type(value["format"]) is not int
     ):
         fail("INPUT_INVALID")
+    if value.get("operation") == "discover":
+        if set(value) != {"format", "operation"}:
+            fail("INPUT_INVALID")
+        return value
     if not full(UUID, value.get("request_key")) or not all(
         full(SHA, value.get(key)) for key in ("release_sha256", "installer_sha256")
     ):
@@ -371,7 +381,7 @@ def prepare_namespace(header):
     return intent
 
 
-def read_intent(header):
+def read_intent(header=None):
     directory(TRANSFER_ROOT, private=True)
     intent = json.loads(read_file(os.path.join(TRANSFER_ROOT, "intent.json"), 4096))
     if not isinstance(intent, dict) or set(intent) != {
@@ -385,8 +395,12 @@ def read_intent(header):
         fail("CONFLICT")
     if type(intent["format"]) is not int or intent["format"] != 1:
         fail("CONFLICT")
+    if not full(UUID, intent["request_key"]) or not all(
+        full(SHA, intent[key]) for key in ("release_sha256", "installer_sha256")
+    ):
+        fail("CONFLICT")
     for key in ("format", "request_key", "release_sha256", "installer_sha256"):
-        if intent[key] != header[key]:
+        if header is not None and intent[key] != header[key]:
             fail("CONFLICT")
     if any(
         type(intent[key]) is not int or not 1 <= intent[key] <= cap
@@ -660,6 +674,40 @@ def main():
         fail("ROOT_REQUIRED")
     os.umask(0o077)
     header = request()
+    if header["operation"] == "discover":
+        require_eof()
+        if not exists(TRANSFER_ROOT):
+            if any(exists(path) for path in INSTALLATION_PATHS):
+                fail("CONFLICT")
+            # A crash before the singleton rename is still a pending installation.
+            parent = os.path.dirname(TRANSFER_ROOT)
+            directory(parent)
+            if any(
+                name.startswith(os.path.basename(TRANSFER_ROOT) + ".preparing-")
+                for name in os.listdir(parent)
+            ):
+                fail("CONFLICT")
+            reply({"state": "absent"})
+            return
+        intent = read_intent()
+        fd, _ = checked_file(os.path.join(TRANSFER_ROOT, "operation.lock"), 0, 0o600)
+        try:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                fail("BUSY")
+            reply(
+                {
+                    "state": "discovered",
+                    **{
+                        key: intent[key]
+                        for key in ("request_key", "release_sha256", "installer_sha256")
+                    },
+                }
+            )
+        finally:
+            os.close(fd)
+        return
     manifest = None
     raw = None
     if header["operation"] == "transfer":

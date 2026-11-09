@@ -258,7 +258,7 @@ it('upgrades populated v027 without altering saved profiles or sending anything'
   const before = db.prepare('SELECT * FROM vps').all(),
     bindings = db.prepare('SELECT * FROM desktop_controller_binding').all()
   db.exec(
-    'DROP TABLE desktop_target_setup;DROP TABLE product_vps_registration;DELETE FROM schema_version WHERE version=28'
+    'DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE desktop_target_setup;DROP TABLE product_vps_registration;DELETE FROM schema_version WHERE version=28'
   )
   runMigrations(db)
   expect(db.prepare('SELECT * FROM vps').all()).toEqual(before)

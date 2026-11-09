@@ -17,7 +17,8 @@ import {
   type ControllerBootstrapErrorCode,
   type ControllerBootstrapLocator,
   type ControllerBootstrapOperation,
-  type ControllerBootstrapResult
+  type ControllerBootstrapResult,
+  type ControllerBootstrapDiscovery
 } from '../../../../docs/contracts/product-controller-ssh-bootstrap'
 
 const locatorSchema = z
@@ -63,7 +64,7 @@ const safePath = z
         .slice(1)
         .every((p) => p.length > 0 && p !== '.' && p !== '..')
   )
-const installationSchema = z
+export const controllerInstallationResultSchema = z
   .object({
     format: z.literal(1),
     request_key: z.uuidv4(),
@@ -101,7 +102,7 @@ const resultSchema = z.union([
     .object({
       state: z.literal('installation_result'),
       request_key: z.uuidv4(),
-      installation: installationSchema
+      installation: controllerInstallationResultSchema
     })
     .strict()
 ])
@@ -272,7 +273,7 @@ export async function transferControllerRelease(
 
 export async function callControllerBootstrap(
   input: BootstrapInput & {
-    operation: Exclude<ControllerBootstrapOperation, 'transfer'>
+    operation: Exclude<ControllerBootstrapOperation, 'transfer' | 'discover'>
     consent?: true
   }
 ): Promise<ControllerBootstrapResult> {
@@ -300,6 +301,26 @@ export async function callControllerBootstrap(
     })
     wire.end()
     return checkedResult(await wire.receive(), input.locator, input.operation)
+  })
+}
+
+/** Readonly locator hint. Caller MUST match both pins against its protected catalog. */
+export async function discoverControllerBootstrap(
+  input: Omit<BootstrapInput, 'locator'>
+): Promise<ControllerBootstrapDiscovery> {
+  input = { ...input, expectedIdentity: { ...input.expectedIdentity } }
+  return withBootstrap(input, 'discover', async (wire) => {
+    await wire.sendFrame({ format: 1, operation: 'discover' })
+    wire.end()
+    const value = await wire.receive()
+    const parsed = z
+      .union([
+        z.object({ state: z.literal('absent') }).strict(),
+        locatorSchema.extend({ state: z.literal('discovered') }).strict()
+      ])
+      .safeParse(value)
+    if (!parsed.success) throw new ControllerBootstrapError('BOOTSTRAP_UNAVAILABLE')
+    return parsed.data
   })
 }
 
@@ -343,11 +364,11 @@ interface BootstrapWire {
   end: () => void
 }
 
-async function withBootstrap(
-  input: BootstrapInput,
+async function withBootstrap<T>(
+  input: Omit<BootstrapInput, 'locator'>,
   operation: ControllerBootstrapOperation,
-  action: (wire: BootstrapWire) => Promise<ControllerBootstrapResult>
-): Promise<ControllerBootstrapResult> {
+  action: (wire: BootstrapWire) => Promise<T>
+): Promise<T> {
   let channel: ClientChannel | undefined,
     effects = false,
     timer: ReturnType<typeof setTimeout> | undefined

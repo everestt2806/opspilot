@@ -83,7 +83,7 @@ await esbuild.build({
     {
       name: 'raw-python',
       setup(build) {
-        build.onResolve({ filter: /\.py\?raw$/ }, (args) => ({
+        build.onResolve({ filter: /\.(py|sql)\?raw$/ }, (args) => ({
           path: resolve(args.resolveDir, args.path.slice(0, -4)),
           namespace: 'raw-python'
         }))
@@ -100,13 +100,26 @@ const {
   transferControllerRelease,
   callControllerBootstrap,
   controllerBootstrapScript,
-  renderControllerUnit
+  renderControllerUnit,
+  discoverControllerBootstrap,
+  DesktopControllerInstallations,
+  initializeDatabase,
+  closeDatabase,
+  VpsRepository,
+  AesGcmCredentialCipher,
+  loadSecret
 } = require(tool)
 const baseScript = controllerBootstrapScript()
-const text = baseScript.text.replace(
-  'TRANSFER_ROOT = "/var/lib/opspilot-controller-transfer"',
-  'TRANSFER_ROOT = ' + JSON.stringify(join(root, 'transfer'))
-)
+const text = baseScript.text
+  .replace(
+    'TRANSFER_ROOT = "/var/lib/opspilot-controller-transfer"',
+    'TRANSFER_ROOT = ' + JSON.stringify(join(root, 'transfer'))
+  )
+  .replace(
+    /INSTALLATION_PATHS = \([\s\S]*?\n\)/,
+    'INSTALLATION_PATHS = ' +
+      JSON.stringify([paths.state, paths.installation, paths.data, paths.unit])
+  )
 assert.notEqual(text, baseScript.text)
 const bootstrapScript = { text, sha256: createHash('sha256').update(text).digest('hex') }
 const locator = {
@@ -263,6 +276,20 @@ const raw = (code, header, body = Buffer.alloc(0), nonroot = false) => {
   return { ...result, frames }
 }
 try {
+  const discoveredAbsent = await discoverControllerBootstrap(input())
+  check('discovery_absent_is_readonly_and_does_not_create_lock_or_state', () => {
+    assert.deepEqual(discoveredAbsent, { state: 'absent' })
+    assert(!existsSync(join(root, 'transfer')))
+  })
+  writeFileSync(paths.state, 'SYNTHETIC_UNKNOWN_MANUAL_STATE', { mode: 0o600, flag: 'wx' })
+  try {
+    await assert.rejects(() => discoverControllerBootstrap(input()), { code: 'BOOTSTRAP_CONFLICT' })
+    check('unknown_manual_installation_is_conflict_instead_of_new_empty_plan', () =>
+      assert(!existsSync(join(root, 'transfer')))
+    )
+  } finally {
+    unlinkSync(paths.state)
+  }
   const absent = await callControllerBootstrap({ ...input(), operation: 'status' })
   check('readonly_status_does_not_create_remote_namespace', () => {
     assert.equal(absent.state, 'absent')
@@ -357,6 +384,10 @@ try {
     assert(existsSync(join(root, 'transfer.preparing-' + key, 'intent.json')))
     assert(!existsSync(join(root, 'transfer')))
   })
+  await assert.rejects(() => discoverControllerBootstrap(input()), { code: 'BOOTSTRAP_CONFLICT' })
+  check('discovery_does_not_hide_pre_rename_crash_with_a_new_request_uuid', () =>
+    assert(!existsSync(join(root, 'transfer')))
+  )
   const abort = new AbortController()
   await assert.rejects(
     () =>
@@ -421,6 +452,10 @@ try {
   })
   const intentPath = join(root, 'transfer/intent.json'),
     intentBefore = readFileSync(intentPath)
+  const remoteHint = await discoverControllerBootstrap(input())
+  check('readonly_discovery_returns_existing_uuid_and_both_pins_without_node_execution', () =>
+    assert.deepEqual(remoteHint, { state: 'discovered', ...locator })
+  )
   writeFileSync(intentPath, JSON.stringify({ ...JSON.parse(intentBefore), format: true }))
   try {
     await assert.rejects(() => callControllerBootstrap({ ...input(), operation: 'status' }), {
@@ -529,16 +564,132 @@ try {
   } finally {
     writeFileSync(remoteTool, originalTool)
   }
+  const desktopDirectory = join(root, 'desktop')
+  mkdirSync(desktopDirectory, { mode: 0o700 })
+  const desktopDb = initializeDatabase(desktopDirectory)
+  const cipherKey = randomBytes(32),
+    cipher = new AesGcmCredentialCipher(cipherKey)
+  const repository = new VpsRepository(desktopDb)
+  const addVps = () =>
+    repository.create({
+      name: 'fixture-controller',
+      host: identity.host,
+      port: identity.port,
+      username: identity.username,
+      auth_type: 'key',
+      host_fingerprint: hostFingerprint,
+      credential: cipher.encrypt(clientKey.toString())
+    })
+  assert.equal(addVps().id, 1)
+  const journalSsh = new SshManager((id) => {
+    const v = repository.getById(id)
+    return {
+      host: v.host,
+      port: v.port,
+      username: v.username,
+      authType: v.auth_type,
+      hostFingerprint: v.host_fingerprint,
+      secret: loadSecret(desktopDb, cipher, id)
+    }
+  })
+  managers.push(journalSsh)
+  const release = {
+    release_id: 'native-approved-linux22',
+    ...artifacts,
+    release_sha256: locator.release_sha256,
+    installer_sha256: locator.installer_sha256
+  }
+  const journal = new DesktopControllerInstallations(desktopDb, journalSsh, [release], {
+    bootstrapScript
+  })
+  const plan = await journal.plan(1, release.release_id)
+  check('main_journal_discovers_remote_key_and_commits_same_uuid_before_any_install', () => {
+    assert.equal(plan.request_key, key)
+    assert.equal(plan.remote_existing, true)
+    assert.equal(journal.prepare(plan.plan_id).state, 'outcome_unknown')
+    assert.equal(desktopDb.prepare('SELECT max(version) n FROM schema_version').get().n, 29)
+  })
+  assert.equal((await journal.inspect(key)).state, 'transferred')
   dropReply = true
   const beforeInstallExec = executions
-  await assert.rejects(
-    () => callControllerBootstrap({ ...input(), operation: 'install', consent: true }),
-    { code: 'BOOTSTRAP_OUTCOME_UNKNOWN', remote_effects_possible: true }
-  )
+  await assert.rejects(() => journal.send(key, 'install', true), {
+    code: 'BOOTSTRAP_OUTCOME_UNKNOWN',
+    remote_effects_possible: true
+  })
   check('lost_install_reply_never_automatically_reopens_or_replays', () => {
     assert.equal(executions, beforeInstallExec + 1)
     assert(existsSync(paths.unit))
+    assert.equal(journal.list()[0].state, 'outcome_unknown')
   })
+  await assert.rejects(() => journal.send(key, 'install', true), {
+    code: 'INSTALL_INSPECT_REQUIRED'
+  })
+  // AES key only crosses a private stdin pipe; no plaintext SSH key, secret argv or env.
+  const cold = await new Promise((ok, fail) => {
+    const child = spawn(process.execPath, [resolve(import.meta.dirname, 'cold-inspect.mjs')], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8' }
+    })
+    const output = [],
+      error = []
+    child.stdout.on('data', (v) => output.push(v))
+    child.stderr.on('data', (v) => error.push(v))
+    child.on('error', fail)
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      fail(Error('COLD_INSPECT_TIMEOUT'))
+    }, 120000)
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      if (code !== 0) return fail(Error('COLD_INSPECT_FAILED'))
+      try {
+        ok(JSON.parse(Buffer.concat(output).toString()))
+      } catch {
+        fail(Error('COLD_INSPECT_PROTOCOL'))
+      }
+    })
+    child.stdin.end(
+      JSON.stringify({
+        modules,
+        tool,
+        directory: desktopDirectory,
+        key: cipherKey.toString('base64'),
+        release,
+        bootstrapScript,
+        request_key: key
+      })
+    )
+  })
+  check(
+    'cold_main_process_reads_sqlite029_and_inspects_same_installed_controller_after_lost_reply',
+    () => {
+      assert.equal(cold.schema, 29)
+      assert.equal(cold.before[0].state, 'outcome_unknown')
+      assert.equal(cold.result.state, 'installed')
+      assert.equal(cold.result.request_key, key)
+      assert.equal(cold.result.last_result.service_state, 'running')
+      assert.equal(executions, beforeInstallExec + 3) // one install, readonly status and inspect
+    }
+  )
+  repository.delete(1)
+  assert.equal(journal.list()[0].controller_id, cold.result.controller_id)
+  await assert.rejects(() => journal.inspect(key), { code: 'INSTALL_AUTHORITY_CHANGED' })
+  assert.equal(addVps().id, 1)
+  const rebindPlan = await journal.plan(1, release.release_id)
+  assert.equal(rebindPlan.rebind_required, true)
+  assert.throws(() => journal.prepare(rebindPlan.plan_id), { code: 'INSTALL_REBIND_REQUIRED' })
+  const rebound = journal.rebind(rebindPlan.plan_id, key, true)
+  const afterRebind = await journal.inspect(key)
+  check(
+    'archive_readd_explicit_fresh_pinned_rebind_preserves_root_uuid_controller_db_and_service',
+    () => {
+      assert.equal(rebound.authority_revision, 2)
+      assert.equal(afterRebind.controller_id, cold.result.controller_id)
+      assert.equal(afterRebind.state, 'installed')
+      assert.equal(afterRebind.request_key, key)
+      assert.equal(afterRebind.last_result.service_state, 'running')
+    }
+  )
   ssh = manager()
   const recovered = await callControllerBootstrap({ ...input(), operation: 'inspect' })
   check('cold_ssh_inspect_finds_real_installed_systemd_service_without_replay', () => {
@@ -578,6 +729,7 @@ try {
   for (const child of children) child.kill()
   for (const client of clients) client.end()
   await new Promise((ok) => server.close(ok))
+  closeDatabase()
   assert.equal(root, resolve('/opt', 'opspilot-controller-service-lab-' + nonce))
   assert.equal(readFileSync(join(root, '.lab-owner'), 'utf8'), nonce)
   if (existsSync(paths.unit)) {

@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6h2b2 08/11:** [Desktop installation journal](tasks/tk-s7-release-r3c6h2b2-install-journal.md) bổ sung discovery chỉ đọc, durable UUID/pins/current SSH authority và cold recovery/rebind; migration029 không xóa lịch sử khi gỡ VPS. Native SSH/systemd proof và gates trong hồ sơ; đây là controller setup backend, không bằng chứng deployment mới hoặc hoàn thiện FR/UC. Còn code6h2b3 admin UID bridge/vault authority rồi IPC/Settings wizard; live/reboot/soak/distribution riêng.
+
 > **R3c-6h2b1 08/11:** [SSH controller bootstrap](tasks/tk-s7-release-r3c6h2b1-ssh-bootstrap.md) có Main-only API/CLI lab transfer + independent Python verification + packaged Node/fixed installer. Native25 chứng minh SSH thật,145MB/resume/lost reply/cold inspect và systemd;0production, không chứng minh app deployment. Còn Main install journal/root-admin bridge/IPC/UI/distribution/live/soak, không nâng FR/UC/PRODUCT_PASS từ test count.
 
 > **R3c-6h2a 08/11:** [Controller service installer](tasks/tk-s7-release-r3c6h2a-controller-service.md) đã có Linux CLI transaction với account riêng, private DB/key, immutable UUID/pin, kernel lock và explicit recovery. Native22 chứng minh systemd và cold recovery, không phải deployment mới; fresh DB0VPS/app/job. Còn code transport/bootstrap/admin UID bridge/wizard, không nâng FR/UC/PRODUCT_PASS từ test count; reboot/live/soak riêng.

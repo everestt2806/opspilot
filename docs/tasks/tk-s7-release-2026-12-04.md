@@ -1,5 +1,7 @@
 # Hoàn thiện OpsPilot tới 04/12/2026
 
+> **08/11 — R3c-6h2b2:** [Main installation journal/discovery](tk-s7-release-r3c6h2b2-install-journal.md) nối local SQLite029 với existing remote UUID, protected catalog/current ciphertext/security fences, cold unknown/explicit inspect/recovery/rebind. Tiếp6h2b3 root-admin UID bridge và vault installation authority, rồi Settings consent wizard; chưa Desktop one-click install hoặc đóng R3/PRODUCT_PASS. Không productionwrite/PR/merge.
+
 > **08/11 — R3c-6h2b1:** [SSH transfer/bootstrap](tk-s7-release-r3c6h2b1-ssh-bootstrap.md) nối verified local release/tool → pinned SSH → bounded root staging → Python verify → packaged Node/trusted installer; native25 có real systemd và lost reply→coldinspect không replay. Còn code6h2b2 durable Main install journal/root-admin UID bridge/binding rồi wizard; chưa Desktop one-click, live/reboot/soak/distribution và R3 tổng chưa đóng. Không productionwrite/PR/merge.
 
 > **08/11 — R3c-6h2a:** [System service installation](tk-s7-release-r3c6h2a-controller-service.md) nối verified release → private durable installer state → fresh service account → DB/key → enabled non-root systemd/owned loopback health. Native22 có4SIGKILL boundaries và cold same-key recovery; full/types/lint/build trong hồ sơ. Chưa Desktop install: cần6h2b transfer/Python bootstrap/explicit root-admin UID bridge, rồi consent wizard. Không productionwrite/PR/merge; reboot/live/soak và R3 tổng chưa đóng.

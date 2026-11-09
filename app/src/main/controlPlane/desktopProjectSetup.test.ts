@@ -343,7 +343,7 @@ describe('Desktop durable Product project setup', () => {
     )
     const before = db.prepare('SELECT * FROM desktop_controller_binding').all()
     db.exec(
-      'DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE desktop_project_setup;DELETE FROM schema_version WHERE version=27'
+      'DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE desktop_project_setup;DELETE FROM schema_version WHERE version=27'
     )
     runMigrations(db)
     runMigrations(db)

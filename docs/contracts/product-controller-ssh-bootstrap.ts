@@ -15,7 +15,11 @@ export type ControllerBootstrapLocator = {
   installer_sha256: string;
 };
 export type ControllerBootstrapOperation =
-  "transfer" | "status" | "install" | "inspect" | "recover";
+  "transfer" | "status" | "install" | "inspect" | "recover" | "discover";
+/** Untrusted hint: match both hashes to a protected Main catalog before using it. */
+export type ControllerBootstrapDiscovery =
+  | { state: "absent" }
+  | (ControllerBootstrapLocator & { state: "discovered" });
 export type ControllerBootstrapStatus = ControllerBootstrapLocator & {
   state: "absent" | "uploading" | "verified";
   completed_files: number;
@@ -61,5 +65,7 @@ export type ControllerBootstrapErrorCode =
  * install/inspect/recover chỉ fixed installer CLI, stdin derived request, no paths/commands/env override.
  * Root flock inherited by child; timeout/disconnect sau dispatch là unknown, chỉ explicit inspect/
  * same-key recover. Không raw stderr/credential, public API, apt/npm/curl hoặc tự init/reset DB/key.
- * Main durable install journal/root-admin UID bridge/IPC/wizard chưa nằm trong checkpoint này.
+ * discover chỉ nhận {format:1,operation:'discover'}, không tạo state/lock hoặc exec Node.
+ * Namespace absent nhưng installation paths có sẵn => conflict, không nhận là VPS trống.
+ * Main durable journal theo desktop-controller-installation.ts; root-admin bridge/IPC/wizard riêng.
  */

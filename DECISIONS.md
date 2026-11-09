@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-08 | [product-mode/bootstrap] R3c-6h2b2 thêm Desktop installation journal migration029: immutable remote UUID/catalog pins, current SSH revision/cipher-envelope digest, operation/session fence, cold unknown và explicit same-identity rebind; giữ tombstone sau xóa VPS — Discovery chỉ là hint đọc qua pinned SSH, phải match hai pin trong protected Main catalog; không exec candidate/tự tạo UUID bỏ qua unknown, không đổi API token binding. Main-only trước root-admin UID bridge và Settings wizard — Sơn/Codex
+
 2026-11-08 | [product-mode/bootstrap] R3c-6h2b1 truyền raw file stream có bounded framing/backpressure qua expected-identity SSH, UUID/release+installer pins và root singleton staging; Python independently verify trước packaged Node/trusted installer — Không host Node/npm/curl/apt, tar extraction, generic exec hoặc auto replay sau unknown. Transfer chỉ staging, install/recover cần consent riêng; Main journal/admin UID bridge/GUI nối sau, canonical controller SQLite giữ nguyên — Sơn/Codex
 
 2026-11-08 | [product-mode/infra] R3c-6h2a triển khai root-only Linux installer CLI từ release đã có sẵn: paths cố định, account service riêng/nologin, durable UUID/pin/phase, inherited flock và explicit same-key recover; init/key chạy setpriv clear-groups, không regen/overwrite — Passive verifier nhận expected-owner UID nội bộ từ root receipt/account để kiểm runtime sau chown, default owner policy giữ nguyên; transport/admin-UID bridge/wizard tiếp sau, không public admin API hoặc service root — Sơn/Codex

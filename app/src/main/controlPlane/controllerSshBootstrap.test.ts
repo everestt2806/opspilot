@@ -5,7 +5,8 @@ import type { SshManager, SshVerifiedConnectionIdentity } from '../ssh/manager'
 import {
   callControllerBootstrap,
   controllerBootstrapScript,
-  transferControllerRelease
+  transferControllerRelease,
+  discoverControllerBootstrap
 } from './controllerSshBootstrap'
 import { createHash } from 'node:crypto'
 
@@ -32,7 +33,10 @@ function fixture(
     | 'mismatch'
     | 'error'
     | 'inconsistent'
-    | 'silent' = 'good'
+    | 'silent'
+    | 'discover-absent'
+    | 'discover-existing'
+    | 'discover-extra' = 'good'
 ): {
   ssh: {
     openProductBootstrapChannel: ReturnType<typeof vi.fn<SshManager['openProductBootstrapChannel']>>
@@ -64,36 +68,44 @@ function fixture(
         }
         const body = Buffer.from(
           JSON.stringify(
-            kind === 'error'
-              ? { state: 'error', code: 'SYNTHETIC_RAW_REMOTE_DATA' }
-              : kind === 'inconsistent'
+            kind === 'discover-absent'
+              ? { state: 'absent' }
+              : kind === 'discover-existing' || kind === 'discover-extra'
                 ? {
-                    state: 'installation_result',
-                    request_key: locator.request_key,
-                    installation: {
-                      format: 1,
-                      request_key: locator.request_key,
-                      phase: 'installed',
-                      controller_id: null,
-                      service_state: 'running',
-                      runtime_uid: null,
-                      service_enabled: true,
-                      artifact_path: '/opt/controller/payload/control-plane.cjs',
-                      node_path: '/opt/controller/node',
-                      data_directory: '/var/lib/controller',
-                      payload_sha256: 'c'.repeat(64)
-                    }
-                  }
-                : {
+                    state: 'discovered',
                     ...locator,
-                    state: 'absent',
-                    completed_files: 0,
-                    total_files: 0,
-                    ...(kind === 'raw' ? { secret: 'SYNTHETIC_RAW_REMOTE_DATA' } : {}),
-                    ...(kind === 'mismatch'
-                      ? { request_key: '22222222-2222-4222-8222-222222222222' }
-                      : {})
+                    ...(kind === 'discover-extra' ? { path: '/untrusted' } : {})
                   }
+                : kind === 'error'
+                  ? { state: 'error', code: 'SYNTHETIC_RAW_REMOTE_DATA' }
+                  : kind === 'inconsistent'
+                    ? {
+                        state: 'installation_result',
+                        request_key: locator.request_key,
+                        installation: {
+                          format: 1,
+                          request_key: locator.request_key,
+                          phase: 'installed',
+                          controller_id: null,
+                          service_state: 'running',
+                          runtime_uid: null,
+                          service_enabled: true,
+                          artifact_path: '/opt/controller/payload/control-plane.cjs',
+                          node_path: '/opt/controller/node',
+                          data_directory: '/var/lib/controller',
+                          payload_sha256: 'c'.repeat(64)
+                        }
+                      }
+                    : {
+                        ...locator,
+                        state: 'absent',
+                        completed_files: 0,
+                        total_files: 0,
+                        ...(kind === 'raw' ? { secret: 'SYNTHETIC_RAW_REMOTE_DATA' } : {}),
+                        ...(kind === 'mismatch'
+                          ? { request_key: '22222222-2222-4222-8222-222222222222' }
+                          : {})
+                      }
           )
         )
         const header = Buffer.alloc(4)
@@ -110,6 +122,35 @@ function fixture(
   return { ssh: { openProductBootstrapChannel: open }, channel }
 }
 describe('Fixed pinned SSH controller bootstrap client', () => {
+  it.each(['discover-absent', 'discover-existing'] as const)(
+    'readonly %s has no caller locator or consent',
+    async (kind) => {
+      const { ssh, channel } = fixture(kind)
+      const response = await discoverControllerBootstrap({
+        ssh,
+        vpsId: 1,
+        expectedIdentity: identity,
+        assertCurrent: () => {}
+      })
+      expect(response.state).toBe(kind === 'discover-absent' ? 'absent' : 'discovered')
+      expect(JSON.parse(Buffer.concat(channel.writes).subarray(4).toString())).toEqual({
+        format: 1,
+        operation: 'discover'
+      })
+    }
+  )
+  it('rejects extra remote discovery fields without executing anything else', async () => {
+    const { ssh } = fixture('discover-extra')
+    await expect(
+      discoverControllerBootstrap({
+        ssh,
+        vpsId: 1,
+        expectedIdentity: identity,
+        assertCurrent: () => {}
+      })
+    ).rejects.toMatchObject({ code: 'BOOTSTRAP_UNAVAILABLE', remote_effects_possible: false })
+    expect(ssh.openProductBootstrapChannel).toHaveBeenCalledTimes(1)
+  })
   it('renders only compiled policy constants and exact script digest', () => {
     const code = controllerBootstrapScript()
     expect(code.text).not.toContain('APPROVED_LOCK_SHA = ""')

@@ -47,6 +47,17 @@ import type {
 } from '@shared/desktopProjectRegistration'
 import { DesktopProjectSetups, DesktopProjectSetupError } from './desktopProjectSetup'
 import { ProjectRegistrationError } from './projectRegistration'
+import {
+  DesktopControllerInstallations,
+  DesktopInstallationError
+} from './desktopControllerInstallation'
+import { ControllerBootstrapError } from './controllerSshBootstrap'
+import type {
+  DesktopControllerRelease,
+  DesktopInstallation,
+  DesktopInstallationPlan,
+  DesktopInstallationOperation
+} from '../../../../docs/contracts/desktop-controller-installation'
 
 const registerSchema = z.strictObject({
   binding_id: z.uuid(),
@@ -75,12 +86,15 @@ export class DesktopControllerService {
   private readonly projects: DesktopProjectSetups
   private readonly targets: DesktopTargetSetups
   private readonly firstDeployments: DesktopFirstDeployments
+  private readonly installations: DesktopControllerInstallations
   constructor(
     private readonly db: Database.Database,
     cipher: AesGcmCredentialCipher,
     private readonly ssh: SshManager,
-    private readonly clientFactory?: (bindingId: string) => Pick<ControllerHttpClient, 'call'>
+    private readonly clientFactory?: (bindingId: string) => Pick<ControllerHttpClient, 'call'>,
+    installationCatalog: readonly DesktopControllerRelease[] = []
   ) {
+    this.installations = new DesktopControllerInstallations(db, ssh, installationCatalog)
     this.vault = new DesktopControllerVault(db, cipher)
     this.enrollment = new DesktopControllerEnrollment(this.vault, ssh)
     this.commands = new DesktopControllerCommands(db, this.vault, ssh, clientFactory)
@@ -99,6 +113,35 @@ export class DesktopControllerService {
         )
       }
     )
+  }
+  async planInstallation(vpsId: number, releaseId: string): Promise<DesktopInstallationPlan> {
+    return this.safe(() => this.installations.plan(vpsId, releaseId))
+  }
+  async prepareInstallation(planId: string): Promise<DesktopInstallation> {
+    return this.safe(() => this.installations.prepare(planId))
+  }
+  async listInstallations(): Promise<DesktopInstallation[]> {
+    return this.safe(() => this.installations.list())
+  }
+  async cancelInstallation(key: string): Promise<DesktopInstallation> {
+    return this.safe(() => this.installations.cancel(key))
+  }
+  async inspectInstallation(key: string): Promise<DesktopInstallation> {
+    return this.safe(() => this.installations.inspect(key))
+  }
+  async sendInstallation(
+    key: string,
+    operation: Exclude<DesktopInstallationOperation, 'inspect'>,
+    consent: true
+  ): Promise<DesktopInstallation> {
+    return this.safe(() => this.installations.send(key, operation, consent))
+  }
+  async rebindInstallation(
+    planId: string,
+    key: string,
+    confirm: true
+  ): Promise<DesktopInstallation> {
+    return this.safe(() => this.installations.rebind(planId, key, confirm))
   }
   async prepareTarget(input: DesktopTargetPrepareInput): Promise<DesktopTargetSetup> {
     return this.safe(() => this.targets.prepare(input))
@@ -410,6 +453,8 @@ export class DesktopControllerService {
         error instanceof DesktopProjectSetupError ||
         error instanceof DesktopFirstDeploymentError ||
         error instanceof DesktopTargetSetupError ||
+        error instanceof DesktopInstallationError ||
+        error instanceof ControllerBootstrapError ||
         error instanceof ProjectRegistrationError ||
         error instanceof ControllerHttpClientError
           ? error.code
