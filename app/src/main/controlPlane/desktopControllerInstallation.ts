@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { isAbsolute } from 'node:path'
 import { z } from 'zod'
 import type { SshManager, SshVerifiedConnectionIdentity } from '../ssh/manager'
+import type { ProductDesktopControllerBindingIntent } from '../../../../docs/contracts/product-controller-api'
 import type {
   DesktopControllerRelease,
   DesktopInstallation,
@@ -319,6 +320,42 @@ export class DesktopControllerInstallations {
   }
   inspect(key: string): Promise<DesktopInstallation> {
     return this.dispatch(key, 'inspect')
+  }
+  bindingIntent(
+    key: string,
+    bindingId: string,
+    displayName: string,
+    allowWrite = false
+  ): ProductDesktopControllerBindingIntent {
+    return this.mutate(() => {
+      const row = this.cold(this.row(key))
+      this.current(row)
+      this.release(row)
+      if (row.state !== 'installed' || !row.controller_id || !row.result_json)
+        throw new DesktopInstallationError('INSTALL_INSPECT_REQUIRED')
+      const result = controllerInstallationResultSchema.parse(JSON.parse(row.result_json))
+      if (!result.runtime_uid) throw new DesktopInstallationError('INSTALL_CONFLICT')
+      return {
+        binding_id: bindingId,
+        display_name: displayName,
+        controller_id: row.controller_id,
+        vps_id: row.vps_id,
+        ssh_security_revision: row.ssh_security_revision,
+        principal: JSON.parse(row.principal_json),
+        artifact_path: result.artifact_path,
+        node_path: result.node_path,
+        data_directory: result.data_directory,
+        manifest_sha256: result.payload_sha256,
+        requested_scopes: allowWrite ? ['read', 'deploy:manual', 'policy:write'] : ['read'],
+        installation: {
+          request_key: key,
+          authority_revision: row.authority_revision,
+          release_sha256: row.release_sha256,
+          installer_sha256: row.installer_sha256,
+          runtime_uid: result.runtime_uid
+        }
+      }
+    })
   }
   send(
     key: string,

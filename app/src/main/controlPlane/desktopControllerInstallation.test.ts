@@ -13,6 +13,7 @@ import {
 } from './desktopControllerInstallation'
 import { ControllerBootstrapError } from './controllerSshBootstrap'
 import { DesktopControllerService } from './desktopControllerService'
+import { DesktopControllerVault } from './desktopControllerVault'
 import type { SshManager } from '../ssh/manager'
 import type { ControllerInstallationResult } from '../../../../docs/contracts/product-controller-installation'
 
@@ -440,3 +441,102 @@ it('Main service exposes journal metadata and stable errors without opening SSH 
   expect(ssh.openProductBootstrapChannel).not.toHaveBeenCalled()
   expect((await service.cancelInstallation(key)).state).toBe('cancelled')
 })
+
+async function installedBinding(): Promise<{
+  key: string
+  binding: string
+  vault: DesktopControllerVault
+  intent: ReturnType<DesktopControllerInstallations['bindingIntent']>
+}> {
+  const key = await prepare()
+  await journal.send(key, 'transfer', true)
+  await journal.send(key, 'install', true)
+  const binding = randomUUID(),
+    vault = new DesktopControllerVault(db, cipher)
+  const intent = journal.bindingIntent(key, binding, 'unit-service', true)
+  vault.prepare(intent)
+  const created = new Date().toISOString(),
+    expiry = new Date(Date.now() + 86400000).toISOString()
+  vault.activate(binding, 1, {
+    state: 'issued_once',
+    controller_id: cid,
+    client: {
+      client_id: randomUUID(),
+      controller_id: cid,
+      display_name: 'unit-service',
+      scopes: ['read', 'deploy:manual', 'policy:write'],
+      created_at: created,
+      revoked_at: null,
+      token_expires_at: expiry
+    },
+    credential: {
+      access_token: 'opspilot_' + randomBytes(32).toString('base64url'),
+      token_type: 'Bearer',
+      expires_at: expiry
+    }
+  })
+  return { key, binding, vault, intent }
+}
+it('derives installed binding entirely from current journal and encrypts installation-bound token', async () => {
+  const { key, binding, vault, intent } = await installedBinding()
+  expect(intent.installation).toEqual({
+    request_key: key,
+    authority_revision: 1,
+    release_sha256: release.release_sha256,
+    installer_sha256: release.installer_sha256,
+    runtime_uid: 1001
+  })
+  expect(vault.resolve(binding)).toMatchObject({ controllerId: cid })
+  const token = vault.resolve(binding).accessToken
+  const raw = db
+    .prepare(
+      'SELECT encrypted_secret,intent_json FROM desktop_controller_binding WHERE binding_id=?'
+    )
+    .get(binding) as { encrypted_secret: Buffer; intent_json: string }
+  expect(raw.encrypted_secret.includes(Buffer.from(token))).toBe(false)
+  expect(raw.intent_json).not.toContain(token)
+})
+it.each(['cipher', 'generation', 'unknown'] as const)(
+  'fences installed binding when %s changes without silently rotating credentials',
+  async (kind) => {
+    const { key, binding, vault } = await installedBinding()
+    const before = db
+      .prepare('SELECT encrypted_secret FROM desktop_controller_binding WHERE binding_id=?')
+      .get(binding)
+    if (kind === 'cipher') db.exec("UPDATE vps SET encrypted_secret=X'02' WHERE id=1")
+    if (kind === 'generation') {
+      const plan = await journal.plan(1, release.release_id)
+      journal.rebind(plan.plan_id, key, true)
+    }
+    if (kind === 'unknown') {
+      transport.call.mockImplementation(async (input) => ({
+        state: 'absent',
+        ...input.locator,
+        completed_files: 0,
+        total_files: 0
+      }))
+      await journal.inspect(key)
+    }
+    expect(() => vault.intent(binding)).toThrow('BINDING_CHANGED')
+    expect(() => vault.resolve(binding)).toThrow()
+    expect(
+      db
+        .prepare('SELECT encrypted_secret FROM desktop_controller_binding WHERE binding_id=?')
+        .get(binding)
+    ).toEqual(before)
+  }
+)
+it.each(['uid', 'pin', 'paths', 'request'] as const)(
+  'rejects forged installed %s binding before prepare',
+  async (kind) => {
+    const { intent, vault } = await installedBinding()
+    const forged = structuredClone(intent)
+    forged.binding_id = randomUUID()
+    if (kind === 'uid') forged.installation!.runtime_uid++
+    if (kind === 'pin') forged.installation!.installer_sha256 = 'f'.repeat(64)
+    if (kind === 'paths') forged.artifact_path = '/foreign/control-plane.cjs'
+    if (kind === 'request') forged.installation!.request_key = randomUUID()
+    expect(() => vault.prepare(forged)).toThrow('BINDING_CHANGED')
+    expect(db.prepare('SELECT count(*) n FROM desktop_controller_binding').get()).toEqual({ n: 1 })
+  }
+)

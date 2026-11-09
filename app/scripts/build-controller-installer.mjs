@@ -16,7 +16,23 @@ await esbuild.build({
   platform: 'node',
   format: 'cjs',
   target: 'node22',
-  packages: 'external'
+  packages: 'bundle',
+  nodePaths: [modules],
+  plugins: [
+    {
+      name: 'raw-admin-python',
+      setup(build) {
+        build.onResolve({ filter: /\.py\?raw$/ }, (args) => ({
+          path: resolve(args.resolveDir, args.path.slice(0, -4)),
+          namespace: 'raw-admin-python'
+        }))
+        build.onLoad({ filter: /.*/, namespace: 'raw-admin-python' }, (args) => ({
+          contents: readFileSync(args.path, 'utf8'),
+          loader: 'text'
+        }))
+      }
+    }
+  ]
 })
 console.log(
   JSON.stringify({

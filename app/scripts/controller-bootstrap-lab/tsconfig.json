@@ -1,4 +1,4 @@
 {
   "extends": "../product-runtime-lab/tsconfig.json",
-  "files": ["entry.ts", "../../src/main/raw.d.ts"]
+  "files": ["entry.ts", "installer-entry.ts", "../../src/main/raw.d.ts"]
 }

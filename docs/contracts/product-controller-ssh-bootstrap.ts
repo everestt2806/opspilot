@@ -15,7 +15,7 @@ export type ControllerBootstrapLocator = {
   installer_sha256: string;
 };
 export type ControllerBootstrapOperation =
-  "transfer" | "status" | "install" | "inspect" | "recover" | "discover";
+  "transfer" | "status" | "install" | "inspect" | "recover" | "discover" | "admin";
 /** Untrusted hint: match both hashes to a protected Main catalog before using it. */
 export type ControllerBootstrapDiscovery =
   | { state: "absent" }
@@ -66,6 +66,10 @@ export type ControllerBootstrapErrorCode =
  * Root flock inherited by child; timeout/disconnect sau dispatch là unknown, chỉ explicit inspect/
  * same-key recover. Không raw stderr/credential, public API, apt/npm/curl hoặc tự init/reset DB/key.
  * discover chỉ nhận {format:1,operation:'discover'}, không tạo state/lock hoặc exec Node.
+ * admin header có locator + request_size; raw JSON InstalledControllerAdminRequest <=512KiB
+ * sau header rồi EOF. Root Python verify pins/catalog trước trusted installer admin/drop UID.
+ * Reply admin_result/request_key/result là raw JSON bytes có framing riêng <=64KiB;
+ * secret-bearing enrollment response chỉ Main vault tiêu thụ, không renderer/log.
  * Namespace absent nhưng installation paths có sẵn => conflict, không nhận là VPS trống.
  * Main durable journal theo desktop-controller-installation.ts; root-admin bridge/IPC/wizard riêng.
  */

@@ -20,6 +20,8 @@ import {
   type ControllerBootstrapResult,
   type ControllerBootstrapDiscovery
 } from '../../../../docs/contracts/product-controller-ssh-bootstrap'
+import type { InstalledControllerAdminRequest } from '../../../../docs/contracts/product-installed-controller-admin'
+import { installedControllerAdminSchema } from './installedControllerAdminProtocol'
 
 const locatorSchema = z
   .object({
@@ -273,7 +275,7 @@ export async function transferControllerRelease(
 
 export async function callControllerBootstrap(
   input: BootstrapInput & {
-    operation: Exclude<ControllerBootstrapOperation, 'transfer' | 'discover'>
+    operation: Exclude<ControllerBootstrapOperation, 'transfer' | 'discover' | 'admin'>
     consent?: true
   }
 ): Promise<ControllerBootstrapResult> {
@@ -324,6 +326,54 @@ export async function discoverControllerBootstrap(
   })
 }
 
+/** Main-only secret-bearing response; enrollment consumes it directly into the encrypted vault. */
+export async function administerInstalledController(
+  input: BootstrapInput & { request: InstalledControllerAdminRequest }
+): Promise<unknown> {
+  let bytes: Buffer
+  try {
+    locatorSchema.parse(input.locator)
+    bytes = Buffer.from(JSON.stringify(installedControllerAdminSchema.parse(input.request)))
+    if (
+      bytes.length > 512 * 1024 ||
+      input.request.format !== 1 ||
+      input.request.operation !== 'admin' ||
+      Object.entries(input.locator).some(
+        ([key, value]) => input.request.authority[key as keyof typeof input.locator] !== value
+      )
+    )
+      throw Error()
+  } catch {
+    throw new ControllerBootstrapError('BOOTSTRAP_INPUT_INVALID')
+  }
+  const locator = { ...input.locator }
+  return withBootstrap(
+    { ...input, expectedIdentity: { ...input.expectedIdentity } },
+    'admin',
+    async (wire) => {
+      await wire.sendFrame({
+        format: 1,
+        operation: 'admin',
+        ...locator,
+        request_size: bytes.length
+      })
+      await wire.send(bytes)
+      wire.end()
+      const response = z
+        .strictObject({
+          state: z.literal('admin_result'),
+          request_key: z.uuidv4(),
+          result: z.unknown()
+        })
+        .safeParse(await wire.receive())
+      if (!response.success || response.data.request_key !== locator.request_key)
+        throw new ControllerBootstrapError('BOOTSTRAP_UNAVAILABLE')
+      return response.data.result
+    },
+    65536
+  )
+}
+
 function checkedResult(
   value: unknown,
   locator: ControllerBootstrapLocator,
@@ -367,12 +417,13 @@ interface BootstrapWire {
 async function withBootstrap<T>(
   input: Omit<BootstrapInput, 'locator'>,
   operation: ControllerBootstrapOperation,
-  action: (wire: BootstrapWire) => Promise<T>
+  action: (wire: BootstrapWire) => Promise<T>,
+  replyLimit: number = limits.frame
 ): Promise<T> {
   let channel: ClientChannel | undefined,
     effects = false,
     timer: ReturnType<typeof setTimeout> | undefined
-  const mutates = ['transfer', 'install', 'recover'].includes(operation)
+  const mutates = ['transfer', 'install', 'recover', 'admin'].includes(operation)
   const assert = (): void => {
     if (input.signal?.aborted) throw new ControllerBootstrapError('BOOTSTRAP_ABORTED')
     try {
@@ -434,12 +485,12 @@ async function withBootstrap<T>(
     }
     channel.on('data', (chunk: Buffer) => {
       if (failure) return
-      if (buffer.length + chunk.length > limits.frame * 4)
+      if (buffer.length + chunk.length > replyLimit * 4)
         return reject(new ControllerBootstrapError('BOOTSTRAP_LIMIT'))
       buffer = Buffer.concat([buffer, chunk])
       while (buffer.length >= 4) {
         const size = buffer.readUInt32BE(0)
-        if (size < 1 || size > limits.frame)
+        if (size < 1 || size > replyLimit)
           return reject(new ControllerBootstrapError('BOOTSTRAP_LIMIT'))
         if (buffer.length < size + 4) break
         let value: Record<string, unknown>

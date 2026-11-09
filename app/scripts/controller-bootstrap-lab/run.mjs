@@ -57,13 +57,29 @@ const artifacts = {
 }
 cpSync(source, artifacts.release_directory, { recursive: true, errorOnExist: true, force: false })
 await esbuild.build({
-  entryPoints: [resolve(import.meta.dirname, '../controller-service-lab/entry.ts')],
+  entryPoints: [resolve(import.meta.dirname, 'installer-entry.ts')],
   outfile: artifacts.installer_path,
   bundle: true,
   platform: 'node',
   format: 'cjs',
   target: 'node22',
-  packages: 'external',
+  packages: 'bundle',
+  nodePaths: [modules],
+  plugins: [
+    {
+      name: 'raw-admin-python',
+      setup(build) {
+        build.onResolve({ filter: /\.py\?raw$/ }, (args) => ({
+          path: resolve(args.resolveDir, args.path.slice(0, -4)),
+          namespace: 'raw-admin-python'
+        }))
+        build.onLoad({ filter: /.*/, namespace: 'raw-admin-python' }, (args) => ({
+          contents: readFileSync(args.path, 'utf8'),
+          loader: 'text'
+        }))
+      }
+    }
+  ],
   define: {
     'process.env.OPSPILOT_SERVICE_LAB_NONCE': JSON.stringify(nonce),
     'process.env.OPSPILOT_SERVICE_LAB_CRASH': 'undefined'
@@ -107,7 +123,10 @@ const {
   closeDatabase,
   VpsRepository,
   AesGcmCredentialCipher,
-  loadSecret
+  loadSecret,
+  administerInstalledController,
+  DesktopControllerVault,
+  DesktopControllerEnrollment
 } = require(tool)
 const baseScript = controllerBootstrapScript()
 const text = baseScript.text
@@ -152,6 +171,7 @@ const clients = new Set(),
 let authentications = 0,
   executions = 0,
   dropReply = false,
+  dropAdminReply = false,
   pythonOnlyExecutions = 0
 const server = new Server({ hostKeys: [hostKey] }, (client) => {
   clients.add(client)
@@ -178,7 +198,7 @@ const server = new Server({ hostKeys: [hostKey] }, (client) => {
       child.stdin.on('error', () => {})
       let stdout = Buffer.alloc(0)
       child.stdout.on('data', (chunk) => {
-        if (!dropReply) {
+        if (!dropReply && !dropAdminReply) {
           stream.write(chunk)
           return
         }
@@ -187,6 +207,11 @@ const server = new Server({ hostKeys: [hostKey] }, (client) => {
           const value = JSON.parse(stdout.subarray(4, stdout.readUInt32BE(0) + 4))
           if (value.state === 'installation_result') {
             dropReply = false
+            client.end()
+            return
+          }
+          if (dropAdminReply && value.state === 'admin_result') {
+            dropAdminReply = false
             client.end()
             return
           }
@@ -671,6 +696,137 @@ try {
       assert.equal(executions, beforeInstallExec + 3) // one install, readonly status and inspect
     }
   )
+  const vault = new DesktopControllerVault(desktopDb, cipher)
+  const enrollment = new DesktopControllerEnrollment(vault, journalSsh, { bootstrapScript })
+  const binding = randomUUID()
+  vault.prepare(journal.bindingIntent(key, binding, 'native-service-admin'))
+  await enrollment.enroll(binding, { timeoutMs: 60000 })
+  const targets = await enrollment.projectTargets(binding, { after_id: null, limit: 10 })
+  check('root_ssh_admin_drops_service_uid_before_enrollment_and_project_target_read', () => {
+    assert.equal(vault.get(binding).state, 'active')
+    assert.equal(targets.controller_id, cold.result.controller_id)
+    assert.deepEqual(targets.items, [])
+    const token = vault.resolve(binding).accessToken
+    assert(token.startsWith('opspilot_'))
+    const credential = desktopDb
+      .prepare('SELECT encrypted_secret FROM desktop_controller_binding WHERE binding_id=?')
+      .get(binding)
+    assert(Buffer.isBuffer(credential.encrypted_secret))
+    assert(!credential.encrypted_secret.includes(Buffer.from(token)))
+  })
+  const authority = {
+    ...locator,
+    controller_id: cold.result.controller_id,
+    runtime_uid: cold.result.last_result.runtime_uid,
+    payload_sha256: cold.result.last_result.payload_sha256
+  }
+  const adminStatus = (override = {}) =>
+    administerInstalledController({
+      ...input(),
+      request: {
+        format: 1,
+        operation: 'admin',
+        authority: { ...authority, ...override },
+        command: { operation: 'status', payload: {} }
+      }
+    })
+  await assert.rejects(() => adminStatus({ runtime_uid: authority.runtime_uid + 1 }), {
+    code: 'BOOTSTRAP_INSTALLER_FAILED'
+  })
+  check('caller_cannot_choose_a_different_service_uid', () =>
+    assert.equal(vault.get(binding).state, 'active')
+  )
+  const receiptPath = join(paths.state, 'receipt.json'),
+    savedReceipt = readFileSync(receiptPath)
+  writeFileSync(receiptPath, JSON.stringify({ ...JSON.parse(savedReceipt), uid: 0 }))
+  try {
+    await assert.rejects(() => adminStatus(), { code: 'BOOTSTRAP_INSTALLER_FAILED' })
+    check('root_receipt_tamper_rejected_before_service_admin', () => assert(existsSync(paths.data)))
+  } finally {
+    writeFileSync(receiptPath, savedReceipt)
+  }
+  const savedUnit = readFileSync(paths.unit)
+  const heldReceipt = join(root, 'retained-admin-receipt')
+  renameSync(receiptPath, heldReceipt)
+  try {
+    await assert.rejects(() => adminStatus(), { code: 'BOOTSTRAP_INSTALLER_FAILED' })
+    check('missing_installation_receipt_never_reinitializes_existing_database_or_key', () => {
+      assert(!existsSync(receiptPath))
+      assert(existsSync(join(paths.data, 'opspilot.db')))
+      assert(existsSync(join(paths.data, '.controller-runtime-key')))
+    })
+  } finally {
+    renameSync(heldReceipt, receiptPath)
+  }
+  writeFileSync(paths.unit, Buffer.concat([savedUnit, Buffer.from('\n# foreign unit mutation\n')]))
+  try {
+    await assert.rejects(() => adminStatus(), { code: 'BOOTSTRAP_CONFLICT' })
+    check('unit_tamper_rejected_before_service_admin', () => assert(existsSync(paths.data)))
+  } finally {
+    writeFileSync(paths.unit, savedUnit)
+  }
+  const heldUnit = join(root, 'retained-system-unit')
+  renameSync(paths.unit, heldUnit)
+  try {
+    await assert.rejects(() => adminStatus(), { code: 'BOOTSTRAP_INSTALLER_FAILED' })
+    check('missing_systemd_unit_does_not_authorize_admin_from_receipt_alone', () =>
+      assert(existsSync(paths.data))
+    )
+  } finally {
+    renameSync(heldUnit, paths.unit)
+  }
+  const lostBinding = randomUUID()
+  const installedPayload = cold.result.last_result.artifact_path,
+    savedPayload = readFileSync(installedPayload)
+  writeFileSync(
+    installedPayload,
+    Buffer.concat([savedPayload, Buffer.from('\n// fixture tamper\n')])
+  )
+  try {
+    await assert.rejects(() => adminStatus(), { code: 'BOOTSTRAP_INSTALLER_FAILED' })
+    check('installed_runtime_tamper_rejected_before_executing_service_admin_cli', () =>
+      assert(existsSync(paths.data))
+    )
+  } finally {
+    writeFileSync(installedPayload, savedPayload)
+  }
+  const installLock = openSync(join(paths.state, 'operation.lock'), 'r+')
+  try {
+    assert.equal(
+      spawnSync('/usr/bin/flock', ['-n', '3'], {
+        stdio: ['ignore', 'ignore', 'ignore', installLock]
+      }).status,
+      0
+    )
+    await assert.rejects(() => adminStatus(), { code: 'BOOTSTRAP_BUSY' })
+    check('installed_admin_respects_existing_installation_kernel_lock', () =>
+      assert(existsSync(paths.data))
+    )
+  } finally {
+    closeSync(installLock)
+  }
+  vault.prepare(journal.bindingIntent(key, lostBinding, 'native-lost-delivery'))
+  dropAdminReply = true
+  await assert.rejects(() => enrollment.enroll(lostBinding, { timeoutMs: 60000 }))
+  const recoveredBinding = await enrollment.enroll(lostBinding, { timeoutMs: 60000 })
+  check('lost_admin_enrollment_reply_is_same_key_unknown_without_issuing_another_token', () => {
+    assert.equal(recoveredBinding.state, 'delivery_unknown')
+    assert(recoveredBinding.remote_client_id)
+    assert.throws(() => vault.resolve(lostBinding))
+    const remote = new Database(join(paths.data, 'opspilot.db'), {
+      readonly: true,
+      fileMustExist: true
+    })
+    try {
+      assert.equal(remote.prepare('SELECT count(*) n FROM product_desktop_client').get().n, 2)
+    } finally {
+      remote.close()
+    }
+  })
+  await enrollment.revoke(lostBinding, { timeoutMs: 60000 })
+  check('explicit_revoke_of_unknown_delivery_runs_as_installed_service_user', () =>
+    assert.equal(vault.get(lostBinding).state, 'disabled')
+  )
   repository.delete(1)
   assert.equal(journal.list()[0].controller_id, cold.result.controller_id)
   await assert.rejects(() => journal.inspect(key), { code: 'INSTALL_AUTHORITY_CHANGED' })
@@ -690,6 +846,15 @@ try {
       assert.equal(afterRebind.last_result.service_state, 'running')
     }
   )
+  const beforeStaleExec = executions
+  await assert.rejects(() => enrollment.projectTargets(binding, { after_id: null, limit: 10 }), {
+    code: 'BINDING_UNAVAILABLE'
+  })
+  check('installation_rebind_invalidates_old_api_binding_before_any_ssh_dispatch', () => {
+    assert.equal(executions, beforeStaleExec)
+    assert.throws(() => vault.intent(binding), { code: 'BINDING_CHANGED' })
+    assert.throws(() => vault.resolve(binding), { code: 'BINDING_UNAVAILABLE' })
+  })
   ssh = manager()
   const recovered = await callControllerBootstrap({ ...input(), operation: 'inspect' })
   check('cold_ssh_inspect_finds_real_installed_systemd_service_without_replay', () => {
@@ -723,6 +888,12 @@ try {
   check('read_only_ssh_inspect_never_restarts_a_stopped_service', () => {
     assert.equal(stopped.installation.service_state, 'stopped')
     assert.equal(stopped.installation.controller_id, recovered.installation.controller_id)
+  })
+  const stoppedAdmin = await adminStatus()
+  check('installed_admin_status_works_with_stopped_service_without_restarting_it', () => {
+    assert.equal(stoppedAdmin.ok, true)
+    assert.equal(stoppedAdmin.data.controller_id, cold.result.controller_id)
+    assert.equal(spawnSync('/usr/bin/systemctl', ['is-active', unitName]).status, 3)
   })
 } finally {
   for (const m of managers) await m.disconnectAll()

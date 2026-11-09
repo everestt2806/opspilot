@@ -9,6 +9,8 @@ import type {
   ProductProjectReadinessInput
 } from '../../../../docs/contracts/product-project-readiness'
 import { createHash } from 'node:crypto'
+import { administerInstalledController } from './controllerSshBootstrap'
+import { canonicalH2Json } from './productH2Proof'
 import { TextDecoder } from 'node:util'
 import { z } from 'zod'
 import type { ClientChannel } from 'ssh2'
@@ -101,7 +103,8 @@ function samePrincipal(
 export class DesktopControllerEnrollment {
   constructor(
     private readonly vault: DesktopControllerVault,
-    private readonly ssh: Pick<SshManager, 'openProductBootstrapChannel'>
+    private readonly ssh: Pick<SshManager, 'openProductBootstrapChannel'>,
+    private readonly installedOptions: { bootstrapScript?: { text: string; sha256: string } } = {}
   ) {}
   async revoke(
     bindingId: string,
@@ -371,6 +374,55 @@ export class DesktopControllerEnrollment {
       stop.signal.addEventListener('abort', rejectStopped, { once: true })
     })
     const work = async (): Promise<unknown> => {
+      if (intent.installation) {
+        const reference = intent.installation
+        const revision = this.vault.get(intent.binding_id).revision
+        const assertCurrent = (): void => {
+          if (
+            canonicalH2Json(this.vault.intent(intent.binding_id)) !== canonicalH2Json(intent) ||
+            this.vault.get(intent.binding_id).state === 'disabled' ||
+            this.vault.get(intent.binding_id).revision !== revision ||
+            (command?.expected_revision !== undefined && revision !== command.expected_revision)
+          )
+            throw new DesktopControllerVaultError('BINDING_CHANGED')
+          command?.beforeSend?.()
+        }
+        const response = await administerInstalledController({
+          ssh: this.ssh,
+          vpsId: intent.vps_id,
+          expectedIdentity: intent.principal,
+          locator: {
+            request_key: reference.request_key,
+            release_sha256: reference.release_sha256,
+            installer_sha256: reference.installer_sha256
+          },
+          assertCurrent,
+          signal: stop.signal,
+          bootstrapScript: this.installedOptions.bootstrapScript,
+          request: {
+            format: 1,
+            operation: 'admin',
+            authority: {
+              request_key: reference.request_key,
+              release_sha256: reference.release_sha256,
+              installer_sha256: reference.installer_sha256,
+              controller_id: intent.controller_id,
+              runtime_uid: reference.runtime_uid,
+              payload_sha256: intent.manifest_sha256
+            },
+            command: {
+              operation: command?.operation ?? 'enroll-desktop-client',
+              payload: command?.payload ?? {
+                request_key: intent.binding_id,
+                display_name: intent.display_name,
+                requested_scopes: intent.requested_scopes
+              }
+            }
+          }
+        })
+        assertCurrent()
+        return decodeAdminEnvelope(response)
+      }
       const opened = await this.ssh.openProductBootstrapChannel(intent.vps_id, pinnedScript, {
         signal: stop.signal,
         expectedIdentity: intent.principal,
@@ -437,65 +489,14 @@ export class DesktopControllerEnrollment {
             const decoded: unknown = JSON.parse(
               new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks, size))
             )
-            const failure = z
-              .strictObject({
-                ok: z.literal(false),
-                code: z.enum([
-                  'CONTROLLER_ADMIN_FAILED',
-                  'CONTROLLER_IDENTITY_MISMATCH',
-                  'CONTROLLER_BUNDLE_VERIFICATION_FAILED',
-                  'CONTROLLER_NODE_UNSUPPORTED',
-                  'PROJECT_SOURCE_REQUEST_INVALID',
-                  'PROJECT_SOURCE_AUTHORITY_REJECTED',
-                  'PROJECT_SOURCE_CHANGED',
-                  'PROJECT_SOURCE_OBSERVATION_STALE',
-                  'PROJECT_SOURCE_REQUIRES_QUIESCENCE',
-                  'PROJECT_SOURCE_UNSUPPORTED',
-                  'PROJECT_SOURCE_LIMIT_EXCEEDED',
-                  'PROJECT_SOURCE_FETCH_FAILED',
-                  'PROJECT_SOURCE_ABORTED',
-                  'PROJECT_SOURCE_DEADLINE',
-                  'PROJECT_SOURCE_STORAGE_UNAVAILABLE',
-                  'VPS_REGISTRATION_REQUEST_INVALID',
-                  'VPS_REGISTRATION_CONFLICT',
-                  'VPS_REGISTRATION_CHANGED',
-                  'VPS_REGISTRATION_UNAVAILABLE',
-                  'CONTROLLER_VPS_INPUT_INVALID',
-                  'CONTROLLER_VPS_CONTROLLER_MISMATCH',
-                  'CONTROLLER_VPS_ENROLLMENT_ABORTED',
-                  'CONTROLLER_VPS_ENROLLMENT_CONFLICT',
-                  'CONTROLLER_VPS_CREDENTIAL_STORE_UNAVAILABLE',
-                  'CONTROLLER_VPS_SSH_VERIFICATION_FAILED',
-                  'CONTROLLER_VPS_ENROLLMENT_UNAVAILABLE',
-                  'CONTROLLER_BOOTSTRAP_TRANSACTION_ACTIVE',
-                  'PROJECT_READINESS_REQUEST_INVALID',
-                  'PROJECT_READINESS_UNAVAILABLE',
-                  'PROJECT_TARGET_REQUEST_INVALID',
-                  'PROJECT_TARGET_AUTHORITY_CHANGED',
-                  'PROJECT_TARGET_CONFLICT',
-                  'PROJECT_TARGET_UNAVAILABLE',
-                  'TARGET_ENROLLMENT_INPUT_INVALID',
-                  'TARGET_ENROLLMENT_AUTHORITY_REJECTED',
-                  'TARGET_ENROLLMENT_REQUIRES_QUIESCENCE',
-                  'TARGET_ENROLLMENT_CONFLICT',
-                  'TARGET_ENROLLMENT_NOT_READY',
-                  'TARGET_ENROLLMENT_TRANSACTION_ACTIVE'
-                ])
-              })
-              .safeParse(decoded)
-            if (failure.success) {
-              settled = true
-              reject(new DesktopControllerEnrollmentError(failure.data.code))
-              return
-            }
-            const envelope = z
-              .strictObject({ ok: z.literal(true), data: z.unknown() })
-              .safeParse(decoded)
-            if (!envelope.success) throw new Error()
+            const response = decodeAdminEnvelope(decoded)
             settled = true
-            resolve(envelope.data.data)
-          } catch {
-            fail()
+            resolve(response)
+          } catch (error) {
+            if (error instanceof DesktopControllerEnrollmentError) {
+              settled = true
+              reject(error)
+            } else fail()
           }
         })
         channel!.end(body)
@@ -516,4 +517,59 @@ function ignoreError(): void {
 }
 function discardStderr(): void {
   /* Do not buffer/log arbitrary remote stderr. */
+}
+
+function decodeAdminEnvelope(value: unknown): unknown {
+  const failure = z
+    .strictObject({
+      ok: z.literal(false),
+      code: z.enum([
+        'CONTROLLER_ADMIN_FAILED',
+        'CONTROLLER_IDENTITY_MISMATCH',
+        'CONTROLLER_BUNDLE_VERIFICATION_FAILED',
+        'CONTROLLER_NODE_UNSUPPORTED',
+        'PROJECT_SOURCE_REQUEST_INVALID',
+        'PROJECT_SOURCE_AUTHORITY_REJECTED',
+        'PROJECT_SOURCE_CHANGED',
+        'PROJECT_SOURCE_OBSERVATION_STALE',
+        'PROJECT_SOURCE_REQUIRES_QUIESCENCE',
+        'PROJECT_SOURCE_UNSUPPORTED',
+        'PROJECT_SOURCE_LIMIT_EXCEEDED',
+        'PROJECT_SOURCE_FETCH_FAILED',
+        'PROJECT_SOURCE_ABORTED',
+        'PROJECT_SOURCE_DEADLINE',
+        'PROJECT_SOURCE_STORAGE_UNAVAILABLE',
+        'VPS_REGISTRATION_REQUEST_INVALID',
+        'VPS_REGISTRATION_CONFLICT',
+        'VPS_REGISTRATION_CHANGED',
+        'VPS_REGISTRATION_UNAVAILABLE',
+        'CONTROLLER_VPS_INPUT_INVALID',
+        'CONTROLLER_VPS_CONTROLLER_MISMATCH',
+        'CONTROLLER_VPS_ENROLLMENT_ABORTED',
+        'CONTROLLER_VPS_ENROLLMENT_CONFLICT',
+        'CONTROLLER_VPS_CREDENTIAL_STORE_UNAVAILABLE',
+        'CONTROLLER_VPS_SSH_VERIFICATION_FAILED',
+        'CONTROLLER_VPS_ENROLLMENT_UNAVAILABLE',
+        'CONTROLLER_BOOTSTRAP_TRANSACTION_ACTIVE',
+        'PROJECT_READINESS_REQUEST_INVALID',
+        'PROJECT_READINESS_UNAVAILABLE',
+        'PROJECT_TARGET_REQUEST_INVALID',
+        'PROJECT_TARGET_AUTHORITY_CHANGED',
+        'PROJECT_TARGET_CONFLICT',
+        'PROJECT_TARGET_UNAVAILABLE',
+        'TARGET_ENROLLMENT_INPUT_INVALID',
+        'TARGET_ENROLLMENT_AUTHORITY_REJECTED',
+        'TARGET_ENROLLMENT_REQUIRES_QUIESCENCE',
+        'TARGET_ENROLLMENT_CONFLICT',
+        'TARGET_ENROLLMENT_NOT_READY',
+        'TARGET_ENROLLMENT_TRANSACTION_ACTIVE'
+      ])
+    })
+    .safeParse(value)
+  if (failure.success) {
+    throw new DesktopControllerEnrollmentError(failure.data.code)
+  }
+  const envelope = z.strictObject({ ok: z.literal(true), data: z.unknown() }).safeParse(value)
+  if (!envelope.success) throw new Error()
+  return envelope.data.data
 }

@@ -2,11 +2,13 @@ import { EventEmitter } from 'node:events'
 import type { ClientChannel } from 'ssh2'
 import { describe, expect, it, vi } from 'vitest'
 import type { SshManager, SshVerifiedConnectionIdentity } from '../ssh/manager'
+import type { InstalledControllerAdminRequest } from '../../../../docs/contracts/product-installed-controller-admin'
 import {
   callControllerBootstrap,
   controllerBootstrapScript,
   transferControllerRelease,
-  discoverControllerBootstrap
+  discoverControllerBootstrap,
+  administerInstalledController
 } from './controllerSshBootstrap'
 import { createHash } from 'node:crypto'
 
@@ -36,7 +38,9 @@ function fixture(
     | 'silent'
     | 'discover-absent'
     | 'discover-existing'
-    | 'discover-extra' = 'good'
+    | 'discover-extra'
+    | 'admin'
+    | 'admin-wrong-key' = 'good'
 ): {
   ssh: {
     openProductBootstrapChannel: ReturnType<typeof vi.fn<SshManager['openProductBootstrapChannel']>>
@@ -68,44 +72,51 @@ function fixture(
         }
         const body = Buffer.from(
           JSON.stringify(
-            kind === 'discover-absent'
-              ? { state: 'absent' }
-              : kind === 'discover-existing' || kind === 'discover-extra'
-                ? {
-                    state: 'discovered',
-                    ...locator,
-                    ...(kind === 'discover-extra' ? { path: '/untrusted' } : {})
-                  }
-                : kind === 'error'
-                  ? { state: 'error', code: 'SYNTHETIC_RAW_REMOTE_DATA' }
-                  : kind === 'inconsistent'
-                    ? {
-                        state: 'installation_result',
-                        request_key: locator.request_key,
-                        installation: {
-                          format: 1,
+            kind === 'admin' || kind === 'admin-wrong-key'
+              ? {
+                  state: 'admin_result',
+                  request_key:
+                    kind === 'admin' ? locator.request_key : '22222222-2222-4222-8222-222222222222',
+                  result: { ok: true, data: { value: 'x'.repeat(32768) } }
+                }
+              : kind === 'discover-absent'
+                ? { state: 'absent' }
+                : kind === 'discover-existing' || kind === 'discover-extra'
+                  ? {
+                      state: 'discovered',
+                      ...locator,
+                      ...(kind === 'discover-extra' ? { path: '/untrusted' } : {})
+                    }
+                  : kind === 'error'
+                    ? { state: 'error', code: 'SYNTHETIC_RAW_REMOTE_DATA' }
+                    : kind === 'inconsistent'
+                      ? {
+                          state: 'installation_result',
                           request_key: locator.request_key,
-                          phase: 'installed',
-                          controller_id: null,
-                          service_state: 'running',
-                          runtime_uid: null,
-                          service_enabled: true,
-                          artifact_path: '/opt/controller/payload/control-plane.cjs',
-                          node_path: '/opt/controller/node',
-                          data_directory: '/var/lib/controller',
-                          payload_sha256: 'c'.repeat(64)
+                          installation: {
+                            format: 1,
+                            request_key: locator.request_key,
+                            phase: 'installed',
+                            controller_id: null,
+                            service_state: 'running',
+                            runtime_uid: null,
+                            service_enabled: true,
+                            artifact_path: '/opt/controller/payload/control-plane.cjs',
+                            node_path: '/opt/controller/node',
+                            data_directory: '/var/lib/controller',
+                            payload_sha256: 'c'.repeat(64)
+                          }
                         }
-                      }
-                    : {
-                        ...locator,
-                        state: 'absent',
-                        completed_files: 0,
-                        total_files: 0,
-                        ...(kind === 'raw' ? { secret: 'SYNTHETIC_RAW_REMOTE_DATA' } : {}),
-                        ...(kind === 'mismatch'
-                          ? { request_key: '22222222-2222-4222-8222-222222222222' }
-                          : {})
-                      }
+                      : {
+                          ...locator,
+                          state: 'absent',
+                          completed_files: 0,
+                          total_files: 0,
+                          ...(kind === 'raw' ? { secret: 'SYNTHETIC_RAW_REMOTE_DATA' } : {}),
+                          ...(kind === 'mismatch'
+                            ? { request_key: '22222222-2222-4222-8222-222222222222' }
+                            : {})
+                        }
           )
         )
         const header = Buffer.alloc(4)
@@ -122,6 +133,79 @@ function fixture(
   return { ssh: { openProductBootstrapChannel: open }, channel }
 }
 describe('Fixed pinned SSH controller bootstrap client', () => {
+  const adminRequest = (): InstalledControllerAdminRequest => ({
+    format: 1 as const,
+    operation: 'admin' as const,
+    authority: {
+      ...locator,
+      controller_id: '33333333-3333-4333-8333-333333333333',
+      runtime_uid: 1001,
+      payload_sha256: 'c'.repeat(64)
+    },
+    command: { operation: 'status' as const, payload: {} }
+  })
+  it('admin accepts bounded 32KiB replies while keeping a 4KiB header and immutable request bytes', async () => {
+    const { ssh, channel } = fixture('admin'),
+      request = adminRequest()
+    const input = {
+      ssh,
+      vpsId: 1,
+      expectedIdentity: identity,
+      locator,
+      assertCurrent: () => {},
+      request
+    }
+    const pending = administerInstalledController(input)
+    request.authority.runtime_uid = 0
+    await expect(pending).resolves.toMatchObject({ ok: true, data: { value: 'x'.repeat(32768) } })
+    const bytes = Buffer.concat(channel.writes),
+      headerSize = bytes.readUInt32BE(0)
+    const header = JSON.parse(bytes.subarray(4, 4 + headerSize).toString())
+    expect(header).toMatchObject({ operation: 'admin', ...locator })
+    expect(headerSize).toBeLessThan(4096)
+    const body = bytes.subarray(4 + headerSize)
+    expect(header.request_size).toBe(body.length)
+    expect(JSON.parse(body.toString()).authority.runtime_uid).toBe(1001)
+  })
+  it('rejects a mismatched admin reply key and does not replay the command', async () => {
+    const { ssh } = fixture('admin-wrong-key')
+    await expect(
+      administerInstalledController({
+        ssh,
+        vpsId: 1,
+        expectedIdentity: identity,
+        locator,
+        assertCurrent: () => {},
+        request: adminRequest()
+      })
+    ).rejects.toMatchObject({ code: 'BOOTSTRAP_OUTCOME_UNKNOWN' })
+    expect(ssh.openProductBootstrapChannel).toHaveBeenCalledTimes(1)
+  })
+  it.each(['root-uid', 'foreign-path', 'unknown-command', 'wrong-pin', 'large'] as const)(
+    'rejects admin %s before opening SSH',
+    async (kind) => {
+      const { ssh } = fixture('admin')
+      const request = adminRequest() as unknown as Record<string, unknown>
+      if (kind === 'root-uid') (request.authority as Record<string, unknown>).runtime_uid = 0
+      if (kind === 'foreign-path') request.artifact_path = '/foreign'
+      if (kind === 'unknown-command') request.command = { operation: 'exec', payload: {} }
+      if (kind === 'wrong-pin')
+        (request.authority as Record<string, unknown>).installer_sha256 = 'f'.repeat(64)
+      if (kind === 'large')
+        request.command = { operation: 'register-vps', payload: { value: 'x'.repeat(512 * 1024) } }
+      await expect(
+        administerInstalledController({
+          ssh,
+          vpsId: 1,
+          expectedIdentity: identity,
+          locator,
+          assertCurrent: () => {},
+          request: request as unknown as ReturnType<typeof adminRequest>
+        })
+      ).rejects.toMatchObject({ code: 'BOOTSTRAP_INPUT_INVALID' })
+      expect(ssh.openProductBootstrapChannel).not.toHaveBeenCalled()
+    }
+  )
   it.each(['discover-absent', 'discover-existing'] as const)(
     'readonly %s has no caller locator or consent',
     async (kind) => {

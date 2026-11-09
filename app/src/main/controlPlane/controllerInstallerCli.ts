@@ -1,4 +1,5 @@
 import { executeControllerInstallation } from './controllerInstallation'
+import { executeInstalledControllerAdmin } from './controllerInstalledAdmin'
 
 /** Không có path/service/UID override hoặc secret/env fallback. */
 export async function runControllerInstallerCli(): Promise<void> {
@@ -8,11 +9,20 @@ export async function runControllerInstallerCli(): Promise<void> {
     if (process.argv.length !== 2 || process.stdin.isTTY)
       throw Error('CONTROLLER_INSTALL_INPUT_INVALID')
     for await (const chunk of process.stdin) {
-      if (bytes.length + chunk.length > 4096) throw Error('CONTROLLER_INSTALL_INPUT_INVALID')
+      if (bytes.length + chunk.length > 512 * 1024) throw Error('CONTROLLER_INSTALL_INPUT_INVALID')
       bytes = Buffer.concat([bytes, chunk])
     }
     clearTimeout(timer)
-    const result = await executeControllerInstallation(JSON.parse(bytes.toString('utf8')))
+    const input: unknown = JSON.parse(bytes.toString('utf8'))
+    const admin =
+      typeof input === 'object' &&
+      input !== null &&
+      'operation' in input &&
+      input.operation === 'admin'
+    if (!admin && bytes.length > 4096) throw Error('CONTROLLER_INSTALL_INPUT_INVALID')
+    const result = await (admin
+      ? executeInstalledControllerAdmin(input)
+      : executeControllerInstallation(input))
     console.log(JSON.stringify(result))
   } catch (error) {
     const code =

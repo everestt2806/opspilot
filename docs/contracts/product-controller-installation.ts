@@ -79,5 +79,6 @@ export type ControllerInstallationResult = {
  * service UID. Passive release verifier's optional expected-owner UID is INTERNAL,
  * derived solely from root-owned receipt + matching Unix account, never request JSON.
  * No generic SSH command/API, public port, Docker install or project deployment.
- * Root/admin bridge and Desktop transfer/consent wizard are later checkpoints.
+ * Installed admin bridge uses product-installed-controller-admin.ts separately;
+ * Desktop consent wizard remains a later checkpoint.
  */

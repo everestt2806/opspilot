@@ -149,7 +149,19 @@ export function renderControllerUnit(paths: ControllerInstallerPaths, key: strin
 export async function executeControllerInstallation(
   value: unknown,
   paths: ControllerInstallerPaths = controllerInstallerPaths,
-  hooks: { afterEffect?: (phase: ControllerInstallationPhase) => void } = {}
+  hooks: {
+    afterEffect?: (phase: ControllerInstallationPhase) => void
+    /** Trusted installer composition only, runs under the existing installation flock. */
+    inspected?: (
+      result: ControllerInstallationResult,
+      authority: {
+        uid: number
+        gid: number
+        lockFd: number
+        release_sha256: string
+      }
+    ) => Promise<void>
+  } = {}
 ): Promise<ControllerInstallationResult> {
   const request = parseControllerInstallationRequest(value)
   if (
@@ -572,8 +584,20 @@ export async function executeControllerInstallation(
       request.operation === 'inspect' ||
       (existed && request.operation === 'install') ||
       receipt.phase === 'installed'
-    )
-      return await currentResult()
+    ) {
+      const result = await currentResult()
+      if (request.operation === 'inspect' && hooks.inspected) {
+        if (receipt.uid === null || receipt.gid === null || lockFd === undefined)
+          return fail('ACCOUNT_UNAVAILABLE')
+        await hooks.inspected(result, {
+          uid: receipt.uid,
+          gid: receipt.gid,
+          lockFd,
+          release_sha256: receipt.release_sha256
+        })
+      }
+      return result
+    }
     const hasRuntime = phases.indexOf(receipt.phase) >= phases.indexOf('runtime_ready')
     const manifest = hasRuntime
       ? verifyRuntime()

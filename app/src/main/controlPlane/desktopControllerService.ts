@@ -270,6 +270,32 @@ export class DesktopControllerService {
       return this.connection(value.binding_id)
     })
   }
+  async registerInstalled(input: {
+    installation_request_key: string
+    binding_id: string
+    display_name: string
+    allow_write?: boolean
+  }): Promise<DesktopControllerConnection> {
+    return this.safe(async () => {
+      const value = z
+        .strictObject({
+          installation_request_key: z.uuidv4(),
+          binding_id: z.uuidv4(),
+          display_name: z.string().min(1).max(128),
+          allow_write: z.boolean().optional()
+        })
+        .parse(input)
+      const intent = this.installations.bindingIntent(
+        value.installation_request_key,
+        value.binding_id,
+        value.display_name,
+        value.allow_write
+      )
+      this.vault.prepare(intent)
+      await this.enrollment.enroll(value.binding_id)
+      return this.connection(value.binding_id)
+    })
+  }
   async retry(bindingId: string): Promise<DesktopControllerConnection> {
     return this.safe(async () => {
       this.uuid(bindingId)

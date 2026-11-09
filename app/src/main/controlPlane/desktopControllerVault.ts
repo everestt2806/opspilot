@@ -1,4 +1,6 @@
 import type Database from 'better-sqlite3'
+import { createHash } from 'node:crypto'
+import { controllerInstallationResultSchema } from './controllerSshBootstrap'
 import { z } from 'zod'
 import type { AesGcmCredentialCipher } from '../crypto/credentialCipher'
 import type {
@@ -41,7 +43,16 @@ export const desktopBindingIntentSchema = z
     requested_scopes: z
       .tuple([z.literal('read')])
       .rest(z.enum(['read', 'deploy:manual', 'policy:write']))
-      .refine((value) => value.length <= 3 && new Set(value).size === value.length)
+      .refine((value) => value.length <= 3 && new Set(value).size === value.length),
+    installation: z
+      .strictObject({
+        request_key: z.uuidv4(),
+        authority_revision: positive,
+        release_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+        installer_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+        runtime_uid: positive
+      })
+      .optional()
   })
   .refine((value) => value.principal.vpsId === value.vps_id)
 export const desktopClientIdentitySchema = z.strictObject({
@@ -321,6 +332,71 @@ export class DesktopControllerVault {
       vps.auth_type !== intent.principal.authType
     )
       throw new DesktopControllerVaultError('BINDING_CHANGED')
+    if (intent.installation) this.currentInstallation(intent)
+  }
+  private currentInstallation(intent: z.output<typeof desktopBindingIntentSchema>): void {
+    const installation = intent.installation!
+    const row = this.db
+      .prepare(
+        `SELECT vps_id,authority_revision,ssh_security_revision,principal_json,
+      credential_digest,state,controller_id,release_sha256,installer_sha256,result_json
+      FROM desktop_controller_installation WHERE request_key=?`
+      )
+      .get(installation.request_key) as Record<string, unknown> | undefined
+    try {
+      if (
+        !row ||
+        row.state !== 'installed' ||
+        row.authority_revision !== installation.authority_revision ||
+        row.vps_id !== intent.vps_id ||
+        row.ssh_security_revision !== intent.ssh_security_revision ||
+        row.controller_id !== intent.controller_id ||
+        row.principal_json !== canonicalH2Json(intent.principal) ||
+        row.release_sha256 !== installation.release_sha256 ||
+        row.installer_sha256 !== installation.installer_sha256
+      )
+        throw Error()
+      const result = controllerInstallationResultSchema.parse(JSON.parse(row.result_json as string))
+      if (
+        result.phase !== 'installed' ||
+        result.request_key !== installation.request_key ||
+        result.controller_id !== intent.controller_id ||
+        result.runtime_uid !== installation.runtime_uid ||
+        result.artifact_path !== intent.artifact_path ||
+        result.node_path !== intent.node_path ||
+        result.data_directory !== intent.data_directory ||
+        result.payload_sha256 !== intent.manifest_sha256
+      )
+        throw Error()
+      const credential = this.db
+        .prepare('SELECT crypto_scheme,encrypted_secret,iv,auth_tag FROM vps WHERE id=?')
+        .get(intent.vps_id) as {
+        crypto_scheme: string
+        encrypted_secret: Buffer
+        iv: Buffer
+        auth_tag: Buffer
+      }
+      if (
+        credential.crypto_scheme !== 'aes_256_gcm' ||
+        !Buffer.isBuffer(credential.encrypted_secret) ||
+        !Buffer.isBuffer(credential.iv) ||
+        !Buffer.isBuffer(credential.auth_tag)
+      )
+        throw Error()
+      const digest = createHash('sha256')
+        .update(
+          canonicalH2Json({
+            crypto_scheme: credential.crypto_scheme,
+            ciphertext: credential.encrypted_secret.toString('base64'),
+            iv: credential.iv.toString('base64'),
+            tag: credential.auth_tag.toString('base64')
+          })
+        )
+        .digest('hex')
+      if (digest !== row.credential_digest) throw Error()
+    } catch {
+      throw new DesktopControllerVaultError('BINDING_CHANGED')
+    }
   }
   private parseIntent(row: Row): z.output<typeof desktopBindingIntentSchema> {
     try {

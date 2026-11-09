@@ -169,7 +169,7 @@ def require_eof():
 
 def reply(value):
     data = json.dumps(value, separators=(",", ":")).encode()
-    if len(data) > FRAME:
+    if len(data) > (65536 if value.get("state") == "admin_result" else FRAME):
         fail("LIMIT")
     stream = struct.pack(">I", len(data)) + data
     offset = 0
@@ -208,13 +208,20 @@ def request():
         common.add("consent")
         if value.get("consent") is not True:
             fail("INPUT_INVALID")
-    elif operation not in ("status", "inspect"):
+    elif operation not in ("status", "inspect", "admin"):
         fail("INPUT_INVALID")
     if operation == "transfer":
         common.update(("manifest_size", "installer_size"))
         if any(
             type(value.get(key)) is not int or not 1 <= value[key] <= cap
             for key, cap in (("manifest_size", MANIFEST), ("installer_size", INSTALLER))
+        ):
+            fail("INPUT_INVALID")
+    if operation == "admin":
+        common.add("request_size")
+        if (
+            type(value.get("request_size")) is not int
+            or not 1 <= value["request_size"] <= 512 * 1024
         ):
             fail("INPUT_INVALID")
     if set(value) != common:
@@ -583,7 +590,7 @@ def receive_file(item, key):
     sync_directory(os.path.dirname(file))
 
 
-def run_installer(header, lock):
+def run_installer(header, lock, admin=None):
     operation = header["operation"]
     request = {
         "format": 1,
@@ -594,6 +601,8 @@ def run_installer(header, lock):
         request.update(consent=True, release_sha256=header["release_sha256"])
     if operation == "install":
         request["release_directory"] = os.path.join(TRANSFER_ROOT, "release")
+    if operation == "admin":
+        request = admin
     node = os.path.join(TRANSFER_ROOT, "release/node")
     tool = os.path.join(TRANSFER_ROOT, "installer.cjs")
     child = subprocess.Popen(
@@ -614,7 +623,17 @@ def run_installer(header, lock):
         for stream in (child.stdout, child.stderr):
             os.set_blocking(stream.fileno(), False)
             selector.register(stream, selectors.EVENT_READ)
-        deadline = min(DEADLINE, time.monotonic() + 90)
+        admin_op = admin.get("command", {}).get("operation") if admin else None
+        timeout = (
+            225
+            if admin_op == "project-readiness"
+            else 135
+            if admin_op == "verify-project-source"
+            else 105
+            if admin_op in ("register-vps", "enroll-project-target")
+            else 90
+        )
+        deadline = min(DEADLINE, time.monotonic() + timeout)
         while selector.get_map():
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -645,6 +664,12 @@ def run_installer(header, lock):
                 else None
             )
             fail(mapped.get(reason, "INSTALLER_FAILED"))
+        if operation == "admin":
+            return {
+                "state": "admin_result",
+                "request_key": header["request_key"],
+                "result": result,
+            }
         if (
             not isinstance(result, dict)
             or result.get("format") != 1
@@ -674,6 +699,22 @@ def main():
         fail("ROOT_REQUIRED")
     os.umask(0o077)
     header = request()
+    admin = None
+    if header["operation"] == "admin":
+        admin = json.loads(exact_read(header["request_size"]).decode("utf-8"))
+        if (
+            not isinstance(admin, dict)
+            or set(admin) != {"format", "operation", "authority", "command"}
+            or type(admin.get("format")) is not int
+            or admin["format"] != 1
+            or admin.get("operation") != "admin"
+            or not isinstance(admin.get("authority"), dict)
+            or any(
+                admin["authority"].get(key) != header[key]
+                for key in ("request_key", "release_sha256", "installer_sha256")
+            )
+        ):
+            fail("INPUT_INVALID")
     if header["operation"] == "discover":
         require_eof()
         if not exists(TRANSFER_ROOT):
@@ -806,7 +847,7 @@ def main():
             else:
                 if result["state"] != "verified":
                     fail("NOT_FOUND")
-                reply(run_installer(header, fd))
+                reply(run_installer(header, fd, admin))
     finally:
         os.close(fd)
 

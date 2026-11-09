@@ -106,6 +106,14 @@ export interface ProductDesktopControllerBindingIntent {
   manifest_sha256: string
   display_name: string
   requested_scopes: readonly ['read', ...ProductDesktopGrantableScope[]]
+  /** Main-derived installation reference; absent for legacy manual same-UID bindings. */
+  installation?: {
+    request_key: string
+    authority_revision: number
+    release_sha256: string
+    installer_sha256: string
+    runtime_uid: number
+  }
 }
 export type ProductApiCapabilityState = 'available' | 'blocked' | 'unsupported'
 
