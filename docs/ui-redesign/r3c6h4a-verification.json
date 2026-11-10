@@ -1,0 +1,99 @@
+{
+  "checkpoint": "R3c-6h4a",
+  "date": "2026-11-10",
+  "status": "BACKEND_SCOPE_PASS",
+  "review": "PENDING",
+  "base_commit": "894fcfdf47998a3215f3487c96456b84bd5c4253",
+  "scope": "Post-settlement controller observation persistence and authenticated HTTP/SQLite; no physical external probe or live controller rollout",
+  "focused_tests": {
+    "passed": 29,
+    "files": 2
+  },
+  "full_tests": {
+    "numTotalTests": 2078,
+    "numPassedTests": 2076,
+    "numFailedTests": 0,
+    "numPendingTests": 2,
+    "success": true
+  },
+  "full_test_files": {
+    "total": 155,
+    "passed": 154,
+    "skipped": 1
+  },
+  "skip_reason": "Two existing Linux-only Caddy tests on Windows",
+  "typescript_projects": [
+    {
+      "exit_code": 0,
+      "project": "tsconfig.node.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "tsconfig.web.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "tsconfig.scripts.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "scripts/product-runtime-lab/tsconfig.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "scripts/controller-release-lab/tsconfig.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "scripts/controller-service-lab/tsconfig.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "scripts/controller-bootstrap-lab/tsconfig.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "scripts/controller-exposure-lab/tsconfig.json"
+    }
+  ],
+  "eslint": {
+    "exit_code": 0,
+    "files": 11
+  },
+  "native": {
+    "status": "PASS",
+    "scope": "NATIVE_LINUX_AUTHENTICATED_HTTP_SQLITE_SYNTHETIC_RUNTIME",
+    "checks": [
+      "native_h2_settlement_and_authorized_context",
+      "lost_http_reply_lookup_current_observation_without_retry_write",
+      "same_key_idempotence_and_previous_observation_cas",
+      "current_target_change_fences_read_and_write",
+      "no_h2_runtime_policy_or_deployment_mutation"
+    ],
+    "actual_network_probe_performed": false,
+    "root_removed": true
+  },
+  "native_raw_receipt": "app/.out-scripts/controller-exposure/601a98e4aba3ebe13e058407a9db82c4/result.json",
+  "source_sha256": {
+    "docs/contracts/product-exposure.ts": "4b6e3480a8766cfb6e7a674bb29ec8c941efbb9cf31b944f8b59e4ef4f564aca",
+    "app/src/main/controlPlane/controllerExposure.ts": "4c36957cc324c7e0322c0c59c54dd66ede3d50a522ca7b2f1d950519d350fefd",
+    "app/src/main/controlPlane/controllerExposureSchemas.ts": "e1ee655150ba9fdec4922d98575cdc38441f0243c595a3836ee02d72523bec35",
+    "app/src/main/controlPlane/controllerExposure.test.ts": "f59397b9d6f4c4e88d7e2e28619f860fd768ed97544d3f81c3800d8ef1c43889",
+    "app/src/main/controlPlane/controllerExposureApi.test.ts": "1dadcaa2c3eb8609d4bf21eddc9a135196d790677cc621a05a5391e7b5fb9955",
+    "app/scripts/controller-exposure-lab/run.mjs": "144f30078daca9bb97171ce44c4c878556942e5058cf562044e47c237bddff51",
+    "app/scripts/controller-exposure-lab/fixture.ts": "b001570316f2ac7a8afe3f53ccfd4c20f86e6ac47dc52430278cda4708994d87",
+    "app/scripts/controller-exposure-lab/entry.ts": "5fb161e01a031e7b81f4adad2bf6c2c53863f3e44ff1b1755f1a3c6cdea93d8d"
+  },
+  "vps_mutation": false,
+  "signed_h2_contract_change": false,
+  "schema_or_dependency_change": false,
+  "pending": [
+    "6h4b: Desktop Main safe public probe, typed client/IPC/UI, real isolated Electron/native-profile flow",
+    "6h4c: Trusted installed-controller upgrade/recovery and live new-API rollout"
+  ],
+  "accepted_exceptions": [],
+  "production_build": {
+    "exit_code": 0,
+    "log": "app/.out-scripts/r3c6h4a-build-accepted.log"
+  }
+}

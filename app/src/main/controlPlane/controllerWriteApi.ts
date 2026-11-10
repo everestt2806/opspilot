@@ -3,6 +3,7 @@ import { ControllerCommands } from './controllerCommands'
 import { ControllerClientAuthError } from './controllerClientAuth'
 import { readControllerRequestBody } from './controllerRequestBody'
 import type { ProductControllerApiMeta } from '../../../../docs/contracts/product-controller-api'
+import type { ControllerExposure } from './controllerExposure'
 
 type Respond = (response: ServerResponse, status: number, value: unknown) => void
 type Fail = (response: ServerResponse, error: unknown, requestId: string) => void
@@ -17,7 +18,8 @@ export class ControllerWriteApi {
     private readonly controllerId: string,
     private readonly respond: Respond,
     private readonly fail: Fail,
-    private readonly signal?: AbortSignal
+    private readonly signal?: AbortSignal,
+    private readonly exposure?: ControllerExposure
   ) {
     signal?.addEventListener('abort', this.onStop, { once: true })
     if (signal?.aborted) this.onStop()
@@ -31,7 +33,8 @@ export class ControllerWriteApi {
       parts[2] === 'controllers' &&
       parts[3] === this.controllerId &&
       parts[4] === 'apps' &&
-      ['redeploy', 'auto-deploy-policy'].includes(parts[6])
+      (['redeploy', 'auto-deploy-policy'].includes(parts[6]) ||
+        (parts[6] === 'exposure' && !!this.exposure))
     )
   }
   handle(request: IncomingMessage, response: ServerResponse, url: URL, requestId: string): void {
@@ -81,7 +84,9 @@ export class ControllerWriteApi {
       const result =
         parts[6] === 'redeploy'
           ? this.commands.redeploy(header, key, appId, body)
-          : this.commands.policy(header, key, appId, body)
+          : parts[6] === 'exposure'
+            ? this.exposure!.record(header, key, appId, body)
+            : this.commands.policy(header, key, appId, body)
       const meta: ProductControllerApiMeta = {
         controller_id: this.controllerId,
         request_id: requestId,

@@ -297,6 +297,8 @@ export const controllerErrorSchema = z.strictObject({
       'UNSUPPORTED',
       'CAPABILITY_BLOCKED',
       'RECONCILIATION_REQUIRED',
+      'EXPOSURE_CONTEXT_CHANGED',
+      'EXPOSURE_OBSERVATION_STALE',
       'RATE_LIMITED',
       'INTERNAL_ERROR'
     ] satisfies ProductApiErrorCode[]),
@@ -324,6 +326,8 @@ export const controllerErrorStatuses: Record<ProductApiErrorCode, readonly numbe
   NO_DESIRED_TARGET: [409],
   TARGET_SHA_UNAVAILABLE: [409],
   RECONCILIATION_REQUIRED: [409],
+  EXPOSURE_CONTEXT_CHANGED: [409],
+  EXPOSURE_OBSERVATION_STALE: [409],
   REQUEST_INVALID: [400, 413],
   RATE_LIMITED: [429],
   UNSUPPORTED: [501],

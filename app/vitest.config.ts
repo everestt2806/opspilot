@@ -13,7 +13,11 @@ export default defineConfig({
   },
   test: {
     // Node test runner kiểm chứng fixture riêng; không phải Vitest suite.
-    exclude: [...configDefaults.exclude, 'scripts/product-docker-lab/runner.test.mjs'],
+    exclude: [
+      ...configDefaults.exclude,
+      '.out-scripts/**',
+      'scripts/product-docker-lab/runner.test.mjs'
+    ],
     environment: 'node',
     setupFiles: ['./src/renderer/src/test/setupTests.ts'],
     testTimeout: 15000

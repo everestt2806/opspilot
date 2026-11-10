@@ -10,6 +10,7 @@
  * client/cache and must never fall back to its local deploy pipeline.
  */
 
+import type { ProductExposureView, ProductExposureObservationInput } from './product-exposure'
 import type {
   ProductAppId,
   ProductAttemptId,
@@ -265,6 +266,8 @@ export type ProductApiErrorCode =
   | 'UNSUPPORTED'
   | 'CAPABILITY_BLOCKED'
   | 'RECONCILIATION_REQUIRED'
+  | 'EXPOSURE_CONTEXT_CHANGED'
+  | 'EXPOSURE_OBSERVATION_STALE'
   | 'RATE_LIMITED'
   | 'INTERNAL_ERROR'
 
@@ -521,6 +524,8 @@ export interface ProductControllerApiRoutes {
   'GET /v1/controllers/{controller_id}/capabilities': { response: ProductControllerApiMeta & ProductControllerCapabilities }
   'GET /v1/controllers/{controller_id}/apps': { query: ProductControllerPageQuery; response: ProductControllerApiMeta & ProductControllerPage<ProductControllerAppSummary> }
   'GET /v1/controllers/{controller_id}/apps/{app_id}': { response: ProductControllerApiMeta & ProductControllerAppDetail }
+  'GET /v1/controllers/{controller_id}/apps/{app_id}/exposure': { response: ProductControllerApiMeta & ProductExposureView }
+  'POST /v1/controllers/{controller_id}/apps/{app_id}/exposure': { headers: ProductControllerWriteHeaders; body: ProductExposureObservationInput; response: ProductControllerApiMeta & ProductExposureView }
   'GET /v1/controllers/{controller_id}/apps/{app_id}/jobs': { query: ProductControllerPageQuery; response: ProductControllerApiMeta & ProductControllerPage<ProductControllerJobSummary> }
   'GET /v1/controllers/{controller_id}/apps/{app_id}/deployments': { query: ProductControllerPageQuery; response: ProductControllerApiMeta & ProductControllerPage<ProductControllerDeploymentSummary> }
   'GET /v1/controllers/{controller_id}/apps/{app_id}/history': { query: ProductControllerPageQuery; response: ProductControllerApiMeta & ProductControllerHistoryPage }
@@ -538,6 +543,8 @@ export interface ProductControllerApiRouteSecurity {
   'GET /v1/controllers/{controller_id}/capabilities': { authentication: 'bearer'; scope: 'read'; success_status: 200 }
   'GET /v1/controllers/{controller_id}/apps': { authentication: 'bearer'; scope: 'read'; success_status: 200 }
   'GET /v1/controllers/{controller_id}/apps/{app_id}': { authentication: 'bearer'; scope: 'read'; success_status: 200 }
+  'GET /v1/controllers/{controller_id}/apps/{app_id}/exposure': { authentication: 'bearer'; scope: 'read'; success_status: 200 }
+  'POST /v1/controllers/{controller_id}/apps/{app_id}/exposure': { authentication: 'bearer'; scope: 'policy:write'; success_status: 200 }
   'GET /v1/controllers/{controller_id}/apps/{app_id}/jobs': { authentication: 'bearer'; scope: 'read'; success_status: 200 }
   'GET /v1/controllers/{controller_id}/apps/{app_id}/deployments': { authentication: 'bearer'; scope: 'read'; success_status: 200 }
   'GET /v1/controllers/{controller_id}/apps/{app_id}/history': { authentication: 'bearer'; scope: 'read'; success_status: 200 }
@@ -557,6 +564,10 @@ type ProductControllerRoutesHaveSecurity = ProductControllerAssert<
 export type ProductControllerApiRouteSecurityParity = ProductControllerRoutesHaveSecurity
 
 /**
+ * Command routes only. Exposure observations use the latest-observation CAS
+ * and read-current recovery defined in product-exposure.ts; they do not create
+ * command-request tombstones or use GET /requests/{request_key}.
+ *
  * Idempotency-Key is a UUID created by the main process. Its unique lookup
  * namespace is (controller_id, authenticated_client_id, request_key). Resource/
  * app, action and RFC 8785 canonical-body SHA-256 are immutable values on that

@@ -19,6 +19,7 @@ import type { ControllerReadCursor } from './controllerReadCursor'
 import type { ControllerCommands } from './controllerCommands'
 import { ControllerWriteApi } from './controllerWriteApi'
 import { ControllerRequestBodyError } from './controllerRequestBody'
+import { ControllerExposure } from './controllerExposure'
 
 export interface ControllerReadApiState {
   service_state: 'ready' | 'degraded' | 'maintenance'
@@ -29,6 +30,7 @@ export interface ControllerReadApiState {
 export class ControllerReadApi {
   private readonly auth: ControllerClientAuth
   private readonly model: ControllerReadModel
+  private readonly exposure: ControllerExposure
   private rateWindow = 0
   private rateCount = 0
   private readonly writes: ControllerWriteApi | null
@@ -44,13 +46,19 @@ export class ControllerReadApi {
   ) {
     this.auth = new ControllerClientAuth(database, controllerId, `unix:${process.getuid?.() ?? 0}`)
     this.model = new ControllerReadModel(database, controllerId, cursors)
+    this.exposure = new ControllerExposure(
+      database,
+      controllerId,
+      () => this.state().service_state === 'ready'
+    )
     this.writes = options
       ? new ControllerWriteApi(
           options.commands,
           controllerId,
           (response, status, value) => this.send(response, status, value),
           (response, error, requestId) => this.failure(response, error, requestId),
-          options.signal
+          options.signal,
+          this.exposure
         )
       : null
   }
@@ -103,7 +111,7 @@ export class ControllerReadApi {
           request.method === 'POST' && parts[4] === 'apps'
             ? parts[6] === 'redeploy'
               ? 'deploy:manual'
-              : parts[6] === 'auto-deploy-policy'
+              : parts[6] === 'auto-deploy-policy' || parts[6] === 'exposure'
                 ? 'policy:write'
                 : 'read'
             : 'read'
@@ -176,6 +184,10 @@ export class ControllerReadApi {
             if (url.search) throw new ControllerClientAuthError('REQUEST_INVALID')
             return { ...meta, ...this.model.app(id, sampled) }
           }
+          if (parts.length === 7 && parts[6] === 'exposure') {
+            if (url.search) throw new ControllerClientAuthError('REQUEST_INVALID')
+            return { ...meta, ...this.exposure.read(request.headers.authorization, id) }
+          }
           if (parts.length === 7 && ['jobs', 'deployments', 'history'].includes(parts[6]))
             return {
               ...meta,
@@ -226,7 +238,9 @@ export class ControllerReadApi {
                         'IDEMPOTENCY_CONFLICT',
                         'NO_DESIRED_TARGET',
                         'TARGET_SHA_UNAVAILABLE',
-                        'RECONCILIATION_REQUIRED'
+                        'RECONCILIATION_REQUIRED',
+                        'EXPOSURE_CONTEXT_CHANGED',
+                        'EXPOSURE_OBSERVATION_STALE'
                       ].includes(code)
                     ? 409
                     : code === 'UNSUPPORTED'

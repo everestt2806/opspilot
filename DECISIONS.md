@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-10 | [product-mode/exposure] R3c-6h4 tách independent Desktop network observation khỏi signed H2v1 terminal; canonical controller ghi hậu kiểm qua authenticated bounded exposure API với current deployment/source/target/settlement fences và previous-observation CAS — Existing exposure columns giữ scope/time/client metadata, stale không hiện reachable; policy:write mới được ghi, read chỉ đọc; không nhận URL/body từ renderer, không SQL-writer fallback hoặc thay installed pins ngầm — Sơn/Codex
+
 2026-11-10 | [product-mode/onboarding] R3c-6h2c gắn protected release catalog vào Main lúc build và derive fixed extraResources paths; existing passive verifier hỗ trợ Windows, Linux receiver giữ nguyên owner/mode policy — Build-time generated binary resources không Git, NSIS packaging gate phải có nonempty valid catalog; renderer chỉ chọn release/VPS ID, không nhận pin/path/UID. Settings dùng durable install journal và explicit recovery/rebind/register trước API access — Sơn/Codex
 
 2026-11-10 | [product-mode/onboarding] Wizard prepare-installed-binding reuse cùng installation UUID/authority trong IMMEDIATE vault transaction trước remote enrollment; mất response prepare không tạo client/token UUID mới — Chỉ onboarding dùng reuse flag, legacy/manual nhiều binding giữ nguyên; khác tên/scope hoặc nhiều pending candidates phải review, không silently upgrade quyền. Metadata connection thêm optional public installation reference, không thêm schema/table — Sơn/Codex
