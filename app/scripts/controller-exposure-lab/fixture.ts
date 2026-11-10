@@ -8,7 +8,8 @@ import { hashH2, signH2 } from '../../src/main/controlPlane/productH2Proof'
 /** Private test/lab DB only. Real H2 repository finalizes and settles synthetic runtime evidence. */
 export function seedExposureFixture(
   db: Database.Database,
-  now: number
+  now: number,
+  targetHost = '203.0.113.10'
 ): { controllerId: string; settle: () => void } {
   const controllerId = 'exposure-fixture',
     time = new Date(now).toISOString(),
@@ -46,6 +47,7 @@ export function seedExposureFixture(
     `INSERT INTO product_deploy_attempt(attempt_id,job_id,attempt_number,lease_id,fencing_token,build_slot_lease_id,build_slot_fence,state,deployment_id,remote_outcome,started_at)
     VALUES('fixture-attempt','fixture-job',1,'fixture-lease',1,'fixture-slot',1,'deploying',1,'unknown',?)`
   ).run(time)
+  db.prepare('UPDATE vps SET host=? WHERE id=1').run(targetHost)
   const claim: ProductClaimToken = {
     controller_id: controllerId,
     app_id: 1,

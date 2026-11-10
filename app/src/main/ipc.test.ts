@@ -106,6 +106,8 @@ describe('metadata-only controller IPC composition', () => {
       'controller:commands',
       'controller:disconnect',
       'controller:enroll-project-target',
+      'controller:exposure-check',
+      'controller:exposure-read',
       'controller:inspect-installation',
       'controller:installer-overview',
       'controller:list',

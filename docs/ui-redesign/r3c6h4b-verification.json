@@ -1,0 +1,165 @@
+{
+  "checkpoint": "R3c-6h4b",
+  "date": "2026-11-10",
+  "status": "DESKTOP_FEATURE_SCOPE_PASS",
+  "review": "PENDING",
+  "base_commit": "48103cc4c4aca5f4821f5e0e92c01825da722686",
+  "scope": "Production feature component, typed IPC, Main service/client/probe and private authenticated HTTP/SQLite, with real public HTTP requests to the demo VPS",
+  "limits": [
+    "SSH transport is replaced by a loopback TCP adapter in both labs",
+    "Controller runtime/deployment evidence is synthetic in private SQLite; no live installed-controller DB write",
+    "Full live onboarding/reconnect/first deployment/new API persistence require the trusted upgrade checkpoint6h4c"
+  ],
+  "full_tests": {
+    "numTotalTests": 2138,
+    "numPassedTests": 2136,
+    "numFailedTests": 0,
+    "numPendingTests": 2,
+    "success": true
+  },
+  "full_test_files": {
+    "total": 158,
+    "passed": 157,
+    "skipped": 1
+  },
+  "focused_files_covered_in_final_full_run": 10,
+  "focused_assertions_in_final_full_run": 180,
+  "skip_reason": "Two existing Linux-only Caddy tests on Windows; no new skips or timeout relaxation",
+  "typescript_projects": [
+    {
+      "exit_code": 0,
+      "project": "tsconfig.node.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "tsconfig.web.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "tsconfig.scripts.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "scripts/product-runtime-lab/tsconfig.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "scripts/controller-release-lab/tsconfig.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "scripts/controller-service-lab/tsconfig.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "scripts/controller-bootstrap-lab/tsconfig.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "scripts/controller-exposure-lab/tsconfig.json"
+    }
+  ],
+  "eslint": {
+    "exit_code": 0,
+    "files": 21
+  },
+  "production_build": {
+    "exit_code": 0
+  },
+  "canonical_shared_ast_parity": {
+    "status": "PASS",
+    "pairs": [
+      [
+        "docs/contracts/product-exposure.ts",
+        "app/src/shared/productExposure.ts"
+      ],
+      [
+        "docs/contracts/desktop-controller-exposure.ts",
+        "app/src/shared/desktopControllerExposure.ts"
+      ]
+    ]
+  },
+  "native": {
+    "status": "PASS",
+    "scope": "NATIVE_LINUX_MAIN_PUBLIC_PROBE_HTTP_SQLITE_SYNTHETIC_RUNTIME",
+    "checks": [
+      "cold_native_profile_encrypted_vault_resolves_same_binding",
+      "native_h2_settlement_and_authorized_context",
+      "lost_http_reply_lookup_current_observation_without_retry_write",
+      "same_key_idempotence_and_previous_observation_cas",
+      "current_target_change_fences_read_and_write",
+      "no_h2_runtime_policy_or_deployment_mutation",
+      "independent_public_http_probe_real_main_persist_and_lost_reply_read_current",
+      "public_result_readback_without_h2_runtime_mutation"
+    ],
+    "actual_network_probe_performed": true,
+    "root_removed": true
+  },
+  "electron": {
+    "status": "PASS",
+    "scope": "REAL_ELECTRON_TYPED_IPC_MAIN_PUBLIC_HTTP_PRIVATE_SQLITE_SYNTHETIC_RUNTIME",
+    "checks": [
+      "real_electron_native_sqlite_cold_private_profile_vault",
+      "real_renderer_typed_ipc_main_public_probe_authenticated_sqlite_persistence",
+      "four_locales_two_themes_and_two_window_sizes_without_horizontal_overflow",
+      "unknown_write_explicit_read_without_second_post",
+      "unsupported_no_legacy_fallback_no_runtime_h2_or_command_mutation"
+    ],
+    "screenshots": [
+      "exposure-vi-dark-1280x800.png",
+      "exposure-vi-light-1280x800.png",
+      "exposure-en-dark-1280x800.png",
+      "exposure-en-light-1280x800.png",
+      "exposure-cn-dark-1280x800.png",
+      "exposure-cn-light-1280x800.png",
+      "exposure-jp-dark-1280x800.png",
+      "exposure-jp-light-1280x800.png",
+      "exposure-vi-dark-1366x768.png",
+      "exposure-vi-light-1366x768.png",
+      "exposure-unknown-1280x800.png",
+      "exposure-unsupported-1280x800.png"
+    ],
+    "production_profile_used": false,
+    "actual_ssh_transport": false,
+    "actual_network_probe_performed": true,
+    "private_db_removed": true,
+    "stage": "initial_check_readback",
+    "renderer_errors": [],
+    "ipc_call_count": 5
+  },
+  "screenshots_sha256": {
+    "exposure-vi-dark-1280x800.png": "87c16565256f6c87b30be98fd034ee964a96aaadb20634062cdbd4bb97c66045",
+    "exposure-vi-light-1280x800.png": "3e556115586aad110e1b86ef20130f8093c75a002c38d8bd8eaca9a7df0514fc",
+    "exposure-en-dark-1280x800.png": "1f3b70d27bbcec7202dc5536ebb6d67504c9959670e2d850dd917bd6cfd2662e",
+    "exposure-en-light-1280x800.png": "5e52dcb04df4c4e0deeefdfad004949cafa4a626bff6236f7f66854e5e29d80d",
+    "exposure-cn-dark-1280x800.png": "191fc05c0cc07e1212e41918cf817771b25388fa6fd0d5c3b58b77607da935f1",
+    "exposure-cn-light-1280x800.png": "cc023236180d93889a7f8061d995a301662b74be911110cf07fcea25c68fb572",
+    "exposure-jp-dark-1280x800.png": "798637859b31b8701d882b4006a1900c82ae5b1e664a325ee2c853b66698d7de",
+    "exposure-jp-light-1280x800.png": "8ded805bf42264c9bec5cf466bfc33450286ff6c1fb61a838eb674cdee3f5e2c",
+    "exposure-vi-dark-1366x768.png": "932d5a6a5dcac77842d5a7d61ad7e9a2a5e0e2c6cc15b47ca2812058cbffa448",
+    "exposure-vi-light-1366x768.png": "3fb04557f6c9cb51edd2ebab19e81f74f33f6ea0b4ae392a120cddbee2c20eec",
+    "exposure-unknown-1280x800.png": "413ca6a229ebf3f4542b819f811d3569bdfb6da0f3699c4e64ca3075c9641c11",
+    "exposure-unsupported-1280x800.png": "5cec8c1cd8aae909f6e713b7c1a2a3ca843b8b031098bddc026b0d8cfe7690c5"
+  },
+  "source_sha256": {
+    "app/src/main/controlPlane/desktopExposure.ts": "161fd2933a6fed8971ab412c0d331f01dbd4ecbbae67fce9bc6f39eaa84d9b38",
+    "app/src/main/controlPlane/desktopExposureProbe.ts": "9a97f074aa3dfed63196b18dc5f6912a2e536383dac705fafafac5982210e696",
+    "app/src/main/controlPlane/controllerHttpClient.ts": "256f501cedddc3086d28645d67a9085533b90bf172fca61468d40b47adadf0b9",
+    "app/src/main/controlPlane/controllerExposureSchemas.ts": "70b39df831c8e6521d642be980d79e2daaa4656dc0f4edfa7009b91c2616f08a",
+    "app/src/main/controlPlane/desktopControllerService.ts": "0f6388561099df31fff695a93bb911314c3a1ba73c3f1e87024fc01753616d63",
+    "app/src/main/ipc.ts": "d3401f55cde9bc36e89f1daff5f66b186f59ab139970ff3d040271382682b7a3",
+    "app/src/shared/ipc.ts": "f5cb23d04e5df39633c3581257c7f4db92646bd928687ba71be1102295bba572",
+    "app/src/shared/productExposure.ts": "7de2c02944f05da11768a0f1ae587c9b0e47e3e858cc7592a5ae9ac39fd5c894",
+    "app/src/shared/desktopControllerExposure.ts": "4426d32e06f8cdf30da1b2d94284cde0d705df080bab581e1d1e66f9c892fa08",
+    "docs/contracts/desktop-controller-exposure.ts": "7c7f82288720a1d8975fe3fc3442c821b073cb4246b5e8c25a0479ce605c6e4d",
+    "app/src/renderer/src/components/ControllerExposurePanel.tsx": "d313a93f14390751672deb093114c40e17b07955fc6250c15b034a3badb227a3",
+    "app/src/renderer/src/components/controllerExposureCopy.ts": "17f158325863627baf40d54331eac0ad5bd01687c54c2cea638e7cc07ffdfed4",
+    "app/src/renderer/src/components/ControllerCommandPanel.tsx": "7ab6ab6164864df5ac94bebcf8f5c98997f4254ea7afcd57c92a36d077368ad5",
+    "app/scripts/controller-exposure-lab/electron.mjs": "e7a6ca1be978218648cf555d657a2f98eaaf5132df452e9140760e3a9fdbf951",
+    "app/scripts/controller-exposure-lab/run.mjs": "72f46a0823b227aa742dcbc4f6e1a1b4554da9ac4e9e225e7c82cb9ea50d7441"
+  },
+  "live_vps_mutation": false,
+  "schema_or_dependency_change": false,
+  "signed_h2_receipt_change": false,
+  "accepted_exceptions": []
+}

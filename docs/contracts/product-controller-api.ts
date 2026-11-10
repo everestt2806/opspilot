@@ -300,7 +300,8 @@ export type ProductControllerCallResult<T> =
       state: 'outcome_unknown'
       idempotency_key: ProductApiIdempotencyKey
       may_have_been_accepted: true
-      next_step: 'query_same_request_key'
+      /** Commands use request lookup; observations use read-current only. */
+      next_step: 'query_same_request_key' | 'read_current_exposure'
     }
 
 export interface ProductControllerApiMeta {

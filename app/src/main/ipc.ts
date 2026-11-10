@@ -204,6 +204,8 @@ export function registerIpcHandlers(
     handle('controller:disconnect', (bindingId) => desktopControllerService.disconnect(bindingId))
     handle('controller:apps', (input) => desktopControllerService.apps(input))
     handle('controller:app-status', (input) => desktopControllerService.appStatus(input))
+    handle('controller:exposure-read', (input) => desktopControllerService.exposure(input))
+    handle('controller:exposure-check', (input) => desktopControllerService.exposure(input, true))
     handle('controller:prepare-command', (input) => desktopControllerService.prepareCommand(input))
     handle('controller:send-command', (key) => desktopControllerService.sendCommand(key))
     handle('controller:check-command', (key) => desktopControllerService.checkCommand(key))

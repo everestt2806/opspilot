@@ -119,6 +119,67 @@ afterEach(async () => {
   )
 })
 describe('Bounded main-process controller HTTP client', () => {
+  it('reads exposure over the fixed app route and rejects nested authority mismatch', async () => {
+    const view = {
+      ...meta(),
+      app_id: 1,
+      deployment_id: 2,
+      context: {
+        app_id: 1,
+        deployment_id: 2,
+        authority_sha256: 'a'.repeat(64),
+        previous_observation_id: null,
+        url: 'http://167.71.202.116:30000'
+      },
+      observation: null,
+      status: 'not_checked',
+      freshness: 'not_checked',
+      unavailable_reason: null
+    }
+    handler = (req, res) => {
+      expect(req.method).toBe('GET')
+      expect(req.url).toBe('/v1/controllers/controller-a/apps/1/exposure')
+      send(res, view)
+    }
+    expect((await client.call('exposure', { app_id: 1 })).state).toBe('response_received')
+    view.context.app_id = 7
+    await expect(client.call('exposure', { app_id: 1 })).rejects.toMatchObject({
+      code: 'PROTOCOL_INVALID'
+    })
+  })
+  it('uses read-current recovery for an unknown exposure POST and never retries it', async () => {
+    const key = randomUUID()
+    handler = (req, res) => {
+      expect(req.method).toBe('POST')
+      expect(req.url).toBe('/v1/controllers/controller-a/apps/1/exposure')
+      expect(req.headers['idempotency-key']).toBe(key)
+      req.resume()
+      res.destroy()
+    }
+    expect(
+      await client.call('observeExposure', {
+        app_id: 1,
+        request_key: key,
+        body: {
+          deployment_id: 2,
+          authority_sha256: 'a'.repeat(64),
+          previous_observation_id: null,
+          observer: 'desktop_external',
+          started_at: new Date().toISOString(),
+          checked_at: new Date().toISOString(),
+          outcome: 'reachable',
+          http_status: 200,
+          reason: 'none'
+        }
+      })
+    ).toEqual({
+      state: 'outcome_unknown',
+      idempotency_key: key,
+      may_have_been_accepted: true,
+      next_step: 'read_current_exposure'
+    })
+    expect(received).toBe(1)
+  })
   it('keeps runtime limits equal to contract and only sends a bearer over the pinned channel', async () => {
     expect(CONTROLLER_HTTP_LIMITS).toEqual({
       timeout: PRODUCT_CONTROLLER_CLIENT_TIMEOUT_MS,

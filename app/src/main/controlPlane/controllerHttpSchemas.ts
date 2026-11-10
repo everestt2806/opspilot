@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { exposureViewSchema } from './controllerExposureSchemas'
 import type {
   ProductApiErrorCode,
   ProductControllerApiMeta
@@ -167,6 +168,8 @@ const url = z
     )
   })
 export const controllerResponseSchemas = {
+  exposure: exposureViewSchema.safeExtend(meta),
+  observeExposure: exposureViewSchema.safeExtend(meta),
   identity: z.strictObject({
     ...meta,
     api_version: z.literal('v1'),

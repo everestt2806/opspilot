@@ -48,34 +48,78 @@ export const exposureContextSchema = z.strictObject({
   previous_observation_id: uuid.nullable(),
   url: z.string().min(1).max(512)
 }) satisfies z.ZodType<ProductExposureContext>
-export const exposureObservationSchema = z.strictObject({
-  ...exposureInputSchema.shape,
-  format: z.literal(1),
-  observation_id: uuid,
-  client_id: uuid,
-  body_sha256: sha,
-  app_id: positive,
-  url: z.string().min(1).max(512),
-  status,
-  received_at: z.iso.datetime()
-}) satisfies z.ZodType<ProductExposureObservation>
-export const exposureViewSchema = z.strictObject({
-  app_id: positive,
-  deployment_id: positive.nullable(),
-  context: exposureContextSchema.nullable(),
-  status,
-  freshness: z.enum(['current', 'stale', 'not_checked']),
-  unavailable_reason: z
-    .enum([
-      'no_running_deployment',
-      'runtime_unsettled',
-      'authority_changed',
-      'execution_active',
-      'invalid_target'
-    ])
-    .nullable(),
-  observation: exposureObservationSchema.nullable()
-}) satisfies z.ZodType<ProductExposureView>
+export const exposureObservationSchema = z
+  .strictObject({
+    ...exposureInputSchema.shape,
+    format: z.literal(1),
+    observation_id: uuid,
+    client_id: uuid,
+    body_sha256: sha,
+    app_id: positive,
+    url: z.string().min(1).max(512),
+    status,
+    received_at: z.iso.datetime()
+  })
+  .refine((o) => {
+    const body = Object.fromEntries(
+      Object.keys(exposureInputSchema.shape).map((key) => [key, o[key as keyof typeof o]])
+    )
+    return (
+      exposureInputSchema.safeParse(body).success &&
+      Date.parse(o.checked_at) >= Date.parse(o.started_at) &&
+      o.status ===
+        (o.outcome === 'reachable'
+          ? 'reachable'
+          : o.outcome === 'unreachable'
+            ? 'degraded'
+            : 'not_checked')
+    )
+  }) satisfies z.ZodType<ProductExposureObservation>
+export const exposureViewSchema = z
+  .strictObject({
+    app_id: positive,
+    deployment_id: positive.nullable(),
+    context: exposureContextSchema.nullable(),
+    status,
+    freshness: z.enum(['current', 'stale', 'not_checked']),
+    unavailable_reason: z
+      .enum([
+        'no_running_deployment',
+        'runtime_unsettled',
+        'authority_changed',
+        'execution_active',
+        'invalid_target'
+      ])
+      .nullable(),
+    observation: exposureObservationSchema.nullable()
+  })
+  .refine((v) => {
+    if (!v.context)
+      return v.observation === null && v.status === 'not_checked' && v.freshness === 'not_checked'
+    if (
+      v.context.app_id !== v.app_id ||
+      v.context.deployment_id !== v.deployment_id ||
+      v.unavailable_reason !== null
+    )
+      return false
+    const o = v.observation
+    if (!o)
+      return (
+        v.context.previous_observation_id === null &&
+        v.status === 'not_checked' &&
+        v.freshness === 'not_checked'
+      )
+    return (
+      o.app_id === v.app_id &&
+      o.deployment_id === v.deployment_id &&
+      o.authority_sha256 === v.context.authority_sha256 &&
+      o.url === v.context.url &&
+      v.context.previous_observation_id === o.observation_id &&
+      (v.freshness === 'current'
+        ? v.status === o.status
+        : v.freshness === 'stale' && v.status === 'not_checked')
+    )
+  }) satisfies z.ZodType<ProductExposureView>
 
 export const EXPOSURE_OBSERVATION_MAX_AGE_MS = 30_000
 export const EXPOSURE_DISPLAY_TTL_MS = 60_000

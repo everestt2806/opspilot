@@ -2,6 +2,12 @@ import { Agent, request as httpRequest, type ClientRequest } from 'node:http'
 import type { Socket } from 'node:net'
 import { TextDecoder } from 'node:util'
 import { z } from 'zod'
+import type {
+  ProductExposureView,
+  ProductExposureObservationInput
+} from '../../../../docs/contracts/product-exposure'
+import { exposureInputSchema } from './controllerExposureSchemas'
+import { hashH2 } from './productH2Proof'
 import type { ClientChannel } from 'ssh2'
 import type { SshManager, SshVerifiedConnectionIdentity } from '../ssh/manager'
 import type {
@@ -64,6 +70,11 @@ export class ControllerHttpClientError extends Error {
 class RemoteRejection extends ControllerHttpClientError {}
 type WithMeta<T> = ProductControllerApiMeta & T
 interface Operations {
+  exposure: { input: { app_id: number }; response: WithMeta<ProductExposureView> }
+  observeExposure: {
+    input: { app_id: number; request_key: string; body: ProductExposureObservationInput }
+    response: WithMeta<ProductExposureView>
+  }
   identity: { input: Record<string, never>; response: WithMeta<ProductControllerIdentity> }
   status: { input: Record<string, never>; response: WithMeta<ProductControllerStatus> }
   capabilities: { input: Record<string, never>; response: WithMeta<ProductControllerCapabilities> }
@@ -112,6 +123,12 @@ const bindingSchema = z.strictObject({
   accessToken: z.string().regex(/^opspilot_[A-Za-z0-9_-]{43}$/)
 })
 const inputs = {
+  exposure: z.strictObject({ app_id: positive }),
+  observeExposure: z.strictObject({
+    app_id: positive,
+    request_key: requestKeySchema,
+    body: exposureInputSchema
+  }),
   identity: z.strictObject({}),
   status: z.strictObject({}),
   capabilities: z.strictObject({}),
@@ -168,7 +185,7 @@ export class ControllerHttpClient {
       throw new ControllerHttpClientError('REQUEST_INVALID')
     if (options.signal?.aborted) throw new ControllerHttpClientError('REQUEST_ABORTED')
     const value = parsed.data,
-      write = operation === 'redeploy' || operation === 'policy',
+      write = operation === 'redeploy' || operation === 'policy' || operation === 'observeExposure',
       key = 'request_key' in value ? value.request_key : undefined,
       payload = 'body' in value ? JSON.stringify(value.body) : undefined
     if (payload && Buffer.byteLength(payload) > CONTROLLER_HTTP_LIMITS.request)
@@ -236,7 +253,7 @@ export class ControllerHttpClient {
           `${prefix}/apps/${value.app_id}` +
           (operation === 'app'
             ? ''
-            : `/${operation === 'policy' ? 'auto-deploy-policy' : operation}`)
+            : `/${operation === 'policy' ? 'auto-deploy-policy' : operation === 'observeExposure' ? 'exposure' : operation}`)
       if ('query' in value && value.query) {
         const query = new URLSearchParams()
         if (value.query.limit !== undefined) query.set('limit', String(value.query.limit))
@@ -348,6 +365,24 @@ export class ControllerHttpClient {
       if (!dto.success || dto.data.controller_id !== pinned.controllerId)
         throw new ControllerHttpClientError('PROTOCOL_INVALID')
       const response = dto.data
+      if (operation === 'observeExposure' && 'observation' in response) {
+        const expected = inputs.observeExposure.parse(input),
+          observation = response.observation
+        if (
+          !observation ||
+          observation.observation_id !== expected.request_key ||
+          observation.body_sha256 !== hashH2(expected.body) ||
+          hashH2(
+            Object.fromEntries(
+              Object.keys(exposureInputSchema.shape).map((key) => [
+                key,
+                observation[key as keyof typeof observation]
+              ])
+            )
+          ) !== observation.body_sha256
+        )
+          throw new ControllerHttpClientError('PROTOCOL_INVALID')
+      }
       if (
         'app_id' in value &&
         (('app_id' in response && response.app_id !== value.app_id) ||
@@ -402,7 +437,8 @@ export class ControllerHttpClient {
           state: 'outcome_unknown',
           idempotency_key: key!,
           may_have_been_accepted: true,
-          next_step: 'query_same_request_key'
+          next_step:
+            operation === 'observeExposure' ? 'read_current_exposure' : 'query_same_request_key'
         }
       if (error instanceof ControllerHttpClientError) throw error
       throw new ControllerHttpClientError('TRANSPORT_UNAVAILABLE')

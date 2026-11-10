@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict'
 import { randomBytes, randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
+import { connect } from 'node:net'
+import { once } from 'node:events'
 import { createRequire, Module } from 'node:module'
 import {
   lstatSync,
@@ -54,8 +56,10 @@ await esbuild.build({
   ]
 })
 const code = require(bundle),
-  db = code.initializeDatabase(join(root, 'db'))
-const seeded = code.seedExposureFixture(db, Date.now())
+  desktopMode = process.argv.includes('--desktop-public-probe'),
+  profileKey = randomBytes(32)
+let db = code.initializeDatabase(join(root, 'db'))
+const seeded = code.seedExposureFixture(db, Date.now(), desktopMode ? '167.71.202.116' : undefined)
 seeded.settle()
 const auth = new code.ControllerClientAuth(db, seeded.controllerId, `unix:${process.getuid()}`)
 const grant = auth.enroll({
@@ -64,6 +68,37 @@ const grant = auth.enroll({
   requested_scopes: ['read', 'policy:write']
 })
 assert.equal(grant.state, 'issued_once')
+let vault, bindingId
+if (desktopMode) {
+  bindingId = randomUUID()
+  vault = new code.DesktopControllerVault(db, new code.AesGcmCredentialCipher(profileKey))
+  vault.prepare({
+    binding_id: bindingId,
+    controller_id: seeded.controllerId,
+    vps_id: 1,
+    ssh_security_revision: 1,
+    principal: {
+      vpsId: 1,
+      host: '167.71.202.116',
+      port: 22,
+      hostFingerprint: 'SHA256:' + 'A'.repeat(43),
+      username: 'ops',
+      authType: 'key'
+    },
+    artifact_path: '/opt/opspilot/payload/control-plane.cjs',
+    data_directory: '/var/lib/opspilot',
+    node_path: '/opt/opspilot/node',
+    manifest_sha256: 'a'.repeat(64),
+    display_name: 'Private exposure lab',
+    requested_scopes: ['read', 'policy:write']
+  })
+  vault.activate(bindingId, 1, grant)
+  code.closeDatabase()
+  db = code.initializeDatabase(join(root, 'db'))
+  vault = new code.DesktopControllerVault(db, new code.AesGcmCredentialCipher(profileKey))
+  assert.equal(vault.resolve(bindingId).accessToken, grant.credential.access_token)
+  checks.push('cold_native_profile_encrypted_vault_resolves_same_binding')
+}
 const header = { authorization: `Bearer ${grant.credential.access_token}` }
 const api = new code.ControllerReadApi(
   db,
@@ -79,7 +114,9 @@ const api = new code.ControllerReadApi(
 let drop = false,
   result = {
     status: 'FAIL',
-    scope: 'NATIVE_LINUX_AUTHENTICATED_HTTP_SQLITE_SYNTHETIC_RUNTIME',
+    scope: desktopMode
+      ? 'NATIVE_LINUX_MAIN_PUBLIC_PROBE_HTTP_SQLITE_SYNTHETIC_RUNTIME'
+      : 'NATIVE_LINUX_AUTHENTICATED_HTTP_SQLITE_SYNTHETIC_RUNTIME',
     checks,
     actual_network_probe_performed: false,
     root_removed: false
@@ -115,7 +152,10 @@ const post = (body, key) =>
 try {
   const initial = await read()
   assert.equal(initial.status, 'not_checked')
-  assert.equal(initial.context.url, 'http://203.0.113.10:30000')
+  assert.equal(
+    initial.context.url,
+    desktopMode ? 'http://167.71.202.116:30000' : 'http://203.0.113.10:30000'
+  )
   checks.push('native_h2_settlement_and_authorized_context')
   const { deployment_id, authority_sha256, previous_observation_id } = initial.context
   const body = {
@@ -148,9 +188,35 @@ try {
   assert.equal(db.prepare('SELECT status FROM deployment').get().status, 'running')
   assert.equal(db.prepare('SELECT count(*) n FROM product_deploy_job').get().n, 1)
   checks.push('no_h2_runtime_policy_or_deployment_mutation')
+  if (desktopMode) {
+    db.exec('UPDATE vps SET ssh_security_revision=1')
+    const principal = vault.resolve(bindingId).principal
+    const service = new code.DesktopExposure(vault, {
+      async openControllerApiChannel() {
+        // Authenticated HTTP is real; this adapter substitutes the SSH transport only.
+        const channel = connect({ host: '127.0.0.1', port: address.port })
+        await once(channel, 'connect')
+        return { channel, identity: principal }
+      }
+    })
+    drop = true
+    const observed = await service.run({ binding_id: bindingId, app_id: 1 }, true)
+    assert.equal(observed.state, 'recorded')
+    assert.equal(observed.view.status, 'reachable')
+    assert.equal(observed.view.observation.http_status, 200)
+    assert.equal(observed.view.observation.url, 'http://167.71.202.116:30000')
+    result.actual_network_probe_performed = true
+    checks.push('independent_public_http_probe_real_main_persist_and_lost_reply_read_current')
+    const stored = await service.run({ binding_id: bindingId, app_id: 1 }, false)
+    assert.equal(stored.view.observation.observation_id, observed.view.observation.observation_id)
+    assert.deepEqual(db.prepare('SELECT * FROM product_runtime_terminal').all(), terminal)
+    checks.push('public_result_readback_without_h2_runtime_mutation')
+  }
   result.status = 'PASS'
-} catch {
+} catch (error) {
   result.error = 'EXPOSURE_LAB_CHECK_FAILED'
+  result.failure_location =
+    /run\.mjs:\d+:\d+/.exec(error instanceof Error ? (error.stack ?? '') : '')?.[0] ?? 'unknown'
   process.exitCode = 1
 } finally {
   await api.close()

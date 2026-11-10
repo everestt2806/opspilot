@@ -1,4 +1,6 @@
 import { DesktopTargetSetups, DesktopTargetSetupError } from './desktopTargetSetup'
+import { DesktopExposure } from './desktopExposure'
+import type { DesktopExposureInput, DesktopExposureResult } from '@shared/desktopControllerExposure'
 import type {
   DesktopTargetPrepareInput,
   DesktopTargetSendInput,
@@ -518,6 +520,11 @@ export class DesktopControllerService {
         data_freshness: value.data_freshness
       }
     })
+  }
+  async exposure(input: DesktopExposureInput, check = false): Promise<DesktopExposureResult> {
+    return this.safe(() =>
+      new DesktopExposure(this.vault, this.ssh, this.clientFactory).run(input, check)
+    )
   }
   private connection(bindingId: string): DesktopControllerConnection {
     const row = this.vault.get(bindingId)

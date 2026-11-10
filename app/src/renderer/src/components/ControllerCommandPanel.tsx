@@ -23,6 +23,7 @@ import type {
 } from '@shared/desktopControllerCommands'
 import { useUiState } from '../store/uiState'
 import { CONTROLLER_COMMAND_COPY } from './controllerCommandCopy'
+import { ControllerExposurePanel } from './ControllerExposurePanel'
 
 export function ControllerCommandPanel({
   binding,
@@ -396,6 +397,21 @@ export function ControllerCommandPanel({
             />
           )}
         </section>
+      )}
+      {appId !== null && status && !statusLoading && (
+        <ControllerExposurePanel
+          key={`${binding.binding_id}:${binding.revision}:${appId}:${status.current_deployment_id}:${status.ownership_generation}:${status.source_generation}`}
+          binding={binding}
+          appId={appId}
+          currentDeploymentId={status.current_deployment_id}
+          fresh={
+            fresh &&
+            statusFresh &&
+            status.app_id === app?.app_id &&
+            status.ownership_generation === app.ownership_generation &&
+            status.source_generation === app.source_generation
+          }
+        />
       )}
       <Space style={{ marginTop: 16 }}>
         <Typography.Text strong>{t.journal}</Typography.Text>

@@ -1,3 +1,4 @@
+import type { DesktopExposureInput, DesktopExposureResult } from './desktop-controller-exposure'
 import type {DesktopTargetPrepareInput,DesktopTargetSendInput,DesktopTargetSetup} from './desktop-target-registration';
 import type { ControllerInstallerOverview, ControllerInstallerReview, ControllerInstallerSendInput, ControllerInstalledRegisterInput, ControllerInstalledPrepareInput } from './desktop-controller-installer';
 import type { DesktopInstallation } from './desktop-controller-installation';
@@ -382,6 +383,8 @@ export interface IpcInvokeMap {
   'controller:disconnect': (bindingId: string) => IpcResult<DesktopControllerConnection>;
   'controller:apps': (input: DesktopControllerPageInput) => IpcResult<DesktopControllerSnapshot>;
   'controller:app-status': (input: { binding_id: string; app_id: number }) => IpcResult<DesktopControllerAppStatus>;
+  'controller:exposure-read': (input: DesktopExposureInput) => IpcResult<DesktopExposureResult>;
+  'controller:exposure-check': (input: DesktopExposureInput) => IpcResult<DesktopExposureResult>;
   'controller:prepare-command': (input: DesktopControllerCommandInput) => IpcResult<DesktopControllerCommand>;
   'controller:send-command': (key: string) => IpcResult<DesktopControllerCommand>;
   'controller:check-command': (key: string) => IpcResult<DesktopControllerCommand>;
