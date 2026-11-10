@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6h3 10/11:** [Live Product Git](tasks/tk-s7-release-r3c6h3-live-git.md) chứng minh first deployment và auto Git khi Electron đóng trên VPS mới; bad healthcheck rollback và next healthy commit phục hồi, HTTP200/fullSHA/1job-per-SHA/DB pointer khớp. Live12checks/164focused tests, trusted CLI continuation với server first-deploy precondition; không thay live GUI/installer gate. Product exposure DB vẫn not_checked, chưa HTTPS/zero-downtime/reboot/soak/ML; không tăng FR/UC thành hoàn thiện chỉ vì demo này đạt.
+
 > **R3c-6h2c 10/11:** [Controller onboarding trong Settings](tasks/tk-s7-release-r3c6h2c-install-wizard.md) thêm packaged resources/typedIPC/4locale wizard có consent và unknown recovery; giữ canonical SQLite029. Full2047PASS/2Linux-onlySKIP/0FAIL, Electron19checks/18ảnh và live development VPS10checks xác minh Windows→SSH→non-root systemd→authenticated loopback API. Đây là setup controller, chưa phải bằng chứng project deploy hay hoàn thiện FR/UC. Tiếp live Git/target/readiness/firstdeploy/Desktop-off, upgrade/rotation/reboot/soak và release distribution.
 
 > **R3c-6h2b3 09/11:** [Installed admin authority](tasks/tk-s7-release-r3c6h2b3-installed-admin.md) thêm root→service UID management và installation-bound Desktop token; giữ canonical SQLite/schema029 và legacy binding, không nới same-UID verifier. Đây là backend setup, không tăng FR/UC thành hoàn thiện hoặc chứng minh deployment mới. Tiếp Settings wizard/distribution/live/reboot/soak; assigned VPS TCP chưa dùng được, không kết luận hết hạn.

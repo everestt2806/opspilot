@@ -1,0 +1,613 @@
+{
+  "checkpoint": "R3c-6h3",
+  "date": "2026-11-10",
+  "base_commit": "a7703d63f0ce3ec902ed453633024d139106917a",
+  "scope": "LIVE_DEVELOPMENT_CONTROLLER_GIT_DEPLOYMENT_AND_RECOVERY",
+  "url": "http://167.71.202.116:30000/",
+  "initial_registration_attempt": {
+    "status": "FAIL",
+    "installation": {
+      "request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+      "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+      "runtime_uid": 997
+    },
+    "target_registration": {
+      "request_key": "273bdb6f-2073-4628-bb2d-b9d3bd98386c",
+      "remote_vps_id": 1,
+      "state": "registered"
+    },
+    "project": {
+      "app_id": 1,
+      "request_key": "b6d0767f-7c2c-40be-a2c7-dd30415d983f",
+      "repository_url": "https://github.com/everestt2806/opspilot.git",
+      "production_ref": "demo/r3c6h3-20261110",
+      "repository_root": "demo-apps/san-nha-booking",
+      "host_port": 30000
+    },
+    "error": "VALIDATION",
+    "failure_snapshot": {
+      "active_experiments": 0,
+      "app_count": 1,
+      "apps": [
+        {
+          "id": 1,
+          "name": "san-nha-live",
+          "current_deployment_id": null
+        }
+      ],
+      "deployments": [],
+      "jobs": [],
+      "desired": [
+        {
+          "desired_sha": "f40d0962288a13e432bb1ae61e8353747690a004",
+          "reconciliation_state": "paused",
+          "auto_paused": 1
+        }
+      ]
+    },
+    "local_db_removed": true
+  },
+  "initial_failure_cause": "UNKNOWN: original operational CLI masked the stable cause as VALIDATION; explicit diagnostic and continuation verified source successfully.",
+  "accepted_live_result": {
+    "status": "PASS",
+    "checks": [
+      "existing_controller_adopted_without_reinstall",
+      "no_active_experiment_and_no_existing_app",
+      "docker_and_compose_prepared",
+      "installed_write_binding_with_explicit_consent",
+      "explicit_recovery_of_known_unstarted_demo_without_new_project",
+      "product_git_project_registered_paused",
+      "full_sha_source_and_target_hmac_enrollment",
+      "reviewed_first_deployment_queued_by_product_api",
+      "systemd_product_pipeline_first_deploy_and_external_http",
+      "desktop_disconnected_auto_push_success_and_failure_preservation",
+      "demo_auto_deploy_paused_after_gate",
+      "temporary_write_client_revoked"
+    ],
+    "remote_mutation_attempted": false,
+    "controller_retained": true,
+    "demo_application_retained": true,
+    "auto_gate": [
+      {
+        "expected": {
+          "sha": "62274b32756fcf29a80c15b0b703342b45a246c6",
+          "marker": "demo-v2",
+          "outcome": "running",
+          "final": false
+        },
+        "state": {
+          "active_experiments": 0,
+          "app_count": 1,
+          "apps": [
+            {
+              "id": 1,
+              "name": "san-nha-live",
+              "current_deployment_id": 2
+            }
+          ],
+          "deployments": [
+            {
+              "id": 1,
+              "version": 1,
+              "status": "stopped",
+              "git_commit_sha": "f40d0962288a13e432bb1ae61e8353747690a004",
+              "exposure_status": "not_checked"
+            },
+            {
+              "id": 2,
+              "version": 2,
+              "status": "running",
+              "git_commit_sha": "62274b32756fcf29a80c15b0b703342b45a246c6",
+              "exposure_status": "not_checked"
+            }
+          ],
+          "jobs": [
+            {
+              "job_id": "pjob_63487a72-13b8-4a9c-be03-33c11a605baf",
+              "state": "succeeded",
+              "target_sha": "f40d0962288a13e432bb1ae61e8353747690a004",
+              "trigger": "manual_redeploy",
+              "safe_error_code": null
+            },
+            {
+              "job_id": "pjob_edefcb41-f0b5-489a-b2b7-cef5b61e657a",
+              "state": "succeeded",
+              "target_sha": "62274b32756fcf29a80c15b0b703342b45a246c6",
+              "trigger": "branch_poll",
+              "safe_error_code": null
+            }
+          ],
+          "desired": [
+            {
+              "desired_sha": "62274b32756fcf29a80c15b0b703342b45a246c6",
+              "reconciliation_state": "satisfied",
+              "auto_paused": 0
+            }
+          ]
+        },
+        "public_http": {
+          "health": {
+            "status": 200,
+            "body": "{\"status\":\"ok\",\"service\":\"san-nha-booking\"}"
+          },
+          "marker": {
+            "status": 200,
+            "body": "demo-v2\n"
+          }
+        }
+      },
+      {
+        "expected": {
+          "sha": "ef66b80042cef6f02cae1b3bc747975e87764827",
+          "marker": "demo-v2",
+          "outcome": "rolled_back",
+          "final": false
+        },
+        "state": {
+          "active_experiments": 0,
+          "app_count": 1,
+          "apps": [
+            {
+              "id": 1,
+              "name": "san-nha-live",
+              "current_deployment_id": 2
+            }
+          ],
+          "deployments": [
+            {
+              "id": 1,
+              "version": 1,
+              "status": "stopped",
+              "git_commit_sha": "f40d0962288a13e432bb1ae61e8353747690a004",
+              "exposure_status": "not_checked"
+            },
+            {
+              "id": 2,
+              "version": 2,
+              "status": "running",
+              "git_commit_sha": "62274b32756fcf29a80c15b0b703342b45a246c6",
+              "exposure_status": "not_checked"
+            },
+            {
+              "id": 3,
+              "version": 3,
+              "status": "rolled_back",
+              "git_commit_sha": "ef66b80042cef6f02cae1b3bc747975e87764827",
+              "exposure_status": "not_checked"
+            }
+          ],
+          "jobs": [
+            {
+              "job_id": "pjob_63487a72-13b8-4a9c-be03-33c11a605baf",
+              "state": "succeeded",
+              "target_sha": "f40d0962288a13e432bb1ae61e8353747690a004",
+              "trigger": "manual_redeploy",
+              "safe_error_code": null
+            },
+            {
+              "job_id": "pjob_edefcb41-f0b5-489a-b2b7-cef5b61e657a",
+              "state": "succeeded",
+              "target_sha": "62274b32756fcf29a80c15b0b703342b45a246c6",
+              "trigger": "branch_poll",
+              "safe_error_code": null
+            },
+            {
+              "job_id": "pjob_76d2a41c-b545-41e4-aec3-8267c37bf4dc",
+              "state": "rolled_back",
+              "target_sha": "ef66b80042cef6f02cae1b3bc747975e87764827",
+              "trigger": "branch_poll",
+              "safe_error_code": null
+            }
+          ],
+          "desired": [
+            {
+              "desired_sha": "ef66b80042cef6f02cae1b3bc747975e87764827",
+              "reconciliation_state": "failed",
+              "auto_paused": 0
+            }
+          ]
+        },
+        "public_http": {
+          "health": {
+            "status": 200,
+            "body": "{\"status\":\"ok\",\"service\":\"san-nha-booking\"}"
+          },
+          "marker": {
+            "status": 200,
+            "body": "demo-v2\n"
+          }
+        }
+      },
+      {
+        "expected": {
+          "sha": "bfed8941e2a719b04fa960142b7c3df0eed66b57",
+          "marker": "demo-v3",
+          "outcome": "running",
+          "final": true
+        },
+        "state": {
+          "active_experiments": 0,
+          "app_count": 1,
+          "apps": [
+            {
+              "id": 1,
+              "name": "san-nha-live",
+              "current_deployment_id": 4
+            }
+          ],
+          "deployments": [
+            {
+              "id": 1,
+              "version": 1,
+              "status": "stopped",
+              "git_commit_sha": "f40d0962288a13e432bb1ae61e8353747690a004",
+              "exposure_status": "not_checked"
+            },
+            {
+              "id": 2,
+              "version": 2,
+              "status": "stopped",
+              "git_commit_sha": "62274b32756fcf29a80c15b0b703342b45a246c6",
+              "exposure_status": "not_checked"
+            },
+            {
+              "id": 3,
+              "version": 3,
+              "status": "rolled_back",
+              "git_commit_sha": "ef66b80042cef6f02cae1b3bc747975e87764827",
+              "exposure_status": "not_checked"
+            },
+            {
+              "id": 4,
+              "version": 4,
+              "status": "running",
+              "git_commit_sha": "bfed8941e2a719b04fa960142b7c3df0eed66b57",
+              "exposure_status": "not_checked"
+            }
+          ],
+          "jobs": [
+            {
+              "job_id": "pjob_63487a72-13b8-4a9c-be03-33c11a605baf",
+              "state": "succeeded",
+              "target_sha": "f40d0962288a13e432bb1ae61e8353747690a004",
+              "trigger": "manual_redeploy",
+              "safe_error_code": null
+            },
+            {
+              "job_id": "pjob_edefcb41-f0b5-489a-b2b7-cef5b61e657a",
+              "state": "succeeded",
+              "target_sha": "62274b32756fcf29a80c15b0b703342b45a246c6",
+              "trigger": "branch_poll",
+              "safe_error_code": null
+            },
+            {
+              "job_id": "pjob_76d2a41c-b545-41e4-aec3-8267c37bf4dc",
+              "state": "rolled_back",
+              "target_sha": "ef66b80042cef6f02cae1b3bc747975e87764827",
+              "trigger": "branch_poll",
+              "safe_error_code": null
+            },
+            {
+              "job_id": "pjob_84bb687b-af35-41c8-a346-1a31d93c734b",
+              "state": "succeeded",
+              "target_sha": "bfed8941e2a719b04fa960142b7c3df0eed66b57",
+              "trigger": "branch_poll",
+              "safe_error_code": null
+            }
+          ],
+          "desired": [
+            {
+              "desired_sha": "bfed8941e2a719b04fa960142b7c3df0eed66b57",
+              "reconciliation_state": "satisfied",
+              "auto_paused": 0
+            }
+          ]
+        },
+        "public_http": {
+          "health": {
+            "status": 200,
+            "body": "{\"status\":\"ok\",\"service\":\"san-nha-booking\"}"
+          },
+          "marker": {
+            "status": 200,
+            "body": "demo-v3\n"
+          }
+        }
+      }
+    ],
+    "local_db_removed": true,
+    "installation": {
+      "request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+      "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+      "runtime_uid": 997
+    },
+    "before": {
+      "active_experiments": 0,
+      "app_count": 1,
+      "apps": [
+        {
+          "id": 1,
+          "name": "san-nha-live",
+          "current_deployment_id": null
+        }
+      ],
+      "deployments": [],
+      "jobs": [],
+      "desired": []
+    },
+    "docker": {
+      "version": "29.9.3, build 5457199",
+      "compose": "5.7.0"
+    },
+    "resumed_from": "2a89f9478a899c2e",
+    "project": {
+      "app_id": 1,
+      "request_key": "b6d0767f-7c2c-40be-a2c7-dd30415d983f",
+      "repository_url": "https://github.com/everestt2806/opspilot.git",
+      "production_ref": "demo/r3c6h3-20261110",
+      "repository_root": "demo-apps/san-nha-booking",
+      "host_port": 30000
+    },
+    "source": {
+      "state": "source_verified",
+      "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+      "app_id": 1,
+      "ownership_generation": 1,
+      "source_generation": 1,
+      "source_config_sha256": "e9158778b15223d62923327139d203ed27af582d6bcb18ef0d4dac94be6307cc",
+      "target_vps_id": 1,
+      "target_security_revision": 1,
+      "repository_url": "https://github.com/everestt2806/opspilot.git",
+      "production_ref": "demo/r3c6h3-20261110",
+      "repository_root": "demo-apps/san-nha-booking",
+      "commit_sha": "f40d0962288a13e432bb1ae61e8353747690a004",
+      "observation_sequence": 1,
+      "framework": "express",
+      "configured_container_port": 3000,
+      "detected_container_port": 3000,
+      "source_file_count": 13,
+      "source_bytes": 66462,
+      "auto_deploy_paused": true,
+      "deployment_started": false,
+      "runtime_preflight": "required",
+      "verified_at": "2026-11-10T07:57:35.711Z"
+    },
+    "readiness": {
+      "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+      "app_id": 1,
+      "ownership_generation": 1,
+      "source_generation": 1,
+      "source_config_sha256": "e9158778b15223d62923327139d203ed27af582d6bcb18ef0d4dac94be6307cc",
+      "target_vps_id": 1,
+      "target_security_revision": 1,
+      "repository_url": "https://github.com/everestt2806/opspilot.git",
+      "production_ref": "demo/r3c6h3-20261110",
+      "repository_root": "demo-apps/san-nha-booking",
+      "host_port": 30000,
+      "commit_sha": "f40d0962288a13e432bb1ae61e8353747690a004",
+      "state": "ready",
+      "checks": [
+        {
+          "key": "first_deployment",
+          "state": "passed"
+        },
+        {
+          "key": "controller_resources",
+          "state": "passed"
+        },
+        {
+          "key": "target_enrollment",
+          "state": "passed"
+        },
+        {
+          "key": "source",
+          "state": "passed"
+        },
+        {
+          "key": "target_resources",
+          "state": "passed"
+        }
+      ],
+      "reasons": [],
+      "controller_resources": {
+        "cpu_count": 2,
+        "available_ram_bytes": 3317624832,
+        "workspace_available_bytes": 79200440320
+      },
+      "target_resources": {
+        "cpu_count": 2,
+        "available_ram_bytes": 3351678976,
+        "workspace_available_bytes": 79200448512,
+        "docker_ready": true,
+        "port_ready": true
+      },
+      "auto_deploy_paused": true,
+      "deployment_started": false,
+      "checked_at": "2026-11-10T07:57:51.920Z"
+    },
+    "first_deploy_entry": "TRUSTED_CLI_WITH_SERVER_ATOMIC_PRECONDITION",
+    "first_deployment": {
+      "active_experiments": 0,
+      "app_count": 1,
+      "apps": [
+        {
+          "id": 1,
+          "name": "san-nha-live",
+          "current_deployment_id": 1
+        }
+      ],
+      "deployments": [
+        {
+          "id": 1,
+          "version": 1,
+          "status": "running",
+          "git_commit_sha": "f40d0962288a13e432bb1ae61e8353747690a004",
+          "exposure_status": "not_checked"
+        }
+      ],
+      "jobs": [
+        {
+          "job_id": "pjob_63487a72-13b8-4a9c-be03-33c11a605baf",
+          "state": "succeeded",
+          "target_sha": "f40d0962288a13e432bb1ae61e8353747690a004",
+          "trigger": "manual_redeploy",
+          "safe_error_code": null
+        }
+      ],
+      "desired": [
+        {
+          "desired_sha": "f40d0962288a13e432bb1ae61e8353747690a004",
+          "reconciliation_state": "paused",
+          "auto_paused": 1
+        }
+      ]
+    },
+    "public_http": {
+      "health": {
+        "status": 200,
+        "body": "{\"status\":\"ok\",\"service\":\"san-nha-booking\"}"
+      },
+      "marker": {
+        "status": 200,
+        "body": "demo-v1\n"
+      }
+    },
+    "desktop_executor_used": false
+  },
+  "accepted_live_raw_sha256": "dd37f9877c40d089527b5bd17cd19693981d9e29b57dc36f72180696e8ecd7b3",
+  "raw_check_label_note": "The accepted continuation has one known unstarted app, as before.app_count=1 proves. The no_existing_app check label was corrected afterwards; no raw evidence was rewritten.",
+  "final_readonly_state": {
+    "active_experiments": 0,
+    "app_count": 1,
+    "active_desktop_clients": 0,
+    "apps": [
+      {
+        "id": 1,
+        "name": "san-nha-live",
+        "current_deployment_id": 4
+      }
+    ],
+    "deployments": [
+      {
+        "id": 1,
+        "version": 1,
+        "status": "stopped",
+        "git_commit_sha": "f40d0962288a13e432bb1ae61e8353747690a004",
+        "exposure_status": "not_checked"
+      },
+      {
+        "id": 2,
+        "version": 2,
+        "status": "stopped",
+        "git_commit_sha": "62274b32756fcf29a80c15b0b703342b45a246c6",
+        "exposure_status": "not_checked"
+      },
+      {
+        "id": 3,
+        "version": 3,
+        "status": "rolled_back",
+        "git_commit_sha": "ef66b80042cef6f02cae1b3bc747975e87764827",
+        "exposure_status": "not_checked"
+      },
+      {
+        "id": 4,
+        "version": 4,
+        "status": "running",
+        "git_commit_sha": "bfed8941e2a719b04fa960142b7c3df0eed66b57",
+        "exposure_status": "not_checked"
+      }
+    ],
+    "jobs": [
+      {
+        "job_id": "pjob_63487a72-13b8-4a9c-be03-33c11a605baf",
+        "state": "succeeded",
+        "target_sha": "f40d0962288a13e432bb1ae61e8353747690a004",
+        "trigger": "manual_redeploy",
+        "safe_error_code": null
+      },
+      {
+        "job_id": "pjob_edefcb41-f0b5-489a-b2b7-cef5b61e657a",
+        "state": "succeeded",
+        "target_sha": "62274b32756fcf29a80c15b0b703342b45a246c6",
+        "trigger": "branch_poll",
+        "safe_error_code": null
+      },
+      {
+        "job_id": "pjob_76d2a41c-b545-41e4-aec3-8267c37bf4dc",
+        "state": "rolled_back",
+        "target_sha": "ef66b80042cef6f02cae1b3bc747975e87764827",
+        "trigger": "branch_poll",
+        "safe_error_code": null
+      },
+      {
+        "job_id": "pjob_84bb687b-af35-41c8-a346-1a31d93c734b",
+        "state": "succeeded",
+        "target_sha": "bfed8941e2a719b04fa960142b7c3df0eed66b57",
+        "trigger": "branch_poll",
+        "safe_error_code": null
+      }
+    ],
+    "desired": [
+      {
+        "desired_sha": "bfed8941e2a719b04fa960142b7c3df0eed66b57",
+        "reconciliation_state": "paused",
+        "auto_paused": 1
+      }
+    ]
+  },
+  "public_web": {
+    "status": "PASS",
+    "scope": "ACTUAL_DEVELOPMENT_VPS_PUBLIC_WEB",
+    "facts": {
+      "title": "Sân Nhà — Hẹn nhau ra sân",
+      "text": "S/N\nSân Nhà\nLịch sân\nVề sân\nMở cửa mỗi ngày · 17:00–23:00\n\nSÂN CỎ NHÂN TẠO · ĐẶT LỊCH TRỰC TUYẾN\n\nHẹn nhau\nra sân.\n\nChọn một khung giờ vừa ý, rủ đủ người rồi tới chơi. Lịch trống được cập nhật ngay khi có người giữ sân.\n\nXem lịch còn trống\n↗\n01 / 02\nMỘT BUỔI CHIỀU ĐÚNG HẸN\n\nCHỌN NGÀY VÀ GIỜ\n\nLịch sâ",
+      "horizontal": false,
+      "slots": 1
+    },
+    "screenshot": "screenshots/r3c6h3/san-nha-public-vps-1280x800.png"
+  },
+  "focused_tests": {
+    "files": 10,
+    "passed": 164,
+    "failed": 0,
+    "raw_log": "app/.out-scripts/r3c6h3-focused.log"
+  },
+  "cli_negative_checks": {
+    "status": "PASS",
+    "checks": [
+      {
+        "args": [
+          "--confirm-development-git-deploy",
+          "--unexpected"
+        ],
+        "exit_code": 1,
+        "rejected_before_stdin_or_ssh": true
+      },
+      {
+        "args": [
+          "--confirm-development-git-deploy",
+          "--continue-record",
+          "../escape"
+        ],
+        "exit_code": 1,
+        "rejected_before_stdin_or_ssh": true
+      }
+    ]
+  },
+  "limits": {
+    "desktop_gui_live_first_deploy_verified": false,
+    "product_exposure_persisted": false,
+    "https_verified": false,
+    "reboot_soak_verified": false,
+    "ml_experiment_executed": false,
+    "zero_downtime_measured": false,
+    "full_app_suite_rerun_for_this_operational_checkpoint": false
+  },
+  "retained": {
+    "controller_running": true,
+    "healthy_demo_running": true,
+    "auto_deploy_paused_after_gate": true,
+    "temporary_clients_revoked": true,
+    "official_experiment_data_modified": false
+  }
+}

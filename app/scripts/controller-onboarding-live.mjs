@@ -188,7 +188,7 @@ try {
   checks.push('authenticated_ssh_loopback_api_read')
   evidence.status = 'PASS'
 } catch (error) {
-  const code = error?.cause?.message ?? error?.code ?? ''
+  const code = error?.context?.cause?.message ?? error?.cause?.message ?? error?.code ?? ''
   evidence.status = 'FAIL'
   evidence.error = /^[A-Z][A-Z0-9_]{1,100}$/.test(code) ? code : 'LIVE_ONBOARDING_CHECK_FAILED'
   process.exitCode = 1
