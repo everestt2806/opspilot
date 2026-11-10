@@ -67,3 +67,6 @@ desktop.ini
 .claude/
 .clinerules
 .clinerules/
+
+# Generated Linux controller runtime; pins are baked into Main during the trusted build.
+app/resources/controller-releases/

@@ -13,6 +13,14 @@ import type {
 } from '@shared/desktopFirstDeployment'
 import type Database from 'better-sqlite3'
 import { z } from 'zod'
+import { randomUUID } from 'node:crypto'
+import type { ControllerInstallerResources } from './controllerInstallerCatalog'
+import type {
+  ControllerInstallerOverview,
+  ControllerInstallerReview,
+  ControllerInstallerSendInput,
+  ControllerInstalledPrepareInput
+} from '@shared/controllerInstaller'
 import type {
   DesktopControllerRegisterInput,
   DesktopControllerConnection,
@@ -70,6 +78,12 @@ const registerSchema = z.strictObject({
   display_name: z.string().min(1).max(128),
   allow_write: z.boolean().optional()
 })
+const installedRegisterSchema = z.strictObject({
+  installation_request_key: z.uuidv4(),
+  binding_id: z.uuidv4(),
+  display_name: z.string().min(1).max(128),
+  allow_write: z.boolean().optional()
+})
 const pageSchema = z.strictObject({
   binding_id: z.uuid(),
   cursor: z
@@ -92,7 +106,8 @@ export class DesktopControllerService {
     cipher: AesGcmCredentialCipher,
     private readonly ssh: SshManager,
     private readonly clientFactory?: (bindingId: string) => Pick<ControllerHttpClient, 'call'>,
-    installationCatalog: readonly DesktopControllerRelease[] = []
+    installationCatalog: readonly DesktopControllerRelease[] = [],
+    private readonly installerResources?: ControllerInstallerResources
   ) {
     this.installations = new DesktopControllerInstallations(db, ssh, installationCatalog)
     this.vault = new DesktopControllerVault(db, cipher)
@@ -116,6 +131,73 @@ export class DesktopControllerService {
   }
   async planInstallation(vpsId: number, releaseId: string): Promise<DesktopInstallationPlan> {
     return this.safe(() => this.installations.plan(vpsId, releaseId))
+  }
+  async installerOverview(): Promise<ControllerInstallerOverview> {
+    return this.safe(() => ({
+      releases: this.installerResources?.list() ?? [],
+      installations: this.installations.list(),
+      connections: this.vault.list().map((v) => this.connection(v.binding_id))
+    }))
+  }
+  async reviewInstaller(input: {
+    vps_id: number
+    release_id: string
+  }): Promise<ControllerInstallerReview> {
+    return this.safe(() => {
+      const value = z
+        .strictObject({
+          vps_id: z.number().int().positive(),
+          release_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/)
+        })
+        .parse(input)
+      if (!this.installerResources) throw new DesktopInstallationError('INSTALL_CATALOG_UNKNOWN')
+      this.installerResources.verify(value.release_id)
+      return this.installations.preflight(value.vps_id, value.release_id)
+    })
+  }
+  async prepareInstaller(input: { plan_id: string }): Promise<DesktopInstallation> {
+    return this.safe(() =>
+      this.installations.prepare(z.strictObject({ plan_id: z.uuidv4() }).parse(input).plan_id)
+    )
+  }
+  async sendInstaller(input: ControllerInstallerSendInput): Promise<DesktopInstallation> {
+    return this.safe(() => {
+      const value = z
+        .strictObject({
+          request_key: z.uuidv4(),
+          operation: z.enum(['transfer', 'install', 'recover']),
+          consent: z.literal(true)
+        })
+        .parse(input)
+      return this.installations.send(value.request_key, value.operation, value.consent)
+    })
+  }
+  async rebindInstaller(input: {
+    plan_id: string
+    request_key: string
+    confirm: true
+  }): Promise<DesktopInstallation> {
+    return this.safe(() => {
+      const value = z
+        .strictObject({ plan_id: z.uuidv4(), request_key: z.uuidv4(), confirm: z.literal(true) })
+        .parse(input)
+      return this.installations.rebind(value.plan_id, value.request_key, value.confirm)
+    })
+  }
+  async prepareInstalledRegistration(
+    input: ControllerInstalledPrepareInput
+  ): Promise<DesktopControllerConnection> {
+    return this.safe(() => {
+      const value = installedRegisterSchema.omit({ binding_id: true }).parse(input)
+      const intent = this.installations.bindingIntent(
+        value.installation_request_key,
+        randomUUID(),
+        value.display_name,
+        value.allow_write
+      )
+      const prepared = this.vault.prepare(intent, { reuseInstalled: true })
+      return this.connection(prepared.binding_id)
+    })
   }
   async prepareInstallation(planId: string): Promise<DesktopInstallation> {
     return this.safe(() => this.installations.prepare(planId))
@@ -277,14 +359,7 @@ export class DesktopControllerService {
     allow_write?: boolean
   }): Promise<DesktopControllerConnection> {
     return this.safe(async () => {
-      const value = z
-        .strictObject({
-          installation_request_key: z.uuidv4(),
-          binding_id: z.uuidv4(),
-          display_name: z.string().min(1).max(128),
-          allow_write: z.boolean().optional()
-        })
-        .parse(input)
+      const value = installedRegisterSchema.parse(input)
       const intent = this.installations.bindingIntent(
         value.installation_request_key,
         value.binding_id,
@@ -451,8 +526,23 @@ export class DesktopControllerService {
       .prepare('SELECT intent_json FROM desktop_controller_binding WHERE binding_id=?')
       .get(bindingId) as { intent_json: string }
     const name: unknown = JSON.parse(stored.intent_json).display_name
+    const installation: unknown = JSON.parse(stored.intent_json).installation
     if (typeof name !== 'string') throw new DesktopControllerVaultError('BINDING_UNAVAILABLE')
     return {
+      ...(installation
+        ? {
+            installation: z
+              .strictObject({
+                request_key: z.uuidv4(),
+                authority_revision: z.number().int().positive()
+              })
+              .parse({
+                request_key: (installation as { request_key: string }).request_key,
+                authority_revision: (installation as { authority_revision: number })
+                  .authority_revision
+              })
+          }
+        : {}),
       binding_id: row.binding_id,
       controller_id: row.controller_id,
       vps_id: row.vps_id,

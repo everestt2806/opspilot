@@ -9,6 +9,10 @@ import icon from '../../resources/icon.png?asset'
 import { createCredentialCipher } from './crypto/masterKey'
 import { loadSecret } from './crypto/credentials'
 import { DesktopControllerService } from './controlPlane/desktopControllerService'
+import {
+  builtinControllerInstallerCatalog,
+  ControllerInstallerResources
+} from './controlPlane/controllerInstallerCatalog'
 import { closeDatabase, initializeDatabase } from './db'
 import { AppRepository } from './db/appRepository'
 import { ActionLogRepository } from './db/actionLogRepository'
@@ -148,6 +152,13 @@ void app
       policy: { certificateEnvironment: 'production', stagingLabHostnames: [] }
     })
 
+    const installerResources = new ControllerInstallerResources(
+      builtinControllerInstallerCatalog(),
+      join(
+        app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources'),
+        'controller-releases'
+      )
+    )
     registerIpcHandlers(
       mlService,
       vpsService,
@@ -158,7 +169,14 @@ void app
       monitorService,
       migrateService,
       sharedIngressService,
-      new DesktopControllerService(database, credentialCipher, sshManager)
+      new DesktopControllerService(
+        database,
+        credentialCipher,
+        sshManager,
+        undefined,
+        installerResources.entries(),
+        installerResources
+      )
     )
     if (process.env.OPSPILOT_R3D_SOURCE_PROFILE) {
       try {

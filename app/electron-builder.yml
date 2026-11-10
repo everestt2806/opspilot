@@ -9,6 +9,10 @@ files:
 asarUnpack:
   - '**/node_modules/better-sqlite3/**'
 extraResources:
+  - from: resources/controller-releases
+    to: controller-releases
+    filter:
+      - '**/*'
   - from: src/main/controlPlane
     to: product-target
     filter:
@@ -33,6 +37,7 @@ extraResources:
       - '!**/__pycache__/**'
       - '!**/.pytest_cache/**'
 npmRebuild: false
+beforePack: ./scripts/controller-installer-before-pack.cjs
 win:
   icon: resources/icon.png
   target:

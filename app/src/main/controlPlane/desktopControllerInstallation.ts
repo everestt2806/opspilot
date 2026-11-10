@@ -19,6 +19,9 @@ import {
 } from './controllerSshBootstrap'
 import { controllerVpsEnrollmentSchema } from './controllerEnrollment'
 import { canonicalH2Json } from './productH2Proof'
+import { probeControllerHost, evaluateControllerHost } from './controllerHostPreflight'
+import { verifyControllerRelease } from './controllerRelease'
+import type { ControllerInstallerReview } from '../../../../docs/contracts/desktop-controller-installer'
 
 const session = randomUUID()
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
@@ -84,6 +87,7 @@ type Transport = {
   transfer: typeof transferControllerRelease
 }
 export type DesktopInstallationOptions = {
+  hostProbe?: typeof probeControllerHost
   /** Internal executable composition/test seams. Never accept these through IPC. */
   transport?: Transport
   bootstrapScript?: { text: string; sha256: string }
@@ -145,6 +149,48 @@ export class DesktopControllerInstallations {
     }
   }
 
+  async preflight(vpsId: number, releaseId: string): Promise<ControllerInstallerReview> {
+    const local = this.local(vpsId),
+      release = this.catalog.find((v) => v.release_id === releaseId)
+    if (!release) throw new DesktopInstallationError('INSTALL_CATALOG_UNKNOWN')
+    const manifest = verifyControllerRelease(release.release_directory, release.release_sha256)
+    let host = await (this.options.hostProbe ?? probeControllerHost)({
+      ssh: this.ssh,
+      vpsId,
+      expectedIdentity: local.principal,
+      release: manifest
+    })
+    this.assertLocal(local)
+    if (host.facts.uid !== 0) return { plan: null, host, next: 'blocked', root_required: true }
+    let plan: DesktopInstallationPlan
+    try {
+      plan = await this.plan(vpsId, releaseId)
+    } catch (error) {
+      this.assertLocal(local)
+      if (error instanceof ControllerBootstrapError && error.code === 'BOOTSTRAP_CONFLICT')
+        return { plan: null, host, next: 'blocked', root_required: false }
+      throw error
+    }
+    this.assertLocal(local)
+    if (plan.release_id !== releaseId) {
+      const current = this.catalog.find((v) => v.release_id === plan.release_id)!
+      host = evaluateControllerHost(
+        host.facts,
+        verifyControllerRelease(current.release_directory, current.release_sha256)
+      )
+    }
+    const platformOk = !host.reasons.some(
+      (v) => v === 'PLATFORM' || v === 'LIBC' || v === 'SYSTEMD'
+    )
+    const next =
+      plan.remote_existing && platformOk
+        ? 'inspect_existing'
+        : host.state === 'compatible_snapshot'
+          ? 'install'
+          : 'blocked'
+    if (next === 'blocked') this.plans.delete(plan.plan_id)
+    return { plan: next === 'blocked' ? null : plan, host, root_required: false, next }
+  }
   async plan(vpsId: number, releaseId: string): Promise<DesktopInstallationPlan> {
     const local = this.local(vpsId)
     let release = this.catalog.find((v) => v.release_id === releaseId)

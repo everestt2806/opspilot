@@ -13,6 +13,7 @@ export interface DesktopControllerRegisterInput {
   allow_write?: boolean
 }
 export interface DesktopControllerConnection {
+  installation?: { request_key: string; authority_revision: number }
   binding_id: string
   controller_id: string
   vps_id: number

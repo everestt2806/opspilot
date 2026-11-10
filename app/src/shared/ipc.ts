@@ -1,4 +1,5 @@
 import type {DesktopTargetPrepareInput,DesktopTargetSendInput,DesktopTargetSetup} from './desktopTargetRegistration';
+import type { ControllerInstallerOverview, ControllerInstallerReview, ControllerInstallerSendInput, ControllerInstalledRegisterInput, ControllerInstalledPrepareInput, DesktopInstallation } from './controllerInstaller';
 import type { DesktopProjectReadiness, DesktopFirstDeploymentInput, DesktopFirstDeploymentPlan, DesktopFirstDeploymentSendInput } from './desktopFirstDeployment';
 import type { DesktopProjectSetupInput, DesktopProjectSetup, DesktopProjectTargets, DesktopProjectSourceVerification, DesktopProjectTargetInput, DesktopProjectTargetState } from './desktopProjectRegistration';
 import type { DesktopControllerCommand, DesktopControllerCommandInput } from './desktopControllerCommands';
@@ -367,6 +368,15 @@ export interface DomainIngressActionInput extends DomainIngressStatusInput {
 
 export interface IpcInvokeMap {
   'controller:list': () => IpcResult<DesktopControllerConnection[]>;
+  'controller:installer-overview': () => IpcResult<ControllerInstallerOverview>;
+  'controller:review-installation': (input: { vps_id: number; release_id: string }) => IpcResult<ControllerInstallerReview>;
+  'controller:prepare-installation': (input: { plan_id: string }) => IpcResult<DesktopInstallation>;
+  'controller:send-installation': (input: ControllerInstallerSendInput) => IpcResult<DesktopInstallation>;
+  'controller:inspect-installation': (key: string) => IpcResult<DesktopInstallation>;
+  'controller:rebind-installation': (input: { plan_id: string; request_key: string; confirm: true }) => IpcResult<DesktopInstallation>;
+  'controller:cancel-installation': (key: string) => IpcResult<DesktopInstallation>;
+  'controller:prepare-installed-binding': (input: ControllerInstalledPrepareInput) => IpcResult<DesktopControllerConnection>;
+  'controller:register-installed': (input: ControllerInstalledRegisterInput) => IpcResult<DesktopControllerConnection>;
   'controller:register': (input: DesktopControllerRegisterInput) => IpcResult<DesktopControllerConnection>;
   'controller:retry-enrollment': (bindingId: string) => IpcResult<DesktopControllerConnection>;
   'controller:revoke': (bindingId: string) => IpcResult<DesktopControllerConnection>;

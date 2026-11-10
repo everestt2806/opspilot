@@ -36,7 +36,7 @@ import type { SharedIngressServiceResult } from './domain/ingress/sharedIngressS
 import type { DesktopControllerService } from './controlPlane/desktopControllerService'
 
 describe('metadata-only controller IPC composition', () => {
-  it('registers seventeen concrete channels and preserves safe metadata/error DTOs', async () => {
+  it('registers concrete controller channels and preserves safe metadata/error DTOs', async () => {
     handleMock.mockReset()
     const service = {
       list: vi.fn(async () => []),
@@ -69,7 +69,16 @@ describe('metadata-only controller IPC composition', () => {
       projectReadiness: vi.fn(async () => ({ state: 'blocked' })),
       prepareFirstDeployment: vi.fn(async () => ({ command: { state: 'prepared' } })),
       sendFirstDeployment: vi.fn(async () => ({ state: 'accepted' })),
-      enrollProjectTarget: vi.fn(async () => ({ state: 'unknown' }))
+      enrollProjectTarget: vi.fn(async () => ({ state: 'unknown' })),
+      installerOverview: vi.fn(async () => ({ releases: [], installations: [], connections: [] })),
+      reviewInstaller: vi.fn(async () => ({ next: 'blocked' })),
+      prepareInstaller: vi.fn(async () => ({ state: 'prepared' })),
+      sendInstaller: vi.fn(async () => ({ state: 'outcome_unknown' })),
+      inspectInstallation: vi.fn(async () => ({ state: 'installed' })),
+      rebindInstaller: vi.fn(async () => ({ state: 'outcome_unknown' })),
+      cancelInstallation: vi.fn(async () => ({ state: 'cancelled' })),
+      prepareInstalledRegistration: vi.fn(async () => ({ state: 'pending' })),
+      registerInstalled: vi.fn(async () => ({ state: 'active' }))
     }
     registerIpcHandlers(
       {} as never,
@@ -90,26 +99,35 @@ describe('metadata-only controller IPC composition', () => {
       'controller:app-status',
       'controller:apps',
       'controller:cancel-command',
+      'controller:cancel-installation',
       'controller:cancel-project',
       'controller:cancel-target',
       'controller:check-command',
       'controller:commands',
       'controller:disconnect',
       'controller:enroll-project-target',
+      'controller:inspect-installation',
+      'controller:installer-overview',
       'controller:list',
       'controller:prepare-command',
       'controller:prepare-first-deployment',
+      'controller:prepare-installation',
+      'controller:prepare-installed-binding',
       'controller:prepare-project',
       'controller:prepare-target',
       'controller:project-readiness',
       'controller:project-target-state',
       'controller:project-targets',
       'controller:projects',
+      'controller:rebind-installation',
       'controller:register',
+      'controller:register-installed',
       'controller:retry-enrollment',
+      'controller:review-installation',
       'controller:revoke',
       'controller:send-command',
       'controller:send-first-deployment',
+      'controller:send-installation',
       'controller:send-project',
       'controller:send-target',
       'controller:target-setups',
@@ -125,6 +143,11 @@ describe('metadata-only controller IPC composition', () => {
       error: { technical: 'BINDING_CHANGED' }
     })
     expect(channels).not.toContain('controller:call')
+    expect(await ingressCallback('controller:installer-overview')({}, undefined)).toMatchObject({
+      ok: true,
+      data: { releases: [], installations: [], connections: [] }
+    })
+    expect(service.installerOverview).toHaveBeenCalledWith()
     for (const [channel, method] of [
       ['controller:prepare-target', 'prepareTarget'],
       ['controller:send-target', 'sendTarget'],
@@ -145,7 +168,15 @@ describe('metadata-only controller IPC composition', () => {
       ['controller:cancel-project', 'cancelProject'],
       ['controller:verify-project-source', 'verifyProjectSource'],
       ['controller:project-target-state', 'projectTargetState'],
-      ['controller:enroll-project-target', 'enrollProjectTarget']
+      ['controller:enroll-project-target', 'enrollProjectTarget'],
+      ['controller:review-installation', 'reviewInstaller'],
+      ['controller:prepare-installation', 'prepareInstaller'],
+      ['controller:send-installation', 'sendInstaller'],
+      ['controller:inspect-installation', 'inspectInstallation'],
+      ['controller:rebind-installation', 'rebindInstaller'],
+      ['controller:cancel-installation', 'cancelInstallation'],
+      ['controller:prepare-installed-binding', 'prepareInstalledRegistration'],
+      ['controller:register-installed', 'registerInstalled']
     ] as const) {
       expect(await ingressCallback(channel)({}, 'unit')).toMatchObject({ ok: true })
       expect(service[method]).toHaveBeenCalledWith('unit')

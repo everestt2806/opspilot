@@ -1,0 +1,377 @@
+{
+  "checkpoint": "R3c-6h2c",
+  "date": "2026-11-10",
+  "base_commit": "a074262360fa03d0976020e2d4888c38cd7bb9e3",
+  "full_vitest": {
+    "passed": 2047,
+    "failed": 0,
+    "pending": 2,
+    "raw_evidence": "app/.out-scripts/r3c6h2c-full-final.json"
+  },
+  "typecheck": [
+    {
+      "exit_code": 0,
+      "project": "tsconfig.node.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "tsconfig.web.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "tsconfig.scripts.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "scripts/product-runtime-lab/tsconfig.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "scripts/controller-release-lab/tsconfig.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "scripts/controller-service-lab/tsconfig.json"
+    },
+    {
+      "exit_code": 0,
+      "project": "scripts/controller-bootstrap-lab/tsconfig.json"
+    }
+  ],
+  "packaged_resources": {
+    "state": "PASS",
+    "release_id": "linux-x64-node22-20261110",
+    "node_version": "22.23.4",
+    "minimum_glibc": "2.39",
+    "release_sha256": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+    "installer_sha256": "7e227868e3622a36c4de11bb3a1ac21e1e0b54915a4bc9268a97ca8e81b81ad8",
+    "binaries_in_git": false,
+    "signed_nsis_release_tested": false
+  },
+  "electron": {
+    "status": "PASS",
+    "scope": "REAL_ELECTRON_IPC_FIXTURE",
+    "checks": [
+      {
+        "view": "review",
+        "width": 1280,
+        "height": 800,
+        "theme": "dark",
+        "locale": "vi",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1280x800-dark-vi.png"
+      },
+      {
+        "view": "review",
+        "width": 1280,
+        "height": 800,
+        "theme": "dark",
+        "locale": "en",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1280x800-dark-en.png"
+      },
+      {
+        "view": "unknown",
+        "width": 1280,
+        "height": 800,
+        "theme": "dark",
+        "locale": "en",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": true,
+        "file": "installer-unknown-1280x800-dark-en.png"
+      },
+      {
+        "view": "connected",
+        "width": 1280,
+        "height": 800,
+        "theme": "dark",
+        "locale": "en",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-connected-1280x800-dark-en.png"
+      },
+      {
+        "view": "review",
+        "width": 1280,
+        "height": 800,
+        "theme": "dark",
+        "locale": "cn",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1280x800-dark-cn.png"
+      },
+      {
+        "view": "review",
+        "width": 1280,
+        "height": 800,
+        "theme": "dark",
+        "locale": "jp",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1280x800-dark-jp.png"
+      },
+      {
+        "view": "review",
+        "width": 1280,
+        "height": 800,
+        "theme": "light",
+        "locale": "vi",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1280x800-light-vi.png"
+      },
+      {
+        "view": "review",
+        "width": 1280,
+        "height": 800,
+        "theme": "light",
+        "locale": "en",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1280x800-light-en.png"
+      },
+      {
+        "view": "review",
+        "width": 1280,
+        "height": 800,
+        "theme": "light",
+        "locale": "cn",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1280x800-light-cn.png"
+      },
+      {
+        "view": "review",
+        "width": 1280,
+        "height": 800,
+        "theme": "light",
+        "locale": "jp",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1280x800-light-jp.png"
+      },
+      {
+        "view": "review",
+        "width": 1366,
+        "height": 768,
+        "theme": "dark",
+        "locale": "vi",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1366x768-dark-vi.png"
+      },
+      {
+        "view": "review",
+        "width": 1366,
+        "height": 768,
+        "theme": "dark",
+        "locale": "en",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1366x768-dark-en.png"
+      },
+      {
+        "view": "review",
+        "width": 1366,
+        "height": 768,
+        "theme": "dark",
+        "locale": "cn",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1366x768-dark-cn.png"
+      },
+      {
+        "view": "review",
+        "width": 1366,
+        "height": 768,
+        "theme": "dark",
+        "locale": "jp",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1366x768-dark-jp.png"
+      },
+      {
+        "view": "review",
+        "width": 1366,
+        "height": 768,
+        "theme": "light",
+        "locale": "vi",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1366x768-light-vi.png"
+      },
+      {
+        "view": "review",
+        "width": 1366,
+        "height": 768,
+        "theme": "light",
+        "locale": "en",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1366x768-light-en.png"
+      },
+      {
+        "view": "review",
+        "width": 1366,
+        "height": 768,
+        "theme": "light",
+        "locale": "cn",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1366x768-light-cn.png"
+      },
+      {
+        "view": "review",
+        "width": 1366,
+        "height": 768,
+        "theme": "light",
+        "locale": "jp",
+        "window_horizontal": false,
+        "modal_horizontal": false,
+        "body_horizontal": false,
+        "footer_inside": true,
+        "password_fields": 0,
+        "body_vertical": false,
+        "file": "installer-review-1366x768-light-jp.png"
+      },
+      {
+        "view": "missing_package",
+        "blocked": true
+      }
+    ],
+    "renderer_errors": [],
+    "production_profile_used": false,
+    "backend_network_exercised": false
+  },
+  "development_vps": {
+    "status": "PASS",
+    "checks": [
+      "windows_local_resource_verification",
+      "pinned_ssh_readonly_preflight_and_fresh_remote",
+      "sqlite_intent_before_mutation",
+      "windows_sender_linux_receiver_verified",
+      "root_install_systemd_running",
+      "independent_installed_receipt_inspect",
+      "durable_binding_uuid_reuse",
+      "root_to_service_uid_enrollment_bridge",
+      "authenticated_ssh_loopback_api_read",
+      "temporary_client_revoked"
+    ],
+    "controller_retained": true,
+    "local_db_removed": true,
+    "preflight": {
+      "next": "install",
+      "host": {
+        "state": "compatible_snapshot",
+        "service_mode": "system",
+        "reasons": [],
+        "facts": {
+          "format": 1,
+          "system": "Linux",
+          "architecture": "x86_64",
+          "libc": "glibc",
+          "libc_version": "2.39",
+          "uid": 0,
+          "available_memory_bytes": 3552993280,
+          "free_disk_bytes": 79928676352,
+          "systemd_system": true,
+          "systemd_user_bus": true,
+          "user_linger": false,
+          "installation_conflict": false
+        }
+      },
+      "root_required": false
+    },
+    "request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+    "installed": {
+      "artifact_path": "/opt/opspilot-controller/runtime/payload/control-plane.cjs",
+      "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+      "data_directory": "/var/lib/opspilot-controller",
+      "format": 1,
+      "node_path": "/opt/opspilot-controller/runtime/node",
+      "payload_sha256": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+      "phase": "installed",
+      "request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+      "runtime_uid": 997,
+      "service_enabled": true,
+      "service_state": "running"
+    },
+    "credential_source": "hidden stdin / RAM only",
+    "fingerprint_source": "user-provided after explanation of console verification versus SSH trust on first use",
+    "persistent_service_intentionally_retained": true,
+    "real_user_desktop_profile_used": false,
+    "docker_installed": false,
+    "project_deployment_tested": false,
+    "reboot_soak_tested": false
+  }
+}

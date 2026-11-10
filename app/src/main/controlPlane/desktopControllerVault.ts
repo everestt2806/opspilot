@@ -112,12 +112,34 @@ export class DesktopControllerVault {
     private readonly cipher: AesGcmCredentialCipher,
     private readonly now: () => number = Date.now
   ) {}
-  prepare(input: ProductDesktopControllerBindingIntent): ProductDesktopControllerBindingMetadata {
+  prepare(
+    input: ProductDesktopControllerBindingIntent,
+    options: { reuseInstalled?: boolean } = {}
+  ): ProductDesktopControllerBindingMetadata {
     const parsed = desktopBindingIntentSchema.safeParse(input)
     if (!parsed.success) throw new DesktopControllerVaultError('REQUEST_INVALID')
     return this.mutate(() => {
       const intent = parsed.data
       this.currentVps(intent)
+      if (options.reuseInstalled && intent.installation) {
+        const candidates = this.db
+          .prepare(
+            `SELECT * FROM desktop_controller_binding WHERE state<>'disabled'
+          AND json_extract(intent_json,'$.installation.request_key')=?
+          AND json_extract(intent_json,'$.installation.authority_revision')=?`
+          )
+          .all(intent.installation.request_key, intent.installation.authority_revision) as Row[]
+        if (candidates.length > 1) throw new DesktopControllerVaultError('IDEMPOTENCY_CONFLICT')
+        if (candidates.length === 1) {
+          const previous = this.parseIntent(candidates[0])
+          if (
+            canonicalH2Json({ ...previous, binding_id: intent.binding_id }) !==
+            canonicalH2Json(intent)
+          )
+            throw new DesktopControllerVaultError('IDEMPOTENCY_CONFLICT')
+          return this.metadata(candidates[0])
+        }
+      }
       const existing = this.row(intent.binding_id)
       if (existing) {
         if (existing.intent_json !== canonicalH2Json(intent))

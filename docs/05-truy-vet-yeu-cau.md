@@ -1,5 +1,7 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **R3c-6h2c 10/11:** [Controller onboarding trong Settings](tasks/tk-s7-release-r3c6h2c-install-wizard.md) thêm packaged resources/typedIPC/4locale wizard có consent và unknown recovery; giữ canonical SQLite029. Full2047PASS/2Linux-onlySKIP/0FAIL, Electron19checks/18ảnh và live development VPS10checks xác minh Windows→SSH→non-root systemd→authenticated loopback API. Đây là setup controller, chưa phải bằng chứng project deploy hay hoàn thiện FR/UC. Tiếp live Git/target/readiness/firstdeploy/Desktop-off, upgrade/rotation/reboot/soak và release distribution.
+
 > **R3c-6h2b3 09/11:** [Installed admin authority](tasks/tk-s7-release-r3c6h2b3-installed-admin.md) thêm root→service UID management và installation-bound Desktop token; giữ canonical SQLite/schema029 và legacy binding, không nới same-UID verifier. Đây là backend setup, không tăng FR/UC thành hoàn thiện hoặc chứng minh deployment mới. Tiếp Settings wizard/distribution/live/reboot/soak; assigned VPS TCP chưa dùng được, không kết luận hết hạn.
 
 > **R3c-6h2b2 08/11:** [Desktop installation journal](tasks/tk-s7-release-r3c6h2b2-install-journal.md) bổ sung discovery chỉ đọc, durable UUID/pins/current SSH authority và cold recovery/rebind; migration029 không xóa lịch sử khi gỡ VPS. Native SSH/systemd proof và gates trong hồ sơ; đây là controller setup backend, không bằng chứng deployment mới hoặc hoàn thiện FR/UC. Còn code6h2b3 admin UID bridge/vault authority rồi IPC/Settings wizard; live/reboot/soak/distribution riêng.

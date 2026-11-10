@@ -174,6 +174,29 @@ export function registerIpcHandlers(
   desktopControllerService?: DesktopControllerService
 ): void {
   if (desktopControllerService) {
+    handle('controller:installer-overview', () => desktopControllerService.installerOverview())
+    handle('controller:review-installation', (input) =>
+      desktopControllerService.reviewInstaller(input)
+    )
+    handle('controller:prepare-installation', (input) =>
+      desktopControllerService.prepareInstaller(input)
+    )
+    handle('controller:send-installation', (input) => desktopControllerService.sendInstaller(input))
+    handle('controller:inspect-installation', (key) =>
+      desktopControllerService.inspectInstallation(key)
+    )
+    handle('controller:rebind-installation', (input) =>
+      desktopControllerService.rebindInstaller(input)
+    )
+    handle('controller:cancel-installation', (key) =>
+      desktopControllerService.cancelInstallation(key)
+    )
+    handle('controller:prepare-installed-binding', (input) =>
+      desktopControllerService.prepareInstalledRegistration(input)
+    )
+    handle('controller:register-installed', (input) =>
+      desktopControllerService.registerInstalled(input)
+    )
     handle('controller:list', () => desktopControllerService.list())
     handle('controller:register', (input) => desktopControllerService.register(input))
     handle('controller:retry-enrollment', (bindingId) => desktopControllerService.retry(bindingId))

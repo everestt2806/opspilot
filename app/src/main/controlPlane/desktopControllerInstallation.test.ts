@@ -14,6 +14,8 @@ import {
 import { ControllerBootstrapError } from './controllerSshBootstrap'
 import { DesktopControllerService } from './desktopControllerService'
 import { DesktopControllerVault } from './desktopControllerVault'
+import * as releaseModule from './controllerRelease'
+import { evaluateControllerHost } from './controllerHostPreflight'
 import type { SshManager } from '../ssh/manager'
 import type { ControllerInstallationResult } from '../../../../docs/contracts/product-controller-installation'
 
@@ -95,10 +97,121 @@ beforeEach(() => {
   journal = new DesktopControllerInstallations(db, ssh, [release], { transport })
 })
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.useRealTimers()
   closeDatabase()
   rmSync(directory, { recursive: true, force: true })
 })
+
+it('onboarding binding preparation reuses the durable UUID across separate SQLite connections', async () => {
+  const key = await prepare()
+  await journal.send(key, 'transfer', true)
+  await journal.send(key, 'install', true)
+  const db2 = new Database(join(directory, 'opspilot.db'))
+  try {
+    const a = new DesktopControllerService(db, cipher, ssh as unknown as SshManager, undefined, [
+      release
+    ])
+    const b = new DesktopControllerService(db2, cipher, ssh as unknown as SshManager, undefined, [
+      release
+    ])
+    const input = { installation_request_key: key, display_name: 'wizard', allow_write: false }
+    const [first, second] = await Promise.all([
+      a.prepareInstalledRegistration(input),
+      b.prepareInstalledRegistration(input)
+    ])
+    expect(first.binding_id).toBe(second.binding_id)
+    expect(first.installation).toEqual({ request_key: key, authority_revision: 1 })
+    expect(db.prepare('SELECT count(*) n FROM desktop_controller_binding').get()).toEqual({ n: 1 })
+    expect(ssh.openProductBootstrapChannel).not.toHaveBeenCalled()
+    await expect(
+      a.prepareInstalledRegistration({ ...input, allow_write: true })
+    ).rejects.toMatchObject({ context: { cause: { message: 'IDEMPOTENCY_CONFLICT' } } })
+    expect(db.prepare('SELECT count(*) n FROM desktop_controller_binding').get()).toEqual({ n: 1 })
+  } finally {
+    db2.close()
+  }
+})
+it('onboarding does not silently pick among existing manual installed bindings', async () => {
+  const { key, intent, vault } = await installedBinding()
+  vault.prepare({ ...intent, binding_id: randomUUID() })
+  const service = new DesktopControllerService(
+    db,
+    cipher,
+    ssh as unknown as SshManager,
+    undefined,
+    [release]
+  )
+  await expect(
+    service.prepareInstalledRegistration({
+      installation_request_key: key,
+      display_name: 'unit-service',
+      allow_write: true
+    })
+  ).rejects.toMatchObject({ context: { cause: { message: 'IDEMPOTENCY_CONFLICT' } } })
+  expect(db.prepare('SELECT count(*) n FROM desktop_controller_binding').get()).toEqual({ n: 2 })
+})
+const hostFacts = {
+  format: 1 as const,
+  system: 'Linux',
+  architecture: 'x86_64',
+  libc: 'glibc',
+  libc_version: '2.39',
+  uid: 0,
+  available_memory_bytes: 1024 ** 3,
+  free_disk_bytes: 8 * 1024 ** 3,
+  systemd_system: true,
+  systemd_user_bus: false,
+  user_linger: false,
+  installation_conflict: false
+}
+it.each(['fresh', 'nonroot', 'memory', 'existing', 'manual', 'changed'] as const)(
+  'readonly preflight handles %s without granting a blocked install plan',
+  async (kind) => {
+    const manifest = { platform: 'linux-x64-glibc' as const, minimum_glibc: '2.39' }
+    vi.spyOn(releaseModule, 'verifyControllerRelease').mockReturnValue(
+      manifest as ReturnType<typeof releaseModule.verifyControllerRelease>
+    )
+    const facts = { ...hostFacts }
+    if (kind === 'nonroot') {
+      facts.uid = 1000
+      facts.systemd_user_bus = true
+      facts.user_linger = true
+    }
+    if (kind === 'memory') facts.available_memory_bytes = 100
+    if (kind === 'existing' || kind === 'manual') facts.installation_conflict = true
+    if (kind === 'existing')
+      transport.discover.mockResolvedValue({
+        state: 'discovered',
+        request_key: randomUUID(),
+        release_sha256: release.release_sha256,
+        installer_sha256: release.installer_sha256
+      })
+    if (kind === 'manual')
+      transport.discover.mockRejectedValue(new ControllerBootstrapError('BOOTSTRAP_CONFLICT'))
+    const hostProbe = vi.fn(async () => {
+      if (kind === 'changed')
+        db.exec('UPDATE vps SET ssh_security_revision=ssh_security_revision+1 WHERE id=1')
+      return evaluateControllerHost(facts, manifest)
+    })
+    const value = new DesktopControllerInstallations(db, ssh, [release], { transport, hostProbe })
+    if (kind === 'changed')
+      await expect(value.preflight(1, release.release_id)).rejects.toMatchObject({
+        code: 'INSTALL_AUTHORITY_CHANGED'
+      })
+    else {
+      const result = await value.preflight(1, release.release_id)
+      expect(result.next).toBe(
+        kind === 'fresh' ? 'install' : kind === 'existing' ? 'inspect_existing' : 'blocked'
+      )
+      if (result.next === 'blocked') expect(result.plan).toBeNull()
+      expect(result.root_required).toBe(kind === 'nonroot')
+    }
+    expect(value.list()).toEqual([])
+    expect(transport.transfer).not.toHaveBeenCalled()
+    expect(transport.call).not.toHaveBeenCalled()
+  }
+)
 
 it('persists before dispatch, completes once, separates service state and prevents automatic replay', async () => {
   const key = await prepare()
