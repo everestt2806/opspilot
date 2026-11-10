@@ -46,7 +46,7 @@ app.use(express.static(path.join(__dirname, "public")));
 app.get("/health", (_request, response) => {
   response
     .set("Cache-Control", "no-store")
-    .json({ status: "ok", service: "san-nha-booking" });
+    .status(503).json({ status: "maintenance-demo", service: "san-nha-booking" });
 });
 
 app.get("/api/slots", (request, response) => {
