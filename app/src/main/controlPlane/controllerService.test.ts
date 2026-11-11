@@ -26,6 +26,50 @@ afterEach(async () => {
 })
 
 describe('independent Product controller service', () => {
+  it('does not initialize recovery, poll Git or claim work before the root activation latch opens', async () => {
+    directory = createControllerFixture('upgrade-guarded-job')
+    let released = false
+    const initialize = vi.fn(async () => ({
+        state: 'ready' as const,
+        inspected_enrollments: 0,
+        recovered_terminals: 0,
+        blockers: []
+      })),
+      poll = vi.fn(async () => undefined)
+    service = new ControllerService({
+      dataDirectory: directory,
+      activationReady: () => released,
+      poller: { run: poll, getLastSummary: () => null } as unknown as ControlPlaneGitPoller,
+      executionFactory: (opened, repository) => ({
+        worker: new ControlPlaneJobWorker({
+          repository,
+          controllerId: opened.controllerId,
+          pollIntervalMs: 10,
+          admission: { check: () => ({ state: 'deferred', reason: 'resource_unknown' }) },
+          executor: { execute: async () => ({ state: 'stopped_before_write' }) }
+        }),
+        initialize,
+        isReady: () => true,
+        close: async () => undefined
+      })
+    })
+    await service.start()
+    await delay(120)
+    expect(initialize).not.toHaveBeenCalled()
+    expect(poll).not.toHaveBeenCalled()
+    expect((await (await fetch('http://127.0.0.1:8768/healthz')).json()).service_state).toBe(
+      'maintenance'
+    )
+    expect(readJobAndLeaseState(directory, 'upgrade-guarded-job')).toMatchObject({
+      state: 'queued',
+      app_leases: 0,
+      build_leases: 0
+    })
+    released = true
+    await delay(150)
+    expect(initialize).toHaveBeenCalledOnce()
+    expect(poll).toHaveBeenCalledOnce()
+  })
   it('does not start claiming during startup recovery and reports blocked recovery as degraded', async () => {
     directory = createControllerFixture('startup-blocked-job')
     const recovery = deferred<void>(),

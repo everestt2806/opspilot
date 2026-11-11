@@ -21,6 +21,7 @@ let directory: string,
   header: string,
   url: string,
   ready: boolean,
+  allowWrites: boolean,
   beforeBody: ((request: IncomingMessage) => void) | undefined
 function issue(scopes: string[] = ['read', 'policy:write']): string {
   const issued = auth.enroll({
@@ -39,6 +40,7 @@ beforeEach(async () => {
   auth = new ControllerClientAuth(db, seed.controllerId, 'unix:1000')
   header = issue()
   ready = true
+  allowWrites = true
   beforeBody = undefined
   api = new ControllerReadApi(
     db,
@@ -50,7 +52,10 @@ beforeEach(async () => {
       last_branch_poll_at: null,
       reason_code: null
     }),
-    { commands: new ControllerCommands(db, seed.controllerId, () => ready) }
+    {
+      commands: new ControllerCommands(db, seed.controllerId, () => ready),
+      acceptWrites: () => allowWrites
+    }
   )
   server = createServer((req, res) => {
     beforeBody?.(req)
@@ -76,6 +81,34 @@ const read = async (): Promise<ProductExposureView> => {
   expect(response.status).toBe(200)
   return (await response.json()) as ProductExposureView
 }
+it('root upgrade gate blocks policy writes and advertises blocked capabilities before app lookup or body dispatch', async () => {
+  allowWrites = false
+  const before = db.prepare('SELECT * FROM product_app_control').all()
+  const denied = await fetch(url.replace(/\/exposure$/, '/auto-deploy-policy'), {
+    method: 'POST',
+    headers: {
+      authorization: header,
+      'content-type': 'application/json',
+      'idempotency-key': randomUUID()
+    },
+    body: JSON.stringify({
+      expected_ownership_generation: 1,
+      expected_source_generation: 1,
+      action: 'pause'
+    })
+  })
+  expect(denied.status).toBe(503)
+  expect((await denied.json()).error.code).toBe('CAPABILITY_BLOCKED')
+  expect(db.prepare('SELECT * FROM product_app_control').all()).toEqual(before)
+  expect(db.prepare('SELECT count(*) n FROM product_api_request').get()).toEqual({ n: 0 })
+  const capabilities = await fetch(url.replace('/apps/1/exposure', '/capabilities'), {
+    headers: { authorization: header }
+  })
+  expect((await capabilities.json()).pause_auto_deploy).toEqual({
+    state: 'blocked',
+    reason_code: 'CONTROLLER_NOT_READY'
+  })
+})
 const body = (view: ProductExposureView): Record<string, unknown> => ({
   deployment_id: view.context!.deployment_id,
   authority_sha256: view.context!.authority_sha256,

@@ -1,0 +1,173 @@
+{
+  "checkpoint": "R3c-6h4c-1",
+  "date": "2026-11-11",
+  "status": "ROOT_UPGRADE_BACKEND_LINUX_LAB_PASS",
+  "review": "PENDING",
+  "base_commit": "f470a05bb87dd05cc9c28099aed46b84776bb248",
+  "scope": "Trusted root CLI, side-by-side revision journal, exact same-schema/helper/dependency compatibility, explicit recover/rollback, maintenance gate and real private systemd/SQLite crash/restart proof",
+  "limits": [
+    "No development VPS or production Desktop/controller DB accessed or changed",
+    "Zero Product apps/targets in the private lab; independent HTTP child fixture is not Docker/Product deployment proof",
+    "Systemd service restart is tested; OS reboot is not tested",
+    "No schema/dependency/helper/template/collector upgrade support; incompatible releases are rejected",
+    "Pinned SSH transfer, durable Main intent/current revision binding, upgraded admin bridge and IPC/UI remain c-2",
+    "Actual installed exposure API, isolated Electron onboarding/reconnect/firstdeploy and live rollout remain c-3"
+  ],
+  "full_tests": {
+    "numTotalTests": 2161,
+    "numPassedTests": 2159,
+    "numFailedTests": 0,
+    "numPendingTests": 2,
+    "success": true
+  },
+  "full_test_files": {
+    "total": 160,
+    "passed": 159,
+    "skipped": 1
+  },
+  "focused_files_covered_in_final_full_run": 6,
+  "focused_assertions_in_final_full_run": 69,
+  "skip_reason": "Two existing Linux-only Caddy tests on Windows; no new skips or timeout relaxation",
+  "typescript_projects": [
+    {
+      "project": "tsconfig.node.json",
+      "exit_code": 0
+    },
+    {
+      "project": "tsconfig.web.json",
+      "exit_code": 0
+    },
+    {
+      "project": "tsconfig.scripts.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/product-runtime-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-bootstrap-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-release-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-service-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-exposure-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-upgrade-lab/tsconfig.json",
+      "exit_code": 0
+    }
+  ],
+  "eslint": {
+    "files": 14,
+    "exit_code": 0,
+    "errors": 0,
+    "warnings": 0
+  },
+  "production_build": {
+    "exit_code": 0
+  },
+  "trusted_installer_build": {
+    "exit_code": 0,
+    "sha256": "93f1cff2356dafdec85d273fa4f494db25b8ffb35196737d5e10d2b7448ea7ea"
+  },
+  "negative_cli": {
+    "checks": 2,
+    "expected_exit_codes": [
+      1,
+      1
+    ],
+    "codes": [
+      "CONTROLLER_INSTALL_UPGRADE_INPUT_INVALID",
+      "CONTROLLER_INSTALL_INPUT_INVALID"
+    ]
+  },
+  "linux_native": {
+    "status": "PASS",
+    "scope": "ROOT_LINUX_SYSTEMD_NATIVE_CONTROLLER_UPGRADE_PRIVATE_FIXTURE",
+    "checks": [
+      "consent_and_parent_pins_rejected_before_upgrade_mutation",
+      "staging_death_same_uuid_inspect_only_and_no_other_intent_takeover",
+      "death_after_guarded_stop_keeps_db_key_identity_and_unrelated_app",
+      "death_after_atomic_unit_switch_is_cold_inspectable_without_replay",
+      "service_restart_during_stop_and_switch_recovers_without_restarting_maintenance_candidate",
+      "candidate_maintenance_blocks_even_pause_writes_before_commit",
+      "lost_commit_reply_recovers_without_precommit_hash_comparison_or_credential_loss",
+      "duplicate_upgrade_after_commit_never_restarts_the_service",
+      "second_revision_preserves_parent_history_and_rejects_historical_adoption",
+      "rollback_crashes_preserve_legitimate_writes_and_never_restart_restored_parent",
+      "explicit_two_level_rollback_preserves_new_credentials_and_original_installation",
+      "startup_failure_never_publishes_gate_and_explicit_rollback_restores_old_ready_runtime",
+      "old_installer_attestation_valid_again_after_rollback"
+    ],
+    "production_vps_used": false,
+    "production_database_used": false,
+    "fixture_root_removed": true,
+    "last_operation": "inspect",
+    "last_error_code": null,
+    "fixture_unit_removed": true,
+    "fixture_account_removed": true
+  },
+  "explicit_sigkill_boundaries": [
+    "staging",
+    "stop_pending",
+    "switch_pending",
+    "start_pending",
+    "commit_pending",
+    "rollback_pending",
+    "rollback_commit_pending"
+  ],
+  "credential_preservation": {
+    "temporary_clients": 4,
+    "identity_api_status_each_after_original_restore": 200,
+    "tokens_in_evidence": false
+  },
+  "linux_release": {
+    "old_release_sha256": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+    "new_release_sha256": "cb70e137d311e35d77a0d22f95252c94ab4579d44ce4b025bd22460a5e6a1d40",
+    "new_bundle_manifest_sha256": "623b7d8ad3d851287dc9a7f0fc51ff1be5a1102c281cfc1889e42b0a1ef40c52",
+    "schema_version": 29,
+    "files": 998,
+    "bytes": 145001506
+  },
+  "raw_evidence": [
+    "app/.out-scripts/r3c6h4c1-full-final.json",
+    "app/.out-scripts/r3c6h4c1-full-final.log",
+    "app/.out-scripts/r3c6h4c1-native-final.log",
+    "app/.out-scripts/controller-upgrade/0361907c9020/result.json",
+    "app/.out-scripts/r3c6h4c1-build.log",
+    "app/.out-scripts/r3c6h4c1-final-lint.log",
+    "app/.out-scripts/r3c6h4c1-installer-build.log"
+  ],
+  "raw_sha256": {
+    "app/.out-scripts/r3c6h4c1-full-final.json": "6e8bae7fed9ad48cca0f63b96f9c8ec4a819457a90bf75ca5d43701236a416c9",
+    "app/.out-scripts/controller-upgrade/0361907c9020/result.json": "ea7cb52e35a88ae5758f0760310eaadd83b14cac57d0d62ef63e049f37a96726"
+  },
+  "source_sha256": {
+    "app/src/main/controlPlane/cli.ts": "350a6b6e2e56048704d6476c634ec5976b5f1d8e10b80e20b2b38967a022d90d",
+    "app/src/main/controlPlane/controllerExposureApi.test.ts": "026c42b3eb29e9e03724a7d00ed4986cb841bf7cd4a9d86ec52982d1b12ad6ab",
+    "app/src/main/controlPlane/controllerInstallation.ts": "aecd7ab40b45b3a5a4ce007564d6f9ae6905416ec50a5f6eeecf5ad5be0b071c",
+    "app/src/main/controlPlane/controllerInstallerCli.ts": "639480a4477e78c62e7cef1e63ba2091e643222d1562595ba8ae00eb0b3ddf88",
+    "app/src/main/controlPlane/controllerReadApi.ts": "0c8e65cb492b8d628d71404263cbaf06ffac247a5b612b0d6e42b9d9309b6c93",
+    "app/src/main/controlPlane/controllerService.test.ts": "e4cdc7f7706810842bac75d21b10d6c80583ded392dc47e9dc91f6931145afc5",
+    "app/src/main/controlPlane/controllerService.ts": "650568f98bb792639f5b2e9ae829fdcac9dd959e40f5474eb8f1ececb87dad3a",
+    "app/src/main/controlPlane/controllerUpgrade.ts": "660714a225abd1e8e25ed00d5767020559efbfc7b75164aa6e4b51563868db78",
+    "app/src/main/controlPlane/controllerUpgrade.test.ts": "7411f735b60128f3071b5c908cd4f894e83535d0e0dfa4af01d811f9682dfbf5",
+    "app/src/main/controlPlane/controllerUpgradeCheck.ts": "8e61c522ee530f512b059416b14b2942ab16900f0b09dd835182224aa89858b6",
+    "app/src/main/controlPlane/controllerUpgradeCheck.test.ts": "228897c1d6975a2adfcdf2cecaddb578d4e5bce9bd6b1432dde94fa533f2771c",
+    "app/src/main/controlPlane/controllerUpgradeGate.ts": "34ace8e036aade3e9e1e14eb45192b2daf670b011ea79998beb56926fa51168a",
+    "app/scripts/controller-upgrade-lab/entry.ts": "8daca83848bd56351804c56d9a00f23f9271ab1e320e3bd2caee344bf1355491",
+    "app/scripts/controller-upgrade-lab/run.mjs": "b24d69be4f4a7f06e08213493867585960b3e9ade5f3482dadb23c162f60022a",
+    "app/scripts/controller-upgrade-lab/tsconfig.json": "b4877f4fd55d1f794437ce0ed6de07ee5a2e0896b9c3b7ed9dd7d2e1b8f60813",
+    "docs/contracts/product-controller-upgrade.ts": "4f9836543405726458587c5da00db54d5e524833f76917540602460aff461177"
+  },
+  "accepted_exceptions": []
+}

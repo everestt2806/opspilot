@@ -1,5 +1,6 @@
 import { executeControllerInstallation } from './controllerInstallation'
 import { executeInstalledControllerAdmin } from './controllerInstalledAdmin'
+import { executeControllerUpgrade } from './controllerUpgrade'
 
 /** Không có path/service/UID override hoặc secret/env fallback. */
 export async function runControllerInstallerCli(): Promise<void> {
@@ -22,7 +23,14 @@ export async function runControllerInstallerCli(): Promise<void> {
     if (!admin && bytes.length > 4096) throw Error('CONTROLLER_INSTALL_INPUT_INVALID')
     const result = await (admin
       ? executeInstalledControllerAdmin(input)
-      : executeControllerInstallation(input))
+      : typeof input === 'object' &&
+          input !== null &&
+          'operation' in input &&
+          ['upgrade', 'inspect-upgrade', 'recover-upgrade', 'rollback-upgrade'].includes(
+            String(input.operation)
+          )
+        ? executeControllerUpgrade(input)
+        : executeControllerInstallation(input))
     console.log(JSON.stringify(result))
   } catch (error) {
     const code =

@@ -18,6 +18,8 @@ export const CONTROL_PLANE_HEALTH_HOST = '127.0.0.1'
 export const CONTROL_PLANE_HEALTH_PORT = 8768
 
 export interface ControllerServiceOptions {
+  /** Trusted root revision latch; closed means no recovery, Git polling or worker. */
+  activationReady?: () => boolean
   dataDirectory: string
   /** Explicit trusted admin opt-in; omitted means polling-only. */
   executionBundle?: { artifact: string; manifest_sha256: string }
@@ -36,6 +38,7 @@ export interface ControllerServiceOptions {
 }
 
 export class ControllerService {
+  private readonly activationReady: () => boolean
   private readonly opened: ReturnType<typeof openControllerDatabase>
   private readonly poller: ControlPlaneGitPoller
   private readonly worker: ControlPlaneJobWorker
@@ -50,6 +53,7 @@ export class ControllerService {
   private readonly api: ControllerReadApi | null
 
   constructor(options: ControllerServiceOptions) {
+    this.activationReady = options.activationReady ?? (() => true)
     if (
       (options.executionBundle && options.executionFactory) ||
       ((options.executionBundle || options.executionFactory) &&
@@ -88,7 +92,8 @@ export class ControllerService {
                 this.opened.controllerId,
                 () => this.healthState() === 'ready'
               ),
-              signal: this.stopController.signal
+              signal: this.stopController.signal,
+              acceptWrites: () => this.activationReady()
             }
           )
         : null
@@ -169,6 +174,10 @@ export class ControllerService {
     }
 
     this.runtimeTask = this.trackRuntimeTask(async () => {
+      while (!this.activationReady()) {
+        if (this.stopController.signal.aborted) return
+        await new Promise<void>((done) => setTimeout(done, 100))
+      }
       if (this.execution) await this.execution.initialize(this.stopController.signal)
       this.startupFinished = true
       if (this.stopController.signal.aborted) return

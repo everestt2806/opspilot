@@ -21,6 +21,8 @@ import { verifyProductProjectSource } from './projectSourceVerification'
 import { readProjectTargetState, enrollProjectTarget } from './projectTarget'
 import { checkProjectReadiness } from './projectReadiness'
 import { loadControllerCredentialCipher } from './controllerSecrets'
+import { runControllerUpgradeCheck } from './controllerUpgradeCheck'
+import { controllerUpgradeGate } from './controllerUpgradeGate'
 
 type Command =
   | 'init'
@@ -44,6 +46,10 @@ type Command =
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
+  if (commandValue === 'upgrade-check' || commandValue === 'upgrade-hold') {
+    await runControllerUpgradeCheck(parseDataDirectory(args), commandValue === 'upgrade-hold')
+    return
+  }
   if (commandValue === 'verify-bundle') {
     if (args.length !== 4 || args[0] !== '--artifact' || args[2] !== '--manifest-sha256')
       throw new Error('USAGE')
@@ -89,10 +95,17 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
     process.once('SIGTERM', onSignal)
     try {
       const bundle = parseExecutionBundleRequest(
-        await readControllerBootstrapInput(process.stdin, controller.signal)
+        await readControllerBootstrapInput(process.stdin, controller.signal),
+        true
       )
       if (controller.signal.aborted) throw new Error('CONTROLLER_EXECUTION_ABORTED')
-      service = new ControllerService({ dataDirectory, executionBundle: bundle })
+      service = new ControllerService({
+        dataDirectory,
+        executionBundle: bundle,
+        ...(Object.hasOwn(bundle, 'activation_guard')
+          ? { activationReady: controllerUpgradeGate(bundle.artifact, bundle.activation_guard) }
+          : {})
+      })
       await service.start()
       await service.waitForStop()
     } finally {
@@ -324,24 +337,39 @@ function parseDataDirectory(args: string[]): string {
   return args[1]
 }
 
-function parseExecutionBundleRequest(input: unknown): {
+function parseExecutionBundleRequest(
+  input: unknown,
+  allowGuard = false
+): {
   artifact: string
   manifest_sha256: string
+  activation_guard?: unknown
 } {
   const request = input as {
     format?: unknown
     artifact?: unknown
     manifest_sha256?: unknown
+    activation_guard?: unknown
   } | null
   if (
     !request ||
-    Object.keys(request).sort().join(',') !== 'artifact,format,manifest_sha256' ||
+    !(
+      allowGuard
+        ? ['artifact,format,manifest_sha256', 'activation_guard,artifact,format,manifest_sha256']
+        : ['artifact,format,manifest_sha256']
+    ).includes(Object.keys(request).sort().join(',')) ||
     request.format !== 1 ||
     typeof request.artifact !== 'string' ||
     typeof request.manifest_sha256 !== 'string'
   )
     throw new Error('INVALID_RECOVERY_REQUEST')
-  return { artifact: request.artifact, manifest_sha256: request.manifest_sha256 }
+  return {
+    artifact: request.artifact,
+    manifest_sha256: request.manifest_sha256,
+    ...(Object.hasOwn(request, 'activation_guard')
+      ? { activation_guard: request.activation_guard }
+      : {})
+  }
 }
 
 function readLocalStatus(

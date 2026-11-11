@@ -34,6 +34,7 @@ export class ControllerReadApi {
   private rateWindow = 0
   private rateCount = 0
   private readonly writes: ControllerWriteApi | null
+  private readonly writesAllowed: () => boolean
   private stopping = false
   private closeTask: Promise<void> | null = null
   constructor(
@@ -42,9 +43,10 @@ export class ControllerReadApi {
     private readonly directory: string,
     cursors: ControllerReadCursor,
     private readonly state: () => ControllerReadApiState,
-    options?: { commands: ControllerCommands; signal?: AbortSignal }
+    options?: { commands: ControllerCommands; signal?: AbortSignal; acceptWrites?: () => boolean }
   ) {
     this.auth = new ControllerClientAuth(database, controllerId, `unix:${process.getuid?.() ?? 0}`)
+    this.writesAllowed = options?.acceptWrites ?? (() => true)
     this.model = new ControllerReadModel(database, controllerId, cursors)
     this.exposure = new ControllerExposure(
       database,
@@ -121,6 +123,7 @@ export class ControllerReadApi {
         if (writeRoute) {
           if (!/^[1-9][0-9]*$/.test(parts[5]) || !Number.isSafeInteger(Number(parts[5])))
             throw new ControllerClientAuthError('REQUEST_INVALID')
+          if (!this.writesAllowed()) throw new ControllerClientAuthError('CAPABILITY_BLOCKED')
           this.model.app(Number(parts[5]), new Date().toISOString())
           return undefined
         }
@@ -154,6 +157,7 @@ export class ControllerReadApi {
                 .get(this.controllerId) as { status: string } | undefined
               if (
                 controller?.status !== 'active' ||
+                !this.writesAllowed() ||
                 (!allowDegraded && this.state().service_state !== 'ready')
               )
                 return { state: 'blocked', reason_code: 'CONTROLLER_NOT_READY' }

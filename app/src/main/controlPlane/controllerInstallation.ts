@@ -146,10 +146,18 @@ export function renderControllerUnit(paths: ControllerInstallerPaths, key: strin
 }
 
 /** CLI trusted code only. Paths/hook là composition seam của Linux lab, không nhận từ JSON/IPC. */
-export async function executeControllerInstallation(
+export async function executeControllerInstallation<T = never>(
   value: unknown,
   paths: ControllerInstallerPaths = controllerInstallerPaths,
   hooks: {
+    /** Trusted root composition only; validates original installed base and holds flock.
+     * Upgrade owns unit/revision attestation, including recovery after a unit switch.
+     * No JSON/IPC option enables this callback.
+     */
+    guardedInstalled?: (
+      receipt: Readonly<ControllerInstallationReceipt>,
+      authority: { uid: number; gid: number; lockFd: number }
+    ) => Promise<T>
     afterEffect?: (phase: ControllerInstallationPhase) => void
     /** Trusted installer composition only, runs under the existing installation flock. */
     inspected?: (
@@ -162,7 +170,7 @@ export async function executeControllerInstallation(
       }
     ) => Promise<void>
   } = {}
-): Promise<ControllerInstallationResult> {
+): Promise<ControllerInstallationResult | T> {
   const request = parseControllerInstallationRequest(value)
   if (
     process.platform !== 'linux' ||
@@ -579,6 +587,26 @@ export async function executeControllerInstallation(
       } catch {
         return false
       }
+    }
+    if (hooks.guardedInstalled) {
+      if (
+        request.operation !== 'inspect' ||
+        receipt.phase !== 'installed' ||
+        receipt.uid === null ||
+        receipt.gid === null ||
+        lockFd === undefined
+      )
+        return fail('RECOVERY_REQUIRED')
+      const current = account()
+      if (!current || current.uid !== receipt.uid || current.gid !== receipt.gid)
+        return fail('ACCOUNT_CONFLICT')
+      verifyRuntime()
+      verifyPrivateData()
+      return await hooks.guardedInstalled(Object.freeze({ ...receipt }), {
+        uid: receipt.uid,
+        gid: receipt.gid,
+        lockFd
+      })
     }
     if (
       request.operation === 'inspect' ||
