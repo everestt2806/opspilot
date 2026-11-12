@@ -1,0 +1,518 @@
+{
+  "checkpoint": "R3c-6h4c-2b2",
+  "date": "2026-11-12",
+  "status": "DESKTOP_CONTROLLER_UPGRADE_RUNTIME_BINDING_FEATURE_PASS",
+  "review": "PENDING",
+  "base_commit": "640a6c9a2d556f8ae6fbbe72268dd2c38af9b519",
+  "scope": "Settings upgrade wizard, protected additional release catalog, IDs/consent IPC, fresh Main review and atomic token-preserving runtime binding refresh",
+  "limits": [
+    "Same SSH principal/credential authority only; explicit credential or VPS-ID rebind remains OPEN and fail-closed",
+    "No development/production VPS or production Desktop/controller DB used or changed; live rollout remains c-3",
+    "Private native lab has real root/systemd/pinned SSH/enrollment/Main encrypted vault/authenticated API200/current revision admin, zero Product apps or targets; no Docker workload, OS reboot or soak claim",
+    "Electron uses production preload/UI and actual Main/private native SQLite/vault, but SSH/root responses are a synthetic transport adapter; not live SSH evidence",
+    "Original installation receipt/release/tool pins and resources retained; no token enrollment/rotation or auto policy pause during upgrade refresh",
+    "No migration or dependency changes; Desktop remains030 and controller029; parent c-2/6h4/R3 are not closed by this scoped checkpoint"
+  ],
+  "full_tests": {
+    "numTotalTests": 2193,
+    "numPassedTests": 2191,
+    "numFailedTests": 0,
+    "numPendingTests": 2,
+    "success": true
+  },
+  "full_test_files": {
+    "total": 163,
+    "passed": 162,
+    "skipped": 1
+  },
+  "focused_covered_in_full": [
+    {
+      "file": "ipc.test.ts",
+      "tests": 38
+    },
+    {
+      "file": "controllerInstallerCatalog.test.ts",
+      "tests": 8
+    },
+    {
+      "file": "desktopControllerEnrollment.test.ts",
+      "tests": 11
+    },
+    {
+      "file": "desktopControllerService.test.ts",
+      "tests": 9
+    },
+    {
+      "file": "desktopControllerUpgrade.test.ts",
+      "tests": 11
+    },
+    {
+      "file": "desktopControllerVault.test.ts",
+      "tests": 10
+    },
+    {
+      "file": "ControllerUpgradeWizard.test.tsx",
+      "tests": 7
+    }
+  ],
+  "skip_reason": "Two existing Caddy Linux-only tests on Windows; no new skips or outer test/runtime timeout changes",
+  "earlier_failed_check": "Two full runs hit the same publicBranch real-Git15000ms deadline while isolated execution passed. That test gave its remote query15000ms, equal to the enclosing15000ms deadline before setup/kill/cleanup. Reduced only its query budget to5000ms and accept the existing typed GIT_TIMEOUT or GIT_REMOTE_ERROR failure; local insteadOf fixture SHA must still be rejected. No app timeout, global test timeout or skip changed.",
+  "typescript_projects": [
+    {
+      "project": "tsconfig.node.json",
+      "exit_code": 0
+    },
+    {
+      "project": "tsconfig.web.json",
+      "exit_code": 0
+    },
+    {
+      "project": "tsconfig.scripts.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/product-runtime-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-bootstrap-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-release-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-service-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-exposure-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-upgrade-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-upgrade-desktop-lab/tsconfig.json",
+      "exit_code": 0
+    }
+  ],
+  "eslint": {
+    "files_checked": 19,
+    "errors": 0,
+    "warnings": 0,
+    "exit_code": 0,
+    "shared_ipc_note": "Giant shared/ipc.ts is excluded by repository ESLint config; TypeScript and AST IPC parity cover its changes."
+  },
+  "production_build": {
+    "exit_code": 0
+  },
+  "contract_parity": {
+    "status": "PASS",
+    "checks": 24,
+    "items": [
+      "DTO ControllerUpgradeAuthority",
+      "DTO ControllerUpgradeRequest",
+      "DTO ControllerUpgradePhase",
+      "DTO ControllerUpgradeResult",
+      "DTO ControllerUpgradeSnapshot",
+      "DTO ControllerUpgradeGate",
+      "DTO DesktopUpgradeRelease",
+      "DTO DesktopUpgradeState",
+      "DTO DesktopUpgradeOperation",
+      "DTO DesktopUpgrade",
+      "DTO DesktopUpgradePlan",
+      "DTO ControllerUpgradeOverview",
+      "DTO ControllerUpgradeReviewInput",
+      "DTO ControllerUpgradeSendInput",
+      "DTO ControllerUpgradeBindingReview",
+      "DTO ControllerUpgradeReview",
+      "IPC controller:upgrade-overview",
+      "IPC controller:review-upgrade",
+      "IPC controller:prepare-upgrade",
+      "IPC controller:send-upgrade",
+      "IPC controller:inspect-upgrade",
+      "IPC controller:cancel-upgrade",
+      "IPC controller:review-upgrade-binding",
+      "IPC controller:refresh-upgrade-binding"
+    ]
+  },
+  "packaging_hook": {
+    "status": "PASS",
+    "compiled_main_verifier": true,
+    "original_and_additional_release_bytes_checked": true
+  },
+  "linux_native": {
+    "receipt_id": "36e76600ef48",
+    "status": "PASS",
+    "scope": "PRIVATE_ROOT_SYSTEMD_PINNED_SSH_MAIN_SQLITE_UPGRADE",
+    "checks": [
+      "fresh_desktop030_and_native_controller029_have_separate_migration_roles",
+      "original_root_admin_enrollment_stores_api_token_only_in_encrypted_main_vault",
+      "plan_prepare_and_absent_inspect_preserve_uuid_and_never_create_remote_upgrade_namespace",
+      "independently_pinned_upgrade_transfer_uses_distinct_uuid_namespace_preserving_original_install_staging",
+      "wrong_tool_pin_rejected_by_receiver_before_upgrader_execution",
+      "disconnect_before_root_journal_keeps_attempted_and_wrong_parent_recovery_never_creates_journal",
+      "lost_upgrade_reply_recovers_in_separate_cold_main_process_without_replaying_or_restarting_service",
+      "explicit_runtime_refresh_preserves_api_token_client_and_authenticated_api_with_revision_root_admin",
+      "attempt_monotonicity_prevents_second_upgrade_and_does_not_rebind_api_credentials",
+      "revision_admin_derives_current_runtime_after_root_attestation_and_rejects_wrong_uid_payload_without_restart",
+      "revision_admin_rejects_stopped_controller_without_implicitly_starting_or_adopting_it",
+      "rollback_blocks_old_binding_until_explicit_refresh_then_reuses_the_same_authenticated_token",
+      "rolled_back_current_operation_admin_uses_restored_parent_payload_and_preserves_original_authority",
+      "explicit_main_rollback_restores_original_unit_and_preserves_root_receipt_identity_key_database_inode",
+      "archived_vps_authority_rejected_before_any_ssh_execution"
+    ],
+    "production_vps_used": false,
+    "production_database_used": false,
+    "fixture_root_removed": true,
+    "fixture_unit_removed": true,
+    "fixture_account_removed": true,
+    "python_only_path": true,
+    "ssh_authentications": 12,
+    "ssh_executions": 27,
+    "script_bytes": 35890,
+    "compressed_executions": 27,
+    "max_command_bytes": 11142
+  },
+  "electron": {
+    "receipt_id": "4add6ca53b7d",
+    "status": "PASS",
+    "scope": "REAL_ELECTRON_PRODUCTION_PRELOAD_UI_MAIN_JOURNAL_VAULT_PRIVATE_SQLITE_SYNTHETIC_SSH",
+    "checks": [
+      "unknown_upgrade_never_replays_and_blocks_old_vault_binding",
+      "real_production_preload_typed_ipc_main_fresh_review_explicit_refresh_preserves_encrypted_token_client_scope",
+      "rollback_requires_separate_binding_confirmation_and_preserves_token",
+      "four_locales_two_themes_two_desktop_sizes_no_window_or_modal_horizontal_overflow",
+      "no_token_in_renderer_metadata_or_recorded_ipc_and_no_renderer_errors"
+    ],
+    "captures": [
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-unknown-dark-1280x800.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-vi-dark-1280x800.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-vi-dark-1366x768.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-vi-light-1280x800.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-vi-light-1366x768.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-en-dark-1280x800.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-en-dark-1366x768.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-en-light-1280x800.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-en-light-1366x768.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-cn-dark-1280x800.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-cn-dark-1366x768.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-cn-light-1280x800.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-cn-light-1366x768.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-jp-dark-1280x800.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-jp-dark-1366x768.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-jp-light-1280x800.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "/docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-jp-light-1366x768.png",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      }
+    ],
+    "production_profile_used": false,
+    "actual_ssh_transport": false,
+    "private_data_removed": true,
+    "calls": [
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:review-upgrade",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:prepare-upgrade",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:send-upgrade",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:send-upgrade",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:inspect-upgrade",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:review-upgrade-binding",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:refresh-upgrade-binding",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:send-upgrade",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:review-upgrade-binding",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:refresh-upgrade-binding",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:upgrade-overview",
+        "completed": true
+      }
+    ],
+    "renderer_errors": []
+  },
+  "approved_upgrade": {
+    "release_id": "linux-x64-node22-20261112-upgrade",
+    "node_version": "22.23.4",
+    "minimum_glibc": "2.39",
+    "release_sha256": "093a05957aa2d1f702a1f495346e338ac8e8ce3934556562f74882a7299962d7",
+    "installer_sha256": "7b19cefec8abce4d9dbba21ec234949fd4ae8783d9994cba817701e5f32a71d0",
+    "upgrade_supported": true
+  },
+  "payload_sha256": "4e3a163f077f69cd23b58ffcd26e40506489041804a9b01ea9ef006db3588510",
+  "release_files": 998,
+  "release_bytes": 145005807,
+  "original_release_sha256": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+  "original_installer_sha256": "7e227868e3622a36c4de11bb3a1ac21e1e0b54915a4bc9268a97ca8e81b81ad8",
+  "legacy_installation_guard": "Legacy inspect/send/rebind/register reject before any original installation row mutation once a noncancelled attempted/current upgrade owns the runtime. Main regression asserts unchanged original row and a working fresh runtime review afterwards.",
+  "source_sha256": {
+    "app/control-plane-runtime/desktop-upgrade-release.json": "b97dc758deb8f8a99822c0464f40c69f0c0d9a4875c79228ccd6e749f593ebf3",
+    "app/electron.vite.config.ts": "48e3f57dafa8cf49019db412a0d0efafc628d965dc4a9bfc23de8169969b0f1c",
+    "app/scripts/controller-upgrade-desktop-lab/electron.mjs": "7f62dd2da170cb246bd443cfc9428f8fb0c2ff9c7d4f2caac3f993f252293e41",
+    "app/scripts/controller-upgrade-desktop-lab/entry.ts": "aab1a2b97bec7dd62f6b5d9474a218664ec3f164ca7d290669603828c0ee0b26",
+    "app/scripts/controller-upgrade-desktop-lab/run.mjs": "640b5d38ae4bca77008f428d4966c9f0a9993c11b840b6305e47986f9ec8feb3",
+    "app/src/main/controlPlane/controllerInstallerCatalog.ts": "2cde6a6956368d9e0ccdec39baf00be2a0de96db38880f042be4a167e77eb48c",
+    "app/src/main/controlPlane/desktopControllerEnrollment.ts": "34b48d6cfa32a3115bb9cfc2fea5568218b03a29b6c93a5fd2414c412d78842c",
+    "app/src/main/controlPlane/desktopControllerService.ts": "fc52b8d151b5bb714e34e826a999ea1703fd4f827a2c4a8ec4d3fa6e2dddc099",
+    "app/src/main/controlPlane/desktopControllerUpgrade.test.ts": "5beb035817000cb2dab07e4c4410cb94d2a90649cd2c3cc62fda60a4a5a01623",
+    "app/src/main/controlPlane/desktopControllerUpgrade.ts": "67a4c21c596488af5a7274eb6118f4e8c8c47b36be9389326e40208077aae8e2",
+    "app/src/main/controlPlane/desktopControllerVault.ts": "fb2e07ec1161fa9303dbe66535d21875818cac19fa6c6e5603a551e6433903cd",
+    "app/src/main/git/publicBranch.test.ts": "95cc74999096d569122bf1bba6ba73bdd5910568a055d761a9ceb2c32156d6f1",
+    "app/src/main/ipc.test.ts": "f48c86a9b9ac4ae004563ae9dc2798ee4c727f6549fc917877d26b9ee837c6c3",
+    "app/src/main/ipc.ts": "5e1cfbe954f32686cc2d3fd211839b62230902d9882bd37c81bc43145caca32a",
+    "app/src/renderer/src/components/ControllerPanel.tsx": "1b7d76166f3b9c5a88ff67ba046458ac9d932460607082ed8eab079776a843cd",
+    "app/src/renderer/src/components/ControllerUpgradeWizard.test.tsx": "cbdfff80716fd70170e6a7d3f08947e5f8fb6fe0a4eb0f5b447d6ed84e452cb8",
+    "app/src/renderer/src/components/ControllerUpgradeWizard.tsx": "b0e517a3da57a757ce1427e924ddfa6407ceaa508db6ddd76238667ed73715e9",
+    "app/src/renderer/src/components/controllerUpgradeCopy.ts": "35037d36c17a5bb6193c51e3dfeff4199f947d88529a137a70eb6e47bf206622",
+    "app/src/shared/controllerInstaller.ts": "c5aadf31356a1735f8a6b20a2b7a1a818842c3976969501b1da8b6c46bfbfcaa",
+    "app/src/shared/controllerUpgrade.ts": "114e1c24dcae1c713a5c2c5d9d0df8b68830e1154c5dbb04ea652aac94337b40",
+    "app/src/shared/ipc.ts": "efabc79df84e39a24acfc260093104a0192040282a89418a6ce5a94696ffcb93",
+    "docs/contracts/desktop-controller-installer.ts": "62456a3a1d1a7663968920b239d06548940e7aa3cab1d5e41cd694569f537598",
+    "docs/contracts/desktop-controller-upgrade-ui.ts": "aee500ba02a2b6155aa566e624e82079230c16b7b63414560df076b80cd6f101",
+    "docs/contracts/ipc-contract.ts": "01de79022456499a9ade212e678f7fedd582ada6f7f981c3e93412f72bb0d84f",
+    "docs/contracts/product-controller-api.ts": "c9ee094e1494240114301bda8b5e4b6d0b3ff93eab755408c7f42f340c34d773"
+  },
+  "screenshots_sha256": {
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-cn-dark-1280x800.png": "c568b01d05451517952ca9ae7f6892691a75fd71a9d40b84867640676aee9011",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-cn-dark-1366x768.png": "19ba4b6e67172a05bc709c35bd7ef60fbcdf8235cedc4a25f19150f5dfb19020",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-cn-light-1280x800.png": "4a4bf68a06c395f7828b8077b4ad54b34a18bfd4a4f3b9a6df644a9579c0fbfb",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-cn-light-1366x768.png": "dd9ca29ad081cba16e1edec814a426475f59c7c0bc9a2e4e4d7ae87381944205",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-en-dark-1280x800.png": "ce61f6288f67aad7db6ef1afd8f2db954873b81e10408ae294bd60bcd0a8100d",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-en-dark-1366x768.png": "cff3e21c8b8e435a2c8c81e06499845956db7abb31c5c1bbc9406c005321b0fb",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-en-light-1280x800.png": "1d0408c18243b229e218d86c4a95714e99b1e10c9b755bdef5dc2ced5d02e67d",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-en-light-1366x768.png": "f19f7069ae53e3cf3cac44fef308eba9b503620f8fd51b07c2facf092a3f40bd",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-jp-dark-1280x800.png": "73e2373a296f5399acecde97650855f6699691e9b11da079fe305a575350205a",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-jp-dark-1366x768.png": "22e3874c3ac05bb1ecc56d9c5348f26ff09abe95b751784a8d611f108b7c2b5d",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-jp-light-1280x800.png": "138abe6036e71aadcf4cd030eb65d5dbd22857fc1610a0790a072601c910ec44",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-jp-light-1366x768.png": "ea72ec0dbf98b771033e02ecce7050755c1b20602199080e37dfdb3c9c414737",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-unknown-dark-1280x800.png": "c36b80d0ae3725567333a6195ba47484d62bbf567ef4e9aaba992a3dd443ec9c",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-vi-dark-1280x800.png": "7253d5364aaa44d5034d42ca3e4b468213499f618b0a71ad1e1e5fa54e1916ff",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-vi-dark-1366x768.png": "c46fb0240ba23906e4ef00e255b59c63ce6150905fac16f4d4653dc20290162a",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-vi-light-1280x800.png": "8ccae03492eca00564db20b6b7ec450de7a68784af9bca9c76dbfab22de2dfdd",
+    "docs/ui-redesign/screenshots/r3c6h4c2b2/upgrade-vi-light-1366x768.png": "adf6ce65f8450f0802f8bc99ab1c4110ce8ea6dc839f0307d40536e5594d0142"
+  },
+  "raw_evidence_sha256": {
+    "app/.out-scripts/r3c6h4c2b2-full-final.json": "c5ad37faa6020dc84c1055b1fb3b5a85230379dfccfb5d00a09c2c6a6c213eac",
+    "app/.out-scripts/r3c6h4c2b2-full-final.log": "40eb0a66bfc1d57116319642f7492a6ddf8c829784a71aba235d7375ab0ccc3a",
+    "app/.out-scripts/r3c6h4c2b2-final-lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r3c6h4c2b2-final-build.log": "47da6a73281c9274274548eb197d31117173bd787a7245279c16cb594ac8a8a6",
+    "app/.out-scripts/r3c6h4c2b2-package-gate.log": "1aeef5879c035804719a6ac7da8f6637c495666223d12442a0623860ca77e1b7",
+    "app/.out-scripts/r3c6h4c2b2-contract-parity.json": "43a79105b1aa7910d5f05473a74448e8e96f81cb06e59115354be7d3a1185318",
+    "app/.out-scripts/r3c6h4c2b2-native-final.log": "1f6ef86f4da617d5a93bc1069b2bae7a5ccfe9dd6d3df8359bd7746e467bc9d4",
+    "app/.out-scripts/r3c6h4c2b2-electron-final.log": "c6ce4234e6725e469b0717dcb6d331d78d046514ae52125dfac0eb1ccbc08873",
+    "app/.out-scripts/controller-upgrade-desktop/36e76600ef48/result.json": "357f671a8e5d8a9f5ea15b9af73501031d7f5df5500f22998fb89da5c6d6fa68",
+    "app/.out-scripts/controller-upgrade-electron/4add6ca53b7d/result.json": "3efe86567874af6a31fd86ebf28980782fa2c5b624c0bb6b725b77a89012cc56",
+    "app/.out-scripts/r3c6h4c2b2-final-type-tsconfig.node.json.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r3c6h4c2b2-final-type-tsconfig.web.json.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r3c6h4c2b2-final-type-tsconfig.scripts.json.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r3c6h4c2b2-final-type-scripts-product-runtime-lab-tsconfig.json.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r3c6h4c2b2-final-type-scripts-controller-bootstrap-lab-tsconfig.json.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r3c6h4c2b2-final-type-scripts-controller-release-lab-tsconfig.json.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r3c6h4c2b2-final-type-scripts-controller-service-lab-tsconfig.json.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r3c6h4c2b2-final-type-scripts-controller-exposure-lab-tsconfig.json.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r3c6h4c2b2-final-type-scripts-controller-upgrade-lab-tsconfig.json.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r3c6h4c2b2-final-type-scripts-controller-upgrade-desktop-lab-tsconfig.json.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r3c6h4c2b2-git-budget.log": "f545cf0f5833efc2469ca082f163126baf359abae5eda48c5438fb100c96b96c",
+    "app/.out-scripts/r3c6h4c2b2-git-budget-lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r3c6h4c2b2-full-git-budget-failed.json": "c9c47b7ce48c8b0f2afdefa8b3c2fd89d0392ce7ce3beb3782107dfc19351c4d"
+  },
+  "accepted_exceptions": [],
+  "next_action": "Explicit SSH authority epoch rebind with fresh original/current revision evidence, then development VPS c-3 upgrade and actual installed exposure/onboarding/reconnect/firstdeploy gates"
+}

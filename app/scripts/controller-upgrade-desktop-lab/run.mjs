@@ -119,6 +119,9 @@ await esbuild.build({
 })
 const {
   DesktopControllerUpgrades,
+  DesktopControllerVault,
+  DesktopControllerEnrollment,
+  DesktopControllerService,
   renderUpgradedControllerUnit,
   labScript,
   SshManager,
@@ -380,6 +383,13 @@ try {
   assert.equal(installPlan.request_key, key)
   installations.prepare(installPlan.plan_id)
   await installations.inspect(key)
+  const bindingKey = randomUUID()
+  let vault = new DesktopControllerVault(desktopDb, cipher)
+  vault.prepare(installations.bindingIntent(key, bindingKey, 'Upgrade retained client'))
+  await new DesktopControllerEnrollment(vault, ssh, { bootstrapScript }).enroll(bindingKey)
+  const tokenBefore = vault.resolve(bindingKey).accessToken,
+    clientBefore = vault.get(bindingKey).remote_client_id
+  check('original_root_admin_enrollment_stores_api_token_only_in_encrypted_main_vault')
   const newSource = process.env.OPSPILOT_UPGRADE_RELEASE,
     newPin = process.env.OPSPILOT_UPGRADE_RELEASE_PIN
   assert(newSource && /^[a-f0-9]{64}$/.test(newPin))
@@ -508,7 +518,40 @@ try {
   await assert.rejects(() => upgrades.send(upgradeKey, 'upgrade', true), {
     code: 'UPGRADE_INSPECT_REQUIRED'
   })
-  assert.equal(desktopDb.prepare('SELECT count(*) n FROM desktop_controller_binding').get().n, 0)
+  assert.equal(desktopDb.prepare('SELECT count(*) n FROM desktop_controller_binding').get().n, 1)
+  vault = new DesktopControllerVault(desktopDb, cipher)
+  assert.throws(() => vault.resolve(bindingKey), { code: 'BINDING_UNAVAILABLE' })
+  const desktopService = new DesktopControllerService(
+    desktopDb,
+    cipher,
+    ssh,
+    undefined,
+    [original, target],
+    undefined,
+    { installation: { bootstrapScript }, upgrade: { bootstrapScript }, bootstrapScript }
+  )
+  const bindingReview = await desktopService.reviewUpgradeBinding({
+    binding_id: bindingKey,
+    request_key: upgradeKey
+  })
+  const refreshed = await desktopService.refreshUpgradeBinding({
+    plan_id: bindingReview.plan_id,
+    consent: true
+  })
+  assert.equal(vault.resolve(bindingKey).accessToken, tokenBefore)
+  assert.equal(refreshed.remote_client_id, clientBefore)
+  const api = await fetch(
+    `http://127.0.0.1:8768/v1/controllers/${installed.installation.controller_id}/identity`,
+    { headers: { authorization: `Bearer ${vault.resolve(bindingKey).accessToken}` } }
+  )
+  assert.equal(api.status, 200)
+  const clientState = await new DesktopControllerEnrollment(vault, ssh, {
+    bootstrapScript
+  }).projectTargets(bindingKey, { after_id: null, limit: 10 })
+  assert.equal(clientState.controller_id, installed.installation.controller_id)
+  check(
+    'explicit_runtime_refresh_preserves_api_token_client_and_authenticated_api_with_revision_root_admin'
+  )
   check('attempt_monotonicity_prevents_second_upgrade_and_does_not_rebind_api_credentials')
   stage = 'revision-admin'
   const current = upgrades.list(key)[0].last_result
@@ -601,6 +644,22 @@ try {
   assert(readFileSync(join(paths.state, 'receipt.json')).equals(originalReceipt))
   assert(readFileSync(join(paths.data, '.controller-runtime-key')).equals(keyBytes))
   assert.equal(lstatSync(join(paths.data, 'opspilot.db')).ino, databaseInode)
+  assert.throws(() => vault.resolve(bindingKey), { code: 'BINDING_UNAVAILABLE' })
+  vault.refreshRuntime(
+    bindingKey,
+    vault.get(bindingKey).revision,
+    upgrades.bindingIntent(upgradeKey, vault.storedIntent(bindingKey))
+  )
+  assert.equal(vault.resolve(bindingKey).accessToken, tokenBefore)
+  assert.equal(vault.get(bindingKey).remote_client_id, clientBefore)
+  const restoredApi = await fetch(
+    `http://127.0.0.1:8768/v1/controllers/${installed.installation.controller_id}/identity`,
+    { headers: { authorization: `Bearer ${vault.resolve(bindingKey).accessToken}` } }
+  )
+  assert.equal(restoredApi.status, 200)
+  check(
+    'rollback_blocks_old_binding_until_explicit_refresh_then_reuses_the_same_authenticated_token'
+  )
   const rollbackAdmin = await administerInstalledController({
     ...upgradeInput,
     request: {

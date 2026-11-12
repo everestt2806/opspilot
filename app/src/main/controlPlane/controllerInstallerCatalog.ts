@@ -34,7 +34,8 @@ export const controllerInstallerCatalogSchema = z
           node_version: z.string().regex(/^22\.\d+\.\d+$/),
           minimum_glibc: z.string().regex(/^\d{1,3}\.\d{1,3}$/),
           release_sha256: hash,
-          installer_sha256: hash
+          installer_sha256: hash,
+          upgrade_supported: z.literal(true).optional()
         })
       )
       .max(8)
@@ -85,7 +86,8 @@ export class ControllerInstallerResources {
         node_version: v.node_version,
         minimum_glibc: v.minimum_glibc,
         platform: 'linux-x64-glibc',
-        state
+        state,
+        ...(v.upgrade_supported ? { upgrade_supported: true as const } : {})
       }
     })
   }

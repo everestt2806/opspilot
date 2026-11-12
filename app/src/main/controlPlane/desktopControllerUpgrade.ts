@@ -23,6 +23,7 @@ import {
   ControllerBootstrapError
 } from './controllerSshBootstrap'
 import { controllerUpgradeResultSchema } from './controllerUpgradeProtocol'
+import type { ProductDesktopControllerBindingIntent } from '../../../../docs/contracts/product-controller-api'
 
 const session = randomUUID()
 const uuid = z.uuidv4().refine((v) => v === v.toLowerCase())
@@ -251,6 +252,56 @@ export class DesktopControllerUpgrades {
         )
         .all(installationKey) as { request_key: string }[]
     ).map((v) => this.meta(this.cold(this.row(v.request_key))))
+  }
+  all(): DesktopUpgrade[] {
+    return (
+      this.db
+        .prepare('SELECT request_key FROM desktop_controller_upgrade ORDER BY sequence')
+        .all() as { request_key: string }[]
+    ).map((v) => this.meta(this.cold(this.row(v.request_key))))
+  }
+  /** Must follow a fresh inspect in the calling review. No caller paths/pins. */
+  bindingIntent(
+    key: string,
+    original: ProductDesktopControllerBindingIntent
+  ): ProductDesktopControllerBindingIntent {
+    const row = this.cold(this.row(key)),
+      base = this.current(row)
+    if (
+      !row.is_current ||
+      !['active', 'rolled_back'].includes(row.state) ||
+      !row.result_json ||
+      this.pending(row.installation_request_key)
+    )
+      throw new DesktopUpgradeError('UPGRADE_INSPECT_REQUIRED')
+    const result = controllerUpgradeResultSchema.parse(JSON.parse(row.result_json))
+    this.correlate(row, result)
+    if (
+      !result.is_current ||
+      result.service_state !== 'running' ||
+      original.installation?.request_key !== row.installation_request_key ||
+      original.installation.authority_revision !== row.authority_revision ||
+      original.controller_id !== row.controller_id ||
+      original.vps_id !== row.vps_id ||
+      canonicalH2Json(original.principal) !== canonicalH2Json(base.principal) ||
+      original.ssh_security_revision !== base.ssh_security_revision
+    )
+      throw new DesktopUpgradeError('UPGRADE_AUTHORITY_CHANGED')
+    return {
+      ...original,
+      artifact_path: result.artifact_path,
+      node_path: result.node_path,
+      data_directory: result.data_directory,
+      manifest_sha256: result.runtime_payload_sha256,
+      upgrade: {
+        request_key: key,
+        authority_revision: row.authority_revision,
+        release_sha256: row.release_sha256,
+        installer_sha256: row.installer_sha256,
+        parent_upgrade_key: row.parent_upgrade_key,
+        parent_release_sha256: row.parent_release_sha256
+      }
+    }
   }
   async plan(installationKey: string, releaseId: string): Promise<DesktopUpgradePlan> {
     if (this.pending(installationKey)) throw new DesktopUpgradeError('UPGRADE_BUSY')

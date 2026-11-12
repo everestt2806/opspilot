@@ -27,6 +27,8 @@ import { CONTROLLER_COPY, CONTROLLER_FEEDBACK } from './controllerCopy'
 import { ControllerCommandPanel } from './ControllerCommandPanel'
 import { ControllerProjectPanel } from './ControllerProjectPanel'
 import { ControllerInstallWizard } from './ControllerInstallWizard'
+import { ControllerUpgradeWizard } from './ControllerUpgradeWizard'
+import { CONTROLLER_UPGRADE_COPY } from './controllerUpgradeCopy'
 import { CONTROLLER_INSTALLER_COPY } from './controllerInstallerCopy'
 import { ControllerTargetRegistrationPanel } from './ControllerTargetRegistrationPanel'
 import { CONTROLLER_COMMAND_COPY } from './controllerCommandCopy'
@@ -46,6 +48,7 @@ export function ControllerPanel(): React.JSX.Element {
     [error, setError] = useState<string | null>(null),
     [open, setOpen] = useState(false),
     [installerOpen, setInstallerOpen] = useState(false),
+    [upgradeOpen, setUpgradeOpen] = useState(false),
     [vps, setVps] = useState<Vps[]>([]),
     [selected, setSelected] = useState<string | null>(null),
     [snapshot, setSnapshot] = useState<DesktopControllerSnapshot | null>(null),
@@ -252,6 +255,9 @@ export function ControllerPanel(): React.JSX.Element {
           </Button>
           <Button type="primary" onClick={() => setInstallerOpen(true)} disabled={busy !== null}>
             {CONTROLLER_INSTALLER_COPY[locale].title}
+          </Button>
+          <Button onClick={() => setUpgradeOpen(true)} disabled={busy !== null}>
+            {CONTROLLER_UPGRADE_COPY[locale].title}
           </Button>
           <Button onClick={() => void add()} disabled={busy !== null}>
             {t.add}
@@ -495,6 +501,11 @@ export function ControllerPanel(): React.JSX.Element {
       <ControllerInstallWizard
         open={installerOpen}
         onClose={() => setInstallerOpen(false)}
+        onChanged={() => void load()}
+      />
+      <ControllerUpgradeWizard
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
         onChanged={() => void load()}
       />
       <Modal

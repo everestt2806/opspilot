@@ -1,0 +1,8 @@
+{
+  "release_id": "linux-x64-node22-20261112-upgrade",
+  "node_version": "22.23.4",
+  "minimum_glibc": "2.39",
+  "release_sha256": "093a05957aa2d1f702a1f495346e338ac8e8ce3934556562f74882a7299962d7",
+  "installer_sha256": "7b19cefec8abce4d9dbba21ec234949fd4ae8783d9994cba817701e5f32a71d0",
+  "upgrade_supported": true
+}

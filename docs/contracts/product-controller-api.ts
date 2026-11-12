@@ -115,6 +115,15 @@ export interface ProductDesktopControllerBindingIntent {
     installer_sha256: string
     runtime_uid: number
   }
+  /** Explicitly reviewed current upgrade operation; original installation remains immutable. */
+  upgrade?: {
+    request_key: string
+    authority_revision: number
+    release_sha256: string
+    installer_sha256: string
+    parent_upgrade_key: string | null
+    parent_release_sha256: string
+  }
 }
 export type ProductApiCapabilityState = 'available' | 'blocked' | 'unsupported'
 

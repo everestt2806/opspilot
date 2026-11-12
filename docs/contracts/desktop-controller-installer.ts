@@ -11,6 +11,7 @@ export type ControllerInstallerCatalog = {
     minimum_glibc: string;
     release_sha256: string;
     installer_sha256: string;
+    upgrade_supported?: true;
   }>;
 };
 export type ControllerInstallerRelease = {
@@ -19,6 +20,7 @@ export type ControllerInstallerRelease = {
   minimum_glibc: string;
   platform: "linux-x64-glibc";
   state: "available" | "missing" | "invalid";
+  upgrade_supported?: true;
 };
 export type ControllerInstallerOverview = {
   releases: ControllerInstallerRelease[];

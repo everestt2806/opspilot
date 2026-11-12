@@ -97,6 +97,7 @@ export type ControllerInstallerCatalog = {
   }>
 }
 export type ControllerInstallerRelease = {
+  upgrade_supported?: true
   release_id: string
   node_version: string
   minimum_glibc: string

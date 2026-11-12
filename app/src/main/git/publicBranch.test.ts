@@ -249,7 +249,9 @@ describe('public GitHub branch read', () => {
         result = await queryWithRealGit({
           repositoryUrl: requestedUrl,
           branch: 'main',
-          timeoutMs: 15_000
+          // Leave time for the real Git fixture and process-tree cleanup within
+          // the enclosing 15s test deadline, including when GitHub is unavailable.
+          timeoutMs: 5_000
         })
       } catch (error) {
         queryError = error
@@ -257,7 +259,10 @@ describe('public GitHub branch read', () => {
 
       if (result?.state === 'found') expect(result.sha).not.toBe(fixtureSha)
       else if (result?.state !== 'missing') {
-        expect(queryError).toMatchObject({ code: 'GIT_REMOTE_ERROR' })
+        expect(queryError).toMatchObject({ name: 'PublicBranchQueryError' })
+        expect(['GIT_REMOTE_ERROR', 'GIT_TIMEOUT']).toContain(
+          (queryError as PublicBranchQueryError).code
+        )
       }
     } finally {
       process.chdir(previousDirectory)

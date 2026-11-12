@@ -11,6 +11,7 @@ import type {
 } from '../../../../docs/contracts/product-controller-api'
 import type { ControllerDesktopBinding } from './controllerHttpClient'
 import { canonicalH2Json } from './productH2Proof'
+import { controllerUpgradeResultSchema } from './controllerUpgradeProtocol'
 
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
 const clean = (value: string): boolean =>
@@ -52,9 +53,20 @@ export const desktopBindingIntentSchema = z
         installer_sha256: z.string().regex(/^[a-f0-9]{64}$/),
         runtime_uid: positive
       })
+      .optional(),
+    upgrade: z
+      .strictObject({
+        request_key: z.uuidv4(),
+        authority_revision: positive,
+        release_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+        installer_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+        parent_upgrade_key: z.uuidv4().nullable(),
+        parent_release_sha256: z.string().regex(/^[a-f0-9]{64}$/)
+      })
       .optional()
   })
   .refine((value) => value.principal.vpsId === value.vps_id)
+  .refine((value) => !value.upgrade || !!value.installation)
 export const desktopClientIdentitySchema = z.strictObject({
   client_id: z.uuid(),
   controller_id: z.string(),
@@ -179,6 +191,68 @@ export class DesktopControllerVault {
     this.currentVps(intent)
     return intent as ProductDesktopControllerBindingIntent
   }
+  /** Main-only public intent snapshot for explicit revision review, even if stale. */
+  storedIntent(bindingId: string): ProductDesktopControllerBindingIntent {
+    return this.parseIntent(this.required(bindingId))
+  }
+  refreshRuntime(
+    bindingId: string,
+    expectedRevision: number,
+    nextInput: ProductDesktopControllerBindingIntent
+  ): ProductDesktopControllerBindingMetadata {
+    return this.mutate(() => {
+      const row = this.required(bindingId),
+        previous = this.parseIntent(row),
+        next = desktopBindingIntentSchema.parse(nextInput)
+      const comparable = {
+        ...next,
+        artifact_path: previous.artifact_path,
+        node_path: previous.node_path,
+        manifest_sha256: previous.manifest_sha256
+      }
+      if (previous.upgrade) comparable.upgrade = previous.upgrade
+      else delete comparable.upgrade
+      this.assertRevision(row, expectedRevision)
+      if (
+        row.state !== 'active' ||
+        !next.upgrade ||
+        !previous.installation ||
+        canonicalH2Json(comparable) !== canonicalH2Json(previous)
+      )
+        throw new DesktopControllerVaultError('BINDING_CHANGED')
+      this.currentVps(next)
+      const client = this.client(row),
+        token = this.decryptToken(row)
+      if (client.revoked_at || Date.parse(client.token_expires_at) <= this.now())
+        throw new DesktopControllerVaultError('CREDENTIAL_EXPIRED')
+      const revision = row.revision + 1
+      const secret = this.cipher.encrypt(
+        canonicalH2Json({
+          purpose: 'desktop-controller-client-v1',
+          intent: next,
+          binding_revision: revision,
+          client,
+          access_token: token
+        })
+      )
+      const changed = this.db
+        .prepare(
+          `UPDATE desktop_controller_binding SET intent_json=?,revision=?,encrypted_secret=?,iv=?,auth_tag=?,updated_at=? WHERE binding_id=? AND revision=? AND state='active'`
+        )
+        .run(
+          canonicalH2Json(next),
+          revision,
+          secret.encrypted_secret,
+          secret.iv,
+          secret.auth_tag,
+          this.timestamp(),
+          bindingId,
+          expectedRevision
+        )
+      if (changed.changes !== 1) throw new DesktopControllerVaultError('BINDING_CHANGED')
+      return this.get(bindingId)
+    })
+  }
   activate(
     bindingId: string,
     expectedRevision: number,
@@ -291,41 +365,49 @@ export class DesktopControllerVault {
       this.currentVps(intent)
       if (Date.parse(client.token_expires_at) <= this.now())
         throw new DesktopControllerVaultError('CREDENTIAL_EXPIRED')
-      const plain: unknown = JSON.parse(
-        this.cipher.decrypt({
-          crypto_scheme: 'aes_256_gcm',
-          encrypted_secret: row.encrypted_secret,
-          iv: row.iv,
-          auth_tag: row.auth_tag
-        })
-      )
-      const checked = z
-        .strictObject({
-          purpose: z.literal('desktop-controller-client-v1'),
-          intent: desktopBindingIntentSchema,
-          binding_revision: positive,
-          client: desktopClientIdentitySchema,
-          access_token: z.string().regex(/^opspilot_[A-Za-z0-9_-]{43}$/)
-        })
-        .safeParse(plain)
-      if (
-        !checked.success ||
-        checked.data.binding_revision !== row.revision ||
-        canonicalH2Json(checked.data.intent) !== canonicalH2Json(intent) ||
-        canonicalH2Json(checked.data.client) !== canonicalH2Json(client)
-      )
-        throw new Error()
+      const accessToken = this.decryptToken(row)
       return {
         controllerId: row.controller_id,
         revision: row.revision,
         principal: { ...intent.principal },
-        accessToken: checked.data.access_token
+        accessToken
       }
     } catch (error) {
       if (error instanceof DesktopControllerVaultError && error.code === 'CREDENTIAL_EXPIRED')
         throw error
       throw new DesktopControllerVaultError('BINDING_UNAVAILABLE')
     }
+  }
+  private decryptToken(row: Row): string {
+    const intent = this.parseIntent(row),
+      client = this.client(row)
+    if (!row.encrypted_secret || !row.iv || !row.auth_tag)
+      throw new DesktopControllerVaultError('BINDING_UNAVAILABLE')
+    const plain: unknown = JSON.parse(
+      this.cipher.decrypt({
+        crypto_scheme: 'aes_256_gcm',
+        encrypted_secret: row.encrypted_secret,
+        iv: row.iv,
+        auth_tag: row.auth_tag
+      })
+    )
+    const checked = z
+      .strictObject({
+        purpose: z.literal('desktop-controller-client-v1'),
+        intent: desktopBindingIntentSchema,
+        binding_revision: positive,
+        client: desktopClientIdentitySchema,
+        access_token: z.string().regex(/^opspilot_[A-Za-z0-9_-]{43}$/)
+      })
+      .safeParse(plain)
+    if (
+      !checked.success ||
+      checked.data.binding_revision !== row.revision ||
+      canonicalH2Json(checked.data.intent) !== canonicalH2Json(intent) ||
+      canonicalH2Json(checked.data.client) !== canonicalH2Json(client)
+    )
+      throw new Error()
+    return checked.data.access_token
   }
   private currentVps(intent: z.output<typeof desktopBindingIntentSchema>): void {
     const vps = this.db
@@ -384,10 +466,11 @@ export class DesktopControllerVault {
         result.request_key !== installation.request_key ||
         result.controller_id !== intent.controller_id ||
         result.runtime_uid !== installation.runtime_uid ||
-        result.artifact_path !== intent.artifact_path ||
-        result.node_path !== intent.node_path ||
         result.data_directory !== intent.data_directory ||
-        result.payload_sha256 !== intent.manifest_sha256
+        (!intent.upgrade &&
+          (result.artifact_path !== intent.artifact_path ||
+            result.node_path !== intent.node_path ||
+            result.payload_sha256 !== intent.manifest_sha256))
       )
         throw Error()
       const credential = this.db
@@ -416,6 +499,54 @@ export class DesktopControllerVault {
         )
         .digest('hex')
       if (digest !== row.credential_digest) throw Error()
+      const pending = this.db
+        .prepare(
+          `SELECT 1 FROM desktop_controller_upgrade WHERE installation_request_key=? AND upgrade_attempted=1 AND state IN ('in_flight','outcome_unknown') LIMIT 1`
+        )
+        .get(installation.request_key)
+      if (pending) throw Error()
+      const head = this.db
+        .prepare(
+          'SELECT * FROM desktop_controller_upgrade WHERE installation_request_key=? AND is_current=1'
+        )
+        .get(installation.request_key) as Record<string, unknown> | undefined
+      if (!intent.upgrade) {
+        if (head) throw Error()
+      } else {
+        const ref = intent.upgrade
+        if (
+          !head ||
+          !['active', 'rolled_back'].includes(head.state as string) ||
+          head.request_key !== ref.request_key ||
+          head.authority_revision !== ref.authority_revision ||
+          ref.authority_revision !== installation.authority_revision ||
+          head.vps_id !== intent.vps_id ||
+          head.controller_id !== intent.controller_id ||
+          head.release_sha256 !== ref.release_sha256 ||
+          head.installer_sha256 !== ref.installer_sha256 ||
+          head.parent_upgrade_key !== ref.parent_upgrade_key ||
+          head.parent_release_sha256 !== ref.parent_release_sha256
+        )
+          throw Error()
+        const observed = controllerUpgradeResultSchema.parse(JSON.parse(head.result_json as string))
+        if (
+          !observed.is_current ||
+          observed.service_state !== 'running' ||
+          observed.request_key !== ref.request_key ||
+          observed.installation_request_key !== installation.request_key ||
+          observed.controller_id !== intent.controller_id ||
+          observed.runtime_uid !== installation.runtime_uid ||
+          observed.artifact_path !== intent.artifact_path ||
+          observed.node_path !== intent.node_path ||
+          observed.data_directory !== intent.data_directory ||
+          observed.runtime_payload_sha256 !== intent.manifest_sha256 ||
+          observed.phase !== head.state ||
+          observed.release_sha256 !== ref.release_sha256 ||
+          observed.parent_release_sha256 !== ref.parent_release_sha256 ||
+          observed.parent_upgrade_key !== ref.parent_upgrade_key
+        )
+          throw Error()
+      }
     } catch {
       throw new DesktopControllerVaultError('BINDING_CHANGED')
     }

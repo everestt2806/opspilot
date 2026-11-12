@@ -4,6 +4,43 @@ START11/11/2026 — Base `f470a05`, product-mode/task-discipline. User yêu cầ
 
 ## Phạm vi và checkpoints
 
+START12/11/2026 — Base `640a6c9`, c-2b2: Main revision binding/vault và Desktop upgrade wizard, protected release catalog, explicit token-preserving refresh. Giữ original installation authority/pins và current SSH fences, không live VPS.
+
+### Ledger c-2b2 — Desktop upgrade feature
+
+| Yêu cầu | Điều kiện nhận | State |
+|---|---|---|
+| Contract/catalog | 8typed IDs/consent IPC, protected new release093a059/tool7b19cef entry, original pins/bytes giữ nguyên;24AST DTO/IPC parity và compiled Main package resource gate PASS | PASS |
+| Main/vault | Actual Linux SSH/service/vault/enrollment/API token200/current admin; explicit fresh Main review/consent token/client/scope preserved, old/unknown epoch blocked; Main TTL/consent/replay regression PASS trong full cuối | PASS |
+| UI | Settings wizard4locale, manual upgrade/inspect/recovery/rollback/refresh; final Electron5checks/17ảnh typed preload/Main/private SQLite, no horizontal overflow/errors, synthetic SSH ghi rõ | PASS |
+| Verification | Full2191PASS/2existingLinux-onlySKIP/0FAIL;94focused/7files,10types/ESLint19/build/24AST/package/native15/Electron5+17ảnh PASS; cleanup/source hashes trong proof | PASS |
+| Handoff | Board/FR/HANDOFF/master/parent/proof đồng bộ; exact staged files/Kim coauthor/normal checkpoint push, SHA qua `git log -1 -- app/src/renderer/src/components/ControllerUpgradeWizard.tsx`; explicit SSH authority rebind/live còn mở | PASS |
+
+UPDATE12/11 — c-2b2 triển khai8typed IDs/consent-only IPC + Settings wizard4locale; Main compose durable upgrade, Root revision admin dispatch theo explicit binding authority. Vault chặn pending/unknown/stale, fresh root inspect→60s review→consent re-encrypt cùng token/client/scopes, revision+1; không schema/dependency change. Protected new catalog `linux-x64-node22-20261112-upgrade` pin093a059/root updater7b19cef, original resource/pins giữ nguyên. Binary resources generated/ignored, package gate verify cả2entries.
+
+Focused73PASS/5files trước thêm Main TTL/replay review test; UI7PASS đã kiểm consent/manual actions/unknown/late reply/safe errors/4locale. Electron lượt `0f76ea534c1c`5checks/17ảnh PASS: production preload/typed IPC/actual Main/private SQLite/vault với synthetic SSH; unknown không replay, explicit refresh giữ token và rollback cần confirm riêng,4locale×2theme×2size không ngang. Private data removed=true,0renderer errors. Source cuối có guard historical badge và thêm review TTL test nên sẽ chạy lại final gates trước claim DONE.
+
+Native lượt đầu `835c4f46f423`15PASS với actual new release093a059, SSH/systemd/vault/enrollment/API token dùng được sau upgrade/rollback và revision admin; root/unit/account dọn xong. Source cuối chuyển refresh qua DesktopControllerService fresh-review/consent, native cuối đang chạy; không dùng lượt đầu thay current Main proof.0Productapps/targets/productionDB/VPS/OS reboot/Docker claim.
+
+UPDATE12/11 — Native source cuối `8955a8604429`15PASS/27compressed SSH commands, actual Main fresh review/consent giữ token/client và API200 sau upgrade/rollback, Root admin/parent authority và archive guard; root/unit/account removed=true.0Productapps/targets/production. Final Electron `9550b835e110`5PASS/17ảnh, production preload+component+Main service/SQLite/encrypted vault với synthetic transport; private data removed=true/renderer errors0.10types/ESLint19 (ignored giant IPC file không lint theo config)/production build/package hook/24AST PASS; full Vitest cuối đang chạy. Main API revision refresh giữ SSH principal/cipher; explicit SSH rebind vẫn OPEN, không claim c-2 tổng hoặc live rollout hoàn tất.
+
+## HANDOFF12/11 — c-2b2 DONE scoped / CHỜ REVIEW
+
+- Ledger c-2b2 đạt5/5PASS; không accepted exception. [Proof/source hashes](../ui-redesign/r3c6h4c2b2-verification.json), [17ảnh Electron](../ui-redesign/screenshots/r3c6h4c2b2/). SHA dùng `git log -1 -- app/src/renderer/src/components/ControllerUpgradeWizard.tsx`. Chỉ runtime refresh cùng SSH principal/cipher; explicit credential/VPS-ID rebind và live c-3 còn mở, không đóng c-2 tổng/6h4/R3.
+- Final `pnpm --prefix app exec vitest run --maxWorkers=4 --reporter=default --reporter=json --outputFile.json=.out-scripts/r3c6h4c2b2-full-final.json` →2191PASS/2existingLinux-onlySKIP/0FAIL,163files;94focused assertions/7files trong cùng lượt full. Hai lượt trước real-Git publicBranch timeout15000ms nhưng chạy riêng đạt. Test cấp query15000ms bằng toàn deadline15000ms, chưa tính fixture/kill/cleanup; giảm riêng query test xuống5000ms và nhận typed GIT_TIMEOUT/GIT_REMOTE_ERROR như thất bại mạng, vẫn bắt buộc không trả SHA của local insteadOf fixture. Không đổi timeout app/global test hoặc thêm skip; đây là sửa test budget có ghi nhận, không waiver gate.
+- Node22: `pnpm --prefix app exec tsc --noEmit -p <project> --composite false` →10projects trong proof PASS. `pnpm.cmd --prefix app exec eslint --no-warn-ignored <19 exact files>` →0error/0warning; giant shared/ipc.ts theo ignore config, được typecheck/AST. `pnpm --prefix app build` PASS. Raw logs prefix `app/.out-scripts/r3c6h4c2b2-final-*`; `node app/.out-scripts/check-upgrade-parity.cjs` →24AST, `node app/.out-scripts/check-upgrade-package.cjs` →compiled Main packaging gate PASS. Scripts kiểm nhỏ là scratch ignored; packaging hook tái hiện trong README lab.
+- Final native `36e76600ef48`15PASS: actual private Linux SSH/systemd/Main030/controller029/root admin/enrollment/vault/authenticated API200 sau upgrade và rollback, lostreply→cold Main inspect không replay/restart, receipt/key/DB inode/controller identity giữ nguyên. root/unit/account removed=true,27compressed SSH commands/max11142bytes;0Productapps/targets/VPS/productionDB/Docker/OS reboot claim. Final Electron `4add6ca53b7d`5PASS/17captures, production preload/UI/typed IPC/Main/private SQLite; SSH synthetic ghi rõ, private data removed=true/0renderer errors/no horizontal overflow ở4locale×2theme×2size.
+- Rà soát cuối phát hiện legacy install inspect có thể ghi outcome_unknown vào original authority sau upgrade. Service chặn inspect/send/rebind/register bằng UPGRADE_INSPECT_REQUIRED trước bất kỳ mutation; regression thử7entrypoints, original row giữ nguyên và fresh upgrade binding review vẫn chạy. Pending/unknown revision fail-closed, review60s/consent/replay và cipher/session fences đều kiểm chứng.
+- Additional protected descriptor `linux-x64-node22-20261112-upgrade`: release093a059/payload4e3a163/updater7b19cef,998files/145005807bytes; binary ignored/generated. Original release96a6a5b/tool7e22786 giữ nguyên. [Reproduction/native/Electron commands](../../app/scripts/controller-upgrade-desktop-lab/README.md); không migration/dependency mới, không ghi VPS hoặc production DB. Normal checkpoint push/Kim coauthor; không PR/merge/reset/clean/stash/rebase. Personal untracked giữ ngoài index.
+
+### Bước kế tiếp: explicit SSH authority rebind rồi live c-3
+
+- Khi VPS ID/SSH credential đổi, giữ original install và upgrade UUID/history/attempted; fresh original+current revision proof dưới pinned SSH, bump local authority epoch, không đổi pin hoặc dùng old-unit inspector để né guard. Migration030 immutable authority hiện từ chối sửa fields; nếu cần epoch rebind phải contract/migration Desktop-only mới, controller giữ029.
+- Liên kết review/rebind của installation, upgrade và encrypted API binding cần thiết kế nguyên tử hoặc có trạng thái recovery rõ ràng; bất kỳ gap đều fail-closed. Không tự decrypt bằng profile khác hoặc cấp client/token mới để che lỗi cũ.
+- Sau gate rebind, live c-3 dùng protected release/updater mới trên VPS phát triển, giữ demo/controller identity/UID/key/DB/target; actual installed exposure API và full isolated Electron onboarding/reconnect/firstdeploy. Hiện VPS/demo/pins/DB/key không bị tác động.
+
+Phạm vi refresh c-2b2 giữ nguyên SSH principal/cipher authority đã xác minh. Credential/VPS ID thay đổi vẫn fail-closed; không dùng UI refresh revision để tự thông qua SSH authority rebind. Luồng rebind cần fresh root evidence xuyên cả original install và upgrade intent/epoch; triển khai riêng nếu không chứng minh đủ trong slice này, không claim hoàn thành.
+
 START12/11/2026 — Base `db95d10`, tiếp c-2b bằng lát c-2b1: root admin bridge cho current upgraded revision và explicit same-key recovery khi transport mất trước root journal. Task-discipline, không production VPS/DB, không API binding/UI ngầm.
 
 ### Ledger c-2b1 — runtime authority và khôi phục trước root journal

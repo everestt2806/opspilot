@@ -174,6 +174,18 @@ export function registerIpcHandlers(
   desktopControllerService?: DesktopControllerService
 ): void {
   if (desktopControllerService) {
+    handle('controller:upgrade-overview', () => desktopControllerService.upgradeOverview())
+    handle('controller:review-upgrade', (input) => desktopControllerService.reviewUpgrade(input))
+    handle('controller:prepare-upgrade', (input) => desktopControllerService.prepareUpgrade(input))
+    handle('controller:send-upgrade', (input) => desktopControllerService.sendUpgrade(input))
+    handle('controller:inspect-upgrade', (key) => desktopControllerService.inspectUpgrade(key))
+    handle('controller:cancel-upgrade', (key) => desktopControllerService.cancelUpgrade(key))
+    handle('controller:review-upgrade-binding', (input) =>
+      desktopControllerService.reviewUpgradeBinding(input)
+    )
+    handle('controller:refresh-upgrade-binding', (input) =>
+      desktopControllerService.refreshUpgradeBinding(input)
+    )
     handle('controller:installer-overview', () => desktopControllerService.installerOverview())
     handle('controller:review-installation', (input) =>
       desktopControllerService.reviewInstaller(input)

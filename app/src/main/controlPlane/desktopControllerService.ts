@@ -62,6 +62,18 @@ import {
   DesktopInstallationError
 } from './desktopControllerInstallation'
 import { ControllerBootstrapError } from './controllerSshBootstrap'
+import { DesktopControllerUpgrades, DesktopUpgradeError } from './desktopControllerUpgrade'
+import type { DesktopUpgradeOptions } from './desktopControllerUpgrade'
+import type { DesktopInstallationOptions } from './desktopControllerInstallation'
+import type { ProductDesktopControllerBindingIntent } from '../../../../docs/contracts/product-controller-api'
+import { canonicalH2Json } from './productH2Proof'
+import type {
+  ControllerUpgradeOverview,
+  ControllerUpgradeReviewInput,
+  ControllerUpgradeSendInput,
+  ControllerUpgradeBindingReview,
+  ControllerUpgradeReview
+} from '@shared/controllerUpgrade'
 import type {
   DesktopControllerRelease,
   DesktopInstallation,
@@ -103,17 +115,57 @@ export class DesktopControllerService {
   private readonly targets: DesktopTargetSetups
   private readonly firstDeployments: DesktopFirstDeployments
   private readonly installations: DesktopControllerInstallations
+  private readonly upgrades: DesktopControllerUpgrades
+  private readonly runtimeReviews = new Map<
+    string,
+    {
+      expires: number
+      bindingId: string
+      revision: number
+      before: ProductDesktopControllerBindingIntent
+      next: ProductDesktopControllerBindingIntent
+      upgradeKey: string
+    }
+  >()
   constructor(
     private readonly db: Database.Database,
     cipher: AesGcmCredentialCipher,
     private readonly ssh: SshManager,
     private readonly clientFactory?: (bindingId: string) => Pick<ControllerHttpClient, 'call'>,
     installationCatalog: readonly DesktopControllerRelease[] = [],
-    private readonly installerResources?: ControllerInstallerResources
+    private readonly installerResources?: ControllerInstallerResources,
+    /** Trusted CLI/lab composition only; never a JSON/IPC field. */
+    options: {
+      installation?: DesktopInstallationOptions
+      upgrade?: DesktopUpgradeOptions
+      bootstrapScript?: { text: string; sha256: string }
+    } = {}
   ) {
-    this.installations = new DesktopControllerInstallations(db, ssh, installationCatalog)
+    this.installations = new DesktopControllerInstallations(
+      db,
+      ssh,
+      installationCatalog,
+      options.installation
+    )
+    const upgradeIds = new Set(
+      installerResources
+        ?.list()
+        .filter((v) => v.upgrade_supported)
+        .map((v) => v.release_id)
+    )
+    this.upgrades = new DesktopControllerUpgrades(
+      db,
+      this.installations,
+      ssh,
+      installerResources
+        ? installationCatalog.filter((v) => upgradeIds.has(v.release_id))
+        : installationCatalog,
+      options.upgrade
+    )
     this.vault = new DesktopControllerVault(db, cipher)
-    this.enrollment = new DesktopControllerEnrollment(this.vault, ssh)
+    this.enrollment = new DesktopControllerEnrollment(this.vault, ssh, {
+      bootstrapScript: options.bootstrapScript
+    })
     this.commands = new DesktopControllerCommands(db, this.vault, ssh, clientFactory)
     this.projects = new DesktopProjectSetups(db, this.vault, this.enrollment)
     this.targets = new DesktopTargetSetups(db, cipher, this.vault, this.enrollment)
@@ -133,6 +185,116 @@ export class DesktopControllerService {
   }
   async planInstallation(vpsId: number, releaseId: string): Promise<DesktopInstallationPlan> {
     return this.safe(() => this.installations.plan(vpsId, releaseId))
+  }
+  async upgradeOverview(): Promise<ControllerUpgradeOverview> {
+    return this.safe(() => ({
+      releases: this.installerResources?.list().filter((v) => v.upgrade_supported) ?? [],
+      installations: this.installations.list(),
+      upgrades: this.upgrades.all(),
+      connections: this.vault.list().map((v) => this.connection(v.binding_id))
+    }))
+  }
+  async reviewUpgrade(input: ControllerUpgradeReviewInput): Promise<ControllerUpgradeReview> {
+    return this.safe(() => {
+      const v = z
+        .strictObject({
+          installation_request_key: z.uuidv4(),
+          release_id: z.string().regex(/^[A-Za-z0-9_.-]{1,128}$/)
+        })
+        .parse(input)
+      return this.upgrades.plan(v.installation_request_key, v.release_id)
+    })
+  }
+  async prepareUpgrade(input: {
+    plan_id: string
+  }): Promise<import('../../../../docs/contracts/desktop-controller-upgrade').DesktopUpgrade> {
+    return this.safe(() =>
+      this.upgrades.prepare(z.strictObject({ plan_id: z.uuidv4() }).parse(input).plan_id)
+    )
+  }
+  async sendUpgrade(
+    input: ControllerUpgradeSendInput
+  ): Promise<import('../../../../docs/contracts/desktop-controller-upgrade').DesktopUpgrade> {
+    return this.safe(() => {
+      const v = z
+        .strictObject({
+          request_key: z.uuidv4(),
+          operation: z.enum(['transfer', 'upgrade', 'recover', 'rollback']),
+          consent: z.literal(true)
+        })
+        .parse(input)
+      return this.upgrades.send(v.request_key, v.operation, v.consent)
+    })
+  }
+  async inspectUpgrade(
+    key: string
+  ): Promise<import('../../../../docs/contracts/desktop-controller-upgrade').DesktopUpgrade> {
+    return this.safe(() => this.upgrades.inspect(z.uuidv4().parse(key)))
+  }
+  async cancelUpgrade(
+    key: string
+  ): Promise<import('../../../../docs/contracts/desktop-controller-upgrade').DesktopUpgrade> {
+    return this.safe(() => this.upgrades.cancel(z.uuidv4().parse(key)))
+  }
+  async reviewUpgradeBinding(input: {
+    binding_id: string
+    request_key: string
+  }): Promise<ControllerUpgradeBindingReview> {
+    return this.safe(async () => {
+      const v = z.strictObject({ binding_id: z.uuidv4(), request_key: z.uuidv4() }).parse(input)
+      const before = this.vault.storedIntent(v.binding_id),
+        metadata = this.vault.get(v.binding_id)
+      if (metadata.state !== 'active') throw new DesktopUpgradeError('UPGRADE_CONFLICT')
+      await this.upgrades.inspect(v.request_key)
+      if (
+        this.vault.get(v.binding_id).revision !== metadata.revision ||
+        canonicalH2Json(this.vault.storedIntent(v.binding_id)) !== canonicalH2Json(before)
+      )
+        throw new DesktopUpgradeError('UPGRADE_AUTHORITY_CHANGED')
+      const next = this.upgrades.bindingIntent(v.request_key, before)
+      for (const [id, p] of this.runtimeReviews)
+        if (p.expires < Date.now()) this.runtimeReviews.delete(id)
+      if (this.runtimeReviews.size >= 32) throw new DesktopUpgradeError('UPGRADE_BUSY')
+      const id = randomUUID(),
+        expires = Date.now() + 60000
+      this.runtimeReviews.set(id, {
+        expires,
+        bindingId: v.binding_id,
+        revision: metadata.revision,
+        before,
+        next,
+        upgradeKey: v.request_key
+      })
+      return {
+        plan_id: id,
+        expires_at: new Date(expires).toISOString(),
+        binding_id: v.binding_id,
+        upgrade_request_key: v.request_key,
+        binding_revision: metadata.revision,
+        controller_id: next.controller_id,
+        release_id: this.upgrades.all().find((r) => r.request_key === v.request_key)!.release_id
+      }
+    })
+  }
+  async refreshUpgradeBinding(input: {
+    plan_id: string
+    consent: true
+  }): Promise<DesktopControllerConnection> {
+    return this.safe(() => {
+      const v = z.strictObject({ plan_id: z.uuidv4(), consent: z.literal(true) }).parse(input),
+        plan = this.runtimeReviews.get(v.plan_id)
+      if (!plan || plan.expires < Date.now()) throw new DesktopUpgradeError('UPGRADE_PLAN_EXPIRED')
+      if (
+        this.vault.get(plan.bindingId).revision !== plan.revision ||
+        canonicalH2Json(this.vault.storedIntent(plan.bindingId)) !== canonicalH2Json(plan.before) ||
+        canonicalH2Json(this.upgrades.bindingIntent(plan.upgradeKey, plan.before)) !==
+          canonicalH2Json(plan.next)
+      )
+        throw new DesktopUpgradeError('UPGRADE_AUTHORITY_CHANGED')
+      this.vault.refreshRuntime(plan.bindingId, plan.revision, plan.next)
+      this.runtimeReviews.delete(v.plan_id)
+      return this.connection(plan.bindingId)
+    })
   }
   async installerOverview(): Promise<ControllerInstallerOverview> {
     return this.safe(() => ({
@@ -171,6 +333,7 @@ export class DesktopControllerService {
           consent: z.literal(true)
         })
         .parse(input)
+      this.originalInstallationOnly(value.request_key)
       return this.installations.send(value.request_key, value.operation, value.consent)
     })
   }
@@ -183,6 +346,7 @@ export class DesktopControllerService {
       const value = z
         .strictObject({ plan_id: z.uuidv4(), request_key: z.uuidv4(), confirm: z.literal(true) })
         .parse(input)
+      this.originalInstallationOnly(value.request_key)
       return this.installations.rebind(value.plan_id, value.request_key, value.confirm)
     })
   }
@@ -191,6 +355,7 @@ export class DesktopControllerService {
   ): Promise<DesktopControllerConnection> {
     return this.safe(() => {
       const value = installedRegisterSchema.omit({ binding_id: true }).parse(input)
+      this.originalInstallationOnly(value.installation_request_key)
       const intent = this.installations.bindingIntent(
         value.installation_request_key,
         randomUUID(),
@@ -211,21 +376,30 @@ export class DesktopControllerService {
     return this.safe(() => this.installations.cancel(key))
   }
   async inspectInstallation(key: string): Promise<DesktopInstallation> {
-    return this.safe(() => this.installations.inspect(key))
+    return this.safe(() => {
+      this.originalInstallationOnly(key)
+      return this.installations.inspect(key)
+    })
   }
   async sendInstallation(
     key: string,
     operation: Exclude<DesktopInstallationOperation, 'inspect'>,
     consent: true
   ): Promise<DesktopInstallation> {
-    return this.safe(() => this.installations.send(key, operation, consent))
+    return this.safe(() => {
+      this.originalInstallationOnly(key)
+      return this.installations.send(key, operation, consent)
+    })
   }
   async rebindInstallation(
     planId: string,
     key: string,
     confirm: true
   ): Promise<DesktopInstallation> {
-    return this.safe(() => this.installations.rebind(planId, key, confirm))
+    return this.safe(() => {
+      this.originalInstallationOnly(key)
+      return this.installations.rebind(planId, key, confirm)
+    })
   }
   async prepareTarget(input: DesktopTargetPrepareInput): Promise<DesktopTargetSetup> {
     return this.safe(() => this.targets.prepare(input))
@@ -362,6 +536,7 @@ export class DesktopControllerService {
   }): Promise<DesktopControllerConnection> {
     return this.safe(async () => {
       const value = installedRegisterSchema.parse(input)
+      this.originalInstallationOnly(value.installation_request_key)
       const intent = this.installations.bindingIntent(
         value.installation_request_key,
         value.binding_id,
@@ -562,6 +737,20 @@ export class DesktopControllerService {
       scopes: [...(row.client?.scopes ?? [])]
     }
   }
+  private originalInstallationOnly(key: string): void {
+    this.uuid(key)
+    // The original inspector attests the original runtime. Once an upgrade owns
+    // that runtime, it must not overwrite installation authority with a stale result.
+    if (
+      this.db
+        .prepare(
+          `SELECT 1 FROM desktop_controller_upgrade WHERE installation_request_key=?
+           AND state<>'cancelled' AND (upgrade_attempted=1 OR is_current=1) LIMIT 1`
+        )
+        .get(key)
+    )
+      throw new DesktopUpgradeError('UPGRADE_INSPECT_REQUIRED')
+  }
   private uuid(value: string): void {
     if (!z.uuid().safeParse(value).success) throw new DesktopControllerVaultError('REQUEST_INVALID')
   }
@@ -577,6 +766,7 @@ export class DesktopControllerService {
         error instanceof DesktopFirstDeploymentError ||
         error instanceof DesktopTargetSetupError ||
         error instanceof DesktopInstallationError ||
+        error instanceof DesktopUpgradeError ||
         error instanceof ControllerBootstrapError ||
         error instanceof ProjectRegistrationError ||
         error instanceof ControllerHttpClientError

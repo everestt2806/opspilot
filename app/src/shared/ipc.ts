@@ -1,3 +1,4 @@
+import type { ControllerUpgradeOverview, ControllerUpgradeReviewInput, ControllerUpgradeReview, ControllerUpgradeSendInput, ControllerUpgradeBindingReview, DesktopUpgrade } from './controllerUpgrade'
 import type { DesktopExposureInput, DesktopExposureResult } from './desktopControllerExposure'
 import type {DesktopTargetPrepareInput,DesktopTargetSendInput,DesktopTargetSetup} from './desktopTargetRegistration';
 import type { ControllerInstallerOverview, ControllerInstallerReview, ControllerInstallerSendInput, ControllerInstalledRegisterInput, ControllerInstalledPrepareInput, DesktopInstallation } from './controllerInstaller';
@@ -369,6 +370,14 @@ export interface DomainIngressActionInput extends DomainIngressStatusInput {
 
 export interface IpcInvokeMap {
   'controller:list': () => IpcResult<DesktopControllerConnection[]>;
+  'controller:upgrade-overview': () => IpcResult<ControllerUpgradeOverview>;
+  'controller:review-upgrade': (input: ControllerUpgradeReviewInput) => IpcResult<ControllerUpgradeReview>;
+  'controller:prepare-upgrade': (input: { plan_id: string }) => IpcResult<DesktopUpgrade>;
+  'controller:send-upgrade': (input: ControllerUpgradeSendInput) => IpcResult<DesktopUpgrade>;
+  'controller:inspect-upgrade': (key: string) => IpcResult<DesktopUpgrade>;
+  'controller:cancel-upgrade': (key: string) => IpcResult<DesktopUpgrade>;
+  'controller:review-upgrade-binding': (input: { binding_id: string; request_key: string }) => IpcResult<ControllerUpgradeBindingReview>;
+  'controller:refresh-upgrade-binding': (input: { plan_id: string; consent: true }) => IpcResult<DesktopControllerConnection>;
   'controller:installer-overview': () => IpcResult<ControllerInstallerOverview>;
   'controller:review-installation': (input: { vps_id: number; release_id: string }) => IpcResult<ControllerInstallerReview>;
   'controller:prepare-installation': (input: { plan_id: string }) => IpcResult<DesktopInstallation>;

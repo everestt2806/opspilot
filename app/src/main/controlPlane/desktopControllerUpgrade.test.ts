@@ -10,6 +10,8 @@ import { DesktopControllerInstallations } from './desktopControllerInstallation'
 import { DesktopControllerUpgrades, type DesktopUpgradeOptions } from './desktopControllerUpgrade'
 import { ControllerBootstrapError } from './controllerSshBootstrap'
 import * as releaseModule from './controllerRelease'
+import { DesktopControllerVault } from './desktopControllerVault'
+import { DesktopControllerService } from './desktopControllerService'
 import type { ControllerInstallationResult } from '../../../../docs/contracts/product-controller-installation'
 import type { ControllerUpgradeResult } from '../../../../docs/contracts/product-controller-upgrade'
 
@@ -35,7 +37,8 @@ let directory: string,
   db: ReturnType<typeof initializeDatabase>,
   installations: DesktopControllerInstallations,
   upgrades: DesktopControllerUpgrades,
-  installKey: string
+  installKey: string,
+  cipher: AesGcmCredentialCipher
 const remote = new Map<string, ControllerUpgradeResult>()
 const transport = {
   call: vi.fn<NonNullable<DesktopUpgradeOptions['transport']>['call']>(),
@@ -102,7 +105,7 @@ beforeEach(async () => {
   vi.spyOn(releaseModule, 'readReleaseFile').mockReturnValue(tool)
   directory = mkdtempSync(join(tmpdir(), 'opspilot-upgrade-journal-'))
   db = initializeDatabase(directory)
-  const cipher = new AesGcmCredentialCipher(randomBytes(32))
+  cipher = new AesGcmCredentialCipher(randomBytes(32))
   new VpsRepository(db).create({
     name: 'fixture',
     host: 'controller.test',
@@ -190,6 +193,135 @@ it('persists UUID/parent/pins before transfer, idempotent prepare and no token b
   await expect(upgrades.send(first.request_key, 'upgrade', true)).rejects.toMatchObject({
     code: 'UPGRADE_INSPECT_REQUIRED'
   })
+})
+it('explicit runtime refresh preserves the existing token/client/scopes and fences old or unknown epochs', async () => {
+  const vault = new DesktopControllerVault(db, cipher),
+    bindingId = randomUUID()
+  const intent = installations.bindingIntent(installKey, bindingId, 'fixture binding', true)
+  vault.prepare(intent)
+  const token = 'opspilot_' + randomBytes(32).toString('base64url'),
+    expires = new Date(Date.now() + 86400000).toISOString()
+  const client = {
+    client_id: randomUUID(),
+    controller_id: cid,
+    display_name: intent.display_name,
+    scopes: intent.requested_scopes,
+    created_at: new Date().toISOString(),
+    revoked_at: null,
+    token_expires_at: expires
+  }
+  vault.activate(bindingId, 1, {
+    state: 'issued_once',
+    controller_id: cid,
+    client,
+    credential: { access_token: token, token_type: 'Bearer', expires_at: expires }
+  })
+  const key = await transferred()
+  await upgrades.send(key, 'upgrade', true)
+  expect(() => vault.resolve(bindingId)).toThrow('BINDING_UNAVAILABLE')
+  const next = upgrades.bindingIntent(key, vault.storedIntent(bindingId))
+  expect(() => vault.refreshRuntime(bindingId, 2, { ...next, requested_scopes: ['read'] })).toThrow(
+    'BINDING_CHANGED'
+  )
+  const refreshed = vault.refreshRuntime(bindingId, 2, next)
+  expect(refreshed).toMatchObject({ revision: 3, remote_client_id: client.client_id })
+  expect(vault.resolve(bindingId)).toMatchObject({ accessToken: token, revision: 3 })
+  expect(vault.storedIntent(bindingId).installation).toEqual(intent.installation)
+  expect(() => vault.refreshRuntime(bindingId, 2, next)).toThrow('BINDING_CHANGED')
+  const before = upgrades.list(installKey)[0]
+  db.prepare(
+    "UPDATE desktop_controller_upgrade SET state='outcome_unknown' WHERE request_key=?"
+  ).run(key)
+  expect(() => vault.resolve(bindingId)).toThrow('BINDING_UNAVAILABLE')
+  db.prepare('UPDATE desktop_controller_upgrade SET state=? WHERE request_key=?').run(
+    before.state,
+    key
+  )
+  await upgrades.send(key, 'rollback', true)
+  expect(() => vault.resolve(bindingId)).toThrow('BINDING_UNAVAILABLE')
+  const restored = upgrades.bindingIntent(key, vault.storedIntent(bindingId))
+  expect(restored.node_path).toBe(intent.node_path)
+  vault.refreshRuntime(bindingId, 3, restored)
+  expect(vault.resolve(bindingId)).toMatchObject({ accessToken: token, revision: 4 })
+  expect(vault.get(bindingId).remote_client_id).toBe(client.client_id)
+})
+it('Main requires a fresh ephemeral review and explicit consent before preserving a runtime binding token', async () => {
+  const vault = new DesktopControllerVault(db, cipher),
+    bindingId = randomUUID(),
+    intent = installations.bindingIntent(installKey, bindingId, 'Main refresh')
+  vault.prepare(intent)
+  const token = 'opspilot_' + randomBytes(32).toString('base64url'),
+    expires = new Date(Date.now() + 86400000).toISOString()
+  vault.activate(bindingId, 1, {
+    state: 'issued_once',
+    controller_id: cid,
+    client: {
+      client_id: randomUUID(),
+      controller_id: cid,
+      display_name: intent.display_name,
+      scopes: ['read'],
+      created_at: new Date().toISOString(),
+      revoked_at: null,
+      token_expires_at: expires
+    },
+    credential: { access_token: token, token_type: 'Bearer', expires_at: expires }
+  })
+  const key = await transferred()
+  await upgrades.send(key, 'upgrade', true)
+  const main = new DesktopControllerService(
+    db,
+    cipher,
+    ssh as never,
+    undefined,
+    [old, target],
+    undefined,
+    { installation: { transport: installationTransport }, upgrade: { transport } }
+  )
+  const original = db
+    .prepare('SELECT * FROM desktop_controller_installation WHERE request_key=?')
+    .get(installKey)
+  for (const work of [
+    () => main.inspectInstallation(installKey),
+    () => main.sendInstallation(installKey, 'recover', true),
+    () => main.sendInstaller({ request_key: installKey, operation: 'recover', consent: true }),
+    () => main.rebindInstallation(randomUUID(), installKey, true),
+    () => main.rebindInstaller({ plan_id: randomUUID(), request_key: installKey, confirm: true }),
+    () =>
+      main.prepareInstalledRegistration({
+        installation_request_key: installKey,
+        display_name: 'Stale installation'
+      }),
+    () =>
+      main.registerInstalled({
+        installation_request_key: installKey,
+        binding_id: randomUUID(),
+        display_name: 'Stale installation'
+      })
+  ])
+    await expect(work()).rejects.toMatchObject({
+      context: { cause: { message: 'UPGRADE_INSPECT_REQUIRED' } }
+    })
+  expect(
+    db.prepare('SELECT * FROM desktop_controller_installation WHERE request_key=?').get(installKey)
+  ).toEqual(original)
+  const review = await main.reviewUpgradeBinding({ binding_id: bindingId, request_key: key })
+  expect(vault.get(bindingId).revision).toBe(2)
+  await expect(
+    main.refreshUpgradeBinding({ plan_id: review.plan_id, consent: false as true })
+  ).rejects.toThrow()
+  expect(vault.get(bindingId).revision).toBe(2)
+  vi.useFakeTimers()
+  vi.setSystemTime(Date.now() + 61000)
+  await expect(
+    main.refreshUpgradeBinding({ plan_id: review.plan_id, consent: true })
+  ).rejects.toThrow()
+  vi.useRealTimers()
+  const fresh = await main.reviewUpgradeBinding({ binding_id: bindingId, request_key: key })
+  await main.refreshUpgradeBinding({ plan_id: fresh.plan_id, consent: true })
+  expect(vault.resolve(bindingId)).toMatchObject({ revision: 3, accessToken: token })
+  await expect(
+    main.refreshUpgradeBinding({ plan_id: fresh.plan_id, consent: true })
+  ).rejects.toThrow()
 })
 it('lost upgrade reply survives cold SQLite reopen and inspect never replays upgrade', async () => {
   const key = await transferred(),

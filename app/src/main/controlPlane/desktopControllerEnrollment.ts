@@ -375,7 +375,7 @@ export class DesktopControllerEnrollment {
     })
     const work = async (): Promise<unknown> => {
       if (intent.installation) {
-        const reference = intent.installation
+        const reference = intent.upgrade ?? intent.installation
         const revision = this.vault.get(intent.binding_id).revision
         const assertCurrent = (): void => {
           if (
@@ -388,6 +388,7 @@ export class DesktopControllerEnrollment {
           command?.beforeSend?.()
         }
         const response = await administerInstalledController({
+          ...(intent.upgrade ? { purpose: 'upgrade' as const } : {}),
           ssh: this.ssh,
           vpsId: intent.vps_id,
           expectedIdentity: intent.principal,
@@ -407,8 +408,17 @@ export class DesktopControllerEnrollment {
               release_sha256: reference.release_sha256,
               installer_sha256: reference.installer_sha256,
               controller_id: intent.controller_id,
-              runtime_uid: reference.runtime_uid,
-              payload_sha256: intent.manifest_sha256
+              runtime_uid: intent.installation.runtime_uid,
+              payload_sha256: intent.manifest_sha256,
+              ...(intent.upgrade
+                ? {
+                    revision: {
+                      installation_request_key: intent.installation.request_key,
+                      parent_upgrade_key: intent.upgrade.parent_upgrade_key,
+                      parent_release_sha256: intent.upgrade.parent_release_sha256
+                    }
+                  }
+                : {})
             },
             command: {
               operation: command?.operation ?? 'enroll-desktop-client',

@@ -3,11 +3,24 @@ import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import { existsSync, readFileSync } from 'node:fs'
 import { controllerInstallerCatalogSchema } from './src/main/controlPlane/controllerInstallerCatalog'
+import approvedUpgrade from './control-plane-runtime/desktop-upgrade-release.json'
 
 const catalogFile = resolve('resources/controller-releases/catalog.json')
-const installerCatalog = existsSync(catalogFile)
+const originalCatalog = existsSync(catalogFile)
   ? controllerInstallerCatalogSchema.parse(JSON.parse(readFileSync(catalogFile, 'utf8')))
   : { format: 1, releases: [] }
+const conflicting = originalCatalog.releases.find(
+  (v) => v.release_id === approvedUpgrade.release_id
+)
+if (conflicting && JSON.stringify(conflicting) !== JSON.stringify(approvedUpgrade))
+  throw Error('CONTROLLER_UPGRADE_CATALOG_CONFLICT')
+const installerCatalog = controllerInstallerCatalogSchema.parse({
+  format: 1,
+  releases: [
+    ...originalCatalog.releases.filter((v) => v.release_id !== approvedUpgrade.release_id),
+    approvedUpgrade
+  ]
+})
 
 export default defineConfig({
   main: {
