@@ -11,7 +11,7 @@ from pathlib import Path
 
 def main():
     root = Path(__file__).resolve().parents[3]
-    if sys.argv[1:] == ["--upgrade"]:
+    if sys.argv[1:] in (["--upgrade"], ["--desktop-preflight"]):
         payload = {
             "host": "167.71.202.116",
             "port": 22,
@@ -21,11 +21,32 @@ def main():
         }
         command = [
             "node",
-            str(root / "app/scripts/controller-upgrade-live.mjs"),
-            "--confirm-development-controller-upgrade",
+            str(
+                root
+                / (
+                    "app/scripts/controller-desktop-live.mjs"
+                    if sys.argv[1] == "--desktop-preflight"
+                    else "app/scripts/controller-upgrade-live.mjs"
+                )
+            ),
+            "--confirm-development-desktop-preflight"
+            if sys.argv[1] == "--desktop-preflight"
+            else "--confirm-development-controller-upgrade",
         ]
         data = json.dumps(payload).encode()
         payload["password"] = ""
+    elif (
+        len(sys.argv) == 3
+        and sys.argv[1] == "--desktop-resume"
+        and re.fullmatch(r"[a-f0-9]{16}", sys.argv[2])
+    ):
+        command = [
+            "node",
+            str(root / "app/scripts/controller-desktop-live.mjs"),
+            "--resume",
+            sys.argv[2],
+        ]
+        data = b""
     elif (
         len(sys.argv) == 3
         and sys.argv[1] in ("--inspect", "--recover")
