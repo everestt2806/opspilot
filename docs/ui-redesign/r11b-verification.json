@@ -1,0 +1,161 @@
+{
+  "checkpoint": "R11b",
+  "date": "2026-11-12",
+  "base_commit": "833db7de62483447c0a4dac3c635dbe1f84d8622",
+  "status": "PARTIAL",
+  "review": "PENDING",
+  "achieved": "Actual full application build, first launch and cold reopen; isolated NSIS install/same-version repair/uninstall with real production payload.",
+  "remaining": [
+    {
+      "gate": "Independent clean Windows/default profile/production installer identity",
+      "state": "BLOCKED",
+      "reason": "No configured independent Windows environment; WindowsSandbox.exe and available VM CLI absent. User was asked about another machine; no answer received at handoff."
+    },
+    {
+      "gate": "Genuine older-version upgrade and legacy model-state migration",
+      "state": "OPEN",
+      "reason": "Same-version repair is not an upgrade. Requires a selected trusted older release with fixture data/models and explicit migration proof."
+    },
+    {
+      "gate": "Standalone production uninstaller self-removal/default shortcuts/whole folder removal",
+      "state": "OPEN",
+      "reason": "Fixture disables shortcuts/autorun, uses unique identity and synchronous _?= uninstall; executable and registry removed but executing uninstaller remains. Must test ordinary uninstall in independent Windows gate."
+    }
+  ],
+  "limits": [
+    "Actual production Main/preload/App.tsx/typed IPC/native SQLite031/Windows safeStorage and bundled Python/HTTP/models. No Electron surrogate host or mocked logger/transport/service.",
+    "Current Windows account/DPAPI identity is unchanged. Private Unicode userData via verified --user-data-dir, private HOME/logs, System32-only child PATH and invalid PYTHONHOME/PYTHONPATH prove profile/runtime isolation, not a clean OS or cross-user credential portability.",
+    "Production installer was built and hashed but was not installed over the developer installation. NSIS fixture changes only installer appId/GUID/executable filename/labels/options; renamed executable and app.asar match production payload hashes.",
+    "The fixture has no desktop/start-menu shortcuts, autorun, elevation or data deletion. Separate profile data is preserved by repair and synchronous uninstall. No claim that production-identity upgrade or ordinary uninstaller self-delete has passed.",
+    "Synthetic 180-sample training/161 feature vectors/four scores test delivery/persistence, not formal 75-minute ML pilot or 50-run evaluation. No VPS, production DB or user model migration.",
+    "Initial path probe tried unnecessary appData lookup under a synthetic profile and failed before DB use. Corrected probe proved userData switch and HOME isolation. First full-app harness checked Language instead of actual Display Language and failed after first check; final installed run passes all7 checks. Earlier failed records are not counted as PASS.",
+    "ASAR audit uses native Windows path separators and actual better-sqlite3 v13 prebuilds/win32-x64.node; initial helper assumptions were corrected against the built artifact. These were verification-helper failures, not product runtime errors.",
+    "Installer signature is NotSigned; no signed publisher release/distribution claim. Parent R11 and overall release remain OPEN; no PR/merge."
+  ],
+  "production_artifact": {
+    "status": "PASS",
+    "asar_entries": 17588,
+    "compiled_entries_match": [
+      "out/main/index.js",
+      "out/main/mlResourceVerifier.js",
+      "out/preload/index.js",
+      "out/renderer/index.html"
+    ],
+    "package_version": "0.1.0",
+    "ml_resource_verified": true,
+    "sqlite_addon_bytes": 1989632,
+    "installer": {
+      "name": "OpsPilot-0.1.0-setup.exe",
+      "bytes": 241537755,
+      "sha256": "d048a9dcdb981a6e9c380a009ef35e33021c1dde8e73c9d95ac15cf4b4f14724",
+      "signature": "NotSigned (separately observed with Get-AuthenticodeSignature)"
+    }
+  },
+  "application_payload_sha256": {
+    "exe": "21d0a6b1cef21dd2161bc075908ff88a83ccf8b6e5a8177f513461a389c66dfc",
+    "asar": "21ce223b19c8b39e4df59b4413e12e70c0720e9704cc03e7a5afc2d19fd227de"
+  },
+  "native_full_application": {
+    "record": "8074fd898c1d",
+    "checks": [
+      "full_packaged_main_preload_app_sqlite_safeStorage_and_bundled_ml_first_launch",
+      "all_five_full_application_pages_and_real_settings_language_theme_interactions",
+      "full_app_owned_bundled_python_real_train180_and_four_scores_outside_resources",
+      "same_version_nsis_reinstall_preserves_separate_sqlite_key_and_model_fixture",
+      "cold_full_app_reopen_preserves_sqlite_key_models_ui_settings_and_both_exits_reap_ml",
+      "full_application_and_ml_resource_hashes_unchanged_after_two_launches",
+      "unique_fixture_nsis_uninstall_removes_executable_and_preserves_separate_user_data"
+    ],
+    "sqlite": {
+      "version": 31,
+      "integrity": "ok"
+    },
+    "training": {
+      "deployment_id": 900002,
+      "trained": true,
+      "train_sample_count": 180,
+      "feature_vector_count": 161,
+      "trained_at": "2026-11-12T14:48:14Z",
+      "warnings": []
+    },
+    "private_fixture_removed": true,
+    "mocked_services": false,
+    "production_database_used": false
+  },
+  "unpacked_application": {
+    "record": "bfdb70ada180",
+    "checks": [
+      "full_packaged_main_preload_app_sqlite_safeStorage_and_bundled_ml_first_launch",
+      "all_five_full_application_pages_and_real_settings_language_theme_interactions",
+      "full_app_owned_bundled_python_real_train180_and_four_scores_outside_resources",
+      "cold_full_app_reopen_preserves_sqlite_key_models_ui_settings_and_both_exits_reap_ml",
+      "full_application_and_ml_resource_hashes_unchanged_after_two_launches"
+    ],
+    "private_fixture_removed": true
+  },
+  "nsis_fixture": {
+    "status": "PASS",
+    "record": "a9e408e6b66d",
+    "unique_app_id_and_guid": true,
+    "unique_executable_name": true,
+    "shortcuts_disabled": true,
+    "production_installer_executed": false,
+    "clean_windows": false,
+    "same_version_reinstall_not_version_upgrade": true,
+    "installed_payload_matches_production": true,
+    "installer_sha256": "05c34cfa1861f809b3828ee58b6d5e2c3cff3d136313dcb3f24ae89493bb406b",
+    "registry_removed": true,
+    "application": "{\"status\":\"PASS\",\"checks\":7,\"record\":\"8074fd898c1d\"}"
+  },
+  "checks": {
+    "node_web_scripts_typecheck": "PASS",
+    "eslint_files": 3,
+    "eslint_errors": 0,
+    "eslint_warnings": 0,
+    "prettier_files": 3,
+    "node_syntax_files": 3,
+    "negative_cli": 2,
+    "negative_record_traversal": 1,
+    "full_app_tests_current_task": "Not rerun: only lab scripts/docs added; all23 R11a source hashes unchanged.",
+    "unchanged_application_baseline": {
+      "source_commit": "833db7d",
+      "passed": 2216,
+      "existing_linux_only_skipped": 2
+    },
+    "source_changes_runtime_api_schema_dependency": "NONE"
+  },
+  "source_sha256": {
+    "app/scripts/windows-release-lab.mjs": "018e55982d2bbfebd4fbb16ccd028c7fbd3511d2c146c7c970619e99ac6eaafc",
+    "app/scripts/windows-release-lab/cdp.mjs": "3f9135b0ed3d7fb3c4dcb1bcc1935ce1f97bba4e34dc094ce647f3950b0135ef",
+    "app/scripts/windows-installer-lab.mjs": "d13094b5a3bfab4ce1427e16197ce697f7561cc24cfe18551a644a81a48204e9"
+  },
+  "raw_evidence": {
+    "app/.out-scripts/r11b-package-first.log": "bef240f101cb302e833e3a9827f30c5097c2ab5472aa6ce05e5e048e93fc562a",
+    "app/.out-scripts/r11b-artifact-audit.log": "cd98e1f66d49a77ad17ac20e9e119a7af5771609ea4e8b2f7303468a20676795",
+    "app/.out-scripts/r11b-signature.json": "1592042d17b6ea58d036a367228d1069202632dec4f06a3d7614a34a1fa33332",
+    "app/.out-scripts/r11b-nsis-fixture-build.log": "5e6d2acd69c24b8e66beba60293db51266beb4890fbd2ac6a9aecb7583b4b6b9",
+    "app/.out-scripts/r11b-nsis-fixture-run.log": "bfbab50fca12dba8a92afdb74ed6c9ae2ca069d7766ad01775c8337020854f8a",
+    "app/.out-scripts/r11b-full-app-first.log": "d06c0abe947976048516cd76b68a3077f08e27b49b9b77d0373408f2c57ca4e0",
+    "app/.out-scripts/r11b-full-app-second.log": "002a07ee523d7a6641b524661b88d6f6387558ca90f86e27ff85c55ab0151723",
+    "app/.out-scripts/r11b-probe-paths.log": "f29157636882b68a4083594587da1752ea9aeb61674acaf09560e56b212d0e28",
+    "app/.out-scripts/r11b-probe-paths-second.log": "f09883841318436a36e4c9f851bc7d38b856df9faa2bb03e4e3131fa55650987",
+    "app/.out-scripts/r11b-typecheck.log": "6936182bf6a9e706d7effee2f30fabd9921a7f072b618fa5b0dd860ea64f19e3",
+    "app/.out-scripts/r11b-scripts-type.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r11b-lint-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r11b-format-final.log": "fbdd37869c73ce85afb11ffefa058e0181874c073fdfee7d7a4b5086b7ea3b1b",
+    "app/.out-scripts/r11b-negative-app.log": "aee869e109509cb6b61b9dae374b16e947c66dd691d400b52fb3fc82efb10401",
+    "app/.out-scripts/r11b-negative-installer.log": "e0bdf09464a69ecc3a83c2ac09aacebf99c58adbebc0368c6af6e7d6a546c739",
+    "app/.out-scripts/r11b-negative-record.log": "daab0445e436e139b3067e260dea9893e45b1a40a84fc418db5fd1df287131d5",
+    "app/.out-scripts/windows-release-lab/bfdb70ada180/result.json": "df937625acfaa2e1a3bdfccf78f4491bc47aea3a58879706dd806beaf854ece6",
+    "app/.out-scripts/windows-release-lab/8074fd898c1d/result.json": "9808507a8adf6c10d66f392e2c4761553e47fdff2b7ad4b4557696477eaf5e88",
+    "app/.out-scripts/windows-installer-lab/a9e408e6b66d/result.json": "a696fd9b6e3e73e4ce007ef706041857252a91238053883d862db7f81186afc1",
+    "app/.out-scripts/windows-installer-lab/a9e408e6b66d/plan.json": "21e84a21235aadf7e1599363a4bd9a08bc78cb7738bd69b3773697a723bb52a8",
+    "app/.out-scripts/windows-installer-lab/a9e408e6b66d/builder.json": "c4d687a262582c1f32eefdfde6389784a03db2f3fd64ab9069e4075389328046",
+    "app/.out-scripts/windows-installer-lab/a9e408e6b66d/application.log": "847f49c1d364ae51ce0d1ffd50856844e32ddd69ed62c5924a178b83d3bdbff8"
+  },
+  "screenshot": {
+    "path": "docs/ui-redesign/screenshots/r11b/r11b-installed-settings-1280x800-light.png",
+    "sha256": "91e0cabc853cd66a90060e43d0f553ba8917b2fa04810f64ad0d850a7fc93e50",
+    "kind": "actual installed full application renderer capture; native window frame excluded"
+  }
+}
