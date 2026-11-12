@@ -4,10 +4,10 @@ START10/11/2026 — Base `894fcfd`, product-mode/task-discipline. User yêu cầ
 
 | Yêu cầu tổng | Điều kiện nhận | State |
 |---|---|---|
-| Product exposure persistence | Canonical controller SQLite lưu current deployment evidence sau terminal settlement, current-authority/CAS/freshness/auth; backend/native đã kiểm chứng ở 6h4a, rollout VPS còn 6h4c | IMPLEMENTED |
-| Independent observation | Main probe public IP/DNS pinned socket + typed API/IPC/UI; Linux và Electron đo thật tới demo public, final6h4b gates PASS; installed-controller persistence còn6h4c | PASS |
+| Product exposure persistence | Canonical controller SQLite lưu current deployment evidence sau terminal settlement, current-authority/CAS/freshness/auth; backend/native6h4a + actual installed VPS API/SQLite/reconnect persistence ở6h4c-3a PASS, observation có timestamp/TTL | IMPLEMENTED |
+| Independent observation | Main probe public IP/DNS pinned socket + typed API/IPC/UI; Linux và Electron đo thật tới demo public, final6h4b gates PASS; installed-controller persistence đã live PASS ở6h4c-3a | PASS |
 | Electron flow | Typed IPC/UI4locale/exposure và cold isolated Electron native SQLite đã kiểm chứng; onboarding/reconnect/firstdeploy end-to-end với installed runtime mới chuyển sang live gate6h4c sau trusted upgrade | IMPLEMENTED |
-| Deployment/upgrade | c-1/c-2a/c-2b1 backend PASS; c-2b2 Settings upgrade/runtime binding và c-2b3 same-machine SSH authority epochs/readded VPS/native16/Electron6+19ảnh PASS. C-3 live upgrade/exposure/onboarding/reconnect/firstdeploy còn mở, VPS vẫn bản cũ | IMPLEMENTED |
+| Deployment/upgrade | c-1/c-2a/c-2b1 backend PASS; c-2b2 Settings upgrade/runtime binding và c-2b3 same-machine SSH authority epochs/readded VPS/native16/Electron6+19ảnh PASS. C-3a actual protected VPS upgrade/exposure/Main reconnect8checks PASS; c-3b actual GUI/cold-profile onboarding/firstdeploy còn mở | IMPLEMENTED |
 | Handoff | Gate phù hợp/ledger/board/FR/HANDOFF/master, Kim co-author/normal push, raw/sanitized evidence và giới hạn rõ | OPEN |
 
 ## Phân checkpoint / quyết định

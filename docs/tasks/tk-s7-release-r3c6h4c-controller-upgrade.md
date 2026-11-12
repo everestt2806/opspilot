@@ -4,6 +4,48 @@ START11/11/2026 — Base `f470a05`, product-mode/task-discipline. User yêu cầ
 
 ## Phạm vi và checkpoints
 
+START12/11/2026 — Base `54bbeb7`, c-3 product-mode/live development VPS: fresh pinned SSH preflight rồi protected controller upgrade, preserve identity/UID/key/DB/target/demo; actual installed exposure API và isolated Electron onboarding/reconnect/firstdeploy. User đã cấp VPS/credential và quyền phát triển; chỉ dùng RAM/hidden stdin/encrypted store, không argv/env/log/Git. Không PR/merge/reset/clean/stash/rebase; normal checkpoint push được phép.
+
+### Ledger c-3 — VPS rollout và live Desktop
+
+Chia checkpoint để có bằng chứng/push độc lập: **c-3a** fresh preflight, protected live upgrade + actual exposure/reconnect Main; **c-3b** actual isolated Electron onboarding/reconnect/firstdeploy trên runtime mới. Không dùng operational CLI/Electron Main không cửa sổ của c-3a thay cho GUI c-3b. Durable private Desktop DB dùng OS-protected key, giữ lại khi unknown/fail để phục hồi cùng UUID; chỉ dọn sau settled/revoke thành công.
+
+### Ledger c-3a — Live upgrade và exposure
+
+| Yêu cầu | Gate | State |
+|---|---|---|
+| Preflight | Actual pinned SSH/readonly snapshot record6027d7fa4d3142ed: expected original identity/UID997/schema029,0active experiment/jobs/clients, policy paused/demo HTTP200; fresh Main adoption trước transfer | PASS |
+| Upgrade/reconnect | Live record6027d7fa4d3142ed8checks PASS: Main/root active current upgradeUUID37a115d5, original receipt/identity/UID997/key/DB inode/target/demo giữ nguyên; local re-add/fresh separate confirms giữ token/client/PID | PASS |
+| Exposure | Main actual Windows public probe→installed authenticated API→canonical SQLite reachable + read-current same observation sau reconnect PASS; không root SQL write | PASS |
+| Handoff |83tests/5files/type/lint4/Ruff2/syntax3/negativeCLI2/DPAPI3/live8 PASS; sanitized proof/source hashes/board/FR/master/HANDOFF đồng bộ; Kim coauthor/normal push, c-3b giữ OPEN | PASS |
+
+UPDATE12/11 — readonly preflight `abc96242209f4052` PASS/controller bản6h2c/demo health200; field active_jobs ở scratch đầu đếm sai terminal succeeded, không dùng số đó để quyết định mutation. Operational source sửa predicate trước live; fresh record `6027d7fa4d3142ed` xác nhận0active jobs/experiments/clients và paused policy. Original controllerID dc586bb7/installUUID7573f0b1/UID997/receipt+key+DB inode giữ làm baseline; current deployment4 SHA bfed894 còn running. New durable upgrade UUID `37a115d5-71c6-4b87-bacb-6375a64c0c65`, đang transfer protected release093a059/tool7b19cef, chưa claim upgrade/exposure PASS.
+
+Operational tool chuyển sang Node22 vì Electron Main Windows startup/anonymous stdin không phù hợp pipeline này. Hai lượt chưa SSH/write (48b1b1190bec7400 startup wait,159cf8176ffdbd35 empty stdin) giữ riêng, không làm bằng chứng live pass. Private journal dùng approved AES-GCM + Windows user-scoped DPAPI qua bounded anonymous child pipes, không production safeStorage format; DPAPI cold reopen/encrypted-at-rest/missing-key3checks PASS. Current scoped83tests/5files, entry typecheck/lint/Ruff/syntax/2negativeCLI đều PASS;83 không thay full2197 baseline của checkpoint trước. No GUI/OS reboot/remote key rotation claim.
+
+UPDATE12/11 — Live c-3a `6027d7fa4d3142ed` PASS8checks: current active upgradeUUID37a115d5-71c6-4b87-bacb-6375a64c0c65/root payload4e3a163/release093a059; original install7573f0b1/controllerdc586bb7/UID997/original receipt hash/key inode+hash/DBinode265566/target credential digest/deployment4 SHA bfed894 giữ nguyên. Actual independent Windows probe→new installed API ghi canonical observation37e04ff7-980b-455a-8bf7-9d68960113aa/statusreachable; local VPS re-add→fresh SSH authority confirm→separate API refresh giữ token/client/PID và read-current cùng observation. Temporary client20feca75 đã revoke, active clients0/experiments0/jobs0/policypaused/demoHTTP200, private DB+DPAPI key removed=true. Không chạy Root recovery trên live hoặc cố ý ngắt SSH, không GUI/cold-new-profile onboarding/firstdeploy claim.
+
+## HANDOFF12/11 — c-3a DONE scoped / CHỜ REVIEW
+
+- Ledger c-3a4/4PASS, không accepted exception. [Live proof/source hashes](../ui-redesign/r3c6h4c3a-verification.json), [Operational commands](../../app/scripts/controller-upgrade-live/README.md); SHA `git log -1 -- app/scripts/controller-upgrade-live.mjs`. Live record6027d7fa4d3142ed8checks PASS, temporary client revoked/private DB+sealed key removed, current controller và healthy demo giữ chạy. Parent c-3/c-3b/6h4/R3 chưa đóng.
+- Node22: `pnpm --prefix app exec vitest run src/main/controlPlane/desktopControllerUpgrade.test.ts src/main/controlPlane/desktopExposure.test.ts src/main/controlPlane/desktopExposureProbe.test.ts src/main/controlPlane/desktopControllerEnrollment.test.ts src/main/controlPlane/desktopControllerVault.test.ts --maxWorkers=2` →83PASS/5files. `pnpm --prefix app exec tsc --noEmit -p scripts/controller-upgrade-live/tsconfig.json --composite false` PASS; ESLint4files `--max-warnings=0`, Ruff check/format2Python files, Node syntax3files và2negativeCLI exit2 PASS. `node app/.out-scripts/check-live-journal-key.mjs` →DPAPI3checks PASS. Exact raw logs/hash trong proof; helper DPAPI tiny check là scratch ignored.
+- Chỉ operational scripts/docs mới, không runtime/DB/IPC/UI/resource/dependency source change. Không chạy lại full app/build hoặc dùng full2197 của54bbeb7 như gate mới. Không fake Root SQL writer/observer hoặc thay installed original receipt/pins. Exposure reachable là observation có timestamp/TTL; không ghi là trạng thái xanh vĩnh viễn.
+- Live Main re-add dùng local journal có từ trước upgrade. Cold Desktop profile chưa biết current remote revision vẫn phải audit/attach qua trusted discovery và actual GUI; không đưa cached CLI row vào DB để giả onboarding pass. C-3b tiếp theo; không cần user test thay automation. Không PR/merge; normal checkpoint push đã được user cho phép, Kim coauthor; personal untracked giữ ngoài index.
+
+### Bước kế tiếp c-3b — actual Desktop với controller đã nâng cấp
+
+- Runtime hiện `/opt/opspilot-controller/revisions/37a115d5-71c6-4b87-bacb-6375a64c0c65/runtime/{node,payload/control-plane.cjs}`, UID997, data `/var/lib/opspilot-controller`, protected new updater7b19cef/release093a059/payload4e3a163. Original receipt/runtime/pins vẫn nguyên; không gọi old inspector rồi sửa receipt để né mismatch.
+- Gate c-3a có local upgrade journal từ trước nâng cấp rồi re-add VPS. Một Desktop profile mới hoàn toàn chưa có upgrade journal cần được audit riêng: original discovery chỉ đưa installation hint, old inspector có thể từ chối unit đã thay. Nếu UI chưa attach được current revision, bổ sung explicit trusted discovery/adoption bằng fixed Root/current pins và fresh attestation; không tự dựng SQL row hoặc lấy cached CLI proof làm GUI pass. Giữ UUID/history và require confirmation trước API enrollment.
+- Sau attach/current binding đúng, dùng actual isolated Electron/preload/typed IPC/Main/native SQLite/pinned SSH cho onboarding/reconnect và một firstdeploy demo riêng. Giữ san-nha-live/app1/port30000 và paused policy; dùng ownership/port/source mới rõ ràng, dọn đúng client/privateprofile được tạo, không đụng dữ liệu người dùng. Product API/exposure phải chạy thật; không synthetic transport.
+
+| Yêu cầu | Gate/bằng chứng | State |
+|---|---|---|
+| Fresh preflight | Actual c-3a record6027d7fa4d3142ed pinned SSH/readonly baseline,0active experiment/job/client,paused policy/HTTP200 PASS | PASS |
+| Safe upgrade | c-3a actual Main durable journal/root active current UUID37a115d5, original receipt/identity/UID997/key/DB inode/target/demo preserved, API access PASS | PASS |
+| Actual exposure | c-3a actual Windows Main public probe/authenticated API/canonical SQLite reachable/read-current/reconnect persistence PASS | PASS |
+| Live Desktop | Isolated real Electron/preload/typed IPC/Main/native SQLite, actual pinned SSH onboarding/reconnect/firstdeploy; chỉ resources demo mới có ownership rõ và cleanup phù hợp | OPEN |
+| Handoff | Required scoped gates, sanitized proof/hashes, board/FR/master/HANDOFF, Kim coauthor/normal checkpoint push; phân biệt gate còn chưa chạy | OPEN |
+
 START12/11/2026 — Base `60c14ed`, c-2b3 product-mode: explicit SSH credential/VPS-ID rebind cho controller có lịch sử upgrade. Dùng task-discipline; được implementation/private lab/checkpoint normal push, không PR/merge/reset/clean/stash/rebase. Không chạm VPS/production DB trong slice này.
 
 ### Ledger c-2b3 — Nhận lại quyền SSH sau upgrade

@@ -1,0 +1,379 @@
+{
+  "checkpoint": "R3c-6h4c-3a",
+  "date": "2026-11-12",
+  "status": "LIVE_CONTROLLER_UPGRADE_EXPOSURE_MAIN_RECONNECT_PASS",
+  "review": "PENDING",
+  "base_commit": "54bbeb7c7d53a482096f8c88d5ec0bcc00233825",
+  "scope": "Actual development VPS controller upgrade, independent Windows Main exposure report persisted through authenticated installed API and same-machine local VPS re-add with separate SSH/API confirmation",
+  "limits": [
+    "Operational Node22/Main gate with native private Desktop031 SQLite, Windows user-scoped DPAPI and actual pinned SSH/root/controller API/public HTTP; no visible Electron GUI, production Desktop profile or user DB used.",
+    "The private operational key format is DPAPI-sealed journal-master-key.dpapi, not the production safeStorage format. The production profile/key remain unchanged.",
+    "User-supplied ED25519 fingerprint is enforced before authentication; provenance was the user login/key output, not independently provider-console-attested in this session.",
+    "No forced live SSH failure, root rollback/recovery, reboot, soak, remote SSH credential rotation, HTTPS, new workload/first deployment or GUI onboarding claim. Root recovery helper is present but was not needed/executed on the live server.",
+    "Exposure reachable is a timestamped observation, not perpetual reachability. Its client has been revoked after verification; display freshness must expire normally.",
+    "c-3b actual isolated Electron cold-profile onboarding/reconnect/firstdeploy and parent6h4/R3 remain open. A fresh Desktop without local upgrade history needs explicit current-revision discovery/adoption audited before claiming onboarding complete."
+  ],
+  "live": {
+    "status": "PASS",
+    "checks": [
+      "fresh_pinned_ssh_original_controller_no_active_experiment_or_job_paused_policy_public_http200",
+      "original_trusted_inspection_and_explicit_temporary_scoped_binding_old_exposure_unsupported",
+      "protected_upgrade_transfer_distinct_uuid_namespace_original_pins_retained",
+      "settled_current_upgrade_keeps_original_receipt_identity_uid_key_db_inode_target_and_healthy_demo",
+      "separate_runtime_binding_confirmation_reuses_original_token_client_scopes",
+      "actual_independent_windows_public_probe_persists_reachable_via_authenticated_installed_api",
+      "actual_local_vps_readd_fresh_pinned_ssh_then_separate_api_refresh_keeps_token_client_pid_and_persisted_observation",
+      "temporary_client_revoked_and_controller_healthy_demo_paused_policy_retained"
+    ],
+    "remote_mutation_attempted": true,
+    "private_db_removed": true,
+    "gui_tested": false,
+    "production_profile_used": false,
+    "before": {
+      "receipt": {
+        "format": 1,
+        "request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "release_sha256": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+        "source_directory": "/var/lib/opspilot-controller-transfer/release",
+        "payload_sha256": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+        "phase": "installed",
+        "uid": 997,
+        "gid": 987,
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "created_at": "2026-11-10T06:11:51.696Z",
+        "updated_at": "2026-11-10T06:12:02.055Z"
+      },
+      "receipt_sha256": "b3be9019462c586781b64f7a13faa4f4c55e27d964893ba22571c835716ba5b4",
+      "database_inode": 265566,
+      "schema": 29,
+      "active_experiments": 0,
+      "active_jobs": 0,
+      "active_clients": 0,
+      "apps": [
+        {
+          "id": 1,
+          "name": "san-nha-live",
+          "current_deployment_id": 4
+        }
+      ],
+      "deployment": {
+        "id": 4,
+        "status": "running",
+        "git_commit_sha": "bfed8941e2a719b04fa960142b7c3df0eed66b57",
+        "exposure_status": "not_checked",
+        "exposure_evidence_json": null
+      },
+      "desired": [
+        {
+          "app_id": 1,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        }
+      ],
+      "vps_digest": "68940aec92472f567563d7c4edfc99f063b76abc466f14ec1fc974b3df070653",
+      "files": [
+        {
+          "path": ".product-controller-initialized",
+          "inode": 265569,
+          "sha256": "e9342557cddefc41325a75f51d3eca413e659c2cd348d4f6045a6c16702d2074"
+        },
+        {
+          "path": ".controller-runtime-key",
+          "inode": 265570,
+          "sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706"
+        },
+        {
+          "path": ".controller-installation",
+          "inode": 265565,
+          "sha256": "5d9cc95ff2db3d9338776481d7998be53b6d29bd5234d9c6db9b85d2b321609b"
+        }
+      ],
+      "service": "MainPID=10143\nUser=opspilot-controller\nActiveState=active\n"
+    },
+    "upgrade": {
+      "request_key": "37a115d5-71c6-4b87-bacb-6375a64c0c65",
+      "installation_request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+      "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+      "vps_id": 1,
+      "authority_revision": 1,
+      "parent_upgrade_key": null,
+      "parent_release_sha256": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+      "release_id": "linux-x64-node22-20261112-upgrade",
+      "release_sha256": "093a05957aa2d1f702a1f495346e338ac8e8ce3934556562f74882a7299962d7",
+      "installer_sha256": "7b19cefec8abce4d9dbba21ec234949fd4ae8783d9994cba817701e5f32a71d0",
+      "state": "active",
+      "is_current": true,
+      "last_result": {
+        "artifact_path": "/opt/opspilot-controller/revisions/37a115d5-71c6-4b87-bacb-6375a64c0c65/runtime/payload/control-plane.cjs",
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "data_directory": "/var/lib/opspilot-controller",
+        "format": 1,
+        "installation_request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "is_current": true,
+        "node_path": "/opt/opspilot-controller/revisions/37a115d5-71c6-4b87-bacb-6375a64c0c65/runtime/node",
+        "parent_release_sha256": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+        "parent_upgrade_key": null,
+        "payload_sha256": "4e3a163f077f69cd23b58ffcd26e40506489041804a9b01ea9ef006db3588510",
+        "phase": "active",
+        "release_sha256": "093a05957aa2d1f702a1f495346e338ac8e8ce3934556562f74882a7299962d7",
+        "request_key": "37a115d5-71c6-4b87-bacb-6375a64c0c65",
+        "runtime_payload_sha256": "4e3a163f077f69cd23b58ffcd26e40506489041804a9b01ea9ef006db3588510",
+        "runtime_release_sha256": "093a05957aa2d1f702a1f495346e338ac8e8ce3934556562f74882a7299962d7",
+        "runtime_uid": 997,
+        "runtime_upgrade_key": "37a115d5-71c6-4b87-bacb-6375a64c0c65",
+        "service_state": "running"
+      },
+      "created_at": "2026-11-12T07:16:29.305Z",
+      "updated_at": "2026-11-12T07:19:13.735Z"
+    },
+    "after_upgrade": {
+      "receipt": {
+        "format": 1,
+        "request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "release_sha256": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+        "source_directory": "/var/lib/opspilot-controller-transfer/release",
+        "payload_sha256": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+        "phase": "installed",
+        "uid": 997,
+        "gid": 987,
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "created_at": "2026-11-10T06:11:51.696Z",
+        "updated_at": "2026-11-10T06:12:02.055Z"
+      },
+      "receipt_sha256": "b3be9019462c586781b64f7a13faa4f4c55e27d964893ba22571c835716ba5b4",
+      "database_inode": 265566,
+      "schema": 29,
+      "active_experiments": 0,
+      "active_jobs": 0,
+      "active_clients": 1,
+      "apps": [
+        {
+          "id": 1,
+          "name": "san-nha-live",
+          "current_deployment_id": 4
+        }
+      ],
+      "deployment": {
+        "id": 4,
+        "status": "running",
+        "git_commit_sha": "bfed8941e2a719b04fa960142b7c3df0eed66b57",
+        "exposure_status": "not_checked",
+        "exposure_evidence_json": null
+      },
+      "desired": [
+        {
+          "app_id": 1,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        }
+      ],
+      "vps_digest": "68940aec92472f567563d7c4edfc99f063b76abc466f14ec1fc974b3df070653",
+      "files": [
+        {
+          "path": ".product-controller-initialized",
+          "inode": 265569,
+          "sha256": "e9342557cddefc41325a75f51d3eca413e659c2cd348d4f6045a6c16702d2074"
+        },
+        {
+          "path": ".controller-runtime-key",
+          "inode": 265570,
+          "sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706"
+        },
+        {
+          "path": ".controller-installation",
+          "inode": 265565,
+          "sha256": "5d9cc95ff2db3d9338776481d7998be53b6d29bd5234d9c6db9b85d2b321609b"
+        }
+      ],
+      "service": "MainPID=197520\nUser=opspilot-controller\nActiveState=active\n"
+    },
+    "exposure": {
+      "binding_id": "9422f136-6ea9-4f01-b99d-64f44c8ef8d6",
+      "app_id": 1,
+      "binding_revision": 3,
+      "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+      "state": "recorded",
+      "view": {
+        "app_id": 1,
+        "deployment_id": 4,
+        "context": {
+          "app_id": 1,
+          "deployment_id": 4,
+          "authority_sha256": "ed4bf8bbe021788de437631ef10ab34b8011e8fbb0bb9d198d2ede87dbc47feb",
+          "previous_observation_id": "37e04ff7-980b-455a-8bf7-9d68960113aa",
+          "url": "http://167.71.202.116:30000"
+        },
+        "status": "reachable",
+        "freshness": "current",
+        "unavailable_reason": null,
+        "observation": {
+          "deployment_id": 4,
+          "authority_sha256": "ed4bf8bbe021788de437631ef10ab34b8011e8fbb0bb9d198d2ede87dbc47feb",
+          "previous_observation_id": null,
+          "observer": "desktop_external",
+          "started_at": "2026-11-12T07:19:21.599Z",
+          "checked_at": "2026-11-12T07:19:21.719Z",
+          "outcome": "reachable",
+          "http_status": 200,
+          "reason": "none",
+          "format": 1,
+          "observation_id": "37e04ff7-980b-455a-8bf7-9d68960113aa",
+          "client_id": "20feca75-727b-4d8e-8a56-42a998df1de4",
+          "body_sha256": "ddb003d1f641b53c873f26ef1d3326bc35118dc623f14bee93aecbee7f5e2737",
+          "app_id": 1,
+          "url": "http://167.71.202.116:30000",
+          "status": "reachable",
+          "received_at": "2026-11-12T07:19:24.309Z"
+        },
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "request_id": "1be3bfeb-7aef-4486-9f4d-62a4ed0b47b5",
+        "sampled_at": "2026-11-12T07:19:24.312Z",
+        "data_freshness": "current"
+      },
+      "reason_code": null,
+      "checked_at": "2026-11-12T07:19:22.030Z"
+    },
+    "after": {
+      "receipt": {
+        "format": 1,
+        "request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "release_sha256": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+        "source_directory": "/var/lib/opspilot-controller-transfer/release",
+        "payload_sha256": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+        "phase": "installed",
+        "uid": 997,
+        "gid": 987,
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "created_at": "2026-11-10T06:11:51.696Z",
+        "updated_at": "2026-11-10T06:12:02.055Z"
+      },
+      "receipt_sha256": "b3be9019462c586781b64f7a13faa4f4c55e27d964893ba22571c835716ba5b4",
+      "database_inode": 265566,
+      "schema": 29,
+      "active_experiments": 0,
+      "active_jobs": 0,
+      "active_clients": 0,
+      "apps": [
+        {
+          "id": 1,
+          "name": "san-nha-live",
+          "current_deployment_id": 4
+        }
+      ],
+      "deployment": {
+        "id": 4,
+        "status": "running",
+        "git_commit_sha": "bfed8941e2a719b04fa960142b7c3df0eed66b57",
+        "exposure_status": "reachable",
+        "exposure_evidence_json": "{\"checked_at\":\"2026-11-12T07:19:21.719Z\",\"cloud_firewall\":\"not_configured\",\"diagnosis\":null,\"external_probe\":\"reachable\",\"kind\":\"product_exposure_observation\",\"observation\":{\"app_id\":1,\"authority_sha256\":\"ed4bf8bbe021788de437631ef10ab34b8011e8fbb0bb9d198d2ede87dbc47feb\",\"body_sha256\":\"ddb003d1f641b53c873f26ef1d3326bc35118dc623f14bee93aecbee7f5e2737\",\"checked_at\":\"2026-11-12T07:19:21.719Z\",\"client_id\":\"20feca75-727b-4d8e-8a56-42a998df1de4\",\"deployment_id\":4,\"format\":1,\"http_status\":200,\"observation_id\":\"37e04ff7-980b-455a-8bf7-9d68960113aa\",\"observer\":\"desktop_external\",\"outcome\":\"reachable\",\"previous_observation_id\":null,\"reason\":\"none\",\"received_at\":\"2026-11-12T07:19:24.309Z\",\"started_at\":\"2026-11-12T07:19:21.599Z\",\"status\":\"reachable\",\"url\":\"http://167.71.202.116:30000\"},\"status\":\"reachable\",\"ufw_reconciled\":false,\"ufw_state\":\"not_checked\",\"url\":\"http://167.71.202.116:30000\"}"
+      },
+      "desired": [
+        {
+          "app_id": 1,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        }
+      ],
+      "vps_digest": "68940aec92472f567563d7c4edfc99f063b76abc466f14ec1fc974b3df070653",
+      "files": [
+        {
+          "path": ".product-controller-initialized",
+          "inode": 265569,
+          "sha256": "e9342557cddefc41325a75f51d3eca413e659c2cd348d4f6045a6c16702d2074"
+        },
+        {
+          "path": ".controller-runtime-key",
+          "inode": 265570,
+          "sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706"
+        },
+        {
+          "path": ".controller-installation",
+          "inode": 265565,
+          "sha256": "5d9cc95ff2db3d9338776481d7998be53b6d29bd5234d9c6db9b85d2b321609b"
+        }
+      ],
+      "service": "MainPID=197520\nUser=opspilot-controller\nActiveState=active\n"
+    },
+    "temporary_client_revoked": true,
+    "phase": "revoke-and-cleanup"
+  },
+  "public_health_final_recheck": 200,
+  "scoped_tests": {
+    "numTotalTests": 83,
+    "numPassedTests": 83,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "success": true
+  },
+  "scoped_test_files": 5,
+  "typescript": {
+    "project": "scripts/controller-upgrade-live/tsconfig.json",
+    "exit_code": 0
+  },
+  "eslint": {
+    "files": 4,
+    "exit_code": 0,
+    "errors": 0,
+    "warnings": 0
+  },
+  "ruff": {
+    "files": 2,
+    "check": "PASS",
+    "format": "PASS"
+  },
+  "node_syntax": {
+    "files": 3,
+    "status": "PASS"
+  },
+  "negative_cli": {
+    "checks": 2,
+    "expected_exit_codes": [
+      2,
+      2
+    ],
+    "before_stdin_or_ssh": true
+  },
+  "private_dpapi_key": {
+    "checks": 3,
+    "status": "PASS",
+    "cold_reopen": true,
+    "no_plaintext_key_file": true,
+    "missing_key_does_not_create_one": true
+  },
+  "full_app_build_and_suite": "Not rerun: runtime/DB/IPC/UI source and packaged resources unchanged. Previous54bbeb7 full2197PASS/2existingLinux-onlySKIP/build are baseline only, not current-session full gates.",
+  "operational_startup_failures": [
+    {
+      "record": "48b1b1190bec7400",
+      "reason": "Electron top-level app-ready startup wait; owned process stopped after verifying PID/command; no SSH/DB/remote mutation"
+    },
+    {
+      "record": "159cf8176ffdbd35",
+      "reason": "Electron Windows anonymous stdin empty; no SSH/DB/remote mutation"
+    },
+    "Switched operational runner to Node22 with user-scoped DPAPI helper. These failed launches are not live-pass evidence."
+  ],
+  "source_sha256": {
+    "app/scripts/controller-upgrade-live.mjs": "125460e80984924be2f18a426043c9541db1de16af014a3d171d8cfbaa8dec20",
+    "app/scripts/controller-upgrade-live-recover.mjs": "d757978a5f17a7bbff651c7bfd2b6bc3c4823690163fca710a6e381e4ad461d3",
+    "app/scripts/controller-upgrade-live/entry.ts": "ca03d8769ce2baa3e4c5dd7f211a3ba0a5b41d0174deed646f9a19eac3ed7512",
+    "app/scripts/controller-upgrade-live/tsconfig.json": "e36a7107e2ea52a8597d90deb98ea019a59db1fa3cbd6dcef47e0fa51fb5867a",
+    "app/scripts/controller-upgrade-live/journal-key.mjs": "805ba57aec0cdf71e5b19a8e334a449b42d88c9e5898ac8f4ee1fa9c8b6e389b",
+    "app/scripts/controller-upgrade-live/journal-key.py": "36f042844deaba7c988261f5a7a51eb66c71ac824958db3a76617031294d17d4",
+    "app/scripts/controller-upgrade-live/hidden-input.py": "e26ba29f7b8e1b2ab9f03d7a7094cb6318efb1b17cd60ec4eb8dc8012102c4ec",
+    "app/scripts/controller-upgrade-live/README.md": "ca8d6984902b7280b6c5f0ae173449abeccaf29882b721d70f9963cf04426e59"
+  },
+  "raw_evidence_sha256": {
+    "app/.out-scripts/controller-upgrade-live/6027d7fa4d3142ed/result.json": "44c5cfc6f6fd200c121c02fc2e83fbff789a40a5a469f6f0732736d616f1d5b5",
+    "app/.out-scripts/r3c6h4c3a-type.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r3c6h4c3a-lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r3c6h4c3a-ruff.log": "af352a86840ad0af3d37ea0d9197f868363a6dac6b1c2ef5d2722f6b41d2d9af",
+    "app/.out-scripts/r3c6h4c3a-ruff-format.log": "1ba32d724ec0aa587aba7888f97338980bc34aae522616cf9f35d4e0b38e574d",
+    "app/.out-scripts/r3c6h4c3a-negative-upgrade.log": "b8a73c1464e51105345ffc43e477c1750d2b1814acee6d0157a258448db26fc6",
+    "app/.out-scripts/r3c6h4c3a-negative-recover.log": "ca38726ac35bfa53b0d702c321ffbf2382576caccd47caa23e0abf63da1a1f82",
+    "app/.out-scripts/r3c6h4c3a-dpapi.log": "ec393a1b3d6a313809e161fcdbe27e6ee26e4b64a37c956acd32ea5a3df4fe3a",
+    "app/.out-scripts/r3c6h4c3a-focused.json": "dff404cf20a2f040bb444be82bc4a791272366dadd45ff7a93c548508d7c78b9",
+    "app/.out-scripts/r3c6h4c3a-focused.log": "cba63d97e8099d9cceb1f22f7ed26a7b77552b033ff20221d8dccbb570d7d7f4"
+  },
+  "accepted_exceptions": [],
+  "next_action": "c-3b audit and implement explicit trusted upgraded-controller discovery/adoption for a fresh Desktop if needed; then actual isolated Electron onboarding/reconnect/new firstdeploy while preserving app1/port30000/demo policy"
+}
