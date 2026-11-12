@@ -18,6 +18,10 @@ import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import type { ControllerInstallerResources } from './controllerInstallerCatalog'
 import type {
+  ControllerAuthorityReview,
+  ControllerAuthorityResult
+} from '@shared/controllerAuthority'
+import type {
   ControllerInstallerOverview,
   ControllerInstallerReview,
   ControllerInstallerSendInput,
@@ -188,11 +192,34 @@ export class DesktopControllerService {
   }
   async upgradeOverview(): Promise<ControllerUpgradeOverview> {
     return this.safe(() => ({
+      ssh_candidates: this.db
+        .prepare('SELECT id,name,host FROM vps WHERE archived_at IS NULL ORDER BY id')
+        .all() as { id: number; name: string; host: string }[],
       releases: this.installerResources?.list().filter((v) => v.upgrade_supported) ?? [],
       installations: this.installations.list(),
       upgrades: this.upgrades.all(),
       connections: this.vault.list().map((v) => this.connection(v.binding_id))
     }))
+  }
+  async reviewControllerAuthority(input: {
+    installation_request_key: string
+    vps_id: number
+  }): Promise<ControllerAuthorityReview> {
+    return this.safe(() => {
+      const v = z
+        .strictObject({ installation_request_key: z.uuidv4(), vps_id: z.number().int().positive() })
+        .parse(input)
+      return this.upgrades.reviewAuthority(v.installation_request_key, v.vps_id)
+    })
+  }
+  async confirmControllerAuthority(input: {
+    plan_id: string
+    consent: true
+  }): Promise<ControllerAuthorityResult> {
+    return this.safe(() => {
+      const v = z.strictObject({ plan_id: z.uuidv4(), consent: z.literal(true) }).parse(input)
+      return this.upgrades.confirmAuthority(v.plan_id, v.consent)
+    })
   }
   async reviewUpgrade(input: ControllerUpgradeReviewInput): Promise<ControllerUpgradeReview> {
     return this.safe(() => {

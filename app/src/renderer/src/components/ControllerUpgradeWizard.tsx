@@ -21,6 +21,8 @@ import type {
 } from '@shared/controllerUpgrade'
 import { useUiState } from '../store/uiState'
 import { CONTROLLER_UPGRADE_COPY } from './controllerUpgradeCopy'
+import { CONTROLLER_AUTHORITY_COPY } from './controllerAuthorityCopy'
+import type { ControllerAuthorityReview } from '@shared/controllerAuthority'
 
 async function checked<T>(promise: Promise<IpcResult<T>>): Promise<T> {
   const r = await promise
@@ -37,7 +39,8 @@ export function ControllerUpgradeWizard({
   onChanged: () => void
 }): React.JSX.Element {
   const locale = useUiState((v) => v.locale),
-    t = CONTROLLER_UPGRADE_COPY[locale]
+    t = CONTROLLER_UPGRADE_COPY[locale],
+    a = CONTROLLER_AUTHORITY_COPY[locale]
   const [data, setData] = useState<ControllerUpgradeOverview | null>(null),
     [installation, setInstallation] = useState<string>(),
     [release, setRelease] = useState<string>(),
@@ -48,6 +51,10 @@ export function ControllerUpgradeWizard({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(false),
     [now, setNow] = useState(Date.now)
+  const [candidate, setCandidate] = useState<number>(),
+    [authorityReview, setAuthorityReview] = useState<ControllerAuthorityReview | null>(null),
+    [authorityConsent, setAuthorityConsent] = useState(false),
+    [authorityUpdated, setAuthorityUpdated] = useState(false)
   const generation = useRef(0),
     lock = useRef(false)
   const invalidate = useCallback(() => {
@@ -64,6 +71,10 @@ export function ControllerUpgradeWizard({
       setReview(null)
       setBindingReview(null)
       setConsent(false)
+      setCandidate(undefined)
+      setAuthorityReview(null)
+      setAuthorityConsent(false)
+      setAuthorityUpdated(false)
       setError(false)
       setBusy(true)
       void checked(window.api.invoke('controller:upgrade-overview'))
@@ -111,6 +122,9 @@ export function ControllerUpgradeWizard({
     lock.current = true
     setBusy(true)
     setError(false)
+    setAuthorityReview(null)
+    setAuthorityConsent(false)
+    setAuthorityUpdated(false)
     try {
       await action(id)
       if (generation.current === id) {
@@ -149,6 +163,9 @@ export function ControllerUpgradeWizard({
   }
   const change = (): void => {
     ++generation.current
+    setAuthorityReview(null)
+    setAuthorityConsent(false)
+    setAuthorityUpdated(false)
     setReview(null)
     setBindingReview(null)
     setBindingId(undefined)
@@ -218,6 +235,97 @@ export function ControllerUpgradeWizard({
                 disabled: r.state !== 'available'
               }))}
             />
+            {selected && transaction && (
+              <>
+                <Typography.Title level={5}>{a.title}</Typography.Title>
+                <Typography.Paragraph>{a.note}</Typography.Paragraph>
+                {authorityUpdated && <Alert type="info" showIcon message={a.next} />}
+                <Select
+                  aria-label={a.candidate}
+                  value={candidate}
+                  disabled={busy}
+                  style={{ width: '100%' }}
+                  onChange={(id) => {
+                    setCandidate(id)
+                    setAuthorityReview(null)
+                    setAuthorityConsent(false)
+                    setAuthorityUpdated(false)
+                  }}
+                  options={(data.ssh_candidates ?? []).map((v) => ({
+                    value: v.id,
+                    label: `${v.name} · ${v.host}`
+                  }))}
+                />
+                <Button
+                  disabled={busy || !candidate}
+                  onClick={() =>
+                    void run(async (id) => {
+                      const result = await checked(
+                        window.api.invoke('controller:review-ssh-authority', {
+                          installation_request_key: selected.request_key,
+                          vps_id: candidate!
+                        })
+                      )
+                      if (id === generation.current) {
+                        setAuthorityReview(result)
+                        setAuthorityConsent(false)
+                        setAuthorityUpdated(false)
+                      }
+                    })
+                  }
+                >
+                  {a.review}
+                </Button>
+                {authorityReview && (
+                  <>
+                    <Descriptions
+                      column={1}
+                      size="small"
+                      items={[
+                        { key: 'host', label: a.host, children: authorityReview.host },
+                        { key: 'user', label: a.username, children: authorityReview.username },
+                        {
+                          key: 'fingerprint',
+                          label: a.fingerprint,
+                          children: authorityReview.host_fingerprint
+                        }
+                      ]}
+                    />
+                    <Checkbox
+                      checked={authorityConsent}
+                      disabled={busy}
+                      onChange={(e) => setAuthorityConsent(e.target.checked)}
+                    >
+                      {a.consent}
+                    </Checkbox>
+                    <Button
+                      disabled={
+                        busy || !authorityConsent || Date.parse(authorityReview.expires_at) <= now
+                      }
+                      onClick={() =>
+                        void run(async (id) => {
+                          await checked(
+                            window.api.invoke('controller:confirm-ssh-authority', {
+                              plan_id: authorityReview.plan_id,
+                              consent: true
+                            })
+                          )
+                          if (id === generation.current) {
+                            setAuthorityReview(null)
+                            setAuthorityConsent(false)
+                            setAuthorityUpdated(true)
+                            setBindingReview(null)
+                            setReview(null)
+                          }
+                        })
+                      }
+                    >
+                      {a.confirm}
+                    </Button>
+                  </>
+                )}
+              </>
+            )}
             <Checkbox
               checked={consent}
               disabled={busy}
@@ -397,7 +505,7 @@ export function ControllerUpgradeWizard({
                         {bindingReview && (
                           <Button
                             type="primary"
-                            disabled={!writable || Date.parse(bindingReview.expires_at) <= now}
+                            disabled={busy || Date.parse(bindingReview.expires_at) <= now}
                             onClick={() =>
                               void run(async (id) => {
                                 await checked(

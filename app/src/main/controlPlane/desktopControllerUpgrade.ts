@@ -24,6 +24,11 @@ import {
 } from './controllerSshBootstrap'
 import { controllerUpgradeResultSchema } from './controllerUpgradeProtocol'
 import type { ProductDesktopControllerBindingIntent } from '../../../../docs/contracts/product-controller-api'
+import type {
+  ControllerAuthorityReview,
+  ControllerAuthorityResult
+} from '@shared/controllerAuthority'
+import { bindingAtAuthority } from './desktopControllerAuthority'
 
 const session = randomUUID()
 const uuid = z.uuidv4().refine((v) => v === v.toLowerCase())
@@ -103,6 +108,17 @@ export class DesktopControllerUpgrades {
   private readonly catalog: readonly DesktopUpgradeRelease[]
   private readonly transport: NonNullable<DesktopUpgradeOptions['transport']>
   private readonly plans = new Map<string, Plan>()
+  private readonly authorityReviews = new Map<
+    string,
+    {
+      before: string
+      next: string
+      snapshot: string
+      key: string
+      result: ControllerUpgradeResult
+      review: ControllerAuthorityReview
+    }
+  >()
   constructor(
     private readonly db: Database.Database,
     private readonly installations: DesktopControllerInstallations,
@@ -150,6 +166,189 @@ export class DesktopControllerUpgrades {
       node_path: r.node_path,
       data_directory: r.data_directory,
       payload_sha256: r.payload_sha256
+    })
+  }
+  async reviewAuthority(
+    installationKey: string,
+    vpsId: number
+  ): Promise<ControllerAuthorityReview> {
+    uuid.parse(installationKey)
+    this.list(installationKey)
+    const before = this.authority(this.installations.retainedUpgradeAuthority(installationKey)),
+      candidate = this.installations.candidateUpgradeAuthority(installationKey, vpsId),
+      next = this.authority(candidate),
+      rows = this.db
+        .prepare(
+          "SELECT * FROM desktop_controller_upgrade WHERE installation_request_key=? AND state<>'cancelled' ORDER BY sequence"
+        )
+        .all(installationKey) as Row[],
+      latest = rows.at(-1)
+    if (
+      !latest ||
+      !latest.upgrade_attempted ||
+      rows.some((r) => r.state === 'in_flight' || r.installation_authority_json !== before)
+    )
+      throw new DesktopUpgradeError('UPGRADE_INSPECT_REQUIRED')
+    const snapshot = canonicalH2Json(rows)
+    const assertCurrent = (): void => {
+      if (
+        this.authority(this.installations.retainedUpgradeAuthority(installationKey)) !== before ||
+        this.authority(this.installations.candidateUpgradeAuthority(installationKey, vpsId)) !==
+          next ||
+        canonicalH2Json(
+          this.db
+            .prepare(
+              "SELECT * FROM desktop_controller_upgrade WHERE installation_request_key=? AND state<>'cancelled' ORDER BY sequence"
+            )
+            .all(installationKey)
+        ) !== snapshot
+      )
+        throw new DesktopUpgradeError('UPGRADE_AUTHORITY_CHANGED')
+    }
+    this.release(latest.release_id)
+    const input = {
+      ssh: this.ssh,
+      vpsId,
+      expectedIdentity: candidate.principal,
+      locator: {
+        request_key: latest.request_key,
+        release_sha256: latest.release_sha256,
+        installer_sha256: latest.installer_sha256
+      },
+      purpose: 'upgrade' as const,
+      assertCurrent,
+      bootstrapScript: this.options.bootstrapScript
+    }
+    const status = await this.transport.call({ ...input, operation: 'status' })
+    assertCurrent()
+    if (status.state !== 'verified') throw new DesktopUpgradeError('UPGRADE_INSPECT_REQUIRED')
+    const result = controllerUpgradeResultSchema.parse(
+      await this.transport.upgrade({
+        ...input,
+        request: {
+          format: 1,
+          request_key: latest.request_key,
+          installation_request_key: installationKey,
+          controller_id: latest.controller_id,
+          parent_upgrade_key: latest.parent_upgrade_key,
+          parent_release_sha256: latest.parent_release_sha256,
+          release_sha256: latest.release_sha256,
+          operation: 'inspect-upgrade'
+        }
+      })
+    )
+    assertCurrent()
+    this.correlate(latest, result)
+    if (
+      !result.is_current ||
+      result.service_state !== 'running' ||
+      !['active', 'rolled_back'].includes(result.phase)
+    )
+      throw new DesktopUpgradeError('UPGRADE_INSPECT_REQUIRED')
+    for (const [id, plan] of this.authorityReviews)
+      if (Date.parse(plan.review.expires_at) <= Date.now()) this.authorityReviews.delete(id)
+    if (this.authorityReviews.size >= 32) throw new DesktopUpgradeError('UPGRADE_BUSY')
+    const review: ControllerAuthorityReview = {
+      plan_id: randomUUID(),
+      expires_at: new Date(Date.now() + 60000).toISOString(),
+      installation_request_key: installationKey,
+      upgrade_request_key: latest.request_key,
+      controller_id: latest.controller_id,
+      previous_vps_id: latest.vps_id,
+      vps_id: vpsId,
+      host: candidate.principal.host,
+      username: candidate.principal.username,
+      host_fingerprint: candidate.principal.hostFingerprint,
+      from_revision: latest.authority_revision,
+      to_revision: candidate.installation.authority_revision
+    }
+    this.authorityReviews.set(review.plan_id, {
+      before,
+      next,
+      snapshot,
+      key: installationKey,
+      result,
+      review
+    })
+    return review
+  }
+  confirmAuthority(planId: string, consent: true): ControllerAuthorityResult {
+    if (consent !== true) throw new DesktopUpgradeError('UPGRADE_INPUT_INVALID')
+    return this.mutate(() => {
+      const plan = this.authorityReviews.get(uuid.parse(planId))
+      if (!plan || Date.parse(plan.review.expires_at) <= Date.now())
+        throw new DesktopUpgradeError('UPGRADE_PLAN_EXPIRED')
+      const { review, key } = plan
+      if (
+        this.authority(this.installations.retainedUpgradeAuthority(key)) !== plan.before ||
+        this.authority(this.installations.candidateUpgradeAuthority(key, review.vps_id)) !==
+          plan.next ||
+        canonicalH2Json(
+          this.db
+            .prepare(
+              "SELECT * FROM desktop_controller_upgrade WHERE installation_request_key=? AND state<>'cancelled' ORDER BY sequence"
+            )
+            .all(key)
+        ) !== plan.snapshot
+      )
+        throw new DesktopUpgradeError('UPGRADE_AUTHORITY_CHANGED')
+      const requestKey = randomUUID(),
+        now = new Date().toISOString(),
+        next = JSON.parse(plan.next)
+      this.db
+        .prepare(
+          `INSERT INTO desktop_controller_authority_rebind
+        (request_key,installation_request_key,upgrade_request_key,from_revision,to_revision,previous_authority_json,next_authority_json,result_json,created_at)
+        VALUES(?,?,?,?,?,?,?,?,?)`
+        )
+        .run(
+          requestKey,
+          key,
+          review.upgrade_request_key,
+          review.from_revision,
+          review.to_revision,
+          plan.before,
+          plan.next,
+          canonicalH2Json(plan.result),
+          now
+        )
+      this.db
+        .prepare(
+          `UPDATE desktop_controller_installation SET vps_id=?,authority_revision=?,ssh_security_revision=?,principal_json=?,credential_digest=?,updated_at=? WHERE request_key=?`
+        )
+        .run(
+          review.vps_id,
+          review.to_revision,
+          next.ssh_security_revision,
+          canonicalH2Json(next.principal),
+          next.credential_digest,
+          now,
+          key
+        )
+      this.db
+        .prepare(
+          `UPDATE desktop_controller_upgrade SET vps_id=?,authority_revision=?,installation_authority_json=?,updated_at=? WHERE installation_request_key=? AND state<>'cancelled'`
+        )
+        .run(review.vps_id, review.to_revision, plan.next, now, key)
+      this.db
+        .prepare(
+          'UPDATE desktop_controller_upgrade SET is_current=0 WHERE installation_request_key=?'
+        )
+        .run(key)
+      this.db
+        .prepare(
+          `UPDATE desktop_controller_upgrade SET is_current=1,state=?,result_json=?,operation_id=NULL,owner_session=NULL,updated_at=? WHERE request_key=?`
+        )
+        .run(plan.result.phase, canonicalH2Json(plan.result), now, review.upgrade_request_key)
+      this.authorityReviews.delete(planId)
+      return {
+        request_key: requestKey,
+        installation_request_key: key,
+        upgrade_request_key: review.upgrade_request_key,
+        vps_id: review.vps_id,
+        authority_revision: review.to_revision,
+        binding_refresh_required: true
+      }
     })
   }
   private base(key: string): Base {
@@ -276,6 +475,7 @@ export class DesktopControllerUpgrades {
       throw new DesktopUpgradeError('UPGRADE_INSPECT_REQUIRED')
     const result = controllerUpgradeResultSchema.parse(JSON.parse(row.result_json))
     this.correlate(row, result)
+    original = bindingAtAuthority(this.db, original, row.authority_revision)
     if (
       !result.is_current ||
       result.service_state !== 'running' ||

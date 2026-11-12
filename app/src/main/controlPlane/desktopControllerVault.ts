@@ -12,6 +12,7 @@ import type {
 import type { ControllerDesktopBinding } from './controllerHttpClient'
 import { canonicalH2Json } from './productH2Proof'
 import { controllerUpgradeResultSchema } from './controllerUpgradeProtocol'
+import { bindingAtAuthority } from './desktopControllerAuthority'
 
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
 const clean = (value: string): boolean =>
@@ -204,20 +205,25 @@ export class DesktopControllerVault {
       const row = this.required(bindingId),
         previous = this.parseIntent(row),
         next = desktopBindingIntentSchema.parse(nextInput)
+      const authorized = bindingAtAuthority(
+        this.db,
+        previous,
+        next.installation?.authority_revision ?? 0
+      )
       const comparable = {
         ...next,
         artifact_path: previous.artifact_path,
         node_path: previous.node_path,
         manifest_sha256: previous.manifest_sha256
       }
-      if (previous.upgrade) comparable.upgrade = previous.upgrade
+      if (authorized.upgrade) comparable.upgrade = authorized.upgrade
       else delete comparable.upgrade
       this.assertRevision(row, expectedRevision)
       if (
         row.state !== 'active' ||
         !next.upgrade ||
         !previous.installation ||
-        canonicalH2Json(comparable) !== canonicalH2Json(previous)
+        canonicalH2Json(comparable) !== canonicalH2Json(authorized)
       )
         throw new DesktopControllerVaultError('BINDING_CHANGED')
       this.currentVps(next)

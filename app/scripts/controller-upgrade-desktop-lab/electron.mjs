@@ -11,7 +11,7 @@ const root = resolve(import.meta.dirname, '../../..'),
   nonce = randomBytes(6).toString('hex'),
   directory = join(root, 'app/.out-scripts/controller-upgrade-electron', nonce),
   privateData = join(directory, 'private'),
-  screenshots = join(root, 'docs/ui-redesign/screenshots/r3c6h4c2b2')
+  screenshots = join(root, 'docs/ui-redesign/screenshots/r3c6h4c2b3')
 mkdirSync(privateData, { recursive: true })
 mkdirSync(screenshots, { recursive: true })
 app.setPath('userData', join(directory, 'profile'))
@@ -212,6 +212,8 @@ app.whenReady().then(async () => {
       { installation: { transport: installTransport }, upgrade: { transport } }
     )
     const methods = {
+      'controller:review-ssh-authority': 'reviewControllerAuthority',
+      'controller:confirm-ssh-authority': 'confirmControllerAuthority',
       'controller:upgrade-overview': 'upgradeOverview',
       'controller:review-upgrade': 'reviewUpgrade',
       'controller:prepare-upgrade': 'prepareUpgrade',
@@ -236,7 +238,7 @@ app.whenReady().then(async () => {
     stage = 'renderer'
     await esbuild.build({
       stdin: {
-        contents: `import React from 'react';import{createRoot}from'react-dom/client';import{App,ConfigProvider}from'antd';import{ControllerUpgradeWizard}from'./src/renderer/src/components/ControllerUpgradeWizard';import{useUiState}from'./src/renderer/src/store/uiState';import{themeTokens,applyTheme}from'./src/renderer/src/utils/themeTokens';import'./src/renderer/src/assets/main.css';const root=createRoot(document.getElementById('root'));window.showUpgrade=(locale,theme)=>{useUiState.setState({locale,theme});applyTheme(theme);root.render(<ConfigProvider theme={themeTokens[theme]}><App><main style={{padding:24}}><h1>OpsPilot</h1><ControllerUpgradeWizard key={locale+theme} open onClose={()=>{}} onChanged={()=>{}}/></main></App></ConfigProvider>)};`,
+        contents: `import React from 'react';import{createRoot}from'react-dom/client';import{App,ConfigProvider}from'antd';import{ControllerUpgradeWizard}from'./src/renderer/src/components/ControllerUpgradeWizard';import{useUiState}from'./src/renderer/src/store/uiState';import{themeTokens,applyTheme}from'./src/renderer/src/utils/themeTokens';import'./src/renderer/src/assets/main.css';const root=createRoot(document.getElementById('root'));let showId=0;window.showUpgrade=(locale,theme)=>{useUiState.setState({locale,theme});applyTheme(theme);root.render(<ConfigProvider theme={themeTokens[theme]}><App><main style={{padding:24}}><h1>OpsPilot</h1><ControllerUpgradeWizard key={locale+theme+(++showId)} open onClose={()=>{}} onChanged={()=>{}}/></main></App></ConfigProvider>)};`,
         resolveDir: join(root, 'app'),
         sourcefile: 'upgrade-ui-lab.jsx',
         loader: 'jsx'
@@ -339,6 +341,56 @@ app.whenReady().then(async () => {
     assert.equal(vault.resolve(bindingId).accessToken, token)
     assert.equal(vault.get(bindingId).revision, 4)
     checks.push('rollback_requires_separate_binding_confirmation_and_preserves_token')
+    stage = 'ssh-authority-rebind'
+    new code.VpsRepository(database).delete(1)
+    const candidate = new code.VpsRepository(database).create({
+      name: 'Readded private VPS',
+      host: 'fixture.test',
+      port: 22,
+      username: 'root',
+      auth_type: 'key',
+      host_fingerprint: 'SHA256:' + 'A'.repeat(43),
+      credential: cipher.encrypt(randomBytes(32).toString('base64url'))
+    })
+    assert.throws(() => vault.resolve(bindingId))
+    await show('vi', 'dark')
+    await js(
+      `document.querySelector('[aria-label="Thông tin VPS hiện tại"]').closest('.ant-select').querySelector('.ant-select-selector').dispatchEvent(new MouseEvent('mousedown',{bubbles:true}))`
+    )
+    await wait(
+      `!!Array.from(document.querySelectorAll('.ant-select-item-option-content')).find(v=>v.textContent.includes('Readded private VPS'))`
+    )
+    await js(
+      `Array.from(document.querySelectorAll('.ant-select-item-option-content')).find(v=>v.textContent.includes('Readded private VPS')).click()`
+    )
+    await click('Kiểm tra quyền SSH')
+    await wait('document.body.textContent.includes("Fingerprint SSH")')
+    assert.throws(() => vault.resolve(bindingId))
+    await capture('ssh-authority-review-dark', 1280, 800)
+    await capture('ssh-authority-review-dark', 1366, 768)
+    await js(
+      `Array.from(document.querySelectorAll('label')).find(v=>v.textContent.includes('Tôi xác nhận đây là cùng máy chủ')).querySelector('input').click()`
+    )
+    await click('Xác nhận kết nối lại')
+    await wait('document.body.textContent.includes("Đã cập nhật quyền SSH")')
+    assert.throws(() => vault.resolve(bindingId))
+    assert.equal(vault.get(bindingId).revision, 4)
+    await click('Kiểm tra cập nhật kết nối')
+    await click('Xác nhận cập nhật kết nối')
+    await wait(
+      '!Array.from(document.querySelectorAll("button")).some(b=>b.textContent.trim()==="Xác nhận cập nhật kết nối")'
+    )
+    assert.equal(vault.resolve(bindingId).accessToken, token)
+    assert.equal(vault.resolve(bindingId).principal.vpsId, candidate.id)
+    assert.equal(vault.get(bindingId).revision, 5)
+    assert.equal(vault.get(bindingId).remote_client_id, clientId)
+    assert.equal(
+      database.prepare('SELECT count(*) n FROM desktop_controller_authority_rebind').get().n,
+      1
+    )
+    checks.push(
+      'readded_vps_review_and_separate_ssh_consent_then_separate_api_confirmation_keep_existing_token_and_client'
+    )
     stage = 'screenshots'
     for (const locale of ['vi', 'en', 'cn', 'jp'])
       for (const theme of ['dark', 'light']) {

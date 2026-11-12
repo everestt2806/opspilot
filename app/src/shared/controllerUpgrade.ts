@@ -149,6 +149,7 @@ export type DesktopUpgradePlan = {
  */
 
 export type ControllerUpgradeOverview = {
+  ssh_candidates?: { id: number; name: string; host: string }[]
   releases: ControllerInstallerRelease[]
   installations: DesktopInstallation[]
   upgrades: DesktopUpgrade[]

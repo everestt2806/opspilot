@@ -37,7 +37,7 @@ Private profile/SQLite030/key, production preload và component thật, typed IP
 
 ## Tái tạo protected upgrade resource
 
-Descriptor đã duyệt nằm tại `app/control-plane-runtime/desktop-upgrade-release.json`; không thay pin của original release. Binary resources không commit. Dùng Linux x64 glibc2.39, Node22.23.4 và approved production dependency lock như release lab. Cung cấp `NODE22`, `MODULES` và thư mục `OUTPUT` mới chưa tồn tại; không tải dependency bằng root:
+Descriptor đã duyệt nằm tại `app/control-plane-runtime/desktop-upgrade-release.json`; không thay pin của original release. Binary resources không commit. Để tái tạo đúng bytes của descriptor này, dùng source snapshot `60c14ed` trong checkout/export riêng cùng approved lock; không dùng source mới hơn rồi sửa pin cho khớp. Dùng Linux x64 glibc2.39, Node22.23.4 và approved production dependency lock như release lab. Cung cấp `NODE22`, `MODULES` và thư mục `OUTPUT` mới chưa tồn tại; không tải dependency bằng root:
 
 ```sh
 env OPSPILOT_CONTROL_PLANE_MODULES="$MODULES" \
@@ -59,3 +59,11 @@ Kiểm independent release pin `093a05957aa2d1f702a1f495346e338ac8e8ce3934556562
 pnpm --prefix app build
 pnpm --prefix app exec node -e "require('./scripts/controller-installer-before-pack.cjs')({packager:{projectDir:process.cwd()}}).then(function(){console.log('PACKAGING_GATE_PASS')})"
 ```
+
+## c-2b3 — Nhận lại VPS sau đổi SSH
+
+Source hiện tại thêm Desktop-only031; controller và protected upgrade resource vẫn029. Native lab mở lại local VPS bằng một ID mới/ciphertext mới trên cùng host/port/pin/username, chứng minh old authority bị chặn. Main review thực hiện actual pinned SSH Root inspect, confirm ghi append-only audit và đổi installation/upgrade authority nguyên tử, PID giữ nguyên. Token vẫn bị chặn ở khoảng giữa hai bước; separate runtime-binding review/confirm giữ client/token và gọi authenticated API200 + Root admin thành công, rồi rollback/archive guards tiếp tục chạy.
+
+Electron lab thêm chọn candidate VPS, review hostname/user/fingerprint và consent SSH riêng; sau đó buộc xác nhận API binding riêng.19captures gồm2ảnh review SSH ở1280×800/1366×768 và17ảnh unknown/4locale/themes/layout, lưu `docs/ui-redesign/screenshots/r3c6h4c2b3/`. Main/private SQLite/encrypted vault/production preload/UI là thật; SSH responses là synthetic. Không dùng VPS/production DB, không cài lại/start/replay remote bằng chức năng rebind.
+
+Chỉ nhận cùng host/port/fingerprint/username. Máy khác, fingerprint đổi, root operation thiếu/chưa settled/current/running hoặc candidate profile đổi giữa lúc review đều bị từ chối. Khi remote upgrade journal chưa tồn tại hoặc operation đang dở, cần khôi phục đúng authority trước; chức năng này không chuyển quyền sang máy khác hoặc học host key mới.0Productapps/targets trong native lab, không thay live exposure/onboarding/deployment/soak gate.

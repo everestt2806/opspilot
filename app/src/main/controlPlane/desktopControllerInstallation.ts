@@ -375,8 +375,19 @@ export class DesktopControllerInstallations {
     ssh_security_revision: number
     release: DesktopControllerRelease
   } {
+    const value = this.retainedUpgradeAuthority(key)
+    this.current(this.row(key))
+    return value
+  }
+  /** Retained identity for explicit candidate-SSH review; never authorizes dispatch. */
+  retainedUpgradeAuthority(key: string): {
+    installation: DesktopInstallation
+    principal: SshVerifiedConnectionIdentity
+    credential_digest: string
+    ssh_security_revision: number
+    release: DesktopControllerRelease
+  } {
     const row = this.cold(this.row(key))
-    this.current(row)
     const release = this.release(row)
     if (row.state !== 'installed' || !row.controller_id || !row.result_json)
       throw new DesktopInstallationError('INSTALL_INSPECT_REQUIRED')
@@ -386,6 +397,26 @@ export class DesktopControllerInstallations {
       credential_digest: row.credential_digest,
       ssh_security_revision: row.ssh_security_revision,
       release
+    }
+  }
+  candidateUpgradeAuthority(
+    key: string,
+    vpsId: number
+  ): ReturnType<DesktopControllerInstallations['upgradeAuthority']> {
+    const before = this.retainedUpgradeAuthority(key),
+      local = this.local(vpsId)
+    if (local.identity !== this.row(key).identity_key)
+      throw new DesktopInstallationError('INSTALL_CONFLICT')
+    return {
+      ...before,
+      installation: {
+        ...before.installation,
+        vps_id: vpsId,
+        authority_revision: before.installation.authority_revision + 1
+      },
+      principal: local.principal,
+      credential_digest: local.digest,
+      ssh_security_revision: local.revision
     }
   }
   bindingIntent(

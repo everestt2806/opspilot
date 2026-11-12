@@ -279,8 +279,9 @@ const identity = {
   authType: 'key'
 }
 const manager = (pin = hostFingerprint) => {
-  const ssh = new SshManager(() => ({
+  const ssh = new SshManager((vpsId) => ({
     ...identity,
+    vpsId,
     hostFingerprint: pin,
     secret: clientKey.toString()
   }))
@@ -358,11 +359,11 @@ try {
   const databaseInode = lstatSync(join(paths.data, 'opspilot.db')).ino
   keyBytes = readFileSync(join(paths.data, '.controller-runtime-key'))
   desktopDb = initializeDatabase(join(root, 'desktop'))
-  assert.equal(desktopDb.prepare('SELECT MAX(version) n FROM schema_version').get().n, 30)
+  assert.equal(desktopDb.prepare('SELECT MAX(version) n FROM schema_version').get().n, 31)
   const controllerDb = new Database(join(paths.data, 'opspilot.db'), { readonly: true })
   assert.equal(controllerDb.prepare('SELECT MAX(version) n FROM schema_version').get().n, 29)
   controllerDb.close()
-  check('fresh_desktop030_and_native_controller029_have_separate_migration_roles')
+  check('fresh_desktop031_and_native_controller029_have_separate_migration_roles')
   const cipher = new AesGcmCredentialCipher(randomBytes(32))
   const vps = new VpsRepository(desktopDb)
   vps.create({
@@ -500,7 +501,7 @@ try {
   assert.equal(recovered.before[0].state, 'outcome_unknown')
   assert.equal(recovered.result.state, 'active')
   assert.equal(recovered.result.last_result.controller_id, installed.installation.controller_id)
-  assert.equal(recovered.schema.n, 30)
+  assert.equal(recovered.schema.n, 31)
   assert.equal(
     fixed('/usr/bin/systemctl', ['show', unitName, '--property=MainPID', '--value']),
     activePid
@@ -551,6 +552,55 @@ try {
   assert.equal(clientState.controller_id, installed.installation.controller_id)
   check(
     'explicit_runtime_refresh_preserves_api_token_client_and_authenticated_api_with_revision_root_admin'
+  )
+  stage = 'candidate-authority-rebind'
+  new VpsRepository(desktopDb).delete(1)
+  const candidate = new VpsRepository(desktopDb).create({
+    name: 'Readded private SSH fixture',
+    host: identity.host,
+    port: identity.port,
+    username: identity.username,
+    auth_type: 'key',
+    host_fingerprint: identity.hostFingerprint,
+    credential: cipher.encrypt(clientKey.toString())
+  })
+  const retainedUuid = upgrades.list(key)[0].request_key
+  await assert.rejects(() => upgrades.inspect(upgradeKey))
+  const authorityReview = await desktopService.reviewControllerAuthority({
+    installation_request_key: key,
+    vps_id: candidate.id
+  })
+  assert.throws(() => vault.resolve(bindingKey))
+  await desktopService.confirmControllerAuthority({
+    plan_id: authorityReview.plan_id,
+    consent: true
+  })
+  assert.throws(() => vault.resolve(bindingKey))
+  assert.equal(upgrades.list(key)[0].request_key, retainedUuid)
+  assert.equal(installations.list()[0].authority_revision, 2)
+  const reboundReview = await desktopService.reviewUpgradeBinding({
+    binding_id: bindingKey,
+    request_key: upgradeKey
+  })
+  await desktopService.refreshUpgradeBinding({ plan_id: reboundReview.plan_id, consent: true })
+  assert.equal(vault.resolve(bindingKey).accessToken, tokenBefore)
+  assert.equal(vault.resolve(bindingKey).principal.vpsId, candidate.id)
+  assert.equal(vault.get(bindingKey).remote_client_id, clientBefore)
+  const reboundApi = await fetch(
+    `http://127.0.0.1:8768/v1/controllers/${installed.installation.controller_id}/identity`,
+    { headers: { authorization: `Bearer ${vault.resolve(bindingKey).accessToken}` } }
+  )
+  assert.equal(reboundApi.status, 200)
+  const reboundAdmin = await new DesktopControllerEnrollment(vault, ssh, {
+    bootstrapScript
+  }).projectTargets(bindingKey, { after_id: null, limit: 10 })
+  assert.equal(reboundAdmin.controller_id, installed.installation.controller_id)
+  assert.equal(
+    fixed('/usr/bin/systemctl', ['show', unitName, '--property=MainPID', '--value']),
+    activePid
+  )
+  check(
+    'same_host_readded_vps_fresh_pinned_ssh_authority_then_separate_api_refresh_preserves_uuid_pid_token_client_and_api200'
   )
   check('attempt_monotonicity_prevents_second_upgrade_and_does_not_rebind_api_credentials')
   stage = 'revision-admin'
@@ -677,7 +727,7 @@ try {
   )
   stage = 'authority-change'
   const beforeChange = executions
-  new VpsRepository(desktopDb).delete(1)
+  new VpsRepository(desktopDb).delete(candidate.id)
   await assert.rejects(() => upgrades.inspect(upgradeKey), { code: 'UPGRADE_AUTHORITY_CHANGED' })
   assert.equal(executions, beforeChange)
   check('archived_vps_authority_rejected_before_any_ssh_execution')

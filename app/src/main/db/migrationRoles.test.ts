@@ -6,14 +6,19 @@ import { it, expect } from 'vitest'
 import { initializeDatabase, runMigrations } from './index'
 import { initializeController, openControllerDatabase } from '../controlPlane/controllerDatabase'
 
-it('Desktop adds030 while controller retains exact029 across cold open, with no identity rewrite', () => {
+it('Desktop adds030/031 while controller retains exact029 across cold open, with no identity rewrite', () => {
   const root = mkdtempSync(join(tmpdir(), 'opspilot-migration-role-'))
   try {
     const desktop = initializeDatabase(join(root, 'desktop'))
-    expect(desktop.prepare('SELECT MAX(version) v FROM schema_version').get()).toEqual({ v: 30 })
+    expect(desktop.prepare('SELECT MAX(version) v FROM schema_version').get()).toEqual({ v: 31 })
     expect(
       desktop
         .prepare("SELECT name FROM sqlite_master WHERE name='desktop_controller_upgrade'")
+        .get()
+    ).toBeTruthy()
+    expect(
+      desktop
+        .prepare("SELECT name FROM sqlite_master WHERE name='desktop_controller_authority_rebind'")
         .get()
     ).toBeTruthy()
     desktop.close()
@@ -29,6 +34,13 @@ it('Desktop adds030 while controller retains exact029 across cold open, with no 
       expect(
         reopened.database
           .prepare("SELECT name FROM sqlite_master WHERE name='desktop_controller_upgrade'")
+          .get()
+      ).toBeUndefined()
+      expect(
+        reopened.database
+          .prepare(
+            "SELECT name FROM sqlite_master WHERE name='desktop_controller_authority_rebind'"
+          )
           .get()
       ).toBeUndefined()
       expect(readFileSync(join(directory, '.product-controller-initialized')).equals(marker)).toBe(

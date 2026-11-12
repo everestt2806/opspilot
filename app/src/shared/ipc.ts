@@ -1,3 +1,4 @@
+import type { ControllerAuthorityReviewInput, ControllerAuthorityReview, ControllerAuthorityConfirmInput, ControllerAuthorityResult } from './controllerAuthority'
 import type { ControllerUpgradeOverview, ControllerUpgradeReviewInput, ControllerUpgradeReview, ControllerUpgradeSendInput, ControllerUpgradeBindingReview, DesktopUpgrade } from './controllerUpgrade'
 import type { DesktopExposureInput, DesktopExposureResult } from './desktopControllerExposure'
 import type {DesktopTargetPrepareInput,DesktopTargetSendInput,DesktopTargetSetup} from './desktopTargetRegistration';
@@ -370,6 +371,8 @@ export interface DomainIngressActionInput extends DomainIngressStatusInput {
 
 export interface IpcInvokeMap {
   'controller:list': () => IpcResult<DesktopControllerConnection[]>;
+  'controller:review-ssh-authority': (input: ControllerAuthorityReviewInput) => IpcResult<ControllerAuthorityReview>;
+  'controller:confirm-ssh-authority': (input: ControllerAuthorityConfirmInput) => IpcResult<ControllerAuthorityResult>;
   'controller:upgrade-overview': () => IpcResult<ControllerUpgradeOverview>;
   'controller:review-upgrade': (input: ControllerUpgradeReviewInput) => IpcResult<ControllerUpgradeReview>;
   'controller:prepare-upgrade': (input: { plan_id: string }) => IpcResult<DesktopUpgrade>;

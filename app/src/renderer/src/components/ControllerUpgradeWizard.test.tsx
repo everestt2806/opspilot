@@ -239,6 +239,88 @@ it('renders safe error text without leaking raw IPC details or starting another 
   expect(document.body.textContent).not.toContain('SECRET_FAKE')
   expect(invoke.mock.calls.some(([c]) => c === 'controller:prepare-upgrade')).toBe(false)
 })
+it('reviews a candidate VPS and requires separate consent before updating SSH authority', async () => {
+  overview.upgrades = [record('active')]
+  overview.ssh_candidates = [{ id: 2, name: 'Readded VPS', host: 'fixture.test' }]
+  const original = invoke.getMockImplementation()!
+  invoke.mockImplementation(async (channel, input) => {
+    if (channel === 'controller:review-ssh-authority')
+      return {
+        ok: true,
+        data: {
+          plan_id: plan,
+          expires_at: expiry(),
+          installation_request_key: ik,
+          upgrade_request_key: uk,
+          controller_id: cid,
+          previous_vps_id: 1,
+          vps_id: 2,
+          host: 'fixture.test',
+          username: 'root',
+          host_fingerprint: 'SHA256:verified-fixture-pin',
+          from_revision: 1,
+          to_revision: 2
+        }
+      }
+    if (channel === 'controller:confirm-ssh-authority')
+      return { ok: true, data: { binding_refresh_required: true } }
+    return original(channel, input)
+  })
+  await opened()
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Thông tin VPS hiện tại' }))
+  fireEvent.click(await screen.findByText('Readded VPS · fixture.test'))
+  await click('Kiểm tra quyền SSH')
+  await screen.findByText('SHA256:verified-fixture-pin')
+  expect(invoke).toHaveBeenCalledWith('controller:review-ssh-authority', {
+    installation_request_key: ik,
+    vps_id: 2
+  })
+  expect(
+    (screen.getByRole('button', { name: 'Xác nhận kết nối lại' }) as HTMLButtonElement).disabled
+  ).toBe(true)
+  expect(invoke.mock.calls.some(([c]) => c === 'controller:confirm-ssh-authority')).toBe(false)
+  fireEvent.click(screen.getByRole('checkbox', { name: /Tôi xác nhận đây là cùng máy chủ/ }))
+  await click('Xác nhận kết nối lại')
+  await screen.findByText(/Đã cập nhật quyền SSH/)
+  expect(invoke).toHaveBeenCalledWith('controller:confirm-ssh-authority', {
+    plan_id: plan,
+    consent: true
+  })
+  expect(invoke.mock.calls.some(([c]) => c === 'controller:refresh-upgrade-binding')).toBe(false)
+  await click('Kiểm tra cập nhật kết nối')
+  await click('Xác nhận cập nhật kết nối')
+  expect(invoke).toHaveBeenCalledWith('controller:refresh-upgrade-binding', {
+    plan_id: plan,
+    consent: true
+  })
+})
+it('discards a late SSH authority review after closing and reopening the wizard', async () => {
+  overview.upgrades = [record('active')]
+  overview.ssh_candidates = [{ id: 2, name: 'Readded VPS', host: 'fixture.test' }]
+  const original = invoke.getMockImplementation()!
+  let finish: (v: unknown) => void = () => {}
+  invoke.mockImplementation((channel, input) =>
+    channel === 'controller:review-ssh-authority'
+      ? new Promise((done) => {
+          finish = done
+        })
+      : original(channel, input)
+  )
+  const view = await opened()
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Thông tin VPS hiện tại' }))
+  fireEvent.click(await screen.findByText('Readded VPS · fixture.test'))
+  await click('Kiểm tra quyền SSH')
+  view.rerender(<ControllerUpgradeWizard open={false} onClose={() => {}} onChanged={() => {}} />)
+  view.rerender(<ControllerUpgradeWizard open onClose={() => {}} onChanged={() => {}} />)
+  finish({ ok: true, data: { plan_id: plan, expires_at: expiry(), host: 'LATE_AUTHORITY_HOST' } })
+  await waitFor(() =>
+    expect(
+      invoke.mock.calls.filter(([c]) => c === 'controller:upgrade-overview').length
+    ).toBeGreaterThan(1)
+  )
+  expect(screen.queryByText('LATE_AUTHORITY_HOST')).toBeNull()
+  expect(screen.queryByRole('button', { name: 'Xác nhận kết nối lại' })).toBeNull()
+})
 it.each([
   ['en', 'Upgrade controller'],
   ['cn', '升级控制器'],

@@ -174,6 +174,12 @@ export function registerIpcHandlers(
   desktopControllerService?: DesktopControllerService
 ): void {
   if (desktopControllerService) {
+    handle('controller:review-ssh-authority', (input) =>
+      desktopControllerService.reviewControllerAuthority(input)
+    )
+    handle('controller:confirm-ssh-authority', (input) =>
+      desktopControllerService.confirmControllerAuthority(input)
+    )
     handle('controller:upgrade-overview', () => desktopControllerService.upgradeOverview())
     handle('controller:review-upgrade', (input) => desktopControllerService.reviewUpgrade(input))
     handle('controller:prepare-upgrade', (input) => desktopControllerService.prepareUpgrade(input))
