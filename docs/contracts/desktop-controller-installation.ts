@@ -1,5 +1,6 @@
 import type { ControllerInstallationResult } from "./product-controller-installation";
 import type { ControllerBootstrapLocator } from "./product-controller-ssh-bootstrap";
+import type { DesktopUpgrade } from './desktop-controller-upgrade';
 
 /** Main-only protected catalog. Never accept filesystem paths or pins from IPC. */
 export type DesktopControllerRelease = {
@@ -14,6 +15,8 @@ export type DesktopInstallationState =
   | "transferred" | "installed" | "cancelled";
 export type DesktopInstallationOperation = "transfer" | "install" | "recover" | "inspect";
 export type DesktopInstallation = ControllerBootstrapLocator & {
+  /** Current revision observation; original last_result remains historical metadata. */
+  current_revision?: DesktopUpgrade;
   vps_id: number;
   authority_revision: number;
   release_id: string;

@@ -553,6 +553,81 @@ try {
   check(
     'explicit_runtime_refresh_preserves_api_token_client_and_authenticated_api_with_revision_root_admin'
   )
+  stage = 'cold-profile-adoption'
+  const coldDb = initializeDatabase(join(root, 'cold-adoption'))
+  try {
+    const freshVps = new VpsRepository(coldDb).create({
+      name: 'Cold adoption SSH fixture',
+      host: identity.host,
+      port: identity.port,
+      username: identity.username,
+      auth_type: 'key',
+      host_fingerprint: identity.hostFingerprint,
+      credential: cipher.encrypt(clientKey.toString())
+    })
+    const coldService = new DesktopControllerService(
+      coldDb,
+      cipher,
+      ssh,
+      undefined,
+      [original, target],
+      undefined,
+      { installation: { bootstrapScript }, upgrade: { bootstrapScript }, bootstrapScript }
+    )
+    const beforeReceipt = readFileSync(join(paths.state, 'receipt.json'))
+    const beforeJournal = readFileSync(join(paths.state, 'upgrade.json'))
+    const review = await coldService.reviewControllerAdoption({ vps_id: freshVps.id })
+    assert.equal(review.installation_request_key, key)
+    assert.equal(review.upgrade_request_key, upgradeKey)
+    assert.equal(
+      coldDb.prepare('SELECT count(*) n FROM desktop_controller_installation').get().n,
+      0
+    )
+    const result = await coldService.confirmControllerAdoption({
+      plan_id: review.plan_id,
+      consent: true
+    })
+    assert.equal(result.controller_id, installed.installation.controller_id)
+    const row = await coldService.inspectInstallation(key)
+    assert.equal(row.last_result.service_state, 'stopped')
+    assert.equal(row.current_revision.last_result.service_state, 'running')
+    assert.equal(row.current_revision.request_key, upgradeKey)
+    assert.equal(coldDb.prepare('SELECT count(*) n FROM desktop_controller_binding').get().n, 0)
+    check(
+      'cold_profile_readonly_discovery_and_explicit_adoption_preserve_remote_uuids_and_current_runtime'
+    )
+    const intent = {
+      installation_request_key: key,
+      display_name: 'Cold lab read only',
+      allow_write: false
+    }
+    const prepared = await coldService.prepareInstalledRegistration(intent)
+    const registered = await coldService.registerInstalled({
+      ...intent,
+      binding_id: prepared.binding_id
+    })
+    assert.equal(registered.state, 'active')
+    assert.deepEqual(registered.scopes, ['read'])
+    const coldVault = new DesktopControllerVault(coldDb, cipher)
+    const coldApi = await fetch(
+      `http://127.0.0.1:8768/v1/controllers/${installed.installation.controller_id}/identity`,
+      { headers: { authorization: `Bearer ${coldVault.resolve(prepared.binding_id).accessToken}` } }
+    )
+    assert.equal(coldApi.status, 200)
+    await coldService.revoke(prepared.binding_id)
+    assert.equal(coldVault.get(prepared.binding_id).state, 'disabled')
+    assert.deepEqual(readFileSync(join(paths.state, 'receipt.json')), beforeReceipt)
+    assert.deepEqual(readFileSync(join(paths.state, 'upgrade.json')), beforeJournal)
+    assert.equal(
+      fixed('/usr/bin/systemctl', ['show', unitName, '--property=MainPID', '--value']),
+      activePid
+    )
+    check(
+      'cold_adoption_separate_readonly_enrollment_api200_revocation_without_reinstall_restart_or_receipt_change'
+    )
+  } finally {
+    coldDb.close()
+  }
   stage = 'candidate-authority-rebind'
   new VpsRepository(desktopDb).delete(1)
   const candidate = new VpsRepository(desktopDb).create({
@@ -737,6 +812,8 @@ try {
     error?.code && /^[A-Z_]+$/.test(error.code) ? error.code : 'UPGRADE_DESKTOP_LAB_FAILED'
   receipt.stage = stage
   receipt.failure_kind = error?.name
+  const stable = error?.context?.cause?.message
+  if (typeof stable === 'string' && /^[A-Z_]+$/.test(stable)) receipt.technical = stable
   receipt.failure_location = /run\.mjs:\d+:\d+/.exec(error?.stack ?? '')?.[0] ?? 'unknown'
 } finally {
   if (desktopDb?.open) desktopDb.close()

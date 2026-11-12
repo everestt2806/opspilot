@@ -379,6 +379,70 @@ export class DesktopControllerInstallations {
     this.current(this.row(key))
     return value
   }
+  /** Main-only snapshot for cold adoption; no remote dispatch or journal insertion. */
+  localAuthority(vpsId: number): Local {
+    return this.local(vpsId)
+  }
+  protectedRelease(locator: {
+    release_sha256: string
+    installer_sha256: string
+  }): DesktopControllerRelease {
+    const release = this.catalog.find(
+      (v) =>
+        v.release_sha256 === locator.release_sha256 &&
+        v.installer_sha256 === locator.installer_sha256
+    )
+    if (!release) throw new DesktopInstallationError('INSTALL_CATALOG_UNKNOWN')
+    return release
+  }
+  /** Called only in the owning Main adoption transaction after paired fresh attestation. */
+  adoptVerifiedOriginal(
+    vpsId: number,
+    release: DesktopControllerRelease,
+    installation: import('../../../../docs/contracts/product-controller-installation').ControllerInstallationResult
+  ): ReturnType<DesktopControllerInstallations['upgradeAuthority']> {
+    if (!this.db.inTransaction) throw new DesktopInstallationError('INSTALL_BUSY')
+    const local = this.local(vpsId),
+      result = controllerInstallationResultSchema.parse(installation)
+    if (
+      result.phase !== 'installed' ||
+      !result.controller_id ||
+      !result.runtime_uid ||
+      result.service_state !== 'stopped'
+    )
+      throw new DesktopInstallationError('INSTALL_CONFLICT')
+    if (
+      this.db
+        .prepare(
+          'SELECT 1 FROM desktop_controller_installation WHERE request_key=? OR identity_key=?'
+        )
+        .get(result.request_key, local.identity)
+    )
+      throw new DesktopInstallationError('INSTALL_CONFLICT')
+    const now = new Date().toISOString()
+    this.db
+      .prepare(
+        `INSERT INTO desktop_controller_installation
+      (request_key,vps_id,authority_revision,ssh_security_revision,principal_json,identity_key,credential_digest,release_id,release_sha256,installer_sha256,state,last_operation,discovery_existing,controller_id,result_json,created_at,updated_at)
+      VALUES(?,?,1,?,?,?,?,?,?,?,'installed','inspect',1,?,?,?,?)`
+      )
+      .run(
+        result.request_key,
+        vpsId,
+        local.revision,
+        canonicalH2Json(local.principal),
+        local.identity,
+        local.digest,
+        release.release_id,
+        release.release_sha256,
+        release.installer_sha256,
+        result.controller_id,
+        canonicalH2Json(result),
+        now,
+        now
+      )
+    return this.upgradeAuthority(result.request_key)
+  }
   /** Retained identity for explicit candidate-SSH review; never authorizes dispatch. */
   retainedUpgradeAuthority(key: string): {
     installation: DesktopInstallation

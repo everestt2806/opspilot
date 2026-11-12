@@ -8,6 +8,7 @@ import {
   controllerBootstrapScript,
   transferControllerRelease,
   discoverControllerBootstrap,
+  discoverCurrentController,
   administerInstalledController
 } from './controllerSshBootstrap'
 import { createHash } from 'node:crypto'
@@ -36,6 +37,8 @@ function fixture(
     | 'error'
     | 'inconsistent'
     | 'silent'
+    | 'current-absent'
+    | 'current-extra'
     | 'discover-absent'
     | 'discover-existing'
     | 'discover-extra'
@@ -79,44 +82,49 @@ function fixture(
                     kind === 'admin' ? locator.request_key : '22222222-2222-4222-8222-222222222222',
                   result: { ok: true, data: { value: 'x'.repeat(32768) } }
                 }
-              : kind === 'discover-absent'
-                ? { state: 'absent' }
-                : kind === 'discover-existing' || kind === 'discover-extra'
-                  ? {
-                      state: 'discovered',
-                      ...locator,
-                      ...(kind === 'discover-extra' ? { path: '/untrusted' } : {})
-                    }
-                  : kind === 'error'
-                    ? { state: 'error', code: 'SYNTHETIC_RAW_REMOTE_DATA' }
-                    : kind === 'inconsistent'
-                      ? {
-                          state: 'installation_result',
-                          request_key: locator.request_key,
-                          installation: {
-                            format: 1,
+              : kind === 'current-absent' || kind === 'current-extra'
+                ? {
+                    state: 'not_upgraded',
+                    ...(kind === 'current-extra' ? { path: '/untrusted' } : {})
+                  }
+                : kind === 'discover-absent'
+                  ? { state: 'absent' }
+                  : kind === 'discover-existing' || kind === 'discover-extra'
+                    ? {
+                        state: 'discovered',
+                        ...locator,
+                        ...(kind === 'discover-extra' ? { path: '/untrusted' } : {})
+                      }
+                    : kind === 'error'
+                      ? { state: 'error', code: 'SYNTHETIC_RAW_REMOTE_DATA' }
+                      : kind === 'inconsistent'
+                        ? {
+                            state: 'installation_result',
                             request_key: locator.request_key,
-                            phase: 'installed',
-                            controller_id: null,
-                            service_state: 'running',
-                            runtime_uid: null,
-                            service_enabled: true,
-                            artifact_path: '/opt/controller/payload/control-plane.cjs',
-                            node_path: '/opt/controller/node',
-                            data_directory: '/var/lib/controller',
-                            payload_sha256: 'c'.repeat(64)
+                            installation: {
+                              format: 1,
+                              request_key: locator.request_key,
+                              phase: 'installed',
+                              controller_id: null,
+                              service_state: 'running',
+                              runtime_uid: null,
+                              service_enabled: true,
+                              artifact_path: '/opt/controller/payload/control-plane.cjs',
+                              node_path: '/opt/controller/node',
+                              data_directory: '/var/lib/controller',
+                              payload_sha256: 'c'.repeat(64)
+                            }
                           }
-                        }
-                      : {
-                          ...locator,
-                          state: 'absent',
-                          completed_files: 0,
-                          total_files: 0,
-                          ...(kind === 'raw' ? { secret: 'SYNTHETIC_RAW_REMOTE_DATA' } : {}),
-                          ...(kind === 'mismatch'
-                            ? { request_key: '22222222-2222-4222-8222-222222222222' }
-                            : {})
-                        }
+                        : {
+                            ...locator,
+                            state: 'absent',
+                            completed_files: 0,
+                            total_files: 0,
+                            ...(kind === 'raw' ? { secret: 'SYNTHETIC_RAW_REMOTE_DATA' } : {}),
+                            ...(kind === 'mismatch'
+                              ? { request_key: '22222222-2222-4222-8222-222222222222' }
+                              : {})
+                          }
           )
         )
         const header = Buffer.alloc(4)
@@ -133,6 +141,35 @@ function fixture(
   return { ssh: { openProductBootstrapChannel: open }, channel }
 }
 describe('Fixed pinned SSH controller bootstrap client', () => {
+  it('current discovery sends only the fixed readonly header and rejects unrecognized metadata', async () => {
+    const { ssh, channel } = fixture('current-absent')
+    await expect(
+      discoverCurrentController({
+        ssh,
+        vpsId: 1,
+        expectedIdentity: identity,
+        assertCurrent: () => {}
+      })
+    ).resolves.toEqual({ state: 'not_upgraded' })
+    const bytes = Buffer.concat(channel.writes),
+      size = bytes.readUInt32BE(0)
+    expect(JSON.parse(bytes.subarray(4, 4 + size).toString())).toEqual({
+      format: 1,
+      operation: 'discover-current'
+    })
+    expect(bytes.length).toBe(size + 4)
+    const extra = fixture('current-extra')
+    await expect(
+      discoverCurrentController({
+        ssh: extra.ssh,
+        vpsId: 1,
+        expectedIdentity: identity,
+        assertCurrent: () => {}
+      })
+    ).rejects.toThrow()
+    expect(extra.ssh.openProductBootstrapChannel).toHaveBeenCalledTimes(1)
+  })
+
   const adminRequest = (): InstalledControllerAdminRequest => ({
     format: 1 as const,
     operation: 'admin' as const,

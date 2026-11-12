@@ -1,3 +1,4 @@
+import type { ControllerAdoptionReviewInput, ControllerAdoptionReview, ControllerAdoptionConfirmInput, ControllerAdoptionResult } from './controllerAdoption'
 import type { ControllerAuthorityReviewInput, ControllerAuthorityReview, ControllerAuthorityConfirmInput, ControllerAuthorityResult } from './controllerAuthority'
 import type { ControllerUpgradeOverview, ControllerUpgradeReviewInput, ControllerUpgradeReview, ControllerUpgradeSendInput, ControllerUpgradeBindingReview, DesktopUpgrade } from './controllerUpgrade'
 import type { DesktopExposureInput, DesktopExposureResult } from './desktopControllerExposure'
@@ -373,6 +374,8 @@ export interface IpcInvokeMap {
   'controller:list': () => IpcResult<DesktopControllerConnection[]>;
   'controller:review-ssh-authority': (input: ControllerAuthorityReviewInput) => IpcResult<ControllerAuthorityReview>;
   'controller:confirm-ssh-authority': (input: ControllerAuthorityConfirmInput) => IpcResult<ControllerAuthorityResult>;
+  'controller:review-adoption': (input: ControllerAdoptionReviewInput) => IpcResult<ControllerAdoptionReview>;
+  'controller:confirm-adoption': (input: ControllerAdoptionConfirmInput) => IpcResult<ControllerAdoptionResult>;
   'controller:upgrade-overview': () => IpcResult<ControllerUpgradeOverview>;
   'controller:review-upgrade': (input: ControllerUpgradeReviewInput) => IpcResult<ControllerUpgradeReview>;
   'controller:prepare-upgrade': (input: { plan_id: string }) => IpcResult<DesktopUpgrade>;

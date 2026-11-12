@@ -67,3 +67,19 @@ Source hiện tại thêm Desktop-only031; controller và protected upgrade reso
 Electron lab thêm chọn candidate VPS, review hostname/user/fingerprint và consent SSH riêng; sau đó buộc xác nhận API binding riêng.19captures gồm2ảnh review SSH ở1280×800/1366×768 và17ảnh unknown/4locale/themes/layout, lưu `docs/ui-redesign/screenshots/r3c6h4c2b3/`. Main/private SQLite/encrypted vault/production preload/UI là thật; SSH responses là synthetic. Không dùng VPS/production DB, không cài lại/start/replay remote bằng chức năng rebind.
 
 Chỉ nhận cùng host/port/fingerprint/username. Máy khác, fingerprint đổi, root operation thiếu/chưa settled/current/running hoặc candidate profile đổi giữa lúc review đều bị từ chối. Khi remote upgrade journal chưa tồn tại hoặc operation đang dở, cần khôi phục đúng authority trước; chức năng này không chuyển quyền sang máy khác hoặc học host key mới.0Productapps/targets trong native lab, không thay live exposure/onboarding/deployment/soak gate.
+
+## c-3b1 — Hồ sơ Desktop mới nhận lại controller hiện hành
+
+Native `run.mjs` thêm một Desktop DB031 hoàn toàn mới sau upgrade, cùng SSH fixture được mã hóa lại trong profile riêng. Fixed Python `discover-current` chỉ đọc original staging/receipt và current journal dưới original root flock. Main match cả original/current release và installer pins trong catalog, gọi pinned updater inspect rồi repeat discovery; review không tạo journal. Confirm trong60s xác minh lại và ghi original/current metadata nguyên tử, giữ UUID/controller ID/parent/pins. Original result được ghi là historical/stopped; trạng thái hiện hành lấy riêng từ current revision đã xác minh. Không cài lại hoặc replay upgrade.
+
+Main chuẩn bị binding theo current runtime sau fresh inspect; separate explicit read-only enrollment gọi authenticated API200 rồi revoke client thử. Lab kiểm PID và bytes original receipt/current journal không đổi. Đây là private Linux SSH/systemd/SQLite thật; không dùng VPS production hoặc triển khai Product app. Bộ gate toàn bộ vẫn phải chạy riêng, không đồng thời test ControllerService trên Windows dùng8768.
+
+```powershell
+pnpm --prefix app exec electron scripts/controller-upgrade-desktop-lab/adoption-electron.mjs
+```
+
+Electron lab riêng dùng production preload, installer wizard, typed IPC, actual Main và private native SQLite/encrypted vault; discovery/SSH replies là synthetic, không được gọi là live VPS evidence. Kiểm xác nhận nhận lại riêng với API permission, current runtime khác historical result, IDs-only IPC,4locale×2theme×2size và horizontal overflow; ảnh lưu `docs/ui-redesign/screenshots/r3c6h4c3b1/`. Private DB bị xóa sau khi window đóng, profile sản phẩm không bị thay đổi. Lỗi harness lần đầu do dùng sai nhãn nút và stub status chưa đủ đã được sửa; chỉ final result PASS mới dùng làm bằng chứng.
+
+Luồng này chỉ áp dụng khi profile chưa có installation cho cùng VPS identity. Không ghi đè journal đã biết, không chuyển token hoặc import app/history từ máy khác. Original/current protected staging phải còn đầy đủ và thuộc release được app tin cậy; thiếu hoặc sai thì từ chối. Controller gốc chưa nâng cấp tiếp tục dùng luồng cài đặt/inspect cũ. Chưa chứng minh live GUI onboarding/reconnect/firstdeploy: đó là c-3b2, không thay bằng native hoặc synthetic Electron gate.
+
+Trên giao diện Settings → Tự động triển khai trên VPS: chọn VPS đã lưu fingerprint và kiểm tra VPS; nếu profile mới gặp controller đã nâng cấp, wizard chuyển sang review controller hiện hành. Có thể dùng nút “Tìm controller đã nâng cấp” trực tiếp. Kiểm tra máy chủ/tài khoản/fingerprint/controller/release rồi xác nhận “Nhận lại controller”. Bước này chưa cấp API token. Chọn quyền đọc hoặc quyền triển khai, xác nhận riêng rồi “Lưu kết nối”; Main kiểm tra current runtime lần nữa trước enrollment. Đóng wizard khi chờ sẽ bỏ phản hồi UI đến muộn, không tự tiếp tục enrollment.

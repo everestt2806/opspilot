@@ -32,8 +32,8 @@ export function labScript(nonce: string): { text: string; sha256: string } {
       'TRANSFER_ROOT = ' + JSON.stringify(join(root, 'transfer'))
     )
     .replace(
-      'upgrades = "/var/lib/opspilot-controller-upgrades"',
-      'upgrades = ' + JSON.stringify(join(root, 'upgrade-transfers'))
+      'UPGRADES_ROOT = "/var/lib/opspilot-controller-upgrades"',
+      'UPGRADES_ROOT = ' + JSON.stringify(join(root, 'upgrade-transfers'))
     )
     .replace(
       /INSTALLATION_PATHS = \([\s\S]*?\n\)/,
@@ -47,7 +47,7 @@ export function labScript(nonce: string): { text: string; sha256: string } {
     )
   const diagnostic = text.replace(
     '    ) as error:\n        code = (',
-    '    ) as error:\n        import sys\n        trace = error.__traceback__\n        while trace.tb_next: trace = trace.tb_next\n        sys.stderr.write(json.dumps({"fixture_error":type(error).__name__,"line":trace.tb_lineno,"errno":getattr(error,"errno",None)})+"\\n")\n        code = ('
+    '    ) as error:\n        import sys\n        trace = error.__traceback__\n        caller = trace.tb_lineno\n        while trace.tb_next: caller = trace.tb_lineno; trace = trace.tb_next\n        sys.stderr.write(json.dumps({"fixture_error":type(error).__name__,"line":trace.tb_lineno,"caller_line":caller,"code":getattr(error,"code",None),"errno":getattr(error,"errno",None)})+"\\n")\n        code = ('
   )
   return { text: diagnostic, sha256: createHash('sha256').update(diagnostic).digest('hex') }
 }

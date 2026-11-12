@@ -1,5 +1,6 @@
 // Metadata DTO copies of docs/contracts/*; keep CLI rootDir inside app.
 import type { DesktopControllerConnection } from './desktopController'
+import type { DesktopUpgrade } from './controllerUpgrade'
 
 export type ControllerBootstrapLocator = {
   request_key: string
@@ -41,6 +42,7 @@ export type DesktopInstallationState =
   'prepared' | 'in_flight' | 'outcome_unknown' | 'transferred' | 'installed' | 'cancelled'
 export type DesktopInstallationOperation = 'transfer' | 'install' | 'recover' | 'inspect'
 export type DesktopInstallation = ControllerBootstrapLocator & {
+  current_revision?: DesktopUpgrade
   vps_id: number
   authority_revision: number
   release_id: string

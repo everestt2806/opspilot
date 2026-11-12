@@ -20,6 +20,8 @@ import {
   callControllerBootstrap,
   callControllerUpgrade,
   transferControllerRelease,
+  discoverCurrentController,
+  controllerCurrentDiscoverySchema,
   ControllerBootstrapError
 } from './controllerSshBootstrap'
 import { controllerUpgradeResultSchema } from './controllerUpgradeProtocol'
@@ -29,6 +31,11 @@ import type {
   ControllerAuthorityResult
 } from '@shared/controllerAuthority'
 import { bindingAtAuthority } from './desktopControllerAuthority'
+import type {
+  ControllerAdoptionReview,
+  ControllerAdoptionResult,
+  ControllerCurrentDiscovery
+} from '../../../../docs/contracts/desktop-controller-adoption'
 
 const session = randomUUID()
 const uuid = z.uuidv4().refine((v) => v === v.toLowerCase())
@@ -81,6 +88,7 @@ type Plan = {
 export type DesktopUpgradeOptions = {
   sessionId?: string
   bootstrapScript?: { text: string; sha256: string }
+  discovery?: typeof discoverCurrentController
   transport?: {
     call: typeof callControllerBootstrap
     upgrade: typeof callControllerUpgrade
@@ -108,6 +116,17 @@ export class DesktopControllerUpgrades {
   private readonly catalog: readonly DesktopUpgradeRelease[]
   private readonly transport: NonNullable<DesktopUpgradeOptions['transport']>
   private readonly plans = new Map<string, Plan>()
+  private readonly adoptions = new Map<
+    string,
+    {
+      local: ReturnType<DesktopControllerInstallations['localAuthority']>
+      observation: Extract<ControllerCurrentDiscovery, { state: 'current_revision' }>
+      result: ControllerUpgradeResult
+      seed: Omit<Row, 'sequence'>
+      original: DesktopUpgradeRelease
+      review: ControllerAdoptionReview
+    }
+  >()
   private readonly authorityReviews = new Map<
     string,
     {
@@ -166,6 +185,205 @@ export class DesktopControllerUpgrades {
       node_path: r.node_path,
       data_directory: r.data_directory,
       payload_sha256: r.payload_sha256
+    })
+  }
+  private adoptionLocal(
+    vpsId: number
+  ): ReturnType<DesktopControllerInstallations['localAuthority']> {
+    const local = this.installations.localAuthority(vpsId)
+    if (
+      this.db
+        .prepare('SELECT 1 FROM desktop_controller_installation WHERE identity_key=? OR vps_id=?')
+        .get(local.identity, vpsId)
+    )
+      throw new DesktopUpgradeError('UPGRADE_CONFLICT')
+    return local
+  }
+  private async adoptionEvidence(vpsId: number): Promise<{
+    local: ReturnType<DesktopControllerInstallations['localAuthority']>
+    observation: Extract<ControllerCurrentDiscovery, { state: 'current_revision' }>
+    result: ControllerUpgradeResult
+    seed: Omit<Row, 'sequence'>
+    original: DesktopUpgradeRelease
+  }> {
+    const local = this.adoptionLocal(vpsId)
+    const assertCurrent = (): void => {
+      if (canonicalH2Json(this.adoptionLocal(vpsId)) !== canonicalH2Json(local))
+        throw new DesktopUpgradeError('UPGRADE_AUTHORITY_CHANGED')
+    }
+    const input = {
+      ssh: this.ssh,
+      vpsId,
+      expectedIdentity: local.principal,
+      assertCurrent,
+      bootstrapScript: this.options.bootstrapScript
+    }
+    const discover = this.options.discovery ?? discoverCurrentController
+    const observation = controllerCurrentDiscoverySchema.parse(await discover(input))
+    assertCurrent()
+    if (observation.state !== 'current_revision')
+      throw new DesktopUpgradeError('UPGRADE_UNAVAILABLE')
+    const original = this.installations.protectedRelease(observation.original),
+      manifest = verifyControllerRelease(original.release_directory, original.release_sha256),
+      release = this.catalog.find(
+        (v) =>
+          v.release_sha256 === observation.upgrade.release_sha256 &&
+          v.installer_sha256 === observation.upgrade.installer_sha256
+      ),
+      i = observation.original.installation,
+      u = observation.upgrade
+    if (
+      !release ||
+      i.phase !== 'installed' ||
+      i.service_state !== 'stopped' ||
+      !i.controller_id ||
+      !i.runtime_uid ||
+      observation.original.request_key !== i.request_key ||
+      u.installation_request_key !== i.request_key ||
+      u.controller_id !== i.controller_id ||
+      manifest.payload_sha256 !== i.payload_sha256 ||
+      releaseSha256(readReleaseFile(original.installer_path, 1024 * 1024)) !==
+        original.installer_sha256
+    )
+      throw new DesktopUpgradeError('UPGRADE_CONFLICT')
+    this.release(release.release_id)
+    const result = controllerUpgradeResultSchema.parse(
+      await this.transport.upgrade({
+        ...input,
+        purpose: 'upgrade',
+        locator: {
+          request_key: u.request_key,
+          release_sha256: u.release_sha256,
+          installer_sha256: u.installer_sha256
+        },
+        request: {
+          format: 1,
+          operation: 'inspect-upgrade',
+          request_key: u.request_key,
+          installation_request_key: i.request_key,
+          controller_id: i.controller_id,
+          parent_upgrade_key: u.parent_upgrade_key,
+          parent_release_sha256: u.parent_release_sha256,
+          release_sha256: u.release_sha256
+        }
+      })
+    )
+    assertCurrent()
+    if (
+      !result.is_current ||
+      result.service_state !== 'running' ||
+      !['active', 'rolled_back'].includes(result.phase)
+    )
+      throw new DesktopUpgradeError('UPGRADE_INSPECT_REQUIRED')
+    const now = new Date().toISOString(),
+      base: Base = {
+        installation: {
+          ...observation.original,
+          vps_id: vpsId,
+          authority_revision: 1,
+          release_id: original.release_id,
+          state: 'installed',
+          controller_id: i.controller_id,
+          last_result: i,
+          created_at: now,
+          updated_at: now
+        },
+        principal: local.principal,
+        credential_digest: local.digest,
+        ssh_security_revision: local.revision,
+        release: original
+      }
+    const seed: Omit<Row, 'sequence'> = {
+      request_key: u.request_key,
+      installation_request_key: i.request_key,
+      controller_id: i.controller_id,
+      vps_id: vpsId,
+      authority_revision: 1,
+      installation_authority_json: this.authority(base),
+      parent_upgrade_key: u.parent_upgrade_key,
+      parent_release_sha256: u.parent_release_sha256,
+      release_id: release.release_id,
+      release_sha256: release.release_sha256,
+      installer_sha256: release.installer_sha256,
+      state: result.phase as 'active' | 'rolled_back',
+      last_operation: 'inspect',
+      operation_id: null,
+      owner_session: null,
+      ever_dispatched: 1,
+      upgrade_attempted: 1,
+      is_current: 1,
+      result_json: canonicalH2Json(result),
+      created_at: now,
+      updated_at: now
+    }
+    this.correlate(seed as Row, result)
+    const after = controllerCurrentDiscoverySchema.parse(await discover(input))
+    assertCurrent()
+    if (canonicalH2Json(after) !== canonicalH2Json(observation))
+      throw new DesktopUpgradeError('UPGRADE_AUTHORITY_CHANGED')
+    return { local, observation, result, seed, original }
+  }
+  async reviewAdoption(vpsId: number): Promise<ControllerAdoptionReview> {
+    const evidence = await this.adoptionEvidence(vpsId)
+    for (const [id, p] of this.adoptions)
+      if (Date.parse(p.review.expires_at) <= Date.now()) this.adoptions.delete(id)
+    if (this.adoptions.size >= 32) throw new DesktopUpgradeError('UPGRADE_BUSY')
+    const review: ControllerAdoptionReview = {
+      plan_id: randomUUID(),
+      expires_at: new Date(Date.now() + 60000).toISOString(),
+      installation_request_key: evidence.seed.installation_request_key,
+      upgrade_request_key: evidence.seed.request_key,
+      controller_id: evidence.seed.controller_id,
+      vps_id: vpsId,
+      host: evidence.local.principal.host,
+      username: evidence.local.principal.username,
+      host_fingerprint: evidence.local.principal.hostFingerprint,
+      release_id: evidence.seed.release_id
+    }
+    this.adoptions.set(review.plan_id, { ...evidence, review })
+    return review
+  }
+  async confirmAdoption(planId: string, consent: true): Promise<ControllerAdoptionResult> {
+    if (consent !== true) throw new DesktopUpgradeError('UPGRADE_INPUT_INVALID')
+    const plan = this.adoptions.get(uuid.parse(planId))
+    if (!plan || Date.parse(plan.review.expires_at) <= Date.now())
+      throw new DesktopUpgradeError('UPGRADE_PLAN_EXPIRED')
+    const fresh = await this.adoptionEvidence(plan.review.vps_id)
+    if (
+      canonicalH2Json(fresh.local) !== canonicalH2Json(plan.local) ||
+      canonicalH2Json(fresh.observation) !== canonicalH2Json(plan.observation) ||
+      canonicalH2Json(fresh.result) !== canonicalH2Json(plan.result)
+    )
+      throw new DesktopUpgradeError('UPGRADE_AUTHORITY_CHANGED')
+    return this.mutate(() => {
+      if (
+        Date.parse(plan.review.expires_at) <= Date.now() ||
+        canonicalH2Json(this.adoptionLocal(plan.review.vps_id)) !== canonicalH2Json(fresh.local)
+      )
+        throw new DesktopUpgradeError('UPGRADE_AUTHORITY_CHANGED')
+      const base = this.installations.adoptVerifiedOriginal(
+          plan.review.vps_id,
+          fresh.original,
+          fresh.observation.original.installation
+        ),
+        seed = fresh.seed
+      if (this.authority(base) !== seed.installation_authority_json)
+        throw new DesktopUpgradeError('UPGRADE_AUTHORITY_CHANGED')
+      const keys = Object.keys(seed)
+      this.db
+        .prepare(
+          `INSERT INTO desktop_controller_upgrade (${keys.join(',')}) VALUES (${keys.map(() => '?').join(',')})`
+        )
+        .run(...Object.values(seed))
+      this.row(seed.request_key)
+      this.adoptions.delete(planId)
+      return {
+        installation_request_key: seed.installation_request_key,
+        upgrade_request_key: seed.request_key,
+        controller_id: seed.controller_id,
+        vps_id: seed.vps_id,
+        enrollment_required: true
+      }
     })
   }
   async reviewAuthority(

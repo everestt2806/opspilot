@@ -1,5 +1,8 @@
 # R3c-6h4 — Product exposure và live Electron
 
+> **12/11 — R3c-6h4c-3b1 CHỜ REVIEW:** Cold Desktop nhận lại controller đã nâng cấp, DONE scoped. Fixed readonly discovery + protected original/current pins + paired fresh Root inspect/repeat SSH fences; review60s/consent và atomic original/current metadata giữ remote UUID/parent/CID, không import app/secret/token/reinstall/replay. Wizard4locale tự chuyển từ preflight, current runtime khác historical result và separate API permission. Full2204PASS+2existingLinux-onlySKIP/0FAIL,focused138/5files,10types/ESLint16/build/38AST/package/Ruff/native18/Electron5+18ảnh PASS; [proof/source hashes](../ui-redesign/r3c6h4c3b1-verification.json). Native actual SSH/systemd/Main031/controller029/cold DB/read-only enrollment/API200/revoke/PID/receipt/journal preservation; Electron synthetic SSH/actual Main/private SQLite/production preload,cleanup đạt. Không VPS/productionDB/Productapps/targets/Docker/reboot/soak/live GUI claim. Scope chỉ cold profile, không overwrite journal đã biết; phải còn trusted original/current staging. Tiếp **c-3b2 actual isolated Electron/pinned SSH onboarding/reconnect/firstdeploy**, parent6h4/R3 mở. SHA `git log -1 -- app/src/shared/controllerAdoption.ts`; normal push được phép, không PR/merge.
+
+
 START10/11/2026 — Base `894fcfd`, product-mode/task-discipline. User yêu cầu tiếp tục. Được triển khai/lab/checkpoint commit/normal push; không PR/merge/reset/clean/stash/rebase. Giữ demo VPS167.71.202.116 hiện tại/auto paused; credential chỉ encrypted store hoặc hidden stdin/RAM.
 
 | Yêu cầu tổng | Điều kiện nhận | State |

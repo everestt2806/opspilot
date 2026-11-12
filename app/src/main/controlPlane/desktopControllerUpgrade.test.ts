@@ -14,6 +14,7 @@ import { DesktopControllerVault } from './desktopControllerVault'
 import { DesktopControllerService } from './desktopControllerService'
 import type { ControllerInstallationResult } from '../../../../docs/contracts/product-controller-installation'
 import type { ControllerUpgradeResult } from '../../../../docs/contracts/product-controller-upgrade'
+import type { ControllerCurrentDiscovery } from '../../../../docs/contracts/desktop-controller-adoption'
 
 const cid = randomUUID(),
   tool = Buffer.from('private fixture updater bytes'),
@@ -281,26 +282,16 @@ it('Main requires a fresh ephemeral review and explicit consent before preservin
     .prepare('SELECT * FROM desktop_controller_installation WHERE request_key=?')
     .get(installKey)
   for (const work of [
-    () => main.inspectInstallation(installKey),
     () => main.sendInstallation(installKey, 'recover', true),
     () => main.sendInstaller({ request_key: installKey, operation: 'recover', consent: true }),
     () => main.rebindInstallation(randomUUID(), installKey, true),
-    () => main.rebindInstaller({ plan_id: randomUUID(), request_key: installKey, confirm: true }),
-    () =>
-      main.prepareInstalledRegistration({
-        installation_request_key: installKey,
-        display_name: 'Stale installation'
-      }),
-    () =>
-      main.registerInstalled({
-        installation_request_key: installKey,
-        binding_id: randomUUID(),
-        display_name: 'Stale installation'
-      })
+    () => main.rebindInstaller({ plan_id: randomUUID(), request_key: installKey, confirm: true })
   ])
     await expect(work()).rejects.toMatchObject({
       context: { cause: { message: 'UPGRADE_INSPECT_REQUIRED' } }
     })
+  const inspected = await main.inspectInstallation(installKey)
+  expect(inspected.current_revision).toMatchObject({ request_key: key, state: 'active' })
   expect(
     db.prepare('SELECT * FROM desktop_controller_installation WHERE request_key=?').get(installKey)
   ).toEqual(original)
@@ -496,6 +487,175 @@ it('ignores a delayed candidate root response if the SSH profile changes during 
   expect(db.prepare('SELECT count(*) n FROM desktop_controller_authority_rebind').get()).toEqual({
     n: 0
   })
+})
+async function coldAdoptionFixture(): Promise<{
+  cold: ReturnType<typeof initializeDatabase>
+  installs: DesktopControllerInstallations
+  adopting: DesktopControllerUpgrades
+  discovery: ReturnType<typeof vi.fn<NonNullable<DesktopUpgradeOptions['discovery']>>>
+  observation: Extract<ControllerCurrentDiscovery, { state: 'current_revision' }>
+  key: string
+}> {
+  const key = await transferred()
+  await upgrades.send(key, 'upgrade', true)
+  vi.mocked(releaseModule.verifyControllerRelease).mockImplementation(
+    (directory) =>
+      ({
+        payload_sha256: directory === old.release_directory ? 'c'.repeat(64) : 'e'.repeat(64)
+      }) as ReturnType<typeof releaseModule.verifyControllerRelease>
+  )
+  const cold = initializeDatabase(join(directory, 'cold'))
+  new VpsRepository(cold).create({
+    name: 'Cold Desktop',
+    host: 'controller.test',
+    port: 22,
+    username: 'root',
+    host_fingerprint: 'SHA256:' + 'A'.repeat(43),
+    auth_type: 'key',
+    credential: cipher.encrypt(randomBytes(32).toString('base64url'))
+  })
+  const observation: Extract<ControllerCurrentDiscovery, { state: 'current_revision' }> = {
+    state: 'current_revision',
+    original: {
+      request_key: installKey,
+      release_sha256: old.release_sha256,
+      installer_sha256: old.installer_sha256,
+      installation: { ...original(installKey), service_state: 'stopped' }
+    },
+    upgrade: {
+      request_key: key,
+      release_sha256: target.release_sha256,
+      installer_sha256: target.installer_sha256,
+      installation_request_key: installKey,
+      controller_id: cid,
+      parent_upgrade_key: null,
+      parent_release_sha256: old.release_sha256
+    },
+    original_receipt_sha256: '1'.repeat(64),
+    current_journal_sha256: '2'.repeat(64)
+  }
+  const discovery = vi.fn<NonNullable<DesktopUpgradeOptions['discovery']>>(async (input) => {
+    input.assertCurrent()
+    return structuredClone(observation)
+  })
+  const installs = new DesktopControllerInstallations(cold, ssh, [old, target], {
+    transport: installationTransport
+  })
+  const adopting = new DesktopControllerUpgrades(cold, installs, ssh, [target], {
+    transport,
+    discovery
+  })
+  return { cold, installs, adopting, discovery, observation, key }
+}
+it('adopts only freshly attested original/current identities in a cold profile, with separate API enrollment', async () => {
+  const c = await coldAdoptionFixture()
+  try {
+    const writes = transport.upgrade.mock.calls.filter(
+      ([i]) => i.request.operation !== 'inspect-upgrade'
+    ).length
+    const review = await c.adopting.reviewAdoption(1)
+    expect(Object.keys(transport.upgrade.mock.calls.at(-1)![0].locator).sort()).toEqual([
+      'installer_sha256',
+      'release_sha256',
+      'request_key'
+    ])
+    expect(c.cold.prepare('SELECT count(*) n FROM desktop_controller_installation').get()).toEqual({
+      n: 0
+    })
+    await expect(c.adopting.confirmAdoption(review.plan_id, false as true)).rejects.toThrow()
+    const result = await c.adopting.confirmAdoption(review.plan_id, true)
+    expect(result).toMatchObject({
+      installation_request_key: installKey,
+      upgrade_request_key: c.key,
+      controller_id: cid,
+      enrollment_required: true
+    })
+    expect(c.installs.list()[0]).toMatchObject({
+      state: 'installed',
+      last_result: { service_state: 'stopped' }
+    })
+    expect(c.adopting.all()[0]).toMatchObject({
+      request_key: c.key,
+      state: 'active',
+      is_current: true
+    })
+    expect(
+      transport.upgrade.mock.calls.filter(([i]) => i.request.operation !== 'inspect-upgrade')
+    ).toHaveLength(writes)
+    expect(c.cold.prepare('SELECT count(*) n FROM desktop_controller_binding').get()).toEqual({
+      n: 0
+    })
+    await expect(c.adopting.confirmAdoption(review.plan_id, true)).rejects.toThrow()
+    const main = new DesktopControllerService(
+      c.cold,
+      cipher,
+      ssh as never,
+      undefined,
+      [old, target],
+      undefined,
+      { installation: { transport: installationTransport }, upgrade: { transport } }
+    )
+    const prepared = await main.prepareInstalledRegistration({
+      installation_request_key: installKey,
+      display_name: 'Fresh confirmation',
+      allow_write: false
+    })
+    const intent = new DesktopControllerVault(c.cold, cipher).storedIntent(prepared.binding_id)
+    expect(intent.artifact_path).toBe(remote.get(c.key)!.artifact_path)
+    expect(intent.upgrade?.request_key).toBe(c.key)
+    expect(intent.requested_scopes).toEqual(['read'])
+    expect((await main.inspectInstallation(installKey)).current_revision?.state).toBe('active')
+  } finally {
+    c.cold.close()
+  }
+})
+it('rejects changed discovery/unknown pins and keeps the cold journal empty', async () => {
+  const c = await coldAdoptionFixture()
+  try {
+    c.discovery.mockImplementationOnce(async () => ({
+      ...c.observation,
+      upgrade: { ...c.observation.upgrade, installer_sha256: 'f'.repeat(64) }
+    }))
+    await expect(c.adopting.reviewAdoption(1)).rejects.toThrow()
+    c.discovery.mockImplementationOnce(async () => structuredClone(c.observation))
+    c.discovery.mockImplementationOnce(async () => ({
+      ...c.observation,
+      current_journal_sha256: '3'.repeat(64)
+    }))
+    await expect(c.adopting.reviewAdoption(1)).rejects.toThrow()
+    const review = await c.adopting.reviewAdoption(1)
+    c.observation.current_journal_sha256 = '4'.repeat(64)
+    await expect(c.adopting.confirmAdoption(review.plan_id, true)).rejects.toThrow()
+    expect(c.cold.prepare('SELECT count(*) n FROM desktop_controller_installation').get()).toEqual({
+      n: 0
+    })
+  } finally {
+    c.cold.close()
+  }
+})
+it('rolls back both adopted journals on insert failure and fences profile changes and expired reviews', async () => {
+  const c = await coldAdoptionFixture()
+  try {
+    const review = await c.adopting.reviewAdoption(1)
+    c.cold.exec(
+      `CREATE TRIGGER fixture_adoption_failure BEFORE INSERT ON desktop_controller_upgrade BEGIN SELECT RAISE(ABORT,'FIXTURE_ABORT'); END`
+    )
+    await expect(c.adopting.confirmAdoption(review.plan_id, true)).rejects.toThrow('FIXTURE_ABORT')
+    expect(c.cold.prepare('SELECT count(*) n FROM desktop_controller_installation').get()).toEqual({
+      n: 0
+    })
+    c.cold.exec('DROP TRIGGER fixture_adoption_failure')
+    c.cold.prepare('UPDATE vps SET ssh_security_revision=ssh_security_revision+1 WHERE id=1').run()
+    await expect(c.adopting.confirmAdoption(review.plan_id, true)).rejects.toThrow()
+    const fresh = await c.adopting.reviewAdoption(1)
+    vi.useFakeTimers()
+    vi.setSystemTime(Date.now() + 61000)
+    await expect(c.adopting.confirmAdoption(fresh.plan_id, true)).rejects.toThrow()
+    vi.useRealTimers()
+  } finally {
+    vi.useRealTimers()
+    c.cold.close()
+  }
 })
 it('lost upgrade reply survives cold SQLite reopen and inspect never replays upgrade', async () => {
   const key = await transferred(),

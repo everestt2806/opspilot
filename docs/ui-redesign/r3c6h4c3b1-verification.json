@@ -1,0 +1,601 @@
+{
+  "checkpoint": "R3c-6h4c-3b1",
+  "date": "2026-11-12",
+  "status": "COLD_PROFILE_TRUSTED_CURRENT_REVISION_ADOPTION_PASS",
+  "review": "PENDING",
+  "base_commit": "5ee1639607414e2cfd1fa10d7218e3c80d11825c",
+  "scope": "Fixed readonly discovery; protected original/current pin pairing; fresh root inspect before/after; 60s review and explicit consent; atomic original/current metadata adoption; separate API binding and current runtime UI in four locales.",
+  "limits": [
+    "Only a cold Desktop profile with no installation for this VPS identity. Existing journals are never overwritten; rebind and unknown recovery remain separate.",
+    "Requires retained protected original staging and a known original/current release/tool in the Main catalog, plus a current settled/running root operation. Missing/changed/unknown evidence fails closed; no host-key learning or reinstall/upgrade replay.",
+    "Original installation result is explicitly historical/stopped metadata, not a claim that the new Desktop performed the original upgrade. Remote UUID/controller ID/parent/pins preserved; no app/history/secret/token import.",
+    "Actual native lab uses private Linux SSH/systemd/SQLite/controller029/Desktop031, separate explicit read enrollment/API200/revocation and preservation checks. No development VPS, production DB, Product app/target deployment, Docker workload, reboot or soak in this checkpoint.",
+    "Electron uses production preload/UI/typed channels, actual Main/private native SQLite/vault; SSH/discovery replies are synthetic. Its window proof does not replace actual live VPS GUI onboarding/reconnect/firstdeploy c-3b2.",
+    "No schema/dependency/installed binary/resource pin changes. Parent c-3/6h4/R3 remains open."
+  ],
+  "full_tests": {
+    "numTotalTests": 2206,
+    "numPassedTests": 2204,
+    "numFailedTests": 0,
+    "numPendingTests": 2,
+    "success": true
+  },
+  "full_test_files": {
+    "total": 163,
+    "passed": 162,
+    "skipped": 1
+  },
+  "focused_covered_in_full": [
+    {
+      "file": "ipc.test.ts",
+      "tests": 38
+    },
+    {
+      "file": "controllerSshBootstrap.test.ts",
+      "tests": 29
+    },
+    {
+      "file": "desktopControllerInstallation.test.ts",
+      "tests": 39
+    },
+    {
+      "file": "desktopControllerUpgrade.test.ts",
+      "tests": 18
+    },
+    {
+      "file": "ControllerInstallWizard.test.tsx",
+      "tests": 14
+    }
+  ],
+  "checks": {
+    "typescript_projects": [
+      {
+        "project": "tsconfig.node.json",
+        "exit_code": 0,
+        "via": "final production build"
+      },
+      {
+        "project": "tsconfig.web.json",
+        "exit_code": 0,
+        "via": "final production build"
+      },
+      {
+        "project": "tsconfig.scripts.json",
+        "exit_code": 0
+      },
+      {
+        "project": "scripts/controller-bootstrap-lab/tsconfig.json",
+        "exit_code": 0
+      },
+      {
+        "project": "scripts/controller-exposure-lab/tsconfig.json",
+        "exit_code": 0
+      },
+      {
+        "project": "scripts/controller-release-lab/tsconfig.json",
+        "exit_code": 0
+      },
+      {
+        "project": "scripts/controller-service-lab/tsconfig.json",
+        "exit_code": 0
+      },
+      {
+        "project": "scripts/controller-upgrade-desktop-lab/tsconfig.json",
+        "exit_code": 0
+      },
+      {
+        "project": "scripts/controller-upgrade-lab/tsconfig.json",
+        "exit_code": 0
+      },
+      {
+        "project": "scripts/controller-upgrade-live/tsconfig.json",
+        "exit_code": 0
+      }
+    ],
+    "lint": {
+      "files": [
+        "scripts/controller-upgrade-desktop-lab/adoption-electron.mjs",
+        "scripts/controller-upgrade-desktop-lab/entry.ts",
+        "scripts/controller-upgrade-desktop-lab/run.mjs",
+        "src/main/controlPlane/controllerSshBootstrap.test.ts",
+        "src/main/controlPlane/controllerSshBootstrap.ts",
+        "src/main/controlPlane/desktopControllerInstallation.ts",
+        "src/main/controlPlane/desktopControllerService.ts",
+        "src/main/controlPlane/desktopControllerUpgrade.test.ts",
+        "src/main/controlPlane/desktopControllerUpgrade.ts",
+        "src/main/ipc.test.ts",
+        "src/main/ipc.ts",
+        "src/renderer/src/components/controllerAdoptionCopy.ts",
+        "src/renderer/src/components/ControllerInstallWizard.test.tsx",
+        "src/renderer/src/components/ControllerInstallWizard.tsx",
+        "src/shared/controllerAdoption.ts",
+        "src/shared/controllerInstaller.ts"
+      ],
+      "exit_code": 0
+    },
+    "contract_ast_parity": {
+      "status": "PASS",
+      "checks": 38,
+      "items": [
+        "DTO ControllerUpgradeAuthority",
+        "DTO ControllerUpgradeRequest",
+        "DTO ControllerUpgradePhase",
+        "DTO ControllerUpgradeResult",
+        "DTO ControllerUpgradeSnapshot",
+        "DTO ControllerUpgradeGate",
+        "DTO DesktopUpgradeRelease",
+        "DTO DesktopUpgradeState",
+        "DTO DesktopUpgradeOperation",
+        "DTO DesktopUpgrade",
+        "DTO DesktopUpgradePlan",
+        "DTO ControllerUpgradeOverview",
+        "DTO ControllerUpgradeReviewInput",
+        "DTO ControllerUpgradeSendInput",
+        "DTO ControllerUpgradeBindingReview",
+        "DTO ControllerUpgradeReview",
+        "DTO ControllerCurrentDiscovery",
+        "DTO ControllerAdoptionReview",
+        "DTO ControllerAdoptionReviewInput",
+        "DTO ControllerAdoptionConfirmInput",
+        "DTO ControllerAdoptionResult",
+        "DTO ControllerAuthorityReviewInput",
+        "DTO ControllerAuthorityReview",
+        "DTO ControllerAuthorityConfirmInput",
+        "DTO ControllerAuthorityResult",
+        "IPC controller:review-ssh-authority",
+        "IPC controller:confirm-ssh-authority",
+        "IPC controller:review-adoption",
+        "IPC controller:confirm-adoption",
+        "IPC controller:upgrade-overview",
+        "IPC controller:review-upgrade",
+        "IPC controller:prepare-upgrade",
+        "IPC controller:send-upgrade",
+        "IPC controller:inspect-upgrade",
+        "IPC controller:cancel-upgrade",
+        "IPC controller:review-upgrade-binding",
+        "IPC controller:refresh-upgrade-binding",
+        "DTO DesktopInstallation"
+      ]
+    },
+    "production_build": "PASS",
+    "compiled_main_packaging_gate": "PASS",
+    "ruff_check_and_format": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "native": {
+    "status": "PASS",
+    "scope": "PRIVATE_ROOT_SYSTEMD_PINNED_SSH_MAIN_SQLITE_UPGRADE",
+    "checks": [
+      "fresh_desktop031_and_native_controller029_have_separate_migration_roles",
+      "original_root_admin_enrollment_stores_api_token_only_in_encrypted_main_vault",
+      "plan_prepare_and_absent_inspect_preserve_uuid_and_never_create_remote_upgrade_namespace",
+      "independently_pinned_upgrade_transfer_uses_distinct_uuid_namespace_preserving_original_install_staging",
+      "wrong_tool_pin_rejected_by_receiver_before_upgrader_execution",
+      "disconnect_before_root_journal_keeps_attempted_and_wrong_parent_recovery_never_creates_journal",
+      "lost_upgrade_reply_recovers_in_separate_cold_main_process_without_replaying_or_restarting_service",
+      "explicit_runtime_refresh_preserves_api_token_client_and_authenticated_api_with_revision_root_admin",
+      "cold_profile_readonly_discovery_and_explicit_adoption_preserve_remote_uuids_and_current_runtime",
+      "cold_adoption_separate_readonly_enrollment_api200_revocation_without_reinstall_restart_or_receipt_change",
+      "same_host_readded_vps_fresh_pinned_ssh_authority_then_separate_api_refresh_preserves_uuid_pid_token_client_and_api200",
+      "attempt_monotonicity_prevents_second_upgrade_and_does_not_rebind_api_credentials",
+      "revision_admin_derives_current_runtime_after_root_attestation_and_rejects_wrong_uid_payload_without_restart",
+      "revision_admin_rejects_stopped_controller_without_implicitly_starting_or_adopting_it",
+      "rollback_blocks_old_binding_until_explicit_refresh_then_reuses_the_same_authenticated_token",
+      "rolled_back_current_operation_admin_uses_restored_parent_payload_and_preserves_original_authority",
+      "explicit_main_rollback_restores_original_unit_and_preserves_root_receipt_identity_key_database_inode",
+      "archived_vps_authority_rejected_before_any_ssh_execution"
+    ],
+    "production_vps_used": false,
+    "production_database_used": false,
+    "fixture_root_removed": true,
+    "fixture_unit_removed": true,
+    "fixture_account_removed": true,
+    "python_only_path": true,
+    "ssh_authentications": 12,
+    "ssh_executions": 46,
+    "script_bytes": 40517,
+    "compressed_executions": 46,
+    "max_command_bytes": 12138,
+    "raw": {
+      "path": "app/.out-scripts/controller-upgrade-desktop/7db42a44b41d/result.json",
+      "bytes": 2203,
+      "sha256": "00fca20ca2f27f1ca9e935256a0c67bdffac2c77b1e3eb05dbcbaa4cda19ff00"
+    }
+  },
+  "electron": {
+    "status": "PASS",
+    "scope": "REAL_ELECTRON_PRODUCTION_PRELOAD_UI_MAIN_JOURNAL_VAULT_PRIVATE_SQLITE_SYNTHETIC_SSH",
+    "checks": [
+      "production_preload_ids_only_review_reaches_actual_main_without_creating_local_journals_or_enrolling",
+      "explicit_adoption_atomically_retains_remote_uuids_and_shows_current_runtime_without_implicit_enrollment",
+      "separate_real_main_binding_preparation_uses_current_revision_and_read_scope_without_remote_enrollment",
+      "four_locales_two_themes_two_sizes_no_horizontal_overflow",
+      "no_renderer_errors_and_no_credential_in_renderer_or_recorded_ipc"
+    ],
+    "captures": [
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-review-dark-1280x800.png",
+        "bytes": 45580,
+        "sha256": "480509b09ff2dc8a2e175556b643bc36f865d984b31d2725dd07119d94288666",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-confirmed-dark-1280x800.png",
+        "bytes": 47286,
+        "sha256": "025b70b5def29de843a7dc893cb6a2913dd14ad53b8bd2c0201977b1b7f24498",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-vi-dark-1280x800.png",
+        "bytes": 41419,
+        "sha256": "9d014b292265c52787fc6f1dafb3073c54674778d7b90b36f93f4568400abaf1",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-vi-dark-1366x768.png",
+        "bytes": 41893,
+        "sha256": "4d651775b4ecf6864d9f199a74940dc717714c43ea4b7450dd866546d3506008",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-vi-light-1280x800.png",
+        "bytes": 42141,
+        "sha256": "e118b8b06c2f56fb200af7820ab2a3cd1efe44d5251b758afa5edfceabc7d87b",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-vi-light-1366x768.png",
+        "bytes": 42740,
+        "sha256": "367289bd1128a7e78cb825e2b18e1c2a7276a673dec87f0e9c99d438bf964462",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-en-dark-1280x800.png",
+        "bytes": 41287,
+        "sha256": "cdb9923247de05c8f4ad00bb0d8e7ad9529981fe2a4bd5416778c41fd27049c6",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-en-dark-1366x768.png",
+        "bytes": 41685,
+        "sha256": "b373b14e40130155e3e398151d3cfe59d44b09f60cabd63fb9d146470129c8e4",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-en-light-1280x800.png",
+        "bytes": 42161,
+        "sha256": "cf76516ff422856c91670f6c5e2eb83ba7a9fd90d2e52a3a8b4bba95edaa8fe1",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-en-light-1366x768.png",
+        "bytes": 42592,
+        "sha256": "ef204c478f666bbcb21a8e1ca03115776451aec67177ec1c60e1182d38ec5c19",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-cn-dark-1280x800.png",
+        "bytes": 38584,
+        "sha256": "ee78ec0e63c1ca18cefee11940b65f7d1828275926645ab6f4f6efe85d4dc6ce",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-cn-dark-1366x768.png",
+        "bytes": 39200,
+        "sha256": "8a8720e8b05866ad3bd056d2c7b8fff214c38d23115ff67f294f74348612cb15",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-cn-light-1280x800.png",
+        "bytes": 40291,
+        "sha256": "4b2cac6e0c3c892617ee9420b9caf4d98e88e33d056a501c601b2952dbf03475",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-cn-light-1366x768.png",
+        "bytes": 40993,
+        "sha256": "d225310b4868ca2270df64bce89cc753f22f0cd32edfa20e860cf67574ebb721",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-jp-dark-1280x800.png",
+        "bytes": 50595,
+        "sha256": "f2259e67d2bbeecb79ac1a3e517e3fe35ce71e7863482d6f271bfff311761a2a",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-jp-dark-1366x768.png",
+        "bytes": 51267,
+        "sha256": "97f096ca2e25fe81843e306e2092bca85347d308ceaa050368e2feab07ce2fce",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-jp-light-1280x800.png",
+        "bytes": 52474,
+        "sha256": "843220e10eb27c0a75c115f533bdc9667085c1aa77dbb568a0f69c08bc7d2078",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "path": "docs/ui-redesign/screenshots/r3c6h4c3b1/adoption-jp-light-1366x768.png",
+        "bytes": 53212,
+        "sha256": "20193b143cf35360d2821ce78cb9f796a87ea0c7c7fe4c6a7c8657ccd027b3ed",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      }
+    ],
+    "production_profile_used": false,
+    "actual_ssh_transport": false,
+    "private_data_removed": true,
+    "calls": [
+      {
+        "channel": "controller:installer-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:review-adoption",
+        "completed": true
+      },
+      {
+        "channel": "controller:confirm-adoption",
+        "completed": true
+      },
+      {
+        "channel": "controller:installer-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:installer-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:installer-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:installer-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:installer-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:installer-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:installer-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:installer-overview",
+        "completed": true
+      },
+      {
+        "channel": "controller:installer-overview",
+        "completed": true
+      }
+    ],
+    "renderer_errors": [],
+    "raw": {
+      "path": "app/.out-scripts/controller-adoption-electron/5ef33c23403e/result.json",
+      "bytes": 4973,
+      "sha256": "8871a58601d5016f7f18372fa7785fd09493b646fe84c21536afa814b803e22e"
+    }
+  },
+  "commands": [
+    "pnpm --prefix app exec vitest run --maxWorkers=4 --reporter=default --reporter=json --outputFile.json=.out-scripts/r3c6h4c3b1-full-final.json",
+    "pnpm --prefix app build",
+    "pnpm --prefix app exec tsc --noEmit -p <project listed above> --composite false",
+    "pnpm --prefix app exec eslint --max-warnings=0 --no-warn-ignored <16 files listed above>",
+    "python -m ruff check app/control-plane-runtime/controller_ssh_bootstrap.py",
+    "python -m ruff format --check app/control-plane-runtime/controller_ssh_bootstrap.py",
+    "Linux Node22: env <approved original/new runtime inputs> node app/scripts/controller-upgrade-desktop-lab/run.mjs (README)",
+    "pnpm --prefix app exec electron scripts/controller-upgrade-desktop-lab/adoption-electron.mjs",
+    "git diff --check"
+  ],
+  "logs": [
+    {
+      "path": "app/.out-scripts/r3c6h4c3b1-full-final.json",
+      "bytes": 786480,
+      "sha256": "a60bb586eb363f54fe7d2e553e6f6ab0d6e5088ccbdb37ca5b67533cb7de57e5"
+    },
+    {
+      "path": "app/.out-scripts/r3c6h4c3b1-build-final-fixed.log",
+      "bytes": 3082,
+      "sha256": "d323aec8c3be4d0c86cc22a24cc7e1079819b27bb23a589b973752cb8a24bda4"
+    },
+    {
+      "path": "app/.out-scripts/r3c6h4c3b1-lint-final.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "app/.out-scripts/r3c6h4c3b1-types.json",
+      "bytes": 869,
+      "sha256": "4427eb94114f6eb2fbae1d3b684e9066399af0fea521b6fcb21df7128561dc48"
+    },
+    {
+      "path": "app/.out-scripts/r3c6h4c3b1-contract-parity.json",
+      "bytes": 1478,
+      "sha256": "a30a53359c71235960567436de643653fdbefa0c69086849da970e4c489449ef"
+    }
+  ],
+  "source_hashes": [
+    {
+      "path": "DECISIONS.md",
+      "bytes": 68217,
+      "sha256": "c2372ab9f7f256ef0a56c8d8cf2d0c13f57665fd331caeda3041310f74953a09"
+    },
+    {
+      "path": "app/control-plane-runtime/controller_ssh_bootstrap.py",
+      "bytes": 37968,
+      "sha256": "b4f63a41bc6472a6404c043f96c1aa7f3c5f20e6dd7c443728351893b231eae0"
+    },
+    {
+      "path": "app/scripts/controller-upgrade-desktop-lab/README.md",
+      "bytes": 11197,
+      "sha256": "667d8d6f11b0651892e3296c5d66149a41ed77aa3d55b8200529c01f90f0e133"
+    },
+    {
+      "path": "app/scripts/controller-upgrade-desktop-lab/adoption-electron.mjs",
+      "bytes": 15874,
+      "sha256": "d36e53a2547602b12fa0ea7b4419f912ccec4bdafe61fb66df1f07b39f05324b"
+    },
+    {
+      "path": "app/scripts/controller-upgrade-desktop-lab/entry.ts",
+      "bytes": 4455,
+      "sha256": "18b83ec3c535c8fa1186c570893fa3b10801600f92c6e2158957aeec23ae25c6"
+    },
+    {
+      "path": "app/scripts/controller-upgrade-desktop-lab/run.mjs",
+      "bytes": 32196,
+      "sha256": "f44f603c2e8d079ba25569ec58160d667c3efd30cbd6c2be0fd5462b894fe331"
+    },
+    {
+      "path": "app/src/main/controlPlane/controllerSshBootstrap.test.ts",
+      "bytes": 18490,
+      "sha256": "5a78d9206cfcc0c4541c58dcc3ee6f741b0fb276482c226907fe356de7df3f96"
+    },
+    {
+      "path": "app/src/main/controlPlane/controllerSshBootstrap.ts",
+      "bytes": 24940,
+      "sha256": "52db65cc84eaeed9650b9213512c23f10ad88554feae06ee7ea25d3374fb48f6"
+    },
+    {
+      "path": "app/src/main/controlPlane/desktopControllerInstallation.ts",
+      "bytes": 31683,
+      "sha256": "501a269834fb80aa2f1577bec78227a1a8dd27e3255473077c81039aaa4c1074"
+    },
+    {
+      "path": "app/src/main/controlPlane/desktopControllerService.ts",
+      "bytes": 33570,
+      "sha256": "ce80e16ef950bf43a0f930fcef7faa49208784af7b9367ca49882e721a6ad421"
+    },
+    {
+      "path": "app/src/main/controlPlane/desktopControllerUpgrade.test.ts",
+      "bytes": 33721,
+      "sha256": "b2b64f3c82415f9cd872f5b0025a40551431982c66cabdd66168b20f4fdb4b8c"
+    },
+    {
+      "path": "app/src/main/controlPlane/desktopControllerUpgrade.ts",
+      "bytes": 40997,
+      "sha256": "d452159ed7ac9bdd96e2765e1a2eb0c6711e2d8eae7fc57de013f87f13bcd6f5"
+    },
+    {
+      "path": "app/src/main/ipc.test.ts",
+      "bytes": 58623,
+      "sha256": "800969ff8a9fbe0b732b147c7b0cac88bf9a01045cd1cc5e17c778575b0d7242"
+    },
+    {
+      "path": "app/src/main/ipc.ts",
+      "bytes": 27312,
+      "sha256": "821b0609b33b25a24a97b185f601a8ba9f08cdd46adba666d980db175bc660f8"
+    },
+    {
+      "path": "app/src/renderer/src/components/ControllerInstallWizard.test.tsx",
+      "bytes": 18854,
+      "sha256": "c31f8555edab36758379146a4c56385331bd093cdbf43c3bb27ea039784b5538"
+    },
+    {
+      "path": "app/src/renderer/src/components/ControllerInstallWizard.tsx",
+      "bytes": 27915,
+      "sha256": "114434bb3474767d4da8400729ea5aee17fcbdf36ec4755536b4803c470e99cf"
+    },
+    {
+      "path": "app/src/renderer/src/components/controllerAdoptionCopy.ts",
+      "bytes": 3637,
+      "sha256": "56d028d051c1e16bad88b3f55a8eb935abb5464de98c0404d322b4ff7fb088ec"
+    },
+    {
+      "path": "app/src/shared/controllerAdoption.ts",
+      "bytes": 1593,
+      "sha256": "2fd8325c4b9b985189b3bbb3f6744b527431e684c131aac3a606dc0385422c1d"
+    },
+    {
+      "path": "app/src/shared/controllerInstaller.ts",
+      "bytes": 4361,
+      "sha256": "7621c773e4d20d143077c77818b7be01e58e54981a76fcd84c2a39bdf4295297"
+    },
+    {
+      "path": "app/src/shared/ipc.ts",
+      "bytes": 40079,
+      "sha256": "4cdc556624f10d3ea1e75db97b7d20094de495959f105ee7b5ffde182c266c8f"
+    },
+    {
+      "path": "docs/contracts/desktop-controller-adoption.ts",
+      "bytes": 1608,
+      "sha256": "48b83625ec497d7be51ae618a58ab9a5b88b9116cc4c9dd9bc63855097170bff"
+    },
+    {
+      "path": "docs/contracts/desktop-controller-installation.ts",
+      "bytes": 2655,
+      "sha256": "f9367711f079fa248b395dbf9eff267a7b9f7bd82dad457f1dc16db1419e2bf0"
+    },
+    {
+      "path": "docs/contracts/ipc-contract.ts",
+      "bytes": 39762,
+      "sha256": "248c7024664cca1485a85a8ef140585b0ba6dd050516499a2d63b9ea583b3fd8"
+    },
+    {
+      "path": "docs/contracts/product-controller-ssh-bootstrap.ts",
+      "bytes": 5060,
+      "sha256": "29f2e2985037e8e788b2550b5cfceabd16158220357a73fa4c597e17a2f53e78"
+    }
+  ],
+  "investigation": "First native attempt exposed a strict-locator Zod rejection before SSH upgrade inspect: adoption passed extra metadata. Fixed to exactly request_key/release_sha256/installer_sha256, with a regression. Native failures cleaned private fixtures. Earlier Electron harness wrong-label/status-stub failures are not pass evidence; only final records above count.",
+  "next_action": "c-3b2 actual isolated Electron/pinned SSH cold onboarding/reconnect/firstdeploy on development VPS; preserve healthy demo and use owned separate deployment resources. Normal checkpoint push authorized; no PR/merge."
+}

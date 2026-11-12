@@ -15,7 +15,7 @@ export type ControllerBootstrapLocator = {
   installer_sha256: string;
 };
 export type ControllerBootstrapOperation =
-  "transfer" | "status" | "install" | "inspect" | "recover" | "discover" | "admin" | "upgrade-call";
+  "transfer" | "status" | "install" | "inspect" | "recover" | "discover" | "discover-current" | "admin" | "upgrade-call";
 /** Untrusted hint: match both hashes to a protected Main catalog before using it. */
 export type ControllerBootstrapDiscovery =
   | { state: "absent" }
@@ -66,6 +66,11 @@ export type ControllerBootstrapErrorCode =
  * Root flock inherited by child; timeout/disconnect sau dispatch là unknown, chỉ explicit inspect/
  * same-key recover. Không raw stderr/credential, public API, apt/npm/curl hoặc tự init/reset DB/key.
  * discover chỉ nhận {format:1,operation:'discover'}, không tạo state/lock hoặc exec Node.
+ * discover-current chỉ nhận {format:1,operation:'discover-current'}: readonly root
+ * installation flock + immutable original staging/receipt + current journal metadata.
+ * Không tạo namespace/lock, exec Node hoặc đọc secret. DTO desktop-controller-adoption.ts;
+ * Main phải match protected catalogs, inspect current bằng pinned updater rồi repeat
+ * discovery dưới current SSH fence. Hint này không tự cấp quyền adoption/enrollment.
  * admin header có locator + request_size; raw JSON InstalledControllerAdminRequest <=512KiB
  * sau header rồi EOF. Root Python verify pins/catalog trước trusted installer admin/drop UID.
  * Reply admin_result/request_key/result là raw JSON bytes có framing riêng <=64KiB;

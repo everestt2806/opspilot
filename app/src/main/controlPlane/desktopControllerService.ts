@@ -18,6 +18,10 @@ import { z } from 'zod'
 import { randomUUID } from 'node:crypto'
 import type { ControllerInstallerResources } from './controllerInstallerCatalog'
 import type {
+  ControllerAdoptionReview,
+  ControllerAdoptionResult
+} from '../../../../docs/contracts/desktop-controller-adoption'
+import type {
   ControllerAuthorityReview,
   ControllerAuthorityResult
 } from '@shared/controllerAuthority'
@@ -326,9 +330,50 @@ export class DesktopControllerService {
   async installerOverview(): Promise<ControllerInstallerOverview> {
     return this.safe(() => ({
       releases: this.installerResources?.list() ?? [],
-      installations: this.installations.list(),
+      installations: this.installations.list().map((i) => this.installationWithRevision(i)),
       connections: this.vault.list().map((v) => this.connection(v.binding_id))
     }))
+  }
+  async reviewControllerAdoption(input: { vps_id: number }): Promise<ControllerAdoptionReview> {
+    return this.safe(() =>
+      this.upgrades.reviewAdoption(
+        z.strictObject({ vps_id: z.number().int().positive() }).parse(input).vps_id
+      )
+    )
+  }
+  async confirmControllerAdoption(input: {
+    plan_id: string
+    consent: true
+  }): Promise<ControllerAdoptionResult> {
+    return this.safe(() => {
+      const v = z.strictObject({ plan_id: z.uuidv4(), consent: z.literal(true) }).parse(input)
+      return this.upgrades.confirmAdoption(v.plan_id, v.consent)
+    })
+  }
+  private installationWithRevision(i: DesktopInstallation): DesktopInstallation {
+    const revision = this.upgrades
+      .all()
+      .find((u) => u.installation_request_key === i.request_key && u.is_current)
+    return revision ? { ...i, current_revision: revision } : i
+  }
+  private async installedIntent(
+    key: string,
+    bindingId: string,
+    name: string,
+    write: boolean
+  ): Promise<ProductDesktopControllerBindingIntent> {
+    const revision = this.upgrades
+      .all()
+      .find((u) => u.installation_request_key === key && u.is_current)
+    if (revision) {
+      await this.upgrades.inspect(revision.request_key)
+      return this.upgrades.bindingIntent(
+        revision.request_key,
+        this.installations.bindingIntent(key, bindingId, name, write)
+      )
+    }
+    this.originalInstallationOnly(key)
+    return this.installations.bindingIntent(key, bindingId, name, write)
   }
   async reviewInstaller(input: {
     vps_id: number
@@ -380,14 +425,13 @@ export class DesktopControllerService {
   async prepareInstalledRegistration(
     input: ControllerInstalledPrepareInput
   ): Promise<DesktopControllerConnection> {
-    return this.safe(() => {
+    return this.safe(async () => {
       const value = installedRegisterSchema.omit({ binding_id: true }).parse(input)
-      this.originalInstallationOnly(value.installation_request_key)
-      const intent = this.installations.bindingIntent(
+      const intent = await this.installedIntent(
         value.installation_request_key,
         randomUUID(),
         value.display_name,
-        value.allow_write
+        value.allow_write ?? false
       )
       const prepared = this.vault.prepare(intent, { reuseInstalled: true })
       return this.connection(prepared.binding_id)
@@ -403,7 +447,15 @@ export class DesktopControllerService {
     return this.safe(() => this.installations.cancel(key))
   }
   async inspectInstallation(key: string): Promise<DesktopInstallation> {
-    return this.safe(() => {
+    return this.safe(async () => {
+      const revision = this.upgrades
+        .all()
+        .find((u) => u.installation_request_key === key && u.is_current)
+      if (revision) {
+        const current = await this.upgrades.inspect(revision.request_key)
+        const original = this.installations.list().find((i) => i.request_key === key)!
+        return { ...original, current_revision: current }
+      }
       this.originalInstallationOnly(key)
       return this.installations.inspect(key)
     })
@@ -563,12 +615,11 @@ export class DesktopControllerService {
   }): Promise<DesktopControllerConnection> {
     return this.safe(async () => {
       const value = installedRegisterSchema.parse(input)
-      this.originalInstallationOnly(value.installation_request_key)
-      const intent = this.installations.bindingIntent(
+      const intent = await this.installedIntent(
         value.installation_request_key,
         value.binding_id,
         value.display_name,
-        value.allow_write
+        value.allow_write ?? false
       )
       this.vault.prepare(intent)
       await this.enrollment.enroll(value.binding_id)

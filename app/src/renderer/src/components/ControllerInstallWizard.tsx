@@ -23,6 +23,17 @@ import type {
 } from '@shared/controllerInstaller'
 import { useUiState } from '../store/uiState'
 import { CONTROLLER_INSTALLER_COPY } from './controllerInstallerCopy'
+import { CONTROLLER_ADOPTION_COPY } from './controllerAdoptionCopy'
+import type { ControllerAdoptionReview } from '@shared/controllerAdoption'
+
+function runtimeState(row: DesktopInstallation | null): string | undefined {
+  const revision = row?.current_revision
+  if (revision)
+    return revision.is_current && ['active', 'rolled_back'].includes(revision.state)
+      ? revision.last_result?.service_state
+      : undefined
+  return row?.last_result?.service_state
+}
 
 async function checked<T>(promise: Promise<IpcResult<T>>): Promise<T> {
   const result = await promise
@@ -47,7 +58,8 @@ export function ControllerInstallWizard({
   onChanged: () => void
 }): React.JSX.Element {
   const locale = useUiState((s) => s.locale),
-    t = CONTROLLER_INSTALLER_COPY[locale]
+    t = CONTROLLER_INSTALLER_COPY[locale],
+    a = CONTROLLER_ADOPTION_COPY[locale]
   const [overview, setOverview] = useState<ControllerInstallerOverview | null>(null),
     [servers, setServers] = useState<Vps[]>([])
   const [vpsId, setVpsId] = useState<number>(),
@@ -61,6 +73,8 @@ export function ControllerInstallWizard({
   const [error, setError] = useState<string | null>(null),
     [connection, setConnection] = useState<'active' | 'delivery_unknown' | null>(null)
   const [checkedRow, setCheckedRow] = useState(false)
+  const [adoption, setAdoption] = useState<ControllerAdoptionReview | null>(null),
+    [adopted, setAdopted] = useState(false)
   const epoch = useRef(0),
     operation = useRef<number | null>(null),
     visible = useRef(open)
@@ -149,10 +163,12 @@ export function ControllerInstallWizard({
       setOverview(null)
       setServers([])
       setReview(null)
+      setAdoption(null)
       setRow(null)
       setConsent(false)
       setError(null)
       setConnection(null)
+      setAdopted(false)
       setCheckedRow(false)
       setBusy('check')
       void load(token, true)
@@ -179,8 +195,10 @@ export function ControllerInstallWizard({
     setVpsId(id)
     setName(servers.find((v) => v.id === id)?.name ?? '')
     setReview(null)
+    setAdoption(null)
     setConsent(false)
     setConnection(null)
+    setAdopted(false)
     setError(null)
     setCheckedRow(false)
     setRow(overview ? localRow(overview, id) : null)
@@ -190,8 +208,10 @@ export function ControllerInstallWizard({
     run(async (token) => {
       if (!vpsId || !releaseId) return
       setReview(null)
+      setAdoption(null)
       setConsent(false)
       setConnection(null)
+      setAdopted(false)
       setCheckedRow(false)
       const value = await checked(
         window.api.invoke('controller:review-installation', {
@@ -199,6 +219,19 @@ export function ControllerInstallWizard({
           release_id: releaseId
         })
       )
+      if (!current(token)) return
+      if (value.next === 'inspect_existing' && !row) {
+        try {
+          const candidate = await checked(
+            window.api.invoke('controller:review-adoption', { vps_id: vpsId })
+          )
+          if (current(token)) setAdoption(candidate)
+          return
+        } catch (cause) {
+          // Only a verified absence of an upgrade permits the original-install path.
+          if (!(cause instanceof Error) || cause.message !== 'UPGRADE_UNAVAILABLE') throw cause
+        }
+      }
       if (current(token)) {
         setReview(value)
         if (value.plan) setReleaseId(value.plan.release_id)
@@ -238,6 +271,43 @@ export function ControllerInstallWizard({
       onChanged()
     }
   }
+  const reviewAdoption = (): Promise<void> =>
+    run(async (token) => {
+      if (!vpsId) return
+      setReview(null)
+      setAdoption(null)
+      setConsent(false)
+      setCheckedRow(false)
+      const result = await checked(
+        window.api.invoke('controller:review-adoption', { vps_id: vpsId })
+      )
+      if (current(token)) setAdoption(result)
+    }, 'check')
+  const adopt = (): Promise<void> =>
+    run(async (token) => {
+      if (!adoption || !consent) return
+      const result = await checked(
+        window.api.invoke('controller:confirm-adoption', {
+          plan_id: adoption.plan_id,
+          consent: true
+        })
+      )
+      if (!current(token)) return
+      const data = await checked(window.api.invoke('controller:installer-overview'))
+      if (!current(token)) return
+      const value = data.installations.find(
+        (v) => v.request_key === result.installation_request_key
+      )
+      if (!value?.current_revision) throw Error('UPGRADE_INSPECT_REQUIRED')
+      setOverview(data)
+      setRow(value)
+      setCheckedRow(true)
+      setAdoption(null)
+      setAdopted(true)
+      setConsent(false)
+      setAllowWrite(false)
+      onChanged()
+    }, 'check')
   const freshInstall = (): Promise<void> =>
     run(async (token) => {
       if (!review?.plan || !consent) return
@@ -291,7 +361,7 @@ export function ControllerInstallWizard({
         setRow(value)
         setCheckedRow(true)
       }
-      if (value.state === 'installed' && value.last_result?.service_state === 'running')
+      if (value.state === 'installed' && runtimeState(value) === 'running')
         await connect(value, token)
     }, 'check')
   const send = (kind: 'transfer' | 'install' | 'recover'): Promise<void> =>
@@ -320,23 +390,25 @@ export function ControllerInstallWizard({
     !review.host.reasons.some((v) => v !== 'EXISTING_INSTALLATION')
   const rebindRequired = !!review?.plan?.rebind_required
   const canWrite = !!consent && !busy && !!name.trim() && !rebindRequired
-  const service = row?.last_result?.service_state
-  const step = connection ? 3 : row ? 2 : review ? 1 : 0
-  const explanation =
-    error === 'INSTALL_PLAN_EXPIRED'
-      ? t.expired
-      : error === 'IDEMPOTENCY_CONFLICT'
-        ? t.conflict
-        : error &&
-            [
-              'INSTALL_AUTHORITY_CHANGED',
-              'BOOTSTRAP_AUTHORITY_CHANGED',
-              'BINDING_CHANGED',
-              'BINDING_UNAVAILABLE'
-            ].includes(error)
-          ? t.changed
-          : error && ['BOOTSTRAP_OUTCOME_UNKNOWN', 'REQUEST_TIMEOUT'].includes(error)
-            ? t.unknown
+  const service = runtimeState(row)
+  const step = connection ? 3 : row ? 2 : review || adoption ? 1 : 0
+  const explanation = ['INSTALL_PLAN_EXPIRED', 'UPGRADE_PLAN_EXPIRED'].includes(error ?? '')
+    ? t.expired
+    : error === 'IDEMPOTENCY_CONFLICT'
+      ? t.conflict
+      : error &&
+          [
+            'UPGRADE_AUTHORITY_CHANGED',
+            'INSTALL_AUTHORITY_CHANGED',
+            'BOOTSTRAP_AUTHORITY_CHANGED',
+            'BINDING_CHANGED',
+            'BINDING_UNAVAILABLE'
+          ].includes(error)
+        ? t.changed
+        : error && ['BOOTSTRAP_OUTCOME_UNKNOWN', 'REQUEST_TIMEOUT'].includes(error)
+          ? t.unknown
+          : error?.startsWith('UPGRADE_')
+            ? a.unavailable
             : t.error
   return (
     <Modal
@@ -408,6 +480,7 @@ export function ControllerInstallWizard({
                       epoch.current++
                       setReleaseId(value)
                       setReview(null)
+                      setAdoption(null)
                       setConsent(false)
                     }}
                     options={overview.releases.map((v) => ({
@@ -437,7 +510,53 @@ export function ControllerInstallWizard({
               >
                 {t.review}
               </Button>
+              {!row && (
+                <Space direction="vertical" style={{ width: '100%', marginTop: 16 }}>
+                  <Typography.Text type="secondary">{a.intro}</Typography.Text>
+                  <Button disabled={!!busy || !vpsId} onClick={() => void reviewAdoption()}>
+                    {a.review}
+                  </Button>
+                </Space>
+              )}
             </Form>
+            {adoption && (
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Alert type="info" showIcon message={a.found} />
+                <Descriptions
+                  size="small"
+                  column={1}
+                  items={[
+                    { key: 'host', label: t.server, children: adoption.host },
+                    { key: 'user', label: t.account, children: adoption.username },
+                    {
+                      key: 'pin',
+                      label: a.fingerprint,
+                      children: (
+                        <Typography.Text style={{ overflowWrap: 'anywhere' }}>
+                          {adoption.host_fingerprint}
+                        </Typography.Text>
+                      )
+                    },
+                    { key: 'controller', label: a.controller, children: adoption.controller_id },
+                    { key: 'release', label: a.release, children: adoption.release_id }
+                  ]}
+                />
+                <Checkbox
+                  checked={consent}
+                  disabled={!!busy}
+                  onChange={(event) => setConsent(event.target.checked)}
+                >
+                  {a.consent}
+                </Checkbox>
+                <Button
+                  type="primary"
+                  disabled={!!busy || !consent || !name.trim()}
+                  onClick={() => void adopt()}
+                >
+                  {a.confirm}
+                </Button>
+              </Space>
+            )}
             {asset?.state !== 'available' && (
               <Alert type="warning" showIcon message={t.invalidPackage} />
             )}
@@ -523,8 +642,30 @@ export function ControllerInstallWizard({
             )}
           </>
         )}
+        {adopted && <Alert type="info" showIcon message={a.adopted} />}
         {row && (
           <>
+            {!review && !adoption && row.state === 'installed' && (
+              <Space direction="vertical">
+                <Checkbox
+                  checked={allowWrite}
+                  disabled={!!busy}
+                  onChange={(event) => {
+                    setAllowWrite(event.target.checked)
+                    setConsent(false)
+                  }}
+                >
+                  {t.write}
+                </Checkbox>
+                <Checkbox
+                  checked={consent}
+                  disabled={!!busy}
+                  onChange={(event) => setConsent(event.target.checked)}
+                >
+                  {a.connectConsent}
+                </Checkbox>
+              </Space>
+            )}
             <Descriptions
               size="small"
               column={{ xs: 1, sm: 2 }}
@@ -535,7 +676,7 @@ export function ControllerInstallWizard({
                   label: t.service,
                   children: service ? (
                     <Tag color={checkedRow && service === 'running' ? 'success' : 'default'}>
-                      {t.services[service]}
+                      {t.services[service as keyof typeof t.services]}
                     </Tag>
                   ) : (
                     '—'
@@ -544,9 +685,9 @@ export function ControllerInstallWizard({
                 {
                   key: 'recorded',
                   label: t.recorded,
-                  children: new Date(row.updated_at).toLocaleString(
-                    { vi: 'vi-VN', en: 'en-US', cn: 'zh-CN', jp: 'ja-JP' }[locale]
-                  )
+                  children: new Date(
+                    row.current_revision?.updated_at ?? row.updated_at
+                  ).toLocaleString({ vi: 'vi-VN', en: 'en-US', cn: 'zh-CN', jp: 'ja-JP' }[locale])
                 }
               ]}
             />
@@ -580,6 +721,7 @@ export function ControllerInstallWizard({
                       if (current(token)) {
                         setRow(result)
                         setReview(null)
+                        setAdoption(null)
                         setConsent(false)
                       }
                     }, 'check')

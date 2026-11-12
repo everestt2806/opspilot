@@ -28,6 +28,7 @@ import type {
   ControllerUpgradeRequest,
   ControllerUpgradeResult
 } from '../../../../docs/contracts/product-controller-upgrade'
+import type { ControllerCurrentDiscovery } from '../../../../docs/contracts/desktop-controller-adoption'
 
 const locatorSchema = z
   .object({
@@ -336,6 +337,37 @@ export async function discoverControllerBootstrap(
       .safeParse(value)
     if (!parsed.success) throw new ControllerBootstrapError('BOOTSTRAP_UNAVAILABLE')
     return parsed.data
+  })
+}
+
+/** Readonly metadata is a hint; paired protected inspection is required before adoption. */
+export const controllerCurrentDiscoverySchema = z.union([
+  z.strictObject({ state: z.literal('not_upgraded') }),
+  z.strictObject({
+    state: z.literal('current_revision'),
+    original: locatorSchema.extend({ installation: controllerInstallationResultSchema }).strict(),
+    upgrade: locatorSchema
+      .extend({
+        installation_request_key: z.uuidv4(),
+        controller_id: z.uuidv4(),
+        parent_upgrade_key: z.uuidv4().nullable(),
+        parent_release_sha256: locatorSchema.shape.release_sha256
+      })
+      .strict(),
+    original_receipt_sha256: locatorSchema.shape.release_sha256,
+    current_journal_sha256: locatorSchema.shape.release_sha256
+  })
+]) satisfies z.ZodType<ControllerCurrentDiscovery>
+export async function discoverCurrentController(
+  input: Omit<BootstrapInput, 'locator'>
+): Promise<ControllerCurrentDiscovery> {
+  input = { ...input, expectedIdentity: { ...input.expectedIdentity } }
+  return withBootstrap(input, 'discover-current', async (wire) => {
+    await wire.sendFrame({ format: 1, operation: 'discover-current' })
+    wire.end()
+    const result = controllerCurrentDiscoverySchema.safeParse(await wire.receive())
+    if (!result.success) throw new ControllerBootstrapError('BOOTSTRAP_UNAVAILABLE')
+    return result.data
   })
 }
 

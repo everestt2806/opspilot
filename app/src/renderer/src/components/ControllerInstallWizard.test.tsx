@@ -10,6 +10,7 @@ import type {
 import { useUiState } from '../store/uiState'
 import { ControllerInstallWizard } from './ControllerInstallWizard'
 import { CONTROLLER_INSTALLER_COPY } from './controllerInstallerCopy'
+import { CONTROLLER_ADOPTION_COPY } from './controllerAdoptionCopy'
 
 const key = '11111111-1111-4111-8111-111111111111',
   planId = '22222222-2222-4222-8222-222222222222',
@@ -142,6 +143,15 @@ beforeEach(() => {
     if (channel === 'controller:installer-overview')
       return ok({ ...overview, installations: stored ? [stored] : overview.installations })
     if (channel === 'controller:review-installation') return ok(review)
+    if (channel === 'controller:review-adoption')
+      return {
+        ok: false,
+        error: {
+          code: 'VALIDATION',
+          message: 'No current revision',
+          technical: 'UPGRADE_UNAVAILABLE'
+        }
+      }
     if (channel === 'controller:prepare-installation') {
       stored = receipt()
       return ok(stored)
@@ -341,4 +351,151 @@ it.each(['vi', 'en', 'cn', 'jp'] as const)('renders the installer flow in %s', a
         name.replace(/\s+/g, '') === CONTROLLER_INSTALLER_COPY[locale].close.replace(/\s+/g, '')
     }).length
   ).toBeGreaterThan(0)
+})
+
+it('adopts current revision separately from granting API permissions and never reinstalls', async () => {
+  const a = CONTROLLER_ADOPTION_COPY.vi,
+    original = invoke.getMockImplementation()!
+  review.next = 'inspect_existing'
+  review.plan!.remote_existing = true
+  const current = {
+    ...receipt('installed'),
+    last_result: { ...receipt('installed').last_result!, service_state: 'stopped' as const }
+  }
+  current.current_revision = {
+    request_key: binding,
+    installation_request_key: key,
+    controller_id: key,
+    parent_upgrade_key: null,
+    parent_release_sha256: 'a'.repeat(64),
+    release_sha256: 'd'.repeat(64),
+    vps_id: 1,
+    authority_revision: 1,
+    release_id: 'current22',
+    installer_sha256: 'b'.repeat(64),
+    state: 'active',
+    is_current: true,
+    created_at: current.created_at,
+    updated_at: current.updated_at,
+    last_result: {
+      format: 1,
+      request_key: binding,
+      installation_request_key: key,
+      controller_id: key,
+      parent_upgrade_key: null,
+      parent_release_sha256: 'a'.repeat(64),
+      release_sha256: 'd'.repeat(64),
+      payload_sha256: 'e'.repeat(64),
+      runtime_release_sha256: 'd'.repeat(64),
+      runtime_payload_sha256: 'e'.repeat(64),
+      runtime_upgrade_key: binding,
+      phase: 'active',
+      is_current: true,
+      service_state: 'running',
+      runtime_uid: 1001,
+      artifact_path: '/opt/controller/revisions/current/payload/control-plane.cjs',
+      node_path: '/opt/controller/revisions/current/node',
+      data_directory: '/var/lib/controller'
+    }
+  }
+  invoke.mockImplementation(async (channel: string, input?: unknown) => {
+    if (channel === 'controller:review-adoption')
+      return ok({
+        plan_id: planId,
+        expires_at: new Date(Date.now() + 60000).toISOString(),
+        installation_request_key: key,
+        upgrade_request_key: binding,
+        controller_id: key,
+        vps_id: 1,
+        host: servers[0].host,
+        username: 'root',
+        host_fingerprint: servers[0].host_fingerprint,
+        release_id: 'current22'
+      })
+    if (channel === 'controller:confirm-adoption') {
+      stored = current
+      return ok({
+        installation_request_key: key,
+        upgrade_request_key: binding,
+        controller_id: key,
+        vps_id: 1,
+        enrollment_required: true
+      })
+    }
+    return original(channel, input)
+  })
+  show()
+  const find = await screen.findByRole('button', { name: t.review })
+  await waitFor(() => expect((find as HTMLButtonElement).disabled).toBe(false))
+  fireEvent.click(find)
+  const confirm = await screen.findByRole('button', { name: a.confirm })
+  expect((confirm as HTMLButtonElement).disabled).toBe(true)
+  expect(invoke.mock.calls.some(([c]) => c === 'controller:confirm-adoption')).toBe(false)
+  fireEvent.click(screen.getByRole('checkbox', { name: a.consent }))
+  fireEvent.click(confirm)
+  await screen.findByText(a.adopted)
+  const connect = screen.getByRole('button', { name: t.connect })
+  expect((connect as HTMLButtonElement).disabled).toBe(true)
+  expect(invoke.mock.calls.some(([c]) => c === 'controller:register-installed')).toBe(false)
+  expect(screen.queryByText(t.stopped)).toBeNull()
+  fireEvent.click(screen.getByRole('checkbox', { name: a.connectConsent }))
+  fireEvent.click(connect)
+  await screen.findByText(t.connected)
+  expect(invoke.mock.calls.some(([c]) => c === 'controller:send-installation')).toBe(false)
+  expect(invoke).toHaveBeenCalledWith('controller:register-installed', {
+    installation_request_key: key,
+    binding_id: binding,
+    display_name: 'Fixture VPS',
+    allow_write: false
+  })
+})
+it('drops a late adoption review after closing the wizard', async () => {
+  const a = CONTROLLER_ADOPTION_COPY.vi,
+    original = invoke.getMockImplementation()!
+  let finish!: (v: unknown) => void
+  invoke.mockImplementation((channel: string, input?: unknown) =>
+    channel === 'controller:review-adoption'
+      ? new Promise((done) => {
+          finish = done
+        })
+      : original(channel, input)
+  )
+  show()
+  const find = await screen.findByRole('button', { name: a.review })
+  await waitFor(() => expect((find as HTMLButtonElement).disabled).toBe(false))
+  fireEvent.click(find)
+  await waitFor(() => expect(finish).toBeDefined())
+  fireEvent.click(screen.getByRole('button', { name: t.close }))
+  await act(async () => finish(ok({ plan_id: planId, host: 'late.invalid' })))
+  expect(screen.queryByRole('button', { name: a.confirm })).toBeNull()
+  expect(invoke.mock.calls.some(([c]) => c === 'controller:confirm-adoption')).toBe(false)
+})
+
+it('does not fall back to original installation when current-revision verification fails', async () => {
+  review.next = 'inspect_existing'
+  review.plan!.remote_existing = true
+  const original = invoke.getMockImplementation()!
+  invoke.mockImplementation((channel: string, input?: unknown) =>
+    channel === 'controller:review-adoption'
+      ? Promise.resolve({
+          ok: false,
+          error: { code: 'VALIDATION', message: 'Unverified', technical: 'UPGRADE_CONFLICT' }
+        })
+      : original(channel, input)
+  )
+  show()
+  const button = await screen.findByRole('button', { name: t.review })
+  await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false))
+  fireEvent.click(button)
+  await screen.findByText(CONTROLLER_ADOPTION_COPY.vi.unavailable)
+  expect(
+    invoke.mock.calls.some(([c]) =>
+      [
+        'controller:prepare-installation',
+        'controller:send-installation',
+        'controller:confirm-adoption'
+      ].includes(c)
+    )
+  ).toBe(false)
+  expect(screen.queryByRole('checkbox', { name: t.consent })).toBeNull()
 })

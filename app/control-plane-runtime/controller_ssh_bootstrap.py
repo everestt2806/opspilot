@@ -16,6 +16,7 @@ import subprocess
 import time
 
 TRANSFER_ROOT = "/var/lib/opspilot-controller-transfer"
+UPGRADES_ROOT = "/var/lib/opspilot-controller-upgrades"
 INSTALLATION_PATHS = (
     "/var/lib/opspilot-controller-install",
     "/opt/opspilot-controller",
@@ -195,7 +196,7 @@ def request():
         or type(value["format"]) is not int
     ):
         fail("INPUT_INVALID")
-    if value.get("operation") == "discover":
+    if value.get("operation") in ("discover", "discover-current"):
         if set(value) != {"format", "operation"}:
             fail("INPUT_INVALID")
         return value
@@ -562,6 +563,110 @@ def status(header, manifest, intent, final=False):
     }
 
 
+def discover_current():
+    global TRANSFER_ROOT
+    state, installation, data, _ = INSTALLATION_PATHS
+    current = os.path.join(state, "upgrade.json")
+    if not exists(current):
+        reply({"state": "not_upgraded"})
+        return
+    lock, _ = checked_file(os.path.join(state, "operation.lock"), 0, 0o600)
+    original_root = TRANSFER_ROOT
+    try:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            fail("BUSY")
+        raw = read_file(os.path.join(state, "receipt.json"), 32768)
+        receipt = json.loads(raw)
+        journal_raw = read_file(current, 32768)
+        journal = json.loads(journal_raw)
+        intent = read_intent()
+        manifest_raw = read_file(
+            os.path.join(TRANSFER_ROOT, "release/release-manifest.json"), MANIFEST
+        )
+        if hashlib.sha256(manifest_raw).hexdigest() != intent["release_sha256"]:
+            fail("PIN_MISMATCH")
+        manifest = manifest_records(manifest_raw, intent["release_sha256"])
+        if status(intent, manifest, intent)["state"] != "verified":
+            fail("CONFLICT")
+        if (
+            receipt.get("format") != 1
+            or receipt.get("phase") != "installed"
+            or receipt.get("request_key") != intent["request_key"]
+            or receipt.get("release_sha256") != intent["release_sha256"]
+            or receipt.get("payload_sha256") != manifest["payload_sha256"]
+            or receipt.get("source_directory") != os.path.join(TRANSFER_ROOT, "release")
+            or not full(UUID, receipt.get("controller_id"))
+            or type(receipt.get("uid")) is not int
+            or not 1 <= receipt["uid"] <= 2147483647
+            or journal.get("format") != 1
+            or not full(UUID, journal.get("request_key"))
+            or journal.get("installation_request_key") != receipt["request_key"]
+            or journal.get("controller_id") != receipt["controller_id"]
+            or journal.get("phase") not in ("active", "rolled_back")
+            or not full(SHA, journal.get("release_sha256"))
+            or not full(SHA, journal.get("parent_release_sha256"))
+            or (
+                journal.get("parent_upgrade_key") is not None
+                and not full(UUID, journal["parent_upgrade_key"])
+            )
+        ):
+            fail("CONFLICT")
+        original = {
+            key: intent[key]
+            for key in ("request_key", "release_sha256", "installer_sha256")
+        }
+        original["installation"] = {
+            "format": 1,
+            "request_key": receipt["request_key"],
+            "phase": "installed",
+            "controller_id": receipt["controller_id"],
+            "runtime_uid": receipt["uid"],
+            "service_state": "stopped",
+            "service_enabled": True,
+            "artifact_path": os.path.join(
+                installation, "runtime/payload/control-plane.cjs"
+            ),
+            "node_path": os.path.join(installation, "runtime/node"),
+            "data_directory": data,
+            "payload_sha256": receipt["payload_sha256"],
+        }
+        TRANSFER_ROOT = os.path.join(UPGRADES_ROOT, journal["request_key"])
+        revision = read_intent()
+        if (
+            revision["request_key"] != journal["request_key"]
+            or revision["release_sha256"] != journal["release_sha256"]
+        ):
+            fail("CONFLICT")
+        reply(
+            {
+                "state": "current_revision",
+                "original": original,
+                "upgrade": {
+                    **{
+                        key: revision[key]
+                        for key in ("request_key", "release_sha256", "installer_sha256")
+                    },
+                    **{
+                        key: journal[key]
+                        for key in (
+                            "installation_request_key",
+                            "controller_id",
+                            "parent_upgrade_key",
+                            "parent_release_sha256",
+                        )
+                    },
+                },
+                "original_receipt_sha256": hashlib.sha256(raw).hexdigest(),
+                "current_journal_sha256": hashlib.sha256(journal_raw).hexdigest(),
+            }
+        )
+    finally:
+        TRANSFER_ROOT = original_root
+        os.close(lock)
+
+
 def transfer_file(item, key):
     file = os.path.join(TRANSFER_ROOT, item["destination"])
     parent = os.path.dirname(file)
@@ -744,7 +849,7 @@ def main():
     header = request()
     if header.get("purpose") == "upgrade":
         # Namespace cố định theo UUID; không đặt revision trong singleton cài đặt gốc.
-        upgrades = "/var/lib/opspilot-controller-upgrades"
+        upgrades = UPGRADES_ROOT
         if not exists(upgrades) and header["operation"] == "transfer":
             directory(os.path.dirname(upgrades))
             try:
@@ -808,6 +913,10 @@ def main():
         revision = admin["authority"].get("revision")
         if bool(revision) != (header.get("purpose") == "upgrade"):
             fail("INPUT_INVALID")
+    if header["operation"] == "discover-current":
+        require_eof()
+        discover_current()
+        return
     if header["operation"] == "discover":
         require_eof()
         if not exists(TRANSFER_ROOT):
