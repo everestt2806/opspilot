@@ -205,6 +205,7 @@ export class DesktopProjectSetups {
         result.repository_url !== body.repository_url ||
         result.production_ref !== body.production_ref ||
         result.repository_root !== body.repository_root ||
+        result.framework !== body.framework ||
         result.configured_container_port !== body.container_port ||
         Date.parse(result.verified_at) > Date.now() + 5000 ||
         Date.now() - Date.parse(result.verified_at) > 120_000
@@ -482,6 +483,7 @@ export class DesktopProjectSetups {
       target_vps_id: row.target_vps_id,
       target_security_revision: row.target_security_revision,
       app_name: row.app_name,
+      framework: body.framework,
       repository_url: body.repository_url,
       production_ref: body.production_ref,
       repository_root: body.repository_root,

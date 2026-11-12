@@ -42,6 +42,7 @@ const appNames = new Map([
   [2, `${appName}-first`]
 ])
 const restoreFailure = process.argv.includes('--restore-failure')
+const spa = process.argv.includes('--spa')
 const traceEnabled = process.argv.includes('--trace')
 const scratch = mkdtempSync(join(tmpdir(), 'opspilot-r1-'))
 chmodSync(scratch, 0o700)
@@ -51,7 +52,8 @@ const helper = join(scratch, 'helper')
 const state = join(scratch, 'target-state')
 const source = join(scratch, 'source')
 const secret = randomBytes(32)
-const configHash = createHash('sha256').update('{}').digest('hex')
+const configJson = spa ? '{"framework":"static-spa"}' : '{}'
+const configHash = createHash('sha256').update(configJson).digest('hex')
 const subjectFiles = [
   'target_execution_guard.py',
   'target_guarded_ssh_helper.py',
@@ -174,16 +176,23 @@ try {
       .prepare(
         `INSERT INTO app
     (id,vps_id,name,framework,host_port,container_port,healthcheck_path,source_type,git_repo_url,git_ref,git_root)
-    VALUES (?,1,?,'express',?,3000,'/health','git','https://example.test/r1.git','main','.')`
+    VALUES (?,1,?,?,?, ?,?,'git','https://example.test/r1.git','main','.')`
       )
-      .run(appId, name, appId === 1 ? hostPort : await reservePort())
+      .run(
+        appId,
+        name,
+        spa ? 'static-spa' : 'express',
+        appId === 1 ? hostPort : await reservePort(),
+        spa ? 80 : 3000,
+        spa ? '/' : '/health'
+      )
     database
       .prepare(
         `INSERT INTO product_source_config
     (app_id,source_generation,repository_url,production_ref,repository_root,deploy_config_json,config_sha256,created_at)
-    VALUES (?,1,'https://example.test/r1.git','main','.','{}',?,?)`
+    VALUES (?,1,'https://example.test/r1.git','main','.',?,?,?)`
       )
-      .run(appId, configHash, now)
+      .run(appId, configJson, configHash, now)
     database
       .prepare(
         `INSERT INTO product_app_control
@@ -269,12 +278,21 @@ try {
   mkdirSync(source)
   writeFileSync(
     join(source, 'package.json'),
-    JSON.stringify({
-      name: 'r1-express-fixture',
-      version: '1.0.0',
-      scripts: { start: 'node server.js' },
-      dependencies: { express: '4.21.2' }
-    })
+    JSON.stringify(
+      spa
+        ? {
+            name: 'r7b-vite-fixture',
+            version: '1.0.0',
+            scripts: { build: 'vite build' },
+            devDependencies: { vite: '5.4.11' }
+          }
+        : {
+            name: 'r1-express-fixture',
+            version: '1.0.0',
+            scripts: { start: 'node server.js' },
+            dependencies: { express: '4.21.2' }
+          }
+    )
   )
   run('npm', ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund'], {
     cwd: source
@@ -298,7 +316,21 @@ try {
       join(source, 'server.js'),
       `const express = require('express');\nconst app = express();\napp.get('/health', (_, res) => res.status(${statusCode}).send('${name}'));\napp.get('/', (_, res) => res.send('${name}'));\napp.listen(3000, '0.0.0.0');\n`
     )
+    if (spa) {
+      // Artifact không đọc được: build thành công nhưng nginx403, buộc health/rollback thật.
+      pkg.scripts.build = 'vite build' + (statusCode !== 200 ? ' && chmod 000 dist/index.html' : '')
+      writeFileSync(join(source, 'package.json'), JSON.stringify(pkg))
+      writeFileSync(
+        join(source, 'index.html'),
+        '<html><body><main id="app"></main><script type="module" src="/main.js"></script></body></html>'
+      )
+      writeFileSync(
+        join(source, 'main.js'),
+        `document.getElementById('app').textContent = ${JSON.stringify(name)};`
+      )
+    }
     run('git', ['-C', source, 'add', '--', 'package.json', 'package-lock.json', 'server.js'])
+    if (spa) run('git', ['-C', source, 'add', '--', 'index.html', 'main.js'])
     run('git', [
       '-C',
       source,
@@ -407,6 +439,7 @@ try {
     container_id: current.Id,
     metric_rows: rows.length
   })
+  if (spa) await verifySpaRoutes('first_healthy')
 
   const second = await deploy('healthy_update')
   assert.equal(second.result.state, 'succeeded')
@@ -425,6 +458,7 @@ try {
       .prepare('SELECT state,stream_generation,start_offset FROM deployment_activation WHERE id=?')
       .get(second.result.context.activation_id)
   })
+  if (spa) await verifySpaRoutes('healthy_update')
 
   const failedBuild = await deploy('build_failure', 200, true)
   assert.equal(failedBuild.result.state, 'failed')
@@ -494,6 +528,7 @@ try {
       previous_container_id: current.Id,
       rollback_boundary: unhealthy.result.terminal.envelope.receipt.boundary
     })
+    if (spa) await verifySpaRoutes('healthy_update')
     const firstBuildFailure = await deploy('first_build_failure', 200, true, undefined, 2)
     assert.equal(firstBuildFailure.result.state, 'failed')
     assert.equal(firstBuildFailure.result.failed_step, 'BUILD')
@@ -641,6 +676,7 @@ try {
   const report = {
     status: failure ? 'FAIL' : cleanup ? 'PASS' : 'FAIL',
     scope: 'PINNED_SSH_SQLITE_DOCKER_RUNTIME',
+    framework: spa ? 'static-spa' : 'express',
     nonce,
     source_sha: run('git', ['-c', `safe.directory=${repo}`, '-C', repo, 'rev-parse', 'HEAD']),
     subject_sha256: subjectHashes,
@@ -669,6 +705,28 @@ async function waitFor(check, timeout) {
     await delay(100)
   }
   throw new Error('LAB_WAIT_TIMEOUT')
+}
+
+async function verifySpaRoutes(marker) {
+  const origin = `http://127.0.0.1:${hostPort}`
+  const home = await fetch(origin + '/')
+  assert.equal(home.status, 200)
+  const html = await home.text()
+  const deep = await fetch(origin + '/projects/current/settings')
+  assert.equal(deep.status, 200)
+  assert.equal(await deep.text(), html)
+  const asset = html.match(/src="([^"]+\.js)"/)?.[1]
+  assert.ok(asset?.startsWith('/assets/'))
+  const js = await fetch(origin + asset)
+  assert.equal(js.status, 200)
+  assert.ok((await js.text()).includes(marker))
+  assert.equal((await fetch(origin + '/assets/not-present.js')).status, 404)
+  assert.equal((await fetch(origin + '/not-present.css')).status, 404)
+  record('spa_routes_' + stage, {
+    html_sha256: createHash('sha256').update(html).digest('hex'),
+    deep_link_matches_index: true,
+    missing_assets_404: true
+  })
 }
 
 function reservePort() {

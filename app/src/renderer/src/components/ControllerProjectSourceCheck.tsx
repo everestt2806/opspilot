@@ -90,6 +90,7 @@ function SourceCheckSession({ binding, project }: Props): React.JSX.Element {
         value.repository_url !== project.repository_url ||
         value.production_ref !== project.production_ref ||
         value.repository_root !== project.repository_root ||
+        value.framework !== project.framework ||
         value.configured_container_port !== project.container_port ||
         value.state !== 'source_verified' ||
         value.deployment_started !== false ||

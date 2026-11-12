@@ -19,6 +19,7 @@ export OPSPILOT_R1_MODULES=/var/tmp/opspilot-p3e3a-runtime/node_modules
 export OPSPILOT_R1_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r1-lab.cjs
 node app/scripts/product-runtime-lab/build.mjs
 node app/scripts/product-runtime-lab/run.mjs
+node app/scripts/product-runtime-lab/run.mjs --spa
 node app/scripts/product-runtime-lab/run.mjs --restore-failure
 node app/scripts/product-runtime-lab/verify-deps.mjs
 ```
@@ -37,6 +38,11 @@ must keep the previous collector running, leave the barrier/leases pending and r
 success. `--restore-failure` deliberately removes **only this run's verified previous container**
 before rollback; the pipeline must refuse successful finalization and retain authority for recovery.
 This is an unknown outcome requiring R2 reconciliation, not a successful rollback.
+
+R7b: `--spa` dùng Vite/nginx cổng80, thêm ba lần kiểm deep route/index, bundle
+marker và missing asset404 sau deploy/update/rollback. Artifact chmod000 tạo health403
+thật để kiểm rollback; không giả Docker response. Source config chứa framework SPA
+với canonical hash; cùng H2 receipts/lease/fences, không sửa wire protocol.
 
 Optional `--trace` uses `trace_helper.py` to observe/rethrow exceptions and forward all real operations.
 The default gate uses the unchanged target helper directly. The optional trace contains

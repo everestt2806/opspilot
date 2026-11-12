@@ -28,7 +28,7 @@ import { ControllerProjectSourceCheck } from './ControllerProjectSourceCheck'
 import { ControllerProjectTargetPreparation } from './ControllerProjectTargetPreparation'
 import { ControllerProjectFirstDeployment } from './ControllerProjectFirstDeployment'
 type Target = DesktopProjectTargets['items'][number]
-type Values = Omit<DesktopProjectSetupInput, 'binding_id' | 'framework'>
+type Values = Omit<DesktopProjectSetupInput, 'binding_id'>
 const canonicalRepo = (value: string): string => {
   const url = new URL(value),
     path = url.pathname.replace(/\/$/, '').replace(/\.git$/i, '')
@@ -70,6 +70,7 @@ export function ControllerProjectPanel({
     listEpoch = useRef(0),
     targetEpoch = useRef(0),
     latest = useRef(binding)
+  const framework = Form.useWatch('framework', form)
   useEffect(() => {
     latest.current = binding
   }, [binding])
@@ -197,8 +198,7 @@ export function ControllerProjectPanel({
     try {
       const prepared = await window.api.invoke('controller:prepare-project', {
         ...captured.input,
-        binding_id: binding.binding_id,
-        framework: 'express'
+        binding_id: binding.binding_id
       })
       if (!alive.current) return
       if (!prepared?.ok) {
@@ -215,6 +215,7 @@ export function ControllerProjectPanel({
         row.target_vps_id !== captured.target.id ||
         row.target_security_revision !== captured.target.ssh_security_revision ||
         row.app_name !== captured.input.app_name ||
+        row.framework !== captured.input.framework ||
         row.repository_url !== captured.input.repository_url ||
         row.production_ref !== captured.input.production_ref ||
         row.repository_root !== captured.input.repository_root ||
@@ -269,6 +270,11 @@ export function ControllerProjectPanel({
   ): Array<{ key: string; label: string; children: React.ReactNode }> => [
     { key: 'target', label: t.target, children: targetLabel },
     { key: 'name', label: t.name, children: value.app_name },
+    {
+      key: 'framework',
+      label: t.framework,
+      children: value.framework === 'static-spa' ? 'Vite SPA' : 'Express'
+    },
     { key: 'repo', label: t.repo, children: value.repository_url },
     { key: 'branch', label: t.branch, children: value.production_ref },
     { key: 'root', label: t.root, children: value.repository_root },
@@ -441,6 +447,7 @@ export function ControllerProjectPanel({
           layout="vertical"
           disabled={busy}
           initialValues={{
+            framework: 'express',
             production_ref: 'main',
             repository_root: '.',
             host_port: null,
@@ -450,6 +457,24 @@ export function ControllerProjectPanel({
           style={{ display: review ? 'none' : 'block' }}
         >
           <Alert type="info" message={t.limits} />
+          <Form.Item
+            name="framework"
+            label={t.framework}
+            rules={[{ required: true, message: t.required }]}
+          >
+            <Select
+              options={[
+                { value: 'express', label: 'Express' },
+                { value: 'static-spa', label: 'Vite SPA' }
+              ]}
+              onChange={(framework: Values['framework']) =>
+                form.setFieldsValue({
+                  container_port: framework === 'static-spa' ? 80 : 3000,
+                  healthcheck_path: framework === 'static-spa' ? '/' : '/health'
+                })
+              }
+            />
+          </Form.Item>
           {targetError && <Alert type="error" message={t.targetError} />}
           {!targetLoading && !targetError && targets.length === 0 && (
             <Alert type="warning" message={t.targetEmpty} />
@@ -533,7 +558,13 @@ export function ControllerProjectPanel({
             label={t.containerPort}
             rules={[{ required: true, message: t.required }]}
           >
-            <InputNumber min={1} max={65535} precision={0} style={{ width: '100%' }} />
+            <InputNumber
+              disabled={framework === 'static-spa' || busy}
+              min={1}
+              max={65535}
+              precision={0}
+              style={{ width: '100%' }}
+            />
           </Form.Item>
           <Form.Item
             name="healthcheck_path"

@@ -76,6 +76,7 @@ beforeEach(() => {
     controller_id: binding.controller_id,
     target_vps_id: 77,
     target_security_revision: 3,
+    framework: 'express',
     app_name: 'test-api',
     repository_url: 'https://github.com/example/api.git',
     production_ref: 'main',

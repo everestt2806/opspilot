@@ -196,6 +196,16 @@ afterEach(() => {
   rmSync(directory, { recursive: true })
 })
 describe('Desktop durable Product project setup', () => {
+  it('giữ framework SPA từ body journal qua reopen/send và từ chối source response framework khác', async () => {
+    input = { ...input, framework: 'static-spa', container_port: 80, healthcheck_path: '/' }
+    const prepared = await setups.prepare(input)
+    expect(prepared.framework).toBe('static-spa')
+    expect(setups.list(input.binding_id)[0].framework).toBe('static-spa')
+    await setups.send(prepared.request_key)
+    expect(register.mock.calls[0][1]).toMatchObject({ framework: 'static-spa', container_port: 80 })
+    await expect(setups.verifySource(prepared.request_key)).rejects.toThrow()
+    expect(verify).toHaveBeenCalledOnce()
+  })
   it('derives target review and preparation from registered journal, preserving unknown without creating deployment intent', async () => {
     const row = await setups.prepare(input)
     await expect(setups.targetState(row.request_key)).rejects.toThrow('PROJECT_SETUP_CONFLICT')

@@ -20,7 +20,7 @@ export const projectRegistrationInputSchema = z.strictObject({
   target_vps_id: positive,
   expected_target_security_revision: positive,
   app_name: z.string().regex(/^[a-z0-9][a-z0-9-]{1,30}$/),
-  framework: z.literal('express'),
+  framework: z.enum(['express', 'static-spa']),
   repository_url: z.string().min(1).max(2048),
   production_ref: z.string().min(1).max(255),
   repository_root: z.string().min(1).max(512),
@@ -173,7 +173,7 @@ export class ProductProjectRegistration {
           const app = new AppRepository(this.db).create({
             vps_id: value.target_vps_id,
             name: value.app_name,
-            framework: 'express',
+            framework: value.framework,
             source_type: 'git',
             source_path: null,
             git_repo_url: value.repository_url,
@@ -185,7 +185,7 @@ export class ProductProjectRegistration {
             needs_db: 0
           })
           const config = canonicalH2Json({
-              framework: 'express',
+              framework: value.framework,
               host_port: port,
               container_port: value.container_port,
               healthcheck_path: value.healthcheck_path,
@@ -270,6 +270,8 @@ export class ProductProjectRegistration {
   static normalize(input: unknown): Input {
     try {
       const value = inputSchema.parse(input)
+      if (value.framework === 'static-spa' && value.container_port !== 80)
+        throw new ProjectRegistrationError('PROJECT_REQUEST_INVALID')
       validateRef(value.production_ref)
       if (
         value.production_ref.startsWith('refs/') ||
@@ -429,7 +431,7 @@ export class ProductProjectRegistration {
       )
       .get(result.app_id) as Record<string, unknown> | undefined
     const config = canonicalH2Json({
-      framework: 'express',
+      framework: value.framework,
       host_port: result.host_port,
       container_port: value.container_port,
       healthcheck_path: value.healthcheck_path,
@@ -447,7 +449,7 @@ export class ProductProjectRegistration {
       row.deploy_config_json !== config ||
       row.vps_id !== value.target_vps_id ||
       row.name !== value.app_name ||
-      row.framework !== 'express' ||
+      row.framework !== value.framework ||
       row.source_type !== 'git' ||
       row.needs_db !== 0 ||
       row.host_port !== result.host_port ||

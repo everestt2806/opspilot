@@ -123,10 +123,11 @@ export function validateProductSourceAndPlan(
   const sourceTree = buildSourceTree(rootDirectory)
   const detection = detectFramework(sourceTree)
   if (
-    app.framework !== 'express' ||
+    !['express', 'static-spa'].includes(app.framework) ||
     app.needs_db !== 0 ||
     !detection.matched ||
-    detection.detector !== 'express' ||
+    detection.detector !== app.framework ||
+    (app.framework === 'static-spa' && app.container_port !== detection.plan.containerPort) ||
     detection.plan.needsDb ||
     detection.plan.requiredEnv.length > 0
   ) {

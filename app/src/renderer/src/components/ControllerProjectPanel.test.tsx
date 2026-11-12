@@ -20,6 +20,7 @@ const row = (state: DesktopProjectSetup['state'] = 'prepared'): DesktopProjectSe
   controller_id: 'controller-a',
   target_vps_id: 77,
   target_security_revision: 3,
+  framework: 'express',
   app_name: 'ui-api',
   repository_url: 'https://github.com/example/api.git',
   production_ref: 'main',
@@ -48,9 +49,16 @@ const begin = async (): Promise<void> => {
     )
   )
 }
-const configure = async (): Promise<void> => {
+const configure = async (framework: 'express' | 'static-spa' = 'express'): Promise<void> => {
   await begin()
-  fireEvent.mouseDown(screen.getByRole('combobox'))
+  if (framework === 'static-spa') {
+    fireEvent.mouseDown(screen.getByLabelText(t.framework))
+    fireEvent.click((await screen.findAllByText('Vite SPA')).at(-1)!)
+    expect((screen.getByLabelText(t.containerPort) as HTMLInputElement).value).toBe('80')
+    expect((screen.getByLabelText(t.containerPort) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByLabelText(t.health) as HTMLInputElement).value).toBe('/')
+  }
+  fireEvent.mouseDown(screen.getByLabelText(t.target))
   const options = await screen.findAllByText('Remote target · target.test (#77)')
   fireEvent.click(options.at(-1)!)
   fireEvent.change(screen.getByLabelText(t.name), { target: { value: 'ui-api' } })
@@ -105,12 +113,12 @@ beforeEach(() => {
         }
       }
     if (channel === 'controller:prepare-project') {
-      rows = [row()]
+      rows = [{ ...row(), ...(input as object) }]
       return { ok: true, data: rows[0] }
     }
     if (channel === 'controller:send-project') {
       remote.add(input as string)
-      rows = [row(lost ? 'outcome_unknown' : 'registered')]
+      rows = [{ ...rows[0], state: lost ? 'outcome_unknown' : 'registered', app_id: 42 }]
       if (lost) {
         lost = false
         return { ok: false, error: { technical: 'CONTROLLER_ADMIN_FAILED' } }
@@ -128,6 +136,35 @@ afterEach(() => {
   vi.useRealTimers()
 })
 describe('Product project registration form and recovery', () => {
+  it('xem lại và gửi SPA với cổng nginx80, không tự gửi Express', async () => {
+    render(view())
+    await configure('static-spa')
+    expect(within(screen.getByRole('dialog')).getAllByText('Vite SPA').length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: t.confirm }))
+    await screen.findByText(t.registeredHint)
+    expect(invoke).toHaveBeenCalledWith(
+      'controller:prepare-project',
+      expect.objectContaining({
+        framework: 'static-spa',
+        container_port: 80,
+        healthcheck_path: '/'
+      })
+    )
+    expect(remote.size).toBe(1)
+  })
+  it('không send khi prepare trả framework khác phần đã duyệt', async () => {
+    const original = invoke.getMockImplementation()!
+    invoke.mockImplementation(async (channel, ...args) =>
+      channel === 'controller:prepare-project'
+        ? { ok: true, data: row() }
+        : original(channel, ...args)
+    )
+    render(view())
+    await configure('static-spa')
+    fireEvent.click(screen.getByRole('button', { name: t.confirm }))
+    await screen.findAllByText(t.changed)
+    expect(invoke.mock.calls.some(([channel]) => channel === 'controller:send-project')).toBe(false)
+  })
   it('does not allow read-only bindings to prepare projects or load administrative targets', async () => {
     binding.scopes = ['read']
     render(view())

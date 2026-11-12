@@ -14,6 +14,7 @@ import {
 } from './productPipelineSourceRender'
 import { TargetEnrollmentRepository } from './targetEnrollmentRepository'
 import { verifyControllerBundle } from './controllerBundle'
+import { projectRegistrationInputSchema } from './projectRegistration'
 
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
 export const projectSourceVerificationInputSchema = z.strictObject({
@@ -42,7 +43,7 @@ export const projectSourceVerificationResultSchema = z.strictObject({
   repository_root: z.string().min(1).max(512),
   commit_sha: z.string().regex(/^[a-f0-9]{40}$/),
   observation_sequence: positive,
-  framework: z.literal('express'),
+  framework: projectRegistrationInputSchema.shape.framework,
   configured_container_port: positive.max(65535),
   detected_container_port: positive.max(65535),
   source_file_count: positive.max(1024),
@@ -224,7 +225,9 @@ export async function verifyProductProjectSource(
             repository_root: before.source.repository_root,
             commit_sha: snapshot.commitSha,
             observation_sequence: observed.observationSequence,
-            framework: 'express' as const,
+            framework: projectRegistrationInputSchema.shape.framework.parse(
+              before.source.framework
+            ),
             configured_container_port: before.source.container_port,
             detected_container_port: preflight.plan.containerPort,
             source_file_count: preflight.sourceFiles.length,
@@ -298,7 +301,7 @@ export function readProjectSourceAuthority(
     source.git_repo_url !== source.repository_url ||
     source.git_ref !== source.production_ref ||
     source.git_root !== source.repository_root ||
-    source.framework !== 'express' ||
+    !projectRegistrationInputSchema.shape.framework.safeParse(source.framework).success ||
     source.needs_db !== 0 ||
     source.source_path !== null ||
     source.imported_from_vps !== 0 ||

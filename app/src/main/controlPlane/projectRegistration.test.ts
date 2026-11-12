@@ -81,6 +81,32 @@ afterEach(() => {
   rmSync(directory, { recursive: true })
 })
 describe('Atomic Product project registration', () => {
+  it('đăng ký SPA với cấu hình canonical, replay giữ framework và không tạo deployment', () => {
+    input = { ...input, framework: 'static-spa', container_port: 80, healthcheck_path: '/' }
+    const result = registration.register(input)
+    expect(
+      db.prepare('SELECT framework,container_port,current_deployment_id FROM app').get()
+    ).toEqual({ framework: 'static-spa', container_port: 80, current_deployment_id: null })
+    const source = db
+      .prepare('SELECT deploy_config_json,config_sha256 FROM product_source_config')
+      .get() as { deploy_config_json: string; config_sha256: string }
+    expect(JSON.parse(source.deploy_config_json).framework).toBe('static-spa')
+    expect(source.config_sha256).toBe(result.source_config_sha256)
+    expect(registration.register(input)).toMatchObject({ ...result, state: 'already_registered' })
+    expect(() => registration.register({ ...input, framework: 'express' })).toThrow(
+      'PROJECT_IDEMPOTENCY_CONFLICT'
+    )
+    db.prepare("UPDATE app SET framework='express'").run()
+    expect(() => registration.register(input)).toThrow('PROJECT_REVIEW_REQUIRED')
+    expect(db.prepare('SELECT COUNT(*) AS n FROM product_deploy_job').get()).toEqual({ n: 0 })
+  })
+  it('từ chối cổng SPA sai trước khi tạo app hoặc journal', () => {
+    const before = snapshot()
+    expect(() => registration.register({ ...input, framework: 'static-spa' })).toThrow(
+      'PROJECT_REQUEST_INVALID'
+    )
+    expect(snapshot()).toEqual(before)
+  })
   it('lists only current usable controller targets with bounded pagination and never imports local profiles', () => {
     db.prepare(
       "INSERT INTO vps(id,name,host,username,auth_type,encrypted_secret) VALUES(2,'legacy','other.test','unit','key',X'0102')"

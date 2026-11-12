@@ -73,6 +73,7 @@ beforeEach(() => {
     controller_id: binding.controller_id,
     target_vps_id: 77,
     target_security_revision: 3,
+    framework: 'express',
     app_name: 'test-api',
     repository_url: 'https://github.com/example/api.git',
     production_ref: 'main',
@@ -178,6 +179,28 @@ describe('Kiểm tra source từ Desktop', () => {
     fireEvent.click(screen.getByRole('button', { name: t.retry }))
     await screen.findByText(t.portHint)
     expect(screen.getByText('3000 / 4000')).toBeTruthy()
+  })
+  it('từ chối response SPA cho dự án Express, sau đó xác minh SPA khớp dự án', async () => {
+    invoke.mockResolvedValueOnce({ ok: true, data: { ...source(), framework: 'static-spa' } })
+    const rendered = render(view())
+    await start()
+    await screen.findByText(t.changed)
+    rendered.unmount()
+    invoke.mockClear()
+    project = { ...project, framework: 'static-spa', container_port: 80, healthcheck_path: '/' }
+    invoke.mockResolvedValueOnce({
+      ok: true,
+      data: {
+        ...source(),
+        framework: 'static-spa',
+        configured_container_port: 80,
+        detected_container_port: 80
+      }
+    })
+    render(view())
+    await start()
+    await screen.findByText(t.verified)
+    expect(screen.getByText('80 / 80')).toBeTruthy()
   })
   it.each(['vi', 'en', 'cn', 'jp'] as const)(
     'supports %s without exposing runtime controls',

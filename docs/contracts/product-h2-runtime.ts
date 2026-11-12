@@ -1,6 +1,9 @@
 import type { ProductClaimToken, ProductDispatchTargetBinding } from './product-auto-deploy'
 
-/** Internal main-process/lab contract. No IPC, public API, raw shell or production enrollment. */
+/** Internal main-process/lab contract. No IPC, public API, raw shell or production enrollment.
+ * R7b: Express hoặc SPA không DB/env; framework được khóa bởi source config trong claim,
+ * không thêm field hoặc thay đổi protocol receipt. SPA dùng container_port80.
+ */
 export type H2PreviousExpectation = Readonly<{
   deployment_id: number
   image_tag: string
@@ -173,7 +176,9 @@ export type H2Request = H2RequestBase &
  * Build failure: no activation barrier or collector stop, verify previous health and seal failed BUILD.
  * Candidate first deploy failed stays for diagnostics; no volume/data prune. Unknown Docker CLI
  * timeout or disconnected/in-flight child -> no seal, reconcile; never assume daemon stopped.
- * Health probes run inside exact CID and verify image/labels before+after. Publish policy only
+ * Health probes run inside exact CID and verify image/labels before+after. Fixed probe uses Node
+ * when available, otherwise wget/awk in Alpine nginx; only bounded JSON HTTP status is returned.
+ * Publish policy only
  * not_checked (degraded exposure allowed); no firewall/DNS/external Desktop SSH writer.
  * Prepared activation barrier rechecked by poller inside every commit after async reads.
  * T1 keeps leases; target verifies committed attestation+receipt/quiescence before unknown→idle;

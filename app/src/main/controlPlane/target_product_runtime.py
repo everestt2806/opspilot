@@ -495,7 +495,17 @@ class ProductRuntime:
                   "fetch(u,{signal:AbortSignal.timeout(Number(process.argv[3]))})"
                   ".then(async r=>{await r.body?.cancel();console.log(JSON.stringify({http_status:r.status}))})"
                   ".catch(()=>console.log(JSON.stringify({http_status:null})))")
-        text = self.commands.run(["exec", value["container_id"], "node", "-e", script,
+        # Nginx SPA không có Node; probe cố định dùng wget sẵn trong image Alpine.
+        # Chỉ trả JSON status, không ghi header/body; URL đi qua positional args.
+        probe = """if command -v node >/dev/null 2>&1; then
+exec node -e "$1" "$2" "$3" "$4"
+fi
+command -v wget >/dev/null 2>&1 || exit 127
+wget -S -O /dev/null -T 2 "http://127.0.0.1:$2$3" 2>&1 | awk '
+$1 ~ /^HTTP\\// && $2 ~ /^[0-9][0-9][0-9]$/ {status=$2}
+END {if (status == "") print "{\\"http_status\\":null}"; else printf "{\\"http_status\\":%s}\\n", status}'
+"""
+        text = self.commands.run(["exec", value["container_id"], "sh", "-c", probe, "opspilot-health", script,
                                   str(self.context["container_port"]), self.context["healthcheck_path"],
                                   str(max(1, min(2000, budget_ms)))], timeout=5)
         try:

@@ -89,7 +89,8 @@ export class ProductRuntimeRepository {
         const row = this.canonical(claim.app_id, deploymentId)
         if (
           !row ||
-          row.framework !== 'express' ||
+          row.framework !== this.registeredFramework(claim) ||
+          (row.framework === 'static-spa' && row.container_port !== 80) ||
           row.needs_db !== 0 ||
           row.deployment_status !== 'building' ||
           build.image_tag !== row.image_tag ||
@@ -451,7 +452,7 @@ export class ProductRuntimeRepository {
         source_config_sha256: context.claim.source_config_sha256,
         app_id: context.claim.app_id,
         app_name: context.app_name,
-        framework: 'express',
+        framework: this.registeredFramework(context.claim),
         needs_db: 0,
         host_port: context.host_port,
         container_port: context.container_port,
@@ -758,6 +759,29 @@ export class ProductRuntimeRepository {
       LEFT JOIN deployment old ON old.id=a.current_deployment_id AND old.app_id=a.id WHERE a.id=?`
       )
       .get(deploymentId, appId) as CanonicalRow | undefined
+  }
+  /** Framework lấy từ source generation đã khóa bởi claim, không suy ra từ app đang sửa. */
+  private registeredFramework(claim: ProductClaimToken): 'express' | 'static-spa' {
+    const row = this.database
+      .prepare(
+        'SELECT deploy_config_json,config_sha256 FROM product_source_config WHERE app_id=? AND source_generation=?'
+      )
+      .get(claim.app_id, claim.source_generation) as
+      { deploy_config_json: string; config_sha256: string } | undefined
+    if (!row || row.config_sha256 !== claim.source_config_sha256) this.fail('H2_BUILD_INVALID')
+    let config: Record<string, unknown>
+    try {
+      config = JSON.parse(row.deploy_config_json)
+    } catch {
+      this.fail('H2_BUILD_INVALID')
+    }
+    if (!config || Array.isArray(config) || typeof config !== 'object')
+      this.fail('H2_BUILD_INVALID')
+    // Source legacy chưa có framework chỉ thuộc Express; SPA luôn cần hash canonical hợp lệ.
+    if (config.framework === undefined || config.framework === 'express') return 'express'
+    if (config.framework === 'static-spa' && hashH2(config) === claim.source_config_sha256)
+      return 'static-spa'
+    return this.fail('H2_BUILD_INVALID')
   }
   private assertExecution(context: H2Context): ExecutionRow {
     const execution = this.execution(context.claim.attempt_id)

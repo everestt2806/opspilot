@@ -9,12 +9,13 @@ export interface ProductProjectRegistrationInput {
   target_vps_id: number
   expected_target_security_revision: number
   app_name: string
-  framework: 'express'
+  framework: 'express' | 'static-spa'
   repository_url: string
   production_ref: string
   repository_root: string
   /** null = cấp port DB từ30000–30999; target listener phải preflight riêng. */
   host_port: number | null
+  /** SPA dùng nginx cố định cổng80; public port vẫn được cấp riêng. */
   container_port: number
   healthcheck_path: string
 }

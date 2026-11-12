@@ -56,6 +56,8 @@ function setupHarness(
 ): Harness {
   testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-product-runtime-'))
   const database = initializeDatabase(testDirectory)
+  const sourceConfig = options.framework === 'static-spa' ? '{"framework":"static-spa"}' : '{}'
+  const configHash = options.framework === 'static-spa' ? hashH2(JSON.parse(sourceConfig)) : HASH
   const clock = {
     value: NOW,
     advance(ms: number) {
@@ -67,13 +69,13 @@ function setupHarness(
     INSERT INTO vps (id, name, host, port, host_fingerprint, username, auth_type, encrypted_secret, ssh_security_revision)
       VALUES (1, 'vps-1', 'target.example.test', 2222, '${TARGET_PIN}', 'deploy', 'key', X'00', 1);
     INSERT INTO app (id, vps_id, name, framework, host_port, container_port, healthcheck_path, source_type, git_repo_url, git_ref, git_root, current_deployment_id)
-      VALUES (1, 1, 'my-express-app', '${options.framework ?? 'express'}', 30001, 3000, '/healthz', 'git', 'https://example.test/repo.git', 'main', '.', ${options.withPrevious ? 1 : 'NULL'});
+      VALUES (1, 1, 'my-express-app', '${options.framework ?? 'express'}', 30001, ${options.framework === 'static-spa' ? 80 : 3000}, '/healthz', 'git', 'https://example.test/repo.git', 'main', '.', ${options.withPrevious ? 1 : 'NULL'});
     INSERT INTO product_controller VALUES ('${CONTROLLER}', '2026-10-27T10:00:00.000Z', 'active');
     INSERT INTO product_source_config VALUES
-      (1, 1, 'https://example.test/repo.git', 'main', '.', '{}', '${HASH}', '2026-10-27T10:00:00.000Z');
+      (1, 1, 'https://example.test/repo.git', 'main', '.', '${sourceConfig}', '${configHash}', '2026-10-27T10:00:00.000Z');
     INSERT INTO product_app_control
       (app_id, mode, controller_id, ownership_generation, source_generation, source_config_sha256, changed_at)
-      VALUES (1, 'product', '${CONTROLLER}', 1, 1, '${HASH}', '2026-10-27T10:00:00.000Z');
+      VALUES (1, 'product', '${CONTROLLER}', 1, 1, '${configHash}', '2026-10-27T10:00:00.000Z');
   `)
 
   if (options.withPrevious) {
@@ -101,7 +103,7 @@ function setupHarness(
     ownership_generation: 1,
     app_id: 1,
     source_generation: 1,
-    source_config_sha256: HASH,
+    source_config_sha256: configHash,
     app_lease_id: 'lease-app-1',
     app_fence: 1,
     build_slot_lease_id: 'lease-slot-1',
@@ -116,7 +118,7 @@ function setupHarness(
       (job_id, controller_id, app_id, ownership_generation, source_generation, source_config_sha256,
        trigger, idempotency_key, ref, target_sha, observation_sequence, reconcile_epoch, state,
        attempt_count, max_attempts, available_at, created_at, updated_at)
-      VALUES ('job-100', '${CONTROLLER}', 1, 1, 1, '${HASH}',
+      VALUES ('job-100', '${CONTROLLER}', 1, 1, 1, '${configHash}',
        'manual_redeploy', 'manual:job-100', 'main', '${SHA_B}', NULL, NULL, 'deploying',
        1, 3, '2026-10-27T11:00:00.000Z', '2026-10-27T11:00:00.000Z', '2026-10-27T11:00:00.000Z');
 
@@ -173,6 +175,33 @@ describe('ProductRuntimeRepository C0 Barrier & Lifecycle', () => {
   })
 
   describe('createContext', () => {
+    it('tạo context SPA cổng80 từ source hash và chặn đổi framework sau build', () => {
+      const { repository, claim, buildEvidence, deploymentId, database } = setupHarness({
+        framework: 'static-spa'
+      })
+      expect(repository.createContext(claim, deploymentId, buildEvidence).container_port).toBe(80)
+      database.prepare("UPDATE app SET framework='express'").run()
+      expect(() => repository.createContext(claim, deploymentId, buildEvidence)).toThrow(
+        'H2_BUILD_INVALID'
+      )
+    })
+    it('từ chối source SPA sai hash hoặc cổng nginx sai trước C0', () => {
+      const { repository, claim, buildEvidence, deploymentId, database } = setupHarness({
+        framework: 'static-spa'
+      })
+      database.prepare('UPDATE app SET container_port=3000').run()
+      expect(() => repository.createContext(claim, deploymentId, buildEvidence)).toThrow(
+        'H2_BUILD_INVALID'
+      )
+      database.prepare('UPDATE app SET container_port=80').run()
+      database.prepare("UPDATE product_source_config SET deploy_config_json='{}'").run()
+      expect(() => repository.createContext(claim, deploymentId, buildEvidence)).toThrow(
+        'H2_BUILD_INVALID'
+      )
+      expect(database.prepare('SELECT COUNT(*) AS n FROM deployment_activation').get()).toEqual({
+        n: 0
+      })
+    })
     it('creates H2Context successfully for initial deployment', () => {
       const { repository, claim, buildEvidence, deploymentId, database } = setupHarness()
       const context = repository.createContext(claim, deploymentId, buildEvidence)
@@ -226,7 +255,7 @@ describe('ProductRuntimeRepository C0 Barrier & Lifecycle', () => {
       )
     })
 
-    it('fails with H2_BUILD_INVALID if framework is not express', () => {
+    it('fails with H2_BUILD_INVALID if framework is outside Express/SPA', () => {
       const { repository, claim, buildEvidence, deploymentId } = setupHarness({
         framework: 'nextjs'
       })
@@ -452,25 +481,33 @@ describe('ProductRuntimeRepository C0 Barrier & Lifecycle', () => {
       expect(repository.readSettlementAuthority(context)).toBe('rejected')
     })
 
-    it('returns ready when terminal record is committed and authority matches', () => {
-      const { repository, claim, buildEvidence, deploymentId } = setupHarness({
-        withPrevious: true
-      })
-      const boundary: H2MetricBoundary = {
-        generation: 'stream-gen-1',
-        device: 100,
-        inode: 200,
-        next_offset: 501
+    it.each(['express', 'static-spa'])(
+      'settlement %s giữ framework đã khóa từ source, từ chối app đổi loại',
+      (framework) => {
+        const { repository, claim, buildEvidence, deploymentId, database } = setupHarness({
+          withPrevious: true,
+          framework
+        })
+        const boundary: H2MetricBoundary = {
+          generation: 'stream-gen-1',
+          device: 100,
+          inode: 200,
+          next_offset: 501
+        }
+        let context = repository.createContext(claim, deploymentId, buildEvidence)
+        context = repository.beginActivationBarrier(context)
+        repository.bindActivationBoundary(context, boundary)
+
+        const sealedReceipt = createValidReceipt(context, { boundary })
+        repository.finalize(sealedReceipt)
+
+        expect(repository.readSettlementAuthority(context)).toBe('ready')
+        database
+          .prepare('UPDATE app SET framework=?')
+          .run(framework === 'express' ? 'static-spa' : 'express')
+        expect(repository.readSettlementAuthority(context)).toBe('rejected')
       }
-      let context = repository.createContext(claim, deploymentId, buildEvidence)
-      context = repository.beginActivationBarrier(context)
-      repository.bindActivationBoundary(context, boundary)
-
-      const sealedReceipt = createValidReceipt(context, { boundary })
-      repository.finalize(sealedReceipt)
-
-      expect(repository.readSettlementAuthority(context)).toBe('ready')
-    })
+    )
 
     it('returns rejected if controller is not active', () => {
       const { repository, claim, buildEvidence, deploymentId, database } = setupHarness({

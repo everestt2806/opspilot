@@ -3,7 +3,7 @@ export interface DesktopProjectSetupInput {
   binding_id: string
   target_vps_id: number
   app_name: string
-  framework: 'express'
+  framework: 'express' | 'static-spa'
   repository_url: string
   production_ref: string
   repository_root: string
@@ -12,6 +12,7 @@ export interface DesktopProjectSetupInput {
   healthcheck_path: string
 }
 export interface DesktopProjectSetup {
+  framework: 'express' | 'static-spa'
   request_key: string
   binding_id: string
   binding_revision: number
@@ -96,7 +97,7 @@ export interface DesktopProjectSourceVerification {
   repository_root: string
   commit_sha: string
   observation_sequence: number
-  framework: 'express'
+  framework: 'express' | 'static-spa'
   configured_container_port: number
   detected_container_port: number
   source_file_count: number

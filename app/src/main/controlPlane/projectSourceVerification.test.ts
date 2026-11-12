@@ -135,6 +135,64 @@ afterEach(() => {
 })
 
 describe('Xác minh source Product trước deployment', () => {
+  const spa = (): void => {
+    db.prepare("UPDATE app SET framework='static-spa',container_port=80,healthcheck_path='/'").run()
+    const config = canonicalH2Json({
+      framework: 'static-spa',
+      host_port: 30000,
+      container_port: 80,
+      healthcheck_path: '/',
+      needs_db: false
+    })
+    const hash = createHash('sha256').update(config).digest('hex')
+    db.transaction(() => {
+      db.pragma('defer_foreign_keys = ON')
+      db.prepare('UPDATE product_source_config SET deploy_config_json=?,config_sha256=?').run(
+        config,
+        hash
+      )
+      db.prepare('UPDATE product_app_control SET source_config_sha256=?').run(hash)
+    })()
+    request.expected_source_config_sha256 = hash
+    writeFileSync(
+      join(source, 'package.json'),
+      JSON.stringify({
+        name: 'spa-fixture',
+        scripts: { build: 'vite build' },
+        devDependencies: { vite: '5.4.11' }
+      })
+    )
+    writeFileSync(join(source, 'index.html'), '<html><body>SPA</body></html>')
+  }
+  it('xác minh SPA khớp framework, giữ paused và không tạo deployment/job', async () => {
+    spa()
+    const before = counts()
+    expect(await check()).toMatchObject({
+      framework: 'static-spa',
+      configured_container_port: 80,
+      detected_container_port: 80,
+      deployment_started: false,
+      auto_deploy_paused: true
+    })
+    expect(db.prepare('SELECT COUNT(*) AS n FROM deployment').get()).toEqual({ n: 0 })
+    expect(db.prepare('SELECT COUNT(*) AS n FROM product_deploy_job').get()).toEqual({ n: 0 })
+    expect(counts()).not.toEqual(before)
+    expect(cleanup).toHaveBeenCalledOnce()
+  })
+  it('không xác minh source Express dưới đăng ký SPA hoặc cổng nginx sai', async () => {
+    spa()
+    db.prepare('UPDATE app SET container_port=3000').run()
+    await expect(check()).rejects.toThrow('PROJECT_SOURCE_AUTHORITY_REJECTED')
+    spa()
+    writeFileSync(
+      join(source, 'package.json'),
+      JSON.stringify({ scripts: { start: 'node server.js' }, dependencies: { express: '4.21.2' } })
+    )
+    await expect(check()).rejects.toThrow('PROJECT_SOURCE_UNSUPPORTED')
+    expect(db.prepare('SELECT COUNT(*) AS n FROM product_branch_observation').get()).toEqual({
+      n: 0
+    })
+  })
   it('fetches the exact branch namespace and shares source/render preflight, keeping app paused without jobs', async () => {
     const result = await check()
     expect(result).toMatchObject({
