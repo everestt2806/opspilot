@@ -43,6 +43,7 @@ win:
         - x64
   executableName: OpsPilot
 nsis:
+  include: resources/installer.nsh
   artifactName: OpsPilot-${version}-setup.${ext}
   shortcutName: OpsPilot
   uninstallDisplayName: OpsPilot

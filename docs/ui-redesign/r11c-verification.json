@@ -1,0 +1,212 @@
+{
+  "checkpoint": "R11c",
+  "date": "2026-11-12",
+  "base_commit": "35dae3440cbf58d7044a9e7c451ef8515e0fc82d",
+  "status": "SUPPORTED_PREDECESSOR_UPGRADE_PASS",
+  "review": "PENDING",
+  "scope": "Automatic NSIS pre-uninstall legacy ML state preservation and actual isolated 0.1.0 source-predecessor to 0.2.0 full-application upgrade.",
+  "limits": [
+    "The 0.1.0 baseline was rebuilt from exact trusted Git predecessor d302ee3 with existing approved Node/npm/scientific dependencies. It retains its real legacy venv redirector/base-prefix dependency on the development Python installation. It is not an original signed distributed historical installer or a clean-machine proof.",
+    "First launch of the unchanged predecessor did not report ML ready within its original30-second limit. A separate native interpreter/scientific-import probe passed. Explicit resume verified the same owned installation/profile/source hashes, preserved failed-first-launch.json and relaunched without reinstalling, changing the old code/timeout or claiming that the first cold launch passed. The resumed upgrade gate then trained real models before testing preservation.",
+    "Two actual ASAR package versions and code payload hashes differ. The fixture changes installer appId/GUID/executable filename/labels and compile-time profile path only; actual Main/preload/App.tsx/SQLite/Windows safeStorage/ML are not mocked. No production VPS/DB/profile/installation identity is used.",
+    "Legacy local installation model state is treated as user-trusted data already used by that installation. The helper does not unpickle or execute old scripts. Source hashes and scientific-version metadata fence compatibility; they do not sanitize arbitrary imported pickle files. Unknown source/dependency families, links, incomplete states and conflicting existing target models block upgrade before uninstall.",
+    "Only the declared predecessor source family and exact numpy/scipy/scikit-learn/joblib versions are admitted. Cross-user DPAPI/credential portability, every historical release/dependency upgrade, and unattended upgrades with arbitrary concurrent application writers are not claimed.",
+    "Synthetic180-sample training tests delivery/persistence only, not formal75-minute pilot/50run statistics. Model bytes and trained_at match before the first resumed inference; inference may legitimately persist updated state afterward.",
+    "Ordinary asynchronous uninstall self-removed the complete fixture installation directory and registry without _?=, while retaining separate userData until explicitly scoped fixture cleanup. Default production identity/shortcuts and independent clean Windows remain R11b gates.",
+    "App version is now0.2.0. ML service/API/algorithms/features/thresholds/SQLite schema/IPC contracts/dependency versions are unchanged. Production installer remains NotSigned; no signed distribution/PR/merge claim."
+  ],
+  "native_upgrade": {
+    "record": "d2157c31faaf",
+    "status": "PASS",
+    "checks": [
+      "trusted_git_predecessor_full_0_1_app_real_train180_writes_legacy_resource_state_and_profile",
+      "actual_new_nsis_aborts_before_old_uninstall_when_legacy_state_is_incomplete",
+      "actual_nsis_0_1_to_0_2_preserves_model_bytes_before_old_uninstall_and_replaces_payload",
+      "actual_new_full_application_restores_same_trained_at_and_models_then_returns_four_real_scores",
+      "ordinary_async_nsis_uninstall_self_removes_whole_fixture_folder_and_registry_preserving_profile"
+    ],
+    "versions": [
+      "0.1.0",
+      "0.2.0"
+    ],
+    "source_commit": "d302ee39f13ee369b308582994c4554636ea7892",
+    "clean_windows": false,
+    "actual_full_applications": true,
+    "production_database_used": false,
+    "production_installer_identity_used": false,
+    "same_approved_dependencies": true,
+    "training": {
+      "deployment_id": 900004,
+      "trained": true,
+      "train_sample_count": 180,
+      "feature_vector_count": 161,
+      "trained_at": "2026-11-12T16:22:26Z",
+      "warnings": []
+    },
+    "private_fixture_removed": true
+  },
+  "helper_checks": {
+    "status": "PASS",
+    "checks": [
+      "PRESERVED",
+      "ALREADY_PRESERVED",
+      "UPGRADE_MODEL_CONFLICT_KEEP_OLD_INSTALLATION",
+      "UPGRADE_LEGACY_SOURCE_UNVERIFIED",
+      "UPGRADE_INCOMPLETE_STATE",
+      "UPGRADE_MODEL_METADATA_REJECTED",
+      "UPGRADE_INCOMPLETE_STATE",
+      "UPGRADE_LEGACY_LIBRARY_UNVERIFIED",
+      "NO_LEGACY_STATE",
+      "EMPTY_LEGACY_STATE",
+      "UPGRADE_LINK_REJECTED",
+      "UPGRADE_FILE_LIMIT",
+      "UPGRADE_SEPARATE_PROFILE_REQUIRED",
+      "UPGRADE_CLOSE_OLD_APP_FIRST"
+    ],
+    "record": "case-5wx_n8wn",
+    "synthetic_bytes_only": true,
+    "production_database_used": false,
+    "private_fixture_removed": true
+  },
+  "production_artifact": {
+    "status": "PASS",
+    "source_commit": "d302ee39f13ee369b308582994c4554636ea7892",
+    "versions": [
+      "0.1.0",
+      "0.2.0"
+    ],
+    "payloads": [
+      {
+        "version": "0.1.0",
+        "exe": "4568025cf5e9bd5252b1be5aff15dbb0e6a6e1457179893ddfc8682179245345",
+        "asar": "f5b3ed08a521a369f9a366d8cbd40ec1999d7551a8ab520f0819865607c01143"
+      },
+      {
+        "version": "0.2.0",
+        "exe": "215ca881fa23cf46e14a075c07c41397bdc559dd924bac28dd0e2d199441aabe",
+        "asar": "b7538ba8aa64831060a2b7b1d00e8a5084832534fe50570a4fb71005db78e31a"
+      }
+    ],
+    "policy_files": 10,
+    "installer": {
+      "name": "OpsPilot-0.2.0-setup.exe",
+      "bytes": 241541417,
+      "sha256": "fb94b84adfcb779bc0bf9ec6605e6d04aa25373bee7a45435d27f834884e9167"
+    }
+  },
+  "policy": {
+    "format": 1,
+    "source_commit": "d302ee39f13ee369b308582994c4554636ea7892",
+    "feature_version": "v1-5metrics-4feats-w20",
+    "source_sha256": {
+      "main.py": "23ab986ef55a04b4aa52e514157ca06e4a9d15d2f9e49078fba707c2ed780660",
+      "config.py": "6778d8e6357ded1451897726df803c6ebf17cb1724d313f7e41330d6435fe6f2",
+      "features.py": "586abde831ca0aacd9905ed69ccd7c3b3b94469721ea3473f82f7c550563f489",
+      "store.py": "f3b7618038047a6cfc1fa11c45313090ab7052423171e6308fc2116f48aeeff6",
+      "models/__init__.py": "84d742a5c24f201f9d4abe6f01d0c48edfe604eccf96ae3ed5ae950faf801ee3",
+      "models/base.py": "dfffbbada8a0bf44ba92e832416da076ad0a39bdf61cd381e12b2f0b72e5b909",
+      "models/ensemble.py": "4c33c516517298703ec0c0d0701a4f0f78ac427a986a8e8dd17f7a320f1496da",
+      "models/iforest.py": "d4a1d33068b6c27e0a6282c266165f02bdeca948038df383506b53ec78541e06",
+      "models/ocsvm.py": "43527400c97cfd180e054322e04d15a0ca39f97d8efa2f38cebc5207ea11168e",
+      "models/zscore_ewma.py": "91028bf208d414873b4e8386e17fe45876db7e1e2944cd80608d44e93248d950"
+    },
+    "packages": {
+      "numpy": "2.5.1",
+      "scipy": "1.18.0",
+      "scikit_learn": "1.9.0",
+      "joblib": "1.5.3"
+    }
+  },
+  "checks": {
+    "focused": {
+      "passed": 29,
+      "files": 3
+    },
+    "types": [
+      "node",
+      "web",
+      "scripts"
+    ],
+    "eslint": {
+      "files": 2,
+      "errors": 0,
+      "warnings": 0
+    },
+    "ruff": {
+      "files": 2,
+      "lint": "PASS",
+      "format": "PASS"
+    },
+    "node_syntax": 2,
+    "powershell_parse_errors": 0,
+    "negative_cli": 3,
+    "negative_record_traversal": 1,
+    "completed_record_replay_refused": 2,
+    "full_suite": "Not rerun: current native upgrade/helper tests and focused29 cover packaging changes; application/ML source hashes remain at R11a full2216PASS+2existingLinux-onlySKIP baseline."
+  },
+  "unchanged_runtime_source_sha256": {
+    "app/src/main/mlClient.ts": "bffea7d421866b381fea8e045e7dfc79d198d01c3f807ba1d3fb779ab19ac18d",
+    "app/src/main/mlRuntime.ts": "4fcffd203335c60503296a3b96ad8d8a8918e804141a4622891deac1d056e7ae",
+    "app/src/main/mlClient.test.ts": "2ca5da1391c212e303ac857cbfb90e11f6faedb52068752d48ca9ba154b385bc",
+    "app/src/main/mlRuntime.test.ts": "e08cfb7bbdafc4151d7d5ae531198b9da68b5a3ddfd63c96c6322f0fd0263363",
+    "ml-service/runtime-lock.json": "dcbecd8b7dabaafb569aa3878139ce3f0854ff47d8911b16df5eabab747a5db3",
+    "ml-service/config.py": "822531131f3511ce8a04c1186f4f7b65c8f4094a8b4099d50360609d635b2191",
+    "ml-service/tests/test_state_location.py": "4e0c9dbee3297e499e9af90bc25a489c9addb7dc3733600d5f54ce56e992cba5",
+    "ml-service/main.py": "23ab986ef55a04b4aa52e514157ca06e4a9d15d2f9e49078fba707c2ed780660",
+    "ml-service/features.py": "586abde831ca0aacd9905ed69ccd7c3b3b94469721ea3473f82f7c550563f489",
+    "ml-service/store.py": "f3b7618038047a6cfc1fa11c45313090ab7052423171e6308fc2116f48aeeff6",
+    "ml-service/models/__init__.py": "84d742a5c24f201f9d4abe6f01d0c48edfe604eccf96ae3ed5ae950faf801ee3",
+    "ml-service/models/base.py": "dfffbbada8a0bf44ba92e832416da076ad0a39bdf61cd381e12b2f0b72e5b909",
+    "ml-service/models/ensemble.py": "4c33c516517298703ec0c0d0701a4f0f78ac427a986a8e8dd17f7a320f1496da",
+    "ml-service/models/iforest.py": "d4a1d33068b6c27e0a6282c266165f02bdeca948038df383506b53ec78541e06",
+    "ml-service/models/ocsvm.py": "43527400c97cfd180e054322e04d15a0ca39f97d8efa2f38cebc5207ea11168e",
+    "ml-service/models/zscore_ewma.py": "91028bf208d414873b4e8386e17fe45876db7e1e2944cd80608d44e93248d950"
+  },
+  "source_sha256": {
+    "app/scripts/legacy-ml-upgrade.ps1": "63e2508f1fababb70d9c12b308ee222f374f64a180c87ee9e3213958fa5bca1b",
+    "app/scripts/legacy-ml-upgrade-lab.py": "505f8c8c4696358d3223c445437b77695d6d54a82638e431441ee691ca04cc59",
+    "app/scripts/windows-upgrade-baseline.py": "187aae09e10c79657a433e9df645a6c2bf3933251a2323b5aede2f3eef497f28",
+    "app/scripts/windows-upgrade-lab.mjs": "58c8dc0f038d9480f7475418385d8066dc07c07f375a04f87b0cdb65ee30a8e3",
+    "app/scripts/windows-release-lab/upgrade-app.mjs": "01f3b3be2ccc7d6e2e1150db326efcaa6b4fb84c1994d053e43a7903b5e9d12b",
+    "app/resources/installer.nsh": "e6e5db29587b15b1fd4a7b7b6d2210c62e13568f1dc711e8ecd92d970d4b8a82",
+    "app/resources/legacy-ml-policy.json": "4b426e92adf9991f87a780ea13a5343054382369be44439f87d4d6f64ec14045",
+    "app/electron-builder.yml": "5be43e1dd8f28699ceb1a53cea27a56720abfb44a81be2bad13497ee264d9ef3",
+    "app/package.json": "6e462d4442a8e4fdc796e11c639ab72ab57480530f1deab9a5fda19a9ed8c469",
+    "docs/contracts/ml-runtime-artifact.ts": "456c15c1f48d3d14a3cc242c4e11630f19a9b7e0c6886da7e98195a1a81f8383"
+  },
+  "raw_evidence": {
+    "app/.out-scripts/r11c-migration-final.log": "5727870d792616796ac629c68321dd6b02fbcca90490d0a9167f006a232f3488",
+    "app/.out-scripts/r11c-focused.log": "b5b86bc829b711f0606be0c2082a018ab248474bbf6f42d437ce42031b2f38e7",
+    "app/.out-scripts/r11c-current-build.log": "c7700886e9ef61b78af7b37128875c167ef1f3809c4a0f6cf496b7d3bce25843",
+    "app/.out-scripts/r11c-old-build.log": "6e29589e8cdd95ebbfeb8735c4e8955d06df42ab37ed48654758dd7c6880747a",
+    "app/.out-scripts/r11c-package.log": "bf4154995c016c1cdf6c6a9c0ded4c1d06d33d2ddf793e0caecb86a09ce5a484",
+    "app/.out-scripts/r11c-upgrade-build.log": "33619aa349f2802fca5dd2f887ef61056bfa8e7cb107f260d812472374d9947c",
+    "app/.out-scripts/r11c-upgrade-run.log": "512f7c819856a9e5966aa73bd47118be0533efe63008abcec92168a2a376e99c",
+    "app/.out-scripts/r11c-upgrade-resume.log": "67b190e848cc65a002d4099dc3de1415ae8611d1ede6445a34ee8b92bef93322",
+    "app/.out-scripts/r11c-artifact-audit.log": "e8ae3655da8b7dfd416e75a73bc65ae15d678568d09de1a1a7406f1370942968",
+    "app/.out-scripts/r11c-signature.json": "1592042d17b6ea58d036a367228d1069202632dec4f06a3d7614a34a1fa33332",
+    "app/.out-scripts/r11c-powershell-syntax.json": "b01e22c32f3bdb11cd4e85647a972613a4514ce43c9c2920072637dc4c93e5e2",
+    "app/.out-scripts/r11c-lint-js.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r11c-format-js.log": "2d2b49523d55607850cfe2c39a696ffeade4f9acbc47fa256b0de410683eae85",
+    "app/.out-scripts/r11c-format-check.log": "fbdd37869c73ce85afb11ffefa058e0181874c073fdfee7d7a4b5086b7ea3b1b",
+    "app/.out-scripts/r11c-negative-replay.log": "f54aec2015458f2784751ac66df6b32d9cf6ade54796e1e47ef9da99d985d0c8",
+    "app/.out-scripts/r11c-negative-fresh-replay.log": "47f3afec81fbae127fa1970512aefce96e16a478c15d6b2a1ff4d0860bbf2ea6",
+    "app/.out-scripts/r11c-ruff-final.log": "af352a86840ad0af3d37ea0d9197f868363a6dac6b1c2ef5d2722f6b41d2d9af",
+    "app/.out-scripts/r11c-ruff-format.log": "1ba32d724ec0aa587aba7888f97338980bc34aae522616cf9f35d4e0b38e574d",
+    "app/.out-scripts/r11c-scripts-type.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r11c-negative-cli.log": "7851ed8062ded34c735157055d012cc814f547c0629ca398d0ff9f22d046f639",
+    "app/.out-scripts/r11c-negative-record.log": "1322112cdd4a50d68529e512dac46129297545f392741e0ecff45128fddfdce4",
+    "app/.out-scripts/r11c-negative-baseline.log": "a7f58d025a02fc6b185f65c52cc74a6972e0d9bcf8627bd9f76ac8e74ed61e1d",
+    "app/.out-scripts/r11c-negative-migration.log": "369f0d5e339600d9a8d40b6e4ac43485425d19dd02a258bcc86fc213d6729a22",
+    "app/.out-scripts/windows-upgrade-baseline/build-qjf84w0l/result.json": "5504c72ffc32aec6d37d050a0a6c3d949e9228b2bb48d30d1f3017cc2ac7a9f2",
+    "app/.out-scripts/windows-upgrade-lab/d2157c31faaf/plan.json": "49b6067dc26161bf031f73c036640c29075b825de6bfc5e4ee8579ab073c5573",
+    "app/.out-scripts/windows-upgrade-lab/d2157c31faaf/result.json": "a7375bb02e175ec6c4034dbb5363950f2be4e4efbe2e7d253a43791932f5d86c",
+    "app/.out-scripts/windows-upgrade-lab/d2157c31faaf/failed-first-launch.json": "fd0f129a3292fb221a7f9d70ef55a768c80f5b60df84742b7993345938ffc8c4",
+    "app/.out-scripts/windows-upgrade-lab/d2157c31faaf/old.json": "d41fda69d56d7918a01c1f32356688722f57aa86b992ba6b5d1475654968d7e5",
+    "app/.out-scripts/windows-upgrade-lab/d2157c31faaf/new.json": "5d2c0602ccb31a1550dcd4ddd9df5840ba704042803394b4c6399ec52e3501ee"
+  },
+  "screenshot": {
+    "path": "docs/ui-redesign/screenshots/r11c/r11c-upgraded-0.2.0.png",
+    "sha256": "083df6615ff6553a72b0ead01597644e55f5bd6873b50efda72f374f674c1ffc"
+  }
+}

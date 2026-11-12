@@ -1,5 +1,7 @@
 # Kiểm chứng full application và NSIS Windows
 
+Từ R11c, bản ứng dụng0.2.0 có bước bảo toàn legacy model trước old uninstall. [Compatibility policy và upgrade lab](UPGRADE.md) đã kiểm actual source predecessor0.1.0→0.2.0 trong namespace riêng; ordinary uninstall đã self-delete cả folder/registry fixture. Kết quả này không thay Windows độc lập/default production identity trong checklist bên dưới.
+
 R11b dùng chính bản `OpsPilot.exe`/`app.asar` do electron-builder tạo, không dùng một Electron host thay Main hoặc mock IPC/SQLite/ML. Giao diện là production App.tsx, preload và handler thực; CDP chỉ điều khiển qua loopback trong thời gian lab. Profile và HOME riêng, PATH chỉ System32, không truyền credential hoặc dùng VPS. Native SQLite031/safeStorage/ML bundled phải chạy trước khi test nhận PASS.
 
 ## Build và thử bản đầy đủ trên máy phát triển
@@ -32,7 +34,7 @@ Installed full app chạy lại toàn bộ gate phía trên; giữa hai lượt 
 
 Dùng Windows VM/máy khác không có môi trường dev. Windows account mới giúp kiểm profile/DPAPI mới, nhưng nếu vẫn trên máy phát triển thì không tự chứng minh hệ điều hành/môi trường độc lập. Profile riêng của lab cũng chỉ chứng minh isolation.
 
-1. Copy **production installer** cùng SHA256SUMS từ thư mục build; so SHA bằng `Get-FileHash .\OpsPilot-0.1.0-setup.exe -Algorithm SHA256`. Không dùng installer có tên Release-Lab để nghiệm thu release thực.
+1. Copy **production installer** cùng SHA256SUMS từ thư mục build; so SHA bằng `Get-FileHash .\OpsPilot-0.2.0-setup.exe -Algorithm SHA256` cho bản hiện hành. Không dùng installer có tên Release-Lab để nghiệm thu release thực.
 2. Ghi Windows version/architecture, xác nhận không cài Python/Node riêng. Không cần cài các tool này để chạy app. Nếu có môi trường dev cũ, ghi rõ và không gọi là clean-machine PASS.
 3. Cài và mở app bằng shortcut bình thường, không truyền profile override/debug flags. Xác nhận không crash/blank screen hoặc yêu cầu Python/.venv; Apps/VPS ban đầu rỗng, Settings đổi ngôn ngữ/theme được.
 4. Qua PowerShell `Invoke-RestMethod http://127.0.0.1:8765/health` (hoặc8766/8767 nếu port bận), xác nhận ML status/version. Task Manager phải cho thấy Python con nằm trong resources/ml-runtime của bản cài, không từ một Python cài riêng.

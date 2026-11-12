@@ -17,3 +17,16 @@ export interface MlRuntimeManifest {
  * resources. Missing/hash-mismatched artifact refuses packaged launch/packaging;
  * never fall back to global Python or developer .venv. No IPC/API/schema change.
  */
+
+/**
+ * Nâng cấp Windows: trước khi NSIS gỡ bản cũ, migration đọc riêng
+ * <installation>/resources/ml-service/state. Chỉ nhận service source pins và
+ * scientific-library versions trong chính sách đóng gói đã duyệt; không chạy
+ * Python/pickle hoặc script trong bản cũ để kiểm chứng. Dữ liệu bounded/no-link,
+ * deployment IDs dương và đúng cặp state.pkl/meta.json; ghi vào userData/ml-state
+ * bằng staging + atomic directory rename, giữ nguyên nguồn. Target đã có chỉ
+ * được chấp nhận khi cùng bytes, không merge/ghi đè model khác. Conflict, app
+ * đang chạy, state không hoàn chỉnh hoặc nguồn không được duyệt phải abort
+ * installer trước uninstall, với hướng dẫn giữ nguyên bản cũ và sao lưu.
+ * Không tự chuyển profile/key giữa Windows accounts hoặc đổi feature/model.
+ */

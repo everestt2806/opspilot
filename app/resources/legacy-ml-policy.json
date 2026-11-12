@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "source_commit": "d302ee39f13ee369b308582994c4554636ea7892",
+  "feature_version": "v1-5metrics-4feats-w20",
+  "source_sha256": {
+    "main.py": "23ab986ef55a04b4aa52e514157ca06e4a9d15d2f9e49078fba707c2ed780660",
+    "config.py": "6778d8e6357ded1451897726df803c6ebf17cb1724d313f7e41330d6435fe6f2",
+    "features.py": "586abde831ca0aacd9905ed69ccd7c3b3b94469721ea3473f82f7c550563f489",
+    "store.py": "f3b7618038047a6cfc1fa11c45313090ab7052423171e6308fc2116f48aeeff6",
+    "models/__init__.py": "84d742a5c24f201f9d4abe6f01d0c48edfe604eccf96ae3ed5ae950faf801ee3",
+    "models/base.py": "dfffbbada8a0bf44ba92e832416da076ad0a39bdf61cd381e12b2f0b72e5b909",
+    "models/ensemble.py": "4c33c516517298703ec0c0d0701a4f0f78ac427a986a8e8dd17f7a320f1496da",
+    "models/iforest.py": "d4a1d33068b6c27e0a6282c266165f02bdeca948038df383506b53ec78541e06",
+    "models/ocsvm.py": "43527400c97cfd180e054322e04d15a0ca39f97d8efa2f38cebc5207ea11168e",
+    "models/zscore_ewma.py": "91028bf208d414873b4e8386e17fe45876db7e1e2944cd80608d44e93248d950"
+  },
+  "packages": {
+    "numpy": "2.5.1",
+    "scipy": "1.18.0",
+    "scikit_learn": "1.9.0",
+    "joblib": "1.5.3"
+  }
+}
