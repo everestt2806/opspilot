@@ -1,0 +1,134 @@
+{
+  "checkpoint": "R7a",
+  "date": "2026-11-12",
+  "base_commit": "b7163d92e4fc7580b8dca5f388f47b78c5bb072c",
+  "status": "LOCAL_SPA_TEMPLATE_ROUTING_PASS",
+  "review": "PENDING",
+  "behavior": "Generated static SPA image requires real dist/index.html, nginx falls back client routes to index, serves declared/static missing assets as404 and index as no-cache.",
+  "limits": [
+    "This is an actual local Docker Linux build/run/HTTP and Chromium/Electron browser gate with production source-tree/detector/template/Git snapshot code. It is not full OpsPilot deploy wizard/Main/SSH/deployment history/rollback or a live VPS rollout.",
+    "Git uses an actual private local fixture repository and exact detached fullSHA through the production local-fixture snapshot export; it does not prove public GitHub authentication/fetching or always-on Product auto-deploy. Folder and Git artifact hashes match.",
+    "Product source registration/preflight/render still explicitly supports Express without DB only. No Product framework gate, contract, schema, detector or installed controller release was opened or changed. R7 overall remains OPEN for parity/DB/env/custom Dockerfile/live acceptance.",
+    "Template scope is ordinary Vite dist/root serving. No custom output/base path/API reverse proxy or runtime secret-env feature is added. Missing assets404 cover /assets/ and declared static extensions; other client routes fall back to index.",
+    "Baseline eeda589b738b was run before the template fix. The final CLI can reproduce the same two bugs using readonly Git extraction of the exact predecessor template, verified again in fd2d754683a2 without checkout/reset.",
+    "Initial fixed-template run3d489af9ebf0 passed local/Git HTTP but browser driver timed out. A minimal actual Electron probe observed top-level await-whenReady branch readyfalse/exit2 and then branch readytrue/exit0. Driver was corrected without changing nginx or removing assertions; finala29e9ec09854 passed all5checks including proof of the exact missing-index rejection message. This is a host-specific demonstrated startup ordering issue, not a claim that all top-level await is unsupported.",
+    "Docker Desktop was initially stopped and started through its supported CLI. Only nonce-labeled containers/images and owned source/snapshot/browser profile were removed. Shared base images/build cache and the daemon are kept; no global prune, VPS or production DB/profile mutation.",
+    "The existing0.2.0 installer and installed VPS controller were not rebuilt/rolled out with this template fix. Their earlier evidence remains scoped to their own artifacts. No signed release/clean-machine/ML pilot or full-suite rerun claim."
+  ],
+  "baseline": {
+    "first_record": "eeda589b738b",
+    "reproducible_record": "fd2d754683a2",
+    "template_sha256": "a3c5cf2585ddca71d7e316c71e733c46c104ed929e12b0c88ab07f24d8d0e4af",
+    "checks": [
+      "baseline_root_and_real_asset_work_but_direct_client_route_is_404",
+      "baseline_missing_index_builds_and_serves_stock_nginx_welcome"
+    ]
+  },
+  "native": {
+    "status": "PASS",
+    "mode": "fixed",
+    "record": "a29e9ec09854",
+    "checks": [
+      "local_production_detector_render_docker_root_deep_query_head_real_asset_mime_missing_assets404_and_index_no_cache",
+      "git_production_detector_render_docker_root_deep_query_head_real_asset_mime_missing_assets404_and_index_no_cache",
+      "actual_browser_direct_client_route_renders_app_script",
+      "actual_browser_reload_preserves_client_route_and_query",
+      "build_refuses_artifact_without_index_html"
+    ],
+    "baseline_template_sha256": "bfb5c3e77b5af306f10ec46797b5777396a92be15bbee8aeea44ea999d7e9ba3",
+    "production_database_used": false,
+    "vps_used": false,
+    "local": {
+      "image_id": "sha256:3573584003c21bf99c7e18125e662c9aba1ff01e79d2a28b21b4f43d4f5a8816",
+      "container_id": "898c7c00c30a0a92d92933cc1c268c9ee02107ce7ca2e578fa33f6b16efcf69a",
+      "source": "actual local",
+      "asset_sha256": "ab69b7acabf79f75a2cf1f8e573b8629459820963ad9e50e9d051dcd3b6c1a31",
+      "root_sha256": "ed03f242bd6013227158dc5adb86ed4c705b74e1a97bad9c4dcada19c5c05abd"
+    },
+    "git_commit_sha": "a2b5806112f6f6d0f583053e6a26cd16eab22956",
+    "git": {
+      "image_id": "sha256:3f690389f420de1937def58824060127e1fb10abbb25479991d3224009555589",
+      "container_id": "639ee8f7bf4de6a79149ffed1a579d6ed21754caa3c889f35db90332ff6eb436",
+      "source": "actual git",
+      "asset_sha256": "ab69b7acabf79f75a2cf1f8e573b8629459820963ad9e50e9d051dcd3b6c1a31",
+      "root_sha256": "ed03f242bd6013227158dc5adb86ed4c705b74e1a97bad9c4dcada19c5c05abd"
+    },
+    "missing_index_guard_observed": true,
+    "owned_resources_removed": true
+  },
+  "browser": {
+    "status": "PASS",
+    "checks": [
+      "actual_browser_direct_client_route_renders_app_script",
+      "actual_browser_reload_preserves_client_route_and_query"
+    ]
+  },
+  "environment": "29.4.3 linux amd64",
+  "gates": {
+    "focused_tests": {
+      "passed": 135,
+      "files": 3
+    },
+    "types": [
+      "node",
+      "web",
+      "scripts",
+      "spa-template-lab"
+    ],
+    "eslint": {
+      "files": 3,
+      "errors": 0,
+      "warnings": 0
+    },
+    "prettier_files": 4,
+    "node_syntax_files": 2,
+    "build": "PASS",
+    "negative_cli": "exit2 before scratch/Docker mutation",
+    "owned_containers_images_remaining": 0,
+    "full_suite": "Not rerun; scoped template tests and actual image/browser/error paths were used. Application runtime source is unchanged."
+  },
+  "source_sha256": {
+    "templates/static-spa.Dockerfile": "bfb5c3e77b5af306f10ec46797b5777396a92be15bbee8aeea44ea999d7e9ba3",
+    "app/scripts/spa-template-lab.mjs": "7228e14a18d38d62ed7b3e6943fc9a672e330d5e9411a422b056b729821587f2",
+    "app/scripts/spa-template-lab/subject.ts": "329e633d25928893c87b796ccd639e563104ba6c4ca54cc1de1b8be56eb36d5a",
+    "app/scripts/spa-template-lab/browser.mjs": "35601d561ae4e7c60c2f278b5b1167b5267488e1fd587166908a6cacd84ad18a",
+    "app/scripts/spa-template-lab/tsconfig.json": "7a4c81bd371437e529ac8a00b76423e39add58d94d47a76a44ce599df1556961"
+  },
+  "unchanged_runtime_sha256": {
+    "app/src/main/detectors/static-spa.ts": "92e6d983bcb52944fe53262415f8927ef43dddfde075924f41851338845d0fd4",
+    "app/src/main/deploy/templates.ts": "cd5838b99f15c789ad0669d33f96a977ed41fb09f29791fb9b82f0c11056dfa9",
+    "app/src/main/git/snapshot.ts": "d259731f6c7bc0c1495632b651cef15740b0d78efc362d621d40d3140077d8f5",
+    "app/src/main/deploy/pipeline.ts": "e5be579fb85b8dbe24487340cf74cc4b48ff3073871272aa8eb0a0cf488c0d3a",
+    "app/src/main/controlPlane/productPipelineSourceRender.ts": "48acd1bc92b2fc49c615257e71bb54eaab9a22da4395a0dbbd458781d44a9c41"
+  },
+  "raw_evidence": {
+    "app/.out-scripts/r7a-baseline.log": "86e5914ce9055965649b9414bac495c6e98cfe2ad3fd926d62df0559df9d613e",
+    "app/.out-scripts/r7a-baseline-repeat.log": "2511eda145af1029d537d7ced3a213ba996149de1bbd7ced7f27bbe310322623",
+    "app/.out-scripts/r7a-native-first.log": "531658446f5c4be5f8100f9ce0bb9f6d3cf1f4cdf1e545459c9bf14a0a3e25b2",
+    "app/.out-scripts/r7a-native-final.log": "465c8a2aa88da8dd3cc4dc3ce171912a40be039d6739995d32ad0f4b9d2b623f",
+    "app/.out-scripts/r7a-ready-probe.log": "48bff99504ae712bcb01bdfc7b60a7bef058abafb6c98f902b340c5d9c03b01d",
+    "app/.out-scripts/r7a-focused.log": "353ae0c91ae834ab05692c2fa304b6fad8600a68fa3c8e86498e055057d6ddde",
+    "app/.out-scripts/r7a-build.log": "f54beae970967ca1fb2750fafd6fe691bb7538e1e67e8a23cd35a924bd9259e7",
+    "app/.out-scripts/r7a-scripts-type.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7a-lab-type.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7a-lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7a-format-check.log": "fbdd37869c73ce85afb11ffefa058e0181874c073fdfee7d7a4b5086b7ea3b1b",
+    "app/.out-scripts/r7a-negative-cli.log": "ff3a148fbc4b293c172ac3ee684e848e13b1fd0894979ae35f8f25f917c493f2",
+    "app/.out-scripts/r7a-docker-version.log": "685b85729c1959335140ae2121e6b0c7bc98d98e8c672ecafe3b790377d4d00b",
+    "app/.out-scripts/spa-template-lab/eeda589b738b/result.json": "5f94f26944257c19a0cd1e6c6829b12e8b548fde5a0bb29133aaa9efd9226ef5",
+    "app/.out-scripts/spa-template-lab/fd2d754683a2/result.json": "123c41e19dd28c7140ad76a121fecc4cbac6a3edfdca38f95efd9c12aa363e44",
+    "app/.out-scripts/spa-template-lab/a29e9ec09854/result.json": "6174c42b292588c9a1589fd1ab6a60279bd3953ebcc98f6e26f009f9396da4bd",
+    "app/.out-scripts/spa-template-lab/a29e9ec09854/browser-result.json": "07dedeb100bf9345cdfda22f77469da376f8a4e69ebb58fad555eeebc3b0135a",
+    "app/.out-scripts/spa-template-lab/a29e9ec09854/browser.log": "2a5222a0dd2400f31aae17bc0ad61e08446faa9e86bc9862ba8b0740cfa05283",
+    "app/.out-scripts/spa-template-lab/a29e9ec09854/local-build.log": "98441aa738234bce12a80111616e46cc611f51e7e8ed5d49c3bc5b5a0a20f4e5",
+    "app/.out-scripts/spa-template-lab/a29e9ec09854/git-build.log": "2e4da94620c6adb9bfc9cf484337f1b20e3d2bd4b3758fd7ea44a960f3bd0d86",
+    "app/.out-scripts/spa-template-lab/a29e9ec09854/missing-index-build.log": "76618594770d1e1f6ef1705624b7ae792310f2d138d80bb9c5f97f1372b026ca",
+    "app/.out-scripts/spa-template-lab/3d489af9ebf0/result.json": "6a2d51e7bb80b8909c459c5ab956f922304e0b66761b24be111b7e0949c12d4e",
+    "app/.out-scripts/spa-template-lab/3d489af9ebf0/browser.log": "2a5222a0dd2400f31aae17bc0ad61e08446faa9e86bc9862ba8b0740cfa05283"
+  },
+  "screenshot": {
+    "path": "docs/ui-redesign/screenshots/r7a/r7a-spa-deep-route-reload.png",
+    "sha256": "6ed22395a2fe3fc4c838c62723c18fb76f604097c26e3722d91b74ec63aff07c",
+    "kind": "actual isolated Electron BrowserWindow after client-route reload"
+  }
+}
