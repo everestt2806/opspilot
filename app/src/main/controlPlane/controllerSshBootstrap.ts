@@ -352,7 +352,9 @@ export async function callControllerUpgrade(
   )
     throw new ControllerBootstrapError('BOOTSTRAP_CONFLICT')
   const { release_directory: _path, ...wireRequest } =
-    request.operation === 'upgrade' ? request : { ...request, release_directory: undefined }
+    request.operation === 'upgrade' || request.operation === 'recover-upgrade'
+      ? request
+      : { ...request, release_directory: undefined }
   void _path
   const bytes = Buffer.from(JSON.stringify(wireRequest))
   if (bytes.length > 4096) throw new ControllerBootstrapError('BOOTSTRAP_LIMIT')
@@ -390,6 +392,7 @@ export async function callControllerUpgrade(
 export async function administerInstalledController(
   input: BootstrapInput & { request: InstalledControllerAdminRequest }
 ): Promise<unknown> {
+  input = { ...input, expectedIdentity: { ...input.expectedIdentity } }
   let bytes: Buffer
   try {
     locatorSchema.parse(input.locator)
@@ -407,6 +410,8 @@ export async function administerInstalledController(
     throw new ControllerBootstrapError('BOOTSTRAP_INPUT_INVALID')
   }
   const locator = { ...input.locator }
+  if (!!input.request.authority.revision !== (input.purpose === 'upgrade'))
+    throw new ControllerBootstrapError('BOOTSTRAP_INPUT_INVALID')
   return withBootstrap(
     { ...input, expectedIdentity: { ...input.expectedIdentity } },
     'admin',
@@ -414,6 +419,7 @@ export async function administerInstalledController(
       await wire.sendFrame({
         format: 1,
         operation: 'admin',
+        ...(input.purpose ? { purpose: input.purpose } : {}),
         ...locator,
         request_size: bytes.length
       })

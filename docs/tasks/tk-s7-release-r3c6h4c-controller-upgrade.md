@@ -4,6 +4,41 @@ START11/11/2026 — Base `f470a05`, product-mode/task-discipline. User yêu cầ
 
 ## Phạm vi và checkpoints
 
+START12/11/2026 — Base `db95d10`, tiếp c-2b bằng lát c-2b1: root admin bridge cho current upgraded revision và explicit same-key recovery khi transport mất trước root journal. Task-discipline, không production VPS/DB, không API binding/UI ngầm.
+
+### Ledger c-2b1 — runtime authority và khôi phục trước root journal
+
+| Yêu cầu | Điều kiện nhận | State |
+|---|---|---|
+| Contract/authority | Additive revision authority + original flock xuyên service-UID admin; focused69 gồm historical/unsettled/maintenance reject và native12 gồm current/rolled-back status, wrong UID/payload, stopped reject | PASS |
+| Recovery | Native actual SSH close trước Python/root exec: missing journal + attempted giữ nguyên, wrong parent không tạo journal, explicit same-key recover rồi lostreply/cold inspect/PID preservation | PASS |
+| SSH bridge | Native12 current source receiver/updater/Main, purpose upgrade admin/pin/runtime-derived fixed paths/safe result; original admin path unchanged, original receipt/key/DB inode preserved | PASS |
+| Verification | Full2182PASS/2existingLinux-onlySKIP/0FAIL,69focused/4files,10types/ESLint11/build/builder/2negativeCLI/Ruff/native12 PASS; cleanup/source hash proof | PASS |
+| Handoff | Board/FR/master/HANDOFF/parent/proof đồng bộ; Kim coauthor/normal checkpoint push, SHA qua `git log -1 -- app/src/main/controlPlane/controllerInstalledAdmin.ts`; Main revision binding/rebind/UI/Electron/live mở | PASS |
+
+UPDATE12/11 — Implemented additive root revision authority/inspected callback under original flock; exact current settled/ready runtime rồi setpriv service UID mới chạy unchanged Python admin verifier. Original admin path unchanged. Explicit recover từ verified namespace có thể tạo missing journal sau fresh parent attestation; same key/attempt giữ nguyên. Focused4files/62tests PASS và ESLint10files PASS;10types/native đang chạy. Chưa claim root admin được Main vault/UI sử dụng hoặc VPS live đã upgrade.
+
+UPDATE12/11 — Lượt native đầu `687e60979a48`11checks PASS/cleanup root-unit-account true, actual SSH disconnect trước Python/root exec giữ attempted, wrong parent recover không tạo journal, explicit same-key recover/lostreply→cold Main inspect/PID preservation; revision admin status trên current và restored parent, wrong UID/payload rejected. Source cuối thêm gate settled/current/ready validator + stopped-service native negative; focused69PASS/4files, final10types/ESLint11/build/builder/2negativeCLI/Ruff PASS. Native cuối và full gate chưa hoàn tất tại thời điểm nhật ký này.
+
+UPDATE12/11 — Native source cuối `a8749884a878`12checks PASS,23compressed SSH commands/max11142bytes, root/unit/account removed=true. Same original identity/key/DB inode và root receipt; status admin read-only actual service UID trên current/rolled-back runtime, stopped controller không bị start bởi admin.0Productapps/targets/productionDB/VPS, không enrollment/rotation/Docker/reboot/UI claim. Full Vitest cuối đang chạy; root updater CLI build pin `7b19cefec8abce4d9dbba21ec234949fd4ae8783d9994cba817701e5f32a71d0`, old packaged installer/pins không đổi. Không migration/dependency/template/helper change.
+
+## HANDOFF12/11 — c-2b1 DONE scoped / CHỜ REVIEW
+
+- Ledger c-2b1 đạt5/5PASS, không accepted exception. [Proof/source hashes](../ui-redesign/r3c6h4c2b1-verification.json); SHA dùng `git log -1 -- app/src/main/controlPlane/controllerInstalledAdmin.ts`. Đây là root backend/SSH, chưa Main vault/current binding/UI/Electron hoặc VPS rollout. c-2b2/c-3 và parent6h4/R3 còn mở.
+- `pnpm --prefix app exec vitest run --maxWorkers=4 --reporter=default --reporter=json --outputFile.json=.out-scripts/r3c6h4c2b1-full-final.json` →161files PASS/1SKIP (162),2182tests PASS/2SKIP (2184),290.00s;69focused assertions/4files nằm trong lượt full cuối. Hai skip Caddy Linux-only có sẵn, không thêm skip/nới timeout. Logs cùng prefix trong `app/.out-scripts/`.
+- `. ./tools/enter-node22.ps1`; `pnpm --prefix app exec tsc --noEmit -p <project> --composite false` →10projects trong proof PASS; logs `r3c6h4c2b1-final-type-*.log`. `pnpm.cmd --prefix app exec eslint`11file →0error/0warning; `pnpm --prefix app build` PASS, raw `r3c6h4c2b1-final-lint.log`/`r3c6h4c2b1-final-build.log`. Ruff check + format --check bootstrap Python đều PASS.
+- Linux `build-controller-installer.mjs` tạo trusted root updater pin `7b19cefec8abce4d9dbba21ec234949fd4ae8783d9994cba817701e5f32a71d0`; negative recover thiếu authority và admin foreign-path đều trả safe error/expected exit1. Raw `r3c6h4c2b1-installer-final.log`, `r3c6h4c2b1-negative-{recover,admin}.log`. Original packaged resource/tool/pins không thay, không deploy updater này lên VPS.
+- [Native README](../../app/scripts/controller-upgrade-desktop-lab/README.md): root Linux/systemd/Node22, modules `/var/tmp/opspilot-p3e3a-runtime/node_modules`, golden original release/pin96a6a5 và verified candidatev4/pincb70e1 từ hồ sơ c-2a. Current source receiver/root updater/Main build trong fixture nonce; `app/.out-scripts/controller-upgrade-desktop/a8749884a878/result.json`12PASS, raw `r3c6h4c2b1-native-final.log`. Actual SSH disconnect trước Python/root exec; wrong parent không tạo journal; same-key recover/lostreply/cold Main/PID preservation; admin status current/restored parent, wrong UID/payload/stopped refusal.23compressed SSH exec/max11142bytes; root/unit/account removed=true.
+- Native admin positive chỉ read-only status,0Productapps/targets; không enrollment/rotation/Docker/OS reboot/production DB/VPS/UI claim. Không schema/migration/dependency/helper/template/collector change. Main binding/token không tự cập nhật; tiếp c-2b2 theo task bên dưới, sau đó live c-3. Normal checkpoint push theo quyền user, không PR/merge; personal untracked ngoài index.
+
+### Tiếp c-2b2 — Main revision authority và UI (chưa triển khai)
+
+- Main protected catalog phải có updater/release pin mới riêng; không đổi original catalog entry/resource bytes. `DesktopControllerUpgrades` phải được compose vào Desktop service, giữ generation/current SSH/cipher checks trước và sau mỗi await.
+- Binding intent giữ original installation reference và thêm explicit current upgrade operation authority. Vault phải chặn binding cũ khi current runtime đổi; chỉ hành động review/consent mới được cập nhật encrypted binding/token envelope. Không auto-enroll token mới, nới currentInstallation verifier, bỏ generation fence hoặc lấy `is_current` cache làm remote attestation.
+- Admin dispatch chọn đúng namespace/revision/root updater đã pin; root c-2b1 derive runtime/UID từ original receipt + current upgrade journal. Historical operation không là quyền admin; rollback outcome dùng parent runtime đúng payload/hash.
+- Explicit authority rebind khi credential/VPS ID đổi cần fresh pinned SSH/original-install/upgrade current evidence, giữ UUID/history/attempted, bump local epoch. Không gọi old inspector lên unit mới rồi sửa pin để né lỗi. API requests và kết quả đang bay phải bị fence khi epoch đổi.
+- IPC chỉ IDs/release ID/consent; UI4locale review→transfer→upgrade/inspect/explicit recovery/rollback, cảnh báo pause từng app và unknown. Thêm real isolated Electron flow trước live c-3. Scope c-2b1 backend pass không là Desktop feature đã xong.
+
 START12/11/2026 — Base `0e61286`, tiếp c-2. Dùng task-discipline; không truy cập VPS hoặc sửa runtime đã cài trong checkpoint này.
 
 ### Ledger c-2a — Main journal và pinned SSH upgrade transport

@@ -6,6 +6,12 @@ export type InstalledControllerAuthority = {
   controller_id: string;
   runtime_uid: number;
   payload_sha256: string;
+  /** c-2b1: operation in the upgrade namespace; its UUID is authority.request_key. */
+  revision?: {
+    installation_request_key: string;
+    parent_upgrade_key: string | null;
+    parent_release_sha256: string;
+  };
 };
 export type InstalledControllerAdminRequest = {
   format: 1;
@@ -29,4 +35,9 @@ export type InstalledControllerAdminRequest = {
  * No init/reset/reinstall, public admin API, privilege bypass or token logging.
  * Main stores request key + authority_revision with immutable binding intent;
  * current journal/profile/cipher checks apply before dispatch and after awaits.
+ * Revision admin keeps original installation flock across current upgraded journal/
+ * exact runtime/unit/UID attestation and the service-UID command. It accepts only
+ * is_current, settled active/rolled_back and ready running service; never historical
+ * cached evidence. release/tool pin refers to the upgrade staging namespace; payload
+ * pin must equal the runtime actually selected (may be parent after rollback).
  */

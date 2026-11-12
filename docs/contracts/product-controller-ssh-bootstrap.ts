@@ -77,4 +77,7 @@ export type ControllerBootstrapErrorCode =
  * /var/lib/opspilot-controller-upgrades/<UUID>, không thay singleton install transfer.
  * Receiver derive release_directory, không nhận path/UID/service từ request; upgrade/recover/rollback
  * cần consent:true, inspect-upgrade readonly. Reply upgrade_result/request_key/result strict DTO.
+ * c-2b1: purpose:'upgrade' also permits admin; header locator must match revision
+ * authority. recover derives verified staging release_directory for missing-journal
+ * explicit recovery, no caller paths. Original singleton admin unchanged.
  */

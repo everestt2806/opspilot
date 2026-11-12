@@ -16,6 +16,7 @@ export {
   transferControllerRelease,
   callControllerBootstrap,
   callControllerUpgrade,
+  administerInstalledController,
   controllerBootstrapScript
 } from '../../src/main/controlPlane/controllerSshBootstrap'
 export function labScript(nonce: string): { text: string; sha256: string } {

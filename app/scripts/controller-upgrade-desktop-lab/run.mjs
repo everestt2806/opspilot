@@ -124,6 +124,8 @@ const {
   SshManager,
   transferControllerRelease,
   callControllerBootstrap,
+  callControllerUpgrade,
+  administerInstalledController,
   renderControllerUnit,
   DesktopControllerInstallations,
   initializeDatabase,
@@ -166,6 +168,7 @@ let authentications = 0,
   compressedExecutions = 0,
   maxCommandBytes = 0,
   dropUpgradeReply = false
+let dropBeforeUpgrade = false
 const server = new Server({ hostKeys: [hostKey] }, (client) => {
   clients.add(client)
   client.on('error', (error) => {
@@ -194,6 +197,12 @@ const server = new Server({ hostKeys: [hostKey] }, (client) => {
       pythonOnlyExecutions++
       maxCommandBytes = Math.max(maxCommandBytes, Buffer.byteLength(info.command))
       if (info.command.includes('base64,zlib')) compressedExecutions++
+      if (dropBeforeUpgrade) {
+        dropBeforeUpgrade = false
+        const stream = acceptExec()
+        stream.on('data', () => client.end())
+        return
+      }
       const stream = acceptExec()
       const child = spawn('/bin/sh', ['-c', info.command], {
         env: { PATH: bin, LANG: 'C.UTF-8' },
@@ -427,8 +436,40 @@ try {
   assert(readFileSync(join(paths.state, 'receipt.json')).equals(originalReceipt))
   check('wrong_tool_pin_rejected_by_receiver_before_upgrader_execution')
   stage = 'lost-upgrade-reply'
-  dropUpgradeReply = true
+  dropBeforeUpgrade = true
   await assert.rejects(() => upgrades.send(upgradeKey, 'upgrade', true), {
+    code: 'BOOTSTRAP_OUTCOME_UNKNOWN'
+  })
+  assert(!existsSync(join(paths.state, 'upgrade.json')))
+  assert.equal(upgrades.list(key)[0].state, 'outcome_unknown')
+  await assert.rejects(() => upgrades.send(upgradeKey, 'upgrade', true), {
+    code: 'UPGRADE_INSPECT_REQUIRED'
+  })
+  const request = {
+    format: 1,
+    operation: 'recover-upgrade',
+    consent: true,
+    request_key: upgradeKey,
+    installation_request_key: key,
+    controller_id: installed.installation.controller_id,
+    parent_upgrade_key: null,
+    parent_release_sha256: releasePin,
+    release_sha256: newPin
+  }
+  await assert.rejects(
+    () =>
+      callControllerUpgrade({
+        ...upgradeInput,
+        request: { ...request, parent_release_sha256: '0'.repeat(64) }
+      }),
+    { code: 'BOOTSTRAP_CONFLICT' }
+  )
+  assert(!existsSync(join(paths.state, 'upgrade.json')))
+  check(
+    'disconnect_before_root_journal_keeps_attempted_and_wrong_parent_recovery_never_creates_journal'
+  )
+  dropUpgradeReply = true
+  await assert.rejects(() => upgrades.send(upgradeKey, 'recover', true), {
     code: 'BOOTSTRAP_OUTCOME_UNKNOWN'
   })
   assert.equal(upgrades.list(key)[0].state, 'outcome_unknown')
@@ -469,6 +510,87 @@ try {
   })
   assert.equal(desktopDb.prepare('SELECT count(*) n FROM desktop_controller_binding').get().n, 0)
   check('attempt_monotonicity_prevents_second_upgrade_and_does_not_rebind_api_credentials')
+  stage = 'revision-admin'
+  const current = upgrades.list(key)[0].last_result
+  const authority = {
+    request_key: upgradeKey,
+    release_sha256: newPin,
+    installer_sha256: locator.installer_sha256,
+    controller_id: current.controller_id,
+    runtime_uid: current.runtime_uid,
+    payload_sha256: current.runtime_payload_sha256,
+    revision: {
+      installation_request_key: key,
+      parent_upgrade_key: null,
+      parent_release_sha256: releasePin
+    }
+  }
+  const adminRequest = {
+    format: 1,
+    operation: 'admin',
+    authority,
+    command: { operation: 'status', payload: {} }
+  }
+  const admin = await administerInstalledController({ ...upgradeInput, request: adminRequest })
+  assert.equal(admin.ok, true)
+  assert.equal(admin.data.controller_id, current.controller_id)
+  await assert.rejects(
+    () =>
+      administerInstalledController({
+        ...upgradeInput,
+        request: { ...adminRequest, authority: { ...authority, payload_sha256: '0'.repeat(64) } }
+      }),
+    { code: 'BOOTSTRAP_INSTALLER_FAILED' }
+  )
+  await assert.rejects(
+    () =>
+      administerInstalledController({
+        ...upgradeInput,
+        request: {
+          ...adminRequest,
+          authority: { ...authority, runtime_uid: current.runtime_uid + 1 }
+        }
+      }),
+    { code: 'BOOTSTRAP_INSTALLER_FAILED' }
+  )
+  assert.equal(
+    fixed('/usr/bin/systemctl', ['show', unitName, '--property=MainPID', '--value']),
+    activePid
+  )
+  check(
+    'revision_admin_derives_current_runtime_after_root_attestation_and_rejects_wrong_uid_payload_without_restart'
+  )
+  stage = 'stopped-admin-guard'
+  fixed('/usr/bin/systemctl', ['stop', unitName])
+  await assert.rejects(
+    () => administerInstalledController({ ...upgradeInput, request: adminRequest }),
+    { code: 'BOOTSTRAP_INSTALLER_FAILED' }
+  )
+  assert.equal(
+    fixed('/usr/bin/systemctl', ['show', unitName, '--property=MainPID', '--value']),
+    '0'
+  )
+  fixed('/usr/bin/systemctl', ['start', unitName])
+  const until = Date.now() + 30000
+  for (;;) {
+    const inspected = await callControllerUpgrade({
+      ...upgradeInput,
+      request: {
+        format: 1,
+        operation: 'inspect-upgrade',
+        request_key: upgradeKey,
+        installation_request_key: key,
+        controller_id: installed.installation.controller_id,
+        parent_upgrade_key: null,
+        parent_release_sha256: releasePin,
+        release_sha256: newPin
+      }
+    })
+    if (inspected.service_state === 'running') break
+    assert(Date.now() < until, 'REVISION_RESTART_NOT_READY')
+    await new Promise((done) => setTimeout(done, 200))
+  }
+  check('revision_admin_rejects_stopped_controller_without_implicitly_starting_or_adopting_it')
   stage = 'rollback'
   const reverted = await upgrades.send(upgradeKey, 'rollback', true)
   assert.equal(reverted.state, 'rolled_back')
@@ -479,6 +601,18 @@ try {
   assert(readFileSync(join(paths.state, 'receipt.json')).equals(originalReceipt))
   assert(readFileSync(join(paths.data, '.controller-runtime-key')).equals(keyBytes))
   assert.equal(lstatSync(join(paths.data, 'opspilot.db')).ino, databaseInode)
+  const rollbackAdmin = await administerInstalledController({
+    ...upgradeInput,
+    request: {
+      ...adminRequest,
+      authority: { ...authority, payload_sha256: installed.installation.payload_sha256 }
+    }
+  })
+  assert.equal(rollbackAdmin.ok, true)
+  assert.equal(rollbackAdmin.data.controller_id, current.controller_id)
+  check(
+    'rolled_back_current_operation_admin_uses_restored_parent_payload_and_preserves_original_authority'
+  )
   check(
     'explicit_main_rollback_restores_original_unit_and_preserves_root_receipt_identity_key_database_inode'
   )

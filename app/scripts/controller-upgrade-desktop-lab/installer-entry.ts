@@ -1,5 +1,6 @@
 import { executeControllerInstallation } from '../../src/main/controlPlane/controllerInstallation'
 import { executeControllerUpgrade } from '../../src/main/controlPlane/controllerUpgrade'
+import { executeInstalledControllerAdmin } from '../../src/main/controlPlane/controllerInstalledAdmin'
 void (async (): Promise<void> => {
   const nonce = process.env.OPSPILOT_SERVICE_LAB_NONCE
   if (!nonce || !/^[a-f0-9]{12}$/.test(nonce)) throw Error('LAB_NONCE_REQUIRED')
@@ -17,11 +18,14 @@ void (async (): Promise<void> => {
     unit: '/etc/systemd/system/opspilot-upgrade-desktop-' + nonce + '.service',
     account: 'opsud' + nonce
   }
-  const result = ['upgrade', 'inspect-upgrade', 'recover-upgrade', 'rollback-upgrade'].includes(
-    input.operation
-  )
-    ? await executeControllerUpgrade(input, paths)
-    : await executeControllerInstallation(input, paths)
+  const result =
+    input.operation === 'admin'
+      ? await executeInstalledControllerAdmin(input, paths)
+      : ['upgrade', 'inspect-upgrade', 'recover-upgrade', 'rollback-upgrade'].includes(
+            input.operation
+          )
+        ? await executeControllerUpgrade(input, paths)
+        : await executeControllerInstallation(input, paths)
   console.log(JSON.stringify(result))
 })().catch((error: unknown) => {
   console.log(

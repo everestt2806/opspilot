@@ -39,6 +39,7 @@ import {
   verifyControllerRelease
 } from './controllerRelease'
 import { CONTROLLER_RELEASE_LIMITS } from '../../../../docs/contracts/product-controller-release'
+import { assertControllerUpgradeAdminReady } from './controllerUpgradeProtocol'
 
 const uuid = z.uuidv4().refine((v) => v === v.toLowerCase()),
   sha = z.string().regex(/^[a-f0-9]{64}$/),
@@ -66,7 +67,8 @@ const requestSchema = z.discriminatedUnion('operation', [
   z.strictObject({
     ...authority,
     operation: z.literal('recover-upgrade'),
-    consent: z.literal(true)
+    consent: z.literal(true),
+    release_directory: path.optional()
   }),
   z.strictObject({
     ...authority,
@@ -167,13 +169,30 @@ const exists = (file: string): boolean => {
 export async function executeControllerUpgrade(
   value: unknown,
   paths: ControllerInstallerPaths = controllerInstallerPaths,
-  hooks: { afterEffect?: (phase: ControllerUpgradePhase) => void } = {}
+  hooks: {
+    afterEffect?: (phase: ControllerUpgradePhase) => void
+    /** Trusted composition only, under the original installation flock. */
+    inspected?: (
+      result: Readonly<ControllerUpgradeResult>,
+      held: { uid: number; gid: number; lockFd: number }
+    ) => Promise<void>
+  } = {}
 ): Promise<ControllerUpgradeResult> {
   const request = parseControllerUpgradeRequest(value)
   const result = await executeControllerInstallation<ControllerUpgradeResult>(
     { format: 1, operation: 'inspect', request_key: request.installation_request_key },
     paths,
-    { guardedInstalled: (parent, held) => perform(request, paths, parent, held, hooks) }
+    {
+      guardedInstalled: async (parent, held) => {
+        const result = await perform(request, paths, parent, held, hooks)
+        if (hooks.inspected) {
+          if (request.operation !== 'inspect-upgrade') return fail('ADMIN_NOT_READY')
+          assertControllerUpgradeAdminReady(result)
+          await hooks.inspected(Object.freeze({ ...result }), held)
+        }
+        return result
+      }
+    }
   )
   if (!('installation_request_key' in result)) return fail('BASE_UNAVAILABLE')
   return result
@@ -696,7 +715,13 @@ async function perform(
     )
       return result()
   } else {
-    if (request.operation !== 'upgrade') return fail('NOT_FOUND')
+    if (!(
+      request.operation === 'upgrade' ||
+      (request.operation === 'recover-upgrade' && request.release_directory)
+    ))
+      return fail('NOT_FOUND')
+    const source = request.release_directory
+    if (!source) return fail('NOT_FOUND')
     const previous = exists(currentFile) ? readJournal(currentFile) : null
     const parentKey =
       previous?.phase === 'active'
@@ -714,14 +739,14 @@ async function perform(
           : base.release_sha256
     if (request.parent_release_sha256 !== parentPin) return fail('AUTHORITY_CHANGED')
     const oldManifest = verifiedRuntime(parentKey, parentPin),
-      candidate = verifyControllerRelease(request.release_directory, request.release_sha256)
+      candidate = verifyControllerRelease(source, request.release_sha256)
     assertControllerUpgradeCompatibility(oldManifest, candidate)
     if (!(await health(parentKey, 'ready'))) return fail('PARENT_NOT_READY')
     if (previous) archive(previous)
     const now = new Date().toISOString()
     journal = {
       ...request,
-      release_directory: request.release_directory,
+      release_directory: source,
       payload_sha256: candidate.payload_sha256,
       phase: 'prepared',
       before: null,

@@ -1,0 +1,166 @@
+{
+  "checkpoint": "R3c-6h4c-2b1",
+  "date": "2026-11-12",
+  "status": "ROOT_REVISION_ADMIN_EXPLICIT_RECOVERY_BACKEND_PASS",
+  "review": "PENDING",
+  "base_commit": "db95d1023d1a4ef35d30a5d4cc26c60e73c92f5c",
+  "scope": "Current settled/ready revision root admin under original installation flock through service-UID verifier, plus explicit same-key recovery when SSH disconnects before root journal creation",
+  "limits": [
+    "Backend only; Main API revision binding/current vault checks/explicit SSH authority rebind and IPC/UI/Electron remain next checkpoint",
+    "No production VPS/controller/Desktop DB changed; zero Product apps/targets in private fixture",
+    "Native positive admin command is read-only status; enrollment/credential rotation/product workload/OS reboot are not asserted",
+    "Native uses independently pinned golden old runtime and previously verified candidatev4; root upgrader/receiver/Main are built from current source",
+    "Current flag and ready/settled gate checked under root flock; tests cover historical and maintenance rejection; native covers stopped-service refusal without restart",
+    "No implicit API token rebind, catalog pin replacement, migration or dependency change; live rollout remains c-3"
+  ],
+  "full_tests": {
+    "numTotalTests": 2184,
+    "numPassedTests": 2182,
+    "numFailedTests": 0,
+    "numPendingTests": 2,
+    "success": true
+  },
+  "full_test_files": {
+    "total": 162,
+    "passed": 161,
+    "skipped": 1
+  },
+  "focused_files_covered_in_full": 4,
+  "focused_assertions_in_full": 69,
+  "skip_reason": "Two existing Caddy Linux-only tests on Windows; no new skips or timeout changes",
+  "typescript_projects": [
+    {
+      "project": "tsconfig.node.json",
+      "exit_code": 0
+    },
+    {
+      "project": "tsconfig.web.json",
+      "exit_code": 0
+    },
+    {
+      "project": "tsconfig.scripts.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/product-runtime-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-bootstrap-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-release-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-service-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-exposure-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-upgrade-lab/tsconfig.json",
+      "exit_code": 0
+    },
+    {
+      "project": "scripts/controller-upgrade-desktop-lab/tsconfig.json",
+      "exit_code": 0
+    }
+  ],
+  "eslint": {
+    "files": 11,
+    "exit_code": 0,
+    "errors": 0,
+    "warnings": 0
+  },
+  "ruff": {
+    "check": "PASS",
+    "format": "PASS",
+    "file": "app/control-plane-runtime/controller_ssh_bootstrap.py"
+  },
+  "production_build": {
+    "exit_code": 0
+  },
+  "trusted_installer_build": {
+    "exit_code": 0,
+    "sha256": "7b19cefec8abce4d9dbba21ec234949fd4ae8783d9994cba817701e5f32a71d0"
+  },
+  "negative_cli": {
+    "checks": 2,
+    "expected_exit_codes": [
+      1,
+      1
+    ],
+    "codes": [
+      "CONTROLLER_INSTALL_UPGRADE_INPUT_INVALID",
+      "CONTROLLER_INSTALL_ADMIN_INPUT_INVALID"
+    ]
+  },
+  "linux_native": {
+    "status": "PASS",
+    "scope": "PRIVATE_ROOT_SYSTEMD_PINNED_SSH_MAIN_SQLITE_UPGRADE",
+    "checks": [
+      "fresh_desktop030_and_native_controller029_have_separate_migration_roles",
+      "plan_prepare_and_absent_inspect_preserve_uuid_and_never_create_remote_upgrade_namespace",
+      "independently_pinned_upgrade_transfer_uses_distinct_uuid_namespace_preserving_original_install_staging",
+      "wrong_tool_pin_rejected_by_receiver_before_upgrader_execution",
+      "disconnect_before_root_journal_keeps_attempted_and_wrong_parent_recovery_never_creates_journal",
+      "lost_upgrade_reply_recovers_in_separate_cold_main_process_without_replaying_or_restarting_service",
+      "attempt_monotonicity_prevents_second_upgrade_and_does_not_rebind_api_credentials",
+      "revision_admin_derives_current_runtime_after_root_attestation_and_rejects_wrong_uid_payload_without_restart",
+      "revision_admin_rejects_stopped_controller_without_implicitly_starting_or_adopting_it",
+      "rolled_back_current_operation_admin_uses_restored_parent_payload_and_preserves_original_authority",
+      "explicit_main_rollback_restores_original_unit_and_preserves_root_receipt_identity_key_database_inode",
+      "archived_vps_authority_rejected_before_any_ssh_execution"
+    ],
+    "production_vps_used": false,
+    "production_database_used": false,
+    "fixture_root_removed": true,
+    "fixture_unit_removed": true,
+    "fixture_account_removed": true,
+    "python_only_path": true,
+    "ssh_authentications": 12,
+    "ssh_executions": 23,
+    "script_bytes": 35890,
+    "compressed_executions": 23,
+    "max_command_bytes": 11142
+  },
+  "old_release_sha256": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+  "candidate_fixture_release_sha256": "cb70e137d311e35d77a0d22f95252c94ab4579d44ce4b025bd22460a5e6a1d40",
+  "raw_evidence": [
+    "app/.out-scripts/r3c6h4c2b1-full-final.json",
+    "app/.out-scripts/r3c6h4c2b1-full-final.log",
+    "app/.out-scripts/controller-upgrade-desktop/a8749884a878/result.json",
+    "app/.out-scripts/r3c6h4c2b1-native-final.log",
+    "app/.out-scripts/r3c6h4c2b1-final-build.log",
+    "app/.out-scripts/r3c6h4c2b1-final-lint.log",
+    "app/.out-scripts/r3c6h4c2b1-installer-final.log",
+    "app/.out-scripts/r3c6h4c2b1-negative-recover.log",
+    "app/.out-scripts/r3c6h4c2b1-negative-admin.log"
+  ],
+  "raw_sha256": {
+    "app/.out-scripts/r3c6h4c2b1-full-final.json": "3f3dcbefaa0d2dcba0c1441c30b17bfcff8bf4bb1335d2768f2f5eccec7f8281",
+    "app/.out-scripts/controller-upgrade-desktop/a8749884a878/result.json": "e06ecf3c78e376f58fd68a7f842fc2e45b531c8802db6003547380661610717c"
+  },
+  "source_sha256": {
+    "app/control-plane-runtime/controller_ssh_bootstrap.py": "97428c823a6434c910194f3df6ff120b3820589c5d8a5c0f7f47331218689eb0",
+    "app/scripts/controller-upgrade-desktop-lab/entry.ts": "f01e636e6fcc6afd4deb61b250764ee9652f69cb2f852295a2c0551521b0669b",
+    "app/scripts/controller-upgrade-desktop-lab/installer-entry.ts": "b5510edd46433d24c9e43186e3952378f23aacd18dbcf99e2e8fbbc2c3ae0bcc",
+    "app/scripts/controller-upgrade-desktop-lab/run.mjs": "939f5889a18079a241669b91c06f3530ea1f0d0c3165e5e0d461fdf7d8d62c84",
+    "app/src/main/controlPlane/controllerInstalledAdmin.test.ts": "21da152f75b260578eeca283a10323735004e6fd19bd7a07ff5602021793470b",
+    "app/src/main/controlPlane/controllerInstalledAdmin.ts": "c78e6eb417e1e3bd29c575f6659fc32517759e11c10bb42edc8a782fef7cd83e",
+    "app/src/main/controlPlane/controllerSshBootstrap.test.ts": "3231d69126d6369fdd54590214efed938dc4e943d78aca7c352be8d1539b133c",
+    "app/src/main/controlPlane/controllerSshBootstrap.ts": "6e58042943f5a8cfe97756f2e371d1a462f495d8c64f6e833b149e839707c806",
+    "app/src/main/controlPlane/controllerUpgrade.test.ts": "af6d1701a697c1d246cf01e5da3d1ece022dd3c47942750871fcd4f7d2161871",
+    "app/src/main/controlPlane/controllerUpgrade.ts": "07362f665061829fb36d805b32844948fd564fa3801bc2a34e9ad04c43747a86",
+    "app/src/main/controlPlane/controllerUpgradeProtocol.ts": "5471717acb7eee7a534c25fdd8518fb5223e91fb4c6c430f28955ecf78fdf99e",
+    "app/src/main/controlPlane/installedControllerAdminProtocol.ts": "a838e6aeaea2065618d893f8e26209397989ad1f6a86e2aaa4a6e34c2b3c4b10",
+    "docs/contracts/product-controller-ssh-bootstrap.ts": "acf831251712b19f9a7c67cdb500c433f0c96b97eebb4dfc15355cebbaf084b1",
+    "docs/contracts/product-controller-upgrade.ts": "cd3ead9b56a84b4edf652dba0f9f9d389c391d8a4d35e7e3cfbd0cd42d51e608",
+    "docs/contracts/product-installed-controller-admin.ts": "5940a31dc3ba4a0458a02df4e15f2c2d05f78fbdfa114adb64491908ab4be21d"
+  },
+  "accepted_exceptions": []
+}

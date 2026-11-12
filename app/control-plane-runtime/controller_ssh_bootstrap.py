@@ -209,6 +209,7 @@ def request():
             "transfer",
             "status",
             "upgrade-call",
+            "admin",
         ):
             fail("INPUT_INVALID")
         common.add("purpose")
@@ -619,7 +620,10 @@ def run_installer(header, lock, admin=None):
         request["release_directory"] = os.path.join(TRANSFER_ROOT, "release")
     if operation in ("admin", "upgrade-call"):
         request = admin
-    if operation == "upgrade-call" and request["operation"] == "upgrade":
+    if operation == "upgrade-call" and request["operation"] in (
+        "upgrade",
+        "recover-upgrade",
+    ):
         request = {
             **request,
             "release_directory": os.path.join(TRANSFER_ROOT, "release"),
@@ -800,6 +804,9 @@ def main():
                 for key in ("request_key", "release_sha256", "installer_sha256")
             )
         ):
+            fail("INPUT_INVALID")
+        revision = admin["authority"].get("revision")
+        if bool(revision) != (header.get("purpose") == "upgrade"):
             fail("INPUT_INVALID")
     if header["operation"] == "discover":
         require_eof()

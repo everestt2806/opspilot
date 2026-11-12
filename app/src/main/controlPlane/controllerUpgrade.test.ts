@@ -21,6 +21,21 @@ const input = {
   release_directory: '/private/release'
 }
 describe('Trusted controller upgrade boundary', () => {
+  it('allows explicit recovery staging but never accepts it for inspection or rollback', () => {
+    expect(parseControllerUpgradeRequest({ ...input, operation: 'recover-upgrade' })).toMatchObject(
+      { operation: 'recover-upgrade', release_directory: input.release_directory }
+    )
+    expect(() =>
+      parseControllerUpgradeRequest({ ...input, operation: 'rollback-upgrade' })
+    ).toThrow('INPUT_INVALID')
+    expect(() =>
+      parseControllerUpgradeRequest({
+        ...input,
+        operation: 'recover-upgrade',
+        release_directory: '/tmp/../outside'
+      })
+    ).toThrow('INPUT_INVALID')
+  })
   it('accepts explicit upgrade and inspect/recover/rollback with the same immutable authority', () => {
     expect(parseControllerUpgradeRequest(input)).toEqual(input)
     const { release_directory: _path, consent: _consent, ...authority } = input

@@ -43,3 +43,17 @@ export const controllerUpgradeResultSchema = z.strictObject({
   node_path: path,
   data_directory: path
 }) satisfies z.ZodType<ControllerUpgradeResult>
+
+/** Gate dùng bởi trusted root composition; cached/historical result không có quyền admin. */
+export function assertControllerUpgradeAdminReady(
+  value: unknown
+): asserts value is ControllerUpgradeResult {
+  const parsed = controllerUpgradeResultSchema.safeParse(value)
+  if (
+    !parsed.success ||
+    !parsed.data.is_current ||
+    !['active', 'rolled_back'].includes(parsed.data.phase) ||
+    parsed.data.service_state !== 'running'
+  )
+    throw Error('CONTROLLER_INSTALL_UPGRADE_ADMIN_NOT_READY')
+}

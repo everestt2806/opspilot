@@ -12,7 +12,8 @@ export type ControllerUpgradeRequest = ControllerUpgradeAuthority & {
 } & (
     | { operation: "upgrade"; consent: true; release_directory: string }
     | { operation: "inspect-upgrade" }
-    | { operation: "recover-upgrade" | "rollback-upgrade"; consent: true }
+    | { operation: "recover-upgrade"; consent: true; release_directory?: string }
+    | { operation: "rollback-upgrade"; consent: true }
   );
 export type ControllerUpgradePhase =
   | "prepared"
@@ -82,6 +83,9 @@ export interface ControllerUpgradeGate {
  * blind re-stop after the parent unit becomes authoritative. rollback_commit_pending
  * permits either unit; if the parent is selected, reconcile/start it without
  * comparing business hashes from before a potentially successful restart.
+ * Explicit recover may supply verified staging for a missing journal: under original
+ * flock it freshly verifies current parent revision/pins/unit/health before creating
+ * this same UUID. No automatic retry or takeover of another incomplete operation.
  * No key regeneration. Old inspector may reject the changed unit; Desktop must use
  * the new trusted upgrader authority, never silently replace old pins/bindings.
  */

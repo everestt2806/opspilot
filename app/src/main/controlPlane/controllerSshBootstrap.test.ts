@@ -181,6 +181,57 @@ describe('Fixed pinned SSH controller bootstrap client', () => {
     ).rejects.toMatchObject({ code: 'BOOTSTRAP_OUTCOME_UNKNOWN' })
     expect(ssh.openProductBootstrapChannel).toHaveBeenCalledTimes(1)
   })
+  it('requires revision authority exactly when the upgrade staging namespace is selected', async () => {
+    const request: InstalledControllerAdminRequest = adminRequest()
+    request.authority.revision = {
+      installation_request_key: '44444444-4444-4444-8444-444444444444',
+      parent_upgrade_key: null,
+      parent_release_sha256: 'd'.repeat(64)
+    }
+    const { ssh, channel } = fixture('admin')
+    await expect(
+      administerInstalledController({
+        ssh,
+        vpsId: 1,
+        expectedIdentity: identity,
+        locator,
+        assertCurrent: () => {},
+        request
+      })
+    ).rejects.toMatchObject({ code: 'BOOTSTRAP_INPUT_INVALID' })
+    expect(ssh.openProductBootstrapChannel).not.toHaveBeenCalled()
+    await expect(
+      administerInstalledController({
+        ssh,
+        vpsId: 1,
+        expectedIdentity: identity,
+        locator,
+        purpose: 'upgrade',
+        assertCurrent: () => {},
+        request
+      })
+    ).resolves.toMatchObject({ ok: true })
+    const bytes = Buffer.concat(channel.writes),
+      size = bytes.readUInt32BE(0)
+    expect(JSON.parse(bytes.subarray(4, 4 + size).toString())).toMatchObject({
+      purpose: 'upgrade',
+      operation: 'admin',
+      ...locator
+    })
+    const normal = fixture('admin')
+    await expect(
+      administerInstalledController({
+        ssh: normal.ssh,
+        vpsId: 1,
+        expectedIdentity: identity,
+        locator,
+        purpose: 'upgrade',
+        assertCurrent: () => {},
+        request: adminRequest()
+      })
+    ).rejects.toMatchObject({ code: 'BOOTSTRAP_INPUT_INVALID' })
+    expect(normal.ssh.openProductBootstrapChannel).not.toHaveBeenCalled()
+  })
   it.each(['root-uid', 'foreign-path', 'unknown-command', 'wrong-pin', 'large'] as const)(
     'rejects admin %s before opening SSH',
     async (kind) => {

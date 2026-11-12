@@ -11,7 +11,17 @@ export const installedControllerAdminSchema = z.strictObject({
     installer_sha256: sha,
     controller_id: z.uuidv4(),
     runtime_uid: z.number().int().positive().max(2147483647),
-    payload_sha256: sha
+    payload_sha256: sha,
+    revision: z
+      .strictObject({
+        installation_request_key: z.uuidv4().refine((v) => v === v.toLowerCase()),
+        parent_upgrade_key: z
+          .uuidv4()
+          .refine((v) => v === v.toLowerCase())
+          .nullable(),
+        parent_release_sha256: sha
+      })
+      .optional()
   }),
   command: z.strictObject({
     operation: z.enum([

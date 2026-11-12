@@ -8,6 +8,7 @@ import {
 import script from './desktop_controller_admin.py?raw'
 import catalog from '../../../control-plane-runtime/bundle-files.json'
 import { installedControllerAdminSchema } from './installedControllerAdminProtocol'
+import { executeControllerUpgrade } from './controllerUpgrade'
 export { installedControllerAdminSchema } from './installedControllerAdminProtocol'
 
 const code = script.replace(
@@ -24,6 +25,54 @@ export async function executeInstalledControllerAdmin(
   if (!parsed.success) throw Error('CONTROLLER_INSTALL_ADMIN_INPUT_INVALID')
   const input = parsed.data
   let response: unknown
+  if (input.authority.revision) {
+    const revision = input.authority.revision
+    await executeControllerUpgrade(
+      {
+        format: 1,
+        operation: 'inspect-upgrade',
+        request_key: input.authority.request_key,
+        installation_request_key: revision.installation_request_key,
+        controller_id: input.authority.controller_id,
+        parent_upgrade_key: revision.parent_upgrade_key,
+        parent_release_sha256: revision.parent_release_sha256,
+        release_sha256: input.authority.release_sha256
+      },
+      paths,
+      {
+        inspected: async (current, held) => {
+          if (
+            current.runtime_uid !== input.authority.runtime_uid ||
+            held.uid !== input.authority.runtime_uid ||
+            current.runtime_payload_sha256 !== input.authority.payload_sha256
+          )
+            throw Error('CONTROLLER_INSTALL_ADMIN_AUTHORITY_CHANGED')
+          const request = JSON.stringify({
+            ...input.command,
+            artifact_path: current.artifact_path,
+            node_path: current.node_path,
+            data_directory: current.data_directory,
+            manifest_sha256: current.runtime_payload_sha256,
+            controller_id: current.controller_id
+          })
+          if (
+            Buffer.byteLength(request) >
+            (input.command.operation === 'register-vps' ? 512 * 1024 : 16384)
+          )
+            throw Error('CONTROLLER_INSTALL_ADMIN_INPUT_INVALID')
+          response = await runAsService(
+            held.uid,
+            held.gid,
+            held.lockFd,
+            request,
+            adminTimeout(input.command.operation)
+          )
+        }
+      }
+    )
+    if (response === undefined) throw Error('CONTROLLER_INSTALL_ADMIN_FAILED')
+    return response
+  }
   await executeControllerInstallation(
     { format: 1, operation: 'inspect', request_key: input.authority.request_key },
     paths,
@@ -57,19 +106,23 @@ export async function executeInstalledControllerAdmin(
           authority.gid,
           authority.lockFd,
           request,
-          input.command.operation === 'project-readiness'
-            ? 210000
-            : input.command.operation === 'verify-project-source'
-              ? 120000
-              : ['register-vps', 'enroll-project-target'].includes(input.command.operation)
-                ? 90000
-                : 60000
+          adminTimeout(input.command.operation)
         )
       }
     }
   )
   if (response === undefined) throw Error('CONTROLLER_INSTALL_ADMIN_FAILED')
   return response
+}
+
+function adminTimeout(operation: string): number {
+  return operation === 'project-readiness'
+    ? 210000
+    : operation === 'verify-project-source'
+      ? 120000
+      : ['register-vps', 'enroll-project-target'].includes(operation)
+        ? 90000
+        : 60000
 }
 
 function runAsService(
