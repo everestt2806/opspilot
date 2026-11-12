@@ -32,11 +32,13 @@ import migration026 from './migrations/026_product_project_registration.sql?raw'
 import migration027 from './migrations/027_desktop_project_setup.sql?raw'
 import migration028 from './migrations/028_desktop_target_registration.sql?raw'
 import migration029 from './migrations/029_desktop_controller_installation.sql?raw'
+import migration030 from './migrations/030_desktop_controller_upgrade.sql?raw'
 
 interface Migration {
   name: string
   version: number
   sql: string
+  role?: 'desktop'
 }
 
 const migrations: Migration[] = [
@@ -176,7 +178,8 @@ const migrations: Migration[] = [
     sql: migration027
   },
   { name: '028_desktop_target_registration.sql', version: 28, sql: migration028 },
-  { name: '029_desktop_controller_installation.sql', version: 29, sql: migration029 }
+  { name: '029_desktop_controller_installation.sql', version: 29, sql: migration029 },
+  { name: '030_desktop_controller_upgrade.sql', version: 30, sql: migration030, role: 'desktop' }
 ]
 
 export let db: Database.Database
@@ -189,7 +192,10 @@ export function setMigration005TestInterceptor(
   migration005TestInterceptor = interceptor
 }
 
-export function initializeDatabase(userDataPath: string): Database.Database {
+export function initializeDatabase(
+  userDataPath: string,
+  role: 'desktop' | 'controller' = 'desktop'
+): Database.Database {
   const databasePath = join(userDataPath, 'opspilot.db')
   mkdirSync(dirname(databasePath), { recursive: true })
 
@@ -197,7 +203,7 @@ export function initializeDatabase(userDataPath: string): Database.Database {
   try {
     db.pragma('journal_mode = WAL')
     db.pragma('foreign_keys = ON')
-    runMigrations(db)
+    runMigrations(db, Number.POSITIVE_INFINITY, role)
     return db
   } catch (error) {
     db.close()
@@ -213,14 +219,21 @@ export function closeDatabase(): void {
 
 export function runMigrations(
   database: Database.Database,
-  maxVersion = Number.POSITIVE_INFINITY
+  maxVersion = Number.POSITIVE_INFINITY,
+  role: 'desktop' | 'controller' = 'desktop'
 ): void {
   const applied = getAppliedVersions(database)
+  if (
+    role === 'controller' &&
+    migrations.some((m) => m.role === 'desktop' && applied.has(m.version))
+  )
+    throw new Error('CONTROLLER_DATABASE_ROLE_MISMATCH')
 
   for (const migration of migrations.toSorted((left, right) =>
     left.name.localeCompare(right.name)
   )) {
     if (migration.version > maxVersion) break
+    if (role === 'controller' && migration.role === 'desktop') continue
     if (applied.has(migration.version)) {
       continue
     }

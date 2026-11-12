@@ -15,7 +15,7 @@ export type ControllerBootstrapLocator = {
   installer_sha256: string;
 };
 export type ControllerBootstrapOperation =
-  "transfer" | "status" | "install" | "inspect" | "recover" | "discover" | "admin";
+  "transfer" | "status" | "install" | "inspect" | "recover" | "discover" | "admin" | "upgrade-call";
 /** Untrusted hint: match both hashes to a protected Main catalog before using it. */
 export type ControllerBootstrapDiscovery =
   | { state: "absent" }
@@ -72,4 +72,9 @@ export type ControllerBootstrapErrorCode =
  * secret-bearing enrollment response chỉ Main vault tiêu thụ, không renderer/log.
  * Namespace absent nhưng installation paths có sẵn => conflict, không nhận là VPS trống.
  * Main durable journal theo desktop-controller-installation.ts; root-admin bridge/IPC/wizard riêng.
+ * c-2a: transfer/status có optional purpose:'upgrade', và upgrade-call bắt buộc purpose:'upgrade'
+ * + request_size<=4096, raw fixed upgrade request rồi EOF. Namespace riêng
+ * /var/lib/opspilot-controller-upgrades/<UUID>, không thay singleton install transfer.
+ * Receiver derive release_directory, không nhận path/UID/service từ request; upgrade/recover/rollback
+ * cần consent:true, inspect-upgrade readonly. Reply upgrade_result/request_key/result strict DTO.
  */

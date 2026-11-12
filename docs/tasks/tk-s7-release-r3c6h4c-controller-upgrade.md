@@ -4,6 +4,38 @@ START11/11/2026 — Base `f470a05`, product-mode/task-discipline. User yêu cầ
 
 ## Phạm vi và checkpoints
 
+START12/11/2026 — Base `0e61286`, tiếp c-2. Dùng task-discipline; không truy cập VPS hoặc sửa runtime đã cài trong checkpoint này.
+
+### Ledger c-2a — Main journal và pinned SSH upgrade transport
+
+| Yêu cầu | Điều kiện nhận | State |
+|---|---|---|
+| Schema boundary | Migration030 Desktop-only, role tests và current bundled Linux CLI init/secrets/check/status3PASS giữ controller029, identity/key/DB inode;001–029 nguyên vẹn | PASS |
+| Contract và intent | Durable UUID/pins/parent/SSH-envelope authority trước effect; focused và native8 chứng minh lostreply→separate cold Main process→inspect không replay/PID unchanged, không API rebind | PASS |
+| Transport | Namespace upgrade UUID tách original staging, receiver/tool pin reject, fixed bounded RPC và command compression đã hash-verify; native8 PASS/15compressed SSH commands, cap24KB | PASS |
+| Gates | Full2172PASS/2existingLinux-onlySKIP/0FAIL,321focused assertions/20files;10types/ESLint21/Ruff/check+format/build/builder/negativeCLI/nativeSSH8/current bundle role3 PASS; cleanup/source hashes trong proof | PASS |
+| Handoff | Board/FR/master/HANDOFF/parent/proof đồng bộ; coauthor Kim/normal checkpoint push, SHA qua `git log -1 -- app/src/main/controlPlane/desktopControllerUpgrade.ts`; c-2b/c-3 còn mở | PASS |
+
+c-2 được thực hiện theo hai lát có gate độc lập: c-2a journal/transport/schema boundary; c-2b upgraded admin/current binding + IPC/UI/Electron. Root c-1 đã xong không thay thế Main authority, và c-2a không được dùng để claim Desktop upgrade UI hoặc rollout VPS.
+
+UPDATE12/11 — Desktop030/controller029 tách role; Main lưu UUID/parent/tool/release/current SSH envelope digest trước dispatch, same-key explicit inspect/recover/rollback, không reset attempted hoặc tự rebind token. Focused20files/320tests PASS, bổ sung second-revision/history và SSH compression tests có lượt focused25PASS; full cuối vẫn cần chạy.
+
+Linux native đã chứng minh transfer/upgrade/lostreply→separate cold Main process→inspect không restart/rollback giữ identity/key/DB inode. Lượt `154c169cdaf6` đạt7checks rồi FAIL do fixture giữ VpsRepository gắn SQLite connection đã đóng sau cold reopen; đã sửa fixture tạo repository từ connection mới, chưa dùng lượt lỗi làm PASS. Các lượt đầu exec0 vì bootstrap35KB vượt SSH packet: phép thử độc lập 30KB exec được/36KB `Bad packet length`; SshManager nén bytes đã xác minh hash bằng builtin zlib, command cap24KB, reject incompressible trước auth. Native sau sửa dùng command11078bytes thay script35250bytes.
+
+Giới hạn c-2a: pending/history bảo toàn sau archive nhưng authority đổi bị chặn trước SSH; explicit upgrade-authority rebind khi credential/VPS ID đổi cần c-2b. Không dùng old inspector để giả chứng thực upgraded runtime; API credential/admin binding chưa được tự cập nhật. Namespace mới chỉ staging/root CLI; không public port, production DB, Docker workload, OS reboot hay live VPS claim.
+
+UPDATE12/11 — Native cuối `80742200af53`8PASS, actual source Python/Ruff final: Desktop030/controller029, protected original staging và independent pins, lostreply/separate cold process/PID preservation/explicit rollback/archive authority.15SSH commands nén, script35670bytes/maxcommand11078bytes; Root/unit/account removed=true,0production/0Productapps/targets. Current production controller payload build có bundle manifest pin `4e3a163f077f69cd23b58ffcd26e40506489041804a9b01ea9ef006db3588510`; independent native role gate3PASS chứng minh source mới init/reopen/checker vẫn029, key/identity/inode không đổi, fixture removed. Không dùng candidatev4 cũ làm bằng chứng cho role code mới.10types/ESLint20+role1/Ruff check+format/build/builder/negativeCLI PASS; full Vitest đang chạy, chưa claim gate cuối.
+
+## HANDOFF12/11 — c-2a DONE scoped / CHỜ REVIEW
+
+- [Proof/source hashes](../ui-redesign/r3c6h4c2a-verification.json), ledger c-2a5/5PASS. Không accepted exception. c-2b/c-3 và parent6h4/R3 vẫn mở; không claim UI/live/PRODUCT_PASS.
+- Full: `pnpm --prefix app exec vitest run --maxWorkers=4 --reporter=default --reporter=json --outputFile.json=.out-scripts/r3c6h4c2a-full-final.json` →161files PASS/1SKIP (162),2172tests PASS/2SKIP (2174),251.73s.321focused assertions/20files đều nằm trong lượt full này; skips Caddy Linux-only có sẵn, không thêm skip/nới timeout. Raw `.json`/`.log` cùng prefix trong `app/.out-scripts/`.
+- `. ./tools/enter-node22.ps1`; `pnpm --prefix app exec tsc --noEmit -p <project> --composite false` →10projects PASS: node/web/scripts +7lab projects trong proof. `pnpm.cmd --prefix app exec eslint`21file →0error/0warning; Ruff check và format --check cho `app/control-plane-runtime/controller_ssh_bootstrap.py` PASS. `pnpm --prefix app build` PASS, raw `r3c6h4c2a-build-final.log`.
+- Trusted installer builder PASS/pin `93f1cff2356dafdec85d273fa4f494db25b8ffb35196737d5e10d2b7448ea7ea`, unchanged root c-1 tool; negative JSON CLI returns expected exit1/safe `CONTROLLER_INSTALL_UPGRADE_INPUT_INVALID`. Không thay original packaged installer7e2278/pins hoặc cài lên VPS.
+- [Native lab README](../../app/scripts/controller-upgrade-desktop-lab/README.md): root Linux Node22/systemd, original golden release pin96a6a5/candidatev4 pincb70e1, approved modules `/var/tmp/opspilot-p3e3a-runtime/node_modules`. `app/.out-scripts/controller-upgrade-desktop/80742200af53/result.json`8PASS/15compressed SSH exec; Root/unit/account removed. Lostreply→một Main process mới mở DB030 và inspect cùng UUID/PID, explicit rollback giữ original receipt/identity/key/DB inode;0Productapps/targets, không Docker/reboot/production.
+- Current Linux source bundle build pin `4e3a163f077f69cd23b58ffcd26e40506489041804a9b01ea9ef006db3588510`; chạy `role.mjs` với `OPSPILOT_CURRENT_CONTROLLER_PAYLOAD`/`OPSPILOT_CURRENT_CONTROLLER_PAYLOAD_PIN` và approved modules →3PASS. Raw `r3c6h4c2a-role-current.json`; fresh controller source vẫn029, upgrade-check/reopen không tạo030/đổi key/identity/inode, private root removed. Source assets không đổi helper/dependency/template/collector.
+- Tiếp c-2b: upgraded admin/current binding, explicit epoch rebind và unknown-before-root-journal resolution có fresh parent attestation, IPC/UI4locale/isolated Electron; sau đó c-3 actual installed exposure/onboarding/reconnect/firstdeploy/live upgrade. Không xóa/reset attempted/history hoặc tự thay pin/token để vượt verifier. Normal push có quyền user; không PR/merge, personal files giữ ngoài index.
+
 - **6h4c-1:** trusted root CLI upgrade backend + durable side-by-side revision/rollback/recovery, real Linux systemd/native crash/lostreply lab. Runtime cũ và install receipt nguyên vẹn; dùng chung kernel installation flock. Chưa rollout VPS trước Desktop authority/transport gate.
 - **6h4c-2:** pinned SSH transfer/upgrader catalog và Main durable upgrade intent/explicit revision binding, typed IPC/UI consent/inspect/recovery. Không gọi tool/pin cũ để chứng thực bytes mới.
 - **6h4c-3:** development VPS rollout giữ demo/identity/UID/DB/key/target; actual installed exposure API và isolated Electron onboarding/reconnect/firstdeploy/live gate.
@@ -47,6 +79,7 @@ START11/11/2026 — Base `f470a05`, product-mode/task-discipline. User yêu cầ
 - Main binding/admin phải xác minh revision bằng root journal + exact current unit/runtime/account/UID và original installation authority. Old inspector sẽ từ chối unit đã đổi; không sửa binding thành pin mới chỉ để vượt verifier.
 - Chốt contract/schema strategy trước Main intent migration: controller đang ở029 và c-1 yêu cầu exact fresh schema. Migration chỉ phục vụ Desktop không được ngầm tăng schema floor của controller rồi gọi đó là upgrade không migration.
 - IPC chỉ IDs/consent, không lộ credential; UI4locale xem phiên bản, yêu cầu pause rõ ràng, thể hiện maintenance/unknown và recovery/rollback. Không tự pause policy hoặc xóa job để qua quiescent gate.
+- Hoàn thiện explicit authority rebind giữ UUID khi credential/VPS ID đổi. Phân biệt unknown trước remote journal: c-2a giữ `outcome_unknown/upgrade_attempted=1` khi root trả NOT_FOUND, không tự retry initial upgrade. c-2b phải bổ sung recovery khởi tạo cùng UUID sau fresh parent/unit/pin attestation hoặc trạng thái chưa bắt đầu có bằng chứng; không xóa journal/reset attempted để né gate. Historical/ancestor rollback cần fresh current-operation authority, không dùng cached is_current làm quyền.
 - Native SSH transport/authority/cold local intent/lostreply + isolated Electron flow trước rollout.
 
 ### c-3: Live gate trên VPS phát triển

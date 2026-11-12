@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { createHash } from 'node:crypto'
+import { deflateSync } from 'node:zlib'
 import type { Readable, Writable } from 'node:stream'
 import * as tar from 'tar'
 
@@ -425,7 +426,16 @@ export class SshManager extends EventEmitter {
       createHash('sha256').update(script.text).digest('hex') !== script.sha256
     )
       throw new AppError('VALIDATION', 'Invalid pinned bootstrap script.')
-    return this.openIdentifiedChannel(vpsId, `python3 -B -u -c ${shellQuote(script.text)}`, options)
+    let code = script.text
+    // SSH CHANNEL_REQUEST có giới hạn packet; nén code đã xác minh trước khi quote.
+    if (Buffer.byteLength(code) > 16 * 1024) {
+      const compressed = deflateSync(Buffer.from(code), { level: 9 }).toString('base64')
+      code = `import base64,zlib;exec(compile(zlib.decompress(base64.b64decode('${compressed}')),'<opspilot-bootstrap>','exec'))`
+    }
+    const command = `python3 -B -u -c ${shellQuote(code)}`
+    if (Buffer.byteLength(command) > 24 * 1024)
+      throw new AppError('VALIDATION', 'Bootstrap vượt giới hạn command SSH an toàn.')
+    return this.openIdentifiedChannel(vpsId, command, options)
   }
 
   private async openIdentifiedChannel(

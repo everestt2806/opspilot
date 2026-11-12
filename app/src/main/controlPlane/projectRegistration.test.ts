@@ -110,12 +110,12 @@ describe('Atomic Product project registration', () => {
   it('upgrades populated v025, retaining bindings and source data without implicit registrations', () => {
     const before = snapshot()
     db.exec(
-      'DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE product_project_registration;DELETE FROM schema_version WHERE version=26'
+      'DROP TABLE IF EXISTS desktop_controller_upgrade;DELETE FROM schema_version WHERE version=30;DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE product_project_registration;DELETE FROM schema_version WHERE version=26'
     )
     runMigrations(db)
     runMigrations(db)
     expect(snapshot()).toEqual(before)
-    expect(db.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({ n: 29 })
+    expect(db.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({ n: 30 })
     expect(db.pragma('foreign_key_check')).toEqual([])
     const sql = readFileSync(
       new URL('../db/migrations/026_product_project_registration.sql', import.meta.url),

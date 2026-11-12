@@ -1,4 +1,5 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
+import { inflateSync } from 'node:zlib'
 import { PassThrough } from 'node:stream'
 import type { ClientChannel, ConnectConfig } from 'ssh2'
 import { PRODUCT_CONTROLLER_SSH_CHANNEL } from '../../../../docs/contracts/product-controller-api'
@@ -64,6 +65,34 @@ async function connect(): Promise<(typeof clients)[number]> {
   return client
 }
 describe('Pinned controller API SSH channel', () => {
+  it('compresses verified long bootstrap code below the SSH request packet limit without changing bytes', async () => {
+    const client = await connect(),
+      text = 'print(1)\n#' + 'fixture'.repeat(8000)
+    client.exec.mockImplementation(
+      (_command: string, callback: (error: Error | null, channel: ClientChannel) => void) =>
+        callback(null, stream())
+    )
+    await manager.openProductBootstrapChannel(
+      7,
+      { text, sha256: createHash('sha256').update(text).digest('hex') },
+      { expectedIdentity: expected }
+    )
+    const command = client.exec.mock.calls[0][0] as string
+    expect(Buffer.byteLength(command)).toBeLessThan(24 * 1024)
+    const compressed = command.match(/[A-Za-z0-9+/]{60,}={0,2}/)?.[0]
+    expect(compressed).toBeTruthy()
+    expect(inflateSync(Buffer.from(compressed!, 'base64')).toString()).toBe(text)
+  })
+  it('rejects incompressible oversized commands before opening an SSH connection', async () => {
+    const text = randomBytes(45000).toString('base64')
+    await expect(
+      manager.openProductBootstrapChannel(7, {
+        text,
+        sha256: createHash('sha256').update(text).digest('hex')
+      })
+    ).rejects.toMatchObject({ code: 'VALIDATION' })
+    expect(clients).toHaveLength(0)
+  })
   it('checks an enrollment bootstrap expected principal before SSH authentication or exec', async () => {
     const text = 'print(1)'
     await expect(

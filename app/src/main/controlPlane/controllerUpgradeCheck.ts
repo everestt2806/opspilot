@@ -59,7 +59,7 @@ export function openControllerUpgradeCheck(
   try {
     expected.pragma('journal_mode = WAL')
     expected.pragma('foreign_keys = ON')
-    runMigrations(expected)
+    runMigrations(expected, Number.POSITIVE_INFINITY, 'controller')
     db = new Database(file, { readonly: !hold, fileMustExist: true, timeout: 5000 })
     db.exec(hold ? 'BEGIN IMMEDIATE' : 'BEGIN')
     if (hold) db.pragma('query_only = ON') // No row/schema writes even in the mutex transaction.

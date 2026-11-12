@@ -204,11 +204,19 @@ def request():
     ):
         fail("INPUT_INVALID")
     operation = value.get("operation")
+    if "purpose" in value:
+        if value["purpose"] != "upgrade" or operation not in (
+            "transfer",
+            "status",
+            "upgrade-call",
+        ):
+            fail("INPUT_INVALID")
+        common.add("purpose")
     if operation in ("transfer", "install", "recover"):
         common.add("consent")
         if value.get("consent") is not True:
             fail("INPUT_INVALID")
-    elif operation not in ("status", "inspect", "admin"):
+    elif operation not in ("status", "inspect", "admin", "upgrade-call"):
         fail("INPUT_INVALID")
     if operation == "transfer":
         common.update(("manifest_size", "installer_size"))
@@ -222,6 +230,14 @@ def request():
         if (
             type(value.get("request_size")) is not int
             or not 1 <= value["request_size"] <= 512 * 1024
+        ):
+            fail("INPUT_INVALID")
+    if operation == "upgrade-call":
+        common.add("request_size")
+        if (
+            value.get("purpose") != "upgrade"
+            or type(value.get("request_size")) is not int
+            or not 1 <= value["request_size"] <= 4096
         ):
             fail("INPUT_INVALID")
     if set(value) != common:
@@ -601,8 +617,13 @@ def run_installer(header, lock, admin=None):
         request.update(consent=True, release_sha256=header["release_sha256"])
     if operation == "install":
         request["release_directory"] = os.path.join(TRANSFER_ROOT, "release")
-    if operation == "admin":
+    if operation in ("admin", "upgrade-call"):
         request = admin
+    if operation == "upgrade-call" and request["operation"] == "upgrade":
+        request = {
+            **request,
+            "release_directory": os.path.join(TRANSFER_ROOT, "release"),
+        }
     node = os.path.join(TRANSFER_ROOT, "release/node")
     tool = os.path.join(TRANSFER_ROOT, "installer.cjs")
     child = subprocess.Popen(
@@ -625,7 +646,9 @@ def run_installer(header, lock, admin=None):
             selector.register(stream, selectors.EVENT_READ)
         admin_op = admin.get("command", {}).get("operation") if admin else None
         timeout = (
-            225
+            300
+            if operation == "upgrade-call"
+            else 225
             if admin_op == "project-readiness"
             else 135
             if admin_op == "verify-project-source"
@@ -657,6 +680,9 @@ def run_installer(header, lock, admin=None):
                 "CONTROLLER_INSTALL_NOT_FOUND": "NOT_FOUND",
                 "CONTROLLER_INSTALL_BUSY": "BUSY",
                 "CONTROLLER_INSTALL_CONFLICT": "CONFLICT",
+                "CONTROLLER_INSTALL_UPGRADE_NOT_FOUND": "NOT_FOUND",
+                "CONTROLLER_INSTALL_UPGRADE_BUSY": "BUSY",
+                "CONTROLLER_INSTALL_UPGRADE_AUTHORITY_CHANGED": "CONFLICT",
             }
             reason = (
                 result.get("error")
@@ -667,6 +693,18 @@ def run_installer(header, lock, admin=None):
         if operation == "admin":
             return {
                 "state": "admin_result",
+                "request_key": header["request_key"],
+                "result": result,
+            }
+        if operation == "upgrade-call":
+            if (
+                not isinstance(result, dict)
+                or result.get("format") != 1
+                or result.get("request_key") != header["request_key"]
+            ):
+                fail("INSTALLER_FAILED")
+            return {
+                "state": "upgrade_result",
                 "request_key": header["request_key"],
                 "result": result,
             }
@@ -695,11 +733,59 @@ def run_installer(header, lock, admin=None):
 
 
 def main():
+    global TRANSFER_ROOT
     if os.geteuid() != 0:
         fail("ROOT_REQUIRED")
     os.umask(0o077)
     header = request()
+    if header.get("purpose") == "upgrade":
+        # Namespace cố định theo UUID; không đặt revision trong singleton cài đặt gốc.
+        upgrades = "/var/lib/opspilot-controller-upgrades"
+        if not exists(upgrades) and header["operation"] == "transfer":
+            directory(os.path.dirname(upgrades))
+            try:
+                os.mkdir(upgrades, 0o700)
+            except FileExistsError:
+                pass
+            sync_directory(os.path.dirname(upgrades))
+        if exists(upgrades):
+            directory(upgrades, private=True)
+        TRANSFER_ROOT = os.path.join(upgrades, header["request_key"])
     admin = None
+    if header["operation"] == "upgrade-call":
+        admin = json.loads(exact_read(header["request_size"]).decode("utf-8"))
+        common = {
+            "format",
+            "operation",
+            "request_key",
+            "installation_request_key",
+            "controller_id",
+            "parent_upgrade_key",
+            "parent_release_sha256",
+            "release_sha256",
+        }
+        operation = admin.get("operation") if isinstance(admin, dict) else None
+        if operation in ("upgrade", "recover-upgrade", "rollback-upgrade"):
+            common.add("consent")
+        if (
+            not isinstance(admin, dict)
+            or set(admin) != common
+            or type(admin.get("format")) is not int
+            or admin["format"] != 1
+            or operation
+            not in ("upgrade", "inspect-upgrade", "recover-upgrade", "rollback-upgrade")
+            or (operation != "inspect-upgrade" and admin.get("consent") is not True)
+            or admin.get("request_key") != header["request_key"]
+            or admin.get("release_sha256") != header["release_sha256"]
+            or not full(UUID, admin.get("installation_request_key"))
+            or not full(UUID, admin.get("controller_id"))
+            or (
+                admin.get("parent_upgrade_key") is not None
+                and not full(UUID, admin["parent_upgrade_key"])
+            )
+            or not full(SHA, admin.get("parent_release_sha256"))
+        ):
+            fail("INPUT_INVALID")
     if header["operation"] == "admin":
         admin = json.loads(exact_read(header["request_size"]).decode("utf-8"))
         if (

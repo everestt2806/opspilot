@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-12 | [product-mode/db-upgrade] R3c-6h4c-2a thêm migration030 chỉ Desktop cho upgrade intent; runMigrations có role desktop/controller, controller giữ nguyên001–029 và reject DB đã có migration Desktop-only trước DDL. Transfer upgrade có root namespace riêng theo UUID, không ghi vào namespace cài đặt gốc; Main persist original authority/parent/release/tool trước SSH, unknown không replay và không tự rebind API token — Sơn/Codex
+
 2026-11-11 | [product-mode/controller-upgrade] R3c-6h4c-1 dùng side-by-side runtime + new UUID/parent revision authority, root journal/flock chung installation; không thay receipt/runtime/pin cũ. Candidate service giữ maintenance bằng root-owned activation gate, không poll/worker/startup recovery trước commit; cùng lock/ABI/helper assets và exact schema, readonly snapshot kiểm protected state/key. Recovery/rollback explicit, không DB restore/schema rollback; Main/SSH/current binding và live rollout là c-2/c-3 — Sơn/Codex
 
 2026-11-10 | [product-mode/desktop-exposure] R3c-6h4b nối Main-only public probe với exposure API; renderer chỉ truyền binding/app IDs. HTTP không credential/redirect/body, public address được kiểm tra và pin tại socket lookup, timeout tổng; lost POST chỉ GET current exact ID/body/authority, không command lookup/retry. UI hết hạn60s và old controller unsupported; rollout/upgrade/live riêng6h4c — Sơn/Codex

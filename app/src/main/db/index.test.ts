@@ -160,7 +160,7 @@ function downgradeMigration014ToV13(database: Database.Database): void {
 
 function downgradeProductMigrationsToV15(database: Database.Database): void {
   database.exec(`
-    DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE IF EXISTS desktop_controller_command;DELETE FROM schema_version WHERE version=25;DROP TABLE IF EXISTS desktop_controller_binding;DELETE FROM schema_version WHERE version=24;DROP TABLE IF EXISTS product_api_request;
+    DROP TABLE IF EXISTS desktop_controller_upgrade;DELETE FROM schema_version WHERE version=30;DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE IF EXISTS desktop_controller_command;DELETE FROM schema_version WHERE version=25;DROP TABLE IF EXISTS desktop_controller_binding;DELETE FROM schema_version WHERE version=24;DROP TABLE IF EXISTS product_api_request;
     DROP INDEX IF EXISTS idx_product_desktop_client_identity;
     DELETE FROM schema_version WHERE version=23;
     DROP TABLE IF EXISTS product_desktop_admin_request;
@@ -292,7 +292,7 @@ describe('initializeDatabase', () => {
       count: 1
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 29
+      version: 30
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
   })
@@ -318,12 +318,12 @@ describe('initializeDatabase', () => {
       before as object
     )
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 29
+      version: 30
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 29
+      version: 30
     })
   })
 
@@ -384,7 +384,7 @@ describe('initializeDatabase', () => {
       healthcheck_response_type: 'status_2xx'
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 29
+      version: 30
     })
     database
       .prepare(
@@ -424,7 +424,7 @@ describe('initializeDatabase', () => {
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 29
+      version: 30
     })
   })
 
@@ -532,12 +532,12 @@ describe('initializeDatabase', () => {
       https_probe_peer_ips_json: '["198.51.100.160"]'
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 29
+      version: 30
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 29
+      version: 30
     })
   })
 
@@ -996,8 +996,8 @@ describe('initializeDatabase', () => {
       .prepare('SELECT MAX(version) AS version FROM schema_version')
       .get() as { version: number }
 
-    expect(tables).toHaveLength(41)
-    expect(schemaVersion.version).toBe(29)
+    expect(tables).toHaveLength(42)
+    expect(schemaVersion.version).toBe(30)
     expect(database.pragma('journal_mode', { simple: true })).toBe('wal')
     expect(database.pragma('foreign_keys', { simple: true })).toBe(1)
   })
@@ -1028,7 +1028,7 @@ describe('initializeDatabase', () => {
       metrics_offset: 42
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 29
+      version: 30
     })
     expect(
       database
@@ -1227,7 +1227,7 @@ describe('initializeDatabase', () => {
     const successVer = v4Db.prepare('SELECT MAX(version) AS version FROM schema_version').get() as {
       version: number
     }
-    expect(successVer.version).toBe(29)
+    expect(successVer.version).toBe(30)
 
     // b. Bảng experiment_run đã có cột attempt_index và backfill = 1 cho tất cả bản ghi cũ
     const postRuns = v4Db

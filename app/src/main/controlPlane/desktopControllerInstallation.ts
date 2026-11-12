@@ -367,6 +367,27 @@ export class DesktopControllerInstallations {
   inspect(key: string): Promise<DesktopInstallation> {
     return this.dispatch(key, 'inspect')
   }
+  /** Main-only authority snapshot; không trả ciphertext hoặc plaintext credential. */
+  upgradeAuthority(key: string): {
+    installation: DesktopInstallation
+    principal: SshVerifiedConnectionIdentity
+    credential_digest: string
+    ssh_security_revision: number
+    release: DesktopControllerRelease
+  } {
+    const row = this.cold(this.row(key))
+    this.current(row)
+    const release = this.release(row)
+    if (row.state !== 'installed' || !row.controller_id || !row.result_json)
+      throw new DesktopInstallationError('INSTALL_INSPECT_REQUIRED')
+    return {
+      installation: this.metadata(row),
+      principal: JSON.parse(row.principal_json),
+      credential_digest: row.credential_digest,
+      ssh_security_revision: row.ssh_security_revision,
+      release
+    }
+  }
   bindingIntent(
     key: string,
     bindingId: string,

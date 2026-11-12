@@ -22,6 +22,12 @@ import {
 } from '../../../../docs/contracts/product-controller-ssh-bootstrap'
 import type { InstalledControllerAdminRequest } from '../../../../docs/contracts/product-installed-controller-admin'
 import { installedControllerAdminSchema } from './installedControllerAdminProtocol'
+import { controllerUpgradeResultSchema } from './controllerUpgradeProtocol'
+import { parseControllerUpgradeRequest } from './controllerUpgrade'
+import type {
+  ControllerUpgradeRequest,
+  ControllerUpgradeResult
+} from '../../../../docs/contracts/product-controller-upgrade'
 
 const locatorSchema = z
   .object({
@@ -158,6 +164,8 @@ export type ControllerBootstrapArtifacts = {
   installer_path: string
 }
 type BootstrapInput = {
+  /** Main-only namespace selector; không nhận từ IPC. */
+  purpose?: 'upgrade'
   ssh: Pick<SshManager, 'openProductBootstrapChannel'>
   vpsId: number
   expectedIdentity: SshVerifiedConnectionIdentity
@@ -212,6 +220,7 @@ export async function transferControllerRelease(
     await wire.sendFrame({
       format: 1,
       operation: 'transfer',
+      ...(input.purpose ? { purpose: input.purpose } : {}),
       ...input.locator,
       consent: true,
       manifest_size: raw.length,
@@ -275,7 +284,10 @@ export async function transferControllerRelease(
 
 export async function callControllerBootstrap(
   input: BootstrapInput & {
-    operation: Exclude<ControllerBootstrapOperation, 'transfer' | 'discover' | 'admin'>
+    operation: Exclude<
+      ControllerBootstrapOperation,
+      'transfer' | 'discover' | 'admin' | 'upgrade-call'
+    >
     consent?: true
   }
 ): Promise<ControllerBootstrapResult> {
@@ -298,6 +310,7 @@ export async function callControllerBootstrap(
     await wire.sendFrame({
       format: 1,
       operation: input.operation,
+      ...(input.purpose ? { purpose: input.purpose } : {}),
       ...input.locator,
       ...(['install', 'recover'].includes(input.operation) ? { consent: true } : {})
     })
@@ -323,6 +336,53 @@ export async function discoverControllerBootstrap(
       .safeParse(value)
     if (!parsed.success) throw new ControllerBootstrapError('BOOTSTRAP_UNAVAILABLE')
     return parsed.data
+  })
+}
+
+/** Fixed root upgrader, staged tool/release pins independently verified by receiver. */
+export async function callControllerUpgrade(
+  input: BootstrapInput & { request: ControllerUpgradeRequest }
+): Promise<ControllerUpgradeResult> {
+  input = { ...input, expectedIdentity: { ...input.expectedIdentity } }
+  const locator = locatorSchema.parse(input.locator)
+  const request = parseControllerUpgradeRequest(input.request)
+  if (
+    request.request_key !== locator.request_key ||
+    request.release_sha256 !== locator.release_sha256
+  )
+    throw new ControllerBootstrapError('BOOTSTRAP_CONFLICT')
+  const { release_directory: _path, ...wireRequest } =
+    request.operation === 'upgrade' ? request : { ...request, release_directory: undefined }
+  void _path
+  const bytes = Buffer.from(JSON.stringify(wireRequest))
+  if (bytes.length > 4096) throw new ControllerBootstrapError('BOOTSTRAP_LIMIT')
+  return withBootstrap(input, 'upgrade-call', async (wire) => {
+    await wire.sendFrame({
+      format: 1,
+      operation: 'upgrade-call',
+      purpose: 'upgrade',
+      ...locator,
+      request_size: bytes.length
+    })
+    await wire.send(bytes)
+    wire.end()
+    const value = z
+      .strictObject({
+        state: z.literal('upgrade_result'),
+        request_key: z.uuidv4(),
+        result: controllerUpgradeResultSchema
+      })
+      .parse(await wire.receive())
+    if (
+      value.request_key !== locator.request_key ||
+      Object.entries(wireRequest).some(
+        ([key, v]) =>
+          !['operation', 'consent'].includes(key) &&
+          value.result[key as keyof ControllerUpgradeResult] !== v
+      )
+    )
+      throw new ControllerBootstrapError('BOOTSTRAP_CONFLICT')
+    return value.result
   })
 }
 
@@ -423,7 +483,7 @@ async function withBootstrap<T>(
   let channel: ClientChannel | undefined,
     effects = false,
     timer: ReturnType<typeof setTimeout> | undefined
-  const mutates = ['transfer', 'install', 'recover', 'admin'].includes(operation)
+  const mutates = ['transfer', 'install', 'recover', 'admin', 'upgrade-call'].includes(operation)
   const assert = (): void => {
     if (input.signal?.aborted) throw new ControllerBootstrapError('BOOTSTRAP_ABORTED')
     try {
