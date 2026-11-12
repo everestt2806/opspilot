@@ -135,6 +135,12 @@ Không ghép đường dẫn Windows vào lệnh SSH. Đường dẫn VPS luôn 
 Mọi giá trị người dùng nhập đi vào lệnh shell phải qua `shellQuote()`.
 
 ### 4.4 Spawn Python từ Electron
+Dành cho development: đường dẫn `.venv` bên dưới vẫn giữ nguyên. Từ R11a, bản
+Windows packaged chỉ dùng resource `ml-runtime` đã kiểm manifest/hash, không dùng
+Python global hoặc copy virtualenv. Model/state ghi vào `userData/ml-state`.
+Build và phạm vi kiểm chứng: [ML runtime](../app/scripts/ml-runtime-lab/README.md);
+máy sạch/NSIS vẫn phải qua gate R11b riêng.
+
 Dùng đường dẫn tuyệt đối tới `.venv\Scripts\python.exe` — `python` trong PATH có thể là
 Store stub hoặc phiên bản khác. Bắt buộc:
 - kill tiến trình con trong `app.on('before-quit')` **và** `process.on('exit')`;

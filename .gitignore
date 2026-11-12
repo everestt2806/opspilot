@@ -70,3 +70,4 @@ desktop.ini
 
 # Generated Linux controller runtime; pins are baked into Main during the trusted build.
 app/resources/controller-releases/
+app/resources/ml-runtime/

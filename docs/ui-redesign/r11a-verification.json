@@ -1,0 +1,173 @@
+{
+  "checkpoint": "R11a",
+  "date": "2026-11-12",
+  "base_commit": "d302ee39f13ee369b308582994c4554636ea7892",
+  "status": "PORTABLE_WINDOWS_ML_RUNTIME_PASS",
+  "review": "PENDING",
+  "scope": "Generated Windows x64 Python runtime, passive trusted-resource verifier, packaged ML process lifecycle and writable userData model state.",
+  "limits": [
+    "Real packaged Electron host imports actual production MlServiceManager/verifier and runs real bundled Python/native libraries/HTTP/models. Only the logger adapter is a no-op; this is not full OpsPilot App.tsx or an NSIS/clean-Windows install.",
+    "The approved local Python installation and installed wheel RECORD hashes are build inputs, not a clean-machine distribution proof. Binary resources are generated/ignored and are not committed. Package missing resource or pin is refused; no global Python/development venv fallback.",
+    "180 synthetic samples and 161 feature vectors test software delivery and model persistence only. They do not constitute a 75-minute pilot, 50 formal runs or statistical ML efficacy evidence.",
+    "No VPS, production Desktop DB or user model migration. Development launch arguments and default state path remain unchanged; legacy installed-state migration and full install/upgrade/uninstall remain R11b gates.",
+    "Earlier fixture-copy failures were diagnosed with a minimal Unicode copy probe, then fixed using mkdir/copyFile without symlinks. A later successful ML run had cleanup EBUSY; the final run waits child close with cwd outside fixture and bounded cleanup retries. Earlier failed records are not counted as PASS.",
+    "R11 and overall release remain OPEN. No PR, merge, force push or signed-release claim."
+  ],
+  "runtime": {
+    "python_version": "3.12.10",
+    "platform": "win32-x64",
+    "files": 2679,
+    "bytes": 184108823,
+    "packages": {
+      "annotated-doc": "0.0.5",
+      "annotated-types": "0.8.0",
+      "anyio": "4.14.2",
+      "click": "8.4.2",
+      "colorama": "0.4.6",
+      "fastapi": "0.141.1",
+      "h11": "0.16.0",
+      "idna": "3.18",
+      "joblib": "1.5.3",
+      "narwhals": "2.24.0",
+      "numpy": "2.5.1",
+      "pydantic": "2.13.4",
+      "pydantic-core": "2.46.4",
+      "scikit-learn": "1.9.0",
+      "scipy": "1.18.0",
+      "starlette": "1.6.0",
+      "threadpoolctl": "3.6.0",
+      "typing-extensions": "4.16.0",
+      "typing-inspection": "0.4.2",
+      "uvicorn": "0.52.1"
+    },
+    "manifest_sha256": "17405450ce1486c411ec437c90e273b60525fd3c54d7df69477bbf3cb7e55654",
+    "service_source_hashes_match_current_source": true
+  },
+  "native": {
+    "record": "be380411bbf4",
+    "checks": [
+      "real_packaged_electron_and_relocated_python_native_imports_only_from_bundled_runtime_without_user_site",
+      "actual_http_train180_inference_four_methods_and_model_written_only_to_unicode_user_data",
+      "real_process_restart_kills_old_pid_and_restores_same_persisted_models_before_resuming_inference",
+      "absolute_windows_taskkill_removes_owned_ml_process_and_releases_loopback_listener_without_path_python_or_node",
+      "tampered_and_missing_runtime_refused_without_spawn_or_global_venv_fallback_and_resource_bytes_unchanged_after_restore"
+    ],
+    "real_packaged_electron": true,
+    "mocked_python": false,
+    "python_isolated": 1,
+    "python_no_site": 1,
+    "path_environment": "Windows System32 only, invalid inherited PYTHONHOME/PYTHONPATH",
+    "unicode_resources_and_user_data": true,
+    "training": {
+      "deployment_id": 900001,
+      "trained": true,
+      "train_sample_count": 180,
+      "feature_vector_count": 161,
+      "trained_at": "2026-11-12T13:23:42Z",
+      "warnings": []
+    },
+    "four_scores_returned": [
+      "ensemble",
+      "iforest",
+      "ocsvm",
+      "zscore_ewma"
+    ],
+    "private_fixture_removed": true,
+    "production_database_used": false
+  },
+  "gates": {
+    "full_app": {
+      "passed": 2216,
+      "failed": 0,
+      "skipped": 2,
+      "files": 165,
+      "existing_platform_skips": [
+        {
+          "file": "caddyInstallTransaction.test.ts",
+          "test": "P1e-3 first-run Caddy transaction executes install and rollback against a disposable Linux filesystem root"
+        },
+        {
+          "file": "caddyRealRuntime.linux.test.ts",
+          "test": "real Caddy lifecycle in an isolated WSL lab validates and reconciles real Caddy with loopback-only networking and tmpfs state"
+        }
+      ]
+    },
+    "focused_ml": {
+      "passed": 12,
+      "files": 2,
+      "also_in_final_full_suite": true
+    },
+    "python_ml": {
+      "passed": 23,
+      "state": "isolated ignored test directory"
+    },
+    "typecheck": [
+      "node",
+      "web",
+      "scripts"
+    ],
+    "eslint": {
+      "files": 8,
+      "errors": 0,
+      "warnings": 0
+    },
+    "ruff": {
+      "files": 3,
+      "lint": "PASS",
+      "format": "PASS"
+    },
+    "production_build": "PASS",
+    "actual_before_pack_controller_and_ml": "PASS",
+    "artifact_negatives": [
+      "compiled_pin_matches_generated_resource",
+      "empty_pin_refused",
+      "missing_resource_refused",
+      "no_venv_state_test_or_dev_tools_inventory"
+    ],
+    "negative_cli": "exit2 without explicit --run",
+    "negative_builder": "exit1 existing output refused without mutation"
+  },
+  "source_sha256": {
+    "app/src/main/mlClient.ts": "bffea7d421866b381fea8e045e7dfc79d198d01c3f807ba1d3fb779ab19ac18d",
+    "app/src/main/mlRuntime.ts": "4fcffd203335c60503296a3b96ad8d8a8918e804141a4622891deac1d056e7ae",
+    "app/src/main/mlClient.test.ts": "2ca5da1391c212e303ac857cbfb90e11f6faedb52068752d48ca9ba154b385bc",
+    "app/src/main/mlRuntime.test.ts": "e08cfb7bbdafc4151d7d5ae531198b9da68b5a3ddfd63c96c6322f0fd0263363",
+    "app/scripts/build-ml-runtime.py": "7b73d8c24ef8fc02c73a9e50556c73bebd21f50c8362e639b36d0159f99a31fb",
+    "app/scripts/ml-runtime-lab.mjs": "1d75eddfd8b23d098cc6bf4753281f49751c85f8050a7f8248e84a93564c3e76",
+    "app/scripts/ml-runtime-lab/entry.mjs": "aaabdd903f788e85c1681c1b043794f1f438c1a7214cf170cf4da0d0cc873321",
+    "app/scripts/controller-installer-before-pack.cjs": "8ca9b56cbf3b0da7aaa4b8b8ee811e445664c50334483e7903b03ee646c912ec",
+    "app/electron-builder.yml": "d09e256fbdde57e38f0b493b9c52713d5d7422b948cdea3931186c845dc249a7",
+    "app/electron.vite.config.ts": "5077f840e2d1075893119c17b2a0babfa30bb588b7fba24be42e2bf4125e728e",
+    "ml-service/runtime-lock.json": "dcbecd8b7dabaafb569aa3878139ce3f0854ff47d8911b16df5eabab747a5db3",
+    "ml-service/config.py": "822531131f3511ce8a04c1186f4f7b65c8f4094a8b4099d50360609d635b2191",
+    "ml-service/tests/test_state_location.py": "4e0c9dbee3297e499e9af90bc25a489c9addb7dc3733600d5f54ce56e992cba5",
+    "docs/contracts/ml-runtime-artifact.ts": "941cb1350a64cb1c5f54f9d6fd4928aadba6a5308fbd7b949a4c5f623b78334a",
+    "ml-service/main.py": "23ab986ef55a04b4aa52e514157ca06e4a9d15d2f9e49078fba707c2ed780660",
+    "ml-service/features.py": "586abde831ca0aacd9905ed69ccd7c3b3b94469721ea3473f82f7c550563f489",
+    "ml-service/store.py": "f3b7618038047a6cfc1fa11c45313090ab7052423171e6308fc2116f48aeeff6",
+    "ml-service/models/__init__.py": "84d742a5c24f201f9d4abe6f01d0c48edfe604eccf96ae3ed5ae950faf801ee3",
+    "ml-service/models/base.py": "dfffbbada8a0bf44ba92e832416da076ad0a39bdf61cd381e12b2f0b72e5b909",
+    "ml-service/models/ensemble.py": "4c33c516517298703ec0c0d0701a4f0f78ac427a986a8e8dd17f7a320f1496da",
+    "ml-service/models/iforest.py": "d4a1d33068b6c27e0a6282c266165f02bdeca948038df383506b53ec78541e06",
+    "ml-service/models/ocsvm.py": "43527400c97cfd180e054322e04d15a0ca39f97d8efa2f38cebc5207ea11168e",
+    "ml-service/models/zscore_ewma.py": "91028bf208d414873b4e8386e17fe45876db7e1e2944cd80608d44e93248d950"
+  },
+  "raw_evidence": {
+    "app/.out-scripts/r11a-full-final.json": "22523b89ae204ebd47e94daf79932854afefadbbb8d80743a06facfaf941e649",
+    "app/.out-scripts/r11a-full-final.log": "b71a0ca15babf2624042cf115572b72d4df796f80d673aaa0c3cf3fbd887f83c",
+    "app/.out-scripts/r11a-python-final.log": "af05a69457e6866ba73a5bf1137749bc24add4f75e4866907a0ce6376bba2f02",
+    "app/.out-scripts/r11a-focused-final.log": "6cb2ad47293be3bf1bede0d2854754d4ee73f4927db63b42376e0e0a29bd4e16",
+    "app/.out-scripts/r11a-lint-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r11a-build-final.log": "14a3b773a7a755a1168b445a0124ad052d6c43107c0205709f50e49ede0d6bb5",
+    "app/.out-scripts/r11a-scripts-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r11a-packaging-final.log": "1aeef5879c035804719a6ac7da8f6637c495666223d12442a0623860ca77e1b7",
+    "app/.out-scripts/r11a-negative-artifact.log": "7a136c490f910a1feb471a1be18a92fff84e10a208ecfae97ce2b299da10854c",
+    "app/.out-scripts/r11a-ruff-final.log": "af352a86840ad0af3d37ea0d9197f868363a6dac6b1c2ef5d2722f6b41d2d9af",
+    "app/.out-scripts/r11a-ruff-format-final.log": "f8db66624dca1692f16e9e88db61386f2e7352235dac883aa085892fffc1a5ac",
+    "app/.out-scripts/r11a-negative-cli.log": "102618490e56433d9e51b9a4189551a013cb105da06f9f227119212391c72f45",
+    "app/.out-scripts/r11a-negative-builder.log": "bbb9eb931759cb9a7e1b21423a977b1de226e725369fcd458db79e4335dcac8d",
+    "app/.out-scripts/r11a-native-final-cleanup.log": "b608f38720b90972b56bfc700e6d2523e16eb92e154ca45fefd48bd2d5b20b39",
+    "app/.out-scripts/ml-runtime-native/be380411bbf4/result.json": "c27e59a1b5239923d62c17eba8018ccef5bba93f3dacae90ddfc4e35adfa8e49",
+    "app/.out-scripts/ml-runtime-native/be380411bbf4/process.log": "750ab20604e0c65b2612ae34f335512efc5d4ffc3c44624e1ab6045bed4c1dbb"
+  }
+}

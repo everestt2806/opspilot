@@ -1,8 +1,13 @@
+import os
 from pathlib import Path
 
 SERVICE_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
-STATE_DIRECTORY = Path(__file__).resolve().parent / "state"
+STATE_DIRECTORY = Path(
+    os.environ.get("OPSPILOT_ML_STATE_DIRECTORY", str(Path(__file__).resolve().parent / "state"))
+)
+if not STATE_DIRECTORY.is_absolute():
+    raise RuntimeError("ML_STATE_DIRECTORY_MUST_BE_ABSOLUTE")
 
 WINDOW = 20
 METRICS: list[str] = [

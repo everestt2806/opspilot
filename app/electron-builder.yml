@@ -19,13 +19,10 @@ extraResources:
       - target_execution_guard.py
       - target_guarded_ssh_helper.py
       - target_product_runtime.py
-  - from: ../ml-service
-    to: ml-service
+  - from: resources/ml-runtime
+    to: ml-runtime
     filter:
       - '**/*'
-      - '!**/__pycache__/**'
-      - '!**/.pytest_cache/**'
-      - '!state/**'
   - from: ../templates
     to: templates
     filter:

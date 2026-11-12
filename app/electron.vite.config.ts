@@ -2,6 +2,7 @@ import { resolve } from 'path'
 import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import { existsSync, readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { controllerInstallerCatalogSchema } from './src/main/controlPlane/controllerInstallerCatalog'
 import approvedUpgrade from './control-plane-runtime/desktop-upgrade-release.json'
 
@@ -21,10 +22,17 @@ const installerCatalog = controllerInstallerCatalogSchema.parse({
     approvedUpgrade
   ]
 })
+const mlManifestFile = resolve('resources/ml-runtime/manifest.json')
+const mlRuntimePin = existsSync(mlManifestFile)
+  ? createHash('sha256').update(readFileSync(mlManifestFile)).digest('hex')
+  : ''
 
 export default defineConfig({
   main: {
-    define: { __OPSPILOT_CONTROLLER_INSTALLER_CATALOG__: JSON.stringify(installerCatalog) },
+    define: {
+      __OPSPILOT_CONTROLLER_INSTALLER_CATALOG__: JSON.stringify(installerCatalog),
+      __OPSPILOT_ML_RUNTIME_SHA256__: JSON.stringify(mlRuntimePin)
+    },
     plugins: [
       {
         name: 'controller-installer-catalog',
@@ -42,7 +50,10 @@ export default defineConfig({
         preserveEntrySignatures: 'strict',
         input: {
           index: resolve('src/main/index.ts'),
-          controllerResourceVerifier: resolve('src/main/controlPlane/controllerInstallerCatalog.ts')
+          controllerResourceVerifier: resolve(
+            'src/main/controlPlane/controllerInstallerCatalog.ts'
+          ),
+          mlResourceVerifier: resolve('src/main/mlRuntime.ts')
         }
       }
     },

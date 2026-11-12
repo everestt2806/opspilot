@@ -190,6 +190,8 @@ thời gian tiết kiệm được dồn cho phần ML.
 
 ## ADR-010 — ML service là tiến trình Python riêng, yêu cầu Python 3.12 trên máy người dùng
 
+> **Cập nhật R11a, 12/11/2026:** Với bản Windows x64 packaged, Python3.12 và các thư viện ML được đóng gói thành resource độc lập có kiểm hash; người dùng không cần cài Python riêng. Vẫn giữ tiến trình Python và REST loopback, không đổi model/API. Development dùng `.venv` như trước. Quyết định ban đầu bên dưới được giữ để tra cứu; điều kiện cài Python riêng không còn áp dụng cho bản packaged mới. [Hồ sơ và giới hạn kiểm chứng](tasks/tk-s7-release-r11a-portable-ml-runtime.md); máy sạch/NSIS thật còn gate R11b.
+
 **Bối cảnh.** scikit-learn không có bản JavaScript tương đương đủ tin cậy.
 
 **Phương án.** (a) Cài đặt lại 3 thuật toán bằng TypeScript. (b) **Tiến trình Python riêng,
