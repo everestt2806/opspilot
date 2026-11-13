@@ -7,12 +7,13 @@ import { controllerInstallerCatalogSchema } from './src/main/controlPlane/contro
 import approvedUpgrade from './control-plane-runtime/desktop-upgrade-release.json'
 import approvedSpa from './control-plane-runtime/desktop-spa-release.json'
 import approvedSpaRetained from './control-plane-runtime/desktop-spa-retained-release.json'
+import approvedNext from './control-plane-runtime/desktop-next-release.json'
 
 const catalogFile = resolve('resources/controller-releases/catalog.json')
 const originalCatalog = existsSync(catalogFile)
   ? controllerInstallerCatalogSchema.parse(JSON.parse(readFileSync(catalogFile, 'utf8')))
   : { format: 1, releases: [] }
-const approvedUpgrades = [approvedUpgrade, approvedSpa, approvedSpaRetained]
+const approvedUpgrades = [approvedUpgrade, approvedSpa, approvedSpaRetained, approvedNext]
 for (const approved of approvedUpgrades) {
   const conflicting = originalCatalog.releases.find((v) => v.release_id === approved.release_id)
   if (conflicting && JSON.stringify(conflicting) !== JSON.stringify(approved))

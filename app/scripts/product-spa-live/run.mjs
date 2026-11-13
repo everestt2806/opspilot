@@ -7,8 +7,11 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync, realpathSync, rmSyn
 import { join, resolve, dirname } from 'node:path'
 import { journalKey } from '../controller-upgrade-live/journal-key.mjs'
 import { snapshotCommand } from '../controller-desktop-live/snapshot.mjs'
-const args = process.argv.slice(2),
-  fresh = args.length === 1 && args[0] === '--confirm-development-spa-rollout',
+const next = process.argv.includes('--nextjs')
+const args = process.argv.slice(2).filter((a) => a !== '--nextjs'),
+  fresh =
+    args.length === 1 &&
+    args[0] === (next ? '--confirm-development-next-rollout' : '--confirm-development-spa-rollout'),
   resume = args.length === 2 && args[0] === '--resume' && /^[a-f0-9]{12}$/.test(args[1])
 if (!fresh && !resume) {
   console.log('{"status":"REJECTED","code":"EXPLICIT_DEVELOPMENT_SPA_ROLLOUT_REQUIRED"}')
@@ -17,8 +20,14 @@ if (!fresh && !resume) {
 const project = resolve(import.meta.dirname, '../..'),
   require = createRequire(join(project, 'package.json')),
   nonce = fresh ? randomBytes(6).toString('hex') : args[1],
-  directory = join(project, '.out-scripts/product-spa-live', nonce),
+  directory = join(
+    project,
+    next ? '.out-scripts/product-next-live' : '.out-scripts/product-spa-live',
+    nonce
+  ),
   local = join(directory, 'private-profile')
+const framework = next ? 'nextjs' : 'static-spa',
+  appPrefix = next ? 'next-live-' : 'spa-live-'
 const pin = 'SHA256:0X8J5LfPr6iZqEspsD379FvFEWrLfYpN0wfNYjQ87+E',
   installation = '7573f0b1-4262-4305-8b7d-9a1edce49626',
   controller = 'dc586bb7-cd83-484c-b036-e5ad40ec106d'
@@ -52,13 +61,17 @@ const stable = (error) => {
 const delay = (ms) => new Promise((r) => setTimeout(r, ms))
 const fixture = (mode) =>
   JSON.parse(
-    execFileSync(process.execPath, [join(import.meta.dirname, 'git-fixture.mjs'), mode, nonce], {
-      encoding: 'utf8',
-      windowsHide: true,
-      timeout: 120000,
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
+    execFileSync(
+      process.execPath,
+      [join(import.meta.dirname, 'git-fixture.mjs'), mode, nonce, ...(next ? ['--nextjs'] : [])],
+      {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 120000,
+        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+        stdio: ['ignore', 'pipe', 'pipe']
+      }
+    )
   )
 try {
   if (fresh) {
@@ -81,6 +94,7 @@ try {
     writeFileSync(join(directory, '.owner'), nonce, { flag: 'wx' })
     evidence = {
       status: 'RUNNING',
+      framework,
       record: nonce,
       checks: [],
       production_profile_used: false,
@@ -106,7 +120,10 @@ try {
   }
   const native = JSON.parse(
     readFileSync(
-      join(project, '.out-scripts/controller-upgrade-desktop/3ed7123a6a6a/result.json'),
+      join(
+        project,
+        `.out-scripts/controller-upgrade-desktop/${next ? '2de81b4d2f97' : '3ed7123a6a6a'}/result.json`
+      ),
       'utf8'
     )
   )
@@ -118,11 +135,27 @@ try {
   )
   assert.equal(
     native.release_inputs.candidate,
-    'a81ed72cfe56e8ecbe09508711eabe8f8e8dd82e505d2fef2d681032e0d909da'
+    next
+      ? 'b6803bc794cb39987936395d8d1f12cd06720a08f2e0ba2c3307ec619368ab45'
+      : 'a81ed72cfe56e8ecbe09508711eabe8f8e8dd82e505d2fef2d681032e0d909da'
   )
   assert(
     native.fixture_root_removed && native.fixture_unit_removed && native.fixture_account_removed
   )
+  if (next) {
+    const retained = JSON.parse(
+      readFileSync(
+        join(project, '.out-scripts/controller-enrollment/ebca6d0b5be8/result.json'),
+        'utf8'
+      )
+    )
+    assert.equal(retained.status, 'PASS')
+    assert.equal(retained.cleanup, true)
+    assert.equal(
+      retained.bundle_sha256,
+      '2a444abc24115985f920d48bc7cf049bf376cc37ab386d1b7aa4e2d5b620ac95'
+    )
+  }
   const verifier = require(join(project, 'out/main/controllerResourceVerifier.js'))
   verifier.verifyPackagedControllerResources(join(project, 'resources/controller-releases'))
   const esbuild = createRequire(require.resolve('vite/package.json'))('esbuild')
@@ -162,7 +195,7 @@ try {
   const profiles = new code.VpsRepository(db)
   if (fresh) {
     profiles.create({
-      name: 'SPA rollout ' + nonce,
+      name: (next ? 'Next rollout ' : 'SPA rollout ') + nonce,
       host: config.host,
       port: 22,
       username: 'root',
@@ -188,7 +221,11 @@ try {
       join(project, 'resources/controller-releases')
     ),
     releases = resources.entries(),
-    candidate = releases.find((r) => r.release_id === 'linux-x64-node22-20261113-spa-retained')
+    candidate = releases.find(
+      (r) =>
+        r.release_id ===
+        (next ? 'linux-x64-node22-20261113-next' : 'linux-x64-node22-20261113-spa-retained')
+    )
   assert(candidate)
   service = new code.DesktopControllerService(db, cipher, ssh, undefined, releases, resources)
   vault = new code.DesktopControllerVault(db, cipher)
@@ -207,12 +244,13 @@ try {
   const oldCids = async () => {
     const lines = (
       await exec(
-        "docker inspect --format '{{.Id}}' san-nha-live-app san-nha-live-collector desktop-live-69eeeb78-app desktop-live-69eeeb78-collector"
+        "docker inspect --format '{{.Id}}' san-nha-live-app san-nha-live-collector desktop-live-69eeeb78-app desktop-live-69eeeb78-collector" +
+          (next ? ' spa-live-6ab247675f19-app spa-live-6ab247675f19-collector' : '')
       )
     )
       .trim()
       .split('\n')
-    assert.equal(lines.length, 4)
+    assert.equal(lines.length, next ? 6 : 4)
     assert(lines.every((line) => /^[a-f0-9]{64}$/.test(line)))
     return lines
   }
@@ -223,6 +261,7 @@ try {
   assert.equal(before.schema, 29)
   assert.equal(before.active_jobs, 0)
   assert.equal(before.active_experiments, 0)
+  if (next) assert.equal(before.active_clients, 0)
   assert(before.desired.every((r) => r.auto_paused === 1))
   evidence.before ??= before
   evidence.old_container_ids ??= await oldCids()
@@ -237,7 +276,7 @@ try {
   }
   const intent = {
     installation_request_key: installation,
-    display_name: 'SPA rollout ' + nonce,
+    display_name: (next ? 'Next rollout ' : 'SPA rollout ') + nonce,
     allow_write: true
   }
   let connection = (await service.list()).find((v) => v.state === 'active')
@@ -301,7 +340,11 @@ try {
   evidence.after_upgrade = after
   check('trusted_asset_upgrade_preserves_uuid_uid_key_db_old_apps_and_scoped_client')
   progress('public-git-initial')
-  const gitRoot = join(project, '.out-scripts/product-spa-git', nonce)
+  const gitRoot = join(
+    project,
+    next ? '.out-scripts/product-next-git' : '.out-scripts/product-spa-git',
+    nonce
+  )
   const gitRecord = (mode) => JSON.parse(readFileSync(join(gitRoot, mode + '.json'), 'utf8'))
   const initial = existsSync(join(gitRoot, 'initial.json'))
     ? gitRecord('initial')
@@ -310,7 +353,7 @@ try {
   evidence.git.initial = initial
   save()
   let projectSetup = (await service.listProjects(binding)).find(
-    (p) => p.app_name === 'spa-live-' + nonce
+    (p) => p.app_name === appPrefix + nonce
   )
   if (!projectSetup) {
     const targets = await service.projectTargets({ binding_id: binding })
@@ -321,23 +364,23 @@ try {
     projectSetup = await service.prepareProject({
       binding_id: binding,
       target_vps_id: target.id,
-      app_name: 'spa-live-' + nonce,
-      framework: 'static-spa',
+      app_name: appPrefix + nonce,
+      framework,
       repository_url: initial.repository_url,
       production_ref: initial.branch,
       repository_root: '.',
       host_port: null,
-      container_port: 80,
+      container_port: next ? 3000 : 80,
       healthcheck_path: '/'
     })
     projectSetup = await service.sendProject(projectSetup.request_key)
   }
   assert.equal(projectSetup.state, 'registered')
-  assert.equal(projectSetup.framework, 'static-spa')
+  assert.equal(projectSetup.framework, framework)
   evidence.project = projectSetup
   save()
   const source = await service.verifyProjectSource(projectSetup.request_key)
-  assert.equal(source.framework, 'static-spa')
+  assert.equal(source.framework, framework)
   const currentPublished = ['final', 'fault', 'update', 'initial'].find((mode) =>
     existsSync(join(gitRoot, mode + '.json'))
   )
@@ -373,11 +416,21 @@ try {
     const html = await home.text(),
       deep = await get('/books/current/reading')
     assert.equal(deep.status, 200)
-    assert.equal(await deep.text(), html)
-    assert.equal((await get('/assets/not-present.js')).status, 404)
+    if (next) {
+      const expected = `r7f-${nonce}-${mode}`
+      assert(html.includes(expected))
+      assert((await deep.text()).includes(expected))
+      const asset = html.match(/src="([^"]+\.js)"/)?.[1]
+      assert(asset?.startsWith('/_next/'))
+      assert.equal((await get(asset)).status, 200)
+      assert.equal((await get('/_next/static/not-present.js')).status, 404)
+    } else {
+      assert.equal(await deep.text(), html)
+      assert.equal((await get('/assets/not-present.js')).status, 404)
+    }
     const marker = await get('/release.txt')
     assert.equal(marker.status, 200)
-    assert.equal((await marker.text()).trim(), `r7c-${nonce}-${mode}`)
+    assert.equal((await marker.text()).trim(), `${next ? 'r7f' : 'r7c'}-${nonce}-${mode}`)
     return { url: origin, deep_route: true, missing_asset_404: true, marker: mode }
   }
   const dispatch = async (sha, first = false, mode) => {
@@ -446,10 +499,14 @@ try {
     save()
     return evidence.deployments[mode]
   }
-  progress('spa-first-deployment')
+  progress((next ? 'next-' : 'spa-') + 'first-deployment')
   await doDeploy('initial', true)
-  check('public_git_spa_source_enrollment_preflight_full_pipeline_http_deep_route_and_404')
-  progress('spa-source-update')
+  check(
+    next
+      ? 'public_git_next_source_enrollment_preflight_full_pipeline_ssr_assets_and_404'
+      : 'public_git_spa_source_enrollment_preflight_full_pipeline_http_deep_route_and_404'
+  )
+  progress((next ? 'next-' : 'spa-') + 'source-update')
   const update = await doDeploy('update')
   const cidBefore = (
     await exec(
@@ -458,8 +515,12 @@ try {
   ).trim()
   evidence.spa_previous_cids = cidBefore
   save()
-  check('new_public_git_commit_updates_spa_and_collector')
-  progress('spa-unhealthy-update')
+  check(
+    next
+      ? 'new_public_git_commit_updates_next_and_collector'
+      : 'new_public_git_commit_updates_spa_and_collector'
+  )
+  progress((next ? 'next-' : 'spa-') + 'unhealthy-update')
   const failed = await doDeploy('fault')
   assert.equal(failed.status.current_deployment_id, update.status.current_deployment_id)
   assert.equal(
@@ -470,8 +531,12 @@ try {
     ).trim(),
     evidence.spa_previous_cids
   )
-  check('unreadable_public_git_artifact_rolls_back_exact_app_and_collector_cids')
-  progress('spa-final-healthy')
+  check(
+    next
+      ? 'public_git_ssr503_rolls_back_exact_app_and_collector_cids'
+      : 'unreadable_public_git_artifact_rolls_back_exact_app_and_collector_cids'
+  )
+  progress((next ? 'next-' : 'spa-') + 'final-healthy')
   await doDeploy('final')
   check('public_branch_restored_healthy_final_deployment')
   assert.deepEqual(await oldCids(), evidence.old_container_ids)
@@ -483,6 +548,21 @@ try {
   assert.equal(final.active_jobs, 0)
   assert.equal(final.active_experiments, 0)
   assert(final.desired.every((row) => row.auto_paused === 1))
+  if (next) {
+    assert.deepEqual(
+      final.apps.filter((a) => a.id <= 3),
+      evidence.before.apps
+    )
+    for (const field of [
+      'receipt_sha256',
+      'database_inode',
+      'schema',
+      'vps_digest',
+      'files',
+      'service'
+    ])
+      assert.deepEqual(final[field], evidence.after_upgrade[field])
+  }
   evidence.after = final
   check('temporary_client_revoked_old_apps_unchanged_all_jobs_settled_policies_paused')
   evidence.status = 'PASS'

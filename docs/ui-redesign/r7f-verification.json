@@ -1,0 +1,953 @@
+{
+  "status": "LIVE_PRODUCT_NEXTJS_ROLLOUT_PASS",
+  "date": "2026-11-13",
+  "base_sha": "922fc3819c2477579a87a5e2ab44adb001b04b19",
+  "source_sha256": {
+    "app/electron.vite.config.ts": "2ee4b9c11bbd4bc5eff124b12740f79bcce5700586caea0a827792b7acb3169d",
+    "app/scripts/product-spa-live/git-fixture.mjs": "301622bf2bd6327635817dd6f0ce7330d50d77629f64a3cb457c881978acae63",
+    "app/scripts/product-spa-live/run.mjs": "76a70cff8a2ea71b60fcf43a704eb59041f30e38f3ea32e20c1b2546bc6aa214",
+    "app/control-plane-runtime/desktop-next-release.json": "ee3937332d9c2d8d91ffc39afa21175701150d9e8210eba99ebf4197f83ff8de"
+  },
+  "release": {
+    "id": "linux-x64-node22-20261113-next",
+    "release_sha256": "b6803bc794cb39987936395d8d1f12cd06720a08f2e0ba2c3307ec619368ab45",
+    "payload_sha256": "93abe6ea846f44ef914d0a9ee6e74aaa7e40d3c1ec3a353e537ca89b1ff0c777",
+    "control_sha256": "2a444abc24115985f920d48bc7cf049bf376cc37ab386d1b7aa4e2d5b620ac95",
+    "tool_sha256": "8ac74cd54097de33346fc1053dc09fa349520a29b64882f95250c5866e512d0c",
+    "files": 998,
+    "bytes": 145018395,
+    "node_version": "22.23.4",
+    "glibc": "2.39",
+    "compiled_catalog_entries": 5,
+    "old_four_pins_unchanged": true,
+    "frozen_payload_rebuild_byte_identical": true
+  },
+  "native_upgrade": {
+    "status": "PASS",
+    "scope": "PRIVATE_ROOT_SYSTEMD_PINNED_SSH_MAIN_SQLITE_UPGRADE",
+    "release_inputs": {
+      "original": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+      "candidate": "b6803bc794cb39987936395d8d1f12cd06720a08f2e0ba2c3307ec619368ab45",
+      "fixture_installer": "2747dc675fb87a8a74ab03bf0f76cd6138eb7363bef433243f2a1f21e2075ec9"
+    },
+    "checks": [
+      "fresh_desktop031_and_native_controller029_have_separate_migration_roles",
+      "original_root_admin_enrollment_stores_api_token_only_in_encrypted_main_vault",
+      "plan_prepare_and_absent_inspect_preserve_uuid_and_never_create_remote_upgrade_namespace",
+      "independently_pinned_upgrade_transfer_uses_distinct_uuid_namespace_preserving_original_install_staging",
+      "wrong_tool_pin_rejected_by_receiver_before_upgrader_execution",
+      "disconnect_before_root_journal_keeps_attempted_and_wrong_parent_recovery_never_creates_journal",
+      "lost_upgrade_reply_recovers_in_separate_cold_main_process_without_replaying_or_restarting_service",
+      "explicit_runtime_refresh_preserves_api_token_client_and_authenticated_api_with_revision_root_admin",
+      "historical_release_keeps_real_inspection_and_token_refresh_but_cannot_be_selected_for_new_upgrade",
+      "cold_profile_readonly_discovery_and_explicit_adoption_preserve_remote_uuids_and_current_runtime",
+      "cold_adoption_separate_readonly_enrollment_api200_revocation_without_reinstall_restart_or_receipt_change",
+      "same_host_readded_vps_fresh_pinned_ssh_authority_then_separate_api_refresh_preserves_uuid_pid_token_client_and_api200",
+      "attempt_monotonicity_prevents_second_upgrade_and_does_not_rebind_api_credentials",
+      "revision_admin_derives_current_runtime_after_root_attestation_and_rejects_wrong_uid_payload_without_restart",
+      "revision_admin_rejects_stopped_controller_without_implicitly_starting_or_adopting_it",
+      "rollback_blocks_old_binding_until_explicit_refresh_then_reuses_the_same_authenticated_token",
+      "rolled_back_current_operation_admin_uses_restored_parent_payload_and_preserves_original_authority",
+      "explicit_main_rollback_restores_original_unit_and_preserves_root_receipt_identity_key_database_inode",
+      "archived_vps_authority_rejected_before_any_ssh_execution"
+    ],
+    "production_vps_used": false,
+    "production_database_used": false,
+    "fixture_root_removed": true,
+    "fixture_unit_removed": true,
+    "fixture_account_removed": true,
+    "python_only_path": true,
+    "ssh_authentications": 12,
+    "ssh_executions": 48,
+    "script_bytes": 40517,
+    "compressed_executions": 48,
+    "max_command_bytes": 12138
+  },
+  "retained_helper": {
+    "status": "PASS",
+    "nonce": "ebca6d0b5be8",
+    "scope": "RETAINED_HELPER_REAL_SSH_COLD_RECOVERY",
+    "cases": [
+      {
+        "name": "init_does_not_create_key_or_vps",
+        "status": "PASS"
+      },
+      {
+        "name": "missing_key_never_autocreates_or_enrolls",
+        "status": "PASS"
+      },
+      {
+        "name": "explicit_private_create_once_key",
+        "status": "PASS"
+      },
+      {
+        "name": "controller_and_missing_pin_reject_without_write",
+        "status": "PASS"
+      },
+      {
+        "name": "real_host_key_and_auth_failure_do_not_enroll",
+        "status": "PASS"
+      },
+      {
+        "name": "pinned_authenticated_enrollment_saves_bound_ciphertext",
+        "status": "PASS"
+      },
+      {
+        "name": "cold_cli_replay_preserves_id_ciphertext_and_metadata",
+        "status": "PASS"
+      },
+      {
+        "name": "actual_old_express_enrollment_recovers_under_new_bundle_without_reinstall_or_helper_write",
+        "status": "PASS"
+      },
+      {
+        "name": "spa_rejects_the_same_legacy_helper",
+        "status": "PASS"
+      },
+      {
+        "name": "actual_remote_helper_drift_rejected_even_with_legacy_profile_compatibility",
+        "status": "PASS"
+      }
+    ],
+    "bundle_sha256": "2a444abc24115985f920d48bc7cf049bf376cc37ab386d1b7aa4e2d5b620ac95",
+    "driver_sha256": "5d4d9c9fd44976f5a51ef6431ed9e1f6c20252c1a50729d2eeb971daaa859e16",
+    "subject_sha256": {
+      "app/src/main/controlPlane/cli.ts": "350a6b6e2e56048704d6476c634ec5976b5f1d8e10b80e20b2b38967a022d90d",
+      "app/src/main/controlPlane/controllerEnrollment.ts": "613633af4d3e7c373c43708f9b66719875a7daf7569baa4f9a8952f4659a0a06",
+      "app/src/main/controlPlane/controllerBootstrapInput.ts": "ecc22254b85fac165297a7ec05af142a8babdfea2a7c10117b70687040cf1d58",
+      "app/src/main/controlPlane/controllerSecrets.ts": "3b598a861eaa805e939cd6d08022503e15c6347b795e4522da33ec60164d7e14",
+      "app/src/main/controlPlane/controllerSshResolver.ts": "1103f906e1eb012635672987567c40bec76b2bebbcb58f20b67d3b6ebff1fabf",
+      "docs/contracts/product-controller-bootstrap.ts": "11330cbd69bb4cea7d26de850591e0aac3f4fe5bd7e61bcc2880ddb41e4b7306"
+    },
+    "subject_unchanged": true,
+    "cleanup": true
+  },
+  "live": {
+    "status": "PASS",
+    "framework": "nextjs",
+    "record": "ba8a98aed302",
+    "checks": [
+      "fresh_pinned_ssh_quiescent_controller_and_existing_healthy_containers",
+      "trusted_asset_upgrade_preserves_uuid_uid_key_db_old_apps_and_scoped_client",
+      "public_git_next_source_enrollment_preflight_full_pipeline_ssr_assets_and_404",
+      "new_public_git_commit_updates_next_and_collector",
+      "public_git_ssr503_rolls_back_exact_app_and_collector_cids",
+      "public_branch_restored_healthy_final_deployment",
+      "temporary_client_revoked_old_apps_unchanged_all_jobs_settled_policies_paused"
+    ],
+    "production_profile_used": false,
+    "gui_tested": false,
+    "remote_mutation_attempted": true,
+    "main_artifact_sha256": "e1fa0ccc30b3b6eec3554fffe37c4e896e22689eb0cd22c53a34abcbb6f57d9e",
+    "before": {
+      "receipt": {
+        "format": 1,
+        "request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "release_sha256": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+        "source_directory": "/var/lib/opspilot-controller-transfer/release",
+        "payload_sha256": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+        "phase": "installed",
+        "uid": 997,
+        "gid": 987,
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "created_at": "2026-11-10T06:11:51.696Z",
+        "updated_at": "2026-11-10T06:12:02.055Z"
+      },
+      "upgrade": {
+        "format": 1,
+        "request_key": "a5a702ff-68a6-47e3-abd5-e1dd71ce25a9",
+        "installation_request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "parent_upgrade_key": "37a115d5-71c6-4b87-bacb-6375a64c0c65",
+        "parent_release_sha256": "093a05957aa2d1f702a1f495346e338ac8e8ce3934556562f74882a7299962d7",
+        "release_sha256": "a81ed72cfe56e8ecbe09508711eabe8f8e8dd82e505d2fef2d681032e0d909da",
+        "release_directory": "/var/lib/opspilot-controller-upgrades/a5a702ff-68a6-47e3-abd5-e1dd71ce25a9/release",
+        "payload_sha256": "4fbe3321801fd084749df2892fbc2fa078ae6e64e6458a107b5940517f0ff957",
+        "phase": "active",
+        "before": {
+          "format": 1,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "schema_sha256": "4fa659e7343ac9bb6b2cc1ccff302ea0e08e89a4e9d869c9dc66ccf164846446",
+          "state_sha256": "77ba6ed0e290adad30e5da94769c812a38f02854ad710f6f361b1f1872b0715e",
+          "key_sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706",
+          "database_inode": 265566,
+          "key_inode": 265570,
+          "quiescent": true
+        },
+        "rollback_before": null,
+        "created_at": "2026-11-13T06:19:45.998Z",
+        "updated_at": "2026-11-13T06:20:10.811Z"
+      },
+      "upgrade_sha256": "53daab24d41f2249b7440cd77509e7e2c961f2147293f5e2b7fed008f6babf79",
+      "receipt_sha256": "b3be9019462c586781b64f7a13faa4f4c55e27d964893ba22571c835716ba5b4",
+      "database_inode": 265566,
+      "schema": 29,
+      "active_experiments": 0,
+      "active_jobs": 0,
+      "active_clients": 0,
+      "apps": [
+        {
+          "id": 1,
+          "name": "san-nha-live",
+          "current_deployment_id": 4
+        },
+        {
+          "id": 2,
+          "name": "desktop-live-69eeeb78",
+          "current_deployment_id": 5
+        },
+        {
+          "id": 3,
+          "name": "spa-live-6ab247675f19",
+          "current_deployment_id": 10
+        }
+      ],
+      "deployment": {
+        "id": 4,
+        "status": "running",
+        "git_commit_sha": "bfed8941e2a719b04fa960142b7c3df0eed66b57",
+        "exposure_status": "reachable",
+        "exposure_evidence_json": "{\"checked_at\":\"2026-11-12T07:19:21.719Z\",\"cloud_firewall\":\"not_configured\",\"diagnosis\":null,\"external_probe\":\"reachable\",\"kind\":\"product_exposure_observation\",\"observation\":{\"app_id\":1,\"authority_sha256\":\"ed4bf8bbe021788de437631ef10ab34b8011e8fbb0bb9d198d2ede87dbc47feb\",\"body_sha256\":\"ddb003d1f641b53c873f26ef1d3326bc35118dc623f14bee93aecbee7f5e2737\",\"checked_at\":\"2026-11-12T07:19:21.719Z\",\"client_id\":\"20feca75-727b-4d8e-8a56-42a998df1de4\",\"deployment_id\":4,\"format\":1,\"http_status\":200,\"observation_id\":\"37e04ff7-980b-455a-8bf7-9d68960113aa\",\"observer\":\"desktop_external\",\"outcome\":\"reachable\",\"previous_observation_id\":null,\"reason\":\"none\",\"received_at\":\"2026-11-12T07:19:24.309Z\",\"started_at\":\"2026-11-12T07:19:21.599Z\",\"status\":\"reachable\",\"url\":\"http://167.71.202.116:30000\"},\"status\":\"reachable\",\"ufw_reconciled\":false,\"ufw_state\":\"not_checked\",\"url\":\"http://167.71.202.116:30000\"}"
+      },
+      "desired": [
+        {
+          "app_id": 1,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 2,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 3,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        }
+      ],
+      "vps_digest": "68940aec92472f567563d7c4edfc99f063b76abc466f14ec1fc974b3df070653",
+      "files": [
+        {
+          "path": ".product-controller-initialized",
+          "inode": 265569,
+          "sha256": "e9342557cddefc41325a75f51d3eca413e659c2cd348d4f6045a6c16702d2074"
+        },
+        {
+          "path": ".controller-runtime-key",
+          "inode": 265570,
+          "sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706"
+        },
+        {
+          "path": ".controller-installation",
+          "inode": 265565,
+          "sha256": "5d9cc95ff2db3d9338776481d7998be53b6d29bd5234d9c6db9b85d2b321609b"
+        }
+      ],
+      "service": "MainPID=333893\nUser=opspilot-controller\nActiveState=active\n"
+    },
+    "old_container_ids": [
+      "1bdb0eeacc48c4686cc157685e8aacec3b0f208f301ee6a1a0c218c3a82500bc",
+      "5049f9dc01cba64c771badf0d690ef49476f2cd9b9b9aa235ccaa9dbbc53eb6f",
+      "55ee8e261546919d7072a34d98804d4fd248433064fcd1ac922843d792f771ea",
+      "3cbebfe49f5994b138582e7a4512da9ac7461b3b03e01e9eafc7d02e004f0969",
+      "51afedc0502b2f81fa150858623ad7a8be2ca47c2d905829ac7f6399088cfccb",
+      "82aefed9096cd557ca946592de4f863d2eb75c9f72348bd2346ae1e9077732cc"
+    ],
+    "upgrade_key": "4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4",
+    "upgrade_attempted": true,
+    "upgrade": {
+      "request_key": "4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4",
+      "installation_request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+      "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+      "vps_id": 1,
+      "authority_revision": 1,
+      "parent_upgrade_key": "a5a702ff-68a6-47e3-abd5-e1dd71ce25a9",
+      "parent_release_sha256": "a81ed72cfe56e8ecbe09508711eabe8f8e8dd82e505d2fef2d681032e0d909da",
+      "release_id": "linux-x64-node22-20261113-next",
+      "release_sha256": "b6803bc794cb39987936395d8d1f12cd06720a08f2e0ba2c3307ec619368ab45",
+      "installer_sha256": "8ac74cd54097de33346fc1053dc09fa349520a29b64882f95250c5866e512d0c",
+      "state": "active",
+      "is_current": true,
+      "last_result": {
+        "artifact_path": "/opt/opspilot-controller/revisions/4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4/runtime/payload/control-plane.cjs",
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "data_directory": "/var/lib/opspilot-controller",
+        "format": 1,
+        "installation_request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "is_current": true,
+        "node_path": "/opt/opspilot-controller/revisions/4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4/runtime/node",
+        "parent_release_sha256": "a81ed72cfe56e8ecbe09508711eabe8f8e8dd82e505d2fef2d681032e0d909da",
+        "parent_upgrade_key": "a5a702ff-68a6-47e3-abd5-e1dd71ce25a9",
+        "payload_sha256": "93abe6ea846f44ef914d0a9ee6e74aaa7e40d3c1ec3a353e537ca89b1ff0c777",
+        "phase": "active",
+        "release_sha256": "b6803bc794cb39987936395d8d1f12cd06720a08f2e0ba2c3307ec619368ab45",
+        "request_key": "4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4",
+        "runtime_payload_sha256": "93abe6ea846f44ef914d0a9ee6e74aaa7e40d3c1ec3a353e537ca89b1ff0c777",
+        "runtime_release_sha256": "b6803bc794cb39987936395d8d1f12cd06720a08f2e0ba2c3307ec619368ab45",
+        "runtime_uid": 997,
+        "runtime_upgrade_key": "4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4",
+        "service_state": "running"
+      },
+      "created_at": "2026-11-13T11:32:49.798Z",
+      "updated_at": "2026-11-13T11:37:02.732Z"
+    },
+    "after_upgrade": {
+      "receipt": {
+        "format": 1,
+        "request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "release_sha256": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+        "source_directory": "/var/lib/opspilot-controller-transfer/release",
+        "payload_sha256": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+        "phase": "installed",
+        "uid": 997,
+        "gid": 987,
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "created_at": "2026-11-10T06:11:51.696Z",
+        "updated_at": "2026-11-10T06:12:02.055Z"
+      },
+      "upgrade": {
+        "format": 1,
+        "request_key": "4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4",
+        "installation_request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "parent_upgrade_key": "a5a702ff-68a6-47e3-abd5-e1dd71ce25a9",
+        "parent_release_sha256": "a81ed72cfe56e8ecbe09508711eabe8f8e8dd82e505d2fef2d681032e0d909da",
+        "release_sha256": "b6803bc794cb39987936395d8d1f12cd06720a08f2e0ba2c3307ec619368ab45",
+        "release_directory": "/var/lib/opspilot-controller-upgrades/4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4/release",
+        "payload_sha256": "93abe6ea846f44ef914d0a9ee6e74aaa7e40d3c1ec3a353e537ca89b1ff0c777",
+        "phase": "active",
+        "before": {
+          "format": 1,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "schema_sha256": "4fa659e7343ac9bb6b2cc1ccff302ea0e08e89a4e9d869c9dc66ccf164846446",
+          "state_sha256": "7daa11ce48d7df7ed6aef379240b2d8278b0b3299ba13dd67a58b3eeee6c3755",
+          "key_sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706",
+          "database_inode": 265566,
+          "key_inode": 265570,
+          "quiescent": true
+        },
+        "rollback_before": null,
+        "created_at": "2026-11-13T11:36:42.114Z",
+        "updated_at": "2026-11-13T11:36:57.484Z"
+      },
+      "upgrade_sha256": "0a61746199fc06521d3395d21ea36a93a659323700d7613d5c1349c2a92429c3",
+      "receipt_sha256": "b3be9019462c586781b64f7a13faa4f4c55e27d964893ba22571c835716ba5b4",
+      "database_inode": 265566,
+      "schema": 29,
+      "active_experiments": 0,
+      "active_jobs": 0,
+      "active_clients": 1,
+      "apps": [
+        {
+          "id": 1,
+          "name": "san-nha-live",
+          "current_deployment_id": 4
+        },
+        {
+          "id": 2,
+          "name": "desktop-live-69eeeb78",
+          "current_deployment_id": 5
+        },
+        {
+          "id": 3,
+          "name": "spa-live-6ab247675f19",
+          "current_deployment_id": 10
+        }
+      ],
+      "deployment": {
+        "id": 4,
+        "status": "running",
+        "git_commit_sha": "bfed8941e2a719b04fa960142b7c3df0eed66b57",
+        "exposure_status": "reachable",
+        "exposure_evidence_json": "{\"checked_at\":\"2026-11-12T07:19:21.719Z\",\"cloud_firewall\":\"not_configured\",\"diagnosis\":null,\"external_probe\":\"reachable\",\"kind\":\"product_exposure_observation\",\"observation\":{\"app_id\":1,\"authority_sha256\":\"ed4bf8bbe021788de437631ef10ab34b8011e8fbb0bb9d198d2ede87dbc47feb\",\"body_sha256\":\"ddb003d1f641b53c873f26ef1d3326bc35118dc623f14bee93aecbee7f5e2737\",\"checked_at\":\"2026-11-12T07:19:21.719Z\",\"client_id\":\"20feca75-727b-4d8e-8a56-42a998df1de4\",\"deployment_id\":4,\"format\":1,\"http_status\":200,\"observation_id\":\"37e04ff7-980b-455a-8bf7-9d68960113aa\",\"observer\":\"desktop_external\",\"outcome\":\"reachable\",\"previous_observation_id\":null,\"reason\":\"none\",\"received_at\":\"2026-11-12T07:19:24.309Z\",\"started_at\":\"2026-11-12T07:19:21.599Z\",\"status\":\"reachable\",\"url\":\"http://167.71.202.116:30000\"},\"status\":\"reachable\",\"ufw_reconciled\":false,\"ufw_state\":\"not_checked\",\"url\":\"http://167.71.202.116:30000\"}"
+      },
+      "desired": [
+        {
+          "app_id": 1,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 2,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 3,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        }
+      ],
+      "vps_digest": "68940aec92472f567563d7c4edfc99f063b76abc466f14ec1fc974b3df070653",
+      "files": [
+        {
+          "path": ".product-controller-initialized",
+          "inode": 265569,
+          "sha256": "e9342557cddefc41325a75f51d3eca413e659c2cd348d4f6045a6c16702d2074"
+        },
+        {
+          "path": ".controller-runtime-key",
+          "inode": 265570,
+          "sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706"
+        },
+        {
+          "path": ".controller-installation",
+          "inode": 265565,
+          "sha256": "5d9cc95ff2db3d9338776481d7998be53b6d29bd5234d9c6db9b85d2b321609b"
+        }
+      ],
+      "service": "MainPID=401620\nUser=opspilot-controller\nActiveState=active\n"
+    },
+    "git": {
+      "initial": {
+        "mode": "initial",
+        "nonce": "ba8a98aed302",
+        "branch": "demo/next-r7f-ba8a98aed302",
+        "sha": "1931e8a427a80beb3e1d80663bbc6622922731d0",
+        "repository_url": "https://github.com/everestt2806/opspilot.git",
+        "repository_root": ".",
+        "public_marker": "r7f-ba8a98aed302-initial",
+        "files": 7
+      },
+      "update": {
+        "mode": "update",
+        "nonce": "ba8a98aed302",
+        "branch": "demo/next-r7f-ba8a98aed302",
+        "sha": "17c602ee37508eea4ee98245d1b2a6f4e1e44173",
+        "repository_url": "https://github.com/everestt2806/opspilot.git",
+        "repository_root": ".",
+        "public_marker": "r7f-ba8a98aed302-update",
+        "files": 7
+      },
+      "fault": {
+        "mode": "fault",
+        "nonce": "ba8a98aed302",
+        "branch": "demo/next-r7f-ba8a98aed302",
+        "sha": "47e4f3b3de560b5fbfb3c51ec38bb6c55a1ec820",
+        "repository_url": "https://github.com/everestt2806/opspilot.git",
+        "repository_root": ".",
+        "public_marker": "r7f-ba8a98aed302-fault",
+        "files": 7
+      },
+      "final": {
+        "mode": "final",
+        "nonce": "ba8a98aed302",
+        "branch": "demo/next-r7f-ba8a98aed302",
+        "sha": "ab115722e7dcf6e1efee59d1fd795351ccc2ac7f",
+        "repository_url": "https://github.com/everestt2806/opspilot.git",
+        "repository_root": ".",
+        "public_marker": "r7f-ba8a98aed302-final",
+        "files": 7
+      }
+    },
+    "project": {
+      "request_key": "8004c33d-13b0-4f3c-9da5-1114908c383d",
+      "binding_id": "2e0819ba-60e2-4db5-bc78-a985fd2ae7b1",
+      "binding_revision": 3,
+      "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+      "target_vps_id": 1,
+      "target_security_revision": 1,
+      "app_name": "next-live-ba8a98aed302",
+      "framework": "nextjs",
+      "repository_url": "https://github.com/everestt2806/opspilot.git",
+      "production_ref": "demo/next-r7f-ba8a98aed302",
+      "repository_root": ".",
+      "host_port": 30003,
+      "container_port": 3000,
+      "healthcheck_path": "/",
+      "state": "registered",
+      "app_id": 4,
+      "created_at": "2026-11-13T11:37:21.282Z",
+      "updated_at": "2026-11-13T11:37:29.138Z"
+    },
+    "deployments": {
+      "initial": {
+        "status": {
+          "binding_id": "2e0819ba-60e2-4db5-bc78-a985fd2ae7b1",
+          "binding_revision": 3,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "app_id": 4,
+          "ownership_generation": 1,
+          "source_generation": 1,
+          "current_deployment_id": 11,
+          "current_deployment_sha": "1931e8a427a80beb3e1d80663bbc6622922731d0",
+          "current_deployment_state": "running",
+          "latest_job_id": "pjob_e5838270-1996-4040-ae60-a398c1359aff",
+          "latest_job_state": "succeeded",
+          "checked_at": "2026-11-13T11:39:24.407Z",
+          "data_freshness": "current"
+        },
+        "web": {
+          "url": "http://167.71.202.116:30003",
+          "deep_route": true,
+          "missing_asset_404": true,
+          "marker": "initial"
+        },
+        "exposure": {
+          "binding_id": "2e0819ba-60e2-4db5-bc78-a985fd2ae7b1",
+          "app_id": 4,
+          "binding_revision": 3,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "state": "recorded",
+          "view": {
+            "app_id": 4,
+            "deployment_id": 11,
+            "context": {
+              "app_id": 4,
+              "deployment_id": 11,
+              "authority_sha256": "d9a6f5680b454ad336f7f416882191063f2a889d3cf433792a27925d63f17358",
+              "previous_observation_id": "83ce1ab7-a4ab-4ef6-ad6f-9582491f4da0",
+              "url": "http://167.71.202.116:30003"
+            },
+            "status": "reachable",
+            "freshness": "current",
+            "unavailable_reason": null,
+            "observation": {
+              "deployment_id": 11,
+              "authority_sha256": "d9a6f5680b454ad336f7f416882191063f2a889d3cf433792a27925d63f17358",
+              "previous_observation_id": null,
+              "observer": "desktop_external",
+              "started_at": "2026-11-13T11:39:24.296Z",
+              "checked_at": "2026-11-13T11:39:24.492Z",
+              "outcome": "reachable",
+              "http_status": 200,
+              "reason": "none",
+              "format": 1,
+              "observation_id": "83ce1ab7-a4ab-4ef6-ad6f-9582491f4da0",
+              "client_id": "8e214c88-6683-4fbe-b887-1f65aed1972f",
+              "body_sha256": "1af75e258c9b0f15d9b56e44033e9cf63aa9fbdc4c0b6f7fd96ed42b69d77b5b",
+              "app_id": 4,
+              "url": "http://167.71.202.116:30003",
+              "status": "reachable",
+              "received_at": "2026-11-13T11:39:26.140Z"
+            },
+            "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+            "request_id": "6c06c969-7ad9-49d5-bbaa-57850604e1b9",
+            "sampled_at": "2026-11-13T11:39:26.145Z",
+            "data_freshness": "current"
+          },
+          "reason_code": null,
+          "checked_at": "2026-11-13T11:39:24.854Z"
+        },
+        "command_key": "555170f6-2560-406a-a524-9ad3d49c84ad"
+      },
+      "update": {
+        "status": {
+          "binding_id": "2e0819ba-60e2-4db5-bc78-a985fd2ae7b1",
+          "binding_revision": 3,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "app_id": 4,
+          "ownership_generation": 1,
+          "source_generation": 1,
+          "current_deployment_id": 12,
+          "current_deployment_sha": "17c602ee37508eea4ee98245d1b2a6f4e1e44173",
+          "current_deployment_state": "running",
+          "latest_job_id": "pjob_efad1473-8900-4254-9c3e-a3d4bc2a1cd0",
+          "latest_job_state": "succeeded",
+          "checked_at": "2026-11-13T11:40:47.403Z",
+          "data_freshness": "current"
+        },
+        "web": {
+          "url": "http://167.71.202.116:30003",
+          "deep_route": true,
+          "missing_asset_404": true,
+          "marker": "update"
+        },
+        "exposure": {
+          "binding_id": "2e0819ba-60e2-4db5-bc78-a985fd2ae7b1",
+          "app_id": 4,
+          "binding_revision": 3,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "state": "recorded",
+          "view": {
+            "app_id": 4,
+            "deployment_id": 12,
+            "context": {
+              "app_id": 4,
+              "deployment_id": 12,
+              "authority_sha256": "c7c60868caebab87d3fdbde4d6468e7911e1f901312f65077ce7c39ac955c9bc",
+              "previous_observation_id": "e051f312-c875-4591-88d7-23c18f009743",
+              "url": "http://167.71.202.116:30003"
+            },
+            "status": "reachable",
+            "freshness": "current",
+            "unavailable_reason": null,
+            "observation": {
+              "deployment_id": 12,
+              "authority_sha256": "c7c60868caebab87d3fdbde4d6468e7911e1f901312f65077ce7c39ac955c9bc",
+              "previous_observation_id": null,
+              "observer": "desktop_external",
+              "started_at": "2026-11-13T11:40:47.295Z",
+              "checked_at": "2026-11-13T11:40:47.492Z",
+              "outcome": "reachable",
+              "http_status": 200,
+              "reason": "none",
+              "format": 1,
+              "observation_id": "e051f312-c875-4591-88d7-23c18f009743",
+              "client_id": "8e214c88-6683-4fbe-b887-1f65aed1972f",
+              "body_sha256": "dc88191fc2e2b03959eb4216490caf052b6ce8f8fa05e449ec17c480984ea1a1",
+              "app_id": 4,
+              "url": "http://167.71.202.116:30003",
+              "status": "reachable",
+              "received_at": "2026-11-13T11:40:49.140Z"
+            },
+            "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+            "request_id": "5ee72a62-a130-4311-b205-b978b8793614",
+            "sampled_at": "2026-11-13T11:40:49.142Z",
+            "data_freshness": "current"
+          },
+          "reason_code": null,
+          "checked_at": "2026-11-13T11:40:47.847Z"
+        },
+        "command_key": "5dcf5fba-f0a3-44c8-afe0-55e2d441c081"
+      },
+      "fault": {
+        "status": {
+          "binding_id": "2e0819ba-60e2-4db5-bc78-a985fd2ae7b1",
+          "binding_revision": 3,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "app_id": 4,
+          "ownership_generation": 1,
+          "source_generation": 1,
+          "current_deployment_id": 12,
+          "current_deployment_sha": "17c602ee37508eea4ee98245d1b2a6f4e1e44173",
+          "current_deployment_state": "running",
+          "latest_job_id": "pjob_575398e2-0409-40d8-8b35-fa14e853ef72",
+          "latest_job_state": "rolled_back",
+          "checked_at": "2026-11-13T11:42:30.991Z",
+          "data_freshness": "current"
+        },
+        "web": {
+          "url": "http://167.71.202.116:30003",
+          "deep_route": true,
+          "missing_asset_404": true,
+          "marker": "update"
+        },
+        "exposure": {
+          "binding_id": "2e0819ba-60e2-4db5-bc78-a985fd2ae7b1",
+          "app_id": 4,
+          "binding_revision": 3,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "state": "recorded",
+          "view": {
+            "app_id": 4,
+            "deployment_id": 12,
+            "context": {
+              "app_id": 4,
+              "deployment_id": 12,
+              "authority_sha256": "c7c60868caebab87d3fdbde4d6468e7911e1f901312f65077ce7c39ac955c9bc",
+              "previous_observation_id": "6e47f604-afc1-4ac8-a3ff-fd39957fa417",
+              "url": "http://167.71.202.116:30003"
+            },
+            "status": "reachable",
+            "freshness": "current",
+            "unavailable_reason": null,
+            "observation": {
+              "deployment_id": 12,
+              "authority_sha256": "c7c60868caebab87d3fdbde4d6468e7911e1f901312f65077ce7c39ac955c9bc",
+              "previous_observation_id": "e051f312-c875-4591-88d7-23c18f009743",
+              "observer": "desktop_external",
+              "started_at": "2026-11-13T11:42:30.866Z",
+              "checked_at": "2026-11-13T11:42:31.043Z",
+              "outcome": "reachable",
+              "http_status": 200,
+              "reason": "none",
+              "format": 1,
+              "observation_id": "6e47f604-afc1-4ac8-a3ff-fd39957fa417",
+              "client_id": "8e214c88-6683-4fbe-b887-1f65aed1972f",
+              "body_sha256": "35b63df6f99757c816974fda3a928c06807fed0b3939909dd25fb62241b636bc",
+              "app_id": 4,
+              "url": "http://167.71.202.116:30003",
+              "status": "reachable",
+              "received_at": "2026-11-13T11:42:32.690Z"
+            },
+            "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+            "request_id": "e66b73e6-ef4e-4198-b51f-9f060e7470af",
+            "sampled_at": "2026-11-13T11:42:32.691Z",
+            "data_freshness": "current"
+          },
+          "reason_code": null,
+          "checked_at": "2026-11-13T11:42:31.394Z"
+        },
+        "command_key": "919bd9fb-6e21-4906-87aa-36ea8a2d6b62"
+      },
+      "final": {
+        "status": {
+          "binding_id": "2e0819ba-60e2-4db5-bc78-a985fd2ae7b1",
+          "binding_revision": 3,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "app_id": 4,
+          "ownership_generation": 1,
+          "source_generation": 1,
+          "current_deployment_id": 14,
+          "current_deployment_sha": "ab115722e7dcf6e1efee59d1fd795351ccc2ac7f",
+          "current_deployment_state": "running",
+          "latest_job_id": "pjob_0b2c7ab5-1c67-45a2-88b4-c5f273364a86",
+          "latest_job_state": "succeeded",
+          "checked_at": "2026-11-13T11:43:45.731Z",
+          "data_freshness": "current"
+        },
+        "web": {
+          "url": "http://167.71.202.116:30003",
+          "deep_route": true,
+          "missing_asset_404": true,
+          "marker": "final"
+        },
+        "exposure": {
+          "binding_id": "2e0819ba-60e2-4db5-bc78-a985fd2ae7b1",
+          "app_id": 4,
+          "binding_revision": 3,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "state": "recorded",
+          "view": {
+            "app_id": 4,
+            "deployment_id": 14,
+            "context": {
+              "app_id": 4,
+              "deployment_id": 14,
+              "authority_sha256": "eb9405b6134ed1bad34be46bfdc85b4de9bbd03cef2e87648748e6b315063039",
+              "previous_observation_id": "145a3eb4-9ffd-430a-b082-9eefcb84d626",
+              "url": "http://167.71.202.116:30003"
+            },
+            "status": "reachable",
+            "freshness": "current",
+            "unavailable_reason": null,
+            "observation": {
+              "deployment_id": 14,
+              "authority_sha256": "eb9405b6134ed1bad34be46bfdc85b4de9bbd03cef2e87648748e6b315063039",
+              "previous_observation_id": null,
+              "observer": "desktop_external",
+              "started_at": "2026-11-13T11:43:45.593Z",
+              "checked_at": "2026-11-13T11:43:45.791Z",
+              "outcome": "reachable",
+              "http_status": 200,
+              "reason": "none",
+              "format": 1,
+              "observation_id": "145a3eb4-9ffd-430a-b082-9eefcb84d626",
+              "client_id": "8e214c88-6683-4fbe-b887-1f65aed1972f",
+              "body_sha256": "4a69c05f4da214ec5866debb75377d8e045c8cda8a1d200e6da17a6d9131adbe",
+              "app_id": 4,
+              "url": "http://167.71.202.116:30003",
+              "status": "reachable",
+              "received_at": "2026-11-13T11:43:47.430Z"
+            },
+            "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+            "request_id": "defeaf9c-ad66-4e25-8b02-4573da1db267",
+            "sampled_at": "2026-11-13T11:43:47.432Z",
+            "data_freshness": "current"
+          },
+          "reason_code": null,
+          "checked_at": "2026-11-13T11:43:46.127Z"
+        },
+        "command_key": "ec217c25-61a3-4a67-a896-332fc1f6074a"
+      }
+    },
+    "spa_previous_cids": "cc7c875d6bcb4760888384f90941bfbc5ee98ffaa0b9f5eadda7accb40a55379\n4d30035a743c75904464a1261485ea593445b5d72d40e8a1096bdc76aa0d24bd",
+    "temporary_client_revoked": true,
+    "after": {
+      "receipt": {
+        "format": 1,
+        "request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "release_sha256": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+        "source_directory": "/var/lib/opspilot-controller-transfer/release",
+        "payload_sha256": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+        "phase": "installed",
+        "uid": 997,
+        "gid": 987,
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "created_at": "2026-11-10T06:11:51.696Z",
+        "updated_at": "2026-11-10T06:12:02.055Z"
+      },
+      "upgrade": {
+        "format": 1,
+        "request_key": "4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4",
+        "installation_request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "parent_upgrade_key": "a5a702ff-68a6-47e3-abd5-e1dd71ce25a9",
+        "parent_release_sha256": "a81ed72cfe56e8ecbe09508711eabe8f8e8dd82e505d2fef2d681032e0d909da",
+        "release_sha256": "b6803bc794cb39987936395d8d1f12cd06720a08f2e0ba2c3307ec619368ab45",
+        "release_directory": "/var/lib/opspilot-controller-upgrades/4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4/release",
+        "payload_sha256": "93abe6ea846f44ef914d0a9ee6e74aaa7e40d3c1ec3a353e537ca89b1ff0c777",
+        "phase": "active",
+        "before": {
+          "format": 1,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "schema_sha256": "4fa659e7343ac9bb6b2cc1ccff302ea0e08e89a4e9d869c9dc66ccf164846446",
+          "state_sha256": "7daa11ce48d7df7ed6aef379240b2d8278b0b3299ba13dd67a58b3eeee6c3755",
+          "key_sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706",
+          "database_inode": 265566,
+          "key_inode": 265570,
+          "quiescent": true
+        },
+        "rollback_before": null,
+        "created_at": "2026-11-13T11:36:42.114Z",
+        "updated_at": "2026-11-13T11:36:57.484Z"
+      },
+      "upgrade_sha256": "0a61746199fc06521d3395d21ea36a93a659323700d7613d5c1349c2a92429c3",
+      "receipt_sha256": "b3be9019462c586781b64f7a13faa4f4c55e27d964893ba22571c835716ba5b4",
+      "database_inode": 265566,
+      "schema": 29,
+      "active_experiments": 0,
+      "active_jobs": 0,
+      "active_clients": 0,
+      "apps": [
+        {
+          "id": 1,
+          "name": "san-nha-live",
+          "current_deployment_id": 4
+        },
+        {
+          "id": 2,
+          "name": "desktop-live-69eeeb78",
+          "current_deployment_id": 5
+        },
+        {
+          "id": 3,
+          "name": "spa-live-6ab247675f19",
+          "current_deployment_id": 10
+        },
+        {
+          "id": 4,
+          "name": "next-live-ba8a98aed302",
+          "current_deployment_id": 14
+        }
+      ],
+      "deployment": {
+        "id": 4,
+        "status": "running",
+        "git_commit_sha": "bfed8941e2a719b04fa960142b7c3df0eed66b57",
+        "exposure_status": "reachable",
+        "exposure_evidence_json": "{\"checked_at\":\"2026-11-12T07:19:21.719Z\",\"cloud_firewall\":\"not_configured\",\"diagnosis\":null,\"external_probe\":\"reachable\",\"kind\":\"product_exposure_observation\",\"observation\":{\"app_id\":1,\"authority_sha256\":\"ed4bf8bbe021788de437631ef10ab34b8011e8fbb0bb9d198d2ede87dbc47feb\",\"body_sha256\":\"ddb003d1f641b53c873f26ef1d3326bc35118dc623f14bee93aecbee7f5e2737\",\"checked_at\":\"2026-11-12T07:19:21.719Z\",\"client_id\":\"20feca75-727b-4d8e-8a56-42a998df1de4\",\"deployment_id\":4,\"format\":1,\"http_status\":200,\"observation_id\":\"37e04ff7-980b-455a-8bf7-9d68960113aa\",\"observer\":\"desktop_external\",\"outcome\":\"reachable\",\"previous_observation_id\":null,\"reason\":\"none\",\"received_at\":\"2026-11-12T07:19:24.309Z\",\"started_at\":\"2026-11-12T07:19:21.599Z\",\"status\":\"reachable\",\"url\":\"http://167.71.202.116:30000\"},\"status\":\"reachable\",\"ufw_reconciled\":false,\"ufw_state\":\"not_checked\",\"url\":\"http://167.71.202.116:30000\"}"
+      },
+      "desired": [
+        {
+          "app_id": 1,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 2,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 3,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 4,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        }
+      ],
+      "vps_digest": "68940aec92472f567563d7c4edfc99f063b76abc466f14ec1fc974b3df070653",
+      "files": [
+        {
+          "path": ".product-controller-initialized",
+          "inode": 265569,
+          "sha256": "e9342557cddefc41325a75f51d3eca413e659c2cd348d4f6045a6c16702d2074"
+        },
+        {
+          "path": ".controller-runtime-key",
+          "inode": 265570,
+          "sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706"
+        },
+        {
+          "path": ".controller-installation",
+          "inode": 265565,
+          "sha256": "5d9cc95ff2db3d9338776481d7998be53b6d29bd5234d9c6db9b85d2b321609b"
+        }
+      ],
+      "service": "MainPID=401620\nUser=opspilot-controller\nActiveState=active\n"
+    },
+    "private_db_removed": true,
+    "phase": "revoke-and-final-check"
+  },
+  "checks": {
+    "focused_vitest": 29,
+    "build": "PASS",
+    "types": [
+      "node",
+      "web",
+      "scripts",
+      "live-lab"
+    ],
+    "eslint": "PASS_0_ERRORS_0_WARNINGS",
+    "prettier": "PASS",
+    "syntax": "PASS",
+    "cli_no_consent": "REJECTED_EXIT_2",
+    "packaging": "PASS_5_ENTRIES_MISSING_TAMPER_REFUSED_RESTORED",
+    "full_vitest": "NOT_RERUN_NO_RUNTIME_SCHEMA_DEPENDENCY_CHANGE_R7e_922fc38_2244_PASS_2_EXISTING_SKIP"
+  },
+  "raw_evidence": {
+    "app/.out-scripts/controller-upgrade-desktop/2de81b4d2f97/result.json": "607f41d9cdd1589aed9b144edf8c887c987016a20bef6bdc6cbdc28c12e5d520",
+    "app/.out-scripts/controller-enrollment/ebca6d0b5be8/result.json": "f6232d62c72117f463431b728c59441b34e162d5dbf05bd7656f22f4ce3ae5d3",
+    "app/.out-scripts/product-next-live/ba8a98aed302/result.json": "c585ffee399b227919b22b116427087635b5b023fa16aa7a65e1b8b52fa0c37c",
+    "app/.out-scripts/r7f-build-release.log": "3f795b0105c90026a00d4226ca0107385c87fd3c5ba9afebdeb5dae3f167b804",
+    "app/.out-scripts/r7f-app-build.log": "61f5f5a11612afe70acecc8b59d97eaff5a34a140d64dfcc91c8f05ba7164144",
+    "app/.out-scripts/r7f-resources.log": "0262d8d09f357ce9a2671e69f2b23f5631004cdc4604e46ea1c6068cd0dce7b8",
+    "app/.out-scripts/r7f-focused.log": "2e4879d476ca00f70b04cb5f67840659e999803771f3c1fa907027fae688cadb",
+    "app/.out-scripts/r7f-checks-final.log": "ebbcd37aed1866a81b452179d32f0b3c77327d4a8200ac450dd07d209439ab89",
+    "app/.out-scripts/product-next-live/ba8a98aed302/settlement-readonly.json": "a95eb0a7ee5a5c82ad734dae60284fe1a893423b08eb4243f04959afc3275ad7"
+  },
+  "limitations": [
+    "Development VPS operational Main/SSH/controller pipeline; no production Desktop profile or GUI",
+    "Manual public Git redeploy/health503 rollback; automatic Next branch polling with Main disconnected requires separate gate",
+    "No Next DB/user env/public build args/custom server, new NSIS/independent Windows/reboot/soak/ML/full R7 or release completion"
+  ],
+  "settlement_readonly": {
+    "jobs": [
+      {
+        "job_id": "pjob_e5838270-1996-4040-ae60-a398c1359aff",
+        "target_sha": "1931e8a427a80beb3e1d80663bbc6622922731d0",
+        "state": "succeeded"
+      },
+      {
+        "job_id": "pjob_efad1473-8900-4254-9c3e-a3d4bc2a1cd0",
+        "target_sha": "17c602ee37508eea4ee98245d1b2a6f4e1e44173",
+        "state": "succeeded"
+      },
+      {
+        "job_id": "pjob_575398e2-0409-40d8-8b35-fa14e853ef72",
+        "target_sha": "47e4f3b3de560b5fbfb3c51ec38bb6c55a1ec820",
+        "state": "rolled_back"
+      },
+      {
+        "job_id": "pjob_0b2c7ab5-1c67-45a2-88b4-c5f273364a86",
+        "target_sha": "ab115722e7dcf6e1efee59d1fd795351ccc2ac7f",
+        "state": "succeeded"
+      }
+    ],
+    "terminals": [
+      {
+        "job_id": "pjob_efad1473-8900-4254-9c3e-a3d4bc2a1cd0",
+        "settled_at": "2026-11-13T11:40:45.740Z",
+        "leases_released_at": "2026-11-13T11:40:45.754Z"
+      },
+      {
+        "job_id": "pjob_e5838270-1996-4040-ae60-a398c1359aff",
+        "settled_at": "2026-11-13T11:39:23.685Z",
+        "leases_released_at": "2026-11-13T11:39:23.693Z"
+      },
+      {
+        "job_id": "pjob_575398e2-0409-40d8-8b35-fa14e853ef72",
+        "settled_at": "2026-11-13T11:42:29.560Z",
+        "leases_released_at": "2026-11-13T11:42:29.571Z"
+      },
+      {
+        "job_id": "pjob_0b2c7ab5-1c67-45a2-88b4-c5f273364a86",
+        "settled_at": "2026-11-13T11:43:43.519Z",
+        "leases_released_at": "2026-11-13T11:43:43.528Z"
+      }
+    ],
+    "unreleased_leases": {
+      "product_app_lease": 0,
+      "product_worker_lease": 0
+    },
+    "status": "PASS",
+    "scope": "PINNED_SSH_READONLY_SETTLEMENT_NO_CLIENT_OR_DB_WRITE"
+  },
+  "working_tree_subject": true
+}

@@ -109,3 +109,49 @@ paused; cần resume có chủ đích nếu dùng demo auto sau này. Main SSH t
 đã ngắt; process quan sát HTTP vẫn chạy. Không gọi gate này là bằng chứng OS
 Desktop process đã thoát, GUI/reboot/soak hay toàn template matrix. R7c health403
 rollback và R7d healthy auto commit là hai gate riêng.
+
+## R7f — Trusted Next.js release và VPS
+
+Additional descriptor `desktop-next-release.json` dùng release
+`linux-x64-node22-20261113-next`, SHA
+`b6803bc794cb39987936395d8d1f12cd06720a08f2e0ba2c3307ec619368ab45`;
+payload manifest
+`93abe6ea846f44ef914d0a9ee6e74aaa7e40d3c1ec3a353e537ca89b1ff0c777`;
+control-plane.cjs
+`2a444abc24115985f920d48bc7cf049bf376cc37ab386d1b7aa4e2d5b620ac95`.
+Installer/upgrader8ac74cd, Node22.23.4/glibc2.39/modules/asset policy giữ nguyên.
+Build theo recipe đầu file dưới UID sở hữu modules với OUTPUT private mới,
+thay payload pin bằng93abe6e, copy release/installer vào ignored resource
+namespace mới. Main bake5entries và giữ cả4pins lịch sử. Không ghi đè old release.
+
+Chạy native upgrade với original96a/candidateb680 và retained enrollment với
+current payload93ab/legacy4e3a trước VPS. Desktop source/R7e full2244+2existing
+skip là baseline; descriptor/driver changes có scoped types/lint/build/catalog
+regression và compiled-resource missing/tamper/refusal/restore gate riêng.
+
+```text
+Electron-as-Node app/scripts/product-spa-live/run.mjs --nextjs --confirm-development-next-rollout
+Electron-as-Node app/scripts/product-spa-live/run.mjs --nextjs --resume <12-hex-record>
+```
+
+Explicit CLI guard/secret stdin/pin/DPAPI/same-key unknown handling như R7c.
+Variant Next dùng private journal `product-next-live/<nonce>`, source Git
+`product-next-git/<nonce>` và branch `demo/next-r7f-<nonce>` riêng. Không đưa
+record Next vào namespace SPA hoặc sửa raw lịch sử. Ba app cũ gồm SPA6ab được
+kiểm6CID trước/sau. Gói mới chỉ được nâng qua Main review/transfer/upgrade/
+inspect và separate API-binding refresh giữ client/token. Không Root SQL writes.
+
+Fixture Sổ Đọc dùng package/lock approved từ demo-next-blog, source Pages Router
+SSR riêng không env/DB,1build CPU; không nhận Dockerfile/start command từ renderer.
+Initial/update/fault/final là4public commits trên nhánh demo có Kim coauthor.
+Fault SSR trả503 thật để kiểm health rollback exact app+collector CID; final
+đưa branch/app về khỏe. HTTP ngoài VPS kiểm marker trong SSR index và deep
+route, asset `/_next/`200, missingasset404 và release marker; exposure recorded
+reachable qua Main/API. Đây là manual Git redeploy acceptance; auto Git Next
+khi Main tắt/ngắt là gate riêng, không suy từ R7d SPA hoặc ca manual này.
+
+PASS yêu cầu0active jobs/experiments, policypaused, client thử revoke và private
+journal cleanup; giữ original receipt/key/DBinode/schema/target credentials và
+3apps. FAIL giữ encrypted same-key journal để inspect/reconcile; không reset
+DB/branch hoặc replay unknown. Không GUI/NSIS/new Windows/reboot/soak/ML hoặc
+Next DB/env/customserver/customDockerfile claim.
