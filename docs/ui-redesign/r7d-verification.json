@@ -1,0 +1,132 @@
+{
+  "status": "LIVE_SPA_AUTO_BRANCH_POLL_PASS",
+  "date": "2026-11-13",
+  "base_sha": "d48ed07a7e85fef0dee51c18ea20939cd8f5b383",
+  "runtime_schema_ipc_changes": false,
+  "source_sha256": {
+    "app/scripts/product-spa-live/auto.mjs": "6f892b00624fe21cad1f0029c4ba1150bd0892d83cfac7aed8ba0721ec4ca768",
+    "app/scripts/product-spa-live/entry.ts": "8836353048730299764911b8730449e8bb7eeb2a982d90393b4391a51deed41a",
+    "app/scripts/product-spa-live/tsconfig.json": "7fd5b543d10903dc1a28de2cc102d72900508099cc072c02d97f5b9ca4c2ddf6",
+    "app/scripts/controller-desktop-live/snapshot.mjs": "93631a21443894f6f1ab03c1d7371f0baa82e2af2a812aec9ac87673e106f7e4"
+  },
+  "live": {
+    "record": "10be92694bb1",
+    "status": "PASS",
+    "checks": [
+      "public_git_commit_reaches_app_without_main_ssh_or_manual_redeploy",
+      "exact_single_branch_poll_job_success_current_sha_deep_route_asset_404_and_recorded_exposure",
+      "pause_revoke_cleanup_preserve_old_apps_controller_pid_key_db_and_quiescent_state"
+    ],
+    "url": "http://167.71.202.116:30002",
+    "app_id": 3,
+    "git": {
+      "branch": "demo/spa-r7c-6ab247675f19",
+      "sha": "2e4c9913d6a8d01df933fd419bf3fe1a54f52dee",
+      "parent_sha": "1191914b693305bf49bed1448eff483a258f9e9f",
+      "marker": "r7d-10be92694bb1-auto"
+    },
+    "http_only_polls": 22,
+    "main_artifact_sha256": "333bcdcb2271547cc0b5694adcde000974421a1c6cc339822165511b3bbadf29",
+    "main_ssh_disconnected_before_git_push": true,
+    "main_ssh_disconnected_until_public_success": true,
+    "manual_redeploy_sent": false,
+    "jobs": [
+      {
+        "job_id": "pjob_cf0cdc67-b3ec-4f8d-94d2-696ec50d5f7c",
+        "trigger": "branch_poll",
+        "target_sha": "2e4c9913d6a8d01df933fd419bf3fe1a54f52dee",
+        "state": "succeeded"
+      }
+    ],
+    "settlement": {
+      "terminals": [
+        {
+          "attempt_id": "attempt_93a03901-77bb-48fe-9376-f75da4af2ab9",
+          "settled_at": "2026-11-13T06:39:33.347Z",
+          "leases_released_at": "2026-11-13T06:39:33.360Z"
+        }
+      ],
+      "unreleased_leases": {
+        "product_app_lease": 0,
+        "product_worker_lease": 0
+      }
+    },
+    "app_status": {
+      "binding_id": "fa059b59-03cc-44db-bab8-9763124198bf",
+      "binding_revision": 2,
+      "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+      "app_id": 3,
+      "ownership_generation": 1,
+      "source_generation": 1,
+      "current_deployment_id": 10,
+      "current_deployment_sha": "2e4c9913d6a8d01df933fd419bf3fe1a54f52dee",
+      "current_deployment_state": "running",
+      "latest_job_id": "pjob_cf0cdc67-b3ec-4f8d-94d2-696ec50d5f7c",
+      "latest_job_state": "succeeded",
+      "checked_at": "2026-11-13T06:39:34.584Z",
+      "data_freshness": "current"
+    },
+    "exposure": {
+      "state": "recorded",
+      "status": "reachable",
+      "deployment_id": 10
+    },
+    "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+    "controller_service_unchanged": true,
+    "old_four_cids_unchanged": true,
+    "key_db_inode_schema_receipts_target_credentials_unchanged": true,
+    "after": {
+      "active_jobs": 0,
+      "active_clients": 0,
+      "active_experiments": 0,
+      "desired": [
+        {
+          "app_id": 1,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 2,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 3,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        }
+      ],
+      "service": "MainPID=333893\nUser=opspilot-controller\nActiveState=active\n",
+      "schema": 29
+    },
+    "temporary_client_revoked": true,
+    "private_db_removed": true
+  },
+  "previous_recovery_private_cleanup": {
+    "status": "PASS",
+    "record": "20f678094880",
+    "scope": "OWNED_RECOVERY_PRIVATE_PROFILE_ONLY",
+    "private_profile_removed": true,
+    "historical_result_unchanged_sha256": "b1d7a56ee546eefe459be3f444741bc63906f0aca9e473b75f158024f3b71d7d",
+    "reason": "Candidate previously rolled back/client revoked; R7d succeeded and needs no recovery credential"
+  },
+  "checks": {
+    "cli_no_consent": "REJECTED_EXIT_2_BEFORE_SCRATCH_OR_CONNECTION",
+    "live_lab_typecheck": "PASS",
+    "eslint": "PASS_0_ERRORS_0_WARNINGS",
+    "prettier": "PASS",
+    "node_syntax": "PASS",
+    "git_diff": "PASS",
+    "full_vitest": "NOT_RERUN_DRIVER_DOCS_ONLY_BASE_d48ed07_2233_PASS_2_EXISTING_SKIP"
+  },
+  "raw_evidence": {
+    "app/.out-scripts/product-spa-auto/10be92694bb1/result.json": "7a5a237ff137a12cd3f90f330d0c15d7dc9e6735158d2bb0abc2ba1383eb34f6",
+    "app/.out-scripts/product-spa-auto/10be92694bb1/previous-private-cleanup.json": "3033d8aeae981fc166c1e1f63de55eae2596578364db8dae8d034a21f430e9be"
+  },
+  "limitations": [
+    "HTTP-only observer keeps gate process alive, proves Main SSH disconnected rather than physical Desktop process termination",
+    "No GUI, reboot, soak, new NSIS/independent Windows, private Git, Next.js/DB/env/custom Dockerfile or ML acceptance",
+    "R7c health403 rollback is separate evidence; R7d tests healthy automatic commit only",
+    "All policies explicitly paused after acceptance; resume required for future automatic demo"
+  ]
+}

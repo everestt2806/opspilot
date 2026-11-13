@@ -73,3 +73,39 @@ Report và encrypted recovery journal riêng trong
 `app/.out-scripts/product-spa-live/<nonce>/`. PASS mới xóa private DB/key; lỗi giữ
 same-key journal để inspect/recover, không tự tạo installation/upgrade/app thay
 thế. Gate không kiểm GUI, reboot, soak, domain/HTTPS, ML hoặc toàn R7.
+
+## R7d — SPA tự deploy khi Main ngắt SSH
+
+Sau R7c, nghiệm thu đúng app3/port30002 và branch demo đã duyệt:
+
+```text
+Electron-as-Node app/scripts/product-spa-live/auto.mjs --confirm-development-auto 6ab247675f19
+```
+
+Input bounded stdin/DPAPI và SSH pin giống R7c. Đây là gate một lần từ exact
+R7c final SHA1191914b; không reset branch về commit cũ để chạy lại. Report lưu
+riêng tại `app/.out-scripts/product-spa-auto/<nonce>/result.json`, không sửa raw
+R7c. Thiếu cờ/record duyệt bị từ chối exit2 trước tạo scratch hoặc kết nối.
+
+Gate cold-adopt current controller, cấp client thử và resume policy app3 qua
+Main. Sau `disconnectAll()` và xác nhận không còn verified connection, mới
+commit/push thay `public/release.txt` trên demo branch. Không gửi redeploy hoặc
+SSH trong thời gian đợi marker qua HTTP công khai. Khi marker mới xuất hiện,
+mới reconnect để kiểm đúng1job `trigger=branch_poll`, đúng fullSHA/succeeded,
+terminal settled và app/build leases released. Deep route/index, asset404 và
+external exposure cũng phải đạt. Cuối gate pause policy, revoke client, kiểm
+old4CID/controllerPID/key/DBinode/schema/Root receipts, xóa private scratch.
+
+Nếu FAIL sau resume, giữ encrypted private journal và request UUID trong report.
+Không chạy fresh gate hoặc phát lại command khi phản hồi chưa rõ; mở đúng
+private Main profile, dùng `checkCommand(request_key)` để reconcile cùng UUID,
+đọc current app status rồi explicit pause policy scoped app3/revoke client.
+Không sửa SQL, journal, key hoặc source branch để tạo kết quả PASS. Chỉ xóa
+đúng owned private profile sau khi reconcile và lưu bằng chứng; raw report giữ.
+
+Live10be92694bb1 PASS3checks: commit2e4c991/deployment10,22HTTP polls, job
+branch_poll thành công,0active jobs/clients/experiments cuối gate. Policy đã
+paused; cần resume có chủ đích nếu dùng demo auto sau này. Main SSH thực sự
+đã ngắt; process quan sát HTTP vẫn chạy. Không gọi gate này là bằng chứng OS
+Desktop process đã thoát, GUI/reboot/soak hay toàn template matrix. R7c health403
+rollback và R7d healthy auto commit là hai gate riêng.
