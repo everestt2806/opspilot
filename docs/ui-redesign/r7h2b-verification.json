@@ -1,0 +1,290 @@
+{
+  "status": "LOCAL_DESKTOP_STAGED_ENVIRONMENT_PASS",
+  "scope": "R7h-2b MAIN/IPC/UI + SAME-UID ADMIN",
+  "date": "2026-11-14",
+  "base_sha": "128ba1b5c72ad002c39b3cc5616c4d966c6bdb0b",
+  "working_tree_subject": true,
+  "source_sha256": {
+    "app/scripts/product-environment-admin-lab/bridge.py": "f9e8a55b963e0148328cb30e838eed581dd1af8fed5961c6ceb70f4a32786aba",
+    "app/scripts/product-environment-admin-lab/run.mjs": "d58c3e026c542a03ba1188af75a80629d3334e5a7af13959ea0680ce46633f0a",
+    "app/scripts/product-environment-desktop-lab/README.md": "c1873eb194cbf0659d65b9c3dfa0049d803c9b451075ac88c6b03982d50937e2",
+    "app/scripts/product-environment-desktop-lab/electron.mjs": "d3deceba0df5c829c2a10d4d572e7070b0bedf774663c898fab3ae9a3bb931a1",
+    "app/scripts/product-environment-desktop-lab/entry.ts": "a2af2e9231fd7dc369867b57fef342a4b4e2273ceb02b5284b4874e42333a5ad",
+    "app/scripts/product-environment-desktop-lab/fixture.ts": "a4f5a10ad3a3c230feab6e171c62d6f479c3ab638cb3f87206eb8d91aae541a1",
+    "app/scripts/product-environment-desktop-lab/run.mjs": "cb853b03e2f9562650df87e9462316e14a2c422c5476614d6eb7c7347283f3ab",
+    "app/scripts/product-environment-desktop-lab/tsconfig.json": "a5ea568f1ceaae2bdd1a551ba9636b3f50b0098bcc02123baf1e4ac8302f7d19",
+    "app/src/main/controlPlane/cli.ts": "efa7b1742ca045c8e77a028fcb65647f58d45ac267798aaeab0055aad5595d3c",
+    "app/src/main/controlPlane/controllerInstalledAdmin.ts": "56137732cff7e713db13f0606ef0079a001dbedf25f1fff604eef88b30dc2fd3",
+    "app/src/main/controlPlane/desktopControllerCommands.test.ts": "2a7698f70ced1bdb97532427f668c2ff5e52c6bc6d478188ded99a8e2cd53d2e",
+    "app/src/main/controlPlane/desktopControllerEnrollment.test.ts": "5f923e5984a90ce5868c5686920b5ec352144de4b8e9e5aa6c2df2c123f2f642",
+    "app/src/main/controlPlane/desktopControllerEnrollment.ts": "ae528bfe336cb0ddf708a1077153ceab32de7084a4cdc4607f22b2af876b8660",
+    "app/src/main/controlPlane/desktopControllerInstallation.test.ts": "ede95342135a080da57bdd9454911f834f09e5b957aa9ed4dd1f3f0fc4606e67",
+    "app/src/main/controlPlane/desktopControllerService.ts": "33cd7909c3ea560d00ac746a33885c46a7e5a9e1093504e955bddd01781e2cc4",
+    "app/src/main/controlPlane/desktopControllerVault.test.ts": "96537a4d57f39624db4b84cfda71fb75a835bc6491f7fbac188c150ec1e212b5",
+    "app/src/main/controlPlane/desktopProductEnvironment.test.ts": "c52d074df34fdc0282eadd0a9a9e517a7cec33d0d3e056ff0edf48a2654c4cd3",
+    "app/src/main/controlPlane/desktopProductEnvironment.ts": "7dfd7e94349dc6ce4943a0c36d9b6ec8fea88db455f887b38f16a6c3073c86f4",
+    "app/src/main/controlPlane/desktopProjectSetup.ts": "67e9a0251ba9508a364547c46a2c54234aca4af9c77a15348b10715ecd7831be",
+    "app/src/main/controlPlane/desktop_controller_admin.py": "3aee9de68ab2f68256965946cdeea08eff9a952edcb77c9d149e5bbd0232a0b6",
+    "app/src/main/controlPlane/installedControllerAdminProtocol.ts": "b907370b37f12f14f8365b11da63a29cfa4e265e3ec1fa1d466ba021cea570cf",
+    "app/src/main/controlPlane/productEnvironment.ts": "18aaeb0bbc6ab7d1b125ef3619d0f14b5c173ef266f82648895761b5d61b2f2e",
+    "app/src/main/controlPlane/projectRegistration.test.ts": "3f2b6a87f05831c5c4f64543ec5f197717db5cd42bb9b8fc1d3855b59db33f01",
+    "app/src/main/db/index.test.ts": "4c36135b7bf9cb45b7d13e830a70c6caee00e4b1741e1c2c424bed0d910084bc",
+    "app/src/main/db/index.ts": "8710588034c52765c2c70fb3517ee514374eb7858348af56ba06819607261d13",
+    "app/src/main/db/migrationRoles.test.ts": "589d1ef4d64aeee8c3db1079e8d681ceb725d2318f51c06dcbc891c9e195190f",
+    "app/src/main/db/migrations/034_desktop_environment_intent.sql": "0fdb8435ce44ed03b5e336561b4a2a78f0ef86b48615e7d04d788fae2baa2874",
+    "app/src/main/db/productEnvironmentAdmin.test.ts": "0653c185309b3e903b036ef371cc09b64e863e9fa10cc5d019249a8950099038",
+    "app/src/main/db/productEnvironmentRepository.test.ts": "1bd511d0911014f3f25870cbebccf3e7ad2b1e44e6705043678ba583da7b94d3",
+    "app/src/main/db/productEnvironmentRepository.ts": "ce7d3853ddd170428efad9a083184df505a383c05b7fe1ff4439c0b4e6893d74",
+    "app/src/main/db/productMigration.test.ts": "2ae045621e3dfd2462d5e793e1f072276eec964ad9110622ff4f690f0a49c873",
+    "app/src/main/ipc.test.ts": "0729eae5dead264cb28f284bd66a2ce52852b400e4f058478ac7a184d4bdbfa2",
+    "app/src/main/ipc.ts": "1b53ca3af61e55c1fcbc6d49289f5a501536e6667b8e33bb86245efe9fd98f78",
+    "app/src/renderer/src/components/ControllerProjectEnvironment.test.tsx": "f38b010565e9be58b11319ae947a297a9d7e9c4a29e26fccbf109bf7ab276a4b",
+    "app/src/renderer/src/components/ControllerProjectEnvironment.tsx": "822e1ce16c3d1801d65958e340d70a8ec595c93ee0f029cda2d56f6d4b9df9e9",
+    "app/src/renderer/src/components/ControllerProjectPanel.tsx": "0bed158a9ba91fa020b29385235b44737b01042d1ea45aa6af4d5da170fb1533",
+    "app/src/renderer/src/components/controllerEnvironmentCopy.ts": "60176b1c62ab6ab05bdf602da9bbd0da73b64484cbaaea396fc8ab55b1643c39",
+    "app/src/shared/desktopProductEnvironment.ts": "c051fdfab911adb6c78dc88bda4b24571c0b8d14dc5c5f870c2bcee7da33d8b9",
+    "app/src/shared/ipc.ts": "5394f6c434874ddb67b3b3da5b4a506a1508eb24fc480cccbe956f79149db1fb",
+    "app/src/shared/productEnvironment.ts": "e3c2d4f29a91d1122c7d7e60a7d3e7ae285de6c8ff13fc8dbb7d1b664162e5b8",
+    "docs/contracts/desktop-product-environment.ts": "5b5401a8cb1a770cc15b9f74426f5c504b7f773bf9b93355b93a82c3170c633f",
+    "docs/contracts/ipc-contract.ts": "5f76992b20f2fbd89a0a3ba1be2efb8d9dca2770e829d68be775d9100dc3f829",
+    "docs/contracts/product-environment.ts": "c2f1ebbb7290ddc7ae96049c0a64b1fa408af918f390247e2f988bfc61ec3c40",
+    "docs/contracts/product-installed-controller-admin.ts": "236298036120e124f60dc85ffebe44342ab2d5b885ad252b3c97cda512ba7a49",
+    "docs/contracts/schema.sql": "1e74c1ee3c20c22cf32d1fc5d6f80b69e94825bebc731b4b288a1b044d863ee5"
+  },
+  "raw_evidence": {
+    "app/.out-scripts/r7h2b-full-final2.log": "1205baefd2c4e03ad1fc2bf20a1cfe09fdc6099aa4fbe0ffeabd87dafdb803bf",
+    "app/.out-scripts/r7h2b-focused-final.log": "655896bc384a17620926b17e05e1fb9425a720af7f43eeaae1a4277f2fa3007d",
+    "app/.out-scripts/product-environment-desktop-lab/c577a5cf4ea5/result.json": "331d552e3bd44475c379ca9ac23ef25df0f5ac6de01ed68be2dc70caa7a446df",
+    "app/.out-scripts/product-environment-admin-lab/b3672c83266e/result.json": "35f8b2a967968a78fe325495f707ba3575d3c19a93354b594287f61d1bffa238",
+    "app/.out-scripts/product-environment-lab/9880be452d60/result.json": "0e2821bd255b3cef260a816f299bce832e94dc9716ebf58cada6dc90a1a15c83",
+    "app/.out-scripts/r7h2b-lint-final2.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h2b-format-final.log": "fbdd37869c73ce85afb11ffefa058e0181874c073fdfee7d7a4b5086b7ea3b1b",
+    "app/.out-scripts/r7h2b-build-final.log": "222874d982d9bc0419ce30f26ddbb9fc24c09d2f9bf977e71b2b4aa2ce4c1197",
+    "app/.out-scripts/r7h2b-scripts-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h2b-lab-type-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h2b-node-type-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h2b-web-type-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h2b-ruff.log": "af352a86840ad0af3d37ea0d9197f868363a6dac6b1c2ef5d2722f6b41d2d9af",
+    "app/.out-scripts/r7h2b-ruff-format.log": "1ba32d724ec0aa587aba7888f97338980bc34aae522616cf9f35d4e0b38e574d",
+    "app/.out-scripts/r7h2b-negative-ui.log": "f254362eca8b25968b5649333688838e15e424107449cca171a9aacb8302017b",
+    "app/.out-scripts/r7h2b-negative-admin.log": "b03b811c67f3e23b40af8091850b608945cbdf736942f161442988ae6ab9ab11"
+  },
+  "electron": {
+    "status": "PASS",
+    "scope": "REAL_ELECTRON_PRODUCTION_PRELOAD_MAIN_SQLITE_SYNTHETIC_SSH_CONTROLLER",
+    "nonce": "c577a5cf4ea5",
+    "checks": [
+      "production_component_4locale_2theme_2resolutions_no_horizontal_overflow",
+      "typed_preload_main_prepare_encrypts_values_clears_form_and_does_not_send",
+      "lost_ssh_reply_cold_main_sqlite_reopen_metadata_lookup_one_revision",
+      "no_plaintext_in_private_databases_or_localstorage_no_deployment_or_source_activation"
+    ],
+    "captures": [
+      {
+        "file": "docs/ui-redesign/screenshots/r7h2b/c577a5cf4ea5/vi-dark-1280x800.png",
+        "sha256": "53167da9fc0300c932312de82af1d679cb7e6cdb81d1d601ccd3b3fc2efa1a48",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h2b/c577a5cf4ea5/vi-dark-1366x768.png",
+        "sha256": "8553ccb33ab18114748bf7111cede3bdf054971fad3dbf91e711329da4587a5c",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h2b/c577a5cf4ea5/vi-light-1280x800.png",
+        "sha256": "33cada486a507fc4a9f18537172e0d91dcdb33f981f9a9b488c627ac0c5e841f",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h2b/c577a5cf4ea5/vi-light-1366x768.png",
+        "sha256": "89d3c9a91251395d12204a2e900189d331f0503737384d2ad0e72e40bd162757",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h2b/c577a5cf4ea5/en-dark-1280x800.png",
+        "sha256": "4da3caa40c054401ffe462efc47ee0a01ad2d96adb412c96b874cc627ef88ddc",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h2b/c577a5cf4ea5/en-light-1280x800.png",
+        "sha256": "bf01f4f32389ee252a854c3a019f0660483c987b561899c608aef94e61847cf9",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h2b/c577a5cf4ea5/cn-dark-1280x800.png",
+        "sha256": "489b84d493a9299d2d0b49eda2516013bdfc6f209ec26041449cb1c1d9a6dcb8",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h2b/c577a5cf4ea5/cn-light-1280x800.png",
+        "sha256": "aca82d84e2d9858e9787d92d2c5fcb447f992315c41384e6cc4a89690759e519",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h2b/c577a5cf4ea5/jp-dark-1280x800.png",
+        "sha256": "05d6809c77802cffdf345d4cf11f90f66ea9bf31c4ff8d15fb0e7f1e2af53572",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h2b/c577a5cf4ea5/jp-light-1280x800.png",
+        "sha256": "a6e5ca0a534147fcd47278dc4fa09a7fde44afedb30c7e83318da721fd7cfaca",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h2b/c577a5cf4ea5/prepared-en-dark-1280x800.png",
+        "sha256": "700f2a8f83f70fbadc64c0b3f03664cea49f4c7b806a720ebc9b620d4bebaec3",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h2b/c577a5cf4ea5/unknown-en-dark-1280x800.png",
+        "sha256": "6b14b257d56c48a31c21eb3e9d01e51076e30d0611ac8621de8914efe45dd3db",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h2b/c577a5cf4ea5/saved-en-dark-1280x800.png",
+        "sha256": "c9e7fdcdb156dc689a271e65602d64c50465b900c75ebe7cf89ca61a8c0ac18f",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      }
+    ],
+    "production_profile_used": false,
+    "ssh_transport_real": false,
+    "vps_used": false,
+    "private_data_removed": true,
+    "profile_cleanup": "REMOVED_AFTER_ELECTRON_EXIT",
+    "child_exit": 0,
+    "stderr_bytes": 0
+  },
+  "native_admin": {
+    "status": "PASS",
+    "scope": "NATIVE_SAME_UID_CLI_STDIN_SQLITE_ONLY",
+    "nonce": "b3672c83266e",
+    "checks": [
+      "native_python_streaming_large_stdin_replay_and_derived_context",
+      "actual_cli_stdin_cold_process_retry_one_revision_metadata_only",
+      "changed_body_same_uuid_and_stale_cas_new_uuid_refused",
+      "two_actual_cli_processes_race_same_uuid_exactly_one_new_revision",
+      "encrypted_revision_and_receipt_only_no_policy_source_job_activation",
+      "actual_sqlite_receipt_auth_tag_tamper_refused_before_replay",
+      "unsafe_key_permissions_and_changed_current_authority_refused"
+    ],
+    "vps_used": false,
+    "ssh_used": false,
+    "gui_used": false,
+    "activation_implemented": false,
+    "artifact_sha256": "554e843d1c18e33d497350a6dd08870b61d6b6139a906297fbcea1cf30819930",
+    "private_scratch_removed": true
+  },
+  "native_vault": {
+    "status": "PASS",
+    "scope": "LINUX_PRIVATE_KEYSTORE_SQLITE_ONLY",
+    "nonce": "9880be452d60",
+    "checks": [
+      "missing_master_key_refused_without_implicit_creation",
+      "explicit_key_once_unsafe_mode_refused_original_material_preserved",
+      "real_cipher_encrypted_sqlite_reopen_metadata_only_no_job_or_source_activation",
+      "wrong_key_and_actual_sqlite_tag_tamper_refused_without_value_leak",
+      "changed_target_security_binding_rejected_before_decrypt"
+    ],
+    "vps_used": false,
+    "gui_used": false,
+    "activation_implemented": false,
+    "artifact_sha256": "04bc38173fe99ffd4d7f486466bb7b0d0739e4f15125515545e439333a062430",
+    "private_scratch_removed": true
+  },
+  "checks": {
+    "full_vitest": {
+      "passed": 2342,
+      "skipped_existing": 2,
+      "failed": 0,
+      "files_passed": 169,
+      "files_skipped": 1
+    },
+    "focused": 298,
+    "new_tests": 27,
+    "types": [
+      "node",
+      "web",
+      "scripts",
+      "environment-desktop-lab"
+    ],
+    "eslint": "0_ERRORS_0_WARNINGS",
+    "prettier": "PASS",
+    "ruff": "PASS",
+    "build": "PASS",
+    "contract_schema_032_033_034_and_shared_ipc_parity": "PASS",
+    "syntax": "PASS",
+    "negative_cli": "UI_AND_ADMIN_EXIT2_BEFORE_SCRATCH",
+    "visual_review": "vi_dark_light_and_saved_state_inspected"
+  },
+  "schema": {
+    "desktop_latest": 34,
+    "controller_latest": 33,
+    "controller_skips": [
+      30,
+      31,
+      34
+    ],
+    "installed_vps_unchanged": 29
+  },
+  "security": [
+    "Three fixed same-UID admin operations and six typed Main IPC channels; no arbitrary command/target/credential from renderer",
+    "Controller derives current target context from registered app with owner/source/security CAS",
+    "Desktop immutable encrypted full-body intent enables exact cold retry; no plaintext body/secret digest or renderer value readback",
+    "Current write scopes and binding/source guards before/after awaits; uncertain delivery retains original UUID/body",
+    "UI runtime password/public build warning/whole-snapshot consent, clears values after prepare; stages only",
+    "Synthetic SSH loses reply after real controller SQLite commit; cold DB/Main recreation retrieves one revision"
+  ],
+  "early_checks": [
+    "Initial fixture missed prepare await, fixed; exact empty fake-host fixtures removed",
+    "JSX brace/locale jp/test close-button ambiguity/AntD CJK spacing fixed; all 4locales retained",
+    "ESLint control regex/import/return annotations fixed; Ruff bounded exception tuple",
+    "Windows Chromium DIPS profile lock resolved by exact-owned parent cleanup after Electron exit; preference localStorage retained, assert no env data instead",
+    "Two full passes attempted before shared DTO fix had2334PASS/10SKIP but one failed detector CLI suite (8tests skipped by failed scripts compiler). Shared DTO copied within scripts rootDir, no guard/config broadening; final full repeated",
+    "Final audit authenticates encrypted local intents even for metadata-only list; native/UI and final relevant tests rerun"
+  ],
+  "limitations": [
+    "Installed development VPS/pins/release/schema remain unchanged. No real SSH/root-installed-admin new-operation or VPS rollout acceptance",
+    "Electron uses production component/preload/Main/native SQLite with synthetic SSH/controller transport; cold DB/Main recreation keeps same cipher in one OS process, not independent OS/DPAPI restart proof",
+    "No env activation/source-generation switch, runtime/public build rendering/deploy, PostgreSQL/config rollback/backup/live gate yet",
+    "No whole R7, R8, ML batch, reboot/soak, independent Windows or release completion"
+  ]
+}

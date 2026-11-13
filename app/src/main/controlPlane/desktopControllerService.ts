@@ -1,3 +1,9 @@
+import { DesktopProductEnvironment, DesktopEnvironmentError } from './desktopProductEnvironment'
+import type {
+  DesktopEnvironmentContext,
+  DesktopEnvironmentPrepareInput,
+  DesktopEnvironmentIntent
+} from '@shared/desktopProductEnvironment'
 import { DesktopTargetSetups, DesktopTargetSetupError } from './desktopTargetSetup'
 import { DesktopExposure } from './desktopExposure'
 import type { DesktopExposureInput, DesktopExposureResult } from '@shared/desktopControllerExposure'
@@ -120,6 +126,7 @@ export class DesktopControllerService {
   private readonly enrollment: DesktopControllerEnrollment
   private readonly commands: DesktopControllerCommands
   private readonly projects: DesktopProjectSetups
+  private readonly environment: DesktopProductEnvironment
   private readonly targets: DesktopTargetSetups
   private readonly firstDeployments: DesktopFirstDeployments
   private readonly installations: DesktopControllerInstallations
@@ -168,6 +175,13 @@ export class DesktopControllerService {
     })
     this.commands = new DesktopControllerCommands(db, this.vault, ssh, clientFactory)
     this.projects = new DesktopProjectSetups(db, this.vault, this.enrollment)
+    this.environment = new DesktopProductEnvironment(
+      db,
+      cipher,
+      this.vault,
+      this.projects,
+      this.enrollment
+    )
     this.targets = new DesktopTargetSetups(db, cipher, this.vault, this.enrollment)
     this.firstDeployments = new DesktopFirstDeployments(
       this.projects,
@@ -525,6 +539,26 @@ export class DesktopControllerService {
       return this.projects.targets(parsed.data.binding_id, parsed.data.after_id ?? null)
     })
   }
+  async environmentContext(key: string): Promise<DesktopEnvironmentContext> {
+    return this.safe(() => this.environment.context(key))
+  }
+  async prepareEnvironment(
+    input: DesktopEnvironmentPrepareInput
+  ): Promise<DesktopEnvironmentIntent> {
+    return this.safe(() => this.environment.prepare(input))
+  }
+  async sendEnvironment(key: string): Promise<DesktopEnvironmentIntent> {
+    return this.safe(() => this.environment.send(key))
+  }
+  async checkEnvironment(key: string): Promise<DesktopEnvironmentIntent> {
+    return this.safe(() => this.environment.check(key))
+  }
+  async listEnvironmentIntents(key: string): Promise<DesktopEnvironmentIntent[]> {
+    return this.safe(() => this.environment.list(key))
+  }
+  async cancelEnvironment(key: string): Promise<DesktopEnvironmentIntent> {
+    return this.safe(() => this.environment.cancel(key))
+  }
   async prepareProject(input: DesktopProjectSetupInput): Promise<DesktopProjectSetup> {
     return this.safe(() => this.projects.prepare(input))
   }
@@ -848,6 +882,7 @@ export class DesktopControllerService {
         error instanceof DesktopProjectSetupError ||
         error instanceof DesktopFirstDeploymentError ||
         error instanceof DesktopTargetSetupError ||
+        error instanceof DesktopEnvironmentError ||
         error instanceof DesktopInstallationError ||
         error instanceof DesktopUpgradeError ||
         error instanceof ControllerBootstrapError ||

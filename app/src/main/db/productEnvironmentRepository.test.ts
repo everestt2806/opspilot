@@ -369,7 +369,7 @@ describe('Product staged environment encrypted revisions', () => {
       expect(prior.prepare('SELECT count(*) n FROM product_environment_revision').get()).toEqual({
         n: 0
       })
-      expect(prior.prepare('SELECT max(version) n FROM schema_version').get()).toEqual({ n: 33 })
+      expect(prior.prepare('SELECT max(version) n FROM schema_version').get()).toEqual({ n: 34 })
       expect(prior.pragma('foreign_key_check')).toEqual([])
       expect(new ProductEnvironmentRepository(prior, cipher).append(input()).revision).toBe(1)
     } finally {

@@ -1,3 +1,4 @@
+import { ControllerProjectEnvironment } from './ControllerProjectEnvironment'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Alert,
@@ -364,6 +365,9 @@ export function ControllerProjectPanel({
             key: 'actions',
             render: (_value, row) => (
               <Space wrap>
+                {row.state === 'registered' && (
+                  <ControllerProjectEnvironment binding={binding} project={row} />
+                )}
                 {row.state === 'registered' && (
                   <ControllerProjectSourceCheck
                     key={`source-${sourceRevision}`}

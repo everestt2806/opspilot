@@ -114,6 +114,34 @@ it('returns metadata only, persists both ciphertexts and recovers a lost reply a
   expect(disk.includes(Buffer.from(secret))).toBe(false)
   expect(disk.includes(Buffer.from(createHash('sha256').update(secret).digest('hex')))).toBe(false)
 })
+it('derives environment context from the app and rejects target/source overrides', () => {
+  const request = input(),
+    context = {
+      format: 1,
+      controller_id: controllerId,
+      app_id: 1,
+      expected_ownership_generation: 1,
+      expected_source_generation: 1,
+      expected_source_config_sha256: hash,
+      expected_target_security_revision: 1
+    }
+  expect(store.context(context, controllerId, principal)).toMatchObject({
+    scope: request.scope,
+    latest: null,
+    request_key: null
+  })
+  expect(() =>
+    store.context({ ...context, target: request.scope.target }, controllerId, principal)
+  ).toThrow('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+  expect(() =>
+    store.context({ ...context, expected_target_security_revision: 2 }, controllerId, principal)
+  ).toThrow('PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED')
+  expect(() =>
+    store.context({ ...context, expected_source_generation: 2 }, controllerId, principal)
+  ).toThrow('PRODUCT_ENVIRONMENT_SOURCE_CHANGED')
+  store.stage(request, controllerId, principal)
+  expect(store.context(context, controllerId, principal).latest?.revision).toBe(1)
+})
 
 it('replays the original revision after a newer snapshot, with canonical order-insensitive comparison', () => {
   const request = input(),
@@ -326,7 +354,7 @@ it('retains immutable receipt and revision and upgrades schema032 without losing
   const before = db.prepare('SELECT encrypted_secret FROM product_environment_revision').get()
   // Fixture này là Desktop; không dùng controller role để bỏ qua role fence.
   runMigrations(db)
-  expect(db.prepare('SELECT max(version) n FROM schema_version').get()).toEqual({ n: 33 })
+  expect(db.prepare('SELECT max(version) n FROM schema_version').get()).toEqual({ n: 34 })
   expect(db.prepare('SELECT encrypted_secret FROM product_environment_revision').get()).toEqual(
     before
   )

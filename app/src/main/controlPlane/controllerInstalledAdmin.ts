@@ -57,7 +57,9 @@ export async function executeInstalledControllerAdmin(
           })
           if (
             Buffer.byteLength(request) >
-            (input.command.operation === 'register-vps' ? 512 * 1024 : 16384)
+            (['register-vps', 'stage-project-environment'].includes(input.command.operation)
+              ? 512 * 1024
+              : 16384)
           )
             throw Error('CONTROLLER_INSTALL_ADMIN_INPUT_INVALID')
           response = await runAsService(
@@ -98,7 +100,9 @@ export async function executeInstalledControllerAdmin(
         })
         if (
           Buffer.byteLength(request) >
-          (input.command.operation === 'register-vps' ? 512 * 1024 : 16384)
+          (['register-vps', 'stage-project-environment'].includes(input.command.operation)
+            ? 512 * 1024
+            : 16384)
         )
           throw Error('CONTROLLER_INSTALL_ADMIN_INPUT_INVALID')
         response = await runAsService(

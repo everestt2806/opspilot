@@ -108,6 +108,93 @@ afterEach(() => {
   rmSync(directory, { recursive: true })
 })
 describe('Trusted Desktop controller enrollment', () => {
+  it('sends bounded large environment bodies through the fixed operation and calls the last-moment guard', async () => {
+    await service.enroll(intent.binding_id)
+    const request = {
+      format: 1 as const,
+      request_key: randomUUID(),
+      scope: {
+        controller_id: intent.controller_id,
+        app_id: 42,
+        ownership_generation: 1,
+        target: {
+          vps_id: 77,
+          host: 'target.test',
+          port: 22,
+          username: 'operator',
+          auth_type: 'key' as const,
+          host_fingerprint: 'SHA256:' + 'B'.repeat(43),
+          ssh_security_revision: 1
+        }
+      },
+      expected_latest_revision: null,
+      expected_source_generation: 1,
+      expected_source_config_sha256: 'a'.repeat(64),
+      values: {
+        runtime_env: {
+          APP_PADDING: 'x'.repeat(8000),
+          APP_PADDING_2: 'y'.repeat(8000),
+          APP_PADDING_3: 'z'.repeat(8000)
+        },
+        public_build_args: {}
+      }
+    }
+    const metadata = {
+      controller_id: intent.controller_id,
+      app_id: 42,
+      ownership_generation: 1,
+      revision: 1,
+      basis_source_generation: 1,
+      basis_source_config_sha256: 'a'.repeat(64),
+      framework: 'nextjs',
+      runtime_keys: ['APP_PADDING', 'APP_PADDING_2', 'APP_PADDING_3'],
+      public_build_keys: [],
+      created_at: new Date().toISOString(),
+      activation: 'staged'
+    }
+    reply = (value) =>
+      respond(value, { state: 'staged', request_key: request.request_key, metadata })
+    const guard = vi.fn()
+    expect(
+      (await service.stageEnvironment(intent.binding_id, request, guard)).metadata.revision
+    ).toBe(1)
+    expect(guard).toHaveBeenCalledOnce()
+    expect(requests.at(-1)).toMatchObject({
+      operation: 'stage-project-environment',
+      payload: request
+    })
+    expect(JSON.stringify(requests.at(-1)).length).toBeGreaterThan(16384)
+  })
+  it('does not transmit environment values after current authority changes at the send boundary', async () => {
+    await service.enroll(intent.binding_id)
+    const guard = vi.fn(() => {
+      throw Error('SYNTHETIC_ONLY_GUARD')
+    })
+    const request = {
+      format: 1 as const,
+      request_key: randomUUID(),
+      scope: {
+        controller_id: intent.controller_id,
+        app_id: 42,
+        ownership_generation: 1,
+        target: {
+          vps_id: 77,
+          host: 'target.test',
+          port: 22,
+          username: 'operator',
+          auth_type: 'key' as const,
+          host_fingerprint: 'SHA256:' + 'B'.repeat(43),
+          ssh_security_revision: 1
+        }
+      },
+      expected_latest_revision: null,
+      expected_source_generation: 1,
+      expected_source_config_sha256: 'a'.repeat(64),
+      values: { runtime_env: { APP_TOKEN: 'SYNTHETIC_ONLY' }, public_build_args: {} }
+    }
+    await expect(service.stageEnvironment(intent.binding_id, request, guard)).rejects.toThrow()
+    expect(requests.filter((r) => r.operation === 'stage-project-environment')).toHaveLength(0)
+  })
   it('pins the approved bootstrap and principal, persists the credential and returns metadata only', async () => {
     const metadata = await service.enroll(intent.binding_id)
     expect(metadata).toMatchObject({

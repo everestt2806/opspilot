@@ -71,6 +71,16 @@ export interface ProductEnvironmentState {
   request_key: string | null
   requested: ProductEnvironmentMetadata | null
 }
+/** Read-only context derived from registered app; no caller target/credential. */
+export interface ProductEnvironmentContextInput {
+  format: 1
+  controller_id: string
+  app_id: number
+  expected_ownership_generation: number
+  expected_source_generation: number
+  expected_source_config_sha256: string
+  expected_target_security_revision: number
+}
 
 /** Whole snapshot, không merge PATCH/implicit inherited env. Tối đa128keys tổng,
  * key uppercase1..128bytes, value<=8192UTF8bytes, values JSON<=64KiB; empty value

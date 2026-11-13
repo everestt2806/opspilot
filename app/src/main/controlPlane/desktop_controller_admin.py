@@ -14,6 +14,18 @@ import time
 
 APPROVED_ASSETS = ()
 MAX_REPLY = 65536
+ENVIRONMENT_ERROR_CODES = frozenset(
+    [
+        "PRODUCT_ENVIRONMENT_INPUT_INVALID",
+        "PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED",
+        "PRODUCT_ENVIRONMENT_SOURCE_CHANGED",
+        "PRODUCT_ENVIRONMENT_REVISION_CONFLICT",
+        "PRODUCT_ENVIRONMENT_IDEMPOTENCY_CONFLICT",
+        "PRODUCT_ENVIRONMENT_UNAVAILABLE",
+        "PRODUCT_ENVIRONMENT_STORAGE_UNAVAILABLE",
+        "CONTROLLER_SECRET_KEY_UNAVAILABLE",
+    ]
+)
 SOURCE_ERROR_CODES = frozenset(
     {
         "PROJECT_SOURCE_REQUEST_INVALID",
@@ -213,7 +225,19 @@ def run_cli(request, operation, payload):
     target_check = operation in ("project-target-state", "enroll-project-target")
     readiness_check = operation == "project-readiness"
     vps_check = operation == "register-vps"
-    structured_error = source_check or target_check or readiness_check or vps_check
+    environment_check = operation in (
+        "stage-project-environment",
+        "project-environment-state",
+        "project-environment-context",
+    )
+    streamed_input = vps_check or operation == "stage-project-environment"
+    structured_error = (
+        source_check
+        or target_check
+        or readiness_check
+        or vps_check
+        or environment_check
+    )
     args = (
         [request["node_path"], "--version"]
         if operation == "_version"
@@ -230,7 +254,7 @@ def run_cli(request, operation, payload):
         if operation == "_version"
         else json.dumps(payload, ensure_ascii=False).encode()
     )
-    if vps_check and len(payload_bytes) > 512 * 1024:
+    if streamed_input and len(payload_bytes) > 512 * 1024:
         raise ValueError()
     process = subprocess.Popen(
         args,
@@ -242,7 +266,7 @@ def run_cli(request, operation, payload):
         start_new_session=True,
     )
     try:
-        if vps_check:
+        if streamed_input:
             os.set_blocking(process.stdin.fileno(), False)
         else:
             if operation != "_version":
@@ -254,7 +278,7 @@ def run_cli(request, operation, payload):
             180
             if readiness_check
             else 60
-            if vps_check
+            if streamed_input
             else 105
             if source_check
             else 75
@@ -264,7 +288,7 @@ def run_cli(request, operation, payload):
         with selectors.DefaultSelector() as selector:
             selector.register(process.stdout, selectors.EVENT_READ)
             sent = 0
-            if vps_check:
+            if streamed_input:
                 selector.register(process.stdin, selectors.EVENT_WRITE)
             if structured_error:
                 selector.register(process.stderr, selectors.EVENT_READ)
@@ -299,7 +323,7 @@ def run_cli(request, operation, payload):
             if structured_error:
                 # Chỉ chuyển tiếp đúng mã đã duyệt, không stdout/stderr tùy ý.
                 match = re.fullmatch(
-                    rb"CONTROL_PLANE_ERROR ((?:PROJECT_SOURCE_|PROJECT_TARGET_|TARGET_ENROLLMENT_|PROJECT_READINESS_|VPS_REGISTRATION_|CONTROLLER_VPS_|CONTROLLER_BOOTSTRAP_)[A-Z_]+)\r?\n?",
+                    rb"CONTROL_PLANE_ERROR ((?:PROJECT_SOURCE_|PROJECT_TARGET_|TARGET_ENROLLMENT_|PROJECT_READINESS_|VPS_REGISTRATION_|PRODUCT_ENVIRONMENT_|CONTROLLER_SECRET_KEY_|CONTROLLER_VPS_|CONTROLLER_BOOTSTRAP_)[A-Z_]+)\r?\n?",
                     bytes(error_content),
                 )
                 if match:
@@ -314,6 +338,7 @@ def run_cli(request, operation, payload):
                             }
                         )
                         or (vps_check and safe_code in VPS_ERROR_CODES)
+                        or (environment_check and safe_code in ENVIRONMENT_ERROR_CODES)
                         or safe_code in SOURCE_ERROR_CODES
                         or (
                             (target_check or readiness_check)
@@ -340,7 +365,10 @@ def main():
     if len(raw) > 512 * 1024:
         raise ValueError()
     request = json.loads(raw.decode("utf-8", errors="strict"))
-    if request.get("operation") != "register-vps" and len(raw) > 16384:
+    if (
+        request.get("operation") not in ("register-vps", "stage-project-environment")
+        and len(raw) > 16384
+    ):
         raise ValueError()
     if set(request) != {
         "operation",
@@ -363,6 +391,9 @@ def main():
         "enroll-project-target",
         "project-readiness",
         "register-vps",
+        "stage-project-environment",
+        "project-environment-state",
+        "project-environment-context",
     ):
         raise ValueError()
     try:

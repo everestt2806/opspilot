@@ -16,7 +16,8 @@
 --   - 031_desktop_controller_authority_rebind.sql (chỉ Desktop: explicit SSH authority epochs)
 --   - 032_product_environment_revision.sql (staged encrypted Product config)
 --   - 033_product_environment_request.sql (receipt staged config mã hóa, idempotency)
--- Controller role áp dụng001–029/032–033; không áp dụng030/031 hoặc copy DB để phục hồi schema.
+--   - 034_desktop_environment_intent.sql (chỉ Desktop: encrypted config retry intent)
+-- Controller role áp dụng001–029/032–033; không áp dụng030/031/034 hoặc copy DB để phục hồi schema.
 --
 -- QUY ƯỚC BẮT BUỘC:
 --   * Mọi cột thời gian: TEXT, ISO-8601 UTC, dạng '2026-07-27T10:00:00Z'
@@ -1381,3 +1382,39 @@ CREATE TRIGGER product_environment_request_immutable BEFORE UPDATE ON product_en
 BEGIN SELECT RAISE(ABORT,'PRODUCT_ENVIRONMENT_REQUEST_IMMUTABLE'); END;
 CREATE TRIGGER product_environment_request_retain BEFORE DELETE ON product_environment_request
 BEGIN SELECT RAISE(ABORT,'PRODUCT_ENVIRONMENT_REQUEST_IMMUTABLE'); END;
+
+
+-- Chỉ Desktop: replay cùng body qua ciphertext, không plaintext/digest secret.
+CREATE TABLE desktop_environment_intent (
+  request_key TEXT PRIMARY KEY NOT NULL CHECK(length(request_key)=36),
+  project_request_key TEXT NOT NULL REFERENCES desktop_project_setup(request_key) ON DELETE RESTRICT,
+  binding_id TEXT NOT NULL,
+  binding_revision INTEGER NOT NULL CHECK(binding_revision>=1),
+  controller_id TEXT NOT NULL,
+  app_id INTEGER NOT NULL CHECK(app_id>=1),
+  context_json TEXT NOT NULL CHECK(json_valid(context_json) AND length(context_json)<=32768),
+  crypto_scheme TEXT NOT NULL CHECK(crypto_scheme='aes_256_gcm'),
+  encrypted_secret BLOB NOT NULL CHECK(typeof(encrypted_secret)='blob' AND length(encrypted_secret) BETWEEN 1 AND 131072),
+  iv BLOB NOT NULL CHECK(typeof(iv)='blob' AND length(iv)=12),
+  auth_tag BLOB NOT NULL CHECK(typeof(auth_tag)='blob' AND length(auth_tag)=16),
+  state TEXT NOT NULL CHECK(state IN ('prepared','in_flight','outcome_unknown','staged','cancelled')),
+  result_json TEXT CHECK(result_json IS NULL OR (json_valid(result_json) AND length(result_json)<=32768)),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  CHECK((state='staged' AND result_json IS NOT NULL) OR (state<>'staged' AND result_json IS NULL))
+);
+CREATE UNIQUE INDEX idx_desktop_environment_pending ON desktop_environment_intent(controller_id,app_id)
+  WHERE state IN ('prepared','in_flight','outcome_unknown');
+CREATE TRIGGER desktop_environment_intent_immutable BEFORE UPDATE ON desktop_environment_intent
+WHEN NEW.request_key IS NOT OLD.request_key OR NEW.project_request_key IS NOT OLD.project_request_key
+  OR NEW.binding_id IS NOT OLD.binding_id OR NEW.binding_revision IS NOT OLD.binding_revision
+  OR NEW.controller_id IS NOT OLD.controller_id OR NEW.app_id IS NOT OLD.app_id
+  OR NEW.context_json IS NOT OLD.context_json OR NEW.crypto_scheme IS NOT OLD.crypto_scheme
+  OR NEW.encrypted_secret IS NOT OLD.encrypted_secret OR NEW.iv IS NOT OLD.iv OR NEW.auth_tag IS NOT OLD.auth_tag
+  OR NEW.created_at IS NOT OLD.created_at
+BEGIN SELECT RAISE(ABORT,'DESKTOP_ENVIRONMENT_INTENT_IMMUTABLE'); END;
+CREATE TRIGGER desktop_environment_intent_transition BEFORE UPDATE ON desktop_environment_intent
+WHEN NOT (NEW.state=OLD.state OR (OLD.state='prepared' AND NEW.state IN ('in_flight','cancelled'))
+  OR (OLD.state='in_flight' AND NEW.state IN ('outcome_unknown','staged'))
+  OR (OLD.state='outcome_unknown' AND NEW.state IN ('in_flight','staged')))
+BEGIN SELECT RAISE(ABORT,'DESKTOP_ENVIRONMENT_INTENT_TRANSITION_INVALID'); END;

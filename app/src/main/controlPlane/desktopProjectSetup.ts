@@ -85,6 +85,14 @@ export class DesktopProjectSetups {
     body_sha256: string
   } {
     if (this.db.inTransaction) throw new DesktopProjectSetupError('PROJECT_REQUEST_INVALID')
+    return this.registeredContextSnapshot(key)
+  }
+  /** Main-only synchronous snapshot, không giữ transaction qua await. */
+  registeredContextSnapshot(key: string): {
+    setup: DesktopProjectSetup
+    registration: z.output<typeof projectRegistrationResultSchema>
+    body_sha256: string
+  } {
     const row = this.row(key)
     if (row.state !== 'registered') throw new DesktopProjectSetupError('PROJECT_SETUP_CONFLICT')
     this.authorize(row.binding_id, row.binding_revision, row.controller_id)

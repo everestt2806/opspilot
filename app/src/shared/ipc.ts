@@ -1,3 +1,4 @@
+import type { DesktopEnvironmentContext, DesktopEnvironmentPrepareInput, DesktopEnvironmentIntent } from './desktopProductEnvironment';
 import type { ControllerAdoptionReviewInput, ControllerAdoptionReview, ControllerAdoptionConfirmInput, ControllerAdoptionResult } from './controllerAdoption'
 import type { ControllerAuthorityReviewInput, ControllerAuthorityReview, ControllerAuthorityConfirmInput, ControllerAuthorityResult } from './controllerAuthority'
 import type { ControllerUpgradeOverview, ControllerUpgradeReviewInput, ControllerUpgradeReview, ControllerUpgradeSendInput, ControllerUpgradeBindingReview, DesktopUpgrade } from './controllerUpgrade'
@@ -417,6 +418,12 @@ export interface IpcInvokeMap {
   'controller:verify-project-source': (key:string) => IpcResult<DesktopProjectSourceVerification>;
   'controller:project-target-state': (key:string) => IpcResult<DesktopProjectTargetState>;
   'controller:enroll-project-target': (input:DesktopProjectTargetInput) => IpcResult<DesktopProjectTargetState>;
+  'controller:environment-context': (projectKey: string) => IpcResult<DesktopEnvironmentContext>;
+  'controller:prepare-environment': (input: DesktopEnvironmentPrepareInput) => IpcResult<DesktopEnvironmentIntent>;
+  'controller:send-environment': (key: string) => IpcResult<DesktopEnvironmentIntent>;
+  'controller:check-environment': (key: string) => IpcResult<DesktopEnvironmentIntent>;
+  'controller:environment-intents': (projectKey: string) => IpcResult<DesktopEnvironmentIntent[]>;
+  'controller:cancel-environment': (key: string) => IpcResult<DesktopEnvironmentIntent>;
   'controller:prepare-project': (input: DesktopProjectSetupInput) => IpcResult<DesktopProjectSetup>;
   'controller:send-project': (key: string) => IpcResult<DesktopProjectSetup>;
   'controller:projects': (bindingId: string) => IpcResult<DesktopProjectSetup[]>;

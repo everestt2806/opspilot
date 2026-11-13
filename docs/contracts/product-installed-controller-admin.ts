@@ -22,7 +22,8 @@ export type InstalledControllerAdminRequest = {
       | "enroll-desktop-client" | "revoke-desktop-client" | "status"
       | "project-targets" | "register-project" | "verify-project-source"
       | "project-target-state" | "enroll-project-target" | "project-readiness"
-      | "register-vps";
+      | "register-vps" | "stage-project-environment" | "project-environment-state"
+      | "project-environment-context";
     payload: object;
   };
 };

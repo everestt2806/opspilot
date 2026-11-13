@@ -258,6 +258,24 @@ export function registerIpcHandlers(
     handle('controller:verify-project-source', (key) =>
       desktopControllerService.verifyProjectSource(key)
     )
+    handle('controller:environment-context', (input) =>
+      desktopControllerService.environmentContext(input)
+    )
+    handle('controller:prepare-environment', (input) =>
+      desktopControllerService.prepareEnvironment(input)
+    )
+    handle('controller:send-environment', (input) =>
+      desktopControllerService.sendEnvironment(input)
+    )
+    handle('controller:check-environment', (input) =>
+      desktopControllerService.checkEnvironment(input)
+    )
+    handle('controller:environment-intents', (input) =>
+      desktopControllerService.listEnvironmentIntents(input)
+    )
+    handle('controller:cancel-environment', (input) =>
+      desktopControllerService.cancelEnvironment(input)
+    )
     handle('controller:prepare-project', (input) => desktopControllerService.prepareProject(input))
     handle('controller:send-project', (key) => desktopControllerService.sendProject(key))
     handle('controller:projects', (bindingId) => desktopControllerService.listProjects(bindingId))

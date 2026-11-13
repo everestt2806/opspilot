@@ -6,12 +6,12 @@ import { it, expect } from 'vitest'
 import { initializeDatabase, runMigrations } from './index'
 import { initializeController, openControllerDatabase } from '../controlPlane/controllerDatabase'
 
-it('shared033 applies to both roles; Desktop alone adds030/031, cold controller keeps identity', () => {
+it('shared033 applies to both roles; Desktop alone adds030/031/034, cold controller keeps identity', () => {
   const root = mkdtempSync(join(tmpdir(), 'opspilot-migration-role-'))
   try {
     const desktop = initializeDatabase(join(root, 'desktop'))
     try {
-      expect(desktop.prepare('SELECT MAX(version) v FROM schema_version').get()).toEqual({ v: 33 })
+      expect(desktop.prepare('SELECT MAX(version) v FROM schema_version').get()).toEqual({ v: 34 })
       expect(
         desktop
           .prepare("SELECT name FROM sqlite_master WHERE name='desktop_controller_upgrade'")
@@ -25,6 +25,9 @@ it('shared033 applies to both roles; Desktop alone adds030/031, cold controller 
           .get()
       ).toBeTruthy()
       expect(desktop.prepare('SELECT count(*) n FROM product_environment_revision').get()).toEqual({
+        n: 0
+      })
+      expect(desktop.prepare('SELECT count(*) n FROM desktop_environment_intent').get()).toEqual({
         n: 0
       })
     } finally {
@@ -57,6 +60,11 @@ it('shared033 applies to both roles; Desktop alone adds030/031, cold controller 
       expect(
         reopened.database.prepare('SELECT count(*) n FROM product_environment_revision').get()
       ).toEqual({ n: 0 })
+      expect(
+        reopened.database
+          .prepare("SELECT name FROM sqlite_master WHERE name='desktop_environment_intent'")
+          .get()
+      ).toBeUndefined()
     } finally {
       reopened.database.close()
     }

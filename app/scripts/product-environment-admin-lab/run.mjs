@@ -178,7 +178,13 @@ try {
     expected_source_generation: 1,
     expected_source_config_sha256: hash,
     values: {
-      runtime_env: { APP_TOKEN: marker, EMPTY: '' },
+      runtime_env: {
+        APP_TOKEN: marker,
+        EMPTY: '',
+        APP_PADDING: 'x'.repeat(8000),
+        APP_PADDING_2: 'y'.repeat(8000),
+        APP_PADDING_3: 'z'.repeat(8000)
+      },
       public_build_args: { NEXT_PUBLIC_TITLE: 'Sổ Đọc' }
     }
   }
@@ -187,6 +193,54 @@ try {
   assert.equal(expected_latest_revision, null)
   assert.equal(call('project-environment-state', stateRequest).latest, null)
   const first = call('stage-project-environment', request)
+  const bridged = spawnSync('/usr/bin/python3', [join(import.meta.dirname, 'bridge.py')], {
+    input: JSON.stringify({
+      operation: 'stage-project-environment',
+      node_path: process.execPath,
+      artifact_path: artifact,
+      data_directory: scratch,
+      payload: request
+    }),
+    encoding: 'utf8',
+    timeout: 20000,
+    maxBuffer: 131072
+  })
+  assert.equal(bridged.status, 0)
+  assert(!bridged.stdout.includes(marker))
+  assert.equal(bridged.stderr, '')
+  assert.equal(JSON.parse(bridged.stdout).data.state, 'already_staged')
+  const badBridge = spawnSync('/usr/bin/python3', [join(import.meta.dirname, 'bridge.py')], {
+    input: JSON.stringify({
+      operation: 'stage-project-environment',
+      node_path: process.execPath,
+      artifact_path: artifact,
+      data_directory: scratch,
+      payload: {
+        ...request,
+        values: { ...request.values, runtime_env: { APP_TOKEN: 'different' } }
+      }
+    }),
+    encoding: 'utf8',
+    timeout: 20000,
+    maxBuffer: 131072
+  })
+  assert.equal(badBridge.status, 0)
+  assert.equal(badBridge.stderr, '')
+  assert.deepEqual(JSON.parse(badBridge.stdout), {
+    ok: false,
+    code: 'PRODUCT_ENVIRONMENT_IDEMPOTENCY_CONFLICT'
+  })
+  const contextInput = {
+    format: 1,
+    controller_id: controllerId,
+    app_id: 1,
+    expected_ownership_generation: 1,
+    expected_source_generation: 1,
+    expected_source_config_sha256: hash,
+    expected_target_security_revision: 1
+  }
+  assert.deepEqual(call('project-environment-context', contextInput).scope, scope)
+  checks.push('native_python_streaming_large_stdin_replay_and_derived_context')
   assert.equal(first.state, 'staged')
   assert.equal(first.metadata.revision, 1)
   code.closeDatabase()

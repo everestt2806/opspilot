@@ -46,6 +46,7 @@ type Command =
   | 'project-readiness'
   | 'stage-project-environment'
   | 'project-environment-state'
+  | 'project-environment-context'
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
@@ -80,7 +81,8 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
       'enroll-project-target',
       'project-readiness',
       'stage-project-environment',
-      'project-environment-state'
+      'project-environment-state',
+      'project-environment-context'
     ].includes(commandValue)
   ) {
     throw new Error('USAGE')
@@ -142,7 +144,8 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
     command === 'enroll-project-target' ||
     command === 'project-readiness' ||
     command === 'stage-project-environment' ||
-    command === 'project-environment-state'
+    command === 'project-environment-state' ||
+    command === 'project-environment-context'
   ) {
     if (process.platform !== 'linux') throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
     const controller = new AbortController()
@@ -162,7 +165,11 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
         recoveryBundle = verifyControllerBundle(request.artifact, request.manifest_sha256)
       }
       opened = openControllerDatabase(dataDirectory)
-      if (command === 'stage-project-environment' || command === 'project-environment-state') {
+      if (
+        command === 'stage-project-environment' ||
+        command === 'project-environment-state' ||
+        command === 'project-environment-context'
+      ) {
         const uid = process.getuid?.()
         if (uid === undefined) throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
         const environment = new ProductEnvironmentRepository(
@@ -173,7 +180,9 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
           JSON.stringify(
             command === 'stage-project-environment'
               ? environment.stage(input, opened.controllerId, `unix:${uid}`)
-              : environment.state(input, opened.controllerId, `unix:${uid}`)
+              : command === 'project-environment-context'
+                ? environment.context(input, opened.controllerId, `unix:${uid}`)
+                : environment.state(input, opened.controllerId, `unix:${uid}`)
           )
         )
       } else if (command === 'project-readiness') {

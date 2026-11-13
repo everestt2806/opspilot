@@ -16,6 +16,7 @@ import {
   environmentWriteSchema,
   environmentStageSchema,
   environmentStateSchema,
+  environmentContextSchema,
   ProductEnvironmentError,
   validateEnvironmentValues
 } from '../controlPlane/productEnvironment'
@@ -79,6 +80,40 @@ export class ProductEnvironmentRepository {
   }
 
   /** CLI cùng UID; receipt và revision commit chung, không lưu hash của secret. */
+  context(input: unknown, controllerId: string, administratorId: string): ProductEnvironmentState {
+    return this.guarded(() => {
+      const parsed = environmentContextSchema.safeParse(input)
+      if (!parsed.success) throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+      const request = parsed.data
+      if (request.controller_id !== controllerId)
+        throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED')
+      const target = this.db
+        .prepare(
+          `SELECT v.id AS vps_id,v.host,v.port,v.username,v.auth_type,
+        v.host_fingerprint,v.ssh_security_revision FROM app a JOIN vps v ON v.id=a.vps_id WHERE a.id=?`
+        )
+        .get(request.app_id) as ProductEnvironmentScope['target'] | undefined
+      if (!target || target.ssh_security_revision !== request.expected_target_security_revision)
+        throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED')
+      return this.state(
+        {
+          format: 1,
+          scope: {
+            controller_id: controllerId,
+            app_id: request.app_id,
+            ownership_generation: request.expected_ownership_generation,
+            target
+          },
+          expected_source_generation: request.expected_source_generation,
+          expected_source_config_sha256: request.expected_source_config_sha256,
+          request_key: null
+        },
+        controllerId,
+        administratorId
+      )
+    })
+  }
+
   stage(
     input: unknown,
     controllerId: string,

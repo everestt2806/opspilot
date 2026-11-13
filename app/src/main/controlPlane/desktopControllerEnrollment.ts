@@ -1,3 +1,18 @@
+import type {
+  ProductEnvironmentContextInput,
+  ProductEnvironmentStageInput,
+  ProductEnvironmentStageResult,
+  ProductEnvironmentStateInput,
+  ProductEnvironmentState
+} from '../../../../docs/contracts/product-environment'
+import {
+  environmentContextSchema,
+  environmentStageSchema,
+  environmentStateSchema,
+  environmentStateResultSchema,
+  environmentStageResultSchema,
+  type ProductEnvironmentError
+} from './productEnvironment'
 import { vpsRegistrationInputSchema, vpsRegistrationResultSchema } from './vpsRegistration'
 import type {
   ProductVpsRegistrationInput,
@@ -60,6 +75,8 @@ const replaySchema = z.strictObject({
 export class DesktopControllerEnrollmentError extends Error {
   constructor(
     readonly code:
+      | ProductEnvironmentError['code']
+      | 'CONTROLLER_SECRET_KEY_UNAVAILABLE'
       | 'CONTROLLER_ADMIN_FAILED'
       | 'CONTROLLER_IDENTITY_MISMATCH'
       | 'CONTROLLER_BUNDLE_VERIFICATION_FAILED'
@@ -189,6 +206,91 @@ export class DesktopControllerEnrollment {
       vpsRegistrationResultSchema,
       beforeSend
     )
+  }
+  async environmentContext(
+    bindingId: string,
+    input: ProductEnvironmentContextInput
+  ): Promise<ProductEnvironmentState> {
+    const parsed = environmentContextSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    return this.environmentOperation(
+      bindingId,
+      'project-environment-context',
+      parsed.data,
+      environmentStateResultSchema
+    )
+  }
+  async environmentState(
+    bindingId: string,
+    input: ProductEnvironmentStateInput
+  ): Promise<ProductEnvironmentState> {
+    const parsed = environmentStateSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    return this.environmentOperation(
+      bindingId,
+      'project-environment-state',
+      parsed.data,
+      environmentStateResultSchema
+    )
+  }
+  async stageEnvironment(
+    bindingId: string,
+    input: ProductEnvironmentStageInput,
+    beforeSend: () => void
+  ): Promise<ProductEnvironmentStageResult> {
+    const parsed = environmentStageSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    return this.environmentOperation(
+      bindingId,
+      'stage-project-environment',
+      parsed.data,
+      environmentStageResultSchema,
+      beforeSend
+    )
+  }
+  private async environmentOperation<T>(
+    bindingId: string,
+    operation:
+      'stage-project-environment' | 'project-environment-state' | 'project-environment-context',
+    payload: object,
+    schema: z.ZodType<T>,
+    beforeSend?: () => void
+  ): Promise<T> {
+    const before = this.vault.resolve(bindingId),
+      intent = this.vault.intent(bindingId)
+    const authorize = (): void => {
+      const current = this.vault.resolve(bindingId),
+        scopes = this.vault.get(bindingId).client?.scopes ?? []
+      if (
+        current.revision !== before.revision ||
+        current.controllerId !== before.controllerId ||
+        current.accessToken !== before.accessToken ||
+        !scopes.includes('deploy:manual') ||
+        !scopes.includes('policy:write')
+      )
+        throw new DesktopControllerVaultError('BINDING_CHANGED')
+    }
+    authorize()
+    const result = await this.exchange(
+      intent,
+      {},
+      {
+        operation,
+        payload,
+        expected_revision: before.revision,
+        beforeSend: () => {
+          authorize()
+          beforeSend?.()
+        }
+      }
+    )
+    authorize()
+    const parsed = schema.safeParse(result)
+    if (!parsed.success) throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+    return parsed.data
   }
   async registerProject(
     bindingId: string,
@@ -333,6 +435,9 @@ export class DesktopControllerEnrollment {
         | 'enroll-project-target'
         | 'project-readiness'
         | 'register-vps'
+        | 'stage-project-environment'
+        | 'project-environment-state'
+        | 'project-environment-context'
       payload: object
       expected_revision?: number
       beforeSend?: () => void
@@ -469,7 +574,12 @@ export class DesktopControllerEnrollment {
           requested_scopes: intent.requested_scopes
         }
       })
-      if (Buffer.byteLength(body) > (command?.operation === 'register-vps' ? 512 * 1024 : 16384))
+      if (
+        Buffer.byteLength(body) >
+        (['register-vps', 'stage-project-environment'].includes(command?.operation ?? '')
+          ? 512 * 1024
+          : 16384)
+      )
         throw new DesktopControllerVaultError('REQUEST_INVALID')
       return new Promise((resolve, reject) => {
         const chunks: Buffer[] = []
@@ -534,6 +644,14 @@ function decodeAdminEnvelope(value: unknown): unknown {
     .strictObject({
       ok: z.literal(false),
       code: z.enum([
+        'PRODUCT_ENVIRONMENT_INPUT_INVALID',
+        'PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED',
+        'PRODUCT_ENVIRONMENT_SOURCE_CHANGED',
+        'PRODUCT_ENVIRONMENT_REVISION_CONFLICT',
+        'PRODUCT_ENVIRONMENT_IDEMPOTENCY_CONFLICT',
+        'PRODUCT_ENVIRONMENT_UNAVAILABLE',
+        'PRODUCT_ENVIRONMENT_STORAGE_UNAVAILABLE',
+        'CONTROLLER_SECRET_KEY_UNAVAILABLE',
         'CONTROLLER_ADMIN_FAILED',
         'CONTROLLER_IDENTITY_MISMATCH',
         'CONTROLLER_BUNDLE_VERIFICATION_FAILED',

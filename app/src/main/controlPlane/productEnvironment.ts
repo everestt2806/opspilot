@@ -3,6 +3,10 @@ import type {
   ProductEnvironmentScope,
   ProductEnvironmentStageInput,
   ProductEnvironmentStateInput,
+  ProductEnvironmentContextInput,
+  ProductEnvironmentMetadata,
+  ProductEnvironmentStageResult,
+  ProductEnvironmentState,
   ProductEnvironmentValues,
   ProductEnvironmentWriteInput
 } from '../../../../docs/contracts/product-environment'
@@ -46,6 +50,42 @@ export const environmentStateSchema = environmentWriteSchema
     format: z.literal(1),
     request_key: requestKey.nullable()
   }) satisfies z.ZodType<ProductEnvironmentStateInput>
+export const environmentContextSchema = z.strictObject({
+  format: z.literal(1),
+  controller_id: identifier,
+  app_id: positive,
+  expected_ownership_generation: positive,
+  expected_source_generation: positive,
+  expected_source_config_sha256: environmentWriteSchema.shape.expected_source_config_sha256,
+  expected_target_security_revision: positive
+}) satisfies z.ZodType<ProductEnvironmentContextInput>
+const keys = z.array(z.string().regex(/^[A-Z_][A-Z0-9_]{0,127}$/)).max(128)
+export const environmentMetadataSchema = z.strictObject({
+  controller_id: identifier,
+  app_id: positive,
+  ownership_generation: positive,
+  revision: positive,
+  basis_source_generation: positive,
+  basis_source_config_sha256: environmentWriteSchema.shape.expected_source_config_sha256,
+  framework: z.enum(['express', 'static-spa', 'nextjs']),
+  runtime_keys: keys,
+  public_build_keys: keys,
+  created_at: z.iso.datetime(),
+  activation: z.literal('staged')
+}) satisfies z.ZodType<ProductEnvironmentMetadata>
+export const environmentStageResultSchema = z.strictObject({
+  state: z.enum(['staged', 'already_staged']),
+  request_key: requestKey,
+  metadata: environmentMetadataSchema
+}) satisfies z.ZodType<ProductEnvironmentStageResult>
+export const environmentStateResultSchema = z.strictObject({
+  scope: environmentScopeSchema,
+  source_generation: positive,
+  source_config_sha256: environmentWriteSchema.shape.expected_source_config_sha256,
+  latest: environmentMetadataSchema.nullable(),
+  request_key: requestKey.nullable(),
+  requested: environmentMetadataSchema.nullable()
+}) satisfies z.ZodType<ProductEnvironmentState>
 
 export class ProductEnvironmentError extends Error {
   constructor(
