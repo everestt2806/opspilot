@@ -18,6 +18,7 @@ import { SshManager } from '../ssh/manager'
 import { makeTargetEnrollmentPayload, verifyTargetEnrollmentProof } from './targetEnrollmentProof'
 import { TargetEnrollmentRepository } from './targetEnrollmentRepository'
 import { canonicalH2Json } from './productH2Proof'
+import { assertRetainedTargetHelpers } from './controllerTargetHelperCompatibility'
 
 const requestSchema = z.strictObject({
   format: z.literal(1),
@@ -330,21 +331,23 @@ export async function inspectStoredProductTarget(
   const manifest = JSON.parse(historicalManifest.toString('utf8')) as {
     files: { path: string; sha256: string; size: number }[]
   }
-  for (const name of [
+  const currentHelpers = [
     'target_execution_guard.py',
     'target_guarded_ssh_helper.py',
     'target_product_runtime.py'
-  ]) {
+  ].map((name) => {
     const path = `target-helper/${name}`
     const current = readVerifiedControllerBundleFile(bundle, path)
-    const previous = manifest.files.find((file) => file.path === path)
-    if (
-      !previous ||
-      previous.size !== current.length ||
-      previous.sha256 !== createHash('sha256').update(current).digest('hex')
-    )
-      throw new Error('TARGET_ENROLLMENT_HELPER_UPGRADE_REQUIRED')
-  }
+    return {
+      path,
+      size: current.length,
+      sha256: createHash('sha256').update(current).digest('hex')
+    }
+  })
+  const app = database.prepare('SELECT framework FROM app WHERE id=?').get(appId) as
+    { framework: string } | undefined
+  if (!app) throw new Error('TARGET_ENROLLMENT_NOT_READY')
+  assertRetainedTargetHelpers(app.framework, currentHelpers, manifest.files)
   const target = repository.target(controllerId, appId, generation, false)
   const payload = makeTargetEnrollmentPayload(
     controllerId,

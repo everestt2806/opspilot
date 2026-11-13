@@ -155,19 +155,11 @@ export class DesktopControllerService {
       installationCatalog,
       options.installation
     )
-    const upgradeIds = new Set(
-      installerResources
-        ?.list()
-        .filter((v) => v.upgrade_supported)
-        .map((v) => v.release_id)
-    )
     this.upgrades = new DesktopControllerUpgrades(
       db,
       this.installations,
       ssh,
-      installerResources
-        ? installationCatalog.filter((v) => upgradeIds.has(v.release_id))
-        : installationCatalog,
+      installationCatalog,
       options.upgrade
     )
     this.vault = new DesktopControllerVault(db, cipher)
@@ -233,6 +225,19 @@ export class DesktopControllerService {
           release_id: z.string().regex(/^[A-Za-z0-9_.-]{1,128}$/)
         })
         .parse(input)
+      // Giữ historical catalog để inspect/rollback/adopt; chỉ chọn release mới còn được hỗ trợ.
+      if (
+        this.installerResources &&
+        !this.installerResources
+          .list()
+          .some(
+            (release) =>
+              release.release_id === v.release_id &&
+              release.upgrade_supported &&
+              release.state === 'available'
+          )
+      )
+        throw new DesktopUpgradeError('UPGRADE_UNAVAILABLE')
       return this.upgrades.plan(v.installation_request_key, v.release_id)
     })
   }

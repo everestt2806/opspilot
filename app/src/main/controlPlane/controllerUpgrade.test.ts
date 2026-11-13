@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { CONTROLLER_SPA_ASSET_TRANSITION } from './controllerUpgradeAssets'
 import {
   parseControllerUpgradeRequest,
   renderUpgradedControllerUnit,
@@ -21,6 +24,85 @@ const input = {
   release_directory: '/private/release'
 }
 describe('Trusted controller upgrade boundary', () => {
+  it('chỉ nhận đúng asset pair R7a/R7b và giữ chốt Node/dependency/template khác', () => {
+    const old = {
+      format: 1,
+      platform: 'linux-x64-glibc',
+      node_version: '22.23.4',
+      node_abi: '127',
+      minimum_glibc: '2.39',
+      lock_sha256: 'a'.repeat(64),
+      payload_sha256: 'b'.repeat(64),
+      packages: [],
+      files: [
+        { path: 'node', size: 100, mode: 0o700, sha256: 'c'.repeat(64) },
+        ...CONTROLLER_SPA_ASSET_TRANSITION.map((entry) => ({
+          path: entry.path,
+          mode: entry.mode,
+          ...entry.before
+        }))
+      ]
+    } satisfies ControllerReleaseManifest
+    const next = {
+      ...old,
+      files: [
+        old.files[0],
+        ...CONTROLLER_SPA_ASSET_TRANSITION.map((entry) => ({
+          path: entry.path,
+          mode: entry.mode,
+          ...entry.after
+        }))
+      ]
+    }
+    expect(() => assertControllerUpgradeCompatibility(old, next)).not.toThrow()
+    expect(() => assertControllerUpgradeCompatibility(next, old)).toThrow('INCOMPATIBLE_RELEASE')
+    for (const index of [0, 1, 2])
+      for (const patch of [{ sha256: 'f'.repeat(64) }, { size: 1 }, { mode: 0o700 }] as const) {
+        if (index === 0 && patch.mode === 0o700) continue
+        expect(() =>
+          assertControllerUpgradeCompatibility(old, {
+            ...next,
+            files: next.files.map((file, i) => (i === index ? { ...file, ...patch } : file))
+          })
+        ).toThrow('INCOMPATIBLE_RELEASE')
+      }
+    expect(() =>
+      assertControllerUpgradeCompatibility(old, {
+        ...next,
+        files: [next.files[0], old.files[1], next.files[2]]
+      })
+    ).toThrow('INCOMPATIBLE_RELEASE')
+    expect(() =>
+      assertControllerUpgradeCompatibility(old, {
+        ...next,
+        files: [
+          ...next.files,
+          {
+            path: 'payload/templates/other.Dockerfile',
+            size: 1,
+            mode: 0o600,
+            sha256: 'd'.repeat(64)
+          }
+        ]
+      })
+    ).toThrow('INCOMPATIBLE_RELEASE')
+    expect(() =>
+      assertControllerUpgradeCompatibility(old, { ...next, lock_sha256: 'e'.repeat(64) })
+    ).toThrow('INCOMPATIBLE_RELEASE')
+    expect(() =>
+      assertControllerUpgradeCompatibility(old, { ...next, node_version: '22.24.0' })
+    ).toThrow('INCOMPATIBLE_RELEASE')
+  })
+  it('policy mới khớp đúng bytes helper và template được kiểm chứng', () => {
+    for (const entry of CONTROLLER_SPA_ASSET_TRANSITION) {
+      const file = entry.path.endsWith('.py')
+        ? new URL('./target_product_runtime.py', import.meta.url)
+        : new URL('../../../../templates/static-spa.Dockerfile', import.meta.url)
+      const bytes = readFileSync(file)
+      expect(bytes.length).toBe(entry.after.size)
+      expect(createHash('sha256').update(bytes).digest('hex')).toBe(entry.after.sha256)
+    }
+  })
   it('allows explicit recovery staging but never accepts it for inspection or rollback', () => {
     expect(parseControllerUpgradeRequest({ ...input, operation: 'recover-upgrade' })).toMatchObject(
       { operation: 'recover-upgrade', release_directory: input.release_directory }

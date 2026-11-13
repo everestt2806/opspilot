@@ -12,6 +12,7 @@ import { AesGcmCredentialCipher } from '../crypto/credentialCipher'
 import { DesktopControllerService } from './desktopControllerService'
 import { ControllerHttpClientError, type ControllerHttpClient } from './controllerHttpClient'
 import type { DesktopControllerRegisterInput } from '@shared/desktopController'
+import type { ControllerInstallerResources } from './controllerInstallerCatalog'
 let directory: string,
   db: ReturnType<typeof initializeDatabase>,
   service: DesktopControllerService,
@@ -137,6 +138,26 @@ afterEach(() => {
   rmSync(directory, { recursive: true })
 })
 describe('Metadata-only Desktop controller service', () => {
+  it.each(['historical', 'unlisted'])(
+    'không lên kế hoạch nâng release %s đã rút khỏi danh sách được hỗ trợ',
+    async (releaseId) => {
+      const catalog = {
+        list: () => [{ release_id: 'historical', state: 'available' }]
+      } as unknown as ControllerInstallerResources
+      const guarded = new DesktopControllerService(
+        db,
+        new AesGcmCredentialCipher(randomBytes(32)),
+        { openProductBootstrapChannel: open } as unknown as SshManager,
+        undefined,
+        [],
+        catalog
+      )
+      await expect(
+        guarded.reviewUpgrade({ installation_request_key: randomUUID(), release_id: releaseId })
+      ).rejects.toMatchObject({ context: { cause: { message: 'UPGRADE_UNAVAILABLE' } } })
+      expect(open).not.toHaveBeenCalled()
+    }
+  )
   it('grants write scopes only on explicit opt-in and exposes public scope metadata', async () => {
     const row = await service.register({ ...input, allow_write: true })
     expect(payloads[0]).toMatchObject({

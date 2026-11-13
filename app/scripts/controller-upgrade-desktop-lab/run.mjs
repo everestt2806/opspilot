@@ -301,6 +301,11 @@ const checks = []
 const receipt = {
   status: 'FAIL',
   scope: 'PRIVATE_ROOT_SYSTEMD_PINNED_SSH_MAIN_SQLITE_UPGRADE',
+  release_inputs: {
+    original: releasePin,
+    candidate: process.env.OPSPILOT_UPGRADE_RELEASE_PIN,
+    fixture_installer: locator.installer_sha256
+  },
   checks,
   production_vps_used: false,
   production_database_used: false
@@ -552,6 +557,38 @@ try {
   assert.equal(clientState.controller_id, installed.installation.controller_id)
   check(
     'explicit_runtime_refresh_preserves_api_token_client_and_authenticated_api_with_revision_root_admin'
+  )
+  // Metadata-only fixture rút release hiện hành khỏi lựa chọn mới, vẫn dùng đúng artifacts/SSH.
+  const historicalService = new DesktopControllerService(
+    desktopDb,
+    cipher,
+    ssh,
+    undefined,
+    [original, target],
+    { list: () => [{ release_id: target.release_id, state: 'available' }] },
+    { installation: { bootstrapScript }, upgrade: { bootstrapScript }, bootstrapScript }
+  )
+  const historicalReview = await historicalService.reviewUpgradeBinding({
+    binding_id: bindingKey,
+    request_key: upgradeKey
+  })
+  await historicalService.refreshUpgradeBinding({
+    plan_id: historicalReview.plan_id,
+    consent: true
+  })
+  assert.equal(vault.resolve(bindingKey).accessToken, tokenBefore)
+  const beforeHistoricalSelection = executions
+  await assert.rejects(
+    () =>
+      historicalService.reviewUpgrade({
+        installation_request_key: key,
+        release_id: target.release_id
+      }),
+    (error) => error?.context?.cause?.message === 'UPGRADE_UNAVAILABLE'
+  )
+  assert.equal(executions, beforeHistoricalSelection)
+  check(
+    'historical_release_keeps_real_inspection_and_token_refresh_but_cannot_be_selected_for_new_upgrade'
   )
   stage = 'cold-profile-adoption'
   const coldDb = initializeDatabase(join(root, 'cold-adoption'))

@@ -1,13 +1,15 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- CLI JavaScript chạy trực tiếp bằng Node, không có cú pháp kiểu TypeScript. */
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
-import { createDecipheriv, createHash, randomBytes } from 'node:crypto'
+import { createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto'
 import {
   chmodSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -27,6 +29,7 @@ if (!artifact) throw new Error('CONTROLLER_ARTIFACT_REQUIRED')
 const Database = createRequire(artifact)('better-sqlite3')
 const repo = resolve(import.meta.dirname, '../../..')
 const nonce = randomBytes(6).toString('hex')
+const retainedGate = process.argv.includes('--retained-target-gate')
 const scratch = mkdtempSync(join(tmpdir(), 'opspilot-enrollment-'))
 chmodSync(scratch, 0o700)
 const output = resolve(repo, 'app/.out-scripts/controller-enrollment', nonce)
@@ -286,6 +289,86 @@ try {
   assert.deepEqual(await cli('enroll-vps', input), { ...enrolled, state: 'already_enrolled' })
   assert.deepEqual(readRows(), [row])
   record('cold_cli_replay_preserves_id_ciphertext_and_metadata')
+  if (retainedGate) {
+    const legacyDirectory = process.env.OPSPILOT_LEGACY_PAYLOAD
+    assert(legacyDirectory)
+    const old = join(scratch, 'legacy'),
+      current = join(scratch, 'current')
+    cpSync(legacyDirectory, old, { recursive: true })
+    cpSync(dirname(artifact), current, { recursive: true })
+    const ownerModes = (dir) => {
+      chmodSync(dir, 0o700)
+      for (const item of readdirSync(dir, { withFileTypes: true })) {
+        if (item.isDirectory()) ownerModes(join(dir, item.name))
+        else {
+          assert(!item.isSymbolicLink())
+          chmodSync(join(dir, item.name), 0o600)
+        }
+      }
+    }
+    ownerModes(old)
+    ownerModes(current)
+    const oldPin = createHash('sha256')
+      .update(readFileSync(join(old, 'bundle-manifest.json')))
+      .digest('hex')
+    assert.equal(oldPin, '4e3a163f077f69cd23b58ffcd26e40506489041804a9b01ea9ef006db3588510')
+    const registered = await cli('register-project', {
+      format: 1,
+      controller_id: initialized.controller_id,
+      request_key: randomUUID(),
+      target_vps_id: row.id,
+      expected_target_security_revision: row.ssh_security_revision,
+      app_name: 'legacy-' + nonce,
+      framework: 'express',
+      repository_url: 'https://github.com/example/legacy.git',
+      production_ref: 'main',
+      repository_root: '.',
+      host_port: null,
+      container_port: 3000,
+      healthcheck_path: '/health'
+    })
+    const target = await cli('enroll-target', {
+      format: 1,
+      controller_id: initialized.controller_id,
+      app_id: registered.app_id,
+      ownership_generation: 1,
+      artifact: join(old, 'control-plane.cjs'),
+      manifest_sha256: oldPin,
+      target_root: join(scratch, 'targets')
+    })
+    assert.equal(target.state, 'enrolled')
+    const helper = join(dirname(target.helper_path), 'target_product_runtime.py'),
+      bytes = readFileSync(helper)
+    assert.equal(
+      createHash('sha256').update(bytes).digest('hex'),
+      'eb5c697e0051f38e0633bc84e32377fbc91cf4b825c21734f5f611a49b85908d'
+    )
+    const recoveryInput = {
+      format: 1,
+      artifact: join(current, 'control-plane.cjs'),
+      manifest_sha256: createHash('sha256')
+        .update(readFileSync(join(current, 'bundle-manifest.json')))
+        .digest('hex')
+    }
+    const recovered = await cli('recover-runtime', recoveryInput)
+    assert.equal(recovered.state, 'ready')
+    assert.equal(recovered.inspected_enrollments, 1)
+    assert.deepEqual(readFileSync(helper), bytes)
+    record(
+      'actual_old_express_enrollment_recovers_under_new_bundle_without_reinstall_or_helper_write'
+    )
+    writeLabSql("UPDATE app SET framework='static-spa',container_port=80")
+    const wrong = await cli('recover-runtime', recoveryInput)
+    assert.equal(wrong.state, 'reconciliation_required')
+    assert.equal(wrong.blockers[0].reason, 'enrollment_not_ready')
+    record('spa_rejects_the_same_legacy_helper')
+    writeLabSql("UPDATE app SET framework='express',container_port=3000")
+    writeFileSync(helper, Buffer.concat([bytes, Buffer.from('\n# tampered fixture\n')]))
+    const tampered = await cli('recover-runtime', recoveryInput)
+    assert.equal(tampered.state, 'reconciliation_required')
+    record('actual_remote_helper_drift_rejected_even_with_legacy_profile_compatibility')
+    throw Object.assign(new Error('RETAINED_GATE_FINISHED'), { checkpoint: true })
+  }
   assert.equal(
     await cli('enroll-vps', { ...input, secret: 'SYNTHETIC_DIFFERENT_MATERIAL' }, directory, 1),
     'CONTROLLER_VPS_ENROLLMENT_CONFLICT'
@@ -358,8 +441,17 @@ try {
   record('retained_runtime_key_blocks_new_master_even_without_vps')
   assert.equal((await cli('status')).controller_id, initialized.controller_id)
   record('existing_status_command_still_works')
-} catch {
-  failure = 'CONTROLLER_ENROLLMENT_LAB_FAILED'
+} catch (error) {
+  if (!error?.checkpoint) {
+    failure = 'CONTROLLER_ENROLLMENT_LAB_FAILED'
+    writeFileSync(
+      join(output, 'failure.json'),
+      JSON.stringify({
+        name: error?.name,
+        location: /controller-enrollment\.mjs:\d+:\d+/.exec(error?.stack ?? '')?.[0] ?? null
+      }) + '\n'
+    )
+  }
 } finally {
   sshd?.kill('SIGTERM')
   if (sshd) {
@@ -380,7 +472,9 @@ try {
   const result = {
     status: failure || !unchanged ? 'FAIL' : 'PASS',
     nonce,
-    scope: 'REAL_CONTROLLER_ENROLLMENT_CLI_SSH_SQLITE',
+    scope: retainedGate
+      ? 'RETAINED_HELPER_REAL_SSH_COLD_RECOVERY'
+      : 'REAL_CONTROLLER_ENROLLMENT_CLI_SSH_SQLITE',
     cases,
     failure,
     bundle_sha256: bundleHash,

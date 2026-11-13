@@ -5,21 +5,26 @@ import { existsSync, readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { controllerInstallerCatalogSchema } from './src/main/controlPlane/controllerInstallerCatalog'
 import approvedUpgrade from './control-plane-runtime/desktop-upgrade-release.json'
+import approvedSpa from './control-plane-runtime/desktop-spa-release.json'
+import approvedSpaRetained from './control-plane-runtime/desktop-spa-retained-release.json'
 
 const catalogFile = resolve('resources/controller-releases/catalog.json')
 const originalCatalog = existsSync(catalogFile)
   ? controllerInstallerCatalogSchema.parse(JSON.parse(readFileSync(catalogFile, 'utf8')))
   : { format: 1, releases: [] }
-const conflicting = originalCatalog.releases.find(
-  (v) => v.release_id === approvedUpgrade.release_id
-)
-if (conflicting && JSON.stringify(conflicting) !== JSON.stringify(approvedUpgrade))
-  throw Error('CONTROLLER_UPGRADE_CATALOG_CONFLICT')
+const approvedUpgrades = [approvedUpgrade, approvedSpa, approvedSpaRetained]
+for (const approved of approvedUpgrades) {
+  const conflicting = originalCatalog.releases.find((v) => v.release_id === approved.release_id)
+  if (conflicting && JSON.stringify(conflicting) !== JSON.stringify(approved))
+    throw Error('CONTROLLER_UPGRADE_CATALOG_CONFLICT')
+}
 const installerCatalog = controllerInstallerCatalogSchema.parse({
   format: 1,
   releases: [
-    ...originalCatalog.releases.filter((v) => v.release_id !== approvedUpgrade.release_id),
-    approvedUpgrade
+    ...originalCatalog.releases.filter(
+      (v) => !approvedUpgrades.some((entry) => entry.release_id === v.release_id)
+    ),
+    ...approvedUpgrades
   ]
 })
 const mlManifestFile = resolve('resources/ml-runtime/manifest.json')

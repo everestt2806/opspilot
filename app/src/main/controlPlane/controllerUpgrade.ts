@@ -40,6 +40,7 @@ import {
 } from './controllerRelease'
 import { CONTROLLER_RELEASE_LIMITS } from '../../../../docs/contracts/product-controller-release'
 import { assertControllerUpgradeAdminReady } from './controllerUpgradeProtocol'
+import { CONTROLLER_SPA_ASSET_TRANSITION } from './controllerUpgradeAssets'
 
 const uuid = z.uuidv4().refine((v) => v === v.toLowerCase()),
   sha = z.string().regex(/^[a-f0-9]{64}$/),
@@ -147,11 +148,34 @@ export function assertControllerUpgradeCompatibility(
         (f) => !['payload/control-plane.cjs', 'payload/bundle-manifest.json'].includes(f.path)
       )
     )
+  const oldAssets = assets(old),
+    nextAssets = assets(next)
+  const mapped = old.files
+    .filter((f) => !['payload/control-plane.cjs', 'payload/bundle-manifest.json'].includes(f.path))
+    .map((file) => {
+      const transition = CONTROLLER_SPA_ASSET_TRANSITION.find((entry) => entry.path === file.path)
+      return transition &&
+        file.mode === transition.mode &&
+        file.size === transition.before.size &&
+        file.sha256 === transition.before.sha256
+        ? { ...file, ...transition.after }
+        : file
+    })
+  const approvedTransition =
+    CONTROLLER_SPA_ASSET_TRANSITION.every((entry) =>
+      old.files.some(
+        (file) =>
+          file.path === entry.path &&
+          file.mode === entry.mode &&
+          file.size === entry.before.size &&
+          file.sha256 === entry.before.sha256
+      )
+    ) && JSON.stringify(mapped) === nextAssets
   if (
     old.lock_sha256 !== next.lock_sha256 ||
     old.node_abi !== next.node_abi ||
     old.node_version !== next.node_version ||
-    assets(old) !== assets(next)
+    (oldAssets !== nextAssets && !approvedTransition)
   )
     fail('INCOMPATIBLE_RELEASE')
 }

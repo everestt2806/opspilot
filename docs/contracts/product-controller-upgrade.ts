@@ -71,6 +71,10 @@ export interface ControllerUpgradeGate {
  * lease, prepared activation, or unsettled H2 terminal. No automatic policy write.
  * Same dependency lock/Node ABI, helper/template/collector assets and exact live
  * vs fresh schema required. Readonly upgrade-check hashes protected records/key;
+ * R7c: chỉ cặp asset transition đã bake trong trusted upgrader được ngoại lệ:
+ * exact old→new SHA/size/mode của SPA nginx template và exact-CID health helper.
+ * Không nhận allowlist hoặc override từ IPC, request hay release candidate.
+ * Toàn bộ Node/dependencies/asset khác phải giữ nguyên; reverse/drift bị từ chối.
  * never initializes/migrates live DB or returns plaintext records/secrets.
  * upgrade-hold is a separate service-UID, bounded IMMEDIATE no-write transaction
  * spanning quiescent check and old-service stop; rollback on stdin EOF/timeout.

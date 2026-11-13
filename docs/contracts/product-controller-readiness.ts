@@ -52,5 +52,9 @@ export type ProductStartupRecoveryReport = Readonly<{
  * Pre-T1 unknown không tự replay/clear; không renew lease, rotate key, reinstall hoặc fetch source.
  * Read-only inspect được phép khi có pending runtime; tuyệt đối không dùng đường first-install.
  * Historical manifest phải khớp SQL pin và actual runtime helpers khớp current approved helper hashes.
+ * R7c: Express có thể inspect/dispatch exact retained helper trước R7b (hash/size đã bake),
+ * chỉ khi current bundle dùng exact helper R7b và hai helper guard còn lại khớp.
+ * SPA không nhận legacy helper. Vẫn phải kiểm manifest SQL, actual remote files và HMAC proof;
+ * không re-enroll, đổi key/manifest hoặc cập nhật remote helper trong startup recovery.
  * Không dùng management bundle SHA mới thay identity của receipt/installed release cũ.
  */
