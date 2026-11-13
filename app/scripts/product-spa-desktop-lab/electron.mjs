@@ -5,13 +5,16 @@ import { createRequire } from 'node:module'
 import { randomBytes, randomUUID, createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync, rmSync, realpathSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+const next = process.argv.includes('--nextjs')
+const framework = next ? 'nextjs' : 'static-spa'
+const frameworkLabel = next ? 'Next.js' : 'Vite SPA'
 const root = resolve(import.meta.dirname, '../../..'),
   require = createRequire(join(root, 'app/package.json')),
   esbuild = createRequire(require.resolve('vite/package.json'))('esbuild'),
   nonce = randomBytes(6).toString('hex'),
   directory = join(root, 'app/.out-scripts/product-spa-desktop-lab', nonce),
   privateData = join(directory, 'private'),
-  screenshots = join(root, 'docs/ui-redesign/screenshots/r7b', nonce)
+  screenshots = join(root, 'docs/ui-redesign/screenshots', next ? 'r7e' : 'r7b', nonce)
 mkdirSync(privateData, { recursive: true })
 mkdirSync(screenshots, { recursive: true })
 app.setPath('userData', join(directory, 'profile'))
@@ -23,6 +26,7 @@ const checks = [],
   errors = []
 const proof = {
   status: 'FAIL',
+  framework,
   scope: 'REAL_ELECTRON_PRELOAD_UI_MAIN_SQLITE_SYNTHETIC_CONTROLLER',
   checks,
   captures,
@@ -129,8 +133,8 @@ app.whenReady().then(async () => {
         has_more: false
       }),
       registerProject: async (_binding, body) => {
-        assert.equal(body.framework, 'static-spa')
-        assert.equal(body.container_port, 80)
+        assert.equal(body.framework, framework)
+        assert.equal(body.container_port, next ? 3000 : 80)
         assert.equal(body.healthcheck_path, '/')
         const response = {
           state: remote.has(body.request_key) ? 'already_registered' : 'registered',
@@ -262,7 +266,7 @@ app.whenReady().then(async () => {
       await wait(
         '!!document.querySelector("#framework")&&!document.querySelector(".ant-select-loading")'
       )
-      await choose('framework', 'Vite SPA')
+      await choose('framework', frameworkLabel)
       await choose('target_vps_id', 'SPA target · target.invalid (#77)')
       await field('app_name', 'spa-ui-' + locale + '-' + theme)
       await field('repository_url', 'https://github.com/example/spa')
@@ -270,12 +274,14 @@ app.whenReady().then(async () => {
         await js(
           '({port:document.querySelector("#container_port").value,disabled:document.querySelector("#container_port").disabled,path:document.querySelector("#healthcheck_path").value})'
         ),
-        { port: '80', disabled: true, path: '/' }
+        { port: next ? '3000' : '80', disabled: !next, path: '/' }
       )
       await click(t.review)
       await wait(`document.body.textContent.includes(${JSON.stringify(t.confirmHint)})`)
       assert.equal(
-        await js('document.querySelector(".ant-descriptions").textContent.includes("Vite SPA")'),
+        await js(
+          `document.querySelector(".ant-descriptions").textContent.includes(${JSON.stringify(frameworkLabel)})`
+        ),
         true
       )
       return t
@@ -303,7 +309,7 @@ app.whenReady().then(async () => {
         if (locale === 'vi') await capture(`${locale}-${theme}`, 1366, 768)
         await js('document.querySelector(".ant-modal-close").click()')
       }
-    checks.push('4locale_2theme_spa_defaults_review_native_layout')
+    checks.push('4locale_2theme_' + framework + '_defaults_review_native_layout')
     stage = 'register'
     let t = await form('vi', 'dark')
     await click(t.confirm)
@@ -312,10 +318,10 @@ app.whenReady().then(async () => {
     )
     await wait(`document.body.textContent.includes(${JSON.stringify(t.registeredHint)})`)
     const registered = setups.list(bindingId)[0]
-    assert.equal(registered.framework, 'static-spa')
+    assert.equal(registered.framework, framework)
     assert.equal(registered.state, 'registered')
     assert.equal(remote.size, 1)
-    checks.push('production_preload_main_sqlite_preserves_spa_registration')
+    checks.push('production_preload_main_sqlite_preserves_' + framework + '_registration')
     mismatch = true
     t = await form('en', 'light')
     const sentBefore = calls.filter((c) => c === 'controller:send-project').length

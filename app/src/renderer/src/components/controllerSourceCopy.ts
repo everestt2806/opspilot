@@ -12,7 +12,7 @@ const vi = {
     'Chưa deploy. Còn cần chuẩn bị target và kiểm tra runtime trước khi gửi yêu cầu deploy. Nhánh Git có thể thay đổi sau thời điểm kiểm tra.',
   failure: 'Chưa xác minh được source. Kiểm tra kết nối hoặc cấu hình rồi thử lại.',
   unsupported:
-    'Source chưa phù hợp với luồng Product hiện tại: Express hoặc Vite SPA không dùng database hoặc biến môi trường bắt buộc.',
+    'Source chưa phù hợp với luồng Product hiện tại: Express, Vite SPA hoặc Next.js không dùng database hoặc biến môi trường bắt buộc.',
   changed:
     'Cấu hình, quyền quản lý hoặc VPS đã thay đổi. Tải lại dự án và kiểm tra cấu hình trước khi tiếp tục.',
   blocked:
@@ -52,7 +52,7 @@ const en: Copy = {
   failure:
     'Source verification could not be confirmed. Check the connection or configuration and try again.',
   unsupported:
-    'This source is outside the current Product runtime: Express or Vite SPA without a database or required environment variables.',
+    'This source is outside the current Product runtime: Express, Vite SPA or Next.js without a database or required environment variables.',
   changed:
     'Configuration, ownership or target metadata changed. Refresh the project and review its configuration before continuing.',
   blocked:
@@ -88,7 +88,7 @@ const cn: Copy = {
   remaining: '尚未部署。请求部署前仍需准备目标并检查运行环境。Git 分支可能在检查后发生变化。',
   failure: '未能确认源码验证结果。请检查连接或配置后重试。',
   unsupported:
-    '此源码超出当前 Product 支持范围：不依赖数据库或必需环境变量的 Express 或 Vite SPA 应用。',
+    '此源码超出当前 Product 支持范围：不依赖数据库或必需环境变量的 Express、Vite SPA 或 Next.js 应用。',
   changed: '配置、管理权限或目标信息已变化。请刷新项目并检查配置。',
   blocked: '请暂停自动部署，并处理待执行任务或不确定的运行结果后再检查。',
   fetch: '无法获取仓库、分支或项目目录。请检查公开 GitHub 源码和控制器网络。',
@@ -121,7 +121,7 @@ const jp: Copy = {
     '未デプロイです。デプロイ要求前にターゲット準備とランタイム確認が必要です。確認後に Git ブランチが変わる場合があります。',
   failure: 'ソース検証を確認できませんでした。接続や設定を確認して再試行してください。',
   unsupported:
-    '現在の Product 対応範囲は、DB や必須環境変数を使わない Express または Vite SPA です。',
+    '現在の Product 対応範囲は、DB や必須環境変数を使わない Express、Vite SPA または Next.js です。',
   changed:
     '設定、管理権限、またはターゲットが変更されました。プロジェクトを更新して設定を確認してください。',
   blocked:

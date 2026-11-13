@@ -1,0 +1,488 @@
+{
+  "status": "LOCAL_PRODUCT_NEXTJS_PASS",
+  "date": "2026-11-13",
+  "base_sha": "b949d064d885eee907d025b529be5c88f8aa130b",
+  "working_tree_subject": true,
+  "source_sha256": {
+    "app/scripts/product-runtime-lab/run.mjs": "3c5efb867e2a228c81b5192669f385b76add5d54b80d2ccd045efde65bb1e9ca",
+    "app/scripts/product-spa-desktop-lab/electron.mjs": "7326ca393dd1db45ca0039addd9a19aabf5b7e03fa32dc70443c52f118d9edaf",
+    "app/src/main/controlPlane/productPipelineSourceRender.ts": "79f8a1386f0ab997dcea5e73df657c6e2040ce9c42254fb5c93ee6358a903473",
+    "app/src/main/controlPlane/projectRegistration.test.ts": "6c39a5584ed8a82e5089a98e814e335af07d7929ec3ee3c71887a683c0a0dbc6",
+    "app/src/main/controlPlane/projectRegistration.ts": "72f02d1a6df4303c779922a820d8991bd6e077b1601e13b99f2db7ba85d8850c",
+    "app/src/main/controlPlane/projectSourceVerification.test.ts": "d1004e1f3dc583b2d02d40f2dee3d59b5a911ec3b9b6a0a05f113e49fd3e51e3",
+    "app/src/main/controlPlane/target_product_runtime.py": "98b0edec5ffb29a114e411d067a551a9a90110cdcf5872ab31dee5246f3e10ff",
+    "app/src/main/db/productRuntimeRepository.test.ts": "2cee388825e3ea86d53b33e39d6de26bf1667249ab4297630302ba6e96732b5e",
+    "app/src/main/db/productRuntimeRepository.ts": "f85ad86b3eed84fb3c349b8bce5c012f183f937e5cb9bc54929aaa47eb992079",
+    "app/src/main/detectors/nextjs.ts": "7adb5b05b3d888dc0dfe96d5313880759b94cf97237b44b2da8fca1c73b12d44",
+    "app/src/renderer/src/components/ControllerProjectPanel.test.tsx": "63ee86305cddc0cd6d83da93525f66b057d4294bf2b0feea8b6adc09d7f3c232",
+    "app/src/renderer/src/components/ControllerProjectPanel.tsx": "ae5b3093163d28d3f62146de7cedd7b620ba89ebd3042114333d39da3ea6fdfa",
+    "app/src/renderer/src/components/controllerProjectCopy.ts": "1c3d7516d6b74078e7d2fcdbb0a42c20c0c6783e56ab196f6930d8d8b8804e28",
+    "app/src/renderer/src/components/controllerSourceCopy.ts": "6a008831fe1624b502dd0898823a60a227b44d84f9330b76a705601da4bc08d0",
+    "app/src/shared/desktopProjectRegistration.ts": "153d8804c13f8dc1138942f66cad24831cad8f9723b5b32ff0812800c9633784",
+    "docs/contracts/desktop-project-registration.ts": "153d8804c13f8dc1138942f66cad24831cad8f9723b5b32ff0812800c9633784",
+    "docs/contracts/product-h2-runtime.ts": "728e2e70f7594cff3223c01f0c1940fa29e0b6897c005d9eada1af2bc5d1aa5a",
+    "docs/contracts/product-project-registration.ts": "fd9f3441ae23036e4ed2063919c456616fab5fb682b5dd295ba8c37b53f21649",
+    "docs/contracts/product-project-source-verification.ts": "78ee6e12f2dca1b2a40d8f73f19a05cad631b4079bff442b15393bad011254e5",
+    "templates/nextjs.Dockerfile": "2dc118830e7a71ace30f8d4366b00f94e346f20d0519e12eb1b6189550b227df"
+  },
+  "native_runtime": {
+    "next": {
+      "status": "PASS",
+      "scope": "PINNED_SSH_SQLITE_DOCKER_RUNTIME",
+      "framework": "nextjs",
+      "nonce": "99ef29342c62",
+      "source_sha": "b949d064d885eee907d025b529be5c88f8aa130b",
+      "subject_sha256": {
+        "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+        "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+        "target_product_runtime.py": "98b0edec5ffb29a114e411d067a551a9a90110cdcf5872ab31dee5246f3e10ff"
+      },
+      "bundle_sha256": "56c01f5f11604b50cab8a7dfc85c925b47b9a85870337a9905b51a3ece06e8ca",
+      "driver_sha256": "3c5efb867e2a228c81b5192669f385b76add5d54b80d2ccd045efde65bb1e9ca",
+      "deadline_expired": false,
+      "subject_unchanged": true,
+      "cases": [
+        {
+          "name": "first_healthy",
+          "status": "PASS",
+          "deployment_id": 1,
+          "sha": "e566625b34c8d9eb0d8a54e2c9ddb6b3575bb582",
+          "container_id": "62499bb4f94aa9c89ceea66b6485fbae61f13da442f675f599c17aeed2de851a",
+          "metric_rows": 1
+        },
+        {
+          "name": "next_ssr_first_healthy",
+          "status": "PASS",
+          "ssr_marker": "first_healthy",
+          "html_sha256": "e4cf1a6fd4285c55073353f60881e2650a7f657715fc02169991eaf9ae729a9f",
+          "next_asset_200": true,
+          "missing_asset_404": true
+        },
+        {
+          "name": "healthy_update",
+          "status": "PASS",
+          "deployment_id": 2,
+          "sha": "e3b599168b4ea9584565a6cf0d796189f79f6d7d",
+          "container_id": "69de84bd0441ce28f8c1c9131d8f57c4343766d9e7dd4794a4a1c8a7e9b1dd30",
+          "activation": {
+            "state": "active",
+            "stream_generation": "2096:37272",
+            "start_offset": 686
+          }
+        },
+        {
+          "name": "next_ssr_healthy_update",
+          "status": "PASS",
+          "ssr_marker": "healthy_update",
+          "html_sha256": "8ff2caee71201b68582071959c9f7462fd6d1eb6082da9b926d1af1ffa9e0977",
+          "next_asset_200": true,
+          "missing_asset_404": true
+        },
+        {
+          "name": "build_failure",
+          "status": "PASS",
+          "deployment_id": 3,
+          "previous_container_preserved": true,
+          "previous_collector_preserved": true
+        },
+        {
+          "name": "unhealthy_rollback",
+          "status": "PASS",
+          "deployment_id": 4,
+          "previous_container_id": "69de84bd0441ce28f8c1c9131d8f57c4343766d9e7dd4794a4a1c8a7e9b1dd30",
+          "rollback_boundary": {
+            "generation": "2096:37272",
+            "device": 2096,
+            "inode": 37272,
+            "next_offset": 3070
+          }
+        },
+        {
+          "name": "next_ssr_unhealthy_rollback",
+          "status": "PASS",
+          "ssr_marker": "healthy_update",
+          "html_sha256": "8ff2caee71201b68582071959c9f7462fd6d1eb6082da9b926d1af1ffa9e0977",
+          "next_asset_200": true,
+          "missing_asset_404": true
+        },
+        {
+          "name": "first_build_failure",
+          "status": "PASS",
+          "deployment_id": 5,
+          "pointer": null
+        },
+        {
+          "name": "first_health_failure",
+          "status": "PASS",
+          "deployment_id": 6,
+          "rollback_forged": false
+        },
+        {
+          "name": "collector_build_failure_blocks_finalization",
+          "status": "PASS",
+          "previous_runtime_preserved": true,
+          "collector_still_running": true,
+          "leases_retained": true
+        }
+      ],
+      "failure": null,
+      "cleanup": true
+    },
+    "express": {
+      "status": "PASS",
+      "scope": "PINNED_SSH_SQLITE_DOCKER_RUNTIME",
+      "framework": "express",
+      "nonce": "1c5c839f6966",
+      "source_sha": "b949d064d885eee907d025b529be5c88f8aa130b",
+      "subject_sha256": {
+        "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+        "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+        "target_product_runtime.py": "98b0edec5ffb29a114e411d067a551a9a90110cdcf5872ab31dee5246f3e10ff"
+      },
+      "bundle_sha256": "56c01f5f11604b50cab8a7dfc85c925b47b9a85870337a9905b51a3ece06e8ca",
+      "driver_sha256": "3c5efb867e2a228c81b5192669f385b76add5d54b80d2ccd045efde65bb1e9ca",
+      "deadline_expired": false,
+      "subject_unchanged": true,
+      "cases": [
+        {
+          "name": "first_healthy",
+          "status": "PASS",
+          "deployment_id": 1,
+          "sha": "bf1b449e9fb878ad595cb3573373b82ceed449ab",
+          "container_id": "eca6806e36fe008f16d144fad69beb8e3e29062f2c9e2be764278c7b72878641",
+          "metric_rows": 1
+        },
+        {
+          "name": "healthy_update",
+          "status": "PASS",
+          "deployment_id": 2,
+          "sha": "8dd61d5c9a49e190cf74246dbfa757a0fd4f4b34",
+          "container_id": "22eb4c0955a2604588bb2db97df1689af5795853942184997b79d9c25176a23f",
+          "activation": {
+            "state": "active",
+            "stream_generation": "2096:38049",
+            "start_offset": 668
+          }
+        },
+        {
+          "name": "build_failure",
+          "status": "PASS",
+          "deployment_id": 3,
+          "previous_container_preserved": true,
+          "previous_collector_preserved": true
+        },
+        {
+          "name": "unhealthy_rollback",
+          "status": "PASS",
+          "deployment_id": 4,
+          "previous_container_id": "22eb4c0955a2604588bb2db97df1689af5795853942184997b79d9c25176a23f",
+          "rollback_boundary": {
+            "generation": "2096:38049",
+            "device": 2096,
+            "inode": 38049,
+            "next_offset": 2377
+          }
+        },
+        {
+          "name": "first_build_failure",
+          "status": "PASS",
+          "deployment_id": 5,
+          "pointer": null
+        },
+        {
+          "name": "first_health_failure",
+          "status": "PASS",
+          "deployment_id": 6,
+          "rollback_forged": false
+        },
+        {
+          "name": "collector_build_failure_blocks_finalization",
+          "status": "PASS",
+          "previous_runtime_preserved": true,
+          "collector_still_running": true,
+          "leases_retained": true
+        }
+      ],
+      "failure": null,
+      "cleanup": true
+    },
+    "spa": {
+      "status": "PASS",
+      "scope": "PINNED_SSH_SQLITE_DOCKER_RUNTIME",
+      "framework": "static-spa",
+      "nonce": "2a426bdb0526",
+      "source_sha": "b949d064d885eee907d025b529be5c88f8aa130b",
+      "subject_sha256": {
+        "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+        "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+        "target_product_runtime.py": "98b0edec5ffb29a114e411d067a551a9a90110cdcf5872ab31dee5246f3e10ff"
+      },
+      "bundle_sha256": "56c01f5f11604b50cab8a7dfc85c925b47b9a85870337a9905b51a3ece06e8ca",
+      "driver_sha256": "3c5efb867e2a228c81b5192669f385b76add5d54b80d2ccd045efde65bb1e9ca",
+      "deadline_expired": false,
+      "subject_unchanged": true,
+      "cases": [
+        {
+          "name": "first_healthy",
+          "status": "PASS",
+          "deployment_id": 1,
+          "sha": "2a883f9ae03f2b715653a2f6977463f6de41c296",
+          "container_id": "5cd05e0b61384072ad236416eef1f7f00cc963eafb6829897a126f5caac656cb",
+          "metric_rows": 1
+        },
+        {
+          "name": "spa_routes_first_healthy",
+          "status": "PASS",
+          "html_sha256": "46e57dc441881e450a768f1db42f2ec5db50035a68c8b892c2d3b2a3e5e7e308",
+          "deep_link_matches_index": true,
+          "missing_assets_404": true
+        },
+        {
+          "name": "healthy_update",
+          "status": "PASS",
+          "deployment_id": 2,
+          "sha": "7ba7b542dcef8827bf8c8e61d121a522c7b8632b",
+          "container_id": "400dea3ec8e4a38a80db1e8a4bf2b04ac12fea8aeeaaea990f046c7d8c6b4d8f",
+          "activation": {
+            "state": "active",
+            "stream_generation": "2096:44000",
+            "start_offset": 681
+          }
+        },
+        {
+          "name": "spa_routes_healthy_update",
+          "status": "PASS",
+          "html_sha256": "ec10e0ae26571220b7de7312455701239cc8e170e49bb81e8f17e75b4cd43039",
+          "deep_link_matches_index": true,
+          "missing_assets_404": true
+        },
+        {
+          "name": "build_failure",
+          "status": "PASS",
+          "deployment_id": 3,
+          "previous_container_preserved": true,
+          "previous_collector_preserved": true
+        },
+        {
+          "name": "unhealthy_rollback",
+          "status": "PASS",
+          "deployment_id": 4,
+          "previous_container_id": "400dea3ec8e4a38a80db1e8a4bf2b04ac12fea8aeeaaea990f046c7d8c6b4d8f",
+          "rollback_boundary": {
+            "generation": "2096:44000",
+            "device": 2096,
+            "inode": 44000,
+            "next_offset": 2364
+          }
+        },
+        {
+          "name": "spa_routes_unhealthy_rollback",
+          "status": "PASS",
+          "html_sha256": "ec10e0ae26571220b7de7312455701239cc8e170e49bb81e8f17e75b4cd43039",
+          "deep_link_matches_index": true,
+          "missing_assets_404": true
+        },
+        {
+          "name": "first_build_failure",
+          "status": "PASS",
+          "deployment_id": 5,
+          "pointer": null
+        },
+        {
+          "name": "first_health_failure",
+          "status": "PASS",
+          "deployment_id": 6,
+          "rollback_forged": false
+        },
+        {
+          "name": "collector_build_failure_blocks_finalization",
+          "status": "PASS",
+          "previous_runtime_preserved": true,
+          "collector_still_running": true,
+          "leases_retained": true
+        }
+      ],
+      "failure": null,
+      "cleanup": true
+    }
+  },
+  "electron_ui": {
+    "status": "PASS",
+    "framework": "nextjs",
+    "scope": "REAL_ELECTRON_PRELOAD_UI_MAIN_SQLITE_SYNTHETIC_CONTROLLER",
+    "checks": [
+      "4locale_2theme_nextjs_defaults_review_native_layout",
+      "production_preload_main_sqlite_preserves_nextjs_registration",
+      "framework_mismatch_leaves_journal_unsent",
+      "no_deployment_or_secret_in_ui_metadata"
+    ],
+    "captures": [
+      {
+        "file": "docs/ui-redesign/screenshots/r7e/ac2b83c7c353/vi-dark-1280x800.png",
+        "sha256": "7d21bbcbab264c3640337aa0b0f86c69390ff06748d714d13765ff4b43a60f23",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7e/ac2b83c7c353/vi-dark-1366x768.png",
+        "sha256": "284eb4cafb7b32eaa7e1d5f2ec1065409eb4f3e526ab31f8fc3cd6ead372b66d",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7e/ac2b83c7c353/vi-light-1280x800.png",
+        "sha256": "d24be8f5f2b80ec0a183fb0188f734f36c6f31b7b4c7befe96a1de84292c1400",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7e/ac2b83c7c353/vi-light-1366x768.png",
+        "sha256": "5783b93c6ed3d04a7f327cfdfdba9a43cbfc538af834df8c8eb2a5641f70e06e",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7e/ac2b83c7c353/en-dark-1280x800.png",
+        "sha256": "1d3c9c67f3fc07202df18c695dd0db7cf712cf9a8d2d97027b754f1f662ca1d5",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7e/ac2b83c7c353/en-light-1280x800.png",
+        "sha256": "bc7bc3ae47e3ef63cc8a42305099503ea2e36e588516c514a851dddbb79067f9",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7e/ac2b83c7c353/cn-dark-1280x800.png",
+        "sha256": "ba07c83ac3e2b6694c6d2bc51bf1f2dc2276a2f4e2449c963a9ee4caf83b2ada",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7e/ac2b83c7c353/cn-light-1280x800.png",
+        "sha256": "c70194c7ed7208db5d57cfe92f98ac830dedca6958a6625c08cf30afa97895e4",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7e/ac2b83c7c353/jp-dark-1280x800.png",
+        "sha256": "d68262ec27f37fa73e4ee4a95030e9f64937fea7a5a8791807d51e154149d4ed",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7e/ac2b83c7c353/jp-light-1280x800.png",
+        "sha256": "8384a915fda96e6f8dbfbcf48167d21e314fe2de71b0755a3198120e173efae1",
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      }
+    ],
+    "errors": [],
+    "production_profile_used": false,
+    "ssh_transport_real": false,
+    "last_wait": "document.body.textContent.includes(\"The connection or target VPS metadata changed. No further command was sent; refresh and review the configuration.\")",
+    "private_data_removed": true,
+    "calls": [
+      "controller:projects",
+      "controller:project-targets",
+      "controller:projects",
+      "controller:project-targets",
+      "controller:projects",
+      "controller:project-targets",
+      "controller:projects",
+      "controller:project-targets",
+      "controller:projects",
+      "controller:project-targets",
+      "controller:projects",
+      "controller:project-targets",
+      "controller:projects",
+      "controller:project-targets",
+      "controller:projects",
+      "controller:project-targets",
+      "controller:projects",
+      "controller:project-targets",
+      "controller:prepare-project",
+      "controller:send-project",
+      "controller:projects",
+      "controller:projects",
+      "controller:project-targets",
+      "controller:prepare-project",
+      "controller:projects"
+    ]
+  },
+  "checks": {
+    "full_vitest": {
+      "passed": 2244,
+      "skipped_existing": 2,
+      "failed": 0,
+      "files_passed": 165,
+      "files_skipped": 1
+    },
+    "focused_vitest": 161,
+    "types": [
+      "node",
+      "web",
+      "scripts",
+      "runtime-lab",
+      "ui-lab"
+    ],
+    "build": "PASS",
+    "eslint": "PASS_0_ERRORS_0_WARNINGS",
+    "prettier": "PASS",
+    "contract_parity": "PASS",
+    "syntax": "PASS",
+    "negative_cli_framework_flags": "REJECTED_BEFORE_SCRATCH",
+    "diff_secret_review": "PASS"
+  },
+  "early_runs": {
+    "native": "87e2d84eb5b0: PASS10 before final custom-server guard, superseded by frozen final artifact",
+    "ui": "ff081bae7911: FAIL synthetic controller still expected SPA/80; fixture fixed, no product guard waiver, failed captures removed",
+    "full": "r7e-full-final.log: PASS2244+2skip but began before source freeze; final full-frozen repeated",
+    "spa": "503f48c7bc51 interrupted during first health failure when prior execution session ended; no acceptance/result manufactured. Exact8containers/8images/2networks/sshd/owned scratch cleaned after nonce/DB/controller label/path verification; fresh SPA run uses same frozen artifact"
+  },
+  "raw_evidence": {
+    "app/.out-scripts/r7e-next-final.log": "44fa6519a91f492ffd11259c6722eae4c4a1f7decd23b8c9b34286f14cfbcc80",
+    "app/.out-scripts/product-runtime-lab/99ef29342c62/result.json": "4388d9d5121261c100dd326712851a2ff753b5df981f3535a27eda4f55e84fba",
+    "app/.out-scripts/r7e-express-final.log": "ebaad9e3fb4409ea8969b7bbf1beb6359574910d51caafec717290c4c55b4e19",
+    "app/.out-scripts/product-runtime-lab/1c5c839f6966/result.json": "3e5450091dc3b9a6cc44fcd7ab7f5066ad8e02fd33ab18f979c376c8d996d6a6",
+    "app/.out-scripts/r7e-spa-rerun.log": "1e6d45c44ec2f3fa693b4c10e057f8c6d1d7170a6665b460260186f7f7235f01",
+    "app/.out-scripts/product-runtime-lab/2a426bdb0526/result.json": "03ee7077e11c95caac118f593e080b854c3ebde9ce2290cbf08a6b974e9e33ca",
+    "app/.out-scripts/product-spa-desktop-lab/ac2b83c7c353/result.json": "8c7cfa5cf246bf223078b33541f375481500c13ddede3561171adf1c533b2de5",
+    "app/.out-scripts/r7e-full-frozen.log": "b4836db68fec3028a595007bd8acf3a4f6067794316199ddeda107080722e0cc",
+    "app/.out-scripts/r7e-focused-final.log": "5415e10399fffb415039e57e0e5e5167ffc49a11d8eb22a44aa3f448f1581985",
+    "app/.out-scripts/r7e-lint-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7e-build-final.log": "a5d4963ade6be1140dfb8a5a63b8ab6f02356123f2afbc7e0db9538c8d8f8583",
+    "app/.out-scripts/product-spa-desktop-lab/ff081bae7911/result.json": "053bdafb67709e37094f8ec45c5ff53a5b07af10ead47443f41104f1ca01b3d5",
+    "app/.out-scripts/product-runtime-lab/503f48c7bc51/interrupted-cleanup.json": "b757c85a7b73b20f7e3bb3ea42495eeaa9da96c789ae2bad91aa533c5e8e334f",
+    "app/.out-scripts/r7e-format-final.log": "fbdd37869c73ce85afb11ffefa058e0181874c073fdfee7d7a4b5086b7ea3b1b"
+  },
+  "limitations": [
+    "No VPS/production database/controller pin/installed bundle/NSIS change",
+    "Native Next fixture is Pages Router SSR with approved Next14.2.35/React18.3.1 and local Git fullSHA provided through verified snapshot; no public GitHub polling claim",
+    "Product Next has no DB/user env/public build args/custom server; only template NODE_ENV=production",
+    "Existing next-blog needs NEXT_PUBLIC_SITE_NAME and remains outside this checkpoint until environment lifecycle",
+    "Electron real widget/preload/Main/SQLite uses explicitly synthetic controller transport, separate from native pinned SSH gate",
+    "R7/R3/R4-R6/R11/R13/full release remain OPEN; no formal ML/clean Windows/reboot/soak or production security acceptance"
+  ]
+}

@@ -761,7 +761,7 @@ export class ProductRuntimeRepository {
       .get(deploymentId, appId) as CanonicalRow | undefined
   }
   /** Framework lấy từ source generation đã khóa bởi claim, không suy ra từ app đang sửa. */
-  private registeredFramework(claim: ProductClaimToken): 'express' | 'static-spa' {
+  private registeredFramework(claim: ProductClaimToken): 'express' | 'static-spa' | 'nextjs' {
     const row = this.database
       .prepare(
         'SELECT deploy_config_json,config_sha256 FROM product_source_config WHERE app_id=? AND source_generation=?'
@@ -777,10 +777,13 @@ export class ProductRuntimeRepository {
     }
     if (!config || Array.isArray(config) || typeof config !== 'object')
       this.fail('H2_BUILD_INVALID')
-    // Source legacy chưa có framework chỉ thuộc Express; SPA luôn cần hash canonical hợp lệ.
+    // Source legacy thiếu framework chỉ thuộc Express; framework mới luôn cần canonical hash.
     if (config.framework === undefined || config.framework === 'express') return 'express'
-    if (config.framework === 'static-spa' && hashH2(config) === claim.source_config_sha256)
-      return 'static-spa'
+    if (
+      (config.framework === 'static-spa' || config.framework === 'nextjs') &&
+      hashH2(config) === claim.source_config_sha256
+    )
+      return config.framework
     return this.fail('H2_BUILD_INVALID')
   }
   private assertExecution(context: H2Context): ExecutionRow {

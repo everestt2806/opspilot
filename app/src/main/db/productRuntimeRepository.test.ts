@@ -56,8 +56,12 @@ function setupHarness(
 ): Harness {
   testDirectory = mkdtempSync(join(tmpdir(), 'opspilot-product-runtime-'))
   const database = initializeDatabase(testDirectory)
-  const sourceConfig = options.framework === 'static-spa' ? '{"framework":"static-spa"}' : '{}'
-  const configHash = options.framework === 'static-spa' ? hashH2(JSON.parse(sourceConfig)) : HASH
+  const sourceConfig =
+    options.framework && options.framework !== 'express'
+      ? JSON.stringify({ framework: options.framework })
+      : '{}'
+  const configHash =
+    options.framework && options.framework !== 'express' ? hashH2(JSON.parse(sourceConfig)) : HASH
   const clock = {
     value: NOW,
     advance(ms: number) {
@@ -175,6 +179,21 @@ describe('ProductRuntimeRepository C0 Barrier & Lifecycle', () => {
   })
 
   describe('createContext', () => {
+    it('khóa Next.js theo canonical source claim và từ chối legacy/tamper', () => {
+      const { repository, claim, buildEvidence, deploymentId, database } = setupHarness({
+        framework: 'nextjs'
+      })
+      expect(repository.createContext(claim, deploymentId, buildEvidence).container_port).toBe(3000)
+      database.prepare("UPDATE app SET framework='express'").run()
+      expect(() => repository.createContext(claim, deploymentId, buildEvidence)).toThrow(
+        'H2_BUILD_INVALID'
+      )
+      database.prepare("UPDATE app SET framework='nextjs'").run()
+      database.prepare("UPDATE product_source_config SET deploy_config_json='{}'").run()
+      expect(() => repository.createContext(claim, deploymentId, buildEvidence)).toThrow(
+        'H2_BUILD_INVALID'
+      )
+    })
     it('tạo context SPA cổng80 từ source hash và chặn đổi framework sau build', () => {
       const { repository, claim, buildEvidence, deploymentId, database } = setupHarness({
         framework: 'static-spa'
@@ -255,9 +274,9 @@ describe('ProductRuntimeRepository C0 Barrier & Lifecycle', () => {
       )
     })
 
-    it('fails with H2_BUILD_INVALID if framework is outside Express/SPA', () => {
+    it('fails with H2_BUILD_INVALID if framework is outside supported Tier 1', () => {
       const { repository, claim, buildEvidence, deploymentId } = setupHarness({
-        framework: 'nextjs'
+        framework: 'flask'
       })
       expect(() => repository.createContext(claim, deploymentId, buildEvidence)).toThrowError(
         new ProductRuntimeRepositoryError('H2_BUILD_INVALID')
@@ -481,7 +500,7 @@ describe('ProductRuntimeRepository C0 Barrier & Lifecycle', () => {
       expect(repository.readSettlementAuthority(context)).toBe('rejected')
     })
 
-    it.each(['express', 'static-spa'])(
+    it.each(['express', 'static-spa', 'nextjs'])(
       'settlement %s giữ framework đã khóa từ source, từ chối app đổi loại',
       (framework) => {
         const { repository, claim, buildEvidence, deploymentId, database } = setupHarness({

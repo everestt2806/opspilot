@@ -9,7 +9,8 @@ export interface ProductProjectRegistrationInput {
   target_vps_id: number
   expected_target_security_revision: number
   app_name: string
-  framework: 'express' | 'static-spa'
+  /** Next.js chuẩn không DB/user env; source verification kiểm detector và cổng trước deploy. */
+  framework: 'express' | 'static-spa' | 'nextjs'
   repository_url: string
   production_ref: string
   repository_root: string

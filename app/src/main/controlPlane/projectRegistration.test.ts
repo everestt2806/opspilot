@@ -100,6 +100,24 @@ describe('Atomic Product project registration', () => {
     expect(() => registration.register(input)).toThrow('PROJECT_REVIEW_REQUIRED')
     expect(db.prepare('SELECT COUNT(*) AS n FROM product_deploy_job').get()).toEqual({ n: 0 })
   })
+  it('đăng ký Next.js, canonical source/replay và chặn đổi framework cùng key', () => {
+    input = { ...input, framework: 'nextjs', healthcheck_path: '/' }
+    const result = registration.register(input)
+    const source = db
+      .prepare('SELECT deploy_config_json,config_sha256 FROM product_source_config')
+      .get() as { deploy_config_json: string; config_sha256: string }
+    expect(JSON.parse(source.deploy_config_json)).toMatchObject({
+      framework: 'nextjs',
+      container_port: 3000,
+      needs_db: false
+    })
+    expect(source.config_sha256).toBe(result.source_config_sha256)
+    expect(registration.register(input)).toMatchObject({ ...result, state: 'already_registered' })
+    expect(() => registration.register({ ...input, framework: 'express' })).toThrow(
+      'PROJECT_IDEMPOTENCY_CONFLICT'
+    )
+    expect(db.prepare('SELECT COUNT(*) AS n FROM deployment').get()).toEqual({ n: 0 })
+  })
   it('từ chối cổng SPA sai trước khi tạo app hoặc journal', () => {
     const before = snapshot()
     expect(() => registration.register({ ...input, framework: 'static-spa' })).toThrow(
@@ -314,7 +332,7 @@ describe('Atomic Product project registration', () => {
       { repository_root: '/api' },
       { repository_root: 'apps/../api' },
       { repository_root: '.git' },
-      { framework: 'nextjs' },
+      { framework: 'flask' },
       { healthcheck_path: '/health\n' },
       { app_name: 'Bad Name' },
       { env: { PASSWORD: secret } },

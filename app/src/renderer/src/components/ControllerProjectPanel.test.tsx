@@ -49,13 +49,21 @@ const begin = async (): Promise<void> => {
     )
   )
 }
-const configure = async (framework: 'express' | 'static-spa' = 'express'): Promise<void> => {
+const configure = async (
+  framework: 'express' | 'static-spa' | 'nextjs' = 'express'
+): Promise<void> => {
   await begin()
   if (framework === 'static-spa') {
     fireEvent.mouseDown(screen.getByLabelText(t.framework))
     fireEvent.click((await screen.findAllByText('Vite SPA')).at(-1)!)
     expect((screen.getByLabelText(t.containerPort) as HTMLInputElement).value).toBe('80')
     expect((screen.getByLabelText(t.containerPort) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByLabelText(t.health) as HTMLInputElement).value).toBe('/')
+  }
+  if (framework === 'nextjs') {
+    fireEvent.mouseDown(screen.getByLabelText(t.framework))
+    fireEvent.click((await screen.findAllByText('Next.js')).at(-1)!)
+    expect((screen.getByLabelText(t.containerPort) as HTMLInputElement).value).toBe('3000')
     expect((screen.getByLabelText(t.health) as HTMLInputElement).value).toBe('/')
   }
   fireEvent.mouseDown(screen.getByLabelText(t.target))
@@ -149,6 +157,18 @@ describe('Product project registration form and recovery', () => {
         container_port: 80,
         healthcheck_path: '/'
       })
+    )
+    expect(remote.size).toBe(1)
+  })
+  it('review và đăng ký Next.js đúng framework, default3000 và root health', async () => {
+    render(view())
+    await configure('nextjs')
+    expect(within(screen.getByRole('dialog')).getAllByText('Next.js').length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: t.confirm }))
+    await screen.findByText(t.registeredHint)
+    expect(invoke).toHaveBeenCalledWith(
+      'controller:prepare-project',
+      expect.objectContaining({ framework: 'nextjs', container_port: 3000, healthcheck_path: '/' })
     )
     expect(remote.size).toBe(1)
   })

@@ -1,5 +1,9 @@
 # R7b — Product SPA qua Desktop và runtime thật
 
+> Cập nhật R7e13/11: các giới hạn cuối file là phạm vi lịch sử R7b. SPA đã qua
+> release/live R7c và auto R7d. R7e thêm Next.js vào source/local gate; installed
+> controller vẫn cần release/rollout riêng cho Next, không suy đã có từ code UI.
+
 Sau `. ./tools/enter-node22.ps1`, từ repo root:
 
 ```powershell
@@ -44,3 +48,18 @@ Controller đã cài/bundled release cũ vẫn Express-only; code checkpoint nà
 nâng release pin, cài controller hoặc xây installer mới. Cần trusted release,
 upgrade và live acceptance riêng trước khi dùng SPA trên VPS. Next, database,
 required env và custom Dockerfile vẫn ngoài phạm vi; toàn R7 còn OPEN.
+
+## R7e — Next.js
+
+```powershell
+pnpm.cmd --prefix app exec electron scripts/product-spa-desktop-lab/electron.mjs --nextjs
+```
+
+Cùng production widget/preload/Main/SQLite và synthetic controller đã ghi rõ,
+chọn Next.js: default3000 và `/`, cổng sửa được để khớp script source, review
+Next.js và đăng ký giữ framework.4locale×2theme/layout1280×800 và thêm1366×768
+cho tiếng Việt; request/response khác framework giữ prepared và không gửi. Không
+thay source guards để pass fixture. Report framework=nextjs ở namespace riêng,
+ảnh `docs/ui-redesign/screenshots/r7e/<nonce>/`. Runtime Linux tương ứng dùng
+`run.mjs --nextjs` theo [runbook](../product-runtime-lab/README.md); native SSH,
+build/SSR/asset/rollback/collector/lease gate độc lập với UI synthetic transport.

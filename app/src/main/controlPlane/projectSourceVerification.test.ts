@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type Database from 'better-sqlite3'
@@ -164,6 +164,83 @@ describe('Xác minh source Product trước deployment', () => {
     )
     writeFileSync(join(source, 'index.html'), '<html><body>SPA</body></html>')
   }
+  const next = (): void => {
+    spa()
+    const config = canonicalH2Json({
+      framework: 'nextjs',
+      host_port: 30000,
+      container_port: 3000,
+      healthcheck_path: '/',
+      needs_db: false
+    })
+    const hash = createHash('sha256').update(config).digest('hex')
+    db.transaction(() => {
+      db.pragma('defer_foreign_keys = ON')
+      db.prepare("UPDATE app SET framework='nextjs',container_port=3000").run()
+      db.prepare('UPDATE product_source_config SET deploy_config_json=?,config_sha256=?').run(
+        config,
+        hash
+      )
+      db.prepare('UPDATE product_app_control SET source_config_sha256=?').run(hash)
+    })()
+    request.expected_source_config_sha256 = hash
+    writeFileSync(
+      join(source, 'package.json'),
+      JSON.stringify({
+        scripts: { start: 'next start', build: 'next build' },
+        dependencies: { next: '14.2.35', react: '18.3.1', 'react-dom': '18.3.1' }
+      })
+    )
+    mkdirSync(join(source, 'pages'), { recursive: true })
+    writeFileSync(join(source, 'pages/index.js'), 'export default function Home(){return null}')
+  }
+  it('xác minh Next.js dùng NODE_ENV nội bộ, không deploy hoặc tự bật policy', async () => {
+    next()
+    expect(await check()).toMatchObject({
+      framework: 'nextjs',
+      detected_container_port: 3000,
+      configured_container_port: 3000,
+      deployment_started: false,
+      auto_deploy_paused: true
+    })
+    expect(db.prepare('SELECT COUNT(*) AS n FROM product_deploy_job').get()).toEqual({ n: 0 })
+    expect(db.prepare('SELECT COUNT(*) AS n FROM deployment').get()).toEqual({ n: 0 })
+  })
+  it.each(['port', 'db', 'env', 'public-env', 'framework', 'custom-server'])(
+    'chặn Next.js chưa hỗ trợ %s trước observation',
+    async (kind) => {
+      next()
+      if (kind === 'port') {
+        const pkg = JSON.parse(readFileSync(join(source, 'package.json'), 'utf8'))
+        pkg.scripts.start = 'next start -p 4000'
+        writeFileSync(join(source, 'package.json'), JSON.stringify(pkg))
+      } else if (kind === 'custom-server') {
+        const pkg = JSON.parse(readFileSync(join(source, 'package.json'), 'utf8'))
+        pkg.scripts.start = 'node server.js'
+        writeFileSync(join(source, 'package.json'), JSON.stringify(pkg))
+      } else if (kind === 'db') {
+        const pkg = JSON.parse(readFileSync(join(source, 'package.json'), 'utf8'))
+        pkg.dependencies.pg = '8.13.1'
+        writeFileSync(join(source, 'package.json'), JSON.stringify(pkg))
+      } else if (kind === 'framework') {
+        writeFileSync(
+          join(source, 'package.json'),
+          JSON.stringify({
+            scripts: { start: 'node server.js' },
+            dependencies: { express: '4.21.2' }
+          })
+        )
+      } else
+        writeFileSync(
+          join(source, '.env.example'),
+          kind === 'env' ? 'API_SECRET=\n' : 'NEXT_PUBLIC_API_URL=https://example.test\n'
+        )
+      await expect(check()).rejects.toThrow('PROJECT_SOURCE_UNSUPPORTED')
+      expect(db.prepare('SELECT COUNT(*) AS n FROM product_branch_observation').get()).toEqual({
+        n: 0
+      })
+    }
+  )
   it('xác minh SPA khớp framework, giữ paused và không tạo deployment/job', async () => {
     spa()
     const before = counts()

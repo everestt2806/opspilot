@@ -29,7 +29,7 @@ export interface ProductProjectSourceVerificationResult {
   repository_root: string
   commit_sha: string
   observation_sequence: number
-  framework: 'express' | 'static-spa'
+  framework: 'express' | 'static-spa' | 'nextjs'
   configured_container_port: number
   detected_container_port: number
   source_file_count: number
@@ -45,8 +45,9 @@ export interface ProductProjectSourceVerificationResult {
  * không queued/active/uncertain work hoặc lease chưa release. Canonical config hash
  * khớp deploy config thực tế; target pin/principal/revision không đổi sau await.
  * Isolated public GitHub HTTPS/full SHA, không npm install/build/execute source hay
- * SSH target. Dùng chung detector/render/quota của executor: Express hoặc SPA/noDB/no required
- * env. Chỉ whitelist metadata, không command/file content/raw Git stderr/secret.
+ * SSH target. Dùng chung detector/render/quota của executor: Express, SPA hoặc Next.js/noDB/
+ * no user env; Next chỉ NODE_ENV=production của template, không custom server/build args.
+ * Chỉ whitelist metadata, không command/file content/raw Git stderr/secret.
  *
  * IMMEDIATE trước/sau await kiểm authority và expected observation sequence. Commit
  * observeTip + safe history nguyên tử, policy vẫn paused; không job/deployment/key/

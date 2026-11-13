@@ -20,6 +20,7 @@ export OPSPILOT_R1_ARTIFACT=/var/tmp/opspilot-p3e3a-runtime/r1-lab.cjs
 node app/scripts/product-runtime-lab/build.mjs
 node app/scripts/product-runtime-lab/run.mjs
 node app/scripts/product-runtime-lab/run.mjs --spa
+node app/scripts/product-runtime-lab/run.mjs --nextjs
 node app/scripts/product-runtime-lab/run.mjs --restore-failure
 node app/scripts/product-runtime-lab/verify-deps.mjs
 ```
@@ -43,6 +44,17 @@ R7b: `--spa` dùng Vite/nginx cổng80, thêm ba lần kiểm deep route/index, 
 marker và missing asset404 sau deploy/update/rollback. Artifact chmod000 tạo health403
 thật để kiểm rollback; không giả Docker response. Source config chứa framework SPA
 với canonical hash; cùng H2 receipts/lease/fences, không sửa wire protocol.
+
+R7e: `--nextjs` dùng Next.js14.2.35/React18.3.1 đã có trong demo dependency,
+SSR Pages Router với `next start`, cổng3000/health `/`. HTTP status503 từ SSR
+là lỗi thật để kiểm rollback; mỗi first/update/rollback còn kiểm HTML marker,
+asset `/_next/` trả200 và asset thiếu404. Build error vẫn từ postinstall exit42;
+first failure/collector failure và exact-CID/metric boundary/lease gates giữ nguyên.
+`next.config.js` fixture dùng1CPU để giới hạn worker build trong lab; không đổi
+template hoặc giả kết quả health. `--spa` và `--nextjs` cùng lúc bị từ chối trước
+tạo scratch. Không DB/user env/custom server; NODE_ENV=production thuộc template.
+Đây là native lab với verified snapshot, không thay GitHub polling/installed VPS
+rollout; phải build frozen artifact từ source cuối trước khi chạy.
 
 Optional `--trace` uses `trace_helper.py` to observe/rethrow exceptions and forward all real operations.
 The default gate uses the unchanged target helper directly. The optional trace contains

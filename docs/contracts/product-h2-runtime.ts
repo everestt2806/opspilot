@@ -1,7 +1,8 @@
 import type { ProductClaimToken, ProductDispatchTargetBinding } from './product-auto-deploy'
 
 /** Internal main-process/lab contract. No IPC, public API, raw shell or production enrollment.
- * R7b: Express hoặc SPA không DB/env; framework được khóa bởi source config trong claim,
+ * R7e: Express, SPA hoặc Next.js không DB/user env; Next dùng NODE_ENV=production nội bộ.
+ * Framework được khóa bởi source config trong claim,
  * không thêm field hoặc thay đổi protocol receipt. SPA dùng container_port80.
  */
 export type H2PreviousExpectation = Readonly<{

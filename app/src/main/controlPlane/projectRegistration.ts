@@ -20,7 +20,7 @@ export const projectRegistrationInputSchema = z.strictObject({
   target_vps_id: positive,
   expected_target_security_revision: positive,
   app_name: z.string().regex(/^[a-z0-9][a-z0-9-]{1,30}$/),
-  framework: z.enum(['express', 'static-spa']),
+  framework: z.enum(['express', 'static-spa', 'nextjs']),
   repository_url: z.string().min(1).max(2048),
   production_ref: z.string().min(1).max(255),
   repository_root: z.string().min(1).max(512),

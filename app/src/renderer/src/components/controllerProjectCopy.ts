@@ -26,7 +26,7 @@ const vi = {
   containerPort: 'Cổng ứng dụng trong container',
   health: 'Đường dẫn kiểm tra HTTP',
   limits:
-    'Hiện luồng Product hỗ trợ Express hoặc Vite SPA không dùng database và không cần biến môi trường bắt buộc. Source sẽ được kiểm tra riêng trước khi deploy.',
+    'Hiện luồng Product hỗ trợ Express, Vite SPA hoặc Next.js không dùng database và không cần biến môi trường bắt buộc. Source sẽ được kiểm tra riêng trước khi deploy.',
   review: 'Xem lại cấu hình',
   confirm: 'Đăng ký dự án',
   back: 'Quay lại',
@@ -85,7 +85,7 @@ const en: Copy = {
   containerPort: 'Application container port',
   health: 'HTTP health check path',
   limits:
-    'Product currently supports Express or Vite SPA without a database or required environment variables. Source verification is a separate step before deployment.',
+    'Product currently supports Express, Vite SPA or Next.js without a database or required environment variables. Source verification is a separate step before deployment.',
   review: 'Review configuration',
   confirm: 'Register project',
   back: 'Back',
@@ -138,7 +138,7 @@ const cn: Copy = {
   containerPort: '应用容器端口',
   health: 'HTTP 健康检查路径',
   limits:
-    '当前 Product 流程支持不使用数据库或必需环境变量的 Express 或 Vite SPA 应用。部署前仍需单独验证源代码。',
+    '当前 Product 流程支持不使用数据库或必需环境变量的 Express、Vite SPA 或 Next.js 应用。部署前仍需单独验证源代码。',
   review: '检查配置',
   confirm: '注册项目',
   back: '返回',
@@ -191,7 +191,7 @@ const jp: Copy = {
   containerPort: 'アプリのコンテナポート',
   health: 'HTTP ヘルスチェックのパス',
   limits:
-    '現在の Product はデータベースや必須環境変数を使わない Express または Vite SPA に対応しています。デプロイ前にソース検証が必要です。',
+    '現在の Product はデータベースや必須環境変数を使わない Express、Vite SPA または Next.js に対応しています。デプロイ前にソース検証が必要です。',
   review: '設定を確認',
   confirm: 'プロジェクトを登録',
   back: '戻る',

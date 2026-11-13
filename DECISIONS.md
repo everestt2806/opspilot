@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-13 | [product-mode/template] R7e mở nextjs không DB/user env cho registration/source/pipeline/Desktop; framework và cổng phải khớp detector trước SSH, H2 lấy framework từ canonical source claim. Chỉ NODE_ENV=production do template cung cấp được miễn requiredEnv cho Next; mọi user env/build args/DB vẫn chặn khi chưa có lifecycle riêng. Không thay schema/receipt/pins hoặc coi local gate là installed-controller rollout — Sơn/Codex
+
 2026-11-13 | [delivery/catalog-history] R7c Desktop giữ toàn bộ protected catalog cho inspection/rollback/adoption lịch sử; chỉ review nâng cấp mới mới lọc upgrade_supported+available. Candidate6b đã dùng trên VPS cần giữ pin để đọc Root journal sau rollback, dù không được chọn lại. Không tái tạo history hoặc thêm quyền ghi cho release lịch sử; Main reject selection trước SSH, native actual history/token refresh gate bắt buộc — Sơn/Codex
 
 2026-11-13 | [delivery/retained-target] R7c live populated controller cần đọc existing Express enrollment từ helper EB5 cũ khi current helper98b đã duyệt; chỉ exact old/current SHA+size pair, guard helpers còn lại phải trùng. Manifest SQL pin/remote exact files/HMAC/current SSH/ownership vẫn kiểm nguyên, SPA không dùng helper cũ. Không sửa remote enrollment/key/receipt để làm ready. Native empty-controller upgrade không thay populated enrollment gate; failed candidate6b rollback same UUID, giữ historical pins rồi build release mới — Sơn/Codex

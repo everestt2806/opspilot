@@ -273,7 +273,12 @@ export function ControllerProjectPanel({
     {
       key: 'framework',
       label: t.framework,
-      children: value.framework === 'static-spa' ? 'Vite SPA' : 'Express'
+      children:
+        value.framework === 'static-spa'
+          ? 'Vite SPA'
+          : value.framework === 'nextjs'
+            ? 'Next.js'
+            : 'Express'
     },
     { key: 'repo', label: t.repo, children: value.repository_url },
     { key: 'branch', label: t.branch, children: value.production_ref },
@@ -465,12 +470,13 @@ export function ControllerProjectPanel({
             <Select
               options={[
                 { value: 'express', label: 'Express' },
-                { value: 'static-spa', label: 'Vite SPA' }
+                { value: 'static-spa', label: 'Vite SPA' },
+                { value: 'nextjs', label: 'Next.js' }
               ]}
               onChange={(framework: Values['framework']) =>
                 form.setFieldsValue({
                   container_port: framework === 'static-spa' ? 80 : 3000,
-                  healthcheck_path: framework === 'static-spa' ? '/' : '/health'
+                  healthcheck_path: framework === 'express' ? '/health' : '/'
                 })
               }
             />

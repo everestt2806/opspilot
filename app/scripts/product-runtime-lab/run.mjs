@@ -43,6 +43,9 @@ const appNames = new Map([
 ])
 const restoreFailure = process.argv.includes('--restore-failure')
 const spa = process.argv.includes('--spa')
+const next = process.argv.includes('--nextjs')
+if (spa && next) throw Error('FRAMEWORK_FLAGS_CONFLICT')
+const framework = spa ? 'static-spa' : next ? 'nextjs' : 'express'
 const traceEnabled = process.argv.includes('--trace')
 const scratch = mkdtempSync(join(tmpdir(), 'opspilot-r1-'))
 chmodSync(scratch, 0o700)
@@ -52,7 +55,7 @@ const helper = join(scratch, 'helper')
 const state = join(scratch, 'target-state')
 const source = join(scratch, 'source')
 const secret = randomBytes(32)
-const configJson = spa ? '{"framework":"static-spa"}' : '{}'
+const configJson = framework === 'express' ? '{}' : JSON.stringify({ framework })
 const configHash = createHash('sha256').update(configJson).digest('hex')
 const subjectFiles = [
   'target_execution_guard.py',
@@ -181,10 +184,10 @@ try {
       .run(
         appId,
         name,
-        spa ? 'static-spa' : 'express',
+        framework,
         appId === 1 ? hostPort : await reservePort(),
         spa ? 80 : 3000,
-        spa ? '/' : '/health'
+        framework === 'express' ? '/health' : '/'
       )
     database
       .prepare(
@@ -279,24 +282,35 @@ try {
   writeFileSync(
     join(source, 'package.json'),
     JSON.stringify(
-      spa
+      next
         ? {
-            name: 'r7b-vite-fixture',
+            name: 'r7e-next-fixture',
             version: '1.0.0',
-            scripts: { build: 'vite build' },
-            devDependencies: { vite: '5.4.11' }
+            scripts: { build: 'next build', start: 'next start' },
+            dependencies: { next: '14.2.35', react: '18.3.1', 'react-dom': '18.3.1' }
           }
-        : {
-            name: 'r1-express-fixture',
-            version: '1.0.0',
-            scripts: { start: 'node server.js' },
-            dependencies: { express: '4.21.2' }
-          }
+        : spa
+          ? {
+              name: 'r7b-vite-fixture',
+              version: '1.0.0',
+              scripts: { build: 'vite build' },
+              devDependencies: { vite: '5.4.11' }
+            }
+          : {
+              name: 'r1-express-fixture',
+              version: '1.0.0',
+              scripts: { start: 'node server.js' },
+              dependencies: { express: '4.21.2' }
+            }
     )
   )
   run('npm', ['install', '--package-lock-only', '--ignore-scripts', '--no-audit', '--no-fund'], {
     cwd: source
   })
+  if (next) {
+    mkdirSync(join(source, 'pages'))
+    writeFileSync(join(source, 'next.config.js'), 'module.exports={experimental:{cpus:1}};\n')
+  }
   run('git', ['init', '-q', source])
   const deploy = async (
     name,
@@ -316,6 +330,13 @@ try {
       join(source, 'server.js'),
       `const express = require('express');\nconst app = express();\napp.get('/health', (_, res) => res.status(${statusCode}).send('${name}'));\napp.get('/', (_, res) => res.send('${name}'));\napp.listen(3000, '0.0.0.0');\n`
     )
+    if (next) {
+      // SSR trả status thật để kiểm health/rollback, không giả response helper.
+      writeFileSync(
+        join(source, 'pages/index.js'),
+        `export function getServerSideProps({res}) {res.statusCode=${statusCode};return {props:{}}};export default function Home(){return <main>${name}</main>};\n`
+      )
+    }
     if (spa) {
       // Artifact không đọc được: build thành công nhưng nginx403, buộc health/rollback thật.
       pkg.scripts.build = 'vite build' + (statusCode !== 200 ? ' && chmod 000 dist/index.html' : '')
@@ -331,6 +352,7 @@ try {
     }
     run('git', ['-C', source, 'add', '--', 'package.json', 'package-lock.json', 'server.js'])
     if (spa) run('git', ['-C', source, 'add', '--', 'index.html', 'main.js'])
+    if (next) run('git', ['-C', source, 'add', '--', 'pages/index.js', 'next.config.js'])
     run('git', [
       '-C',
       source,
@@ -440,6 +462,7 @@ try {
     metric_rows: rows.length
   })
   if (spa) await verifySpaRoutes('first_healthy')
+  if (next) await verifyNextPage('first_healthy')
 
   const second = await deploy('healthy_update')
   assert.equal(second.result.state, 'succeeded')
@@ -459,6 +482,7 @@ try {
       .get(second.result.context.activation_id)
   })
   if (spa) await verifySpaRoutes('healthy_update')
+  if (next) await verifyNextPage('healthy_update')
 
   const failedBuild = await deploy('build_failure', 200, true)
   assert.equal(failedBuild.result.state, 'failed')
@@ -529,6 +553,7 @@ try {
       rollback_boundary: unhealthy.result.terminal.envelope.receipt.boundary
     })
     if (spa) await verifySpaRoutes('healthy_update')
+    if (next) await verifyNextPage('healthy_update')
     const firstBuildFailure = await deploy('first_build_failure', 200, true, undefined, 2)
     assert.equal(firstBuildFailure.result.state, 'failed')
     assert.equal(firstBuildFailure.result.failed_step, 'BUILD')
@@ -676,7 +701,7 @@ try {
   const report = {
     status: failure ? 'FAIL' : cleanup ? 'PASS' : 'FAIL',
     scope: 'PINNED_SSH_SQLITE_DOCKER_RUNTIME',
-    framework: spa ? 'static-spa' : 'express',
+    framework,
     nonce,
     source_sha: run('git', ['-c', `safe.directory=${repo}`, '-C', repo, 'rev-parse', 'HEAD']),
     subject_sha256: subjectHashes,
@@ -705,6 +730,24 @@ async function waitFor(check, timeout) {
     await delay(100)
   }
   throw new Error('LAB_WAIT_TIMEOUT')
+}
+
+async function verifyNextPage(marker) {
+  const origin = `http://127.0.0.1:${hostPort}`
+  const home = await fetch(origin + '/')
+  assert.equal(home.status, 200)
+  const html = await home.text()
+  assert(html.includes(marker))
+  const asset = html.match(/src="([^"]+\.js)"/)?.[1]
+  assert(asset?.startsWith('/_next/'))
+  assert.equal((await fetch(origin + asset)).status, 200)
+  assert.equal((await fetch(origin + '/_next/static/missing-r7e.js')).status, 404)
+  record('next_ssr_' + stage, {
+    ssr_marker: marker,
+    html_sha256: createHash('sha256').update(html).digest('hex'),
+    next_asset_200: true,
+    missing_asset_404: true
+  })
 }
 
 async function verifySpaRoutes(marker) {

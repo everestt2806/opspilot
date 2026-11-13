@@ -18,6 +18,7 @@ import { DeploymentRepository } from '../db/deploymentRepository'
 import { ProductDeployRepository } from '../db/productDeployRepository'
 import { detectFramework } from '../detectors'
 import { buildSourceTree } from '../detectors/sourceTree'
+import { resolveNextStart } from '../detectors/helpers'
 import type { BuildPlan } from '../detectors/types'
 import { SshAbortedError, SshManager } from '../ssh/manager'
 import { shouldExcludeUploadPath } from '../ssh/manager'
@@ -123,13 +124,16 @@ export function validateProductSourceAndPlan(
   const sourceTree = buildSourceTree(rootDirectory)
   const detection = detectFramework(sourceTree)
   if (
-    !['express', 'static-spa'].includes(app.framework) ||
+    !['express', 'static-spa', 'nextjs'].includes(app.framework) ||
     app.needs_db !== 0 ||
     !detection.matched ||
     detection.detector !== app.framework ||
-    (app.framework === 'static-spa' && app.container_port !== detection.plan.containerPort) ||
+    (app.framework !== 'express' && app.container_port !== detection.plan.containerPort) ||
     detection.plan.needsDb ||
-    detection.plan.requiredEnv.length > 0
+    detection.plan.requiredEnv.some((name) => app.framework !== 'nextjs' || name !== 'NODE_ENV') ||
+    (app.framework === 'nextjs' &&
+      (Object.keys(detection.plan.buildArgs).length > 0 ||
+        resolveNextStart(sourceTree).entry !== undefined))
   ) {
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
   }
