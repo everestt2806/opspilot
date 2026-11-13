@@ -7,12 +7,13 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, realpathSync, rmSyn
 import { join, resolve, dirname } from 'node:path'
 import { journalKey } from '../controller-upgrade-live/journal-key.mjs'
 import { snapshotCommand } from '../controller-desktop-live/snapshot.mjs'
-const args = process.argv.slice(2),
+const next = process.argv.includes('--nextjs')
+const args = process.argv.slice(2).filter((a) => a !== '--nextjs'),
   sourceNonce = args[1]
 if (
   args.length !== 2 ||
   args[0] !== '--confirm-development-auto' ||
-  sourceNonce !== '6ab247675f19'
+  sourceNonce !== (next ? 'ba8a98aed302' : '6ab247675f19')
 ) {
   console.log('{"status":"REJECTED","code":"EXPLICIT_DEVELOPMENT_AUTO_GATE_REQUIRED"}')
   process.exit(2)
@@ -20,7 +21,11 @@ if (
 const project = resolve(import.meta.dirname, '../..'),
   require = createRequire(join(project, 'package.json')),
   nonce = randomBytes(6).toString('hex'),
-  directory = join(project, '.out-scripts/product-spa-auto', nonce),
+  directory = join(
+    project,
+    next ? '.out-scripts/product-next-auto' : '.out-scripts/product-spa-auto',
+    nonce
+  ),
   local = join(directory, 'private-profile')
 mkdirSync(local, { recursive: true })
 writeFileSync(join(directory, '.owner'), nonce, { flag: 'wx' })
@@ -28,6 +33,7 @@ const proof = {
   status: 'RUNNING',
   record: nonce,
   source_record: sourceNonce,
+  framework: next ? 'nextjs' : 'static-spa',
   checks: [],
   production_profile_used: false,
   gui_tested: false,
@@ -78,16 +84,30 @@ try {
       config.password
   )
   const first = JSON.parse(
-    readFileSync(join(project, '.out-scripts/product-spa-live', sourceNonce, 'result.json'), 'utf8')
+    readFileSync(
+      join(
+        project,
+        next ? '.out-scripts/product-next-live' : '.out-scripts/product-spa-live',
+        sourceNonce,
+        'result.json'
+      ),
+      'utf8'
+    )
   )
   assert.equal(first.status, 'PASS')
   assert(first.private_db_removed && first.temporary_client_revoked)
   const app = first.project,
     branch = first.git.final.branch,
     previousSha = first.git.final.sha,
-    source = join(project, '.out-scripts/product-spa-git', sourceNonce, 'source')
-  assert(Number.isSafeInteger(app.app_id) && app.app_id === 3)
-  assert.equal(app.host_port, 30002)
+    source = join(
+      project,
+      next ? '.out-scripts/product-next-git' : '.out-scripts/product-spa-git',
+      sourceNonce,
+      'source'
+    )
+  assert(Number.isSafeInteger(app.app_id) && app.app_id === (next ? 4 : 3))
+  assert.equal(app.host_port, next ? 30003 : 30002)
+  assert.equal(app.framework, next ? 'nextjs' : 'static-spa')
   assert.equal(git(source, 'branch', '--show-current'), branch)
   assert.equal(git(source, 'rev-parse', 'HEAD'), previousSha)
   assert.equal(git(source, 'ls-remote', '--heads', 'origin', branch).split(/\s/)[0], previousSha)
@@ -128,7 +148,7 @@ try {
   db = code.initializeDatabase(local)
   const profiles = new code.VpsRepository(db)
   profiles.create({
-    name: 'Auto SPA ' + nonce,
+    name: (next ? 'Auto Next ' : 'Auto SPA ') + nonce,
     host: config.host,
     port: 22,
     username: 'root',
@@ -175,7 +195,8 @@ try {
   const cids = async () =>
     (
       await exec(
-        "docker inspect --format '{{.Id}}' san-nha-live-app san-nha-live-collector desktop-live-69eeeb78-app desktop-live-69eeeb78-collector"
+        "docker inspect --format '{{.Id}}' san-nha-live-app san-nha-live-collector desktop-live-69eeeb78-app desktop-live-69eeeb78-collector" +
+          (next ? ' spa-live-6ab247675f19-app spa-live-6ab247675f19-collector' : '')
       )
     ).trim()
   progress('readonly-preflight')
@@ -189,7 +210,7 @@ try {
   await service.confirmControllerAdoption({ plan_id: review.plan_id, consent: true })
   const intent = {
       installation_request_key: review.installation_request_key,
-      display_name: 'Auto SPA ' + nonce,
+      display_name: (next ? 'Auto Next ' : 'Auto SPA ') + nonce,
       allow_write: true
     },
     prepared = await service.prepareInstalledRegistration(intent)
@@ -224,14 +245,23 @@ try {
   assert(!ssh.getVerifiedHostKey(1))
   proof.main_ssh_disconnected = true
   save()
-  const marker = `r7d-${nonce}-auto`
+  const marker = `${next ? 'r7g' : 'r7d'}-${nonce}-auto`
   writeFileSync(join(source, 'public/release.txt'), marker + '\n')
-  git(source, 'add', '--', 'public/release.txt')
+  const changed = ['public/release.txt']
+  if (next) {
+    const page = join(source, 'pages/index.jsx'),
+      oldMarker = `r7f-${sourceNonce}-final`,
+      html = readFileSync(page, 'utf8')
+    assert(html.includes(oldMarker))
+    writeFileSync(page, html.replaceAll(oldMarker, marker))
+    changed.push('pages/index.jsx')
+  }
+  git(source, 'add', '--', ...changed)
   git(source, 'diff', '--cached', '--check')
   const message = join(directory, 'auto-commit.txt')
   writeFileSync(
     message,
-    'test(demo): xác minh SPA tự deploy khi Main ngắt SSH (R7d)\n\nChỉ đổi marker của demo riêng; không gửi redeploy từ Desktop.\n\nCo-authored-by: Võ Thị Thiên Kim <Thienkim.dev@gmail.com>\n'
+    `test(demo): xác minh ${next ? 'Next.js' : 'SPA'} tự deploy khi Main ngắt SSH (${next ? 'R7g' : 'R7d'})\n\nChỉ đổi marker của demo riêng; không gửi redeploy từ Desktop.\n\nCo-authored-by: Võ Thị Thiên Kim <Thienkim.dev@gmail.com>\n`
   )
   git(source, 'commit', '--file', message)
   const sha = git(source, 'rev-parse', 'HEAD')
@@ -274,7 +304,7 @@ try {
   proof.app_status = status
   const jobs = JSON.parse(
     await exec(
-      `python3 - <<'PY'\nimport json,sqlite3\nc=sqlite3.connect('file:/var/lib/opspilot-controller/opspilot.db?mode=ro',uri=True);c.row_factory=sqlite3.Row\nprint(json.dumps([dict(r) for r in c.execute('SELECT job_id,trigger,target_sha,state FROM product_deploy_job WHERE app_id=? AND target_sha=?',(3,'${sha}'))]));c.close()\nPY`
+      `python3 - <<'PY'\nimport json,sqlite3\nc=sqlite3.connect('file:/var/lib/opspilot-controller/opspilot.db?mode=ro',uri=True);c.row_factory=sqlite3.Row\nprint(json.dumps([dict(r) for r in c.execute('SELECT job_id,trigger,target_sha,state FROM product_deploy_job WHERE app_id=? AND target_sha=?',(${app.app_id},'${sha}'))]));c.close()\nPY`
     )
   )
   assert.equal(jobs.length, 1)
@@ -284,7 +314,7 @@ try {
   proof.jobs = jobs
   const settlement = JSON.parse(
     await exec(
-      `python3 - <<'PY'\nimport json,sqlite3\nc=sqlite3.connect('file:/var/lib/opspilot-controller/opspilot.db?mode=ro',uri=True);c.row_factory=sqlite3.Row\nj=c.execute('SELECT job_id FROM product_deploy_job WHERE app_id=? AND target_sha=?',(3,'${sha}')).fetchone()[0]\nterm=[dict(r) for r in c.execute('SELECT t.attempt_id,t.settled_at,t.leases_released_at FROM product_runtime_terminal t JOIN product_deploy_attempt a ON a.attempt_id=t.attempt_id WHERE a.job_id=?',(j,))]\nleases={t:c.execute('SELECT count(*) FROM '+t+' WHERE job_id=? AND released_at IS NULL',(j,)).fetchone()[0] for t in ('product_app_lease','product_worker_lease')}\nprint(json.dumps({'terminals':term,'unreleased_leases':leases}));c.close()\nPY`
+      `python3 - <<'PY'\nimport json,sqlite3\nc=sqlite3.connect('file:/var/lib/opspilot-controller/opspilot.db?mode=ro',uri=True);c.row_factory=sqlite3.Row\nj=c.execute('SELECT job_id FROM product_deploy_job WHERE app_id=? AND target_sha=?',(${app.app_id},'${sha}')).fetchone()[0]\nterm=[dict(r) for r in c.execute('SELECT t.attempt_id,t.settled_at,t.leases_released_at FROM product_runtime_terminal t JOIN product_deploy_attempt a ON a.attempt_id=t.attempt_id WHERE a.job_id=?',(j,))]\nleases={t:c.execute('SELECT count(*) FROM '+t+' WHERE job_id=? AND released_at IS NULL',(j,)).fetchone()[0] for t in ('product_app_lease','product_worker_lease')}\nprint(json.dumps({'terminals':term,'unreleased_leases':leases}));c.close()\nPY`
     )
   )
   assert.equal(settlement.terminals.length, 1)
@@ -295,12 +325,27 @@ try {
     deep = await fetch(origin + '/books/current/reading', { signal: AbortSignal.timeout(10000) })
   assert.equal(home.status, 200)
   assert.equal(deep.status, 200)
-  assert.equal(await home.text(), await deep.text())
-  assert.equal(
-    (await fetch(origin + '/assets/not-present.js', { signal: AbortSignal.timeout(10000) })).status,
-    404
-  )
-  proof.exposure = await service.exposure({ binding_id: binding, app_id: 3 }, true)
+  const html = await home.text(),
+    deepHtml = await deep.text()
+  if (next) {
+    assert(html.includes(marker) && deepHtml.includes(marker))
+    const asset = html.match(/src="([^"]+\.js)"/)?.[1]
+    assert(asset?.startsWith('/_next/'))
+    assert.equal((await fetch(origin + asset, { signal: AbortSignal.timeout(10000) })).status, 200)
+    assert.equal(
+      (await fetch(origin + '/_next/static/not-present.js', { signal: AbortSignal.timeout(10000) }))
+        .status,
+      404
+    )
+  } else {
+    assert.equal(html, deepHtml)
+    assert.equal(
+      (await fetch(origin + '/assets/not-present.js', { signal: AbortSignal.timeout(10000) }))
+        .status,
+      404
+    )
+  }
+  proof.exposure = await service.exposure({ binding_id: binding, app_id: app.app_id }, true)
   assert.equal(proof.exposure.state, 'recorded')
   assert.equal(proof.exposure.view.status, 'reachable')
   proof.checks.push(
@@ -327,6 +372,11 @@ try {
   ])
     assert.deepEqual(proof.after[field], proof.before[field])
   assert.deepEqual(proof.after.files, proof.before.files)
+  if (next)
+    assert.deepEqual(
+      proof.after.apps.filter((a) => a.id <= 3),
+      proof.before.apps.filter((a) => a.id <= 3)
+    )
   proof.checks.push(
     'pause_revoke_cleanup_preserve_old_apps_controller_pid_key_db_and_quiescent_state'
   )

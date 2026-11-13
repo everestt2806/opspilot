@@ -1,0 +1,411 @@
+{
+  "status": "LIVE_NEXT_AUTO_BRANCH_POLL_PASS",
+  "date": "2026-11-13",
+  "base_sha": "3cc00e2f88c18f8275f84a2bde8d10f3b0ca6174",
+  "working_tree_subject": true,
+  "runtime_schema_ipc_pins_changes": false,
+  "source_sha256": {
+    "app/scripts/product-spa-live/auto.mjs": "0509d51bcd32c7ba04c4c86331b9518b50c2faaa20e48899eab275665274658b",
+    "app/scripts/product-spa-live/entry.ts": "8836353048730299764911b8730449e8bb7eeb2a982d90393b4391a51deed41a",
+    "app/scripts/product-spa-live/tsconfig.json": "7fd5b543d10903dc1a28de2cc102d72900508099cc072c02d97f5b9ca4c2ddf6",
+    "app/scripts/controller-desktop-live/snapshot.mjs": "93631a21443894f6f1ab03c1d7371f0baa82e2af2a812aec9ac87673e106f7e4"
+  },
+  "live": {
+    "status": "PASS",
+    "record": "cb79a3a15cd9",
+    "source_record": "ba8a98aed302",
+    "framework": "nextjs",
+    "checks": [
+      "public_git_commit_reaches_app_without_main_ssh_or_manual_redeploy",
+      "exact_single_branch_poll_job_success_current_sha_deep_route_asset_404_and_recorded_exposure",
+      "pause_revoke_cleanup_preserve_old_apps_controller_pid_key_db_and_quiescent_state"
+    ],
+    "production_profile_used": false,
+    "gui_tested": false,
+    "manual_redeploy_sent": false,
+    "main_artifact_sha256": "e1fa0ccc30b3b6eec3554fffe37c4e896e22689eb0cd22c53a34abcbb6f57d9e",
+    "before": {
+      "receipt": {
+        "format": 1,
+        "request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "release_sha256": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+        "source_directory": "/var/lib/opspilot-controller-transfer/release",
+        "payload_sha256": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+        "phase": "installed",
+        "uid": 997,
+        "gid": 987,
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "created_at": "2026-11-10T06:11:51.696Z",
+        "updated_at": "2026-11-10T06:12:02.055Z"
+      },
+      "upgrade": {
+        "format": 1,
+        "request_key": "4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4",
+        "installation_request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "parent_upgrade_key": "a5a702ff-68a6-47e3-abd5-e1dd71ce25a9",
+        "parent_release_sha256": "a81ed72cfe56e8ecbe09508711eabe8f8e8dd82e505d2fef2d681032e0d909da",
+        "release_sha256": "b6803bc794cb39987936395d8d1f12cd06720a08f2e0ba2c3307ec619368ab45",
+        "release_directory": "/var/lib/opspilot-controller-upgrades/4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4/release",
+        "payload_sha256": "93abe6ea846f44ef914d0a9ee6e74aaa7e40d3c1ec3a353e537ca89b1ff0c777",
+        "phase": "active",
+        "before": {
+          "format": 1,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "schema_sha256": "4fa659e7343ac9bb6b2cc1ccff302ea0e08e89a4e9d869c9dc66ccf164846446",
+          "state_sha256": "7daa11ce48d7df7ed6aef379240b2d8278b0b3299ba13dd67a58b3eeee6c3755",
+          "key_sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706",
+          "database_inode": 265566,
+          "key_inode": 265570,
+          "quiescent": true
+        },
+        "rollback_before": null,
+        "created_at": "2026-11-13T11:36:42.114Z",
+        "updated_at": "2026-11-13T11:36:57.484Z"
+      },
+      "upgrade_sha256": "0a61746199fc06521d3395d21ea36a93a659323700d7613d5c1349c2a92429c3",
+      "receipt_sha256": "b3be9019462c586781b64f7a13faa4f4c55e27d964893ba22571c835716ba5b4",
+      "database_inode": 265566,
+      "schema": 29,
+      "active_experiments": 0,
+      "active_jobs": 0,
+      "active_clients": 0,
+      "apps": [
+        {
+          "id": 1,
+          "name": "san-nha-live",
+          "current_deployment_id": 4
+        },
+        {
+          "id": 2,
+          "name": "desktop-live-69eeeb78",
+          "current_deployment_id": 5
+        },
+        {
+          "id": 3,
+          "name": "spa-live-6ab247675f19",
+          "current_deployment_id": 10
+        },
+        {
+          "id": 4,
+          "name": "next-live-ba8a98aed302",
+          "current_deployment_id": 14
+        }
+      ],
+      "deployment": {
+        "id": 4,
+        "status": "running",
+        "git_commit_sha": "bfed8941e2a719b04fa960142b7c3df0eed66b57",
+        "exposure_status": "reachable",
+        "exposure_evidence_json": "{\"checked_at\":\"2026-11-12T07:19:21.719Z\",\"cloud_firewall\":\"not_configured\",\"diagnosis\":null,\"external_probe\":\"reachable\",\"kind\":\"product_exposure_observation\",\"observation\":{\"app_id\":1,\"authority_sha256\":\"ed4bf8bbe021788de437631ef10ab34b8011e8fbb0bb9d198d2ede87dbc47feb\",\"body_sha256\":\"ddb003d1f641b53c873f26ef1d3326bc35118dc623f14bee93aecbee7f5e2737\",\"checked_at\":\"2026-11-12T07:19:21.719Z\",\"client_id\":\"20feca75-727b-4d8e-8a56-42a998df1de4\",\"deployment_id\":4,\"format\":1,\"http_status\":200,\"observation_id\":\"37e04ff7-980b-455a-8bf7-9d68960113aa\",\"observer\":\"desktop_external\",\"outcome\":\"reachable\",\"previous_observation_id\":null,\"reason\":\"none\",\"received_at\":\"2026-11-12T07:19:24.309Z\",\"started_at\":\"2026-11-12T07:19:21.599Z\",\"status\":\"reachable\",\"url\":\"http://167.71.202.116:30000\"},\"status\":\"reachable\",\"ufw_reconciled\":false,\"ufw_state\":\"not_checked\",\"url\":\"http://167.71.202.116:30000\"}"
+      },
+      "desired": [
+        {
+          "app_id": 1,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 2,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 3,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 4,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        }
+      ],
+      "vps_digest": "68940aec92472f567563d7c4edfc99f063b76abc466f14ec1fc974b3df070653",
+      "files": [
+        {
+          "path": ".product-controller-initialized",
+          "inode": 265569,
+          "sha256": "e9342557cddefc41325a75f51d3eca413e659c2cd348d4f6045a6c16702d2074"
+        },
+        {
+          "path": ".controller-runtime-key",
+          "inode": 265570,
+          "sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706"
+        },
+        {
+          "path": ".controller-installation",
+          "inode": 265565,
+          "sha256": "5d9cc95ff2db3d9338776481d7998be53b6d29bd5234d9c6db9b85d2b321609b"
+        }
+      ],
+      "service": "MainPID=401620\nUser=opspilot-controller\nActiveState=active\n"
+    },
+    "old_cids": "1bdb0eeacc48c4686cc157685e8aacec3b0f208f301ee6a1a0c218c3a82500bc\n5049f9dc01cba64c771badf0d690ef49476f2cd9b9b9aa235ccaa9dbbc53eb6f\n55ee8e261546919d7072a34d98804d4fd248433064fcd1ac922843d792f771ea\n3cbebfe49f5994b138582e7a4512da9ac7461b3b03e01e9eafc7d02e004f0969\n51afedc0502b2f81fa150858623ad7a8be2ca47c2d905829ac7f6399088cfccb\n82aefed9096cd557ca946592de4f863d2eb75c9f72348bd2346ae1e9077732cc",
+    "policy_resume": {
+      "request_key": "8ca0ff4c-db3b-40cc-8c25-bab53f5de1dc",
+      "binding_id": "7a6571cd-d85d-46e6-9037-433299c5410f",
+      "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+      "client_id": "027f0f53-775b-4e6e-a542-b15d09cd84c6",
+      "binding_revision": 2,
+      "app_id": 4,
+      "operation": "policy",
+      "state": "accepted",
+      "reason_code": null,
+      "remote_state": "completed",
+      "job_id": null,
+      "target_sha": null,
+      "created_at": "2026-11-13T12:02:50.436Z",
+      "updated_at": "2026-11-13T12:02:50.775Z",
+      "auto_deploy_paused": false
+    },
+    "main_ssh_disconnected": true,
+    "git": {
+      "branch": "demo/next-r7f-ba8a98aed302",
+      "sha": "b50f625dd7bc3e087ef84bbd767392b83f7f2cab",
+      "parent_sha": "ab115722e7dcf6e1efee59d1fd795351ccc2ac7f",
+      "marker": "r7g-cb79a3a15cd9-auto"
+    },
+    "http_only_polls": 33,
+    "ssh_was_closed_through_public_success": true,
+    "app_status": {
+      "binding_id": "7a6571cd-d85d-46e6-9037-433299c5410f",
+      "binding_revision": 2,
+      "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+      "app_id": 4,
+      "ownership_generation": 1,
+      "source_generation": 1,
+      "current_deployment_id": 15,
+      "current_deployment_sha": "b50f625dd7bc3e087ef84bbd767392b83f7f2cab",
+      "current_deployment_state": "running",
+      "latest_job_id": "pjob_21d92d01-094a-405d-8025-180b6c0f422a",
+      "latest_job_state": "succeeded",
+      "checked_at": "2026-11-13T12:04:07.087Z",
+      "data_freshness": "current"
+    },
+    "jobs": [
+      {
+        "job_id": "pjob_21d92d01-094a-405d-8025-180b6c0f422a",
+        "trigger": "branch_poll",
+        "target_sha": "b50f625dd7bc3e087ef84bbd767392b83f7f2cab",
+        "state": "succeeded"
+      }
+    ],
+    "settlement": {
+      "terminals": [
+        {
+          "attempt_id": "attempt_6a056e3e-7280-4048-a294-325d248ef5bc",
+          "settled_at": "2026-11-13T12:04:06.077Z",
+          "leases_released_at": "2026-11-13T12:04:06.089Z"
+        }
+      ],
+      "unreleased_leases": {
+        "product_app_lease": 0,
+        "product_worker_lease": 0
+      }
+    },
+    "exposure": {
+      "binding_id": "7a6571cd-d85d-46e6-9037-433299c5410f",
+      "app_id": 4,
+      "binding_revision": 2,
+      "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+      "state": "recorded",
+      "view": {
+        "app_id": 4,
+        "deployment_id": 15,
+        "context": {
+          "app_id": 4,
+          "deployment_id": 15,
+          "authority_sha256": "073c33f62b0a15001f1862aed74d7a49a5121907946c615a64609c9974a5dce4",
+          "previous_observation_id": "5071a7d9-070a-4b48-aabf-a56fd66f660c",
+          "url": "http://167.71.202.116:30003"
+        },
+        "status": "reachable",
+        "freshness": "current",
+        "unavailable_reason": null,
+        "observation": {
+          "deployment_id": 15,
+          "authority_sha256": "073c33f62b0a15001f1862aed74d7a49a5121907946c615a64609c9974a5dce4",
+          "previous_observation_id": null,
+          "observer": "desktop_external",
+          "started_at": "2026-11-13T12:04:08.895Z",
+          "checked_at": "2026-11-13T12:04:09.089Z",
+          "outcome": "reachable",
+          "http_status": 200,
+          "reason": "none",
+          "format": 1,
+          "observation_id": "5071a7d9-070a-4b48-aabf-a56fd66f660c",
+          "client_id": "027f0f53-775b-4e6e-a542-b15d09cd84c6",
+          "body_sha256": "63d6017c0faeb812de2979627ba5d17fb75dc5e6da7b58805fef76b5e3f4048a",
+          "app_id": 4,
+          "url": "http://167.71.202.116:30003",
+          "status": "reachable",
+          "received_at": "2026-11-13T12:04:09.443Z"
+        },
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "request_id": "12701b02-e097-4b94-858d-ad4265812c82",
+        "sampled_at": "2026-11-13T12:04:09.445Z",
+        "data_freshness": "current"
+      },
+      "reason_code": null,
+      "checked_at": "2026-11-13T12:04:09.456Z"
+    },
+    "policy_pause": {
+      "request_key": "3052459c-4b28-41cc-9db9-696caa29ad0e",
+      "binding_id": "7a6571cd-d85d-46e6-9037-433299c5410f",
+      "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+      "client_id": "027f0f53-775b-4e6e-a542-b15d09cd84c6",
+      "binding_revision": 2,
+      "app_id": 4,
+      "operation": "policy",
+      "state": "accepted",
+      "reason_code": null,
+      "remote_state": "completed",
+      "job_id": null,
+      "target_sha": null,
+      "created_at": "2026-11-13T12:04:09.460Z",
+      "updated_at": "2026-11-13T12:04:09.811Z",
+      "auto_deploy_paused": true
+    },
+    "temporary_client_revoked": true,
+    "after": {
+      "receipt": {
+        "format": 1,
+        "request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "release_sha256": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+        "source_directory": "/var/lib/opspilot-controller-transfer/release",
+        "payload_sha256": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+        "phase": "installed",
+        "uid": 997,
+        "gid": 987,
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "created_at": "2026-11-10T06:11:51.696Z",
+        "updated_at": "2026-11-10T06:12:02.055Z"
+      },
+      "upgrade": {
+        "format": 1,
+        "request_key": "4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4",
+        "installation_request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "parent_upgrade_key": "a5a702ff-68a6-47e3-abd5-e1dd71ce25a9",
+        "parent_release_sha256": "a81ed72cfe56e8ecbe09508711eabe8f8e8dd82e505d2fef2d681032e0d909da",
+        "release_sha256": "b6803bc794cb39987936395d8d1f12cd06720a08f2e0ba2c3307ec619368ab45",
+        "release_directory": "/var/lib/opspilot-controller-upgrades/4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4/release",
+        "payload_sha256": "93abe6ea846f44ef914d0a9ee6e74aaa7e40d3c1ec3a353e537ca89b1ff0c777",
+        "phase": "active",
+        "before": {
+          "format": 1,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "schema_sha256": "4fa659e7343ac9bb6b2cc1ccff302ea0e08e89a4e9d869c9dc66ccf164846446",
+          "state_sha256": "7daa11ce48d7df7ed6aef379240b2d8278b0b3299ba13dd67a58b3eeee6c3755",
+          "key_sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706",
+          "database_inode": 265566,
+          "key_inode": 265570,
+          "quiescent": true
+        },
+        "rollback_before": null,
+        "created_at": "2026-11-13T11:36:42.114Z",
+        "updated_at": "2026-11-13T11:36:57.484Z"
+      },
+      "upgrade_sha256": "0a61746199fc06521d3395d21ea36a93a659323700d7613d5c1349c2a92429c3",
+      "receipt_sha256": "b3be9019462c586781b64f7a13faa4f4c55e27d964893ba22571c835716ba5b4",
+      "database_inode": 265566,
+      "schema": 29,
+      "active_experiments": 0,
+      "active_jobs": 0,
+      "active_clients": 0,
+      "apps": [
+        {
+          "id": 1,
+          "name": "san-nha-live",
+          "current_deployment_id": 4
+        },
+        {
+          "id": 2,
+          "name": "desktop-live-69eeeb78",
+          "current_deployment_id": 5
+        },
+        {
+          "id": 3,
+          "name": "spa-live-6ab247675f19",
+          "current_deployment_id": 10
+        },
+        {
+          "id": 4,
+          "name": "next-live-ba8a98aed302",
+          "current_deployment_id": 15
+        }
+      ],
+      "deployment": {
+        "id": 4,
+        "status": "running",
+        "git_commit_sha": "bfed8941e2a719b04fa960142b7c3df0eed66b57",
+        "exposure_status": "reachable",
+        "exposure_evidence_json": "{\"checked_at\":\"2026-11-12T07:19:21.719Z\",\"cloud_firewall\":\"not_configured\",\"diagnosis\":null,\"external_probe\":\"reachable\",\"kind\":\"product_exposure_observation\",\"observation\":{\"app_id\":1,\"authority_sha256\":\"ed4bf8bbe021788de437631ef10ab34b8011e8fbb0bb9d198d2ede87dbc47feb\",\"body_sha256\":\"ddb003d1f641b53c873f26ef1d3326bc35118dc623f14bee93aecbee7f5e2737\",\"checked_at\":\"2026-11-12T07:19:21.719Z\",\"client_id\":\"20feca75-727b-4d8e-8a56-42a998df1de4\",\"deployment_id\":4,\"format\":1,\"http_status\":200,\"observation_id\":\"37e04ff7-980b-455a-8bf7-9d68960113aa\",\"observer\":\"desktop_external\",\"outcome\":\"reachable\",\"previous_observation_id\":null,\"reason\":\"none\",\"received_at\":\"2026-11-12T07:19:24.309Z\",\"started_at\":\"2026-11-12T07:19:21.599Z\",\"status\":\"reachable\",\"url\":\"http://167.71.202.116:30000\"},\"status\":\"reachable\",\"ufw_reconciled\":false,\"ufw_state\":\"not_checked\",\"url\":\"http://167.71.202.116:30000\"}"
+      },
+      "desired": [
+        {
+          "app_id": 1,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 2,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 3,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 4,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        }
+      ],
+      "vps_digest": "68940aec92472f567563d7c4edfc99f063b76abc466f14ec1fc974b3df070653",
+      "files": [
+        {
+          "path": ".product-controller-initialized",
+          "inode": 265569,
+          "sha256": "e9342557cddefc41325a75f51d3eca413e659c2cd348d4f6045a6c16702d2074"
+        },
+        {
+          "path": ".controller-runtime-key",
+          "inode": 265570,
+          "sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706"
+        },
+        {
+          "path": ".controller-installation",
+          "inode": 265565,
+          "sha256": "5d9cc95ff2db3d9338776481d7998be53b6d29bd5234d9c6db9b85d2b321609b"
+        }
+      ],
+      "service": "MainPID=401620\nUser=opspilot-controller\nActiveState=active\n"
+    },
+    "private_db_removed": true,
+    "phase": "pause-policy"
+  },
+  "url": "http://167.71.202.116:30003",
+  "checks": {
+    "cli_missing_consent": "REJECTED_EXIT_2_BEFORE_SCRATCH",
+    "cli_wrong_source_record": "REJECTED_EXIT_2_BEFORE_SCRATCH",
+    "live_lab_typecheck": "PASS",
+    "eslint": "PASS_0_ERRORS_0_WARNINGS",
+    "prettier": "PASS",
+    "syntax": "PASS",
+    "git_diff_secret_review": "PASS",
+    "full_vitest": "NOT_RERUN_DRIVER_DOCS_ONLY_R7e_922fc38_2244_PASS_2_EXISTING_SKIP"
+  },
+  "raw_evidence": {
+    "app/.out-scripts/product-next-auto/cb79a3a15cd9/result.json": "0f150886bf87cd2f19e44cd882b25160d6fbf82982f60081e5732645340c9fec",
+    "app/.out-scripts/r7g-checks-final.log": "5739617484724a92a74c73d7fc67ea6c578132a39956ea3fd7535d2736db6437"
+  },
+  "limitations": [
+    "HTTP-only observer remains alive; Main SSH is disconnected before Git push through public success, no claim OS Desktop process terminated",
+    "Healthy automatic Next update only; R7f manual health503 rollback is separate proof",
+    "Policies explicitly paused after test; no GUI/reboot/soak/DB/env/new NSIS/independent Windows/ML/full R7 or release completion"
+  ]
+}

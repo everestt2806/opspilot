@@ -155,3 +155,34 @@ journal cleanup; giữ original receipt/key/DBinode/schema/target credentials v�
 3apps. FAIL giữ encrypted same-key journal để inspect/reconcile; không reset
 DB/branch hoặc replay unknown. Không GUI/NSIS/new Windows/reboot/soak/ML hoặc
 Next DB/env/customserver/customDockerfile claim.
+
+## R7g — Next.js auto Git khi Main ngắt SSH
+
+```text
+Electron-as-Node app/scripts/product-spa-live/auto.mjs --nextjs --confirm-development-auto ba8a98aed302
+```
+
+Input secret bounded stdin/DPAPI và SSH pin như R7d/R7f. Variant Next chỉ nhận
+exact R7f app4/port30003/framework/record đã PASS và private journal đã cleanup;
+local/remote HEAD phải trùng R7f finalab115722. Không reset branch để chạy lại.
+Report riêng `app/.out-scripts/product-next-auto/<nonce>/result.json`; raw R7f
+không sửa. CLI thiếu consent hoặc recordSPA bị từ chối exit2 trước tạo scratch.
+
+Sau cold adoption/scoped client/policy resume accepted, gate disconnectAll và
+kiểm không còn verified connection trước Git commit/push. Commit chỉ đổi
+`public/release.txt` và marker trong `pages/index.jsx` trên demo branch hiện có,
+Kim coauthor. Chỉ HTTP observer chờ marker công khai; không manual redeploy,
+appStatus/API hoặc SSH poll trước public success. Sau đó mới reconnect để kiểm
+đúng1job triggerbranch_poll/target fullSHA/succeeded,1H2terminal settled và cả2
+leases released. SSR index/deep phải chứa marker mới, Nextasset200 và asset
+thiếu404, Main exposure recorded reachable. Giữ3oldapps/6CID/controllerPID/key/
+DBinode/schema/Root receipts; pause lại, revoke client và xóa private journal
+khi PASS. Controller release hiện tại giữb680/93ab, không nâng lại để chạy gate.
+
+Nếu lỗi sau resume: giữ encrypted journal và request UUID. Mở đúng private Main
+profile để `checkCommand(request_key)` cùng key, đọc current app status, explicit
+pause scoped app4 và revoke client; không chạy lại fresh hoặc replay unknown.
+Không Root SQL writes, reset source/history/key hoặc sửa raw report để làm PASS.
+HTTP-only observer process vẫn sống; bằng chứng là Main SSH disconnected trong
+khoảng Git→build→public success, không tuyên bố OS Desktop process đã thoát.
+R7f manual health503 rollback là proof riêng, không tự gọi là Next auto rollback.
