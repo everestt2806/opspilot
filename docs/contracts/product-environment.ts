@@ -42,6 +42,36 @@ export interface ProductEnvironmentMetadata {
   activation: 'staged'
 }
 
+/** CLI cùng UID đã được xác thực; administrator lấy từ OS, không nhận qua stdin.
+ * request_key giữ nguyên khi retry mất reply. Body có secret chỉ được lưu mã hóa,
+ * không plaintext digest. Lưu revision và receipt nguyên tử, không active deploy.
+ */
+export interface ProductEnvironmentStageInput extends ProductEnvironmentWriteInput {
+  format: 1
+  request_key: string
+}
+export interface ProductEnvironmentStateInput {
+  format: 1
+  scope: ProductEnvironmentScope
+  expected_source_generation: number
+  expected_source_config_sha256: string
+  /** null chỉ đọc latest; UUID tra receipt của chính administrator hiện hành. */
+  request_key: string | null
+}
+export interface ProductEnvironmentStageResult {
+  state: 'staged' | 'already_staged'
+  request_key: string
+  metadata: ProductEnvironmentMetadata
+}
+export interface ProductEnvironmentState {
+  scope: ProductEnvironmentScope
+  source_generation: number
+  source_config_sha256: string
+  latest: ProductEnvironmentMetadata | null
+  request_key: string | null
+  requested: ProductEnvironmentMetadata | null
+}
+
 /** Whole snapshot, không merge PATCH/implicit inherited env. Tối đa128keys tổng,
  * key uppercase1..128bytes, value<=8192UTF8bytes, values JSON<=64KiB; empty value
  * hợp lệ, không NUL/CR/LF/control chars. NODE_ENV/PORT, NODE_OPTIONS, PATH/HOME,

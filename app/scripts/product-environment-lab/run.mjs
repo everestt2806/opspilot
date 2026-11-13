@@ -150,7 +150,7 @@ try {
   assert(
     !readFileSync(join(scratch, 'opspilot.db')).includes(Buffer.from(values.runtime_env.APP_TOKEN))
   )
-  assert.equal(db.prepare('SELECT max(version) n FROM schema_version').get().n, 32)
+  assert.equal(db.prepare('SELECT max(version) n FROM schema_version').get().n, 33)
   assert.deepEqual(db.pragma('foreign_key_check'), [])
   checks.push('real_cipher_encrypted_sqlite_reopen_metadata_only_no_job_or_source_activation')
   assert.throws(

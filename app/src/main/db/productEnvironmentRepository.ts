@@ -4,6 +4,9 @@ import { z } from 'zod'
 import type {
   ProductEnvironmentMetadata,
   ProductEnvironmentScope,
+  ProductEnvironmentWriteInput,
+  ProductEnvironmentStageResult,
+  ProductEnvironmentState,
   ProductEnvironmentValues
 } from '../../../../docs/contracts/product-environment'
 import { AesGcmCredentialCipher } from '../crypto/credentialCipher'
@@ -11,6 +14,8 @@ import { canonicalH2Json } from '../controlPlane/productH2Proof'
 import {
   environmentScopeSchema,
   environmentWriteSchema,
+  environmentStageSchema,
+  environmentStateSchema,
   ProductEnvironmentError,
   validateEnvironmentValues
 } from '../controlPlane/productEnvironment'
@@ -40,6 +45,23 @@ const rowSchema = z.strictObject({
 })
 type Row = z.output<typeof rowSchema>
 const purpose = 'opspilot-product-environment-v1'
+const requestPurpose = 'opspilot-product-environment-request-v1'
+const receiptSchema = rowSchema
+  .pick({
+    controller_id: true,
+    app_id: true,
+    ownership_generation: true,
+    revision: true,
+    crypto_scheme: true,
+    encrypted_secret: true,
+    iv: true,
+    auth_tag: true,
+    created_at: true
+  })
+  .extend({
+    administrator_id: z.string().regex(/^unix:(0|[1-9][0-9]{0,9})$/),
+    request_key: environmentStageSchema.shape.request_key
+  })
 
 /** Staged-only vault; caller không được dùng readValues như quyền kích hoạt deploy. */
 export class ProductEnvironmentRepository {
@@ -52,80 +74,285 @@ export class ProductEnvironmentRepository {
     return this.guarded(() => {
       const parsed = environmentWriteSchema.safeParse(input)
       if (!parsed.success) throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+      return this.db.transaction(() => this.appendRevision(parsed.data)).immediate()
+    })
+  }
+
+  /** CLI cùng UID; receipt và revision commit chung, không lưu hash của secret. */
+  stage(
+    input: unknown,
+    controllerId: string,
+    administratorId: string
+  ): ProductEnvironmentStageResult {
+    return this.guarded(() => {
+      const parsed = environmentStageSchema.safeParse(input)
+      if (!parsed.success) throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
       const request = parsed.data
       return this.db
         .transaction(() => {
-          const authority = this.authorize(request.scope)
-          if (
-            authority.source_generation !== request.expected_source_generation ||
-            authority.source_config_sha256 !== request.expected_source_config_sha256
-          )
-            throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_SOURCE_CHANGED')
-          const values = validateEnvironmentValues(request.values, authority.framework)
-          const latest = this.db
-            .prepare(
-              'SELECT MAX(revision) AS revision FROM product_environment_revision WHERE app_id=? AND ownership_generation=?'
-            )
-            .get(request.scope.app_id, request.scope.ownership_generation) as {
-            revision: number | null
+          this.adminAuthority(request, controllerId, administratorId)
+          validateEnvironmentValues(request.values, this.authorize(request.scope).framework)
+          const previous = this.receipt(request.request_key, administratorId, request.scope)
+          if (previous) {
+            if (canonicalH2Json(previous.request) !== canonicalH2Json(request))
+              throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_IDEMPOTENCY_CONFLICT')
+            this.adminAuthority(request, controllerId, administratorId)
+            return {
+              state: 'already_staged' as const,
+              request_key: request.request_key,
+              metadata: previous.metadata
+            }
           }
-          if (
-            latest.revision !== request.expected_latest_revision ||
-            latest.revision === Number.MAX_SAFE_INTEGER
-          )
-            throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_REVISION_CONFLICT')
-          const metadata: ProductEnvironmentMetadata = {
-            controller_id: request.scope.controller_id,
-            app_id: request.scope.app_id,
-            ownership_generation: request.scope.ownership_generation,
-            revision: (latest.revision ?? 0) + 1,
-            basis_source_generation: authority.source_generation,
-            basis_source_config_sha256: authority.source_config_sha256,
-            framework: authority.framework,
-            runtime_keys: Object.keys(values.runtime_env).sort(),
-            public_build_keys: Object.keys(values.public_build_args).sort(),
-            created_at: new Date().toISOString(),
-            activation: 'staged'
+          const { request_key } = request
+          const metadata = this.appendRevision(request)
+          const binding = {
+            controller_id: controllerId,
+            administrator_id: administratorId,
+            request_key,
+            app_id: metadata.app_id,
+            ownership_generation: metadata.ownership_generation,
+            revision: metadata.revision,
+            created_at: metadata.created_at
           }
           let encrypted
           try {
             encrypted = this.cipher.encrypt(
-              canonicalH2Json({ purpose, scope: request.scope, metadata, values })
+              canonicalH2Json({ purpose: requestPurpose, binding, request })
             )
           } catch {
             throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_UNAVAILABLE')
           }
-          // Crypto thành công chưa đủ: callbacks/custom cipher không được vượt authority CAS.
-          if (canonicalH2Json(this.authorize(request.scope)) !== canonicalH2Json(authority))
-            throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_SOURCE_CHANGED')
+          this.adminAuthority(request, controllerId, administratorId)
+          if (
+            canonicalH2Json(this.read(request.scope, metadata.revision).metadata) !==
+            canonicalH2Json(metadata)
+          )
+            throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_UNAVAILABLE')
           this.db
             .prepare(
-              `INSERT INTO product_environment_revision
-          (controller_id,app_id,ownership_generation,revision,basis_source_generation,basis_source_config_sha256,
-           target_binding_json,framework,runtime_keys_json,public_build_keys_json,crypto_scheme,encrypted_secret,iv,auth_tag,created_at)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+              `INSERT INTO product_environment_request
+          (controller_id,administrator_id,request_key,app_id,ownership_generation,revision,created_at,
+          crypto_scheme,encrypted_secret,iv,auth_tag) VALUES(?,?,?,?,?,?,?,?,?,?,?)`
             )
             .run(
-              metadata.controller_id,
+              controllerId,
+              administratorId,
+              request_key,
               metadata.app_id,
               metadata.ownership_generation,
               metadata.revision,
-              metadata.basis_source_generation,
-              metadata.basis_source_config_sha256,
-              canonicalH2Json(request.scope.target),
-              metadata.framework,
-              JSON.stringify(metadata.runtime_keys),
-              JSON.stringify(metadata.public_build_keys),
+              metadata.created_at,
               encrypted.crypto_scheme,
               encrypted.encrypted_secret,
               encrypted.iv,
-              encrypted.auth_tag,
-              metadata.created_at
+              encrypted.auth_tag
             )
-          return metadata
+          const persisted = this.receipt(request_key, administratorId, request.scope)
+          if (
+            !persisted ||
+            canonicalH2Json(persisted.request) !== canonicalH2Json(request) ||
+            canonicalH2Json(persisted.metadata) !== canonicalH2Json(metadata)
+          )
+            throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_UNAVAILABLE')
+          this.adminAuthority(request, controllerId, administratorId)
+          return { state: 'staged' as const, request_key, metadata }
         })
         .immediate()
     })
+  }
+
+  /** Chỉ metadata; lost reply có thể tra request UUID mà không gửi lại values. */
+  state(input: unknown, controllerId: string, administratorId: string): ProductEnvironmentState {
+    return this.guarded(() => {
+      const parsed = environmentStateSchema.safeParse(input)
+      if (!parsed.success) throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+      const request = parsed.data
+      return this.db
+        .transaction(() => {
+          this.adminAuthority(request, controllerId, administratorId)
+          const latest = this.db
+            .prepare(
+              `SELECT MAX(revision) AS revision FROM product_environment_revision
+          WHERE app_id=? AND ownership_generation=?`
+            )
+            .get(request.scope.app_id, request.scope.ownership_generation) as {
+            revision: number | null
+          }
+          const requested =
+            request.request_key === null
+              ? null
+              : this.receipt(request.request_key, administratorId, request.scope)
+          const metadata =
+            latest.revision === null ? null : this.read(request.scope, latest.revision).metadata
+          this.adminAuthority(request, controllerId, administratorId)
+          return {
+            scope: request.scope,
+            source_generation: request.expected_source_generation,
+            source_config_sha256: request.expected_source_config_sha256,
+            latest: metadata,
+            request_key: request.request_key,
+            requested: requested?.metadata ?? null
+          }
+        })
+        .deferred()
+    })
+  }
+
+  private adminAuthority(
+    request: Pick<
+      ProductEnvironmentWriteInput,
+      'scope' | 'expected_source_generation' | 'expected_source_config_sha256'
+    >,
+    controllerId: string,
+    administratorId: string
+  ): void {
+    if (
+      !/^unix:(0|[1-9][0-9]{0,9})$/.test(administratorId) ||
+      request.scope.controller_id !== controllerId
+    )
+      throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED')
+    const controllers = this.db
+      .prepare('SELECT controller_id,status FROM product_controller')
+      .all() as { controller_id: string; status: string }[]
+    if (
+      controllers.length !== 1 ||
+      controllers[0].controller_id !== controllerId ||
+      controllers[0].status !== 'active'
+    )
+      throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED')
+    const current = this.authorize(request.scope)
+    if (
+      current.source_generation !== request.expected_source_generation ||
+      current.source_config_sha256 !== request.expected_source_config_sha256
+    )
+      throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_SOURCE_CHANGED')
+  }
+
+  private receipt(
+    key: string,
+    administratorId: string,
+    scope: ProductEnvironmentScope
+  ): {
+    request: z.output<typeof environmentStageSchema>
+    metadata: ProductEnvironmentMetadata
+  } | null {
+    const found = this.db
+      .prepare(
+        `SELECT * FROM product_environment_request
+      WHERE controller_id=? AND administrator_id=? AND request_key=?`
+      )
+      .get(scope.controller_id, administratorId, key)
+    if (!found) return null
+    try {
+      const row = receiptSchema.parse(found)
+      const binding = {
+        controller_id: row.controller_id,
+        administrator_id: row.administrator_id,
+        request_key: row.request_key,
+        app_id: row.app_id,
+        ownership_generation: row.ownership_generation,
+        revision: row.revision,
+        created_at: row.created_at
+      }
+      const decoded = JSON.parse(this.cipher.decrypt(row))
+      if (
+        !decoded ||
+        Object.keys(decoded).sort().join(',') !== 'binding,purpose,request' ||
+        decoded.purpose !== requestPurpose ||
+        canonicalH2Json(decoded.binding) !== canonicalH2Json(binding)
+      )
+        throw Error()
+      const request = environmentStageSchema.parse(decoded.request)
+      if (
+        request.request_key !== key ||
+        canonicalH2Json(request.scope) !== canonicalH2Json(scope) ||
+        row.app_id !== scope.app_id ||
+        row.ownership_generation !== scope.ownership_generation
+      )
+        throw Error()
+      const stored = this.read(scope, row.revision)
+      if (
+        stored.metadata.created_at !== row.created_at ||
+        stored.metadata.basis_source_generation !== request.expected_source_generation ||
+        stored.metadata.basis_source_config_sha256 !== request.expected_source_config_sha256 ||
+        canonicalH2Json(stored.values) !== canonicalH2Json(request.values)
+      )
+        throw Error()
+      return { request, metadata: stored.metadata }
+    } catch {
+      throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_UNAVAILABLE')
+    }
+  }
+
+  private appendRevision(request: ProductEnvironmentWriteInput): ProductEnvironmentMetadata {
+    const authority = this.authorize(request.scope)
+    if (
+      authority.source_generation !== request.expected_source_generation ||
+      authority.source_config_sha256 !== request.expected_source_config_sha256
+    )
+      throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_SOURCE_CHANGED')
+    const values = validateEnvironmentValues(request.values, authority.framework)
+    const latest = this.db
+      .prepare(
+        'SELECT MAX(revision) AS revision FROM product_environment_revision WHERE app_id=? AND ownership_generation=?'
+      )
+      .get(request.scope.app_id, request.scope.ownership_generation) as {
+      revision: number | null
+    }
+    if (
+      latest.revision !== request.expected_latest_revision ||
+      latest.revision === Number.MAX_SAFE_INTEGER
+    )
+      throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_REVISION_CONFLICT')
+    const metadata: ProductEnvironmentMetadata = {
+      controller_id: request.scope.controller_id,
+      app_id: request.scope.app_id,
+      ownership_generation: request.scope.ownership_generation,
+      revision: (latest.revision ?? 0) + 1,
+      basis_source_generation: authority.source_generation,
+      basis_source_config_sha256: authority.source_config_sha256,
+      framework: authority.framework,
+      runtime_keys: Object.keys(values.runtime_env).sort(),
+      public_build_keys: Object.keys(values.public_build_args).sort(),
+      created_at: new Date().toISOString(),
+      activation: 'staged'
+    }
+    let encrypted
+    try {
+      encrypted = this.cipher.encrypt(
+        canonicalH2Json({ purpose, scope: request.scope, metadata, values })
+      )
+    } catch {
+      throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_UNAVAILABLE')
+    }
+    // Crypto thành công chưa đủ: callbacks/custom cipher không được vượt authority CAS.
+    if (canonicalH2Json(this.authorize(request.scope)) !== canonicalH2Json(authority))
+      throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_SOURCE_CHANGED')
+    this.db
+      .prepare(
+        `INSERT INTO product_environment_revision
+    (controller_id,app_id,ownership_generation,revision,basis_source_generation,basis_source_config_sha256,
+     target_binding_json,framework,runtime_keys_json,public_build_keys_json,crypto_scheme,encrypted_secret,iv,auth_tag,created_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      )
+      .run(
+        metadata.controller_id,
+        metadata.app_id,
+        metadata.ownership_generation,
+        metadata.revision,
+        metadata.basis_source_generation,
+        metadata.basis_source_config_sha256,
+        canonicalH2Json(request.scope.target),
+        metadata.framework,
+        JSON.stringify(metadata.runtime_keys),
+        JSON.stringify(metadata.public_build_keys),
+        encrypted.crypto_scheme,
+        encrypted.encrypted_secret,
+        encrypted.iv,
+        encrypted.auth_tag,
+        metadata.created_at
+      )
+    return metadata
   }
 
   metadata(scope: ProductEnvironmentScope, revision: number): ProductEnvironmentMetadata {

@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import type {
   ProductEnvironmentScope,
+  ProductEnvironmentStageInput,
+  ProductEnvironmentStateInput,
   ProductEnvironmentValues,
   ProductEnvironmentWriteInput
 } from '../../../../docs/contracts/product-environment'
@@ -33,6 +35,17 @@ export const environmentWriteSchema = z.strictObject({
   expected_source_config_sha256: z.string().regex(/^[a-f0-9]{64}$/),
   values: valuesSchema
 }) satisfies z.ZodType<ProductEnvironmentWriteInput>
+const requestKey = z.uuidv4().refine((v) => v === v.toLowerCase())
+export const environmentStageSchema = environmentWriteSchema.extend({
+  format: z.literal(1),
+  request_key: requestKey
+}) satisfies z.ZodType<ProductEnvironmentStageInput>
+export const environmentStateSchema = environmentWriteSchema
+  .pick({ scope: true, expected_source_generation: true, expected_source_config_sha256: true })
+  .extend({
+    format: z.literal(1),
+    request_key: requestKey.nullable()
+  }) satisfies z.ZodType<ProductEnvironmentStateInput>
 
 export class ProductEnvironmentError extends Error {
   constructor(
@@ -41,6 +54,7 @@ export class ProductEnvironmentError extends Error {
       | 'PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED'
       | 'PRODUCT_ENVIRONMENT_SOURCE_CHANGED'
       | 'PRODUCT_ENVIRONMENT_REVISION_CONFLICT'
+      | 'PRODUCT_ENVIRONMENT_IDEMPOTENCY_CONFLICT'
       | 'PRODUCT_ENVIRONMENT_UNAVAILABLE'
       | 'PRODUCT_ENVIRONMENT_STORAGE_UNAVAILABLE'
   ) {

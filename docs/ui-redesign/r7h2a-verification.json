@@ -1,0 +1,124 @@
+{
+  "status": "LOCAL_STAGED_ENVIRONMENT_ADMIN_PASS",
+  "scope": "R7h-2a SAME-UID CLI ONLY",
+  "date": "2026-11-14",
+  "base_sha": "179bb5ad30078762453df424b25438a8771dd45c",
+  "working_tree_subject": true,
+  "source_sha256": {
+    "app/src/main/controlPlane/cli.ts": "dd51561f837fd44ece04e6eafc88a20dd46e141b7502a9281054ede0abaab441",
+    "app/src/main/controlPlane/productEnvironment.ts": "00f225384b26a242190c95bf014b591f96e8c1fc19baf1b375645722a3ca4aaf",
+    "app/src/main/db/productEnvironmentRepository.ts": "00be5db2db802a12da928fdea8b477973563ee49252aafe7a566ad5e797461a1",
+    "app/src/main/db/productEnvironmentAdmin.test.ts": "096b1208bcb3c3ccf401462ef4f6d641c1194e0b57515acd8b5af178074f2f2f",
+    "app/src/main/db/productEnvironmentRepository.test.ts": "1416cde587c3a2b8d899afaa96f75fcef492693289dc8fa67ac9cf8c54585b36",
+    "app/src/main/db/index.ts": "6022abf25378f04277ee41de995f6420c795b4faf172e0aa1cf03c9bc605d469",
+    "app/src/main/db/migrationRoles.test.ts": "7f6b44f1ead046e33ef26f83b26311b27ef8b9df04418bf71d12a5f85e7b74ad",
+    "app/src/main/db/migrations/033_product_environment_request.sql": "d4c14b098f3a576554306ef8d823a1914784d05efde1dd3737ffe84ae747d92b",
+    "docs/contracts/product-environment.ts": "0e358702f8a99405fb09695623fd380042639f763e2953762a27c6ea220b6b7b",
+    "docs/contracts/schema.sql": "975697f25d8d1e7a5828e4daf1eedf200b15c99902c69316e648fba6d43d780e",
+    "app/scripts/product-environment-admin-lab/entry.ts": "144209846304db4581db1bb31e9a46bcef0e75ff922eed182ad3fab89e0327c8",
+    "app/scripts/product-environment-admin-lab/run.mjs": "cc61c2ff2bdb201fdbc1e28e153eb4b1287bf10d52ccaed10089ad8ed4a8e0f0",
+    "app/scripts/product-environment-admin-lab/tsconfig.json": "9a13d7fa4429342c1929ec73ee60a58d3f6291622a18a90ffc5416ec8bbed976",
+    "app/scripts/product-environment-lab/run.mjs": "382cd663dbd6aa6b58dc1ce6c60288e3eca31a209622ef0976f09601f6b1a726"
+  },
+  "native_cli": {
+    "status": "PASS",
+    "scope": "NATIVE_SAME_UID_CLI_STDIN_SQLITE_ONLY",
+    "nonce": "ea7b0feb647a",
+    "checks": [
+      "actual_cli_stdin_cold_process_retry_one_revision_metadata_only",
+      "changed_body_same_uuid_and_stale_cas_new_uuid_refused",
+      "two_actual_cli_processes_race_same_uuid_exactly_one_new_revision",
+      "encrypted_revision_and_receipt_only_no_policy_source_job_activation",
+      "actual_sqlite_receipt_auth_tag_tamper_refused_before_replay",
+      "unsafe_key_permissions_and_changed_current_authority_refused"
+    ],
+    "vps_used": false,
+    "ssh_used": false,
+    "gui_used": false,
+    "activation_implemented": false,
+    "artifact_sha256": "aa24abde79ef9b353baa61ef05fd32a82864bbe4ff7b1748ec687c9f9d8d36fd",
+    "private_scratch_removed": true
+  },
+  "native_vault": {
+    "status": "PASS",
+    "scope": "LINUX_PRIVATE_KEYSTORE_SQLITE_ONLY",
+    "nonce": "195e214d891f",
+    "checks": [
+      "missing_master_key_refused_without_implicit_creation",
+      "explicit_key_once_unsafe_mode_refused_original_material_preserved",
+      "real_cipher_encrypted_sqlite_reopen_metadata_only_no_job_or_source_activation",
+      "wrong_key_and_actual_sqlite_tag_tamper_refused_without_value_leak",
+      "changed_target_security_binding_rejected_before_decrypt"
+    ],
+    "vps_used": false,
+    "gui_used": false,
+    "activation_implemented": false,
+    "artifact_sha256": "4ce0570094eec5f6e7818928a9092b1dffe75d5a2fb1af934b6eae9494a126a5",
+    "private_scratch_removed": true
+  },
+  "checks": {
+    "full_vitest": {
+      "passed": 2315,
+      "skipped_existing": 2,
+      "failed": 0,
+      "files_passed": 167,
+      "files_skipped": 1
+    },
+    "focused": 99,
+    "new_admin_tests": 24,
+    "types": [
+      "node",
+      "web",
+      "scripts",
+      "environment-admin-lab"
+    ],
+    "eslint": "0_ERRORS_0_WARNINGS",
+    "prettier": "PASS",
+    "build": "PASS",
+    "contract_sql_032_033_parity": "PASS",
+    "negative_cli": "EXIT_2_WITHOUT_EXPLICIT_LOCAL_GATE"
+  },
+  "schema": {
+    "desktop_latest": 33,
+    "controller_latest": 33,
+    "controller_skips": [
+      30,
+      31
+    ],
+    "installed_vps_unchanged": 29
+  },
+  "security": [
+    "OS-derived same-UID principal; no payload administrator",
+    "Staged revision and encrypted body-bound request receipt commit atomically",
+    "No plaintext body, plaintext secret digest, runtime env readback or source/policy/job activation",
+    "Current owner/SSH target/source fences before and after crypto; authenticate persisted receipt before success",
+    "Replay after cold process or newer snapshot returns same revision; changed body fails; metadata-only request UUID lookup",
+    "Two native CLI processes competing for same UUID create exactly one new revision"
+  ],
+  "raw_evidence": {
+    "app/.out-scripts/r7h2a-full-final.log": "8d3fe7a2208e343ebeb9849b81b8b21567d9adfe364fcf6d53559b10fe3ce5cb",
+    "app/.out-scripts/product-environment-admin-lab/ea7b0feb647a/result.json": "09b2fd88aa0f5b48f61665667d7fe96f82b9ec7144b5c6f838ccb2ae56ecbf88",
+    "app/.out-scripts/product-environment-lab/195e214d891f/result.json": "7c07f7aa17b922508f80cdcd2fd41abb83332656e886705b25bbfa7facc467b7",
+    "app/.out-scripts/r7h2a-focused-final3.log": "2f0ca9b6eda6d1421119f334fbd808878a9203199f7f487a38a874a425cdeca2",
+    "app/.out-scripts/r7h2a-build-final.log": "cabe076eb2ff968ad8fb758b329318ce54b20ed72d6772044fdb09ec620e0177",
+    "app/.out-scripts/r7h2a-lint-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h2a-node-type-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h2a-scripts-type.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h2a-lab-type.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h2a-format-final.log": "fbdd37869c73ce85afb11ffefa058e0181874c073fdfee7d7a4b5086b7ea3b1b",
+    "app/.out-scripts/r7h2a-negative.log": "b03b811c67f3e23b40af8091850b608945cbdf736942f161442988ae6ab9ab11"
+  },
+  "early_checks": [
+    "First scoped ESLint found unused destructuring and missing return annotations; fixed without suppressing source rules (JS CLI return rule explicitly documented)",
+    "Lab tsconfig initially lacked JSON/Electron typing; switched to existing native runtime lab config",
+    "Typecheck found migration fixture role passed as version; correction to controller role was refused by Desktop role fence. Fixture now migrates in its real Desktop role; production guard unchanged",
+    "First full2314PASS+1FAIL+2SKIP was the above role fixture; final focused/full rerun required",
+    "Final audit added post-decrypt source fence and authentication of newly written receipt; native gates rerun on final runtime"
+  ],
+  "limitations": [
+    "No installed root bridge operation, HTTP, Main, IPC or UI editor yet; R7h-2b remains OPEN",
+    "No source activation, execution rendering of env/public args, PostgreSQL, config rollback or deploy acceptance; R7h-3/4 remain OPEN",
+    "No VPS or production-profile writes, dependency/helper/template/pin/release changes; schema rollout needs explicit backup/upgrade acceptance",
+    "No physical Desktop-off, GUI, reboot, soak, independent Windows or formal ML acceptance from these local checks"
+  ]
+}

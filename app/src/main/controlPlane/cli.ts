@@ -1,3 +1,4 @@
+import { ProductEnvironmentRepository } from '../db/productEnvironmentRepository'
 import { registerControllerVps } from './vpsRegistration'
 import type Database from 'better-sqlite3'
 
@@ -43,6 +44,8 @@ type Command =
   | 'project-target-state'
   | 'enroll-project-target'
   | 'project-readiness'
+  | 'stage-project-environment'
+  | 'project-environment-state'
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
@@ -75,7 +78,9 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
       'verify-project-source',
       'project-target-state',
       'enroll-project-target',
-      'project-readiness'
+      'project-readiness',
+      'stage-project-environment',
+      'project-environment-state'
     ].includes(commandValue)
   ) {
     throw new Error('USAGE')
@@ -135,7 +140,9 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
     command === 'verify-project-source' ||
     command === 'project-target-state' ||
     command === 'enroll-project-target' ||
-    command === 'project-readiness'
+    command === 'project-readiness' ||
+    command === 'stage-project-environment' ||
+    command === 'project-environment-state'
   ) {
     if (process.platform !== 'linux') throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
     const controller = new AbortController()
@@ -155,7 +162,21 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
         recoveryBundle = verifyControllerBundle(request.artifact, request.manifest_sha256)
       }
       opened = openControllerDatabase(dataDirectory)
-      if (command === 'project-readiness') {
+      if (command === 'stage-project-environment' || command === 'project-environment-state') {
+        const uid = process.getuid?.()
+        if (uid === undefined) throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
+        const environment = new ProductEnvironmentRepository(
+          opened.database,
+          loadControllerCredentialCipher(opened.dataDirectory)
+        )
+        console.log(
+          JSON.stringify(
+            command === 'stage-project-environment'
+              ? environment.stage(input, opened.controllerId, `unix:${uid}`)
+              : environment.state(input, opened.controllerId, `unix:${uid}`)
+          )
+        )
+      } else if (command === 'project-readiness') {
         console.log(
           JSON.stringify(
             await checkProjectReadiness(
