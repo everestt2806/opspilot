@@ -1,0 +1,95 @@
+{
+  "status": "LOCAL_STAGED_ENVIRONMENT_VAULT_PASS",
+  "date": "2026-11-14",
+  "scope": "R7h-1 FOUNDATION ONLY",
+  "base_sha": "27c2f44111ab6ad6475e8547fe5247979338c120",
+  "working_tree_subject": true,
+  "source_sha256": {
+    "app/src/main/controlPlane/productEnvironment.ts": "667bb2cca71bf441dab98c920f6f385d560a6fd395f2b3505fc0200fcaba638a",
+    "app/src/main/db/productEnvironmentRepository.ts": "bb8398a3e53f2d1c0d0592ce587e67df5bb58de548379aa203a396f5f90195ea",
+    "app/src/main/db/productEnvironmentRepository.test.ts": "f2644211d74740307f618fe27c6404c725150741c8621e4a1f376a2adb886b4f",
+    "app/src/main/db/index.ts": "27eb5c00db9f7a74aa10ca4022a61d48979957639a319eec6a8df52d32ce8f09",
+    "app/src/main/db/migrationRoles.test.ts": "09a2dc49a52569d5bd8394757d29e0299e7678d64ca33b4f279836d327a68bfa",
+    "app/src/main/db/migrations/032_product_environment_revision.sql": "136144e2f922a3a676b7be628b19f21ae9d36bff60c2ec9729129cc4ec0f66b1",
+    "docs/contracts/product-environment.ts": "187f85dfc17cd80d6fee86b9a8b166b262e9dcc17692236cb7d326121f165d24",
+    "docs/contracts/schema.sql": "b79a4d77fc194ce6e40ef7293265cd78d2cb582a9e46a5da8463b9e0d36585b0",
+    "app/scripts/product-environment-lab/run.mjs": "73af722bec05a4105636566a78e85bc60d2795cf403b7c1e4f23ea021fdb582c",
+    "app/scripts/product-environment-lab/entry.ts": "9eaf41c591c588eb37de1f434e318f9e1437d35edc63144a423222b69c07a911",
+    "app/scripts/product-environment-lab/tsconfig.json": "cc25c892266f1693a652ad0468142a8f423a98a4f8abf8fd8cec80da27f602cf"
+  },
+  "native_key_sqlite": {
+    "status": "PASS",
+    "scope": "LINUX_PRIVATE_KEYSTORE_SQLITE_ONLY",
+    "nonce": "3e24f3b756f4",
+    "checks": [
+      "missing_master_key_refused_without_implicit_creation",
+      "explicit_key_once_unsafe_mode_refused_original_material_preserved",
+      "real_cipher_encrypted_sqlite_reopen_metadata_only_no_job_or_source_activation",
+      "wrong_key_and_actual_sqlite_tag_tamper_refused_without_value_leak",
+      "changed_target_security_binding_rejected_before_decrypt"
+    ],
+    "vps_used": false,
+    "gui_used": false,
+    "activation_implemented": false,
+    "artifact_sha256": "be4c6e1bccbf4bfd5aaf2dad284155b3b3e66a2839eb2e8e2d9c449755813539",
+    "private_scratch_removed": true
+  },
+  "checks": {
+    "full_vitest": {
+      "passed": 2291,
+      "skipped_existing": 2,
+      "failed": 0,
+      "files_passed": 166,
+      "files_skipped": 1
+    },
+    "focused_tests": 75,
+    "vault_tests": 47,
+    "migration_tests": 28,
+    "types": [
+      "node",
+      "web",
+      "scripts",
+      "environment-lab"
+    ],
+    "lint": "PASS_0_ERRORS_0_WARNINGS",
+    "build": "PASS",
+    "prettier": "PASS",
+    "syntax": "PASS",
+    "cli_no_consent": "REJECTED_EXIT_2_BEFORE_SCRATCH",
+    "contract_sql_migration032_parity": "PASS",
+    "source_and_staged_secret_review": "PASS"
+  },
+  "schema": {
+    "desktop_latest": 32,
+    "controller_latest": 32,
+    "controller_skips": [
+      30,
+      31
+    ],
+    "installed_vps_unchanged": 29,
+    "staged_revisions_only": true,
+    "source_or_policy_mutation": false
+  },
+  "raw_evidence": {
+    "app/.out-scripts/product-environment-lab/3e24f3b756f4/result.json": "9d72847cd93de8444467e17c8991b06a771ba31019522e78ac6b3ca5fb521536",
+    "app/.out-scripts/r7h1-full-final2.log": "6e221cfea29615b34c1c3cf16cf5bf893219c252be5405ba18d62ceb58d07f83",
+    "app/.out-scripts/r7h1-focused-final2.log": "eabc0f1ccb8bf433f9b65b40778c86b598d5ba388fa20636891e8f74eb18e3a4",
+    "app/.out-scripts/r7h1-native-final.log": "d9bd27394386c419475dbcb7e177137b5b5182c3126a5ef6ce9628a672fc7820",
+    "app/.out-scripts/r7h1-build-final.log": "57e0a7825feeee265229db391fe4ed71335f70dadb5c389d51fc01408f4c3a7c",
+    "app/.out-scripts/r7h1-lint-final2.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h1-types-final.log": "a791e19b3dd7ccfb8cbf3a92741a9489e51b7202c84c05176ba01b3c3795adfe",
+    "app/.out-scripts/r7h1-format-final.log": "fbdd37869c73ce85afb11ffefa058e0181874c073fdfee7d7a4b5086b7ea3b1b"
+  },
+  "early_checks": [
+    "47vault/26migration focused initially passed; new migration fixture lacked required WAL setup for001, corrected to initializer precondition",
+    "Legacy downgrade fixtures previously retained schema032; fixed exact fixture table/version cleanup, actual old-version expectations retained",
+    "First full2290PASS+1FAIL+2SKIP: migrationRoles fixture retained31/29 versions; exception masked by DB not closed on assertion failure. Expectations updated32/shared table and try/finally close; role separation/identity assertions retained. Full repeat required",
+    "3source Prettier warnings fixed; unused disable comment removed from lab then native rerun, artifact byte-identical"
+  ],
+  "limitations": [
+    "No CLI/IPC/HTTP/UI config writer or active revision/source generation change yet",
+    "No runtime environment rendering/deploy/public build args/managed PostgreSQL integration acceptance; pipeline retains no-user-env/noDB guards",
+    "No VPS/profile/installer/controller release/pin/dependency/template changes; schema032 requires explicit upgrade/migration/backup acceptance before rollout",
+    "No GUI/ML/reboot/soak/independent Windows or whole R7/release completion"
+  ]
+}

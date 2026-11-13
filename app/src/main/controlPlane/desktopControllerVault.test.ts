@@ -86,7 +86,7 @@ describe('Desktop controller encrypted vault', () => {
     expect(db.prepare('SELECT count(*) AS n FROM desktop_controller_binding').get()).toEqual({
       n: 0
     })
-    expect(db.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({ n: 31 })
+    expect(db.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({ n: 32 })
     expect(db.pragma('foreign_key_check')).toEqual([])
   })
   it('persists a pending enrollment once and rejects altered content with the same UUID', () => {

@@ -1,5 +1,7 @@
 # DECISIONS.md — Nhật ký quyết định
 
+2026-11-14 | [product-mode/environment] R7h-1 gi? app env th?nh immutable encrypted controller SQLite revisions ?? lu?n ch?y khi Desktop t?t; AES-GCM envelope purpose/controller/app/ownership/target/revision/basis/framework/keys-bound, metadata-only readback, kh?ng plaintext/hash secret trong source/journal/log. ??y l? ngo?i l? Product cho M04 env m?t chi?u, kh?ng ??i Desktop policy ho?c auto-init/rotate key. Staging kh?ng activate/source change/deploy; active-source CAS/claim binding/render/DB/rollback c?n R7h-2..4 ri?ng. Migration032 additive, kh?ng rollout VPS/pin/schema guard bypass ? S?n/Codex
+
 2026-11-13 | [product-mode/template] R7e mở nextjs không DB/user env cho registration/source/pipeline/Desktop; framework và cổng phải khớp detector trước SSH, H2 lấy framework từ canonical source claim. Chỉ NODE_ENV=production do template cung cấp được miễn requiredEnv cho Next; mọi user env/build args/DB vẫn chặn khi chưa có lifecycle riêng. Không thay schema/receipt/pins hoặc coi local gate là installed-controller rollout — Sơn/Codex
 
 2026-11-13 | [delivery/catalog-history] R7c Desktop giữ toàn bộ protected catalog cho inspection/rollback/adoption lịch sử; chỉ review nâng cấp mới mới lọc upgrade_supported+available. Candidate6b đã dùng trên VPS cần giữ pin để đọc Root journal sau rollback, dù không được chọn lại. Không tái tạo history hoặc thêm quyền ghi cho release lịch sử; Main reject selection trước SSH, native actual history/token refresh gate bắt buộc — Sơn/Codex

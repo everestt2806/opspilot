@@ -6,22 +6,30 @@ import { it, expect } from 'vitest'
 import { initializeDatabase, runMigrations } from './index'
 import { initializeController, openControllerDatabase } from '../controlPlane/controllerDatabase'
 
-it('Desktop adds030/031 while controller retains exact029 across cold open, with no identity rewrite', () => {
+it('shared032 applies to both roles; Desktop alone adds030/031, cold controller keeps identity', () => {
   const root = mkdtempSync(join(tmpdir(), 'opspilot-migration-role-'))
   try {
     const desktop = initializeDatabase(join(root, 'desktop'))
-    expect(desktop.prepare('SELECT MAX(version) v FROM schema_version').get()).toEqual({ v: 31 })
-    expect(
-      desktop
-        .prepare("SELECT name FROM sqlite_master WHERE name='desktop_controller_upgrade'")
-        .get()
-    ).toBeTruthy()
-    expect(
-      desktop
-        .prepare("SELECT name FROM sqlite_master WHERE name='desktop_controller_authority_rebind'")
-        .get()
-    ).toBeTruthy()
-    desktop.close()
+    try {
+      expect(desktop.prepare('SELECT MAX(version) v FROM schema_version').get()).toEqual({ v: 32 })
+      expect(
+        desktop
+          .prepare("SELECT name FROM sqlite_master WHERE name='desktop_controller_upgrade'")
+          .get()
+      ).toBeTruthy()
+      expect(
+        desktop
+          .prepare(
+            "SELECT name FROM sqlite_master WHERE name='desktop_controller_authority_rebind'"
+          )
+          .get()
+      ).toBeTruthy()
+      expect(desktop.prepare('SELECT count(*) n FROM product_environment_revision').get()).toEqual({
+        n: 0
+      })
+    } finally {
+      desktop.close()
+    }
     const directory = join(root, 'controller')
     const identity = initializeController(directory)
     const marker = readFileSync(join(directory, '.product-controller-initialized'))
@@ -29,7 +37,7 @@ it('Desktop adds030/031 while controller retains exact029 across cold open, with
     try {
       expect(reopened.controllerId).toBe(identity.controllerId)
       expect(reopened.database.prepare('SELECT MAX(version) v FROM schema_version').get()).toEqual({
-        v: 29
+        v: 32
       })
       expect(
         reopened.database
@@ -46,6 +54,9 @@ it('Desktop adds030/031 while controller retains exact029 across cold open, with
       expect(readFileSync(join(directory, '.product-controller-initialized')).equals(marker)).toBe(
         true
       )
+      expect(
+        reopened.database.prepare('SELECT count(*) n FROM product_environment_revision').get()
+      ).toEqual({ n: 0 })
     } finally {
       reopened.database.close()
     }

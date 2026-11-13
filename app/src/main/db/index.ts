@@ -34,6 +34,7 @@ import migration028 from './migrations/028_desktop_target_registration.sql?raw'
 import migration029 from './migrations/029_desktop_controller_installation.sql?raw'
 import migration030 from './migrations/030_desktop_controller_upgrade.sql?raw'
 import migration031 from './migrations/031_desktop_controller_authority_rebind.sql?raw'
+import migration032 from './migrations/032_product_environment_revision.sql?raw'
 
 interface Migration {
   name: string
@@ -43,6 +44,7 @@ interface Migration {
 }
 
 const migrations: Migration[] = [
+  { name: '032_product_environment_revision.sql', version: 32, sql: migration032 },
   {
     name: '031_desktop_controller_authority_rebind.sql',
     version: 31,

@@ -1,0 +1,69 @@
+import type { ProductDispatchTargetBinding } from './product-auto-deploy'
+
+/** Main/controller-only; không IPC/HTTP/renderer readback hoặc command tùy ý.
+ * R7h-1 chỉ kho revision staged. Append không chọn active revision, không thay
+ * source generation/ownership/policy, không tạo job hoặc ghi target.
+ * Product exception: encrypted controller SQLite, key riêng đã init explicit;
+ * Desktop .env một chiều/không lưu plaintext SQLite vẫn giữ nguyên.
+ */
+export interface ProductEnvironmentScope {
+  controller_id: string
+  app_id: number
+  ownership_generation: number
+  target: ProductDispatchTargetBinding
+}
+export interface ProductEnvironmentValues {
+  /** Runtime secret: chỉ decrypt trong Main/controller khi execution cần. */
+  runtime_env: Record<string, string>
+  /** Explicit public: Next NEXT_PUBLIC_* hoặc SPA VITE_*, Express không có build args.
+   * Có thể xuất hiện trong client bundle; không tự chuyển runtime secret sang đây.
+   */
+  public_build_args: Record<string, string>
+}
+export interface ProductEnvironmentWriteInput {
+  scope: ProductEnvironmentScope
+  /** CAS theo app+ownership generation; null chỉ khi namespace chưa có revision. */
+  expected_latest_revision: number | null
+  expected_source_generation: number
+  expected_source_config_sha256: string
+  values: ProductEnvironmentValues
+}
+export interface ProductEnvironmentMetadata {
+  controller_id: string
+  app_id: number
+  ownership_generation: number
+  revision: number
+  basis_source_generation: number
+  basis_source_config_sha256: string
+  framework: 'express' | 'static-spa' | 'nextjs'
+  runtime_keys: string[]
+  public_build_keys: string[]
+  created_at: string
+  activation: 'staged'
+}
+
+/** Whole snapshot, không merge PATCH/implicit inherited env. Tối đa128keys tổng,
+ * key uppercase1..128bytes, value<=8192UTF8bytes, values JSON<=64KiB; empty value
+ * hợp lệ, không NUL/CR/LF/control chars. NODE_ENV/PORT, NODE_OPTIONS, PATH/HOME,
+ * LD_, NPM_CONFIG_, OPSPILOT_, DOCKER_, COMPOSE_, POSTGRES_ prefixes
+ * và DATABASE_URL thuộc system/managed DB lifecycle, chưa nhận user override.
+ * Public prefixes bị từ chối trong runtime map; public build map chỉ đúng
+ * framework prefix, không được hiểu là nơi giữ secret. Không dotenv parsing hoặc
+ * shell interpolation ở kho; serialization target phải được gate riêng.
+ *
+ * append: BEGIN IMMEDIATE, current active Product controller/owner, pinned target
+ * identity/revision/unarchived + expected current source identity; CAS revision,
+ * AES-GCM purpose+scope+revision+basis+framework+keys authenticated inside envelope,
+ * insert immutable row atomically. Cipher/key unavailable không init/rotate ngầm.
+ *
+ * metadata/readValues đều recheck current controller/owner/target và authenticated
+ * envelope/row binding; historical revision không yêu cầu basis source vẫn active
+ * (rollback cần revision cũ), nhưng caller execution phải có claim-bound source
+ * config reference đúng revision trước/sau decrypt. Kho tự nó không cấp quyền
+ * deploy. Metadata chỉ keys/revision/basis/framework/time/staged, không value,
+ * plaintext digest, cipher, iv/tag hoặc secret trong errors/logs/history.
+ *
+ * Revisions retained: không update/delete/cascade hoặc thay khóa để mất cấu hình
+ * rollback. Đổi ownership/target không tự giải mã lại/rebind/import revision cũ.
+ * Source activation/CLI/UI/executor/managed PostgreSQL là gate R7h-2..4 riêng.
+ */

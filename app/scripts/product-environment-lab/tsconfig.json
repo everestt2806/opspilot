@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.scripts.json",
+  "compilerOptions": { "rootDir": "../../..", "noEmit": true },
+  "files": ["entry.ts", "../../src/main/raw.d.ts"]
+}

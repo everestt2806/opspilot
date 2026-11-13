@@ -65,7 +65,7 @@ describe('Product persistence migrations 016-028', () => {
     })
     const snapshot = database.prepare('SELECT * FROM product_desktop_credential').all()
     database.exec(
-      'DROP TABLE IF EXISTS desktop_controller_authority_rebind;DELETE FROM schema_version WHERE version=31;DROP TABLE IF EXISTS desktop_controller_upgrade;DELETE FROM schema_version WHERE version=30;DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE IF EXISTS desktop_controller_command;DELETE FROM schema_version WHERE version=25;DROP TABLE IF EXISTS desktop_controller_binding;DELETE FROM schema_version WHERE version=24;DROP TABLE product_api_request;DROP INDEX idx_product_desktop_client_identity;DELETE FROM schema_version WHERE version=23'
+      'DROP TABLE IF EXISTS product_environment_revision;DELETE FROM schema_version WHERE version=32;DROP TABLE IF EXISTS desktop_controller_authority_rebind;DELETE FROM schema_version WHERE version=31;DROP TABLE IF EXISTS desktop_controller_upgrade;DELETE FROM schema_version WHERE version=30;DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE IF EXISTS desktop_controller_command;DELETE FROM schema_version WHERE version=25;DROP TABLE IF EXISTS desktop_controller_binding;DELETE FROM schema_version WHERE version=24;DROP TABLE product_api_request;DROP INDEX idx_product_desktop_client_identity;DELETE FROM schema_version WHERE version=23'
     )
     runMigrations(database)
     expect(database.prepare('SELECT * FROM product_desktop_credential').all()).toEqual(snapshot)
@@ -73,7 +73,7 @@ describe('Product persistence migrations 016-028', () => {
       n: 0
     })
     expect(database.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({
-      n: 31
+      n: 32
     })
     runMigrations(database)
     expect(database.prepare('SELECT * FROM product_desktop_credential').all()).toEqual(snapshot)
@@ -85,7 +85,7 @@ describe('Product persistence migrations 016-028', () => {
     const database = initializeDatabase(testDirectory)
     seedLegacyRows(database)
     const before = snapshotLegacy(database)
-    database.exec(`DROP TABLE IF EXISTS desktop_controller_authority_rebind;DELETE FROM schema_version WHERE version=31;DROP TABLE IF EXISTS desktop_controller_upgrade;DELETE FROM schema_version WHERE version=30;DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE IF EXISTS desktop_controller_command;DELETE FROM schema_version WHERE version=25;DROP TABLE IF EXISTS desktop_controller_binding;DELETE FROM schema_version WHERE version=24;DROP TABLE product_api_request;DROP INDEX idx_product_desktop_client_identity;DELETE FROM schema_version WHERE version=23;
+    database.exec(`DROP TABLE IF EXISTS product_environment_revision;DELETE FROM schema_version WHERE version=32;DROP TABLE IF EXISTS desktop_controller_authority_rebind;DELETE FROM schema_version WHERE version=31;DROP TABLE IF EXISTS desktop_controller_upgrade;DELETE FROM schema_version WHERE version=30;DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE IF EXISTS desktop_controller_command;DELETE FROM schema_version WHERE version=25;DROP TABLE IF EXISTS desktop_controller_binding;DELETE FROM schema_version WHERE version=24;DROP TABLE product_api_request;DROP INDEX idx_product_desktop_client_identity;DELETE FROM schema_version WHERE version=23;
       DROP TABLE product_desktop_admin_request;DROP TABLE product_desktop_credential;
       DROP TABLE product_desktop_client;DELETE FROM schema_version WHERE version=22`)
     runMigrations(database)
@@ -97,7 +97,7 @@ describe('Product persistence migrations 016-028', () => {
     ])
       expect(database.prepare(`SELECT count(*) AS n FROM ${table}`).get()).toEqual({ n: 0 })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 31
+      version: 32
     })
     runMigrations(database)
     expect(snapshotLegacy(database)).toEqual(before)
@@ -130,7 +130,7 @@ describe('Product persistence migrations 016-028', () => {
       ssh_security_revision: 1
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 31
+      version: 32
     })
     expect(database.pragma('foreign_key_check')).toEqual([])
     runMigrations(database)
@@ -153,7 +153,7 @@ describe('Product persistence migrations 016-028', () => {
       n: 0
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 31
+      version: 32
     })
     expect(database.prepare('SELECT COUNT(*) AS count FROM product_controller').get()).toEqual({
       count: 0
@@ -176,7 +176,7 @@ describe('Product persistence migrations 016-028', () => {
     ).count
     runMigrations(database)
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 31
+      version: 32
     })
     expect(
       (
@@ -222,7 +222,7 @@ describe('Product persistence migrations 016-028', () => {
       pause_policy_provenance: 'legacy_inferred'
     })
     expect(database.prepare('SELECT MAX(version) AS version FROM schema_version').get()).toEqual({
-      version: 31
+      version: 32
     })
     expect(
       database
@@ -421,7 +421,7 @@ describe('Product persistence migrations 016-028', () => {
 
 function downgradeToV015(database: Database.Database): void {
   database.exec(`
-    DROP TABLE IF EXISTS desktop_controller_authority_rebind;DELETE FROM schema_version WHERE version=31;DROP TABLE IF EXISTS desktop_controller_upgrade;DELETE FROM schema_version WHERE version=30;DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE IF EXISTS desktop_controller_command;DELETE FROM schema_version WHERE version=25;DROP TABLE IF EXISTS desktop_controller_binding;DELETE FROM schema_version WHERE version=24;DROP TABLE IF EXISTS product_api_request;
+    DROP TABLE IF EXISTS product_environment_revision;DELETE FROM schema_version WHERE version=32;DROP TABLE IF EXISTS desktop_controller_authority_rebind;DELETE FROM schema_version WHERE version=31;DROP TABLE IF EXISTS desktop_controller_upgrade;DELETE FROM schema_version WHERE version=30;DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE IF EXISTS desktop_controller_command;DELETE FROM schema_version WHERE version=25;DROP TABLE IF EXISTS desktop_controller_binding;DELETE FROM schema_version WHERE version=24;DROP TABLE IF EXISTS product_api_request;
     DROP INDEX IF EXISTS idx_product_desktop_client_identity;
     DELETE FROM schema_version WHERE version=23;
     DROP TABLE IF EXISTS product_desktop_admin_request;
@@ -459,7 +459,7 @@ function downgradeToV015(database: Database.Database): void {
 
 function downgradeToV016(database: Database.Database): void {
   database.exec(`
-    DROP TABLE IF EXISTS desktop_controller_authority_rebind;DELETE FROM schema_version WHERE version=31;DROP TABLE IF EXISTS desktop_controller_upgrade;DELETE FROM schema_version WHERE version=30;DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE IF EXISTS desktop_controller_command;DELETE FROM schema_version WHERE version=25;DROP TABLE IF EXISTS desktop_controller_binding;DELETE FROM schema_version WHERE version=24;DROP TABLE IF EXISTS product_api_request;
+    DROP TABLE IF EXISTS product_environment_revision;DELETE FROM schema_version WHERE version=32;DROP TABLE IF EXISTS desktop_controller_authority_rebind;DELETE FROM schema_version WHERE version=31;DROP TABLE IF EXISTS desktop_controller_upgrade;DELETE FROM schema_version WHERE version=30;DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE IF EXISTS desktop_controller_command;DELETE FROM schema_version WHERE version=25;DROP TABLE IF EXISTS desktop_controller_binding;DELETE FROM schema_version WHERE version=24;DROP TABLE IF EXISTS product_api_request;
     DROP INDEX IF EXISTS idx_product_desktop_client_identity;
     DELETE FROM schema_version WHERE version=23;
     DROP TABLE IF EXISTS product_desktop_admin_request;
@@ -487,7 +487,7 @@ function downgradeToV016(database: Database.Database): void {
 
 function downgradeMigration018ToV017(database: Database.Database): void {
   database.exec(`
-    DROP TABLE IF EXISTS desktop_controller_authority_rebind;DELETE FROM schema_version WHERE version=31;DROP TABLE IF EXISTS desktop_controller_upgrade;DELETE FROM schema_version WHERE version=30;DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE IF EXISTS desktop_controller_command;DELETE FROM schema_version WHERE version=25;DROP TABLE IF EXISTS desktop_controller_binding;DELETE FROM schema_version WHERE version=24;DROP TABLE IF EXISTS product_api_request;
+    DROP TABLE IF EXISTS product_environment_revision;DELETE FROM schema_version WHERE version=32;DROP TABLE IF EXISTS desktop_controller_authority_rebind;DELETE FROM schema_version WHERE version=31;DROP TABLE IF EXISTS desktop_controller_upgrade;DELETE FROM schema_version WHERE version=30;DROP TABLE IF EXISTS desktop_controller_installation;DELETE FROM schema_version WHERE version=29;DROP TABLE IF EXISTS desktop_target_setup;DROP TABLE IF EXISTS product_vps_registration;DELETE FROM schema_version WHERE version=28;DROP TABLE IF EXISTS desktop_project_setup;DELETE FROM schema_version WHERE version=27;DROP TABLE IF EXISTS product_project_registration;DELETE FROM schema_version WHERE version=26;DROP TABLE IF EXISTS desktop_controller_command;DELETE FROM schema_version WHERE version=25;DROP TABLE IF EXISTS desktop_controller_binding;DELETE FROM schema_version WHERE version=24;DROP TABLE IF EXISTS product_api_request;
     DROP INDEX IF EXISTS idx_product_desktop_client_identity;
     DELETE FROM schema_version WHERE version=23;
     DROP TABLE IF EXISTS product_desktop_admin_request;
