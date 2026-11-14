@@ -17,7 +17,8 @@
 --   - 032_product_environment_revision.sql (staged encrypted Product config)
 --   - 033_product_environment_request.sql (receipt staged config mã hóa, idempotency)
 --   - 034_desktop_environment_intent.sql (chỉ Desktop: encrypted config retry intent)
--- Controller role áp dụng001–029/032–033; không áp dụng030/031/034 hoặc copy DB để phục hồi schema.
+--   - 035_product_source_environment.sql (source generation → encrypted env revision)
+-- Controller role áp dụng001–029/032–033/035; không áp dụng030/031/034 hoặc copy DB để phục hồi schema.
 --
 -- QUY ƯỚC BẮT BUỘC:
 --   * Mọi cột thời gian: TEXT, ISO-8601 UTC, dạng '2026-07-27T10:00:00Z'
@@ -1418,3 +1419,33 @@ WHEN NOT (NEW.state=OLD.state OR (OLD.state='prepared' AND NEW.state IN ('in_fli
   OR (OLD.state='in_flight' AND NEW.state IN ('outcome_unknown','staged'))
   OR (OLD.state='outcome_unknown' AND NEW.state IN ('in_flight','staged')))
 BEGIN SELECT RAISE(ABORT,'DESKTOP_ENVIRONMENT_INTENT_TRANSITION_INVALID'); END;
+
+
+-- Source identity chỉ reference revision, không value/key list/digest secret.
+CREATE TABLE product_source_environment (
+  app_id INTEGER NOT NULL,
+  source_generation INTEGER NOT NULL CHECK(source_generation BETWEEN 1 AND 9007199254740991),
+  source_config_sha256 TEXT NOT NULL CHECK(length(source_config_sha256)=64),
+  controller_id TEXT NOT NULL REFERENCES product_controller(controller_id) ON DELETE RESTRICT,
+  ownership_generation INTEGER NOT NULL CHECK(ownership_generation BETWEEN 1 AND 9007199254740991),
+  environment_revision INTEGER NOT NULL CHECK(environment_revision BETWEEN 1 AND 9007199254740991),
+  target_binding_json TEXT NOT NULL CHECK(json_valid(target_binding_json)),
+  administrator_id TEXT NOT NULL CHECK(length(administrator_id) BETWEEN 6 AND 15),
+  request_key TEXT NOT NULL CHECK(length(request_key)=36),
+  request_json TEXT NOT NULL CHECK(json_valid(request_json) AND length(request_json)<=8192),
+  previous_source_generation INTEGER NOT NULL CHECK(previous_source_generation BETWEEN 1 AND 9007199254740991),
+  previous_source_config_sha256 TEXT NOT NULL CHECK(length(previous_source_config_sha256)=64),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY(app_id,source_generation),
+  UNIQUE(controller_id,administrator_id,request_key),
+  FOREIGN KEY(app_id,source_generation,source_config_sha256)
+    REFERENCES product_source_config(app_id,source_generation,config_sha256) ON DELETE RESTRICT,
+  FOREIGN KEY(app_id,previous_source_generation,previous_source_config_sha256)
+    REFERENCES product_source_config(app_id,source_generation,config_sha256) ON DELETE RESTRICT,
+  FOREIGN KEY(app_id,ownership_generation,environment_revision)
+    REFERENCES product_environment_revision(app_id,ownership_generation,revision) ON DELETE RESTRICT
+);
+CREATE TRIGGER product_source_environment_immutable BEFORE UPDATE ON product_source_environment
+BEGIN SELECT RAISE(ABORT,'PRODUCT_SOURCE_ENVIRONMENT_IMMUTABLE'); END;
+CREATE TRIGGER product_source_environment_retain BEFORE DELETE ON product_source_environment
+BEGIN SELECT RAISE(ABORT,'PRODUCT_SOURCE_ENVIRONMENT_IMMUTABLE'); END;

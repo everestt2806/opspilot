@@ -81,6 +81,40 @@ export interface ProductEnvironmentContextInput {
   expected_source_config_sha256: string
   expected_target_security_revision: number
 }
+/** Desired-source selection only, chưa runtime activate. CLI administrator từ OS.
+ * Giữ pause, current deployment và mọi job/lease/terminal nguyên vẹn.
+ * Chỉ khi app quiescent: không queued/active/unknown job, unreleased lease hoặc
+ * runtime terminal chưa settled. Hai CAS: current source và latest vault revision.
+ * Selection có thể chọn retained revision cũ trong cùng owner/target/framework.
+ * New source JSON chỉ giữ environment identity, tuyệt đối không value/digest secret.
+ */
+export interface ProductEnvironmentSelectionInput {
+  format: 1
+  request_key: string
+  scope: ProductEnvironmentScope
+  expected_source_generation: number
+  expected_source_config_sha256: string
+  expected_latest_revision: number
+  environment_revision: number
+}
+export interface ProductEnvironmentReference {
+  controller_id: string
+  ownership_generation: number
+  revision: number
+}
+export interface ProductEnvironmentSelectionResult {
+  state: 'selected' | 'already_selected'
+  request_key: string
+  controller_id: string
+  app_id: number
+  ownership_generation: number
+  source_generation: number
+  source_config_sha256: string
+  environment: ProductEnvironmentReference
+  auto_deploy_paused: true
+  deployment_started: false
+  execution: 'requires_environment_runtime'
+}
 
 /** Whole snapshot, không merge PATCH/implicit inherited env. Tối đa128keys tổng,
  * key uppercase1..128bytes, value<=8192UTF8bytes, values JSON<=64KiB; empty value

@@ -159,7 +159,7 @@ describe('Atomic Product project registration', () => {
     runMigrations(db)
     runMigrations(db)
     expect(snapshot()).toEqual(before)
-    expect(db.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({ n: 34 })
+    expect(db.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({ n: 35 })
     expect(db.pragma('foreign_key_check')).toEqual([])
     const sql = readFileSync(
       new URL('../db/migrations/026_product_project_registration.sql', import.meta.url),

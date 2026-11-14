@@ -15,6 +15,7 @@ export async function fixture(directory: string): Promise<{
   db: ReturnType<typeof initializeDatabase>
   remote: Database.Database
   cipher: AesGcmCredentialCipher
+  remoteCipher: AesGcmCredentialCipher
   vault: DesktopControllerVault
   projects: DesktopProjectSetups
   main: DesktopProductEnvironment
@@ -183,6 +184,7 @@ export async function fixture(directory: string): Promise<{
     db,
     remote,
     cipher,
+    remoteCipher,
     vault,
     projects,
     repo,

@@ -4,6 +4,7 @@ import type {
   ProductEnvironmentStageInput,
   ProductEnvironmentStateInput,
   ProductEnvironmentContextInput,
+  ProductEnvironmentSelectionInput,
   ProductEnvironmentMetadata,
   ProductEnvironmentStageResult,
   ProductEnvironmentState,
@@ -59,6 +60,14 @@ export const environmentContextSchema = z.strictObject({
   expected_source_config_sha256: environmentWriteSchema.shape.expected_source_config_sha256,
   expected_target_security_revision: positive
 }) satisfies z.ZodType<ProductEnvironmentContextInput>
+export const environmentSelectionSchema = environmentWriteSchema
+  .omit({ values: true, expected_latest_revision: true })
+  .extend({
+    format: z.literal(1),
+    request_key: requestKey,
+    expected_latest_revision: positive,
+    environment_revision: positive
+  }) satisfies z.ZodType<ProductEnvironmentSelectionInput>
 const keys = z.array(z.string().regex(/^[A-Z_][A-Z0-9_]{0,127}$/)).max(128)
 export const environmentMetadataSchema = z.strictObject({
   controller_id: identifier,
@@ -97,6 +106,7 @@ export class ProductEnvironmentError extends Error {
       | 'PRODUCT_ENVIRONMENT_IDEMPOTENCY_CONFLICT'
       | 'PRODUCT_ENVIRONMENT_UNAVAILABLE'
       | 'PRODUCT_ENVIRONMENT_STORAGE_UNAVAILABLE'
+      | 'PRODUCT_ENVIRONMENT_REQUIRES_QUIESCENCE'
   ) {
     super(code)
     this.name = 'ProductEnvironmentError'

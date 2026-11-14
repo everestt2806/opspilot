@@ -120,6 +120,28 @@ export function validateProductSourceAndPlan(
   sourceFiles: TransferFile[]
   sourceManifest: { totalBytes: number; sha256: string }
 } {
+  // R7h-3a chọn desired config trước; execution chưa được phép bỏ qua revision.
+  const currentSource = database
+    .prepare(
+      `SELECT s.deploy_config_json FROM product_source_config s
+    JOIN product_app_control c ON c.app_id=s.app_id AND c.source_generation=s.source_generation WHERE c.app_id=?`
+    )
+    .get(appId) as { deploy_config_json: string } | undefined
+  if (currentSource) {
+    let config: unknown
+    try {
+      config = JSON.parse(currentSource.deploy_config_json)
+    } catch {
+      throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
+    }
+    if (
+      !config ||
+      typeof config !== 'object' ||
+      Array.isArray(config) ||
+      Object.hasOwn(config, 'environment')
+    )
+      throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
+  }
   const app = new AppRepository(database).getById(appId)
   const sourceTree = buildSourceTree(rootDirectory)
   const detection = detectFramework(sourceTree)

@@ -133,7 +133,7 @@ describe('Durable Desktop Product command journal', () => {
     runMigrations(db)
     runMigrations(db)
     expect(db.prepare('SELECT * FROM desktop_controller_binding').all()).toEqual(before)
-    expect(db.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({ n: 34 })
+    expect(db.prepare('SELECT MAX(version) AS n FROM schema_version').get()).toEqual({ n: 35 })
     expect(commands.list(input.binding_id)).toEqual([])
     expect(db.pragma('foreign_key_check')).toEqual([])
     expect(call).not.toHaveBeenCalled()

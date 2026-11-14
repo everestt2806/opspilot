@@ -283,7 +283,7 @@ try {
   assert.equal(db.prepare('SELECT count(*) n FROM product_deploy_job').get().n, 0)
   assert.equal(db.prepare('SELECT count(*) n FROM product_environment_revision').get().n, 2)
   assert.equal(db.prepare('SELECT count(*) n FROM product_environment_request').get().n, 2)
-  assert.equal(db.prepare('SELECT max(version) n FROM schema_version').get().n, 33)
+  assert.equal(db.prepare('SELECT max(version) n FROM schema_version').get().n, 35)
   db.pragma('wal_checkpoint(TRUNCATE)')
   assert(!readFileSync(join(scratch, 'opspilot.db')).includes(Buffer.from(marker)))
   assert.deepEqual(db.pragma('foreign_key_check'), [])

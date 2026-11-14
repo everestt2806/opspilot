@@ -1,0 +1,113 @@
+{
+  "status": "LOCAL_DESIRED_SOURCE_ENVIRONMENT_SELECTION_PASS",
+  "scope": "R7h-3a SOURCE SELECTION ONLY",
+  "date": "2026-11-14",
+  "base_sha": "2a3603f79894b6c0804c800e1f11f3f591ad4f54",
+  "working_tree_subject": true,
+  "source_sha256": {
+    "app/scripts/product-environment-admin-lab/run.mjs": "9dd5f48bae933a52a370392770faf585b7f5fe6359f623520011531da707d609",
+    "app/scripts/product-environment-desktop-lab/fixture.ts": "7127de9e889d44e475c352dc50ec7fb55934a802a1e8f08a55799c357b8e9e5a",
+    "app/scripts/product-environment-lab/run.mjs": "86b21913d49d0605eeda12444c566ddae6dc0d08aa09c58ef8588e1de01bb70b",
+    "app/scripts/product-environment-selection-lab/README.md": "b04573212d1e17790d7ff98bbc05ce4745444a560f0a7d7e6edf44a2409e3902",
+    "app/scripts/product-environment-selection-lab/entry.ts": "aa3443b01b448b4514c5bab87983b4db81c2dd0d664ef3e36b8147a7e2005bd1",
+    "app/scripts/product-environment-selection-lab/run.mjs": "1a38eeeb89ae118acaccbfd084b0445bb343ace9d885bf98a02044d3d4c28483",
+    "app/scripts/product-environment-selection-lab/tsconfig.json": "b4877f4fd55d1f794437ce0ed6de07ee5a2e0896b9c3b7ed9dd7d2e1b8f60813",
+    "app/src/main/controlPlane/cli.ts": "6d49e233d2ad72fc149d7f2bcd0ebefdb70395b2ae4c00725b178d08d27f5dfd",
+    "app/src/main/controlPlane/desktopControllerCommands.test.ts": "5aa4c5d1ffb618245d75eb3a971b0a7c87a364c17ca79819db1ab11b9f724634",
+    "app/src/main/controlPlane/desktopControllerInstallation.test.ts": "a06f3f43896c829360d51f39a67edc5cfc912f264e07455a288068eb7d096b3b",
+    "app/src/main/controlPlane/desktopControllerVault.test.ts": "3f1ac4c953294e0241e09ee3f84f7c6bfd4ccc1f51b200bedf5097ffe80b60bb",
+    "app/src/main/controlPlane/productEnvironment.ts": "66691b413fca01c669f1ca5ff553674c4577af43d4e12dce3845c7528fc1cbb4",
+    "app/src/main/controlPlane/productEnvironmentSelection.test.ts": "b2ec4b66f9d27fe3c7cb85abbd4e66f3b8c78959905d70e00a1fefbacbb4c1c1",
+    "app/src/main/controlPlane/productEnvironmentSelection.ts": "d151024b17401623977fcfdc1b944312d1fca189d49942eb717bbeaa24a7e57c",
+    "app/src/main/controlPlane/productPipelineSourceRender.ts": "545783e955ba22172be15a6cd272e84606fd4ec15f152a517f46006362b37439",
+    "app/src/main/controlPlane/projectRegistration.test.ts": "59d3be3ded6938600c6a77eaac04e91338066c1d30f49e4d73c38216eb265893",
+    "app/src/main/db/index.test.ts": "bc4115faf7cfd6aaa70718c4a773300fa4b181d225cc4f909a057c966963ea3e",
+    "app/src/main/db/index.ts": "2b3fbdf0a77962bf66dbfbace0770488300c1d5f675952e3a01dc8d01d3a3152",
+    "app/src/main/db/migrationRoles.test.ts": "f187a079e23420b04d6c9baa88f5474d7f580715d8d44eefb369a515142ddfdd",
+    "app/src/main/db/migrations/035_product_source_environment.sql": "bc8ea67045d63c7b114be02f931ca7c4faf59f3fa6d6ab3094f4aa76a93bc94d",
+    "app/src/main/db/productEnvironmentAdmin.test.ts": "8226e46b90411364c646c5b96fca574345ebe5d216cf7d3d2b934595eaabe101",
+    "app/src/main/db/productEnvironmentRepository.test.ts": "38e90a2fe8ae7ab01d7c146ece40d0511e1d43d7423706aa1694bebfd036c4ad",
+    "app/src/main/db/productEnvironmentRepository.ts": "a6200f4f99623de6b7fdec97320b1ce7298cec75fa4011a94e6b7fc9c94757e1",
+    "app/src/main/db/productMigration.test.ts": "6d79bc27b4270a41d20e17a014b164c33f7bde38296f1a021637206607bfd634",
+    "docs/contracts/product-environment.ts": "06426b7e394b3b31af13a66ee5aff75751553bb62a53ef7bd0eafa65443270db",
+    "docs/contracts/schema.sql": "f1762032948b625040b5cf29458dd843ffcd0137b1caf7699e126051c0570f7e"
+  },
+  "raw_evidence": {
+    "app/.out-scripts/r7h3a-full.log": "2211b0defd8771a5fd2c9e3d65bf8ec28dd4719a6c2fbb7e6ea33a34165cdf8f",
+    "app/.out-scripts/r7h3a-focused-final.log": "3a1df44f11ead28ab9485da4d833541681c01214b855668f0bc0dd09e456c59c",
+    "app/.out-scripts/product-environment-selection-lab/5f8feb387e26/result.json": "d300dfa1e505b650f80ec9baa57fafa56c5636e42f42a2ec18de79e8d3cbd27b",
+    "app/.out-scripts/r7h3a-lint-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3a-format-final.log": "fbdd37869c73ce85afb11ffefa058e0181874c073fdfee7d7a4b5086b7ea3b1b",
+    "app/.out-scripts/r7h3a-scripts-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3a-lab-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3a-types-early.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3a-build.log": "650ae931bf28dce6dedcc569c054c208c59688ee66c53f55f2d89e2fb3ee52da",
+    "app/.out-scripts/r7h3a-native-final.log": "07316b3271b8cf17702bbc06562bee9d8e491cdafc756cab8f1b6e85675d9ce8",
+    "app/.out-scripts/r7h3a-negative.log": "d18f39b08b94af81a4b2eb27846e8f9d1ec09cf10db68f1213859af11360e79a"
+  },
+  "native_selection": {
+    "status": "PASS",
+    "scope": "NATIVE_LINUX_CLI_SOURCE_SELECTION_ONLY",
+    "nonce": "5f8feb387e26",
+    "checks": [
+      "actual_cli_select_cold_process_retry_exactly_one_source_generation",
+      "source_binding_and_audit_contain_no_values_keys_or_secret_hash_live_and_pause_preserved",
+      "source_preflight_refuses_environment_reference_before_source_io_or_ssh",
+      "shared035_controller_role_no_desktop_migrations_immutable_binding_no_plaintext_db",
+      "two_actual_cli_processes_same_uuid_create_one_new_generation",
+      "replay_does_not_claim_paused_after_operator_resumes_policy"
+    ],
+    "vps_used": false,
+    "ssh_used": false,
+    "execution_implemented": false,
+    "artifact_sha256": "45bbd0bcc1dff9fc39fa2eda8df82583073563d7b3d28d5c0617c35fbfa033fe",
+    "private_scratch_removed": true
+  },
+  "checks": {
+    "full_vitest": {
+      "passed": 2369,
+      "skipped_existing": 2,
+      "failed": 0,
+      "files_passed": 170,
+      "files_skipped": 1
+    },
+    "focused": 160,
+    "new_selection_tests": 27,
+    "types": [
+      "node",
+      "web",
+      "scripts",
+      "selection-lab"
+    ],
+    "eslint": "0_ERRORS_0_WARNINGS",
+    "prettier": "PASS",
+    "build": "PASS",
+    "contract_sql_032_033_034_035_parity": "PASS",
+    "syntax": "PASS",
+    "negative_cli": "EXIT2_BEFORE_SCRATCH"
+  },
+  "schema": {
+    "desktop_latest": 35,
+    "controller_latest": 35,
+    "controller_skips": [
+      30,
+      31,
+      34
+    ],
+    "installed_vps_unchanged": 29
+  },
+  "security": [
+    "Source JSON contains only revision identity; no values/key lists/plaintext secret digest",
+    "Immutable binding/receipt035 with canonical non-secret body and same-UID administrator namespace",
+    "CAS on current owner/source/target and latest vault revision inside BEGIN IMMEDIATE; current deployment/pause retained",
+    "Reject active jobs, retry/unknown work, unreleased expired leases, runtime without terminal or unsettled terminal",
+    "Cold retry and two real CLI processes with same UUID create exactly one source generation per body",
+    "Pipeline rejects any environment reference before source IO/SSH until execution integration is accepted"
+  ],
+  "limitations": [
+    "No runtime env/public build render, source activation into a container, config rollback or env-enabled deployment acceptance",
+    "No Main/IPC/UI/root bridge selection operation; existing registration journal remains source-generation bound; current-source refresh/review needs execution slice",
+    "No VPS/production profile/release/pins/installer/helper/template/dependency changes; installed schema029 remains unchanged",
+    "No new actual SSH/Docker/GUI/reboot/soak/ML/independent Windows gate or whole R7/release completion"
+  ]
+}

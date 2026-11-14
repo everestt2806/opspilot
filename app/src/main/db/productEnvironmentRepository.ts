@@ -393,6 +393,20 @@ export class ProductEnvironmentRepository {
   metadata(scope: ProductEnvironmentScope, revision: number): ProductEnvironmentMetadata {
     return this.guarded(() => this.read(scope, revision).metadata)
   }
+  /** Controller-only snapshot cho atomic selection; cùng connection/transaction. */
+  metadataInTransaction(
+    scope: ProductEnvironmentScope,
+    revision: number
+  ): ProductEnvironmentMetadata {
+    if (!this.db.inTransaction)
+      throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    try {
+      return this.read(scope, revision).metadata
+    } catch (error) {
+      if (error instanceof ProductEnvironmentError) throw error
+      throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_STORAGE_UNAVAILABLE')
+    }
+  }
 
   /** Main-only. Future executor phải bind revision với source claim trước và sau decrypt. */
   readValues(scope: ProductEnvironmentScope, revision: number): ProductEnvironmentValues {

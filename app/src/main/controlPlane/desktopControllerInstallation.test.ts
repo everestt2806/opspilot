@@ -521,7 +521,7 @@ it('migration028 upgrade preserves data and agrees with cumulative schema031', a
     'DROP TABLE IF EXISTS desktop_controller_authority_rebind;DELETE FROM schema_version WHERE version=31;DROP TABLE IF EXISTS desktop_controller_upgrade;DELETE FROM schema_version WHERE version=30;DROP TABLE desktop_controller_installation;DELETE FROM schema_version WHERE version=29'
   )
   runMigrations(db)
-  expect(db.prepare('SELECT max(version) n FROM schema_version').get()).toEqual({ n: 34 })
+  expect(db.prepare('SELECT max(version) n FROM schema_version').get()).toEqual({ n: 35 })
   expect(vps.getById(1).name).toBe('fixture')
   const reference = new Database(':memory:')
   try {
