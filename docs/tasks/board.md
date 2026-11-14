@@ -1,5 +1,9 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
+> **15/11 — R7h-3d đang triển khai, checkpoint protected upgrade CHỜ REVIEW:** SQLite backup29 được Root seal0440/0550, atomic032/033/035, durable apply/reverse recovery và startup exact35 read-only. Native Linux systemd18checks/cleanup PASS: SIGKILL trong migration033, lost replies, giữ credential mới, block reverse khi có env data trước stop. Final full2432PASS+2existingLinux-onlySKIP/0FAIL, types/scripts/lint/format/build/diff native exit0. Chỉ source/private candidate, chưa publish catalog hoặc mutation VPS. Historical target helper compatibility, Main/live env rollout/PG và whole R7 còn OPEN; không dùng pin override. SHA tra git log -1 -- app/src/main/controlPlane/controllerSchemaUpgrade.ts. [Proof](../ui-redesign/r7h3d-verification.json); [task](tk-s7-release-r7h3d-environment-rollout.md).
+
+> **14/11 — START R7h-3d:** Protected backup/schema029→035 transition, rollback giữ old records và chặn khi có env data, native Root/systemd gate trước trusted release/VPS rollout. [Task](tk-s7-release-r7h3d-environment-rollout.md). Chưa đổi installed pins hoặc VPS.
+
 > **14/11 — R7h-3c CHỜ REVIEW, DONE local Desktop selection:** Current-source review neo registered basis, immutable authenticated journal036/Main/5IPC/UI latest-vs-selected4locale/consent; cold retry/lookup, atomic negative proof not_applied và staging tiếp sau source change. Không job/unpause/deploy. Native CLI/Python10checks + Electron8checks/26captures/private cleanup PASS; Electron dùng production Main/SQLite và synthetic SSH, không OS restart/VPS. Full2420PASS+2existingLinux-onlySKIP/0FAIL, acceptance69/types/lint/Ruff/build/parity đạt. Desktop036/controller035, installed VPS029/releaseb680 chưa đổi; protected upgrade/live/PG và whole R7 OPEN. SHA tra git log -1 -- app/src/main/controlPlane/desktopEnvironmentSelections.ts. [Proof](../ui-redesign/r7h3c-verification.json); [task](tk-s7-release-r7h3c-environment-selection-ui.md).
 
 

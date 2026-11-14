@@ -28,4 +28,16 @@ Lab tạo `/opt/opspilot-controller-upgrade-lab-<nonce>`, account `opsup<nonce>`
 - Candidate lỗi startup không mở gate; rollback tường minh khôi phục bản gốc. Old install receipt/runtime, identity/key và DB/key inode giữ nguyên; old inspector hợp lệ lại sau rollback.
 - HTTP fixture độc lập vẫn phục vụ qua các lần chuyển. Có **0 Product app/target** trong DB lab; chưa chứng minh Docker app deployment, target enrollment, OS reboot, VPS rollout hoặc Desktop UI.
 
-Release này chỉ nâng payload với cùng Node/dependency lock/schema/helper/template/collector. Schema/dependency drift bị từ chối; không chạy migration hoặc phục hồi DB bằng bản sao.
+## R7h-3d — Schema29→35 có bảo vệ
+
+Lab hiện kiểm thêm18 phép thử trên bản ứng viên có cùng Node/dependency lock, với exact helper transition R7h đã qua runtime gates. Snapshot29/35 và projection29 dùng cùng dữ liệu/key/DB inode; không nhận schema khác hoặc Desktop migrations.
+
+- Backup SQLite nhất quán được Root seal0440 trong directory0550; service không thể ghi đè. SIGKILL sau seal nhưng trước journal vẫn phục hồi đúng request.
+- SIGKILL sau migration commit, khởi động candidate maintenance và phục hồi cùng UUID không lặp migration hay mất dữ liệu cũ.
+- Variant lab riêng ngắt tiến trình ngay trong migration033: outer transaction hoàn tác cả032/033, DB vẫn đúng29, sau đó recover và rollback thành công. Variant này không vào catalog hoặc VPS.
+- SIGKILL sau reverse commit; khởi động candidate không tự migrate29. Recover hủy systemd restart đang chờ và chỉ công bố parent sau khi kiểm fresh projection29.
+- Credential tạo sau activation và giữa các lần rollback vẫn xác thực được. Không restore backup lên DB đang dùng.
+- Một app/nguồn/env ciphertext giả lập chỉ phục vụ phép thử cuối: khi bảng env có dữ liệu, rollback bị từ chối trước stop/unit switch; PID và service ready giữ nguyên.
+- Cleanup chỉ unit/account/root thuộc nonce đã xác minh. Có0 Docker Product deployment; HTTP fixture độc lập không được gọi là Docker/VPS acceptance. Chưa chứng minh OS reboot, target helper upgrade, packaged catalog, Desktop upgrade UI hay live env rollout.
+
+Log các lần chạy lỗi và bản pass giữ riêng trong `app/.out-scripts/controller-upgrade/<nonce>/`; phải chạy lại trên source/bundle cuối, không lấy lần pass cũ thay gate cuối.

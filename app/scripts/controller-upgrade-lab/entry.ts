@@ -34,6 +34,10 @@ if (require.main === module)
           afterEffect: (phase) => {
             if (process.env.OPSPILOT_UPGRADE_LAB_CRASH === phase)
               process.kill(process.pid, 'SIGKILL')
+          },
+          schemaEffect: (phase) => {
+            if (process.env.OPSPILOT_UPGRADE_LAB_CRASH_SCHEMA === phase)
+              process.kill(process.pid, 'SIGKILL')
           }
         })
       : await executeControllerInstallation(input, paths)

@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { gunzipSync } from 'node:zlib'
-import { CONTROLLER_SPA_ASSET_TRANSITION } from './controllerUpgradeAssets'
+import {
+  CONTROLLER_SPA_ASSET_TRANSITION,
+  CONTROLLER_ENVIRONMENT_ASSET_TRANSITION
+} from './controllerUpgradeAssets'
 import { assertRetainedTargetHelpers } from './controllerTargetHelperCompatibility'
 import {
   parseControllerUpgradeRequest,
@@ -26,6 +29,59 @@ const input = {
   release_directory: '/private/release'
 }
 describe('Trusted controller upgrade boundary', () => {
+  it('allows only the frozen environment helper transition, including the complete preceding SPA pair', () => {
+    const before = {
+      format: 1,
+      platform: 'linux-x64-glibc',
+      node_version: '22.23.4',
+      node_abi: '127',
+      minimum_glibc: '2.39',
+      lock_sha256: 'a'.repeat(64),
+      payload_sha256: 'b'.repeat(64),
+      packages: [],
+      files: CONTROLLER_SPA_ASSET_TRANSITION.map((entry) => ({
+        path: entry.path,
+        mode: entry.mode,
+        ...entry.before
+      }))
+    } satisfies ControllerReleaseManifest
+    const parent = {
+      ...before,
+      files: CONTROLLER_SPA_ASSET_TRANSITION.map((entry) => ({
+        path: entry.path,
+        mode: entry.mode,
+        ...entry.after
+      }))
+    }
+    const policy = CONTROLLER_ENVIRONMENT_ASSET_TRANSITION[0]
+    const next = {
+      ...parent,
+      files: parent.files.map((file) =>
+        file.path === policy.path ? { ...file, ...policy.after } : file
+      )
+    }
+    expect(() => assertControllerUpgradeCompatibility(before, next)).not.toThrow()
+    expect(() => assertControllerUpgradeCompatibility(parent, next)).not.toThrow()
+    expect(() => assertControllerUpgradeCompatibility(next, parent)).toThrow('INCOMPATIBLE_RELEASE')
+    const bytes = readFileSync(new URL('./target_product_runtime.py', import.meta.url))
+    expect(bytes.length).toBe(policy.after.size)
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe(policy.after.sha256)
+    for (const patch of [{ size: 1 }, { sha256: 'f'.repeat(64) }, { mode: 0o700 as const }])
+      expect(() =>
+        assertControllerUpgradeCompatibility(parent, {
+          ...next,
+          files: next.files.map((file) =>
+            file.path === policy.path ? { ...file, ...patch } : file
+          )
+        })
+      ).toThrow('INCOMPATIBLE_RELEASE')
+    expect(() =>
+      assertControllerUpgradeCompatibility(before, {
+        ...next,
+        files: [next.files[0], before.files[1]]
+      })
+    ).toThrow('INCOMPATIBLE_RELEASE')
+  })
   it('chỉ nhận đúng asset pair R7a/R7b và giữ chốt Node/dependency/template khác', () => {
     const old = {
       format: 1,

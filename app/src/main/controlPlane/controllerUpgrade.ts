@@ -6,17 +6,20 @@ import {
   fchmodSync,
   fchownSync,
   fsyncSync,
+  fstatSync,
   lchownSync,
   lstatSync,
   mkdirSync,
   openSync,
   readdirSync,
+  readSync,
   readlinkSync,
   renameSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
 import { createServer } from 'node:net'
+import { createHash } from 'node:crypto'
 import { basename, dirname, join, posix } from 'node:path'
 import { z } from 'zod'
 import type {
@@ -40,7 +43,15 @@ import {
 } from './controllerRelease'
 import { CONTROLLER_RELEASE_LIMITS } from '../../../../docs/contracts/product-controller-release'
 import { assertControllerUpgradeAdminReady } from './controllerUpgradeProtocol'
-import { CONTROLLER_SPA_ASSET_TRANSITION } from './controllerUpgradeAssets'
+import {
+  CONTROLLER_SPA_ASSET_TRANSITION,
+  CONTROLLER_ENVIRONMENT_ASSET_TRANSITION
+} from './controllerUpgradeAssets'
+import {
+  controllerUpgradeSnapshotSchema,
+  controllerSchemaBackupSchema,
+  controllerSchemaTransitionSchema
+} from './controllerSchemaUpgradeProtocol'
 
 const uuid = z.uuidv4().refine((v) => v === v.toLowerCase()),
   sha = z.string().regex(/^[a-f0-9]{64}$/),
@@ -77,16 +88,7 @@ const requestSchema = z.discriminatedUnion('operation', [
     consent: z.literal(true)
   })
 ])
-const snapshotSchema = z.strictObject({
-  format: z.literal(1),
-  controller_id: uuid,
-  schema_sha256: sha,
-  state_sha256: sha,
-  key_sha256: sha,
-  database_inode: z.number().int().nonnegative(),
-  key_inode: z.number().int().nonnegative(),
-  quiescent: z.boolean()
-})
+const snapshotSchema = controllerUpgradeSnapshotSchema
 const phases = z.enum([
   'prepared',
   'staging',
@@ -109,6 +111,22 @@ const journalSchema = z.strictObject({
   phase: phases,
   before: snapshotSchema.nullable(),
   rollback_before: snapshotSchema.nullable(),
+  schema_transition: z
+    .strictObject({
+      phase: z.enum([
+        'backup_pending',
+        'backup_ready',
+        'apply_pending',
+        'applied',
+        'revert_pending',
+        'reverted'
+      ]),
+      before: snapshotSchema.extend({ schema_version: z.literal(29) }),
+      backup: controllerSchemaBackupSchema.optional(),
+      after: snapshotSchema.optional(),
+      rollback_projection: snapshotSchema.optional()
+    })
+    .optional(),
   created_at: z.iso.datetime(),
   updated_at: z.iso.datetime()
 })
@@ -150,27 +168,40 @@ export function assertControllerUpgradeCompatibility(
     )
   const oldAssets = assets(old),
     nextAssets = assets(next)
-  const mapped = old.files
-    .filter((f) => !['payload/control-plane.cjs', 'payload/bundle-manifest.json'].includes(f.path))
-    .map((file) => {
-      const transition = CONTROLLER_SPA_ASSET_TRANSITION.find((entry) => entry.path === file.path)
-      return transition &&
-        file.mode === transition.mode &&
-        file.size === transition.before.size &&
-        file.sha256 === transition.before.sha256
-        ? { ...file, ...transition.after }
-        : file
-    })
-  const approvedTransition =
-    CONTROLLER_SPA_ASSET_TRANSITION.every((entry) =>
-      old.files.some(
-        (file) =>
-          file.path === entry.path &&
-          file.mode === entry.mode &&
-          file.size === entry.before.size &&
-          file.sha256 === entry.before.sha256
+  type Asset = (typeof old.files)[number]
+  type Transition = {
+    path: string
+    mode: number
+    before: { size: number; sha256: string }
+    after: { size: number; sha256: string }
+  }
+  const apply = (files: readonly Asset[], entries: readonly Transition[]): Asset[] | null => {
+    if (
+      !entries.every((entry) =>
+        files.some(
+          (file) =>
+            file.path === entry.path &&
+            file.mode === entry.mode &&
+            file.size === entry.before.size &&
+            file.sha256 === entry.before.sha256
+        )
       )
-    ) && JSON.stringify(mapped) === nextAssets
+    )
+      return null
+    return files.map((file) => {
+      const entry = entries.find((entry) => entry.path === file.path)
+      return entry ? { ...file, ...entry.after } : file
+    })
+  }
+  const files = old.files.filter(
+      (f) => !['payload/control-plane.cjs', 'payload/bundle-manifest.json'].includes(f.path)
+    ),
+    spa = apply(files, CONTROLLER_SPA_ASSET_TRANSITION),
+    environment = apply(files, CONTROLLER_ENVIRONMENT_ASSET_TRANSITION),
+    both = spa && apply(spa, CONTROLLER_ENVIRONMENT_ASSET_TRANSITION)
+  const approvedTransition = [spa, environment, both].some(
+    (mapped) => mapped && JSON.stringify(mapped) === nextAssets
+  )
   if (
     old.lock_sha256 !== next.lock_sha256 ||
     old.node_abi !== next.node_abi ||
@@ -195,6 +226,7 @@ export async function executeControllerUpgrade(
   paths: ControllerInstallerPaths = controllerInstallerPaths,
   hooks: {
     afterEffect?: (phase: ControllerUpgradePhase) => void
+    schemaEffect?: (phase: 'backup' | 'apply' | 'revert') => void
     /** Trusted composition only, under the original installation flock. */
     inspected?: (
       result: Readonly<ControllerUpgradeResult>,
@@ -227,7 +259,10 @@ async function perform(
   paths: ControllerInstallerPaths,
   base: Readonly<ControllerInstallationReceipt>,
   held: { uid: number; gid: number; lockFd: number },
-  hooks: { afterEffect?: (phase: ControllerUpgradePhase) => void }
+  hooks: {
+    afterEffect?: (phase: ControllerUpgradePhase) => void
+    schemaEffect?: (phase: 'backup' | 'apply' | 'revert') => void
+  }
 ): Promise<ControllerUpgradeResult> {
   const { uid, gid, lockFd } = held,
     unitName = basename(paths.unit),
@@ -288,14 +323,15 @@ async function perform(
     renameSync(temporary, file)
     sync(dirname(file))
   }
-  const run = (command: string, args: string[], timeout = 30000): string => {
+  const run = (command: string, args: string[], timeout = 30000, input?: string): string => {
     const child = spawnSync(command, args, {
       env,
       cwd: '/',
       encoding: 'utf8',
       timeout,
       maxBuffer: 65536,
-      stdio: ['ignore', 'pipe', 'pipe', lockFd]
+      input,
+      stdio: [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe', lockFd]
     })
     if (child.error || child.status !== 0) return fail('COMMAND_FAILED')
     return child.stdout
@@ -515,7 +551,11 @@ async function perform(
     )
       fail('STATE_CHANGED')
   }
-  const invoke = (key: string, command: 'upgrade-check'): ControllerUpgradeSnapshot => {
+  const invoke = (
+    key: string,
+    command: 'upgrade-check',
+    reverseRecovery = false
+  ): ControllerUpgradeSnapshot => {
     verifiedRuntime(key, journal!.release_sha256)
     const value: unknown = JSON.parse(
       run('/usr/bin/setpriv', [
@@ -535,7 +575,17 @@ async function perform(
     const parsed = snapshotSchema.safeParse(value)
     if (!parsed.success || parsed.data.controller_id !== base.controller_id)
       return fail('CHECK_FAILED')
-    identityFence(parsed.data)
+    if (reverseRecovery) {
+      const before = journal?.schema_transition?.before
+      if (
+        !before ||
+        journal?.schema_transition?.phase !== 'revert_pending' ||
+        (['controller_id', 'key_sha256', 'database_inode', 'key_inode'] as const).some(
+          (field) => before[field] !== parsed.data[field]
+        )
+      )
+        return fail('STATE_CHANGED')
+    } else identityFence(parsed.data)
     return parsed.data
   }
   const stopped = (): void => {
@@ -834,6 +884,174 @@ async function perform(
     run('/usr/bin/systemctl', ['stop', unitName], 55000)
     stopped()
   }
+  const schemaDirectory = join(revision, 'schema-backup')
+  const schemaCall = (
+    command: string,
+    expected: ControllerUpgradeSnapshot,
+    withBackup = true,
+    projection?: ControllerUpgradeSnapshot
+  ): unknown => {
+    verifiedRuntime(j.request_key, j.release_sha256)
+    const child = spawnSync(
+      '/usr/bin/setpriv',
+      [
+        '--reuid',
+        String(uid),
+        '--regid',
+        String(gid),
+        '--clear-groups',
+        '--',
+        join(newRuntime, 'node'),
+        artifact(j.request_key),
+        command,
+        '--data-dir',
+        paths.data
+      ],
+      {
+        env,
+        cwd: '/',
+        encoding: 'utf8',
+        timeout: 90000,
+        maxBuffer: 16384,
+        stdio: ['pipe', 'pipe', 'pipe', lockFd],
+        input: JSON.stringify({
+          format: 1,
+          request_key: j.request_key,
+          expected,
+          ...(withBackup ? { backup: j.schema_transition?.backup } : {}),
+          ...(projection ? { rollback_projection: projection } : {})
+        })
+      }
+    )
+    if (child.error || child.status !== 0) {
+      const safe = /^CONTROL_PLANE_ERROR CONTROLLER_INSTALL_SCHEMA_([A-Z_]+)\s*$/.exec(
+        child.stderr ?? ''
+      )
+      return fail('SCHEMA_' + (safe?.[1] ?? 'COMMAND_FAILED'))
+    }
+    try {
+      return JSON.parse(child.stdout)
+    } catch {
+      return fail('SCHEMA_RESPONSE_INVALID')
+    }
+  }
+  const sealBackup = (): string => {
+    assertReleaseDirectory(schemaDirectory, uid)
+    const parent = lstatSync(schemaDirectory)
+    if (![0, uid].includes(parent.uid) || ![0o700, 0o550].includes(parent.mode & 0o777))
+      return fail('SCHEMA_BACKUP_INVALID')
+    const file = join(schemaDirectory, 'backup.sqlite'),
+      fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW)
+    try {
+      const before = fstatSync(fd)
+      if (
+        !before.isFile() ||
+        before.nlink !== 1 ||
+        ![0, uid].includes(before.uid) ||
+        ![0o600, 0o440].includes(before.mode & 0o777) ||
+        before.size < 512 ||
+        before.size > 512 * 1024 * 1024
+      )
+        return fail('SCHEMA_BACKUP_INVALID')
+      const hash = createHash('sha256'),
+        chunk = Buffer.alloc(1024 * 1024)
+      for (;;) {
+        const count = readSync(fd, chunk)
+        if (!count) break
+        hash.update(chunk.subarray(0, count))
+      }
+      const after = fstatSync(fd),
+        path = lstatSync(file)
+      if (
+        after.size !== before.size ||
+        after.mtimeMs !== before.mtimeMs ||
+        path.isSymbolicLink() ||
+        path.ino !== before.ino ||
+        path.dev !== before.dev
+      )
+        return fail('SCHEMA_BACKUP_CHANGED')
+      fchownSync(fd, 0, gid)
+      fchmodSync(fd, 0o440)
+      fsyncSync(fd)
+      lchownSync(schemaDirectory, 0, gid)
+      chmodSync(schemaDirectory, 0o550)
+      sync(schemaDirectory)
+      sync(revision)
+      return hash.digest('hex')
+    } finally {
+      closeSync(fd)
+    }
+  }
+  const prepareSchema = (): void => {
+    if (!j.schema_transition) {
+      if (j.before?.schema_version !== 29) return
+      j.schema_transition = { phase: 'backup_pending', before: { ...j.before, schema_version: 29 } }
+      persist('stopped')
+    }
+    const schema = j.schema_transition
+    if (schema.phase !== 'backup_pending') return
+    if (!exists(schemaDirectory)) {
+      mkdirSync(schemaDirectory, { mode: 0o700 })
+      lchownSync(schemaDirectory, uid, gid)
+      chmodSync(schemaDirectory, 0o700)
+      sync(revision)
+    }
+    const file = join(schemaDirectory, 'backup.sqlite')
+    // A crash may have sealed the file before its durable receipt. It is verified again
+    // inside the same-UID SQLite command before applying any schema change.
+    if (exists(file) && lstatSync(file).uid === 0) {
+      schema.backup = {
+        format: 1,
+        request_key: j.request_key,
+        before: schema.before,
+        backup_sha256: sealBackup()
+      }
+    } else {
+      const proof = controllerSchemaBackupSchema.parse(
+        schemaCall('upgrade-schema-backup', schema.before, false)
+      )
+      unchanged(schema.before, proof.before)
+      if (proof.request_key !== j.request_key || sealBackup() !== proof.backup_sha256)
+        return fail('SCHEMA_BACKUP_CHANGED')
+      schema.backup = proof
+    }
+    hooks.schemaEffect?.('backup')
+    schema.phase = 'backup_ready'
+    persist('stopped')
+  }
+  const applySchema = (): void => {
+    const schema = j.schema_transition
+    if (!schema || schema.phase === 'applied') return
+    if (!schema.backup || !['backup_ready', 'apply_pending'].includes(schema.phase))
+      return fail('SCHEMA_JOURNAL_INVALID')
+    schema.phase = 'apply_pending'
+    persist('switch_pending')
+    const result = controllerSchemaTransitionSchema.parse(
+      schemaCall('upgrade-schema-apply', schema.before)
+    )
+    unchanged(schema.before, result.projection29)
+    if (result.snapshot.schema_version !== 35) return fail('SCHEMA_RESPONSE_INVALID')
+    hooks.schemaEffect?.('apply')
+    j.before = result.snapshot
+    schema.after = result.snapshot
+    schema.phase = 'applied'
+    persist('switch_pending')
+  }
+  const reverseSchema = (): void => {
+    const schema = j.schema_transition
+    if (!schema || schema.phase === 'reverted') return
+    if (schema.phase !== 'revert_pending' || !schema.rollback_projection || !j.rollback_before)
+      return fail('SCHEMA_JOURNAL_INVALID')
+    const result = controllerSchemaTransitionSchema.parse(
+      schemaCall('upgrade-schema-rollback', j.rollback_before, true, schema.rollback_projection)
+    )
+    unchanged(schema.rollback_projection, result.snapshot)
+    hooks.schemaEffect?.('revert')
+    j.before = result.snapshot
+    j.rollback_before = result.snapshot
+    schema.phase = 'reverted'
+    persist('rollback_pending')
+  }
   const rollback = async (): Promise<void> => {
     if (['prepared', 'staging', 'staged'].includes(j.phase)) {
       attest(j.parent_upgrade_key)
@@ -841,18 +1059,53 @@ async function perform(
       archive(j)
       return
     }
+    if (j.schema_transition?.phase === 'apply_pending') {
+      if (systemMatches([j.request_key, j.parent_upgrade_key]) !== j.request_key)
+        return fail('SCHEMA_JOURNAL_INVALID')
+      applySchema()
+    }
     const selected = systemMatches([j.request_key, j.parent_upgrade_key])
     if (selected === j.request_key) {
+      // A committed reverse may have lost its reply. The candidate cannot open schema29;
+      // compare its stored fresh projection before publishing the parent unit.
+      if (j.schema_transition?.phase === 'revert_pending') {
+        const current = invoke(j.request_key, 'upgrade-check', true)
+        if (current.schema_version === 29) {
+          unchanged(j.schema_transition.rollback_projection ?? null, current)
+          // systemd may be retrying this intentionally schema-incompatible candidate.
+          // Cancel that restart job after exact29 projection attestation, before publishing the parent.
+          stop([j.request_key])
+          reverseSchema()
+        }
+      }
       // Recovery also takes a fresh mutex: the candidate could have restarted and accepted writes.
       const release = await hold()
       try {
         j.rollback_before = invoke(j.request_key, 'upgrade-check')
+        if (
+          j.schema_transition?.phase === 'applied' ||
+          j.schema_transition?.phase === 'revert_pending'
+        ) {
+          const checked = controllerSchemaTransitionSchema.parse(
+            schemaCall('upgrade-schema-inspect-rollback', j.rollback_before)
+          )
+          unchanged(j.rollback_before, checked.snapshot)
+          j.schema_transition.rollback_projection = checked.projection29
+        }
         persist('rollback_pending')
         stop([j.request_key])
       } finally {
         await release()
       }
       unchanged(j.rollback_before, invoke(j.request_key, 'upgrade-check'))
+      if (
+        j.schema_transition &&
+        ['applied', 'revert_pending'].includes(j.schema_transition.phase)
+      ) {
+        j.schema_transition.phase = 'revert_pending'
+        persist('rollback_pending')
+        reverseSchema()
+      }
       hooks.afterEffect?.('rollback_pending')
       // Publishing the parent unit may expose it on reboot. Do not compare business state after this boundary.
       persist('rollback_commit_pending')
@@ -998,10 +1251,13 @@ async function perform(
     } else if (selected === j.request_key && attest(selected)) {
       if (exists(guard) || !(await waitHealth(j.request_key, 'maintenance'))) fail('GATE_CHANGED')
     } else stopped()
-    unchanged(j.before, invoke(j.request_key, 'upgrade-check'))
+    if (!j.schema_transition || j.schema_transition.phase === 'applied')
+      unchanged(j.before, invoke(j.request_key, 'upgrade-check'))
+    if (j.phase === 'stopped') prepareSchema()
     persist('switch_pending')
     atomic(paths.unit, expectedUnit(j.request_key), 0o644, true)
     run('/usr/bin/systemctl', ['daemon-reload'])
+    applySchema()
     hooks.afterEffect?.('switch_pending')
     persist('switched')
   }

@@ -22,3 +22,16 @@ export const CONTROLLER_SPA_ASSET_TRANSITION = [
     after: { size: 942, sha256: 'bfb5c3e77b5af306f10ec46797b5777396a92be15bbee8aeea44ea999d7e9ba3' }
   }
 ] as const
+
+/** R7h: helper đã qua native Express/Next/SPA env, exact-CID rollback và legacy gates. */
+export const CONTROLLER_ENVIRONMENT_ASSET_TRANSITION = [
+  {
+    path: 'payload/target-helper/target_product_runtime.py',
+    mode: 0o600,
+    before: CONTROLLER_SPA_ASSET_TRANSITION[0].after,
+    after: {
+      size: 51419,
+      sha256: 'f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5'
+    }
+  }
+] as const

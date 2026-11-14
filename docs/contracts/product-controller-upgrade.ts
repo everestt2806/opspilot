@@ -55,6 +55,8 @@ export interface ControllerUpgradeSnapshot {
   database_inode: number;
   key_inode: number;
   quiescent: boolean;
+  /** Absent in historical snapshots; exact supported pair only. */
+  schema_version?: 29 | 35;
 }
 /** Additive run-product stdin field, only for root-staged revision paths. */
 export interface ControllerUpgradeGate {
@@ -75,7 +77,23 @@ export interface ControllerUpgradeGate {
  * exact old→new SHA/size/mode của SPA nginx template và exact-CID health helper.
  * Không nhận allowlist hoặc override từ IPC, request hay release candidate.
  * Toàn bộ Node/dependencies/asset khác phải giữ nguyên; reverse/drift bị từ chối.
- * never initializes/migrates live DB or returns plaintext records/secrets.
+ * R7h-3d: exact controller29/35 only. A29 parent needs a consistent SQLite backup,
+ * Root-owned0440 file/0550 directory and durable request-bound schema journal.
+ * Fixed same-UID stdin commands upgrade-schema-backup / upgrade-schema-apply /
+ * upgrade-schema-inspect-rollback / upgrade-schema-rollback accept no caller path,
+ * SQL, UID, service or migration override. Backup lives beside the Root revision;
+ * inherited Root flock and original controller/key/DB inode authority are required.
+ * Root publishes the candidate maintenance unit before atomic032/033/035 migration.
+ * Revision startup checks exact35 read-only before any normal DB initializer, so
+ * restart/reboot cannot bypass migration or reapply it after a committed reverse.
+ * Lost migration replies require the original29 projection and empty new tables.
+ * Reverse drops only those empty tables/version rows under a fresh quiescent CAS,
+ * preserving old-schema credentials/history created since upgrade. Environment data
+ * or any source environment reference blocks reverse before candidate stop/unit switch.
+ * Backup is never restored over live DB. No initializer/key generation or plaintext
+ * records/secrets in upgrade commands. The exact frozen R7h helper transition is
+ * separately baked into Root compatibility; retained target enrollment pins remain
+ * unchanged and still require an independently verified compatibility/upgrade path.
  * upgrade-hold is a separate service-UID, bounded IMMEDIATE no-write transaction
  * spanning quiescent check and old-service stop; rollback on stdin EOF/timeout.
  * It closes the manual-deploy admission race without changing policy/DB rows.

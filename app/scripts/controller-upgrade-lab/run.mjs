@@ -57,7 +57,7 @@ await esbuild.build({
 })
 const code = require(tool),
   installKey = randomUUID(),
-  keys = [randomUUID(), randomUUID(), randomUUID()],
+  keys = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()],
   unitAllow = [
     code.renderControllerUnit(paths, installKey),
     ...keys.map((key) => code.renderUpgradedControllerUnit(paths, installKey, key))
@@ -118,6 +118,10 @@ function variant(name, suffix) {
 }
 const second = variant('second-release', '\n// Native fixture revision two.\n'),
   faulty = variant('faulty-release', "\nif(process.argv[2]==='run-product')process.exit(73)\n")
+const interrupted = variant(
+  'interrupted-migration-release',
+  "\nif(process.argv[2]==='upgrade-schema-apply'){const D=require('better-sqlite3'),F=require('node:fs'),P=require('node:path'),old=D.prototype.exec;D.prototype.exec=function(sql){const result=old.call(this,sql);const file=P.join(process.argv.at(-1),'.lab-interrupted-migration');if(sql.includes('CREATE TABLE product_environment_request')&&!F.existsSync(file)){F.writeFileSync(file,'private-lab-only',{mode:384,flag:'wx'});process.kill(process.pid,'SIGKILL')}return result}}\n"
+)
 const result = {
   status: 'FAIL',
   scope: 'ROOT_LINUX_SYSTEMD_NATIVE_CONTROLLER_UPGRADE_PRIVATE_FIXTURE',
@@ -140,7 +144,11 @@ const call = (input, crash) => {
     env: {
       PATH: '/usr/sbin:/usr/bin:/sbin:/bin',
       OPSPILOT_UPGRADE_LAB_NONCE: nonce,
-      ...(crash ? { OPSPILOT_UPGRADE_LAB_CRASH: crash } : {})
+      ...(crash?.startsWith('schema:')
+        ? { OPSPILOT_UPGRADE_LAB_CRASH_SCHEMA: crash.slice(7) }
+        : crash
+          ? { OPSPILOT_UPGRADE_LAB_CRASH: crash }
+          : {})
     }
   })
   let body
@@ -328,11 +336,59 @@ try {
   stage = 'stop-crash'
   assert.equal(recover('stop_pending').signal, 'SIGKILL')
   await wait(() => inspect().body?.phase === 'stop_pending')
-  assert.equal(inspect().body.service_state, 'stopped')
+  assert(['stopped', 'failed'].includes(inspect().body.service_state))
+  // Both are terminal states accepted by the Root stop contract; never accept a pending restart.
+  assert.equal(
+    command('/usr/bin/systemctl', ['show', unitName, '--property=MainPID', '--value']).trim(),
+    '0'
+  )
+  assert(
+    ['inactive', 'failed'].includes(
+      command('/usr/bin/systemctl', ['show', unitName, '--property=ActiveState', '--value']).trim()
+    )
+  )
   await preserved()
   check('death_after_guarded_stop_keeps_db_key_identity_and_unrelated_app')
   command('/usr/bin/systemctl', ['start', unitName])
   await wait(() => health('ready'))
+  stage = 'schema-backup-crash'
+  assert.equal(recover('schema:backup').signal, 'SIGKILL')
+  const backupPath = join(paths.installation, 'revisions', keys[0], 'schema-backup/backup.sqlite')
+  assert.equal(lstatSync(backupPath).uid, 0)
+  assert.equal(lstatSync(backupPath).mode & 0o777, 0o440)
+  assert.equal(lstatSync(dirname(backupPath)).mode & 0o777, 0o550)
+  const candidateArtifact = join(
+    paths.installation,
+    'revisions',
+    keys[0],
+    'runtime/payload/control-plane.cjs'
+  )
+  assert.equal(asService(candidateArtifact, ['upgrade-check']).schema_version, 29)
+  const forbidden = spawnSync('/usr/bin/setpriv', [
+    '--reuid',
+    String(installed.runtime_uid),
+    '--regid',
+    String(lstatSync(paths.data).gid),
+    '--clear-groups',
+    '--',
+    process.execPath,
+    '-e',
+    "try{require('node:fs').openSync(process.argv[1],'w');process.exit(2)}catch(e){process.exit(e.code==='EACCES'?0:3)}",
+    backupPath
+  ])
+  assert.equal(forbidden.status, 0)
+  await preserved()
+  check('consistent_backup_is_root_sealed_before_migration_and_service_cannot_overwrite_it')
+  stage = 'schema-apply-crash'
+  assert.equal(recover('schema:apply').signal, 'SIGKILL')
+  assert.equal(inspect().body.phase, 'switch_pending')
+  assert.equal(asService(candidateArtifact, ['upgrade-check']).schema_version, 35)
+  command('/usr/bin/systemctl', ['start', unitName])
+  await wait(() => health('maintenance'))
+  await preserved()
+  check(
+    'lost_migration_reply_leaves_exact35_schema_and_candidate_maintenance_without_auto_migration'
+  )
   stage = 'switch-crash'
   assert.equal(recover('switch_pending').signal, 'SIGKILL')
   assert.equal(inspect().body.phase, 'switch_pending')
@@ -476,6 +532,14 @@ try {
   await preserved()
   stage = 'rollback-first'
   request = first
+  assert.equal(rollback('schema:revert').signal, 'SIGKILL')
+  assert.equal(asService(candidateArtifact, ['upgrade-check']).schema_version, 29)
+  command('/usr/bin/systemctl', ['start', unitName])
+  // The candidate must reject29 before opening its normal migrating initializer.
+  await new Promise((done) => setTimeout(done, 1500))
+  assert.equal(asService(candidateArtifact, ['upgrade-check']).schema_version, 29)
+  assert(!(await health('ready')))
+  check('reverse_commit_reply_loss_and_candidate_restart_never_auto_migrate29')
   const original = rollback()
   assert.equal(original.status, 0)
   assert.equal(original.body.runtime_upgrade_key, null)
@@ -510,6 +574,64 @@ try {
     assert.equal((await response.json()).controller_id, installed.controller_id)
   }
   check('old_installer_attestation_valid_again_after_rollback')
+  stage = 'interrupted-migration-transaction'
+  request = {
+    ...first,
+    request_key: keys[4],
+    release_directory: interrupted.directory,
+    release_sha256: interrupted.pin
+  }
+  assert.equal(call(request).body.error, 'CONTROLLER_INSTALL_UPGRADE_SCHEMA_COMMAND_FAILED')
+  assert.equal(inspect().body.phase, 'switch_pending')
+  const interruptedArtifact = join(
+    paths.installation,
+    'revisions',
+    keys[4],
+    'runtime/payload/control-plane.cjs'
+  )
+  assert.equal(asService(interruptedArtifact, ['upgrade-check']).schema_version, 29)
+  assert.equal(recover().body.phase, 'active')
+  assert.equal(rollback().body.phase, 'rolled_back')
+  assert.equal(asService(interruptedArtifact, ['upgrade-check']).schema_version, 29)
+  await preserved()
+  check('SIGKILL_inside_migration033_rolls_back032_and033_atomically_and_same_uuid_recovers')
+  stage = 'environment-data-blocks-rollback'
+  request = { ...first, request_key: keys[3] }
+  const finalUpgrade = call(request)
+  assert.equal(finalUpgrade.status, 0)
+  const candidatePid = command('/usr/bin/systemctl', [
+    'show',
+    unitName,
+    '--property=MainPID',
+    '--value'
+  ]).trim()
+  const sql =
+    "const D=require(process.argv[1]);const d=new D(process.argv[2]);d.pragma('foreign_keys=ON');d.transaction(()=>{d.exec(\"INSERT INTO vps(id,name,host,username,auth_type,encrypted_secret) VALUES(1,'schema-lab','fixture.test','operator','key',X'00');INSERT INTO app(id,vps_id,name,framework,host_port,container_port) VALUES(1,1,'schema-fixture','express',30000,3000);INSERT INTO product_source_config VALUES(1,1,'https://github.com/example/app.git','main','.', '{}', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','2026-11-14T00:00:00Z')\");d.prepare(\"INSERT INTO product_environment_revision VALUES(?,1,1,1,1,?,'{}','express','[]','[]','aes_256_gcm',?,?,?,?)\").run(process.argv[3],'a'.repeat(64),Buffer.from([1]),Buffer.alloc(12),Buffer.alloc(16),'2026-11-14T00:00:00Z')}).immediate();d.close()"
+  command('/usr/bin/setpriv', [
+    '--reuid',
+    String(installed.runtime_uid),
+    '--regid',
+    String(lstatSync(paths.data).gid),
+    '--clear-groups',
+    '--',
+    join(paths.installation, 'revisions', keys[3], 'runtime/node'),
+    '-e',
+    sql,
+    join(paths.installation, 'revisions', keys[3], 'runtime/node_modules/better-sqlite3'),
+    join(paths.data, 'opspilot.db'),
+    installed.controller_id
+  ])
+  assert.equal(rollback().body.error, 'CONTROLLER_INSTALL_UPGRADE_SCHEMA_ROLLBACK_UNSAFE')
+  assert.equal(
+    command('/usr/bin/systemctl', ['show', unitName, '--property=MainPID', '--value']).trim(),
+    candidatePid
+  )
+  assert.equal(inspect().body.phase, 'active')
+  assert(await health('ready'))
+  await preserved()
+  check(
+    'nonempty_encrypted_environment_table_blocks_schema_rollback_before_service_stop_or_unit_switch'
+  )
   result.status = 'PASS'
 } catch (error) {
   result.error =

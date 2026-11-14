@@ -1,0 +1,197 @@
+{
+  "status": "LOCAL_PROTECTED_SCHEMA_UPGRADE_PASS_ROLLOUT_PENDING",
+  "task_status": "PARTIAL",
+  "scope": "R7h-3d protected29-to35 Root upgrade source and private systemd lab; no catalog publication or VPS deployment",
+  "date": "2026-11-15",
+  "base_sha": "44c33e60a4733df79ddcc8cd325526b22be78e7e",
+  "source_hash_encoding": "UTF-8 repository bytes with CRLF normalized to LF for checkout portability",
+  "source_sha256": {
+    "app/src/main/controlPlane/cli.ts": "d6c1d1af7cf0647941e331fc30c550d581c39a65bb0556d5aee4fd3308c01650",
+    "app/src/main/controlPlane/controllerSchemaUpgrade.ts": "065cf2161280f06423f08c1091ff901e43dabcb28ed20a76f503bf90a4bb5e80",
+    "app/src/main/controlPlane/controllerSchemaUpgrade.test.ts": "3d50cf64db50a7bc8d5b39b66717faf5d6a93ad8b1efbdef0efad3afb1fb7f9f",
+    "app/src/main/controlPlane/controllerSchemaUpgradeCli.ts": "091a88890dbbe6eb10cd1f5dfaa09cd692866d9a6222914db80e7b70a8a15aab",
+    "app/src/main/controlPlane/controllerSchemaUpgradeProtocol.ts": "a35a9975cfd3290fe730084101255b087b707e66cda5a2bf5c5803a691fde4ee",
+    "app/src/main/controlPlane/controllerSchemaUpgradeProtocol.test.ts": "3a722ff35805df825c794edc99a0b2fa55434dfa19368933945ecbaf8cf2fc2a",
+    "app/src/main/controlPlane/controllerUpgrade.ts": "9c8344f2652637df35d81af6234d64bd728eda9c72f7ccf4b8bde157853df4df",
+    "app/src/main/controlPlane/controllerUpgrade.test.ts": "b4b961ebecfbeb1002d1d3128132661abaa04201459579a1226c82f2bf5f0e7b",
+    "app/src/main/controlPlane/controllerUpgradeAssets.ts": "2484509830af0ca2d1b3638e079bbb73c0663aec72851563569912c903f68d44",
+    "app/src/main/controlPlane/controllerUpgradeCheck.ts": "1b61e3bd2a344e8d3bfab220fd128b863f618c2082610960ddaf764bd9b28998",
+    "app/scripts/controller-upgrade-lab/run.mjs": "a8297cb1cf6dc1ad6e14d9c2b358b4e39a90639c8e500fa0a9ac5cce3e5d7803",
+    "app/scripts/controller-upgrade-lab/entry.ts": "fa314c83c83a05c8fb4506c7062e014b4b6b4275510ed78207d6ae118f038877",
+    "docs/contracts/product-controller-upgrade.ts": "8d2705fc570b29f7f4e7281f25fba6209e185529938261f20580737b3646d292",
+    "app/src/main/controlPlane/target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+  },
+  "raw_evidence": {
+    "app/.out-scripts/r7h3d-quality/full.log": "4e490ccfc3314364dbd52768cc2065c3a13df9a0acdcd6a8541765561950b2d0",
+    "app/.out-scripts/r7h3d-quality/types.log": "e1233c3e393be6bc01b75114f4405f780fe125c011904e60806109b2d88dbd38",
+    "app/.out-scripts/r7h3d-quality/scripts-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d-quality/lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d-quality/format.log": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20",
+    "app/.out-scripts/r7h3d-quality/build.log": "6f843535045e9917c7d3af9629ddab64492cc50befd7e1939cca2d72baee1614",
+    "app/.out-scripts/r7h3d-quality/diff.log": "bdf6d79147c1e8e7b1b927c588fb1a64754984405cffd67e177496d00dcb0da4",
+    "app/.out-scripts/r7h3d-quality/results.json": "96d8312f237f62795ad5eb5bd96cf976e288ddec549ce80c5c11ec844c9feab9",
+    "app/.out-scripts/controller-upgrade/f761baa341ab/result.json": "51dadc179d8f8dceb1bf7a54440d80152a5a20908c74786ca07bfb96b71c9d1f",
+    "app/.out-scripts/r7h3d-build3.log": "c5d8eb15d7cf63e3ca76244b2fec1d1087dea420727394a547c97b847f890ec1",
+    "app/.out-scripts/r7h3d-installer.log": "83c61947c47bad3d94b41ecf7a05eb7af5ed0987f63980f31d6aa744ee27bba6",
+    "app/.out-scripts/r7h3d-service-isolated.log": "dd4a632d063d5a1ce8ed3602b96e4dcd9e7626dae3e6d112d6805ad2b6186a1a",
+    "app/.out-scripts/r7h3d-full.log": "025df55e7d3496462c556d755012de0786301f898eebf1bbe4894824c2abdac1",
+    "app/.out-scripts/r7h3d-full-final.log": "2f0b262336080160c2c571f826adcbc99765fe13cd11f06ba83c3b581d92937d",
+    "app/.out-scripts/r7h3d-vps-host-key-final.json": "59b9fc952786b2b7501905e0a81c4b0512cb7c30d8275bdaa25304d185a8072c",
+    "app/.out-scripts/r7h3d-vps-http.json": "fbe15509f3cee3e9dc33f0cb36dbfdd28142b25a12728f895c17f97aa37d2341"
+  },
+  "checks": {
+    "full_tests_passed": 2432,
+    "existing_linux_only_skipped": 2,
+    "test_files_passed": 175,
+    "test_files_skipped": 1,
+    "new_tests": 12,
+    "quality_commands": [
+      {
+        "gate": "full",
+        "command": "pnpm.cmd --prefix app exec vitest run --maxWorkers=3",
+        "exit_code": 0
+      },
+      {
+        "gate": "types",
+        "command": "pnpm.cmd --prefix app typecheck",
+        "exit_code": 0
+      },
+      {
+        "gate": "scripts-types",
+        "command": "pnpm.cmd --prefix app exec tsc -p tsconfig.scripts.json --noEmit",
+        "exit_code": 0
+      },
+      {
+        "gate": "lint",
+        "command": "pnpm.cmd --prefix app exec eslint src/main/controlPlane/controllerSchemaUpgrade.ts src/main/controlPlane/controllerSchemaUpgrade.test.ts src/main/controlPlane/controllerSchemaUpgradeCli.ts src/main/controlPlane/controllerSchemaUpgradeProtocol.ts src/main/controlPlane/controllerSchemaUpgradeProtocol.test.ts src/main/controlPlane/controllerUpgrade.ts src/main/controlPlane/controllerUpgrade.test.ts src/main/controlPlane/controllerUpgradeCheck.ts src/main/controlPlane/controllerUpgradeAssets.ts src/main/controlPlane/cli.ts scripts/controller-upgrade-lab/run.mjs scripts/controller-upgrade-lab/entry.ts",
+        "exit_code": 0
+      },
+      {
+        "gate": "format",
+        "command": "pnpm.cmd --prefix app exec prettier --check src/main/controlPlane/controllerSchemaUpgrade.ts src/main/controlPlane/controllerSchemaUpgrade.test.ts src/main/controlPlane/controllerSchemaUpgradeCli.ts src/main/controlPlane/controllerSchemaUpgradeProtocol.ts src/main/controlPlane/controllerSchemaUpgradeProtocol.test.ts src/main/controlPlane/controllerUpgrade.ts src/main/controlPlane/controllerUpgrade.test.ts src/main/controlPlane/controllerUpgradeCheck.ts src/main/controlPlane/controllerUpgradeAssets.ts src/main/controlPlane/cli.ts scripts/controller-upgrade-lab/run.mjs scripts/controller-upgrade-lab/entry.ts",
+        "exit_code": 0
+      },
+      {
+        "gate": "build",
+        "command": "pnpm.cmd --prefix app run build",
+        "exit_code": 0
+      },
+      {
+        "gate": "diff",
+        "command": "git diff --check",
+        "exit_code": 0
+      }
+    ]
+  },
+  "native": {
+    "nonce": "f761baa341ab",
+    "raw_path": "app/.out-scripts/controller-upgrade/f761baa341ab/result.json",
+    "result": {
+      "status": "PASS",
+      "scope": "ROOT_LINUX_SYSTEMD_NATIVE_CONTROLLER_UPGRADE_PRIVATE_FIXTURE",
+      "checks": [
+        "consent_and_parent_pins_rejected_before_upgrade_mutation",
+        "staging_death_same_uuid_inspect_only_and_no_other_intent_takeover",
+        "death_after_guarded_stop_keeps_db_key_identity_and_unrelated_app",
+        "consistent_backup_is_root_sealed_before_migration_and_service_cannot_overwrite_it",
+        "lost_migration_reply_leaves_exact35_schema_and_candidate_maintenance_without_auto_migration",
+        "death_after_atomic_unit_switch_is_cold_inspectable_without_replay",
+        "service_restart_during_stop_and_switch_recovers_without_restarting_maintenance_candidate",
+        "candidate_maintenance_blocks_even_pause_writes_before_commit",
+        "lost_commit_reply_recovers_without_precommit_hash_comparison_or_credential_loss",
+        "duplicate_upgrade_after_commit_never_restarts_the_service",
+        "second_revision_preserves_parent_history_and_rejects_historical_adoption",
+        "rollback_crashes_preserve_legitimate_writes_and_never_restart_restored_parent",
+        "reverse_commit_reply_loss_and_candidate_restart_never_auto_migrate29",
+        "explicit_two_level_rollback_preserves_new_credentials_and_original_installation",
+        "startup_failure_never_publishes_gate_and_explicit_rollback_restores_old_ready_runtime",
+        "old_installer_attestation_valid_again_after_rollback",
+        "SIGKILL_inside_migration033_rolls_back032_and033_atomically_and_same_uuid_recovers",
+        "nonempty_encrypted_environment_table_blocks_schema_rollback_before_service_stop_or_unit_switch"
+      ],
+      "production_vps_used": false,
+      "production_database_used": false,
+      "fixture_root_removed": true,
+      "last_operation": "inspect-upgrade",
+      "last_error_code": null,
+      "fixture_unit_removed": true,
+      "fixture_account_removed": true
+    },
+    "candidate_release_sha256": "7c1bb64d1861eacea9ea4515dfcd77662a932cf9d16992098067eb698b7c97a7",
+    "candidate_payload_sha256": "e67d1276450234826392451b5c58ea89325acc90f1c50c66dd2f5d6ca96b4419",
+    "node_version": "22.23.4",
+    "approved_catalog_entry": false,
+    "docker_product_deployment_tested": false,
+    "os_reboot_tested": false
+  },
+  "private_installer": {
+    "sha256": "be2c1df35652aceec0ce18aabb0f788bd76ee55ed6821065441759b4381c879a",
+    "build_exit_code": 0,
+    "catalog_published": false,
+    "packaged_acceptance_run": false
+  },
+  "known_failures_resolved": [
+    {
+      "record": "d354017921b0",
+      "issue": "Service cannot read Root0600 marker; verify stat metadata, Root verifies bytes"
+    },
+    {
+      "record": "c52041831b73",
+      "issue": "Reverse recovery cancels pending systemd restart only after exact29 projection attestation"
+    },
+    {
+      "record": "ed5253fcc1ed",
+      "issue": "Lab accepts terminal failed/PID0 as specified; still rejects activating/restart"
+    },
+    {
+      "record": "app/.out-scripts/r7h3d-full.log",
+      "issue": "Windows full suite ran concurrently with systemd lab on8768; seven bind failures. Isolated8PASS and sequential full2432PASS; no production code workaround"
+    }
+  ],
+  "shell_evidence_note": "PowerShell can report exit1 on redirected native stderr despite a passing Vitest summary. Final quality runner captures child stdout/stderr directly and records every actual native exit code.",
+  "public_vps_observation": {
+    "host_key": {
+      "scope": "public_host_key_only_no_authentication_no_remote_command",
+      "host": "167.71.202.116",
+      "port": 22,
+      "key_scan_exit": 0,
+      "fingerprint_exit": 0,
+      "pinned_ed25519_matches": true,
+      "windows_keyscan_issue": "unsupported KEX method sntrup761x25519-sha512@openssh.com; no public key received, not a fingerprint mismatch"
+    },
+    "http": {
+      "scope": "public_http_only",
+      "checked_at": "2026-11-14T19:11:04.724349+00:00",
+      "items": [
+        {
+          "port": 30000,
+          "status": 200
+        },
+        {
+          "port": 30001,
+          "status": 200
+        },
+        {
+          "port": 30002,
+          "status": 200
+        },
+        {
+          "port": 30003,
+          "status": 200
+        }
+      ]
+    },
+    "authenticated_controller_attestation": false,
+    "remote_command_or_mutation": false
+  },
+  "accepted_exceptions": [],
+  "not_run": [
+    "historical target-helper compatibility against this new controller",
+    "approved release/tool catalog packaging and tamper gate",
+    "fresh authenticated VPS controller attestation",
+    "Main protected VPS upgrade and binding refresh",
+    "VPS env first/update/build-health failure/exact-CID rollback",
+    "OS reboot and GUI upgrade"
+  ],
+  "next_action": "Verify exact env-free retained target helper compatibility and block environment on unsupported helpers before source selection/dispatch, then approve/package release and perform protected development-VPS rollout. Keep task R7h-3d and whole release open."
+}

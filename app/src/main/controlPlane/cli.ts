@@ -23,8 +23,12 @@ import { verifyProductProjectSource } from './projectSourceVerification'
 import { readProjectTargetState, enrollProjectTarget } from './projectTarget'
 import { checkProjectReadiness } from './projectReadiness'
 import { loadControllerCredentialCipher } from './controllerSecrets'
-import { runControllerUpgradeCheck } from './controllerUpgradeCheck'
+import { assertControllerRuntimeSchema, runControllerUpgradeCheck } from './controllerUpgradeCheck'
 import { controllerUpgradeGate } from './controllerUpgradeGate'
+import {
+  CONTROLLER_SCHEMA_COMMANDS,
+  runControllerSchemaUpgrade
+} from './controllerSchemaUpgradeCli'
 
 type Command =
   | 'init'
@@ -54,6 +58,10 @@ type Command =
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
+  if ((CONTROLLER_SCHEMA_COMMANDS as readonly string[]).includes(commandValue)) {
+    await runControllerSchemaUpgrade(commandValue, parseDataDirectory(args))
+    return
+  }
   if (commandValue === 'upgrade-check' || commandValue === 'upgrade-hold') {
     await runControllerUpgradeCheck(parseDataDirectory(args), commandValue === 'upgrade-hold')
     return
@@ -113,6 +121,10 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
         true
       )
       if (controller.signal.aborted) throw new Error('CONTROLLER_EXECUTION_ABORTED')
+      // Root revision startup must never auto-migrate an interrupted protected upgrade.
+      if (Object.hasOwn(bundle, 'activation_guard')) {
+        assertControllerRuntimeSchema(dataDirectory)
+      }
       service = new ControllerService({
         dataDirectory,
         executionBundle: bundle,
