@@ -202,7 +202,7 @@ def initialize_runtime_enrollment(root: str | Path, controller_id: str, app_id: 
 
 
 def validate_context(context: Any, identity: ExecutionIdentity, deployment_id: int) -> dict[str, Any]:
-    if not isinstance(context, dict) or set(context) != _CONTEXT_KEYS or context.get("version") != 1:
+    if not isinstance(context, dict) or set(context) not in (_CONTEXT_KEYS, _CONTEXT_KEYS | {"environment"}) or context.get("version") != 1:
         raise RuntimeRejected()
     if not _plain(context):
         raise RuntimeRejected()
@@ -230,6 +230,12 @@ def validate_context(context: Any, identity: ExecutionIdentity, deployment_id: i
         or not _positive(context["health_timeout_ms"]) or context["health_timeout_ms"] > 60_000
         or context["exposure_policy"] != "not_checked"):
         raise RuntimeRejected()
+    if "environment" in context:
+        ref = context["environment"]
+        if (not isinstance(ref, dict) or set(ref) != {"controller_id", "ownership_generation", "revision"}
+            or ref.get("controller_id") != claim["controller_id"]
+            or ref.get("ownership_generation") != claim["ownership_generation"] or not _positive(ref.get("revision"))):
+            raise RuntimeRejected()
     for field in ("vps_id", "port", "ssh_security_revision"):
         if not _positive(target[field]):
             raise RuntimeRejected()
@@ -325,14 +331,20 @@ class DockerCommands:
         return result
 
 
-def _config_hash(container: dict[str, Any]) -> str:
+def _config_hash(container: dict[str, Any], secret: bytes | None = None) -> str:
     # Chỉ digest ra wire; env/config có thể chứa secret chỉ ở bộ nhớ target.
     # Docker inspect does not promise Mounts order. Preserve every identity field,
     # but canonicalize enumeration before hashing so stop/re-inspect cannot drift.
     mounts = [{key: mount.get(key) for key in ("Type", "Source", "Destination", "RW")}
               for mount in container.get("Mounts", [])]
-    return hash_h2({"Config": container.get("Config"), "HostConfig": container.get("HostConfig"),
-                    "Mounts": sorted(mounts, key=canonical_json)})
+    payload = {"Config": container.get("Config"), "HostConfig": container.get("HostConfig"),
+               "Mounts": sorted(mounts, key=canonical_json)}
+    if any(isinstance(value, str) and value.startswith("OPSPILOT_CONFIG_REVISION=")
+           for value in (container.get("Config", {}).get("Env") or [])):
+        if not isinstance(secret, bytes) or len(secret) != 32:
+            raise RuntimeUnknown("SSH_RUNTIME_IDENTITY_MISMATCH")
+        return hmac.new(secret, b"opspilot-env-config-fingerprint-v1\n" + canonical_json(payload), hashlib.sha256).hexdigest()
+    return hash_h2(payload)
 
 
 class ProductRuntime:
@@ -472,14 +484,14 @@ class ProductRuntime:
             raise RuntimeUnknown("SSH_RUNTIME_IDENTITY_MISMATCH")
         return {"deployment_id": expected["deployment_id"], "image_tag": expected["image_tag"],
                 "image_id": image["Id"], "source_sha": expected["source_sha"], "container_id": record["Id"],
-                "collector_container_id": None, "collector_image_id": None, "config_sha256": _config_hash(record),
+                "collector_container_id": None, "collector_image_id": None, "config_sha256": _config_hash(record, self.secret),
                 "health": "unknown", "http_status": None}
 
     def _check_runtime(self, value: dict[str, Any], canonical_name: bool = True) -> dict[str, Any]:
         record = self.commands.inspect("container", value["container_id"])
         self._check_labels(record, self._labels(value["deployment_id"], value["source_sha"]))
         if (record.get("Id") != value["container_id"] or record.get("Image") != value["image_id"]
-            or _config_hash(record) != value["config_sha256"]
+            or _config_hash(record, self.secret) != value["config_sha256"]
             or (canonical_name and record.get("Name") != "/" + self.app_name)):
             raise RuntimeUnknown("SSH_RUNTIME_IDENTITY_MISMATCH")
         return record
@@ -540,8 +552,54 @@ END {if (status == "") print "{\\"http_status\\":null}"; else printf "{\\"http_s
         finally:
             os.close(fd)
 
+    def _runtime_env_args(self) -> list[str]:
+        assert self.context is not None
+        expected = self.context.get("environment")
+        path = self.transfer_directory / "render" / ".env"
+        if expected is None:
+            return []
+        try:
+            text = _read_private(path, 96 * 1024).decode("utf-8", errors="strict")
+            first, signature, body = text.split("\n", 2)
+            prefix = "# opspilot-environment-v1 "
+            sig_prefix = "# opspilot-environment-hmac "
+            if not first.startswith(prefix) or not signature.startswith(sig_prefix):
+                raise ValueError()
+            header = json.loads(first[len(prefix):])
+            if (not isinstance(header, dict) or set(header) != {"format", "claim", "target", "reference", "nonce", "runtime_keys"}
+                or header["format"] != 1 or header["claim"] != self.context["claim"]
+                or header["target"] != self.context["target"] or header["reference"] != expected
+                or not isinstance(header["nonce"], str) or re.fullmatch(r"[0-9a-f]{64}", header["nonce"]) is None
+                or not isinstance(header["runtime_keys"], list) or len(header["runtime_keys"]) > 128):
+                raise ValueError()
+            derived = hmac.new(self.secret, b"opspilot-env-transfer-key-v1", hashlib.sha256).digest()
+            mac = hmac.new(derived, b"opspilot-env-transfer-v1\n" + (first + "\n" + body).encode("utf-8"), hashlib.sha256).hexdigest()
+            supplied = signature[len(sig_prefix):]
+            if not _match(_HASH, supplied) or not hmac.compare_digest(mac, supplied):
+                raise ValueError()
+            if not body.endswith("\n"):
+                raise ValueError()
+            values = {}
+            for line in body[:-1].split("\n"):
+                name, separator, value = line.partition("=")
+                if (not separator or name in values or re.fullmatch(r"[A-Z_][A-Z0-9_]{0,127}", name) is None
+                    or len(value.encode("utf-8")) > 8192 or any(ord(c) < 32 or ord(c) == 127 for c in value)):
+                    raise ValueError()
+                values[name] = value
+            marker = ":".join(str(v) for v in (expected["controller_id"], expected["ownership_generation"], expected["revision"], self.context["claim"]["source_generation"]))
+            if values.pop("OPSPILOT_CONFIG_REVISION", None) != marker or sorted(values) != header["runtime_keys"]:
+                raise ValueError()
+            if any(name in {"PORT", "NODE_ENV", "NODE_OPTIONS", "PATH", "HOME", "DATABASE_URL"}
+                   or name.startswith(("LD_", "NPM_CONFIG_", "OPSPILOT_", "DOCKER_", "COMPOSE_", "POSTGRES_", "VITE_", "NEXT_PUBLIC_")) for name in values):
+                raise ValueError()
+            return ["--env-file", str(path)]
+        except (ValueError, TypeError, KeyError, UnicodeError, OSError, RuntimeRejected):
+            raise RuntimeUnknown("SSH_RUNTIME_IDENTITY_MISMATCH") from None
+
     def _step_prepare(self) -> None:
         assert self.context is not None
+        if self.context["build_state"] != "build_failed_definite":
+            self._runtime_env_args()
         old_app = self.commands.container(self.app_name)
         old_collector = self.commands.container(self.collector_name)
         expected = self.context["previous"]
@@ -612,6 +670,7 @@ END {if (status == "") print "{\\"http_status\\":null}"; else printf "{\\"http_s
 
     def _step_activate(self) -> None:
         assert self.context is not None
+        environment_args = self._runtime_env_args()
         self._ensure_network()
         self._authorize()
         if self.previous is not None:
@@ -623,7 +682,7 @@ END {if (status == "") print "{\\"http_status\\":null}"; else printf "{\\"http_s
         container_id = self.commands.run(["run", "-d", "--name", self.app_name, "--network", self.network,
             "--network-alias", "app", "--restart", "unless-stopped", "--memory", "512m",
             "-p", f"{self.context['host_port']}:{self.context['container_port']}",
-            *self._resource_labels(), self.context["candidate_image_id"]])
+            *environment_args, *self._resource_labels(), self.context["candidate_image_id"]])
         if not _match(_CID, container_id):
             raise RuntimeUnknown()
         self.candidate = self._pin(self.commands.inspect("container", container_id), {

@@ -82,9 +82,22 @@ export const h2ContextSchema: z.ZodType<H2Context> = z
     previous: previousSchema.nullable(),
     activation_id: positive.nullable(),
     health_timeout_ms: positive.min(100).max(60_000),
-    exposure_policy: z.literal('not_checked')
+    exposure_policy: z.literal('not_checked'),
+    environment: z
+      .strictObject({
+        controller_id: identifier,
+        ownership_generation: positive,
+        revision: positive
+      })
+      .optional()
   })
   .superRefine((value, context) => {
+    if (
+      value.environment &&
+      (value.environment.controller_id !== value.claim.controller_id ||
+        value.environment.ownership_generation !== value.claim.ownership_generation)
+    )
+      context.addIssue({ code: 'custom', message: 'H2_CONTEXT_INVALID' })
     if (value.build_state === 'build_succeeded' && value.candidate_image_id === null)
       context.addIssue({ code: 'custom', message: 'H2_CONTEXT_INVALID' })
     if (

@@ -46,3 +46,7 @@ export {
 } from '../../src/main/controlPlane/productRuntimePipeline'
 export { DesktopControllerCommands } from '../../src/main/controlPlane/desktopControllerCommands'
 export { ProductProjectRegistration } from '../../src/main/controlPlane/projectRegistration'
+export { ProductEnvironmentRuntime } from '../../src/main/controlPlane/productEnvironmentRuntime'
+export { ProductEnvironmentSelection } from '../../src/main/controlPlane/productEnvironmentSelection'
+export { ProductEnvironmentRepository } from '../../src/main/db/productEnvironmentRepository'
+export { canonicalH2Json } from '../../src/main/controlPlane/productH2Proof'

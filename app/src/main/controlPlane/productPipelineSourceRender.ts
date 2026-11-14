@@ -1,3 +1,7 @@
+import type { ResolvedProductEnvironment } from '../../../../docs/contracts/product-environment-runtime'
+import type { ProductEnvironmentRuntime } from './productEnvironmentRuntime'
+import { renderProductRuntimeEnv, renderProductPublicBuild } from './productEnvironmentRuntime'
+import { canonicalH2Json } from './productH2Proof'
 import { createHash } from 'node:crypto'
 import { lstatSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
@@ -51,7 +55,7 @@ export type ProductSourceRenderResult = Readonly<{
   source_manifest_sha256: string
   render_file_count: number
   render_bytes: number
-  render_manifest_sha256: string
+  render_manifest_sha256: string | null
   finalization: 'not_implemented_remote_outcome_unknown'
 }>
 
@@ -89,7 +93,8 @@ export function validatePreflightSourceAndPlan(
   database: Database.Database,
   snapshot: PreparedProductGitSnapshot,
   collectorDirectory = resolveCollectorDir(),
-  templatesDirectory?: string
+  templatesDirectory?: string,
+  configuration?: ResolvedProductEnvironment | null
 ): {
   app: App
   plan: BuildPlan
@@ -102,7 +107,8 @@ export function validatePreflightSourceAndPlan(
     snapshot.claim.app_id,
     snapshot.rootDirectory,
     collectorDirectory,
-    templatesDirectory
+    templatesDirectory,
+    configuration
   )
 }
 
@@ -112,7 +118,8 @@ export function validateProductSourceAndPlan(
   appId: number,
   rootDirectory: string,
   collectorDirectory = resolveCollectorDir(),
-  templatesDirectory?: string
+  templatesDirectory?: string,
+  configuration?: ResolvedProductEnvironment | null
 ): {
   app: App
   plan: BuildPlan
@@ -120,7 +127,7 @@ export function validateProductSourceAndPlan(
   sourceFiles: TransferFile[]
   sourceManifest: { totalBytes: number; sha256: string }
 } {
-  // R7h-3a chọn desired config trước; execution chưa được phép bỏ qua revision.
+  // Chỉ resolver theo claim hiện hành mới cấp cấu hình; onboarding chưa có resolver vẫn fail closed.
   const currentSource = database
     .prepare(
       `SELECT s.deploy_config_json FROM product_source_config s
@@ -138,7 +145,14 @@ export function validateProductSourceAndPlan(
       !config ||
       typeof config !== 'object' ||
       Array.isArray(config) ||
-      Object.hasOwn(config, 'environment')
+      (Object.hasOwn(config, 'environment') &&
+        (!configuration ||
+          configuration.claim.app_id !== appId ||
+          configuration.claim.source_config_sha256 !==
+            createHash('sha256').update(canonicalH2Json(config)).digest('hex') ||
+          canonicalH2Json((config as Record<string, unknown>).environment) !==
+            canonicalH2Json(configuration.reference))) ||
+      (!Object.hasOwn(config, 'environment') && !!configuration)
     )
       throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
   }
@@ -152,9 +166,20 @@ export function validateProductSourceAndPlan(
     detection.detector !== app.framework ||
     (app.framework !== 'express' && app.container_port !== detection.plan.containerPort) ||
     detection.plan.needsDb ||
-    detection.plan.requiredEnv.some((name) => app.framework !== 'nextjs' || name !== 'NODE_ENV') ||
+    detection.plan.requiredEnv.some(
+      (name) =>
+        !(app.framework === 'nextjs' && name === 'NODE_ENV') &&
+        (!configuration ||
+          (!Object.hasOwn(configuration.values.runtime_env, name) &&
+            !Object.hasOwn(configuration.values.public_build_args, name)))
+    ) ||
+    (configuration &&
+      (configuration.framework !== app.framework ||
+        Object.keys(detection.plan.buildArgs).some(
+          (name) => !Object.hasOwn(configuration.values.public_build_args, name)
+        ))) ||
     (app.framework === 'nextjs' &&
-      (Object.keys(detection.plan.buildArgs).length > 0 ||
+      ((!configuration && Object.keys(detection.plan.buildArgs).length > 0) ||
         resolveNextStart(sourceTree).entry !== undefined))
   ) {
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
@@ -169,7 +194,8 @@ export function validateProductSourceAndPlan(
     detection.plan,
     sourceTree,
     undefined,
-    templatesDirectory
+    templatesDirectory,
+    configuration
   )
   const renderManifest = prepareManifest(renderFiles)
   if (
@@ -192,13 +218,16 @@ export async function stageProductSourceAndRenderWithSession(
     collector_directory?: string
     templates_directory?: string
     signal?: AbortSignal
+    environment?: ProductEnvironmentRuntime
   } = {}
 ): Promise<ProductSourceRenderResult> {
+  const configuration = options.environment?.resolve(session.deploymentId)
   const { app, plan, sourceTree, sourceFiles, sourceManifest } = validatePreflightSourceAndPlan(
     database,
     snapshot,
     options.collector_directory,
-    options.templates_directory
+    options.templates_directory,
+    configuration
   )
 
   const deployment = new DeploymentRepository(database).getById(session.deploymentId)
@@ -217,7 +246,8 @@ export async function stageProductSourceAndRenderWithSession(
     plan,
     sourceTree,
     deployment.image_tag,
-    options.templates_directory
+    options.templates_directory,
+    configuration
   )
   const renderManifest = prepareManifest(renderFiles)
   if (
@@ -240,7 +270,7 @@ export async function stageProductSourceAndRenderWithSession(
     source_manifest_sha256: sourceManifest.sha256,
     render_file_count: renderFiles.length,
     render_bytes: renderManifest.totalBytes,
-    render_manifest_sha256: renderManifest.sha256,
+    render_manifest_sha256: configuration ? null : renderManifest.sha256,
     finalization: 'not_implemented_remote_outcome_unknown'
   }
 }
@@ -455,7 +485,8 @@ function renderPlanFiles(
   plan: BuildPlan,
   sourceTree: ReturnType<typeof buildSourceTree>,
   imageTag?: string,
-  templatesDirectory?: string
+  templatesDirectory?: string,
+  configuration?: ResolvedProductEnvironment | null
 ): TransferFile[] {
   if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$/.test(app.name)) {
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
@@ -481,7 +512,9 @@ function renderPlanFiles(
         {
           ...vars,
           BUILD_COMMAND: plan.buildCommand,
-          BUILD_ARGS: renderBuildArgs(plan.buildArgs)
+          BUILD_ARGS: configuration
+            ? renderProductPublicBuild(configuration.values.public_build_args)
+            : renderBuildArgs(plan.buildArgs)
         },
         templatesDirectory
       ),
@@ -492,7 +525,13 @@ function renderPlanFiles(
       content: renderCompose(vars, false, templatesDirectory),
       mode: 0o644
     },
-    { path: '.env', content: buildEnvFile({}, false).content, mode: 0o600 }
+    {
+      path: '.env',
+      content: configuration
+        ? renderProductRuntimeEnv(configuration)
+        : buildEnvFile({}, false).content,
+      mode: 0o600
+    }
   ]
   return rendered.map(({ path, content, mode }) => {
     const bytes = Buffer.from(content, 'utf8')

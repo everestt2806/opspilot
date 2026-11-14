@@ -30,6 +30,8 @@ export type H2Context = Readonly<{
   activation_id: number | null
   health_timeout_ms: number
   exposure_policy: 'not_checked'
+  /** R7h-3b identity only; target requires the authenticated private env-file. */
+  environment?: { controller_id: string; ownership_generation: number; revision: number }
 }>
 export type H2MetricBoundary = Readonly<{
   generation: string

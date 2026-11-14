@@ -64,7 +64,8 @@ export class ProductRuntimeExecutor implements ProductJobExecutor {
         this.options.database,
         snapshot,
         target.collector_directory,
-        target.templates_directory
+        target.templates_directory,
+        target.environment?.resolve()
       )
       if (this.options.admitTarget) {
         const admission = await this.options.admitTarget(claim, signal)

@@ -1,0 +1,124 @@
+{
+  "status": "LOCAL_CLAIM_BOUND_ENVIRONMENT_RUNTIME_PASS",
+  "scope": "R7h-3b actual local SSH/SQLite/Docker; no Desktop activation UI or VPS rollout",
+  "date": "2026-11-14",
+  "base_sha": "6d466f91db11cdd84accce01b69354f2b8847b4d",
+  "working_tree_subject": true,
+  "source_sha256": {
+    "app/scripts/product-runtime-lab/README.md": "dd9f0c61a2dfa3434eed09a2bbbb11d8df1ca1075a7f2f5718024ee92df62862",
+    "app/scripts/product-runtime-lab/entry.ts": "41cc3549042dae331f5475a630687b0aa4c93aa6259984984a0c912fa3737e95",
+    "app/scripts/product-runtime-lab/run.mjs": "40cae826b8047238ae4bbcb4ad39b2bef25e85e30c169deab65248761015cd2f",
+    "app/scripts/test_product_environment_runtime.py": "d05ef7e48861e18bb72183b05750ed917ae53b3c99cba88f6c4e203d26bf651c",
+    "app/src/main/controlPlane/controllerExecutionService.ts": "91fe063672d24c9e7a76c7556f0963f008cefeb7b77d9c02e58c5a688404c0eb",
+    "app/src/main/controlPlane/controllerUpgrade.test.ts": "39e18dca9ad98e5477b46be00f662f2c3268ad90e77695572d1e546dde079c8e",
+    "app/src/main/controlPlane/fixtures/r7b-runtime.json": "dea67f3f6d2d9357aa423cb220ea0c5640049faa337cb205df63919de3f776c8",
+    "app/src/main/controlPlane/productEnvironmentRuntime.ts": "3d4808dee1b0b9e6168d8ddb9febeef271003cfc4ccc8137bbe33703ac3153f3",
+    "app/src/main/controlPlane/productEnvironmentRuntime.test.ts": "6b76b1ad223fde76035c222135979bd61fa1b82f90b10086206763d9c5c10946",
+    "app/src/main/controlPlane/productH2Proof.ts": "3e8d5d7d8a6834e20703818d4339391ffafa6ea943a12d9f1b252e2da6cda5c4",
+    "app/src/main/controlPlane/productPipelineSourceRender.ts": "ff976b5eed5957b87c85b47a98d62faee044e68aecdcec804810ac041ae5416b",
+    "app/src/main/controlPlane/productRuntimeExecutor.ts": "53f30cc0579115830b880ac985d89ac935a0e60815d761938f1e941ff2d4bc49",
+    "app/src/main/controlPlane/productRuntimePipeline.ts": "e1e8d182127ed13a4654258049beb2dc69f14674293a41e9e3a636da22840b7d",
+    "app/src/main/controlPlane/target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5",
+    "app/src/main/db/productRuntimeRepository.ts": "c2b133bc68d0e5d3dd868173fc3d34fe4886855957abaf31df17379471183e44",
+    "docs/contracts/product-environment-runtime.ts": "70d1a24a3e90331ee0e1d701e0353ab9e68400ae781c86cd89c4946e6cd5edbd",
+    "docs/contracts/product-h2-runtime.ts": "f0eaf044292aafa4f21112670ceb596f10d95e748389ef730cc4317c02bd8184"
+  },
+  "raw_evidence": {
+    "app/.out-scripts/r7h3b-full-frozen.log": "4cf61798bd3669cfae194f850f7ad44a3bb36547fca04be2af553117a9f88a5b",
+    "app/.out-scripts/r7h3b-focused-final.log": "6fe824ab59728e4686665ac7cb0860fce98371b0d6cc1c617b4fa7276962771e",
+    "app/.out-scripts/r7h3b-types-final.log": "8c12255d8ab6e314322863c86934bc4d0315ccb96d27c3c3a5df8f54009bdeff",
+    "app/.out-scripts/r7h3b-types-scripts-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3b-types-lab-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3b-eslint-final.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3b-prettier-final.log": "fbdd37869c73ce85afb11ffefa058e0181874c073fdfee7d7a4b5086b7ea3b1b",
+    "app/.out-scripts/r7h3b-build-final.log": "421ff359f9cdd15c7f9dc49f60a10799a8c944c284924b906129e3fedd9f687e",
+    "app/.out-scripts/r7h3b-python-auth-final.log": "2a46665176764c36aa3c8ccee01a98c94120986523e857d0ceb18e0f08e13298",
+    "app/.out-scripts/r7h3b-python-legacy-final.log": "5ca861be2620785cf10caa4d25ee997a8f2c8b73d6dc7a1ab35f0ecff587b33d",
+    "app/.out-scripts/r7h3b-ruff-final.log": "af352a86840ad0af3d37ea0d9197f868363a6dac6b1c2ef5d2722f6b41d2d9af",
+    "app/.out-scripts/r7h3b-negative-final.log": "c196aa3a3af915952f2805a2ba99d3a3b31dec845efd0a2be7a7b55a24f64680",
+    "app/.out-scripts/r7h3b-review.log": "29c2ead1571956ffe172905b550dd6efbbb395d985f1336323e4cb7c785de43b"
+  },
+  "native": [
+    {
+      "framework": "express",
+      "environment_enabled": true,
+      "checks": 10,
+      "nonce": "bda6c9439702",
+      "raw": "app/.out-scripts/product-runtime-lab/bda6c9439702/result.json",
+      "sha256": "82e498437ce2e595ff837e1bc4bc12862353feb6b42592a43f354b9cc2e63867",
+      "bundle_sha256": "4d2e6a54afc9f715aef40b5e58a7e45e29cb93285b2fb4147b493a00a2b55571",
+      "cleanup": true
+    },
+    {
+      "framework": "nextjs",
+      "environment_enabled": true,
+      "checks": 13,
+      "nonce": "f0cc41f0e51b",
+      "raw": "app/.out-scripts/product-runtime-lab/f0cc41f0e51b/result.json",
+      "sha256": "a54dc6e805a64c29e74b2f8e7237d53771c4d7451236a419a25f61c872c0a7d0",
+      "bundle_sha256": "4d2e6a54afc9f715aef40b5e58a7e45e29cb93285b2fb4147b493a00a2b55571",
+      "cleanup": true
+    },
+    {
+      "framework": "static-spa",
+      "environment_enabled": true,
+      "checks": 13,
+      "nonce": "d3bbfa346935",
+      "raw": "app/.out-scripts/product-runtime-lab/d3bbfa346935/result.json",
+      "sha256": "50be11f51df4524df43443d5f4f52139c6f2697d8dd60a848f80de64186f57d8",
+      "bundle_sha256": "4d2e6a54afc9f715aef40b5e58a7e45e29cb93285b2fb4147b493a00a2b55571",
+      "cleanup": true
+    },
+    {
+      "framework": "express",
+      "environment_enabled": false,
+      "checks": 7,
+      "nonce": "8848e88f20b3",
+      "raw": "app/.out-scripts/product-runtime-lab/8848e88f20b3/result.json",
+      "sha256": "5bf43bf28d20b43f830695a59039f41137552484d3cee12a2da03e44468cde3f",
+      "bundle_sha256": "4d2e6a54afc9f715aef40b5e58a7e45e29cb93285b2fb4147b493a00a2b55571",
+      "cleanup": true
+    }
+  ],
+  "gates": {
+    "focused": {
+      "files": 8,
+      "passed": 166,
+      "new_runtime_tests": 18
+    },
+    "full": {
+      "files_passed": 171,
+      "files_skipped": 1,
+      "passed": 2387,
+      "skipped": 2,
+      "failed": 0,
+      "note": "Two existing Linux-only tests skipped on Windows; no new skips."
+    },
+    "python": {
+      "environment_auth": 7,
+      "legacy_config": 2
+    },
+    "typecheck": [
+      "node",
+      "web",
+      "scripts",
+      "runtime_lab"
+    ],
+    "eslint": "0 errors / 0 warnings",
+    "prettier": "PASS",
+    "ruff": "PASS",
+    "build": "PASS",
+    "negative_cli": "unknown flag and conflicting framework flags rejected before Docker mutation"
+  },
+  "history": {
+    "initial_full": "2 failures: current helper versus historical R7b pin (corrected to immutable frozen fixture, pins unchanged) and Windows process-tree harness. Harness unchanged; focused passed, full frozen gate is authoritative.",
+    "invalidated_run": "A full run overlapped later source edits and cached old serializers while seeing new tests; stopped its verified owned Vitest tree. Not acceptance evidence. Final frozen run has no source edits during execution."
+  },
+  "limitations": [
+    "Local source snapshot fixture, not public Git poll/installed controller/GUI acceptance.",
+    "No VPS access or schema/release/pin rollout in this checkpoint. Last known VPS controller schema029; source035.",
+    "Main/IPC/UI current-source selection and protected schema backup/upgrade/live gates remain OPEN. Existing editor remains staged-only.",
+    "PostgreSQL/data/backup/restore and whole R7/release remain OPEN."
+  ],
+  "accepted_exceptions": []
+}

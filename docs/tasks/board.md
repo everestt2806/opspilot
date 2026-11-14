@@ -1,5 +1,10 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
+> **14/11 — R7h-3b CHỜ REVIEW, DONE local runtime:** Claim-selected encrypted env035 nối executor/preflight/render/Docker; authenticated file0600/private nonce, runtime literal/public-only build, H2 reference/keyed config fingerprint, không export secret/manifest digest. Frozen actual Linux SSH/SQLite/Docker: Express10+Next13+SPA13+legacy7checks/cleanup PASS; update/restart/build-health failure/exact-CID rollback/collector barrier. Focused166/18newtests, full2387PASS+2existingLinux-onlySKIP/0FAIL, Python9/types/lint/Ruff/build/negativeCLI đạt. Giữ historical pins/release; không truy cập VPS/nâng schema029. Main/UI selection/protected upgrade/live/PG và whole R7 OPEN. SHA tra git log -1 -- app/src/main/controlPlane/productEnvironmentRuntime.ts. [Proof](../ui-redesign/r7h3b-verification.json); [task](tk-s7-release-r7h3b-environment-runtime.md).
+
+
+
+
 > **14/11 — R7h-3a CHỜ REVIEW, DONE scoped desired-source selection:** Chọn retained encrypted env revision bằng source generation mới/non-secret identity và immutable binding035/receipt; same-UID CLI, current source/owner/target/latest-revision CAS, paused/quiescence và replay guards. Giữ deployment/pause, không tạo job/runtime. Pipeline từ chối environment reference trước SSH tới R7h-3b; chưa deploy config. Focused160PASS/27newtests; native6checks/cold retry/two-process race/cleanup; full2369PASS+2existingLinux-onlySKIP/0FAIL/types/lint/build/parity/negativeCLI đạt. Source Desktop/controller035 (controller bỏ030/031/034), VPS029/releaseb680 giữ nguyên. Chưa Main/UI selection/claim decrypt/render/rollout/PG hoặc wholeR7. SHA `git log -1 -- app/src/main/controlPlane/productEnvironmentSelection.ts`; normal push/Kim coauthor, không PR/merge. [Proof](../ui-redesign/r7h3a-verification.json); [task](tk-s7-release-r7h3a-environment-selection.md).
 
 

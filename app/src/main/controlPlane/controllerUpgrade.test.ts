@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { gunzipSync } from 'node:zlib'
 import { CONTROLLER_SPA_ASSET_TRANSITION } from './controllerUpgradeAssets'
+import { assertRetainedTargetHelpers } from './controllerTargetHelperCompatibility'
 import {
   parseControllerUpgradeRequest,
   renderUpgradedControllerUnit,
@@ -93,15 +95,35 @@ describe('Trusted controller upgrade boundary', () => {
       assertControllerUpgradeCompatibility(old, { ...next, node_version: '22.24.0' })
     ).toThrow('INCOMPATIBLE_RELEASE')
   })
-  it('policy mới khớp đúng bytes helper và template được kiểm chứng', () => {
+  it('policy R7b giữ đúng frozen helper/template đã nghiệm thu, không tự chấp nhận helper env chưa release', () => {
     for (const entry of CONTROLLER_SPA_ASSET_TRANSITION) {
-      const file = entry.path.endsWith('.py')
-        ? new URL('./target_product_runtime.py', import.meta.url)
-        : new URL('../../../../templates/static-spa.Dockerfile', import.meta.url)
-      const bytes = readFileSync(file)
+      const bytes = entry.path.endsWith('.py')
+        ? gunzipSync(
+            Buffer.from(
+              JSON.parse(
+                readFileSync(new URL('./fixtures/r7b-runtime.json', import.meta.url), 'utf8')
+              ).gzip_base64,
+              'base64'
+            )
+          )
+        : readFileSync(new URL('../../../../templates/static-spa.Dockerfile', import.meta.url))
       expect(bytes.length).toBe(entry.after.size)
       expect(createHash('sha256').update(bytes).digest('hex')).toBe(entry.after.sha256)
     }
+    const current = readFileSync(new URL('./target_product_runtime.py', import.meta.url))
+    expect(createHash('sha256').update(current).digest('hex')).not.toBe(
+      CONTROLLER_SPA_ASSET_TRANSITION[0].after.sha256
+    )
+    const path = 'target-helper/target_product_runtime.py'
+    expect(() =>
+      assertRetainedTargetHelpers(
+        'express',
+        [
+          { path, size: current.length, sha256: createHash('sha256').update(current).digest('hex') }
+        ],
+        [{ path, ...CONTROLLER_SPA_ASSET_TRANSITION[0].after }]
+      )
+    ).toThrow('TARGET_ENROLLMENT_HELPER_UPGRADE_REQUIRED')
   })
   it('allows explicit recovery staging but never accepts it for inspection or rollback', () => {
     expect(parseControllerUpgradeRequest({ ...input, operation: 'recover-upgrade' })).toMatchObject(

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- Standalone JavaScript integration lab. */
 import assert from 'node:assert/strict'
 import { execFileSync, spawn } from 'node:child_process'
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import {
   chmodSync,
   cpSync,
@@ -20,6 +20,16 @@ import { dirname, join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 
 if (process.platform !== 'linux') throw new Error('LINUX_REQUIRED')
+const allowedFlags = new Set([
+  '--restore-failure',
+  '--spa',
+  '--nextjs',
+  '--environment',
+  '--trace',
+  '--public-git-checkpoint-gate'
+])
+if (process.argv.slice(2).some((flag) => !allowedFlags.has(flag)))
+  throw new Error('RUNTIME_LAB_FLAG_INVALID')
 process.env.PATH = `${dirname(process.execPath)}:${process.env.PATH}`
 const artifact = process.env.OPSPILOT_R1_ARTIFACT
 if (!artifact) throw new Error('R1_ARTIFACT_REQUIRED')
@@ -30,7 +40,12 @@ const {
   ProductRuntimeRepository,
   SshManager,
   executeProductDeployPipeline,
-  recoverProductRuntimeSession
+  recoverProductRuntimeSession,
+  AesGcmCredentialCipher,
+  ProductEnvironmentRepository,
+  ProductEnvironmentSelection,
+  ProductEnvironmentRuntime,
+  canonicalH2Json
 } = createRequire(artifact)(artifact)
 const repo = resolve(import.meta.dirname, '../../..')
 process.env.OPSPILOT_TEMPLATES_DIR = join(repo, 'templates')
@@ -46,6 +61,7 @@ const spa = process.argv.includes('--spa')
 const next = process.argv.includes('--nextjs')
 if (spa && next) throw Error('FRAMEWORK_FLAGS_CONFLICT')
 const framework = spa ? 'static-spa' : next ? 'nextjs' : 'express'
+const environmentEnabled = process.argv.includes('--environment')
 const traceEnabled = process.argv.includes('--trace')
 const scratch = mkdtempSync(join(tmpdir(), 'opspilot-r1-'))
 chmodSync(scratch, 0o700)
@@ -55,6 +71,16 @@ const helper = join(scratch, 'helper')
 const state = join(scratch, 'target-state')
 const source = join(scratch, 'source')
 const secret = randomBytes(32)
+const cipher = new AesGcmCredentialCipher(randomBytes(32))
+const publicValue = 'Public Sổ Đọc $HOME "quoted" \\ end'
+const runtimeValues = (revision) => ({
+  APP_TOKEN: `SYNTHETIC_ONLY_${revision} $HOME "quote" \\ = # 日本語  `,
+  EMPTY: '',
+  SPACES: '  leading and trailing  ',
+  UNICODE: 'a\u0085b\u2028c\u2029d'
+})
+const publicValues = () =>
+  next ? { NEXT_PUBLIC_TITLE: publicValue } : spa ? { VITE_TITLE: publicValue } : {}
 const configJson = framework === 'express' ? '{}' : JSON.stringify({ framework })
 const configHash = createHash('sha256').update(configJson).digest('hex')
 const subjectFiles = [
@@ -175,6 +201,19 @@ try {
     .run(appName, port, pin)
   database.prepare('INSERT INTO product_controller VALUES (?,?,?)').run(controller, now, 'active')
   for (const [appId, name] of appNames) {
+    const appPort = appId === 1 ? hostPort : await reservePort()
+    const initialConfig = environmentEnabled
+      ? canonicalH2Json({
+          framework,
+          host_port: appPort,
+          container_port: spa ? 80 : 3000,
+          healthcheck_path: framework === 'express' ? '/health' : '/',
+          needs_db: false
+        })
+      : configJson
+    const initialHash = environmentEnabled
+      ? createHash('sha256').update(initialConfig).digest('hex')
+      : configHash
     database
       .prepare(
         `INSERT INTO app
@@ -185,7 +224,7 @@ try {
         appId,
         name,
         framework,
-        appId === 1 ? hostPort : await reservePort(),
+        appPort,
         spa ? 80 : 3000,
         framework === 'express' ? '/health' : '/'
       )
@@ -195,14 +234,14 @@ try {
     (app_id,source_generation,repository_url,production_ref,repository_root,deploy_config_json,config_sha256,created_at)
     VALUES (?,1,'https://example.test/r1.git','main','.',?,?,?)`
       )
-      .run(appId, configJson, configHash, now)
+      .run(appId, initialConfig, initialHash, now)
     database
       .prepare(
         `INSERT INTO product_app_control
     (app_id,mode,controller_id,ownership_generation,source_generation,source_config_sha256,changed_at)
     VALUES (?,'product',?,1,1,?,?)`
       )
-      .run(appId, controller, configHash, now)
+      .run(appId, controller, initialHash, now)
     run(
       'python3',
       [
@@ -262,6 +301,65 @@ try {
       return write(chunk, ...writeArgs)
     }
     return opened
+  }
+  const selectEnvironment = (appId, revision) => {
+    const owner = database.prepare('SELECT * FROM product_app_control WHERE app_id=?').get(appId)
+    const target = {
+      vps_id: 1,
+      host: '127.0.0.1',
+      port,
+      username: 'root',
+      auth_type: 'key',
+      host_fingerprint: pin,
+      ssh_security_revision: 1
+    }
+    const scope = { controller_id: controller, app_id: appId, ownership_generation: 1, target }
+    const vault = new ProductEnvironmentRepository(database, cipher)
+    vault.append({
+      scope,
+      expected_latest_revision: revision === 1 ? null : revision - 1,
+      expected_source_generation: owner.source_generation,
+      expected_source_config_sha256: owner.source_config_sha256,
+      values: { runtime_env: runtimeValues(revision), public_build_args: publicValues() }
+    })
+    new ProductEnvironmentSelection(database, cipher).select(
+      {
+        format: 1,
+        request_key: randomUUID(),
+        scope,
+        expected_source_generation: owner.source_generation,
+        expected_source_config_sha256: owner.source_config_sha256,
+        expected_latest_revision: revision,
+        environment_revision: revision
+      },
+      controller,
+      'unix:0'
+    )
+  }
+  if (environmentEnabled) {
+    database.exec(
+      "UPDATE product_app_control SET auto_deploy_paused=1,pause_reason='operator',pause_policy_provenance='explicit'"
+    )
+    for (const appId of appNames.keys()) {
+      selectEnvironment(appId, 1)
+    }
+  }
+  const verifyEnvironment = (revision) => {
+    const item = inspect('container', `${appName}-app`)
+    const actual = Object.fromEntries(
+      item.Config.Env.map((line) => {
+        const i = line.indexOf('=')
+        return [line.slice(0, i), line.slice(i + 1)]
+      })
+    )
+    for (const [key, value] of Object.entries(runtimeValues(revision)))
+      assert.equal(actual[key], value, 'RUNTIME_LITERAL_MISMATCH')
+    assert.ok(actual.OPSPILOT_CONFIG_REVISION.endsWith(`:1:${revision}:${revision + 1}`))
+    assert.ok(!Object.keys(publicValues()).some((key) => Object.hasOwn(actual, key)))
+    const image = inspect('image', item.Image)
+    const imageText = JSON.stringify(image)
+    for (const value of Object.values(runtimeValues(revision)).filter((v) => v.length > 3))
+      assert.ok(!imageText.includes(value), 'RUNTIME_VALUE_IN_IMAGE')
   }
   const deploys = new ProductDeployRepository(database)
   const runtime = new ProductRuntimeRepository(database, { secret })
@@ -336,6 +434,13 @@ try {
         join(source, 'pages/index.js'),
         `export function getServerSideProps({res}) {res.statusCode=${statusCode};return {props:{}}};export default function Home(){return <main>${name}</main>};\n`
       )
+      if (environmentEnabled) {
+        mkdirSync(join(source, 'pages/api'), { recursive: true })
+        writeFileSync(
+          join(source, 'pages/api/public.js'),
+          'export default function handler(req,res){res.json({title:process.env.NEXT_PUBLIC_TITLE})}\n'
+        )
+      }
     }
     if (spa) {
       // Artifact không đọc được: build thành công nhưng nginx403, buộc health/rollback thật.
@@ -347,12 +452,13 @@ try {
       )
       writeFileSync(
         join(source, 'main.js'),
-        `document.getElementById('app').textContent = ${JSON.stringify(name)};`
+        `document.getElementById('app').textContent = ${JSON.stringify(name)};` +
+          (environmentEnabled ? '\nconsole.info(import.meta.env.VITE_TITLE);' : '')
       )
     }
     run('git', ['-C', source, 'add', '--', 'package.json', 'package-lock.json', 'server.js'])
     if (spa) run('git', ['-C', source, 'add', '--', 'index.html', 'main.js'])
-    if (next) run('git', ['-C', source, 'add', '--', 'pages/index.js', 'next.config.js'])
+    if (next) run('git', ['-C', source, 'add', '--', 'pages', 'next.config.js'])
     run('git', [
       '-C',
       source,
@@ -367,18 +473,24 @@ try {
     const sha = run('git', ['-C', source, 'rev-parse', 'HEAD'])
     const job = `${controller}-${cases.length + 1}`
     const timestamp = new Date().toISOString()
+    const owner = database
+      .prepare(
+        'SELECT source_generation,source_config_sha256 FROM product_app_control WHERE app_id=?'
+      )
+      .get(appId)
     database
       .prepare(
         `INSERT INTO product_deploy_job
       (job_id,controller_id,app_id,ownership_generation,source_generation,source_config_sha256,trigger,
        idempotency_key,ref,target_sha,state,available_at,created_at,updated_at)
-      VALUES (?,?,?,1,1,?,'manual_redeploy',?,'main',?,'queued',?,?,?)`
+      VALUES (?,?,?,1,?,?,'manual_redeploy',?,'main',?,'queued',?,?,?)`
       )
       .run(
         job,
         controller,
         appId,
-        configHash,
+        owner.source_generation,
+        owner.source_config_sha256,
         `manual:${job}`,
         sha,
         timestamp,
@@ -392,7 +504,7 @@ try {
       repositoryUrl: 'https://example.test/r1.git',
       repositoryRoot: '.',
       commitSha: sha,
-      sourceConfigSha256: configHash
+      sourceConfigSha256: owner.source_config_sha256
     }
     assert.equal(deploys.markGitSnapshotVerified(claim, metadata).state, 'snapshot_verified')
     heartbeat = setInterval(() => {
@@ -417,6 +529,11 @@ try {
         snapshot,
         {
           ...options,
+          environment: environmentEnabled
+            ? new ProductEnvironmentRuntime(database, deploys, cipher, claim, () =>
+                Buffer.from(secret)
+              )
+            : undefined,
           target_state_root: join(state, `app-${appId}`),
           ...(collectorDirectory ? { collector_directory: collectorDirectory } : {})
         }
@@ -463,6 +580,15 @@ try {
   })
   if (spa) await verifySpaRoutes('first_healthy')
   if (next) await verifyNextPage('first_healthy')
+  if (environmentEnabled) {
+    verifyEnvironment(1)
+    selectEnvironment(1, 2)
+    record('environment_first_revision_and_selection', {
+      literal_values: true,
+      image_excludes_runtime: true,
+      selected_next_revision: 2
+    })
+  }
 
   const second = await deploy('healthy_update')
   assert.equal(second.result.state, 'succeeded')
@@ -483,6 +609,34 @@ try {
   })
   if (spa) await verifySpaRoutes('healthy_update')
   if (next) await verifyNextPage('healthy_update')
+  if (environmentEnabled) {
+    verifyEnvironment(2)
+    docker('restart', current.Id)
+    await waitFor(async () => {
+      try {
+        return (await fetch(`http://127.0.0.1:${hostPort}`)).ok
+      } catch {
+        return false
+      }
+    }, 30000)
+    verifyEnvironment(2)
+    if (next)
+      assert.equal(
+        (await (await fetch(`http://127.0.0.1:${hostPort}/api/public`)).json()).title,
+        publicValue
+      )
+    if (spa) {
+      const html = await (await fetch(`http://127.0.0.1:${hostPort}`)).text()
+      const asset = html.match(/src="([^"]+\.js)"/)[1]
+      const js = await (await fetch(`http://127.0.0.1:${hostPort}${asset}`)).text()
+      assert.ok(js.includes('Public Sổ Đọc') && js.includes('$HOME'))
+    }
+    record('environment_update_restart_public_build', {
+      revision: 2,
+      literals_after_restart: true,
+      public_build: next || spa
+    })
+  }
 
   const failedBuild = await deploy('build_failure', 200, true)
   assert.equal(failedBuild.result.state, 'failed')
@@ -495,6 +649,7 @@ try {
     previous_container_preserved: true,
     previous_collector_preserved: true
   })
+  if (environmentEnabled) verifyEnvironment(2)
 
   if (restoreFailure) {
     await assert.rejects(
@@ -554,6 +709,14 @@ try {
     })
     if (spa) await verifySpaRoutes('healthy_update')
     if (next) await verifyNextPage('healthy_update')
+    if (environmentEnabled) {
+      verifyEnvironment(2)
+      record('environment_rollback_preserves_exact_config', {
+        revision: 2,
+        exact_container: true,
+        exact_collector: true
+      })
+    }
     const firstBuildFailure = await deploy('first_build_failure', 200, true, undefined, 2)
     assert.equal(firstBuildFailure.result.state, 'failed')
     assert.equal(firstBuildFailure.result.failed_step, 'BUILD')
@@ -702,6 +865,7 @@ try {
     status: failure ? 'FAIL' : cleanup ? 'PASS' : 'FAIL',
     scope: 'PINNED_SSH_SQLITE_DOCKER_RUNTIME',
     framework,
+    environment_enabled: environmentEnabled,
     nonce,
     source_sha: run('git', ['-c', `safe.directory=${repo}`, '-C', repo, 'rev-parse', 'HEAD']),
     subject_sha256: subjectHashes,

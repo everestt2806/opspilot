@@ -21,6 +21,9 @@ node app/scripts/product-runtime-lab/build.mjs
 node app/scripts/product-runtime-lab/run.mjs
 node app/scripts/product-runtime-lab/run.mjs --spa
 node app/scripts/product-runtime-lab/run.mjs --nextjs
+node app/scripts/product-runtime-lab/run.mjs --environment
+node app/scripts/product-runtime-lab/run.mjs --environment --nextjs
+node app/scripts/product-runtime-lab/run.mjs --environment --spa
 node app/scripts/product-runtime-lab/run.mjs --restore-failure
 node app/scripts/product-runtime-lab/verify-deps.mjs
 ```
@@ -55,6 +58,20 @@ template hoặc giả kết quả health. `--spa` và `--nextjs` cùng lúc bị
 tạo scratch. Không DB/user env/custom server; NODE_ENV=production thuộc template.
 Đây là native lab với verified snapshot, không thay GitHub polling/installed VPS
 rollout; phải build frozen artifact từ source cuối trước khi chạy.
+
+R7h-3b: `--environment` dùng encrypted vault032 và source selection035 thật cho
+hai app fixture. Chọn revision1 trước deploy đầu, revision2 trước update; runtime
+resolver cấp đúng claim-selected revision và ký private env-file bằng key đã
+enroll trong helper. Kiểm tra Docker Env trong RAM (không ghi giá trị ra report),
+giữ empty/space/Unicode/dollar/quote/backslash; restart giữ cấu hình và image không
+chứa runtime values. Next kiểm API trả public value đã compile, SPA kiểm bundle
+chứa public marker. Build failure, health failure và rollback phải giữ exact CID,
+collector và revision2; failed first deploy/collector barrier vẫn được kiểm.
+Không dùng inspector để hiển thị secret, không lưu key trong evidence.sqlite;
+vault ciphertext có trong private backup nhưng key chỉ ở RAM và scratch đã dọn.
+CLI từ chối cờ không biết (kể cả CR bị dính do shell script Windows) trước tạo
+scratch. Đây là actual Linux SSH/Docker local acceptance; chưa chứng minh Desktop
+UI selection, installed release upgrade hoặc deployment trên VPS thật.
 
 Optional `--trace` uses `trace_helper.py` to observe/rethrow exceptions and forward all real operations.
 The default gate uses the unchanged target helper directly. The optional trace contains

@@ -1,3 +1,5 @@
+import { ProductEnvironmentRuntime } from './productEnvironmentRuntime'
+import { loadControllerRuntimeKey } from './controllerRuntimeKeys'
 import type { OpenControllerDatabase } from './controllerDatabase'
 import type { ProductDeployRepository } from '../db/productDeployRepository'
 import type { VerifiedControllerBundle } from './controllerBundle'
@@ -67,7 +69,14 @@ export function createControllerExecutionRuntime(
         target_helper_path: installed.helper_path,
         target_state_root: installed.state_root,
         collector_directory: approved.collector_directory,
-        templates_directory: approved.templates_directory
+        templates_directory: approved.templates_directory,
+        environment: new ProductEnvironmentRuntime(
+          opened.database,
+          repository,
+          loadControllerCredentialCipher(opened.dataDirectory),
+          claim,
+          (keyClaim) => loadControllerRuntimeKey(opened.dataDirectory, keyClaim)
+        )
       }
     }
   })
