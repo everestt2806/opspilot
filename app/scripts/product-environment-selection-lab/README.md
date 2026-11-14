@@ -19,10 +19,15 @@ tiến trình mới và hai tiến trình cạnh tranh cùng UUID. Chỉ một g
 có value/tên biến/hash secret, giữ deployment/pause policy, FK/role/migration035,
 binding bất biến và từ chối replay báo paused sai khi operator đã resume.
 
-Source có `environment` reference bị preflight từ chối trước source IO/SSH vì
-renderer/runtime còn ở checkpoint sau. Đây là **desired source selection**,
-không phải deploy hoặc activate cấu hình vào container. Không mở HTTP/root admin
-bridge/Main/IPC/UI selection hoặc nới installed release/schema upgrade guard.
+Lab này gọi preflight không cấp claim-bound resolver nên `environment` reference
+bị từ chối trước source IO/SSH. Runtime đã được kiểm riêng tại R7h-3b; CLI selection
+ở đây không deploy hoặc activate container. R7h-3c thêm current-source review neo
+vào registered basis, readonly exact-body receipt lookup kể cả sau resume, và native
+fixed Python same-UID bridge cho review/select/lookup. Negative proof đòi một SQLite
+snapshot có receipt vắng mặt và monotonic source/latest CAS đã vượt request; chỉ
+vắng receipt hoặc request dùng future generation không đủ để kết luận chưa áp dụng.
+Controller role035 không chạy Desktop-only036. Không HTTP, Root installed admin,
+VPS hoặc bypass release/schema guard. [Electron UI gate riêng](../product-environment-selection-desktop-lab/README.md).
 
 Kết quả đã khử dữ liệu tại
 `app/.out-scripts/product-environment-selection-lab/<nonce>/result.json`; chỉ

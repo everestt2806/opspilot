@@ -49,6 +49,8 @@ type Command =
   | 'project-environment-state'
   | 'project-environment-context'
   | 'select-project-environment'
+  | 'project-environment-review'
+  | 'project-environment-selection-state'
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
@@ -85,7 +87,9 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
       'stage-project-environment',
       'project-environment-state',
       'project-environment-context',
-      'select-project-environment'
+      'select-project-environment',
+      'project-environment-review',
+      'project-environment-selection-state'
     ].includes(commandValue)
   ) {
     throw new Error('USAGE')
@@ -149,7 +153,9 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
     command === 'stage-project-environment' ||
     command === 'project-environment-state' ||
     command === 'project-environment-context' ||
-    command === 'select-project-environment'
+    command === 'select-project-environment' ||
+    command === 'project-environment-review' ||
+    command === 'project-environment-selection-state'
   ) {
     if (process.platform !== 'linux') throw new Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
     const controller = new AbortController()
@@ -169,7 +175,13 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
         recoveryBundle = verifyControllerBundle(request.artifact, request.manifest_sha256)
       }
       opened = openControllerDatabase(dataDirectory)
-      if (command === 'select-project-environment') {
+      if (
+        [
+          'select-project-environment',
+          'project-environment-review',
+          'project-environment-selection-state'
+        ].includes(command)
+      ) {
         const uid = process.getuid?.()
         if (uid === undefined) throw Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
         console.log(
@@ -177,7 +189,13 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
             new ProductEnvironmentSelection(
               opened.database,
               loadControllerCredentialCipher(opened.dataDirectory)
-            ).select(input, opened.controllerId, `unix:${uid}`)
+            )[
+              command === 'project-environment-review'
+                ? 'review'
+                : command === 'project-environment-selection-state'
+                  ? 'lookup'
+                  : 'select'
+            ](input, opened.controllerId, `unix:${uid}`)
           )
         )
       } else if (

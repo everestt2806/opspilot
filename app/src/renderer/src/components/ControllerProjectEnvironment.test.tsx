@@ -90,6 +90,8 @@ beforeEach(() => {
     ownership_generation: 1,
     source_generation: 1,
     source_config_sha256: 'a'.repeat(64),
+    selected: null,
+    auto_deploy_paused: true,
     latest: null
   }
   Object.defineProperty(window, 'api', { configurable: true, value: { invoke } })
@@ -98,7 +100,7 @@ beforeEach(() => {
     data:
       channel === 'controller:environment-context'
         ? context
-        : channel === 'controller:environment-intents'
+        : ['controller:environment-intents', 'controller:environment-selections'].includes(channel)
           ? rows
           : intent()
   }))

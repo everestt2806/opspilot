@@ -1,0 +1,399 @@
+{
+  "status": "LOCAL_DESKTOP_ENVIRONMENT_SELECTION_PASS",
+  "date": "2026-11-14",
+  "base_sha": "b1ac6cf86a2fd394276e6b90769b0cb4e2c3dd7a",
+  "working_tree_subject": true,
+  "source_sha256": {
+    "app/scripts/product-environment-desktop-lab/fixture.ts": "c7cfa80db5b17cc99da9922e2f6f3c13ba0bcc7981f7ce19c9efab6efe6c2b86",
+    "app/scripts/product-environment-selection-desktop-lab/README.md": "0a63e483d61e2b1ef5541ecaca97d0c00010be976ced21198eccef579a8bbff9",
+    "app/scripts/product-environment-selection-desktop-lab/electron.mjs": "b1cbcd313d87680b15ce4daf2fe254279c7c23d1985e607561a892a7089cf257",
+    "app/scripts/product-environment-selection-desktop-lab/entry.ts": "0337ed694dfb81763d99f6b68bb9581a230f9a9f732f2d948963ce263fc9c081",
+    "app/scripts/product-environment-selection-desktop-lab/run.mjs": "67894339058669a1035a1982f59f932fe4fa042075c729deff5d25e93c8111dd",
+    "app/scripts/product-environment-selection-desktop-lab/tsconfig.json": "978243f3aaf45fcf5a3c1cb8504800930e48be80fe11d865864eb8af6c69cb19",
+    "app/scripts/product-environment-selection-lab/README.md": "9a9b2abff87b6dfd2034b6d1440b776ceaf17795b61a8706b114a342e21e8ed6",
+    "app/scripts/product-environment-selection-lab/run.mjs": "5144a90caacb34a0b8921aaf2199676781b63b5d42221881b7f1a902d4d274ae",
+    "app/src/main/controlPlane/cli.ts": "825196fe115b06b894cee27cdc8a61b2a4decc9efefaee22d9f142356f715f8c",
+    "app/src/main/controlPlane/controllerInstalledAdmin.test.ts": "2c19c3f1a199a05e22bafa2ec24ec8bd824b00213dca767240b3b96644a70f1e",
+    "app/src/main/controlPlane/desktopControllerCommands.test.ts": "ecb95cd64095b3de528cd67d164617350008691a3aac94c56924426d35e2f7c6",
+    "app/src/main/controlPlane/desktopControllerEnrollment.ts": "08e6244b3e495a8d276944e63aea4476dfdc64963e797aa536b49ae9ed363214",
+    "app/src/main/controlPlane/desktopControllerInstallation.test.ts": "99a8e1f001e913fddcebbf1c17205cb0abca75b57ef3794999669668ae72baf4",
+    "app/src/main/controlPlane/desktopControllerService.ts": "fdf6e995dd4f02c592a803dba34f498fc9d87d517e1b6d7c3e4e7ef0fad5040c",
+    "app/src/main/controlPlane/desktopControllerVault.test.ts": "989774d1d48e0c99763858b043beaea1b7e60cf203031e35bd6bce25ad9df164",
+    "app/src/main/controlPlane/desktopEnvironmentSelections.test.ts": "9991498b3090c418c62ad80714e78b689b0dd427df7f7d8b4fa96266795150e5",
+    "app/src/main/controlPlane/desktopEnvironmentSelections.ts": "8e0b45dd5d08f4282250c08b6ddb07fddda3b673dba8ab36b335af704bac5ac8",
+    "app/src/main/controlPlane/desktopProductEnvironment.test.ts": "48c8d6ce4ed0250f711b7be1f21d08f0a84fb4e090a397192f013548a69f3f2b",
+    "app/src/main/controlPlane/desktopProductEnvironment.ts": "97b4dd3b39e3b860d6f58c214c3ecb2ed16736843b76679eb812cf0b13ea1271",
+    "app/src/main/controlPlane/desktop_controller_admin.py": "ca73c04974eb98a0ba7b7479f2ffaf051ebcff2c0c0cf34d30a6ffe24e41ae23",
+    "app/src/main/controlPlane/installedControllerAdminProtocol.ts": "0c7dcb4c1dc60f76eff21b15e0db2fb2c7c475b3ab5771f5975ac2bed75f92ea",
+    "app/src/main/controlPlane/productEnvironment.ts": "089e733a9ae3e93085c75fc2f483f06a104abf3c74cecc00ce8012ce3410b447",
+    "app/src/main/controlPlane/productEnvironmentSelection.ts": "ee94ace50fbcca0935aa3b652a9068a83680488e6077d4b5fad2707a26efe755",
+    "app/src/main/controlPlane/projectRegistration.test.ts": "02bd8093adf8535a7c2184c937790e0a4083cac0f28cd24be06708cdf2a6bd8e",
+    "app/src/main/db/index.test.ts": "a3d1c0e5e2ed94c3b1a77f442c44b3a739f9248428b5322ba79dff2b876708ec",
+    "app/src/main/db/index.ts": "35f5a202b58d151cb0bf14c1c1b7125675963e0ad97ee864b7e53f7ec380a6e4",
+    "app/src/main/db/migrationRoles.test.ts": "63da5f0a5c8244fc977d0e97b469937ea78e502be436f94025c68e877facf1ef",
+    "app/src/main/db/migrations/036_desktop_environment_selection.sql": "420c26c6f3f2b5a8c34a820acaecbd5e114f7d481a221d25fb89d823cbf93bd7",
+    "app/src/main/db/productEnvironmentAdmin.test.ts": "62dbd14bf4710c381bbf810542ea0604b3572d537f4e63029d59d81bf9c35fa0",
+    "app/src/main/db/productEnvironmentRepository.test.ts": "88e8ec274f685b06cf6c6cbceffc3280bb404b652b9332ea6ab68c1f952bb8d6",
+    "app/src/main/db/productMigration.test.ts": "bf0b82668bace2f319340b002068fcbc2ec117e5f5d1a85abae6a56c109b6eef",
+    "app/src/main/ipc.test.ts": "de7230abcfd57fb22eba22619956fd451b69cf605b73941af59682c47c21b5c8",
+    "app/src/main/ipc.ts": "02b09379de0d6e5f2e13dcf3910e2b301f2d34934477bacabc75346b03067f5d",
+    "app/src/renderer/src/components/ControllerEnvironmentSelection.test.tsx": "6b391a3f25da12e5f6e49224c38758ce0e75cd1a755aa5d1059351ca215e7cf6",
+    "app/src/renderer/src/components/ControllerEnvironmentSelection.tsx": "44e5c1e648445581446b31800baa8d7c98dd91d802a95661605301ce5de30fc2",
+    "app/src/renderer/src/components/ControllerProjectEnvironment.test.tsx": "f74c06f6a403889785d4054e239cef58af5dd99fb1af76d1a2fcc505283dd8c5",
+    "app/src/renderer/src/components/ControllerProjectEnvironment.tsx": "037998fa6688f850e53e430631d8646dff5729ba9f826e9de129c0e379f52729",
+    "app/src/renderer/src/components/controllerEnvironmentCopy.ts": "f8d95e3faa0c1ab9d8a085d745698fc65ba7f11ea46abd700d2e1955b071ca21",
+    "app/src/shared/desktopProductEnvironment.ts": "61ffb819229066eda51d81a1b7155e7f2082463801e5ceb50d0b81c41eac955d",
+    "app/src/shared/ipc.ts": "338570083513963713d5a8f910a988eb23dd21b3d8b83aed039d5231419c1b48",
+    "app/src/shared/productEnvironment.ts": "ed0507915d98ec2764a2c9a09c22858a800e951a9897acfc4f704aa80bac0fd1",
+    "docs/contracts/desktop-product-environment.ts": "b0c1b6c407da24302f345cc2f0a71c2de6f4f2ab78e943a2ac0cfc1a9849ce40",
+    "docs/contracts/ipc-contract.ts": "a6e12db04699f5adc690a904917b16a2c19527c6e09cc3aaefdfdae2cdf4bb6f",
+    "docs/contracts/product-environment.ts": "fd0d2228e291f420b8958b20db597823a309761da4c59c87496d12ad5e0dbe6d",
+    "docs/contracts/product-installed-controller-admin.ts": "ec7f2cda1f41880b149dfb581ca43717c8816653c9265208a4d53af862cf9ca3",
+    "docs/contracts/schema.sql": "4768b4b5e4c6088a2899e278b21fb1ee004018bf647c084a40f87187d020f67f"
+  },
+  "raw_evidence": {
+    "app/.out-scripts/r7h3c-full-frozen.log": "fb3dc1a386bdf96c9e97c0142e7cb7081c66ee021b6f02765e16c319a66e064f",
+    "app/.out-scripts/r7h3c-focused-acceptance.log": "6b860907720e8a52d0ac9f6bf23bd52a2ba7765290c5c4e55e71a02f94f36b1c",
+    "app/.out-scripts/r7h3c-types-frozen.log": "3ec66c6e8a11f7f2bcf72fd11b79d829da991ad3c59e881ec67a98e5597ece8e",
+    "app/.out-scripts/r7h3c-scripts-types-frozen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3c-lab-types-frozen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3c-lint-frozen.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3c-dto-lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3c-prettier-frozen.log": "fbdd37869c73ce85afb11ffefa058e0181874c073fdfee7d7a4b5086b7ea3b1b",
+    "app/.out-scripts/r7h3c-build-frozen.log": "434d4e0afa3d68069c9e25e6a36fb4323a4c0d16b291696cd291afa169b35bcb",
+    "app/.out-scripts/r7h3c-ruff.log": "af352a86840ad0af3d37ea0d9197f868363a6dac6b1c2ef5d2722f6b41d2d9af",
+    "app/.out-scripts/r7h3c-negative.log": "1aac235897d13b8740e10cda8c157dc14c756479012e25a54c91a3443d022f03",
+    "app/.out-scripts/r7h3c-native-frozen.log": "2c6b9e7ec37c1b701fa94bc90dcfa06f97dfbd34aec60f5035f4b9276305b513",
+    "app/.out-scripts/r7h3c-electron-painted.log": "24c0cace959c2042f84f6415b5f3ace680e675d2a38ffef0f8aa24f067a1db83",
+    "app/.out-scripts/r7h3c-review.log": "9b5882489ed1e3d7bd2fb006ea3cc428584f9ce855b7b17f60733df534c6a22f",
+    "app/.out-scripts/r7h3c-capture-lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3c-capture-format.log": "8146321b439473fcaaaf9c4515e1c2aad715eaa630c228f2f679f6a71bb56171"
+  },
+  "native_cli": {
+    "status": "PASS",
+    "scope": "NATIVE_LINUX_CLI_SOURCE_SELECTION_ONLY",
+    "nonce": "e2effd26c882",
+    "checks": [
+      "native_fixed_python_same_uid_bridge_review_select_and_receipt_lookup",
+      "actual_cli_review_anchored_original_source_and_readonly_receipt_lookup_after_cold_process",
+      "actual_cli_select_cold_process_retry_exactly_one_source_generation",
+      "source_binding_and_audit_contain_no_values_keys_or_secret_hash_live_and_pause_preserved",
+      "source_preflight_refuses_environment_reference_before_source_io_or_ssh",
+      "shared035_controller_role_no_desktop_migrations_immutable_binding_no_plaintext_db",
+      "two_actual_cli_processes_same_uuid_create_one_new_generation",
+      "replay_does_not_claim_paused_after_operator_resumes_policy",
+      "readonly_review_and_receipt_remain_available_after_operator_resume",
+      "atomic_negative_lookup_requires_monotonic_cas_advance_not_merely_absent_receipt"
+    ],
+    "vps_used": false,
+    "ssh_used": false,
+    "execution_implemented": false,
+    "artifact_sha256": "e301fd74ac61838bfc136f013188f8e514932a2035960460d5de0ee2f4a29c5f",
+    "private_scratch_removed": true
+  },
+  "electron": {
+    "status": "PASS",
+    "scope": "REAL_ELECTRON_ENVIRONMENT_SELECTION_PRELOAD_MAIN_SQLITE_SYNTHETIC_SSH",
+    "nonce": "3c75e4e4a328",
+    "checks": [
+      "production_component_4locale_2theme_2resolutions_no_horizontal_overflow",
+      "typed_preload_main_prepare_encrypts_values_clears_form_and_does_not_send",
+      "lost_ssh_reply_cold_main_sqlite_reopen_metadata_lookup_one_revision",
+      "selection_confirmation_lost_reply_cold_main_reopen_lookup_one_source_generation",
+      "new_stage_after_selection_uses_current_source_and_keeps_previous_selected_revision",
+      "selected_and_latest_visible_in_all_4locales_2themes",
+      "stale_other_admin_revision_authoritative_unapplied_unlocks_new_request_without_source_write",
+      "no_plaintext_in_private_databases_or_localstorage_no_deployment_or_unpause"
+    ],
+    "captures": [
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/vi-dark-1280x800.png",
+        "sha256": "8c7d91a8f486223ed28d21227602b3ad44fa43b7f24afd3041e2072c2d97e53d",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/vi-dark-1366x768.png",
+        "sha256": "6a491fcd5bd47eabf7d8c407ad768e1163aedf2a345d97ca7e8f0d7ac745beb8",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/vi-light-1280x800.png",
+        "sha256": "fd6b80ff6d81f1268c1f7aea25057292b180cfeec7c8e861e579d38a38421e0d",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/vi-light-1366x768.png",
+        "sha256": "9fbf8f83bda2996fa84fc96fc0aeccc38d89b060697f737488833f7ce6d497bf",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/en-dark-1280x800.png",
+        "sha256": "572606d5f853a075aaecc5151ba8fdc35c7fa7ca135b17bb0a5f4d19ec435f4a",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/en-light-1280x800.png",
+        "sha256": "73d66496a59678d34388b20f9e2ca31a231a7e59f45f6e510d4e356fa730bced",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/cn-dark-1280x800.png",
+        "sha256": "2d8868185b93ff1807f6acdfb3cadc69c23c45fdcc006a985709628145c9db8f",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/cn-light-1280x800.png",
+        "sha256": "454aeca1021094946cbcae31cdf57e297d1cf86e55e101db149db3c9ad0d2218",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/jp-dark-1280x800.png",
+        "sha256": "9d11496a4e68a65e1478f38d75c42014b33e367a2580f37b86905957cceb4ee8",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/jp-light-1280x800.png",
+        "sha256": "9e8792e322c22adfbe276d9985a845d9a8a267037850df6fce8c72d3d2e345d4",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/prepared-en-dark-1280x800.png",
+        "sha256": "95b1bc555997b607d39e1f5cafce98ef482d18b047b09369efe79f358f959193",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/unknown-en-dark-1280x800.png",
+        "sha256": "d36080d887208b6b7904d75d4de858eb49d714b7fcaa1f6aed97ab74e0e26397",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/saved-en-dark-1280x800.png",
+        "sha256": "42e11a9899bfe02df784821f618d97553f8f36bbae2ac06cdd5f3821cfc80f2d",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/selection-prepared-en-dark-1280x800.png",
+        "sha256": "246a9921e73cd8a505d7058b1754ac3b14ae64b85a44275be22634a302fa0d89",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/selection-unknown-en-dark-1280x800.png",
+        "sha256": "83b885d0e412cd993edd94c15e24b6d6dee4a0720108ed74ae71d2868d72a224",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/selection-selected-en-dark-1280x800.png",
+        "sha256": "4d742266afe477b9cb561cf0111432baf60fb8612f5c1e0f29a1b469b87f01ac",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/latest2-selected1-en-dark-1280x800.png",
+        "sha256": "fab702f55ac1e61f6a37505635ba69e9be053c0293ab7584d29dc4229fb62f49",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/selected-vi-dark-1280x800.png",
+        "sha256": "598e9392443c1dcdb88a36122f158280aa31f8ca0fd5a6c63e394c1bc19f5985",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/selected-vi-light-1280x800.png",
+        "sha256": "4c334f9cefb9ee4be891101480dc2d00ed15108d62cc6e97015c3599c0b397d8",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/selected-en-dark-1280x800.png",
+        "sha256": "fab702f55ac1e61f6a37505635ba69e9be053c0293ab7584d29dc4229fb62f49",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/selected-en-light-1280x800.png",
+        "sha256": "798ebb2efa3b6ef5a04ff44eacf69ed2d32b1258442edd13611acb6c4b37870c",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/selected-cn-dark-1280x800.png",
+        "sha256": "708a09c85dab4cbd573a7b9ed657a394083196bba5f6ab1492c8cf334fdb80d8",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/selected-cn-light-1280x800.png",
+        "sha256": "846b0ab73957a7606900baaa7c2c1a163e1345687f78f3eb2c87ab7e0d5af625",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/selected-jp-dark-1280x800.png",
+        "sha256": "1ae055914dda0defc912dce2e7091acbb621a003b4ba89141b29e668cd26e992",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/selected-jp-light-1280x800.png",
+        "sha256": "e5990a74ecb60fb8176fc936c04a8d52290482801a656be02d57dbad9d70d9c7",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      },
+      {
+        "file": "docs/ui-redesign/screenshots/r7h3c/3c75e4e4a328/stale-selection-not-applied-jp-light-1280x800.png",
+        "sha256": "35ecf6b2f7aa4130325bfa222e2428dd96e251f891e74e06158265fe01d83695",
+        "paint_attempts": 1,
+        "layout": {
+          "window": false,
+          "modal": false
+        }
+      }
+    ],
+    "production_profile_used": false,
+    "ssh_transport_real": false,
+    "vps_used": false,
+    "private_data_removed": true,
+    "profile_cleanup": "REMOVED_AFTER_ELECTRON_EXIT",
+    "child_exit": 0,
+    "stderr_bytes": 0
+  },
+  "gates": {
+    "full": {
+      "files_passed": 173,
+      "files_skipped": 1,
+      "passed": 2420,
+      "skipped": 2,
+      "failed": 0
+    },
+    "new_tests": 33,
+    "focused_acceptance": {
+      "files": 3,
+      "passed": 69
+    },
+    "broad_focused": "333 PASS plus one raw-trigger CRLF parity failure before schemaLF fix; corrected installation/selection/UI acceptance69 PASS and final full2420 PASS. Earlier focused11files177 PASS.",
+    "typecheck": [
+      "Node",
+      "Web",
+      "Scripts",
+      "selection_lab"
+    ],
+    "eslint": "0 errors / 0 warnings,33 scoped files +2 DTOs",
+    "prettier": "PASS",
+    "ruff": "PASS",
+    "build": "PASS",
+    "negative_cli": "explicit gates reject before launch/scratch",
+    "parity": [
+      "Desktop DTO",
+      "renderer metadata DTO subsets",
+      "5 IPC signatures",
+      "SQL036"
+    ]
+  },
+  "limits": [
+    "Native CLI+Python bridge is real same-UID local Linux; no SSH/Root installed admin or VPS.",
+    "Electron uses production component/preload/Main/SQLite but synthetic SSH/controller transport. Cold Main/SQLite reopen is within one Electron process, not OS/DPAPI cross-machine proof.",
+    "Initial four locales in both themes at1280x800; Vietnamese also1366x768; selected and stale-request captures at1280x800. No horizontal window/modal overflow.",
+    "No deployment/unpause/API exposure or installed controller/release/helper upgrade. Source Desktop036/controller035; last known VPS029/releaseb680 unchanged by this work.",
+    "R7h-3d protected schema backup/upgrade/rollback+helper release+actual VPS env acceptance remains OPEN; whole environment/DB/R7/release not DONE."
+  ],
+  "history": [
+    "Earlier locale mapping used zh/ja, fixed to existing cn/jp. Read-only target lookup uses nonquiescent read; mutation guard unchanged.",
+    "First full exposed six Desktop schema assertions35→36; corrected expectations. Cumulative SQL CRLF triggered raw trigger parity mismatch; normalize schema.sql to LF, no old migration edits.",
+    "One full run overlapped later liveness changes and was not final acceptance. Frozen final full is authoritative.",
+    "Preliminary screenshot sets b0d9fae08fd3/fec51a70d926/e5f95cc20591 preserved in ignored app/.out-scripts/r7h3c-preliminary-screenshots; final 3c75e4e4a328 committed."
+  ],
+  "capture_gate_correction": "Visual review found one blank first-frame capture in preliminary e5f95cc20591. Harness now waits two animation frames and requires >=16 sampled bitmap colors with bounded retry; final26 captures are actual repainted Electron frames. No product/runtime changes after full acceptance.",
+  "accepted_exceptions": []
+}

@@ -18,3 +18,22 @@ export interface ProductEnvironmentMetadata {
   created_at: string
   activation: 'staged'
 }
+
+export interface ProductEnvironmentReference {
+  controller_id: string
+  ownership_generation: number
+  revision: number
+}
+export interface ProductEnvironmentSelectionResult {
+  state: 'selected' | 'already_selected'
+  request_key: string
+  controller_id: string
+  app_id: number
+  ownership_generation: number
+  source_generation: number
+  source_config_sha256: string
+  environment: ProductEnvironmentReference
+  auto_deploy_paused: true
+  deployment_started: false
+  execution: 'requires_environment_runtime'
+}

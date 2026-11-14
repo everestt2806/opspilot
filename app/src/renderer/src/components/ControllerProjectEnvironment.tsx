@@ -19,6 +19,7 @@ import type {
 } from '@shared/desktopProductEnvironment'
 import { useUiState } from '../store/uiState'
 import { CONTROLLER_ENVIRONMENT_COPY } from './controllerEnvironmentCopy'
+import { ControllerEnvironmentSelection } from './ControllerEnvironmentSelection'
 type Props = { binding: DesktopControllerConnection; project: DesktopProjectSetup }
 type Entry = { name: string; value: string }
 type Values = { runtime?: Entry[]; public?: Entry[] }
@@ -48,6 +49,7 @@ function EnvironmentSession({ binding, project }: Props): React.JSX.Element {
     [loading, setLoading] = useState(false),
     [consent, setConsent] = useState(false)
   const [context, setContext] = useState<DesktopEnvironmentContext | null>(null),
+    [selectionPending, setSelectionPending] = useState(false),
     [rows, setRows] = useState<DesktopEnvironmentIntent[]>([]),
     [error, setError] = useState<string | null>(null)
   const alive = useRef(true),
@@ -127,7 +129,7 @@ function EnvironmentSession({ binding, project }: Props): React.JSX.Element {
     }
   }
   const prepare = async (): Promise<void> => {
-    if (!allowed || !context || !consent || pending || busy.current) return
+    if (!allowed || !context || !consent || pending || selectionPending || busy.current) return
     let values: Values
     try {
       values = await form.validateFields()
@@ -323,6 +325,17 @@ function EnvironmentSession({ binding, project }: Props): React.JSX.Element {
           />
         )}
         <Typography.Paragraph type="secondary">{t.savedKeys}</Typography.Paragraph>
+        {context && (
+          <ControllerEnvironmentSelection
+            key={context.source_generation}
+            binding={binding}
+            project={project}
+            context={context}
+            stagingPending={!!pending}
+            onPendingChange={setSelectionPending}
+            onChanged={load}
+          />
+        )}
         {rows.map((row) => (
           <div key={row.request_key} style={{ margin: '12px 0' }}>
             <Tag color={row.state === 'outcome_unknown' ? 'warning' : 'default'}>
@@ -359,7 +372,7 @@ function EnvironmentSession({ binding, project }: Props): React.JSX.Element {
             )}
           </div>
         ))}
-        {!pending && context && (
+        {!pending && !selectionPending && context && (
           <Form form={form} layout="vertical" preserve={false} disabled={loading}>
             <Typography.Title level={5}>{t.runtime}</Typography.Title>
             {fields('runtime')}

@@ -38,6 +38,7 @@ import migration032 from './migrations/032_product_environment_revision.sql?raw'
 import migration033 from './migrations/033_product_environment_request.sql?raw'
 import migration034 from './migrations/034_desktop_environment_intent.sql?raw'
 import migration035 from './migrations/035_product_source_environment.sql?raw'
+import migration036 from './migrations/036_desktop_environment_selection.sql?raw'
 
 interface Migration {
   name: string
@@ -47,6 +48,12 @@ interface Migration {
 }
 
 const migrations: Migration[] = [
+  {
+    name: '036_desktop_environment_selection.sql',
+    version: 36,
+    sql: migration036,
+    role: 'desktop'
+  },
   { name: '035_product_source_environment.sql', version: 35, sql: migration035 },
   { name: '034_desktop_environment_intent.sql', version: 34, sql: migration034, role: 'desktop' },
   { name: '033_product_environment_request.sql', version: 33, sql: migration033 },

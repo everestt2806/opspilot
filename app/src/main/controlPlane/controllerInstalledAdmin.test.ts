@@ -57,6 +57,21 @@ describe('trusted installed admin boundary', () => {
       assertControllerUpgradeAdminReady({ ...current, phase: 'rolled_back' })
     ).not.toThrow()
   })
+  it.each([
+    'project-environment-review',
+    'select-project-environment',
+    'project-environment-selection-state'
+  ] as const)('admits fixed configuration operation %s without caller commands', (operation) => {
+    const value = request()
+    value.command.operation = operation
+    expect(installedControllerAdminSchema.safeParse(value).success).toBe(true)
+    expect(
+      installedControllerAdminSchema.safeParse({
+        ...value,
+        command: { ...value.command, shell: 'echo nope' }
+      }).success
+    ).toBe(false)
+  })
   it('accepts a strict revision authority while rejecting caller paths and incomplete parents', () => {
     const value = request()
     value.authority.revision = {

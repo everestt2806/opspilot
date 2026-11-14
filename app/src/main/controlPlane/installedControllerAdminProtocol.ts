@@ -37,7 +37,10 @@ export const installedControllerAdminSchema = z.strictObject({
       'register-vps',
       'stage-project-environment',
       'project-environment-state',
-      'project-environment-context'
+      'project-environment-context',
+      'project-environment-review',
+      'select-project-environment',
+      'project-environment-selection-state'
     ]),
     payload: z.record(z.string(), z.unknown())
   })

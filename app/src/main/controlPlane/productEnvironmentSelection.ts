@@ -6,10 +6,15 @@ import type {
   ProductEnvironmentSelectionResult,
   ProductEnvironmentReference
 } from '../../../../docs/contracts/product-environment'
+import type { ProductEnvironmentReview } from '../../../../docs/contracts/product-environment'
 import { ProductEnvironmentRepository } from '../db/productEnvironmentRepository'
 import { TargetEnrollmentRepository } from './targetEnrollmentRepository'
 import { canonicalH2Json } from './productH2Proof'
-import { environmentSelectionSchema, ProductEnvironmentError } from './productEnvironment'
+import {
+  environmentContextSchema,
+  environmentSelectionSchema,
+  ProductEnvironmentError
+} from './productEnvironment'
 
 type Source = {
   repository_url: string
@@ -59,6 +64,150 @@ export class ProductEnvironmentSelection {
     cipher: AesGcmCredentialCipher
   ) {
     this.vault = new ProductEnvironmentRepository(db, cipher)
+  }
+  review(input: unknown, controllerId: string, administratorId: string): ProductEnvironmentReview {
+    if (this.db.inTransaction)
+      throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    const parsed = environmentContextSchema.safeParse(input)
+    if (!parsed.success) throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    const request = parsed.data
+    const derive = (): { generation: number; hash: string } => {
+      const row = this.db
+        .prepare(
+          `SELECT s.deploy_config_json,s.config_sha256,c.source_generation,c.source_config_sha256,
+        b.deploy_config_json basis_json,b.config_sha256 basis_hash,s.repository_url,s.production_ref,s.repository_root,
+        b.repository_url basis_repo,b.production_ref basis_ref,b.repository_root basis_root
+        FROM product_app_control c JOIN product_source_config s ON s.app_id=c.app_id AND s.source_generation=c.source_generation
+        JOIN product_source_config b ON b.app_id=c.app_id AND b.source_generation=? WHERE c.app_id=? AND c.controller_id=? AND c.ownership_generation=? AND c.mode='product'`
+        )
+        .get(
+          request.expected_source_generation,
+          request.app_id,
+          controllerId,
+          request.expected_ownership_generation
+        ) as Record<string, unknown> | undefined
+      try {
+        if (
+          !row ||
+          request.controller_id !== controllerId ||
+          row.basis_hash !== request.expected_source_config_sha256 ||
+          row.config_sha256 !== row.source_config_sha256 ||
+          row.repository_url !== row.basis_repo ||
+          row.production_ref !== row.basis_ref ||
+          row.repository_root !== row.basis_root
+        )
+          throw Error()
+        const basis = JSON.parse(row.basis_json as string),
+          current = JSON.parse(row.deploy_config_json as string)
+        if (
+          sha(canonicalH2Json(basis)) !== row.basis_hash ||
+          sha(canonicalH2Json(current)) !== row.config_sha256 ||
+          (row.source_generation !== request.expected_source_generation &&
+            !Object.hasOwn(current, 'environment'))
+        )
+          throw Error()
+        delete basis.environment
+        delete current.environment
+        if (canonicalH2Json(basis) !== canonicalH2Json(current)) throw Error()
+        return {
+          generation: row.source_generation as number,
+          hash: row.source_config_sha256 as string
+        }
+      } catch {
+        throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_SOURCE_CHANGED')
+      }
+    }
+    const before = derive()
+    const state = this.vault.context(
+      {
+        ...request,
+        expected_source_generation: before.generation,
+        expected_source_config_sha256: before.hash
+      },
+      controllerId,
+      administratorId
+    )
+    const synthetic: ProductEnvironmentSelectionInput = {
+      format: 1,
+      request_key: '00000000-0000-4000-8000-000000000001',
+      scope: state.scope,
+      expected_source_generation: state.source_generation,
+      expected_source_config_sha256: state.source_config_sha256,
+      expected_latest_revision: state.latest?.revision ?? 1,
+      environment_revision: state.latest?.revision ?? 1
+    }
+    const source = this.source(synthetic)
+    const ref = JSON.parse(source.deploy_config_json).environment as
+      ProductEnvironmentReference | undefined
+    const selected = ref ? this.vault.metadata(state.scope, ref.revision) : null
+    const owner = this.db
+      .prepare('SELECT auto_deploy_paused FROM product_app_control WHERE app_id=?')
+      .get(request.app_id) as { auto_deploy_paused: number }
+    if (canonicalH2Json(before) !== canonicalH2Json(derive()))
+      throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_SOURCE_CHANGED')
+    return { ...state, selected, auto_deploy_paused: owner.auto_deploy_paused === 1 }
+  }
+  /** Exact-body receipt lookup; never repeats selection and works while jobs are active. */
+  lookup(
+    input: unknown,
+    controllerId: string,
+    administratorId: string
+  ): { result: ProductEnvironmentSelectionResult | null; definitively_unapplied: boolean } {
+    if (this.db.inTransaction)
+      throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    const parsed = environmentSelectionSchema.safeParse(input)
+    if (!parsed.success) throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    const request = parsed.data
+    this.vault.context(
+      {
+        format: 1,
+        controller_id: request.scope.controller_id,
+        app_id: request.scope.app_id,
+        expected_ownership_generation: request.scope.ownership_generation,
+        expected_source_generation: this.source(request).source_generation,
+        expected_source_config_sha256: this.source(request).source_config_sha256,
+        expected_target_security_revision: request.scope.target.ssh_security_revision
+      },
+      controllerId,
+      administratorId
+    )
+    return this.db
+      .transaction(() => {
+        const source = this.source(request)
+        const target = new TargetEnrollmentRepository(this.db).target(
+          controllerId,
+          request.scope.app_id,
+          request.scope.ownership_generation,
+          false
+        )
+        if (canonicalH2Json(target) !== canonicalH2Json(request.scope.target))
+          throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED')
+        const row = this.db
+          .prepare(
+            'SELECT * FROM product_source_environment WHERE controller_id=? AND administrator_id=? AND request_key=?'
+          )
+          .get(controllerId, administratorId, request.request_key) as Stored | undefined
+        if (!row) {
+          const latest = this.db
+            .prepare(
+              'SELECT MAX(revision) revision FROM product_environment_revision WHERE app_id=? AND ownership_generation=?'
+            )
+            .get(request.scope.app_id, request.scope.ownership_generation) as {
+            revision: number | null
+          }
+          return {
+            result: null,
+            definitively_unapplied:
+              source.source_generation > request.expected_source_generation ||
+              (latest.revision ?? 0) > request.expected_latest_revision
+          }
+        }
+        if (row.request_json !== canonicalH2Json(request))
+          throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_IDEMPOTENCY_CONFLICT')
+        this.verifyBinding(row, request)
+        return { result: this.result(row, 'already_selected'), definitively_unapplied: false }
+      })
+      .deferred()
   }
   select(
     input: unknown,

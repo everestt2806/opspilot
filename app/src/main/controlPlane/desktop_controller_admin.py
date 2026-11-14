@@ -229,6 +229,9 @@ def run_cli(request, operation, payload):
         "stage-project-environment",
         "project-environment-state",
         "project-environment-context",
+        "project-environment-review",
+        "select-project-environment",
+        "project-environment-selection-state",
     )
     streamed_input = vps_check or operation == "stage-project-environment"
     structured_error = (
@@ -394,6 +397,9 @@ def main():
         "stage-project-environment",
         "project-environment-state",
         "project-environment-context",
+        "project-environment-review",
+        "select-project-environment",
+        "project-environment-selection-state",
     ):
         raise ValueError()
     try:

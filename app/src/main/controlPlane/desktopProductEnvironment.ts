@@ -21,6 +21,7 @@ import {
   environmentStateResultSchema,
   environmentStageResultSchema,
   environmentMetadataSchema,
+  environmentReviewSchema,
   validateEnvironmentValues
 } from './productEnvironment'
 
@@ -81,7 +82,7 @@ export class DesktopProductEnvironment {
     private readonly projects: Pick<DesktopProjectSetups, 'registeredContextSnapshot'>,
     private readonly admin: Pick<
       DesktopControllerEnrollment,
-      'environmentContext' | 'environmentState' | 'stageEnvironment'
+      'environmentReview' | 'environmentState' | 'stageEnvironment'
     >
   ) {}
 
@@ -96,7 +97,9 @@ export class DesktopProductEnvironment {
       ownership_generation: remote.scope.ownership_generation,
       source_generation: remote.source_generation,
       source_config_sha256: remote.source_config_sha256,
-      latest: remote.latest
+      latest: remote.latest,
+      selected: remote.selected,
+      auto_deploy_paused: remote.auto_deploy_paused
     }
   }
 
@@ -121,6 +124,14 @@ export class DesktopProductEnvironment {
           "SELECT * FROM desktop_environment_intent WHERE controller_id=? AND app_id=? AND state IN ('prepared','in_flight','outcome_unknown')"
         )
         .get(project.setup.controller_id, project.registration.app_id)
+      if (
+        this.db
+          .prepare(
+            "SELECT 1 FROM desktop_environment_selection WHERE controller_id=? AND app_id=? AND state IN ('prepared','in_flight','outcome_unknown')"
+          )
+          .get(project.setup.controller_id, project.registration.app_id)
+      )
+        throw new DesktopEnvironmentError('ENVIRONMENT_CONFLICT')
       if (previous) {
         const row = this.valid(previous)
         this.current(row)
@@ -243,20 +254,24 @@ export class DesktopProductEnvironment {
       }
       let result: ProductEnvironmentMetadata | null
       if (check) {
+        const reviewed = await this.remoteContext(initial.project_request_key)
+        guard()
+        if (canonicalH2Json(reviewed.remote.scope) !== canonicalH2Json(request.scope))
+          throw new DesktopEnvironmentError('ENVIRONMENT_CHANGED')
         const value = environmentStateResultSchema.parse(
           await this.admin.environmentState(initial.binding_id, {
             format: 1,
             scope: request.scope,
-            expected_source_generation: request.expected_source_generation,
-            expected_source_config_sha256: request.expected_source_config_sha256,
+            expected_source_generation: reviewed.remote.source_generation,
+            expected_source_config_sha256: reviewed.remote.source_config_sha256,
             request_key: key
           })
         )
         if (
           canonicalH2Json(value.scope) !== canonicalH2Json(request.scope) ||
           value.request_key !== key ||
-          value.source_generation !== request.expected_source_generation ||
-          value.source_config_sha256 !== request.expected_source_config_sha256
+          value.source_generation !== reviewed.remote.source_generation ||
+          value.source_config_sha256 !== reviewed.remote.source_config_sha256
         )
           throw new DesktopEnvironmentError('ENVIRONMENT_RESPONSE_INVALID')
         result = value.requested
@@ -308,16 +323,20 @@ export class DesktopProductEnvironment {
       throw new DesktopEnvironmentError('ENVIRONMENT_CHANGED')
     return project
   }
-  private async remoteContext(key: string): Promise<{
+  /** @internal Main capability; only context() metadata may cross IPC. */
+  async remoteContext(key: string): Promise<{
     project: ReturnType<DesktopProjectSetups['registeredContextSnapshot']>
-    remote: ProductEnvironmentState
+    remote: ProductEnvironmentState & {
+      selected: ProductEnvironmentMetadata | null
+      auto_deploy_paused: boolean
+    }
   }> {
     if (this.db.inTransaction) throw new DesktopEnvironmentError('ENVIRONMENT_REQUEST_INVALID')
     const project = this.project(key),
       setup = project.setup,
       registration = project.registration
-    const remote = environmentStateResultSchema.parse(
-      await this.admin.environmentContext(setup.binding_id, {
+    const remote = environmentReviewSchema.parse(
+      await this.admin.environmentReview(setup.binding_id, {
         format: 1,
         controller_id: setup.controller_id,
         app_id: registration.app_id,
@@ -333,17 +352,20 @@ export class DesktopProductEnvironment {
       remote.scope.controller_id !== setup.controller_id ||
       remote.scope.app_id !== registration.app_id ||
       remote.scope.ownership_generation !== registration.ownership_generation ||
-      remote.source_generation !== registration.source_generation ||
-      remote.source_config_sha256 !== registration.source_config_sha256 ||
+      remote.source_generation < registration.source_generation ||
       remote.scope.target.vps_id !== setup.target_vps_id ||
       remote.scope.target.ssh_security_revision !== setup.target_security_revision ||
       remote.request_key !== null ||
       remote.requested !== null ||
-      (remote.latest &&
-        (remote.latest.controller_id !== setup.controller_id ||
-          remote.latest.app_id !== registration.app_id ||
-          remote.latest.ownership_generation !== registration.ownership_generation ||
-          remote.latest.framework !== setup.framework))
+      [remote.latest, remote.selected].some(
+        (metadata) =>
+          metadata &&
+          (metadata.controller_id !== setup.controller_id ||
+            metadata.app_id !== registration.app_id ||
+            metadata.ownership_generation !== registration.ownership_generation ||
+            metadata.framework !== setup.framework)
+      ) ||
+      (remote.selected !== null && remote.selected.revision > (remote.latest?.revision ?? 0))
     )
       throw new DesktopEnvironmentError('ENVIRONMENT_RESPONSE_INVALID')
     return { project, remote }
@@ -360,8 +382,6 @@ export class DesktopProductEnvironment {
       request.scope.controller_id !== row.controller_id ||
       request.scope.app_id !== row.app_id ||
       request.scope.ownership_generation !== project.registration.ownership_generation ||
-      request.expected_source_generation !== project.registration.source_generation ||
-      request.expected_source_config_sha256 !== project.registration.source_config_sha256 ||
       request.scope.target.vps_id !== project.setup.target_vps_id ||
       request.scope.target.ssh_security_revision !== project.setup.target_security_revision
     )

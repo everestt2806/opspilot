@@ -6,7 +6,8 @@ const vi = {
   refresh: 'Tải lại',
   intro:
     'Lưu bản cấu hình đầy đủ, gồm biến chạy ứng dụng và biến công khai dùng khi build. Giá trị đã lưu không được hiển thị lại.',
-  stagedOnly: 'Chỉ lưu cấu hình. Chưa áp dụng vào deployment; phiên bản đang chạy giữ nguyên.',
+  stagedOnly:
+    'Lưu và chọn cấu hình không triển khai ứng dụng. Bản đang chạy chỉ đổi khi bạn triển khai lại.',
   publicWarning:
     'Biến build công khai có thể xuất hiện trong mã trình duyệt. Không nhập mật khẩu hoặc token vào nhóm này.',
   snapshot:
@@ -52,7 +53,7 @@ const en: Copy = {
   intro:
     'Save a complete configuration containing runtime variables and public build variables. Saved values cannot be read back.',
   stagedOnly:
-    'Configuration is saved only. Deployment integration is pending; the running application stays unchanged.',
+    'Saving or selecting configuration does not deploy the app. The running version changes only after a separate deployment.',
   publicWarning:
     'Public build variables may appear in browser code. Never put passwords or tokens in this group.',
   snapshot:
@@ -96,7 +97,7 @@ const cn: Copy = {
   close: '关闭',
   refresh: '刷新',
   intro: '保存包含运行变量和公开构建变量的完整配置。已保存的值不能读取。',
-  stagedOnly: '仅保存配置，尚未应用到部署；当前应用保持不变。',
+  stagedOnly: '保存或选择配置不会部署应用。单独部署后，运行版本才会改变。',
   publicWarning: '公开构建变量可能出现在浏览器代码中。请勿填写密码或令牌。',
   snapshot: '此操作替换整个配置。请填写所有需要保留的变量；遗漏的变量不会属于新版本。',
   runtime: '运行变量',
@@ -135,7 +136,8 @@ const ja: Copy = {
   close: '閉じる',
   refresh: '再読み込み',
   intro: '実行時変数と公開ビルド変数を含む設定全体を保存します。保存値は再表示されません。',
-  stagedOnly: '設定の保存のみです。デプロイには未適用で、稼働中のアプリは変わりません。',
+  stagedOnly:
+    '設定の保存や選択ではデプロイされません。別途デプロイするまで稼働中のバージョンは変わりません。',
   publicWarning:
     '公開ビルド変数はブラウザーのコードに含まれる場合があります。パスワードやトークンを入力しないでください。',
   snapshot:

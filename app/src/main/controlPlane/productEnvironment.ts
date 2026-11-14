@@ -95,6 +95,27 @@ export const environmentStateResultSchema = z.strictObject({
   request_key: requestKey.nullable(),
   requested: environmentMetadataSchema.nullable()
 }) satisfies z.ZodType<ProductEnvironmentState>
+export const environmentReviewSchema = environmentStateResultSchema.extend({
+  selected: environmentMetadataSchema.nullable(),
+  auto_deploy_paused: z.boolean()
+})
+export const environmentSelectionResultSchema = z.strictObject({
+  state: z.enum(['selected', 'already_selected']),
+  request_key: requestKey,
+  controller_id: identifier,
+  app_id: positive,
+  ownership_generation: positive,
+  source_generation: positive,
+  source_config_sha256: environmentWriteSchema.shape.expected_source_config_sha256,
+  environment: z.strictObject({
+    controller_id: identifier,
+    ownership_generation: positive,
+    revision: positive
+  }),
+  auto_deploy_paused: z.literal(true),
+  deployment_started: z.literal(false),
+  execution: z.literal('requires_environment_runtime')
+})
 
 export class ProductEnvironmentError extends Error {
   constructor(

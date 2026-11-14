@@ -1,5 +1,12 @@
 # Hoàn thiện OpsPilot tới 04/12/2026
 
+> **14/11 — R7h-3c CHỜ REVIEW, DONE local Desktop selection:** Current-source review neo registered basis, immutable authenticated journal036/Main/5IPC/UI latest-vs-selected4locale/consent; cold retry/lookup, atomic negative proof not_applied và staging tiếp sau source change. Không job/unpause/deploy. Native CLI/Python10checks + Electron8checks/26captures/private cleanup PASS; Electron dùng production Main/SQLite và synthetic SSH, không OS restart/VPS. Full2420PASS+2existingLinux-onlySKIP/0FAIL, acceptance69/types/lint/Ruff/build/parity đạt. Desktop036/controller035, installed VPS029/releaseb680 chưa đổi; protected upgrade/live/PG và whole R7 OPEN. SHA tra git log -1 -- app/src/main/controlPlane/desktopEnvironmentSelections.ts. [Proof](../ui-redesign/r7h3c-verification.json); [task](tk-s7-release-r7h3c-environment-selection-ui.md).
+
+
+
+
+
+
 > **14/11 — R7h-3b CHỜ REVIEW, DONE local runtime:** Claim-selected encrypted env035 nối executor/preflight/render/Docker; authenticated file0600/private nonce, runtime literal/public-only build, H2 reference/keyed config fingerprint, không export secret/manifest digest. Frozen actual Linux SSH/SQLite/Docker: Express10+Next13+SPA13+legacy7checks/cleanup PASS; update/restart/build-health failure/exact-CID rollback/collector barrier. Focused166/18newtests, full2387PASS+2existingLinux-onlySKIP/0FAIL, Python9/types/lint/Ruff/build/negativeCLI đạt. Giữ historical pins/release; không truy cập VPS/nâng schema029. Main/UI selection/protected upgrade/live/PG và whole R7 OPEN. SHA tra git log -1 -- app/src/main/controlPlane/productEnvironmentRuntime.ts. [Proof](../ui-redesign/r7h3b-verification.json); [task](tk-s7-release-r7h3b-environment-runtime.md).
 
 

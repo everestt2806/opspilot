@@ -123,8 +123,8 @@ it.each(['target', 'owner', 'source', 'revision'] as const)(
   }
 )
 it('checks binding and permissions after awaited context and before any local encrypt', async () => {
-  const original = f.admin.environmentContext
-  vi.spyOn(f.admin, 'environmentContext').mockImplementation(async (...args) => {
+  const original = f.admin.environmentReview
+  vi.spyOn(f.admin, 'environmentReview').mockImplementation(async (...args) => {
     const result = await original(...args)
     f.vault.disable(f.bindingId, 2)
     return result

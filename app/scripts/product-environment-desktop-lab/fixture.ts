@@ -1,3 +1,4 @@
+import { ProductEnvironmentSelection } from '../../src/main/controlPlane/productEnvironmentSelection'
 import Database from 'better-sqlite3'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -24,7 +25,12 @@ export async function fixture(directory: string): Promise<{
   projectKey: string
   admin: Pick<
     DesktopControllerEnrollment,
-    'environmentContext' | 'environmentState' | 'stageEnvironment'
+    | 'environmentContext'
+    | 'environmentReview'
+    | 'environmentState'
+    | 'stageEnvironment'
+    | 'selectEnvironment'
+    | 'environmentSelectionState'
   >
   behavior: { lost: boolean; failBefore: boolean }
   controllerId: string
@@ -45,7 +51,7 @@ export async function fixture(directory: string): Promise<{
     )
     .run(pin)
   remote.exec(
-    "INSERT INTO app(id,vps_id,name,framework,host_port,container_port) VALUES(42,77,'env-ui','nextjs',30000,3000)"
+    "INSERT INTO app(id,vps_id,name,framework,host_port,container_port,source_type,git_repo_url,git_ref,git_root) VALUES(42,77,'env-ui','nextjs',30000,3000,'git','https://github.com/example/app.git','main','.')"
   )
   remote
     .prepare("INSERT INTO product_controller VALUES(?,'2026-11-14T00:00:00.000Z','active')")
@@ -68,6 +74,9 @@ export async function fixture(directory: string): Promise<{
       "INSERT INTO product_app_control(app_id,mode,controller_id,ownership_generation,source_generation,source_config_sha256,changed_at) VALUES(42,'product',?,1,1,?,'2026-11-14T00:00:00.000Z')"
     )
     .run(controllerId, hash)
+  remote.exec(
+    "UPDATE product_app_control SET auto_deploy_paused=1,pause_reason='operator',pause_policy_provenance='explicit'"
+  )
   db.prepare(
     "INSERT INTO vps(id,name,host,username,auth_type,host_fingerprint,encrypted_secret) VALUES(1,'controller','controller.test','operator','key',?,X'00')"
   ).run(pin)
@@ -164,8 +173,38 @@ export async function fixture(directory: string): Promise<{
     behavior = { lost: false, failBefore: false }
   const admin: Pick<
     DesktopControllerEnrollment,
-    'environmentContext' | 'environmentState' | 'stageEnvironment'
+    | 'environmentContext'
+    | 'environmentReview'
+    | 'environmentState'
+    | 'stageEnvironment'
+    | 'selectEnvironment'
+    | 'environmentSelectionState'
   > = {
+    environmentReview: async (_binding, request) =>
+      new ProductEnvironmentSelection(remote, remoteCipher).review(
+        request,
+        controllerId,
+        'unix:1000'
+      ),
+    selectEnvironment: async (_binding, request, guard) => {
+      guard()
+      const result = new ProductEnvironmentSelection(remote, remoteCipher).select(
+        request,
+        controllerId,
+        'unix:1000'
+      )
+      if (behavior.lost) {
+        behavior.lost = false
+        throw Error('SYNTHETIC_LOST_REPLY')
+      }
+      return result
+    },
+    environmentSelectionState: async (_binding, request) =>
+      new ProductEnvironmentSelection(remote, remoteCipher).lookup(
+        request,
+        controllerId,
+        'unix:1000'
+      ),
     environmentContext: async (_binding, request) =>
       repo.context(request, controllerId, 'unix:1000'),
     environmentState: async (_binding, request) => repo.state(request, controllerId, 'unix:1000'),

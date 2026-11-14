@@ -89,6 +89,31 @@ function call(command, request, ok = true) {
   assert(/^CONTROL_PLANE_ERROR [A-Z][A-Z0-9_]+\n$/.test(child.stderr))
   return child.stderr.trim().split(' ')[1]
 }
+function bridge(operation, payload) {
+  const result = spawnSync(
+    'python3',
+    [join(root, 'app/scripts/product-environment-admin-lab/bridge.py')],
+    {
+      input: JSON.stringify({
+        node_path: process.execPath,
+        artifact_path: artifact,
+        data_directory: scratch,
+        operation,
+        payload
+      }),
+      encoding: 'utf8',
+      timeout: 20000,
+      maxBuffer: 131072,
+      env: { PATH: '/usr/bin:/bin', LANG: 'C.UTF-8', PYTHONDONTWRITEBYTECODE: '1' }
+    }
+  )
+  assert.equal(result.status, 0)
+  assert.equal(result.stderr, '')
+  assert(!result.stdout.includes(marker))
+  const parsed = JSON.parse(result.stdout)
+  assert.equal(parsed.ok, true)
+  return parsed.data
+}
 function concurrentSelect(request) {
   return new Promise((resolve, reject) => {
     const child = spawn(
@@ -206,6 +231,35 @@ try {
     call('select-project-environment', { ...request, expected_latest_revision: 2 }, false),
     'PRODUCT_ENVIRONMENT_IDEMPOTENCY_CONFLICT'
   )
+  const reviewInput = {
+    format: 1,
+    controller_id: controllerId,
+    app_id: 1,
+    expected_ownership_generation: 1,
+    expected_source_generation: 1,
+    expected_source_config_sha256: hash,
+    expected_target_security_revision: 1
+  }
+  const reviewed = call('project-environment-review', reviewInput)
+  assert.equal(reviewed.source_generation, 2)
+  assert.equal(reviewed.selected.revision, 1)
+  assert.equal(reviewed.latest.revision, 1)
+  assert.equal(reviewed.auto_deploy_paused, true)
+  assert(!JSON.stringify(reviewed).includes(marker))
+  assert.equal(
+    call('project-environment-selection-state', request).result.request_key,
+    request.request_key
+  )
+  assert.deepEqual(bridge('project-environment-review', reviewInput), reviewed)
+  assert.equal(bridge('select-project-environment', request).state, 'already_selected')
+  assert.equal(
+    bridge('project-environment-selection-state', request).result.request_key,
+    request.request_key
+  )
+  proof.checks.push('native_fixed_python_same_uid_bridge_review_select_and_receipt_lookup')
+  proof.checks.push(
+    'actual_cli_review_anchored_original_source_and_readonly_receipt_lookup_after_cold_process'
+  )
   proof.checks.push('actual_cli_select_cold_process_retry_exactly_one_source_generation')
   db = code.initializeDatabase(scratch, 'controller')
   assert.equal(db.prepare('SELECT count(*) n FROM product_source_config').get().n, 2)
@@ -250,7 +304,7 @@ try {
   assert.deepEqual(db.pragma('foreign_key_check'), [])
   assert.equal(db.prepare('SELECT max(version) n FROM schema_version').get().n, 35)
   assert.deepEqual(
-    db.prepare('SELECT version FROM schema_version WHERE version IN(30,31,34)').all(),
+    db.prepare('SELECT version FROM schema_version WHERE version IN(30,31,34,36)').all(),
     []
   )
   db.pragma('wal_checkpoint(TRUNCATE)')
@@ -282,6 +336,33 @@ try {
     'PRODUCT_ENVIRONMENT_REQUIRES_QUIESCENCE'
   )
   proof.checks.push('replay_does_not_claim_paused_after_operator_resumes_policy')
+  assert.equal(call('project-environment-review', reviewInput).auto_deploy_paused, false)
+  assert.equal(
+    call('project-environment-selection-state', raceRequest).result.request_key,
+    raceRequest.request_key
+  )
+  proof.checks.push('readonly_review_and_receipt_remain_available_after_operator_resume')
+  const missing = {
+    ...raceRequest,
+    request_key: '25f8bae6-cef7-448c-bd25-4d733d93dafd',
+    expected_source_generation: 3
+  }
+  assert.deepEqual(call('project-environment-selection-state', missing), {
+    result: null,
+    definitively_unapplied: false
+  })
+  assert.deepEqual(
+    call('project-environment-selection-state', { ...missing, expected_source_generation: 4 }),
+    { result: null, definitively_unapplied: false }
+  )
+  assert.deepEqual(
+    bridge('project-environment-selection-state', { ...missing, expected_source_generation: 2 }),
+    { result: null, definitively_unapplied: true }
+  )
+  proof.checks.push(
+    'atomic_negative_lookup_requires_monotonic_cas_advance_not_merely_absent_receipt'
+  )
+
   proof.status = 'PASS'
 } catch (error) {
   proof.error_code = /^[A-Z][A-Z0-9_]+$/.test(error.message ?? '')

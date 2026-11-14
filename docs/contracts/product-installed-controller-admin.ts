@@ -23,7 +23,8 @@ export type InstalledControllerAdminRequest = {
       | "project-targets" | "register-project" | "verify-project-source"
       | "project-target-state" | "enroll-project-target" | "project-readiness"
       | "register-vps" | "stage-project-environment" | "project-environment-state"
-      | "project-environment-context";
+      | "project-environment-context" | "project-environment-review"
+      | "select-project-environment" | "project-environment-selection-state";
     payload: object;
   };
 };

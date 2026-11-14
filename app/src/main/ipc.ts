@@ -258,6 +258,21 @@ export function registerIpcHandlers(
     handle('controller:verify-project-source', (key) =>
       desktopControllerService.verifyProjectSource(key)
     )
+    handle('controller:prepare-environment-selection', (input) =>
+      desktopControllerService.prepareEnvironmentSelection(input)
+    )
+    handle('controller:send-environment-selection', (input) =>
+      desktopControllerService.sendEnvironmentSelection(input)
+    )
+    handle('controller:check-environment-selection', (input) =>
+      desktopControllerService.checkEnvironmentSelection(input)
+    )
+    handle('controller:environment-selections', (input) =>
+      desktopControllerService.listEnvironmentSelections(input)
+    )
+    handle('controller:cancel-environment-selection', (input) =>
+      desktopControllerService.cancelEnvironmentSelection(input)
+    )
     handle('controller:environment-context', (input) =>
       desktopControllerService.environmentContext(input)
     )

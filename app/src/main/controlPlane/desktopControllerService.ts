@@ -1,8 +1,11 @@
+import { DesktopEnvironmentSelections } from './desktopEnvironmentSelections'
 import { DesktopProductEnvironment, DesktopEnvironmentError } from './desktopProductEnvironment'
 import type {
   DesktopEnvironmentContext,
   DesktopEnvironmentPrepareInput,
-  DesktopEnvironmentIntent
+  DesktopEnvironmentIntent,
+  DesktopEnvironmentSelectionPrepareInput,
+  DesktopEnvironmentSelectionIntent
 } from '@shared/desktopProductEnvironment'
 import { DesktopTargetSetups, DesktopTargetSetupError } from './desktopTargetSetup'
 import { DesktopExposure } from './desktopExposure'
@@ -126,6 +129,7 @@ export class DesktopControllerService {
   private readonly enrollment: DesktopControllerEnrollment
   private readonly commands: DesktopControllerCommands
   private readonly projects: DesktopProjectSetups
+  private readonly environmentSelections: DesktopEnvironmentSelections
   private readonly environment: DesktopProductEnvironment
   private readonly targets: DesktopTargetSetups
   private readonly firstDeployments: DesktopFirstDeployments
@@ -180,6 +184,14 @@ export class DesktopControllerService {
       cipher,
       this.vault,
       this.projects,
+      this.enrollment
+    )
+    this.environmentSelections = new DesktopEnvironmentSelections(
+      db,
+      cipher,
+      this.vault,
+      this.projects,
+      this.environment,
       this.enrollment
     )
     this.targets = new DesktopTargetSetups(db, cipher, this.vault, this.enrollment)
@@ -538,6 +550,23 @@ export class DesktopControllerService {
       if (!parsed.success) throw new DesktopProjectSetupError('PROJECT_REQUEST_INVALID')
       return this.projects.targets(parsed.data.binding_id, parsed.data.after_id ?? null)
     })
+  }
+  async prepareEnvironmentSelection(
+    input: DesktopEnvironmentSelectionPrepareInput
+  ): Promise<DesktopEnvironmentSelectionIntent> {
+    return this.safe(() => this.environmentSelections.prepare(input))
+  }
+  async sendEnvironmentSelection(key: string): Promise<DesktopEnvironmentSelectionIntent> {
+    return this.safe(() => this.environmentSelections.send(key))
+  }
+  async checkEnvironmentSelection(key: string): Promise<DesktopEnvironmentSelectionIntent> {
+    return this.safe(() => this.environmentSelections.check(key))
+  }
+  async listEnvironmentSelections(key: string): Promise<DesktopEnvironmentSelectionIntent[]> {
+    return this.safe(() => this.environmentSelections.list(key))
+  }
+  async cancelEnvironmentSelection(key: string): Promise<DesktopEnvironmentSelectionIntent> {
+    return this.safe(() => this.environmentSelections.cancel(key))
   }
   async environmentContext(key: string): Promise<DesktopEnvironmentContext> {
     return this.safe(() => this.environment.context(key))

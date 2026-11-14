@@ -102,6 +102,19 @@ export interface ProductEnvironmentReference {
   ownership_generation: number
   revision: number
 }
+/** Read-only review anchored to the immutable registered source. Only environment
+ * selection may differ from that basis; no implicit adoption of repository/plan edits. */
+export interface ProductEnvironmentReview extends ProductEnvironmentState {
+  selected: ProductEnvironmentMetadata | null
+  auto_deploy_paused: boolean
+}
+/** Negative proof is from one SQLite snapshot: receipt absent AND monotonic
+ * current source generation/latest revision advanced beyond the immutable request.
+ * Merely missing a receipt is never proof that an in-flight request cannot apply. */
+export interface ProductEnvironmentSelectionLookup {
+  result: ProductEnvironmentSelectionResult | null
+  definitively_unapplied: boolean
+}
 export interface ProductEnvironmentSelectionResult {
   state: 'selected' | 'already_selected'
   request_key: string

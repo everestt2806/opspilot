@@ -5,12 +5,20 @@ import type {
   ProductEnvironmentStateInput,
   ProductEnvironmentState
 } from '../../../../docs/contracts/product-environment'
+import type {
+  ProductEnvironmentReview,
+  ProductEnvironmentSelectionInput,
+  ProductEnvironmentSelectionResult
+} from '../../../../docs/contracts/product-environment'
 import {
   environmentContextSchema,
   environmentStageSchema,
   environmentStateSchema,
   environmentStateResultSchema,
   environmentStageResultSchema,
+  environmentReviewSchema,
+  environmentSelectionSchema,
+  environmentSelectionResultSchema,
   type ProductEnvironmentError
 } from './productEnvironment'
 import { vpsRegistrationInputSchema, vpsRegistrationResultSchema } from './vpsRegistration'
@@ -221,6 +229,56 @@ export class DesktopControllerEnrollment {
       environmentStateResultSchema
     )
   }
+  async environmentReview(
+    bindingId: string,
+    input: ProductEnvironmentContextInput
+  ): Promise<ProductEnvironmentReview> {
+    const parsed = environmentContextSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    return this.environmentOperation(
+      bindingId,
+      'project-environment-review',
+      parsed.data,
+      environmentReviewSchema
+    )
+  }
+  async selectEnvironment(
+    bindingId: string,
+    input: ProductEnvironmentSelectionInput,
+    beforeSend: () => void
+  ): Promise<ProductEnvironmentSelectionResult> {
+    const parsed = environmentSelectionSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    return this.environmentOperation(
+      bindingId,
+      'select-project-environment',
+      parsed.data,
+      environmentSelectionResultSchema,
+      beforeSend
+    )
+  }
+  async environmentSelectionState(
+    bindingId: string,
+    input: ProductEnvironmentSelectionInput
+  ): Promise<{
+    result: ProductEnvironmentSelectionResult | null
+    definitively_unapplied: boolean
+  }> {
+    const parsed = environmentSelectionSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
+    return this.environmentOperation(
+      bindingId,
+      'project-environment-selection-state',
+      parsed.data,
+      z.strictObject({
+        result: environmentSelectionResultSchema.nullable(),
+        definitively_unapplied: z.boolean()
+      })
+    )
+  }
   async environmentState(
     bindingId: string,
     input: ProductEnvironmentStateInput
@@ -254,7 +312,12 @@ export class DesktopControllerEnrollment {
   private async environmentOperation<T>(
     bindingId: string,
     operation:
-      'stage-project-environment' | 'project-environment-state' | 'project-environment-context',
+      | 'stage-project-environment'
+      | 'project-environment-state'
+      | 'project-environment-context'
+      | 'project-environment-review'
+      | 'select-project-environment'
+      | 'project-environment-selection-state',
     payload: object,
     schema: z.ZodType<T>,
     beforeSend?: () => void
@@ -438,6 +501,9 @@ export class DesktopControllerEnrollment {
         | 'stage-project-environment'
         | 'project-environment-state'
         | 'project-environment-context'
+        | 'project-environment-review'
+        | 'select-project-environment'
+        | 'project-environment-selection-state'
       payload: object
       expected_revision?: number
       beforeSend?: () => void

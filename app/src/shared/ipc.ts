@@ -1,4 +1,4 @@
-import type { DesktopEnvironmentContext, DesktopEnvironmentPrepareInput, DesktopEnvironmentIntent } from './desktopProductEnvironment';
+import type { DesktopEnvironmentContext, DesktopEnvironmentPrepareInput, DesktopEnvironmentIntent, DesktopEnvironmentSelectionPrepareInput, DesktopEnvironmentSelectionIntent } from './desktopProductEnvironment';
 import type { ControllerAdoptionReviewInput, ControllerAdoptionReview, ControllerAdoptionConfirmInput, ControllerAdoptionResult } from './controllerAdoption'
 import type { ControllerAuthorityReviewInput, ControllerAuthorityReview, ControllerAuthorityConfirmInput, ControllerAuthorityResult } from './controllerAuthority'
 import type { ControllerUpgradeOverview, ControllerUpgradeReviewInput, ControllerUpgradeReview, ControllerUpgradeSendInput, ControllerUpgradeBindingReview, DesktopUpgrade } from './controllerUpgrade'
@@ -418,6 +418,11 @@ export interface IpcInvokeMap {
   'controller:verify-project-source': (key:string) => IpcResult<DesktopProjectSourceVerification>;
   'controller:project-target-state': (key:string) => IpcResult<DesktopProjectTargetState>;
   'controller:enroll-project-target': (input:DesktopProjectTargetInput) => IpcResult<DesktopProjectTargetState>;
+  'controller:prepare-environment-selection': (input: DesktopEnvironmentSelectionPrepareInput) => IpcResult<DesktopEnvironmentSelectionIntent>;
+  'controller:send-environment-selection': (key: string) => IpcResult<DesktopEnvironmentSelectionIntent>;
+  'controller:check-environment-selection': (key: string) => IpcResult<DesktopEnvironmentSelectionIntent>;
+  'controller:environment-selections': (projectKey: string) => IpcResult<DesktopEnvironmentSelectionIntent[]>;
+  'controller:cancel-environment-selection': (key: string) => IpcResult<DesktopEnvironmentSelectionIntent>;
   'controller:environment-context': (projectKey: string) => IpcResult<DesktopEnvironmentContext>;
   'controller:prepare-environment': (input: DesktopEnvironmentPrepareInput) => IpcResult<DesktopEnvironmentIntent>;
   'controller:send-environment': (key: string) => IpcResult<DesktopEnvironmentIntent>;

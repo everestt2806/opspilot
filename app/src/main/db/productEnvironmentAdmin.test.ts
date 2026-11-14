@@ -354,7 +354,7 @@ it('retains immutable receipt and revision and upgrades schema032 without losing
   const before = db.prepare('SELECT encrypted_secret FROM product_environment_revision').get()
   // Fixture này là Desktop; không dùng controller role để bỏ qua role fence.
   runMigrations(db)
-  expect(db.prepare('SELECT max(version) n FROM schema_version').get()).toEqual({ n: 35 })
+  expect(db.prepare('SELECT max(version) n FROM schema_version').get()).toEqual({ n: 36 })
   expect(db.prepare('SELECT encrypted_secret FROM product_environment_revision').get()).toEqual(
     before
   )
