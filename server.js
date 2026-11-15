@@ -46,7 +46,7 @@ app.use(express.static(path.join(__dirname, "public")));
 app.get("/health", (_request, response) => {
   response
     .set("Cache-Control", "no-store")
-    .status(200).json({status:"ok",service:"environment-acceptance",marker:"cff1aa0eb5c4-initial",title_configured:Boolean(process.env.APP_TITLE),configured:Boolean(process.env.APP_TOKEN)});
+    .status(200).json({status:"ok",service:"environment-acceptance",marker:"cff1aa0eb5c4-update",title_configured:Boolean(process.env.APP_TITLE),configured:Boolean(process.env.APP_TOKEN)});
 });
 
 app.get("/api/slots", (request, response) => {
