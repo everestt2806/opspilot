@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "postinstall": "node -e \"process.exit(42)\""
+    "postinstall": "node -e \"process.exit(0)\""
   },
   "engines": {
     "node": ">=18"
