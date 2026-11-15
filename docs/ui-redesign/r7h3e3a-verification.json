@@ -1,0 +1,218 @@
+{
+  "status": "PASS",
+  "checkpoint": "R7h-3e3a",
+  "scope": "LOCAL_TARGET_HELPER_UPGRADE_ENGINE_AND_AUTHENTICATED_OUTCOME_VERIFIER",
+  "base_commit": "5c7199f1e9f5425731cd7485fe888b56f246e981",
+  "quality": [
+    {
+      "gate": "native",
+      "command": "wsl.exe -d Ubuntu -u root -- sh /mnt/d/Developing/DuAnCNTT/app/.out-scripts/r7h3e3a-native.sh",
+      "exit_code": 0
+    },
+    {
+      "gate": "ruff",
+      "command": "ml-service\\.venv\\Scripts\\python.exe -m ruff check app/src/main/controlPlane/target_enrollment.py app/scripts/product-runtime-lab/test_target_helper_upgrade.py",
+      "exit_code": 0
+    },
+    {
+      "gate": "python-format",
+      "command": "ml-service\\.venv\\Scripts\\python.exe -m ruff format --check app/src/main/controlPlane/target_enrollment.py app/scripts/product-runtime-lab/test_target_helper_upgrade.py",
+      "exit_code": 0
+    },
+    {
+      "gate": "full",
+      "command": "pnpm.cmd --prefix app exec vitest run --maxWorkers=3",
+      "exit_code": 0
+    },
+    {
+      "gate": "types",
+      "command": "pnpm.cmd --prefix app typecheck",
+      "exit_code": 0
+    },
+    {
+      "gate": "scripts-types",
+      "command": "pnpm.cmd --prefix app exec tsc -p tsconfig.scripts.json --noEmit",
+      "exit_code": 0
+    },
+    {
+      "gate": "lint",
+      "command": "pnpm.cmd --prefix app exec eslint --max-warnings=0 src/main/controlPlane/targetHelperUpgradeOutcome.ts scripts/target-helper-upgrade-lab/run.mjs scripts/target-helper-upgrade-lab/entry.ts",
+      "exit_code": 0
+    },
+    {
+      "gate": "format",
+      "command": "pnpm.cmd --prefix app exec prettier --check src/main/controlPlane/targetHelperUpgradeOutcome.ts scripts/target-helper-upgrade-lab/run.mjs scripts/target-helper-upgrade-lab/entry.ts",
+      "exit_code": 0
+    },
+    {
+      "gate": "build",
+      "command": "pnpm.cmd --prefix app run build",
+      "exit_code": 0
+    },
+    {
+      "gate": "diff",
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "affected_checks_repeated_on_final_Python_test_source": [
+    {
+      "gate": "native",
+      "command": "wsl.exe -d Ubuntu -u root -- sh /mnt/d/Developing/DuAnCNTT/app/.out-scripts/r7h3e3a-native.sh",
+      "exit_code": 0
+    },
+    {
+      "gate": "ruff",
+      "command": "ml-service\\.venv\\Scripts\\python.exe -m ruff check app/src/main/controlPlane/target_enrollment.py app/scripts/product-runtime-lab/test_target_helper_upgrade.py",
+      "exit_code": 0
+    },
+    {
+      "gate": "python-format",
+      "command": "ml-service\\.venv\\Scripts\\python.exe -m ruff format --check app/src/main/controlPlane/target_enrollment.py app/scripts/product-runtime-lab/test_target_helper_upgrade.py",
+      "exit_code": 0
+    }
+  ],
+  "full_app_tests": {
+    "passed": 2509,
+    "skipped": 2,
+    "failed": 0,
+    "files_passed": 178,
+    "files_skipped": 1
+  },
+  "native_Python": {
+    "legacy_tests": 11,
+    "new_tests": 18,
+    "failed": 0,
+    "actual_SIGKILL_boundaries": 7,
+    "framework_pairs": [
+      "express-eb5c-f591",
+      "express-98b0-f591",
+      "static-spa-98b0-f591",
+      "nextjs-98b0-f591"
+    ],
+    "actual_CLI": true,
+    "flock_exclusion": true,
+    "two_process_apply_apply_and_apply_cancel": true,
+    "key_marker_guards_existing_lock_inode_preserved": true,
+    "partial_no_implicit_replay": true,
+    "cancel_tombstone_blocks_late_apply": true,
+    "tamper_FIFO_symlink_rejected": true
+  },
+  "native_Python_to_Node": {
+    "status": "PASS",
+    "scope": "NATIVE_PYTHON_TARGET_NODE_OUTCOME_VERIFIER",
+    "nonce": "7538f5d64b83",
+    "checks": 23,
+    "observations": [
+      {
+        "name": "absent_unsettled",
+        "state": "not_applied",
+        "settled": false,
+        "proof_verified": true
+      },
+      {
+        "name": "partial_unsettled",
+        "state": "pending",
+        "settled": false,
+        "proof_verified": true
+      },
+      {
+        "name": "applied_settled",
+        "state": "applied",
+        "settled": true,
+        "proof_verified": true
+      },
+      {
+        "name": "cancelled_settled",
+        "state": "not_applied",
+        "settled": true,
+        "proof_verified": true
+      }
+    ],
+    "private_cleanup": true,
+    "artifact_sha256": "34179b96e264dbdfbc59e35e7ef258bd41d0b57d37a611132211754ec0936c7b"
+  },
+  "public_HTTP": {
+    "status": "PASS",
+    "scope": "PUBLIC_HTTP_READ_ONLY_NO_SSH",
+    "checked_at": "2026-11-15T18:03:22.316Z",
+    "observations": [
+      {
+        "port": 30000,
+        "status": 200
+      },
+      {
+        "port": 30001,
+        "status": 200
+      },
+      {
+        "port": 30002,
+        "status": 200
+      },
+      {
+        "port": 30003,
+        "status": 200
+      },
+      {
+        "port": 30004,
+        "status": 200
+      },
+      {
+        "port": 30005,
+        "status": 200
+      }
+    ]
+  },
+  "bootstrap_raw_sha256": "ae2c290726b6fc497489bca962036ac14806bf588086d181498cbc8dcd886c7b",
+  "bootstrap_raw_bytes": 36931,
+  "source_sha256_lf": {
+    "app/src/main/controlPlane/target_enrollment.py": "ae2c290726b6fc497489bca962036ac14806bf588086d181498cbc8dcd886c7b",
+    "app/src/main/controlPlane/targetHelperUpgradeOutcome.ts": "442192436fb57099233d7c982ccb60f34cc828df470349820f68ab3f8839a2f1",
+    "docs/contracts/product-target-helper-upgrade.ts": "85a2eb0e7c4a07f27e6bb503f5e25defdb67b3b76d1d70f238d274279bd87a63",
+    "app/scripts/product-runtime-lab/test_target_helper_upgrade.py": "6a9ffd032e93308d85b12b9e54e2cf9ffea029213dc2a7251f09350cd954f624",
+    "app/scripts/product-runtime-lab/test_target_enrollment.py": "0bac24a8005b82de31bfd7d2c960e2ed22c2cd24ab8f8148b5496665077e8f89",
+    "app/scripts/target-helper-upgrade-lab/run.mjs": "42b8239aee0372cbd949bc3fda7749b8ac4e831face7d74254c8d4ac69a51e0d",
+    "app/scripts/target-helper-upgrade-lab/entry.ts": "0deb7cd7626c08a4d43e467655739677225548652b90885a1c6691718bdb68d7",
+    "app/src/main/controlPlane/targetEnrollmentProof.ts": "1028c9919085c6d7f0e4245ee28916bfe820b6c05a287ac0368e19e6f38c3784",
+    "app/src/main/controlPlane/target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+    "app/src/main/controlPlane/target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+    "app/src/main/controlPlane/target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5",
+    "app/src/main/ssh/manager.ts": "2355c2f8b9fb1a00232d421361594f0ff7784c06a7a87d5933f2e4964598e5c9"
+  },
+  "raw_sha256": {
+    "app/.out-scripts/r7h3e3a-quality/results.json": "534d23b46daf3a85c83acf7740d8792f59d11e2348772c2f545a31d85a8e93cf",
+    "app/.out-scripts/r7h3e3a-quality/native-final-results.json": "45b690a4f7d1f3c753fe601178b6939ec6e0a8d2a4471ebfd3fbd6cd402ce4f1",
+    "app/.out-scripts/r7h3e3a-target-initial.log": "cc65406c1ad060c7d917278d7fb53079a413cf193871c0f7c19da477b24fe7bb",
+    "app/.out-scripts/r7h3e3a-quality/native-attempt1.log": "a959d0facc124c8dd0e16c511d2ae2eeec17853cf27de432f502d0324021fc97",
+    "app/.out-scripts/r7h3e3a-quality/results-attempt1.json": "65cda8295936725fbf988b6bd14b2ca99a9337db47543274a02ec179fdfcde7f",
+    "app/.out-scripts/r7h3e3a-quality/native-pre-concurrency.log": "826cb781a5f51d38d8c29db63e588e164512574ff42620459eebd22e83d05d23",
+    "app/.out-scripts/r7h3e3a-quality/ruff-pre-concurrency.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "app/.out-scripts/r7h3e3a-quality/python-format-pre-concurrency.log": "3bc53bf3e981a98a34a852e175bf9b77af841edea74fca595d9aedcbaf9a4938",
+    "app/.out-scripts/r7h3e3a-public-http.json": "0ac48e9da6020cf6e4b0a3320db8bb165613a2d0e1f02b37c0b8e352bfed2536",
+    "app/.out-scripts/target-helper-upgrade-lab/7538f5d64b83/result.json": "44194cea4f87cff90facbd9e95feccadbda08a58c396e9061adb13cc503a94a0",
+    "app/.out-scripts/r7h3e3a-quality/native.log": "e33444cb75dc372243ac810e8359b4b876dad4d51b4266b7c299986558f218dc",
+    "app/.out-scripts/r7h3e3a-quality/ruff.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "app/.out-scripts/r7h3e3a-quality/python-format.log": "3bc53bf3e981a98a34a852e175bf9b77af841edea74fca595d9aedcbaf9a4938",
+    "app/.out-scripts/r7h3e3a-quality/full.log": "dedaa8737354b194ae29f41861cff4b1747fcf09d49044fdfbcf78514a530a67",
+    "app/.out-scripts/r7h3e3a-quality/types.log": "e1233c3e393be6bc01b75114f4405f780fe125c011904e60806109b2d88dbd38",
+    "app/.out-scripts/r7h3e3a-quality/scripts-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3e3a-quality/lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3e3a-quality/format.log": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20",
+    "app/.out-scripts/r7h3e3a-quality/build.log": "561487770178418ef4671ae8ff548ec1a1c60cb1b8cad787748cf89a20585875",
+    "app/.out-scripts/r7h3e3a-quality/diff.log": "bdf6d79147c1e8e7b1b927c588fb1a64754984405cffd67e177496d00dcb0da4"
+  },
+  "limits": [
+    "Target-only engine. No controller dispatch, SQL pin finalization, Root upgrade/rollback barrier or UI integration.",
+    "Actual helper bytes are pinned approved versions; target test current manifest uses a synthetic unused controller entrypoint, not an installed release.",
+    "No frozen controller bundle, catalog publication, VPS SSH/mutation, Docker runtime or installed helper upgrade proof.",
+    "private_cleanup refers to disposable Python target fixtures; standalone compiled Node verifier artifacts are retained in private ignored scratch.",
+    "Absent not_applied/settled:false is observation only and must not authorize SQL cancellation.",
+    "Controller integration must persist dispatch/outcome, fence exact pending SQL UUID/revision/source/owner/target, and protect rollback before serving rollout.",
+    "Managed DB/PG, ML/report, packaging/demo and whole release remain OPEN."
+  ],
+  "initial_attempts": [
+    "Native harness initially omitted production -B behavior; guard import produced disallowed __pycache__. Final harness sets PYTHONDONTWRITEBYTECODE=1, strict layout unchanged.",
+    "Python concurrency/cleanup tests added while independent Windows Vitest ran; affected native/Ruff/format rerun on final test source. Production sources unchanged during those runs."
+  ],
+  "accepted_exceptions": []
+}
