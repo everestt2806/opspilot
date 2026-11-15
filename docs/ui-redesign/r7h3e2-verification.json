@@ -1,0 +1,664 @@
+{
+  "status": "PASS",
+  "checkpoint": "R7h-3e2",
+  "scope": "LOCAL_HELPER_UPGRADE_IMMUTABLE_INTENT_SQL_BARRIER_COLD_LOOKUP",
+  "base_commit": "c0af82561d9c5ef4b2978548ef61d354977d67c2",
+  "candidate_payload_sha256": "f1999275783c66c97d4837960f176fb104a92b185ebdb86e26a21955f8b98ce2",
+  "quality": [
+    {
+      "gate": "focused",
+      "command": "pnpm.cmd --prefix app exec vitest run src/main/controlPlane/targetHelperUpgradeReview.test.ts src/main/controlPlane/targetEnrollment.test.ts src/main/controlPlane/targetEnrollmentSsh.test.ts",
+      "exit_code": 0
+    },
+    {
+      "gate": "full",
+      "command": "pnpm.cmd --prefix app exec vitest run --maxWorkers=3",
+      "exit_code": 0
+    },
+    {
+      "gate": "types",
+      "command": "pnpm.cmd --prefix app typecheck",
+      "exit_code": 0
+    },
+    {
+      "gate": "scripts-types",
+      "command": "pnpm.cmd --prefix app exec tsc -p tsconfig.scripts.json --noEmit",
+      "exit_code": 0
+    },
+    {
+      "gate": "lint",
+      "command": "pnpm.cmd --prefix app exec eslint --max-warnings=0 src/main/controlPlane/targetHelperUpgradeReview.ts src/main/controlPlane/targetHelperUpgradeReview.test.ts src/main/controlPlane/cli.ts src/main/controlPlane/targetHelperUpgradeJournal.ts src/main/controlPlane/targetEnrollmentRepository.ts scripts/product-runtime-lab/target-helper-upgrade-journal-checks.mjs scripts/product-runtime-lab/target-helper-upgrade-journal-fault.mjs scripts/product-runtime-lab/target-helper-upgrade-journal-race.mjs scripts/product-runtime-lab/target-helper-upgrade-review-checks.mjs scripts/product-runtime-lab/target-enrollment-runtime-preload.mjs",
+      "exit_code": 0
+    },
+    {
+      "gate": "format",
+      "command": "pnpm.cmd --prefix app exec prettier --check src/main/controlPlane/targetHelperUpgradeReview.ts src/main/controlPlane/targetHelperUpgradeReview.test.ts src/main/controlPlane/cli.ts src/main/controlPlane/targetHelperUpgradeJournal.ts src/main/controlPlane/targetEnrollmentRepository.ts scripts/product-runtime-lab/target-helper-upgrade-journal-checks.mjs scripts/product-runtime-lab/target-helper-upgrade-journal-fault.mjs scripts/product-runtime-lab/target-helper-upgrade-journal-race.mjs scripts/product-runtime-lab/target-helper-upgrade-review-checks.mjs scripts/product-runtime-lab/target-enrollment-runtime-preload.mjs",
+      "exit_code": 0
+    },
+    {
+      "gate": "build",
+      "command": "pnpm.cmd --prefix app run build",
+      "exit_code": 0
+    },
+    {
+      "gate": "diff",
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "full_tests": {
+    "passed": 2509,
+    "skipped": 2,
+    "failed": 0,
+    "files_passed": 178,
+    "files_skipped": 1
+  },
+  "focused_tests": 57,
+  "new_tests": 16,
+  "native_journal_checks": 80,
+  "native_readonly_review_checks": 40,
+  "native_retained_runtime_attempts": 28,
+  "matrix": [
+    {
+      "case": "express-original",
+      "journal": {
+        "status": "PASS",
+        "scope": "NATIVE_HELPER_UPGRADE_JOURNAL_COLD_SIGKILL",
+        "observations": [
+          {
+            "app_id": 1,
+            "cases": 10,
+            "original_SQL_remote_material_unchanged": true,
+            "cold_lookup_retry": true,
+            "startup_does_not_clear_barrier": true,
+            "SIGKILL_after_intent_recovers": true,
+            "SIGKILL_after_link_fails_closed_without_SQL": true,
+            "journal_permissions_verified": true
+          },
+          {
+            "app_id": 2,
+            "cases": 10,
+            "original_SQL_remote_material_unchanged": true,
+            "cold_lookup_retry": true,
+            "startup_does_not_clear_barrier": true,
+            "SIGKILL_after_intent_recovers": true,
+            "SIGKILL_after_link_fails_closed_without_SQL": true,
+            "journal_permissions_verified": true
+          }
+        ],
+        "private_clone_cleanup": true
+      },
+      "review": {
+        "status": "PASS",
+        "scope": "NATIVE_CLI_PINNED_SSH_SQLITE_HELPER_REVIEW",
+        "checks": [
+          {
+            "app_id": 1,
+            "cases": 5,
+            "repeated_review_stable": true,
+            "SQL_and_material_unchanged": true,
+            "remote_receipt_tamper_rejected": true,
+            "unpaused_rejected": true,
+            "review": {
+              "format": 1,
+              "purpose": "product-target-helper-upgrade-review",
+              "controller_id": "r1-ea0eae8fb13d",
+              "app_id": 1,
+              "ownership_generation": 1,
+              "from_manifest_sha256": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+              "to_manifest_sha256": "f1999275783c66c97d4837960f176fb104a92b185ebdb86e26a21955f8b98ce2",
+              "authority_sha256": "2fb9af2b9e826489306383405469e06cea83c8d05b845aaa71b07c03057e1887",
+              "changes": [
+                {
+                  "path": "target-helper/target_product_runtime.py",
+                  "before": {
+                    "size": 46765,
+                    "sha256": "eb5c697e0051f38e0633bc84e32377fbc91cf4b825c21734f5f611a49b85908d"
+                  },
+                  "after": {
+                    "size": 51419,
+                    "sha256": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+                  }
+                }
+              ],
+              "apply_available": false,
+              "review_sha256": "9312182cd39dc783477fe91aed2b98a901a94b5884b82771fd808614bb5af054"
+            }
+          },
+          {
+            "app_id": 2,
+            "cases": 5,
+            "repeated_review_stable": true,
+            "SQL_and_material_unchanged": true,
+            "remote_receipt_tamper_rejected": true,
+            "unpaused_rejected": true,
+            "review": {
+              "format": 1,
+              "purpose": "product-target-helper-upgrade-review",
+              "controller_id": "r1-ea0eae8fb13d",
+              "app_id": 2,
+              "ownership_generation": 1,
+              "from_manifest_sha256": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+              "to_manifest_sha256": "f1999275783c66c97d4837960f176fb104a92b185ebdb86e26a21955f8b98ce2",
+              "authority_sha256": "8ea368544bc2d27c489f87bbd2e06f32f6728d619ed07be609c83ec0823a4dd8",
+              "changes": [
+                {
+                  "path": "target-helper/target_product_runtime.py",
+                  "before": {
+                    "size": 46765,
+                    "sha256": "eb5c697e0051f38e0633bc84e32377fbc91cf4b825c21734f5f611a49b85908d"
+                  },
+                  "after": {
+                    "size": 51419,
+                    "sha256": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+                  }
+                }
+              ],
+              "apply_available": false,
+              "review_sha256": "74a070a2a4e7bd02d3920d1fa29adc58e1bc9c7cce60e6224686cd1a534cfbec"
+            }
+          }
+        ]
+      },
+      "retained_runtime": {
+        "status": "PASS",
+        "nonce": "f5197b0cfd2f",
+        "scope": "CONTROLLER_READINESS_COLD_RECOVERY",
+        "cases": 7,
+        "framework": "express",
+        "enrolled_apps": 2,
+        "installed_helpers": true,
+        "controller_process_loss_recovered": true,
+        "packaged_templates_collector": true,
+        "verified_terminals": 6,
+        "unknown_without_retry": 1,
+        "runtime_nonce": "ea0eae8fb13d",
+        "cleanup": true,
+        "bundle_sha256": "cf57563ef093ba69e7a5032cea90891beea29c7273b1e13c038440913150354e",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "resource_probes": 7,
+        "historical_release_preserved": true,
+        "cold_startup_terminal_recovered": true,
+        "preterminal_unknown_blocked": true,
+        "no_runtime_replay": true
+      }
+    },
+    {
+      "case": "express-r7b",
+      "journal": {
+        "status": "PASS",
+        "scope": "NATIVE_HELPER_UPGRADE_JOURNAL_COLD_SIGKILL",
+        "observations": [
+          {
+            "app_id": 1,
+            "cases": 10,
+            "original_SQL_remote_material_unchanged": true,
+            "cold_lookup_retry": true,
+            "startup_does_not_clear_barrier": true,
+            "SIGKILL_after_intent_recovers": true,
+            "SIGKILL_after_link_fails_closed_without_SQL": true,
+            "journal_permissions_verified": true
+          },
+          {
+            "app_id": 2,
+            "cases": 10,
+            "original_SQL_remote_material_unchanged": true,
+            "cold_lookup_retry": true,
+            "startup_does_not_clear_barrier": true,
+            "SIGKILL_after_intent_recovers": true,
+            "SIGKILL_after_link_fails_closed_without_SQL": true,
+            "journal_permissions_verified": true
+          }
+        ],
+        "private_clone_cleanup": true
+      },
+      "review": {
+        "status": "PASS",
+        "scope": "NATIVE_CLI_PINNED_SSH_SQLITE_HELPER_REVIEW",
+        "checks": [
+          {
+            "app_id": 1,
+            "cases": 5,
+            "repeated_review_stable": true,
+            "SQL_and_material_unchanged": true,
+            "remote_receipt_tamper_rejected": true,
+            "unpaused_rejected": true,
+            "review": {
+              "format": 1,
+              "purpose": "product-target-helper-upgrade-review",
+              "controller_id": "r1-538c83946dc4",
+              "app_id": 1,
+              "ownership_generation": 1,
+              "from_manifest_sha256": "4fbe3321801fd084749df2892fbc2fa078ae6e64e6458a107b5940517f0ff957",
+              "to_manifest_sha256": "f1999275783c66c97d4837960f176fb104a92b185ebdb86e26a21955f8b98ce2",
+              "authority_sha256": "15b2a7d6e8affc0929089f6e4a27207bb8bb8e1d04f4abf139997659ee382a74",
+              "changes": [
+                {
+                  "path": "target-helper/target_product_runtime.py",
+                  "before": {
+                    "size": 47340,
+                    "sha256": "98b0edec5ffb29a114e411d067a551a9a90110cdcf5872ab31dee5246f3e10ff"
+                  },
+                  "after": {
+                    "size": 51419,
+                    "sha256": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+                  }
+                }
+              ],
+              "apply_available": false,
+              "review_sha256": "e3718d22bc80fa8c7449839b7dcb9ae1340f20726882606b596beb3019fa84ca"
+            }
+          },
+          {
+            "app_id": 2,
+            "cases": 5,
+            "repeated_review_stable": true,
+            "SQL_and_material_unchanged": true,
+            "remote_receipt_tamper_rejected": true,
+            "unpaused_rejected": true,
+            "review": {
+              "format": 1,
+              "purpose": "product-target-helper-upgrade-review",
+              "controller_id": "r1-538c83946dc4",
+              "app_id": 2,
+              "ownership_generation": 1,
+              "from_manifest_sha256": "4fbe3321801fd084749df2892fbc2fa078ae6e64e6458a107b5940517f0ff957",
+              "to_manifest_sha256": "f1999275783c66c97d4837960f176fb104a92b185ebdb86e26a21955f8b98ce2",
+              "authority_sha256": "c7f1ce0f52ac48eec010fa452f6fd20561ea6cc59e77a9d923a2c728050706ed",
+              "changes": [
+                {
+                  "path": "target-helper/target_product_runtime.py",
+                  "before": {
+                    "size": 47340,
+                    "sha256": "98b0edec5ffb29a114e411d067a551a9a90110cdcf5872ab31dee5246f3e10ff"
+                  },
+                  "after": {
+                    "size": 51419,
+                    "sha256": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+                  }
+                }
+              ],
+              "apply_available": false,
+              "review_sha256": "47c7cced08a3ae952855dbbede7fdb1cdb63cf947d4f7b09e8eee11ed3e697ab"
+            }
+          }
+        ]
+      },
+      "retained_runtime": {
+        "status": "PASS",
+        "nonce": "cdd6dbd7d291",
+        "scope": "CONTROLLER_READINESS_COLD_RECOVERY",
+        "cases": 7,
+        "framework": "express",
+        "enrolled_apps": 2,
+        "installed_helpers": true,
+        "controller_process_loss_recovered": true,
+        "packaged_templates_collector": true,
+        "verified_terminals": 6,
+        "unknown_without_retry": 1,
+        "runtime_nonce": "538c83946dc4",
+        "cleanup": true,
+        "bundle_sha256": "cf57563ef093ba69e7a5032cea90891beea29c7273b1e13c038440913150354e",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "resource_probes": 7,
+        "historical_release_preserved": true,
+        "cold_startup_terminal_recovered": true,
+        "preterminal_unknown_blocked": true,
+        "no_runtime_replay": true
+      }
+    },
+    {
+      "case": "spa-r7b",
+      "journal": {
+        "status": "PASS",
+        "scope": "NATIVE_HELPER_UPGRADE_JOURNAL_COLD_SIGKILL",
+        "observations": [
+          {
+            "app_id": 1,
+            "cases": 10,
+            "original_SQL_remote_material_unchanged": true,
+            "cold_lookup_retry": true,
+            "startup_does_not_clear_barrier": true,
+            "SIGKILL_after_intent_recovers": true,
+            "SIGKILL_after_link_fails_closed_without_SQL": true,
+            "journal_permissions_verified": true
+          },
+          {
+            "app_id": 2,
+            "cases": 10,
+            "original_SQL_remote_material_unchanged": true,
+            "cold_lookup_retry": true,
+            "startup_does_not_clear_barrier": true,
+            "SIGKILL_after_intent_recovers": true,
+            "SIGKILL_after_link_fails_closed_without_SQL": true,
+            "journal_permissions_verified": true
+          }
+        ],
+        "private_clone_cleanup": true
+      },
+      "review": {
+        "status": "PASS",
+        "scope": "NATIVE_CLI_PINNED_SSH_SQLITE_HELPER_REVIEW",
+        "checks": [
+          {
+            "app_id": 1,
+            "cases": 5,
+            "repeated_review_stable": true,
+            "SQL_and_material_unchanged": true,
+            "remote_receipt_tamper_rejected": true,
+            "unpaused_rejected": true,
+            "review": {
+              "format": 1,
+              "purpose": "product-target-helper-upgrade-review",
+              "controller_id": "r1-03dbfe7a1000",
+              "app_id": 1,
+              "ownership_generation": 1,
+              "from_manifest_sha256": "4fbe3321801fd084749df2892fbc2fa078ae6e64e6458a107b5940517f0ff957",
+              "to_manifest_sha256": "f1999275783c66c97d4837960f176fb104a92b185ebdb86e26a21955f8b98ce2",
+              "authority_sha256": "21baaf0aa34177227475a0b554ce614d3f14d27286fa05e1d6daa82430f6785b",
+              "changes": [
+                {
+                  "path": "target-helper/target_product_runtime.py",
+                  "before": {
+                    "size": 47340,
+                    "sha256": "98b0edec5ffb29a114e411d067a551a9a90110cdcf5872ab31dee5246f3e10ff"
+                  },
+                  "after": {
+                    "size": 51419,
+                    "sha256": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+                  }
+                }
+              ],
+              "apply_available": false,
+              "review_sha256": "5da965169124f700076db02dee392a1d75fbd15dd141fabc72e54f683bcb8ca5"
+            }
+          },
+          {
+            "app_id": 2,
+            "cases": 5,
+            "repeated_review_stable": true,
+            "SQL_and_material_unchanged": true,
+            "remote_receipt_tamper_rejected": true,
+            "unpaused_rejected": true,
+            "review": {
+              "format": 1,
+              "purpose": "product-target-helper-upgrade-review",
+              "controller_id": "r1-03dbfe7a1000",
+              "app_id": 2,
+              "ownership_generation": 1,
+              "from_manifest_sha256": "4fbe3321801fd084749df2892fbc2fa078ae6e64e6458a107b5940517f0ff957",
+              "to_manifest_sha256": "f1999275783c66c97d4837960f176fb104a92b185ebdb86e26a21955f8b98ce2",
+              "authority_sha256": "6463946f313b64904f7516766dbe909358d415013bb1994d271a41a0a58f42ad",
+              "changes": [
+                {
+                  "path": "target-helper/target_product_runtime.py",
+                  "before": {
+                    "size": 47340,
+                    "sha256": "98b0edec5ffb29a114e411d067a551a9a90110cdcf5872ab31dee5246f3e10ff"
+                  },
+                  "after": {
+                    "size": 51419,
+                    "sha256": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+                  }
+                }
+              ],
+              "apply_available": false,
+              "review_sha256": "2efc529df4843f423f823f07bf375406cbaa038d6f965eb4bed8f39ff7e57718"
+            }
+          }
+        ]
+      },
+      "retained_runtime": {
+        "status": "PASS",
+        "nonce": "7bdc26e2f42e",
+        "scope": "CONTROLLER_READINESS_COLD_RECOVERY",
+        "cases": 7,
+        "framework": "static-spa",
+        "enrolled_apps": 2,
+        "installed_helpers": true,
+        "controller_process_loss_recovered": true,
+        "packaged_templates_collector": true,
+        "verified_terminals": 6,
+        "unknown_without_retry": 1,
+        "runtime_nonce": "03dbfe7a1000",
+        "cleanup": true,
+        "bundle_sha256": "cf57563ef093ba69e7a5032cea90891beea29c7273b1e13c038440913150354e",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "resource_probes": 7,
+        "historical_release_preserved": true,
+        "cold_startup_terminal_recovered": true,
+        "preterminal_unknown_blocked": true,
+        "no_runtime_replay": true
+      }
+    },
+    {
+      "case": "next-r7b",
+      "journal": {
+        "status": "PASS",
+        "scope": "NATIVE_HELPER_UPGRADE_JOURNAL_COLD_SIGKILL",
+        "observations": [
+          {
+            "app_id": 1,
+            "cases": 10,
+            "original_SQL_remote_material_unchanged": true,
+            "cold_lookup_retry": true,
+            "startup_does_not_clear_barrier": true,
+            "SIGKILL_after_intent_recovers": true,
+            "SIGKILL_after_link_fails_closed_without_SQL": true,
+            "journal_permissions_verified": true
+          },
+          {
+            "app_id": 2,
+            "cases": 10,
+            "original_SQL_remote_material_unchanged": true,
+            "cold_lookup_retry": true,
+            "startup_does_not_clear_barrier": true,
+            "SIGKILL_after_intent_recovers": true,
+            "SIGKILL_after_link_fails_closed_without_SQL": true,
+            "journal_permissions_verified": true
+          }
+        ],
+        "private_clone_cleanup": true
+      },
+      "review": {
+        "status": "PASS",
+        "scope": "NATIVE_CLI_PINNED_SSH_SQLITE_HELPER_REVIEW",
+        "checks": [
+          {
+            "app_id": 1,
+            "cases": 5,
+            "repeated_review_stable": true,
+            "SQL_and_material_unchanged": true,
+            "remote_receipt_tamper_rejected": true,
+            "unpaused_rejected": true,
+            "review": {
+              "format": 1,
+              "purpose": "product-target-helper-upgrade-review",
+              "controller_id": "r1-d22fbdb2094b",
+              "app_id": 1,
+              "ownership_generation": 1,
+              "from_manifest_sha256": "93abe6ea846f44ef914d0a9ee6e74aaa7e40d3c1ec3a353e537ca89b1ff0c777",
+              "to_manifest_sha256": "f1999275783c66c97d4837960f176fb104a92b185ebdb86e26a21955f8b98ce2",
+              "authority_sha256": "660dfb58516eeac8c107639a3fdaa5533ff501bf8b078fac63025dae6532bc57",
+              "changes": [
+                {
+                  "path": "target-helper/target_product_runtime.py",
+                  "before": {
+                    "size": 47340,
+                    "sha256": "98b0edec5ffb29a114e411d067a551a9a90110cdcf5872ab31dee5246f3e10ff"
+                  },
+                  "after": {
+                    "size": 51419,
+                    "sha256": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+                  }
+                }
+              ],
+              "apply_available": false,
+              "review_sha256": "c94256fea26cc0e2b077e6b464709bbad93df59cf6b22b0f9a64687c6b0028c2"
+            }
+          },
+          {
+            "app_id": 2,
+            "cases": 5,
+            "repeated_review_stable": true,
+            "SQL_and_material_unchanged": true,
+            "remote_receipt_tamper_rejected": true,
+            "unpaused_rejected": true,
+            "review": {
+              "format": 1,
+              "purpose": "product-target-helper-upgrade-review",
+              "controller_id": "r1-d22fbdb2094b",
+              "app_id": 2,
+              "ownership_generation": 1,
+              "from_manifest_sha256": "93abe6ea846f44ef914d0a9ee6e74aaa7e40d3c1ec3a353e537ca89b1ff0c777",
+              "to_manifest_sha256": "f1999275783c66c97d4837960f176fb104a92b185ebdb86e26a21955f8b98ce2",
+              "authority_sha256": "0233b9ed9ecddbb5a60496c493772660057c48d8804abf6583b7a48c71bee4ec",
+              "changes": [
+                {
+                  "path": "target-helper/target_product_runtime.py",
+                  "before": {
+                    "size": 47340,
+                    "sha256": "98b0edec5ffb29a114e411d067a551a9a90110cdcf5872ab31dee5246f3e10ff"
+                  },
+                  "after": {
+                    "size": 51419,
+                    "sha256": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+                  }
+                }
+              ],
+              "apply_available": false,
+              "review_sha256": "6b9969b6012b990db6a9d3b73b3c49e74800cb57c701a84893a4c4a486c97c0a"
+            }
+          }
+        ]
+      },
+      "retained_runtime": {
+        "status": "PASS",
+        "nonce": "28dd967a9d8e",
+        "scope": "CONTROLLER_READINESS_COLD_RECOVERY",
+        "cases": 7,
+        "framework": "nextjs",
+        "enrolled_apps": 2,
+        "installed_helpers": true,
+        "controller_process_loss_recovered": true,
+        "packaged_templates_collector": true,
+        "verified_terminals": 6,
+        "unknown_without_retry": 1,
+        "runtime_nonce": "d22fbdb2094b",
+        "cleanup": true,
+        "bundle_sha256": "cf57563ef093ba69e7a5032cea90891beea29c7273b1e13c038440913150354e",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "resource_probes": 7,
+        "historical_release_preserved": true,
+        "cold_startup_terminal_recovered": true,
+        "preterminal_unknown_blocked": true,
+        "no_runtime_replay": true
+      }
+    }
+  ],
+  "public_HTTP": {
+    "status": "PASS",
+    "scope": "PUBLIC_HTTP_READ_ONLY_NO_SSH",
+    "checked_at": "2026-11-15T17:23:21.132Z",
+    "observations": [
+      {
+        "port": 30000,
+        "status": 200
+      },
+      {
+        "port": 30001,
+        "status": 200
+      },
+      {
+        "port": 30002,
+        "status": 200
+      },
+      {
+        "port": 30003,
+        "status": 200
+      },
+      {
+        "port": 30004,
+        "status": 200
+      },
+      {
+        "port": 30005,
+        "status": 200
+      }
+    ]
+  },
+  "source_sha256_lf": {
+    "app/src/main/controlPlane/targetHelperUpgradeJournal.ts": "8a60d3848554ee414a2f47727f3bb3d7f130324ee6d6b671de53d40411666146",
+    "app/src/main/controlPlane/targetHelperUpgradeReview.ts": "29288699755ea7dd10e38ddcf1f01c2135a52e116981b950665c4bc29630fd9f",
+    "app/src/main/controlPlane/targetHelperUpgradeReview.test.ts": "2e33870d58b2e10ced59ab246f6d41df40c0ec7356512052f87c591211519b9c",
+    "app/src/main/controlPlane/targetEnrollmentRepository.ts": "86e9bb9eccf756bfc69e5dc84fce7faa30580741d540f239b0c6bc0181e3004d",
+    "app/src/main/controlPlane/targetEnrollment.ts": "27f8eb98003aaaadb00fe86fed48af12069475556eb725b6ccddc0e589b3bf7f",
+    "app/src/main/controlPlane/cli.ts": "254bd5d6cb14610e91404f3b13011a1a8c36c154e8c2925a9346696e945fba7d",
+    "app/src/main/controlPlane/controllerStartupRecovery.ts": "213a5ca56942019824718def1f212214cee3b17dfed54464e31d8d1e250a6108",
+    "app/src/main/controlPlane/controllerRuntimeKeys.ts": "ff259873d19f14a906f7ee0be4b1ad37d39319f9cb9465fef29858273d18f795",
+    "app/scripts/product-runtime-lab/target-helper-upgrade-journal-checks.mjs": "c1a10d053496696479174f023bbabcb9c3663e7a4f5e75845aa37a3c250cc3ff",
+    "app/scripts/product-runtime-lab/target-helper-upgrade-journal-fault.mjs": "1f95bbd1ca27b58abaab422f4fa1ba241231e66211107f289f1be675007a6e5b",
+    "app/scripts/product-runtime-lab/target-helper-upgrade-journal-race.mjs": "8fba013cf9b23a40692a9f2ed731bfa7293a22278db46d65268891a46a3526e5",
+    "app/scripts/product-runtime-lab/target-enrollment-runtime-preload.mjs": "1b133fccdada29cfde8e1652629f0f4143eb62581d59be22f5c0250b1302e9d6",
+    "docs/contracts/product-target-helper-upgrade.ts": "16e6241632641fa9d2de77df8e9d7c4121490a6e002c4ed4c628c5b583762f02"
+  },
+  "raw_sha256": {
+    "app/.out-scripts/r7h3e2-quality/results.json": "8a727b380124e40551a6678c9c52e7ded9205a15e8c5564879f517e7df5baee0",
+    "app/.out-scripts/r7h3e2-native.log": "4d1e5cd0ac102f01e9bb013ff7c1f82620c0756923446faeaaba682e52975078",
+    "app/.out-scripts/r7h3e2-native-attempt1.log": "77b14dd92861dd9fb364d130ec22bb8ff0eeb23b1fa7970d9d8ddb4c8efb36b3",
+    "app/.out-scripts/r7h3e2-public-http.json": "9ac1c5095c56196a4b1947f3847e9feedfe83695825e6dce4562d18879800595",
+    "app/.out-scripts/r7h3e2-quality/focused.log": "ef9cf50f61af1fca2bc36373ae60764f48e5c7a59c2525d621e7be0816b530fb",
+    "app/.out-scripts/r7h3e2-quality/full.log": "043955e1ae5a0454fe718830e52a0b5b557b51b92e951a98e8c252191ad54f02",
+    "app/.out-scripts/r7h3e2-quality/types.log": "e1233c3e393be6bc01b75114f4405f780fe125c011904e60806109b2d88dbd38",
+    "app/.out-scripts/r7h3e2-quality/scripts-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3e2-quality/lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3e2-quality/format.log": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20",
+    "app/.out-scripts/r7h3e2-quality/build.log": "72b3d67ef713e44505d89521460482789fdcd57514532be09775935fafb9bb99",
+    "app/.out-scripts/r7h3e2-quality/diff.log": "bdf6d79147c1e8e7b1b927c588fb1a64754984405cffd67e177496d00dcb0da4",
+    "app/.out-scripts/r7h3e2-journal-express-original.json": "056b9ddcc4fbc5269c71beacc92571581c7af173edbdd3aa33e50080f6e44a86",
+    "app/.out-scripts/r7h3e2-native-express-original.json": "42d9e03e1a9dbb5d7ecef9048b9493fdd532ce053df68c6c7159c9bba07952fc",
+    "app/.out-scripts/product-runtime-lab/ea0eae8fb13d/result.json": "cdab6b3773d31362f8224a465576007f695e3012ea1612f577a998a7d70bd46d",
+    "app/.out-scripts/target-enrollment-runtime/f5197b0cfd2f/result.json": "07b56081402ae446e6a6776a38c63524dd8330e0f584c0b3cbad3fb06f8fddca",
+    "app/.out-scripts/r7h3e2-journal-express-r7b.json": "056b9ddcc4fbc5269c71beacc92571581c7af173edbdd3aa33e50080f6e44a86",
+    "app/.out-scripts/r7h3e2-native-express-r7b.json": "fb264eaa418c0b1f47be20850bca0577f968c987b932a5042098246f74b1bff9",
+    "app/.out-scripts/product-runtime-lab/538c83946dc4/result.json": "64a532451d8eb58466c69dfbd6d298b7c293e7726e0de1fc926163ccadbf726a",
+    "app/.out-scripts/target-enrollment-runtime/cdd6dbd7d291/result.json": "6fa185bf014168adb884d7248292aef2ad6805a29c1f9ff99a926774846f3d7a",
+    "app/.out-scripts/r7h3e2-journal-spa-r7b.json": "056b9ddcc4fbc5269c71beacc92571581c7af173edbdd3aa33e50080f6e44a86",
+    "app/.out-scripts/r7h3e2-native-spa-r7b.json": "7a5f247a344cc683ff0c088674cf25aac0d7d428d0db941260537781be3217c5",
+    "app/.out-scripts/product-runtime-lab/03dbfe7a1000/result.json": "414c5a4e6dc6ec9b5c263c561765620ea2f34d8a53e4a76593979197562cd579",
+    "app/.out-scripts/target-enrollment-runtime/7bdc26e2f42e/result.json": "895c2527ac8940fab74444f8fba2132cac7f88ef971273dd12e5c371624485bc",
+    "app/.out-scripts/r7h3e2-journal-next-r7b.json": "056b9ddcc4fbc5269c71beacc92571581c7af173edbdd3aa33e50080f6e44a86",
+    "app/.out-scripts/r7h3e2-native-next-r7b.json": "2c7afc5ec5a9e78bf821f09ef40ccbfdc331f496d081b70f9f586cb53ea18f35",
+    "app/.out-scripts/product-runtime-lab/d22fbdb2094b/result.json": "4e6c57bd13e1f9f5c701671c9a24a34a3464610199f1ecde73f72a69e7c7b74f",
+    "app/.out-scripts/target-enrollment-runtime/28dd967a9d8e/result.json": "4efc0cb142bcaa448fcc11f840fdd015e2d02d85632722eae4d76b77b8c56fdf"
+  },
+  "limits": [
+    "No remote target helper apply, completion, cancellation or SQL pin finalization.",
+    "Pending preparation is exercised only in disposable private clones; source fixture DB/target material remain unchanged.",
+    "Do not stage/approve/install this prepare-only candidate on a serving controller.",
+    "Next checkpoint must guard controller upgrade/rollback as well as implement target runtime/enrollment locks and authenticated remote recovery.",
+    "No VPS SSH or mutation; public HTTP only. Installed release/schema/catalog remain unchanged.",
+    "PG, ML, UI, full updater, packaging and whole release remain OPEN."
+  ],
+  "initial_failures_resolved": [
+    "Generated shell initially had CRLF and failed before build; final LF wrapper passed.",
+    "Type narrowing, test query_only placement and unused lint imports/directive corrected before final gates."
+  ],
+  "accepted_exceptions": []
+}

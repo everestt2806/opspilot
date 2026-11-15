@@ -29,6 +29,45 @@ export type ProductTargetHelperUpgradeReview = Readonly<{
   apply_available: false;
 }>;
 
+export type ProductTargetHelperUpgradePrepareInput = ProductTargetHelperUpgradeReviewInput & Readonly<{
+  request_key: string;
+  expected_review_sha256: string;
+  confirm: true;
+}>;
+
+export type ProductTargetHelperUpgradeLookupInput = Readonly<{
+  format: 1;
+  controller_id: string;
+  app_id: number;
+  ownership_generation: number;
+  request_key: string;
+}>;
+
+export type ProductTargetHelperUpgradePreparation = Readonly<{
+  format: 1;
+  purpose: "product-target-helper-upgrade-preparation";
+  request_key: string;
+  controller_id: string;
+  app_id: number;
+  ownership_generation: number;
+  state: "intent_only" | "pending";
+  review_sha256: string;
+  from_manifest_sha256: string;
+  to_manifest_sha256: string;
+  /** Phase này không thực hiện hoặc cấp quyền remote write. */
+  apply_available: false;
+}>;
+
+/**
+ * prepare-target-helper-upgrade: fresh authenticated review + explicit confirm:true,
+ * expected_review_sha256 và UUID v4 lowercase qua bounded stdin, trusted Unix admin only.
+ * HMAC immutable intent publish/fsync trước SQLite BEGIN IMMEDIATE exact authority/revision CAS.
+ * SQL enrollment unknown/last_error_code=TARGET_HELPER_UPGRADE_PENDING:<UUID> giữ old pin/proof/key.
+ * helper-upgrade-state chỉ đọc intent + SQL, không SSH/replay/clear barrier hoặc rotate key.
+ * intent_only không cấp quyền; pending chỉ xác nhận đúng SQL barrier và unchanged authority.
+ * Ordinary enroll/inspect/complete không được clear upgrade barrier. Target apply/finish chưa có.
+ */
+
 /**
  * review-target-helper-upgrade --data-dir <private-controller-directory>
  * Input: bounded JSON stdin. Exact installed schema, readonly SQLite handle (no migrations).

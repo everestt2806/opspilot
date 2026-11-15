@@ -17,6 +17,7 @@ import { readControllerBootstrapInput } from './controllerBootstrapInput'
 import { verifyControllerBundle } from './controllerBundle'
 import { enrollProductTarget } from './targetEnrollment'
 import { runTargetHelperUpgradeReviewCli } from './targetHelperUpgradeReview'
+import { runTargetHelperUpgradeJournalCli } from './targetHelperUpgradeJournal'
 import { ControllerStartupRecovery } from './controllerStartupRecovery'
 import { ControllerClientAuth } from './controllerClientAuth'
 import { ProductProjectRegistration } from './projectRegistration'
@@ -59,7 +60,11 @@ type Command =
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
-  if (commandValue === 'review-target-helper-upgrade') {
+  if (
+    commandValue === 'review-target-helper-upgrade' ||
+    commandValue === 'prepare-target-helper-upgrade' ||
+    commandValue === 'helper-upgrade-state'
+  ) {
     const controller = new AbortController()
     const stop = (): void => controller.abort()
     process.once('SIGINT', stop)
@@ -68,7 +73,9 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
       if (process.platform !== 'linux') throw Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
       const directory = parseDataDirectory(args)
       const input = await readControllerBootstrapInput(process.stdin, controller.signal)
-      await runTargetHelperUpgradeReviewCli(directory, input, controller.signal)
+      if (commandValue === 'review-target-helper-upgrade')
+        await runTargetHelperUpgradeReviewCli(directory, input, controller.signal)
+      else await runTargetHelperUpgradeJournalCli(commandValue, directory, input, controller.signal)
     } finally {
       process.removeListener('SIGINT', stop)
       process.removeListener('SIGTERM', stop)

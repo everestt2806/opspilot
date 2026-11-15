@@ -16,12 +16,12 @@ import { loadControllerRuntimeKey } from './controllerRuntimeKeys'
 import { createControllerSshResolver } from './controllerSshResolver'
 import { SshManager } from '../ssh/manager'
 import { exchangeProductBootstrapJson, readEnrolledProductTarget } from './targetEnrollment'
-import { TargetEnrollmentRepository } from './targetEnrollmentRepository'
+import { TargetEnrollmentRepository, type TargetEnrollmentRow } from './targetEnrollmentRepository'
 import { verifyTargetEnrollmentProof } from './targetEnrollmentProof'
 import { canonicalH2Json } from './productH2Proof'
 
 const sha256 = (bytes: string | Buffer): string => createHash('sha256').update(bytes).digest('hex')
-const inputSchema = z.strictObject({
+export const targetHelperUpgradeReviewInputSchema = z.strictObject({
   format: z.literal(1),
   controller_id: z
     .string()
@@ -51,18 +51,30 @@ function authority(
   request: ProductTargetHelperUpgradeReviewInput
 ): string {
   if (database.inTransaction) throw Error('TARGET_HELPER_REVIEW_TRANSACTION_ACTIVE')
-  return database.transaction(() => {
-    const repository = new TargetEnrollmentRepository(database)
-    const target = repository.target(
-      request.controller_id,
-      request.app_id,
-      request.ownership_generation,
-      true
-    )
-    if (
-      database
-        .prepare(
-          `SELECT 1 FROM product_deploy_attempt a JOIN product_deploy_job j ON j.job_id=a.job_id
+  return database.transaction(() => readTargetHelperUpgradeAuthority(database, request))()
+}
+
+/** Internal SQL fence: caller owns transaction; override only after exact pending-row validation. */
+export function readTargetHelperUpgradeAuthority(
+  database: Database.Database,
+  request: Pick<
+    ProductTargetHelperUpgradeReviewInput,
+    'controller_id' | 'app_id' | 'ownership_generation'
+  >,
+  originalEnrollment?: TargetEnrollmentRow
+): string {
+  if (!database.inTransaction) throw Error('TARGET_HELPER_REVIEW_TRANSACTION_REQUIRED')
+  const repository = new TargetEnrollmentRepository(database)
+  const target = repository.target(
+    request.controller_id,
+    request.app_id,
+    request.ownership_generation,
+    true
+  )
+  if (
+    database
+      .prepare(
+        `SELECT 1 FROM product_deploy_attempt a JOIN product_deploy_job j ON j.job_id=a.job_id
         WHERE j.app_id=? AND (a.state NOT IN ('succeeded','failed','rolled_back','abandoned_before_write') OR a.remote_outcome='unknown')
       UNION ALL SELECT 1 FROM product_worker_lease l JOIN product_deploy_job j ON j.job_id=l.job_id
         WHERE j.app_id=? AND l.released_at IS NULL
@@ -72,24 +84,23 @@ function authority(
         AND (t.attempt_id IS NULL OR t.settled_at IS NULL OR t.leases_released_at IS NULL)
       UNION ALL SELECT 1 FROM experiment_run e JOIN deployment d ON d.id=e.deployment_id
         WHERE d.app_id=? AND e.status='running' LIMIT 1`
-        )
-        .get(...Array(5).fill(request.app_id))
-    )
-      throw Error('TARGET_HELPER_REVIEW_REQUIRES_QUIESCENCE')
-    const row = repository.get(request)
-    if (!row || row.state !== 'enrolled' || row.last_error_code || !row.receipt_json)
-      throw Error('TARGET_ENROLLMENT_NOT_READY')
-    const context = database
-      .prepare(
-        `SELECT a.framework,a.current_deployment_id,a.host_port,a.container_port,
+      )
+      .get(...Array(5).fill(request.app_id))
+  )
+    throw Error('TARGET_HELPER_REVIEW_REQUIRES_QUIESCENCE')
+  const row = originalEnrollment ?? repository.get(request)
+  if (!row || row.state !== 'enrolled' || row.last_error_code || !row.receipt_json)
+    throw Error('TARGET_ENROLLMENT_NOT_READY')
+  const context = database
+    .prepare(
+      `SELECT a.framework,a.current_deployment_id,a.host_port,a.container_port,
       a.healthcheck_path,a.name,c.*,s.repository_url,s.production_ref,s.repository_root,s.deploy_config_json
       FROM app a JOIN product_app_control c ON c.app_id=a.id JOIN product_source_config s
       ON s.app_id=c.app_id AND s.source_generation=c.source_generation AND s.config_sha256=c.source_config_sha256
       WHERE a.id=?`
-      )
-      .get(request.app_id)
-    return sha256(canonicalH2Json({ target, enrollment: row, context }))
-  })()
+    )
+    .get(request.app_id)
+  return sha256(canonicalH2Json({ target, enrollment: row, context }))
 }
 
 /** Authenticated retained inspect only. The returned snapshot never grants mutation authority. */
@@ -100,7 +111,7 @@ export async function reviewProductTargetHelperUpgrade(
   input: unknown,
   signal?: AbortSignal
 ): Promise<ProductTargetHelperUpgradeReview> {
-  const parsed = inputSchema.safeParse(input)
+  const parsed = targetHelperUpgradeReviewInputSchema.safeParse(input)
   if (
     !parsed.success ||
     parsed.data.controller_id !== controllerId ||

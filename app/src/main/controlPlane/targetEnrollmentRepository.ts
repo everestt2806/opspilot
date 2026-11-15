@@ -20,6 +20,12 @@ export type TargetEnrollmentRow = {
   last_error_code: string | null
 }
 
+export const TARGET_HELPER_UPGRADE_PENDING_PREFIX = 'TARGET_HELPER_UPGRADE_PENDING:'
+function assertNoHelperUpgrade(row: TargetEnrollmentRow | undefined): void {
+  if (row?.last_error_code?.startsWith(TARGET_HELPER_UPGRADE_PENDING_PREFIX))
+    throw Error('TARGET_HELPER_UPGRADE_PENDING')
+}
+
 export class TargetEnrollmentRepository {
   constructor(private readonly database: Database.Database) {}
 
@@ -116,6 +122,7 @@ export class TargetEnrollmentRepository {
         assertAuthority?.()
         this.assertCurrent(payload)
         const previous = this.get(payload)
+        assertNoHelperUpgrade(previous)
         if (previous) {
           if (
             previous.target_binding_json !== canonicalH2Json(payload.target) ||
@@ -161,6 +168,7 @@ export class TargetEnrollmentRepository {
         assertAuthority?.()
         this.assertCurrent(payload, !inspectionOnly)
         const row = this.get(payload)
+        assertNoHelperUpgrade(row)
         if (!row) throw new Error('TARGET_ENROLLMENT_NOT_PREPARED')
         if (
           row.target_binding_json !== canonicalH2Json(payload.target) ||
@@ -200,6 +208,7 @@ export class TargetEnrollmentRepository {
         assertAuthority?.()
         this.assertCurrent(payload, !inspectionOnly)
         const row = this.get(payload)
+        assertNoHelperUpgrade(row)
         if (!row || row.state === 'prepared') throw new Error('TARGET_ENROLLMENT_NOT_PREPARED')
         if (
           row.target_binding_json !== canonicalH2Json(payload.target) ||
@@ -228,7 +237,8 @@ export class TargetEnrollmentRepository {
     this.database
       .prepare(
         `UPDATE product_target_enrollment SET state='unknown',last_error_code='TARGET_ENROLLMENT_UNKNOWN',
-      revision=revision+1,updated_at=? WHERE controller_id=? AND app_id=? AND ownership_generation=? AND revision=?`
+      revision=revision+1,updated_at=? WHERE controller_id=? AND app_id=? AND ownership_generation=? AND revision=?
+      AND (last_error_code IS NULL OR last_error_code NOT LIKE 'TARGET_HELPER_UPGRADE_PENDING:%')`
       )
       .run(
         new Date().toISOString(),

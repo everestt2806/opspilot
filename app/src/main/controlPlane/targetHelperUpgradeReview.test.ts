@@ -1,5 +1,13 @@
-import { createHash, createHmac, randomBytes } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto'
+import {
+  linkSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -20,6 +28,16 @@ import {
   CONTROLLER_SPA_ASSET_TRANSITION
 } from './controllerUpgradeAssets'
 import { reviewProductTargetHelperUpgrade } from './targetHelperUpgradeReview'
+import {
+  prepareTargetHelperUpgrade,
+  readTargetHelperUpgradePreparation,
+  activateTargetHelperUpgradeIntent
+} from './targetHelperUpgradeJournal'
+import { readEnrolledProductTarget } from './targetEnrollment'
+vi.mock('./controllerSecrets', async (original) => ({
+  ...(await original<typeof import('./controllerSecrets')>()),
+  resolveControllerSecretDirectory: (directory: string) => directory
+}))
 vi.mock('./controllerRuntimeKeys', async (original) => ({
   ...(await original<typeof import('./controllerRuntimeKeys')>()),
   loadControllerRuntimeKey: vi.fn()
@@ -188,6 +206,224 @@ afterEach(() => {
 })
 const review = (): ReturnType<typeof reviewProductTargetHelperUpgrade> =>
   reviewProductTargetHelperUpgrade(database, directory, 'test-controller', input)
+
+describe('Durable helper upgrade preparation', () => {
+  const administrator = 'unix:1000'
+  const row = (): unknown => database.prepare('SELECT * FROM product_target_enrollment').get()
+  const journalFile = (): string =>
+    join(
+      directory,
+      'target-helper-upgrades',
+      readdirSync(join(directory, 'target-helper-upgrades')).find((name) => name.endsWith('.json'))!
+    )
+  const request = async (): Promise<ReturnType<typeof makeRequest>> =>
+    makeRequest((await review()).review_sha256)
+  function makeRequest(
+    reviewHash: string
+  ): typeof input & { request_key: string; expected_review_sha256: string; confirm: true } {
+    return {
+      ...input,
+      request_key: randomUUID(),
+      expected_review_sha256: reviewHash,
+      confirm: true
+    }
+  }
+  const identity = (value: {
+    request_key: string
+  }): {
+    format: 1
+    controller_id: string
+    app_id: number
+    ownership_generation: number
+    request_key: string
+  } => ({
+    format: 1,
+    controller_id: input.controller_id,
+    app_id: input.app_id,
+    ownership_generation: input.ownership_generation,
+    request_key: value.request_key
+  })
+  const prepare = (value: unknown): ReturnType<typeof prepareTargetHelperUpgrade> =>
+    prepareTargetHelperUpgrade(database, directory, input.controller_id, administrator, value)
+  const lookup = (value: {
+    request_key: string
+  }): ReturnType<typeof readTargetHelperUpgradePreparation> =>
+    readTargetHelperUpgradePreparation(
+      database,
+      directory,
+      input.controller_id,
+      administrator,
+      identity(value)
+    )
+  it('publishes signed intent, CAS blocks dispatch, cold lookup/retry leaves revision and SSH unchanged', async () => {
+    const value = await request(),
+      before = row() as { revision: number; manifest_sha256: string; receipt_json: string }
+    const prepared = await prepare(value)
+    expect(prepared).toMatchObject({
+      state: 'pending',
+      apply_available: false,
+      request_key: value.request_key
+    })
+    const pending = row()
+    expect(pending).toMatchObject({
+      state: 'unknown',
+      revision: before.revision + 1,
+      manifest_sha256: before.manifest_sha256,
+      receipt_json: before.receipt_json,
+      last_error_code: 'TARGET_HELPER_UPGRADE_PENDING:' + value.request_key
+    })
+    expect(readFileSync(journalFile(), 'utf8')).not.toContain(key.toString('base64'))
+    expect(JSON.stringify(prepared)).not.toContain((proof() as { signature: string }).signature)
+    database.pragma('query_only=ON')
+    expect(lookup(value)).toEqual(prepared)
+    database.pragma('query_only=OFF')
+    await expect(prepare(value)).resolves.toEqual(prepared)
+    expect(row()).toEqual(pending)
+    expect(open).toHaveBeenCalledTimes(2) // initial read + fresh prepare, never on cold lookup/retry
+    expect(() =>
+      readEnrolledProductTarget(
+        database,
+        directory,
+        input.controller_id,
+        1,
+        1,
+        payload.manifest_sha256
+      )
+    ).toThrow('NOT_READY')
+  })
+  it('keeps intent_only after SQL failure then cold-resumes the exact request without SSH', async () => {
+    const value = await request(),
+      before = row()
+    database.exec(
+      "CREATE TRIGGER block_prepare BEFORE UPDATE ON product_target_enrollment BEGIN SELECT RAISE(ABORT,'SYNTHETIC_CRASH_BEFORE_SQL'); END"
+    )
+    await expect(prepare(value)).rejects.toThrow('SYNTHETIC_CRASH_BEFORE_SQL')
+    expect(row()).toEqual(before)
+    expect(lookup(value)).toMatchObject({ state: 'intent_only' })
+    database.exec('DROP TRIGGER block_prepare')
+    const calls = open.mock.calls.length
+    expect(
+      activateTargetHelperUpgradeIntent(
+        database,
+        directory,
+        input.controller_id,
+        administrator,
+        identity(value)
+      )
+    ).toMatchObject({ state: 'pending' })
+    expect(open).toHaveBeenCalledTimes(calls)
+  })
+  it('ordinary prepare/begin/complete/failed cannot clear or advance the pending marker', async () => {
+    const value = await request()
+    await prepare(value)
+    const repository = new TargetEnrollmentRepository(database),
+      pending = repository.get(payload)!
+    const material = vi.fn()
+    expect(() => repository.prepare(payload, material)).toThrow('TARGET_HELPER_UPGRADE_PENDING')
+    expect(() => repository.begin(payload, true)).toThrow('TARGET_HELPER_UPGRADE_PENDING')
+    expect(() => repository.begin(payload)).toThrow('TARGET_HELPER_UPGRADE_PENDING')
+    expect(() => repository.complete(payload, proof(), key, true)).toThrow(
+      'TARGET_HELPER_UPGRADE_PENDING'
+    )
+    repository.failed(pending)
+    expect(repository.get(payload)).toEqual(pending)
+    expect(material).not.toHaveBeenCalled()
+  })
+  it.each(['body', 'signature', 'truncated', 'hardlink'])(
+    'rejects %s journal tamper without advancing SQL',
+    async (kind) => {
+      const value = await request()
+      await prepare(value)
+      const pending = row(),
+        file = journalFile()
+      if (kind === 'hardlink') linkSync(file, file + '.alias')
+      else if (kind === 'truncated') writeFileSync(file, '{')
+      else {
+        const envelope = JSON.parse(readFileSync(file, 'utf8'))
+        if (kind === 'signature') envelope.signature = '0'.repeat(64)
+        else envelope.intent.request.artifact = '/another/control-plane.cjs'
+        writeFileSync(file, JSON.stringify(envelope))
+      }
+      expect(() => lookup(value)).toThrow(/JOURNAL_(INVALID|UNSAFE)/)
+      await expect(prepare(value)).rejects.toThrow(/JOURNAL_(INVALID|UNSAFE)/)
+      expect(row()).toEqual(pending)
+    }
+  )
+  it('missing intent or existing runtime key never creates replacement material', async () => {
+    const value = await request()
+    await prepare(value)
+    const pending = row()
+    unlinkSync(journalFile())
+    expect(() => lookup(value)).toThrow('INTENT_NOT_FOUND')
+    vi.mocked(loadControllerRuntimeKey).mockImplementation(() => {
+      throw Error('CONTROLLER_RUNTIME_KEY_UNAVAILABLE')
+    })
+    await expect(prepare(value)).rejects.toThrow('CONTROLLER_RUNTIME_KEY_UNAVAILABLE')
+    expect(row()).toEqual(pending)
+  })
+  it.each(['name', 'target', 'enrollment', 'marker', 'unpaused'])(
+    'rejects %s drift on pending lookup',
+    async (kind) => {
+      const value = await request()
+      await prepare(value)
+      if (kind === 'name') database.exec("UPDATE app SET name='another'")
+      else if (kind === 'target')
+        database.exec('UPDATE vps SET ssh_security_revision=ssh_security_revision+1')
+      else if (kind === 'enrollment')
+        database.exec('UPDATE product_target_enrollment SET revision=revision+1')
+      else if (kind === 'marker')
+        database.exec(
+          "UPDATE product_target_enrollment SET last_error_code='TARGET_HELPER_UPGRADE_PENDING:00000000-0000-4000-8000-000000000000'"
+        )
+      else
+        database.exec(
+          "UPDATE product_app_control SET auto_deploy_paused=0,pause_reason=NULL,pause_policy_provenance='explicit'"
+        )
+      expect(() => lookup(value)).toThrow(/AUTHORITY_CHANGED|QUIESCENCE/)
+    }
+  )
+  it('rejects a competing UUID, changed body or administrator while preserving first intent', async () => {
+    const value = await request()
+    await prepare(value)
+    const pending = row(),
+      original = readFileSync(journalFile())
+    await expect(prepare({ ...value, artifact: '/another/control-plane.cjs' })).rejects.toThrow(
+      'REQUEST_CONFLICT'
+    )
+    await expect(prepare({ ...value, request_key: randomUUID() })).rejects.toThrow('NOT_READY')
+    expect(() =>
+      readTargetHelperUpgradePreparation(
+        database,
+        directory,
+        input.controller_id,
+        'unix:1001',
+        identity(value)
+      )
+    ).toThrow('JOURNAL_INVALID')
+    expect(row()).toEqual(pending)
+    expect(readFileSync(journalFile())).toEqual(original)
+  })
+  it('requires explicit consent and exact review digest before publishing or changing SQL', async () => {
+    const value = await request(),
+      before = row()
+    await expect(prepare({ ...value, confirm: false })).rejects.toThrow('INPUT_INVALID')
+    await expect(prepare({ ...value, expected_review_sha256: 'd'.repeat(64) })).rejects.toThrow(
+      'REVIEW_CHANGED'
+    )
+    expect(row()).toEqual(before)
+    expect(() => readdirSync(join(directory, 'target-helper-upgrades'))).toThrow()
+  })
+  it('preserves caller transaction ownership and does no SSH or journal creation', async () => {
+    const value = await request()
+    open.mockClear()
+    database.exec('BEGIN')
+    await expect(prepare(value)).rejects.toThrow('TRANSACTION_ACTIVE')
+    expect(database.inTransaction).toBe(true)
+    expect(() => lookup(value)).toThrow('TRANSACTION_ACTIVE')
+    database.exec('ROLLBACK')
+    expect(open).not.toHaveBeenCalled()
+  })
+})
 describe('Retained helper upgrade read-only review', () => {
   it.each(['activation', 'experiment', 'unknown-attempt', 'unsettled-runtime'])(
     'rejects %s even when the deploy job is terminal',
