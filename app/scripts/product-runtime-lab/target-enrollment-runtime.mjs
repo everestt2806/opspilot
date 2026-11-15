@@ -5,6 +5,12 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 if (process.platform !== 'linux') throw new Error('LINUX_REQUIRED')
+const flags = process.argv.slice(2)
+if (
+  flags.some((flag) => !['--spa', '--nextjs'].includes(flag)) ||
+  (flags.includes('--spa') && flags.includes('--nextjs'))
+)
+  throw Error('RETAINED_RUNTIME_FLAG_INVALID')
 const nonce = randomBytes(6).toString('hex')
 const directory = resolve(
   import.meta.dirname,
@@ -19,7 +25,8 @@ const processResult = await new Promise((resolveChild) => {
     [
       '--import',
       join(import.meta.dirname, 'target-enrollment-runtime-preload.mjs'),
-      join(import.meta.dirname, 'run.mjs')
+      join(import.meta.dirname, 'run.mjs'),
+      ...flags
     ],
     {
       env: { ...process.env, OPSPILOT_TARGET_ENROLL_RUNTIME_RESULT: output },
@@ -65,6 +72,11 @@ try {
     nonce,
     scope: 'PRODUCTION_TARGET_ENROLLMENT_RUNTIME',
     cases: 7,
+    framework: flags.includes('--spa')
+      ? 'static-spa'
+      : flags.includes('--nextjs')
+        ? 'nextjs'
+        : 'express',
     enrolled_apps: 2,
     installed_helpers: true,
     controller_process_loss_recovered: true,

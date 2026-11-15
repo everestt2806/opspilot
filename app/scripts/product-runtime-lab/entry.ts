@@ -49,4 +49,6 @@ export { ProductProjectRegistration } from '../../src/main/controlPlane/projectR
 export { ProductEnvironmentRuntime } from '../../src/main/controlPlane/productEnvironmentRuntime'
 export { ProductEnvironmentSelection } from '../../src/main/controlPlane/productEnvironmentSelection'
 export { ProductEnvironmentRepository } from '../../src/main/db/productEnvironmentRepository'
+export { ProductEnvironmentCommands } from '../../src/main/controlPlane/productEnvironmentCommands'
+export { observeProductTarget } from '../../src/main/controlPlane/controllerTargetProbe'
 export { canonicalH2Json } from '../../src/main/controlPlane/productH2Proof'

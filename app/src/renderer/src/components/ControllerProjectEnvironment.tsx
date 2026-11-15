@@ -108,6 +108,14 @@ function EnvironmentSession({ binding, project }: Props): React.JSX.Element {
         setRows([])
         throw Error()
       }
+      if (
+        a.status === 'fulfilled' &&
+        !a.value.ok &&
+        a.value.error.technical === 'PRODUCT_ENVIRONMENT_HELPER_UPGRADE_REQUIRED'
+      ) {
+        setError(t.targetUpdate)
+        return
+      }
       if (a.status !== 'fulfilled' || !a.value.ok) throw Error()
       const c = a.value.data
       if (

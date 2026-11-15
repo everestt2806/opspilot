@@ -1,4 +1,4 @@
-import { ProductEnvironmentSelection } from './productEnvironmentSelection'
+import { ProductEnvironmentCommands } from './productEnvironmentCommands'
 import { ProductEnvironmentRepository } from '../db/productEnvironmentRepository'
 import { registerControllerVps } from './vpsRegistration'
 import type Database from 'better-sqlite3'
@@ -198,16 +198,19 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
         if (uid === undefined) throw Error('CONTROLLER_BOOTSTRAP_REQUIRES_LINUX')
         console.log(
           JSON.stringify(
-            new ProductEnvironmentSelection(
+            await new ProductEnvironmentCommands(
               opened.database,
-              loadControllerCredentialCipher(opened.dataDirectory)
+              loadControllerCredentialCipher(opened.dataDirectory),
+              opened.dataDirectory,
+              opened.controllerId,
+              `unix:${uid}`
             )[
               command === 'project-environment-review'
                 ? 'review'
                 : command === 'project-environment-selection-state'
                   ? 'lookup'
                   : 'select'
-            ](input, opened.controllerId, `unix:${uid}`)
+            ](input, controller.signal)
           )
         )
       } else if (

@@ -105,6 +105,33 @@ beforeEach(() => {
           : intent()
   }))
 })
+it('explains an unsupported target in all locales without showing raw errors or offering configuration writes', async () => {
+  invoke.mockImplementation(async (channel: string) =>
+    channel === 'controller:environment-context'
+      ? {
+          ok: false,
+          error: { code: 'UNKNOWN', technical: 'PRODUCT_ENVIRONMENT_HELPER_UPGRADE_REQUIRED' }
+        }
+      : { ok: true, data: [] }
+  )
+  for (const locale of ['en', 'vi', 'cn', 'jp'] as const) {
+    useUiState.setState({ locale })
+    const mounted = render(view()),
+      copy = CONTROLLER_ENVIRONMENT_COPY[locale]
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: (name) => name.replace(/\s/g, '') === copy.open.replace(/\s/g, '')
+      })
+    )
+    await screen.findByText(copy.targetUpdate)
+    expect(screen.queryByText('PRODUCT_ENVIRONMENT_HELPER_UPGRADE_REQUIRED')).toBeNull()
+    expect(screen.queryByRole('button', { name: copy.prepare })).toBeNull()
+    mounted.unmount()
+  }
+  expect(invoke.mock.calls.some(([channel]) => channel === 'controller:prepare-environment')).toBe(
+    false
+  )
+})
 it('loads context only on open and clears entered secret after preparing without sending', async () => {
   render(view())
   expect(invoke).not.toHaveBeenCalled()

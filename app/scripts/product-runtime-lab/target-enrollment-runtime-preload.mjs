@@ -14,6 +14,8 @@ if (!artifact || !cli || !output) throw new Error('TARGET_ENROLL_LAB_ENV_REQUIRE
 const require = createRequire(artifact)
 const original = require(artifact)
 const api = { ...original }
+// Fixture controller phải dùng đúng controller role, không trộn Desktop migrations.
+api.initializeDatabase = (directory) => original.initializeDatabase(directory, 'controller')
 require.cache[require.resolve(artifact)].exports = api
 const manifestSha = createHash('sha256')
   .update(readFileSync(join(dirname(cli), 'bundle-manifest.json')))
@@ -37,15 +39,27 @@ const readinessInput = readinessCli
         .digest('hex')
     }
   : null
-const recoverCold = () =>
-  JSON.parse(
-    execFileSync(process.execPath, [readinessCli, 'recover-runtime', '--data-dir', dataDirectory], {
-      input: JSON.stringify(readinessInput),
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 60000
-    })
-  )
+const recoverCold = () => {
+  try {
+    return JSON.parse(
+      execFileSync(
+        process.execPath,
+        [readinessCli, 'recover-runtime', '--data-dir', dataDirectory],
+        {
+          input: JSON.stringify(readinessInput),
+          encoding: 'utf8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+          timeout: 60000
+        }
+      )
+    )
+  } catch (error) {
+    const code =
+      /CONTROL_PLANE_ERROR ([A-Z0-9_]+)/.exec(String(error.stderr ?? ''))?.[1] ??
+      'NATIVE_COLD_RECOVERY_FAILED'
+    throw Object.assign(Error(code), { code })
+  }
+}
 const containerIdentity = (name) => {
   const value = JSON.parse(
     execFileSync('docker', ['container', 'inspect', name], {
@@ -192,6 +206,10 @@ api.ProductDeployRepository = class extends original.ProductDeployRepository {
       assert.equal(installed.helper_path, result.helper_path)
       enrollments.push({ app_id, state: result.state, manifest_verified: true })
     }
+    assert.deepEqual(
+      database.prepare('SELECT version FROM schema_version WHERE version IN(30,31,34,36)').all(),
+      []
+    )
     database
       .prepare(
         "UPDATE product_app_control SET auto_deploy_paused=0,pause_reason=NULL,pause_policy_provenance='explicit'"

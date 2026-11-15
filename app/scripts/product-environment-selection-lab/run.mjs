@@ -59,7 +59,8 @@ chmodSync(scratch, 0o700)
 mkdirSync(directory, { recursive: true })
 const proof = {
   status: 'FAIL',
-  scope: 'NATIVE_LINUX_CLI_SOURCE_SELECTION_ONLY',
+  scope: 'NATIVE_LINUX_CORE_SOURCE_SELECTION_FIXTURE_ONLY',
+  production_cli_tested: false,
   nonce,
   checks: [],
   vps_used: false,
@@ -258,9 +259,9 @@ try {
   )
   proof.checks.push('native_fixed_python_same_uid_bridge_review_select_and_receipt_lookup')
   proof.checks.push(
-    'actual_cli_review_anchored_original_source_and_readonly_receipt_lookup_after_cold_process'
+    'core_fixture_review_anchored_original_source_and_readonly_receipt_lookup_after_cold_process'
   )
-  proof.checks.push('actual_cli_select_cold_process_retry_exactly_one_source_generation')
+  proof.checks.push('core_fixture_select_cold_process_retry_exactly_one_source_generation')
   db = code.initializeDatabase(scratch, 'controller')
   assert.equal(db.prepare('SELECT count(*) n FROM product_source_config').get().n, 2)
   assert.equal(db.prepare('SELECT count(*) n FROM product_source_environment').get().n, 1)
@@ -329,7 +330,7 @@ try {
   ])
   assert(race.every((result) => result.value.source_generation === 3))
   assert.equal(db.prepare('SELECT count(*) n FROM product_source_environment').get().n, 2)
-  proof.checks.push('two_actual_cli_processes_same_uuid_create_one_new_generation')
+  proof.checks.push('two_core_fixture_processes_same_uuid_create_one_new_generation')
   db.exec('UPDATE product_app_control SET auto_deploy_paused=0,pause_reason=NULL')
   assert.equal(
     call('select-project-environment', raceRequest, false),

@@ -1,5 +1,7 @@
 # Chọn revision cấu hình — R7h-3a
 
+**Từ R7h-3d2:** Runner này là fixture core/SQLite/key-store trong các tiến trình riêng, không phải production CLI. Production review/new selection hiện cần target thật và probe helper capability; kiểm chứng tại `product-runtime-lab/environment-target-capability.mjs` bằng pinned SSH. Fixture core không import production CLI, không deploy hoặc được dùng qua IPC/catalog. Chỉ giữ gate atomic selection/concurrent UUID/receipt đã có, không chứng minh target capability. Mọi đề cập CLI bên dưới mô tả packet/core behavior lịch sử, không thay gate production mới.
+
 Linux Node22, modules Linux đã được duyệt; không SSH/Docker/VPS/profile Desktop.
 
 ```sh

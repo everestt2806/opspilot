@@ -54,7 +54,12 @@ export type ProductStartupRecoveryReport = Readonly<{
  * Historical manifest phải khớp SQL pin và actual runtime helpers khớp current approved helper hashes.
  * R7c: Express có thể inspect/dispatch exact retained helper trước R7b (hash/size đã bake),
  * chỉ khi current bundle dùng exact helper R7b và hai helper guard còn lại khớp.
- * SPA không nhận legacy helper. Vẫn phải kiểm manifest SQL, actual remote files và HMAC proof;
+ * SPA không nhận helper trước R7b/eb5c. Vẫn kiểm manifest SQL, actual remote files và HMAC proof;
  * không re-enroll, đổi key/manifest hoặc cập nhật remote helper trong startup recovery.
  * Không dùng management bundle SHA mới thay identity của receipt/installed release cũ.
+ * R7h-3d2: current env helperf591 cho phép giữ exact98b0 cho Express/SPA/Next,
+ * hoặc exacteb5c chỉ Express theo policy legacy trước; hai guard khác vẫn exact.
+ * Đây là retained env-free compatibility, không nâng helper hay đổi SQL pin/key.
+ * Env claim phải probe manifest có exact env-capable helper trước dispatch marker
+ * và trước mọi plaintext env file. Helper legacy không được nhận environment reference.
  */

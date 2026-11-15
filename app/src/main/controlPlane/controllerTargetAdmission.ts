@@ -8,6 +8,7 @@ import { readEnrolledProductTarget } from './targetEnrollment'
 import { observeProductTarget } from './controllerTargetProbe'
 import { assessProductResources } from './controllerResources'
 import { canonicalH2Json } from './productH2Proof'
+import { assertProductEnvironmentTargetManifest } from './productEnvironmentTarget'
 
 /** Probe thất bại không được biến thành deploy thử để đoán tình trạng target. */
 export class ControllerTargetAdmission {
@@ -44,6 +45,15 @@ export class ControllerTargetAdmission {
           throw new Error('ADMISSION_REJECTED')
       }
       assertClaim()
+      const source = this.database
+        .prepare(
+          'SELECT deploy_config_json,config_sha256 FROM product_source_config WHERE app_id=? AND source_generation=?'
+        )
+        .get(claim.app_id, claim.source_generation) as
+        { deploy_config_json: string; config_sha256: string } | undefined
+      if (!source || source.config_sha256 !== claim.source_config_sha256)
+        throw Error('ADMISSION_REJECTED')
+      const needsEnvironment = Object.hasOwn(JSON.parse(source.deploy_config_json), 'environment')
       const result = await observeProductTarget(
         this.database,
         this.controllerId,
@@ -53,6 +63,7 @@ export class ControllerTargetAdmission {
         signal
       )
       assertClaim()
+      if (needsEnvironment) assertProductEnvironmentTargetManifest(result.manifest)
       return assessProductResources(result.resources, true)
     } catch {
       return { state: 'deferred', reason: 'resource_unknown' }

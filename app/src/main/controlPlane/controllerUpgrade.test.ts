@@ -7,6 +7,7 @@ import {
   CONTROLLER_ENVIRONMENT_ASSET_TRANSITION
 } from './controllerUpgradeAssets'
 import { assertRetainedTargetHelpers } from './controllerTargetHelperCompatibility'
+import { assertProductEnvironmentTargetManifest } from './productEnvironmentTarget'
 import {
   parseControllerUpgradeRequest,
   renderUpgradedControllerUnit,
@@ -151,7 +152,7 @@ describe('Trusted controller upgrade boundary', () => {
       assertControllerUpgradeCompatibility(old, { ...next, node_version: '22.24.0' })
     ).toThrow('INCOMPATIBLE_RELEASE')
   })
-  it('policy R7b giữ đúng frozen helper/template đã nghiệm thu, không tự chấp nhận helper env chưa release', () => {
+  it('giữ frozen helper/template R7b và tách retained compatibility khỏi env capability', () => {
     for (const entry of CONTROLLER_SPA_ASSET_TRANSITION) {
       const bytes = entry.path.endsWith('.py')
         ? gunzipSync(
@@ -179,7 +180,18 @@ describe('Trusted controller upgrade boundary', () => {
         ],
         [{ path, ...CONTROLLER_SPA_ASSET_TRANSITION[0].after }]
       )
-    ).toThrow('TARGET_ENROLLMENT_HELPER_UPGRADE_REQUIRED')
+    ).not.toThrow()
+    expect(() =>
+      assertProductEnvironmentTargetManifest(
+        Buffer.from(
+          JSON.stringify({
+            format: 1,
+            node_major: 22,
+            files: [{ path, ...CONTROLLER_SPA_ASSET_TRANSITION[0].after }]
+          })
+        )
+      )
+    ).toThrow('PRODUCT_ENVIRONMENT_HELPER_UPGRADE_REQUIRED')
   })
   it('allows explicit recovery staging but never accepts it for inspection or rollback', () => {
     expect(parseControllerUpgradeRequest({ ...input, operation: 'recover-upgrade' })).toMatchObject(

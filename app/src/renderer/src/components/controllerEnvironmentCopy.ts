@@ -42,7 +42,9 @@ const vi = {
   permission: 'Cần kết nối hiện hành có quyền deploy và thay đổi chính sách.',
   empty: 'Không có yêu cầu đang chờ',
   loading: 'Đang tải cấu hình',
-  savedKeys: 'Chỉ hiển thị tên biến; giá trị không được đọc lại.'
+  savedKeys: 'Chỉ hiển thị tên biến; giá trị không được đọc lại.',
+  targetUpdate:
+    'Chuẩn bị hoặc cập nhật máy chủ trước khi dùng cấu hình môi trường. Các ứng dụng đang chạy vẫn hoạt động.'
 }
 type Copy = { [K in keyof typeof vi]: string }
 const en: Copy = {
@@ -89,7 +91,9 @@ const en: Copy = {
   permission: 'A current connection with deployment and policy permissions is required.',
   empty: 'No pending request',
   loading: 'Loading configuration',
-  savedKeys: 'Only names are shown; saved values are never read back.'
+  savedKeys: 'Only names are shown; saved values are never read back.',
+  targetUpdate:
+    'Prepare or update this server before using environment configuration. Running applications keep working.'
 }
 const cn: Copy = {
   open: '配置',
@@ -128,7 +132,8 @@ const cn: Copy = {
   permission: '需要具有部署和策略权限的当前连接。',
   empty: '无待处理请求',
   loading: '正在加载配置',
-  savedKeys: '仅显示变量名，不读取已保存的值。'
+  savedKeys: '仅显示变量名，不读取已保存的值。',
+  targetUpdate: '请先准备或更新此服务器，再使用环境配置。正在运行的应用不受影响。'
 }
 const ja: Copy = {
   open: '設定',
@@ -172,6 +177,8 @@ const ja: Copy = {
   permission: 'デプロイとポリシーの権限を持つ現在の接続が必要です。',
   empty: '保留中の要求なし',
   loading: '設定を読み込み中',
-  savedKeys: '変数名のみ表示します。保存値は読み戻しません。'
+  savedKeys: '変数名のみ表示します。保存値は読み戻しません。',
+  targetUpdate:
+    '環境設定を使用する前にサーバーを準備または更新してください。稼働中のアプリは引き続き動作します。'
 }
 export const CONTROLLER_ENVIRONMENT_COPY: Record<LocaleMode, Copy> = { vi, en, cn, jp: ja }

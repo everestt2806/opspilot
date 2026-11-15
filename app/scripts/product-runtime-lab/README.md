@@ -1,5 +1,33 @@
 # Product runtime integration lab (R1)
 
+## R7h-3d2 — Retained helpers và capability env
+
+`target-enrollment-runtime.mjs` nhận `--spa` hoặc `--nextjs` (không đồng thời).
+Giữ `OPSPILOT_CONTROLLER_ARTIFACT` là bundle lịch sử để enroll và execute đúng
+helper cũ, `OPSPILOT_CONTROLLER_READINESS_ARTIFACT` là bundle mới để cold recovery.
+`OPSPILOT_R1_ARTIFACT` là API lab build từ source mới. Fixture và tiến trình mô
+phỏng crash phải init DB bằng role controller; không trộn Desktop migrations.
+Mỗi cặp chạy7 runtime attempts, có deploy/update/build-health failure/rollback,
+T1 mất reply/cold settle không restart app/collector và preterminal unknown không replay.
+App/collector/keys/manifest lịch sử giữ nguyên qua recovery, rồi cleanup riêng nonce.
+
+`environment-target-capability.mjs --confirm-local-environment-target-capability`
+chạy Root Linux Node22 với các artifact trên, tạo SSHD/key/SQLite/controller riêng.
+Chỉ probe Docker resources, không deploy container hoặc truy cập VPS. Gate kiểm
+Express helpereb5c, SPA/Next helper98b0 và env helperf591: actual pinned SSH/HMAC,
+không sửa old material, production CLI và fixed Python adapter chặn legacy env
+trước selection, current target chọn/retry/lookup đúng; legacy env fault fixture
+bị chặn trước dispatch/files ngay cả khi Docker/resources hợp lệ; remote tamper
+bị phát hiện, không tự reinstall. Adapter Python dùng môi trường tối thiểu nên
+artifact cần có approved dependencies trong module search hierarchy, giống release
+được đóng gói; không bật lại NODE_PATH trong adapter để làm gate pass.
+
+Kết quả capability ở `app/.out-scripts/environment-target-capability/<nonce>/`;
+retained runtime ở `app/.out-scripts/target-enrollment-runtime/<nonce>/` cùng
+runtime report liên kết. Đây không phải proof Root installed admin, GUI, OS reboot
+hoặc VPS rollout. Core selection/concurrency không SSH nằm ở fixture riêng
+`product-environment-selection-lab`, không còn được gọi là production CLI gate.
+
 This CLI calls the **real** Product pipeline through fingerprint-pinned OpenSSH, scratch SQLite,
 the target guard/helper, Docker build/run/inspect, and the production collector. It does not use a
 fake channel, Docker command implementation, receipt, or metric generator. It is a local Linux lab,

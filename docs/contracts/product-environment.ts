@@ -87,6 +87,10 @@ export interface ProductEnvironmentContextInput {
  * runtime terminal chưa settled. Hai CAS: current source và latest vault revision.
  * Selection có thể chọn retained revision cũ trong cùng owner/target/framework.
  * New source JSON chỉ giữ environment identity, tuyệt đối không value/digest secret.
+ * Production same-UID CLI review/new selection probe target manifest theo SQL pin
+ * và exact helper env-capable, recheck source/target sau await; helper cũ trả
+ * PRODUCT_ENVIRONMENT_HELPER_UPGRADE_REQUIRED trước source mutation. Lookup/positive
+ * exact-body receipt replay không SSH hoặc re-select; unknown chỉ giữ cùng UUID.
  */
 export interface ProductEnvironmentSelectionInput {
   format: 1

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { CONTROLLER_SPA_ASSET_TRANSITION } from './controllerUpgradeAssets'
+import {
+  CONTROLLER_SPA_ASSET_TRANSITION,
+  CONTROLLER_ENVIRONMENT_ASSET_TRANSITION
+} from './controllerUpgradeAssets'
 import { assertRetainedTargetHelpers } from './controllerTargetHelperCompatibility'
 const policy = CONTROLLER_SPA_ASSET_TRANSITION[0]
 const current = [
@@ -9,6 +12,26 @@ const current = [
 ]
 const historical = [current[0], current[1], { path: current[2].path, ...policy.before }]
 describe('Retained target helper compatibility', () => {
+  it('retains exact approved env-free helpers under the env-capable release, never unknown frameworks or partial guard drift', () => {
+    const next = current.map((file, i) =>
+      i === 2 ? { ...file, ...CONTROLLER_ENVIRONMENT_ASSET_TRANSITION[0].after } : file
+    )
+    for (const framework of ['express', 'static-spa', 'nextjs'])
+      expect(() => assertRetainedTargetHelpers(framework, next, current)).not.toThrow()
+    expect(() => assertRetainedTargetHelpers('express', next, historical)).not.toThrow()
+    for (const framework of ['static-spa', 'nextjs', 'flask', 'unknown'])
+      expect(() => assertRetainedTargetHelpers(framework, next, historical)).toThrow(
+        'HELPER_UPGRADE_REQUIRED'
+      )
+    for (const index of [0, 1, 2])
+      expect(() =>
+        assertRetainedTargetHelpers(
+          'express',
+          next,
+          current.map((file, i) => (i === index ? { ...file, sha256: 'f'.repeat(64) } : file))
+        )
+      ).toThrow('HELPER_UPGRADE_REQUIRED')
+  })
   it('chấp nhận current helpers cho SPA/Express và exact legacy pair riêng cho Express', () => {
     expect(() => assertRetainedTargetHelpers('express', current, historical)).not.toThrow()
     for (const framework of ['express', 'static-spa'])

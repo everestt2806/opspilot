@@ -6,7 +6,7 @@ const artifact = process.env.OPSPILOT_R1_ARTIFACT
 if (!artifact || !process.argv[2]) throw new Error('LOSS_LAB_ENV_REQUIRED')
 const api = createRequire(artifact)(artifact)
 const input = JSON.parse(readFileSync(0, 'utf8'))
-const database = api.initializeDatabase(process.argv[2])
+const database = api.initializeDatabase(process.argv[2], 'controller')
 api.TargetEnrollmentRepository.prototype.complete = function () {
   // Target đã trả receipt thật; kết thúc process trước khi SQLite được ghi proof.
   assert.equal(

@@ -128,6 +128,7 @@ export class ProductEnvironmentError extends Error {
       | 'PRODUCT_ENVIRONMENT_UNAVAILABLE'
       | 'PRODUCT_ENVIRONMENT_STORAGE_UNAVAILABLE'
       | 'PRODUCT_ENVIRONMENT_REQUIRES_QUIESCENCE'
+      | 'PRODUCT_ENVIRONMENT_HELPER_UPGRADE_REQUIRED'
   ) {
     super(code)
     this.name = 'ProductEnvironmentError'

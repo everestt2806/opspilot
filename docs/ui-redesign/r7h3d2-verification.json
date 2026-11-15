@@ -1,0 +1,364 @@
+{
+  "status": "LOCAL_RETAINED_TARGET_AND_ENVIRONMENT_CAPABILITY_PASS",
+  "date": "2026-11-15",
+  "base_sha": "932180eb1546a7520d968c0e154c542c79d24174",
+  "scope": "R7h-3d2 source/local Linux SSH/SQLite/Docker and DOM error handling; no approved release/catalog/VPS rollout",
+  "source_hash_encoding": "UTF-8 repository bytes with CRLF normalized to LF",
+  "source_sha256": {
+    "app/scripts/product-environment-selection-lab/README.md": "f888a3ab868c3ffc441d33c039259261c392e2bee7c711bc2f95d206a46f00af",
+    "app/scripts/product-environment-selection-lab/entry.ts": "c3e8b872a0dcc2149aeffc9e920435a172491c39eed5239c6ec7027f95f516ab",
+    "app/scripts/product-environment-selection-lab/run.mjs": "cf37aae337e79228daff4f7cd5111f6b3c85b0a5136a1338ccce115acda7ed17",
+    "app/scripts/product-runtime-lab/README.md": "1cc2cb1d0bac3a446ce483b88d5f24e85f68084c07e3fd34fe7b89583d8eb127",
+    "app/scripts/product-runtime-lab/entry.ts": "0266781db82bc9c8564dcffa1cd08dda9b832904647e3660359ffda4565c02db",
+    "app/scripts/product-runtime-lab/environment-target-capability.mjs": "6fa2f3b04deab967db17270175f26a8f363523ba5663c9a11c7d5bd350b76cb5",
+    "app/scripts/product-runtime-lab/target-enrollment-loss.mjs": "148ad771659392515369a19c15e782452db0107c06f7b7b33ad403a4df8d151b",
+    "app/scripts/product-runtime-lab/target-enrollment-runtime-preload.mjs": "dfac14506d0d7500eeb9c06488aa3ce8a8812e1a6e76368f93d7e1f3acb3bcac",
+    "app/scripts/product-runtime-lab/target-enrollment-runtime.mjs": "1aa5a631d0bbc1b68b1e0594b985d2c0f6edf1b957e1a412d93fdf48d37a4fea",
+    "app/src/main/controlPlane/cli.ts": "6371e3b8d25f797b6f7f7759d0b0c878306734eec06581859ca454bce4a2f9b2",
+    "app/src/main/controlPlane/controllerTargetAdmission.ts": "15fcf07246a85aaed20803c9e647b8e3a9ec63b25916a71ae142069e55694abc",
+    "app/src/main/controlPlane/controllerTargetHelperCompatibility.test.ts": "23df34247df2e507db0e47f958353c98d53a53dbe9597f9565597f64d241f26a",
+    "app/src/main/controlPlane/controllerTargetHelperCompatibility.ts": "f6a0a572881fdaffe2022d9520bf6be47f3fb4e5705161ab7b66d9a6b3c28009",
+    "app/src/main/controlPlane/controllerUpgrade.test.ts": "9a8398c6160575fc6c8662338995f9503e32e1a6796d4787348cade5775ea7f0",
+    "app/src/main/controlPlane/desktopControllerEnrollment.ts": "ee04182fcb7dca0083609682c58dbd005ca4d669f4942089df39ed4ba8ff768e",
+    "app/src/main/controlPlane/desktop_controller_admin.py": "ed0a83c2bf02b87539701c14f179d074f88dfc2b63bfa38b297be80cc29ccdba",
+    "app/src/main/controlPlane/productEnvironment.ts": "4f817e159b00d56cf404923e2ac34d28fb6c4aa0b41270ebda05e4f1c56064d2",
+    "app/src/main/controlPlane/productEnvironmentCommands.test.ts": "86634b1ef533093c841efd3117b79092343ad0baf5b88055b31c2900edd7c6d0",
+    "app/src/main/controlPlane/productEnvironmentCommands.ts": "1d61936f7cccb63bea2be8d87e99ca4e3c3c47eb5a2ce017046f9f601881b5a6",
+    "app/src/main/controlPlane/productEnvironmentTarget.ts": "8441d450e704520885dab33a34111facffd235667a87c0a36ed6c7b385225297",
+    "app/src/renderer/src/components/ControllerProjectEnvironment.test.tsx": "8233d90ff63bfcf4eb6b802e86f75d5ff1455b0b798d48fe06d6315c83cff17c",
+    "app/src/renderer/src/components/ControllerProjectEnvironment.tsx": "9edc986252516a7448f8c9381d670b99745cde1aebd311621e41f4b228d185bc",
+    "app/src/renderer/src/components/controllerEnvironmentCopy.ts": "ed30717db233b605f520dfcf6c7f4303f1dcb97af12a8a02907afec92038209e",
+    "docs/contracts/product-controller-readiness.ts": "68571080d435725a95a428c82768d38ed273ae92b7a8117baaff6fcec971be5e",
+    "docs/contracts/product-environment.ts": "ebbc04d1dba82390dd2e969495e2fcc6b82fa9e93eaa0b0bff6c8d2d2bfa6f9b"
+  },
+  "raw_evidence": {
+    "app/.out-scripts/r7h3d2-quality/results.json": "79a1e4b0194b09fe5f421d3168b9271f9eb92bf3ca19df7d0ac98997e02ed495",
+    "app/.out-scripts/r7h3d2-quality/types.log": "e1233c3e393be6bc01b75114f4405f780fe125c011904e60806109b2d88dbd38",
+    "app/.out-scripts/r7h3d2-quality/scripts-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d2-quality/core-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d2-quality/runtime-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d2-quality/lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d2-quality/format.log": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20",
+    "app/.out-scripts/r7h3d2-quality/python-lint.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "app/.out-scripts/r7h3d2-quality/python-format.log": "fd2299c9f1c6dc869070883e281051bfe93aacf66c1a3b0069f45b4aa410ca50",
+    "app/.out-scripts/r7h3d2-quality/full.log": "b2e7a71ef9a5f2b2a1aec0eddcad29e6ea3aab30b5ce05671dcf2d7809800491",
+    "app/.out-scripts/r7h3d2-quality/build.log": "2f51e3a2b32a250b5e521f586300fef3d5eb56bf3c1d17b6639c60a01c2b7af0",
+    "app/.out-scripts/r7h3d2-quality/diff.log": "4f6cfb65f666a9dc604499d89666f565ae168c71820763c5e902e92204bdb0cf",
+    "app/.out-scripts/environment-target-capability/d106609d55b2/result.json": "e467fc3e1d4551613638f043d20d30de824123c34a95e8888bca6716e3399004",
+    "app/.out-scripts/product-environment-selection-lab/67d59d3aef9e/result.json": "4638ee2f591de245e713f59da913b25b08857dd29a9e624b7ba895c70f4e9712",
+    "app/.out-scripts/r7h3d2-focused-final.log": "0396221d8fd137fcea925ab5e7ad0ceeac514a34e1c63847dafb857b68113007",
+    "app/.out-scripts/r7h3d2-native-capability-final2.log": "95b734e147f458bf6ba269c28a1b8294df54f3106e0bf52b8a8394ba70055eb5",
+    "app/.out-scripts/r7h3d2-native-core-final.log": "f0cb56658a34ebea76b3287f7586da6d27c55f1b13892b87cd71390705abd6b8",
+    "app/.out-scripts/target-enrollment-runtime/4815373bd02a/result.json": "a045bb28d14239400296b668f4721e70762cd0397adf4e45d5c3a0377988af0a",
+    "app/.out-scripts/product-runtime-lab/ff0a81bb0e81/result.json": "61cd36a31478a39477142a979a24a9a1b55a2c9f421c046507fde6ad0cadd122",
+    "app/.out-scripts/target-enrollment-runtime/3cd32f871e19/result.json": "5601114b9020ae2782343132e20d8ddabb4fb8a6e61adf1ef7002cb7041dfc81",
+    "app/.out-scripts/product-runtime-lab/b4d64a77366b/result.json": "b617df1a3b80ab5486fa8c8377e7a9ecd409c024e86e5246dc702a6fe77632db",
+    "app/.out-scripts/target-enrollment-runtime/8b68e8028db7/result.json": "0fd394f244229dd58049a8cc6c4e73fe5131d260b4e4883464ec22e611891725",
+    "app/.out-scripts/product-runtime-lab/4179b8a4690d/result.json": "8b043f3a3e1441cd86f90e04b0875379c0e64f8560c750436c95fac579d25045",
+    "app/.out-scripts/target-enrollment-runtime/1c8505a7571d/result.json": "6cce8e53f404235302fa1516e6314da50bf52c0e66ddeeb46e87409055048a54",
+    "app/.out-scripts/product-runtime-lab/539fa1cc921b/result.json": "fcf68a4ae38d9cf91767eea69cf2a899d0290dadb60ec7a70a5f36e79db005b5"
+  },
+  "quality": {
+    "full_tests_passed": 2440,
+    "existing_linux_only_skipped": 2,
+    "test_files_passed": 176,
+    "test_files_skipped": 1,
+    "new_tests": 8,
+    "commands": [
+      {
+        "gate": "types",
+        "command": "pnpm.cmd --prefix app typecheck",
+        "exit_code": 0
+      },
+      {
+        "gate": "scripts-types",
+        "command": "pnpm.cmd --prefix app exec tsc -p tsconfig.scripts.json --noEmit",
+        "exit_code": 0
+      },
+      {
+        "gate": "core-types",
+        "command": "pnpm.cmd --prefix app exec tsc -p scripts/product-environment-selection-lab/tsconfig.json --noEmit",
+        "exit_code": 0
+      },
+      {
+        "gate": "runtime-types",
+        "command": "pnpm.cmd --prefix app exec tsc -p scripts/product-runtime-lab/tsconfig.json --noEmit",
+        "exit_code": 0
+      },
+      {
+        "gate": "lint",
+        "command": "pnpm.cmd --prefix app exec eslint scripts/product-environment-selection-lab/entry.ts scripts/product-environment-selection-lab/run.mjs scripts/product-runtime-lab/entry.ts scripts/product-runtime-lab/environment-target-capability.mjs scripts/product-runtime-lab/target-enrollment-loss.mjs scripts/product-runtime-lab/target-enrollment-runtime-preload.mjs scripts/product-runtime-lab/target-enrollment-runtime.mjs src/main/controlPlane/cli.ts src/main/controlPlane/controllerTargetAdmission.ts src/main/controlPlane/controllerTargetHelperCompatibility.test.ts src/main/controlPlane/controllerTargetHelperCompatibility.ts src/main/controlPlane/controllerUpgrade.test.ts src/main/controlPlane/desktopControllerEnrollment.ts src/main/controlPlane/productEnvironment.ts src/main/controlPlane/productEnvironmentCommands.test.ts src/main/controlPlane/productEnvironmentCommands.ts src/main/controlPlane/productEnvironmentTarget.ts src/renderer/src/components/ControllerProjectEnvironment.test.tsx src/renderer/src/components/ControllerProjectEnvironment.tsx src/renderer/src/components/controllerEnvironmentCopy.ts",
+        "exit_code": 0
+      },
+      {
+        "gate": "format",
+        "command": "pnpm.cmd --prefix app exec prettier --check scripts/product-environment-selection-lab/entry.ts scripts/product-environment-selection-lab/run.mjs scripts/product-runtime-lab/entry.ts scripts/product-runtime-lab/environment-target-capability.mjs scripts/product-runtime-lab/target-enrollment-loss.mjs scripts/product-runtime-lab/target-enrollment-runtime-preload.mjs scripts/product-runtime-lab/target-enrollment-runtime.mjs src/main/controlPlane/cli.ts src/main/controlPlane/controllerTargetAdmission.ts src/main/controlPlane/controllerTargetHelperCompatibility.test.ts src/main/controlPlane/controllerTargetHelperCompatibility.ts src/main/controlPlane/controllerUpgrade.test.ts src/main/controlPlane/desktopControllerEnrollment.ts src/main/controlPlane/productEnvironment.ts src/main/controlPlane/productEnvironmentCommands.test.ts src/main/controlPlane/productEnvironmentCommands.ts src/main/controlPlane/productEnvironmentTarget.ts src/renderer/src/components/ControllerProjectEnvironment.test.tsx src/renderer/src/components/ControllerProjectEnvironment.tsx src/renderer/src/components/controllerEnvironmentCopy.ts",
+        "exit_code": 0
+      },
+      {
+        "gate": "python-lint",
+        "command": "ml-service\\.venv\\Scripts\\python.exe -m ruff check app/src/main/controlPlane/desktop_controller_admin.py",
+        "exit_code": 0
+      },
+      {
+        "gate": "python-format",
+        "command": "ml-service\\.venv\\Scripts\\python.exe -m ruff format --check app/src/main/controlPlane/desktop_controller_admin.py",
+        "exit_code": 0
+      },
+      {
+        "gate": "full",
+        "command": "pnpm.cmd --prefix app exec vitest run --maxWorkers=3",
+        "exit_code": 0
+      },
+      {
+        "gate": "build",
+        "command": "pnpm.cmd --prefix app run build",
+        "exit_code": 0
+      },
+      {
+        "gate": "diff",
+        "command": "git diff --check",
+        "exit_code": 0
+      }
+    ]
+  },
+  "capability": {
+    "raw": "app/.out-scripts/environment-target-capability/d106609d55b2/result.json",
+    "result": {
+      "status": "PASS",
+      "scope": "LOCAL_REAL_PINNED_SSH_SQLITE_ENVIRONMENT_CAPABILITY",
+      "nonce": "d106609d55b2",
+      "checks": [
+        "real_SSH_cold_recovery_retains_Express_eb5c_SPA_Next_98b0_and_current_f591_with_exact_material",
+        "production_CLI_rejects_legacy_environment_before_selection_and_current_target_selects_and_replays",
+        "actual_Docker_resource_probe_cannot_admit_env_on_legacy_helper_before_dispatch_or_plaintext_files",
+        "retained_allowlist_never_skips_remote_file_hash_or_reinstalls_a_changed_helper"
+      ],
+      "production_vps_used": false,
+      "production_database_used": false,
+      "docker_info_only": true,
+      "docker_deployment_tested": false,
+      "cleanup": true,
+      "bundle_sha256": "42256447d1aada2a80882784e50d8f092c7510de4acd80b3ba8d7cf89044ffe3",
+      "driver_sha256": "6fa2f3b04deab967db17270175f26a8f363523ba5663c9a11c7d5bd350b76cb5"
+    },
+    "python_adapter": "actual same-UID test adapter; Root installed admin not tested"
+  },
+  "retained_runtime_matrix": [
+    {
+      "framework": "express",
+      "installed_helper_sha256": "eb5c697e0051f38e0633bc84e32377fbc91cf4b825c21734f5f611a49b85908d",
+      "wrapper_raw": "app/.out-scripts/target-enrollment-runtime/4815373bd02a/result.json",
+      "wrapper_result": {
+        "status": "PASS",
+        "nonce": "4815373bd02a",
+        "scope": "CONTROLLER_READINESS_COLD_RECOVERY",
+        "cases": 7,
+        "framework": "express",
+        "enrolled_apps": 2,
+        "installed_helpers": true,
+        "controller_process_loss_recovered": true,
+        "packaged_templates_collector": true,
+        "verified_terminals": 6,
+        "unknown_without_retry": 1,
+        "runtime_nonce": "ff0a81bb0e81",
+        "cleanup": true,
+        "bundle_sha256": "a09031a263e25632bf76fcd89311717a1555ce46b634912b37288bbc45e28d57",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "resource_probes": 7,
+        "historical_release_preserved": true,
+        "cold_startup_terminal_recovered": true,
+        "preterminal_unknown_blocked": true,
+        "no_runtime_replay": true
+      },
+      "runtime_raw": "app/.out-scripts/product-runtime-lab/ff0a81bb0e81/result.json",
+      "runtime_case_names": [
+        "first_healthy",
+        "healthy_update",
+        "build_failure",
+        "unhealthy_rollback",
+        "first_build_failure",
+        "first_health_failure",
+        "collector_build_failure_blocks_finalization"
+      ]
+    },
+    {
+      "framework": "express",
+      "installed_helper_sha256": "98b0edec5ffb29a114e411d067a551a9a90110cdcf5872ab31dee5246f3e10ff",
+      "wrapper_raw": "app/.out-scripts/target-enrollment-runtime/3cd32f871e19/result.json",
+      "wrapper_result": {
+        "status": "PASS",
+        "nonce": "3cd32f871e19",
+        "scope": "CONTROLLER_READINESS_COLD_RECOVERY",
+        "cases": 7,
+        "framework": "express",
+        "enrolled_apps": 2,
+        "installed_helpers": true,
+        "controller_process_loss_recovered": true,
+        "packaged_templates_collector": true,
+        "verified_terminals": 6,
+        "unknown_without_retry": 1,
+        "runtime_nonce": "b4d64a77366b",
+        "cleanup": true,
+        "bundle_sha256": "a09031a263e25632bf76fcd89311717a1555ce46b634912b37288bbc45e28d57",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "resource_probes": 7,
+        "historical_release_preserved": true,
+        "cold_startup_terminal_recovered": true,
+        "preterminal_unknown_blocked": true,
+        "no_runtime_replay": true
+      },
+      "runtime_raw": "app/.out-scripts/product-runtime-lab/b4d64a77366b/result.json",
+      "runtime_case_names": [
+        "first_healthy",
+        "healthy_update",
+        "build_failure",
+        "unhealthy_rollback",
+        "first_build_failure",
+        "first_health_failure",
+        "collector_build_failure_blocks_finalization"
+      ]
+    },
+    {
+      "framework": "static-spa",
+      "installed_helper_sha256": "98b0edec5ffb29a114e411d067a551a9a90110cdcf5872ab31dee5246f3e10ff",
+      "wrapper_raw": "app/.out-scripts/target-enrollment-runtime/8b68e8028db7/result.json",
+      "wrapper_result": {
+        "status": "PASS",
+        "nonce": "8b68e8028db7",
+        "scope": "CONTROLLER_READINESS_COLD_RECOVERY",
+        "cases": 7,
+        "framework": "static-spa",
+        "enrolled_apps": 2,
+        "installed_helpers": true,
+        "controller_process_loss_recovered": true,
+        "packaged_templates_collector": true,
+        "verified_terminals": 6,
+        "unknown_without_retry": 1,
+        "runtime_nonce": "4179b8a4690d",
+        "cleanup": true,
+        "bundle_sha256": "a09031a263e25632bf76fcd89311717a1555ce46b634912b37288bbc45e28d57",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "resource_probes": 7,
+        "historical_release_preserved": true,
+        "cold_startup_terminal_recovered": true,
+        "preterminal_unknown_blocked": true,
+        "no_runtime_replay": true
+      },
+      "runtime_raw": "app/.out-scripts/product-runtime-lab/4179b8a4690d/result.json",
+      "runtime_case_names": [
+        "first_healthy",
+        "spa_routes_first_healthy",
+        "healthy_update",
+        "spa_routes_healthy_update",
+        "build_failure",
+        "unhealthy_rollback",
+        "spa_routes_unhealthy_rollback",
+        "first_build_failure",
+        "first_health_failure",
+        "collector_build_failure_blocks_finalization"
+      ]
+    },
+    {
+      "framework": "nextjs",
+      "installed_helper_sha256": "98b0edec5ffb29a114e411d067a551a9a90110cdcf5872ab31dee5246f3e10ff",
+      "wrapper_raw": "app/.out-scripts/target-enrollment-runtime/1c8505a7571d/result.json",
+      "wrapper_result": {
+        "status": "PASS",
+        "nonce": "1c8505a7571d",
+        "scope": "CONTROLLER_READINESS_COLD_RECOVERY",
+        "cases": 7,
+        "framework": "nextjs",
+        "enrolled_apps": 2,
+        "installed_helpers": true,
+        "controller_process_loss_recovered": true,
+        "packaged_templates_collector": true,
+        "verified_terminals": 6,
+        "unknown_without_retry": 1,
+        "runtime_nonce": "539fa1cc921b",
+        "cleanup": true,
+        "bundle_sha256": "a09031a263e25632bf76fcd89311717a1555ce46b634912b37288bbc45e28d57",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "resource_probes": 7,
+        "historical_release_preserved": true,
+        "cold_startup_terminal_recovered": true,
+        "preterminal_unknown_blocked": true,
+        "no_runtime_replay": true
+      },
+      "runtime_raw": "app/.out-scripts/product-runtime-lab/539fa1cc921b/result.json",
+      "runtime_case_names": [
+        "first_healthy",
+        "next_ssr_first_healthy",
+        "healthy_update",
+        "next_ssr_healthy_update",
+        "build_failure",
+        "unhealthy_rollback",
+        "next_ssr_unhealthy_rollback",
+        "first_build_failure",
+        "first_health_failure",
+        "collector_build_failure_blocks_finalization"
+      ]
+    }
+  ],
+  "core_selection_fixture": {
+    "raw": "app/.out-scripts/product-environment-selection-lab/67d59d3aef9e/result.json",
+    "result": {
+      "status": "PASS",
+      "scope": "NATIVE_LINUX_CORE_SOURCE_SELECTION_FIXTURE_ONLY",
+      "production_cli_tested": false,
+      "nonce": "67d59d3aef9e",
+      "checks": [
+        "native_fixed_python_same_uid_bridge_review_select_and_receipt_lookup",
+        "core_fixture_review_anchored_original_source_and_readonly_receipt_lookup_after_cold_process",
+        "core_fixture_select_cold_process_retry_exactly_one_source_generation",
+        "source_binding_and_audit_contain_no_values_keys_or_secret_hash_live_and_pause_preserved",
+        "source_preflight_refuses_environment_reference_before_source_io_or_ssh",
+        "shared035_controller_role_no_desktop_migrations_immutable_binding_no_plaintext_db",
+        "two_core_fixture_processes_same_uuid_create_one_new_generation",
+        "replay_does_not_claim_paused_after_operator_resumes_policy",
+        "readonly_review_and_receipt_remain_available_after_operator_resume",
+        "atomic_negative_lookup_requires_monotonic_cas_advance_not_merely_absent_receipt"
+      ],
+      "vps_used": false,
+      "ssh_used": false,
+      "execution_implemented": false,
+      "artifact_sha256": "f79184fad5cfe2ea13af23bc55f17ff2bd407d3882d94859df103a035d8ae69b",
+      "private_scratch_removed": true
+    }
+  },
+  "accepted_exceptions": [],
+  "resolved_lab_issues": [
+    "Docker Desktop was stopped; started Hidden and verified WSL Docker29.4.3 before resource-valid acceptance",
+    "Private payload copies need Linux private modes without changing bytes/pins",
+    "Enrollment fault child must initialize controller role, not Desktop; role guard retained",
+    "Sanitized Python adapter intentionally strips NODE_PATH; native CLI placed in approved dependency hierarchy instead of restoring env fallback",
+    "Chinese AntD accessible button name has inserted whitespace; test matches normalized accessible label",
+    "Explicit return type added to test request helper; Ruff executed through valid Windows executable path"
+  ],
+  "not_run": [
+    "approved release/tool packaging and catalog tamper gate",
+    "Root upgrade with final candidate",
+    "authenticated development VPS attestation/upgrade",
+    "VPS environment first/update/failure/rollback",
+    "explicit in-place helper update for existing targets",
+    "OS reboot",
+    "Electron screenshot/GUI upgrade"
+  ],
+  "next_action": "R7h-3d remains open. Freeze approved controller/tool/catalog and run protected upgrade plus actual development-VPS env deployment gates. Existing targets remain env-free until an explicit journalled helper upgrade; no auto re-enroll or old pin replacement."
+}
