@@ -1,0 +1,304 @@
+{
+  "checkpoint": "R7h-3d3b",
+  "status": "PASS",
+  "base_commit": "4e9f5b5423ead123620c6bd0377c055f74d44328",
+  "scope": "ACTUAL_DEVELOPMENT_VPS_PROTECTED_UPGRADE_AND_MAIN_ENV_ROLLOUT",
+  "record": "88a0b12613c2",
+  "upgrade_key": "2628dc29-cd96-4e82-a14f-a00f60d8c0a3",
+  "release_sha256": "db1e58c83badef0c7efca42b78fff483d71cc38bdd711a635924d0849b41bdb8",
+  "payload_sha256": "c1106b10eee233e5802aa8fc141b4acccafe2c0e924ed3a984d43fe03b7a9392",
+  "main_artifact_sha256": "5149a6fbce6dbd601803928ae656f964658ef692d1ca1cbd2f65a5330fd3aeb2",
+  "gui_tested": false,
+  "production_desktop_profile_used": false,
+  "development_vps_mutated": true,
+  "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+  "runtime_uid": 997,
+  "schema_before": 29,
+  "schema_after": 35,
+  "backup": {
+    "uid": 0,
+    "mode": 288,
+    "links": 1,
+    "directory_uid": 0,
+    "directory_mode": 360,
+    "sha256": "1735f44f7724764d1f2d6e907b9d319110573e67bad51849ec915abc79d4c81b",
+    "schema": 29
+  },
+  "binding_refreshed": true,
+  "checks": [
+    "fresh_pinned_SSH_expected_parent029_four_apps_eight_CIDs_quiescent",
+    "protected_Main_upgrade029_to035_Root_backup_binding_refresh_preserves_old_apps_key_DB_receipt",
+    "environment_revision_1_staged_selected_through_Main_durable_UUID",
+    "actual_Main_env_initial_HTTP_runtime_image_and_succeeded",
+    "environment_revision_2_staged_selected_through_Main_durable_UUID",
+    "actual_Main_env_update_HTTP_runtime_image_and_succeeded",
+    "actual_Main_env_build-fault_HTTP_runtime_image_and_failed",
+    "environment_revision_3_staged_selected_through_Main_durable_UUID",
+    "rollback_desired_active_source_mismatch_keeps_exposure_fence_despite_independent_HTTP200",
+    "actual_Main_env_health-fault_HTTP_runtime_image_and_rolled_back",
+    "environment_revision_4_staged_selected_through_Main_durable_UUID",
+    "actual_Main_env_final_HTTP_runtime_image_and_succeeded",
+    "old_four_apps_unchanged_new_env_app_healthy_all_settled_paused_temporary_client_revoked"
+  ],
+  "deployments": [
+    {
+      "mode": "initial",
+      "state": "succeeded",
+      "command_key": "c56d6327-d867-4044-8f72-764b26cb0e07",
+      "job_id": "pjob_8bd1951a-a656-4923-860d-99b46a6d0b1c",
+      "deployment_id": 16,
+      "source_sha": "cb3d4db59388f05500c9ae7fdca346601bf2e5ad",
+      "runtime_revision": 1,
+      "public_http": 200,
+      "runtime_literals_exact": true,
+      "image_excludes_runtime": true,
+      "exposure_state": "recorded",
+      "exposure_reason": null
+    },
+    {
+      "mode": "update",
+      "state": "succeeded",
+      "command_key": "b7d09dcc-4ff3-4254-a16d-8697aaedd84d",
+      "job_id": "pjob_0671157d-feb2-470e-8956-02f330e1175f",
+      "deployment_id": 17,
+      "source_sha": "d80b76dc2e6b6b49b5ee536c7b7415e94de8e23d",
+      "runtime_revision": 2,
+      "public_http": 200,
+      "runtime_literals_exact": true,
+      "image_excludes_runtime": true,
+      "exposure_state": "recorded",
+      "exposure_reason": null
+    },
+    {
+      "mode": "build-fault",
+      "state": "failed",
+      "command_key": "289407f9-1ba1-4ec9-af2a-77be0e016619",
+      "job_id": "pjob_42132532-c790-475f-ba61-a979d556a3b4",
+      "deployment_id": 17,
+      "source_sha": "652944ef5d7200cc30a5766ddd07dd7830ac7d12",
+      "runtime_revision": 2,
+      "public_http": 200,
+      "runtime_literals_exact": true,
+      "image_excludes_runtime": true,
+      "exposure_state": "recorded",
+      "exposure_reason": null
+    },
+    {
+      "mode": "health-fault",
+      "state": "rolled_back",
+      "command_key": "e695e55f-20d0-4105-b590-0a626f2e87d1",
+      "job_id": "pjob_c3e8573e-bd32-4917-8085-7fc7ffcff173",
+      "deployment_id": 17,
+      "source_sha": "d4605c79ed41fd9a081fb0c8b19ff6c1a9d36318",
+      "runtime_revision": 2,
+      "public_http": 200,
+      "runtime_literals_exact": true,
+      "image_excludes_runtime": true,
+      "exposure_state": "unavailable",
+      "exposure_reason": "authority_changed"
+    },
+    {
+      "mode": "final",
+      "state": "succeeded",
+      "command_key": "e3499124-166b-4dc7-b1cb-7a37bfb3c044",
+      "job_id": "pjob_935f5c15-c79a-4f04-af90-370e36f93aad",
+      "deployment_id": 20,
+      "source_sha": "991f0012764c89314b029891d50e8f385892b3fc",
+      "runtime_revision": 4,
+      "public_http": 200,
+      "runtime_literals_exact": true,
+      "image_excludes_runtime": true,
+      "exposure_state": "recorded",
+      "exposure_reason": null
+    }
+  ],
+  "application": {
+    "id": 5,
+    "name": "env-live-88a0b12613c2",
+    "url": "http://167.71.202.116:30004",
+    "branch": "demo/environment-r7h-88a0b12613c2",
+    "final_runtime_revision": 4,
+    "policy_paused": true
+  },
+  "old_four_apps_eight_CIDs_key_DB_receipt_target_profile_policies_unchanged": true,
+  "controller_PID_unchanged_during_app_gate": true,
+  "active_jobs_clients_experiments_leases_unsettled": 0,
+  "temporary_client_revoked": true,
+  "private_journal_removed": true,
+  "public_HTTP": {
+    "checked_at": "2026-11-15T11:14:26.006Z",
+    "rows": [
+      {
+        "port": 30000,
+        "status": 200
+      },
+      {
+        "port": 30001,
+        "status": 200
+      },
+      {
+        "port": 30002,
+        "status": 200
+      },
+      {
+        "port": 30003,
+        "status": 200
+      },
+      {
+        "port": 30004,
+        "status": 200
+      }
+    ]
+  },
+  "quality_gates": [
+    {
+      "gate": "full",
+      "command": "pnpm.cmd --prefix app exec vitest run --maxWorkers=3",
+      "exit_code": 0
+    },
+    {
+      "gate": "types",
+      "command": "pnpm.cmd --prefix app typecheck",
+      "exit_code": 0
+    },
+    {
+      "gate": "scripts-types",
+      "command": "pnpm.cmd --prefix app exec tsc -p tsconfig.scripts.json --noEmit",
+      "exit_code": 0
+    },
+    {
+      "gate": "live-types",
+      "command": "pnpm.cmd --prefix app exec tsc -p scripts/product-environment-live/tsconfig.json --noEmit",
+      "exit_code": 0
+    },
+    {
+      "gate": "lint",
+      "command": "pnpm.cmd --prefix app exec eslint --max-warnings=0 src/main/controlPlane/cli.ts src/main/controlPlane/desktopFirstDeployment.test.ts src/main/controlPlane/desktopFirstDeployment.ts src/main/controlPlane/desktopProjectSetup.test.ts src/main/controlPlane/desktopProjectSetup.ts src/main/controlPlane/productEnvironmentOnboarding.test.ts src/main/controlPlane/productEnvironmentPreflight.ts src/main/controlPlane/productPipelineSourceRender.ts src/main/controlPlane/projectReadiness.test.ts src/main/controlPlane/projectReadiness.ts src/main/controlPlane/projectSourceVerification.ts scripts/product-environment-live/run.mjs scripts/product-environment-live/launch.mjs scripts/product-environment-live/entry.ts scripts/product-environment-live/git-fixture.mjs scripts/product-environment-desktop-lab/fixture.ts scripts/controller-upgrade-desktop-lab/run.mjs scripts/product-runtime-lab/environment-target-capability.mjs scripts/product-environment-live/input.mjs scripts/product-environment-live/inspect.mjs scripts/product-environment-live/snapshot.mjs electron.vite.config.ts",
+      "exit_code": 0
+    },
+    {
+      "gate": "format",
+      "command": "pnpm.cmd --prefix app exec prettier --check src/main/controlPlane/cli.ts src/main/controlPlane/desktopFirstDeployment.test.ts src/main/controlPlane/desktopFirstDeployment.ts src/main/controlPlane/desktopProjectSetup.test.ts src/main/controlPlane/desktopProjectSetup.ts src/main/controlPlane/productEnvironmentOnboarding.test.ts src/main/controlPlane/productEnvironmentPreflight.ts src/main/controlPlane/productPipelineSourceRender.ts src/main/controlPlane/projectReadiness.test.ts src/main/controlPlane/projectReadiness.ts src/main/controlPlane/projectSourceVerification.ts scripts/product-environment-live/run.mjs scripts/product-environment-live/launch.mjs scripts/product-environment-live/entry.ts scripts/product-environment-live/git-fixture.mjs scripts/product-environment-desktop-lab/fixture.ts scripts/controller-upgrade-desktop-lab/run.mjs scripts/product-runtime-lab/environment-target-capability.mjs scripts/product-environment-live/input.mjs scripts/product-environment-live/inspect.mjs scripts/product-environment-live/snapshot.mjs electron.vite.config.ts control-plane-runtime/desktop-environment-release.json",
+      "exit_code": 0
+    },
+    {
+      "gate": "build",
+      "command": "pnpm.cmd --prefix app run build",
+      "exit_code": 0
+    },
+    {
+      "gate": "ruff",
+      "command": "ml-service\\.venv\\Scripts\\python.exe -m ruff check experiments/ collector/ ml-service/",
+      "exit_code": 0
+    },
+    {
+      "gate": "diff",
+      "command": "git diff --check",
+      "exit_code": 0
+    },
+    {
+      "gate": "ops-lint",
+      "command": "pnpm.cmd --prefix app exec eslint --max-warnings=0 scripts/product-environment-live",
+      "exit_code": 0
+    },
+    {
+      "gate": "ops-format",
+      "command": "pnpm.cmd --prefix app exec prettier --check scripts/product-environment-live",
+      "exit_code": 0
+    },
+    {
+      "gate": "ops-types",
+      "command": "pnpm.cmd --prefix app exec tsc -p scripts/product-environment-live/tsconfig.json --noEmit",
+      "exit_code": 0
+    },
+    {
+      "gate": "resources",
+      "command": "node app/.out-scripts/r7h3d3-resources.cjs",
+      "exit_code": 0
+    },
+    {
+      "gate": "diff",
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "vitest_passed": 2447,
+  "vitest_existing_linux_only_skipped": 2,
+  "completed_journal_resume_rejected_without_remote_access": {
+    "status": "PASS",
+    "rejected_exit_code": 2,
+    "no_remote_access": true,
+    "completed_journal_unchanged": true,
+    "journal_sha256": "ca76591a0d786d489ac4b47525beb3169496c52b94ae167251c9827a7231183b"
+  },
+  "recovered_attempts": [
+    {
+      "status": "UPGRADE_READY",
+      "phase": "environment-app-pending",
+      "error_code": null
+    },
+    {
+      "status": "FAIL",
+      "phase": "refresh-runtime-binding",
+      "error_code": "ERR_ASSERTION"
+    },
+    {
+      "status": "FAIL",
+      "phase": "environment-health-fault",
+      "error_code": "PROJECT_SOURCE_OBSERVATION_STALE"
+    },
+    {
+      "status": "FAIL",
+      "phase": "environment-health-fault",
+      "error_code": "ERR_ASSERTION"
+    },
+    {
+      "status": "FAIL",
+      "phase": "environment-health-fault",
+      "error_code": "ERR_ASSERTION"
+    }
+  ],
+  "execution_notes": [
+    "Upgrade completed first, app gate resumed from same encrypted journal and upgrade UUID.",
+    "Backup read-only probe initially used transfer path; corrected to installed revision schema-backup path.",
+    "Source observation CAS rejected a Git poll race before deployment command; explicit fresh review succeeded.",
+    "Initial exposure expectation after changed-env rollback was stricter than existing contract. Final gate asserts authority_changed and independent HTTP200/exact old CIDs/config; no production fence changed."
+  ],
+  "remaining": [
+    "Active-versus-desired exposure presentation",
+    "In-place helper updater for old targets",
+    "Managed DB/PG acceptance",
+    "Whole ML and production release"
+  ],
+  "source_sha256_lf_normalized": {
+    "app/scripts/product-environment-live/entry.ts": "8836353048730299764911b8730449e8bb7eeb2a982d90393b4391a51deed41a",
+    "app/scripts/product-environment-live/git-fixture.mjs": "8cdea63ea0cc6149096af44e9981ee9cffdb189b0c87979074aa07de07a3b2b3",
+    "app/scripts/product-environment-live/launch.mjs": "ad432e056cc79ddf4098338b61c3760c5cb426756eb0d548c8054ccd33058692",
+    "app/scripts/product-environment-live/run.mjs": "2013cf05ae197557b0853797d6ee7a01ecff04168e8a82e80650deb74aff1b2d",
+    "app/scripts/product-environment-live/tsconfig.json": "8b47c5a635ebe681461de654d4ba5af0c25e39013491bb81e9b0fd1ef62e2e7b",
+    "app/src/main/controlPlane/controllerExposure.ts": "4c36957cc324c7e0322c0c59c54dd66ede3d50a522ca7b2f1d950519d350fefd",
+    "app/src/main/controlPlane/desktopExposure.ts": "161fd2933a6fed8971ab412c0d331f01dbd4ecbbae67fce9bc6f39eaa84d9b38"
+  },
+  "baseline_3a_sources_unchanged": true,
+  "raw_sha256": {
+    "app/.out-scripts/product-environment-live/88a0b12613c2/result.json": "ca76591a0d786d489ac4b47525beb3169496c52b94ae167251c9827a7231183b",
+    "app/.out-scripts/r7h3d3b-final-http.json": "9bc1a737b74e6c12377937b522a3e93b5bff104e3f41bd6937a9f34961e66262",
+    "app/.out-scripts/r7h3d3b-quality/results.json": "96f37312f684c65a5ea9f044ee8c12e7240d7acc76de99d4df95d7ad67c7005a",
+    "app/.out-scripts/r7h3d3b-final-quality/results.json": "41759afb895aa5bb15eaa00f51ab043a10123a48496ab452c3a120f1eb955f5a",
+    "app/.out-scripts/r7h3d3b-terminal-check.json": "938b0b064a5b58bd0dba3e5f0362727f747e280a736767edf1e8c658e3058643",
+    "app/.out-scripts/r7h3d3b-quality/full.log": "a40629f5cb93ad88ef4a1fef0698587861534bd50e16a103d99704de7632db30",
+    "app/.out-scripts/r7h3d3b-quality/types.log": "e1233c3e393be6bc01b75114f4405f780fe125c011904e60806109b2d88dbd38",
+    "app/.out-scripts/r7h3d3b-quality/scripts-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3b-quality/live-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3b-quality/lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3b-quality/format.log": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20",
+    "app/.out-scripts/r7h3d3b-quality/build.log": "20e76fa34a04191276670059d3c6c330831583d4af2a6daf74360e2b5712c464",
+    "app/.out-scripts/r7h3d3b-quality/ruff.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "app/.out-scripts/r7h3d3b-quality/diff.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3b-final-quality/ops-lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3b-final-quality/ops-format.log": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20",
+    "app/.out-scripts/r7h3d3b-final-quality/ops-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3b-final-quality/resources.log": "4dfa8ec3172614bcfb483d6439964a5ebeaa618744d6a6fcacbd2a1fada5fd91",
+    "app/.out-scripts/r7h3d3b-final-quality/diff.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}
