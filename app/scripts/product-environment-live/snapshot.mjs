@@ -6,6 +6,16 @@ def h(p):
  with open(p,'rb') as f:return hashlib.sha256(f.read()).hexdigest()
 c=sqlite3.connect('file:'+base+'/opspilot.db?mode=ro',uri=True);c.row_factory=sqlite3.Row
 def rows(sql):return [dict(r) for r in c.execute(sql)]
+def protected_digest():
+ if c.execute('SELECT max(version) FROM schema_version').fetchone()[0]<35:return None
+ tables=('product_environment_revision','product_source_environment','product_source_config','product_target_enrollment')
+ data={t:rows('SELECT * FROM '+t+' WHERE app_id<=5 ORDER BY app_id') for t in tables}
+ return hashlib.sha256(json.dumps(data,sort_keys=True,default=lambda v:v.hex(),separators=(',',':')).encode()).hexdigest()
+def protected_material_digest():
+ if c.execute('SELECT max(version) FROM schema_version').fetchone()[0]<35:return None
+ data={t:rows('SELECT * FROM '+t+' WHERE app_id<=5 ORDER BY app_id') for t in ('product_environment_revision','product_source_environment','product_source_config')}
+ data['target_identity']=rows('SELECT controller_id,app_id,ownership_generation,target_binding_json,manifest_sha256,target_root,state,last_error_code,created_at FROM product_target_enrollment WHERE app_id<=5 ORDER BY app_id')
+ return hashlib.sha256(json.dumps(data,sort_keys=True,default=lambda v:v.hex(),separators=(',',':')).encode()).hexdigest()
 with open(state+'/receipt.json') as f:receipt=json.load(f)
 with open(state+'/upgrade.json') as f:upgrade=json.load(f)
 apps=rows('SELECT id,name,current_deployment_id FROM app ORDER BY id')
@@ -19,6 +29,8 @@ for app in apps:
   fields=p.stdout.strip().split('|');containers.append({'name':name,'id':fields[0],'status':fields[1],'started_at':fields[2],'restart_count':int(fields[3])})
 print(json.dumps({'receipt':receipt,'upgrade':upgrade,'receipt_sha256':h(state+'/receipt.json'),'upgrade_sha256':h(state+'/upgrade.json'),
 'database_inode':os.stat(base+'/opspilot.db').st_ino,'schema':c.execute('SELECT max(version) FROM schema_version').fetchone()[0],
+'retained_environment_target_digest':protected_digest(),
+'retained_material_digest':protected_material_digest(),
 'active_experiments':c.execute("SELECT count(*) FROM experiment_run WHERE status='running'").fetchone()[0],
 'active_jobs':c.execute("SELECT count(*) FROM product_deploy_job WHERE state NOT IN ('succeeded','failed','rolled_back','superseded','cancelled')").fetchone()[0],
 'active_clients':c.execute('SELECT count(*) FROM product_desktop_client WHERE revoked_at IS NULL').fetchone()[0],

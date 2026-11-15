@@ -9,6 +9,7 @@ import approvedSpa from './control-plane-runtime/desktop-spa-release.json'
 import approvedSpaRetained from './control-plane-runtime/desktop-spa-retained-release.json'
 import approvedNext from './control-plane-runtime/desktop-next-release.json'
 import approvedEnvironment from './control-plane-runtime/desktop-environment-release.json'
+import approvedActiveExposure from './control-plane-runtime/desktop-active-exposure-release.json'
 
 const catalogFile = resolve('resources/controller-releases/catalog.json')
 const originalCatalog = existsSync(catalogFile)
@@ -19,7 +20,8 @@ const approvedUpgrades = [
   approvedSpa,
   approvedSpaRetained,
   approvedNext,
-  approvedEnvironment
+  approvedEnvironment,
+  approvedActiveExposure
 ]
 for (const approved of approvedUpgrades) {
   const conflicting = originalCatalog.releases.find((v) => v.release_id === approved.release_id)

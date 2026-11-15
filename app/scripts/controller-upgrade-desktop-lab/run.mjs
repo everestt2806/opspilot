@@ -22,6 +22,13 @@ if (process.platform !== 'linux' || process.getuid() !== 0 || !process.version.s
 const modules = process.env.OPSPILOT_CONTROL_PLANE_MODULES
 const source = process.env.OPSPILOT_CONTROLLER_RELEASE_OUTPUT
 const releasePin = process.env.OPSPILOT_CONTROLLER_RELEASE_PIN
+const baseSchema =
+  process.env.OPSPILOT_UPGRADE_BASE_SCHEMA === undefined
+    ? 29
+    : Number(process.env.OPSPILOT_UPGRADE_BASE_SCHEMA)
+assert([29, 35].includes(baseSchema), 'LAB_BASE_SCHEMA_UNSUPPORTED')
+if (baseSchema === 35)
+  assert.equal(releasePin, 'db1e58c83badef0c7efca42b78fff483d71cc38bdd711a635924d0849b41bdb8')
 if (!modules || !source || !releasePin) throw Error('LAB_INPUT_REQUIRED')
 process.env.NODE_PATH = modules
 Module._initPaths()
@@ -366,9 +373,12 @@ try {
   desktopDb = initializeDatabase(join(root, 'desktop'))
   assert.equal(desktopDb.prepare('SELECT MAX(version) n FROM schema_version').get().n, 36)
   const controllerDb = new Database(join(paths.data, 'opspilot.db'), { readonly: true })
-  assert.equal(controllerDb.prepare('SELECT MAX(version) n FROM schema_version').get().n, 29)
+  assert.equal(
+    controllerDb.prepare('SELECT MAX(version) n FROM schema_version').get().n,
+    baseSchema
+  )
   controllerDb.close()
-  check('fresh_desktop036_and_native_controller029_have_separate_migration_roles')
+  check(`fresh_desktop036_and_native_controller0${baseSchema}_have_separate_migration_roles`)
   const cipher = new AesGcmCredentialCipher(randomBytes(32))
   const vps = new VpsRepository(desktopDb)
   vps.create({

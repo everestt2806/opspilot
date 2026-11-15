@@ -8,20 +8,40 @@ import { join, resolve } from 'node:path'
 import { journalKey } from '../controller-upgrade-live/journal-key.mjs'
 import { privateInput } from './input.mjs'
 import { snapshotCommand } from './snapshot.mjs'
-const args = process.argv.slice(2),
+const activeExposure = process.argv.includes('--active-exposure')
+const rollbackMeasurement = process.argv.includes('--rollback-for-measurement')
+assert(process.argv.filter((arg) => arg === '--active-exposure').length <= 1)
+assert(process.argv.filter((arg) => arg === '--rollback-for-measurement').length <= 1)
+const args = process.argv
+    .slice(2)
+    .filter((arg) => !['--active-exposure', '--rollback-for-measurement'].includes(arg)),
   fresh = args.join(' ') === '--start'
+assert(!rollbackMeasurement || (activeExposure && !fresh))
 assert(fresh || (args.length === 2 && args[0] === '--resume' && /^[a-f0-9]{12}$/.test(args[1])))
 const project = resolve(import.meta.dirname, '../..'),
   require = createRequire(join(project, 'package.json')),
   nonce = fresh ? randomBytes(6).toString('hex') : args[1],
-  directory = join(project, '.out-scripts/product-environment-live', nonce),
+  directory = join(
+    project,
+    activeExposure
+      ? '.out-scripts/product-active-exposure-live'
+      : '.out-scripts/product-environment-live',
+    nonce
+  ),
   local = join(directory, 'private-profile'),
   pin = 'SHA256:0X8J5LfPr6iZqEspsD379FvFEWrLfYpN0wfNYjQ87+E',
   controller = 'dc586bb7-cd83-484c-b036-e5ad40ec106d',
   installation = '7573f0b1-4262-4305-8b7d-9a1edce49626',
-  parent = 'b6803bc794cb39987936395d8d1f12cd06720a08f2e0ba2c3307ec619368ab45',
-  candidateId = 'linux-x64-node22-20261115-environment-v2',
-  candidatePin = 'db1e58c83badef0c7efca42b78fff483d71cc38bdd711a635924d0849b41bdb8'
+  parent = activeExposure
+    ? 'db1e58c83badef0c7efca42b78fff483d71cc38bdd711a635924d0849b41bdb8'
+    : 'b6803bc794cb39987936395d8d1f12cd06720a08f2e0ba2c3307ec619368ab45',
+  candidateId = activeExposure
+    ? 'linux-x64-node22-20261115-active-exposure'
+    : 'linux-x64-node22-20261115-environment-v2',
+  candidatePin = activeExposure
+    ? 'eb08d06756bd635ae332e8afd6cd6791e89dff94aef0ae763223d274848db7cf'
+    : 'db1e58c83badef0c7efca42b78fff483d71cc38bdd711a635924d0849b41bdb8',
+  oldAppCount = activeExposure ? 5 : 4
 if (
   !fresh &&
   (!existsSync(join(local, 'opspilot.db')) ||
@@ -84,12 +104,17 @@ try {
       checks: [],
       production_profile_used: false,
       gui_tested: false,
+      variant: activeExposure ? 'active_exposure' : 'environment',
       remote_mutation_attempted: false
     }
   } else {
     assert.equal(realpathSync(directory), resolve(directory))
     assert.equal(readFileSync(join(directory, '.owner'), 'utf8'), nonce)
     evidence = JSON.parse(readFileSync(join(directory, 'result.json'), 'utf8'))
+    assert.equal(
+      evidence.variant ?? 'environment',
+      activeExposure ? 'active_exposure' : 'environment'
+    )
     evidence.attempt_history ??= []
     evidence.attempt_history.push({
       status: evidence.status,
@@ -101,10 +126,18 @@ try {
   }
   save()
   const proof = JSON.parse(
-    readFileSync(join(project, '../docs/ui-redesign/r7h3d3a-verification.json'), 'utf8')
+    readFileSync(
+      join(
+        project,
+        activeExposure
+          ? '.out-scripts/r7h3d3d-native-approved.json'
+          : '../docs/ui-redesign/r7h3d3a-verification.json'
+      ),
+      'utf8'
+    )
   )
   assert.equal(proof.status, 'PASS')
-  assert.equal(proof.release.release_sha256, candidatePin)
+  assert.equal(activeExposure ? proof.release_sha256 : proof.release.release_sha256, candidatePin)
   const verifier = require(join(project, 'out/main/controllerResourceVerifier.js'))
   verifier.verifyPackagedControllerResources(join(project, 'resources/controller-releases'))
   const esbuild = createRequire(require.resolve('vite/package.json'))('esbuild'),
@@ -222,8 +255,12 @@ try {
     const before = evidence.before
     for (const key of ['receipt_sha256', 'database_inode', 'vps_digest', 'files'])
       assert.deepEqual(after[key], before[key])
+    if (activeExposure && !rollbackMeasurement) {
+      if (!before.retained_material_digest) throw Error('MATERIAL_BASELINE_REQUIRED')
+      assert.equal(after.retained_material_digest, before.retained_material_digest)
+    }
     assert.deepEqual(
-      after.apps.filter((a) => a.id <= 4),
+      after.apps.filter((a) => a.id <= oldAppCount),
       before.apps
     )
     assert.deepEqual(
@@ -238,11 +275,16 @@ try {
     assert.equal(before.receipt.controller_id, controller)
     assert.equal(before.receipt.request_key, installation)
     assert.equal(before.receipt.uid, 997)
-    assert.equal(before.upgrade.request_key, '4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4')
+    assert.equal(
+      before.upgrade.request_key,
+      activeExposure
+        ? '2628dc29-cd96-4e82-a14f-a00f60d8c0a3'
+        : '4c90a650-dbae-4694-9c2b-5eb2e8b9fdd4'
+    )
     assert.equal(before.upgrade.release_sha256, parent)
-    assert.equal(before.schema, 29)
-    assert.equal(before.apps.length, 4)
-    assert.equal(before.containers.length, 8)
+    assert.equal(before.schema, activeExposure ? 35 : 29)
+    assert.equal(before.apps.length, oldAppCount)
+    assert.equal(before.containers.length, oldAppCount * 2)
     assert(before.containers.every((c) => c.status === 'running'))
     for (const key of [
       'active_jobs',
@@ -258,7 +300,11 @@ try {
     assert(before.desired.every((r) => r.auto_paused === 1))
     assert(before.service.includes('ActiveState=active'))
     evidence.before = before
-    check('fresh_pinned_SSH_expected_parent029_four_apps_eight_CIDs_quiescent')
+    check(
+      activeExposure
+        ? 'fresh_pinned_SSH_expected_parent035_five_apps_ten_CIDs_quiescent'
+        : 'fresh_pinned_SSH_expected_parent029_four_apps_eight_CIDs_quiescent'
+    )
   } else unchangedOld(before)
   progress('adopt-current-controller')
   if (!(await service.listInstallations()).length) {
@@ -298,6 +344,72 @@ try {
     privateState.client_id = clientBefore
     savePrivate()
   }
+  if (rollbackMeasurement) {
+    assert(evidence.upgrade_key && evidence.binding_refreshed && !evidence.project_key)
+    const current = await service.inspectUpgrade(evidence.upgrade_key)
+    assert.equal(current.state, 'active')
+    assert.equal(current.is_current, true)
+    assert.equal(current.release_sha256, candidatePin)
+    const snapshotBeforeRollback = await snapshot()
+    unchangedOld(snapshotBeforeRollback)
+    for (const k of [
+      'active_jobs',
+      'active_experiments',
+      'app_leases',
+      'worker_leases',
+      'unsettled_terminals',
+      'prepared_activations'
+    ])
+      assert.equal(snapshotBeforeRollback[k], 0)
+    progress('explicit-measurement-rollback')
+    const rolled = await service.sendUpgrade({
+      request_key: evidence.upgrade_key,
+      operation: 'rollback',
+      consent: true
+    })
+    assert.equal(rolled.state, 'rolled_back')
+    const rebind = await service.reviewUpgradeBinding({
+      binding_id: binding,
+      request_key: evidence.upgrade_key
+    })
+    await service.refreshUpgradeBinding({ plan_id: rebind.plan_id, consent: true })
+    assert.equal(vault.resolve(binding).accessToken, privateState.client_token)
+    const restored = await snapshot()
+    unchangedOld(restored)
+    assert.equal(restored.schema, 35)
+    assert.equal(restored.upgrade.phase, 'rolled_back')
+    assert.equal(restored.retained_material_digest, snapshotBeforeRollback.retained_material_digest)
+    evidence.original_before ??= evidence.before
+    evidence.upgrade_history ??= []
+    evidence.upgrade_history.push({
+      request_key: evidence.upgrade_key,
+      result: rolled,
+      reason: 'WHOLE_ENROLLMENT_HASH_INCLUDES_LEGITIMATE_INSPECTION_RECEIPT_REVISION_TIMESTAMP',
+      material_digest_before: snapshotBeforeRollback.retained_material_digest,
+      material_digest_after: restored.retained_material_digest
+    })
+    evidence.before = restored
+    for (const k of [
+      'upgrade_key',
+      'transfer_attempted',
+      'upgrade_attempted',
+      'binding_refreshed',
+      'upgrade',
+      'after_upgrade'
+    ])
+      delete evidence[k]
+    evidence.status = 'MEASUREMENT_BASELINE_READY'
+    save()
+    console.log(
+      JSON.stringify({
+        status: evidence.status,
+        record: nonce,
+        old_apps_unchanged: true,
+        material_unchanged: true
+      })
+    )
+    throw Error('MEASUREMENT_BASELINE_READY')
+  }
   progress('prepare-protected-upgrade')
   let upgraded
   if (!evidence.upgrade_key) {
@@ -326,7 +438,7 @@ try {
     assert.equal(upgraded.state, 'transferred')
     evidence.upgrade_attempted = true
     save()
-    progress('upgrade029-to035')
+    progress(activeExposure ? 'upgrade035-to035' : 'upgrade029-to035')
     try {
       await service.sendUpgrade({
         request_key: evidence.upgrade_key,
@@ -362,16 +474,19 @@ try {
   const after = await snapshot()
   unchangedOld(after)
   assert.equal(after.schema, 35)
-  assert.equal(after.upgrade.schema_transition.phase, 'applied')
-  assert.equal(after.upgrade.schema_transition.backup.before.schema_version, 29)
-  assert.equal(after.upgrade.schema_transition.backup.request_key, evidence.upgrade_key)
+  if (activeExposure) assert.equal(after.upgrade.schema_transition, undefined)
+  else {
+    assert.equal(after.upgrade.schema_transition.phase, 'applied')
+    assert.equal(after.upgrade.schema_transition.backup.before.schema_version, 29)
+    assert.equal(after.upgrade.schema_transition.backup.request_key, evidence.upgrade_key)
+  }
   assert.equal(after.active_jobs, 0)
   evidence.after_upgrade ??= after
   assert.match(evidence.upgrade_key, /^[a-f0-9-]{36}$/)
   const backup = JSON.parse(
     await exec(`python3 - <<'PY'
 import os,stat,json,hashlib,sqlite3
-p='/opt/opspilot-controller/revisions/${evidence.upgrade_key}/schema-backup/backup.sqlite'
+p='/opt/opspilot-controller/revisions/${activeExposure ? '2628dc29-cd96-4e82-a14f-a00f60d8c0a3' : evidence.upgrade_key}/schema-backup/backup.sqlite'
 s=os.lstat(p);d=os.lstat(os.path.dirname(p));h=hashlib.sha256()
 with open(p,'rb') as f:
  while True:
@@ -389,10 +504,16 @@ PY`)
   assert.equal(backup.directory_mode, 0o550)
   assert.equal(backup.links, 1)
   assert.equal(backup.schema, 29)
-  assert.equal(backup.sha256, after.upgrade.schema_transition.backup.backup_sha256)
+  assert.equal(
+    backup.sha256,
+    (activeExposure ? (evidence.original_before ?? evidence.before) : after).upgrade
+      .schema_transition.backup.backup_sha256
+  )
   evidence.backup = backup
   check(
-    'protected_Main_upgrade029_to035_Root_backup_binding_refresh_preserves_old_apps_key_DB_receipt'
+    activeExposure
+      ? 'protected_Main_upgrade035_to035_preserves_parent_backup_binding_old_five_apps_key_DB_receipt'
+      : 'protected_Main_upgrade029_to035_Root_backup_binding_refresh_preserves_old_apps_key_DB_receipt'
   )
   const gitDirectory = join(project, '.out-scripts/product-environment-git', nonce)
   const fixture = (mode) => {
@@ -420,7 +541,7 @@ PY`)
     setup = await service.prepareProject({
       binding_id: binding,
       target_vps_id: target.id,
-      app_name: 'env-live-' + nonce,
+      app_name: (activeExposure ? 'active-live-' : 'env-live-') + nonce,
       framework: 'express',
       repository_url: initial.repository_url,
       production_ref: initial.branch,
@@ -665,12 +786,85 @@ PY`)
     return evidence.deployments[mode]
   }
   await deploy('initial', 1, true)
+  if (activeExposure && !evidence.active_pending_checked) {
+    progress('active-source-pending-env')
+    const previous = evidence.deployments.initial.exposure.view
+    assert.equal(previous.source_state.relation, 'current')
+    evidence.initial_cids ??= await cids()
+    save()
+    await selectRevision(2)
+    const pending = await service.exposure({ binding_id: binding, app_id: setup.app_id })
+    assert.equal(pending.view.source_state.relation, 'pending')
+    assert.equal(pending.view.source_state.active_generation, 2)
+    assert.equal(pending.view.source_state.desired_generation, 3)
+    assert.equal(pending.view.status, 'not_checked')
+    assert.equal(pending.view.observation, null)
+    assert.deepEqual(await cids(), evidence.initial_cids)
+    await verifyRuntime('initial', 1)
+    const time = new Date().toISOString(),
+      stale = {
+        deployment_id: previous.context.deployment_id,
+        authority_sha256: previous.context.authority_sha256,
+        previous_observation_id: previous.context.previous_observation_id,
+        observer: 'desktop_external',
+        started_at: time,
+        checked_at: time,
+        outcome: 'reachable',
+        http_status: 200,
+        reason: 'none'
+      }
+    const client = new code.ControllerHttpClient(ssh, () => vault.resolve(binding))
+    evidence.stale_observation_key ??= (await import('node:crypto')).randomUUID()
+    save()
+    await assert.rejects(
+      () =>
+        client.call('observeExposure', {
+          app_id: setup.app_id,
+          request_key: evidence.stale_observation_key,
+          body: stale
+        }),
+      (error) => error?.code === 'EXPOSURE_CONTEXT_CHANGED'
+    )
+    const recorded = await service.exposure({ binding_id: binding, app_id: setup.app_id }, true)
+    assert.equal(recorded.state, 'recorded')
+    assert.equal(recorded.view.status, 'reachable')
+    assert.deepEqual(recorded.view.source_state, pending.view.source_state)
+    assert.deepEqual(await cids(), evidence.initial_cids)
+    const unchanged = await snapshot()
+    unchangedOld(unchanged)
+    assert.equal(
+      unchanged.apps.find((a) => a.id === setup.app_id).current_deployment_id,
+      evidence.deployments.initial.status.current_deployment_id
+    )
+    assert.equal(unchanged.active_jobs, 0)
+    evidence.pending_exposure = recorded
+    evidence.active_pending_checked = true
+    save()
+    check(
+      'installed_pending_env_public_Main_probe_reachable_old_observation_CAS_rejected_no_runtime_restart'
+    )
+  }
   await deploy('update', 2)
+  if (activeExposure) {
+    assert.deepEqual(evidence.deployments.update.exposure.view.source_state, {
+      active_generation: 3,
+      desired_generation: 3,
+      relation: 'current'
+    })
+    const oldApp = await service.exposure({ binding_id: binding, app_id: 5 }, true)
+    assert.equal(oldApp.state, 'recorded')
+    assert.equal(oldApp.view.status, 'reachable')
+    assert.equal(oldApp.view.source_state.relation, 'current')
+    evidence.old_app5_exposure = oldApp
+    check('installed_update_applies_desired_env2_and_old_app5_current_exposure_works')
+  }
   evidence.update_cids ??= await cids()
   save()
-  await deploy('build-fault', null)
-  await deploy('health-fault', 3)
-  await deploy('final', 4)
+  if (!activeExposure) {
+    await deploy('build-fault', null)
+    await deploy('health-fault', 3)
+    await deploy('final', 4)
+  }
   progress('revoke-and-final-attestation')
   await service.revoke(binding)
   evidence.temporary_client_revoked = true
@@ -689,16 +883,24 @@ PY`)
     assert.equal(final[field], 0)
   assert(final.owners.every((r) => r.auto_deploy_paused === 1))
   assert(final.desired.every((r) => r.auto_paused === 1))
-  assert.equal(final.apps.length, 5)
+  assert.equal(final.apps.length, oldAppCount + 1)
   evidence.after = final
-  check('old_four_apps_unchanged_new_env_app_healthy_all_settled_paused_temporary_client_revoked')
+  check(
+    activeExposure
+      ? 'old_five_apps_unchanged_new_active_exposure_app_healthy_all_settled_paused_client_revoked'
+      : 'old_four_apps_unchanged_new_env_app_healthy_all_settled_paused_temporary_client_revoked'
+  )
   evidence.status = 'PASS'
   save()
 } catch (error) {
   evidence ??= { record: nonce, checks: [] }
-  evidence.status = 'FAIL'
-  evidence.error_code = stable(error)
-  evidence.failure_location = /run\.mjs:\d+:\d+/.exec(error?.stack ?? '')?.[0] ?? null
+  if (rollbackMeasurement && error?.message === 'MEASUREMENT_BASELINE_READY')
+    evidence.status = 'MEASUREMENT_BASELINE_READY'
+  else {
+    evidence.status = 'FAIL'
+    evidence.error_code = stable(error)
+    evidence.failure_location = /run\.mjs:\d+:\d+/.exec(error?.stack ?? '')?.[0] ?? null
+  }
   if (existsSync(directory)) save()
 } finally {
   if (config) config.password = ''

@@ -1,0 +1,8 @@
+{
+  "release_id": "linux-x64-node22-20261115-active-exposure",
+  "node_version": "22.23.4",
+  "minimum_glibc": "2.39",
+  "release_sha256": "eb08d06756bd635ae332e8afd6cd6791e89dff94aef0ae763223d274848db7cf",
+  "installer_sha256": "e02bc14aa115423441eceb789405a7c5d6ce3a43d50d5d6ffd5102acbc74b336",
+  "upgrade_supported": true
+}

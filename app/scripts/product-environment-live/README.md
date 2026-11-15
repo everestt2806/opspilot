@@ -1,5 +1,31 @@
 # R7h-3d3b — Nghiệm thu env trên development VPS
 
+## R7h-3d3d — Variant active exposure
+
+`launch.mjs --start --active-exposure` dùng journal namespace riêng, baseline
+schema35/parent2628dc29/releasedb1e58c và approved active-exposure candidate. Chỉ
+chạy sau Root18 và Main19 gate với exact candidate, parent35; local approval proof
+không chứa credential. Resume bắt buộc cùng `--active-exposure`, không dùng journal
+đã PASS hoặc namespace của pilot3b. Đường mặc định của3b giữ expected contract cũ.
+
+Giữ cả5apps/10CIDs: app kiểm chứng6 được đăng ký/enroll mới qua Main thật, env1/
+first deploy → env2 chỉ stage/select → probe active reachable với pending metadata
+và từ chối POST mang authority cũ → deploy/update env2/current. App5 cũ được read/
+probe và không redeploy. Không dựng registration receipt đã xóa. Final app6 healthy,
+policies paused, client riêng revoke, private journal cleanup như3b.
+
+## Pilot3b lịch sử
+
+`--resume <nonce> --active-exposure --rollback-for-measurement` chỉ dùng cho journal
+đang active/current, chưa tạo app kiểm chứng, để explicit rollback về parent35 và
+chụp baseline material mới. Không tự chạy khi mất reply: inspect phải chứng minh
+state active và quiescent trước consent rollback; binding refresh giữ token/client.
+Mode này dừng ở MEASUREMENT_BASELINE_READY; lượt nâng tiếp theo dùng normal resume
+và UUID mới. Không dùng để bỏ qua thay đổi material: phải so sánh env/source và
+target identity digest trước/sau rollback; audit giữ original_before và history.
+Digest material không gồm receipt/revision/updated_at của enrollment vì startup
+inspect cập nhật chúng hợp lệ, nhưng vẫn giữ manifest/owner/target/root/state/error.
+
 Chỉ VPS development đã duyệt, pinned ED25519, current controller/install/parent
 trong source. Không dùng hồ sơ Electron thật. Candidate phải là đúng approved
 release và đã qua Root/Main upgrade lab trong proof3a; thiếu/tamper resource bị
