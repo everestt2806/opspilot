@@ -52,3 +52,4 @@ export { ProductEnvironmentRepository } from '../../src/main/db/productEnvironme
 export { ProductEnvironmentCommands } from '../../src/main/controlPlane/productEnvironmentCommands'
 export { observeProductTarget } from '../../src/main/controlPlane/controllerTargetProbe'
 export { canonicalH2Json } from '../../src/main/controlPlane/productH2Proof'
+export { ControllerExposure } from '../../src/main/controlPlane/controllerExposure'

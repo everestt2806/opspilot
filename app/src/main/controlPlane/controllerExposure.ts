@@ -9,6 +9,7 @@ import type {
 } from '../../../../docs/contracts/product-exposure'
 import { ControllerClientAuth, ControllerClientAuthError } from './controllerClientAuth'
 import { canonicalH2Json, h2ContextSchema, hashH2 } from './productH2Proof'
+import { readExposureSourceState } from './controllerExposureSource'
 import {
   exposureInputSchema,
   exposureObservationSchema,
@@ -217,15 +218,23 @@ export class ControllerExposure {
       row.job_state !== 'succeeded'
     )
       return { ...base, unavailable_reason: 'runtime_unsettled' }
-    if (!this.runtimeMatches(row)) return { ...base, unavailable_reason: 'authority_changed' }
+    const sourceState = this.runtimeSource(row)
+    if (!sourceState) return { ...base, unavailable_reason: 'authority_changed' }
     if (
       this.db
         .prepare(
           `SELECT 1 FROM product_deploy_job WHERE app_id=? AND state IN ('queued','claimed','deploying','retry_wait','uncertain')
        UNION ALL SELECT 1 FROM product_app_lease WHERE app_id=? AND released_at IS NULL
-       UNION ALL SELECT 1 FROM deployment_activation WHERE app_id=? AND state='prepared' LIMIT 1`
+       UNION ALL SELECT 1 FROM deployment_activation WHERE app_id=? AND state='prepared'
+       UNION ALL SELECT 1 FROM product_worker_lease l JOIN product_deploy_job j ON j.job_id=l.job_id
+         WHERE j.app_id=? AND l.released_at IS NULL
+       UNION ALL SELECT 1 FROM product_runtime_execution e JOIN product_deploy_attempt a ON a.attempt_id=e.attempt_id
+         JOIN product_deploy_job j ON j.job_id=a.job_id LEFT JOIN product_runtime_terminal t ON t.attempt_id=e.attempt_id
+         WHERE j.app_id=? AND (t.attempt_id IS NULL OR t.settled_at IS NULL OR t.leases_released_at IS NULL)
+       UNION ALL SELECT 1 FROM product_deploy_attempt a JOIN product_deploy_job j ON j.job_id=a.job_id
+         WHERE j.app_id=? AND (a.remote_outcome='unknown' OR a.state='uncertain') LIMIT 1`
         )
-        .get(row.app_id, row.app_id, row.app_id)
+        .get(row.app_id, row.app_id, row.app_id, row.app_id, row.app_id, row.app_id)
     )
       return { ...base, unavailable_reason: 'execution_active' }
     const ipv6 = isIP(row.host) === 6
@@ -262,6 +271,7 @@ export class ControllerExposure {
       age !== null && age >= -EXPOSURE_FUTURE_TOLERANCE_MS && age <= EXPOSURE_DISPLAY_TTL_MS
     return {
       ...base,
+      source_state: sourceState,
       context,
       observation,
       freshness: observation ? (current ? 'current' : 'stale') : 'not_checked',
@@ -310,21 +320,38 @@ export class ControllerExposure {
       return null
     }
   }
-  private runtimeMatches(row: Row): boolean {
-    if (!row.context_json || Buffer.byteLength(row.context_json) > 48 * 1024) return false
+  private runtimeSource(row: Row): ProductExposureView['source_state'] | null {
+    if (!row.context_json || Buffer.byteLength(row.context_json) > 48 * 1024) return null
     try {
       const context = h2ContextSchema.parse(JSON.parse(row.context_json))
       if (
         hashH2(context) !== row.execution_context_sha256 ||
         row.execution_context_sha256 !== row.terminal_context_sha256
       )
-        return false
-      return (
+        return null
+      const job = this.db
+        .prepare(
+          `SELECT j.controller_id,j.app_id,j.ownership_generation,j.source_generation,
+        j.source_config_sha256,j.target_sha,p.attempt_number,p.deployment_id FROM product_deploy_job j
+        JOIN product_deploy_attempt p ON p.job_id=j.job_id WHERE j.job_id=? AND p.attempt_id=?`
+        )
+        .get(context.claim.job_id, context.claim.attempt_id) as Record<string, unknown> | undefined
+      if (
+        !job ||
+        job.controller_id !== this.controllerId ||
+        job.app_id !== row.app_id ||
+        job.ownership_generation !== row.ownership_generation ||
+        job.source_generation !== context.claim.source_generation ||
+        job.source_config_sha256 !== context.claim.source_config_sha256 ||
+        job.target_sha !== context.source_sha ||
+        job.attempt_number !== context.claim.attempt_number ||
+        job.deployment_id !== row.current_deployment_id
+      )
+        return null
+      const matches =
         context.claim.controller_id === this.controllerId &&
         context.claim.app_id === row.app_id &&
         context.claim.ownership_generation === row.ownership_generation &&
-        context.claim.source_generation === row.source_generation &&
-        context.claim.source_config_sha256 === row.source_config_sha256 &&
         context.deployment_id === row.current_deployment_id &&
         context.source_sha === row.git_commit_sha &&
         context.candidate_image_tag === row.image_tag &&
@@ -342,9 +369,9 @@ export class ControllerExposure {
             auth_type: row.auth_type,
             ssh_security_revision: row.ssh_security_revision
           })
-      )
+      return matches ? readExposureSourceState(this.db, row, context) : null
     } catch {
-      return false
+      return null
     }
   }
   private fail(code: ConstructorParameters<typeof ControllerClientAuthError>[0]): never {

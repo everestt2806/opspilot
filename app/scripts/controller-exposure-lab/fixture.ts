@@ -1,21 +1,32 @@
 import type Database from 'better-sqlite3'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import type { ProductClaimToken } from '../../../docs/contracts/product-auto-deploy'
 import type { H2TerminalReceipt } from '../../../docs/contracts/product-h2-runtime'
 import { ProductRuntimeRepository } from '../../src/main/db/productRuntimeRepository'
-import { hashH2, signH2 } from '../../src/main/controlPlane/productH2Proof'
+import { canonicalH2Json, hashH2, signH2 } from '../../src/main/controlPlane/productH2Proof'
+import { AesGcmCredentialCipher } from '../../src/main/crypto/credentialCipher'
+import { ProductEnvironmentRepository } from '../../src/main/db/productEnvironmentRepository'
+import { ProductEnvironmentSelection } from '../../src/main/controlPlane/productEnvironmentSelection'
 
 /** Private test/lab DB only. Real H2 repository finalizes and settles synthetic runtime evidence. */
 export function seedExposureFixture(
   db: Database.Database,
   now: number,
   targetHost = '203.0.113.10'
-): { controllerId: string; settle: () => void } {
+): { controllerId: string; settle: () => void; selectEnvironment: (revision: number) => void } {
   const controllerId = 'exposure-fixture',
     time = new Date(now).toISOString(),
     expires = new Date(now + 60000).toISOString(),
     sha = 'a'.repeat(40),
-    config = 'b'.repeat(64)
+    configJson = canonicalH2Json({
+      framework: 'express',
+      host_port: 30000,
+      container_port: 3000,
+      healthcheck_path: '/health',
+      needs_db: false
+    }),
+    config = createHash('sha256').update(configJson).digest('hex'),
+    cipher = new AesGcmCredentialCipher(randomBytes(32))
   db.exec(`INSERT INTO vps(id,name,host,port,host_fingerprint,username,auth_type,encrypted_secret)
     VALUES(1,'fixture','203.0.113.10',22,'SHA256:${'A'.repeat(43)}','ops','key',X'00');
     INSERT INTO app(id,vps_id,name,framework,host_port,container_port,healthcheck_path,source_type,git_repo_url,git_ref,git_root)
@@ -23,8 +34,8 @@ export function seedExposureFixture(
     INSERT INTO deployment(id,app_id,version,image_tag,git_commit_sha,status) VALUES(1,1,1,'exposure-app:v1','${sha}','building');`)
   db.prepare('INSERT INTO product_controller VALUES(?,?,?)').run(controllerId, time, 'active')
   db.prepare(
-    "INSERT INTO product_source_config VALUES(1,1,'https://github.com/example/demo.git','main','.','{}',?,?)"
-  ).run(config, time)
+    "INSERT INTO product_source_config VALUES(1,1,'https://github.com/example/demo.git','main','.',?,?,?)"
+  ).run(configJson, config, time)
   db.prepare(
     `INSERT INTO product_app_control(app_id,mode,controller_id,ownership_generation,source_generation,source_config_sha256,changed_at)
     VALUES(1,'product',?,1,1,?,?)`
@@ -106,6 +117,49 @@ export function seedExposureFixture(
   })
   return {
     controllerId,
+    selectEnvironment: (revision) => {
+      db.exec(
+        "UPDATE product_app_control SET auto_deploy_paused=1,pause_reason='operator',pause_policy_provenance='explicit'"
+      )
+      const owner = db
+        .prepare(
+          'SELECT source_generation,source_config_sha256 FROM product_app_control WHERE app_id=1'
+        )
+        .get() as { source_generation: number; source_config_sha256: string }
+      const target = {
+          vps_id: 1,
+          host: targetHost,
+          port: 22,
+          host_fingerprint: 'SHA256:' + 'A'.repeat(43),
+          username: 'ops',
+          auth_type: 'key' as const,
+          ssh_security_revision: 1
+        },
+        scope = { controller_id: controllerId, app_id: 1, ownership_generation: 1, target }
+      new ProductEnvironmentRepository(db, cipher).append({
+        scope,
+        expected_latest_revision: revision === 1 ? null : revision - 1,
+        expected_source_generation: owner.source_generation,
+        expected_source_config_sha256: owner.source_config_sha256,
+        values: {
+          runtime_env: { APP_TOKEN: 'SYNTHETIC_EXPOSURE_ONLY_' + revision },
+          public_build_args: {}
+        }
+      })
+      new ProductEnvironmentSelection(db, cipher).select(
+        {
+          format: 1,
+          request_key: randomUUID(),
+          scope,
+          expected_source_generation: owner.source_generation,
+          expected_source_config_sha256: owner.source_config_sha256,
+          expected_latest_revision: revision,
+          environment_revision: revision
+        },
+        controllerId,
+        'unix:1000'
+      )
+    },
     settle: () => {
       const attestation = repository.commitAttestation(claim.attempt_id)
       const payload = {

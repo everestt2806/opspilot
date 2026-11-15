@@ -1,0 +1,292 @@
+{
+  "checkpoint": "R7h-3d3c",
+  "status": "PASS",
+  "base_commit": "9b6ff4c4917e3be25db61ccef7d32fc6fd1fc948",
+  "scope": "LOCAL_ACTIVE_EXPOSURE_ENV_ONLY_AUTHORITY_AND_ELECTRON_PRESENTATION",
+  "quality_gates": [
+    {
+      "gate": "full",
+      "command": "pnpm.cmd --prefix app exec vitest run --maxWorkers=3",
+      "exit_code": 0
+    },
+    {
+      "gate": "types",
+      "command": "pnpm.cmd --prefix app typecheck",
+      "exit_code": 0
+    },
+    {
+      "gate": "scripts-types",
+      "command": "pnpm.cmd --prefix app exec tsc -p tsconfig.scripts.json --noEmit",
+      "exit_code": 0
+    },
+    {
+      "gate": "runtime-lab-types",
+      "command": "pnpm.cmd --prefix app exec tsc -p scripts/product-runtime-lab/tsconfig.json --noEmit",
+      "exit_code": 0
+    },
+    {
+      "gate": "exposure-lab-types",
+      "command": "pnpm.cmd --prefix app exec tsc -p scripts/controller-exposure-lab/tsconfig.json --noEmit",
+      "exit_code": 0
+    },
+    {
+      "gate": "lint",
+      "command": "pnpm.cmd --prefix app exec eslint --max-warnings=0 src/main/controlPlane/controllerExposure.ts src/main/controlPlane/controllerExposureSource.ts src/main/controlPlane/controllerExposureSchemas.ts src/main/controlPlane/controllerExposure.test.ts src/shared/productExposure.ts src/renderer/src/components/ControllerExposurePanel.tsx src/renderer/src/components/ControllerExposurePanel.test.tsx src/renderer/src/components/controllerExposureCopy.ts scripts/controller-exposure-lab/fixture.ts scripts/controller-exposure-lab/run.mjs scripts/controller-exposure-lab/electron.mjs scripts/product-runtime-lab/run.mjs scripts/product-runtime-lab/entry.ts",
+      "exit_code": 0
+    },
+    {
+      "gate": "format",
+      "command": "pnpm.cmd --prefix app exec prettier --check src/main/controlPlane/controllerExposure.ts src/main/controlPlane/controllerExposureSource.ts src/main/controlPlane/controllerExposureSchemas.ts src/main/controlPlane/controllerExposure.test.ts src/shared/productExposure.ts src/renderer/src/components/ControllerExposurePanel.tsx src/renderer/src/components/ControllerExposurePanel.test.tsx src/renderer/src/components/controllerExposureCopy.ts scripts/controller-exposure-lab/fixture.ts scripts/controller-exposure-lab/run.mjs scripts/controller-exposure-lab/electron.mjs scripts/product-runtime-lab/run.mjs scripts/product-runtime-lab/entry.ts",
+      "exit_code": 0
+    },
+    {
+      "gate": "build",
+      "command": "pnpm.cmd --prefix app run build",
+      "exit_code": 0
+    },
+    {
+      "gate": "ruff",
+      "command": "ml-service\\.venv\\Scripts\\python.exe -m ruff check experiments/ collector/ ml-service/",
+      "exit_code": 0
+    },
+    {
+      "gate": "diff",
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "vitest_passed": 2471,
+  "vitest_existing_linux_only_skipped": 2,
+  "native_HTTP_SQLite": {
+    "status": "PASS",
+    "scope": "NATIVE_LINUX_AUTHENTICATED_HTTP_SQLITE_SYNTHETIC_RUNTIME",
+    "checks": [
+      "native_h2_settlement_and_authorized_context",
+      "lost_http_reply_lookup_current_observation_without_retry_write",
+      "same_key_idempotence_and_previous_observation_cas",
+      "active_source_env_only_desired_pending_real_HTTP_CAS_without_runtime_mutation",
+      "current_target_change_fences_read_and_write",
+      "no_h2_runtime_policy_or_deployment_mutation"
+    ],
+    "actual_network_probe_performed": false,
+    "root_removed": true
+  },
+  "real_Electron_Main_renderer": {
+    "status": "PASS",
+    "scope": "REAL_ELECTRON_TYPED_IPC_MAIN_PUBLIC_HTTP_PRIVATE_SQLITE_SYNTHETIC_RUNTIME",
+    "checks": [
+      "real_electron_native_sqlite_cold_private_profile_vault",
+      "real_renderer_typed_ipc_main_public_probe_authenticated_sqlite_persistence",
+      "active_source_pending_env_real_Main_public_probe_and_renderer_warning_without_new_deploy",
+      "four_locales_two_themes_and_two_window_sizes_without_horizontal_overflow",
+      "unknown_write_explicit_read_without_second_post",
+      "unsupported_no_legacy_fallback_no_runtime_h2_or_command_mutation"
+    ],
+    "screenshots": [
+      "exposure-vi-dark-1280x800.png",
+      "exposure-vi-light-1280x800.png",
+      "exposure-en-dark-1280x800.png",
+      "exposure-en-light-1280x800.png",
+      "exposure-cn-dark-1280x800.png",
+      "exposure-cn-light-1280x800.png",
+      "exposure-jp-dark-1280x800.png",
+      "exposure-jp-light-1280x800.png",
+      "exposure-vi-dark-1366x768.png",
+      "exposure-vi-light-1366x768.png",
+      "exposure-unknown-1280x800.png",
+      "exposure-unsupported-1280x800.png"
+    ],
+    "production_profile_used": false,
+    "actual_ssh_transport": false,
+    "actual_network_probe_performed": true,
+    "private_db_removed": true,
+    "stage": "initial_check_readback",
+    "renderer_errors": [],
+    "ipc_call_count": 7
+  },
+  "native_runtime_cases": 39,
+  "runtime_matrix": [
+    {
+      "raw": "app/.out-scripts/product-runtime-lab/03e12454c232/result.json",
+      "framework": "nextjs",
+      "cases": [
+        "first_healthy",
+        "next_ssr_first_healthy",
+        "environment_first_revision_and_selection",
+        "healthy_update",
+        "next_ssr_healthy_update",
+        "environment_update_restart_public_build",
+        "build_failure",
+        "unhealthy_rollback",
+        "next_ssr_unhealthy_rollback",
+        "environment_rollback_preserves_exact_config",
+        "environment_active_exposure_after_desired3_health_rollback",
+        "first_build_failure",
+        "first_health_failure",
+        "collector_build_failure_blocks_finalization"
+      ],
+      "bundle_sha256": "7a7f5273ea2971a7d531ebaa2d4b338ab19eadfac15cd3994893c3ca5a4c790e",
+      "exposure": {
+        "name": "environment_active_exposure_after_desired3_health_rollback",
+        "status": "PASS",
+        "active_source": 3,
+        "desired_source": 4,
+        "current_deployment_id": 2,
+        "exposure_status": "reachable",
+        "exact_CIDs_and_env2": true,
+        "signed_terminal_unchanged": true,
+        "probe_scope": "LOCAL_LOOPBACK_DOCKER",
+        "independent_desktop_probe": false
+      },
+      "cleanup": true
+    },
+    {
+      "raw": "app/.out-scripts/product-runtime-lab/08d21f31a190/result.json",
+      "framework": "express",
+      "cases": [
+        "first_healthy",
+        "environment_first_revision_and_selection",
+        "healthy_update",
+        "environment_update_restart_public_build",
+        "build_failure",
+        "unhealthy_rollback",
+        "environment_rollback_preserves_exact_config",
+        "environment_active_exposure_after_desired3_health_rollback",
+        "first_build_failure",
+        "first_health_failure",
+        "collector_build_failure_blocks_finalization"
+      ],
+      "bundle_sha256": "7a7f5273ea2971a7d531ebaa2d4b338ab19eadfac15cd3994893c3ca5a4c790e",
+      "exposure": {
+        "name": "environment_active_exposure_after_desired3_health_rollback",
+        "status": "PASS",
+        "active_source": 3,
+        "desired_source": 4,
+        "current_deployment_id": 2,
+        "exposure_status": "reachable",
+        "exact_CIDs_and_env2": true,
+        "signed_terminal_unchanged": true,
+        "probe_scope": "LOCAL_LOOPBACK_DOCKER",
+        "independent_desktop_probe": false
+      },
+      "cleanup": true
+    },
+    {
+      "raw": "app/.out-scripts/product-runtime-lab/8c8c6d8c41b0/result.json",
+      "framework": "static-spa",
+      "cases": [
+        "first_healthy",
+        "spa_routes_first_healthy",
+        "environment_first_revision_and_selection",
+        "healthy_update",
+        "spa_routes_healthy_update",
+        "environment_update_restart_public_build",
+        "build_failure",
+        "unhealthy_rollback",
+        "spa_routes_unhealthy_rollback",
+        "environment_rollback_preserves_exact_config",
+        "environment_active_exposure_after_desired3_health_rollback",
+        "first_build_failure",
+        "first_health_failure",
+        "collector_build_failure_blocks_finalization"
+      ],
+      "bundle_sha256": "7a7f5273ea2971a7d531ebaa2d4b338ab19eadfac15cd3994893c3ca5a4c790e",
+      "exposure": {
+        "name": "environment_active_exposure_after_desired3_health_rollback",
+        "status": "PASS",
+        "active_source": 3,
+        "desired_source": 4,
+        "current_deployment_id": 2,
+        "exposure_status": "reachable",
+        "exact_CIDs_and_env2": true,
+        "signed_terminal_unchanged": true,
+        "probe_scope": "LOCAL_LOOPBACK_DOCKER",
+        "independent_desktop_probe": false
+      },
+      "cleanup": true
+    }
+  ],
+  "production_desktop_profile_used": false,
+  "development_VPS_mutation": false,
+  "VPS_controller_release_unchanged": "db1e58c83badef0c7efca42b78fff483d71cc38bdd711a635924d0849b41bdb8",
+  "observer_scope": {
+    "HTTP_SQLite": "synthetic signed H2 runtime / real HTTP and SQLite",
+    "Electron": "private Main and real public HTTP / synthetic SSH and H2 runtime",
+    "Docker": "real local SSH/SQLite/Docker and env selection/rollback / loopback probe"
+  },
+  "visual_review": {
+    "screenshots": 12,
+    "locales": [
+      "vi",
+      "en",
+      "cn",
+      "jp"
+    ],
+    "themes": [
+      "dark",
+      "light"
+    ],
+    "sizes": [
+      "1280x800",
+      "1366x768"
+    ],
+    "horizontal_overflow": false,
+    "inspected": [
+      "exposure-vi-light-1366x768.png",
+      "exposure-jp-dark-1280x800.png"
+    ]
+  },
+  "not_yet_proved": [
+    "Installed VPS controller supports the new source_state",
+    "Rollout of a frozen new release through protected upgrade",
+    "In-place helper updater for retained targets",
+    "Whole production release"
+  ],
+  "source_sha256_lf_normalized": {
+    "app/scripts/controller-exposure-lab/electron.mjs": "00ac7addcaff5ad155ac364cb64f18b0ab4b14c7e1777a955f0e425c8680bfc7",
+    "app/scripts/controller-exposure-lab/fixture.ts": "5973789ae1981f3f0eb58c9b56a0b5c22c234d1926e5638eadb7f5d2836e5ae3",
+    "app/scripts/controller-exposure-lab/run.mjs": "b3f6773c9e596ea75e376d3296d69bee0a7bfd02985bddac42c31f8517d7845f",
+    "app/scripts/product-runtime-lab/entry.ts": "febf106077ef5e6e17b66459439b00478ee8149acf9785e201b0b2b64a710e98",
+    "app/scripts/product-runtime-lab/run.mjs": "9462e0f18958a4bcebb9d147fb6562605645fe47bb0a7d912b719c7f907992e5",
+    "app/src/main/controlPlane/controllerExposure.test.ts": "59c11c6389632244861a7d561c4489e9b11c5bd2fb4b7d2b699b9f520abef7e3",
+    "app/src/main/controlPlane/controllerExposure.ts": "5f9abe8b4d000061b46beb7b3121a218d255cc1ded637c6e2e1b194a2bb96e47",
+    "app/src/main/controlPlane/controllerExposureSchemas.ts": "a7e8662a4cf681a28c60efeb5f2907f3894a74e49a4932cc1af1c04d18d2b8f9",
+    "app/src/main/controlPlane/controllerExposureSource.ts": "09d1b0bb7f55472c51bb03ae743a060911d2b2f72cb990937193159cf1eeabf6",
+    "app/src/renderer/src/components/ControllerExposurePanel.test.tsx": "d22100dbd8af23ae94527cbd0c7ddecf7fe0e566349e390c9d7732f2b3ece099",
+    "app/src/renderer/src/components/ControllerExposurePanel.tsx": "b830b3844480f10a3de02e5e14aba00073b3f49104022e19ae6a375ec5baad10",
+    "app/src/renderer/src/components/controllerExposureCopy.ts": "473098acd2216288b6497ed0c3f5277e3930aeccd12ea7aeb5dd95749f2dc9a5",
+    "app/src/shared/productExposure.ts": "35fb6381852ab3565ab83cae1d867dc2bc3b639d473a093d50eb90a1ef5dd60b"
+  },
+  "raw_sha256": {
+    "app/.out-scripts/r7h3d3c-quality/results.json": "63d9a8f0b5e365de76c68bfbf29014294d831c2a7c0966d854336078214db0ab",
+    "app/.out-scripts/controller-exposure/e95890938d3a0486e5bb7e74cfa88926/result.json": "00d6e459fdd4f00d157c3d384d0dc3cbe7ea77eb465a49d30693d7742976c6e9",
+    "app/.out-scripts/controller-exposure-electron/c2e87965cbfd2a60/result.json": "6c75ff89068c9727c73f356f8c8d08b01e92ec8308e8099f0cef8593a0867492",
+    "app/.out-scripts/r7h3d3c-quality/full.log": "1ed00df07197aac84968c08e7caaf30acab9d49b9a99ed3022af112bf6cba3a4",
+    "app/.out-scripts/r7h3d3c-quality/types.log": "e1233c3e393be6bc01b75114f4405f780fe125c011904e60806109b2d88dbd38",
+    "app/.out-scripts/r7h3d3c-quality/scripts-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3c-quality/runtime-lab-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3c-quality/exposure-lab-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3c-quality/lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3c-quality/format.log": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20",
+    "app/.out-scripts/r7h3d3c-quality/build.log": "54bf621eb69d54f41d6571dd0959008342c72776c21e8765a72d4825d1c39724",
+    "app/.out-scripts/r7h3d3c-quality/ruff.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "app/.out-scripts/r7h3d3c-quality/diff.log": "4f6cfb65f666a9dc604499d89666f565ae168c71820763c5e902e92204bdb0cf",
+    "app/.out-scripts/product-runtime-lab/03e12454c232/result.json": "81c3655323f25dbfbcea86672ffd7a74e7567544054356802abcc956244a3741",
+    "app/.out-scripts/product-runtime-lab/08d21f31a190/result.json": "61a759de08d4304863649497d98d6962a9250439289cc0445d5626b2d1aba098",
+    "app/.out-scripts/product-runtime-lab/8c8c6d8c41b0/result.json": "5b6e019b15dd876a9801be0480da620b7bebf8a37aac291d7cfcb8816208180f"
+  },
+  "screenshot_sha256": {
+    "docs/ui-redesign/screenshots/r7h3d3c/c2e87965cbfd2a60/exposure-vi-dark-1280x800.png": "3ca1a5239f81cddbf97c1678feec226c63c07a0154a6542401f46142f073110e",
+    "docs/ui-redesign/screenshots/r7h3d3c/c2e87965cbfd2a60/exposure-vi-light-1280x800.png": "185e3b1a1d782264bd98e4b9a4467e754bb95e15c0454090e568f3f81063185f",
+    "docs/ui-redesign/screenshots/r7h3d3c/c2e87965cbfd2a60/exposure-en-dark-1280x800.png": "632e8e9c2e9e879dc1e5a3122baa64fb8fb21388e19124ca173534110dd00210",
+    "docs/ui-redesign/screenshots/r7h3d3c/c2e87965cbfd2a60/exposure-en-light-1280x800.png": "589065ea28f40741edad571ee0c86291bddd96d2494e36310fd97491bd957a0f",
+    "docs/ui-redesign/screenshots/r7h3d3c/c2e87965cbfd2a60/exposure-cn-dark-1280x800.png": "8812371455dde9bfffc2192e3f347ca3843d57bf1dbe17fb9b68c9588b434b1e",
+    "docs/ui-redesign/screenshots/r7h3d3c/c2e87965cbfd2a60/exposure-cn-light-1280x800.png": "9163d60dd2e27f923c004330547f9d3fbd9bfa78e0b69d45b5f30cb969ce703d",
+    "docs/ui-redesign/screenshots/r7h3d3c/c2e87965cbfd2a60/exposure-jp-dark-1280x800.png": "ddd66fcead4e27accf16735c7e92d8f5904233eef13b5d1c4aec124b97919ddf",
+    "docs/ui-redesign/screenshots/r7h3d3c/c2e87965cbfd2a60/exposure-jp-light-1280x800.png": "cfec6cd620eb3a8d4ef58faff497223e31c1f8ef39cc65858785757061b0c0fd",
+    "docs/ui-redesign/screenshots/r7h3d3c/c2e87965cbfd2a60/exposure-vi-dark-1366x768.png": "f04382e60f4829253453657d553c31349da7de4ad2f6eed06ec2803dac7603a9",
+    "docs/ui-redesign/screenshots/r7h3d3c/c2e87965cbfd2a60/exposure-vi-light-1366x768.png": "05caa1fa14c3fc0f352f43d448d0a310545071bcd57b21fbb18dcea6864fe075",
+    "docs/ui-redesign/screenshots/r7h3d3c/c2e87965cbfd2a60/exposure-unknown-1280x800.png": "413ca6a229ebf3f4542b819f811d3569bdfb6da0f3699c4e64ca3075c9641c11",
+    "docs/ui-redesign/screenshots/r7h3d3c/c2e87965cbfd2a60/exposure-unsupported-1280x800.png": "5cec8c1cd8aae909f6e713b7c1a2a3ca843b8b031098bddc026b0d8cfe7690c5"
+  }
+}

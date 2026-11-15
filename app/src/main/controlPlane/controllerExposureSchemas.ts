@@ -77,6 +77,18 @@ export const exposureObservationSchema = z
   }) satisfies z.ZodType<ProductExposureObservation>
 export const exposureViewSchema = z
   .strictObject({
+    source_state: z
+      .strictObject({
+        active_generation: positive,
+        desired_generation: positive,
+        relation: z.enum(['current', 'pending'])
+      })
+      .refine((s) =>
+        s.relation === 'current'
+          ? s.active_generation === s.desired_generation
+          : s.active_generation < s.desired_generation
+      )
+      .optional(),
     app_id: positive,
     deployment_id: positive.nullable(),
     context: exposureContextSchema.nullable(),
@@ -94,6 +106,7 @@ export const exposureViewSchema = z
     observation: exposureObservationSchema.nullable()
   })
   .refine((v) => {
+    if (v.source_state && (!v.context || v.deployment_id === null)) return false
     if (!v.context)
       return v.observation === null && v.status === 'not_checked' && v.freshness === 'not_checked'
     if (

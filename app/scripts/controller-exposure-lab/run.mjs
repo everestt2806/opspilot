@@ -157,6 +157,11 @@ try {
     desktopMode ? 'http://167.71.202.116:30000' : 'http://203.0.113.10:30000'
   )
   checks.push('native_h2_settlement_and_authorized_context')
+  assert.deepEqual(initial.source_state, {
+    active_generation: 1,
+    desired_generation: 1,
+    relation: 'current'
+  })
   const { deployment_id, authority_sha256, previous_observation_id } = initial.context
   const body = {
     deployment_id,
@@ -180,6 +185,32 @@ try {
   assert.equal((await post(body, key)).status, 200)
   assert.equal((await post(body, randomUUID())).status, 409)
   checks.push('same_key_idempotence_and_previous_observation_cas')
+  seeded.selectEnvironment(1)
+  const pending = await read()
+  assert.deepEqual(pending.source_state, {
+    active_generation: 1,
+    desired_generation: 2,
+    relation: 'pending'
+  })
+  assert.equal(pending.deployment_id, initial.deployment_id)
+  assert.equal(pending.status, 'not_checked')
+  assert.equal((await post(body, randomUUID())).status, 409)
+  const pendingBody = {
+    ...body,
+    deployment_id: pending.context.deployment_id,
+    authority_sha256: pending.context.authority_sha256,
+    previous_observation_id: pending.context.previous_observation_id,
+    started_at: new Date().toISOString(),
+    checked_at: new Date().toISOString()
+  }
+  assert.equal((await post(pendingBody, randomUUID())).status, 200)
+  assert.equal((await read()).status, 'reachable')
+  seeded.selectEnvironment(2)
+  const newer = await read()
+  assert.equal(newer.status, 'not_checked')
+  assert.equal(newer.source_state.desired_generation, 3)
+  assert.equal((await post(pendingBody, randomUUID())).status, 409)
+  checks.push('active_source_env_only_desired_pending_real_HTTP_CAS_without_runtime_mutation')
   db.exec('UPDATE vps SET ssh_security_revision=2')
   assert.equal((await post(body, key)).status, 409)
   assert.equal((await read()).status, 'not_checked')

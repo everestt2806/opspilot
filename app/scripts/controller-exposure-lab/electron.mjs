@@ -18,7 +18,7 @@ const root = resolve(import.meta.dirname, '../../..'),
     randomBytes(8).toString('hex')
   ),
   privateRoot = join(directory, 'private-data'),
-  screenshots = join(root, 'docs/ui-redesign/screenshots/r3c6h4b')
+  screenshots = join(root, 'docs/ui-redesign/screenshots/r7h3d3c', directory.split(/[\\/]/).at(-1))
 mkdirSync(privateRoot, { recursive: true })
 mkdirSync(screenshots, { recursive: true })
 app.setPath('userData', join(directory, 'profile'))
@@ -94,7 +94,7 @@ app.whenReady().then(async () => {
     database = new Database(join(privateRoot, 'controller.db'))
     database.pragma('journal_mode = WAL')
     database.pragma('foreign_keys = ON')
-    code.runMigrations(database)
+    code.runMigrations(database, Infinity, 'controller')
     const seed = code.seedExposureFixture(database, Date.now(), '167.71.202.116')
     seed.settle()
     const beforeTerminal = database.prepare('SELECT * FROM product_runtime_terminal').all(),
@@ -307,10 +307,20 @@ app.whenReady().then(async () => {
     assert.equal(posts, 1)
     result.actual_network_probe_performed = true
     checks.push('real_renderer_typed_ipc_main_public_probe_authenticated_sqlite_persistence')
+    seed.selectEnvironment(1)
+    await click(copy.vi.read)
+    await wait(`document.body.textContent.includes(${JSON.stringify(copy.vi.pending)})`)
+    await click(copy.vi.check)
+    await wait(`document.body.textContent.includes(${JSON.stringify(copy.vi.reachable)})`)
+    assert.equal(posts, 2)
+    checks.push(
+      'active_source_pending_env_real_Main_public_probe_and_renderer_warning_without_new_deploy'
+    )
     for (const locale of ['vi', 'en', 'cn', 'jp'])
       for (const theme of ['dark', 'light']) {
         await show(locale, theme)
         await wait(`document.body.textContent.includes(${JSON.stringify(copy[locale].reachable)})`)
+        await wait(`document.body.textContent.includes(${JSON.stringify(copy[locale].pending)})`)
         await capture(`exposure-${locale}-${theme}`, 1280, 800)
       }
     await show('vi', 'dark')
@@ -321,11 +331,11 @@ app.whenReady().then(async () => {
     dropPost = true
     await click(copy.vi.check)
     await wait(`document.body.textContent.includes(${JSON.stringify(copy.vi.unknown)})`)
-    assert.equal(posts, 2)
+    assert.equal(posts, 3)
     await capture('exposure-unknown', 1280, 800)
     await click(copy.vi.read)
     await wait(`document.body.textContent.includes(${JSON.stringify(copy.vi.reachable)})`)
-    assert.equal(posts, 2)
+    assert.equal(posts, 3)
     checks.push('unknown_write_explicit_read_without_second_post')
     oldServer = true
     await click(copy.vi.read)

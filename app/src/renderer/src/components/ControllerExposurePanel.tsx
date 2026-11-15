@@ -75,6 +75,8 @@ export function ControllerExposurePanel({
     }
   }, [load, invalidate])
   const observation = value?.view?.observation,
+    sourceState = value?.view?.source_state,
+    pending = sourceState?.relation === 'pending',
     age = observation ? now - Date.parse(observation.checked_at) : Infinity,
     recent =
       fresh &&
@@ -135,6 +137,20 @@ export function ControllerExposurePanel({
         </Button>
       </Space>
       <Typography.Paragraph type="secondary">{t.hint}</Typography.Paragraph>
+      {pending && (
+        <Alert
+          type="warning"
+          showIcon
+          message={t.pending}
+          description={
+            <Space wrap>
+              <span>
+                {t.active}: #{currentDeploymentId}
+              </span>
+            </Space>
+          }
+        />
+      )}
       {message && <Alert type={failed ? 'error' : 'info'} showIcon message={message} />}
       {!binding.scopes.includes('policy:write') && (
         <Typography.Paragraph type="secondary">{t.denied}</Typography.Paragraph>
@@ -144,7 +160,11 @@ export function ControllerExposurePanel({
           size="small"
           column={1}
           items={[
-            { key: 'deployment', label: t.deployment, children: `#${observation.deployment_id}` },
+            {
+              key: 'deployment',
+              label: pending ? t.active : t.deployment,
+              children: `#${observation.deployment_id}`
+            },
             {
               key: 'checked',
               label: t.checked,

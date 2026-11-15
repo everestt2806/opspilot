@@ -129,6 +129,23 @@ it('expires the green status without a new request', async () => {
   expect(screen.getByText(CONTROLLER_EXPOSURE_COPY.vi.stale)).toBeTruthy()
   expect(invoke).toHaveBeenCalledOnce()
 })
+it.each(['vi', 'en', 'jp', 'cn'] as const)(
+  'distinguishes active access from pending configuration in %s and still expires evidence',
+  async (locale) => {
+    useUiState.setState({ locale })
+    result.view!.source_state = { active_generation: 2, desired_generation: 3, relation: 'pending' }
+    await show()
+    const t = CONTROLLER_EXPOSURE_COPY[locale]
+    expect(screen.getByText(t.reachable)).toBeTruthy()
+    expect(screen.getByText(t.pending)).toBeTruthy()
+    expect(screen.getByText(t.active + ': #1')).toBeTruthy()
+    await act(async () => {
+      vi.advanceTimersByTime(61_000)
+    })
+    expect(screen.queryByText(t.reachable)).toBeNull()
+    expect(screen.getByText(t.pending)).toBeTruthy()
+  }
+)
 it('shows an old controller as unsupported and never substitutes a deploy action', async () => {
   result = { ...result, state: 'unavailable', reason_code: 'UNSUPPORTED', view: null }
   await show()

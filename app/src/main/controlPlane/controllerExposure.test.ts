@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,6 +7,7 @@ import { initializeDatabase, closeDatabase } from '../db'
 import { ControllerExposure } from './controllerExposure'
 import { ControllerClientAuth } from './controllerClientAuth'
 import { seedExposureFixture } from '../../../scripts/controller-exposure-lab/fixture'
+import { exposureViewSchema } from './controllerExposureSchemas'
 import type {
   ProductExposureContext,
   ProductExposureObservationInput
@@ -20,6 +21,7 @@ let db: ReturnType<typeof initializeDatabase>,
   controller: string,
   now: number,
   ready: boolean,
+  selectEnvironment: (revision: number) => void,
   settle: () => void
 const issue = (scopes = ['read', 'policy:write']): string => {
   const result = auth.enroll({
@@ -38,6 +40,7 @@ beforeEach(() => {
   const fixture = seedExposureFixture(db, now)
   controller = fixture.controllerId
   settle = fixture.settle
+  selectEnvironment = fixture.selectEnvironment
   auth = new ControllerClientAuth(db, controller, 'unix:1000', () => now)
   header = issue()
   repository = new ControllerExposure(
@@ -216,4 +219,137 @@ it('does not accept legacy/corrupt evidence as verified current state and refuse
   )
   expect(db.inTransaction).toBe(true)
   db.exec('ROLLBACK')
+})
+it('observes the settled active source after env selection, distinguishes desired state and retains both-source CAS', () => {
+  const current = prepare(),
+    before = db.prepare('SELECT * FROM product_runtime_terminal').all()
+  selectEnvironment(1)
+  const view = repository.read(header, 1)
+  expect(view).toMatchObject({
+    source_state: { active_generation: 1, desired_generation: 2, relation: 'pending' },
+    deployment_id: 1,
+    status: 'not_checked',
+    unavailable_reason: null
+  })
+  expect(view.context).not.toBeNull()
+  expect(() => repository.record(header, randomUUID(), 1, input(current))).toThrow(
+    'EXPOSURE_CONTEXT_CHANGED'
+  )
+  const stored = repository.record(header, randomUUID(), 1, input(view.context!))
+  expect(stored.status).toBe('reachable')
+  expect(exposureViewSchema.safeParse(stored).success).toBe(true)
+  expect(JSON.stringify(stored)).not.toContain('SYNTHETIC_EXPOSURE_ONLY')
+  selectEnvironment(2)
+  const changed = repository.read(header, 1)
+  expect(changed).toMatchObject({
+    source_state: { active_generation: 1, desired_generation: 3, relation: 'pending' },
+    status: 'not_checked',
+    observation: null
+  })
+  expect(() => repository.record(header, randomUUID(), 1, input(stored.context!))).toThrow(
+    'EXPOSURE_CONTEXT_CHANGED'
+  )
+  expect(repository.record(header, randomUUID(), 1, input(changed.context!)).status).toBe(
+    'reachable'
+  )
+  expect(db.prepare('SELECT * FROM product_runtime_terminal').all()).toEqual(before)
+  expect(db.prepare('SELECT current_deployment_id FROM app').get()).toEqual({
+    current_deployment_id: 1
+  })
+  expect(db.prepare('SELECT COUNT(*) n FROM product_deploy_job').get()).toEqual({ n: 1 })
+  now += 60001
+  expect(repository.read(header, 1)).toMatchObject({ freshness: 'stale', status: 'not_checked' })
+})
+it.each([
+  "UPDATE product_source_config SET repository_url='https://github.com/example/changed.git' WHERE source_generation=2",
+  "UPDATE product_source_config SET production_ref='other' WHERE source_generation=2",
+  "UPDATE product_source_config SET repository_root='subdir' WHERE source_generation=2",
+  "UPDATE product_source_config SET deploy_config_json='{}' WHERE source_generation=2",
+  "UPDATE product_source_config SET deploy_config_json='{}' WHERE source_generation=1",
+  'UPDATE vps SET ssh_security_revision=2',
+  'UPDATE product_app_control SET ownership_generation=2',
+  "UPDATE product_deploy_job SET target_sha='cccccccccccccccccccccccccccccccccccccccc'",
+  'UPDATE product_deploy_job SET source_generation=2,source_config_sha256=(SELECT config_sha256 FROM product_source_config WHERE source_generation=2)',
+  "UPDATE product_runtime_execution SET context_json='{}'",
+  'UPDATE product_app_lease SET released_at=NULL',
+  'UPDATE product_worker_lease SET released_at=NULL',
+  "UPDATE product_deploy_attempt SET remote_outcome='unknown'",
+  'UPDATE product_runtime_terminal SET leases_released_at=NULL',
+  'UPDATE app SET container_port=4000',
+  "UPDATE app SET git_ref='other'"
+])('fails closed on pending-source authority drift: %s', (sql) => {
+  prepare()
+  selectEnvironment(1)
+  const context = repository.read(header, 1).context!
+  expect(context).not.toBeNull()
+  db.exec(sql)
+  expect(repository.read(header, 1).context).toBeNull()
+  expect(() => repository.record(header, randomUUID(), 1, input(context))).toThrow(
+    'EXPOSURE_CONTEXT_CHANGED'
+  )
+  expect(raw()).toMatchObject({ exposure_evidence_json: null })
+})
+it('rejects an internally rehashed plan change and malformed source-state metadata', () => {
+  prepare()
+  selectEnvironment(1)
+  const stored = db
+    .prepare('SELECT deploy_config_json FROM product_source_config WHERE source_generation=2')
+    .get() as { deploy_config_json: string }
+  const config = JSON.parse(stored.deploy_config_json)
+  config.container_port = 4000
+  const json = JSON.stringify(config),
+    hash = createHash('sha256').update(json).digest('hex')
+  db.prepare(
+    'INSERT INTO product_source_config SELECT app_id,3,repository_url,production_ref,repository_root,?,?,created_at FROM product_source_config WHERE source_generation=2'
+  ).run(json, hash)
+  db.prepare('UPDATE product_app_control SET source_generation=3,source_config_sha256=?').run(hash)
+  expect(repository.read(header, 1).context).toBeNull()
+  const base = {
+    ...repositoryShape(),
+    source_state: { active_generation: 2, desired_generation: 1, relation: 'pending' }
+  }
+  expect(exposureViewSchema.safeParse(base).success).toBe(false)
+})
+function repositoryShape(): Record<string, unknown> {
+  return {
+    app_id: 1,
+    deployment_id: 1,
+    context: null,
+    status: 'not_checked',
+    freshness: 'not_checked',
+    unavailable_reason: 'authority_changed',
+    observation: null
+  }
+}
+it('rejects a copied desired source without its immutable environment-selection binding', () => {
+  prepare()
+  selectEnvironment(1)
+  db.exec(`INSERT INTO product_source_config SELECT app_id,3,repository_url,production_ref,repository_root,
+    deploy_config_json,config_sha256,created_at FROM product_source_config WHERE source_generation=2;
+    UPDATE product_app_control SET source_generation=3`)
+  expect(repository.read(header, 1)).toMatchObject({
+    context: null,
+    unavailable_reason: 'authority_changed'
+  })
+})
+it('parses old exposure responses and rejects a false or unattested source-state claim', () => {
+  prepare()
+  const view = repository.read(header, 1)
+  expect(exposureViewSchema.safeParse(view).success).toBe(true)
+  const legacy = { ...view }
+  delete legacy.source_state
+  expect(exposureViewSchema.safeParse(legacy).success).toBe(true)
+  for (const source_state of [
+    { active_generation: 1, desired_generation: 1, relation: 'pending' },
+    { active_generation: 1, desired_generation: 2, relation: 'current' },
+    { active_generation: 2, desired_generation: 1, relation: 'pending' },
+    { active_generation: 1, desired_generation: 2, relation: 'pending', secret: 'injected' }
+  ])
+    expect(exposureViewSchema.safeParse({ ...view, source_state }).success).toBe(false)
+  expect(
+    exposureViewSchema.safeParse({
+      ...repositoryShape(),
+      source_state: { active_generation: 1, desired_generation: 2, relation: 'pending' }
+    }).success
+  ).toBe(false)
 })

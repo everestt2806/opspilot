@@ -30,6 +30,13 @@ export interface ProductExposureObservation extends ProductExposureObservationIn
   received_at: string
 }
 export interface ProductExposureView {
+  /** Optional cho controller cũ. Reachability chỉ của deployment_id active;
+   * pending nghĩa desired source mới chưa chạy, không chứng minh deploy mới khỏe. */
+  source_state?: {
+    active_generation: number
+    desired_generation: number
+    relation: 'current' | 'pending'
+  }
   app_id: number
   deployment_id: number | null
   context: ProductExposureContext | null
@@ -43,6 +50,13 @@ export interface ProductExposureView {
  * POST same route: policy:write scope, Idempotency-Key UUID and observation body.
  * Main derives URL from GET context; renderer never supplies URL/evidence/secret.
  * Server checks current owner/source/target SSH revision/deployment/settlement and
+ * binds observation authority to active AND desired source. A settled successful
+ * active deployment may retain an older source only for proven environment-only
+ * changes: canonical hashes/repo/ref/root/base plan match, current app settings
+ * match, immutable selected env/revision bindings use the same owner/target.
+ * Missing or changed proof fails closed; never adopt repository/plan/target drift.
+ * Optional source_state describes generations, never env values. Old responses
+ * without source_state remain readable; new controller requires compatible Main.
  * previous-observation CAS in IMMEDIATE tx after body read; authenticates client
  * again. Exact latest-ID/body replay is readonly. Superseded ID/body or changed
  * authority rejects. Freshness30s, display TTL60s, future-clock tolerance5s.

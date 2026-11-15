@@ -45,6 +45,8 @@ const {
   ProductEnvironmentRepository,
   ProductEnvironmentSelection,
   ProductEnvironmentRuntime,
+  ControllerExposure,
+  ControllerClientAuth,
   canonicalH2Json
 } = createRequire(artifact)(artifact)
 const repo = resolve(import.meta.dirname, '../../..')
@@ -133,7 +135,7 @@ const deadline = setTimeout(
   (process.argv.includes('--public-git-checkpoint-gate') ? 25 : 12) * 60000
 )
 const port = await reservePort()
-const hostPort = await reservePort()
+const hostPort = environmentEnabled ? await reserveProductPort() : await reservePort()
 try {
   docker('info', '--format', '{{.ServerVersion}}')
   assert.equal(docker('ps', '-aq', '--filter', `name=^/${appName}-`), '')
@@ -201,7 +203,8 @@ try {
     .run(appName, port, pin)
   database.prepare('INSERT INTO product_controller VALUES (?,?,?)').run(controller, now, 'active')
   for (const [appId, name] of appNames) {
-    const appPort = appId === 1 ? hostPort : await reservePort()
+    const appPort =
+      appId === 1 ? hostPort : environmentEnabled ? await reserveProductPort() : await reservePort()
     const initialConfig = environmentEnabled
       ? canonicalH2Json({
           framework,
@@ -686,6 +689,7 @@ try {
       leases_retained: true
     })
   } else {
+    if (environmentEnabled) selectEnvironment(1, 3)
     const unhealthy = await deploy('unhealthy_rollback', 503)
     assert.equal(unhealthy.result.state, 'rolled_back')
     assert.equal(inspect('container', `${appName}-app`).Id, current.Id)
@@ -715,6 +719,61 @@ try {
         revision: 2,
         exact_container: true,
         exact_collector: true
+      })
+      const auth = new ControllerClientAuth(database, controller, 'unix:0'),
+        grant = auth.enroll({
+          request_key: randomUUID(),
+          display_name: 'Private active exposure gate',
+          requested_scopes: ['read', 'policy:write']
+        })
+      assert.equal(grant.state, 'issued_once')
+      const authorization = 'Bearer ' + grant.credential.access_token,
+        exposure = new ControllerExposure(database, controller, () => true),
+        before = exposure.read(authorization, 1)
+      assert.deepEqual(before.source_state, {
+        active_generation: 3,
+        desired_generation: 4,
+        relation: 'pending'
+      })
+      assert.equal(before.deployment_id, second.result.deployment_id)
+      assert(before.context)
+      assert.equal(
+        (await fetch(`http://127.0.0.1:${hostPort}${framework === 'express' ? '/health' : '/'}`))
+          .status,
+        200
+      )
+      const terminalBefore = database.prepare('SELECT * FROM product_runtime_terminal').all(),
+        started = new Date().toISOString(),
+        recorded = exposure.record(authorization, randomUUID(), 1, {
+          deployment_id: before.context.deployment_id,
+          authority_sha256: before.context.authority_sha256,
+          previous_observation_id: before.context.previous_observation_id,
+          observer: 'desktop_external',
+          started_at: started,
+          checked_at: new Date().toISOString(),
+          outcome: 'reachable',
+          http_status: 200,
+          reason: 'none'
+        })
+      assert.equal(recorded.status, 'reachable')
+      assert.deepEqual(recorded.source_state, before.source_state)
+      assert.deepEqual(
+        database.prepare('SELECT * FROM product_runtime_terminal').all(),
+        terminalBefore
+      )
+      assert.equal(inspect('container', `${appName}-app`).Id, current.Id)
+      assert.equal(inspect('container', `${appName}-collector`).Id, collector.Id)
+      verifyEnvironment(2)
+      auth.revoke({ request_key: randomUUID(), client_id: grant.client.client_id })
+      record('environment_active_exposure_after_desired3_health_rollback', {
+        active_source: 3,
+        desired_source: 4,
+        current_deployment_id: second.result.deployment_id,
+        exposure_status: 'reachable',
+        exact_CIDs_and_env2: true,
+        signed_terminal_unchanged: true,
+        probe_scope: 'LOCAL_LOOPBACK_DOCKER',
+        independent_desktop_probe: false
       })
     }
     const firstBuildFailure = await deploy('first_build_failure', 200, true, undefined, 2)
@@ -945,4 +1004,17 @@ function reservePort() {
       server.close((error) => (error ? reject(error) : resolvePort(address.port)))
     })
   })
+}
+async function reserveProductPort() {
+  const start = randomBytes(2).readUInt16BE() % 1000
+  for (let offset = 0; offset < 1000; offset++) {
+    const port = 30000 + ((start + offset) % 1000)
+    const available = await new Promise((done) => {
+      const server = net.createServer()
+      server.once('error', () => done(false))
+      server.listen(port, '127.0.0.1', () => server.close(() => done(true)))
+    })
+    if (available) return port
+  }
+  throw Error('PRODUCT_LAB_PORT_RANGE_UNAVAILABLE')
 }

@@ -1,5 +1,20 @@
 # Product runtime integration lab (R1)
 
+## R7h-3d3c — Active exposure sau env rollback
+
+`run.mjs --environment` (cùng `--spa` hoặc `--nextjs`) chọn env3 trước health-failure
+attempt. Khi rollback, active source3/env2 phải giữ đúng app/collector CID và literal
+values, desired source4/env3 còn pending. ControllerExposure dùng auth riêng để ghi
+observation theo active proof + cả hai source CAS; không sửa signed H2 terminal hoặc
+thực thi config mới. Gate trả metadata active3/desired4, reachable và pending;
+client lab bị revoke, namespace Docker/SSH dọn như cũ.
+
+Probe trong gate Docker là loopback local và không chứng minh observer desktop độc
+lập. Gate HTTP/SQLite và Electron nằm ở `controller-exposure-lab`: Main/public HTTP
+thật nhưng SSH/runtime là fixture. Trình bày đúng phạm vi từng proof. Env lab cấp
+port app trong30000–30999; không bỏ production port policy để hợp thức port ngẫu nhiên.
+Controller trên VPS phải được rollout bằng candidate/upgrade gate riêng mới có code này.
+
 ## R7h-3d3a — Source đã chọn environment
 
 `environment-target-capability.mjs --confirm-local-environment-target-capability

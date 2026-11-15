@@ -19,6 +19,9 @@ export const CONTROLLER_EXPOSURE_COPY = {
     failed: 'Không tải được kết quả. Kiểm tra kết nối controller rồi thử lại.',
     checked: 'Lần đo gần nhất',
     deployment: 'Bản triển khai',
+    active: 'Bản đang chạy',
+    pending:
+      'Ứng dụng vẫn dùng cấu hình trước. Kết quả truy cập chỉ phản ánh bản đang chạy; cấu hình mới chưa được xác nhận chạy thành công.',
     scope: 'Kết quả phản ánh đường mạng từ máy tính thực hiện phép đo tại thời điểm ghi nhận.',
     unsafe: 'Địa chỉ đích chưa đủ điều kiện kiểm tra qua mạng công khai.',
     timeout: 'Hết thời gian chờ',
@@ -47,6 +50,9 @@ export const CONTROLLER_EXPOSURE_COPY = {
     failed: 'Could not read the result. Check the controller connection and try again.',
     checked: 'Last observation',
     deployment: 'Deployment',
+    active: 'Running deployment',
+    pending:
+      'The app still uses its previous configuration. Access results describe the running deployment; the new configuration has not been confirmed running successfully.',
     scope:
       'This reflects the network path from the computer that performed the check at the time shown.',
     unsafe: 'The target is not eligible for a public network check.',
@@ -73,6 +79,9 @@ export const CONTROLLER_EXPOSURE_COPY = {
     failed: '結果を取得できません。接続を確認して再試行してください。',
     checked: '最終確認',
     deployment: 'デプロイ',
+    active: '実行中のデプロイ',
+    pending:
+      'アプリは以前の設定で実行中です。アクセス結果は実行中のデプロイのみを示し、新しい設定での正常実行はまだ確認されていません。',
     scope: '確認を実行したパソコンから、表示時刻に確認した接続状況です。',
     unsafe: 'この接続先は公開ネットワーク確認の対象にできません。',
     timeout: 'タイムアウト',
@@ -98,6 +107,8 @@ export const CONTROLLER_EXPOSURE_COPY = {
     failed: '无法读取结果。请检查控制器连接后重试。',
     checked: '最近检查',
     deployment: '部署',
+    active: '正在运行的部署',
+    pending: '应用仍使用之前的配置。访问结果仅反映正在运行的部署，新配置尚未确认成功运行。',
     scope: '结果反映执行检查的电脑在所示时间到应用的网络情况。',
     unsafe: '目标地址不符合公网检查条件。',
     timeout: '请求超时',
