@@ -19,8 +19,13 @@ import {
 import { dirname, join, resolve } from 'node:path'
 import net from 'node:net'
 
+const verifyPublicSource = process.argv.includes('--verify-public-source')
 if (
-  process.argv.slice(2).join(' ') !== '--confirm-local-environment-target-capability' ||
+  process.argv
+    .slice(2)
+    .filter((arg) => arg !== '--verify-public-source')
+    .join(' ') !== '--confirm-local-environment-target-capability' ||
+  process.argv.filter((arg) => arg === '--verify-public-source').length > 1 ||
   process.platform !== 'linux' ||
   process.getuid() !== 0 ||
   !process.version.startsWith('v22.')
@@ -50,6 +55,7 @@ const result = {
   production_database_used: false,
   docker_info_only: true,
   docker_deployment_tested: false,
+  public_git_source_verified: false,
   cleanup: false
 }
 const run = (binary, args, options = {}) =>
@@ -248,12 +254,24 @@ try {
       hash = sha(config),
       stamp = new Date().toISOString()
     assert(!existsSync('/opt/opspilot/' + name))
+    const repository =
+        verifyPublicSource && index === 4
+          ? 'https://github.com/everestt2806/opspilot.git'
+          : 'https://github.com/example/fixture.git',
+      ref = verifyPublicSource && index === 4 ? 'feat/release-audit-20261204' : 'main',
+      repositoryRoot = verifyPublicSource && index === 4 ? 'demo-apps/san-nha-booking' : '.'
     db.prepare(
-      "INSERT INTO app(id,vps_id,name,framework,host_port,container_port,healthcheck_path,source_type,git_repo_url,git_ref,git_root) VALUES(?,1,?,?,?,?,?,'git','https://github.com/example/fixture.git','main','.')"
-    ).run(index, name, framework, hostPort, containerPort, path)
-    db.prepare(
-      "INSERT INTO product_source_config VALUES(?,1,'https://github.com/example/fixture.git','main','.',?,?,?)"
-    ).run(index, config, hash, stamp)
+      "INSERT INTO app(id,vps_id,name,framework,host_port,container_port,healthcheck_path,source_type,git_repo_url,git_ref,git_root) VALUES(?,1,?,?,?,?,?,'git',?,?,?)"
+    ).run(index, name, framework, hostPort, containerPort, path, repository, ref, repositoryRoot)
+    db.prepare('INSERT INTO product_source_config VALUES(?,1,?,?,?,?,?,?)').run(
+      index,
+      repository,
+      ref,
+      repositoryRoot,
+      config,
+      hash,
+      stamp
+    )
     db.prepare(
       "INSERT INTO product_app_control(app_id,mode,controller_id,ownership_generation,source_generation,source_config_sha256,auto_deploy_paused,pause_reason,pause_policy_provenance,changed_at) VALUES(?,'product',?,1,1,?,1,'operator','explicit',?)"
     ).run(index, controller, hash, stamp)
@@ -377,6 +395,26 @@ try {
           .source_generation,
         2
       )
+      if (verifyPublicSource) {
+        const verified = cli(currentCli, 'verify-project-source', {
+          ...row.context,
+          expected_source_generation: selected.data.source_generation,
+          expected_source_config_sha256: selected.data.source_config_sha256,
+          artifact: currentCli,
+          manifest_sha256: currentBundle.manifest_sha256
+        })
+        assert.equal(verified.ok, true)
+        assert.equal(verified.data.state, 'source_verified')
+        assert.equal(verified.data.source_generation, 2)
+        assert.equal(verified.data.deployment_started, false)
+        assert.match(verified.data.commit_sha, /^[a-f0-9]{40}$/)
+        assert(!JSON.stringify(verified).includes('SYNTHETIC_NATIVE_CAPABILITY_ONLY'))
+        result.public_git_source_verified = true
+        result.source_commit_sha = verified.data.commit_sha
+        check(
+          'production_CLI_selected_env_source_verification_real_public_Git_without_execution_or_values'
+        )
+      }
     }
   }
   assert.equal(db.prepare('SELECT count(*) n FROM product_source_environment').get().n, 1)

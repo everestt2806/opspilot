@@ -36,6 +36,7 @@ import {
 import { resolveCollectorDir, resolveCollectorAppPath } from '../deploy/pipeline'
 import type { PreparedProductGitSnapshot } from './productSnapshotPreparation'
 import { GuardedSshExecutionSession, openProductGuardedSshSession } from './guardedSshSession'
+import { ProductEnvironmentPreflight } from './productEnvironmentPreflight'
 
 type TransferFile = {
   path: string
@@ -120,6 +121,47 @@ export function validateProductSourceAndPlan(
   collectorDirectory = resolveCollectorDir(),
   templatesDirectory?: string,
   configuration?: ResolvedProductEnvironment | null
+): ReturnType<typeof validateSourceAndPlan> {
+  return validateSourceAndPlan(
+    database,
+    appId,
+    rootDirectory,
+    collectorDirectory,
+    templatesDirectory,
+    configuration
+  )
+}
+
+/** Kiểm tra nguồn bằng metadata; không tạo runtime env-file hoặc execution capability. */
+export function validateProductSourceForReview(
+  database: Database.Database,
+  appId: number,
+  rootDirectory: string,
+  collectorDirectory: string,
+  templatesDirectory: string,
+  metadata: ProductEnvironmentPreflight | null
+): ReturnType<typeof validateSourceAndPlan> {
+  if (metadata && !(metadata instanceof ProductEnvironmentPreflight))
+    throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
+  return validateSourceAndPlan(
+    database,
+    appId,
+    rootDirectory,
+    collectorDirectory,
+    templatesDirectory,
+    null,
+    metadata
+  )
+}
+
+function validateSourceAndPlan(
+  database: Database.Database,
+  appId: number,
+  rootDirectory: string,
+  collectorDirectory: string,
+  templatesDirectory?: string,
+  configuration?: ResolvedProductEnvironment | null,
+  review?: ProductEnvironmentPreflight | null
 ): {
   app: App
   plan: BuildPlan
@@ -146,13 +188,13 @@ export function validateProductSourceAndPlan(
       typeof config !== 'object' ||
       Array.isArray(config) ||
       (Object.hasOwn(config, 'environment') &&
-        (!configuration ||
-          configuration.claim.app_id !== appId ||
-          configuration.claim.source_config_sha256 !==
+        ((!configuration && !review) ||
+          (configuration?.claim.app_id ?? review?.appId) !== appId ||
+          (configuration?.claim.source_config_sha256 ?? review?.sourceHash) !==
             createHash('sha256').update(canonicalH2Json(config)).digest('hex') ||
           canonicalH2Json((config as Record<string, unknown>).environment) !==
-            canonicalH2Json(configuration.reference))) ||
-      (!Object.hasOwn(config, 'environment') && !!configuration)
+            canonicalH2Json(configuration?.reference ?? review?.reference))) ||
+      (!Object.hasOwn(config, 'environment') && (!!configuration || !!review))
     )
       throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
   }
@@ -169,17 +211,22 @@ export function validateProductSourceAndPlan(
     detection.plan.requiredEnv.some(
       (name) =>
         !(app.framework === 'nextjs' && name === 'NODE_ENV') &&
-        (!configuration ||
-          (!Object.hasOwn(configuration.values.runtime_env, name) &&
-            !Object.hasOwn(configuration.values.public_build_args, name)))
+        ((!configuration && !review) ||
+          !(configuration
+            ? Object.hasOwn(configuration.values.runtime_env, name) ||
+              Object.hasOwn(configuration.values.public_build_args, name)
+            : review!.metadata.runtime_keys.includes(name) ||
+              review!.metadata.public_build_keys.includes(name)))
     ) ||
-    (configuration &&
-      (configuration.framework !== app.framework ||
-        Object.keys(detection.plan.buildArgs).some(
-          (name) => !Object.hasOwn(configuration.values.public_build_args, name)
+    ((configuration || review) &&
+      ((configuration?.framework ?? review?.metadata.framework) !== app.framework ||
+        Object.keys(detection.plan.buildArgs).some((name) =>
+          configuration
+            ? !Object.hasOwn(configuration.values.public_build_args, name)
+            : !review!.metadata.public_build_keys.includes(name)
         ))) ||
     (app.framework === 'nextjs' &&
-      ((!configuration && Object.keys(detection.plan.buildArgs).length > 0) ||
+      ((!configuration && !review && Object.keys(detection.plan.buildArgs).length > 0) ||
         resolveNextStart(sourceTree).entry !== undefined))
   ) {
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
@@ -200,7 +247,8 @@ export function validateProductSourceAndPlan(
   const renderManifest = prepareManifest(renderFiles)
   if (
     sourceFiles.length + renderFiles.length > GUARDED_SSH_TRANSFER_MAX_FILES ||
-    sourceManifest.totalBytes + renderManifest.totalBytes > GUARDED_SSH_TRANSFER_MAX_TOTAL_BYTES
+    sourceManifest.totalBytes + renderManifest.totalBytes + (review ? 160 * 1024 : 0) >
+      GUARDED_SSH_TRANSFER_MAX_TOTAL_BYTES
   )
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_LIMIT_EXCEEDED')
   return { app, plan: detection.plan, sourceTree, sourceFiles, sourceManifest }

@@ -20,6 +20,7 @@ import { canonicalH2Json } from './productH2Proof'
 import { projectSourceVerificationResultSchema } from './projectSourceVerification'
 import { projectTargetStateSchema } from './projectTarget'
 import { productTargetRootSchema } from './targetEnrollment'
+import { environmentReviewSchema } from './productEnvironment'
 
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   uuid = z.uuid().transform((value) => value.toLowerCase())
@@ -48,6 +49,14 @@ const rowSchema = z.strictObject({
   updated_at: z.iso.datetime()
 })
 type Row = z.output<typeof rowSchema>
+export type DesktopProjectCurrentContext = Omit<
+  ReturnType<DesktopProjectSetups['registeredContext']>,
+  'registration'
+> & {
+  registration: Omit<z.output<typeof projectRegistrationResultSchema>, 'source_generation'> & {
+    source_generation: number
+  }
+}
 const sha = (value: string): string => createHash('sha256').update(value).digest('hex')
 export class DesktopProjectSetupError extends Error {
   constructor(
@@ -77,6 +86,7 @@ export class DesktopProjectSetups {
       | 'verifyProjectSource'
       | 'projectTargetState'
       | 'enrollProjectTarget'
+      | 'environmentReview'
     >
   ) {}
   registeredContext(key: string): {
@@ -105,6 +115,64 @@ export class DesktopProjectSetups {
   async targetState(key: string): Promise<DesktopProjectTargetState> {
     return this.targetOperation(key)
   }
+  /** Receipt gốc bất biến. Chỉ derive source đã chọn qua journal env của Main này. */
+  async currentContext(key: string): Promise<DesktopProjectCurrentContext> {
+    const basis = this.registeredContext(key)
+    // Chưa thao tác env: giữ đường cũ cho retained helper; remote drift vẫn bị source CAS từ chối.
+    if (
+      !this.db
+        .prepare(
+          'SELECT 1 FROM desktop_environment_selection WHERE controller_id=? AND app_id=? LIMIT 1'
+        )
+        .get(basis.setup.controller_id, basis.registration.app_id)
+    )
+      return basis
+    const s = basis.setup,
+      r = basis.registration
+    const review = environmentReviewSchema.parse(
+      await this.admin.environmentReview(s.binding_id, {
+        format: 1,
+        controller_id: s.controller_id,
+        app_id: r.app_id,
+        expected_ownership_generation: r.ownership_generation,
+        expected_source_generation: r.source_generation,
+        expected_source_config_sha256: r.source_config_sha256,
+        expected_target_security_revision: s.target_security_revision
+      })
+    )
+    if (
+      canonicalH2Json(this.registeredContext(key)) !== canonicalH2Json(basis) ||
+      review.scope.controller_id !== s.controller_id ||
+      review.scope.app_id !== r.app_id ||
+      review.scope.ownership_generation !== r.ownership_generation ||
+      review.scope.target.vps_id !== s.target_vps_id ||
+      review.scope.target.ssh_security_revision !== s.target_security_revision ||
+      review.source_generation < r.source_generation ||
+      review.request_key !== null ||
+      review.requested !== null ||
+      [review.latest, review.selected].some(
+        (metadata) =>
+          metadata &&
+          (metadata.controller_id !== s.controller_id ||
+            metadata.app_id !== r.app_id ||
+            metadata.ownership_generation !== r.ownership_generation ||
+            metadata.framework !== s.framework)
+      ) ||
+      (review.selected !== null && review.selected.revision > (review.latest?.revision ?? 0)) ||
+      (review.source_generation === r.source_generation &&
+        review.source_config_sha256 !== r.source_config_sha256) ||
+      (review.source_generation > r.source_generation && !review.selected)
+    )
+      throw new DesktopProjectSetupError('PROJECT_SETUP_CONFLICT')
+    return {
+      ...basis,
+      registration: {
+        ...r,
+        source_generation: review.source_generation,
+        source_config_sha256: review.source_config_sha256
+      }
+    }
+  }
   async enrollTarget(input: DesktopProjectTargetInput): Promise<DesktopProjectTargetState> {
     const parsed = z
       .strictObject({ request_key: uuid, target_root: productTargetRootSchema })
@@ -120,7 +188,8 @@ export class DesktopProjectSetups {
     if (this.busy.has(row.request_key)) throw new DesktopProjectSetupError('PROJECT_SETUP_BUSY')
     this.busy.add(row.request_key)
     try {
-      const registration = projectRegistrationResultSchema.parse(JSON.parse(row.result_json!))
+      const context = await this.currentContext(key)
+      const registration = context.registration
       const request = {
         format: 1 as const,
         controller_id: row.controller_id,
@@ -135,6 +204,8 @@ export class DesktopProjectSetups {
           ? await this.admin.projectTargetState(row.binding_id, request)
           : await this.admin.enrollProjectTarget(row.binding_id, { ...request, target_root: root })
       )
+      if (canonicalH2Json(await this.currentContext(key)) !== canonicalH2Json(context))
+        throw new DesktopProjectSetupError('PROJECT_SETUP_CONFLICT')
       this.authorize(row.binding_id, before.revision, before.controllerId)
       if (this.db.inTransaction) throw new DesktopProjectSetupError('PROJECT_REQUEST_INVALID')
       const current = this.row(key)
@@ -178,7 +249,8 @@ export class DesktopProjectSetups {
     if (this.busy.has(row.request_key)) throw new DesktopProjectSetupError('PROJECT_SETUP_BUSY')
     this.busy.add(row.request_key)
     try {
-      const registration = projectRegistrationResultSchema.parse(JSON.parse(row.result_json!))
+      const context = await this.currentContext(key)
+      const registration = context.registration
       const parsed = projectSourceVerificationResultSchema.safeParse(
         await this.admin.verifyProjectSource(row.binding_id, {
           format: 1,
@@ -190,6 +262,8 @@ export class DesktopProjectSetups {
           expected_target_security_revision: row.target_security_revision
         })
       )
+      if (canonicalH2Json(await this.currentContext(key)) !== canonicalH2Json(context))
+        throw new DesktopProjectSetupError('PROJECT_SETUP_CONFLICT')
       this.authorize(row.binding_id, before.revision, before.controllerId)
       if (this.db.inTransaction) throw new DesktopProjectSetupError('PROJECT_REQUEST_INVALID')
       const current = this.row(key)

@@ -9,12 +9,17 @@ import { ProductDeployRepository } from '../db/productDeployRepository'
 import { canonicalizeGitHubUrl, createGitSnapshot, validateRef } from '../git/snapshot'
 import { canonicalH2Json } from './productH2Proof'
 import {
-  validateProductSourceAndPlan,
+  validateProductSourceForReview,
   ProductSourceRenderError
 } from './productPipelineSourceRender'
 import { TargetEnrollmentRepository } from './targetEnrollmentRepository'
 import { verifyControllerBundle } from './controllerBundle'
 import { projectRegistrationInputSchema } from './projectRegistration'
+import type { AesGcmCredentialCipher } from '../crypto/credentialCipher'
+import {
+  ProductEnvironmentPreflight,
+  productEnvironmentReferenceSchema
+} from './productEnvironmentPreflight'
 
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
 export const projectSourceVerificationInputSchema = z.strictObject({
@@ -111,6 +116,7 @@ export async function verifyProductProjectSource(
   input: unknown,
   options: {
     signal?: AbortSignal
+    cipher?: AesGcmCredentialCipher
   } = {}
 ): Promise<ProductProjectSourceVerificationResult> {
   const parsed = projectSourceVerificationInputSchema.safeParse(input)
@@ -151,15 +157,19 @@ export async function verifyProductProjectSource(
     )
       throw new ProjectSourceVerificationError('PROJECT_SOURCE_FETCH_FAILED')
     // Source hỏng/không hỗ trợ phải bị loại trước observation và trước bất kỳ target I/O.
-    let preflight: ReturnType<typeof validateProductSourceAndPlan>
+    if (db.inTransaction) throw new ProjectSourceVerificationError('PROJECT_SOURCE_REQUEST_INVALID')
+    readProjectSourceAuthority(db, request)
+    let preflight: ReturnType<typeof validateProductSourceForReview>
     try {
       verifyControllerBundle(request.artifact, request.manifest_sha256)
-      preflight = validateProductSourceAndPlan(
+      const metadata = ProductEnvironmentPreflight.review(db, request, options.cipher)
+      preflight = validateProductSourceForReview(
         db,
         request.app_id,
         snapshot.rootDirectory,
         bundle.collector_directory,
-        bundle.templates_directory
+        bundle.templates_directory,
+        metadata
       )
     } catch (error) {
       if (error instanceof ProductSourceRenderError)
@@ -322,12 +332,23 @@ export function readProjectSourceAuthority(
           source.repository_root.split('/').some((part) => ['.', '..', '.git'].includes(part))))
     )
       throw new Error()
+    const stored = JSON.parse(source.deploy_config_json)
+    const environment = Object.hasOwn(stored, 'environment')
+      ? productEnvironmentReferenceSchema.parse(stored.environment)
+      : undefined
+    if (
+      environment &&
+      (environment.controller_id !== request.controller_id ||
+        environment.ownership_generation !== request.expected_ownership_generation)
+    )
+      throw new Error()
     const config = canonicalH2Json({
       framework: source.framework,
       host_port: source.host_port,
       container_port: source.container_port,
       healthcheck_path: source.healthcheck_path,
-      needs_db: false
+      needs_db: false,
+      ...(environment ? { environment } : {})
     })
     if (
       source.deploy_config_json !== config ||

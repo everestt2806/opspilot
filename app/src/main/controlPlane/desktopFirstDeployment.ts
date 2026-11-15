@@ -37,7 +37,7 @@ export class DesktopFirstDeployments {
   private readonly receipts = new Map<string, Receipt>()
   private readonly busy = new Set<string>()
   constructor(
-    private readonly projects: Pick<DesktopProjectSetups, 'registeredContext'>,
+    private readonly projects: Pick<DesktopProjectSetups, 'registeredContext' | 'currentContext'>,
     private readonly admin: Pick<DesktopControllerEnrollment, 'projectReadiness'>,
     private readonly commands: Pick<DesktopControllerCommands, 'prepare' | 'get' | 'send'>,
     private readonly controllerReady: (bindingId: string) => Promise<boolean>,
@@ -45,14 +45,16 @@ export class DesktopFirstDeployments {
   ) {}
   async readiness(key: string): Promise<DesktopProjectReadiness> {
     const before = this.projects.registeredContext(key),
-      setup = before.setup,
-      registration = before.registration
+      setup = before.setup
     if (this.busy.has(key)) throw new DesktopFirstDeploymentError('FIRST_DEPLOY_BUSY')
     this.busy.add(key)
     for (const [id, receipt] of this.receipts)
       if (receipt.expires <= this.now() || receipt.value.request_key === key)
         this.receipts.delete(id)
     try {
+      const selected = await this.projects.currentContext(key),
+        registration = selected.registration
+      this.assertContext(before)
       const report = projectReadinessSchema.safeParse(
         await this.admin.projectReadiness(setup.binding_id, {
           format: 1,
@@ -95,6 +97,9 @@ export class DesktopFirstDeployments {
       } catch {
         /* Mất capability không biến thành sẵn sàng. */
       }
+      this.assertContext(before)
+      if (canonicalH2Json(await this.projects.currentContext(key)) !== canonicalH2Json(selected))
+        throw new DesktopFirstDeploymentError('FIRST_DEPLOY_REVIEW_REQUIRED')
       this.assertContext(before)
       if (this.now() - Date.parse(r.checked_at) > 30_000)
         throw new DesktopFirstDeploymentError('FIRST_DEPLOY_REVIEW_REQUIRED')
@@ -152,6 +157,14 @@ export class DesktopFirstDeployments {
       throw new DesktopFirstDeploymentError('FIRST_DEPLOY_REVIEW_REQUIRED')
     if (command.state !== 'prepared') return command
     const receipt = this.receipt(parsed.data)
+    const selected = await this.projects.currentContext(input.request_key)
+    if (
+      selected.registration.source_generation !== receipt.value.report.source_generation ||
+      selected.registration.source_config_sha256 !== receipt.value.report.source_config_sha256 ||
+      selected.registration.ownership_generation !== receipt.value.report.ownership_generation
+    )
+      throw new DesktopFirstDeploymentError('FIRST_DEPLOY_REVIEW_REQUIRED')
+    this.receipt(parsed.data)
     if (
       receipt.commandKey !== command.request_key ||
       this.prepareCommand(receipt).request_key !== command.request_key

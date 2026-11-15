@@ -121,6 +121,8 @@ export async function fixture(directory: string): Promise<{
     }
   })
   const projects = new DesktopProjectSetups(db, vault, {
+    environmentReview: (...args: Parameters<DesktopControllerEnrollment['environmentReview']>) =>
+      admin.environmentReview(...args),
     projectTargets: async () => ({
       controller_id: controllerId,
       items: [

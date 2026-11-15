@@ -13,7 +13,7 @@ let context: Context,
 const admin = { projectReadiness: vi.fn() },
   commands = { prepare: vi.fn(), get: vi.fn(), send: vi.fn() },
   ready = vi.fn()
-const projects = { registeredContext: vi.fn() }
+const projects = { registeredContext: vi.fn(), currentContext: vi.fn() }
 const service = (): DesktopFirstDeployments =>
   new DesktopFirstDeployments(projects, admin, commands, ready, () => clock)
 beforeEach(() => {
@@ -102,6 +102,7 @@ beforeEach(() => {
     updated_at: new Date(clock).toISOString()
   }
   projects.registeredContext.mockImplementation(() => structuredClone(context))
+  projects.currentContext.mockImplementation(async () => structuredClone(context))
   admin.projectReadiness.mockImplementation(async () => structuredClone(report))
   ready.mockResolvedValue(true)
   commands.prepare.mockImplementation(() => ({ ...command }))
@@ -159,6 +160,54 @@ it('expires at 60 seconds and invalidates the earlier receipt when checking agai
   expect(() => main.prepare({ ...input, readiness_id: fresh.readiness_id! })).toThrow(
     'FIRST_DEPLOY_REVIEW_REQUIRED'
   )
+})
+it('uses selected source generation for readiness and command while preserving the registration basis', async () => {
+  const selected = {
+    ...structuredClone(context),
+    registration: {
+      ...context.registration,
+      source_generation: 2,
+      source_config_sha256: 'd'.repeat(64)
+    }
+  }
+  projects.currentContext.mockImplementation(async () => structuredClone(selected))
+  report.source_generation = 2
+  report.source_config_sha256 = 'd'.repeat(64)
+  const main = service(),
+    value = await main.readiness(context.setup.request_key),
+    input = { request_key: context.setup.request_key, readiness_id: value.readiness_id! }
+  const plan = main.prepare(input)
+  expect(admin.projectReadiness).toHaveBeenCalledWith(
+    context.setup.binding_id,
+    expect.objectContaining({
+      expected_source_generation: 2,
+      expected_source_config_sha256: 'd'.repeat(64)
+    })
+  )
+  expect(commands.prepare).toHaveBeenCalledWith(
+    expect.objectContaining({ expected_source_generation: 2 })
+  )
+  expect(context.registration.source_generation).toBe(1)
+  selected.registration.source_generation = 3
+  selected.registration.source_config_sha256 = 'e'.repeat(64)
+  await expect(main.send({ ...input, command_key: plan.command.request_key })).rejects.toThrow(
+    'FIRST_DEPLOY_REVIEW_REQUIRED'
+  )
+  expect(commands.send).not.toHaveBeenCalled()
+})
+it('rejects source selection changes during the readiness network wait', async () => {
+  projects.currentContext.mockResolvedValueOnce(structuredClone(context)).mockResolvedValueOnce({
+    ...structuredClone(context),
+    registration: {
+      ...context.registration,
+      source_generation: 2,
+      source_config_sha256: 'd'.repeat(64)
+    }
+  })
+  await expect(service().readiness(context.setup.request_key)).rejects.toThrow(
+    'FIRST_DEPLOY_REVIEW_REQUIRED'
+  )
+  expect(commands.prepare).not.toHaveBeenCalled()
 })
 it.each([
   'app_id',

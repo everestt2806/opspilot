@@ -46,7 +46,10 @@ export interface ProductProjectSourceVerificationResult {
  * khớp deploy config thực tế; target pin/principal/revision không đổi sau await.
  * Isolated public GitHub HTTPS/full SHA, không npm install/build/execute source hay
  * SSH target. Dùng chung detector/render/quota của executor: Express, SPA hoặc Next.js/noDB/
- * no user env; Next chỉ NODE_ENV=production của template, không custom server/build args.
+ * Env-free giữ đường cũ. Desired env chỉ được kiểm bằng metadata đã xác thực theo
+ * source hash/owner/revision/target và AES envelope; không trả values hoặc cấp
+ * claim/runtime capability. Required keys/public build keys phải có trong revision
+ * đã chọn; Next vẫn không custom server. Runtime kiểm lại claim và render riêng.
  * Chỉ whitelist metadata, không command/file content/raw Git stderr/secret.
  *
  * IMMEDIATE trước/sau await kiểm authority và expected observation sequence. Commit

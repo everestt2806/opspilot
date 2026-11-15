@@ -268,7 +268,8 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
         console.log(
           JSON.stringify(
             await verifyProductProjectSource(opened.database, opened.controllerId, input, {
-              signal: controller.signal
+              signal: controller.signal,
+              cipher: loadControllerCredentialCipher(opened.dataDirectory)
             })
           )
         )

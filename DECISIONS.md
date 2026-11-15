@@ -211,6 +211,8 @@
 
 ---
 
+| 2026-11-15 | [deploy] | R7h-3d3 nối desired environment source vào source verification và first-deploy review. Registration receipt gốc giữ nguyên; Main lấy current generation qua environment review neo basis và kiểm tra lại trước gửi. Preflight chỉ dùng metadata đã xác thực của revision/owner/target, không cấp runtime capability hoặc xuất values. Runtime tiếp tục yêu cầu execution claim hiện hành. | Audit trước rollout thấy source authority/config preflight và Main còn dùng config/generation ban đầu, khiến env selection thành công nhưng first deploy bị chặn. Candidate chưa phát hành phải refreeze và chạy lại gate bị ảnh hưởng. | tk-s7-release-r7h3d-environment-live.md; projectSourceVerification; productPipelineSourceRender; desktopProjectSetup; desktopFirstDeployment |
+
 ## Mẫu để ghi tiếp
 
 | 2026-10-27 | [deploy] | H2 contract v1: typed async runtime steps trên cùng helper/lock, C0 activation barrier trước stop collector/mutation, B0/R0 metric quarantine khi rollback; terminal receipt có HMAC/atomic fsync, DB T1 giữ leases rồi attested target settlement và fenced T2; recovery handle chỉ read/settle sealed+committed attempt, không nới normal unknown/replay guard. | Cần phân biệt build thành công với runtime healthy và kết quả đã commit; plain JSON/hash không phải authentication. Producer/consumer dùng chung contract; HMAC enrollment chỉ lab/new explicit enrollment, publish chưa hỗ trợ chỉ not_checked/degraded. B0/R0 dùng path monitor hiện hành và generation dev:ino. | docs/contracts/product-h2-runtime.ts; product-guarded-ssh-session.ts; migration 020; target/DB/session/proof/tests |

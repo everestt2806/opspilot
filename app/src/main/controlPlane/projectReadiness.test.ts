@@ -64,7 +64,8 @@ beforeEach(() => {
       repository_url: 'https://github.com/example/demo.git',
       production_ref: 'main',
       repository_root: '.',
-      host_port: 30000
+      host_port: 30000,
+      deploy_config_json: '{}'
     },
     target: { vps_id: 1, ssh_security_revision: 1 },
     observationSequence: null

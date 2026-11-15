@@ -1,0 +1,353 @@
+{
+  "checkpoint": "R7h-3d3a",
+  "status": "PASS",
+  "scope": "LOCAL_ONBOARDING_ENV_RELEASE_CANDIDATE_AND_READONLY_VPS",
+  "base_commit": "257d2cfca1a53a1c18a8f6fbabe4cd1cff2d1aee",
+  "release": {
+    "release_id": "linux-x64-node22-20261115-environment-v2",
+    "node_version": "22.23.4",
+    "minimum_glibc": "2.39",
+    "release_sha256": "db1e58c83badef0c7efca42b78fff483d71cc38bdd711a635924d0849b41bdb8",
+    "installer_sha256": "e02bc14aa115423441eceb789405a7c5d6ce3a43d50d5d6ffd5102acbc74b336",
+    "upgrade_supported": true
+  },
+  "payload_manifest_sha256": "c1106b10eee233e5802aa8fc141b4acccafe2c0e924ed3a984d43fe03b7a9392",
+  "quality_gates": [
+    {
+      "gate": "full",
+      "command": "pnpm.cmd --prefix app exec vitest run --maxWorkers=3",
+      "exit_code": 0
+    },
+    {
+      "gate": "types",
+      "command": "pnpm.cmd --prefix app typecheck",
+      "exit_code": 0
+    },
+    {
+      "gate": "scripts-types",
+      "command": "pnpm.cmd --prefix app exec tsc -p tsconfig.scripts.json --noEmit",
+      "exit_code": 0
+    },
+    {
+      "gate": "lint",
+      "command": "pnpm.cmd --prefix app exec eslint --max-warnings=0 src/main/controlPlane/cli.ts src/main/controlPlane/desktopFirstDeployment.test.ts src/main/controlPlane/desktopFirstDeployment.ts src/main/controlPlane/desktopProjectSetup.test.ts src/main/controlPlane/desktopProjectSetup.ts src/main/controlPlane/productEnvironmentOnboarding.test.ts src/main/controlPlane/productEnvironmentPreflight.ts src/main/controlPlane/productPipelineSourceRender.ts src/main/controlPlane/projectReadiness.test.ts src/main/controlPlane/projectReadiness.ts src/main/controlPlane/projectSourceVerification.ts scripts/product-environment-desktop-lab/fixture.ts scripts/controller-upgrade-desktop-lab/run.mjs scripts/product-runtime-lab/environment-target-capability.mjs scripts/product-environment-live/input.mjs scripts/product-environment-live/inspect.mjs scripts/product-environment-live/snapshot.mjs electron.vite.config.ts",
+      "exit_code": 0
+    },
+    {
+      "gate": "format",
+      "command": "pnpm.cmd --prefix app exec prettier --check src/main/controlPlane/cli.ts src/main/controlPlane/desktopFirstDeployment.test.ts src/main/controlPlane/desktopFirstDeployment.ts src/main/controlPlane/desktopProjectSetup.test.ts src/main/controlPlane/desktopProjectSetup.ts src/main/controlPlane/productEnvironmentOnboarding.test.ts src/main/controlPlane/productEnvironmentPreflight.ts src/main/controlPlane/productPipelineSourceRender.ts src/main/controlPlane/projectReadiness.test.ts src/main/controlPlane/projectReadiness.ts src/main/controlPlane/projectSourceVerification.ts scripts/product-environment-desktop-lab/fixture.ts scripts/controller-upgrade-desktop-lab/run.mjs scripts/product-runtime-lab/environment-target-capability.mjs scripts/product-environment-live/input.mjs scripts/product-environment-live/inspect.mjs scripts/product-environment-live/snapshot.mjs electron.vite.config.ts control-plane-runtime/desktop-environment-release.json",
+      "exit_code": 0
+    },
+    {
+      "gate": "build",
+      "command": "pnpm.cmd --prefix app run build",
+      "exit_code": 0
+    },
+    {
+      "gate": "ruff",
+      "command": "ml-service\\.venv\\Scripts\\python.exe -m ruff check experiments/ collector/ ml-service/",
+      "exit_code": 0
+    },
+    {
+      "gate": "diff",
+      "command": "git diff --check",
+      "exit_code": 0
+    },
+    {
+      "gate": "product-runtime-lab-types",
+      "command": "pnpm.cmd --prefix app exec tsc -p scripts/product-runtime-lab/tsconfig.json --noEmit",
+      "exit_code": 0
+    },
+    {
+      "gate": "product-environment-desktop-lab-types",
+      "command": "pnpm.cmd --prefix app exec tsc -p scripts/product-environment-desktop-lab/tsconfig.json --noEmit",
+      "exit_code": 0
+    },
+    {
+      "gate": "controller-upgrade-desktop-lab-types",
+      "command": "pnpm.cmd --prefix app exec tsc -p scripts/controller-upgrade-desktop-lab/tsconfig.json --noEmit",
+      "exit_code": 0
+    },
+    {
+      "gate": "resources",
+      "command": "node app/.out-scripts/r7h3d3-resources.cjs",
+      "exit_code": 0
+    },
+    {
+      "gate": "inspect-lint",
+      "command": "pnpm.cmd --prefix app exec eslint --max-warnings=0 scripts/product-environment-live/inspect.mjs",
+      "exit_code": 0
+    },
+    {
+      "gate": "inspect-format",
+      "command": "pnpm.cmd --prefix app exec prettier --check scripts/product-environment-live/inspect.mjs",
+      "exit_code": 0
+    }
+  ],
+  "vitest_passed": 2447,
+  "vitest_existing_linux_only_skipped": 2,
+  "native_public_git_source": {
+    "status": "PASS",
+    "scope": "LOCAL_REAL_PINNED_SSH_SQLITE_ENVIRONMENT_CAPABILITY",
+    "nonce": "ed9fb19fff51",
+    "checks": [
+      "real_SSH_cold_recovery_retains_Express_eb5c_SPA_Next_98b0_and_current_f591_with_exact_material",
+      "production_CLI_selected_env_source_verification_real_public_Git_without_execution_or_values",
+      "production_CLI_rejects_legacy_environment_before_selection_and_current_target_selects_and_replays",
+      "actual_Docker_resource_probe_cannot_admit_env_on_legacy_helper_before_dispatch_or_plaintext_files",
+      "retained_allowlist_never_skips_remote_file_hash_or_reinstalls_a_changed_helper"
+    ],
+    "production_vps_used": false,
+    "production_database_used": false,
+    "docker_info_only": true,
+    "docker_deployment_tested": false,
+    "public_git_source_verified": true,
+    "cleanup": true,
+    "source_commit_sha": "257d2cfca1a53a1c18a8f6fbabe4cd1cff2d1aee",
+    "bundle_sha256": "c1106b10eee233e5802aa8fc141b4acccafe2c0e924ed3a984d43fe03b7a9392",
+    "driver_sha256": "b95495639a8d6d27cd3baa0750f943a58bbf9fc1d40656d2c397fffa0a7d6411"
+  },
+  "root_upgrade_lab": {
+    "status": "PASS",
+    "scope": "ROOT_LINUX_SYSTEMD_NATIVE_CONTROLLER_UPGRADE_PRIVATE_FIXTURE",
+    "checks": [
+      "consent_and_parent_pins_rejected_before_upgrade_mutation",
+      "staging_death_same_uuid_inspect_only_and_no_other_intent_takeover",
+      "death_after_guarded_stop_keeps_db_key_identity_and_unrelated_app",
+      "consistent_backup_is_root_sealed_before_migration_and_service_cannot_overwrite_it",
+      "lost_migration_reply_leaves_exact35_schema_and_candidate_maintenance_without_auto_migration",
+      "death_after_atomic_unit_switch_is_cold_inspectable_without_replay",
+      "service_restart_during_stop_and_switch_recovers_without_restarting_maintenance_candidate",
+      "candidate_maintenance_blocks_even_pause_writes_before_commit",
+      "lost_commit_reply_recovers_without_precommit_hash_comparison_or_credential_loss",
+      "duplicate_upgrade_after_commit_never_restarts_the_service",
+      "second_revision_preserves_parent_history_and_rejects_historical_adoption",
+      "rollback_crashes_preserve_legitimate_writes_and_never_restart_restored_parent",
+      "reverse_commit_reply_loss_and_candidate_restart_never_auto_migrate29",
+      "explicit_two_level_rollback_preserves_new_credentials_and_original_installation",
+      "startup_failure_never_publishes_gate_and_explicit_rollback_restores_old_ready_runtime",
+      "old_installer_attestation_valid_again_after_rollback",
+      "SIGKILL_inside_migration033_rolls_back032_and033_atomically_and_same_uuid_recovers",
+      "nonempty_encrypted_environment_table_blocks_schema_rollback_before_service_stop_or_unit_switch"
+    ],
+    "production_vps_used": false,
+    "production_database_used": false,
+    "fixture_root_removed": true,
+    "last_operation": "inspect-upgrade",
+    "last_error_code": null,
+    "fixture_unit_removed": true,
+    "fixture_account_removed": true
+  },
+  "main_upgrade_lab": {
+    "status": "PASS",
+    "scope": "PRIVATE_ROOT_SYSTEMD_PINNED_SSH_MAIN_SQLITE_UPGRADE",
+    "release_inputs": {
+      "original": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+      "candidate": "db1e58c83badef0c7efca42b78fff483d71cc38bdd711a635924d0849b41bdb8",
+      "fixture_installer": "d9fd791fc9ca06f51bfbb0aace0f2f8ddc6d822d813b5711f405824caf1b1fe5"
+    },
+    "checks": [
+      "fresh_desktop036_and_native_controller029_have_separate_migration_roles",
+      "original_root_admin_enrollment_stores_api_token_only_in_encrypted_main_vault",
+      "plan_prepare_and_absent_inspect_preserve_uuid_and_never_create_remote_upgrade_namespace",
+      "independently_pinned_upgrade_transfer_uses_distinct_uuid_namespace_preserving_original_install_staging",
+      "wrong_tool_pin_rejected_by_receiver_before_upgrader_execution",
+      "disconnect_before_root_journal_keeps_attempted_and_wrong_parent_recovery_never_creates_journal",
+      "lost_upgrade_reply_recovers_in_separate_cold_main_process_without_replaying_or_restarting_service",
+      "explicit_runtime_refresh_preserves_api_token_client_and_authenticated_api_with_revision_root_admin",
+      "historical_release_keeps_real_inspection_and_token_refresh_but_cannot_be_selected_for_new_upgrade",
+      "cold_profile_readonly_discovery_and_explicit_adoption_preserve_remote_uuids_and_current_runtime",
+      "cold_adoption_separate_readonly_enrollment_api200_revocation_without_reinstall_restart_or_receipt_change",
+      "same_host_readded_vps_fresh_pinned_ssh_authority_then_separate_api_refresh_preserves_uuid_pid_token_client_and_api200",
+      "attempt_monotonicity_prevents_second_upgrade_and_does_not_rebind_api_credentials",
+      "revision_admin_derives_current_runtime_after_root_attestation_and_rejects_wrong_uid_payload_without_restart",
+      "revision_admin_rejects_stopped_controller_without_implicitly_starting_or_adopting_it",
+      "rollback_blocks_old_binding_until_explicit_refresh_then_reuses_the_same_authenticated_token",
+      "rolled_back_current_operation_admin_uses_restored_parent_payload_and_preserves_original_authority",
+      "explicit_main_rollback_restores_original_unit_and_preserves_root_receipt_identity_key_database_inode",
+      "archived_vps_authority_rejected_before_any_ssh_execution"
+    ],
+    "production_vps_used": false,
+    "production_database_used": false,
+    "fixture_root_removed": true,
+    "fixture_unit_removed": true,
+    "fixture_account_removed": true,
+    "python_only_path": true,
+    "ssh_authentications": 12,
+    "ssh_executions": 48,
+    "script_bytes": 40517,
+    "compressed_executions": 48,
+    "max_command_bytes": 12138
+  },
+  "runtime_matrix": [
+    {
+      "raw": "app/.out-scripts/product-runtime-lab/1dfedf3e1ac3/result.json",
+      "framework": "nextjs",
+      "environment_enabled": true,
+      "cases": [
+        "first_healthy",
+        "next_ssr_first_healthy",
+        "environment_first_revision_and_selection",
+        "healthy_update",
+        "next_ssr_healthy_update",
+        "environment_update_restart_public_build",
+        "build_failure",
+        "unhealthy_rollback",
+        "next_ssr_unhealthy_rollback",
+        "environment_rollback_preserves_exact_config",
+        "first_build_failure",
+        "first_health_failure",
+        "collector_build_failure_blocks_finalization"
+      ],
+      "cleanup": true
+    },
+    {
+      "raw": "app/.out-scripts/product-runtime-lab/6d622808bca1/result.json",
+      "framework": "express",
+      "environment_enabled": false,
+      "cases": [
+        "first_healthy",
+        "healthy_update",
+        "build_failure",
+        "unhealthy_rollback",
+        "first_build_failure",
+        "first_health_failure",
+        "collector_build_failure_blocks_finalization"
+      ],
+      "cleanup": true
+    },
+    {
+      "raw": "app/.out-scripts/product-runtime-lab/96bf08fe7065/result.json",
+      "framework": "express",
+      "environment_enabled": true,
+      "cases": [
+        "first_healthy",
+        "environment_first_revision_and_selection",
+        "healthy_update",
+        "environment_update_restart_public_build",
+        "build_failure",
+        "unhealthy_rollback",
+        "environment_rollback_preserves_exact_config",
+        "first_build_failure",
+        "first_health_failure",
+        "collector_build_failure_blocks_finalization"
+      ],
+      "cleanup": true
+    },
+    {
+      "raw": "app/.out-scripts/product-runtime-lab/baec98d51a40/result.json",
+      "framework": "static-spa",
+      "environment_enabled": true,
+      "cases": [
+        "first_healthy",
+        "spa_routes_first_healthy",
+        "environment_first_revision_and_selection",
+        "healthy_update",
+        "spa_routes_healthy_update",
+        "environment_update_restart_public_build",
+        "build_failure",
+        "unhealthy_rollback",
+        "spa_routes_unhealthy_rollback",
+        "environment_rollback_preserves_exact_config",
+        "first_build_failure",
+        "first_health_failure",
+        "collector_build_failure_blocks_finalization"
+      ],
+      "cleanup": true
+    }
+  ],
+  "runtime_cases_passed": 43,
+  "packaging": {
+    "status": "PASS",
+    "entries": 6,
+    "tamper_rejected": true,
+    "missing_rejected": true,
+    "restored": true
+  },
+  "readonly_vps": {
+    "checked_at": "2026-11-15T08:30:31.968Z",
+    "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+    "schema": 29,
+    "apps": 4,
+    "containers": 8,
+    "active_jobs": 0,
+    "active_experiments": 0,
+    "before_after_identical": true,
+    "public_http": [
+      {
+        "port": 30000,
+        "status": 200
+      },
+      {
+        "port": 30001,
+        "status": 200
+      },
+      {
+        "port": 30002,
+        "status": 200
+      },
+      {
+        "port": 30003,
+        "status": 200
+      }
+    ],
+    "mutation_attempted": false
+  },
+  "not_tested": [
+    "Protected upgrade on development VPS",
+    "Main first deployment with selected env on development VPS",
+    "In-place helper updater for existing targets",
+    "GUI interaction",
+    "Whole production release"
+  ],
+  "next_checkpoint": "R7h-3d3b: fresh attestation, protected upgrade29->35, actual env app rollout and cleanup",
+  "source_sha256_lf_normalized": {
+    "app/control-plane-runtime/desktop-environment-release.json": "d12474016a4211fa529aeff5b4fbd39e201ef39d6c2d6d2c4dc07d6f6941b951",
+    "app/electron.vite.config.ts": "c9c12abc71ae279e2968ada64cb069b891564f66f29a79c118189d87337826b4",
+    "app/scripts/controller-upgrade-desktop-lab/run.mjs": "02445ec567667ea9aca8368a286719295642b13fa76042b12415a8a725673d88",
+    "app/scripts/product-environment-desktop-lab/fixture.ts": "0e35d6ad0750d9ce5301512f593f828d2ed7a4c200013d45ee1c1666daa3919b",
+    "app/scripts/product-environment-live/input.mjs": "8d138fdc203ba98ccbdd6f09bb67d88b3d5f14a97ae193f070229625340c7e1b",
+    "app/scripts/product-environment-live/inspect.mjs": "fe0269a21ba4fe981d7bdc3a1440f632f6aa6e60c483032d8dbdfe4844d071aa",
+    "app/scripts/product-environment-live/snapshot.mjs": "c2f90e8eb350e256c63e051c2093fa08a86ad02af1d0e4950ce7c65c7a07efcd",
+    "app/scripts/product-runtime-lab/environment-target-capability.mjs": "b95495639a8d6d27cd3baa0750f943a58bbf9fc1d40656d2c397fffa0a7d6411",
+    "app/src/main/controlPlane/cli.ts": "c286ae5c3571208887aad8b223aceaf2069eaa472d6aeafc86fb0ee68eca7f31",
+    "app/src/main/controlPlane/desktopFirstDeployment.test.ts": "7c524de53404c08c2f63b0630ea6122ecf24ce38a810517bfdd7216ac7d3f448",
+    "app/src/main/controlPlane/desktopFirstDeployment.ts": "6efbf066e7c7740430f3fe6ff198d2807f3d87ee0573012043ab6a74aac4237c",
+    "app/src/main/controlPlane/desktopProjectSetup.test.ts": "ea6d1fe1a10b9e36b3fa31453c1299f9104113978b707484c81e0eb6acd8b334",
+    "app/src/main/controlPlane/desktopProjectSetup.ts": "180448805dd0ca80e72f90528259521b71e6acf3369f1fd2adc110347ba6f6fd",
+    "app/src/main/controlPlane/productEnvironmentOnboarding.test.ts": "197381ca0b791d1f60b00514a059727aca56d0c3ead6f07eeab792ae6b49ae4f",
+    "app/src/main/controlPlane/productEnvironmentPreflight.ts": "ba814e76a67f81084d9f2a99569677d6993d58c65ac1832580cdcf0c770ad3b4",
+    "app/src/main/controlPlane/productPipelineSourceRender.ts": "e9a38d3e5b56d6bb83138001cbd1901b65382a86cf06ab6b828474c121550a00",
+    "app/src/main/controlPlane/projectReadiness.test.ts": "727879b132324b5bde03df6f517ef450179f3e0bc5474072db793a672afeacac",
+    "app/src/main/controlPlane/projectReadiness.ts": "4327c0fb8c1848de82fb9ce6476f32ce9995eee56a0038d51b3152e749d1de45",
+    "app/src/main/controlPlane/projectSourceVerification.ts": "435b08082ff6a92745f16896ba4903a645e3d48b4aae822ae6fd418ed084daf0"
+  },
+  "raw_sha256": {
+    "app/.out-scripts/r7h3d3-quality/results.json": "8f8f7d71dc5c579163bce42f5764241f06e988436ab0ad4d2302b42d37e902f1",
+    "app/.out-scripts/r7h3d3-extra-quality/results.json": "e03075070a0edd52983d848b67746dc7b25fe4aba661fbfad8deaf7c46ddfce1",
+    "app/.out-scripts/environment-target-capability/ed9fb19fff51/result.json": "14ce08d7f83e201e175f32691c59553edb832410f6011e4ac696799ccc236e81",
+    "app/.out-scripts/controller-upgrade/d3bbddf03619/result.json": "51dadc179d8f8dceb1bf7a54440d80152a5a20908c74786ca07bfb96b71c9d1f",
+    "app/.out-scripts/controller-upgrade-desktop/9b36bae85bd0/result.json": "cc1aa510a82c79a1fee7baac0c183ab0aaddcd5c639fd64b443118dfe929707c",
+    "app/.out-scripts/product-environment-inspect/f6fb3e50b295/snapshot.json": "ac69292a18402fa6294af306415c524fad6f6852f166871ea4636c1ebbe007e0",
+    "app/.out-scripts/product-environment-inspect/1ab81bf2d2de/snapshot.json": "1a65e679898e4e959afed46d31c8876e1069ee3efdf6536827f46ee602e2c546",
+    "app/.out-scripts/r7h3d3-public-http.json": "9291f3e70066b87e77052f6a7847793555034884082e5026552ac31a5fd34ea8",
+    "app/.out-scripts/r7h3d3-quality/full.log": "a3c9b363cd40a1bb60b4b146b7284b168314328cd6c17c26d78d36871688fe33",
+    "app/.out-scripts/r7h3d3-quality/types.log": "e1233c3e393be6bc01b75114f4405f780fe125c011904e60806109b2d88dbd38",
+    "app/.out-scripts/r7h3d3-quality/scripts-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3-quality/lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3-quality/format.log": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20",
+    "app/.out-scripts/r7h3d3-quality/build.log": "c027e1a222ba1a4ab00a56133c086c460eeda6ee1a954cdf42b0d3f8f7e30c8d",
+    "app/.out-scripts/r7h3d3-quality/ruff.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "app/.out-scripts/r7h3d3-quality/diff.log": "4f6cfb65f666a9dc604499d89666f565ae168c71820763c5e902e92204bdb0cf",
+    "app/.out-scripts/r7h3d3-extra-quality/product-runtime-lab-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3-extra-quality/product-environment-desktop-lab-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3-extra-quality/controller-upgrade-desktop-lab-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3-extra-quality/resources.log": "4dfa8ec3172614bcfb483d6439964a5ebeaa618744d6a6fcacbd2a1fada5fd91",
+    "app/.out-scripts/r7h3d3-extra-quality/inspect-lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3d3-extra-quality/inspect-format.log": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20",
+    "app/.out-scripts/product-runtime-lab/1dfedf3e1ac3/result.json": "b0b0bd1becd18c03ea0bfc50647b23a700d33e9fc3ff400f09cd7ae36530eca3",
+    "app/.out-scripts/product-runtime-lab/6d622808bca1/result.json": "46615c0c4e1eb98e2a030b4abfc57179dae792ca0741172d47438bf29df018fc",
+    "app/.out-scripts/product-runtime-lab/96bf08fe7065/result.json": "4d8b0ab2f0801cee7759eb3680d90fa6faade8932963d98eeb7f111082ab73af",
+    "app/.out-scripts/product-runtime-lab/baec98d51a40/result.json": "7fad94ceea462cc4c17637b009f46fa8955b556158075f840408e05c9e5ae008"
+  }
+}

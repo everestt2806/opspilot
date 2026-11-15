@@ -121,6 +121,7 @@ beforeEach(() => {
     }
   )
   setups = new DesktopProjectSetups(db, vault, {
+    environmentReview: vi.fn(),
     projectTargetState: (targetRead = vi.fn<DesktopControllerEnrollment['projectTargetState']>(
       async (_binding, request) => ({
         controller_id: request.controller_id,

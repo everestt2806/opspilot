@@ -1,5 +1,23 @@
 # Product runtime integration lab (R1)
 
+## R7h-3d3a — Source đã chọn environment
+
+`environment-target-capability.mjs --confirm-local-environment-target-capability
+--verify-public-source` bổ sung public Git thật vào gate CLI cùng UID. Cần Linux
+root/Node22/Docker/sshd và mạng tới GitHub. Artifact CLI và API lab phải nằm trong
+namespace private thuộc root, có dependency đã duyệt ở đường Node có thể resolve;
+Python admin xóa env kế thừa nên không dựa vào `NODE_PATH` để chạy CLI con.
+
+Nhánh `feat/release-audit-20261204` của repo demo OpsPilot, root
+`demo-apps/san-nha-booking`, chỉ được fetch/check detector-quota sau selection2;
+không npm install, build, SSH deployment hoặc job. Report ghi full source SHA đã
+fetch và `public_git_source_verified`; gate mặc định vẫn chạy ngoại tuyến như cũ.
+Actual runtime env/rollback thuộc gate `run.mjs --environment`, `--spa`, `--nextjs`.
+
+Không chạy Windows full suite/ControllerService test cùng Root systemd upgrade
+lab hoặc Main upgrade lab: các gate này cùng dùng cổng8768. Main lab dùng Desktop036,
+controller gốc029, candidate035; không đổi migration role để làm test pass.
+
 ## R7h-3d2 — Retained helpers và capability env
 
 `target-enrollment-runtime.mjs` nhận `--spa` hoặc `--nextjs` (không đồng thời).

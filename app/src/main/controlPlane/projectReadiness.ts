@@ -17,6 +17,7 @@ import { SshManager } from '../ssh/manager'
 import { observeProductTarget } from './controllerTargetProbe'
 import { assessProductResources, measureControllerResources } from './controllerResources'
 import { canonicalH2Json } from './productH2Proof'
+import { loadControllerCredentialCipher } from './controllerSecrets'
 const positive = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 const resourceSchema = z.strictObject({
   cpu_count: positive,
@@ -185,7 +186,12 @@ export async function checkProjectReadiness(
   }
   if (reasons.length) return done()
   try {
-    const source = await verifyProductProjectSource(db, controllerId, value, { signal })
+    const source = await verifyProductProjectSource(db, controllerId, value, {
+      signal,
+      cipher: Object.hasOwn(JSON.parse(before.source.deploy_config_json), 'environment')
+        ? loadControllerCredentialCipher(directory)
+        : undefined
+    })
     current()
     mark('first_deployment', first(), 'current_deployment_exists')
     result.commit_sha = source.commit_sha
