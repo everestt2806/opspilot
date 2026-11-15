@@ -116,7 +116,7 @@ export function inspectControllerUpgradeDatabase(
       fail()
     const busy = db
       .prepare(
-        "SELECT 1 FROM product_app_control WHERE mode='product' AND auto_deploy_paused<>1 UNION ALL SELECT 1 FROM product_deploy_job WHERE state IN ('queued','claimed','deploying','retry_wait','uncertain') UNION ALL SELECT 1 FROM product_app_lease WHERE released_at IS NULL UNION ALL SELECT 1 FROM product_worker_lease WHERE released_at IS NULL UNION ALL SELECT 1 FROM deployment_activation WHERE state='prepared' UNION ALL SELECT 1 FROM product_runtime_terminal WHERE settled_at IS NULL OR leases_released_at IS NULL UNION ALL SELECT 1 FROM experiment_run WHERE status='running' LIMIT 1"
+        "SELECT 1 FROM product_app_control WHERE mode='product' AND auto_deploy_paused<>1 UNION ALL SELECT 1 FROM product_deploy_job WHERE state IN ('queued','claimed','deploying','retry_wait','uncertain') UNION ALL SELECT 1 FROM product_app_lease WHERE released_at IS NULL UNION ALL SELECT 1 FROM product_worker_lease WHERE released_at IS NULL UNION ALL SELECT 1 FROM deployment_activation WHERE state='prepared' UNION ALL SELECT 1 FROM product_runtime_terminal WHERE settled_at IS NULL OR leases_released_at IS NULL UNION ALL SELECT 1 FROM experiment_run WHERE status='running' UNION ALL SELECT 1 FROM product_target_enrollment WHERE last_error_code LIKE 'TARGET_HELPER_UPGRADE_PENDING:%' LIMIT 1"
       )
       .get()
     let tableSource = expected,

@@ -607,20 +607,36 @@ try {
   ]).trim()
   const sql =
     "const D=require(process.argv[1]);const d=new D(process.argv[2]);d.pragma('foreign_keys=ON');d.transaction(()=>{d.exec(\"INSERT INTO vps(id,name,host,username,auth_type,encrypted_secret) VALUES(1,'schema-lab','fixture.test','operator','key',X'00');INSERT INTO app(id,vps_id,name,framework,host_port,container_port) VALUES(1,1,'schema-fixture','express',30000,3000);INSERT INTO product_source_config VALUES(1,1,'https://github.com/example/app.git','main','.', '{}', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','2026-11-14T00:00:00Z')\");d.prepare(\"INSERT INTO product_environment_revision VALUES(?,1,1,1,1,?,'{}','express','[]','[]','aes_256_gcm',?,?,?,?)\").run(process.argv[3],'a'.repeat(64),Buffer.from([1]),Buffer.alloc(12),Buffer.alloc(16),'2026-11-14T00:00:00Z')}).immediate();d.close()"
-  command('/usr/bin/setpriv', [
-    '--reuid',
-    String(installed.runtime_uid),
-    '--regid',
-    String(lstatSync(paths.data).gid),
-    '--clear-groups',
-    '--',
-    join(paths.installation, 'revisions', keys[3], 'runtime/node'),
-    '-e',
-    sql,
-    join(paths.installation, 'revisions', keys[3], 'runtime/node_modules/better-sqlite3'),
-    join(paths.data, 'opspilot.db'),
-    installed.controller_id
-  ])
+  const runFixtureSql = (text) =>
+    command('/usr/bin/setpriv', [
+      '--reuid',
+      String(installed.runtime_uid),
+      '--regid',
+      String(lstatSync(paths.data).gid),
+      '--clear-groups',
+      '--',
+      join(paths.installation, 'revisions', keys[3], 'runtime/node'),
+      '-e',
+      text,
+      join(paths.installation, 'revisions', keys[3], 'runtime/node_modules/better-sqlite3'),
+      join(paths.data, 'opspilot.db'),
+      installed.controller_id
+    ])
+  const pendingSql =
+    "const D=require(process.argv[1]);const d=new D(process.argv[2]);d.pragma('foreign_keys=ON');d.transaction(()=>{d.exec(\"INSERT INTO vps(id,name,host,username,auth_type,encrypted_secret) VALUES(9,'helper-lab','fixture.test','operator','key',X'00');INSERT INTO app(id,vps_id,name,framework,host_port,container_port) VALUES(9,9,'helper-fixture','express',30009,3000)\");d.prepare(\"INSERT INTO product_target_enrollment(controller_id,app_id,ownership_generation,target_binding_json,manifest_sha256,target_root,state,last_error_code,created_at,updated_at) VALUES(?,9,1,'{}',?,'/private-fixture','unknown','TARGET_HELPER_UPGRADE_PENDING:00000000-0000-4000-8000-000000000000','now','now')\").run(process.argv[3],'a'.repeat(64))}).immediate();d.close()"
+  runFixtureSql(pendingSql)
+  assert.equal(rollback().body.error, 'CONTROLLER_INSTALL_UPGRADE_NOT_QUIESCENT')
+  assert.equal(
+    command('/usr/bin/systemctl', ['show', unitName, '--property=MainPID', '--value']).trim(),
+    candidatePid
+  )
+  assert.equal(inspect().body.phase, 'active')
+  assert(await health('ready'))
+  runFixtureSql(
+    "const D=require(process.argv[1]);const d=new D(process.argv[2]);d.pragma('foreign_keys=ON');d.transaction(()=>{d.exec('DELETE FROM product_target_enrollment WHERE app_id=9;DELETE FROM app WHERE id=9;DELETE FROM vps WHERE id=9')}).immediate();d.close()"
+  )
+  check('pending_helper_upgrade_blocks_reverse_before_service_stop_or_unit_switch')
+  runFixtureSql(sql)
   assert.equal(rollback().body.error, 'CONTROLLER_INSTALL_UPGRADE_SCHEMA_ROLLBACK_UNSAFE')
   assert.equal(
     command('/usr/bin/systemctl', ['show', unitName, '--property=MainPID', '--value']).trim(),

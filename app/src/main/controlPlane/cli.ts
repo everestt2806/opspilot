@@ -63,7 +63,11 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
   if (
     commandValue === 'review-target-helper-upgrade' ||
     commandValue === 'prepare-target-helper-upgrade' ||
-    commandValue === 'helper-upgrade-state'
+    commandValue === 'helper-upgrade-state' ||
+    commandValue === 'apply-target-helper-upgrade' ||
+    commandValue === 'inspect-target-helper-upgrade' ||
+    commandValue === 'recover-target-helper-upgrade' ||
+    commandValue === 'cancel-target-helper-upgrade'
   ) {
     const controller = new AbortController()
     const stop = (): void => controller.abort()

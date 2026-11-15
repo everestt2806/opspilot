@@ -1,0 +1,1787 @@
+{
+  "status": "PASS",
+  "checkpoint": "R7h-3e3b",
+  "scope": "LOCAL_CONTROLLER_HELPER_UPGRADE_DURABLE_ORCHESTRATION",
+  "base_commit": "0c9e11c833f3d5c60bd5f8891eea88dfa94a6f0c",
+  "quality": [
+    {
+      "gate": "ruff",
+      "command": "ml-service\\.venv\\Scripts\\python.exe -m ruff check app/src/main/controlPlane/target_enrollment.py app/scripts/product-runtime-lab/test_target_helper_upgrade.py",
+      "exit_code": 0
+    },
+    {
+      "gate": "python-format",
+      "command": "ml-service\\.venv\\Scripts\\python.exe -m ruff format --check app/src/main/controlPlane/target_enrollment.py app/scripts/product-runtime-lab/test_target_helper_upgrade.py",
+      "exit_code": 0
+    },
+    {
+      "gate": "full",
+      "command": "pnpm.cmd --prefix app exec vitest run --maxWorkers=3",
+      "exit_code": 0
+    },
+    {
+      "gate": "types",
+      "command": "pnpm.cmd --prefix app typecheck",
+      "exit_code": 0
+    },
+    {
+      "gate": "scripts-types",
+      "command": "pnpm.cmd --prefix app exec tsc -p tsconfig.scripts.json --noEmit",
+      "exit_code": 0
+    },
+    {
+      "gate": "lint",
+      "command": "pnpm.cmd --prefix app exec eslint --max-warnings=0 src/main/controlPlane/cli.ts src/main/controlPlane/controllerUpgrade.test.ts src/main/controlPlane/controllerUpgrade.ts src/main/controlPlane/controllerUpgradeAssets.ts src/main/controlPlane/controllerUpgradeCheck.test.ts src/main/controlPlane/controllerUpgradeCheck.ts src/main/controlPlane/targetHelperUpgradeJournal.ts src/main/controlPlane/targetHelperUpgradeReview.test.ts src/main/controlPlane/targetHelperUpgradeBundle.ts src/main/controlPlane/targetHelperUpgradeExecution.ts scripts/controller-upgrade-lab/run.mjs scripts/product-runtime-lab/helper-controller-fault.mjs scripts/product-runtime-lab/helper-controller-checks.mjs scripts/product-runtime-lab/target-enrollment-runtime-preload.mjs scripts/product-runtime-lab/target-enrollment-runtime.mjs",
+      "exit_code": 0
+    },
+    {
+      "gate": "format",
+      "command": "pnpm.cmd --prefix app exec prettier --check src/main/controlPlane/cli.ts src/main/controlPlane/controllerUpgrade.test.ts src/main/controlPlane/controllerUpgrade.ts src/main/controlPlane/controllerUpgradeAssets.ts src/main/controlPlane/controllerUpgradeCheck.test.ts src/main/controlPlane/controllerUpgradeCheck.ts src/main/controlPlane/targetHelperUpgradeJournal.ts src/main/controlPlane/targetHelperUpgradeReview.test.ts src/main/controlPlane/targetHelperUpgradeBundle.ts src/main/controlPlane/targetHelperUpgradeExecution.ts scripts/controller-upgrade-lab/run.mjs scripts/product-runtime-lab/helper-controller-fault.mjs scripts/product-runtime-lab/helper-controller-checks.mjs scripts/product-runtime-lab/target-enrollment-runtime-preload.mjs scripts/product-runtime-lab/target-enrollment-runtime.mjs ../docs/contracts/product-target-helper-upgrade.ts",
+      "exit_code": 0
+    },
+    {
+      "gate": "build",
+      "command": "pnpm.cmd --prefix app run build",
+      "exit_code": 0
+    },
+    {
+      "gate": "diff",
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "final_fixture_and_contract_checks": [
+    {
+      "gate": "final-lint",
+      "command": "pnpm.cmd --prefix app exec eslint --max-warnings=0 scripts/product-runtime-lab/target-enrollment-runtime-preload.mjs",
+      "exit_code": 0
+    },
+    {
+      "gate": "final-format",
+      "command": "pnpm.cmd --prefix app exec prettier --check scripts/product-runtime-lab/target-enrollment-runtime-preload.mjs ../docs/contracts/product-target-helper-upgrade.ts",
+      "exit_code": 0
+    },
+    {
+      "gate": "final-diff",
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "full_app_tests": {
+    "passed": 2521,
+    "skipped": 2,
+    "failed": 0,
+    "files_passed": 178,
+    "files_skipped": 1
+  },
+  "private_candidate": {
+    "payload_sha256": "5b876a1a55c776722e0f440b4d67bedb45d7ef6118eb203245f5a943c174c029",
+    "release_sha256": "3782655ddd14e5b88e6fff592cf7415e5652b4c0562af68866b4fd0eae2fadf0",
+    "installer_sha256": "2a5eb9f264763b2f9de2fd3cb93769a005f4d8617f49557c54a3b5eeec63c7d7",
+    "approved": false,
+    "installed_on_VPS": false
+  },
+  "native_matrix": [
+    {
+      "path": "app/.out-scripts/target-enrollment-runtime/1f42fbaade2b/result.json",
+      "result": {
+        "status": "PASS",
+        "nonce": "1f42fbaade2b",
+        "scope": "CONTROLLER_HELPER_UPGRADE_RUNTIME",
+        "cases": 7,
+        "framework": "nextjs",
+        "enrolled_apps": 2,
+        "installed_helpers": true,
+        "controller_process_loss_recovered": true,
+        "packaged_templates_collector": true,
+        "verified_terminals": 6,
+        "unknown_without_retry": 1,
+        "runtime_nonce": "05a7919da48a",
+        "cleanup": true,
+        "bundle_sha256": "cf57563ef093ba69e7a5032cea90891beea29c7273b1e13c038440913150354e",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "resource_probes": 7,
+        "historical_release_preserved": false,
+        "helper_upgrade_integrated": true,
+        "cold_startup_terminal_recovered": true,
+        "preterminal_unknown_blocked": true,
+        "no_runtime_replay": true,
+        "environment_enabled": true,
+        "helper_controller": {
+          "status": "PASS",
+          "scope": "CONTROLLER_HELPER_UPGRADE_PINNED_SSH_SQLITE",
+          "observations": [
+            {
+              "app_id": 1,
+              "fault": "dispatch-link",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "fault": "after-dispatch",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "fault": "outcome-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "fault": "commit-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "state": "applied",
+              "actual_pinned_SSH": true,
+              "old_pin": "93abe6ea846f44ef914d0a9ee6e74aaa7e40d3c1ec3a353e537ca89b1ff0c777",
+              "new_pin": "5b876a1a55c776722e0f440b4d67bedb45d7ef6118eb203245f5a943c174c029",
+              "exact_revision_transition": true,
+              "key_marker_guards_preserved": true
+            },
+            {
+              "app_id": 2,
+              "fault": "dispatch-link",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "fault": "after-dispatch",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "fault": "outcome-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "fault": "commit-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "state": "applied",
+              "actual_pinned_SSH": true,
+              "old_pin": "93abe6ea846f44ef914d0a9ee6e74aaa7e40d3c1ec3a353e537ca89b1ff0c777",
+              "new_pin": "5b876a1a55c776722e0f440b4d67bedb45d7ef6118eb203245f5a943c174c029",
+              "exact_revision_transition": true,
+              "key_marker_guards_preserved": true
+            }
+          ],
+          "private_fault_fixture_cleanup": true
+        }
+      },
+      "runtime": {
+        "status": "PASS",
+        "scope": "PINNED_SSH_SQLITE_DOCKER_RUNTIME",
+        "framework": "nextjs",
+        "environment_enabled": true,
+        "nonce": "05a7919da48a",
+        "source_sha": "0c9e11c833f3d5c60bd5f8891eea88dfa94a6f0c",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "bundle_sha256": "cf57563ef093ba69e7a5032cea90891beea29c7273b1e13c038440913150354e",
+        "driver_sha256": "9462e0f18958a4bcebb9d147fb6562605645fe47bb0a7d912b719c7f907992e5",
+        "deadline_expired": false,
+        "subject_unchanged": true,
+        "cases": [
+          {
+            "name": "first_healthy",
+            "status": "PASS",
+            "deployment_id": 1,
+            "sha": "b60f732f92cc600f08ef5dc4984c0fc5e717f2e3",
+            "container_id": "3ffdf08557d8e38b418a31af910445e9df37905755adf2dfb682db3f40c2c723",
+            "metric_rows": 1
+          },
+          {
+            "name": "next_ssr_first_healthy",
+            "status": "PASS",
+            "ssr_marker": "first_healthy",
+            "html_sha256": "fd513acac575f5413cc7dcddad0d30226a30ea709c22ce7d1d086c7f03bc3cef",
+            "next_asset_200": true,
+            "missing_asset_404": true
+          },
+          {
+            "name": "environment_first_revision_and_selection",
+            "status": "PASS",
+            "literal_values": true,
+            "image_excludes_runtime": true,
+            "selected_next_revision": 2
+          },
+          {
+            "name": "healthy_update",
+            "status": "PASS",
+            "deployment_id": 2,
+            "sha": "f0315c3d5394ab87a2659725936a98dbe142cc71",
+            "container_id": "abd7a41500a73f7c45dd3902343538c86439637398cc3565e8af87933b0a689a",
+            "activation": {
+              "state": "active",
+              "stream_generation": "2096:153761",
+              "start_offset": 668
+            }
+          },
+          {
+            "name": "next_ssr_healthy_update",
+            "status": "PASS",
+            "ssr_marker": "healthy_update",
+            "html_sha256": "96dfaea9dc4d971b7b69cbcb2a846977616348e241da7de694f281956d9fcff9",
+            "next_asset_200": true,
+            "missing_asset_404": true
+          },
+          {
+            "name": "environment_update_restart_public_build",
+            "status": "PASS",
+            "revision": 2,
+            "literals_after_restart": true,
+            "public_build": true
+          },
+          {
+            "name": "build_failure",
+            "status": "PASS",
+            "deployment_id": 3,
+            "previous_container_preserved": true,
+            "previous_collector_preserved": true
+          },
+          {
+            "name": "unhealthy_rollback",
+            "status": "PASS",
+            "deployment_id": 4,
+            "previous_container_id": "abd7a41500a73f7c45dd3902343538c86439637398cc3565e8af87933b0a689a",
+            "rollback_boundary": {
+              "generation": "2096:153761",
+              "device": 2096,
+              "inode": 153761,
+              "next_offset": 2716
+            }
+          },
+          {
+            "name": "next_ssr_unhealthy_rollback",
+            "status": "PASS",
+            "ssr_marker": "healthy_update",
+            "html_sha256": "96dfaea9dc4d971b7b69cbcb2a846977616348e241da7de694f281956d9fcff9",
+            "next_asset_200": true,
+            "missing_asset_404": true
+          },
+          {
+            "name": "environment_rollback_preserves_exact_config",
+            "status": "PASS",
+            "revision": 2,
+            "exact_container": true,
+            "exact_collector": true
+          },
+          {
+            "name": "environment_active_exposure_after_desired3_health_rollback",
+            "status": "PASS",
+            "active_source": 3,
+            "desired_source": 4,
+            "current_deployment_id": 2,
+            "exposure_status": "reachable",
+            "exact_CIDs_and_env2": true,
+            "signed_terminal_unchanged": true,
+            "probe_scope": "LOCAL_LOOPBACK_DOCKER",
+            "independent_desktop_probe": false
+          },
+          {
+            "name": "first_build_failure",
+            "status": "PASS",
+            "deployment_id": 5,
+            "pointer": null
+          },
+          {
+            "name": "first_health_failure",
+            "status": "PASS",
+            "deployment_id": 6,
+            "rollback_forged": false
+          },
+          {
+            "name": "collector_build_failure_blocks_finalization",
+            "status": "PASS",
+            "previous_runtime_preserved": true,
+            "collector_still_running": true,
+            "leases_retained": true
+          }
+        ],
+        "failure": null,
+        "cleanup": true
+      }
+    },
+    {
+      "path": "app/.out-scripts/target-enrollment-runtime/5a02d1f2a796/result.json",
+      "result": {
+        "status": "PASS",
+        "nonce": "5a02d1f2a796",
+        "scope": "CONTROLLER_HELPER_UPGRADE_RUNTIME",
+        "cases": 7,
+        "framework": "static-spa",
+        "enrolled_apps": 2,
+        "installed_helpers": true,
+        "controller_process_loss_recovered": true,
+        "packaged_templates_collector": true,
+        "verified_terminals": 6,
+        "unknown_without_retry": 1,
+        "runtime_nonce": "2957e0f84e12",
+        "cleanup": true,
+        "bundle_sha256": "cf57563ef093ba69e7a5032cea90891beea29c7273b1e13c038440913150354e",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "resource_probes": 7,
+        "historical_release_preserved": false,
+        "helper_upgrade_integrated": true,
+        "cold_startup_terminal_recovered": true,
+        "preterminal_unknown_blocked": true,
+        "no_runtime_replay": true,
+        "environment_enabled": true,
+        "helper_controller": {
+          "status": "PASS",
+          "scope": "CONTROLLER_HELPER_UPGRADE_PINNED_SSH_SQLITE",
+          "observations": [
+            {
+              "app_id": 1,
+              "fault": "dispatch-link",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "fault": "after-dispatch",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "fault": "outcome-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "fault": "commit-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "state": "applied",
+              "actual_pinned_SSH": true,
+              "old_pin": "4fbe3321801fd084749df2892fbc2fa078ae6e64e6458a107b5940517f0ff957",
+              "new_pin": "5b876a1a55c776722e0f440b4d67bedb45d7ef6118eb203245f5a943c174c029",
+              "exact_revision_transition": true,
+              "key_marker_guards_preserved": true
+            },
+            {
+              "app_id": 2,
+              "fault": "dispatch-link",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "fault": "after-dispatch",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "fault": "outcome-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "fault": "commit-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "state": "applied",
+              "actual_pinned_SSH": true,
+              "old_pin": "4fbe3321801fd084749df2892fbc2fa078ae6e64e6458a107b5940517f0ff957",
+              "new_pin": "5b876a1a55c776722e0f440b4d67bedb45d7ef6118eb203245f5a943c174c029",
+              "exact_revision_transition": true,
+              "key_marker_guards_preserved": true
+            }
+          ],
+          "private_fault_fixture_cleanup": true
+        }
+      },
+      "runtime": {
+        "status": "PASS",
+        "scope": "PINNED_SSH_SQLITE_DOCKER_RUNTIME",
+        "framework": "static-spa",
+        "environment_enabled": true,
+        "nonce": "2957e0f84e12",
+        "source_sha": "0c9e11c833f3d5c60bd5f8891eea88dfa94a6f0c",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "bundle_sha256": "cf57563ef093ba69e7a5032cea90891beea29c7273b1e13c038440913150354e",
+        "driver_sha256": "9462e0f18958a4bcebb9d147fb6562605645fe47bb0a7d912b719c7f907992e5",
+        "deadline_expired": false,
+        "subject_unchanged": true,
+        "cases": [
+          {
+            "name": "first_healthy",
+            "status": "PASS",
+            "deployment_id": 1,
+            "sha": "86e7418c2ec74fd31ad67f0cfcfa278ab24d60f9",
+            "container_id": "1f8d22bf368238f152fbdb8c2270a8a32ec7a553e080fd822241f27bd0786f53",
+            "metric_rows": 1
+          },
+          {
+            "name": "spa_routes_first_healthy",
+            "status": "PASS",
+            "html_sha256": "ce7a5691c871e71cad65c7a8904feb716c38e837744c04234b5476b82fe8a68a",
+            "deep_link_matches_index": true,
+            "missing_assets_404": true
+          },
+          {
+            "name": "environment_first_revision_and_selection",
+            "status": "PASS",
+            "literal_values": true,
+            "image_excludes_runtime": true,
+            "selected_next_revision": 2
+          },
+          {
+            "name": "healthy_update",
+            "status": "PASS",
+            "deployment_id": 2,
+            "sha": "dba2e3dbf25a43be724017254bed6f8c113af354",
+            "container_id": "a0eb1e4d07605abb3be8ba6e3627613f2550d6a4b6f2da6ad26345d535d3cc86",
+            "activation": {
+              "state": "active",
+              "stream_generation": "2096:157148",
+              "start_offset": 680
+            }
+          },
+          {
+            "name": "spa_routes_healthy_update",
+            "status": "PASS",
+            "html_sha256": "d12b8f1de5895d35d934a8d363f4bb3a9168fcab95e62fae35b293ef801d0c39",
+            "deep_link_matches_index": true,
+            "missing_assets_404": true
+          },
+          {
+            "name": "environment_update_restart_public_build",
+            "status": "PASS",
+            "revision": 2,
+            "literals_after_restart": true,
+            "public_build": true
+          },
+          {
+            "name": "build_failure",
+            "status": "PASS",
+            "deployment_id": 3,
+            "previous_container_preserved": true,
+            "previous_collector_preserved": true
+          },
+          {
+            "name": "unhealthy_rollback",
+            "status": "PASS",
+            "deployment_id": 4,
+            "previous_container_id": "a0eb1e4d07605abb3be8ba6e3627613f2550d6a4b6f2da6ad26345d535d3cc86",
+            "rollback_boundary": {
+              "generation": "2096:157148",
+              "device": 2096,
+              "inode": 157148,
+              "next_offset": 2389
+            }
+          },
+          {
+            "name": "spa_routes_unhealthy_rollback",
+            "status": "PASS",
+            "html_sha256": "d12b8f1de5895d35d934a8d363f4bb3a9168fcab95e62fae35b293ef801d0c39",
+            "deep_link_matches_index": true,
+            "missing_assets_404": true
+          },
+          {
+            "name": "environment_rollback_preserves_exact_config",
+            "status": "PASS",
+            "revision": 2,
+            "exact_container": true,
+            "exact_collector": true
+          },
+          {
+            "name": "environment_active_exposure_after_desired3_health_rollback",
+            "status": "PASS",
+            "active_source": 3,
+            "desired_source": 4,
+            "current_deployment_id": 2,
+            "exposure_status": "reachable",
+            "exact_CIDs_and_env2": true,
+            "signed_terminal_unchanged": true,
+            "probe_scope": "LOCAL_LOOPBACK_DOCKER",
+            "independent_desktop_probe": false
+          },
+          {
+            "name": "first_build_failure",
+            "status": "PASS",
+            "deployment_id": 5,
+            "pointer": null
+          },
+          {
+            "name": "first_health_failure",
+            "status": "PASS",
+            "deployment_id": 6,
+            "rollback_forged": false
+          },
+          {
+            "name": "collector_build_failure_blocks_finalization",
+            "status": "PASS",
+            "previous_runtime_preserved": true,
+            "collector_still_running": true,
+            "leases_retained": true
+          }
+        ],
+        "failure": null,
+        "cleanup": true
+      }
+    },
+    {
+      "path": "app/.out-scripts/target-enrollment-runtime/8727764fe5e4/result.json",
+      "result": {
+        "status": "PASS",
+        "nonce": "8727764fe5e4",
+        "scope": "CONTROLLER_HELPER_UPGRADE_RUNTIME",
+        "cases": 7,
+        "framework": "express",
+        "enrolled_apps": 2,
+        "installed_helpers": true,
+        "controller_process_loss_recovered": true,
+        "packaged_templates_collector": true,
+        "verified_terminals": 6,
+        "unknown_without_retry": 1,
+        "runtime_nonce": "4121549f36ac",
+        "cleanup": true,
+        "bundle_sha256": "cf57563ef093ba69e7a5032cea90891beea29c7273b1e13c038440913150354e",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "resource_probes": 7,
+        "historical_release_preserved": false,
+        "helper_upgrade_integrated": true,
+        "cold_startup_terminal_recovered": true,
+        "preterminal_unknown_blocked": true,
+        "no_runtime_replay": true,
+        "environment_enabled": false,
+        "helper_controller": {
+          "status": "PASS",
+          "scope": "CONTROLLER_HELPER_UPGRADE_PINNED_SSH_SQLITE",
+          "observations": [
+            {
+              "app_id": 2,
+              "fault": "dispatch-link",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "fault": "after-dispatch",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "fault": "outcome-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "fault": "commit-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "state": "applied",
+              "actual_pinned_SSH": true,
+              "old_pin": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+              "new_pin": "5b876a1a55c776722e0f440b4d67bedb45d7ef6118eb203245f5a943c174c029",
+              "exact_revision_transition": true,
+              "key_marker_guards_preserved": true
+            },
+            {
+              "app_id": 1,
+              "fault": "dispatch-link",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "fault": "after-dispatch",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "fault": "outcome-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "fault": "commit-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "state": "applied",
+              "actual_pinned_SSH": true,
+              "old_pin": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+              "new_pin": "5b876a1a55c776722e0f440b4d67bedb45d7ef6118eb203245f5a943c174c029",
+              "exact_revision_transition": true,
+              "key_marker_guards_preserved": true
+            }
+          ],
+          "private_fault_fixture_cleanup": true,
+          "existing_app_and_collector_CID_unchanged": true
+        }
+      },
+      "runtime": {
+        "status": "PASS",
+        "scope": "PINNED_SSH_SQLITE_DOCKER_RUNTIME",
+        "framework": "express",
+        "environment_enabled": false,
+        "nonce": "4121549f36ac",
+        "source_sha": "0c9e11c833f3d5c60bd5f8891eea88dfa94a6f0c",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "bundle_sha256": "cf57563ef093ba69e7a5032cea90891beea29c7273b1e13c038440913150354e",
+        "driver_sha256": "9462e0f18958a4bcebb9d147fb6562605645fe47bb0a7d912b719c7f907992e5",
+        "deadline_expired": false,
+        "subject_unchanged": true,
+        "cases": [
+          {
+            "name": "first_healthy",
+            "status": "PASS",
+            "deployment_id": 1,
+            "sha": "e1ba6fd8f7b47d8e0fe721d61451e00c19c78320",
+            "container_id": "281af90ebc5a514bab43ae3559d4a25a0001307bd684c5d3a1764636c4489433",
+            "metric_rows": 2
+          },
+          {
+            "name": "healthy_update",
+            "status": "PASS",
+            "deployment_id": 2,
+            "sha": "3956cbc986581288f5557c81d2ed2389a51989a3",
+            "container_id": "e05af0f222260d5f4766a67bcad89f7c989e0dd8667d8b8e96c7689336c6fc1b",
+            "activation": {
+              "state": "active",
+              "stream_generation": "2096:154975",
+              "start_offset": 999
+            }
+          },
+          {
+            "name": "build_failure",
+            "status": "PASS",
+            "deployment_id": 3,
+            "previous_container_preserved": true,
+            "previous_collector_preserved": true
+          },
+          {
+            "name": "unhealthy_rollback",
+            "status": "PASS",
+            "deployment_id": 4,
+            "previous_container_id": "e05af0f222260d5f4766a67bcad89f7c989e0dd8667d8b8e96c7689336c6fc1b",
+            "rollback_boundary": {
+              "generation": "2096:154975",
+              "device": 2096,
+              "inode": 154975,
+              "next_offset": 2713
+            }
+          },
+          {
+            "name": "first_build_failure",
+            "status": "PASS",
+            "deployment_id": 5,
+            "pointer": null
+          },
+          {
+            "name": "first_health_failure",
+            "status": "PASS",
+            "deployment_id": 6,
+            "rollback_forged": false
+          },
+          {
+            "name": "collector_build_failure_blocks_finalization",
+            "status": "PASS",
+            "previous_runtime_preserved": true,
+            "collector_still_running": true,
+            "leases_retained": true
+          }
+        ],
+        "failure": null,
+        "cleanup": true
+      }
+    },
+    {
+      "path": "app/.out-scripts/target-enrollment-runtime/9d89cba2d5c7/result.json",
+      "result": {
+        "status": "PASS",
+        "nonce": "9d89cba2d5c7",
+        "scope": "CONTROLLER_HELPER_UPGRADE_RUNTIME",
+        "cases": 7,
+        "framework": "express",
+        "enrolled_apps": 2,
+        "installed_helpers": true,
+        "controller_process_loss_recovered": true,
+        "packaged_templates_collector": true,
+        "verified_terminals": 6,
+        "unknown_without_retry": 1,
+        "runtime_nonce": "217467954cc8",
+        "cleanup": true,
+        "bundle_sha256": "cf57563ef093ba69e7a5032cea90891beea29c7273b1e13c038440913150354e",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "resource_probes": 7,
+        "historical_release_preserved": false,
+        "helper_upgrade_integrated": true,
+        "cold_startup_terminal_recovered": true,
+        "preterminal_unknown_blocked": true,
+        "no_runtime_replay": true,
+        "environment_enabled": true,
+        "helper_controller": {
+          "status": "PASS",
+          "scope": "CONTROLLER_HELPER_UPGRADE_PINNED_SSH_SQLITE",
+          "observations": [
+            {
+              "app_id": 1,
+              "fault": "dispatch-link",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "fault": "after-dispatch",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "fault": "outcome-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "fault": "commit-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "state": "applied",
+              "actual_pinned_SSH": true,
+              "old_pin": "4fbe3321801fd084749df2892fbc2fa078ae6e64e6458a107b5940517f0ff957",
+              "new_pin": "5b876a1a55c776722e0f440b4d67bedb45d7ef6118eb203245f5a943c174c029",
+              "exact_revision_transition": true,
+              "key_marker_guards_preserved": true
+            },
+            {
+              "app_id": 2,
+              "fault": "dispatch-link",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "fault": "after-dispatch",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "fault": "outcome-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "fault": "commit-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "state": "applied",
+              "actual_pinned_SSH": true,
+              "old_pin": "4fbe3321801fd084749df2892fbc2fa078ae6e64e6458a107b5940517f0ff957",
+              "new_pin": "5b876a1a55c776722e0f440b4d67bedb45d7ef6118eb203245f5a943c174c029",
+              "exact_revision_transition": true,
+              "key_marker_guards_preserved": true
+            }
+          ],
+          "private_fault_fixture_cleanup": true
+        }
+      },
+      "runtime": {
+        "status": "PASS",
+        "scope": "PINNED_SSH_SQLITE_DOCKER_RUNTIME",
+        "framework": "express",
+        "environment_enabled": true,
+        "nonce": "217467954cc8",
+        "source_sha": "0c9e11c833f3d5c60bd5f8891eea88dfa94a6f0c",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "bundle_sha256": "cf57563ef093ba69e7a5032cea90891beea29c7273b1e13c038440913150354e",
+        "driver_sha256": "9462e0f18958a4bcebb9d147fb6562605645fe47bb0a7d912b719c7f907992e5",
+        "deadline_expired": false,
+        "subject_unchanged": true,
+        "cases": [
+          {
+            "name": "first_healthy",
+            "status": "PASS",
+            "deployment_id": 1,
+            "sha": "8280e9ed814e63f210c40f1d915588a6d76a5537",
+            "container_id": "3b6b86fa2a664dae5542d824f54b8c7566988438daf3d6787a8c353e61574b4e",
+            "metric_rows": 1
+          },
+          {
+            "name": "environment_first_revision_and_selection",
+            "status": "PASS",
+            "literal_values": true,
+            "image_excludes_runtime": true,
+            "selected_next_revision": 2
+          },
+          {
+            "name": "healthy_update",
+            "status": "PASS",
+            "deployment_id": 2,
+            "sha": "575918409c45c4529896709bba8d0a23334dc663",
+            "container_id": "5e7c9786cb5e7a498c6b13f999241fcc55e543e30b149877ba398892eda0e418",
+            "activation": {
+              "state": "active",
+              "stream_generation": "2096:164295",
+              "start_offset": 334
+            }
+          },
+          {
+            "name": "environment_update_restart_public_build",
+            "status": "PASS",
+            "revision": 2,
+            "literals_after_restart": true,
+            "public_build": false
+          },
+          {
+            "name": "build_failure",
+            "status": "PASS",
+            "deployment_id": 3,
+            "previous_container_preserved": true,
+            "previous_collector_preserved": true
+          },
+          {
+            "name": "unhealthy_rollback",
+            "status": "PASS",
+            "deployment_id": 4,
+            "previous_container_id": "5e7c9786cb5e7a498c6b13f999241fcc55e543e30b149877ba398892eda0e418",
+            "rollback_boundary": {
+              "generation": "2096:164295",
+              "device": 2096,
+              "inode": 164295,
+              "next_offset": 2033
+            }
+          },
+          {
+            "name": "environment_rollback_preserves_exact_config",
+            "status": "PASS",
+            "revision": 2,
+            "exact_container": true,
+            "exact_collector": true
+          },
+          {
+            "name": "environment_active_exposure_after_desired3_health_rollback",
+            "status": "PASS",
+            "active_source": 3,
+            "desired_source": 4,
+            "current_deployment_id": 2,
+            "exposure_status": "reachable",
+            "exact_CIDs_and_env2": true,
+            "signed_terminal_unchanged": true,
+            "probe_scope": "LOCAL_LOOPBACK_DOCKER",
+            "independent_desktop_probe": false
+          },
+          {
+            "name": "first_build_failure",
+            "status": "PASS",
+            "deployment_id": 5,
+            "pointer": null
+          },
+          {
+            "name": "first_health_failure",
+            "status": "PASS",
+            "deployment_id": 6,
+            "rollback_forged": false
+          },
+          {
+            "name": "collector_build_failure_blocks_finalization",
+            "status": "PASS",
+            "previous_runtime_preserved": true,
+            "collector_still_running": true,
+            "leases_retained": true
+          }
+        ],
+        "failure": null,
+        "cleanup": true
+      }
+    },
+    {
+      "path": "app/.out-scripts/target-enrollment-runtime/e3957ac58c0a/result.json",
+      "result": {
+        "status": "PASS",
+        "nonce": "e3957ac58c0a",
+        "scope": "CONTROLLER_HELPER_UPGRADE_RUNTIME",
+        "cases": 7,
+        "framework": "express",
+        "enrolled_apps": 2,
+        "installed_helpers": true,
+        "controller_process_loss_recovered": true,
+        "packaged_templates_collector": true,
+        "verified_terminals": 6,
+        "unknown_without_retry": 1,
+        "runtime_nonce": "c9f7b17cc9f2",
+        "cleanup": true,
+        "bundle_sha256": "cf57563ef093ba69e7a5032cea90891beea29c7273b1e13c038440913150354e",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "resource_probes": 7,
+        "historical_release_preserved": false,
+        "helper_upgrade_integrated": true,
+        "cold_startup_terminal_recovered": true,
+        "preterminal_unknown_blocked": true,
+        "no_runtime_replay": true,
+        "environment_enabled": true,
+        "helper_controller": {
+          "status": "PASS",
+          "scope": "CONTROLLER_HELPER_UPGRADE_PINNED_SSH_SQLITE",
+          "observations": [
+            {
+              "app_id": 1,
+              "fault": "dispatch-link",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "fault": "after-dispatch",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "fault": "outcome-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "fault": "commit-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 1,
+              "state": "applied",
+              "actual_pinned_SSH": true,
+              "old_pin": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+              "new_pin": "5b876a1a55c776722e0f440b4d67bedb45d7ef6118eb203245f5a943c174c029",
+              "exact_revision_transition": true,
+              "key_marker_guards_preserved": true
+            },
+            {
+              "app_id": 2,
+              "fault": "dispatch-link",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "fault": "after-dispatch",
+              "actual_SIGKILL": true,
+              "state": "not_applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "fault": "outcome-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "fault": "commit-link",
+              "actual_SIGKILL": true,
+              "state": "applied",
+              "pin_finalized_by_production_CLI": true,
+              "key_marker_preserved": true,
+              "cold_retry_no_revision_advance": true
+            },
+            {
+              "app_id": 2,
+              "state": "applied",
+              "actual_pinned_SSH": true,
+              "old_pin": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+              "new_pin": "5b876a1a55c776722e0f440b4d67bedb45d7ef6118eb203245f5a943c174c029",
+              "exact_revision_transition": true,
+              "key_marker_guards_preserved": true
+            }
+          ],
+          "private_fault_fixture_cleanup": true
+        }
+      },
+      "runtime": {
+        "status": "PASS",
+        "scope": "PINNED_SSH_SQLITE_DOCKER_RUNTIME",
+        "framework": "express",
+        "environment_enabled": true,
+        "nonce": "c9f7b17cc9f2",
+        "source_sha": "0c9e11c833f3d5c60bd5f8891eea88dfa94a6f0c",
+        "subject_sha256": {
+          "target_execution_guard.py": "3cadd020a5cfc5a784bd4c62fc7b887ea62b0094a921fc30a8177622090b222f",
+          "target_guarded_ssh_helper.py": "4b06a70b3274708f7af3284683df32da81c1107877f7c1313158fcc31206b0e7",
+          "target_product_runtime.py": "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"
+        },
+        "bundle_sha256": "cf57563ef093ba69e7a5032cea90891beea29c7273b1e13c038440913150354e",
+        "driver_sha256": "9462e0f18958a4bcebb9d147fb6562605645fe47bb0a7d912b719c7f907992e5",
+        "deadline_expired": false,
+        "subject_unchanged": true,
+        "cases": [
+          {
+            "name": "first_healthy",
+            "status": "PASS",
+            "deployment_id": 1,
+            "sha": "3c6f48f6a2df53f3829e955b2794e08bbb00c344",
+            "container_id": "17af4c379c697b1206cf3c8de2928184c682e9625dc63b47c41651fc60b49c58",
+            "metric_rows": 1
+          },
+          {
+            "name": "environment_first_revision_and_selection",
+            "status": "PASS",
+            "literal_values": true,
+            "image_excludes_runtime": true,
+            "selected_next_revision": 2
+          },
+          {
+            "name": "healthy_update",
+            "status": "PASS",
+            "deployment_id": 2,
+            "sha": "51fbc77ae1d212a0bb94d67fdd9377d26c7682c7",
+            "container_id": "2200459ca008cffb73098b9d2665ca2d07b72e7ef321418de61e6c7a972127f1",
+            "activation": {
+              "state": "active",
+              "stream_generation": "2096:153751",
+              "start_offset": 336
+            }
+          },
+          {
+            "name": "environment_update_restart_public_build",
+            "status": "PASS",
+            "revision": 2,
+            "literals_after_restart": true,
+            "public_build": false
+          },
+          {
+            "name": "build_failure",
+            "status": "PASS",
+            "deployment_id": 3,
+            "previous_container_preserved": true,
+            "previous_collector_preserved": true
+          },
+          {
+            "name": "unhealthy_rollback",
+            "status": "PASS",
+            "deployment_id": 4,
+            "previous_container_id": "2200459ca008cffb73098b9d2665ca2d07b72e7ef321418de61e6c7a972127f1",
+            "rollback_boundary": {
+              "generation": "2096:153751",
+              "device": 2096,
+              "inode": 153751,
+              "next_offset": 2048
+            }
+          },
+          {
+            "name": "environment_rollback_preserves_exact_config",
+            "status": "PASS",
+            "revision": 2,
+            "exact_container": true,
+            "exact_collector": true
+          },
+          {
+            "name": "environment_active_exposure_after_desired3_health_rollback",
+            "status": "PASS",
+            "active_source": 3,
+            "desired_source": 4,
+            "current_deployment_id": 2,
+            "exposure_status": "reachable",
+            "exact_CIDs_and_env2": true,
+            "signed_terminal_unchanged": true,
+            "probe_scope": "LOCAL_LOOPBACK_DOCKER",
+            "independent_desktop_probe": false
+          },
+          {
+            "name": "first_build_failure",
+            "status": "PASS",
+            "deployment_id": 5,
+            "pointer": null
+          },
+          {
+            "name": "first_health_failure",
+            "status": "PASS",
+            "deployment_id": 6,
+            "rollback_forged": false
+          },
+          {
+            "name": "collector_build_failure_blocks_finalization",
+            "status": "PASS",
+            "previous_runtime_preserved": true,
+            "collector_still_running": true,
+            "leases_retained": true
+          }
+        ],
+        "failure": null,
+        "cleanup": true
+      }
+    }
+  ],
+  "runtime_attempts": 35,
+  "native_controller_SIGKILL_cases": 40,
+  "native_helper_CLI_observations": 50,
+  "root_systemd": {
+    "status": "PASS",
+    "scope": "ROOT_LINUX_SYSTEMD_NATIVE_CONTROLLER_UPGRADE_PRIVATE_FIXTURE",
+    "checks": [
+      "consent_and_parent_pins_rejected_before_upgrade_mutation",
+      "staging_death_same_uuid_inspect_only_and_no_other_intent_takeover",
+      "death_after_guarded_stop_keeps_db_key_identity_and_unrelated_app",
+      "consistent_backup_is_root_sealed_before_migration_and_service_cannot_overwrite_it",
+      "lost_migration_reply_leaves_exact35_schema_and_candidate_maintenance_without_auto_migration",
+      "death_after_atomic_unit_switch_is_cold_inspectable_without_replay",
+      "service_restart_during_stop_and_switch_recovers_without_restarting_maintenance_candidate",
+      "candidate_maintenance_blocks_even_pause_writes_before_commit",
+      "lost_commit_reply_recovers_without_precommit_hash_comparison_or_credential_loss",
+      "duplicate_upgrade_after_commit_never_restarts_the_service",
+      "second_revision_preserves_parent_history_and_rejects_historical_adoption",
+      "rollback_crashes_preserve_legitimate_writes_and_never_restart_restored_parent",
+      "reverse_commit_reply_loss_and_candidate_restart_never_auto_migrate29",
+      "explicit_two_level_rollback_preserves_new_credentials_and_original_installation",
+      "startup_failure_never_publishes_gate_and_explicit_rollback_restores_old_ready_runtime",
+      "old_installer_attestation_valid_again_after_rollback",
+      "SIGKILL_inside_migration033_rolls_back032_and033_atomically_and_same_uuid_recovers",
+      "pending_helper_upgrade_blocks_reverse_before_service_stop_or_unit_switch",
+      "nonempty_encrypted_environment_table_blocks_schema_rollback_before_service_stop_or_unit_switch"
+    ],
+    "production_vps_used": false,
+    "production_database_used": false,
+    "fixture_root_removed": true,
+    "last_operation": "inspect-upgrade",
+    "last_error_code": null,
+    "fixture_unit_removed": true,
+    "fixture_account_removed": true
+  },
+  "desktop_main_upgrade": {
+    "status": "PASS",
+    "scope": "PRIVATE_ROOT_SYSTEMD_PINNED_SSH_MAIN_SQLITE_UPGRADE",
+    "release_inputs": {
+      "original": "db1e58c83badef0c7efca42b78fff483d71cc38bdd711a635924d0849b41bdb8",
+      "candidate": "3782655ddd14e5b88e6fff592cf7415e5652b4c0562af68866b4fd0eae2fadf0",
+      "fixture_installer": "e26bb86ce5fe3a36b6c605fbddab8d39cd74c1b2de6274ae5f5ffd08d0a488b1"
+    },
+    "checks": [
+      "fresh_desktop036_and_native_controller035_have_separate_migration_roles",
+      "original_root_admin_enrollment_stores_api_token_only_in_encrypted_main_vault",
+      "plan_prepare_and_absent_inspect_preserve_uuid_and_never_create_remote_upgrade_namespace",
+      "independently_pinned_upgrade_transfer_uses_distinct_uuid_namespace_preserving_original_install_staging",
+      "wrong_tool_pin_rejected_by_receiver_before_upgrader_execution",
+      "disconnect_before_root_journal_keeps_attempted_and_wrong_parent_recovery_never_creates_journal",
+      "lost_upgrade_reply_recovers_in_separate_cold_main_process_without_replaying_or_restarting_service",
+      "explicit_runtime_refresh_preserves_api_token_client_and_authenticated_api_with_revision_root_admin",
+      "historical_release_keeps_real_inspection_and_token_refresh_but_cannot_be_selected_for_new_upgrade",
+      "cold_profile_readonly_discovery_and_explicit_adoption_preserve_remote_uuids_and_current_runtime",
+      "cold_adoption_separate_readonly_enrollment_api200_revocation_without_reinstall_restart_or_receipt_change",
+      "same_host_readded_vps_fresh_pinned_ssh_authority_then_separate_api_refresh_preserves_uuid_pid_token_client_and_api200",
+      "attempt_monotonicity_prevents_second_upgrade_and_does_not_rebind_api_credentials",
+      "revision_admin_derives_current_runtime_after_root_attestation_and_rejects_wrong_uid_payload_without_restart",
+      "revision_admin_rejects_stopped_controller_without_implicitly_starting_or_adopting_it",
+      "rollback_blocks_old_binding_until_explicit_refresh_then_reuses_the_same_authenticated_token",
+      "rolled_back_current_operation_admin_uses_restored_parent_payload_and_preserves_original_authority",
+      "explicit_main_rollback_restores_original_unit_and_preserves_root_receipt_identity_key_database_inode",
+      "archived_vps_authority_rejected_before_any_ssh_execution"
+    ],
+    "production_vps_used": false,
+    "production_database_used": false,
+    "fixture_root_removed": true,
+    "fixture_unit_removed": true,
+    "fixture_account_removed": true,
+    "python_only_path": true,
+    "ssh_authentications": 12,
+    "ssh_executions": 48,
+    "script_bytes": 40517,
+    "compressed_executions": 48,
+    "max_command_bytes": 12138
+  },
+  "public_HTTP": {
+    "status": "PASS",
+    "scope": "PUBLIC_HTTP_READ_ONLY_NO_SSH",
+    "checked_at": "2026-11-15T19:11:18.692Z",
+    "observations": [
+      {
+        "port": 30000,
+        "status": 200
+      },
+      {
+        "port": 30001,
+        "status": 200
+      },
+      {
+        "port": 30002,
+        "status": 200
+      },
+      {
+        "port": 30003,
+        "status": 200
+      },
+      {
+        "port": 30004,
+        "status": 200
+      },
+      {
+        "port": 30005,
+        "status": 200
+      }
+    ]
+  },
+  "pinned_SSH_readonly": {
+    "checked_at": "2026-11-15T19:02:29.798Z",
+    "pinned_host": "167.71.202.116",
+    "mutation_attempted": false,
+    "expected_baseline": true,
+    "snapshot": {
+      "receipt": {
+        "format": 1,
+        "request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "release_sha256": "96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd",
+        "source_directory": "/var/lib/opspilot-controller-transfer/release",
+        "payload_sha256": "2345f6ebee2bb83728658e3b4caa79ad76bb6af3eb45b56b862875628d45c640",
+        "phase": "installed",
+        "uid": 997,
+        "gid": 987,
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "created_at": "2026-11-10T06:11:51.696Z",
+        "updated_at": "2026-11-10T06:12:02.055Z"
+      },
+      "upgrade": {
+        "format": 1,
+        "request_key": "d7afa8d4-91a7-4399-895b-471f6a6bc01c",
+        "installation_request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+        "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+        "parent_upgrade_key": "2628dc29-cd96-4e82-a14f-a00f60d8c0a3",
+        "parent_release_sha256": "db1e58c83badef0c7efca42b78fff483d71cc38bdd711a635924d0849b41bdb8",
+        "release_sha256": "eb08d06756bd635ae332e8afd6cd6791e89dff94aef0ae763223d274848db7cf",
+        "release_directory": "/var/lib/opspilot-controller-upgrades/d7afa8d4-91a7-4399-895b-471f6a6bc01c/release",
+        "payload_sha256": "c97ab86dbec29e73d4c414a98b1f3507127d7ee54d08a5d1e7cf4406d47faae2",
+        "phase": "active",
+        "before": {
+          "format": 1,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "schema_sha256": "fa45b37736f00fa3c0b2f3f56a94c9dfd6817d058475a7535acd72b5128047f1",
+          "state_sha256": "f32bbd85143b952064337feda4a8aeeb7b35082c90a910ecab491b1e6a30cf95",
+          "key_sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706",
+          "database_inode": 265566,
+          "key_inode": 265570,
+          "quiescent": true,
+          "schema_version": 35
+        },
+        "rollback_before": null,
+        "created_at": "2026-11-15T14:27:39.097Z",
+        "updated_at": "2026-11-15T14:28:01.945Z"
+      },
+      "receipt_sha256": "b3be9019462c586781b64f7a13faa4f4c55e27d964893ba22571c835716ba5b4",
+      "upgrade_sha256": "0c5ebd0c5ad7e3f8bf0fd1b32d22972af9ee23ab45d7bf8118119be892de6c47",
+      "database_inode": 265566,
+      "schema": 35,
+      "retained_environment_target_digest": "f6f623072ae14828711e15570649f8d00377d961bbdf18294b0962a06edaba4e",
+      "retained_material_digest": "f52b9cfc80633337bd9bb6f2eb07addc9ede53a6bf43ef5fb9a281bf8fc35ed6",
+      "active_experiments": 0,
+      "active_jobs": 0,
+      "active_clients": 0,
+      "app_leases": 0,
+      "worker_leases": 0,
+      "unsettled_terminals": 0,
+      "prepared_activations": 0,
+      "apps": [
+        {
+          "id": 1,
+          "name": "san-nha-live",
+          "current_deployment_id": 4
+        },
+        {
+          "id": 2,
+          "name": "desktop-live-69eeeb78",
+          "current_deployment_id": 5
+        },
+        {
+          "id": 3,
+          "name": "spa-live-6ab247675f19",
+          "current_deployment_id": 10
+        },
+        {
+          "id": 4,
+          "name": "next-live-ba8a98aed302",
+          "current_deployment_id": 15
+        },
+        {
+          "id": 5,
+          "name": "env-live-88a0b12613c2",
+          "current_deployment_id": 20
+        },
+        {
+          "id": 6,
+          "name": "active-live-cff1aa0eb5c4",
+          "current_deployment_id": 22
+        }
+      ],
+      "containers": [
+        {
+          "name": "san-nha-live-app",
+          "id": "1bdb0eeacc48c4686cc157685e8aacec3b0f208f301ee6a1a0c218c3a82500bc",
+          "status": "running",
+          "started_at": "2026-11-10T08:05:34.188517852Z",
+          "restart_count": 0
+        },
+        {
+          "name": "san-nha-live-collector",
+          "id": "5049f9dc01cba64c771badf0d690ef49476f2cd9b9b9aa235ccaa9dbbc53eb6f",
+          "status": "running",
+          "started_at": "2026-11-10T08:05:34.716620348Z",
+          "restart_count": 0
+        },
+        {
+          "name": "desktop-live-69eeeb78-app",
+          "id": "55ee8e261546919d7072a34d98804d4fd248433064fcd1ac922843d792f771ea",
+          "status": "running",
+          "started_at": "2026-11-12T11:45:28.872137559Z",
+          "restart_count": 0
+        },
+        {
+          "name": "desktop-live-69eeeb78-collector",
+          "id": "3cbebfe49f5994b138582e7a4512da9ac7461b3b03e01e9eafc7d02e004f0969",
+          "status": "running",
+          "started_at": "2026-11-12T11:45:29.474597305Z",
+          "restart_count": 0
+        },
+        {
+          "name": "spa-live-6ab247675f19-app",
+          "id": "51afedc0502b2f81fa150858623ad7a8be2ca47c2d905829ac7f6399088cfccb",
+          "status": "running",
+          "started_at": "2026-11-13T06:39:30.199689111Z",
+          "restart_count": 0
+        },
+        {
+          "name": "spa-live-6ab247675f19-collector",
+          "id": "82aefed9096cd557ca946592de4f863d2eb75c9f72348bd2346ae1e9077732cc",
+          "status": "running",
+          "started_at": "2026-11-13T06:39:30.984032804Z",
+          "restart_count": 0
+        },
+        {
+          "name": "next-live-ba8a98aed302-app",
+          "id": "ab1fab9726d96299fdb5efdd09b9ce78b0412ebd30faa26810c1996efc63a732",
+          "status": "running",
+          "started_at": "2026-11-13T12:04:01.680906371Z",
+          "restart_count": 0
+        },
+        {
+          "name": "next-live-ba8a98aed302-collector",
+          "id": "f87c6699ba3d37ea4eacbfb7fb0a5d643aa22596df714b9ca7774a956d9a65f0",
+          "status": "running",
+          "started_at": "2026-11-13T12:04:02.388204726Z",
+          "restart_count": 0
+        },
+        {
+          "name": "env-live-88a0b12613c2-app",
+          "id": "83e1cc9755a77016bf2d09d36cc648ea2d18f00b467da44623337b8bf5d905b6",
+          "status": "running",
+          "started_at": "2026-11-15T11:13:13.684189024Z",
+          "restart_count": 0
+        },
+        {
+          "name": "env-live-88a0b12613c2-collector",
+          "id": "56c0b045a933439dbd8fd7523f567414064d99fa49877a332adbb3dffbdd5d84",
+          "status": "running",
+          "started_at": "2026-11-15T11:13:14.2741646Z",
+          "restart_count": 0
+        },
+        {
+          "name": "active-live-cff1aa0eb5c4-app",
+          "id": "f834f3af65759baa00e215f577e8f850473e8dea36873e5f2aef8ee8ac095171",
+          "status": "running",
+          "started_at": "2026-11-15T14:31:37.129233349Z",
+          "restart_count": 0
+        },
+        {
+          "name": "active-live-cff1aa0eb5c4-collector",
+          "id": "5a7a722c9a50fd99713c49e3be8de492f455d33578da630671d00cce74aa7c37",
+          "status": "running",
+          "started_at": "2026-11-15T14:31:37.703792151Z",
+          "restart_count": 0
+        }
+      ],
+      "owners": [
+        {
+          "app_id": 1,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "ownership_generation": 1,
+          "source_generation": 1,
+          "auto_deploy_paused": 1
+        },
+        {
+          "app_id": 2,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "ownership_generation": 1,
+          "source_generation": 1,
+          "auto_deploy_paused": 1
+        },
+        {
+          "app_id": 3,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "ownership_generation": 1,
+          "source_generation": 1,
+          "auto_deploy_paused": 1
+        },
+        {
+          "app_id": 4,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "ownership_generation": 1,
+          "source_generation": 1,
+          "auto_deploy_paused": 1
+        },
+        {
+          "app_id": 5,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "ownership_generation": 1,
+          "source_generation": 5,
+          "auto_deploy_paused": 1
+        },
+        {
+          "app_id": 6,
+          "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+          "ownership_generation": 1,
+          "source_generation": 3,
+          "auto_deploy_paused": 1
+        }
+      ],
+      "desired": [
+        {
+          "app_id": 1,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 2,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 3,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 4,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 5,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 5,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 5,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 5,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 5,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 6,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 6,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        },
+        {
+          "app_id": 6,
+          "auto_paused": 1,
+          "reconciliation_state": "paused"
+        }
+      ],
+      "vps_digest": "68940aec92472f567563d7c4edfc99f063b76abc466f14ec1fc974b3df070653",
+      "files": [
+        {
+          "path": ".controller-runtime-key",
+          "inode": 265570,
+          "sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706"
+        },
+        {
+          "path": ".product-controller-initialized",
+          "inode": 265569,
+          "sha256": "e9342557cddefc41325a75f51d3eca413e659c2cd348d4f6045a6c16702d2074"
+        },
+        {
+          "path": ".controller-installation",
+          "inode": 265565,
+          "sha256": "5d9cc95ff2db3d9338776481d7998be53b6d29bd5234d9c6db9b85d2b321609b"
+        }
+      ],
+      "service": "MainPID=1084375\nUser=opspilot-controller\nActiveState=active\n"
+    }
+  },
+  "source_sha256_lf": {
+    "app/scripts/controller-upgrade-lab/run.mjs": "a0e0dff665047abb76e4d13109e1370d4bd169abe72b650502ce17cfdd741094",
+    "app/scripts/product-runtime-lab/helper-controller-checks.mjs": "11df978a57b3d18f8046b55ec0b38314f4c7bedae6eb3369e20de915a3463a44",
+    "app/scripts/product-runtime-lab/helper-controller-fault.mjs": "09700153291b4e60f2f05a87f9ad2767e7a779bad02b842d5d4a96a329549b4f",
+    "app/scripts/product-runtime-lab/target-enrollment-runtime-preload.mjs": "463bb300d58ff644b06f415a95225eb896ecb2b1582aa9593081bbd90547d740",
+    "app/scripts/product-runtime-lab/target-enrollment-runtime.mjs": "ee9af747e8d313dcf1c36630ee7433ca611fc0561857a857bd36e23098128753",
+    "app/src/main/controlPlane/cli.ts": "eb34868c1564ab38966b4b6450be9da170259d301b51f5a0083e5def53346739",
+    "app/src/main/controlPlane/controllerUpgrade.test.ts": "0101da97eb303c39be719e901b82d610521ef1da956d4e85fc3b1a00ea244121",
+    "app/src/main/controlPlane/controllerUpgrade.ts": "8ef4270ab0f0beb6b5e8f008d509228d6028fa7a7e0101e37265dc18f95a7c41",
+    "app/src/main/controlPlane/controllerUpgradeAssets.ts": "8df08f5da0842b1c66ac233c2ffaeac7684eaadde68efed2cd6a8fa64d758277",
+    "app/src/main/controlPlane/controllerUpgradeCheck.test.ts": "03d2cb6b61acdd78984fb475626b146cf49c34056b817cf110195c4bbe390ff0",
+    "app/src/main/controlPlane/controllerUpgradeCheck.ts": "4b1ca530c004890081d9a4a3854150bdf4c32c28382397aea64c82ec47e526e1",
+    "app/src/main/controlPlane/targetEnrollmentRepository.ts": "86e9bb9eccf756bfc69e5dc84fce7faa30580741d540f239b0c6bc0181e3004d",
+    "app/src/main/controlPlane/targetHelperUpgradeBundle.ts": "4b1bba2ed4dd4c7fdf29f66c9d22b651ad5acf70b3b6335acef2ef2195d3bcad",
+    "app/src/main/controlPlane/targetHelperUpgradeExecution.ts": "560d145cf28410f7148852135bcd599dfb92effe3bf44bd4682f0ad72a67186e",
+    "app/src/main/controlPlane/targetHelperUpgradeJournal.ts": "457c5a7cbcb8a1b3860bb7e5e8dc36e60776d2a4a6eeda40fca2e5b25087a7f6",
+    "app/src/main/controlPlane/targetHelperUpgradeOutcome.ts": "442192436fb57099233d7c982ccb60f34cc828df470349820f68ab3f8839a2f1",
+    "app/src/main/controlPlane/targetHelperUpgradeReview.test.ts": "6c9b664017639f5df0c40bccf2521a6c1cbac5b720ad1106edd4cf3f495c450c",
+    "app/src/main/controlPlane/target_enrollment.py": "ae2c290726b6fc497489bca962036ac14806bf588086d181498cbc8dcd886c7b",
+    "app/src/main/ssh/manager.ts": "2355c2f8b9fb1a00232d421361594f0ff7784c06a7a87d5933f2e4964598e5c9",
+    "docs/contracts/product-target-helper-upgrade.ts": "7a93de5d60074399a80a62ee89d81e1ea7280833188063a11d7dbee023d87025"
+  },
+  "raw_sha256": {
+    "app/.out-scripts/controller-upgrade-desktop/5336f4f880da/result.json": "2d596f4796e5ba39b8715d9a819cb5ac80d8e7b45267fe42e56e9a2c8cf759f4",
+    "app/.out-scripts/controller-upgrade/eb4a5b3817af/result.json": "c99b814fde6b68f466a7c65742c6af66d1dac245afe79f31c4659afba393b283",
+    "app/.out-scripts/product-environment-inspect/e15f49b76b2d/snapshot.json": "abff617ebec9a9ce6fa871c6c4c01cc2a4d09fd794863123f6493f9bab6f4fc0",
+    "app/.out-scripts/product-runtime-lab/05a7919da48a/result.json": "7d181f602bad790351f2ad11d9d8461039c6fcdbbfdff5b09fe1fdea1513904a",
+    "app/.out-scripts/product-runtime-lab/16f92d614462/result.json": "06d67bb2697c2eef563e50becdee5fcb09dbdb3a1f6bf38b8360d0cac15484cd",
+    "app/.out-scripts/product-runtime-lab/217467954cc8/result.json": "e3c8a4aa6b79ab92bea5b7edec368d198dd08723c7ab002a09364c16fcf6a4f6",
+    "app/.out-scripts/product-runtime-lab/2957e0f84e12/result.json": "9010cf92ae63947b46570bc9f04a9615a4baffc214dcecdd5e57d34b188200ce",
+    "app/.out-scripts/product-runtime-lab/4121549f36ac/result.json": "1443d0380cb0a87857d24582f2a8c86796481781809cacdf9b9aefd38dfb5c92",
+    "app/.out-scripts/product-runtime-lab/5da7ae3cc0e0/interrupted-cleanup.json": "c99b5afa51c50b518e9c1e79a0114bbbea2dac80b8920530de7c9545169ae56c",
+    "app/.out-scripts/product-runtime-lab/c6c44b34c487/result.json": "45476cd2dc070bcd40bb3bae5eacaebf0fde79f734d62a96710ad848362e4192",
+    "app/.out-scripts/product-runtime-lab/c9f7b17cc9f2/result.json": "1768792d19e114b7aa05572cf06fb91227125e5ddb6f87f492d02aa40168ebdf",
+    "app/.out-scripts/r7h3e3b-main-attempt1.log": "1d09f194e3d2a7a7f4b02f30d6f0962ca9748acf2e73b567d6b16faeddc7d87e",
+    "app/.out-scripts/r7h3e3b-native-attempt1.log": "34b2a82f9d333590ec16405884de66d3b51eafdad318901b202d2cfb482b0add",
+    "app/.out-scripts/r7h3e3b-native-attempt2.log": "1bd94ce6d8e4230ba4d5b4d87b2ab3a341f846e7e05bf446bfeeb6446e5c428a",
+    "app/.out-scripts/r7h3e3b-native-attempt3.log": "221c148d77430f25020f7df35e1bb4353611cfa1a6caa05688ae0366a22db0c9",
+    "app/.out-scripts/r7h3e3b-native-attempt4.log": "2affa44a135814ae517e46660080eee77d692765a5c3f84dce842de4e14d4338",
+    "app/.out-scripts/r7h3e3b-public-http.json": "fa4f0f4c4d0bfb8eeef9888e9c208403c8e44d9c57e4bd089dd193d32e7f9337",
+    "app/.out-scripts/r7h3e3b-quality/build.log": "a66cd574d3d6db1e226c431a8ada3ca0b31332290c0c717bd8b8e3d3e2c173b3",
+    "app/.out-scripts/r7h3e3b-quality/diff.log": "bdf6d79147c1e8e7b1b927c588fb1a64754984405cffd67e177496d00dcb0da4",
+    "app/.out-scripts/r7h3e3b-quality/final-diff.log": "bdf6d79147c1e8e7b1b927c588fb1a64754984405cffd67e177496d00dcb0da4",
+    "app/.out-scripts/r7h3e3b-quality/final-format.log": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20",
+    "app/.out-scripts/r7h3e3b-quality/final-lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3e3b-quality/final-results.json": "9a48035c4edbe6f47b8571f1d8b3e8c5faab9620d99c477c46c353fb82fb9e31",
+    "app/.out-scripts/r7h3e3b-quality/format.log": "17aa973d3f004560237d9a95171210b0671deff23d61628eecf7322ff5938f20",
+    "app/.out-scripts/r7h3e3b-quality/full.log": "5257eccbd08168f4287e63a47b178054cac412e20631c072181d04ba14ae4dcf",
+    "app/.out-scripts/r7h3e3b-quality/lint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3e3b-quality/python-format.log": "3bc53bf3e981a98a34a852e175bf9b77af841edea74fca595d9aedcbaf9a4938",
+    "app/.out-scripts/r7h3e3b-quality/results.json": "54d9e41c77027c8bc6409d2095b0073462c3e9a29f158be494087b148d817fac",
+    "app/.out-scripts/r7h3e3b-quality/ruff.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "app/.out-scripts/r7h3e3b-quality/scripts-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/r7h3e3b-quality/types.log": "e1233c3e393be6bc01b75114f4405f780fe125c011904e60806109b2d88dbd38",
+    "app/.out-scripts/r7h3e3b-release-attempt2.log": "affc26fd3730294e7b128ff514bf33d72d3e4806a2fe54ec294c953a8132dd00",
+    "app/.out-scripts/r7h3e3b-release.log": "f5b37f19e23879e85eff55c07763df8bf3cd740e34de853f3c27af6a5c3459fe",
+    "app/.out-scripts/r7h3e3b-systemd-attempt1.log": "4ab54899e7a86ef0bede1320a0aa122980383821524fee1aec2fff38abb7041b",
+    "app/.out-scripts/target-enrollment-runtime/1f42fbaade2b/result.json": "bf542d479e9a47209f17cd29a4ae9024bb39f1a68bc2eb6a5302bc2065760a43",
+    "app/.out-scripts/target-enrollment-runtime/5a02d1f2a796/result.json": "b017e1974218fad8dca71eae3a292430f4d06a1f39de53264ae56d317fca3043",
+    "app/.out-scripts/target-enrollment-runtime/8727764fe5e4/result.json": "3a3c45e563899dbc531a145220c488d3751ee79d1a94f1df2ce8c68d1f1508ba",
+    "app/.out-scripts/target-enrollment-runtime/9d89cba2d5c7/result.json": "55bd26757d90c575ba4a22a9c083cc6ec1794ba2d42f297709b4b672a56fe937",
+    "app/.out-scripts/target-enrollment-runtime/e3957ac58c0a/result.json": "5530dcd50919e28169419ce5802f867f23ee1326be537efeefce6b530e609227"
+  },
+  "initial_attempts": [
+    "Attempt1 env fixture restored policies incorrectly (unpaused); failed after first healthy deployment. Fixed fixture preserves original policy, product quiescence unchanged; raw result retained.",
+    "Second matrix process ended before terminal result (cause not established); exact owned Docker resources/sshd/metrics/private credential scratch cleaned, SQLite evidence/progress retained; not counted as PASS.",
+    "Delayed fixture initially tried to unpause without explicit provenance, correctly rejected by SQLite trigger before deployment; final fixture unpauses explicitly, preserving paused env cases. No trigger relaxed.",
+    "Root build attempt could not trust UID1000 dependency owner; rebuilt as actual dependency owner using unchanged strict directory checks.",
+    "ESLint contract outside app base produced ignored-file warning; source lint excludes outside-base contract, TypeScript and explicit contract Prettier verify it. No lint warning suppression."
+  ],
+  "limits": [
+    "Private candidate only; catalog approval, serving VPS/controller/target rollout and Main/UI helper command entry remain next checkpoint.",
+    "Actual Main backend upgrade lab is not visual GUI acceptance.",
+    "Serving VPS pinned SSH readonly attestation and public HTTP6ports200 only; no mutation.",
+    "Exact old helper byte transitions only; no key/marker/fence/generation changes or arbitrary pin adoption.",
+    "Managed PostgreSQL, ML formal runs, packaging independent Windows and release completion remain OPEN."
+  ],
+  "accepted_exceptions": []
+}

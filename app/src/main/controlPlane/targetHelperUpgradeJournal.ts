@@ -9,8 +9,10 @@ import {
   mkdirSync,
   openSync,
   readSync,
+  readdirSync,
   unlinkSync,
-  writeFileSync
+  writeFileSync,
+  type Stats
 } from 'node:fs'
 import { join } from 'node:path'
 import SqliteDatabase from 'better-sqlite3'
@@ -36,6 +38,13 @@ import {
 } from './targetHelperUpgradeReview'
 import { assertControllerRuntimeSchema } from './controllerUpgradeCheck'
 import { readReleaseFile } from './controllerRelease'
+import { verifyTargetHelperUpgradeBundle } from './targetHelperUpgradeBundle'
+import { makeTargetEnrollmentPayload, verifyTargetEnrollmentProof } from './targetEnrollmentProof'
+import {
+  verifyTargetHelperUpgradeOutcome,
+  type TargetHelperUpgradeResult,
+  type TargetHelperUpgradeExpected
+} from './targetHelperUpgradeOutcome'
 
 const DOMAIN = 'opspilot-target-helper-upgrade-intent-v1\n'
 const CAP = 128 * 1024
@@ -96,7 +105,7 @@ const rowSchema = z.strictObject({
     .number()
     .int()
     .positive()
-    .max(Number.MAX_SAFE_INTEGER - 1),
+    .max(Number.MAX_SAFE_INTEGER - 2),
   receipt_json: z.string().min(1).max(16384),
   last_error_code: z.null(),
   created_at: z.string(),
@@ -112,8 +121,10 @@ const intentSchema = z.strictObject({
   original_enrollment: rowSchema,
   created_at: z.iso.datetime()
 })
-type Intent = z.infer<typeof intentSchema>
-type Identity = z.infer<typeof targetHelperUpgradeLookupSchema>
+export type TargetHelperUpgradeIntent = z.infer<typeof intentSchema>
+type Intent = TargetHelperUpgradeIntent
+export type TargetHelperUpgradeIdentity = z.infer<typeof targetHelperUpgradeLookupSchema>
+type Identity = TargetHelperUpgradeIdentity
 const envelopeSchema = z.strictObject({ intent: intentSchema, signature: sha })
 function reject(code: string): never {
   throw Error('TARGET_HELPER_UPGRADE_' + code)
@@ -156,8 +167,10 @@ function journalPaths(
   )
   return { parent, root, file: join(root, `${slot}-${identity.request_key}.json`) }
 }
-function readIntent(directory: string, identity: Identity, key: Buffer): Intent | undefined {
-  const { root, file } = journalPaths(directory, identity)
+function readJournalBytes(directory: string, identity: Identity, suffix = ''): Buffer | undefined {
+  const paths = journalPaths(directory, identity),
+    root = paths.root,
+    file = paths.file + suffix
   try {
     privateDirectory(root)
   } catch (error) {
@@ -178,7 +191,7 @@ function readIntent(directory: string, identity: Identity, key: Buffer): Intent 
     const before = fstatSync(fd)
     if (
       !before.isFile() ||
-      before.nlink !== 1 ||
+      (before.nlink !== 1 && !validAuxiliaryStagingLink(file, suffix, before)) ||
       before.size < 1 ||
       before.size > CAP ||
       (process.platform !== 'win32' &&
@@ -202,9 +215,52 @@ function readIntent(directory: string, identity: Identity, key: Buffer): Intent 
       path.isSymbolicLink() ||
       path.ino !== before.ino ||
       path.dev !== before.dev ||
-      path.nlink !== 1
+      path.nlink !== before.nlink ||
+      after.nlink !== before.nlink ||
+      (path.nlink !== 1 && !validAuxiliaryStagingLink(file, suffix, path))
     )
       reject('JOURNAL_UNSAFE')
+    return Buffer.from(bytes)
+  } catch (error) {
+    if (error instanceof Error && /^TARGET_HELPER_UPGRADE_[A-Z_]+$/.test(error.message)) throw error
+    return reject('JOURNAL_INVALID')
+  } finally {
+    closeSync(fd)
+  }
+}
+/** Auxiliary publication can be interrupted after link but before unlink; only that private
+ * exact staging inode is accepted. Primary intent and all foreign hardlinks remain rejected. */
+function validAuxiliaryStagingLink(file: string, suffix: string, info: Stats): boolean {
+  if (!['.dispatch', '.outcome', '.commit'].includes(suffix) || info.nlink !== 2) return false
+  const slash = Math.max(file.lastIndexOf('/'), file.lastIndexOf('\\'))
+  const root = file.slice(0, slash),
+    prefix = file.slice(slash + 1) + '.stage-'
+  const matches = readdirSync(root)
+    .filter((name) => name.startsWith(prefix) && /^[a-f0-9]{24}$/.test(name.slice(prefix.length)))
+    .filter((name) => {
+      const stage = lstatSync(join(root, name))
+      return (
+        stage.isFile() &&
+        !stage.isSymbolicLink() &&
+        stage.ino === info.ino &&
+        stage.dev === info.dev &&
+        stage.nlink === 2 &&
+        stage.uid === info.uid &&
+        stage.mode === info.mode
+      )
+    })
+  return matches.length === 1
+}
+
+export function syncTargetHelperUpgradeJournal(directory: string, identity: Identity): void {
+  const { root } = journalPaths(directory, identity)
+  privateDirectory(root)
+  syncDirectory(root)
+}
+function readIntent(directory: string, identity: Identity, key: Buffer): Intent | undefined {
+  const bytes = readJournalBytes(directory, identity)
+  if (!bytes) return undefined
+  try {
     const parsed = envelopeSchema.safeParse(JSON.parse(bytes.toString('utf8')))
     if (!parsed.success) reject('JOURNAL_INVALID')
     const { intent, signature: mac } = parsed.data
@@ -220,8 +276,6 @@ function readIntent(directory: string, identity: Identity, key: Buffer): Intent 
   } catch (error) {
     if (error instanceof Error && /^TARGET_HELPER_UPGRADE_[A-Z_]+$/.test(error.message)) throw error
     return reject('JOURNAL_INVALID')
-  } finally {
-    closeSync(fd)
   }
 }
 function identityOf(input: Identity): Identity {
@@ -233,8 +287,13 @@ function identityOf(input: Identity): Identity {
     request_key: input.request_key
   }
 }
-function publishIntent(directory: string, intent: Intent, key: Buffer): void {
-  const paths = journalPaths(directory, identityOf(intent.request))
+function publishJournalBytes(
+  directory: string,
+  identity: Identity,
+  bytes: Buffer,
+  suffix = ''
+): boolean {
+  const paths = journalPaths(directory, identity)
   try {
     mkdirSync(paths.root, { mode: 0o700 })
   } catch (error) {
@@ -242,8 +301,8 @@ function publishIntent(directory: string, intent: Intent, key: Buffer): void {
   }
   privateDirectory(paths.root)
   syncDirectory(paths.parent)
-  const stage = paths.file + '.stage-' + randomBytes(12).toString('hex')
-  const bytes = Buffer.from(canonicalH2Json({ intent, signature: signature(intent, key) }) + '\n')
+  const final = paths.file + suffix
+  const stage = final + '.stage-' + randomBytes(12).toString('hex')
   if (bytes.length > CAP) reject('JOURNAL_INVALID')
   const fd = openSync(
     stage,
@@ -254,7 +313,7 @@ function publishIntent(directory: string, intent: Intent, key: Buffer): void {
   try {
     writeFileSync(fd, bytes)
     fsyncSync(fd)
-    linkSync(stage, paths.file) // Kernel no-replace publication; existing/corrupt intent is never overwritten.
+    linkSync(stage, final) // Kernel no-replace publication; existing/corrupt material is never overwritten.
     linked = true
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
@@ -263,7 +322,11 @@ function publishIntent(directory: string, intent: Intent, key: Buffer): void {
     unlinkSync(stage)
     syncDirectory(paths.root)
   }
-  if (!linked) {
+  return linked
+}
+function publishIntent(directory: string, intent: Intent, key: Buffer): void {
+  const bytes = Buffer.from(canonicalH2Json({ intent, signature: signature(intent, key) }) + '\n')
+  if (!publishJournalBytes(directory, identityOf(intent.request), bytes)) {
     const existing = readIntent(directory, identityOf(intent.request), key)
     if (
       !existing ||
@@ -272,6 +335,81 @@ function publishIntent(directory: string, intent: Intent, key: Buffer): void {
     )
       reject('REQUEST_CONFLICT')
   }
+}
+
+export function loadTargetHelperUpgradeIntent(
+  directory: string,
+  identity: Identity,
+  administrator: string,
+  key: Buffer
+): Intent {
+  const intent = readIntent(directory, identity, key)
+  if (!intent) reject('INTENT_NOT_FOUND')
+  assertIntentBinding(intent, identity, administrator)
+  return intent
+}
+
+type MaterialKind = 'dispatch' | 'outcome' | 'commit'
+const materialSchema = z.strictObject({
+  format: z.literal(1),
+  purpose: z.string(),
+  intent_sha256: sha,
+  record: z.unknown()
+})
+export function readTargetHelperUpgradeMaterial(
+  directory: string,
+  intent: Intent,
+  key: Buffer,
+  kind: MaterialKind
+): unknown | undefined {
+  const bytes = readJournalBytes(directory, identityOf(intent.request), '.' + kind)
+  if (!bytes) return undefined
+  try {
+    const envelope = z
+      .strictObject({ payload: materialSchema, signature: sha })
+      .parse(JSON.parse(bytes.toString('utf8')))
+    const payload = envelope.payload
+    const expected = createHmac('sha256', key)
+      .update(`opspilot-target-helper-upgrade-${kind}-v1\n`)
+      .update(canonicalH2Json(payload))
+      .digest()
+    if (
+      key.length !== 32 ||
+      !timingSafeEqual(expected, Buffer.from(envelope.signature, 'hex')) ||
+      payload.purpose !== 'product-target-helper-upgrade-' + kind ||
+      payload.intent_sha256 !== digest(canonicalH2Json(intent))
+    )
+      reject('JOURNAL_INVALID')
+    return payload.record
+  } catch {
+    return reject('JOURNAL_INVALID')
+  }
+}
+/** Returns the kernel publication winner; no existing material is ever replaced. */
+export function publishTargetHelperUpgradeMaterial(
+  directory: string,
+  intent: Intent,
+  key: Buffer,
+  kind: MaterialKind,
+  record: unknown
+): { created: boolean; record: unknown } {
+  const payload = {
+    format: 1,
+    purpose: 'product-target-helper-upgrade-' + kind,
+    intent_sha256: digest(canonicalH2Json(intent)),
+    record
+  }
+  const signature = createHmac('sha256', key)
+    .update(`opspilot-target-helper-upgrade-${kind}-v1\n`)
+    .update(canonicalH2Json(payload))
+    .digest('hex')
+  const created = publishJournalBytes(
+    directory,
+    identityOf(intent.request),
+    Buffer.from(canonicalH2Json({ payload, signature }) + '\n'),
+    '.' + kind
+  )
+  return { created, record: readTargetHelperUpgradeMaterial(directory, intent, key, kind) }
 }
 
 function assertIntentBinding(intent: Intent, identity: Identity, administrator: string): void {
@@ -297,7 +435,7 @@ function assertIntentBinding(intent: Intent, identity: Identity, administrator: 
 }
 function view(
   intent: Intent,
-  state: 'intent_only' | 'pending'
+  state: ProductTargetHelperUpgradePreparation['state']
 ): ProductTargetHelperUpgradePreparation {
   return {
     format: 1,
@@ -313,7 +451,161 @@ function view(
     apply_available: false
   }
 }
-function pendingState(database: Database.Database, intent: Intent): 'intent_only' | 'pending' {
+export function targetHelperUpgradeExpected(intent: Intent): TargetHelperUpgradeExpected {
+  const original = intent.original_enrollment
+  const from = makeTargetEnrollmentPayload(
+    original.controller_id,
+    original.app_id,
+    original.ownership_generation,
+    JSON.parse(original.target_binding_json),
+    original.manifest_sha256,
+    original.target_root
+  )
+  return {
+    request_key: intent.request.request_key,
+    review_sha256: intent.review.review_sha256,
+    from,
+    to: { ...from, manifest_sha256: intent.review.to_manifest_sha256 }
+  }
+}
+export function readTargetHelperUpgradeOutcome(
+  directory: string,
+  intent: Intent,
+  key: Buffer
+): TargetHelperUpgradeResult | undefined {
+  const value = readTargetHelperUpgradeMaterial(directory, intent, key, 'outcome')
+  if (value === undefined) return undefined
+  if (
+    !verifyTargetHelperUpgradeOutcome(targetHelperUpgradeExpected(intent), value, key) ||
+    !value.receipt.payload.settled ||
+    value.state === 'pending'
+  )
+    reject('JOURNAL_INVALID')
+  return value
+}
+const commitSchema = z.strictObject({
+  outcome_sha256: sha,
+  completed_revision: z.number().int().positive(),
+  completed_at: z.iso.datetime()
+})
+function hasHelperUpgradeCommit(
+  directory: string,
+  intent: Intent,
+  key: Buffer,
+  outcome: TargetHelperUpgradeResult
+): boolean {
+  const value = readTargetHelperUpgradeMaterial(directory, intent, key, 'commit')
+  if (value === undefined) return false
+  const parsed = commitSchema.safeParse(value)
+  if (
+    !parsed.success ||
+    parsed.data.outcome_sha256 !== digest(canonicalH2Json(outcome)) ||
+    parsed.data.completed_revision < intent.original_enrollment.revision + 2
+  )
+    reject('JOURNAL_INVALID')
+  return true
+}
+function completedHelperUpgradeRow(
+  database: Database.Database,
+  intent: Intent,
+  outcome: TargetHelperUpgradeResult
+): TargetEnrollmentRow | undefined {
+  const row = new TargetEnrollmentRepository(database).get(intent.request),
+    original = intent.original_enrollment
+  const expected =
+    outcome.state === 'applied' ? intent.review.to_manifest_sha256 : original.manifest_sha256
+  if (
+    row &&
+    row.state === 'enrolled' &&
+    row.last_error_code === null &&
+    row.revision >= original.revision + 2 &&
+    row.manifest_sha256 === expected &&
+    row.receipt_json === canonicalH2Json(outcome.proof) &&
+    canonicalH2Json({
+      ...row,
+      revision: original.revision,
+      state: original.state,
+      last_error_code: null,
+      manifest_sha256: original.manifest_sha256,
+      receipt_json: original.receipt_json,
+      updated_at: original.updated_at
+    }) === canonicalH2Json(original)
+  )
+    return row
+  return undefined
+}
+function storedHelperUpgradeState(
+  database: Database.Database,
+  directory: string,
+  intent: Intent,
+  key: Buffer
+): ProductTargetHelperUpgradePreparation {
+  const outcome = readTargetHelperUpgradeOutcome(directory, intent, key)
+  if (
+    outcome &&
+    (hasHelperUpgradeCommit(directory, intent, key, outcome) ||
+      completedHelperUpgradeRow(database, intent, outcome))
+  )
+    return view(intent, outcome.state)
+  return view(intent, readTargetHelperUpgradePendingState(database, intent))
+}
+/** Durable positive target evidence must precede this exact source/enrollment CAS. */
+export function finalizeTargetHelperUpgrade(
+  database: Database.Database,
+  directory: string,
+  intent: Intent,
+  key: Buffer
+): ProductTargetHelperUpgradePreparation {
+  if (database.inTransaction) reject('TRANSACTION_ACTIVE')
+  const outcome = readTargetHelperUpgradeOutcome(directory, intent, key)
+  if (!outcome) reject('OUTCOME_REQUIRED')
+  syncTargetHelperUpgradeJournal(directory, identityOf(intent.request))
+  if (hasHelperUpgradeCommit(directory, intent, key, outcome)) return view(intent, outcome.state)
+  const completed = database
+    .transaction(() => {
+      const current = completedHelperUpgradeRow(database, intent, outcome)
+      if (current) return current
+      if (readTargetHelperUpgradePendingState(database, intent) !== 'pending') reject('NOT_PENDING')
+      const old = intent.original_enrollment,
+        expected = targetHelperUpgradeExpected(intent)
+      if (!verifyTargetEnrollmentProof(expected.from, JSON.parse(old.receipt_json), key))
+        reject('JOURNAL_INVALID')
+      const changed = database
+        .prepare(
+          `UPDATE product_target_enrollment SET state='enrolled',manifest_sha256=?,receipt_json=?,last_error_code=NULL,
+      revision=revision+1,updated_at=? WHERE controller_id=? AND app_id=? AND ownership_generation=? AND state='unknown'
+      AND last_error_code=? AND revision=? AND manifest_sha256=? AND receipt_json=?`
+        )
+        .run(
+          outcome.state === 'applied' ? expected.to.manifest_sha256 : expected.from.manifest_sha256,
+          canonicalH2Json(outcome.proof),
+          new Date().toISOString(),
+          old.controller_id,
+          old.app_id,
+          old.ownership_generation,
+          TARGET_HELPER_UPGRADE_PENDING_PREFIX + intent.request.request_key,
+          old.revision + 1,
+          old.manifest_sha256,
+          old.receipt_json
+        ).changes
+      if (changed !== 1) reject('AUTHORITY_CHANGED')
+      return new TargetEnrollmentRepository(database).get(intent.request)!
+    })
+    .immediate()
+  const record = {
+    outcome_sha256: digest(canonicalH2Json(outcome)),
+    completed_revision: completed.revision,
+    completed_at: (completed as TargetEnrollmentRow & { updated_at: string }).updated_at
+  }
+  publishTargetHelperUpgradeMaterial(directory, intent, key, 'commit', record)
+  if (!hasHelperUpgradeCommit(directory, intent, key, outcome)) reject('JOURNAL_INVALID')
+  return view(intent, outcome.state)
+}
+
+export function readTargetHelperUpgradePendingState(
+  database: Database.Database,
+  intent: Intent
+): 'intent_only' | 'pending' {
   const expected = intent.original_enrollment
   const row = new TargetEnrollmentRepository(database).get(intent.request)
   if (!row) return reject('AUTHORITY_CHANGED')
@@ -365,7 +657,9 @@ export function activateTargetHelperUpgradeIntent(
     assertIntentBinding(intent, parsed.data, administrator)
     return database
       .transaction(() => {
-        const state = pendingState(database, intent)
+        const stored = storedHelperUpgradeState(database, directory, intent, key)
+        if (stored.state === 'applied' || stored.state === 'not_applied') return stored
+        const state = readTargetHelperUpgradePendingState(database, intent)
         if (state === 'pending') return view(intent, state)
         const row = intent.original_enrollment
         const changed = database
@@ -414,7 +708,7 @@ export function readTargetHelperUpgradePreparation(
     const intent = readIntent(directory, parsed.data, key)
     if (!intent) reject('INTENT_NOT_FOUND')
     assertIntentBinding(intent, parsed.data, administrator)
-    return database.transaction(() => view(intent, pendingState(database, intent)))()
+    return database.transaction(() => storedHelperUpgradeState(database, directory, intent, key))()
   } finally {
     key.fill(0)
   }
@@ -447,6 +741,7 @@ export async function prepareTargetHelperUpgrade(
       assertIntentBinding(intent, identity, administrator)
       if (intent.body_sha256 !== digest(canonicalH2Json(request))) reject('REQUEST_CONFLICT')
     } else {
+      verifyTargetHelperUpgradeBundle(request.artifact, request.manifest_sha256)
       const reviewInput = {
         format: request.format,
         controller_id: controllerId,
@@ -506,7 +801,10 @@ export async function prepareTargetHelperUpgrade(
 
 /** Linux-only CLI: validate installed schema before opening, never run normal auto-migrations. */
 export async function runTargetHelperUpgradeJournalCli(
-  command: 'prepare-target-helper-upgrade' | 'helper-upgrade-state',
+  command:
+    | 'prepare-target-helper-upgrade'
+    | 'helper-upgrade-state'
+    | import('../../../../docs/contracts/product-target-helper-upgrade').ProductTargetHelperUpgradeCommand,
   directory: string,
   input: unknown,
   signal?: AbortSignal
@@ -534,7 +832,7 @@ export async function runTargetHelperUpgradeJournalCli(
     )
       reject('AUTHORITY_CHANGED')
     database.pragma('foreign_keys=ON')
-    if (command === 'prepare-target-helper-upgrade') database.pragma('synchronous=FULL')
+    if (command !== 'helper-upgrade-state') database.pragma('synchronous=FULL')
     const controllerId = controllers[0].controller_id,
       administrator = `unix:${process.getuid!()}`
     const result =
@@ -546,14 +844,26 @@ export async function runTargetHelperUpgradeJournalCli(
             administrator,
             input
           )
-        : await prepareTargetHelperUpgrade(
-            database,
-            directory,
-            controllerId,
-            administrator,
-            input,
-            signal
-          )
+        : command === 'prepare-target-helper-upgrade'
+          ? await prepareTargetHelperUpgrade(
+              database,
+              directory,
+              controllerId,
+              administrator,
+              input,
+              signal
+            )
+          : await (
+              await import('./targetHelperUpgradeExecution')
+            ).executeTargetHelperUpgrade(
+              database,
+              directory,
+              controllerId,
+              administrator,
+              command,
+              input,
+              signal
+            )
     console.log(JSON.stringify(result))
   } finally {
     database.close()

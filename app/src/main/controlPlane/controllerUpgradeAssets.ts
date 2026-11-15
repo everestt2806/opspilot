@@ -23,6 +23,22 @@ export const CONTROLLER_SPA_ASSET_TRANSITION = [
   }
 ] as const
 
+/** e3a reviewed target transaction bootstrap, exact forward bytes only. */
+export const CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION = [
+  {
+    path: 'payload/target-helper/target_enrollment.py',
+    mode: 0o600,
+    before: {
+      size: 16931,
+      sha256: '848aede7f9b49f51b303b1d1d13ad283262ae1b1a21ece0878a1a9bf507e9336'
+    },
+    after: {
+      size: 36931,
+      sha256: 'ae2c290726b6fc497489bca962036ac14806bf588086d181498cbc8dcd886c7b'
+    }
+  }
+] as const
+
 /** R7h: helper đã qua native Express/Next/SPA env, exact-CID rollback và legacy gates. */
 export const CONTROLLER_ENVIRONMENT_ASSET_TRANSITION = [
   {

@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path'
 if (process.platform !== 'linux') throw new Error('LINUX_REQUIRED')
 const flags = process.argv.slice(2)
 if (
-  flags.some((flag) => !['--spa', '--nextjs'].includes(flag)) ||
+  flags.some((flag) => !['--spa', '--nextjs', '--environment'].includes(flag)) ||
   (flags.includes('--spa') && flags.includes('--nextjs'))
 )
   throw Error('RETAINED_RUNTIME_FLAG_INVALID')
@@ -63,7 +63,12 @@ try {
   assert.equal(installed.runtimes.at(-1).state, 'dispatch_marker_committed')
   if (process.env.OPSPILOT_CONTROLLER_READINESS_ARTIFACT) {
     assert.equal(installed.cold_startup_terminal_recovered, true)
-    assert.equal(installed.historical_release_preserved, true)
+    assert.equal(
+      installed.historical_release_preserved,
+      !process.env.OPSPILOT_HELPER_CONTROLLER_RESULT
+    )
+    if (process.env.OPSPILOT_HELPER_CONTROLLER_RESULT)
+      assert.equal(installed.helper_upgrade_integrated, true)
     assert.equal(installed.preterminal_unknown_blocked, true)
     assert.equal(installed.resource_probes, 7)
   }
@@ -91,12 +96,21 @@ try {
       ? {
           scope: 'CONTROLLER_READINESS_COLD_RECOVERY',
           resource_probes: 7,
-          historical_release_preserved: true,
+          historical_release_preserved: !process.env.OPSPILOT_HELPER_CONTROLLER_RESULT,
+          helper_upgrade_integrated: !!process.env.OPSPILOT_HELPER_CONTROLLER_RESULT,
           cold_startup_terminal_recovered: true,
           preterminal_unknown_blocked: true,
           no_runtime_replay: true
         }
       : {})
+  }
+  if (process.env.OPSPILOT_HELPER_CONTROLLER_RESULT) {
+    result.scope = 'CONTROLLER_HELPER_UPGRADE_RUNTIME'
+    result.environment_enabled = flags.includes('--environment')
+    result.helper_controller = JSON.parse(
+      readFileSync(process.env.OPSPILOT_HELPER_CONTROLLER_RESULT, 'utf8')
+    )
+    assert.equal(result.helper_controller.status, 'PASS')
   }
 } catch {
   result = { status: 'FAIL', nonce, code: 'TARGET_ENROLLMENT_RUNTIME_FAILED' }

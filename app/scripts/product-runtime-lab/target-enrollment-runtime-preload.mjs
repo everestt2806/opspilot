@@ -7,6 +7,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { checkHelperUpgradeReview } from './target-helper-upgrade-review-checks.mjs'
 import { checkHelperUpgradeJournal } from './target-helper-upgrade-journal-checks.mjs'
+import { checkHelperController } from './helper-controller-checks.mjs'
 
 const artifact = process.env.OPSPILOT_R1_ARTIFACT
 const cli = process.env.OPSPILOT_CONTROLLER_ARTIFACT
@@ -16,6 +17,21 @@ if (!artifact || !cli || !output) throw new Error('TARGET_ENROLL_LAB_ENV_REQUIRE
 const require = createRequire(artifact)
 const original = require(artifact)
 const api = { ...original }
+const upgradeEnabled = !!process.env.OPSPILOT_HELPER_CONTROLLER_RESULT
+const delayedUpgrade = upgradeEnabled && process.env.OPSPILOT_HELPER_UPGRADE_AFTER_FIRST === '1'
+let environmentCipher
+const captureEnvironmentCipher = (cipher) => {
+  environmentCipher ??= cipher
+}
+if (upgradeEnabled)
+  api.AesGcmCredentialCipher = class extends original.AesGcmCredentialCipher {
+    constructor(key) {
+      super(key)
+      captureEnvironmentCipher(this)
+    }
+  }
+const enrolledPins = new Map(),
+  enrollmentDetails = new Map()
 // Fixture controller phải dùng đúng controller role, không trộn Desktop migrations.
 api.initializeDatabase = (directory) => original.initializeDatabase(directory, 'controller')
 require.cache[require.resolve(artifact)].exports = api
@@ -104,6 +120,11 @@ api.ProductDeployRepository = class extends original.ProductDeployRepository {
     database
       .prepare('UPDATE vps SET crypto_scheme=?,encrypted_secret=?,iv=?,auth_tag=? WHERE id=1')
       .run(encrypted.crypto_scheme, encrypted.encrypted_secret, encrypted.iv, encrypted.auth_tag)
+    const policies = database
+      .prepare(
+        'SELECT app_id,auto_deploy_paused,pause_reason,pause_policy_provenance FROM product_app_control ORDER BY app_id'
+      )
+      .all()
     database
       .prepare(
         "UPDATE product_app_control SET auto_deploy_paused=1,pause_reason='operator',pause_policy_provenance='explicit'"
@@ -208,17 +229,29 @@ api.ProductDeployRepository = class extends original.ProductDeployRepository {
       assert.equal(installed.helper_path, result.helper_path)
       checkHelperUpgradeReview(database, dataDirectory, controllerId, input, final, files)
       checkHelperUpgradeJournal(database, dataDirectory, controllerId, input, final, files)
+      enrollmentDetails.set(app_id, { input, final, files })
+      const upgraded =
+        upgradeEnabled && (!delayedUpgrade || app_id !== 1)
+          ? checkHelperController(database, dataDirectory, controllerId, input, final, files)
+          : null
+      enrolledPins.set(app_id, upgraded ?? manifestSha)
       enrollments.push({ app_id, state: result.state, manifest_verified: true })
     }
     assert.deepEqual(
       database.prepare('SELECT version FROM schema_version WHERE version IN(30,31,34,36)').all(),
       []
     )
-    database
-      .prepare(
-        "UPDATE product_app_control SET auto_deploy_paused=0,pause_reason=NULL,pause_policy_provenance='explicit'"
-      )
-      .run()
+    for (const policy of policies)
+      database
+        .prepare(
+          'UPDATE product_app_control SET auto_deploy_paused=?,pause_reason=?,pause_policy_provenance=? WHERE app_id=?'
+        )
+        .run(
+          policy.auto_deploy_paused,
+          policy.pause_reason,
+          policy.auto_deploy_paused === 0 ? 'explicit' : policy.pause_policy_provenance,
+          policy.app_id
+        )
   }
 }
 
@@ -253,13 +286,14 @@ api.executeProductDeployPipeline = async (
     controllerId,
     claim.app_id,
     claim.ownership_generation,
-    manifestSha
+    enrolledPins.get(claim.app_id) ?? manifestSha
   )
   const key = original.loadControllerRuntimeKey(dataDirectory, claim)
   legacyVerifier.secret.fill(0)
   legacyVerifier.secret = Buffer.from(key)
   key.fill(0)
-  process.env.OPSPILOT_TEMPLATES_DIR = join(dirname(cli), 'templates')
+  const runtimeBundle = upgradeEnabled ? readinessCli : cli
+  process.env.OPSPILOT_TEMPLATES_DIR = join(dirname(runtimeBundle), 'templates')
   const ssh = new original.SshManager(
     original.createControllerSshResolver(database, controllerId, dataDirectory)
   )
@@ -302,13 +336,24 @@ api.executeProductDeployPipeline = async (
       : {}),
     targetOptions: () => ({
       ...options,
+      ...(upgradeEnabled && options.environment
+        ? {
+            environment: new original.ProductEnvironmentRuntime(
+              database,
+              repository,
+              environmentCipher,
+              claim,
+              () => original.loadControllerRuntimeKey(dataDirectory, claim)
+            )
+          }
+        : {}),
       target_helper_path: installed.helper_path,
       target_state_root: installed.state_root,
       // Ca lỗi cuối cố ý dùng Dockerfile hỏng của fixture; sáu ca thường dùng packaged collector.
       collector_directory:
         options.collector_directory === join(dirname(dataDirectory), 'broken-collector')
           ? options.collector_directory
-          : join(dirname(cli), 'collector')
+          : join(dirname(runtimeBundle), 'collector')
     }),
     prepareSnapshot: async () => ({
       ...snapshot,
@@ -382,7 +427,8 @@ api.executeProductDeployPipeline = async (
       installed_helpers: true,
       controller_process_loss_recovered: lossRecovered,
       cold_startup_terminal_recovered: coldRecovered,
-      historical_release_preserved: !!readinessCli,
+      historical_release_preserved: !!readinessCli && !upgradeEnabled,
+      helper_upgrade_integrated: upgradeEnabled,
       preterminal_unknown_blocked: unknownBlocked,
       resource_probes: resourceProbes,
       packaged_templates_collector: true,
@@ -396,6 +442,54 @@ api.executeProductDeployPipeline = async (
   const terminal = original
     .openControllerRuntimeRepository(database, dataDirectory, claim)
     .getTerminal(claim.attempt_id)
+  if (delayedUpgrade && readinessCalls === 1) {
+    const policies = database
+      .prepare(
+        'SELECT app_id,auto_deploy_paused,pause_reason,pause_policy_provenance FROM product_app_control ORDER BY app_id'
+      )
+      .all()
+    const name = database.prepare('SELECT name FROM app WHERE id=?').get(1).name
+    const before = [containerIdentity(name + '-app'), containerIdentity(name + '-collector')]
+    try {
+      database.exec(
+        "UPDATE product_app_control SET auto_deploy_paused=1,pause_reason='operator',pause_policy_provenance='explicit'"
+      )
+      const details = enrollmentDetails.get(1)
+      enrolledPins.set(
+        1,
+        checkHelperController(
+          database,
+          dataDirectory,
+          controllerId,
+          details.input,
+          details.final,
+          details.files
+        )
+      )
+      assert.deepEqual(
+        [containerIdentity(name + '-app'), containerIdentity(name + '-collector')],
+        before
+      )
+    } finally {
+      for (const value of policies)
+        database
+          .prepare(
+            'UPDATE product_app_control SET auto_deploy_paused=?,pause_reason=?,pause_policy_provenance=? WHERE app_id=?'
+          )
+          .run(
+            value.auto_deploy_paused,
+            value.pause_reason,
+            value.pause_policy_provenance,
+            value.app_id
+          )
+    }
+    const record = JSON.parse(readFileSync(process.env.OPSPILOT_HELPER_CONTROLLER_RESULT, 'utf8'))
+    record.existing_app_and_collector_CID_unchanged = true
+    writeFileSync(
+      process.env.OPSPILOT_HELPER_CONTROLLER_RESULT,
+      JSON.stringify(record, null, 2) + '\n'
+    )
+  }
   return {
     state: terminal.envelope.receipt.outcome,
     terminal,

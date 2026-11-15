@@ -31,9 +31,18 @@ import { reviewProductTargetHelperUpgrade } from './targetHelperUpgradeReview'
 import {
   prepareTargetHelperUpgrade,
   readTargetHelperUpgradePreparation,
-  activateTargetHelperUpgradeIntent
+  activateTargetHelperUpgradeIntent,
+  loadTargetHelperUpgradeIntent,
+  publishTargetHelperUpgradeMaterial,
+  readTargetHelperUpgradeOutcome
 } from './targetHelperUpgradeJournal'
 import { readEnrolledProductTarget } from './targetEnrollment'
+import { executeTargetHelperUpgrade } from './targetHelperUpgradeExecution'
+import {
+  PRODUCT_TARGET_HELPER_UPGRADE_OUTCOME_DOMAIN,
+  type ProductTargetHelperUpgradePacket,
+  type ProductTargetHelperUpgradeCommand
+} from '../../../../docs/contracts/product-target-helper-upgrade'
 vi.mock('./controllerSecrets', async (original) => ({
   ...(await original<typeof import('./controllerSecrets')>()),
   resolveControllerSecretDirectory: (directory: string) => directory
@@ -58,6 +67,9 @@ const current = new Map(
       Buffer.from(readFileSync(join(import.meta.dirname, name), 'utf8').replace(/\r\n/g, '\n'))
     ]
   )
+)
+const bootstrap = Buffer.from(
+  readFileSync(join(import.meta.dirname, 'target_enrollment.py'), 'utf8').replace(/\r\n/g, '\n')
 )
 let directory: string
 let database: ReturnType<typeof initializeDatabase>
@@ -176,8 +188,10 @@ beforeEach(() => {
   } as never)
   vi.mocked(readVerifiedControllerBundleFile).mockImplementation((_bundle, path) =>
     path.endsWith('/target_enrollment.py')
-      ? Buffer.from('trusted synthetic inspect')
-      : Buffer.from(current.get(path)!)
+      ? Buffer.from(bootstrap)
+      : path === 'bundle-manifest.json'
+        ? Buffer.from('{}')
+        : Buffer.from(current.get(path)!)
   )
   open.mockResolvedValue({
     channel: { destroy },
@@ -424,6 +438,278 @@ describe('Durable helper upgrade preparation', () => {
     expect(open).not.toHaveBeenCalled()
   })
 })
+describe('Controller helper upgrade execution', () => {
+  const administrator = 'unix:1000'
+  const row = (): {
+    revision: number
+    state: string
+    manifest_sha256: string
+    receipt_json: string
+    last_error_code: string | null
+  } => database.prepare('SELECT * FROM product_target_enrollment').get() as never
+  const begin = async (): Promise<{
+    format: 1
+    controller_id: string
+    app_id: number
+    ownership_generation: number
+    request_key: string
+  }> => {
+    const observed = await review(),
+      request_key = randomUUID()
+    await prepareTargetHelperUpgrade(database, directory, input.controller_id, administrator, {
+      ...input,
+      request_key,
+      expected_review_sha256: observed.review_sha256,
+      confirm: true
+    })
+    return {
+      format: 1,
+      controller_id: input.controller_id,
+      app_id: 1,
+      ownership_generation: 1,
+      request_key
+    }
+  }
+  const outcome = (
+    packet: ProductTargetHelperUpgradePacket,
+    state: 'pending' | 'applied' | 'not_applied' = 'applied',
+    settled = true
+  ): unknown => {
+    const enrollment =
+      state === 'pending'
+        ? null
+        : proof(state === 'applied' ? packet.to.payload : packet.from.payload)
+    const value = {
+      format: 1,
+      purpose: 'product-target-helper-upgrade-outcome',
+      request_key: packet.request_key,
+      review_sha256: packet.review_sha256,
+      controller_id: packet.from.payload.controller_id,
+      app_id: packet.from.payload.app_id,
+      ownership_generation: packet.from.payload.ownership_generation,
+      from_manifest_sha256: packet.from.payload.manifest_sha256,
+      to_manifest_sha256: packet.to.payload.manifest_sha256,
+      state,
+      settled,
+      marker_sha256: 'c'.repeat(64),
+      enrollment_proof_sha256: enrollment ? hash(canonicalH2Json(enrollment)) : null
+    }
+    return {
+      state,
+      receipt: {
+        payload: value,
+        signature: createHmac('sha256', key)
+          .update(PRODUCT_TARGET_HELPER_UPGRADE_OUTCOME_DOMAIN + '\n')
+          .update(canonicalH2Json(value))
+          .digest('hex')
+      },
+      proof: enrollment
+    }
+  }
+  const execute = (
+    identity: Awaited<ReturnType<typeof begin>>,
+    command: ProductTargetHelperUpgradeCommand = 'apply-target-helper-upgrade'
+  ): ReturnType<typeof executeTargetHelperUpgrade> =>
+    executeTargetHelperUpgrade(
+      database,
+      directory,
+      input.controller_id,
+      administrator,
+      command,
+      command === 'inspect-target-helper-upgrade' ? identity : { ...identity, confirm: true }
+    )
+  const remote = (
+    state: 'pending' | 'applied' | 'not_applied' = 'applied',
+    settled = true
+  ): void => {
+    vi.mocked(exchangeProductBootstrapJson).mockImplementation(async (_channel, body) =>
+      outcome(JSON.parse(body), state, settled)
+    )
+  }
+  it('finalizes only after durable authenticated outcome and cold replay does no SSH or revision advance', async () => {
+    const identity = await begin(),
+      before = row()
+    remote()
+    const result = await execute(identity)
+    expect(result.state).toBe('applied')
+    expect(row()).toMatchObject({
+      state: 'enrolled',
+      manifest_sha256: 'b'.repeat(64),
+      last_error_code: null,
+      revision: before.revision + 1
+    })
+    expect(
+      readEnrolledProductTarget(database, directory, input.controller_id, 1, 1, 'b'.repeat(64))
+        .manifest_sha256
+    ).toBe('b'.repeat(64))
+    const current = row(),
+      calls = open.mock.calls.length
+    database.exec("UPDATE app SET name='later-name'")
+    expect((await execute(identity)).state).toBe('applied')
+    expect(
+      readTargetHelperUpgradePreparation(
+        database,
+        directory,
+        input.controller_id,
+        administrator,
+        identity
+      ).state
+    ).toBe('applied')
+    expect(row()).toEqual(current)
+    expect(open).toHaveBeenCalledTimes(calls)
+  })
+  it('unsettled absence preserves SQL and explicit cancel finalizes old pin', async () => {
+    const identity = await begin(),
+      before = row()
+    remote('not_applied', false)
+    expect((await execute(identity)).state).toBe('pending')
+    expect(row()).toEqual(before)
+    remote('not_applied', true)
+    expect((await execute(identity, 'cancel-target-helper-upgrade')).state).toBe('not_applied')
+    expect(row()).toMatchObject({
+      state: 'enrolled',
+      manifest_sha256: before.manifest_sha256,
+      receipt_json: before.receipt_json,
+      last_error_code: null
+    })
+  })
+  it('lost reply never replays upgrade; explicit recovery is separate', async () => {
+    const identity = await begin(),
+      before = row()
+    vi.mocked(exchangeProductBootstrapJson).mockRejectedValue(Error('SYNTHETIC_SECRET_STDERR'))
+    expect(await execute(identity)).toMatchObject({
+      state: 'pending',
+      safe_error_code: 'TARGET_HELPER_UPGRADE_REMOTE_UNKNOWN'
+    })
+    remote('pending', false)
+    expect((await execute(identity)).state).toBe('pending')
+    remote()
+    expect((await execute(identity, 'recover-target-helper-upgrade')).state).toBe('applied')
+    const operations = vi
+      .mocked(exchangeProductBootstrapJson)
+      .mock.calls.slice(-3)
+      .map((call) => JSON.parse(call[1]).operation)
+    expect(operations).toEqual(['upgrade', 'inspect-upgrade', 'recover-upgrade'])
+    expect(row().revision).toBe(before.revision + 1)
+  })
+  it('a cancellation dispatch winner prevents a subsequent automatic upgrade', async () => {
+    const identity = await begin()
+    const intent = loadTargetHelperUpgradeIntent(directory, identity, administrator, key)
+    publishTargetHelperUpgradeMaterial(directory, intent, key, 'dispatch', { mode: 'cancel' })
+    remote('not_applied', false)
+    await execute(identity)
+    expect(
+      JSON.parse(vi.mocked(exchangeProductBootstrapJson).mock.calls.at(-1)![1]).operation
+    ).toBe('inspect-upgrade')
+    remote('not_applied', true)
+    await execute(identity, 'recover-target-helper-upgrade')
+    expect(
+      JSON.parse(vi.mocked(exchangeProductBootstrapJson).mock.calls.at(-1)![1]).operation
+    ).toBe('cancel-upgrade')
+  })
+  it('stores terminal proof before SQL commit and resumes finalization without replay after SQL failure', async () => {
+    const identity = await begin(),
+      pending = row()
+    database.exec(
+      "CREATE TRIGGER block_finalize BEFORE UPDATE ON product_target_enrollment WHEN NEW.state='enrolled' BEGIN SELECT RAISE(ABORT,'SYNTHETIC_SQL_FAILURE'); END"
+    )
+    remote()
+    expect(await execute(identity)).toMatchObject({
+      state: 'pending',
+      safe_error_code: 'TARGET_HELPER_UPGRADE_FINALIZATION_PENDING'
+    })
+    expect(row()).toEqual(pending)
+    const intent = loadTargetHelperUpgradeIntent(directory, identity, administrator, key)
+    expect(readTargetHelperUpgradeOutcome(directory, intent, key)?.state).toBe('applied')
+    database.exec('DROP TRIGGER block_finalize')
+    const calls = open.mock.calls.length
+    vi.mocked(exchangeProductBootstrapJson).mockRejectedValue(Error('NO_REPLAY_ALLOWED'))
+    expect((await execute(identity)).state).toBe('applied')
+    expect(open).toHaveBeenCalledTimes(calls)
+  })
+  it('reconstructs a missing post-commit archive from positive SQL state without mutation or SSH', async () => {
+    const identity = await begin()
+    remote()
+    await execute(identity)
+    const path = join(
+      directory,
+      'target-helper-upgrades',
+      readdirSync(join(directory, 'target-helper-upgrades')).find((name) =>
+        name.endsWith('.commit')
+      )!
+    )
+    unlinkSync(path)
+    const current = row(),
+      calls = open.mock.calls.length
+    expect((await execute(identity)).state).toBe('applied')
+    expect(readFileSync(path).length).toBeGreaterThan(0)
+    expect(row()).toEqual(current)
+    expect(open).toHaveBeenCalledTimes(calls)
+  })
+  it('accepts only an authenticated interrupted auxiliary publication, never foreign hardlinks', async () => {
+    const identity = await begin()
+    database.exec(
+      "CREATE TRIGGER block_finalize BEFORE UPDATE ON product_target_enrollment WHEN NEW.state='enrolled' BEGIN SELECT RAISE(ABORT,'SYNTHETIC_SQL_FAILURE'); END"
+    )
+    remote()
+    await execute(identity)
+    const root = join(directory, 'target-helper-upgrades'),
+      path = join(
+        root,
+        readdirSync(root).find((name) => name.endsWith('.outcome'))!
+      )
+    const interrupted = path + '.stage-' + 'a'.repeat(24)
+    linkSync(path, interrupted)
+    database.exec('DROP TRIGGER block_finalize')
+    expect((await execute(identity)).state).toBe('applied')
+    unlinkSync(interrupted)
+    linkSync(path, path + '.foreign')
+    await expect(execute(identity)).rejects.toThrow('JOURNAL_UNSAFE')
+  })
+  it('never adopts source/target authority changed during SSH', async () => {
+    const identity = await begin(),
+      before = row()
+    vi.mocked(exchangeProductBootstrapJson).mockImplementation(async (_channel, body) => {
+      database.exec("UPDATE app SET name='changed-during-request'")
+      return outcome(JSON.parse(body))
+    })
+    await expect(execute(identity)).rejects.toThrow('AUTHORITY_CHANGED')
+    expect(row()).toEqual(before)
+  })
+  it('rejects tampered remote proof and holds the barrier', async () => {
+    const identity = await begin(),
+      before = row()
+    vi.mocked(exchangeProductBootstrapJson).mockImplementation(async (_channel, body) => {
+      const result = outcome(JSON.parse(body)) as { receipt: { signature: string } }
+      result.receipt.signature = '0'.repeat(64)
+      return result
+    })
+    expect(await execute(identity)).toMatchObject({
+      state: 'pending',
+      safe_error_code: 'TARGET_HELPER_UPGRADE_REMOTE_UNKNOWN'
+    })
+    expect(row()).toEqual(before)
+  })
+  it('rejects incapable destination bootstrap before preparation or SSH', async () => {
+    const observed = await review(),
+      before = row(),
+      calls = open.mock.calls.length
+    vi.mocked(readVerifiedControllerBundleFile).mockImplementation(() =>
+      Buffer.from('old bootstrap')
+    )
+    await expect(
+      prepareTargetHelperUpgrade(database, directory, input.controller_id, administrator, {
+        ...input,
+        request_key: randomUUID(),
+        expected_review_sha256: observed.review_sha256,
+        confirm: true
+      })
+    ).rejects.toThrow('BOOTSTRAP_REQUIRED')
+    expect(row()).toEqual(before)
+    expect(open).toHaveBeenCalledTimes(calls)
+  })
+})
+
 describe('Retained helper upgrade read-only review', () => {
   it.each(['activation', 'experiment', 'unknown-attempt', 'unsettled-runtime'])(
     'rejects %s even when the deploy job is terminal',

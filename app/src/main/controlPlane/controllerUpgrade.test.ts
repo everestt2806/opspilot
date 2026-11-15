@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs'
 import { gunzipSync } from 'node:zlib'
 import {
   CONTROLLER_SPA_ASSET_TRANSITION,
-  CONTROLLER_ENVIRONMENT_ASSET_TRANSITION
+  CONTROLLER_ENVIRONMENT_ASSET_TRANSITION,
+  CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION
 } from './controllerUpgradeAssets'
 import { assertRetainedTargetHelpers } from './controllerTargetHelperCompatibility'
 import { assertProductEnvironmentTargetManifest } from './productEnvironmentTarget'
@@ -30,6 +31,31 @@ const input = {
   release_directory: '/private/release'
 }
 describe('Trusted controller upgrade boundary', () => {
+  it('allows the reviewed bootstrap bytes only, never reverse or unknown script changes', () => {
+    const policy = CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION[0]
+    const before = {
+      format: 1,
+      platform: 'linux-x64-glibc',
+      node_version: '22.23.4',
+      node_abi: '127',
+      minimum_glibc: '2.39',
+      lock_sha256: 'a'.repeat(64),
+      payload_sha256: 'b'.repeat(64),
+      packages: [],
+      files: [{ path: policy.path, mode: policy.mode, ...policy.before }]
+    } satisfies ControllerReleaseManifest
+    const after = { ...before, files: [{ path: policy.path, mode: policy.mode, ...policy.after }] }
+    expect(() => assertControllerUpgradeCompatibility(before, after)).not.toThrow()
+    expect(() => assertControllerUpgradeCompatibility(after, before)).toThrow(
+      'INCOMPATIBLE_RELEASE'
+    )
+    expect(() =>
+      assertControllerUpgradeCompatibility(before, {
+        ...after,
+        files: [{ ...after.files[0], sha256: 'c'.repeat(64) }]
+      })
+    ).toThrow('INCOMPATIBLE_RELEASE')
+  })
   it('allows only the frozen environment helper transition, including the complete preceding SPA pair', () => {
     const before = {
       format: 1,

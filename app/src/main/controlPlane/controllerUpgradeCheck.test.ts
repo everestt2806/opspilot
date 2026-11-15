@@ -69,6 +69,25 @@ it('rejects a controller identity marker mismatch without rewriting it', () => {
   expect(() => openControllerUpgradeCheck(directory)).toThrow('UPGRADE_CHECK_FAILED')
   expect(readFileSync(file, 'utf8')).toBe(bad)
 })
+
+it('treats any helper pending UUID as non-quiescent for candidate upgrade-hold and rollback', () => {
+  const controller = (
+    db.prepare('SELECT controller_id FROM product_controller').get() as { controller_id: string }
+  ).controller_id
+  db.prepare(
+    "INSERT INTO vps(id,name,host,username,auth_type,encrypted_secret) VALUES(1,'unit','target.test','ops','key',X'00')"
+  ).run()
+  db.exec(
+    "INSERT INTO app(id,vps_id,name,framework,host_port,container_port) VALUES(1,1,'unit','express',30000,3000)"
+  )
+  db.prepare(
+    `INSERT INTO product_target_enrollment(controller_id,app_id,ownership_generation,target_binding_json,manifest_sha256,target_root,state,last_error_code,created_at,updated_at)
+    VALUES(?,1,1,'{}',?,'/unit','unknown','TARGET_HELPER_UPGRADE_PENDING:00000000-0000-4000-8000-000000000000','now','now')`
+  ).run(controller, 'a'.repeat(64))
+  const checked = openControllerUpgradeCheck(directory)
+  expect(checked.snapshot.quiescent).toBe(false)
+  checked.close()
+})
 it('does not create a missing key', () => {
   const file = join(directory, '.controller-runtime-key')
   unlinkSync(file)

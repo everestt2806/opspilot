@@ -45,7 +45,8 @@ import { CONTROLLER_RELEASE_LIMITS } from '../../../../docs/contracts/product-co
 import { assertControllerUpgradeAdminReady } from './controllerUpgradeProtocol'
 import {
   CONTROLLER_SPA_ASSET_TRANSITION,
-  CONTROLLER_ENVIRONMENT_ASSET_TRANSITION
+  CONTROLLER_ENVIRONMENT_ASSET_TRANSITION,
+  CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION
 } from './controllerUpgradeAssets'
 import {
   controllerUpgradeSnapshotSchema,
@@ -199,9 +200,11 @@ export function assertControllerUpgradeCompatibility(
     spa = apply(files, CONTROLLER_SPA_ASSET_TRANSITION),
     environment = apply(files, CONTROLLER_ENVIRONMENT_ASSET_TRANSITION),
     both = spa && apply(spa, CONTROLLER_ENVIRONMENT_ASSET_TRANSITION)
-  const approvedTransition = [spa, environment, both].some(
-    (mapped) => mapped && JSON.stringify(mapped) === nextAssets
-  )
+  const prior = [files, spa, environment, both]
+  const approvedTransition = [
+    ...prior.slice(1),
+    ...prior.map((value) => value && apply(value, CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION))
+  ].some((mapped) => mapped && JSON.stringify(mapped) === nextAssets)
   if (
     old.lock_sha256 !== next.lock_sha256 ||
     old.node_abi !== next.node_abi ||

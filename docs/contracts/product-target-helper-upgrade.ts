@@ -1,4 +1,4 @@
-/** Internal Unix-admin CLI review. No apply command or reusable upgrade capability. */
+/** Internal Unix-admin CLI review. Review alone grants no reusable upgrade capability. */
 export type ProductTargetHelperUpgradeReviewInput = Readonly<{
   format: 1;
   controller_id: string;
@@ -29,11 +29,13 @@ export type ProductTargetHelperUpgradeReview = Readonly<{
   apply_available: false;
 }>;
 
-export type ProductTargetHelperUpgradePrepareInput = ProductTargetHelperUpgradeReviewInput & Readonly<{
-  request_key: string;
-  expected_review_sha256: string;
-  confirm: true;
-}>;
+export type ProductTargetHelperUpgradePrepareInput =
+  ProductTargetHelperUpgradeReviewInput &
+    Readonly<{
+      request_key: string;
+      expected_review_sha256: string;
+      confirm: true;
+    }>;
 
 export type ProductTargetHelperUpgradeLookupInput = Readonly<{
   format: 1;
@@ -50,16 +52,28 @@ export type ProductTargetHelperUpgradePreparation = Readonly<{
   controller_id: string;
   app_id: number;
   ownership_generation: number;
-  state: "intent_only" | "pending";
+  state: "intent_only" | "pending" | "applied" | "not_applied";
   review_sha256: string;
   from_manifest_sha256: string;
   to_manifest_sha256: string;
-  /** Phase này không thực hiện hoặc cấp quyền remote write. */
+  /** Metadata không cấp quyền apply; internal CLI yêu cầu intent/confirm riêng, chưa có UI action. */
   apply_available: false;
 }>;
 
 export type ProductTargetHelperUpgradeOperation =
-  | "upgrade" | "inspect-upgrade" | "recover-upgrade" | "cancel-upgrade";
+  "upgrade" | "inspect-upgrade" | "recover-upgrade" | "cancel-upgrade";
+
+export type ProductTargetHelperUpgradeExecuteInput =
+  ProductTargetHelperUpgradeLookupInput & Readonly<{ confirm: true }>;
+export type ProductTargetHelperUpgradeCommand =
+  | "apply-target-helper-upgrade"
+  | "inspect-target-helper-upgrade"
+  | "recover-target-helper-upgrade"
+  | "cancel-target-helper-upgrade";
+/** Internal Unix-admin only. Dispatch/outcome/commit immutable HMAC material is fsynced
+ * before the next phase. Repeat apply inspects only; explicit recover/cancel require confirm.
+ * Only authenticated settled evidence may CAS pending SQL; absent/unsettled never clears it.
+ */
 
 /** Target-only wire, pinned trusted bootstrap over SSH; key only in bounded stdin. */
 export type ProductTargetHelperUpgradePacket = Readonly<{
@@ -69,11 +83,19 @@ export type ProductTargetHelperUpgradePacket = Readonly<{
   review_sha256: string;
   framework: "express" | "static-spa" | "nextjs";
   key: string;
-  from: { payload: import("./product-target-enrollment").ProductTargetEnrollmentPayload; manifest: string };
-  to: { payload: import("./product-target-enrollment").ProductTargetEnrollmentPayload; manifest: string; helpers: Record<string, string> };
+  from: {
+    payload: import("./product-target-enrollment").ProductTargetEnrollmentPayload;
+    manifest: string;
+  };
+  to: {
+    payload: import("./product-target-enrollment").ProductTargetEnrollmentPayload;
+    manifest: string;
+    helpers: Record<string, string>;
+  };
 }>;
 
-export const PRODUCT_TARGET_HELPER_UPGRADE_OUTCOME_DOMAIN = "opspilot-target-helper-upgrade-outcome-v1";
+export const PRODUCT_TARGET_HELPER_UPGRADE_OUTCOME_DOMAIN =
+  "opspilot-target-helper-upgrade-outcome-v1";
 export type ProductTargetHelperUpgradeOutcome = Readonly<{
   payload: {
     format: 1;
