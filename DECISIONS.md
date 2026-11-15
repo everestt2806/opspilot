@@ -234,3 +234,5 @@
 ```
 
 **Phạm vi hợp lệ:** `[ssh] [crypto] [db] [detector] [deploy] [migrate] [monitor] [ml] [ui] [exp] [infra] [ops] [plan] [report]`
+
+| 2026-11-16 | [deploy] | R7h-3e3c1 approve exact helper-upgrade release3782655/payload5b876a1/tool2a5eb9f sau b Root19/Main19/runtime35/40SIGKILL/full2521. Compiled8th descriptor gi? historical pins; actual Main controller upgrade r?i Unix997 CLI target helper rollout t?ng app, kh?ng app redeploy ho?c key/pin adoption. | User-authorized development release; UI/Main helper command UX ri?ng c2, kh?ng public admin API. Preserve6apps12CID/env/source/key v? unknown barrier/same UUID. | tk-s7-release-r7h3e-helper-rollout.md; desktop-helper-upgrade-release.json |
