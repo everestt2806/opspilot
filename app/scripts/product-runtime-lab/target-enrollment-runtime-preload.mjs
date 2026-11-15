@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto'
 import { chmodSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
+import { checkHelperUpgradeReview } from './target-helper-upgrade-review-checks.mjs'
 
 const artifact = process.env.OPSPILOT_R1_ARTIFACT
 const cli = process.env.OPSPILOT_CONTROLLER_ARTIFACT
@@ -204,6 +205,7 @@ api.ProductDeployRepository = class extends original.ProductDeployRepository {
         manifestSha
       )
       assert.equal(installed.helper_path, result.helper_path)
+      checkHelperUpgradeReview(database, dataDirectory, controllerId, input, final, files)
       enrollments.push({ app_id, state: result.state, manifest_verified: true })
     }
     assert.deepEqual(
