@@ -26,13 +26,19 @@ const baseSchema =
   process.env.OPSPILOT_UPGRADE_BASE_SCHEMA === undefined
     ? 29
     : Number(process.env.OPSPILOT_UPGRADE_BASE_SCHEMA)
-assert([29, 35].includes(baseSchema), 'LAB_BASE_SCHEMA_UNSUPPORTED')
+assert([29, 35, 37].includes(baseSchema), 'LAB_BASE_SCHEMA_UNSUPPORTED')
 if (baseSchema === 35)
   assert(
     [
       'db1e58c83badef0c7efca42b78fff483d71cc38bdd711a635924d0849b41bdb8',
       '3782655ddd14e5b88e6fff592cf7415e5652b4c0562af68866b4fd0eae2fadf0'
     ].includes(releasePin),
+    'LAB_BASE_RELEASE_UNSUPPORTED'
+  )
+if (baseSchema === 37)
+  assert.equal(
+    releasePin,
+    '4bc45902888d7e3442e6cd44694c4abbe1685101c5eac94415cb677461e245a5',
     'LAB_BASE_RELEASE_UNSUPPORTED'
   )
 if (!modules || !source || !releasePin) throw Error('LAB_INPUT_REQUIRED')
@@ -755,6 +761,23 @@ try {
   const admin = await administerInstalledController({ ...upgradeInput, request: adminRequest })
   assert.equal(admin.ok, true)
   assert.equal(admin.data.controller_id, current.controller_id)
+  if (baseSchema === 37) {
+    const inspection = await administerInstalledController({
+      ...upgradeInput,
+      request: {
+        ...adminRequest,
+        command: { operation: 'managed-postgres-inspection', payload: {} }
+      }
+    })
+    assert.deepEqual(inspection, { ok: false, code: 'PRODUCT_POSTGRES_INPUT_INVALID' })
+    assert.equal(
+      fixed('/usr/bin/systemctl', ['show', unitName, '--property=MainPID', '--value']),
+      activePid
+    )
+    check(
+      'current037_installed_Root_setpriv_sameUID_admin_reaches_finite_inspector_and_refuses_invalid_input_without_restart'
+    )
+  }
   await assert.rejects(
     () =>
       administerInstalledController({

@@ -584,7 +584,22 @@ try {
   assert.equal(bad.body.error, 'CONTROLLER_INSTALL_UPGRADE_CANDIDATE_NOT_READY')
   assert.equal(inspect().body.phase, 'start_pending')
   assert(!existsSync(join(paths.installation, 'revisions', keys[2], 'activation.json')))
-  const safe = rollback()
+  // The intentionally crashing candidate can disappear between MainPID and /proc
+  // attestation. That must refuse the operation; inspect the same durable intent
+  // before a bounded explicit rollback retry rather than weakening attestation.
+  let safe = rollback()
+  for (
+    let retry = 0;
+    safe.body.error === 'CONTROLLER_INSTALL_UPGRADE_PROCESS_CHANGED' && retry < 5;
+    retry++
+  ) {
+    const pending = inspect()
+    assert.equal(pending.body.request_key, request.request_key)
+    assert.equal(pending.body.phase, 'start_pending')
+    assert(!existsSync(join(paths.installation, 'revisions', keys[2], 'activation.json')))
+    await new Promise((done) => setTimeout(done, 600))
+    safe = rollback()
+  }
   assert.equal(safe.status, 0)
   assert.equal(safe.body.service_state, 'running')
   await preserved()

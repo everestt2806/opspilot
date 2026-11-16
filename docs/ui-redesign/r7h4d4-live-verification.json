@@ -1,0 +1,381 @@
+{
+  "status": "PASS_SCOPED_R7H4D4_SERVING_AND_TRANSPORT",
+  "checkpoint": "R7h-4d4",
+  "verified_at": "2026-11-16T19:47:23.844838+00:00",
+  "base_commit": "68d4ddd801aa2e89fc0f3373872cd07ba5dd9105",
+  "candidate_proof": {
+    "path": "docs/ui-redesign/r7h4d4-candidate-verification.json",
+    "sha256": "8f1f476fc2261618c28a7447ec8db8b51b11a82931cdcdf22817e634dbe45ed2"
+  },
+  "raw": {
+    "path": "app/.out-scripts/product-postgres-inspector-controller-live/a6725b98625c/result.json",
+    "sha256": "ef96dcda62b807be7e4e57aa91ccc3d24e8c9c3513be20575c37c30da091c328"
+  },
+  "checks": [
+    "fresh_pinned_SSH_schema037_eight_apps_sixteen_app_CIDs_and_two_retained_PG_quiescent",
+    "Main_upgrade037_to037_binding_refresh_preserves_eight_apps_two_PG_data_CIDs_key_source_env",
+    "original_Root_sealed035_backup_retained_while_current_live_PG_resource_unchanged",
+    "actual_Main_transport_installed_Root_sameUID_pinned_SSH_PG_app7_inspect_tables_rows10_rows100_and_cross_instance_limit_missing_relation_refusal",
+    "actual_Main_transport_installed_Root_sameUID_pinned_SSH_PG_app8_inspect_tables_rows10_rows100_and_cross_instance_limit_missing_relation_refusal",
+    "real_inspector_keeps_two1000_row_databases_CIDs_volumes_systemIDs_source_env_keys_helpers_and_policy_unchanged",
+    "eight_public_HTTP200_existing_helpers_two_PG_data_unchanged_and_scoped_client_revoked"
+  ],
+  "actual_Main_artifact_sha256": "947946eef213de98d698d9e8704f92b90703260e1cca5f9541b62b2317f79e93",
+  "installation": {
+    "controller_id": "dc586bb7-cd83-484c-b036-e5ad40ec106d",
+    "original_request_key": "7573f0b1-4262-4305-8b7d-9a1edce49626",
+    "runtime_upgrade_key": "5461c398-27e4-48b8-82e0-0ca0663aa760",
+    "runtime_uid": 997,
+    "schema": 37,
+    "release_sha256": "63d1dca75f976d7cd06926ccf8f1407f221b505371cd32ea8132b39de8e01899",
+    "payload_sha256": "ade9e58a0d1a234dcc67b0e01724e8224fc4d4f7e36fa03f35ed6a37d410c167",
+    "service": "MainPID=1720200\nUser=opspilot-controller\nActiveState=active\n"
+  },
+  "retained": {
+    "apps": [
+      {
+        "id": 1,
+        "name": "san-nha-live",
+        "current_deployment_id": 4
+      },
+      {
+        "id": 2,
+        "name": "desktop-live-69eeeb78",
+        "current_deployment_id": 5
+      },
+      {
+        "id": 3,
+        "name": "spa-live-6ab247675f19",
+        "current_deployment_id": 10
+      },
+      {
+        "id": 4,
+        "name": "next-live-ba8a98aed302",
+        "current_deployment_id": 15
+      },
+      {
+        "id": 5,
+        "name": "env-live-88a0b12613c2",
+        "current_deployment_id": 20
+      },
+      {
+        "id": 6,
+        "name": "active-live-cff1aa0eb5c4",
+        "current_deployment_id": 22
+      },
+      {
+        "id": 7,
+        "name": "pg-live-f3ba42f10b94",
+        "current_deployment_id": 26
+      },
+      {
+        "id": 8,
+        "name": "pg-main-2a6785f2e51e",
+        "current_deployment_id": 30
+      }
+    ],
+    "app_and_collector_CIDs": [
+      {
+        "name": "san-nha-live-app",
+        "id": "1bdb0eeacc48c4686cc157685e8aacec3b0f208f301ee6a1a0c218c3a82500bc",
+        "image": "sha256:293a8a871d7beca51b59d76cb307d75fab5e4d4da612ba419cb6f88f80573de1",
+        "status": "running",
+        "started_at": "2026-11-10T08:05:34.188517852Z",
+        "restart_count": 0
+      },
+      {
+        "name": "san-nha-live-collector",
+        "id": "5049f9dc01cba64c771badf0d690ef49476f2cd9b9b9aa235ccaa9dbbc53eb6f",
+        "image": "sha256:1e82d7cda2f7369465194d5c632f18e7a885d1d6eff162a77eab6536d940ade1",
+        "status": "running",
+        "started_at": "2026-11-10T08:05:34.716620348Z",
+        "restart_count": 0
+      },
+      {
+        "name": "desktop-live-69eeeb78-app",
+        "id": "55ee8e261546919d7072a34d98804d4fd248433064fcd1ac922843d792f771ea",
+        "image": "sha256:44670ef2a261d3edc6ffed045ae710c05e88672c5fdcffd6cd5db8b7b044f5ec",
+        "status": "running",
+        "started_at": "2026-11-12T11:45:28.872137559Z",
+        "restart_count": 0
+      },
+      {
+        "name": "desktop-live-69eeeb78-collector",
+        "id": "3cbebfe49f5994b138582e7a4512da9ac7461b3b03e01e9eafc7d02e004f0969",
+        "image": "sha256:6d127a2fe1f73e4680b53b7970bbbb8257dbe41595f39b1c25d79390cc7d2f60",
+        "status": "running",
+        "started_at": "2026-11-12T11:45:29.474597305Z",
+        "restart_count": 0
+      },
+      {
+        "name": "spa-live-6ab247675f19-app",
+        "id": "51afedc0502b2f81fa150858623ad7a8be2ca47c2d905829ac7f6399088cfccb",
+        "image": "sha256:5c415de5e24c1bf4e26c3b4588cf146a30549ce3e8c100a2207434567d997746",
+        "status": "running",
+        "started_at": "2026-11-13T06:39:30.199689111Z",
+        "restart_count": 0
+      },
+      {
+        "name": "spa-live-6ab247675f19-collector",
+        "id": "82aefed9096cd557ca946592de4f863d2eb75c9f72348bd2346ae1e9077732cc",
+        "image": "sha256:3e3f7f7cce80f9dadb6b0e157a966e75fc312723d8c6b1977f089340cb08fcc3",
+        "status": "running",
+        "started_at": "2026-11-13T06:39:30.984032804Z",
+        "restart_count": 0
+      },
+      {
+        "name": "next-live-ba8a98aed302-app",
+        "id": "ab1fab9726d96299fdb5efdd09b9ce78b0412ebd30faa26810c1996efc63a732",
+        "image": "sha256:3907c4bd7fc6508e702ff26e0695a885d416b19b39404f77f4e9cfaf810b7f85",
+        "status": "running",
+        "started_at": "2026-11-13T12:04:01.680906371Z",
+        "restart_count": 0
+      },
+      {
+        "name": "next-live-ba8a98aed302-collector",
+        "id": "f87c6699ba3d37ea4eacbfb7fb0a5d643aa22596df714b9ca7774a956d9a65f0",
+        "image": "sha256:cf935067a9fb210e8caafd5ba1bd0346dff7f2feb8408c54b81d19e203b2a61b",
+        "status": "running",
+        "started_at": "2026-11-13T12:04:02.388204726Z",
+        "restart_count": 0
+      },
+      {
+        "name": "env-live-88a0b12613c2-app",
+        "id": "83e1cc9755a77016bf2d09d36cc648ea2d18f00b467da44623337b8bf5d905b6",
+        "image": "sha256:025827b7563756776b7de03d75fe0ad141b1aad6d9ef2e0388d453bbaa0f7835",
+        "status": "running",
+        "started_at": "2026-11-15T11:13:13.684189024Z",
+        "restart_count": 0
+      },
+      {
+        "name": "env-live-88a0b12613c2-collector",
+        "id": "56c0b045a933439dbd8fd7523f567414064d99fa49877a332adbb3dffbdd5d84",
+        "image": "sha256:9db5d943796cb7e529d785d0fb2eb4133ca01f04b82a6dd60e9f6af8c1456c3f",
+        "status": "running",
+        "started_at": "2026-11-15T11:13:14.2741646Z",
+        "restart_count": 0
+      },
+      {
+        "name": "active-live-cff1aa0eb5c4-app",
+        "id": "f834f3af65759baa00e215f577e8f850473e8dea36873e5f2aef8ee8ac095171",
+        "image": "sha256:58be6a3c73e4d0e8c3b3143818db433a97f667a9b62103448d71c8b11e97d0c7",
+        "status": "running",
+        "started_at": "2026-11-15T14:31:37.129233349Z",
+        "restart_count": 0
+      },
+      {
+        "name": "active-live-cff1aa0eb5c4-collector",
+        "id": "5a7a722c9a50fd99713c49e3be8de492f455d33578da630671d00cce74aa7c37",
+        "image": "sha256:ad7ffe1965784438504a089cbf889c8cce4806482533832c39ca69358520a056",
+        "status": "running",
+        "started_at": "2026-11-15T14:31:37.703792151Z",
+        "restart_count": 0
+      },
+      {
+        "name": "pg-live-f3ba42f10b94-app",
+        "id": "9d712d22ff98eec5065c0959e6fe1ca4dd15a4f5b0b05370e9a10128c811bf8b",
+        "image": "sha256:dc9a22f7e8a81d67b742c46dbeb3be8a55a93fbae55546014d52e382c14cfe65",
+        "status": "running",
+        "started_at": "2026-11-16T06:20:15.792431907Z",
+        "restart_count": 0
+      },
+      {
+        "name": "pg-live-f3ba42f10b94-collector",
+        "id": "681afd46697c37bd3a0a6c04d3c2578664e16a565f044a364b708b2982050c51",
+        "image": "sha256:c474f41619fce86081a2cc0f422dc67c86c6bbda4a8e52820d8b19b85b45c4d3",
+        "status": "running",
+        "started_at": "2026-11-16T06:20:16.499339887Z",
+        "restart_count": 0
+      },
+      {
+        "name": "pg-main-2a6785f2e51e-app",
+        "id": "f9ed71a0b29aae89d910ba74c1804653ffd6c82e7dbf7aae669b91b84ce9c4f0",
+        "image": "sha256:4808e92bc971851909a7d97545ef7aea8c8c7c819a77a3812c302a867bc4eab8",
+        "status": "running",
+        "started_at": "2026-11-16T13:03:26.010135811Z",
+        "restart_count": 0
+      },
+      {
+        "name": "pg-main-2a6785f2e51e-collector",
+        "id": "4dd570face7f1915bddc92f4f7f92c0a1985248503394c16a916b0a1873eb67f",
+        "image": "sha256:c8e2531cedbdd76b4f90dcc822371c9b4f2965fe760de074c47940aa85cea70a",
+        "status": "running",
+        "started_at": "2026-11-16T13:03:26.621790347Z",
+        "restart_count": 0
+      }
+    ],
+    "postgres7": {
+      "database_id": "8e397a25-7d99-43b8-9ecb-2a5765a7afcd",
+      "container_id": "83a8a787e3629431e61791ce6790d9b61f3aa463d5c92226e9af34e0ed4f8b3f",
+      "volume": "opspilot-pg-8e397a25-7d99-43b8-9ecb-2a5765a7afcd-data",
+      "image_id": "sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e",
+      "system_identifier": "7708649593492308006",
+      "data_count": 1000,
+      "data_md5": "8be5880654258932bbc6c426885878da",
+      "material_sha256": "16041196a9f9fd4bc66c17355d63d51ffca113f42b159cce906eeb1f75920d38",
+      "resource_count": 1,
+      "public_port": null,
+      "original_source_material_sha256": "284cf8420cf2a50d330e74d085ab96c218ae6c7de7cea0970a24f548c8d8b966"
+    },
+    "postgres8": {
+      "database_id": "850c85ec-450c-4b94-b2a4-712387664e1e",
+      "container_id": "3e1b0411840e2079b8256c145a451d64d208f25190dd4bb700c0aa13307fa889",
+      "volume": "opspilot-pg-850c85ec-450c-4b94-b2a4-712387664e1e-data",
+      "image_id": "sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e",
+      "system_identifier": "7708752679918456877",
+      "data_count": 1000,
+      "data_md5": "8be5880654258932bbc6c426885878da",
+      "material_sha256": "a07323e609eec1b44f8ffc328a998c7899eecb7f0a950d08276669dc73b15349",
+      "public_port": null
+    },
+    "source_env_material_sha256": "c92776fdcb8c562b9b5d10feb469a8a05f2981dd396832d641d276200174e629",
+    "VPS_credential_material_sha256": "68940aec92472f567563d7c4edfc99f063b76abc466f14ec1fc974b3df070653",
+    "key_and_installation_markers": [
+      {
+        "path": ".controller-runtime-key",
+        "inode": 265570,
+        "sha256": "86332adad288d17e34d79e20cbe63e29250665dc19c17013f4603ea727e89706"
+      },
+      {
+        "path": ".product-controller-initialized",
+        "inode": 265569,
+        "sha256": "e9342557cddefc41325a75f51d3eca413e659c2cd348d4f6045a6c16702d2074"
+      },
+      {
+        "path": ".controller-installation",
+        "inode": 265565,
+        "sha256": "5d9cc95ff2db3d9338776481d7998be53b6d29bd5234d9c6db9b85d2b321609b"
+      }
+    ],
+    "database_inode": 265566,
+    "helpers_unchanged": true,
+    "all_policies_paused_before_and_after": true,
+    "all_active_jobs_clients_experiments_leases_unsettled_zero": true
+  },
+  "original_sealed_schema35_backup": {
+    "uid": 0,
+    "mode": 288,
+    "directory_uid": 0,
+    "directory_mode": 360,
+    "sha256": "f7d68968adaf6dfc455a4e8968a3bce97504fa3464af826e4d1ea31e16094a52",
+    "schema": 35,
+    "managed_resources": 2,
+    "database_selections": 2,
+    "service_state": "ready"
+  },
+  "inspector": {
+    "status": "PASS",
+    "scope": "REAL_MAIN_TRANSPORT_ROOT_SAME_UID_CLI_PINNED_SSH_TWO_POSTGRES_INSTANCES",
+    "observations": [
+      {
+        "app_id": 7,
+        "database_id": "8e397a25-7d99-43b8-9ecb-2a5765a7afcd",
+        "container_id": "83a8a787e3629431e61791ce6790d9b61f3aa463d5c92226e9af34e0ed4f8b3f",
+        "columns": [
+          {
+            "name": "id",
+            "data_type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "label",
+            "data_type": "text",
+            "nullable": false
+          }
+        ],
+        "samples": [
+          {
+            "limit": 10,
+            "returned": 10,
+            "digest": "9db892d886eca43e2ae018458119c9cad37d9681af77aed2ff9832e9cb2d5dcd"
+          },
+          {
+            "limit": 100,
+            "returned": 100,
+            "digest": "0ba99950a973b8303225038bf1216872dcc1568d4e16633647fc232990aa6475"
+          }
+        ]
+      },
+      {
+        "app_id": 8,
+        "database_id": "850c85ec-450c-4b94-b2a4-712387664e1e",
+        "container_id": "3e1b0411840e2079b8256c145a451d64d208f25190dd4bb700c0aa13307fa889",
+        "columns": [
+          {
+            "name": "id",
+            "data_type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "label",
+            "data_type": "text",
+            "nullable": false
+          }
+        ],
+        "samples": [
+          {
+            "limit": 10,
+            "returned": 10,
+            "digest": "9db892d886eca43e2ae018458119c9cad37d9681af77aed2ff9832e9cb2d5dcd"
+          },
+          {
+            "limit": 100,
+            "returned": 100,
+            "digest": "0ba99950a973b8303225038bf1216872dcc1568d4e16633647fc232990aa6475"
+          }
+        ]
+      }
+    ],
+    "controller_and_target_material_unchanged": true,
+    "raw_samples_persisted": false,
+    "desktop_project_receipts_manufactured": false,
+    "service_project_receipt_guard_and_GUI_live_tested": false,
+    "limitation": "Prior private Desktop project profiles were removed. This transport proof does not bypass or prove the Service/UI own-current-selection-receipt guard."
+  },
+  "public_HTTP_observer": {
+    "path": "app/.out-scripts/r7h4d4-public-during-upgrade.json",
+    "sha256": "4258e22fafb8a1ef7f77ddf738fa4e67887fc817f194064a00457407fc001e8f",
+    "samples": 32,
+    "ports_per_sample": 8,
+    "all_200": true,
+    "first_at": "2026-11-16T19:40:43.579703+00:00",
+    "last_at": "2026-11-16T19:46:00.414956+00:00"
+  },
+  "client_revoked": true,
+  "client_and_token_identity_preserved_during_refresh": true,
+  "private_database_removed": true,
+  "raw_samples_persisted": false,
+  "production_desktop_profile_used": false,
+  "production_GUI_live_tested": false,
+  "whole_database_feature_ready": false,
+  "formal_ML": "NOT_RUN",
+  "Kim_files_changed": false,
+  "quality": {
+    "full_tests_passed": 2678,
+    "existing_Linux_skips": 2,
+    "node_web_scripts_typecheck": "PASS",
+    "production_build": "PASS",
+    "packaged_resources_and_tamper_checks": 5,
+    "scoped_ESLint_and_Prettier": "PASS"
+  },
+  "source_hashes": {
+    "DECISIONS.md": "29f5cfa394578005dc31c739722fd68ec2aede2a783088cbe9ece2a153146872",
+    "app/electron.vite.config.ts": "20c62ee0b339fbdfb56c54c759a8c74d9334ced39cb4fe97cb407025e116b442",
+    "app/control-plane-runtime/desktop-postgres-inspector-release.json": "b6fca57b74de5ea027898ee7245bfc265458d0e2e2be6b43fd0766437a109a9b",
+    "app/scripts/controller-upgrade-lab/run.mjs": "88a0284e0395c59aaf123b2f6005eeb4cba2e2e35de968bbeaddc398f2b7236b",
+    "app/scripts/controller-upgrade-desktop-lab/run.mjs": "add39f3999f71dbea7d8a020f9020902fbbd4269a4e72de0cb2984fd31b5f67a",
+    "app/scripts/product-postgres-inspector-live/entry.ts": "dfcf9b2f432e1dc0d5c48742335996ece93e8259e8523432f8783afbc38e2bf7",
+    "app/scripts/product-postgres-inspector-live/launch.mjs": "560b78b58095537a893cbb471da02886c43c41fb5f0301cf3adf98b14694b8fe",
+    "app/scripts/product-postgres-inspector-live/read-only.mjs": "2c63534850c85d8def70aef4ac689d1cbbb278f60e9cbae1a8cdf980b749c5c0",
+    "app/scripts/product-postgres-inspector-live/README.md": "90b2564e973cb7732383edf925e233127434c812bfa631a2386bc54f9db060e3",
+    "app/scripts/product-postgres-inspector-live/run.mjs": "350cc40313655b27fd224f158dbabf05b824c47378189e11211bd9eee1242e0a",
+    "app/scripts/product-postgres-inspector-live/snapshot.mjs": "47b4f1ce3457809d547fbeaedd825fcc332a76a1b4e6a6e5647e96cbad880eee",
+    "app/scripts/product-postgres-inspector-live/verify-inspector.mjs": "94a656f8e090abf6e91546a845d129f385b5bb0ecda947b287c7c30afb13cdd0"
+  },
+  "limits": [
+    "Serving rollout and real Main enrollment transport/Root/CLI/SSH/PG reads are verified. No new PG resource or app deployment performed.",
+    "Prior private project profiles were removed; positive live Desktop Service/UI own-selection-receipt path remains NOT_RUN. Existing Electron UI proof uses synthetic transport and is labelled in d3b.",
+    "Reconnect/adopt project configuration needs its own explicit authority/consent design and gate; do not insert fake selection receipts.",
+    "Product backup/restore/migrate/direct-upload database acceptance, Kim clean Windows delivery, soak and formal ML remain separate release work."
+  ]
+}

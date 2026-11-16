@@ -1,0 +1,8 @@
+{
+  "release_id": "linux-x64-node22-20261117-postgres-inspector",
+  "node_version": "22.23.4",
+  "minimum_glibc": "2.39",
+  "release_sha256": "63d1dca75f976d7cd06926ccf8f1407f221b505371cd32ea8132b39de8e01899",
+  "installer_sha256": "e53521cca74c5e70ed8ddc3f8ff0a5619f6957402ffffd9a76725d2ea757abd5",
+  "upgrade_supported": true
+}
