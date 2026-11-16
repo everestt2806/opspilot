@@ -28,7 +28,13 @@ const baseSchema =
     : Number(process.env.OPSPILOT_UPGRADE_BASE_SCHEMA)
 assert([29, 35].includes(baseSchema), 'LAB_BASE_SCHEMA_UNSUPPORTED')
 if (baseSchema === 35)
-  assert.equal(releasePin, 'db1e58c83badef0c7efca42b78fff483d71cc38bdd711a635924d0849b41bdb8')
+  assert(
+    [
+      'db1e58c83badef0c7efca42b78fff483d71cc38bdd711a635924d0849b41bdb8',
+      '3782655ddd14e5b88e6fff592cf7415e5652b4c0562af68866b4fd0eae2fadf0'
+    ].includes(releasePin),
+    'LAB_BASE_RELEASE_UNSUPPORTED'
+  )
 if (!modules || !source || !releasePin) throw Error('LAB_INPUT_REQUIRED')
 process.env.NODE_PATH = modules
 Module._initPaths()

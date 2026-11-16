@@ -73,6 +73,23 @@ export const PRODUCT_POSTGRES_TRANSFER_PREFIX =
 export interface ProductPostgresSelectionInput extends ProductPostgresPrepareInput {
   database_id: string;
 }
+/** Same-UID Linux CLI only. Explicit pinned artifact, never source-provided code.
+ * review/select require an actual read-only target helper/key inspection.
+ * selection-state reads the durable receipt without requiring a target connection.
+ */
+export interface ProductPostgresSelectionCommandInput {
+  artifact: string;
+  manifest_sha256: string;
+  selection: ProductPostgresSelectionInput;
+}
+export interface ProductPostgresReview {
+  scope: ProductEnvironmentScope;
+  source_generation: number;
+  source_config_sha256: string;
+  metadata: ProductPostgresMetadata;
+  auto_deploy_paused: true;
+  deployment_started: false;
+}
 export interface ProductPostgresSelectionResult {
   state: "selected" | "already_selected";
   request_key: string;

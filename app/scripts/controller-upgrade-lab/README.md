@@ -41,3 +41,9 @@ Lab hiện kiểm thêm18 phép thử trên bản ứng viên có cùng Node/dep
 - Cleanup chỉ unit/account/root thuộc nonce đã xác minh. Có0 Docker Product deployment; HTTP fixture độc lập không được gọi là Docker/VPS acceptance. Chưa chứng minh OS reboot, target helper upgrade, packaged catalog, Desktop upgrade UI hay live env rollout.
 
 Log các lần chạy lỗi và bản pass giữ riêng trong `app/.out-scripts/controller-upgrade/<nonce>/`; phải chạy lại trên source/bundle cuối, không lấy lần pass cũ thay gate cuối.
+
+## R7h-4b: schema35→37
+
+Chạy thêm flag `--postgres` với candidate PostgreSQL37 đã build riêng. Baseline cố định là `linux-x64-node22-20261116-helper-upgrade`, pin `3782655ddd14e5b88e6fff592cf7415e5652b4c0562af68866b4fd0eae2fadf0`. Backup35 được seal trong `postgres-schema-backup`, journal riêng và Root FD3 protocol; mặc định không flag vẫn kiểm đường29→35 bằng candidate035 tương ứng. Không dùng candidate037 trực tiếp trên29; phải qua release035 đã duyệt.
+
+Gate kiểm19 tình huống gồm SIGKILL backup/apply/revert, candidate maintenance restart, cold recovery cùngUUID, credential mới sau commit, rollback hai cấp, kill giữa DDL037 và version insert (cả transaction phải rollback), và từ chối rollback trước khi dừng service khi có retained PostgreSQL resource/helper pending. Fixture không có Product Docker app; serving rollout/desktop UI là gate riêng.

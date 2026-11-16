@@ -20,6 +20,12 @@ import {
 import { dirname, join, resolve } from 'node:path'
 if (process.platform !== 'linux' || process.getuid() !== 0 || !process.version.startsWith('v22.'))
   throw Error('ROOT_LINUX_NODE22_REQUIRED')
+const postgres = process.argv.slice(2).join(' ') === '--postgres'
+if (process.argv.length > 2 && !postgres) throw Error('LAB_MODE_INVALID')
+const baselineVersion = postgres ? 35 : 29,
+  targetVersion = postgres ? 37 : 35,
+  schemaPhase = (phase) => 'schema:' + (postgres ? 'postgres-' : '') + phase,
+  backupDirectory = postgres ? 'postgres-schema-backup' : 'schema-backup'
 const modules = process.env.OPSPILOT_CONTROL_PLANE_MODULES,
   newSource = process.env.OPSPILOT_UPGRADE_RELEASE,
   newPin = process.env.OPSPILOT_UPGRADE_RELEASE_PIN
@@ -62,8 +68,15 @@ const code = require(tool),
     code.renderControllerUnit(paths, installKey),
     ...keys.map((key) => code.renderUpgradedControllerUnit(paths, installKey, key))
   ]
-const oldSource = join(repo, 'app/resources/controller-releases/linux-x64-node22-20261110/release'),
-  oldPin = '96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd'
+const oldSource = join(
+    repo,
+    'app/resources/controller-releases',
+    postgres ? 'linux-x64-node22-20261116-helper-upgrade' : 'linux-x64-node22-20261110',
+    'release'
+  ),
+  oldPin = postgres
+    ? '3782655ddd14e5b88e6fff592cf7415e5652b4c0562af68866b4fd0eae2fadf0'
+    : '96a6a5b46ebede6d8c2e6cb0141028748b98278777cdba8648a89d00d83d15cd'
 function fixtureCopy(source, destination, pin) {
   const bytes = readFileSync(join(source, 'release-manifest.json'))
   assert.equal(sha(bytes), pin)
@@ -120,12 +133,20 @@ const second = variant('second-release', '\n// Native fixture revision two.\n'),
   faulty = variant('faulty-release', "\nif(process.argv[2]==='run-product')process.exit(73)\n")
 const interrupted = variant(
   'interrupted-migration-release',
-  "\nif(process.argv[2]==='upgrade-schema-apply'){const D=require('better-sqlite3'),F=require('node:fs'),P=require('node:path'),old=D.prototype.exec;D.prototype.exec=function(sql){const result=old.call(this,sql);const file=P.join(process.argv.at(-1),'.lab-interrupted-migration');if(sql.includes('CREATE TABLE product_environment_request')&&!F.existsSync(file)){F.writeFileSync(file,'private-lab-only',{mode:384,flag:'wx'});process.kill(process.pid,'SIGKILL')}return result}}\n"
+  "\nif(process.argv[2]==='" +
+    (postgres ? 'upgrade-postgres-schema-apply' : 'upgrade-schema-apply') +
+    "'){const D=require('better-sqlite3'),F=require('node:fs'),P=require('node:path'),old=D.prototype.exec;D.prototype.exec=function(sql){const result=old.call(this,sql);const file=P.join(process.argv.at(-1),'.lab-interrupted-migration');if(sql.includes('" +
+    (postgres
+      ? 'CREATE TABLE product_managed_postgres'
+      : 'CREATE TABLE product_environment_request') +
+    "')&&!F.existsSync(file)){F.writeFileSync(file,'private-lab-only',{mode:384,flag:'wx'});process.kill(process.pid,'SIGKILL')}return result}}\n"
 )
 const result = {
   status: 'FAIL',
   scope: 'ROOT_LINUX_SYSTEMD_NATIVE_CONTROLLER_UPGRADE_PRIVATE_FIXTURE',
   checks,
+  schema_before: baselineVersion,
+  schema_after: targetVersion,
   production_vps_used: false,
   production_database_used: false,
   fixture_root_removed: false
@@ -352,8 +373,14 @@ try {
   command('/usr/bin/systemctl', ['start', unitName])
   await wait(() => health('ready'))
   stage = 'schema-backup-crash'
-  assert.equal(recover('schema:backup').signal, 'SIGKILL')
-  const backupPath = join(paths.installation, 'revisions', keys[0], 'schema-backup/backup.sqlite')
+  assert.equal(recover(schemaPhase('backup')).signal, 'SIGKILL')
+  const backupPath = join(
+    paths.installation,
+    'revisions',
+    keys[0],
+    backupDirectory,
+    'backup.sqlite'
+  )
   assert.equal(lstatSync(backupPath).uid, 0)
   assert.equal(lstatSync(backupPath).mode & 0o777, 0o440)
   assert.equal(lstatSync(dirname(backupPath)).mode & 0o777, 0o550)
@@ -363,7 +390,7 @@ try {
     keys[0],
     'runtime/payload/control-plane.cjs'
   )
-  assert.equal(asService(candidateArtifact, ['upgrade-check']).schema_version, 29)
+  assert.equal(asService(candidateArtifact, ['upgrade-check']).schema_version, baselineVersion)
   const forbidden = spawnSync('/usr/bin/setpriv', [
     '--reuid',
     String(installed.runtime_uid),
@@ -380,14 +407,14 @@ try {
   await preserved()
   check('consistent_backup_is_root_sealed_before_migration_and_service_cannot_overwrite_it')
   stage = 'schema-apply-crash'
-  assert.equal(recover('schema:apply').signal, 'SIGKILL')
+  assert.equal(recover(schemaPhase('apply')).signal, 'SIGKILL')
   assert.equal(inspect().body.phase, 'switch_pending')
-  assert.equal(asService(candidateArtifact, ['upgrade-check']).schema_version, 35)
+  assert.equal(asService(candidateArtifact, ['upgrade-check']).schema_version, targetVersion)
   command('/usr/bin/systemctl', ['start', unitName])
   await wait(() => health('maintenance'))
   await preserved()
   check(
-    'lost_migration_reply_leaves_exact35_schema_and_candidate_maintenance_without_auto_migration'
+    `lost_migration_reply_leaves_exact${targetVersion}_schema_and_candidate_maintenance_without_auto_migration`
   )
   stage = 'switch-crash'
   assert.equal(recover('switch_pending').signal, 'SIGKILL')
@@ -532,14 +559,14 @@ try {
   await preserved()
   stage = 'rollback-first'
   request = first
-  assert.equal(rollback('schema:revert').signal, 'SIGKILL')
-  assert.equal(asService(candidateArtifact, ['upgrade-check']).schema_version, 29)
+  assert.equal(rollback(schemaPhase('revert')).signal, 'SIGKILL')
+  assert.equal(asService(candidateArtifact, ['upgrade-check']).schema_version, baselineVersion)
   command('/usr/bin/systemctl', ['start', unitName])
-  // The candidate must reject29 before opening its normal migrating initializer.
+  // The candidate must reject the parent schema before opening its normal initializer.
   await new Promise((done) => setTimeout(done, 1500))
-  assert.equal(asService(candidateArtifact, ['upgrade-check']).schema_version, 29)
+  assert.equal(asService(candidateArtifact, ['upgrade-check']).schema_version, baselineVersion)
   assert(!(await health('ready')))
-  check('reverse_commit_reply_loss_and_candidate_restart_never_auto_migrate29')
+  check(`reverse_commit_reply_loss_and_candidate_restart_never_auto_migrate${baselineVersion}`)
   const original = rollback()
   assert.equal(original.status, 0)
   assert.equal(original.body.runtime_upgrade_key, null)
@@ -589,12 +616,16 @@ try {
     keys[4],
     'runtime/payload/control-plane.cjs'
   )
-  assert.equal(asService(interruptedArtifact, ['upgrade-check']).schema_version, 29)
+  assert.equal(asService(interruptedArtifact, ['upgrade-check']).schema_version, baselineVersion)
   assert.equal(recover().body.phase, 'active')
   assert.equal(rollback().body.phase, 'rolled_back')
-  assert.equal(asService(interruptedArtifact, ['upgrade-check']).schema_version, 29)
+  assert.equal(asService(interruptedArtifact, ['upgrade-check']).schema_version, baselineVersion)
   await preserved()
-  check('SIGKILL_inside_migration033_rolls_back032_and033_atomically_and_same_uuid_recovers')
+  check(
+    postgres
+      ? 'SIGKILL_inside_migration037_rolls_back_atomically_and_same_uuid_recovers'
+      : 'SIGKILL_inside_migration033_rolls_back032_and033_atomically_and_same_uuid_recovers'
+  )
   stage = 'environment-data-blocks-rollback'
   request = { ...first, request_key: keys[3] }
   const finalUpgrade = call(request)
@@ -605,8 +636,11 @@ try {
     '--property=MainPID',
     '--value'
   ]).trim()
-  const sql =
+  const environmentSql =
     "const D=require(process.argv[1]);const d=new D(process.argv[2]);d.pragma('foreign_keys=ON');d.transaction(()=>{d.exec(\"INSERT INTO vps(id,name,host,username,auth_type,encrypted_secret) VALUES(1,'schema-lab','fixture.test','operator','key',X'00');INSERT INTO app(id,vps_id,name,framework,host_port,container_port) VALUES(1,1,'schema-fixture','express',30000,3000);INSERT INTO product_source_config VALUES(1,1,'https://github.com/example/app.git','main','.', '{}', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa','2026-11-14T00:00:00Z')\");d.prepare(\"INSERT INTO product_environment_revision VALUES(?,1,1,1,1,?,'{}','express','[]','[]','aes_256_gcm',?,?,?,?)\").run(process.argv[3],'a'.repeat(64),Buffer.from([1]),Buffer.alloc(12),Buffer.alloc(16),'2026-11-14T00:00:00Z')}).immediate();d.close()"
+  // Synthetic encrypted bytes are private SQL fixtures; no credentials are decrypted here.
+  const postgresSql =
+    "const D=require(process.argv[1]);const d=new D(process.argv[2]);d.pragma('foreign_keys=ON');d.transaction(()=>{d.exec(\"INSERT INTO vps(id,name,host,username,auth_type,encrypted_secret) VALUES(1,'schema-lab','fixture.test','operator','key',X'00');INSERT INTO app(id,vps_id,name,framework,host_port,container_port) VALUES(1,1,'schema-fixture','express',30000,3000)\");d.prepare(\"INSERT INTO product_managed_postgres VALUES(?,?,1,1,'{}','express','fixture-pinned-image','aes_256_gcm',?,?,?,'now')\").run('00000000-0000-4000-8000-000000000001',process.argv[3],Buffer.from([1]),Buffer.alloc(12),Buffer.alloc(16))}).immediate();d.close()"
   const runFixtureSql = (text) =>
     command('/usr/bin/setpriv', [
       '--reuid',
@@ -636,7 +670,7 @@ try {
     "const D=require(process.argv[1]);const d=new D(process.argv[2]);d.pragma('foreign_keys=ON');d.transaction(()=>{d.exec('DELETE FROM product_target_enrollment WHERE app_id=9;DELETE FROM app WHERE id=9;DELETE FROM vps WHERE id=9')}).immediate();d.close()"
   )
   check('pending_helper_upgrade_blocks_reverse_before_service_stop_or_unit_switch')
-  runFixtureSql(sql)
+  runFixtureSql(postgres ? postgresSql : environmentSql)
   assert.equal(rollback().body.error, 'CONTROLLER_INSTALL_UPGRADE_SCHEMA_ROLLBACK_UNSAFE')
   assert.equal(
     command('/usr/bin/systemctl', ['show', unitName, '--property=MainPID', '--value']).trim(),
@@ -646,7 +680,9 @@ try {
   assert(await health('ready'))
   await preserved()
   check(
-    'nonempty_encrypted_environment_table_blocks_schema_rollback_before_service_stop_or_unit_switch'
+    postgres
+      ? 'retained_postgres_resource_blocks_schema_rollback_before_service_stop_or_unit_switch'
+      : 'nonempty_encrypted_environment_table_blocks_schema_rollback_before_service_stop_or_unit_switch'
   )
   result.status = 'PASS'
 } catch (error) {

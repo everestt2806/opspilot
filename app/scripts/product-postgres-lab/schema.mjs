@@ -26,7 +26,7 @@ const artifact = process.env.OPSPILOT_CONTROL_PLANE_OUTPUT,
 if (!artifact || !modules) throw Error('PRIVATE_LINUX_ARTIFACT_REQUIRED')
 const helper = join(dirname(dirname(artifact)), 'prepare-lab.cjs'),
   {
-    initializeController,
+    runMigrations,
     backupControllerSchema,
     transitionControllerPostgresSchema,
     openControllerUpgradeCheck,
@@ -44,7 +44,7 @@ const proof = {
     nonce,
     state: 'RUNNING',
     serving_vps_used: false,
-    initializer_remains_035: true,
+    registered_controller_schema: 37,
     artifact_sha256: createHash('sha256').update(readFileSync(helper)).digest('hex'),
     checks
   },
@@ -66,12 +66,23 @@ try {
   const data = join(scratch, 'data'),
     backup = join(scratch, 'backup'),
     request = randomUUID()
-  initializeController(data)
-  writeFileSync(join(data, '.controller-runtime-key'), randomBytes(32), { flag: 'wx', mode: 0o600 })
-  mkdirSync(backup, { mode: 0o700 })
+  mkdirSync(data, { mode: 0o700 })
   db = new Database(join(data, 'opspilot.db'))
   db.pragma('journal_mode=WAL')
   db.pragma('foreign_keys=ON')
+  runMigrations(db, 35, 'controller')
+  const controllerId = randomUUID()
+  db.prepare("INSERT INTO product_controller VALUES(?,'2026-11-16T00:00:00.000Z','active')").run(
+    controllerId
+  )
+  writeFileSync(
+    join(data, '.product-controller-initialized'),
+    JSON.stringify({ format: 1, controller_id: controllerId }),
+    { mode: 0o600, flag: 'wx' }
+  )
+  chmodSync(join(data, 'opspilot.db'), 0o600)
+  writeFileSync(join(data, '.controller-runtime-key'), randomBytes(32), { flag: 'wx', mode: 0o600 })
+  mkdirSync(backup, { mode: 0o700 })
   db.exec(
     "INSERT INTO vps(id,name,host,username,auth_type,encrypted_secret) VALUES(1,'lab','fixture.test','operator','key',X'00')"
   )
@@ -117,8 +128,9 @@ try {
     applied
   )
   check('lost_apply_reply_reconciles_without_rekey_or_duplicate_schema')
-  assert.throws(() => assertControllerRuntimeSchema(data), /CHECK_FAILED/)
-  check('normal035_startup_refuses_private37_until_root_rollout_is_integrated')
+  assertControllerRuntimeSchema(data)
+  assert.throws(() => assertControllerRuntimeSchema(data, 35), /CHECK_FAILED/)
+  check('registered037_startup_accepts_exact37_legacy035_check_refuses_it')
   db.exec(
     "INSERT INTO vps(id,name,host,username,auth_type,encrypted_secret) VALUES(2,'later','later.test','operator','key',X'01')"
   )
@@ -149,8 +161,9 @@ try {
     reverted
   )
   check('lost_revert_reply_reconciles_exact_fresh_projection')
-  assertControllerRuntimeSchema(data)
-  check('original035_startup_accepts_reverted_exact_schema')
+  assertControllerRuntimeSchema(data, 35)
+  assert.throws(() => assertControllerRuntimeSchema(data), /CHECK_FAILED/)
+  check('legacy035_accepts_reverted_schema_latest_startup_refuses_implicit_upgrade')
   proof.state = 'PASS'
 } catch (error) {
   proof.state = 'FAIL'

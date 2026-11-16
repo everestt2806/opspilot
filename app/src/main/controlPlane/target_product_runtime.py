@@ -284,6 +284,7 @@ class DockerCommands:
         self.active = True
         retained = bytearray()
         overflow = False
+        read_failed = threading.Event()
         try:
             process = subprocess.Popen(["docker", *args], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                        stdin=subprocess.PIPE if input_bytes is not None else subprocess.DEVNULL)
@@ -311,8 +312,13 @@ class DockerCommands:
                                 overflow = True
                             else:
                                 retained.extend(chunk)
+                except (OSError, ValueError):
+                    read_failed.set()
                 finally:
-                    process.stdout.close()
+                    try:
+                        process.stdout.close()
+                    except OSError:
+                        read_failed.set()
             reader = threading.Thread(target=drain, daemon=True)
             reader.start()
             writer = threading.Thread(target=supply, daemon=True) if input_bytes is not None else None
@@ -329,12 +335,12 @@ class DockerCommands:
                 if writer is not None:
                     writer.join(timeout=2)
             if (reader.is_alive() or (writer is not None and writer.is_alive()) or write_failed.is_set()
-                or overflow or self.cancelled.is_set()):
+                or read_failed.is_set() or overflow or self.cancelled.is_set()):
                 raise RuntimeUnknown()
             if code != 0:
                 raise RuntimeUnknown("SSH_RUNTIME_COMMAND_FAILED")
             return retained.decode("utf-8", errors="strict").strip() if capture else ""
-        except (OSError, UnicodeError):
+        except (OSError, UnicodeError, subprocess.SubprocessError):
             raise RuntimeUnknown() from None
         finally:
             self.active = False

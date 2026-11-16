@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import Database from 'better-sqlite3'
@@ -39,15 +39,17 @@ import migration033 from './migrations/033_product_environment_request.sql?raw'
 import migration034 from './migrations/034_desktop_environment_intent.sql?raw'
 import migration035 from './migrations/035_product_source_environment.sql?raw'
 import migration036 from './migrations/036_desktop_environment_selection.sql?raw'
+import migration037 from './migrations/037_product_managed_postgres.sql?raw'
 
 interface Migration {
   name: string
   version: number
   sql: string
-  role?: 'desktop'
+  role?: 'desktop' | 'controller'
 }
 
 const migrations: Migration[] = [
+  { name: '037_product_managed_postgres.sql', version: 37, sql: migration037, role: 'controller' },
   {
     name: '036_desktop_environment_selection.sql',
     version: 36,
@@ -221,6 +223,12 @@ export function initializeDatabase(
   const databasePath = join(userDataPath, 'opspilot.db')
   mkdirSync(dirname(databasePath), { recursive: true })
 
+  if (existsSync(databasePath)) {
+    // Open/status không được tự nâng035. Root migration dùng transaction tường minh;
+    // fresh initializeController đã từ chối file có sẵn trước khi tới đây.
+    assertDatabaseCanOpen(databasePath, role)
+  }
+
   db = new Database(databasePath)
   try {
     db.pragma('journal_mode = WAL')
@@ -230,6 +238,33 @@ export function initializeDatabase(
   } catch (error) {
     db.close()
     throw error
+  }
+}
+
+/** Read-only prerequisite; không migrate/rekey. SQLite có thể mở WAL/SHM sidecar
+ * để đọc đủ committed state; không dùng immutable=1 vì sẽ bỏ qua WAL đang sống.
+ */
+export function assertControllerDatabaseCanOpen(databasePath: string): void {
+  assertDatabaseCanOpen(databasePath, 'controller')
+}
+function assertDatabaseCanOpen(databasePath: string, role: 'desktop' | 'controller'): void {
+  const inspection = new Database(databasePath, { readonly: true, fileMustExist: true })
+  try {
+    const applied = getAppliedVersions(inspection)
+    if (
+      migrations.some(
+        (migration) => migration.role && migration.role !== role && applied.has(migration.version)
+      )
+    )
+      throw new Error(
+        role === 'controller'
+          ? 'CONTROLLER_DATABASE_ROLE_MISMATCH'
+          : 'DESKTOP_DATABASE_ROLE_MISMATCH'
+      )
+    if (role === 'controller' && !applied.has(37))
+      throw new Error('CONTROLLER_SCHEMA_UPGRADE_REQUIRED')
+  } finally {
+    inspection.close()
   }
 }
 
@@ -250,12 +285,19 @@ export function runMigrations(
     migrations.some((m) => m.role === 'desktop' && applied.has(m.version))
   )
     throw new Error('CONTROLLER_DATABASE_ROLE_MISMATCH')
+  if (
+    role === 'desktop' &&
+    migrations.some(
+      (migration) => migration.role === 'controller' && applied.has(migration.version)
+    )
+  )
+    throw new Error('DESKTOP_DATABASE_ROLE_MISMATCH')
 
   for (const migration of migrations.toSorted((left, right) =>
     left.name.localeCompare(right.name)
   )) {
     if (migration.version > maxVersion) break
-    if (role === 'controller' && migration.role === 'desktop') continue
+    if (migration.role && migration.role !== role) continue
     if (applied.has(migration.version)) {
       continue
     }

@@ -7,16 +7,28 @@ import {
   resolveControllerSecretDirectory
 } from './controllerSecrets'
 import { readReleaseFile } from './controllerRelease'
-import { postgresPrepareSchema, postgresStateSchema, ProductPostgresError } from './productPostgres'
+import {
+  postgresPrepareSchema,
+  postgresStateSchema,
+  postgresSelectionCommandSchema,
+  ProductPostgresError
+} from './productPostgres'
 import { assertControllerRuntimeSchema } from './controllerUpgradeCheck'
+import { ProductPostgresCommands } from './productPostgresCommands'
+import { verifyControllerBundle } from './controllerBundle'
 
-/** Deliberately separate from auto-migrating opener. Dormant until protected schema037 exists. */
-export function runProductPostgresCli(
-  command: 'prepare-managed-postgres' | 'managed-postgres-state',
+/** Requires explicit schema037. Never migrates an existing controller or creates a key. */
+export async function runProductPostgresCli(
+  command:
+    | 'prepare-managed-postgres'
+    | 'managed-postgres-state'
+    | 'managed-postgres-review'
+    | 'select-managed-postgres'
+    | 'managed-postgres-selection-state',
   directory: string,
   input: unknown,
   signal?: AbortSignal
-): void {
+): Promise<void> {
   if (process.platform !== 'linux') throw Error('PRODUCT_POSTGRES_LINUX_REQUIRED')
   if (signal?.aborted) throw Error('PRODUCT_POSTGRES_ABORTED')
   const root = resolveControllerSecretDirectory(directory),
@@ -59,7 +71,7 @@ export function runProductPostgresCli(
   ) as { format?: unknown; controller_id?: unknown }
   if (signal?.aborted) throw Error('PRODUCT_POSTGRES_ABORTED')
   const db = new Database(path, {
-    readonly: command === 'managed-postgres-state',
+    readonly: command !== 'prepare-managed-postgres' && command !== 'select-managed-postgres',
     fileMustExist: true,
     timeout: 5000
   })
@@ -75,6 +87,34 @@ export function runProductPostgresCli(
       marker.controller_id !== controllers[0].controller_id
     )
       throw new ProductPostgresError('PRODUCT_POSTGRES_AUTHORITY_CHANGED')
+    if (
+      command === 'managed-postgres-review' ||
+      command === 'select-managed-postgres' ||
+      command === 'managed-postgres-selection-state'
+    ) {
+      const request = postgresSelectionCommandSchema.safeParse(input)
+      if (!request.success || request.data.selection.scope.controller_id !== marker.controller_id)
+        throw new ProductPostgresError('PRODUCT_POSTGRES_INPUT_INVALID')
+      const bundle = verifyControllerBundle(request.data.artifact, request.data.manifest_sha256)
+      db.pragma('foreign_keys=ON')
+      if (command === 'select-managed-postgres') db.pragma('synchronous=FULL')
+      const commands = new ProductPostgresCommands(
+        db,
+        loadControllerCredentialCipher(root),
+        root,
+        controllers[0].controller_id,
+        `unix:${process.getuid!()}`,
+        bundle
+      )
+      const result =
+        command === 'managed-postgres-review'
+          ? await commands.review(request.data.selection, signal)
+          : command === 'managed-postgres-selection-state'
+            ? commands.lookup(request.data.selection)
+            : await commands.select(request.data.selection, signal)
+      console.log(JSON.stringify(result))
+      return
+    }
     const parsed = (
       command === 'prepare-managed-postgres' ? postgresPrepareSchema : postgresStateSchema
     ).safeParse(input)

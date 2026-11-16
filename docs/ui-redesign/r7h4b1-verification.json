@@ -1,0 +1,765 @@
+{
+  "format": 1,
+  "checkpoint": "R7h-4b1",
+  "status": "PASS_SCOPED_NATIVE_CONTROLLER_CHECKPOINT",
+  "aggregate_R7h4b": "OPEN_PENDING_SERVING_ROLLOUT",
+  "base": "507cf15b1380b4fcf279fed2ba60c4316645afec",
+  "serving_vps_mutated": false,
+  "migration037_registered_controller_only": true,
+  "desktop_schema": 36,
+  "new_serving_release_approved": false,
+  "Main_UI_database_selection_available": false,
+  "formal_ML": "NOT_RUN_NO_DEDICATED_VPS",
+  "source_sha256_LF": {
+    "app/scripts/controller-upgrade-desktop-lab/README.md": "fa0a680b9c813a6c00a7ee1c3dc00645e850867128cf1ce80bdd84066b42c009",
+    "app/scripts/controller-upgrade-desktop-lab/run.mjs": "2da9f6900c15f16b3d9e72d40c907606d52d7ccca97805be29e61ca205541342",
+    "app/scripts/controller-upgrade-lab/README.md": "43171f021c4dbce5e9ee21611f73339b75b6457c5a52f8a6a7c3df8eebe8d60e",
+    "app/scripts/controller-upgrade-lab/run.mjs": "09e2919f07f72c2df6b19a687b950135cb12831b9f1aa4089e4524bd792f574c",
+    "app/scripts/product-environment-admin-lab/run.mjs": "3a159d2bc281e1a2d79cfcfd5f9a60d585dada8e75d2234ea2f12080708e6b12",
+    "app/scripts/product-environment-lab/run.mjs": "87e8038e9928c28498b9aae2c1294374b83f75b5529e8ae0384fbdfc0725f137",
+    "app/scripts/product-environment-selection-lab/run.mjs": "d0f4078461aaebb51596e6f1b05cca602eb77fa724dae723d48cc8cc6da4906d",
+    "app/scripts/product-postgres-lab/README.md": "f6baa48b0ac6bcb5529998d5c6d8eabf06747d0cf495f8e87060c774962cd611",
+    "app/scripts/product-postgres-lab/entry.ts": "dc29cb617210c4063f4a4afa84dfd0c6dcd137c78d68f59d69d39437128ec653",
+    "app/scripts/product-postgres-lab/prepare.mjs": "a0aa0f07cfc7c23cada144b04d42e48a9998cee8a4a399b8288c44c9e048f2de",
+    "app/scripts/product-postgres-lab/schema.mjs": "f668f392b82c01e8dc1b10bece1f02db7112d68f1217b463ee2ce40c0460ff2f",
+    "app/scripts/product-postgres-lab/selection.mjs": "15dd8725a6452e8491c57a8cc3d42e61176d37d1393f2dcc97b86fd06be655a7",
+    "app/scripts/product-postgres-lab/test_io.py": "5e01def131c925ed604b9f24c79830f094c91e229991d4cdba19183e5ea0f0db",
+    "app/scripts/product-runtime-lab/entry.ts": "e7707659e126d7a7601b493e0af0441ee025b4ba8fabbdc34305c9e2a777bc3e",
+    "app/scripts/product-runtime-lab/run.mjs": "7b3ce6711ab15294ad477e99abb6b4895ffbdca8d04a798f0e37d39165c41e63",
+    "app/scripts/product-runtime-lab/test_target_helper_upgrade.py": "a6460cfc9309f7331ca9ba19d5cef0f75a41a450a8e02704ce2c57ba3257be42",
+    "app/src/main/controlPlane/cli.ts": "b51e1999bb70bdf8e6d7972eb8c5231a3d265b73812e6d90233a2024563400a5",
+    "app/src/main/controlPlane/controllerDatabase.test.ts": "234e8efa88ff59545e91b8d991e6b28fc00b70f07ef65412dc1fd9c8c96ad011",
+    "app/src/main/controlPlane/controllerDatabase.ts": "1627bc8d11ef9c618adf8235a41cdcd57b6bb938d6702eb740d20e8ae507f42e",
+    "app/src/main/controlPlane/controllerPostgresSchema.test.ts": "6c470f481347a8cf68108a0a68d5ed6e2a17ec6d9abcbc0f675ac7f08bf47287",
+    "app/src/main/controlPlane/controllerSchemaUpgrade.test.ts": "32551edc483f2c8d0c52c31dc7b3b98eade7da7b5c960de91738d476a21e8f26",
+    "app/src/main/controlPlane/controllerTargetHelperCompatibility.ts": "aa35c79a0b3aa57e035b31e501bbf4705a62b20fbcbcd43935bdb6569e8a7e50",
+    "app/src/main/controlPlane/controllerUpgrade.test.ts": "9e163746431c5894d982827dd2fd3006504b5e7eadcea942f17a95e65aaf429b",
+    "app/src/main/controlPlane/controllerUpgrade.ts": "33d676c445885ff9344ba6d493978fdaf36c2e2713c33e84477e8a4834587635",
+    "app/src/main/controlPlane/controllerUpgradeAssets.ts": "2119fd53b861276fb86df1fa11319e3ba462199b6017ea90ef7861edeefb319f",
+    "app/src/main/controlPlane/controllerUpgradeCheck.ts": "ef73946f5b278b6e7defe13a18ca4de2e75c8c62cd5a68ab743deec3d6db9c7a",
+    "app/src/main/controlPlane/productEnvironmentTarget.ts": "bc515fe138cfff236a58569bbf1c171d6d89b468d55007e0de027aa3009b8a20",
+    "app/src/main/controlPlane/productPostgres.ts": "0ec6a0d5abf08f90a3c4af4f18f3fc787f50caa4a245a48e8bb9dad3c00b9ebe",
+    "app/src/main/controlPlane/productPostgresCli.ts": "4717731bb9a9dfe8f62eaa2c7a76230466a5649be91745801f87e5e177d2b3ca",
+    "app/src/main/controlPlane/productPostgresCommands.ts": "1396e3dd5bcd17de2dfaaee2306f64ccd7dfeb918e43e8758aa0b5071fff720b",
+    "app/src/main/controlPlane/productPostgresSelection.ts": "5e7f503e1743a8c4f19182fe6efe45653bd58b3b300b196b1a21f627f50ec8e4",
+    "app/src/main/controlPlane/targetHelperUpgradeBundle.ts": "c6def21b7f956482888c326e8d8725887386add36ffbeca9fc3d0866596ed4ed",
+    "app/src/main/controlPlane/targetHelperUpgradeReview.test.ts": "5e928624a33747ee05f84272b479608661769f86d4a7ef876cb28267edce79e6",
+    "app/src/main/controlPlane/targetHelperUpgradeReview.ts": "b50e982f0a6884af9bb2cf8cab598f4152fe1da349aece51069160ef2fd18552",
+    "app/src/main/controlPlane/target_enrollment.py": "546cba32411870226e63eb36e15edd0f0a015cdcde4ef8f23989bc025f7741ab",
+    "app/src/main/controlPlane/target_product_runtime.py": "95cc98a0fe3692193e66f034ac8bdb8a0e7541e9ee4c5c75b472e18ed37fc343",
+    "app/src/main/db/index.ts": "f4511b0f20a7ca872b6f5d61c7f4e8c31138e24d9c5745a6902db899504ab682",
+    "app/src/main/db/migrationRoles.test.ts": "5e8c4e75e58f5ddc025d646f99e15e5219016cfb59d921279cd9a9165ffd7937",
+    "app/src/main/db/productEnvironmentRepository.test.ts": "e2cd82a585619e543abd7653d88dfe7c7c42b4e1e36b45ad6f85a47c38de6004",
+    "app/src/main/db/productPostgresRepository.test.ts": "0988829279bc92790f9258153340f364f3e9cab0a410b8386ad65ddf18fef1f0",
+    "docs/contracts/product-postgres.ts": "f5161827f970bd560185d5d7f825d4f972ab42218fe48f84935fb0f0b74b8aa9"
+  },
+  "runtime_sha256": "95cc98a0fe3692193e66f034ac8bdb8a0e7541e9ee4c5c75b472e18ed37fc343",
+  "bootstrap_sha256": "546cba32411870226e63eb36e15edd0f0a015cdcde4ef8f23989bc025f7741ab",
+  "private_candidate": {
+    "release_sha256": "b17ba0e69f710acfcb76e8e84ee9805c9728a86c9c5067d147bf1771784b1444",
+    "payload_sha256": "13d79a5b4066c3a422abd2bbdc9a56e18a8129d056a1ca98ceacf4ec7060c2cb"
+  },
+  "full_tests": {
+    "passed": 2572,
+    "existing_Linux_skipped": 2,
+    "failed": 0
+  },
+  "checks": {
+    "full": [
+      {
+        "name": "vitest",
+        "command": "pnpm.cmd --prefix app test",
+        "exit_code": 0,
+        "seconds": 143.54,
+        "log": "app\\.out-scripts\\r7h4b-final-vitest.log",
+        "log_sha256": "10db9e9605f0c085366477edf5bcc01eee5f06fabb6d6d9646976a0cf1989c29"
+      }
+    ],
+    "quality": [
+      {
+        "name": "typecheck",
+        "command": "pnpm.cmd --prefix app typecheck",
+        "exit_code": 0,
+        "seconds": 29.06,
+        "log": "app\\.out-scripts\\r7h4b-final-typecheck.log",
+        "log_sha256": "029e938d6e9810955fd908da4fbcad7359973ac750ffc94c64f35541f0996df7"
+      },
+      {
+        "name": "scripts-types",
+        "command": "pnpm.cmd --prefix app exec tsc --noEmit -p tsconfig.scripts.json",
+        "exit_code": 0,
+        "seconds": 3.66,
+        "log": "app\\.out-scripts\\r7h4b-final-scripts-types.log",
+        "log_sha256": "b95f1de3c2e69db3d73ce45e90c59a5efdc67849d6013bbfa4e9c8f20548f98e"
+      },
+      {
+        "name": "lab-types",
+        "command": "pnpm.cmd --prefix app exec tsc -p scripts/product-runtime-lab/tsconfig.json",
+        "exit_code": 0,
+        "seconds": 6.7,
+        "log": "app\\.out-scripts\\r7h4b-final-lab-types.log",
+        "log_sha256": "b95f1de3c2e69db3d73ce45e90c59a5efdc67849d6013bbfa4e9c8f20548f98e"
+      },
+      {
+        "name": "contracts",
+        "command": "pnpm.cmd --prefix app exec tsc --noEmit ../docs/contracts/product-postgres.ts --skipLibCheck",
+        "exit_code": 0,
+        "seconds": 1.91,
+        "log": "app\\.out-scripts\\r7h4b-final-contracts.log",
+        "log_sha256": "b95f1de3c2e69db3d73ce45e90c59a5efdc67849d6013bbfa4e9c8f20548f98e"
+      },
+      {
+        "name": "build",
+        "command": "pnpm.cmd --prefix app build",
+        "exit_code": 0,
+        "seconds": 53.82,
+        "log": "app\\.out-scripts\\r7h4b-final-build.log",
+        "log_sha256": "6a15f913bfccc1f8430dc4e7df5a66dd12064d042a9dde5772877ae7de123386"
+      }
+    ],
+    "eslint-build": [
+      {
+        "name": "eslint",
+        "command": "pnpm.cmd --prefix app lint",
+        "exit_code": 0,
+        "seconds": 56.5,
+        "log": "app\\.out-scripts\\r7h4b-final-eslint.log",
+        "log_sha256": "eb8d2edc0fcb52a04b03a459359a9bf4a8eb19d7b14f0c85f9658fcb5dab3ad8"
+      },
+      {
+        "name": "build",
+        "command": "pnpm.cmd --prefix app build",
+        "exit_code": 0,
+        "seconds": 54.52,
+        "log": "app\\.out-scripts\\r7h4b-final-build.log",
+        "log_sha256": "6a15f913bfccc1f8430dc4e7df5a66dd12064d042a9dde5772877ae7de123386"
+      }
+    ],
+    "cli-schema": [
+      {
+        "name": "prepare",
+        "command": [
+          "wsl",
+          "-d",
+          "Ubuntu",
+          "--",
+          "env",
+          "NODE_PATH=/var/tmp/opspilot-p3e3a-runtime/node_modules",
+          "OPSPILOT_CONTROL_PLANE_MODULES=/var/tmp/opspilot-p3e3a-runtime/node_modules",
+          "OPSPILOT_CONTROL_PLANE_OUTPUT=/var/tmp/opspilot-r7h4b-root-1794804019-350078/payload/control-plane.cjs",
+          "/home/everestt2806/.npm/_npx/52027bd8fc0022aa/node_modules/node/bin/node",
+          "app/scripts/product-postgres-lab/prepare.mjs",
+          "--confirm-local-postgres-preparation"
+        ],
+        "exit_code": 0,
+        "seconds": 2.57,
+        "log": "app\\.out-scripts\\r7h4b-final-prepare.log",
+        "log_sha256": "1622cb032a75ce08f6fb5117f60fde101215d256097b520dcab28a4a32d37486"
+      },
+      {
+        "name": "schema",
+        "command": [
+          "wsl",
+          "-d",
+          "Ubuntu",
+          "-u",
+          "root",
+          "--",
+          "env",
+          "NODE_PATH=/var/tmp/opspilot-p3e3a-runtime/node_modules",
+          "OPSPILOT_CONTROL_PLANE_MODULES=/var/tmp/opspilot-p3e3a-runtime/node_modules",
+          "OPSPILOT_CONTROL_PLANE_OUTPUT=/var/tmp/opspilot-r7h4b-root-1794804019-350078/payload/control-plane.cjs",
+          "/home/everestt2806/.npm/_npx/52027bd8fc0022aa/node_modules/node/bin/node",
+          "app/scripts/product-postgres-lab/schema.mjs",
+          "--confirm-local-postgres-schema"
+        ],
+        "exit_code": 0,
+        "seconds": 1.6,
+        "log": "app\\.out-scripts\\r7h4b-final-schema.log",
+        "log_sha256": "adbe54738f99927da6e47fc76258fc175e1854fa6a5606a541b72b6e4677334a"
+      }
+    ],
+    "native": [
+      {
+        "command": [
+          "wsl",
+          "-d",
+          "Ubuntu",
+          "-u",
+          "root",
+          "--",
+          "sh",
+          "/mnt/d/Developing/DuAnCNTT/app/.out-scripts/r7h4b-final-native.sh"
+        ],
+        "exit_code": 0,
+        "seconds": 530.77,
+        "log": "app\\.out-scripts\\r7h4b-final-native.log",
+        "log_sha256": "1456217af4e4f5b47185b3cf2c543797a41193710f626700ebe8bd7b70d04881"
+      }
+    ],
+    "runtime": [
+      {
+        "command": [
+          "wsl",
+          "-d",
+          "Ubuntu",
+          "-u",
+          "root",
+          "--",
+          "sh",
+          "/mnt/d/Developing/DuAnCNTT/app/.out-scripts/r7h4b-remaining-runtime.sh"
+        ],
+        "exit_code": 0,
+        "seconds": 785.15,
+        "log": "app\\.out-scripts\\r7h4b-final-runtime.log",
+        "log_sha256": "abf6a79f5d4043959d2234592263fe8f2ede582cdead069cca84cc83205aaed8"
+      },
+      {
+        "command": [
+          "wsl",
+          "-d",
+          "Ubuntu",
+          "-u",
+          "root",
+          "--",
+          "sh",
+          "/mnt/d/Developing/DuAnCNTT/app/.out-scripts/r7h4b-pipeline.sh"
+        ],
+        "exit_code": 0,
+        "seconds": 207.39,
+        "log": "app\\.out-scripts\\r7h4b-pure-pg.log",
+        "log_sha256": "f4a3fbe4add87a0e1abead0bff0255f9db6e68b5b4607c40b39a9f538ea71191"
+      }
+    ],
+    "python": [
+      {
+        "name": "io",
+        "command": [
+          "wsl",
+          "-d",
+          "Ubuntu",
+          "--",
+          "env",
+          "PYTHONDONTWRITEBYTECODE=1",
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "app/scripts/product-postgres-lab",
+          "-p",
+          "test_io.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "seconds": 0.89,
+        "log": "app\\.out-scripts\\r7h4b-native-io.log",
+        "log_sha256": "e4184a9e3e7eb29cc1c797a6c4c7ede2ea48f4654e780d0e6a294651c34231a8"
+      },
+      {
+        "name": "helper",
+        "command": [
+          "wsl",
+          "-d",
+          "Ubuntu",
+          "--",
+          "env",
+          "PYTHONDONTWRITEBYTECODE=1",
+          "python3",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "app/scripts/product-runtime-lab",
+          "-p",
+          "test_target_helper_upgrade.py",
+          "-v"
+        ],
+        "exit_code": 0,
+        "seconds": 6.73,
+        "log": "app\\.out-scripts\\r7h4b-native-helper.log",
+        "log_sha256": "71e5c1b3ad471caa375252f0e3b3704c8cb5716b05be1d723f3c7565e7c77a27"
+      }
+    ],
+    "focused": [
+      {
+        "name": "changed-eslint",
+        "command": [
+          "powershell.exe",
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          ". ./tools/enter-node22.ps1; $taskList = Get-Content app/.out-scripts/r7h4b-check-files.json | ConvertFrom-Json; Push-Location app; & node_modules/.bin/eslint.cmd --max-warnings 0 $taskList.js; $taskRc = $LASTEXITCODE; Pop-Location; exit $taskRc"
+        ],
+        "exit_code": 0,
+        "seconds": 6.63,
+        "log": "app\\.out-scripts\\r7h4b-final-changed-eslint.log",
+        "log_sha256": "b95f1de3c2e69db3d73ce45e90c59a5efdc67849d6013bbfa4e9c8f20548f98e"
+      },
+      {
+        "name": "ruff-check",
+        "command": [
+          "ml-service/.venv/Scripts/python.exe",
+          "-m",
+          "ruff",
+          "check",
+          "app/scripts/product-runtime-lab/test_target_helper_upgrade.py",
+          "app/src/main/controlPlane/target_enrollment.py",
+          "app/src/main/controlPlane/target_product_runtime.py",
+          "app/scripts/product-postgres-lab/test_io.py"
+        ],
+        "exit_code": 0,
+        "seconds": 0.14,
+        "log": "app\\.out-scripts\\r7h4b-final-ruff-check.log",
+        "log_sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+      },
+      {
+        "name": "new-python-format",
+        "command": [
+          "ml-service/.venv/Scripts/python.exe",
+          "-m",
+          "ruff",
+          "format",
+          "--check",
+          "app/scripts/product-runtime-lab/test_target_helper_upgrade.py",
+          "app/scripts/product-postgres-lab/test_io.py"
+        ],
+        "exit_code": 0,
+        "log": "app\\.out-scripts\\r7h4b-final-new-python-format.log",
+        "log_sha256": "3bc53bf3e981a98a34a852e175bf9b77af841edea74fca595d9aedcbaf9a4938"
+      },
+      {
+        "name": "diff",
+        "command": [
+          "git",
+          "diff",
+          "--check"
+        ],
+        "exit_code": 0,
+        "log": "app\\.out-scripts\\r7h4b-final-diff.log",
+        "log_sha256": "bdf6d79147c1e8e7b1b927c588fb1a64754984405cffd67e177496d00dcb0da4"
+      }
+    ]
+  },
+  "native_Root_and_Main": [
+    {
+      "path": "app/.out-scripts/controller-upgrade/7e6d0b9c5233/result.json",
+      "sha256": "1bc23e2f2a4d70730032ae7a97afa9b7a2660fbc9da896d35d17d5b7c36d1721",
+      "checks": 19,
+      "scope": "ROOT_LINUX_SYSTEMD_NATIVE_CONTROLLER_UPGRADE_PRIVATE_FIXTURE"
+    },
+    {
+      "path": "app/.out-scripts/controller-upgrade-desktop/9b61e352cff1/result.json",
+      "sha256": "3659f34acf2d6fb4bd0f590cdd452b2576ac3e33da375c43cd1ca2dd55ecdfe5",
+      "checks": 19,
+      "scope": "PRIVATE_ROOT_SYSTEMD_PINNED_SSH_MAIN_SQLITE_UPGRADE"
+    }
+  ],
+  "native_pipelines": [
+    {
+      "path": "app/.out-scripts/product-runtime-lab/05acc9c82578/result.json",
+      "sha256": "1b28ff50164a4b16ffa8caf1c69a84ee34a710bad4d0a186326ad1015278240f",
+      "framework": "express",
+      "postgres": true,
+      "environment": true,
+      "env_before_database": false,
+      "attempts": 7,
+      "checks": 15,
+      "bundle_sha256": "c82256d2c88a7be910b7618468c9f0c90b6f1eb71c9fa931b8c3f03f09dfb538",
+      "driver_sha256": "fcde5743fb210ae9f29808f84b48c762406566352f984989af57418bc38d6f25"
+    },
+    {
+      "path": "app/.out-scripts/product-runtime-lab/9b714a5daaf6/result.json",
+      "sha256": "54e53228001f89b9d0808bf66739df7176f376cef7eca255464a9fec70d5be49",
+      "framework": "nextjs",
+      "postgres": true,
+      "environment": true,
+      "env_before_database": false,
+      "attempts": 7,
+      "checks": 18,
+      "bundle_sha256": "c82256d2c88a7be910b7618468c9f0c90b6f1eb71c9fa931b8c3f03f09dfb538",
+      "driver_sha256": "fcde5743fb210ae9f29808f84b48c762406566352f984989af57418bc38d6f25"
+    },
+    {
+      "path": "app/.out-scripts/product-runtime-lab/7a96a5acef89/result.json",
+      "sha256": "3d5230dd1f09681d924059dee2b1422bdbcb079df309056ecad34d668d88dcc8",
+      "framework": "express",
+      "postgres": true,
+      "environment": true,
+      "env_before_database": true,
+      "attempts": 7,
+      "checks": 15,
+      "bundle_sha256": "c82256d2c88a7be910b7618468c9f0c90b6f1eb71c9fa931b8c3f03f09dfb538",
+      "driver_sha256": "7b3ce6711ab15294ad477e99abb6b4895ffbdca8d04a798f0e37d39165c41e63"
+    },
+    {
+      "path": "app/.out-scripts/product-runtime-lab/3c8a3f905c52/result.json",
+      "sha256": "362835c51e422bc57c8eee856c6c1af92c87494d1c3501e71a2b6a134dad4314",
+      "framework": "express",
+      "postgres": false,
+      "environment": true,
+      "env_before_database": false,
+      "attempts": 7,
+      "checks": 11,
+      "bundle_sha256": "c82256d2c88a7be910b7618468c9f0c90b6f1eb71c9fa931b8c3f03f09dfb538",
+      "driver_sha256": "7b3ce6711ab15294ad477e99abb6b4895ffbdca8d04a798f0e37d39165c41e63"
+    },
+    {
+      "path": "app/.out-scripts/product-runtime-lab/d5fc0329c647/result.json",
+      "sha256": "daa7ae694f8bab98e657e76974d2b31ac01260ac1b1932a62d058c419a28182c",
+      "framework": "static-spa",
+      "postgres": false,
+      "environment": true,
+      "env_before_database": false,
+      "attempts": 7,
+      "checks": 14,
+      "bundle_sha256": "c82256d2c88a7be910b7618468c9f0c90b6f1eb71c9fa931b8c3f03f09dfb538",
+      "driver_sha256": "7b3ce6711ab15294ad477e99abb6b4895ffbdca8d04a798f0e37d39165c41e63"
+    },
+    {
+      "path": "app/.out-scripts/product-runtime-lab/31dcf2655ee9/result.json",
+      "sha256": "6f3f7950210b84827b11c7d994fe1f4a836a2b3bc9a197d6f81a36859c5d2a9f",
+      "framework": "nextjs",
+      "postgres": false,
+      "environment": true,
+      "env_before_database": false,
+      "attempts": 7,
+      "checks": 14,
+      "bundle_sha256": "c82256d2c88a7be910b7618468c9f0c90b6f1eb71c9fa931b8c3f03f09dfb538",
+      "driver_sha256": "7b3ce6711ab15294ad477e99abb6b4895ffbdca8d04a798f0e37d39165c41e63"
+    },
+    {
+      "path": "app/.out-scripts/product-runtime-lab/97beb72e942f/result.json",
+      "sha256": "4628adb2193e1b53f951b63b948d6cbaff1909e67427153996bd0e48e7f1bbc3",
+      "framework": "express",
+      "postgres": true,
+      "environment": false,
+      "env_before_database": false,
+      "attempts": 7,
+      "checks": 11,
+      "bundle_sha256": "c82256d2c88a7be910b7618468c9f0c90b6f1eb71c9fa931b8c3f03f09dfb538",
+      "driver_sha256": "7b3ce6711ab15294ad477e99abb6b4895ffbdca8d04a798f0e37d39165c41e63"
+    }
+  ],
+  "native_runtime_attempts": 49,
+  "native_runtime_checks": 98,
+  "native_actor": {
+    "path": "app/.out-scripts/product-postgres-docker/c7b388c0236a/cfb5f35af340/proof.json",
+    "sha256": "e214a52ce196c6e27765add5244a343b614407d891c5b0c65cdcdf9932b58d13",
+    "checks": 34,
+    "result": {
+      "format": 1,
+      "nonce": "cfb5f35af340",
+      "state": "PASS",
+      "checks": [
+        "real_postgres16_no_public_port_non_admin_app",
+        "one_thousand_real_rows",
+        "cold_reopen_preserves_cid_volume_system_identity_and_data",
+        "restart_keeps_same_database_and_rows",
+        "app_role_cannot_create_admin_role",
+        "wrong_credentials_rejected_without_mutation",
+        "wrong_master_key_rejected_without_mutation",
+        "wrong_target_rejected_without_mutation",
+        "wrong_owner_rejected_without_mutation",
+        "lost_authority_stops_before_access",
+        "rejections_have_zero_docker_writes",
+        "secret_hardlink_rejected",
+        "secret_fifo_rejected_without_hang",
+        "rejected_secret_not_repaired_or_rotated",
+        "logical_backup_custom_archive_with_checksum",
+        "cold_backup_uuid_reads_original_archive",
+        "native_pg_restore_completes",
+        "restored_1000_rows_match_full_content_checksum",
+        "tampered_archive_not_accepted_or_replaced",
+        "repaired_lab_archive_is_original_receipt",
+        "lost_volume_response",
+        "ambiguous_volume_cannot_adopt_or_recreate",
+        "ambiguous_volume_has_zero_replayed_writes",
+        "lost_container_response",
+        "ambiguous_container_cannot_adopt_or_recreate",
+        "ambiguous_container_has_zero_replayed_writes",
+        "lost_bootstrap_response",
+        "lost_bootstrap_response_read_only_recovery",
+        "partial_ddl_retains_unknown",
+        "partial_ddl_never_replayed_or_database_recreated",
+        "partial_ddl_recovery_does_not_mutate",
+        "foreign_named_volume_never_adopted",
+        "collision_does_not_create_private_state",
+        "existing_database_unchanged_after_all_faults"
+      ],
+      "runtime_sha256": "95cc98a0fe3692193e66f034ac8bdb8a0e7541e9ee4c5c75b472e18ed37fc343",
+      "image": "postgres:16-alpine@sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e",
+      "serving_vps_used": false,
+      "last_container_shape": {
+        "Image": "sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e",
+        "Name": "/opspilot-pg-15292226-05f5-489a-98b6-3708ad029fb8",
+        "labels": {
+          "opspilot.app_id": "1",
+          "opspilot.controller_id": "94ac1869-8b9c-4664-bf39-b0b3076fb9a2",
+          "opspilot.database_id": "15292226-05f5-489a-98b6-3708ad029fb8",
+          "opspilot.ownership_generation": "1",
+          "opspilot.resource": "managed-postgres-v1"
+        },
+        "config_image": "postgres:16-alpine@sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e",
+        "host": {
+          "Privileged": false,
+          "PublishAllPorts": false,
+          "PortBindings": {},
+          "NetworkMode": "opspilot-pg-lab-cfb5f35af340",
+          "RestartPolicy": {
+            "Name": "unless-stopped",
+            "MaximumRetryCount": 0
+          },
+          "Memory": 268435456,
+          "PidMode": "",
+          "IpcMode": "private",
+          "Mounts": [
+            {
+              "Type": "volume",
+              "Source": "opspilot-pg-15292226-05f5-489a-98b6-3708ad029fb8-data",
+              "Target": "/var/lib/postgresql/data"
+            },
+            {
+              "Type": "bind",
+              "Source": "/var/lib/docker/volumes/opspilot-pg-lab-c7b388c0236a-scratch/_data/opspilot-postgres-runtime-u_9v55jn/postgres-15292226-05f5-489a-98b6-3708ad029fb8",
+              "Target": "/run/opspilot-secrets",
+              "ReadOnly": true
+            }
+          ],
+          "Runtime": "runc"
+        },
+        "mounts": [
+          {
+            "Type": "volume",
+            "Name": "opspilot-pg-15292226-05f5-489a-98b6-3708ad029fb8-data",
+            "Source": "/var/lib/docker/volumes/opspilot-pg-15292226-05f5-489a-98b6-3708ad029fb8-data/_data",
+            "Destination": "/var/lib/postgresql/data",
+            "Driver": "local",
+            "Mode": "z",
+            "RW": true,
+            "Propagation": ""
+          },
+          {
+            "Type": "bind",
+            "Source": "/var/lib/docker/volumes/opspilot-pg-lab-c7b388c0236a-scratch/_data/opspilot-postgres-runtime-u_9v55jn/postgres-15292226-05f5-489a-98b6-3708ad029fb8",
+            "Destination": "/run/opspilot-secrets",
+            "Mode": "",
+            "RW": false,
+            "Propagation": "rslave"
+          }
+        ],
+        "networks": [
+          "opspilot-pg-lab-cfb5f35af340"
+        ]
+      },
+      "identity": {
+        "database_id": "15292226-05f5-489a-98b6-3708ad029fb8",
+        "container_id": "527d431b83255c74b99201b360a9eb0c7cc558c463624d4f842e480d5280d40a",
+        "image_id": "sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e",
+        "volume": "opspilot-pg-15292226-05f5-489a-98b6-3708ad029fb8-data",
+        "volume_created_at": "2026-11-16T03:52:20Z",
+        "system_identifier": "7708612219273687080",
+        "state": "ready",
+        "public_port": null
+      },
+      "row_count": 1000,
+      "cleanup": {
+        "database_ids": [
+          "15292226-05f5-489a-98b6-3708ad029fb8",
+          "35b8c372-d577-43c1-8f58-212bed3c1931",
+          "6646ea04-54cb-41c7-b412-41ada2073c2d",
+          "c0153849-380f-4ff5-9920-69f6d111c502",
+          "08e8736d-144f-4f45-952e-a34c190654bb",
+          "a85a9846-a9f9-4bea-a7e0-b68d66bbffce"
+        ],
+        "network_removed": true,
+        "private_directory_removed": true
+      },
+      "checks_count": 34
+    }
+  },
+  "native_CLI": {
+    "path": "app/.out-scripts/product-postgres-selection/36654117b3fa/proof.json",
+    "sha256": "b5153451a40370f2b9dcb461448ca7769849a6821f9fd20f09393f7451224ee7",
+    "checks": 6,
+    "result": {
+      "state": "PASS",
+      "nonce": "36654117b3fa",
+      "production_vps_used": false,
+      "production_database_used": false,
+      "Docker_used": false,
+      "artifact_sha256": "894ddeda133a2e853e34c71215b1b3b06f848ceec48e0229fd9dcf10bb84dd83",
+      "checks": [
+        "missing_enrollment_refuses_selection_without_source_mutation",
+        "actual_SSH_manifest_helper_bytes_key_and_receipt_review_is_readonly",
+        "actual_helper_tamper_refuses_selection_without_clearing_enrollment",
+        "wrong_local_bundle_pin_rejected_before_source_selection",
+        "production_CLI_selects_once_preserves_key_and_pause_no_job_or_runtime_readiness_claim",
+        "cold_offline_same_UUID_lookup_replay_and_conflicting_body_refusal"
+      ],
+      "last_command": "select-managed-postgres",
+      "last_error": "PRODUCT_POSTGRES_REQUEST_CONFLICT",
+      "private_cleanup": true
+    }
+  },
+  "native_prepare": {
+    "path": "app/.out-scripts/product-postgres-preparation/a09ae5cc79b8/result.json",
+    "sha256": "a742fd4fc674125ff932d22fd1b7574c83d66cf83fa4bd8204251af91b10c7fc",
+    "checks": 7,
+    "result": {
+      "status": "PASS",
+      "scope": "LINUX_PRIVATE_MANAGED_POSTGRES_PREPARATION_CLI_SQLITE_ONLY",
+      "nonce": "a09ae5cc79b8",
+      "checks": [
+        "compiled_controller_bundle_remains_exact_verified_separate_lab_artifact",
+        "current035_refused_no_auto_schema_or_key_creation",
+        "explicit_registered037_fixture_existing_key_required_metadata_empty",
+        "two_actual_CLI_processes_atomic_single_resource_separate_receipts",
+        "cold_CLI_replay_and_lookup_preserve_identity_separate_credentials_no_readback",
+        "wrong_private_fixture_key_refused_not_rotated_original_key_restored",
+        "actual_SQLite_files_no_plain_passwords_and_no_deploy_job_or_source_activation"
+      ],
+      "artifact_sha256": "894ddeda133a2e853e34c71215b1b3b06f848ceec48e0229fd9dcf10bb84dd83",
+      "VPS_used": false,
+      "Docker_runtime_used": false,
+      "initialized_schema_registered": true,
+      "private_cleanup": true
+    }
+  },
+  "native_schema": {
+    "path": "app/.out-scripts/product-postgres-schema/6068e99fcdf2/proof.json",
+    "sha256": "423cfde26428ed7f2c96b02af7df5ef4642b7bd1c3f521372952a1f6da508200",
+    "checks": 10,
+    "result": {
+      "format": 1,
+      "nonce": "6068e99fcdf2",
+      "state": "PASS",
+      "serving_vps_used": false,
+      "registered_controller_schema": 37,
+      "artifact_sha256": "be9866a5ec46920ee97c6b69a2ac88352fec2573ae95279d8d4f3a19b7bb4acc",
+      "checks": [
+        "native_wal35_consistent_backup",
+        "service_writable_backup_rejected_before_migration",
+        "all_private037_ddl_rolled_back_on_transaction_abort",
+        "native35_to_private37_preserves_baseline_projection_and_inodes",
+        "runtime_key_bytes_unchanged",
+        "lost_apply_reply_reconciles_without_rekey_or_duplicate_schema",
+        "registered037_startup_accepts_exact37_legacy035_check_refuses_it",
+        "empty37_downgrade_preserves_later35_rows",
+        "lost_revert_reply_reconciles_exact_fresh_projection",
+        "legacy035_accepts_reverted_schema_latest_startup_refuses_implicit_upgrade"
+      ],
+      "cleanup": true,
+      "checks_count": 10
+    }
+  },
+  "native_IO_tests": 8,
+  "native_helper_tests": 19,
+  "lint": {
+    "errors": 0,
+    "preexisting_format_warnings": 880,
+    "warning_source_files_match_base": [
+      "app/src/main/db/productDeployRepository.test.ts",
+      "app/src/main/db/productJobClaim.test.ts",
+      "app/src/main/db/vpsRepository.test.ts",
+      "app/src/main/db/vpsRepository.ts",
+      "app/src/main/deploy/precheck.test.ts",
+      "app/src/main/deploy/service.test.ts",
+      "app/src/main/deploy/service.ts",
+      "app/src/main/doctor/fix.test.ts",
+      "app/src/main/domain/ingress/caddyInstallTransaction.test.ts",
+      "app/src/main/domain/ingress/caddyReconcile.linux.test.ts",
+      "app/src/main/domain/ingress/caddyReconcile.test.ts",
+      "app/src/main/domain/ingress/caddyReconcile.ts",
+      "app/src/main/domain/ingress/dnsReadiness.test.ts",
+      "app/src/main/domain/ingress/dnsReadiness.ts",
+      "app/src/main/domain/ingress/externalHttpsActivation.test.ts",
+      "app/src/main/domain/ingress/externalHttpsActivation.ts",
+      "app/src/main/domain/ingress/externalHttpsProbe.test.ts",
+      "app/src/main/domain/ingress/externalHttpsProbe.ts",
+      "app/src/main/domain/ingress/preflight.test.ts",
+      "app/src/main/domain/ingress/preflight.ts",
+      "app/src/main/domain/ingress/routeBuilder.test.ts",
+      "app/src/main/domain/ingress/routeBuilder.ts",
+      "app/src/main/domain/repository.test.ts",
+      "app/src/main/domain/repository.ts",
+      "app/src/main/vps/importService.ts",
+      "app/src/renderer/src/pages/AppsPage.tsx",
+      "app/src/renderer/src/pages/DeployPage.tsx",
+      "app/src/renderer/src/pages/MigratePage.tsx"
+    ],
+    "changed_files_errors": 0,
+    "changed_files_warnings": 0
+  },
+  "frozen_helper_format_diagnostic": {
+    "required_gate": false,
+    "baseline_both_fail": [
+      {
+        "source": "507cf15:app/src/main/controlPlane/target_enrollment.py",
+        "exit_code": 1
+      },
+      {
+        "source": "507cf15:app/src/main/controlPlane/target_product_runtime.py",
+        "exit_code": 1
+      }
+    ],
+    "raw": "app/.out-scripts/r7h4b-final-ruff-format.log",
+    "new_test_drivers_format": "PASS"
+  },
+  "readonly_VPS": {
+    "path": "app/.out-scripts/product-environment-inspect/52f49c580bb9/snapshot.json",
+    "sha256": "529c69eec17f6fb6338219dcf6c3b03e71402e6b4bd98d8cff2a1e66d98db99b",
+    "serving_mutation": false,
+    "schema": 35,
+    "apps": 6,
+    "running_containers": 12,
+    "preserved_since_prior_attestation": {
+      "receipt_sha256": true,
+      "database_inode": true,
+      "vps_digest": true,
+      "files": true,
+      "content_digest": true,
+      "apps": true,
+      "containers": true,
+      "owners": true,
+      "desired": true,
+      "helpers": true
+    }
+  },
+  "external_HTTP": [
+    {
+      "port": 30000,
+      "status": 200
+    },
+    {
+      "port": 30001,
+      "status": 200
+    },
+    {
+      "port": 30002,
+      "status": 200
+    },
+    {
+      "port": 30003,
+      "status": 200
+    },
+    {
+      "port": 30004,
+      "status": 200
+    },
+    {
+      "port": 30005,
+      "status": 200
+    }
+  ],
+  "pending": [
+    "bounded_catalog_and_frozen_release_approval",
+    "fresh_attestation_before_any_serving_mutation",
+    "Main_real_VPS_upgrade37_and_new_PG_app_acceptance",
+    "Main_IPC_UI_database_instance_context",
+    "operator_backup_restore_recovery_migrate",
+    "direct_upload_database_coverage",
+    "formal_ML_dedicated_VPS"
+  ]
+}

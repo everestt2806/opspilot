@@ -76,8 +76,8 @@ it('backs up WAL35, atomically applies private037 and replays only unchanged pro
   expect(transitionControllerPostgresSchema(data, backup, proof, after.snapshot, 'apply')).toEqual(
     after
   )
-  // Production startup remains035 until the Root release upgrade has been integrated.
-  expect(() => assertControllerRuntimeSchema(data)).toThrow('CHECK_FAILED')
+  expect(() => assertControllerRuntimeSchema(data)).not.toThrow()
+  expect(() => assertControllerRuntimeSchema(data, 35)).toThrow('CHECK_FAILED')
 })
 it('reverts only empty PG schema, preserves later35 rows and reconciles a lost revert reply', async () => {
   const before = snapshot(),

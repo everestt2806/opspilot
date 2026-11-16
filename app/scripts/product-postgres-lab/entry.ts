@@ -1,4 +1,4 @@
-export { initializeDatabase, closeDatabase } from '../../src/main/db'
+export { initializeDatabase, closeDatabase, runMigrations } from '../../src/main/db'
 export { ProductPostgresRepository } from '../../src/main/db/productPostgresRepository'
 export { initializeController } from '../../src/main/controlPlane/controllerDatabase'
 export {

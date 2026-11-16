@@ -376,7 +376,7 @@ describe('Product staged environment encrypted revisions', () => {
       prior.close()
     }
     db = initializeDatabase(join(directory, 'controller'), 'controller')
-    expect(db.prepare('SELECT max(version) n FROM schema_version').get()).toEqual({ n: 35 })
+    expect(db.prepare('SELECT max(version) n FROM schema_version').get()).toEqual({ n: 37 })
     expect(db.prepare('SELECT version FROM schema_version WHERE version IN(30,31)').all()).toEqual(
       []
     )

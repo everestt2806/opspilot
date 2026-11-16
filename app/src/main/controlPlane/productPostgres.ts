@@ -14,6 +14,11 @@ export const postgresPrepareSchema = postgresStateSchema.extend({
   expected_source_config_sha256: z.string().regex(/^[a-f0-9]{64}$/)
 })
 export const postgresSelectionSchema = postgresPrepareSchema.extend({ database_id: z.uuidv4() })
+export const postgresSelectionCommandSchema = z.strictObject({
+  artifact: z.string().min(1).max(4096),
+  manifest_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+  selection: postgresSelectionSchema
+})
 export const postgresReferenceSchema = z.strictObject({
   database_id: z.uuidv4(),
   controller_id: z.string().min(1).max(128),
@@ -40,6 +45,7 @@ export class ProductPostgresError extends Error {
       | 'PRODUCT_POSTGRES_REQUIRES_QUIESCENCE'
       | 'PRODUCT_POSTGRES_REQUEST_CONFLICT'
       | 'PRODUCT_POSTGRES_UNAVAILABLE'
+      | 'PRODUCT_POSTGRES_HELPER_UPGRADE_REQUIRED'
   ) {
     super(code)
     this.name = 'ProductPostgresError'

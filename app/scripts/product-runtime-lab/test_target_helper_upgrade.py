@@ -503,6 +503,82 @@ api.handle(json.load(sys.stdin))
                 },
             )
 
+    def test_pinned_checkpoint_a_upgrades_all_three_frameworks_and_reverse_is_rejected(
+        self,
+    ):
+        # Exact historical checkpoint bytes, never inferred from the current candidate.
+        old_runtime = subprocess.check_output(
+            [
+                "git",
+                "show",
+                "507cf15b1380b4fcf279fed2ba60c4316645afec:app/src/main/controlPlane/target_product_runtime.py",
+            ],
+            cwd=fixture.REPO,
+        )
+        self.assertEqual(len(old_runtime), 85494)
+        self.assertEqual(
+            hashlib.sha256(old_runtime).hexdigest(),
+            "9f8e1fbb6fab90e9266e160b9cbbcec9707c36f455e1962b8462699f03720f1a",
+        )
+        for app_id, framework in enumerate(
+            ["express", "nextjs", "static-spa"], start=21
+        ):
+            old = copy.deepcopy(self.current)
+            manifest = json.loads(old["manifest"])
+            for file in manifest["files"]:
+                if file["path"] == "target-helper/target_product_runtime.py":
+                    file.update(
+                        size=len(old_runtime),
+                        sha256=hashlib.sha256(old_runtime).hexdigest(),
+                    )
+            old["manifest"] = json.dumps(manifest, separators=(",", ":"))
+            old["helpers"]["target_product_runtime.py"] = base64.b64encode(
+                old_runtime
+            ).decode()
+            directory = self.base / (
+                "controller-"
+                + hashlib.sha256(b"test-controller").hexdigest()
+                + "-app-"
+                + str(app_id)
+            )
+            old["payload"].update(
+                app_id=app_id,
+                state_root=str(directory / "state"),
+                helper_path=str(directory / "helpers/target_guarded_ssh_helper.py"),
+                manifest_sha256=hashlib.sha256(old["manifest"].encode()).hexdigest(),
+            )
+            self.api.handle(old)
+            target = copy.deepcopy(self.current["payload"])
+            target.update(
+                app_id=app_id,
+                state_root=str(directory / "state"),
+                helper_path=str(directory / "helpers/target_guarded_ssh_helper.py"),
+            )
+            packet = {
+                **self.packet,
+                "request_key": str(uuid.uuid4()),
+                "framework": framework,
+                "from": {"payload": old["payload"], "manifest": old["manifest"]},
+                "to": {**self.packet["to"], "payload": target},
+            }
+            self.assert_receipt(self.call(packet=packet), "applied", packet)
+            reverse = {
+                **packet,
+                "request_key": str(uuid.uuid4()),
+                "from": {"payload": target, "manifest": self.current["manifest"]},
+                "to": {
+                    "payload": old["payload"],
+                    "manifest": old["manifest"],
+                    "helpers": old["helpers"],
+                },
+            }
+            with self.assertRaises(self.api.EnrollmentRejected):
+                self.call(packet=reverse)
+            self.assertEqual(
+                (directory / "helpers/target_product_runtime.py").read_bytes(),
+                base64.b64decode(self.current["helpers"]["target_product_runtime.py"]),
+            )
+
     def test_two_process_apply_and_cancel_races_have_one_consistent_terminal(self):
         for operations in [("upgrade", "upgrade"), ("upgrade", "cancel-upgrade")]:
             if operations[1] == "cancel-upgrade":

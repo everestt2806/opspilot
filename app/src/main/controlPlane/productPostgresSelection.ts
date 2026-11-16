@@ -4,7 +4,8 @@ import type { AesGcmCredentialCipher } from '../crypto/credentialCipher'
 import { ProductPostgresRepository } from '../db/productPostgresRepository'
 import type {
   ProductPostgresSelectionInput,
-  ProductPostgresSelectionResult
+  ProductPostgresSelectionResult,
+  ProductPostgresReview
 } from '../../../../docs/contracts/product-postgres'
 import { canonicalH2Json } from './productH2Proof'
 import {
@@ -47,7 +48,7 @@ type Source = ProductSourceBasis & {
 const hash = (value: string): string => createHash('sha256').update(value).digest('hex')
 
 /** Trusted SQL primitive. Public CLI/Main wrapper must probe a PG-capable pinned helper
- * before calling select; no selection CLI is enabled yet. No SSH/job/policy activation.
+ * before calling select. No SSH/job/policy activation in this primitive.
  */
 export class ProductPostgresSelection {
   private readonly vault: ProductPostgresRepository
@@ -56,6 +57,34 @@ export class ProductPostgresSelection {
     cipher: AesGcmCredentialCipher
   ) {
     this.vault = new ProductPostgresRepository(db, cipher)
+  }
+
+  review(input: unknown, controllerId: string, administrator: string): ProductPostgresReview {
+    return this.guarded(() => {
+      const request = this.request(input, controllerId, administrator)
+      return this.db.transaction(() => {
+        const source = this.source(request),
+          config = this.configuration(source, request)
+        this.quiescent(request)
+        if (
+          source.source_generation !== request.expected_source_generation ||
+          source.source_config_sha256 !== request.expected_source_config_sha256 ||
+          (config.database && config.database.database_id !== request.database_id)
+        )
+          throw new ProductPostgresError('PRODUCT_POSTGRES_AUTHORITY_CHANGED')
+        const metadata = this.vault.verifyAvailableInTransaction(request.scope, request.database_id)
+        if (metadata.framework !== source.framework)
+          throw new ProductPostgresError('PRODUCT_POSTGRES_AUTHORITY_CHANGED')
+        return {
+          scope: request.scope,
+          source_generation: source.source_generation,
+          source_config_sha256: source.source_config_sha256,
+          metadata,
+          auto_deploy_paused: true as const,
+          deployment_started: false as const
+        }
+      })()
+    })
   }
 
   select(

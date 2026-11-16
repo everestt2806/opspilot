@@ -398,6 +398,9 @@ JOURNAL_DOMAIN = b"opspilot-target-helper-upgrade-journal-v1\n"
 DECISION_DOMAIN = b"opspilot-target-helper-upgrade-decision-v1\n"
 UPGRADE_OPERATIONS = {"upgrade", "inspect-upgrade", "recover-upgrade", "cancel-upgrade"}
 RUNTIME_BEFORE = {
+    (85494, "9f8e1fbb6fab90e9266e160b9cbbcec9707c36f455e1962b8462699f03720f1a"): {
+        "express", "static-spa", "nextjs"
+    },
     (51419, "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"): {
         "express", "static-spa", "nextjs"
     },
@@ -417,6 +420,10 @@ RUNTIME_AFTER = (
 POSTGRES_RUNTIME_AFTER = (
     85494,
     "9f8e1fbb6fab90e9266e160b9cbbcec9707c36f455e1962b8462699f03720f1a",
+)
+POSTGRES_IO_RUNTIME_AFTER = (
+    85777,
+    "95cc98a0fe3692193e66f034ac8bdb8a0e7541e9ee4c5c75b472e18ed37fc343",
 )
 PINNED_GUARDS = {
     "target_execution_guard.py": (
@@ -535,10 +542,16 @@ def _upgrade_validate(request: dict):
     ]
     runtime = "target-helper/target_product_runtime.py"
     pair = lambda record: (record["size"], record["sha256"])
+    ordered = [
+        (46765, "eb5c697e0051f38e0633bc84e32377fbc91cf4b825c21734f5f611a49b85908d"),
+        (47340, "98b0edec5ffb29a114e411d067a551a9a90110cdcf5872ab31dee5246f3e10ff"),
+        RUNTIME_AFTER, POSTGRES_RUNTIME_AFTER, POSTGRES_IO_RUNTIME_AFTER,
+    ]
+    before_pin, after_pin = pair(records[0][runtime]), pair(records[1][runtime])
     if (
-        request["framework"] not in RUNTIME_BEFORE.get(pair(records[0][runtime]), set())
-        or pair(records[1][runtime]) not in {RUNTIME_AFTER, POSTGRES_RUNTIME_AFTER}
-        or pair(records[0][runtime]) == pair(records[1][runtime])
+        request["framework"] not in RUNTIME_BEFORE.get(before_pin, set())
+        or after_pin not in {RUNTIME_AFTER, POSTGRES_RUNTIME_AFTER, POSTGRES_IO_RUNTIME_AFTER}
+        or before_pin not in ordered or ordered.index(before_pin) >= ordered.index(after_pin)
     ):
         raise EnrollmentRejected("TARGET_HELPER_UPGRADE_TRANSITION_REJECTED")
     for name, pin in PINNED_GUARDS.items():

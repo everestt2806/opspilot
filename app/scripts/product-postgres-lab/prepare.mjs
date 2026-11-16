@@ -65,7 +65,7 @@ const proof = {
   artifact_sha256: sha(readFileSync(artifact)),
   VPS_used: false,
   Docker_runtime_used: false,
-  initialized_schema_registered: false
+  initialized_schema_registered: true
 }
 let db
 const call = (command, input) =>
@@ -126,7 +126,11 @@ try {
   )
   assert.equal(verified.manifest_sha256, bundlePin)
   checks.push('compiled_controller_bundle_remains_exact_verified_separate_lab_artifact')
-  db = code.initializeDatabase(scratch, 'controller')
+  db = new (require('better-sqlite3'))(join(scratch, 'opspilot.db'))
+  db.pragma('journal_mode=WAL')
+  db.pragma('foreign_keys=ON')
+  code.runMigrations(db, 35, 'controller')
+  chmodSync(join(scratch, 'opspilot.db'), 0o600)
   const config = '{"framework":"express"}',
     hash = sha(config),
     controller = 'postgres-native',
@@ -177,25 +181,14 @@ try {
     0
   )
   checks.push('current035_refused_no_auto_schema_or_key_creation')
-  db.transaction(() => {
-    db.exec(
-      readFileSync(
-        resolve(
-          import.meta.dirname,
-          '../../src/main/db/migrations/037_product_managed_postgres.sql'
-        ),
-        'utf8'
-      )
-    )
-    db.prepare('INSERT INTO schema_version(version) VALUES(37)').run()
-  })()
+  code.runMigrations(db, 37, 'controller')
   denied('prepare-managed-postgres', request(), 'CONTROLLER_SECRET_KEY_UNAVAILABLE')
   assert.equal(db.prepare('SELECT count(*) n FROM product_managed_postgres').get().n, 0)
   code.initializeControllerSecretKey(scratch)
   const originalKey = readFileSync(join(scratch, '.controller-runtime-key')),
     keyHash = sha(originalKey)
   assert.deepEqual(call('managed-postgres-state', state), { metadata: null })
-  checks.push('explicit_private037_fixture_existing_key_required_metadata_empty')
+  checks.push('explicit_registered037_fixture_existing_key_required_metadata_empty')
   const a = request(),
     b = request(),
     results = await Promise.all([childPrepare(a), childPrepare(b)])
@@ -244,6 +237,7 @@ try {
     error?.code === 'ERR_ASSERTION' ? 'NATIVE_ASSERTION_FAILED' : 'POSTGRES_PREPARATION_LAB_FAILED'
   process.exitCode = 1
 } finally {
+  db?.close()
   code.closeDatabase()
   assert.equal(realpathSync(scratch), scratch)
   assert.equal(dirname(scratch), realpathSync(tmpdir()))

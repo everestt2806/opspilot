@@ -13,7 +13,8 @@ import { randomUUID } from 'node:crypto'
 
 import Database from 'better-sqlite3'
 
-import { initializeDatabase } from '../db'
+import { initializeDatabase, assertControllerDatabaseCanOpen } from '../db'
+import { assertControllerRuntimeSchema } from './controllerUpgradeCheck'
 import type { ProductControllerId } from '../../../../docs/contracts/product-auto-deploy'
 
 const DATABASE_FILENAME = 'opspilot.db'
@@ -75,6 +76,8 @@ export function openControllerDatabase(dataDirectoryInput: string): OpenControll
   if (marker.format !== 1 || typeof marker.controller_id !== 'string') {
     throw new Error('CONTROLLER_IDENTITY_MARKER_INVALID')
   }
+  assertControllerDatabaseCanOpen(databasePath)
+  assertControllerRuntimeSchema(dataDirectory)
   const database = initializeDatabase(dataDirectory, 'controller')
   try {
     secureDatabaseFile(databasePath)

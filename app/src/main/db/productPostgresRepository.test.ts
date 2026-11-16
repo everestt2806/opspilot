@@ -7,10 +7,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AesGcmCredentialCipher } from '../crypto/credentialCipher'
 import { initializeDatabase, closeDatabase } from './index'
 import { ProductPostgresRepository } from './productPostgresRepository'
-import migration from './migrations/037_product_managed_postgres.sql?raw'
 import type { ProductEnvironmentScope } from '../../../../docs/contracts/product-environment'
 import { PRODUCT_POSTGRES_IMAGE } from '../controlPlane/productPostgres'
 import { canonicalH2Json } from '../controlPlane/productH2Proof'
+import {
+  ProductPostgresCommands,
+  assertProductPostgresTargetManifest
+} from '../controlPlane/productPostgresCommands'
+import {
+  CONTROLLER_POSTGRES_IO_ASSET_TRANSITION,
+  CONTROLLER_POSTGRES_ASSET_TRANSITION,
+  CONTROLLER_ENVIRONMENT_ASSET_TRANSITION
+} from '../controlPlane/controllerUpgradeAssets'
+import type { VerifiedControllerBundle } from '../controlPlane/controllerBundle'
 import { ProductPostgresSelection } from '../controlPlane/productPostgresSelection'
 import { ProductEnvironmentRepository } from './productEnvironmentRepository'
 import { ProductEnvironmentSelection } from '../controlPlane/productEnvironmentSelection'
@@ -66,11 +75,6 @@ const input = (): ProductPostgresPrepareInput => ({
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'opspilot-postgres-vault-'))
   db = initializeDatabase(directory, 'controller')
-  // Private foundation fixture only; normal initializer still ends at035.
-  db.transaction(() => {
-    db.exec(migration)
-    db.prepare('INSERT INTO schema_version(version) VALUES(37)').run()
-  })()
   db.prepare(
     "INSERT INTO vps(id,name,host,port,username,auth_type,host_fingerprint,encrypted_secret) VALUES(1,'fixture','example.test',22,'operator','key',?,X'00')"
   ).run(scope.target.host_fingerprint)
@@ -652,5 +656,135 @@ describe('Managed PostgreSQL immutable encrypted preparation', () => {
     )
     expect(db.inTransaction).toBe(true)
     db.exec('ROLLBACK')
+  })
+})
+
+describe('Managed PostgreSQL public selection boundary', () => {
+  const policy = CONTROLLER_POSTGRES_IO_ASSET_TRANSITION[0]
+  const manifest = (asset: { size: number; sha256: string } = policy.after): Buffer =>
+    Buffer.from(
+      JSON.stringify({
+        format: 1,
+        node_major: 22,
+        files: [{ path: policy.path.replace(/^payload\//, ''), ...asset }]
+      })
+    )
+  const setup = (): {
+    commands: ProductPostgresCommands
+    inspect: ReturnType<
+      typeof vi.fn<(_scope: ProductEnvironmentScope, _signal: AbortSignal) => Promise<Buffer>>
+    >
+    request: import('../../../../docs/contracts/product-postgres').ProductPostgresSelectionInput
+  } => {
+    const resource = prepare(),
+      request = { ...input(), database_id: resource.metadata.database_id },
+      inspect = vi
+        .fn<(_scope: ProductEnvironmentScope, _signal: AbortSignal) => Promise<Buffer>>()
+        .mockResolvedValue(manifest())
+    // No production artifact/probe seam is exposed through the CLI. This is SQL/TOCTOU composition only.
+    const bundle = {} as VerifiedControllerBundle
+    return {
+      commands: new ProductPostgresCommands(
+        db,
+        cipher,
+        directory,
+        scope.controller_id,
+        'unix:1000',
+        bundle,
+        { inspectTarget: inspect }
+      ),
+      inspect,
+      request
+    }
+  }
+  it('requires the exact IO-hardened PostgreSQL capability and rejects missing/duplicate/tampered/older manifests', () => {
+    expect(() => assertProductPostgresTargetManifest(manifest())).not.toThrow()
+    for (const asset of [
+      CONTROLLER_POSTGRES_ASSET_TRANSITION[0].after,
+      CONTROLLER_ENVIRONMENT_ASSET_TRANSITION[0].after,
+      { ...policy.after, size: 1 },
+      { ...policy.after, sha256: 'f'.repeat(64) }
+    ])
+      expect(() => assertProductPostgresTargetManifest(manifest(asset))).toThrow(
+        'HELPER_UPGRADE_REQUIRED'
+      )
+    for (const value of [
+      {},
+      { format: 1, node_major: 22, files: [] },
+      {
+        ...JSON.parse(manifest().toString()),
+        files: [
+          ...JSON.parse(manifest().toString()).files,
+          ...JSON.parse(manifest().toString()).files
+        ]
+      }
+    ])
+      expect(() => assertProductPostgresTargetManifest(Buffer.from(JSON.stringify(value)))).toThrow(
+        'HELPER_UPGRADE_REQUIRED'
+      )
+  })
+  it('reviews without selecting or claiming a running database and replays an exact receipt offline', async () => {
+    const { commands, inspect, request } = setup()
+    const before = db.prepare('SELECT * FROM product_app_control').get()
+    db.pragma('query_only=ON')
+    const review = await commands.review(request)
+    expect(review).toMatchObject({
+      metadata: { provisioning: 'prepared' },
+      auto_deploy_paused: true,
+      deployment_started: false
+    })
+    expect(db.prepare('SELECT * FROM product_app_control').get()).toEqual(before)
+    db.pragma('query_only=OFF')
+    const selected = await commands.select(request)
+    inspect.mockRejectedValue(Error('SYNTHETIC_OFFLINE_SECRET'))
+    expect(await commands.select(request)).toEqual({ ...selected, state: 'already_selected' })
+    expect(commands.lookup(request)).toMatchObject({ result: selected, is_current: true })
+    expect(inspect).toHaveBeenCalledTimes(2)
+    expect(db.prepare('SELECT count(*) n FROM product_deploy_job').get()).toEqual({ n: 0 })
+  })
+  it('rejects old helpers before source or needs_db changes', async () => {
+    const { commands, inspect, request } = setup()
+    inspect.mockResolvedValue(manifest(CONTROLLER_ENVIRONMENT_ASSET_TRANSITION[0].after))
+    await expect(commands.select(request)).rejects.toThrow('HELPER_UPGRADE_REQUIRED')
+    expect(db.prepare('SELECT count(*) n FROM product_source_postgres').get()).toEqual({ n: 0 })
+    expect(db.prepare('SELECT needs_db FROM app').get()).toEqual({ needs_db: 0 })
+  })
+  it('rechecks source CAS when a second selection wins during the target probe', async () => {
+    const { commands, inspect, request } = setup()
+    inspect.mockImplementation(async () => {
+      new ProductPostgresSelection(db, cipher).select(
+        { ...request, request_key: randomUUID() },
+        scope.controller_id,
+        'unix:1000'
+      )
+      return manifest()
+    })
+    await expect(commands.select(request)).rejects.toThrow('AUTHORITY_CHANGED')
+    expect(db.prepare('SELECT count(*) n FROM product_postgres_selection_request').get()).toEqual({
+      n: 1
+    })
+  })
+  it('rechecks pause and ownership after the probe before source selection', async () => {
+    const { commands, inspect, request } = setup()
+    inspect.mockImplementation(async () => {
+      db.exec(
+        "UPDATE product_app_control SET auto_deploy_paused=0,pause_reason=NULL,pause_policy_provenance='explicit'"
+      )
+      return manifest()
+    })
+    await expect(commands.select(request)).rejects.toThrow('PRODUCT_POSTGRES_')
+    expect(db.prepare('SELECT count(*) n FROM product_source_postgres').get()).toEqual({ n: 0 })
+  })
+  it('redacts transport faults and aborts without source changes', async () => {
+    const { commands, inspect, request } = setup()
+    inspect.mockRejectedValue(Error('SYNTHETIC_RAW_TRANSPORT_SECRET'))
+    await expect(commands.select(request)).rejects.toThrow('PRODUCT_POSTGRES_UNAVAILABLE')
+    const abort = new AbortController()
+    abort.abort()
+    await expect(commands.select(request, abort.signal)).rejects.toThrow(
+      'PRODUCT_POSTGRES_UNAVAILABLE'
+    )
+    expect(inspect).toHaveBeenCalledOnce()
+    expect(db.prepare('SELECT count(*) n FROM product_source_postgres').get()).toEqual({ n: 0 })
   })
 })

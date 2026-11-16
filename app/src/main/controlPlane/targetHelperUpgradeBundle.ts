@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto'
 import { readVerifiedControllerBundleFile, verifyControllerBundle } from './controllerBundle'
 import {
   CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION,
-  CONTROLLER_POSTGRES_BOOTSTRAP_TRANSITION
+  CONTROLLER_POSTGRES_BOOTSTRAP_TRANSITION,
+  CONTROLLER_POSTGRES_IO_BOOTSTRAP_TRANSITION
 } from './controllerUpgradeAssets'
 
 /** Reviewed e3a bootstrap capability. Bundle verifier still pins exact original file bytes. */
@@ -20,7 +21,8 @@ export function verifyTargetHelperUpgradeBundle(
     bytes.length > 64 * 1024 ||
     ![
       CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION[0].after,
-      CONTROLLER_POSTGRES_BOOTSTRAP_TRANSITION[0].after
+      CONTROLLER_POSTGRES_BOOTSTRAP_TRANSITION[0].after,
+      CONTROLLER_POSTGRES_IO_BOOTSTRAP_TRANSITION[0].after
     ].some(
       (pin) =>
         canonical.length === pin.size &&

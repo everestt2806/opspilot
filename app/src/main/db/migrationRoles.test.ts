@@ -6,7 +6,7 @@ import { it, expect } from 'vitest'
 import { initializeDatabase, runMigrations } from './index'
 import { initializeController, openControllerDatabase } from '../controlPlane/controllerDatabase'
 
-it('shared035 applies to both roles; Desktop alone adds030/031/034/036, cold controller keeps identity', () => {
+it('shared035 applies to both roles; Desktop alone adds030/031/034/036, controller alone adds037 and keeps identity', () => {
   const root = mkdtempSync(join(tmpdir(), 'opspilot-migration-role-'))
   try {
     const desktop = initializeDatabase(join(root, 'desktop'))
@@ -40,7 +40,7 @@ it('shared035 applies to both roles; Desktop alone adds030/031/034/036, cold con
     try {
       expect(reopened.controllerId).toBe(identity.controllerId)
       expect(reopened.database.prepare('SELECT MAX(version) v FROM schema_version').get()).toEqual({
-        v: 35
+        v: 37
       })
       expect(
         reopened.database

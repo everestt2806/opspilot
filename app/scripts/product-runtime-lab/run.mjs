@@ -50,7 +50,6 @@ const {
   ProductPostgresRuntime,
   ProductPostgresRepository,
   ProductPostgresSelection,
-  productPostgresMigration,
   ControllerExposure,
   ControllerClientAuth,
   canonicalH2Json
@@ -204,14 +203,10 @@ try {
       socket.once('error', () => resolveCheck(false))
     })
   }, 8000)
-  database = initializeDatabase(join(scratch, 'database'))
-  if (postgresEnabled) {
-    // Chỉ fixture riêng; initializer sản phẩm chưa đổi trước khi có Root schema gate.
-    database.transaction(() => {
-      database.exec(productPostgresMigration)
-      database.prepare('INSERT INTO schema_version(version) VALUES(37)').run()
-    })()
-  }
+  database = initializeDatabase(
+    join(scratch, 'database'),
+    postgresEnabled ? 'controller' : 'desktop'
+  )
   const now = new Date().toISOString()
   database
     .prepare(

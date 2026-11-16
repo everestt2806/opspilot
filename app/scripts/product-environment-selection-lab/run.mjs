@@ -303,7 +303,7 @@ try {
     /PRODUCT_SOURCE_ENVIRONMENT_IMMUTABLE/
   )
   assert.deepEqual(db.pragma('foreign_key_check'), [])
-  assert.equal(db.prepare('SELECT max(version) n FROM schema_version').get().n, 35)
+  assert.equal(db.prepare('SELECT max(version) n FROM schema_version').get().n, 37)
   assert.deepEqual(
     db.prepare('SELECT version FROM schema_version WHERE version IN(30,31,34,36)').all(),
     []

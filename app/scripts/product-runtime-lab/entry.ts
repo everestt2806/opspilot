@@ -56,4 +56,3 @@ export { ControllerExposure } from '../../src/main/controlPlane/controllerExposu
 export { ProductPostgresRuntime } from '../../src/main/controlPlane/productPostgresRuntime'
 export { ProductPostgresRepository } from '../../src/main/db/productPostgresRepository'
 export { ProductPostgresSelection } from '../../src/main/controlPlane/productPostgresSelection'
-export { default as productPostgresMigration } from '../../src/main/db/migrations/037_product_managed_postgres.sql?raw'

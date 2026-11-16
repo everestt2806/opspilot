@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto'
 import { lstatSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
 import { runMigrations } from '../db'
-import postgresMigration from '../db/migrations/037_product_managed_postgres.sql?raw'
 import { assertReleaseDirectory, readReleaseFile } from './controllerRelease'
 import type { ControllerUpgradeSnapshot } from '../../../../docs/contracts/product-controller-upgrade'
 export const controllerUpgradeDigest = (value: string | Buffer): string =>
@@ -25,7 +24,7 @@ export function controllerUpgradeSchemaHash(db: Database.Database): string {
 /** Revision startup checks schema only; normal history growth must not inherit the upgrade hash cap. */
 export function assertControllerRuntimeSchema(
   directory: string,
-  schemaVersion: 35 | 37 = 35
+  schemaVersion: 35 | 37 = 37
 ): void {
   if (schemaVersion !== 35 && schemaVersion !== 37) fail()
   if (!isAbsolute(directory) || resolve(directory) !== directory) fail()
@@ -44,11 +43,7 @@ export function assertControllerRuntimeSchema(
     expected = new Database(':memory:')
   try {
     db.exec('BEGIN')
-    runMigrations(expected, 35, 'controller')
-    if (schemaVersion === 37) {
-      expected.exec(postgresMigration)
-      expected.prepare('INSERT INTO schema_version(version) VALUES(37)').run()
-    }
+    runMigrations(expected, schemaVersion, 'controller')
     if (
       controllerUpgradeSchemaHash(db) !== controllerUpgradeSchemaHash(expected) ||
       JSON.stringify(db.prepare('SELECT version FROM schema_version ORDER BY version').all()) !==
@@ -102,12 +97,7 @@ export function inspectControllerUpgradeDatabase(
   let projection: Database.Database | undefined
   try {
     expected.pragma('foreign_keys=ON')
-    runMigrations(expected, Math.min(version, 35), 'controller')
-    if (version === 37) {
-      // Private candidate schema gate only; normal initializer remains035 until Root integration.
-      expected.exec(postgresMigration)
-      expected.prepare('INSERT INTO schema_version(version) VALUES(37)').run()
-    }
+    runMigrations(expected, version, 'controller')
     const schemaHash = controllerUpgradeSchemaHash(db)
     if (
       schemaHash !== controllerUpgradeSchemaHash(expected) ||
@@ -205,7 +195,7 @@ export function openControllerUpgradeCheck(
     db.exec(hold ? 'BEGIN IMMEDIATE' : 'BEGIN')
     if (hold) db.pragma('query_only=ON')
     const snapshot = inspectControllerUpgradeDatabase(directory, db)
-    if (!acceptLegacy && snapshot.schema_version !== 35) fail()
+    if (!acceptLegacy && snapshot.schema_version !== 37) fail()
     const opened = db
     return {
       snapshot,

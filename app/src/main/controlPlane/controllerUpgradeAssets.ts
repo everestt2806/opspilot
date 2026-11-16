@@ -38,6 +38,35 @@ export const CONTROLLER_POSTGRES_ASSET_TRANSITION = [
     }
   }
 ] as const
+/** R7h-4b candidate: đọc/đóng stdout lỗi luôn unknown, không chấp nhận kết quả thiếu. */
+export const CONTROLLER_POSTGRES_IO_ASSET_TRANSITION = [
+  {
+    path: 'payload/target-helper/target_product_runtime.py',
+    mode: 0o600,
+    before: {
+      size: 85494,
+      sha256: '9f8e1fbb6fab90e9266e160b9cbbcec9707c36f455e1962b8462699f03720f1a'
+    },
+    after: {
+      size: 85777,
+      sha256: '95cc98a0fe3692193e66f034ac8bdb8a0e7541e9ee4c5c75b472e18ed37fc343'
+    }
+  }
+] as const
+export const CONTROLLER_POSTGRES_IO_BOOTSTRAP_TRANSITION = [
+  {
+    path: 'payload/target-helper/target_enrollment.py',
+    mode: 0o600,
+    before: {
+      size: 37271,
+      sha256: 'e1a00d3c1cc90656a56257c1820a5b1424cef5ac4d8f634f07dcd44990057b25'
+    },
+    after: {
+      size: 37889,
+      sha256: '546cba32411870226e63eb36e15edd0f0a015cdcde4ef8f23989bc025f7741ab'
+    }
+  }
+] as const
 export const CONTROLLER_POSTGRES_BOOTSTRAP_TRANSITION = [
   {
     path: 'payload/target-helper/target_enrollment.py',

@@ -48,12 +48,16 @@ import {
   CONTROLLER_ENVIRONMENT_ASSET_TRANSITION,
   CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION,
   CONTROLLER_POSTGRES_ASSET_TRANSITION,
-  CONTROLLER_POSTGRES_BOOTSTRAP_TRANSITION
+  CONTROLLER_POSTGRES_BOOTSTRAP_TRANSITION,
+  CONTROLLER_POSTGRES_IO_ASSET_TRANSITION,
+  CONTROLLER_POSTGRES_IO_BOOTSTRAP_TRANSITION
 } from './controllerUpgradeAssets'
 import {
   controllerUpgradeSnapshotSchema,
   controllerSchemaBackupSchema,
-  controllerSchemaTransitionSchema
+  controllerSchemaTransitionSchema,
+  controllerPostgresSchemaBackupSchema,
+  controllerPostgresSchemaTransitionSchema
 } from './controllerSchemaUpgradeProtocol'
 
 const uuid = z.uuidv4().refine((v) => v === v.toLowerCase()),
@@ -128,6 +132,22 @@ const journalSchema = z.strictObject({
       backup: controllerSchemaBackupSchema.optional(),
       after: snapshotSchema.optional(),
       rollback_projection: snapshotSchema.optional()
+    })
+    .optional(),
+  postgres_schema_transition: z
+    .strictObject({
+      phase: z.enum([
+        'backup_pending',
+        'backup_ready',
+        'apply_pending',
+        'applied',
+        'revert_pending',
+        'reverted'
+      ]),
+      before: snapshotSchema.extend({ schema_version: z.literal(35) }),
+      backup: controllerPostgresSchemaBackupSchema.optional(),
+      after: snapshotSchema.optional(),
+      rollback_projection: snapshotSchema.extend({ schema_version: z.literal(35) }).optional()
     })
     .optional(),
   created_at: z.iso.datetime(),
@@ -206,12 +226,17 @@ export function assertControllerUpgradeCompatibility(
   const withBootstrap = prior.map(
     (value) => value && apply(value, CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION)
   )
+  const withPostgres = [...prior, ...withBootstrap].map((value) => {
+    const pg = value && apply(value, CONTROLLER_POSTGRES_ASSET_TRANSITION)
+    return pg && apply(pg, CONTROLLER_POSTGRES_BOOTSTRAP_TRANSITION)
+  })
   const approvedTransition = [
     ...prior.slice(1),
     ...withBootstrap,
-    ...[...prior, ...withBootstrap].map((value) => {
-      const pg = value && apply(value, CONTROLLER_POSTGRES_ASSET_TRANSITION)
-      return pg && apply(pg, CONTROLLER_POSTGRES_BOOTSTRAP_TRANSITION)
+    ...withPostgres,
+    ...[...prior, ...withBootstrap, ...withPostgres].map((value) => {
+      const io = value && apply(value, CONTROLLER_POSTGRES_IO_ASSET_TRANSITION)
+      return io && apply(io, CONTROLLER_POSTGRES_IO_BOOTSTRAP_TRANSITION)
     })
   ].some((mapped) => mapped && JSON.stringify(mapped) === nextAssets)
   if (
@@ -238,7 +263,10 @@ export async function executeControllerUpgrade(
   paths: ControllerInstallerPaths = controllerInstallerPaths,
   hooks: {
     afterEffect?: (phase: ControllerUpgradePhase) => void
-    schemaEffect?: (phase: 'backup' | 'apply' | 'revert') => void
+    schemaEffect?: (
+      phase:
+        'backup' | 'apply' | 'revert' | 'postgres-backup' | 'postgres-apply' | 'postgres-revert'
+    ) => void
     /** Trusted composition only, under the original installation flock. */
     inspected?: (
       result: Readonly<ControllerUpgradeResult>,
@@ -273,7 +301,10 @@ async function perform(
   held: { uid: number; gid: number; lockFd: number },
   hooks: {
     afterEffect?: (phase: ControllerUpgradePhase) => void
-    schemaEffect?: (phase: 'backup' | 'apply' | 'revert') => void
+    schemaEffect?: (
+      phase:
+        'backup' | 'apply' | 'revert' | 'postgres-backup' | 'postgres-apply' | 'postgres-revert'
+    ) => void
   }
 ): Promise<ControllerUpgradeResult> {
   const { uid, gid, lockFd } = held,
@@ -555,11 +586,22 @@ async function perform(
   }
   const identityFence = (snapshot: ControllerUpgradeSnapshot): void => {
     const before = journal?.before
+    const pending =
+      journal?.postgres_schema_transition?.phase === 'apply_pending'
+        ? { from: 35, to: 37 }
+        : journal?.schema_transition?.phase === 'apply_pending'
+          ? { from: 29, to: 35 }
+          : null
+    const committedWithoutReply =
+      pending && before?.schema_version === pending.from && snapshot.schema_version === pending.to
     if (
       before &&
       (
         ['controller_id', 'schema_sha256', 'key_sha256', 'database_inode', 'key_inode'] as const
-      ).some((key) => snapshot[key] !== before[key])
+      ).some(
+        (key) =>
+          !(key === 'schema_sha256' && committedWithoutReply) && snapshot[key] !== before[key]
+      )
     )
       fail('STATE_CHANGED')
   }
@@ -588,10 +630,14 @@ async function perform(
     if (!parsed.success || parsed.data.controller_id !== base.controller_id)
       return fail('CHECK_FAILED')
     if (reverseRecovery) {
-      const before = journal?.schema_transition?.before
+      const transition =
+        journal?.postgres_schema_transition?.phase === 'revert_pending'
+          ? journal.postgres_schema_transition
+          : journal?.schema_transition
+      const before = transition?.before
       if (
         !before ||
-        journal?.schema_transition?.phase !== 'revert_pending' ||
+        transition?.phase !== 'revert_pending' ||
         (['controller_id', 'key_sha256', 'database_inode', 'key_inode'] as const).some(
           (field) => before[field] !== parsed.data[field]
         )
@@ -873,6 +919,15 @@ async function perform(
     ? verifyControllerRelease(j.release_directory, j.release_sha256)
     : verifiedRuntime(j.request_key, j.release_sha256)
   assertControllerUpgradeCompatibility(oldManifest, manifest)
+  const postgresRuntime = CONTROLLER_POSTGRES_IO_ASSET_TRANSITION[0],
+    requiresPostgresSchema = manifest.files.some(
+      (file) =>
+        file.path === postgresRuntime.path &&
+        file.size === postgresRuntime.after.size &&
+        file.sha256 === postgresRuntime.after.sha256
+    )
+  if (j.schema_transition && j.postgres_schema_transition) fail('SCHEMA_JOURNAL_INVALID')
+  if (j.postgres_schema_transition && !requiresPostgresSchema) fail('SCHEMA_JOURNAL_INVALID')
   if (!['prepared', 'staging'].includes(j.phase)) {
     rootDir(revisions, 0o755)
     rootDir(revision, 0o755)
@@ -897,6 +952,7 @@ async function perform(
     stopped()
   }
   const schemaDirectory = join(revision, 'schema-backup')
+  const postgresSchemaDirectory = join(revision, 'postgres-schema-backup')
   const schemaCall = (
     command: string,
     expected: ControllerUpgradeSnapshot,
@@ -930,7 +986,13 @@ async function perform(
           format: 1,
           request_key: j.request_key,
           expected,
-          ...(withBackup ? { backup: j.schema_transition?.backup } : {}),
+          ...(withBackup
+            ? {
+                backup: command.startsWith('upgrade-postgres-schema-')
+                  ? j.postgres_schema_transition?.backup
+                  : j.schema_transition?.backup
+              }
+            : {}),
           ...(projection ? { rollback_projection: projection } : {})
         })
       }
@@ -947,12 +1009,12 @@ async function perform(
       return fail('SCHEMA_RESPONSE_INVALID')
     }
   }
-  const sealBackup = (): string => {
-    assertReleaseDirectory(schemaDirectory, uid)
-    const parent = lstatSync(schemaDirectory)
+  const sealBackup = (selectedDirectory = schemaDirectory): string => {
+    assertReleaseDirectory(selectedDirectory, uid)
+    const parent = lstatSync(selectedDirectory)
     if (![0, uid].includes(parent.uid) || ![0o700, 0o550].includes(parent.mode & 0o777))
       return fail('SCHEMA_BACKUP_INVALID')
-    const file = join(schemaDirectory, 'backup.sqlite'),
+    const file = join(selectedDirectory, 'backup.sqlite'),
       fd = openSync(file, constants.O_RDONLY | constants.O_NOFOLLOW)
     try {
       const before = fstatSync(fd)
@@ -985,9 +1047,9 @@ async function perform(
       fchownSync(fd, 0, gid)
       fchmodSync(fd, 0o440)
       fsyncSync(fd)
-      lchownSync(schemaDirectory, 0, gid)
-      chmodSync(schemaDirectory, 0o550)
-      sync(schemaDirectory)
+      lchownSync(selectedDirectory, 0, gid)
+      chmodSync(selectedDirectory, 0o550)
+      sync(selectedDirectory)
       sync(revision)
       return hash.digest('hex')
     } finally {
@@ -1064,6 +1126,92 @@ async function perform(
     schema.phase = 'reverted'
     persist('rollback_pending')
   }
+  const preparePostgresSchema = (): void => {
+    if (!requiresPostgresSchema) return
+    if (!j.postgres_schema_transition) {
+      if (j.before?.schema_version === 37) return
+      const before = j.before
+      if (!before || before.schema_version !== 35 || j.schema_transition)
+        return fail('SCHEMA_REQUIRES_ENVIRONMENT35')
+      j.postgres_schema_transition = {
+        phase: 'backup_pending',
+        before: { ...before, schema_version: 35 }
+      }
+      persist(j.phase)
+    }
+    const schema = j.postgres_schema_transition
+    if (!schema) return fail('SCHEMA_JOURNAL_INVALID')
+    if (schema.phase !== 'backup_pending') return
+    if (!exists(postgresSchemaDirectory)) {
+      mkdirSync(postgresSchemaDirectory, { mode: 0o700 })
+      lchownSync(postgresSchemaDirectory, uid, gid)
+      chmodSync(postgresSchemaDirectory, 0o700)
+      sync(revision)
+    }
+    const file = join(postgresSchemaDirectory, 'backup.sqlite')
+    if (exists(file) && lstatSync(file).uid === 0) {
+      schema.backup = {
+        format: 1,
+        request_key: j.request_key,
+        before: schema.before,
+        backup_sha256: sealBackup(postgresSchemaDirectory)
+      }
+    } else {
+      const proof = controllerPostgresSchemaBackupSchema.parse(
+        schemaCall('upgrade-postgres-schema-backup', schema.before, false)
+      )
+      unchanged(schema.before, proof.before)
+      if (
+        proof.request_key !== j.request_key ||
+        sealBackup(postgresSchemaDirectory) !== proof.backup_sha256
+      )
+        fail('SCHEMA_BACKUP_CHANGED')
+      schema.backup = proof
+    }
+    hooks.schemaEffect?.('postgres-backup')
+    schema.phase = 'backup_ready'
+    persist(j.phase)
+  }
+  const applyPostgresSchema = (): void => {
+    const schema = j.postgres_schema_transition
+    if (!schema || schema.phase === 'applied') return
+    if (
+      !requiresPostgresSchema ||
+      j.schema_transition ||
+      !schema.backup ||
+      !['backup_ready', 'apply_pending'].includes(schema.phase)
+    )
+      fail('SCHEMA_JOURNAL_INVALID')
+    schema.phase = 'apply_pending'
+    persist('switch_pending')
+    const result = controllerPostgresSchemaTransitionSchema.parse(
+      schemaCall('upgrade-postgres-schema-apply', schema.before)
+    )
+    unchanged(schema.before, result.projection35)
+    if (result.snapshot.schema_version !== 37) fail('SCHEMA_RESPONSE_INVALID')
+    hooks.schemaEffect?.('postgres-apply')
+    j.before = result.snapshot
+    schema.after = result.snapshot
+    schema.phase = 'applied'
+    persist('switch_pending')
+  }
+  const reversePostgresSchema = (): void => {
+    const schema = j.postgres_schema_transition
+    if (!schema || schema.phase === 'reverted') return
+    const projection = schema.rollback_projection,
+      before = j.rollback_before
+    if (j.schema_transition || schema.phase !== 'revert_pending' || !projection || !before)
+      return fail('SCHEMA_JOURNAL_INVALID')
+    const result = controllerPostgresSchemaTransitionSchema.parse(
+      schemaCall('upgrade-postgres-schema-rollback', before, true, projection)
+    )
+    unchanged(projection, result.snapshot)
+    hooks.schemaEffect?.('postgres-revert')
+    j.before = result.snapshot
+    j.rollback_before = result.snapshot
+    schema.phase = 'reverted'
+    persist('rollback_pending')
+  }
   const rollback = async (): Promise<void> => {
     if (['prepared', 'staging', 'staged'].includes(j.phase)) {
       attest(j.parent_upgrade_key)
@@ -1076,8 +1224,21 @@ async function perform(
         return fail('SCHEMA_JOURNAL_INVALID')
       applySchema()
     }
+    if (j.postgres_schema_transition?.phase === 'apply_pending') {
+      if (systemMatches([j.request_key, j.parent_upgrade_key]) !== j.request_key)
+        fail('SCHEMA_JOURNAL_INVALID')
+      applyPostgresSchema()
+    }
     const selected = systemMatches([j.request_key, j.parent_upgrade_key])
     if (selected === j.request_key) {
+      if (j.postgres_schema_transition?.phase === 'revert_pending') {
+        const current = invoke(j.request_key, 'upgrade-check', true)
+        if (current.schema_version === 35) {
+          unchanged(j.postgres_schema_transition.rollback_projection ?? null, current)
+          stop([j.request_key])
+          reversePostgresSchema()
+        }
+      }
       // A committed reverse may have lost its reply. The candidate cannot open schema29;
       // compare its stored fresh projection before publishing the parent unit.
       if (j.schema_transition?.phase === 'revert_pending') {
@@ -1095,6 +1256,16 @@ async function perform(
       try {
         j.rollback_before = invoke(j.request_key, 'upgrade-check')
         if (
+          j.postgres_schema_transition &&
+          ['applied', 'revert_pending'].includes(j.postgres_schema_transition.phase)
+        ) {
+          const checked = controllerPostgresSchemaTransitionSchema.parse(
+            schemaCall('upgrade-postgres-schema-inspect-rollback', j.rollback_before)
+          )
+          unchanged(j.rollback_before, checked.snapshot)
+          j.postgres_schema_transition.rollback_projection = checked.projection35
+        }
+        if (
           j.schema_transition?.phase === 'applied' ||
           j.schema_transition?.phase === 'revert_pending'
         ) {
@@ -1110,6 +1281,14 @@ async function perform(
         await release()
       }
       unchanged(j.rollback_before, invoke(j.request_key, 'upgrade-check'))
+      if (
+        j.postgres_schema_transition &&
+        ['applied', 'revert_pending'].includes(j.postgres_schema_transition.phase)
+      ) {
+        j.postgres_schema_transition.phase = 'revert_pending'
+        persist('rollback_pending')
+        reversePostgresSchema()
+      }
       if (
         j.schema_transition &&
         ['applied', 'revert_pending'].includes(j.schema_transition.phase)
@@ -1237,6 +1416,11 @@ async function perform(
   if (j.phase === 'staged' || j.phase === 'stop_pending') {
     const release = await hold()
     try {
+      if (
+        requiresPostgresSchema &&
+        ![35, 37].includes(invoke(j.request_key, 'upgrade-check').schema_version ?? 0)
+      )
+        fail('SCHEMA_REQUIRES_ENVIRONMENT35')
       persist('stop_pending')
       stop([j.parent_upgrade_key])
       hooks.afterEffect?.('stop_pending')
@@ -1263,13 +1447,20 @@ async function perform(
     } else if (selected === j.request_key && attest(selected)) {
       if (exists(guard) || !(await waitHealth(j.request_key, 'maintenance'))) fail('GATE_CHANGED')
     } else stopped()
-    if (!j.schema_transition || j.schema_transition.phase === 'applied')
+    if (
+      (!j.schema_transition || j.schema_transition.phase === 'applied') &&
+      (!j.postgres_schema_transition || j.postgres_schema_transition.phase === 'applied')
+    )
       unchanged(j.before, invoke(j.request_key, 'upgrade-check'))
-    if (j.phase === 'stopped') prepareSchema()
+    if (j.phase === 'stopped') {
+      prepareSchema()
+      preparePostgresSchema()
+    }
     persist('switch_pending')
     atomic(paths.unit, expectedUnit(j.request_key), 0o644, true)
     run('/usr/bin/systemctl', ['daemon-reload'])
     applySchema()
+    applyPostgresSchema()
     hooks.afterEffect?.('switch_pending')
     persist('switched')
   }

@@ -12,7 +12,8 @@ import { assertControllerRuntimeSchema } from './controllerUpgradeCheck'
 import { readVerifiedControllerBundleFile, verifyControllerBundle } from './controllerBundle'
 import {
   CONTROLLER_ENVIRONMENT_ASSET_TRANSITION,
-  CONTROLLER_POSTGRES_ASSET_TRANSITION
+  CONTROLLER_POSTGRES_ASSET_TRANSITION,
+  CONTROLLER_POSTGRES_IO_ASSET_TRANSITION
 } from './controllerUpgradeAssets'
 import { assertRetainedTargetHelpers } from './controllerTargetHelperCompatibility'
 import { loadControllerRuntimeKey } from './controllerRuntimeKeys'
@@ -160,7 +161,8 @@ export async function reviewProductTargetHelperUpgrade(
   })
   const approved = [
     CONTROLLER_ENVIRONMENT_ASSET_TRANSITION[0],
-    CONTROLLER_POSTGRES_ASSET_TRANSITION[0]
+    CONTROLLER_POSTGRES_ASSET_TRANSITION[0],
+    CONTROLLER_POSTGRES_IO_ASSET_TRANSITION[0]
   ].find(
     (entry) =>
       changes.length === 1 &&

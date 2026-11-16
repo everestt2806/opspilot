@@ -85,7 +85,8 @@ it('backs up WAL state consistently and applies exact additive migrations atomic
   seal()
   const result = transitionControllerSchema(data, backup, proof, before, 'apply')
   expect(result.snapshot.schema_version).toBe(35)
-  expect(() => assertControllerRuntimeSchema(data)).not.toThrow()
+  expect(() => assertControllerRuntimeSchema(data, 35)).not.toThrow()
+  expect(() => assertControllerRuntimeSchema(data)).toThrow('CHECK_FAILED')
   expect(result.projection29).toEqual(before)
   expect(result.snapshot.database_inode).toBe(before.database_inode)
   expect(result.snapshot.key_inode).toBe(before.key_inode)
@@ -195,7 +196,7 @@ it('reads rollback eligibility while another connection holds the IMMEDIATE no-w
     proof = await backupControllerSchema(data, backup, request, before)
   seal()
   transitionControllerSchema(data, backup, proof, before, 'apply')
-  const hold = openControllerUpgradeCheck(data, true)
+  const hold = openControllerUpgradeCheck(data, true, true)
   try {
     expect(
       transitionControllerSchema(data, backup, proof, hold.snapshot, 'can-revert').snapshot
