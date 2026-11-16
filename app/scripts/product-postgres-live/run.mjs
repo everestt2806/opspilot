@@ -89,7 +89,15 @@ const preserved = (after) => {
     'desired'
   ])
     assert.deepEqual(after[name], before[name])
-  assert.equal(after.schema, 35)
+  // A completed candidate must be037; interrupted pre-apply recovery may still be035.
+  const isCandidate =
+    after.upgrade.request_key === evidence.upgrade_key &&
+    after.upgrade.release_sha256 === candidatePin
+  assert([35, 37].includes(after.schema))
+  if (after.schema === 37 || (isCandidate && after.upgrade.phase === 'active')) {
+    assert(isCandidate)
+    assert.equal(after.schema, 37)
+  }
   assert.equal(after.receipt.controller_id, controller)
   assert.equal(after.receipt.request_key, installation)
   assert.equal(after.receipt.uid, 997)

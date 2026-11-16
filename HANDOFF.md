@@ -1,5 +1,8 @@
 # HANDOFF — Bàn giao phiên làm việc với AI
 
+> **16/11 — R7h-4b2 controller rollout CHỜ REVIEW:** Actual Main upgradeUUIDaaf2d779 nâng VPS167 lên schema37/releasecc8/payload32167/UID997 ready. Sáu app/12CID/source/env/helpers/key/DBinode giữ nguyên, HTTP200 cả6, Root-sealed backup35 đúng hash/mode0440+dir0550. Token/client giữ qua refresh rồi revoke client thử; private profile dọn,0jobs/experiments/clients. Chỉ controller đã nâng: PG resource/app count0, Main/UI database chưa sẵn sàng. Tiếp tục app PG acceptance. [Task](docs/tasks/tk-s7-release-r7h4b2-postgres-rollout.md); [proof](docs/ui-redesign/r7h4b2-controller-verification.json). SHA tra `git log -1 -- docs/ui-redesign/r7h4b2-controller-verification.json`.
+
+
 > **16/11 — R7h-4b2a CHỜ REVIEW, approved candidate trước serving:** Source/readiness nhận PG reference đã xác minh; GitHub+SSH readiness8checks, Root19/Main19, bảy Docker suite49attempts/98checks, full2580PASS+2existingLinuxSKIP. Capacity catalog16, compiled9entry giữ nguyên8pin cũ; missing/tamper/runtime-catalog5checks PASS. Approved releasecc8f33f/payload32167c9/toolac6fc27, reproducible rebuild match; chưa cài VPS tại commit này. Test harness bounded4workers và external IPC act, không đổi production UI. Controller-only driver đã syntax/types/lint; tiếp tục live35→37 và app PG acceptance, Main/UI DB vẫn OPEN. [Task](docs/tasks/tk-s7-release-r7h4b2-postgres-rollout.md); [proof](docs/ui-redesign/r7h4b2-candidate-verification.json). SHA tra `git log -1 -- app/control-plane-runtime/desktop-postgres-release.json`.
 
 
