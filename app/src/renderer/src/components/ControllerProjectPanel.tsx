@@ -1,3 +1,4 @@
+import { ControllerProjectDatabase } from './ControllerProjectDatabase'
 import { ControllerProjectEnvironment } from './ControllerProjectEnvironment'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -366,7 +367,18 @@ export function ControllerProjectPanel({
             render: (_value, row) => (
               <Space wrap>
                 {row.state === 'registered' && (
-                  <ControllerProjectEnvironment binding={binding} project={row} />
+                  <ControllerProjectEnvironment
+                    binding={binding}
+                    project={row}
+                    onSourceChanged={() => setSourceRevision((value) => value + 1)}
+                  />
+                )}
+                {row.state === 'registered' && (
+                  <ControllerProjectDatabase
+                    binding={binding}
+                    project={row}
+                    onSourceChanged={() => setSourceRevision((value) => value + 1)}
+                  />
                 )}
                 {row.state === 'registered' && (
                   <ControllerProjectSourceCheck

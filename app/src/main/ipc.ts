@@ -273,6 +273,24 @@ export function registerIpcHandlers(
     handle('controller:cancel-environment-selection', (input) =>
       desktopControllerService.cancelEnvironmentSelection(input)
     )
+    handle('controller:postgres-context', (input) =>
+      desktopControllerService.postgresContext(input)
+    )
+    handle('controller:prepare-postgres-intent', (input) =>
+      desktopControllerService.preparePostgresIntent(input)
+    )
+    handle('controller:send-postgres-intent', (input) =>
+      desktopControllerService.sendPostgresIntent(input)
+    )
+    handle('controller:check-postgres-intent', (input) =>
+      desktopControllerService.checkPostgresIntent(input)
+    )
+    handle('controller:postgres-intents', (input) =>
+      desktopControllerService.listPostgresIntents(input)
+    )
+    handle('controller:cancel-postgres-intent', (input) =>
+      desktopControllerService.cancelPostgresIntent(input)
+    )
     handle('controller:environment-context', (input) =>
       desktopControllerService.environmentContext(input)
     )

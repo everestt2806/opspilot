@@ -254,3 +254,7 @@
 2026-11-16 | [product/database-recovery]: R7h-4c3a thêm exact-body managed-postgres-prepare-state readonly; positive receipt đọc được sau source advance/active jobs, không resend prepare. Receipt absent chưa chứng minh chưa áp dụng; chỉ source_generation tăng đơn điệu mới cho definitive negative proof. Metadata-only, existing key/owner/target và sameUID administrator, không SSH/job/schema mutation.
 
 2026-11-16 | [desktop/database-intent]: R7h-4c3 thêm migration038 chỉ Desktop, encrypted authenticated prepare/select request+result và UUID durable trước SSH; controller vẫn037. Unknown chỉ exact receipt lookup, không resend; source derive cần own current receipt, metadata context không thay thế consent/journal. ENV và DB phải giữ authenticated inherited reference khi đổi source.
+
+2026-11-16 | [desktop/postgres/ui] R7h-4c4: expose six metadata-only typed PostgreSQL intent IPC channels backed by Main038 journal. Renderer supplies project/source CAS and explicit consent; no credential, target path or artifact from UI. Prepared metadata and source selection are not runtime readiness; unknown delivery permits receipt lookup only, never resend or new UUID.
+
+2026-11-16 | [desktop/postgres/types] R7h-4c4: mirror metadata-only PostgreSQL/intent DTOs inside app/src/shared, like existing ENV DTOs. Do not re-export docs outside app rootDir: six IPC channels otherwise make script CLI builds import contract/controller types outside their compilation root. Wire fields unchanged; Main/IPC typecheck enforces structural compatibility.

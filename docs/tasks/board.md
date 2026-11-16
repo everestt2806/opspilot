@@ -1,5 +1,8 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
+> **16/11 — R7h-4c4 PostgreSQL configuration UI PASS:** Six typed IPC/Main038 journal +4locale project database panel, explicit prepare/send/select, unknown receipt-only check; source/target/readiness views refresh after selection. Full2643PASS+2existingLinuxSKIP/types/scripts/lint/build, real Electron5checks/17captures/private cleanup PASS (synthetic SSH, real Main/SQLite). Chưa serving upgrade/Root lifecycle/VPS GUI deploy;7apps/controller37/cc8 giữ nguyên. [Task](tk-s7-release-r7h4c-project-database.md); [proof](../ui-redesign/r7h4c4-verification.json). SHA: `git log -1 -- app/src/renderer/src/components/ControllerProjectDatabase.tsx`.
+
+
 > **16/11 — R7h-4c3 Main PostgreSQL/source PASS:** Desktop038 durable prepare/select, exact sameUUID receipt recovery, ENV↔DB giữ inherited refs/source hash; foreign source không tự nhận. Full2632PASS+2existingLinuxSKIP/types/scripts/lint/build; native SSHD/sameUID admin10checks + Main2SQLite CLI5checks/cleanup PASS. Chưa UI/installedRoot lifecycle/serving approval; VPS7apps/controller37/cc8 giữ nguyên. [Task](tk-s7-release-r7h4c-project-database.md); [proof](../ui-redesign/r7h4c3-verification.json). SHA: `git log -1 -- app/src/main/controlPlane/desktopProductPostgres.ts`.
 
 

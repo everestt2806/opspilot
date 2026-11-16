@@ -20,7 +20,11 @@ import type {
 import { useUiState } from '../store/uiState'
 import { CONTROLLER_ENVIRONMENT_COPY } from './controllerEnvironmentCopy'
 import { ControllerEnvironmentSelection } from './ControllerEnvironmentSelection'
-type Props = { binding: DesktopControllerConnection; project: DesktopProjectSetup }
+type Props = {
+  binding: DesktopControllerConnection
+  project: DesktopProjectSetup
+  onSourceChanged?: () => void
+}
 type Entry = { name: string; value: string }
 type Values = { runtime?: Entry[]; public?: Entry[] }
 function mapEntries(entries: Entry[] = []): Record<string, string> {
@@ -42,7 +46,7 @@ function mapEntries(entries: Entry[] = []): Record<string, string> {
 export function ControllerProjectEnvironment(props: Props): React.JSX.Element {
   return <EnvironmentSession key={JSON.stringify([props.binding, props.project])} {...props} />
 }
-function EnvironmentSession({ binding, project }: Props): React.JSX.Element {
+function EnvironmentSession({ binding, project, onSourceChanged }: Props): React.JSX.Element {
   const t = CONTROLLER_ENVIRONMENT_COPY[useUiState((s) => s.locale)]
   const [form] = Form.useForm<Values>()
   const [open, setOpen] = useState(false),
@@ -341,7 +345,10 @@ function EnvironmentSession({ binding, project }: Props): React.JSX.Element {
             context={context}
             stagingPending={!!pending}
             onPendingChange={setSelectionPending}
-            onChanged={load}
+            onChanged={async () => {
+              onSourceChanged?.()
+              await load()
+            }}
           />
         )}
         {rows.map((row) => (

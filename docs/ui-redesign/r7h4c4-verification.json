@@ -1,0 +1,268 @@
+{
+  "status": "PASS_DESKTOP_POSTGRES_CONFIGURATION_UI",
+  "scope": "PRIVATE_REAL_ELECTRON_MAIN_SQLITE_WITH_SYNTHETIC_SSH",
+  "base_commit": "8f4f289",
+  "VPS_mutated": false,
+  "Docker_runtime_provisioned_by_UI_gate": false,
+  "installed_Root_lifecycle_proven_by_UI_gate": false,
+  "serving_release_unchanged": "cc8f33f57ab518c20c75118925522dcc03bb2d2cef04ba94c9bfef101cdb0ddd",
+  "full_tests": {
+    "passed": 2643,
+    "existing_Linux_skips": 2,
+    "failed": 0,
+    "files_passed": 183
+  },
+  "focused_UI_tests": 11,
+  "gates": [
+    {
+      "name": "full",
+      "command": [
+        "pnpm.cmd",
+        "--prefix",
+        "app",
+        "exec",
+        "vitest",
+        "run",
+        "--reporter=dot"
+      ],
+      "exit_code": 0,
+      "seconds": 248.28,
+      "log": "app\\.out-scripts\\r7h4c4-full.log"
+    },
+    {
+      "name": "build",
+      "command": [
+        "pnpm.cmd",
+        "--prefix",
+        "app",
+        "build"
+      ],
+      "exit_code": 0,
+      "seconds": 55.86,
+      "log": "app\\.out-scripts\\r7h4c4-build.log"
+    }
+  ],
+  "scripts_typecheck": "PASS: pnpm --prefix app exec tsc -p tsconfig.scripts.json --noEmit",
+  "changed_ESLint": {
+    "exit_code": 0,
+    "files": [
+      "src/main/ipc.test.ts",
+      "src/main/ipc.ts",
+      "src/renderer/src/components/ControllerProjectEnvironment.tsx",
+      "src/renderer/src/components/ControllerProjectPanel.tsx",
+      "src/shared/desktopProductPostgres.ts",
+      "src/shared/productPostgres.ts",
+      "src/renderer/src/components/ControllerProjectDatabase.tsx",
+      "src/renderer/src/components/ControllerProjectDatabase.test.tsx",
+      "src/renderer/src/components/controllerDatabaseCopy.ts",
+      "scripts/product-postgres-ui-lab"
+    ],
+    "command": "pnpm --prefix app exec eslint <changed files and new UI lab> --max-warnings 0",
+    "excluded_by_existing_config": [
+      "src/shared/ipc.ts"
+    ]
+  },
+  "GUI": {
+    "raw_path": "app/.out-scripts/product-postgres-ui-lab/5cd88d65c5e3/result.json",
+    "raw_sha256": "74392a0e416136da961fecdc1bbb10bdc4a7ef41ff02d421ed8d3b82851541f9",
+    "proof": {
+      "status": "PASS",
+      "scope": "REAL_ELECTRON_POSTGRES_PRELOAD_MAIN_SQLITE_SYNTHETIC_SSH",
+      "Docker_used": false,
+      "nonce": "5cd88d65c5e3",
+      "checks": [
+        "production_PostgreSQL_component_4locale_2theme_2resolutions_no_horizontal_overflow",
+        "typed_preload_Main_038_journal_prepare_without_server_resource_or_job",
+        "lost_prepare_reply_Main_SQLite_reopen_original_receipt_lookup_one_resource",
+        "lost_select_reply_exact_lookup_no_resend_one_source_binding_deployment_views_invalidated",
+        "metadata_only_no_password_readback_no_deploy_no_Docker_or_runtime_health_claim"
+      ],
+      "captures": [
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/empty-vi-dark-1280x800.png",
+          "sha256": "1be52dd5eee9a87f0c991d44709aff970454f7f08742b2baebe20fd1f5e55fa8",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/empty-vi-dark-1366x768.png",
+          "sha256": "d5c963e49b767f697c3ca6e41fd8d70a838c0746dd2c103a0d3789041cdc758b",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/empty-vi-light-1280x800.png",
+          "sha256": "c03ea5d92a35df23d31bcf5d0f570c2885857100f8fb42b29313bd48238191ce",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/empty-vi-light-1366x768.png",
+          "sha256": "59d45cc78f70ff56510e9252f3f630118bd2c1739abe5a1ceb8abc69cf893c99",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/empty-en-dark-1280x800.png",
+          "sha256": "e8e8f263cecdca570b032d5b028b78f96f997907bf19ebc9bea9f06a50eb3e84",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/empty-en-light-1280x800.png",
+          "sha256": "9218e49a3db35ecdabc682da8c3bcab741eb6ef05748fd46c5e98795c3cc8914",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/empty-cn-dark-1280x800.png",
+          "sha256": "1da40ffb10c8e0d5db19a34397603e6fc08969254f72862e54b11386337ea67c",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/empty-cn-light-1280x800.png",
+          "sha256": "5da72a093dc59c12af8dba392cc3354986f1ebc072b062daacb0502e639d71da",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/empty-jp-dark-1280x800.png",
+          "sha256": "ef08343e76878dba5d5f71bcd817e78457cd501811a7b017e7e93f0d09c1d3ba",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/empty-jp-light-1280x800.png",
+          "sha256": "5ed38a4ff90cfe3f06ef90b0789ea391aa75634df87e3dc056ca7cf4d40a8d6c",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/prepared-en-dark-1280x800.png",
+          "sha256": "d534da16fdc1e475a078749533c0e78dcf67d00ce497ab45787a09e19672da9e",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/prepare-unknown-en-dark-1280x800.png",
+          "sha256": "2bd2af3c0aee480c613c6ae314cbdb4833f7769479909a20f80f514eb1b0c9e1",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/select-unknown-en-dark-1280x800.png",
+          "sha256": "83a5189bef7891ec26403e6551f57ffbe0e13b8523d65958d36f434954487024",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/selected-vi-dark-1280x800.png",
+          "sha256": "14fdbfb436d6f1b635e34382da4c0cd17e89ebe073a8eae39f89f5718b46f0a6",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/selected-vi-dark-1366x768.png",
+          "sha256": "a75c4fc53c3a48e5aaa834d38238d99ede87bec28f0d33915eb87785a36c19a7",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/selected-vi-light-1280x800.png",
+          "sha256": "935571a5d745879bb9d5a4d4e0d62e393b8eb8ac3b539a8264192b7fd077dac4",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4c4/5cd88d65c5e3/selected-vi-light-1366x768.png",
+          "sha256": "10a8f3e4fff69cfe8293800a1ea9a1dec08cbb17a99e0fee7898a650631c2459",
+          "paint_attempts": 1,
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        }
+      ],
+      "production_profile_used": false,
+      "ssh_transport_real": false,
+      "vps_used": false,
+      "last_operation": "project-configuration-context",
+      "private_data_removed": true,
+      "profile_cleanup": "REMOVED_AFTER_ELECTRON_EXIT",
+      "child_exit": 0,
+      "stderr_bytes": 0
+    }
+  },
+  "visually_reviewed": [
+    "selected-vi-dark-1366x768.png",
+    "empty-vi-light-1280x800.png",
+    "select-unknown-en-dark-1280x800.png"
+  ],
+  "source_files": {
+    "app/src/main/ipc.ts": "c89b3051acdded291e3262f379453a99cb66c32fdc58999c1c67c01d20ade424",
+    "app/src/shared/ipc.ts": "57aff4464825be1ed0c8ac48b8fb02b102a7b2bcd8bc8b7096064ff916198ad6",
+    "docs/contracts/ipc-contract.ts": "d544e9af8c9f85e33f4609f2f18fdfb2e683260c65499729b44439667f419ff2",
+    "app/src/shared/desktopProductPostgres.ts": "98f7cfe638cc1ed038c6ca7923b7f8bee422b0d64b3f557e78005f036136f813",
+    "app/src/shared/productPostgres.ts": "49134283366f18a78c5d9558a4deda301bd06fc513661691518d1eea6a1e786a",
+    "app/src/renderer/src/components/ControllerProjectDatabase.tsx": "abbd4c70e1ea20eb103a350fc006cbc85f4653cac868a89c5938e9ba58ecf358",
+    "app/src/renderer/src/components/controllerDatabaseCopy.ts": "b46d72605c354a5787451b27c020e1bb8d01b0d145e5c7caa41b5906d30179eb",
+    "app/src/renderer/src/components/ControllerProjectPanel.tsx": "96275354aa064824fe0f4babfcbe207603aaa41112da28351f164e605059426d",
+    "app/src/renderer/src/components/ControllerProjectEnvironment.tsx": "935988a8d95c91ed9bd1fad109bc29372d5baaea7a2dd692ce90741b3a92f2db",
+    "app/scripts/product-postgres-ui-lab/electron.mjs": "8a6c361b36694d3bdd073307989391da54a38fbb074511d9e51cc61b6c082a12",
+    "app/scripts/product-postgres-ui-lab/run.mjs": "8afc3988afe97297e788827cbdd0c00a116aca024d3a182d12d89ad90d249dfe"
+  },
+  "remaining": [
+    "Installed Root/Main lifecycle and candidate approval/serving upgrade are separate gates.",
+    "UI preparation/selection is configuration metadata, not database provisioning or runtime health.",
+    "Product backup/restore, explicit database inspector context, migrate/direct-upload DB and formal ML remain separate work."
+  ]
+}
