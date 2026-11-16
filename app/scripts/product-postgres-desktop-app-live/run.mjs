@@ -107,7 +107,7 @@ const preserved = (after) => {
     before.containers
   )
   assert.deepEqual(
-    after.helpers.filter((row) => row.enrollment.app_id <= 6),
+    after.helpers.filter((row) => row.enrollment.app_id <= 7),
     before.helpers
   )
   assert.deepEqual(after.postgres, before.postgres)

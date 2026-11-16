@@ -1,5 +1,8 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
+> **16/11 — R7h-4c5b real Main PostgreSQL PASS:** App8 pg-main-2a6785f2e51e/30007 uses Main038 prepare/select receipts, source Git/readiness/firstDeployment;4jobs initial/update/healthrollback/finald30/1000rows/HTTP200/signedterminal settled and PGidentity/volume unchanged. No operatorPGrelay/fakeENV. Original7apps+PGdata untouched;8apps/2PG/allpaused/0activejobs-clients-leases, revoked/privatecleanup. Fresh database metric22.279ms/age8.645sec via pinned SSH. Changedscript lint/format/types + actualVPS PASS; core C5a full2643+2existingLinuxSKIP baseline unchanged. Inspector/productbackup/migrate/directupload/formalML/release OPEN. [Task](tk-s7-release-r7h4c5-postgres-desktop-rollout.md); [proof](../ui-redesign/r7h4c5-app-verification.json). SHA: `git log -1 -- docs/ui-redesign/r7h4c5-app-verification.json`.
+
+
 > **16/11 — R7h-4c5a controller rollout PASS:** Native source12/Root19/Main19 + Docker49attempts98checks, full2643PASS+2existingLinuxSKIP/types/lint/build/resources5checks PASS; tenth compiled release keeps original9pins. Actual Main/pinned SSH upgrades VPS to4bc4590/schema37/requestce4d6711, preserves7apps/14appCIDs/helpers/source/env/key and app7PGidentity/1000rows;27HTTPsamples all200, client revoked/private profile removed. Main PG first-deploy c5b still running; inspector/backup/migrate/formal ML/release OPEN. [Task](tk-s7-release-r7h4c5-postgres-desktop-rollout.md); [proof](../ui-redesign/r7h4c5-controller-verification.json). SHA: `git log -1 -- app/control-plane-runtime/desktop-project-postgres-release.json`.
 
 
