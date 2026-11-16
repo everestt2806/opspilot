@@ -1,5 +1,8 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **16/11 — R7h-4c3 Main PostgreSQL/source PASS:** Desktop038 durable prepare/select, exact sameUUID receipt recovery, ENV↔DB giữ inherited refs/source hash; foreign source không tự nhận. Full2632PASS+2existingLinuxSKIP/types/scripts/lint/build; native SSHD/sameUID admin10checks + Main2SQLite CLI5checks/cleanup PASS. Chưa UI/installedRoot lifecycle/serving approval; VPS7apps/controller37/cc8 giữ nguyên. [Task](tasks/tk-s7-release-r7h4c-project-database.md); [proof](ui-redesign/r7h4c3-verification.json). SHA: `git log -1 -- app/src/main/controlPlane/desktopProductPostgres.ts`.
+
+
 > **16/11 — R7h-4c2 Main/admin transport PASS:** Six fixed PG/context operations, vault-derived artifact/pin, authenticated metadata/UUID/scope, bounded safe codes, lookup riêng khi mất phản hồi.99focused/full2609PASS+2existingLinuxSKIP/types/lint/build và actual sameUID Python+SSHD/CLI9checks/cleanup PASS. Private artifact55b4a6c chưa approve/install; Root lifecycle/PG intent/IPC/UI còn OPEN, VPS7apps giữ nguyên. [Task](tasks/tk-s7-release-r7h4c-project-database.md); [proof](ui-redesign/r7h4c2-verification.json). SHA: `git log -1 -- app/src/main/controlPlane/desktopControllerEnrollment.ts`.
 
 

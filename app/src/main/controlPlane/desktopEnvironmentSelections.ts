@@ -1,3 +1,8 @@
+import type {
+  ProductProjectConfigurationContext,
+  ProductPostgresReference
+} from '../../../../docs/contracts/product-postgres'
+import { postgresReferenceSchema } from './productPostgres'
 import { createHash, randomUUID } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import { z } from 'zod'
@@ -96,6 +101,14 @@ export class DesktopEnvironmentSelections {
           .get(project.setup.controller_id, project.registration.app_id)
       )
         throw new DesktopEnvironmentError('ENVIRONMENT_CONFLICT')
+      if (
+        this.db
+          .prepare(
+            "SELECT 1 FROM desktop_postgres_intent WHERE controller_id=? AND app_id=? AND state IN ('prepared','in_flight','outcome_unknown')"
+          )
+          .get(project.setup.controller_id, project.registration.app_id)
+      )
+        throw new DesktopEnvironmentError('ENVIRONMENT_CONFLICT')
       const pending = this.db
         .prepare(
           "SELECT * FROM desktop_environment_selection WHERE controller_id=? AND app_id=? AND state IN ('prepared','in_flight','outcome_unknown')"
@@ -132,7 +145,14 @@ export class DesktopEnvironmentSelections {
           context_json: canonicalH2Json(request),
           created_at: stamp
         }
-      const encrypted = this.cipher.encrypt(canonicalH2Json({ purpose, binding, request }))
+      const encrypted = this.cipher.encrypt(
+        canonicalH2Json({
+          purpose,
+          binding,
+          request,
+          ...(remote.database ? { database: remote.database } : {})
+        })
+      )
       this.project(value.project_request_key, project.setup.binding_revision)
       this.db
         .prepare(
@@ -274,7 +294,9 @@ export class DesktopEnvironmentSelections {
       const project = this.project(row.project_request_key, row.binding_revision),
         value = JSON.parse(this.cipher.decrypt(row))
       if (
-        Object.keys(value).sort().join(',') !== 'binding,purpose,request' ||
+        !['binding,purpose,request', 'binding,database,purpose,request'].includes(
+          Object.keys(value).sort().join(',')
+        ) ||
         value.purpose !== purpose ||
         canonicalH2Json(value.binding) !== canonicalH2Json(this.binding(row))
       )
@@ -293,16 +315,67 @@ export class DesktopEnvironmentSelections {
         request.scope.target.ssh_security_revision !== project.setup.target_security_revision
       )
         throw Error()
+      if (Object.hasOwn(value, 'database')) {
+        const database = postgresReferenceSchema.parse(value.database)
+        if (
+          database.controller_id !== request.scope.controller_id ||
+          database.ownership_generation !== request.scope.ownership_generation
+        )
+          throw Error()
+      }
       return request
     } catch {
       throw new DesktopEnvironmentError('ENVIRONMENT_UNAVAILABLE')
     }
+  }
+  private sourceDatabase(row: Row): ProductPostgresReference | undefined {
+    this.request(row)
+    const value = JSON.parse(this.cipher.decrypt(row))
+    return value.database === undefined ? undefined : postgresReferenceSchema.parse(value.database)
+  }
+  async confirmsSource(key: string, remote: ProductProjectConfigurationContext): Promise<boolean> {
+    if (this.db.inTransaction) throw new DesktopEnvironmentError('ENVIRONMENT_REQUEST_INVALID')
+    const project = this.project(key)
+    if (
+      remote.controller_id !== project.setup.controller_id ||
+      remote.scope.app_id !== project.registration.app_id ||
+      remote.scope.ownership_generation !== project.registration.ownership_generation ||
+      remote.scope.target.vps_id !== project.setup.target_vps_id ||
+      remote.scope.target.ssh_security_revision !== project.setup.target_security_revision
+    )
+      return false
+    for (const value of this.db
+      .prepare(
+        "SELECT * FROM desktop_environment_selection WHERE project_request_key=? AND state='selected' ORDER BY json_extract(context_json,'$.expected_source_generation') DESC,created_at DESC LIMIT 20"
+      )
+      .all(key)) {
+      const row = this.valid(value),
+        request = this.request(row),
+        saved = this.result(row)
+      if (
+        !saved ||
+        saved.source_generation !== remote.source_generation ||
+        saved.source_config_sha256 !== remote.source_config_sha256
+      )
+        continue
+      const lookup = await this.admin.environmentSelectionState(row.binding_id, request)
+      if (!lookup.result || lookup.definitively_unapplied) return false
+      this.validateResult(lookup.result, request)
+      if (canonicalH2Json(this.project(key)) !== canonicalH2Json(project))
+        throw new DesktopEnvironmentError('ENVIRONMENT_CHANGED')
+      return (
+        canonicalH2Json({ ...lookup.result, state: 'selected' }) ===
+        canonicalH2Json({ ...saved, state: 'selected' })
+      )
+    }
+    return false
   }
   private validateResult(
     value: ProductEnvironmentSelectionResult,
     request: ProductEnvironmentSelectionInput
   ): void {
     const project = this.project(this.row(request.request_key).project_request_key).setup
+    const database = this.sourceDatabase(this.row(request.request_key))
     const expectedHash = createHash('sha256')
       .update(
         canonicalH2Json({
@@ -310,7 +383,8 @@ export class DesktopEnvironmentSelections {
           host_port: project.host_port,
           container_port: project.container_port,
           healthcheck_path: project.healthcheck_path,
-          needs_db: false,
+          needs_db: !!database,
+          ...(database ? { database } : {}),
           environment: value.environment
         })
       )
@@ -323,7 +397,11 @@ export class DesktopEnvironmentSelections {
       value.environment.controller_id !== request.scope.controller_id ||
       value.environment.ownership_generation !== request.scope.ownership_generation ||
       value.environment.revision !== request.environment_revision ||
-      value.source_generation <= request.expected_source_generation ||
+      ![request.expected_source_generation, request.expected_source_generation + 1].includes(
+        value.source_generation
+      ) ||
+      (value.source_generation === request.expected_source_generation &&
+        value.source_config_sha256 !== request.expected_source_config_sha256) ||
       value.source_config_sha256 !== expectedHash
     )
       throw new DesktopEnvironmentError('ENVIRONMENT_RESPONSE_INVALID')

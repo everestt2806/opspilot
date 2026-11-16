@@ -514,4 +514,41 @@ describe('Fixed pinned SSH controller bootstrap client', () => {
       vi.useRealTimers()
     }
   })
+  it('commits the admin dispatch hook once after verified open and before any command bytes', async () => {
+    const { ssh, channel } = fixture('admin')
+    const beforeDispatch = vi.fn(() => {
+      expect(ssh.openProductBootstrapChannel).toHaveBeenCalledOnce()
+      expect(channel.writes).toHaveLength(0)
+    })
+    await administerInstalledController({
+      ssh,
+      vpsId: 1,
+      expectedIdentity: identity,
+      locator,
+      assertCurrent: vi.fn(),
+      request: adminRequest(),
+      beforeDispatch
+    })
+    expect(beforeDispatch).toHaveBeenCalledOnce()
+  })
+  it('does not commit a dispatch hook when the SSH channel cannot be opened', async () => {
+    const { ssh, channel } = fixture('admin'),
+      beforeDispatch = vi.fn()
+    ssh.openProductBootstrapChannel.mockRejectedValueOnce(
+      new Error('SYNTHETIC_UNSENT_OPEN_FAILURE')
+    )
+    await expect(
+      administerInstalledController({
+        ssh,
+        vpsId: 1,
+        expectedIdentity: identity,
+        locator,
+        assertCurrent: vi.fn(),
+        request: adminRequest(),
+        beforeDispatch
+      })
+    ).rejects.toThrow()
+    expect(beforeDispatch).not.toHaveBeenCalled()
+    expect(channel.writes).toHaveLength(0)
+  })
 })

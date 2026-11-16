@@ -422,7 +422,7 @@ export async function callControllerUpgrade(
 
 /** Main-only secret-bearing response; enrollment consumes it directly into the encrypted vault. */
 export async function administerInstalledController(
-  input: BootstrapInput & { request: InstalledControllerAdminRequest }
+  input: BootstrapInput & { request: InstalledControllerAdminRequest; beforeDispatch?: () => void }
 ): Promise<unknown> {
   input = { ...input, expectedIdentity: { ...input.expectedIdentity } }
   let bytes: Buffer
@@ -448,6 +448,10 @@ export async function administerInstalledController(
     { ...input, expectedIdentity: { ...input.expectedIdentity } },
     'admin',
     async (wire) => {
+      // Identity guards can run during handshake and on each write. Commit the
+      // caller journal once, after verified open and before the first admin frame.
+      input.assertCurrent()
+      input.beforeDispatch?.()
       await wire.sendFrame({
         format: 1,
         operation: 'admin',

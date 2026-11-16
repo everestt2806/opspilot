@@ -672,4 +672,22 @@ describe('Pinned PostgreSQL admin transport', () => {
       'PRODUCT_POSTGRES_HELPER_UPGRADE_REQUIRED'
     )
   })
+  it('looks up a lost prepare reply through its readonly operation instead of sending prepare again', async () => {
+    await service.enroll(intent.binding_id)
+    const input = request(),
+      resource = metadata()
+    reply = (value) =>
+      respond(value, {
+        result: { state: 'already_prepared', request_key: input.request_key, metadata: resource },
+        definitively_unapplied: false
+      })
+    expect((await service.postgresPrepareState(intent.binding_id, input)).result?.metadata).toEqual(
+      resource
+    )
+    expect(requests.at(-1)).toMatchObject({
+      operation: 'managed-postgres-prepare-state',
+      payload: input
+    })
+    expect(requests.filter((r) => r.operation === 'prepare-managed-postgres')).toHaveLength(0)
+  })
 })

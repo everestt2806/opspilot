@@ -941,3 +941,108 @@ describe('Project configuration metadata anchored to registration', () => {
     db.exec('ROLLBACK')
   })
 })
+
+describe('Exact PostgreSQL prepare receipt recovery', () => {
+  it('does not equate receipt absence with non-application, even when the resource exists from another UUID', () => {
+    const pending = input()
+    expect(store.lookupPrepare(pending, scope.controller_id, 'unix:1000')).toEqual({
+      result: null,
+      definitively_unapplied: false
+    })
+    const created = prepare()
+    expect(store.lookupPrepare(pending, scope.controller_id, 'unix:1000')).toEqual({
+      result: null,
+      definitively_unapplied: false
+    })
+    new ProductPostgresSelection(db, cipher).select(
+      { ...input(), database_id: created.metadata.database_id },
+      scope.controller_id,
+      'unix:1000'
+    )
+    expect(store.lookupPrepare(pending, scope.controller_id, 'unix:1000')).toEqual({
+      result: null,
+      definitively_unapplied: true
+    })
+  })
+  it('reads the exact positive receipt after selection and during a queued job without writing or replaying prepare', () => {
+    const pending = input(),
+      created = store.prepare(pending, scope.controller_id, 'unix:1000')
+    const selected = new ProductPostgresSelection(db, cipher).select(
+      { ...input(), database_id: created.metadata.database_id },
+      scope.controller_id,
+      'unix:1000'
+    )
+    db.prepare(
+      `INSERT INTO product_deploy_job(job_id,controller_id,app_id,ownership_generation,source_generation,source_config_sha256,trigger,idempotency_key,ref,target_sha,state,available_at,created_at,updated_at)
+      VALUES('lookup-job',?,1,1,?,?,'manual_redeploy','lookup-key','main',?,'queued','2026-11-16T00:00:00Z','2026-11-16T00:00:00Z','2026-11-16T00:00:00Z')`
+    ).run(
+      scope.controller_id,
+      selected.source_generation,
+      selected.source_config_sha256,
+      'a'.repeat(40)
+    )
+    const bytes = db.serialize()
+    expect(store.lookupPrepare(pending, scope.controller_id, 'unix:1000')).toEqual({
+      result: { ...created, state: 'already_prepared' },
+      definitively_unapplied: false
+    })
+    expect(db.serialize()).toEqual(bytes)
+    expect(() => store.prepare(pending, scope.controller_id, 'unix:1000')).toThrow()
+  })
+  it('rejects conflicting bodies and wrong target without returning another administrator receipt', () => {
+    const pending = input()
+    store.prepare(pending, scope.controller_id, 'unix:1000')
+    expect(() =>
+      store.lookupPrepare(
+        { ...pending, expected_source_config_sha256: '0'.repeat(64) },
+        scope.controller_id,
+        'unix:1000'
+      )
+    ).toThrow('PRODUCT_POSTGRES_REQUEST_CONFLICT')
+    expect(() =>
+      store.lookupPrepare(
+        { ...pending, scope: { ...scope, target: { ...scope.target, host: 'foreign.test' } } },
+        scope.controller_id,
+        'unix:1000'
+      )
+    ).toThrow('PRODUCT_POSTGRES_AUTHORITY_CHANGED')
+    expect(store.lookupPrepare(pending, scope.controller_id, 'unix:2000')).toEqual({
+      result: null,
+      definitively_unapplied: false
+    })
+  })
+  it('checks ciphertext/key availability and preserves a caller transaction', () => {
+    const pending = input()
+    store.prepare(pending, scope.controller_id, 'unix:1000')
+    const wrong = new ProductPostgresRepository(db, new AesGcmCredentialCipher(randomBytes(32)))
+    expect(() => wrong.lookupPrepare(pending, scope.controller_id, 'unix:1000')).toThrow(
+      'PRODUCT_POSTGRES_UNAVAILABLE'
+    )
+    db.exec('BEGIN')
+    expect(() => store.lookupPrepare(pending, scope.controller_id, 'unix:1000')).toThrow(
+      'PRODUCT_POSTGRES_INPUT_INVALID'
+    )
+    expect(db.inTransaction).toBe(true)
+    db.exec('ROLLBACK')
+  })
+  it('returns no negative proof to a concurrent reader before the atomic prepare transaction commits', () => {
+    const observerDb = new Database(join(directory, 'opspilot.db'), { readonly: true })
+    connections.push(observerDb)
+    const observer = new ProductPostgresRepository(observerDb, cipher),
+      pending = input(),
+      encrypt = cipher.encrypt.bind(cipher)
+    const spy = vi.spyOn(cipher, 'encrypt').mockImplementationOnce((value) => {
+      const encoded = encrypt(value)
+      expect(observer.lookupPrepare(pending, scope.controller_id, 'unix:1000')).toEqual({
+        result: null,
+        definitively_unapplied: false
+      })
+      return encoded
+    })
+    const result = store.prepare(pending, scope.controller_id, 'unix:1000')
+    spy.mockRestore()
+    expect(
+      observer.lookupPrepare(pending, scope.controller_id, 'unix:1000').result?.metadata
+    ).toEqual(result.metadata)
+  })
+})

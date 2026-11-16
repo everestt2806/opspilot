@@ -433,6 +433,10 @@ except Exception as error:print(json.dumps({'lines':[frame.lineno for frame in t
     prepared.metadata.database_id
   )
   assert.equal(
+    adminCli('managed-postgres-prepare-state', currentRequest).result.metadata.database_id,
+    prepared.metadata.database_id
+  )
+  assert.equal(
     adminCli('managed-postgres-state', { format: 1, scope }).metadata.database_id,
     prepared.metadata.database_id
   )
@@ -464,7 +468,7 @@ except Exception as error:print(json.dumps({'lines':[frame.lineno for frame in t
     prepared.metadata.database_id
   )
   check(
-    'actual_same_UID_Python_admin_verifies_ELF_bundle_key_SQLite_then_runs_six_fixed_PostgreSQL_operations'
+    'actual_same_UID_Python_admin_verifies_ELF_bundle_key_SQLite_then_runs_seven_fixed_PostgreSQL_operations'
   )
   adminCli(
     'project-configuration-context',
@@ -481,6 +485,11 @@ except Exception as error:print(json.dumps({'lines':[frame.lineno for frame in t
   )
   assert.equal(db.prepare('SELECT count(*) n FROM product_deploy_job').get().n, 0)
   check('Python_admin_forwards_only_approved_PostgreSQL_error_and_never_starts_job')
+  const prepareReceipt = cli('managed-postgres-prepare-state', prepare)
+  assert.equal(prepareReceipt.result.request_key, prepare.request_key)
+  assert.equal(prepareReceipt.result.metadata.database_id, prepared.metadata.database_id)
+  assert.equal(prepareReceipt.definitively_unapplied, false)
+  check('readonly_prepare_receipt_available_after_source_advance_without_replaying_prepare')
   stage = 'offline-receipt'
   sshd.kill('SIGTERM')
   await new Promise((done) => sshd.once('close', done))

@@ -1,3 +1,5 @@
+import type { ProductProjectConfigurationContext } from '../../../../docs/contracts/product-postgres'
+import { projectConfigurationContextSchema } from './productPostgres'
 import { createHash, randomUUID } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import { z } from 'zod'
@@ -87,7 +89,10 @@ export class DesktopProjectSetups {
       | 'projectTargetState'
       | 'enrollProjectTarget'
       | 'environmentReview'
-    >
+    >,
+    private readonly options: {
+      configurationContext?: (key: string) => Promise<ProductProjectConfigurationContext>
+    } = {}
   ) {}
   registeredContext(key: string): {
     setup: DesktopProjectSetup
@@ -118,6 +123,38 @@ export class DesktopProjectSetups {
   /** Receipt gốc bất biến. Chỉ derive source đã chọn qua journal env của Main này. */
   async currentContext(key: string): Promise<DesktopProjectCurrentContext> {
     const basis = this.registeredContext(key)
+    if (
+      this.db
+        .prepare('SELECT 1 FROM desktop_postgres_intent WHERE controller_id=? AND app_id=? LIMIT 1')
+        .get(basis.setup.controller_id, basis.registration.app_id)
+    ) {
+      if (!this.options.configurationContext)
+        throw new DesktopProjectSetupError('PROJECT_SETUP_CONFLICT')
+      const configured = projectConfigurationContextSchema.parse(
+          await this.options.configurationContext(key)
+        ),
+        s = basis.setup,
+        r = basis.registration
+      if (
+        canonicalH2Json(this.registeredContext(key)) !== canonicalH2Json(basis) ||
+        configured.controller_id !== s.controller_id ||
+        configured.scope.app_id !== r.app_id ||
+        configured.scope.ownership_generation !== r.ownership_generation ||
+        configured.scope.target.vps_id !== s.target_vps_id ||
+        configured.scope.target.ssh_security_revision !== s.target_security_revision ||
+        configured.basis_source_generation !== r.source_generation ||
+        configured.basis_source_config_sha256 !== r.source_config_sha256
+      )
+        throw new DesktopProjectSetupError('PROJECT_SETUP_CONFLICT')
+      return {
+        ...basis,
+        registration: {
+          ...r,
+          source_generation: configured.source_generation,
+          source_config_sha256: configured.source_config_sha256
+        }
+      }
+    }
     // Chưa thao tác env: giữ đường cũ cho retained helper; remote drift vẫn bị source CAS từ chối.
     if (
       !this.db

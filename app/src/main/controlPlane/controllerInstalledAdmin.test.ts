@@ -130,6 +130,7 @@ describe('PostgreSQL installed admin operation boundary', () => {
     'project-configuration-context',
     'prepare-managed-postgres',
     'managed-postgres-state',
+    'managed-postgres-prepare-state',
     'managed-postgres-review',
     'select-managed-postgres',
     'managed-postgres-selection-state'

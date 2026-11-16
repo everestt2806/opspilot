@@ -1,0 +1,141 @@
+{
+  "status": "PASS_MAIN_DURABLE_INTENTS_AND_CONFIGURATION_COMPOSITION",
+  "scope": "MAIN_AND_PRIVATE_LABS_ONLY",
+  "Desktop_schema": 38,
+  "Controller_schema": 37,
+  "GUI_tested": false,
+  "full_installed_Root_lifecycle_tested": false,
+  "VPS_mutated": false,
+  "serving_release_unchanged": "cc8f33f57ab518c20c75118925522dcc03bb2d2cef04ba94c9bfef101cdb0ddd",
+  "private_payload_manifest": "0ce3a5cab4e95947ca0852cdfdab71ae5ce7ab45eb5b384b017094805845be8e",
+  "full_tests": {
+    "passed": 2632,
+    "existing_Linux_skips": 2,
+    "failed": 0,
+    "files_passed": 182
+  },
+  "focused": {
+    "PG_composition_bootstrap": 45,
+    "migration_regressions": 171
+  },
+  "build_and_full": [
+    {
+      "name": "full",
+      "command": [
+        "pnpm.cmd",
+        "--prefix",
+        "app",
+        "exec",
+        "vitest",
+        "run",
+        "--reporter=dot"
+      ],
+      "exit_code": 0,
+      "seconds": 249.91,
+      "log": "app\\.out-scripts\\r7h4c3-full.log"
+    },
+    {
+      "name": "build",
+      "command": [
+        "pnpm.cmd",
+        "--prefix",
+        "app",
+        "build"
+      ],
+      "exit_code": 0,
+      "seconds": 59.59,
+      "log": "app\\.out-scripts\\r7h4c3-build.log"
+    }
+  ],
+  "changed_ESLint": {
+    "exit_code": 0,
+    "file_count": 35,
+    "seconds": 26.59,
+    "log": "app\\.out-scripts\\r7h4c3-changed-lint.log"
+  },
+  "source_files": {
+    "app/src/main/controlPlane/desktopProductPostgres.ts": "bc13e1db8cb3b0a6675e61a95c064851b01040a1cd9537726bbb4807eba2d833",
+    "app/src/main/controlPlane/desktopConfigurationAuthority.ts": "6670fe8947f9467daa4ddd7370c0ea615121aabdd93e885c06fd5841bdc5ecf1",
+    "app/src/main/controlPlane/desktopEnvironmentSelections.ts": "91c2afd64d4eab41b50e358aeb37c75cdffbad8613bfb67e8fb55d0cf1905b90",
+    "app/src/main/controlPlane/controllerSshBootstrap.ts": "f8523125fb44764c0848ad40ea03c8b2016042f0be24a74f5b9dfc8a6cd183eb",
+    "app/src/main/db/migrations/038_desktop_postgres_intent.sql": "e460fabecb23e8cb8ed9d4b4a3aa2be1898c13064680f3e45d8ad7fe9c6f4cf7"
+  },
+  "labs": [
+    {
+      "raw_path": "app/.out-scripts/product-postgres-selection/5e2974e172fd/proof.json",
+      "raw_sha256": "049b0fe3d771489cf20c49d4e256df0df2daa419cc0df804ce8d1eaaff995bce",
+      "evidence": {
+        "state": "PASS",
+        "nonce": "5e2974e172fd",
+        "production_vps_used": false,
+        "production_database_used": false,
+        "Docker_used": false,
+        "artifact_sha256": "9374bbd58a20f841b31c7d3234e62c9b0aa646997ede8867922bc45dc50789a7",
+        "checks": [
+          "missing_enrollment_refuses_selection_without_source_mutation",
+          "actual_SSH_manifest_helper_bytes_key_and_receipt_review_is_readonly",
+          "actual_helper_tamper_refuses_selection_without_clearing_enrollment",
+          "wrong_local_bundle_pin_rejected_before_source_selection",
+          "production_CLI_selects_once_preserves_key_and_pause_no_job_or_runtime_readiness_claim",
+          "production_CLI_reviews_DB_only_source_from_original_registration_without_provisioning_or_job",
+          "actual_same_UID_Python_admin_verifies_ELF_bundle_key_SQLite_then_runs_seven_fixed_PostgreSQL_operations",
+          "Python_admin_forwards_only_approved_PostgreSQL_error_and_never_starts_job",
+          "readonly_prepare_receipt_available_after_source_advance_without_replaying_prepare",
+          "cold_offline_same_UUID_lookup_replay_and_conflicting_body_refusal"
+        ],
+        "last_command": "select-managed-postgres",
+        "last_error": "PRODUCT_POSTGRES_REQUEST_CONFLICT",
+        "admin_node_ancestry": [
+          {
+            "path": "/tmp",
+            "uid": 0,
+            "mode": 1023,
+            "symlink": false
+          },
+          {
+            "path": "/tmp/opspilot-pg-selection-RvAmmZ",
+            "uid": 0,
+            "mode": 448,
+            "symlink": false
+          },
+          {
+            "path": "/tmp/opspilot-pg-selection-RvAmmZ/node",
+            "uid": 0,
+            "mode": 493,
+            "symlink": false
+          }
+        ],
+        "admin_last_operation": "project-configuration-context",
+        "admin_last_error": "PRODUCT_POSTGRES_AUTHORITY_CHANGED",
+        "private_cleanup": true
+      }
+    },
+    {
+      "raw_path": "app/.out-scripts/product-postgres-desktop-lab/fea370086c0d/proof.json",
+      "raw_sha256": "34a46ddf490d5347164e002fbfdc1605db46c7964f5e724d209811d69dd67fd9",
+      "evidence": {
+        "status": "PASS",
+        "nonce": "fea370086c0d",
+        "checks": [
+          "Desktop038_Controller037_role_separation",
+          "Main_prepare_select_immutable_authenticated_journal_without_runtime_provisioning",
+          "ENV_after_DB_preserves_database_reference_and_original_registration",
+          "SQLite_reopen_restores_own_authenticated_receipts_and_current_source_without_new_UUID",
+          "no_secret_readback_job_or_duplicate_resource"
+        ],
+        "transport": "SYNTHETIC_SQLITE_ONLY",
+        "SSH_used": false,
+        "Docker_used": false,
+        "VPS_used": false,
+        "GUI_used": false,
+        "artifact_sha256": "8480140a8985e1fad5ac18a462093387b6127d803fb0bd8602b49fb69e13d85c",
+        "private_cleanup": true
+      }
+    }
+  ],
+  "limits": [
+    "Main CLI uses synthetic transport, real SQLite/cipher services; SQLite reconnect is not Electron/DPAPI restart.",
+    "Native admin lab uses actual local SSHD/same UID; not installed Root/systemd lifecycle.",
+    "Private bundle is not approved or installed on serving VPS; IPC/UI remain open."
+  ]
+}

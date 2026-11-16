@@ -1,3 +1,11 @@
+import { DesktopProductPostgres, DesktopPostgresError } from './desktopProductPostgres'
+import { readOwnedDesktopConfiguration } from './desktopConfigurationAuthority'
+import type { ProductProjectConfigurationContext } from '../../../../docs/contracts/product-postgres'
+import type {
+  DesktopPostgresContext,
+  DesktopPostgresIntentInput,
+  DesktopPostgresIntent
+} from '@shared/desktopProductPostgres'
 import { DesktopEnvironmentSelections } from './desktopEnvironmentSelections'
 import { DesktopProductEnvironment, DesktopEnvironmentError } from './desktopProductEnvironment'
 import type {
@@ -131,6 +139,7 @@ export class DesktopControllerService {
   private readonly projects: DesktopProjectSetups
   private readonly environmentSelections: DesktopEnvironmentSelections
   private readonly environment: DesktopProductEnvironment
+  private readonly postgres: DesktopProductPostgres
   private readonly targets: DesktopTargetSetups
   private readonly firstDeployments: DesktopFirstDeployments
   private readonly installations: DesktopControllerInstallations
@@ -178,13 +187,24 @@ export class DesktopControllerService {
       bootstrapScript: options.bootstrapScript
     })
     this.commands = new DesktopControllerCommands(db, this.vault, ssh, clientFactory)
-    this.projects = new DesktopProjectSetups(db, this.vault, this.enrollment)
+    const configurationContext = (key: string): Promise<ProductProjectConfigurationContext> =>
+      readOwnedDesktopConfiguration(
+        key,
+        this.projects,
+        this.enrollment,
+        this.postgres,
+        this.environmentSelections
+      )
+    this.projects = new DesktopProjectSetups(db, this.vault, this.enrollment, {
+      configurationContext
+    })
     this.environment = new DesktopProductEnvironment(
       db,
       cipher,
       this.vault,
       this.projects,
-      this.enrollment
+      this.enrollment,
+      { configurationContext }
     )
     this.environmentSelections = new DesktopEnvironmentSelections(
       db,
@@ -192,6 +212,13 @@ export class DesktopControllerService {
       this.vault,
       this.projects,
       this.environment,
+      this.enrollment
+    )
+    this.postgres = new DesktopProductPostgres(
+      db,
+      cipher,
+      this.vault,
+      this.projects,
       this.enrollment
     )
     this.targets = new DesktopTargetSetups(db, cipher, this.vault, this.enrollment)
@@ -535,6 +562,24 @@ export class DesktopControllerService {
     input: DesktopFirstDeploymentSendInput
   ): Promise<DesktopControllerCommand> {
     return this.safe(() => this.firstDeployments.send(input))
+  }
+  async postgresContext(key: string): Promise<DesktopPostgresContext> {
+    return this.safe(() => this.postgres.context(key))
+  }
+  async preparePostgresIntent(input: DesktopPostgresIntentInput): Promise<DesktopPostgresIntent> {
+    return this.safe(() => this.postgres.prepare(input))
+  }
+  async sendPostgresIntent(key: string): Promise<DesktopPostgresIntent> {
+    return this.safe(() => this.postgres.send(key))
+  }
+  async checkPostgresIntent(key: string): Promise<DesktopPostgresIntent> {
+    return this.safe(() => this.postgres.check(key))
+  }
+  async listPostgresIntents(key: string): Promise<DesktopPostgresIntent[]> {
+    return this.safe(() => this.postgres.list(key))
+  }
+  async cancelPostgresIntent(key: string): Promise<DesktopPostgresIntent> {
+    return this.safe(() => this.postgres.cancel(key))
   }
   async projectTargets(input: {
     binding_id: string
@@ -912,6 +957,7 @@ export class DesktopControllerService {
         error instanceof DesktopFirstDeploymentError ||
         error instanceof DesktopTargetSetupError ||
         error instanceof DesktopEnvironmentError ||
+        error instanceof DesktopPostgresError ||
         error instanceof DesktopInstallationError ||
         error instanceof DesktopUpgradeError ||
         error instanceof ControllerBootstrapError ||

@@ -4,7 +4,8 @@ import { z } from 'zod'
 import type {
   ProductPostgresCredentials,
   ProductPostgresMetadata,
-  ProductPostgresPrepareResult
+  ProductPostgresPrepareResult,
+  ProductPostgresPrepareLookup
 } from '../../../../docs/contracts/product-postgres'
 import type { ProductEnvironmentScope } from '../../../../docs/contracts/product-environment'
 import type { AesGcmCredentialCipher } from '../crypto/credentialCipher'
@@ -160,6 +161,57 @@ export class ProductPostgresRepository {
           }
         })
         .immediate()
+    })
+  }
+
+  /** Exact receipt lookup, including after desired-source changes. No prepare replay. */
+  lookupPrepare(
+    input: unknown,
+    controllerId: string,
+    administrator: string
+  ): ProductPostgresPrepareLookup {
+    if (this.db.inTransaction) throw new ProductPostgresError('PRODUCT_POSTGRES_INPUT_INVALID')
+    return this.guarded(() => {
+      const parsed = postgresPrepareSchema.safeParse(input)
+      if (
+        !parsed.success ||
+        parsed.data.scope.controller_id !== controllerId ||
+        !/^unix:(0|[1-9][0-9]{0,15})$/.test(administrator)
+      )
+        throw new ProductPostgresError('PRODUCT_POSTGRES_INPUT_INVALID')
+      const request = parsed.data
+      return this.db.transaction(() => {
+        const authority = this.authorize(request.scope, false)
+        const receipt = this.db
+          .prepare(
+            `SELECT request_json,database_id FROM product_managed_postgres_request
+          WHERE controller_id=? AND administrator_id=? AND request_key=?`
+          )
+          .get(controllerId, administrator, request.request_key) as
+          { request_json: string; database_id: string } | undefined
+        if (!receipt)
+          return {
+            result: null,
+            definitively_unapplied: authority.source_generation > request.expected_source_generation
+          }
+        if (receipt.request_json !== canonicalH2Json(request))
+          throw new ProductPostgresError('PRODUCT_POSTGRES_REQUEST_CONFLICT')
+        const row = this.row(request.scope)
+        if (!row || row.database_id !== receipt.database_id)
+          throw new ProductPostgresError('PRODUCT_POSTGRES_UNAVAILABLE')
+        this.assertRow(row, request.scope, authority.framework)
+        this.decrypt(row, request.scope)
+        if (canonicalH2Json(this.authorize(request.scope, false)) !== canonicalH2Json(authority))
+          throw new ProductPostgresError('PRODUCT_POSTGRES_AUTHORITY_CHANGED')
+        return {
+          result: {
+            state: 'already_prepared' as const,
+            request_key: request.request_key,
+            metadata: this.metadata(row)
+          },
+          definitively_unapplied: false
+        }
+      })()
     })
   }
 

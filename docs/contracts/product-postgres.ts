@@ -143,3 +143,13 @@ export interface ProductProjectConfigurationContext {
   auto_deploy_paused: boolean;
   deployment_started: false;
 }
+
+/** Exact-body same-UID prepare receipt lookup. Never repeats prepare, provisions,
+ * selects source or opens SSH. Receipt absence alone is not negative proof;
+ * definitive non-application requires the monotonic current source to advance.
+ * Positive lookup remains available after source selection and while jobs run.
+ */
+export interface ProductPostgresPrepareLookup {
+  result: ProductPostgresPrepareResult | null;
+  definitively_unapplied: boolean;
+}

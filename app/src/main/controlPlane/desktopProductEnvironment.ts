@@ -1,4 +1,9 @@
-﻿import { randomUUID } from 'node:crypto'
+import type {
+  ProductProjectConfigurationContext,
+  ProductPostgresReference
+} from '../../../../docs/contracts/product-postgres'
+import { projectConfigurationContextSchema } from './productPostgres'
+import { randomUUID } from 'node:crypto'
 import type Database from 'better-sqlite3'
 import { z } from 'zod'
 import type {
@@ -83,7 +88,10 @@ export class DesktopProductEnvironment {
     private readonly admin: Pick<
       DesktopControllerEnrollment,
       'environmentReview' | 'environmentState' | 'stageEnvironment'
-    >
+    >,
+    private readonly options: {
+      configurationContext?: (key: string) => Promise<ProductProjectConfigurationContext>
+    } = {}
   ) {}
 
   async context(projectKey: string): Promise<DesktopEnvironmentContext> {
@@ -128,6 +136,14 @@ export class DesktopProductEnvironment {
         this.db
           .prepare(
             "SELECT 1 FROM desktop_environment_selection WHERE controller_id=? AND app_id=? AND state IN ('prepared','in_flight','outcome_unknown')"
+          )
+          .get(project.setup.controller_id, project.registration.app_id)
+      )
+        throw new DesktopEnvironmentError('ENVIRONMENT_CONFLICT')
+      if (
+        this.db
+          .prepare(
+            "SELECT 1 FROM desktop_postgres_intent WHERE controller_id=? AND app_id=? AND state IN ('prepared','in_flight','outcome_unknown')"
           )
           .get(project.setup.controller_id, project.registration.app_id)
       )
@@ -329,12 +345,62 @@ export class DesktopProductEnvironment {
     remote: ProductEnvironmentState & {
       selected: ProductEnvironmentMetadata | null
       auto_deploy_paused: boolean
+      database?: ProductPostgresReference
     }
   }> {
     if (this.db.inTransaction) throw new DesktopEnvironmentError('ENVIRONMENT_REQUEST_INVALID')
     const project = this.project(key),
       setup = project.setup,
       registration = project.registration
+    const postgres = this.db
+      .prepare('SELECT 1 FROM desktop_postgres_intent WHERE controller_id=? AND app_id=? LIMIT 1')
+      .get(setup.controller_id, registration.app_id)
+    if (postgres) {
+      if (!this.options.configurationContext)
+        throw new DesktopEnvironmentError('ENVIRONMENT_CHANGED')
+      const configured = projectConfigurationContextSchema.parse(
+        await this.options.configurationContext(key)
+      )
+      const after = this.project(key, setup.binding_revision)
+      if (
+        canonicalH2Json(after) !== canonicalH2Json(project) ||
+        configured.controller_id !== setup.controller_id ||
+        configured.scope.app_id !== registration.app_id ||
+        configured.scope.ownership_generation !== registration.ownership_generation ||
+        configured.scope.target.vps_id !== setup.target_vps_id ||
+        configured.scope.target.ssh_security_revision !== setup.target_security_revision ||
+        configured.basis_source_generation !== registration.source_generation ||
+        configured.basis_source_config_sha256 !== registration.source_config_sha256 ||
+        [
+          configured.database.prepared,
+          configured.database.selected,
+          configured.environment.latest,
+          configured.environment.selected
+        ].some((value) => value && value.framework !== setup.framework)
+      )
+        throw new DesktopEnvironmentError('ENVIRONMENT_CHANGED')
+      const database = configured.database.selected
+        ? {
+            database_id: configured.database.selected.database_id,
+            controller_id: setup.controller_id,
+            ownership_generation: registration.ownership_generation
+          }
+        : undefined
+      return {
+        project,
+        remote: {
+          scope: configured.scope,
+          source_generation: configured.source_generation,
+          source_config_sha256: configured.source_config_sha256,
+          latest: configured.environment.latest,
+          selected: configured.environment.selected,
+          request_key: null,
+          requested: null,
+          auto_deploy_paused: configured.auto_deploy_paused,
+          ...(database ? { database } : {})
+        }
+      }
+    }
     const remote = environmentReviewSchema.parse(
       await this.admin.environmentReview(setup.binding_id, {
         format: 1,

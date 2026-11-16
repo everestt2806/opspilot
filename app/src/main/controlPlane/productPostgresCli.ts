@@ -23,6 +23,7 @@ export async function runProductPostgresCli(
   command:
     | 'prepare-managed-postgres'
     | 'managed-postgres-state'
+    | 'managed-postgres-prepare-state'
     | 'managed-postgres-review'
     | 'select-managed-postgres'
     | 'managed-postgres-selection-state'
@@ -89,6 +90,18 @@ export async function runProductPostgresCli(
       marker.controller_id !== controllers[0].controller_id
     )
       throw new ProductPostgresError('PRODUCT_POSTGRES_AUTHORITY_CHANGED')
+    if (command === 'managed-postgres-prepare-state') {
+      console.log(
+        JSON.stringify(
+          new ProductPostgresRepository(db, loadControllerCredentialCipher(root)).lookupPrepare(
+            input,
+            controllers[0].controller_id,
+            `unix:${process.getuid!()}`
+          )
+        )
+      )
+      return
+    }
     if (command === 'project-configuration-context') {
       console.log(
         JSON.stringify(

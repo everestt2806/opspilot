@@ -64,6 +64,7 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
   if (
     commandValue === 'prepare-managed-postgres' ||
     commandValue === 'managed-postgres-state' ||
+    commandValue === 'managed-postgres-prepare-state' ||
     commandValue === 'managed-postgres-review' ||
     commandValue === 'select-managed-postgres' ||
     commandValue === 'managed-postgres-selection-state' ||

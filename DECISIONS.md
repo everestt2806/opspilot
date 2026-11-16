@@ -250,3 +250,7 @@
 2026-11-16 | [product/database-desktop]: R7h-4c thêm readonly project configuration context ghim vào registration basis; chỉ env/database reference có binding xác thực được khác, không tự adopt source thay journal Main. Metadata prepared/selected không đồng nghĩa database ready; không credential/SSH/job/schema mutation. Root admin/Main/IPC/UI và rollout vẫn theo checkpoint có gate riêng.
 
 2026-11-16 | [product/database-admin]: R7h-4c2 nối sáu CLI metadata/PG operations vào installed Root admin được ghim độc lập, sameUID/schema37, bounded stdin/safe code và timeout75s; Main tự lấy artifact/payload từ binding vault, chưa cho renderer truyền target/path, không tự adopt source hoặc tự phát job. Chỉ private candidate trước gates/approval; không đổi serving cc8.
+
+2026-11-16 | [product/database-recovery]: R7h-4c3a thêm exact-body managed-postgres-prepare-state readonly; positive receipt đọc được sau source advance/active jobs, không resend prepare. Receipt absent chưa chứng minh chưa áp dụng; chỉ source_generation tăng đơn điệu mới cho definitive negative proof. Metadata-only, existing key/owner/target và sameUID administrator, không SSH/job/schema mutation.
+
+2026-11-16 | [desktop/database-intent]: R7h-4c3 thêm migration038 chỉ Desktop, encrypted authenticated prepare/select request+result và UUID durable trước SSH; controller vẫn037. Unknown chỉ exact receipt lookup, không resend; source derive cần own current receipt, metadata context không thay thế consent/journal. ENV và DB phải giữ authenticated inherited reference khi đổi source.

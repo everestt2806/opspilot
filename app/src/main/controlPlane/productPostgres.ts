@@ -138,3 +138,13 @@ export const projectConfigurationContextSchema = z
       )
     if (invalid) ctx.addIssue({ code: 'custom', message: 'CONFIGURATION_METADATA_SCOPE_MISMATCH' })
   })
+
+export const postgresPrepareLookupSchema = z
+  .strictObject({
+    result: postgresPrepareResultSchema.nullable(),
+    definitively_unapplied: z.boolean()
+  })
+  .superRefine((value, ctx) => {
+    if (value.result && value.definitively_unapplied)
+      ctx.addIssue({ code: 'custom', message: 'POSTGRES_PREPARE_LOOKUP_INCONSISTENT' })
+  })

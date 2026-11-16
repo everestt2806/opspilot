@@ -13,6 +13,7 @@ import {
   postgresMetadataSchema,
   postgresPrepareSchema,
   postgresPrepareResultSchema,
+  postgresPrepareLookupSchema,
   postgresStateSchema,
   postgresSelectionSchema,
   postgresSelectionResultSchema,
@@ -377,6 +378,27 @@ export class DesktopControllerEnrollment {
     this.postgresMetadata(parsed.data.scope, result.metadata)
     return result
   }
+  async postgresPrepareState(
+    bindingId: string,
+    input: ProductPostgresPrepareInput
+  ): Promise<z.output<typeof postgresPrepareLookupSchema>> {
+    const parsed = postgresPrepareSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_POSTGRES_INPUT_INVALID')
+    this.postgresScope(bindingId, parsed.data.scope)
+    const result = await this.configurationOperation(
+      bindingId,
+      'managed-postgres-prepare-state',
+      parsed.data,
+      postgresPrepareLookupSchema
+    )
+    if (result.result) {
+      if (result.result.request_key !== parsed.data.request_key)
+        throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+      this.postgresMetadata(parsed.data.scope, result.result.metadata)
+    }
+    return result
+  }
   async postgresState(
     bindingId: string,
     scope: ProductEnvironmentScope
@@ -514,6 +536,7 @@ export class DesktopControllerEnrollment {
       | 'project-configuration-context'
       | 'prepare-managed-postgres'
       | 'managed-postgres-state'
+      | 'managed-postgres-prepare-state'
       | 'managed-postgres-review'
       | 'select-managed-postgres'
       | 'managed-postgres-selection-state',
@@ -708,6 +731,7 @@ export class DesktopControllerEnrollment {
         | 'project-configuration-context'
         | 'prepare-managed-postgres'
         | 'managed-postgres-state'
+        | 'managed-postgres-prepare-state'
         | 'managed-postgres-review'
         | 'select-managed-postgres'
         | 'managed-postgres-selection-state'
@@ -765,7 +789,6 @@ export class DesktopControllerEnrollment {
             (command?.expected_revision !== undefined && revision !== command.expected_revision)
           )
             throw new DesktopControllerVaultError('BINDING_CHANGED')
-          command?.beforeSend?.()
         }
         const response = await administerInstalledController({
           ...(intent.upgrade ? { purpose: 'upgrade' as const } : {}),
@@ -778,6 +801,7 @@ export class DesktopControllerEnrollment {
             installer_sha256: reference.installer_sha256
           },
           assertCurrent,
+          beforeDispatch: command?.beforeSend,
           signal: stop.signal,
           bootstrapScript: this.installedOptions.bootstrapScript,
           request: {
