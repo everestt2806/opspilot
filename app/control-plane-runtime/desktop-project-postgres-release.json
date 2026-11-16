@@ -1,0 +1,8 @@
+{
+  "release_id": "linux-x64-node22-20261116-project-postgres",
+  "node_version": "22.23.4",
+  "minimum_glibc": "2.39",
+  "release_sha256": "4bc45902888d7e3442e6cd44694c4abbe1685101c5eac94415cb677461e245a5",
+  "installer_sha256": "414e610ae7d54cee26d503f7487ae1622205f97c13cde4fe4e0a99b474da5cca",
+  "upgrade_supported": true
+}

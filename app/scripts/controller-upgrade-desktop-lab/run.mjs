@@ -377,14 +377,14 @@ try {
   const databaseInode = lstatSync(join(paths.data, 'opspilot.db')).ino
   keyBytes = readFileSync(join(paths.data, '.controller-runtime-key'))
   desktopDb = initializeDatabase(join(root, 'desktop'))
-  assert.equal(desktopDb.prepare('SELECT MAX(version) n FROM schema_version').get().n, 36)
+  assert.equal(desktopDb.prepare('SELECT MAX(version) n FROM schema_version').get().n, 38)
   const controllerDb = new Database(join(paths.data, 'opspilot.db'), { readonly: true })
   assert.equal(
     controllerDb.prepare('SELECT MAX(version) n FROM schema_version').get().n,
     baseSchema
   )
   controllerDb.close()
-  check(`fresh_desktop036_and_native_controller0${baseSchema}_have_separate_migration_roles`)
+  check(`fresh_desktop038_and_native_controller0${baseSchema}_have_separate_migration_roles`)
   const cipher = new AesGcmCredentialCipher(randomBytes(32))
   const vps = new VpsRepository(desktopDb)
   vps.create({
@@ -522,7 +522,7 @@ try {
   assert.equal(recovered.before[0].state, 'outcome_unknown')
   assert.equal(recovered.result.state, 'active')
   assert.equal(recovered.result.last_result.controller_id, installed.installation.controller_id)
-  assert.equal(recovered.schema.n, 36)
+  assert.equal(recovered.schema.n, 38)
   assert.equal(
     fixed('/usr/bin/systemctl', ['show', unitName, '--property=MainPID', '--value']),
     activePid

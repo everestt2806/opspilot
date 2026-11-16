@@ -12,6 +12,7 @@ import approvedEnvironment from './control-plane-runtime/desktop-environment-rel
 import approvedActiveExposure from './control-plane-runtime/desktop-active-exposure-release.json'
 import approvedHelperUpgrade from './control-plane-runtime/desktop-helper-upgrade-release.json'
 import approvedPostgres from './control-plane-runtime/desktop-postgres-release.json'
+import approvedProjectPostgres from './control-plane-runtime/desktop-project-postgres-release.json'
 
 const catalogFile = resolve('resources/controller-releases/catalog.json')
 const originalCatalog = existsSync(catalogFile)
@@ -25,7 +26,8 @@ const approvedUpgrades = [
   approvedEnvironment,
   approvedActiveExposure,
   approvedHelperUpgrade,
-  approvedPostgres
+  approvedPostgres,
+  approvedProjectPostgres
 ]
 for (const approved of approvedUpgrades) {
   const conflicting = originalCatalog.releases.find((v) => v.release_id === approved.release_id)

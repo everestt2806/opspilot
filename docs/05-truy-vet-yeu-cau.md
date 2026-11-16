@@ -1,5 +1,8 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **16/11 — R7h-4c5a controller rollout PASS:** Native source12/Root19/Main19 + Docker49attempts98checks, full2643PASS+2existingLinuxSKIP/types/lint/build/resources5checks PASS; tenth compiled release keeps original9pins. Actual Main/pinned SSH upgrades VPS to4bc4590/schema37/requestce4d6711, preserves7apps/14appCIDs/helpers/source/env/key and app7PGidentity/1000rows;27HTTPsamples all200, client revoked/private profile removed. Main PG first-deploy c5b still running; inspector/backup/migrate/formal ML/release OPEN. [Task](tasks/tk-s7-release-r7h4c5-postgres-desktop-rollout.md); [proof](ui-redesign/r7h4c5-controller-verification.json). SHA: `git log -1 -- app/control-plane-runtime/desktop-project-postgres-release.json`.
+
+
 > **16/11 — R7h-4c4 PostgreSQL configuration UI PASS:** Six typed IPC/Main038 journal +4locale project database panel, explicit prepare/send/select, unknown receipt-only check; source/target/readiness views refresh after selection. Full2643PASS+2existingLinuxSKIP/types/scripts/lint/build, real Electron5checks/17captures/private cleanup PASS (synthetic SSH, real Main/SQLite). Chưa serving upgrade/Root lifecycle/VPS GUI deploy;7apps/controller37/cc8 giữ nguyên. [Task](tasks/tk-s7-release-r7h4c-project-database.md); [proof](ui-redesign/r7h4c4-verification.json). SHA: `git log -1 -- app/src/renderer/src/components/ControllerProjectDatabase.tsx`.
 
 
