@@ -5,6 +5,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import {
   chmodSync,
+  chownSync,
   cpSync,
   existsSync,
   lstatSync,
@@ -13,6 +14,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
@@ -325,6 +327,160 @@ try {
   check(
     'production_CLI_reviews_DB_only_source_from_original_registration_without_provisioning_or_job'
   )
+
+  stage = 'same-UID-admin-gateway'
+  const nativeNode = join(scratch, 'node')
+  cpSync(realpathSync(process.execPath), nativeNode, {
+    errorOnExist: true,
+    force: false,
+    dereference: true
+  })
+  chownSync(nativeNode, 0, 0)
+  chmodSync(nativeNode, 0o755)
+  assert.equal(sha(readFileSync(nativeNode)), sha(readFileSync(process.execPath)))
+  proof.admin_node_ancestry = nativeNode
+    .split('/')
+    .slice(1)
+    .map((_part, index, parts) => {
+      const path = '/' + parts.slice(0, index + 1).join('/'),
+        info = lstatSync(path)
+      return { path, uid: info.uid, mode: info.mode & 0o7777, symlink: info.isSymbolicLink() }
+    })
+  symlinkSync(modules, join(scratch, 'node_modules'), 'dir')
+  const admin = readFileSync(
+    join(import.meta.dirname, '../../src/main/controlPlane/desktop_controller_admin.py'),
+    'utf8'
+  ).replace(
+    'APPROVED_ASSETS = ()',
+    'APPROVED_ASSETS = ' +
+      JSON.stringify(
+        Object.keys(
+          JSON.parse(
+            readFileSync(
+              join(import.meta.dirname, '../../control-plane-runtime/bundle-files.json'),
+              'utf8'
+            )
+          )
+        ).sort()
+      )
+  )
+  const adminCli = (operation, payload, denied) => {
+    const child = spawnSync('python3', ['-c', admin], {
+      input: JSON.stringify({
+        operation,
+        artifact_path: artifact,
+        data_directory: data,
+        node_path: nativeNode,
+        manifest_sha256: bundlePin,
+        controller_id: controllerId,
+        payload
+      }),
+      encoding: 'utf8',
+      timeout: 90000,
+      maxBuffer: 65536
+    })
+    assert(!child.error)
+    const result = JSON.parse(child.stdout)
+    proof.admin_last_operation = operation
+    proof.admin_last_error =
+      typeof result.code === 'string' && /^[A-Z][A-Z_]{1,90}$/.test(result.code)
+        ? result.code
+        : null
+
+    if (result.code === 'CONTROLLER_BUNDLE_VERIFICATION_FAILED') {
+      // Private fixture diagnostic: line numbers only, never exception text/key/stdin.
+      const diagnostic = `import sys,json,traceback
+r=json.load(sys.stdin)
+n={'__name__':'private_pg_admin_fixture'}
+exec(${JSON.stringify(admin)},n)
+try:n['verify'](r)
+except Exception as error:print(json.dumps({'lines':[frame.lineno for frame in traceback.extract_tb(error.__traceback__)]}))
+`
+      const inspected = spawnSync('python3', ['-c', diagnostic], {
+        input: JSON.stringify({
+          operation,
+          artifact_path: artifact,
+          data_directory: data,
+          node_path: nativeNode,
+          manifest_sha256: bundlePin,
+          controller_id: controllerId,
+          payload
+        }),
+        encoding: 'utf8',
+        timeout: 20000,
+        maxBuffer: 4096
+      })
+      if (inspected.status === 0)
+        proof.admin_verification_lines = JSON.parse(inspected.stdout).lines
+    }
+    assert.equal(child.stderr, '')
+    if (denied) {
+      assert.equal(result.ok, false)
+      assert.equal(result.code, denied)
+      return
+    }
+    assert.equal(result.ok, true)
+    return result.data
+  }
+  const currentRequest = {
+    ...prepare,
+    request_key: randomUUID(),
+    expected_source_generation: selected.source_generation,
+    expected_source_config_sha256: selected.source_config_sha256
+  }
+  assert.equal(
+    adminCli('prepare-managed-postgres', currentRequest).metadata.database_id,
+    prepared.metadata.database_id
+  )
+  assert.equal(
+    adminCli('managed-postgres-state', { format: 1, scope }).metadata.database_id,
+    prepared.metadata.database_id
+  )
+  const currentSelection = {
+    artifact,
+    manifest_sha256: bundlePin,
+    selection: {
+      ...currentRequest,
+      request_key: randomUUID(),
+      database_id: prepared.metadata.database_id
+    }
+  }
+  assert.equal(
+    adminCli('managed-postgres-review', currentSelection).metadata.database_id,
+    prepared.metadata.database_id
+  )
+  assert.equal(adminCli('select-managed-postgres', currentSelection).state, 'already_selected')
+  assert.equal(adminCli('managed-postgres-selection-state', currentSelection).is_current, true)
+  assert.equal(
+    adminCli('project-configuration-context', {
+      format: 1,
+      controller_id: controllerId,
+      app_id: 1,
+      expected_ownership_generation: 1,
+      expected_source_generation: 1,
+      expected_source_config_sha256: hash,
+      expected_target_security_revision: vps.ssh_security_revision
+    }).database.selected.database_id,
+    prepared.metadata.database_id
+  )
+  check(
+    'actual_same_UID_Python_admin_verifies_ELF_bundle_key_SQLite_then_runs_six_fixed_PostgreSQL_operations'
+  )
+  adminCli(
+    'project-configuration-context',
+    {
+      format: 1,
+      controller_id: controllerId,
+      app_id: 1,
+      expected_ownership_generation: 2,
+      expected_source_generation: 1,
+      expected_source_config_sha256: hash,
+      expected_target_security_revision: vps.ssh_security_revision
+    },
+    'PRODUCT_POSTGRES_AUTHORITY_CHANGED'
+  )
+  assert.equal(db.prepare('SELECT count(*) n FROM product_deploy_job').get().n, 0)
+  check('Python_admin_forwards_only_approved_PostgreSQL_error_and_never_starts_job')
   stage = 'offline-receipt'
   sshd.kill('SIGTERM')
   await new Promise((done) => sshd.once('close', done))

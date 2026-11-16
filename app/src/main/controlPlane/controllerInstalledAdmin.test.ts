@@ -124,3 +124,27 @@ describe('trusted installed admin boundary', () => {
     }
   )
 })
+
+describe('PostgreSQL installed admin operation boundary', () => {
+  it.each([
+    'project-configuration-context',
+    'prepare-managed-postgres',
+    'managed-postgres-state',
+    'managed-postgres-review',
+    'select-managed-postgres',
+    'managed-postgres-selection-state'
+  ] as const)('admits fixed operation %s without caller executable or user IDs', (operation) => {
+    expect(
+      installedControllerAdminSchema.safeParse({
+        ...request(),
+        command: { operation, payload: {} }
+      }).success
+    ).toBe(true)
+    expect(
+      installedControllerAdminSchema.safeParse({
+        ...request(),
+        command: { operation, payload: {}, executable: '/bin/sh' }
+      }).success
+    ).toBe(false)
+  })
+})

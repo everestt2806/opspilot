@@ -1,4 +1,25 @@
 import type {
+  ProductPostgresPrepareInput,
+  ProductPostgresPrepareResult,
+  ProductPostgresMetadata,
+  ProductPostgresSelectionInput,
+  ProductPostgresSelectionResult,
+  ProductProjectConfigurationContext,
+  ProductProjectConfigurationContextInput
+} from '../../../../docs/contracts/product-postgres'
+import type { ProductEnvironmentScope } from '../../../../docs/contracts/product-environment'
+import {
+  postgresAdminErrorCodes,
+  postgresMetadataSchema,
+  postgresPrepareSchema,
+  postgresPrepareResultSchema,
+  postgresStateSchema,
+  postgresSelectionSchema,
+  postgresSelectionResultSchema,
+  postgresSelectionLookupSchema,
+  projectConfigurationContextSchema
+} from './productPostgres'
+import type {
   ProductEnvironmentContextInput,
   ProductEnvironmentStageInput,
   ProductEnvironmentStageResult,
@@ -12,6 +33,7 @@ import type {
 } from '../../../../docs/contracts/product-environment'
 import {
   environmentContextSchema,
+  environmentScopeSchema as environmentContextScope,
   environmentStageSchema,
   environmentStateSchema,
   environmentStateResultSchema,
@@ -84,6 +106,7 @@ export class DesktopControllerEnrollmentError extends Error {
   constructor(
     readonly code:
       | ProductEnvironmentError['code']
+      | (typeof postgresAdminErrorCodes)[number]
       | 'CONTROLLER_SECRET_KEY_UNAVAILABLE'
       | 'CONTROLLER_ADMIN_FAILED'
       | 'CONTROLLER_IDENTITY_MISMATCH'
@@ -222,7 +245,7 @@ export class DesktopControllerEnrollment {
     const parsed = environmentContextSchema.safeParse(input)
     if (!parsed.success)
       throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
-    return this.environmentOperation(
+    return this.configurationOperation(
       bindingId,
       'project-environment-context',
       parsed.data,
@@ -236,7 +259,7 @@ export class DesktopControllerEnrollment {
     const parsed = environmentContextSchema.safeParse(input)
     if (!parsed.success)
       throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
-    return this.environmentOperation(
+    return this.configurationOperation(
       bindingId,
       'project-environment-review',
       parsed.data,
@@ -251,7 +274,7 @@ export class DesktopControllerEnrollment {
     const parsed = environmentSelectionSchema.safeParse(input)
     if (!parsed.success)
       throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
-    return this.environmentOperation(
+    return this.configurationOperation(
       bindingId,
       'select-project-environment',
       parsed.data,
@@ -269,7 +292,7 @@ export class DesktopControllerEnrollment {
     const parsed = environmentSelectionSchema.safeParse(input)
     if (!parsed.success)
       throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
-    return this.environmentOperation(
+    return this.configurationOperation(
       bindingId,
       'project-environment-selection-state',
       parsed.data,
@@ -286,7 +309,7 @@ export class DesktopControllerEnrollment {
     const parsed = environmentStateSchema.safeParse(input)
     if (!parsed.success)
       throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
-    return this.environmentOperation(
+    return this.configurationOperation(
       bindingId,
       'project-environment-state',
       parsed.data,
@@ -301,7 +324,7 @@ export class DesktopControllerEnrollment {
     const parsed = environmentStageSchema.safeParse(input)
     if (!parsed.success)
       throw new DesktopControllerEnrollmentError('PRODUCT_ENVIRONMENT_INPUT_INVALID')
-    return this.environmentOperation(
+    return this.configurationOperation(
       bindingId,
       'stage-project-environment',
       parsed.data,
@@ -309,7 +332,177 @@ export class DesktopControllerEnrollment {
       beforeSend
     )
   }
-  private async environmentOperation<T>(
+  async postgresContext(
+    bindingId: string,
+    input: ProductProjectConfigurationContextInput
+  ): Promise<ProductProjectConfigurationContext> {
+    const parsed = environmentContextSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_POSTGRES_INPUT_INVALID')
+    const result = await this.configurationOperation(
+      bindingId,
+      'project-configuration-context',
+      parsed.data,
+      projectConfigurationContextSchema
+    )
+    if (
+      result.controller_id !== this.vault.resolve(bindingId).controllerId ||
+      result.scope.app_id !== parsed.data.app_id ||
+      result.scope.ownership_generation !== parsed.data.expected_ownership_generation ||
+      result.scope.target.ssh_security_revision !== parsed.data.expected_target_security_revision ||
+      result.basis_source_generation !== parsed.data.expected_source_generation ||
+      result.basis_source_config_sha256 !== parsed.data.expected_source_config_sha256
+    )
+      throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+    return result
+  }
+  async preparePostgres(
+    bindingId: string,
+    input: ProductPostgresPrepareInput,
+    beforeSend: () => void
+  ): Promise<ProductPostgresPrepareResult> {
+    const parsed = postgresPrepareSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_POSTGRES_INPUT_INVALID')
+    this.postgresScope(bindingId, parsed.data.scope)
+    const result = await this.configurationOperation(
+      bindingId,
+      'prepare-managed-postgres',
+      parsed.data,
+      postgresPrepareResultSchema,
+      beforeSend
+    )
+    if (result.request_key !== parsed.data.request_key)
+      throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+    this.postgresMetadata(parsed.data.scope, result.metadata)
+    return result
+  }
+  async postgresState(
+    bindingId: string,
+    scope: ProductEnvironmentScope
+  ): Promise<ProductPostgresMetadata | null> {
+    const parsed = postgresStateSchema.safeParse({ format: 1, scope })
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_POSTGRES_INPUT_INVALID')
+    this.postgresScope(bindingId, parsed.data.scope)
+    const result = await this.configurationOperation(
+      bindingId,
+      'managed-postgres-state',
+      parsed.data,
+      z.strictObject({ metadata: postgresMetadataSchema.nullable() })
+    )
+    if (result.metadata) this.postgresMetadata(parsed.data.scope, result.metadata)
+    return result.metadata
+  }
+  async reviewPostgres(
+    bindingId: string,
+    input: ProductPostgresSelectionInput
+  ): Promise<import('../../../../docs/contracts/product-postgres').ProductPostgresReview> {
+    const request = this.postgresSelection(bindingId, input)
+    const result = await this.configurationOperation(
+      bindingId,
+      'managed-postgres-review',
+      request,
+      z.strictObject({
+        scope: environmentContextScope,
+        source_generation: z.number().int().positive(),
+        source_config_sha256: z.string().regex(/^[a-f0-9]{64}$/),
+        metadata: postgresMetadataSchema,
+        auto_deploy_paused: z.literal(true),
+        deployment_started: z.literal(false)
+      })
+    )
+    if (
+      canonicalH2Json(result.scope) !== canonicalH2Json(input.scope) ||
+      result.source_generation !== input.expected_source_generation ||
+      result.source_config_sha256 !== input.expected_source_config_sha256 ||
+      result.metadata.database_id !== input.database_id
+    )
+      throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+    this.postgresMetadata(input.scope, result.metadata)
+    return result
+  }
+  async selectPostgres(
+    bindingId: string,
+    input: ProductPostgresSelectionInput,
+    beforeSend: () => void
+  ): Promise<ProductPostgresSelectionResult> {
+    const request = this.postgresSelection(bindingId, input)
+    const result = await this.configurationOperation(
+      bindingId,
+      'select-managed-postgres',
+      request,
+      postgresSelectionResultSchema,
+      beforeSend
+    )
+    this.postgresResult(input, result)
+    return result
+  }
+  async postgresSelectionState(
+    bindingId: string,
+    input: ProductPostgresSelectionInput
+  ): Promise<z.output<typeof postgresSelectionLookupSchema>> {
+    const request = this.postgresSelection(bindingId, input)
+    const result = await this.configurationOperation(
+      bindingId,
+      'managed-postgres-selection-state',
+      request,
+      postgresSelectionLookupSchema
+    )
+    if (result.result) this.postgresResult(input, result.result)
+    return result
+  }
+  private postgresSelection(
+    bindingId: string,
+    input: ProductPostgresSelectionInput
+  ): { artifact: string; manifest_sha256: string; selection: ProductPostgresSelectionInput } {
+    const parsed = postgresSelectionSchema.safeParse(input)
+    if (!parsed.success)
+      throw new DesktopControllerEnrollmentError('PRODUCT_POSTGRES_INPUT_INVALID')
+    this.postgresScope(bindingId, parsed.data.scope)
+    const intent = this.vault.intent(bindingId)
+    return {
+      artifact: intent.artifact_path,
+      manifest_sha256: intent.manifest_sha256,
+      selection: parsed.data
+    }
+  }
+  private postgresScope(bindingId: string, scope: ProductEnvironmentScope): void {
+    if (scope.controller_id !== this.vault.resolve(bindingId).controllerId)
+      throw new DesktopControllerEnrollmentError('PRODUCT_POSTGRES_AUTHORITY_CHANGED')
+  }
+  private postgresMetadata(
+    scope: ProductEnvironmentScope,
+    metadata: ProductPostgresMetadata
+  ): void {
+    if (
+      metadata.controller_id !== scope.controller_id ||
+      metadata.app_id !== scope.app_id ||
+      metadata.ownership_generation !== scope.ownership_generation
+    )
+      throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+  }
+  private postgresResult(
+    input: ProductPostgresSelectionInput,
+    result: ProductPostgresSelectionResult
+  ): void {
+    if (
+      result.request_key !== input.request_key ||
+      result.controller_id !== input.scope.controller_id ||
+      result.app_id !== input.scope.app_id ||
+      result.ownership_generation !== input.scope.ownership_generation ||
+      result.database.database_id !== input.database_id ||
+      result.database.controller_id !== input.scope.controller_id ||
+      result.database.ownership_generation !== input.scope.ownership_generation ||
+      ![input.expected_source_generation, input.expected_source_generation + 1].includes(
+        result.source_generation
+      ) ||
+      (result.source_generation === input.expected_source_generation &&
+        result.source_config_sha256 !== input.expected_source_config_sha256)
+    )
+      throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
+  }
+  private async configurationOperation<T>(
     bindingId: string,
     operation:
       | 'stage-project-environment'
@@ -317,7 +510,13 @@ export class DesktopControllerEnrollment {
       | 'project-environment-context'
       | 'project-environment-review'
       | 'select-project-environment'
-      | 'project-environment-selection-state',
+      | 'project-environment-selection-state'
+      | 'project-configuration-context'
+      | 'prepare-managed-postgres'
+      | 'managed-postgres-state'
+      | 'managed-postgres-review'
+      | 'select-managed-postgres'
+      | 'managed-postgres-selection-state',
     payload: object,
     schema: z.ZodType<T>,
     beforeSend?: () => void
@@ -339,7 +538,9 @@ export class DesktopControllerEnrollment {
     authorize()
     const result = await this.exchange(
       intent,
-      {},
+      ['managed-postgres-review', 'select-managed-postgres'].includes(operation)
+        ? { timeoutMs: 90000 }
+        : {},
       {
         operation,
         payload,
@@ -504,6 +705,12 @@ export class DesktopControllerEnrollment {
         | 'project-environment-review'
         | 'select-project-environment'
         | 'project-environment-selection-state'
+        | 'project-configuration-context'
+        | 'prepare-managed-postgres'
+        | 'managed-postgres-state'
+        | 'managed-postgres-review'
+        | 'select-managed-postgres'
+        | 'managed-postgres-selection-state'
       payload: object
       expected_revision?: number
       beforeSend?: () => void
@@ -519,7 +726,9 @@ export class DesktopControllerEnrollment {
           : command?.operation === 'verify-project-source'
             ? 120_000
             : command?.operation === 'enroll-project-target' ||
-                command?.operation === 'register-vps'
+                command?.operation === 'register-vps' ||
+                command?.operation === 'managed-postgres-review' ||
+                command?.operation === 'select-managed-postgres'
               ? 90_000
               : 60_000)
     )
@@ -710,6 +919,7 @@ function decodeAdminEnvelope(value: unknown): unknown {
     .strictObject({
       ok: z.literal(false),
       code: z.enum([
+        ...postgresAdminErrorCodes,
         'PRODUCT_ENVIRONMENT_INPUT_INVALID',
         'PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED',
         'PRODUCT_ENVIRONMENT_SOURCE_CHANGED',

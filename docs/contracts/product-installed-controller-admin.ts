@@ -24,7 +24,9 @@ export type InstalledControllerAdminRequest = {
       | "project-target-state" | "enroll-project-target" | "project-readiness"
       | "register-vps" | "stage-project-environment" | "project-environment-state"
       | "project-environment-context" | "project-environment-review"
-      | "select-project-environment" | "project-environment-selection-state";
+      | "select-project-environment" | "project-environment-selection-state"
+      | "project-configuration-context" | "prepare-managed-postgres" | "managed-postgres-state"
+      | "managed-postgres-review" | "select-managed-postgres" | "managed-postgres-selection-state";
     payload: object;
   };
 };

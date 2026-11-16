@@ -49,3 +49,7 @@ python3 -m unittest discover -s app/scripts/product-postgres-lab -p test_io.py -
 ## R7h-4c1: registration configuration metadata
 
 `selection.mjs` còn gọi production CLI `project-configuration-context` sau DB selection bằng registration basis ban đầu, xác nhận đúng database metadata/source hiện hành mà không job, provisioning hay network mới. Đây là private candidate gate; chưa Root admin/Main journal/IPC/UI, không tự approve/install artifact. Contract ghi rõ metadata context không cho Main quyền tự nhận source nếu thiếu receipt của chính nó.
+
+## R7h-4c2: Main và sameUID admin transport
+
+Selection lab còn gọi đủ6PG/configuration operations qua Python admin thật: Node ELF/bundle/key/SQLite verification, safe-code allowlist, bounded output/deadline, no deploy/job và cleanup. Node bản sao trong Root scratch phải Root-owned và hash khớp; không thay ownership Node gốc. Đây là sameUID gate, chưa chứng minh Root installed service lifecycle hoặc GUI. Main transport schemas từ chối foreign scope/secret field/ready claim/wrong image; artifact/pin do vault cung cấp, SSH open30s và helper-review/select operation90s. Main durable intents/IPC/UI cần checkpoint tiếp theo.

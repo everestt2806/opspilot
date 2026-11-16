@@ -1,5 +1,8 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
+> **16/11 — R7h-4c2 Main/admin transport PASS:** Six fixed PG/context operations, vault-derived artifact/pin, authenticated metadata/UUID/scope, bounded safe codes, lookup riêng khi mất phản hồi.99focused/full2609PASS+2existingLinuxSKIP/types/lint/build và actual sameUID Python+SSHD/CLI9checks/cleanup PASS. Private artifact55b4a6c chưa approve/install; Root lifecycle/PG intent/IPC/UI còn OPEN, VPS7apps giữ nguyên. [Task](tk-s7-release-r7h4c-project-database.md); [proof](../ui-redesign/r7h4c2-verification.json). SHA: `git log -1 -- app/src/main/controlPlane/desktopControllerEnrollment.ts`.
+
+
 > **16/11 — R7h-4c1 metadata foundation PASS:** Readonly source context hỗ trợ DB-only/ENV→DB/DB→ENV từ registration basis, authenticated refs, không secrets/job/implicit adopt.121focused/full2591PASS+2existingLinuxSKIP, types/lint/build và actual Linux SSHD/CLI7checks/cleanup PASS. Private candidate00ecf95 chưa serving/approved; VPS giữ7apps và PostgreSQL đã nghiệm thu. Tiếp tục Root admin/Main journal/IPC/UI. [Task](tk-s7-release-r7h4c-project-database.md); [proof](../ui-redesign/r7h4c1-verification.json). SHA: `git log -1 -- app/src/main/controlPlane/projectConfigurationContext.ts`.
 
 

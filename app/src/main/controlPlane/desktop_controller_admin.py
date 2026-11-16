@@ -28,6 +28,21 @@ ENVIRONMENT_ERROR_CODES = frozenset(
         "CONTROLLER_SECRET_KEY_UNAVAILABLE",
     ]
 )
+POSTGRES_ERROR_CODES = frozenset(
+    (
+        "PRODUCT_POSTGRES_INPUT_INVALID",
+        "PRODUCT_POSTGRES_AUTHORITY_CHANGED",
+        "PRODUCT_POSTGRES_REQUIRES_QUIESCENCE",
+        "PRODUCT_POSTGRES_REQUEST_CONFLICT",
+        "PRODUCT_POSTGRES_UNAVAILABLE",
+        "PRODUCT_POSTGRES_HELPER_UPGRADE_REQUIRED",
+        "PRODUCT_POSTGRES_LINUX_REQUIRED",
+        "PRODUCT_POSTGRES_ABORTED",
+        "PRODUCT_POSTGRES_DATABASE_UNSAFE",
+        "PRODUCT_POSTGRES_SCHEMA_UNSUPPORTED",
+        "CONTROLLER_SECRET_KEY_UNAVAILABLE",
+    )
+)
 SOURCE_ERROR_CODES = frozenset(
     {
         "PROJECT_SOURCE_REQUEST_INVALID",
@@ -235,6 +250,14 @@ def run_cli(request, operation, payload):
         "select-project-environment",
         "project-environment-selection-state",
     )
+    postgres_check = operation in (
+        "project-configuration-context",
+        "prepare-managed-postgres",
+        "managed-postgres-state",
+        "managed-postgres-review",
+        "select-managed-postgres",
+        "managed-postgres-selection-state",
+    )
     streamed_input = vps_check or operation == "stage-project-environment"
     structured_error = (
         source_check
@@ -242,6 +265,7 @@ def run_cli(request, operation, payload):
         or readiness_check
         or vps_check
         or environment_check
+        or postgres_check
     )
     args = (
         [request["node_path"], "--version"]
@@ -287,7 +311,12 @@ def run_cli(request, operation, payload):
             else 105
             if source_check
             else 75
-            if operation == "enroll-project-target"
+            if operation
+            in (
+                "enroll-project-target",
+                "managed-postgres-review",
+                "select-managed-postgres",
+            )
             else 15
         )
         with selectors.DefaultSelector() as selector:
@@ -328,7 +357,7 @@ def run_cli(request, operation, payload):
             if structured_error:
                 # Chỉ chuyển tiếp đúng mã đã duyệt, không stdout/stderr tùy ý.
                 match = re.fullmatch(
-                    rb"CONTROL_PLANE_ERROR ((?:PROJECT_SOURCE_|PROJECT_TARGET_|TARGET_ENROLLMENT_|PROJECT_READINESS_|VPS_REGISTRATION_|PRODUCT_ENVIRONMENT_|CONTROLLER_SECRET_KEY_|CONTROLLER_VPS_|CONTROLLER_BOOTSTRAP_)[A-Z_]+)\r?\n?",
+                    rb"CONTROL_PLANE_ERROR ((?:PROJECT_SOURCE_|PROJECT_TARGET_|TARGET_ENROLLMENT_|PROJECT_READINESS_|VPS_REGISTRATION_|PRODUCT_ENVIRONMENT_|PRODUCT_POSTGRES_|CONTROLLER_SECRET_KEY_|CONTROLLER_VPS_|CONTROLLER_BOOTSTRAP_)[A-Z_]+)\r?\n?",
                     bytes(error_content),
                 )
                 if match:
@@ -344,6 +373,7 @@ def run_cli(request, operation, payload):
                         )
                         or (vps_check and safe_code in VPS_ERROR_CODES)
                         or (environment_check and safe_code in ENVIRONMENT_ERROR_CODES)
+                        or (postgres_check and safe_code in POSTGRES_ERROR_CODES)
                         or safe_code in SOURCE_ERROR_CODES
                         or (
                             (target_check or readiness_check)
@@ -402,6 +432,12 @@ def main():
         "project-environment-review",
         "select-project-environment",
         "project-environment-selection-state",
+        "project-configuration-context",
+        "prepare-managed-postgres",
+        "managed-postgres-state",
+        "managed-postgres-review",
+        "select-managed-postgres",
+        "managed-postgres-selection-state",
     ):
         raise ValueError()
     try:

@@ -40,7 +40,13 @@ export const installedControllerAdminSchema = z.strictObject({
       'project-environment-context',
       'project-environment-review',
       'select-project-environment',
-      'project-environment-selection-state'
+      'project-environment-selection-state',
+      'project-configuration-context',
+      'prepare-managed-postgres',
+      'managed-postgres-state',
+      'managed-postgres-review',
+      'select-managed-postgres',
+      'managed-postgres-selection-state'
     ]),
     payload: z.record(z.string(), z.unknown())
   })

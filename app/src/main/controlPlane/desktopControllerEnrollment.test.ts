@@ -1,3 +1,4 @@
+import { PRODUCT_POSTGRES_IMAGE } from './productPostgres'
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
@@ -445,5 +446,230 @@ describe('Trusted Desktop controller enrollment', () => {
     await new Promise((resolve) => setTimeout(resolve, 5))
     expect(value.end).not.toHaveBeenCalled()
     expect(value.destroy).toHaveBeenCalled()
+  })
+})
+
+describe('Pinned PostgreSQL admin transport', () => {
+  const request =
+    (): import('../../../../docs/contracts/product-postgres').ProductPostgresPrepareInput => ({
+      format: 1 as const,
+      request_key: randomUUID(),
+      scope: {
+        controller_id: intent.controller_id,
+        app_id: 42,
+        ownership_generation: 1,
+        target: {
+          vps_id: 77,
+          host: 'target.test',
+          port: 22,
+          username: 'operator',
+          auth_type: 'key' as const,
+          host_fingerprint: 'SHA256:' + 'B'.repeat(43),
+          ssh_security_revision: 1
+        }
+      },
+      expected_source_generation: 1,
+      expected_source_config_sha256: 'a'.repeat(64)
+    })
+  const metadata =
+    (): import('../../../../docs/contracts/product-postgres').ProductPostgresMetadata => ({
+      database_id: '11111111-1111-4111-8111-111111111111',
+      controller_id: intent.controller_id,
+      app_id: 42,
+      ownership_generation: 1,
+      framework: 'express' as const,
+      engine: 'postgresql' as const,
+      major: 16 as const,
+      image: PRODUCT_POSTGRES_IMAGE,
+      database_name: 'opspilot' as const,
+      application_user: 'opspilot' as const,
+      administrator_user: 'postgres' as const,
+      created_at: new Date().toISOString(),
+      provisioning: 'prepared' as const
+    })
+  it('guards resource prepare and verifies returned scope, UUID and metadata', async () => {
+    await service.enroll(intent.binding_id)
+    const input = request(),
+      resource = metadata(),
+      guard = vi.fn()
+    reply = (channel) =>
+      respond(channel, { state: 'prepared', request_key: input.request_key, metadata: resource })
+    expect(await service.preparePostgres(intent.binding_id, input, guard)).toEqual({
+      state: 'prepared',
+      request_key: input.request_key,
+      metadata: resource
+    })
+    expect(guard).toHaveBeenCalledOnce()
+    expect(requests.at(-1)).toMatchObject({ operation: 'prepare-managed-postgres', payload: input })
+  })
+  it('uses vault artifact/pin for review and preserves the longer bounded helper-probe timeout', async () => {
+    await service.enroll(intent.binding_id)
+    const input = { ...request(), database_id: metadata().database_id },
+      resource = metadata()
+    reply = (channel) =>
+      respond(channel, {
+        scope: input.scope,
+        source_generation: 1,
+        source_config_sha256: input.expected_source_config_sha256,
+        metadata: resource,
+        auto_deploy_paused: true,
+        deployment_started: false
+      })
+    await service.reviewPostgres(intent.binding_id, input)
+    expect(requests.at(-1)).toMatchObject({
+      operation: 'managed-postgres-review',
+      payload: {
+        artifact: intent.artifact_path,
+        manifest_sha256: intent.manifest_sha256,
+        selection: input
+      }
+    })
+    expect(open.mock.calls.at(-1)?.[2]?.timeoutMs).toBe(30000) // SSH open budget; operation has its own 90s deadline.
+  })
+  it('allows a PG helper review to finish after60s while keeping the operation deadline bounded', async () => {
+    await service.enroll(intent.binding_id)
+    const input = { ...request(), database_id: metadata().database_id },
+      resource = metadata()
+    let waiting: FakeChannel | undefined
+    reply = (value) => {
+      waiting = value
+    }
+    vi.useFakeTimers()
+    try {
+      const running = service.reviewPostgres(intent.binding_id, input)
+      await vi.advanceTimersByTimeAsync(60000)
+      expect(waiting).toBeDefined()
+      expect(waiting!.destroy).not.toHaveBeenCalled()
+      respond(waiting!, {
+        scope: input.scope,
+        source_generation: 1,
+        source_config_sha256: input.expected_source_config_sha256,
+        metadata: resource,
+        auto_deploy_paused: true,
+        deployment_started: false
+      })
+      expect((await running).metadata).toEqual(resource)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+  it('reads prepared state without claiming selected or provisioned runtime', async () => {
+    await service.enroll(intent.binding_id)
+    const value = metadata()
+    reply = (channel) => respond(channel, { metadata: value })
+    expect(await service.postgresState(intent.binding_id, request().scope)).toEqual(value)
+    expect(requests.at(-1)).toMatchObject({ operation: 'managed-postgres-state' })
+  })
+  it('sends selection once with its guard and uses a distinct lookup operation for uncertainty', async () => {
+    await service.enroll(intent.binding_id)
+    const input = { ...request(), database_id: metadata().database_id },
+      guard = vi.fn()
+    const selected = {
+      state: 'selected',
+      request_key: input.request_key,
+      controller_id: intent.controller_id,
+      app_id: 42,
+      ownership_generation: 1,
+      source_generation: 2,
+      source_config_sha256: 'b'.repeat(64),
+      database: {
+        database_id: input.database_id,
+        controller_id: intent.controller_id,
+        ownership_generation: 1
+      },
+      auto_deploy_paused: true,
+      deployment_started: false,
+      execution: 'requires_postgres_runtime'
+    }
+    reply = (channel) => respond(channel, selected)
+    await service.selectPostgres(intent.binding_id, input, guard)
+    expect(guard).toHaveBeenCalledOnce()
+    reply = (channel) =>
+      respond(channel, { result: selected, is_current: true, definitively_unapplied: false })
+    expect((await service.postgresSelectionState(intent.binding_id, input)).result).toEqual(
+      selected
+    )
+    expect(requests.slice(-2).map((r) => r.operation)).toEqual([
+      'select-managed-postgres',
+      'managed-postgres-selection-state'
+    ])
+  })
+  it('validates context scope and original registration basis without changing the binding', async () => {
+    await service.enroll(intent.binding_id)
+    const r = request(),
+      before = vault.resolve(intent.binding_id)
+    const input = {
+      format: 1 as const,
+      controller_id: intent.controller_id,
+      app_id: 42,
+      expected_ownership_generation: 1,
+      expected_source_generation: 1,
+      expected_source_config_sha256: r.expected_source_config_sha256,
+      expected_target_security_revision: 1
+    }
+    const databaseMetadata = metadata()
+    const result = {
+      controller_id: intent.controller_id,
+      scope: r.scope,
+      basis_source_generation: 1,
+      basis_source_config_sha256: r.expected_source_config_sha256,
+      source_generation: 2,
+      source_config_sha256: 'b'.repeat(64),
+      environment: { latest: null, selected: null },
+      database: { prepared: databaseMetadata, selected: databaseMetadata },
+      auto_deploy_paused: true,
+      deployment_started: false
+    }
+    reply = (channel) => respond(channel, result)
+    expect(await service.postgresContext(intent.binding_id, input)).toEqual(result)
+    expect(vault.resolve(intent.binding_id)).toEqual(before)
+    reply = (channel) => respond(channel, { ...result, basis_source_config_sha256: '0'.repeat(64) })
+    await expect(service.postgresContext(intent.binding_id, input)).rejects.toThrow(
+      'CONTROLLER_ADMIN_FAILED'
+    )
+  })
+  it.each(['foreign-app', 'credential-field', 'runtime-ready', 'wrong-image'])(
+    'rejects %s metadata in a Root reply',
+    async (variant) => {
+      await service.enroll(intent.binding_id)
+      const resource = {
+        ...metadata(),
+        ...(variant === 'foreign-app'
+          ? { app_id: 43 }
+          : variant === 'credential-field'
+            ? { password: 'SYNTHETIC_DO_NOT_TRANSPORT' }
+            : variant === 'runtime-ready'
+              ? { provisioning: 'ready' }
+              : { image: 'postgres:latest' })
+      }
+      reply = (channel) => respond(channel, { metadata: resource })
+      await expect(service.postgresState(intent.binding_id, request().scope)).rejects.toThrow(
+        'CONTROLLER_ADMIN_FAILED'
+      )
+    }
+  )
+  it('refuses foreign controller scope before opening a new channel', async () => {
+    await service.enroll(intent.binding_id)
+    const before = open.mock.calls.length,
+      input = request()
+    input.scope.controller_id = 'foreign-controller'
+    await expect(service.preparePostgres(intent.binding_id, input, vi.fn())).rejects.toThrow(
+      'PRODUCT_POSTGRES_AUTHORITY_CHANGED'
+    )
+    expect(open).toHaveBeenCalledTimes(before)
+  })
+  it('preserves only explicitly whitelisted PG error codes', async () => {
+    await service.enroll(intent.binding_id)
+    reply = (channel) => {
+      channel.emit(
+        'data',
+        Buffer.from(JSON.stringify({ ok: false, code: 'PRODUCT_POSTGRES_HELPER_UPGRADE_REQUIRED' }))
+      )
+      channel.emit('end')
+      channel.emit('close', 0)
+    }
+    await expect(service.postgresState(intent.binding_id, request().scope)).rejects.toThrow(
+      'PRODUCT_POSTGRES_HELPER_UPGRADE_REQUIRED'
+    )
   })
 })
