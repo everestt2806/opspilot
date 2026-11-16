@@ -1,5 +1,8 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **16/11 — R7h-4d1 exact-instance metadata PASS:** DB UUID+app/owner/current source/target checks prevent same-name PostgreSQL cross-routing on one VPS; readonly SQLite/no writes/credentials/job/runtime-ready claim. Deployment preflight retains quiescence, inspection metadata permits auto-deploy enabled.113focused/full2646PASS+2existingLinuxSKIP/types/lint/build + standalone SQLite CLI5checks/cleanup PASS. No serving mutation:8apps/2PG/controller4bc4590 remain. Native target reader/SQL table view/MainIPC/UI inspector still OPEN. [Task](tasks/tk-s7-release-r7h4d-database-inspector.md); [proof](ui-redesign/r7h4d1-verification.json). SHA: `git log -1 -- app/src/main/controlPlane/productPostgresInspection.ts`.
+
+
 > **16/11 — R7h-4c5b real Main PostgreSQL PASS:** App8 pg-main-2a6785f2e51e/30007 uses Main038 prepare/select receipts, source Git/readiness/firstDeployment;4jobs initial/update/healthrollback/finald30/1000rows/HTTP200/signedterminal settled and PGidentity/volume unchanged. No operatorPGrelay/fakeENV. Original7apps+PGdata untouched;8apps/2PG/allpaused/0activejobs-clients-leases, revoked/privatecleanup. Fresh database metric22.279ms/age8.645sec via pinned SSH. Changedscript lint/format/types + actualVPS PASS; core C5a full2643+2existingLinuxSKIP baseline unchanged. Inspector/productbackup/migrate/directupload/formalML/release OPEN. [Task](tasks/tk-s7-release-r7h4c5-postgres-desktop-rollout.md); [proof](ui-redesign/r7h4c5-app-verification.json). SHA: `git log -1 -- docs/ui-redesign/r7h4c5-app-verification.json`.
 
 

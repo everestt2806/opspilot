@@ -1,3 +1,6 @@
+import { reviewPostgresInspection } from '../controlPlane/productPostgresInspection'
+import { ProductPostgresPreflight } from '../controlPlane/productPostgresPreflight'
+import type { ProductPostgresInspectionInput } from '../../../../docs/contracts/product-postgres-inspection'
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -1044,5 +1047,149 @@ describe('Exact PostgreSQL prepare receipt recovery', () => {
     expect(
       observer.lookupPrepare(pending, scope.controller_id, 'unix:1000').result?.metadata
     ).toEqual(result.metadata)
+  })
+})
+
+describe('Explicit PostgreSQL inspection configuration', () => {
+  const selectedInspection = (): ProductPostgresInspectionInput => {
+    const resource = prepare()
+    const selected = new ProductPostgresSelection(db, cipher).select(
+      { ...input(), database_id: resource.metadata.database_id },
+      scope.controller_id,
+      'unix:1000'
+    )
+    return {
+      format: 1,
+      controller_id: scope.controller_id,
+      app_id: 1,
+      expected_ownership_generation: 1,
+      expected_source_generation: selected.source_generation,
+      expected_source_config_sha256: selected.source_config_sha256,
+      expected_target_security_revision: 1,
+      database_id: resource.metadata.database_id
+    }
+  }
+  it('requires exact instance even for two databases with the same name on one VPS, returns no runtime health or secrets, and never writes', () => {
+    const first = selectedInspection()
+    const secondSource = canonicalH2Json({ ...JSON.parse(source), host_port: 30001 }),
+      secondHash = createHash('sha256').update(secondSource).digest('hex')
+    db.exec(
+      "INSERT INTO app(id,vps_id,name,framework,host_port,container_port,healthcheck_path,source_type,git_repo_url,git_ref,git_root) VALUES(2,1,'second','express',30001,3000,'/health','git','https://example.test/app.git','main','.')"
+    )
+    db.prepare(
+      "INSERT INTO product_source_config VALUES(2,1,'https://example.test/app.git','main','.',?,?,'2026-11-16T00:00:00.000Z')"
+    ).run(secondSource, secondHash)
+    db.prepare(
+      "INSERT INTO product_app_control(app_id,mode,controller_id,ownership_generation,source_generation,source_config_sha256,auto_deploy_paused,pause_reason,pause_policy_provenance,changed_at) VALUES(2,'product','postgres-test',1,1,?,1,'operator','explicit','2026-11-16T00:00:00.000Z')"
+    ).run(secondHash)
+    const secondRequest = {
+      ...input(),
+      scope: { ...scope, app_id: 2 },
+      expected_source_config_sha256: secondHash
+    }
+    const resource = store.prepare(secondRequest, scope.controller_id, 'unix:1000')
+    const selected = new ProductPostgresSelection(db, cipher).select(
+      { ...secondRequest, database_id: resource.metadata.database_id },
+      scope.controller_id,
+      'unix:1000'
+    )
+    const second = {
+      ...first,
+      app_id: 2,
+      expected_source_config_sha256: selected.source_config_sha256,
+      database_id: resource.metadata.database_id
+    }
+    const before = db.prepare('SELECT total_changes() n').get()
+    const a = reviewPostgresInspection(db, cipher, scope.controller_id, first),
+      b = reviewPostgresInspection(db, cipher, scope.controller_id, second)
+    expect(a.database.database_name).toBe(b.database.database_name)
+    expect(a.database.database_id).not.toBe(b.database.database_id)
+    const readonly = new Database(join(directory, 'opspilot.db'), {
+      readonly: true,
+      fileMustExist: true
+    })
+    connections.push(readonly)
+    expect(reviewPostgresInspection(readonly, cipher, scope.controller_id, first)).toEqual(a)
+    expect(a.runtime_status).toBe('not_checked')
+    expect(a.state).toBe('configuration_verified')
+    expect(() =>
+      reviewPostgresInspection(db, cipher, scope.controller_id, {
+        ...first,
+        database_id: second.database_id
+      })
+    ).toThrow('PRODUCT_POSTGRES_UNAVAILABLE')
+    const credentials = store.readCredentials(scope, first.database_id)
+    expect(JSON.stringify([a, b])).not.toContain(credentials.application_password)
+    expect(JSON.stringify([a, b])).not.toContain(credentials.administrator_password)
+    expect(db.prepare('SELECT total_changes() n').get()).toEqual(before)
+    expect(db.prepare('SELECT count(*) n FROM product_deploy_job').get()).toEqual({ n: 0 })
+  })
+  it('allows inspection metadata while auto-deploy is enabled without weakening deployment preflight', () => {
+    const request = selectedInspection()
+    db.prepare(
+      'UPDATE product_app_control SET auto_deploy_paused=0,pause_reason=NULL WHERE app_id=1'
+    ).run()
+    expect(
+      reviewPostgresInspection(db, cipher, scope.controller_id, request).database.database_id
+    ).toBe(request.database_id)
+    expect(() => ProductPostgresPreflight.review(db, request, cipher)).toThrow(
+      'PRODUCT_POSTGRES_UNAVAILABLE'
+    )
+    expect(db.prepare('SELECT auto_deploy_paused FROM product_app_control').get()).toEqual({
+      auto_deploy_paused: 0
+    })
+  })
+  it('refuses missing instance, extra SQL/path, wrong controller/owner/source/target and prepared-only resource', () => {
+    const resource = prepare()
+    const request = {
+      format: 1,
+      controller_id: scope.controller_id,
+      app_id: 1,
+      expected_ownership_generation: 1,
+      expected_source_generation: 1,
+      expected_source_config_sha256: hash,
+      expected_target_security_revision: 1,
+      database_id: resource.metadata.database_id
+    }
+    expect(() => reviewPostgresInspection(db, cipher, scope.controller_id, request)).toThrow(
+      'PRODUCT_POSTGRES_UNAVAILABLE'
+    )
+    const selected = new ProductPostgresSelection(db, cipher).select(
+      { ...input(), database_id: resource.metadata.database_id },
+      scope.controller_id,
+      'unix:1000'
+    )
+    const current = {
+      ...request,
+      expected_source_generation: selected.source_generation,
+      expected_source_config_sha256: selected.source_config_sha256
+    }
+    for (const changed of [
+      { database_id: undefined },
+      { sql: 'SELECT 1' },
+      { path: '/tmp/x' },
+      { expected_ownership_generation: 2 },
+      { expected_source_generation: 1 },
+      { expected_target_security_revision: 2 },
+      { expected_source_config_sha256: 'b'.repeat(64) },
+      { controller_id: 'foreign' }
+    ])
+      expect(() =>
+        reviewPostgresInspection(db, cipher, scope.controller_id, { ...current, ...changed })
+      ).toThrow()
+    expect(() =>
+      reviewPostgresInspection(
+        db,
+        new AesGcmCredentialCipher(randomBytes(32)),
+        scope.controller_id,
+        current
+      )
+    ).toThrow('PRODUCT_POSTGRES_UNAVAILABLE')
+    db.exec('BEGIN')
+    expect(() => reviewPostgresInspection(db, cipher, scope.controller_id, current)).toThrow(
+      'PRODUCT_POSTGRES_INPUT_INVALID'
+    )
+    expect(db.inTransaction).toBe(true)
+    db.exec('ROLLBACK')
   })
 })

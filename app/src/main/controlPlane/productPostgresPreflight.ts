@@ -29,6 +29,27 @@ export class ProductPostgresPreflight {
       | Omit<ProductProjectSourceVerificationInput, 'artifact' | 'manifest_sha256'>,
     cipher?: AesGcmCredentialCipher
   ): ProductPostgresPreflight | null {
+    return this.read(db, input, cipher, true)
+  }
+  /** Read-only inspection metadata never pauses auto-deploy or authorizes a job.
+   * Current source/owner/target/key checks are identical; a target read must still
+   * revalidate this snapshot and its independently pinned resource identity.
+   */
+  static reviewForInspection(
+    db: Database.Database,
+    input: Omit<ProductProjectSourceVerificationInput, 'artifact' | 'manifest_sha256'>,
+    cipher: AesGcmCredentialCipher
+  ): ProductPostgresPreflight | null {
+    return this.read(db, input, cipher, false)
+  }
+  private static read(
+    db: Database.Database,
+    input:
+      | ProductProjectSourceVerificationInput
+      | Omit<ProductProjectSourceVerificationInput, 'artifact' | 'manifest_sha256'>,
+    cipher: AesGcmCredentialCipher | undefined,
+    requireQuiescence: boolean
+  ): ProductPostgresPreflight | null {
     const fail = (): never => {
       throw new ProductPostgresError('PRODUCT_POSTGRES_UNAVAILABLE')
     }
@@ -68,7 +89,7 @@ export class ProductPostgresPreflight {
           input.controller_id,
           input.app_id,
           input.expected_ownership_generation,
-          true
+          requireQuiescence
         )
         if (target.ssh_security_revision !== input.expected_target_security_revision) fail()
         const scope = {
