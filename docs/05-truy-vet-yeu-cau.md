@@ -1,5 +1,8 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **16/11 — R7h-4b2 app acceptance PASS nội bộ:** App PostgreSQL mới7/30006 qua deploy/update/healthrollback/final,1.000rows + cùng CID/volume/systemID; collector database measured, pg_dump/isolated clone restore khớp count/content và clone removed. Original6apps/helpers/source/env/key/12CID unchanged/HTTP200, scoped client revoked/private profile cleaned/7policiespaused. Controller37/releasecc8 giữ nguyên. Main/IPC/UI database selection/instance context và product backup/restore/migrate vẫn OPEN; không gọi operator gate là GUI complete. Formal ML NOT_RUN chờ2VPSriêng. [Task](tasks/tk-s7-release-r7h4b2-postgres-rollout.md); [proof](ui-redesign/r7h4b2-app-verification.json). SHA tra `git log -1 -- app/scripts/product-postgres-app-live/run.mjs`.
+
+
 > **16/11 — R7h-4b2 controller rollout CHỜ REVIEW:** Actual Main upgradeUUIDaaf2d779 nâng VPS167 lên schema37/releasecc8/payload32167/UID997 ready. Sáu app/12CID/source/env/helpers/key/DBinode giữ nguyên, HTTP200 cả6, Root-sealed backup35 đúng hash/mode0440+dir0550. Token/client giữ qua refresh rồi revoke client thử; private profile dọn,0jobs/experiments/clients. Chỉ controller đã nâng: PG resource/app count0, Main/UI database chưa sẵn sàng. Tiếp tục app PG acceptance. [Task](tasks/tk-s7-release-r7h4b2-postgres-rollout.md); [proof](ui-redesign/r7h4b2-controller-verification.json). SHA tra `git log -1 -- docs/ui-redesign/r7h4b2-controller-verification.json`.
 
 
