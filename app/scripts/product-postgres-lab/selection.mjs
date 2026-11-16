@@ -277,6 +277,27 @@ try {
   assert.equal(db.prepare('SELECT count(*) n FROM product_deploy_job').get().n, 0)
   assert.deepEqual(readFileSync(join(data, '.controller-runtime-key')), keyBefore)
   check('production_CLI_selects_once_preserves_key_and_pause_no_job_or_runtime_readiness_claim')
+  if (process.env.OPSPILOT_POSTGRES_INSPECTION_GATE === '1') {
+    stage = 'native-controller-inspection'
+    proof.Docker_used = true
+    const { inspectSelectedPostgres } =
+      await import('../product-postgres-inspection-lab/bridge.mjs')
+    await inspectSelectedPostgres({
+      db,
+      data,
+      scope,
+      root,
+      scratch,
+      modules,
+      artifact,
+      bundlePin,
+      prepared,
+      selected,
+      nonce,
+      cli,
+      check
+    })
+  }
   if (sourceFixture) {
     stage = 'public-Git-source-readiness'
     const input = {
@@ -507,6 +528,8 @@ except Exception as error:print(json.dumps({'lines':[frame.lineno for frame in t
   assert.deepEqual(db.pragma('foreign_key_check'), [])
   proof.state = 'PASS'
 } catch (error) {
+  const fixtureFailure = /\{"fixture_failure_lines": \[[0-9, ]+\]\}/.exec(error?.message ?? '')?.[0]
+  if (fixtureFailure) proof.fixture_failure = JSON.parse(fixtureFailure)
   proof.stage = stage
   proof.error = error?.code === 'ERR_ASSERTION' ? 'ASSERTION_FAILED' : 'SELECTION_LAB_FAILED'
   proof.failure_location = /selection\.mjs:\d+:\d+/.exec(error?.stack ?? '')?.[0] ?? 'unknown'

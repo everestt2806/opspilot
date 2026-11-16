@@ -1,3 +1,7 @@
+import {
+  ProductPostgresInspectorCommands,
+  postgresInspectionCommandSchema
+} from './productPostgresInspectorCommands'
 import { readProjectConfigurationContext } from './projectConfigurationContext'
 import { lstatSync } from 'node:fs'
 import { join } from 'node:path'
@@ -27,7 +31,8 @@ export async function runProductPostgresCli(
     | 'managed-postgres-review'
     | 'select-managed-postgres'
     | 'managed-postgres-selection-state'
-    | 'project-configuration-context',
+    | 'project-configuration-context'
+    | 'managed-postgres-inspection',
   directory: string,
   input: unknown,
   signal?: AbortSignal
@@ -90,6 +95,24 @@ export async function runProductPostgresCli(
       marker.controller_id !== controllers[0].controller_id
     )
       throw new ProductPostgresError('PRODUCT_POSTGRES_AUTHORITY_CHANGED')
+    if (command === 'managed-postgres-inspection') {
+      const request = postgresInspectionCommandSchema.safeParse(input)
+      if (
+        !request.success ||
+        request.data.inspection.context.controller_id !== marker.controller_id
+      )
+        throw new ProductPostgresError('PRODUCT_POSTGRES_INPUT_INVALID')
+      const bundle = verifyControllerBundle(request.data.artifact, request.data.manifest_sha256)
+      const inspector = new ProductPostgresInspectorCommands(
+        db,
+        loadControllerCredentialCipher(root),
+        root,
+        controllers[0].controller_id,
+        bundle
+      )
+      console.log(JSON.stringify(await inspector.read(request.data.inspection, signal)))
+      return
+    }
     if (command === 'managed-postgres-prepare-state') {
       console.log(
         JSON.stringify(

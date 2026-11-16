@@ -1,3 +1,4 @@
+import { ProductPostgresInspectorCommands } from '../controlPlane/productPostgresInspectorCommands'
 import { reviewPostgresInspection } from '../controlPlane/productPostgresInspection'
 import { ProductPostgresPreflight } from '../controlPlane/productPostgresPreflight'
 import type { ProductPostgresInspectionInput } from '../../../../docs/contracts/product-postgres-inspection'
@@ -1191,5 +1192,158 @@ describe('Explicit PostgreSQL inspection configuration', () => {
     )
     expect(db.inTransaction).toBe(true)
     db.exec('ROLLBACK')
+  })
+})
+
+describe('Controller PostgreSQL inspector response and async authority', () => {
+  const fixture = (): {
+    context: ProductPostgresInspectionInput
+    instance: Record<string, unknown>
+    wire: (read: unknown, data: unknown) => unknown
+  } => {
+    const resource = prepare(),
+      selected = new ProductPostgresSelection(db, cipher).select(
+        { ...input(), database_id: resource.metadata.database_id },
+        scope.controller_id,
+        'unix:1000'
+      )
+    const context = {
+      format: 1 as const,
+      controller_id: scope.controller_id,
+      app_id: 1,
+      expected_ownership_generation: 1,
+      expected_source_generation: selected.source_generation,
+      expected_source_config_sha256: selected.source_config_sha256,
+      expected_target_security_revision: 1,
+      database_id: resource.metadata.database_id
+    }
+    const instance = {
+      database_id: resource.metadata.database_id,
+      container_id: 'a'.repeat(64),
+      image_id: 'sha256:' + 'b'.repeat(64),
+      volume: 'opspilot-pg-' + resource.metadata.database_id + '-data',
+      volume_created_at: '2026-11-16T00:00:00Z',
+      system_identifier: '1234567890123456789',
+      state: 'ready',
+      public_port: null
+    }
+    const wire = (read: unknown, data: unknown): unknown => ({
+      ok: true,
+      data: { format: 1, operation: read, instance, data }
+    })
+    return { context, instance, wire }
+  }
+  const subject = (
+    readTarget: NonNullable<
+      ConstructorParameters<typeof ProductPostgresInspectorCommands>[5]
+    >['readTarget']
+  ): ProductPostgresInspectorCommands =>
+    new ProductPostgresInspectorCommands(
+      db,
+      cipher,
+      directory,
+      scope.controller_id,
+      {} as VerifiedControllerBundle,
+      { readTarget }
+    )
+  it('returns bounded metadata and samples only after current source authority recheck without SQL writes', async () => {
+    const f = fixture(),
+      before = db.prepare('SELECT total_changes() n').get()
+    const read = { operation: 'rows' as const, schema: 'public', table: 'sample', limit: 2 }
+    const target = vi.fn(async (context, operation) => {
+      expect(context.database.database_id).toBe(f.context.database_id)
+      return f.wire(operation, [{ id: 1, marker: 'fixture' }])
+    })
+    const result = await subject(target).read({ context: f.context, read })
+    expect(result.data).toEqual([{ id: 1, marker: 'fixture' }])
+    expect(result.context.runtime_status).toBe('not_checked')
+    expect(result.instance.database_id).toBe(f.context.database_id)
+    expect(result.checked_at).toMatch(/Z$/)
+    expect(db.prepare('SELECT total_changes() n').get()).toEqual(before)
+    expect(JSON.stringify(result)).not.toContain('password')
+    expect(target).toHaveBeenCalledTimes(1)
+  })
+  it('refuses invalid source or arbitrary SQL before target I/O', async () => {
+    const f = fixture(),
+      target = vi.fn(),
+      reader = subject(target)
+    await expect(
+      reader.read({
+        context: { ...f.context, database_id: randomUUID() },
+        read: { operation: 'inspect' }
+      })
+    ).rejects.toThrow()
+    await expect(
+      reader.read({ context: f.context, read: { operation: 'query', sql: 'SELECT 1' } })
+    ).rejects.toThrow('POSTGRES_INSPECTION_INPUT_INVALID')
+    await expect(
+      reader.read({
+        context: f.context,
+        read: { operation: 'rows', schema: 'public', table: 'x', limit: 101 }
+      })
+    ).rejects.toThrow('POSTGRES_INSPECTION_INPUT_INVALID')
+    await expect(
+      reader.read({ context: f.context, read: { operation: 'inspect' } }, AbortSignal.abort())
+    ).rejects.toThrow('POSTGRES_INSPECTION_TIMEOUT')
+    expect(target).not.toHaveBeenCalled()
+  })
+  it('discards data when target/source changes during I/O rather than returning a stale result', async () => {
+    const f = fixture()
+    const target: NonNullable<
+      NonNullable<ConstructorParameters<typeof ProductPostgresInspectorCommands>[5]>['readTarget']
+    > = async (_context, read) => {
+      db.exec('UPDATE vps SET ssh_security_revision=2 WHERE id=1')
+      return f.wire(read, null)
+    }
+    await expect(
+      subject(target).read({ context: f.context, read: { operation: 'inspect' } })
+    ).rejects.toThrow('POSTGRES_INSPECTION_AUTHORITY_CHANGED')
+  })
+  it('reports cancellation during target I/O without exposing transport error contents', async () => {
+    const f = fixture(),
+      controller = new AbortController()
+    const reader = subject(async () => {
+      controller.abort()
+      throw new Error('SYNTHETIC_TRANSPORT_PRIVATE_DETAIL')
+    })
+    await expect(
+      reader.read({ context: f.context, read: { operation: 'inspect' } }, controller.signal)
+    ).rejects.toThrow('POSTGRES_INSPECTION_TIMEOUT')
+  })
+  it('refuses cross-instance, unexpected fields, mismatched operations, oversized sample and raw errors', async () => {
+    const f = fixture(),
+      read = { operation: 'rows' as const, schema: 'public', table: 'sample', limit: 1 }
+    const values = [
+      {
+        ok: true,
+        data: {
+          format: 1,
+          operation: read,
+          instance: { ...f.instance, database_id: randomUUID() },
+          data: []
+        }
+      },
+      {
+        ok: true,
+        data: {
+          format: 1,
+          operation: read,
+          instance: { ...f.instance, password: 'SYNTHETIC_PRIVATE' },
+          data: []
+        }
+      },
+      f.wire({ operation: 'inspect' }, []),
+      f.wire(read, [{ id: 1 }, { id: 2 }]),
+      { ok: false, code: 'SYNTHETIC_PRIVATE_DETAIL' }
+    ]
+    for (const value of values) {
+      try {
+        await subject(async () => value).read({ context: f.context, read })
+        throw Error('UNEXPECTED_ACCEPTANCE')
+      } catch (error) {
+        expect((error as Error).message).toMatch(/^POSTGRES_INSPECTION_/)
+        expect((error as Error).message).not.toContain('SYNTHETIC_PRIVATE')
+      }
+    }
   })
 })

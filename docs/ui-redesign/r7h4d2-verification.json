@@ -1,0 +1,253 @@
+{
+  "status": "PASS_R7H4D2_BACKEND_CLI_ONLY",
+  "checkpoint": "R7h-4d2",
+  "base_commit": "ed23e40",
+  "scope": "FINITE_READONLY_TARGET_AND_CONTROLLER_CLI_ONLY",
+  "VPS_used": false,
+  "production_database_used": false,
+  "serving_release_changed": false,
+  "serving_baseline": "controller ce4d6711 / 4bc4590 / schema37; eight apps and two private PostgreSQL instances unchanged by this checkpoint",
+  "operations": [
+    "inspect",
+    "tables",
+    "rows schema-qualified limit 1..100"
+  ],
+  "authority": "Exact current app/controller/owner/source/target revision/database UUID revalidated before and after network I/O; existing authenticated resource identity and pinned helper bytes checked on target",
+  "limits": {
+    "reply_bytes": 65536,
+    "request_bytes": 131072,
+    "tables": 200,
+    "columns_per_table": 128,
+    "sample_rows": 100,
+    "statement_timeout_seconds": 3,
+    "lock_timeout_seconds": 1
+  },
+  "target_native": {
+    "raw_path": "app\\.out-scripts\\product-postgres-inspection-native\\e1a667e8f855\\proof.json",
+    "raw_sha256": "62110a656611730f6aff61f52430dcdda625d0389a4ab4fb0be57d864da60540",
+    "proof": {
+      "status": "PASS",
+      "nonce": "e1a667e8f855",
+      "scope": "PRIVATE_TWO_INSTANCE_OPENSSH_DOCKER_READER",
+      "VPS_used": false,
+      "production_database_used": false,
+      "checks": [
+        "pinned_private_SSH_authentication_verified_before_any_Docker_resource",
+        "explicit_private_fixture_provisions_two_same_name_databases_on_one_target_without_public_ports",
+        "actual_pinned_OpenSSH_inspect_tables_and_rows_route_each_database_UUID_to_its_own_data",
+        "wrong_database_UUID_never_falls_back_to_other_existing_same_name_container",
+        "actual_PostgreSQL_unicode_quotes_and_SQL_punctuation_identifiers_roundtrip_without_injection",
+        "views_and_oversize_results_refuse_without_silent_empty_or_truncation",
+        "wrong_credential_binding_is_rejected_without_rotation_or_readback",
+        "wrong_independent_host_key_pin_rejects_SSH_before_target_reader",
+        "both_instance_CIDs_volumes_systemIDs_journals_and_data_remain_unchanged_after_reads_and_refusals"
+      ],
+      "subject_sha256": "d4ea3d48dc29299ad08165a9ebcb1cec43a6d71c0f67e11d13b3af30cf6a9907",
+      "script_sha256": "3fefcfd84ea6c38ad4fdf19e42396e88080a61d83bad6de569eb0f78f88d479f",
+      "enrollment_sha256": "546cba32411870226e63eb36e15edd0f0a015cdcde4ef8f23989bc025f7741ab",
+      "last_reader_code": "OK",
+      "instances": [
+        {
+          "database_id": "6265e708-a2ee-45da-96ef-a2a0fcc32134",
+          "container_id": "d064c4eb4c8b0a0fa146d7571a9f6de4d9cfba42f3ccb2298f3518c66a996fe9",
+          "image_id": "sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e",
+          "volume": "opspilot-pg-6265e708-a2ee-45da-96ef-a2a0fcc32134-data",
+          "volume_created_at": "2026-11-16T13:43:42Z",
+          "system_identifier": "7708764615550898210",
+          "state": "ready",
+          "public_port": null
+        },
+        {
+          "database_id": "720b801c-2148-4fbf-aedd-47808126f909",
+          "container_id": "1809eece20c95b974872a6affa1a7b8c4802278a0034ed6f41b2c1b2f272e6a5",
+          "image_id": "sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e",
+          "volume": "opspilot-pg-720b801c-2148-4fbf-aedd-47808126f909-data",
+          "volume_created_at": "2026-11-16T13:44:03Z",
+          "system_identifier": "7708764707754270754",
+          "state": "ready",
+          "public_port": null
+        }
+      ],
+      "private_cleanup": true
+    }
+  },
+  "controller_CLI_native": {
+    "raw_path": "app\\.out-scripts\\product-postgres-selection\\bc3e2fc32e0d\\proof.json",
+    "raw_sha256": "ed37fd8d2a68afeb4ade900d15d07f24d59b7986bd59bcaff9032889ffeffc69",
+    "proof": {
+      "state": "PASS",
+      "nonce": "bc3e2fc32e0d",
+      "production_vps_used": false,
+      "production_database_used": false,
+      "Docker_used": true,
+      "artifact_sha256": "14bfa606deb8ccbebfd2f324fef20062eaa6d4e339ac4a028e78af4d867746f7",
+      "checks": [
+        "missing_enrollment_refuses_selection_without_source_mutation",
+        "actual_SSH_manifest_helper_bytes_key_and_receipt_review_is_readonly",
+        "actual_helper_tamper_refuses_selection_without_clearing_enrollment",
+        "wrong_local_bundle_pin_rejected_before_source_selection",
+        "production_CLI_selects_once_preserves_key_and_pause_no_job_or_runtime_readiness_claim",
+        "production_same_UID_CLI_cipher_and_pinned_SSH_inspect_tables_rows_reach_selected_instance",
+        "production_CLI_refuses_wrong_instance_limit_and_bundle_pin",
+        "controller_inspection_preserves_CID_volume_system_ID_journal_rows_configuration_and_zero_jobs",
+        "controller_inspection_private_Docker_resources_removed_by_exact_ownership",
+        "production_CLI_reviews_DB_only_source_from_original_registration_without_provisioning_or_job",
+        "actual_same_UID_Python_admin_verifies_ELF_bundle_key_SQLite_then_runs_seven_fixed_PostgreSQL_operations",
+        "Python_admin_forwards_only_approved_PostgreSQL_error_and_never_starts_job",
+        "readonly_prepare_receipt_available_after_source_advance_without_replaying_prepare",
+        "cold_offline_same_UUID_lookup_replay_and_conflicting_body_refusal"
+      ],
+      "last_command": "select-managed-postgres",
+      "last_error": "PRODUCT_POSTGRES_REQUEST_CONFLICT",
+      "admin_node_ancestry": [
+        {
+          "path": "/tmp",
+          "uid": 0,
+          "mode": 1023,
+          "symlink": false
+        },
+        {
+          "path": "/tmp/opspilot-pg-selection-Eifs0O",
+          "uid": 0,
+          "mode": 448,
+          "symlink": false
+        },
+        {
+          "path": "/tmp/opspilot-pg-selection-Eifs0O/node",
+          "uid": 0,
+          "mode": 493,
+          "symlink": false
+        }
+      ],
+      "admin_last_operation": "project-configuration-context",
+      "admin_last_error": "PRODUCT_POSTGRES_AUTHORITY_CHANGED",
+      "private_cleanup": true
+    },
+    "runner": {
+      "exit_code": 0,
+      "seconds": 38.55,
+      "command": [
+        "wsl",
+        "-d",
+        "Ubuntu",
+        "-u",
+        "root",
+        "--",
+        "env",
+        "NODE_PATH=/var/tmp/opspilot-p3e3a-runtime/node_modules",
+        "OPSPILOT_CONTROL_PLANE_MODULES=/var/tmp/opspilot-p3e3a-runtime/node_modules",
+        "OPSPILOT_CONTROL_PLANE_OUTPUT=/var/tmp/opspilot-r7h4d2-build-akrsza/payload/control-plane.cjs",
+        "OPSPILOT_POSTGRES_INSPECTION_GATE=1",
+        "/home/everestt2806/.npm/_npx/52027bd8fc0022aa/node_modules/node/bin/node",
+        "/mnt/d/Developing/DuAnCNTT/app/scripts/product-postgres-lab/selection.mjs",
+        "--confirm-local-postgres-selection"
+      ]
+    }
+  },
+  "focused": {
+    "Vitest": 118,
+    "PG": 63,
+    "source": 44,
+    "readiness": 11,
+    "Linux_Python": 8
+  },
+  "quality": {
+    "Node_Web_typecheck": "PASS",
+    "scripts_typecheck": "PASS",
+    "scoped_ESLint": "PASS_0_ERRORS_0_WARNINGS",
+    "Ruff_lint": "PASS",
+    "Ruff_format": "PASS_5_FILES"
+  },
+  "reproduction": "app/scripts/product-postgres-inspection-lab/README.md",
+  "known_private_lab_failures": [
+    "1666e92c6adc: SSH refused; initial cleanup rejected Docker Desktop engine metadata; separate exact-owned cleanup receipt PASS",
+    "bec0f9194683: SSH refused before reads; cleanup PASS; temporary SSH fixture aligned StrictModes=no, pinned SSH verified before Docker creation thereafter",
+    "4db0df9db96d/be8c03a76853/9416ca0cb15f: fixture network omitted mandatory owner labels, refused before query; cleanup PASS; fixture labels corrected without product guard changes"
+  ],
+  "not_claimed": [
+    "installed admin transport for inspector",
+    "Main IPC or UI inspector",
+    "serving release approval or rollout",
+    "product backup/restore",
+    "formal ML experiments"
+  ],
+  "next": "R7h-4d3 contract/admin/Main/IPC/read-only project inspector UI, then separate frozen candidate release gates; STOP after current checkpoint per user request",
+  "source_sha256": {
+    "app/src/main/controlPlane/productPostgresInspectorCommands.ts": "bf18eb8d1b5319f43a702a6deab4093e030e90195233115d71b43748c1b195f6",
+    "app/src/main/controlPlane/target_postgres_inspection.py": "d4ea3d48dc29299ad08165a9ebcb1cec43a6d71c0f67e11d13b3af30cf6a9907",
+    "app/src/main/controlPlane/productPostgresCli.ts": "219a2832b5c0149f647dae6d0040efeac989a96053ad07999acb9b98a827a26f",
+    "app/src/main/controlPlane/cli.ts": "7ccf31c0d64e9fe52f12f972ec4b788a05943847a763fc85b33617affca25848",
+    "app/scripts/build-control-plane.mjs": "280b783a4e6d5a7e5a2ba4aaf265f3db6af43108faea68fed71fad896c4f04ba",
+    "app/scripts/product-postgres-inspection-lab/native.py": "4337e559d736ccd4da40e63b2a24b6fd99e5c86a1cf77163192bef280e183bfd",
+    "app/scripts/product-postgres-inspection-lab/bridge.mjs": "3f1b553f089379a2d5af4881b21de6e3aed92c1a315961088d5d179333c8c9dc",
+    "app/scripts/product-postgres-inspection-lab/bridge_fixture.py": "d25e132a57772d238dc21efaa17b90e6971491a5120d8d345d96e89c7a929746",
+    "app/scripts/product-runtime-lab/test_target_postgres_inspection.py": "0b55caef23cdb2cbc1a0209b3dd339ed0c3a50768ef887ea3e49c9814fc25fb3",
+    "app/src/main/db/productPostgresRepository.test.ts": "e80671750a5d4ccb465265c5ca20ebc79d6dd05df8953c689fbb13c4902fe67b",
+    "docs/contracts/product-postgres-inspection.ts": "c4514a13298bf8efb85459210976239acab5dfcfd40f115e20defdd0aa8b4129"
+  },
+  "final_artifact_matches_native_CLI": true,
+  "final_reader_matches_native_pair": true,
+  "gates": [
+    {
+      "name": "full",
+      "command": [
+        "pnpm.cmd",
+        "--prefix",
+        "app",
+        "exec",
+        "vitest",
+        "run",
+        "--reporter=dot"
+      ],
+      "exit_code": 0,
+      "seconds": 357.84,
+      "log": "app\\.out-scripts\\r7h4d2-full.log"
+    },
+    {
+      "name": "build",
+      "command": [
+        "pnpm.cmd",
+        "--prefix",
+        "app",
+        "build"
+      ],
+      "exit_code": 0,
+      "seconds": 70.95,
+      "log": "app\\.out-scripts\\r7h4d2-build.log"
+    }
+  ],
+  "full_tests": {
+    "passed": 2651,
+    "existing_Linux_skips": 2,
+    "failed": 0,
+    "files_passed": 183
+  },
+  "accepted_exceptions": [],
+  "requirements": [
+    {
+      "requirement": "Finite bounded read-only target operations and authenticated exact-instance identity",
+      "state": "PASS",
+      "evidence": "Python8 + target native9"
+    },
+    {
+      "requirement": "Current controller/source/owner/target/UUID authority before and after I/O, safe response/errors/cancellation",
+      "state": "PASS",
+      "evidence": "PG63/source44/readiness11 focused + actual controller CLI14"
+    },
+    {
+      "requirement": "No provisioning/job/credentials output/5432 exposure from inspector, data and runtime identities preserved",
+      "state": "PASS",
+      "evidence": "target native9 and controller CLI14, exact-owned fixture cleanup"
+    },
+    {
+      "requirement": "Final relevant source focused/full/typecheck/lint/format/build and independent CLI acceptance",
+      "state": "PASS",
+      "evidence": "118focused/2651full+2existingSKIP/Python8/types/lint/format/build/native9+14"
+    },
+    {
+      "requirement": "Task/board/contract/decision/proof and checkpoint push, no serving mutation",
+      "state": "PASS",
+      "evidence": "current checkpoint files; normal branch push after commit"
+    }
+  ]
+}

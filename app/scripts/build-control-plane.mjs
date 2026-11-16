@@ -47,9 +47,9 @@ await esbuild.build({
   minify: false,
   plugins: [
     {
-      name: 'migration-sql-raw-loader',
+      name: 'controller-raw-source-loader',
       setup(build) {
-        build.onResolve({ filter: /\.sql\?raw$/ }, (args) => ({
+        build.onResolve({ filter: /\.(sql|py)\?raw$/ }, (args) => ({
           path: resolve(args.resolveDir, args.path.replace(/\?raw$/, '')),
           namespace: 'migration-sql'
         }))
