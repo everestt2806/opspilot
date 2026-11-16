@@ -133,7 +133,8 @@ describe('PostgreSQL installed admin operation boundary', () => {
     'managed-postgres-prepare-state',
     'managed-postgres-review',
     'select-managed-postgres',
-    'managed-postgres-selection-state'
+    'managed-postgres-selection-state',
+    'managed-postgres-inspection'
   ] as const)('admits fixed operation %s without caller executable or user IDs', (operation) => {
     expect(
       installedControllerAdminSchema.safeParse({

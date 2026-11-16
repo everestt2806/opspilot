@@ -1,4 +1,10 @@
 import { DesktopProductPostgres, DesktopPostgresError } from './desktopProductPostgres'
+import { DesktopPostgresInspection } from './desktopPostgresInspection'
+import { ProductPostgresInspectionError } from './productPostgresInspectorCommands'
+import type {
+  DesktopPostgresInspectionInput,
+  DesktopPostgresInspectionResult
+} from '@shared/desktopPostgresInspection'
 import { readOwnedDesktopConfiguration } from './desktopConfigurationAuthority'
 import type { ProductProjectConfigurationContext } from '../../../../docs/contracts/product-postgres'
 import type {
@@ -140,6 +146,7 @@ export class DesktopControllerService {
   private readonly environmentSelections: DesktopEnvironmentSelections
   private readonly environment: DesktopProductEnvironment
   private readonly postgres: DesktopProductPostgres
+  private readonly postgresInspection: DesktopPostgresInspection
   private readonly targets: DesktopTargetSetups
   private readonly firstDeployments: DesktopFirstDeployments
   private readonly installations: DesktopControllerInstallations
@@ -219,6 +226,12 @@ export class DesktopControllerService {
       cipher,
       this.vault,
       this.projects,
+      this.enrollment
+    )
+    this.postgresInspection = new DesktopPostgresInspection(
+      this.projects,
+      this.vault,
+      configurationContext,
       this.enrollment
     )
     this.targets = new DesktopTargetSetups(db, cipher, this.vault, this.enrollment)
@@ -565,6 +578,11 @@ export class DesktopControllerService {
   }
   async postgresContext(key: string): Promise<DesktopPostgresContext> {
     return this.safe(() => this.postgres.context(key))
+  }
+  async inspectPostgres(
+    input: DesktopPostgresInspectionInput
+  ): Promise<DesktopPostgresInspectionResult> {
+    return this.safe(() => this.postgresInspection.read(input))
   }
   async preparePostgresIntent(input: DesktopPostgresIntentInput): Promise<DesktopPostgresIntent> {
     return this.safe(() => this.postgres.prepare(input))
@@ -958,6 +976,7 @@ export class DesktopControllerService {
         error instanceof DesktopTargetSetupError ||
         error instanceof DesktopEnvironmentError ||
         error instanceof DesktopPostgresError ||
+        error instanceof ProductPostgresInspectionError ||
         error instanceof DesktopInstallationError ||
         error instanceof DesktopUpgradeError ||
         error instanceof ControllerBootstrapError ||

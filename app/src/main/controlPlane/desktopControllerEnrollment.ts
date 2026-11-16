@@ -8,6 +8,16 @@ import type {
   ProductProjectConfigurationContextInput
 } from '../../../../docs/contracts/product-postgres'
 import type { ProductEnvironmentScope } from '../../../../docs/contracts/product-environment'
+import type {
+  ProductPostgresInspectionRequest,
+  ProductPostgresInspectionResult
+} from '../../../../docs/contracts/product-postgres-inspection'
+import {
+  postgresInspectionRequestSchema,
+  postgresInspectionResultSchema,
+  postgresInspectionErrorCodes,
+  validatePostgresInspectionResult
+} from './productPostgresInspectorCommands'
 import {
   postgresAdminErrorCodes,
   postgresMetadataSchema,
@@ -108,6 +118,7 @@ export class DesktopControllerEnrollmentError extends Error {
     readonly code:
       | ProductEnvironmentError['code']
       | (typeof postgresAdminErrorCodes)[number]
+      | (typeof postgresInspectionErrorCodes)[number]
       | 'CONTROLLER_SECRET_KEY_UNAVAILABLE'
       | 'CONTROLLER_ADMIN_FAILED'
       | 'CONTROLLER_IDENTITY_MISMATCH'
@@ -357,6 +368,26 @@ export class DesktopControllerEnrollment {
       throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
     return result
   }
+  async inspectPostgres(
+    bindingId: string,
+    input: ProductPostgresInspectionRequest,
+    beforeRead?: () => void
+  ): Promise<ProductPostgresInspectionResult> {
+    const parsed = postgresInspectionRequestSchema.safeParse(input)
+    if (
+      !parsed.success ||
+      parsed.data.context.controller_id !== this.vault.resolve(bindingId).controllerId
+    )
+      throw new DesktopControllerEnrollmentError('POSTGRES_INSPECTION_INPUT_INVALID')
+    const result = await this.configurationOperation(
+      bindingId,
+      'managed-postgres-inspection',
+      parsed.data,
+      postgresInspectionResultSchema,
+      beforeRead
+    )
+    return validatePostgresInspectionResult(result, parsed.data)
+  }
   async preparePostgres(
     bindingId: string,
     input: ProductPostgresPrepareInput,
@@ -539,7 +570,8 @@ export class DesktopControllerEnrollment {
       | 'managed-postgres-prepare-state'
       | 'managed-postgres-review'
       | 'select-managed-postgres'
-      | 'managed-postgres-selection-state',
+      | 'managed-postgres-selection-state'
+      | 'managed-postgres-inspection',
     payload: object,
     schema: z.ZodType<T>,
     beforeSend?: () => void
@@ -554,14 +586,19 @@ export class DesktopControllerEnrollment {
         current.controllerId !== before.controllerId ||
         current.accessToken !== before.accessToken ||
         !scopes.includes('deploy:manual') ||
-        !scopes.includes('policy:write')
+        !scopes.includes('policy:write') ||
+        (operation === 'managed-postgres-inspection' && !scopes.includes('read'))
       )
         throw new DesktopControllerVaultError('BINDING_CHANGED')
     }
     authorize()
     const result = await this.exchange(
       intent,
-      ['managed-postgres-review', 'select-managed-postgres'].includes(operation)
+      [
+        'managed-postgres-review',
+        'select-managed-postgres',
+        'managed-postgres-inspection'
+      ].includes(operation)
         ? { timeoutMs: 90000 }
         : {},
       {
@@ -735,6 +772,7 @@ export class DesktopControllerEnrollment {
         | 'managed-postgres-review'
         | 'select-managed-postgres'
         | 'managed-postgres-selection-state'
+        | 'managed-postgres-inspection'
       payload: object
       expected_revision?: number
       beforeSend?: () => void
@@ -752,7 +790,8 @@ export class DesktopControllerEnrollment {
             : command?.operation === 'enroll-project-target' ||
                 command?.operation === 'register-vps' ||
                 command?.operation === 'managed-postgres-review' ||
-                command?.operation === 'select-managed-postgres'
+                command?.operation === 'select-managed-postgres' ||
+                command?.operation === 'managed-postgres-inspection'
               ? 90_000
               : 60_000)
     )
@@ -944,6 +983,7 @@ function decodeAdminEnvelope(value: unknown): unknown {
       ok: z.literal(false),
       code: z.enum([
         ...postgresAdminErrorCodes,
+        ...postgresInspectionErrorCodes,
         'PRODUCT_ENVIRONMENT_INPUT_INVALID',
         'PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED',
         'PRODUCT_ENVIRONMENT_SOURCE_CHANGED',

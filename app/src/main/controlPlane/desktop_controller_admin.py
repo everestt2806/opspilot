@@ -41,6 +41,13 @@ POSTGRES_ERROR_CODES = frozenset(
         "PRODUCT_POSTGRES_DATABASE_UNSAFE",
         "PRODUCT_POSTGRES_SCHEMA_UNSUPPORTED",
         "CONTROLLER_SECRET_KEY_UNAVAILABLE",
+        "POSTGRES_INSPECTION_INPUT_INVALID",
+        "POSTGRES_INSPECTION_UNAVAILABLE",
+        "POSTGRES_INSPECTION_NOT_READY",
+        "POSTGRES_INSPECTION_TIMEOUT",
+        "POSTGRES_INSPECTION_RESULT_LIMIT",
+        "POSTGRES_INSPECTION_RELATION_UNAVAILABLE",
+        "POSTGRES_INSPECTION_AUTHORITY_CHANGED",
     )
 )
 SOURCE_ERROR_CODES = frozenset(
@@ -238,6 +245,13 @@ def verify(request):
 
 
 def run_cli(request, operation, payload):
+    if operation == "managed-postgres-inspection":
+        # These are verified installation values, never caller-selected paths/pins.
+        payload = {
+            "artifact": request["artifact_path"],
+            "manifest_sha256": request["manifest_sha256"],
+            "inspection": payload,
+        }
     source_check = operation == "verify-project-source"
     target_check = operation in ("project-target-state", "enroll-project-target")
     readiness_check = operation == "project-readiness"
@@ -258,6 +272,7 @@ def run_cli(request, operation, payload):
         "managed-postgres-review",
         "select-managed-postgres",
         "managed-postgres-selection-state",
+        "managed-postgres-inspection",
     )
     streamed_input = vps_check or operation == "stage-project-environment"
     structured_error = (
@@ -317,6 +332,7 @@ def run_cli(request, operation, payload):
                 "enroll-project-target",
                 "managed-postgres-review",
                 "select-managed-postgres",
+                "managed-postgres-inspection",
             )
             else 15
         )
@@ -358,7 +374,7 @@ def run_cli(request, operation, payload):
             if structured_error:
                 # Chỉ chuyển tiếp đúng mã đã duyệt, không stdout/stderr tùy ý.
                 match = re.fullmatch(
-                    rb"CONTROL_PLANE_ERROR ((?:PROJECT_SOURCE_|PROJECT_TARGET_|TARGET_ENROLLMENT_|PROJECT_READINESS_|VPS_REGISTRATION_|PRODUCT_ENVIRONMENT_|PRODUCT_POSTGRES_|CONTROLLER_SECRET_KEY_|CONTROLLER_VPS_|CONTROLLER_BOOTSTRAP_)[A-Z_]+)\r?\n?",
+                    rb"CONTROL_PLANE_ERROR ((?:PROJECT_SOURCE_|PROJECT_TARGET_|TARGET_ENROLLMENT_|PROJECT_READINESS_|VPS_REGISTRATION_|PRODUCT_ENVIRONMENT_|PRODUCT_POSTGRES_|POSTGRES_INSPECTION_|CONTROLLER_SECRET_KEY_|CONTROLLER_VPS_|CONTROLLER_BOOTSTRAP_)[A-Z_]+)\r?\n?",
                     bytes(error_content),
                 )
                 if match:
@@ -440,6 +456,7 @@ def main():
         "managed-postgres-review",
         "select-managed-postgres",
         "managed-postgres-selection-state",
+        "managed-postgres-inspection",
     ):
         raise ValueError()
     try:

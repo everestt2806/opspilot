@@ -128,7 +128,8 @@ function adminTimeout(operation: string): number {
             'register-vps',
             'enroll-project-target',
             'managed-postgres-review',
-            'select-managed-postgres'
+            'select-managed-postgres',
+            'managed-postgres-inspection'
           ].includes(operation)
         ? 90000
         : 60000

@@ -19,14 +19,30 @@ export type InstalledControllerAdminRequest = {
   authority: InstalledControllerAuthority;
   command: {
     operation:
-      | "enroll-desktop-client" | "revoke-desktop-client" | "status"
-      | "project-targets" | "register-project" | "verify-project-source"
-      | "project-target-state" | "enroll-project-target" | "project-readiness"
-      | "register-vps" | "stage-project-environment" | "project-environment-state"
-      | "project-environment-context" | "project-environment-review"
-      | "select-project-environment" | "project-environment-selection-state"
-      | "project-configuration-context" | "prepare-managed-postgres" | "managed-postgres-state"
-      | "managed-postgres-prepare-state" | "managed-postgres-review" | "select-managed-postgres" | "managed-postgres-selection-state";
+      | "enroll-desktop-client"
+      | "revoke-desktop-client"
+      | "status"
+      | "project-targets"
+      | "register-project"
+      | "verify-project-source"
+      | "project-target-state"
+      | "enroll-project-target"
+      | "project-readiness"
+      | "register-vps"
+      | "stage-project-environment"
+      | "project-environment-state"
+      | "project-environment-context"
+      | "project-environment-review"
+      | "select-project-environment"
+      | "project-environment-selection-state"
+      | "project-configuration-context"
+      | "prepare-managed-postgres"
+      | "managed-postgres-state"
+      | "managed-postgres-prepare-state"
+      | "managed-postgres-review"
+      | "select-managed-postgres"
+      | "managed-postgres-selection-state"
+      | "managed-postgres-inspection";
     payload: object;
   };
 };

@@ -22,7 +22,8 @@ export async function inspectSelectedPostgres({
   selected,
   nonce,
   cli,
-  check
+  check,
+  admin
 }) {
   const require = createRequire(join(modules, 'package.json'))
   const { build } = require('esbuild')
@@ -142,6 +143,47 @@ export async function inspectSelectedPostgres({
       true
     )
     check('production_CLI_refuses_wrong_instance_limit_and_bundle_pin')
+    if (admin) {
+      const inspected = admin(
+        'managed-postgres-inspection',
+        query({ operation: 'inspect' }).inspection
+      )
+      assert.deepEqual(inspected.instance, before.instance)
+      const tables = admin('managed-postgres-inspection', query({ operation: 'tables' }).inspection)
+      assert.deepEqual(
+        tables.data.map((t) => [t.schema, t.name]),
+        [['public', 'sample']]
+      )
+      const sample = admin(
+        'managed-postgres-inspection',
+        query({ operation: 'rows', schema: 'public', table: 'sample', limit: 10 }).inspection
+      )
+      assert.deepEqual(sample.data, [{ id: 1, marker: 'controller-bridge' }])
+      check('actual_same_UID_Python_admin_to_CLI_pinned_SSH_PostgreSQL_reads_correct_instance')
+      admin(
+        'managed-postgres-inspection',
+        query({ operation: 'rows', schema: 'public', table: 'absent_relation', limit: 1 })
+          .inspection,
+        // PostgreSQL resolves an absent FROM relation before evaluating CASE;
+        // the reader deliberately suppresses its raw error as UNAVAILABLE.
+        'POSTGRES_INSPECTION_UNAVAILABLE'
+      )
+      admin(
+        'managed-postgres-inspection',
+        query({ operation: 'rows', schema: 'public', table: 'reader_view', limit: 1 }).inspection,
+        'POSTGRES_INSPECTION_RELATION_UNAVAILABLE'
+      )
+      admin(
+        'managed-postgres-inspection',
+        {
+          ...query({ operation: 'inspect' }).inspection,
+          artifact: '/caller/untrusted',
+          manifest_sha256: '0'.repeat(64)
+        },
+        'PRODUCT_POSTGRES_INPUT_INVALID'
+      )
+      check('same_UID_admin_preserves_safe_inspection_error_and_refuses_caller_artifact_injection')
+    }
     assert.deepEqual(fixture('snapshot'), before)
     assert.equal(
       JSON.stringify(db.prepare('SELECT * FROM product_app_control').all()),

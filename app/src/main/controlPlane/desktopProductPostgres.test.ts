@@ -9,6 +9,10 @@ import { ProductPostgresRepository } from '../db/productPostgresRepository'
 import { ProductPostgresSelection } from './productPostgresSelection'
 import { readProjectConfigurationContext } from './projectConfigurationContext'
 import { DesktopProductPostgres } from './desktopProductPostgres'
+import { DesktopPostgresInspection } from './desktopPostgresInspection'
+import { readOwnedDesktopConfiguration } from './desktopConfigurationAuthority'
+import { reviewPostgresInspection } from './productPostgresInspection'
+import type { ProductPostgresInspectionResult } from '../../../../docs/contracts/product-postgres-inspection'
 import type { DesktopControllerEnrollment } from './desktopControllerEnrollment'
 import type {
   DesktopPostgresIntent,
@@ -307,4 +311,140 @@ it('keeps an unsent intent prepared when opening transport fails before its disp
   admin.preparePostgres = original
   expect((await subject.send(row.request_key)).state).toBe('resource_prepared')
   expect(prepareCalls).toBe(1)
+})
+
+async function inspectorFixture(): Promise<{
+  reader: DesktopPostgresInspection
+  input: import('@shared/desktopPostgresInspection').DesktopPostgresInspectionInput
+  target: ReturnType<typeof vi.fn<DesktopControllerEnrollment['inspectPostgres']>>
+}> {
+  await subject.send((await prepare()).request_key)
+  await subject.send((await prepare('select')).request_key)
+  const context = await subject.context(f.projectKey)
+  const target = vi.fn<DesktopControllerEnrollment['inspectPostgres']>(
+    async (_id, request, guard) => {
+      guard?.()
+      return {
+        context: reviewPostgresInspection(
+          f.remote,
+          f.remoteCipher,
+          f.controllerId,
+          request.context
+        ),
+        read: request.read,
+        instance: {
+          database_id: request.context.database_id,
+          container_id: 'a'.repeat(64),
+          image_id: 'sha256:' + 'b'.repeat(64),
+          volume: `opspilot-pg-${request.context.database_id}-data`,
+          volume_created_at: '2026-11-17T00:00:00Z',
+          system_identifier: '1234567890',
+          state: 'ready',
+          public_port: null
+        },
+        checked_at: new Date().toISOString(),
+        data:
+          request.read.operation === 'inspect'
+            ? null
+            : [{ id: 1, marker: 'PRIVATE_SAMPLE_NOT_PERSISTED' }]
+      }
+    }
+  )
+  return {
+    reader: new DesktopPostgresInspection(
+      f.projects,
+      f.vault,
+      (key) =>
+        readOwnedDesktopConfiguration(key, f.projects, admin, subject, {
+          confirmsSource: async () => false
+        }),
+      { inspectPostgres: target }
+    ),
+    input: {
+      project_request_key: f.projectKey,
+      expected_binding_revision: context.binding_revision,
+      expected_source_generation: context.source_generation,
+      expected_source_config_sha256: context.source_config_sha256,
+      database_id: context.database.selected!.database_id,
+      read: { operation: 'rows', schema: 'public', table: 'sample', limit: 10 }
+    },
+    target
+  }
+}
+it('Main inspector derives current owned source and returns samples without persisting data or creating jobs', async () => {
+  const { reader, input, target } = await inspectorFixture()
+  const changes = f.db.prepare('SELECT total_changes() n').get()
+  const remoteChanges = f.remote.prepare('SELECT total_changes() n').get()
+  const result = await reader.read(input)
+  expect(result).toMatchObject({
+    project_request_key: f.projectKey,
+    binding_id: f.bindingId,
+    data: [{ id: 1 }]
+  })
+  expect(target).toHaveBeenCalledOnce()
+  expect(target.mock.calls[0][1].context).toMatchObject({
+    app_id: 42,
+    expected_target_security_revision: 1,
+    expected_source_generation: 2
+  })
+  expect(f.db.prepare('SELECT total_changes() n').get()).toEqual(changes)
+  expect(f.remote.prepare('SELECT total_changes() n').get()).toEqual(remoteChanges)
+  expect(f.db.serialize().includes(Buffer.from('PRIVATE_SAMPLE_NOT_PERSISTED'))).toBe(false)
+  expect(f.remote.prepare('SELECT count(*) n FROM product_deploy_job').get()).toEqual({ n: 0 })
+})
+it('Main inspector rejects arbitrary SQL, foreign UUID and stale source or binding before target reads', async () => {
+  const { reader, input, target } = await inspectorFixture()
+  for (const invalid of [
+    { ...input, database_id: randomUUID() },
+    { ...input, expected_source_generation: 1 },
+    { ...input, expected_binding_revision: input.expected_binding_revision + 1 },
+    { ...input, sql: 'SELECT anything' },
+    { ...input, artifact: '/caller/path' }
+  ])
+    await expect(reader.read(invalid)).rejects.toThrow()
+  expect(target).not.toHaveBeenCalled()
+})
+it('Main inspector never adopts a foreign source selection when its own positive receipt is missing', async () => {
+  const { reader, input, target } = await inspectorFixture()
+  f.db.exec("DELETE FROM desktop_postgres_intent WHERE operation='select'")
+  await expect(reader.read(input)).rejects.toThrow('POSTGRES_CHANGED')
+  expect(target).not.toHaveBeenCalled()
+})
+it('Main inspector discards a reply when binding is disabled during the read', async () => {
+  const { reader, input, target } = await inspectorFixture()
+  const previous = target.getMockImplementation()!
+  target.mockImplementationOnce(async (...args) => {
+    const result = await previous(...args)
+    f.vault.disable(f.bindingId, f.vault.resolve(f.bindingId).revision)
+    return result
+  })
+  await expect(reader.read(input)).rejects.toThrow()
+})
+it('Main inspector discards samples when target revision changes while data is in flight', async () => {
+  const { reader, input, target } = await inspectorFixture()
+  const previous = target.getMockImplementation()!
+  target.mockImplementationOnce(async (...args) => {
+    const result = await previous(...args)
+    f.remote.exec('UPDATE vps SET ssh_security_revision=2 WHERE id=77')
+    return result
+  })
+  await expect(reader.read(input)).rejects.toThrow('POSTGRES_CHANGED')
+})
+it('Main inspector rejects a wrong database or unexpected credential fields in admin replies', async () => {
+  const { reader, input, target } = await inspectorFixture()
+  const previous = target.getMockImplementation()!
+  target.mockImplementationOnce(async (...args) => {
+    const result = await previous(...args)
+    result.instance.database_id = randomUUID()
+    return result
+  })
+  await expect(reader.read(input)).rejects.toThrow('POSTGRES_INSPECTION_AUTHORITY_CHANGED')
+  target.mockImplementationOnce(
+    async (...args) =>
+      ({
+        ...(await previous(...args)),
+        credential: 'SYNTHETIC_SECRET'
+      }) as ProductPostgresInspectionResult
+  )
+  await expect(reader.read(input)).rejects.toThrow('POSTGRES_INSPECTION_UNAVAILABLE')
 })

@@ -487,6 +487,127 @@ describe('Pinned PostgreSQL admin transport', () => {
       created_at: new Date().toISOString(),
       provisioning: 'prepared' as const
     })
+  const inspection = (): {
+    request: import('../../../../docs/contracts/product-postgres-inspection').ProductPostgresInspectionRequest
+    result: import('../../../../docs/contracts/product-postgres-inspection').ProductPostgresInspectionResult
+  } => {
+    const resource = metadata(),
+      original = request()
+    const input = {
+      context: {
+        format: 1 as const,
+        controller_id: intent.controller_id,
+        app_id: 42,
+        expected_ownership_generation: 1,
+        expected_source_generation: 1,
+        expected_source_config_sha256: original.expected_source_config_sha256,
+        expected_target_security_revision: 1,
+        database_id: resource.database_id
+      },
+      read: { operation: 'inspect' as const }
+    }
+    return {
+      request: input,
+      result: {
+        context: {
+          state: 'configuration_verified',
+          controller_id: intent.controller_id,
+          app_id: 42,
+          ownership_generation: 1,
+          source_generation: 1,
+          source_config_sha256: original.expected_source_config_sha256,
+          target_security_revision: 1,
+          database: resource,
+          runtime_status: 'not_checked'
+        },
+        read: input.read,
+        instance: {
+          database_id: resource.database_id,
+          container_id: 'b'.repeat(64),
+          image_id: 'sha256:' + 'c'.repeat(64),
+          volume: `opspilot-pg-${resource.database_id}-data`,
+          volume_created_at: '2026-11-17T00:00:00Z',
+          system_identifier: '1234567',
+          state: 'ready',
+          public_port: null
+        },
+        checked_at: new Date().toISOString(),
+        data: null
+      }
+    }
+  }
+  it('uses the finite inspector operation with project-only input and validates runtime identity', async () => {
+    await service.enroll(intent.binding_id)
+    const f = inspection(),
+      guard = vi.fn()
+    reply = (channel) => respond(channel, f.result)
+    expect(await service.inspectPostgres(intent.binding_id, f.request, guard)).toEqual(f.result)
+    expect(guard).toHaveBeenCalledOnce()
+    expect(requests.at(-1)).toMatchObject({
+      operation: 'managed-postgres-inspection',
+      payload: f.request
+    })
+    expect(requests.at(-1)?.payload).not.toHaveProperty('artifact')
+  })
+  it('rejects foreign controller or extra SQL before opening inspector transport', async () => {
+    await service.enroll(intent.binding_id)
+    open.mockClear()
+    const f = inspection()
+    await expect(
+      service.inspectPostgres(intent.binding_id, {
+        ...f.request,
+        context: { ...f.request.context, controller_id: randomUUID() }
+      })
+    ).rejects.toThrow('POSTGRES_INSPECTION_INPUT_INVALID')
+    await expect(
+      service.inspectPostgres(intent.binding_id, {
+        ...f.request,
+        sql: 'SELECT 1'
+      } as typeof f.request)
+    ).rejects.toThrow('POSTGRES_INSPECTION_INPUT_INVALID')
+    expect(open).not.toHaveBeenCalled()
+  })
+  it('rejects wrong source, instance and credential-bearing inspector replies', async () => {
+    await service.enroll(intent.binding_id)
+    const f = inspection()
+    for (const bad of [
+      { ...f.result, context: { ...f.result.context, source_generation: 2 } },
+      { ...f.result, instance: { ...f.result.instance, database_id: randomUUID() } },
+      { ...f.result, credential: 'SYNTHETIC_SECRET' }
+    ]) {
+      reply = (channel) => respond(channel, bad)
+      await expect(service.inspectPostgres(intent.binding_id, f.request)).rejects.toThrow()
+    }
+  })
+  it('keeps only safe inspector errors and supports reads finishing after the old15s admin budget', async () => {
+    await service.enroll(intent.binding_id)
+    const f = inspection()
+    let waiting: FakeChannel | undefined
+    reply = (channel) => {
+      waiting = channel
+    }
+    vi.useFakeTimers()
+    try {
+      const pending = service.inspectPostgres(intent.binding_id, f.request)
+      await vi.advanceTimersByTimeAsync(60000)
+      expect(waiting!.destroy).not.toHaveBeenCalled()
+      respond(waiting!, f.result)
+      expect(await pending).toEqual(f.result)
+    } finally {
+      vi.useRealTimers()
+    }
+    reply = (channel) => {
+      channel.emit(
+        'data',
+        Buffer.from(JSON.stringify({ ok: false, code: 'POSTGRES_INSPECTION_RELATION_UNAVAILABLE' }))
+      )
+      channel.emit('end')
+      channel.emit('close', 0)
+    }
+    await expect(service.inspectPostgres(intent.binding_id, f.request)).rejects.toThrow(
+      'POSTGRES_INSPECTION_RELATION_UNAVAILABLE'
+    )
+  })
   it('guards resource prepare and verifies returned scope, UUID and metadata', async () => {
     await service.enroll(intent.binding_id)
     const input = request(),

@@ -6,6 +6,13 @@ Uses real private Desktop38/controller37 SQLite databases and cipher/services wi
 
 Runs independently before IPC/UI. Evidence: `app/.out-scripts/product-postgres-inspection-lab/<nonce>/proof.json`. Scratch cleanup verifies resolved temporary parent, symlink state and exact nonce marker before removing only its own directory. No production profile, SSH, Docker or VPS is used.
 
+R7h-4d3a extends that same standalone command to the production Main reader:
+real Desktop038/controller037 SQLite and encrypted current-selection receipts,
+ephemeral samples with no SQLite writes, cold Main read, and wrong UUID/response
+refusal. Its target transport remains explicitly synthetic; it does not prove an
+actual query from Main over SSH. The separate native bridge below exercises the
+actual same-UID Python admin -> CLI -> pinned SSH -> private PostgreSQL path.
+
 # Target and controller CLI acceptance
 
 Private Linux labs only. Require root, Python3, Linux Docker, OpenSSH server/client,
@@ -42,3 +49,10 @@ reader and controller CLI, not installed admin/Main IPC, UI, or a serving rollou
 Temporary SSH fixtures use `StrictModes no` for generated keys under private temp
 paths, matching the existing selection lab. Product host-key pins and target
 file/key/journal permission checks remain enforced.
+
+The opted-in selection lab now also tests the new same-UID admin inspection
+operation while its owned private PostgreSQL is running. Artifact/pin are wrapped
+from the independently verified admin installation inputs; caller path injection
+is refused. Existing views and missing relations return approved safe error codes,
+never SQL/stderr. Root installation/setpriv lifecycle on a newly approved serving
+release, renderer IPC/UI and actual VPS acceptance remain separate gates.

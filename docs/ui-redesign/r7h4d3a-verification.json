@@ -1,0 +1,226 @@
+{
+  "status": "PASS_SCOPED_R7H4D3A_MAIN_ADMIN",
+  "checkpoint": "R7h-4d3a",
+  "base_commit": "7cec588",
+  "scope": "MAIN_AND_SAME_UID_ADMIN_FINITE_INSPECTION",
+  "VPS_used": false,
+  "serving_catalog_changed": false,
+  "schema_changed": false,
+  "Kim_files_changed": false,
+  "focused": {
+    "files": 4,
+    "passed": 135,
+    "failed": 0
+  },
+  "native": {
+    "raw_path": "app\\.out-scripts\\product-postgres-selection\\8ef30070ac12\\proof.json",
+    "raw_sha256": "c3ac718375b15a5fc92509d147e37f3c6bdf28ce106df887482b449c18cffff7",
+    "proof": {
+      "state": "PASS",
+      "nonce": "8ef30070ac12",
+      "production_vps_used": false,
+      "production_database_used": false,
+      "Docker_used": true,
+      "artifact_sha256": "7bf8fa4c7654bdb3d26d7b003bce1307a13f8599d59c99e0b43ef148fb46206c",
+      "checks": [
+        "missing_enrollment_refuses_selection_without_source_mutation",
+        "actual_SSH_manifest_helper_bytes_key_and_receipt_review_is_readonly",
+        "actual_helper_tamper_refuses_selection_without_clearing_enrollment",
+        "wrong_local_bundle_pin_rejected_before_source_selection",
+        "production_CLI_selects_once_preserves_key_and_pause_no_job_or_runtime_readiness_claim",
+        "production_CLI_reviews_DB_only_source_from_original_registration_without_provisioning_or_job",
+        "production_same_UID_CLI_cipher_and_pinned_SSH_inspect_tables_rows_reach_selected_instance",
+        "production_CLI_refuses_wrong_instance_limit_and_bundle_pin",
+        "actual_same_UID_Python_admin_to_CLI_pinned_SSH_PostgreSQL_reads_correct_instance",
+        "same_UID_admin_preserves_safe_inspection_error_and_refuses_caller_artifact_injection",
+        "controller_inspection_preserves_CID_volume_system_ID_journal_rows_configuration_and_zero_jobs",
+        "controller_inspection_private_Docker_resources_removed_by_exact_ownership",
+        "actual_same_UID_Python_admin_verifies_ELF_bundle_key_SQLite_then_runs_seven_fixed_PostgreSQL_operations",
+        "Python_admin_forwards_only_approved_PostgreSQL_error_and_never_starts_job",
+        "readonly_prepare_receipt_available_after_source_advance_without_replaying_prepare",
+        "cold_offline_same_UUID_lookup_replay_and_conflicting_body_refusal"
+      ],
+      "last_command": "select-managed-postgres",
+      "last_error": "PRODUCT_POSTGRES_REQUEST_CONFLICT",
+      "admin_node_ancestry": [
+        {
+          "path": "/tmp",
+          "uid": 0,
+          "mode": 1023,
+          "symlink": false
+        },
+        {
+          "path": "/tmp/opspilot-pg-selection-bmGfby",
+          "uid": 0,
+          "mode": 448,
+          "symlink": false
+        },
+        {
+          "path": "/tmp/opspilot-pg-selection-bmGfby/node",
+          "uid": 0,
+          "mode": 493,
+          "symlink": false
+        }
+      ],
+      "admin_last_operation": "project-configuration-context",
+      "admin_last_error": "PRODUCT_POSTGRES_AUTHORITY_CHANGED",
+      "private_cleanup": true
+    },
+    "runner": {
+      "exit_code": 0,
+      "seconds": 67.5,
+      "command": [
+        "wsl",
+        "-d",
+        "Ubuntu",
+        "-u",
+        "root",
+        "--",
+        "env",
+        "NODE_PATH=/var/tmp/opspilot-p3e3a-runtime/node_modules",
+        "OPSPILOT_CONTROL_PLANE_MODULES=/var/tmp/opspilot-p3e3a-runtime/node_modules",
+        "OPSPILOT_CONTROL_PLANE_OUTPUT=/var/tmp/opspilot-r7h4d3a-build-7fWY5w/payload/control-plane.cjs",
+        "OPSPILOT_POSTGRES_INSPECTION_GATE=1",
+        "/home/everestt2806/.npm/_npx/52027bd8fc0022aa/node_modules/node/bin/node",
+        "/mnt/d/Developing/DuAnCNTT/app/scripts/product-postgres-lab/selection.mjs",
+        "--confirm-local-postgres-selection"
+      ]
+    }
+  },
+  "Main_CLI": {
+    "raw_path": "app\\.out-scripts\\product-postgres-inspection-lab\\85ddeb70ab56\\proof.json",
+    "raw_sha256": "585673d50efb4d30708080b8c790a8773217f67d9d0b489f2ebbb729927257fe",
+    "proof": {
+      "status": "PASS",
+      "nonce": "85ddeb70ab56",
+      "checks": [
+        "Desktop038_Controller037_role_separation",
+        "no_selected_database_never_falls_back_to_a_name_or_container",
+        "exact_selected_instance_authenticated_metadata_without_SSH_SQL_or_runtime_health_claim",
+        "wrong_instance_source_target_controller_or_extra_SQL_cannot_route_the_read",
+        "no_credentials_provisioning_or_deployment_job",
+        "production_Main_derives_owned_selected_source_and_returns_ephemeral_samples_without_writes",
+        "cold_Main_reader_rejects_foreign_UUID_and_cross_instance_admin_reply"
+      ],
+      "transport": "SYNTHETIC_SQLITE_ONLY",
+      "SSH_used": false,
+      "Docker_used": false,
+      "VPS_used": false,
+      "GUI_used": false,
+      "artifact_sha256": "202dfce90ec52d27b40dec6ed0cd27b07bbacd32877294fa92a1e932b588209c",
+      "private_cleanup": true
+    }
+  },
+  "source_sha256": {
+    "app/src/main/controlPlane/desktopControllerEnrollment.ts": "01ceda09a60e871816c9ca9fb4120aa501325515d679f0e1b060879abf96b93d",
+    "app/src/main/controlPlane/desktopPostgresInspection.ts": "f51b0ccef0f2eaf56069af432f3c589b8b266a26e84294f160e625e26c8ce1bf",
+    "app/src/main/controlPlane/desktopControllerService.ts": "c873e639d0515a7d76ea59ec78977ab18dd80e6bb32b4250a8e65c25cb45d429",
+    "app/src/main/controlPlane/desktop_controller_admin.py": "95d297cc85a38b4a1151896111d40a8043ac1ed576e3283a99fe6e8de2fc66dd",
+    "app/src/main/controlPlane/controllerInstalledAdmin.ts": "cfd525a3916171e8f69cb26f7dc23928aacb8490a821bb1b2ee8dc7bc6505b96",
+    "app/src/main/controlPlane/installedControllerAdminProtocol.ts": "170670dd26ec1f106e1f97bfce53fecedcfaee10679047958a26cea1aca026d9",
+    "app/src/main/controlPlane/productPostgresInspectorCommands.ts": "505032d9e8b563ca9f2d8c6398a8f31b921570bd6a9b2cb16ca3bc9e6c99ec0f",
+    "app/src/shared/desktopPostgresInspection.ts": "504b5dc3d8ea3d16824d96fd96191291de434f75daaa6eba835bcc93c8a71d84",
+    "app/src/shared/productPostgresInspection.ts": "92138388873d344016b7e9eb8d7f014b6f55687d597a1d9b5c352900c4c0d387",
+    "app/src/main/controlPlane/desktopProductPostgres.test.ts": "a4a2d95fae591ffa45495f6c011e4ab4e05249e027f07f687cab932778a307b1",
+    "app/src/main/controlPlane/desktopControllerEnrollment.test.ts": "7b5a7d9ec1443cdb4205205571e00543b9630cea244ba3a3d895d8febc109834",
+    "app/src/main/controlPlane/controllerInstalledAdmin.test.ts": "3020c7d598459892cd09b85b0cec44f3eb43b7dea72d7804bb03a51fa7255341",
+    "app/scripts/product-postgres-inspection-lab/entry.ts": "991b5e8c0e86875fde8dd8ce9eb8bc7808117bfd0dc91cd4899741d15841947c",
+    "app/scripts/product-postgres-inspection-lab/run.mjs": "e28451620c07869e2e0f80df20df2b231929b3d5cb5c48ea864883dcb8ec1727",
+    "app/scripts/product-postgres-inspection-lab/bridge.mjs": "f1ec8854278ea3d32ce6d91b359cded4fa34ec144f3253b34167172ab4a50e89",
+    "app/scripts/product-postgres-inspection-lab/bridge_fixture.py": "86f21cda037a09817c315db5e173eb5e3a16c86307a3ed5a502a575bba444175",
+    "app/scripts/product-postgres-lab/selection.mjs": "b9f16da44f7c11d61ad2d071c86f454ff3d3c61c8a068d3f7d891c1a23a469ad",
+    "docs/contracts/desktop-postgres-inspection.ts": "1e1e1f38ac8c4d3b276d69d85aca2e5dae75e55dc70138f31dea1c7a49873ebe",
+    "docs/contracts/product-installed-controller-admin.ts": "6b42509875e1d44179ebfc263225233dd0966d0b9b5a0708da4b1f577e586fe9"
+  },
+  "quality": {
+    "Node_Web_types": "PASS",
+    "scripts_types": "PASS",
+    "scoped_ESLint_15files": "PASS_0_ERRORS_0_WARNINGS",
+    "Ruff_2files": "PASS",
+    "Ruff_format_2files": "PASS"
+  },
+  "limits": {
+    "target_read_seconds": 60,
+    "same_UID_admin_seconds": 75,
+    "Root_and_Desktop_admin_seconds": 90,
+    "reply_bytes": 65536,
+    "sample_rows": 100
+  },
+  "scope_guards": [
+    "Authenticated registered project/current own source-selection receipt",
+    "Exact selected UUID and current controller/app/owner/target revision before/after I/O",
+    "Installation-derived artifact/pin, caller artifact fields refused",
+    "Strict finite operation/response, safe errors, no SQL/credential DTO",
+    "No sample persistence/job/intent/pause/provisioning"
+  ],
+  "corrected_checks": [
+    "Focused first run134PASS/1FAIL exposed inconsistent final revalidation error; Main now discards result as POSTGRES_CHANGED, final135PASS",
+    "Native0d13c77c5b96 correctly suppressed absent FROM relation error as UNAVAILABLE; fixture expected overly-specific RELATION_UNAVAILABLE. Corrected expectation and added actual existing-view refusal; product behavior unchanged. Cleanup PASS."
+  ],
+  "not_claimed": [
+    "New release installed Root/setpriv native lifecycle",
+    "Renderer IPC or UI database inspector",
+    "Serving approved release or VPS upgrade",
+    "Product backup/restore and formal ML"
+  ],
+  "accepted_exceptions": [],
+  "next": "R7h-4d3b IPC/UI with four locales and actual Electron proof; d4 frozen candidate Root/native/live gates separately",
+  "gates": [
+    {
+      "name": "full",
+      "command": [
+        "pnpm.cmd",
+        "--prefix",
+        "app",
+        "exec",
+        "vitest",
+        "run",
+        "--reporter=dot"
+      ],
+      "exit_code": 0,
+      "seconds": 325.95,
+      "log": "app\\.out-scripts\\r7h4d3a-full.log"
+    },
+    {
+      "name": "build",
+      "command": [
+        "pnpm.cmd",
+        "--prefix",
+        "app",
+        "build"
+      ],
+      "exit_code": 0,
+      "seconds": 67.94,
+      "log": "app\\.out-scripts\\r7h4d3a-build.log"
+    }
+  ],
+  "full_tests": {
+    "passed": 2662,
+    "existing_Linux_skips": 2,
+    "failed": 0,
+    "files_passed": 183
+  },
+  "final_artifact_matches_native": true,
+  "requirements": [
+    {
+      "requirement": "Contract/trusted binding and no caller path/SQL",
+      "state": "PASS"
+    },
+    {
+      "requirement": "Finite sameUID/installed protocol and safe response/errors",
+      "state": "PASS"
+    },
+    {
+      "requirement": "Main current own source receipts and selected-instance scope before/after I/O, no sample writes",
+      "state": "PASS"
+    },
+    {
+      "requirement": "Independent actual sameUID/SSH/PG16 and synthetic Main realSQLite7 proofs/cleanup",
+      "state": "PASS"
+    },
+    {
+      "requirement": "Focused135/full2662+2existingSKIP/types/lint/Ruff/build and current source hashes",
+      "state": "PASS"
+    }
+  ]
+}

@@ -118,7 +118,7 @@ def main():
         actor.ensure(network)
         actor._psql(
             False,
-            "CREATE TABLE sample(id int PRIMARY KEY,marker text); INSERT INTO sample VALUES(1,'controller-bridge')",
+            "CREATE TABLE sample(id int PRIMARY KEY,marker text); INSERT INTO sample VALUES(1,'controller-bridge'); CREATE VIEW reader_view AS SELECT * FROM sample",
             capture=False,
         )
     print(

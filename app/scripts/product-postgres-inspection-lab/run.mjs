@@ -144,6 +144,77 @@ try {
   assert(!JSON.stringify(context).includes('password'))
   assert(!JSON.stringify(context).includes('encrypted_secret'))
   check('no_credentials_provisioning_or_deployment_job')
+  let reads = 0,
+    tamper = false
+  const transport = {
+    inspectPostgres: async (_binding, request, guard) => {
+      guard?.()
+      reads++
+      return {
+        context: code.reviewPostgresInspection(
+          f.remote,
+          f.remoteCipher,
+          f.controllerId,
+          request.context
+        ),
+        read: request.read,
+        instance: {
+          database_id: tamper
+            ? '33333333-3333-4333-8333-333333333333'
+            : request.context.database_id,
+          container_id: 'a'.repeat(64),
+          image_id: 'sha256:' + 'b'.repeat(64),
+          volume: `opspilot-pg-${request.context.database_id}-data`,
+          volume_created_at: '2026-11-17T00:00:00Z',
+          system_identifier: '1234567',
+          state: 'ready',
+          public_port: null
+        },
+        checked_at: new Date().toISOString(),
+        data: [{ marker: 'INSPECTOR_PRIVATE_EPHEMERAL_SAMPLE' }]
+      }
+    }
+  }
+  const makeReader = () =>
+    new code.DesktopPostgresInspection(
+      f.projects,
+      f.vault,
+      (key) =>
+        code.readOwnedDesktopConfiguration(
+          key,
+          f.projects,
+          f.pgAdmin,
+          f.postgres,
+          f.environmentSelections
+        ),
+      transport
+    )
+  const mainInput = {
+    project_request_key: f.projectKey,
+    expected_binding_revision: c.binding_revision,
+    expected_source_generation: c.source_generation,
+    expected_source_config_sha256: c.source_config_sha256,
+    database_id: c.database.selected.database_id,
+    read: { operation: 'rows', schema: 'public', table: 'sample', limit: 10 }
+  }
+  const beforeDesktop = f.db.prepare('SELECT total_changes() n').get()
+  const beforeController = f.remote.prepare('SELECT total_changes() n').get()
+  const result = await makeReader().read(mainInput)
+  assert.equal(result.project_request_key, f.projectKey)
+  assert.deepEqual(result.data, [{ marker: 'INSPECTOR_PRIVATE_EPHEMERAL_SAMPLE' }])
+  assert.deepEqual(f.db.prepare('SELECT total_changes() n').get(), beforeDesktop)
+  assert.deepEqual(f.remote.prepare('SELECT total_changes() n').get(), beforeController)
+  assert(!f.db.serialize().includes(Buffer.from('INSPECTOR_PRIVATE_EPHEMERAL_SAMPLE')))
+  check(
+    'production_Main_derives_owned_selected_source_and_returns_ephemeral_samples_without_writes'
+  )
+  await assert.rejects(() =>
+    makeReader().read({ ...mainInput, database_id: '33333333-3333-4333-8333-333333333333' })
+  )
+  assert.equal(reads, 1)
+  tamper = true
+  await assert.rejects(() => makeReader().read(mainInput), /POSTGRES_INSPECTION_AUTHORITY_CHANGED/)
+  check('cold_Main_reader_rejects_foreign_UUID_and_cross_instance_admin_reply')
   proof.status = 'PASS'
 } catch (error) {
   proof.error =

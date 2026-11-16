@@ -12,6 +12,8 @@ import {
   reviewPostgresInspection
 } from './productPostgresInspection'
 import { canonicalH2Json } from './productH2Proof'
+import { postgresMetadataSchema } from './productPostgres'
+import type { ProductPostgresInspectionRequest } from '../../../../docs/contracts/product-postgres-inspection'
 import { ProductPostgresRepository } from '../db/productPostgresRepository'
 import { readVerifiedControllerBundleFile, type VerifiedControllerBundle } from './controllerBundle'
 import { assertProductPostgresTargetManifest } from './productPostgresCommands'
@@ -79,7 +81,7 @@ const resultSchema = z.strictObject({
   instance: runtimeSchema,
   data: z.unknown()
 })
-const safeCodes = [
+export const postgresInspectionErrorCodes = [
   'POSTGRES_INSPECTION_INPUT_INVALID',
   'POSTGRES_INSPECTION_UNAVAILABLE',
   'POSTGRES_INSPECTION_NOT_READY',
@@ -88,6 +90,7 @@ const safeCodes = [
   'POSTGRES_INSPECTION_RELATION_UNAVAILABLE',
   'POSTGRES_INSPECTION_AUTHORITY_CHANGED'
 ] as const
+const safeCodes = postgresInspectionErrorCodes
 export class ProductPostgresInspectionError extends Error {
   constructor(readonly code: (typeof safeCodes)[number]) {
     super(code)
@@ -97,6 +100,64 @@ const wireSchema = z.discriminatedUnion('ok', [
   z.strictObject({ ok: z.literal(true), data: resultSchema }),
   z.strictObject({ ok: z.literal(false), code: z.enum(safeCodes) })
 ])
+
+/** Revalidate metadata-only DTOs at the admin/Main boundary. No caller may
+ * replace scope/operation/instance or append credentials to a response.
+ */
+export const postgresInspectionResultSchema = z.strictObject({
+  context: z.strictObject({
+    state: z.literal('configuration_verified'),
+    controller_id: z.string().min(1).max(128),
+    app_id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    ownership_generation: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    source_generation: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    source_config_sha256: hash,
+    target_security_revision: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    database: postgresMetadataSchema,
+    runtime_status: z.literal('not_checked')
+  }),
+  read: postgresInspectionOperationSchema,
+  instance: runtimeSchema,
+  checked_at: z.iso.datetime(),
+  data: z.unknown()
+})
+export function validatePostgresInspectionResult(
+  input: unknown,
+  request: ProductPostgresInspectionRequest
+): ProductPostgresInspectionResult {
+  const parsed = postgresInspectionResultSchema.safeParse(input)
+  if (!parsed.success) throw new ProductPostgresInspectionError('POSTGRES_INSPECTION_UNAVAILABLE')
+  const value = parsed.data,
+    c = value.context,
+    expected = request.context
+  if (
+    c.controller_id !== expected.controller_id ||
+    c.app_id !== expected.app_id ||
+    c.ownership_generation !== expected.expected_ownership_generation ||
+    c.source_generation !== expected.expected_source_generation ||
+    c.source_config_sha256 !== expected.expected_source_config_sha256 ||
+    c.target_security_revision !== expected.expected_target_security_revision ||
+    c.database.database_id !== expected.database_id ||
+    c.database.controller_id !== expected.controller_id ||
+    c.database.app_id !== expected.app_id ||
+    c.database.ownership_generation !== expected.expected_ownership_generation ||
+    value.instance.database_id !== expected.database_id ||
+    value.instance.volume !== `opspilot-pg-${expected.database_id}-data` ||
+    canonicalH2Json(value.read) !== canonicalH2Json(request.read)
+  )
+    throw new ProductPostgresInspectionError('POSTGRES_INSPECTION_AUTHORITY_CHANGED')
+  if (value.read.operation === 'inspect') {
+    if (value.data !== null)
+      throw new ProductPostgresInspectionError('POSTGRES_INSPECTION_UNAVAILABLE')
+    return { ...value, data: null }
+  }
+  const data =
+    value.read.operation === 'tables' ? tables.safeParse(value.data) : rows.safeParse(value.data)
+  if (!data.success) throw new ProductPostgresInspectionError('POSTGRES_INSPECTION_UNAVAILABLE')
+  if (value.read.operation === 'rows' && data.data.length > value.read.limit)
+    throw new ProductPostgresInspectionError('POSTGRES_INSPECTION_RESULT_LIMIT')
+  return { ...value, data: data.data }
+}
 
 /** Controller-only finite target reader. No HTTP admin endpoint, provisioning,
  * job/lease identity or arbitrary SQL. Input paths/pins are from trusted CLI/Main

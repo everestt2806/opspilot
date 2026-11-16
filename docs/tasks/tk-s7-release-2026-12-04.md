@@ -1,5 +1,7 @@
 # Hoàn thiện OpsPilot tới 04/12/2026
 
+> **17/11 — R7h-4d3a Main/admin inspector PASS, CHỜ REVIEW:** finite read tied to own positive source receipts/current project/binding/DB UUID before-after I/O; trusted installed artifact/pin, strict safe response/errors, no persisted samples/jobs/pause.135focused/full2662PASS+2existingLinuxSKIP/types/lint/Ruff/build, actual sameUID Pythonadmin/CLI/SSH/privatePG16checks + synthetic Main realSQLite7checks/cleanup PASS. No serving/catalog/schema/Kim-file mutation. Next A2 renderer IPC/UI, then separate d4 frozen Root/live release gates; whole inspector/release OPEN. [Task](tk-s7-release-r7h4d3a-inspector-main.md); [proof](../ui-redesign/r7h4d3a-verification.json). SHA: `git log -1 -- docs/ui-redesign/r7h4d3a-verification.json`.
+
 > **16/11 — R7h-4d1 exact-instance metadata PASS:** DB UUID+app/owner/current source/target checks prevent same-name PostgreSQL cross-routing on one VPS; readonly SQLite/no writes/credentials/job/runtime-ready claim. Deployment preflight retains quiescence, inspection metadata permits auto-deploy enabled.113focused/full2646PASS+2existingLinuxSKIP/types/lint/build + standalone SQLite CLI5checks/cleanup PASS. No serving mutation:8apps/2PG/controller4bc4590 remain. Native target reader/SQL table view/MainIPC/UI inspector still OPEN. [Task](tk-s7-release-r7h4d-database-inspector.md); [proof](../ui-redesign/r7h4d1-verification.json). SHA: `git log -1 -- app/src/main/controlPlane/productPostgresInspection.ts`.
 
 
