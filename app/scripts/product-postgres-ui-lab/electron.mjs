@@ -14,7 +14,7 @@ const root = resolve(import.meta.dirname, '../../..'),
   nonce = randomBytes(6).toString('hex'),
   directory = join(root, 'app/.out-scripts/product-postgres-ui-lab', nonce),
   privateData = join(directory, 'private'),
-  screenshots = join(root, 'docs/ui-redesign/screenshots/r7h4c4', nonce)
+  screenshots = join(root, 'docs/ui-redesign/screenshots/r7h4d3b', nonce)
 mkdirSync(privateData, { recursive: true })
 mkdirSync(screenshots, { recursive: true })
 app.setPath('userData', join(directory, 'profile'))
@@ -29,6 +29,7 @@ const proof = {
   captures: [],
   production_profile_used: false,
   ssh_transport_real: false,
+  database_read_transport: 'SYNTHETIC_TARGET_RESPONSE_PRODUCTION_MAIN_GUARDS',
   vps_used: false
 }
 let code,
@@ -96,12 +97,50 @@ app.whenReady().then(async () => {
                 const { operation, payload } = JSON.parse(body)
                 proof.last_operation = operation
                 const method = methodsByOperation[operation]
-                assert(method && typeof f.pgAdmin[method] === 'function')
-                const data = await f.pgAdmin[method](
-                  f.bindingId,
-                  payload.selection ?? payload,
-                  () => {}
-                )
+                let data
+                if (operation === 'managed-postgres-inspection') {
+                  const context = code.reviewPostgresInspection(
+                    f.remote,
+                    f.remoteCipher,
+                    f.controllerId,
+                    payload.context
+                  )
+                  const columns = [
+                    { name: 'id', data_type: 'integer', nullable: false },
+                    { name: 'marker', data_type: 'text', nullable: true }
+                  ]
+                  data = {
+                    context,
+                    read: payload.read,
+                    instance: {
+                      database_id: context.database.database_id,
+                      container_id: 'a'.repeat(64),
+                      image_id: 'sha256:' + 'b'.repeat(64),
+                      volume: `opspilot-pg-${context.database.database_id}-data`,
+                      volume_created_at: '2026-11-17T00:00:00Z',
+                      system_identifier: '1234567',
+                      state: 'ready',
+                      public_port: null
+                    },
+                    checked_at: new Date().toISOString(),
+                    data:
+                      payload.read.operation === 'tables'
+                        ? [{ schema: 'public', name: 'sample', columns }]
+                        : payload.read.operation === 'rows'
+                          ? [
+                              { id: 1, marker: 'Release checklist' },
+                              { id: 2, marker: 'Review deployment' }
+                            ]
+                          : null
+                  }
+                } else {
+                  assert(method && typeof f.pgAdmin[method] === 'function')
+                  data = await f.pgAdmin[method](
+                    f.bindingId,
+                    payload.selection ?? payload,
+                    () => {}
+                  )
+                }
                 if (
                   loseReply &&
                   ['prepare-managed-postgres', 'select-managed-postgres'].includes(operation)
@@ -132,6 +171,7 @@ app.whenReady().then(async () => {
       project = f.projects.list(f.bindingId)[0]
     const methods = {
       'controller:postgres-context': 'postgresContext',
+      'controller:inspect-postgres': 'inspectPostgres',
       'controller:prepare-postgres-intent': 'preparePostgresIntent',
       'controller:send-postgres-intent': 'sendPostgresIntent',
       'controller:check-postgres-intent': 'checkPostgresIntent',
@@ -155,7 +195,7 @@ app.whenReady().then(async () => {
     stage = 'renderer'
     await esbuild.build({
       stdin: {
-        contents: `import React from'react';import{createRoot}from'react-dom/client';import{ConfigProvider}from'antd';import{ControllerProjectDatabase}from'./src/renderer/src/components/ControllerProjectDatabase';import{CONTROLLER_DATABASE_COPY}from'./src/renderer/src/components/controllerDatabaseCopy';import{useUiState}from'./src/renderer/src/store/uiState';import{themeTokens,applyTheme}from'./src/renderer/src/utils/themeTokens';import'./src/renderer/src/assets/main.css';const root=createRoot(document.getElementById('root'));let id=0;window.showDatabase=(locale,theme)=>{useUiState.setState({locale,theme});applyTheme(theme);window.copy=CONTROLLER_DATABASE_COPY[locale];root.render(<ConfigProvider theme={themeTokens[theme]}><main style={{padding:24}}><h1>OpsPilot</h1><ControllerProjectDatabase key={++id} binding={${JSON.stringify(binding)}} project={${JSON.stringify(project)}} onSourceChanged={()=>{window.sourceChanges=(window.sourceChanges||0)+1}}/></main></ConfigProvider>)};`,
+        contents: `import React from'react';import{createRoot}from'react-dom/client';import{ConfigProvider}from'antd';import{ControllerProjectDatabase}from'./src/renderer/src/components/ControllerProjectDatabase';import{CONTROLLER_DATABASE_COPY}from'./src/renderer/src/components/controllerDatabaseCopy';import{POSTGRES_INSPECTOR_COPY}from'./src/renderer/src/components/postgresInspectorCopy';import{useUiState}from'./src/renderer/src/store/uiState';import{themeTokens,applyTheme}from'./src/renderer/src/utils/themeTokens';import'./src/renderer/src/assets/main.css';const root=createRoot(document.getElementById('root'));let id=0;window.showDatabase=(locale,theme)=>{useUiState.setState({locale,theme});applyTheme(theme);window.copy=CONTROLLER_DATABASE_COPY[locale];window.inspectorCopy=POSTGRES_INSPECTOR_COPY[locale];root.render(<ConfigProvider theme={themeTokens[theme]}><main style={{padding:24}}><h1>OpsPilot</h1><ControllerProjectDatabase key={++id} binding={${JSON.stringify(binding)}} project={${JSON.stringify(project)}} onSourceChanged={()=>{window.sourceChanges=(window.sourceChanges||0)+1}}/></main></ConfigProvider>)};`,
         resolveDir: join(root, 'app'),
         sourcefile: 'postgres-ui-lab.jsx',
         loader: 'jsx'
@@ -326,6 +366,40 @@ app.whenReady().then(async () => {
     assert.equal(await js('!!document.querySelector("input[type=password]")'), false)
     proof.checks.push(
       'metadata_only_no_password_readback_no_deploy_no_Docker_or_runtime_health_claim'
+    )
+    const changesBefore = f.db.prepare('SELECT total_changes() n').get().n
+    const remoteChangesBefore = f.remote.prepare('SELECT total_changes() n').get().n
+    for (const locale of ['vi', 'en', 'jp', 'cn'])
+      for (const theme of ['dark', 'light']) {
+        stage = `inspector-${locale}-${theme}`
+        await js(`window.showDatabase(${JSON.stringify(locale)},${JSON.stringify(theme)})`)
+        await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))')
+        const c = await js('window.inspectorCopy')
+        await click(c.open)
+        await click(c.load)
+        await click('public.sample')
+        await wait('document.body.textContent.includes("Release checklist")')
+        await capture(`inspector-rows-${locale}-${theme}`, 1280, 800)
+        if (locale === 'vi') await capture(`inspector-rows-${locale}-${theme}`, 1366, 768)
+        if (locale === 'vi' && theme === 'dark') {
+          await js(
+            `Array.from(document.querySelectorAll('[role=tab]')).find(e=>e.textContent===${JSON.stringify(c.structure)}).click()`
+          )
+          await wait('document.body.textContent.includes("integer")')
+          await capture('inspector-columns-vi-dark', 1366, 768)
+        }
+        await click(c.close)
+        await wait('!document.querySelector(".ant-modal-body")')
+        assert(!(await js('document.body.textContent.includes("Release checklist")')))
+      }
+    assert.equal(f.db.prepare('SELECT total_changes() n').get().n, changesBefore)
+    assert.equal(f.remote.prepare('SELECT total_changes() n').get().n, remoteChangesBefore)
+    assert(!f.db.serialize().includes(Buffer.from('Release checklist')))
+    proof.checks.push(
+      'inspector_4locale_2theme_table_rows_columns_production_preload_Main_real_SQLite_synthetic_target'
+    )
+    proof.checks.push(
+      'inspector_scope_derived_and_samples_removed_after_close_not_persisted_no_controller_writes'
     )
     proof.status = 'PASS'
   } catch (error) {

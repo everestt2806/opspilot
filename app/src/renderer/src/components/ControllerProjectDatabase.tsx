@@ -5,6 +5,7 @@ import type { DesktopProjectSetup } from '@shared/desktopProjectRegistration'
 import type { DesktopPostgresContext, DesktopPostgresIntent } from '@shared/desktopProductPostgres'
 import { useUiState } from '../store/uiState'
 import { CONTROLLER_DATABASE_COPY } from './controllerDatabaseCopy'
+import { ControllerPostgresInspector } from './ControllerPostgresInspector'
 
 type Props = {
   binding: DesktopControllerConnection
@@ -362,6 +363,7 @@ function DatabaseSession({ binding, project, onSourceChanged }: Props): React.JS
           </Space>
         </Space>
       </Modal>
+      <ControllerPostgresInspector binding={binding} project={project} />
     </>
   )
 }

@@ -1,4 +1,5 @@
 import type { DesktopPostgresContext, DesktopPostgresIntentInput, DesktopPostgresIntent } from './desktop-product-postgres';
+import type { DesktopPostgresInspectionInput, DesktopPostgresInspectionResult } from './desktop-postgres-inspection';
 import type { DesktopEnvironmentContext, DesktopEnvironmentPrepareInput, DesktopEnvironmentIntent, DesktopEnvironmentSelectionPrepareInput, DesktopEnvironmentSelectionIntent } from './desktop-product-environment';
 import type { ControllerAdoptionReviewInput, ControllerAdoptionReview, ControllerAdoptionConfirmInput, ControllerAdoptionResult } from './desktop-controller-adoption'
 import type { ControllerAuthorityReviewInput, ControllerAuthorityReview, ControllerAuthorityConfirmInput, ControllerAuthorityResult } from './desktop-controller-authority'
@@ -425,6 +426,7 @@ export interface IpcInvokeMap {
   'controller:environment-selections': (projectKey: string) => IpcResult<DesktopEnvironmentSelectionIntent[]>;
   'controller:cancel-environment-selection': (key: string) => IpcResult<DesktopEnvironmentSelectionIntent>;
   'controller:postgres-context': (projectKey: string) => IpcResult<DesktopPostgresContext>;
+  'controller:inspect-postgres': (input: DesktopPostgresInspectionInput) => IpcResult<DesktopPostgresInspectionResult>;
   'controller:prepare-postgres-intent': (input: DesktopPostgresIntentInput) => IpcResult<DesktopPostgresIntent>;
   'controller:send-postgres-intent': (key: string) => IpcResult<DesktopPostgresIntent>;
   'controller:check-postgres-intent': (key: string) => IpcResult<DesktopPostgresIntent>;

@@ -276,6 +276,9 @@ export function registerIpcHandlers(
     handle('controller:postgres-context', (input) =>
       desktopControllerService.postgresContext(input)
     )
+    handle('controller:inspect-postgres', (input) =>
+      desktopControllerService.inspectPostgres(input)
+    )
     handle('controller:prepare-postgres-intent', (input) =>
       desktopControllerService.preparePostgresIntent(input)
     )
