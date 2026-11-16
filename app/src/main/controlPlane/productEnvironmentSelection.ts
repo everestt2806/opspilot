@@ -10,6 +10,11 @@ import type { ProductEnvironmentReview } from '../../../../docs/contracts/produc
 import { ProductEnvironmentRepository } from '../db/productEnvironmentRepository'
 import { TargetEnrollmentRepository } from './targetEnrollmentRepository'
 import { canonicalH2Json } from './productH2Proof'
+import { readProductSourceConfiguration } from './productSourceConfiguration'
+import {
+  readBoundProductEnvironmentSource,
+  readProductPostgresSourceBinding
+} from './productSourceBindings'
 import {
   environmentContextSchema,
   environmentSelectionSchema,
@@ -277,6 +282,7 @@ export class ProductEnvironmentSelection {
               ownership_generation: request.scope.ownership_generation,
               revision: request.environment_revision
             }
+          const currentConfig = readProductSourceConfiguration(source, source.deploy_config_json)
           const config = canonicalH2Json({ ...this.base(source), environment }),
             hash = sha(config)
           this.db
@@ -331,6 +337,30 @@ export class ProductEnvironmentSelection {
               stamp
             )
           this.vault.metadataInTransaction(request.scope, request.environment_revision)
+          if (currentConfig.database) {
+            const retained = readProductPostgresSourceBinding(
+              this.db,
+              request.scope,
+              source.source_generation,
+              source.source_config_sha256,
+              currentConfig.database
+            )
+            this.db
+              .prepare(
+                `INSERT INTO product_source_postgres(app_id,source_generation,controller_id,ownership_generation,database_id,source_config_sha256,target_binding_json,environment_source_generation,created_at) VALUES(?,?,?,?,?,?,?,?,?)`
+              )
+              .run(
+                request.scope.app_id,
+                generation,
+                controllerId,
+                request.scope.ownership_generation,
+                retained.database_id,
+                hash,
+                retained.target_binding_json,
+                generation,
+                stamp
+              )
+          }
           this.assertExpected(this.source(request), request)
           this.quiescent(request)
           const updated = this.db
@@ -397,7 +427,7 @@ export class ProductEnvironmentSelection {
       s.controller_id !== request.scope.controller_id ||
       s.ownership_generation !== request.scope.ownership_generation ||
       !['express', 'static-spa', 'nextjs'].includes(s.framework) ||
-      s.needs_db !== 0 ||
+      ![0, 1].includes(s.needs_db) ||
       s.source_type !== 'git' ||
       s.source_path !== null ||
       s.imported_from_vps !== 0 ||
@@ -407,35 +437,49 @@ export class ProductEnvironmentSelection {
       s.git_root !== s.repository_root
     )
       throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED')
-    let config: Record<string, unknown>
+    let parsedConfig: ReturnType<typeof readProductSourceConfiguration>
     try {
-      config = JSON.parse(s.deploy_config_json)
+      parsedConfig = readProductSourceConfiguration(s, s.deploy_config_json)
     } catch {
       throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED')
     }
-    const env = config?.environment
-    const expected = canonicalH2Json({
-      ...this.base(s),
-      ...(env === undefined ? {} : { environment: env })
-    })
-    if (s.deploy_config_json !== expected || sha(expected) !== s.config_sha256)
+    const env = parsedConfig.environment
+    if (sha(s.deploy_config_json) !== s.config_sha256)
       throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED')
+    if (parsedConfig.database)
+      readProductPostgresSourceBinding(
+        this.db,
+        request.scope,
+        s.source_generation,
+        s.source_config_sha256,
+        parsedConfig.database
+      )
     if (env !== undefined) {
+      const resolved = readBoundProductEnvironmentSource(
+        this.db,
+        request.scope,
+        s.source_generation,
+        s.source_config_sha256,
+        env,
+        parsedConfig.database
+      )
       const binding = this.db
         .prepare('SELECT * FROM product_source_environment WHERE app_id=? AND source_generation=?')
-        .get(request.scope.app_id, s.source_generation) as Stored | undefined
+        .get(request.scope.app_id, resolved.basis_source_generation) as Stored | undefined
       if (!binding) throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_AUTHORITY_REJECTED')
       this.verifyBinding(binding, request, false)
     }
     return s
   }
   private base(source: Source): object {
+    const config = readProductSourceConfiguration(source, source.deploy_config_json)
     return {
       framework: source.framework,
       host_port: source.host_port,
       container_port: source.container_port,
       healthcheck_path: source.healthcheck_path,
-      needs_db: false
+      needs_db: source.needs_db === 1,
+      ...(config.database ? { database: config.database } : {})
     }
   }
   private assertExpected(source: Source, request: ProductEnvironmentSelectionInput): void {

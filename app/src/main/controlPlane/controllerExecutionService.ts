@@ -1,4 +1,5 @@
 import { ProductEnvironmentRuntime } from './productEnvironmentRuntime'
+import { ProductPostgresRuntime } from './productPostgresRuntime'
 import { loadControllerRuntimeKey } from './controllerRuntimeKeys'
 import type { OpenControllerDatabase } from './controllerDatabase'
 import type { ProductDeployRepository } from '../db/productDeployRepository'
@@ -70,6 +71,13 @@ export function createControllerExecutionRuntime(
         target_state_root: installed.state_root,
         collector_directory: approved.collector_directory,
         templates_directory: approved.templates_directory,
+        postgres: new ProductPostgresRuntime(
+          opened.database,
+          repository,
+          loadControllerCredentialCipher(opened.dataDirectory),
+          claim,
+          (keyClaim) => loadControllerRuntimeKey(opened.dataDirectory, keyClaim)
+        ),
         environment: new ProductEnvironmentRuntime(
           opened.database,
           repository,

@@ -18,6 +18,7 @@ import { verifyControllerBundle } from './controllerBundle'
 import { enrollProductTarget } from './targetEnrollment'
 import { runTargetHelperUpgradeReviewCli } from './targetHelperUpgradeReview'
 import { runTargetHelperUpgradeJournalCli } from './targetHelperUpgradeJournal'
+import { runProductPostgresCli } from './productPostgresCli'
 import { ControllerStartupRecovery } from './controllerStartupRecovery'
 import { ControllerClientAuth } from './controllerClientAuth'
 import { ProductProjectRegistration } from './projectRegistration'
@@ -60,6 +61,21 @@ type Command =
 
 export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<void> {
   const [commandValue, ...args] = argv
+  if (commandValue === 'prepare-managed-postgres' || commandValue === 'managed-postgres-state') {
+    const controller = new AbortController()
+    const stop = (): void => controller.abort()
+    process.once('SIGINT', stop)
+    process.once('SIGTERM', stop)
+    try {
+      if (process.platform !== 'linux') throw Error('PRODUCT_POSTGRES_LINUX_REQUIRED')
+      const input = await readControllerBootstrapInput(process.stdin, controller.signal)
+      runProductPostgresCli(commandValue, parseDataDirectory(args), input, controller.signal)
+    } finally {
+      process.removeListener('SIGINT', stop)
+      process.removeListener('SIGTERM', stop)
+    }
+    return
+  }
   if (
     commandValue === 'review-target-helper-upgrade' ||
     commandValue === 'prepare-target-helper-upgrade' ||

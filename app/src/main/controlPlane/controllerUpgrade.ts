@@ -46,7 +46,9 @@ import { assertControllerUpgradeAdminReady } from './controllerUpgradeProtocol'
 import {
   CONTROLLER_SPA_ASSET_TRANSITION,
   CONTROLLER_ENVIRONMENT_ASSET_TRANSITION,
-  CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION
+  CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION,
+  CONTROLLER_POSTGRES_ASSET_TRANSITION,
+  CONTROLLER_POSTGRES_BOOTSTRAP_TRANSITION
 } from './controllerUpgradeAssets'
 import {
   controllerUpgradeSnapshotSchema,
@@ -201,9 +203,16 @@ export function assertControllerUpgradeCompatibility(
     environment = apply(files, CONTROLLER_ENVIRONMENT_ASSET_TRANSITION),
     both = spa && apply(spa, CONTROLLER_ENVIRONMENT_ASSET_TRANSITION)
   const prior = [files, spa, environment, both]
+  const withBootstrap = prior.map(
+    (value) => value && apply(value, CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION)
+  )
   const approvedTransition = [
     ...prior.slice(1),
-    ...prior.map((value) => value && apply(value, CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION))
+    ...withBootstrap,
+    ...[...prior, ...withBootstrap].map((value) => {
+      const pg = value && apply(value, CONTROLLER_POSTGRES_ASSET_TRANSITION)
+      return pg && apply(pg, CONTROLLER_POSTGRES_BOOTSTRAP_TRANSITION)
+    })
   ].some((mapped) => mapped && JSON.stringify(mapped) === nextAssets)
   if (
     old.lock_sha256 !== next.lock_sha256 ||

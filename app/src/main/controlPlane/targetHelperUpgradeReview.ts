@@ -10,7 +10,10 @@ import type {
 import { readReleaseFile } from './controllerRelease'
 import { assertControllerRuntimeSchema } from './controllerUpgradeCheck'
 import { readVerifiedControllerBundleFile, verifyControllerBundle } from './controllerBundle'
-import { CONTROLLER_ENVIRONMENT_ASSET_TRANSITION } from './controllerUpgradeAssets'
+import {
+  CONTROLLER_ENVIRONMENT_ASSET_TRANSITION,
+  CONTROLLER_POSTGRES_ASSET_TRANSITION
+} from './controllerUpgradeAssets'
 import { assertRetainedTargetHelpers } from './controllerTargetHelperCompatibility'
 import { loadControllerRuntimeKey } from './controllerRuntimeKeys'
 import { createControllerSshResolver } from './controllerSshResolver'
@@ -155,8 +158,17 @@ export async function reviewProductTargetHelperUpgrade(
           }
         ]
   })
-  const approved = CONTROLLER_ENVIRONMENT_ASSET_TRANSITION[0]
+  const approved = [
+    CONTROLLER_ENVIRONMENT_ASSET_TRANSITION[0],
+    CONTROLLER_POSTGRES_ASSET_TRANSITION[0]
+  ].find(
+    (entry) =>
+      changes.length === 1 &&
+      changes[0].after.size === entry.after.size &&
+      changes[0].after.sha256 === entry.after.sha256
+  )
   if (
+    !approved ||
     !['express', 'static-spa', 'nextjs'].includes(framework) ||
     changes.length !== 1 ||
     changes[0].path !== approved.path.replace(/^payload\//, '') ||

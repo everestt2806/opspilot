@@ -23,6 +23,36 @@ export const CONTROLLER_SPA_ASSET_TRANSITION = [
   }
 ] as const
 
+/** R7h-4 candidate, exact bytes; serving approval requires full PG/legacy/Root gates. */
+export const CONTROLLER_POSTGRES_ASSET_TRANSITION = [
+  {
+    path: 'payload/target-helper/target_product_runtime.py',
+    mode: 0o600,
+    before: {
+      size: 51419,
+      sha256: 'f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5'
+    },
+    after: {
+      size: 85494,
+      sha256: '9f8e1fbb6fab90e9266e160b9cbbcec9707c36f455e1962b8462699f03720f1a'
+    }
+  }
+] as const
+export const CONTROLLER_POSTGRES_BOOTSTRAP_TRANSITION = [
+  {
+    path: 'payload/target-helper/target_enrollment.py',
+    mode: 0o600,
+    before: {
+      size: 36931,
+      sha256: 'ae2c290726b6fc497489bca962036ac14806bf588086d181498cbc8dcd886c7b'
+    },
+    after: {
+      size: 37271,
+      sha256: 'e1a00d3c1cc90656a56257c1820a5b1424cef5ac4d8f634f07dcd44990057b25'
+    }
+  }
+] as const
+
 /** e3a reviewed target transaction bootstrap, exact forward bytes only. */
 export const CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION = [
   {

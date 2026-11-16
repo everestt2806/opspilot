@@ -55,8 +55,8 @@ export interface ControllerUpgradeSnapshot {
   database_inode: number;
   key_inode: number;
   quiescent: boolean;
-  /** Absent in historical snapshots; exact supported pair only. */
-  schema_version?: 29 | 35;
+  /** Historical snapshots may omit it; exact29→35 and35→37 schema gates only. */
+  schema_version?: 29 | 35 | 37;
 }
 /** Additive run-product stdin field, only for root-staged revision paths. */
 export interface ControllerUpgradeGate {

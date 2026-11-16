@@ -8,6 +8,8 @@ import { ProductEnvironmentRepository } from '../db/productEnvironmentRepository
 import { TargetEnrollmentRepository } from './targetEnrollmentRepository'
 import { canonicalH2Json } from './productH2Proof'
 import { ProductEnvironmentError } from './productEnvironment'
+import { readBoundProductEnvironmentSource } from './productSourceBindings'
+import { postgresReferenceSchema } from './productPostgres'
 
 export const productEnvironmentReferenceSchema = z.strictObject({
   controller_id: z.string().min(1).max(128),
@@ -70,21 +72,19 @@ export class ProductEnvironmentPreflight {
         true
       )
       if (target.ssh_security_revision !== input.expected_target_security_revision) fail()
-      const binding = db
-        .prepare(
-          `SELECT controller_id,ownership_generation,environment_revision,
-        target_binding_json,source_config_sha256 FROM product_source_environment
-        WHERE app_id=? AND source_generation=?`
-        )
-        .get(input.app_id, input.expected_source_generation) as
-        | {
-            controller_id: string
-            ownership_generation: number
-            environment_revision: number
-            target_binding_json: string
-            source_config_sha256: string
-          }
-        | undefined
+      const binding = readBoundProductEnvironmentSource(
+        db,
+        {
+          controller_id: input.controller_id,
+          app_id: input.app_id,
+          ownership_generation: input.expected_ownership_generation,
+          target
+        },
+        input.expected_source_generation,
+        source!.config_sha256,
+        reference,
+        config.database === undefined ? undefined : postgresReferenceSchema.parse(config.database)
+      )
       if (
         !binding ||
         binding.controller_id !== reference.controller_id ||

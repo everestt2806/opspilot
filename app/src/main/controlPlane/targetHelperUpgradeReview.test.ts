@@ -25,6 +25,7 @@ import {
 } from '../../../../docs/contracts/product-target-enrollment'
 import {
   CONTROLLER_ENVIRONMENT_ASSET_TRANSITION,
+  CONTROLLER_POSTGRES_ASSET_TRANSITION,
   CONTROLLER_SPA_ASSET_TRANSITION
 } from './controllerUpgradeAssets'
 import { reviewProductTargetHelperUpgrade } from './targetHelperUpgradeReview'
@@ -755,7 +756,7 @@ describe('Retained helper upgrade read-only review', () => {
           {
             path: 'target-helper/target_product_runtime.py',
             before: CONTROLLER_ENVIRONMENT_ASSET_TRANSITION[0].before,
-            after: CONTROLLER_ENVIRONMENT_ASSET_TRANSITION[0].after
+            after: CONTROLLER_POSTGRES_ASSET_TRANSITION[0].after
           }
         ]
       })
@@ -795,7 +796,7 @@ describe('Retained helper upgrade read-only review', () => {
       Object.assign(
         entry,
         kind === 'current'
-          ? CONTROLLER_ENVIRONMENT_ASSET_TRANSITION[0].after
+          ? CONTROLLER_POSTGRES_ASSET_TRANSITION[0].after
           : { sha256: 'c'.repeat(64) }
       )
       input.retained_manifest = JSON.stringify(manifest)

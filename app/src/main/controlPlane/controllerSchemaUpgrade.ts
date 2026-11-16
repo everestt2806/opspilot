@@ -19,6 +19,7 @@ import type { ControllerUpgradeSnapshot } from '../../../../docs/contracts/produ
 import { assertReleaseDirectory } from './controllerRelease'
 import { runMigrations } from '../db'
 import { inspectControllerUpgradeDatabase } from './controllerUpgradeCheck'
+import postgresMigration from '../db/migrations/037_product_managed_postgres.sql?raw'
 
 const CAP = 512 * 1024 * 1024
 const tables = [
@@ -38,6 +39,12 @@ export type ControllerSchemaBackup = {
 export type ControllerSchemaTransition = {
   snapshot: ControllerUpgradeSnapshot
   projection29: ControllerUpgradeSnapshot
+}
+export type ControllerPostgresSchemaTransition = {
+  snapshot: ControllerUpgradeSnapshot
+  projection35: ControllerUpgradeSnapshot
+  legacy_environment_reversible: boolean
+  projection29?: ControllerUpgradeSnapshot
 }
 function same(expected: ControllerUpgradeSnapshot, actual: ControllerUpgradeSnapshot): void {
   for (const field of [
@@ -142,7 +149,8 @@ export async function backupControllerSchema(
   data: string,
   backupDirectory: string,
   requestKey: string,
-  expected: ControllerUpgradeSnapshot
+  expected: ControllerUpgradeSnapshot,
+  baseline: 29 | 35 = 29
 ): Promise<ControllerSchemaBackup> {
   process.umask(0o077)
   directory(backupDirectory)
@@ -159,7 +167,7 @@ export async function backupControllerSchema(
   try {
     db.exec('BEGIN')
     const before = inspectControllerUpgradeDatabase(data, db)
-    if (before.schema_version !== 29) fail('VERSION_UNSUPPORTED')
+    if (before.schema_version !== baseline) fail('VERSION_UNSUPPORTED')
     same(expected, before)
     if (existsSync(file)) {
       repairedPromotion(file)
@@ -306,6 +314,131 @@ export function transitionControllerSchema(
     if (error instanceof Error && /^CONTROLLER_INSTALL_SCHEMA_[A-Z_]+$/.test(error.message))
       throw error
     return fail('TRANSITION_FAILED')
+  } finally {
+    db.close()
+  }
+}
+
+const postgresTables = [
+  'product_postgres_selection_request',
+  'product_source_postgres',
+  'product_managed_postgres_request',
+  'product_managed_postgres'
+]
+function reversiblePostgres(db: Database.Database): boolean {
+  return (
+    postgresTables.every(
+      (name) => (db.prepare('SELECT count(*) n FROM ' + name).get() as { n: number }).n === 0
+    ) &&
+    !db
+      .prepare(
+        "SELECT 1 FROM product_source_config WHERE NOT json_valid(deploy_config_json) OR json_type(deploy_config_json,'$.database') IS NOT NULL LIMIT 1"
+      )
+      .get()
+  )
+}
+function unchangedRetainedTargets(db: Database.Database, backupDirectory: string): boolean {
+  const backup = new Database(join(backupDirectory, 'backup.sqlite'), {
+    readonly: true,
+    fileMustExist: true
+  })
+  try {
+    const sql = `SELECT controller_id,app_id,ownership_generation,target_binding_json,manifest_sha256,target_root,state
+      FROM product_target_enrollment ORDER BY controller_id,app_id,ownership_generation`
+    return JSON.stringify(db.prepare(sql).all()) === JSON.stringify(backup.prepare(sql).all())
+  } finally {
+    backup.close()
+  }
+}
+/** Private037 prerequisite gate. Root orchestration must seal a separate35 backup;
+ * do not register the normal migration or start a37 service before that integration.
+ * A retained resource/request/binding blocks downgrade even before Docker activation.
+ */
+export function transitionControllerPostgresSchema(
+  data: string,
+  backupDirectory: string,
+  proof: ControllerSchemaBackup,
+  expected: ControllerUpgradeSnapshot,
+  operation: 'apply' | 'can-revert' | 'revert',
+  rollbackProjection?: ControllerUpgradeSnapshot,
+  hooks: { afterMigration?: () => void } = {}
+): ControllerPostgresSchemaTransition {
+  if (proof.before.schema_version !== 35 || ![35, 37].includes(expected.schema_version ?? 0))
+    fail('VERSION_UNSUPPORTED')
+  sealedBackup(data, backupDirectory, proof)
+  const db = new Database(join(data, 'opspilot.db'), {
+    fileMustExist: true,
+    readonly: operation === 'can-revert',
+    timeout: 5000
+  })
+  try {
+    db.pragma('foreign_keys=ON')
+    const run = db.transaction(() => {
+      const before = inspectControllerUpgradeDatabase(data, db)
+      identity(proof.before, before)
+      if (operation === 'apply') {
+        if (before.schema_version === 35) {
+          same(expected, before)
+          same(proof.before, before)
+          db.exec(postgresMigration)
+          hooks.afterMigration?.()
+          db.prepare('INSERT INTO schema_version(version) VALUES(37)').run()
+        } else if (before.schema_version === 37) {
+          same(expected, expected.schema_version === 35 ? proof.before : before)
+        } else fail('VERSION_UNSUPPORTED')
+        const snapshot = inspectControllerUpgradeDatabase(data, db),
+          projection35 = inspectControllerUpgradeDatabase(data, db, 35)
+        same(proof.before, projection35)
+        if (!reversiblePostgres(db)) fail('MIGRATION_CHANGED_DATA')
+        return { snapshot, projection35, legacy_environment_reversible: reversible(db) }
+      }
+      if (operation === 'revert' && before.schema_version === 35) {
+        if (expected.schema_version !== 37 || !rollbackProjection) fail('STATE_CHANGED')
+        identity(expected, before)
+        same(rollbackProjection!, before)
+        const legacy_environment_reversible = reversible(db)
+        return {
+          snapshot: before,
+          projection35: before,
+          legacy_environment_reversible,
+          ...(legacy_environment_reversible
+            ? { projection29: inspectControllerUpgradeDatabase(data, db, true) }
+            : {})
+        }
+      }
+      same(expected, before)
+      if (before.schema_version !== 37) fail('VERSION_UNSUPPORTED')
+      if (!reversiblePostgres(db) || !unchangedRetainedTargets(db, backupDirectory))
+        fail('ROLLBACK_UNSAFE')
+      const projection35 = inspectControllerUpgradeDatabase(data, db, 35),
+        legacy_environment_reversible = reversible(db),
+        projection29 = legacy_environment_reversible
+          ? inspectControllerUpgradeDatabase(data, db, true)
+          : undefined
+      if (operation === 'can-revert')
+        return {
+          snapshot: before,
+          projection35,
+          legacy_environment_reversible,
+          ...(projection29 ? { projection29 } : {})
+        }
+      if (rollbackProjection) same(rollbackProjection, projection35)
+      for (const table of postgresTables) db.exec('DROP TABLE ' + table)
+      db.prepare('DELETE FROM schema_version WHERE version=37').run()
+      const after = inspectControllerUpgradeDatabase(data, db)
+      same(projection35, after)
+      return {
+        snapshot: after,
+        projection35,
+        legacy_environment_reversible,
+        ...(projection29 ? { projection29 } : {})
+      }
+    })
+    return operation === 'can-revert' ? run.deferred() : run.immediate()
+  } catch (error) {
+    if (error instanceof Error && /^CONTROLLER_INSTALL_SCHEMA_[A-Z_]+$/.test(error.message))
+      throw error
+    return fail('POSTGRES_TRANSITION_FAILED')
   } finally {
     db.close()
   }

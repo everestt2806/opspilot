@@ -1,5 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto'
 import { z } from 'zod'
+import { postgresReferenceSchema } from './productPostgres'
 import type {
   H2Context,
   H2TerminalReceipt,
@@ -89,13 +90,20 @@ export const h2ContextSchema: z.ZodType<H2Context> = z
         ownership_generation: positive,
         revision: positive
       })
-      .optional()
+      .optional(),
+    database: postgresReferenceSchema.optional()
   })
   .superRefine((value, context) => {
     if (
       value.environment &&
       (value.environment.controller_id !== value.claim.controller_id ||
         value.environment.ownership_generation !== value.claim.ownership_generation)
+    )
+      context.addIssue({ code: 'custom', message: 'H2_CONTEXT_INVALID' })
+    if (
+      value.database &&
+      (value.database.controller_id !== value.claim.controller_id ||
+        value.database.ownership_generation !== value.claim.ownership_generation)
     )
       context.addIssue({ code: 'custom', message: 'H2_CONTEXT_INVALID' })
     if (value.build_state === 'build_succeeded' && value.candidate_image_id === null)
@@ -136,6 +144,16 @@ export const h2RuntimeIdentitySchema = z
     if ((value.collector_container_id === null) !== (value.collector_image_id === null))
       context.addIssue({ code: 'custom', message: 'H2_COLLECTOR_INVALID' })
   })
+export const h2PostgresIdentitySchema = z.strictObject({
+  database_id: z.uuidv4().refine((s) => s === s.toLowerCase()),
+  container_id: containerId,
+  image_id: imageId,
+  volume: z.string().regex(/^opspilot-pg-[0-9a-f-]{36}-data$/),
+  volume_created_at: z.string().min(1).max(64),
+  system_identifier: z.string().regex(/^[0-9]{1,20}$/),
+  state: z.literal('ready'),
+  public_port: z.null()
+})
 export const h2ReceiptSchema: z.ZodType<H2TerminalReceipt> = z
   .strictObject({
     version: z.literal(1),
@@ -148,7 +166,8 @@ export const h2ReceiptSchema: z.ZodType<H2TerminalReceipt> = z
     boundary: h2BoundarySchema.nullable(),
     exposure_status: z.enum(['not_checked', 'degraded']),
     remote_quiescent: z.literal(true),
-    sealed_at: timestamp
+    sealed_at: timestamp,
+    database_runtime: h2PostgresIdentitySchema.optional()
   })
   .superRefine((value, context) => {
     const fail = (): void => {
@@ -158,6 +177,16 @@ export const h2ReceiptSchema: z.ZodType<H2TerminalReceipt> = z
     const active = value.active_runtime
     const cand = value.candidate_runtime
     const prev = value.previous_runtime
+    if (value.context.database) {
+      if (value.failed_step !== 'BUILD' && !value.database_runtime) fail()
+      if (
+        value.database_runtime &&
+        (value.database_runtime.database_id !== value.context.database.database_id ||
+          value.database_runtime.volume !==
+            `opspilot-pg-${value.context.database.database_id}-data`)
+      )
+        fail()
+    } else if (value.database_runtime) fail()
 
     // H2-PROOF-001: Any runtimes sharing a container_id must be completely identical.
     const runtimes = [active, cand, prev].filter((r): r is NonNullable<typeof r> => r !== null)

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { lstatSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
 import { runMigrations } from '../db'
+import postgresMigration from '../db/migrations/037_product_managed_postgres.sql?raw'
 import { assertReleaseDirectory, readReleaseFile } from './controllerRelease'
 import type { ControllerUpgradeSnapshot } from '../../../../docs/contracts/product-controller-upgrade'
 export const controllerUpgradeDigest = (value: string | Buffer): string =>
@@ -22,7 +23,11 @@ export function controllerUpgradeSchemaHash(db: Database.Database): string {
   )
 }
 /** Revision startup checks schema only; normal history growth must not inherit the upgrade hash cap. */
-export function assertControllerRuntimeSchema(directory: string): void {
+export function assertControllerRuntimeSchema(
+  directory: string,
+  schemaVersion: 35 | 37 = 35
+): void {
+  if (schemaVersion !== 35 && schemaVersion !== 37) fail()
   if (!isAbsolute(directory) || resolve(directory) !== directory) fail()
   assertReleaseDirectory(directory)
   const file = join(directory, 'opspilot.db'),
@@ -40,6 +45,10 @@ export function assertControllerRuntimeSchema(directory: string): void {
   try {
     db.exec('BEGIN')
     runMigrations(expected, 35, 'controller')
+    if (schemaVersion === 37) {
+      expected.exec(postgresMigration)
+      expected.prepare('INSERT INTO schema_version(version) VALUES(37)').run()
+    }
     if (
       controllerUpgradeSchemaHash(db) !== controllerUpgradeSchemaHash(expected) ||
       JSON.stringify(db.prepare('SELECT version FROM schema_version ORDER BY version').all()) !==
@@ -57,7 +66,7 @@ export function assertControllerRuntimeSchema(directory: string): void {
 export function inspectControllerUpgradeDatabase(
   directory: string,
   db: Database.Database,
-  project29 = false
+  projectBefore: boolean | 35 = false
 ): ControllerUpgradeSnapshot {
   if (!db.inTransaction || !isAbsolute(directory) || resolve(directory) !== directory) fail()
   assertReleaseDirectory(directory)
@@ -84,12 +93,21 @@ export function inspectControllerUpgradeDatabase(
   const rawVersion = (
     db.prepare('SELECT MAX(version) v FROM schema_version').get() as { v: number }
   ).v
-  const version: 29 | 35 = rawVersion === 29 ? 29 : rawVersion === 35 ? 35 : fail()
+  const version: 29 | 35 | 37 = [29, 35, 37].includes(rawVersion)
+    ? (rawVersion as 29 | 35 | 37)
+    : fail()
+  const projectVersion = projectBefore === true ? 29 : projectBefore === 35 ? 35 : null
+  if (projectVersion !== null && projectVersion > version) fail()
   const expected = new Database(':memory:')
   let projection: Database.Database | undefined
   try {
     expected.pragma('foreign_keys=ON')
-    runMigrations(expected, version, 'controller')
+    runMigrations(expected, Math.min(version, 35), 'controller')
+    if (version === 37) {
+      // Private candidate schema gate only; normal initializer remains035 until Root integration.
+      expected.exec(postgresMigration)
+      expected.prepare('INSERT INTO schema_version(version) VALUES(37)').run()
+    }
     const schemaHash = controllerUpgradeSchemaHash(db)
     if (
       schemaHash !== controllerUpgradeSchemaHash(expected) ||
@@ -121,10 +139,10 @@ export function inspectControllerUpgradeDatabase(
       .get()
     let tableSource = expected,
       resultSchema = schemaHash
-    if (project29 && version === 35) {
+    if (projectVersion !== null && projectVersion < version) {
       projection = new Database(':memory:')
       projection.pragma('foreign_keys=ON')
-      runMigrations(projection, 29, 'controller')
+      runMigrations(projection, projectVersion, 'controller')
       tableSource = projection
       resultSchema = controllerUpgradeSchemaHash(projection)
     }
@@ -139,7 +157,10 @@ export function inspectControllerUpgradeDatabase(
       if (['metric_sample', 'score_sample', 'alert'].includes(name)) continue
       if (!/^[a-z][a-z0-9_]*$/.test(name)) fail()
       hash.update(name + '\n')
-      const filter = project29 && name === 'schema_version' ? ' WHERE version<=29' : ''
+      const filter =
+        projectVersion !== null && name === 'schema_version'
+          ? ' WHERE version<=' + projectVersion
+          : ''
       for (const row of db
         .prepare('SELECT * FROM "' + name + '"' + filter + ' ORDER BY rowid')
         .iterate()) {
@@ -158,7 +179,7 @@ export function inspectControllerUpgradeDatabase(
       database_inode: info.ino,
       key_inode: keyInfo.ino,
       quiescent: !busy,
-      schema_version: project29 ? 29 : version
+      schema_version: projectVersion ?? version
     }
   } finally {
     projection?.close()

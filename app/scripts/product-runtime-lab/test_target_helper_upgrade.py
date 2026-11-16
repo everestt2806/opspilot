@@ -440,13 +440,16 @@ api.handle(json.load(sys.stdin))
         self.assertEqual(json.loads(result.stdout)["state"], "rejected")
         self.assertNotIn("SYNTHETIC_SECRET_CANARY", result.stdout + result.stderr)
 
-    def test_all_four_pinned_framework_pairs_can_actually_replace_the_runtime(self):
+    def test_all_seven_pinned_framework_pairs_can_actually_replace_the_runtime(self):
         root = fixture.REPO / "app/resources/controller-releases"
         for app_id, (framework, release) in enumerate(
             [
                 ("express", "linux-x64-node22-20261110"),
                 ("static-spa", "linux-x64-node22-20261113-spa-retained"),
                 ("nextjs", "linux-x64-node22-20261113-spa-retained"),
+                ("express", "linux-x64-node22-20261116-helper-upgrade"),
+                ("static-spa", "linux-x64-node22-20261116-helper-upgrade"),
+                ("nextjs", "linux-x64-node22-20261116-helper-upgrade"),
             ],
             start=2,
         ):

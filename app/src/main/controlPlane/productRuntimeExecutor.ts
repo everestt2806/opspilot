@@ -65,7 +65,8 @@ export class ProductRuntimeExecutor implements ProductJobExecutor {
         snapshot,
         target.collector_directory,
         target.templates_directory,
-        target.environment?.resolve()
+        target.environment?.resolve(),
+        target.postgres?.resolve()
       )
       if (this.options.admitTarget) {
         const admission = await this.options.admitTarget(claim, signal)

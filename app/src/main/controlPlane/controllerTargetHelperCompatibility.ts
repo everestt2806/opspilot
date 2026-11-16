@@ -1,6 +1,7 @@
 import {
   CONTROLLER_SPA_ASSET_TRANSITION,
-  CONTROLLER_ENVIRONMENT_ASSET_TRANSITION
+  CONTROLLER_ENVIRONMENT_ASSET_TRANSITION,
+  CONTROLLER_POSTGRES_ASSET_TRANSITION
 } from './controllerUpgradeAssets'
 
 type Asset = { path: string; size: number; sha256: string }
@@ -16,6 +17,19 @@ export function assertRetainedTargetHelpers(
     if (previous[0].size === file.size && previous[0].sha256 === file.sha256) continue
     const policy = CONTROLLER_SPA_ASSET_TRANSITION[0]
     const environment = CONTROLLER_ENVIRONMENT_ASSET_TRANSITION[0]
+    const postgres = CONTROLLER_POSTGRES_ASSET_TRANSITION[0]
+    if (
+      ['express', 'static-spa', 'nextjs'].includes(framework) &&
+      file.path === postgres.path.replace(/^payload\//, '') &&
+      file.size === postgres.after.size &&
+      file.sha256 === postgres.after.sha256 &&
+      [
+        environment.after,
+        environment.before,
+        ...(framework === 'express' ? [policy.before] : [])
+      ].some((pin) => previous[0].size === pin.size && previous[0].sha256 === pin.sha256)
+    )
+      continue
     if (
       ['express', 'static-spa', 'nextjs'].includes(framework) &&
       file.path === environment.path.replace(/^payload\//, '') &&

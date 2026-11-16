@@ -202,7 +202,8 @@ def initialize_runtime_enrollment(root: str | Path, controller_id: str, app_id: 
 
 
 def validate_context(context: Any, identity: ExecutionIdentity, deployment_id: int) -> dict[str, Any]:
-    if not isinstance(context, dict) or set(context) not in (_CONTEXT_KEYS, _CONTEXT_KEYS | {"environment"}) or context.get("version") != 1:
+    if (not isinstance(context, dict) or not _CONTEXT_KEYS <= set(context)
+        or not set(context) <= _CONTEXT_KEYS | {"environment", "database"} or context.get("version") != 1):
         raise RuntimeRejected()
     if not _plain(context):
         raise RuntimeRejected()
@@ -236,6 +237,12 @@ def validate_context(context: Any, identity: ExecutionIdentity, deployment_id: i
             or ref.get("controller_id") != claim["controller_id"]
             or ref.get("ownership_generation") != claim["ownership_generation"] or not _positive(ref.get("revision"))):
             raise RuntimeRejected()
+    if "database" in context:
+        ref = context["database"]
+        if (not isinstance(ref, dict) or set(ref) != {"controller_id", "ownership_generation", "database_id"}
+            or ref.get("controller_id") != claim["controller_id"]
+            or ref.get("ownership_generation") != claim["ownership_generation"] or not _match(_UUID, ref.get("database_id"))):
+            raise RuntimeRejected()
     for field in ("vps_id", "port", "ssh_security_revision"):
         if not _positive(target[field]):
             raise RuntimeRejected()
@@ -268,14 +275,30 @@ class DockerCommands:
         self.active = False
         self.cancelled = threading.Event()
 
-    def run(self, args: list[str], timeout: float = 10.0, capture: bool = True) -> str:
+    def run(self, args: list[str], timeout: float = 10.0, capture: bool = True,
+            input_bytes: bytes | None = None) -> str:
         if self.cancelled.is_set():
             raise RuntimeUnknown()
+        if input_bytes is not None and (not isinstance(input_bytes, bytes) or len(input_bytes) > 64 * 1024):
+            raise RuntimeRejected()
         self.active = True
         retained = bytearray()
         overflow = False
         try:
-            process = subprocess.Popen(["docker", *args], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            process = subprocess.Popen(["docker", *args], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                       stdin=subprocess.PIPE if input_bytes is not None else subprocess.DEVNULL)
+            write_failed = threading.Event()
+            def supply() -> None:
+                try:
+                    process.stdin.write(input_bytes)
+                    process.stdin.flush()
+                except (OSError, ValueError):
+                    write_failed.set()
+                finally:
+                    try:
+                        process.stdin.close()
+                    except OSError:
+                        write_failed.set()
             def drain() -> None:
                 nonlocal overflow
                 try:
@@ -292,6 +315,9 @@ class DockerCommands:
                     process.stdout.close()
             reader = threading.Thread(target=drain, daemon=True)
             reader.start()
+            writer = threading.Thread(target=supply, daemon=True) if input_bytes is not None else None
+            if writer is not None:
+                writer.start()
             try:
                 code = process.wait(timeout=timeout)
             except subprocess.TimeoutExpired:
@@ -300,7 +326,10 @@ class DockerCommands:
                 raise RuntimeUnknown("SSH_RUNTIME_TIMEOUT") from None
             finally:
                 reader.join(timeout=2)
-            if reader.is_alive() or overflow or self.cancelled.is_set():
+                if writer is not None:
+                    writer.join(timeout=2)
+            if (reader.is_alive() or (writer is not None and writer.is_alive()) or write_failed.is_set()
+                or overflow or self.cancelled.is_set()):
                 raise RuntimeUnknown()
             if code != 0:
                 raise RuntimeUnknown("SSH_RUNTIME_COMMAND_FAILED")
@@ -339,12 +368,515 @@ def _config_hash(container: dict[str, Any], secret: bytes | None = None) -> str:
               for mount in container.get("Mounts", [])]
     payload = {"Config": container.get("Config"), "HostConfig": container.get("HostConfig"),
                "Mounts": sorted(mounts, key=canonical_json)}
-    if any(isinstance(value, str) and value.startswith("OPSPILOT_CONFIG_REVISION=")
+    if any(isinstance(value, str) and value.startswith(("OPSPILOT_CONFIG_REVISION=", "OPSPILOT_DATABASE_ID="))
            for value in (container.get("Config", {}).get("Env") or [])):
         if not isinstance(secret, bytes) or len(secret) != 32:
             raise RuntimeUnknown("SSH_RUNTIME_IDENTITY_MISMATCH")
         return hmac.new(secret, b"opspilot-env-config-fingerprint-v1\n" + canonical_json(payload), hashlib.sha256).hexdigest()
     return hash_h2(payload)
+
+
+_POSTGRES_IMAGE = "postgres:16-alpine@sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e"
+_UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
+_PG_PASSWORD = re.compile(r"[A-Za-z0-9_-]{43}\Z")
+_NETWORK_NAME = re.compile(r"[a-z0-9][a-z0-9_.-]{0,126}\Z")
+
+
+class ManagedPostgres:
+    """Tài nguyên độc lập deployment; caller phải giữ guarded app lock/fence.
+
+    Chưa được nối vào dispatch khi chưa có gate schema/source/runtime tương ứng.
+    Journal ký trước mutation; mất phản hồi create/DDL không được tự nhận tài nguyên.
+    Không cung cấp lệnh xoá volume, đổi password hay restore trong deploy/rollback.
+    """
+    def __init__(self, root: Path, secret: bytes, identity: dict[str, Any],
+                 credentials: dict[str, str], commands: DockerCommands, authorize: Any):
+        required = {"controller_id", "app_id", "ownership_generation", "database_id", "target"}
+        if (not isinstance(secret, bytes) or len(secret) != 32 or not isinstance(identity, dict)
+            or set(identity) != required or not _match(_IDENT, identity.get("controller_id"))
+            or not _positive(identity.get("app_id")) or not _positive(identity.get("ownership_generation"))
+            or not _match(_UUID, identity.get("database_id")) or not isinstance(identity.get("target"), dict)
+            or not isinstance(credentials, dict) or set(credentials) != {"admin_password", "app_password"}
+            or any(not _match(_PG_PASSWORD, value) for value in credentials.values())
+            or credentials["admin_password"] == credentials["app_password"] or not callable(authorize)):
+            raise RuntimeRejected("SSH_POSTGRES_INPUT_INVALID")
+        self.identity = json.loads(canonical_json(identity))
+        self.credentials = dict(credentials)
+        self.secret = secret
+        self.commands = commands
+        self.authorize = authorize
+        self.root = Path(root)
+        _private_directory(self.root)
+        self.directory = self.root / ("postgres-" + identity["database_id"])
+        self.name = "opspilot-pg-" + identity["database_id"]
+        self.volume = self.name + "-data"
+        self.labels = {"opspilot.controller_id": identity["controller_id"],
+                       "opspilot.app_id": str(identity["app_id"]),
+                       "opspilot.ownership_generation": str(identity["ownership_generation"]),
+                       "opspilot.database_id": identity["database_id"],
+                       "opspilot.resource": "managed-postgres-v1"}
+        self.journal: dict[str, Any] | None = None
+
+    def _reject(self) -> None:
+        raise RuntimeUnknown("SSH_POSTGRES_IDENTITY_MISMATCH")
+
+    def _mac(self, value: Any, domain: str = "opspilot-managed-postgres-journal-v1") -> str:
+        return sign_h2(self.secret, domain, value)
+
+    def _read(self, path: Path, limit: int = 16 * 1024) -> bytes:
+        # O_NONBLOCK chặn FIFO trước khi fstat; hardlink không được làm alias secret.
+        try:
+            fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+            with os.fdopen(fd, "rb") as stream:
+                info = os.fstat(stream.fileno())
+                if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.geteuid()
+                    or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > limit):
+                    self._reject()
+                value = stream.read(limit + 1)
+                if len(value) > limit:
+                    self._reject()
+                return value
+        except OSError:
+            self._reject()
+
+    def _exclusive(self, path: Path, content: bytes) -> None:
+        self.authorize()
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+            with os.fdopen(fd, "wb") as target:
+                os.fchmod(target.fileno(), 0o600)
+                target.write(content)
+                target.flush()
+                os.fsync(target.fileno())
+            self._sync_directory()
+        except OSError:
+            self._reject()
+
+    def _sync_directory(self) -> None:
+        fd = os.open(self.directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0))
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
+    def _credentials_mac(self) -> str:
+        return self._mac({"identity": self.identity, "credentials": self.credentials},
+                         "opspilot-managed-postgres-credentials-v1")
+
+    def _save(self, **changes: Any) -> None:
+        self.authorize()
+        value = dict(self.journal or {})
+        value.update(changes)
+        self._validate_journal(value)
+        signed = {"payload": value, "signature": self._mac(value)}
+        if self.journal is None:
+            self._exclusive(self.directory / "resource.json", canonical_json(signed))
+        else:
+            if self._load() != self.journal:
+                self._reject()
+            _write_private(self.directory / "resource.json", signed)
+        self.journal = value
+
+    def _validate_journal(self, value: Any) -> None:
+        if (not isinstance(value, dict) or set(value) != {"format", "identity", "image", "image_id",
+            "credentials_mac", "network", "network_id", "phase", "volume_created_at", "container_id", "system_identifier",
+            "secret_mount_source", "container_config_sha256"}
+            or value.get("format") != 1 or value.get("identity") != self.identity
+            or value.get("image") != _POSTGRES_IMAGE or not _match(_IMAGE, value.get("image_id"))
+            or value.get("credentials_mac") != self._credentials_mac()
+            or not _match(_NETWORK_NAME, value.get("network"))
+            or not _match(_CID, value.get("network_id"))
+            or value.get("phase") not in {"planned", "volume", "container", "initializing", "ready"}):
+            self._reject()
+        phase = value["phase"]
+        if phase != "planned":
+            if not isinstance(value["volume_created_at"], str) or not 1 <= len(value["volume_created_at"]) <= 64:
+                self._reject()
+        elif value["volume_created_at"] is not None:
+            self._reject()
+        if phase in {"container", "initializing", "ready"}:
+            if (not _match(_CID, value["container_id"]) or not _match(_HASH, value["container_config_sha256"])
+                or not isinstance(value["secret_mount_source"], str)
+                or re.fullmatch(r"/[A-Za-z0-9_./-]{1,1023}", value["secret_mount_source"]) is None
+                or ".." in value["secret_mount_source"].split("/")):
+                self._reject()
+        elif any(value[k] is not None for k in ("container_id", "secret_mount_source", "container_config_sha256")):
+            self._reject()
+        if phase == "ready":
+            if not isinstance(value["system_identifier"], str) or re.fullmatch(r"[0-9]{1,20}", value["system_identifier"]) is None:
+                self._reject()
+        elif value["system_identifier"] is not None:
+            self._reject()
+
+    def _load(self) -> dict[str, Any]:
+        try:
+            record = json.loads(self._read(self.directory / "resource.json"))
+            if (not isinstance(record, dict) or set(record) != {"payload", "signature"}
+                or not verify_h2(self.secret, "opspilot-managed-postgres-journal-v1", record["payload"], record["signature"])):
+                self._reject()
+            self._validate_journal(record["payload"])
+            return record["payload"]
+        except (ValueError, TypeError, KeyError, UnicodeError):
+            self._reject()
+
+    def _files(self) -> dict[str, bytes]:
+        admin, app = self.credentials["admin_password"], self.credentials["app_password"]
+        marker = "OPSPILOT_DATABASE_ID=" + self.identity["database_id"] + "\n"
+        url = f"postgresql://opspilot:{app}@postgres:5432/opspilot"
+        return {"admin_password": admin.encode("ascii"),
+                "admin.pgpass": f"127.0.0.1:5432:*:postgres:{admin}\n".encode("ascii"),
+                "app.pgpass": f"127.0.0.1:5432:opspilot:opspilot:{app}\n".encode("ascii"),
+                "app.env": (marker + "DATABASE_URL=" + url + "\n").encode("ascii"),
+                "collector.env": (marker + "DB_DSN=" + url + "\n").encode("ascii")}
+
+    def _verify_files(self) -> None:
+        expected = self._files()
+        if {path.name for path in self.directory.iterdir()} != {*expected, "resource.json"}:
+            self._reject()
+        for name, content in expected.items():
+            if not hmac.compare_digest(self._read(self.directory / name), content):
+                self._reject()
+
+    def _label_args(self) -> list[str]:
+        return [part for key, value in self.labels.items() for part in ("--label", f"{key}={value}")]
+
+    def _network(self, name: str) -> str:
+        record = self.commands.inspect("network", name)
+        labels = record.get("Labels") or {}
+        if (record.get("Name") != name or not _match(_CID, record.get("Id"))
+            or record.get("Driver") != "bridge" or record.get("Internal")
+            or (self.journal is not None and record.get("Id") != self.journal["network_id"])
+            or any(labels.get(key) != self.labels[key] for key in
+                   ("opspilot.controller_id", "opspilot.app_id", "opspilot.ownership_generation"))):
+            self._reject()
+        for cid in (record.get("Containers") or {}):
+            member = self.commands.inspect("container", cid)
+            aliases = (member.get("NetworkSettings", {}).get("Networks", {}).get(name) or {}).get("Aliases") or []
+            if "postgres" in aliases and (self.journal is None or cid != self.journal["container_id"]):
+                raise RuntimeUnknown("SSH_POSTGRES_COLLISION")
+        return record["Id"]
+
+    def _volume(self) -> dict[str, Any]:
+        value = self.commands.inspect("volume", self.volume)
+        if (value.get("Name") != self.volume or value.get("Driver") != "local" or value.get("Options")
+            or value.get("Labels") != self.labels or value.get("Scope") != "local"
+            or (self.journal["volume_created_at"] is not None
+                and value.get("CreatedAt") != self.journal["volume_created_at"])):
+            self._reject()
+        return value
+
+    def _container(self) -> dict[str, Any]:
+        value = self.commands.inspect("container", self.journal["container_id"])
+        config, host = value.get("Config") or {}, value.get("HostConfig") or {}
+        mounts = value.get("Mounts") or []
+        data = [m for m in mounts if m.get("Destination") == "/var/lib/postgresql/data"]
+        secrets = [m for m in mounts if m.get("Destination") == "/run/opspilot-secrets"]
+        env = config.get("Env") or []
+        if (value.get("Id") != self.journal["container_id"] or value.get("Name") != "/" + self.name
+            or value.get("Image") != self.journal["image_id"] or config.get("Image") != _POSTGRES_IMAGE
+            or {k: v for k, v in (config.get("Labels") or {}).items() if k.startswith("opspilot.")} != self.labels
+            or self._container_config_mac(value) != self.journal["container_config_sha256"]
+            or host.get("Privileged") or host.get("PublishAllPorts") or host.get("OomKillDisable") not in {None, False}
+            or host.get("PortBindings") or host.get("NetworkMode") != self.journal["network"]
+            or host.get("RestartPolicy") != {"Name": "unless-stopped", "MaximumRetryCount": 0}
+            or host.get("Memory") != 256 * 1024 * 1024
+            or host.get("PidMode") or host.get("IpcMode") not in {"private", ""}
+            or len(mounts) != 2 or len(data) != 1 or len(secrets) != 1
+            or data[0].get("Type") != "volume" or data[0].get("Name") != self.volume or data[0].get("RW") is not True
+            or secrets[0].get("Type") != "bind" or secrets[0].get("Source") != self.journal["secret_mount_source"]
+            or secrets[0].get("RW") is not False
+            or "POSTGRES_PASSWORD_FILE=/run/opspilot-secrets/admin_password" not in env
+            or "POSTGRES_USER=postgres" not in env or "POSTGRES_DB=postgres" not in env
+            or any(v.startswith(("POSTGRES_PASSWORD=", "DATABASE_URL=", "DB_DSN=")) for v in env)
+            or set((value.get("NetworkSettings") or {}).get("Networks") or {}) != {self.journal["network"]}
+            or "postgres" not in (value.get("NetworkSettings", {}).get("Networks", {}).get(self.journal["network"], {}).get("Aliases") or [])):
+            self._reject()
+        return value
+
+    def _container_config_mac(self, value: dict[str, Any]) -> str:
+        mounts = [{key: mount.get(key) for key in ("Type", "Source", "Destination", "RW")}
+                  for mount in value.get("Mounts", [])]
+        host = dict(value.get("HostConfig") or {})
+        # Docker29 chuyển null thành false sau start; cùng nghĩa bật OOM killer.
+        # True không được chuẩn hoá và luôn bị từ chối bởi kiểm tra container.
+        if host.get("OomKillDisable") is None:
+            host["OomKillDisable"] = False
+        return self._mac({"Config": value.get("Config"), "HostConfig": host,
+                          "Mounts": sorted(mounts, key=canonical_json)}, "opspilot-managed-postgres-container-v1")
+
+    def _mounted_credentials(self) -> None:
+        # Docker Desktop có thể ánh xạ bind source. Pin config thực từ CID vừa tạo,
+        # rồi đối chiếu byte file mount với secret đã xác thực ở target, chỉ trong RAM.
+        # Không đưa stdout này qua wire/receipt/log hoặc dùng hash password công khai.
+        for name in ("admin_password", "admin.pgpass", "app.pgpass"):
+            value = self.commands.run(["exec", "-u", "0", self.journal["container_id"],
+                                       "cat", "/run/opspilot-secrets/" + name])
+            if not hmac.compare_digest(value, self._files()[name].decode("ascii").strip()):
+                self._reject()
+
+    def _psql(self, admin: bool, query: str, capture: bool = True, stdin: bytes | None = None) -> str:
+        user = "postgres" if admin else "opspilot"
+        database = "postgres" if admin else "opspilot"
+        args = ["exec"] + (["-i"] if stdin is not None else [])
+        args += ["-u", "0", "-e", "PGCONNECT_TIMEOUT=2", "-e",
+                 "PGPASSFILE=/run/opspilot-secrets/" + ("admin.pgpass" if admin else "app.pgpass"),
+                 self.journal["container_id"], "psql", "-X", "--no-password", "-h", "127.0.0.1",
+                 "-U", user, "-d", database, "-v", "ON_ERROR_STOP=1", "-At"]
+        if stdin is not None:
+            args += ["-f", "-"]
+        else:
+            args += ["-c", query]
+        return self.commands.run(args, timeout=8, capture=capture, input_bytes=stdin)
+
+    def _probe(self) -> str:
+        system_id = self._psql(True, "SELECT system_identifier FROM pg_control_system()")
+        result = self._psql(False, "SELECT current_database(),current_user,current_setting('server_version_num'),"
+                             "rolsuper,rolcreatedb,rolcreaterole,rolreplication,rolbypassrls,rolcanlogin "
+                             "FROM pg_roles WHERE rolname=current_user").split("|")
+        owner = self._psql(True, "SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname='opspilot'")
+        if (re.fullmatch(r"[0-9]{1,20}", system_id) is None or len(result) != 9
+            or result[:2] != ["opspilot", "opspilot"] or not result[2].isdigit()
+            or not 160000 <= int(result[2]) < 170000 or result[3:] != ["f", "f", "f", "f", "f", "t"]
+            or owner != "opspilot"):
+            self._reject()
+        return system_id
+
+    def inspect_ready(self) -> dict[str, Any]:
+        self.authorize()
+        _private_directory(self.directory)
+        self.journal = self._load()
+        self._verify_files()
+        if self.journal["phase"] != "ready":
+            raise RuntimeUnknown("SSH_POSTGRES_NOT_READY")
+        self._network(self.journal["network"])
+        self._volume()
+        if not self._container().get("State", {}).get("Running") or self._probe() != self.journal["system_identifier"]:
+            raise RuntimeUnknown("SSH_POSTGRES_NOT_READY")
+        self._mounted_credentials()
+        self.authorize()
+        return self._public_identity()
+
+    def _public_identity(self) -> dict[str, Any]:
+        return {"database_id": self.identity["database_id"], "container_id": self.journal["container_id"],
+                "image_id": self.journal["image_id"], "volume": self.volume,
+                "volume_created_at": self.journal["volume_created_at"], "system_identifier": self.journal["system_identifier"],
+                "state": "ready", "public_port": None}
+
+    def backup(self, request_key: str) -> dict[str, Any]:
+        """Logical archive cố định của database app; không SQL tùy ý/restore/ghi đè.
+
+        Bị ngắt giữ lại intent/file riêng tư, lần sau chỉ xác minh receipt hoàn tất.
+        Không tự dump lại vào cùng request UUID và không log stderr/data/password.
+        """
+        if not _match(_UUID, request_key):
+            raise RuntimeRejected("SSH_POSTGRES_INPUT_INVALID")
+        self.inspect_ready()
+        base = self.root / ("postgres-backups-" + self.identity["database_id"])
+        self.authorize()
+        _private_directory(base, create=True)
+        directory = base / request_key
+        receipt_path, archive_path = directory / "receipt.json", directory / "database.pgdump"
+        domain = "opspilot-managed-postgres-backup-v1"
+        if directory.exists() or directory.is_symlink():
+            _private_directory(directory)
+            try:
+                receipt = json.loads(self._read(receipt_path))
+                payload = receipt["payload"]
+                if (set(receipt) != {"payload", "signature"}
+                    or not verify_h2(self.secret, domain, payload, receipt["signature"])
+                    or set(payload) != {"format", "request_key", "identity", "system_identifier", "image", "sha256", "bytes"}
+                    or payload["format"] != 1 or payload["request_key"] != request_key
+                    or payload["identity"] != self.identity or payload["image"] != _POSTGRES_IMAGE
+                    or payload["system_identifier"] != self.journal["system_identifier"]
+                    or not _match(_HASH, payload["sha256"]) or not _positive(payload["bytes"])
+                    or payload["bytes"] > 64 * 1024 * 1024
+                    or {p.name for p in directory.iterdir()} != {"intent.json", "database.pgdump", "receipt.json"}):
+                    self._reject()
+                size, digest = self._archive_digest(archive_path)
+                if size != payload["bytes"] or digest != payload["sha256"]:
+                    self._reject()
+                self.authorize()
+                return {"state": "already_created", **payload}
+            except (ValueError, TypeError, KeyError, OSError):
+                raise RuntimeUnknown("SSH_POSTGRES_BACKUP_UNCONFIRMED") from None
+        self.authorize()
+        _private_directory(directory, create=True)
+        intent = {"format": 1, "request_key": request_key, "identity": self.identity,
+                  "system_identifier": self.journal["system_identifier"], "image": _POSTGRES_IMAGE}
+        _write_private(directory / "intent.json", {"payload": intent, "signature": self._mac(intent, domain + "-intent")})
+        self.authorize()
+        fd = os.open(archive_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        failed = threading.Event()
+        process = None
+        try:
+            os.fchmod(fd, 0o600)
+            process = subprocess.Popen(["docker", "exec", "-u", "0", "-e", "PGCONNECT_TIMEOUT=2", "-e",
+                "PGPASSFILE=/run/opspilot-secrets/app.pgpass", self.journal["container_id"],
+                "pg_dump", "--no-password", "-h", "127.0.0.1", "-U", "opspilot", "-d", "opspilot",
+                "--format=custom", "--no-owner", "--no-acl", "--serializable-deferrable", "--lock-wait-timeout=5s"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+            def consume() -> None:
+                size = 0
+                try:
+                    with os.fdopen(fd, "wb") as target:
+                        while True:
+                            chunk = process.stdout.read(64 * 1024)
+                            if not chunk:
+                                break
+                            size += len(chunk)
+                            if size > 64 * 1024 * 1024:
+                                failed.set()
+                                process.kill()
+                                break
+                            target.write(chunk)
+                        target.flush()
+                        os.fsync(target.fileno())
+                except (OSError, ValueError):
+                    failed.set()
+                finally:
+                    process.stdout.close()
+            reader = threading.Thread(target=consume, daemon=True)
+            reader.start()
+            try:
+                code = process.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=2)
+                raise RuntimeUnknown("SSH_POSTGRES_BACKUP_UNCONFIRMED") from None
+            finally:
+                reader.join(timeout=2)
+            if code != 0 or reader.is_alive() or failed.is_set() or self.commands.cancelled.is_set():
+                raise RuntimeUnknown("SSH_POSTGRES_BACKUP_UNCONFIRMED")
+            self.authorize()
+            self._container()
+            self._volume()
+            if self._probe() != self.journal["system_identifier"]:
+                self._reject()
+            size, digest = self._archive_digest(archive_path)
+            payload = {**intent, "sha256": digest, "bytes": size}
+            _write_private(receipt_path, {"payload": payload, "signature": self._mac(payload, domain)})
+            return {"state": "created", **payload}
+        except OSError:
+            if process is None:
+                os.close(fd)
+            raise RuntimeUnknown("SSH_POSTGRES_BACKUP_UNCONFIRMED") from None
+
+    def _archive_digest(self, path: Path) -> tuple[int, str]:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+        with os.fdopen(fd, "rb") as source:
+            before = os.fstat(source.fileno())
+            if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_uid != os.geteuid()
+                or stat.S_IMODE(before.st_mode) != 0o600 or not 0 < before.st_size <= 64 * 1024 * 1024):
+                self._reject()
+            digest, size = hashlib.sha256(), 0
+            if source.read(5) != b"PGDMP":
+                self._reject()
+            source.seek(0)
+            while chunk := source.read(64 * 1024):
+                size += len(chunk)
+                if size > 64 * 1024 * 1024:
+                    self._reject()
+                digest.update(chunk)
+            after = os.fstat(source.fileno())
+            if (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns, before.st_ctime_ns) != (
+                after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns):
+                self._reject()
+            return size, digest.hexdigest()
+
+    def ensure(self, network: str) -> dict[str, Any]:
+        self.authorize()
+        if not _match(_NETWORK_NAME, network):
+            raise RuntimeRejected("SSH_POSTGRES_INPUT_INVALID")
+        if self.directory.exists() or self.directory.is_symlink():
+            _private_directory(self.directory)
+            self.journal = self._load()
+            if self.journal["network"] != network:
+                self._reject()
+            self._network(network)
+            self._verify_files()
+        else:
+            network_id = self._network(network)
+            # Collision trước khi ghi intent; không xoá/nhận tài nguyên cùng tên.
+            if (self.commands.container(self.name) is not None or self.commands.run(
+                ["volume", "ls", "--filter", f"name=^{self.volume}$", "--format", "{{.Name}}"])):
+                raise RuntimeUnknown("SSH_POSTGRES_COLLISION")
+            try:
+                image = self.commands.inspect("image", _POSTGRES_IMAGE)
+            except RuntimeUnknown:
+                self.authorize()
+                self.commands.run(["pull", _POSTGRES_IMAGE], timeout=120, capture=False)
+                image = self.commands.inspect("image", _POSTGRES_IMAGE)
+            if (not _match(_IMAGE, image.get("Id")) or image.get("Os") != "linux" or image.get("Architecture") != "amd64"
+                or not any(d.endswith("@" + _POSTGRES_IMAGE.split("@", 1)[1]) for d in image.get("RepoDigests", []))):
+                self._reject()
+            self.authorize()
+            _private_directory(self.directory, create=True)
+            self._save(format=1, identity=self.identity, image=_POSTGRES_IMAGE, image_id=image["Id"],
+                       credentials_mac=self._credentials_mac(), network=network, network_id=network_id, phase="planned",
+                       volume_created_at=None, container_id=None, system_identifier=None,
+                       secret_mount_source=None, container_config_sha256=None)
+            for name, content in self._files().items():
+                self._exclusive(self.directory / name, content)
+        if self.journal["phase"] == "planned":
+            if self.commands.run(["volume", "ls", "--filter", f"name=^{self.volume}$", "--format", "{{.Name}}"]):
+                raise RuntimeUnknown("SSH_POSTGRES_CREATE_UNCONFIRMED")
+            self.authorize()
+            self.commands.run(["volume", "create", *self._label_args(), self.volume])
+            volume = self._volume()
+            self._save(phase="volume", volume_created_at=volume.get("CreatedAt"))
+        self._volume()
+        if self.journal["phase"] == "volume":
+            if self.commands.container(self.name) is not None:
+                raise RuntimeUnknown("SSH_POSTGRES_CREATE_UNCONFIRMED")
+            self.authorize()
+            cid = self.commands.run(["create", "--name", self.name, "--network", network, "--network-alias", "postgres",
+                "--restart", "unless-stopped", "--memory", "256m", "--oom-kill-disable=false", "--ipc", "private",
+                "--mount", f"type=volume,source={self.volume},target=/var/lib/postgresql/data",
+                "--mount", f"type=bind,source={self.directory},target=/run/opspilot-secrets,readonly",
+                "-e", "POSTGRES_USER=postgres", "-e", "POSTGRES_DB=postgres", "-e",
+                "POSTGRES_PASSWORD_FILE=/run/opspilot-secrets/admin_password", *self._label_args(), _POSTGRES_IMAGE])
+            if not _match(_CID, cid):
+                raise RuntimeUnknown("SSH_POSTGRES_CREATE_UNCONFIRMED")
+            created = self.commands.inspect("container", cid)
+            mounts = [m for m in created.get("Mounts", []) if m.get("Destination") == "/run/opspilot-secrets"]
+            if len(mounts) != 1:
+                self._reject()
+            self._save(phase="container", container_id=cid, secret_mount_source=mounts[0].get("Source"),
+                       container_config_sha256=self._container_config_mac(created))
+        container = self._container()
+        if not container.get("State", {}).get("Running"):
+            self.authorize()
+            self.commands.run(["start", container["Id"]])
+        self._mounted_credentials()
+        if self.journal["phase"] == "container":
+            deadline = time.monotonic() + 30
+            while True:
+                self.authorize()
+                self._container()
+                try:
+                    if self._psql(True, "SELECT 1") == "1":
+                        break
+                except RuntimeUnknown:
+                    if time.monotonic() >= deadline:
+                        raise RuntimeUnknown("SSH_POSTGRES_NOT_READY") from None
+                time.sleep(0.2)
+            self._save(phase="initializing")
+            self.authorize()
+            # Password chỉ qua stdin; role app không có quyền quản trị.
+            sql = ("SET statement_timeout='5s'; SET lock_timeout='2s';\n"
+                   "CREATE ROLE opspilot LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS PASSWORD '"
+                   + self.credentials["app_password"] + "';\nCREATE DATABASE opspilot OWNER opspilot;\n")
+            self._psql(True, "", capture=False, stdin=sql.encode("ascii"))
+        system_id = self._probe()
+        if self.journal["phase"] == "initializing":
+            self._save(phase="ready", system_identifier=system_id)
+        if system_id != self.journal["system_identifier"]:
+            self._reject()
+        self.authorize()
+        self._container()
+        self._volume()
+        self._verify_files()
+        return self._public_identity()
 
 
 class ProductRuntime:
@@ -377,6 +909,7 @@ class ProductRuntime:
         self.published = False
         self.ambiguous = False
         self.settled = False
+        self.database: ManagedPostgres | None = None
 
     def configure(self, context: Any) -> None:
         if self.context is not None or self.worker is not None:
@@ -560,6 +1093,10 @@ END {if (status == "") print "{\\"http_status\\":null}"; else printf "{\\"http_s
             return []
         try:
             text = _read_private(path, 96 * 1024).decode("utf-8", errors="strict")
+            if self.context.get("database") is not None:
+                if not text.startswith("# opspilot-managed-postgres-v1 "):
+                    raise ValueError()
+                text = text.partition("\n")[2]
             first, signature, body = text.split("\n", 2)
             prefix = "# opspilot-environment-v1 "
             sig_prefix = "# opspilot-environment-hmac "
@@ -596,9 +1133,44 @@ END {if (status == "") print "{\\"http_status\\":null}"; else printf "{\\"http_s
         except (ValueError, TypeError, KeyError, UnicodeError, OSError, RuntimeRejected):
             raise RuntimeUnknown("SSH_RUNTIME_IDENTITY_MISMATCH") from None
 
+    def _managed_postgres(self) -> ManagedPostgres | None:
+        expected = self.context.get("database")
+        if expected is None:
+            return None
+        try:
+            text = _read_private(self.transfer_directory / "render/.env", 96 * 1024).decode("utf-8", errors="strict")
+            first, separator, _ = text.partition("\n")
+            prefix = "# opspilot-managed-postgres-v1 "
+            if not separator or not first.startswith(prefix):
+                raise ValueError()
+            record = json.loads(first[len(prefix):])
+            if not isinstance(record, dict) or set(record) != {"payload", "signature"}:
+                raise ValueError()
+            payload = record["payload"]
+            if (not isinstance(payload, dict) or set(payload) != {"format", "claim", "target", "reference", "image", "nonce", "credentials"}
+                or payload["format"] != 1 or payload["claim"] != self.context["claim"]
+                or payload["target"] != self.context["target"] or payload["reference"] != expected
+                or payload["image"] != _POSTGRES_IMAGE or not _match(_HASH, payload["nonce"])
+                or not isinstance(payload["credentials"], dict)
+                or set(payload["credentials"]) != {"administrator_password", "application_password"}):
+                raise ValueError()
+            derived = hmac.new(self.secret, b"opspilot-postgres-transfer-key-v1", hashlib.sha256).digest()
+            mac = hmac.new(derived, b"opspilot-postgres-transfer-v1\n" + canonical_json(payload), hashlib.sha256).hexdigest()
+            if not _match(_HASH, record["signature"]) or not hmac.compare_digest(mac, record["signature"]):
+                raise ValueError()
+            claim = self.context["claim"]
+            return ManagedPostgres(self.root, self.secret, {
+                "controller_id": claim["controller_id"], "app_id": claim["app_id"],
+                "ownership_generation": claim["ownership_generation"], "database_id": expected["database_id"],
+                "target": self.context["target"]}, {"admin_password": payload["credentials"]["administrator_password"],
+                "app_password": payload["credentials"]["application_password"]}, self.commands, self._authorize)
+        except (ValueError, TypeError, KeyError, UnicodeError, OSError, RuntimeRejected):
+            raise RuntimeUnknown("SSH_POSTGRES_TRANSFER_REJECTED") from None
+
     def _step_prepare(self) -> None:
         assert self.context is not None
         if self.context["build_state"] != "build_failed_definite":
+            self.database = self._managed_postgres()
             self._runtime_env_args()
         old_app = self.commands.container(self.app_name)
         old_collector = self.commands.container(self.collector_name)
@@ -636,13 +1208,16 @@ END {if (status == "") print "{\\"http_status\\":null}"; else printf "{\\"http_s
         if not _match(_IMAGE, collector_image.get("Id")):
             raise RuntimeUnknown()
         self.collector_image_id = collector_image["Id"]
+        if self.database is not None:
+            self._ensure_network()
+            self.database.ensure(self.network)
         # A failed image preparation must not interrupt the current collector.
         # Quiesce it and capture B0 only after both candidate images are verified.
         self._authorize()
         if self.previous_collector is not None:
             self.commands.run(["stop", "--time", "10", self.previous_collector["Id"]], timeout=15)
             stopped = self.commands.inspect("container", self.previous_collector["Id"])
-            if stopped.get("State", {}).get("Running") or _config_hash(stopped) != _config_hash(self.previous_collector):
+            if stopped.get("State", {}).get("Running") or _config_hash(stopped, self.secret) != _config_hash(self.previous_collector, self.secret):
                 raise RuntimeUnknown()
         self.boundary = self._metric_boundary()
         self.prepared = True
@@ -671,6 +1246,11 @@ END {if (status == "") print "{\\"http_status\\":null}"; else printf "{\\"http_s
     def _step_activate(self) -> None:
         assert self.context is not None
         environment_args = self._runtime_env_args()
+        collector_environment_args = []
+        if self.database is not None:
+            self.database.inspect_ready()
+            environment_args += ["--env-file", str(self.database.directory / "app.env")]
+            collector_environment_args = ["--env-file", str(self.database.directory / "collector.env")]
         self._ensure_network()
         self._authorize()
         if self.previous is not None:
@@ -696,7 +1276,7 @@ END {if (status == "") print "{\\"http_status\\":null}"; else printf "{\\"http_s
             "-e", "METRICS_DIR=/var/metrics", "-e", "MAX_FILE_MB=50",
             "--mount", f"type=bind,source={self.metrics_directory},target=/var/metrics",
             "--mount", "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock,readonly",
-            *self._resource_labels(), self.collector_image_id])
+            *collector_environment_args, *self._resource_labels(), self.collector_image_id])
         if not _match(_CID, collector_id):
             raise RuntimeUnknown()
         self.candidate_collector = self.commands.inspect("container", collector_id)
@@ -750,7 +1330,7 @@ END {if (status == "") print "{\\"http_status\\":null}"; else printf "{\\"http_s
         self.boundary = self._metric_boundary()
         if self.previous_collector is not None:
             old = self.commands.inspect("container", self.previous_collector["Id"])
-            if _config_hash(old) != _config_hash(self.previous_collector):
+            if _config_hash(old, self.secret) != _config_hash(self.previous_collector, self.secret):
                 raise RuntimeUnknown("SSH_RUNTIME_IDENTITY_MISMATCH")
             self.commands.run(["rename", old["Id"], self.collector_name])
             self.commands.run(["start", old["Id"]])
@@ -775,7 +1355,7 @@ END {if (status == "") print "{\\"http_status\\":null}"; else printf "{\\"http_s
         if (current.get('Id') != active['collector_container_id']
             or current.get('Image') != active['collector_image_id']
             or current.get('Name') != '/' + self.collector_name
-            or _config_hash(current) != _config_hash(collector)
+            or _config_hash(current, self.secret) != _config_hash(collector, self.secret)
             or not current.get('State', {}).get('Running')):
             raise RuntimeUnknown('SSH_RUNTIME_IDENTITY_MISMATCH')
         return active
@@ -818,6 +1398,8 @@ END {if (status == "") print "{\\"http_status\\":null}"; else printf "{\\"http_s
         receipt = {"version": 1, "context": self.context, "outcome": outcome, "failed_step": failed_step,
             "active_runtime": active, "candidate_runtime": self.candidate, "previous_runtime": self.previous,
             "boundary": self.boundary, "exposure_status": "not_checked", "remote_quiescent": True, "sealed_at": _now()}
+        if self.database is not None:
+            receipt["database_runtime"] = self.database.inspect_ready()
         terminal = {"receipt": receipt, "receipt_sha256": hash_h2(receipt),
                          "signature": sign_h2(self.secret, "product-h2:receipt", receipt)}
         _write_private(self.receipt_path, terminal)

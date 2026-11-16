@@ -1,4 +1,5 @@
 import type { ProductEnvironmentRuntime } from './productEnvironmentRuntime'
+import type { ProductPostgresRuntime } from './productPostgresRuntime'
 import type Database from 'better-sqlite3'
 import type {
   H2BuildEvidence,
@@ -50,6 +51,7 @@ export type ProductDeployPipelineOptions = {
   collector_directory?: string
   templates_directory?: string
   environment?: ProductEnvironmentRuntime
+  postgres?: ProductPostgresRuntime
   build_timeout_ms?: number
   build_poll_interval_ms?: number
   runtime_poll_timeout_ms?: number
@@ -73,7 +75,8 @@ export async function executeProductDeployPipeline(
     snapshot,
     options.collector_directory,
     options.templates_directory,
-    options.environment?.resolve()
+    options.environment?.resolve(),
+    options.postgres?.resolve()
   )
   const session = await openProductGuardedSshSession(deployRepository, ssh, snapshot, {
     vps_id: options.vps_id,
@@ -88,6 +91,7 @@ export async function executeProductDeployPipeline(
       collector_directory: options.collector_directory,
       templates_directory: options.templates_directory,
       environment: options.environment,
+      postgres: options.postgres,
       signal: options.signal
     })
 

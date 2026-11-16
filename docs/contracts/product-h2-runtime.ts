@@ -1,9 +1,10 @@
 import type { ProductClaimToken, ProductDispatchTargetBinding } from './product-auto-deploy'
+import type { ProductPostgresReference } from './product-postgres'
 
-/** Internal main-process/lab contract. No IPC, public API, raw shell or production enrollment.
- * R7e: Express, SPA hoặc Next.js không DB/user env; Next dùng NODE_ENV=production nội bộ.
- * Framework được khóa bởi source config trong claim,
- * không thêm field hoặc thay đổi protocol receipt. SPA dùng container_port80.
+/** Internal main-process contract; không nhận raw shell/credential qua IPC hoặc API.
+ * Framework khóa theo source config của claim, SPA dùng container_port80.
+ * R7h bổ sung optional env/managed database metadata và PG identity proof có chữ ký.
+ * Receipt cũ không có những field này vẫn giữ nguyên canonical bytes và semantics.
  */
 export type H2PreviousExpectation = Readonly<{
   deployment_id: number
@@ -31,7 +32,23 @@ export type H2Context = Readonly<{
   health_timeout_ms: number
   exposure_policy: 'not_checked'
   /** R7h-3b identity only; target requires the authenticated private env-file. */
-  environment?: { controller_id: string; ownership_generation: number; revision: number }
+  environment?: {
+    controller_id: string
+    ownership_generation: number
+    revision: number
+  }
+  /** R7h-4: metadata duy nhất; credential nằm trong transfer .env0600 có HMAC riêng. */
+  database?: ProductPostgresReference
+}>
+export type H2PostgresIdentity = Readonly<{
+  database_id: string
+  container_id: string
+  image_id: string
+  volume: string
+  volume_created_at: string
+  system_identifier: string
+  state: 'ready'
+  public_port: null
 }>
 export type H2MetricBoundary = Readonly<{
   generation: string
@@ -74,6 +91,8 @@ export type H2TerminalReceipt = Readonly<{
   exposure_status: 'not_checked' | 'degraded'
   remote_quiescent: true
   sealed_at: string
+  /** Bắt buộc sau PG prepare thành công; BUILD fail không tạo database mới. */
+  database_runtime?: H2PostgresIdentity
 }>
 export type H2SealedReceipt = Readonly<{
   receipt: H2TerminalReceipt
@@ -91,7 +110,10 @@ export type H2CommitPayload = Readonly<{
   deployment_id: number
   outcome: H2TerminalReceipt['outcome']
 }>
-export type H2CommitAttestation = Readonly<{ payload: H2CommitPayload; signature: string }>
+export type H2CommitAttestation = Readonly<{
+  payload: H2CommitPayload
+  signature: string
+}>
 export type H2SettlementPayload = Readonly<{
   version: 1
   kind: 'product-h2-settlement'
@@ -103,7 +125,10 @@ export type H2SettlementPayload = Readonly<{
   deployment_id: number
   settled_at: string
 }>
-export type H2SettlementAck = Readonly<{ payload: H2SettlementPayload; signature: string }>
+export type H2SettlementAck = Readonly<{
+  payload: H2SettlementPayload
+  signature: string
+}>
 export type H2TerminalRecord = Readonly<{
   commit_id: string
   envelope: H2SealedReceipt

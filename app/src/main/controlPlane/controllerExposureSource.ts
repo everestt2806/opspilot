@@ -4,6 +4,12 @@ import type { H2Context } from '../../../../docs/contracts/product-h2-runtime'
 import type { ProductExposureView } from '../../../../docs/contracts/product-exposure'
 import { canonicalH2Json } from './productH2Proof'
 import { productEnvironmentReferenceSchema } from './productEnvironmentPreflight'
+import { productSourceConfigurationSchema } from './productSourceConfiguration'
+import {
+  readBoundProductEnvironmentSource,
+  readProductPostgresSourceBinding
+} from './productSourceBindings'
+import { PRODUCT_POSTGRES_IMAGE } from './productPostgres'
 
 type Source = {
   source_generation: number
@@ -40,7 +46,7 @@ export function readExposureSourceState(
     if (
       !app ||
       app.source_type !== 'git' ||
-      app.needs_db !== 0 ||
+      ![0, 1].includes(app.needs_db as number) ||
       app.source_path !== null ||
       app.imported_from_vps !== 0
     )
@@ -59,7 +65,7 @@ export function readExposureSourceState(
         row.repository_root !== app.git_root
       )
         return null
-      const config = JSON.parse(row.deploy_config_json)
+      const config = productSourceConfigurationSchema.parse(JSON.parse(row.deploy_config_json))
       const ref = Object.hasOwn(config, 'environment')
         ? productEnvironmentReferenceSchema.parse(config.environment)
         : undefined
@@ -68,25 +74,60 @@ export function readExposureSourceState(
         host_port: app.host_port,
         container_port: app.container_port,
         healthcheck_path: app.healthcheck_path,
-        needs_db: false,
-        ...(ref ? { environment: ref } : {})
+        needs_db: config.needs_db,
+        ...(ref ? { environment: ref } : {}),
+        ...(config.database ? { database: config.database } : {})
       })
       if (
         canonical !== row.deploy_config_json ||
-        createHash('sha256').update(canonical).digest('hex') !== expectedHash
+        createHash('sha256').update(canonical).digest('hex') !== expectedHash ||
+        (generation === desired.source_generation && config.needs_db !== (app.needs_db === 1))
       )
         return null
       if (
         generation === claim.source_generation &&
-        canonicalH2Json(ref ?? null) !== canonicalH2Json(context.environment ?? null)
+        (canonicalH2Json(ref ?? null) !== canonicalH2Json(context.environment ?? null) ||
+          canonicalH2Json(config.database ?? null) !== canonicalH2Json(context.database ?? null))
       )
         return null
+      const scope = {
+        controller_id: claim.controller_id,
+        app_id: desired.app_id,
+        ownership_generation: claim.ownership_generation,
+        target: context.target
+      }
+      if (config.database) {
+        readProductPostgresSourceBinding(db, scope, generation, expectedHash, config.database)
+        const resource = db
+          .prepare(
+            'SELECT controller_id,app_id,ownership_generation,target_binding_json,framework,image FROM product_managed_postgres WHERE database_id=?'
+          )
+          .get(config.database.database_id) as Record<string, unknown> | undefined
+        if (
+          !resource ||
+          resource.controller_id !== claim.controller_id ||
+          resource.app_id !== desired.app_id ||
+          resource.ownership_generation !== claim.ownership_generation ||
+          resource.target_binding_json !== target ||
+          resource.framework !== app.framework ||
+          resource.image !== PRODUCT_POSTGRES_IMAGE
+        )
+          return null
+      }
       if (ref) {
         if (
           ref.controller_id !== claim.controller_id ||
           ref.ownership_generation !== claim.ownership_generation
         )
           return null
+        const source = readBoundProductEnvironmentSource(
+          db,
+          scope,
+          generation,
+          expectedHash,
+          ref,
+          config.database
+        )
         const binding = db
           .prepare(
             `SELECT s.controller_id,s.ownership_generation,s.environment_revision,s.source_config_sha256,
@@ -95,20 +136,28 @@ export function readExposureSourceState(
           AND r.ownership_generation=s.ownership_generation AND r.revision=s.environment_revision
           WHERE s.app_id=? AND s.source_generation=?`
           )
-          .get(desired.app_id, generation) as Record<string, unknown> | undefined
+          .get(desired.app_id, source.basis_source_generation) as
+          Record<string, unknown> | undefined
         if (
           !binding ||
           binding.controller_id !== claim.controller_id ||
           binding.revision_controller !== claim.controller_id ||
           binding.ownership_generation !== claim.ownership_generation ||
           binding.environment_revision !== ref.revision ||
-          binding.source_config_sha256 !== expectedHash ||
+          binding.source_config_sha256 !==
+            (
+              db
+                .prepare(
+                  'SELECT config_sha256 FROM product_source_config WHERE app_id=? AND source_generation=?'
+                )
+                .get(desired.app_id, source.basis_source_generation) as { config_sha256: string }
+            ).config_sha256 ||
           binding.target_binding_json !== target ||
           binding.revision_target !== target ||
           binding.framework !== app.framework
         )
           return null
-      } else if (generation !== claim.source_generation) return null
+      } else if (generation !== claim.source_generation && !config.database) return null
       return row
     }
     const active = read(claim.source_generation, claim.source_config_sha256),

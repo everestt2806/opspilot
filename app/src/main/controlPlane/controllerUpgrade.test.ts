@@ -5,7 +5,9 @@ import { gunzipSync } from 'node:zlib'
 import {
   CONTROLLER_SPA_ASSET_TRANSITION,
   CONTROLLER_ENVIRONMENT_ASSET_TRANSITION,
-  CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION
+  CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION,
+  CONTROLLER_POSTGRES_ASSET_TRANSITION,
+  CONTROLLER_POSTGRES_BOOTSTRAP_TRANSITION
 } from './controllerUpgradeAssets'
 import { assertRetainedTargetHelpers } from './controllerTargetHelperCompatibility'
 import { assertProductEnvironmentTargetManifest } from './productEnvironmentTarget'
@@ -31,6 +33,50 @@ const input = {
   release_directory: '/private/release'
 }
 describe('Trusted controller upgrade boundary', () => {
+  it('requires both exact PostgreSQL runtime and bootstrap assets, rejects partial/reverse/tampered pairs', () => {
+    const entries = [
+        CONTROLLER_POSTGRES_ASSET_TRANSITION[0],
+        CONTROLLER_POSTGRES_BOOTSTRAP_TRANSITION[0]
+      ],
+      before: ControllerReleaseManifest = {
+        format: 1,
+        platform: 'linux-x64-glibc',
+        node_version: '22.23.4',
+        node_abi: '127',
+        minimum_glibc: '2.39',
+        lock_sha256: 'a'.repeat(64),
+        payload_sha256: 'b'.repeat(64),
+        packages: [],
+        files: entries.map((entry) => ({ path: entry.path, mode: entry.mode, ...entry.before }))
+      },
+      after = {
+        ...before,
+        files: entries.map((entry) => ({ path: entry.path, mode: entry.mode, ...entry.after }))
+      }
+    expect(() => assertControllerUpgradeCompatibility(before, after)).not.toThrow()
+    expect(() => assertControllerUpgradeCompatibility(after, before)).toThrow(
+      'INCOMPATIBLE_RELEASE'
+    )
+    for (let i = 0; i < entries.length; i++) {
+      expect(() =>
+        assertControllerUpgradeCompatibility(before, {
+          ...after,
+          files: after.files.map((file, index) => (index === i ? before.files[index] : file))
+        })
+      ).toThrow('INCOMPATIBLE_RELEASE')
+      expect(() =>
+        assertControllerUpgradeCompatibility(before, {
+          ...after,
+          files: after.files.map((file, index) =>
+            index === i ? { ...file, sha256: 'f'.repeat(64) } : file
+          )
+        })
+      ).toThrow('INCOMPATIBLE_RELEASE')
+      const bytes = readFileSync(new URL('./' + entries[i].path.split('/').at(-1), import.meta.url))
+      expect(bytes.length).toBe(entries[i].after.size)
+      expect(createHash('sha256').update(bytes).digest('hex')).toBe(entries[i].after.sha256)
+    }
+  })
   it('allows the reviewed bootstrap bytes only, never reverse or unknown script changes', () => {
     const policy = CONTROLLER_HELPER_UPGRADE_BOOTSTRAP_TRANSITION[0]
     const before = {
@@ -91,8 +137,10 @@ describe('Trusted controller upgrade boundary', () => {
     expect(() => assertControllerUpgradeCompatibility(parent, next)).not.toThrow()
     expect(() => assertControllerUpgradeCompatibility(next, parent)).toThrow('INCOMPATIBLE_RELEASE')
     const bytes = readFileSync(new URL('./target_product_runtime.py', import.meta.url))
-    expect(bytes.length).toBe(policy.after.size)
-    expect(createHash('sha256').update(bytes).digest('hex')).toBe(policy.after.sha256)
+    expect(bytes.length).toBe(CONTROLLER_POSTGRES_ASSET_TRANSITION[0].after.size)
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe(
+      CONTROLLER_POSTGRES_ASSET_TRANSITION[0].after.sha256
+    )
     for (const patch of [{ size: 1 }, { sha256: 'f'.repeat(64) }, { mode: 0o700 as const }])
       expect(() =>
         assertControllerUpgradeCompatibility(parent, {

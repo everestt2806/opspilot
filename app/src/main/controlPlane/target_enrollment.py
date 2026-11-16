@@ -398,6 +398,9 @@ JOURNAL_DOMAIN = b"opspilot-target-helper-upgrade-journal-v1\n"
 DECISION_DOMAIN = b"opspilot-target-helper-upgrade-decision-v1\n"
 UPGRADE_OPERATIONS = {"upgrade", "inspect-upgrade", "recover-upgrade", "cancel-upgrade"}
 RUNTIME_BEFORE = {
+    (51419, "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5"): {
+        "express", "static-spa", "nextjs"
+    },
     (46765, "eb5c697e0051f38e0633bc84e32377fbc91cf4b825c21734f5f611a49b85908d"): {
         "express"
     },
@@ -410,6 +413,10 @@ RUNTIME_BEFORE = {
 RUNTIME_AFTER = (
     51419,
     "f591e2f4bd8b1a770204af8645c499ba05955090a32464c1ae5c32dd37443cb5",
+)
+POSTGRES_RUNTIME_AFTER = (
+    85494,
+    "9f8e1fbb6fab90e9266e160b9cbbcec9707c36f455e1962b8462699f03720f1a",
 )
 PINNED_GUARDS = {
     "target_execution_guard.py": (
@@ -530,7 +537,8 @@ def _upgrade_validate(request: dict):
     pair = lambda record: (record["size"], record["sha256"])
     if (
         request["framework"] not in RUNTIME_BEFORE.get(pair(records[0][runtime]), set())
-        or pair(records[1][runtime]) != RUNTIME_AFTER
+        or pair(records[1][runtime]) not in {RUNTIME_AFTER, POSTGRES_RUNTIME_AFTER}
+        or pair(records[0][runtime]) == pair(records[1][runtime])
     ):
         raise EnrollmentRejected("TARGET_HELPER_UPGRADE_TRANSITION_REJECTED")
     for name, pin in PINNED_GUARDS.items():
