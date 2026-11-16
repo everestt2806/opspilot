@@ -33,6 +33,22 @@ export class ProductEnvironmentPreflight {
       | Omit<ProductProjectSourceVerificationInput, 'artifact' | 'manifest_sha256'>,
     cipher?: AesGcmCredentialCipher
   ): ProductEnvironmentPreflight | null {
+    return this.read(db, input, cipher, true)
+  }
+  /** Metadata review only; does not authorize deployment or expose env values. */
+  static reviewForInspection(
+    db: Database.Database,
+    input: Omit<ProductProjectSourceVerificationInput, 'artifact' | 'manifest_sha256'>,
+    cipher: AesGcmCredentialCipher
+  ): ProductEnvironmentPreflight | null {
+    return this.read(db, input, cipher, false)
+  }
+  private static read(
+    db: Database.Database,
+    input: Omit<ProductProjectSourceVerificationInput, 'artifact' | 'manifest_sha256'>,
+    cipher: AesGcmCredentialCipher | undefined,
+    requireQuiescence: boolean
+  ): ProductEnvironmentPreflight | null {
     const fail = (): never => {
       throw new ProductEnvironmentError('PRODUCT_ENVIRONMENT_UNAVAILABLE')
     }
@@ -71,7 +87,7 @@ export class ProductEnvironmentPreflight {
         input.controller_id,
         input.app_id,
         input.expected_ownership_generation,
-        true
+        requireQuiescence
       )
       if (target.ssh_security_revision !== input.expected_target_security_revision) fail()
       const binding = readBoundProductEnvironmentSource(

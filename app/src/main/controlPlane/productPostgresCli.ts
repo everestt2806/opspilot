@@ -3,6 +3,7 @@ import {
   postgresInspectionCommandSchema
 } from './productPostgresInspectorCommands'
 import { readProjectConfigurationContext } from './projectConfigurationContext'
+import { readProjectReconnectionContext } from './projectReconnection'
 import { lstatSync } from 'node:fs'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
@@ -32,7 +33,8 @@ export async function runProductPostgresCli(
     | 'select-managed-postgres'
     | 'managed-postgres-selection-state'
     | 'project-configuration-context'
-    | 'managed-postgres-inspection',
+    | 'managed-postgres-inspection'
+    | 'project-reconnection-context',
   directory: string,
   input: unknown,
   signal?: AbortSignal
@@ -95,6 +97,20 @@ export async function runProductPostgresCli(
       marker.controller_id !== controllers[0].controller_id
     )
       throw new ProductPostgresError('PRODUCT_POSTGRES_AUTHORITY_CHANGED')
+    if (command === 'project-reconnection-context') {
+      console.log(
+        JSON.stringify(
+          readProjectReconnectionContext(
+            db,
+            loadControllerCredentialCipher(root),
+            controllers[0].controller_id,
+            `unix:${process.getuid!()}`,
+            input
+          )
+        )
+      )
+      return
+    }
     if (command === 'managed-postgres-inspection') {
       const request = postgresInspectionCommandSchema.safeParse(input)
       if (

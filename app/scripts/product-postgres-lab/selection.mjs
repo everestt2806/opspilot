@@ -526,6 +526,19 @@ except Exception as error:print(json.dumps({'lines':[frame.lineno for frame in t
     /REQUEST_CONFLICT/
   )
   check('cold_offline_same_UUID_lookup_replay_and_conflicting_body_refusal')
+  if (process.env.OPSPILOT_PROJECT_RECONNECTION_GATE === '1') {
+    assert(sourceFixture, 'PUBLIC_GIT_SOURCE_FIXTURE_REQUIRED_FOR_RECONNECTION')
+    stage = 'cold-project-reconnection-review'
+    const { reviewReconnection } = await import('../product-project-reconnection-lab/review.mjs')
+    reviewReconnection({
+      db,
+      cli,
+      check,
+      controllerId,
+      databaseId: prepared.metadata.database_id,
+      repository
+    })
+  }
   assert.deepEqual(db.pragma('foreign_key_check'), [])
   proof.state = 'PASS'
 } catch (error) {
