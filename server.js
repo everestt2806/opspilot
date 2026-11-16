@@ -6,13 +6,13 @@ app.disable('x-powered-by');
 app.get('/', async (_request, response) => {
   try {
     const result = await pool.query('SELECT count(*)::integer AS rows FROM acceptance_sample');
-    response.json({ service: 'postgres-acceptance', rows: result.rows[0].rows, release: "2a6785f2e51e-health-fault" });
+    response.json({ service: 'postgres-acceptance', rows: result.rows[0].rows, release: "2a6785f2e51e-final" });
   } catch { response.status(503).json({ status: 'unavailable' }); }
 });
 app.get('/health', async (_request, response) => {
   try {
     const result = await pool.query('SELECT count(*)::integer AS rows FROM acceptance_sample');
-    response.status(503).json({ status: 'ok', service: 'postgres-acceptance', rows: result.rows[0].rows, release: "2a6785f2e51e-health-fault" });
+    response.status(200).json({ status: 'ok', service: 'postgres-acceptance', rows: result.rows[0].rows, release: "2a6785f2e51e-final" });
   } catch { response.status(503).json({ status: 'unavailable' }); }
 });
 (async () => {
