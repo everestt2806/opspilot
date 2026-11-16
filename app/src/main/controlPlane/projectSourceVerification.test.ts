@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -7,6 +7,16 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { initializeDatabase, closeDatabase } from '../db'
 import { AppRepository } from '../db/appRepository'
 import { ProductDeployRepository } from '../db/productDeployRepository'
+import { ProductPostgresRepository } from '../db/productPostgresRepository'
+import { ProductEnvironmentRepository } from '../db/productEnvironmentRepository'
+import { ProductEnvironmentSelection } from './productEnvironmentSelection'
+import { ProductPostgresSelection } from './productPostgresSelection'
+import { ProductPostgresPreflight } from './productPostgresPreflight'
+import { AesGcmCredentialCipher } from '../crypto/credentialCipher'
+import {
+  validateProductSourceAndPlan,
+  validateProductSourceForReview
+} from './productPipelineSourceRender'
 import { createGitSnapshot } from '../git/snapshot'
 import { verifyControllerBundle } from './controllerBundle'
 import { canonicalH2Json } from './productH2Proof'
@@ -64,7 +74,7 @@ beforeEach(() => {
     join(source, 'server.js'),
     "const app = require('express')(); app.get('/health',(req,res)=>res.send('ok')); app.listen(3000);\n"
   )
-  db = initializeDatabase(join(directory, 'db'))
+  db = initializeDatabase(join(directory, 'db'), 'controller')
   db.prepare("INSERT INTO product_controller VALUES('controller-test',?,'active')").run(
     new Date().toISOString()
   )
@@ -132,6 +142,168 @@ afterEach(() => {
   if (db.inTransaction) db.exec('ROLLBACK')
   closeDatabase()
   rmSync(directory, { recursive: true, force: true })
+})
+
+describe('Managed PostgreSQL public source preflight', () => {
+  const selectedDatabase = (
+    environmentFirst = false
+  ): { cipher: AesGcmCredentialCipher; secrets: string[] } => {
+    const cipher = new AesGcmCredentialCipher(randomBytes(32)),
+      scope = {
+        controller_id: request.controller_id,
+        app_id: 1,
+        ownership_generation: 1,
+        target: {
+          vps_id: 1,
+          host: 'target.test',
+          port: 22,
+          username: 'operator',
+          auth_type: 'key' as const,
+          host_fingerprint: 'SHA256:' + 'A'.repeat(43),
+          ssh_security_revision: 1
+        }
+      },
+      vault = new ProductPostgresRepository(db, cipher)
+    if (environmentFirst) selectEnvironment(cipher)
+    const input = {
+        format: 1 as const,
+        request_key: randomUUID(),
+        scope,
+        expected_source_generation: request.expected_source_generation,
+        expected_source_config_sha256: request.expected_source_config_sha256
+      },
+      prepared = vault.prepare(input, request.controller_id, 'unix:1000'),
+      selected = new ProductPostgresSelection(db, cipher).select(
+        { ...input, request_key: randomUUID(), database_id: prepared.metadata.database_id },
+        request.controller_id,
+        'unix:1000'
+      )
+    request.expected_source_generation = selected.source_generation
+    request.expected_source_config_sha256 = selected.source_config_sha256
+    writeFileSync(
+      join(source, 'package.json'),
+      JSON.stringify({
+        scripts: { start: 'node server.js' },
+        dependencies: { express: '4.21.2', pg: '8.13.0' }
+      })
+    )
+    writeFileSync(
+      join(source, 'server.js'),
+      "const pg = require('pg'); const url = process.env.DATABASE_URL; const app = require('express')(); app.get('/health',(req,res)=>res.send('ok')); app.listen(3000);\n"
+    )
+    return {
+      cipher,
+      secrets: Object.values(vault.readCredentials(scope, prepared.metadata.database_id))
+    }
+  }
+  const selectEnvironment = (cipher: AesGcmCredentialCipher): void => {
+    const scope = {
+      controller_id: request.controller_id,
+      app_id: 1,
+      ownership_generation: 1,
+      target: {
+        vps_id: 1,
+        host: 'target.test',
+        port: 22,
+        username: 'operator',
+        auth_type: 'key' as const,
+        host_fingerprint: 'SHA256:' + 'A'.repeat(43),
+        ssh_security_revision: 1
+      }
+    }
+    new ProductEnvironmentRepository(db, cipher).append({
+      scope,
+      expected_latest_revision: null,
+      expected_source_generation: request.expected_source_generation,
+      expected_source_config_sha256: request.expected_source_config_sha256,
+      values: {
+        runtime_env: { APP_TOKEN: 'SYNTHETIC_PUBLIC_PREFLIGHT_ONLY' },
+        public_build_args: {}
+      }
+    })
+    const selected = new ProductEnvironmentSelection(db, cipher).select(
+      {
+        format: 1,
+        request_key: randomUUID(),
+        scope,
+        expected_source_generation: request.expected_source_generation,
+        expected_source_config_sha256: request.expected_source_config_sha256,
+        expected_latest_revision: 1,
+        environment_revision: 1
+      },
+      request.controller_id,
+      'unix:1000'
+    )
+    request.expected_source_generation = selected.source_generation
+    request.expected_source_config_sha256 = selected.source_config_sha256
+  }
+  it.each([false, true])(
+    'authenticates combined env/database source with environmentFirst=%s',
+    async (environmentFirst) => {
+      const { cipher, secrets } = selectedDatabase(environmentFirst)
+      if (!environmentFirst) selectEnvironment(cipher)
+      writeFileSync(
+        join(source, 'server.js'),
+        readFileSync(join(source, 'server.js'), 'utf8') + '\nconst token = process.env.APP_TOKEN;\n'
+      )
+      const result = await verifyProductProjectSource(db, request.controller_id, request, {
+        cipher
+      })
+      expect(result.source_generation).toBe(3)
+      expect(result.state).toBe('source_verified')
+      for (const secret of [...secrets, 'SYNTHETIC_PUBLIC_PREFLIGHT_ONLY'])
+        expect(JSON.stringify(result)).not.toContain(secret)
+      expect(db.prepare('SELECT count(*) n FROM product_deploy_job').get()).toEqual({ n: 0 })
+    }
+  )
+  it('verifies a database-backed source through metadata without creating runtime capability or deployment', async () => {
+    const { cipher, secrets } = selectedDatabase()
+    const result = await verifyProductProjectSource(db, request.controller_id, request, { cipher })
+    expect(result.state).toBe('source_verified')
+    expect(result.source_generation).toBe(2)
+    expect(db.prepare('SELECT count(*) n FROM deployment').get()).toEqual({ n: 0 })
+    expect(db.prepare('SELECT count(*) n FROM product_deploy_job').get()).toEqual({ n: 0 })
+    for (const secret of secrets) expect(JSON.stringify(result)).not.toContain(secret)
+    expect(() => validateProductSourceAndPlan(db, 1, source)).toThrow('UNSUPPORTED_PLAN')
+    const review = ProductPostgresPreflight.review(db, request, cipher)
+    expect(review?.metadata.provisioning).toBe('prepared')
+    for (const secret of secrets) expect(JSON.stringify(review)).not.toContain(secret)
+    expect(() =>
+      validateProductSourceForReview(
+        db,
+        1,
+        source,
+        resolve('../collector'),
+        resolve('../templates'),
+        null,
+        JSON.parse(JSON.stringify(review))
+      )
+    ).toThrow('UNSUPPORTED_PLAN')
+  })
+  it.each(['missing', 'wrong'] as const)(
+    'rejects %s credential proof without an observation or target IO',
+    async (kind) => {
+      selectedDatabase()
+      await expect(
+        verifyProductProjectSource(db, request.controller_id, request, {
+          cipher: kind === 'wrong' ? new AesGcmCredentialCipher(randomBytes(32)) : undefined
+        })
+      ).rejects.toThrow('PROJECT_SOURCE_UNSUPPORTED')
+      expect(db.prepare('SELECT count(*) n FROM product_branch_observation').get()).toEqual({
+        n: 0
+      })
+      expect(cleanup).toHaveBeenCalledOnce()
+    }
+  )
+  it('refuses a changed target binding before fetching source', async () => {
+    const { cipher } = selectedDatabase()
+    db.exec("UPDATE vps SET host='changed.test',ssh_security_revision=2")
+    await expect(
+      verifyProductProjectSource(db, request.controller_id, request, { cipher })
+    ).rejects.toThrow('PROJECT_SOURCE_REQUIRES_QUIESCENCE')
+    expect(createGitSnapshot).not.toHaveBeenCalled()
+    expect(db.prepare('SELECT count(*) n FROM product_branch_observation').get()).toEqual({ n: 0 })
+  })
 })
 
 describe('Xác minh source Product trước deployment', () => {

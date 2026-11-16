@@ -30,6 +30,14 @@ if (
 const inputArtifact = process.env.OPSPILOT_CONTROL_PLANE_OUTPUT,
   modules = process.env.OPSPILOT_CONTROL_PLANE_MODULES
 if (!inputArtifact || !modules) throw Error('PRIVATE_LINUX_ARTIFACT_REQUIRED')
+const sourceFixture = process.env.OPSPILOT_POSTGRES_SOURCE_FIXTURE
+  ? JSON.parse(readFileSync(process.env.OPSPILOT_POSTGRES_SOURCE_FIXTURE, 'utf8'))
+  : null
+if (sourceFixture) {
+  assert.equal(sourceFixture.repository_url, 'https://github.com/everestt2806/opspilot.git')
+  assert.match(sourceFixture.branch, /^demo\/postgres-r7h-[a-f0-9]{12}$/)
+  assert.match(sourceFixture.sha, /^[a-f0-9]{40}$/)
+}
 const Database = createRequire(join(modules, 'package.json'))('better-sqlite3'),
   scratch = mkdtempSync(join(tmpdir(), 'opspilot-pg-selection-')),
   artifact = join(scratch, 'payload/control-plane.cjs'),
@@ -72,7 +80,7 @@ const cli = (command, input, denied) => {
   const child = spawnSync(process.execPath, [artifact, command, '--data-dir', data], {
     input: input === undefined ? '' : JSON.stringify(input),
     encoding: 'utf8',
-    timeout: 50000,
+    timeout: sourceFixture ? 180000 : 50000,
     maxBuffer: 65536,
     env: { PATH: '/usr/sbin:/usr/bin:/sbin:/bin', NODE_ENV: 'production', NODE_PATH: modules }
   })
@@ -191,12 +199,18 @@ try {
       }
     }
   assert(enrolled)
+  const repository = sourceFixture?.repository_url ?? 'https://example.test/fixture.git',
+    productionRef = sourceFixture?.branch ?? 'main'
   db.prepare(
-    "INSERT INTO app(id,vps_id,name,framework,host_port,container_port,healthcheck_path,source_type,git_repo_url,git_ref,git_root) VALUES(1,?,'pg-selection','express',30000,3000,'/health','git','https://example.test/fixture.git','main','.')"
-  ).run(vps.id)
-  db.prepare(
-    "INSERT INTO product_source_config VALUES(1,1,'https://example.test/fixture.git','main','.',?,?,?)"
-  ).run(config, hash, '2026-11-16T00:00:00.000Z')
+    "INSERT INTO app(id,vps_id,name,framework,host_port,container_port,healthcheck_path,source_type,git_repo_url,git_ref,git_root) VALUES(1,?,'pg-selection','express',30000,3000,'/health','git',?,? ,'.')"
+  ).run(vps.id, repository, productionRef)
+  db.prepare("INSERT INTO product_source_config VALUES(1,1,?,? ,'.',?,?,?)").run(
+    repository,
+    productionRef,
+    config,
+    hash,
+    '2026-11-16T00:00:00.000Z'
+  )
   db.prepare(
     "INSERT INTO product_app_control(app_id,mode,controller_id,ownership_generation,source_generation,source_config_sha256,auto_deploy_paused,pause_reason,pause_policy_provenance,changed_at) VALUES(1,'product',?,1,1,?,1,'operator','explicit','2026-11-16T00:00:00.000Z')"
   ).run(controllerId, hash)
@@ -261,6 +275,37 @@ try {
   assert.equal(db.prepare('SELECT count(*) n FROM product_deploy_job').get().n, 0)
   assert.deepEqual(readFileSync(join(data, '.controller-runtime-key')), keyBefore)
   check('production_CLI_selects_once_preserves_key_and_pause_no_job_or_runtime_readiness_claim')
+  if (sourceFixture) {
+    stage = 'public-Git-source-readiness'
+    const input = {
+      format: 1,
+      controller_id: controllerId,
+      app_id: 1,
+      expected_ownership_generation: 1,
+      expected_source_generation: selected.source_generation,
+      expected_source_config_sha256: selected.source_config_sha256,
+      expected_target_security_revision: vps.ssh_security_revision,
+      artifact,
+      manifest_sha256: bundlePin
+    }
+    const verified = cli('verify-project-source', input)
+    assert.equal(verified.state, 'source_verified')
+    assert.equal(verified.commit_sha, sourceFixture.sha)
+    check('production_CLI_fetches_actual_public_Git_and_verifies_selected_PostgreSQL_source')
+    const ready = cli('project-readiness', input)
+    assert.equal(ready.state, 'ready')
+    assert.equal(ready.commit_sha, sourceFixture.sha)
+    assert.equal(ready.auto_deploy_paused, true)
+    assert.equal(ready.deployment_started, false)
+    assert.equal(db.prepare('SELECT count(*) n FROM product_deploy_job').get().n, 0)
+    proof.public_Git = {
+      ...sourceFixture,
+      source_verified: true,
+      first_deployment_readiness: 'ready',
+      database_not_provisioned: true
+    }
+    check('actual_SSH_Docker_resource_probe_and_readiness_support_database_only_source_no_job')
+  }
   stage = 'offline-receipt'
   sshd.kill('SIGTERM')
   await new Promise((done) => sshd.once('close', done))

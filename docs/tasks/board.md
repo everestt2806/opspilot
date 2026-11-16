@@ -1,5 +1,10 @@
 # BẢNG TASK — NGUỒN SỰ THẬT VỀ TRẠNG THÁI
 
+> **16/11 — R7h-4b2a CHỜ REVIEW, approved candidate trước serving:** Source/readiness nhận PG reference đã xác minh; GitHub+SSH readiness8checks, Root19/Main19, bảy Docker suite49attempts/98checks, full2580PASS+2existingLinuxSKIP. Capacity catalog16, compiled9entry giữ nguyên8pin cũ; missing/tamper/runtime-catalog5checks PASS. Approved releasecc8f33f/payload32167c9/toolac6fc27, reproducible rebuild match; chưa cài VPS tại commit này. Test harness bounded4workers và external IPC act, không đổi production UI. Controller-only driver đã syntax/types/lint; tiếp tục live35→37 và app PG acceptance, Main/UI DB vẫn OPEN. [Task](tk-s7-release-r7h4b2-postgres-rollout.md); [proof](../ui-redesign/r7h4b2-candidate-verification.json). SHA tra `git log -1 -- app/control-plane-runtime/desktop-postgres-release.json`.
+
+
+> **16/11 — START R7h-4b2**, basead62c5e đã push. Chuẩn bị bounded catalog và frozen PostgreSQL serving release, rồi actual Main/VPS rollout/app PG; giữ sáu app đang chạy. [Ledger](tk-s7-release-r7h4b2-postgres-rollout.md).
+
 > **16/11 — R7h-4b1, controller/CLI PostgreSQL (CHỜ REVIEW):** Controller-only037, Desktop036; existing035 không tự migrate/rekey. Root35→37 journal/backup/cold recovery và Main→pinned SSH→systemd cùng final candidate b17ba0e đã qua19+19checks. CLI review/select/receipt lookup kiểm actual helper/key/HMAC, CAS/quiescence, offline replay; metadata chỉ prepared, không tự deploy. Full2572PASS+2existingLinuxSKIP; frozen helper95cc/546. Serving VPS vẫn035, sáu app/12CID không đổi, sáu URL HTTP200. Bước b2 còn OPEN: bounded catalog/approved frozen release, fresh attestation rồi Main actual upgrade37 và app PG mới. Main/IPC/UI instance context/operator restore/migrate/formal ML chưa hoàn thành. [Task](tk-s7-release-r7h4b-postgres-controller.md); [proof](../ui-redesign/r7h4b1-verification.json). SHA: `git log -1 -- app/src/main/controlPlane/productPostgresCommands.ts`.
 
 

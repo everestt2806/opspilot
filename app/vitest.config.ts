@@ -12,6 +12,8 @@ export default defineConfig({
     }
   },
   test: {
+    // Bound parallel DOM workers so the full suite can share a developer/CI host with Docker labs.
+    maxWorkers: 4,
     // Node test runner kiểm chứng fixture riêng; không phải Vitest suite.
     exclude: [
       ...configDefaults.exclude,

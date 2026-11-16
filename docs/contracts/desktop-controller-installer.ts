@@ -3,6 +3,10 @@ import type { ControllerHostPreflight } from "./product-controller-release";
 import type { DesktopControllerConnection } from "./desktop-controller-ipc";
 
 /** Build input only. Baked into Main; never trust a renderer/resource catalog at runtime. */
+export const PRODUCT_CONTROLLER_INSTALLER_MAX_RELEASES = 16;
+/** Bounded release history: retain every prior independently approved descriptor.
+ * Increasing capacity does not approve resources or permit runtime catalog updates.
+ */
 export type ControllerInstallerCatalog = {
   format: 1;
   releases: Array<{

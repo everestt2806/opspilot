@@ -243,7 +243,10 @@ describe('Controller settings onboarding and authoritative app reads', () => {
     expect(document.querySelector('input[type="password"]')).toBeNull()
     expect(screen.queryByText(/access_token|api token|private key/i)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: t.register }))
-    await waitFor(() => expect(screen.getAllByText(t.required).length).toBeGreaterThan(0))
+    // Ant Form validates asynchronously; keep the semantic assertion under a busy full-suite runner.
+    await waitFor(() => expect(screen.getAllByText(t.required).length).toBeGreaterThan(0), {
+      timeout: 5000
+    })
     expect(invoke.mock.calls.some(([channel]) => channel === 'controller:register')).toBe(false)
   })
   it('submits a valid enrollment with one UUID and only public installation fields', async () => {

@@ -16,10 +16,10 @@ import { TargetEnrollmentRepository } from './targetEnrollmentRepository'
 import { verifyControllerBundle } from './controllerBundle'
 import { projectRegistrationInputSchema } from './projectRegistration'
 import type { AesGcmCredentialCipher } from '../crypto/credentialCipher'
-import {
-  ProductEnvironmentPreflight,
-  productEnvironmentReferenceSchema
-} from './productEnvironmentPreflight'
+import { ProductEnvironmentPreflight } from './productEnvironmentPreflight'
+import { ProductPostgresPreflight } from './productPostgresPreflight'
+import { readProductSourceConfiguration } from './productSourceConfiguration'
+import { readProductPostgresSourceBinding } from './productSourceBindings'
 
 const positive = z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
 export const projectSourceVerificationInputSchema = z.strictObject({
@@ -163,13 +163,15 @@ export async function verifyProductProjectSource(
     try {
       verifyControllerBundle(request.artifact, request.manifest_sha256)
       const metadata = ProductEnvironmentPreflight.review(db, request, options.cipher)
+      const postgresMetadata = ProductPostgresPreflight.review(db, request, options.cipher)
       preflight = validateProductSourceForReview(
         db,
         request.app_id,
         snapshot.rootDirectory,
         bundle.collector_directory,
         bundle.templates_directory,
-        metadata
+        metadata,
+        postgresMetadata
       )
     } catch (error) {
       if (error instanceof ProductSourceRenderError)
@@ -312,7 +314,6 @@ export function readProjectSourceAuthority(
     source.git_ref !== source.production_ref ||
     source.git_root !== source.repository_root ||
     !projectRegistrationInputSchema.shape.framework.safeParse(source.framework).success ||
-    source.needs_db !== 0 ||
     source.source_path !== null ||
     source.imported_from_vps !== 0 ||
     source.healthcheck_response_type !== 'status_2xx'
@@ -332,27 +333,23 @@ export function readProjectSourceAuthority(
           source.repository_root.split('/').some((part) => ['.', '..', '.git'].includes(part))))
     )
       throw new Error()
-    const stored = JSON.parse(source.deploy_config_json)
-    const environment = Object.hasOwn(stored, 'environment')
-      ? productEnvironmentReferenceSchema.parse(stored.environment)
-      : undefined
-    if (
-      environment &&
-      (environment.controller_id !== request.controller_id ||
-        environment.ownership_generation !== request.expected_ownership_generation)
+    const config = readProductSourceConfiguration(
+      {
+        ...source,
+        framework: projectRegistrationInputSchema.shape.framework.parse(source.framework)
+      },
+      source.deploy_config_json
     )
-      throw new Error()
-    const config = canonicalH2Json({
-      framework: source.framework,
-      host_port: source.host_port,
-      container_port: source.container_port,
-      healthcheck_path: source.healthcheck_path,
-      needs_db: false,
-      ...(environment ? { environment } : {})
-    })
+    for (const reference of [config.environment, config.database]) {
+      if (
+        reference &&
+        (reference.controller_id !== request.controller_id ||
+          reference.ownership_generation !== request.expected_ownership_generation)
+      )
+        throw new Error()
+    }
     if (
-      source.deploy_config_json !== config ||
-      createHash('sha256').update(config).digest('hex') !== source.config_sha256
+      createHash('sha256').update(source.deploy_config_json).digest('hex') !== source.config_sha256
     )
       throw new Error()
   } catch {
@@ -380,6 +377,26 @@ export function readProjectSourceAuthority(
     )
     if (target.ssh_security_revision !== request.expected_target_security_revision)
       throw new Error()
+    const config = readProductSourceConfiguration(
+      {
+        ...source,
+        framework: projectRegistrationInputSchema.shape.framework.parse(source.framework)
+      },
+      source.deploy_config_json
+    )
+    if (config.database)
+      readProductPostgresSourceBinding(
+        db,
+        {
+          controller_id: request.controller_id,
+          app_id: request.app_id,
+          ownership_generation: request.expected_ownership_generation,
+          target
+        },
+        request.expected_source_generation,
+        request.expected_source_config_sha256,
+        config.database
+      )
   } catch {
     throw new ProjectSourceVerificationError('PROJECT_SOURCE_REQUIRES_QUIESCENCE')
   }

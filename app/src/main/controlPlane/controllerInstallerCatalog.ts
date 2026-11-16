@@ -2,6 +2,7 @@ import { existsSync, readdirSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import { z } from 'zod'
 import { readReleaseFile, releaseSha256, verifyControllerRelease } from './controllerRelease'
+import { PRODUCT_CONTROLLER_INSTALLER_MAX_RELEASES } from '../../../../docs/contracts/desktop-controller-installer'
 import type { DesktopControllerRelease } from '../../../../docs/contracts/desktop-controller-installation'
 import type {
   ControllerInstallerCatalog,
@@ -38,7 +39,7 @@ export const controllerInstallerCatalogSchema = z
           upgrade_supported: z.literal(true).optional()
         })
       )
-      .max(8)
+      .max(PRODUCT_CONTROLLER_INSTALLER_MAX_RELEASES)
   })
   .superRefine((value, ctx) => {
     if (

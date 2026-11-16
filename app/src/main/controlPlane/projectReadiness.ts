@@ -188,7 +188,9 @@ export async function checkProjectReadiness(
   try {
     const source = await verifyProductProjectSource(db, controllerId, value, {
       signal,
-      cipher: Object.hasOwn(JSON.parse(before.source.deploy_config_json), 'environment')
+      cipher: ['environment', 'database'].some((key) =>
+        Object.hasOwn(JSON.parse(before.source.deploy_config_json), key)
+      )
         ? loadControllerCredentialCipher(directory)
         : undefined
     })

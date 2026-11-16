@@ -1,6 +1,7 @@
 import type { ResolvedProductEnvironment } from '../../../../docs/contracts/product-environment-runtime'
 import type { ProductEnvironmentRuntime } from './productEnvironmentRuntime'
 import type { ResolvedProductPostgres } from '../../../../docs/contracts/product-postgres'
+import { ProductPostgresPreflight } from './productPostgresPreflight'
 import type { ProductPostgresRuntime } from './productPostgresRuntime'
 import { renderProductPostgresTransfer } from './productPostgresRuntime'
 import { renderProductRuntimeEnv, renderProductPublicBuild } from './productEnvironmentRuntime'
@@ -147,9 +148,12 @@ export function validateProductSourceForReview(
   rootDirectory: string,
   collectorDirectory: string,
   templatesDirectory: string,
-  metadata: ProductEnvironmentPreflight | null
+  metadata: ProductEnvironmentPreflight | null,
+  postgresMetadata: ProductPostgresPreflight | null = null
 ): ReturnType<typeof validateSourceAndPlan> {
   if (metadata && !(metadata instanceof ProductEnvironmentPreflight))
+    throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
+  if (postgresMetadata && !(postgresMetadata instanceof ProductPostgresPreflight))
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
   return validateSourceAndPlan(
     database,
@@ -158,7 +162,9 @@ export function validateProductSourceForReview(
     collectorDirectory,
     templatesDirectory,
     null,
-    metadata
+    metadata,
+    null,
+    postgresMetadata
   )
 }
 
@@ -170,7 +176,8 @@ function validateSourceAndPlan(
   templatesDirectory?: string,
   configuration?: ResolvedProductEnvironment | null,
   review?: ProductEnvironmentPreflight | null,
-  postgres?: ResolvedProductPostgres | null
+  postgres?: ResolvedProductPostgres | null,
+  postgresReview?: ProductPostgresPreflight | null
 ): {
   app: App
   plan: BuildPlan
@@ -205,13 +212,13 @@ function validateSourceAndPlan(
             canonicalH2Json(configuration?.reference ?? review?.reference))) ||
       (!Object.hasOwn(config, 'environment') && (!!configuration || !!review)) ||
       (Object.hasOwn(config, 'database') &&
-        (!postgres ||
-          postgres.claim.app_id !== appId ||
-          postgres.claim.source_config_sha256 !==
+        ((!postgres && !postgresReview) ||
+          (postgres?.claim.app_id ?? postgresReview?.appId) !== appId ||
+          (postgres?.claim.source_config_sha256 ?? postgresReview?.sourceHash) !==
             createHash('sha256').update(canonicalH2Json(config)).digest('hex') ||
           canonicalH2Json((config as Record<string, unknown>).database) !==
-            canonicalH2Json(postgres.reference))) ||
-      (!Object.hasOwn(config, 'database') && !!postgres)
+            canonicalH2Json(postgres?.reference ?? postgresReview?.reference))) ||
+      (!Object.hasOwn(config, 'database') && (!!postgres || !!postgresReview))
     )
       throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_UNSUPPORTED_PLAN')
   }
@@ -220,17 +227,18 @@ function validateSourceAndPlan(
   const detection = detectFramework(sourceTree)
   if (
     !['express', 'static-spa', 'nextjs'].includes(app.framework) ||
-    app.needs_db !== (postgres ? 1 : 0) ||
-    (postgres &&
-      (app.framework === 'static-spa' || postgres.metadata.framework !== app.framework)) ||
+    app.needs_db !== (postgres || postgresReview ? 1 : 0) ||
+    ((postgres || postgresReview) &&
+      (app.framework === 'static-spa' ||
+        (postgres?.metadata.framework ?? postgresReview?.metadata.framework) !== app.framework)) ||
     !detection.matched ||
     detection.detector !== app.framework ||
     (app.framework !== 'express' && app.container_port !== detection.plan.containerPort) ||
-    (detection.plan.needsDb && !postgres) ||
+    (detection.plan.needsDb && !postgres && !postgresReview) ||
     detection.plan.requiredEnv.some(
       (name) =>
         !(app.framework === 'nextjs' && name === 'NODE_ENV') &&
-        !(postgres && name === 'DATABASE_URL') &&
+        !((postgres || postgresReview) && name === 'DATABASE_URL') &&
         ((!configuration && !review) ||
           !(configuration
             ? Object.hasOwn(configuration.values.runtime_env, name) ||
@@ -268,7 +276,10 @@ function validateSourceAndPlan(
   const renderManifest = prepareManifest(renderFiles)
   if (
     sourceFiles.length + renderFiles.length > GUARDED_SSH_TRANSFER_MAX_FILES ||
-    sourceManifest.totalBytes + renderManifest.totalBytes + (review ? 160 * 1024 : 0) >
+    sourceManifest.totalBytes +
+      renderManifest.totalBytes +
+      (review ? 160 * 1024 : 0) +
+      (postgresReview ? 96 * 1024 : 0) >
       GUARDED_SSH_TRANSFER_MAX_TOTAL_BYTES
   )
     throw new ProductSourceRenderError('PRODUCT_SOURCE_RENDER_LIMIT_EXCEEDED')

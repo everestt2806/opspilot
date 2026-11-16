@@ -8,6 +8,7 @@ import { readProjectSourceAuthority, verifyProductProjectSource } from './projec
 import { readEnrolledProductTarget, inspectStoredProductTarget } from './targetEnrollment'
 import { measureControllerResources } from './controllerResources'
 import { observeProductTarget } from './controllerTargetProbe'
+import { loadControllerCredentialCipher } from './controllerSecrets'
 vi.mock('./projectSourceVerification', async (original) => ({
   ...(await original<typeof import('./projectSourceVerification')>()),
   readProjectSourceAuthority: vi.fn(),
@@ -31,6 +32,7 @@ vi.mock('../ssh/manager', () => ({
   }
 }))
 vi.mock('./controllerSshResolver', () => ({ createControllerSshResolver: vi.fn() }))
+vi.mock('./controllerSecrets', () => ({ loadControllerCredentialCipher: vi.fn() }))
 let db: ReturnType<typeof initializeDatabase>, directory: string
 const request = {
   format: 1,
@@ -87,6 +89,29 @@ it('checks exact source and target proof without creating jobs or deployments', 
   expect(value.checks.every((row) => row.state === 'passed')).toBe(true)
   expect(db.prepare('SELECT count(*) AS n FROM product_deploy_job').get()).toEqual({ n: 0 })
   expect(db.prepare('SELECT count(*) AS n FROM deployment').get()).toEqual({ n: 0 })
+})
+it('loads the existing credential cipher for a database-only source review', async () => {
+  const authority = vi.mocked(readProjectSourceAuthority).getMockImplementation()!(
+    db,
+    request as Parameters<typeof readProjectSourceAuthority>[1]
+  )
+  vi.mocked(readProjectSourceAuthority).mockReturnValue({
+    ...authority,
+    source: {
+      ...authority.source,
+      deploy_config_json: '{"database":{"database_id":"metadata-only-fixture"}}'
+    }
+  } as never)
+  const cipher = { fixture: 'metadata-only' } as never
+  vi.mocked(loadControllerCredentialCipher).mockReturnValue(cipher)
+  expect((await check()).state).toBe('ready')
+  expect(loadControllerCredentialCipher).toHaveBeenCalledWith(directory)
+  expect(verifyProductProjectSource).toHaveBeenCalledWith(
+    db,
+    'unit',
+    request,
+    expect.objectContaining({ cipher })
+  )
 })
 it.each([
   { docker_ready: false },

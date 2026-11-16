@@ -2,6 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
+import { PRODUCT_CONTROLLER_INSTALLER_MAX_RELEASES } from '../../../../docs/contracts/desktop-controller-installer'
 import {
   ControllerInstallerResources,
   controllerInstallerCatalogSchema,
@@ -60,4 +61,24 @@ it('allows existing development mode without assets but rejects a packaged app w
   expect(() => verifyPackagedControllerResources(root)).toThrow(
     'CONTROLLER_INSTALLER_RESOURCES_REQUIRED'
   )
+})
+it('retains prior pins and accepts only the bounded sixteen independently identified releases', () => {
+  expect(PRODUCT_CONTROLLER_INSTALLER_MAX_RELEASES).toBe(16)
+  const releases = Array.from({ length: 17 }, (_, index) => ({
+    ...release,
+    release_id: `linux-22-${index}`,
+    release_sha256: index.toString(16).padStart(64, '0'),
+    installer_sha256: (index + 100).toString(16).padStart(64, '0')
+  }))
+  const previous = new ControllerInstallerResources(
+    { format: 1, releases: releases.slice(0, 8) },
+    root
+  )
+  const expanded = new ControllerInstallerResources(
+    { format: 1, releases: releases.slice(0, 16) },
+    root
+  )
+  expect(expanded.entries()).toHaveLength(16)
+  expect(expanded.entries().slice(0, 8)).toEqual(previous.entries())
+  expect(() => new ControllerInstallerResources({ format: 1, releases }, root)).toThrow()
 })
