@@ -1,3 +1,4 @@
+import { readProjectConfigurationContext } from './projectConfigurationContext'
 import { lstatSync } from 'node:fs'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
@@ -24,7 +25,8 @@ export async function runProductPostgresCli(
     | 'managed-postgres-state'
     | 'managed-postgres-review'
     | 'select-managed-postgres'
-    | 'managed-postgres-selection-state',
+    | 'managed-postgres-selection-state'
+    | 'project-configuration-context',
   directory: string,
   input: unknown,
   signal?: AbortSignal
@@ -87,6 +89,20 @@ export async function runProductPostgresCli(
       marker.controller_id !== controllers[0].controller_id
     )
       throw new ProductPostgresError('PRODUCT_POSTGRES_AUTHORITY_CHANGED')
+    if (command === 'project-configuration-context') {
+      console.log(
+        JSON.stringify(
+          readProjectConfigurationContext(
+            db,
+            loadControllerCredentialCipher(root),
+            controllers[0].controller_id,
+            `unix:${process.getuid!()}`,
+            input
+          )
+        )
+      )
+      return
+    }
     if (
       command === 'managed-postgres-review' ||
       command === 'select-managed-postgres' ||

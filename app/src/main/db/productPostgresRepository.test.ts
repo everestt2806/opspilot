@@ -6,6 +6,7 @@ import Database from 'better-sqlite3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AesGcmCredentialCipher } from '../crypto/credentialCipher'
 import { initializeDatabase, closeDatabase } from './index'
+import { readProjectConfigurationContext } from '../controlPlane/projectConfigurationContext'
 import { ProductPostgresRepository } from './productPostgresRepository'
 import type { ProductEnvironmentScope } from '../../../../docs/contracts/product-environment'
 import { PRODUCT_POSTGRES_IMAGE } from '../controlPlane/productPostgres'
@@ -35,7 +36,8 @@ import type { GuardedSshExecutionSession } from '../controlPlane/guardedSshSessi
 import { readBoundProductEnvironmentSource } from '../controlPlane/productSourceBindings'
 import type {
   ProductPostgresPrepareInput,
-  ProductPostgresPrepareResult
+  ProductPostgresPrepareResult,
+  ProductPostgresSelectionResult
 } from '../../../../docs/contracts/product-postgres'
 
 let directory: string,
@@ -786,5 +788,156 @@ describe('Managed PostgreSQL public selection boundary', () => {
     )
     expect(inspect).toHaveBeenCalledOnce()
     expect(db.prepare('SELECT count(*) n FROM product_source_postgres').get()).toEqual({ n: 0 })
+  })
+})
+
+describe('Project configuration metadata anchored to registration', () => {
+  const context = (overrides: object = {}): ReturnType<typeof readProjectConfigurationContext> =>
+    readProjectConfigurationContext(db, cipher, scope.controller_id, 'unix:1000', {
+      format: 1,
+      controller_id: scope.controller_id,
+      app_id: 1,
+      expected_ownership_generation: 1,
+      expected_source_generation: 1,
+      expected_source_config_sha256: hash,
+      expected_target_security_revision: 1,
+      ...overrides
+    })
+  const selectDatabase = (): ProductPostgresSelectionResult => {
+    const row = db
+      .prepare('SELECT source_generation,source_config_sha256 FROM product_app_control')
+      .get() as { source_generation: number; source_config_sha256: string }
+    const resource = store.prepare(
+      {
+        ...input(),
+        expected_source_generation: row.source_generation,
+        expected_source_config_sha256: row.source_config_sha256
+      },
+      scope.controller_id,
+      'unix:1000'
+    )
+    return new ProductPostgresSelection(db, cipher).select(
+      {
+        ...input(),
+        expected_source_generation: row.source_generation,
+        expected_source_config_sha256: row.source_config_sha256,
+        database_id: resource.metadata.database_id
+      },
+      scope.controller_id,
+      'unix:1000'
+    )
+  }
+  const selectEnv = (): void => {
+    const row = db
+      .prepare('SELECT source_generation,source_config_sha256 FROM product_app_control')
+      .get() as { source_generation: number; source_config_sha256: string }
+    new ProductEnvironmentRepository(db, cipher).append({
+      scope,
+      expected_latest_revision: null,
+      expected_source_generation: row.source_generation,
+      expected_source_config_sha256: row.source_config_sha256,
+      values: { runtime_env: { APP_MODE: 'CONTEXT_SYNTHETIC_VALUE' }, public_build_args: {} }
+    })
+    new ProductEnvironmentSelection(db, cipher).select(
+      {
+        ...input(),
+        expected_source_generation: row.source_generation,
+        expected_source_config_sha256: row.source_config_sha256,
+        expected_latest_revision: 1,
+        environment_revision: 1
+      },
+      scope.controller_id,
+      'unix:1000'
+    )
+  }
+  it('keeps an empty registration readonly and distinguishes prepared database from selected database', () => {
+    expect(context()).toMatchObject({
+      source_generation: 1,
+      basis_source_generation: 1,
+      database: { prepared: null, selected: null },
+      environment: { latest: null, selected: null },
+      deployment_started: false
+    })
+    const prepared = prepare()
+    expect(context().database).toEqual({ prepared: prepared.metadata, selected: null })
+    expect(db.prepare('SELECT count(*) n FROM product_deploy_job').get()).toEqual({ n: 0 })
+  })
+  it.each(['database-only', 'env-before-database', 'database-before-env'])(
+    'reviews %s using the immutable original basis without credentials or source mutation',
+    (order) => {
+      if (order === 'env-before-database') selectEnv()
+      const selected = selectDatabase()
+      if (order === 'database-before-env') selectEnv()
+      const before = db.serialize()
+      const result = context()
+      expect(result.source_generation).toBe(order === 'database-only' ? 2 : 3)
+      expect(result.database.selected?.database_id).toBe(selected.database.database_id)
+      expect(result.database.prepared).toEqual(result.database.selected)
+      expect(result.environment.selected?.revision ?? null).toBe(
+        order === 'database-only' ? null : 1
+      )
+      expect(result.scope.target.auth_type).toBe('key')
+      expect(result.auto_deploy_paused).toBe(true)
+      expect(result.deployment_started).toBe(false)
+      const credentials = store.readCredentials(scope, selected.database.database_id)
+      for (const secret of Object.values(credentials))
+        expect(JSON.stringify(result)).not.toContain(secret)
+      expect(JSON.stringify(result)).not.toContain('CONTEXT_SYNTHETIC_VALUE')
+      expect(db.serialize()).toEqual(before)
+    }
+  )
+  it.each([
+    { expected_source_config_sha256: '0'.repeat(64) },
+    { expected_target_security_revision: 2 },
+    { expected_ownership_generation: 2 },
+    { controller_id: 'foreign-controller' },
+    { expected_source_generation: 2 }
+  ])('rejects changed registration/target/ownership authority %#', (patch) => {
+    expect(() => context(patch)).toThrow('PRODUCT_POSTGRES_AUTHORITY_CHANGED')
+  })
+  it('rejects repository drift and new deployment-plan source even when its hash is valid', () => {
+    const changed = canonicalH2Json({
+      framework: 'express',
+      host_port: 30000,
+      container_port: 4000,
+      healthcheck_path: '/health',
+      needs_db: false
+    })
+    const changedHash = createHash('sha256').update(changed).digest('hex')
+    db.prepare(
+      "INSERT INTO product_source_config VALUES(1,2,'https://example.test/app.git','main','.',?,?,'2026-11-16T00:01:00.000Z')"
+    ).run(changed, changedHash)
+    db.prepare('UPDATE product_app_control SET source_generation=2,source_config_sha256=?').run(
+      changedHash
+    )
+    db.prepare('UPDATE app SET container_port=4000').run()
+    expect(() => context()).toThrow('PRODUCT_POSTGRES_AUTHORITY_CHANGED')
+    db.prepare("UPDATE app SET git_repo_url='https://example.test/other.git'").run()
+    expect(() => context()).toThrow('PRODUCT_POSTGRES_AUTHORITY_CHANGED')
+  })
+  it('rejects a missing/wrong credential key and refuses to borrow a caller transaction', () => {
+    selectDatabase()
+    const values = {
+      format: 1,
+      controller_id: scope.controller_id,
+      app_id: 1,
+      expected_ownership_generation: 1,
+      expected_source_generation: 1,
+      expected_source_config_sha256: hash,
+      expected_target_security_revision: 1
+    }
+    expect(() =>
+      readProjectConfigurationContext(
+        db,
+        new AesGcmCredentialCipher(randomBytes(32)),
+        scope.controller_id,
+        'unix:1000',
+        values
+      )
+    ).toThrow('PRODUCT_POSTGRES_AUTHORITY_CHANGED')
+    db.exec('BEGIN')
+    expect(() => context()).toThrow('PRODUCT_POSTGRES_INPUT_INVALID')
+    expect(db.inTransaction).toBe(true)
+    db.exec('ROLLBACK')
   })
 })

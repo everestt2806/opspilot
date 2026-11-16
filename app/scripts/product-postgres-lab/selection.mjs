@@ -306,6 +306,25 @@ try {
     }
     check('actual_SSH_Docker_resource_probe_and_readiness_support_database_only_source_no_job')
   }
+  stage = 'configuration-context'
+  const metadataContext = cli('project-configuration-context', {
+    format: 1,
+    controller_id: controllerId,
+    app_id: 1,
+    expected_ownership_generation: 1,
+    expected_source_generation: 1,
+    expected_source_config_sha256: hash,
+    expected_target_security_revision: vps.ssh_security_revision
+  })
+  assert.equal(metadataContext.source_generation, selected.source_generation)
+  assert.equal(metadataContext.database.selected.database_id, prepared.metadata.database_id)
+  assert.equal(metadataContext.database.selected.provisioning, 'prepared')
+  assert.equal(metadataContext.deployment_started, false)
+  assert.equal(metadataContext.environment.selected, null)
+  assert.equal(db.prepare('SELECT count(*) n FROM product_deploy_job').get().n, 0)
+  check(
+    'production_CLI_reviews_DB_only_source_from_original_registration_without_provisioning_or_job'
+  )
   stage = 'offline-receipt'
   sshd.kill('SIGTERM')
   await new Promise((done) => sshd.once('close', done))

@@ -28,7 +28,9 @@ export class ProductEnvironmentPreflight {
 
   static review(
     db: Database.Database,
-    input: ProductProjectSourceVerificationInput,
+    input:
+      | ProductProjectSourceVerificationInput
+      | Omit<ProductProjectSourceVerificationInput, 'artifact' | 'manifest_sha256'>,
     cipher?: AesGcmCredentialCipher
   ): ProductEnvironmentPreflight | null {
     const fail = (): never => {

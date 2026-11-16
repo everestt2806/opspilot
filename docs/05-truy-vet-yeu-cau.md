@@ -1,5 +1,8 @@
 # MA TRẬN TRUY VẾT YÊU CẦU
 
+> **16/11 — R7h-4c1 metadata foundation PASS:** Readonly source context hỗ trợ DB-only/ENV→DB/DB→ENV từ registration basis, authenticated refs, không secrets/job/implicit adopt.121focused/full2591PASS+2existingLinuxSKIP, types/lint/build và actual Linux SSHD/CLI7checks/cleanup PASS. Private candidate00ecf95 chưa serving/approved; VPS giữ7apps và PostgreSQL đã nghiệm thu. Tiếp tục Root admin/Main journal/IPC/UI. [Task](tasks/tk-s7-release-r7h4c-project-database.md); [proof](ui-redesign/r7h4c1-verification.json). SHA: `git log -1 -- app/src/main/controlPlane/projectConfigurationContext.ts`.
+
+
 > **16/11 — R7h-4b2 app acceptance PASS nội bộ:** App PostgreSQL mới7/30006 qua deploy/update/healthrollback/final,1.000rows + cùng CID/volume/systemID; collector database measured, pg_dump/isolated clone restore khớp count/content và clone removed. Original6apps/helpers/source/env/key/12CID unchanged/HTTP200, scoped client revoked/private profile cleaned/7policiespaused. Controller37/releasecc8 giữ nguyên. Main/IPC/UI database selection/instance context và product backup/restore/migrate vẫn OPEN; không gọi operator gate là GUI complete. Formal ML NOT_RUN chờ2VPSriêng. [Task](tasks/tk-s7-release-r7h4b2-postgres-rollout.md); [proof](ui-redesign/r7h4b2-app-verification.json). SHA tra `git log -1 -- app/scripts/product-postgres-app-live/run.mjs`.
 
 

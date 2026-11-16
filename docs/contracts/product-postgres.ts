@@ -117,3 +117,29 @@ export interface ProductPostgresSelectionResult {
  * Source selection/execution is separate, must validate claim/lease and this reference.
  * Archive/reconnect never adopts another target/owner or erases the retained resource.
  */
+
+/** Metadata review anchored to immutable project registration. Only authenticated
+ * env/database reference changes may differ. Never authority for Main to adopt a
+ * changed source without its own verified selection journal. No ready/provisioned
+ * claim, network connection, job, schema migration or credential output.
+ */
+export type ProductProjectConfigurationContextInput =
+  import("./product-environment").ProductEnvironmentContextInput;
+export interface ProductProjectConfigurationContext {
+  controller_id: string;
+  scope: ProductEnvironmentScope;
+  basis_source_generation: number;
+  basis_source_config_sha256: string;
+  source_generation: number;
+  source_config_sha256: string;
+  environment: {
+    latest: import("./product-environment").ProductEnvironmentMetadata | null;
+    selected: import("./product-environment").ProductEnvironmentMetadata | null;
+  };
+  database: {
+    prepared: ProductPostgresMetadata | null;
+    selected: ProductPostgresMetadata | null;
+  };
+  auto_deploy_paused: boolean;
+  deployment_started: false;
+}

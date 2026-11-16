@@ -66,7 +66,8 @@ export async function runControlPlaneCli(argv = process.argv.slice(2)): Promise<
     commandValue === 'managed-postgres-state' ||
     commandValue === 'managed-postgres-review' ||
     commandValue === 'select-managed-postgres' ||
-    commandValue === 'managed-postgres-selection-state'
+    commandValue === 'managed-postgres-selection-state' ||
+    commandValue === 'project-configuration-context'
   ) {
     const controller = new AbortController()
     const stop = (): void => controller.abort()

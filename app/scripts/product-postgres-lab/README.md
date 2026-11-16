@@ -45,3 +45,7 @@ python3 -m unittest discover -s app/scripts/product-postgres-lab -p test_io.py -
 ```
 
 `selection.mjs` yêu cầu Root/Linux Node22 + artifact/modules như trên. Tạo SSHD/key/SQLite/target có nonce riêng; gọi production CLI prepare/review/select/selection-state. Kiểm actual helper bytes/key/HMAC, helper tamper, pin sai, no-op replay khi SSHD đã tắt, không job/enable policy và cleanup. Không chạy Docker hay tạo database đang phục vụ; metadata chỉ `prepared`, không giả `ready`. IO tests chạy process Linux thật và inject lỗi stream read/close để xác nhận kết quả không bị nhận nhầm là thành công.
+
+## R7h-4c1: registration configuration metadata
+
+`selection.mjs` còn gọi production CLI `project-configuration-context` sau DB selection bằng registration basis ban đầu, xác nhận đúng database metadata/source hiện hành mà không job, provisioning hay network mới. Đây là private candidate gate; chưa Root admin/Main journal/IPC/UI, không tự approve/install artifact. Contract ghi rõ metadata context không cho Main quyền tự nhận source nếu thiếu receipt của chính nó.
