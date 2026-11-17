@@ -65,7 +65,7 @@ UPDATE 17/11/2026 — Đã soạn [kế hoạch/checkpoint/acceptance của lead
 
 START 17/11/2026 (Gemini) — Bắt đầu triển khai CP0 và CP1 theo ủy quyền và hướng dẫn giao việc. Đọc kỹ `gemini-handoff.md`, `leader-plan.md`, `CLAUDE.md`, tasks README. Xác nhận HEAD `7cec58845eed87057baa4562a410dc403eb6f2a7`, nhánh `feat/kim-windows-delivery-20261116`. Giữ nguyên các tài liệu Codex đã tạo. Tuân thủ file ownership.
 
-UPDATE 17/11/2026 (Gemini) — Hoàn thành CP0 (Preflight & Prerequisite) và CP1 (Source CI & Runner):
+UPDATE 17/11/2026 (Gemini) — Hoàn thành CP0 (Preflight & Prerequisite) — Candidate SHA: `586b19a`:
 1. **CP0 Automation**:
    - Tạo CLI `app/scripts/windows-delivery/preflight.mjs`: kiểm tra readonly môi trường (Node, pnpm, Python, WindowsSandbox), đối chiếu chính xác 20 package ML vs `runtime-lock.json`, kiểm tra 9 approved controller releases, kiểm kê `app/resources/ml-runtime`, kiểm tra trạng thái các cổng ML 8765-8767, phân định ranh giới role-aware Desktop 38 vs Controller 37. Hỗ trợ flags `--json`, `--out <file>`, `--gate <name>`.
    - Tạo `app/scripts/windows-delivery/preflight.test.mjs`: unit test kiểm tra toàn bộ CLI options, JSON output, exit codes (7/7 tests passed).
@@ -73,6 +73,7 @@ UPDATE 17/11/2026 (Gemini) — Hoàn thành CP0 (Preflight & Prerequisite) và C
    - Soạn thảo [hướng dẫn gọi CLI và báo cáo blockers](../delivery/windows-kim/preflight-guide.md).
    - Xuất evidence kiểm kê: `app/.out-scripts/windows-delivery/cp0-inventory.json` (SHA256: `0060dda665685eab5c1aa3f4b28054abfd9a4b02f9a33b220b41c2636fbecde3`).
 
+UPDATE 17/11/2026 (Gemini) — Hoàn thành CP1 (Source CI & Shared Runner):
 2. **CP1 Source CI**:
    - Tạo runner dùng chung local/CI `app/scripts/windows-delivery/source-check.mjs`: thực thi tuần tự 6 gates (git diff check, preflight source gate, typecheck node & web, typecheck scripts, preflight unit tests, source build compilation). Đã xử lý triệt để vấn đề khoảng trắng và Unicode trong đường dẫn Windows. Kết quả chạy local: PASS 6/6 steps, duration ~78s.
    - Tạo workflow GitHub Actions `.github/workflows/windows-delivery-source.yml`: trigger `workflow_dispatch`, `push`, `pull_request`; runner Windows; Node 22, pnpm 11.1.0, frozen lockfile; permissions `contents: read`; không secrets/production DB; tự động upload evidence artifacts `if: always()`.

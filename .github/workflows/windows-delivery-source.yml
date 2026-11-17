@@ -1,0 +1,80 @@
+name: Windows Delivery Source Checks
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feat/kim-windows-delivery-*'
+    paths:
+      - 'app/scripts/windows-delivery/**'
+      - '.github/workflows/windows-delivery-source.yml'
+      - 'app/scripts/windows-release-lab/**'
+      - 'app/scripts/windows-release-lab.mjs'
+      - 'docs/delivery/windows-kim/**'
+  pull_request:
+    branches:
+      - 'feat/kim-windows-delivery-*'
+
+permissions:
+  contents: read
+
+jobs:
+  source-checks:
+    name: Source Compilation and Preflight Gates
+    runs-on: windows-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify Git Baseline Ancestry
+        shell: bash
+        run: |
+          echo "Current commit: $(git rev-parse HEAD)"
+          echo "Branch: $(git rev-parse --abbrev-ref HEAD)"
+          git diff --check
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm 11.1.0
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.0
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Rebuild native dependencies for Electron ABI
+        run: pnpm --prefix app rebuild:native
+
+      - name: Run Windows Delivery Preflight Inventory (Source Gate)
+        run: node app/scripts/windows-delivery/preflight.mjs --gate source --out app/.out-scripts/windows-delivery/ci-preflight.json
+
+      - name: Run Node & Web Typechecks
+        run: pnpm --prefix app typecheck
+
+      - name: Run Scripts Typecheck
+        run: pnpm --prefix app exec tsc -p tsconfig.scripts.json --noEmit
+
+      - name: Run Delivery Unit Tests
+        run: node app/scripts/windows-delivery/preflight.test.mjs
+
+      - name: Run Source Build Compilation
+        run: pnpm --prefix app build
+
+      - name: Run Source Check Unified Runner
+        run: node app/scripts/windows-delivery/source-check.mjs
+
+      - name: Upload Evidence and Diagnostics
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-delivery-source-evidence
+          path: app/.out-scripts/windows-delivery/
+          retention-days: 14
