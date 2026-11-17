@@ -268,7 +268,15 @@ const server = new Server({ hostKeys: [hostKey] }, (client) => {
           try {
             const value = JSON.parse(line)
             if (value.fixture_error)
-              writeFileSync(join(evidence, 'python-diagnostic.json'), JSON.stringify(value) + '\n')
+              writeFileSync(
+                join(
+                  evidence,
+                  value.fixture_error === 'InstallerFailure'
+                    ? 'python-installer-diagnostic.json'
+                    : 'python-diagnostic.json'
+                ),
+                JSON.stringify(value) + '\n'
+              )
           } catch {
             /* Không lưu stderr thô. */
           }
@@ -383,14 +391,14 @@ try {
   const databaseInode = lstatSync(join(paths.data, 'opspilot.db')).ino
   keyBytes = readFileSync(join(paths.data, '.controller-runtime-key'))
   desktopDb = initializeDatabase(join(root, 'desktop'))
-  assert.equal(desktopDb.prepare('SELECT MAX(version) n FROM schema_version').get().n, 38)
+  assert.equal(desktopDb.prepare('SELECT MAX(version) n FROM schema_version').get().n, 39)
   const controllerDb = new Database(join(paths.data, 'opspilot.db'), { readonly: true })
   assert.equal(
     controllerDb.prepare('SELECT MAX(version) n FROM schema_version').get().n,
     baseSchema
   )
   controllerDb.close()
-  check(`fresh_desktop038_and_native_controller0${baseSchema}_have_separate_migration_roles`)
+  check(`fresh_desktop039_and_native_controller0${baseSchema}_have_separate_migration_roles`)
   const cipher = new AesGcmCredentialCipher(randomBytes(32))
   const vps = new VpsRepository(desktopDb)
   vps.create({
@@ -413,7 +421,14 @@ try {
   await installations.inspect(key)
   const bindingKey = randomUUID()
   let vault = new DesktopControllerVault(desktopDb, cipher)
-  vault.prepare(installations.bindingIntent(key, bindingKey, 'Upgrade retained client'))
+  vault.prepare(
+    installations.bindingIntent(
+      key,
+      bindingKey,
+      'Upgrade retained client',
+      process.env.OPSPILOT_RECONNECTION_NATIVE_GATE === '1'
+    )
+  )
   await new DesktopControllerEnrollment(vault, ssh, { bootstrapScript }).enroll(bindingKey)
   const tokenBefore = vault.resolve(bindingKey).accessToken,
     clientBefore = vault.get(bindingKey).remote_client_id
@@ -528,7 +543,7 @@ try {
   assert.equal(recovered.before[0].state, 'outcome_unknown')
   assert.equal(recovered.result.state, 'active')
   assert.equal(recovered.result.last_result.controller_id, installed.installation.controller_id)
-  assert.equal(recovered.schema.n, 38)
+  assert.equal(recovered.schema.n, 39)
   assert.equal(
     fixed('/usr/bin/systemctl', ['show', unitName, '--property=MainPID', '--value']),
     activePid
@@ -778,6 +793,147 @@ try {
       'current037_installed_Root_setpriv_sameUID_admin_reaches_finite_inspector_and_refuses_invalid_input_without_restart'
     )
   }
+  if (process.env.OPSPILOT_RECONNECTION_NATIVE_GATE === '1') {
+    assert.equal(baseSchema, 37)
+    stage = 'installed-main-reconnection'
+    const seedFile = join(root, 'reconnection-seed.cjs')
+    await esbuild.build({
+      entryPoints: [
+        resolve(
+          import.meta.dirname,
+          '../product-project-reconnection-desktop-lab/controller-seed.ts'
+        )
+      ],
+      outfile: seedFile,
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      target: 'node22',
+      packages: 'external',
+      nodePaths: [modules]
+    })
+    chmodSync(seedFile, 0o644)
+    const gid = fixed('/usr/bin/id', ['-g', account]).trim()
+    const seeded = spawnSync(
+      '/usr/bin/setpriv',
+      [
+        '--reuid',
+        String(current.runtime_uid),
+        '--regid',
+        gid,
+        '--clear-groups',
+        join(paths.installation, 'revisions', upgradeKey, 'runtime/node'),
+        seedFile,
+        paths.data,
+        current.controller_id,
+        nonce
+      ],
+      {
+        env: {
+          PATH: '/usr/bin:/bin',
+          NODE_PATH: join(paths.installation, 'revisions', upgradeKey, 'runtime/node_modules')
+        },
+        encoding: 'utf8',
+        timeout: 30000,
+        maxBuffer: 8192
+      }
+    )
+    assert.equal(seeded.status, 0, 'NATIVE_RECONNECTION_FIXTURE_FAILED')
+    const selected = JSON.parse(seeded.stdout)
+    stage = 'reconnection-git-fixture-ready'
+    const gitDeadline = Date.now() + 60000
+    for (;;) {
+      const metadata = new Database(join(paths.data, 'opspilot.db'), { readonly: true })
+      let observed
+      try {
+        observed = metadata
+          .prepare('SELECT count(*) n FROM product_branch_observation WHERE app_id=?')
+          .get(selected.app_id).n
+        assert.equal(metadata.prepare('SELECT count(*) n FROM product_deploy_job').get().n, 0)
+      } finally {
+        metadata.close()
+      }
+      if (observed > 0) break
+      assert(Date.now() < gitDeadline, 'NATIVE_RECONNECTION_PUBLIC_GIT_NOT_OBSERVED')
+      await new Promise((done) => setTimeout(done, 500))
+    }
+    const fixtureHealth = await fetch('http://127.0.0.1:8768/healthz')
+    assert.equal(fixtureHealth.status, 200)
+    assert.equal((await fixtureHealth.json()).service_state, 'ready')
+    check('paused_fixture_public_Git_is_observed_without_job_and_controller_remains_ready')
+    stage = 'installed-main-reconnection'
+    const legacy = () =>
+      JSON.stringify(
+        [
+          'desktop_project_setup',
+          'desktop_postgres_intent',
+          'desktop_environment_intent',
+          'desktop_environment_selection'
+        ].map((name) => desktopDb.prepare('SELECT * FROM ' + name).all())
+      )
+    const beforeLegacy = legacy()
+    // Chỉ ghi pha/mã lỗi cố định, không response/row/credential của Main.
+    const realReconnectionRead = desktopService.enrollment.reconnectionContext.bind(
+      desktopService.enrollment
+    )
+    desktopService.enrollment.reconnectionContext = async (...args) => {
+      try {
+        return await realReconnectionRead(...args)
+      } catch (error) {
+        writeFileSync(
+          join(evidence, 'reconnection-diagnostic.json'),
+          JSON.stringify({
+            phase: 'installed_transport',
+            code: /^[A-Z_]{1,64}$/.test(error?.code ?? '') ? error.code : 'UNKNOWN'
+          }) + '\n'
+        )
+        throw error
+      }
+    }
+    const review = await desktopService.reviewProjectReconnection({
+      binding_id: bindingKey,
+      app_id: selected.app_id
+    })
+    assert.equal(review.context.source.generation, 2)
+    assert.equal(review.context.selected_database.database_id, selected.database_id)
+    const confirmed = await desktopService.confirmProjectReconnection({
+      plan_id: review.plan_id,
+      consent: true
+    })
+    assert.equal(confirmed.provenance, 'explicit_reconnection_v1')
+    assert.equal(confirmed.execution, 'fresh_review_required')
+    assert.deepEqual(
+      await desktopService.currentProjectReconnection(confirmed.request_key),
+      confirmed
+    )
+    assert.equal(legacy(), beforeLegacy)
+    check(
+      'actual_installed_Main_Root_setpriv_service_UID_reconnection_source2_PG_consent_preserves_legacy_receipts'
+    )
+    const again = await desktopService.confirmProjectReconnection({
+      plan_id: review.plan_id,
+      consent: true
+    })
+    assert.equal(again.request_key, confirmed.request_key)
+    assert.equal(
+      desktopDb.prepare('SELECT count(*) n FROM desktop_project_reconnection').get().n,
+      1
+    )
+    await assert.rejects(() =>
+      desktopService.confirmProjectReconnection({ plan_id: review.plan_id, consent: false })
+    )
+    await assert.rejects(() =>
+      desktopService.reviewProjectReconnection({ binding_id: bindingKey, app_id: 900002 })
+    )
+    assert.equal(vault.resolve(bindingKey).accessToken, tokenBefore)
+    assert.equal(
+      fixed('/usr/bin/systemctl', ['show', unitName, '--property=MainPID', '--value']),
+      activePid
+    )
+    check(
+      'actual_installed_reconnection_same_plan_idempotent_invalid_consent_and_foreign_app_refused_token_and_PID_unchanged'
+    )
+  }
   await assert.rejects(
     () =>
       administerInstalledController({
@@ -837,6 +993,10 @@ try {
   check('revision_admin_rejects_stopped_controller_without_implicitly_starting_or_adopting_it')
   stage = 'rollback'
   const reverted = await upgrades.send(upgradeKey, 'rollback', true)
+  writeFileSync(
+    join(evidence, 'rollback-diagnostic.json'),
+    JSON.stringify({ state: reverted.state, phase: reverted.last_result?.phase ?? null }) + '\n'
+  )
   assert.equal(reverted.state, 'rolled_back')
   assert.equal(reverted.last_result.runtime_upgrade_key, null)
   const originalAgain = await callControllerBootstrap({ ...input(), operation: 'inspect' })

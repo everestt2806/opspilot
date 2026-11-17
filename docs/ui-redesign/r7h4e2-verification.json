@@ -1,0 +1,240 @@
+{
+  "status": "PASS_SCOPED_R7H4E2_MAIN_CONSENT_AND_INSTALLED_TRANSPORT",
+  "verified_at": "2026-11-17T06:18:37.270207+00:00",
+  "base_commit": "9954019080f6e5320b08c73179592a5e924518cf",
+  "contracts": [
+    "docs/contracts/desktop-project-reconnection.ts",
+    "docs/contracts/product-installed-controller-admin.ts"
+  ],
+  "schema_roles": {
+    "Desktop": 39,
+    "Controller": 37,
+    "migration_038_FK_or_registration_receipt_fabrication": false
+  },
+  "native_installed_Main_Root": {
+    "path": "app/.out-scripts/controller-upgrade-desktop/3953da9eb784/result.json",
+    "sha256": "3da2a93e0bce1e0ebe984863ed93167e1ea9b0a392c27b9253bfafa8ac5335f3",
+    "result": {
+      "status": "PASS",
+      "scope": "PRIVATE_ROOT_SYSTEMD_PINNED_SSH_MAIN_SQLITE_UPGRADE",
+      "release_inputs": {
+        "original": "4bc45902888d7e3442e6cd44694c4abbe1685101c5eac94415cb677461e245a5",
+        "candidate": "9878eae58256c87f5095aa544d35345f14e7eca526d1d6a1eb3de80e20356233",
+        "fixture_installer": "0a137d6dba86e06603de740f5a046cf8a14a8a762dcce2e1de3570298f139743"
+      },
+      "checks": [
+        "fresh_desktop039_and_native_controller037_have_separate_migration_roles",
+        "original_root_admin_enrollment_stores_api_token_only_in_encrypted_main_vault",
+        "plan_prepare_and_absent_inspect_preserve_uuid_and_never_create_remote_upgrade_namespace",
+        "independently_pinned_upgrade_transfer_uses_distinct_uuid_namespace_preserving_original_install_staging",
+        "wrong_tool_pin_rejected_by_receiver_before_upgrader_execution",
+        "disconnect_before_root_journal_keeps_attempted_and_wrong_parent_recovery_never_creates_journal",
+        "lost_upgrade_reply_recovers_in_separate_cold_main_process_without_replaying_or_restarting_service",
+        "explicit_runtime_refresh_preserves_api_token_client_and_authenticated_api_with_revision_root_admin",
+        "historical_release_keeps_real_inspection_and_token_refresh_but_cannot_be_selected_for_new_upgrade",
+        "cold_profile_readonly_discovery_and_explicit_adoption_preserve_remote_uuids_and_current_runtime",
+        "cold_adoption_separate_readonly_enrollment_api200_revocation_without_reinstall_restart_or_receipt_change",
+        "same_host_readded_vps_fresh_pinned_ssh_authority_then_separate_api_refresh_preserves_uuid_pid_token_client_and_api200",
+        "attempt_monotonicity_prevents_second_upgrade_and_does_not_rebind_api_credentials",
+        "current037_installed_Root_setpriv_sameUID_admin_reaches_finite_inspector_and_refuses_invalid_input_without_restart",
+        "paused_fixture_public_Git_is_observed_without_job_and_controller_remains_ready",
+        "actual_installed_Main_Root_setpriv_service_UID_reconnection_source2_PG_consent_preserves_legacy_receipts",
+        "actual_installed_reconnection_same_plan_idempotent_invalid_consent_and_foreign_app_refused_token_and_PID_unchanged",
+        "revision_admin_derives_current_runtime_after_root_attestation_and_rejects_wrong_uid_payload_without_restart",
+        "revision_admin_rejects_stopped_controller_without_implicitly_starting_or_adopting_it",
+        "rollback_blocks_old_binding_until_explicit_refresh_then_reuses_the_same_authenticated_token",
+        "rolled_back_current_operation_admin_uses_restored_parent_payload_and_preserves_original_authority",
+        "explicit_main_rollback_restores_original_unit_and_preserves_root_receipt_identity_key_database_inode",
+        "archived_vps_authority_rejected_before_any_ssh_execution"
+      ],
+      "production_vps_used": false,
+      "production_database_used": false,
+      "fixture_root_removed": true,
+      "fixture_unit_removed": true,
+      "fixture_account_removed": true,
+      "python_only_path": true,
+      "ssh_authentications": 12,
+      "ssh_executions": 54,
+      "script_bytes": 40741,
+      "compressed_executions": 54,
+      "max_command_bytes": 12202
+    },
+    "target_metadata_fixture_only": true,
+    "PostgreSQL_prepared_not_provisioned": true,
+    "safe_foreign_app_error": "PROJECT_RECONNECTION_AUTHORITY_CHANGED",
+    "rollback": {
+      "state": "rolled_back",
+      "phase": "rolled_back"
+    },
+    "GUI": false,
+    "DPAPI": false,
+    "fixture_background_public_Git_polling": true,
+    "fixture_background_target_SSH": false
+  },
+  "same_UID_admin": {
+    "path": "app/.out-scripts/product-postgres-selection/301360148fd2/proof.json",
+    "sha256": "4dceee143320a6e3b6f8009965d682664e4cf43f2896d9d75aaff165cda92e33",
+    "checks": [
+      "missing_enrollment_refuses_selection_without_source_mutation",
+      "actual_SSH_manifest_helper_bytes_key_and_receipt_review_is_readonly",
+      "actual_helper_tamper_refuses_selection_without_clearing_enrollment",
+      "wrong_local_bundle_pin_rejected_before_source_selection",
+      "production_CLI_selects_once_preserves_key_and_pause_no_job_or_runtime_readiness_claim",
+      "production_CLI_fetches_actual_public_Git_and_verifies_selected_PostgreSQL_source",
+      "actual_SSH_Docker_resource_probe_and_readiness_support_database_only_source_no_job",
+      "production_CLI_reviews_DB_only_source_from_original_registration_without_provisioning_or_job",
+      "actual_same_UID_Python_admin_verifies_ELF_bundle_key_SQLite_then_runs_seven_fixed_PostgreSQL_operations",
+      "Python_admin_forwards_only_approved_PostgreSQL_error_and_never_starts_job",
+      "readonly_prepare_receipt_available_after_source_advance_without_replaying_prepare",
+      "cold_offline_same_UUID_lookup_replay_and_conflicting_body_refusal",
+      "actual_same_UID_CLI_reads_current_Git_and_authenticated_PG_metadata_with_SSHD_off_and_no_SQLite_writes",
+      "actual_same_UID_CLI_refuses_wrong_controller_app_previous_snapshot_and_caller_target_without_writes",
+      "actual_same_UID_CLI_review_keeps_auto_enabled_creates_no_job_and_requires_review_after_policy_drift",
+      "actual_same_UID_Python_admin_reaches_reconnection_CLI_and_forwards_only_safe_errors_without_SQLite_writes"
+    ],
+    "artifact_sha256": "9a33e1315db1b8ca9713d77bddeeb39568dd783cd483d4e38177ef6bedcc5c3b",
+    "SSHD_off_during_reconnection": true,
+    "SQLite_serialized_bytes_unchanged": true,
+    "private_cleanup": true,
+    "PostgreSQL_runtime_provisioning": false
+  },
+  "standalone_Main": {
+    "path": "app/.out-scripts/product-project-reconnection-desktop-lab/8b5b03e49de5/proof.json",
+    "sha256": "6b05fe2546b3d2f684d6d9190ae84bc61f2542b797441f366153eccf5982c531",
+    "result": {
+      "status": "PASS",
+      "nonce": "8b5b03e49de5",
+      "checks": [
+        "Desktop039_Controller037_roles_separate",
+        "source2_PG_without_own_selection_receipt_is_preview_only_until_explicit_consent",
+        "confirmed_provenance_is_local_atomic_idempotent_and_preserves_legacy_receipts_and_controller_bytes",
+        "closed_reopened_SQLite_and_recomposed_real_vault_recovers_authenticated_record_without_registration_fabrication",
+        "policy_drift_requires_fresh_review_and_explicit_consent_preserves_both_versions",
+        "binding_disable_revokes_record_use_no_job_or_credential_readback"
+      ],
+      "transport": "SYNTHETIC_SQLITE_ONLY",
+      "SSH_used": false,
+      "Docker_used": false,
+      "VPS_used": false,
+      "GUI_used": false,
+      "artifact_sha256": "3809c7197afb5870861f19df2a539823b8004bd45b208bb6a354dee898360667",
+      "private_cleanup": true
+    },
+    "real_SQLite_cipher_vault": true,
+    "transport": "SYNTHETIC_SQLITE_ONLY",
+    "reopened_SQLite_not_OS_process_restart": true
+  },
+  "tests": {
+    "files_passed": 186,
+    "passed": 2712,
+    "existing_skipped_tests": 2,
+    "failed": 0,
+    "full_log_sha256": "660955f0a0bb6edcf83828d9fc852ad23253a3e4f5cd31a529254feaa7ea1573",
+    "focused_affected_fixture_rerun": 184
+  },
+  "quality": [
+    {
+      "name": "full",
+      "command": [
+        "pnpm.cmd",
+        "--prefix",
+        "app",
+        "exec",
+        "vitest",
+        "run",
+        "--reporter=dot"
+      ],
+      "exit_code": 0,
+      "seconds": 385.01,
+      "log": "app\\.out-scripts\\r7h4e2-final-full.log"
+    },
+    {
+      "name": "build",
+      "command": [
+        "pnpm.cmd",
+        "--prefix",
+        "app",
+        "build"
+      ],
+      "exit_code": 0,
+      "seconds": 126.03,
+      "log": "app\\.out-scripts\\r7h4e2-final-build.log"
+    }
+  ],
+  "additional_checks": {
+    "Node_Web_typecheck": "PASS (production build)",
+    "scripts_typecheck": "PASS",
+    "contract_typecheck": "PASS",
+    "scoped_ESLint_zero_warnings": "PASS",
+    "changed_source_format": "PASS",
+    "Python_admin_Ruff_lint_and_format": "PASS",
+    "diff_check": "PASS",
+    "migration039_exact_contract_copy": "PASS"
+  },
+  "source_hashes": {
+    "app/scripts/controller-upgrade-desktop-lab/entry.ts": "f6625b3e1da127109b86ea0fb73584b2834575e72f757a948a43bc12a7c2ab36",
+    "app/scripts/controller-upgrade-desktop-lab/run.mjs": "a5b0f370704bce0758d0fa055597575fa868e74c39fa701cb884856deeccaded",
+    "app/scripts/product-postgres-lab/selection.mjs": "20346c9d35a0e86d452427dd8b346168033a5d3fca4ac929f2abde57227166e2",
+    "app/scripts/product-project-reconnection-desktop-lab/README.md": "1cd8a774ca13e9ccd702dacb62fc096cda7e90f33b88cc5c4d00bcbd6329e482",
+    "app/scripts/product-project-reconnection-desktop-lab/controller-seed.ts": "c5a83dd8723148a78b812effeca520fbbec48a12ac1787f08a0adc5c1671d5ca",
+    "app/scripts/product-project-reconnection-desktop-lab/entry.ts": "7b6a7fa4111b4b3fee377fd6e82a2bf6201e98a3926b227304dc5b1662320f7b",
+    "app/scripts/product-project-reconnection-desktop-lab/fixture.ts": "e4322064ad5753ceda3b3d3be6d6277edb46d3bcae9c8705fdda98707bf442ac",
+    "app/scripts/product-project-reconnection-desktop-lab/run.mjs": "393e6e2bb7e30000fc513c6d70108381982ac22440d0b17b590f7e9305e7d0d7",
+    "app/scripts/product-project-reconnection-lab/review.mjs": "2755dd60993e5e5f0fb63000a606078feceaecf155c1f26b30048ec6c38215a1",
+    "app/src/main/controlPlane/controllerDatabase.test.ts": "25b6d60f451c3d9e9a546b24df9fb0259f21daf6c20da66ae26d5165845f4599",
+    "app/src/main/controlPlane/controllerPostgresSchema.test.ts": "f4117ea2b3c695ac7118bd33661af23929785b5fe5f7198af9f3961e940eb82c",
+    "app/src/main/controlPlane/desktopControllerCommands.test.ts": "e05430e32ac9309bd75cc62273b7a7419e8dcc7a78f81290d0208881dbd4bee1",
+    "app/src/main/controlPlane/desktopControllerEnrollment.test.ts": "6bd8ff327d9841e50fccf5500885d4ee598a22f274f4693e1e05cd743dca9c03",
+    "app/src/main/controlPlane/desktopControllerEnrollment.ts": "eff80be7d6eecbbb7b77a0f6247af475d46554bb3725f86fa69a5044efb69fb9",
+    "app/src/main/controlPlane/desktopControllerInstallation.test.ts": "c2b8b01d2e4718ebf5e66616fa798a375da414e988b356ffc4fc89e225852a55",
+    "app/src/main/controlPlane/desktopControllerService.ts": "215b4d852bb9b8186e9579a82b968092f2152fe12b702c5359d628b003da65e5",
+    "app/src/main/controlPlane/desktopControllerVault.test.ts": "d551d5755045b795768c6991e793198773ccad625e34770c870195a28a00d8ee",
+    "app/src/main/controlPlane/desktopProjectReconnection.test.ts": "053c39d49af6da2151eb352964499ee37d0c4e17fe86b869f4407ea9e2061506",
+    "app/src/main/controlPlane/desktopProjectReconnection.ts": "245c994730350e39452e2d0baf30cfa19189784102deff843e5ba3ab0c807a76",
+    "app/src/main/controlPlane/desktop_controller_admin.py": "001724bf83ef742adeb620b0098b82a031166d457c2a62a88a90836c50461fc0",
+    "app/src/main/controlPlane/installedControllerAdminProtocol.ts": "5934df1d0baf627e83f829d2e81dffc47d13dc9d4cdbbea30f74a8a40f9510ca",
+    "app/src/main/controlPlane/projectRegistration.test.ts": "be5227cc1a6b222cc7f6055afc1ac73c9940e7a5891df82c9ed977cf12f71dfe",
+    "app/src/main/db/index.test.ts": "e2689bb79330301666699c3a03df7eaf29e6a8f84167f7235d0f960ec21c296e",
+    "app/src/main/db/index.ts": "6ae13a3dd491b428945d81ad3b9013b2538dba6f0b1c21805db1f69f3af0bf1a",
+    "app/src/main/db/migrationRoles.test.ts": "0c928d2d5206ddbce99fceee1a1eecffb4c44e68e8a754f001837554fed0f9ba",
+    "app/src/main/db/migrations/039_desktop_project_reconnection.sql": "8a874f79a5d922d5eb9d5df0f33c3494bc284b5a1db0d7450ca85a4b5888874e",
+    "app/src/main/db/productEnvironmentAdmin.test.ts": "e7d2c33fabc41c2f1dd7f5346f3734976653208a81e3670a08c00b4d99061157",
+    "app/src/main/db/productEnvironmentRepository.test.ts": "6dda3349732a367651c9c60e1e507c434997c6f9e1c27e3c0473501ef56a13a5",
+    "app/src/main/db/productMigration.test.ts": "23311f357d3418a208babb6e592dc9721d236843c3bc61bb57720bf2aa8f6d7c",
+    "docs/contracts/desktop-project-reconnection.ts": "fc98efa0652c534037074082e2645c40e7dfdcfda88284bf2df749340027022a",
+    "docs/contracts/product-installed-controller-admin.ts": "cdafa450753cf55e959bfdc8c8d4e7a45d6428f26ecefef075496a450f9c2522",
+    "docs/contracts/schema.sql": "0b9ca3a2bac87b02055a17a963da0dc305d6ac96cfd2bf859ccc62c13507fd25"
+  },
+  "private_release": {
+    "manifest_sha256": "9878eae58256c87f5095aa544d35345f14e7eca526d1d6a1eb3de80e20356233",
+    "directory": "/var/tmp/opspilot-r7h4e2-release-1794893124-622159/release",
+    "approved_or_serving": false
+  },
+  "initial_failures": {
+    "full": "Seven old Desktop max-schema38 assertions failed; upgraded expectations/legacy downgrade fixtures to39; final full rerun required and passed.",
+    "native": "First installed lab stopped at cold-process Desktop schema38 assertion; corrected39 and reran whole gate.",
+    "Git_fixture": "A nonexistent fixture repository made the paused-app Git poller degrade controller health, triggering ADMIN_NOT_READY and rollback guards. Use a real public repository; require branch observation, zero jobs and ready health before Main consent. No production readiness guard weakened.",
+    "build_environment": "Root release builder refused user-owned input; built release under input owner. No permission guard bypass."
+  },
+  "scope": {
+    "explicit_review_and_consent": true,
+    "separate_authenticated_encrypted_append_only_provenance": true,
+    "expiry_and_async_authority_recheck": true,
+    "idempotent_confirmation_no_remote_write": true,
+    "historical_records_not_execution_authority": true,
+    "current_requires_fresh_remote_snapshot": true,
+    "serving_catalog_changed": false,
+    "VPS_used": false,
+    "production_database_used": false,
+    "IPC_UI_integrated": false,
+    "GUI_acceptance": false,
+    "Docker_or_runtime_deployment": false,
+    "formal_ML": "NOT_RUN",
+    "Kim_lane_changed": false
+  },
+  "remaining": [
+    "E3: typed IPC, explicit confirmation UI and read-only inspector routing with fresh reconnection authority; preserve original-receipt guards.",
+    "E4: approve candidate release, installed/serving rollout and actual GUI acceptance; do not claim these from private backend labs.",
+    "Product backup/restore/migrate and formal ML remain independent release work."
+  ]
+}

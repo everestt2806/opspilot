@@ -1,5 +1,12 @@
 # R7h-4e — nhận lại dự án/cấu hình Product
 
+UPDATE 17/11/2026 — E2 backend/installed transport PASS trong phạm vi riêng:
+Desktop039 consent journal, full2712PASS+2existingLinuxSKIP, native Root/Main23,
+sameUID16 và Main standalone6checks/cleanup; types/lint/build PASS. Chi tiết và
+source/raw hashes tại [task E2](tk-s7-release-r7h4e2-reconnection-main.md) và
+[proof E2](../ui-redesign/r7h4e2-verification.json). Không thay kết quả E1 lịch sử;
+E3 IPC/UI/inspector và E4 approve/serving/GUI còn OPEN. Không giả receipt cũ.
+
 START17/11/2026 — Base1bb56ad. User tiếp tục core development, normal checkpoint
 commit/push đã được cho phép. Kim giữ lane Windows delivery; không sửa file Kim.
 Serving63d1/schema37/8apps/2PG giữ nguyên cho tới gate phát hành riêng.

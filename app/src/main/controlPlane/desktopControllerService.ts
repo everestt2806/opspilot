@@ -1,5 +1,15 @@
 import { DesktopProductPostgres, DesktopPostgresError } from './desktopProductPostgres'
 import { DesktopPostgresInspection } from './desktopPostgresInspection'
+import {
+  DesktopProjectReconnections,
+  DesktopProjectReconnectionError
+} from './desktopProjectReconnection'
+import type {
+  DesktopProjectReconnectionReviewInput,
+  DesktopProjectReconnectionReview,
+  DesktopProjectReconnectionConfirmInput,
+  DesktopProjectReconnection
+} from '../../../../docs/contracts/desktop-project-reconnection'
 import { ProductPostgresInspectionError } from './productPostgresInspectorCommands'
 import type {
   DesktopPostgresInspectionInput,
@@ -147,6 +157,7 @@ export class DesktopControllerService {
   private readonly environment: DesktopProductEnvironment
   private readonly postgres: DesktopProductPostgres
   private readonly postgresInspection: DesktopPostgresInspection
+  private readonly reconnections: DesktopProjectReconnections
   private readonly targets: DesktopTargetSetups
   private readonly firstDeployments: DesktopFirstDeployments
   private readonly installations: DesktopControllerInstallations
@@ -193,6 +204,7 @@ export class DesktopControllerService {
     this.enrollment = new DesktopControllerEnrollment(this.vault, ssh, {
       bootstrapScript: options.bootstrapScript
     })
+    this.reconnections = new DesktopProjectReconnections(db, cipher, this.vault, this.enrollment)
     this.commands = new DesktopControllerCommands(db, this.vault, ssh, clientFactory)
     const configurationContext = (key: string): Promise<ProductProjectConfigurationContext> =>
       readOwnedDesktopConfiguration(
@@ -578,6 +590,25 @@ export class DesktopControllerService {
   }
   async postgresContext(key: string): Promise<DesktopPostgresContext> {
     return this.safe(() => this.postgres.context(key))
+  }
+  async reviewProjectReconnection(
+    input: DesktopProjectReconnectionReviewInput
+  ): Promise<DesktopProjectReconnectionReview> {
+    return this.safe(() => this.reconnections.review(input))
+  }
+  async confirmProjectReconnection(
+    input: DesktopProjectReconnectionConfirmInput
+  ): Promise<DesktopProjectReconnection> {
+    return this.safe(() => this.reconnections.confirm(input))
+  }
+  async currentProjectReconnection(key: string): Promise<DesktopProjectReconnection> {
+    return this.safe(() => this.reconnections.current(key))
+  }
+  async latestProjectReconnection(
+    bindingId: string,
+    appId: number
+  ): Promise<DesktopProjectReconnection | null> {
+    return this.safe(() => this.reconnections.latest(bindingId, appId))
   }
   async inspectPostgres(
     input: DesktopPostgresInspectionInput
@@ -976,6 +1007,7 @@ export class DesktopControllerService {
         error instanceof DesktopTargetSetupError ||
         error instanceof DesktopEnvironmentError ||
         error instanceof DesktopPostgresError ||
+        error instanceof DesktopProjectReconnectionError ||
         error instanceof ProductPostgresInspectionError ||
         error instanceof DesktopInstallationError ||
         error instanceof DesktopUpgradeError ||

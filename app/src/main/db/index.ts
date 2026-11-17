@@ -41,6 +41,7 @@ import migration035 from './migrations/035_product_source_environment.sql?raw'
 import migration036 from './migrations/036_desktop_environment_selection.sql?raw'
 import migration037 from './migrations/037_product_managed_postgres.sql?raw'
 import migration038 from './migrations/038_desktop_postgres_intent.sql?raw'
+import migration039 from './migrations/039_desktop_project_reconnection.sql?raw'
 
 interface Migration {
   name: string
@@ -50,6 +51,7 @@ interface Migration {
 }
 
 const migrations: Migration[] = [
+  { name: '039_desktop_project_reconnection.sql', version: 39, sql: migration039, role: 'desktop' },
   { name: '038_desktop_postgres_intent.sql', version: 38, sql: migration038, role: 'desktop' },
   { name: '037_product_managed_postgres.sql', version: 37, sql: migration037, role: 'controller' },
   {

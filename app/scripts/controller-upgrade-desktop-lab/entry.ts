@@ -45,10 +45,15 @@ export function labScript(nonce: string): { text: string; sha256: string } {
           '/etc/systemd/system/opspilot-upgrade-desktop-' + nonce + '.service'
         ])
     )
-  const diagnostic = text.replace(
-    '    ) as error:\n        code = (',
-    '    ) as error:\n        import sys\n        trace = error.__traceback__\n        caller = trace.tb_lineno\n        while trace.tb_next: caller = trace.tb_lineno; trace = trace.tb_next\n        sys.stderr.write(json.dumps({"fixture_error":type(error).__name__,"line":trace.tb_lineno,"caller_line":caller,"code":getattr(error,"code",None),"errno":getattr(error,"errno",None)})+"\\n")\n        code = ('
-  )
+  const diagnostic = text
+    .replace(
+      '            fail(mapped.get(reason, "INSTALLER_FAILED"))',
+      '            import sys\n            sys.stderr.write(json.dumps({"fixture_error":"InstallerFailure","reason":reason if isinstance(reason,str) and reason.startswith("CONTROLLER_INSTALL_") and len(reason)<128 else None})+"\\n")\n            fail(mapped.get(reason, "INSTALLER_FAILED"))'
+    )
+    .replace(
+      '    ) as error:\n        code = (',
+      '    ) as error:\n        import sys\n        trace = error.__traceback__\n        caller = trace.tb_lineno\n        while trace.tb_next: caller = trace.tb_lineno; trace = trace.tb_next\n        sys.stderr.write(json.dumps({"fixture_error":type(error).__name__,"line":trace.tb_lineno,"caller_line":caller,"code":getattr(error,"code",None),"errno":getattr(error,"errno",None)})+"\\n")\n        code = ('
+    )
   return { text: diagnostic, sha256: createHash('sha256').update(diagnostic).digest('hex') }
 }
 if (require.main === module)

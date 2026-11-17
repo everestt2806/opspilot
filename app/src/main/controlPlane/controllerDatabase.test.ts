@@ -85,7 +85,7 @@ describe('Product controller database bootstrap', () => {
     expect(readFileSync(path)).toEqual(before)
     const desktop = initializeDatabase(join(directory, 'desktop'), 'desktop')
     expect(desktop.prepare('SELECT max(version) version FROM schema_version').get()).toEqual({
-      version: 38
+      version: 39
     })
     expect(
       desktop.prepare("SELECT name FROM sqlite_master WHERE name='product_managed_postgres'").get()

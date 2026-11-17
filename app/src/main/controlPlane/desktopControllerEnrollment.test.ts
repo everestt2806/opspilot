@@ -25,6 +25,27 @@ let directory: string,
   open: ReturnType<typeof vi.fn<SshManager['openProductBootstrapChannel']>>,
   requests: Array<Record<string, unknown>>,
   reply: (channel: FakeChannel) => void
+
+it('refuses reconnection through a legacy direct binding and never accepts caller paths', async () => {
+  await service.enroll(intent.binding_id)
+  open.mockClear()
+  await expect(
+    service.reconnectionContext(intent.binding_id, {
+      format: 1,
+      controller_id: intent.controller_id,
+      app_id: 42
+    })
+  ).rejects.toThrow('PROJECT_RECONNECTION_UNAVAILABLE')
+  await expect(
+    service.reconnectionContext(intent.binding_id, {
+      format: 1,
+      controller_id: intent.controller_id,
+      app_id: 42,
+      artifact: '/caller/path'
+    } as never)
+  ).rejects.toThrow('PROJECT_RECONNECTION_INPUT_INVALID')
+  expect(open).not.toHaveBeenCalled()
+})
 type FakeChannel = EventEmitter & {
   stderr: PassThrough
   end: ReturnType<typeof vi.fn>

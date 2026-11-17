@@ -42,7 +42,8 @@ export type InstalledControllerAdminRequest = {
       | "managed-postgres-review"
       | "select-managed-postgres"
       | "managed-postgres-selection-state"
-      | "managed-postgres-inspection";
+      | "managed-postgres-inspection"
+      | "project-reconnection-context";
     payload: object;
   };
 };

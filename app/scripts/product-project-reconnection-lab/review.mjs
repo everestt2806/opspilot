@@ -3,7 +3,15 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 
 /** Called after the selection lab stops its private SSHD. No production VPS/DB. */
-export function reviewReconnection({ db, cli, check, controllerId, databaseId, repository }) {
+export function reviewReconnection({
+  db,
+  cli,
+  check,
+  controllerId,
+  databaseId,
+  repository,
+  admin
+}) {
   const fingerprint = () => createHash('sha256').update(db.serialize()).digest('hex')
   const input = { format: 1, controller_id: controllerId, app_id: 1 }
   const before = fingerprint()
@@ -64,4 +72,23 @@ export function reviewReconnection({ db, cli, check, controllerId, databaseId, r
   check(
     'actual_same_UID_CLI_review_keeps_auto_enabled_creates_no_job_and_requires_review_after_policy_drift'
   )
+  if (admin) {
+    const state = fingerprint()
+    const result = admin('project-reconnection-context', input)
+    assert.deepEqual(result, current)
+    admin(
+      'project-reconnection-context',
+      { ...input, expected_snapshot_sha256: '0'.repeat(64) },
+      'PROJECT_RECONNECTION_AUTHORITY_CHANGED'
+    )
+    admin(
+      'project-reconnection-context',
+      { ...input, artifact: '/caller/untrusted' },
+      'PROJECT_RECONNECTION_INPUT_INVALID'
+    )
+    assert.equal(fingerprint(), state)
+    check(
+      'actual_same_UID_Python_admin_reaches_reconnection_CLI_and_forwards_only_safe_errors_without_SQLite_writes'
+    )
+  }
 }

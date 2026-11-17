@@ -7,6 +7,15 @@ import type {
   ProductProjectConfigurationContext,
   ProductProjectConfigurationContextInput
 } from '../../../../docs/contracts/product-postgres'
+import type {
+  ProductProjectReconnectionInput,
+  ProductProjectReconnectionContext
+} from '../../../../docs/contracts/product-project-reconnection'
+import {
+  projectReconnectionInputSchema,
+  projectReconnectionContextSchema,
+  type ProjectReconnectionError
+} from './projectReconnection'
 import type { ProductEnvironmentScope } from '../../../../docs/contracts/product-environment'
 import type {
   ProductPostgresInspectionRequest,
@@ -119,6 +128,7 @@ export class DesktopControllerEnrollmentError extends Error {
       | ProductEnvironmentError['code']
       | (typeof postgresAdminErrorCodes)[number]
       | (typeof postgresInspectionErrorCodes)[number]
+      | ProjectReconnectionError['code']
       | 'CONTROLLER_SECRET_KEY_UNAVAILABLE'
       | 'CONTROLLER_ADMIN_FAILED'
       | 'CONTROLLER_IDENTITY_MISMATCH'
@@ -368,6 +378,32 @@ export class DesktopControllerEnrollment {
       throw new DesktopControllerEnrollmentError('CONTROLLER_ADMIN_FAILED')
     return result
   }
+  async reconnectionContext(
+    bindingId: string,
+    input: ProductProjectReconnectionInput,
+    beforeRead?: () => void
+  ): Promise<ProductProjectReconnectionContext> {
+    const parsed = projectReconnectionInputSchema.safeParse(input)
+    if (!parsed.success || parsed.data.controller_id !== this.vault.resolve(bindingId).controllerId)
+      throw new DesktopControllerEnrollmentError('PROJECT_RECONNECTION_INPUT_INVALID')
+    if (!this.vault.intent(bindingId).installation)
+      throw new DesktopControllerEnrollmentError('PROJECT_RECONNECTION_UNAVAILABLE')
+    const result = await this.configurationOperation(
+      bindingId,
+      'project-reconnection-context',
+      parsed.data,
+      projectReconnectionContextSchema,
+      beforeRead
+    )
+    if (
+      result.controller_id !== parsed.data.controller_id ||
+      result.app_id !== parsed.data.app_id ||
+      (parsed.data.expected_snapshot_sha256 !== undefined &&
+        result.snapshot_sha256 !== parsed.data.expected_snapshot_sha256)
+    )
+      throw new DesktopControllerEnrollmentError('PROJECT_RECONNECTION_AUTHORITY_CHANGED')
+    return result
+  }
   async inspectPostgres(
     bindingId: string,
     input: ProductPostgresInspectionRequest,
@@ -571,7 +607,8 @@ export class DesktopControllerEnrollment {
       | 'managed-postgres-review'
       | 'select-managed-postgres'
       | 'managed-postgres-selection-state'
-      | 'managed-postgres-inspection',
+      | 'managed-postgres-inspection'
+      | 'project-reconnection-context',
     payload: object,
     schema: z.ZodType<T>,
     beforeSend?: () => void
@@ -587,7 +624,8 @@ export class DesktopControllerEnrollment {
         current.accessToken !== before.accessToken ||
         !scopes.includes('deploy:manual') ||
         !scopes.includes('policy:write') ||
-        (operation === 'managed-postgres-inspection' && !scopes.includes('read'))
+        (['managed-postgres-inspection', 'project-reconnection-context'].includes(operation) &&
+          !scopes.includes('read'))
       )
         throw new DesktopControllerVaultError('BINDING_CHANGED')
     }
@@ -773,6 +811,7 @@ export class DesktopControllerEnrollment {
         | 'select-managed-postgres'
         | 'managed-postgres-selection-state'
         | 'managed-postgres-inspection'
+        | 'project-reconnection-context'
       payload: object
       expected_revision?: number
       beforeSend?: () => void
@@ -1032,7 +1071,10 @@ function decodeAdminEnvelope(value: unknown): unknown {
         'TARGET_ENROLLMENT_REQUIRES_QUIESCENCE',
         'TARGET_ENROLLMENT_CONFLICT',
         'TARGET_ENROLLMENT_NOT_READY',
-        'TARGET_ENROLLMENT_TRANSACTION_ACTIVE'
+        'TARGET_ENROLLMENT_TRANSACTION_ACTIVE',
+        'PROJECT_RECONNECTION_INPUT_INVALID',
+        'PROJECT_RECONNECTION_AUTHORITY_CHANGED',
+        'PROJECT_RECONNECTION_UNAVAILABLE'
       ])
     })
     .safeParse(value)

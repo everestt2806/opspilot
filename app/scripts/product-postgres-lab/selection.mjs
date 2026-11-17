@@ -536,7 +536,8 @@ except Exception as error:print(json.dumps({'lines':[frame.lineno for frame in t
       check,
       controllerId,
       databaseId: prepared.metadata.database_id,
-      repository
+      repository,
+      admin: process.env.OPSPILOT_PROJECT_RECONNECTION_ADMIN_GATE === '1' ? adminCli : undefined
     })
   }
   assert.deepEqual(db.pragma('foreign_key_check'), [])

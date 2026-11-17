@@ -6,12 +6,12 @@ import { it, expect } from 'vitest'
 import { initializeDatabase, runMigrations } from './index'
 import { initializeController, openControllerDatabase } from '../controlPlane/controllerDatabase'
 
-it('shared035 applies to both roles; Desktop alone adds030/031/034/036/038, controller alone adds037 and keeps identity', () => {
+it('shared035 applies to both roles; Desktop alone adds030/031/034/036/038/039, controller alone adds037 and keeps identity', () => {
   const root = mkdtempSync(join(tmpdir(), 'opspilot-migration-role-'))
   try {
     const desktop = initializeDatabase(join(root, 'desktop'))
     try {
-      expect(desktop.prepare('SELECT MAX(version) v FROM schema_version').get()).toEqual({ v: 38 })
+      expect(desktop.prepare('SELECT MAX(version) v FROM schema_version').get()).toEqual({ v: 39 })
       expect(
         desktop
           .prepare("SELECT name FROM sqlite_master WHERE name='desktop_controller_upgrade'")

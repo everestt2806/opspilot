@@ -205,7 +205,7 @@ it('accepts only exact35/37 and rejects SQL, paths and UID overrides in dedicate
       expected: { ...before, database_inode: 1, key_inode: 2 }
     }
   expect(controllerPostgresSchemaCommandSchema.safeParse(input).success).toBe(true)
-  for (const value of [undefined, 29, 30, 32, 33, 36, 38])
+  for (const value of [undefined, 29, 30, 32, 33, 36, 38, 39])
     expect(
       controllerPostgresSchemaCommandSchema.safeParse({
         ...input,

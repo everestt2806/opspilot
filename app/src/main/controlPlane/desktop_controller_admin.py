@@ -30,6 +30,9 @@ ENVIRONMENT_ERROR_CODES = frozenset(
 )
 POSTGRES_ERROR_CODES = frozenset(
     (
+        "PROJECT_RECONNECTION_INPUT_INVALID",
+        "PROJECT_RECONNECTION_AUTHORITY_CHANGED",
+        "PROJECT_RECONNECTION_UNAVAILABLE",
         "PRODUCT_POSTGRES_INPUT_INVALID",
         "PRODUCT_POSTGRES_AUTHORITY_CHANGED",
         "PRODUCT_POSTGRES_REQUIRES_QUIESCENCE",
@@ -265,6 +268,7 @@ def run_cli(request, operation, payload):
         "project-environment-selection-state",
     )
     postgres_check = operation in (
+        "project-reconnection-context",
         "project-configuration-context",
         "prepare-managed-postgres",
         "managed-postgres-state",
@@ -374,7 +378,7 @@ def run_cli(request, operation, payload):
             if structured_error:
                 # Chỉ chuyển tiếp đúng mã đã duyệt, không stdout/stderr tùy ý.
                 match = re.fullmatch(
-                    rb"CONTROL_PLANE_ERROR ((?:PROJECT_SOURCE_|PROJECT_TARGET_|TARGET_ENROLLMENT_|PROJECT_READINESS_|VPS_REGISTRATION_|PRODUCT_ENVIRONMENT_|PRODUCT_POSTGRES_|POSTGRES_INSPECTION_|CONTROLLER_SECRET_KEY_|CONTROLLER_VPS_|CONTROLLER_BOOTSTRAP_)[A-Z_]+)\r?\n?",
+                    rb"CONTROL_PLANE_ERROR ((?:PROJECT_RECONNECTION_|PROJECT_SOURCE_|PROJECT_TARGET_|TARGET_ENROLLMENT_|PROJECT_READINESS_|VPS_REGISTRATION_|PRODUCT_ENVIRONMENT_|PRODUCT_POSTGRES_|POSTGRES_INSPECTION_|CONTROLLER_SECRET_KEY_|CONTROLLER_VPS_|CONTROLLER_BOOTSTRAP_)[A-Z_]+)\r?\n?",
                     bytes(error_content),
                 )
                 if match:
@@ -433,6 +437,7 @@ def main():
     }:
         raise ValueError()
     if request["operation"] not in (
+        "project-reconnection-context",
         "enroll-desktop-client",
         "revoke-desktop-client",
         "status",
