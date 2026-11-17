@@ -1,5 +1,10 @@
 import { DesktopProductPostgres, DesktopPostgresError } from './desktopProductPostgres'
 import { DesktopPostgresInspection } from './desktopPostgresInspection'
+import { DesktopReconnectedPostgresInspection } from './desktopReconnectedPostgresInspection'
+import type {
+  DesktopReconnectedPostgresInspectionInput,
+  DesktopReconnectedPostgresInspectionResult
+} from '@shared/desktopReconnectedPostgresInspection'
 import {
   DesktopProjectReconnections,
   DesktopProjectReconnectionError
@@ -158,6 +163,7 @@ export class DesktopControllerService {
   private readonly postgres: DesktopProductPostgres
   private readonly postgresInspection: DesktopPostgresInspection
   private readonly reconnections: DesktopProjectReconnections
+  private readonly reconnectedInspection: DesktopReconnectedPostgresInspection
   private readonly targets: DesktopTargetSetups
   private readonly firstDeployments: DesktopFirstDeployments
   private readonly installations: DesktopControllerInstallations
@@ -205,6 +211,10 @@ export class DesktopControllerService {
       bootstrapScript: options.bootstrapScript
     })
     this.reconnections = new DesktopProjectReconnections(db, cipher, this.vault, this.enrollment)
+    this.reconnectedInspection = new DesktopReconnectedPostgresInspection(
+      this.reconnections,
+      this.enrollment
+    )
     this.commands = new DesktopControllerCommands(db, this.vault, ssh, clientFactory)
     const configurationContext = (key: string): Promise<ProductProjectConfigurationContext> =>
       readOwnedDesktopConfiguration(
@@ -603,6 +613,16 @@ export class DesktopControllerService {
   }
   async currentProjectReconnection(key: string): Promise<DesktopProjectReconnection> {
     return this.safe(() => this.reconnections.current(key))
+  }
+  async projectReconnectionHistory(
+    input: DesktopProjectReconnectionReviewInput
+  ): Promise<DesktopProjectReconnection | null> {
+    return this.safe(() => this.reconnections.history(input))
+  }
+  async inspectReconnectedPostgres(
+    input: DesktopReconnectedPostgresInspectionInput
+  ): Promise<DesktopReconnectedPostgresInspectionResult> {
+    return this.safe(() => this.reconnectedInspection.read(input))
   }
   async latestProjectReconnection(
     bindingId: string,

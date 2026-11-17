@@ -1,5 +1,12 @@
 # R7h-4e — nhận lại dự án/cấu hình Product
 
+UPDATE 17/11/2026 — E3 IPC/UI PASS trong phạm vi:5IPC IDs-only, explicit consent,
+fresh restore và inspector provenance riêng; A→B→A dùng matching consent có kiểm
+lại. Full2733PASS+2existingLinuxSKIP, standalone5 và Electron6checks/25captures
+private/cleanup, types/lint/build PASS. [Task E3](tk-s7-release-r7h4e3-reconnection-ui.md),
+[proof E3](../ui-redesign/r7h4e3-verification.json). E4 approved release/installed
+composition/serving/actual VPS GUI vẫn OPEN; không dùng router lab thay live proof.
+
 UPDATE 17/11/2026 — E2 backend/installed transport PASS trong phạm vi riêng:
 Desktop039 consent journal, full2712PASS+2existingLinuxSKIP, native Root/Main23,
 sameUID16 và Main standalone6checks/cleanup; types/lint/build PASS. Chi tiết và

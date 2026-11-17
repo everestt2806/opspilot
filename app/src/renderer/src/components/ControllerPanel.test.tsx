@@ -96,6 +96,9 @@ describe('Controller settings onboarding and authoritative app reads', () => {
     expect(invoke.mock.calls.some(([channel]) => channel === 'controller:apps')).toBe(false)
     fireEvent.click(screen.getByRole('button', { name: t.view }))
     await screen.findByText('Remote app')
+    expect(
+      (screen.getByRole('button', { name: 'Nhận lại ứng dụng' }) as HTMLButtonElement).disabled
+    ).toBe(true)
     expect(invoke).toHaveBeenCalledWith('controller:apps', { binding_id: a })
     expect(
       invoke.mock.calls.some(([channel]) => channel === 'app:list' || channel === 'deploy:start')

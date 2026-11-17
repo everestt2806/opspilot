@@ -241,6 +241,21 @@ export function registerIpcHandlers(
       desktopControllerService.listTargetSetups(binding)
     )
     handle('controller:cancel-target', (key) => desktopControllerService.cancelTarget(key))
+    handle('controller:review-project-reconnection', (input) =>
+      desktopControllerService.reviewProjectReconnection(input)
+    )
+    handle('controller:confirm-project-reconnection', (input) =>
+      desktopControllerService.confirmProjectReconnection(input)
+    )
+    handle('controller:current-project-reconnection', (key) =>
+      desktopControllerService.currentProjectReconnection(key)
+    )
+    handle('controller:latest-project-reconnection', (input) =>
+      desktopControllerService.projectReconnectionHistory(input)
+    )
+    handle('controller:inspect-reconnected-postgres', (input) =>
+      desktopControllerService.inspectReconnectedPostgres(input)
+    )
     handle('controller:project-readiness', (key) => desktopControllerService.projectReadiness(key))
     handle('controller:prepare-first-deployment', (input) =>
       desktopControllerService.prepareFirstDeployment(input)

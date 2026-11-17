@@ -26,6 +26,7 @@ import { useUiState } from '../store/uiState'
 import { CONTROLLER_COPY, CONTROLLER_FEEDBACK } from './controllerCopy'
 import { ControllerCommandPanel } from './ControllerCommandPanel'
 import { ControllerProjectPanel } from './ControllerProjectPanel'
+import { ControllerProjectReconnection } from './ControllerProjectReconnection'
 import { ControllerInstallWizard } from './ControllerInstallWizard'
 import { ControllerUpgradeWizard } from './ControllerUpgradeWizard'
 import { CONTROLLER_UPGRADE_COPY } from './controllerUpgradeCopy'
@@ -424,6 +425,15 @@ export function ControllerPanel(): React.JSX.Element {
                 scroll={{ x: 620 }}
                 columns={[
                   { title: t.appName, dataIndex: 'app_name' },
+                  {
+                    key: 'reconnection',
+                    render: (_value, item) => {
+                      const binding = rows.find((row) => row.binding_id === selected)
+                      return (
+                        binding && <ControllerProjectReconnection binding={binding} app={item} />
+                      )
+                    }
+                  },
                   { title: t.branch, dataIndex: 'production_ref' },
                   {
                     title: t.commit,

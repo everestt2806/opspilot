@@ -164,6 +164,20 @@ it('keeps old confirmation as history but refuses to use it after source advance
   await expect(f.subject.current(result.request_key)).rejects.toThrow('RECONNECTION_CHANGED')
   expect(rows()).toBe(1)
 })
+it('finds an authenticated matching consent after policy A to B to A without treating latest history as current', async () => {
+  const a = await confirm()
+  f.remote.exec('UPDATE product_app_control SET auto_deploy_paused=0,pause_reason=NULL')
+  const b = await confirm()
+  f.remote.exec("UPDATE product_app_control SET auto_deploy_paused=1,pause_reason='operator'")
+  expect(f.subject.latest(f.bindingId, 42)?.request_key).toBe(b.request_key)
+  const plan = await review()
+  expect(plan.matching_confirmation_key).toBe(a.request_key)
+  expect((await f.subject.current(plan.matching_confirmation_key!)).request_key).toBe(a.request_key)
+  expect((await f.subject.confirm({ plan_id: plan.plan_id, consent: true })).request_key).toBe(
+    a.request_key
+  )
+  expect(rows()).toBe(2)
+})
 it('requires another consent for a new valid source and preserves both records', async () => {
   const first = await confirm()
   f.remote.exec('UPDATE product_app_control SET auto_deploy_paused=0,pause_reason=NULL')

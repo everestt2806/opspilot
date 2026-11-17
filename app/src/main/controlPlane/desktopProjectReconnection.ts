@@ -101,6 +101,21 @@ export class DesktopProjectReconnections {
     const before = this.authority(value.data.binding_id)
     const context = await this.remote(before, value.data.app_id)
     this.guard(before)
+    const matching = this.db
+      .prepare(
+        `SELECT * FROM desktop_project_reconnection
+      WHERE binding_id=? AND binding_revision=? AND controller_id=? AND app_id=? AND snapshot_sha256=?`
+      )
+      .get(
+        before.binding_id,
+        before.revision,
+        before.controller_id,
+        context.app_id,
+        context.snapshot_sha256
+      )
+    const previous = matching ? this.decode(matching) : null
+    if (previous && canonicalH2Json(previous.context) !== canonicalH2Json(context))
+      throw new DesktopProjectReconnectionError('RECONNECTION_CHANGED')
     // Hai review hoàn thành đồng thời vẫn phải tôn trọng giới hạn cache.
     this.expire()
     if (this.plans.size >= 64) throw new DesktopProjectReconnectionError('RECONNECTION_BUSY')
@@ -112,7 +127,8 @@ export class DesktopProjectReconnections {
       expires_at: new Date(expires).toISOString(),
       binding_id: before.binding_id,
       binding_revision: before.revision,
-      context: structuredClone(context)
+      context: structuredClone(context),
+      matching_confirmation_key: previous?.request_key ?? null
     }
   }
 
@@ -211,6 +227,11 @@ export class DesktopProjectReconnections {
       )
       .get(bindingId, a.revision, a.controller_id, appId)
     return row ? this.decode(row) : null
+  }
+  history(input: DesktopProjectReconnectionReviewInput): DesktopProjectReconnection | null {
+    const value = reviewInput.safeParse(input)
+    if (!value.success) throw new DesktopProjectReconnectionError('RECONNECTION_REQUEST_INVALID')
+    return this.latest(value.data.binding_id, value.data.app_id)
   }
   /** Luôn kiểm lại remote trước khi dùng cấu hình của dự án đã nhận lại. */
   async current(key: string): Promise<DesktopProjectReconnection> {

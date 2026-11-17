@@ -1,6 +1,6 @@
 import type { ProductProjectReconnectionContext } from './product-project-reconnection'
 
-/** Main-only until E3 IPC. Caller supplies identifiers and explicit consent;
+/** E3 IPC: caller supplies identifiers and explicit consent;
  * never controller identity, source/target fields, credential or journal rows.
  */
 export interface DesktopProjectReconnectionReviewInput {
@@ -13,6 +13,8 @@ export interface DesktopProjectReconnectionReview {
   binding_id: string
   binding_revision: number
   context: ProductProjectReconnectionContext
+  /** Consent cũ khớp snapshot hiện tại; phải current/recheck trước khi dùng. */
+  matching_confirmation_key?: string | null
 }
 export interface DesktopProjectReconnectionConfirmInput {
   plan_id: string

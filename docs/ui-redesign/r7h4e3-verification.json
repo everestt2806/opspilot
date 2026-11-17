@@ -1,0 +1,431 @@
+{
+  "status": "PASS_SCOPED_R7H4E3_IPC_UI_RECONNECTION_AND_READONLY_INSPECTOR",
+  "verified_at": "2026-11-17T16:42:49.258291+00:00",
+  "base_commit": "65d41b720f96c05d00793cdae3a4409da87686d9",
+  "tests": {
+    "full_files_passed": 188,
+    "full_passed": 2733,
+    "existing_skipped_files": 1,
+    "existing_Linux_skipped_tests": 2,
+    "failed": 0,
+    "focused_before_cycle_fix": 73,
+    "focused_cycle_final": 30,
+    "new_tests_delta_from_E2": 21,
+    "full_log_sha256": "eed606d6da4c74f010b5c94f072969891471adc9e8101ff3fc1d2ad2a5b503e2"
+  },
+  "quality": [
+    {
+      "name": "gui",
+      "command": [
+        "pnpm.cmd",
+        "--prefix",
+        "app",
+        "exec",
+        "electron",
+        "scripts/product-project-reconnection-ui-lab/electron.mjs",
+        "--confirm-local-project-reconnection-ui"
+      ],
+      "exit_code": 0,
+      "seconds": 14.5,
+      "log": "app\\.out-scripts\\r7h4e3-v2-gui.log"
+    },
+    {
+      "name": "full",
+      "command": [
+        "pnpm.cmd",
+        "--prefix",
+        "app",
+        "exec",
+        "vitest",
+        "run",
+        "--reporter=dot"
+      ],
+      "exit_code": 0,
+      "seconds": 322.97,
+      "log": "app\\.out-scripts\\r7h4e3-v2-full.log"
+    },
+    {
+      "name": "build",
+      "command": [
+        "pnpm.cmd",
+        "--prefix",
+        "app",
+        "build"
+      ],
+      "exit_code": 0,
+      "seconds": 67.29,
+      "log": "app\\.out-scripts\\r7h4e3-v2-build.log"
+    }
+  ],
+  "additional_checks": {
+    "scoped_ESLint_zero_warnings": "PASS",
+    "changed_TS_TSX_MJS_Prettier": "PASS",
+    "scripts_typecheck": "PASS",
+    "contract_shared_bidirectional_type_parity": "PASS",
+    "Node_Web_typecheck": "PASS (production build)",
+    "diff_check": "PASS"
+  },
+  "Electron": {
+    "path": "app/.out-scripts/product-project-reconnection-ui-lab/ff5ed7f2c5d5/result.json",
+    "sha256": "9019ee19f3c44e7257702cf974706f489430f6939953d1f0eff1877cfb23024e",
+    "proof": {
+      "status": "PASS",
+      "scope": "REAL_ELECTRON_PRELOAD_MAIN_CLASSES_TWO_SQLITE_SYNTHETIC_ADMIN_AND_TARGET",
+      "nonce": "ff5ed7f2c5d5",
+      "checks": [
+        "production_renderer_4locale_2theme_2sizes_review_only_no_journal_no_outer_overflow",
+        "typed_preload_actual_Main_classes_two_SQLite_explicit_consent_lost_reply_restored_without_resend_or_fake_receipt",
+        "reconnected_source2_selected_database_readonly_tables_rows_clear_on_close_dark_light_2sizes",
+        "policy_drift_clears_confirmed_state_shows_previous_current_requires_new_consent",
+        "policy_A_B_A_restores_matching_old_consent_after_fresh_current_check_without_third_confirmation",
+        "samples_not_persisted_no_job_no_legacy_receipt_mutation"
+      ],
+      "captures": [
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-vi-dark-1280x800.png",
+          "sha256": "b70154faa2d325404b8d436f02d2f0ae0fb43e56e09e25ce76515f8eb5e73623",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-vi-dark-1366x768.png",
+          "sha256": "4e3fb612a19d2a04360bf11dd0d9b0ae953039b999b6806090a3a3f9909dc8ae",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-vi-light-1280x800.png",
+          "sha256": "08c3a7fc04e433c634889d4f94c7f87e5acf90b9a22f9abe15925648480463c2",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-vi-light-1366x768.png",
+          "sha256": "c69dcf17f94fa08b6015bbf815a69550204d6dfab7bf16033d27ee3ccf405e26",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-en-dark-1280x800.png",
+          "sha256": "484c967beadf9b84e11c6a3fb2a240357d2d5df3d7a40e29bc9e2ef1537ea3df",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-en-dark-1366x768.png",
+          "sha256": "cf4b96bba467060f76b993dd0b4ea06e6492256539f9a12f9daa3dc656c254db",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-en-light-1280x800.png",
+          "sha256": "412541d4a611784e4834043b4b4fec4383a7dd1dcebee84c9511063ad92e1c4d",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-en-light-1366x768.png",
+          "sha256": "4f39d24cc6f93cf27673de506d53b17079aa1c35370cbe81e2c0f1e7b69d44de",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-jp-dark-1280x800.png",
+          "sha256": "285a70b1bb599b059242de3e3ca5811e69711160030225b80e758dc8c2b18f1c",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-jp-dark-1366x768.png",
+          "sha256": "69a592f87623fb965ff70de3cc11796e7da21925fbf4389832ddb7da6050c0a7",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-jp-light-1280x800.png",
+          "sha256": "617d9bfd2c883bdedbd0349a4b5a41a610d636890e447e49384351f7c143a493",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-jp-light-1366x768.png",
+          "sha256": "afc0a1d74ead73abf20284a72a0e6781656b99edfca21ab29d4ff22ced9f94eb",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-cn-dark-1280x800.png",
+          "sha256": "8f414225d5a902b37cecfac53cbf2ba965b5016190d57998ec37b507bd1cc065",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-cn-dark-1366x768.png",
+          "sha256": "b16296fe4604e184c89d5d4593919000b596c249106ef6693709b003a604aa3e",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-cn-light-1280x800.png",
+          "sha256": "e7ad78db0af8f0b8f87c8977106b2fdce921bd18c8e73a6490fce5aceedf7afc",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/review-cn-light-1366x768.png",
+          "sha256": "cfb66ab4d6f8f4a299d1c176e8247ffd2acec2b8283e0da84a9daa39682e8a25",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/confirmed-en-dark-1280x800.png",
+          "sha256": "eef99fe509f313e57628e8419f7f6c8c6ac8e86791ba0f583a0efb76f01ec50d",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/confirmed-en-dark-1366x768.png",
+          "sha256": "563d3deb434f35dc5912148d6ea9029b44460943e20c68ff8dbc82d3262eeaff",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/inspector-en-dark-1280x800.png",
+          "sha256": "0751d6d99d5ccc84561dac3abe57f44f1c9bbc4a1f9f19d65f395fffecd9fe78",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/inspector-en-dark-1366x768.png",
+          "sha256": "756830ff6793577f3ab343bd750992dd7339c16801a1f67e90263b15f4e36925",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/confirmed-en-light-1280x800.png",
+          "sha256": "870b56e5a3d81eb8297878cd1db5c48c8ccaad4e09e5e3e91ae0fa5a5c1c9b6d",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/confirmed-en-light-1366x768.png",
+          "sha256": "2d28b7e2332e060c2554a51b4cb5f4ed6f511ef391fd2ccc9f8509605ae0ca43",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/inspector-en-light-1280x800.png",
+          "sha256": "cf4cc1cbd5fb4253929ec9bb084da439a784f3b730bedd5e327efe4deb06413d",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/inspector-en-light-1366x768.png",
+          "sha256": "de7f7063b4a9eb446195adefaa9f95bd1e6616e5abf223dd726e922cb02dcd8f",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/r7h4e3/ff5ed7f2c5d5/restored-A-en-light-1280x800.png",
+          "sha256": "870b56e5a3d81eb8297878cd1db5c48c8ccaad4e09e5e3e91ae0fa5a5c1c9b6d",
+          "layout": {
+            "window": false,
+            "modal": false
+          }
+        }
+      ],
+      "IPC_calls": [
+        "controller:latest-project-reconnection",
+        "controller:review-project-reconnection",
+        "controller:latest-project-reconnection",
+        "controller:review-project-reconnection",
+        "controller:latest-project-reconnection",
+        "controller:review-project-reconnection",
+        "controller:latest-project-reconnection",
+        "controller:review-project-reconnection",
+        "controller:latest-project-reconnection",
+        "controller:review-project-reconnection",
+        "controller:latest-project-reconnection",
+        "controller:review-project-reconnection",
+        "controller:latest-project-reconnection",
+        "controller:review-project-reconnection",
+        "controller:latest-project-reconnection",
+        "controller:review-project-reconnection",
+        "controller:latest-project-reconnection",
+        "controller:review-project-reconnection",
+        "controller:confirm-project-reconnection",
+        "controller:latest-project-reconnection",
+        "controller:current-project-reconnection",
+        "controller:current-project-reconnection",
+        "controller:inspect-reconnected-postgres",
+        "controller:inspect-reconnected-postgres",
+        "controller:latest-project-reconnection",
+        "controller:current-project-reconnection",
+        "controller:current-project-reconnection",
+        "controller:inspect-reconnected-postgres",
+        "controller:inspect-reconnected-postgres",
+        "controller:latest-project-reconnection",
+        "controller:current-project-reconnection",
+        "controller:review-project-reconnection",
+        "controller:confirm-project-reconnection",
+        "controller:latest-project-reconnection",
+        "controller:current-project-reconnection",
+        "controller:review-project-reconnection",
+        "controller:current-project-reconnection"
+      ],
+      "VPS_used": false,
+      "Docker_used": false,
+      "production_profile_used": false,
+      "service_composition": "LAB_ROUTERS_TO_PRODUCTION_RECONNECTION_AND_INSPECTOR_CLASSES",
+      "installed_Root_transport": false,
+      "private_cleanup": true
+    },
+    "main_artifact_sha256": "876fe9065d9ab03555990a0089073e6f4d38f87c8b08b4d62f397e7f1f1acfc2",
+    "renderer_artifact_sha256": "1d2a6303f43f28594c6cd20829b07d25ce57d334398180c3b8b8816549192cdb",
+    "production_preload": true,
+    "production_components": true,
+    "Main_classes_SQLite_cipher_vault": true,
+    "lab_routers_not_production_service_composition": true,
+    "admin_target_transport": "SYNTHETIC",
+    "installed_Root_proof": false,
+    "VPS_proof": false,
+    "visually_inspected": [
+      "review-en-dark-1280x800",
+      "inspector-en-light-1366x768",
+      "restored-A-en-light-1280x800"
+    ],
+    "superseded_captures_retained": "app/.out-scripts/r7h4e3-superseded-captures (three prior nonces, excluded from commit)"
+  },
+  "standalone_Main": {
+    "path": "app/.out-scripts/product-project-reconnection-ui-lab/c122e8cd4f4e/proof.json",
+    "sha256": "b997b7f595fa9ca4ac5e6efa985bcb7706efadf78f759663dd5afb0abbe1e0af",
+    "proof": {
+      "status": "PASS",
+      "nonce": "c122e8cd4f4e",
+      "checks": [
+        "real_Main_consent_separate_from_original_registration_source2_database",
+        "readonly_inspector_exact_consent_and_database_tables_rows_no_SQLite_mutation_or_fake_selection",
+        "reopened_SQLite_recomposed_real_Main_uses_authenticated_consent_without_reconfirmation",
+        "foreign_database_refused_before_target_and_policy_drift_drops_data_after_target",
+        "policy_A_B_A_finds_authenticated_matching_consent_and_rechecks_without_fake_receipts_or_duplicate_rows"
+      ],
+      "transport": "SYNTHETIC_SQLITE_ONLY",
+      "SSH_used": false,
+      "Docker_used": false,
+      "VPS_used": false,
+      "GUI_used": false,
+      "artifact_sha256": "144a85c786592593b4120c8009f9e41593ed419a6dfcfd17c410502280cc7a1b",
+      "private_cleanup": true
+    },
+    "OS_process_restart": false,
+    "SQLite_reopen_recompose": true
+  },
+  "source_hashes": {
+    "app/scripts/product-project-reconnection-ui-lab/README.md": "d056d470b64a4bb1ac7fb0405a38b88014b83a7fbc3b302e7d1e301c86a2191b",
+    "app/scripts/product-project-reconnection-ui-lab/electron.mjs": "4529cc0e7640b4cf1d003d9285fb0764c2e9e1707a6e8f0ca008d29ba069fdb6",
+    "app/scripts/product-project-reconnection-ui-lab/entry.ts": "18dc888282fe20c260a64361735a83786a70b0f99b75f6bb346a417d66c5b49d",
+    "app/scripts/product-project-reconnection-ui-lab/fixture.ts": "8192e7abcc8c748fe0bc7199b41d9d1c00ed3e902388d6887ef8e5527155e7fe",
+    "app/scripts/product-project-reconnection-ui-lab/run.mjs": "7857e03d5f4b40c6a9188a41e2ea10869e0eec07341cdbbacf4488f9db3be4e9",
+    "app/src/main/controlPlane/desktopControllerService.ts": "083133463c4788a969ed7d40d5d5dca61f6b9e38a5ae8473eba7c0c412537ad5",
+    "app/src/main/controlPlane/desktopProjectReconnection.test.ts": "2cf3ad87e973c028e8751bb4a961203ea150029e16317b67d6ed11085eded77f",
+    "app/src/main/controlPlane/desktopProjectReconnection.ts": "c893cc4c35bc8ea1e29790b5087e3fce7db08907df23b9a308dfe8679815e125",
+    "app/src/main/controlPlane/desktopReconnectedPostgresInspection.test.ts": "2adbd9c9e4a447cd6bd9095c809983a8009ff4cc005fbb7fce298bc7dc8ec844",
+    "app/src/main/controlPlane/desktopReconnectedPostgresInspection.ts": "d256bc146d1f93015889939d98c02679eacf1a9ef53865b559ca2baea962804e",
+    "app/src/main/ipc.test.ts": "4c2b65c26054fbbc955248f01e6b4d2575ff1675a6c612956ac179ab0c595123",
+    "app/src/main/ipc.ts": "2934d74d8ba250078283992f81f42071b53699d5919c5e9cb5d38d74e10fd222",
+    "app/src/renderer/src/components/ControllerPanel.test.tsx": "860205139428db2fb291df9323dcd387d0646a5cdf6cca4bb68adf3f5e973df4",
+    "app/src/renderer/src/components/ControllerPanel.tsx": "9eb97ee10829483a71cd31912ae8e27a12123f28ac8b7a3f43512758c09743d4",
+    "app/src/renderer/src/components/ControllerPostgresInspector.test.tsx": "80e15bc6dd8f743970705f29b898d1b78eb00f6ebbf8169e0b23648e0a7ab696",
+    "app/src/renderer/src/components/ControllerPostgresInspector.tsx": "8de8c4016f9e4a423c4b917c9fba1109ee00a61a163342673bc637ebcf64d413",
+    "app/src/renderer/src/components/ControllerProjectReconnection.test.tsx": "932a1042b566156f81640d0f329e4c71541463a813c33f9adf6f85617def7c1d",
+    "app/src/renderer/src/components/ControllerProjectReconnection.tsx": "3ddd1c1aedf909be14e6cb8b8b5537b39bd6630806065d1118b6d07c25836b04",
+    "app/src/renderer/src/components/projectReconnectionCopy.ts": "b9a47b872eb331d0f2b248bca64ff31f0a4824baec9fe7e0c8fefaf88308b869",
+    "app/src/renderer/src/components/projectReconnectionTestData.ts": "c9469d61907fffb75ef4d5efbd3719cfacbcf5002ce62644e0087b42602276f9",
+    "app/src/shared/desktopProjectReconnection.ts": "5e85f7a815d84aad660eb6d128fefcc3558a3133965e06adb3f98779cb509227",
+    "app/src/shared/desktopReconnectedPostgresInspection.ts": "e59d7def02049c6b1b5560f9a92ae21f4f4fef779be7c938da01c6924f0412f9",
+    "app/src/shared/ipc.ts": "3b943b8fa314fe6783aa4fb351b9da156dc91090bc90c865328304461f521c70",
+    "app/src/shared/productProjectReconnection.ts": "708ca1db3269a60764fd5314ab639cdef8825af6117b46977f3b85edd9b85690",
+    "docs/contracts/desktop-project-reconnection.ts": "2ec1a270dfa9f17496ec1ca082237e366f68430cf816f5ce4f8570915c501f02",
+    "docs/contracts/desktop-reconnected-postgres-inspection.ts": "cc43b2658c20dfa7dc9782aab3b2da54e488693d4170b019c152b60e61fc1a5a",
+    "docs/contracts/ipc-contract.ts": "f7feb584a3bc741fa03d2f60b5b4171b7e96b619b3b9626e246db5da30001960"
+  },
+  "scope": {
+    "five_typed_IPC_channels": true,
+    "explicit_consent_only": true,
+    "history_requires_current_recheck": true,
+    "matching_confirmation_for_A_B_A_requires_current_recheck": true,
+    "separate_provenance_inspector": true,
+    "original_registration_guards_retained": true,
+    "fake_registration_or_selection_receipts": false,
+    "new_schema": false,
+    "serving_release_or_VPS_changed": false,
+    "approved_catalog_changed": false,
+    "Kim_lane_changed": false,
+    "deployment_or_policy_mutation_from_UI": false,
+    "formal_ML": "NOT_RUN"
+  },
+  "limits": [
+    "Optimistic before/after metadata checks are snapshots, not a distributed lock or promise that the target never changes after the final query.",
+    "E3 GUI uses actual Electron/preload/Main classes and two SQLite databases with a synthetic admin/target; installed transport and serving acceptance remain E4.",
+    "UI consent grants no implicit runtime/deploy capability; selected PostgreSQL instance still needs normal readiness checks."
+  ],
+  "iteration_notes": [
+    "Initial overly strong final-query race test replaced with a lost-final-reply case; target-I/O drift test remains.",
+    "Fixed frontend scope projection import, duplicate Close selector, jp/cn locale keys and target-revision test mismatch.",
+    "Fixed lab whitespace selector and synchronized fixture clock with production Date.now semantics.",
+    "Added authenticated matching_confirmation_key for A-B-A restore; initial full was invalidated and final GUI/full/build rerun on updated source.",
+    "jsdom getComputedStyle/pseudo-element warnings existed in prior baseline; tests still pass."
+  ],
+  "next": [
+    "E4: freeze/approve controller release and run installed/serving/actual Electron acceptance without fabricating project receipts.",
+    "Product backup/restore/migrate, Kim Windows lane and formal ML remain independent release work."
+  ]
+}

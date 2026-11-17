@@ -14,6 +14,7 @@ import { ControllerPostgresInspector } from './ControllerPostgresInspector'
 import { POSTGRES_INSPECTOR_COPY } from './postgresInspectorCopy'
 import { useUiState } from '../store/uiState'
 import image from '../../../../control-plane-runtime/product-postgres-image.json'
+import { reconnectionTestData } from './projectReconnectionTestData'
 
 const invoke = vi.fn(),
   t = POSTGRES_INSPECTOR_COPY.en
@@ -323,6 +324,67 @@ it('marks snapshots stale after60seconds without polling data', async () => {
     vi.clearAllTimers()
     vi.useRealTimers()
   }
+})
+it('uses only fresh explicit reconnection authority and its separate inspector endpoint', async () => {
+  const f = reconnectionTestData(),
+    r = f.confirmed
+  r.context.selected_database = context.database.selected
+  r.context.scope.target.ssh_security_revision = project.target_security_revision
+  invoke.mockImplementation(async (c, input) => {
+    if (c === 'controller:current-project-reconnection') return { ok: true, data: r }
+    const { project_request_key: _old, ...base } = result(input.read)
+    void _old
+    return {
+      ok: true,
+      data: { ...base, reconnection_request_key: r.request_key, snapshot_sha256: r.snapshot_sha256 }
+    }
+  })
+  render(
+    <ConfigProvider theme={{ token: { motion: false } }}>
+      <ControllerPostgresInspector binding={binding} reconnection={r} />
+    </ConfigProvider>
+  )
+  await open()
+  await load()
+  expect(invoke).toHaveBeenCalledWith('controller:inspect-reconnected-postgres', {
+    reconnection_request_key: r.request_key,
+    expected_binding_revision: 2,
+    expected_snapshot_sha256: r.snapshot_sha256,
+    database_id: databaseId,
+    read: { operation: 'tables' }
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'public.notes' }))
+  await screen.findByText('notes-value')
+  expect(
+    invoke.mock.calls.some(([c]) =>
+      ['controller:postgres-context', 'controller:inspect-postgres'].includes(c)
+    )
+  ).toBe(false)
+})
+it('rejects a reconnected inspector reply from another consent and clears samples on authority change', async () => {
+  const r = reconnectionTestData().confirmed
+  r.context.selected_database = context.database.selected
+  r.context.scope.target.ssh_security_revision = project.target_security_revision
+  invoke.mockImplementation(async (c) => ({
+    ok: true,
+    data:
+      c === 'controller:current-project-reconnection'
+        ? r
+        : {
+            ...result({ operation: 'tables' }),
+            reconnection_request_key: 'foreign',
+            snapshot_sha256: r.snapshot_sha256
+          }
+  }))
+  render(
+    <ConfigProvider theme={{ token: { motion: false } }}>
+      <ControllerPostgresInspector binding={binding} reconnection={r} />
+    </ConfigProvider>
+  )
+  await open()
+  fireEvent.click(screen.getByRole('button', { name: t.load }))
+  await screen.findByText(t.changed)
+  expect(screen.queryByRole('button', { name: 'public.notes' })).toBeNull()
 })
 it.each(['vi', 'en', 'jp', 'cn'] as const)(
   'shows localized explorer copy for %s',

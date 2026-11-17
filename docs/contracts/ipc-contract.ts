@@ -1,3 +1,5 @@
+import type { DesktopProjectReconnectionReviewInput, DesktopProjectReconnectionReview, DesktopProjectReconnectionConfirmInput, DesktopProjectReconnection } from './desktop-project-reconnection';
+import type { DesktopReconnectedPostgresInspectionInput, DesktopReconnectedPostgresInspectionResult } from './desktop-reconnected-postgres-inspection';
 import type { DesktopPostgresContext, DesktopPostgresIntentInput, DesktopPostgresIntent } from './desktop-product-postgres';
 import type { DesktopPostgresInspectionInput, DesktopPostgresInspectionResult } from './desktop-postgres-inspection';
 import type { DesktopEnvironmentContext, DesktopEnvironmentPrepareInput, DesktopEnvironmentIntent, DesktopEnvironmentSelectionPrepareInput, DesktopEnvironmentSelectionIntent } from './desktop-product-environment';
@@ -413,6 +415,11 @@ export interface IpcInvokeMap {
   'controller:send-target': (input:DesktopTargetSendInput) => IpcResult<DesktopTargetSetup>;
   'controller:target-setups': (bindingId:string) => IpcResult<DesktopTargetSetup[]>;
   'controller:cancel-target': (key:string) => IpcResult<DesktopTargetSetup>;
+  'controller:review-project-reconnection': (input: DesktopProjectReconnectionReviewInput) => IpcResult<DesktopProjectReconnectionReview>;
+  'controller:confirm-project-reconnection': (input: DesktopProjectReconnectionConfirmInput) => IpcResult<DesktopProjectReconnection>;
+  'controller:current-project-reconnection': (key: string) => IpcResult<DesktopProjectReconnection>;
+  'controller:latest-project-reconnection': (input: DesktopProjectReconnectionReviewInput) => IpcResult<DesktopProjectReconnection | null>;
+  'controller:inspect-reconnected-postgres': (input: DesktopReconnectedPostgresInspectionInput) => IpcResult<DesktopReconnectedPostgresInspectionResult>;
   'controller:project-readiness': (key:string) => IpcResult<DesktopProjectReadiness>;
   'controller:prepare-first-deployment': (input:DesktopFirstDeploymentInput) => IpcResult<DesktopFirstDeploymentPlan>;
   'controller:send-first-deployment': (input:DesktopFirstDeploymentSendInput) => IpcResult<DesktopControllerCommand>;
