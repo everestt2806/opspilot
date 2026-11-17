@@ -10,8 +10,10 @@ R11b dùng chính bản `OpsPilot.exe`/`app.asar` do electron-builder tạo, kh�
 . ./tools/enter-node22.ps1
 # Chuẩn bị generated resources theo R11a và protected controller catalog trước.
 pnpm.cmd --prefix app build
-pnpm.cmd --prefix app exec electron-builder --win nsis --x64 --publish never --config.directories.output=app/.out-scripts/<new-package-directory>
-node app/scripts/windows-release-lab.mjs --run --artifact app/.out-scripts/<new-package-directory>/win-unpacked
+# Dùng absolute scoped output tính từ repo root để builder và lab trỏ cùng thư mục artifact:
+$OUTPUT_DIR = Join-Path (Resolve-Path .).Path "app/.out-scripts/<new-package-directory>"
+pnpm.cmd --prefix app exec electron-builder --win nsis --x64 --publish never "--config.directories.output=$OUTPUT_DIR"
+node app/scripts/windows-release-lab.mjs --run --artifact "$OUTPUT_DIR/win-unpacked"
 ```
 
 Output phải mới, nằm trong ignored `.out-scripts`; không ghi đè dist/bản cài hiện tại. Lab chụp Settings, điều hướng5trang, đổi English/Light, train180mẫu tổng hợp/suy luận4method bằng đúng Python con thuộc app, đóng app và kiểm process/cổng đã dừng; mở process mới cùng profile phải giữ DB/key/model/UI. Sau hai lần chạy, hash executable/asar/ML resource không đổi; SQLite readonly integrity=ok/schema38. Chỉ dọn profile/HOME thuộc fixture khi toàn bộ gate đạt, lỗi giữ diagnostics. Không có thay đổi Main/IPC để phục vụ lab.

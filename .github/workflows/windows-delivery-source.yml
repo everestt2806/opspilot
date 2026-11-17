@@ -53,22 +53,9 @@ jobs:
       - name: Rebuild native dependencies for Electron ABI
         run: pnpm --prefix app rebuild:native
 
-      - name: Run Windows Delivery Preflight Inventory (Source Gate)
-        run: node app/scripts/windows-delivery/preflight.mjs --gate source --out app/.out-scripts/windows-delivery/ci-preflight.json
-
-      - name: Run Node & Web Typechecks
-        run: pnpm --prefix app typecheck
-
-      - name: Run Scripts Typecheck
-        run: pnpm --prefix app exec tsc -p tsconfig.scripts.json --noEmit
-
-      - name: Run Delivery Unit Tests
-        run: node app/scripts/windows-delivery/preflight.test.mjs
-
-      - name: Run Source Build Compilation
-        run: pnpm --prefix app build
-
-      - name: Run Source Check Unified Runner
+      - name: Run Unified Windows Delivery Source Check Runner
+        env:
+          CI: 'true'
         run: node app/scripts/windows-delivery/source-check.mjs
 
       - name: Upload Evidence and Diagnostics

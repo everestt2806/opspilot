@@ -1,14 +1,17 @@
-# Hướng dẫn chạy Preflight & Báo cáo Kiểm kê Prerequisite (CP0)
+# Hướng dẫn Chạy Preflight & Báo cáo Kiểm kê Prerequisite (CP0 / R1-R7)
 
-Tài liệu hướng dẫn gọi CLI preflight inventory tự động của Windows Delivery, giải thích các cổng kiểm tra (gates), dữ liệu đầu ra và các điều kiện gỡ chặn (unblock conditions).
+Tài liệu hướng dẫn gọi CLI preflight inventory tự động của Windows Delivery, giải thích các cổng kiểm tra (gates), dữ liệu đầu ra và các điều kiện gỡ chặn (unblock conditions) đã được nâng cấp theo phản hồi review của Leader (17/11/2026).
 
 ---
 
 ## 1. Mục đích và Quy tắc Bất biến
 
-- **Readonly mặc định**: CLI `app/scripts/windows-delivery/preflight.mjs` chỉ thực hiện kiểm tra đọc. Không tự spawn ứng dụng hay tiến trình ML, không tự tải file, không tự ghi đè environment/venv có sẵn và không tự tạo/phê duyệt artifact giả.
-- **Không hardcode đường dẫn**: Tự động suy ra thư mục gốc repository (`REPO_ROOT`) từ vị trí của script (`import.meta.dirname`), an toàn tuyệt đối với đường dẫn có dấu tiếng Việt và khoảng trắng (ví dụ `D:\Dự án CNTT\Tool Deploy\opspilot`).
-- **Phân định rõ ranh giới**: Phân biệt tường minh giữa `source_ready` (đủ điều kiện chạy typecheck/tests mã nguồn), `package_ready` (đủ prerequisite đóng gói NSIS/ASAR) và `clean_windows_ready` (môi trường Windows độc lập không có dev tools).
+- **Readonly & Phân giải Tường minh**: CLI `app/scripts/windows-delivery/preflight.mjs` chỉ thực hiện kiểm tra đọc. Không tự spawn ứng dụng hay tiến trình ML, không tự tải file, không tự ghi đè environment/venv có sẵn và không tự tạo/phê duyệt artifact giả.
+- **Bảo vệ Ghi đè & Kiểm tra Tham số Chặt chẽ (R5)**: Kiểm tra toàn bộ cờ CLI trước khi chạy probe hay ghi file. Bất kỳ tham số không xác định, thiếu giá trị hoặc gate sai tên đều trả mã thoát `2` và không chạm/ghi đè lên file đích đã có. Khi ghi bằng `--out`, nếu file đã tồn tại bắt buộc phải có `--overwrite` để chống ghi đè vô tình.
+- **Phân định rõ Ranh giới**:
+  - `source_ready`: Đủ điều kiện chạy typecheck/lint/tests mã nguồn (Node 22, pnpm 11.1.0 exact pin, Windows x64, Git baseline ancestry `f699615`, đúng branch hoặc detached ref hợp lệ của CI).
+  - `package_ready`: Đủ prerequisite đóng gói (bao gồm `source_ready`, Python 3.12.10, locked packages, content/hash-verified `ml-runtime`, verified `controller-releases`, và release lab audit khớp schema 38).
+  - `clean_windows_discovery` vs `clean_windows_gate`: Tách biệt việc phát hiện công cụ (`WindowsSandbox.exe`) khỏi việc nghiệm thu lifecycle (`NOT_RUN` khi chưa thực hiện chạy thực tế trên VM độc lập).
 
 ---
 
@@ -22,7 +25,7 @@ Chạy từ thư mục gốc của repository với Node 22:
 node app/scripts/windows-delivery/preflight.mjs
 ```
 
-Lệnh luôn trả mã thoát `0` khi hoàn tất việc kiểm kê và xuất hiện đầy đủ thông tin môi trường, dependencies, resources và blockers.
+Lệnh trả mã thoát `0` khi hoàn tất kiểm kê và xuất hiện đầy đủ thông tin môi trường, dependencies, resources và blockers.
 
 ### 2.2. Xuất dữ liệu Evidence dạng JSON
 
@@ -30,82 +33,77 @@ Lệnh luôn trả mã thoát `0` khi hoàn tất việc kiểm kê và xuất h
 # In trực tiếp JSON ra stdout:
 node app/scripts/windows-delivery/preflight.mjs --json
 
-# Lưu evidence JSON vào thư mục out-scripts (bị git ignore):
-node app/scripts/windows-delivery/preflight.mjs --out app/.out-scripts/windows-delivery/inventory.json
+# Lưu evidence JSON vào đường dẫn chỉ định (bảo vệ chống ghi đè nếu không có --overwrite):
+node app/scripts/windows-delivery/preflight.mjs --out app/.out-scripts/windows-delivery/inventory.json --overwrite
 ```
 
-### 2.3. Kiểm tra chốt chặn (Gate Enforcement)
-
-Dùng trong script CI hoặc pre-commit guard để kiểm tra điều kiện tiên quyết:
+### 2.3. Kiểm tra Chốt chặn (Gate Enforcement)
 
 ```powershell
-# Kiểm tra điều kiện source (Node 22, pnpm 11, đúng nhánh):
+# Kiểm tra điều kiện source (Node 22, pnpm 11.1.0, Windows x64, Git ancestry/ref):
 node app/scripts/windows-delivery/preflight.mjs --gate source
 # Exit 0 nếu đạt; Exit 1 nếu không đạt.
 
-# Kiểm tra điều kiện package (cần Python 3.12.10, locked packages, ml-runtime, controller-releases):
+# Kiểm tra điều kiện package:
 node app/scripts/windows-delivery/preflight.mjs --gate package
-# Exit 0 nếu đủ; Exit 1 nếu còn thiếu prerequisite.
+# Exit 0 nếu đủ; Exit 1 nếu còn thiếu prerequisite hoặc tài nguyên chưa xác thực.
 
-# Kiểm tra môi trường Windows độc lập (WindowsSandbox/VM):
+# Kiểm tra môi trường Windows độc lập:
 node app/scripts/windows-delivery/preflight.mjs --gate clean_os
+# Trả exit 1 (NOT_RUN) khi chưa chạy trên disposable VM.
 
-# Kiểm tra toàn bộ mọi gate:
+# Kiểm tra toàn bộ:
 node app/scripts/windows-delivery/preflight.mjs --gate all
 ```
 
-### 2.4. Kiểm thử đơn vị cho chính CLI Preflight
+### 2.4. Tùy chọn Môi trường Python & pnpm (R6)
 
 ```powershell
-node app/scripts/windows-delivery/preflight.test.mjs
+# Chỉ định build interpreter cụ thể (thay vì tự động phát hiện venv hoặc system python):
+node app/scripts/windows-delivery/preflight.mjs --python ml-service/.venv/Scripts/python.exe
+
+# Hoặc thiết lập qua biến môi trường:
+$env:OPSPILOT_PYTHON = "D:\Dự án CNTT\Tool Deploy\opspilot\ml-service\.venv\Scripts\python.exe"
+node app/scripts/windows-delivery/preflight.mjs
 ```
+
+### 2.5. Bộ Kiểm thử Đơn vị Độc lập (R1 / Standalone Check Suite)
+
+```powershell
+node app/scripts/windows-delivery/preflight-check.mjs
+```
+File này chạy trực tiếp bằng Node và độc lập hoàn toàn với Vitest pattern, đảm bảo 11/11 standalone probes pass mà không gây regression "No test suite found".
 
 ---
 
-## 3. Kết quả Kiểm kê Thực tế tại Baseline (17/11/2026)
+## 3. Kết quả Kiểm kê Thực tế tại Baseline (Cập nhật sau Review 17/11)
 
 | Hạng mục | Thực tế máy dev | Yêu cầu chuẩn | Đánh giá | Ghi chú |
 |---|---|---|---|---|
 | **Hệ điều hành** | Windows 10/11 x64 (10.0.26200) | Windows x64 | **PASS** | Môi trường máy phát triển |
-| **Git Branch** | `feat/kim-windows-delivery-20261116` | Đúng nhánh giao | **PASS** | HEAD `7cec5884`, ancestor `f699615` |
+| **Git Baseline & Ref** | `feat/kim-windows-delivery-20261116` | Ancestor `f699615`, delivery branch / detached CI | **PASS** | Đạt ancestry & ref verification |
 | **Node.js** | v22.17.0 | v22.x | **PASS** | Đạt yêu cầu Node 22 |
-| **pnpm** | 11.5.1 | 11.1.0 (11.x) | **PASS** | Đạt yêu cầu pnpm 11 |
-| **Python** | 3.12.7 | 3.12.10 | **BLOCKED** | Lệch patch version so với lock |
-| **Windows Sandbox** | Không có (`WindowsSandbox.exe` absent) | Disposable clean OS | **NOT_RUN** | Chưa có VM/Sandbox độc lập |
-| **ML Dependencies** | 10/20 khớp phiên bản | 20/20 theo runtime-lock.json | **BLOCKED** | 10 package lệch (chi tiết mục 4) |
-| **ML Runtime Res** | `MISSING` | `app/resources/ml-runtime` | **BLOCKED** | Chưa có runtime bundled |
-| **Controller Res** | `CATALOG_MISSING` | 9 descriptors đã duyệt | **BLOCKED** | Chưa có catalog & release binaries |
-| **Schema Harness** | Desktop 38 (37 migrations applied) | Desktop 38, bỏ 037 controller | **PASS** | Đã sửa `windows-release-lab.mjs` |
-| **Ports 8765-8767** | Tất cả đều FREE (không bị chiếm) | Không tiến trình nào nghe | **PASS** | Sẵn sàng cho app/ML service |
+| **pnpm** | 11.5.1 | Exact `11.1.0` (theo `packageManager`) | **MISMATCH (BLOCKED)** | Lệch minor vs exact pin `11.1.0` |
+| **Build Python** | 3.12.7 (`ml-service/.venv/Scripts/python.exe`) | Exact `3.12.10` | **BLOCKED** | Tự động phân giải venv, lệch patch vs lock |
+| **System Python** | 3.12.7 (`Python312\python.exe`) | Không dùng làm build interpreter | **INSPECTED** | Báo cáo tách bạch venv vs global |
+| **ML Dependencies** | 15/20 khớp trong venv (5 lệch) | 20/20 theo runtime-lock.json | **BLOCKED** | 5 package lệch trong venv: `anyio`, `idna`, `numpy`, `scipy`, `uvicorn` |
+| **ML Runtime Res** | `MISSING` | `app/resources/ml-runtime` (hash-verified) | **BLOCKED** | Chưa có runtime bundled thật |
+| **Controller Res** | `CATALOG_INVALID_OR_MISSING` | 9 descriptors đã duyệt + catalog format 1 | **BLOCKED** | Chưa có release binaries thật |
+| **Schema Harness** | Desktop 38 + exact migrations `[1..36, 38]` | Exact array 37 migrations | **PASS** | Đã sửa `windows-release-lab.mjs` assert exact array |
+| **Windows Sandbox** | Không có (`WindowsSandbox.exe` absent) | Disposable clean OS VM | **NOT_RUN** | Discovery: ABSENT; Gate: NOT_RUN |
+| **Ports 8765-8767** | Tất cả đều FREE | Không tiến trình nào chiếm | **PASS** | Sẵn sàng cho app/ML service |
 
 ---
 
-## 4. Bảng Chi tiết 10 Package Lệch Phiên bản vs `runtime-lock.json`
+## 4. Xác minh Toàn vẹn Tài nguyên (R4)
 
-| Package | Yêu cầu trong `runtime-lock.json` | Hiện tại trên máy dev | Trạng thái |
-|---|---|---|---|
-| `annotated-types` | `0.8.0` | `0.7.0` | MISMATCH |
-| `anyio` | `4.14.2` | `4.13.0` | MISMATCH |
-| `click` | `8.4.2` | `8.3.2` | MISMATCH |
-| `idna` | `3.18` | `3.11` | MISMATCH |
-| `narwhals` | `2.24.0` | `2.19.0` | MISMATCH |
-| `numpy` | `2.5.1` | `2.4.4` | MISMATCH |
-| `scikit-learn` | `1.9.0` | `1.8.0` | MISMATCH |
-| `scipy` | `1.18.0` | `1.17.1` | MISMATCH |
-| `typing-extensions` | `4.16.0` | `4.15.0` | MISMATCH |
-| `uvicorn` | `0.52.1` | `0.52.4` | MISMATCH |
-
-> [!WARNING]
-> Tuyệt đối không chạy `pip install -U` hoặc sửa `ml-service/runtime-lock.json` để ép lock theo máy dev. Cần dựng venv Python 3.12.10 riêng cài đặt chính xác các phiên bản đã pin.
-
----
-
-## 5. Danh sách Blockers Đang Mở và Điều Kiện Gỡ Chặn
-
-| Mã Blocker | Gate | Mô tả | Người phụ trách | Điều kiện gỡ chặn (Unblock Condition) |
-|---|---|---|---|---|
-| `PYTHON_VERSION_MISMATCH` | `package` | Python hiện tại là 3.12.7; runtime-lock yêu cầu 3.12.10 | Kim / Coordinator | Dựng môi trường Python 3.12.10 riêng khớp runtime lock |
-| `PYTHON_DEPENDENCIES_MISMATCH` | `package` | 10 package lệch phiên bản so với runtime-lock.json | Kim / Coordinator | Cài đúng exact 20 packages vào venv Python 3.12.10 |
-| `ML_RUNTIME_RESOURCE_MISSING` | `package` | `app/resources/ml-runtime` chưa tồn tại | Kim / Coordinator | Chạy `build-ml-runtime.py` với venv Python 3.12.10 đã chuẩn bị |
-| `CONTROLLER_RELEASES_MISSING` | `package` | `app/resources/controller-releases` thiếu catalog và binary | Coordinator (Sơn) | Cung cấp release binaries và installer.cjs khớp 9 descriptors |
-| `DISPOSABLE_WINDOWS_ENVIRONMENT_UNAVAILABLE` | `clean_os` | Máy dev không có WindowsSandbox.exe; cần máy/VM độc lập | Kim | Thiết lập máy ảo Windows hoặc máy độc lập không dev tools |
+Preflight không chỉ kiểm tra sự tồn tại của file:
+1. **ML Runtime**:
+   - Yêu cầu `manifest.json` có `format: 1`, `python_version: '3.12.10'`, và danh sách `files`.
+   - Bắt buộc đủ 8 file chuẩn: `python.exe`, `python312.dll`, `python312.zip`, `python312._pth`, `service/main.py`, `service/config.py`, `service/features.py`, `service/store.py`.
+   - Toàn bộ file bắt buộc phải có dung lượng `size > 0` và SHA256 khớp với manifest.
+   - Nội dung file `python312._pth` bắt buộc khớp `python312.zip\n.\nservice\n`.
+   - File rỗng 0-byte hoặc sai hash bị từ chối ngay lập tức với trạng thái `INVALID_MANIFEST` hoặc `TAMPERED_OR_CORRUPT`.
+2. **Controller Releases**:
+   - `catalog.json` bắt buộc có `format: 1` và danh sách releases hợp lệ.
+   - Từng release phải có `installer.cjs` khớp `desc.installer_sha256`, `release/manifest.json` khớp `desc.release_sha256`, và payload files khớp kích thước và checksum.

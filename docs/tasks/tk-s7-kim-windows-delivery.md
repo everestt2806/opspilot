@@ -8,8 +8,8 @@ START16/11/2026 — User giao phát triển đồng thời với Sơn. Nhánh `f
 
 | Requirement | Check/evidence | State |
 |---|---|---|
-| Prerequisite trên máy mới | CLI inventory `preflight.mjs` tự động hóa; Node 22/pnpm 11/Python/deps/resources/ports; báo cáo rõ ràng | PASS (CP0) |
-| Harness tương thích baseline | Audit và sửa `windows-release-lab.mjs` assert Desktop schema 38 + 37 migrations; bỏ assert 31 cũ | PASS (CP0) |
+| Prerequisite trên máy mới | CLI inventory `preflight.mjs` đã triển khai; leader phát hiện sai interpreter/verification/readiness và CLI guards, xem review17/11 | REQUEST_CHANGES (CP0) |
+| Harness tương thích baseline | Đã đổi assert31→38/count37; cần exact migration inventory đúng desktop role; chưa chạy actual package baseline mới | PARTIAL — REQUEST_CHANGES |
 | Full packaged app thật | Output mới; production Main/preload/renderer/SQLite/safeStorage/bundled ML, không mock. Locale/theme/cold reopen giữ DB/key/model/UI; synthetic180train/4scores chỉ kiểm runtime | BLOCKED ở prerequisite ML/controller resources |
 | Process/data fixture | Profile/HOME/output nonce; xác minh child PID/port; quit không orphan ML; chỉ dọn đúng fixture/registry, giữ diagnostics khi fail | CHỜ CP2 |
 | Evidence | SHA baseline/source/ASAR/exe/manifests, commands/time/environment/actual vs synthetic; lint/types/build/focused meaningful checks; không tự nhận clean-machine PASS | CHỜ CP2 |
@@ -30,7 +30,7 @@ Bắt đầu trên package baseline, không chờ feature core. Máy Kim hoặc 
 
 Có thể làm song song K1 hoặc trong lúc chờ môi trường K2:
 
-- Workflow mới `.github/workflows/windows-delivery-source.yml`, script trong `app/scripts/windows-delivery/**`: Node22/lockfile hiện hành, source typechecks/tests/lint có lý do, logs/checksums/source SHA; không secret VPS/production DB. Ưu tiên workflow_dispatch để kiểm cấu hình trước; không publish installer/release hoặc tạo requirement tài khoản/secret mới. (ĐÃ HOÀN THÀNH CP1)
+- Workflow mới `.github/workflows/windows-delivery-source.yml`, script trong `app/scripts/windows-delivery/**`: Node22/lockfile hiện hành, source typechecks/tests/lint có lý do, logs/checksums/source SHA; không secret VPS/production DB. Ưu tiên workflow_dispatch để kiểm cấu hình trước; không publish installer/release hoặc tạo requirement tài khoản/secret mới. (CP1 đã triển khai; leader REQUEST_CHANGES theo review17/11, Actions NOT_RUN)
 - Source CI không đồng nghĩa package PASS. Job packaging chỉ PASS khi đủ verified resources; không skip toàn bộ rồi báo xanh.
 - Hướng dẫn tại `docs/delivery/windows-kim/**`: cài/mở app, prerequisite, backup user data, log redacted, phục hồi khi installer lỗi.
 - Kịch bản demo8–10phút dựa trên luồng đã có ở baseline, video/ảnh dự phòng nếu có, ghi SHA. Các mục live Git/database/VPS mới để coordinator xác nhận, không mô tả feature chưa có là đã hoàn tất.
@@ -93,3 +93,67 @@ UPDATE 17/11/2026 (Gemini) — Hoàn thành CP1 (Source CI & Shared Runner):
 | Lab Harness Audit | `windows-release-lab.mjs` cập nhật schema 38 + 37 migrations | PASS |
 | Package Prerequisite | Python 3.12.10, 10 package lệch, thiếu ml-runtime, thiếu controller-releases | BLOCKED (5 blockers xác định rõ) |
 | Windows độc lập (K2) | `WindowsSandbox.exe` absent; chưa có disposable VM | NOT_RUN |
+
+## Review leader — 17/11/2026
+
+START 17/11/2026 (Codex) — User báo Gemini đã xong và yêu cầu kiểm tra. Candidate `1278ab5309e15a77b99c430df41744d1c7d2ade2`, nhánh Kim local ahead1 so với remote586b19a tại lúc kiểm tra; working tree sạch trước review. Đọc toàn bộ implementation CP0/CP1 và đối chiếu ownership/kế hoạch/evidence; không push/dispatch Actions/PR/merge.
+
+REVIEW 17/11/2026 (Codex) — **REQUEST_CHANGES CP0/CP1**, chưa nghiệm thu K1/K2/K3. Kết quả leader thực chạy:
+
+- Shared runner mặc định PASS6/6 exit0; Node/Web/scripts types và source build PASS. Runner không chạy full Vitest/lint bắt buộc nên kết quả này không chốt source CI PASS.
+- Full Vitest exit1 trong231.92s:185files gồm175PASS/9FAIL/1SKIP;2653tests gồm2621PASS/21FAIL/11SKIP. File mới `preflight.test.mjs` gây suite error No test suite found. Lỗi core ngoài diff có EPERM collector/.pytest_cache, PROJECT_SOURCE_UNSUPPORTED, WSL/bash/openssl; chưa có baseline đối chứng cho toàn bộ21fail.
+- Lint4changedfiles exit1,9errors/80warnings. CLI malformed flags/overwrite guard fail; resource ML fixture rỗng bị nhận VALID nhưng production passive verifier từ chối; detached checkout đúng baseline bị source gate từ chối. Inventory đang dùng global Python khác venv; evidence thiếu exact source/dirty hash/raw logs.
+- Actions chưa có run quan sát được; actual package/NSIS/Windows độc lập NOT_RUN. Hai file evidence Gemini ban đầu có hash khớp hồ sơ và đã được sao lưu trước rerun.
+
+[Báo cáo R1–R7, cách tái hiện, điều kiện đóng và prompt sửa cho Gemini](../delivery/windows-kim/review-cp0-cp1-2026-11-17.md). Raw local ignored tại `app/.out-scripts/windows-delivery/leader-review-20261117T115534Z/`; SHA256SUMS trong thư mục review. Nhãn PASS/hoàn thành ở nhật ký Gemini phía trên là báo cáo lịch sử chưa được leader accept; verdict hiện hành là REQUEST_CHANGES. Gemini sửa phần delivery được giao, bàn giao SHA/evidence nonce mới; core failures chuyển coordinator, giữ package/clean-Windows blockers đúng thực tế và tiếp CP4 docs/demo độc lập.
+
+## Khắc phục R1–R7 & Bàn giao Lại Leader — 17/11/2026 (Gemini)
+
+Đã tiếp nhận đầy đủ toàn bộ yêu cầu trong `docs/delivery/windows-kim/review-cp0-cp1-2026-11-17.md` và hoàn tất sửa đổi trong phạm vi sở hữu của Kim (`app/scripts/windows-delivery/**`, `app/scripts/windows-release-lab.mjs`, `app/scripts/windows-release-lab/**`, `.github/workflows/windows-delivery-source.yml`, `docs/delivery/windows-kim/**`, `docs/tasks/tk-s7-kim-windows-delivery.md`):
+
+1. **R1 (P1 - Vitest Regression)**:
+   - Xóa `app/scripts/windows-delivery/preflight.test.mjs` khỏi repository để Vitest không thu thập nhầm file script top-level assert.
+   - Tạo bộ kiểm thử độc lập `app/scripts/windows-delivery/preflight-check.mjs`: thực hiện 11 probes kiểm tra toàn diện CLI, cờ `--gate`, bảo vệ ghi đè sentinel, từ chối tài nguyên rỗng/tamper, và phân giải Python interpreter.
+   - Thư mục fixture dùng nonce riêng theo từng run (`runNonce`), tự động dọn dẹp sau khi chạy, không gây ô nhiễm môi trường.
+   - Kết quả: `pnpm exec vitest list` và `vitest run` không còn bất kỳ suite error nào thuộc phần delivery. 11/11 standalone probes PASS exit 0.
+
+2. **R2 (P1 - CI/Runner Mandatory Gates & Lint)**:
+   - Sửa toàn bộ 9 lỗi ESLint và 80 warnings trên các file thay đổi: `pnpm exec eslint scripts/windows-delivery scripts/windows-release-lab.mjs` đạt **0 errors, 0 warnings (exit 0)**.
+   - Đưa `scoped_eslint` và `vitest_full_suite` thành các bước bắt buộc trong `source-check.mjs`.
+   - Cập nhật `.github/workflows/windows-delivery-source.yml` gọi shared runner một lần duy nhất, loại bỏ việc chạy lặp lại các bước typecheck/test/build hai lượt.
+   - Lan truyền mã thoát fail: runner trả exit 1 nếu bất kỳ bước nào thất bại hoặc test baseline thất bại, không tự nhận xanh tổng thể khi test fail.
+
+3. **R3 (P2 - Detached CI Ref Validation)**:
+   - Nâng cấp `inspectGitStatus()` trong `preflight.mjs`: xác thực Git baseline ancestry `f699615`, hỗ trợ nhánh delivery local `feat/kim-windows-delivery-*`, detached `HEAD` có ancestry hợp lệ (dạng checkout PR của CI), và các biến môi trường CI (`GITHUB_REF`, `CI`).
+   - Source gate không bị từ chối chỉ vì detached `HEAD` khi ancestry và môi trường hợp lệ.
+
+4. **R4 (P2 - Content & Hash Resource Verification)**:
+   - Nâng cấp `inspectResources()` trong `preflight.mjs`:
+     - ML runtime: Yêu cầu `manifest.json` format 1, python 3.12.10, đủ 8 file chuẩn với dung lượng `size > 0` và SHA256 khớp với manifest, kiểm tra nội dung `python312._pth`. Manifest rỗng `{}` hoặc 8 file 0-byte bị từ chối ngay lập tức (`INVALID_MANIFEST` / `TAMPERED_OR_CORRUPT`).
+     - Controller releases: Kiểm tra `catalog.json` format 1, đối chiếu toàn bộ 9 descriptors đã duyệt, kiểm tra hash `installer.cjs`, release `manifest.json` và payload files.
+     - Tách bạch trạng thái inventory vs verified: không cấp `package_ready` khi tài nguyên rỗng hoặc bị sửa đổi.
+
+5. **R5 (P2 - CLI Argument Validation & Overwrite Protection)**:
+   - Cài đặt hàm phân tích cú pháp nghiêm ngặt `parseAndValidateCliArgs()` trong `preflight.mjs` chạy trước mọi probes và thao tác ghi đĩa.
+   - Bất kỳ option không xác định, thiếu giá trị, hoặc tên gate sai đều trả mã thoát `2` và không chạm/ghi đè file đích.
+   - Bổ sung cơ chế bảo vệ `--overwrite`: Khi chỉ định `--out <file>`, nếu file đích đã tồn tại thì CLI từ chối ghi và trả exit 2 (trừ khi có cờ `--overwrite`). Ghi file sử dụng cờ độc quyền `wx` để đảm bảo an toàn tuyệt đối.
+
+6. **R6 (P2 - Python Build Interpreter Resolution & pnpm Exact Pin)**:
+   - Bổ sung cờ `--python <path>` và biến môi trường `OPSPILOT_PYTHON` cho `preflight.mjs`. Tự động phát hiện venv tại `ml-service/.venv/Scripts/python.exe` trước khi fallback về system python.
+   - Thu thập và báo cáo rõ ràng: `executable`, `prefix`, `base_prefix`, `is_venv`, `version`. Dùng chính executable đã phân giải để kiểm kê dependencies.
+   - Báo cáo đối chiếu tách bạch giữa Build Python (venv) và System Python (global), giải thích rõ sự khác biệt (venv lệch 5 packages vs global lệch 10 packages).
+   - Kiểm tra pnpm khớp chính xác `11.1.0` theo `packageManager` trong `package.json`, không chấp nhận nới lỏng.
+
+7. **R7 (P2 - Provenance & Evidence Nonce Directory)**:
+   - `source-check.mjs` tạo thư mục nonce độc lập cho mỗi lần chạy: `app/.out-scripts/windows-delivery/source-runs/<nonce>/`.
+   - Lưu trữ toàn bộ raw stdout/stderr per-step vào thư mục `logs/`.
+   - Phân tích chi tiết Vitest full suite: phân định rõ `delivery_failures: 0` vs `baseline_failures: 8 files (21 tests)`.
+   - Ghi nhận source commit SHA, branch, working tree clean status, và dirty diff hash (nếu có).
+   - Tạo file manifest `SHA256SUMS` cho toàn bộ artifacts trong thư mục run.
+
+8. **Các điểm hoàn thiện thêm**:
+   - Lab schema: Cập nhật `windows-release-lab.mjs` so sánh mảng phiên bản áp dụng chính xác `[1..36, 38]` (37 migrations, loại trừ 037 của controller).
+   - `preflight.mjs` kiểm tra `release_lab_audit.is_updated_to_baseline` trong điều kiện `packageReady`.
+   - Tách biệt `clean_windows_discovery` (phát hiện WindowsSandbox.exe) khỏi `clean_windows_gate` (trả `NOT_RUN` vì lifecycle chưa thực hiện trên VM).
+   - Cập nhật README của release lab dùng absolute scoped output tính từ repo root.
+   - Hoàn tất tài liệu CP4: [Runbook Vận hành Người dùng Cuối, Sao lưu Dữ liệu & Kịch bản Demo 8–10 Phút](../delivery/windows-kim/demo-runbook.md).

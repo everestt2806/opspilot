@@ -264,9 +264,12 @@ try {
   proof.sqlite = JSON.parse(sql.stdout)
   assert.equal(proof.sqlite.version, 38, 'EXPECTED_DESKTOP_SCHEMA_38')
   assert.equal(proof.sqlite.integrity, 'ok', 'SQLITE_INTEGRITY_CHECK_FAILED')
-  assert.equal(proof.sqlite.versions.includes(37), false, 'CONTROLLER_MIGRATION_37_MUST_NOT_EXIST_IN_DESKTOP')
-  assert.equal(proof.sqlite.versions.includes(38), true, 'DESKTOP_MIGRATION_38_REQUIRED')
-  assert.equal(proof.sqlite.versions.length, 37, 'EXPECTED_37_DESKTOP_MIGRATIONS')
+  const expectedDesktopMigrations = Array.from({ length: 36 }, (_, i) => i + 1).concat([38])
+  assert.deepEqual(
+    proof.sqlite.versions,
+    expectedDesktopMigrations,
+    'EXACT_DESKTOP_MIGRATIONS_INVENTORY_MISMATCH'
+  )
   await launch()
   const restored = await api(`/status?deployment_id=${deployment}`)
   assert(restored.trained && restored.trained_at === proof.training.trained_at)
