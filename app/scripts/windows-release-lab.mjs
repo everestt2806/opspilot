@@ -255,14 +255,18 @@ try {
       '-I',
       '-B',
       '-c',
-      'import json,sqlite3,sys; c=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True); print(json.dumps({"version":c.execute("SELECT max(version) FROM schema_version").fetchone()[0],"integrity":c.execute("PRAGMA integrity_check").fetchone()[0]})); c.close()',
+      'import json,sqlite3,sys; c=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True); versions=[r[0] for r in c.execute("SELECT version FROM schema_version ORDER BY version").fetchall()]; print(json.dumps({"version":max(versions) if versions else None,"versions":versions,"integrity":c.execute("PRAGMA integrity_check").fetchone()[0]})); c.close()',
       join(profile, 'opspilot.db')
     ],
     { cwd: directory, env: environment, encoding: 'utf8', timeout: 15000 }
   )
   assert.equal(sql.status, 0, 'SQLITE_READONLY_INSPECTION_FAILED')
   proof.sqlite = JSON.parse(sql.stdout)
-  assert.deepEqual(proof.sqlite, { version: 31, integrity: 'ok' })
+  assert.equal(proof.sqlite.version, 38, 'EXPECTED_DESKTOP_SCHEMA_38')
+  assert.equal(proof.sqlite.integrity, 'ok', 'SQLITE_INTEGRITY_CHECK_FAILED')
+  assert.equal(proof.sqlite.versions.includes(37), false, 'CONTROLLER_MIGRATION_37_MUST_NOT_EXIST_IN_DESKTOP')
+  assert.equal(proof.sqlite.versions.includes(38), true, 'DESKTOP_MIGRATION_38_REQUIRED')
+  assert.equal(proof.sqlite.versions.length, 37, 'EXPECTED_37_DESKTOP_MIGRATIONS')
   await launch()
   const restored = await api(`/status?deployment_id=${deployment}`)
   assert(restored.trained && restored.trained_at === proof.training.trained_at)

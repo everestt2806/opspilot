@@ -2,7 +2,7 @@
 
 Từ R11c, bản ứng dụng0.2.0 có bước bảo toàn legacy model trước old uninstall. [Compatibility policy và upgrade lab](UPGRADE.md) đã kiểm actual source predecessor0.1.0→0.2.0 trong namespace riêng; ordinary uninstall đã self-delete cả folder/registry fixture. Kết quả này không thay Windows độc lập/default production identity trong checklist bên dưới.
 
-R11b dùng chính bản `OpsPilot.exe`/`app.asar` do electron-builder tạo, không dùng một Electron host thay Main hoặc mock IPC/SQLite/ML. Giao diện là production App.tsx, preload và handler thực; CDP chỉ điều khiển qua loopback trong thời gian lab. Profile và HOME riêng, PATH chỉ System32, không truyền credential hoặc dùng VPS. Native SQLite031/safeStorage/ML bundled phải chạy trước khi test nhận PASS.
+R11b dùng chính bản `OpsPilot.exe`/`app.asar` do electron-builder tạo, không dùng một Electron host thay Main hoặc mock IPC/SQLite/ML. Giao diện là production App.tsx, preload và handler thực; CDP chỉ điều khiển qua loopback trong thời gian lab. Profile và HOME riêng, PATH chỉ System32, không truyền credential hoặc dùng VPS. Native SQLite038/safeStorage/ML bundled phải chạy trước khi test nhận PASS.
 
 ## Build và thử bản đầy đủ trên máy phát triển
 
@@ -10,11 +10,11 @@ R11b dùng chính bản `OpsPilot.exe`/`app.asar` do electron-builder tạo, kh�
 . ./tools/enter-node22.ps1
 # Chuẩn bị generated resources theo R11a và protected controller catalog trước.
 pnpm.cmd --prefix app build
-pnpm.cmd --prefix app exec electron-builder --win nsis --x64 --publish never --config.directories.output=D:/Developing/DuAnCNTT/app/.out-scripts/<new-package-directory>
+pnpm.cmd --prefix app exec electron-builder --win nsis --x64 --publish never --config.directories.output=app/.out-scripts/<new-package-directory>
 node app/scripts/windows-release-lab.mjs --run --artifact app/.out-scripts/<new-package-directory>/win-unpacked
 ```
 
-Output phải mới, nằm trong ignored `.out-scripts`; không ghi đè dist/bản cài hiện tại. Lab chụp Settings, điều hướng5trang, đổi English/Light, train180mẫu tổng hợp/suy luận4method bằng đúng Python con thuộc app, đóng app và kiểm process/cổng đã dừng; mở process mới cùng profile phải giữ DB/key/model/UI. Sau hai lần chạy, hash executable/asar/ML resource không đổi; SQLite readonly integrity=ok/schema31. Chỉ dọn profile/HOME thuộc fixture khi toàn bộ gate đạt, lỗi giữ diagnostics. Không có thay đổi Main/IPC để phục vụ lab.
+Output phải mới, nằm trong ignored `.out-scripts`; không ghi đè dist/bản cài hiện tại. Lab chụp Settings, điều hướng5trang, đổi English/Light, train180mẫu tổng hợp/suy luận4method bằng đúng Python con thuộc app, đóng app và kiểm process/cổng đã dừng; mở process mới cùng profile phải giữ DB/key/model/UI. Sau hai lần chạy, hash executable/asar/ML resource không đổi; SQLite readonly integrity=ok/schema38. Chỉ dọn profile/HOME thuộc fixture khi toàn bộ gate đạt, lỗi giữ diagnostics. Không có thay đổi Main/IPC để phục vụ lab.
 
 `--user-data-dir` được probe độc lập trước full app. HOME chỉ tách đường log hiện hành; Windows identity/DPAPI vẫn là tài khoản đang đăng nhập. Thao tác `app.getPath`/sessionData tham chiếu [Electron app API](https://www.electronjs.org/docs/latest/api/app#appgetpathname). Đây không phải máy Windows sạch hay kiểm chứng decrypt key giữa hai user.
 
