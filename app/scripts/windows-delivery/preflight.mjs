@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- Standalone preflight inventory CLI for Windows delivery */
-import { existsSync, readFileSync, statSync, writeFileSync, mkdirSync } from 'node:fs'
-import { resolve, join, dirname } from 'node:path'
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'node:fs'
+import { resolve, join, relative, dirname } from 'node:path'
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { platform, arch, release } from 'node:os'
@@ -322,6 +322,7 @@ function inspectResources(options = {}) {
   let mlRuntimePass = false
   let mlRuntimeDetails = { path: mlRuntimeDir, present: false }
 
+  const ML_RUNTIME_PATHS = 'python312.zip\nDLLs\nLib/site-packages\nservice\n'
   const REQUIRED_ML_FILES = [
     'python.exe',
     'python312.dll',
@@ -330,7 +331,14 @@ function inspectResources(options = {}) {
     'service/main.py',
     'service/config.py',
     'service/features.py',
-    'service/store.py'
+    'service/store.py',
+    'Lib/site-packages/fastapi/__init__.py',
+    'Lib/site-packages/uvicorn/__init__.py',
+    'Lib/site-packages/pydantic/__init__.py',
+    'Lib/site-packages/sklearn/__init__.py',
+    'Lib/site-packages/numpy/__init__.py',
+    'Lib/site-packages/scipy/__init__.py',
+    'Lib/site-packages/joblib/__init__.py'
   ]
 
   if (existsSync(mlRuntimeDir)) {
@@ -343,7 +351,13 @@ function inspectResources(options = {}) {
         const filesArray = Array.isArray(manifest.files) ? manifest.files : []
         const hasValidStructure =
           manifest.format === 1 &&
-          manifest.python_version === '3.12.10' &&
+          manifest.platform === 'win32-x64' &&
+          typeof manifest.python_version === 'string' &&
+          /^3\.12\.\d+$/.test(manifest.python_version) &&
+          manifest.interpreter === 'python.exe' &&
+          manifest.service_directory === 'service' &&
+          manifest.packages &&
+          typeof manifest.packages === 'object' &&
           filesArray.length >= REQUIRED_ML_FILES.length
 
         if (!hasValidStructure) {
@@ -352,7 +366,8 @@ function inspectResources(options = {}) {
             path: mlRuntimeDir,
             present: true,
             manifest_sha256: manifestSha,
-            error: 'Manifest lacks format:1, python_version:3.12.10, or files list'
+            error:
+              'Manifest lacks format:1, platform:win32-x64, python_version:3.12.x, or valid files list'
           }
         } else {
           // Check that all required files exist in manifest and have non-zero size
@@ -375,6 +390,7 @@ function inspectResources(options = {}) {
           } else {
             // Verify files on disk match manifest size and sha256 hash
             let fileErrors = []
+            let totalBytes = 0
             for (const f of filesArray) {
               const fullFilePath = join(mlRuntimeDir, f.path)
               if (!existsSync(fullFilePath)) {
@@ -395,6 +411,7 @@ function inspectResources(options = {}) {
                 fileErrors.push({ path: f.path, error: 'ZERO_BYTE_REQUIRED_FILE' })
                 continue
               }
+              totalBytes += f.size
               const diskSha = hashFile(fullFilePath)
               if (diskSha !== f.sha256) {
                 fileErrors.push({
@@ -406,13 +423,48 @@ function inspectResources(options = {}) {
               }
             }
 
-            // Verify .pth file content
+            if (totalBytes > 512 * 1024 * 1024) {
+              fileErrors.push({ path: 'manifest.files', error: 'TOTAL_SIZE_EXCEEDS_512MB' })
+            }
+
+            // Verify .pth file content against production contract
             const pthPath = join(mlRuntimeDir, 'python312._pth')
             if (existsSync(pthPath)) {
               const pthContent = readFileSync(pthPath, 'utf8')
-              if (pthContent !== 'python312.zip\n.\nservice\n') {
+              if (pthContent !== ML_RUNTIME_PATHS) {
                 fileErrors.push({ path: 'python312._pth', error: 'INVALID_PTH_CONTENT' })
               }
+            } else {
+              fileErrors.push({ path: 'python312._pth', error: 'PTH_MISSING' })
+            }
+
+            // Walk directory to ensure no extra un-manifested files
+            const extraFiles = []
+            const walkDir = (currentDir) => {
+              const entries = readdirSync(currentDir, { withFileTypes: true })
+              for (const entry of entries) {
+                const fullP = join(currentDir, entry.name)
+                if (entry.isSymbolicLink()) {
+                  fileErrors.push({ path: fullP, error: 'SYMBOLIC_LINK_FORBIDDEN' })
+                  continue
+                }
+                if (entry.isDirectory()) {
+                  walkDir(fullP)
+                } else if (entry.isFile()) {
+                  const relP = relative(mlRuntimeDir, fullP).split('\\').join('/')
+                  if (relP !== 'manifest.json' && !manifestFileMap.has(relP)) {
+                    extraFiles.push(relP)
+                  }
+                }
+              }
+            }
+            try {
+              walkDir(mlRuntimeDir)
+            } catch {
+              // Directory traversal error
+            }
+            if (extraFiles.length > 0) {
+              fileErrors.push({ path: 'extra_files', error: 'UNLISTED_FILES', files: extraFiles })
             }
 
             if (fileErrors.length > 0) {
@@ -425,8 +477,21 @@ function inspectResources(options = {}) {
                 verification_errors: fileErrors
               }
             } else {
-              mlRuntimeStatus = 'VERIFIED'
-              mlRuntimePass = true
+              // Check trusted pin: options.mlRuntimePin, or if trusted verify pin is provided
+              const trustedPin = options.mlRuntimePin || null
+              if (trustedPin) {
+                if (manifestSha === trustedPin) {
+                  mlRuntimeStatus = 'VERIFIED'
+                  mlRuntimePass = true
+                } else {
+                  mlRuntimeStatus = 'TAMPERED_OR_CORRUPT'
+                  mlRuntimePass = false
+                }
+              } else {
+                // In local dev preflight without a built/provided pin, integrity is validated but unpinned
+                mlRuntimeStatus = 'VERIFIED'
+                mlRuntimePass = true
+              }
               mlRuntimeDetails = {
                 path: mlRuntimeDir,
                 present: true,
@@ -491,9 +556,25 @@ function inspectResources(options = {}) {
         catParsed &&
         catParsed.format === 1 &&
         Array.isArray(catParsed.releases) &&
-        catParsed.releases.length >= approvedDescriptors.length
+        catParsed.releases.length === approvedDescriptors.length
       ) {
-        catalogValid = true
+        // Validate that each release entry in catalog is a valid descriptor, not empty {}
+        const allEntriesValid = catParsed.releases.every(
+          (r) =>
+            r &&
+            typeof r.release_id === 'string' &&
+            /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(r.release_id) &&
+            typeof r.node_version === 'string' &&
+            /^22\.\d+\.\d+$/.test(r.node_version) &&
+            typeof r.minimum_glibc === 'string' &&
+            typeof r.release_sha256 === 'string' &&
+            /^[a-f0-9]{64}$/.test(r.release_sha256) &&
+            typeof r.installer_sha256 === 'string' &&
+            /^[a-f0-9]{64}$/.test(r.installer_sha256)
+        )
+        if (allEntriesValid) {
+          catalogValid = true
+        }
       }
     } catch {
       catalogValid = false
@@ -504,10 +585,13 @@ function inspectResources(options = {}) {
   let allReleasesValid = catalogValid && approvedDescriptors.length === 9
 
   for (const desc of approvedDescriptors) {
-    const releaseDir = join(runtimeReleasesDir, desc.release_id, 'release')
-    const releaseManifestFile = join(releaseDir, 'manifest.json')
-    const installerFile = join(runtimeReleasesDir, desc.release_id, 'installer.cjs')
+    const releaseParentDir = join(runtimeReleasesDir, desc.release_id)
+    const releaseDir = join(releaseParentDir, 'release')
+    // Production contract: CONTROLLER_RELEASE_MANIFEST = 'release-manifest.json'
+    const releaseManifestFile = join(releaseDir, 'release-manifest.json')
+    const installerFile = join(releaseParentDir, 'installer.cjs')
 
+    const parentExists = existsSync(releaseParentDir)
     const releaseExists = existsSync(releaseDir)
     const installerExists = existsSync(installerFile)
     const manifestExists = existsSync(releaseManifestFile)
@@ -515,6 +599,7 @@ function inspectResources(options = {}) {
     let installerMatch = false
     let releaseManifestMatch = false
     let manifestValid = false
+    let dirLayoutValid = false
 
     if (installerExists) {
       try {
@@ -535,12 +620,24 @@ function inspectResources(options = {}) {
           parsedManifest &&
           parsedManifest.format === 1 &&
           parsedManifest.platform === 'linux-x64-glibc' &&
-          parsedManifest.node_version === desc.node_version
+          parsedManifest.node_version === desc.node_version &&
+          parsedManifest.minimum_glibc === desc.minimum_glibc &&
+          Array.isArray(parsedManifest.files) &&
+          Array.isArray(parsedManifest.packages)
         ) {
           manifestValid = true
         }
       } catch {
         manifestValid = false
+      }
+    }
+
+    if (parentExists) {
+      try {
+        const entries = readdirSync(releaseParentDir).sort().join(',')
+        dirLayoutValid = entries === 'installer.cjs,release'
+      } catch {
+        dirLayoutValid = false
       }
     }
 
@@ -550,7 +647,8 @@ function inspectResources(options = {}) {
       manifestExists &&
       installerMatch &&
       releaseManifestMatch &&
-      manifestValid
+      manifestValid &&
+      dirLayoutValid
         ? 'VERIFIED'
         : 'MISSING_OR_INVALID'
 
@@ -568,6 +666,7 @@ function inspectResources(options = {}) {
       release_manifest_valid: manifestValid,
       installer_path_exists: installerExists,
       installer_sha_matches: installerMatch,
+      directory_layout_valid: dirLayoutValid,
       status: itemStatus
     })
   }

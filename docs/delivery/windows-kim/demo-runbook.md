@@ -1,163 +1,370 @@
-# Runbook Vận hành Người dùng Cuối, Sao lưu Dữ liệu & Kịch bản Demo 8–10 Phút (CP4)
+# Runbook Vận hành Người dùng Cuối, Sao lưu Dữ liệu & Kịch bản Demo (CP4 - Draft Specification)
 
-Tài liệu hoàn thiện cho Checkpoint CP4: Cung cấp hướng dẫn cài đặt, sao lưu/phục hồi dữ liệu, làm sạch nhật ký (log redaction), xử lý sự cố installer, và kịch bản trình diễn (demo script) 8–10 phút dựa trên các tính năng đã được kiểm chứng ở baseline.
+> [!NOTE]
+> **Trạng thái Checkpoint CP4**: **DRAFT / SPECIFICATION**.
+> Tính đến vòng review 18/11/2026, sản phẩm chưa thực hiện đóng gói NSIS mới trên môi trường Windows độc lập hoàn toàn sạch và chưa có production installer artifact được ký số chính thức. Tài liệu này đóng vai trò đặc tả vận hành chuẩn (target operational specification), cung cấp hướng dẫn cài đặt dự kiến, quy trình sao lưu/phục hồi dữ liệu người dùng đồng bộ, làm sạch nhật ký, quy tắc quản lý tiến trình an toàn, và kịch bản demo đối chiếu với hiện trạng kiểm thử.
 
 ---
 
-## 1. Hướng dẫn Người dùng Cuối (End-User Setup)
+## 1. Hướng dẫn Người dùng Cuối (End-User Setup - Dự kiến)
 
-### 1.1. Yêu cầu Hệ thống Tối thiểu
+### 1.1. Yêu cầu Hệ thống Dự kiến (Target System Requirements)
 - **Hệ điều hành**: Windows 10 (version 1809 trở lên) hoặc Windows 11, kiến trúc 64-bit (x64).
-- **Bộ nhớ (RAM)**: Tối thiểu 4 GB (khuyến nghị 8 GB trở lên).
-- **Ổ đĩa trống**: Tối thiểu 1 GB dung lượng khả dụng trên ổ hệ thống (ổ C:).
-- **Phần mềm phụ thuộc**: **Không yêu cầu người dùng cài đặt trước Node.js hay Python**. Bản cài đặt đóng gói sẵn toàn bộ runtime cần thiết (`python.exe`, standard libraries, bundled ML models và SQLite drivers).
+- **Bộ nhớ (RAM)**: Tối thiểu 4 GB (khuyến nghị 8 GB trở lên dựa trên yêu cầu phối hợp giữa Electron Main, Renderer và Python ML runtime).
+- **Ổ đĩa trống**: Tối thiểu 1.5 GB dung lượng khả dụng trên ổ cài đặt (`%LocalAppData%`) và ổ chứa profile (`%AppData%`).
+- **Phần mềm phụ thuộc**: Khi đóng gói hoàn chỉnh theo đặc tả CP3/CP4, bản cài đặt NSIS dự kiến tự chứa:
+  - Runtime Python nhúng (`python312.zip`, DLLs, standard libraries, dependencies trong `Lib/site-packages`).
+  - Dịch vụ ML cục bộ (`service/`).
+  - Driver SQLite native (`better-sqlite3`).
+  - Người dùng cuối không cần tự cài đặt riêng Node.js hay Python toàn cục.
 
-### 1.2. Các bước Cài đặt
-1. Tải bộ cài chính thức `OpsPilot-0.2.0-setup.exe` từ nguồn phát hành được phê duyệt.
-2. Kiểm tra mã băm SHA256 trước khi chạy:
+### 1.2. Quy trình Cài đặt & Kiểm tra Toàn vẹn
+1. Tải bộ cài chính thức (ví dụ: `OpsPilot-Setup-<version>.exe`) từ kênh phát hành được phê duyệt kèm tệp `SHA256SUMS`.
+2. Kiểm tra mã băm SHA256 trước khi khởi chạy:
    ```powershell
-   Get-FileHash .\OpsPilot-0.2.0-setup.exe -Algorithm SHA256
+   Get-FileHash .\OpsPilot-Setup-<version>.exe -Algorithm SHA256
    ```
-3. Nhấp đúp vào file `.exe` để tiến hành cài đặt.
+   So sánh giá trị băm nhận được với giá trị công bố trong thông cáo phát hành.
+3. Chạy bộ cài đặt `.exe`:
    - Thư mục cài đặt mặc định: `%LocalAppData%\Programs\OpsPilot`.
-   - Ứng dụng tự động đăng ký shortcut trong Start Menu.
-4. Mở ứng dụng từ Start Menu hoặc shortcut trên Desktop.
-   - Trong lần khởi động đầu tiên, OpsPilot sẽ tự động khởi tạo cơ sở dữ liệu SQLite và sinh master encryption key được bảo vệ bởi Windows DPAPI (`safeStorage`).
+   - Tiến trình cài đặt ghi nhận registry key và tạo shortcut Start Menu.
+4. Mở ứng dụng lần đầu:
+   - Ứng dụng khởi tạo thư mục dữ liệu tại `%AppData%\OpsPilot\`.
+   - Sinh master encryption key được bảo vệ bởi Windows DPAPI (`credential-master-key.protected`).
+   - Khởi tạo cơ sở dữ liệu SQLite schema 38 (`opspilot.db`) và áp dụng migrations.
 
 ---
 
-## 2. Quy trình Sao lưu & Phục hồi Dữ liệu Người dùng (Backup & Restore)
+## 2. Quy trình Sao lưu & Phục hồi Dữ liệu Người dùng (Synchronized Backup & Restore)
 
-Dữ liệu cục bộ của người dùng được tách biệt hoàn toàn khỏi thư mục cài đặt phần mềm.
+Dữ liệu cục bộ của người dùng được tách biệt khỏi thư mục nhị phân cài đặt phần mềm. Để đảm bảo tính toàn vẹn, **tuyệt đối không sao lưu chắp vá chỉ một phần tệp tin**.
 
-### 2.1. Vị trí Dữ liệu Cục bộ
-- **Đường dẫn thư mục Profile**:
-  `%AppData%\OpsPilot\` (thực tế: `C:\Users\<Username>\AppData\Roaming\OpsPilot\`)
-- **Các thành phần quan trọng**:
-  - `opspilot.db`: Cơ sở dữ liệu SQLite chứa cấu hình, lịch sử deployment, VPS records, schema version (hiện tại schema 38).
-  - `credential-master-key.protected`: Khóa mã hóa chính được bảo vệ bởi DPAPI của Windows người dùng hiện hành.
-  - `models/`: Thư mục chứa trọng số mô hình ML được huấn luyện cục bộ.
+### 2.1. Cấu trúc Profile Dữ liệu Người dùng (`%AppData%\OpsPilot\`)
+Đường dẫn đầy đủ: `C:\Users\<Username>\AppData\Roaming\OpsPilot\`
+Bao gồm 4 nhóm thành phần phụ thuộc chặt chẽ:
+1. **Cơ sở dữ liệu SQLite**:
+   - `opspilot.db`: Chứa toàn bộ cấu hình, lịch sử deployment, servers, metadata và schema version 38.
+   - `opspilot.db-wal` & `opspilot.db-shm` (nếu có khi app đang ở chế độ WAL): Nhật ký transaction ghi tạm.
+2. **Khóa bảo vệ chứng chỉ (DPAPI)**:
+   - `credential-master-key.protected`: Khóa đối xứng được bảo vệ bởi Windows Data Protection API (`CryptProtectData`). Mất khóa này, toàn bộ VPS password và SSH private key lưu trong `opspilot.db` sẽ **không thể giải mã**.
+3. **Trạng thái Dịch vụ ML (ML State)**:
+   - Thư mục `ml-state/`: Lưu trữ các mô hình và trạng thái huấn luyện cục bộ theo cấu trúc:
+     `ml-state/<deployment_id>/state.pkl` và `ml-state/<deployment_id>/meta.json`.
+     *(Lưu ý: Ứng dụng sử dụng đường dẫn `userData/ml-state`, không dùng thư mục `userData/models`)*.
+4. **Trạng thái Giao diện Cục bộ (UI Local Storage)**:
+   - Thư mục `Local Storage/`: Lưu cache giao diện, session tokens tạm, và các cài đặt người dùng trên renderer.
 
-### 2.2. Quy trình Sao lưu (Backup)
-Trước khi nâng cấp phiên bản hoặc bảo trì máy tính:
-1. Đóng hoàn toàn ứng dụng OpsPilot (đảm bảo không còn tiến trình `OpsPilot.exe` chạy ngầm).
-2. Mở PowerShell và tạo thư mục sao lưu lưu trữ an toàn:
-   ```powershell
-   $BACKUP_DIR = "D:\OpsPilot_Backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-   New-Item -ItemType Directory -Path $BACKUP_DIR -Force
-   
-   # Sao lưu cơ sở dữ liệu và models
-   Copy-Item "$env:APPDATA\OpsPilot\opspilot.db" -Destination "$BACKUP_DIR\opspilot.db"
-   if (Test-Path "$env:APPDATA\OpsPilot\models") {
-       Copy-Item "$env:APPDATA\OpsPilot\models" -Destination "$BACKUP_DIR\models" -Recurse
-   }
-   
-   # Ghi lại checksum của dữ liệu đã sao lưu
-   Get-FileHash "$BACKUP_DIR\opspilot.db" -Algorithm SHA256 | Out-File "$BACKUP_DIR\checksums.txt"
-   ```
-
-> [!WARNING]
-> Tệp `credential-master-key.protected` được mã hóa gắn liền với tài khoản Windows người dùng hiện hành (`CryptProtectData`). Sao lưu file này sang máy tính khác hoặc tài khoản Windows khác sẽ không thể giải mã được nếu không có khóa dự phòng.
-
-### 2.3. Quy trình Phục hồi (Restore)
-1. Đảm bảo OpsPilot đã tắt.
-2. Khôi phục file cơ sở dữ liệu:
-   ```powershell
-   Copy-Item "$BACKUP_DIR\opspilot.db" -Destination "$env:APPDATA\OpsPilot\opspilot.db" -Force
-   if (Test-Path "$BACKUP_DIR\models") {
-       Copy-Item "$BACKUP_DIR\models" -Destination "$env:APPDATA\OpsPilot\models" -Recurse -Force
-   }
-   ```
-3. Mở lại ứng dụng OpsPilot. Ứng dụng sẽ tự động kiểm tra tính toàn vẹn `PRAGMA integrity_check` và áp dụng các migration cần thiết.
+> [!IMPORTANT]
+> **Ranh giới Bảo mật Windows DPAPI**:
+> Tệp `credential-master-key.protected` được mã hóa gắn liền với **tài khoản người dùng Windows cụ thể trên máy tính vật lý cụ thể**.
+> Bản sao lưu chứa khóa này chỉ có thể giải mã thành công khi khôi phục lại trên **cùng tài khoản người dùng và cùng máy tính**. Không thể chuyển profile sang máy tính khác hoặc user khác mà vẫn giữ khả năng giải mã credentials tự động trừ khi có quy trình xuất chứng chỉ chủ động (re-key/export).
 
 ---
 
-## 3. Quy chuẩn Làm sạch Nhật ký (Log Redaction Guidelines)
+### 2.2. Kịch bản Sao lưu Toàn vẹn (Synchronized Backup Script)
 
-Trước khi gửi logs chẩn đoán cho đội ngũ hỗ trợ kỹ thuật hoặc coordinator, người dùng và kỹ sư hỗ trợ **bắt buộc** phải tuân thủ quy tắc khử dữ liệu nhạy cảm:
+Trước khi sao lưu:
+1. Đóng ứng dụng OpsPilot hoàn toàn qua giao diện (Menu -> Exit hoặc đóng cửa sổ chính).
+2. Đảm bảo tiến trình ứng dụng và tiến trình ML con đã dừng (xem Mục 4 để kiểm tra an toàn theo PID).
 
-### 3.1. Các thông tin BẮT BUỘC phải che (Redacted)
-- **Private SSH Keys**: Bất kỳ khối `-----BEGIN OPENSSH PRIVATE KEY-----` hoặc RSA private key.
-- **Passwords & Passphrases**: Mật khẩu VPS, mật khẩu cơ sở dữ liệu PostgreSQL.
-- **Database Connection Strings**: Chuỗi `postgres://user:password@host:port/dbname` phải được thay thế thành `postgres://user:[REDACTED]@host:port/dbname`.
-- **API Tokens / Secrets**: Các token Bearer, JWT, webhook secrets.
-- **Tên miền hoặc IP nội bộ nhạy cảm**: Nếu có yêu cầu bảo mật từ phía khách hàng.
+Script PowerShell thực hiện sao lưu đồng bộ kèm tệp kê khai `backup-manifest.json`:
 
-### 3.2. Công cụ Khử Tự động
-Ứng dụng OpsPilot tích hợp module `maskSecrets` (trong `src/main/logger.ts`), tự động lọc các chuỗi nhạy cảm khi ghi log. Khi thu thập file log thủ công (`%AppData%\OpsPilot\logs\`), có thể chạy lệnh làm sạch:
 ```powershell
-(Get-Content "$env:APPDATA\OpsPilot\logs\main.log") `
-    -replace '(?i)(password|secret|token|key)\s*[:=]\s*["'']?[^"''\s]+', '$1=[REDACTED]' `
-    -replace 'postgres://([^:]+):([^@]+)@', 'postgres://$1:[REDACTED]@' `
-    | Set-Content "$env:APPDATA\OpsPilot\logs\main-sanitized.log"
+# backup-opspilot.ps1
+$ErrorActionPreference = "Stop"
+
+$SOURCE_PROFILE = "$env:APPDATA\OpsPilot"
+if (-not (Test-Path $SOURCE_PROFILE)) {
+    Write-Error "Không tìm thấy thư mục profile OpsPilot tại: $SOURCE_PROFILE"
+    exit 1
+}
+
+$TIMESTAMP = Get-Date -Format 'yyyyMMdd_HHmmss'
+$BACKUP_TARGET = "D:\OpsPilot_Backups\Backup_$TIMESTAMP"
+New-Item -ItemType Directory -Path $BACKUP_TARGET -Force | Out-Null
+
+Write-Host "Bắt đầu sao lưu profile OpsPilot vào: $BACKUP_TARGET"
+
+# 1. Sao lưu cơ sở dữ liệu SQLite và WAL/SHM nếu tồn tại
+Copy-Item "$SOURCE_PROFILE\opspilot.db" -Destination "$BACKUP_TARGET\opspilot.db"
+if (Test-Path "$SOURCE_PROFILE\opspilot.db-wal") {
+    Copy-Item "$SOURCE_PROFILE\opspilot.db-wal" -Destination "$BACKUP_TARGET\opspilot.db-wal"
+}
+if (Test-Path "$SOURCE_PROFILE\opspilot.db-shm") {
+    Copy-Item "$SOURCE_PROFILE\opspilot.db-shm" -Destination "$BACKUP_TARGET\opspilot.db-shm"
+}
+
+# 2. Sao lưu DPAPI Master Key
+if (Test-Path "$SOURCE_PROFILE\credential-master-key.protected") {
+    Copy-Item "$SOURCE_PROFILE\credential-master-key.protected" -Destination "$BACKUP_TARGET\credential-master-key.protected"
+} else {
+    Write-Warning "Cảnh báo: Không tìm thấy credential-master-key.protected trong profile nguồn."
+}
+
+# 3. Sao lưu ML State (chứa mô hình và metadata huấn luyện)
+if (Test-Path "$SOURCE_PROFILE\ml-state") {
+    Copy-Item "$SOURCE_PROFILE\ml-state" -Destination "$BACKUP_TARGET\ml-state" -Recurse
+}
+
+# 4. Sao lưu Local Storage
+if (Test-Path "$SOURCE_PROFILE\Local Storage") {
+    Copy-Item "$SOURCE_PROFILE\Local Storage" -Destination "$BACKUP_TARGET\Local Storage" -Recurse
+}
+
+# 5. Tạo bảng kê khai tính toàn vẹn (backup-manifest.json)
+$files = Get-ChildItem -Path $BACKUP_TARGET -Recurse -File
+$manifestEntries = @()
+
+foreach ($file in $files) {
+    $relativePath = $file.FullName.Substring($BACKUP_TARGET.Length + 1).Replace('\', '/')
+    $hash = (Get-FileHash -Path $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    $manifestEntries += [PSCustomObject]@{
+        path = $relativePath
+        size = $file.Length
+        sha256 = $hash
+    }
+}
+
+$manifest = [PSCustomObject]@{
+    backup_format = 1
+    created_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    source_profile = $SOURCE_PROFILE
+    user_domain = $env:USERDOMAIN
+    user_name = $env:USERNAME
+    items = $manifestEntries
+}
+
+$manifestJson = $manifest | ConvertTo-Json -Depth 5
+[System.IO.File]::WriteAllText("$BACKUP_TARGET\backup-manifest.json", $manifestJson)
+
+Write-Host "Sao lưu hoàn tất thành công. Đã ghi nhận $($manifestEntries.Count) tệp vào backup-manifest.json."
 ```
 
 ---
 
-## 4. Xử lý Sự cố Cài đặt & Phục hồi khi Installer Lỗi
+### 2.3. Quy trình Phục hồi An toàn (Safe Profile Restore)
 
-### 4.1. Sự cố: Installer báo lỗi "File in use / Tiến trình đang chạy"
-- **Nguyên nhân**: Phiên bản cũ của `OpsPilot.exe` hoặc tiến trình con Python ML service chưa thoát hoàn toàn.
-- **Khắc phục**:
-  ```powershell
-  Stop-Process -Name "OpsPilot" -Force -ErrorAction SilentlyContinue
-  Stop-Process -Name "python" -Force -ErrorAction SilentlyContinue
-  ```
-  Sau đó chạy lại bộ cài đặt.
+> [!CAUTION]
+> **Nguyên tắc Phục hồi**:
+> - **KHÔNG ĐƯỢC** ghi đè trực tiếp (`Copy-Item -Force`) vào profile đang hoạt động hoặc ghép dữ liệu cũ với khóa mới.
+> - **BẮT BUỘC** lưu giữ bản sao lưu dự phòng của profile hiện hữu (`OpsPilot_PreRestore_<timestamp>`) trước khi khôi phục.
+> - **BẮT BUỘC** kiểm tra toàn vẹn băm của bản sao lưu dựa trên `backup-manifest.json` trước khi tiến hành copy.
 
-### 4.2. Sự cố: Màn hình trắng (Blank Screen) hoặc lỗi GPU Hardware Acceleration
-- **Nguyên nhân**: Driver card màn hình trên Windows không tương thích với WebGL/ANGLE của Chromium.
-- **Khắc phục**: Chạy ứng dụng với cờ vô hiệu hóa tăng tốc phần cứng:
-  ```powershell
-  & "$env:LOCALAPPDATA\Programs\OpsPilot\OpsPilot.exe" --disable-gpu
-  ```
+Script PowerShell phục hồi an toàn:
 
-### 4.3. Sự cố: Cơ sở dữ liệu bị hỏng (Database Malformed)
-- **Nguyên nhân**: Máy tính bị tắt nguồn đột ngột khi đang ghi transaction.
-- **Khắc phục**:
-  1. Kiểm tra trạng thái:
-     ```powershell
-     # Kiểm tra tính toàn vẹn bằng sqlite3 CLI
-     sqlite3 "$env:APPDATA\OpsPilot\opspilot.db" "PRAGMA integrity_check;"
-     ```
-  2. Nếu hỏng, đổi tên `opspilot.db` thành `opspilot.db.corrupt` và khôi phục từ bản sao lưu gần nhất.
+```powershell
+# restore-opspilot.ps1
+param (
+    [Parameter(Mandatory=$true)]
+    [string]$BackupDir
+)
+$ErrorActionPreference = "Stop"
+
+if (-not (Test-Path "$BackupDir\backup-manifest.json")) {
+    Write-Error "Thư mục sao lưu không hợp lệ: Thiếu backup-manifest.json."
+    exit 1
+}
+
+# 1. Xác minh tính toàn vẹn của bản sao lưu trước khi khôi phục
+Write-Host "Đang xác minh tính toàn vẹn bản sao lưu từ manifest..."
+$manifestContent = Get-Content -Raw "$BackupDir\backup-manifest.json" | ConvertFrom-Json
+
+foreach ($item in $manifestContent.items) {
+    $filePath = Join-Path $BackupDir ($item.path.Replace('/', '\'))
+    if (-not (Test-Path $filePath)) {
+        Write-Error "Tệp sao lưu bị thiếu: $($item.path)"
+        exit 1
+    }
+    $calcHash = (Get-FileHash -Path $filePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($calcHash -ne $item.sha256) {
+        Write-Error "Mã băm không khớp cho tệp: $($item.path). Dự kiến: $($item.sha256), Thực tế: $calcHash"
+        exit 1
+    }
+}
+Write-Host "Xác minh toàn vẹn bản sao lưu: TẤT CẢ TỆP HỢP LỆ."
+
+# 2. Đảm bảo ứng dụng OpsPilot đã dừng hoàn toàn
+$PROFILE_DIR = "$env:APPDATA\OpsPilot"
+
+# 3. Lưu giữ profile hiện tại trước khi khôi phục (Pre-Restore Preservation)
+if (Test-Path $PROFILE_DIR) {
+    $PRE_RESTORE_BACKUP = "$env:APPDATA\OpsPilot_PreRestore_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    Write-Host "Lưu trữ profile hiện tại vào: $PRE_RESTORE_BACKUP"
+    Move-Item -Path $PROFILE_DIR -Destination $PRE_RESTORE_BACKUP
+}
+
+# 4. Tạo thư mục profile mới và khôi phục dữ liệu đồng bộ
+New-Item -ItemType Directory -Path $PROFILE_DIR -Force | Out-Null
+
+Copy-Item "$BackupDir\opspilot.db" -Destination "$PROFILE_DIR\opspilot.db"
+if (Test-Path "$BackupDir\opspilot.db-wal") {
+    Copy-Item "$BackupDir\opspilot.db-wal" -Destination "$PROFILE_DIR\opspilot.db-wal"
+}
+if (Test-Path "$BackupDir\opspilot.db-shm") {
+    Copy-Item "$BackupDir\opspilot.db-shm" -Destination "$PROFILE_DIR\opspilot.db-shm"
+}
+if (Test-Path "$BackupDir\credential-master-key.protected") {
+    Copy-Item "$BackupDir\credential-master-key.protected" -Destination "$PROFILE_DIR\credential-master-key.protected"
+}
+if (Test-Path "$BackupDir\ml-state") {
+    Copy-Item "$BackupDir\ml-state" -Destination "$PROFILE_DIR\ml-state" -Recurse
+}
+if (Test-Path "$BackupDir\Local Storage") {
+    Copy-Item "$BackupDir\Local Storage" -Destination "$PROFILE_DIR\Local Storage" -Recurse
+}
+
+Write-Host "Khôi phục dữ liệu thành công! Khởi động lại ứng dụng OpsPilot để nạp dữ liệu."
+```
 
 ---
 
-## 5. Kịch bản Trình diễn Thực tế (Demo Script 8–10 Phút)
+## 3. Quy chuẩn Thu thập & Làm sạch Nhật ký (Log Sanitization & Redaction)
 
-Kịch bản trình diễn được thiết kế dựa trên các tính năng đã kiểm chứng ở baseline (không phụ thuộc vào mock, không bịa đặt tính năng chưa có):
+### 3.1. Vị trí Nhật ký Thực tế của Ứng dụng
+Theo cấu trúc logger sản phẩm (`src/main/logger.ts`):
+- Nhật ký ghi vào thư mục home của người dùng:
+  `~/.opspilot/logs/app-YYYY-MM-DD.log`
+  (Thực tế trên Windows: `C:\Users\<Username>\.opspilot\logs\app-YYYY-MM-DD.log`).
+- *Lưu ý: Không tìm log tại đường dẫn sai `%AppData%\OpsPilot\logs\main.log`.*
 
-### Phút 0:00 – 1:30: Khởi động Ứng dụng & Giới thiệu Giao diện Cục bộ
-- **Hành động**: Mở OpsPilot từ Start Menu.
-- **Điểm nhấn trình bày**:
-  - Ứng dụng khởi động mượt mà, khung viền Mica/Aero native trên Windows (`windowOptions.ts`).
-  - Giao diện Dashboard hiển thị trạng thái hệ thống: Apps, Servers (VPS), Deployments.
-  - Chuyển đổi Theme (Dark/Light) và Ngôn ngữ (English/Vietnamese) trong Settings: cài đặt lưu trữ tức thì và giữ nguyên khi khởi động lại.
+### 3.2. Quy tắc Khử Dữ liệu Nhạy cảm Đa dòng (Multiline Redaction)
+Module `maskSecrets` trong mã nguồn ứng dụng tự động che giấu chuỗi nhạy cảm khi ghi log trực tiếp. Tuy nhiên, trước khi gửi file log ra bên ngoài hỗ trợ, bắt buộc tạo một bản copy riêng đã làm sạch và **kiểm tra lại thủ công (manual human review)**.
 
-### Phút 1:30 – 3:30: Cơ chế Bảo mật Cục bộ & Schema Độc lập
-- **Hành động**: Giới thiệu kiến trúc lưu trữ dữ liệu an toàn.
-- **Điểm nhấn trình bày**:
-  - Dữ liệu hoàn toàn nằm trên máy người dùng (`%AppData%\OpsPilot`), không gửi credential lên đám mây của bên thứ ba.
-  - Sử dụng SQLite Desktop schema phiên bản 38, thực thi 37 migrations chuẩn, bảo toàn toàn vẹn dữ liệu.
-  - Master key được bảo vệ bởi Windows Data Protection API (DPAPI).
+Script PowerShell khử dữ liệu nhạy cảm đa dòng (xử lý OpenSSH private key, Authorization headers, connection strings):
 
-### Phút 3:30 – 6:00: Dịch vụ Máy học Cục bộ (Bundled ML Service)
-- **Hành động**: Kiểm tra endpoint sức khỏe và suy luận mô hình ML.
-- **Điểm nhấn trình bày**:
-  - Mở PowerShell kiểm tra endpoint nội bộ: `Invoke-RestMethod http://127.0.0.1:8765/health`.
-  - Tiến trình Python hoàn toàn khép kín trong `resources/ml-runtime`, không làm ảnh hưởng hay xung đột với bất kỳ phiên bản Python nào khác trên máy khách hàng.
-  - Trình diễn khả năng tính toán điểm đánh giá rủi ro deployment (Risk Scoring) dựa trên 4 thuật toán suy luận cục bộ.
+```powershell
+# sanitize-logs.ps1
+param (
+    [string]$LogDate = (Get-Date -Format 'yyyy-MM-dd')
+)
 
-### Phút 6:00 – 8:00: Quản lý Máy chủ & Chuẩn bị Triển khai (VPS & Deployment Readiness)
-- **Hành động**: Vào trang Servers / VPS và Deployments.
-- **Điểm nhấn trình bày**:
-  - Quản lý danh sách VPS với SSH Fingerprint xác thực và bộ lọc cổng an toàn (Port Policy).
-  - Khả năng kiểm tra trạng thái ingress Caddy và chứng chỉ HTTPS độc lập.
-  - Terminal stream hiển thị log trực tiếp với cơ chế che giấu dữ liệu nhạy cảm (Secret Masking).
+$USER_HOME = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::UserProfile)
+$LOG_FILE = Join-Path $USER_HOME ".opspilot\logs\app-$LogDate.log"
 
-### Phút 8:00 – 10:00: Đóng Ứng dụng & Dọn dẹp Tiến trình Hoàn hảo
-- **Hành động**: Đóng cửa sổ ứng dụng OpsPilot.
-- **Điểm nhấn trình bày**:
-  - Kiểm tra Task Manager / PowerShell: Xác nhận toàn bộ tiến trình con `OpsPilot.exe` và `python.exe` đều đã được thu hồi (reaped) sạch sẽ, giải phóng hoàn toàn các cổng 8765-8767, không để lại tiến trình mồ côi (orphan process).
-  - Mở lại ứng dụng: Toàn bộ phiên làm việc, trạng thái theme, và lịch sử cơ sở dữ liệu được phục hồi hoàn hảo (Cold Reopen Preservation).
+if (-not (Test-Path $LOG_FILE)) {
+    Write-Warning "Không tìm thấy file log ngày hôm nay tại: $LOG_FILE"
+    exit 0
+}
+
+$SANITIZED_FILE = Join-Path $USER_HOME ".opspilot\logs\app-$LogDate-sanitized.log"
+$content = [System.IO.File]::ReadAllText($LOG_FILE, [System.Text.Encoding]::UTF8)
+
+# 1. Khử khối khóa OpenSSH / RSA Private Key đa dòng
+$content = [System.Text.RegularExpressions.Regex]::Replace(
+    $content,
+    '(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----',
+    '[REDACTED_PRIVATE_KEY]'
+)
+
+# 2. Khử PostgreSQL Connection Strings chứa thông tin đăng nhập
+$content = [System.Text.RegularExpressions.Regex]::Replace(
+    $content,
+    'postgres://([^:]+):([^@]+)@',
+    'postgres://$1:[REDACTED]@'
+)
+
+# 3. Khử Bearer tokens, API keys, JWT, passwords
+$content = [System.Text.RegularExpressions.Regex]::Replace(
+    $content,
+    '(?i)(password|secret|token|bearer|key)\s*[:=]\s*["'']?[A-Za-z0-9_\-\.\=\+/]{8,}["'']?',
+    '$1=[REDACTED]'
+)
+
+# 4. Khử Authorization headers
+$content = [System.Text.RegularExpressions.Regex]::Replace(
+    $content,
+    '(?i)authorization\s*:\s*Bearer\s+[A-Za-z0-9_\-\.]+',
+    'Authorization: Bearer [REDACTED]'
+)
+
+[System.IO.File]::WriteAllText($SANITIZED_FILE, $content, [System.Text.Encoding]::UTF8)
+Write-Host "Đã xuất file log làm sạch tại: $SANITIZED_FILE"
+Write-Host "QUAN TRỌNG: Hãy mở file log kiểm tra lại bằng mắt trước khi chia sẻ ra ngoài."
+```
+
+---
+
+## 4. Quy tắc Quản lý Tiến trình & Xử lý Sự cố An toàn (Process Ownership & Troubleshooting)
+
+> [!CAUTION]
+> **Chính sách Sở hữu Tiến trình (Process Ownership Policy)**:
+> - **NGHIÊM CẤM** sử dụng lệnh `Stop-Process -Name "python"` hoặc `Stop-Process -Name "OpsPilot"`.
+>   Việc này có thể làm gián đoạn các môi trường phát triển (VS Code, Jupyter, IDE), tiến trình AI/ML khác của máy người dùng, hoặc các phiên bản OpsPilot độc lập khác.
+> - **Luôn đóng ứng dụng bình thường (Graceful Close) trước**.
+> - Nếu ứng dụng bị treo, **chỉ dừng đúng tiến trình con thuộc thư mục cài đặt OpsPilot** dựa trên PID hoặc cổng lắng nghe nội bộ 8765.
+
+### 4.1. Dừng An toàn Tiến trình Theo Cổng & Đường dẫn Nhị phân (Targeted Teardown)
+
+Nếu cổng dịch vụ ML nội bộ 8765 bị chiếm dụng sau khi đóng app:
+```powershell
+# 1. Tra cứu PID đang lắng nghe cổng ML nội bộ 8765
+$portEntry = Get-NetTCPConnection -LocalPort 8765 -ErrorAction SilentlyContinue
+if ($portEntry) {
+    $targetPid = $portEntry.OwningProcess
+    $proc = Get-Process -Id $targetPid -ErrorAction SilentlyContinue
+    if ($proc) {
+        $procPath = $proc.Path
+        Write-Host "Phát hiện tiến trình sở hữu cổng 8765: PID=$targetPid, Path=$procPath"
+        # 2. Xác minh tiến trình có thuộc thư mục cài đặt OpsPilot không
+        $expectedDir = "$env:LOCALAPPDATA\Programs\OpsPilot"
+        if ($procPath -like "*$expectedDir*" -or $procPath -like "*ml-runtime*") {
+            Write-Host "Xác nhận đúng tiến trình OpsPilot. Tiến hành đóng PID $targetPid..."
+            Stop-Process -Id $targetPid -Force
+        } else {
+            Write-Warning "Cảnh báo: Cổng 8765 đang được sử dụng bởi tiến trình ngoài OpsPilot ($procPath). Không can thiệp, hãy chuyển cổng hoặc escalate kỹ thuật."
+        }
+    }
+} else {
+    Write-Host "Cổng 8765 đang ở trạng thái rảnh."
+}
+```
+
+### 4.2. Khắc phục Sự cố Màn hình Trắng (Blank Screen / GPU ANGLE Crash)
+Chạy ứng dụng với cờ tắt tăng tốc đồ họa phần cứng:
+```powershell
+& "$env:LOCALAPPDATA\Programs\OpsPilot\OpsPilot.exe" --disable-gpu
+```
+
+### 4.3. Khắc phục Sự cố Cơ sở Dữ liệu Hỏng (Database Malformed)
+- Khi gặp lỗi SQLite hỏng do máy tính mất điện đột ngột:
+  1. Kiểm tra sao lưu gần nhất trong thư mục `D:\OpsPilot_Backups\`.
+  2. Thực hiện quy trình phục hồi tại Mục 2.3. Không yêu cầu người dùng phải tự cài đặt bộ công cụ bên thứ ba (`sqlite3` CLI).
+
+---
+
+## 5. Kịch bản Trình diễn Thực tế 8–10 Phút (Demo Script - CP4 Draft)
+
+*Kịch bản này phản ánh các tính năng cốt lõi đã được kiểm chứng trên nhánh `feat/kim-windows-delivery-20261116`:*
+
+### Phút 0:00 – 1:30: Khởi động Ứng dụng & Khung Giao diện Cục bộ
+- **Thao tác**: Khởi động OpsPilot từ Start Menu / shortcut.
+- **Quan sát & Thuyết minh**:
+  - Giao diện nạp Dashboard với thông số trạng thái Apps, Servers, Deployments.
+  - Cấu hình theme (Dark/Light) và ngôn ngữ (English/Vietnamese) phản hồi ngay lập tức và được lưu trữ trong SQLite schema 38.
+
+### Phút 1:30 – 3:30: Bảo mật Dữ liệu Cục bộ & Khóa DPAPI
+- **Thao tác**: Trình bày kiến trúc lưu trữ dữ liệu tại `%AppData%\OpsPilot`.
+- **Quan sát & Thuyết minh**:
+  - Cơ sở dữ liệu SQLite schema 38 quản lý trạng thái máy chủ, secret token được mã hóa bằng master key bảo vệ qua Windows DPAPI (`credential-master-key.protected`).
+  - Dữ liệu nằm hoàn toàn tại máy trạm, không bị truyền gửi lên các máy chủ quản lý bên ngoài.
+
+### Phút 3:30 – 6:00: Dịch vụ Máy học Nội bộ (Bundled ML Service)
+- **Thao tác**: Kiểm tra cổng dịch vụ ML nội bộ:
+  ```powershell
+  Invoke-RestMethod -Uri "http://127.0.0.1:8765/health" -Method Get
+  ```
+- **Quan sát & Thuyết minh**:
+  - Endpoint trả về trạng thái JSON `{"status": "ok"}` kèm metadata phiên bản runtime.
+  - Dịch vụ Python chạy biệt lập trong `resources/ml-runtime`, sử dụng đúng cấu hình `.pth` cô lập (`python312.zip\nDLLs\nLib/site-packages\nservice\n`), bảo đảm không phụ thuộc vào PATH môi trường hệ điều hành.
+
+### Phút 6:00 – 8:00: Quản lý Máy chủ & Nhật ký An toàn (VPS & Log Sanitization)
+- **Thao tác**: Truy cập giao diện quản lý VPS và kiểm tra luồng terminal logs.
+- **Quan sát & Thuyết minh**:
+  - Quản lý cấu hình kết nối SSH, bộ lọc chính sách cổng (Port Policy) và theo dõi trạng thái máy chủ.
+  - Cơ chế `maskSecrets` tự động che giấu mật khẩu và SSH private key khỏi luồng hiển thị giao diện và tệp nhật ký `~/.opspilot/logs/`.
+
+### Phút 8:00 – 10:00: Đóng Ứng dụng & Xác minh Giải phóng Tài nguyên
+- **Thao tác**: Đóng ứng dụng OpsPilot qua menu Exit.
+- **Quan sát & Thuyết minh**:
+  - Kiểm tra cổng 8765: xác nhận cổng đã được giải phóng, tiến trình con ML đã kết thúc đồng bộ theo tiến trình cha Electron Main.
+  - Không tồn tại tiến trình mồ côi (orphan process). Mở lại ứng dụng để xác nhận toàn bộ cấu hình phiên làm việc được giữ nguyên.

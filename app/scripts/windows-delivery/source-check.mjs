@@ -56,9 +56,17 @@ function inspectProvenance() {
           encoding: 'utf8',
           timeout: 10000
         })
-        if (diffRes.status === 0) {
-          dirtyDiffHash = hashString(diffRes.stdout)
-        }
+        const statusPorcelain = spawnSync('git', ['status', '--porcelain'], {
+          cwd: REPO_ROOT,
+          windowsHide: true,
+          encoding: 'utf8',
+          timeout: 10000
+        })
+        const combined =
+          (diffRes.stdout || '') +
+          '\n--- UNTRACKED_AND_STATUS ---\n' +
+          (statusPorcelain.stdout || '')
+        dirtyDiffHash = hashString(combined)
       }
     }
 
@@ -113,10 +121,7 @@ function runStep(name, command, args, options = {}, logsDir) {
     ...options
   })
   const durationMs = Date.now() - start
-  const passed = result.status === 0
-  console.log(
-    `[STEP: ${name}] ${passed ? 'PASS' : 'FAIL'} (exit: ${result.status}, duration: ${(durationMs / 1000).toFixed(1)}s)`
-  )
+  const passed = result.status === 0 && !result.error
 
   const stdoutRaw = result.stdout || ''
   const stderrRaw = result.stderr || ''
@@ -130,8 +135,17 @@ function runStep(name, command, args, options = {}, logsDir) {
   const stdoutHash = hashString(stdoutRaw)
   const stderrHash = hashString(stderrRaw)
 
-  if (!passed && stderrRaw) {
-    console.error(`Error output summary (first 500 chars):\n${stderrRaw.slice(0, 500)}`)
+  console.log(
+    `[STEP: ${name}] ${passed ? 'PASS' : 'FAIL'} (exit: ${result.status}, signal: ${result.signal || 'none'}, duration: ${(durationMs / 1000).toFixed(1)}s)`
+  )
+
+  if (!passed) {
+    if (result.error) {
+      console.error(`Execution error: ${result.error.message || result.error}`)
+    }
+    if (stderrRaw) {
+      console.error(`Error output summary (first 500 chars):\n${stderrRaw.slice(0, 500)}`)
+    }
   }
 
   return {
@@ -140,6 +154,10 @@ function runStep(name, command, args, options = {}, logsDir) {
     cwd: options.cwd || REPO_ROOT,
     status: passed ? 'PASS' : 'FAIL',
     exit_code: result.status,
+    signal: result.signal || null,
+    error: result.error ? result.error.message || String(result.error) : null,
+    error_code: result.error?.code || null,
+    timed_out: result.error?.code === 'ETIMEDOUT',
     duration_ms: durationMs,
     stdout_file: stdoutPath,
     stdout_sha256: stdoutHash,
@@ -152,7 +170,36 @@ function runStep(name, command, args, options = {}, logsDir) {
   }
 }
 
-function parseVitestResults(vitestJsonPath, fullStdout) {
+function parseVitestResults(vitestJsonPath, fullStdout, vitestStep) {
+  // If Vitest did not complete cleanly or results JSON is absent, report abnormal termination
+  if (
+    !existsSync(vitestJsonPath) ||
+    vitestStep.exit_code === null ||
+    vitestStep.error ||
+    vitestStep.timed_out
+  ) {
+    return {
+      status: 'ABNORMAL_TERMINATION_OR_TIMEOUT',
+      error:
+        vitestStep.error ||
+        (vitestStep.timed_out
+          ? 'Vitest full suite timed out'
+          : 'Vitest did not exit cleanly or produce results JSON'),
+      signal: vitestStep.signal,
+      timed_out: Boolean(vitestStep.timed_out),
+      total_suites: null,
+      failed_suites: null,
+      total_tests: 0,
+      passed_tests: 0,
+      failed_tests: 0,
+      skipped_tests: 0,
+      delivery_failures_count: null,
+      delivery_failures: [],
+      outside_scope_failures_count: null,
+      outside_scope_failures: []
+    }
+  }
+
   let totalTests = 0
   let passedTests = 0
   let failedTests = 0
@@ -160,14 +207,14 @@ function parseVitestResults(vitestJsonPath, fullStdout) {
   let totalSuites = 0
   let failedSuites = 0
   let deliveryFailures = []
-  let baselineFailures = []
+  let outsideScopeFailures = []
 
   let parsed = null
   try {
     const raw = readFileSync(vitestJsonPath, 'utf8')
     parsed = JSON.parse(raw)
   } catch {
-    // If JSON output file was not generated or failed to parse
+    // JSON parse error
   }
 
   if (parsed && Array.isArray(parsed.testResults)) {
@@ -203,12 +250,13 @@ function parseVitestResults(vitestJsonPath, fullStdout) {
           file: suitePath,
           failed_tests_count: failedCases.length,
           failed_cases: failedCases,
-          suite_message: suite.message
+          suite_message: suite.message,
+          category: isDeliveryOwned ? 'delivery_regression' : 'outside_scope_unverified_baseline'
         }
         if (isDeliveryOwned) {
           deliveryFailures.push(failureRecord)
         } else {
-          baselineFailures.push(failureRecord)
+          outsideScopeFailures.push(failureRecord)
         }
       }
     }
@@ -226,6 +274,7 @@ function parseVitestResults(vitestJsonPath, fullStdout) {
   }
 
   return {
+    status: failedSuites === 0 ? 'ALL_PASSED' : 'HAS_FAILURES',
     total_suites: totalSuites,
     failed_suites: failedSuites,
     total_tests: totalTests,
@@ -234,8 +283,8 @@ function parseVitestResults(vitestJsonPath, fullStdout) {
     skipped_tests: skippedTests,
     delivery_failures_count: deliveryFailures.length,
     delivery_failures: deliveryFailures,
-    baseline_failures_count: baselineFailures.length,
-    baseline_failures: baselineFailures
+    outside_scope_failures_count: outsideScopeFailures.length,
+    outside_scope_failures: outsideScopeFailures
   }
 }
 
@@ -259,13 +308,37 @@ export async function runSourceChecks(options = {}) {
     runStep(
       'scoped_eslint',
       'pnpm.cmd',
-      ['exec', 'eslint', 'scripts/windows-delivery', 'scripts/windows-release-lab.mjs'],
+      [
+        'exec',
+        'eslint',
+        'scripts/windows-delivery',
+        'scripts/windows-release-lab.mjs',
+        '--max-warnings=0'
+      ],
       { cwd: APP_DIR },
       logsDir
     )
   )
 
-  // Step 3: Standalone Preflight Check Suite
+  // Step 3: Mandatory Preflight Source-Readiness Gate (S4)
+  steps.push(
+    runStep(
+      'preflight_source_gate',
+      process.execPath,
+      [
+        join(SCRIPT_DIR, 'preflight.mjs'),
+        '--gate',
+        'source',
+        '--out',
+        join(runDir, 'preflight-inventory.json'),
+        '--overwrite'
+      ],
+      { cwd: REPO_ROOT, shell: false },
+      logsDir
+    )
+  )
+
+  // Step 4: Standalone Preflight Check Suite (probes / negative tests)
   steps.push(
     runStep(
       'preflight_standalone_checks',
@@ -276,12 +349,12 @@ export async function runSourceChecks(options = {}) {
     )
   )
 
-  // Step 4: Typecheck Node & Web
+  // Step 5: Typecheck Node & Web
   steps.push(
     runStep('typecheck_node_and_web', 'pnpm.cmd', ['typecheck'], { cwd: APP_DIR }, logsDir)
   )
 
-  // Step 5: Typecheck Scripts
+  // Step 6: Typecheck Scripts
   steps.push(
     runStep(
       'typecheck_scripts',
@@ -292,7 +365,7 @@ export async function runSourceChecks(options = {}) {
     )
   )
 
-  // Step 6: Source build compilation
+  // Step 7: Source build compilation
   steps.push(
     runStep(
       'source_build_compilation',
@@ -303,12 +376,13 @@ export async function runSourceChecks(options = {}) {
     )
   )
 
-  // Step 7: Full Vitest test suite (mandatory gate unless explicitly --skip-vitest passed)
+  // Step 8: Full Vitest test suite (mandatory gate unless explicitly --skip-vitest passed)
   let vitestAnalysis = null
+  let vitestStep = null
   if (!options.skipVitest) {
     const vitestJsonPath = join(runDir, 'vitest-results.json')
     const relVitestJsonPath = relative(APP_DIR, vitestJsonPath).split('\\').join('/')
-    const vitestStep = runStep(
+    vitestStep = runStep(
       'vitest_full_suite',
       'pnpm.cmd',
       [
@@ -325,35 +399,47 @@ export async function runSourceChecks(options = {}) {
     steps.push(vitestStep)
 
     const rawStdout = readFileSync(vitestStep.stdout_file, 'utf8')
-    vitestAnalysis = parseVitestResults(vitestJsonPath, rawStdout)
+    vitestAnalysis = parseVitestResults(vitestJsonPath, rawStdout, vitestStep)
   }
 
   const deliverySteps = steps.filter((s) => s.name !== 'vitest_full_suite')
   const allDeliveryStepsPassed = deliverySteps.every((s) => s.status === 'PASS')
-  const vitestStep = steps.find((s) => s.name === 'vitest_full_suite')
-  const vitestPassed = vitestStep ? vitestStep.status === 'PASS' : true
+  const vitestPassed = vitestStep ? vitestStep.status === 'PASS' : false
 
   let overallStatus = 'FAIL'
-  if (allDeliveryStepsPassed && vitestPassed) {
-    overallStatus = 'PASS'
-  } else if (allDeliveryStepsPassed && !vitestPassed) {
-    // Check if delivery caused vitest failure or if it's purely baseline
-    if (vitestAnalysis && vitestAnalysis.delivery_failures_count === 0) {
-      overallStatus = 'PARTIAL_BLOCKED_ON_BASELINE'
+  let reportScope = 'windows_delivery_source_and_gates'
+
+  if (options.skipVitest) {
+    reportScope = 'windows_delivery_fast_mode'
+    overallStatus = allDeliveryStepsPassed ? 'INCOMPLETE_FAST_MODE' : 'FAIL'
+  } else if (!allDeliveryStepsPassed) {
+    overallStatus = 'FAIL'
+  } else if (!vitestPassed) {
+    // If vitest failed, check if test execution completed and produced valid results
+    if (
+      !vitestAnalysis ||
+      vitestAnalysis.total_tests === 0 ||
+      vitestAnalysis.delivery_failures_count === null
+    ) {
+      overallStatus = 'FAIL'
+    } else if (vitestAnalysis.delivery_failures_count > 0) {
+      overallStatus = 'FAIL'
+    } else if (vitestAnalysis.outside_scope_failures_count > 0) {
+      overallStatus = 'PARTIAL_OUTSIDE_SCOPE_FAILURES'
     } else {
       overallStatus = 'FAIL'
     }
   } else {
-    overallStatus = 'FAIL'
+    overallStatus = 'PASS'
   }
 
   const report = {
     timestamp: new Date().toISOString(),
     tool: 'opspilot-windows-delivery-source-check',
-    version: '1.1.0',
+    version: '1.2.0',
     nonce,
     overall_status: overallStatus,
-    scope: 'windows_delivery_source_and_gates',
+    scope: reportScope,
     provenance,
     steps_total: steps.length,
     steps_passed: steps.filter((s) => s.status === 'PASS').length,
@@ -374,6 +460,10 @@ export async function runSourceChecks(options = {}) {
   for (const step of steps) {
     checksumEntries.push(`${step.stdout_sha256}  logs/${step.name}.stdout.log`)
     checksumEntries.push(`${step.stderr_sha256}  logs/${step.name}.stderr.log`)
+  }
+  const preflightInvJson = join(runDir, 'preflight-inventory.json')
+  if (existsSync(preflightInvJson)) {
+    checksumEntries.push(`${hashFile(preflightInvJson)}  preflight-inventory.json`)
   }
   const vitestJson = join(runDir, 'vitest-results.json')
   if (existsSync(vitestJson)) {
@@ -418,23 +508,53 @@ Usage:
   node app/scripts/windows-delivery/source-check.mjs [options]
 
 Options:
-  --skip-vitest     Skip running full Vitest suite (for fast local cycle)
+  --skip-vitest     Skip running full Vitest suite (results in INCOMPLETE_FAST_MODE, not acceptance PASS)
   --out-dir <path>  Specify custom output directory for evidence logs
+  --overwrite       Allow using an existing custom output directory
   --help, -h        Show this help message
 
 Exit codes:
   0: All source checks and full test suite PASSED
-  1: One or more checks FAILED or baseline blocked
-  2: Execution error
+  1: One or more checks FAILED, incomplete fast mode, or outside-scope failures present
+  2: Execution error or output path collision
 `)
     process.exit(0)
   }
 
-  const skipVitest = args.includes('--skip-vitest')
+  const validFlags = ['--skip-vitest', '--out-dir', '--overwrite', '--help', '-h']
+  let skipVitest = false
   let customOutDir = null
-  const outDirIdx = args.indexOf('--out-dir')
-  if (outDirIdx !== -1 && args[outDirIdx + 1]) {
-    customOutDir = resolve(args[outDirIdx + 1])
+  let overwrite = false
+
+  let i = 0
+  while (i < args.length) {
+    const a = args[i]
+    if (a === '--skip-vitest') {
+      skipVitest = true
+      i++
+    } else if (a === '--overwrite') {
+      overwrite = true
+      i++
+    } else if (a === '--out-dir') {
+      if (i + 1 >= args.length || args[i + 1].startsWith('-')) {
+        console.error('CLI Error: Option --out-dir requires a directory path argument')
+        process.exit(2)
+      }
+      customOutDir = resolve(args[i + 1])
+      i += 2
+    } else if (!validFlags.includes(a)) {
+      console.error(`CLI Error: Unknown option "${a}"`)
+      process.exit(2)
+    } else {
+      i++
+    }
+  }
+
+  if (customOutDir && existsSync(customOutDir) && !overwrite) {
+    console.error(
+      `CLI Error: Output directory already exists at "${customOutDir}". Specify --overwrite to allow using it.`
+    )
+    process.exit(2)
   }
 
   runSourceChecks({ skipVitest, outDir: customOutDir })
@@ -443,25 +563,37 @@ Exit codes:
       console.log(' SOURCE CHECK RESULTS')
       console.log('='.repeat(70))
       console.log(`Overall Status:   ${report.overall_status}`)
+      console.log(`Scope:            ${report.scope}`)
       console.log(`Passed / Total:   ${report.steps_passed} / ${report.steps_total}`)
       console.log(`Report File:      ${report.report_path}`)
       console.log(`Report SHA256:    ${report.report_sha256}`)
       if (report.vitest_analysis) {
         console.log('-'.repeat(70))
-        console.log('VITEST FULL SUITE BREAKDOWN:')
-        console.log(
-          `  Total Tests:    ${report.vitest_analysis.total_tests} (${report.vitest_analysis.passed_tests} passed, ${report.vitest_analysis.failed_tests} failed, ${report.vitest_analysis.skipped_tests} skipped)`
-        )
-        console.log(
-          `  Delivery Tests: ${report.vitest_analysis.delivery_failures_count} failed suites (REGRESSION: ${report.vitest_analysis.delivery_failures_count > 0 ? 'YES' : 'NONE'})`
-        )
-        console.log(
-          `  Baseline Tests: ${report.vitest_analysis.baseline_failures_count} failed suites (Out-of-scope baseline)`
-        )
+        console.log('VITEST SUITE BREAKDOWN:')
+        console.log(`  Vitest Status:  ${report.vitest_analysis.status}`)
+        if (report.vitest_analysis.status === 'ABNORMAL_TERMINATION_OR_TIMEOUT') {
+          console.log(`  Error/Signal:   ${report.vitest_analysis.error}`)
+          console.log('  Coverage:       UNKNOWN (suite did not produce test results)')
+        } else {
+          console.log(
+            `  Total Tests:    ${report.vitest_analysis.total_tests} (${report.vitest_analysis.passed_tests} passed, ${report.vitest_analysis.failed_tests} failed, ${report.vitest_analysis.skipped_tests} skipped)`
+          )
+          console.log(
+            `  Delivery Tests: ${report.vitest_analysis.delivery_failures_count} failed suites (REGRESSION: ${report.vitest_analysis.delivery_failures_count > 0 ? 'YES' : 'NONE'})`
+          )
+          console.log(
+            `  Outside Scope:  ${report.vitest_analysis.outside_scope_failures_count} failed suites (unverified baseline in src/**)`
+          )
+        }
+      }
+      if (report.overall_status === 'INCOMPLETE_FAST_MODE') {
+        console.log('-'.repeat(70))
+        console.log('WARNING: Fast mode active. Full Vitest suite was NOT RUN.')
+        console.log('Status is INCOMPLETE_FAST_MODE (cannot be used for full acceptance).')
       }
       console.log('='.repeat(70))
 
-      // Exit 0 ONLY if truly PASS. Propagate exit code 1 if any failure or baseline block.
+      // Exit 0 ONLY if truly PASS. Propagate exit code 1 if any failure or outside-scope failures.
       process.exitCode = report.overall_status === 'PASS' ? 0 : 1
     })
     .catch((err) => {
