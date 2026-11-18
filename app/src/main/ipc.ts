@@ -14,7 +14,8 @@ import { AppError, toIpcError } from './errors'
 import type { HistoryService } from './history/service'
 import type { MlServiceManager } from './mlClient'
 import type { SshManager } from './ssh/manager'
-import { readVpsResources, testConnectionWithCredentials } from './vps/connectionService'
+import { readVpsResources } from './vps/connectionService'
+import { VpsOnboarding } from './vps/onboarding'
 import { readVpsOperationalDiagnostics } from './vps/operationalDiagnostics'
 import { discoverVpsApps } from './vps/discovery'
 import { VpsAppImportService } from './vps/importService'
@@ -343,22 +344,14 @@ export function registerIpcHandlers(
       policy: { certificateEnvironment: 'production', stagingLabHostnames: [] }
     })
   handle('vps:list', () => vpsService.list())
-  handle('vps:create', (input) => vpsService.create(input))
-  handle('vps:update', (id, patch) => vpsService.update(id, patch))
+  const onboarding = new VpsOnboarding(new VpsRepository(database), vpsService)
+  handle('vps:create', (input) => onboarding.create(input))
+  handle('vps:update', (id, patch) => onboarding.update(id, patch))
   handle('vps:delete', async (id) => {
     vpsService.delete(id)
     await ssh.disconnect(id)
   })
-  handle('vps:test-connection', (input) =>
-    testConnectionWithCredentials({
-      host: input.host,
-      port: input.port,
-      hostFingerprint: input.host_fingerprint ?? null,
-      username: input.username,
-      authType: input.auth_type,
-      secret: input.secret
-    })
-  )
+  handle('vps:test-connection', (input) => onboarding.test(input))
   handle('vps:get-resources', (vpsId) => readVpsResources(ssh, vpsId))
   handle('vps:get-operational-diagnostics', (vpsId) => readVpsOperationalDiagnostics(ssh, vpsId))
   handle('vps:discover-apps', (vpsId) => discoverVpsApps(ssh, vpsId))

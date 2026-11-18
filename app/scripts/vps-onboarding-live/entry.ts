@@ -1,0 +1,8 @@
+export { VpsOnboarding } from '../../src/main/vps/onboarding'
+export { VpsService } from '../../src/main/vps/service'
+export { SshManager } from '../../src/main/ssh/manager'
+export { readFirstContactFingerprint } from '../../src/main/ssh/firstContact'
+export { initializeDatabase, closeDatabase } from '../../src/main/db'
+export { VpsRepository } from '../../src/main/db/vpsRepository'
+export { AesGcmCredentialCipher } from '../../src/main/crypto/credentialCipher'
+export { loadSecret } from '../../src/main/crypto/credentials'

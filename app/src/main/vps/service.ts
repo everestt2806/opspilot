@@ -17,7 +17,7 @@ const hostFingerprintSchema = z
   .trim()
   .regex(/^SHA256:[A-Za-z0-9+/]{43}$/)
 
-const createVpsSchema = z.object({
+export const createVpsSchema = z.object({
   name: nameSchema,
   host: hostSchema,
   port: portSchema,

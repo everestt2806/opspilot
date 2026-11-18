@@ -96,3 +96,9 @@ E4b không còn chờ địa chỉ máy, nhưng authenticated inventory/serving/
 Tiếp E4b ngay trên máy1+2: strict pinned SSH với key đã chấp nhận lần đầu, inventory
 và onboarding thật; deploy/configure, fresh Desktop reconnection039, actual GUI
 đọc đúng DB UUID. Máy3+4 chỉ chuyển thông tin cho Kim, không tự quản trị.
+
+UPDATE18/11 — User yêu cầu sản phẩm ưu tiên tiện dụng, không bắt nhập SHA256 trong
+luồng thêm VPS. Chuyển UX1 lên trước install/deploy: optional advanced pin/Main
+auto-first-contact/strict saved-key verifier. Actual create/encrypted-profile/SSH
+readonly inventory1+2 đã PASS, chưa install/Docker/deploy; xem [UX1](tk-s7-release-ux1-vps-onboarding.md).
+Không sửa lại E4a historical proof để nhận các bước live chưa chạy là PASS.

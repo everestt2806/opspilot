@@ -594,8 +594,8 @@ export interface VpsInput {
   name: string;
   host: string;
   port: number;
-  /** OpenSSH SHA256 fingerprint copied from an independently trusted console. */
-  host_fingerprint: string;
+  /** Optional advanced pin. Main pins the first-contact key when absent; known endpoint pins are never silently replaced. */
+  host_fingerprint?: string;
   username: string;
   auth_type: 'key' | 'password';
   /** Private key hoặc password bản rõ — main mã hoá NGAY, không log, không ghi tạm ra đĩa */
@@ -605,6 +605,8 @@ export interface VpsInput {
 }
 
 export interface VpsConnectionCheck {
+  /** Public pin used for this check; preserve through Save. First contact is not independent console verification. */
+  host_fingerprint?: string;
   ssh_ok: boolean;
   docker_installed: boolean;
   docker_version: string | null;

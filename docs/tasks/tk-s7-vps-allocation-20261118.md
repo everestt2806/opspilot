@@ -1,7 +1,8 @@
 # Phân bổ VPS mới — 18/11/2026
 
 User đã cấp4VPS mới. Sơn/assistant chỉ dùng máy1+2; máy3+4 dành Kim.
-Chỉ đọc public host key của cả4; chưa đăng nhập bằng password hoặc cài đặt.
+Đã đọc public host key của cả4. Sau đó chỉ đăng nhập1+2 để kiểm inventory, chưa cài đặt;
+máy3+4 vẫn chưa đăng nhập bằng password hoặc quản trị.
 Không lưu password trong repo, artifact hoặc log.
 
 | Máy | IP | Owner / phạm vi | SSH ED25519 fingerprint SHA256 |
@@ -16,7 +17,10 @@ Username root, SSH port22 theo thông tin user. Fingerprint được lấy qua m
 là first-contact do user cho phép, không phải xác minh độc lập qua console.
 Ghim trước khi gửi password; key đã ghim thay đổi thì dừng/báo user, không tự thay.
 
-E4b cần fresh inventory/onboarding/deploy và actual reconnection/inspector trên
-máy1+2. Không tái sử dụng UUID/CID/receipt/data claims của VPS167 đã hết hạn.
+Inventory1+2 qua production auto-pin/create/encrypted profile/strict SshManager đã
+PASS: Ubuntu24.04.5/x64/glibc2.39,2CPU/~4GBRAM/~80GBdisk, chưa Docker/controller;
+private credential DB/key fixture đã dọn. [Proof UX1](../ui-redesign/ux1-vps-onboarding-verification.json).
+E4b vẫn cần fresh install/deploy và actual reconnection/inspector trên máy1+2.
+Không tái sử dụng UUID/CID/receipt/data claims của VPS167 đã hết hạn.
 Không tự cài đặt hoặc đổi cấu hình máy3+4. Đây không phải bằng chứng đã đủ cặp
 VPS/config/provider/dedicated workload cho giao thức ML chính thức.

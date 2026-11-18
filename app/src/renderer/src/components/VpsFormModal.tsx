@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Divider, Form, Input, InputNumber, Modal, Radio } from 'antd'
 
 import type { Vps, VpsConnectionCheck, VpsInput } from '@shared/ipc'
@@ -24,11 +24,13 @@ export function VpsFormModal({
   onSubmit
 }: VpsFormModalProps): React.JSX.Element {
   const [form] = Form.useForm<VpsFormValues>()
-  const authType = Form.useWatch('auth_type', form) ?? 'key'
+  const authType = Form.useWatch('auth_type', form) ?? 'password'
   // Đổi giá trị form => kết quả "Kiểm tra kết nối" cũ không còn đúng nữa => reset khối check.
   const [formVersion, setFormVersion] = useState(0)
+  const revision = useRef(0)
 
   useEffect(() => {
+    revision.current += 1
     if (!open) return
 
     if (initialVps) {
@@ -45,13 +47,19 @@ export function VpsFormModal({
       })
     } else {
       form.resetFields()
-      form.setFieldsValue({ port: 22, auth_type: 'key', host_fingerprint: '' })
+      form.setFieldsValue({
+        port: 22,
+        username: 'root',
+        auth_type: 'password',
+        host_fingerprint: ''
+      })
     }
     // Không cần bump formVersion ở đây: destroyOnHidden đã hủy ConnectionCheck khi đóng modal.
   }, [form, initialVps, open])
 
   const runCheck = useCallback(
     async (values: VpsInput): Promise<VpsConnectionCheck> => {
+      const requestRevision = revision.current
       try {
         await form.validateFields()
       } catch {
@@ -60,9 +68,15 @@ export function VpsFormModal({
       if (initialVps && !String(values.secret ?? '').trim()) {
         throw new CheckFailedError(strings.vps.check.needCredential)
       }
-      const result = await window.api.invoke('vps:test-connection', values)
+      const result = await window.api.invoke('vps:test-connection', {
+        ...values,
+        name: values.name?.trim() || values.host
+      })
       if (!result.ok) {
         throw new CheckFailedError(result.error.message, result.error.technical)
+      }
+      if (revision.current === requestRevision && result.data.host_fingerprint) {
+        form.setFieldValue('host_fingerprint', result.data.host_fingerprint)
       }
       return result.data
     },
@@ -72,6 +86,8 @@ export function VpsFormModal({
   return (
     <Modal
       open={open}
+      centered
+      styles={{ body: { maxHeight: 'calc(100dvh - 200px)', overflowY: 'auto' } }}
       title={initialVps ? strings.vps.form.editTitle : strings.vps.form.createTitle}
       okText={strings.common.save}
       cancelText={strings.common.cancel}
@@ -85,17 +101,14 @@ export function VpsFormModal({
         layout="vertical"
         requiredMark="optional"
         onValuesChange={(changed) => {
+          revision.current += 1
           if ('host' in changed || 'port' in changed) form.setFieldValue('host_fingerprint', '')
           setFormVersion((version) => version + 1)
         }}
-        onFinish={onSubmit}
+        onFinish={(values) => onSubmit({ ...values, name: values.name?.trim() || values.host })}
       >
-        <Form.Item
-          name="name"
-          label={strings.vps.fields.name}
-          rules={[{ required: true, message: strings.vps.validation.name }]}
-        >
-          <Input autoFocus maxLength={64} />
+        <Form.Item name="name" label={strings.vps.fields.name}>
+          <Input maxLength={64} />
         </Form.Item>
         <Form.Item
           name="host"
@@ -103,31 +116,11 @@ export function VpsFormModal({
           rules={[{ required: true, message: strings.vps.validation.host }]}
         >
           <Input
+            autoFocus
             className="mono-input"
             maxLength={253}
             placeholder={strings.vps.form.hostPlaceholder}
           />
-        </Form.Item>
-        <Form.Item
-          name="port"
-          label={strings.vps.fields.port}
-          rules={[{ required: true, message: strings.vps.validation.port }]}
-        >
-          <InputNumber min={1} max={65535} precision={0} style={{ width: '100%' }} />
-        </Form.Item>
-        <Form.Item
-          name="host_fingerprint"
-          label={strings.vps.fields.hostFingerprint}
-          extra={strings.vps.form.hostFingerprintHint}
-          rules={[
-            { required: true, message: strings.vps.validation.hostFingerprintRequired },
-            {
-              pattern: /^SHA256:[A-Za-z0-9+/]{43}$/,
-              message: strings.vps.validation.hostFingerprintFormat
-            }
-          ]}
-        >
-          <Input className="mono-input" placeholder="SHA256:..." autoComplete="off" />
         </Form.Item>
         <Form.Item
           name="username"
@@ -164,12 +157,37 @@ export function VpsFormModal({
             <Input.Password />
           )}
         </Form.Item>
-        <Form.Item name="provider" label={strings.vps.fields.provider}>
-          <Input maxLength={100} />
-        </Form.Item>
-        <Form.Item name="region" label={strings.vps.fields.region}>
-          <Input maxLength={100} />
-        </Form.Item>
+        <details>
+          <summary style={{ cursor: 'pointer', marginBottom: 16 }}>
+            {strings.vps.form.advanced}
+          </summary>
+          <Form.Item
+            name="port"
+            label={strings.vps.fields.port}
+            rules={[{ required: true, message: strings.vps.validation.port }]}
+          >
+            <InputNumber min={1} max={65535} precision={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="host_fingerprint"
+            label={strings.vps.fields.hostFingerprint}
+            extra={strings.vps.form.hostFingerprintHint}
+            rules={[
+              {
+                pattern: /^SHA256:[A-Za-z0-9+/]{43}$/,
+                message: strings.vps.validation.hostFingerprintFormat
+              }
+            ]}
+          >
+            <Input className="mono-input" placeholder="SHA256:..." autoComplete="off" />
+          </Form.Item>
+          <Form.Item name="provider" label={strings.vps.fields.provider}>
+            <Input maxLength={100} />
+          </Form.Item>
+          <Form.Item name="region" label={strings.vps.fields.region}>
+            <Input maxLength={100} />
+          </Form.Item>
+        </details>
       </Form>
 
       <Divider />
