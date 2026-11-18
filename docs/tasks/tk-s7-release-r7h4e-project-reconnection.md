@@ -1,5 +1,13 @@
 # R7h-4e — nhận lại dự án/cấu hình Product
 
+UPDATE 18/11/2026 — E4a frozen candidate/compiled12 giữ11pin cũ/native22/19/24/24,
+full2733PASS+2existingLinuxSKIP/build/resource5checks PASS. [Task E4](tk-s7-release-r7h4e4-reconnection-rollout.md),
+[candidate proof](../ui-redesign/r7h4e4-candidate-verification.json). Chưa serving
+hoặc actual VPS GUI. User đã thay hạ tầng hết hạn bằng4máy mới; chỉ máy1+2 cho
+assistant,3+4 Kim; public keyscan theo first-contact được user cho phép đã xong.
+Fresh authenticated onboarding/serving/GUI là E4b OPEN, không dùng lại data claims
+hoặc receipt của máy cũ. Chi tiết [allocation](tk-s7-vps-allocation-20261118.md).
+
 UPDATE 17/11/2026 — E3 IPC/UI PASS trong phạm vi:5IPC IDs-only, explicit consent,
 fresh restore và inspector provenance riêng; A→B→A dùng matching consent có kiểm
 lại. Full2733PASS+2existingLinuxSKIP, standalone5 và Electron6checks/25captures

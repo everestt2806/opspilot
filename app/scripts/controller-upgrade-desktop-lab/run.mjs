@@ -36,9 +36,11 @@ if (baseSchema === 35)
     'LAB_BASE_RELEASE_UNSUPPORTED'
   )
 if (baseSchema === 37)
-  assert.equal(
-    releasePin,
-    '4bc45902888d7e3442e6cd44694c4abbe1685101c5eac94415cb677461e245a5',
+  assert(
+    [
+      '4bc45902888d7e3442e6cd44694c4abbe1685101c5eac94415cb677461e245a5',
+      '63d1dca75f976d7cd06926ccf8f1407f221b505371cd32ea8132b39de8e01899'
+    ].includes(releasePin),
     'LAB_BASE_RELEASE_UNSUPPORTED'
   )
 if (!modules || !source || !releasePin) throw Error('LAB_INPUT_REQUIRED')
@@ -933,6 +935,47 @@ try {
     check(
       'actual_installed_reconnection_same_plan_idempotent_invalid_consent_and_foreign_app_refused_token_and_PID_unchanged'
     )
+    if (process.env.OPSPILOT_RECONNECTION_INSPECTOR_NATIVE_GATE === '1') {
+      const request = {
+        reconnection_request_key: confirmed.request_key,
+        expected_binding_revision: confirmed.binding_revision,
+        expected_snapshot_sha256: confirmed.snapshot_sha256,
+        database_id: selected.database_id,
+        read: { operation: 'tables' }
+      }
+      const technical = (code) => (error) => error?.context?.cause?.message === code
+      const beforeLimit = executions
+      await assert.rejects(
+        () =>
+          desktopService.inspectReconnectedPostgres({
+            ...request,
+            read: { operation: 'rows', schema: 'public', table: 'notes', limit: 101 }
+          }),
+        technical('POSTGRES_REQUEST_INVALID')
+      )
+      assert.equal(executions, beforeLimit)
+      await assert.rejects(
+        () =>
+          desktopService.inspectReconnectedPostgres({
+            ...request,
+            database_id: '99999999-9999-4999-8999-999999999999'
+          }),
+        technical('POSTGRES_CHANGED')
+      )
+      await assert.rejects(
+        () => desktopService.inspectReconnectedPostgres(request),
+        technical('POSTGRES_INSPECTION_NOT_READY')
+      )
+      assert.equal(legacy(), beforeLegacy)
+      assert.equal(vault.resolve(bindingKey).accessToken, tokenBefore)
+      assert.equal(
+        fixed('/usr/bin/systemctl', ['show', unitName, '--property=MainPID', '--value']),
+        activePid
+      )
+      check(
+        'current_Main_reconnected_inspector_actual_installed_Root_CLI_refuses_limit_foreign_database_and_unenrolled_target_without_provisioning_or_restart'
+      )
+    }
   }
   await assert.rejects(
     () =>

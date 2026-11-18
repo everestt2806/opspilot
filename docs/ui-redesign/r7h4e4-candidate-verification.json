@@ -1,0 +1,461 @@
+{
+  "status": "PASS_E4A_FROZEN_CANDIDATE_ONLY_NOT_SERVING",
+  "verified_at": "2026-11-18T10:52:42.318689+00:00",
+  "base_commit": "339250d8ed5ac8783d7abb11a01abf818ded7a15",
+  "release": {
+    "release_id": "linux-x64-node22-20261118-project-reconnection",
+    "node_version": "22.23.4",
+    "minimum_glibc": "2.39",
+    "release_sha256": "9878eae58256c87f5095aa544d35345f14e7eca526d1d6a1eb3de80e20356233",
+    "installer_sha256": "f53555b55585528ef604eb2546388ab11fb5f8114ff139c4e1911435523c8207",
+    "upgrade_supported": true
+  },
+  "freeze": {
+    "path": "docs/ui-redesign/r7h4e4-freeze-verification.json",
+    "sha256": "56493f3e3a39a780b863e95f00ef7a13956235dad3424934d82eeb1d12c4f555",
+    "builds": [
+      {
+        "directory": "/var/tmp/opspilot-r7h4e4-build-a-1794935952-640691",
+        "release_sha256": "9878eae58256c87f5095aa544d35345f14e7eca526d1d6a1eb3de80e20356233",
+        "payload_manifest_sha256": "708fbd8274bac5a2fdbf71323c739b93b98bcc5f289b0f7185bcc874b56cbb14",
+        "controller_artifact_sha256": "9a33e1315db1b8ca9713d77bddeeb39568dd783cd483d4e38177ef6bedcc5c3b",
+        "installer_sha256": "f53555b55585528ef604eb2546388ab11fb5f8114ff139c4e1911435523c8207",
+        "node_binary_sha256": "94efd062ed066c1a0b332e18249859c905e920eeada5df55d24c99b919629a90",
+        "files": 998,
+        "bytes": 145394238,
+        "node_version": "22.23.4",
+        "node_abi": "127",
+        "minimum_glibc": "2.39"
+      },
+      {
+        "directory": "/var/tmp/opspilot-r7h4e4-build-b-1794935956-640691",
+        "release_sha256": "9878eae58256c87f5095aa544d35345f14e7eca526d1d6a1eb3de80e20356233",
+        "payload_manifest_sha256": "708fbd8274bac5a2fdbf71323c739b93b98bcc5f289b0f7185bcc874b56cbb14",
+        "controller_artifact_sha256": "9a33e1315db1b8ca9713d77bddeeb39568dd783cd483d4e38177ef6bedcc5c3b",
+        "installer_sha256": "f53555b55585528ef604eb2546388ab11fb5f8114ff139c4e1911435523c8207",
+        "node_binary_sha256": "94efd062ed066c1a0b332e18249859c905e920eeada5df55d24c99b919629a90",
+        "files": 998,
+        "bytes": 145394238,
+        "node_version": "22.23.4",
+        "node_abi": "127",
+        "minimum_glibc": "2.39"
+      }
+    ],
+    "changed_bundle_files": [
+      "control-plane.cjs"
+    ],
+    "unchanged_target_collector_template_files": [
+      "collector/Dockerfile",
+      "collector/collect.py",
+      "collector/requirements.txt",
+      "target-helper/target_enrollment.py",
+      "target-helper/target_execution_guard.py",
+      "target-helper/target_guarded_ssh_helper.py",
+      "target-helper/target_product_runtime.py",
+      "templates/docker-compose.template.yml",
+      "templates/express.Dockerfile",
+      "templates/nextjs.Dockerfile",
+      "templates/static-spa.Dockerfile"
+    ]
+  },
+  "post_catalog_rebuild": {
+    "directory": "/var/tmp/opspilot-r7h4e4-build-c-1794937329-651034",
+    "release_sha256": "9878eae58256c87f5095aa544d35345f14e7eca526d1d6a1eb3de80e20356233",
+    "payload_manifest_sha256": "708fbd8274bac5a2fdbf71323c739b93b98bcc5f289b0f7185bcc874b56cbb14",
+    "installer_sha256": "f53555b55585528ef604eb2546388ab11fb5f8114ff139c4e1911435523c8207",
+    "same_as_two_frozen_builds": true
+  },
+  "native": [
+    {
+      "label": "source_admin_Docker",
+      "path": "app/.out-scripts/product-postgres-selection/0ae542f9a325/proof.json",
+      "sha256": "68a234628043dd97fd99584e928c51d6222a9a445b59321f73fc1a83adc9c5a6",
+      "proof": {
+        "state": "PASS",
+        "nonce": "0ae542f9a325",
+        "production_vps_used": false,
+        "production_database_used": false,
+        "Docker_used": true,
+        "artifact_sha256": "9a33e1315db1b8ca9713d77bddeeb39568dd783cd483d4e38177ef6bedcc5c3b",
+        "checks": [
+          "missing_enrollment_refuses_selection_without_source_mutation",
+          "actual_SSH_manifest_helper_bytes_key_and_receipt_review_is_readonly",
+          "actual_helper_tamper_refuses_selection_without_clearing_enrollment",
+          "wrong_local_bundle_pin_rejected_before_source_selection",
+          "production_CLI_selects_once_preserves_key_and_pause_no_job_or_runtime_readiness_claim",
+          "production_CLI_fetches_actual_public_Git_and_verifies_selected_PostgreSQL_source",
+          "actual_SSH_Docker_resource_probe_and_readiness_support_database_only_source_no_job",
+          "production_CLI_reviews_DB_only_source_from_original_registration_without_provisioning_or_job",
+          "production_same_UID_CLI_cipher_and_pinned_SSH_inspect_tables_rows_reach_selected_instance",
+          "production_CLI_refuses_wrong_instance_limit_and_bundle_pin",
+          "actual_same_UID_Python_admin_to_CLI_pinned_SSH_PostgreSQL_reads_correct_instance",
+          "same_UID_admin_preserves_safe_inspection_error_and_refuses_caller_artifact_injection",
+          "controller_inspection_preserves_CID_volume_system_ID_journal_rows_configuration_and_zero_jobs",
+          "controller_inspection_private_Docker_resources_removed_by_exact_ownership",
+          "actual_same_UID_Python_admin_verifies_ELF_bundle_key_SQLite_then_runs_seven_fixed_PostgreSQL_operations",
+          "Python_admin_forwards_only_approved_PostgreSQL_error_and_never_starts_job",
+          "readonly_prepare_receipt_available_after_source_advance_without_replaying_prepare",
+          "cold_offline_same_UUID_lookup_replay_and_conflicting_body_refusal",
+          "actual_same_UID_CLI_reads_current_Git_and_authenticated_PG_metadata_with_SSHD_off_and_no_SQLite_writes",
+          "actual_same_UID_CLI_refuses_wrong_controller_app_previous_snapshot_and_caller_target_without_writes",
+          "actual_same_UID_CLI_review_keeps_auto_enabled_creates_no_job_and_requires_review_after_policy_drift",
+          "actual_same_UID_Python_admin_reaches_reconnection_CLI_and_forwards_only_safe_errors_without_SQLite_writes"
+        ],
+        "last_command": "project-reconnection-context",
+        "last_error": "PROJECT_RECONNECTION_AUTHORITY_CHANGED",
+        "public_Git": {
+          "nonce": "6d38a91b7c02",
+          "branch": "demo/postgres-r7h-6d38a91b7c02",
+          "sha": "6aa870cc23f23983fdde68ca9fe3805aa7b6899b",
+          "repository_url": "https://github.com/everestt2806/opspilot.git",
+          "repository_root": ".",
+          "source_verified": true,
+          "first_deployment_readiness": "ready",
+          "database_not_provisioned": true
+        },
+        "admin_node_ancestry": [
+          {
+            "path": "/tmp",
+            "uid": 0,
+            "mode": 1023,
+            "symlink": false
+          },
+          {
+            "path": "/tmp/opspilot-pg-selection-cro90l",
+            "uid": 0,
+            "mode": 448,
+            "symlink": false
+          },
+          {
+            "path": "/tmp/opspilot-pg-selection-cro90l/node",
+            "uid": 0,
+            "mode": 493,
+            "symlink": false
+          }
+        ],
+        "admin_last_operation": "project-reconnection-context",
+        "admin_last_error": "PROJECT_RECONNECTION_INPUT_INVALID",
+        "private_cleanup": true
+      }
+    },
+    {
+      "label": "Root35_to37",
+      "path": "app/.out-scripts/controller-upgrade/7ef8947b372b/result.json",
+      "sha256": "1bc23e2f2a4d70730032ae7a97afa9b7a2660fbc9da896d35d17d5b7c36d1721",
+      "proof": {
+        "status": "PASS",
+        "scope": "ROOT_LINUX_SYSTEMD_NATIVE_CONTROLLER_UPGRADE_PRIVATE_FIXTURE",
+        "checks": [
+          "consent_and_parent_pins_rejected_before_upgrade_mutation",
+          "staging_death_same_uuid_inspect_only_and_no_other_intent_takeover",
+          "death_after_guarded_stop_keeps_db_key_identity_and_unrelated_app",
+          "consistent_backup_is_root_sealed_before_migration_and_service_cannot_overwrite_it",
+          "lost_migration_reply_leaves_exact37_schema_and_candidate_maintenance_without_auto_migration",
+          "death_after_atomic_unit_switch_is_cold_inspectable_without_replay",
+          "service_restart_during_stop_and_switch_recovers_without_restarting_maintenance_candidate",
+          "candidate_maintenance_blocks_even_pause_writes_before_commit",
+          "lost_commit_reply_recovers_without_precommit_hash_comparison_or_credential_loss",
+          "duplicate_upgrade_after_commit_never_restarts_the_service",
+          "second_revision_preserves_parent_history_and_rejects_historical_adoption",
+          "rollback_crashes_preserve_legitimate_writes_and_never_restart_restored_parent",
+          "reverse_commit_reply_loss_and_candidate_restart_never_auto_migrate35",
+          "explicit_two_level_rollback_preserves_new_credentials_and_original_installation",
+          "startup_failure_never_publishes_gate_and_explicit_rollback_restores_old_ready_runtime",
+          "old_installer_attestation_valid_again_after_rollback",
+          "SIGKILL_inside_migration037_rolls_back_atomically_and_same_uuid_recovers",
+          "pending_helper_upgrade_blocks_reverse_before_service_stop_or_unit_switch",
+          "retained_postgres_resource_blocks_schema_rollback_before_service_stop_or_unit_switch"
+        ],
+        "schema_before": 35,
+        "schema_after": 37,
+        "production_vps_used": false,
+        "production_database_used": false,
+        "fixture_root_removed": true,
+        "last_operation": "inspect-upgrade",
+        "last_error_code": null,
+        "fixture_unit_removed": true,
+        "fixture_account_removed": true
+      }
+    },
+    {
+      "label": "Main37_old_parent",
+      "path": "app/.out-scripts/controller-upgrade-desktop/3937976fdaed/result.json",
+      "sha256": "0972f3802222501395c1953c2af4306e5e0133efbca4a6d6f0c643a38ee692ce",
+      "proof": {
+        "status": "PASS",
+        "scope": "PRIVATE_ROOT_SYSTEMD_PINNED_SSH_MAIN_SQLITE_UPGRADE",
+        "release_inputs": {
+          "original": "4bc45902888d7e3442e6cd44694c4abbe1685101c5eac94415cb677461e245a5",
+          "candidate": "9878eae58256c87f5095aa544d35345f14e7eca526d1d6a1eb3de80e20356233",
+          "fixture_installer": "2482b8bacfbcc19ad2afdab466ed9d30c737b99fbfdbc28cf838dd644ef1c534"
+        },
+        "checks": [
+          "fresh_desktop039_and_native_controller037_have_separate_migration_roles",
+          "original_root_admin_enrollment_stores_api_token_only_in_encrypted_main_vault",
+          "plan_prepare_and_absent_inspect_preserve_uuid_and_never_create_remote_upgrade_namespace",
+          "independently_pinned_upgrade_transfer_uses_distinct_uuid_namespace_preserving_original_install_staging",
+          "wrong_tool_pin_rejected_by_receiver_before_upgrader_execution",
+          "disconnect_before_root_journal_keeps_attempted_and_wrong_parent_recovery_never_creates_journal",
+          "lost_upgrade_reply_recovers_in_separate_cold_main_process_without_replaying_or_restarting_service",
+          "explicit_runtime_refresh_preserves_api_token_client_and_authenticated_api_with_revision_root_admin",
+          "historical_release_keeps_real_inspection_and_token_refresh_but_cannot_be_selected_for_new_upgrade",
+          "cold_profile_readonly_discovery_and_explicit_adoption_preserve_remote_uuids_and_current_runtime",
+          "cold_adoption_separate_readonly_enrollment_api200_revocation_without_reinstall_restart_or_receipt_change",
+          "same_host_readded_vps_fresh_pinned_ssh_authority_then_separate_api_refresh_preserves_uuid_pid_token_client_and_api200",
+          "attempt_monotonicity_prevents_second_upgrade_and_does_not_rebind_api_credentials",
+          "current037_installed_Root_setpriv_sameUID_admin_reaches_finite_inspector_and_refuses_invalid_input_without_restart",
+          "paused_fixture_public_Git_is_observed_without_job_and_controller_remains_ready",
+          "actual_installed_Main_Root_setpriv_service_UID_reconnection_source2_PG_consent_preserves_legacy_receipts",
+          "actual_installed_reconnection_same_plan_idempotent_invalid_consent_and_foreign_app_refused_token_and_PID_unchanged",
+          "current_Main_reconnected_inspector_actual_installed_Root_CLI_refuses_limit_foreign_database_and_unenrolled_target_without_provisioning_or_restart",
+          "revision_admin_derives_current_runtime_after_root_attestation_and_rejects_wrong_uid_payload_without_restart",
+          "revision_admin_rejects_stopped_controller_without_implicitly_starting_or_adopting_it",
+          "rollback_blocks_old_binding_until_explicit_refresh_then_reuses_the_same_authenticated_token",
+          "rolled_back_current_operation_admin_uses_restored_parent_payload_and_preserves_original_authority",
+          "explicit_main_rollback_restores_original_unit_and_preserves_root_receipt_identity_key_database_inode",
+          "archived_vps_authority_rejected_before_any_ssh_execution"
+        ],
+        "production_vps_used": false,
+        "production_database_used": false,
+        "fixture_root_removed": true,
+        "fixture_unit_removed": true,
+        "fixture_account_removed": true,
+        "python_only_path": true,
+        "ssh_authentications": 12,
+        "ssh_executions": 57,
+        "script_bytes": 40741,
+        "compressed_executions": 57,
+        "max_command_bytes": 12202
+      }
+    },
+    {
+      "label": "Main37_exact_last_serving_parent",
+      "path": "app/.out-scripts/controller-upgrade-desktop/debddb3d2fd7/result.json",
+      "sha256": "a2bcfed4b9f1591d5e9b0781656d930ccac34d29b82c6bb98179356a19085c61",
+      "proof": {
+        "status": "PASS",
+        "scope": "PRIVATE_ROOT_SYSTEMD_PINNED_SSH_MAIN_SQLITE_UPGRADE",
+        "release_inputs": {
+          "original": "63d1dca75f976d7cd06926ccf8f1407f221b505371cd32ea8132b39de8e01899",
+          "candidate": "9878eae58256c87f5095aa544d35345f14e7eca526d1d6a1eb3de80e20356233",
+          "fixture_installer": "dc6a5dae65ee1a35b358d395d370141486c46492f89aa1425dcb4933873d9f91"
+        },
+        "checks": [
+          "fresh_desktop039_and_native_controller037_have_separate_migration_roles",
+          "original_root_admin_enrollment_stores_api_token_only_in_encrypted_main_vault",
+          "plan_prepare_and_absent_inspect_preserve_uuid_and_never_create_remote_upgrade_namespace",
+          "independently_pinned_upgrade_transfer_uses_distinct_uuid_namespace_preserving_original_install_staging",
+          "wrong_tool_pin_rejected_by_receiver_before_upgrader_execution",
+          "disconnect_before_root_journal_keeps_attempted_and_wrong_parent_recovery_never_creates_journal",
+          "lost_upgrade_reply_recovers_in_separate_cold_main_process_without_replaying_or_restarting_service",
+          "explicit_runtime_refresh_preserves_api_token_client_and_authenticated_api_with_revision_root_admin",
+          "historical_release_keeps_real_inspection_and_token_refresh_but_cannot_be_selected_for_new_upgrade",
+          "cold_profile_readonly_discovery_and_explicit_adoption_preserve_remote_uuids_and_current_runtime",
+          "cold_adoption_separate_readonly_enrollment_api200_revocation_without_reinstall_restart_or_receipt_change",
+          "same_host_readded_vps_fresh_pinned_ssh_authority_then_separate_api_refresh_preserves_uuid_pid_token_client_and_api200",
+          "attempt_monotonicity_prevents_second_upgrade_and_does_not_rebind_api_credentials",
+          "current037_installed_Root_setpriv_sameUID_admin_reaches_finite_inspector_and_refuses_invalid_input_without_restart",
+          "paused_fixture_public_Git_is_observed_without_job_and_controller_remains_ready",
+          "actual_installed_Main_Root_setpriv_service_UID_reconnection_source2_PG_consent_preserves_legacy_receipts",
+          "actual_installed_reconnection_same_plan_idempotent_invalid_consent_and_foreign_app_refused_token_and_PID_unchanged",
+          "current_Main_reconnected_inspector_actual_installed_Root_CLI_refuses_limit_foreign_database_and_unenrolled_target_without_provisioning_or_restart",
+          "revision_admin_derives_current_runtime_after_root_attestation_and_rejects_wrong_uid_payload_without_restart",
+          "revision_admin_rejects_stopped_controller_without_implicitly_starting_or_adopting_it",
+          "rollback_blocks_old_binding_until_explicit_refresh_then_reuses_the_same_authenticated_token",
+          "rolled_back_current_operation_admin_uses_restored_parent_payload_and_preserves_original_authority",
+          "explicit_main_rollback_restores_original_unit_and_preserves_root_receipt_identity_key_database_inode",
+          "archived_vps_authority_rejected_before_any_ssh_execution"
+        ],
+        "production_vps_used": false,
+        "production_database_used": false,
+        "fixture_root_removed": true,
+        "fixture_unit_removed": true,
+        "fixture_account_removed": true,
+        "python_only_path": true,
+        "ssh_authentications": 12,
+        "ssh_executions": 57,
+        "script_bytes": 40741,
+        "compressed_executions": 57,
+        "max_command_bytes": 12198
+      }
+    }
+  ],
+  "native_limits": [
+    "Root/Main labs execute production methods and CLI under private nonce path composition, not the production installer namespace.",
+    "Main reconnected inspector positive metadata and safe refusal cases are current; prepared PG target is not enrolled, so NOT_READY is required and no positive runtime Main PG read is claimed.",
+    "Source/admin Docker suite exercises actual private PostgreSQL/SSH reads; no production VPS or production database was used in these native gates."
+  ],
+  "tests": {
+    "files_passed": 188,
+    "passed": 2733,
+    "existing_skipped_files": 1,
+    "existing_Linux_skipped_tests": 2,
+    "failed": 0,
+    "full_log_sha256": "491a0eeb9c5aa64e6ac5efcb57379cf793c9298a6544eb0a111869c9e6778bfa"
+  },
+  "quality": [
+    {
+      "name": "full",
+      "command": [
+        "pnpm.cmd",
+        "--prefix",
+        "app",
+        "exec",
+        "vitest",
+        "run",
+        "--reporter=dot"
+      ],
+      "exit_code": 0,
+      "seconds": 314.3,
+      "log": "app\\.out-scripts\\r7h4e4-final-full.log"
+    },
+    {
+      "name": "build",
+      "command": [
+        "pnpm.cmd",
+        "--prefix",
+        "app",
+        "build"
+      ],
+      "exit_code": 0,
+      "seconds": 103.99,
+      "log": "app\\.out-scripts\\r7h4e4-final-build.log"
+    },
+    {
+      "name": "resources",
+      "command": [
+        "node",
+        "app/scripts/product-project-reconnection-release-lab/run.mjs",
+        "--confirm-project-reconnection-resources"
+      ],
+      "exit_code": 0,
+      "seconds": 126.71,
+      "log": "app\\.out-scripts\\r7h4e4-final-resources.log"
+    }
+  ],
+  "additional_checks": {
+    "Node_Web_typecheck": "PASS (production build)",
+    "scripts_typecheck": "PASS",
+    "scoped_ESLint_zero_warnings": "PASS",
+    "changed_source_format": "PASS",
+    "current_Main_readonly_build_only": "PASS, artifact4db0a842, no SSH or credential",
+    "diff_check": "PASS"
+  },
+  "resources": {
+    "status": "PASS",
+    "checks": [
+      "compiled_twelve_releases_exact_and_original_eleven_pins_retained",
+      "actual_release_payload_and_installer_verified_without_execution",
+      "runtime_catalog_cannot_replace_compiled_pin",
+      "tampered_installer_rejected_before_execution",
+      "missing_installer_rejected_before_execution"
+    ],
+    "compiled_entries": 12,
+    "prior_pins_retained": true,
+    "release": {
+      "release_id": "linux-x64-node22-20261118-project-reconnection",
+      "node_version": "22.23.4",
+      "minimum_glibc": "2.39",
+      "release_sha256": "9878eae58256c87f5095aa544d35345f14e7eca526d1d6a1eb3de80e20356233",
+      "installer_sha256": "f53555b55585528ef604eb2546388ab11fb5f8114ff139c4e1911435523c8207",
+      "upgrade_supported": true
+    },
+    "cleanup": true,
+    "main_catalog_sha256": "d5e530d546f51d104b6288158155c01179350b7fb0e78e9273395c08e301a7b3"
+  },
+  "resources_raw_sha256": "f1a79d4d31304e6205dcfeab1f02268a7da432f957305b8623992b3f771304b1",
+  "source_hashes": {
+    "app/control-plane-runtime/desktop-project-reconnection-release.json": "8b701aecb2fa5a127572704d49e086e1600f6b4934ce9fe92eafca05a178f4ba",
+    "app/electron.vite.config.ts": "1ae07ab3f9907203029ee5f4b2a30966cfefc1073773bf6e1accacd152566820",
+    "app/scripts/controller-upgrade-desktop-lab/run.mjs": "3e82cf403d08f89c49a480a570b8f944ddb0b82aed2514dbe1a3171eac6d8bab",
+    "app/scripts/product-project-reconnection-live/README.md": "21c9e9ee018ecac0c51c5833714bbdba95a8db4f8a085b905ca904b929e91f38",
+    "app/scripts/product-project-reconnection-live/read-only-launch.mjs": "606184cfbdc2328dcc5b8ff54b68e9d2171d65086c5d980c556f103bf7e8d02a",
+    "app/scripts/product-project-reconnection-live/read-only.mjs": "d5b951fc58c1e7721d6b6b0bd59b14be11c80320eb5d338f837ca07381ae49b0",
+    "app/scripts/product-project-reconnection-release-lab/README.md": "0d176afb393f947680eba90e13ff490b14715f65240f32fb770f4b5d743ac83e",
+    "app/scripts/product-project-reconnection-release-lab/run.mjs": "a4dd483fcd1b8e1ee8bb875c5118ca82305f92c699298bf3841674c4ac47c408"
+  },
+  "live": {
+    "status": "NOT_RUN_FRESH_VPS_BASELINE_AND_SERVING_NEXT",
+    "fresh_baseline_obtained": false,
+    "serving_mutation_attempted": false,
+    "artifact_transfer_attempted": false,
+    "upgrade_attempted": false,
+    "GUI_acceptance_run": false,
+    "old_data_restored": false,
+    "last_known_release_is_historical_only": "63d1dca75f976d7cd06926ccf8f1407f221b505371cd32ea8132b39de8e01899",
+    "observations": [
+      "Windows TCP22/80/30000/30006/30007 timed out; SSH handshake timed out before snapshot.",
+      "WSL TCP22/30000/30007 timed out. User confirms VPS expired and will supply a new VPS tomorrow.",
+      "No further connection or credential attempts to the expired IP after that confirmation."
+    ],
+    "network_raw_path": "app/.out-scripts/r7h4e4-network.log",
+    "network_raw_sha256": "729ac41f16beefcf86dcf9db68a376e609461a445ebb5c54fbb9d61d510b7ab0",
+    "old_instance_status": "EXPIRED_CONFIRMED_BY_USER",
+    "new_vps_first_contact": {
+      "raw_path": "app/.out-scripts/r7h4e4-new-vps-hostkeys.json",
+      "raw_sha256": "a1982eaeecffbc3a43962dd998ba87aa79a08e3eb33854c1fd98a0b381cd3b27",
+      "authentication_used": false,
+      "passwords_persisted": false,
+      "keys_verified_with_OpenSSH_ssh_keygen": true,
+      "hosts": [
+        {
+          "index": 1,
+          "host": "157.245.195.121",
+          "fingerprint": "SHA256:d1XH2CiZnh4Dy/AoIbI1n3Uo2N1je86U2Wsy3orvxA4",
+          "algorithm": "ssh-ed25519",
+          "owner": "Son_assistant",
+          "assistant_admin_allowed": true
+        },
+        {
+          "index": 2,
+          "host": "188.166.234.163",
+          "fingerprint": "SHA256:jWmoAjdWENXxC2bmfEtx9g85HvjGt7P6mfaRn83XnZ0",
+          "algorithm": "ssh-ed25519",
+          "owner": "Son_assistant",
+          "assistant_admin_allowed": true
+        },
+        {
+          "index": 3,
+          "host": "159.89.204.206",
+          "fingerprint": "SHA256:l0oKX3LDlIZu3gsjm281BTL/FoLejuVnhyQayBeNrIA",
+          "algorithm": "ssh-ed25519",
+          "owner": "Kim",
+          "assistant_admin_allowed": false
+        },
+        {
+          "index": 4,
+          "host": "168.144.245.131",
+          "fingerprint": "SHA256:3uX6Okns7irl3wvuGq6sAY0/dFJIvhDk394eufkT+EE",
+          "algorithm": "ssh-ed25519",
+          "owner": "Kim",
+          "assistant_admin_allowed": false
+        }
+      ]
+    }
+  },
+  "operator_trust_policy": {
+    "user_authorized_new_development_VPS_IP_password_only": true,
+    "first_contact_public_key_pinned_before_password": true,
+    "independent_console_verification_claimed": false,
+    "never_disable_strict_verifier": true,
+    "never_silently_replace_changed_pinned_key": true,
+    "bootstrap_executed": false,
+    "app_default_trust_contract_changed": false,
+    "first_contact_public_keys_collected": true,
+    "password_authentication_used": false
+  },
+  "scope": {
+    "Desktop_schema": 39,
+    "controller_schema": 37,
+    "all_11_prior_compiled_pins_retained": true,
+    "approved_candidate_catalog_entries": 12,
+    "Kim_lane_changed": false,
+    "formal_ML": "NOT_RUN",
+    "no_fake_project_or_selection_receipts": true
+  },
+  "next": [
+    "E4b on new assigned hosts 1+2: strict pinned SSH, authenticated inventory, fresh onboarding and baseline; do not reuse expired VM identities or receipts.",
+    "Perform genuine deployment/configuration then reconnection039 and actual Electron/Main/Root/SSH two-UUID PG inspection; report live proof separately.",
+    "Old retained-data checks remain unverified, never assume old data restored on a new VM."
+  ]
+}
