@@ -72,6 +72,7 @@ export function ControllerInstallWizard({
     [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null),
     [connection, setConnection] = useState<'active' | 'delivery_unknown' | null>(null)
+  const [preparationMessage, setPreparationMessage] = useState<string | null>(null)
   const [checkedRow, setCheckedRow] = useState(false)
   const [adoption, setAdoption] = useState<ControllerAdoptionReview | null>(null),
     [adopted, setAdopted] = useState(false)
@@ -98,6 +99,7 @@ export function ControllerInstallWizard({
     operation.current = token
     setBusy(label)
     setError(null)
+    setPreparationMessage(null)
     try {
       await action(token)
     } catch (cause) {
@@ -137,10 +139,7 @@ export function ControllerInstallWizard({
     setRow(existing)
     setCheckedRow(false)
     if (initial) {
-      setReleaseId(
-        data.releases.find((v) => v.state === 'available')?.release_id ??
-          data.releases[0]?.release_id
-      )
+      setReleaseId(data.releases.at(-1)?.release_id)
       const previous = data.connections.find(
         (v) =>
           v.state !== 'disabled' &&
@@ -149,7 +148,7 @@ export function ControllerInstallWizard({
           v.installation?.authority_revision === existing.authority_revision
       )
       setName(previous?.display_name ?? vps.find((v) => v.id === selected)?.name ?? '')
-      setAllowWrite(!!previous?.scopes.includes('deploy:manual'))
+      setAllowWrite(previous ? previous.scopes.includes('deploy:manual') : !existing)
     }
   }
   useEffect(() => {
@@ -202,7 +201,7 @@ export function ControllerInstallWizard({
     setError(null)
     setCheckedRow(false)
     setRow(overview ? localRow(overview, id) : null)
-    setAllowWrite(false)
+    setAllowWrite(!overview || !localRow(overview, id))
   }
   const preflight = (): Promise<void> =>
     run(async (token) => {
@@ -311,6 +310,45 @@ export function ControllerInstallWizard({
   const freshInstall = (): Promise<void> =>
     run(async (token) => {
       if (!review?.plan || !consent) return
+      let installReview = review
+      if (!row && review.next === 'install') {
+        setBusy('prepare')
+        const runtime = await window.api.invoke('vps:prepare-runtime', {
+          vps_id: review.plan.vps_id,
+          consent: true
+        })
+        if (!current(token)) return
+        if (!runtime.ok) {
+          setPreparationMessage(runtime.error.message)
+          throw Error('VPS_PREPARATION_FAILED')
+        }
+        // Installing prerequisites can outlive the original review; obtain a fresh plan.
+        installReview = await checked(
+          window.api.invoke('controller:review-installation', {
+            vps_id: review.plan.vps_id,
+            release_id: review.plan.release_id
+          })
+        )
+        if (!current(token)) return
+        const next = installReview.plan
+        if (
+          !next ||
+          installReview.next !== 'install' ||
+          next.rebind_required ||
+          next.remote_existing ||
+          next.vps_id !== review.plan.vps_id ||
+          next.release_id !== review.plan.release_id ||
+          next.host !== review.plan.host ||
+          next.username !== review.plan.username ||
+          next.host_fingerprint !== review.plan.host_fingerprint
+        ) {
+          setReview(installReview)
+          setConsent(false)
+          throw Error('INSTALL_AUTHORITY_CHANGED')
+        }
+        setReview(installReview)
+      }
+      if (!installReview.plan) return
       let value: DesktopInstallation
       if (review.plan.rebind_required) {
         value = await checked(
@@ -328,7 +366,9 @@ export function ControllerInstallWizard({
           )
       } else
         value = await checked(
-          window.api.invoke('controller:prepare-installation', { plan_id: review.plan.plan_id })
+          window.api.invoke('controller:prepare-installation', {
+            plan_id: installReview.plan.plan_id
+          })
         )
       if (!current(token)) return
       setRow(value)
@@ -432,10 +472,13 @@ export function ControllerInstallWizard({
             type="error"
             message={explanation}
             description={
-              <details>
-                <summary>{t.details}</summary>
-                <Typography.Text code>{error}</Typography.Text>
-              </details>
+              <Space direction="vertical">
+                {preparationMessage && <Typography.Text>{preparationMessage}</Typography.Text>}
+                <details>
+                  <summary>{t.details}</summary>
+                  <Typography.Text code>{error}</Typography.Text>
+                </details>
+              </Space>
             }
           />
         )}
@@ -470,26 +513,29 @@ export function ControllerInstallWizard({
                 />
               </Form.Item>
               {overview.releases.length > 1 && (
-                <Form.Item label={t.release}>
-                  <Select
-                    aria-label={t.release}
-                    value={releaseId}
-                    disabled={!!busy}
-                    style={{ width: '100%' }}
-                    onChange={(value) => {
-                      epoch.current++
-                      setReleaseId(value)
-                      setReview(null)
-                      setAdoption(null)
-                      setConsent(false)
-                    }}
-                    options={overview.releases.map((v) => ({
-                      value: v.release_id,
-                      label: v.release_id,
-                      disabled: v.state !== 'available'
-                    }))}
-                  />
-                </Form.Item>
+                <details>
+                  <summary>{t.details}</summary>
+                  <Form.Item label={t.release}>
+                    <Select
+                      aria-label={t.release}
+                      value={releaseId}
+                      disabled={!!busy}
+                      style={{ width: '100%' }}
+                      onChange={(value) => {
+                        epoch.current++
+                        setReleaseId(value)
+                        setReview(null)
+                        setAdoption(null)
+                        setConsent(false)
+                      }}
+                      options={overview.releases.map((v) => ({
+                        value: v.release_id,
+                        label: v.release_id,
+                        disabled: v.state !== 'available'
+                      }))}
+                    />
+                  </Form.Item>
+                </details>
               )}
               <Form.Item label={t.name}>
                 <Input
@@ -772,13 +818,15 @@ export function ControllerInstallWizard({
             showIcon
             icon={<Spin size="small" />}
             message={
-              busy === 'transfer'
-                ? t.transferBusy
-                : busy === 'install'
-                  ? t.installBusy
-                  : busy === 'connect'
-                    ? t.connectBusy
-                    : t.checkBusy
+              busy === 'prepare'
+                ? t.prepareBusy
+                : busy === 'transfer'
+                  ? t.transferBusy
+                  : busy === 'install'
+                    ? t.installBusy
+                    : busy === 'connect'
+                      ? t.connectBusy
+                      : t.checkBusy
             }
           />
         )}

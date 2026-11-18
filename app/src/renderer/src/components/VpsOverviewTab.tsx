@@ -34,6 +34,7 @@ import { localDateTime, relativeTime } from '../utils/format'
 import { formatGb, formatMb, resourcePercents, type RowResourceState } from '../vpsResources'
 import { VpsOverviewActionBar } from './VpsOverviewActionBar'
 import { VpsServerHeader } from './VpsServerHeader'
+import { VpsPreparationPanel } from './VpsPreparationPanel'
 
 interface VpsOverviewTabProps {
   vps: Vps
@@ -216,6 +217,13 @@ export function VpsOverviewTab({
 
       {/* Thông tin nhanh (IP/port/lệnh SSH) — chỉ thuộc tab Tổng quan, nằm trên Machine info */}
       <VpsServerHeader vps={vps} />
+      <VpsPreparationPanel
+        vpsId={vps.id}
+        onPrepared={() => {
+          runScan()
+          onRefreshResources()
+        }}
+      />
 
       {/* Tài nguyên hệ thống (CPU / RAM / Disk) — từ IPC vps:get-resources */}
       <Card

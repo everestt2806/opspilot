@@ -16,6 +16,7 @@ import type { MlServiceManager } from './mlClient'
 import type { SshManager } from './ssh/manager'
 import { readVpsResources } from './vps/connectionService'
 import { VpsOnboarding } from './vps/onboarding'
+import { VpsRuntimePreparationService } from './vps/runtimePreparation'
 import { readVpsOperationalDiagnostics } from './vps/operationalDiagnostics'
 import { discoverVpsApps } from './vps/discovery'
 import { VpsAppImportService } from './vps/importService'
@@ -366,6 +367,12 @@ export function registerIpcHandlers(
     vpsService.recordDockerInstalled(vpsId, dockerVersion)
     return { docker_version: dockerVersion }
   })
+  const runtimePreparation = new VpsRuntimePreparationService(
+    ssh,
+    new VpsRepository(database),
+    vpsService
+  )
+  handle('vps:prepare-runtime', (input) => runtimePreparation.prepare(input))
   handle('vps:scan', async (vpsId) => {
     const result = await scanVpsEnvironment(ssh, vpsId)
     const docker = result.items.find((item) => item.key === 'docker')

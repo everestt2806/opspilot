@@ -5,7 +5,8 @@ import { randomBytes, createHash } from 'node:crypto'
 import { mkdirSync, writeFileSync, readFileSync, rmSync, lstatSync } from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 
-assert.equal(process.argv.slice(2).join(' '), '--confirm-private-vps-form')
+const preparationGate = process.argv.slice(2).join(' ') === '--confirm-private-vps-preparation'
+assert(preparationGate || process.argv.slice(2).join(' ') === '--confirm-private-vps-form')
 const root = resolve(import.meta.dirname, '../../..')
 const require = createRequire(join(root, 'app/package.json'))
 const esbuild = createRequire(require.resolve('vite/package.json'))('esbuild')
@@ -30,6 +31,7 @@ const proof = {
 let code,
   window,
   observations = 0
+let preparations = 0
 const timer = setTimeout(() => app.exit(2), 120000)
 app
   .whenReady()
@@ -76,9 +78,37 @@ app
         ok: true,
         data: await onboarding.create(input)
       }))
+      const runtimePreparation = new code.VpsRuntimePreparationService(
+        {
+          execWithHostIdentity: async (_id, command, options, identity) => {
+            assert.equal(command, code.PREPARE_RUNTIME_COMMAND)
+            assert.equal(options.retryOnReconnect, false)
+            assert.equal(identity.username, 'root')
+            preparations++
+            return {
+              identity,
+              result: {
+                code: 0,
+                stdout:
+                  'DOCKER_VERSION=Docker version 29.10.0\nCOMPOSE_VERSION=5.8.0\nINSTALLED_DOCKER=0\n',
+                stderr: ''
+              }
+            }
+          }
+        },
+        repository,
+        new code.VpsService(repository, cipher)
+      )
+      ipcMain.handle('vps:prepare-runtime', async (_event, input) => ({
+        ok: true,
+        data: await runtimePreparation.prepare(input)
+      }))
+      const preparationRenderer = `import{VpsPreparationPanel}from'./src/renderer/src/components/VpsPreparationPanel';window.showPreparation=(locale,theme)=>{useUiState.setState({locale,theme});applyTheme(theme);root.render(<ConfigProvider theme={{...themeTokens[theme],token:{...themeTokens[theme].token,motion:false}}}><main style={{padding:24}}><VpsPreparationPanel vpsId={window.saved.data.id} onPrepared={()=>{window.prepared=true}}/></main></ConfigProvider>)};`
       await esbuild.build({
         stdin: {
-          contents: `import React from'react';import{createRoot}from'react-dom/client';import{ConfigProvider}from'antd';import{VpsFormModal}from'./src/renderer/src/components/VpsFormModal';import{useUiState}from'./src/renderer/src/store/uiState';import{themeTokens,applyTheme}from'./src/renderer/src/utils/themeTokens';import'./src/renderer/src/assets/main.css';const root=createRoot(document.getElementById('root'));let id=0;window.showForm=(locale,theme)=>{useUiState.setState({locale,theme});applyTheme(theme);root.render(<ConfigProvider theme={{...themeTokens[theme],token:{...themeTokens[theme].token,motion:false}}}><VpsFormModal key={++id} open initialVps={null} saving={false} onCancel={()=>{}} onSubmit={async input=>{window.saved=await window.api.invoke('vps:create',input)}}/></ConfigProvider>)};`,
+          contents:
+            `import React from'react';import{createRoot}from'react-dom/client';import{ConfigProvider}from'antd';import{VpsFormModal}from'./src/renderer/src/components/VpsFormModal';import{useUiState}from'./src/renderer/src/store/uiState';import{themeTokens,applyTheme}from'./src/renderer/src/utils/themeTokens';import'./src/renderer/src/assets/main.css';const root=createRoot(document.getElementById('root'));let id=0;window.showForm=(locale,theme)=>{useUiState.setState({locale,theme});applyTheme(theme);root.render(<ConfigProvider theme={{...themeTokens[theme],token:{...themeTokens[theme].token,motion:false}}}><VpsFormModal key={++id} open initialVps={null} saving={false} onCancel={()=>{}} onSubmit={async input=>{window.saved=await window.api.invoke('vps:create',input)}}/></ConfigProvider>)};` +
+            preparationRenderer,
           resolveDir: join(root, 'app'),
           sourcefile: 'vps-form-proof.jsx',
           loader: 'jsx'
@@ -163,6 +193,45 @@ app
       proof.checks.push(
         'ip_password_only_native_form_preload_main_automatic_pin_encrypted_SQLite_save'
       )
+      if (preparationGate) {
+        assert.equal(preparations, 0)
+        await js("window.showPreparation('en','dark')")
+        await wait(
+          "Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='Prepare VPS')"
+        )
+        await js(
+          "Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Prepare VPS').click()"
+        )
+        await wait('window.prepared===true')
+        assert.equal(preparations, 1)
+        assert.equal(repository.getById(saved.id).docker_version, '29.10.0')
+        for (const [locale, theme, width, height] of [
+          ['en', 'dark', 1280, 800],
+          ['vi', 'light', 1366, 768]
+        ]) {
+          window.setContentSize(width, height)
+          await js(`window.showPreparation(${JSON.stringify(locale)},${JSON.stringify(theme)})`)
+          await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
+          await new Promise((resolve) => setTimeout(resolve, 350))
+          const layout = await js(
+            '({horizontal:document.documentElement.scrollWidth>document.documentElement.clientWidth,width:innerWidth,height:innerHeight})'
+          )
+          assert.deepEqual(layout, { horizontal: false, width, height })
+          const bytes = (await window.webContents.capturePage()).toPNG()
+          assert(bytes.length > 10000)
+          const file = join(screenshots, `vps-ready-${locale}-${theme}-${width}x${height}.png`)
+          writeFileSync(file, bytes)
+          proof.captures.push({
+            file: file.slice(root.length + 1).replaceAll('\\', '/'),
+            sha256: createHash('sha256').update(bytes).digest('hex'),
+            layout
+          })
+        }
+        proof.checks.push(
+          'production_preparation_panel_preload_Main_service_SQLite_synthetic_SSH_no_automatic_mutation_before_click'
+        )
+        proof.scope += '_RUNTIME_PREPARATION_WITH_SYNTHETIC_SSH'
+      }
       proof.status = 'PASS'
     } catch (error) {
       proof.error = error?.code === 'ERR_ASSERTION' ? 'FORM_ASSERTION_FAILED' : 'FORM_GATE_FAILED'

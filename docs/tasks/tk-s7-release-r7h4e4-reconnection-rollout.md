@@ -15,8 +15,8 @@ app hay policy. Mỗi pha có proof riêng để không nhầm candidate với s
 | Frozen candidate | Hai builds a/b independently verified998files/145394238bytes, release9878eae5/payload manifest708fbd82/controller artifact9a33e131/installerf53555b5 trùng; chỉ control-plane.cjs khác D4, target/collector/template bytes giữ nguyên | PASS |
 | Native composition | Source/admin/Docker PG22checks0ae542f9a325, Root19checks7ef8947b372b, Main24/3937976fdaed từ4bc và Main24/debddb3d2fd7 từ đúng serving63d1 đều PASS/cleanup. Safe inspector refusal không phải positive runtime PG read | PASS |
 | Protected catalog |12compiled descriptors/all11prior pins retained; full2733PASS+2existingLinuxSKIP/types/scripts/lint/build và5resource/tamper/missing checks PASS/cleanup | PASS |
-| VPS baseline | Máy cũ hết hạn, không thử credential tiếp. User đã cấp4máy mới; chỉ1+2 cho Sơn/assistant,3+4 Kim. Public ED25519 keys cả4 đã lấy/đối chiếu OpenSSH theo TOFU được cho phép; fresh authenticated inventory chưa chạy | OPEN |
-| Protected serving install/upgrade | Chưa chuyển/install/upgrade; E4b dùng fresh identity/onboarding/baseline trên1+2, không dùng UUID/CID/receipt của instance cũ | OPEN |
+| VPS baseline | UX1 actual encrypted-profile/strict SSH inventory1+2 PASS, Ubuntu24.04/x64/glibc2.39/2CPU/~4GB; máy cũ hết hạn,3+4 Kim không admin | PASS |
+| Protected serving install/upgrade | UX2a fresh Main protected install1 release9878/payload708f, UUID0c1503c9/request55f5ed57/UID997/systemd+API ready/enroll-revoke11checks PASS;2 chỉ runtime. Không tái dùng identity/data cũ | PASS |
 | Actual GUI acceptance | Chưa chạy live; cần genuine deployment/profile/consent039 trên máy mới. Không thay bằng lab synthetic hoặc tạo receipt giả | OPEN |
 | Handoff E4a | Freeze/candidate/source hashes và raw evidence; board/task/allocation cập nhật, native/resource cleanup đạt. Indexed allowlist đúng15file, source SHA trùng proof, diff/secret check PASS; normal push checkpoint. Không có live client cần revoke | PASS |
 
@@ -102,3 +102,9 @@ luồng thêm VPS. Chuyển UX1 lên trước install/deploy: optional advanced 
 auto-first-contact/strict saved-key verifier. Actual create/encrypted-profile/SSH
 readonly inventory1+2 đã PASS, chưa install/Docker/deploy; xem [UX1](tk-s7-release-ux1-vps-onboarding.md).
 Không sửa lại E4a historical proof để nhận các bước live chưa chạy là PASS.
+
+UPDATE UX2a18/11 — Fresh runtime1+2 và protected controller1 install đã PASS, xem
+[task UX2a](tk-s7-release-ux2a-vps-preparation.md) và [proof](../ui-redesign/ux2a-vps-preparation-verification.json).
+Installation55f5ed57-d092-438e-b74d-56e3a618db93/controller0c1503c9-3c59-4bdc-9eee-658652eaf4e0
+là identity mới, không phải khôi phục máy cũ. Chưa app/PG/reconnection GUI live;
+E4b toàn bộ vẫn OPEN. Các đoạn “chưa install” trước đây là nhật ký lịch sử.

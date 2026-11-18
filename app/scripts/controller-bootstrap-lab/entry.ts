@@ -18,3 +18,5 @@ export { DesktopControllerCommands } from '../../src/main/controlPlane/desktopCo
 export { DesktopControllerService } from '../../src/main/controlPlane/desktopControllerService'
 export { ControllerInstallerResources } from '../../src/main/controlPlane/controllerInstallerCatalog'
 export { installDockerOnVps, readDockerVersion } from '../../src/main/vps/dockerInstall'
+export { VpsRuntimePreparationService } from '../../src/main/vps/runtimePreparation'
+export { VpsService } from '../../src/main/vps/service'

@@ -463,6 +463,8 @@ export interface IpcInvokeMap {
   'vps:update':         (id: number, input: Partial<VpsInput>) => IpcResult<Vps>;
   'vps:delete':         (id: number) => IpcResult<void>;
   'vps:install-docker': (vpsId: number) => IpcResult<{ docker_version: string }>;
+  /** Explicit user action: check prerequisites, install Docker only when absent, prepare workdir. */
+  'vps:prepare-runtime': (input: { vps_id: number; consent: true }) => IpcResult<VpsRuntimePreparation>;
   'vps:scan':           (vpsId: number) => IpcResult<VpsScanResult>;
 
   // ── Detect & Deploy (UC-02, UC-03) ─────────────────────────────────────────
@@ -615,6 +617,15 @@ export interface VpsConnectionCheck {
   steps: Array<{ label: string; ok: boolean; detail?: string }>;
   /** Khi `ssh_ok: false`: nguyên nhân + cách sửa tiếng Việt (TK-A10). Không có khi OK. */
   diagnosis?: VpsDiagnosis;
+}
+
+export interface VpsRuntimePreparation {
+  vps_id: number;
+  docker_version: string;
+  compose_version: string;
+  installed_docker: boolean;
+  workdir_ready: true;
+  checked_at: string;
 }
 
 /** Chẩn đoán nguyên nhân khi kết nối VPS thất bại (TK-A10). Mỗi lớp lỗi kèm hướng dẫn sửa

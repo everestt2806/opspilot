@@ -1,5 +1,10 @@
 # Đánh giá mốc 25/11 — cập nhật 18/11/2026
 
+UPDATE18/11 UX2a — Runtime1+2 ready thật; controller mới đã cài trên1 (systemd/API
+ready),2 làm đích. App có1nút chuẩn bị và controller wizard tự gọi trước install.
+Full2779+2existingLinuxSKIP/build/native PASS; chưa app deployment trên máy mới.
+Tiếp guided folder/Git→website/E4b, giữ các công việc còn mở theo lịch dưới đây.
+
 Đây là dự báo công việc, không phải chứng nhận hoàn thành. Deadline toàn dự án
 hiện hành vẫn 04/12; user hỏi khả năng xong toàn bộ trước25/11. Với các khoảng trống
 đã ghi ở release master/board, chưa đủ cơ sở cam kết xong toàn bộ vào25/11.

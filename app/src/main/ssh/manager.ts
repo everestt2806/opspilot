@@ -495,6 +495,7 @@ export class SshManager extends EventEmitter {
   ): Promise<{ identity: SshHostIdentity; result: ExecResult }> {
     const deadline = Date.now() + (options.timeoutMs ?? EXEC_DEFAULT_TIMEOUT_MS)
     const entry = await this.ensureConnected(vpsId)
+    const principal = { username: entry.info.username, authType: entry.info.authType }
     const identity: SshHostIdentity = {
       vpsId,
       host: entry.info.host,
@@ -506,7 +507,9 @@ export class SshManager extends EventEmitter {
       (expectedIdentity.vpsId !== identity.vpsId ||
         expectedIdentity.host !== identity.host ||
         expectedIdentity.port !== identity.port ||
-        expectedIdentity.hostFingerprint !== identity.hostFingerprint)
+        expectedIdentity.hostFingerprint !== identity.hostFingerprint ||
+        ('username' in expectedIdentity && expectedIdentity.username !== principal.username) ||
+        ('authType' in expectedIdentity && expectedIdentity.authType !== principal.authType))
     ) {
       throw new SshHostIdentityChangedError()
     }
@@ -523,7 +526,9 @@ export class SshManager extends EventEmitter {
     if (
       current.host !== identity.host ||
       current.port !== identity.port ||
-      current.hostFingerprint !== identity.hostFingerprint
+      current.hostFingerprint !== identity.hostFingerprint ||
+      current.username !== principal.username ||
+      current.authType !== principal.authType
     ) {
       throw new SshHostIdentityChangedError(true)
     }

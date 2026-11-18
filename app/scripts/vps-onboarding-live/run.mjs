@@ -5,7 +5,9 @@ import { readFileSync, writeFileSync, mkdirSync, lstatSync, rmSync } from 'node:
 import { resolve, join, dirname } from 'node:path'
 import { privateInput } from '../product-environment-live/input.mjs'
 
-assert.equal(process.argv.slice(2).join(' '), '--confirm-readonly-assigned-vps')
+const operation = process.argv.slice(2).join(' ')
+assert(['--confirm-readonly-assigned-vps', '--confirm-prepare-assigned-vps'].includes(operation))
+const prepareRuntime = operation === '--confirm-prepare-assigned-vps'
 const root = resolve(import.meta.dirname, '../../..')
 const nonce = randomBytes(6).toString('hex')
 const directory = join(root, 'app/.out-scripts/vps-onboarding-live', nonce)
@@ -73,7 +75,8 @@ let inputs, ssh
 const profile = join(directory, 'private-profile')
 const proof = {
   status: 'RUNNING',
-  base_commit: 'e353c1f',
+  base_commit: '42c71bf',
+  operation,
   checks: [],
   hosts: [],
   remote_mutation_attempted: false,
@@ -115,6 +118,11 @@ try {
       secret: code.loadSecret(db, cipher, id)
     }
   })
+  const preparation = new code.VpsRuntimePreparationService(
+    ssh,
+    repository,
+    new code.VpsService(repository, cipher)
+  )
   for (const input of inputs) {
     // Deliberately omit a manual fingerprint: exercise production first-contact onboarding.
     const saved = await onboarding.create({
@@ -128,6 +136,17 @@ try {
     input.password = ''
     assert.equal(saved.host_fingerprint, allowed.get(saved.host))
     proof.checks.push('automatic_pin_saved_before_auth_' + saved.host)
+    let runtime
+    if (prepareRuntime) {
+      proof.remote_mutation_attempted = true
+      console.log('PREPARING_RUNTIME ' + saved.host)
+      runtime = await preparation.prepare({ vps_id: saved.id, consent: true })
+      const again = await preparation.prepare({ vps_id: saved.id, consent: true })
+      assert.equal(again.installed_docker, false)
+      assert.equal(again.docker_version, runtime.docker_version)
+      assert.equal(again.compose_version, runtime.compose_version)
+      proof.checks.push('runtime_prepared_and_repeat_does_not_reinstall_' + saved.host)
+    }
     const result = await ssh.exec(saved.id, command, {
       logCommand: false,
       retryOnReconnect: false,
@@ -142,12 +161,15 @@ try {
       host: saved.host,
       host_fingerprint: saved.host_fingerprint,
       trust: 'USER_AUTHORIZED_FIRST_CONTACT_NOT_CONSOLE_VERIFIED',
+      ...(runtime ? { runtime_preparation: runtime } : {}),
       inventory
     })
     proof.checks.push('strict_saved_pin_credential_and_readonly_inventory_' + saved.host)
     await ssh.disconnect(saved.id)
   }
-  proof.status = 'PASS_READONLY_INVENTORY_ONLY'
+  proof.status = prepareRuntime
+    ? 'PASS_RUNTIME_PREPARATION_AND_INVENTORY'
+    : 'PASS_READONLY_INVENTORY_ONLY'
 } catch (error) {
   proof.status = 'FAIL'
   proof.error = /^[A-Z][A-Z0-9_]{1,100}$/.test(error?.code ?? '')

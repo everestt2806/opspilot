@@ -140,6 +140,15 @@ beforeEach(() => {
   Object.defineProperty(window, 'api', { configurable: true, value: { invoke } })
   invoke.mockImplementation(async (channel: string, input?: unknown) => {
     if (channel === 'vps:list') return ok(servers)
+    if (channel === 'vps:prepare-runtime')
+      return ok({
+        vps_id: 1,
+        docker_version: '29.5.3',
+        compose_version: '2.40.3',
+        installed_docker: false,
+        workdir_ready: true,
+        checked_at: new Date().toISOString()
+      })
     if (channel === 'controller:installer-overview')
       return ok({ ...overview, installations: stored ? [stored] : overview.installations })
     if (channel === 'controller:review-installation') return ok(review)
@@ -182,6 +191,41 @@ afterEach(() => {
   cleanup()
   useUiState.setState({ locale: 'vi' })
 })
+it('selects the final compiled release by default and never falls back when it is missing', async () => {
+  overview.releases.push({ ...overview.releases[0], release_id: 'latest', state: 'missing' })
+  show()
+  await screen.findByText(t.invalidPackage)
+  expect((screen.getByRole('button', { name: t.review }) as HTMLButtonElement).disabled).toBe(true)
+  expect(invoke.mock.calls.some(([c]) => c === 'controller:review-installation')).toBe(false)
+})
+it('reviews the current release automatically without requiring a manual version selection', async () => {
+  overview.releases.push({ ...overview.releases[0], release_id: 'latest' })
+  review.plan!.release_id = 'latest'
+  show()
+  await reviewVps()
+  expect(invoke).toHaveBeenCalledWith('controller:review-installation', {
+    vps_id: 1,
+    release_id: 'latest'
+  })
+})
+it('does not create an installation intent if runtime preparation fails', async () => {
+  const original = invoke.getMockImplementation()!
+  invoke.mockImplementation((channel: string, input?: unknown) =>
+    channel === 'vps:prepare-runtime'
+      ? Promise.resolve({ ok: false, error: { message: 'Docker daemon is unavailable' } })
+      : original(channel, input)
+  )
+  show()
+  await reviewVps()
+  fireEvent.click(screen.getByRole('checkbox', { name: t.consent }))
+  fireEvent.click(screen.getByRole('button', { name: t.install }))
+  await screen.findByText('Docker daemon is unavailable')
+  expect(
+    invoke.mock.calls.some(
+      ([c]) => c === 'controller:prepare-installation' || c === 'controller:send-installation'
+    )
+  ).toBe(false)
+})
 const reviewVps = async (): Promise<void> => {
   const button = await screen.findByRole('button', { name: t.review })
   await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false))
@@ -204,6 +248,13 @@ it('keeps writes behind review/consent and performs the complete same-key instal
   fireEvent.click(screen.getByRole('checkbox', { name: t.consent }))
   fireEvent.click(install)
   await screen.findByText(t.connected)
+  const order = invoke.mock.calls.map(([channel]) => channel)
+  expect(order.indexOf('vps:prepare-runtime')).toBeLessThan(
+    order.lastIndexOf('controller:review-installation')
+  )
+  expect(order.lastIndexOf('controller:review-installation')).toBeLessThan(
+    order.indexOf('controller:prepare-installation')
+  )
   expect(
     invoke.mock.calls
       .filter(([channel]) => channel === 'controller:send-installation')
@@ -216,7 +267,7 @@ it('keeps writes behind review/consent and performs the complete same-key instal
     installation_request_key: key,
     binding_id: binding,
     display_name: 'Fixture VPS',
-    allow_write: false
+    allow_write: true
   })
   expect(
     invoke.mock.calls.findIndex(([v]) => v === 'controller:prepare-installed-binding')

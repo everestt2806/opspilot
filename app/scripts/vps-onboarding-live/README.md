@@ -33,3 +33,25 @@ save via IPC and layout. It is separate from actual SSH inventory; neither prove
 a complete installed-controller deployment. Screenshots contain no real credential.
 Private DB cleanup is checked; Chromium cache remains in the ignored nonce folder,
 outside the real application profile. Initial failure logs are retained separately.
+
+## UX2a — runtime preparation
+
+`node app/scripts/vps-onboarding-live/launch.mjs --confirm-prepare-assigned-vps`
+uses the same no-echo input and restricts administration to assigned hosts1+2.
+It invokes production `VpsRuntimePreparationService`, then repeats and verifies
+no reinstall. Fresh Ubuntu22.04/24.04 uses Docker's signed apt repository with an
+exact Engine29 candidate; existing Docker is only inspected. Compose/daemon errors
+and conflicting runtimes fail explicitly rather than replacing an existing engine.
+
+`pnpm --prefix app exec electron scripts/vps-onboarding-live/electron.mjs --confirm-private-vps-preparation`
+adds production preparation panel/preload/Main/SQLite checks with synthetic SSH.
+It is separate from the actual two-host and installed-controller proof.
+
+For the designated management VPS1 only:
+`node app/scripts/controller-onboarding-live-launch.mjs --confirm-install-assigned-controller`.
+Provide only its host/password after the no-echo READY marker. The launcher supplies
+the previously accepted pin, selects the final compiled release with verified
+resources, prepares runtime before review, and calls actual Main install/enroll/API.
+Temporary read-only client is revoked; successful private profiles are removed.
+On failure a private encrypted SQLite/DPAPI journal is retained for inspection;
+do not rerun fresh install or delete that evidence to hide an unknown result.

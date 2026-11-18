@@ -1,0 +1,339 @@
+{
+  "status": "PASS_UX2A_RUNTIME_PREPARATION_AND_FRESH_CONTROLLER",
+  "recorded_at": "2026-11-18T12:38:28.412247+00:00",
+  "base_commit": "42c71bf0ccd30134dcceda141b3264879421f227",
+  "source_hashes": {
+    "app/scripts/controller-bootstrap-lab/entry.ts": "fd6e311404132415a6cc6b8e089c26c7767a1b4c9a3603cd044b52c352130529",
+    "app/scripts/controller-onboarding-live-launch.mjs": "359f5760e6c20ea26f192022e676656adcb4c04fdc58e5f83f2413e254b50e90",
+    "app/scripts/controller-onboarding-live.mjs": "1fd75c7f77c523606fe56fdea54e75882388da5dd610076e21e56c352e98c51f",
+    "app/scripts/vps-onboarding-live/README.md": "d86a7d762df8804487b37326ee8dca1eddca2f558cc27cd94d8b1278203aef0c",
+    "app/scripts/vps-onboarding-live/electron.mjs": "a454029b23ec6c289147675e371943eae513f9585490ec7aec48a950699e184e",
+    "app/scripts/vps-onboarding-live/entry.ts": "3639f26f8a52d89dd0c1b4b897e07ce521a72bd435ba0d8e680bd6a58a9af83f",
+    "app/scripts/vps-onboarding-live/launch.mjs": "3b90f136a481154a798a37f97a54d02d2038e2c2053d22754b3a9e2f25273153",
+    "app/scripts/vps-onboarding-live/run.mjs": "73726506c0f0e14d81d0dc45e7abc16c733051cacdf1395a2cb2a19496e587b7",
+    "app/src/main/ipc.ts": "0b95bc8476a7bcdaf1c92f49d3180b393eabb9b8c16167c2be1601a85da7169a",
+    "app/src/main/ssh/manager.ts": "e4be88f57ceb05f579e53033736497cf27a4f17f59be773ca448097c4c14418c",
+    "app/src/main/ssh/ssh.test.ts": "342b83baae85c9754b3cf4efa4aea7967af3cb748de7b1c503b770970f6013b6",
+    "app/src/main/vps/runtimePreparation.test.ts": "8c286d99b0a1649152808a1be952723c978c938a69040bd5cb00686c745d6add",
+    "app/src/main/vps/runtimePreparation.ts": "a5a2b4377f7c61051856e409f01477dcb457717eb2911f31d9c80f62e4512bcc",
+    "app/src/renderer/src/components/ControllerInstallWizard.test.tsx": "4ee24571a78717c9b2b5585224bdea5ccb28ee3769667703fc8e332a699091cf",
+    "app/src/renderer/src/components/ControllerInstallWizard.tsx": "ffa86593b3ab1594ed97e47f0b7529b60be2ded98110b89abeea3cd360773bda",
+    "app/src/renderer/src/components/VpsOverviewTab.tsx": "84c79cae15130a425ffb6cadd86f7ce8293d382919b978137d7e913f4b113b09",
+    "app/src/renderer/src/components/VpsPreparationPanel.test.tsx": "add042ca3f22223af604af7fe9f496e6ab1012a86bf29c05bfc15727b9fc0fda",
+    "app/src/renderer/src/components/VpsPreparationPanel.tsx": "32a26aa42eeaa7c717313de999f4edc9e9e8134ac70111f32720fe8db858c009",
+    "app/src/renderer/src/components/controllerInstallerCopy.ts": "8feb53ae8ccf69d67c668e0fe273f5b18b01cb6c206810cdf40e83db4b3740a3",
+    "app/src/renderer/src/components/vpsPreparationCopy.ts": "3683eeca9e5d714d62ceb90a44181f0683a3a62311c03a5d38c1c98c9b34a148",
+    "app/src/shared/ipc.ts": "03746bdc4290abf169876ad3d25d2be7fa260dc9cad0e126cbc70112f20e23ef",
+    "docs/contracts/ipc-contract.ts": "9ca233acde581acec78be751b2047fc7be58e3ca1c726164f632202e210c6bd5"
+  },
+  "live_runtime": {
+    "path": "app/.out-scripts/vps-onboarding-live/8a3c791af3ab/proof.json",
+    "sha256": "8d44a6386feba139bb08ffbe2856be4cca01bff49b044134180dbfb0365209a0",
+    "result": {
+      "status": "PASS_RUNTIME_PREPARATION_AND_INVENTORY",
+      "base_commit": "42c71bf",
+      "operation": "--confirm-prepare-assigned-vps",
+      "checks": [
+        "automatic_pin_saved_before_auth_157.245.195.121",
+        "runtime_prepared_and_repeat_does_not_reinstall_157.245.195.121",
+        "strict_saved_pin_credential_and_readonly_inventory_157.245.195.121",
+        "automatic_pin_saved_before_auth_188.166.234.163",
+        "runtime_prepared_and_repeat_does_not_reinstall_188.166.234.163",
+        "strict_saved_pin_credential_and_readonly_inventory_188.166.234.163"
+      ],
+      "hosts": [
+        {
+          "host": "157.245.195.121",
+          "host_fingerprint": "SHA256:d1XH2CiZnh4Dy/AoIbI1n3Uo2N1je86U2Wsy3orvxA4",
+          "trust": "USER_AUTHORIZED_FIRST_CONTACT_NOT_CONSOLE_VERIFIED",
+          "runtime_preparation": {
+            "vps_id": 1,
+            "docker_version": "29.10.0, build fdd4b8e",
+            "compose_version": "5.8.0",
+            "installed_docker": true,
+            "workdir_ready": true,
+            "checked_at": "2026-11-18T12:17:35.644Z"
+          },
+          "inventory": {
+            "checked_at": "2026-11-18T12:17:36.857895+00:00",
+            "uid": 0,
+            "os": {
+              "PRETTY_NAME": "Ubuntu 24.04.5 LTS",
+              "VERSION_ID": "24.04",
+              "ID": "ubuntu"
+            },
+            "architecture": "x86_64",
+            "libc": [
+              "glibc",
+              "2.39"
+            ],
+            "cpu_count": 2,
+            "memory_bytes": {
+              "MemTotal": 4106088448,
+              "MemAvailable": 3478405120
+            },
+            "disk_bytes": {
+              "total": 82086711296,
+              "free": 79588552704
+            },
+            "machine_id_sha256": "65e8ea5e92b32590f4101ca929e7d87068e51690f536cb1f8fdff5be9c56e4b7",
+            "docker": {
+              "code": 0,
+              "value": "29.10.0"
+            },
+            "container_count": 0,
+            "controller_service": {
+              "code": 4,
+              "value": "inactive"
+            },
+            "controller_root_exists": false
+          }
+        },
+        {
+          "host": "188.166.234.163",
+          "host_fingerprint": "SHA256:jWmoAjdWENXxC2bmfEtx9g85HvjGt7P6mfaRn83XnZ0",
+          "trust": "USER_AUTHORIZED_FIRST_CONTACT_NOT_CONSOLE_VERIFIED",
+          "runtime_preparation": {
+            "vps_id": 2,
+            "docker_version": "29.10.0, build fdd4b8e",
+            "compose_version": "5.8.0",
+            "installed_docker": true,
+            "workdir_ready": true,
+            "checked_at": "2026-11-18T12:18:21.974Z"
+          },
+          "inventory": {
+            "checked_at": "2026-11-18T12:18:23.142821+00:00",
+            "uid": 0,
+            "os": {
+              "PRETTY_NAME": "Ubuntu 24.04.5 LTS",
+              "VERSION_ID": "24.04",
+              "ID": "ubuntu"
+            },
+            "architecture": "x86_64",
+            "libc": [
+              "glibc",
+              "2.39"
+            ],
+            "cpu_count": 2,
+            "memory_bytes": {
+              "MemTotal": 4106096640,
+              "MemAvailable": 3602202624
+            },
+            "disk_bytes": {
+              "total": 82086711296,
+              "free": 79588352000
+            },
+            "machine_id_sha256": "9b2c01fbf1fa1d7b968e76f8a7194f57b7014404dcb7adbffa6cb4847187b3c8",
+            "docker": {
+              "code": 0,
+              "value": "29.10.0"
+            },
+            "container_count": 0,
+            "controller_service": {
+              "code": 4,
+              "value": "inactive"
+            },
+            "controller_root_exists": false
+          }
+        }
+      ],
+      "remote_mutation_attempted": true,
+      "private_profile_removed": true,
+      "main_artifact_sha256": "600dbf382951ee7911924e23bdc6147fd9e18e4d66a19c43a22e0a5522c791ba"
+    }
+  },
+  "live_controller": {
+    "path": "app/.out-scripts/controller-onboarding-live/38be15196885d4cb/result.json",
+    "sha256": "714c74d2b85753e91df17e685a57c78f54dc1d6f6a6cb81800e42a0a0de08a83",
+    "result": {
+      "status": "PASS",
+      "checks": [
+        "production_runtime_preparation_before_controller_review",
+        "windows_local_resource_verification",
+        "pinned_ssh_readonly_preflight_and_fresh_remote",
+        "sqlite_intent_before_mutation",
+        "windows_sender_linux_receiver_verified",
+        "root_install_systemd_running",
+        "independent_installed_receipt_inspect",
+        "durable_binding_uuid_reuse",
+        "root_to_service_uid_enrollment_bridge",
+        "authenticated_ssh_loopback_api_read",
+        "temporary_client_revoked"
+      ],
+      "remote_mutation_attempted": true,
+      "controller_retained": true,
+      "local_db_removed": true,
+      "runtime": {
+        "vps_id": 1,
+        "docker_version": "29.10.0, build fdd4b8e",
+        "compose_version": "5.8.0",
+        "installed_docker": false,
+        "workdir_ready": true,
+        "checked_at": "2026-11-18T12:23:08.814Z"
+      },
+      "release_id": "linux-x64-node22-20261118-project-reconnection",
+      "preflight": {
+        "next": "install",
+        "host": {
+          "state": "compatible_snapshot",
+          "service_mode": "system",
+          "reasons": [],
+          "facts": {
+            "format": 1,
+            "system": "Linux",
+            "architecture": "x86_64",
+            "libc": "glibc",
+            "libc_version": "2.39",
+            "uid": 0,
+            "available_memory_bytes": 3611619328,
+            "free_disk_bytes": 79588544512,
+            "systemd_system": true,
+            "systemd_user_bus": true,
+            "user_linger": false,
+            "installation_conflict": false
+          }
+        },
+        "root_required": false
+      },
+      "request_key": "55f5ed57-d092-438e-b74d-56e3a618db93",
+      "installed": {
+        "artifact_path": "/opt/opspilot-controller/runtime/payload/control-plane.cjs",
+        "controller_id": "0c1503c9-3c59-4bdc-9eee-658652eaf4e0",
+        "data_directory": "/var/lib/opspilot-controller",
+        "format": 1,
+        "node_path": "/opt/opspilot-controller/runtime/node",
+        "payload_sha256": "708fbd8274bac5a2fdbf71323c739b93b98bcc5f289b0f7185bcc874b56cbb14",
+        "phase": "installed",
+        "request_key": "55f5ed57-d092-438e-b74d-56e3a618db93",
+        "runtime_uid": 997,
+        "service_enabled": true,
+        "service_state": "running"
+      }
+    }
+  },
+  "electron": {
+    "path": "app/.out-scripts/vps-onboarding-form/15e79fbd5204/proof.json",
+    "sha256": "d4465b6458ee4d7f34943cef99cc90e7d5d08ec9d606558a3913bb9a95281a81",
+    "result": {
+      "status": "PASS",
+      "scope": "REAL_ELECTRON_PRODUCTION_FORM_PRELOAD_MAIN_ONBOARDING_SQLITE_SYNTHETIC_HOST_OBSERVATION_RUNTIME_PREPARATION_WITH_SYNTHETIC_SSH",
+      "checks": [
+        "default_root_password_advanced_closed_native_layout_two_locales_themes",
+        "ip_password_only_native_form_preload_main_automatic_pin_encrypted_SQLite_save",
+        "production_preparation_panel_preload_Main_service_SQLite_synthetic_SSH_no_automatic_mutation_before_click"
+      ],
+      "layout_attempts": [
+        {
+          "locale": "en",
+          "theme": "dark",
+          "width": 1280,
+          "height": 800,
+          "layout": {
+            "horizontal": false,
+            "modal": false,
+            "footerVisible": true
+          }
+        },
+        {
+          "locale": "vi",
+          "theme": "light",
+          "width": 1366,
+          "height": 768,
+          "layout": {
+            "horizontal": false,
+            "modal": false,
+            "footerVisible": true
+          }
+        }
+      ],
+      "captures": [
+        {
+          "file": "docs/ui-redesign/screenshots/ux1/15e79fbd5204/vps-add-en-dark-1280x800.png",
+          "sha256": "5e977a684b87e545c6a549029da586f345cd8cad41027855386b1ff2f8613f70",
+          "layout": {
+            "horizontal": false,
+            "modal": false,
+            "footerVisible": true
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/ux1/15e79fbd5204/vps-add-vi-light-1366x768.png",
+          "sha256": "0aa64ae13ff6893dd459376fbe281e36f949b436ba1f28a7288bb9f4d1c41ecf",
+          "layout": {
+            "horizontal": false,
+            "modal": false,
+            "footerVisible": true
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/ux1/15e79fbd5204/vps-ready-en-dark-1280x800.png",
+          "sha256": "f7ed88b77ebd37f90e3ee991426daf13538739b87cc75aeda00432017caaee4f",
+          "layout": {
+            "horizontal": false,
+            "width": 1280,
+            "height": 800
+          }
+        },
+        {
+          "file": "docs/ui-redesign/screenshots/ux1/15e79fbd5204/vps-ready-vi-light-1366x768.png",
+          "sha256": "af8f5ffbb06034da2984a644522d7e4e08fd0d3601932abc872be7a86d232c51",
+          "layout": {
+            "horizontal": false,
+            "width": 1366,
+            "height": 768
+          }
+        }
+      ],
+      "VPS_used": false,
+      "private_cleanup": true
+    }
+  },
+  "tests": {
+    "files_passed": 194,
+    "tests_passed": 2779,
+    "existing_linux_only_files_skipped": 1,
+    "existing_linux_only_tests_skipped": 2,
+    "failed": 0,
+    "duration_seconds": 353.95,
+    "path": "app/.out-scripts/ux2a-full.log",
+    "sha256": "ed0ff877757590ee8e94bd7be9f0dbf30f454cb74b8317b8dfc6ef83428ab7b1"
+  },
+  "quality": {
+    "Node_Web_types_and_production_build": "PASS",
+    "scripts_types": "PASS",
+    "scoped_ESLint_zero_warnings": "PASS",
+    "format": "PASS",
+    "contract_parity": "PASS"
+  },
+  "quality_raw": {
+    "app/.out-scripts/ux2a-build.log": "b3cf748dc0b6608c1ecd785ee1034cc4e7e07140e4f63ca865bd1acb4cf67f04",
+    "app/.out-scripts/ux2a-current-eslint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/ux2a-wizard-eslint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/ux2a-scripts-types.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/.out-scripts/ux2a-format.log": "fbdd37869c73ce85afb11ffefa058e0181874c073fdfee7d7a4b5086b7ea3b1b",
+    "app/.out-scripts/ux2a-early-focused.log": "34e0ecb7b48f777b5d5b353263a3730a4fa7141e11a68360f74c19078d5687c2",
+    "app/.out-scripts/ux2a-final-focused.log": "5796ef0387bc2fcac92e8a504635e67956cf7b812ab1e4d89ef5246713fd9f2f",
+    "app/.out-scripts/ux2a-electron-final.log": "f88407439a47d25a060b0d93b8d1556d09cd8c44c79164fbebd691147d2d04c6",
+    "app/.out-scripts/ux2a-last-harness-eslint.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "limits": {
+    "controller_installed_on": "157.245.195.121",
+    "runtime_only_on": "188.166.234.163",
+    "Kim_hosts_administered": false,
+    "new_VPS_app_deployments": 0,
+    "live_GUI_to_installed_controller_deployment": "NOT_RUN",
+    "formal_ML": "NOT_RUN",
+    "schema_changed": false,
+    "compiled_controller_pins_changed": false,
+    "controller_release": "linux-x64-node22-20261118-project-reconnection",
+    "legacy_install_docker_channel_unchanged": true,
+    "new_install_support": "Ubuntu jammy/noble, Engine29 signed repository; already installed Docker is inspected. Missing Compose/conflicting runtimes fail explicitly.",
+    "GUI_scope": "Production form/panel/preload/Main/SQLite with synthetic observation and SSH; separate real runtime1+2 and protected controller1 proof."
+  },
+  "accepted_gate_exceptions": [],
+  "next": [
+    "UX2b guided folder/Git deployment through existing services, with actual new-VPS website acceptance.",
+    "E4b genuine app/PG setup then reconnection039 and actual remote inspector acceptance.",
+    "Whole release/formal ML/Windows and backup-migrate remain open."
+  ]
+}

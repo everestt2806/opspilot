@@ -11,6 +11,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
+import { journalKey } from './controller-upgrade-live/journal-key.mjs'
 
 // This intentionally uses a private disposable Desktop DB, never the user's profile.
 // Only the controller installed on the designated development VPS remains afterwards.
@@ -34,6 +35,7 @@ const evidence = {
   local_db_removed: false
 }
 const checks = evidence.checks
+console.log('VERIFYING_PACKAGED_CONTROLLER_RESOURCES')
 const verifier = require(join(project, 'out/main/controllerResourceVerifier.js'))
 verifier.verifyPackagedControllerResources(join(project, 'resources/controller-releases'))
 const catalog = verifier.builtinControllerInstallerCatalog()
@@ -88,6 +90,8 @@ const parsed = z
   .safeParse(input)
 if (!parsed.success) throw Error('LIVE_INPUT_INVALID')
 const config = parsed.data
+assert.equal(config.host, '157.245.195.121')
+assert.equal(config.host_fingerprint, 'SHA256:d1XH2CiZnh4Dy/AoIbI1n3Uo2N1je86U2Wsy3orvxA4')
 input.password = ''
 const {
   initializeDatabase,
@@ -102,7 +106,7 @@ const {
 const local = join(directory, 'private-profile')
 mkdirSync(local, { mode: 0o700 })
 const db = initializeDatabase(local)
-const key = randomBytes(32),
+const key = journalKey(local, true),
   cipher = new AesGcmCredentialCipher(key)
 key.fill(0)
 const repository = new VpsRepository(db)
@@ -133,11 +137,21 @@ const resources = new ControllerInstallerResources(
 )
 let binding, service
 try {
+  console.log('PREPARING_VPS_RUNTIME')
+  const runtime = await new (require(bundle).VpsRuntimePreparationService)(
+    ssh,
+    repository,
+    new (require(bundle).VpsService)(repository, cipher)
+  ).prepare({ vps_id: vps.id, consent: true })
+  evidence.runtime = runtime
+  checks.push('production_runtime_preparation_before_controller_review')
   service = new DesktopControllerService(db, cipher, ssh, undefined, resources.entries(), resources)
   const overview = await service.installerOverview()
-  const release = overview.releases.find((v) => v.state === 'available')
-  assert.ok(release)
+  const release = overview.releases.at(-1)
+  assert.equal(release?.state, 'available')
+  evidence.release_id = release.release_id
   checks.push('windows_local_resource_verification')
+  console.log('REVIEWING_FRESH_CONTROLLER_INSTALLATION')
   const review = await service.reviewInstaller({ vps_id: vps.id, release_id: release.release_id })
   evidence.preflight = { next: review.next, host: review.host, root_required: review.root_required }
   assert.equal(review.next, 'install')
@@ -148,6 +162,7 @@ try {
   assert.equal(record.state, 'prepared')
   checks.push('sqlite_intent_before_mutation')
   evidence.remote_mutation_attempted = true
+  console.log('TRANSFERRING_PINNED_RELEASE')
   record = await service.sendInstaller({
     request_key: record.request_key,
     operation: 'transfer',
@@ -155,6 +170,7 @@ try {
   })
   assert.equal(record.state, 'transferred')
   checks.push('windows_sender_linux_receiver_verified')
+  console.log('INSTALLING_CONTROLLER')
   record = await service.sendInstaller({
     request_key: record.request_key,
     operation: 'install',
@@ -210,8 +226,12 @@ try {
   assert.ok(directory.startsWith(parent + sep))
   assert.match(nonce, /^[a-f0-9]{16}$/)
   assert.equal(lstatSync(local).isSymbolicLink(), false)
-  rmSync(local, { recursive: true })
-  evidence.local_db_removed = true
+  if (evidence.status === 'PASS') {
+    rmSync(local, { recursive: true })
+    evidence.local_db_removed = true
+  } else {
+    evidence.private_encrypted_journal_retained = true
+  }
   const fd = openSync(join(directory, 'result.json'), 'wx', 0o600)
   try {
     writeFileSync(fd, JSON.stringify(evidence, null, 2))

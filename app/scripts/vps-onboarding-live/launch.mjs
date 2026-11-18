@@ -3,19 +3,16 @@ import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { privateInput } from '../product-environment-live/input.mjs'
 
-if (process.argv.slice(2).join(' ') !== '--confirm-readonly-assigned-vps')
+const operation = process.argv.slice(2).join(' ')
+if (!['--confirm-readonly-assigned-vps', '--confirm-prepare-assigned-vps'].includes(operation))
   throw Error('CONFIRMATION_REQUIRED')
 const config = await privateInput()
 const require = createRequire(import.meta.url)
-const child = spawn(
-  require('electron'),
-  [join(import.meta.dirname, 'run.mjs'), '--confirm-readonly-assigned-vps'],
-  {
-    windowsHide: true,
-    stdio: ['pipe', 'inherit', 'inherit'],
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
-  }
-)
+const child = spawn(require('electron'), [join(import.meta.dirname, 'run.mjs'), operation], {
+  windowsHide: true,
+  stdio: ['pipe', 'inherit', 'inherit'],
+  env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+})
 child.stdin.on('error', () => {})
 child.stdin.end(JSON.stringify(config))
 if (Array.isArray(config)) for (const host of config) host.password = ''

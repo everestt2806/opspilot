@@ -6,3 +6,7 @@ export { initializeDatabase, closeDatabase } from '../../src/main/db'
 export { VpsRepository } from '../../src/main/db/vpsRepository'
 export { AesGcmCredentialCipher } from '../../src/main/crypto/credentialCipher'
 export { loadSecret } from '../../src/main/crypto/credentials'
+export {
+  VpsRuntimePreparationService,
+  PREPARE_RUNTIME_COMMAND
+} from '../../src/main/vps/runtimePreparation'
