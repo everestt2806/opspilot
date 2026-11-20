@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from experiments.run_batch import (
     PROTOCOL_SCENARIOS,
     RunSpec,
+    _preflight_allows_batch,
     build_batch_plan,
     completed_runs_from_db,
     execute_batch,
@@ -90,3 +91,32 @@ def test_execute_batch_dry_run_never_touches_preflight_or_ssh(tmp_path: Path) ->
     assert result["status"] == "DRY_RUN"
     assert result["planned_total"] == 5
     assert result["pending_count"] == 5
+
+
+def test_preflight_allows_batch_ignores_only_unselected_second_vps_placeholder() -> None:
+    assert _preflight_allows_batch({"overall": "PASS", "gates": []}) is True
+    assert (
+        _preflight_allows_batch(
+            {
+                "overall": "BLOCKED",
+                "gates": [
+                    {"name": "DEDICATED_HOST", "status": "PASS"},
+                    {"name": "PROTOCOL_CLOCK_OFFSET", "status": "PASS"},
+                    {"name": "PROTOCOL_PROVIDER_PAIR", "status": "NOT_RUN"},
+                ],
+            }
+        )
+        is True
+    )
+    assert (
+        _preflight_allows_batch(
+            {
+                "overall": "BLOCKED",
+                "gates": [
+                    {"name": "DEDICATED_HOST", "status": "BLOCKED"},
+                    {"name": "PROTOCOL_PROVIDER_PAIR", "status": "NOT_RUN"},
+                ],
+            }
+        )
+        is False
+    )

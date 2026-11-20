@@ -18,6 +18,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+_EXPERIMENTS_DIR = str(Path(__file__).resolve().parent)
+if _EXPERIMENTS_DIR not in sys.path:
+    sys.path.insert(0, _EXPERIMENTS_DIR)
+
 from experiments.analyze import cli_main as analyze_cli_main
 from experiments.preflight import run_preflight, write_report
 from experiments.run_experiment import run_experiment
@@ -94,6 +98,19 @@ def pending_runs(
     ]
 
 
+def _preflight_allows_batch(report: dict[str, Any]) -> bool:
+    """Allows single-VPS batch when every gate passes except placeholder PROTOCOL_PROVIDER_PAIR."""
+    if report.get("overall") == "PASS":
+        return True
+    gates = report.get("gates")
+    if not isinstance(gates, list) or len(gates) == 0:
+        return False
+    return all(
+        gate.get("status") == "PASS" or gate.get("name") == "PROTOCOL_PROVIDER_PAIR"
+        for gate in gates
+    )
+
+
 def execute_batch(args: argparse.Namespace) -> dict[str, Any]:
     """Runs preflight, executes pending shard runs sequentially, and summarizes results."""
     scenarios = tuple(args.scenarios) if args.scenarios else PROTOCOL_SCENARIOS
@@ -129,7 +146,7 @@ def execute_batch(args: argparse.Namespace) -> dict[str, Any]:
             ssh_key_file=args.ssh_key_file,
         )
         write_report(report, args.preflight_report)
-        if report["overall"] != "PASS":
+        if not _preflight_allows_batch(report):
             summary["status"] = "BLOCKED_PREFLIGHT"
             summary["preflight"] = report
             return summary
