@@ -1,5 +1,12 @@
 import type Database from 'better-sqlite3'
-import type { Alert, MetricSample, MonitorSetting, ScoreSet } from '@shared/ipc'
+import type {
+  Alert,
+  DetectionMethod,
+  IpcEventMap,
+  MetricSample,
+  MonitorSetting,
+  ScoreSet
+} from '@shared/ipc'
 import { MonitorRepository } from './repository'
 import { MetricSourceError, MonitorPoller, type MonitorRuntime } from './poller'
 import { z } from 'zod'
@@ -7,12 +14,32 @@ import { AppError } from '../errors'
 import { SshMetricSource } from './metricSource'
 import type { SshManager } from '../ssh/manager'
 import { join as posixJoin } from 'node:path/posix'
-import type { IpcEventMap } from '@shared/ipc'
 import { metricLineSchema } from './metricParser'
 import type { MlApiClient } from './mlApi'
 import { ActivationRepository } from './activation'
 import { withAppLock } from './appLock'
 import { DeploymentRepository } from '../db/deploymentRepository'
+import {
+  countConsecutiveTriggeredScores,
+  isDesktopAutoRollbackAllowed,
+  shouldAutoRollback
+} from './auto-rollback'
+
+export interface AutoRollbackRequest {
+  appId: number
+  currentDeploymentId: number
+  targetDeploymentId: number
+  fromVersion: number
+  toVersion: number
+  method: DetectionMethod
+  consecutive: number
+  peakScore: number
+  alertId: number
+}
+
+export type AutoRollbackExecutor = (
+  request: AutoRollbackRequest
+) => Promise<{ ok: boolean; deploymentId?: number; error?: string }>
 
 const settingPatchSchema = z
   .object({
@@ -39,7 +66,11 @@ export class MonitorService {
   private readonly lastMlLog = new Map<number, number>()
   constructor(
     private readonly db: Database.Database,
-    private readonly options: { autoTrain?: boolean; strict?: boolean } = {}
+    private readonly options: {
+      autoTrain?: boolean
+      strict?: boolean
+      autoRollback?: AutoRollbackExecutor
+    } = {}
   ) {
     this.repository = new MonitorRepository(db)
   }
@@ -125,7 +156,8 @@ export class MonitorService {
     ssh: SshManager,
     scorer?: MonitorRuntime,
     emit?: (event: IpcEventMap['monitor:tick']) => void,
-    mlStatus?: (status: { running: boolean; reason?: string }) => void
+    mlStatus?: (status: { running: boolean; reason?: string }) => void,
+    onAutoRollback?: (event: IpcEventMap['system:auto-rollback']) => void
   ): Promise<void> {
     await this.reconcilePrepared(ssh)
     for (const target of this.repository.listTargets()) {
@@ -167,7 +199,137 @@ export class MonitorService {
           scores: this.repository.listScoresBySampleIds(result.sampleIds),
           new_alerts: this.repository.listAlertsByIds(result.alertIds)
         })
+      if (this.options.autoRollback && result.sampleIds.length > 0) {
+        await this.evaluateAutoRollback(
+          target.app_id,
+          target.deployment_id,
+          result.sampleIds,
+          onAutoRollback
+        )
+      }
     }
+  }
+
+  private async evaluateAutoRollback(
+    appId: number,
+    deploymentId: number,
+    freshSampleIds: number[],
+    onAutoRollback?: (event: IpcEventMap['system:auto-rollback']) => void
+  ): Promise<void> {
+    if (!this.options.autoRollback || !isDesktopAutoRollbackAllowed(this.db, appId)) return
+
+    const currentApp = this.db
+      .prepare('SELECT current_deployment_id, imported_from_vps FROM app WHERE id=?')
+      .get(appId) as { current_deployment_id: number | null; imported_from_vps: number } | undefined
+    if (
+      !currentApp ||
+      currentApp.imported_from_vps === 1 ||
+      currentApp.current_deployment_id !== deploymentId
+    ) {
+      return
+    }
+
+    const currentDeployment = new DeploymentRepository(this.db).getById(deploymentId)
+    if (currentDeployment.status !== 'running' || currentDeployment.origin !== 'opspilot') return
+
+    const setting = this.repository.getOrCreateSetting(appId)
+    if (setting.auto_rollback !== 1) return
+
+    const streak = countConsecutiveTriggeredScores(
+      this.db,
+      deploymentId,
+      setting.trusted_method,
+      setting.rollback_consecutive
+    )
+    if (streak.count < setting.rollback_consecutive) return
+
+    // Only react when at least one sample in the active streak arrived in the current poll,
+    // preventing historical alerts from re-triggering after restart when no new data arrived.
+    const freshSet = new Set(freshSampleIds)
+    if (!streak.metricSampleIds.some((id) => freshSet.has(id))) return
+
+    const openAlert = this.db
+      .prepare(
+        'SELECT id, acted, peak_score FROM alert WHERE deployment_id=? AND method=? AND ts_resolved IS NULL ORDER BY id DESC LIMIT 1'
+      )
+      .get(deploymentId, setting.trusted_method) as
+      { id: number; acted: Alert['acted']; peak_score: number } | undefined
+    if (!openAlert || openAlert.acted !== 'none') return
+
+    const cooldownRow = this.db
+      .prepare('SELECT last_rollback_at FROM monitor_setting WHERE app_id=?')
+      .get(appId) as { last_rollback_at: string | null } | undefined
+    const decision = shouldAutoRollback({
+      setting,
+      consecutiveTriggered: streak.count,
+      lastRollbackAt: cooldownRow?.last_rollback_at ?? null,
+      now: new Date().toISOString()
+    })
+
+    if (decision.reason === 'cooldown') {
+      this.db
+        .prepare(
+          "UPDATE alert SET acted='rollback_suppressed_cooldown' WHERE id=? AND acted='none'"
+        )
+        .run(openAlert.id)
+      return
+    }
+    if (!decision.rollback) return
+
+    const previous = new DeploymentRepository(this.db).previousCompleted(
+      appId,
+      currentDeployment.version
+    )
+    if (!previous) {
+      const claimed = this.db
+        .prepare("UPDATE alert SET acted='rollback_auto' WHERE id=? AND acted='none'")
+        .run(openAlert.id)
+      if (claimed.changes === 1) {
+        this.repository.logAction(
+          'rollback_auto',
+          'failed',
+          `Auto-rollback bị bỏ qua: app đang ở v${currentDeployment.version}, chưa có phiên bản trước đó.`,
+          appId,
+          deploymentId
+        )
+      }
+      return
+    }
+
+    const claimed = this.db
+      .prepare("UPDATE alert SET acted='rollback_auto' WHERE id=? AND acted='none'")
+      .run(openAlert.id)
+    if (claimed.changes !== 1) return
+
+    let outcome: { ok: boolean; deploymentId?: number; error?: string }
+    try {
+      outcome = await this.options.autoRollback({
+        appId,
+        currentDeploymentId: deploymentId,
+        targetDeploymentId: previous.id,
+        fromVersion: currentDeployment.version,
+        toVersion: previous.version,
+        method: setting.trusted_method,
+        consecutive: streak.count,
+        peakScore: Math.max(openAlert.peak_score, streak.peakScore),
+        alertId: openAlert.id
+      })
+    } catch (error) {
+      outcome = { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+
+    if (!outcome.ok) return
+
+    this.db
+      .prepare('UPDATE monitor_setting SET last_rollback_at=? WHERE app_id=?')
+      .run(new Date().toISOString(), appId)
+    onAutoRollback?.({
+      app_id: appId,
+      from_version: currentDeployment.version,
+      to_version: previous.version,
+      method: setting.trusted_method,
+      alert_id: openAlert.id
+    })
   }
 
   /** Reconcile a prepared cutover after process restart without trusting the DB pointer. */

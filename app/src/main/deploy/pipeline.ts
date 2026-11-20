@@ -6,7 +6,15 @@ import { join as posixJoin } from 'node:path/posix'
 import type { Database as SqliteDatabase } from 'better-sqlite3'
 import { z } from 'zod'
 
-import type { App, DeployEvent, DeployInput, DeployStep, Deployment, IpcError } from '@shared/ipc'
+import type {
+  App,
+  DeployEvent,
+  DeployInput,
+  DeployStep,
+  Deployment,
+  DetectionMethod,
+  IpcError
+} from '@shared/ipc'
 
 import { ActionLogRepository } from '../db/actionLogRepository'
 import { AppRepository } from '../db/appRepository'
@@ -270,6 +278,10 @@ export class DeployPipeline {
     return { deploymentId: ctx.deployment.id }
   }
 
+  hasActiveRun(appId: number): boolean {
+    return this.activeByApp.has(appId)
+  }
+
   async shutdown(): Promise<void> {
     for (const controller of this.controllers.values()) controller.abort()
     await Promise.allSettled([...this.activeRuns])
@@ -277,6 +289,57 @@ export class DeployPipeline {
 
   /** Rollback thủ công (UC-04): compose up image cũ (không build lại), healthcheck, ghi bản ghi mới. */
   rollback(appId: number, targetDeploymentId: number): { deploymentId: number } {
+    const { ctx, targetImageTag, toVersion, runPromise } = this.prepareRollback(
+      appId,
+      targetDeploymentId,
+      'manual'
+    )
+    void runPromise
+    void targetImageTag
+    void toVersion
+    return { deploymentId: ctx.deployment.id }
+  }
+
+  /** Tự động rollback (M08): dùng chung pipeline rollback, ghi nhãn auto_rollback và chờ kết quả hoàn tất. */
+  async rollbackAuto(
+    appId: number,
+    targetDeploymentId: number,
+    meta: { method: DetectionMethod; consecutive: number; peakScore: number }
+  ): Promise<{
+    ok: boolean
+    deploymentId: number
+    fromVersion: number
+    toVersion: number
+    error?: string
+  }> {
+    const { ctx, fromVersion, toVersion, runPromise } = this.prepareRollback(
+      appId,
+      targetDeploymentId,
+      'auto',
+      meta
+    )
+    const outcome = await runPromise
+    return {
+      ok: outcome.ok,
+      deploymentId: ctx.deployment.id,
+      fromVersion,
+      toVersion,
+      ...(outcome.error ? { error: outcome.error } : {})
+    }
+  }
+
+  private prepareRollback(
+    appId: number,
+    targetDeploymentId: number,
+    mode: 'manual' | 'auto',
+    autoMeta?: { method: DetectionMethod; consecutive: number; peakScore: number }
+  ): {
+    ctx: RunContext
+    targetImageTag: string
+    fromVersion: number
+    toVersion: number
+    runPromise: Promise<{ ok: boolean; error?: string }>
+  } {
     if (this.activeByApp.has(appId)) {
       throw new AppError(
         'VALIDATION',
@@ -294,6 +357,11 @@ export class DeployPipeline {
         'Chỉ có thể rollback về deployment đã chạy thành công. Hãy chọn một phiên bản running.'
       )
     }
+    const current =
+      app.current_deployment_id !== null
+        ? this.deploymentRepository.getById(app.current_deployment_id)
+        : null
+    const fromVersion = current?.version ?? target.version
     const targetImageTag = this.deploymentRepository.runtimeImageTag(target.id)
 
     const controller = new AbortController()
@@ -320,15 +388,24 @@ export class DeployPipeline {
       exposureStatus: 'not_checked',
       exposureEvidence: null
     }
-    void this.executeRollback(ctx, targetImageTag, target.version, target.id).catch(
-      (error: unknown) => {
-        logger.error('deploy', 'Rollback thủ công dừng bất thường ngoài vòng bắt lỗi', {
-          deployment_id: deployment.id,
-          error: error instanceof Error ? error.message : String(error)
-        })
-      }
-    )
-    return { deploymentId: deployment.id }
+    const runPromise = this.executeRollback(
+      ctx,
+      targetImageTag,
+      target.version,
+      target.id,
+      fromVersion,
+      mode,
+      autoMeta
+    ).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error)
+      logger.error('deploy', 'Rollback dừng bất thường ngoài vòng bắt lỗi', {
+        deployment_id: deployment.id,
+        mode,
+        error: message
+      })
+      return { ok: false, error: message }
+    })
+    return { ctx, targetImageTag, fromVersion, toVersion: target.version, runPromise }
   }
 
   /** Chuỗi event rút gọn DEPLOY → HEALTHCHECK, luôn kết thúc bằng đúng một `finished`. */
@@ -336,10 +413,21 @@ export class DeployPipeline {
     ctx: RunContext,
     targetImageTag: string,
     toVersion: number,
-    targetDeploymentId: number
-  ): Promise<void> {
-    await withAppLock(ctx.app.id, () =>
-      this.executeRollbackLocked(ctx, targetImageTag, toVersion, targetDeploymentId)
+    targetDeploymentId: number,
+    fromVersion: number,
+    mode: 'manual' | 'auto',
+    autoMeta?: { method: DetectionMethod; consecutive: number; peakScore: number }
+  ): Promise<{ ok: boolean; error?: string }> {
+    return withAppLock(ctx.app.id, () =>
+      this.executeRollbackLocked(
+        ctx,
+        targetImageTag,
+        toVersion,
+        targetDeploymentId,
+        fromVersion,
+        mode,
+        autoMeta
+      )
     )
   }
 
@@ -347,11 +435,16 @@ export class DeployPipeline {
     ctx: RunContext,
     targetImageTag: string,
     toVersion: number,
-    targetDeploymentId: number
-  ): Promise<void> {
+    targetDeploymentId: number,
+    fromVersion: number,
+    mode: 'manual' | 'auto',
+    autoMeta?: { method: DetectionMethod; consecutive: number; peakScore: number }
+  ): Promise<{ ok: boolean; error?: string }> {
     let preparedActivationId: number | null = null
+    const activationReason: ActivationReason = mode === 'auto' ? 'auto_rollback' : 'manual_rollback'
+    const logAction = mode === 'auto' ? 'rollback_auto' : 'rollback_manual'
     try {
-      preparedActivationId = await this.prepareActivation(ctx, 'manual_rollback')
+      preparedActivationId = await this.prepareActivation(ctx, activationReason)
       await this.inStep(ctx, 'DEPLOY', async () => {
         await this.ensureImageAvailable(ctx, targetImageTag)
         await this.restoreComposeTo(ctx.app, targetImageTag)
@@ -400,7 +493,16 @@ export class DeployPipeline {
       })
 
       await this.publishExposure(ctx)
-      await this.recordManualRollbackSuccess(ctx, targetImageTag, targetDeploymentId)
+      await this.recordRollbackSuccess(
+        ctx,
+        targetImageTag,
+        targetDeploymentId,
+        fromVersion,
+        toVersion,
+        mode,
+        autoMeta
+      )
+      return { ok: true }
     } catch (error) {
       if (ctx.signal.aborted) ctx.cancelled = true
       if (ctx.collectorState === 'stopped') await this.resumeCollector(ctx)
@@ -418,19 +520,33 @@ export class DeployPipeline {
         this.activation.abort(preparedActivationId)
       }
       await this.recordFailure(ctx, error)
+      const ipcError = toStepIpcError(error)
       try {
-        const ipcError = toStepIpcError(error)
         this.actionLog.insert({
-          action: 'rollback_manual',
+          action: logAction,
           status: ctx.cancelled ? 'cancelled' : 'failed',
           vps_id: ctx.app.vps_id,
           app_id: ctx.app.id,
           deployment_id: ctx.deployment.id,
-          message: `Rollback thủ công app ${ctx.app.name} thất bại: ${ipcError.message}`
+          detail_json:
+            mode === 'auto' && autoMeta
+              ? JSON.stringify({
+                  method: autoMeta.method,
+                  score: autoMeta.peakScore,
+                  consecutive: autoMeta.consecutive,
+                  from_version: fromVersion,
+                  to_version: toVersion
+                })
+              : undefined,
+          message:
+            mode === 'auto'
+              ? `Tự động rollback app ${ctx.app.name} về v${toVersion} thất bại: ${ipcError.message}`
+              : `Rollback thủ công app ${ctx.app.name} thất bại: ${ipcError.message}`
         })
       } catch (recordError) {
-        logger.warn('deploy', 'Không ghi được action_log rollback thủ công thất bại', {
+        logger.warn('deploy', 'Không ghi được action_log rollback thất bại', {
           deployment_id: ctx.deployment.id,
+          mode,
           error: recordError instanceof Error ? recordError.message : String(recordError)
         })
       }
@@ -440,15 +556,20 @@ export class DeployPipeline {
         status: 'failed',
         total_duration_ms: Date.now() - ctx.startedAt
       })
+      return { ok: false, error: ipcError.message }
     } finally {
       this.release(ctx.app.id, ctx.deployment.id)
     }
   }
 
-  private async recordManualRollbackSuccess(
+  private async recordRollbackSuccess(
     ctx: RunContext,
     targetImageTag: string,
-    targetDeploymentId: number
+    targetDeploymentId: number,
+    fromVersion: number,
+    toVersion: number,
+    mode: 'manual' | 'auto',
+    autoMeta?: { method: DetectionMethod; consecutive: number; peakScore: number }
   ): Promise<void> {
     this.deploymentRepository.update(ctx.deployment.id, {
       status: 'running',
@@ -460,12 +581,25 @@ export class DeployPipeline {
     })
     this.appRepository.setCurrentDeployment(ctx.app.id, ctx.deployment.id)
     this.actionLog.insert({
-      action: 'rollback_manual',
+      action: mode === 'auto' ? 'rollback_auto' : 'rollback_manual',
       status: 'success',
       vps_id: ctx.app.vps_id,
       app_id: ctx.app.id,
       deployment_id: ctx.deployment.id,
-      message: `Rollback thủ công app ${ctx.app.name} về ${targetImageTag} — app đã chạy lại và healthcheck đạt.`
+      detail_json:
+        mode === 'auto' && autoMeta
+          ? JSON.stringify({
+              method: autoMeta.method,
+              score: autoMeta.peakScore,
+              consecutive: autoMeta.consecutive,
+              from_version: fromVersion,
+              to_version: toVersion
+            })
+          : undefined,
+      message:
+        mode === 'auto'
+          ? `Tự động rollback app ${ctx.app.name} từ v${fromVersion} về v${toVersion} (${autoMeta?.method ?? 'ensemble'}, ${autoMeta?.consecutive ?? 3} mẫu liên tiếp).`
+          : `Rollback thủ công app ${ctx.app.name} về ${targetImageTag} — app đã chạy lại và healthcheck đạt.`
     })
     await this.pruneImages(ctx, null, [targetImageTag])
     this.emitFinished(ctx, {
