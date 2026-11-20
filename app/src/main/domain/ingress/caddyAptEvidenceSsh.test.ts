@@ -385,4 +385,40 @@ describe('collectCaddyAptEvidenceOverSsh', () => {
       collectCaddyAptEvidenceOverSsh(expandedSsh, TARGET, { maxPackagesUncompressedBytes: 512 })
     ).resolves.toMatchObject({ status: 'blocked', code: 'APT_METADATA_TOO_LARGE' })
   })
+
+  it('accepts unrelated KEYEXPIRED subkey warnings when the pinned signing subkey is valid, and blocks EXPKEYSIG', async () => {
+    const expiredSubkeySsh = fakeSsh({
+      mutate: (response) => ({
+        ...response,
+        signatureStatusB64: Buffer.from(
+          [
+            '[GNUPG:] KEYEXPIRED 1711818465',
+            '[GNUPG:] GOODSIG ABA1F9B8875A6661 Caddy Web Server <contact@caddyserver.com>',
+            `[GNUPG:] VALIDSIG ${CADDY_STABLE_SIGNER_FINGERPRINT} 2026-11-05 1793842124 0 4 0 1 8 01 65760C51EDEA2017CEA2CA15155B6D79CA56EA34`
+          ].join('\n')
+        ).toString('base64')
+      })
+    })
+    await expect(collectCaddyAptEvidenceOverSsh(expiredSubkeySsh, TARGET)).resolves.toMatchObject({
+      status: 'verified'
+    })
+
+    const expiredSigningKeySsh = fakeSsh({
+      mutate: (response) => ({
+        ...response,
+        signatureStatusB64: Buffer.from(
+          [
+            `[GNUPG:] EXPKEYSIG ABA1F9B8875A6661 Caddy Web Server`,
+            `[GNUPG:] VALIDSIG ${CADDY_STABLE_SIGNER_FINGERPRINT} 2026-11-05 1793842124 0 4 0 1 8 01 65760C51EDEA2017CEA2CA15155B6D79CA56EA34`
+          ].join('\n')
+        ).toString('base64')
+      })
+    })
+    await expect(collectCaddyAptEvidenceOverSsh(expiredSigningKeySsh, TARGET)).resolves.toMatchObject(
+      {
+        status: 'blocked',
+        code: 'APT_SIGNATURE_INVALID'
+      }
+    )
+  })
 })
