@@ -135,7 +135,25 @@ export class MonitorPoller {
       offset === 1
     ) {
       mutateActivation(() => activationRepository.adoptFirstGeneration(target.app_id, identity))
-    } else if (activeBeforeIdentity && storedGeneration !== identity.generation) {
+    } else if (
+      activeBeforeIdentity &&
+      activeBeforeIdentity.generation === identity.generation &&
+      storedGeneration !== identity.generation
+    ) {
+      mutateActivation(() => {
+        this.database
+          .prepare(
+            'UPDATE app SET metrics_stream_generation=?, metrics_stream_device=?, metrics_stream_inode=? WHERE id=?'
+          )
+          .run(identity.generation, identity.device ?? null, identity.inode ?? null, target.app_id)
+      })
+    } else if (
+      activeBeforeIdentity &&
+      ((activeBeforeIdentity.generation !== 'pending-first-generation' &&
+        activeBeforeIdentity.generation !== identity.generation) ||
+        (storedGeneration !== 'pending-first-generation' &&
+          storedGeneration !== identity.generation))
+    ) {
       let recovered = false
       let oldEndOffset = offset
       let gapEndOffset = offset

@@ -388,4 +388,30 @@ describe('C02 activation episodes', () => {
     ).toEqual({ count: 2 })
     expect(db.prepare('SELECT COUNT(*) AS count FROM score_sample').get()).toEqual({ count: 15 })
   })
+
+  it('syncs app generation without false rotation or CHECK failure when v2 activates before v1 is polled', async () => {
+    const db = seed()
+    const activation = new ActivationRepository(db)
+    const v1Ep = activation.prepare(1, 1, { generation: 'pending-first-generation' }, 1, 'deploy')
+    activation.activate(v1Ep, null)
+    db.prepare('UPDATE app SET metrics_stream_generation=?, metrics_offset=1 WHERE id=1').run(
+      'pending-first-generation'
+    )
+
+    addDeployment(db, 2)
+    const line1 = `${metric(1)}\n`
+    const line2 = `${metric(2)}\n`
+    const start2 = Buffer.byteLength(line1) + 1
+    const v2Ep = activation.prepare(1, 2, { generation: '64769:809338' }, start2, 'deploy')
+    activation.activate(v2Ep, v1Ep)
+
+    await new MonitorPoller(db).poll(1, 2, source(`${line1}${line2}`, '64769:809338'))
+
+    expect(
+      db.prepare('SELECT metrics_stream_generation FROM app WHERE id=1').get()
+    ).toEqual({ metrics_stream_generation: '64769:809338' })
+    expect(db.prepare('SELECT deployment_id, seq FROM metric_sample ORDER BY seq').all()).toEqual([
+      { deployment_id: 2, seq: 2 }
+    ])
+  })
 })

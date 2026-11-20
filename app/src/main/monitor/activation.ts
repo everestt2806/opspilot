@@ -238,14 +238,14 @@ export class ActivationRepository {
     this.database.transaction(() => {
       const previous = this.database
         .prepare(
-          "SELECT stream_generation FROM deployment_activation WHERE app_id=? AND state='active'"
+          "SELECT stream_generation, start_offset FROM deployment_activation WHERE app_id=? AND state='active'"
         )
-        .get(appId) as { stream_generation?: string } | undefined
+        .get(appId) as { stream_generation?: string; start_offset?: number } | undefined
       this.database
         .prepare(
           "UPDATE deployment_activation SET state='closed', end_offset=?, closed_at=? WHERE app_id=? AND state='active'"
         )
-        .run(Math.max(endOffset, 1), now(), appId)
+        .run(Math.max(endOffset, previous?.start_offset ?? 1, 1), now(), appId)
       this.database
         .prepare(
           'UPDATE app SET metrics_stream_generation=?, metrics_stream_device=?, metrics_stream_inode=?, metrics_offset=1 WHERE id=?'
