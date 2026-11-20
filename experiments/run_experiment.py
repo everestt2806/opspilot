@@ -30,6 +30,7 @@ import sys
 import tempfile
 import time
 import types
+import urllib.parse
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -94,6 +95,7 @@ from experiments.adapters.poller_adapter import (
     PollerHandle,
 )
 from experiments.faults.scheduler import apply_plan, plan_fault, reset_fault
+from experiments.load_gen.loadgen import _is_private_or_loopback
 from experiments.protocol import (
     INTERVAL_S,
     PHASE_A_S,
@@ -742,6 +744,28 @@ def wait_with_checks(
             )
 
 
+def _resolve_loadgen_app_url(
+    app_url: str,
+    app_name: str | None,
+    ssh_client: Any | None,
+    loadgen_app_url: str | None = None,
+) -> str:
+    """Chọn URL nội bộ docker (http://app:3000) khi loadgen chạy container trên VPS public."""
+    if loadgen_app_url:
+        return loadgen_app_url
+    parsed = urllib.parse.urlparse(app_url)
+    host = parsed.hostname or ""
+    if (
+        ssh_client is not None
+        and app_name
+        and host
+        and host not in {"localhost", "127.0.0.1", "::1", "app"}
+        and not _is_private_or_loopback(host)
+    ):
+        return "http://app:3000"
+    return app_url
+
+
 def run_attempt(
     scenario: str,
     repeat_index: int,
@@ -767,6 +791,7 @@ def run_attempt(
     allow_pilot_4500: bool = False,
     ssh_secret: str | None = None,
     loadgen_counter_mount_dir: str | None = None,
+    loadgen_app_url: str | None = None,
     custom_poller_cmd: Sequence[str] | None = None,
     custom_deploy_cmd: Sequence[str] | None = None,
     raise_on_abort: bool = False,
@@ -1017,8 +1042,14 @@ def run_attempt(
         )
 
         lg_adapter = loadgen_adapter or LoadgenAdapter()
-        loadgen_handle = lg_adapter.start(
+        effective_loadgen_url = _resolve_loadgen_app_url(
             app_url=app_url,
+            app_name=app_name,
+            ssh_client=ssh_client,
+            loadgen_app_url=loadgen_app_url,
+        )
+        loadgen_handle = lg_adapter.start(
+            app_url=effective_loadgen_url,
             rate_rps=5.0,
             duration_s=4500.0,
             allow_pilot_4500=allow_pilot_4500,
