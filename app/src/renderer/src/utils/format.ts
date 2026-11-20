@@ -13,10 +13,10 @@ interface TimeLabels {
 const TIME_LABELS: Record<'en' | 'vi' | 'cn' | 'jp', TimeLabels> = {
   en: {
     justNow: 'just now',
-    secondsAgo: (s) => `${s} seconds ago`,
-    minutesAgo: (m) => `${m} minutes ago`,
-    hoursAgo: (h) => `${h} hours ago`,
-    daysAgo: (d) => `${d} days ago`
+    secondsAgo: (s) => `${s} ${s === 1 ? 'second' : 'seconds'} ago`,
+    minutesAgo: (m) => `${m} ${m === 1 ? 'minute' : 'minutes'} ago`,
+    hoursAgo: (h) => `${h} ${h === 1 ? 'hour' : 'hours'} ago`,
+    daysAgo: (d) => `${d} ${d === 1 ? 'day' : 'days'} ago`
   },
   vi: {
     justNow: 'vừa xong',

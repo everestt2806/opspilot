@@ -60,6 +60,15 @@ export function VpsPage(): React.JSX.Element {
   }, [load])
 
   useEffect(() => {
+    const onRefresh = (): void => {
+      void load()
+      void refreshResources()
+    }
+    window.addEventListener('opspilot:refresh', onRefresh)
+    return () => window.removeEventListener('opspilot:refresh', onRefresh)
+  }, [load, refreshResources])
+
+  useEffect(() => {
     let cancelled = false
     void window.api.invoke('app:list').then((result) => {
       if (cancelled || !result.ok) return
@@ -264,17 +273,19 @@ export function VpsPage(): React.JSX.Element {
         selectedVps && (
           <>
             <div className="panel-detail-bar">
-              <Tooltip title={strings.vps.backToList}>
-                <Button
-                  type="text"
-                  icon={<ArrowLeftOutlined />}
-                  aria-label={strings.vps.backToList}
-                  onClick={() => setSelectedVpsId(null)}
-                />
-              </Tooltip>
-              <Typography.Title level={3} style={{ margin: 0 }}>
-                {selectedVps.name}
-              </Typography.Title>
+              <div className="panel-detail-bar-left">
+                <Tooltip title={strings.vps.backToList}>
+                  <Button
+                    type="text"
+                    icon={<ArrowLeftOutlined />}
+                    aria-label={strings.vps.backToList}
+                    onClick={() => setSelectedVpsId(null)}
+                  />
+                </Tooltip>
+                <Typography.Title level={3} style={{ margin: 0 }}>
+                  {selectedVps.name}
+                </Typography.Title>
+              </div>
             </div>
 
             {showResourceBanner && (

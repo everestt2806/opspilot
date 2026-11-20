@@ -431,10 +431,10 @@ export function ControllerCommandPanel({
       )}
       <Table
         size="small"
+        tableLayout="fixed"
         rowKey="request_key"
         dataSource={rows}
         pagination={{ pageSize: 5, hideOnSinglePage: true }}
-        scroll={{ x: 580 }}
         locale={{ emptyText: historyError ? t.historyError : <Empty description={t.empty} /> }}
         columns={[
           {

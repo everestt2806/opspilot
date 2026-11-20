@@ -272,12 +272,12 @@ export function ControllerPanel(): React.JSX.Element {
       )}
       <Table<DesktopControllerConnection>
         size="small"
+        tableLayout="fixed"
         rowKey="binding_id"
         loading={loading}
         dataSource={rows}
         pagination={false}
         locale={{ emptyText: error ? t.loadError : t.empty }}
-        scroll={{ x: 640 }}
         columns={[
           {
             title: t.name,
@@ -419,10 +419,10 @@ export function ControllerPanel(): React.JSX.Element {
               <Table
                 rowKey="app_id"
                 size="small"
+                tableLayout="fixed"
                 dataSource={snapshot.items}
                 pagination={false}
                 locale={{ emptyText: <Empty description={t.noApps} /> }}
-                scroll={{ x: 620 }}
                 columns={[
                   { title: t.appName, dataIndex: 'app_name' },
                   {
@@ -526,8 +526,8 @@ export function ControllerPanel(): React.JSX.Element {
         }}
         footer={null}
         destroyOnHidden
-        style={{ top: 32 }}
-        styles={{ body: { maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' } }}
+        centered
+        width="min(620px, calc(100vw - 32px))"
         maskClosable={busy !== 'register'}
         closable={busy !== 'register'}
       >

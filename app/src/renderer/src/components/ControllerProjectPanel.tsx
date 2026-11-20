@@ -321,11 +321,11 @@ export function ControllerProjectPanel({
       )}
       <Table
         size="small"
+        tableLayout="fixed"
         rowKey="request_key"
         loading={listLoading}
         dataSource={rows}
         pagination={{ pageSize: 5, hideOnSinglePage: true }}
-        scroll={{ x: 600 }}
         locale={{ emptyText: listError ? t.historyError : t.empty }}
         columns={[
           {
@@ -450,11 +450,11 @@ export function ControllerProjectPanel({
         }}
         footer={null}
         destroyOnHidden
+        centered
+        width="min(640px, calc(100vw - 32px))"
         maskClosable={!busy}
         closable={!busy}
         keyboard={!busy}
-        style={{ top: 32 }}
-        styles={{ body: { maxHeight: 'calc(100vh - 180px)', overflowY: 'auto' } }}
       >
         <Steps
           size="small"

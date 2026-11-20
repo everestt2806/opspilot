@@ -53,7 +53,7 @@ export function VpsPreparationPanel({
     }
   }
   return (
-    <Card size="small" title={t.title} style={{ marginTop: 12 }}>
+    <Card size="small" title={t.title}>
       <Space direction="vertical" style={{ width: '100%' }}>
         <Typography.Text type="secondary">{t.note}</Typography.Text>
         {current?.phase === 'ready' && (

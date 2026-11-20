@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  AppstoreOutlined,
   ArrowLeftOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
   CloudServerOutlined,
+  CopyOutlined,
   ExclamationCircleOutlined,
+  FileTextOutlined,
   HistoryOutlined,
   InfoCircleOutlined,
+  LineChartOutlined,
   MedicineBoxOutlined,
+  PlayCircleOutlined,
   PlusOutlined,
+  PoweroffOutlined,
   ReloadOutlined,
   RocketOutlined,
   RollbackOutlined,
@@ -20,6 +26,7 @@ import {
   Alert,
   Button,
   Descriptions,
+  Drawer,
   Empty,
   Input,
   Modal,
@@ -34,6 +41,7 @@ import {
 } from 'antd'
 
 import type { App, Deployment, Vps } from '@shared/ipc'
+import { useContextMenu } from '../components/contextMenuContext'
 import { PageHeader } from '../components/PageHeader'
 import { useUiState } from '../store/uiState'
 import { useVpsStore } from '../store/vpsStore'
@@ -41,6 +49,50 @@ import { useStrings } from '../strings'
 import { localDateTime, relativeTime } from '../utils/format'
 import { evaluateVpsStatus } from '../vpsResources'
 import { SharedIngressTab } from './SharedIngressTab'
+import { AppMonitorTab } from '../components/AppMonitorTab'
+
+const LIFECYCLE_LABELS = {
+  vi: {
+    start: 'Khởi động',
+    stop: 'Dừng',
+    restart: 'Khởi động lại',
+    logs: 'Xem log',
+    logsTitle: 'Log container runtime',
+    logsEmpty: 'Container chưa có dòng log nào.',
+    logsTail: 'Số dòng cuối',
+    monitorTab: 'Giám sát & Rollback'
+  },
+  en: {
+    start: 'Start',
+    stop: 'Stop',
+    restart: 'Restart',
+    logs: 'Logs',
+    logsTitle: 'Container runtime logs',
+    logsEmpty: 'No container log lines returned.',
+    logsTail: 'Tail lines',
+    monitorTab: 'Monitor & Rollback'
+  },
+  cn: {
+    start: '启动',
+    stop: '停止',
+    restart: '重启',
+    logs: '日志',
+    logsTitle: '容器运行日志',
+    logsEmpty: '容器暂无日志输出。',
+    logsTail: '最近行数',
+    monitorTab: '监控与回滚'
+  },
+  jp: {
+    start: '起動',
+    stop: '停止',
+    restart: '再起動',
+    logs: 'ログ',
+    logsTitle: 'コンテナ実行ログ',
+    logsEmpty: 'コンテナログがありません。',
+    logsTail: '取得行数',
+    monitorTab: '監視・ロールバック'
+  }
+} as const
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000)
@@ -88,6 +140,9 @@ function getRuntimeTagColor(state?: string): 'success' | 'error' | 'warning' | '
 export function AppsPage(): React.JSX.Element {
   const { modal } = AntApp.useApp()
   const strings = useStrings()
+  const locale = useUiState((state) => state.locale)
+  const lifecycleCopy = LIFECYCLE_LABELS[locale]
+  const { openContextMenu } = useContextMenu()
 
   const selectedAppId = useUiState((state) => state.selectedAppId)
   const setSelectedAppId = useUiState((state) => state.setSelectedAppId)
@@ -113,6 +168,16 @@ export function AppsPage(): React.JSX.Element {
   const [rollbackTarget, setRollbackTarget] = useState<Deployment | null>(null)
   const [confirmInput, setConfirmInput] = useState('')
   const [rollbackBusy, setRollbackBusy] = useState(false)
+  const [containerBusy, setContainerBusy] = useState<'start' | 'stop' | 'restart' | null>(null)
+  const [logsOpen, setLogsOpen] = useState(false)
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [logsTail, setLogsTail] = useState(120)
+  const [logsData, setLogsData] = useState<{
+    container_name: string
+    lines: string[]
+    truncated: boolean
+  } | null>(null)
+  const [logsError, setLogsError] = useState<string | null>(null)
   const [appsError, setAppsError] = useState<string | null>(null)
   const [versionsError, setVersionsError] = useState<string | null>(null)
 
@@ -145,6 +210,9 @@ export function AppsPage(): React.JSX.Element {
     setDoctorFixId(null)
     setDoctorSafeToFix(false)
     setRollbackTarget(null)
+    setLogsOpen(false)
+    setLogsData(null)
+    setLogsError(null)
     setConfirmInput('')
     setRollbackBusy(false)
     setLiveInspectState({ status: 'idle' })
@@ -242,6 +310,14 @@ export function AppsPage(): React.JSX.Element {
     },
     [strings]
   )
+
+  useEffect(() => {
+    const onRefresh = (): void => {
+      void refreshData()
+    }
+    window.addEventListener('opspilot:refresh', onRefresh)
+    return () => window.removeEventListener('opspilot:refresh', onRefresh)
+  }, [refreshData])
 
   useEffect(() => {
     let cancelled = false
@@ -401,6 +477,56 @@ export function AppsPage(): React.JSX.Element {
     }
   }
 
+  async function runContainerAction(action: 'start' | 'stop' | 'restart'): Promise<void> {
+    if (!selectedApp || selectedApp.imported_from_vps === 1) return
+    const targetAppId = selectedApp.id
+    setContainerBusy(action)
+    try {
+      const channel =
+        action === 'start' ? 'app:start' : action === 'restart' ? 'app:restart' : 'app:stop'
+      const result = await window.api.invoke(channel, targetAppId)
+      if (activeAppIdRef.current !== targetAppId) return
+      if (!result.ok) {
+        modal.error({
+          title:
+            action === 'start'
+              ? lifecycleCopy.start
+              : action === 'restart'
+                ? lifecycleCopy.restart
+                : lifecycleCopy.stop,
+          content: result.error.message
+        })
+        return
+      }
+      await inspectLive()
+    } finally {
+      setContainerBusy(null)
+    }
+  }
+
+  async function loadAppLogs(tail = logsTail): Promise<void> {
+    if (!selectedApp || selectedApp.imported_from_vps === 1) return
+    const targetAppId = selectedApp.id
+    setLogsOpen(true)
+    setLogsLoading(true)
+    setLogsError(null)
+    try {
+      const result = await window.api.invoke('app:logs', targetAppId, tail)
+      if (activeAppIdRef.current !== targetAppId) return
+      if (result.ok) {
+        setLogsData(result.data)
+      } else {
+        setLogsError(result.error.message)
+      }
+    } catch (err) {
+      if (activeAppIdRef.current === targetAppId) {
+        setLogsError(err instanceof Error ? err.message : String(err))
+      }
+    } finally {
+      if (activeAppIdRef.current === targetAppId) setLogsLoading(false)
+    }
+  }
+
   async function runDoctor(): Promise<void> {
     if (
       !activeDeployment ||
@@ -506,20 +632,8 @@ export function AppsPage(): React.JSX.Element {
           }
         />
 
-        <div
-          className="apps-list-toolbar"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            marginBottom: 16,
-            flexWrap: 'wrap'
-          }}
-        >
-          <div
-            style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', flex: 1 }}
-          >
+        <div className="apps-list-toolbar">
+          <div className="apps-list-toolbar-filters">
             <Input
               allowClear
               prefix={<SearchOutlined />}
@@ -562,129 +676,163 @@ export function AppsPage(): React.JSX.Element {
         )}
 
         {loading ? (
-          <div style={{ padding: 48, textAlign: 'center' }}>
+          <div className="desktop-loading-panel">
             <Spin size="default" />
           </div>
         ) : (
-          <Table<App>
-            rowKey="id"
-            size="middle"
-            dataSource={filteredApps}
-            pagination={false}
-            locale={{ emptyText: strings.apps.empty }}
-            onRow={(app) => ({
-              onClick: () => selectApp(app.id),
-              style: { cursor: 'pointer' }
-            })}
-            columns={[
-              {
-                title: strings.apps.appName,
-                dataIndex: 'name',
-                key: 'name',
-                render: (name: string, app: App) => (
-                  <div>
-                    <Typography.Link
-                      strong
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        selectApp(app.id)
-                      }}
-                    >
-                      {name}
-                    </Typography.Link>
-                    <div
-                      className="mono-text"
-                      style={{ fontSize: 11, color: 'var(--text-secondary)' }}
-                    >
-                      {app.url}
-                    </div>
-                  </div>
-                )
-              },
-              {
-                title: strings.apps.framework,
-                dataIndex: 'framework',
-                key: 'framework',
-                width: 130,
-                render: (framework: string) => <Tag>{framework}</Tag>
-              },
-              {
-                title: strings.apps.recordedTitle,
-                key: 'status',
-                width: 170,
-                render: (_: unknown, app: App) => (
-                  <Tag color={app.current_deployment_id ? 'blue' : 'default'}>
-                    <span
-                      className={`status-dot status-dot-${app.current_deployment_id ? 'info' : 'neutral'}`}
-                      style={{ marginRight: 6 }}
-                    />
-                    {app.current_deployment_id
-                      ? strings.apps.statusRecordedDeployed
-                      : strings.apps.statusNotDeployed}
-                  </Tag>
-                )
-              },
-              {
-                title: strings.apps.deploymentIdTitle,
-                key: 'deployment_id',
-                width: 130,
-                render: (_: unknown, app: App) => (
-                  <span className="mono-text">
-                    {app.current_deployment_id ? `#${app.current_deployment_id}` : '—'}
-                  </span>
-                )
-              },
-              {
-                title: strings.apps.vpsHost,
-                key: 'vps',
-                width: 200,
-                render: (_: unknown, app: App) => {
-                  const vps = vpsList.find((v) => v.id === app.vps_id)
-                  return vps ? (
-                    <Space size={6}>
-                      <CloudServerOutlined style={{ color: 'var(--accent)' }} />
-                      <span className="mono-text">
-                        {vps.name} ({vps.host})
-                      </span>
-                    </Space>
-                  ) : (
-                    '—'
-                  )
-                }
-              },
-              {
-                title: strings.apps.port,
-                key: 'port',
-                width: 100,
-                render: (_: unknown, app: App) => (
-                  <span className="mono-text">:{app.host_port}</span>
-                )
-              },
-              {
-                title: strings.vpsControl.apps.columns.actions,
-                key: 'actions',
-                width: 170,
-                align: 'right',
-                render: (_: unknown, app: App) => (
-                  <Space size="small" onClick={(e) => e.stopPropagation()}>
-                    <Button size="small" onClick={() => selectApp(app.id)}>
-                      {strings.apps.viewDetail}
-                    </Button>
-                    <Button
-                      size="small"
-                      icon={<RocketOutlined />}
-                      onClick={() => {
+          <div className="apps-list-table-card">
+            <Table<App>
+              rowKey="id"
+              size="middle"
+              tableLayout="fixed"
+              dataSource={filteredApps}
+              pagination={false}
+              locale={{ emptyText: strings.apps.empty }}
+              onRow={(app) => ({
+                onClick: () => selectApp(app.id),
+                onContextMenu: (event) => {
+                  openContextMenu(event, [
+                    {
+                      key: 'open',
+                      label: strings.apps.viewDetail,
+                      icon: <AppstoreOutlined />,
+                      onClick: () => selectApp(app.id)
+                    },
+                    ...(app.url
+                      ? [
+                          {
+                            key: 'copy-url',
+                            label: app.url,
+                            icon: <CopyOutlined />,
+                            onClick: () => {
+                              if (navigator.clipboard) void navigator.clipboard.writeText(app.url)
+                            }
+                          }
+                        ]
+                      : []),
+                    {
+                      key: 'deploy',
+                      label: strings.apps.deployAction,
+                      icon: <RocketOutlined />,
+                      onClick: () => {
                         setDeployPreselect({ vpsId: app.vps_id, appId: app.id })
                         setActivePage('deploy')
-                      }}
-                    >
-                      {strings.apps.deployAction}
-                    </Button>
-                  </Space>
-                )
-              }
-            ]}
-          />
+                      }
+                    }
+                  ])
+                },
+                style: { cursor: 'pointer' }
+              })}
+              columns={[
+                {
+                  title: strings.apps.appName,
+                  dataIndex: 'name',
+                  key: 'name',
+                  render: (name: string, app: App) => (
+                    <div>
+                      <Typography.Link
+                        strong
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          selectApp(app.id)
+                        }}
+                      >
+                        {name}
+                      </Typography.Link>
+                      <div
+                        className="mono-text"
+                        style={{ fontSize: 11, color: 'var(--text-secondary)' }}
+                      >
+                        {app.url}
+                      </div>
+                    </div>
+                  )
+                },
+                {
+                  title: strings.apps.framework,
+                  dataIndex: 'framework',
+                  key: 'framework',
+                  width: 130,
+                  render: (framework: string) => <Tag>{framework}</Tag>
+                },
+                {
+                  title: strings.apps.recordedTitle,
+                  key: 'status',
+                  width: 170,
+                  render: (_: unknown, app: App) => (
+                    <Tag color={app.current_deployment_id ? 'blue' : 'default'}>
+                      <span
+                        className={`status-dot status-dot-${app.current_deployment_id ? 'info' : 'neutral'}`}
+                        style={{ marginRight: 6 }}
+                      />
+                      {app.current_deployment_id
+                        ? strings.apps.statusRecordedDeployed
+                        : strings.apps.statusNotDeployed}
+                    </Tag>
+                  )
+                },
+                {
+                  title: strings.apps.deploymentIdTitle,
+                  key: 'deployment_id',
+                  width: 130,
+                  render: (_: unknown, app: App) => (
+                    <span className="mono-text">
+                      {app.current_deployment_id ? `#${app.current_deployment_id}` : '—'}
+                    </span>
+                  )
+                },
+                {
+                  title: strings.apps.vpsHost,
+                  key: 'vps',
+                  width: 200,
+                  render: (_: unknown, app: App) => {
+                    const vps = vpsList.find((v) => v.id === app.vps_id)
+                    return vps ? (
+                      <Space size={6}>
+                        <CloudServerOutlined style={{ color: 'var(--accent)' }} />
+                        <span className="mono-text">
+                          {vps.name} ({vps.host})
+                        </span>
+                      </Space>
+                    ) : (
+                      '—'
+                    )
+                  }
+                },
+                {
+                  title: strings.apps.port,
+                  key: 'port',
+                  width: 100,
+                  render: (_: unknown, app: App) => (
+                    <span className="mono-text">:{app.host_port}</span>
+                  )
+                },
+                {
+                  title: strings.vpsControl.apps.columns.actions,
+                  key: 'actions',
+                  width: 170,
+                  align: 'right',
+                  render: (_: unknown, app: App) => (
+                    <Space size="small" onClick={(e) => e.stopPropagation()}>
+                      <Button size="small" onClick={() => selectApp(app.id)}>
+                        {strings.apps.viewDetail}
+                      </Button>
+                      <Button
+                        size="small"
+                        icon={<RocketOutlined />}
+                        onClick={() => {
+                          setDeployPreselect({ vpsId: app.vps_id, appId: app.id })
+                          setActivePage('deploy')
+                        }}
+                      >
+                        {strings.apps.deployAction}
+                      </Button>
+                    </Space>
+                  )
+                }
+              ]}
+            />
+          </div>
         )}
       </section>
     )
@@ -695,17 +843,7 @@ export function AppsPage(): React.JSX.Element {
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <section className="page-panel apps-page">
-      <div
-        className="panel-detail-bar"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 16,
-          flexWrap: 'wrap',
-          gap: 12
-        }}
-      >
+      <div className="panel-detail-bar">
         <Space size="middle" align="center">
           <Tooltip title={strings.apps.backToList}>
             <Button
@@ -772,6 +910,37 @@ export function AppsPage(): React.JSX.Element {
             >
               {strings.apps.viewVps}
             </Button>
+          )}
+          {selectedApp.imported_from_vps !== 1 && activeDeployment && (
+            <>
+              <Button
+                icon={<PlayCircleOutlined />}
+                loading={containerBusy === 'start'}
+                disabled={containerBusy !== null}
+                onClick={() => void runContainerAction('start')}
+              >
+                {lifecycleCopy.start}
+              </Button>
+              <Button
+                icon={<ReloadOutlined />}
+                loading={containerBusy === 'restart'}
+                disabled={containerBusy !== null}
+                onClick={() => void runContainerAction('restart')}
+              >
+                {lifecycleCopy.restart}
+              </Button>
+              <Button
+                icon={<PoweroffOutlined />}
+                loading={containerBusy === 'stop'}
+                disabled={containerBusy !== null}
+                onClick={() => void runContainerAction('stop')}
+              >
+                {lifecycleCopy.stop}
+              </Button>
+              <Button icon={<FileTextOutlined />} onClick={() => void loadAppLogs(logsTail)}>
+                {lifecycleCopy.logs}
+              </Button>
+            </>
           )}
           {selectedApp.imported_from_vps !== 1 && (
             <Button
@@ -935,196 +1104,365 @@ export function AppsPage(): React.JSX.Element {
         />
       )}
 
-      <Tabs
-        className="apps-tabs"
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        items={[
-          {
-            key: 'overview',
-            label: (
-              <Space size={6}>
-                <InfoCircleOutlined />
-                <span>{strings.apps.tabs.overview}</span>
-              </Space>
-            ),
-            children: (
-              <div className="apps-tab-content">
-                <div className="apps-section-heading">
-                  <div>
-                    <h3>{strings.apps.runtimeInfo}</h3>
+      <div className="apps-detail-card-shell">
+        <Tabs
+          className="apps-tabs"
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          items={[
+            {
+              key: 'overview',
+              label: (
+                <Space size={6}>
+                  <InfoCircleOutlined />
+                  <span>{strings.apps.tabs.overview}</span>
+                </Space>
+              ),
+              children: (
+                <div className="apps-tab-content">
+                  <div className="apps-section-heading">
+                    <div>
+                      <h3>{strings.apps.runtimeInfo}</h3>
+                    </div>
+                    <span className="apps-section-note">{strings.apps.runtimeSync}</span>
                   </div>
-                  <span className="apps-section-note">{strings.apps.runtimeSync}</span>
-                </div>
-                <Descriptions column={{ xs: 1, sm: 2 }} size="small" bordered>
-                  <Descriptions.Item label={strings.apps.appName}>
-                    {selectedApp.name}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={strings.apps.framework}>
-                    <span className="mono-text">{selectedApp.framework}</span>
-                  </Descriptions.Item>
-                  <Descriptions.Item label={strings.apps.vps}>
-                    <Space size={6}>
-                      <CloudServerOutlined className="text-info" />
-                      <span className="mono-text">
-                        {selectedVps ? `${selectedVps.name} (${selectedVps.host})` : '—'}
-                      </span>
-                    </Space>
-                  </Descriptions.Item>
-                  <Descriptions.Item label={strings.apps.url}>
-                    <Button
-                      type="link"
-                      style={{ padding: 0 }}
-                      onClick={() =>
-                        void window.api.invoke('system:open-external', selectedApp.url)
-                      }
-                    >
-                      {selectedApp.url}
-                    </Button>
-                  </Descriptions.Item>
-                  <Descriptions.Item label={strings.apps.port}>
-                    <span className="mono-text">
-                      {strings.apps.portBinding(selectedApp.host_port, selectedApp.container_port)}
-                    </span>
-                  </Descriptions.Item>
-                  <Descriptions.Item label={strings.apps.healthcheck}>
-                    <span className="mono-text">{selectedApp.healthcheck_path}</span>
-                  </Descriptions.Item>
-                  <Descriptions.Item label={strings.apps.db}>
-                    {selectedApp.needs_db ? strings.apps.dbYes : strings.apps.dbNo}
-                  </Descriptions.Item>
-                  <Descriptions.Item label={strings.apps.runtime}>
-                    <Space size="small" wrap align="center">
-                      {liveInspectState.status === 'idle' && (
-                        <Button
-                          size="small"
-                          icon={<ReloadOutlined />}
-                          onClick={() => void inspectLive()}
-                        >
-                          {strings.apps.inspectLive}
-                        </Button>
-                      )}
-                      {liveInspectState.status === 'checking' && (
-                        <Tag color="processing">
-                          <Spin size="small" style={{ marginRight: 6 }} />
-                          {strings.vps.status.checking}
-                        </Tag>
-                      )}
-                      {liveInspectState.status === 'success' && (
-                        <>
-                          <Tag color={getRuntimeTagColor(liveInspectState.state)}>
-                            {strings.apps.liveState(liveInspectState.state ?? 'running')}
-                          </Tag>
-                          {liveInspectState.checkedAt && (
-                            <Tooltip
-                              title={localDateTime(
-                                new Date(liveInspectState.checkedAt).toISOString()
-                              )}
-                            >
-                              <span
-                                className="mono-text"
-                                style={{ fontSize: 12, color: 'var(--text-secondary)' }}
-                              >
-                                {relativeTime(new Date(liveInspectState.checkedAt).toISOString())}
-                              </span>
-                            </Tooltip>
-                          )}
-                          <Button
-                            size="small"
-                            type="text"
-                            icon={<ReloadOutlined />}
-                            aria-label={strings.apps.recheckLive}
-                            onClick={() => void inspectLive()}
-                          >
-                            {strings.apps.recheckLive}
-                          </Button>
-                        </>
-                      )}
-                      {liveInspectState.status === 'unverified' && (
-                        <>
-                          <Tag color="default">{strings.apps.liveUnverified}</Tag>
-                          {liveInspectState.checkedAt && (
-                            <Tooltip
-                              title={localDateTime(
-                                new Date(liveInspectState.checkedAt).toISOString()
-                              )}
-                            >
-                              <span
-                                className="mono-text"
-                                style={{ fontSize: 12, color: 'var(--text-secondary)' }}
-                              >
-                                {relativeTime(new Date(liveInspectState.checkedAt).toISOString())}
-                              </span>
-                            </Tooltip>
-                          )}
-                          <Button
-                            size="small"
-                            type="text"
-                            icon={<ReloadOutlined />}
-                            aria-label={strings.apps.recheckLive}
-                            onClick={() => void inspectLive()}
-                          >
-                            {strings.apps.recheckLive}
-                          </Button>
-                        </>
-                      )}
-                    </Space>
-                  </Descriptions.Item>
-                  <Descriptions.Item label={strings.apps.exposurePublishResult}>
-                    {isVersionsLoading ? (
-                      <Spin size="small" />
-                    ) : (
-                      <Tag
-                        color={
-                          activeDeployment?.exposure_status === 'reachable'
-                            ? 'success'
-                            : activeDeployment?.exposure_status === 'degraded'
-                              ? 'warning'
-                              : 'default'
+                  <Descriptions column={{ xs: 1, sm: 2 }} size="small" bordered>
+                    <Descriptions.Item label={strings.apps.appName}>
+                      {selectedApp.name}
+                    </Descriptions.Item>
+                    <Descriptions.Item label={strings.apps.framework}>
+                      <span className="mono-text">{selectedApp.framework}</span>
+                    </Descriptions.Item>
+                    <Descriptions.Item label={strings.apps.vps}>
+                      <Space size={6}>
+                        <CloudServerOutlined className="text-info" />
+                        <span className="mono-text">
+                          {selectedVps ? `${selectedVps.name} (${selectedVps.host})` : '—'}
+                        </span>
+                      </Space>
+                    </Descriptions.Item>
+                    <Descriptions.Item label={strings.apps.url}>
+                      <Button
+                        type="link"
+                        style={{ padding: 0 }}
+                        onClick={() =>
+                          void window.api.invoke('system:open-external', selectedApp.url)
                         }
                       >
-                        {activeDeployment
-                          ? strings.apps.exposureStatus[activeDeployment.exposure_status]
-                          : strings.apps.exposureStatus.not_checked}
-                      </Tag>
-                    )}
-                  </Descriptions.Item>
-                </Descriptions>
-              </div>
-            )
-          },
-          {
-            key: 'history',
-            label: (
-              <Space size={6}>
-                <HistoryOutlined />
-                <span>{strings.apps.tabs.history}</span>
-              </Space>
-            ),
-            children: (
-              <div className="apps-tab-content">
-                <div className="apps-section-heading">
-                  <div>
-                    <h3>{strings.apps.versionHistory}</h3>
-                  </div>
-                  <span className="apps-section-note">
-                    {strings.apps.versionCount(currentAppDeployments.length)}
-                  </span>
+                        {selectedApp.url}
+                      </Button>
+                    </Descriptions.Item>
+                    <Descriptions.Item label={strings.apps.port}>
+                      <span className="mono-text">
+                        {strings.apps.portBinding(
+                          selectedApp.host_port,
+                          selectedApp.container_port
+                        )}
+                      </span>
+                    </Descriptions.Item>
+                    <Descriptions.Item label={strings.apps.healthcheck}>
+                      <span className="mono-text">{selectedApp.healthcheck_path}</span>
+                    </Descriptions.Item>
+                    <Descriptions.Item label={strings.apps.db}>
+                      {selectedApp.needs_db ? strings.apps.dbYes : strings.apps.dbNo}
+                    </Descriptions.Item>
+                    <Descriptions.Item label={strings.apps.runtime}>
+                      <Space size="small" wrap align="center">
+                        {liveInspectState.status === 'idle' && (
+                          <Button
+                            size="small"
+                            icon={<ReloadOutlined />}
+                            onClick={() => void inspectLive()}
+                          >
+                            {strings.apps.inspectLive}
+                          </Button>
+                        )}
+                        {liveInspectState.status === 'checking' && (
+                          <Tag color="processing">
+                            <Spin size="small" style={{ marginRight: 6 }} />
+                            {strings.vps.status.checking}
+                          </Tag>
+                        )}
+                        {liveInspectState.status === 'success' && (
+                          <>
+                            <Tag color={getRuntimeTagColor(liveInspectState.state)}>
+                              {strings.apps.liveState(liveInspectState.state ?? 'running')}
+                            </Tag>
+                            {liveInspectState.checkedAt && (
+                              <Tooltip
+                                title={localDateTime(
+                                  new Date(liveInspectState.checkedAt).toISOString()
+                                )}
+                              >
+                                <span
+                                  className="mono-text"
+                                  style={{ fontSize: 12, color: 'var(--text-secondary)' }}
+                                >
+                                  {relativeTime(new Date(liveInspectState.checkedAt).toISOString())}
+                                </span>
+                              </Tooltip>
+                            )}
+                            <Button
+                              size="small"
+                              type="text"
+                              icon={<ReloadOutlined />}
+                              aria-label={strings.apps.recheckLive}
+                              onClick={() => void inspectLive()}
+                            >
+                              {strings.apps.recheckLive}
+                            </Button>
+                          </>
+                        )}
+                        {liveInspectState.status === 'unverified' && (
+                          <>
+                            <Tag color="default">{strings.apps.liveUnverified}</Tag>
+                            {liveInspectState.checkedAt && (
+                              <Tooltip
+                                title={localDateTime(
+                                  new Date(liveInspectState.checkedAt).toISOString()
+                                )}
+                              >
+                                <span
+                                  className="mono-text"
+                                  style={{ fontSize: 12, color: 'var(--text-secondary)' }}
+                                >
+                                  {relativeTime(new Date(liveInspectState.checkedAt).toISOString())}
+                                </span>
+                              </Tooltip>
+                            )}
+                            <Button
+                              size="small"
+                              type="text"
+                              icon={<ReloadOutlined />}
+                              aria-label={strings.apps.recheckLive}
+                              onClick={() => void inspectLive()}
+                            >
+                              {strings.apps.recheckLive}
+                            </Button>
+                          </>
+                        )}
+                      </Space>
+                    </Descriptions.Item>
+                    <Descriptions.Item label={strings.apps.exposurePublishResult}>
+                      {isVersionsLoading ? (
+                        <Spin size="small" />
+                      ) : (
+                        <Tag
+                          color={
+                            activeDeployment?.exposure_status === 'reachable'
+                              ? 'success'
+                              : activeDeployment?.exposure_status === 'degraded'
+                                ? 'warning'
+                                : 'default'
+                          }
+                        >
+                          {activeDeployment
+                            ? strings.apps.exposureStatus[activeDeployment.exposure_status]
+                            : strings.apps.exposureStatus.not_checked}
+                        </Tag>
+                      )}
+                    </Descriptions.Item>
+                  </Descriptions>
                 </div>
-                {isVersionsLoading ? (
-                  <div style={{ padding: 24, textAlign: 'center' }}>
-                    <Space size="middle" direction="vertical" align="center">
-                      <Spin size="small" />
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        {strings.apps.loadingVersions}
-                      </Typography.Text>
-                    </Space>
+              )
+            },
+            {
+              key: 'history',
+              label: (
+                <Space size={6}>
+                  <HistoryOutlined />
+                  <span>{strings.apps.tabs.history}</span>
+                </Space>
+              ),
+              children: (
+                <div className="apps-tab-content">
+                  <div className="apps-section-heading">
+                    <div>
+                      <h3>{strings.apps.versionHistory}</h3>
+                    </div>
+                    <span className="apps-section-note">
+                      {strings.apps.versionCount(currentAppDeployments.length)}
+                    </span>
                   </div>
-                ) : versionsError ? (
-                  <div style={{ padding: 16 }}>
+                  {isVersionsLoading ? (
+                    <div style={{ padding: 24, textAlign: 'center' }}>
+                      <Space size="middle" direction="vertical" align="center">
+                        <Spin size="small" />
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {strings.apps.loadingVersions}
+                        </Typography.Text>
+                      </Space>
+                    </div>
+                  ) : versionsError ? (
+                    <div style={{ padding: 16 }}>
+                      <Alert
+                        type="error"
+                        showIcon
+                        message={strings.apps.versionsLoadError}
+                        description={versionsError}
+                        action={
+                          <Button
+                            size="small"
+                            danger
+                            onClick={() => void reloadVersions(selectedApp.id)}
+                          >
+                            {strings.common.retry}
+                          </Button>
+                        }
+                      />
+                    </div>
+                  ) : currentAppDeployments.length === 0 ? (
+                    <div style={{ padding: 24, textAlign: 'center' }}>
+                      <Empty
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        description={strings.apps.noDeploymentsYet}
+                      />
+                    </div>
+                  ) : (
+                    <ol className="apps-version-list">
+                      {currentAppDeployments.map((dep) => {
+                        const isCurrent = dep.id === selectedApp.current_deployment_id
+                        return (
+                          <li
+                            className={`apps-version-item apps-version-item-${isCurrent ? 'success' : 'neutral'}`}
+                            key={dep.id}
+                          >
+                            <span className="apps-version-marker" aria-hidden="true">
+                              {isCurrent ? <CheckCircleOutlined /> : <span />}
+                            </span>
+                            <div className="apps-version-body">
+                              <div className="apps-version-header">
+                                <div className="apps-version-title">
+                                  <strong className="mono-text">v{dep.version}</strong>
+                                  {isCurrent && (
+                                    <Tag color="blue">{strings.apps.activeVersion}</Tag>
+                                  )}
+                                  <Tag
+                                    color={
+                                      dep.status === 'running'
+                                        ? 'success'
+                                        : dep.status === 'failed'
+                                          ? 'error'
+                                          : 'default'
+                                    }
+                                  >
+                                    {dep.status}
+                                  </Tag>
+                                  {dep.origin === 'vps_import' && (
+                                    <Tag>
+                                      {strings.vpsControl.apps.recoveryStatus.importedFromVps}
+                                    </Tag>
+                                  )}
+                                  <Tag
+                                    color={
+                                      dep.exposure_status === 'reachable'
+                                        ? 'success'
+                                        : dep.exposure_status === 'degraded'
+                                          ? 'warning'
+                                          : 'default'
+                                    }
+                                  >
+                                    {strings.apps.exposureStatus[dep.exposure_status]}
+                                  </Tag>
+                                </div>
+                                {selectedApp.imported_from_vps !== 1 &&
+                                  !isCurrent &&
+                                  dep.status !== 'building' &&
+                                  dep.status !== 'deploying' && (
+                                    <Button
+                                      size="small"
+                                      type="text"
+                                      danger
+                                      disabled={isVersionsLoading || rollbackBusy}
+                                      icon={<RollbackOutlined />}
+                                      onClick={() => openRollback(dep)}
+                                    >
+                                      {strings.apps.rollback}
+                                    </Button>
+                                  )}
+                              </div>
+                              <div className="apps-version-meta">
+                                <span>
+                                  {dep.started_at ? (
+                                    <>
+                                      <ClockCircleOutlined /> {formatTime(dep.started_at)}
+                                    </>
+                                  ) : (
+                                    strings.vpsControl.apps.recoveryStatus.importedFromVps
+                                  )}
+                                </span>
+                                {dep.total_duration_ms !== null && (
+                                  <span>
+                                    {strings.apps.buildDuration(
+                                      formatDuration(dep.total_duration_ms)
+                                    )}
+                                  </span>
+                                )}
+                                {dep.image_tag && (
+                                  <span>{strings.apps.imageTag(dep.image_tag)}</span>
+                                )}
+                                {dep.git_repo_url && (
+                                  <span>
+                                    <Tag color="blue">Git</Tag> {dep.git_repo_url}
+                                  </span>
+                                )}
+                                {dep.git_commit_sha && (
+                                  <span>
+                                    SHA{' '}
+                                    <Typography.Text code copyable>
+                                      {dep.git_commit_sha}
+                                    </Typography.Text>
+                                  </span>
+                                )}
+                                {dep.is_rollback_of !== null &&
+                                  (() => {
+                                    const { direct, origin } = getRollbackLineage(
+                                      dep,
+                                      currentAppDeployments
+                                    )
+                                    return (
+                                      <span>
+                                        Rollback of v{direct?.version ?? '—'}
+                                        {origin && origin.id !== direct?.id && (
+                                          <> · image from v{origin.version}</>
+                                        )}
+                                        {origin?.git_commit_sha ? (
+                                          <>
+                                            {' '}
+                                            · SHA{' '}
+                                            <Typography.Text code>
+                                              {origin.git_commit_sha}
+                                            </Typography.Text>
+                                          </>
+                                        ) : null}
+                                      </span>
+                                    )
+                                  })()}
+                              </div>
+                            </div>
+                          </li>
+                        )
+                      })}
+                    </ol>
+                  )}
+                </div>
+              )
+            },
+            {
+              key: 'doctor',
+              label: (
+                <Space size={6}>
+                  <MedicineBoxOutlined />
+                  <span>{strings.apps.tabs.doctor}</span>
+                </Space>
+              ),
+              children: (
+                <div className="apps-tab-content">
+                  {versionsError && (
                     <Alert
                       type="error"
                       showIcon
+                      style={{ marginBottom: 16 }}
                       message={strings.apps.versionsLoadError}
                       description={versionsError}
                       action={
@@ -1137,305 +1475,135 @@ export function AppsPage(): React.JSX.Element {
                         </Button>
                       }
                     />
-                  </div>
-                ) : currentAppDeployments.length === 0 ? (
-                  <div style={{ padding: 24, textAlign: 'center' }}>
-                    <Empty
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description={strings.apps.noDeploymentsYet}
-                    />
-                  </div>
-                ) : (
-                  <ol className="apps-version-list">
-                    {currentAppDeployments.map((dep) => {
-                      const isCurrent = dep.id === selectedApp.current_deployment_id
-                      return (
-                        <li
-                          className={`apps-version-item apps-version-item-${isCurrent ? 'success' : 'neutral'}`}
-                          key={dep.id}
-                        >
-                          <span className="apps-version-marker" aria-hidden="true">
-                            {isCurrent ? <CheckCircleOutlined /> : <span />}
-                          </span>
-                          <div className="apps-version-body">
-                            <div className="apps-version-header">
-                              <div className="apps-version-title">
-                                <strong className="mono-text">v{dep.version}</strong>
-                                {isCurrent && <Tag color="blue">{strings.apps.activeVersion}</Tag>}
-                                <Tag
-                                  color={
-                                    dep.status === 'running'
-                                      ? 'success'
-                                      : dep.status === 'failed'
-                                        ? 'error'
-                                        : 'default'
-                                  }
-                                >
-                                  {dep.status}
-                                </Tag>
-                                {dep.origin === 'vps_import' && (
-                                  <Tag>{strings.vpsControl.apps.recoveryStatus.importedFromVps}</Tag>
-                                )}
-                                <Tag
-                                  color={
-                                    dep.exposure_status === 'reachable'
-                                      ? 'success'
-                                      : dep.exposure_status === 'degraded'
-                                        ? 'warning'
-                                        : 'default'
-                                  }
-                                >
-                                  {strings.apps.exposureStatus[dep.exposure_status]}
-                                </Tag>
-                              </div>
-                              {selectedApp.imported_from_vps !== 1 &&
-                                !isCurrent &&
-                                dep.status !== 'building' &&
-                                dep.status !== 'deploying' && (
-                                  <Button
-                                    size="small"
-                                    type="text"
-                                    danger
-                                    disabled={isVersionsLoading || rollbackBusy}
-                                    icon={<RollbackOutlined />}
-                                    onClick={() => openRollback(dep)}
-                                  >
-                                    {strings.apps.rollback}
-                                  </Button>
-                                )}
-                            </div>
-                            <div className="apps-version-meta">
-                              <span>
-                                {dep.started_at ? (
-                                  <>
-                                    <ClockCircleOutlined /> {formatTime(dep.started_at)}
-                                  </>
-                                ) : (
-                                  strings.vpsControl.apps.recoveryStatus.importedFromVps
-                                )}
-                              </span>
-                              {dep.total_duration_ms !== null && (
-                                <span>
-                                  {strings.apps.buildDuration(
-                                    formatDuration(dep.total_duration_ms)
-                                  )}
-                                </span>
-                              )}
-                              {dep.image_tag && <span>{strings.apps.imageTag(dep.image_tag)}</span>}
-                              {dep.git_repo_url && (
-                                <span>
-                                  <Tag color="blue">Git</Tag> {dep.git_repo_url}
-                                </span>
-                              )}
-                              {dep.git_commit_sha && (
-                                <span>
-                                  SHA{' '}
-                                  <Typography.Text code copyable>
-                                    {dep.git_commit_sha}
-                                  </Typography.Text>
-                                </span>
-                              )}
-                              {dep.is_rollback_of !== null &&
-                                (() => {
-                                  const { direct, origin } = getRollbackLineage(
-                                    dep,
-                                    currentAppDeployments
-                                  )
-                                  return (
-                                    <span>
-                                      Rollback of v{direct?.version ?? '—'}
-                                      {origin && origin.id !== direct?.id && (
-                                        <> · image from v{origin.version}</>
-                                      )}
-                                      {origin?.git_commit_sha ? (
-                                        <>
-                                          {' '}
-                                          · SHA{' '}
-                                          <Typography.Text code>
-                                            {origin.git_commit_sha}
-                                          </Typography.Text>
-                                        </>
-                                      ) : null}
-                                    </span>
-                                  )
-                                })()}
-                            </div>
-                          </div>
-                        </li>
-                      )
-                    })}
-                  </ol>
-                )}
-              </div>
-            )
-          },
-          {
-            key: 'doctor',
-            label: (
-              <Space size={6}>
-                <MedicineBoxOutlined />
-                <span>{strings.apps.tabs.doctor}</span>
-              </Space>
-            ),
-            children: (
-              <div className="apps-tab-content">
-                {versionsError && (
-                  <Alert
-                    type="error"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                    message={strings.apps.versionsLoadError}
-                    description={versionsError}
-                    action={
-                      <Button
-                        size="small"
-                        danger
-                        onClick={() => void reloadVersions(selectedApp.id)}
-                      >
-                        {strings.common.retry}
-                      </Button>
-                    }
-                  />
-                )}
-                <div className="apps-section-heading">
-                  <div>
-                    <h3>{strings.apps.doctorExposureTitle}</h3>
-                  </div>
-                  <span className="apps-section-note">{strings.apps.doctorDesc}</span>
-                </div>
-
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-                    gap: 16,
-                    marginBottom: 16
-                  }}
-                >
-                  <div
-                    className="card"
-                    style={{
-                      padding: 16,
-                      border: '1px solid var(--border)',
-                      borderRadius: 6,
-                      background: 'var(--bg-panel)'
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: 12
-                      }}
-                    >
-                      <Typography.Text strong>{strings.apps.exposureTitle}</Typography.Text>
-                      <Tag
-                        color={
-                          activeDeployment?.exposure_status === 'reachable'
-                            ? 'success'
-                            : activeDeployment?.exposure_status === 'degraded'
-                              ? 'warning'
-                              : 'default'
-                        }
-                      >
-                        {activeDeployment
-                          ? strings.apps.exposureStatus[activeDeployment.exposure_status]
-                          : strings.apps.exposureStatus.not_checked}
-                      </Tag>
+                  )}
+                  <div className="apps-section-heading">
+                    <div>
+                      <h3>{strings.apps.doctorExposureTitle}</h3>
                     </div>
-                    {activeDeployment?.exposure_evidence_json ? (
-                      <Typography.Paragraph
-                        type="secondary"
-                        className="mono-text"
-                        style={{ fontSize: 12 }}
-                      >
-                        {activeDeployment.exposure_evidence_json}
-                      </Typography.Paragraph>
-                    ) : (
-                      <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-                        {strings.apps.runtimeSync}
-                      </Typography.Paragraph>
-                    )}
-                    <Space style={{ marginTop: 8 }}>
-                      <Button
-                        loading={doctorBusy}
-                        disabled={isVersionsLoading || !activeDeployment}
-                        icon={<ReloadOutlined />}
-                        onClick={() => void runDoctor()}
-                      >
-                        {strings.apps.doctorDiagnose}
-                      </Button>
-                      {selectedApp.imported_from_vps !== 1 && doctorSafeToFix && doctorFixId && (
-                        <Button
-                          type="primary"
-                          loading={doctorBusy}
-                          disabled={isVersionsLoading}
-                          onClick={() => void fixWithDoctor()}
+                    <span className="apps-section-note">{strings.apps.doctorDesc}</span>
+                  </div>
+
+                  <div className="apps-doctor-grid">
+                    <div className="apps-doctor-card">
+                      <div className="apps-doctor-card-head">
+                        <Typography.Text strong>{strings.apps.exposureTitle}</Typography.Text>
+                        <Tag
+                          color={
+                            activeDeployment?.exposure_status === 'reachable'
+                              ? 'success'
+                              : activeDeployment?.exposure_status === 'degraded'
+                                ? 'warning'
+                                : 'default'
+                          }
                         >
-                          {strings.apps.doctorAutoFix}
-                        </Button>
+                          {activeDeployment
+                            ? strings.apps.exposureStatus[activeDeployment.exposure_status]
+                            : strings.apps.exposureStatus.not_checked}
+                        </Tag>
+                      </div>
+                      {activeDeployment?.exposure_evidence_json ? (
+                        <Typography.Paragraph
+                          type="secondary"
+                          className="mono-text"
+                          style={{ fontSize: 12 }}
+                        >
+                          {activeDeployment.exposure_evidence_json}
+                        </Typography.Paragraph>
+                      ) : (
+                        <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+                          {strings.apps.runtimeSync}
+                        </Typography.Paragraph>
                       )}
-                    </Space>
-                  </div>
-
-                  <div
-                    className="card"
-                    style={{
-                      padding: 16,
-                      border: '1px solid var(--border)',
-                      borderRadius: 6,
-                      background: 'var(--bg-panel)'
-                    }}
-                  >
-                    <div style={{ marginBottom: 12 }}>
-                      <Typography.Text strong>
-                        {strings.apps.doctorDiagnosticEvidence}
-                      </Typography.Text>
+                      <Space style={{ marginTop: 8 }}>
+                        <Button
+                          loading={doctorBusy}
+                          disabled={isVersionsLoading || !activeDeployment}
+                          icon={<ReloadOutlined />}
+                          onClick={() => void runDoctor()}
+                        >
+                          {strings.apps.doctorDiagnose}
+                        </Button>
+                        {selectedApp.imported_from_vps !== 1 && doctorSafeToFix && doctorFixId && (
+                          <Button
+                            type="primary"
+                            loading={doctorBusy}
+                            disabled={isVersionsLoading}
+                            onClick={() => void fixWithDoctor()}
+                          >
+                            {strings.apps.doctorAutoFix}
+                          </Button>
+                        )}
+                      </Space>
                     </div>
-                    {doctorMessage ? (
-                      <Alert
-                        type={doctorSafeToFix ? 'warning' : 'info'}
-                        showIcon
-                        message={doctorMessage}
-                        description={doctorSafeToFix ? strings.apps.doctorAutoFix : undefined}
-                      />
-                    ) : (
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        {strings.apps.doctorNotRunYet}
-                      </Typography.Text>
-                    )}
+
+                    <div className="apps-doctor-card">
+                      <div className="apps-doctor-card-head">
+                        <Typography.Text strong>
+                          {strings.apps.doctorDiagnosticEvidence}
+                        </Typography.Text>
+                      </div>
+                      {doctorMessage ? (
+                        <Alert
+                          type={doctorSafeToFix ? 'warning' : 'info'}
+                          showIcon
+                          message={doctorMessage}
+                          description={doctorSafeToFix ? strings.apps.doctorAutoFix : undefined}
+                        />
+                      ) : (
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {strings.apps.doctorNotRunYet}
+                        </Typography.Text>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )
-          },
-          {
-            key: 'domainHttps',
-            label: (
-              <Space size={6}>
-                <SafetyCertificateOutlined />
-                <span>{strings.apps.tabs.domainHttps}</span>
-              </Space>
-            ),
-            children: selectedVps ? (
-              <SharedIngressTab
-                key={`${selectedVps.id}:${selectedApp.id}:${activeTab}`}
-                vpsId={selectedVps.id}
-                appId={selectedApp.id}
-                httpUrl={selectedApp.url}
-                active={activeTab === 'domainHttps'}
-              />
-            ) : (
-              <div className="apps-tab-content" />
-            )
-          }
-        ]}
-      />
+              )
+            },
+            {
+              key: 'monitor',
+              label: (
+                <Space size={6}>
+                  <LineChartOutlined />
+                  <span>{lifecycleCopy.monitorTab}</span>
+                </Space>
+              ),
+              children: (
+                <AppMonitorTab
+                  appId={selectedApp.id}
+                  deploymentId={activeDeployment?.id ?? null}
+                  importedFromVps={selectedApp.imported_from_vps === 1}
+                />
+              )
+            },
+            {
+              key: 'domainHttps',
+              label: (
+                <Space size={6}>
+                  <SafetyCertificateOutlined />
+                  <span>{strings.apps.tabs.domainHttps}</span>
+                </Space>
+              ),
+              children: selectedVps ? (
+                <SharedIngressTab
+                  key={`${selectedVps.id}:${selectedApp.id}:${activeTab}`}
+                  vpsId={selectedVps.id}
+                  appId={selectedApp.id}
+                  httpUrl={selectedApp.url}
+                  active={activeTab === 'domainHttps'}
+                />
+              ) : (
+                <div className="apps-tab-content" />
+              )
+            }
+          ]}
+        />
+      </div>
 
       {rollbackTarget !== null && (
         <Modal
           open
+          centered
+          width="min(540px, calc(100vw - 32px))"
           destroyOnHidden
           title={
             <Space size={8}>
@@ -1486,6 +1654,86 @@ export function AppsPage(): React.JSX.Element {
           )}
         </Modal>
       )}
+
+      <Drawer
+        open={logsOpen}
+        width="min(760px, 92vw)"
+        title={
+          <Space size={8}>
+            <FileTextOutlined />
+            <span>
+              {lifecycleCopy.logsTitle}
+              {logsData?.container_name ? ` — ${logsData.container_name}` : ''}
+            </span>
+          </Space>
+        }
+        onClose={() => setLogsOpen(false)}
+        extra={
+          <Space>
+            <Select
+              size="small"
+              aria-label={lifecycleCopy.logsTail}
+              value={logsTail}
+              options={[
+                { value: 50, label: '50' },
+                { value: 120, label: '120' },
+                { value: 300, label: '300' },
+                { value: 500, label: '500' }
+              ]}
+              onChange={(val) => {
+                setLogsTail(val)
+                void loadAppLogs(val)
+              }}
+            />
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              loading={logsLoading}
+              onClick={() => void loadAppLogs(logsTail)}
+            >
+              {strings.common.retry}
+            </Button>
+          </Space>
+        }
+      >
+        {logsLoading && !logsData ? (
+          <div style={{ padding: 32, textAlign: 'center' }}>
+            <Spin />
+          </div>
+        ) : logsError ? (
+          <Alert
+            type="error"
+            showIcon
+            message={logsError}
+            action={
+              <Button size="small" onClick={() => void loadAppLogs(logsTail)}>
+                {strings.common.retry}
+              </Button>
+            }
+          />
+        ) : !logsData || logsData.lines.length === 0 ? (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={lifecycleCopy.logsEmpty} />
+        ) : (
+          <pre
+            className="mono-text"
+            style={{
+              margin: 0,
+              padding: 12,
+              borderRadius: 8,
+              background: 'var(--bg-elevated)',
+              border: '1px solid var(--border-subtle)',
+              maxHeight: '70vh',
+              overflow: 'auto',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              fontSize: 12,
+              lineHeight: 1.55
+            }}
+          >
+            {logsData.lines.join('\n')}
+          </pre>
+        )}
+      </Drawer>
     </section>
   )
 }

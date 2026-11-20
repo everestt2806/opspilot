@@ -910,13 +910,15 @@ export function MigratePage(): React.JSX.Element {
                 <option value="" disabled>
                   {strings.migrate.draft.sourceLabel}
                 </option>
-                {apps.filter((item) => item.imported_from_vps !== 1).map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name} ·{' '}
-                    {vps.find((candidate) => candidate.id === item.vps_id)?.name ??
-                      strings.migrate.overview.noVps(item.vps_id)}
-                  </option>
-                ))}
+                {apps
+                  .filter((item) => item.imported_from_vps !== 1)
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} ·{' '}
+                      {vps.find((candidate) => candidate.id === item.vps_id)?.name ??
+                        strings.migrate.overview.noVps(item.vps_id)}
+                    </option>
+                  ))}
               </select>
 
               <select
@@ -1218,6 +1220,8 @@ export function MigratePage(): React.JSX.Element {
           open={confirmModalOpen && status === 'awaiting_confirmation'}
           onCancel={() => !isConfirming && setConfirmModalOpen(false)}
           title={strings.migrate.modal.title}
+          centered
+          width="min(580px, calc(100vw - 32px))"
           footer={null}
           destroyOnHidden
         >

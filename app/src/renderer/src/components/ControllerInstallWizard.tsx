@@ -456,11 +456,8 @@ export function ControllerInstallWizard({
       open={open}
       onCancel={close}
       footer={<Button onClick={close}>{t.close}</Button>}
-      width={840}
-      style={{ top: 32 }}
-      styles={{
-        body: { maxHeight: 'calc(100vh - 180px)', overflowY: 'auto', overflowX: 'hidden' }
-      }}
+      centered
+      width="min(840px, calc(100vw - 32px))"
       destroyOnHidden
     >
       <Space direction="vertical" size={20} style={{ width: '100%' }}>

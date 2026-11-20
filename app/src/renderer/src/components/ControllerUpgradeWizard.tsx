@@ -182,14 +182,13 @@ export function ControllerUpgradeWizard({
       closable={!busy}
       maskClosable={!busy}
       destroyOnHidden
+      centered
       footer={
         <Button onClick={onClose} disabled={busy}>
           {t.close}
         </Button>
       }
-      width={760}
-      style={{ top: 32 }}
-      styles={{ body: { maxHeight: 'calc(100vh - 190px)', overflowY: 'auto' } }}
+      width="min(760px, calc(100vw - 32px))"
     >
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
         <Typography.Paragraph>{t.intro}</Typography.Paragraph>

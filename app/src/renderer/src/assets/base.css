@@ -17,8 +17,16 @@ body {
   color: var(--text-primary);
   background: var(--bg-base);
   font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--fill-selected);
+  color: var(--text-primary);
 }
 
 code,

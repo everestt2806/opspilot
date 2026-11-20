@@ -87,7 +87,7 @@ export function VpsFormModal({
     <Modal
       open={open}
       centered
-      styles={{ body: { maxHeight: 'calc(100dvh - 200px)', overflowY: 'auto' } }}
+      width="min(640px, calc(100vw - 32px))"
       title={initialVps ? strings.vps.form.editTitle : strings.vps.form.createTitle}
       okText={strings.common.save}
       cancelText={strings.common.cancel}
@@ -107,36 +107,38 @@ export function VpsFormModal({
         }}
         onFinish={(values) => onSubmit({ ...values, name: values.name?.trim() || values.host })}
       >
-        <Form.Item name="name" label={strings.vps.fields.name}>
-          <Input maxLength={64} />
-        </Form.Item>
-        <Form.Item
-          name="host"
-          label={strings.vps.fields.host}
-          rules={[{ required: true, message: strings.vps.validation.host }]}
-        >
-          <Input
-            autoFocus
-            className="mono-input"
-            maxLength={253}
-            placeholder={strings.vps.form.hostPlaceholder}
-          />
-        </Form.Item>
-        <Form.Item
-          name="username"
-          label={strings.vps.fields.username}
-          rules={[{ required: true, message: strings.vps.validation.username }]}
-        >
-          <Input maxLength={128} />
-        </Form.Item>
-        <Form.Item name="auth_type" label={strings.vps.fields.authType}>
-          <Radio.Group
-            options={[
-              { label: strings.vps.authType.key, value: 'key' },
-              { label: strings.vps.authType.password, value: 'password' }
-            ]}
-          />
-        </Form.Item>
+        <div className="modal-form-grid">
+          <Form.Item name="name" label={strings.vps.fields.name}>
+            <Input maxLength={64} />
+          </Form.Item>
+          <Form.Item
+            name="host"
+            label={strings.vps.fields.host}
+            rules={[{ required: true, message: strings.vps.validation.host }]}
+          >
+            <Input
+              autoFocus
+              className="mono-input"
+              maxLength={253}
+              placeholder={strings.vps.form.hostPlaceholder}
+            />
+          </Form.Item>
+          <Form.Item
+            name="username"
+            label={strings.vps.fields.username}
+            rules={[{ required: true, message: strings.vps.validation.username }]}
+          >
+            <Input maxLength={128} />
+          </Form.Item>
+          <Form.Item name="auth_type" label={strings.vps.fields.authType}>
+            <Radio.Group
+              options={[
+                { label: strings.vps.authType.key, value: 'key' },
+                { label: strings.vps.authType.password, value: 'password' }
+              ]}
+            />
+          </Form.Item>
+        </div>
         <Form.Item
           name="secret"
           label={authType === 'key' ? strings.vps.fields.privateKey : strings.vps.fields.password}
@@ -152,45 +154,45 @@ export function VpsFormModal({
           ]}
         >
           {authType === 'key' ? (
-            <Input.TextArea className="mono-input" autoSize={{ minRows: 4, maxRows: 8 }} />
+            <Input.TextArea className="mono-input" autoSize={{ minRows: 3, maxRows: 7 }} />
           ) : (
             <Input.Password />
           )}
         </Form.Item>
-        <details>
-          <summary style={{ cursor: 'pointer', marginBottom: 16 }}>
-            {strings.vps.form.advanced}
-          </summary>
-          <Form.Item
-            name="port"
-            label={strings.vps.fields.port}
-            rules={[{ required: true, message: strings.vps.validation.port }]}
-          >
-            <InputNumber min={1} max={65535} precision={0} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            name="host_fingerprint"
-            label={strings.vps.fields.hostFingerprint}
-            extra={strings.vps.form.hostFingerprintHint}
-            rules={[
-              {
-                pattern: /^SHA256:[A-Za-z0-9+/]{43}$/,
-                message: strings.vps.validation.hostFingerprintFormat
-              }
-            ]}
-          >
-            <Input className="mono-input" placeholder="SHA256:..." autoComplete="off" />
-          </Form.Item>
-          <Form.Item name="provider" label={strings.vps.fields.provider}>
-            <Input maxLength={100} />
-          </Form.Item>
-          <Form.Item name="region" label={strings.vps.fields.region}>
-            <Input maxLength={100} />
-          </Form.Item>
+        <details className="vps-form-advanced">
+          <summary>{strings.vps.form.advanced}</summary>
+          <div className="modal-form-grid">
+            <Form.Item
+              name="port"
+              label={strings.vps.fields.port}
+              rules={[{ required: true, message: strings.vps.validation.port }]}
+            >
+              <InputNumber min={1} max={65535} precision={0} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item
+              name="host_fingerprint"
+              label={strings.vps.fields.hostFingerprint}
+              extra={strings.vps.form.hostFingerprintHint}
+              rules={[
+                {
+                  pattern: /^SHA256:[A-Za-z0-9+/]{43}$/,
+                  message: strings.vps.validation.hostFingerprintFormat
+                }
+              ]}
+            >
+              <Input className="mono-input" placeholder="SHA256:..." autoComplete="off" />
+            </Form.Item>
+            <Form.Item name="provider" label={strings.vps.fields.provider}>
+              <Input maxLength={100} />
+            </Form.Item>
+            <Form.Item name="region" label={strings.vps.fields.region}>
+              <Input maxLength={100} />
+            </Form.Item>
+          </div>
         </details>
       </Form>
 
-      <Divider />
+      <Divider style={{ marginBlock: 14 }} />
       <ConnectionCheck
         key={formVersion}
         getValues={() => form.getFieldsValue() as VpsInput}

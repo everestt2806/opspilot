@@ -15,16 +15,20 @@ import {
 import type { MenuProps } from 'antd'
 import {
   CheckCircleFilled,
+  CheckOutlined,
   CloudServerOutlined,
   CopyOutlined,
   DeleteOutlined,
   FilterOutlined,
   ReloadOutlined,
+  RocketOutlined,
   WarningOutlined
 } from '@ant-design/icons'
 
 import type { Vps } from '@shared/ipc'
 
+import { useContextMenu } from './contextMenuContext'
+import { useUiState } from '../store/uiState'
 import { useStrings } from '../strings'
 import { localDateTime, relativeTime } from '../utils/format'
 import {
@@ -72,8 +76,10 @@ export function ServerSelector({
   onRetryResources
 }: ServerSelectorProps): React.JSX.Element {
   const strings = useStrings()
+  const locale = useUiState((state) => state.locale)
+  const { openContextMenu } = useContextMenu()
   const [statusFilter, setStatusFilter] = useState<StatusFilterKey>('all')
-  const [pageSize, setPageSize] = useState(10)
+  const [copiedId, setCopiedId] = useState<number | null>(null)
 
   const STATUS_TAG: Record<RowDisplayStatus, { color: string; label: string }> = {
     checking: { color: 'processing', label: strings.vps.status.checking },
@@ -111,10 +117,14 @@ export function ServerSelector({
     })
   }, [items, resources, search, statusFilter, currentNow])
 
-  async function copyIp(host: string, event: React.MouseEvent): Promise<void> {
+  async function copyIp(vpsId: number, host: string, event: React.MouseEvent): Promise<void> {
     event.stopPropagation()
     if (!navigator.clipboard) return
     await navigator.clipboard.writeText(host)
+    setCopiedId(vpsId)
+    window.setTimeout(() => {
+      setCopiedId((current) => (current === vpsId ? null : current))
+    }, 1500)
   }
 
   const columns = [
@@ -122,7 +132,6 @@ export function ServerSelector({
       title: strings.vps.columns.name,
       dataIndex: 'name',
       key: 'name',
-      width: 170,
       ellipsis: true,
       render: (name: string) => (
         <Typography.Text strong ellipsis>
@@ -135,26 +144,36 @@ export function ServerSelector({
       title: strings.vps.columns.ip,
       dataIndex: 'host',
       key: 'host',
-      width: 152,
-      render: (host: string) => (
-        <span onClick={(event) => event.stopPropagation()} role="presentation">
-          <span className="mono-text">{host}</span>
-          <Tooltip title={strings.vpsControl.selector.copyIp}>
-            <Button
-              type="text"
-              size="small"
-              icon={<CopyOutlined />}
-              aria-label={strings.vpsControl.selector.copyIp}
-              onClick={(event) => void copyIp(host, event)}
-            />
-          </Tooltip>
-        </span>
-      )
+      width: 158,
+      render: (host: string, vps: Vps) => {
+        const isCopied = copiedId === vps.id
+        return (
+          <span
+            onClick={(event) => event.stopPropagation()}
+            role="presentation"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: '100%' }}
+          >
+            <span className="mono-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {host}
+            </span>
+            <Tooltip title={strings.vpsControl.selector.copyIp}>
+              <Button
+                type="text"
+                size="small"
+                className={isCopied ? 'copy-btn-copied' : undefined}
+                icon={isCopied ? <CheckOutlined /> : <CopyOutlined />}
+                aria-label={strings.vpsControl.selector.copyIp}
+                onClick={(event) => void copyIp(vps.id, host, event)}
+              />
+            </Tooltip>
+          </span>
+        )
+      }
     },
     {
       title: strings.vps.columns.status,
       key: 'status',
-      width: 100,
+      width: 108,
       align: 'center' as const,
       render: (_: unknown, vps: Vps) => {
         const tag = STATUS_TAG[rowDisplayStatus(vps, resources[vps.id], currentNow)]
@@ -164,7 +183,7 @@ export function ServerSelector({
     {
       title: strings.vps.columns.docker,
       key: 'docker',
-      width: 124,
+      width: 108,
       ellipsis: true,
       render: (_: unknown, vps: Vps) =>
         vps.docker_version ? (
@@ -182,68 +201,72 @@ export function ServerSelector({
     {
       title: strings.vps.columns.site,
       key: 'site',
-      width: 52,
+      width: 56,
       align: 'center' as const,
       render: (_: unknown, vps: Vps) => (
-        <Typography.Text type="secondary">{appCounts[vps.id] ?? 0}</Typography.Text>
+        <Typography.Text type="secondary" className="mono-text">
+          {appCounts[vps.id] ?? 0}
+        </Typography.Text>
       )
     },
     {
       title: strings.vps.columns.lastConnection,
       key: 'lastConnection',
-      width: 148,
+      width: 164,
       render: (_: unknown, vps: Vps) => {
         const status = rowDisplayStatus(vps, resources[vps.id], currentNow)
-        if (status === 'check_failed' || status === 'checking') {
-          return (
-            <span onClick={(event) => event.stopPropagation()} role="presentation">
-              <Tag color={status === 'check_failed' ? 'error' : 'processing'}>
-                {STATUS_TAG[status].label}
-              </Tag>
-              <Button
-                type="text"
-                size="small"
-                icon={<ReloadOutlined />}
-                aria-label={strings.vps.resources.retry(vps.name)}
-                onClick={() => onRetryResources(vps.id)}
-              />
-            </span>
-          )
-        }
         const resState = resources[vps.id]
-        if (status === 'checked_now' && resState?.status === 'success' && resState.fetchedAt) {
-          const iso = new Date(resState.fetchedAt).toISOString()
-          return (
-            <Tooltip title={localDateTime(iso)}>
-              <span className="mono-text" style={{ fontSize: 12 }}>
-                {relativeTime(iso)}
-              </span>
-            </Tooltip>
-          )
-        }
-        if (vps.last_seen_at) {
-          const seenMs = Date.parse(vps.last_seen_at)
-          if (!Number.isNaN(seenMs) && seenMs <= Date.now() + 60_000) {
-            return (
-              <Tooltip title={localDateTime(vps.last_seen_at)}>
-                <span className="mono-text" style={{ fontSize: 12 }}>
-                  {relativeTime(vps.last_seen_at)}
+        const seenIso =
+          status === 'checked_now' && resState?.status === 'success' && resState.fetchedAt
+            ? new Date(resState.fetchedAt).toISOString()
+            : vps.last_seen_at &&
+                !Number.isNaN(Date.parse(vps.last_seen_at)) &&
+                Date.parse(vps.last_seen_at) <= Date.now() + 60_000
+              ? vps.last_seen_at
+              : null
+
+        return (
+          <span
+            onClick={(event) => event.stopPropagation()}
+            role="presentation"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: '100%' }}
+          >
+            {seenIso ? (
+              <Tooltip title={localDateTime(seenIso)}>
+                <span
+                  className="mono-text"
+                  style={{ fontSize: 12, color: 'var(--text-secondary)' }}
+                >
+                  {relativeTime(seenIso, currentNow, locale)}
                 </span>
               </Tooltip>
-            )
-          }
-        }
-        return (
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            {strings.vpsControl.overview.neverSeen}
-          </Typography.Text>
+            ) : (
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {status === 'checking'
+                  ? strings.vps.status.checking
+                  : strings.vpsControl.overview.neverSeen}
+              </Typography.Text>
+            )}
+            {(status === 'check_failed' || status === 'checking') && (
+              <Tooltip title={strings.vps.resources.retry(vps.name)}>
+                <Button
+                  type="text"
+                  size="small"
+                  loading={status === 'checking'}
+                  icon={<ReloadOutlined />}
+                  aria-label={strings.vps.resources.retry(vps.name)}
+                  onClick={() => onRetryResources(vps.id)}
+                />
+              </Tooltip>
+            )}
+          </span>
         )
       }
     },
     {
       title: strings.vps.columns.actions,
       key: 'actions',
-      width: 52,
+      width: 72,
       align: 'center' as const,
       render: (_: unknown, vps: Vps) => (
         <Button
@@ -273,34 +296,41 @@ export function ServerSelector({
     >
       {showTable && (
         <div className="server-list-toolbar">
-          <Input
-            allowClear
-            className="server-list-search"
-            placeholder={strings.vpsControl.selector.searchPlaceholder}
-            value={search}
-            onChange={(event) => onSearchChange(event.target.value)}
-          />
-          <Dropdown
-            trigger={['click']}
-            menu={{
-              selectable: true,
-              selectedKeys: [statusFilter],
-              items: FILTER_MENU,
-              onClick: ({ key }) => setStatusFilter(key as StatusFilterKey)
-            }}
-          >
-            <Badge dot={filterActive} color="var(--info)">
-              <Button
-                icon={<FilterOutlined />}
-                aria-label={strings.vpsControl.selector.filterButton}
-              />
-            </Badge>
-          </Dropdown>
+          <div className="server-list-toolbar-left">
+            <Input
+              allowClear
+              className="server-list-search"
+              placeholder={strings.vpsControl.selector.searchPlaceholder}
+              value={search}
+              onChange={(event) => onSearchChange(event.target.value)}
+            />
+            <Dropdown
+              trigger={['click']}
+              menu={{
+                selectable: true,
+                selectedKeys: [statusFilter],
+                items: FILTER_MENU,
+                onClick: ({ key }) => setStatusFilter(key as StatusFilterKey)
+              }}
+            >
+              <Badge dot={filterActive} color="var(--info)">
+                <Button
+                  icon={<FilterOutlined />}
+                  aria-label={strings.vpsControl.selector.filterButton}
+                />
+              </Badge>
+            </Dropdown>
+          </div>
+          <span className="server-list-count">
+            {visible.length === items.length
+              ? String(items.length)
+              : `${visible.length} / ${items.length}`}
+          </span>
         </div>
       )}
 
       {loading && (
-        <div style={{ textAlign: 'center', padding: 16 }}>
+        <div className="desktop-loading-panel">
           <Spin size="small" />
         </div>
       )}
@@ -316,11 +346,11 @@ export function ServerSelector({
       {showTable && (
         <Table<Vps>
           className="server-list-table"
+          tableLayout="fixed"
           rowKey="id"
           size="small"
           dataSource={visible}
           columns={columns}
-          scroll={{ x: 840 }}
           rowSelection={{
             selectedRowKeys: selectedIds,
             preserveSelectedRowKeys: true,
@@ -331,17 +361,50 @@ export function ServerSelector({
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={strings.history.empty} />
             )
           }}
-          pagination={{
-            pageSize,
-            size: 'small',
-            showSizeChanger: true,
-            pageSizeOptions: [10, 20, 50],
-            showTotal: (total, range) =>
-              strings.vpsControl.selector.pageTotal(range[0], range[1], total),
-            onShowSizeChange: (_current, size) => setPageSize(size)
-          }}
+          pagination={false}
           onRow={(vps) => ({
             onClick: () => onSelect(vps),
+            onContextMenu: (event) => {
+              openContextMenu(event, [
+                {
+                  key: 'open',
+                  label: vps.name,
+                  icon: <CloudServerOutlined />,
+                  onClick: () => onSelect(vps)
+                },
+                {
+                  key: 'copy-ip',
+                  label: strings.vpsControl.selector.copyIp,
+                  icon: <CopyOutlined />,
+                  onClick: () => {
+                    if (navigator.clipboard) void navigator.clipboard.writeText(vps.host)
+                  }
+                },
+                {
+                  key: 'retry',
+                  label: strings.vps.checkResources,
+                  icon: <ReloadOutlined />,
+                  onClick: () => onRetryResources(vps.id)
+                },
+                {
+                  key: 'deploy',
+                  label: strings.navigation.deploy,
+                  icon: <RocketOutlined />,
+                  onClick: () => {
+                    useUiState.getState().setDeployPreselect({ vpsId: vps.id })
+                    useUiState.getState().setActivePage('deploy')
+                  }
+                },
+                { type: 'divider', key: 'div-del' },
+                {
+                  key: 'delete',
+                  label: strings.vps.actions.delete(vps.name),
+                  icon: <DeleteOutlined />,
+                  danger: true,
+                  onClick: () => onDelete(vps)
+                }
+              ])
+            },
             onKeyDown: (event) => {
               if (event.key === 'Enter' || event.key === ' ') onSelect(vps)
             },

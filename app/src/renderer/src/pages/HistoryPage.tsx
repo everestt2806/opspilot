@@ -14,11 +14,18 @@ import {
   Tooltip,
   Typography
 } from 'antd'
-import { AppstoreOutlined, CloudServerOutlined, ReloadOutlined } from '@ant-design/icons'
+import {
+  AppstoreOutlined,
+  CloudServerOutlined,
+  CopyOutlined,
+  EyeOutlined,
+  ReloadOutlined
+} from '@ant-design/icons'
 import type { Dayjs } from 'dayjs'
 
 import type { ActionLogEntry, IpcError, Vps } from '@shared/ipc'
 
+import { useContextMenu } from '../components/contextMenuContext'
 import { PageHeader } from '../components/PageHeader'
 import { useUiState } from '../store/uiState'
 import { useStrings } from '../strings'
@@ -86,6 +93,7 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
   const locale = useUiState((state) => state.locale)
   const setSelectedVpsId = useUiState((state) => state.setSelectedVpsId)
   const setSelectedAppId = useUiState((state) => state.setSelectedAppId)
+  const { openContextMenu } = useContextMenu()
 
   const [rows, setRows] = useState<ActionLogEntry[]>([])
   const [vpsList, setVpsList] = useState<Vps[]>([])
@@ -186,6 +194,15 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
     setLoading(true)
     setReloadKey((k) => k + 1)
   }
+
+  useEffect(() => {
+    const onRefresh = (): void => {
+      setLoading(true)
+      setReloadKey((k) => k + 1)
+    }
+    window.addEventListener('opspilot:refresh', onRefresh)
+    return () => window.removeEventListener('opspilot:refresh', onRefresh)
+  }, [])
 
   function handleActionsChange(value: string[]): void {
     setLoading(true)
@@ -313,13 +330,13 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
         }
       />
 
-      <Space wrap size={8} style={{ marginBottom: 12 }}>
+      <div className="history-filter-bar">
         <Select
           mode="multiple"
           allowClear
           placeholder={strings.history.filters.actionAll}
           aria-label={strings.history.filters.action}
-          style={{ minWidth: 200 }}
+          style={{ minWidth: 220 }}
           value={actions}
           onChange={handleActionsChange}
           options={actionOptions}
@@ -328,7 +345,7 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
           allowClear
           placeholder={strings.history.filters.vpsAll}
           aria-label={strings.history.filters.vps}
-          style={{ minWidth: 160 }}
+          style={{ minWidth: 180 }}
           value={vpsId}
           onChange={handleVpsChange}
           options={vpsList.map((vps) => ({ value: vps.id, label: `${vps.name} — ${vps.host}` }))}
@@ -340,7 +357,7 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
           value={range}
           onChange={handleRangeChange}
         />
-      </Space>
+      </div>
 
       {error && (
         <Alert
@@ -357,59 +374,86 @@ export function HistoryPage({ onOpenVps, onOpenApps }: HistoryPageProps): React.
         />
       )}
 
-      <Table<ActionLogEntry>
-        rowKey="id"
-        size="small"
-        loading={loading}
-        dataSource={rows}
-        columns={columns}
-        onRow={(record) => ({
-          onClick: () => setSelected(record),
-          style: { cursor: 'pointer' }
-        })}
-        pagination={
-          (rows.length === 0 && page === 1 && !loading) || error !== null
-            ? false
-            : {
-                current: page,
-                pageSize: PAGE_SIZE,
-                total: total,
-                showSizeChanger: false,
-                hideOnSinglePage: false,
-                onChange: handlePageChange,
-                showTotal: (_totalCount, [from, to]) =>
-                  hasMore
-                    ? strings.history.pagination.pageMore(from, to)
-                    : strings.history.pagination.pageTotal(
-                        rows.length === 0 ? 0 : from,
-                        rows.length === 0 ? 0 : to,
-                        (page - 1) * PAGE_SIZE + rows.length
-                      ),
-                locale: {
-                  prev_page: strings.history.pagination.prev,
-                  next_page: strings.history.pagination.next
+      <div className="history-table-card">
+        <Table<ActionLogEntry>
+          rowKey="id"
+          size="small"
+          tableLayout="fixed"
+          loading={loading}
+          dataSource={rows}
+          columns={columns}
+          onRow={(record) => ({
+            onClick: () => setSelected(record),
+            onContextMenu: (event) => {
+              openContextMenu(event, [
+                {
+                  key: 'inspect',
+                  label: strings.history.detail.title,
+                  icon: <EyeOutlined />,
+                  onClick: () => setSelected(record)
+                },
+                ...(record.message
+                  ? [
+                      {
+                        key: 'copy-msg',
+                        label: strings.deploy.log.toolbar.copy,
+                        icon: <CopyOutlined />,
+                        onClick: () => {
+                          if (navigator.clipboard && record.message) {
+                            void navigator.clipboard.writeText(record.message)
+                          }
+                        }
+                      }
+                    ]
+                  : [])
+              ])
+            },
+            style: { cursor: 'pointer' }
+          })}
+          pagination={
+            (rows.length === 0 && page === 1 && !loading) || error !== null
+              ? false
+              : {
+                  current: page,
+                  pageSize: PAGE_SIZE,
+                  total: total,
+                  showSizeChanger: false,
+                  hideOnSinglePage: false,
+                  onChange: handlePageChange,
+                  showTotal: (_totalCount, [from, to]) =>
+                    hasMore
+                      ? strings.history.pagination.pageMore(from, to)
+                      : strings.history.pagination.pageTotal(
+                          rows.length === 0 ? 0 : from,
+                          rows.length === 0 ? 0 : to,
+                          (page - 1) * PAGE_SIZE + rows.length
+                        ),
+                  locale: {
+                    prev_page: strings.history.pagination.prev,
+                    next_page: strings.history.pagination.next
+                  }
                 }
-              }
-        }
-        locale={{
-          emptyText: (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={page > 1 ? strings.history.emptyPage : strings.history.empty}
-            >
-              {page > 1 && !loading && !error && (
-                <Button
-                  type="primary"
-                  size="small"
-                  onClick={() => handlePageChange(Math.max(1, page - 1))}
-                >
-                  {strings.history.pagination.prevPageAction}
-                </Button>
-              )}
-            </Empty>
-          )
-        }}
-      />
+          }
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={page > 1 ? strings.history.emptyPage : strings.history.empty}
+              >
+                {page > 1 && !loading && !error && (
+                  <Button
+                    type="primary"
+                    size="small"
+                    onClick={() => handlePageChange(Math.max(1, page - 1))}
+                  >
+                    {strings.history.pagination.prevPageAction}
+                  </Button>
+                )}
+              </Empty>
+            )
+          }}
+        />
+      </div>
 
       <Drawer
         open={selected !== null}

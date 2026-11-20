@@ -972,5 +972,43 @@ describe(
       expect((await screen.findAllByText(/running \(v2\)/)).length).toBeGreaterThan(0)
       expect(screen.queryByText(strings.apps.versionsLoadError)).toBeNull()
     })
+
+    it('cho phép Stop, Start, Restart và xem Logs container cho app Desktop', async () => {
+      const { invoke } = mockApi({
+        'app:stop': async () => ({ ok: true, data: undefined }),
+        'app:start': async () => ({ ok: true, data: undefined }),
+        'app:restart': async () => ({ ok: true, data: undefined }),
+        'app:logs': async () => ({
+          ok: true,
+          data: {
+            container_name: 'my-express-app-app',
+            lines: ['2026-11-20T12:00:00Z Server listening on 3000'],
+            truncated: false
+          }
+        }),
+        'app:runtime-inspect': async () => ({
+          ok: true,
+          data: { image: 'my-express-app:v2', state: 'running' }
+        })
+      })
+      useUiState.setState({ selectedAppId: 10 })
+
+      render(
+        <AntApp>
+          <AppsPage />
+        </AntApp>
+      )
+
+      expect(await screen.findByRole('heading', { level: 3, name: 'my-express-app' })).toBeTruthy()
+      fireEvent.click(await screen.findByRole('button', { name: /Dừng/i }))
+      await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:stop', 10))
+      fireEvent.click(await screen.findByRole('button', { name: /Khởi động lại/i }))
+      await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:restart', 10))
+      fireEvent.click(await screen.findByRole('button', { name: /Khởi động$/i }))
+      await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:start', 10))
+      fireEvent.click(await screen.findByRole('button', { name: /Xem log/i }))
+      await waitFor(() => expect(invoke).toHaveBeenCalledWith('app:logs', 10, 120))
+      expect(await screen.findByText(/Server listening on 3000/)).toBeTruthy()
+    })
   }
 )
