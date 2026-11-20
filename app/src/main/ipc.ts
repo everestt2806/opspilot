@@ -43,6 +43,7 @@ import { DeploymentRepository } from './db/deploymentRepository'
 import { DoctorFixService } from './doctor/fix'
 import { DoctorRepository } from './doctor/repository'
 import { VpsRepository } from './db/vpsRepository'
+import { VpsPostgresService } from './db/vpsPostgresService'
 import { db as database } from './db'
 import type { DesktopControllerService } from './controlPlane/desktopControllerService'
 
@@ -658,6 +659,10 @@ export function registerIpcHandlers(
   handle('app:rollback', (appId, targetDeploymentId) =>
     deployService.rollback(appId, targetDeploymentId)
   )
+  handle('app:stop', (appId) => deployService.stopApp(appId))
+  handle('app:start', (appId) => deployService.startApp(appId))
+  handle('app:restart', (appId) => deployService.restartApp(appId))
+  handle('app:logs', (appId, tailLines) => deployService.readAppLogs(appId, tailLines))
 
   if (migrateService) {
     handle('migrate:start', (input) => migrateService.start(input))
@@ -667,6 +672,21 @@ export function registerIpcHandlers(
   }
 
   handle('history:list', (filter) => historyService.list(filter))
+
+  const postgresService = new VpsPostgresService(database, ssh)
+  handle('db:list-databases', (vpsId) => postgresService.listDatabases(vpsId))
+  handle('db:create-database', (vpsId, name) => postgresService.createDatabase(vpsId, name))
+  handle('db:list-users', (vpsId) => postgresService.listUsers(vpsId))
+  handle('db:create-user', (vpsId, input) => postgresService.createUser(vpsId, input))
+  handle('db:list-tables', (vpsId, dbName) => postgresService.listTables(vpsId, dbName))
+  handle('db:save-schema', (vpsId, dbName, ddl) => postgresService.saveSchema(vpsId, dbName, ddl))
+  handle('db:import-data', (vpsId, dbName, input) =>
+    postgresService.importData(vpsId, dbName, input)
+  )
+  handle('db:export-data', (vpsId, dbName, format) =>
+    postgresService.exportData(vpsId, dbName, format)
+  )
+  handle('db:query', (vpsId, dbName, sql) => postgresService.query(vpsId, dbName, sql))
 
   if (monitorService) {
     handle('monitor:samples', (deploymentId, fromTs) =>

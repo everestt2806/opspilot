@@ -100,7 +100,7 @@ export function VpsDetail({
           <span>{strings.vpsControl.tabs.database}</span>
         </span>
       ),
-      children: <VpsDatabaseTab vpsId={vps.id} />
+      children: <VpsDatabaseTab vpsId={vps.id} supported={true} />
     },
     {
       key: 'activity',

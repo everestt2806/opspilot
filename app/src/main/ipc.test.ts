@@ -1631,4 +1631,54 @@ describe('handle', () => {
       }
     })
   })
+
+  it('registers app:stop, app:start, app:restart, app:logs, and db:* handlers', async () => {
+    const stopApp = vi.fn(async () => {})
+    const startApp = vi.fn(async () => {})
+    const restartApp = vi.fn(async () => {})
+    const readAppLogs = vi.fn(async () => ({
+      container_name: 'demo-app',
+      lines: ['line 1'],
+      truncated: false
+    }))
+    registerIpcHandlers(
+      { getPort: () => null } as never,
+      {} as never,
+      {} as never,
+      { stopApp, startApp, restartApp, readAppLogs } as never,
+      {} as never,
+      () => null
+    )
+    const callbackFor = (
+      channel: string
+    ): ((event: unknown, ...args: unknown[]) => Promise<unknown>) => {
+      const callback = handleMock.mock.calls.find(([registered]) => registered === channel)?.[1]
+      expect(callback).toBeTypeOf('function')
+      return callback as (event: unknown, ...args: unknown[]) => Promise<unknown>
+    }
+    await expect(callbackFor('app:stop')({}, 42)).resolves.toEqual({ ok: true, data: undefined })
+    await expect(callbackFor('app:start')({}, 42)).resolves.toEqual({ ok: true, data: undefined })
+    await expect(callbackFor('app:restart')({}, 42)).resolves.toEqual({ ok: true, data: undefined })
+    await expect(callbackFor('app:logs')({}, 42, 200)).resolves.toEqual({
+      ok: true,
+      data: { container_name: 'demo-app', lines: ['line 1'], truncated: false }
+    })
+    expect(stopApp).toHaveBeenCalledWith(42)
+    expect(startApp).toHaveBeenCalledWith(42)
+    expect(restartApp).toHaveBeenCalledWith(42)
+    expect(readAppLogs).toHaveBeenCalledWith(42, 200)
+    for (const ch of [
+      'db:list-databases',
+      'db:create-database',
+      'db:list-users',
+      'db:create-user',
+      'db:list-tables',
+      'db:save-schema',
+      'db:import-data',
+      'db:export-data',
+      'db:query'
+    ]) {
+      expect(handleMock.mock.calls.some(([registered]) => registered === ch)).toBe(true)
+    }
+  })
 })
