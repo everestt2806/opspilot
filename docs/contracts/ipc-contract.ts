@@ -543,6 +543,8 @@ export interface IpcInvokeMap {
   'app:rollback':    (appId: number, targetDeploymentId: number) => IpcResult<{ deployment_id: number }>;
   'app:stop':        (appId: number) => IpcResult<void>;
   'app:start':       (appId: number) => IpcResult<void>;
+  'app:restart':     (appId: number) => IpcResult<void>;
+  'app:logs':        (appId: number, tailLines?: number) => IpcResult<{ container_name: string; lines: string[]; truncated: boolean }>;
 
   // ── Giám sát (UC-06, UC-07, UC-08) ─────────────────────────────────────────
   'monitor:samples': (deploymentId: number, fromTs: string) => IpcResult<MetricSample[]>;
@@ -724,6 +726,8 @@ export interface DoctorEvidenceInput {
 
 export interface PrecheckResult {
   passed: boolean;
+  /** Main reports a failed Docker daemon/Compose check; renderer can offer consented runtime preparation. */
+  runtime_preparation_required?: true;
   checks: Array<{
     label: string;            // 'RAM trống'
     required: string;         // '> 512 MB'
