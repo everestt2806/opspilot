@@ -395,6 +395,8 @@ class SystemSshClient:
                 stderr = res.stderr
             if res.returncode != 0:
                 self.last_error_code = _classify_ssh_error(stderr)
+                if res.returncode == 1 and "no such container" in stderr.lower():
+                    return res.returncode, stdout, "No such container"
                 return res.returncode, stdout, self.last_error_code
             return res.returncode, stdout, stderr
         except subprocess.TimeoutExpired:
@@ -1048,6 +1050,7 @@ def run_attempt(
             ssh_client=ssh_client,
             loadgen_app_url=loadgen_app_url,
         )
+        loadgen_started_at = clock_fn()
         loadgen_handle = lg_adapter.start(
             app_url=effective_loadgen_url,
             rate_rps=5.0,
@@ -1198,22 +1201,43 @@ def run_attempt(
             raise ExperimentError(f"Không thể reset fault ở đầu Pha D: {reset_err}")
 
         phase_d_dur = PHASE_D_S * time_scale
-        wait_with_checks(
-            phase_d_dur,
-            check_interval_s=check_interval_s,
-            loadgen_handle=loadgen_handle,
-            poller_handle=poller_handle,
-            sleeper_fn=sleeper_fn,
-            clock_fn=clock_fn,
+        # Loadgen có trần 4500s nên có thể hết hạn vài giây trước cuối Pha D do trễ train/SSH;
+        # dừng chủ động trước hạn vài giây để không bị assert_running() báo sai là crash.
+        loadgen_stop_margin_s = 5.0 if time_scale >= 1.0 else 0.0
+        loadgen_budget_end = (
+            loadgen_started_at
+            + (loadgen_handle.effective_duration_s * time_scale)
+            - loadgen_stop_margin_s
         )
+        phase_d_with_loadgen = min(phase_d_dur, max(0.0, loadgen_budget_end - clock_fn()))
+        if phase_d_with_loadgen > 0:
+            wait_with_checks(
+                phase_d_with_loadgen,
+                check_interval_s=check_interval_s,
+                loadgen_handle=loadgen_handle,
+                poller_handle=poller_handle,
+                sleeper_fn=sleeper_fn,
+                clock_fn=clock_fn,
+            )
 
-        # Dừng Load Generator ở cuối Pha D
+        # Dừng Load Generator ở cuối Pha D (hoặc ngay trước khi vượt trần 4500s)
         try:
             loadgen_handle.stop()
         except Exception as e:
             reason = f"loadgen_stop_failed: {e}"
             abort_run(conn, run_id, reason=reason, auto_commit=True)
             raise ExperimentError(f"Dừng load generator thất bại: {e}") from e
+
+        remaining_phase_d = max(0.0, phase_d_dur - phase_d_with_loadgen)
+        if remaining_phase_d > 0:
+            wait_with_checks(
+                remaining_phase_d,
+                check_interval_s=check_interval_s,
+                loadgen_handle=None,
+                poller_handle=poller_handle,
+                sleeper_fn=sleeper_fn,
+                clock_fn=clock_fn,
+            )
 
         # =========================================================================
         # BƯỚC 9: Draining dữ liệu & Cổng kiểm tra toàn vẹn (Integrity Gate)

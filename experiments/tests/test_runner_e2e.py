@@ -2720,3 +2720,24 @@ def test_resolve_loadgen_app_url_maps_public_vps_url_to_internal_service() -> No
         )
         == "http://127.0.0.1:30000"
     )
+
+
+def test_system_ssh_client_preserves_docker_no_such_container_stderr(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Docker inspect missing container literal is preserved without bypassing SSH secret redaction."""
+    from types import SimpleNamespace
+
+    import experiments.run_experiment as runner
+
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *_a, **_kw: SimpleNamespace(
+            returncode=1,
+            stdout="",
+            stderr="Error response from daemon: No such container: opspilot-loadgen-express-api\n",
+        ),
+    )
+    client = runner.SystemSshClient(host="127.0.0.1", key_file="dummy")
+    code, _out, err = client.exec("docker inspect -f '{{.State.Status}}' opspilot-loadgen-express-api")
+    assert code == 1
+    assert err == "No such container"
