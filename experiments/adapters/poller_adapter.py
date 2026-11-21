@@ -287,7 +287,7 @@ class PollerAdapter:
         ml_url: str | None = None,
         mock_metrics_file: str | Path | None = None,
         ssh_secret: str | None = None,
-        startup_timeout_s: float = 10.0,
+        startup_timeout_s: float = 30.0,
         cli_cmd: Sequence[str] | None = None,
     ) -> PollerHandle:
         """Khởi chạy Headless Poller không chặn, chờ xác nhận ready và trả về PollerHandle."""

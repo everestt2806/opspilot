@@ -1043,6 +1043,7 @@ def run_attempt(
             db_path=db_file,
             ml_url=ml_url,
             ssh_secret=resolved_ssh_secret,
+            startup_timeout_s=30.0,
             cli_cmd=custom_poller_cmd,
         )
 
