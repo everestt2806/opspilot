@@ -323,10 +323,10 @@ class LoadgenHandle:
                         f"Container '{self.container_name}' vẫn đang chạy hoặc trạng thái không hợp lệ sau lệnh dừng (mã={exit_code}, status={status or 'unknown'}): {stderr.strip() or stdout.strip()}"
                     )
 
-                # inspect_code != 0: Chỉ chấp nhận nếu Docker báo lỗi rõ ràng "No such container"
+                # inspect_code != 0: Chỉ chấp nhận nếu Docker báo lỗi rõ ràng container không còn tồn tại
                 err_clean = inspect_err.strip() or inspect_out.strip() or stderr.strip()
                 err_lower = err_clean.lower()
-                if "no such container" in err_lower:
+                if "no such container" in err_lower or "no such object" in err_lower:
                     self._is_stopped = True
                     return
 
@@ -386,10 +386,10 @@ class LoadgenHandle:
                         f"Container '{self.container_name}' chưa biến mất sau lệnh dọn dẹp (mã={exit_code}, status={status}): {stderr.strip() or stdout.strip()}"
                     )
 
-                # inspect_code != 0: Chỉ chấp nhận nếu Docker báo lỗi rõ ràng "No such container"
+                # inspect_code != 0: Chỉ chấp nhận nếu Docker báo lỗi rõ ràng container không còn tồn tại
                 err_clean = inspect_err.strip() or inspect_out.strip() or stderr.strip()
                 err_lower = err_clean.lower()
-                if "no such container" in err_lower:
+                if "no such container" in err_lower or "no such object" in err_lower:
                     self._is_stopped = True
                     self._is_cleaned = True
                     return

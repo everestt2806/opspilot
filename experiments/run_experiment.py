@@ -395,7 +395,10 @@ class SystemSshClient:
                 stderr = res.stderr
             if res.returncode != 0:
                 self.last_error_code = _classify_ssh_error(stderr)
-                if res.returncode == 1 and "no such container" in stderr.lower():
+                lower_err = stderr.lower()
+                if res.returncode == 1 and (
+                    "no such container" in lower_err or "no such object" in lower_err
+                ):
                     return res.returncode, stdout, "No such container"
                 return res.returncode, stdout, self.last_error_code
             return res.returncode, stdout, stderr

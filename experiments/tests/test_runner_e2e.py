@@ -2741,3 +2741,16 @@ def test_system_ssh_client_preserves_docker_no_such_container_stderr(monkeypatch
     code, _out, err = client.exec("docker inspect -f '{{.State.Status}}' opspilot-loadgen-express-api")
     assert code == 1
     assert err == "No such container"
+
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *_a, **_kw: SimpleNamespace(
+            returncode=1,
+            stdout="",
+            stderr="error: no such object: opspilot-loadgen-express-api\n",
+        ),
+    )
+    code2, _out2, err2 = client.exec("docker inspect -f '{{.State.Status}}' opspilot-loadgen-express-api")
+    assert code2 == 1
+    assert err2 == "No such container"

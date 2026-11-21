@@ -1035,3 +1035,20 @@ def test_loadgen_adapter_assert_running_ssh_connection_error() -> None:
 
     assert "Lỗi SSH khi kiểm tra trạng thái container" in str(exc_info.value)
     assert "SSH connection reset by peer" in str(exc_info.value)
+
+
+def test_loadgen_adapter_cleanup_accepts_docker_no_such_object() -> None:
+    """Docker 29 inspect returns 'error: no such object: ...' after removal."""
+    mock_ssh = MockSshClient(exit_code=0, simulate_docker=True)
+    adapter = LoadgenAdapter()
+    handle = adapter.start(app_url="http://127.0.0.1:3000", app_name="demo-app", ssh_client=mock_ssh)
+
+    def router(cmd: str, timeout: float | None = None) -> tuple[int, str, str]:
+        mock_ssh.executed_commands.append(cmd)
+        if "docker inspect" in cmd:
+            return 1, "", "error: no such object: opspilot-loadgen-demo-app"
+        return 0, "opspilot-loadgen-demo-app\n", ""
+
+    handle.ssh_client = router
+    handle.cleanup()
+    assert handle.is_running is False
