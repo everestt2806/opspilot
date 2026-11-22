@@ -158,7 +158,8 @@ if ($Action -eq 'Stop') {
             # Xác thực lại xem PID này còn đang lắng nghe cổng không
             $currentConn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -eq $res.PID }
             if (-not $currentConn) {
-                Write-Host "Tiến trình PID $($res.PID) không còn lắng nghe trên cổng $Port nữa."
+                Write-Host "BỎ QUA / TỪ CHỐI DỪNG: Tiến trình PID $($res.PID) không còn lắng nghe trên cổng $Port tại thời điểm dừng. Bỏ qua và không thực hiện thao tác dừng trên tiến trình này."
+                continue
             }
 
             Write-Host "Đang dừng an toàn tiến trình sở hữu OpsPilot PID $($res.PID) ($canonicalCurrentPath)..."

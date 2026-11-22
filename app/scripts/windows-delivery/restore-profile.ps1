@@ -210,20 +210,68 @@ try {
 
     # 6.3. Promote staging thành profile chính thức
     Write-Host "Áp dụng profile mới vào: $canonicalTarget"
+    if ($env:OPSPILOT_SIMULATE_RESTORE_PROMOTE_FAILURE -eq "1") {
+        throw "SYNTHETIC_PROMOTE_FAILURE"
+    }
     Move-Item -Path $stagingDir -Destination $canonicalTarget
 
     Write-Host "Phục hồi profile OpsPilot hoàn tất thành công!"
     exit 0
 } catch {
-    Write-Error "Lỗi xảy ra trong quá trình staging/promote: $_"
-    # Rollback nếu profile cũ đã chuyển sang PreRestore nhưng chưa promote thành công
-    if ($preRestoreDir -and (Test-Path -Path $preRestoreDir) -and -not (Test-Path -Path $canonicalTarget)) {
-        Write-Warning "Đang khôi phục lại profile ban đầu từ PreRestore..."
-        Move-Item -Path $preRestoreDir -Destination $canonicalTarget -Force -ErrorAction SilentlyContinue
+    $originalError = $_
+    $rollbackAttempted = $false
+    $rollbackSucceeded = $false
+    $rollbackError = $null
+
+    # 1. Dọn dẹp staging nếu còn tồn tại
+    if ($stagingDir -and (Test-Path -Path $stagingDir)) {
+        try {
+            Remove-Item -Path $stagingDir -Recurse -Force -ErrorAction Stop
+        } catch {
+            # Bỏ qua lỗi dọn staging để không ảnh hưởng đến rollback dữ liệu
+        }
     }
-    # Dọn dẹp staging nếu còn
-    if (Test-Path -Path $stagingDir) {
-        Remove-Item -Path $stagingDir -Recurse -Force -ErrorAction SilentlyContinue
+
+    # 2. Rollback phục hồi profile ban đầu từ PreRestore nếu target đã bị di chuyển
+    if ($preRestoreDir -and (Test-Path -Path $preRestoreDir)) {
+        $rollbackAttempted = $true
+        Write-Host "Phát hiện sự cố sau khi lưu giữ profile cũ. Đang khôi phục (rollback) lại profile ban đầu từ: $preRestoreDir"
+        try {
+            if ($env:OPSPILOT_SIMULATE_RESTORE_ROLLBACK_FAILURE -eq "1") {
+                throw "SYNTHETIC_ROLLBACK_FAILURE"
+            }
+            # Nếu target đã bị tạo dở dang bởi lệnh promote lỗi, dọn dẹp trước khi chuyển PreRestore về
+            if (Test-Path -Path $canonicalTarget) {
+                Remove-Item -Path $canonicalTarget -Recurse -Force -ErrorAction Stop
+            }
+            Move-Item -Path $preRestoreDir -Destination $canonicalTarget -Force -ErrorAction Stop
+            if ((Test-Path -Path $canonicalTarget) -and -not (Test-Path -Path $preRestoreDir)) {
+                $rollbackSucceeded = $true
+                Write-Host "Rollback thành công: Profile ban đầu đã được phục hồi đầy đủ về: $canonicalTarget"
+            } else {
+                $rollbackSucceeded = $false
+                $rollbackError = "Thư mục đích không tồn tại hoặc thư mục PreRestore vẫn còn sau khi di chuyển."
+            }
+        } catch {
+            $rollbackSucceeded = $false
+            $rollbackError = $_.Exception.Message
+        }
     }
+
+    # 3. Xuất thông báo chi tiết
+    if ($rollbackAttempted) {
+        if ($rollbackSucceeded) {
+            Write-Host "[ROLLBACK THÀNH CÔNG] Sự cố promote đã được xử lý an toàn. Profile ban đầu đã được hoàn trả nguyên trạng về: $canonicalTarget"
+        } else {
+            Write-Host "[CẢNH BÁO NGUY HIỂM] Rollback tự động thất bại: $rollbackError. Bản lưu giữ profile ban đầu vẫn còn nguyên tại: $preRestoreDir. Vui lòng khôi phục thủ công từ thư mục này (không xóa thư mục này)."
+        }
+    }
+
+    # 4. Ghi nhận lỗi gốc ra error stream mà không ngắt giữa chừng
+    Write-Error -Message "Lỗi xảy ra trong quá trình staging/promote: $originalError" -ErrorAction Continue
+    if ($rollbackAttempted -and -not $rollbackSucceeded) {
+        Write-Error -Message "Rollback thất bại ($rollbackError). Dữ liệu ban đầu được giữ nguyên tại: $preRestoreDir" -ErrorAction Continue
+    }
+
     exit 1
 }

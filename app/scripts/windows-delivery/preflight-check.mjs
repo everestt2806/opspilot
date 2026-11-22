@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- Standalone check suite for preflight inventory CLI and resource/backup parity */
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { readFileSync, writeFileSync, rmSync, existsSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, rmSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import { randomBytes, createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
@@ -493,6 +493,137 @@ try {
     assert.notEqual(negUnlistedRes.status, 0, 'Restore must reject unlisted file on disk')
     rmSync(join(backupTargetDir, 'unlisted_injected.txt'))
 
+    // Negative Test 3 (R5): Promote failure triggers automatic rollback to restore original profile
+    const promoteCaseParent = join(FIXTURE_DIR, 'promote-fail-case')
+    const rollbackTargetDir = join(promoteCaseParent, 'target')
+    mkdirSync(rollbackTargetDir, { recursive: true })
+    writeFileSync(join(rollbackTargetDir, 'marker1.txt'), 'ORIGINAL_MARKER_1\n', 'utf8')
+    writeFileSync(join(rollbackTargetDir, 'opspilot.db'), 'ORIGINAL_DB_STATE\n', 'utf8')
+    writeFileSync(
+      join(rollbackTargetDir, 'credential-master-key.protected'),
+      'ORIGINAL_KEY_STATE\n',
+      'utf8'
+    )
+    const originalMarker1Hash = hashFile(join(rollbackTargetDir, 'marker1.txt'))
+    const originalDbHash = hashFile(join(rollbackTargetDir, 'opspilot.db'))
+    const originalKeyHash = hashFile(join(rollbackTargetDir, 'credential-master-key.protected'))
+
+    const promoteFailRes = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        restoreScript,
+        '-BackupDir',
+        backupTargetDir,
+        '-TargetProfile',
+        rollbackTargetDir
+      ],
+      {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 30000,
+        env: {
+          ...process.env,
+          OPSPILOT_SIMULATE_RESTORE_PROMOTE_FAILURE: '1'
+        }
+      }
+    )
+    assert.notEqual(promoteFailRes.status, 0, 'Promote failure must exit with nonzero code')
+    assert(existsSync(rollbackTargetDir), 'Original target directory must exist after rollback')
+    assert.equal(
+      hashFile(join(rollbackTargetDir, 'marker1.txt')),
+      originalMarker1Hash,
+      'marker1.txt must match original hash after rollback'
+    )
+    assert.equal(
+      hashFile(join(rollbackTargetDir, 'opspilot.db')),
+      originalDbHash,
+      'opspilot.db must match original hash after rollback'
+    )
+    assert.equal(
+      hashFile(join(rollbackTargetDir, 'credential-master-key.protected')),
+      originalKeyHash,
+      'credential-master-key.protected must match original hash after rollback'
+    )
+
+    // Verify no PreRestore or Staging folders remain in promote case directory
+    const fixtureParentEntries = readdirSync(promoteCaseParent)
+    const lingeringPreRestore = fixtureParentEntries.filter((e) =>
+      e.startsWith('OpsPilot_PreRestore_')
+    )
+    assert.equal(
+      lingeringPreRestore.length,
+      0,
+      'PreRestore directory must be restored and no longer present'
+    )
+    const lingeringStaging = fixtureParentEntries.filter((e) =>
+      e.startsWith('OpsPilot_RestoreStaging_')
+    )
+    assert.equal(lingeringStaging.length, 0, 'Staging directory must be cleaned up')
+
+    // Negative Test 4 (R5): Rollback failure preserves PreRestore and warns user
+    const rollbackFailCaseParent = join(FIXTURE_DIR, 'rollback-fail-case')
+    const rollbackFailTargetDir = join(rollbackFailCaseParent, 'target')
+    mkdirSync(rollbackFailTargetDir, { recursive: true })
+    writeFileSync(join(rollbackFailTargetDir, 'fail-marker.txt'), 'FAIL_MARKER_CONTENT\n', 'utf8')
+    writeFileSync(join(rollbackFailTargetDir, 'opspilot.db'), 'FAIL_DB_STATE\n', 'utf8')
+    writeFileSync(
+      join(rollbackFailTargetDir, 'credential-master-key.protected'),
+      'FAIL_KEY_STATE\n',
+      'utf8'
+    )
+    const failMarkerHash = hashFile(join(rollbackFailTargetDir, 'fail-marker.txt'))
+
+    const rollbackFailRes = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        restoreScript,
+        '-BackupDir',
+        backupTargetDir,
+        '-TargetProfile',
+        rollbackFailTargetDir
+      ],
+      {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 30000,
+        env: {
+          ...process.env,
+          OPSPILOT_SIMULATE_RESTORE_PROMOTE_FAILURE: '1',
+          OPSPILOT_SIMULATE_RESTORE_ROLLBACK_FAILURE: '1'
+        }
+      }
+    )
+    assert.notEqual(rollbackFailRes.status, 0, 'Rollback failure must exit with nonzero code')
+    assert.equal(
+      existsSync(rollbackFailTargetDir),
+      false,
+      'Target directory should not exist when rollback failed'
+    )
+
+    // PreRestore directory must be preserved and contain the original data!
+    const updatedEntries = readdirSync(rollbackFailCaseParent)
+    const preservedPreRestore = updatedEntries.filter((e) => e.startsWith('OpsPilot_PreRestore_'))
+    assert(
+      preservedPreRestore.length > 0,
+      'PreRestore directory must be preserved when rollback fails'
+    )
+    const preservedPath = join(rollbackFailCaseParent, preservedPreRestore[0])
+    assert.equal(
+      hashFile(join(preservedPath, 'fail-marker.txt')),
+      failMarkerHash,
+      'Original file in PreRestore must be intact'
+    )
+    // Clean up preserved PreRestore for remaining tests
+    rmSync(preservedPath, { recursive: true, force: true })
+
     // Process inspect probe using exact parameters: -InstallDir, -Action, -Port
     const procRes = spawnSync(
       'powershell.exe',
@@ -513,8 +644,85 @@ try {
     )
     assert.equal(procRes.status, 0, `manage-process.ps1 failed: ${procRes.stderr}`)
 
+    // Process Regression Matrix (R6): Mocked cmdlets test suite for manage-process.ps1
+    const procCases = ['owned-listener', 'lost-listener', 'pid-reuse', 'unrelated']
+    for (const cName of procCases) {
+      const caseDir = join(FIXTURE_DIR, `proc-${cName}`)
+      mkdirSync(caseDir, { recursive: true })
+      const markerPath = join(caseDir, 'stop-called.txt')
+      const installPath = join(caseDir, 'owned-install')
+      mkdirSync(installPath, { recursive: true })
+
+      const probePs1 = `
+$global:netReads=0
+$global:procReads=0
+$global:caseName='${cName}'
+$global:markerPath='${markerPath.replace(/'/g, "''")}'
+$global:installPath='${installPath.replace(/'/g, "''")}'
+function Get-NetTCPConnection {
+  [CmdletBinding()] param($LocalPort,$State)
+  $global:netReads++
+  if ($global:netReads -eq 1 -or ($global:caseName -ne 'lost-listener' -and $global:netReads -eq 2)) {
+    [PSCustomObject]@{OwningProcess=777777}
+  }
+}
+function Get-Process {
+  [CmdletBinding()] param($Id)
+  $global:procReads++
+  $exe = Join-Path $global:installPath 'resources\\ml-runtime\\python.exe'
+  if ($global:caseName -eq 'unrelated') { $exe = 'C:\\UnrelatedApp\\ml-runtime\\python.exe' }
+  $start = [datetime]'2026-11-22T01:00:00'
+  if ($global:caseName -eq 'pid-reuse' -and $global:procReads -gt 1) { $start = $start.AddSeconds(1) }
+  $p = [PSCustomObject]@{MainModule=[PSCustomObject]@{FileName=$exe};StartTime=$start;HasExited=$false}
+  $p | Add-Member -MemberType ScriptMethod -Name CloseMainWindow -Value { return $false }
+  return $p
+}
+function Stop-Process {
+  [CmdletBinding()] param($Id,[switch]$Force)
+  [IO.File]::WriteAllText($global:markerPath, [string]$Id)
+}
+function Start-Sleep { [CmdletBinding()] param($Milliseconds) }
+& '${processScript.replace(/'/g, "''")}' -Action Stop -InstallDir $global:installPath -Port 51234
+`
+      const probePs1Path = join(caseDir, 'probe.ps1')
+      writeFileSync(probePs1Path, '\uFEFF' + probePs1, 'utf8')
+
+      const procMockRes = spawnSync(
+        'powershell.exe',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', probePs1Path],
+        { encoding: 'utf8', windowsHide: true, timeout: 30000 }
+      )
+
+      if (cName === 'owned-listener') {
+        assert.equal(procMockRes.status, 0, `owned-listener should exit 0: ${procMockRes.stderr}`)
+        assert(existsSync(markerPath), 'owned-listener must call Stop-Process')
+        assert.equal(
+          readFileSync(markerPath, 'utf8').trim(),
+          '777777',
+          'Stop-Process must receive PID 777777'
+        )
+      } else if (cName === 'lost-listener') {
+        assert.equal(procMockRes.status, 0, `lost-listener should exit 0: ${procMockRes.stderr}`)
+        assert.equal(
+          existsSync(markerPath),
+          false,
+          'lost-listener must NOT call Stop-Process or CloseMainWindow'
+        )
+      } else if (cName === 'pid-reuse') {
+        assert.equal(procMockRes.status, 1, 'pid-reuse must exit 1 with error')
+        assert.equal(existsSync(markerPath), false, 'pid-reuse must NOT call Stop-Process')
+      } else if (cName === 'unrelated') {
+        assert.equal(procMockRes.status, 1, 'unrelated executable must exit 1 with rejection error')
+        assert.equal(
+          existsSync(markerPath),
+          false,
+          'unrelated executable must NOT call Stop-Process'
+        )
+      }
+    }
+
     console.log(
-      '✓ 11. S1 check: Native PowerShell backup, restore & process scripts verified with positive and negative matrix'
+      '✓ 11. S1 check: Native PowerShell backup, restore & process scripts verified with positive and negative matrix (including R5 rollback & R6 listener guards)'
     )
   }
 

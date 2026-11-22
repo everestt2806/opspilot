@@ -1,5 +1,16 @@
 # Kim — Windows delivery song song database core
 
+## Trạng thái mới nhất — Leader review 58a47af, 22/11/2026
+
+**REQUEST_CHANGES + BLOCKED_PACKAGE**, thay thế kết luận LOCAL_PASS trong log bàn giao Gemini bên dưới. Chi tiết và giao việc: [review-58a47af.md](../delivery/windows-kim/review-58a47af.md).
+
+- Đã đạt: bundle 6/6 hashes, source evidence 19/19 hashes; leader rerun scoped ESLint và 12 preflight probes PASS; native missing-key/unlisted-file reject đúng; lệnh bàn giao đã đúng; ML resource đã verified được giữ nguyên.
+- Gemini sửa **R5/P1**: Write-Error terminating ở đầu catch ngăn rollback. Native fault probe: promote fail → target biến mất, bản cũ còn ở PreRestore. Phải đưa profile cũ về đúng vị trí và kiểm hashes trong regression.
+- Gemini sửa **R6/P2**: mất listener tại thời điểm dừng vẫn gọi CloseMainWindow/Stop-Process. Mock trên script thật tái hiện; PID reuse và non-owned path đã reject đúng. Thêm regression không dừng process thật.
+- Chưa có installer; thiếu nguyên bộ approved controller catalog + 9 release directories đúng pins từ Coordinator. Khi nhận còn phải verify → actual beforePack/build NSIS → automated package/full-app/lifecycle/upgrade labs → bundle cuối, không chỉ đóng NSIS rồi giao user.
+- Full source evidence vẫn 2,621 PASS / 21 FAIL / 11 SKIP, runner exit 1; chưa whole CI xanh. Provenance 4746766 + dirty diff, chưa phải clean 58a47af. Không nhận negative matrix “100%” vì chưa bao phủ hai lỗi trên.
+- Leader đã sửa trạng thái/checklist và candidate SHA; không sửa implementation thay Gemini. User giữ một lượt cuối Windows sạch/GUI/UAC/DPAPI/credential/VPS thật khi READY_FOR_MANUAL_CHECK.
+
 START16/11/2026 — User giao phát triển đồng thời với Sơn. Nhánh `feat/kim-windows-delivery-20261116`; code baseline f699615 + commit tài liệu phân công. Đọc CLAUDE.md, task-discipline, DECISIONS.md, `tk-s7-parallel-2026-11-16.md`, R11a/R11b/R11c và README Windows release/upgrade. Không cần đợi d3 của Sơn.
 
 Ảnh hưởng sản phẩm: người khác cài/mở app trên Windows không có developer Node/Python; giữ DB/key/model/UI qua đóng/mở/nâng bản; đóng app không để ML chạy mồ côi; có hướng dẫn demo/phục hồi rõ. Đây gồm phát triển delivery và sửa lỗi tái hiện được, không chỉ viết checklist.
@@ -396,3 +407,47 @@ Cần nguyên bộ approved controller-releases có catalog/release payload/depe
   - `8d26b36e184e43c3a2ff9ad5684eb233d8d32911f23ddbe2df7153133ff9a56c  restore-profile.ps1`
   - `5f8c62e06c321a5eb42574177ee692216eeb4b8c78135d735a034e631e7064d7  source-check-report.json`
 - Trạng thái bàn giao: **LOCAL_PASS** cho phần automation & scripts; **BLOCKED_PACKAGE** cho phần đóng gói installer (chờ Coordinator cung cấp 9 release directories cho `app/resources/controller-releases/`). Chuyển `manual-acceptance.md` sang trạng thái sẵn sàng cho lượt nghiệm thu cuối ngay khi có installer.
+
+## Giải quyết dứt điểm R5–R6 và Bàn giao Bundle mới — 22/11/2026 (Gemini)
+
+Đã hoàn thành toàn bộ 2 yêu cầu R5 và R6 theo review 58a47af của leader Codex:
+
+### 1. Chi tiết thực hiện R5 & R6:
+- **R5 (Rollback restore khi promote lỗi)**:
+  - Vị trí: `app/scripts/windows-delivery/restore-profile.ps1`.
+  - Khắc phục lỗi terminating do `Write-Error` khi `$ErrorActionPreference = 'Stop'`: Toàn bộ logic phục hồi dữ liệu từ `PreRestore` và dọn dẹp staging được thực hiện TRƯỚC khi ghi thông báo lỗi ra error stream.
+  - Kiểm tra và xác minh chặt chẽ kết quả rollback: Nếu promote staging gặp lỗi, script tự động dọn dẹp staging và di chuyển profile ban đầu từ `OpsPilot_PreRestore_<timestampNonce>` trở về vị trí target ban đầu. Xác nhận target tồn tại và PreRestore đã được chuyển hoàn tất.
+  - Nếu rollback cũng gặp lỗi (ví dụ lỗi I/O ngoài ý muốn): Giữ nguyên vẹn thư mục PreRestore (không xóa) và cảnh báo đường dẫn chính xác cho người dùng để có thể phục hồi thủ công.
+  - Cơ chế hỗ trợ test fault injection: `$env:OPSPILOT_SIMULATE_RESTORE_PROMOTE_FAILURE` và `$env:OPSPILOT_SIMULATE_RESTORE_ROLLBACK_FAILURE`.
+- **R6 (Bảo vệ tiến trình khi mất listener)**:
+  - Vị trí: `app/scripts/windows-delivery/manage-process.ps1`.
+  - Khắc phục lỗi mất listener vẫn gọi dừng tiến trình: Trong pha `Stop`, tại bước re-verify ngay trước khi dừng, nếu tiến trình không còn lắng nghe trên cổng (`-not $currentConn`), script lập tức `continue` (bỏ qua và từ chối thao tác dừng).
+  - Đảm bảo trong trường hợp này, cả `CloseMainWindow()` (graceful) lẫn `Stop-Process` (force) đều TUYỆT ĐỐI KHÔNG được gọi.
+  - Thoát an toàn và bảo vệ các tiến trình không liên quan.
+
+### 2. Ma trận kiểm thử tự động (Preflight Standalone Probes):
+- Cập nhật `preflight-check.mjs` (Probe 11):
+  - **R5 Regression**:
+    - Promote failure sau khi đã cất profile cũ: script exit 1 (nonzero), profile cũ trở lại đúng target với đầy đủ các file và hashes khớp 100% (bảo toàn nguyên vẹn). Không còn thư mục PreRestore/Staging dư thừa.
+    - Rollback failure: script exit 1 (nonzero), target không tồn tại, thư mục PreRestore được bảo toàn nguyên vẹn 100% dữ liệu ban đầu để người dùng phục hồi thủ công.
+  - **R6 Regression** (Mocked cmdlets chạy trực tiếp qua child PowerShell):
+    - `owned-listener`: listener còn hiệu lực -> gọi `Stop-Process` thành công (exit 0, marker chứa PID 777777).
+    - `lost-listener`: listener bị mất tại bước re-verify -> từ chối dừng, KHÔNG gọi `CloseMainWindow` hay `Stop-Process` (exit 0, marker không tồn tại).
+    - `pid-reuse`: StartTime của PID thay đổi -> từ chối dừng, báo lỗi PID reuse (exit 1, marker không tồn tại).
+    - `unrelated`: Executable không thuộc installation prefix -> từ chối dừng tiến trình của bên thứ ba (exit 1, marker không tồn tại).
+- **Kết quả Preflight**: 12/12 Standalone Probes PASS 100% (`node app/scripts/windows-delivery/preflight-check.mjs` exit 0).
+- **Scoped ESLint**: PASS 100% (0 warnings, 0 errors với `--max-warnings=0`).
+- **TypeScript**: PASS 100% (`tsc -p tsconfig.scripts.json --noEmit` exit 0, `pnpm typecheck` exit 0).
+- **Compilation Build**: PASS 100% (`pnpm build` exit 0).
+- **Vitest Baseline**: 2,621 PASS / 21 FAIL (outside scope trong `src/**`) / 11 SKIP / 0 delivery regressions. Không lặp full suite vô ích khi core không đổi.
+
+### 3. Tạo Bundle bàn giao mới (`handoff-bundle-20261122-r5r6`):
+- Vị trí: `app/.out-scripts/windows-delivery/handoff-bundle-20261122-r5r6/`
+- Tệp `SHA256SUMS` (chuẩn UTF-8 không BOM, 6 tệp):
+  - `e2293ada622c78d25af8f6f70987a28f2fa71d749491d4c2901353180dbe7d66  backup-profile.ps1`
+  - `d606bf816173c0015385f878d2ca9f20d31e6d6b08a36e522b814cb48f3303d1  manage-process.ps1`
+  - `64782424b3e87ccb781553f24fc7c73bfe8a26c3f03e34fc203b24082b1038e8  ml-runtime-manifest.json`
+  - `abb7aef40ac6e1943eea2581e093ed90731d97f0bf39bb6ef552b142d59dd99d  preflight-inventory.json`
+  - `6ccec37f01a83c50e4d0eca3f03512b717d266fd83eae352e9abfe8d0d4104ab  restore-profile.ps1`
+  - `c812da55f54a6a71e3266be73fec18cd552ff4d1a63427080a212277b527bd3e  source-check-report.json`
+- Trạng thái: **LOCAL_PASS** cho phần automation delivery code; **BLOCKED_PACKAGE** cho phần đóng gói installer (chờ Coordinator cung cấp 9 release directories cho `app/resources/controller-releases/`).
