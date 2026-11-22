@@ -407,11 +407,27 @@ describe('C02 activation episodes', () => {
 
     await new MonitorPoller(db).poll(1, 2, source(`${line1}${line2}`, '64769:809338'))
 
-    expect(
-      db.prepare('SELECT metrics_stream_generation FROM app WHERE id=1').get()
-    ).toEqual({ metrics_stream_generation: '64769:809338' })
+    expect(db.prepare('SELECT metrics_stream_generation FROM app WHERE id=1').get()).toEqual({
+      metrics_stream_generation: '64769:809338'
+    })
     expect(db.prepare('SELECT deployment_id, seq FROM metric_sample ORDER BY seq').all()).toEqual([
       { deployment_id: 2, seq: 2 }
     ])
+  })
+
+  it('closes previous active episode without CHECK error when new stream starts at smaller offset', () => {
+    const db = seed()
+    const activation = new ActivationRepository(db)
+    const ep1 = activation.prepare(1, 1, { generation: 'inode-old' }, 2724838, 'deploy')
+    activation.activate(ep1, null)
+
+    addDeployment(db, 2)
+    const ep2 = activation.prepare(1, 2, { generation: 'inode-new' }, 2815, 'deploy')
+    activation.activate(ep2, ep1)
+
+    const closed = db
+      .prepare('SELECT state, start_offset, end_offset FROM deployment_activation WHERE id=?')
+      .get(ep1) as { state: string; start_offset: number; end_offset: number }
+    expect(closed).toEqual({ state: 'closed', start_offset: 2724838, end_offset: 2724838 })
   })
 })

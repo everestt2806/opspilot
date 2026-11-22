@@ -139,7 +139,7 @@ export class ActivationRepository {
       if (previousId !== null) {
         this.database
           .prepare(
-            "UPDATE deployment_activation SET end_offset=(SELECT start_offset FROM deployment_activation WHERE id=?), state='closed', closed_at=? WHERE id=? AND state='active'"
+            "UPDATE deployment_activation SET end_offset=MAX(start_offset, (SELECT start_offset FROM deployment_activation WHERE id=?)), state='closed', closed_at=? WHERE id=? AND state='active'"
           )
           .run(id, now(), previousId)
       }
@@ -192,7 +192,7 @@ export class ActivationRepository {
       if (previousId !== null) {
         this.database
           .prepare(
-            "UPDATE deployment_activation SET end_offset=?, state='closed', closed_at=? WHERE id=? AND state='active'"
+            "UPDATE deployment_activation SET end_offset=MAX(start_offset, ?), state='closed', closed_at=? WHERE id=? AND state='active'"
           )
           .run(prepared.start_offset, now(), previousId)
       }
