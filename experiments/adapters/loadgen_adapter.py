@@ -217,16 +217,31 @@ class LoadgenHandle:
                     "Thiếu ssh_client hoặc container_name trong chế độ SSH."
                 )
             quoted = shlex.quote(self.container_name)
-            try:
-                code, out, err = _exec_ssh(
-                    self.ssh_client,
-                    f"docker inspect -f '{{{{.State.Status}}}}' {quoted}",
-                    timeout=5.0,
-                )
-            except Exception as e:
-                raise LoadgenExecutionError(
-                    f"Lỗi SSH khi kiểm tra trạng thái container '{self.container_name}': {e}"
-                ) from e
+            inspect_cmd = f"docker inspect -f '{{{{.State.Status}}}}' {quoted}"
+            code = 0
+            out = ""
+            err = ""
+            # Retry once on transient SSH timeout/error so brief network jitter does not abort 75m runs.
+            for attempt in range(2):
+                try:
+                    code, out, err = _exec_ssh(
+                        self.ssh_client,
+                        inspect_cmd,
+                        timeout=15.0,
+                    )
+                except Exception as e:
+                    if attempt == 0:
+                        continue
+                    raise LoadgenExecutionError(
+                        f"Lỗi SSH khi kiểm tra trạng thái container '{self.container_name}': {e}"
+                    ) from e
+
+                if code == 0:
+                    break
+                err_upper = err.upper()
+                if attempt == 0 and (code == 124 or "SSH_TIMEOUT" in err_upper):
+                    continue
+                break
 
             if code != 0:
                 err_clean = err.strip() or out.strip()
@@ -249,7 +264,7 @@ class LoadgenHandle:
             code, out, _ = _exec_ssh(
                 self.ssh_client,
                 f"docker inspect -f '{{{{.State.Status}}}}' {quoted}",
-                timeout=5.0,
+                timeout=15.0,
             )
             return out.strip().lower() if code == 0 and out.strip() else None
         except (
