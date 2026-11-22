@@ -63,9 +63,10 @@ if ($items.Count -eq 0) {
 }
 
 # 3. Kiểm tra các tệp bắt buộc (Required Inventory)
-# Trong supported populated profile, opspilot.db là bắt buộc phải có trong manifest
+# Trong supported populated profile, cả opspilot.db và credential-master-key.protected là bắt buộc phải có trong manifest
 $manifestPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 $hasDbInManifest = $false
+$hasKeyInManifest = $false
 
 foreach ($item in $items) {
     if (-not $item.path -or -not $item.sha256) {
@@ -82,6 +83,9 @@ foreach ($item in $items) {
     if ($posixPath -eq "opspilot.db") {
         $hasDbInManifest = $true
     }
+    if ($posixPath -eq "credential-master-key.protected") {
+        $hasKeyInManifest = $true
+    }
 
     if (-not $manifestPaths.Add($posixPath)) {
         Write-Error "Phát hiện đường dẫn trùng lặp trong manifest items: $posixPath"
@@ -91,6 +95,11 @@ foreach ($item in $items) {
 
 if (-not $hasDbInManifest) {
     Write-Error "Bản sao lưu không hợp lệ: Thiếu tệp bắt buộc opspilot.db trong manifest items."
+    exit 1
+}
+
+if (-not $hasKeyInManifest) {
+    Write-Error "Bản sao lưu không hợp lệ: Thiếu tệp bắt buộc credential-master-key.protected trong manifest items. Hủy khôi phục để tránh làm mất khóa giải mã."
     exit 1
 }
 
@@ -192,6 +201,7 @@ try {
     }
 
     # 6.2. Lưu giữ profile hiện hữu (Pre-Restore Preservation) nếu tồn tại
+    $preRestoreDir = $null
     if (Test-Path -Path $canonicalTarget) {
         $preRestoreDir = Join-Path $targetParent "OpsPilot_PreRestore_$timestampNonce"
         Write-Host "Di chuyển và lưu trữ an toàn profile hiện tại vào: $preRestoreDir"
@@ -206,6 +216,11 @@ try {
     exit 0
 } catch {
     Write-Error "Lỗi xảy ra trong quá trình staging/promote: $_"
+    # Rollback nếu profile cũ đã chuyển sang PreRestore nhưng chưa promote thành công
+    if ($preRestoreDir -and (Test-Path -Path $preRestoreDir) -and -not (Test-Path -Path $canonicalTarget)) {
+        Write-Warning "Đang khôi phục lại profile ban đầu từ PreRestore..."
+        Move-Item -Path $preRestoreDir -Destination $canonicalTarget -Force -ErrorAction SilentlyContinue
+    }
     # Dọn dẹp staging nếu còn
     if (Test-Path -Path $stagingDir) {
         Remove-Item -Path $stagingDir -Recurse -Force -ErrorAction SilentlyContinue

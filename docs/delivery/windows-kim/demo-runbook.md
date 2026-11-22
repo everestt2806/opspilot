@@ -105,7 +105,7 @@ Script PowerShell phục hồi an toàn (sử dụng implementation chính thứ
 Chi tiết luồng bảo vệ nghiêm ngặt của `restore-profile.ps1`:
 1. **Xác thực toàn diện trước khi đụng vào profile**:
    - Kiểm tra `backup-manifest.json` tồn tại, định dạng `format: 1`.
-   - Danh sách `items` không rỗng và bắt buộc phải chứa `opspilot.db`.
+   - Danh sách `items` không rỗng và bắt buộc phải chứa `opspilot.db` cùng `credential-master-key.protected`.
    - Kiểm tra mọi cặp mô hình ML trong manifest (`state.pkl` đi kèm `meta.json`).
    - Kiểm tra mã băm SHA-256 và dung lượng của từng tệp trên đĩa khớp hoàn toàn manifest.
    - **Chống Unlisted Files / Data Injection**: Quét toàn bộ tệp trong thư mục backup; nếu phát hiện tệp lạ trên đĩa mà không có trong manifest (ví dụ key/model chưa xác minh), từ chối và thoát ngay lập tức!

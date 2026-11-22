@@ -516,11 +516,36 @@ function inspectResources(options = {}) {
               })
             }
 
-            // Run production verifyMlRuntime if available
-            if (prodMlVerifier && typeof prodMlVerifier.verifyMlRuntime === 'function') {
+            // 1. Xác định trusted pin: Từ options hoặc từ compiled builtin pin
+            const compiledPin =
+              prodMlVerifier && typeof prodMlVerifier.builtinMlRuntimePin === 'function'
+                ? prodMlVerifier.builtinMlRuntimePin()
+                : null
+            const trustedPin =
+              options.mlRuntimePin ||
+              (compiledPin && compiledPin.length === 64 ? compiledPin : null)
+
+            if (!prodMlVerifier || typeof prodMlVerifier.verifyMlRuntime !== 'function') {
+              fileErrors.push({
+                path: 'production_verifier',
+                error: 'PRODUCTION_VERIFIER_UNAVAILABLE'
+              })
+            } else if (!trustedPin) {
+              fileErrors.push({
+                path: 'production_pin',
+                error: 'TRUSTED_BUILTIN_PIN_MISSING_OR_EMPTY'
+              })
+            } else {
+              if (manifestSha !== trustedPin) {
+                fileErrors.push({
+                  path: 'manifest.json',
+                  error: 'PIN_MISMATCH',
+                  expected: trustedPin,
+                  actual: manifestSha
+                })
+              }
               try {
-                const pinToTest = options.mlRuntimePin || manifestSha
-                prodMlVerifier.verifyMlRuntime(mlRuntimeDir, pinToTest)
+                prodMlVerifier.verifyMlRuntime(mlRuntimeDir, trustedPin)
               } catch (err) {
                 fileErrors.push({
                   path: 'production_verifier',
@@ -531,7 +556,12 @@ function inspectResources(options = {}) {
             }
 
             if (fileErrors.length > 0) {
-              mlRuntimeStatus = 'TAMPERED_OR_CORRUPT'
+              mlRuntimeStatus = fileErrors.some(
+                (e) => e.error.includes('UNAVAILABLE') || e.error.includes('MISSING')
+              )
+                ? 'NOT_VERIFIED'
+                : 'TAMPERED_OR_CORRUPT'
+              mlRuntimePass = false
               mlRuntimeDetails = {
                 path: mlRuntimeDir,
                 present: true,
@@ -540,21 +570,8 @@ function inspectResources(options = {}) {
                 verification_errors: fileErrors
               }
             } else {
-              // Check trusted pin: options.mlRuntimePin, or if trusted verify pin is provided
-              const trustedPin = options.mlRuntimePin || null
-              if (trustedPin) {
-                if (manifestSha === trustedPin) {
-                  mlRuntimeStatus = 'VERIFIED'
-                  mlRuntimePass = true
-                } else {
-                  mlRuntimeStatus = 'TAMPERED_OR_CORRUPT'
-                  mlRuntimePass = false
-                }
-              } else {
-                // In local dev preflight without a built/provided pin, integrity is validated but unpinned
-                mlRuntimeStatus = 'VERIFIED'
-                mlRuntimePass = true
-              }
+              mlRuntimeStatus = 'VERIFIED'
+              mlRuntimePass = true
               mlRuntimeDetails = {
                 path: mlRuntimeDir,
                 present: true,
@@ -606,6 +623,11 @@ function inspectResources(options = {}) {
     }
   }
 
+  const trustedCatalog =
+    prodCtrlVerifier && typeof prodCtrlVerifier.builtinControllerInstallerCatalog === 'function'
+      ? prodCtrlVerifier.builtinControllerInstallerCatalog()
+      : null
+
   const catalogPresent = existsSync(catalogPath)
   let catalogSha = null
   let catalogValid = false
@@ -616,35 +638,37 @@ function inspectResources(options = {}) {
       const catContent = readFileSync(catalogPath, 'utf8')
       catalogSha = createHash('sha256').update(catContent).digest('hex')
       const rawCatalog = JSON.parse(catContent)
+
       if (
         prodCtrlVerifier &&
+        trustedCatalog &&
         typeof prodCtrlVerifier.controllerInstallerCatalogSchema?.parse === 'function'
       ) {
-        catalogObj = prodCtrlVerifier.controllerInstallerCatalogSchema.parse(rawCatalog)
-        catalogValid = true
-      } else {
-        // Fallback schema validator matching production contract
-        if (
-          rawCatalog &&
-          rawCatalog.format === 1 &&
-          Array.isArray(rawCatalog.releases) &&
-          rawCatalog.releases.every(
-            (r) =>
-              r &&
-              typeof r.release_id === 'string' &&
-              /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(r.release_id) &&
-              typeof r.node_version === 'string' &&
-              /^22\.\d+\.\d+$/.test(r.node_version) &&
-              typeof r.minimum_glibc === 'string' &&
-              typeof r.release_sha256 === 'string' &&
-              /^[a-f0-9]{64}$/.test(r.release_sha256) &&
-              typeof r.installer_sha256 === 'string' &&
-              /^[a-f0-9]{64}$/.test(r.installer_sha256)
-          )
-        ) {
+        const parsedCatalog = prodCtrlVerifier.controllerInstallerCatalogSchema.parse(rawCatalog)
+        // Đối chiếu với trusted compiled catalog (bản quyền authority thuộc compiled pin, không cho phép runtime tự kê)
+        const isMatchingBuiltin =
+          parsedCatalog.format === trustedCatalog.format &&
+          parsedCatalog.releases.length === trustedCatalog.releases.length &&
+          trustedCatalog.releases.every((tr) => {
+            const pr = parsedCatalog.releases.find((r) => r.release_id === tr.release_id)
+            return (
+              pr &&
+              pr.node_version === tr.node_version &&
+              pr.minimum_glibc === tr.minimum_glibc &&
+              pr.release_sha256 === tr.release_sha256 &&
+              pr.installer_sha256 === tr.installer_sha256
+            )
+          })
+
+        if (isMatchingBuiltin) {
+          catalogObj = trustedCatalog
           catalogValid = true
-          catalogObj = rawCatalog
+        } else {
+          catalogValid = false
         }
+      } else {
+        // Không có compiled verifier hoặc trusted compiled catalog -> Fail closed, không cấp authority
+        catalogValid = false
       }
     } catch {
       catalogValid = false
@@ -662,7 +686,7 @@ function inspectResources(options = {}) {
           runtimeReleasesDir
         )
         const list = resources.list()
-        allReleasesValid = list.length > 0
+        allReleasesValid = list.length > 0 && list.length === catalogObj.releases.length
         for (const item of list) {
           let isVerified = false
           if (item.state === 'available') {
@@ -691,82 +715,27 @@ function inspectResources(options = {}) {
             status: isVerified ? 'VERIFIED' : 'MISSING_OR_INVALID'
           })
         }
+        // Full parity test với beforePack
+        if (
+          allReleasesValid &&
+          typeof prodCtrlVerifier.verifyPackagedControllerResources === 'function'
+        ) {
+          try {
+            prodCtrlVerifier.verifyPackagedControllerResources(runtimeReleasesDir)
+          } catch {
+            allReleasesValid = false
+          }
+        }
       } catch {
         allReleasesValid = false
       }
     } else {
-      // Fallback release check
-      for (const desc of catalogObj.releases) {
-        const releaseParentDir = join(runtimeReleasesDir, desc.release_id)
-        const releaseDir = join(releaseParentDir, 'release')
-        const releaseManifestFile = join(releaseDir, 'release-manifest.json')
-        const installerFile = join(releaseParentDir, 'installer.cjs')
-
-        const parentExists = existsSync(releaseParentDir)
-        const releaseExists = existsSync(releaseDir)
-        const installerExists = existsSync(installerFile)
-        const manifestExists = existsSync(releaseManifestFile)
-
-        let installerMatch = false
-        let releaseManifestMatch = false
-        let manifestValid = false
-        let dirLayoutValid = false
-
-        if (installerExists) {
-          try {
-            installerMatch = hashFile(installerFile) === desc.installer_sha256
-          } catch {
-            /* verifier load failure */
-          }
-        }
-        if (manifestExists) {
-          try {
-            const manifestRaw = readFileSync(releaseManifestFile, 'utf8')
-            releaseManifestMatch =
-              createHash('sha256').update(manifestRaw).digest('hex') === desc.release_sha256
-            const parsed = JSON.parse(manifestRaw)
-            manifestValid = parsed && parsed.format === 1 && parsed.platform === 'linux-x64-glibc'
-          } catch {
-            /* verifier load failure */
-          }
-        }
-        if (parentExists) {
-          try {
-            dirLayoutValid =
-              readdirSync(releaseParentDir).sort().join(',') === 'installer.cjs,release'
-          } catch {
-            /* verifier load failure */
-          }
-        }
-
-        const isOk =
-          releaseExists &&
-          installerExists &&
-          manifestExists &&
-          installerMatch &&
-          releaseManifestMatch &&
-          manifestValid &&
-          dirLayoutValid
-        if (!isOk) allReleasesValid = false
-        releasesAudit.push({
-          release_id: desc.release_id,
-          expected_release_sha256: desc.release_sha256,
-          expected_installer_sha256: desc.installer_sha256,
-          release_directory_exists: releaseExists,
-          release_manifest_exists: manifestExists,
-          release_manifest_sha_matches: releaseManifestMatch,
-          release_manifest_valid: manifestValid,
-          installer_path_exists: installerExists,
-          installer_sha_matches: installerMatch,
-          directory_layout_valid: dirLayoutValid,
-          status: isOk ? 'VERIFIED' : 'MISSING_OR_INVALID'
-        })
-      }
+      allReleasesValid = false
     }
   } else {
-    // Missing catalog -> Audit list reflects approved descriptors as missing
+    // Missing hoặc invalid catalog -> Audit list phản ánh theo trusted catalog hoặc approved descriptors
     allReleasesValid = false
-    const descriptorsToAudit = approvedDescriptors.length > 0 ? approvedDescriptors : []
+    const descriptorsToAudit = trustedCatalog?.releases || approvedDescriptors
     for (const desc of descriptorsToAudit) {
       releasesAudit.push({
         release_id: desc.release_id,

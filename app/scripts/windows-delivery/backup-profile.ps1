@@ -172,7 +172,8 @@ $manifestObj = [PSCustomObject]@{
 
 $manifestJson = $manifestObj | ConvertTo-Json -Depth 5
 $manifestPath = Join-Path $canonicalTarget "backup-manifest.json"
-[System.IO.File]::WriteAllText($manifestPath, $manifestJson, [System.Text.Encoding]::UTF8)
+$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+[System.IO.File]::WriteAllText($manifestPath, $manifestJson, $utf8NoBom)
 
 Write-Host "Sao lưu thành công! Đã ghi $($manifestEntries.Count) tệp vào $manifestPath."
 exit 0

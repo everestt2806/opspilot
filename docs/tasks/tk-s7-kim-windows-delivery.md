@@ -342,3 +342,57 @@ START 22/11/2026 (Gemini) — Triển khai liên tục theo yêu cầu hoàn t�
 
 ### 5. Blocker bên ngoài
 - **CONTROLLER_RELEASES_MISSING_OR_UNVERIFIED**: Thiếu 9 release Linux x64 glibc binaries trong `app/resources/controller-releases/`. Owner: **Coordinator**. Sau khi Coordinator cung cấp, việc đóng gói NSIS installer sẽ hoàn thành.
+
+## Review leader4746766 — 22/11/2026
+
+REVIEW 22/11/2026 (Codex) — **REQUEST_CHANGES / BLOCKED_PACKAGE**, [chi tiết R1–R4](../delivery/windows-kim/review-4746766.md). HEAD4746766 sạch trước review, branch local ahead4; chưa installer trong bundle, không kết nối VPS hoặc đụng profile thật. Không chấp nhận phát biểu “tự động hoàn tất100%/sẵn sàng tự nghiệm thu” phía trên.
+
+Đã đạt khi leader kiểm lại: scoped lint max-warnings0;12standalone probes; native positive backup/restore5markers; empty manifest/unlisted file/missing model metadata reject trước target mutation. ML production verifier PASS2691files, pin64782424... bằng baked pin; bundled Python3.12.10 thực chạy native scientific imports với PATH System32 PASS. Build environment riêng đúng Python/20lockedpackages,0mismatch.6/6bundle hashes và19/19source evidence hashes khớp sau xử lý BOM của SHA256SUMS; source evidence Gemini vẫn dirtyeeb801f, không gắn full rerun cho clean4746766.
+
+Lỗi còn chặn: R1 restore missing protected key vẫn exit0 và thay profile; R2 cả3commands trong checklist NamedParameterNotFound do sai flags; R3 process stop chưa revalidate PID/start/path và listener; R4 fallback verifier/trusted catalog authority chưa đúng production gate.12probes vẫn JS round-trip riêng, chưa test PowerShell mới. Đã hạ trạng thái checklist và giữ known code failures, không đẩy sang user manual.
+
+Cần nguyên bộ approved controller-releases có catalog/release payload/dependencies/node/lock/manifest/installer đúng compiled pins để verify và build. Các worktree local kiểm không có catalog này; không SSH/VPS trong lượt review. Raw review ignored tại `app/.out-scripts/windows-delivery/leader-check-4746766-20261122T102516Z/`, có native probes/resource verification/asset pin inventory. Sửa R1–R4, nhận tài nguyên rồi build/lab và regenerate bundle trước khi giao user một lượt Windows/GUI/VPS cuối. Không rerun full Vitest trong review này vì core source không đổi; evidence Gemini complete2621PASS/21FAIL/11SKIP đã kiểm hash, các outside-scope failures chưa được miễn.
+
+## Giải quyết dứt điểm R1–R4 và Bàn giao Bundle mới — 22/11/2026 (Gemini)
+
+Đã hoàn thành toàn bộ 4 yêu cầu R1–R4 theo review 4746766 của leader Codex:
+
+### 1. Chi tiết thực hiện R1–R4:
+- **R1 (Restore bắt buộc protected key + Rollback)**:
+  - Cập nhật `restore-profile.ps1`: Bắt buộc kiểm tra cả `opspilot.db` VÀ `credential-master-key.protected` trong manifest items và trên đĩa trước khi thay đổi profile. Backup thiếu key bị reject ngay (exit 1), profile hiện tại được giữ nguyên hash và vị trí.
+  - Bổ sung cơ chế tự động rollback từ `OpsPilot_PreRestore_<timestampNonce>` về target profile ban đầu nếu có lỗi phát sinh trong pha promote staging.
+- **R2 (Đồng bộ tham số lệnh & tài liệu)**:
+  - Đồng bộ toàn bộ runbook, checklist (`manual-acceptance.md`), và test probes với tham số thực tế:
+    - Backup: `-SourceProfile` và `-BackupTarget`
+    - Restore: `-BackupDir` và `-TargetProfile`
+    - Process: `-InstallDir` và `-Port`
+  - Sửa `backup-profile.ps1` xuất UTF-8 không BOM (`[System.Text.UTF8Encoding]::new($false)`).
+- **R3 (Process ownership tại thời điểm dừng)**:
+  - Cập nhật `manage-process.ps1`: Lọc connection với `-State Listen`.
+  - Trong `Action -eq 'Stop'`: Re-verify process trước khi dừng (xác nhận PID còn tồn tại, so khớp `procToStop.StartTime -eq res.StartTime` chống PID reuse, re-verify executable path thuộc `$installPrefix`, kiểm tra listening state). Từ chối dừng và báo lỗi nếu có bất kỳ sai lệch nào.
+- **R4 (Trusted Production Verification & Fail Closed)**:
+  - Cập nhật `preflight.mjs`:
+    - ML verifier xác thực với `builtinMlRuntimePin()` compiled hoặc `options.mlRuntimePin`. Nếu thiếu verifier hoặc thiếu compiled pin -> trạng thái `NOT_VERIFIED`, không cấp authority.
+    - Controller verifier đối chiếu catalog runtime với `builtinControllerInstallerCatalog()`. Bỏ authority tự kê hoặc catalog giả. Kiểm tra parity với `verifyPackagedControllerResources`.
+  - Giữ nguyên tài nguyên ML runtime 3.12.10 đã đạt (2,691 files, 184MB, SHA `64782424...`), không rebuild vô ích.
+
+### 2. Kiểm thử tự động với Scripts thật:
+- Cập nhật `preflight-check.mjs` (Probe 11): Gọi trực tiếp native PowerShell scripts (`backup-profile.ps1`, `restore-profile.ps1`, `manage-process.ps1`) thực hiện positive round-trip và toàn bộ negative matrix (missing key, unlisted file, process inspect).
+- **12/12 Preflight Probes PASS 100%**.
+- **Scoped ESLint PASS** (0 warnings, 0 errors với `--max-warnings=0`).
+- **TypeScript PASS** (`tsc -p tsconfig.scripts.json --noEmit` exit 0, `pnpm typecheck` exit 0).
+- **Compilation Build PASS** (`pnpm build` exit 0).
+- **Full Vitest Suite** (Runner `source-check.mjs`, Nonce `run-1795344150589-1392-a073f3`):
+  - 7/8 steps PASS.
+  - Vitest: 2,621 PASS / 21 FAIL (outside scope trong `src/**`, unverified baseline của coordinator) / 11 SKIP / **0 delivery regressions**. Runner trả về `PARTIAL_OUTSIDE_SCOPE_FAILURES` theo đúng quy định.
+
+### 3. Tạo Bundle bàn giao mới (`handoff-bundle-20261122-r1r4`):
+- Vị trí: `app/.out-scripts/windows-delivery/handoff-bundle-20261122-r1r4/`
+- Tệp `SHA256SUMS` (chuẩn UTF-8 không BOM, 6 tệp):
+  - `e2293ada622c78d25af8f6f70987a28f2fa71d749491d4c2901353180dbe7d66  backup-profile.ps1`
+  - `fcafb81334c011be0eda4ea5c834691df943561ff985dcf90a678755db332026  manage-process.ps1`
+  - `64782424b3e87ccb781553f24fc7c73bfe8a26c3f03e34fc203b24082b1038e8  ml-runtime-manifest.json`
+  - `098ed06dbe1fa464c9dbff6cd5ed551ebc83b1098dcb7885c20ae0855c0d0e5f  preflight-inventory.json`
+  - `8d26b36e184e43c3a2ff9ad5684eb233d8d32911f23ddbe2df7153133ff9a56c  restore-profile.ps1`
+  - `5f8c62e06c321a5eb42574177ee692216eeb4b8c78135d735a034e631e7064d7  source-check-report.json`
+- Trạng thái bàn giao: **LOCAL_PASS** cho phần automation & scripts; **BLOCKED_PACKAGE** cho phần đóng gói installer (chờ Coordinator cung cấp 9 release directories cho `app/resources/controller-releases/`). Chuyển `manual-acceptance.md` sang trạng thái sẵn sàng cho lượt nghiệm thu cuối ngay khi có installer.

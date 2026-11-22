@@ -1,16 +1,8 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- Standalone check suite for preflight inventory CLI and resource/backup parity */
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import {
-  readFileSync,
-  writeFileSync,
-  rmSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  statSync
-} from 'node:fs'
-import { resolve, join, relative } from 'node:path'
+import { readFileSync, writeFileSync, rmSync, existsSync, mkdirSync } from 'node:fs'
+import { resolve, join } from 'node:path'
 import { randomBytes, createHash } from 'node:crypto'
 import { createRequire } from 'node:module'
 
@@ -322,11 +314,20 @@ try {
     console.log('✓ 10. S3 check: Production contract parity and negative parity cases passed')
   }
 
-  // 11. S1 Fixture: Synthetic Profile Backup & Restore Round-Trip with Manifest & Hashes
+  // 11. S1 check: Native PowerShell profile backup, restore & process scripts verification
   {
+    const backupScript = resolve(REPO_ROOT, 'app/scripts/windows-delivery/backup-profile.ps1')
+    const restoreScript = resolve(REPO_ROOT, 'app/scripts/windows-delivery/restore-profile.ps1')
+    const processScript = resolve(REPO_ROOT, 'app/scripts/windows-delivery/manage-process.ps1')
+
+    assert(existsSync(backupScript), 'backup-profile.ps1 must exist')
+    assert(existsSync(restoreScript), 'restore-profile.ps1 must exist')
+    assert(existsSync(processScript), 'manage-process.ps1 must exist')
+
     const profileDir = join(FIXTURE_DIR, 'synthetic-profile')
     const backupTargetDir = join(FIXTURE_DIR, 'synthetic-backup')
     const restoreTargetDir = join(FIXTURE_DIR, 'synthetic-restore-profile')
+
     mkdirSync(profileDir, { recursive: true })
     mkdirSync(backupTargetDir, { recursive: true })
     mkdirSync(restoreTargetDir, { recursive: true })
@@ -361,110 +362,159 @@ try {
       'utf8'
     )
 
-    // Execute synchronous backup copy
-    const itemsToCopy = [
+    // Call backup-profile.ps1 with exact parameters: -SourceProfile, -BackupTarget
+    const backupRes = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        backupScript,
+        '-SourceProfile',
+        profileDir,
+        '-BackupTarget',
+        backupTargetDir,
+        '-Force'
+      ],
+      { encoding: 'utf8', windowsHide: true, timeout: 30000 }
+    )
+    assert.equal(backupRes.status, 0, `backup-profile.ps1 failed: ${backupRes.stderr}`)
+
+    const manifestPath = join(backupTargetDir, 'backup-manifest.json')
+    assert(existsSync(manifestPath), 'backup-manifest.json must be created by backup script')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8').replace(/^\uFEFF/, ''))
+    assert.equal(manifest.format, 1, 'Manifest format must be 1')
+    assert.equal(manifest.items_count, 5, 'All 5 items must be recorded in manifest')
+
+    // Call restore-profile.ps1 with exact parameters: -BackupDir, -TargetProfile
+    const restoreRes = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        restoreScript,
+        '-BackupDir',
+        backupTargetDir,
+        '-TargetProfile',
+        restoreTargetDir
+      ],
+      { encoding: 'utf8', windowsHide: true, timeout: 30000 }
+    )
+    assert.equal(restoreRes.status, 0, `restore-profile.ps1 failed: ${restoreRes.stderr}`)
+
+    // Assert all 5 restored files match original profile hashes exactly
+    for (const item of [
       'opspilot.db',
       'credential-master-key.protected',
-      'ml-state',
-      'Local Storage'
-    ]
-    const backupManifestFiles = []
-
-    const copyRecursive = (src, dest) => {
-      const st = statSync(src)
-      if (st.isDirectory()) {
-        mkdirSync(dest, { recursive: true })
-        for (const entry of readdirSync(src)) {
-          copyRecursive(join(src, entry), join(dest, entry))
-        }
-      } else {
-        writeFileSync(dest, readFileSync(src))
-      }
+      'ml-state/dep-synth-1/state.pkl',
+      'ml-state/dep-synth-1/meta.json',
+      'Local Storage/ui-state.log'
+    ]) {
+      const restoredPath = join(restoreTargetDir, item)
+      assert(existsSync(restoredPath), `Restored file must exist: ${item}`)
+      assert.equal(
+        hashFile(restoredPath),
+        hashFile(join(profileDir, item)),
+        `Hash must match for ${item}`
+      )
     }
 
-    for (const item of itemsToCopy) {
-      const srcPath = join(profileDir, item)
-      if (existsSync(srcPath)) {
-        copyRecursive(srcPath, join(backupTargetDir, item))
-      }
-    }
+    // Negative Test 1: Missing protected key must REJECT and not mutate target
+    const negTargetDir = join(FIXTURE_DIR, 'neg-target')
+    mkdirSync(negTargetDir, { recursive: true })
+    writeFileSync(join(negTargetDir, 'initial.txt'), 'INITIAL_STATE\n', 'utf8')
+    const initialHash = hashFile(join(negTargetDir, 'initial.txt'))
 
-    // Build backup-manifest.json
-    const walkBackup = (curr) => {
-      for (const e of readdirSync(curr)) {
-        const p = join(curr, e)
-        const st = statSync(p)
-        if (st.isDirectory()) {
-          walkBackup(p)
-        } else {
-          const rel = relative(backupTargetDir, p).split('\\').join('/')
-          backupManifestFiles.push({
-            relative_path: rel,
-            size_bytes: st.size,
-            sha256: hashFile(p)
-          })
-        }
-      }
-    }
-    walkBackup(backupTargetDir)
-
-    const manifestObj = {
+    const noKeyBackupDir = join(FIXTURE_DIR, 'backup-no-key')
+    mkdirSync(noKeyBackupDir, { recursive: true })
+    writeFileSync(join(noKeyBackupDir, 'opspilot.db'), 'SYNTHETIC_SQLITE_DATABASE_BYTES\n', 'utf8')
+    const noKeyManifest = {
       format: 1,
-      created_at: new Date().toISOString(),
-      files_count: backupManifestFiles.length,
-      files: backupManifestFiles
+      items: [
+        {
+          path: 'opspilot.db',
+          size: 31,
+          sha256: hashFile(join(noKeyBackupDir, 'opspilot.db'))
+        }
+      ]
     }
     writeFileSync(
-      join(backupTargetDir, 'backup-manifest.json'),
-      JSON.stringify(manifestObj, null, 2) + '\n',
+      join(noKeyBackupDir, 'backup-manifest.json'),
+      JSON.stringify(noKeyManifest),
       'utf8'
     )
 
-    // Assert that all 5 items are captured in backup
-    const backupRelPaths = backupManifestFiles.map((f) => f.relative_path)
-    assert(backupRelPaths.includes('opspilot.db'))
-    assert(backupRelPaths.includes('credential-master-key.protected'))
-    assert(backupRelPaths.includes('ml-state/dep-synth-1/state.pkl'))
-    assert(backupRelPaths.includes('ml-state/dep-synth-1/meta.json'))
-    assert(backupRelPaths.includes('Local Storage/ui-state.log'))
+    const negKeyRes = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        restoreScript,
+        '-BackupDir',
+        noKeyBackupDir,
+        '-TargetProfile',
+        negTargetDir
+      ],
+      { encoding: 'utf8', windowsHide: true, timeout: 30000 }
+    )
+    assert.notEqual(
+      negKeyRes.status,
+      0,
+      'Restore must reject backup missing credential-master-key.protected'
+    )
+    assert.equal(
+      hashFile(join(negTargetDir, 'initial.txt')),
+      initialHash,
+      'Target profile must remain intact on rejected restore'
+    )
 
-    // Execute restoration into restoreTargetDir after validating manifest
-    const manifestFromDisk = JSON.parse(
-      readFileSync(join(backupTargetDir, 'backup-manifest.json'), 'utf8')
+    // Negative Test 2: Unlisted file in backup directory must REJECT
+    writeFileSync(join(backupTargetDir, 'unlisted_injected.txt'), 'MALICIOUS_INJECTION\n', 'utf8')
+    const negUnlistedRes = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        restoreScript,
+        '-BackupDir',
+        backupTargetDir,
+        '-TargetProfile',
+        restoreTargetDir
+      ],
+      { encoding: 'utf8', windowsHide: true, timeout: 30000 }
     )
-    for (const f of manifestFromDisk.files) {
-      const backupFilePath = join(backupTargetDir, f.relative_path)
-      assert(existsSync(backupFilePath), `Backup file must exist: ${f.relative_path}`)
-      assert.equal(hashFile(backupFilePath), f.sha256, `Checksum must match: ${f.relative_path}`)
-      const restoreDest = join(restoreTargetDir, f.relative_path)
-      mkdirSync(resolve(restoreDest, '..'), { recursive: true })
-      writeFileSync(restoreDest, readFileSync(backupFilePath))
-    }
+    assert.notEqual(negUnlistedRes.status, 0, 'Restore must reject unlisted file on disk')
+    rmSync(join(backupTargetDir, 'unlisted_injected.txt'))
 
-    // Assert all 5 restored files match original profile hashes exactly
-    assert.equal(
-      hashFile(join(restoreTargetDir, 'opspilot.db')),
-      hashFile(join(profileDir, 'opspilot.db'))
+    // Process inspect probe using exact parameters: -InstallDir, -Action, -Port
+    const procRes = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        processScript,
+        '-InstallDir',
+        FIXTURE_DIR,
+        '-Action',
+        'Inspect',
+        '-Port',
+        '8765'
+      ],
+      { encoding: 'utf8', windowsHide: true, timeout: 30000 }
     )
-    assert.equal(
-      hashFile(join(restoreTargetDir, 'credential-master-key.protected')),
-      hashFile(join(profileDir, 'credential-master-key.protected'))
-    )
-    assert.equal(
-      hashFile(join(restoreTargetDir, 'ml-state/dep-synth-1/state.pkl')),
-      hashFile(join(profileDir, 'ml-state/dep-synth-1/state.pkl'))
-    )
-    assert.equal(
-      hashFile(join(restoreTargetDir, 'ml-state/dep-synth-1/meta.json')),
-      hashFile(join(profileDir, 'ml-state/dep-synth-1/meta.json'))
-    )
-    assert.equal(
-      hashFile(join(restoreTargetDir, 'Local Storage/ui-state.log')),
-      hashFile(join(profileDir, 'Local Storage/ui-state.log'))
-    )
+    assert.equal(procRes.status, 0, `manage-process.ps1 failed: ${procRes.stderr}`)
 
     console.log(
-      '✓ 11. S1 check: Synthetic profile backup & restore round-trip preserved all 5 items with matching hashes'
+      '✓ 11. S1 check: Native PowerShell backup, restore & process scripts verified with positive and negative matrix'
     )
   }
 

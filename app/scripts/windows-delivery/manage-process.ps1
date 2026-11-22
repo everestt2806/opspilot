@@ -36,9 +36,9 @@ $installPrefix = $canonicalInstallDir + [System.IO.Path]::DirectorySeparatorChar
 
 Write-Host "Kiểm tra cổng $Port với thư mục cài đặt được ủy quyền: $canonicalInstallDir"
 
-$connections = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+$connections = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
 if (-not $connections -or $connections.Count -eq 0) {
-    Write-Host "Cổng $Port đang ở trạng thái rảnh (FREE)."
+    Write-Host "Cổng $Port đang ở trạng thái rảnh (FREE - không có tiến trình nào lắng nghe)."
     [PSCustomObject]@{
         Port   = $Port
         Status = "FREE"
@@ -120,15 +120,53 @@ if ($Action -eq 'Stop') {
 
     foreach ($res in $results) {
         if ($res.Owned -and $res.PID) {
-            Write-Host "Đang dừng an toàn tiến trình sở hữu OpsPilot PID $($res.PID) ($($res.Path))..."
-            # Thử đóng lịch sự trước
+            # Kiểm tra nghiêm ngặt lại trạng thái tiến trình tại thời điểm dừng (chống PID reuse / giả mạo)
             $procToStop = Get-Process -Id $res.PID -ErrorAction SilentlyContinue
-            if ($procToStop) {
-                $procToStop.CloseMainWindow() | Out-Null
-                Start-Sleep -Milliseconds 500
-                if (-not $procToStop.HasExited) {
-                    Stop-Process -Id $res.PID -Force -ErrorAction SilentlyContinue
-                }
+            if (-not $procToStop) {
+                Write-Host "Tiến trình PID $($res.PID) đã tự thoát trước khi dừng."
+                continue
+            }
+
+            # Kiểm tra thời gian khởi động (StartTime) xem PID có bị tái sử dụng cho tiến trình khác không
+            if ($res.StartTime -and $procToStop.StartTime -and $res.StartTime -ne $procToStop.StartTime) {
+                Write-Error "TỪ CHỐI DỪNG: Phát hiện PID reuse! Tiến trình PID $($res.PID) hiện tại có StartTime ($($procToStop.StartTime)) khác với snapshot ban đầu ($($res.StartTime))."
+                exit 1
+            }
+
+            # Xác thực lại đường dẫn thực thi tại thời điểm dừng
+            $currentPath = $null
+            try {
+                $currentPath = $procToStop.MainModule.FileName
+            } catch {
+                try {
+                    $wmi = Get-CimInstance Win32_Process -Filter "ProcessId = $($res.PID)" -ErrorAction SilentlyContinue
+                    if ($wmi) { $currentPath = $wmi.ExecutablePath }
+                } catch {}
+            }
+
+            if (-not $currentPath) {
+                Write-Error "TỪ CHỐI DỪNG: Không thể xác minh lại đường dẫn thực thi của PID $($res.PID) tại thời điểm dừng."
+                exit 1
+            }
+
+            $canonicalCurrentPath = [System.IO.Path]::GetFullPath($currentPath)
+            if (-not $canonicalCurrentPath.StartsWith($installPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                Write-Error "TỪ CHỐI DỪNG: Đường dẫn thực thi tại thời điểm dừng ($canonicalCurrentPath) không thuộc installation được ủy quyền ($canonicalInstallDir)!"
+                exit 1
+            }
+
+            # Xác thực lại xem PID này còn đang lắng nghe cổng không
+            $currentConn = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -eq $res.PID }
+            if (-not $currentConn) {
+                Write-Host "Tiến trình PID $($res.PID) không còn lắng nghe trên cổng $Port nữa."
+            }
+
+            Write-Host "Đang dừng an toàn tiến trình sở hữu OpsPilot PID $($res.PID) ($canonicalCurrentPath)..."
+            # Thử đóng lịch sự trước
+            $procToStop.CloseMainWindow() | Out-Null
+            Start-Sleep -Milliseconds 500
+            if (-not $procToStop.HasExited) {
+                Stop-Process -Id $res.PID -Force -ErrorAction SilentlyContinue
             }
             Write-Host "Đã giải phóng tiến trình PID $($res.PID)."
         }
@@ -136,7 +174,7 @@ if ($Action -eq 'Stop') {
 
     # Xác nhận lại cổng đã được giải phóng
     Start-Sleep -Milliseconds 300
-    $remaining = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+    $remaining = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
     if ($remaining) {
         Write-Warning "Cổng $Port vẫn còn kết nối sau khi dừng."
         exit 1
