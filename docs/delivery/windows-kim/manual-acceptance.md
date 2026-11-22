@@ -1,7 +1,7 @@
 # Checklist tự nghiệm thu một lượt
 
-Cập nhật 22/11/2026 sau khi sửa dứt điểm R5 (rollback restore) và R6 (lost listener guard).
-**Trạng thái tự động: LOCAL_PASS (scoped ESLint 0 warnings, 12 probes PASS bao gồm toàn bộ ma trận native regression R5 & R6).**
+Cập nhật 22/11/2026 sau [leader review 251cde3](review-251cde3.md): R5 rollback và R6 lost listener đã kiểm tra lại PASS trên fixtures/mocks.
+**Trạng thái tự động: LOCAL_FOCUSED_PASS (scoped ESLint, 12 probes và 9 ca native/mock leader kiểm tra lại PASS; source report là INCOMPLETE_FAST_MODE, chưa whole CI xanh).**
 **Trạng thái đóng gói: BLOCKED_PACKAGE (Chờ approved controller-releases từ Coordinator để build NSIS installer .exe).**
 Chỉ chuyển sang `READY_FOR_MANUAL_CHECK` sau khi nhận controller resources từ Coordinator, build installer `.exe` và hoàn tất các automated package/lifecycle labs.
 
@@ -11,13 +11,13 @@ Chỉ chuyển sang `READY_FOR_MANUAL_CHECK` sau khi nhận controller resources
 
 | Thông tin | Giá trị bàn giao |
 |---|---|
-| **Trạng thái tổng thể** | **R1–R6 RESOLVED / AUTOMATION: LOCAL_PASS** / **PACKAGE: BLOCKED_PACKAGE** (thiếu controller-releases từ coordinator) |
-| **Nhánh & Candidate SHA** | Nhánh: `feat/kim-windows-delivery-20261116` / Commit HEAD: `f4ae454` (`f4ae454f9170b075b563b2952a1f3581de2615bb`) / Base reviewed: `58a47af` / Baseline: `f699615` |
+| **Trạng thái tổng thể** | **R5/R6 leader xác nhận PASS / LOCAL_FOCUSED_PASS** / **PACKAGE: BLOCKED_PACKAGE** (thiếu controller-releases từ coordinator) |
+| **Nhánh & Candidate SHA** | Nhánh: `feat/kim-windows-delivery-20261116` / Candidate được review: `251cde3cd141492e7db5b340f2e9f11b9847e79f` / Base reviewed: `58a47af` / Baseline: `f699615` |
 | **Thư mục bàn giao (Bundle)** | `D:\Dự án CNTT\Tool Deploy\opspilot\app\.out-scripts\windows-delivery\handoff-bundle-20261122-r5r6` |
 | **SHA256SUMS file** | `D:\Dự án CNTT\Tool Deploy\opspilot\app\.out-scripts\windows-delivery\handoff-bundle-20261122-r5r6\SHA256SUMS` (UTF-8 no BOM) |
 | **ML Runtime Resource** | Đã build thành công: 2,691 files, 184,327,373 bytes<br>Manifest SHA256: `64782424b3e87ccb781553f24fc7c73bfe8a26c3f03e34fc203b24082b1038e8`<br>Verified bởi production verifier: `verifyMlRuntime()` với trusted builtin pin compiled. |
 | **Installer (.exe)** | **CHƯA CÓ INSTALLER**. Cần nguyên bộ approved controller resources đúng pins từ Coordinator, sau đó actual beforePack/build NSIS và automated package/lifecycle labs; xem thứ tự trong review leader. |
-| **Automation Summary** | • **Scoped ESLint PASS** (0 warnings, 0 errors với `--max-warnings=0`)<br>• **12/12 Preflight Standalone Probes PASS** (`preflight-check.mjs`), Probe 11 bao phủ toàn bộ ma trận native scripts:<br>&nbsp;&nbsp;- Positive backup & restore (5 markers, 100% hash match)<br>&nbsp;&nbsp;- Negative: reject missing protected key, reject unlisted files (target giữ nguyên)<br>&nbsp;&nbsp;- Negative (R5): promote failure kích hoạt tự động rollback, profile cũ trở lại đúng target với hashes nguyên vẹn 100%<br>&nbsp;&nbsp;- Negative (R5): rollback failure bảo toàn nguyên vẹn thư mục PreRestore (không bị xóa)<br>&nbsp;&nbsp;- Process inspect read-only<br>&nbsp;&nbsp;- Process mock (R6): owned-listener gọi Stop-Process, lost-listener từ chối stop (không gọi CloseMainWindow / Stop-Process), pid-reuse reject exit 1, unrelated executable reject exit 1<br>• **Source Check Runner** (`run-1795359591375-16972-18a573`): 7/7 delivery steps PASS (Diff, Scoped ESLint, Preflight Gate, Standalone Probes, Typecheck Node/Web, Typecheck Scripts, Source Build Compilation).<br>• **Vitest Suite Baseline**: 2,621 PASS / 21 FAIL (outside scope trong `src/**`, thuộc baseline coordinator chưa được miễn) / 11 SKIP / **0 delivery regressions**. Không rerun lặp lại khi core không đổi theo đúng chỉ dẫn review. |
+| **Automation Summary** | Leader chạy lại scoped ESLint zero warnings, 12 standalone probes, 5 restore cases và 4 process mock cases: PASS; xem review mới. Gemini runner `run-1795359591375-16972-18a573`: 7/7 steps PASS (gồm types/build), overall **INCOMPLETE_FAST_MODE**; provenance 58a47af + dirty diff. Historical full Vitest: 2,621 PASS / 21 FAIL / 11 SKIP, failures ngoài delivery diff chưa được miễn. Không rerun full suite khi core không đổi; không nhận whole CI xanh hoặc mọi delivery regression đã được loại trừ. |
 | **Blocker đóng gói** | **CONTROLLER_RELEASES_MISSING_OR_UNVERIFIED**<br>Owner: **Coordinator**<br>Điều kiện gỡ: Cung cấp nguyên bộ catalog và 9 release Linux x64 glibc directories (node, payload, dependencies, runtime-lock, release-manifest, installer.cjs) vào `app/resources/controller-releases/` đúng compiled pins. |
 | **Scripts đã kiểm thử** | • Backup: `app/scripts/windows-delivery/backup-profile.ps1`<br>• Restore: `app/scripts/windows-delivery/restore-profile.ps1`<br>• Process: `app/scripts/windows-delivery/manage-process.ps1` |
 | **VPS Requirement** | Mặc định **KHÔNG CẦN CHO CÀI ĐẶT / ML LOCAL BUNDLED**. Chỉ cần khi người dùng chọn nghiệm thu thêm luồng live SSH/deploy ở M4. |
@@ -69,9 +69,8 @@ Chỉ chuyển sang `READY_FOR_MANUAL_CHECK` sau khi nhận controller resources
 ```
 Candidate Code Base: feat/kim-windows-delivery-20261116
 Thư mục bundle: D:\Dự án CNTT\Tool Deploy\opspilot\app\.out-scripts\windows-delivery\handoff-bundle-20261122-r5r6
-Automation Status: LOCAL_PASS (R1–R6 resolved, 12 native probes PASS bao gồm R5 rollback & R6 listener guards, ML runtime 3.12.10 verified, 0 delivery regressions)
+Automation Status: LOCAL_FOCUSED_PASS (R5/R6 leader verified; source INCOMPLETE_FAST_MODE; historical full suite 21 FAIL)
 Package Status: BLOCKED_PACKAGE (Thiếu approved controller-releases từ Coordinator)
 Clean OS Gates (M2, M3, M6, M8): WAITING_PACKAGE / WAITING_USER
 Manual Scripts Tested: backup-profile.ps1, restore-profile.ps1, manage-process.ps1
-```
 ```

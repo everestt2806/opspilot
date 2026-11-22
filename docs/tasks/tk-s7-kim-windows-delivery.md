@@ -1,6 +1,16 @@
 # Kim — Windows delivery song song database core
 
-## Trạng thái mới nhất — Leader review 58a47af, 22/11/2026
+START 22/11/2026 — Leader kiểm tra lại candidate 251cde3: review diff R5/R6, chạy lại native restore fault probes và process mocks, đối chiếu bundle/evidence. Không dùng profile/process/VPS thật.
+
+## Trạng thái mới nhất — Leader review 251cde3, 22/11/2026
+
+UPDATE 22/11/2026 — **LOCAL_FOCUSED_PASS + BLOCKED_PACKAGE**. Leader đã chạy lại 5 native restore cases và 4 process mock cases, scoped ESLint + 12 standalone probes: PASS. R5 promote fail hoàn trả target nguyên hashes; rollback fail giữ bản cũ và báo đường dẫn. R6 lost listener không gọi CloseMainWindow hoặc Stop-Process. Bundle 6/6 hashes, source evidence 16/16 hashes khớp. Không còn request sửa implementation R5/R6 từ review này.
+
+Source evidence Gemini là **INCOMPLETE_FAST_MODE**, 7/7 steps PASS, provenance 58a47af + dirty diff. Historical full suite vẫn 21 FAIL chưa miễn; không nhận whole CI xanh. Controller resources chưa có, chưa installer/package/lifecycle proof; chờ Coordinator rồi hoàn tất các gate trước một lượt manual cuối. [Review và evidence](../delivery/windows-kim/review-251cde3.md). Leader đã đồng bộ candidate SHA/checklist, không sửa code thay Gemini.
+
+UPDATE 22/11/2026 — User yêu cầu commit và push tiến độ hiện tại lên remote. Đóng gói ba hồ sơ review cùng checklist/task; push nhánh Kim gồm các commit implementation đã kiểm tra. Trạng thái task vẫn LOCAL_FOCUSED_PASS + BLOCKED_PACKAGE, không phải nghiệm thu hoàn tất.
+
+## Lịch sử — Leader review 58a47af, 22/11/2026
 
 **REQUEST_CHANGES + BLOCKED_PACKAGE**, thay thế kết luận LOCAL_PASS trong log bàn giao Gemini bên dưới. Chi tiết và giao việc: [review-58a47af.md](../delivery/windows-kim/review-58a47af.md).
 
