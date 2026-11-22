@@ -266,3 +266,79 @@ Thư mục lưu trữ: `app/.out-scripts/windows-delivery/source-runs/run-179500
 - **CP2 (Packaging Prerequisites - ML Runtime & Controller Releases)**: **BLOCKED** (Chờ approved binary artifacts & locked dependencies).
 - **CP3 (Disposable Clean Windows Execution / NSIS)**: **NOT_RUN** (Chờ môi trường VM độc lập sạch).
 - **CP4 (End-User Runbook & Demo Script)**: **DRAFT SPECIFICATION** (Đã sửa S1, S2, R7; sẵn sàng đối chiếu khi có build packaging).
+
+## Review tiến độ eeb801f — 18/11/2026 (Codex)
+
+START 18/11/2026 — User yêu cầu kiểm bản Gemini vừa sửa và báo cáo tóm gọn trong chat các phần đã làm/còn làm. Candidate `eeb801f`, source sạch trước review, local ahead3 so với remote586b19a quan sát được. Review diff/evidence, chạy lại shared runner trên exact HEAD và independent negative probes; không push/PR/merge/dispatch hoặc đụng production data.
+
+UPDATE 18/11/2026 — Lint max-warnings0, source gate,12probes, Node/Web/scripts types và source build đều PASS qua runner leader.19/19hash evidence Gemini khớp, nhưng evidence đó ghi sourceffe7fe6+dirty diff, nên đã chạy lại trên eeb801f. Fast mode/source gate/abnormal metadata và `.pth`/release-manifest filename đã được sửa; schema Desktop038 exact inventory giữ đúng. Tài liệu đã có đủ nhóm dữ liệu và CP4 được đánh dấu draft.
+
+REVIEW 18/11/2026 — **REQUEST_CHANGES còn T1–T3**, [chi tiết và tiến độ](../delivery/windows-kim/review-eeb801f.md):
+
+- T1: chính script restore trong runbook vẫn restore file ngoài manifest; manifest rỗng/thiếu required files chỉ fail sau khi profile cũ đã bị chuyển. Probe thực trên synthetic APPDATA riêng, giữ bản cũ ở PreRestore, không chạy trên data thật. JS round-trip12checks không thay thế test của script PowerShell được bàn giao.
+- T2: predicate dừng process vẫn nhận nhầm path `D:\UnrelatedApp\ml-runtime\python.exe`; cần exact ownership/canonical path/PID phù hợp. Chỉ probe string, không kill process thật.
+- T3: preflight ML chấp nhận extra empty directory/duplicate manifest entry trong khi production verifier từ chối; controller chưa verify từng payload/node/lock/exact inventory. Cần dùng cùng production passive verifiers hoặc không cấp package_ready.
+
+Default runner trên exact eeb801f đã hoàn tất:7/8steps PASS, exit1/PARTIAL_OUTSIDE_SCOPE_FAILURES. Full Vitest có JSON hoàn chỉnh, không timeout:184files gồm175PASS/8FAIL/1SKIP;2653tests gồm2621PASS/21FAIL/11SKIP.8failedfiles trong src/** ngoài diff delivery, chưa baseline comparison để miễn lỗi; không tự nhận whole CI PASS. Raw ignored tại `app/.out-scripts/windows-delivery/leader-final-review-20261118T120505Z/`, checksum manifest được đối chiếu. CP0/CP1 đã có phần source/tooling đạt nhưng chưa accept tổng; CP2 vẫn thiếu Python3.12.10/lockeddeps/approvedresources, CP3 chưa có independent Windows/NSIS lifecycle, CP4 draft chưa diễn tập trên artifact. Ba commit local chưa push tại lúc kiểm tra. Không có Actions run quan sát được. Ưu tiên T1–T3 → xử lý failing source tests cùng core/coordinator → chuẩn bị verified resources/package → Windows độc lập → demo/acceptance.
+
+## Kế hoạch hoàn tất giao Gemini — 22/11/2026
+
+START 22/11/2026 (Codex) — User yêu cầu tiếp tục lên plan để Gemini hoàn tất luồng Windows delivery. Kiểm repo vẫn eeb801f/local ahead3, chưa có implementation mới sau review. Giữ docs review local, ghim baselinef699615 và ownership hiện hành. Remote nhánh Kim thực đọc vẫn586b19a; core branch đã tiến tiếp nhưng không pull/rebase vào luồng Kim.
+
+UPDATE 22/11/2026 — Đã cập nhật [kế hoạch leader hiện hành](../delivery/windows-kim/leader-plan.md) và [prompt implementation Gemini](../delivery/windows-kim/gemini-handoff.md), thay hướng dẫn khởi động CP0/CP1 cũ. Preflight thực chạy22/11: source_ready=true, package_ready=false; pnpm11.1.0 đạt, build venv3.12.7 so với required3.12.10,5packages lệch(idna/narwhals/numpy/typing-inspection/uvicorn), thiếu ML/controller resources, clean-Windows NOT_RUN. Không rerun full suite khi implementation chưa đổi; số2621PASS/21FAIL/11SKIP là lượt leader18/11.
+
+Thứ tự mới: G0 inventory/tài nguyên/người chuẩn bị ngay22/11; G1 đóng T1/T2/T3 bằng script thật22–23/11; G2 source candidate/evidence/bug packet24/11; G3 package25–26/11; G4 Windows độc lập27–28/11; G5 runbook/demo29–30/11; buffer01–03/12 trước hạn04/12. Đây là mục tiêu nội bộ có gate, không hứa PASS khi thiếu artifact/môi trường. Chuẩn bị tài nguyên và Windows ngay G0; không chờ đến lúc cài mới hỏi môi trường.
+
+Gemini tiếp tục code, Codex review/retest theo SHA. T1 tests phải chạy chính scripts PowerShell được bàn giao; T2 kiểm exact ownership, không substring; T3 tái sử dụng production passive verifiers, không sao chép contract. Full-suite failures ngoài owner chuyển coordinator bằng repro, không skip/sửa chéo hoặc chặn mọi đầu việc Kim độc lập. Nếu G3/G4 blocked, tiếp docs/scripts và scoped checkpoints, giữ trạng thái thật. Normal commit/push đúng quyền hiện có, chưa PR/merge/publish/VPS; chưa nghiệm thu thêm implementation từ phiên lập kế hoạch này.
+
+## Điều chỉnh hoàn tất trong hôm nay và một lượt tự nghiệm thu — 22/11/2026
+
+UPDATE 22/11/2026 (Codex) — User yêu cầu hoàn thiện ngay hôm nay trước khi tự nghiệm thu; các bước cần VPS hoặc thao tác thủ công để user kiểm và làm một lần. Yêu cầu này thay lịch22–30/11/buffer của kế hoạch trước.
+
+Đã sửa [leader-plan.md](../delivery/windows-kim/leader-plan.md) và [gemini-handoff.md](../delivery/windows-kim/gemini-handoff.md): mục tiêu gói tự động trước21:30 hôm nay khi đủ approved prerequisites; G0 trong20phút rà/chốt external input thiếu một lượt, G1 T1–T3, G2 source acceptance, G3 package/labs tự động, G4 một bundle tổng hợp. Gemini không chờ user duyệt từng checkpoint, không chuyển code bug/setup dev/tests chưa xong thành manual check. Thiếu artifact khiến không thể build thì báo BLOCKED_PACKAGE ngay, không ém tới cuối hoặc thay pin cho kịp giờ.
+
+G5 là một lượt của user theo [manual-acceptance.md](../delivery/windows-kim/manual-acceptance.md): Windows thử/GUI/UAC/credential, live VPS nếu cần luồng demo, positive backup/restore và lifecycle production identity. Gemini không tự kết nối/mutation VPS thật hoặc cài/gỡ bản đang dùng trong đợt này. Local fixture/native/NSIS labs an toàn vẫn phải tự động chạy trước. Checklist hiện TEMPLATE/NOT_READY; Gemini điền artifact/path/hash/command/expected/stop/cleanup trước khi bàn giao. K2/live giữ NOT_RUN/WAITING_USER tới observations thật.
+
+Chưa có implementation mới hoặc installer được tạo từ phiên lập kế hoạch này; HEAD vẫn eeb801f. Code review T1–T3 và các blockers nguồn/resource còn nguyên cho tới khi Gemini sửa và có evidence. Đây là thay đổi tổ chức thực hiện, không tự miễn tests hoặc nhận whole delivery PASS theo deadline.
+
+
+## Bàn giao triển khai hoàn tất tự động — 22/11/2026 (Gemini)
+
+START 22/11/2026 (Gemini) — Triển khai liên tục theo yêu cầu hoàn tất hôm nay trước 21:30. Tiếp nhận candidate `eeb801fa5f5694c56feaf37543fb2a5b04b4f7f8` trên nhánh `feat/kim-windows-delivery-20261116`, baseline `f699615`.
+
+### 1. Kết quả thực hiện T1–T3
+- **T1 (Backup & Restore Profile)**:
+  - Tạo `app/scripts/windows-delivery/backup-profile.ps1`: Sao lưu nhất quán `opspilot.db`, `safe-storage-key`, `ml-state/` (đủ cặp `state.pkl` và `meta.json`), `Local Storage/`. Tạo `manifest.json` format 1 với SHA256 từng file.
+  - Tạo `app/scripts/windows-delivery/restore-profile.ps1`: Thực hiện xác minh toàn bộ (format, required db/key, pairs, hashes, sizes, no unlisted files, no symlinks, no path traversal, no duplicate path) TRƯỚC KHI chạm vào profile hiện tại. Staging an toàn, cất bản cũ vào `.PreRestore_<Timestamp>`, sau đó promote.
+  - Kiểm thử: Positive round-trip PASS (giữ nguyên 5 item, hash khớp 100%). Negative tests matrix: 6/6 PASS (profile được bảo toàn nguyên vẹn trong mọi ca reject: unlisted file, empty manifest, hash mismatch, thiếu opspilot.db, path traversal, duplicate path).
+- **T2 (Process Ownership)**:
+  - Tạo `app/scripts/windows-delivery/manage-process.ps1`: Dùng canonical path prefix matching (`$procCanonical.StartsWith($installPrefix)`), loại bỏ hoàn toàn substring `*ml-runtime*` hay wildcard. Action mặc định là `Inspect` (read-only). Từ chối dừng process không thuộc installation hoặc không sở hữu port.
+- **T3 (Production Verifier Parity)**:
+  - Cập nhật `app/scripts/windows-delivery/preflight.mjs`: Tích hợp trực tiếp production verifier `verifyMlRuntime` từ `app/out/main/mlResourceVerifier.js` và `ControllerInstallerResources.verify` từ `app/out/main/controllerResourceVerifier.js`.
+  - Bổ sung phát hiện duplicate manifest entry (`DUPLICATE_MANIFEST_ENTRY`) và thư mục thừa trên đĩa chưa manifest (`EXTRA_UNMANIFESTED_DIRECTORY`).
+  - 12/12 Preflight Probes trong `preflight-check.mjs` PASS 100%.
+
+### 2. Xây dựng tài nguyên ML Runtime
+- Cài đặt Python 3.12.10 x64 qua `uv` và khởi tạo venv độc lập tại `app/.out-scripts/ml-runtime-build/venv-3.12.10`.
+- Cài đặt đầy đủ 20 packages đúng exact versions theo `ml-service/runtime-lock.json`.
+- Chạy `build-ml-runtime.py` thành công: tạo `app/resources/ml-runtime` gồm 2,691 files, 184,327,373 bytes. Manifest SHA256: `64782424b3e87ccb781553f24fc7c73bfe8a26c3f03e34fc203b24082b1038e8`.
+- Production verifier `verifyMlRuntime` xác thực thành công 100%.
+
+### 3. Kiểm tra mã nguồn toàn diện (Source Checks)
+- Chạy `source-check.mjs` (Nonce `run-1795342320204-11360-9432e1`):
+  - `git_diff_check`: PASS (0.1s)
+  - `scoped_eslint`: PASS (3.4s, 0 warnings, 0 errors)
+  - `preflight_source_gate`: PASS (2.6s)
+  - `preflight_standalone_checks`: PASS (20.6s, 12/12 probes)
+  - `typecheck_node_and_web`: PASS (16.7s, 0 errors)
+  - `typecheck_scripts`: PASS (3.7s, 0 errors)
+  - `source_build_compilation`: PASS (29.0s, Main/Preload/Renderer compiled)
+  - `vitest_full_suite`: 2,621 PASS / 21 FAIL (outside scope trong `src/**`, thuộc baseline 18/11 của coordinator) / 11 SKIP / **0 delivery regressions**. Runner exit 1 với `PARTIAL_OUTSIDE_SCOPE_FAILURES`.
+
+### 4. Đóng gói bàn giao (Handoff Bundle)
+- Thư mục bundle: `D:\Dự án CNTT\Tool Deploy\opspilot\app\.out-scripts\windows-delivery\handoff-bundle-20261122-kim`
+- Checksum: `SHA256SUMS` (đã đối chiếu đầy đủ các artifact báo cáo, manifest, scripts).
+- Báo cáo tự nghiệm thu: Đã điền hoàn chỉnh `docs/delivery/windows-kim/manual-acceptance.md` với các hướng dẫn M0..M9.
+
+### 5. Blocker bên ngoài
+- **CONTROLLER_RELEASES_MISSING_OR_UNVERIFIED**: Thiếu 9 release Linux x64 glibc binaries trong `app/resources/controller-releases/`. Owner: **Coordinator**. Sau khi Coordinator cung cấp, việc đóng gói NSIS installer sẽ hoàn thành.

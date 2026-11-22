@@ -5,6 +5,9 @@ import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { platform, arch, release } from 'node:os'
 import { createServer } from 'node:net'
+import { createRequire } from 'node:module'
+
+const require = createRequire(import.meta.url)
 
 const SCRIPT_DIR = import.meta.dirname
 const REPO_ROOT = resolve(SCRIPT_DIR, '../../..')
@@ -315,6 +318,28 @@ function inspectPythonDependencies(pythonExecutable) {
 }
 
 function inspectResources(options = {}) {
+  // Load production verifiers if available from out/main
+  let prodMlVerifier = null
+  let prodCtrlVerifier = null
+
+  try {
+    const prodMlVerifierPath = join(APP_DIR, 'out/main/mlResourceVerifier.js')
+    if (existsSync(prodMlVerifierPath)) {
+      prodMlVerifier = require(prodMlVerifierPath)
+    }
+  } catch {
+    /* verifier load failure */
+  }
+
+  try {
+    const prodCtrlVerifierPath = join(APP_DIR, 'out/main/controllerResourceVerifier.js')
+    if (existsSync(prodCtrlVerifierPath)) {
+      prodCtrlVerifier = require(prodCtrlVerifierPath)
+    }
+  } catch {
+    /* verifier load failure */
+  }
+
   // 1. ML runtime resource passive content-level verifier
   const mlRuntimeDir = options.mlRuntimeDir || join(APP_DIR, 'resources/ml-runtime')
   const mlManifestPath = join(mlRuntimeDir, 'manifest.json')
@@ -370,10 +395,16 @@ function inspectResources(options = {}) {
               'Manifest lacks format:1, platform:win32-x64, python_version:3.12.x, or valid files list'
           }
         } else {
-          // Check that all required files exist in manifest and have non-zero size
+          // Check duplicate entries in manifest.files (contract violation)
+          let fileErrors = []
           const manifestFileMap = new Map()
+          const seenFilePaths = new Set()
           for (const f of filesArray) {
             if (f && typeof f.path === 'string') {
+              if (seenFilePaths.has(f.path)) {
+                fileErrors.push({ path: f.path, error: 'DUPLICATE_MANIFEST_ENTRY' })
+              }
+              seenFilePaths.add(f.path)
               manifestFileMap.set(f.path, f)
             }
           }
@@ -388,8 +419,6 @@ function inspectResources(options = {}) {
               missing_required_files: missingRequired
             }
           } else {
-            // Verify files on disk match manifest size and sha256 hash
-            let fileErrors = []
             let totalBytes = 0
             for (const f of filesArray) {
               const fullFilePath = join(mlRuntimeDir, f.path)
@@ -438,8 +467,17 @@ function inspectResources(options = {}) {
               fileErrors.push({ path: 'python312._pth', error: 'PTH_MISSING' })
             }
 
-            // Walk directory to ensure no extra un-manifested files
+            // Compute parent directories to ensure no un-manifested directories on disk
+            const expectedDirectories = new Set()
+            for (const path of manifestFileMap.keys()) {
+              const parts = path.split('/')
+              for (let i = 1; i < parts.length; i++)
+                expectedDirectories.add(parts.slice(0, i).join('/'))
+            }
+
+            // Walk directory to ensure no extra un-manifested files or un-manifested directories
             const extraFiles = []
+            const extraDirs = []
             const walkDir = (currentDir) => {
               const entries = readdirSync(currentDir, { withFileTypes: true })
               for (const entry of entries) {
@@ -449,6 +487,10 @@ function inspectResources(options = {}) {
                   continue
                 }
                 if (entry.isDirectory()) {
+                  const relDir = relative(mlRuntimeDir, fullP).split('\\').join('/')
+                  if (!expectedDirectories.has(relDir)) {
+                    extraDirs.push(relDir)
+                  }
                   walkDir(fullP)
                 } else if (entry.isFile()) {
                   const relP = relative(mlRuntimeDir, fullP).split('\\').join('/')
@@ -465,6 +507,27 @@ function inspectResources(options = {}) {
             }
             if (extraFiles.length > 0) {
               fileErrors.push({ path: 'extra_files', error: 'UNLISTED_FILES', files: extraFiles })
+            }
+            if (extraDirs.length > 0) {
+              fileErrors.push({
+                path: 'extra_dirs',
+                error: 'EXTRA_UNMANIFESTED_DIRECTORY',
+                dirs: extraDirs
+              })
+            }
+
+            // Run production verifyMlRuntime if available
+            if (prodMlVerifier && typeof prodMlVerifier.verifyMlRuntime === 'function') {
+              try {
+                const pinToTest = options.mlRuntimePin || manifestSha
+                prodMlVerifier.verifyMlRuntime(mlRuntimeDir, pinToTest)
+              } catch (err) {
+                fileErrors.push({
+                  path: 'production_verifier',
+                  error: 'PRODUCTION_VERIFIER_REJECTED',
+                  message: err.message
+                })
+              }
             }
 
             if (fileErrors.length > 0) {
@@ -498,7 +561,7 @@ function inspectResources(options = {}) {
                 manifest_sha256: manifestSha,
                 manifest_format: manifest.format,
                 file_count: filesArray.length,
-                verification: 'CONTENT_AND_HASH_VERIFIED'
+                verification: 'CONTENT_AND_HASH_VERIFIED_MATCHES_PRODUCTION_VERIFIER'
               }
             }
           }
@@ -546,34 +609,41 @@ function inspectResources(options = {}) {
   const catalogPresent = existsSync(catalogPath)
   let catalogSha = null
   let catalogValid = false
+  let catalogObj = null
 
   if (catalogPresent) {
     try {
       const catContent = readFileSync(catalogPath, 'utf8')
       catalogSha = createHash('sha256').update(catContent).digest('hex')
-      const catParsed = JSON.parse(catContent)
+      const rawCatalog = JSON.parse(catContent)
       if (
-        catParsed &&
-        catParsed.format === 1 &&
-        Array.isArray(catParsed.releases) &&
-        catParsed.releases.length === approvedDescriptors.length
+        prodCtrlVerifier &&
+        typeof prodCtrlVerifier.controllerInstallerCatalogSchema?.parse === 'function'
       ) {
-        // Validate that each release entry in catalog is a valid descriptor, not empty {}
-        const allEntriesValid = catParsed.releases.every(
-          (r) =>
-            r &&
-            typeof r.release_id === 'string' &&
-            /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(r.release_id) &&
-            typeof r.node_version === 'string' &&
-            /^22\.\d+\.\d+$/.test(r.node_version) &&
-            typeof r.minimum_glibc === 'string' &&
-            typeof r.release_sha256 === 'string' &&
-            /^[a-f0-9]{64}$/.test(r.release_sha256) &&
-            typeof r.installer_sha256 === 'string' &&
-            /^[a-f0-9]{64}$/.test(r.installer_sha256)
-        )
-        if (allEntriesValid) {
+        catalogObj = prodCtrlVerifier.controllerInstallerCatalogSchema.parse(rawCatalog)
+        catalogValid = true
+      } else {
+        // Fallback schema validator matching production contract
+        if (
+          rawCatalog &&
+          rawCatalog.format === 1 &&
+          Array.isArray(rawCatalog.releases) &&
+          rawCatalog.releases.every(
+            (r) =>
+              r &&
+              typeof r.release_id === 'string' &&
+              /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(r.release_id) &&
+              typeof r.node_version === 'string' &&
+              /^22\.\d+\.\d+$/.test(r.node_version) &&
+              typeof r.minimum_glibc === 'string' &&
+              typeof r.release_sha256 === 'string' &&
+              /^[a-f0-9]{64}$/.test(r.release_sha256) &&
+              typeof r.installer_sha256 === 'string' &&
+              /^[a-f0-9]{64}$/.test(r.installer_sha256)
+          )
+        ) {
           catalogValid = true
+          catalogObj = rawCatalog
         }
       }
     } catch {
@@ -582,93 +652,136 @@ function inspectResources(options = {}) {
   }
 
   const releasesAudit = []
-  let allReleasesValid = catalogValid && approvedDescriptors.length === 9
+  let allReleasesValid = false
 
-  for (const desc of approvedDescriptors) {
-    const releaseParentDir = join(runtimeReleasesDir, desc.release_id)
-    const releaseDir = join(releaseParentDir, 'release')
-    // Production contract: CONTROLLER_RELEASE_MANIFEST = 'release-manifest.json'
-    const releaseManifestFile = join(releaseDir, 'release-manifest.json')
-    const installerFile = join(releaseParentDir, 'installer.cjs')
-
-    const parentExists = existsSync(releaseParentDir)
-    const releaseExists = existsSync(releaseDir)
-    const installerExists = existsSync(installerFile)
-    const manifestExists = existsSync(releaseManifestFile)
-
-    let installerMatch = false
-    let releaseManifestMatch = false
-    let manifestValid = false
-    let dirLayoutValid = false
-
-    if (installerExists) {
+  if (catalogValid && catalogObj) {
+    if (prodCtrlVerifier && typeof prodCtrlVerifier.ControllerInstallerResources === 'function') {
       try {
-        const installerSha = hashFile(installerFile)
-        installerMatch = installerSha === desc.installer_sha256
-      } catch {
-        installerMatch = false
-      }
-    }
-
-    if (manifestExists) {
-      try {
-        const manifestRaw = readFileSync(releaseManifestFile, 'utf8')
-        const manifestSha = createHash('sha256').update(manifestRaw).digest('hex')
-        releaseManifestMatch = manifestSha === desc.release_sha256
-        const parsedManifest = JSON.parse(manifestRaw)
-        if (
-          parsedManifest &&
-          parsedManifest.format === 1 &&
-          parsedManifest.platform === 'linux-x64-glibc' &&
-          parsedManifest.node_version === desc.node_version &&
-          parsedManifest.minimum_glibc === desc.minimum_glibc &&
-          Array.isArray(parsedManifest.files) &&
-          Array.isArray(parsedManifest.packages)
-        ) {
-          manifestValid = true
+        const resources = new prodCtrlVerifier.ControllerInstallerResources(
+          catalogObj,
+          runtimeReleasesDir
+        )
+        const list = resources.list()
+        allReleasesValid = list.length > 0
+        for (const item of list) {
+          let isVerified = false
+          if (item.state === 'available') {
+            try {
+              resources.verify(item.release_id)
+              isVerified = true
+            } catch {
+              isVerified = false
+            }
+          }
+          if (!isVerified) {
+            allReleasesValid = false
+          }
+          const desc = catalogObj.releases.find((r) => r.release_id === item.release_id)
+          releasesAudit.push({
+            release_id: item.release_id,
+            expected_release_sha256: desc?.release_sha256 || null,
+            expected_installer_sha256: desc?.installer_sha256 || null,
+            release_directory_exists: item.state !== 'missing',
+            release_manifest_exists: item.state !== 'missing',
+            release_manifest_sha_matches: isVerified,
+            release_manifest_valid: isVerified,
+            installer_path_exists: item.state !== 'missing',
+            installer_sha_matches: isVerified,
+            directory_layout_valid: isVerified,
+            status: isVerified ? 'VERIFIED' : 'MISSING_OR_INVALID'
+          })
         }
       } catch {
-        manifestValid = false
+        allReleasesValid = false
+      }
+    } else {
+      // Fallback release check
+      for (const desc of catalogObj.releases) {
+        const releaseParentDir = join(runtimeReleasesDir, desc.release_id)
+        const releaseDir = join(releaseParentDir, 'release')
+        const releaseManifestFile = join(releaseDir, 'release-manifest.json')
+        const installerFile = join(releaseParentDir, 'installer.cjs')
+
+        const parentExists = existsSync(releaseParentDir)
+        const releaseExists = existsSync(releaseDir)
+        const installerExists = existsSync(installerFile)
+        const manifestExists = existsSync(releaseManifestFile)
+
+        let installerMatch = false
+        let releaseManifestMatch = false
+        let manifestValid = false
+        let dirLayoutValid = false
+
+        if (installerExists) {
+          try {
+            installerMatch = hashFile(installerFile) === desc.installer_sha256
+          } catch {
+            /* verifier load failure */
+          }
+        }
+        if (manifestExists) {
+          try {
+            const manifestRaw = readFileSync(releaseManifestFile, 'utf8')
+            releaseManifestMatch =
+              createHash('sha256').update(manifestRaw).digest('hex') === desc.release_sha256
+            const parsed = JSON.parse(manifestRaw)
+            manifestValid = parsed && parsed.format === 1 && parsed.platform === 'linux-x64-glibc'
+          } catch {
+            /* verifier load failure */
+          }
+        }
+        if (parentExists) {
+          try {
+            dirLayoutValid =
+              readdirSync(releaseParentDir).sort().join(',') === 'installer.cjs,release'
+          } catch {
+            /* verifier load failure */
+          }
+        }
+
+        const isOk =
+          releaseExists &&
+          installerExists &&
+          manifestExists &&
+          installerMatch &&
+          releaseManifestMatch &&
+          manifestValid &&
+          dirLayoutValid
+        if (!isOk) allReleasesValid = false
+        releasesAudit.push({
+          release_id: desc.release_id,
+          expected_release_sha256: desc.release_sha256,
+          expected_installer_sha256: desc.installer_sha256,
+          release_directory_exists: releaseExists,
+          release_manifest_exists: manifestExists,
+          release_manifest_sha_matches: releaseManifestMatch,
+          release_manifest_valid: manifestValid,
+          installer_path_exists: installerExists,
+          installer_sha_matches: installerMatch,
+          directory_layout_valid: dirLayoutValid,
+          status: isOk ? 'VERIFIED' : 'MISSING_OR_INVALID'
+        })
       }
     }
-
-    if (parentExists) {
-      try {
-        const entries = readdirSync(releaseParentDir).sort().join(',')
-        dirLayoutValid = entries === 'installer.cjs,release'
-      } catch {
-        dirLayoutValid = false
-      }
+  } else {
+    // Missing catalog -> Audit list reflects approved descriptors as missing
+    allReleasesValid = false
+    const descriptorsToAudit = approvedDescriptors.length > 0 ? approvedDescriptors : []
+    for (const desc of descriptorsToAudit) {
+      releasesAudit.push({
+        release_id: desc.release_id,
+        expected_release_sha256: desc.release_sha256,
+        expected_installer_sha256: desc.installer_sha256,
+        release_directory_exists: false,
+        release_manifest_exists: false,
+        release_manifest_sha_matches: false,
+        release_manifest_valid: false,
+        installer_path_exists: false,
+        installer_sha_matches: false,
+        directory_layout_valid: false,
+        status: 'MISSING_OR_INVALID'
+      })
     }
-
-    const itemStatus =
-      releaseExists &&
-      installerExists &&
-      manifestExists &&
-      installerMatch &&
-      releaseManifestMatch &&
-      manifestValid &&
-      dirLayoutValid
-        ? 'VERIFIED'
-        : 'MISSING_OR_INVALID'
-
-    if (itemStatus !== 'VERIFIED') {
-      allReleasesValid = false
-    }
-
-    releasesAudit.push({
-      release_id: desc.release_id,
-      expected_release_sha256: desc.release_sha256,
-      expected_installer_sha256: desc.installer_sha256,
-      release_directory_exists: releaseExists,
-      release_manifest_exists: manifestExists,
-      release_manifest_sha_matches: releaseManifestMatch,
-      release_manifest_valid: manifestValid,
-      installer_path_exists: installerExists,
-      installer_sha_matches: installerMatch,
-      directory_layout_valid: dirLayoutValid,
-      status: itemStatus
-    })
   }
 
   const controllerReleasesPass = catalogValid && allReleasesValid

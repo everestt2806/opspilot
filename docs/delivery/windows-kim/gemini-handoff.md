@@ -1,128 +1,92 @@
-# Prompt giao Gemini — Windows delivery của Kim
+# Prompt hoàn tất Windows delivery cho Gemini
 
-Sao chép nội dung từ mục bên dưới vào Gemini có quyền đọc/sửa repo local. Đây là giao việc implementation; không yêu cầu Gemini chỉ trả một kế hoạch khác.
+Cập nhật 22/11/2026. Nội dung này thay prompt khởi động CP0/CP1 cũ.
 
 ---
 
-Bạn là engineer triển khai Windows delivery cho OpsPilot. Codex là leader chịu trách nhiệm plan, review, chạy kiểm thử độc lập và nghiệm thu. Bạn viết code trong phạm vi Kim, tự test và bàn giao từng checkpoint bằng SHA/evidence; không tự nhận leader đã approve.
+Bạn là engineer implementation luồng Kim; Codex là leader review/kiểm thử. **Yêu cầu mới: hoàn thiện code, kiểm thử tự động và chuẩn bị bộ cài ngay hôm nay22/11 trước một lượt tự nghiệm thu cuối của người dùng.** Bước cần VPS/Windows độc lập/GUI/credential thật để người dùng làm theo một checklist đầy đủ. Không tiếp tục lịch nhiều ngày cũ.
 
-## Bối cảnh và yêu cầu bắt buộc
+Mục tiêu bàn giao trước21:30 hôm nay nếu đủ approved prerequisites. Tự làm liên tục G0–G4 theo leader-plan.md mới, bàn giao tổng hợp một lần. Không dừng sau source checks hay xin người dùng kiểm từng sửa nhỏ. Code bug/tests thiếu/setup dev chưa làm xong không được đẩy thành “manual check”. Gate chưa thực hiện giữ NOT_RUN/WAITING_USER.
 
-- Repo hiện tại: `D:\Dự án CNTT\Tool Deploy\opspilot`. Đây là đường dẫn máy Kim; script bạn tạo phải suy ra repo root, không hardcode đường dẫn này.
-- Nhánh bắt buộc: `feat/kim-windows-delivery-20261116`, tracking origin cùng tên. HEAD lúc tiếp nhận `7cec58845eed87057baa4562a410dc403eb6f2a7`; code baseline `f699615`. Baseline cố định, không pull/rebase core liên tục. Deadline hiện hành04/12/2026.
-- Mục tiêu: người khác cài và chạy OpsPilot Windows không có developer Node/Python; DB/key/model/UI giữ qua reopen/repair/supported upgrade; quit không orphan ML; có source CI, runbook và demo thật8–10phút.
-- Bạn được sửa/test/commit và normal push đúng nhánh theo ủy quyền task và lời giao việc trong ảnh. Chưa PR/merge/publish release/VPS. Không reset/clean/stash/rebase/force. Không xóa file local có sẵn.
-- Không tự đổi contract/schema/API/pin/model/thuật toán/dependencies. Không thêm mock/backdoor vào Main/IPC để lab đạt.
-- Chỉ đúng danh tính tác giả; không thêm coauthor không có đóng góp đã xác nhận.
+## Tiếp nhận
 
-## Đọc trước khi code
+- Repo local: D:\Dự án CNTT\Tool Deploy\opspilot. Script tự xác định root, không hardcode máy.
+- Nhánh feat/kim-windows-delivery-20261116, HEAD tiếp nhận eeb801fa5f5694c56feaf37543fb2a5b04b4f7f8; baseline f699615. Không pull/rebase core liên tục. Hoàn thiện phần tự động hôm nay22/11; hạn dự án04/12 không phải lý do lùi đầu việc.
+- Có3 commits local chưa push và docs Codex chưa commit. Đọc/giữ và đưa docs vào commit phù hợp. Không reset/clean/stash/rebase/force. Normal push đúng nhánh đã được giao quyền; chưa PR/merge/publish/VPS.
+- Codex chưa accept T1/T2/T3. Nhãn PASS/hoàn thành cũ trong nhật ký không thay verdict mới. Bạn đề nghị CHỜ REVIEW, không tự nhận leader đã approve.
 
-1. `CLAUDE.md`, `docs/tasks/README.md`, phần setup hiện hành trên `docs/tasks/board.md` (chỉ đọc).
-2. `docs/tasks/tk-s7-parallel-2026-11-16.md` và `docs/tasks/tk-s7-kim-windows-delivery.md`.
-3. `docs/delivery/windows-kim/leader-plan.md` — phạm vi, checkpoint, acceptance, ledger và báo cáo.
-4. `docs/tasks/tk-s7-release-r11a-portable-ml-runtime.md`, `tk-s7-release-r11b-windows-installer.md`, `tk-s7-release-r11c-upgrade-compatibility.md` trong cùng thư mục task.
-5. `app/scripts/windows-release-lab/README.md`, `UPGRADE.md`, `app/scripts/ml-runtime-lab/README.md`, phần liên quan trong `DECISIONS.md` và `docs/09-moi-truong-dev.md`.
-6. Đọc các script/config/role-aware migrations được tham chiếu trước khi chỉnh lab. Tìm `task-discipline` nếu tồn tại; leader không tìm thấy file đó trong checkout, không bịa nội dung. Áp dụng task cụ thể về ownership và ngoại lệ không sửa board.
+Đọc: CLAUDE.md → docs/tasks/README.md → setup hiện hành trên board(chỉ đọc) → docs/tasks/tk-s7-parallel-2026-11-16.md → docs/tasks/tk-s7-kim-windows-delivery.md → docs/delivery/windows-kim/review-eeb801f.md → **leader-plan.md bản22/11** trong cùng thư mục → R11a/b/c tasks và Windows lab README/UPGRADE. Nếu có task-discipline thì đọc; không bịa nội dung file thiếu.
 
-## File ownership
+## Phạm vi
 
-Được sửa:
+Sửa Windows delivery scripts/labs, build-ml-runtime.py, workflow Windows riêng, docs riêng/task Kim theo owner. Được thêm app/scripts/windows-delivery/**. Builder/NSIS/beforePack chỉ sửa delivery bug có repro, giữ verification/pins/identity.
 
-- `app/scripts/windows-release-lab.mjs`, `windows-installer-lab.mjs`, `windows-upgrade-lab.mjs`, `windows-upgrade-baseline.py`, `legacy-ml-upgrade-lab.py`, `legacy-ml-upgrade.ps1`, `build-ml-runtime.py` và `app/scripts/windows-release-lab/**`.
-- File mới trong `app/scripts/windows-delivery/**` và `.github/workflows/windows-delivery-source.yml`.
-- `app/electron-builder.yml`, `app/resources/installer.nsh`, `app/scripts/controller-installer-before-pack.cjs` chỉ nếu có bug delivery tái hiện được, giữ resource verification/pin/production identity.
-- `docs/delivery/windows-kim/**`, `docs/tasks/tk-s7-kim-windows-delivery.md`.
+Chỉ đọc app/src/**, contracts/migrations, ML source, package.json/lockfiles/Vite config, controller pins/catalog/build-release scripts khác, board/DECISIONS và core Sơn. Dùng API/CLI production sẵn có. Lỗi ngoài scope ghi bug packet cho Codex/coordinator; không sửa chéo. Không production DB/profile/VPS, dependency chưa duyệt hoặc invent coauthor.
 
-Chỉ đọc: `app/src/**`, `docs/contracts/**`, migrations, ML source, collector/templates/experiments, package.json/lockfile/Vite config, catalog/pins và controller release scripts khác, board/DECISIONS/task core. Bug ngoài owner thì ghi repro/expected/actual/file gợi ý + evidence trong task riêng rồi giao leader/coordinator; không tự sửa.
+## Làm ngay G0 và G1
 
-## Dữ kiện leader đã xác minh — phải kiểm kê lại
+Ghi START thực tế trong task và kiểm branch/SHA/status. Trong20phút đầu chốt tất cả external inputs còn thiếu một lượt: approved artifacts/deps và máy người dùng tự kiểm. Environment build local là việc của bạn. Thiếu artifact làm không thể build thì báo BLOCKED_PACKAGE ngay với exact file/hash/nguồn/thao tác cần người dùng, rồi tiếp T1–T3/phần độc lập. Không giấu tới cuối hoặc tự đổi pin cho kịp giờ.
 
-- Node22.17.0, pnpm11.1.0; venv Python3.12.7 trong khi runtime-lock yêu cầu3.12.10.
-- 5package lệch lock: idna3.19 thay3.18, narwhals2.25.0 thay2.24.0, numpy2.5.2 thay2.5.1, typing-inspection0.4.4 thay0.4.2, uvicorn0.52.4 thay0.52.1. Không sửa lock hoặc nâng dependencies để khớp máy.
-- Thiếu `app/resources/ml-runtime` và `app/resources/controller-releases`; binary ignored không tự có sau fetch/clone.
-- Source đăng ký Desktop038/controller037 nhưng `windows-release-lab.mjs` còn `assert` schema31. Phải audit harness theo baseline/role và inventory migration đúng; không chỉ suy expected từ artifact đang thử.
-- `pnpm.cmd --prefix app typecheck` đã exit0 cho Node/Web; invocation có chạy native postinstall. Chưa chạy full suite/build/NSIS/GUI. Số test R11 cũ không phải baseline này.
-- Không thấy WindowsSandbox.exe trên máy hiện tại, chưa xác nhận Windows độc lập. Không gọi máy dev/profile riêng/account khác trên máy dev là clean OS.
-- Trong workspace có worktrees H2 riêng và worktree khác có code chưa commit. Không chạm các worktree đó. Hai file plan/prompt và task update của Codex có thể đang chưa commit: đọc và giữ chúng, đưa vào commit docs đầu nếu phù hợp, không reset/stash/clean.
+### T1 — Backup/restore bằng implementation thật
 
-## Thực thi theo checkpoint
+Tạo/hoàn thiện backup-profile.ps1 và restore-profile.ps1 trong app/scripts/windows-delivery; runbook/tests gọi chính scripts này. Backup consistent DB/key/ml-state/UI. DB/key required cho supported populated profile; fresh profile chưa có model/UI thì ghi absence rõ; có model phải đủ pair.
 
-**Bắt đầu ngay CP0, rồi CP1; không dừng ở việc trả plan.** Ghi START thực tế vào task riêng và kiểm `git status`, branch/upstream/source SHA trước mọi mutation.
+Validate toàn bộ format/required inventory/size/hash/path/no-links/no-unlisted files/identity/version **trước khi chuyển profile hiện tại**. Staging mới và verified trước promote, giữ PreRestore, chống collision/overlap; không merge DB/key/model. Rejection giữ hash/vị trí profile hiện tại. Không execute pickle/binary để verify.
 
-### CP0 — Preflight và prerequisite
+Case đang fail: manifest chỉ hash DB nhưng backup còn key/model ngoài manifest; manifest rỗng/thiếu required files. Cả hai phải reject trước thay profile. Chạy positive/tamper/missing/path/link/busy/collision theo matrix plan. Bỏ JS round-trip riêng không kiểm PowerShell thực được bàn giao.
 
-Tạo CLI inventory trong `app/scripts/windows-delivery/**` và docs hướng dẫn gọi. Mặc định kiểm tra readonly: environment, versions/closure vs lock, resource inventory/pins, role-aware expected schema, nguồn artifact còn thiếu, process/port có thể ảnh hưởng lab. Output có trạng thái từng gate và dữ liệu JSON phù hợp lưu evidence; thiếu prerequisite cho package không được nhận package-ready.
+### T2 — Process ownership thật
 
-Không tự spawn app/ML, download, reinstall venv hiện có hoặc ghi đè output chỉ để inventory. Chuẩn bị kế hoạch môi trường build riêng đúng approved Python/deps; nếu nguồn/hash binary chưa được duyệt, ghi danh sách cần coordinator cung cấp, không tự approve. Xử lý path có khoảng trắng/Unicode; không phụ thuộc đường dẫn máy Sơn hoặc LOCALAPPDATA Node mặc định của helper cũ.
+Không substring *ml-runtime* hoặc wildcard installation. Exact canonical executable thuộc exact installation, từng PID/start-time/parent/listener phù hợp; PID reuse/thiếu evidence thì không dừng. Đóng app bình thường trước. Helper default inspect, stop tường minh. Không kill theo tên chung. D:\UnrelatedApp\ml-runtime\python.exe phải bị từ chối.
 
-Chỉ thêm checks meaningful cho CLI guard/path/status/exit-code hoặc bug đã tái hiện; không tạo hàng loạt unit test chỉ mirror implementation.
+### T3 — Dùng production verifier
 
-### CP1 — K3 source CI, làm được khi thiếu resources
+Không chép contract thành bộ if/regex khác. Dùng exports hiện có của mlRuntime/controllerInstallerCatalog/controllerRelease từ source/build tin cậy. Adapter/bundle riêng dưới scripts/windows-delivery, dependencies đã duyệt; không sửa core/API/pin/catalog.
 
-Tạo `.github/workflows/windows-delivery-source.yml` với workflow_dispatch, Windows runner, Node22, pnpm11.1.0/frozen lockfile, không secret mới hoặc release publish. Script source checks dùng chung local/CI phải lan exit code fail. Có typechecks Node/Web/scripts, full Vitest, lint có phạm vi và lý do. Nếu sửa Python lab thì Ruff và affected checks bằng environment riêng đã duyệt.
+Thiếu đúng verifier/trusted pin/resource thì INVENTORY_ONLY/NOT_VERIFIED, package_ready=false; source gate vẫn chạy. Không tin stale out hoặc skip parity khi compiled verifier chưa có. Giữ full historical descriptors, không ép9 entries. Parity cả positive/negative: extra empty directory/duplicate entry hiện preflight vẫn nhận nhầm; controller cần verify payload/node/lock/installer/exact inventory, không chỉ metadata.
 
-Lưu source SHA, environment versions, commands/exit codes/raw logs/checksums; collect evidence kể cả fail. Không upload DB/key/model/secret. Source compilation không đồng nghĩa packaging PASS. Không skip toàn bộ packaging rồi báo xanh, không dùng continue-on-error che gate. Nếu không chạy/quan sát Actions được thì ghi NOT_RUN và giao local equivalent có bằng chứng.
+## G2 source và lỗi ngoài owner
 
-Bàn giao CP0/CP1 sớm bằng commit phù hợp; không cần chờ K2 để leader review. Vẫn tiếp tục phần độc lập đã được giao; báo rõ source SHA của candidate chờ review để tránh nhầm evidence với code sau đó.
+Sau focused tests T1–T3 và lint đạt, khóa candidate SHA và chạy source runner đầy đủ. Leader18/11 có2621 PASS / 21 FAIL / 11 SKIP,8 failed files ngoài diff; đó là index cũ, không phải kết quả HEAD mới. Ngày22/11 implementation chưa đổi, preflight source-ready nhưng package blocked.
 
-### CP2 — K1 package current baseline
+Tái hiện21fail, tách EPERM collector/.pytest_cache, PROJECT_SOURCE_UNSUPPORTED và WSL/bash/openssl; bug packet có file/test/command/env/SHA/raw error. Không baseline-only khi chưa đối chứng, không skip tests/delete cache/sửa permissions/core để xanh. Coordinator xử lý phần core. Fail phải propagate nonzero; fast mode incomplete; absent/invalid JSON/spawn/timeout/signal phải FAIL/UNKNOWN và có log.
 
-Audit/sửa lỗi harness thuộc owner (schema31, migration inventory, paths và lifecycle). Không đổi core/schema để chiều lab. Khi đủ verified resources: build full source và NSIS vào output nonce mới, `--publish never`; giữ actual beforePack và mọi pin/history verification.
+Không full suite sau mỗi sửa văn bản. Focused meaningful checks trong vòng code; full types/build/full suite khi khóa checkpoint, rerun theo implementation/candidate/failure mới.
 
-Chạy full production Main/preload/renderer/native SQLite/safeStorage/bundled ML thật; schema38/integrity/applied migrations đúng desktop role. Profile/HOME riêng; locale/theme và DB/key/model/trained_at giữ qua cold reopen; synthetic180train/4scores chỉ runtime smoke. Xác minh child PID/executable/listener thuộc app, hai lần quit không orphan; resource hashes không đổi. Chạy fixture NSIS repair/lifecycle và negative CLI/traversal/missing/tamper trong phạm vi riêng; dữ liệu giữ nguyên khi từ chối.
+## G3/G4 resources và bộ cài
 
-Không dọn diagnostics của record FAIL hoặc kill theo tên process chung. Chỉ cleanup đúng fixture có marker và đường dẫn tuyệt đối đã kiểm phạm vi; không gỡ OpsPilot đang dùng.
+Preflight22/11: build venv 3.12.7, required 3.12.10;5 package lệch; thiếu ml-runtime/controller-releases; chưa có Windows độc lập. Chuẩn bị environment build riêng đúng lock/nguồn đã duyệt; không đổi pin/lock hoặc venv đang dùng. Artifact thiếu phải có exact ID/hash/source/owner/điều kiện gỡ, không tự approve hoặc lấy artifact đang ghi từ worktree khác.
 
-### CP3 — K2 Windows độc lập / upgrade
+Đủ resource mới production build + beforePack thật + NSIS output nonce mới, publish never; source/compiled/ASAR/exe/installer/manifests hashes. Chạy existing full-app/installer/upgrade labs: SQLite038/safeStorage/bundled ML thật, persistence DB/key/model/UI/trained_at qua cold reopen/repair/supported upgrade, đúng child PID/port, quit không orphan, resource bytes giữ. Synthetic180train/4scores chỉ runtime smoke.
 
-Chỉ chạy production identity/default profile/shortcut/ordinary uninstall trên Windows thử độc lập không có bản đang dùng. Ghi OS/build/arch, Node/Python absent, installer SHA và trạng thái môi trường. Không dùng debug/profile override để thay production launch gate. Giữ DB/key/model/UI qua reopen/repair/supported upgrade, ordinary uninstall giữ user data theo policy và dọn đúng app/process/registry/shortcut.
+Bạn chạy hết full-app/native/NSIS fixture labs tự động an toàn trên máy local. Người dùng làm phần Windows độc lập/production identity/default profile/shortcuts/UAC và ordinary install/uninstall trong một lượt cuối. Chuẩn bị artifact/hướng dẫn chính xác trước; không cài/gỡ bản đang dùng, không account isolation thay clean OS. NotSigned ghi đúng; không tắt Windows security.
 
-Supported predecessor theo policy d302ee3/0.1.0; old source rebuild còn phụ thuộc dev Python phải ghi rõ. Không đổi version để giả upgrade, không coi repair cùng version là upgrade, không hứa mọi binary cũ tương thích. Negative missing/tamper trên copy/fixture, giữ dữ liệu. Ghi NotSigned đúng thực tế, không tắt Windows security để nhận PASS.
+Không tự SSH/kết nối/mutation VPS thật trong đợt này. VPS không cần cho install/ML bundled. Nếu demo cần SSH/deploy/live health, chuẩn bị input/UI hoặc existing CLI/expected result/cleanup đúng fixture để người dùng chạy. Không thêm feature, không đổi controller release/schema để phục vụ demo.
 
-Nếu Windows độc lập/resources chưa có: ghi BLOCKED/NOT_RUN với điều kiện gỡ cụ thể; tiếp CP1/CP4. Không chờ im lặng và không nhận K2/R11/release tổng hoàn tất.
+## G4 gói bàn giao và G5 một lượt người dùng
 
-### CP4 — Runbook và demo
+Runbook gọi đúng scripts đã test; backup/restore negative cases và round-trip tự động phải do bạn làm trước. Phần cần Windows identity/GUI/live credential ghi cho người dùng kiểm một lượt. Có log redaction, stop/rollback/cleanup. Demo8–10phút theo exact artifact SHA/feature baseline và ảnh dự phòng thực có.
 
-Trong `docs/delivery/windows-kim/**`, viết hướng dẫn prerequisite build khác prerequisite end-user, cài/mở app, backup userData có DB/key/model/UI (đóng app trước, giữ nhất quán và khả năng restore cùng Windows identity), log redaction và phục hồi khi installer abort. Không gửi DB/key/pickle trong evidence.
+Đọc và điền docs/delivery/windows-kim/manual-acceptance.md. Bàn giao một thư mục mới gồm installer, SHA256SUMS, report source/artifact identity, automation evidence, scripts đã test và checklist cuối. Điền trước version/hash/path/command/fixture; người dùng chỉ nhập secrets hoặc chọn máy/VPS thật. Không giao checklist trống rồi bắt người dùng làm phần có thể tự động.
 
-Demo8–10phút có timeline, expected output, đường lui khi môi trường lỗi, SHA và ảnh/video dự phòng nếu thực có. Chỉ mô tả feature baseline đã xác nhận. Live Git/database/VPS mới phải để coordinator xác nhận; không dùng production VPS/credentials trong task này.
+Tách LOCAL_PASS, WAITING_USER và BLOCKED_CODE/PACKAGE. READY_FOR_MANUAL_CHECK chỉ khi có artifact thực dùng được và không lỗi code biết trước trong luồng tự nghiệm thu. Full suite còn fail ngoài scope phải báo đúng ảnh hưởng/điều kiện gỡ, không tự miễn hoặc ghi PASS.
 
-## Lệnh nền tảng và quy tắc evidence
+Chưa actual artifact/lifecycle thì tài liệu vẫn DRAFT. Không nhận K1/K2/K3 hoặc release tổng hoàn tất từ lint/source tests.
 
-Chạy từ repo root với Node22 đã xác minh; dùng command/script thật phù hợp môi trường, không chạy build package khi preflight chưa đủ:
+## Bàn giao và tiếp tục
 
-```powershell
-git status --short --branch
-git rev-parse HEAD
-git merge-base --is-ancestor f699615 HEAD
-node --version
-pnpm.cmd --version
-pnpm.cmd --prefix app typecheck
-pnpm.cmd --prefix app exec tsc -p tsconfig.scripts.json --noEmit
-pnpm.cmd --prefix app exec vitest run
-git diff --check
-```
+Bên trong từng Gx/Kx vẫn commit/evidence theo scope, nhưng không chờ người dùng duyệt từng checkpoint. G0 báo một danh sách external input thiếu nếu bắt buộc, còn lại tiếp tới gói cuối. Codex review/retest candidate tổng hợp rồi người dùng tự nghiệm thu một lượt. Normal commit/push theo quyền; pipeline fail thì báo fail.
 
-Không chạy root `pnpm test` rồi tự kết luận Python đạt nếu script hardcode `.venv` không khớp environment. Tên CLI mới, focused checks và lint list do bạn chốt sau audit, ghi đầy đủ trong runbook để leader chạy lại. Không bịa số test.
+Acceptance run ưu tiên clean candidate. Nếu docs ledger đổi sau test, ghi code SHA đã test và ledger SHA riêng. Dirty/untracked implementation phải hash bytes liên quan, không chỉ git status. Raw logs/DB/key/models/binary ở ignored nonce output, Git chỉ sanitized proof/docs. Không overwrite evidence cũ.
 
-Evidence raw/binary ở ignored `app/.out-scripts/windows-delivery/<nonce>` hoặc output riêng của existing lab; docs chỉ commit bản sanitized, SHA256 và ảnh không lộ dữ liệu. Ghi rõ source commit + dirty diff hash nếu kiểm trước commit; nếu source thay đổi sau test phải đánh giá/chạy lại affected gates trước khi gắn PASS vào HEAD mới.
+    Gx/Kx — CHỜ REVIEW | BLOCKED
+    Code SHA / ledger SHA / branch / push state:
+    Đã làm / files / owner:
+    Requirement → PASS/FAIL/NOT_RUN/BLOCKED → evidence path + SHA256:
+    Commands / exit / actual counts / skips:
+    Environment / actual-synthetic-clean OS scope:
+    Artifact hashes / persistence / PID-port-registry cleanup:
+    Bug/blocker / owner / exact unblock condition:
+    Việc đang tiếp tục độc lập:
 
-## Format bàn giao bắt buộc
-
-Cập nhật task riêng trong cùng checkpoint. Không sửa board/DECISIONS; coordinator tổng hợp. Mỗi checkpoint commit riêng và normal push đúng nhánh khi gates tương ứng đạt; nếu chỉ partial thì nói partial, không đánh dấu task hoàn thành. Giữ lịch sử FAIL, skips và NOT_RUN. Báo blocker quá30phút kèm cách gỡ, tiếp phần độc lập.
-
-Trả báo cáo ngắn:
-
-```text
-CPx/Kx — CHỜ REVIEW hoặc BLOCKED
-SHA, branch, files changed và trạng thái push:
-Đã làm:
-Commands / exit code / actual test counts:
-Requirement → PASS/FAIL/NOT_RUN/BLOCKED → evidence path + SHA256:
-Environment và giới hạn actual/synthetic/clean OS:
-Artifact hashes; PID/port/registry cleanup; preservation (nếu đã chạy):
-Lỗi còn mở / repro / owner / điều kiện gỡ:
-Việc tiếp theo:
-```
-
-Leader chỉ nghiệm thu sau đọc diff và kiểm thử lại. Bắt đầu CP0/CP1 ngay với workspace hiện tại; không viết thay core của Sơn và không trả một lời hứa chung “đã hoàn thiện Windows”.
+Bắt đầu G0/G1 ngay. Mục tiêu hôm nay là gói sẵn sàng cho một lượt kiểm cuối: không chỉ source checks, không lịch nhiều ngày, không chuyển code bug thành việc thủ công.

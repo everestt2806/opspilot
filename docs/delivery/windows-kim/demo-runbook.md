@@ -67,78 +67,21 @@ Trước khi sao lưu:
 1. Đóng ứng dụng OpsPilot hoàn toàn qua giao diện (Menu -> Exit hoặc đóng cửa sổ chính).
 2. Đảm bảo tiến trình ứng dụng và tiến trình ML con đã dừng (xem Mục 4 để kiểm tra an toàn theo PID).
 
-Script PowerShell thực hiện sao lưu đồng bộ kèm tệp kê khai `backup-manifest.json`:
+Script PowerShell thực hiện sao lưu đồng bộ kèm tệp kê khai `backup-manifest.json` (sử dụng implementation chính thức tại `app/scripts/windows-delivery/backup-profile.ps1`):
 
 ```powershell
-# backup-opspilot.ps1
-$ErrorActionPreference = "Stop"
-
-$SOURCE_PROFILE = "$env:APPDATA\OpsPilot"
-if (-not (Test-Path $SOURCE_PROFILE)) {
-    Write-Error "Không tìm thấy thư mục profile OpsPilot tại: $SOURCE_PROFILE"
-    exit 1
-}
-
-$TIMESTAMP = Get-Date -Format 'yyyyMMdd_HHmmss'
-$BACKUP_TARGET = "D:\OpsPilot_Backups\Backup_$TIMESTAMP"
-New-Item -ItemType Directory -Path $BACKUP_TARGET -Force | Out-Null
-
-Write-Host "Bắt đầu sao lưu profile OpsPilot vào: $BACKUP_TARGET"
-
-# 1. Sao lưu cơ sở dữ liệu SQLite và WAL/SHM nếu tồn tại
-Copy-Item "$SOURCE_PROFILE\opspilot.db" -Destination "$BACKUP_TARGET\opspilot.db"
-if (Test-Path "$SOURCE_PROFILE\opspilot.db-wal") {
-    Copy-Item "$SOURCE_PROFILE\opspilot.db-wal" -Destination "$BACKUP_TARGET\opspilot.db-wal"
-}
-if (Test-Path "$SOURCE_PROFILE\opspilot.db-shm") {
-    Copy-Item "$SOURCE_PROFILE\opspilot.db-shm" -Destination "$BACKUP_TARGET\opspilot.db-shm"
-}
-
-# 2. Sao lưu DPAPI Master Key
-if (Test-Path "$SOURCE_PROFILE\credential-master-key.protected") {
-    Copy-Item "$SOURCE_PROFILE\credential-master-key.protected" -Destination "$BACKUP_TARGET\credential-master-key.protected"
-} else {
-    Write-Warning "Cảnh báo: Không tìm thấy credential-master-key.protected trong profile nguồn."
-}
-
-# 3. Sao lưu ML State (chứa mô hình và metadata huấn luyện)
-if (Test-Path "$SOURCE_PROFILE\ml-state") {
-    Copy-Item "$SOURCE_PROFILE\ml-state" -Destination "$BACKUP_TARGET\ml-state" -Recurse
-}
-
-# 4. Sao lưu Local Storage
-if (Test-Path "$SOURCE_PROFILE\Local Storage") {
-    Copy-Item "$SOURCE_PROFILE\Local Storage" -Destination "$BACKUP_TARGET\Local Storage" -Recurse
-}
-
-# 5. Tạo bảng kê khai tính toàn vẹn (backup-manifest.json)
-$files = Get-ChildItem -Path $BACKUP_TARGET -Recurse -File
-$manifestEntries = @()
-
-foreach ($file in $files) {
-    $relativePath = $file.FullName.Substring($BACKUP_TARGET.Length + 1).Replace('\', '/')
-    $hash = (Get-FileHash -Path $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-    $manifestEntries += [PSCustomObject]@{
-        path = $relativePath
-        size = $file.Length
-        sha256 = $hash
-    }
-}
-
-$manifest = [PSCustomObject]@{
-    backup_format = 1
-    created_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-    source_profile = $SOURCE_PROFILE
-    user_domain = $env:USERDOMAIN
-    user_name = $env:USERNAME
-    items = $manifestEntries
-}
-
-$manifestJson = $manifest | ConvertTo-Json -Depth 5
-[System.IO.File]::WriteAllText("$BACKUP_TARGET\backup-manifest.json", $manifestJson)
-
-Write-Host "Sao lưu hoàn tất thành công. Đã ghi nhận $($manifestEntries.Count) tệp vào backup-manifest.json."
+# Gọi script sao lưu profile chính thức:
+& "$PSScriptRoot\..\..\..\app\scripts\windows-delivery\backup-profile.ps1" `
+    -SourceProfile "$env:APPDATA\OpsPilot" `
+    -BackupTarget "D:\OpsPilot_Backups\Backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
 ```
+
+Chi tiết luồng xử lý bên trong `backup-profile.ps1`:
+1. Kiểm tra profile nguồn hợp lệ, từ chối symlink/reparse point.
+2. Sao lưu nhất quán `opspilot.db`, WAL/SHM (nếu có), `credential-master-key.protected` (DPAPI key).
+3. Sao lưu mô hình ML (`ml-state`): kiểm tra bắt buộc phải đủ cặp `state.pkl` và `meta.json` cho từng model.
+4. Sao lưu `Local Storage` (UI settings).
+5. Tạo `backup-manifest.json` định dạng chuẩn (format: 1, mã băm SHA-256 từng tệp, đường dẫn tương đối POSIX, không chứa tệp lạ).
 
 ---
 
@@ -150,71 +93,29 @@ Write-Host "Sao lưu hoàn tất thành công. Đã ghi nhận $($manifestEntrie
 > - **BẮT BUỘC** lưu giữ bản sao lưu dự phòng của profile hiện hữu (`OpsPilot_PreRestore_<timestamp>`) trước khi khôi phục.
 > - **BẮT BUỘC** kiểm tra toàn vẹn băm của bản sao lưu dựa trên `backup-manifest.json` trước khi tiến hành copy.
 
-Script PowerShell phục hồi an toàn:
+Script PowerShell phục hồi an toàn (sử dụng implementation chính thức tại `app/scripts/windows-delivery/restore-profile.ps1`):
 
 ```powershell
-# restore-opspilot.ps1
-param (
-    [Parameter(Mandatory=$true)]
-    [string]$BackupDir
-)
-$ErrorActionPreference = "Stop"
-
-if (-not (Test-Path "$BackupDir\backup-manifest.json")) {
-    Write-Error "Thư mục sao lưu không hợp lệ: Thiếu backup-manifest.json."
-    exit 1
-}
-
-# 1. Xác minh tính toàn vẹn của bản sao lưu trước khi khôi phục
-Write-Host "Đang xác minh tính toàn vẹn bản sao lưu từ manifest..."
-$manifestContent = Get-Content -Raw "$BackupDir\backup-manifest.json" | ConvertFrom-Json
-
-foreach ($item in $manifestContent.items) {
-    $filePath = Join-Path $BackupDir ($item.path.Replace('/', '\'))
-    if (-not (Test-Path $filePath)) {
-        Write-Error "Tệp sao lưu bị thiếu: $($item.path)"
-        exit 1
-    }
-    $calcHash = (Get-FileHash -Path $filePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($calcHash -ne $item.sha256) {
-        Write-Error "Mã băm không khớp cho tệp: $($item.path). Dự kiến: $($item.sha256), Thực tế: $calcHash"
-        exit 1
-    }
-}
-Write-Host "Xác minh toàn vẹn bản sao lưu: TẤT CẢ TỆP HỢP LỆ."
-
-# 2. Đảm bảo ứng dụng OpsPilot đã dừng hoàn toàn
-$PROFILE_DIR = "$env:APPDATA\OpsPilot"
-
-# 3. Lưu giữ profile hiện tại trước khi khôi phục (Pre-Restore Preservation)
-if (Test-Path $PROFILE_DIR) {
-    $PRE_RESTORE_BACKUP = "$env:APPDATA\OpsPilot_PreRestore_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-    Write-Host "Lưu trữ profile hiện tại vào: $PRE_RESTORE_BACKUP"
-    Move-Item -Path $PROFILE_DIR -Destination $PRE_RESTORE_BACKUP
-}
-
-# 4. Tạo thư mục profile mới và khôi phục dữ liệu đồng bộ
-New-Item -ItemType Directory -Path $PROFILE_DIR -Force | Out-Null
-
-Copy-Item "$BackupDir\opspilot.db" -Destination "$PROFILE_DIR\opspilot.db"
-if (Test-Path "$BackupDir\opspilot.db-wal") {
-    Copy-Item "$BackupDir\opspilot.db-wal" -Destination "$PROFILE_DIR\opspilot.db-wal"
-}
-if (Test-Path "$BackupDir\opspilot.db-shm") {
-    Copy-Item "$BackupDir\opspilot.db-shm" -Destination "$PROFILE_DIR\opspilot.db-shm"
-}
-if (Test-Path "$BackupDir\credential-master-key.protected") {
-    Copy-Item "$BackupDir\credential-master-key.protected" -Destination "$PROFILE_DIR\credential-master-key.protected"
-}
-if (Test-Path "$BackupDir\ml-state") {
-    Copy-Item "$BackupDir\ml-state" -Destination "$PROFILE_DIR\ml-state" -Recurse
-}
-if (Test-Path "$BackupDir\Local Storage") {
-    Copy-Item "$BackupDir\Local Storage" -Destination "$PROFILE_DIR\Local Storage" -Recurse
-}
-
-Write-Host "Khôi phục dữ liệu thành công! Khởi động lại ứng dụng OpsPilot để nạp dữ liệu."
+# Gọi script phục hồi an toàn:
+& "$PSScriptRoot\..\..\..\app\scripts\windows-delivery\restore-profile.ps1" `
+    -BackupDir "D:\OpsPilot_Backups\Backup_20261122_120000" `
+    -TargetProfile "$env:APPDATA\OpsPilot"
 ```
+
+Chi tiết luồng bảo vệ nghiêm ngặt của `restore-profile.ps1`:
+1. **Xác thực toàn diện trước khi đụng vào profile**:
+   - Kiểm tra `backup-manifest.json` tồn tại, định dạng `format: 1`.
+   - Danh sách `items` không rỗng và bắt buộc phải chứa `opspilot.db`.
+   - Kiểm tra mọi cặp mô hình ML trong manifest (`state.pkl` đi kèm `meta.json`).
+   - Kiểm tra mã băm SHA-256 và dung lượng của từng tệp trên đĩa khớp hoàn toàn manifest.
+   - **Chống Unlisted Files / Data Injection**: Quét toàn bộ tệp trong thư mục backup; nếu phát hiện tệp lạ trên đĩa mà không có trong manifest (ví dụ key/model chưa xác minh), từ chối và thoát ngay lập tức!
+   - Từ chối symlink / path traversal.
+2. **Không thay đổi profile nếu có bất kỳ lỗi xác thực nào**:
+   - Nếu kiểm tra thất bại, script dừng ngay lập tức; profile hiện tại giữ nguyên 100% vị trí và mã băm.
+3. **Thao tác phục hồi an toàn qua Staging**:
+   - Chỉ khi mọi kiểm tra đạt, copy đúng các tệp trong manifest vào thư mục staging tạm.
+   - Di chuyển profile hiện tại sang thư mục lưu giữ dự phòng `OpsPilot_PreRestore_<timestamp>`.
+   - Đưa thư mục staging thành profile chính thức. Khởi động lại ứng dụng OpsPilot để nạp dữ liệu.
 
 ---
 
@@ -296,28 +197,27 @@ Write-Host "QUAN TRỌNG: Hãy mở file log kiểm tra lại bằng mắt trư�
 ### 4.1. Dừng An toàn Tiến trình Theo Cổng & Đường dẫn Nhị phân (Targeted Teardown)
 
 Nếu cổng dịch vụ ML nội bộ 8765 bị chiếm dụng sau khi đóng app:
+Script PowerShell quản lý tiến trình an toàn (sử dụng implementation chính thức tại `app/scripts/windows-delivery/manage-process.ps1`):
+
 ```powershell
-# 1. Tra cứu PID đang lắng nghe cổng ML nội bộ 8765
-$portEntry = Get-NetTCPConnection -LocalPort 8765 -ErrorAction SilentlyContinue
-if ($portEntry) {
-    $targetPid = $portEntry.OwningProcess
-    $proc = Get-Process -Id $targetPid -ErrorAction SilentlyContinue
-    if ($proc) {
-        $procPath = $proc.Path
-        Write-Host "Phát hiện tiến trình sở hữu cổng 8765: PID=$targetPid, Path=$procPath"
-        # 2. Xác minh tiến trình có thuộc thư mục cài đặt OpsPilot không
-        $expectedDir = "$env:LOCALAPPDATA\Programs\OpsPilot"
-        if ($procPath -like "*$expectedDir*" -or $procPath -like "*ml-runtime*") {
-            Write-Host "Xác nhận đúng tiến trình OpsPilot. Tiến hành đóng PID $targetPid..."
-            Stop-Process -Id $targetPid -Force
-        } else {
-            Write-Warning "Cảnh báo: Cổng 8765 đang được sử dụng bởi tiến trình ngoài OpsPilot ($procPath). Không can thiệp, hãy chuyển cổng hoặc escalate kỹ thuật."
-        }
-    }
-} else {
-    Write-Host "Cổng 8765 đang ở trạng thái rảnh."
-}
+# 1. Tra cứu và kiểm tra quyền sở hữu tiến trình trên cổng 8765 (Mặc định: Inspect chỉ đọc)
+& "$PSScriptRoot\..\..\..\app\scripts\windows-delivery\manage-process.ps1" `
+    -Action Inspect `
+    -Port 8765 `
+    -InstallDir "$env:LOCALAPPDATA\Programs\OpsPilot"
+
+# 2. Dừng an toàn tiến trình (Chỉ thực hiện nếu tiến trình được chứng minh thuộc OpsPilot)
+& "$PSScriptRoot\..\..\..\app\scripts\windows-delivery\manage-process.ps1" `
+    -Action Stop `
+    -Port 8765 `
+    -InstallDir "$env:LOCALAPPDATA\Programs\OpsPilot"
 ```
+
+> [!NOTE]
+> Quy tắc kiểm tra sở hữu của `manage-process.ps1`:
+> - Lấy đường dẫn thực thi canonical của PID lắng nghe cổng 8765.
+> - So khớp nghiêm ngặt tiền tố đường dẫn với thư mục cài đặt gốc: `$procCanonical.StartsWith($installPrefix)`.
+> - **Tuyệt đối không dùng substring `*ml-runtime*`**: Bất kỳ tiến trình nào ngoài thư mục cài đặt (ví dụ: `D:\UnrelatedApp\ml-runtime\python.exe`) đều bị từ chối can thiệp và script trả về lỗi cảnh báo mà không dừng tiến trình lạ.
 
 ### 4.2. Khắc phục Sự cố Màn hình Trắng (Blank Screen / GPU ANGLE Crash)
 Chạy ứng dụng với cờ tắt tăng tốc đồ họa phần cứng:
