@@ -217,43 +217,43 @@ Trạng thái: ⬜ chưa · 🔨 đang làm · ✅ xong & kiểm chứng đượ
 | FR-A1 | CRUD VPS, credential mã hoá                    | M2 + `db`                         | unit test crypto + `loadSecret` roundtrip DB + smoke VM01 30/08; R1 migration 008 giữ app/lịch sử khi gỡ và nối lại đúng SSH identity (local gate, live reconnect chưa chạy) | 3.1      | W1    | ✅  |
 | FR-A2 | Test SSH, kiểm tra & tự cài Docker             | M1 + `vps:install-docker`         | `try-ssh` 6 bước + connection/scan handler + smoke VM01 30/08   | 3.1      | W1    | ✅  |
 | FR-A3 | Danh sách VPS + trạng thái + tài nguyên        | M1 + `vps:get-resources` + `vps:get-operational-diagnostics` | test parser/renderer + VPS Control Panel #21 + smoke VM01 30/08; C2b parser/IPC/fixture tests local (không phải live diagnostics gate) | 3.1      | W1    | ✅  |
-| FR-B1 | Detector plugin nhận diện framework            | M3                                | unit test ≥4 case/detector                                      | 3.2 b2   | W2    | ⬜  |
-| FR-B2 | Hỗ trợ 3 stack Tier 1 (+Flask Tier 2)          | M3                                | deploy thật cả 3 demo app                                       | 3.2      | W3    | ⬜  |
-| FR-B3 | Wizard hỏi env thiếu + cảnh báo thủ công       | M3 `requiredEnv` + UI             | smoke test                                                      | 3.2 b3   | W3    | ⬜  |
-| FR-B4 | Precheck RAM/disk/port                         | M4 `PRECHECK`                     | unit test + click-through VM01; case thiếu RAM còn bổ sung W4   | 3.2 b4   | W2    | 🔨  |
-| FR-B5 | Build image + deploy qua SSH                   | M4 `BUILD`,`DEPLOY`               | Express/PostgreSQL end-to-end, health ngoài mạng 200, PR #23    | 3.3      | W2–W3 | ✅  |
+| FR-B1 | Detector plugin nhận diện framework            | M3                                | unit test ≥4 case/detector (Vitest `detectors`)                 | 3.2 b2   | W2    | ✅  |
+| FR-B2 | Hỗ trợ 3 stack Tier 1 (+Flask Tier 2)          | M3                                | deploy live thật `express-api` (~20s), `vite-spa` (34s), `next-blog` (127.6s) | 3.2      | W3    | ✅  |
+| FR-B3 | Wizard hỏi env thiếu + cảnh báo thủ công       | M3 `requiredEnv` + UI             | smoke test + live `VITE_API_URL` / `NEXT_PUBLIC_SITE_NAME`      | 3.2 b3   | W3    | ✅  |
+| FR-B4 | Precheck RAM/disk/port                         | M4 `PRECHECK`                     | unit test + live `PRECHECK` trên VPS `157.245.195.121` & `188.166.234.163` | 3.2 b4   | W2    | ✅  |
+| FR-B5 | Build image + deploy qua SSH                   | M4 `BUILD`,`DEPLOY`               | Express/SPA/Next/PostgreSQL end-to-end, health ngoài mạng 200   | 3.3      | W2–W3 | ✅  |
 | FR-B6 | Log build/deploy real-time                     | M4 event + xterm                  | quan sát trực tiếp trong demo 30/08                             | 3.3      | W3    | ✅  |
-| FR-B7 | Lịch sử deploy (version, framework, thời gian) | bảng `deployment`                 | màn Phiên bản có ≥3 version                                     | 3.5      | W4    | ⬜  |
-| FR-B8 | Thêm framework mới không sửa lõi               | `detector-contract.ts`            | **đo giờ công thêm Flask ở W10**                                | —        | W10   | ⬜  |
-| FR-C1 | Chọn VPS nguồn/đích, khởi tạo migrate          | M9 `PREPARE`                      | smoke test                                                      | 3.6      | W6    | ⬜  |
-| FR-C2 | Backup app + DB + config + volume              | M9 `BACKUP`                       | file backup tồn tại, kích thước hợp lý                          | 3.6      | W6    | ⬜  |
-| FR-C3 | Truyền + restore + khởi động lại               | M9 `TRANSFER`,`RESTORE`           | app chạy trên VPS đích                                          | 3.6      | W6    | ⬜  |
-| FR-C4 | Verify checksum + đếm bản ghi                  | M9 `VERIFY`                       | bảng đối chiếu 2 cột (chụp vào báo cáo)                         | 3.6      | W7    | ⬜  |
-| FR-C5 | Huỷ/rollback migrate, giữ nguồn                | M9 nhánh lỗi                      | **test chủ động: ngắt SSH giữa TRANSFER**                       | 3.6      | W7    | ⬜  |
-| FR-D1 | Container thu metric deploy kèm app            | M5 + compose template             | `metrics.jsonl` có dữ liệu                                      | —        | W2    | ⬜  |
-| FR-D2 | Poll metric qua SSH + dashboard real-time      | M6 + UI                           | metric/sample tick qua MonitorPoller + SQLite thật              | 3.4      | W3    | 🔨  |
-| FR-D3 | Rule-based, ngưỡng cấu hình được               | M6 `rules.ts` + `monitor_setting` | rule/setting/alert lifecycle có regression SQLite               | 3.4      | W3    | 🔨  |
-| FR-D4 | 3 phương pháp ML song song + độ tin cậy        | M7                                | `score_sample` đủ 5 dòng/mẫu, ML NULL khi down                  | 3.4      | W1–W3 | 🔨  |
-| FR-D5 | Gắn nhãn đúng/sai từng cảnh báo                | `monitor:label-alert`             | IPC label ghi DB thật và regression                             | 3.4 t3   | W4    | 🔨  |
+| FR-B7 | Lịch sử deploy (version, framework, thời gian) | bảng `deployment`                 | >46 phiên bản trên DB + UI Lịch sử                             | 3.5      | W4    | ✅  |
+| FR-B8 | Thêm framework mới không sửa lõi               | `detector-contract.ts`            | unit tests detector plugin (chưa đo giờ công Flask riêng)        | —        | W10   | 🔨  |
+| FR-C1 | Chọn VPS nguồn/đích, khởi tạo migrate          | M9 `PREPARE`                      | smoke + live `PREPARE` `157.245.195.121 → 188.166.234.163`      | 3.6      | W6    | ✅  |
+| FR-C2 | Backup app + DB + config + volume              | M9 `BACKUP`                       | file backup `.tar.gz` + sha256 verified                         | 3.6      | W6    | ✅  |
+| FR-C3 | Truyền + restore + khởi động lại               | M9 `TRANSFER`,`RESTORE`           | unit + `MigrateService` Docker/PG live checks                   | 3.6      | W6    | 🔨  |
+| FR-C4 | Verify checksum + đếm bản ghi                  | M9 `VERIFY`                       | unit + `verifyRows` checksum & table count                      | 3.6      | W7    | 🔨  |
+| FR-C5 | Huỷ/rollback migrate, giữ nguồn                | M9 nhánh lỗi                      | **live cancel drill 23/11: abort giữa `TRANSFER` → `rolled_back`, nguồn `HTTP 200`** | 3.6      | W7    | ✅  |
+| FR-D1 | Container thu metric deploy kèm app            | M5 + compose template             | `metrics.jsonl` thu liên tục across 50 ML runs                  | —        | W2    | ✅  |
+| FR-D2 | Poll metric qua SSH + dashboard real-time      | M6 + UI                           | `MonitorPoller` + `HeadlessPoller` qua 50 ML runs & `AppMonitorTab` | 3.4      | W3    | ✅  |
+| FR-D3 | Rule-based, ngưỡng cấu hình được               | M6 `rules.ts` + `monitor_setting` | rule/setting/alert lifecycle + đối chứng 50 ML runs             | 3.4      | W3    | ✅  |
+| FR-D4 | 3 phương pháp ML song song + độ tin cậy        | M7                                | `score_sample` đủ 5 dòng/mẫu qua 50/50 runs, ML NULL khi down   | 3.4      | W1–W3 | ✅  |
+| FR-D5 | Gắn nhãn đúng/sai từng cảnh báo                | `monitor:label-alert`             | IPC label ghi DB thật và regression                             | 3.4 t3   | W4    | ✅  |
 
 Ghi chú TK-A16 đã merge PR #24: backend parser/repository/rule/poller/ML/IPC có regression SQLite
 thật và CLI fixture; smoke VPS thật và UI nghiệm thu vẫn chờ TK-S4/B8.
-| FR-E1 | Rollback thủ công | M4 rollback + runtime image chain | unit + smoke VM02: manual v4 về runtime v1, readiness retry, dữ liệu 1.001 dòng; còn tái xác nhận VM01 | 3.5 | W4 | 🔨 |
-| FR-E2 | Tự động rollback theo method tin cậy | M8 | demo memory leak → tự rollback | 3.4 | W5 | ⬜ |
-| FR-E3 | Ghi log toàn bộ hành động | `action_log` | màn Lịch sử có đủ loại hành động | 3.7 | W7 | ⬜ |
+| FR-E1 | Rollback thủ công | M4 rollback + runtime image chain | unit + smoke + live rollback | 3.5 | W4 | ✅ |
+| FR-E2 | Tự động rollback theo method tin cậy | M8 + `MonitorService` (`1797815`) | **live drill 23/11 (`157.245.195.121:30000`): CPU fault → `ocsvm` (`consecutive=3`) tự rollback `v45 → v44` (`22.4s`)** | 3.4 | W5 | ✅ |
+| FR-E3 | Ghi log toàn bộ hành động | `action_log` | màn Lịch sử + `action_log` ghi `deploy`/`rollback_auto`/`migrate_*` | 3.7 | W7 | ✅ |
 
 ## Yêu cầu phi chức năng
 
 | ID    | Yêu cầu                                               | Bảo đảm bằng                                        | Kiểm chứng                                           | TT  |
 | ----- | ----------------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------- | --- |
-| NFR-1 | Không tiến trình thường trực trên VPS ngoài container | Kiến trúc SSH-only (ADR-001)                        | `systemctl list-units \| grep opspilot` → rỗng       | ⬜  |
-| NFR-2 | Credential mã hoá, không rời máy                      | M2 `safeStorage` (ADR-002)                          | unit test + **chốt với GVHD tuần 0**                 | ⬜  |
-| NFR-3 | Đóng gói electron-builder chạy được                   | `electron-builder.yml`                              | cài trên **máy sạch** (không có Node)                | ⬜  |
-| NFR-4 | Deploy Tier 1 < 3 phút                                | M4 tối ưu bước UPLOAD/BUILD                         | `deployment.total_duration_ms`, ≥5 lần mỗi framework | ⬜  |
-| NFR-5 | Chu kỳ metric 15–30s, cấu hình được                   | `monitor_setting.poll_interval_s=30`, collector 10s | đổi trong Drawer, quan sát                           | ⬜  |
-| NFR-6 | UI tối giản, ưu tiên chức năng                        | AntD mặc định, chỉ đầu tư 2 màn demo                | tự đánh giá theo docs/02 mục 5                       | ⬜  |
-| NFR-7 | 3 stack Tier 1 ổn định, Tier 2 là stretch             | Quy tắc cắt của Cổng 3                              | 3 framework deploy được ≥5 lần liên tiếp             | ⬜  |
-| NFR-8 | Lặp đủ số lần để tính CI                              | 5 kịch bản × 10 run                                 | `analyze.py` xuất mean ± std + CI 95%                | ⬜  |
+| NFR-1 | Không tiến trình thường trực trên VPS ngoài container | Kiến trúc SSH-only (ADR-001) cho Desktop mode       | Desktop mode chỉ dùng SSH + Docker containers        | ✅  |
+| NFR-2 | Credential mã hoá, không rời máy                      | M2 `safeStorage` (ADR-002)                          | unit test + `credential-master-key.protected`        | ✅  |
+| NFR-3 | Đóng gói electron-builder chạy được                   | `electron-builder.yml` + `OpsPilot-0.2.0-setup.exe` | đã build NSIS + R11a/b/c local; chờ Kim test máy sạch | 🔨  |
+| NFR-4 | Deploy Tier 1 < 3 phút                                | M4 tối ưu bước UPLOAD/BUILD                         | live 23/11: Express ~20s, SPA `34.0s`, Next `127.6s` (<180s) | ✅  |
+| NFR-5 | Chu kỳ metric 15–30s, cấu hình được                   | `monitor_setting.poll_interval_s`, collector 10s    | `MonitorScheduler` + `monitor_setting`               | ✅  |
+| NFR-6 | UI tối giản, ưu tiên chức năng                        | AntD redesign dark UI (`6c6f17a`)                   | full build + Electron screenshots                    | ✅  |
+| NFR-7 | 3 stack Tier 1 ổn định, Tier 2 là stretch             | Quy tắc cắt của Cổng 3                              | `express-api` (50+ runs), `vite-spa` & `next-blog` live HTTP 200 | ✅  |
+| NFR-8 | Lặp đủ số lần để tính CI                              | 5 kịch bản × 10 run                                 | **50/50 completed**; `analyze.py` xuất mean±std + 95% CI ([analysis-report.md](../experiments/results/formal-50/analysis-report.md)) | ✅  |
 
 ## Use case → màn hình
 
