@@ -217,13 +217,19 @@ export class ActivationRepository {
   }
 
   route(episodes: ActivationEpisode[], byteOffset: number): number | null {
-    const episode = episodes.find(
-      (candidate) =>
+    // Prefer the newest matching episode (highest id) so reused inodes/offsets never route to stale closed history.
+    let matched: ActivationEpisode | undefined
+    for (const candidate of episodes) {
+      if (
         candidate.state !== 'aborted' &&
         byteOffset >= candidate.startOffset &&
-        (candidate.endOffset === null || byteOffset < candidate.endOffset)
-    )
-    return episode?.deploymentId ?? null
+        (candidate.endOffset === null || byteOffset < candidate.endOffset) &&
+        (!matched || candidate.id > matched.id)
+      ) {
+        matched = candidate
+      }
+    }
+    return matched?.deploymentId ?? null
   }
 
   rotate(

@@ -430,4 +430,20 @@ describe('C02 activation episodes', () => {
       .get(ep1) as { state: string; start_offset: number; end_offset: number }
     expect(closed).toEqual({ state: 'closed', start_offset: 2724838, end_offset: 2724838 })
   })
+
+  it('prefers newest matching episode when same stream_generation is reused after reset', () => {
+    const db = seed()
+    const activation = new ActivationRepository(db)
+    const oldEp = activation.prepare(1, 1, { generation: '64769:794763' }, 1, 'deploy')
+    activation.activate(oldEp, null)
+    activation.closeActive(1, 14363)
+
+    addDeployment(db, 2)
+    const newEp = activation.prepare(1, 2, { generation: '64769:794763' }, 2820, 'deploy')
+    activation.activate(newEp, null)
+
+    const episodes = activation.episodes(1, '64769:794763')
+    expect(activation.route(episodes, 2820)).toBe(2)
+    expect(activation.route(episodes, 10244)).toBe(2)
+  })
 })
