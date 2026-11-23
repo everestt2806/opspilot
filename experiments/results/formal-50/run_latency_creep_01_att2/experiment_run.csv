@@ -1,0 +1,2 @@
+id,scenario,repeat_index,attempt_index,deployment_id,vps_id,baseline_start_ts,train_at_ts,fault_start_ts,fault_end_ts,run_end_ts,clock_offset_ms,detection_grace_s,train_sample_count,fault_params_json,status,abort_reason
+4,latency_creep,1,2,6,1,2026-11-21T15:32:46.485160Z,2026-11-21T16:02:47.929163Z,2026-11-21T16:17:50.454546Z,,,441,60,179,,aborted,apply_fault_failed: Container 'opspilot-loadgen-express-api' không tồn tại hoặc không thể inspect trên VPS (mã=124): SSH_TIMEOUT

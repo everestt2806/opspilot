@@ -1,0 +1,17 @@
+{
+  "run_id": 34,
+  "scenario": "cpu_spike",
+  "repeat_index": 8,
+  "attempt_index": 1,
+  "protocol_version": "1.0",
+  "status": "completed",
+  "clock_offset_ms": 413,
+  "detection_grace_s": 60,
+  "counts": {
+    "metric_sample": 453,
+    "score_sample": 2265,
+    "alert": 12,
+    "experiment_run": 1
+  },
+  "shard": "shard1"
+}

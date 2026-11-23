@@ -1,0 +1,238 @@
+{
+  "generated_at_utc": "2026-11-23T01:17:50Z",
+  "mode": "preflight_only",
+  "overall": "BLOCKED",
+  "selected": {
+    "vps_id": 1,
+    "app_id": 2,
+    "deployment_id": 44
+  },
+  "ssh_manager_snapshot": {
+    "status": "NOT_PROVIDED",
+    "reason": null
+  },
+  "gates": [
+    {
+      "name": "PROFILE_READ_ONLY",
+      "status": "PASS",
+      "reason": "SQLITE_READONLY_QUERY_ONLY",
+      "details": null
+    },
+    {
+      "name": "SELECTION",
+      "status": "PASS",
+      "reason": "PROFILE_RECORDS_FOUND",
+      "details": {
+        "vps_id": 1,
+        "app_id": 2,
+        "deployment_id": 44
+      }
+    },
+    {
+      "name": "VPS_ACTIVE",
+      "status": "PASS",
+      "reason": "VPS_NOT_ARCHIVED",
+      "details": null
+    },
+    {
+      "name": "APP_DEPLOYMENT_OWNERSHIP",
+      "status": "PASS",
+      "reason": "APP_DEPLOYMENT_LINKS_MATCH",
+      "details": null
+    },
+    {
+      "name": "ML_ENDPOINT",
+      "status": "PASS",
+      "reason": "ML_HEALTH_AND_STATUS_OK",
+      "details": {
+        "version": "0.1.0"
+      }
+    },
+    {
+      "name": "ML_MODEL_STATUS",
+      "status": "PASS",
+      "reason": "ML_STATUS_READ_ONLY",
+      "details": {
+        "trained": true,
+        "sample_count": 453,
+        "min_samples_required": 150
+      }
+    },
+    {
+      "name": "APP_HEALTH",
+      "status": "PASS",
+      "reason": "APP_HEALTH_POLICY_OK",
+      "details": {
+        "status_code": 200
+      }
+    },
+    {
+      "name": "SSH_PIN_CONFIG",
+      "status": "PASS",
+      "reason": "PIN_PRESENT",
+      "details": null
+    },
+    {
+      "name": "SSH_CREDENTIAL",
+      "status": "PASS",
+      "reason": "SSH_KEY_FILE_AVAILABLE",
+      "details": null
+    },
+    {
+      "name": "SSH_HOST_KEY",
+      "status": "PASS",
+      "reason": "RUNNER_STRICT_HOST_KEY_CHECK_PASSED",
+      "details": null
+    },
+    {
+      "name": "SSH_TRANSPORT",
+      "status": "PASS",
+      "reason": "RUNNER_AUTHENTICATED_AND_READONLY_COMMAND_SUCCEEDED",
+      "details": null
+    },
+    {
+      "name": "VPS_RESOURCES",
+      "status": "PASS",
+      "reason": "READ_ONLY_RESOURCE_AND_CONTAINER_INVENTORY",
+      "details": {
+        "source": "experiment_runner.SystemSshClient",
+        "collected_at_utc": "2026-11-23T01:17:50Z",
+        "target_vps_id": 1,
+        "endpoint": "157.245.195.121:22",
+        "freshness_limit_seconds": 300
+      }
+    },
+    {
+      "name": "PROTOCOL_PLATFORM",
+      "status": "PASS",
+      "reason": "SUPPORTED_LINUX_PLATFORM",
+      "details": {
+        "os_id": "ubuntu",
+        "architecture": "x86_64"
+      }
+    },
+    {
+      "name": "PROTOCOL_VCPU",
+      "status": "PASS",
+      "reason": "VCPU_TARGET",
+      "details": {
+        "actual": 2,
+        "required": 2
+      }
+    },
+    {
+      "name": "PROTOCOL_RAM_CAPACITY",
+      "status": "PASS",
+      "reason": "RAM_CAPACITY_REFERENCE",
+      "details": {
+        "actual": 4106088448,
+        "required": 4000000000
+      }
+    },
+    {
+      "name": "PROTOCOL_RAM_AVAILABLE",
+      "status": "PASS",
+      "reason": "RAM_AVAILABLE_GUARD",
+      "details": {
+        "actual": 3375157248,
+        "required_strictly_greater_than": 536870912
+      }
+    },
+    {
+      "name": "PROTOCOL_DISK_CAPACITY",
+      "status": "PASS",
+      "reason": "DISK_40GB_TARGET",
+      "details": {
+        "actual": 82086711296,
+        "required": 40000000000
+      }
+    },
+    {
+      "name": "PROTOCOL_DISK_FREE",
+      "status": "PASS",
+      "reason": "DEPLOY_FREE_DISK_GUARD",
+      "details": {
+        "actual": 77422669824,
+        "required_strictly_greater_than": 2000000000
+      }
+    },
+    {
+      "name": "PROTOCOL_NTP_SYNC",
+      "status": "PASS",
+      "reason": "NTP_SYNC_REQUIRED",
+      "details": {
+        "ntp_sync": "yes"
+      }
+    },
+    {
+      "name": "PROTOCOL_CLOCK_OFFSET",
+      "status": "PASS",
+      "reason": "CLOCK_OFFSET_WITHIN_LIMIT",
+      "details": {
+        "offset_ms": 412,
+        "max_abs_offset_ms": 2000
+      }
+    },
+    {
+      "name": "PROTOCOL_DOCKER",
+      "status": "PASS",
+      "reason": "DOCKER_COMPOSE_REQUIRED",
+      "details": null
+    },
+    {
+      "name": "SELECTED_DEPLOYMENT",
+      "status": "PASS",
+      "reason": "CURRENT_DEPLOYMENT_MUST_BE_RUNNING",
+      "details": {
+        "deployment_status": "running"
+      }
+    },
+    {
+      "name": "SELECTED_APP_ORIGIN",
+      "status": "PASS",
+      "reason": "OPS_PILOT_APP_RECORD",
+      "details": null
+    },
+    {
+      "name": "PROTOCOL_APP_STACK",
+      "status": "PASS",
+      "reason": "EXPECTED_EXPERIMENT_APP_STACK",
+      "details": null
+    },
+    {
+      "name": "DEDICATED_HOST",
+      "status": "PASS",
+      "reason": "ONLY_SELECTED_APP_STACK_RUNNING",
+      "details": {
+        "db_running_app_count": 1,
+        "running_container_count": 3,
+        "required_service_count": 3
+      }
+    },
+    {
+      "name": "EXPERIMENT_PROVIDER_METADATA",
+      "status": "PASS",
+      "reason": "PROVIDER_AND_REGION_REQUIRED",
+      "details": null
+    },
+    {
+      "name": "DECLARED_EXPERIMENT_SPECS",
+      "status": "PASS",
+      "reason": "DECLARED_2CPU_4GB_40GB_TARGET",
+      "details": null
+    },
+    {
+      "name": "PROTOCOL_PROVIDER_PAIR",
+      "status": "NOT_RUN",
+      "reason": "SECOND_VPS_NOT_SELECTED_OR_VERIFIED",
+      "details": null
+    }
+  ],
+  "side_effects": {
+    "experiment_run_written": false,
+    "deployment_started": false,
+    "ml_reset_train_ingest_called": false,
+    "loadgen_or_fault_called": false,
+    "remote_cleanup_called": false
+  }
+}

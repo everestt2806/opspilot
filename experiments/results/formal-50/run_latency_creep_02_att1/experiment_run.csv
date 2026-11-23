@@ -1,0 +1,2 @@
+id,scenario,repeat_index,attempt_index,deployment_id,vps_id,baseline_start_ts,train_at_ts,fault_start_ts,fault_end_ts,run_end_ts,clock_offset_ms,detection_grace_s,train_sample_count,fault_params_json,status,abort_reason
+8,latency_creep,2,1,10,2,2026-11-21T18:52:03.222597Z,2026-11-21T19:22:05.133821Z,2026-11-21T19:37:06.491765Z,2026-11-21T19:57:06.491765Z,2026-11-21T20:07:16.265311Z,412,60,180,,completed,

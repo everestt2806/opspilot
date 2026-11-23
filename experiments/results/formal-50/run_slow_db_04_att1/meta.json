@@ -1,0 +1,17 @@
+{
+  "run_id": 12,
+  "scenario": "slow_db",
+  "repeat_index": 4,
+  "attempt_index": 1,
+  "protocol_version": "1.0",
+  "status": "completed",
+  "clock_offset_ms": 414,
+  "detection_grace_s": 60,
+  "counts": {
+    "metric_sample": 455,
+    "score_sample": 2275,
+    "alert": 9,
+    "experiment_run": 1
+  },
+  "shard": "shard1"
+}

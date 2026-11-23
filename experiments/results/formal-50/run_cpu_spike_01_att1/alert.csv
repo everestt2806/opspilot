@@ -1,0 +1,4 @@
+id,deployment_id,metric_sample_id,method,ts_vps,ts_resolved,peak_score,label,acted,experiment_run_id
+3,3,410,ensemble,2026-11-21T13:13:33Z,2026-11-21T13:14:23Z,0.7759459857707803,,none,1
+1,3,410,iforest,2026-11-21T13:13:33Z,2026-11-21T13:14:33Z,0.7759459857707803,,none,1
+2,3,410,ocsvm,2026-11-21T13:13:33Z,2026-11-21T13:15:03Z,0.8486627756834029,,none,1

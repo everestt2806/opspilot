@@ -1,0 +1,2 @@
+id,scenario,repeat_index,attempt_index,deployment_id,vps_id,baseline_start_ts,train_at_ts,fault_start_ts,fault_end_ts,run_end_ts,clock_offset_ms,detection_grace_s,train_sample_count,fault_params_json,status,abort_reason
+13,memory_leak,5,1,15,1,2026-11-22T02:28:03.947470Z,2026-11-22T02:58:05.103529Z,2026-11-22T03:13:06.625804Z,2026-11-22T03:33:06.625804Z,2026-11-22T03:43:17.804174Z,404,60,180,,completed,
