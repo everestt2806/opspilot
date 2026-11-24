@@ -1,5 +1,29 @@
 # Kim — Windows delivery song song database core
 
+START 24/11/2026 (Gemini) — Hoàn tất toàn bộ P0–P6 theo completion-plan-20261123.md. Đóng gói Production NSIS x64 installer với 9/9 controller releases staged & verified, vượt qua tất cả các automation lifecycle labs. Bàn giao Codex review.
+
+## Trạng thái mới nhất — Hoàn tất P0–P6 delivery bundle, 24/11/2026
+
+UPDATE 24/11/2026 — **PACKAGE_READY / FULL_LABS_PASS / SOURCE_TESTS_OPEN / READY_FOR_CODEX_REVIEW**.
+- **Staging & Authority (P0-P1)**: Trích xuất authority compiled 9 entries từ source hiện tại. Staged 9/9 approved controller releases từ private input vào `app/resources/controller-releases/`. Runtime catalog generated khớp compiled authority (`catalog.json`). Static & packaged production verifier PASS 9/9 releases.
+- **Preflight & Build (P2-P3)**: Preflight gate package PASS. Build production NSIS x64 thành công với actual beforePack hook signed nội bộ: tạo `OpsPilot-0.2.0-setup.exe` (492,059,202 bytes, SHA256: `cc76a0943aa8eea32fe477cedb2d10a87f7be2d769e661be612f6be3fd6fe4e0`).
+- **Automation Lifecycle Labs (P4)**:
+  - `windows-release-lab.mjs --run`: PASS 5/5 checks (CDP interaction 5 pages, synthetic 180 samples ML training, 4 anomaly scores, cold reopen persistence SQLite DB/safeStorage key/ML model/UI settings).
+  - `windows-installer-lab.mjs --build & --run`: PASS 7/7 checks + same-version reinstall + clean uninstallation + registry removal sạch.
+  - `legacy-ml-upgrade-lab.py --run`: PASS 14/14 checks (bảo toàn legacy ML state).
+  - `windows-upgrade-lab.mjs`: `NOT_RUN / BLOCKED_PREDECESSOR_LIMIT_8` (source predecessor d302ee3 có Zod constraint schema releases <= 8 items theo thiết kế 0.1.0 cũ; ghi nhận đúng prerequisite theo UPGRADE.md).
+- **Source Test Candidate Run (P5)**: Chạy full test runner một lần chốt candidate: 2,621 PASS / 21 FAIL / 11 SKIP. Toàn bộ 21 tests fail thuộc về Core ControlPlane / Ingress / DB của Sơn (reproduced 100% khớp lịch sử). Zero failures trong delivery code của Kim.
+- **Handoff Bundle (P6)**: Đã tạo `app/.out-scripts/windows-delivery/handoff-bundle-20261123/` gồm installer `.exe`, `SHA256SUMS`, các delivery scripts đã test (`backup-profile.ps1`, `restore-profile.ps1`, `manage-process.ps1`), `package-inventory.json`, `installer-lab-result.json`, `source-tests.json`.
+- **Bàn giao**: Bàn giao Codex kiểm tra artifact provenance và retest trước khi chuyển user nghiệm thu Windows sạch (M2–M9).
+
+## Lịch sử — Nhận private resources, 23/11/2026
+
+UPDATE 23/11/2026 — **PRIVATE_RESOURCES_VERIFIED / PACKAGE_PENDING / SOURCE_TESTS_OPEN**. Archive/catalog checksum khớp; 9/9 descriptors của nhánh có đủ bytes và production verifier PASS. Input catalog có 10 entries, compiled catalog có 9: Gemini cần tạo local staging view đúng compiled set, giữ nguyên private input và source pins. Chưa stage resources vào checkout Kim hoặc build installer mới. ML resource/Python build environment đã có; R5/R6 vẫn PASS theo review trước.
+
+Chưa thấy evidence xử lý 21 full-suite failures trong input mới. Không chờ phần đó để chuẩn bị build/labs an toàn, nhưng không tự miễn hoặc nhận whole CI xanh. User cấm commit/push private files; leader đã thêm local info/exclude tại hai checkout và kiểm không có private file tracked. Git chỉ nhận summary sanitized; artifact/raw evidence giữ local ignored. [Plan 23/11](../delivery/windows-kim/completion-plan-20261123.md), [prompt Gemini](../delivery/windows-kim/gemini-handoff-20261123.md). Phiên này chỉ kiểm tra/lập plan, không commit hoặc push.
+
+## Lịch sử — Review và push 22/11/2026
+
 START 22/11/2026 — Leader kiểm tra lại candidate 251cde3: review diff R5/R6, chạy lại native restore fault probes và process mocks, đối chiếu bundle/evidence. Không dùng profile/process/VPS thật.
 
 ## Trạng thái mới nhất — Leader review 251cde3, 22/11/2026

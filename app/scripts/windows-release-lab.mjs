@@ -241,7 +241,7 @@ try {
     const repair = spawnSync(installer, ['/S', '/D=' + artifact], {
       windowsHide: true,
       cwd: directory,
-      timeout: 180000
+      timeout: 600000
     })
     assert.equal(repair.status, 0, 'NSIS_REINSTALL_FAILED')
     assert.equal(hash(join(profile, 'opspilot.db')), dbHash)

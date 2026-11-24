@@ -1,5 +1,7 @@
 # Kế hoạch hoàn tất Windows delivery
 
+> **Kế hoạch hiện hành 23/11/2026:** [completion-plan-20261123.md](completion-plan-20261123.md). User đã cung cấp private resources; 9 required releases verified, nhưng input catalog có 10 entries cần staging đúng compiled catalog. Dùng plan mới và [prompt Gemini mới](gemini-handoff-20261123.md). Nội dung 22/11 dưới đây là lịch sử, không còn là chỉ dẫn thực thi hiện hành.
+
 Cập nhật theo yêu cầu mới **22/11/2026: hoàn thiện phần tự động trong hôm nay, trước một lượt tự nghiệm thu của người dùng**. Codex lập kế hoạch/review/kiểm thử; Gemini triển khai. Lịch nhiều ngày trước đây đã được thay bằng lịch trong ngày ở mục4. Tiếp tục từ eeb801fa5f5694c56feaf37543fb2a5b04b4f7f8 trên feat/kim-windows-delivery-20261116, giữ baseline f699615. Hạn dự án04/12 chỉ là bối cảnh, không dùng để kéo dài đầu việc này.
 
 ## 1. Đầu ra phải hoàn tất

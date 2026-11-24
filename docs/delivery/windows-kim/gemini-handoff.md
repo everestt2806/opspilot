@@ -1,5 +1,7 @@
 # Prompt hoàn tất Windows delivery cho Gemini
 
+> **Thay bằng prompt 23/11/2026:** [gemini-handoff-20261123.md](gemini-handoff-20261123.md) và [plan hiện hành](completion-plan-20261123.md). Không thực thi lại backlog T1–T3/lịch 22/11 hoặc trạng thái thiếu resources trong prompt lịch sử bên dưới.
+
 Cập nhật 22/11/2026. Nội dung này thay prompt khởi động CP0/CP1 cũ.
 
 ---

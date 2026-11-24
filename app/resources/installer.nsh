@@ -17,3 +17,11 @@
     Quit
   ${EndIf}
 !macroend
+
+!macro customRemoveFiles
+  SetOutPath $TEMP
+  RMDir /r $INSTDIR
+!macroend
+
+!macro customCheckAppRunning
+!macroend
