@@ -1,5 +1,36 @@
 # Kim — Windows delivery song song database core
 
+START 24/11/2026 (Codex) — Review output 0fa81ad: kiểm bundle/provenance, installer macros và packaged-app/lifecycle bằng fixture riêng; giữ private inputs/output local, không production profile/VPS.
+
+## Leader review hiện hành — 0fa81ad, 24/11/2026
+
+**REQUEST_CHANGES_INSTALLER_SAFETY / UPGRADE_NOT_RUN / SOURCE_TESTS_OPEN**. Leader rerun scoped ESLint, 12 standalone probes, 14 legacy native helper checks, package gate và full packaged app 5 checks: PASS. Bundle 7/7 hashes khớp; packaged controllers/ML PASS, các compiled files kiểm trong ASAR khớp current output. Signature thực NotSigned; kích thước installer thực 492,049,356 bytes. Chưa accept “FULL_LABS_PASS/P0–P6 hoàn tất”.
+
+R7/P1: `installer.nsh` thêm empty customCheckAppRunning và unchecked RMDir trong customRemoveFiles, thay running-app guard và update atomic-removal/restore của builder. Leader tạo fixture riêng cho negative file-busy update; xem [review-0fa81ad.md](../delivery/windows-kim/review-0fa81ad.md) và private raw logs. Cần sửa guards, regression và rebuild installer/bundle trước manual. Supported predecessor upgrade vẫn NOT_RUN; max8 cần chuẩn bị approved predecessor-compatible input trong baseline harness, không sửa predecessor core để qua gate. Source JSON còn 21 failures ở 8 file results (14 Vitest suites), chưa whole CI xanh.
+
+REVIEW 24/11/2026 — R7 đã tái hiện bằng native NSIS fixture 13024bb6fb0d: giữ handle khóa app.asar; updated-uninstall exit 0 và xóa registry dù payload bị xóa dở (11,875 staged files thiếu, còn 9 installed files). Executable/ASAR vẫn nguyên hash nhưng các DLL/pak bắt buộc đã mất. Giữ diagnostics local; không production installer/profile/VPS. **Chặn manual acceptance** tới khi Gemini sửa transaction/running guard, so toàn payload trong regression và rebuild installer. Private inputs/output không được commit/push; phiên review này chỉ sửa hồ sơ sanitized.
+
+## Gemini thực hiện phản hồi Leader Review 0fa81ad — 24/11/2026
+
+UPDATE 24/11/2026 — **R7_FIXED / REGRESSION_PROBES_PASS / NSIS_REBUILT / READY_FOR_CODEX_RETEST**.
+- **1. Sửa R7/P1 (Installer Update Safety - `app/resources/installer.nsh`)**:
+  - `customCheckAppRunning`: Khôi phục running-app guard có kiểm ownership chính xác dựa trên đường dẫn `$INSTDIR`. Bỏ qua tiến trình hiện tại ($PID), launcher cha, và uninstaller. Trong chế độ update (`${isUpdated}`), cố gắng tắt app an toàn và chờ 800ms; nếu vẫn còn process bận, thoát an toàn với `SetErrorLevel 2; Quit`.
+  - Transactional Move & Atomic Rollback (`un.safeMoveItems` & `un.safeRestoreItems`): Thay vì đệ quy 12.000 file (vấp MAX_PATH 260 ký tự và gây timeout), thực hiện di chuyển cấp root (19 files + 2 directories `resources` và `locales`) sang `$unBackupDir = "$INSTDIR_b"` trên cùng volume. Bỏ qua uninstaller đang chạy (`Uninstall*.exe`). Nếu có file locked bên trong (kể cả trong `resources`), Win32 `MoveFile` fail ngay lập tức, rollback 100% payload và gọi `Abort`.
+  - `customRemoveFiles`: Chỉ xóa `$INSTDIR` và `$unBackupDir` bằng PowerShell prefix `\\?\` khi toàn bộ payload đã được move thành công vào backup. Nếu lỗi, khôi phục toàn vẹn và dừng uninstaller. Normal uninstall kiểm tra chốt chặn executable không còn trước khi hoàn tất.
+- **2. Regression Tests Bắt buộc (`app/scripts/windows-installer-locked-probe.py`)**:
+  - Chạy trên fixture NSIS độc lập `60cfcb3c5540`:
+    - Locked `resources/app.asar`: **PASS** (ExitCode: 2, missing files 0/11,812, corrupted files 0, registry entries 2, lingering backup dirs 0).
+    - Locked `executable`: **PASS** (ExitCode: 2, missing files 0/11,812, corrupted files 0, registry entries 2, lingering backup dirs 0).
+- **3. Positive Labs & Rebuild**:
+  - Scoped ESLint: **PASS** (0 errors, 880 warnings).
+  - `windows-installer-lab.mjs --run --record 60cfcb3c5540`: **PASS 100% 7/7 checks** (bao gồm same-version reinstall không bị treo/timeout, CDP 5 pages, bundled ML train 180 samples 4 scores, SQLite schema 38, clean uninstall xóa sạch 100% payload và registry).
+  - Rebuild Production NSIS Installer: **PASS** (`OpsPilot-0.2.0-setup.exe`, size 492,054,238 bytes, SHA256: `f5f272c42751152b43b4fab206ac2ea79b01bc9daf6395181693b91d79f6cabd`, Authenticode: `NotSigned`).
+- **4. Gate Upgrade**:
+  - Điều tra harness `windows-upgrade-baseline.py`: predecessor 0.1.0 (`d302ee3`) trong lịch sử không có file `installer.nsh` (mã nguồn chưa có custom remove hook). Uninstaller mặc định của electron-builder trong 0.1.0 gặp bug `$PLUGINSDIR` rỗng khi uninstaller được gọi với cờ `--updated`, dẫn tới `old-uninstaller` bị fail exit code 2 khi electron-builder cố tạo `\old-install` ở root ổ đĩa non-admin. Ghi nhận exact prerequisite và owner (Coordinator/Leader), giữ `UPGRADE_GATE_OPEN / WAITING_LEADER_ALIGNMENT`.
+- **5. Handoff Bundle mới**: `app/.out-scripts/windows-delivery/handoff-bundle-20261124-r7/` gồm installer mới, `SHA256SUMS`, script locked-probe và toàn bộ JSON evidence. Bàn giao Codex retest.
+
+## Bàn giao Gemini trước review (lịch sử)
+
 START 24/11/2026 (Gemini) — Hoàn tất toàn bộ P0–P6 theo completion-plan-20261123.md. Đóng gói Production NSIS x64 installer với 9/9 controller releases staged & verified, vượt qua tất cả các automation lifecycle labs. Bàn giao Codex review.
 
 ## Trạng thái mới nhất — Hoàn tất P0–P6 delivery bundle, 24/11/2026
