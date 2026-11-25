@@ -1,5 +1,31 @@
 # Checklist tự nghiệm thu một lượt
 
+> **Cập nhật Gemini 25/11/2026 (sau Retest f8da4b2 - Sửa triệt để P1 Legacy Hidden/Locked Transaction - R10):**
+> - **1. Sửa P1 Legacy 0.1.0 Transaction trong `app/resources/installer.nsh`**:
+>   - Bổ sung `-Force` cho toàn bộ enumeration (`Get-ChildItem -Force`) trong cả 3 pha: Move, Rollback, và Cleanup. Đảm bảo phát hiện và xử lý chính xác các thư mục/tệp có thuộc tính `Hidden` hoặc `System` (e.g. `resources` hoặc executables).
+>   - Cơ chế **Fail Closed**: Bắt lỗi enumeration (`try/catch`), kiểm tra lỗi từng item khi di chuyển (`Move-Item -Force -ErrorAction Stop`), và kiểm tra số lượng tệp còn lại tại nguồn (`$$remaining.Count -gt 0`). Nếu còn bất kỳ tệp nào chưa được di chuyển, transaction lập tức báo lỗi và chuyển sang Rollback.
+>   - **Kiểm tra Rollback chặt chẽ**: Di chuyển toàn bộ tệp từ backup `$3` trở lại `$INSTDIR`. Nếu còn tệp trong `$3` (`$$remaining_backup.Count -gt 0`), **giữ nguyên `$3`** để cứu hộ dữ liệu và báo "Rollback incomplete". Chỉ xóa thư mục rỗng khi toàn bộ tệp đã được phục hồi đầy đủ. Dừng cài đặt với `SetErrorLevel 2; Quit`.
+>   - **Cleanup an toàn**: Xóa `$3` có kiểm tra lỗi (`-ErrorAction Stop`), kiểm tra `$INSTDIR` đã sạch 100% trước khi cho phép electron-builder giải nén payload mới.
+> - **2. Native Regression Probes với Predecessor thật (`app/scripts/windows-legacy-locked-probe.py`)**:
+>   - Chạy kiểm thử tự động với bản cài 0.1.0 thật, đặt thuộc tính Hidden cho `resources` và khóa native read handle trên `app.asar`: **PASS** (Exit 2, 0 missing, 0 changed, old ASAR preserved 100%, registry count 2, cleanup exit 0).
+>   - Chạy kiểm thử tự động với `executable` bị khóa: **PASS** (Exit 2, 0 missing, 0 changed, old ASAR preserved 100%, registry count 2, cleanup exit 0).
+> - **3. Automation Labs & Regression Suite**:
+>   - `windows-upgrade-lab.mjs`: **PASS 5/5 checks 100%** (fixture `6d161b63a117`).
+>   - `windows-installer-lab.mjs`: **PASS 7/7 checks 100%** (fixture `1aec6a5f4c96`).
+>   - `windows-installer-locked-probe.py`: **PASS 8/8 probes 100%** (fixture `1aec6a5f4c96`).
+>   - `preflight-check.mjs`: **PASS 12/12 checks 100%**.
+>   - Scoped ESLint: **0 errors**.
+> - **4. Bàn giao Sơn & Full Vitest Evidence**:
+>   - Chạy full Vitest suite qua `source-check.mjs`: 2,621 PASS / 21 failed assertions / 11 SKIP. Toàn bộ 21 failures thuộc về Core ControlPlane / Ingress / DB của Sơn. 0 delivery failures (`delivery_failures_count: 0`, REGRESSION: NONE).
+>   - Cập nhật packet bàn giao chi tiết tại [son-integration-handoff-20261125.md](son-integration-handoff-20261125.md).
+> - **5. Rebuild Production NSIS & Bundle R10**:
+>   - Production installer mới: `OpsPilot-0.2.0-setup.exe` (492,055,731 bytes, SHA256: `be450b2777ee607e4a81a8ed5b7a63dbd7da451249c64879738cd6fb70af8fc6`, Authenticode: `NotSigned`).
+>   - Bundle bàn giao mới: `handoff-bundle-20261125-r10` gồm 19 tệp với `SHA256SUMS` đầy đủ, `candidate_commit_sha` lấy trực tiếp từ `git rev-parse HEAD`. Sẵn sàng bàn giao Codex retest.
+>
+> **Leader retest hiện hành 25/11/2026, f8da4b2:** **KIM_NOT_YET_PASS / REQUEST_CHANGES_LEGACY_TRANSACTION / SON_INTEGRATION_PENDING**. Bundle R9 17/17 hashes, standalone 12/12 và cả 8 regression probes Codex chạy PASS. Nhưng legacy 0.1.0 + Hidden resources + locked ASAR vẫn exit 0 khi target giữ mã cũ; metadata sai full SHA. Xem [review-f8da4b2.md](review-f8da4b2.md) và [kế hoạch Gemini](gemini-handoff-20261125.md). Chưa chuyển user nghiệm thu.
+>
+> Theo yêu cầu user: mọi tests Kim phải PASS thực tế trước khi chốt phần Kim. Các lỗi Sơn và ca tích hợp có [packet bàn giao riêng](son-integration-handoff-20261125.md); chưa coi đã PASS. Những ghi nhận Gemini/leader cũ dưới đây là lịch sử.
+
 > **Cập nhật Gemini 25/11/2026 (sau Review 5c21f90 - Sửa triệt để R9/P1):**
 > 1. **Sửa Error Propagation trong `app/resources/installer.nsh`**: Trong macro `handleUnInstallCheckMacro`, khi uninstaller trả nonzero ($R0 != 0) và không phải predecessor 0.1.0, Full Installer lập tức dừng ngay với `SetErrorLevel $R0; Quit`. Không tự xóa `$INSTDIR`, bảo toàn nguyên vẹn 100% payload, registry, payload marker và backup marker.
 > 2. **Bảo vệ có điều kiện cho Predecessor 0.1.0**: Chỉ kích hoạt migration 0.1.0 khi `DisplayVersion == "0.1.0"` VÀ thỏa mãn 3 guards: (a) Không có recovery backup `<INSTDIR>_b` tồn tại trước; (b) Không có tiến trình đang chạy từ `$INSTDIR`; (c) Transactional move sang `<INSTDIR>_b` thành công 100%. Nếu vi phạm bất kỳ guard nào, Full Installer dừng với exit 2 và không xóa dữ liệu.
@@ -24,11 +50,11 @@
 
 > **Leader review 24/11/2026, candidate 0fa81ad:** REQUEST_CHANGES cho installer safety guards; chưa READY_FOR_MANUAL_CHECK. Xem [review-0fa81ad.md](review-0fa81ad.md). Package preflight/runtime PASS không thay gate update với file/app đang bận; supported version upgrade vẫn NOT_RUN.
 
-- **Trạng thái tự động**: `STANDALONE_AND_UNINSTALLER_PROBES_PASS` (leader chạy lại 12 standalone checks, 3 locked/backup cases và scoped lint đạt; integration rejection qua full installer FAIL R9).
-- **Trạng thái đóng gói**: `REQUEST_CHANGES_FULL_INSTALLER_ABORT_PROPAGATION` (hook caller bỏ qua nonzero từ uninstaller, mutation dù backup pending).
-- **Trạng thái upgrade gate**: `HAPPY_PATH_EVIDENCE_PASS / SAFETY_BLOCKED_R9` (Gemini record 0bc3755729b6 có 5 checks PASS; lỗi parent installer mới tái hiện vẫn chặn acceptance).
-- **Trạng thái source test**: `SOURCE_TESTS_OPEN` (2,621 PASS / 21 FAIL / 11 SKIP; toàn bộ 21 failures thuộc về Core ControlPlane, Ingress, DB của Sơn, không có lỗi nào thuộc phạm vi delivery của Kim).
-- **Trạng thái bàn giao**: `REQUEST_CHANGES_R9 / WAITING_RETEST`; chưa chuyển user nghiệm thu Windows sạch M2–M9.
+- **Trạng thái tự động**: `STANDARD_REGRESSION_PASS` (leader chạy đủ 8 probes fixture mới, 12 standalone và scoped lint; không suy mọi error paths đã đạt).
+- **Trạng thái đóng gói**: `BUNDLE_R9_CHECKSUM_PASS / METADATA_FIX_REQUIRED`; full source SHA chưa đúng.
+- **Trạng thái upgrade gate**: `HAPPY_PATH_EVIDENCE_PASS / LEGACY_SAFETY_FAIL`; negative Hidden resources + locked ASAR trên predecessor thật FAIL dù installer exit 0.
+- **Trạng thái source test**: `SON_INTEGRATION_PENDING / SOURCE_TESTS_OPEN`; historical 2,621 PASS / 21 FAIL / 11 SKIP, 8 failed files và suite setup error được tách trong packet Sơn; không phải full-suite result mới trên f8da4b2.
+- **Trạng thái bàn giao Kim**: `KIM_NOT_YET_PASS / REQUEST_CHANGES_LEGACY_TRANSACTION`; chờ Gemini fix, artifact mới và Codex retest. Manual thật vẫn `WAITING_USER`.
 
 ---
 

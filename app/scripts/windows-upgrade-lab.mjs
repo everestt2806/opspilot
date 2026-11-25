@@ -234,7 +234,7 @@ if (process.argv[2] === '--build') {
       const result = spawnSync(item.installer, ['/S', '/D=' + plan.installation], {
         cwd: directory,
         windowsHide: true,
-        timeout: 180000
+        timeout: 300000
       })
       return result.status
     }

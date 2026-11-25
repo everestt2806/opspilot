@@ -93,14 +93,41 @@
 
       # Guard C: Safe transactional move
       CreateDirectory "$3"
-      nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$src = '$INSTDIR'.TrimEnd('\'); $$dst = '$3'.TrimEnd('\'); $$items = Get-ChildItem -LiteralPath $$src; foreach ($$it in $$items) { try { Move-Item -LiteralPath $$it.FullName -Destination (Join-Path $$dst $$it.Name) -Force -ErrorAction Stop } catch { exit 1 } }; exit 0"`
+      nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$src = '$INSTDIR'.TrimEnd('\'); $$dst = '$3'.TrimEnd('\'); try { $$items = @(Get-ChildItem -LiteralPath $$src -Force -ErrorAction Stop) } catch { exit 1 }; $$fail = 0; foreach ($$it in $$items) { try { Move-Item -LiteralPath $$it.FullName -Destination (Join-Path $$dst $$it.Name) -Force -ErrorAction Stop } catch { $$fail = 1; break } }; if ($$fail -ne 0) { exit 1 }; $$remaining = @(Get-ChildItem -LiteralPath $$src -Force -ErrorAction SilentlyContinue); if ($$remaining.Count -gt 0) { exit 1 }; exit 0"`
       Pop $4
       ${If} $4 != 0
         DetailPrint "Transactional move of legacy payload failed. Performing rollback."
-        nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$src = '$INSTDIR'.TrimEnd('\'); $$dst = '$3'.TrimEnd('\'); $$items = Get-ChildItem -LiteralPath $$dst; foreach ($$it in $$items) { try { Move-Item -LiteralPath $$it.FullName -Destination (Join-Path $$src $$it.Name) -Force -ErrorAction SilentlyContinue } catch {} }"`
-        DetailPrint "Upgrade aborted due to locked or busy file in $INSTDIR."
+        Push $R2
+        nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$src = '$INSTDIR'.TrimEnd('\'); $$dst = '$3'.TrimEnd('\'); $$b_items = @(Get-ChildItem -LiteralPath $$dst -Force -ErrorAction SilentlyContinue); foreach ($$it in $$b_items) { try { Move-Item -LiteralPath $$it.FullName -Destination (Join-Path $$src $$it.Name) -Force -ErrorAction Stop } catch {} }; $$remaining_backup = @(Get-ChildItem -LiteralPath $$dst -Force -ErrorAction SilentlyContinue); if ($$remaining_backup.Count -gt 0) { exit 2 } else { try { Remove-Item -LiteralPath ('\\?\' + $$dst) -Recurse -Force -ErrorAction Stop } catch {}; exit 0 }"`
+        Pop $R2
+        ${If} $R2 == 2
+          DetailPrint "Rollback incomplete: retaining recovery backup at $3."
+          ${IfNot} ${Silent}
+            MessageBox MB_OK|MB_ICONEXCLAMATION "Upgrade aborted: could not fully restore files. Recovery backup retained at $3." /SD IDOK
+          ${EndIf}
+        ${Else}
+          DetailPrint "Rollback complete: all files restored to $INSTDIR."
+          ${IfNot} ${Silent}
+            MessageBox MB_OK|MB_ICONEXCLAMATION "Upgrade aborted: could not move legacy files from $INSTDIR." /SD IDOK
+          ${EndIf}
+        ${EndIf}
+        Pop $R2
+        Pop $4
+        Pop $3
+        Pop $2
+        Pop $1
+        Pop $R1
+        SetErrorLevel 2
+        Quit
+      ${EndIf}
+
+      # Transaction succeeded: legacy files safely moved to $3. Clean up backup directory and proceed with upgrade.
+      nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$src = '$INSTDIR'.TrimEnd('\'); $$dst = '$3'.TrimEnd('\'); try { Remove-Item -LiteralPath ('\\?\' + $$dst) -Recurse -Force -ErrorAction Stop } catch { exit 1 }; $$rem_src = @(Get-ChildItem -LiteralPath $$src -Force -ErrorAction SilentlyContinue); if ($$rem_src.Count -gt 0) { exit 1 }; exit 0"`
+      Pop $4
+      ${If} $4 != 0
+        DetailPrint "Failed to finalize legacy transaction cleanup. Aborting upgrade."
         ${IfNot} ${Silent}
-          MessageBox MB_OK|MB_ICONEXCLAMATION "Upgrade aborted: could not move legacy files from $INSTDIR." /SD IDOK
+          MessageBox MB_OK|MB_ICONEXCLAMATION "Failed to finalize upgrade cleanup. Aborting." /SD IDOK
         ${EndIf}
         Pop $4
         Pop $3
@@ -111,8 +138,6 @@
         Quit
       ${EndIf}
 
-      # Transaction succeeded: legacy files safely moved to $3. Clean up and proceed with upgrade.
-      nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Remove-Item -LiteralPath '\\?\$3' -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath '\\?\$INSTDIR' -Recurse -Force -ErrorAction SilentlyContinue"`
       RMDir "$INSTDIR"
       Pop $4
       Pop $3

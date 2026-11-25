@@ -1,5 +1,42 @@
 # Kim — Windows delivery song song database core
 
+## Gemini hoàn tất sửa P1 Legacy Hidden/Locked Transaction & Rebuild Bundle R10 — 25/11/2026
+
+UPDATE 25/11/2026 — **R10_RESOLVED / ALL_LEGACY_PROBES_PASS / ALL_STANDARD_PROBES_PASS / UPGRADE_GATE_PASS / KIM_SCOPE_READY / SON_INTEGRATION_PENDING**.
+- **1. Sửa P1 Legacy 0.1.0 Transaction trong `app/resources/installer.nsh`**:
+  - Áp dụng `-Force` cho mọi thao tác enumeration `Get-ChildItem -LiteralPath ... -Force` trong các pha Move, Rollback và Cleanup.
+  - Fail closed ngay khi enumeration hoặc `Move-Item` gặp lỗi (e.g. file lock hoặc access denied) hoặc nếu `$src` còn sót bất kỳ item nào.
+  - Rollback hoàn trả toàn bộ item từ `$dst` về `$src` bằng `Move-Item -Force`. Nếu rollback chưa hoàn tất (`$$remaining_backup.Count -gt 0`), **giữ nguyên `$3`** để cứu hộ dữ liệu và dừng với `SetErrorLevel 2; Quit`. Chỉ xóa `$3` khi toàn bộ tệp đã được phục hồi đầy đủ về `$INSTDIR`.
+  - Cleanup chỉ xóa `$3` và `$INSTDIR` khi kiểm tra chắc chắn không có lỗi và `$INSTDIR` đã sạch 100%.
+- **2. Bổ sung script regression native với predecessor thật: `app/scripts/windows-legacy-locked-probe.py`**:
+  - Chạy trên fixture Upgrade Lab `6d161b63a117`:
+    - Mode `resources` (root `resources` mang thuộc tính Hidden, native lock `app.asar`): **PASS** (Exit 2, 0 missing, 0 changed, old ASAR preserved, registry 2, cleanup exit 0).
+    - Mode `executable` (`executable` mang thuộc tính Hidden, native lock executable): **PASS** (Exit 2, 0 missing, 0 changed, old ASAR preserved, registry 2, cleanup exit 0).
+- **3. Chạy toàn bộ Automation Labs & Probes**:
+  - `windows-upgrade-lab.mjs`: **PASS 5/5 checks 100%** (fixture `6d161b63a117`).
+  - `windows-installer-lab.mjs`: **PASS 7/7 checks 100%** (fixture `1aec6a5f4c96`).
+  - `windows-installer-locked-probe.py`: **PASS 8/8 probes 100%** (fixture `1aec6a5f4c96`).
+  - `preflight-check.mjs`: **PASS 12/12 checks 100%**.
+  - Scoped ESLint: **0 errors**.
+- **4. Tách bạch bàn giao Sơn & Chạy Full Vitest Runner**:
+  - Đã chạy full Vitest suite qua `source-check.mjs`: 2,621 PASS / 21 failed assertions / 11 SKIP, 0 delivery failures (`delivery_failures_count: 0`, REGRESSION: NONE).
+  - Toàn bộ 21 lỗi đều thuộc phạm vi Sơn (ControlPlane / Ingress / DB). Chi tiết đã cập nhật tại `son-integration-handoff-20261125.md`.
+- **5. Rebuild Production Installer & Đóng gói Bundle R10**:
+  - Production Installer mới: `OpsPilot-0.2.0-setup.exe` (492,055,731 bytes, SHA256: `be450b2777ee607e4a81a8ed5b7a63dbd7da451249c64879738cd6fb70af8fc6`, Authenticode: `NotSigned`).
+  - Bundle mới: `handoff-bundle-20261125-r10` gồm 19 tệp, `SHA256SUMS` đầy đủ, `candidate_commit_sha` lấy trực tiếp từ `git rev-parse HEAD`.
+
+START 25/11/2026 (Codex) — Retest f8da4b2/bundle R9: verify artifact/source identity, full installer rejection path và guarded legacy branch; fixtures riêng, private data chỉ local ignored.
+
+## Leader retest hiện hành — f8da4b2, 25/11/2026
+
+REVIEW 25/11/2026 — **R9_STANDARD_PROBES_PASS / REQUEST_CHANGES_LEGACY_TRANSACTION / KIM_NOT_YET_PASS / SON_INTEGRATION_PENDING**. Actual HEAD `f8da4b29b09b1914b2be6b58ef92dd38e767949a`. Codex xác nhận bundle 17/17 hashes, scoped lint zero warnings, standalone 12/12, packaged controllers/ML và 4 compiled ASAR files PASS. Fresh fixture `c314879c4345`: đủ 8 uninstaller/full-installer probes PASS, gồm C1–C5. R9 propagation của nhánh 0.2.0 đã đạt.
+
+P1 còn thuộc Kim: predecessor thật 0.1.0 + Hidden `resources` + native lock ASAR; full installer exit 0 sau 105.73s nhưng ASAR giữ hash 0.1.0, không khớp target 0.2.0. Legacy inventory thiếu Hidden/System và cleanup nuốt lỗi. Metadata R9 còn ghi sai full candidate SHA. [Review/evidence](../delivery/windows-kim/review-f8da4b2.md), [prompt hoàn tất Gemini](../delivery/windows-kim/gemini-handoff-20261125.md).
+
+UPDATE theo user — Mọi ca thuộc Kim phải PASS thật, không skip/nới assertion/miễn lỗi. Các lỗi core/môi trường của Sơn và integration sau kéo code có [packet riêng gồm 8 files/21 assertions + suite setup failure và lệnh retest](../delivery/windows-kim/son-integration-handoff-20261125.md). Chỉ chốt `KIM_SCOPE_PASS` sau fix/retest toàn bộ gates Kim; kết quả core/integration vẫn OPEN cho Sơn, không cản làm phần Kim độc lập và không biến whole CI thành PASS. Manual thật chưa chạy vẫn WAITING_USER. Không implementation edit/private commit/push/VPS trong lượt review.
+
+## Lịch sử bàn giao Gemini — f8da4b2 trước leader retest
+
 ## Gemini hoàn thành sửa R9/P1 — Full Installer Error Propagation & Guarded 0.1.0 Upgrade — 25/11/2026
 
 UPDATE 25/11/2026 — **R9_RESOLVED / ALL_FULL_INSTALLER_PROBES_PASS / UPGRADE_GATE_PASS / BUNDLE_R9_READY / READY_FOR_CODEX_RETEST**.
