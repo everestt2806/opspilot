@@ -22,7 +22,7 @@ function runCli(args = [], options = {}) {
     env: { ...process.env, ...(options.env || {}) },
     windowsHide: true,
     encoding: 'utf8',
-    timeout: 30000
+    timeout: options.timeout || 90000
   })
 }
 

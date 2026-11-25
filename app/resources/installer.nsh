@@ -20,6 +20,25 @@
     Quit
   ${EndIf}
 !macroend
+
+# Handles old uninstaller result when upgrading from previous versions (e.g. 0.1.0).
+# In electron-builder, default uninstaller lacks customRemoveFiles and fails with $PLUGINSDIR bug when --updated is passed.
+# This prevents silent installer from hanging on an unsuppressed modal MessageBox (which lacks /SD IDOK).
+!macro customUnInstallCheck
+  ${if} $R0 != 0
+    DetailPrint "Previous version uninstaller returned code $R0. Cleaning installation directory before upgrade."
+    nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Remove-Item -LiteralPath '\\?\$INSTDIR' -Recurse -Force -ErrorAction SilentlyContinue"`
+    ClearErrors
+  ${endif}
+!macroend
+
+!macro customUnInstallCheckCurrentUser
+  ${if} $R0 != 0
+    DetailPrint "Previous version uninstaller returned code $R0. Cleaning installation directory before upgrade."
+    nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Remove-Item -LiteralPath '\\?\$INSTDIR' -Recurse -Force -ErrorAction SilentlyContinue"`
+    ClearErrors
+  ${endif}
+!macroend
 !endif
 
 !macro customCheckAppRunning
@@ -30,7 +49,7 @@
       StrCpy $1 "1"
     ${endif}
 
-    nsExec::Exec `"$PowerShellPath" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$dir = '$INSTDIR'.TrimEnd('\'); $$isUp = '$1'; $$ppid = (Get-CimInstance -ClassName Win32_Process | Where-Object { $$_.ProcessId -eq $$PID }).ParentProcessId; $$procs = @(Get-CimInstance -ClassName Win32_Process | Where-Object { $$_.ProcessId -ne $$PID -and $$_.ProcessId -ne $$ppid -and $$_.Name -notlike 'Uninstall*' -and $$_.Path -and ($$_.Path.Equals($$dir, 'CurrentCultureIgnoreCase') -or $$_.Path.StartsWith($$dir + '\', 'CurrentCultureIgnoreCase')) }); if ($$procs.Count -eq 0) { exit 0 }; if ($$isUp -eq '1') { $$procs | ForEach-Object { try { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }; Start-Sleep -Milliseconds 800; $$rem = @(Get-CimInstance -ClassName Win32_Process | Where-Object { $$_.ProcessId -ne $$PID -and $$_.ProcessId -ne $$ppid -and $$_.Name -notlike 'Uninstall*' -and $$_.Path -and ($$_.Path.Equals($$dir, 'CurrentCultureIgnoreCase') -or $$_.Path.StartsWith($$dir + '\', 'CurrentCultureIgnoreCase')) }); if ($$rem.Count -eq 0) { exit 0 } }; exit 1"`
+    nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$dir = '$INSTDIR'.TrimEnd('\'); $$isUp = '$1'; $$ppid = (Get-CimInstance -ClassName Win32_Process | Where-Object { $$_.ProcessId -eq $$PID }).ParentProcessId; $$procs = @(Get-CimInstance -ClassName Win32_Process | Where-Object { $$_.ProcessId -ne $$PID -and $$_.ProcessId -ne $$ppid -and $$_.Name -notlike 'Uninstall*' -and $$_.Path -and ($$_.Path.Equals($$dir, 'CurrentCultureIgnoreCase') -or $$_.Path.StartsWith($$dir + '\', 'CurrentCultureIgnoreCase')) }); if ($$procs.Count -eq 0) { exit 0 }; if ($$isUp -eq '1') { $$procs | ForEach-Object { try { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }; Start-Sleep -Milliseconds 800; $$rem = @(Get-CimInstance -ClassName Win32_Process | Where-Object { $$_.ProcessId -ne $$PID -and $$_.ProcessId -ne $$ppid -and $$_.Name -notlike 'Uninstall*' -and $$_.Path -and ($$_.Path.Equals($$dir, 'CurrentCultureIgnoreCase') -or $$_.Path.StartsWith($$dir + '\', 'CurrentCultureIgnoreCase')) }); if ($$rem.Count -eq 0) { exit 0 } }; exit 1"`
     Pop $R0
 
     ${if} $R0 != 0
@@ -97,6 +116,8 @@ Function un.safeRestoreItems
   Push $R2
   Push $R3
 
+  StrCpy $R0 0
+
   StrCpy $R3 "$unBackupDir\*.*"
   FindFirst $R1 $R2 $R3
 
@@ -107,6 +128,10 @@ Function un.safeRestoreItems
 
     ClearErrors
     Rename "$unBackupDir\$R2" "$INSTDIR\$R2"
+    ${if} ${Errors}
+      IntOp $R0 $R0 + 1
+      DetailPrint "Rollback failed to restore item: $R2"
+    ${endif}
 
   continue:
     FindNext $R1 $R2
@@ -129,29 +154,43 @@ FunctionEnd
     ${endif}
 
     StrCpy $unBackupDir "$1_b"
-    nsExec::Exec `"$PowerShellPath" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Remove-Item -LiteralPath '\\?\$unBackupDir' -Recurse -Force -ErrorAction SilentlyContinue"`
+
+    # R8 Guard: Pre-existing backup directory check
+    # If backup directory already exists before mutation, reject to protect existing recovery data
+    ${if} ${FileExists} "$unBackupDir"
+      DetailPrint "Pre-existing recovery backup found at $unBackupDir. Aborting update before mutation to protect backup."
+      Abort `OpsPilot could not update: pre-existing recovery backup directory found at $unBackupDir. Please inspect, restore, or remove it before updating.`
+    ${endif}
+
     CreateDirectory "$unBackupDir"
 
     Call un.safeMoveItems
 
     ${if} $R0 != 0
-      DetailPrint "File or directory is busy during update: $R0"
+      StrCpy $R5 $R0
+      DetailPrint "File or directory is busy during update: $R5"
 
       Call un.safeRestoreItems
+      # After un.safeRestoreItems, $R0 contains the number of restore errors
 
-      nsExec::Exec `"$PowerShellPath" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Remove-Item -LiteralPath '\\?\$unBackupDir' -Recurse -Force -ErrorAction SilentlyContinue"`
-
-      Abort `OpsPilot could not update because a file is in use: $R0`
+      ${if} $R0 != 0
+        DetailPrint "Rollback could not restore all files ($R0 errors). Preserving recovery backup at $unBackupDir"
+        Abort `OpsPilot update aborted: file is busy ($R5) and rollback failed to restore all items ($R0 errors). Recovery backup preserved at: $unBackupDir`
+      ${else}
+        # Rollback fully succeeded: safe to remove the now empty backup directory
+        RMDir "$unBackupDir"
+        Abort `OpsPilot could not update because a file is in use: $R5`
+      ${endif}
     ${endif}
 
     SetOutPath $TEMP
-    nsExec::Exec `"$PowerShellPath" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Remove-Item -LiteralPath '\\?\$INSTDIR' -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath '\\?\$unBackupDir' -Recurse -Force -ErrorAction SilentlyContinue"`
+    nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Remove-Item -LiteralPath '\\?\$INSTDIR' -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath '\\?\$unBackupDir' -Recurse -Force -ErrorAction SilentlyContinue"`
     RMDir /r $INSTDIR
     RMDir /r "$unBackupDir"
   ${else}
     # Normal uninstall: running-app guard already verified no app is running
     SetOutPath $TEMP
-    nsExec::Exec `"$PowerShellPath" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Remove-Item -LiteralPath '\\?\$INSTDIR' -Recurse -Force -ErrorAction SilentlyContinue"`
+    nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Remove-Item -LiteralPath '\\?\$INSTDIR' -Recurse -Force -ErrorAction SilentlyContinue"`
     RMDir /r $INSTDIR
     ${if} ${FileExists} "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
       Abort `OpsPilot could not remove application executable because it is in use.`

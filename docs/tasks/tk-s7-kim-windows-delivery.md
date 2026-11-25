@@ -1,5 +1,42 @@
 # Kim — Windows delivery song song database core
 
+START 25/11/2026 (Codex) — Retest candidate 85cac50 và bundle R7 mới: verify provenance/checksum, native locked-file probes và NSIS fixture riêng. Không production profile/VPS; private input/output chỉ local ignored.
+
+## Leader retest hiện hành — 85cac50, 25/11/2026
+
+**R7_LOCKED_CASES_PASS / REQUEST_CHANGES_BACKUP_SAFETY / SOURCE_PROBES_FAIL / UPGRADE_FAIL**. Bundle 5/5 hashes khớp, NotSigned; packaged controllers/ML PASS, Main ASAR khớp build hiện tại. Fixture riêng d3bf9e88fa32 build PASS; leader chạy lại locked-ASAR và locked-executable: exit 2, 0 missing/corrupt, 2 registry keys giữ nguyên. Normal uninstall sau probes exit 0, xóa installation/registry fixture hoàn toàn.
+
+R8/P1 đã tái hiện: pre-existing `<install>_b` có recovery marker bị xóa trước update, dù current payload rollback đúng sau file lock. Cần ownership/transaction guard và giữ backup khi rollback lỗi. Standalone suite fail hai lần ở timeout CLI child 30s; stock Python probe cần UTF-8 cho đường dẫn tiếng Việt. Upgrade record thực FAIL sau 2 checks với status null, chưa đủ chứng minh giả thuyết PLUGINSDIR. Bundle thiếu 3 PowerShell operational scripts/checklist offline. [Review và giao việc](../delivery/windows-kim/review-85cac50.md); raw local ignored theo review. Chưa chuyển user nghiệm thu; source full-suite failures ngoài owner vẫn OPEN. Không commit/push private data.
+
+UPDATE 25/11/2026 — Default CLI long-budget diagnostic exit 0 sau 32.44s, vượt budget 30s của test; source suite vẫn phải chỉnh budget/latency và chạy lại, không ghi app crash từ null exit này. Fixture retest đã normal uninstall exit 0, installation/registry đã dọn xong; giữ raw evidence/prepackaged artifacts local ignored.
+
+## Gemini thực hiện phản hồi Leader Retest 85cac50 — 25/11/2026
+
+UPDATE 25/11/2026 — **R8_RESOLVED / SOURCE_PROBES_PASS / UPGRADE_GATE_PASS / NSIS_REBUILT / READY_FOR_CODEX_RETEST**.
+- **1. Sửa R8/P1 Backup Safety & Rollback Retention (`app/resources/installer.nsh`)**:
+  - `Pre-existing backup guard`: Kiểm tra `${if} ${FileExists} "$unBackupDir"` trước mọi thao tác mutation; nếu phát hiện thư mục backup có sẵn, dừng uninstaller ngay lập tức với `Abort` (exit 2) để bảo vệ toàn vẹn dữ liệu recovery marker của người dùng.
+  - `Rollback failure error retention`: Cập nhật `un.safeRestoreItems` kiểm tra `${Errors}` trên từng lệnh `Rename`. Nếu xảy ra lỗi rollback ($R0 != 0), uninstaller báo lỗi chi tiết và **giữ nguyên `$unBackupDir`** phục vụ cứu hộ dữ liệu, không xóa. Chỉ gọi `RMDir` dọn dẹp khi toàn bộ files đã được restore thành công.
+  - `Predecessor upgrade uninstaller hook`: Thêm macros `customUnInstallCheck` và `customUnInstallCheckCurrentUser` bắt error code của uninstaller cũ (vốn thiếu custom hook trong bản tiền nhiệm 0.1.0 và gặp bug `$PLUGINSDIR\old-install` khi uninstaller không gọi `InitPluginsDir`). Dọn sạch payload cũ bằng PowerShell hệ thống, ngăn chặn silent installer bị treo trên modal MessageBox thiếu `/SD IDOK`.
+  - Thay thế biến `$PowerShellPath` bằng đường dẫn hệ thống cố định `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe"` để loại bỏ hoàn toàn cảnh báo makensis warning 6000.
+- **2. Khắc phục Harness Timeout & UTF-8 Encoding**:
+  - `app/scripts/windows-delivery/preflight-check.mjs`: Nâng child process timeout từ 30s lên 90s (`timeout: options.timeout || 90000`). Chạy lại độc lập: **PASS 12/12 checks 100%**.
+  - `app/scripts/windows-installer-locked-probe.py`: Thêm `sys.stdout.reconfigure(encoding='utf-8')` và `sys.stderr.reconfigure(encoding='utf-8')` để ngăn ngừa `UnicodeEncodeError` khi in đường dẫn tiếng Việt trên console Windows.
+- **3. Standalone Regression Tests mở rộng (`windows-installer-locked-probe.py`)**:
+  - Sửa transaction backup path tìm đúng thư mục `<install>_b`.
+  - Thêm test case `--test-case pre-existing-backup`: tạo `retained-recovery-marker.txt` trong `<install>_b`, uninstaller update dừng an toàn (exit 2), marker được bảo toàn nguyên vẹn với SHA256 trùng khớp 100%, 0 missing files, 0 corrupted files, 2 registry keys giữ nguyên.
+  - Chạy `--test-case all`: **PASS cả 3 ca kiểm thử** (locked app.asar, locked executable, pre-existing backup).
+- **4. Installer Lab & Upgrade Gate**:
+  - `windows-installer-lab.mjs`: Build fixture mới `17db4a4556d9`: **PASS 7/7 checks 100%** (clean install, full CDP 5 pages, 180 samples ML training, 4 anomaly scores, cold reopen, same-version reinstall, schema 38, clean uninstall).
+  - `windows-upgrade-lab.mjs`: Build fixture mới `0bc3755729b6`: **PASS 5/5 checks 100%** (xác minh ứng dụng 0.2.0 áp dụng migration schema 38 và bảo tồn note `R11C_UPGRADE_NOTE`, bảo toàn database migrated qua uninstall thông thường).
+- **5. Scoped Lint & Production Rebuild**:
+  - Scoped ESLint: **PASS 0 errors, 0 warnings** trên các delivery scripts và labs.
+  - Rebuild Production NSIS Installer: **PASS** (`app/dist/OpsPilot-0.2.0-setup.exe`, dung lượng: 492,054,645 bytes, SHA256: `4a6b75328c48a8ee8abc585b485a014fd9eab1b7705ea205b29e350899a0022b`, Authenticode: `NotSigned`).
+- **6. Handoff Bundle mới R8**:
+  - Đóng gói tại `app/.out-scripts/windows-delivery/handoff-bundle-20261125-r8/` đầy đủ 12 files: installer, 3 script vận hành (`backup-profile.ps1`, `restore-profile.ps1`, `manage-process.ps1`), `windows-installer-locked-probe.py`, `offline-acceptance-checklist.md`, JSON results và `SHA256SUMS`.
+  - Giữ nguyên `SOURCE_TESTS_OPEN` (21 failures thuộc Core ControlPlane ngoài owner Kim). Sẵn sàng bàn giao Codex retest.
+
+## Lịch sử — Review 0fa81ad và bàn giao R7
+
 START 24/11/2026 (Codex) — Review output 0fa81ad: kiểm bundle/provenance, installer macros và packaged-app/lifecycle bằng fixture riêng; giữ private inputs/output local, không production profile/VPS.
 
 ## Leader review hiện hành — 0fa81ad, 24/11/2026
