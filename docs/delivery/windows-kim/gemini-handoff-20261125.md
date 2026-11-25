@@ -1,12 +1,28 @@
 # Gemini — chốt PASS thật phạm vi Kim, 25/11/2026
 
-Bạn code, Codex là leader retest. Tiếp tục nhánh `feat/kim-windows-delivery-20261116` từ actual candidate `f8da4b29b09b1914b2be6b58ef92dd38e767949a`. Đọc [review-f8da4b2.md](review-f8da4b2.md) và task Kim. Chỉ sửa phần delivery thuộc Kim. Yêu cầu user mới nhất: **mọi test thuộc Kim phải PASS thật; phần Sơn phải có bàn giao rõ để Sơn kéo code, tích hợp và tự test lại.**
+## Chỉ dẫn hiện hành sau retest e2d599d / R10
+
+Đọc [review-e2d599d.md](review-e2d599d.md). Actual HEAD mới `e2d599d7e28326c8f25beb7d634a889abc299724`. Hidden resources + locked ASAR và full SHA metadata đã leader PASS. Không làm lại phần đã đóng chỉ để đổi vòng báo cáo.
+
+**P1 còn thật:** cleanup backup trong `installer.nsh:125` xóa 3,059/3,067 old files trong fixture khi native file lock nằm ở backup; setup exit 2 nhưng chỉ còn 8 files recovery. Giữ backup đầy đủ cho tới commit cài đặt/khả năng phục hồi được xác minh; cleanup failure không được làm mất bản sao duy nhất. Dùng native repro v2 trong review, tạo case mới có ownership; không lấy case v1 chưa bắt được lock để báo PASS/FAIL. Rerun rejected upgrade và kiểm union install+recovery hashes, cùng happy upgrade đúng target và rollback failure/backup-pending controls.
+
+**P2 probe:** sửa `windows-legacy-locked-probe.py` để validate owner/path/GUID/hash/provenance trước mọi mutation, từ chối output có sẵn mà không ghi đè owner/xóa `install`, và thiết lập UTF-8 stdout/stderr. Bổ sung negative tests invalid fixture/foreign owner/existing output bảo toàn marker và không spawn installer. Sửa trong scope Kim; không chuyển cho Sơn.
+
+Sau sửa: build NSIS và bundle mới, rerun gates bị ảnh hưởng, giữ đủ 8 standard probes + 12 standalone + scoped lint đạt thực tế. Khi lab nặng tranh tài nguyên, chạy kiểm tra source tuần tự để phân biệt timeout môi trường; không nới budget/skip checks chỉ để xanh. Cập nhật provenance source report: run hiện tại thực là f8da4b2+dirty, không clean e2d599d. Dossier/bundle ghi đúng 21 files của R10 và trạng thái leader, không tự nhận KIM_SCOPE_PASS trước retest.
+
+Leader đã chạy lại standalone riêng: 12/12 PASS, 205.25s. Standard probes có 6 rejection cases PASS, C4 timeout 180s và C5 NOT_RUN; cần chạy C4/C5 tuần tự trên fixture mới sau sửa và lưu thời gian/postconditions thật. Fixture 1aec6a5f4c96 hiện có partial files sau timeout, registry/process 0; lệnh recursive cleanup đã bị automatic policy chặn, giữ diagnostic ignored. Không chạy lại script trên fixture đó theo giả định “clean install”; không đổi cách xóa để vượt chặn. Dùng nonce mới thay vì phụ thuộc partial state.
+
+21 core failures/8 files vẫn bàn giao Sơn theo packet, không chặn làm Kim độc lập. Không cần sửa core hoặc rerun full Vitest cho mỗi thay đổi docs; khi khóa candidate source cuối, giữ evidence/provenance đúng và chạy required checks theo plan dưới đây. Bàn giao local cho Codex với từng gate PASS/FAIL/NOT_RUN; private resources/log/binaries chỉ ignored, không tự push/VPS/publish.
+
+## Kế hoạch nền và checklist phạm vi
+
+Bạn code, Codex là leader retest. Tiếp tục nhánh `feat/kim-windows-delivery-20261116` từ actual candidate `e2d599d7e28326c8f25beb7d634a889abc299724`. Đọc [review-e2d599d.md](review-e2d599d.md) và task Kim. Chỉ sửa phần delivery thuộc Kim. Yêu cầu user mới nhất: **mọi test thuộc Kim phải PASS thật; phần Sơn phải có bàn giao rõ để Sơn kéo code, tích hợp và tự test lại.**
 
 ## 1. Sửa blocker, không mở rộng scope
 
-- Sửa legacy 0.1.0 transaction trong `app/resources/installer.nsh`: inventory/move/rollback phải bao gồm Hidden/System, fail closed khi enumeration/move lỗi; xác minh rollback trước cleanup và giữ recovery nếu chưa hoàn tất. Không xóa backup hoặc nuốt lỗi rồi trả success khi target chưa có đủ payload mới.
-- Repro đã có: predecessor thật 0.1.0, Hidden `resources`, native lock `app.asar`; full installer hiện exit 0 nhưng ASAR giữ hash 0.1.0, khác target 0.2.0. Script/evidence ignored được chỉ trong review. Tạo case/output mới có ownership; không ghi đè result cũ, không dùng production installation/profile.
-- Sửa việc sinh `candidate_commit_sha`: đọc actual full Git SHA, không tự ghép từ short SHA. Ghi rõ source SHA, dirty diff nếu có và build identity. Metadata và SHA256SUMS phải khớp bundle cuối.
+- Sửa thời điểm/cơ chế cleanup của legacy transaction theo P1 hiện hành: giữ đủ dữ liệu khôi phục khi cleanup lỗi hoặc chưa commit target. Tiếp tục giữ Hidden/System/fail-closed guards đã đạt.
+- Thêm regression native sau move: lock executable ở backup, installer nonzero vẫn phải bảo toàn toàn bộ inventory trong install/recovery. Sửa output guard/UTF-8 của probe và kiểm negative controls như chỉ dẫn đầu file. Không ghi đè result cũ, không dùng production installation/profile.
+- Giữ cách lấy full `candidate_commit_sha` đã đạt; ghi source SHA/dirty diff/build identity đúng cho từng report, không nhận precommit evidence là clean HEAD.
 
 ## 2. Build và kiểm thử trên artifact mới
 
@@ -18,7 +34,7 @@ Sau sửa source, chạy scoped lint/standalone; build source và NSIS với res
 | Backup/restore/process | Giữ các native/mocked positive và negative cases đã được leader duyệt; không mất rollback, ownership hoặc listener guards |
 | Packaged resources | Actual beforePack/production verifiers controller + ML PASS; ASAR/source identity và inventory khớp |
 | Uninstaller + full installer | Cả 8 probes hiện có PASS; rejected cases nonzero, giữ payload/recovery/registry; reinstall/uninstall thật thành công |
-| Legacy safety | Predecessor thật: visible/Hidden `resources` + locked ASAR; backup pending, running process, failed move/rollback có bằng chứng; không biến failed cleanup thành success |
+| Legacy safety | Predecessor thật: visible/Hidden `resources` + locked ASAR; backup pending, running process, failed move/rollback/cleanup có bằng chứng; rejected setup giữ đủ inventory tại install/recovery, không chỉ kiểm nonzero |
 | Legacy happy path | Upgrade 0.1.0→0.2.0 cài đúng target payload; schema 38/note/key/model/scores giữ đúng; cold reopen/uninstall đúng |
 | Full app/installer lifecycle | Chạy labs positive 5/7 checks theo README hiện hành trên artifact mới; persistence, child ML, reinstall và cleanup đúng |
 | Final bundle | Bundle mới, full source identity đúng, signature ghi thực tế, đủ scripts/checklist/evidence, manifest bao phủ và khớp mọi file |

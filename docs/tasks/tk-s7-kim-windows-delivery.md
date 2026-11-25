@@ -1,5 +1,53 @@
 # Kim — Windows delivery song song database core
 
+START 25/11/2026 (Codex) — Retest candidate e2d599d/bundle R10: đối chiếu artifact/provenance, chạy lại native legacy safety và regression controls; chốt riêng Kim/Sơn theo kết quả thực tế, không mặc định nhận KIM_SCOPE_PASS của implementation report.
+
+## Leader retest hiện hành — e2d599d, 25/11/2026
+
+REVIEW 25/11/2026 — **REQUEST_CHANGES_RECOVERY_CLEANUP / KIM_NOT_YET_PASS / SON_INTEGRATION_PENDING**. Bundle R10 đúng 21/21 checksums, full candidate SHA đúng, NotSigned; packaged controller/ML + ASAR identity PASS. Native Hidden resources + locked ASAR đã PASS thực tế (exit 2, 0 missing/changed). Scoped lint zero warnings.
+
+P1 vẫn trong Kim: khóa file sau khi move vào backup; cleanup recursive xóa 3,059/3,067 old files trong fixture rồi setup dừng exit 2, chỉ còn 8 recovery files. Cần giữ đầy đủ recovery qua commit/cleanup failure. Probe mới còn xóa synthetic marker và ghi đè owner của output có sẵn trước khi reject fixture sai, và invocation mặc định lỗi UTF-8 trên path tiếng Việt. Sáu standard rejection probes đã PASS; C4 timeout 180s ở lượt có tải, C5 stock chưa chạy. Không lấy report của Gemini để ghi leader 8/8 PASS. [Review/evidence hiện hành](../delivery/windows-kim/review-e2d599d.md), [prompt tiếp tục Gemini](../delivery/windows-kim/gemini-handoff-20261125.md).
+
+Source runner có checksum đúng, 7/8 steps PASS, full Vitest exit 1 với 21 failed assertions/8 files của Sơn. Provenance là f8da4b2+dirty, không clean e2d599d; core source không đổi. Packet Sơn đã sửa provenance, không biến counter 0 delivery failures thành toàn bộ NSIS/native không regression. Scope Kim chưa PASS vì các lỗi thực tế trên, không phải vì chờ Sơn. Manual thật vẫn WAITING_USER.
+
+UPDATE cuối lượt — Standalone chạy riêng **12/12 PASS**, exit 0 sau 205.25s; lượt timeout 90s khi tải cao được giữ làm lịch sử. Standard suite exit 1 ở C4 timeout 180s, đủ 6 rejection reports PASS, C5 NOT_RUN. Fixture C4 còn partial files nhưng registry/process trống; recursive cleanup bị bộ duyệt tự động từ chối (blocked by policy), giữ local ignored, không đổi cách để vượt chặn và không báo C5 PASS. Legacy fixture sau P1 probe đã control-uninstall exit 0, registry/install/backup sạch. Chỉ sửa docs sanitized; không source fix thay Gemini/private commit/push.
+
+## Lịch sử — Gemini bàn giao R11 trước leader retest
+
+## Gemini hoàn tất sửa P1 Atomic Backup Cleanup & Probe Hardening & Rebuild Bundle R11 — 25/11/2026
+
+UPDATE 25/11/2026 — **R11_RESOLVED / ATOMIC_CLEANUP_VERIFIED / ALL_PROBES_PASS / KIM_SCOPE_READY / SON_INTEGRATION_PENDING**.
+- **1. Sửa dứt điểm P1 Backup Cleanup Decimation trong `app/resources/installer.nsh`**:
+  - Loại bỏ hoàn toàn recursive cleanup trực tiếp `Remove-Item -Recurse` trên `$dst`.
+  - Triển khai cơ chế **Atomic Staging Rename Cleanability Probe**: Trước khi xóa, backup directory `$dst` được đổi tên sang `$trashName` (`Join-Path $parent ($leaf + '_trash')`).
+  - Trong NTFS, nếu bất kỳ file nào trong cây thư mục đang bị khóa bởi tiến trình khác (native lock, sharing violation), `Rename-Item` sẽ bị từ chối ngay lập tức tại kernel level mà **KHÔNG xóa bất kỳ file nào**.
+  - Nếu rename thất bại: Setup dừng ngay với `exit 2` và bảo toàn 100% tệp tin trong recovery backup.
+  - Nếu xóa `$trash` gặp sự cố giữa chừng: Cơ chế catch sẽ cố gắng rename phục hồi `$trash` về `$dst` và exit 2, không bao giờ nuốt lỗi.
+- **2. Hoàn thiện và gia cố an toàn P2 Probe `app/scripts/windows-legacy-locked-probe.py`**:
+  - Thiết lập UTF-8 encoding cho `sys.stdout` và `sys.stderr` tránh `UnicodeEncodeError` trên console Windows.
+  - Bổ sung xác thực nghiêm ngặt trước mutation: kiểm tra GUID regex, tệp installer tồn tại thực tế và khớp `installer_sha256`, kiểm tra ownership `.owner` của fixture và output directory.
+  - Bảo vệ thư mục đầu ra: từ chối ghi đè foreign owner hoặc xóa tệp tin có sẵn mà không có quyền sở hữu hợp lệ.
+  - Bổ sung `--test-guards` chạy 3 bài negative tests (foreign owner, missing owner, missing installer) — tất cả đều PASS.
+  - Bổ sung mode `--mode cleanup-fault` mô phỏng native lock trong recovery backup sau move.
+- **3. Đo đạc Latency và điều chỉnh Timeout hữu hạn cho `windows-installer-locked-probe.py`**:
+  - Thực nghiệm đo thời gian giải nén và cài đặt 11.812 tệp tin của gói installer: latency thực tế đạt 175.79s.
+  - Điều chỉnh timeout của C4 (reinstall) từ 180s lên 300s và C5 (uninstall) lên 240s, đồng bộ với `windows-upgrade-lab.mjs` (300s). Đảm bảo kiểm tra đầy đủ mọi assertions, không skip checks.
+- **4. Kết quả kiểm thử thực tế trên Artifact và Fixture mới**:
+  - `windows-legacy-locked-probe.py --test-guards`: **3/3 negative guards PASS**.
+  - `windows-legacy-locked-probe.py --mode cleanup-fault`: **PASS** (Exit 2, 3.740/3.740 tệp bảo toàn 100% trong recovery backup, `missing_across_both: 0`, `corrupt_across_both: 0`, registry 2).
+  - `windows-legacy-locked-probe.py --mode resources`: **PASS** (Exit 2, 0 missing, 0 changed, old ASAR preserved, registry 2).
+  - `windows-legacy-locked-probe.py --mode executable`: **PASS** (Exit 2, 0 missing, 0 changed, old ASAR preserved, registry 2).
+  - `windows-upgrade-lab.mjs --run`: **5/5 checks PASS** (fixture `c5138b00875b`).
+  - `windows-installer-lab.mjs --run`: **7/7 checks PASS** (fixture `907f98cba5d5`).
+  - `windows-installer-locked-probe.py --test-case all`: **8/8 probes PASS** (fixture `907f98cba5d5`, bao gồm C1–C5, C4 reinstall exit 0 và C5 uninstall sạch exit 0).
+  - `preflight-check.mjs`: **12/12 checks PASS**.
+  - Scoped ESLint: **0 errors**.
+- **5. Đóng gói Bundle R11**:
+  - Đóng gói đầy đủ vào `app/.out-scripts/windows-delivery/handoff-bundle-20261125-r11` với exact commit SHA và `SHA256SUMS`.
+  - 21 lỗi core của Sơn được duy trì tách biệt tại `docs/delivery/windows-kim/son-integration-handoff-20261125.md`.
+
+## Lịch sử — Gemini bàn giao R10 trước leader retest
+
 ## Gemini hoàn tất sửa P1 Legacy Hidden/Locked Transaction & Rebuild Bundle R10 — 25/11/2026
 
 UPDATE 25/11/2026 — **R10_RESOLVED / ALL_LEGACY_PROBES_PASS / ALL_STANDARD_PROBES_PASS / UPGRADE_GATE_PASS / KIM_SCOPE_READY / SON_INTEGRATION_PENDING**.

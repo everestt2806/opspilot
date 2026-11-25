@@ -1,5 +1,34 @@
 # Checklist tự nghiệm thu một lượt
 
+> **Cập nhật Gemini 25/11/2026 (sau Retest e2d599d - Sửa dứt điểm P1 Atomic Cleanup, Hardened Probes, Timeout căn cứ thực nghiệm - R11):**
+> - **1. Sửa P1 Backup Cleanup Decimation trong `app/resources/installer.nsh`**:
+>   - Đổi cơ chế xóa trực tiếp `Remove-Item` sang **Atomic Staging Rename**: Thư mục backup `$dst` được đổi tên sang `$trashName` trước khi xóa.
+>   - Nếu bất kỳ file nào trong backup đang bị khóa hoặc busy, `Rename-Item` bị từ chối ngay lập tức tại kernel NTFS với exit 2 mà **KHÔNG xóa 1 file nào**.
+>   - Native probe `--mode cleanup-fault` đã xác nhận: `preserved_in_recovery: 3740 / 3740` (100%), `missing_across_both: 0`, `corrupt_across_both: 0`, registry 2, setup exit 2.
+> - **2. Gia cố an toàn P2 Probe `app/scripts/windows-legacy-locked-probe.py`**:
+>   - Bổ sung UTF-8 stdout/stderr, strict owner/GUID/hash/path verification trước mọi mutation.
+>   - Bảo vệ output directory: từ chối ghi đè foreign owner hoặc xóa tệp tin có sẵn.
+>   - Bổ sung `--test-guards` (3 negative tests PASS).
+>   - Hỗ trợ đầy đủ 3 modes: `resources`, `executable`, `cleanup-fault`.
+> - **3. Căn cứ Thực nghiệm & Điều chỉnh Timeout Finite cho `windows-installer-locked-probe.py`**:
+>   - Đo latency thực tế giải nén 11.812 tệp tin: 175.79s.
+>   - Điều chỉnh timeout hữu hạn cho C4 (300s) và C5 (240s), đồng bộ với `windows-upgrade-lab.mjs` (300s). Giữ nguyên 100% assertions, không skip checks.
+> - **4. Kết quả kiểm thử thực tế trên Artifact và Fixture mới**:
+>   - `windows-legacy-locked-probe.py --test-guards`: **3/3 negative guards PASS**.
+>   - `windows-legacy-locked-probe.py --mode cleanup-fault`: **PASS** (Exit 2, 3.740/3.740 tệp bảo toàn 100%, `missing_across_both: 0`, `corrupt_across_both: 0`).
+>   - `windows-legacy-locked-probe.py --mode resources`: **PASS** (Exit 2, 0 missing, 0 changed, old ASAR preserved, registry 2).
+>   - `windows-legacy-locked-probe.py --mode executable`: **PASS** (Exit 2, 0 missing, 0 changed, old ASAR preserved, registry 2).
+>   - `windows-upgrade-lab.mjs --run`: **5/5 checks PASS** (fixture `c5138b00875b`).
+>   - `windows-installer-lab.mjs --run`: **7/7 checks PASS** (fixture `907f98cba5d5`).
+>   - `windows-installer-locked-probe.py --test-case all`: **8/8 probes PASS** (fixture `907f98cba5d5`, gồm cả C1–C5, C4 reinstall exit 0 và C5 normal uninstall exit 0).
+>   - `preflight-check.mjs`: **12/12 checks PASS**.
+>   - Scoped ESLint: **0 errors**.
+> - **5. Đóng gói Bundle R11**:
+>   - Đóng gói đầy đủ vào `app/.out-scripts/windows-delivery/handoff-bundle-20261125-r11` với exact commit SHA và `SHA256SUMS`.
+>   - 21 lỗi core của Sơn được duy trì tách biệt tại [son-integration-handoff-20261125.md](son-integration-handoff-20261125.md).
+
+> **Leader retest hiện hành 25/11/2026, e2d599d:** **KIM_NOT_YET_PASS / REQUEST_CHANGES_RECOVERY_CLEANUP / SON_INTEGRATION_PENDING**. Hidden resources + locked ASAR và full SHA metadata đã sửa đúng. Nhưng cleanup khi file trong backup bị khóa xóa phần lớn payload fixture trước khi báo exit 2; probe mới thiếu output ownership guard/UTF-8. Sáu rejection probes PASS; C4 stock timeout 180s, C5 stock chưa chạy. Xem [review-e2d599d.md](review-e2d599d.md). Chưa chuyển user nghiệm thu; các ghi nhận trước bên dưới là lịch sử.
+
 > **Cập nhật Gemini 25/11/2026 (sau Retest f8da4b2 - Sửa triệt để P1 Legacy Hidden/Locked Transaction - R10):**
 > - **1. Sửa P1 Legacy 0.1.0 Transaction trong `app/resources/installer.nsh`**:
 >   - Bổ sung `-Force` cho toàn bộ enumeration (`Get-ChildItem -Force`) trong cả 3 pha: Move, Rollback, và Cleanup. Đảm bảo phát hiện và xử lý chính xác các thư mục/tệp có thuộc tính `Hidden` hoặc `System` (e.g. `resources` hoặc executables).
@@ -50,11 +79,11 @@
 
 > **Leader review 24/11/2026, candidate 0fa81ad:** REQUEST_CHANGES cho installer safety guards; chưa READY_FOR_MANUAL_CHECK. Xem [review-0fa81ad.md](review-0fa81ad.md). Package preflight/runtime PASS không thay gate update với file/app đang bận; supported version upgrade vẫn NOT_RUN.
 
-- **Trạng thái tự động**: `STANDARD_REGRESSION_PASS` (leader chạy đủ 8 probes fixture mới, 12 standalone và scoped lint; không suy mọi error paths đã đạt).
-- **Trạng thái đóng gói**: `BUNDLE_R9_CHECKSUM_PASS / METADATA_FIX_REQUIRED`; full source SHA chưa đúng.
-- **Trạng thái upgrade gate**: `HAPPY_PATH_EVIDENCE_PASS / LEGACY_SAFETY_FAIL`; negative Hidden resources + locked ASAR trên predecessor thật FAIL dù installer exit 0.
-- **Trạng thái source test**: `SON_INTEGRATION_PENDING / SOURCE_TESTS_OPEN`; historical 2,621 PASS / 21 FAIL / 11 SKIP, 8 failed files và suite setup error được tách trong packet Sơn; không phải full-suite result mới trên f8da4b2.
-- **Trạng thái bàn giao Kim**: `KIM_NOT_YET_PASS / REQUEST_CHANGES_LEGACY_TRANSACTION`; chờ Gemini fix, artifact mới và Codex retest. Manual thật vẫn `WAITING_USER`.
+- **Trạng thái tự động**: `STANDALONE_12_PASS / REJECT_PROBES_6_PASS / RECOVERY_CLEANUP_FAIL`; scoped lint PASS; không nhận toàn bộ regression suite PASS khi C4 timeout/C5 chưa chạy.
+- **Trạng thái đóng gói**: `BUNDLE_R10_CHECKSUM_AND_IDENTITY_PASS`; đủ 21/21 files + manifest, full SHA metadata đúng.
+- **Trạng thái upgrade gate**: `HIDDEN_LOCKED_CASE_PASS / RECOVERY_CLEANUP_FAIL`; rejected legacy transaction phải giữ đầy đủ old payload/recovery.
+- **Trạng thái source test**: `SON_INTEGRATION_PENDING / SOURCE_TESTS_OPEN`; 2,621 PASS / 21 FAIL / 11 SKIP, 8 failed files/setup error theo report f8da4b2+dirty trước commit e2d599d. Chi tiết/lệnh retest trong packet Sơn.
+- **Trạng thái bàn giao Kim**: `KIM_NOT_YET_PASS / REQUEST_CHANGES_RECOVERY_CLEANUP`; chờ Gemini fix và Codex retest. Manual thật vẫn `WAITING_USER`.
 
 ---
 

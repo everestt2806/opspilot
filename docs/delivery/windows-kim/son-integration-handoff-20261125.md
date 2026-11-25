@@ -2,16 +2,17 @@
 
 Ngày 25/11/2026. Theo yêu cầu user: Kim phải hoàn tất các tests thuộc Windows delivery; các ca core/tích hợp do Sơn xử lý và chạy lại sau khi kéo code. Packet này để user/Sơn nhận qua Git, chưa có việc gửi tin nhắn hoặc tự tích hợp nhánh.
 
-**SON_INTEGRATION_PENDING.** Không coi các ca dưới đây đã được miễn hoặc PASS. Kim vẫn phải sửa lỗi legacy installer trong [review-f8da4b2.md](review-f8da4b2.md); không đẩy lỗi đó sang Sơn. Phân công gốc: [tk-s7-parallel-2026-11-16.md](../../tasks/tk-s7-parallel-2026-11-16.md).
+**SON_INTEGRATION_PENDING.** Không coi các ca dưới đây đã được miễn hoặc PASS. Kim vẫn phải sửa cleanup recovery và probe guard trong [review-e2d599d.md](review-e2d599d.md); không đẩy lỗi đó sang Sơn. Lỗi Hidden resources cũ đã leader retest PASS. Phân công gốc: [tk-s7-parallel-2026-11-16.md](../../tasks/tk-s7-parallel-2026-11-16.md).
 
 ## Nguồn evidence và giới hạn
 
-Evidence mới nhất chạy trên candidate hiện tại:
+Evidence source mới nhất, chạy trước commit e2d599d:
 - `app/.out-scripts/windows-delivery/source-runs/run-1795601232149-16952-f45ccb/source-check-report.json`
 - SHA256: `f879a7fb6a0f60932ce3df933f0074cd641cfd432ef59ee392938bc6888fe594`
 - Thời điểm chạy: **25/11/2026 17:16:00 GMT+7**.
+- Provenance thực của report: **f8da4b29b09b1914b2be6b58ef92dd38e767949a + dirty tree**, dirty diff SHA `c41ae46f9f62c0cecf8330e48e1ee5ab643dbce595c7a7fff05e358ab838ee59`; không phải clean e2d599d. Core `app/src/**` không đổi giữa hai commits.
 
-Số liệu xác nhận: **2,621 PASS / 21 failed assertions / 11 SKIP**, **8 failed files** (Vitest đếm 14 failed suites do nested suites). Toàn bộ 21 lỗi đều thuộc phạm vi của Sơn; **0 lỗi thuộc phạm vi delivery của Kim** (`delivery_failures_count: 0`, REGRESSION: NONE). File `externalHttpsProbe.test.ts` fail lúc setup môi trường (thiếu WSL/Linux + OpenSSL), không có failed assertion riêng trong 21.
+Số liệu xác nhận: **2,621 PASS / 21 failed assertions / 11 SKIP**, **8 failed files** (Vitest đếm 14 failed suites do nested suites). Toàn bộ 21 assertions fail nằm trong các files Sơn sở hữu; `delivery_failures_count: 0` chỉ là phân loại của Vitest, không chứng minh mọi tests NSIS/native thuộc Kim đạt hoặc không có regression. File `externalHttpsProbe.test.ts` fail lúc setup môi trường (WSL/Linux + OpenSSL), không có failed assertion riêng trong 21.
 
 Raw JSON/log có thể chứa đường dẫn máy và thông tin môi trường: giữ ignored, không commit/upload. Packet tracked chỉ ghi tên tests và thông tin lỗi đã lọc.
 

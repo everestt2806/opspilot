@@ -393,7 +393,7 @@ def main():
 
         # C4: Positive control - Same-version reinstall via full installer
         print(f"\n[*] Case C4: Positive control - Same-version reinstall via full installer...")
-        c4_rc = run(installer, ["/S", f"/D={install}"], "07-full-installer-reinstall", out_dir, fixture_dir, timeout=180)
+        c4_rc = run(installer, ["/S", f"/D={install}"], "07-full-installer-reinstall", out_dir, fixture_dir, timeout=300)
         print(f"[+] Full installer reinstall exited with code: {c4_rc} (expected 0)")
         missing_c4, corrupted_c4 = check_payload_integrity(install, initial_inventory)
         reg_c4 = get_registry_count(guid)
@@ -421,7 +421,7 @@ def main():
 
         # C5: Positive control - Normal uninstall
         print(f"\n[*] Case C5: Positive control - Normal uninstall...")
-        c5_rc = run(uninstaller, ["/S", f"_?={install}"], "08-normal-uninstall", out_dir, fixture_dir, timeout=120)
+        c5_rc = run(uninstaller, ["/S", f"_?={install}"], "08-normal-uninstall", out_dir, fixture_dir, timeout=240)
         print(f"[+] Uninstaller exited with code: {c5_rc} (expected 0)")
         install_exists = install.exists()
         reg_c5 = get_registry_count(guid)

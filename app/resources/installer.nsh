@@ -122,12 +122,15 @@
       ${EndIf}
 
       # Transaction succeeded: legacy files safely moved to $3. Clean up backup directory and proceed with upgrade.
-      nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$src = '$INSTDIR'.TrimEnd('\'); $$dst = '$3'.TrimEnd('\'); try { Remove-Item -LiteralPath ('\\?\' + $$dst) -Recurse -Force -ErrorAction Stop } catch { exit 1 }; $$rem_src = @(Get-ChildItem -LiteralPath $$src -Force -ErrorAction SilentlyContinue); if ($$rem_src.Count -gt 0) { exit 1 }; exit 0"`
+      # To prevent partial deletion of the backup if a file is busy or locked, we test cleanability by atomically
+      # staging the backup directory to a temporary trash name first. If any file is locked, Rename-Item fails
+      # immediately with zero files deleted, ensuring 100% preservation of the recovery payload.
+      nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$dst = '$3'.TrimEnd('\'); $$trashName = (Split-Path $$dst -Leaf) + '_trash'; $$parent = Split-Path $$dst -Parent; $$trash = Join-Path $$parent $$trashName; try { Rename-Item -LiteralPath $$dst -NewName $$trashName -Force -ErrorAction Stop } catch { exit 2 }; try { Remove-Item -LiteralPath ('\\?\' + $$trash) -Recurse -Force -ErrorAction Stop } catch { try { Rename-Item -LiteralPath $$trash -NewName (Split-Path $$dst -Leaf) -Force -ErrorAction SilentlyContinue } catch {}; exit 2 }; $$src = '$INSTDIR'.TrimEnd('\'); $$rem_src = @(Get-ChildItem -LiteralPath $$src -Force -ErrorAction SilentlyContinue); if ($$rem_src.Count -gt 0) { exit 1 }; exit 0"`
       Pop $4
       ${If} $4 != 0
-        DetailPrint "Failed to finalize legacy transaction cleanup. Aborting upgrade."
+        DetailPrint "Failed to finalize legacy transaction cleanup: recovery backup is busy. Retaining complete backup at $3."
         ${IfNot} ${Silent}
-          MessageBox MB_OK|MB_ICONEXCLAMATION "Failed to finalize upgrade cleanup. Aborting." /SD IDOK
+          MessageBox MB_OK|MB_ICONEXCLAMATION "Failed to finalize upgrade cleanup: backup files are in use. Retaining complete backup at $3." /SD IDOK
         ${EndIf}
         Pop $4
         Pop $3
