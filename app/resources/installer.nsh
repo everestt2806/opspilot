@@ -21,23 +21,125 @@
   ${EndIf}
 !macroend
 
-# Handles old uninstaller result when upgrading from previous versions (e.g. 0.1.0).
-# In electron-builder, default uninstaller lacks customRemoveFiles and fails with $PLUGINSDIR bug when --updated is passed.
-# This prevents silent installer from hanging on an unsuppressed modal MessageBox (which lacks /SD IDOK).
-!macro customUnInstallCheck
-  ${if} $R0 != 0
-    DetailPrint "Previous version uninstaller returned code $R0. Cleaning installation directory before upgrade."
-    nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Remove-Item -LiteralPath '\\?\$INSTDIR' -Recurse -Force -ErrorAction SilentlyContinue"`
+# Error propagation and safe transaction for uninstaller results.
+# Ensures that full installer respects uninstaller rejection / failure, aborting before mutation.
+!macro handleUnInstallCheckMacro ROOT_KEY
+  ${If} ${Errors}
+    DetailPrint "Uninstall was not successful. Not able to launch uninstaller!"
+    ${IfNot} ${Silent}
+      MessageBox MB_OK|MB_ICONEXCLAMATION "Uninstall was not successful. Not able to launch uninstaller!" /SD IDOK
+    ${EndIf}
+    SetErrorLevel 2
+    Quit
+  ${EndIf}
+
+  ${If} $R0 == 0
     ClearErrors
-  ${endif}
+  ${Else}
+    Push $R1
+    !insertmacro readReg $R1 "${ROOT_KEY}" "${UNINSTALL_REGISTRY_KEY}" DisplayVersion
+    ${If} $R1 == ""
+      !ifdef UNINSTALL_REGISTRY_KEY_2
+        !insertmacro readReg $R1 "${ROOT_KEY}" "${UNINSTALL_REGISTRY_KEY_2}" DisplayVersion
+      !endif
+    ${EndIf}
+
+    ${If} $R1 == "0.1.0"
+      DetailPrint "Detected predecessor version 0.1.0 uninstaller failure ($R0). Performing guarded transaction."
+
+      # Guard A: Pre-existing recovery backup directory check
+      Push $1
+      Push $2
+      Push $3
+      Push $4
+
+      StrCpy $1 $INSTDIR
+      StrCpy $2 $INSTDIR "" -1
+      ${if} $2 == "\"
+        StrCpy $1 $INSTDIR -1
+      ${endif}
+      StrCpy $3 "$1_b"
+
+      ${If} ${FileExists} "$3\*.*"
+        DetailPrint "Pre-existing recovery backup found at $3. Aborting upgrade to protect recovery data."
+        ${IfNot} ${Silent}
+          MessageBox MB_OK|MB_ICONEXCLAMATION "Pre-existing recovery backup found at $3. Aborting upgrade to protect recovery data." /SD IDOK
+        ${EndIf}
+        Pop $4
+        Pop $3
+        Pop $2
+        Pop $1
+        Pop $R1
+        SetErrorLevel 2
+        Quit
+      ${EndIf}
+
+      # Guard B: Running application process check
+      nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$dir = '$INSTDIR'.TrimEnd('\'); $$ppid = (Get-CimInstance -ClassName Win32_Process | Where-Object { $$_.ProcessId -eq $$PID }).ParentProcessId; $$procs = @(Get-CimInstance -ClassName Win32_Process | Where-Object { $$_.ProcessId -ne $$PID -and $$_.ProcessId -ne $$ppid -and $$_.Name -notlike 'Uninstall*' -and $$_.Path -and ($$_.Path.Equals($$dir, 'CurrentCultureIgnoreCase') -or $$_.Path.StartsWith($$dir + '\', 'CurrentCultureIgnoreCase')) }); if ($$procs.Count -gt 0) { exit 1 } else { exit 0 }"`
+      Pop $4
+      ${If} $4 != 0
+        DetailPrint "Application is currently running from $INSTDIR. Aborting upgrade."
+        ${IfNot} ${Silent}
+          MessageBox MB_OK|MB_ICONEXCLAMATION "Application is currently running from $INSTDIR. Please close it before upgrading." /SD IDOK
+        ${EndIf}
+        Pop $4
+        Pop $3
+        Pop $2
+        Pop $1
+        Pop $R1
+        SetErrorLevel 2
+        Quit
+      ${EndIf}
+
+      # Guard C: Safe transactional move
+      CreateDirectory "$3"
+      nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$src = '$INSTDIR'.TrimEnd('\'); $$dst = '$3'.TrimEnd('\'); $$items = Get-ChildItem -LiteralPath $$src; foreach ($$it in $$items) { try { Move-Item -LiteralPath $$it.FullName -Destination (Join-Path $$dst $$it.Name) -Force -ErrorAction Stop } catch { exit 1 } }; exit 0"`
+      Pop $4
+      ${If} $4 != 0
+        DetailPrint "Transactional move of legacy payload failed. Performing rollback."
+        nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$src = '$INSTDIR'.TrimEnd('\'); $$dst = '$3'.TrimEnd('\'); $$items = Get-ChildItem -LiteralPath $$dst; foreach ($$it in $$items) { try { Move-Item -LiteralPath $$it.FullName -Destination (Join-Path $$src $$it.Name) -Force -ErrorAction SilentlyContinue } catch {} }"`
+        DetailPrint "Upgrade aborted due to locked or busy file in $INSTDIR."
+        ${IfNot} ${Silent}
+          MessageBox MB_OK|MB_ICONEXCLAMATION "Upgrade aborted: could not move legacy files from $INSTDIR." /SD IDOK
+        ${EndIf}
+        Pop $4
+        Pop $3
+        Pop $2
+        Pop $1
+        Pop $R1
+        SetErrorLevel 2
+        Quit
+      ${EndIf}
+
+      # Transaction succeeded: legacy files safely moved to $3. Clean up and proceed with upgrade.
+      nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Remove-Item -LiteralPath '\\?\$3' -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath '\\?\$INSTDIR' -Recurse -Force -ErrorAction SilentlyContinue"`
+      RMDir "$INSTDIR"
+      Pop $4
+      Pop $3
+      Pop $2
+      Pop $1
+      ClearErrors
+      Pop $R1
+    ${Else}
+      # Not 0.1.0 (e.g. 0.2.0, same-version reinstall, or unclassified version):
+      # Must propagate uninstaller rejection/failure to full installer and stop.
+      DetailPrint "Uninstall was not successful or rejected with error code: $R0."
+      ${IfNot} ${Silent}
+        MessageBox MB_OK|MB_ICONEXCLAMATION "Uninstall was not successful. Uninstaller error code: $R0" /SD IDOK
+      ${EndIf}
+      Pop $R1
+      SetErrorLevel $R0
+      Quit
+    ${EndIf}
+  ${EndIf}
+!macroend
+
+!macro customUnInstallCheck
+  !insertmacro handleUnInstallCheckMacro SHELL_CONTEXT
 !macroend
 
 !macro customUnInstallCheckCurrentUser
-  ${if} $R0 != 0
-    DetailPrint "Previous version uninstaller returned code $R0. Cleaning installation directory before upgrade."
-    nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Remove-Item -LiteralPath '\\?\$INSTDIR' -Recurse -Force -ErrorAction SilentlyContinue"`
-    ClearErrors
-  ${endif}
+  !insertmacro handleUnInstallCheckMacro HKEY_CURRENT_USER
 !macroend
 !endif
 

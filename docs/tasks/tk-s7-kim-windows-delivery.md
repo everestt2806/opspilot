@@ -1,5 +1,45 @@
 # Kim — Windows delivery song song database core
 
+## Gemini hoàn thành sửa R9/P1 — Full Installer Error Propagation & Guarded 0.1.0 Upgrade — 25/11/2026
+
+UPDATE 25/11/2026 — **R9_RESOLVED / ALL_FULL_INSTALLER_PROBES_PASS / UPGRADE_GATE_PASS / BUNDLE_R9_READY / READY_FOR_CODEX_RETEST**.
+- **1. Sửa Error Propagation trong `app/resources/installer.nsh`**:
+  - Macro `handleUnInstallCheckMacro` phân định rõ:
+    - Khi uninstaller trả nonzero ($R0 != 0) và `DisplayVersion != "0.1.0"`: Full Installer lập tức dừng ngay với `SetErrorLevel $R0; Quit`. Không tự xóa `$INSTDIR`, bảo toàn nguyên vẹn 100% payload, registry, payload marker và backup marker.
+    - Đối với bản tiền nhiệm 0.1.0: Chỉ thực hiện nâng cấp khi thỏa mãn đồng thời 3 điều kiện an toàn: (a) Không có recovery backup `<INSTDIR>_b` tồn tại trước; (b) Không có tiến trình đang chạy từ `$INSTDIR`; (c) Transactional move sang `<INSTDIR>_b` thành công 100%. Nếu vi phạm bất kỳ điều kiện nào, Full Installer dừng với exit 2 và không xóa dữ liệu.
+- **2. Mở rộng kiểm thử qua Full Installer trong `app/scripts/windows-installer-locked-probe.py`**:
+  - Tích hợp các ca kiểm thử trực tiếp qua Full Installer `/S /D=<install>` trên fixture độc lập `2186cf4d1309`:
+    - Case C1 (Pre-existing recovery backup pending): Full installer exit 2, backup marker và payload marker giữ nguyên 100%, 0 missing files, registry count 2.
+    - Case C2 (Locked `resources/app.asar`): Full installer exit 2, 0 missing files, registry count 2.
+    - Case C3 (Locked `executable`): Full installer exit 2, 0 missing files, registry count 2.
+    - Case C4 (Positive control - Same-version reinstall via full installer): Full installer exit 0, 0 missing files, registry count 2.
+    - Case C5 (Positive control - Normal uninstall): Uninstaller exit 0, gỡ bỏ sạch sẽ toàn bộ payload và registry.
+  - Ba ca uninstaller probes độc lập (locked asar, locked exe, pre-existing backup) tiếp tục PASS 100%.
+- **3. Chạy Upgrade Lab 0.1.0 -> 0.2.0**:
+  - `node app/scripts/windows-upgrade-lab.mjs --run --record 5705eecb5da5`: **PASS 5/5 checks 100%** (nâng cấp từ bản tiền nhiệm 0.1.0 sang 0.2.0, bảo lưu model bytes, ghi chú, khóa và phục hồi 4 anomaly scores chính xác).
+- **4. Kiểm thử độc lập & linter**:
+  - `node app/scripts/windows-delivery/preflight-check.mjs`: **PASS 12/12 checks 100%**.
+  - `pnpm --prefix app lint`: **PASS (0 errors, 880 warnings)**.
+- **5. Rebuild Production Artifacts & Đóng gói Bundle mới**:
+  - Production installer mới: `OpsPilot-0.2.0-setup.exe` (492,055,460 bytes, SHA256: `7f2de238058bf6df77cbe06a4c6c9ed4ad1423aae13a68931fdadf26372a7523`, Authenticode: `NotSigned`).
+  - Bundle bàn giao mới: `app/.out-scripts/windows-delivery/handoff-bundle-20261125-r9` gồm 17 tệp (installer, 3 operational powershell scripts, locked probe script, checklist offline, và đầy đủ JSON evidences cho installer lab, upgrade lab và full-installer probes), kèm `SHA256SUMS`.
+- **6. Sẵn sàng bàn giao Codex retest**:
+  - Candidate commit: HEAD.
+  - Giữ nguyên trạng thái `SOURCE_TESTS_OPEN` (21 core failures ngoài phạm vi delivery).
+  - Không commit/push private data hay binary artifacts.
+
+START 25/11/2026 (Codex) — Retest candidate 5c21f90/bundle R8 mới; kiểm cả uninstaller probes và full-installer error path, giữ private artifacts local và dùng NSIS namespace riêng.
+
+## Leader retest hiện hành — 5c21f90, 25/11/2026
+
+UPDATE 25/11/2026 (rescan theo user, khoảng 12:09 GMT+7) — Quét lại 8 worktrees/checkout trong workspace, source installer, output directories và origin nhánh Kim. Local vẫn 5c21f90, không có implementation diff/new bundle; 12/12 checksum bundle R8 vẫn khớp và installer vẫn hash 4a6b7532...0022b. Các worktree khác không có thay đổi delivery tương ứng. Origin vẫn 4f5622b, local ahead3; không có fix mới trên remote. Hai customUnInstallCheck hooks vẫn giữ cleanup/ClearErrors khi nonzero. R9 chưa sửa; giữ verdict retest trước, không lặp NSIS labs trên cùng code/artifact. Chỉ các tài liệu review Codex đang thay đổi; private source vẫn ignored và 0 tracked files.
+
+**R7_R8_UNINSTALLER_PROBES_PASS / REQUEST_CHANGES_FULL_INSTALLER_ABORT_PROPAGATION**. Bundle 12/12 hashes khớp, scripts/checklist đã đủ; source scoped lint zero warnings và 12 standalone checks leader chạy lại PASS. Packaged controllers/ML PASS, Main/verifier/catalog ASAR khớp build hiện tại. Fixture mới 8d75dbaa80d5: locked-ASAR, locked-executable và pre-existing backup ba probes đều exit 2, payload/registry giữ nguyên; UTF-8 invocation mặc định hoạt động.
+
+R9/P1 tái hiện ở full installer: tạo backup pending và payload marker, chạy installer `/S`; parent hook bắt nonzero từ uninstaller rồi Remove-Item INSTDIR/ClearErrors, installer exit 0 sau 141.34s và payload marker mất. Backup marker giữ nguyên nhưng contract abort-before-mutation bị bỏ qua. Cần propagate rejection và tách workaround legacy an toàn; thêm integration probes qua full installer, không chỉ uninstaller riêng. [Review/giao việc](../delivery/windows-kim/review-5c21f90.md). Normal uninstall cleanup exit 0, installation/registry fixture đã gỡ; không production profile/VPS/private commit hoặc push. Upgrade happy-path evidence Gemini 5 PASS chưa thay R9; core 21 failures vẫn OPEN. Chưa chuyển user nghiệm thu.
+
+## Lịch sử — Retest 85cac50 và bàn giao R8
+
 START 25/11/2026 (Codex) — Retest candidate 85cac50 và bundle R7 mới: verify provenance/checksum, native locked-file probes và NSIS fixture riêng. Không production profile/VPS; private input/output chỉ local ignored.
 
 ## Leader retest hiện hành — 85cac50, 25/11/2026
