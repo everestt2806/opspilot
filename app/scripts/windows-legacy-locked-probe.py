@@ -305,6 +305,13 @@ def main():
                 if not orig_ok and not rec_ok:
                     (corrupt if orig.exists() or rec.exists() else missing).append(relative)
 
+            target_asar = install / "resources/app.asar"
+            target_committed = (
+                target_asar.is_file() and
+                hashlib.file_digest(target_asar.open("rb"), "sha256").hexdigest() == plan["payloads"][1]["asar"]
+            )
+            r["target_committed"] = target_committed
+
             r.update(
                 initial_files=len(inventory),
                 preserved_at_install=installed,
@@ -315,13 +322,26 @@ def main():
                 registry_count_after=len(get_registry_keys()),
                 backup_exists=backup.exists()
             )
-            r["pass"] = (
-                locked_event.is_set() and
-                r["new_install"]["exit_code"] != 0 and
-                not r["new_install"]["timed_out"] and
-                len(missing) == 0 and
-                len(corrupt) == 0
-            )
+
+            # Strict verification based on commit point:
+            # - If setup committed target (exit 0): target ASAR, registry, and zero missing across both
+            # - If setup aborted before commit (exit != 0): all old files preserved across both
+            if r["new_install"]["exit_code"] == 0:
+                r["pass"] = (
+                    locked_event.is_set() and
+                    target_committed and
+                    r["registry_count_after"] == 2 and
+                    not r["new_install"]["timed_out"] and
+                    len(missing) == 0 and
+                    len(corrupt) == 0
+                )
+            else:
+                r["pass"] = (
+                    locked_event.is_set() and
+                    not r["new_install"]["timed_out"] and
+                    len(missing) == 0 and
+                    len(corrupt) == 0
+                )
         finally:
             stop_event.set()
             thread.join(timeout=5)
@@ -332,8 +352,9 @@ def main():
 
     (out_base / "result.json").write_text(json.dumps(r, indent=2), encoding="utf-8")
     print(f"\nResult: {'PASS' if r['pass'] else 'FAIL'}")
-    print(f"  Installer exit code: {r['new_install']['exit_code']} (expected != 0)")
+    print(f"  Installer exit code: {r['new_install']['exit_code']}")
     if args.mode == "cleanup-fault":
+        print(f"  Target committed (0.2.0 ASAR): {r.get('target_committed')}")
         print(f"  Preserved in recovery: {r['preserved_in_recovery']} / {r['initial_files']}")
         print(f"  Missing across both: {r['missing_across_both']}")
         print(f"  Corrupt across both: {r['corrupt_across_both']}")
@@ -346,7 +367,8 @@ def main():
 
     # Clean up fixture
     print(f"[*] Cleaning up installation fixture...")
-    # If backup still exists (e.g. from cleanup-fault), restore to install for control uninstaller
+    # Release handle before cleanup and remove backup if uninstaller won't touch it
+    import shutil
     if backup.exists() and not (install / plan["executable_name"]).exists():
         install.mkdir(parents=True, exist_ok=True)
         for item in list(backup.iterdir()):
@@ -355,6 +377,11 @@ def main():
                 item.rename(target_p)
         try:
             backup.rmdir()
+        except Exception:
+            pass
+    elif backup.exists():
+        try:
+            shutil.rmtree(backup)
         except Exception:
             pass
 

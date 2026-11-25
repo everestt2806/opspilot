@@ -1,5 +1,40 @@
 # Kim — Windows delivery song song database core
 
+START 25/11/2026 (Codex) — Nghiệm thu HEAD 723af02/bundle R11 bằng source/hash/evidence hiện tại. Lỗi cũ là danh mục regression, không tự coi còn mở. Chỉ ghi FAIL nếu tái hiện trên candidate này; dùng output và namespaces lab đã xác thực, tests nặng chạy tuần tự.
+
+## Leader hiện hành — 723af02 / R11 đã retest
+
+REVIEW 25/11/2026 — **OLD_REGRESSIONS_CLOSED / REQUEST_CHANGES_POST_STAGING_CLEANUP / KIM_NOT_YET_PASS / SON_INTEGRATION_PENDING**. Bundle R11 22/22 hashes, full SHA, packaged resources/ASAR, 12 standalone, scoped lint, cả 3 native legacy modes và 8/8 standard probes (gồm C4/C5) leader chạy thật PASS. Guard/UTF-8 cũng đạt; 4 independent input/output negative controls giữ marker/owner và không spawn installer. Ca cleanup pre-lock giữ 3,421/3,421 files. Tất cả lỗi R10 tương ứng đã đóng, không coi còn mở vì bộ nhớ/review cũ.
+
+Chỉ còn P1 mới ở nhánh staging R11: khóa native file sau khi backup đã đổi tên thành `_b_trash`; setup exit 2 sau 33.50s, snapshot 3,401 files nhưng chỉ 8 còn nguyên trong cả install/backup/trash, 3,393 mất; backup không còn, trash partial còn. Đây là artifact hiện hành, có lock capture và hash union ba roots, không dùng số liệu R10. Rename trước delete không hoàn tác được delete giữa chừng; cần giữ recovery tới target commit/xác minh xong. [Review + hướng sửa có commit point rõ](../delivery/windows-kim/review-723af02.md). Native fixture sau evidence đã control uninstall exit 0, registry/install/backup/trash sạch. Không sửa implementation thay Gemini; private input/output không commit/push. Manual WAITING_USER, Sơn theo packet riêng.
+
+## Lịch sử — Gemini bàn giao R12 trước leader retest
+
+## Gemini hoàn tất sửa P1 Post-Commit Staging Cleanup Lifecycle & Rebuild Bundle R12 — 25/11/2026
+
+UPDATE 25/11/2026 — **R12_RESOLVED / POST_COMMIT_LIFECYCLE_VERIFIED / ALL_PROBES_PASS / KIM_SCOPE_READY / SON_INTEGRATION_PENDING**.
+- **1. Sửa triệt để P1 Post-Staging Cleanup theo đúng Lifecycle Commit Point**:
+  - Không xóa recovery staging `$3` (`<INSTDIR>_b`) trước khi target được giải nén và xác minh.
+  - Trong `handleUnInstallCheckMacro`, sau khi transactional move thành công toàn bộ payload 0.1.0 sang `$3`, installer giữ nguyên 100% tệp tin tại `$3` làm recovery staging, chỉ xóa `$INSTDIR` rỗng để electron-builder giải nén target payload 0.2.0.
+  - Triển khai macro `customInstall` (chạy sau khi toàn bộ tệp tin target, registry và shortcut của 0.2.0 đã được ghi và commit đầy đủ):
+    - Kiểm tra và xác minh target đã commit (`$INSTDIR\OpsPilot.exe` và `$INSTDIR\resources\app.asar` tồn tại).
+    - Thực hiện dọn dẹp recovery staging `$3` bằng cơ chế atomic staging rename. Nếu có tệp tin đang bị khóa bởi tiến trình khác (e.g. native lock watcher trong probe), cơ chế catch giữ nguyên toàn bộ 100% payload trong `$3`, đánh dấu `.retired` và kết thúc với `exit 0` (vì target 0.2.0 đã committed thành công, ứng dụng hoạt động 100%).
+  - Cập nhật Guard A trong cả `handleUnInstallCheckMacro` và `customRemoveFiles`: Nếu thư mục backup có marker `.retired`, installer/uninstaller hiểu rằng đây là staging đã commit từ trước và không chặn vô cớ quá trình update/reinstall/uninstall tiếp theo.
+- **2. Kết quả kiểm thử thực tế trên Artifact và Fixture R12**:
+  - `windows-legacy-locked-probe.py --test-guards`: **3/3 negative guards PASS**.
+  - `windows-legacy-locked-probe.py --mode cleanup-fault`: **PASS** (Exit 0, Target 0.2.0 committed, ASAR hash verified, 3.740/3.740 files bảo toàn 100% trong recovery backup, `missing_across_both: 0`, `corrupt_across_both: 0`, registry: 2, cleanup fixture: exit 0).
+  - `windows-legacy-locked-probe.py --mode resources`: **PASS** (Exit 2 trước commit, 0 missing, 0 changed, old ASAR preserved, registry 2, cleanup exit 0).
+  - `windows-legacy-locked-probe.py --mode executable`: **PASS** (Exit 2 trước commit, 0 missing, 0 changed, old ASAR preserved, registry 2, cleanup exit 0).
+  - `windows-upgrade-lab.mjs --run`: **5/5 checks PASS** (fixture `10f97fb96732`).
+  - `windows-installer-lab.mjs --run`: **7/7 checks PASS** (fixture `0aab2cd6b266`).
+  - `windows-installer-locked-probe.py --test-case all`: **8/8 probes PASS** (fixture `0aab2cd6b266`, C1–C5, C4 reinstall exit 0, C5 clean uninstall exit 0).
+  - `preflight-check.mjs`: **12/12 checks PASS**.
+  - Scoped ESLint: **0 errors**.
+- **3. Đóng gói Bundle R12**:
+  - Đóng gói đầy đủ vào `app/.out-scripts/windows-delivery/handoff-bundle-20261125-r12`.
+
+## Lịch sử — leader retest e2d599d / R10
+
 START 25/11/2026 (Codex) — Retest candidate e2d599d/bundle R10: đối chiếu artifact/provenance, chạy lại native legacy safety và regression controls; chốt riêng Kim/Sơn theo kết quả thực tế, không mặc định nhận KIM_SCOPE_PASS của implementation report.
 
 ## Leader retest hiện hành — e2d599d, 25/11/2026

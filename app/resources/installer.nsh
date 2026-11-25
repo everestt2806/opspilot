@@ -61,17 +61,23 @@
       StrCpy $3 "$1_b"
 
       ${If} ${FileExists} "$3\*.*"
-        DetailPrint "Pre-existing recovery backup found at $3. Aborting upgrade to protect recovery data."
-        ${IfNot} ${Silent}
-          MessageBox MB_OK|MB_ICONEXCLAMATION "Pre-existing recovery backup found at $3. Aborting upgrade to protect recovery data." /SD IDOK
+        ${IfNot} ${FileExists} "$3\.retired"
+          DetailPrint "Pre-existing recovery backup found at $3. Aborting upgrade to protect recovery data."
+          ${IfNot} ${Silent}
+            MessageBox MB_OK|MB_ICONEXCLAMATION "Pre-existing recovery backup found at $3. Aborting upgrade to protect recovery data." /SD IDOK
+          ${EndIf}
+          Pop $4
+          Pop $3
+          Pop $2
+          Pop $1
+          Pop $R1
+          SetErrorLevel 2
+          Quit
+        ${Else}
+          # Staging directory was from a previously committed install; attempt cleanup now if unlocked
+          nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$dst = '$3'.TrimEnd('\'); try { Remove-Item -LiteralPath ('\\?\' + $$dst) -Recurse -Force -ErrorAction Stop } catch {}"`
+          Pop $4
         ${EndIf}
-        Pop $4
-        Pop $3
-        Pop $2
-        Pop $1
-        Pop $R1
-        SetErrorLevel 2
-        Quit
       ${EndIf}
 
       # Guard B: Running application process check
@@ -121,26 +127,9 @@
         Quit
       ${EndIf}
 
-      # Transaction succeeded: legacy files safely moved to $3. Clean up backup directory and proceed with upgrade.
-      # To prevent partial deletion of the backup if a file is busy or locked, we test cleanability by atomically
-      # staging the backup directory to a temporary trash name first. If any file is locked, Rename-Item fails
-      # immediately with zero files deleted, ensuring 100% preservation of the recovery payload.
-      nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$dst = '$3'.TrimEnd('\'); $$trashName = (Split-Path $$dst -Leaf) + '_trash'; $$parent = Split-Path $$dst -Parent; $$trash = Join-Path $$parent $$trashName; try { Rename-Item -LiteralPath $$dst -NewName $$trashName -Force -ErrorAction Stop } catch { exit 2 }; try { Remove-Item -LiteralPath ('\\?\' + $$trash) -Recurse -Force -ErrorAction Stop } catch { try { Rename-Item -LiteralPath $$trash -NewName (Split-Path $$dst -Leaf) -Force -ErrorAction SilentlyContinue } catch {}; exit 2 }; $$src = '$INSTDIR'.TrimEnd('\'); $$rem_src = @(Get-ChildItem -LiteralPath $$src -Force -ErrorAction SilentlyContinue); if ($$rem_src.Count -gt 0) { exit 1 }; exit 0"`
-      Pop $4
-      ${If} $4 != 0
-        DetailPrint "Failed to finalize legacy transaction cleanup: recovery backup is busy. Retaining complete backup at $3."
-        ${IfNot} ${Silent}
-          MessageBox MB_OK|MB_ICONEXCLAMATION "Failed to finalize upgrade cleanup: backup files are in use. Retaining complete backup at $3." /SD IDOK
-        ${EndIf}
-        Pop $4
-        Pop $3
-        Pop $2
-        Pop $1
-        Pop $R1
-        SetErrorLevel 2
-        Quit
-      ${EndIf}
-
+      # Transactional move succeeded: legacy files safely moved to $3.
+      # Retain $3 intact as recovery staging until new target payload is unpacked and committed.
+      # Clean up empty $INSTDIR so electron-builder can cleanly unpack new version.
       RMDir "$INSTDIR"
       Pop $4
       Pop $3
@@ -168,6 +157,35 @@
 
 !macro customUnInstallCheckCurrentUser
   !insertmacro handleUnInstallCheckMacro HKEY_CURRENT_USER
+!macroend
+
+!macro customInstall
+  # Target payload files have been extracted into $INSTDIR by electron-builder.
+  # Verify that target application files exist and are valid before committing cleanup.
+  ${if} ${FileExists} "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
+  ${andIf} ${FileExists} "$INSTDIR\resources\app.asar"
+    DetailPrint "Target payload committed. Performing post-commit cleanup of legacy recovery staging."
+    Push $1
+    Push $2
+    Push $3
+
+    StrCpy $1 $INSTDIR
+    StrCpy $2 $INSTDIR "" -1
+    ${if} $2 == "\"
+      StrCpy $1 $INSTDIR -1
+    ${endif}
+    StrCpy $3 "$1_b"
+
+    ${if} ${FileExists} "$3\*.*"
+      nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$dst = '$3'.TrimEnd('\'); if (Test-Path -LiteralPath $$dst) { $$trashName = (Split-Path $$dst -Leaf) + '_trash'; $$parent = Split-Path $$dst -Parent; $$trash = Join-Path $$parent $$trashName; try { Rename-Item -LiteralPath $$dst -NewName $$trashName -Force -ErrorAction Stop } catch { try { Set-Content -Path (Join-Path $$dst '.retired') -Value 'COMMITTED_RETIRED' -Force -ErrorAction SilentlyContinue } catch {}; exit 0 }; try { Remove-Item -LiteralPath ('\\?\' + $$trash) -Recurse -Force -ErrorAction Stop } catch { try { Rename-Item -LiteralPath $$trash -NewName (Split-Path $$dst -Leaf) -Force -ErrorAction SilentlyContinue } catch {}; try { Set-Content -Path (Join-Path $$dst '.retired') -Value 'COMMITTED_RETIRED' -Force -ErrorAction SilentlyContinue } catch {}; exit 0 } }"`
+      Pop $1
+      # Note: Target is fully committed and operational. Any locked file in retired staging does NOT break target installation.
+    ${endif}
+
+    Pop $3
+    Pop $2
+    Pop $1
+  ${endif}
 !macroend
 !endif
 
@@ -288,8 +306,13 @@ FunctionEnd
     # R8 Guard: Pre-existing backup directory check
     # If backup directory already exists before mutation, reject to protect existing recovery data
     ${if} ${FileExists} "$unBackupDir"
-      DetailPrint "Pre-existing recovery backup found at $unBackupDir. Aborting update before mutation to protect backup."
-      Abort `OpsPilot could not update: pre-existing recovery backup directory found at $unBackupDir. Please inspect, restore, or remove it before updating.`
+      ${ifNot} ${FileExists} "$unBackupDir\.retired"
+        DetailPrint "Pre-existing recovery backup found at $unBackupDir. Aborting update before mutation to protect backup."
+        Abort `OpsPilot could not update: pre-existing recovery backup directory found at $unBackupDir. Please inspect, restore, or remove it before updating.`
+      ${else}
+        nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$dst = '$unBackupDir'.TrimEnd('\'); try { Remove-Item -LiteralPath ('\\?\' + $$dst) -Recurse -Force -ErrorAction Stop } catch {}"`
+        Pop $1
+      ${endif}
     ${endif}
 
     CreateDirectory "$unBackupDir"

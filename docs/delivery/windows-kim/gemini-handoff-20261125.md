@@ -1,6 +1,20 @@
 # Gemini — chốt PASS thật phạm vi Kim, 25/11/2026
 
-## Chỉ dẫn hiện hành sau retest e2d599d / R10
+> **Mốc hiện hành 723af02 / R11:** Đọc [review-723af02.md](review-723af02.md). Tất cả ca lỗi cũ đã retest PASS: metadata, UTF-8/output guards, Hidden/locked payload, cleanup pre-lock, C4 và C5. Các chỉ dẫn sửa e2d599d/R10 bên dưới là lịch sử, không tự làm lại.
+
+## Việc còn lại đúng theo evidence R11
+
+Chỉ xử lý **P1 POST_STAGING_CLEANUP**: native lock sau khi directory đã rename sang `_b_trash`; setup hiện exit 2 và mất 3,393/3,401 old files trên union install/backup/trash. Script/evidence và SHA fixture được chỉ trong review hiện hành. Đây là nhánh mới, không phải báo lại pre-lock R10 đã PASS.
+
+Không vá bằng thêm pre-check/rename trước recursive delete: lỗi phát sinh trong delete vẫn không rollback được các file đã xóa. Đổi đúng lifecycle/commit point: giữ full recovery cho tới khi target mới đã cài và được xác minh đầy đủ; xử lý cleanup sau commit và ownership/retry/reinstall/uninstall theo trạng thái thực. Gemini tự đọc template/hooks electron-builder đang dùng và chọn cách nhỏ nhất trong scope Kim. Không sửa core/predecessor/pins/contracts.
+
+Tiêu chí: nếu setup nonzero trước commit, đủ old hashes trong install hoặc recovery được chỉ rõ; nếu success, đủ new target inventory/ASAR hash, registry và profile/key/model/migration đúng. Không kiểm mỗi exit code/executable, không đổi assertion để nhận partial payload. Nếu thay đổi expected outcome vì dời cleanup sau commit, mô tả rõ semantics và thêm mạnh postconditions xác minh target, persistence, retry, thay vì miễn lỗi.
+
+Chạy native post-staging fault và giữ pre-lock controls; rebuild NSIS/bundle mới, retest affected supported upgrade + 8 standard probes + 12 standalone + scoped lint. Những gates đã đạt giữ nguyên, không mở lại từ ký ức/review cũ. Ghi actual SHA/source/artifact, evidence mới, trạng thái từng case. Sơn giữ packet riêng; manual thật WAITING_USER; không tự push/publish/VPS/private commit. Bàn giao Codex retest đúng candidate mới.
+
+## Các vòng trước — chỉ để tra lịch sử
+
+## Lịch sử chỉ dẫn sau retest e2d599d / R10
 
 Đọc [review-e2d599d.md](review-e2d599d.md). Actual HEAD mới `e2d599d7e28326c8f25beb7d634a889abc299724`. Hidden resources + locked ASAR và full SHA metadata đã leader PASS. Không làm lại phần đã đóng chỉ để đổi vòng báo cáo.
 

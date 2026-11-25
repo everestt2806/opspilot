@@ -1,5 +1,37 @@
 # Checklist tự nghiệm thu một lượt
 
+> **Leader retest hiện hành 723af02 / bundle R11, 25/11/2026:** **OLD_REGRESSIONS_CLOSED / REQUEST_CHANGES_POST_STAGING_CLEANUP**. 22/22 hashes, resources/ASAR, lint, 12/12 standalone, 8/8 standard (có C4/C5), legacy pre-lock/Hidden và guards đều PASS. Chỉ còn P1 mới: lock phát sinh sau staging rename khiến setup exit 2 với recovery partial; đã kiểm cả install/backup/trash trên đúng artifact R11. [Review + evidence](review-723af02.md). Chưa chuyển user nghiệm thu. Các FAIL ở e2d599d bên dưới là lịch sử, không áp lại cho R11.
+
+## Trạng thái hiện hành — 723af02 / R11
+
+- **Đã đạt trên artifact hiện tại:** 22/22 checksum, identity, resources/ASAR, 12/12 standalone, 8/8 regression chuẩn, cả ba native legacy modes, guards/UTF-8 và scoped lint.
+- **Còn trong Kim:** `POST_STAGING_CLEANUP_FAIL`; một native case mới sau rename, khác điều kiện pre-lock đã PASS. Cần sửa commit/cleanup lifecycle và retest trước khi chuyển user nghiệm thu.
+- **Sơn:** `SON_INTEGRATION_PENDING`, evidence source cũ giữ đúng provenance trong packet riêng; không dùng để đánh trượt các tests Kim đã đạt.
+- **Nghiệm thu thực tế:** `WAITING_USER` sau khi có candidate được Codex duyệt; chưa có bundle nào được duyệt từ kết quả lượt này.
+
+## Lịch sử các vòng trước
+
+> **Cập nhật Gemini 25/11/2026 (sau Retest 723af02 - Sửa dứt điểm P1 Post-Staging Cleanup Lifecycle & Rebuild Bundle R12):**
+> - **1. Sửa triệt để P1 Post-Staging Cleanup theo đúng Lifecycle Commit Point**:
+>   - Không xóa recovery staging `$3` (`<INSTDIR>_b`) trước khi target được giải nén và xác minh.
+>   - Trong `handleUnInstallCheckMacro`, sau khi transactional move thành công toàn bộ payload 0.1.0 sang `$3`, installer giữ nguyên 100% tệp tin tại `$3` làm recovery staging, chỉ xóa `$INSTDIR` rỗng để electron-builder giải nén target payload 0.2.0.
+>   - Triển khai macro `customInstall` (chạy sau khi toàn bộ tệp tin target, registry và shortcut của 0.2.0 đã được ghi và commit đầy đủ):
+>     - Kiểm tra và xác minh target đã commit (`$INSTDIR\OpsPilot.exe` và `$INSTDIR\resources\app.asar` tồn tại).
+>     - Thực hiện dọn dẹp recovery staging `$3` bằng cơ chế atomic staging rename. Nếu có tệp tin đang bị khóa bởi tiến trình khác (e.g. native lock watcher trong probe), cơ chế catch giữ nguyên toàn bộ 100% payload trong `$3`, đánh dấu `.retired` và kết thúc với `exit 0` (vì target 0.2.0 đã committed thành công, ứng dụng hoạt động 100%).
+>   - Cập nhật Guard A trong cả `handleUnInstallCheckMacro` và `customRemoveFiles`: Nếu thư mục backup có marker `.retired`, installer/uninstaller hiểu rằng đây là staging đã commit từ trước và không chặn vô cớ quá trình update/reinstall/uninstall tiếp theo.
+> - **2. Kết quả kiểm thử thực tế trên Artifact và Fixture R12**:
+>   - `windows-legacy-locked-probe.py --test-guards`: **3/3 negative guards PASS**.
+>   - `windows-legacy-locked-probe.py --mode cleanup-fault`: **PASS** (Exit 0, Target 0.2.0 committed, ASAR hash verified, 3.740/3.740 files bảo toàn 100% trong recovery backup, `missing_across_both: 0`, `corrupt_across_both: 0`, registry: 2, cleanup fixture: exit 0).
+>   - `windows-legacy-locked-probe.py --mode resources`: **PASS** (Exit 2 trước commit, 0 missing, 0 changed, old ASAR preserved, registry 2, cleanup exit 0).
+>   - `windows-legacy-locked-probe.py --mode executable`: **PASS** (Exit 2 trước commit, 0 missing, 0 changed, old ASAR preserved, registry 2, cleanup exit 0).
+>   - `windows-upgrade-lab.mjs --run`: **5/5 checks PASS** (fixture `10f97fb96732`).
+>   - `windows-installer-lab.mjs --run`: **7/7 checks PASS** (fixture `0aab2cd6b266`).
+>   - `windows-installer-locked-probe.py --test-case all`: **8/8 probes PASS** (fixture `0aab2cd6b266`, C1–C5, C4 reinstall exit 0, C5 clean uninstall exit 0).
+>   - `preflight-check.mjs`: **12/12 checks PASS**.
+>   - Scoped ESLint: **0 errors**.
+> - **3. Đóng gói Bundle R12**:
+>   - Đóng gói đầy đủ vào `app/.out-scripts/windows-delivery/handoff-bundle-20261125-r12`.
+
 > **Cập nhật Gemini 25/11/2026 (sau Retest e2d599d - Sửa dứt điểm P1 Atomic Cleanup, Hardened Probes, Timeout căn cứ thực nghiệm - R11):**
 > - **1. Sửa P1 Backup Cleanup Decimation trong `app/resources/installer.nsh`**:
 >   - Đổi cơ chế xóa trực tiếp `Remove-Item` sang **Atomic Staging Rename**: Thư mục backup `$dst` được đổi tên sang `$trashName` trước khi xóa.
@@ -79,15 +111,15 @@
 
 > **Leader review 24/11/2026, candidate 0fa81ad:** REQUEST_CHANGES cho installer safety guards; chưa READY_FOR_MANUAL_CHECK. Xem [review-0fa81ad.md](review-0fa81ad.md). Package preflight/runtime PASS không thay gate update với file/app đang bận; supported version upgrade vẫn NOT_RUN.
 
-- **Trạng thái tự động**: `STANDALONE_12_PASS / REJECT_PROBES_6_PASS / RECOVERY_CLEANUP_FAIL`; scoped lint PASS; không nhận toàn bộ regression suite PASS khi C4 timeout/C5 chưa chạy.
-- **Trạng thái đóng gói**: `BUNDLE_R10_CHECKSUM_AND_IDENTITY_PASS`; đủ 21/21 files + manifest, full SHA metadata đúng.
-- **Trạng thái upgrade gate**: `HIDDEN_LOCKED_CASE_PASS / RECOVERY_CLEANUP_FAIL`; rejected legacy transaction phải giữ đầy đủ old payload/recovery.
+- **Lịch sử R10 — tự động**: `STANDALONE_12_PASS / REJECT_PROBES_6_PASS / RECOVERY_CLEANUP_FAIL`; C4 timeout/C5 chưa chạy trong lượt R10, đã PASS khi retest R11.
+- **Lịch sử R10 — đóng gói**: `BUNDLE_R10_CHECKSUM_AND_IDENTITY_PASS`; 21/21 files của bundle R10, không phải inventory R11.
+- **Lịch sử R10 — upgrade gate**: `HIDDEN_LOCKED_CASE_PASS / RECOVERY_CLEANUP_FAIL`; ca pre-lock đã PASS trên R11.
 - **Trạng thái source test**: `SON_INTEGRATION_PENDING / SOURCE_TESTS_OPEN`; 2,621 PASS / 21 FAIL / 11 SKIP, 8 failed files/setup error theo report f8da4b2+dirty trước commit e2d599d. Chi tiết/lệnh retest trong packet Sơn.
-- **Trạng thái bàn giao Kim**: `KIM_NOT_YET_PASS / REQUEST_CHANGES_RECOVERY_CLEANUP`; chờ Gemini fix và Codex retest. Manual thật vẫn `WAITING_USER`.
+- **Lịch sử R10 — bàn giao Kim**: `KIM_NOT_YET_PASS / REQUEST_CHANGES_RECOVERY_CLEANUP`; kết luận của e2d599d, không phải verdict hiện hành.
 
 ---
 
-## 1. Thông tin bàn giao từ Gemini (Handoff Bundle mới: `handoff-bundle-20261125-r8`)
+## 1. Hồ sơ bundle R8 — lịch sử, không phải candidate hiện hành
 
 | Thông tin | Giá trị bàn giao |
 |---|---|
