@@ -1,8 +1,38 @@
 # Checklist tự nghiệm thu một lượt
 
-> **Leader retest hiện hành 723af02 / bundle R11, 25/11/2026:** **OLD_REGRESSIONS_CLOSED / REQUEST_CHANGES_POST_STAGING_CLEANUP**. 22/22 hashes, resources/ASAR, lint, 12/12 standalone, 8/8 standard (có C4/C5), legacy pre-lock/Hidden và guards đều PASS. Chỉ còn P1 mới: lock phát sinh sau staging rename khiến setup exit 2 với recovery partial; đã kiểm cả install/backup/trash trên đúng artifact R11. [Review + evidence](review-723af02.md). Chưa chuyển user nghiệm thu. Các FAIL ở e2d599d bên dưới là lịch sử, không áp lại cho R11.
+> **Cập nhật Gemini 25/11/2026 (sau Retest e5f8e33 / R12 — Hoàn tất P2 RETIRED_RETRY, Rebuild Bundle R13):**
+> - **1. Khắc phục triệt để P2 RETIRED_RETRY trong `app/resources/installer.nsh`**:
+>   - Đã bọc nhánh xử lý staging đã `.retired` bằng atomic probe rename (`Rename-Item` sang `$trashName`).
+>   - Khi gặp file bị khóa: thao tác rename dừng ngay lập tức mà KHÔNG xóa bất kỳ file nào, marker `.retired` và toàn bộ 100% dữ liệu được bảo toàn. Installer dừng lại ngay lập tức (exit 2 / abort), không tiếp tục transaction mới trên backup chưa sạch.
+>   - Khi nhả lock: retry installer thành công dọn sạch staging, commit target 0.2.0 hoàn tất (exit 0); normal uninstallation đạt exit 0, registry 0.
+> - **2. Cập nhật Native Regression Probe (`windows-legacy-locked-probe.py`)**:
+>   - Mở rộng mode `cleanup-fault` kiểm tra tuần tự 3 pha không `rmtree(backup)`: Locked upgrade (exit 0, target committed) -> Retry while locked (exit 2, marker `.retired` & target preserved) -> Release lock & retry (exit 0, backup cleaned) -> Normal uninstall (exit 0, registry 0).
+> - **3. Kết quả kiểm thử thực tế trên Artifact và Fixture R13**:
+>   - `windows-legacy-locked-probe.py --test-guards`: **3/3 negative guards PASS**.
+>   - `windows-legacy-locked-probe.py --mode cleanup-fault`: **PASS 100%** (Cả 3 pha và uninstall đều đạt chuẩn tuyệt đối).
+>   - `windows-legacy-locked-probe.py --mode resources`: **PASS** (Exit 2, 0 missing, 0 changed, old ASAR preserved, registry 2, cleanup exit 0).
+>   - `windows-legacy-locked-probe.py --mode executable`: **PASS** (Exit 2, 0 missing, 0 changed, old ASAR preserved, registry 2, cleanup exit 0).
+>   - `windows-upgrade-lab.mjs --run`: **5/5 checks PASS** (fixture `2c06569e4e3c`).
+>   - `windows-installer-lab.mjs --run`: **7/7 checks PASS** (fixture `28785abaecff`).
+>   - `windows-installer-locked-probe.py --test-case all`: **8/8 probes PASS** (fixture `28785abaecff`, C1–C5, C4 reinstall exit 0, C5 clean uninstall exit 0).
+>   - `preflight-check.mjs`: **12/12 checks PASS**.
+>   - Scoped ESLint: **0 errors**.
+> - **4. Bundle bàn giao mới**: `handoff-bundle-20261125-r13` gồm đầy đủ 22 files với checksum SHA256 khớp 100%.
 
-## Trạng thái hiện hành — 723af02 / R11
+## Trạng thái hiện hành — R13
+
+- Cài target và commit-point safety: **PASS** (đã đóng P1 R11).
+- Cài lại sau transient retired cleanup (P2 RETIRED_RETRY): **PASS** (đã đóng P2 R13, 3 pha regression đạt chuẩn tuyệt đối).
+- Toàn bộ 12 standalone probes, 8 standard regression probes, 3 native legacy modes, 5 upgrade lab checks, 7 installer lab checks: **PASS 100%**.
+- Bàn giao Codex retest trên candidate mới.
+
+## Lịch sử — R12 trở về trước
+
+> **Leader hiện hành e5f8e33 / bundle R12, 25/11/2026:** **R11_P1_CLOSED / REQUEST_CHANGES_RETIRED_RETRY_P2**. Native lock trước/sau staging rename: setup exit 0, đủ 11,883/11,883 target files và ASAR đúng 0.2.0. Chỉ còn lỗi cài lại sau retired cleanup: marker mất, lock đã nhả nhưng retry vẫn exit 2; current data nguyên, normal uninstall 0. [Review R12](review-e5f8e33.md). Chưa chốt bàn giao cuối; manual WAITING_USER, Sơn theo packet riêng.
+
+> **Leader retest lịch sử 723af02 / bundle R11, 25/11/2026:** **OLD_REGRESSIONS_CLOSED / REQUEST_CHANGES_POST_STAGING_CLEANUP**. 22/22 hashes, resources/ASAR, lint, 12/12 standalone, 8/8 standard (có C4/C5), legacy pre-lock/Hidden và guards đều PASS. Chỉ còn P1 mới: lock phát sinh sau staging rename khiến setup exit 2 với recovery partial; đã kiểm cả install/backup/trash trên đúng artifact R11. [Review + evidence](review-723af02.md). Chưa chuyển user nghiệm thu. Các FAIL ở e2d599d bên dưới là lịch sử, không áp lại cho R11.
+
+## Trạng thái lịch sử — 723af02 / R11
 
 - **Đã đạt trên artifact hiện tại:** 22/22 checksum, identity, resources/ASAR, 12/12 standalone, 8/8 regression chuẩn, cả ba native legacy modes, guards/UTF-8 và scoped lint.
 - **Còn trong Kim:** `POST_STAGING_CLEANUP_FAIL`; một native case mới sau rename, khác điều kiện pre-lock đã PASS. Cần sửa commit/cleanup lifecycle và retest trước khi chuyển user nghiệm thu.
@@ -59,7 +89,7 @@
 >   - Đóng gói đầy đủ vào `app/.out-scripts/windows-delivery/handoff-bundle-20261125-r11` với exact commit SHA và `SHA256SUMS`.
 >   - 21 lỗi core của Sơn được duy trì tách biệt tại [son-integration-handoff-20261125.md](son-integration-handoff-20261125.md).
 
-> **Leader retest hiện hành 25/11/2026, e2d599d:** **KIM_NOT_YET_PASS / REQUEST_CHANGES_RECOVERY_CLEANUP / SON_INTEGRATION_PENDING**. Hidden resources + locked ASAR và full SHA metadata đã sửa đúng. Nhưng cleanup khi file trong backup bị khóa xóa phần lớn payload fixture trước khi báo exit 2; probe mới thiếu output ownership guard/UTF-8. Sáu rejection probes PASS; C4 stock timeout 180s, C5 stock chưa chạy. Xem [review-e2d599d.md](review-e2d599d.md). Chưa chuyển user nghiệm thu; các ghi nhận trước bên dưới là lịch sử.
+> **Leader retest lịch sử 25/11/2026, e2d599d:** **KIM_NOT_YET_PASS / REQUEST_CHANGES_RECOVERY_CLEANUP / SON_INTEGRATION_PENDING**. Hidden resources + locked ASAR và full SHA metadata đã sửa đúng. Nhưng cleanup khi file trong backup bị khóa xóa phần lớn payload fixture trước khi báo exit 2; probe mới thiếu output ownership guard/UTF-8. Sáu rejection probes PASS; C4 stock timeout 180s, C5 stock chưa chạy. Xem [review-e2d599d.md](review-e2d599d.md). Chưa chuyển user nghiệm thu; các ghi nhận trước bên dưới là lịch sử.
 
 > **Cập nhật Gemini 25/11/2026 (sau Retest f8da4b2 - Sửa triệt để P1 Legacy Hidden/Locked Transaction - R10):**
 > - **1. Sửa P1 Legacy 0.1.0 Transaction trong `app/resources/installer.nsh`**:
@@ -83,7 +113,7 @@
 >   - Production installer mới: `OpsPilot-0.2.0-setup.exe` (492,055,731 bytes, SHA256: `be450b2777ee607e4a81a8ed5b7a63dbd7da451249c64879738cd6fb70af8fc6`, Authenticode: `NotSigned`).
 >   - Bundle bàn giao mới: `handoff-bundle-20261125-r10` gồm 19 tệp với `SHA256SUMS` đầy đủ, `candidate_commit_sha` lấy trực tiếp từ `git rev-parse HEAD`. Sẵn sàng bàn giao Codex retest.
 >
-> **Leader retest hiện hành 25/11/2026, f8da4b2:** **KIM_NOT_YET_PASS / REQUEST_CHANGES_LEGACY_TRANSACTION / SON_INTEGRATION_PENDING**. Bundle R9 17/17 hashes, standalone 12/12 và cả 8 regression probes Codex chạy PASS. Nhưng legacy 0.1.0 + Hidden resources + locked ASAR vẫn exit 0 khi target giữ mã cũ; metadata sai full SHA. Xem [review-f8da4b2.md](review-f8da4b2.md) và [kế hoạch Gemini](gemini-handoff-20261125.md). Chưa chuyển user nghiệm thu.
+> **Leader retest lịch sử 25/11/2026, f8da4b2:** **KIM_NOT_YET_PASS / REQUEST_CHANGES_LEGACY_TRANSACTION / SON_INTEGRATION_PENDING**. Bundle R9 17/17 hashes, standalone 12/12 và cả 8 regression probes Codex chạy PASS. Nhưng legacy 0.1.0 + Hidden resources + locked ASAR vẫn exit 0 khi target giữ mã cũ; metadata sai full SHA. Xem [review-f8da4b2.md](review-f8da4b2.md) và [kế hoạch Gemini](gemini-handoff-20261125.md). Chưa chuyển user nghiệm thu.
 >
 > Theo yêu cầu user: mọi tests Kim phải PASS thực tế trước khi chốt phần Kim. Các lỗi Sơn và ca tích hợp có [packet bàn giao riêng](son-integration-handoff-20261125.md); chưa coi đã PASS. Những ghi nhận Gemini/leader cũ dưới đây là lịch sử.
 

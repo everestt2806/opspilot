@@ -289,10 +289,10 @@ def main():
         thread = threading.Thread(target=watch_backup, daemon=True)
         thread.start()
         try:
-            print("[*] Running 0.2.0 installer with cleanup-fault watcher active...")
-            r["new_install"] = run_setup(new_installer, "new-install", timeout=240)
+            print("[*] Phase 1: Running 0.2.0 installer with cleanup-fault watcher active...")
+            r["new_install"] = run_setup(new_installer, "01-initial-upgrade", timeout=240)
             r["lock_acquired_in_backup"] = locked_event.is_set()
-            print(f"[+] New installer exit code: {r['new_install']['exit_code']} (lock in backup: {locked_event.is_set()})")
+            print(f"[+] Initial upgrade exit code: {r['new_install']['exit_code']} (lock in backup: {locked_event.is_set()})")
 
             missing, corrupt = [], []
             installed, recovered = 0, 0
@@ -311,6 +311,39 @@ def main():
                 hashlib.file_digest(target_asar.open("rb"), "sha256").hexdigest() == plan["payloads"][1]["asar"]
             )
             r["target_committed"] = target_committed
+            retired_marker_present = (backup / ".retired").is_file()
+            r["retired_marker_present_p1"] = retired_marker_present
+
+            # Phase 2: Retry WHILE LOCK STILL HELD (DO NOT delete backup, DO NOT release lock)
+            print("[*] Phase 2: Retrying full installer while retired backup lock is still held...")
+            r["retry_locked"] = run_setup(new_installer, "02-retry-locked", timeout=120)
+            print(f"[+] Retry while locked exit code: {r['retry_locked']['exit_code']} (expected != 0)")
+            retired_marker_after_p2 = (backup / ".retired").is_file()
+            r["retired_marker_preserved_p2"] = retired_marker_after_p2
+            target_intact_p2 = (
+                target_asar.is_file() and
+                hashlib.file_digest(target_asar.open("rb"), "sha256").hexdigest() == plan["payloads"][1]["asar"]
+            )
+            r["target_intact_p2"] = target_intact_p2
+
+            # Phase 3: Release lock handle, then retry full installer
+            print("[*] Phase 3: Releasing lock handle and retrying full installer...")
+            stop_event.set()
+            thread.join(timeout=5)
+            if lock_state.get("handle"):
+                kernel.CloseHandle(lock_state.pop("handle"))
+            if lock_state.get("initial_handle"):
+                kernel.CloseHandle(lock_state.pop("initial_handle"))
+
+            r["retry_unlocked"] = run_setup(new_installer, "03-retry-unlocked", timeout=240)
+            print(f"[+] Retry after release exit code: {r['retry_unlocked']['exit_code']} (expected 0)")
+            target_intact_p3 = (
+                target_asar.is_file() and
+                hashlib.file_digest(target_asar.open("rb"), "sha256").hexdigest() == plan["payloads"][1]["asar"]
+            )
+            r["target_intact_p3"] = target_intact_p3
+            backup_cleaned_p3 = not backup.exists()
+            r["backup_cleaned_p3"] = backup_cleaned_p3
 
             r.update(
                 initial_files=len(inventory),
@@ -323,25 +356,19 @@ def main():
                 backup_exists=backup.exists()
             )
 
-            # Strict verification based on commit point:
-            # - If setup committed target (exit 0): target ASAR, registry, and zero missing across both
-            # - If setup aborted before commit (exit != 0): all old files preserved across both
-            if r["new_install"]["exit_code"] == 0:
-                r["pass"] = (
-                    locked_event.is_set() and
-                    target_committed and
-                    r["registry_count_after"] == 2 and
-                    not r["new_install"]["timed_out"] and
-                    len(missing) == 0 and
-                    len(corrupt) == 0
-                )
-            else:
-                r["pass"] = (
-                    locked_event.is_set() and
-                    not r["new_install"]["timed_out"] and
-                    len(missing) == 0 and
-                    len(corrupt) == 0
-                )
+            r["pass"] = (
+                locked_event.is_set() and
+                r["new_install"]["exit_code"] == 0 and
+                target_committed and
+                retired_marker_present and
+                r["retry_locked"]["exit_code"] != 0 and
+                retired_marker_after_p2 and
+                target_intact_p2 and
+                r["retry_unlocked"]["exit_code"] == 0 and
+                target_intact_p3 and
+                len(missing) == 0 and
+                len(corrupt) == 0
+            )
         finally:
             stop_event.set()
             thread.join(timeout=5)

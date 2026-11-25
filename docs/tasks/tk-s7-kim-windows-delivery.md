@@ -1,8 +1,20 @@
 # Kim — Windows delivery song song database core
 
+START 25/11/2026 (Codex) — Retest e5f8e33/bundle R12: identity, commit-point cleanup, retained staging/retry và controls trên artifact mới. Kết quả 723af02 là lịch sử, không tự áp lại; không core/VPS/private commit/push.
+
+## Leader hiện hành — e5f8e33 / R12
+
+REVIEW 25/11/2026 — **R11_P1_CLOSED / REQUEST_CHANGES_RETIRED_RETRY_P2 / KIM_NOT_YET_PASS / SON_INTEGRATION_PENDING**. 22/22 bundle hashes + full SHA, production resources/ASAR, scoped lint và probe guards PASS. Native upgrade khi khóa trước/sau staging rename đều setup exit 0, **11,883/11,883 target files** đúng hash, ASAR 0.2.0, registry 2. Lock trước rename còn giữ đủ 3,859 old files. Lỗi mất recovery trước target commit của R11 đã đóng, không báo lại vì ký ức.
+
+P2 mới còn trong Kim: retry với retired staging còn khóa exit 2 an toàn (11,884 current files nguyên), nhưng marker `.retired` mất. Sau khi nhả lock và chạy full installer lại, vẫn exit 2 sau 16.95s vì backup bị hiểu thành pending recovery. Normal uninstall exit 0, registry 0; không mất/hỏng current data. [Review/evidence và sửa nhỏ](../delivery/windows-kim/review-e5f8e33.md), [prompt Gemini hiện hành](../delivery/windows-kim/gemini-handoff-20261125.md). Cần giữ authority state và dừng trước reuse backup khi retired cleanup lỗi; không làm lại post-commit design R12 đã đúng.
+
+Ca đường dẫn lab sâu được loại khỏi verdict cleanup sau khi xác minh lại ở root ngắn (longest target 232) đủ toàn bộ inventory; không yêu cầu sửa code vì lỗi setup kiểm thử. Physical cases ignored r12a07c2/r12b07c2 đã gỡ app/registry, giữ retired/staged diagnostic files local. R12 reports 7/5/8 của Gemini được kiểm evidence, không nhận là leader fresh rerun. Standalone/core source không đổi, historical evidence ghi rõ; không full-core rerun/miễn 21 failures của Sơn. Source không đổi, chỉ docs sanitized; không private commit/push/VPS. Manual WAITING_USER.
+
+## Lịch sử — leader 723af02 / R11
+
 START 25/11/2026 (Codex) — Nghiệm thu HEAD 723af02/bundle R11 bằng source/hash/evidence hiện tại. Lỗi cũ là danh mục regression, không tự coi còn mở. Chỉ ghi FAIL nếu tái hiện trên candidate này; dùng output và namespaces lab đã xác thực, tests nặng chạy tuần tự.
 
-## Leader hiện hành — 723af02 / R11 đã retest
+## Leader lịch sử — 723af02 / R11 đã retest
 
 REVIEW 25/11/2026 — **OLD_REGRESSIONS_CLOSED / REQUEST_CHANGES_POST_STAGING_CLEANUP / KIM_NOT_YET_PASS / SON_INTEGRATION_PENDING**. Bundle R11 22/22 hashes, full SHA, packaged resources/ASAR, 12 standalone, scoped lint, cả 3 native legacy modes và 8/8 standard probes (gồm C4/C5) leader chạy thật PASS. Guard/UTF-8 cũng đạt; 4 independent input/output negative controls giữ marker/owner và không spawn installer. Ca cleanup pre-lock giữ 3,421/3,421 files. Tất cả lỗi R10 tương ứng đã đóng, không coi còn mở vì bộ nhớ/review cũ.
 
@@ -37,7 +49,7 @@ UPDATE 25/11/2026 — **R12_RESOLVED / POST_COMMIT_LIFECYCLE_VERIFIED / ALL_PROB
 
 START 25/11/2026 (Codex) — Retest candidate e2d599d/bundle R10: đối chiếu artifact/provenance, chạy lại native legacy safety và regression controls; chốt riêng Kim/Sơn theo kết quả thực tế, không mặc định nhận KIM_SCOPE_PASS của implementation report.
 
-## Leader retest hiện hành — e2d599d, 25/11/2026
+## Leader retest lịch sử — e2d599d, 25/11/2026
 
 REVIEW 25/11/2026 — **REQUEST_CHANGES_RECOVERY_CLEANUP / KIM_NOT_YET_PASS / SON_INTEGRATION_PENDING**. Bundle R10 đúng 21/21 checksums, full candidate SHA đúng, NotSigned; packaged controller/ML + ASAR identity PASS. Native Hidden resources + locked ASAR đã PASS thực tế (exit 2, 0 missing/changed). Scoped lint zero warnings.
 
@@ -110,7 +122,7 @@ UPDATE 25/11/2026 — **R10_RESOLVED / ALL_LEGACY_PROBES_PASS / ALL_STANDARD_PRO
 
 START 25/11/2026 (Codex) — Retest f8da4b2/bundle R9: verify artifact/source identity, full installer rejection path và guarded legacy branch; fixtures riêng, private data chỉ local ignored.
 
-## Leader retest hiện hành — f8da4b2, 25/11/2026
+## Leader retest lịch sử — f8da4b2, 25/11/2026
 
 REVIEW 25/11/2026 — **R9_STANDARD_PROBES_PASS / REQUEST_CHANGES_LEGACY_TRANSACTION / KIM_NOT_YET_PASS / SON_INTEGRATION_PENDING**. Actual HEAD `f8da4b29b09b1914b2be6b58ef92dd38e767949a`. Codex xác nhận bundle 17/17 hashes, scoped lint zero warnings, standalone 12/12, packaged controllers/ML và 4 compiled ASAR files PASS. Fresh fixture `c314879c4345`: đủ 8 uninstaller/full-installer probes PASS, gồm C1–C5. R9 propagation của nhánh 0.2.0 đã đạt.
 
@@ -150,7 +162,7 @@ UPDATE 25/11/2026 — **R9_RESOLVED / ALL_FULL_INSTALLER_PROBES_PASS / UPGRADE_G
 
 START 25/11/2026 (Codex) — Retest candidate 5c21f90/bundle R8 mới; kiểm cả uninstaller probes và full-installer error path, giữ private artifacts local và dùng NSIS namespace riêng.
 
-## Leader retest hiện hành — 5c21f90, 25/11/2026
+## Leader retest lịch sử — 5c21f90, 25/11/2026
 
 UPDATE 25/11/2026 (rescan theo user, khoảng 12:09 GMT+7) — Quét lại 8 worktrees/checkout trong workspace, source installer, output directories và origin nhánh Kim. Local vẫn 5c21f90, không có implementation diff/new bundle; 12/12 checksum bundle R8 vẫn khớp và installer vẫn hash 4a6b7532...0022b. Các worktree khác không có thay đổi delivery tương ứng. Origin vẫn 4f5622b, local ahead3; không có fix mới trên remote. Hai customUnInstallCheck hooks vẫn giữ cleanup/ClearErrors khi nonzero. R9 chưa sửa; giữ verdict retest trước, không lặp NSIS labs trên cùng code/artifact. Chỉ các tài liệu review Codex đang thay đổi; private source vẫn ignored và 0 tracked files.
 
@@ -162,7 +174,7 @@ R9/P1 tái hiện ở full installer: tạo backup pending và payload marker, c
 
 START 25/11/2026 (Codex) — Retest candidate 85cac50 và bundle R7 mới: verify provenance/checksum, native locked-file probes và NSIS fixture riêng. Không production profile/VPS; private input/output chỉ local ignored.
 
-## Leader retest hiện hành — 85cac50, 25/11/2026
+## Leader retest lịch sử — 85cac50, 25/11/2026
 
 **R7_LOCKED_CASES_PASS / REQUEST_CHANGES_BACKUP_SAFETY / SOURCE_PROBES_FAIL / UPGRADE_FAIL**. Bundle 5/5 hashes khớp, NotSigned; packaged controllers/ML PASS, Main ASAR khớp build hiện tại. Fixture riêng d3bf9e88fa32 build PASS; leader chạy lại locked-ASAR và locked-executable: exit 2, 0 missing/corrupt, 2 registry keys giữ nguyên. Normal uninstall sau probes exit 0, xóa installation/registry fixture hoàn toàn.
 
@@ -199,7 +211,7 @@ UPDATE 25/11/2026 — **R8_RESOLVED / SOURCE_PROBES_PASS / UPGRADE_GATE_PASS / N
 
 START 24/11/2026 (Codex) — Review output 0fa81ad: kiểm bundle/provenance, installer macros và packaged-app/lifecycle bằng fixture riêng; giữ private inputs/output local, không production profile/VPS.
 
-## Leader review hiện hành — 0fa81ad, 24/11/2026
+## Leader review lịch sử — 0fa81ad, 24/11/2026
 
 **REQUEST_CHANGES_INSTALLER_SAFETY / UPGRADE_NOT_RUN / SOURCE_TESTS_OPEN**. Leader rerun scoped ESLint, 12 standalone probes, 14 legacy native helper checks, package gate và full packaged app 5 checks: PASS. Bundle 7/7 hashes khớp; packaged controllers/ML PASS, các compiled files kiểm trong ASAR khớp current output. Signature thực NotSigned; kích thước installer thực 492,049,356 bytes. Chưa accept “FULL_LABS_PASS/P0–P6 hoàn tất”.
 
@@ -713,3 +725,37 @@ Cần nguyên bộ approved controller-releases có catalog/release payload/depe
   - `6ccec37f01a83c50e4d0eca3f03512b717d266fd83eae352e9abfe8d0d4104ab  restore-profile.ps1`
   - `c812da55f54a6a71e3266be73fec18cd552ff4d1a63427080a212277b527bd3e  source-check-report.json`
 - Trạng thái: **LOCAL_PASS** cho phần automation delivery code; **BLOCKED_PACKAGE** cho phần đóng gói installer (chờ Coordinator cung cấp 9 release directories cho `app/resources/controller-releases/`).
+
+---
+
+## Review leader vòng 12 (R12) & Khắc phục P2 RETIRED_RETRY (R13) — 25/11/2026 (Gemini)
+
+Đã nhận review từ Leader Codex (`docs/delivery/windows-kim/review-e5f8e33.md`) trên candidate `e5f8e33`:
+- **R11 P1 đã đóng hoàn toàn**: Thiết kế post-commit staging cleanup được leader kiểm thử và xác nhận PASS cả 2 trường hợp locked trước và sau rename; setup exit 0 và đủ 11,883 target files.
+- **Yêu cầu duy nhất còn lại — P2 RETIRED_RETRY**: Khi cleanup staging đã có marker `.retired` gặp file bị khóa, code cũ dùng `Remove-Item` trực tiếp và `catch {}`, vô tình xóa mất file `.retired` trước khi gặp lỗi, rồi vẫn nuốt lỗi đi tiếp. Hậu quả là lần retry tiếp theo khi lock còn thì bị mất marker, và sau khi nhả lock thì installer exit 2 do nhầm staging là active pending recovery.
+
+### 1. Giải pháp kỹ thuật R13 trong `app/resources/installer.nsh`:
+- Tại cả 2 nhánh xử lý staging có `.retired` (Guard A và `customRemoveFiles`):
+  - Áp dụng atomic cleanability probe: Sử dụng `Rename-Item -LiteralPath $dst -NewName $trashName -Force -ErrorAction Stop` để kiểm tra khả năng dọn dẹp trước.
+  - Nếu có bất kỳ tệp nào bị khóa trong staging: thao tác rename thất bại ngay lập tức mà KHÔNG xóa bất kỳ file nào, marker `.retired` và toàn bộ payload được bảo toàn 100%. Script lập tức phục hồi marker `.retired` (nếu có biến động) và dừng lại (exit 2 / abort), TUYỆT ĐỐI KHÔNG tiếp tục transaction mới trên backup chưa sạch (không `CreateDirectory` hay `safeMove`).
+  - Nếu staging sạch (không bị khóa): thao tác rename thành công, tiến hành xóa thư mục trash và tiếp tục transaction bình thường.
+
+### 2. Cập nhật Native Regression Probe (`app/scripts/windows-legacy-locked-probe.py`):
+- Chế độ `cleanup-fault` được viết lại thành quy trình 3 pha liên tục, **không `rmtree(backup)`** trước retry:
+  - **Pha 1 (Initial upgrade với lock trong staging)**: Installer 0.2.0 chạy với locked handle, dọn dẹp thất bại sau commit nhưng target 0.2.0 đã committed thành công; staging được đánh dấu `.retired`. Exit code 0, target intact.
+  - **Pha 2 (Retry khi lock còn tồn tại)**: Chạy lại full installer trong khi native lock handle vẫn đang giữ. Installer phát hiện staging `.retired` đang bị khóa, từ chối tiến hành transaction mới và trả exit code 2 (nonzero). Toàn bộ 11,883 target files và marker `.retired` nguyên vẹn.
+  - **Pha 3 (Nhả lock và retry)**: Giải phóng native lock (`CloseHandle`), chạy lại full installer. Installer dọn dẹp sạch sẽ staging `.retired` đã nhả khóa, commit target 0.2.0 hoàn tất (exit code 0), backup directory bị xóa sạch.
+  - **Pha 4 (Normal uninstall)**: Uninstaller chạy gỡ cài đặt sạch sẽ, trả exit code 0, registry 0.
+
+### 3. Kết quả kiểm thử thực tế (R13):
+- `windows-legacy-locked-probe.py --test-guards`: **PASS** (3/3 guards).
+- `windows-legacy-locked-probe.py --mode cleanup-fault`: **PASS** (3/3 phases + uninstall).
+- `windows-legacy-locked-probe.py --mode resources`: **PASS** (exit 2, 0 missing files).
+- `windows-legacy-locked-probe.py --mode executable`: **PASS** (exit 2, 0 missing files).
+- `windows-upgrade-lab.mjs --run --record 2c06569e4e3c`: **PASS** (5/5 checks).
+- `windows-installer-lab.mjs --run --record 28785abaecff`: **PASS** (7/7 checks).
+- `windows-installer-locked-probe.py --record 28785abaecff --test-case all`: **PASS** (8/8 cases: C1-C5, locked asar, locked exe, R8 pre-existing backup).
+- `preflight-check.mjs`: **PASS** (12/12 standalone checks).
+- `pnpm lint`: **PASS** (0 errors).
+- Đóng gói bundle `handoff-bundle-20261125-r13` đầy đủ 22 files với checksum SHA256 khớp 100%.
+

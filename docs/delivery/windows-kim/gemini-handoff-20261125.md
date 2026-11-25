@@ -1,6 +1,38 @@
 # Gemini — chốt PASS thật phạm vi Kim, 25/11/2026
 
-> **Mốc hiện hành 723af02 / R11:** Đọc [review-723af02.md](review-723af02.md). Tất cả ca lỗi cũ đã retest PASS: metadata, UTF-8/output guards, Hidden/locked payload, cleanup pre-lock, C4 và C5. Các chỉ dẫn sửa e2d599d/R10 bên dưới là lịch sử, không tự làm lại.
+## Bàn giao hiện hành — R13 (Khắc phục hoàn tất P2 RETIRED_RETRY)
+
+Candidate R13: Khắc phục triệt để lỗi mất marker `.retired` khi cleanup gặp locked files và đảm bảo block retry an toàn trên busy staging.
+- Đã giải quyết P2 RETIRED_RETRY theo đúng yêu cầu Codex trong [review-e5f8e33.md](review-e5f8e33.md).
+- Kiểm thử 3 pha native regression không `rmtree(backup)`:
+  1. Locked upgrade: exit 0, target committed 100%, staging `.retired`.
+  2. Retry while locked: exit 2, current files/registry intact, `.retired` authority marker nguyên vẹn.
+  3. Release lock & retry: exit 0, target committed, staging dọn sạch -> Normal uninstall exit 0, registry 0.
+- Toàn bộ các suite: 12/12 Preflight standalone, 8/8 Installer lab regression, 5/5 Upgrade lab, 3/3 Legacy locked modes, 3/3 negative guards, Scoped lint: **PASS 100%**.
+- Bundle: `handoff-bundle-20261125-r13` với 22 files và `SHA256SUMS` đầy đủ.
+
+---
+
+## Chỉ dẫn R12 trước đó — e5f8e33 / R12
+
+Đọc [review-e5f8e33.md](review-e5f8e33.md). **R11 P1 đã đóng**: post-commit design R12 được leader retest với lock trước/sau rename, setup exit 0 và đủ 11,883 target hashes. Không viết lại lifecycle đó hoặc mở lại lỗi cũ từ review 723af02.
+
+Chỉ sửa **P2 RETIRED_RETRY**: sau cleanup lỗi của staging đã `.retired`, lần retry làm mất marker; nhả lock xong full installer vẫn exit 2. Current 11,884 files không mất/hỏng, normal uninstall vẫn 0. Lỗi tái hiện trên e5f8e334fc6062e7774ff5f8e747128047f89643, không phải giả định từ R11.
+
+Trong cả retired cleanup branches của `installer.nsh`, đừng `catch {}` rồi tiếp tục dùng backup chưa sạch. Kiểm kết quả cleanup, giữ/khôi phục marker retired hợp lệ trên failure và dừng trước CreateDirectory/safeMove của transaction mới. Không xóa pending-recovery guard hoặc gắn retired cho backup chưa được xác nhận committed. Nếu marker không thể khôi phục, báo lỗi đúng và giữ current payload an toàn.
+
+Thêm native regression giữ nguyên staging trong suốt kiểm thử, **không `rmtree(backup)` trước retry**:
+1. Old→new với locked retired staging: exit 0, đủ new target inventory/ASAR/registry, staging retired đúng.
+2. Retry khi lock còn: nonzero được phép, current hashes/registry và retired authority phải nguyên, không trộn backup của transaction mới vào staging chưa sạch.
+3. Nhả lock: full installer retry phải exit 0, đủ target hashes và profile/key/model đúng; normal uninstall exit 0, registry sạch.
+
+Dùng install root ngắn mới có owner dưới ignored output, bảo đảm longest target path nằm trong điều kiện lab hợp lệ; lưu logs ở review output riêng nếu cần. Ca lab sâu 147 ký tự trước đây chỉ diagnostic; root 62 ký tự đã kiểm đủ 11,883 files, không sửa product hoặc bỏ inventory để né setup lab.
+
+Sau sửa nhỏ: scoped lint, focused native state transition, giữ commit-point controls; rebuild NSIS/bundle mới, chạy affected installer/upgrade/reinstall/uninstall controls theo plan. Ghi source/full SHA đúng, từng ca PASS/FAIL/NOT_RUN và evidence thực tế. Phần Sơn vẫn packet riêng; private input/output không commit/push/upload, không VPS/publish. Đề nghị Codex retest đúng candidate mới.
+
+## Các chỉ dẫn R11 trở về trước — lịch sử, không tự áp lại
+
+> **Mốc lịch sử 723af02 / R11:** Đọc [review-723af02.md](review-723af02.md). Tất cả ca lỗi cũ đã retest PASS: metadata, UTF-8/output guards, Hidden/locked payload, cleanup pre-lock, C4 và C5. Các chỉ dẫn sửa e2d599d/R10 bên dưới là lịch sử, không tự làm lại.
 
 ## Việc còn lại đúng theo evidence R11
 

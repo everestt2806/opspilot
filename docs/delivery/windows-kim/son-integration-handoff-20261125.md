@@ -2,7 +2,7 @@
 
 Ngày 25/11/2026. Theo yêu cầu user: Kim phải hoàn tất các tests thuộc Windows delivery; các ca core/tích hợp do Sơn xử lý và chạy lại sau khi kéo code. Packet này để user/Sơn nhận qua Git, chưa có việc gửi tin nhắn hoặc tự tích hợp nhánh.
 
-**SON_INTEGRATION_PENDING.** Không coi các ca core dưới đây đã được miễn hoặc PASS. Phạm vi Kim theo [review candidate hiện hành 723af02](review-723af02.md); review e2d599d là lịch sử. Các ca guard/UTF-8, Hidden resources và cleanup pre-lock cũ đã PASS khi retest R11; không chuyển lỗi của Kim cho Sơn và không tự coi lỗi cũ còn tồn tại. Phân công gốc: [tk-s7-parallel-2026-11-16.md](../../tasks/tk-s7-parallel-2026-11-16.md).
+**SON_INTEGRATION_PENDING.** Không coi các ca core dưới đây đã được miễn hoặc PASS. Phạm vi Kim theo [review candidate hiện hành e5f8e33/R12](review-e5f8e33.md); các reviews R11/R10 là lịch sử. P1 mất recovery trước commit đã PASS trên R12; P2 retired retry còn thuộc Kim, không chuyển cho Sơn. Core source không đổi qua R12, giữ đúng provenance historical evidence dưới đây. Phân công gốc: [tk-s7-parallel-2026-11-16.md](../../tasks/tk-s7-parallel-2026-11-16.md).
 
 ## Nguồn evidence và giới hạn
 

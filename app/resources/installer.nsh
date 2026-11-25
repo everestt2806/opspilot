@@ -74,9 +74,22 @@
           SetErrorLevel 2
           Quit
         ${Else}
-          # Staging directory was from a previously committed install; attempt cleanup now if unlocked
-          nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$dst = '$3'.TrimEnd('\'); try { Remove-Item -LiteralPath ('\\?\' + $$dst) -Recurse -Force -ErrorAction Stop } catch {}"`
+          # Staging directory was from a previously committed install; attempt atomic cleanup now if unlocked
+          nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$dst = '$3'.TrimEnd('\'); if (Test-Path -LiteralPath $$dst) { $$trashName = (Split-Path $$dst -Leaf) + '_trash'; $$parent = Split-Path $$dst -Parent; $$trash = Join-Path $$parent $$trashName; try { Rename-Item -LiteralPath $$dst -NewName $$trashName -Force -ErrorAction Stop } catch { try { Set-Content -Path (Join-Path $$dst '.retired') -Value 'COMMITTED_RETIRED' -Force -ErrorAction SilentlyContinue } catch {}; exit 2 }; try { Remove-Item -LiteralPath ('\\?\' + $$trash) -Recurse -Force -ErrorAction Stop } catch { try { Rename-Item -LiteralPath $$trash -NewName (Split-Path $$dst -Leaf) -Force -ErrorAction SilentlyContinue } catch {}; try { Set-Content -Path (Join-Path $$dst '.retired') -Value 'COMMITTED_RETIRED' -Force -ErrorAction SilentlyContinue } catch {}; exit 2 }; if (Test-Path -LiteralPath $$dst) { exit 2 } else { exit 0 } }"`
           Pop $4
+          ${If} $4 != 0
+            DetailPrint "Retired staging directory at $3 is currently busy. Aborting to protect staging state."
+            ${IfNot} ${Silent}
+              MessageBox MB_OK|MB_ICONEXCLAMATION "Previous staging directory at $3 is in use. Please retry after closing background processes." /SD IDOK
+            ${EndIf}
+            Pop $4
+            Pop $3
+            Pop $2
+            Pop $1
+            Pop $R1
+            SetErrorLevel 2
+            Quit
+          ${EndIf}
         ${EndIf}
       ${EndIf}
 
@@ -310,8 +323,13 @@ FunctionEnd
         DetailPrint "Pre-existing recovery backup found at $unBackupDir. Aborting update before mutation to protect backup."
         Abort `OpsPilot could not update: pre-existing recovery backup directory found at $unBackupDir. Please inspect, restore, or remove it before updating.`
       ${else}
-        nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$dst = '$unBackupDir'.TrimEnd('\'); try { Remove-Item -LiteralPath ('\\?\' + $$dst) -Recurse -Force -ErrorAction Stop } catch {}"`
+        # Staging directory was from a previously committed install; attempt atomic cleanup
+        nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$dst = '$unBackupDir'.TrimEnd('\'); if (Test-Path -LiteralPath $$dst) { $$trashName = (Split-Path $$dst -Leaf) + '_trash'; $$parent = Split-Path $$dst -Parent; $$trash = Join-Path $$parent $$trashName; try { Rename-Item -LiteralPath $$dst -NewName $$trashName -Force -ErrorAction Stop } catch { try { Set-Content -Path (Join-Path $$dst '.retired') -Value 'COMMITTED_RETIRED' -Force -ErrorAction SilentlyContinue } catch {}; exit 2 }; try { Remove-Item -LiteralPath ('\\?\' + $$trash) -Recurse -Force -ErrorAction Stop } catch { try { Rename-Item -LiteralPath $$trash -NewName (Split-Path $$dst -Leaf) -Force -ErrorAction SilentlyContinue } catch {}; try { Set-Content -Path (Join-Path $$dst '.retired') -Value 'COMMITTED_RETIRED' -Force -ErrorAction SilentlyContinue } catch {}; exit 2 }; if (Test-Path -LiteralPath $$dst) { exit 2 } else { exit 0 } }"`
         Pop $1
+        ${if} $1 != 0
+          DetailPrint "Retired staging directory at $unBackupDir is busy. Aborting update before mutation."
+          Abort `OpsPilot could not update: previous staging directory at $unBackupDir is in use. Please retry after closing background processes.`
+        ${endif}
       ${endif}
     ${endif}
 
