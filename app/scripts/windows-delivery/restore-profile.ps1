@@ -67,6 +67,7 @@ if ($items.Count -eq 0) {
 $manifestPaths = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 $hasDbInManifest = $false
 $hasKeyInManifest = $false
+$hasLocalStateInManifest = $false
 
 foreach ($item in $items) {
     if (-not $item.path -or -not $item.sha256) {
@@ -86,6 +87,9 @@ foreach ($item in $items) {
     if ($posixPath -eq "credential-master-key.protected") {
         $hasKeyInManifest = $true
     }
+    if ($posixPath -eq "Local State") {
+        $hasLocalStateInManifest = $true
+    }
 
     if (-not $manifestPaths.Add($posixPath)) {
         Write-Error "Phát hiện đường dẫn trùng lặp trong manifest items: $posixPath"
@@ -100,6 +104,13 @@ if (-not $hasDbInManifest) {
 
 if (-not $hasKeyInManifest) {
     Write-Error "Bản sao lưu không hợp lệ: Thiếu tệp bắt buộc credential-master-key.protected trong manifest items. Hủy khôi phục để tránh làm mất khóa giải mã."
+    exit 1
+}
+
+# Nếu bản sao lưu có credential-master-key.protected thì bắt buộc phải có Local State đi kèm
+# để Electron / safeStorage giải mã được master key, tránh lỗi DB_ERROR lúc khởi động ứng dụng.
+if ($hasKeyInManifest -and -not $hasLocalStateInManifest) {
+    Write-Error "Bản sao lưu không hợp lệ hoặc thiếu context giải mã: Có credential-master-key.protected nhưng thiếu tệp bắt buộc 'Local State' cần thiết cho giải mã DPAPI trên Windows. Hủy khôi phục để bảo vệ dữ liệu đích và tránh lỗi DB_ERROR."
     exit 1
 }
 

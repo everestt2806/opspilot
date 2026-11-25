@@ -131,6 +131,16 @@ if ($hasKey) {
     Write-Warning "Profile nguồn không có credential-master-key.protected."
 }
 
+# 3.2.1. Chromium / Electron Local State (chứa DPAPI encryption context bắt buộc để giải mã master key trên Windows)
+$hasLocalState = Test-Path -Path (Join-Path $canonicalSource "Local State") -PathType Leaf
+if ($hasLocalState) {
+    Copy-And-RegisterFile -RelativePath "Local State"
+} else {
+    if ($hasKey) {
+        Write-Warning "Profile nguồn có credential-master-key.protected nhưng thiếu Local State. Khuyến nghị đóng ứng dụng đúng cách trước khi sao lưu."
+    }
+}
+
 # 3.3. ML State: Mô hình huấn luyện & Metadata
 $mlStateDir = Join-Path $canonicalSource "ml-state"
 if (Test-Path -Path $mlStateDir -PathType Container) {

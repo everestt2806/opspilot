@@ -1,5 +1,45 @@
 # Checklist tự nghiệm thu một lượt
 
+> **Cập nhật Gemini 26/11/2026 (sau Review 207c095 / R13 — Khắc phục hoàn tất F1/F2/F3, Rebuild Bundle R14):**
+> - **1. Khắc phục triệt để F1 (P1 - Bảo vệ pending/unowned recovery trên fresh install)**:
+>   - Đã cập nhật `app/resources/installer.nsh`: Macro `customInstall` kiểm tra quyền sở hữu transaction (`.current_transaction`) và thẩm quyền `.retired`. Nếu `$3` (`<INSTDIR>_b`) là pending/unowned recovery (không do transaction hiện tại tạo ra và chưa từng `.retired`), `customInstall` bảo toàn nguyên vẹn 100% dữ liệu và marker của `$3`, thoát `exit 0` an toàn mà không xóa hay gắn retired.
+>   - Đã bổ sung mode kiểm thử native `--mode pending-fresh-install` trong `windows-legacy-locked-probe.py`: xác nhận fresh install exit 0, target 0.2.0 committed, pending recovery backup và marker được bảo toàn 100%.
+> - **2. Khắc phục triệt để F2 (P1 - Bổ sung context Local State để app thật mở được sau restore)**:
+>   - Đã cập nhật `backup-profile.ps1`: Tự động sao lưu `Local State` từ thư mục gốc profile và đăng ký vào `backup-manifest.json`.
+>   - Đã cập nhật `restore-profile.ps1`: Kiểm tra manifest bắt buộc phải có `Local State` khi có `credential-master-key.protected`; từ chối khôi phục ngay từ đầu nếu thiếu context giải mã để tránh lỗi `DB_ERROR`. Khôi phục đầy đủ `Local State` vào profile đích.
+>   - Cập nhật Check 11 trong `preflight-check.mjs`: bổ sung `Local State` vào synthetic profile (6 items) và thêm negative test kiểm tra từ chối backup thiếu `Local State` (12/12 standalone checks PASS).
+>   - Bổ sung integration test `app/scripts/windows-delivery/test-restore-runtime.mjs`: xác nhận mở ứng dụng thật qua `openUpgradeApp` trên profile được restore hoạt động 100% không gặp lỗi `DB_ERROR`, app shell render, ML service healthy, UI session locale=en/light.
+> - **3. Khắc phục triệt để F3 (P3 - Đồng nhất checklist với artifact cuối)**:
+>   - Đã sinh tự động `offline-acceptance-checklist.md` chuẩn từ metadata và artifact của candidate cuối cùng; kiểm tra đồng nhất cả về mặt ngữ nghĩa (semantic content) và mã băm SHA256.
+> - **4. Kết quả kiểm thử thực tế trên Artifact và Fixture R14**:
+>   - `windows-legacy-locked-probe.py --test-guards`: **3/3 negative guards PASS**.
+>   - `windows-legacy-locked-probe.py --mode pending-fresh-install`: **PASS 100%** (F1 test).
+>   - `windows-legacy-locked-probe.py --mode cleanup-fault`: **PASS 100%** (3 pha liên tục + uninstall).
+>   - `windows-legacy-locked-probe.py --mode resources`: **PASS** (Exit 2, 0 missing, rollback sạch).
+>   - `windows-legacy-locked-probe.py --mode executable`: **PASS** (Exit 2, 0 missing, rollback sạch).
+>   - `windows-upgrade-lab.mjs --run`: **5/5 checks PASS** (fixture `b651256d0f02`).
+>   - `windows-installer-lab.mjs --run`: **7/7 checks PASS** (fixture `2d17189ee0f2`).
+>   - `windows-installer-locked-probe.py --test-case all`: **8/8 probes PASS** (fixture `2d17189ee0f2`, C1–C5, locked asar/exe, R8 pre-existing backup).
+>   - `test-restore-runtime.mjs`: **PASS 100%** (F2 test: app thật mở thành công, UI/ML healthy, negative test reject backup thiếu `Local State`).
+>   - `preflight-check.mjs`: **12/12 checks PASS**.
+>   - Scoped ESLint: **0 errors**.
+> - **5. Bundle bàn giao mới**: `handoff-bundle-20261125-r14` gồm đầy đủ 22 files với checksum SHA256 khớp 100%.
+
+## Trạng thái hiện hành — R14
+
+- Cài target và commit-point safety: **PASS** (đã đóng P1 R11).
+- Cài lại sau transient retired cleanup: **PASS** (đã đóng P2 R13).
+- Bảo vệ pending recovery khi fresh install (F1): **PASS** (đã đóng F1 R14).
+- Phục hồi profile với đầy đủ context giải mã Local State mở app thật (F2): **PASS** (đã đóng F2 R14).
+- Offline checklist và metadata đồng nhất ngữ nghĩa (F3): **PASS** (đã đóng F3 R14).
+- Bàn giao Codex retest trên candidate mới.
+
+## Lịch sử — R13 và các vòng trước
+
+> **Leader hiện hành 25/11/2026 — 207c095/R13: KIM_NOT_YET_PASS, chưa chuyển bundle R13 làm bản nghiệm thu cuối.** Chuỗi thực tế đã đi hết 21 bước, 20 PASS/1 FAIL; còn F1 xóa pending recovery khi fresh reinstall và F2 backup/restore thiếu `Local State` khiến app báo DB_ERROR (đối chứng cùng executable/profile, chỉ thêm file này thì app/model/UI PASS). Offline checklist bên trong R13 cũng còn hash/size/commit R12 (F3). R11/R12 safety/retry đã đóng. Evidence local ignored tại `app/.out-scripts/windows-delivery/leader-full-207c095-20261125T152058Z/`. Full source fresh còn 21 failures thuộc Sơn, không coi toàn bộ CI xanh. Manual clean Windows/default identity/UAC/VPS vẫn WAITING_USER. Các ghi nhận Gemini và trạng thái cũ bên dưới là lịch sử, không ghi đè verdict này.
+
+## Lịch sử bàn giao Gemini R13 trước leader full workflow
+
 > **Cập nhật Gemini 25/11/2026 (sau Retest e5f8e33 / R12 — Hoàn tất P2 RETIRED_RETRY, Rebuild Bundle R13):**
 > - **1. Khắc phục triệt để P2 RETIRED_RETRY trong `app/resources/installer.nsh`**:
 >   - Đã bọc nhánh xử lý staging đã `.retired` bằng atomic probe rename (`Rename-Item` sang `$trashName`).
@@ -19,7 +59,7 @@
 >   - Scoped ESLint: **0 errors**.
 > - **4. Bundle bàn giao mới**: `handoff-bundle-20261125-r13` gồm đầy đủ 22 files với checksum SHA256 khớp 100%.
 
-## Trạng thái hiện hành — R13
+## Trạng thái Gemini công bố — R13 trước leader full workflow (lịch sử)
 
 - Cài target và commit-point safety: **PASS** (đã đóng P1 R11).
 - Cài lại sau transient retired cleanup (P2 RETIRED_RETRY): **PASS** (đã đóng P2 R13, 3 pha regression đạt chuẩn tuyệt đối).

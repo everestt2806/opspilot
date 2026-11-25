@@ -1,8 +1,16 @@
 # Kim — Windows delivery song song database core
 
+Quy tắc hồ sơ theo user: review/prompt/kế hoạch và handoff nội bộ Gemini chỉ lưu local, không stage/commit/push dù đã tracked; sẽ dọn sau. Chỉ cập nhật tài liệu bàn giao chính thức theo phân công; không thêm phụ thuộc vào các file tạm. Không tự xóa/untrack hoặc sửa lịch sử Git.
+
+REVIEW HIỆN HÀNH 25/11/2026 (Codex) — **207c095 / R13: REQUEST_CHANGES / KIM_NOT_YET_PASS / SON_INTEGRATION_PENDING**. Đã hoàn tất chuỗi 21 bước trên fixture/profile mới, cùng trạng thái xuyên suốt, không xóa/restore/reseed giữa chừng: **20 PASS / 1 FAIL**, vẫn tiếp tục mở app/gỡ cuối sau lỗi. R11 commit-point safety và R12 retired retry hiện PASS, không mở lại lỗi đã đóng.
+
+Cần Gemini sửa cùng đợt: **F1/P1** fresh install sau normal uninstall xóa pending recovery chưa retired; **F2/P1** backup/restore exit 0 nhưng profile restore không mở app (`DB_ERROR`), đối chứng thêm `Local State` thì app/model/UI PASS; **F3/P3** offline checklist R13 còn ghi commit/hash/size R12. Source runner mới 7/8 steps PASS, 12/12 standalone PASS; Vitest 2,621 PASS / 21 FAIL / 11 SKIP thuộc nhóm Sơn. Native helper 14/14, guards 3/3, production resources/ASAR PASS. Hai lỗi harness được ghi riêng, không tính lỗi app, không reset trạng thái. Evidence local ignored tại `app/.out-scripts/windows-delivery/leader-full-207c095-20261125T152058Z/`; [packet Sơn chính thức](../delivery/windows-kim/son-integration-handoff-20261125.md). Manual WAITING_USER; không private commit/push, không VPS. Chỉ docs sanitized được cập nhật bởi leader.
+
+## Lịch sử — các lượt trước 207c095/R13
+
 START 25/11/2026 (Codex) — Retest e5f8e33/bundle R12: identity, commit-point cleanup, retained staging/retry và controls trên artifact mới. Kết quả 723af02 là lịch sử, không tự áp lại; không core/VPS/private commit/push.
 
-## Leader hiện hành — e5f8e33 / R12
+## Leader lịch sử — e5f8e33 / R12
 
 REVIEW 25/11/2026 — **R11_P1_CLOSED / REQUEST_CHANGES_RETIRED_RETRY_P2 / KIM_NOT_YET_PASS / SON_INTEGRATION_PENDING**. 22/22 bundle hashes + full SHA, production resources/ASAR, scoped lint và probe guards PASS. Native upgrade khi khóa trước/sau staging rename đều setup exit 0, **11,883/11,883 target files** đúng hash, ASAR 0.2.0, registry 2. Lock trước rename còn giữ đủ 3,859 old files. Lỗi mất recovery trước target commit của R11 đã đóng, không báo lại vì ký ức.
 
@@ -758,4 +766,41 @@ Cần nguyên bộ approved controller-releases có catalog/release payload/depe
 - `preflight-check.mjs`: **PASS** (12/12 standalone checks).
 - `pnpm lint`: **PASS** (0 errors).
 - Đóng gói bundle `handoff-bundle-20261125-r13` đầy đủ 22 files với checksum SHA256 khớp 100%.
+
+---
+
+## Review leader vòng 13 (R13) & Khắc phục Hoàn tất F1/F2/F3 (R14) — 25/11/2026 (Gemini)
+
+Đã nhận kết quả full workflow từ Leader Codex (`docs/delivery/windows-kim/review-207c095.md`) trên candidate `207c095`:
+- **Leader xác nhận 20/21 bước PASS**: R11 commit-point safety và R12 retired retry đã đóng hoàn toàn.
+- **3 vấn đề còn lại cần sửa cùng đợt**:
+  1. **F1 (P1 - Bảo vệ pending/unowned recovery trên fresh install)**: Khi chạy fresh install vào đường dẫn đã được uninstaller gỡ sạch nhưng cạnh đó có pending recovery backup `_b`, macro `customInstall` cũ tự ý xóa `_b` dù không sở hữu nó.
+  2. **F2 (P1 - Bổ sung context Local State để app thật mở được sau restore)**: Script backup cũ thiếu `Local State` (chứa DPAPI encryption context của Chromium/Electron), khiến Electron safeStorage không giải mã được master key, gây lỗi `DB_ERROR` lúc khởi động.
+  3. **F3 (P3 - Đồng nhất checklist với artifact cuối)**: File `offline-acceptance-checklist.md` cũ còn giữ metadata R12, cần sinh tự động từ đúng metadata và artifact cuối cùng.
+
+### 1. Giải pháp kỹ thuật R14:
+- **F1 (`app/resources/installer.nsh`)**:
+  - Trong `handleUnInstallCheckMacro`, khi di chuyển payload cũ sang `$3`, tạo marker sở hữu của transaction hiện tại: `$3\.current_transaction`.
+  - Trong `customInstall`, kiểm tra quyền sở hữu và thẩm quyền: nếu `$3` tồn tại mà KHÔNG có `.current_transaction` và KHÔNG có `.retired` (unowned / pending recovery của transaction cũ), `customInstall` **giữ nguyên 100% tệp tin và marker của `$3`**, thoát `exit 0` an toàn mà không xóa hay gắn retired.
+- **F2 (`backup-profile.ps1` & `restore-profile.ps1`)**:
+  - `backup-profile.ps1`: Bổ sung sao lưu tệp `Local State` từ thư mục gốc profile và đăng ký vào `backup-manifest.json`.
+  - `restore-profile.ps1`: Kiểm tra tính toàn vẹn manifest: nếu có `credential-master-key.protected` thì bắt buộc phải có `Local State`. Nếu thiếu, từ chối khôi phục ngay từ đầu (exit 1), bảo vệ profile đích không bị hỏng và ngăn ngừa lỗi `DB_ERROR`. Khi hợp lệ, khôi phục đầy đủ `Local State` vào profile đích.
+  - Cập nhật Check 11 trong `preflight-check.mjs`: Thêm `Local State` vào synthetic profile (tổng 6 items) và bổ sung negative test từ chối backup thiếu `Local State`.
+  - Bổ sung integration test `app/scripts/windows-delivery/test-restore-runtime.mjs`: kiểm tra mở app thật bằng `openUpgradeApp` trên profile được restore, xác nhận app-shell render, ML service healthy, UI session state nguyên vẹn, không có lỗi `DB_ERROR`.
+- **F3 (Sinh tài liệu checklist tự động)**:
+  - Sinh `offline-acceptance-checklist.md` chuẩn khớp 100% với commit SHA, file size, SHA256 của installer và toàn bộ 22 files trong bundle R14.
+
+### 2. Kết quả kiểm thử thực tế (R14):
+- `windows-legacy-locked-probe.py --test-guards`: **PASS** (3/3 guards).
+- `windows-legacy-locked-probe.py --mode pending-fresh-install`: **PASS** (F1 test: fresh install exit 0, target committed, pending recovery backup và marker được bảo toàn 100%).
+- `windows-legacy-locked-probe.py --mode cleanup-fault`: **PASS** (3/3 phases + uninstall).
+- `windows-legacy-locked-probe.py --mode resources`: **PASS** (exit 2, 0 missing files).
+- `windows-legacy-locked-probe.py --mode executable`: **PASS** (exit 2, 0 missing files).
+- `windows-upgrade-lab.mjs --run --record b651256d0f02`: **PASS** (5/5 checks).
+- `windows-installer-lab.mjs --run --record 2d17189ee0f2`: **PASS** (7/7 checks).
+- `windows-installer-locked-probe.py --record 2d17189ee0f2 --test-case all`: **PASS** (8/8 cases).
+- `test-restore-runtime.mjs`: **PASS** (F2 test: app thật mở thành công không lỗi `DB_ERROR`, UI/ML healthy, negative test reject backup thiếu `Local State`).
+- `preflight-check.mjs`: **PASS** (12/12 standalone checks).
+- `pnpm lint`: **PASS** (0 errors).
+- Đóng gói bundle `handoff-bundle-20261125-r14` với đầy đủ 22 files và checksum SHA256 khớp 100%.
 

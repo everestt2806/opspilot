@@ -80,7 +80,7 @@ def run_guard_tests(fixture_path):
 def main():
     parser = argparse.ArgumentParser(description="Test legacy 0.1.0 hidden and locked file behavior during upgrade")
     parser.add_argument("--fixture", required=True, help="Path to upgrade lab fixture directory containing plan.json")
-    parser.add_argument("--mode", default="resources", choices=["resources", "executable", "cleanup-fault"], help="Target mode to exercise")
+    parser.add_argument("--mode", default="resources", choices=["resources", "executable", "cleanup-fault", "pending-fresh-install"], help="Target mode to exercise")
     parser.add_argument("--out-dir", default=None, help="Output directory for test execution and results")
     parser.add_argument("--test-guards", action="store_true", help="Run negative self-tests on probe guards")
     args = parser.parse_args()
@@ -377,6 +377,55 @@ def main():
             if lock_state.get("initial_handle"):
                 kernel.CloseHandle(lock_state["initial_handle"])
 
+    elif args.mode == "pending-fresh-install":
+        print("[*] Mode pending-fresh-install: testing pending unowned recovery retention during fresh install...")
+        backup.mkdir(parents=True, exist_ok=True)
+        marker_file = backup / "pending-recovery-marker.txt"
+        marker_file.write_text("PENDING_RECOVERY_DATA_TO_PRESERVE\n", encoding="utf-8")
+        marker_hash = hashlib.file_digest(marker_file.open("rb"), "sha256").hexdigest()
+        print(f"[+] Created pending recovery marker at: {marker_file} (SHA256: {marker_hash})")
+
+        print("[*] Running normal uninstall of predecessor 0.1.0...")
+        argv_un = subprocess.list2cmdline([str(control_uninstaller), "/S"]) + f" _?={install}"
+        p_un = subprocess.run(argv_un, cwd=out_base, capture_output=True, timeout=180, creationflags=subprocess.CREATE_NO_WINDOW)
+        (out_base / "normal-uninstall.stdout.log").write_bytes(p_un.stdout)
+        (out_base / "normal-uninstall.stderr.log").write_bytes(p_un.stderr)
+        assert p_un.returncode == 0, f"Normal uninstall failed with code: {p_un.returncode}"
+        assert not install.exists(), "Installation directory must be removed by normal uninstall"
+        assert backup.exists(), "Backup directory must be preserved by normal uninstall"
+        assert marker_file.exists(), "Pending recovery marker must be preserved by normal uninstall"
+        print("[+] Normal uninstall succeeded: installation removed, pending backup preserved")
+
+        print("[*] Running fresh install of 0.2.0 with pending recovery present...")
+        r["new_install"] = run_setup(new_installer, "new-install-fresh")
+        print(f"[+] Fresh install exit code: {r['new_install']['exit_code']}")
+
+        target_asar = install / "resources/app.asar"
+        target_committed = (
+            target_asar.is_file() and
+            hashlib.file_digest(target_asar.open("rb"), "sha256").hexdigest() == plan["payloads"][1]["asar"]
+        )
+        current_marker_hash = hashlib.file_digest(marker_file.open("rb"), "sha256").hexdigest() if marker_file.exists() else None
+        retired_exists = (backup / ".retired").exists()
+
+        r.update(
+            target_committed=target_committed,
+            backup_exists=backup.exists(),
+            marker_exists=marker_file.exists(),
+            marker_hash_matches=(current_marker_hash == marker_hash),
+            retired_marker_created=retired_exists,
+            registry_count_after=len(get_registry_keys())
+        )
+
+        r["pass"] = (
+            r["new_install"]["exit_code"] == 0 and
+            target_committed and
+            backup.exists() and
+            marker_file.exists() and
+            (current_marker_hash == marker_hash) and
+            not retired_exists
+        )
+
     (out_base / "result.json").write_text(json.dumps(r, indent=2), encoding="utf-8")
     print(f"\nResult: {'PASS' if r['pass'] else 'FAIL'}")
     print(f"  Installer exit code: {r['new_install']['exit_code']}")
@@ -385,6 +434,10 @@ def main():
         print(f"  Preserved in recovery: {r['preserved_in_recovery']} / {r['initial_files']}")
         print(f"  Missing across both: {r['missing_across_both']}")
         print(f"  Corrupt across both: {r['corrupt_across_both']}")
+    elif args.mode == "pending-fresh-install":
+        print(f"  Target committed (0.2.0 ASAR): {r.get('target_committed')}")
+        print(f"  Pending backup preserved: {r.get('backup_exists')}")
+        print(f"  Marker hash matches: {r.get('marker_hash_matches')}")
     else:
         print(f"  Missing files: {len(missing)}")
         print(f"  Changed files: {len(changed)}")
@@ -412,7 +465,13 @@ def main():
         except Exception:
             pass
 
-    argv = subprocess.list2cmdline([str(control_uninstaller), "/S"]) + f" _?={install}"
+    clean_uninstaller = control_uninstaller
+    if (install / plan["executable_name"]).exists():
+        new_uninstallers = list(install.glob("Uninstall *.exe"))
+        if new_uninstallers:
+            clean_uninstaller = new_uninstallers[0]
+
+    argv = subprocess.list2cmdline([str(clean_uninstaller), "/S"]) + f" _?={install}"
     p_clean = subprocess.run(argv, cwd=out_base, capture_output=True, timeout=180, creationflags=subprocess.CREATE_NO_WINDOW)
     (out_base / "cleanup.stdout.log").write_bytes(p_clean.stdout)
     (out_base / "cleanup.stderr.log").write_bytes(p_clean.stderr)

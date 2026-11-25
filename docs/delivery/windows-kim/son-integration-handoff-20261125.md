@@ -2,15 +2,16 @@
 
 Ngày 25/11/2026. Theo yêu cầu user: Kim phải hoàn tất các tests thuộc Windows delivery; các ca core/tích hợp do Sơn xử lý và chạy lại sau khi kéo code. Packet này để user/Sơn nhận qua Git, chưa có việc gửi tin nhắn hoặc tự tích hợp nhánh.
 
-**SON_INTEGRATION_PENDING.** Không coi các ca core dưới đây đã được miễn hoặc PASS. Phạm vi Kim theo [review candidate hiện hành e5f8e33/R12](review-e5f8e33.md); các reviews R11/R10 là lịch sử. P1 mất recovery trước commit đã PASS trên R12; P2 retired retry còn thuộc Kim, không chuyển cho Sơn. Core source không đổi qua R12, giữ đúng provenance historical evidence dưới đây. Phân công gốc: [tk-s7-parallel-2026-11-16.md](../../tasks/tk-s7-parallel-2026-11-16.md).
+**SON_INTEGRATION_PENDING.** Không coi các ca core dưới đây đã được miễn hoặc PASS. Phạm vi Kim theo [task chính thức, trạng thái 207c095/R13](../../tasks/tk-s7-kim-windows-delivery.md); reviews cũ là lịch sử. R11 commit-point và R12 retired retry đã PASS trên R13. F1 pending recovery fresh install, F2 actual backup/restore và F3 checklist còn thuộc Kim, không chuyển cho Sơn. Full source runner đã chạy mới trên 207c095, kết quả và provenance dưới đây. Phân công gốc: [tk-s7-parallel-2026-11-16.md](../../tasks/tk-s7-parallel-2026-11-16.md).
 
 ## Nguồn evidence và giới hạn
 
-Evidence source mới nhất, chạy trước commit e2d599d:
-- `app/.out-scripts/windows-delivery/source-runs/run-1795601232149-16952-f45ccb/source-check-report.json`
-- SHA256: `f879a7fb6a0f60932ce3df933f0074cd641cfd432ef59ee392938bc6888fe594`
-- Thời điểm chạy: **25/11/2026 17:16:00 GMT+7**.
-- Provenance thực của report: **f8da4b29b09b1914b2be6b58ef92dd38e767949a + dirty tree**, dirty diff SHA `c41ae46f9f62c0cecf8330e48e1ee5ab643dbce595c7a7fff05e358ab838ee59`; không phải clean e2d599d. Core `app/src/**` không đổi giữa hai commits.
+Evidence source mới nhất, leader chạy lại toàn bộ runner trên 207c095:
+
+- `app/.out-scripts/windows-delivery/leader-full-207c095-20261125T152058Z/source-current/source-check-report.json`
+- SHA256: `d0a5e122c4a2674f0902539bf2db6009a9702c4ab37ed9d49c9f3e6f34f95543`
+- Hoàn tất: **25/11/2026 23:07:00 GMT+7**; runner 430.83s, 7/8 steps PASS, Vitest exit 1.
+- Provenance thực: **207c095b8afc04fdb7aaf842a5602c72cdb496da + dirty docs only**, dirty diff SHA `0d76dae8ff67067e08a047d351f5da251f3ef8a5585f970d63f40d7bcc4b87a4`. Lúc chạy chỉ task doc có dòng START của leader, không app/core source edit. Những cập nhật report/docs sau runner không nằm trong diff hash đó; không gọi report là clean HEAD.
 
 Số liệu xác nhận: **2,621 PASS / 21 failed assertions / 11 SKIP**, **8 failed files** (Vitest đếm 14 failed suites do nested suites). Toàn bộ 21 assertions fail nằm trong các files Sơn sở hữu; `delivery_failures_count: 0` chỉ là phân loại của Vitest, không chứng minh mọi tests NSIS/native thuộc Kim đạt hoặc không có regression. File `externalHttpsProbe.test.ts` fail lúc setup môi trường (WSL/Linux + OpenSSL), không có failed assertion riêng trong 21.
 
@@ -62,7 +63,7 @@ Luồng VPS/DB/controller live thuộc Sơn chạy trên đích được phép c
 
 Điều kiện đóng packet: đủ 8 files chạy được, 21 historical failures và setup failure được giải quyết hoặc có kết quả mới chỉ rõ; full source/build và integration gates đạt, hoặc từng ca còn thiếu được báo OPEN đúng owner. Kim có thể chốt phạm vi độc lập khi tests Kim đạt thật; whole release/integration chỉ chốt theo kết quả của bản ghép.
 
-## Tên chính xác 21 failed assertions trong JSON lịch sử
+## Tên chính xác 21 failed assertions — đối chiếu JSON fresh 207c095
 
 
 ### `app/src/main/controlPlane/productEnvironmentOnboarding.test.ts`

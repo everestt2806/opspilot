@@ -45,8 +45,9 @@ Bao gồm 4 nhóm thành phần phụ thuộc chặt chẽ:
 1. **Cơ sở dữ liệu SQLite**:
    - `opspilot.db`: Chứa toàn bộ cấu hình, lịch sử deployment, servers, metadata và schema version 38.
    - `opspilot.db-wal` & `opspilot.db-shm` (nếu có khi app đang ở chế độ WAL): Nhật ký transaction ghi tạm.
-2. **Khóa bảo vệ chứng chỉ (DPAPI)**:
+2. **Khóa bảo vệ chứng chỉ & Ngữ cảnh DPAPI**:
    - `credential-master-key.protected`: Khóa đối xứng được bảo vệ bởi Windows Data Protection API (`CryptProtectData`). Mất khóa này, toàn bộ VPS password và SSH private key lưu trong `opspilot.db` sẽ **không thể giải mã**.
+   - `Local State`: Tệp cấu hình gốc của Chromium / Electron chứa `os_crypt.encrypted_key` được mã hóa qua DPAPI. Bắt buộc phải sao lưu và khôi phục đồng bộ cùng `credential-master-key.protected` để Electron safeStorage có thể giải mã khóa lúc khởi động ứng dụng.
 3. **Trạng thái Dịch vụ ML (ML State)**:
    - Thư mục `ml-state/`: Lưu trữ các mô hình và trạng thái huấn luyện cục bộ theo cấu trúc:
      `ml-state/<deployment_id>/state.pkl` và `ml-state/<deployment_id>/meta.json`.
@@ -78,7 +79,7 @@ Script PowerShell thực hiện sao lưu đồng bộ kèm tệp kê khai `backu
 
 Chi tiết luồng xử lý bên trong `backup-profile.ps1`:
 1. Kiểm tra profile nguồn hợp lệ, từ chối symlink/reparse point.
-2. Sao lưu nhất quán `opspilot.db`, WAL/SHM (nếu có), `credential-master-key.protected` (DPAPI key).
+2. Sao lưu nhất quán `opspilot.db`, WAL/SHM (nếu có), `credential-master-key.protected` (DPAPI key) và `Local State` (DPAPI context).
 3. Sao lưu mô hình ML (`ml-state`): kiểm tra bắt buộc phải đủ cặp `state.pkl` và `meta.json` cho từng model.
 4. Sao lưu `Local Storage` (UI settings).
 5. Tạo `backup-manifest.json` định dạng chuẩn (format: 1, mã băm SHA-256 từng tệp, đường dẫn tương đối POSIX, không chứa tệp lạ).
@@ -105,7 +106,7 @@ Script PowerShell phục hồi an toàn (sử dụng implementation chính thứ
 Chi tiết luồng bảo vệ nghiêm ngặt của `restore-profile.ps1`:
 1. **Xác thực toàn diện trước khi đụng vào profile**:
    - Kiểm tra `backup-manifest.json` tồn tại, định dạng `format: 1`.
-   - Danh sách `items` không rỗng và bắt buộc phải chứa `opspilot.db` cùng `credential-master-key.protected`.
+   - Danh sách `items` không rỗng và bắt buộc phải chứa `opspilot.db`, `credential-master-key.protected` cùng `Local State` (khi có master key).
    - Kiểm tra mọi cặp mô hình ML trong manifest (`state.pkl` đi kèm `meta.json`).
    - Kiểm tra mã băm SHA-256 và dung lượng của từng tệp trên đĩa khớp hoàn toàn manifest.
    - **Chống Unlisted Files / Data Injection**: Quét toàn bộ tệp trong thư mục backup; nếu phát hiện tệp lạ trên đĩa mà không có trong manifest (ví dụ key/model chưa xác minh), từ chối và thoát ngay lập tức!

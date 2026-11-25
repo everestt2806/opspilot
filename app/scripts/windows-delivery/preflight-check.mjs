@@ -332,7 +332,7 @@ try {
     mkdirSync(backupTargetDir, { recursive: true })
     mkdirSync(restoreTargetDir, { recursive: true })
 
-    // Create 5 essential synthetic items in profile:
+    // Create 6 essential synthetic items in profile:
     // 1. Database
     writeFileSync(join(profileDir, 'opspilot.db'), 'SYNTHETIC_SQLITE_DATABASE_BYTES\n', 'utf8')
     // 2. Protected Master Key (DPAPI)
@@ -341,20 +341,26 @@ try {
       'SYNTHETIC_DPAPI_PROTECTED_KEY_CIPHERTEXT\n',
       'utf8'
     )
-    // 3. ML State model
+    // 3. Chromium / Electron Local State (DPAPI context)
+    writeFileSync(
+      join(profileDir, 'Local State'),
+      '{"os_crypt":{"encrypted_key":"SYNTHETIC_DPAPI_ENCRYPTED_KEY"}}\n',
+      'utf8'
+    )
+    // 4. ML State model
     mkdirSync(join(profileDir, 'ml-state/dep-synth-1'), { recursive: true })
     writeFileSync(
       join(profileDir, 'ml-state/dep-synth-1/state.pkl'),
       'SYNTHETIC_ML_TRAINED_STATE_PKL\n',
       'utf8'
     )
-    // 4. ML State metadata
+    // 5. ML State metadata
     writeFileSync(
       join(profileDir, 'ml-state/dep-synth-1/meta.json'),
       '{"deployment":"dep-synth-1","trained":true}\n',
       'utf8'
     )
-    // 5. UI Local Storage session
+    // 6. UI Local Storage session
     mkdirSync(join(profileDir, 'Local Storage'), { recursive: true })
     writeFileSync(
       join(profileDir, 'Local Storage/ui-state.log'),
@@ -385,7 +391,7 @@ try {
     assert(existsSync(manifestPath), 'backup-manifest.json must be created by backup script')
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8').replace(/^\uFEFF/, ''))
     assert.equal(manifest.format, 1, 'Manifest format must be 1')
-    assert.equal(manifest.items_count, 5, 'All 5 items must be recorded in manifest')
+    assert.equal(manifest.items_count, 6, 'All 6 items must be recorded in manifest')
 
     // Call restore-profile.ps1 with exact parameters: -BackupDir, -TargetProfile
     const restoreRes = spawnSync(
@@ -405,10 +411,11 @@ try {
     )
     assert.equal(restoreRes.status, 0, `restore-profile.ps1 failed: ${restoreRes.stderr}`)
 
-    // Assert all 5 restored files match original profile hashes exactly
+    // Assert all 6 restored files match original profile hashes exactly
     for (const item of [
       'opspilot.db',
       'credential-master-key.protected',
+      'Local State',
       'ml-state/dep-synth-1/state.pkl',
       'ml-state/dep-synth-1/meta.json',
       'Local Storage/ui-state.log'
@@ -471,6 +478,66 @@ try {
       hashFile(join(negTargetDir, 'initial.txt')),
       initialHash,
       'Target profile must remain intact on rejected restore'
+    )
+
+    // Negative Test 1b: Missing Local State when protected key is present must REJECT
+    const noLocalStateBackupDir = join(FIXTURE_DIR, 'backup-no-local-state')
+    mkdirSync(noLocalStateBackupDir, { recursive: true })
+    writeFileSync(
+      join(noLocalStateBackupDir, 'opspilot.db'),
+      'SYNTHETIC_SQLITE_DATABASE_BYTES\n',
+      'utf8'
+    )
+    writeFileSync(
+      join(noLocalStateBackupDir, 'credential-master-key.protected'),
+      'SYNTHETIC_DPAPI_PROTECTED_KEY_CIPHERTEXT\n',
+      'utf8'
+    )
+    const noLocalStateManifest = {
+      format: 1,
+      items: [
+        {
+          path: 'opspilot.db',
+          size: 31,
+          sha256: hashFile(join(noLocalStateBackupDir, 'opspilot.db'))
+        },
+        {
+          path: 'credential-master-key.protected',
+          size: 42,
+          sha256: hashFile(join(noLocalStateBackupDir, 'credential-master-key.protected'))
+        }
+      ]
+    }
+    writeFileSync(
+      join(noLocalStateBackupDir, 'backup-manifest.json'),
+      JSON.stringify(noLocalStateManifest),
+      'utf8'
+    )
+
+    const negLocalStateRes = spawnSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        restoreScript,
+        '-BackupDir',
+        noLocalStateBackupDir,
+        '-TargetProfile',
+        negTargetDir
+      ],
+      { encoding: 'utf8', windowsHide: true, timeout: 30000 }
+    )
+    assert.notEqual(
+      negLocalStateRes.status,
+      0,
+      'Restore must reject backup having protected key but missing Local State'
+    )
+    assert.equal(
+      hashFile(join(negTargetDir, 'initial.txt')),
+      initialHash,
+      'Target profile must remain intact on rejected restore lacking Local State'
     )
 
     // Negative Test 2: Unlisted file in backup directory must REJECT
