@@ -852,4 +852,5 @@ Cần nguyên bộ approved controller-releases có catalog/release payload/depe
 - `eslint --max-warnings 0` (delivery scripts): **PASS** (0 errors, 0 warnings).
 - `pnpm --prefix app lint`: **PASS** (0 errors).
 - Đóng gói bundle `handoff-bundle-20261125-r15` với đầy đủ 22 files và checksum SHA256 khớp 100%.
+- Tách riêng gói bàn giao người dùng cuối tại `delivery-windows-r15/` gồm `OpsPilot-0.2.0-setup.exe` (`492,056,572 bytes`, SHA256 `a73aa8fd3395f4be06d81d2728fcff0fbebe3cd26e204823bd647e19bff12af8`) và `HUONG_DAN_CAI_DAT_VA_SU_DUNG.md` (hướng dẫn cài đặt, thiết lập và sử dụng step-by-step cho người dùng cuối; thư mục tách riêng để phân phối/commit sau theo quy trình release).
 

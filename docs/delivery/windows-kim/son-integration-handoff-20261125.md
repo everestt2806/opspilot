@@ -4,6 +4,8 @@ Cập nhật 26/11/2026. Theo yêu cầu user: Kim phải hoàn tất các tests
 
 **SON_INTEGRATION_PENDING.** Không coi các ca core dưới đây đã được miễn hoặc PASS. Phạm vi Kim theo [task chính thức, trạng thái a9b0ee0/R15](../../tasks/tk-s7-kim-windows-delivery.md): Kim đã hoàn tất R15 (`a9b0ee053251ef0ecb3a63bec0148a3334d93ed8`, bundle `handoff-bundle-20261125-r15`, `OpsPilot-0.2.0-setup.exe` 492,056,572 bytes SHA256 `a73aa8fd3395f4be06d81d2728fcff0fbebe3cd26e204823bd647e19bff12af8`), khắc phục xong P1 interrupted staging authority (dùng in-memory `$txCreatedStagingDir`, `--mode interrupted-fresh-install` PASS 3,801/3,801 files) và P3 ESLint (`eslint --max-warnings 0` trên delivery scripts đạt 0 errors, 0 warnings). Toàn bộ chuỗi kiểm thử thuộc Kim (5/5 upgrade lab, 7/7 installer lab, 8/8 locked probes, 5/5 legacy modes + 3/3 guards, 12/12 preflight, F2 runtime restore) đã PASS 100%. Các lỗi core dưới đây là phần của Sơn xử lý sau khi kéo nhánh tích hợp; core source ngoài Kim không đổi từ `c89d311` sang `a9b0ee0`. Phân công gốc: [tk-s7-parallel-2026-11-16.md](../../tasks/tk-s7-parallel-2026-11-16.md).
 
+- **Thư mục bàn giao người dùng cuối tách riêng (chưa commit, phục vụ phân phối/nghiệm thu)**: `delivery-windows-r15/` gồm `OpsPilot-0.2.0-setup.exe` (492,056,572 bytes, SHA256 `a73aa8fd3395f4be06d81d2728fcff0fbebe3cd26e204823bd647e19bff12af8`) và `HUONG_DAN_CAI_DAT_VA_SU_DUNG.md` (hướng dẫn cài đặt, thiết lập và sử dụng step-by-step cho người dùng). Lưu ý bộ cài `.exe` nặng ~469 MB (>100 MB giới hạn GitHub) nếu đẩy remote cần GitHub Release hoặc Git LFS.
+
 ## Nguồn evidence và giới hạn
 
 Evidence source mới nhất, leader chạy lại toàn bộ runner trên c89d311:
