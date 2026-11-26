@@ -1,6 +1,8 @@
 !include "LogicLib.nsh"
 
 !ifndef BUILD_UNINSTALLER
+Var /GLOBAL txCreatedStagingDir
+
 ; Chay truoc uninstallOldVersion. Khong cho installer xoa legacy model chua bao toan.
 !macro customInit
   InitPluginsDir
@@ -112,7 +114,7 @@
 
       # Guard C: Safe transactional move
       CreateDirectory "$3"
-      nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$src = '$INSTDIR'.TrimEnd('\'); $$dst = '$3'.TrimEnd('\'); try { $$items = @(Get-ChildItem -LiteralPath $$src -Force -ErrorAction Stop) } catch { exit 1 }; $$fail = 0; foreach ($$it in $$items) { try { Move-Item -LiteralPath $$it.FullName -Destination (Join-Path $$dst $$it.Name) -Force -ErrorAction Stop } catch { $$fail = 1; break } }; if ($$fail -ne 0) { exit 1 }; $$remaining = @(Get-ChildItem -LiteralPath $$src -Force -ErrorAction SilentlyContinue); if ($$remaining.Count -gt 0) { exit 1 }; try { Set-Content -LiteralPath (Join-Path $$dst '.current_transaction') -Value 'ACTIVE_STAGING' -Force -ErrorAction Stop } catch {}; exit 0"`
+      nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$src = '$INSTDIR'.TrimEnd('\'); $$dst = '$3'.TrimEnd('\'); try { $$items = @(Get-ChildItem -LiteralPath $$src -Force -ErrorAction Stop) } catch { exit 1 }; $$fail = 0; foreach ($$it in $$items) { try { Move-Item -LiteralPath $$it.FullName -Destination (Join-Path $$dst $$it.Name) -Force -ErrorAction Stop } catch { $$fail = 1; break } }; if ($$fail -ne 0) { exit 1 }; $$remaining = @(Get-ChildItem -LiteralPath $$src -Force -ErrorAction SilentlyContinue); if ($$remaining.Count -gt 0) { exit 1 }; exit 0"`
       Pop $4
       ${If} $4 != 0
         DetailPrint "Transactional move of legacy payload failed. Performing rollback."
@@ -141,6 +143,8 @@
       ${EndIf}
 
       # Transactional move succeeded: legacy files safely moved to $3.
+      # Record in-memory ownership bound strictly to this installer invocation.
+      StrCpy $txCreatedStagingDir "$3"
       # Retain $3 intact as recovery staging until new target payload is unpacked and committed.
       # Clean up empty $INSTDIR so electron-builder can cleanly unpack new version.
       RMDir "$INSTDIR"
@@ -190,9 +194,14 @@
     StrCpy $3 "$1_b"
 
     ${if} ${FileExists} "$3\*.*"
-      nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$dst = '$3'.TrimEnd('\'); if (Test-Path -LiteralPath $$dst) { $$isCurrentTx = Test-Path -LiteralPath (Join-Path $$dst '.current_transaction'); $$isRetired = Test-Path -LiteralPath (Join-Path $$dst '.retired'); if (-not $$isCurrentTx -and -not $$isRetired) { exit 0 }; if ($$isCurrentTx) { try { Remove-Item -LiteralPath (Join-Path $$dst '.current_transaction') -Force -ErrorAction SilentlyContinue } catch {} }; $$trashName = (Split-Path $$dst -Leaf) + '_trash'; $$parent = Split-Path $$dst -Parent; $$trash = Join-Path $$parent $$trashName; try { Rename-Item -LiteralPath $$dst -NewName $$trashName -Force -ErrorAction Stop } catch { try { Set-Content -Path (Join-Path $$dst '.retired') -Value 'COMMITTED_RETIRED' -Force -ErrorAction SilentlyContinue } catch {}; exit 0 }; try { Remove-Item -LiteralPath ('\\?\' + $$trash) -Recurse -Force -ErrorAction Stop } catch { try { Rename-Item -LiteralPath $$trash -NewName (Split-Path $$dst -Leaf) -Force -ErrorAction SilentlyContinue } catch {}; try { Set-Content -Path (Join-Path $$dst '.retired') -Value 'COMMITTED_RETIRED' -Force -ErrorAction SilentlyContinue } catch {}; exit 0 } }"`
-      Pop $1
-      # Note: Target is fully committed and operational. Any locked file in retired staging does NOT break target installation.
+      ${if} $txCreatedStagingDir == "$3"
+      ${orIf} ${FileExists} "$3\.retired"
+        nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$dst = '$3'.TrimEnd('\'); if (Test-Path -LiteralPath $$dst) { if (Test-Path -LiteralPath (Join-Path $$dst '.current_transaction')) { try { Remove-Item -LiteralPath (Join-Path $$dst '.current_transaction') -Force -ErrorAction SilentlyContinue } catch {} }; $$trashName = (Split-Path $$dst -Leaf) + '_trash'; $$parent = Split-Path $$dst -Parent; $$trash = Join-Path $$parent $$trashName; try { Rename-Item -LiteralPath $$dst -NewName $$trashName -Force -ErrorAction Stop } catch { try { Set-Content -Path (Join-Path $$dst '.retired') -Value 'COMMITTED_RETIRED' -Force -ErrorAction SilentlyContinue } catch {}; exit 0 }; try { Remove-Item -LiteralPath ('\\?\' + $$trash) -Recurse -Force -ErrorAction Stop } catch { try { Rename-Item -LiteralPath $$trash -NewName (Split-Path $$dst -Leaf) -Force -ErrorAction SilentlyContinue } catch {}; try { Set-Content -Path (Join-Path $$dst '.retired') -Value 'COMMITTED_RETIRED' -Force -ErrorAction SilentlyContinue } catch {}; exit 0 } }"`
+        Pop $1
+        # Note: Target is fully committed and operational. Any locked file in retired staging does NOT break target installation.
+      ${else}
+        DetailPrint "Preserving unowned or pending recovery staging at $3."
+      ${endif}
     ${endif}
 
     Pop $3

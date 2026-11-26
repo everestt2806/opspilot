@@ -1,17 +1,17 @@
 # Bàn giao Sơn — core tests và kiểm thử sau tích hợp
 
-Ngày 25/11/2026. Theo yêu cầu user: Kim phải hoàn tất các tests thuộc Windows delivery; các ca core/tích hợp do Sơn xử lý và chạy lại sau khi kéo code. Packet này để user/Sơn nhận qua Git, chưa có việc gửi tin nhắn hoặc tự tích hợp nhánh.
+Cập nhật 26/11/2026. Theo yêu cầu user: Kim phải hoàn tất các tests thuộc Windows delivery; các ca core/tích hợp do Sơn xử lý và chạy lại sau khi kéo code. Packet này để user/Sơn nhận qua Git, chưa có việc gửi tin nhắn hoặc tự tích hợp nhánh.
 
-**SON_INTEGRATION_PENDING.** Không coi các ca core dưới đây đã được miễn hoặc PASS. Phạm vi Kim theo [task chính thức, trạng thái 207c095/R13](../../tasks/tk-s7-kim-windows-delivery.md); reviews cũ là lịch sử. R11 commit-point và R12 retired retry đã PASS trên R13. F1 pending recovery fresh install, F2 actual backup/restore và F3 checklist còn thuộc Kim, không chuyển cho Sơn. Full source runner đã chạy mới trên 207c095, kết quả và provenance dưới đây. Phân công gốc: [tk-s7-parallel-2026-11-16.md](../../tasks/tk-s7-parallel-2026-11-16.md).
+**SON_INTEGRATION_PENDING.** Không coi các ca core dưới đây đã được miễn hoặc PASS. Phạm vi Kim theo [task chính thức, trạng thái c89d311/R14](../../tasks/tk-s7-kim-windows-delivery.md). Leader đã chạy mới chuỗi installer 21/21 PASS và actual backup/restore 10/10 PASS; semantic checklist/bundle parity PASS. Kim còn P1 fresh install xóa recovery mang marker transaction của process bị ngắt, cùng 7 formatting warnings trong test restore; không chuyển các mục này cho Sơn. R11/R12 safety/retry đã đóng, reviews cũ là lịch sử. Phân công gốc: [tk-s7-parallel-2026-11-16.md](../../tasks/tk-s7-parallel-2026-11-16.md).
 
 ## Nguồn evidence và giới hạn
 
-Evidence source mới nhất, leader chạy lại toàn bộ runner trên 207c095:
+Evidence source mới nhất, leader chạy lại toàn bộ runner trên c89d311:
 
-- `app/.out-scripts/windows-delivery/leader-full-207c095-20261125T152058Z/source-current/source-check-report.json`
-- SHA256: `d0a5e122c4a2674f0902539bf2db6009a9702c4ab37ed9d49c9f3e6f34f95543`
-- Hoàn tất: **25/11/2026 23:07:00 GMT+7**; runner 430.83s, 7/8 steps PASS, Vitest exit 1.
-- Provenance thực: **207c095b8afc04fdb7aaf842a5602c72cdb496da + dirty docs only**, dirty diff SHA `0d76dae8ff67067e08a047d351f5da251f3ef8a5585f970d63f40d7bcc4b87a4`. Lúc chạy chỉ task doc có dòng START của leader, không app/core source edit. Những cập nhật report/docs sau runner không nằm trong diff hash đó; không gọi report là clean HEAD.
+- `app/.out-scripts/windows-delivery/leader-final-c89d311-20261126T0600/source-current/source-check-report.json`
+- SHA256: `a4e1aaee6492d7b4aaffe19155929161859da89e7146cc88792a03d47a6fa7f2`
+- Hoàn tất: **26/11/2026 06:34:28 GMT+7**; runner 557.20s, **6/8 steps PASS**, overall FAIL. Scoped ESLint fail vì 7 formatting warnings trong `app/scripts/windows-delivery/test-restore-runtime.mjs` thuộc Kim; Vitest exit 1 với nhóm Sơn dưới đây. Standalone 12/12, types và build PASS.
+- Provenance thực lúc chạy: **c89d31111639d6a283f8860f6d606edb32b5e998, clean working tree**, dirty diff null. Tài liệu bàn giao cập nhật sau runner không nằm trong snapshot đó. Không lấy report historical f8da4b2 trong bundle R14 để nhận là source run mới trên c89d311.
 
 Số liệu xác nhận: **2,621 PASS / 21 failed assertions / 11 SKIP**, **8 failed files** (Vitest đếm 14 failed suites do nested suites). Toàn bộ 21 assertions fail nằm trong các files Sơn sở hữu; `delivery_failures_count: 0` chỉ là phân loại của Vitest, không chứng minh mọi tests NSIS/native thuộc Kim đạt hoặc không có regression. File `externalHttpsProbe.test.ts` fail lúc setup môi trường (WSL/Linux + OpenSSL), không có failed assertion riêng trong 21.
 
@@ -63,7 +63,7 @@ Luồng VPS/DB/controller live thuộc Sơn chạy trên đích được phép c
 
 Điều kiện đóng packet: đủ 8 files chạy được, 21 historical failures và setup failure được giải quyết hoặc có kết quả mới chỉ rõ; full source/build và integration gates đạt, hoặc từng ca còn thiếu được báo OPEN đúng owner. Kim có thể chốt phạm vi độc lập khi tests Kim đạt thật; whole release/integration chỉ chốt theo kết quả của bản ghép.
 
-## Tên chính xác 21 failed assertions — đối chiếu JSON fresh 207c095
+## Tên chính xác 21 failed assertions — đối chiếu JSON fresh c89d311
 
 
 ### `app/src/main/controlPlane/productEnvironmentOnboarding.test.ts`

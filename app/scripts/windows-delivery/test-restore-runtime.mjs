@@ -36,7 +36,9 @@ async function main() {
   }
 
   if (!exePath || !sourceProfile || !outDir) {
-    console.error('Usage: node test-restore-runtime.mjs --exe <OpsPilot.exe> --profile <source-profile> --out-dir <out-dir>')
+    console.error(
+      'Usage: node test-restore-runtime.mjs --exe <OpsPilot.exe> --profile <source-profile> --out-dir <out-dir>'
+    )
     process.exit(1)
   }
 
@@ -82,8 +84,14 @@ async function main() {
   const manifestPaths = new Set(manifest.items.map((i) => i.path.replace(/\\/g, '/')))
 
   assert(manifestPaths.has('opspilot.db'), 'Manifest must contain opspilot.db')
-  assert(manifestPaths.has('credential-master-key.protected'), 'Manifest must contain credential-master-key.protected')
-  assert(manifestPaths.has('Local State'), 'Manifest must contain Local State (F2 context requirement)')
+  assert(
+    manifestPaths.has('credential-master-key.protected'),
+    'Manifest must contain credential-master-key.protected'
+  )
+  assert(
+    manifestPaths.has('Local State'),
+    'Manifest must contain Local State (F2 context requirement)'
+  )
   console.log('[+] Manifest contains all required files including Local State')
 
   // 2. Run restore-profile.ps1 into fresh target
@@ -141,14 +149,18 @@ async function main() {
     const uiSession = await app.cdp.evaluate('localStorage.getItem("opspilot-ui-session")')
     if (uiSession) {
       const parsed = JSON.parse(uiSession)
-      console.log(`[+] UI session state: locale=${parsed?.state?.locale}, theme=${parsed?.state?.theme}`)
+      console.log(
+        `[+] UI session state: locale=${parsed?.state?.locale}, theme=${parsed?.state?.theme}`
+      )
       result.ui_state = parsed?.state
     }
 
     // Query ML service status
     const mlStatus = await app.api('/status?deployment_id=900004').catch(() => null)
     if (mlStatus) {
-      console.log(`[+] ML service status: trained=${mlStatus.trained}, sample_count=${mlStatus.sample_count}`)
+      console.log(
+        `[+] ML service status: trained=${mlStatus.trained}, sample_count=${mlStatus.sample_count}`
+      )
       result.ml_status = mlStatus
     }
 
@@ -182,7 +194,11 @@ async function main() {
     items: manifest.items.filter((i) => i.path !== 'Local State'),
     items_count: manifest.items.length - 1
   }
-  writeFileSync(join(corruptBackupDir, 'backup-manifest.json'), JSON.stringify(corruptManifest, null, 2), 'utf8')
+  writeFileSync(
+    join(corruptBackupDir, 'backup-manifest.json'),
+    JSON.stringify(corruptManifest, null, 2),
+    'utf8'
+  )
 
   const negTarget = join(outDir, 'neg-target')
   mkdirSync(negTarget, { recursive: true })
@@ -206,7 +222,11 @@ async function main() {
     { encoding: 'utf8', windowsHide: true, timeout: 30000 }
   )
   assert.notEqual(negRestoreRes.status, 0, 'Restore must reject backup lacking Local State')
-  assert.equal(readFileSync(join(negTarget, 'sentinel.txt'), 'utf8'), 'SENTINEL_DATA\n', 'Target must remain untouched')
+  assert.equal(
+    readFileSync(join(negTarget, 'sentinel.txt'), 'utf8'),
+    'SENTINEL_DATA\n',
+    'Target must remain untouched'
+  )
   console.log('[+] Negative test passed: restore-profile rejected backup lacking Local State')
 
   const resultPath = join(outDir, 'restore-runtime-result.json')

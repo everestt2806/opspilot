@@ -2,7 +2,20 @@
 
 Quy tắc hồ sơ theo user: review/prompt/kế hoạch và handoff nội bộ Gemini chỉ lưu local, không stage/commit/push dù đã tracked; sẽ dọn sau. Chỉ cập nhật tài liệu bàn giao chính thức theo phân công; không thêm phụ thuộc vào các file tạm. Không tự xóa/untrack hoặc sửa lịch sử Git.
 
-REVIEW HIỆN HÀNH 25/11/2026 (Codex) — **207c095 / R13: REQUEST_CHANGES / KIM_NOT_YET_PASS / SON_INTEGRATION_PENDING**. Đã hoàn tất chuỗi 21 bước trên fixture/profile mới, cùng trạng thái xuyên suốt, không xóa/restore/reseed giữa chừng: **20 PASS / 1 FAIL**, vẫn tiếp tục mở app/gỡ cuối sau lỗi. R11 commit-point safety và R12 retired retry hiện PASS, không mở lại lỗi đã đóng.
+REVIEW HIỆN HÀNH 26/11/2026 (Codex) — **c89d31111639d6a283f8860f6d606edb32b5e998 / R14: REQUEST_CHANGES_INTERRUPTED_STAGING_AUTHORITY / KIM_NOT_YET_PASS / SON_INTEGRATION_PENDING**. Leader đã build fixture mới `fc72fd73ed57`, profile/namespace rỗng mới, chạy trọn chuỗi installer **21/21 PASS trong một lần**, không reset/restore/reseed giữa bước. R11/R12 đã đóng; F1 cơ bản (pending backup không có authority marker), F2 actual backup/restore và F3 checklist hiện PASS, không ghi lại là lỗi cũ còn mở.
+
+- **P1 còn tái hiện — marker của transaction bị ngắt không phải quyền của transaction mới.** Cài predecessor thật, giữ native lock ban đầu để vào legacy fallback rồi nhả khi staging xuất hiện; ngắt riêng process installer R14 sau khi chính sản phẩm tạo `.current_transaction`, trước commit/retired. Giữ đủ **3,859/3,859 file gốc** trong backup (tổng 3,861 file gồm uninstaller và marker), không restore hoặc dọn staging. Normal historical uninstall exit 0, installation/registry 0 và backup đúng toàn bộ hashes. Sau đó fresh R14 installer exit 0, ASAR target đúng nhưng **xóa 3,861/3,861 file pending recovery**. Marker tồn tại từ process cũ bị `customInstall` coi là current chỉ bằng `Test-Path`. Đây là nhánh gián đoạn R14 tái hiện thật, không phải kết luận từ review cũ. Đã tiếp tục final uninstall exit 0; registry 0, profile chính nguyên vẹn.
+- **Sửa trong Kim:** cleanup chỉ khi staging được chính invocation hiện tại tạo thành công (state trong memory/nonce ràng buộc invocation) hoặc authority retired đã xác minh. File `.current_transaction` còn trên đĩa sau crash không đủ quyền. Không gắn retired/xóa pending của process cũ. Giữ behavior locked/unlocked retry và post-commit đã PASS; thêm regression ngắt installer thật → normal uninstall → fresh install, kiểm đủ inventory và marker hash, không xóa staging trước retry.
+- **P3 source quality:** `app/scripts/windows-delivery/test-restore-runtime.mjs` có **7 Prettier warnings**, khiến scoped ESLint `--max-warnings 0` exit 1. Sửa format file này, không skip/nới lint, không đổi core source.
+- **Checks mới đã đạt:** actual bundled backup/restore **10/10 PASS**, gồm app thật trên target mới/existing/sau rollback; protected key/DB note/schema/model trained_at/180 train samples/UI đúng; thiếu context/sai SHA reject trước mutation. Standalone **12/12**, native helper **14/14**, guards **3/3**, production controller **9 releases + ML**, ASAR 0.2.0 và 4 compiled files khớp source build mới đều PASS. Bundle R14 **22/22 SHA256SUMS**, full SHA/size/commit và offline checklist đồng nhất.
+- **Full source fresh:** clean HEAD c89d311 lúc chạy, **6/8 steps PASS / overall FAIL** (lint thuộc Kim + Vitest thuộc Sơn). Vitest **2,621 PASS / 21 FAIL / 11 SKIP**, 8 failed files; [packet Sơn](../delivery/windows-kim/son-integration-handoff-20261125.md) có provenance/repro/tên ca mới. Không miễn lỗi Sơn và không biến 0 delivery assertions thành toàn bộ NSIS/backup PASS.
+- **Tính hợp lệ evidence:** chuỗi chính không có harness interruption. Các kiểm tra phụ giữ raw attempts riêng: SQLite inspection ban đầu quên close connection gây lock lúc replace restore; sửa harness bằng `contextlib.closing`, chạy đủ 10 ca ở fixture phụ mới, không thay profile chính và không coi lock đó là lỗi app. Lượt interruption không có initial lock không vào legacy staging, không coi là product FAIL. Lượt có lock gặp observer read race khi marker vừa được ghi; ngắt đúng process còn precommit rồi tiếp tục chính staging đó, không restore/reseed. Các lần đầu, profile phụ partial và logs đều giữ ignored, không xóa để làm sạch bằng chứng.
+
+Evidence local ignored: `app/.out-scripts/windows-delivery/leader-final-c89d311-20261126T0600/`; chuỗi chính `continuous-result.json`, restore hợp lệ `restore-fixed/restore-matrix.json`, fault thực `interruption-fixed/actual-interruption-rescue.json` + `interruption-fixed/resumed-result.json`, source `source-current/source-check-report.json`. Reviews/prompts chỉ local theo quy tắc trên, không commit/push. Chỉ 3 hồ sơ chính thức task/checklist/packet Sơn được cập nhật bởi leader. Manual clean Windows/default identity/UAC/VPS vẫn WAITING_USER; chưa chuyển bundle R14 làm bản bàn giao cuối.
+
+## Lịch sử — leader 207c095/R13
+
+REVIEW 25/11/2026 (Codex) — **207c095 / R13: REQUEST_CHANGES / KIM_NOT_YET_PASS / SON_INTEGRATION_PENDING**. Đã hoàn tất chuỗi 21 bước trên fixture/profile mới, cùng trạng thái xuyên suốt, không xóa/restore/reseed giữa chừng: **20 PASS / 1 FAIL**, vẫn tiếp tục mở app/gỡ cuối sau lỗi. R11 commit-point safety và R12 retired retry hiện PASS, không mở lại lỗi đã đóng.
 
 Cần Gemini sửa cùng đợt: **F1/P1** fresh install sau normal uninstall xóa pending recovery chưa retired; **F2/P1** backup/restore exit 0 nhưng profile restore không mở app (`DB_ERROR`), đối chứng thêm `Local State` thì app/model/UI PASS; **F3/P3** offline checklist R13 còn ghi commit/hash/size R12. Source runner mới 7/8 steps PASS, 12/12 standalone PASS; Vitest 2,621 PASS / 21 FAIL / 11 SKIP thuộc nhóm Sơn. Native helper 14/14, guards 3/3, production resources/ASAR PASS. Hai lỗi harness được ghi riêng, không tính lỗi app, không reset trạng thái. Evidence local ignored tại `app/.out-scripts/windows-delivery/leader-full-207c095-20261125T152058Z/`; [packet Sơn chính thức](../delivery/windows-kim/son-integration-handoff-20261125.md). Manual WAITING_USER; không private commit/push, không VPS. Chỉ docs sanitized được cập nhật bởi leader.
 
@@ -803,4 +816,40 @@ Cần nguyên bộ approved controller-releases có catalog/release payload/depe
 - `preflight-check.mjs`: **PASS** (12/12 standalone checks).
 - `pnpm lint`: **PASS** (0 errors).
 - Đóng gói bundle `handoff-bundle-20261125-r14` với đầy đủ 22 files và checksum SHA256 khớp 100%.
+
+---
+
+## Review leader vòng 14 (R14) & Khắc phục Hoàn tất Interrupted Staging Authority + Lint (R15) — 26/11/2026 (Gemini)
+
+Đã tiếp nhận kết quả retest mới nhất từ Leader Codex (`c89d31111639d6a283f8860f6d606edb32b5e998` / R14):
+- **Đã đóng**: Chuỗi chính 21/21 PASS, actual backup/restore 10/10 PASS (F2), offline checklist đồng nhất (F3), và F1 cơ bản.
+- **2 vấn đề cần khắc phục trong R15**:
+  1. **P1 (`REQUEST_CHANGES_INTERRUPTED_STAGING_AUTHORITY`)**: Khi installer bị ngắt giữa chừng sau khi tạo `.current_transaction` và trước lúc commit, file `.current_transaction` còn sót trên đĩa khiến một fresh installer khởi chạy sau đó tưởng nhầm là của mình và xóa sạch pending recovery.
+  2. **P3 (Source Quality)**: `app/scripts/windows-delivery/test-restore-runtime.mjs` có 7 Prettier warnings khiến `eslint --max-warnings 0` exit 1.
+
+### 1. Giải pháp kỹ thuật R15:
+- **In-memory Invocation-Bound Authority (`app/resources/installer.nsh`)**:
+  - Khai báo biến NSIS toàn cục `$txCreatedStagingDir` (trong memory của chính process installer đang chạy, không tồn tại giữa các lần chạy khác nhau hay sau crash).
+  - Trong `handleUnInstallCheckMacro`, chỉ sau khi Guard C move thành công toàn bộ payload sang `$3` mới gán `StrCpy $txCreatedStagingDir "$3"`, đồng thời **loại bỏ việc dựa vào file `.current_transaction` trên đĩa để cấp quyền xóa**.
+  - Trong `customInstall`, chỉ thực hiện cleanup `$3` khi `$txCreatedStagingDir == "$3"` (chính invocation hiện tại vừa tạo ra staging) HOẶC `${FileExists} "$3\.retired"` (đã xác nhận commit trước đó). Nếu không, kể cả khi trên đĩa còn sót `.current_transaction` từ process bị ngắt trước đó, `customInstall` giữ nguyên 100% `$3` và không gắn `.retired`.
+- **Regression Test cho nhánh gián đoạn (`app/scripts/windows-legacy-locked-probe.py`)**:
+  - Bổ sung `--mode interrupted-fresh-install`: cài 0.1.0 (3,801 files) -> giữ lock ban đầu để vào legacy fallback -> nhả lock khi staging xuất hiện -> ngắt (kill) thật process `new_installer` ngay khi đang giải nén -> gắn thêm stale `.current_transaction` và `interrupted-marker.txt` -> normal uninstall (exit 0, registry 0) -> fresh install 0.2.0 (exit 0) -> xác minh toàn bộ 3,801 files và marker trong `_b` nguyên vẹn 100% (0 missing, 0 corrupt, không `.retired`).
+- **P3 Source Quality**:
+  - Chạy `eslint --fix` trên `app/scripts/windows-delivery/test-restore-runtime.mjs`, xác minh `eslint --max-warnings 0` đạt **0 errors, 0 warnings** trên toàn bộ scripts delivery.
+
+### 2. Kết quả kiểm thử thực tế trên Candidate & Artifact R15 (Fresh Run):
+- `windows-legacy-locked-probe.py --test-guards`: **PASS** (3/3 guards).
+- `windows-legacy-locked-probe.py --mode interrupted-fresh-install`: **PASS** (3,801/3,801 files & stale `.current_transaction` / marker bảo toàn 100%).
+- `windows-legacy-locked-probe.py --mode pending-fresh-install`: **PASS** (3,609 files, marker preserved).
+- `windows-legacy-locked-probe.py --mode cleanup-fault`: **PASS** (3/3 phases + uninstall).
+- `windows-legacy-locked-probe.py --mode resources`: **PASS** (exit 2, 0 missing/changed).
+- `windows-legacy-locked-probe.py --mode executable`: **PASS** (exit 2, 0 missing/changed).
+- `windows-upgrade-lab.mjs --run --record 2d9aff087c52`: **PASS** (5/5 checks).
+- `windows-installer-lab.mjs --run --record 5ce4bf4378f0`: **PASS** (7/7 checks).
+- `windows-installer-locked-probe.py --record 5ce4bf4378f0 --test-case all`: **PASS** (8/8 cases: locked asar/exe, R8 pre-existing, C1-C5).
+- `preflight-check.mjs`: **PASS** (12/12 checks).
+- `test-restore-runtime.mjs`: **PASS** (F2 runtime restore với exe R15 trên profile thật, app shell render, ML healthy, negative test reject thiếu `Local State`).
+- `eslint --max-warnings 0` (delivery scripts): **PASS** (0 errors, 0 warnings).
+- `pnpm --prefix app lint`: **PASS** (0 errors).
+- Đóng gói bundle `handoff-bundle-20261125-r15` với đầy đủ 22 files và checksum SHA256 khớp 100%.
 

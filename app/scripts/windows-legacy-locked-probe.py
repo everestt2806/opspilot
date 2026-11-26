@@ -80,7 +80,7 @@ def run_guard_tests(fixture_path):
 def main():
     parser = argparse.ArgumentParser(description="Test legacy 0.1.0 hidden and locked file behavior during upgrade")
     parser.add_argument("--fixture", required=True, help="Path to upgrade lab fixture directory containing plan.json")
-    parser.add_argument("--mode", default="resources", choices=["resources", "executable", "cleanup-fault", "pending-fresh-install"], help="Target mode to exercise")
+    parser.add_argument("--mode", default="resources", choices=["resources", "executable", "cleanup-fault", "pending-fresh-install", "interrupted-fresh-install"], help="Target mode to exercise")
     parser.add_argument("--out-dir", default=None, help="Output directory for test execution and results")
     parser.add_argument("--test-guards", action="store_true", help="Run negative self-tests on probe guards")
     args = parser.parse_args()
@@ -426,6 +426,114 @@ def main():
             not retired_exists
         )
 
+    elif args.mode == "interrupted-fresh-install":
+        print("[*] Mode interrupted-fresh-install: testing interrupted staging retention across normal uninstall and fresh install...")
+        initial_handle = kernel.CreateFileW(str(exe), 0x80000000, 1, None, 3, 128, None)
+        assert initial_handle not in [None, ctypes.c_void_p(-1).value], "Failed to acquire initial lock handle"
+        lock_state = {"initial_handle": initial_handle}
+        p_int = subprocess.Popen([str(new_installer), "/S", f"/D={install}"], cwd=out_base,
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 creationflags=subprocess.CREATE_NO_WINDOW)
+        killed = False
+        deadline = time.monotonic() + 180
+        b_exe = backup / plan["executable_name"]
+        b_asar = backup / "resources/app.asar"
+        try:
+            while time.monotonic() < deadline:
+                if backup.exists() and lock_state.get("initial_handle"):
+                    kernel.CloseHandle(lock_state.pop("initial_handle"))
+                    print("[+] Staging directory created; released initial lock handle")
+                if b_exe.is_file() and b_asar.is_file() and install.exists():
+                    subprocess.run(["taskkill.exe", "/PID", str(p_int.pid), "/T", "/F"], capture_output=True,
+                                   creationflags=subprocess.CREATE_NO_WINDOW)
+                    killed = True
+                    break
+                if p_int.poll() is not None:
+                    break
+                time.sleep(0.005)
+        finally:
+            if lock_state.get("initial_handle"):
+                kernel.CloseHandle(lock_state.pop("initial_handle"))
+
+        try:
+            stdout_int, stderr_int = p_int.communicate(timeout=15)
+        except Exception:
+            stdout_int, stderr_int = b"", b""
+        (out_base / "interrupted-upgrade.stdout.log").write_bytes(stdout_int)
+        (out_base / "interrupted-upgrade.stderr.log").write_bytes(stderr_int)
+        assert killed, "Failed to interrupt installer during post-staging unpack window"
+        print("[+] Interrupted installer process during unpack window (before customInstall)")
+
+        # Verify staging has full 0.1.0 inventory and no .retired
+        assert backup.exists(), "Backup staging must exist after interruption"
+        assert not (backup / ".retired").exists(), "Staging must NOT be marked .retired before commit"
+
+        # Add stale .current_transaction and custom marker to verify stale on-disk markers do NOT grant authority
+        (backup / ".current_transaction").write_text("STALE_INTERRUPTED_TX\n", encoding="utf-8")
+        marker_file = backup / "interrupted-marker.txt"
+        marker_file.write_text("INTERRUPTED_RECOVERY_PAYLOAD\n", encoding="utf-8")
+        marker_hash = hashlib.file_digest(marker_file.open("rb"), "sha256").hexdigest()
+
+        # Run normal uninstall to clean partial installation and registry 0.1.0
+        print("[*] Running normal uninstall after interruption...")
+        argv_un = subprocess.list2cmdline([str(control_uninstaller), "/S"]) + f" _?={install}"
+        p_un = subprocess.run(argv_un, cwd=out_base, capture_output=True, timeout=180, creationflags=subprocess.CREATE_NO_WINDOW)
+        (out_base / "normal-uninstall.stdout.log").write_bytes(p_un.stdout)
+        (out_base / "normal-uninstall.stderr.log").write_bytes(p_un.stderr)
+        assert p_un.returncode == 0, f"Normal uninstall failed with code: {p_un.returncode}"
+        assert len(get_registry_keys()) == 0, "Registry must be 0 after normal uninstall"
+        assert backup.exists(), "Backup staging must be preserved by normal uninstall"
+        print("[+] Normal uninstall succeeded: registry 0, interrupted staging preserved")
+
+        # Run fresh install of 0.2.0 into the same path
+        print("[*] Running fresh install of 0.2.0 with interrupted staging (and stale .current_transaction) present...")
+        r["new_install"] = run_setup(new_installer, "new-install-after-interruption")
+        print(f"[+] Fresh install exit code: {r['new_install']['exit_code']}")
+
+        target_asar = install / "resources/app.asar"
+        target_committed = (
+            target_asar.is_file() and
+            hashlib.file_digest(target_asar.open("rb"), "sha256").hexdigest() == plan["payloads"][1]["asar"]
+        )
+
+        missing_b, corrupt_b = [], []
+        for rel, expected_digest in inventory.items():
+            if rel.startswith("Uninstall "):
+                continue
+            bp = backup / rel
+            if not bp.is_file():
+                missing_b.append(rel)
+            elif hashlib.file_digest(bp.open("rb"), "sha256").hexdigest() != expected_digest:
+                corrupt_b.append(rel)
+
+        current_marker_hash = hashlib.file_digest(marker_file.open("rb"), "sha256").hexdigest() if marker_file.exists() else None
+        retired_exists = (backup / ".retired").exists()
+
+        r.update(
+            interrupted_killed=killed,
+            target_committed=target_committed,
+            backup_exists=backup.exists(),
+            initial_files=len(inventory),
+            missing_in_backup=len(missing_b),
+            corrupt_in_backup=len(corrupt_b),
+            marker_exists=marker_file.exists(),
+            marker_hash_matches=(current_marker_hash == marker_hash),
+            retired_marker_created=retired_exists,
+            registry_count_after=len(get_registry_keys())
+        )
+
+        r["pass"] = (
+            killed and
+            r["new_install"]["exit_code"] == 0 and
+            target_committed and
+            backup.exists() and
+            len(missing_b) == 0 and
+            len(corrupt_b) == 0 and
+            marker_file.exists() and
+            (current_marker_hash == marker_hash) and
+            not retired_exists
+        )
+
     (out_base / "result.json").write_text(json.dumps(r, indent=2), encoding="utf-8")
     print(f"\nResult: {'PASS' if r['pass'] else 'FAIL'}")
     print(f"  Installer exit code: {r['new_install']['exit_code']}")
@@ -437,6 +545,11 @@ def main():
     elif args.mode == "pending-fresh-install":
         print(f"  Target committed (0.2.0 ASAR): {r.get('target_committed')}")
         print(f"  Pending backup preserved: {r.get('backup_exists')}")
+        print(f"  Marker hash matches: {r.get('marker_hash_matches')}")
+    elif args.mode == "interrupted-fresh-install":
+        print(f"  Interrupted killed: {r.get('interrupted_killed')}")
+        print(f"  Target committed (0.2.0 ASAR): {r.get('target_committed')}")
+        print(f"  Missing in backup: {r.get('missing_in_backup')}, Corrupt: {r.get('corrupt_in_backup')}")
         print(f"  Marker hash matches: {r.get('marker_hash_matches')}")
     else:
         print(f"  Missing files: {len(missing)}")
