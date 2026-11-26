@@ -110,3 +110,17 @@ Luồng VPS/DB/controller live thuộc Sơn chạy trên đích được phép c
 
 21. `Caddy reconcile Linux isolated filesystem runs first start, multi-route reload, idempotency, and rollback on tmpfs`
 
+## Kết quả tích hợp & đóng bàn giao (Sơn — 26/11/2026)
+
+**SON_INTEGRATION_VERIFIED.** Nhánh `origin/feat/kim-windows-delivery-20261116` (`63b8f9a`) đã được merge sạch (0 xung đột) vào nhánh tích hợp `feat/release-audit-20261204` (`cf33afb`), kèm cập nhật đồng bộ desktop SQLite schema `39` (`039_desktop_project_reconnection.sql`) trong `app/scripts/windows-release-lab.mjs`, `app/scripts/windows-delivery/preflight.mjs` và `app/scripts/windows-delivery/preflight-check.mjs`.
+
+Kết quả kiểm chứng sau hợp nhất trên Windows (Node `v22.23.3`, Python `3.12.10` venv):
+
+- **Full Vitest suite (`source-check.mjs`)**: `ALL_PASSED` — **2,805 passed, 0 failed, 2 skipped** (`0` delivery regressions, `0` outside-scope failures; toàn bộ 21 ca cũ trong danh sách trên đều PASS trên bản hợp nhất).
+- **TypeScript & Build**: `pnpm typecheck` (`node` + `web`), `tsc -p tsconfig.scripts.json --noEmit`, `pnpm build`, `git diff --check` đều **PASS**.
+- **ESLint (`--max-warnings=0`)**: `scripts/windows-delivery` và `scripts/windows-release-lab.mjs` **PASS** (0 errors, 0 warnings).
+- **Python `ml-service` pytest**: **23/23 passed** (`22.02s`).
+- **Windows Delivery standalone preflight checks (`preflight-check.mjs`, Node `v22.23.3`)**: **12/12 PASSED** (schema `39`).
+- **Integrated Windows NSIS Installer (`pnpm --filter @opspilot/app build:win`)**: build sạch từ bản hợp nhất với `beforePack` (`controllerResourceVerifier` + `mlResourceVerifier`) **PASS** → `app/dist/OpsPilot-0.2.0-setup.exe` (`599,939,892` bytes, SHA-256 `1b20e557538233770c18920e97c741b088efb4fbe9c44b5f41fec36119115e68`).
+- **Isolated Packaged Release Lab (`windows-release-lab.mjs` trên `win-unpacked` của bản hợp nhất)**: **5/5 PASSED** (`record: 4ab7bc4fd172`), xác nhận khởi động Electron sạch, SQLite desktop schema `39` (`[1..36, 38, 39]`, `PRAGMA integrity_check = ok`), DPAPI `credential-master-key.protected`, huấn luyện 180 mẫu + chấm 4 detector qua embedded Python `3.12.10` dưới `System32`-only `PATH`, bảo toàn dữ liệu qua restart và thu dọn sạch tiến trình phụ.
+

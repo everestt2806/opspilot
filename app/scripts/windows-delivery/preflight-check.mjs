@@ -67,9 +67,9 @@ try {
     assert(typeof parsed.readiness.package_ready === 'boolean')
     assert(Array.isArray(parsed.blockers))
     assert(parsed.details.environment.node.installed.startsWith('v22.'))
-    assert.equal(parsed.details.role_aware_schema.release_lab_audit.expected_schema_version, 38)
+    assert.equal(parsed.details.role_aware_schema.release_lab_audit.expected_schema_version, 39)
     assert.equal(parsed.details.role_aware_schema.release_lab_audit.is_updated_to_baseline, true)
-    console.log('✓ 3. --json outputs valid schema-compliant JSON with schema 38 verification')
+    console.log('✓ 3. --json outputs valid schema-compliant JSON with schema 39 verification')
   }
 
   // 4. File export (--out <path>) with unique nonce

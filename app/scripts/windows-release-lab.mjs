@@ -262,9 +262,9 @@ try {
   )
   assert.equal(sql.status, 0, 'SQLITE_READONLY_INSPECTION_FAILED')
   proof.sqlite = JSON.parse(sql.stdout)
-  assert.equal(proof.sqlite.version, 38, 'EXPECTED_DESKTOP_SCHEMA_38')
+  assert.equal(proof.sqlite.version, 39, 'EXPECTED_DESKTOP_SCHEMA_39')
   assert.equal(proof.sqlite.integrity, 'ok', 'SQLITE_INTEGRITY_CHECK_FAILED')
-  const expectedDesktopMigrations = Array.from({ length: 36 }, (_, i) => i + 1).concat([38])
+  const expectedDesktopMigrations = Array.from({ length: 36 }, (_, i) => i + 1).concat([38, 39])
   assert.deepEqual(
     proof.sqlite.versions,
     expectedDesktopMigrations,

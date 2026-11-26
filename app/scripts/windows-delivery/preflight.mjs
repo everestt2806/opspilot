@@ -777,20 +777,20 @@ function inspectResources(options = {}) {
 function inspectRoleAwareSchema() {
   const desktopRole = {
     role: 'desktop',
-    expected_max_version: 38,
-    total_applied_migrations: 37,
+    expected_max_version: 39,
+    total_applied_migrations: 38,
     excluded_versions: [37],
-    desktop_specific_versions: [30, 31, 34, 36, 38],
+    desktop_specific_versions: [30, 31, 34, 36, 38, 39],
     common_versions_29_plus: [32, 33, 35],
-    latest_migration_name: '038_desktop_postgres_intent.sql',
-    expected_migrations_sequence: Array.from({ length: 36 }, (_, i) => i + 1).concat([38])
+    latest_migration_name: '039_desktop_project_reconnection.sql',
+    expected_migrations_sequence: Array.from({ length: 36 }, (_, i) => i + 1).concat([38, 39])
   }
 
   const controllerRole = {
     role: 'controller',
     expected_max_version: 37,
     total_applied_migrations: 33,
-    excluded_versions: [30, 31, 34, 36, 38],
+    excluded_versions: [30, 31, 34, 36, 38, 39],
     controller_specific_versions: [37],
     common_versions_29_plus: [32, 33, 35],
     latest_migration_name: '037_product_managed_postgres.sql'
@@ -816,7 +816,7 @@ function inspectRoleAwareSchema() {
       content.includes('proof.sqlite.versions')
 
     releaseLabExactInventoryAssert = hasExactCheck
-    releaseLabPass = releaseLabSchemaAssert === 38 && hasExactCheck
+    releaseLabPass = releaseLabSchemaAssert === 39 && hasExactCheck
   }
 
   return {
@@ -826,7 +826,7 @@ function inspectRoleAwareSchema() {
       path: releaseLabPath,
       asserted_schema_version: releaseLabSchemaAssert,
       asserts_exact_desktop_inventory: releaseLabExactInventoryAssert,
-      expected_schema_version: 38,
+      expected_schema_version: 39,
       is_updated_to_baseline: releaseLabPass
     }
   }
