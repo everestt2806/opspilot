@@ -27,12 +27,12 @@ extraResources:
     to: templates
     filter:
       - '**/*'
-  - from: ../collector
-    to: collector
-    filter:
-      - '**/*'
-      - '!**/__pycache__/**'
-      - '!**/.pytest_cache/**'
+  - from: ../collector/collect.py
+    to: collector/collect.py
+  - from: ../collector/Dockerfile
+    to: collector/Dockerfile
+  - from: ../collector/requirements.txt
+    to: collector/requirements.txt
 npmRebuild: false
 beforePack: ./scripts/controller-installer-before-pack.cjs
 win:

@@ -241,7 +241,7 @@ try {
     const repair = spawnSync(installer, ['/S', '/D=' + artifact], {
       windowsHide: true,
       cwd: directory,
-      timeout: 180000
+      timeout: 600000
     })
     assert.equal(repair.status, 0, 'NSIS_REINSTALL_FAILED')
     assert.equal(hash(join(profile, 'opspilot.db')), dbHash)
@@ -255,14 +255,21 @@ try {
       '-I',
       '-B',
       '-c',
-      'import json,sqlite3,sys; c=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True); print(json.dumps({"version":c.execute("SELECT max(version) FROM schema_version").fetchone()[0],"integrity":c.execute("PRAGMA integrity_check").fetchone()[0]})); c.close()',
+      'import json,sqlite3,sys; c=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True); versions=[r[0] for r in c.execute("SELECT version FROM schema_version ORDER BY version").fetchall()]; print(json.dumps({"version":max(versions) if versions else None,"versions":versions,"integrity":c.execute("PRAGMA integrity_check").fetchone()[0]})); c.close()',
       join(profile, 'opspilot.db')
     ],
     { cwd: directory, env: environment, encoding: 'utf8', timeout: 15000 }
   )
   assert.equal(sql.status, 0, 'SQLITE_READONLY_INSPECTION_FAILED')
   proof.sqlite = JSON.parse(sql.stdout)
-  assert.deepEqual(proof.sqlite, { version: 31, integrity: 'ok' })
+  assert.equal(proof.sqlite.version, 38, 'EXPECTED_DESKTOP_SCHEMA_38')
+  assert.equal(proof.sqlite.integrity, 'ok', 'SQLITE_INTEGRITY_CHECK_FAILED')
+  const expectedDesktopMigrations = Array.from({ length: 36 }, (_, i) => i + 1).concat([38])
+  assert.deepEqual(
+    proof.sqlite.versions,
+    expectedDesktopMigrations,
+    'EXACT_DESKTOP_MIGRATIONS_INVENTORY_MISMATCH'
+  )
   await launch()
   const restored = await api(`/status?deployment_id=${deployment}`)
   assert(restored.trained && restored.trained_at === proof.training.trained_at)

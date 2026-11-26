@@ -64,9 +64,22 @@ def main() -> int:
     modules = directory / "app/node_modules"
     command = f"New-Item -ItemType Junction -Path '{modules}' -Target '{ROOT / 'app/node_modules'}' | Out-Null"
     subprocess.run([str(shell), "-NoProfile", "-Command", command], check=True)
+    legacy_releases = directory / "app/resources/controller-releases"
+    legacy_releases.mkdir(parents=True, exist_ok=True)
+    approved_upgrade_id = "linux-x64-node22-20261112-upgrade"
     shutil.copytree(
-        ROOT / "app/resources/controller-releases",
-        directory / "app/resources/controller-releases",
+        ROOT / "app/resources/controller-releases" / approved_upgrade_id,
+        legacy_releases / approved_upgrade_id,
+    )
+    current_catalog = json.loads(
+        (ROOT / "app/resources/controller-releases/catalog.json").read_text(encoding="utf-8")
+    )
+    compat_releases = [
+        r for r in current_catalog["releases"] if r["release_id"] == approved_upgrade_id
+    ]
+    compat_catalog = {"format": 1, "releases": compat_releases}
+    (legacy_releases / "catalog.json").write_text(
+        json.dumps(compat_catalog, indent=2) + "\n", encoding="utf-8"
     )
     # Giữ đúng venv redirector/base prefix cũ; không sửa Main/config để giả portable.
     legacy = directory / "ml-service/.venv"
@@ -90,6 +103,11 @@ def main() -> int:
         check=True,
     )
     cli = ROOT / "app/node_modules/electron-builder/cli.js"
+    electron_version = subprocess.check_output(
+        [str(node), "-p", "require('electron/package.json').version"],
+        cwd=ROOT / "app",
+        text=True,
+    ).strip()
     subprocess.run(
         [
             str(node),
@@ -99,6 +117,7 @@ def main() -> int:
             "--x64",
             "--publish",
             "never",
+            f"--config.electronVersion={electron_version}",
             "--config.directories.output=" + str(directory / "package"),
         ],
         cwd=directory / "app",

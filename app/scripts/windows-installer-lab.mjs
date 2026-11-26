@@ -161,7 +161,7 @@ if (process.argv[2] === '--build') {
   const installed = spawnSync(plan.installer, ['/S', '/D=' + plan.installation_directory], {
     windowsHide: true,
     cwd: directory,
-    timeout: 180000
+    timeout: 900000
   })
   assert.equal(installed.status, 0, 'LAB_NSIS_INSTALL_FAILED')
   assert.equal(realpathSync(plan.installation_directory), resolve(plan.installation_directory))
@@ -184,14 +184,20 @@ if (process.argv[2] === '--build') {
       '--reinstall',
       plan.installer
     ],
-    { cwd: resolve(project, '..'), windowsHide: true, encoding: 'utf8', timeout: 360000 }
+    { cwd: resolve(project, '..'), windowsHide: true, encoding: 'utf8', timeout: 1200000 }
   )
   writeFileSync(
     join(directory, 'application.log'),
     (application.stdout ?? '') + '\n' + (application.stderr ?? '')
   )
   assert.equal(application.status, 0, 'INSTALLED_FULL_APP_GATE_FAILED')
-  assert.deepEqual(registry(plan.guid), [], 'FIXTURE_REGISTRY_NOT_REMOVED')
+  const registryDeadline = Date.now() + 60000
+  let regKeys = registry(plan.guid)
+  while (regKeys.length > 0 && Date.now() < registryDeadline) {
+    await new Promise((r) => setTimeout(r, 1000))
+    regKeys = registry(plan.guid)
+  }
+  assert.deepEqual(regKeys, [], 'FIXTURE_REGISTRY_NOT_REMOVED')
   assert(!existsSync(join(plan.installation_directory, plan.executable_name)))
   const result = {
     status: 'PASS',

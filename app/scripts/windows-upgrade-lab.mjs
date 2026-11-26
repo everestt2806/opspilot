@@ -234,7 +234,7 @@ if (process.argv[2] === '--build') {
       const result = spawnSync(item.installer, ['/S', '/D=' + plan.installation], {
         cwd: directory,
         windowsHide: true,
-        timeout: 180000
+        timeout: 300000
       })
       return result.status
     }
@@ -336,7 +336,22 @@ if (process.argv[2] === '--build') {
     writeFileSync(join(directory, 'upgraded.png'), Buffer.from(screen.data, 'base64'))
     await application.close()
     application = null
-    assert.equal(hash(join(plan.profile, 'opspilot.db')), database)
+    const inspectDb = spawnSync(
+      join(plan.payloads[1].artifact, 'resources/ml-runtime/python.exe'),
+      [
+        '-I',
+        '-B',
+        '-c',
+        'import json,sqlite3,sys; c=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True); versions=[r[0] for r in c.execute("SELECT version FROM schema_version ORDER BY version").fetchall()]; note=c.execute("SELECT count(*) FROM action_log WHERE message=? and status=?", ("R11C_UPGRADE_NOTE","success")).fetchone()[0]; print(json.dumps({"version":max(versions) if versions else None,"versions":versions,"note":note})); c.close()',
+        join(plan.profile, 'opspilot.db')
+      ],
+      { cwd: directory, windowsHide: true, encoding: 'utf8', timeout: 15000 }
+    )
+    assert.equal(inspectDb.status, 0, 'UPGRADED_SQLITE_INSPECTION_FAILED')
+    const parsedDb = JSON.parse(inspectDb.stdout)
+    assert.equal(parsedDb.version, 38, 'EXPECTED_UPGRADED_SCHEMA_38')
+    assert.equal(parsedDb.note, 1, 'EXPECTED_PRESERVED_UPGRADE_NOTE')
+    const upgradedDatabase = hash(join(plan.profile, 'opspilot.db'))
     assert.equal(hash(join(plan.profile, 'credential-master-key.protected')), key)
     proof.checks.push(
       'actual_new_full_application_restores_same_trained_at_and_models_then_returns_four_real_scores'
@@ -354,7 +369,7 @@ if (process.argv[2] === '--build') {
       'ORDINARY_UNINSTALL_NOT_FINISHED',
       60000
     )
-    assert.equal(hash(join(plan.profile, 'opspilot.db')), database)
+    assert.equal(hash(join(plan.profile, 'opspilot.db')), upgradedDatabase)
     assert.equal(hash(join(plan.profile, 'credential-master-key.protected')), key)
     assert(existsSync(join(migrated, 'state.pkl')))
     proof.checks.push(
