@@ -187,6 +187,7 @@ export interface RunContext {
   exposureStatus: ExposureStatus
   exposureEvidence: ExposureEvidence | null
   gitSnapshotCleanup?: () => void
+  srcBackupTaken?: boolean
   resourcesReleased?: boolean
   finishedEmitted?: boolean
 }
@@ -922,10 +923,13 @@ export class DeployPipeline {
           })
         }
         finalStatus = 'running'
+        await this.cleanupSourceBackup(ctx)
       } else {
         finalStatus = await this.handleHealthcheckFail(ctx)
+        await this.restoreSourceBackup(ctx)
       }
     } catch (error) {
+      await this.restoreSourceBackup(ctx)
       if (ctx.signal.aborted) ctx.cancelled = true
       if (ctx.collectorState === 'stopped') await this.resumeCollector(ctx)
       if (preparedActivationId !== null) {
@@ -1247,6 +1251,19 @@ export class DeployPipeline {
         return
       }
       this.log(ctx, 'UPLOAD', `Tải lên ${srcDir} (loại node_modules/.git/dist)\n`, 'stdout')
+      if (!ctx.newApp) {
+        const backupDir = posixJoin(WORK_ROOT, ctx.app.name, 'src.prev')
+        try {
+          const bakRes = await this.ssh.exec(
+            ctx.app.vps_id,
+            `if [ -d ${shellQuote(srcDir)} ]; then rm -rf ${shellQuote(backupDir)} && cp -a ${shellQuote(srcDir)} ${shellQuote(backupDir)}; fi`,
+            { signal: ctx.signal, retryOnReconnect: false }
+          )
+          if (bakRes.code === 0) ctx.srcBackupTaken = true
+        } catch {
+          // Best-effort source backup before redeploy; do not block upload if unsupported.
+        }
+      }
       try {
         const result = await this.ssh.uploadDir(
           ctx.app.vps_id,
@@ -1282,6 +1299,31 @@ export class DeployPipeline {
         throw error
       }
     })
+  }
+
+  private async cleanupSourceBackup(ctx: RunContext): Promise<void> {
+    if (!ctx.srcBackupTaken) return
+    ctx.srcBackupTaken = false
+    const backupDir = posixJoin(WORK_ROOT, ctx.app.name, 'src.prev')
+    await this.ignoreError(
+      this.ssh.exec(ctx.app.vps_id, `rm -rf ${shellQuote(backupDir)}`, {
+        retryOnReconnect: false
+      })
+    )
+  }
+
+  private async restoreSourceBackup(ctx: RunContext): Promise<void> {
+    if (!ctx.srcBackupTaken) return
+    ctx.srcBackupTaken = false
+    const srcDir = posixJoin(WORK_ROOT, ctx.app.name, 'src')
+    const backupDir = posixJoin(WORK_ROOT, ctx.app.name, 'src.prev')
+    await this.ignoreError(
+      this.ssh.exec(
+        ctx.app.vps_id,
+        `if [ -d ${shellQuote(backupDir)} ]; then rm -rf ${shellQuote(srcDir)} && mv ${shellQuote(backupDir)} ${shellQuote(srcDir)}; fi`,
+        { retryOnReconnect: false }
+      )
+    )
   }
 
   private async stepRender(ctx: RunContext): Promise<void> {

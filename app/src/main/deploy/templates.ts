@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { AppError } from '../errors'
@@ -10,7 +10,15 @@ import { AppError } from '../errors'
  * Dev: repo root/templates; đóng gói: electron-builder extraResources (TK-A15).
  */
 export function resolveTemplatesDir(): string {
-  return process.env.OPSPILOT_TEMPLATES_DIR ?? join(process.cwd(), '..', 'templates')
+  const candidates = [
+    process.env.OPSPILOT_TEMPLATES_DIR,
+    ...(process.resourcesPath ? [join(process.resourcesPath, 'templates')] : []),
+    join(process.cwd(), '..', 'templates')
+  ].filter((candidate): candidate is string => Boolean(candidate))
+  return (
+    candidates.find((candidate) => existsSync(join(candidate, 'docker-compose.template.yml'))) ??
+    candidates[candidates.length - 1]
+  )
 }
 
 /** Thay mọi {{VAR}}; VAR không có trong bảng -> lỗi rõ ràng, không im lặng bỏ qua. */

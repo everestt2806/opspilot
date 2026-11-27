@@ -44,6 +44,27 @@ describe('resolveTemplatesDir', () => {
   it('tro ve thu muc templates o repo root khi chay tu app/', () => {
     expect(resolveTemplatesDir()).toMatch(/[\\/]templates$/)
   })
+
+  it('uu tien thu muc templates trong process.resourcesPath khi chay ban dong goi Electron', () => {
+    fixture = mkdtempSync(join(tmpdir(), 'opspilot-templates-res-'))
+    const packagedTemplates = join(fixture, 'templates')
+    mkdirSync(packagedTemplates, { recursive: true })
+    writeFileSync(join(packagedTemplates, 'docker-compose.template.yml'), 'services: {}\n', 'utf8')
+
+    const prevResourcesPath = process.resourcesPath
+    const prevEnv = process.env.OPSPILOT_TEMPLATES_DIR
+    delete process.env.OPSPILOT_TEMPLATES_DIR
+    Object.defineProperty(process, 'resourcesPath', { configurable: true, value: fixture })
+    try {
+      expect(resolveTemplatesDir()).toBe(packagedTemplates)
+    } finally {
+      Object.defineProperty(process, 'resourcesPath', {
+        configurable: true,
+        value: prevResourcesPath
+      })
+      if (prevEnv !== undefined) process.env.OPSPILOT_TEMPLATES_DIR = prevEnv
+    }
+  })
 })
 
 describe('renderCompose', () => {
