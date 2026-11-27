@@ -252,7 +252,7 @@ try {
     )
     assert.equal(reportValid.details.resources.ml_runtime.pass, true)
 
-    // C. Negative case 1: Wrong .pth (old gemini .pth lacking DLLs and site-packages)
+    // C. Negative case 1: Wrong .pth (legacy minimal .pth lacking DLLs and site-packages)
     const wrongPthDir = join(FIXTURE_DIR, 'wrong-pth-ml-runtime')
     mkdirSync(wrongPthDir, { recursive: true })
     const oldWrongPth = 'python312.zip\n.\nservice\n'

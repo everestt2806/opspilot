@@ -252,7 +252,7 @@ describe('C03 Tier 1 detector matrix', () => {
 
 describe('L6: Ba app mẫu thực tế (Next.js, Express, Vite SPA)', () => {
   const repoRoot = resolve(__dirname, '../../../../')
-  const demoSources = join(repoRoot, 'demo/sources')
+  const demoSources = join(repoRoot, 'demo-apps')
 
   it('nhận diện chính xác demo Next.js (next-blog)', () => {
     const sourcePath = join(demoSources, 'next-blog')
@@ -1046,7 +1046,7 @@ describe('L6 Revision 3: Regression tests theo 3 quy tắc chốt', () => {
 describe('L6: CLI try-detect qua lệnh thực tế', () => {
   const repoRoot = resolve(__dirname, '../../../../')
   const scriptPath = join(repoRoot, 'app/.out-scripts/scripts/try-detect.js')
-  const demoSources = join(repoRoot, 'demo/sources')
+  const demoSources = join(repoRoot, 'demo-apps')
 
   beforeAll(() => {
     // Luôn build lại từ source mới nhất để CLI test luôn phản ánh code hiện tại

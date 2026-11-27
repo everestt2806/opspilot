@@ -49,8 +49,8 @@ lẫn vào số đo.
 > file thiếu/cũ/hỏng thì **fallback** về cửa sổ health probe cũ. Nguồn được ghi vào `raw_json`
 > qua cột phụ `http_error_rate_source` (`loadgen`|`probe`|null) + `loadgen_requests` để phân tích
 > không trộn hai cách đo. Không mở thêm port (chỉ đọc file), không đổi giao thức mạng, không đổi
-> `FEATURE_VERSION`. Chi tiết: `experiments/load_gen/loadgen.py`, `collector/collect.py`,
-> `DECISIONS.md` dòng `[exp] 2026-09-19`. Test: `read_loadgen_error_rate` + `build_metric` chọn
+> `FEATURE_VERSION`. Chi tiết cài đặt: `experiments/load_gen/loadgen.py`, `collector/collect.py`.
+> Test: `read_loadgen_error_rate` + `build_metric` chọn
 > nguồn (10 test trong `collector/tests/test_loadgen_error_rate.py`).
 > **Mức độ tích hợp hiện tại:** collector mới có logic đọc counter (`read_loadgen_error_rate` và fallback probe), chưa được nối vào runtime (pipeline/deploy chưa mount volume `/var/metrics/loadgen_counter.json` cho collector chạy thật trong production).
 

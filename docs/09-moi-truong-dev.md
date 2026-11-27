@@ -16,19 +16,6 @@ Máy dev của nhóm: **Windows 11**. VPS: **Ubuntu 24.04**. Phần lớn bug t�
 | Docker Desktop | mới nhất | docker.com | `docker run --rm hello-world` |
 | VS Code | mới nhất | | |
 | OpenSSH client | có sẵn Win11 | `Get-WindowsCapability -Online -Name OpenSSH.Client*` | `ssh -V` |
-| GitNexus (dev tool cho AI, không phải dep của app) | mới nhất | `npm i -g gitnexus` | `gitnexus --version` |
-
-**GitNexus** — lập chỉ mục code thành knowledge-graph (symbol, call chain, dependency), phục vụ
-Claude Code qua MCP. Chạy local, không cần server; cấu hình chung ở `.gitnexusrc` và `.mcp.json`
-(đã commit). Cách dùng:
-
-```bash
-gitnexus analyze     # dựng/cập nhật index trong thư mục repo (mỗi máy tự chạy, sau thay đổi lớn)
-gitnexus setup -c claude   # (tùy chọn) bật hooks PreToolUse/PostToolUse cho máy này
-```
-
-`.mcp.json` lọc sẵn server `gitnexus` bản read-only — Claude Code ở máy có cài GitNexus sẽ tự nạp.
-Hooks và skills ghi vào `~/.claude/` nên mỗi người tự chạy `gitnexus setup` ở máy mình.
 
 **Cấu hình Git bắt buộc (làm ngay, tránh hỏng line ending):**
 ```bash
@@ -44,7 +31,7 @@ Docker · EditorConfig.
 
 ## 2. Dependency đã duyệt
 
-**Không thêm dependency ngoài danh sách này mà không ghi `DECISIONS.md`.** Mỗi dependency
+**Không thêm dependency ngoài danh sách này khi chưa đánh giá rủi ro đóng gói và bảo trì.** Mỗi dependency
 mới là một câu hỏi tiềm năng của hội đồng ("cái này để làm gì?") và một rủi ro đóng gói.
 
 ### `app/` — Electron

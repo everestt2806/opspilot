@@ -1,4 +1,4 @@
-"""Orchestrator thí nghiệm OpsPilot TK-S6 (docs/tasks/tk-s6-load-gen-experiment-harness.md:843).
+"""Orchestrator thí nghiệm OpsPilot (docs/07-giao-thuc-thi-nghiem.md).
 
 Thực hiện quy trình 10 bước chuẩn hoá của TK-S6:
   1. Khởi tạo bản ghi Attempt trong SQLite TRƯỚC mọi bước SSH/deploy (run_id, status='running', deployment_id=None).
@@ -1513,7 +1513,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--report-path",
-        default=str(Path(__file__).resolve().parents[1] / "docs/evidence/tk-s7-ml-ready-2/preflight-report.json"),
+        default=str(Path(__file__).resolve().parents[1] / "experiments/results/preflight-report.json"),
         help="Đường dẫn report preflight đã khử nhạy cảm",
     )
     parser.add_argument(

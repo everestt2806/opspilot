@@ -4,8 +4,7 @@ Mỗi mục: **bối cảnh → phương án đã cân nhắc → quyết địn
 Đây là nguyên liệu trực tiếp cho **chương 3 mục trade-off** và cho phần trả lời phản biện.
 Học thuộc phần "Đánh đổi" — hội đồng hỏi đúng chỗ đó.
 
-Thay đổi nhỏ hằng ngày ghi ở [`../DECISIONS.md`](../DECISIONS.md); chỉ quyết định **kiến trúc**
-mới lên đây.
+Tài liệu này ghi nhận các quyết định **kiến trúc** chính của hệ thống (bối cảnh, phương án, quyết định và đánh đổi).
 
 ---
 
@@ -190,7 +189,7 @@ thời gian tiết kiệm được dồn cho phần ML.
 
 ## ADR-010 — ML service là tiến trình Python riêng, yêu cầu Python 3.12 trên máy người dùng
 
-> **Cập nhật R11a, 12/11/2026:** Với bản Windows x64 packaged, Python3.12 và các thư viện ML được đóng gói thành resource độc lập có kiểm hash; người dùng không cần cài Python riêng. Vẫn giữ tiến trình Python và REST loopback, không đổi model/API. Development dùng `.venv` như trước. Quyết định ban đầu bên dưới được giữ để tra cứu; điều kiện cài Python riêng không còn áp dụng cho bản packaged mới. [Hồ sơ và giới hạn kiểm chứng](tasks/tk-s7-release-r11a-portable-ml-runtime.md); máy sạch/NSIS thật còn gate R11b.
+> **Cập nhật R11a, 12/11/2026:** Với bản Windows x64 packaged, Python 3.12 và các thư viện ML được đóng gói thành resource độc lập có kiểm hash; người dùng không cần cài Python riêng. Vẫn giữ tiến trình Python và REST loopback, không đổi model/API. Development dùng `.venv` như trước. Quyết định ban đầu bên dưới được giữ để tra cứu; điều kiện cài Python riêng không còn áp dụng cho bản packaged mới.
 
 **Bối cảnh.** scikit-learn không có bản JavaScript tương đương đủ tin cậy.
 
@@ -222,4 +221,4 @@ vòng đời tiến trình con (mồ côi, tranh port) — đã ghi trong
 
 **Ràng buộc an toàn.** API quản trị không được mở công khai khi chưa có xác thực và mô hình quyền; ưu tiên kết nối qua SSH tunnel hoặc HTTPS có xác thực. Webhook công khai, nếu dùng, chỉ nhận sự kiện có chữ ký và chống replay; hoặc dùng poll outbound khi chưa dựng endpoint. Không công khai Docker socket. Cần chốt riêng nguồn sự thật SQLite, đồng bộ dữ liệu/credential từ desktop và cách rollback controller trước khi triển khai service; không tạo hai lịch sử deployment mâu thuẫn.
 
-**Đánh đổi và phạm vi.** Product mode thay thế giới hạn “chỉ hai tiến trình”, “không agent” và “không authentication” của ADR-001/CLAUDE.md ở phần control plane; NFR-1 của hồ sơ đề tài gốc không bị sửa âm thầm. Phải trình bày rõ đây là mở rộng sản phẩm trong báo cáo. Control plane tăng chi phí vận hành và bề mặt an ninh nhưng cho phép auto deploy, job bền và monitor khi desktop tắt. Chỉ triển khai sau checkpoint thiết kế state/IPC/deployment contract; G0 Git thủ công trước demo không cần chờ controller.
+**Đánh đổi và phạm vi.** Product mode mở rộng giới hạn “chỉ hai tiến trình”, “không agent” và “không authentication” của ADR-001 ở phần control plane; chế độ Desktop SSH-only của đề tài gốc vẫn được giữ nguyên. Control plane tăng chi phí vận hành và bề mặt an ninh nhưng cho phép auto deploy, job bền và monitor khi desktop tắt.

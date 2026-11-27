@@ -38,4 +38,4 @@ Hai NSIS fixture dùng cùng GUID/appId/tên executable riêng, tắt shortcut/a
 
 Lượt12/11 đầu tiên của predecessor chưa báo MLready trong timeout30s cũ; kết quả FAIL giữ riêng. Native import probe sau đó đạt. `--resume --record <nonce>` chỉ nhận đúng record FAIL này với0checks, installation vẫn đúng old payload hash, không có model của lab hoặc target `ml-state`; tạo `failed-first-launch.json` trước khi tiếp tục. Không reinstall, tăng timeout hoặc sửa code bản cũ; không gọi lượt cold đầu là PASS. Lượt tiếp tục train thành công rồi hoàn tất5upgrade checks. Record đã PASS/đã có model hoặc phase khác không được resume/replay bằng đường này.
 
-Windows sạch/default production installer identity vẫn là gate riêng. Không suy credential portability giữa accounts, compatibility với mọi library version, pilot75phút/50runs hoặc signed release từ upgrade lab này. [Ledger và evidence](../../../docs/tasks/tk-s7-release-r11c-upgrade-compatibility.md).
+Windows sạch/default production installer identity vẫn là gate riêng. Không suy credential portability giữa accounts, compatibility với mọi library version, hoặc signed release từ upgrade lab này.

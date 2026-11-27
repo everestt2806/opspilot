@@ -4,16 +4,16 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - 'feat/kim-windows-delivery-*'
+      - 'main'
+      - 'feat/**'
     paths:
       - 'app/scripts/windows-delivery/**'
       - '.github/workflows/windows-delivery-source.yml'
       - 'app/scripts/windows-release-lab/**'
       - 'app/scripts/windows-release-lab.mjs'
-      - 'docs/delivery/windows-kim/**'
   pull_request:
     branches:
-      - 'feat/kim-windows-delivery-*'
+      - 'main'
 
 permissions:
   contents: read

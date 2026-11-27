@@ -45,4 +45,4 @@ Dùng Windows VM/máy khác không có môi trường dev. Windows account mới
 7. Gỡ bản cài trên account/máy thử; ghi rõ app/process/shortcut/registry đã gỡ, dữ liệu người dùng giữ hay xóa theo lựa chọn. Không thử trên profile đang dùng thật.
 8. Ghi PASS/FAIL/NOT_RUN riêng từng mục, ảnh lỗi và log đã redacted nếu có. Không suy diễn batch ML/pilot hoặc khả năng deploy template từ gate installer.
 
-Build hiện hành chưa có chữ ký publisher (`Get-AuthenticodeSignature`: NotSigned). Không khẳng định signed release/distribution đã đạt. [Task và evidence hiện hành](../../../docs/tasks/tk-s7-release-r11b-windows-installer.md).
+Build hiện hành chưa có chữ ký publisher (`Get-AuthenticodeSignature`: NotSigned). Không khẳng định signed release/distribution đã đạt.
