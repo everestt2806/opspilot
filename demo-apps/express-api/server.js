@@ -194,7 +194,7 @@ app.get('/meta', async (_req, res, next) => {
   try {
     const { total } = await withSlowDb(() => listItems(1, 0))
     res.json({
-      service: 'OpsPilot Demo Inventory',
+      service: 'OpsPilot Git Demo [v1.0-baseline]',
       version: APP_VERSION,
       status: 'online',
       runtime: process.version,
